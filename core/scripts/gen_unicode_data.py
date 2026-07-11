@@ -156,6 +156,19 @@ def download_ucd(version: str, filename: str) -> str:
         sys.exit(1)
 
 
+def download_allkeys() -> str:
+    """Download allkeys.txt (DUCET) for collation data."""
+    url = "https://www.unicode.org/Public/UCA/latest/allkeys.txt"
+    print(f"  Downloading {url} ...", file=sys.stderr)
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp:
+            data = resp.read().decode("utf-8", errors="replace")
+        return data
+    except urllib.error.HTTPError as e:
+        print(f"  ERROR: HTTP {e.code} fetching {url}", file=sys.stderr)
+        sys.exit(1)
+
+
 def parse_unicode_data(text: str) -> Dict[int, CodepointData]:
     """Parse UnicodeData.txt into codepoint records."""
     records: Dict[int, CodepointData] = {}
@@ -663,6 +676,137 @@ def build_ccc_tables(records: Dict[int, CodepointData]) -> Tuple[List[List[int]]
     return bmp_table, smp_ranges
 
 
+def parse_allkeys(allkeys_text: str) -> Dict[int, int]:
+    """Parse allkeys.txt → codepoint → primary weight (16-bit).
+
+    Handles:
+    - Explicit entries: '0041 ; [.0001.0020.0002] # LATIN CAPITAL LETTER A'
+    - Implicit weights: '@implicitweights 17000..187FF; FB00 # Tangut'
+    - Multi-CE entries: uses FIRST primary weight only
+    - Codepoint 0000 entries (control chars) → weight 0 (sort to front)
+    """
+    import re
+
+    weights: Dict[int, int] = {}
+    implicit_ranges: List[Tuple[int, int, int]] = []
+
+    for raw_line in allkeys_text.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+
+        # Handle @implicitweights
+        if line.startswith("@implicitweights"):
+            # Format: @implicitweights 17000..187FF; FB00
+            m = re.match(r"@implicitweights\s+([0-9A-Fa-f]+)\.\.([0-9A-Fa-f]+);\s*([0-9A-Fa-f]+)", line)
+            if m:
+                lo = int(m.group(1), 16)
+                hi = int(m.group(2), 16)
+                primary = int(m.group(3), 16)
+                implicit_ranges.append((lo, hi, primary))
+            continue
+
+        # Handle explicit entries
+        parts = line.split(";")
+        if len(parts) < 2:
+            continue
+
+        codepoints_str = parts[0].strip()
+        ces_str = parts[1].strip()
+
+        # Parse codepoints (may be multi-codepoint like "0041 0300")
+        cp_parts = codepoints_str.split()
+        if not cp_parts:
+            continue
+        cp = int(cp_parts[0], 16)
+
+        # Skip multi-codepoint sequences (we only want single codepoint mappings)
+        if len(cp_parts) > 1:
+            continue
+
+        # Parse first primary weight from collation elements
+        # Format: [.0001.0020.0002] or [.0001.0020.0002][.0000.0021.0002]
+        m = re.search(r"\[\.([0-9A-Fa-f]{4})\.", ces_str)
+        if m:
+            primary = int(m.group(1), 16)
+            if primary != 0:  # Skip zero-weight entries (ignorable)
+                weights[cp] = primary
+
+    # Apply implicit weights from @implicitweights directives
+    for lo, hi, primary in implicit_ranges:
+        for cp in range(lo, hi + 1):
+            if cp not in weights:
+                weights[cp] = primary
+
+    # Assign implicit weights for CJK Unified Ideographs and other common CJK ranges.
+    # These are NOT in allkeys.txt but need a sort order.
+    # We map them into the unused weight space 0x73C3..0xFAFF (between max
+    # explicit diagnostic weight and Tangut implicit weights).
+    # CJK characters sort after all explicit-weight characters.
+    # Within each CJK block, characters sort by codepoint.
+    CJK_WEIGHT_BASE = 0x73C3  # first unused weight after diagnostic range max
+    cjk_ranges = [
+        (0x3400, 0x4DC0),   # CJK Extension A
+        (0x4E00, 0xA000),   # CJK Unified Ideographs
+        (0xF900, 0xFB00),   # CJK Compatibility Ideographs
+    ]
+    offset = 0
+    for lo, hi in cjk_ranges:
+        for cp in range(lo, hi):
+            if cp not in weights:
+                w = CJK_WEIGHT_BASE + offset
+                if w < 0xFB00:  # don't overlap Tangut implicit weights
+                    weights[cp] = w
+                offset += 1
+
+    return weights
+
+
+def build_collation_tables(weights: Dict[int, int]) -> Tuple[List[List[int]], List[Tuple[int, int, int]]]:
+    """Build BMP stage-2 table + SMP ranges for collation primary weights."""
+    bmp_table = [[0] * 256 for _ in range(256)]
+
+    for cp in range(0x10000):
+        val = weights.get(cp, 0)
+        bmp_table[(cp >> 8) & 0xFF][cp & 0xFF] = val
+
+    smp_ranges: List[Tuple[int, int, int]] = []
+    range_start = 0x10000
+    current_val = weights.get(range_start, 0)
+    for cp in range(0x10001, 0x10FFFF + 1):
+        val = weights.get(cp, 0)
+        if val != current_val:
+            smp_ranges.append((range_start, cp - 1, current_val))
+            range_start = cp
+            current_val = val
+    smp_ranges.append((range_start, 0x10FFFF, current_val))
+    return bmp_table, smp_ranges
+
+
+def pascal_stage2_table_u16(table: List[List[int]], name: str) -> str:
+    """Generate a Pascal const stage-2 table for BMP with UInt16 elements."""
+    lines = [f"  {name}: array[0..255, 0..255] of UInt16 = ("]
+    for hi in range(256):
+        row = ", ".join(f"${v:04X}" for v in table[hi])
+        sep = "," if hi < 255 else ""
+        lines.append(f"    // hi=${hi:02X}")
+        lines.append(f"    ({row}){sep}")
+    lines.append("  );")
+    return "\n".join(lines)
+
+
+def pascal_ranges_list_u16(ranges: List[Tuple[int, int, int]], name: str) -> str:
+    """Generate a Pascal const array of TCodepointRange16 with UInt16 values."""
+    if not ranges:
+        return f"  {name}: array[0..0] of TCodepointRange16 = ( (0, 0, 0) );"
+    lines = [f"  {name}: array[0..{len(ranges)-1}] of TCodepointRange16 = ("]
+    for i, (lo, hi, val) in enumerate(ranges):
+        sep = "," if i < len(ranges) - 1 else ""
+        lines.append(f"    (Lo: ${lo:06X}; Hi: ${hi:06X}; Value: ${val:04X}){sep}")
+    lines.append("  );")
+    return "\n".join(lines)
+
+
 def build_gcb_tables(gcb: Dict[int, int]) -> Tuple[List[List[int]], List[Tuple[int, int, int]]]:
     """Build BMP stage-2 table + SMP ranges for Grapheme_Cluster_Break property."""
     bmp_table = [[0] * 256 for _ in range(256)]  # default: Other (0)
@@ -861,6 +1005,7 @@ def main():
     derived_norm_text = download_ucd(args.version, "DerivedNormalizationProps.txt")
     normalization_test_text = download_ucd(args.version, "NormalizationTest.txt")
     gbp_text = download_ucd(args.version, "auxiliary/GraphemeBreakProperty.txt")
+    allkeys_text = download_allkeys()
 
     # Optional but useful
     try:
@@ -896,6 +1041,8 @@ def main():
     composition_exclusions = build_normalization_property_sets(derived_norm_text)
     compose_entries = build_composition_table(records, raw_decomposition, composition_exclusions)
     gcb_bmp_table, gcb_smp_ranges = build_gcb_tables(gcb_map)
+    collation_weights = parse_allkeys(allkeys_text)
+    collate_bmp_table, collate_smp_ranges = build_collation_tables(collation_weights)
 
     # ── Step 4: Generate main data .inc ──
     print("Step 4/6: Writing Pascal .inc files...", file=sys.stderr)
@@ -1026,6 +1173,27 @@ const
 {pascal_ranges_list(gcb_smp_ranges, "GCB_SMP_RANGES")}
 """
 
+    # ── Step 7: Generate collation .inc ──
+    print("Step 7/7: Generating collation tables...", file=sys.stderr)
+
+    collate_output = f"""// {{Auto-generated by gen_unicode_data.py — Unicode {args.version}}}
+// Collation primary weight data from allkeys.txt (DUCET).
+//
+// Each codepoint maps to a 16-bit primary weight.
+// Weight 0 = ignorable (sorts before all other characters).
+// Non-zero weights define the primary sort order.
+//
+// Usage: look up primary weight, generate sort key as sequence of weights.
+
+const
+  // ── BMP Collation Primary Weight (stage-2: [high][low] → UInt16) ──
+{pascal_stage2_table_u16(collate_bmp_table, "COLLATE_BMP_TABLE")}
+
+  // ── SMP Collation Primary Weight Ranges (0x10000-0x10FFFF) ──
+  COLLATE_SMP_RANGES_COUNT = {len(collate_smp_ranges)};
+{pascal_ranges_list_u16(collate_smp_ranges, "COLLATE_SMP_RANGES")}
+"""
+
     # ── Write files ──
     files = {
         "nextpas.core.text.unicode.data.inc": cat_output,
@@ -1033,6 +1201,7 @@ const
         "nextpas.core.text.unicode.casefold.inc": fold_output,
         "nextpas.core.text.unicode.normalize.inc": normalize_output,
         "nextpas.core.text.unicode.gcb.inc": gcb_output,
+        "nextpas.core.text.unicode.collate.inc": collate_output,
     }
 
     for fname, fcontent in files.items():

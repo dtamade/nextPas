@@ -8,7 +8,7 @@ uses
   nextpas.core.text.unicode.types;
 
 type
-  // 排序规则类型
+  // 排序规则强度
   TCollationStrength = (
     csPrimary,    // 主要差异（如 a vs b）
     csSecondary,  // 次要差异（如 a vs á）
@@ -25,7 +25,7 @@ type
     NumericOrdering: Boolean;
   end;
 
-  // 排序键
+  // 排序键（字节序列）
   TCollationKey = array of Byte;
 
   // 排序器接口
@@ -40,7 +40,7 @@ type
     function Contains(const AText, ASubstring: string): Boolean;
   end;
 
-  // 默认排序器实现
+  // 默认排序器实现（基于 DUCET 主权重）
   TUnicodeCollator = class(TInterfacedObject, IUnicodeCollator)
   private
     FOptions: TCollationOptions;
@@ -62,21 +62,38 @@ function DefaultCollationOptions: TCollationOptions;
 function UnicodeCollator: IUnicodeCollator;
 function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator;
 
+// 底层查询：获取 codepoint 的 DUCET 主权重
+// 返回 0 表示 ignorable（排序时忽略）
+function GetCollationPrimaryWeight(const ACp: TUnicodeCodepoint): UInt16;
+
 implementation
 
 uses
   nextpas.core.text.unicode.normalize,
-  nextpas.core.text.unicode.casefold,
-  nextpas.core.text.unicode.props,
   nextpas.core.text.unicode.base,
   nextpas.core.text.utf8;
+
+{$I nextpas.core.text.unicode.collate.inc}
 
 var
   FUnicodeCollator: IUnicodeCollator;
 
+function GetCollationPrimaryWeight(const ACp: TUnicodeCodepoint): UInt16;
+var
+  LValue: UInt16;
+begin
+  if ACp > UNICODE_MAX_CODEPOINT then
+    Exit(0);
+  if ACp <= $FFFF then
+    Exit(COLLATE_BMP_TABLE[Byte(ACp shr 8), Byte(ACp and $FF)]);
+  if FindRange16Value(ACp, COLLATE_SMP_RANGES, LValue) then
+    Exit(LValue);
+  Result := 0;
+end;
+
 function DefaultCollationOptions: TCollationOptions;
 begin
-  Result.Strength := csTertiary;
+  Result.Strength := csPrimary;
   Result.CaseLevel := False;
   Result.FrenchAccents := False;
   Result.NumericOrdering := False;
@@ -102,151 +119,97 @@ begin
   FOptions := AOptions;
 end;
 
-function TUnicodeCollator.Compare(const A, B: string): Integer;
-var
-  LA, LB: string;
-  LI, LJ: SizeInt;
-  LCodepointA, LCodepointB: TUnicodeCodepoint;
-  LCategoryA, LCategoryB: TGeneralCategory;
-  LDecodeA, LDecodeB: TUTF8DecodeResult;
-begin
-  // 规范化输入
-  LA := NFD(A);
-  LB := NFD(B);
-
-  // 简单实现：逐字符比较
-  LI := 1;
-  LJ := 1;
-  while (LI <= Length(LA)) and (LJ <= Length(LB)) do
-  begin
-    // 解码 UTF-8 字符
-    LDecodeA := UTF8Decode(@LA[LI], Length(LA) - LI + 1);
-    LDecodeB := UTF8Decode(@LB[LJ], Length(LB) - LJ + 1);
-
-    if (LDecodeA.ByteLen = 0) or (LDecodeB.ByteLen = 0) then
-    begin
-      // 无效的 UTF-8 序列，跳过
-      if LDecodeA.ByteLen = 0 then Inc(LI) else Inc(LI, LDecodeA.ByteLen);
-      if LDecodeB.ByteLen = 0 then Inc(LJ) else Inc(LJ, LDecodeB.ByteLen);
-      Continue;
-    end;
-
-    LCodepointA := LDecodeA.CodePoint;
-    LCodepointB := LDecodeB.CodePoint;
-
-    // 根据排序强度比较
-    case FOptions.Strength of
-      csPrimary:
-      begin
-        // 只比较主要差异
-        if LCodepointA <> LCodepointB then
-        begin
-          if LCodepointA < LCodepointB then
-            Exit(-1)
-          else
-            Exit(1);
-        end;
-      end;
-      csSecondary:
-      begin
-        // 比较次要差异
-        if LCodepointA <> LCodepointB then
-        begin
-          // 忽略大小写差异
-          LCategoryA := GetGeneralCategory(LCodepointA);
-          LCategoryB := GetGeneralCategory(LCodepointB);
-          if not (LCategoryA in [gcuUppercaseLetter, gcuLowercaseLetter]) or
-             not (LCategoryB in [gcuUppercaseLetter, gcuLowercaseLetter]) then
-          begin
-            if LCodepointA < LCodepointB then
-              Exit(-1)
-            else
-              Exit(1);
-          end;
-        end;
-      end;
-      csTertiary:
-      begin
-        // 比较三级差异（包括大小写）
-        if LCodepointA <> LCodepointB then
-        begin
-          if LCodepointA < LCodepointB then
-            Exit(-1)
-          else
-            Exit(1);
-        end;
-      end;
-      csQuaternary, csIdentical:
-      begin
-        // 完全比较
-        if LCodepointA <> LCodepointB then
-        begin
-          if LCodepointA < LCodepointB then
-            Exit(-1)
-          else
-            Exit(1);
-        end;
-      end;
-    end;
-
-    Inc(LI, LDecodeA.ByteLen);
-    Inc(LJ, LDecodeB.ByteLen);
-  end;
-
-  // 长度比较
-  if LI <= Length(LA) then
-    Result := 1
-  else if LJ <= Length(LB) then
-    Result := -1
-  else
-    Result := 0;
-end;
-
 function TUnicodeCollator.GetSortKey(const AText: string): TCollationKey;
 var
   LNormalized: string;
-  LI: SizeInt;
-  LCodepoint: TUnicodeCodepoint;
-  LKey: TCollationKey;
-  LDecode: TUTF8DecodeResult;
+  LIter: TUTF8Iterator;
+  LCp: UInt32;
+  LWeight: UInt16;
   LKeyPos: SizeInt;
+  LKey: TCollationKey;
 begin
-  // 规范化输入
-  LNormalized := NFD(AText);
-
-  // 简单实现：生成基本排序键
-  SetLength(LKey, Length(LNormalized) * 4); // 预分配空间
-  LI := 1;
-  LKeyPos := 0;
-  while LI <= Length(LNormalized) do
+  if AText = '' then
   begin
-    // 解码 UTF-8 字符
-    LDecode := UTF8Decode(@LNormalized[LI], Length(LNormalized) - LI + 1);
-    if LDecode.ByteLen = 0 then
-    begin
-      // 无效的 UTF-8 序列，跳过一个字节
-      Inc(LI);
-      Continue;
-    end;
-    LCodepoint := LDecode.CodePoint;
-
-    // 生成排序键
-    // TODO: 实现完整的 Unicode Collation Algorithm
-    if LKeyPos + 4 <= Length(LKey) then
-    begin
-      LKey[LKeyPos] := Byte(LCodepoint and $FF);
-      LKey[LKeyPos + 1] := Byte((LCodepoint shr 8) and $FF);
-      LKey[LKeyPos + 2] := Byte((LCodepoint shr 16) and $FF);
-      LKey[LKeyPos + 3] := Byte((LCodepoint shr 24) and $FF);
-      Inc(LKeyPos, 4);
-    end;
-
-    Inc(LI, LDecode.ByteLen);
+    SetLength(Result, 0);
+    Exit;
   end;
 
-  // 调整长度
+  // NFD 规范化
+  LNormalized := NFD(AText);
+
+  // 预分配：每个 codepoint 最多 3 字节权重 + 1 字节分隔符
+  SetLength(LKey, Length(LNormalized) + 4);
+  LKeyPos := 0;
+
+  LIter.Init(PByte(PAnsiChar(LNormalized)), SizeUInt(Length(LNormalized)));
+  while LIter.Next(LCp) do
+  begin
+    LWeight := GetCollationPrimaryWeight(LCp);
+
+    // 跳过 ignorable（权重为 0）
+    if LWeight = 0 then
+      Continue;
+
+    // 确保空间
+    if LKeyPos + 4 > Length(LKey) then
+      SetLength(LKey, Length(LKey) * 2);
+
+    // 编码权重为 2 字节（大端序，避免与分隔符 0x00 冲突）
+    if LWeight >= $0100 then
+    begin
+      LKey[LKeyPos] := Byte(LWeight shr 8);
+      Inc(LKeyPos);
+    end;
+    LKey[LKeyPos] := Byte(LWeight and $FF);
+    Inc(LKeyPos);
+
+    // 权重之间插入分隔符 0x00，确保可比性
+    LKey[LKeyPos] := 0;
+    Inc(LKeyPos);
+  end;
+
+  // 终止符
+  if LKeyPos + 1 > Length(LKey) then
+    SetLength(LKey, LKeyPos + 1);
+  LKey[LKeyPos] := 0;
+  Inc(LKeyPos);
+
   SetLength(LKey, LKeyPos);
   Result := LKey;
+end;
+
+function TUnicodeCollator.Compare(const A, B: string): Integer;
+var
+  LKeyA, LKeyB: TCollationKey;
+  LLen: SizeInt;
+  LI: SizeInt;
+begin
+  // 快速路径：相同字符串
+  if A = B then
+    Exit(0);
+
+  LKeyA := GetSortKey(A);
+  LKeyB := GetSortKey(B);
+
+  // 按字节比较排序键
+  LLen := Length(LKeyA);
+  if Length(LKeyB) < LLen then
+    LLen := Length(LKeyB);
+
+  for LI := 0 to LLen - 1 do
+  begin
+    if LKeyA[LI] < LKeyB[LI] then
+      Exit(-1);
+    if LKeyA[LI] > LKeyB[LI] then
+      Exit(1);
+  end;
+
+  // 长度比较
+  if Length(LKeyA) < Length(LKeyB) then
+    Exit(-1);
+  if Length(LKeyA) > Length(LKeyB) then
+    Exit(1);
+  Result := 0;
 end;
 
 function TUnicodeCollator.Equals(const A, B: string): Boolean;
@@ -290,7 +253,7 @@ begin
   if LSubByteLen > LTextLen then
     Exit(0);
 
-  // 按 codepoint 边界滑动窗口，避免截断多字节 UTF-8 字符
+  // 按 codepoint 边界滑动窗口
   LI := 1;
   while LI <= LTextLen - LSubByteLen + 1 do
   begin

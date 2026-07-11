@@ -27,19 +27,21 @@ type
   TCaseFoldEntry = nextpas.core.text.unicode.types.TCaseFoldEntry;
   TGraphemeBreakProperty = nextpas.core.text.unicode.types.TGraphemeBreakProperty;
 
+  TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
+  TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
+  TCollationKey = nextpas.core.text.unicode.collate.TCollationKey;
+  IUnicodeCollator = nextpas.core.text.unicode.collate.IUnicodeCollator;
+  TUnicodeCollator = nextpas.core.text.unicode.collate.TUnicodeCollator;
+
   // 新增类型
   TUnicodeScript = nextpas.core.text.unicode.types.TUnicodeScript;
   TUnicodeBlock = nextpas.core.text.unicode.types.TUnicodeBlock;
   TSegmentType = nextpas.core.text.unicode.segment.TSegmentType;
   TSegmentResult = nextpas.core.text.unicode.segment.TSegmentResult;
   TSegmentResultArray = nextpas.core.text.unicode.segment.TSegmentResultArray;
-  TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
-  TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
-  TCollationKey = nextpas.core.text.unicode.collate.TCollationKey;
 
   // 接口类型
   IUnicodeSegmenter = nextpas.core.text.unicode.segment.IUnicodeSegmenter;
-  IUnicodeCollator = nextpas.core.text.unicode.collate.IUnicodeCollator;
 
 const
   UNICODE_MAX_CODEPOINT = nextpas.core.text.unicode.types.UNICODE_MAX_CODEPOINT;
@@ -96,6 +98,7 @@ function SegmentLines(const AText: string): TSegmentResultArray; inline;
 function SegmentSentences(const AText: string): TSegmentResultArray; inline;
 
 // 排序规则函数
+function GetCollationPrimaryWeight(const ACp: TUnicodeCodepoint): UInt16; inline;
 function UnicodeCollator: IUnicodeCollator; inline;
 function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator; inline;
 function DefaultCollationOptions: TCollationOptions; inline;
@@ -295,6 +298,11 @@ end;
 function SegmentSentences(const AText: string): TSegmentResultArray;
 begin
   Result := nextpas.core.text.unicode.segment.UnicodeSegmenter.SegmentSentences(AText);
+end;
+
+function GetCollationPrimaryWeight(const ACp: TUnicodeCodepoint): UInt16;
+begin
+  Result := nextpas.core.text.unicode.collate.GetCollationPrimaryWeight(ACp);
 end;
 
 function UnicodeCollator: IUnicodeCollator;
