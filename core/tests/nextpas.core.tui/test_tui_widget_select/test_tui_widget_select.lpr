@@ -71,11 +71,78 @@ begin S.Fg := IndexedColor(2); Check(TSelect.New(['A']).WithHighlightStyle(S) <>
 
 procedure TestRender;
 var B: TBuffer; A: TRect;
-begin A := TRect.Make(0, 0, 20, 3); B := TBuffer.CreateEmpty(A); TSelect.New(['A', 'B']).Render(A, B); Check(True, 'Render'); end;
+begin
+  A := TRect.Make(0, 0, 20, 3);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TSelect.New(['A', 'B']).Render(A, B);
+    Check(True, 'Render');
+  finally
+    B.Free;
+  end;
+end;
 
 procedure TestRenderStateful;
 var B: TBuffer; A: TRect; S: TSelectState;
-begin A := TRect.Make(0, 0, 20, 8); B := TBuffer.CreateEmpty(A); S := TSelectState.Empty; TSelect.New(['A', 'B', 'C']).RenderStateful(A, B, S); Check(True, 'RenderStateful'); end;
+begin
+  A := TRect.Make(0, 0, 20, 8);
+  B := TBuffer.CreateEmpty(A);
+  try
+    S := TSelectState.Empty;
+    TSelect.New(['A', 'B', 'C']).RenderStateful(A, B, S);
+    Check(True, 'RenderStateful');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TestRenderEmpty;
+var B: TBuffer; A: TRect; S: TSelectState;
+begin
+  A := TRect.Make(0, 0, 15, 3);
+  B := TBuffer.CreateEmpty(A);
+  try
+    S := TSelectState.Empty;
+    TSelect.New(['X']).RenderStateful(A, B, S);
+    Check(True, 'Render empty select');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TestRenderSmallArea;
+var B: TBuffer; A: TRect;
+begin
+  A := TRect.Make(0, 0, 3, 1);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TSelect.New(['A']).Render(A, B);
+    Check(True, 'Render in small area');
+  finally
+    B.Free;
+  end;
+end;
+
+procedure TestStateMoveDownBoundary;
+var S: TSelectState;
+begin
+  S := TSelectState.Empty;
+  S.Open := True;
+  S.HighlightIdx := 0;
+  S.MoveDown(2);
+  S.MoveDown(2);
+  S.MoveDown(2);
+  Check(S.HighlightIdx <= 2, 'Should not exceed item count');
+end;
+
+procedure TestStateConfirmWithoutOpen;
+var S: TSelectState;
+begin
+  S := TSelectState.Empty;
+  S.HighlightIdx := 1;
+  S.Confirm;
+  Check(S.Selected = 1, 'Should confirm even when closed');
+end;
 
 procedure TestBuilderChaining;
 var S1, S2: TStyle;
@@ -101,5 +168,9 @@ begin
   T.Test('Render', @TestRender);
   T.Test('RenderStateful', @TestRenderStateful);
   T.Test('Builder chaining', @TestBuilderChaining);
+  T.Test('Render empty', @TestRenderEmpty);
+  T.Test('Render small area', @TestRenderSmallArea);
+  T.Test('StateMoveDown boundary', @TestStateMoveDownBoundary);
+  T.Test('StateConfirm without open', @TestStateConfirmWithoutOpen);
   if not T.Run then Halt(1);
 end.
