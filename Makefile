@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract
+.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -17,6 +17,7 @@ verify: hygiene contract
 	$(MAKE) test-compiler-incremental-cache
 	$(MAKE) test-compiler-constructor-typing
 	$(MAKE) test-incremental-gate
+	$(MAKE) test-compiler-system-intrinsics
 	./build/verify_local.sh
 	$(MAKE) hygiene
 
@@ -42,6 +43,10 @@ test-compiler-constructor-typing: hygiene
 
 test-incremental-gate: hygiene
 	./tests/regression/verify_incremental.sh
+	$(MAKE) hygiene
+
+test-compiler-system-intrinsics: hygiene system-projection-check
+	./compiler/tests/run_system_intrinsic_self_aliases_test.sh
 	$(MAKE) hygiene
 focused: hygiene
 	@test -n "$(FOCUS)" || { echo "FOCUS is required, e.g. make focused FOCUS=core/tests/nextpas.core.http/test_http_client" >&2; exit 1; }
