@@ -50,7 +50,9 @@ implementation
 uses
   nextpas.core.text.unicode.props,
   nextpas.core.text.unicode.casefold,
-  nextpas.core.text.unicode.normalize;
+  nextpas.core.text.unicode.normalize,
+  nextpas.core.text.unicode.script,
+  nextpas.core.text.unicode.block;
 
 var
   FUnicodeData: IUnicodeDataManager;
@@ -76,14 +78,12 @@ end;
 
 function TUnicodeDataManager.GetScript(const ACp: TUnicodeCodepoint): TUnicodeScript;
 begin
-  // TODO: 实现 Script 属性查询
-  Result := usUnknown;
+  Result := nextpas.core.text.unicode.script.GetScript(ACp);
 end;
 
 function TUnicodeDataManager.GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock;
 begin
-  // TODO: 实现 Block 属性查询
-  Result := ubNoBlock;
+  Result := nextpas.core.text.unicode.block.GetBlock(ACp);
 end;
 
 function TUnicodeDataManager.GetSimpleLowercaseMapping(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
