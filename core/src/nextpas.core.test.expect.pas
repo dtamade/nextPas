@@ -128,6 +128,16 @@ begin
   if A > B then Result := A else Result := B;
 end;
 
+procedure RequireNotNaN(const AValue, AThreshold: Double;
+  const AOp: string);
+{ Shared NaN guard for double comparison methods. Fails with descriptive
+  message if either value is NaN. }
+begin
+  if IsNan(AValue) or IsNan(AThreshold) then
+    InternalFail(FloatToStr(AValue) + ' ' + AOp + ' ' +
+      FloatToStr(AThreshold) + ' (NaN)');
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TExpectation (fluent API)                                                    }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -731,9 +741,7 @@ end;
 function TExpectation.ToBeGreaterThanD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeGreaterThanD');
-  if IsNan(FDoubleValue) or IsNan(AThreshold) then
-    InternalFail(FloatToStr(FDoubleValue) + ' is not > ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(FDoubleValue, AThreshold, 'is not >');
   CheckMatch(FDoubleValue > AThreshold,
     FloatToStr(FDoubleValue) + ' should not be > ' + FloatToStr(AThreshold),
     FloatToStr(FDoubleValue) + ' is not > ' + FloatToStr(AThreshold));
@@ -743,9 +751,7 @@ end;
 function TExpectation.ToBeLessThanD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeLessThanD');
-  if IsNan(FDoubleValue) or IsNan(AThreshold) then
-    InternalFail(FloatToStr(FDoubleValue) + ' is not < ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(FDoubleValue, AThreshold, 'is not <');
   CheckMatch(FDoubleValue < AThreshold,
     FloatToStr(FDoubleValue) + ' should not be < ' + FloatToStr(AThreshold),
     FloatToStr(FDoubleValue) + ' is not < ' + FloatToStr(AThreshold));
@@ -755,9 +761,7 @@ end;
 function TExpectation.ToBeGreaterOrEqualD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeGreaterOrEqualD');
-  if IsNan(FDoubleValue) or IsNan(AThreshold) then
-    InternalFail(FloatToStr(FDoubleValue) + ' is not >= ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(FDoubleValue, AThreshold, 'is not >=');
   CheckMatch(FDoubleValue >= AThreshold,
     FloatToStr(FDoubleValue) + ' should not be >= ' + FloatToStr(AThreshold),
     FloatToStr(FDoubleValue) + ' is not >= ' + FloatToStr(AThreshold));
@@ -767,9 +771,7 @@ end;
 function TExpectation.ToBeLessOrEqualD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeLessOrEqualD');
-  if IsNan(FDoubleValue) or IsNan(AThreshold) then
-    InternalFail(FloatToStr(FDoubleValue) + ' is not <= ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(FDoubleValue, AThreshold, 'is not <=');
   CheckMatch(FDoubleValue <= AThreshold,
     FloatToStr(FDoubleValue) + ' should not be <= ' + FloatToStr(AThreshold),
     FloatToStr(FDoubleValue) + ' is not <= ' + FloatToStr(AThreshold));
@@ -813,7 +815,7 @@ begin
   if Length(ASubstr) = 0 then
     LFound := True { empty needle matches everything }
   else
-    LFound := Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0;
+    LFound := PosCI(ASubstr, FStrValue) > 0;
   CheckMatch(LFound,
     '"' + FStrValue + '" should not contain (ci) "' + ASubstr + '"',
     '"' + FStrValue + '" does not contain (ci) "' + ASubstr + '"');
@@ -823,9 +825,7 @@ end;
 function TExpectation.ToStartWithCI(const APrefix: string): IExpectation;
 begin
   RequireKind(ekString, 'ToStartWithCI');
-  CheckMatch(
-    (Length(FStrValue) >= Length(APrefix)) and
-    (LowerCase(Copy(FStrValue, 1, Length(APrefix))) = LowerCase(APrefix)),
+  CheckMatch(StrStartsWithCI(FStrValue, APrefix),
     '"' + FStrValue + '" should not start with (ci) "' + APrefix + '"',
     '"' + FStrValue + '" does not start with (ci) "' + APrefix + '"');
   Result := Self;
@@ -834,7 +834,7 @@ end;
 function TExpectation.ToEndWithCI(const ASuffix: string): IExpectation;
 begin
   RequireKind(ekString, 'ToEndWithCI');
-  CheckMatch(StrEndsWith(LowerCase(FStrValue), LowerCase(ASuffix)),
+  CheckMatch(StrEndsWithCI(FStrValue, ASuffix),
     '"' + FStrValue + '" should not end with (ci) "' + ASuffix + '"',
     '"' + FStrValue + '" does not end with (ci) "' + ASuffix + '"');
   Result := Self;
