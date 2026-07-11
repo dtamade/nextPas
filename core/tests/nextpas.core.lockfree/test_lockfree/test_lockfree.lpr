@@ -2243,6 +2243,25 @@ begin
   end;
 end;
 
+{ EBR boundary conditions }
+
+procedure TestEbrBoundaryConditions;
+var
+  LDomain: TEbrDomain;
+  LGuard1, LGuard2: TEbrGuard;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    { Multiple guards from same domain }
+    LGuard1 := TEbrGuard.Acquire(LDomain);
+    LGuard2 := TEbrGuard.Acquire(LDomain);
+    LGuard1.Release;
+    LGuard2.Release;
+  finally
+    LDomain.Free;
+  end;
+end;
+
 { Multi-thread stress tests }
 
 const
@@ -4488,6 +4507,118 @@ begin
 end;
 
 { ============================================================ }
+{ Deque: TrySteal boundary conditions                          }
+{ ============================================================ }
+
+procedure TestDequeTryStealEmpty;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(8);
+  try
+    Check(not LD.TrySteal(LV), 'steal from empty returns false');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestDequeTryStealClosed;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(8);
+  try
+    LD.TryPush(1);
+    LD.Close;
+    Check(LD.TrySteal(LV), 'steal from closed with data succeeds');
+    CheckEqual(1, LV, 'stolen value matches');
+    Check(not LD.TrySteal(LV), 'steal from closed empty returns false');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestDequeTryPopEmpty;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(8);
+  try
+    Check(not LD.TryPop(LV), 'pop from empty returns false');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestDequeTryPopClosed;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(8);
+  try
+    LD.TryPush(1);
+    LD.Close;
+    Check(LD.TryPop(LV), 'pop from closed with data succeeds');
+    CheckEqual(1, LV, 'popped value matches');
+    Check(not LD.TryPop(LV), 'pop from closed empty returns false');
+  finally
+    LD.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Stack: boundary conditions                                    }
+{ ============================================================ }
+
+procedure TestStackTryPopEmpty;
+var
+  LS: TIntStack;
+  LV: Integer;
+begin
+  LS := TIntStack.Create(8);
+  try
+    Check(not LS.TryPop(LV), 'pop from empty returns false');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestStackTryPopClosed;
+var
+  LS: TIntStack;
+  LV: Integer;
+begin
+  LS := TIntStack.Create(8);
+  try
+    LS.TryPush(1);
+    LS.Close;
+    Check(LS.TryPop(LV), 'pop from closed with data succeeds');
+    CheckEqual(1, LV, 'popped value matches');
+    Check(not LS.TryPop(LV), 'pop from closed empty returns false');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestStackPushFull;
+var
+  LS: TIntStack;
+begin
+  LS := TIntStack.Create(2);
+  try
+    Check(LS.TryPush(1), 'push 1');
+    Check(LS.TryPush(2), 'push 2');
+    Check(not LS.TryPush(3), 'push to full returns false');
+  finally
+    LS.Free;
+  end;
+end;
+
+{ ============================================================ }
 { Edge-case: HashMap single key stress                          }
 { ============================================================ }
 
@@ -6300,6 +6431,7 @@ begin
   T.Test('EBR multi-guard retire+collect', @TestEbrMultiGuardRetireCollect);
   T.Test('EBR destroy reclaims retired', @TestEbrDestroyWithRetired);
   T.Test('EBR orphan remains with origin domain', @TestEbrOrphansStayWithOriginDomain);
+  T.Test('EBR boundary conditions', @TestEbrBoundaryConditions);
   T.Test('Channel basic', @TestChannelBasic);
   T.Test('Channel close', @TestChannelClose);
   T.Test('Channel close raises on Send', @TestChannelCloseRaiseOnSend);
@@ -6378,6 +6510,13 @@ begin
   T.Test('MPMC capacity=1', @TestMpmcCapacityOne);
   T.Test('Stack capacity=1', @TestStackCapacityOne);
   T.Test('Deque capacity=1', @TestDequeCapacityOne);
+  T.Test('Deque TrySteal empty', @TestDequeTryStealEmpty);
+  T.Test('Deque TrySteal closed', @TestDequeTryStealClosed);
+  T.Test('Deque TryPop empty', @TestDequeTryPopEmpty);
+  T.Test('Deque TryPop closed', @TestDequeTryPopClosed);
+  T.Test('Stack TryPop empty', @TestStackTryPopEmpty);
+  T.Test('Stack TryPop closed', @TestStackTryPopClosed);
+  T.Test('Stack push full', @TestStackPushFull);
   T.Test('HashMap single key stress', @TestHashMapSingleKeyStress);
   T.Test('HashMap many keys stress', @TestHashMapManyKeysStress);
   T.Test('Channel capacity=2', @TestChannelCapacityTwo);
