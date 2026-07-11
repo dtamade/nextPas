@@ -24,9 +24,9 @@ type
     procedure DoneN(const AN: Int64);
     procedure Wait;
     function WaitTimeout(const ATimeoutNs: Int64): Boolean;
-    function GetCount: Int64;
+    function GetCount: Int64; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -102,7 +102,7 @@ begin
   Result := True;
 end;
 
-function TCountDownLatch.GetCount: Int64;
+function TCountDownLatch.GetCount: Int64; inline;
 begin
   Result := AtomicLoad64(FCount, moAcquire);
 end;
@@ -112,7 +112,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TCountDownLatch.IsClosed: Boolean;
+function TCountDownLatch.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

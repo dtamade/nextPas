@@ -57,11 +57,11 @@ type
     destructor Destroy; override;
     function Await: TCyclicBarrierWaitResult;
     function AwaitTimeout(const ATimeoutNs: Int64): TCyclicBarrierWaitResult;
-    function GetParties: Int64;
+    function GetParties: Int64; inline;
     function GetNumberWaiting: Int64;
     procedure Reset;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -239,7 +239,7 @@ begin
   Result := AwaitInternal(ATimeoutNs);
 end;
 
-function TCyclicBarrier.GetParties: Int64;
+function TCyclicBarrier.GetParties: Int64; inline;
 begin
   Result := FParties;
 end;
@@ -279,7 +279,7 @@ begin
   end;
 end;
 
-function TCyclicBarrier.IsClosed: Boolean;
+function TCyclicBarrier.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
