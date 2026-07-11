@@ -1345,6 +1345,65 @@ begin
   end, 'NOT to match');
 end;
 
+{ ── CheckSorted tests ─────────────────────────────────────────────────────── }
+
+procedure TestCheckSortedIntPass;
+begin
+  CheckSorted([1, 2, 3, 4, 5]);
+end;
+
+procedure TestCheckSortedIntFail;
+begin
+  ExpectFail(procedure begin
+    CheckSorted([1, 3, 2, 4]);
+  end, 'not sorted');
+end;
+
+procedure TestCheckSortedIntEmpty;
+var
+  LA: specialize TArray<Int64>;
+begin
+  SetLength(LA, 0);
+  CheckSorted(LA);
+end;
+
+procedure TestCheckSortedIntSingle;
+begin
+  CheckSorted([42]);
+end;
+
+procedure TestCheckSortedIntEqual;
+begin
+  CheckSorted([3, 3, 3]);
+end;
+
+procedure TestCheckSortedIntWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckSorted([5, 3, 1], 'must be ascending');
+  end, 'must be ascending');
+end;
+
+procedure TestCheckSortedStringPass;
+begin
+  CheckSorted(['alpha', 'beta', 'gamma']);
+end;
+
+procedure TestCheckSortedStringFail;
+begin
+  ExpectFail(procedure begin
+    CheckSorted(['z', 'a']);
+  end, 'not sorted');
+end;
+
+procedure TestCheckSortedStringEmpty;
+var
+  LA: specialize TArray<string>;
+begin
+  SetLength(LA, 0);
+  CheckSorted(LA);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1557,6 +1616,17 @@ begin
   LSuite.Test('ArrayNotContains byte pass',@TestCheckArrayNotContainsBytePass);
   LSuite.Test('ArrayNotContains byte fail',@TestCheckArrayNotContainsByteFail);
   LSuite.Test('ArrayNotContains byte+msg', @TestCheckArrayNotContainsByteWithMessage);
+
+  { CheckSorted }
+  LSuite.Test('Sorted int pass',           @TestCheckSortedIntPass);
+  LSuite.Test('Sorted int fail',           @TestCheckSortedIntFail);
+  LSuite.Test('Sorted int empty',          @TestCheckSortedIntEmpty);
+  LSuite.Test('Sorted int single',         @TestCheckSortedIntSingle);
+  LSuite.Test('Sorted int equal',          @TestCheckSortedIntEqual);
+  LSuite.Test('Sorted int+msg',            @TestCheckSortedIntWithMessage);
+  LSuite.Test('Sorted string pass',        @TestCheckSortedStringPass);
+  LSuite.Test('Sorted string fail',        @TestCheckSortedStringFail);
+  LSuite.Test('Sorted string empty',       @TestCheckSortedStringEmpty);
 
   if not LSuite.Run then
   begin
