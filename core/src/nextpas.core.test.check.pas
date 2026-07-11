@@ -163,6 +163,15 @@ procedure CheckNaN(const AValue: Double; const AMessage: string = '');
 { CheckNotNaN — passes if AValue is NOT NaN. }
 procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
 
+{ ── Infinity Checks (v8.3) ────────────────────────────────────────────────── }
+
+{ CheckInf — passes if AValue is +Inf or -Inf. }
+procedure CheckInf(const AValue: Double; const AMessage: string = '');
+{ CheckNotInf — passes if AValue is NOT infinite. }
+procedure CheckNotInf(const AValue: Double; const AMessage: string = '');
+{ CheckFinite — passes if AValue is finite (not NaN, not Inf). }
+procedure CheckFinite(const AValue: Double; const AMessage: string = '');
+
 { ── Regex Matching ──────────────────────────────────────────────────────────── }
 
 { Check that AStr matches regex APattern. Uses nextpas.core.regex for matching.
@@ -624,6 +633,30 @@ procedure CheckNotNaN(const AValue: Double; const AMessage: string);
 begin
   if IsNan(AValue) then
     FailPrepend(AMessage, 'Expected non-NaN but got NaN');
+end;
+
+{ ── Infinity Checks (v8.3) ────────────────────────────────────────────────── }
+
+procedure CheckInf(const AValue: Double; const AMessage: string);
+begin
+  if not IsInfinite(AValue) then
+    FailPrepend(AMessage,
+      'Expected infinite but got ' + FloatToStr(AValue));
+end;
+
+procedure CheckNotInf(const AValue: Double; const AMessage: string);
+begin
+  if IsInfinite(AValue) then
+    FailPrepend(AMessage,
+      'Expected finite but got ' + FloatToStr(AValue));
+end;
+
+procedure CheckFinite(const AValue: Double; const AMessage: string);
+begin
+  if IsNan(AValue) then
+    FailPrepend(AMessage, 'Expected finite but got NaN')
+  else if IsInfinite(AValue) then
+    FailPrepend(AMessage, 'Expected finite but got ' + FloatToStr(AValue));
 end;
 
 { ── Regex Matching ──────────────────────────────────────────────────────────── }

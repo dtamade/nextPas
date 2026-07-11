@@ -220,6 +220,9 @@ procedure CheckNotNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure CheckNaN(const AValue: Double; const AMessage: string = '');
 procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
+procedure CheckInf(const AValue: Double; const AMessage: string = '');
+procedure CheckNotInf(const AValue: Double; const AMessage: string = '');
+procedure CheckFinite(const AValue: Double; const AMessage: string = '');
 
 { ── Regex Matching ──────────────────────────────────────────────────────────── }
 procedure CheckMatch(const APattern, AStr: string); overload;

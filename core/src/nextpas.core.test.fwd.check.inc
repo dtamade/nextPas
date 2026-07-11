@@ -389,3 +389,10 @@ procedure CheckNotEmpty(const AValue: TBytes);
 begin nextpas.core.test.check.CheckNotEmpty(AValue); end;
 procedure CheckNotEmpty(const AValue: TBytes; const AMessage: string);
 begin nextpas.core.test.check.CheckNotEmpty(AValue, AMessage); end;
+
+procedure CheckInf(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckInf(AValue, AMessage); end;
+procedure CheckNotInf(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNotInf(AValue, AMessage); end;
+procedure CheckFinite(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckFinite(AValue, AMessage); end;
