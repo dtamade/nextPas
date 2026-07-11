@@ -89,6 +89,8 @@ const
 constructor TStatsAllocator.Create(AInner: IAllocator);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentNil.Create('TStatsAllocator.Create: AInner cannot be nil');
   FInner := AInner;
   Reset;
 end;

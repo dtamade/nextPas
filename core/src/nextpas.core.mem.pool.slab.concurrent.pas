@@ -76,7 +76,6 @@ type
     function Warmup(aUnitSize: SizeUInt; aMinPages: SizeUInt): SizeUInt;
     // Diagnostics forwarding
     function Owns(APtr: Pointer): Boolean;
-    function MemSizeOf(APtr: Pointer): SizeUInt;
     function Stats: TSlabPoolStats;
     function GetPerfCounters: TSlabPerfCounters;
     function SegmentCount: Integer;
@@ -400,12 +399,6 @@ begin
   FLock.Acquire;
   try
     Result := FInner.Owns(APtr);
-  finally
-    FLock.Release;
-  end;
-end;
-
-    Result := FInner.MemSizeOf(APtr);
   finally
     FLock.Release;
   end;

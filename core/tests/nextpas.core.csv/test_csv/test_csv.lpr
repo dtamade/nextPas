@@ -24,7 +24,7 @@ type
     function AllocMem(ASize: SizeUInt): Pointer; override;
     function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
+    function MemSizeOf(APtr: Pointer): SizeUInt; override;
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
     procedure FreeAligned(APtr: Pointer); override;
     function Traits: TAllocatorTraits; override;

@@ -31,7 +31,7 @@ type
     function AllocMem(ASize: SizeUInt): Pointer; override;
     function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
+    function MemSizeOf(APtr: Pointer): SizeUInt; override;
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
     procedure FreeAligned(APtr: Pointer); override;
     function Traits: TAllocatorTraits; override;
@@ -47,7 +47,7 @@ type
     function AllocMem(ASize: SizeUInt): Pointer; override;
     function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
     procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
+    function MemSizeOf(APtr: Pointer): SizeUInt; override;
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
     procedure FreeAligned(APtr: Pointer); override;
     function Traits: TAllocatorTraits; override;
@@ -98,7 +98,7 @@ begin
     System.FreeMem(ADst);
 end;
 
-function .MemSizeOf(APtr: Pointer): SizeUInt;
+function TFailingReallocateAllocator.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
@@ -170,7 +170,7 @@ begin
     System.FreeMem(ADst);
 end;
 
-function .MemSizeOf(APtr: Pointer): SizeUInt;
+function TFailingAllocateAllocator.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;

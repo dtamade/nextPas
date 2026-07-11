@@ -45,6 +45,9 @@ type
     function DoAllocMem(ASize: SizeUInt): Pointer; virtual;
     {** 实际重分配逻辑，默认分配+拷贝+释放 }
     function DoReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; virtual;
+    {** 返回已分配块的大小，默认返回 ASize（保守假设旧块 >= 新大小）。
+        有大小跟踪的子类应覆盖此方法以确保 ReallocMem 扩容时不越界读。 }
+    function DoMemSizeOf(APtr: Pointer; AHint: SizeUInt): SizeUInt; virtual;
   public
     {** 分配 ASize 字节，ASize=0 返回 nil }
     function GetMem(ASize: SizeUInt): Pointer;
@@ -86,12 +89,18 @@ begin
   Result := DoGetMem(ASize);
   if Result <> nil then
   begin
-    LOldSize := ASize; { 简化：拷贝 ASize 字节，实际应取旧块大小 }
+    LOldSize := DoMemSizeOf(APtr, ASize);
     if LOldSize > ASize then
       LOldSize := ASize;
     Move(APtr^, Result^, LOldSize);
     DoFreeMem(APtr);
   end;
+end;
+
+function TAllocatorBase.DoMemSizeOf(APtr: Pointer; AHint: SizeUInt): SizeUInt;
+begin
+  { 默认保守假设：旧块 >= 新大小。子类如有大小跟踪应覆盖此方法。 }
+  Result := AHint;
 end;
 
 function TAllocatorBase.GetMem(ASize: SizeUInt): Pointer;
