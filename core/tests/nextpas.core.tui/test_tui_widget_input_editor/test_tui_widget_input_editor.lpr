@@ -375,6 +375,118 @@ begin
   Check(Pos('X', LEditor.Content) > 0, 'Should insert X after word move');
 end;
 
+{ --- MoveUp/MoveDown --- }
+
+procedure TestEditorMoveUp;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.InsertChar(Ord('l'));
+  LEditor.InsertChar(Ord('1'));
+  LEditor.InsertNewline;
+  LEditor.InsertChar(Ord('l'));
+  LEditor.InsertChar(Ord('2'));
+  Check(LEditor.LineCount = 2, 'Should have 2 lines');
+  LEditor.MoveUp;
+  LEditor.InsertChar(Ord('X'));
+  Check(Pos('X', LEditor.Content) > 0, 'Should insert X on first line');
+end;
+
+procedure TestEditorMoveDown;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.InsertChar(Ord('l'));
+  LEditor.InsertChar(Ord('1'));
+  LEditor.InsertNewline;
+  LEditor.InsertChar(Ord('l'));
+  LEditor.InsertChar(Ord('2'));
+  LEditor.MoveHome;
+  LEditor.MoveUp;
+  LEditor.MoveDown;
+  LEditor.InsertChar(Ord('Y'));
+  Check(Pos('Y', LEditor.Content) > 0, 'Should insert Y on second line');
+end;
+
+{ --- HandleKey with special keys --- }
+
+procedure TestEditorHandleKeyBackspace;
+var
+  LEditor: IInputEditor;
+  LEvent: TEvent;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.InsertChar(Ord('a'));
+  LEditor.InsertChar(Ord('b'));
+  LEvent := KeyCodeEvent(kcBackspace, []);
+  LEditor.HandleKey(LEvent.Key);
+  Check(LEditor.Content = 'a', 'Content should be a after backspace');
+end;
+
+procedure TestEditorHandleKeyDelete;
+var
+  LEditor: IInputEditor;
+  LEvent: TEvent;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.InsertChar(Ord('a'));
+  LEditor.InsertChar(Ord('b'));
+  LEditor.MoveHome;
+  LEvent := KeyCodeEvent(kcDelete, []);
+  LEditor.HandleKey(LEvent.Key);
+  Check(LEditor.Content = 'b', 'Content should be b after delete');
+end;
+
+{ --- Multiple undo/redo --- }
+
+procedure TestEditorMultipleUndoRedo;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.InsertChar(Ord('a'));
+  LEditor.InsertChar(Ord('b'));
+  LEditor.InsertChar(Ord('c'));
+  Check(LEditor.Content = 'abc', 'Content should be abc');
+  LEditor.Undo;
+  Check(LEditor.Content = 'ab', 'Content should be ab after undo');
+  LEditor.Undo;
+  Check(LEditor.Content = 'a', 'Content should be a after 2nd undo');
+  LEditor.Redo;
+  Check(LEditor.Content = 'ab', 'Content should be ab after redo');
+  LEditor.Redo;
+  Check(LEditor.Content = 'abc', 'Content should be abc after 2nd redo');
+end;
+
+{ --- Content after operations --- }
+
+procedure TestEditorContentEmpty;
+var
+  LEditor: IInputEditor;
+begin
+  LEditor := TInputEditor.New;
+  Check(LEditor.Content = '', 'Empty editor content should be empty string');
+end;
+
+{ --- CursorScreenPos --- }
+
+procedure TestEditorCursorScreenPos;
+var
+  LEditor: IInputEditor;
+  LPos: TPosition;
+  LArea: TRect;
+begin
+  LEditor := TInputEditor.New;
+  LEditor.InsertChar(Ord('a'));
+  LEditor.InsertChar(Ord('b'));
+  LArea := TRect.Make(0, 0, 20, 1);
+  LPos := LEditor.CursorScreenPos(LArea);
+  Check(LPos.X >= 0, 'Cursor X should be non-negative');
+  Check(LPos.Y >= 0, 'Cursor Y should be non-negative');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.input_editor');
   T.Test('TEditorSnapshot record', @TestEditorSnapshotRecord);
@@ -402,5 +514,12 @@ begin
   T.Test('Copy/Paste', @TestEditorCopyCutPaste);
   T.Test('CutSelection', @TestEditorCutSelection);
   T.Test('MoveWordLeft/Right', @TestEditorMoveWordLeftRight);
+  T.Test('MoveUp', @TestEditorMoveUp);
+  T.Test('MoveDown', @TestEditorMoveDown);
+  T.Test('HandleKey backspace', @TestEditorHandleKeyBackspace);
+  T.Test('HandleKey delete', @TestEditorHandleKeyDelete);
+  T.Test('Multiple undo/redo', @TestEditorMultipleUndoRedo);
+  T.Test('Content empty', @TestEditorContentEmpty);
+  T.Test('CursorScreenPos', @TestEditorCursorScreenPos);
   if not T.Run then Halt(1);
 end.

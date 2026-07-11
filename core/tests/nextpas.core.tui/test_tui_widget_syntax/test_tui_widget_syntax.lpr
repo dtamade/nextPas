@@ -388,6 +388,288 @@ begin
   end;
 end;
 
+{ --- Directive tokenization --- }
+
+procedure TestTokenizePascalDirective;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal('{$IFDEF FPC}');
+  Check(Length(LTokens) = 1, 'Directive should produce 1 token');
+  Check(LTokens[0].Kind = tkDirective, '{$IFDEF FPC} should be tkDirective');
+  Check(LTokens[0].Start = 1, 'Directive should start at 1');
+  Check(LTokens[0].Len = 12, 'Directive length should be 12');
+end;
+
+procedure TestTokenizePascalDirectiveMode;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal('{$mode ObjFPC}');
+  Check(Length(LTokens) = 1, 'mode directive should produce 1 token');
+  Check(LTokens[0].Kind = tkDirective, '{$mode ObjFPC} should be tkDirective');
+end;
+
+{ --- Hex numbers --- }
+
+procedure TestTokenizePascalHexNumber;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal('$FF');
+  Check(Length(LTokens) = 1, 'Hex number should produce 1 token');
+  Check(LTokens[0].Kind = tkNumber, '$FF should be tkNumber');
+  Check(LTokens[0].Start = 1, 'Hex should start at 1');
+  Check(LTokens[0].Len = 3, 'Hex length should be 3');
+end;
+
+procedure TestTokenizePascalHexLower;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal('$dead');
+  Check(Length(LTokens) = 1, 'Hex lower should produce 1 token');
+  Check(LTokens[0].Kind = tkNumber, '$dead should be tkNumber');
+  Check(LTokens[0].Len = 5, 'Hex lower length should be 5');
+end;
+
+{ --- Float numbers --- }
+
+procedure TestTokenizePascalFloat;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal('3.14');
+  Check(Length(LTokens) = 1, 'Float should produce 1 token');
+  Check(LTokens[0].Kind = tkNumber, '3.14 should be tkNumber');
+  Check(LTokens[0].Len = 4, 'Float length should be 4');
+end;
+
+{ --- Symbol tokenization --- }
+
+procedure TestTokenizePascalSymbolAssign;
+var
+  LTokens: TTokenArray;
+  LFoundSymbol: Boolean;
+  I: Integer;
+begin
+  LTokens := TokenizePascal(':=');
+  LFoundSymbol := False;
+  for I := 0 to High(LTokens) do
+    if LTokens[I].Kind = tkSymbol then
+    begin
+      LFoundSymbol := True;
+      Break;
+    end;
+  Check(LFoundSymbol, ':= should contain tkSymbol');
+end;
+
+procedure TestTokenizePascalSemicolon;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal(';');
+  Check(Length(LTokens) = 1, 'Semicolon should produce 1 token');
+  Check(LTokens[0].Kind = tkSymbol, '; should be tkSymbol');
+  Check(LTokens[0].Len = 1, 'Semicolon length should be 1');
+end;
+
+{ --- Mixed content --- }
+
+procedure TestTokenizePascalMixed;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal('var x: Integer;');
+  Check(Length(LTokens) >= 4, 'Mixed line should have at least 4 tokens');
+  Check(LTokens[0].Kind = tkKeyword, 'var should be tkKeyword');
+  // x should be identifier (tkNormal)
+  // : should be symbol
+  // Integer should be identifier
+  // ; should be symbol
+end;
+
+{ --- Identifier not keyword --- }
+
+procedure TestTokenizePascalIdentifier;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal('myVariable');
+  Check(Length(LTokens) = 1, 'Identifier should produce 1 token');
+  Check(LTokens[0].Kind = tkNormal, 'myVariable should be tkNormal (not keyword)');
+end;
+
+procedure TestTokenizePascalIdentifierWithDigits;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal('var2');
+  Check(Length(LTokens) = 1, 'Identifier with digits should produce 1 token');
+  Check(LTokens[0].Kind = tkNormal, 'var2 should be tkNormal (not keyword)');
+end;
+
+{ --- Line comment --- }
+
+procedure TestTokenizePascalLineComment;
+var
+  LTokens: TTokenArray;
+begin
+  LTokens := TokenizePascal('// this is a comment');
+  Check(Length(LTokens) = 1, 'Line comment should produce 1 token');
+  Check(LTokens[0].Kind = tkComment, '// comment should be tkComment');
+  Check(LTokens[0].Start = 1, 'Line comment should start at 1');
+  Check(LTokens[0].Len = 20, 'Line comment length should be 20');
+end;
+
+{ --- String with escaped quotes --- }
+
+procedure TestTokenizePascalStringEscaped;
+var
+  LTokens: TTokenArray;
+  LLine: AnsiString;
+begin
+  // Build the string programmatically: 'it''s' (escaped quote inside string)
+  LLine := '''' + 'it' + '''''' + 's' + '''';
+  LTokens := TokenizePascal(LLine);
+  Check(Length(LTokens) = 1, 'Escaped string should produce 1 token');
+  Check(LTokens[0].Kind = tkString, 'Escaped string should be tkString');
+  Check(LTokens[0].Len = Length(LLine), 'Token length should match input');
+end;
+
+{ --- Multi-line block comment spanning --- }
+
+procedure TestTokenizePascalStatefulMultiLine;
+var
+  LStateIn, LStateOut1, LStateOut2: TLineState;
+  LTokens1, LTokens2: TTokenArray;
+begin
+  LStateIn.InBlockComment := False;
+  LStateIn.InString := False;
+  LStateIn.NestDepth := 0;
+  LStateIn.Reserved := 0;
+
+  // First line opens block comment
+  LTokens1 := TokenizePascalStateful('{ start comment', LStateIn, LStateOut1);
+  Check(LStateOut1.InBlockComment, 'Should be in block comment after opening {');
+
+  // Second line continues block comment and closes it
+  LTokens2 := TokenizePascalStateful('end comment }', LStateOut1, LStateOut2);
+  Check(not LStateOut2.InBlockComment, 'Should exit block comment after closing }');
+end;
+
+{ --- TSyntaxDoc.EnsureCleanTo --- }
+
+procedure TestSyntaxDocEnsureCleanTo;
+var
+  LHighlighter: IHighlighter;
+  LDoc: TSyntaxDoc;
+  LProvider: TLineProvider;
+  LPtr: PToken;
+  LCount: Integer;
+begin
+  LHighlighter := TPascalHighlighter.Create;
+  LProvider := TLineProvider.Create(['begin', 'end.']);
+  try
+    LDoc := TSyntaxDoc.Create(LHighlighter, 2, @LProvider.GetLine);
+    try
+      // Initially dirty from line 0
+      LDoc.EnsureCleanTo(1, 100);
+      LDoc.GetTokens(0, LPtr, LCount);
+      Check(LCount > 0, 'Line 0 should have tokens after EnsureCleanTo');
+      LDoc.GetTokens(1, LPtr, LCount);
+      Check(LCount > 0, 'Line 1 should have tokens after EnsureCleanTo');
+    finally
+      LDoc.Free;
+    end;
+  finally
+    LProvider.Free;
+  end;
+end;
+
+{ --- TSyntaxDoc.GetTokens --- }
+
+procedure TestSyntaxDocGetTokens;
+var
+  LHighlighter: IHighlighter;
+  LDoc: TSyntaxDoc;
+  LProvider: TLineProvider;
+  LPtr: PToken;
+  LCount: Integer;
+begin
+  LHighlighter := TPascalHighlighter.Create;
+  LProvider := TLineProvider.Create(['begin', 'end.']);
+  try
+    LDoc := TSyntaxDoc.Create(LHighlighter, 2, @LProvider.GetLine);
+    try
+      LDoc.EnsureCleanTo(1, 100);
+      LDoc.GetTokens(0, LPtr, LCount);
+      Check(LCount > 0, 'begin should produce tokens');
+      Check(LPtr^.Kind = tkKeyword, 'First token of begin should be tkKeyword');
+
+      LDoc.GetTokens(1, LPtr, LCount);
+      Check(LCount > 0, 'end. should produce tokens');
+    finally
+      LDoc.Free;
+    end;
+  finally
+    LProvider.Free;
+  end;
+end;
+
+{ --- TSyntaxDoc with zero lines --- }
+
+procedure TestSyntaxDocZeroLines;
+var
+  LHighlighter: IHighlighter;
+  LDoc: TSyntaxDoc;
+  LProvider: TLineProvider;
+begin
+  LHighlighter := TPascalHighlighter.Create;
+  LProvider := TLineProvider.Create([]);
+  try
+    LDoc := TSyntaxDoc.Create(LHighlighter, 0, @LProvider.GetLine);
+    try
+      Check(LDoc.LineCount = 0, 'Zero lines doc should have LineCount 0');
+    finally
+      LDoc.Free;
+    end;
+  finally
+    LProvider.Free;
+  end;
+end;
+
+{ --- TSyntaxDoc Invalidate before EnsureCleanTo --- }
+
+procedure TestSyntaxDocInvalidateThenClean;
+var
+  LHighlighter: IHighlighter;
+  LDoc: TSyntaxDoc;
+  LProvider: TLineProvider;
+  LPtr: PToken;
+  LCount: Integer;
+begin
+  LHighlighter := TPascalHighlighter.Create;
+  LProvider := TLineProvider.Create(['begin', 'var x: Integer;', 'end.']);
+  try
+    LDoc := TSyntaxDoc.Create(LHighlighter, 3, @LProvider.GetLine);
+    try
+      // Clean first two lines
+      LDoc.EnsureCleanTo(1, 100);
+      // Invalidate from line 1
+      LDoc.Invalidate(1);
+      // Re-clean should still work
+      LDoc.EnsureCleanTo(2, 100);
+      LDoc.GetTokens(2, LPtr, LCount);
+      Check(LCount > 0, 'Line 2 should have tokens after invalidate+clean');
+    finally
+      LDoc.Free;
+    end;
+  finally
+    LProvider.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.syntax');
   T.Test('TTokenKind enum values', @TestTokenKindEnum);
@@ -412,5 +694,22 @@ begin
   T.Test('TSyntaxDoc.NotifyInsert/Delete', @TestSyntaxDocNotifyInsertDelete);
   T.Test('TPascalHighlighter.LangId', @TestPascalHighlighterLangId);
   T.Test('TPascalHighlighter.TokenizeLine', @TestPascalHighlighterTokenize);
+  T.Test('TokenizePascal directive', @TestTokenizePascalDirective);
+  T.Test('TokenizePascal directive mode', @TestTokenizePascalDirectiveMode);
+  T.Test('TokenizePascal hex number', @TestTokenizePascalHexNumber);
+  T.Test('TokenizePascal hex lower', @TestTokenizePascalHexLower);
+  T.Test('TokenizePascal float', @TestTokenizePascalFloat);
+  T.Test('TokenizePascal symbol assign', @TestTokenizePascalSymbolAssign);
+  T.Test('TokenizePascal semicolon', @TestTokenizePascalSemicolon);
+  T.Test('TokenizePascal mixed content', @TestTokenizePascalMixed);
+  T.Test('TokenizePascal identifier', @TestTokenizePascalIdentifier);
+  T.Test('TokenizePascal identifier with digits', @TestTokenizePascalIdentifierWithDigits);
+  T.Test('TokenizePascal line comment', @TestTokenizePascalLineComment);
+  T.Test('TokenizePascal string escaped', @TestTokenizePascalStringEscaped);
+  T.Test('TokenizePascalStateful multi-line', @TestTokenizePascalStatefulMultiLine);
+  T.Test('TSyntaxDoc.EnsureCleanTo', @TestSyntaxDocEnsureCleanTo);
+  T.Test('TSyntaxDoc.GetTokens', @TestSyntaxDocGetTokens);
+  T.Test('TSyntaxDoc zero lines', @TestSyntaxDocZeroLines);
+  T.Test('TSyntaxDoc invalidate then clean', @TestSyntaxDocInvalidateThenClean);
   if not T.Run then Halt(1);
 end.

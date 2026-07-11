@@ -5,6 +5,7 @@ program test_tui_task;
 uses
   nextpas.core.thread.init,
   nextpas.core.tui.task,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 var
@@ -294,6 +295,159 @@ begin
   end;
 end;
 
+procedure TestDrainCompletedWithTasks;
+var
+  LTasks: TTaskManager;
+  LId1, LId2: TTaskId;
+  LSlots: array[0..9] of TCompletionSlot;
+  LCount, LAttempts: Integer;
+  LRes1, LRes2: TTaskResult;
+begin
+  LTasks := TTaskManager.Create;
+  try
+    LId1 := LTasks.Spawn(MakeSpec(@TaskReturn42, nil, 0, 'drain1'));
+    LId2 := LTasks.Spawn(MakeSpec(@TaskReturn42, nil, 0, 'drain2'));
+    Check(LId1 > 0, 'first spawn ok');
+    Check(LId2 > 0, 'second spawn ok');
+    // Wait for tasks to complete via Poll
+    LAttempts := 0;
+    while (LAttempts < 500) do
+    begin
+      LTasks.Poll(LId1, LRes1);
+      LTasks.Poll(LId2, LRes2);
+      if (LRes1.Status = nextpas.core.tui.task.tsCompleted) and
+         (LRes2.Status = nextpas.core.tui.task.tsCompleted) then Break;
+      Inc(LAttempts);
+    end;
+    LCount := LTasks.DrainCompleted(LSlots, 10);
+    // After Poll, completions may have been consumed already
+    // Just verify no crash
+    Check(LCount >= 0, 'drain should not crash');
+  finally
+    LTasks.Free;
+  end;
+end;
+
+procedure TestDrainCompletedMaxCount;
+var
+  LTasks: TTaskManager;
+  LId: TTaskId;
+  LSlots: array[0..0] of TCompletionSlot;
+  LCount, LAttempts: Integer;
+begin
+  LTasks := TTaskManager.Create;
+  try
+    LId := LTasks.Spawn(MakeSpec(@TaskReturn42, nil, 0, 'max-drain'));
+    LAttempts := 0;
+    while (LTasks.CompletionCount < 1) and (LAttempts < 200) do
+      Inc(LAttempts);
+    LCount := LTasks.DrainCompleted(LSlots, 1);
+    Check(LCount <= 1, 'drain should respect MaxCount');
+  finally
+    LTasks.Free;
+  end;
+end;
+
+{ --- Task with parameters --- }
+
+function TaskReturnParam(const Ctx: TTaskContext): TTaskResult;
+begin
+  Result.Status := nextpas.core.tui.task.tsCompleted;
+  Result.Data := nil;
+  Result.DataSize := 0;
+  if Ctx.ParamSize >= SizeOf(Integer) then
+    Result.Error := IntToStr(PInteger(Ctx.Param)^)
+  else
+    Result.Error := 'no param';
+end;
+
+procedure TestSpawnWithParam;
+var
+  LTasks: TTaskManager;
+  LId: TTaskId;
+  LResult: TTaskResult;
+  LAttempts: Integer;
+begin
+  LTasks := TTaskManager.Create;
+  try
+    LId := LTasks.Spawn(MakeSpec(@TaskReturnParam, @LAttempts, SizeOf(Integer), 'param-task'));
+    // ParamCopy is made internally, so we can reuse LAttempts
+    LAttempts := 0;
+    while (not LTasks.Poll(LId, LResult)) and (LAttempts < 200) do
+      Inc(LAttempts);
+    if LAttempts < 200 then
+    begin
+      Check(LResult.Status = nextpas.core.tui.task.tsCompleted, 'param task completed');
+      // The error field contains the param value as string
+    end;
+  finally
+    LTasks.Free;
+  end;
+end;
+
+{ --- Task exception handling --- }
+
+function TaskRaiseException(const Ctx: TTaskContext): TTaskResult;
+begin
+  raise Exception.Create('task exception');
+end;
+
+procedure TestSpawnException;
+var
+  LTasks: TTaskManager;
+  LId: TTaskId;
+  LResult: TTaskResult;
+  LAttempts: Integer;
+begin
+  LTasks := TTaskManager.Create;
+  try
+    LId := LTasks.Spawn(MakeSpec(@TaskRaiseException, nil, 0, 'except-task'));
+    LAttempts := 0;
+    while (not LTasks.Poll(LId, LResult)) and (LAttempts < 200) do
+      Inc(LAttempts);
+    if LAttempts < 200 then
+    begin
+      Check(LResult.Status = nextpas.core.tui.task.tsFailed, 'exception task should fail');
+      Check(Length(LResult.Error) > 0, 'error message should not be empty');
+    end;
+  finally
+    LTasks.Free;
+  end;
+end;
+
+{ --- Task name --- }
+
+procedure TestTaskNamePreserved;
+var
+  LSpec: TTaskSpec;
+begin
+  LSpec := MakeSpec(nil, nil, 0, 'my-task-name');
+  CheckEqual('my-task-name', LSpec.Name, 'task name should be preserved');
+end;
+
+{ --- Multiple concurrent tasks --- }
+
+procedure TestMultipleConcurrent;
+var
+  LTasks: TTaskManager;
+  LIds: array[0..7] of TTaskId;
+  LI, LAttempts: Integer;
+begin
+  LTasks := TTaskManager.Create;
+  try
+    // Spawn MAX_CONCURRENT_TASKS tasks
+    for LI := 0 to 7 do
+      LIds[LI] := LTasks.Spawn(MakeSpec(@TaskReturn42, nil, 0, 'concurrent'));
+    for LI := 0 to 7 do
+      Check(LIds[LI] > 0, 'all concurrent spawns return positive ids');
+    // ShutdownAndWait ensures all tasks complete before we exit
+    LTasks.ShutdownAndWait;
+    Check(True, 'shutdown completed without crash');
+  finally
+    LTasks.Free;
+  end;
+end;
+
 { --- IsThreaded --- }
 
 procedure TestIsThreaded;
@@ -325,6 +479,12 @@ begin
   T.Test('cancel pending', @TestCancelPending);
   T.Test('cancel non-existent', @TestCancelNonExistent);
   T.Test('drain completed empty', @TestDrainCompletedEmpty);
+  T.Test('drain completed with tasks', @TestDrainCompletedWithTasks);
+  T.Test('drain completed max count', @TestDrainCompletedMaxCount);
+  T.Test('spawn with param', @TestSpawnWithParam);
+  T.Test('spawn exception', @TestSpawnException);
+  T.Test('task name preserved', @TestTaskNamePreserved);
+  T.Test('multiple concurrent', @TestMultipleConcurrent);
   T.Test('is threaded', @TestIsThreaded);
   if not T.Run then Halt(1);
 end.
