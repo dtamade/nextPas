@@ -972,3 +972,579 @@ procedure TBatchF64Accessor.ArrayHypot(aX, aY, aDst: PDouble; aCount: SizeUInt);
 begin
   FTable^.ArrayHypotF64(aX, aY, aDst, aCount);
 end;
+
+// --- TI32x4Accessor ---
+
+constructor TI32x4Accessor.Create(aTable: PSimdDispatchTable);
+begin
+  FTable := aTable;
+end;
+
+function TI32x4Accessor.Add(const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.AddI32x4(a, b);
+end;
+
+function TI32x4Accessor.Sub(const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.SubI32x4(a, b);
+end;
+
+function TI32x4Accessor.Mul(const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.MulI32x4(a, b);
+end;
+
+function TI32x4Accessor.Neg(const a: TVecI32x4): TVecI32x4; inline;
+var
+  LZero: TVecI32x4;
+begin
+  // Negate by subtracting from zero
+  LZero.i[0] := 0;
+  LZero.i[1] := 0;
+  LZero.i[2] := 0;
+  LZero.i[3] := 0;
+  Result := FTable^.SubI32x4(LZero, a);
+end;
+
+function TI32x4Accessor.BitAnd(const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.AndI32x4(a, b);
+end;
+
+function TI32x4Accessor.BitOr(const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.OrI32x4(a, b);
+end;
+
+function TI32x4Accessor.BitXor(const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.XorI32x4(a, b);
+end;
+
+function TI32x4Accessor.BitNot(const a: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.NotI32x4(a);
+end;
+
+function TI32x4Accessor.BitAndNot(const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.AndNotI32x4(a, b);
+end;
+
+function TI32x4Accessor.ShiftLeft(const a: TVecI32x4; count: Integer): TVecI32x4; inline;
+begin
+  Result := FTable^.ShiftLeftI32x4(a, count);
+end;
+
+function TI32x4Accessor.ShiftRight(const a: TVecI32x4; count: Integer): TVecI32x4; inline;
+begin
+  Result := FTable^.ShiftRightI32x4(a, count);
+end;
+
+function TI32x4Accessor.ShiftRightArith(const a: TVecI32x4; count: Integer): TVecI32x4; inline;
+begin
+  Result := FTable^.ShiftRightArithI32x4(a, count);
+end;
+
+function TI32x4Accessor.CmpEq(const a, b: TVecI32x4): TMask4; inline;
+begin
+  Result := FTable^.CmpEqI32x4(a, b);
+end;
+
+function TI32x4Accessor.CmpLt(const a, b: TVecI32x4): TMask4; inline;
+begin
+  Result := FTable^.CmpLtI32x4(a, b);
+end;
+
+function TI32x4Accessor.CmpGt(const a, b: TVecI32x4): TMask4; inline;
+begin
+  Result := FTable^.CmpGtI32x4(a, b);
+end;
+
+function TI32x4Accessor.CmpLe(const a, b: TVecI32x4): TMask4; inline;
+begin
+  Result := FTable^.CmpLeI32x4(a, b);
+end;
+
+function TI32x4Accessor.CmpGe(const a, b: TVecI32x4): TMask4; inline;
+begin
+  Result := FTable^.CmpGeI32x4(a, b);
+end;
+
+function TI32x4Accessor.CmpNe(const a, b: TVecI32x4): TMask4; inline;
+begin
+  Result := FTable^.CmpNeI32x4(a, b);
+end;
+
+function TI32x4Accessor.Min(const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.MinI32x4(a, b);
+end;
+
+function TI32x4Accessor.Max(const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  Result := FTable^.MaxI32x4(a, b);
+end;
+
+function TI32x4Accessor.Load(p: PInt32): TVecI32x4; inline;
+begin
+  // Not available in dispatch table, use Insert as workaround
+  Result.i[0] := p[0];
+  Result.i[1] := p[1];
+  Result.i[2] := p[2];
+  Result.i[3] := p[3];
+end;
+
+function TI32x4Accessor.LoadAligned(p: PInt32): TVecI32x4; inline;
+begin
+  // Not available in dispatch table, use Insert as workaround
+  Result.i[0] := p[0];
+  Result.i[1] := p[1];
+  Result.i[2] := p[2];
+  Result.i[3] := p[3];
+end;
+
+procedure TI32x4Accessor.Store(p: PInt32; const a: TVecI32x4); inline;
+begin
+  // Not available in dispatch table, use Extract as workaround
+  p[0] := FTable^.ExtractI32x4(a, 0);
+  p[1] := FTable^.ExtractI32x4(a, 1);
+  p[2] := FTable^.ExtractI32x4(a, 2);
+  p[3] := FTable^.ExtractI32x4(a, 3);
+end;
+
+procedure TI32x4Accessor.StoreAligned(p: PInt32; const a: TVecI32x4); inline;
+begin
+  // Not available in dispatch table, use Extract as workaround
+  p[0] := FTable^.ExtractI32x4(a, 0);
+  p[1] := FTable^.ExtractI32x4(a, 1);
+  p[2] := FTable^.ExtractI32x4(a, 2);
+  p[3] := FTable^.ExtractI32x4(a, 3);
+end;
+
+function TI32x4Accessor.Splat(value: Int32): TVecI32x4; inline;
+begin
+  // Not available in dispatch table, use Insert as workaround
+  Result.i[0] := value;
+  Result.i[1] := value;
+  Result.i[2] := value;
+  Result.i[3] := value;
+end;
+
+function TI32x4Accessor.Zero: TVecI32x4; inline;
+begin
+  // Not available in dispatch table, use direct assignment
+  Result.i[0] := 0;
+  Result.i[1] := 0;
+  Result.i[2] := 0;
+  Result.i[3] := 0;
+end;
+
+function TI32x4Accessor.Make(x, y, z, w: Int32): TVecI32x4; inline;
+begin
+  // Not available in dispatch table, use direct assignment
+  Result.i[0] := x;
+  Result.i[1] := y;
+  Result.i[2] := z;
+  Result.i[3] := w;
+end;
+
+function TI32x4Accessor.Select(const mask: TMask4; const a, b: TVecI32x4): TVecI32x4; inline;
+begin
+  // Dispatch table uses TVecI32x4 as mask, but accessor uses TMask4
+  // For now, use a simple approach: if mask bit is set, return a, else b
+  Result := b; // Default to b
+  if (mask and 1) <> 0 then
+    Result.i[0] := a.i[0];
+  if (mask and 2) <> 0 then
+    Result.i[1] := a.i[1];
+  if (mask and 4) <> 0 then
+    Result.i[2] := a.i[2];
+  if (mask and 8) <> 0 then
+    Result.i[3] := a.i[3];
+end;
+
+function TI32x4Accessor.Extract(const a: TVecI32x4; index: Integer): Int32; inline;
+begin
+  Result := FTable^.ExtractI32x4(a, index);
+end;
+
+function TI32x4Accessor.Insert(const a: TVecI32x4; value: Int32; index: Integer): TVecI32x4; inline;
+begin
+  Result := FTable^.InsertI32x4(a, value, index);
+end;
+
+// --- TMaskAccessor ---
+
+constructor TMaskAccessor.Create(aTable: PSimdDispatchTable);
+begin
+  FTable := aTable;
+end;
+
+function TMaskAccessor.Mask2All(mask: TMask2): Boolean; inline;
+begin
+  Result := FTable^.Mask2All(mask);
+end;
+
+function TMaskAccessor.Mask2Any(mask: TMask2): Boolean; inline;
+begin
+  Result := FTable^.Mask2Any(mask);
+end;
+
+function TMaskAccessor.Mask2None(mask: TMask2): Boolean; inline;
+begin
+  Result := FTable^.Mask2None(mask);
+end;
+
+function TMaskAccessor.Mask2PopCount(mask: TMask2): Integer; inline;
+begin
+  Result := FTable^.Mask2PopCount(mask);
+end;
+
+function TMaskAccessor.Mask2FirstSet(mask: TMask2): Integer; inline;
+begin
+  Result := FTable^.Mask2FirstSet(mask);
+end;
+
+function TMaskAccessor.Mask4All(mask: TMask4): Boolean; inline;
+begin
+  Result := FTable^.Mask4All(mask);
+end;
+
+function TMaskAccessor.Mask4Any(mask: TMask4): Boolean; inline;
+begin
+  Result := FTable^.Mask4Any(mask);
+end;
+
+function TMaskAccessor.Mask4None(mask: TMask4): Boolean; inline;
+begin
+  Result := FTable^.Mask4None(mask);
+end;
+
+function TMaskAccessor.Mask4PopCount(mask: TMask4): Integer; inline;
+begin
+  Result := FTable^.Mask4PopCount(mask);
+end;
+
+function TMaskAccessor.Mask4FirstSet(mask: TMask4): Integer; inline;
+begin
+  Result := FTable^.Mask4FirstSet(mask);
+end;
+
+function TMaskAccessor.Mask8All(mask: TMask8): Boolean; inline;
+begin
+  Result := FTable^.Mask8All(mask);
+end;
+
+function TMaskAccessor.Mask8Any(mask: TMask8): Boolean; inline;
+begin
+  Result := FTable^.Mask8Any(mask);
+end;
+
+function TMaskAccessor.Mask8None(mask: TMask8): Boolean; inline;
+begin
+  Result := FTable^.Mask8None(mask);
+end;
+
+function TMaskAccessor.Mask8PopCount(mask: TMask8): Integer; inline;
+begin
+  Result := FTable^.Mask8PopCount(mask);
+end;
+
+function TMaskAccessor.Mask8FirstSet(mask: TMask8): Integer; inline;
+begin
+  Result := FTable^.Mask8FirstSet(mask);
+end;
+
+function TMaskAccessor.Mask16All(mask: TMask16): Boolean; inline;
+begin
+  Result := FTable^.Mask16All(mask);
+end;
+
+function TMaskAccessor.Mask16Any(mask: TMask16): Boolean; inline;
+begin
+  Result := FTable^.Mask16Any(mask);
+end;
+
+function TMaskAccessor.Mask16None(mask: TMask16): Boolean; inline;
+begin
+  Result := FTable^.Mask16None(mask);
+end;
+
+function TMaskAccessor.Mask16PopCount(mask: TMask16): Integer; inline;
+begin
+  Result := FTable^.Mask16PopCount(mask);
+end;
+
+function TMaskAccessor.Mask16FirstSet(mask: TMask16): Integer; inline;
+begin
+  Result := FTable^.Mask16FirstSet(mask);
+end;
+
+// --- TBatchIntegerAccessor ---
+
+constructor TBatchIntegerAccessor.Create(aTable: PSimdDispatchTable);
+begin
+  FTable := aTable;
+end;
+
+procedure TBatchIntegerAccessor.ArrayAddI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAddI32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArraySubI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArraySubI32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAndI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAndI32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayOrI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayOrI32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayXorI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayXorI32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayShlI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer); inline;
+begin
+  FTable^.ArrayShlI32(aSrc, aDst, aCount, aShift);
+end;
+
+procedure TBatchIntegerAccessor.ArrayShrI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer); inline;
+begin
+  FTable^.ArrayShrI32(aSrc, aDst, aCount, aShift);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAddI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAddI16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArraySubI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArraySubI16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayMulI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayMulI16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAndI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAndI16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayOrI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayOrI16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayXorI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayXorI16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayPackSatI32toI16(aSrc: PInt32; aDst: PInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayPackSatI32toI16(aSrc, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAddI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAddI8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArraySubI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArraySubI8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayMulI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayMulI8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAndI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAndI8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayOrI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayOrI8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayXorI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayXorI8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAddU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAddU32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArraySubU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArraySubU32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayMulU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayMulU32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAndU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAndU32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayOrU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayOrU32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayXorU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayXorU32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAddU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAddU16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArraySubU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArraySubU16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayMulU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayMulU16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAndU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAndU16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayOrU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayOrU16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayXorU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayXorU16(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAddU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAddU8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArraySubU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArraySubU8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayMulU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayMulU8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAndU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAndU8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayOrU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayOrU8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayXorU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayXorU8(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAddI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAddI64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArraySubI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArraySubI64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayMulI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayMulI64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAndI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAndI64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayOrI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayOrI64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayXorI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayXorI64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAddU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAddU64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArraySubU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArraySubU64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayMulU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayMulU64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayAndU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayAndU64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayOrU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayOrU64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayXorU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayXorU64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayF32toI32(aSrc: PSingle; aDst: PInt32; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayF32toI32(aSrc, aDst, aCount);
+end;
+
+procedure TBatchIntegerAccessor.ArrayI32toF32(aSrc: PInt32; aDst: PSingle; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayI32toF32(aSrc, aDst, aCount);
+end;

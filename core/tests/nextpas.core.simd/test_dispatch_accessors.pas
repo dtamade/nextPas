@@ -22,6 +22,9 @@ type
     procedure TestMemoryAccessor;
     procedure TestBatchF32Accessor;
     procedure TestBatchF64Accessor;
+    procedure TestI32x4Accessor;
+    procedure TestMaskAccessor;
+    procedure TestBatchIntegerAccessor;
   end;
 
 implementation
@@ -202,6 +205,93 @@ begin
 
   // Test ReduceSum
   CheckTrue(Abs(LAccessor.ReduceSum(@a, 4) - 6.0) < 0.001, 'BatchF64 ReduceSum');
+end;
+
+procedure TTestDispatchAccessors.TestI32x4Accessor;
+var
+  LAccessor: TI32x4Accessor;
+  a, b, c: TVecI32x4;
+  LValue: Int32;
+begin
+  LAccessor := GetI32x4Accessor;
+
+  // Test basic arithmetic
+  a := LAccessor.Splat(10);
+  b := LAccessor.Splat(20);
+  c := LAccessor.Add(a, b);
+  LValue := LAccessor.Extract(c, 0);
+  CheckEqual(LValue, 30, 'I32x4 Add');
+
+  c := LAccessor.Sub(b, a);
+  LValue := LAccessor.Extract(c, 0);
+  CheckEqual(LValue, 10, 'I32x4 Sub');
+
+  c := LAccessor.Mul(a, b);
+  LValue := LAccessor.Extract(c, 0);
+  CheckEqual(LValue, 200, 'I32x4 Mul');
+
+  // Test bitwise operations
+  c := LAccessor.BitAnd(a, b);
+  LValue := LAccessor.Extract(c, 0);
+  CheckEqual(LValue, 0, 'I32x4 BitAnd');
+
+  c := LAccessor.BitOr(a, b);
+  LValue := LAccessor.Extract(c, 0);
+  CheckEqual(LValue, 30, 'I32x4 BitOr');
+
+  // Test Make/Extract
+  c := LAccessor.Make(1, 2, 3, 4);
+  LValue := LAccessor.Extract(c, 2);
+  CheckEqual(LValue, 3, 'I32x4 Make/Extract');
+end;
+
+procedure TTestDispatchAccessors.TestMaskAccessor;
+var
+  LAccessor: TMaskAccessor;
+  LMask4: TMask4;
+begin
+  LAccessor := GetMaskAccessor;
+
+  // Test all set
+  LMask4 := $F;
+  CheckTrue(LAccessor.Mask4All(LMask4), 'Mask4 All');
+  CheckTrue(LAccessor.Mask4Any(LMask4), 'Mask4 Any');
+  CheckFalse(LAccessor.Mask4None(LMask4), 'Mask4 None');
+  CheckEqual(LAccessor.Mask4PopCount(LMask4), 4, 'Mask4 PopCount');
+  CheckEqual(LAccessor.Mask4FirstSet(LMask4), 0, 'Mask4 FirstSet');
+
+  // Test partial set
+  LMask4 := $5;
+  CheckFalse(LAccessor.Mask4All(LMask4), 'Mask4 All partial');
+  CheckTrue(LAccessor.Mask4Any(LMask4), 'Mask4 Any partial');
+  CheckFalse(LAccessor.Mask4None(LMask4), 'Mask4 None partial');
+  CheckEqual(LAccessor.Mask4PopCount(LMask4), 2, 'Mask4 PopCount partial');
+  CheckEqual(LAccessor.Mask4FirstSet(LMask4), 0, 'Mask4 FirstSet partial');
+end;
+
+procedure TTestDispatchAccessors.TestBatchIntegerAccessor;
+var
+  LAccessor: TBatchIntegerAccessor;
+  LSrc1, LSrc2, LDst: array[0..3] of Int32;
+  i: Integer;
+begin
+  LAccessor := GetBatchIntegerAccessor;
+
+  // Test ArrayAddI32
+  for i := 0 to 3 do
+  begin
+    LSrc1[i] := i + 1;
+    LSrc2[i] := (i + 1) * 10;
+    LDst[i] := 0;
+  end;
+  LAccessor.ArrayAddI32(@LSrc1[0], @LSrc2[0], @LDst[0], 4);
+  for i := 0 to 3 do
+    CheckEqual(LDst[i], LSrc1[i] + LSrc2[i], 'BatchI32 ArrayAdd');
+
+  // Test ArraySubI32
+  LAccessor.ArraySubI32(@LSrc2[0], @LSrc1[0], @LDst[0], 4);
+  for i := 0 to 3 do
+    CheckEqual(LDst[i], LSrc2[i] - LSrc1[i], 'BatchI32 ArraySub');
 end;
 
 end.

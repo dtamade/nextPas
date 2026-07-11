@@ -99,6 +99,15 @@ function GetBatchF32Accessor: TBatchF32Accessor; inline;
 // Get Batch F64 accessor for the current dispatch table
 function GetBatchF64Accessor: TBatchF64Accessor; inline;
 
+// Get I32x4 accessor for the current dispatch table
+function GetI32x4Accessor: TI32x4Accessor; inline;
+
+// Get Mask accessor for the current dispatch table
+function GetMaskAccessor: TMaskAccessor; inline;
+
+// Get Batch Integer accessor for the current dispatch table
+function GetBatchIntegerAccessor: TBatchIntegerAccessor; inline;
+
 // Get current dispatch table
 function GetDispatchTable: PSimdDispatchTable; inline;
 
@@ -1179,6 +1188,21 @@ end;
 function GetBatchF64Accessor: TBatchF64Accessor; inline;
 begin
   Result := TBatchF64Accessor.Create(GetDispatchTable);
+end;
+
+function GetI32x4Accessor: TI32x4Accessor; inline;
+begin
+  Result := TI32x4Accessor.Create(GetDispatchTable);
+end;
+
+function GetMaskAccessor: TMaskAccessor; inline;
+begin
+  Result := TMaskAccessor.Create(GetDispatchTable);
+end;
+
+function GetBatchIntegerAccessor: TBatchIntegerAccessor; inline;
+begin
+  Result := TBatchIntegerAccessor.Create(GetDispatchTable);
 end;
 
 // === Initialization ===

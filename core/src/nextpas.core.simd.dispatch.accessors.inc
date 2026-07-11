@@ -227,3 +227,129 @@ type
     procedure ArrayAtan2(aY, aX, aDst: PDouble; aCount: SizeUInt); inline;
     procedure ArrayHypot(aX, aY, aDst: PDouble; aCount: SizeUInt); inline;
   end;
+
+  // Helper to access I32x4 operations as a sub-record
+  TI32x4Accessor = record
+  private
+    FTable: PSimdDispatchTable;
+  public
+    constructor Create(aTable: PSimdDispatchTable);
+    function Add(const a, b: TVecI32x4): TVecI32x4; inline;
+    function Sub(const a, b: TVecI32x4): TVecI32x4; inline;
+    function Mul(const a, b: TVecI32x4): TVecI32x4; inline;
+    function Neg(const a: TVecI32x4): TVecI32x4; inline;
+    function BitAnd(const a, b: TVecI32x4): TVecI32x4; inline;
+    function BitOr(const a, b: TVecI32x4): TVecI32x4; inline;
+    function BitXor(const a, b: TVecI32x4): TVecI32x4; inline;
+    function BitNot(const a: TVecI32x4): TVecI32x4; inline;
+    function BitAndNot(const a, b: TVecI32x4): TVecI32x4; inline;
+    function ShiftLeft(const a: TVecI32x4; count: Integer): TVecI32x4; inline;
+    function ShiftRight(const a: TVecI32x4; count: Integer): TVecI32x4; inline;
+    function ShiftRightArith(const a: TVecI32x4; count: Integer): TVecI32x4; inline;
+    function CmpEq(const a, b: TVecI32x4): TMask4; inline;
+    function CmpLt(const a, b: TVecI32x4): TMask4; inline;
+    function CmpGt(const a, b: TVecI32x4): TMask4; inline;
+    function CmpLe(const a, b: TVecI32x4): TMask4; inline;
+    function CmpGe(const a, b: TVecI32x4): TMask4; inline;
+    function CmpNe(const a, b: TVecI32x4): TMask4; inline;
+    function Min(const a, b: TVecI32x4): TVecI32x4; inline;
+    function Max(const a, b: TVecI32x4): TVecI32x4; inline;
+    function Load(p: PInt32): TVecI32x4; inline;
+    function LoadAligned(p: PInt32): TVecI32x4; inline;
+    procedure Store(p: PInt32; const a: TVecI32x4); inline;
+    procedure StoreAligned(p: PInt32; const a: TVecI32x4); inline;
+    function Splat(value: Int32): TVecI32x4; inline;
+    function Zero: TVecI32x4; inline;
+    function Make(x, y, z, w: Int32): TVecI32x4; inline;
+    function Select(const mask: TMask4; const a, b: TVecI32x4): TVecI32x4; inline;
+    function Extract(const a: TVecI32x4; index: Integer): Int32; inline;
+    function Insert(const a: TVecI32x4; value: Int32; index: Integer): TVecI32x4; inline;
+  end;
+
+  // Helper to access Mask operations as a sub-record
+  TMaskAccessor = record
+  private
+    FTable: PSimdDispatchTable;
+  public
+    constructor Create(aTable: PSimdDispatchTable);
+    function Mask2All(mask: TMask2): Boolean; inline;
+    function Mask2Any(mask: TMask2): Boolean; inline;
+    function Mask2None(mask: TMask2): Boolean; inline;
+    function Mask2PopCount(mask: TMask2): Integer; inline;
+    function Mask2FirstSet(mask: TMask2): Integer; inline;
+    function Mask4All(mask: TMask4): Boolean; inline;
+    function Mask4Any(mask: TMask4): Boolean; inline;
+    function Mask4None(mask: TMask4): Boolean; inline;
+    function Mask4PopCount(mask: TMask4): Integer; inline;
+    function Mask4FirstSet(mask: TMask4): Integer; inline;
+    function Mask8All(mask: TMask8): Boolean; inline;
+    function Mask8Any(mask: TMask8): Boolean; inline;
+    function Mask8None(mask: TMask8): Boolean; inline;
+    function Mask8PopCount(mask: TMask8): Integer; inline;
+    function Mask8FirstSet(mask: TMask8): Integer; inline;
+    function Mask16All(mask: TMask16): Boolean; inline;
+    function Mask16Any(mask: TMask16): Boolean; inline;
+    function Mask16None(mask: TMask16): Boolean; inline;
+    function Mask16PopCount(mask: TMask16): Integer; inline;
+    function Mask16FirstSet(mask: TMask16): Integer; inline;
+  end;
+
+  // Helper to access Batch Integer operations as a sub-record
+  TBatchIntegerAccessor = record
+  private
+    FTable: PSimdDispatchTable;
+  public
+    constructor Create(aTable: PSimdDispatchTable);
+    procedure ArrayAddI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+    procedure ArraySubI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+    procedure ArrayAndI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+    procedure ArrayOrI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+    procedure ArrayXorI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
+    procedure ArrayShlI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer); inline;
+    procedure ArrayShrI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer); inline;
+    procedure ArrayAddI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+    procedure ArraySubI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+    procedure ArrayMulI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+    procedure ArrayAndI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+    procedure ArrayOrI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+    procedure ArrayXorI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
+    procedure ArrayPackSatI32toI16(aSrc: PInt32; aDst: PInt16; aCount: SizeUInt); inline;
+    procedure ArrayAddI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+    procedure ArraySubI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+    procedure ArrayMulI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+    procedure ArrayAndI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+    procedure ArrayOrI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+    procedure ArrayXorI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
+    procedure ArrayAddU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+    procedure ArraySubU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+    procedure ArrayMulU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+    procedure ArrayAndU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+    procedure ArrayOrU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+    procedure ArrayXorU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
+    procedure ArrayAddU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+    procedure ArraySubU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+    procedure ArrayMulU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+    procedure ArrayAndU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+    procedure ArrayOrU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+    procedure ArrayXorU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
+    procedure ArrayAddU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+    procedure ArraySubU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+    procedure ArrayMulU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+    procedure ArrayAndU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+    procedure ArrayOrU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+    procedure ArrayXorU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
+    procedure ArrayAddI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+    procedure ArraySubI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+    procedure ArrayMulI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+    procedure ArrayAndI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+    procedure ArrayOrI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+    procedure ArrayXorI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
+    procedure ArrayAddU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+    procedure ArraySubU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+    procedure ArrayMulU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+    procedure ArrayAndU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+    procedure ArrayOrU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+    procedure ArrayXorU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
+    procedure ArrayF32toI32(aSrc: PSingle; aDst: PInt32; aCount: SizeUInt); inline;
+    procedure ArrayI32toF32(aSrc: PInt32; aDst: PSingle; aCount: SizeUInt); inline;
+  end;
