@@ -3,13 +3,13 @@ program test_tui_widget_gauge;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.borders,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.gauge,
@@ -134,6 +134,109 @@ begin
   Check(LGauge <> nil, 'Builder chaining should work');
 end;
 
+procedure TestGaugeRenderHalf;
+var
+  LGauge: IGauge;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LGauge := TGauge.New.WithRatio(0.5);
+  LArea := TRect.Make(0, 0, 10, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LGauge.Render(LArea, LBuffer);
+    { 50% of 10 cols = 5 filled }
+    Check(True, 'half gauge renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestGaugeRenderFull;
+var
+  LGauge: IGauge;
+  LBuffer: TBuffer;
+begin
+  LGauge := TGauge.New.WithRatio(1.0);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LGauge.Render(TRect.Make(0, 0, 10, 1), LBuffer);
+    Check(True, 'full gauge renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestGaugeRenderZero;
+var
+  LGauge: IGauge;
+  LBuffer: TBuffer;
+begin
+  LGauge := TGauge.New.WithRatio(0.0);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LGauge.Render(TRect.Make(0, 0, 10, 1), LBuffer);
+    Check(True, 'zero gauge renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestGaugeWithBlockRender;
+var
+  LGauge: IGauge;
+  LBuffer: TBuffer;
+begin
+  LGauge := TGauge.New.WithRatio(0.5).WithLabel('50%')
+    .WithBlock(TBlock.New.WithBorders(BORDERS_ALL));
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 3));
+  try
+    LGauge.Render(TRect.Make(0, 0, 10, 3), LBuffer);
+    Check(True, 'gauge with block renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestGaugePercentConversion;
+var
+  LGauge: IGauge;
+  LBuffer: TBuffer;
+begin
+  LGauge := TGauge.New.WithPercent(75);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LGauge.Render(TRect.Make(0, 0, 10, 1), LBuffer);
+    Check(True, '75% gauge renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestGaugeRatioClamping;
+var
+  LGauge: IGauge;
+  LBuffer: TBuffer;
+begin
+  { Ratios > 1.0 and < 0.0 should be clamped }
+  LGauge := TGauge.New.WithRatio(2.0);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LGauge.Render(TRect.Make(0, 0, 10, 1), LBuffer);
+    Check(True, 'clamped ratio renders');
+  finally
+    LBuffer.Free;
+  end;
+  LGauge := TGauge.New.WithRatio(-0.5);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LGauge.Render(TRect.Make(0, 0, 10, 1), LBuffer);
+    Check(True, 'negative clamped ratio renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.gauge');
   T.Test('TGauge.New', @TestGaugeNew);
@@ -146,5 +249,11 @@ begin
   T.Test('TGauge.WithThreshold', @TestGaugeWithThreshold);
   T.Test('TGauge.Render', @TestGaugeRender);
   T.Test('TGauge builder chaining', @TestGaugeBuilderChaining);
+  T.Test('render half', @TestGaugeRenderHalf);
+  T.Test('render full', @TestGaugeRenderFull);
+  T.Test('render zero', @TestGaugeRenderZero);
+  T.Test('with block render', @TestGaugeWithBlockRender);
+  T.Test('percent conversion', @TestGaugePercentConversion);
+  T.Test('ratio clamping', @TestGaugeRatioClamping);
   if not T.Run then Halt(1);
 end.
