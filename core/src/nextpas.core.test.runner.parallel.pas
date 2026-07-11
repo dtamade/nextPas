@@ -130,8 +130,8 @@ var
   LJoinTimeoutMs: Int64;
   LJoinResult: Int32;
 begin
-  GetMem(LRec, SizeOf(TTimeoutRec));
-  FillChar(LRec^, SizeOf(TTimeoutRec), 0);
+  New(LRec);
+  LRec^ := Default(TTimeoutRec);
   LRec^.Proc := AProc;
   LRec^.Closure := AClosure;
   LRec^.Done := False;
@@ -144,8 +144,7 @@ begin
   begin
     AStatus := tsError;
     AMsg := 'failed to create timeout worker thread';
-    Finalize(LRec^);
-    FreeMem(LRec);
+    Dispose(LRec);
     Result := False;
     Exit;
   end;
@@ -173,8 +172,7 @@ begin
     end
     else
       Result := True;
-    Finalize(LRec^);
-    FreeMem(LRec);
+    Dispose(LRec);
   end
   else
   begin
@@ -193,8 +191,7 @@ begin
       AStatus := tsError;
       AMsg := 'test timed out after ' + IntToStr(ATimeoutMs) + 'ms';
       Result := False;
-      Finalize(LRec^);
-      FreeMem(LRec);
+      Dispose(LRec);
     end
     else
     begin

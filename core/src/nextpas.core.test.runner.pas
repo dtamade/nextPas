@@ -659,8 +659,8 @@ var
 begin
   for I := 0 to High(ACases) do
   begin
-    GetMem(LPCase, SizeOf(TTestCase));
-    FillChar(LPCase^, SizeOf(TTestCase), 0);
+    New(LPCase);
+    LPCase^ := Default(TTestCase);
     LPCase^ := ACases[I];
     New(LPProc);
     LPProc^ := AProc;
@@ -1917,8 +1917,7 @@ begin
     begin
       if Tests[I].TableCase <> nil then
       begin
-        Finalize(PTestCase(Tests[I].TableCase)^);
-        FreeMem(Tests[I].TableCase);
+        Dispose(PTestCase(Tests[I].TableCase));
         Tests[I].TableCase := nil;
       end;
       if Tests[I].TableProc <> nil then
@@ -2012,8 +2011,8 @@ begin
     begin
       if Suites[LIdx].Tests[I].TableCase <> nil then
       begin
-        GetMem(LPCase, SizeOf(TTestCase));
-        FillChar(LPCase^, SizeOf(TTestCase), 0);
+        New(LPCase);
+        LPCase^ := Default(TTestCase);
         LPCase^ := PTestCase(Suites[LIdx].Tests[I].TableCase)^;
         Suites[LIdx].Tests[I].TableCase := LPCase;
       end;
