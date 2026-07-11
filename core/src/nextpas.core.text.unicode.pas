@@ -5,26 +5,47 @@ unit nextpas.core.text.unicode;
 interface
 
 uses
+  nextpas.core.text.unicode.types,
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.props,
   nextpas.core.text.unicode.casefold,
-  nextpas.core.text.unicode.normalize;
+  nextpas.core.text.unicode.normalize,
+  nextpas.core.text.unicode.script,
+  nextpas.core.text.unicode.block,
+  nextpas.core.text.unicode.segment,
+  nextpas.core.text.unicode.collate;
 
 type
-  TUnicodeCodepoint = nextpas.core.text.unicode.base.TUnicodeCodepoint;
-  TGeneralCategory = nextpas.core.text.unicode.base.TGeneralCategory;
-  TBinaryProperty = nextpas.core.text.unicode.base.TBinaryProperty;
-  TGeneralCategorySet = nextpas.core.text.unicode.base.TGeneralCategorySet;
-  TCodepointRange2 = nextpas.core.text.unicode.base.TCodepointRange2;
-  TCodepointRange3 = nextpas.core.text.unicode.base.TCodepointRange3;
-  TCaseFoldMap = nextpas.core.text.unicode.base.TCaseFoldMap;
-  TCaseFoldEntry = nextpas.core.text.unicode.base.TCaseFoldEntry;
+  // 基础类型
+  TUnicodeCodepoint = nextpas.core.text.unicode.types.TUnicodeCodepoint;
+  TGeneralCategory = nextpas.core.text.unicode.types.TGeneralCategory;
+  TBinaryProperty = nextpas.core.text.unicode.types.TBinaryProperty;
+  TGeneralCategorySet = nextpas.core.text.unicode.types.TGeneralCategorySet;
+  TCodepointRange2 = nextpas.core.text.unicode.types.TCodepointRange2;
+  TCodepointRange3 = nextpas.core.text.unicode.types.TCodepointRange3;
+  TCaseFoldMap = nextpas.core.text.unicode.types.TCaseFoldMap;
+  TCaseFoldEntry = nextpas.core.text.unicode.types.TCaseFoldEntry;
+
+  // 新增类型
+  TUnicodeScript = nextpas.core.text.unicode.types.TUnicodeScript;
+  TUnicodeBlock = nextpas.core.text.unicode.types.TUnicodeBlock;
+  TSegmentType = nextpas.core.text.unicode.segment.TSegmentType;
+  TSegmentResult = nextpas.core.text.unicode.segment.TSegmentResult;
+  TSegmentResultArray = nextpas.core.text.unicode.segment.TSegmentResultArray;
+  TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
+  TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
+  TCollationKey = nextpas.core.text.unicode.collate.TCollationKey;
+
+  // 接口类型
+  IUnicodeSegmenter = nextpas.core.text.unicode.segment.IUnicodeSegmenter;
+  IUnicodeCollator = nextpas.core.text.unicode.collate.IUnicodeCollator;
 
 const
-  UNICODE_MAX_CODEPOINT = nextpas.core.text.unicode.base.UNICODE_MAX_CODEPOINT;
-  UNICODE_SURROGATE_FIRST = nextpas.core.text.unicode.base.UNICODE_SURROGATE_FIRST;
-  UNICODE_SURROGATE_LAST = nextpas.core.text.unicode.base.UNICODE_SURROGATE_LAST;
+  UNICODE_MAX_CODEPOINT = nextpas.core.text.unicode.types.UNICODE_MAX_CODEPOINT;
+  UNICODE_SURROGATE_FIRST = nextpas.core.text.unicode.types.UNICODE_SURROGATE_FIRST;
+  UNICODE_SURROGATE_LAST = nextpas.core.text.unicode.types.UNICODE_SURROGATE_LAST;
 
+// 属性查询函数
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;
 function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -39,6 +60,14 @@ function IsNumber(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsPunctuation(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsSymbol(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsSeparator(const ACp: TUnicodeCodepoint): Boolean; inline;
+
+// Script/Block 属性查询
+function GetScript(const ACp: TUnicodeCodepoint): TUnicodeScript; inline;
+function IsScript(const ACp: TUnicodeCodepoint; const AScript: TUnicodeScript): Boolean; inline;
+function GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock; inline;
+function IsBlock(const ACp: TUnicodeCodepoint; const ABlock: TUnicodeBlock): Boolean; inline;
+
+// 大小写映射函数
 function CodepointToLower(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function CodepointToUpper(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function CodepointToTitle(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
@@ -48,12 +77,26 @@ function UTF8ToUpper(const AValue: string): string; inline;
 function UTF8ToLower(const AValue: string): string; inline;
 function UTF8CaseFold(const AValue: string): string; inline;
 function UTF8CaseFoldSimple(const AValue: string): string; inline;
+
+// 规范化函数
 function NFD(const s: string): string; inline;
 function NFC(const s: string): string; inline;
 function NFKD(const s: string): string; inline;
 function NFKC(const s: string): string; inline;
 function IsNormalizedNFD(const s: string): Boolean; inline;
 function IsNormalizedNFC(const s: string): Boolean; inline;
+
+// 文本分割函数
+function UnicodeSegmenter: IUnicodeSegmenter; inline;
+function SegmentGraphemeClusters(const AText: string): TSegmentResultArray; inline;
+function SegmentWords(const AText: string): TSegmentResultArray; inline;
+function SegmentLines(const AText: string): TSegmentResultArray; inline;
+function SegmentSentences(const AText: string): TSegmentResultArray; inline;
+
+// 排序规则函数
+function UnicodeCollator: IUnicodeCollator; inline;
+function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator; inline;
+function DefaultCollationOptions: TCollationOptions; inline;
 
 implementation
 
@@ -125,6 +168,26 @@ end;
 function IsSeparator(const ACp: TUnicodeCodepoint): Boolean;
 begin
   Result := nextpas.core.text.unicode.props.IsSeparator(ACp);
+end;
+
+function GetScript(const ACp: TUnicodeCodepoint): TUnicodeScript;
+begin
+  Result := nextpas.core.text.unicode.script.GetScript(ACp);
+end;
+
+function IsScript(const ACp: TUnicodeCodepoint; const AScript: TUnicodeScript): Boolean;
+begin
+  Result := nextpas.core.text.unicode.script.IsScript(ACp, AScript);
+end;
+
+function GetBlock(const ACp: TUnicodeCodepoint): TUnicodeBlock;
+begin
+  Result := nextpas.core.text.unicode.block.GetBlock(ACp);
+end;
+
+function IsBlock(const ACp: TUnicodeCodepoint; const ABlock: TUnicodeBlock): Boolean;
+begin
+  Result := nextpas.core.text.unicode.block.IsBlock(ACp, ABlock);
 end;
 
 function CodepointToLower(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
@@ -200,6 +263,46 @@ end;
 function IsNormalizedNFC(const s: string): Boolean;
 begin
   Result := nextpas.core.text.unicode.normalize.IsNormalizedNFC(s);
+end;
+
+function UnicodeSegmenter: IUnicodeSegmenter;
+begin
+  Result := nextpas.core.text.unicode.segment.UnicodeSegmenter;
+end;
+
+function SegmentGraphemeClusters(const AText: string): TSegmentResultArray;
+begin
+  Result := nextpas.core.text.unicode.segment.UnicodeSegmenter.SegmentGraphemeClusters(AText);
+end;
+
+function SegmentWords(const AText: string): TSegmentResultArray;
+begin
+  Result := nextpas.core.text.unicode.segment.UnicodeSegmenter.SegmentWords(AText);
+end;
+
+function SegmentLines(const AText: string): TSegmentResultArray;
+begin
+  Result := nextpas.core.text.unicode.segment.UnicodeSegmenter.SegmentLines(AText);
+end;
+
+function SegmentSentences(const AText: string): TSegmentResultArray;
+begin
+  Result := nextpas.core.text.unicode.segment.UnicodeSegmenter.SegmentSentences(AText);
+end;
+
+function UnicodeCollator: IUnicodeCollator;
+begin
+  Result := nextpas.core.text.unicode.collate.UnicodeCollator;
+end;
+
+function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator;
+begin
+  Result := nextpas.core.text.unicode.collate.UnicodeCollatorWithOptions(AOptions);
+end;
+
+function DefaultCollationOptions: TCollationOptions;
+begin
+  Result := nextpas.core.text.unicode.collate.DefaultCollationOptions;
 end;
 
 end.
