@@ -557,6 +557,20 @@ begin
   dispatchTable.ArrayAtan2F64 := @AVX2ArrayAtan2F64;
   dispatchTable.ArrayHypotF64 := @AVX2ArrayHypotF64;
 
+  // F64 Transcendental (AVX2 with loop unrolling)
+  dispatchTable.ArraySinF64 := @AVX2ArraySinF64;
+  dispatchTable.ArrayCosF64 := @AVX2ArrayCosF64;
+  dispatchTable.ArrayExpF64 := @AVX2ArrayExpF64;
+  dispatchTable.ArrayLogF64 := @AVX2ArrayLogF64;
+  dispatchTable.ArrayLog2F64 := @AVX2ArrayLog2F64;
+  dispatchTable.ArrayLog10F64 := @AVX2ArrayLog10F64;
+
+  // F64 Rounding (AVX2 vroundpd)
+  dispatchTable.ArrayCeilF64 := @AVX2ArrayCeilF64;
+  dispatchTable.ArrayFloorF64 := @AVX2ArrayFloorF64;
+  dispatchTable.ArrayRoundF64 := @AVX2ArrayRoundF64;
+  dispatchTable.ArrayTruncF64 := @AVX2ArrayTruncF64;
+
   // Integer batch
   dispatchTable.ArrayAddI32 := @AVX2ArrayAddI32;
   dispatchTable.ArraySubI32 := @AVX2ArraySubI32;

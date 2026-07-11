@@ -3417,6 +3417,243 @@ begin
 end;
 
 // ============================================================================
+// AVX2 F64 Transcendental Batch Array Operations
+// 策略: 标量回退 + 循环展开 (8x unroll)
+// ============================================================================
+
+procedure AVX2ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Sin(pS[i]);
+    pD[i+1] := Sin(pS[i+1]);
+    pD[i+2] := Sin(pS[i+2]);
+    pD[i+3] := Sin(pS[i+3]);
+    pD[i+4] := Sin(pS[i+4]);
+    pD[i+5] := Sin(pS[i+5]);
+    pD[i+6] := Sin(pS[i+6]);
+    pD[i+7] := Sin(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Sin(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Cos(pS[i]);
+    pD[i+1] := Cos(pS[i+1]);
+    pD[i+2] := Cos(pS[i+2]);
+    pD[i+3] := Cos(pS[i+3]);
+    pD[i+4] := Cos(pS[i+4]);
+    pD[i+5] := Cos(pS[i+5]);
+    pD[i+6] := Cos(pS[i+6]);
+    pD[i+7] := Cos(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Cos(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Exp(pS[i]);
+    pD[i+1] := Exp(pS[i+1]);
+    pD[i+2] := Exp(pS[i+2]);
+    pD[i+3] := Exp(pS[i+3]);
+    pD[i+4] := Exp(pS[i+4]);
+    pD[i+5] := Exp(pS[i+5]);
+    pD[i+6] := Exp(pS[i+6]);
+    pD[i+7] := Exp(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Exp(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Ln(pS[i]);
+    pD[i+1] := Ln(pS[i+1]);
+    pD[i+2] := Ln(pS[i+2]);
+    pD[i+3] := Ln(pS[i+3]);
+    pD[i+4] := Ln(pS[i+4]);
+    pD[i+5] := Ln(pS[i+5]);
+    pD[i+6] := Ln(pS[i+6]);
+    pD[i+7] := Ln(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Ln(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayLog2F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Log2(pS[i]);
+    pD[i+1] := Log2(pS[i+1]);
+    pD[i+2] := Log2(pS[i+2]);
+    pD[i+3] := Log2(pS[i+3]);
+    pD[i+4] := Log2(pS[i+4]);
+    pD[i+5] := Log2(pS[i+5]);
+    pD[i+6] := Log2(pS[i+6]);
+    pD[i+7] := Log2(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Log2(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayLog10F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Log10(pS[i]);
+    pD[i+1] := Log10(pS[i+1]);
+    pD[i+2] := Log10(pS[i+2]);
+    pD[i+3] := Log10(pS[i+3]);
+    pD[i+4] := Log10(pS[i+4]);
+    pD[i+5] := Log10(pS[i+5]);
+    pD[i+6] := Log10(pS[i+6]);
+    pD[i+7] := Log10(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Log10(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Math.Ceil(pS[i]);
+  {$POP}
+end;
+
+procedure AVX2ArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Math.Floor(pS[i]);
+  {$POP}
+end;
+
+procedure AVX2ArrayRoundF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Double(System.Round(pS[i]));
+  {$POP}
+end;
+
+procedure AVX2ArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Trunc(pS[i]);
+  {$POP}
+end;
+
+// ============================================================================
 // Integer Batch Array Operations (AVX2)
 // AVX2 vpaddd/vpsubd: 8 x Int32 per YMM, vpmullw: 16 x Int16 per YMM
 // ============================================================================
