@@ -1260,22 +1260,31 @@ end;
 
 procedure CheckArrayContains(const AArray: array of string;
   const AValue: string; const AMessage: string);
+const
+  MaxListItems = 10;
 var
-  I: Integer;
+  I, LCount, LLimit: Integer;
   LList: string;
 begin
   for I := 0 to High(AArray) do
     if AArray[I] = AValue then
       Exit;
-  { Not found — build list for error message }
+  { Not found — build truncated list for error message }
+  LCount := Length(AArray);
+  if LCount < MaxListItems then
+    LLimit := LCount
+  else
+    LLimit := MaxListItems;
   LList := '';
-  for I := 0 to High(AArray) do
+  for I := 0 to LLimit - 1 do
   begin
     if I > 0 then LList := LList + ', ';
     LList := LList + '"' + AArray[I] + '"';
   end;
+  if LCount > MaxListItems then
+    LList := LList + ', ... (' + IntToStr(LCount - MaxListItems) + ' more)';
   FailPrepend(AMessage, 'Expected array to contain "' + AValue +
-    '" but it contains [' + LList + ']');
+    '" but it contains [' + LList + '] (' + IntToStr(LCount) + ' items)');
 end;
 
 procedure CheckArrayContains(const AArray: array of Int64;
@@ -1286,22 +1295,31 @@ end;
 
 procedure CheckArrayContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string);
+const
+  MaxListItems = 10;
 var
-  I: Integer;
+  I, LCount, LLimit: Integer;
   LList: string;
 begin
   for I := 0 to High(AArray) do
     if AArray[I] = AValue then
       Exit;
-  { Not found — build list for error message }
+  { Not found — build truncated list for error message }
+  LCount := Length(AArray);
+  if LCount < MaxListItems then
+    LLimit := LCount
+  else
+    LLimit := MaxListItems;
   LList := '';
-  for I := 0 to High(AArray) do
+  for I := 0 to LLimit - 1 do
   begin
     if I > 0 then LList := LList + ', ';
     LList := LList + IntToStr(AArray[I]);
   end;
+  if LCount > MaxListItems then
+    LList := LList + ', ... (' + IntToStr(LCount - MaxListItems) + ' more)';
   FailPrepend(AMessage, 'Expected array to contain ' + IntToStr(AValue) +
-    ' but it contains [' + LList + ']');
+    ' but it contains [' + LList + '] (' + IntToStr(LCount) + ' items)');
 end;
 
 procedure CheckArrayNotContains(const AArray: array of string;
