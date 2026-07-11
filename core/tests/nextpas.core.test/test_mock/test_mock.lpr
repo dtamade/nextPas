@@ -738,6 +738,91 @@ begin
   WithMock(@TestCallOrderResetImpl);
 end;
 
+{ ── CalledInOrder (TODO resolution) ───────────────────────────────────────── }
+
+procedure TestCalledInOrderSuccessImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Init', []);
+    AMock.RecordCall('Execute', []);
+    AMock.RecordCall('Cleanup', []);
+    AMock.Verify('Init').CalledInOrder(['Init', 'Execute', 'Cleanup']);
+end;
+
+procedure TestCalledInOrderSuccess;
+begin
+  WithMock(@TestCalledInOrderSuccessImpl);
+end;
+
+procedure TestCalledInOrderFailWrongOrderImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Execute', []);
+    AMock.RecordCall('Init', []);
+    AMock.RecordCall('Cleanup', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Execute').CalledInOrder(['Init', 'Execute', 'Cleanup']);
+  end);
+end;
+
+procedure TestCalledInOrderFailWrongOrder;
+begin
+  WithMock(@TestCalledInOrderFailWrongOrderImpl);
+end;
+
+procedure TestCalledInOrderFailMissingImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Init', []);
+    AMock.RecordCall('Cleanup', []);
+  ExpectFail(procedure
+  begin
+      AMock.Verify('Init').CalledInOrder(['Init', 'Execute', 'Cleanup']);
+  end);
+end;
+
+procedure TestCalledInOrderFailMissing;
+begin
+  WithMock(@TestCalledInOrderFailMissingImpl);
+end;
+
+procedure TestCalledInOrderSingleMethodImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.Verify('Foo').CalledInOrder(['Foo']);
+end;
+
+procedure TestCalledInOrderSingleMethod;
+begin
+  WithMock(@TestCalledInOrderSingleMethodImpl);
+end;
+
+procedure TestCalledInOrderWithInterveningCallsImpl(AMock: TMock);
+begin
+    { Other methods called between the ones we verify }
+    AMock.RecordCall('Init', []);
+    AMock.RecordCall('Log', []);
+    AMock.RecordCall('Execute', []);
+    AMock.RecordCall('Debug', []);
+    AMock.RecordCall('Cleanup', []);
+    AMock.Verify('Init').CalledInOrder(['Init', 'Execute', 'Cleanup']);
+end;
+
+procedure TestCalledInOrderWithInterveningCalls;
+begin
+  WithMock(@TestCalledInOrderWithInterveningCallsImpl);
+end;
+
+procedure TestCalledInOrderEmptyImpl(AMock: TMock);
+begin
+    { Empty order list — should pass vacuously }
+    AMock.RecordCall('Foo', []);
+    AMock.Verify('Foo').CalledInOrder([]);
+end;
+
+procedure TestCalledInOrderEmpty;
+begin
+  WithMock(@TestCalledInOrderEmptyImpl);
+end;
+
 procedure TestCalledWithSuccessImpl(AMock: TMock);
 begin
     AMock.RecordCall('Foo', ['bar', 'baz']);
@@ -1511,6 +1596,14 @@ begin
   Suite.Test('TestCalledAfterFail', @TestCalledAfterFail);
   Suite.Test('TestCalledBeforeNeverCalled', @TestCalledBeforeNeverCalled);
   Suite.Test('TestCallOrderReset', @TestCallOrderReset);
+
+  { CalledInOrder — full ordered verification }
+  Suite.Test('TestCalledInOrderSuccess', @TestCalledInOrderSuccess);
+  Suite.Test('TestCalledInOrderFailWrongOrder', @TestCalledInOrderFailWrongOrder);
+  Suite.Test('TestCalledInOrderFailMissing', @TestCalledInOrderFailMissing);
+  Suite.Test('TestCalledInOrderSingleMethod', @TestCalledInOrderSingleMethod);
+  Suite.Test('TestCalledInOrderWithInterveningCalls', @TestCalledInOrderWithInterveningCalls);
+  Suite.Test('TestCalledInOrderEmpty', @TestCalledInOrderEmpty);
 
   { v3.1: CalledWith / CalledExactlyWith }
   Suite.Test('TestCalledWithSuccess', @TestCalledWithSuccess);
