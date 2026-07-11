@@ -219,6 +219,48 @@ begin
   end;
 end;
 
+procedure TestLineChartRenderSmallArea;
+var
+  LChart: ILineChart;
+  LBuffer: TBuffer;
+begin
+  LChart := TLineChart.New([TDataSeries.Create('S', [1.0, 2.0])]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 2));
+  try
+    LChart.Render(TRect.Make(0, 0, 5, 2), LBuffer);
+    Check(True, 'Small area does not crash');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestLineChartMultipleSeries;
+var
+  LChart: ILineChart;
+  LBuffer: TBuffer;
+  LSeries: array[0..1] of TDataSeries;
+begin
+  LSeries[0] := TDataSeries.Create('A', [1.0, 2.0, 3.0]);
+  LSeries[1] := TDataSeries.Create('B', [3.0, 2.0, 1.0]);
+  LChart := TLineChart.New(LSeries);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 10));
+  try
+    LChart.Render(TRect.Make(0, 0, 20, 10), LBuffer);
+    Check(True, 'Multiple series render');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestDataSeriesEmpty;
+var
+  LSeries: TDataSeries;
+begin
+  LSeries := TDataSeries.Create('Empty', []);
+  Check(LSeries.Name = 'Empty', 'Name should be Empty');
+  Check(Length(LSeries.Data) = 0, 'Data length should be 0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.linechart');
   T.Test('TDataSeries.Create', @TestDataSeriesCreate);
@@ -237,5 +279,8 @@ begin
   T.Test('render with block', @TestLineChartRenderWithBlock);
   T.Test('render empty area', @TestLineChartRenderEmptyArea);
   T.Test('single data point', @TestLineChartSinglePoint);
+  T.Test('render small area', @TestLineChartRenderSmallArea);
+  T.Test('multiple series', @TestLineChartMultipleSeries);
+  T.Test('TDataSeries empty', @TestDataSeriesEmpty);
   if not T.Run then Halt(1);
 end.
