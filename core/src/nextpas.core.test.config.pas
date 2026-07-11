@@ -1066,7 +1066,7 @@ var
   LDir, LFile: string;
   LSafeName: string;
   LEscapedMsg: string;
-  K: Integer;
+  K, LLen, LPos: Integer;
 begin
   LDir := CacheDir + '/' + AKey;
   ForceDirectories(LDir);
@@ -1077,15 +1077,25 @@ begin
       LSafeName[K] := '_';
   LFile := LDir + '/' + LSafeName + '.cache';
   { R5-07: escape newlines in message to preserve cache format integrity.
-    Backslash-first: replace \ -> \\, then #10 -> \n, #13 -> \r }
-  LEscapedMsg := '';
+    Backslash-first: replace \ -> \\, then #10 -> \n, #13 -> \r.
+    Two-pass O(n) approach: first count, then fill. }
+  LLen := 0;
   for K := 1 to Length(AEntry.Message) do
     case AEntry.Message[K] of
-      '\': LEscapedMsg := LEscapedMsg + '\\';
-      #10: LEscapedMsg := LEscapedMsg + '\n';
-      #13: LEscapedMsg := LEscapedMsg + '\r';
+      '\': Inc(LLen, 2);
+      #10, #13: Inc(LLen, 2);
     else
-      LEscapedMsg := LEscapedMsg + AEntry.Message[K];
+      Inc(LLen);
+    end;
+  SetLength(LEscapedMsg, LLen);
+  LPos := 1;
+  for K := 1 to Length(AEntry.Message) do
+    case AEntry.Message[K] of
+      '\': begin LEscapedMsg[LPos] := '\'; LEscapedMsg[LPos+1] := '\'; Inc(LPos, 2); end;
+      #10: begin LEscapedMsg[LPos] := '\'; LEscapedMsg[LPos+1] := 'n'; Inc(LPos, 2); end;
+      #13: begin LEscapedMsg[LPos] := '\'; LEscapedMsg[LPos+1] := 'r'; Inc(LPos, 2); end;
+    else
+      begin LEscapedMsg[LPos] := AEntry.Message[K]; Inc(LPos); end;
     end;
   try
     WriteFileText(LFile,

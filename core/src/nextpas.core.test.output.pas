@@ -1146,7 +1146,7 @@ var
 begin
   LOldLen := Length(ALines);
   LCap := GrowCapacity(LOldLen, 8);
-  if LCap <> LOldLen then SetLength(ALines, LCap);
+  if LCap > LOldLen then SetLength(ALines, LCap);
   ALines[LOldLen] := ALine;
   SetLength(ALines, LOldLen + 1);
 end;

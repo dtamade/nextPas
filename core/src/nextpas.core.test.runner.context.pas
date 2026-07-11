@@ -234,7 +234,7 @@ var
 begin
   LOldLen := Length(FLogLines);
   LCap := GrowCapacity(LOldLen, 8);
-  if LCap <> LOldLen then SetLength(FLogLines, LCap);
+  if LCap > LOldLen then SetLength(FLogLines, LCap);
   FLogLines[LOldLen] := AMessage;
   SetLength(FLogLines, LOldLen + 1);
 end;
@@ -404,7 +404,7 @@ var
 begin
   LOldLen := Length(ANames);
   LCap := GrowCapacity(LOldLen, 4);
-  if LCap <> LOldLen then SetLength(ANames, LCap);
+  if LCap > LOldLen then SetLength(ANames, LCap);
   ANames[LOldLen] := AName;
   SetLength(ANames, LOldLen + 1);
 end;

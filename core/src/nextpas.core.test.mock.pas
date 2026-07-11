@@ -444,7 +444,7 @@ var
 begin
   LOldLen := Length(AOrder);
   LCap := GrowCapacity(LOldLen, 16);
-  if LCap <> LOldLen then SetLength(AOrder, LCap);
+  if LCap > LOldLen then SetLength(AOrder, LCap);
   AOrder[LOldLen] := AName;
   SetLength(AOrder, LOldLen + 1);
 end;
@@ -488,7 +488,7 @@ var
 begin
   LOldLen := Length(FCalls);
   LCap := GrowCapacity(LOldLen, 16);
-  if LCap <> LOldLen then SetLength(FCalls, LCap);
+  if LCap > LOldLen then SetLength(FCalls, LCap);
   FCalls[LOldLen] := ACall;
   SetLength(FCalls, LOldLen + 1);
   RecordOrder(FCallOrder, AMethodName);
@@ -500,7 +500,7 @@ var
 begin
   LOldLen := Length(FSetups);
   LCap := GrowCapacity(LOldLen, 4);
-  if LCap <> LOldLen then SetLength(FSetups, LCap);
+  if LCap > LOldLen then SetLength(FSetups, LCap);
   FSetups[LOldLen] := ASetup;
   SetLength(FSetups, LOldLen + 1);
 end;
@@ -687,7 +687,7 @@ begin
   LEntry.ReturnStr := AReturnStr;
   LOldLen := Length(FWhenEntries);
   LCap := GrowCapacity(LOldLen, 4);
-  if LCap <> LOldLen then SetLength(FWhenEntries, LCap);
+  if LCap > LOldLen then SetLength(FWhenEntries, LCap);
   FWhenEntries[LOldLen] := LEntry;
   SetLength(FWhenEntries, LOldLen + 1);
   TrackWhenMethod(AMethodName);
