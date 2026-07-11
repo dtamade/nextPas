@@ -708,6 +708,24 @@ begin
   dispatchTable.ArrayFloorF64 := @ScalarArrayFloorF64;
   dispatchTable.ArrayRoundF64 := @ScalarArrayRoundF64;
   dispatchTable.ArrayTruncF64 := @ScalarArrayTruncF64;
+  // === Batch Array Operations - F64 Extended ===
+  dispatchTable.ArrayAxpyF64 := @ScalarArrayAxpyF64;
+  dispatchTable.ArrayRcpF64 := @ScalarArrayRcpF64;
+  dispatchTable.ArrayRsqrtF64 := @ScalarArrayRsqrtF64;
+  dispatchTable.ArrayTanF64 := @ScalarArrayTanF64;
+  dispatchTable.ArraySignF64 := @ScalarArraySignF64;
+  dispatchTable.ArrayFractF64 := @ScalarArrayFractF64;
+  dispatchTable.ArrayModF64 := @ScalarArrayModF64;
+  dispatchTable.ArrayPowF64 := @ScalarArrayPowF64;
+  dispatchTable.ArrayLerpF64 := @ScalarArrayLerpF64;
+  dispatchTable.ArrayReLUF64 := @ScalarArrayReLUF64;
+  dispatchTable.ArrayAbsDiffF64 := @ScalarArrayAbsDiffF64;
+  dispatchTable.ArrayNormF64 := @ScalarArrayNormF64;
+  dispatchTable.ArrayLinearReLUF64 := @ScalarArrayLinearReLUF64;
+  dispatchTable.ArrayStepF64 := @ScalarArrayStepF64;
+  dispatchTable.ArraySmoothstepF64 := @ScalarArraySmoothstepF64;
+  dispatchTable.ArrayAtan2F64 := @ScalarArrayAtan2F64;
+  dispatchTable.ArrayHypotF64 := @ScalarArrayHypotF64;
   // === Batch Array Operations - Transcendental F32 ===
   dispatchTable.ArrayExpF32 := @ScalarArrayExpF32;
   dispatchTable.ArrayLogF32 := @ScalarArrayLogF32;

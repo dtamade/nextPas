@@ -1358,6 +1358,24 @@
   {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
   {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
   {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
+  // F64 Extended operations (scalar fallback)
+  {$DEFINE SIMD_STATIC_ArrayAxpyF64 := ScalarArrayAxpyF64}
+  {$DEFINE SIMD_STATIC_ArrayRcpF64 := ScalarArrayRcpF64}
+  {$DEFINE SIMD_STATIC_ArrayRsqrtF64 := ScalarArrayRsqrtF64}
+  {$DEFINE SIMD_STATIC_ArrayTanF64 := ScalarArrayTanF64}
+  {$DEFINE SIMD_STATIC_ArraySignF64 := ScalarArraySignF64}
+  {$DEFINE SIMD_STATIC_ArrayFractF64 := ScalarArrayFractF64}
+  {$DEFINE SIMD_STATIC_ArrayModF64 := ScalarArrayModF64}
+  {$DEFINE SIMD_STATIC_ArrayPowF64 := ScalarArrayPowF64}
+  {$DEFINE SIMD_STATIC_ArrayLerpF64 := ScalarArrayLerpF64}
+  {$DEFINE SIMD_STATIC_ArrayReLUF64 := ScalarArrayReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayAbsDiffF64 := ScalarArrayAbsDiffF64}
+  {$DEFINE SIMD_STATIC_ArrayNormF64 := ScalarArrayNormF64}
+  {$DEFINE SIMD_STATIC_ArrayLinearReLUF64 := ScalarArrayLinearReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayStepF64 := ScalarArrayStepF64}
+  {$DEFINE SIMD_STATIC_ArraySmoothstepF64 := ScalarArraySmoothstepF64}
+  {$DEFINE SIMD_STATIC_ArrayAtan2F64 := ScalarArrayAtan2F64}
+  {$DEFINE SIMD_STATIC_ArrayHypotF64 := ScalarArrayHypotF64}
 {$ENDIF}
 
 {$IFDEF SIMD_STATIC_HAS_AVX2}
@@ -1385,6 +1403,24 @@
   {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
   {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
   {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
+  // F64 Extended operations (scalar fallback)
+  {$DEFINE SIMD_STATIC_ArrayAxpyF64 := ScalarArrayAxpyF64}
+  {$DEFINE SIMD_STATIC_ArrayRcpF64 := ScalarArrayRcpF64}
+  {$DEFINE SIMD_STATIC_ArrayRsqrtF64 := ScalarArrayRsqrtF64}
+  {$DEFINE SIMD_STATIC_ArrayTanF64 := ScalarArrayTanF64}
+  {$DEFINE SIMD_STATIC_ArraySignF64 := ScalarArraySignF64}
+  {$DEFINE SIMD_STATIC_ArrayFractF64 := ScalarArrayFractF64}
+  {$DEFINE SIMD_STATIC_ArrayModF64 := ScalarArrayModF64}
+  {$DEFINE SIMD_STATIC_ArrayPowF64 := ScalarArrayPowF64}
+  {$DEFINE SIMD_STATIC_ArrayLerpF64 := ScalarArrayLerpF64}
+  {$DEFINE SIMD_STATIC_ArrayReLUF64 := ScalarArrayReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayAbsDiffF64 := ScalarArrayAbsDiffF64}
+  {$DEFINE SIMD_STATIC_ArrayNormF64 := ScalarArrayNormF64}
+  {$DEFINE SIMD_STATIC_ArrayLinearReLUF64 := ScalarArrayLinearReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayStepF64 := ScalarArrayStepF64}
+  {$DEFINE SIMD_STATIC_ArraySmoothstepF64 := ScalarArraySmoothstepF64}
+  {$DEFINE SIMD_STATIC_ArrayAtan2F64 := ScalarArrayAtan2F64}
+  {$DEFINE SIMD_STATIC_ArrayHypotF64 := ScalarArrayHypotF64}
 {$ENDIF}
 
 {$IFDEF SIMD_STATIC_HAS_AVX512}
@@ -1412,6 +1448,24 @@
   {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
   {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
   {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
+  // F64 Extended operations (scalar fallback)
+  {$DEFINE SIMD_STATIC_ArrayAxpyF64 := ScalarArrayAxpyF64}
+  {$DEFINE SIMD_STATIC_ArrayRcpF64 := ScalarArrayRcpF64}
+  {$DEFINE SIMD_STATIC_ArrayRsqrtF64 := ScalarArrayRsqrtF64}
+  {$DEFINE SIMD_STATIC_ArrayTanF64 := ScalarArrayTanF64}
+  {$DEFINE SIMD_STATIC_ArraySignF64 := ScalarArraySignF64}
+  {$DEFINE SIMD_STATIC_ArrayFractF64 := ScalarArrayFractF64}
+  {$DEFINE SIMD_STATIC_ArrayModF64 := ScalarArrayModF64}
+  {$DEFINE SIMD_STATIC_ArrayPowF64 := ScalarArrayPowF64}
+  {$DEFINE SIMD_STATIC_ArrayLerpF64 := ScalarArrayLerpF64}
+  {$DEFINE SIMD_STATIC_ArrayReLUF64 := ScalarArrayReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayAbsDiffF64 := ScalarArrayAbsDiffF64}
+  {$DEFINE SIMD_STATIC_ArrayNormF64 := ScalarArrayNormF64}
+  {$DEFINE SIMD_STATIC_ArrayLinearReLUF64 := ScalarArrayLinearReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayStepF64 := ScalarArrayStepF64}
+  {$DEFINE SIMD_STATIC_ArraySmoothstepF64 := ScalarArraySmoothstepF64}
+  {$DEFINE SIMD_STATIC_ArrayAtan2F64 := ScalarArrayAtan2F64}
+  {$DEFINE SIMD_STATIC_ArrayHypotF64 := ScalarArrayHypotF64}
 {$ENDIF}
 
 {$IFDEF SIMD_STATIC_HAS_NEON}
@@ -1439,6 +1493,24 @@
   {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
   {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
   {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
+  // F64 Extended operations (scalar fallback)
+  {$DEFINE SIMD_STATIC_ArrayAxpyF64 := ScalarArrayAxpyF64}
+  {$DEFINE SIMD_STATIC_ArrayRcpF64 := ScalarArrayRcpF64}
+  {$DEFINE SIMD_STATIC_ArrayRsqrtF64 := ScalarArrayRsqrtF64}
+  {$DEFINE SIMD_STATIC_ArrayTanF64 := ScalarArrayTanF64}
+  {$DEFINE SIMD_STATIC_ArraySignF64 := ScalarArraySignF64}
+  {$DEFINE SIMD_STATIC_ArrayFractF64 := ScalarArrayFractF64}
+  {$DEFINE SIMD_STATIC_ArrayModF64 := ScalarArrayModF64}
+  {$DEFINE SIMD_STATIC_ArrayPowF64 := ScalarArrayPowF64}
+  {$DEFINE SIMD_STATIC_ArrayLerpF64 := ScalarArrayLerpF64}
+  {$DEFINE SIMD_STATIC_ArrayReLUF64 := ScalarArrayReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayAbsDiffF64 := ScalarArrayAbsDiffF64}
+  {$DEFINE SIMD_STATIC_ArrayNormF64 := ScalarArrayNormF64}
+  {$DEFINE SIMD_STATIC_ArrayLinearReLUF64 := ScalarArrayLinearReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayStepF64 := ScalarArrayStepF64}
+  {$DEFINE SIMD_STATIC_ArraySmoothstepF64 := ScalarArraySmoothstepF64}
+  {$DEFINE SIMD_STATIC_ArrayAtan2F64 := ScalarArrayAtan2F64}
+  {$DEFINE SIMD_STATIC_ArrayHypotF64 := ScalarArrayHypotF64}
 {$ENDIF}
 
 {$IFDEF SIMD_STATIC_HAS_SCALAR}
@@ -1466,6 +1538,24 @@
   {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
   {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
   {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
+  // F64 Extended operations
+  {$DEFINE SIMD_STATIC_ArrayAxpyF64 := ScalarArrayAxpyF64}
+  {$DEFINE SIMD_STATIC_ArrayRcpF64 := ScalarArrayRcpF64}
+  {$DEFINE SIMD_STATIC_ArrayRsqrtF64 := ScalarArrayRsqrtF64}
+  {$DEFINE SIMD_STATIC_ArrayTanF64 := ScalarArrayTanF64}
+  {$DEFINE SIMD_STATIC_ArraySignF64 := ScalarArraySignF64}
+  {$DEFINE SIMD_STATIC_ArrayFractF64 := ScalarArrayFractF64}
+  {$DEFINE SIMD_STATIC_ArrayModF64 := ScalarArrayModF64}
+  {$DEFINE SIMD_STATIC_ArrayPowF64 := ScalarArrayPowF64}
+  {$DEFINE SIMD_STATIC_ArrayLerpF64 := ScalarArrayLerpF64}
+  {$DEFINE SIMD_STATIC_ArrayReLUF64 := ScalarArrayReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayAbsDiffF64 := ScalarArrayAbsDiffF64}
+  {$DEFINE SIMD_STATIC_ArrayNormF64 := ScalarArrayNormF64}
+  {$DEFINE SIMD_STATIC_ArrayLinearReLUF64 := ScalarArrayLinearReLUF64}
+  {$DEFINE SIMD_STATIC_ArrayStepF64 := ScalarArrayStepF64}
+  {$DEFINE SIMD_STATIC_ArraySmoothstepF64 := ScalarArraySmoothstepF64}
+  {$DEFINE SIMD_STATIC_ArrayAtan2F64 := ScalarArrayAtan2F64}
+  {$DEFINE SIMD_STATIC_ArrayHypotF64 := ScalarArrayHypotF64}
 {$ENDIF}
 
 {

@@ -878,3 +878,183 @@ begin
   for i := 0 to aCount - 1 do
     aDst[i] := Trunc(aSrc[i]);
 end;
+
+
+// === Batch Array Operations - F64 Extended ===
+
+
+procedure ScalarArrayAxpyF64(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aX = nil) or (aY = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aAlpha * aX[i] + aY[i];
+end;
+
+
+procedure ScalarArrayRcpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := 1.0 / aSrc[i];
+end;
+
+
+procedure ScalarArrayRsqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := 1.0 / System.Sqrt(aSrc[i]);
+end;
+
+
+procedure ScalarArrayTanF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := Tan(aSrc[i]);
+end;
+
+
+procedure ScalarArraySignF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt; v: Double;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+  begin
+    v := aSrc[i];
+    if v > 0 then
+      aDst[i] := 1.0
+    else if v < 0 then
+      aDst[i] := -1.0
+    else
+      aDst[i] := 0.0;
+  end;
+end;
+
+
+procedure ScalarArrayFractF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aSrc[i] - Trunc(aSrc[i]);
+end;
+
+
+procedure ScalarArrayModF64(aSrc, aDst: PDouble; aCount: SizeUInt; aDivisor: Double);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aSrc[i] - aDivisor * Trunc(aSrc[i] / aDivisor);
+end;
+
+
+procedure ScalarArrayPowF64(aSrc, aDst: PDouble; aCount: SizeUInt; aExponent: Double);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := SimdPowerF64(aSrc[i], aExponent);
+end;
+
+
+procedure ScalarArrayLerpF64(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aStart = nil) or (aEnd = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := aStart[i] + aT * (aEnd[i] - aStart[i]);
+end;
+
+
+procedure ScalarArrayReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    if aSrc[i] > 0 then aDst[i] := aSrc[i]
+    else aDst[i] := 0;
+end;
+
+
+procedure ScalarArrayAbsDiffF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := System.Abs(aSrc1[i] - aSrc2[i]);
+end;
+
+
+procedure ScalarArrayNormF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMean, aInvStd: Double);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := (aSrc[i] - aMean) * aInvStd;
+end;
+
+
+procedure ScalarArrayLinearReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+var i: SizeUInt; v: Double;
+begin
+  if (aCount = 0) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+  begin
+    v := aSrc[i] * aScale + aBias;
+    if v < 0 then v := 0;
+    aDst[i] := v;
+  end;
+end;
+
+
+procedure ScalarArrayStepF64(aEdge, aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aEdge = nil) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+  begin
+    if aSrc[i] < aEdge[i] then
+      aDst[i] := 0.0
+    else
+      aDst[i] := 1.0;
+  end;
+end;
+
+
+procedure ScalarArraySmoothstepF64(aEdge0, aEdge1, aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt; t, v: Double;
+begin
+  if (aCount = 0) or (aEdge0 = nil) or (aEdge1 = nil) or (aSrc = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+  begin
+    v := (aSrc[i] - aEdge0[i]) / (aEdge1[i] - aEdge0[i]);
+    if v < 0 then v := 0;
+    if v > 1 then v := 1;
+    t := v * v;
+    aDst[i] := t * (3 - 2 * v);
+  end;
+end;
+
+
+procedure ScalarArrayAtan2F64(aY, aX, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aY = nil) or (aX = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := ArcTan2(aY[i], aX[i]);
+end;
+
+
+procedure ScalarArrayHypotF64(aX, aY, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  if (aCount = 0) or (aX = nil) or (aY = nil) or (aDst = nil) then Exit;
+  for i := 0 to aCount - 1 do
+    aDst[i] := System.Sqrt(aX[i] * aX[i] + aY[i] * aY[i]);
+end;

@@ -787,6 +787,25 @@
     ArrayRoundF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
     ArrayTruncF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
 
+    // === Batch Array Operations - F64 Extended ===
+    ArrayAxpyF64: procedure(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
+    ArrayRcpF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayRsqrtF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayTanF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArraySignF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayFractF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayModF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aDivisor: Double);
+    ArrayPowF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aExponent: Double);
+    ArrayLerpF64: procedure(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double);
+    ArrayReLUF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayAbsDiffF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+    ArrayNormF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aMean, aInvStd: Double);
+    ArrayLinearReLUF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+    ArrayStepF64: procedure(aEdge, aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArraySmoothstepF64: procedure(aEdge0, aEdge1, aSrc, aDst: PDouble; aCount: SizeUInt);
+    ArrayAtan2F64: procedure(aY, aX, aDst: PDouble; aCount: SizeUInt);
+    ArrayHypotF64: procedure(aX, aY, aDst: PDouble; aCount: SizeUInt);
+
     // === Batch Array Operations - Transcendental F32 ===
     ArrayExpF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
     ArrayLogF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);

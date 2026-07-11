@@ -1334,6 +1334,25 @@ procedure ArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 procedure ArrayRoundF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 procedure ArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 
+// === Batch Array F64 Extended Operations (dispatch-through) ===
+procedure ArrayAxpyF64(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayRcpF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayRsqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayTanF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArraySignF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayFractF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayModF64(aSrc, aDst: PDouble; aCount: SizeUInt; aDivisor: Double); inline;
+procedure ArrayPowF64(aSrc, aDst: PDouble; aCount: SizeUInt; aExponent: Double); inline;
+procedure ArrayLerpF64(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double); inline;
+procedure ArrayReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayAbsDiffF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayNormF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMean, aInvStd: Double); inline;
+procedure ArrayLinearReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double); inline;
+procedure ArrayStepF64(aEdge, aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArraySmoothstepF64(aEdge0, aEdge1, aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayAtan2F64(aY, aX, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayHypotF64(aX, aY, aDst: PDouble; aCount: SizeUInt); inline;
+
 // === Framework Information ===
 
 // Get current backend information
@@ -1999,6 +2018,127 @@ var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
   LDispatch^.ArrayTruncF64(aSrc, aDst, aCount);
+end;
+
+// === F64 Extended Batch Implementation ===
+
+procedure ArrayAxpyF64(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayAxpyF64(aAlpha, aX, aY, aDst, aCount);
+end;
+
+procedure ArrayRcpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayRcpF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayRsqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayRsqrtF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayTanF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayTanF64(aSrc, aDst, aCount);
+end;
+
+procedure ArraySignF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArraySignF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayFractF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayFractF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayModF64(aSrc, aDst: PDouble; aCount: SizeUInt; aDivisor: Double);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayModF64(aSrc, aDst, aCount, aDivisor);
+end;
+
+procedure ArrayPowF64(aSrc, aDst: PDouble; aCount: SizeUInt; aExponent: Double);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayPowF64(aSrc, aDst, aCount, aExponent);
+end;
+
+procedure ArrayLerpF64(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayLerpF64(aStart, aEnd, aDst, aCount, aT);
+end;
+
+procedure ArrayReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayReLUF64(aSrc, aDst, aCount);
+end;
+
+procedure ArrayAbsDiffF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayAbsDiffF64(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure ArrayNormF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMean, aInvStd: Double);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayNormF64(aSrc, aDst, aCount, aMean, aInvStd);
+end;
+
+procedure ArrayLinearReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayLinearReLUF64(aSrc, aDst, aCount, aScale, aBias);
+end;
+
+procedure ArrayStepF64(aEdge, aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayStepF64(aEdge, aSrc, aDst, aCount);
+end;
+
+procedure ArraySmoothstepF64(aEdge0, aEdge1, aSrc, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArraySmoothstepF64(aEdge0, aEdge1, aSrc, aDst, aCount);
+end;
+
+procedure ArrayAtan2F64(aY, aX, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayAtan2F64(aY, aX, aDst, aCount);
+end;
+
+procedure ArrayHypotF64(aX, aY, aDst: PDouble; aCount: SizeUInt);
+var LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  LDispatch^.ArrayHypotF64(aX, aY, aDst, aCount);
 end;
 
 // === Transcendental F32 Batch Implementation ===

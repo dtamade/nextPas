@@ -270,11 +270,156 @@ begin
   Check(dstPack[2] = 123, 'PackSatI32toI16 sample2[2]');
 end;
 
+procedure TestF64ExtendedOperations;
+var
+  src: array[0..3] of Double;
+  src2: array[0..3] of Double;
+  edge: array[0..3] of Double;
+  dst: array[0..3] of Double;
+begin
+  // Test ArrayAxpyF64: y = a*x + y
+  src[0] := 1; src[1] := 2; src[2] := 3; src[3] := 4;
+  src2[0] := 10; src2[1] := 20; src2[2] := 30; src2[3] := 40;
+  ArrayAxpyF64(2.0, @src[0], @src2[0], @dst[0], 4);
+  Check(Abs(dst[0] - 12.0) < 1e-10, 'Axpy[0]');
+  Check(Abs(dst[1] - 24.0) < 1e-10, 'Axpy[1]');
+  Check(Abs(dst[2] - 36.0) < 1e-10, 'Axpy[2]');
+  Check(Abs(dst[3] - 48.0) < 1e-10, 'Axpy[3]');
+
+  // Test ArrayRcpF64: 1/x
+  src[0] := 1; src[1] := 2; src[2] := 4; src[3] := 0.5;
+  ArrayRcpF64(@src[0], @dst[0], 4);
+  Check(Abs(dst[0] - 1.0) < 1e-10, 'Rcp[1]');
+  Check(Abs(dst[1] - 0.5) < 1e-10, 'Rcp[2]');
+  Check(Abs(dst[2] - 0.25) < 1e-10, 'Rcp[4]');
+  Check(Abs(dst[3] - 2.0) < 1e-10, 'Rcp[0.5]');
+
+  // Test ArrayRsqrtF64: 1/sqrt(x)
+  src[0] := 1; src[1] := 4; src[2] := 9; src[3] := 16;
+  ArrayRsqrtF64(@src[0], @dst[0], 4);
+  Check(Abs(dst[0] - 1.0) < 1e-10, 'Rsqrt[1]');
+  Check(Abs(dst[1] - 0.5) < 1e-10, 'Rsqrt[4]');
+  Check(Abs(dst[2] - 1.0/3.0) < 1e-10, 'Rsqrt[9]');
+  Check(Abs(dst[3] - 0.25) < 1e-10, 'Rsqrt[16]');
+
+  // Test ArrayTanF64
+  src[0] := 0; src[1] := Pi/4; src[2] := Pi/6; src[3] := Pi/3;
+  ArrayTanF64(@src[0], @dst[0], 4);
+  Check(Abs(dst[0]) < 1e-10, 'Tan[0]');
+  Check(Abs(dst[1] - 1.0) < 1e-10, 'Tan[pi/4]');
+  Check(Abs(dst[2] - 1.0/Sqrt(3.0)) < 1e-6, 'Tan[pi/6]');
+
+  // Test ArraySignF64
+  src[0] := 5; src[1] := -3; src[2] := 0; src[3] := 0.001;
+  ArraySignF64(@src[0], @dst[0], 4);
+  Check(dst[0] = 1.0, 'Sign[5]');
+  Check(dst[1] = -1.0, 'Sign[-3]');
+  Check(dst[2] = 0.0, 'Sign[0]');
+  Check(dst[3] = 1.0, 'Sign[0.001]');
+
+  // Test ArrayFractF64
+  src[0] := 1.5; src[1] := 2.7; src[2] := -1.3; src[3] := 3.0;
+  ArrayFractF64(@src[0], @dst[0], 4);
+  Check(Abs(dst[0] - 0.5) < 1e-10, 'Fract[1.5]');
+  Check(Abs(dst[1] - 0.7) < 1e-10, 'Fract[2.7]');
+
+  // Test ArrayModF64
+  src[0] := 10; src[1] := 11; src[2] := 12; src[3] := 13;
+  ArrayModF64(@src[0], @dst[0], 4, 3.0);
+  Check(Abs(dst[0] - 1.0) < 1e-10, 'Mod[10,3]');
+  Check(Abs(dst[1] - 2.0) < 1e-10, 'Mod[11,3]');
+  Check(Abs(dst[2] - 0.0) < 1e-10, 'Mod[12,3]');
+  Check(Abs(dst[3] - 1.0) < 1e-10, 'Mod[13,3]');
+
+  // Test ArrayPowF64
+  src[0] := 2; src[1] := 3; src[2] := 4; src[3] := 5;
+  ArrayPowF64(@src[0], @dst[0], 4, 2.0);
+  Check(Abs(dst[0] - 4.0) < 1e-10, 'Pow[2,2]');
+  Check(Abs(dst[1] - 9.0) < 1e-10, 'Pow[3,2]');
+  Check(Abs(dst[2] - 16.0) < 1e-10, 'Pow[4,2]');
+  Check(Abs(dst[3] - 25.0) < 1e-10, 'Pow[5,2]');
+
+  // Test ArrayLerpF64
+  src[0] := 0; src[1] := 0; src[2] := 0; src[3] := 0;
+  src2[0] := 10; src2[1] := 20; src2[2] := 30; src2[3] := 40;
+  ArrayLerpF64(@src[0], @src2[0], @dst[0], 4, 0.5);
+  Check(Abs(dst[0] - 5.0) < 1e-10, 'Lerp[0,10,0.5]');
+  Check(Abs(dst[1] - 10.0) < 1e-10, 'Lerp[0,20,0.5]');
+
+  // Test ArrayReLUF64
+  src[0] := 1; src[1] := -2; src[2] := 0; src[3] := 3;
+  ArrayReLUF64(@src[0], @dst[0], 4);
+  Check(dst[0] = 1.0, 'ReLU[1]');
+  Check(dst[1] = 0.0, 'ReLU[-2]');
+  Check(dst[2] = 0.0, 'ReLU[0]');
+  Check(dst[3] = 3.0, 'ReLU[3]');
+
+  // Test ArrayAbsDiffF64
+  src[0] := 5; src[1] := 3; src[2] := 1; src[3] := 4;
+  src2[0] := 1; src2[1] := 7; src2[2] := 1; src2[3] := 4;
+  ArrayAbsDiffF64(@src[0], @src2[0], @dst[0], 4);
+  Check(dst[0] = 4.0, 'AbsDiff[5,1]');
+  Check(dst[1] = 4.0, 'AbsDiff[3,7]');
+  Check(dst[2] = 0.0, 'AbsDiff[1,1]');
+  Check(dst[3] = 0.0, 'AbsDiff[4,4]');
+
+  // Test ArrayNormF64
+  src[0] := 10; src[1] := 20; src[2] := 30; src[3] := 40;
+  ArrayNormF64(@src[0], @dst[0], 4, 25.0, 0.1);
+  Check(Abs(dst[0] - (-1.5)) < 1e-10, 'Norm[10]');
+  Check(Abs(dst[1] - (-0.5)) < 1e-10, 'Norm[20]');
+  Check(Abs(dst[2] - 0.5) < 1e-10, 'Norm[30]');
+  Check(Abs(dst[3] - 1.5) < 1e-10, 'Norm[40]');
+
+  // Test ArrayLinearReLUF64
+  src[0] := 1; src[1] := -1; src[2] := 2; src[3] := -2;
+  ArrayLinearReLUF64(@src[0], @dst[0], 4, 2.0, 1.0);
+  Check(dst[0] = 3.0, 'LinearReLU[1]');
+  Check(dst[1] = 0.0, 'LinearReLU[-1]');
+  Check(dst[2] = 5.0, 'LinearReLU[2]');
+  Check(dst[3] = 0.0, 'LinearReLU[-2]');
+
+  // Test ArrayStepF64
+  edge[0] := 0; edge[1] := 0; edge[2] := 0; edge[3] := 0;
+  src[0] := -1; src[1] := 0; src[2] := 1; src[3] := 0.5;
+  ArrayStepF64(@edge[0], @src[0], @dst[0], 4);
+  Check(dst[0] = 0.0, 'Step[-1]');
+  Check(dst[1] = 1.0, 'Step[0]');
+  Check(dst[2] = 1.0, 'Step[1]');
+  Check(dst[3] = 1.0, 'Step[0.5]');
+
+  // Test ArraySmoothstepF64
+  edge[0] := 0; edge[1] := 0; edge[2] := 0; edge[3] := 0;
+  edge[0] := 0; edge[1] := 0; edge[2] := 0; edge[3] := 0;
+  src[0] := 0; src[1] := 0.5; src[2] := 1; src[3] := 0.25;
+  ArraySmoothstepF64(@edge[0], @src2[0], @src[0], @dst[0], 4);
+  Check(dst[0] = 0.0, 'Smoothstep[0]');
+  Check(dst[1] = 0.5, 'Smoothstep[0.5]');
+
+  // Test ArrayAtan2F64
+  src[0] := 0; src[1] := 1; src[2] := 1; src[3] := -1;
+  src2[0] := 1; src2[1] := 0; src2[2] := 1; src2[3] := 1;
+  ArrayAtan2F64(@src[0], @src2[0], @dst[0], 4);
+  Check(Abs(dst[0]) < 1e-10, 'Atan2[0,1]');
+  Check(Abs(dst[1] - Pi/2) < 1e-10, 'Atan2[1,0]');
+  Check(Abs(dst[2] - Pi/4) < 1e-10, 'Atan2[1,1]');
+
+  // Test ArrayHypotF64
+  src[0] := 3; src[1] := 5; src[2] := 8; src[3] := 0;
+  src2[0] := 4; src2[1] := 12; src2[2] := 15; src2[3] := 1;
+  ArrayHypotF64(@src[0], @src2[0], @dst[0], 4);
+  Check(Abs(dst[0] - 5.0) < 1e-10, 'Hypot[3,4]');
+  Check(Abs(dst[1] - 13.0) < 1e-10, 'Hypot[5,12]');
+  Check(Abs(dst[2] - 17.0) < 1e-10, 'Hypot[8,15]');
+  Check(Abs(dst[3] - 1.0) < 1e-10, 'Hypot[0,1]');
+end;
+
 begin
   StartApiCoverageSuite('API Coverage Batch Math');
   TestArrayF64;
   TestBatchF64Extra;
   TestBatchF64ThinCoverageSecondSample;
   TestBatchF32RefineAndConversionSecondSample;
+  TestF64ExtendedOperations;
   PrintApiCoverageSummary;
 end.
