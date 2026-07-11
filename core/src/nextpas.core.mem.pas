@@ -69,6 +69,21 @@ uses
   nextpas.core.mem.registry,
   nextpas.core.mem.allocator.compact,
   nextpas.core.mem.allocator.callback,
+  nextpas.core.mem.allocator.bump,
+  nextpas.core.mem.allocator.cascade,
+  nextpas.core.mem.allocator.bitmap,
+  nextpas.core.mem.allocator.batch,
+  nextpas.core.mem.allocator.sentinel,
+  nextpas.core.mem.allocator.guard,
+  nextpas.core.mem.allocator.leak_report,
+  nextpas.core.mem.allocator.logging,
+  nextpas.core.mem.allocator.debug_alloc,
+  nextpas.core.mem.allocator.watermark,
+  nextpas.core.mem.allocator.sampling,
+  nextpas.core.mem.allocator.prefix,
+  nextpas.core.mem.allocator.prediction,
+  nextpas.core.mem.allocator.replay,
+  nextpas.core.mem.allocator.numa,
   nextpas.core.mem.budget;
 
 type
@@ -172,6 +187,30 @@ type
   TAllocMemCallback = nextpas.core.mem.allocator.callback.TAllocMemCallback;
   TReallocMemCallback = nextpas.core.mem.allocator.callback.TReallocMemCallback;
   TFreeMemCallback = nextpas.core.mem.allocator.callback.TFreeMemCallback;
+
+  // === 高性能分配器 ===
+  TBumpAllocator = nextpas.core.mem.allocator.bump.TBumpAllocator;
+  TCascadeAllocator = nextpas.core.mem.allocator.cascade.TCascadeAllocator;
+  TBitmapAllocator = nextpas.core.mem.allocator.bitmap.TBitmapAllocator;
+  TBatchAllocator = nextpas.core.mem.allocator.batch.TBatchAllocator;
+
+  // === 调试/监控分配器 ===
+  TSentinelAllocator = nextpas.core.mem.allocator.sentinel.TSentinelAllocator;
+  TGuardAllocator = nextpas.core.mem.allocator.guard.TGuardAllocator;
+  TLeakReportAllocator = nextpas.core.mem.allocator.leak_report.TLeakReportAllocator;
+  TLeakEntry = nextpas.core.mem.allocator.leak_report.TLeakEntry;
+  TLeakReportResult = nextpas.core.mem.allocator.leak_report.TLeakReportResult;
+  TLoggingAllocator = nextpas.core.mem.allocator.logging.TLoggingAllocator;
+  TDebugAllocator = nextpas.core.mem.allocator.debug_alloc.TDebugAllocator;
+  TWatermarkAllocator = nextpas.core.mem.allocator.watermark.TWatermarkAllocator;
+  TSamplingAllocator = nextpas.core.mem.allocator.sampling.TSamplingAllocator;
+  TSampleEntry = nextpas.core.mem.allocator.sampling.TSampleEntry;
+  TPrefixAllocator = nextpas.core.mem.allocator.prefix.TPrefixAllocator;
+  TPredictionAllocator = nextpas.core.mem.allocator.prediction.TPredictionAllocator;
+  TPredictionEntry = nextpas.core.mem.allocator.prediction.TPredictionEntry;
+  TPredictionResult = nextpas.core.mem.allocator.prediction.TPredictionResult;
+  TReplayAllocator = nextpas.core.mem.allocator.replay.TReplayAllocator;
+  TNumaAllocator = nextpas.core.mem.allocator.numa.TNumaAllocator;
 
   // === 预算管理 ===
   TMemoryBudget = nextpas.core.mem.budget.TMemoryBudget;
