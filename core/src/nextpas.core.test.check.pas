@@ -914,7 +914,7 @@ procedure CheckContainsCI(const AHaystack, ANeedle: string;
 begin
   if Length(ANeedle) = 0 then
     Exit;
-  if Pos(LowerCase(ANeedle), LowerCase(AHaystack)) = 0 then
+  if PosCI(ANeedle, AHaystack) = 0 then
     FailPrepend(AMessage, '"' + AHaystack + '" does not contain (ci) "' + ANeedle + '"');
 end;
 
@@ -930,7 +930,7 @@ procedure CheckNotContainsCI(const AHaystack, ANeedle: string;
 begin
   if Length(ANeedle) = 0 then
     FailPrepend(AMessage, '"' + AHaystack + '" should not contain (ci) empty string');
-  if Pos(LowerCase(ANeedle), LowerCase(AHaystack)) > 0 then
+  if PosCI(ANeedle, AHaystack) > 0 then
     FailPrepend(AMessage, '"' + AHaystack + '" should not contain (ci) "' + ANeedle + '"');
 end;
 
@@ -944,7 +944,7 @@ end;
 procedure CheckStartsWithCI(const AStr, APrefix: string;
   const AMessage: string);
 begin
-  if not StrStartsWith(LowerCase(AStr), LowerCase(APrefix)) then
+  if not StrStartsWithCI(AStr, APrefix) then
     FailPrepend(AMessage, '"' + AStr + '" does not start with (ci) "' + APrefix + '"');
 end;
 
@@ -958,7 +958,7 @@ end;
 procedure CheckEndsWithCI(const AStr, ASuffix: string;
   const AMessage: string);
 begin
-  if not StrEndsWith(LowerCase(AStr), LowerCase(ASuffix)) then
+  if not StrEndsWithCI(AStr, ASuffix) then
     FailPrepend(AMessage, '"' + AStr + '" does not end with (ci) "' + ASuffix + '"');
 end;
 

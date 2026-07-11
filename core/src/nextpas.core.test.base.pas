@@ -234,6 +234,13 @@ procedure InternalSkip(const AReason: string);
 function  StrStartsWith(const S, APrefix: string): Boolean;
 function  StrEndsWith(const AStr, ASuffix: string): Boolean;
   { Returns True if AStr ends with ASuffix. Empty suffix always returns True. }
+function  PosCI(const ANeedle, AHaystack: string): Integer;
+  { Case-insensitive Pos: returns 1-based index of first occurrence, 0 if not found.
+    Does NOT allocate — compares characters via UpCase. }
+function  StrStartsWithCI(const S, APrefix: string): Boolean;
+  { Case-insensitive prefix check. No allocation. }
+function  StrEndsWithCI(const AStr, ASuffix: string): Boolean;
+  { Case-insensitive suffix check. No allocation. }
 procedure IncByStatus(AStatus: TTestStatus;
   var APass, AFail, ASkip: Integer);
   { Increment the appropriate counter based on test status. }
@@ -773,6 +780,69 @@ begin
   LStrLen := Length(AStr);
   Result := (LStrLen >= LSuffixLen) and
     (Copy(AStr, LStrLen - LSuffixLen + 1, LSuffixLen) = ASuffix);
+end;
+
+function PosCI(const ANeedle, AHaystack: string): Integer;
+{ Case-insensitive Pos without allocation. Scans AHaystack for ANeedle
+  comparing via UpCase. Returns 1-based position or 0. }
+var
+  LNeedleLen, LHayLen, I, J: Integer;
+  LMatch: Boolean;
+begin
+  LNeedleLen := Length(ANeedle);
+  LHayLen := Length(AHaystack);
+  if LNeedleLen = 0 then
+    Exit(1); { empty needle matches at position 1, consistent with FPC Pos }
+  if LNeedleLen > LHayLen then
+    Exit(0);
+  for I := 1 to LHayLen - LNeedleLen + 1 do
+  begin
+    LMatch := True;
+    for J := 1 to LNeedleLen do
+    begin
+      if UpCase(AHaystack[I + J - 1]) <> UpCase(ANeedle[J]) then
+      begin
+        LMatch := False;
+        Break;
+      end;
+    end;
+    if LMatch then
+      Exit(I);
+  end;
+  Result := 0;
+end;
+
+function StrStartsWithCI(const S, APrefix: string): Boolean;
+{ Case-insensitive prefix check. No allocation. }
+var
+  LPreLen, I: Integer;
+begin
+  LPreLen := Length(APrefix);
+  if LPreLen = 0 then
+    Exit(True);
+  if Length(S) < LPreLen then
+    Exit(False);
+  for I := 1 to LPreLen do
+    if UpCase(S[I]) <> UpCase(APrefix[I]) then
+      Exit(False);
+  Result := True;
+end;
+
+function StrEndsWithCI(const AStr, ASuffix: string): Boolean;
+{ Case-insensitive suffix check. No allocation. }
+var
+  LStrLen, LSuffixLen, I: Integer;
+begin
+  LSuffixLen := Length(ASuffix);
+  if LSuffixLen = 0 then
+    Exit(True);
+  LStrLen := Length(AStr);
+  if LStrLen < LSuffixLen then
+    Exit(False);
+  for I := 1 to LSuffixLen do
+    if UpCase(AStr[LStrLen - LSuffixLen + I]) <> UpCase(ASuffix[I]) then
+      Exit(False);
+  Result := True;
 end;
 
 procedure IncByStatus(AStatus: TTestStatus;

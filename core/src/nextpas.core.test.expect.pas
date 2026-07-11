@@ -813,7 +813,7 @@ begin
   if Length(ASubstr) = 0 then
     LFound := True { empty needle matches everything }
   else
-    LFound := Pos(LowerCase(ASubstr), LowerCase(FStrValue)) > 0;
+    LFound := PosCI(ASubstr, FStrValue) > 0;
   CheckMatch(LFound,
     '"' + FStrValue + '" should not contain (ci) "' + ASubstr + '"',
     '"' + FStrValue + '" does not contain (ci) "' + ASubstr + '"');
@@ -823,9 +823,7 @@ end;
 function TExpectation.ToStartWithCI(const APrefix: string): IExpectation;
 begin
   RequireKind(ekString, 'ToStartWithCI');
-  CheckMatch(
-    (Length(FStrValue) >= Length(APrefix)) and
-    (LowerCase(Copy(FStrValue, 1, Length(APrefix))) = LowerCase(APrefix)),
+  CheckMatch(StrStartsWithCI(FStrValue, APrefix),
     '"' + FStrValue + '" should not start with (ci) "' + APrefix + '"',
     '"' + FStrValue + '" does not start with (ci) "' + APrefix + '"');
   Result := Self;
@@ -834,7 +832,7 @@ end;
 function TExpectation.ToEndWithCI(const ASuffix: string): IExpectation;
 begin
   RequireKind(ekString, 'ToEndWithCI');
-  CheckMatch(StrEndsWith(LowerCase(FStrValue), LowerCase(ASuffix)),
+  CheckMatch(StrEndsWithCI(FStrValue, ASuffix),
     '"' + FStrValue + '" should not end with (ci) "' + ASuffix + '"',
     '"' + FStrValue + '" does not end with (ci) "' + ASuffix + '"');
   Result := Self;
