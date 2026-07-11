@@ -10,6 +10,16 @@ uses
 type
   TAsyncCallback = procedure(AContext: Pointer);
 
+  { Anonymous procedure reference for async callbacks }
+  TAsyncCallbackRef = reference to procedure(AContext: Pointer);
+
+  { Method pointer for async callbacks }
+  TAsyncCallbackMethod = procedure(AContext: Pointer) of object;
+
+  { I/O completion callback types }
+  TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+  TIoCompletionRef = reference to procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+
   TAsyncTimerHandle = record
     FId: UInt32;
     FGen: UInt32;
