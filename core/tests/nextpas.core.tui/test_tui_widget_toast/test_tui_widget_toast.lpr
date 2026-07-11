@@ -131,6 +131,88 @@ begin
   end;
 end;
 
+procedure TestToastManagerVisibleCount;
+var
+  LManager: IToastManager;
+begin
+  LManager := TToastManager.New;
+  LManager.Push('Msg 1', tlInfo);
+  LManager.Push('Msg 2', tlSuccess);
+  Check(LManager.Visible = 2, 'Visible should be 2');
+  Check(LManager.Count = 2, 'Count should be 2');
+end;
+
+procedure TestToastManagerAllLevels;
+var
+  LManager: IToastManager;
+begin
+  LManager := TToastManager.New;
+  LManager.Push('Info', tlInfo);
+  LManager.Push('Success', tlSuccess);
+  LManager.Push('Warning', tlWarning);
+  LManager.Push('Error', tlError);
+  Check(LManager.Count = 4, 'All 4 levels pushed');
+end;
+
+procedure TestToastManagerTickExactBoundary;
+var
+  LManager: IToastManager;
+begin
+  LManager := TToastManager.New;
+  LManager.Push('Test', tlInfo);
+  // Default duration is 3000ms
+  LManager.Tick(3000);
+  Check(LManager.Count = 0, 'Exact duration tick should remove toast');
+end;
+
+procedure TestToastManagerTickMultiplePartial;
+var
+  LManager: IToastManager;
+begin
+  LManager := TToastManager.New;
+  LManager.Push('Test', tlInfo);
+  LManager.Tick(1000);
+  Check(LManager.Count = 1, 'Still alive after 1000ms');
+  LManager.Tick(1000);
+  Check(LManager.Count = 1, 'Still alive after 2000ms');
+  LManager.Tick(1001);
+  Check(LManager.Count = 0, 'Dead after 3001ms total');
+end;
+
+procedure TestToastManagerVisibleMax;
+var
+  LManager: IToastManager;
+  I: Integer;
+begin
+  LManager := TToastManager.New;
+  for I := 1 to 7 do
+    LManager.Push('Msg', tlInfo);
+  Check(LManager.Count = 7, 'Count should be 7');
+  Check(LManager.Visible = 5, 'Visible capped at 5 (FMaxVisible)');
+end;
+
+procedure TestToastManagerRenderMultiple;
+var
+  LManager: IToastManager;
+  LBuffer: TBuffer;
+  LArea: TRect;
+  LLines: TBufferLines;
+begin
+  LManager := TToastManager.New;
+  LManager.Push('First toast', tlInfo);
+  LManager.Push('Second toast', tlSuccess);
+  LArea := TRect.Make(0, 0, 40, 10);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LManager.Render(LArea, LBuffer);
+    LLines := LBuffer.AsLines;
+    Check(Pos('First toast', LLines[0]) > 0, 'First toast visible');
+    Check(Pos('Second toast', LLines[1]) > 0, 'Second toast visible');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.toast');
   T.Test('TToastPosition enum', @TestToastPositionEnum);
@@ -143,5 +225,11 @@ begin
   T.Test('TToastManager.Tick partial', @TestToastManagerTickPartial);
   T.Test('TToastManager.Render', @TestToastManagerRender);
   T.Test('TToastManager.Render empty', @TestToastManagerRenderEmpty);
+  T.Test('TToastManager.Visible count', @TestToastManagerVisibleCount);
+  T.Test('TToastManager all levels', @TestToastManagerAllLevels);
+  T.Test('TToastManager.Tick exact boundary', @TestToastManagerTickExactBoundary);
+  T.Test('TToastManager.Tick multiple partial', @TestToastManagerTickMultiplePartial);
+  T.Test('TToastManager.Visible max cap', @TestToastManagerVisibleMax);
+  T.Test('TToastManager.Render multiple', @TestToastManagerRenderMultiple);
   if not T.Run then Halt(1);
 end.

@@ -117,24 +117,75 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestTabsEmptyTitles;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState;
+begin
+  LT := TTabsWidget.New([]);
+  FillChar(LS, SizeOf(LS), 0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 20, 1), LBuf, LS);
+    Check(True, 'Empty titles should not crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsSingleTab;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LRow: AnsiString;
+begin
+  LT := TTabsWidget.New(['Only']);
+  FillChar(LS, SizeOf(LS), 0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 20, 1), LBuf, LS);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('Only', LRow) > 0, 'Single tab visible');
+    Check(Pos('|', LRow) = 0, 'No separator with single tab');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsCustomSeparator;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LRow: AnsiString;
+begin
+  LT := TTabsWidget.New(['A', 'B']).WithSeparator(' <-> ');
+  FillChar(LS, SizeOf(LS), 0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 20, 1), LBuf, LS);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('<->', LRow) > 0, 'Custom separator visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsTruncation;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LRow: AnsiString;
+begin
+  LT := TTabsWidget.New(['Tab1', 'Tab2', 'Tab3']);
+  FillChar(LS, SizeOf(LS), 0);
+  // Very narrow area — should truncate
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 8, 1), LBuf, LS);
+    LRow := LBuf.RowAsString(0);
+    Check(Length(LRow) > 0, 'Should produce some output even when truncated');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('test_tui_widget_tabs');
-  try
-    { TTabsState }
-    T.Test('TabsState default', @TestTabsStateDefault);
-
-    { ITabsWidget Builders }
-    T.Test('Tabs New', @TestTabsNew);
-    T.Test('Tabs render', @TestTabsRender);
-    T.Test('Tabs selection', @TestTabsSelection);
-    T.Test('Tabs WithActiveStyle', @TestTabsWithActiveStyle);
-    T.Test('Tabs WithInactiveStyle', @TestTabsWithInactiveStyle);
-    T.Test('Tabs WithSeparator', @TestTabsWithSeparator);
-    T.Test('Tabs as IWidget', @TestTabsAsIWidget);
-    T.Test('Tabs IWidget.Render', @TestTabsRenderIWidget);
-
-    WriteLn;
+  { TTabsState }
+  T.Test('TabsState default', @TestTabsStateDefault);
+  { ITabsWidget Builders }
+  T.Test('Tabs New', @TestTabsNew);
+  T.Test('Tabs render', @TestTabsRender);
+  T.Test('Tabs selection', @TestTabsSelection);
+  T.Test('Tabs WithActiveStyle', @TestTabsWithActiveStyle);
+  T.Test('Tabs WithInactiveStyle', @TestTabsWithInactiveStyle);
+  T.Test('Tabs WithSeparator', @TestTabsWithSeparator);
+  T.Test('Tabs as IWidget', @TestTabsAsIWidget);
+  T.Test('Tabs IWidget.Render', @TestTabsRenderIWidget);
+  T.Test('Tabs empty titles', @TestTabsEmptyTitles);
+  T.Test('Tabs single tab', @TestTabsSingleTab);
+  T.Test('Tabs custom separator', @TestTabsCustomSeparator);
+  T.Test('Tabs truncation', @TestTabsTruncation);
   if not T.Run then Halt(1);
-  finally
-  end;
 end.
