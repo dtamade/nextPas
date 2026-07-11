@@ -480,7 +480,7 @@ test.pas (facade, 537 lines) — 纯 re-export, 无逻辑
   ├── test.discovery (177) — L4: RTTI 自动发现
   ├── test.mock (1529)     — L4: Mock 框架 (TMock + 期望验证 + 调用历史)
   ├── test.prop (2704)     — L4: 属性测试 + 模糊测试 + 语料库 + shrinking
-  ├── test.helpers (178)   — L4: ExpectFail, WithMock, MakeBufferConfig 辅助
+  ├── test.helpers (195)   — L4: ExpectFail, WithMock, MakeBufferConfig, WithTempDir, WithTempFile 辅助
   └── test.bench (206)     — L4: 测试框架与 bench 模块集成
 
 内部模块 (不在 facade re-export):
@@ -527,19 +527,20 @@ Note: `Classes` is NOT a dependency. The framework uses `specialize TArray<T>` f
 
 | Test Suite | Tests | Coverage |
 |-----------|-------|----------|
-| test_assertions | 157 | All Check* procedures + Skip/Fail + CheckNear/CheckNotNear + empty pattern + Double + Array + CI variants |
-| test_expect | 173 | IExpectation (40+ To* methods x 4 dimensions: success/fail/Not_/Not_fail) + Double/CI/Array variants |
-| test_runner | 118 | Lifecycle hooks, failure paths, RunAll, RunAllWithResult, AllPassed cache, Summary, TestTable, retry, shuffle, failfast |
-| test_mock | 106 | TMock setup/verify, typed values, call ordering, CalledWith, CalledInOrder, VerifyInOrder, GetCallHistory |
-| test_output | 81 | ANSI formatting, StatusDot, FormatStatusLine, JUnit XML, JSON, TAP |
-| test_prop | 76 | Property testing generators, fuzzing, corpus, shrinking |
-| test_parallel | 54 | Parallel execution, failure/skip in threads, RunAllParallel, RunParallelWithResult, cleanup |
-| test_lifecycle | 36 | Setup/Teardown, BeforeEach/AfterEach, Cleanup, EachCleanups |
-| test_advanced | 19 | Retry, shuffle, failfast, short mode, verbose, progress, timeout |
+| test_assertions | 167 | All Check* procedures + Skip/Fail + CheckNear/CheckNotNear + empty pattern + Double + Array + CI variants |
+| test_expect | 175 | IExpectation (40+ To* methods x 4 dimensions: success/fail/Not_/Not_fail) + Double/CI/Array/Bytes/Match variants |
+| test_mock | 196 | TMock setup/verify, typed values, call ordering, CalledWith, CalledInOrder, VerifyInOrder, GetCallHistory |
+| test_output | 83 | ANSI formatting, StatusDot, FormatStatusLine, JUnit XML, JSON, TAP, Error vs Failure |
+| test_runner | 13 | CLI/filter/shuffle/retry/timeout/parallel/count |
+| test_prop | 50 | Property testing generators, fuzzing, corpus, shrinking |
+| test_lifecycle | 21 | Setup/Teardown, BeforeEach/AfterEach, Cleanup, EachCleanups, TestTable |
+| test_bench | 22 | RunBenchTest, RunBenchSuite, CheckBenchPerformance, CheckBenchThroughput |
+| test_advanced | 19 | DiscoverTests, TestFixture, ShouldFail, TestTable |
 | test_diagnostics | 15 | Error vs failure distinction, JUnit/TAP/JSON diagnostic output |
-| test_subtests | 2 | Nested subtests, RunNested API |
-| test_stress | 10000+ | Stress tests (excluded from normal count) |
-| **Total** | **~824** | (不含 stress: 10000+) |
+| test_parallel | 19 | Parallel execution, failure/skip in threads, timeout, table parallel |
+| test_subtests | 29 | Nested subtests, RunNested API, CleanupCallbacks, SinkPropagation |
+| test_stress | 10 | Stress tests (10K empty tests, large strings, glob perf, 100K output) |
+| **Total** | **819** | **2276 assertions**, 0 leaks |
 
 ---
 
@@ -734,7 +735,7 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 | test.discovery.pas | 177 | L4 | RTTI 自动发现 |
 | test.mock.pas | 1529 | L4 | Mock 框架 |
 | test.prop.pas | 2695 | L4 | 属性测试、模糊测试、语料库 |
-| test.helpers.pas | 178 | L4 | 测试辅助 (ExpectFail, WithMock) |
+| test.helpers.pas | 195 | L4 | 测试辅助 (ExpectFail, WithMock, WithTempDir, WithTempFile) |
 | test.bench.pas | 206 | L4 | 测试框架与 bench 模块集成 |
 | test.pas | 537 | 门面 | 纯 re-export |
 | **总计** | **15208** | | |
@@ -743,19 +744,20 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 
 | 套件 | 模块覆盖 | 测试数 |
 |------|----------|--------|
-| test_assertions | check.pas, expect.pas | 157 |
-| test_expect | expect.pas | 173 |
-| test_runner | runner.pas | 118 |
-| test_mock | mock.pas | 106 |
-| test_output | output.pas, output.json.pas, output.tap.pas | 81 |
-| test_prop | prop.pas | 76 |
-| test_parallel | runner.parallel.pas | 54 |
-| test_lifecycle | runner.pas (setup/teardown) | 36 |
+| test_assertions | check.pas, expect.pas | 167 |
+| test_expect | expect.pas | 175 |
+| test_mock | mock.pas | 196 |
+| test_output | output.pas, output.json.pas, output.tap.pas | 83 |
+| test_runner | runner.pas, runner.cli.pas | 13 |
+| test_prop | prop.pas | 50 |
+| test_lifecycle | runner.pas (setup/teardown) | 21 |
+| test_bench | bench.pas | 22 |
 | test_advanced | runner.pas (advanced) | 19 |
+| test_parallel | runner.parallel.pas | 19 |
 | test_diagnostics | runner.pas (diagnostics) | 15 |
-| test_subtests | runner.pas (subtests) | 2 |
-| test_stress | runner.pas (stress) | 10000+ |
-| **总计** | | **~824** (不含 stress) |
+| test_subtests | runner.pas (subtests) | 29 |
+| test_stress | runner.pas (stress) | 10 |
+| **总计** | | **819** (2276 assertions) |
 
 ### 文档索引
 

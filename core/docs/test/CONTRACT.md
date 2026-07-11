@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-11
-**版本**：v8.1
+**版本**：v8.2
 
 ---
 
@@ -27,7 +27,7 @@
 | test.output.json.pas | JSON 输出格式 | ~185 |
 | test.output.tap.pas | TAP v13 输出格式 | ~123 |
 | test.prop.pas | 属性测试 + 模糊测试 + 语料库 + shrinking | ~2704 |
-| test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig 辅助 | ~178 |
+| test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig, WithTempDir, WithTempFile 辅助 | ~195 |
 | test.bench.pas | 测试框架与 bench 模块集成 | ~206 |
 
 ---
@@ -281,21 +281,40 @@ end;
 
 ## 8. 测试覆盖
 
-| 套件 | 测试数 | 覆盖范围 |
-|------|--------|----------|
-| test_assertions | 108 | Check* 全方法 |
-| test_expect | 119 | IExpectation 全方法 + negation |
-| test_mock | 75 | TMock/IMockSetup/IMockVerify + typed CalledWith |
-| test_lifecycle | 15 | Setup/Teardown/BeforeEach/AfterEach/Cleanup |
-| test_diagnostics | 15 | 错误消息质量 + 字符串差异 |
-| test_output | 70 | ANSI/glob/JUnit/leak report |
-| test_runner | ~60 | CLI/filter/shuffle/retry/timeout/parallel |
-| test_parallel | 8 | 并行执行 + timeout |
-| test_subtests | ~10 | Run(RunNested + CleanupTableAllocations |
-| test_advanced | ~13 | DiscoverTests/TestFixture/ShouldFail/TestTable |
-| **总计** | **~500+** | **0 泄漏**（test_assertions 32B 是 FPC artifact） |
+| 套件 | 测试过程 | 断言数 | 覆盖范围 |
+|------|---------|--------|----------|
+| test_assertions | 167 | 679 | Check* 全方法 (Pointer/UInt64/TBytes AMessage 变体) |
+| test_expect | 175 | 530 | IExpectation 全方法 + negation + array/bytes/match |
+| test_mock | 196 | 208 | TMock/IMockSetup/IMockVerify + CalledWith + CalledInOrder + GetCallHistory |
+| test_output | 83 | 311 | ANSI/glob/JUnit/TAP/JSON/leak report + Error vs Failure |
+| test_runner | 13 | 146 | CLI/filter/shuffle/retry/timeout/parallel/count |
+| test_lifecycle | 21 | 93 | Setup/Teardown/BeforeEach/AfterEach/Cleanup/TestTable |
+| test_prop | 50 | 50 | 属性测试 + 模糊测试 + 语料库 + shrinking |
+| test_bench | 22 | 53 | RunBenchTest/RunBenchSuite/CheckBenchPerformance/CheckBenchThroughput |
+| test_advanced | 19 | 49 | DiscoverTests/TestFixture/ShouldFail/TestTable |
+| test_diagnostics | 15 | 59 | 错误消息质量 + 字符串差异 |
+| test_parallel | 19 | 19 | 并行执行 + timeout + table parallel |
+| test_subtests | 29 | 59 | Run/RunNested + CleanupCallbacks + SinkPropagation |
+| test_stress | 10 | 20 | 10K 空测试 + 大字符串 + glob 性能 + 100K 行输出 |
+| **总计** | **819** | **2276** | **0 泄漏**（test_assertions 32B 是 FPC artifact） |
 
 ## 9. 变更日志
+
+### v8.2 (2026-07-11) — test.bench 测试覆盖 + helpers 增强
+
+**新增**：
+- `test_bench` 测试套件（22 tests / 53 assertions）：完整覆盖 `nextpas.core.test.bench` 全部公共 API
+  - `DefaultBenchTestConfig` 5 个默认值验证
+  - `RunBenchTest` 6 个测试（执行/名称/NsPerOp/OpsPerSec/迭代数/MaxIterations）
+  - `RunBenchSuite` 3 个测试（多条目/全执行/空套件）
+  - `CheckBenchPerformance` 3 个测试（通过/失败/未执行）
+  - `CheckBenchThroughput` 3 个测试（通过/失败/未执行）
+  - 自定义消息转发 2 个测试
+- `WithTempFile` 辅助函数：创建临时文件、执行回调、自动清理（与 `WithTempDir` 对称）
+
+**更新**：
+- CONTRACT.md 测试覆盖表从 ~500+ 更新为 819 测试过程 / 2276 断言（精确计数）
+- `test.helpers.pas` 行数更新 ~178 → ~195
 
 ### v8.1 (2026-07-11) — 第二轮深度审查
 
