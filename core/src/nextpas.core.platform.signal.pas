@@ -459,8 +459,8 @@ begin
   Result := EnsureWindowsConsoleCtrlHandler;
   if Result <> 0 then
     Exit;
+  InterlockedExchange(GWindowsSignalModes[LIndex], WINDOWS_SIGNAL_HANDLER);
   GWindowsSignalHandlers[LIndex] := AHandler;
-  GWindowsSignalModes[LIndex] := WINDOWS_SIGNAL_HANDLER;
   Result := 0;
 end;
 
@@ -470,8 +470,8 @@ var
 begin
   if not WindowsSignalIndex(ASignal, LIndex) then
     Exit(PLATFORM_ERR_UNSUPPORTED);
+  InterlockedExchange(GWindowsSignalModes[LIndex], WINDOWS_SIGNAL_DEFAULT);
   GWindowsSignalHandlers[LIndex] := nil;
-  GWindowsSignalModes[LIndex] := WINDOWS_SIGNAL_DEFAULT;
   Result := MaybeRemoveWindowsConsoleCtrlHandler;
 end;
 
@@ -484,8 +484,8 @@ begin
   Result := EnsureWindowsConsoleCtrlHandler;
   if Result <> 0 then
     Exit;
+  InterlockedExchange(GWindowsSignalModes[LIndex], WINDOWS_SIGNAL_IGNORE);
   GWindowsSignalHandlers[LIndex] := nil;
-  GWindowsSignalModes[LIndex] := WINDOWS_SIGNAL_IGNORE;
   Result := 0;
 end;
 

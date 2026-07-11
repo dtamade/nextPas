@@ -613,7 +613,10 @@ begin
   if InterlockedCompareExchange(GPosixWaitBucketsState, 1, 0) = 0 then
   begin
     GPosixWaitBucketsInitResult := platform_posix_wait_buckets_init;
-    InterlockedExchange(GPosixWaitBucketsState, 2);
+    if GPosixWaitBucketsInitResult = 0 then
+      InterlockedExchange(GPosixWaitBucketsState, 2)
+    else
+      InterlockedExchange(GPosixWaitBucketsState, 0);
     Exit(GPosixWaitBucketsInitResult);
   end;
 

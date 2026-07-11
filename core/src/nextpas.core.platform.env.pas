@@ -89,6 +89,8 @@ begin
     if AName[I] = '=' then
       Exit(False);
     Inc(I);
+    if I > 256 then
+      Exit(False);
   end;
   Result := True;
 end;

@@ -463,6 +463,7 @@ var
   LRet: pid_t;
   LDeadlineNs, LNowNs: TPlatformTimeNanoseconds;
   LSleepReq: timespec;
+  LWaitIter: Int32;
 begin
   FillChar(AResult, SizeOf(AResult), 0);
   LStatus := 0;
@@ -474,6 +475,7 @@ begin
   end
   else
   begin
+    LWaitIter := 0;
     LDeadlineNs := platform_monotonic_ns + TPlatformTimeNanoseconds(ATimeoutMs) * 1000000;
     repeat
       LRet := waitpid(AProc.Pid, @LStatus, WNOHANG);
@@ -495,8 +497,20 @@ begin
         AResult.Status := psRunning;
         Exit(PLATFORM_ERR_TIMEDOUT);
       end;
+      { Exponential backoff: 0ns → 10μs → 100μs → 1ms → 10ms cap }
+      case LWaitIter of
+        0: LSleepReq.tv_nsec := 0;
+        1: LSleepReq.tv_nsec := 10000;      { 10 μs }
+        2: LSleepReq.tv_nsec := 100000;     { 100 μs }
+        3: LSleepReq.tv_nsec := 1000000;    { 1 ms }
+      else
+        begin
+          LSleepReq.tv_sec := 0;
+          LSleepReq.tv_nsec := 10000000;    { 10 ms cap }
+        end;
+      end;
       LSleepReq.tv_sec := 0;
-      LSleepReq.tv_nsec := 1000000; { 1 ms }
+      Inc(LWaitIter);
       nanosleep(@LSleepReq, nil);
     until False;
   end;
