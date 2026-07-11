@@ -403,7 +403,7 @@ begin
     'document must expose node accessor');
   CheckSourceContains(LSource, 'function anchorcount: uint32; inline;',
     'document must expose anchor count accessor');
-  CheckSourceContains(LSource, 'function allocator: iallocator; inline;',
+  CheckSourceContains(LSource, 'function allocator: tmemallocator; inline;',
     'document must expose allocator accessor');
   CheckSourceContains(LSource, 'procedure setroot(aidx: uint32); inline;',
     'document must expose root setter for builder');
