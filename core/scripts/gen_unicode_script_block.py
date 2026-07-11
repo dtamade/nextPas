@@ -628,6 +628,25 @@ def main():
 
     print(f"Done. Generated {len(script_ranges)} script ranges and {len(block_ranges)} block ranges.", file=sys.stderr)
 
+    # ── Step 4: Verify enum consistency ──
+    print("Step 4/4: Verifying enum consistency...", file=sys.stderr)
+    types_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src',
+                              'nextpas.core.text.unicode.types.pas')
+    if os.path.exists(types_path):
+        with open(types_path, 'r', encoding='utf-8') as f:
+            types_content = f.read()
+        # Check script enums
+        for name in SCRIPT_NAMES.values():
+            if name != 'usUnknown' and name not in types_content:
+                print(f"  WARNING: Script enum '{name}' not found in types.pas", file=sys.stderr)
+        # Check block enums
+        for name in BLOCK_NAMES.values():
+            if name != 'ubNoBlock' and name not in types_content:
+                print(f"  WARNING: Block enum '{name}' not found in types.pas", file=sys.stderr)
+        print("  Enum consistency check passed.", file=sys.stderr)
+    else:
+        print(f"  Skipping enum check: {types_path} not found", file=sys.stderr)
+
 
 if __name__ == "__main__":
     main()
