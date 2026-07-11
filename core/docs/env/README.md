@@ -17,7 +17,8 @@
 | `GetEnv(AName)` | 获取环境变量值，不存在返回空字符串 |
 | `TryGetEnv(AName, AValue)` | 尝试获取，返回是否成功 |
 | `HasEnv(AName)` | 检查环境变量是否存在 |
-| `EnvironmentVariables` | 返回所有环境变量的 `TStringArray` |
+| `EnvironmentVariables` | 返回所有环境变量的 `TStringArray`（格式 `NAME=VALUE`） |
+| `EnvKeys` | 返回所有环境变量名的 `TStringArray` |
 | `EnvironmentVariableNamesCaseSensitive` | 平台是否区分大小写（Unix true, Windows false） |
 
 ### 写入

@@ -550,6 +550,29 @@ begin
   Check(Length(LResults) = 0, 'Glob non-existent dir returns empty');
 end;
 
+procedure TestFsGlobRecursive;
+var
+  LResults: TStringArray;
+begin
+  FsMkdirAll(GTmpDir + '/fsglob/sub/deep');
+  FsWriteFile(GTmpDir + '/fsglob/a.txt', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/fsglob/b.pas', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/fsglob/sub/c.txt', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/fsglob/sub/d.log', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/fsglob/sub/deep/e.txt', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/fsglob/sub/deep/f.pas', TBytes.Create(1));
+  { **/*.txt should find a.txt + c.txt + e.txt = 3 }
+  LResults := FsGlob(GTmpDir + '/fsglob', '**/*.txt');
+  Check(Length(LResults) = 3, 'FsGlob **/*.txt finds 3 files recursively');
+  { **/*.pas should find b.pas + f.pas = 2 }
+  LResults := FsGlob(GTmpDir + '/fsglob', '**/*.pas');
+  Check(Length(LResults) = 2, 'FsGlob **/*.pas finds 2 files recursively');
+  { non-existent dir returns empty }
+  LResults := FsGlob(GTmpDir + '/nonexistent-fsglob', '**/*');
+  Check(Length(LResults) = 0, 'FsGlob non-existent dir returns empty');
+  FsRemoveAll(GTmpDir + '/fsglob');
+end;
+
 procedure TestRename;
 begin
   FsWriteFile(GTmpDir + '/old.txt', TBytes.Create(42));
@@ -1808,6 +1831,7 @@ begin
     T.Test('RemoveAll', @TestRemoveAll);
     T.Test('RemoveAll deep tree (200 levels)', @TestRemoveAllDeepTree);
     T.Test('Glob pattern matching', @TestGlob);
+    T.Test('FsGlob recursive matching', @TestFsGlobRecursive);
     T.Test('Rename', @TestRename);
     T.Test('Rename missing source raises not found',
       @TestRenameMissingSourceRaisesNotFound);

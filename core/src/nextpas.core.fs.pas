@@ -17,6 +17,7 @@ uses
   nextpas.core.fs.dir,
   nextpas.core.fs.path,
   nextpas.core.fs.util,
+  nextpas.core.fs.glob,
   nextpas.core.io.scanner,
   nextpas.core.io.mapped;
 
@@ -176,6 +177,20 @@ procedure Walk(const ARoot: string; const AFunc: TWalkFunc); inline;
  * @note 使用 PathMatch 进行模式匹配
  *}
 function Glob(const ADir, APattern: string): TStringArray;
+{** @desc 递归匹配文件系统 glob 模式（支持 ** 递归目录）
+ *
+ * @param ADir  根目录
+ * @param APattern  glob 模式（可含 ** 和路径分隔符）
+ * @return 匹配的文件路径数组（已排序）
+ *
+ * @note 使用 FsWalk 递归遍历
+ * @note 只匹配文件，不匹配目录
+ * @note 结果自动排序
+ *}
+function FsGlob(const ADir, APattern: string): TStringArray; overload;
+function FsGlob(const APattern: string): TStringArray; overload;
+{** @desc 检查文件名是否匹配 glob 模式（支持 **） *}
+function GlobMatch(const APattern, AName: string): Boolean;
 
 { Path operations }
 {** @desc 连接多个路径片段 *}
@@ -495,6 +510,21 @@ begin
     end;
   end;
   SetLength(Result, LCount);
+end;
+
+function FsGlob(const ADir, APattern: string): TStringArray;
+begin
+  Result := nextpas.core.fs.glob.FsGlob(ADir, APattern);
+end;
+
+function FsGlob(const APattern: string): TStringArray;
+begin
+  Result := nextpas.core.fs.glob.FsGlob(APattern);
+end;
+
+function GlobMatch(const APattern, AName: string): Boolean;
+begin
+  Result := nextpas.core.fs.glob.GlobMatch(APattern, AName);
 end;
 
 function PathJoin(const AParts: array of string): string;

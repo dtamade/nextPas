@@ -55,7 +55,9 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `CopyFile(ASrc, ADst)` | 复制文件，返回写入字节数 |
 | `TempFile(ADir, APattern)` | 创建临时文件，返回 `IFile` |
 | `TempDir(ADir, APattern)` | 创建临时目录，返回路径 |
-| `Glob(ADir, APattern)` | 列出匹配 glob 模式的文件 |
+| `Glob(ADir, APattern)` | 列出匹配 glob 模式的文件（单层） |
+| `FsGlob(ADir, APattern)` | 递归匹配文件系统 glob（支持 `**`） |
+| `GlobMatch(APattern, AName)` | 检查文件名是否匹配 glob 模式 |
 
 ### 便利函数
 
@@ -143,7 +145,7 @@ make -C core/tests/nextpas.core.fs/test_fs_ifile clean test
 make -C core/tests/nextpas.core.fs/test_fs_text clean test
 ```
 
-330 个测试，heaptrc 零泄漏。
+333 个测试，heaptrc 零泄漏。
 
 ### 特殊行为说明
 
@@ -151,6 +153,8 @@ make -C core/tests/nextpas.core.fs/test_fs_text clean test
 - **ReadFileText 编码**: 自动检测 BOM（UTF-8/UTF-16LE/UTF-16BE）；无 BOM 且非合法 UTF-8 时回退 Latin-1
 - **RemoveAll**: 迭代式实现，支持任意深度目录树（不会栈溢出）
 - **TempFile**: 统一权限为 0644，无论是否指定目录
+- **Glob**: 只匹配文件，不匹配目录；目录不存在返回空数组
+- **FsGlob**: 递归遍历，支持 `**` 模式；只匹配文件；结果自动排序
 
 ## 基准
 
