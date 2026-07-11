@@ -330,7 +330,7 @@ begin
   LAttrSize := 0;
   InitializeProcThreadAttributeList(nil, 1, 0, LAttrSize);
   LAttrList := GetMem(LAttrSize);
-  if LAttrList = nil then Exit(Int32(8));
+  if LAttrList = nil then Exit(PLATFORM_ERR_NOMEM);
 
   if not InitializeProcThreadAttributeList(LAttrList, 1, 0, LAttrSize) then
   begin

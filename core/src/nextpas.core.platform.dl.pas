@@ -280,7 +280,7 @@ function platform_dl_sym(const ALib: TPlatformLibrary;
 begin
   AAddr := nil;
   if ALib.Handle = 0 then
-    Exit(Int32(87)); // ERROR_INVALID_PARAMETER
+    Exit(PLATFORM_ERR_INVALID);
   if AName = nil then
     Exit(PLATFORM_ERR_INVALID);
   AAddr := Pointer(GetProcAddress(HMODULE(ALib.Handle), AName));
@@ -293,7 +293,7 @@ end;
 function platform_dl_close(var ALib: TPlatformLibrary): Int32;
 begin
   if ALib.Handle = 0 then
-    Exit(Int32(6)); // ERROR_INVALID_HANDLE
+    Exit(PLATFORM_ERR_BADF);
   if FreeLibrary(HMODULE(ALib.Handle)) then
     Result := 0
   else
