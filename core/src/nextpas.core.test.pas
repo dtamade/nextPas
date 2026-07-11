@@ -290,6 +290,20 @@ procedure CheckSorted(const AArray: array of string;
 procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');
 procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string = '');
 
+{ ── Emptiness Checks (v8.3) ───────────────────────────────────────────────── }
+procedure CheckEmpty(const AValue: string); overload;
+procedure CheckEmpty(const AValue: string;
+  const AMessage: string); overload;
+procedure CheckNotEmpty(const AValue: string); overload;
+procedure CheckNotEmpty(const AValue: string;
+  const AMessage: string); overload;
+procedure CheckEmpty(const AValue: TBytes); overload;
+procedure CheckEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
+procedure CheckNotEmpty(const AValue: TBytes); overload;
+procedure CheckNotEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
+
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
 
 function  GetLastTestTrace: string;

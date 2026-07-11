@@ -1345,6 +1345,78 @@ begin
   end, 'NOT to match');
 end;
 
+{ ── CheckEmpty/CheckNotEmpty tests ─────────────────────────────────────────── }
+
+procedure TestCheckEmptyStringPass;
+begin
+  CheckEmpty('');
+end;
+
+procedure TestCheckEmptyStringFail;
+begin
+  ExpectFail(procedure begin
+    CheckEmpty('hello');
+  end, 'empty');
+end;
+
+procedure TestCheckNotEmptyStringPass;
+begin
+  CheckNotEmpty('hello');
+end;
+
+procedure TestCheckNotEmptyStringFail;
+begin
+  ExpectFail(procedure begin
+    CheckNotEmpty('');
+  end, 'non-empty');
+end;
+
+procedure TestCheckEmptyBytesPass;
+begin
+  CheckEmpty(TBytes(nil));
+end;
+
+procedure TestCheckEmptyBytesFail;
+var
+  LB: TBytes;
+begin
+  SetLength(LB, 1);
+  LB[0] := 42;
+  ExpectFail(procedure begin
+    CheckEmpty(LB);
+  end, 'empty');
+end;
+
+procedure TestCheckNotEmptyBytesPass;
+var
+  LB: TBytes;
+begin
+  SetLength(LB, 1);
+  LB[0] := 42;
+  CheckNotEmpty(LB);
+end;
+
+procedure TestCheckNotEmptyBytesFail;
+begin
+  ExpectFail(procedure begin
+    CheckNotEmpty(TBytes(nil));
+  end, 'non-empty');
+end;
+
+procedure TestCheckEmptyStringWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckEmpty('abc', 'must be empty');
+  end, 'must be empty');
+end;
+
+procedure TestCheckNotEmptyBytesWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckNotEmpty(TBytes(nil), 'must have data');
+  end, 'must have data');
+end;
+
 { ── CheckSorted tests ─────────────────────────────────────────────────────── }
 
 procedure TestCheckSortedIntPass;
@@ -1627,6 +1699,17 @@ begin
   LSuite.Test('Sorted string pass',        @TestCheckSortedStringPass);
   LSuite.Test('Sorted string fail',        @TestCheckSortedStringFail);
   LSuite.Test('Sorted string empty',       @TestCheckSortedStringEmpty);
+
+  LSuite.Test('Empty string pass',        @TestCheckEmptyStringPass);
+  LSuite.Test('Empty string fail',        @TestCheckEmptyStringFail);
+  LSuite.Test('NotEmpty string pass',     @TestCheckNotEmptyStringPass);
+  LSuite.Test('NotEmpty string fail',     @TestCheckNotEmptyStringFail);
+  LSuite.Test('Empty bytes pass',         @TestCheckEmptyBytesPass);
+  LSuite.Test('Empty bytes fail',         @TestCheckEmptyBytesFail);
+  LSuite.Test('NotEmpty bytes pass',      @TestCheckNotEmptyBytesPass);
+  LSuite.Test('NotEmpty bytes fail',      @TestCheckNotEmptyBytesFail);
+  LSuite.Test('Empty string+msg',         @TestCheckEmptyStringWithMessage);
+  LSuite.Test('NotEmpty bytes+msg',       @TestCheckNotEmptyBytesWithMessage);
 
   if not LSuite.Run then
   begin

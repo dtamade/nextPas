@@ -91,6 +91,9 @@ type
       ToBeEmpty passes when length = 0. ToBeNotEmpty passes when length > 0. }
     function ToBeEmpty: IExpectation;
     function ToBeNotEmpty: IExpectation;
+    { Sorted check: works for int arrays and string arrays.
+      ToBeSorted passes when elements are in non-decreasing order. }
+    function ToBeSorted: IExpectation;
     { Set membership: value must be one of the given values. }
     function ToBeOneOf(const AValues: array of string): IExpectation;
     function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
@@ -262,6 +265,7 @@ type
     function ToContain(const AValue: Byte): IExpectation;
     function ToBeEmpty: IExpectation;
     function ToBeNotEmpty: IExpectation;
+    function ToBeSorted: IExpectation;
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
@@ -1254,6 +1258,53 @@ begin
   CheckMatch(LLen > 0,
     'Expected empty but got ' + IntToStr(LLen) + ' element(s)',
     'Expected non-empty but got empty');
+  Result := Self;
+end;
+
+function TExpectation.ToBeSorted: IExpectation;
+var
+  I: Integer;
+begin
+  case FKind of
+    ekIntArray:
+    begin
+      for I := 1 to High(FIntArrayValue) do
+        if FIntArrayValue[I] < FIntArrayValue[I - 1] then
+        begin
+          CheckMatch(False,
+            'Array is sorted but expected unsorted',
+            'Array not sorted at index ' + IntToStr(I) +
+            ': ' + IntToStr(FIntArrayValue[I - 1]) + ' > ' +
+            IntToStr(FIntArrayValue[I]));
+          Result := Self;
+          Exit;
+        end;
+      CheckMatch(True,
+        'Array not sorted',
+        'Array is sorted');
+    end;
+    ekStrArray:
+    begin
+      for I := 1 to High(FStrArrayValue) do
+        if FStrArrayValue[I] < FStrArrayValue[I - 1] then
+        begin
+          CheckMatch(False,
+            'Array is sorted but expected unsorted',
+            'Array not sorted at index ' + IntToStr(I) +
+            ': "' + FStrArrayValue[I - 1] + '" > "' +
+            FStrArrayValue[I] + '"');
+          Result := Self;
+          Exit;
+        end;
+      CheckMatch(True,
+        'Array not sorted',
+        'Array is sorted');
+    end;
+  else
+    InternalFail('ToBeSorted requires int array or string array expectation, ' +
+      'but got ' + KindNames[FKind] + '. Use ' + FactoryHints[FKind] +
+      ' to create the correct type.');
+  end;
   Result := Self;
 end;
 

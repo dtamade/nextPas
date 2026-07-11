@@ -96,6 +96,11 @@ Without these modeswitches, you must use named procedures with `@Proc` syntax.
 | `CheckNear(expected, actual, epsilon, msg)` | Assert floating-point nearness (absolute epsilon) |
 | `CheckNotNear(expected, actual, epsilon, msg)` | Assert floating-point not near |
 | `CheckApprox(expected, actual, epsilon, msg)` | Assert floating-point nearness (relative epsilon) |
+| `CheckEmpty(value)` | Assert string/bytes is empty (length = 0) |
+| `CheckNotEmpty(value)` | Assert string/bytes is not empty (length > 0) |
+| `CheckSorted(array)` | Assert array is sorted in non-decreasing order |
+| `CheckIsNil(intf, msg)` | Assert interface reference is nil |
+| `CheckIsNotNil(intf, msg)` | Assert interface reference is not nil |
 | `Fail(msg)` | Unconditional failure |
 | `Skip(reason)` | Skip current test (raises `ETestSkipped`) |
 

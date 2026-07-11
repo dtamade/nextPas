@@ -274,6 +274,28 @@ procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');
 { Check that an interface reference is not nil. }
 procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string = '');
 
+{ ── Emptiness Checks (v8.3) ───────────────────────────────────────────────── }
+
+{ Check that a string is empty (length = 0). }
+procedure CheckEmpty(const AValue: string); overload;
+procedure CheckEmpty(const AValue: string;
+  const AMessage: string); overload;
+
+{ Check that a string is not empty (length > 0). }
+procedure CheckNotEmpty(const AValue: string); overload;
+procedure CheckNotEmpty(const AValue: string;
+  const AMessage: string); overload;
+
+{ Check that a byte array is empty (length = 0). }
+procedure CheckEmpty(const AValue: TBytes); overload;
+procedure CheckEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
+
+{ Check that a byte array is not empty (length > 0). }
+procedure CheckNotEmpty(const AValue: TBytes); overload;
+procedure CheckNotEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
+
 implementation
 
 uses
@@ -1496,6 +1518,54 @@ begin
       FailPrepend(AMessage,
         'Array not sorted at index ' + IntToStr(I) +
         ': "' + AArray[I - 1] + '" > "' + AArray[I] + '"');
+end;
+
+{ ── Emptiness Checks (v8.3) ───────────────────────────────────────────────── }
+
+procedure CheckEmpty(const AValue: string);
+begin
+  CheckEmpty(AValue, '');
+end;
+
+procedure CheckEmpty(const AValue: string; const AMessage: string);
+begin
+  if Length(AValue) <> 0 then
+    FailWithDefault(AMessage,
+      'Expected empty string but got ' + IntToStr(Length(AValue)) + ' char(s)');
+end;
+
+procedure CheckNotEmpty(const AValue: string);
+begin
+  CheckNotEmpty(AValue, '');
+end;
+
+procedure CheckNotEmpty(const AValue: string; const AMessage: string);
+begin
+  if Length(AValue) = 0 then
+    FailWithDefault(AMessage, 'Expected non-empty string but got empty');
+end;
+
+procedure CheckEmpty(const AValue: TBytes);
+begin
+  CheckEmpty(AValue, '');
+end;
+
+procedure CheckEmpty(const AValue: TBytes; const AMessage: string);
+begin
+  if Length(AValue) <> 0 then
+    FailWithDefault(AMessage,
+      'Expected empty byte array but got ' + IntToStr(Length(AValue)) + ' byte(s)');
+end;
+
+procedure CheckNotEmpty(const AValue: TBytes);
+begin
+  CheckNotEmpty(AValue, '');
+end;
+
+procedure CheckNotEmpty(const AValue: TBytes; const AMessage: string);
+begin
+  if Length(AValue) = 0 then
+    FailWithDefault(AMessage, 'Expected non-empty byte array but got empty');
 end;
 
 end.

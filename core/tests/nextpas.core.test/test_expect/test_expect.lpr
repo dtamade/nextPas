@@ -1297,6 +1297,59 @@ begin
   end, 'pattern');
 end;
 
+{ ── ToBeSorted tests ──────────────────────────────────────────────────────── }
+
+procedure TestToBeSortedIntPass;
+begin
+  ExpectArrayOfInt([1, 2, 3, 4, 5]).ToBeSorted;
+end;
+
+procedure TestToBeSortedIntFail;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfInt([1, 3, 2, 4]).ToBeSorted;
+  end, 'not sorted');
+end;
+
+procedure TestToBeSortedIntEmpty;
+begin
+  ExpectArrayOfInt([]).ToBeSorted;
+end;
+
+procedure TestToBeSortedIntSingle;
+begin
+  ExpectArrayOfInt([42]).ToBeSorted;
+end;
+
+procedure TestToBeSortedIntEqual;
+begin
+  ExpectArrayOfInt([3, 3, 3]).ToBeSorted;
+end;
+
+procedure TestToBeSortedIntNot;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfInt([1, 2, 3]).Not_.ToBeSorted;
+  end, 'sorted');
+end;
+
+procedure TestToBeSortedStrPass;
+begin
+  ExpectArrayOfStr(['a', 'b', 'c']).ToBeSorted;
+end;
+
+procedure TestToBeSortedStrFail;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfStr(['c', 'a', 'b']).ToBeSorted;
+  end, 'not sorted');
+end;
+
+procedure TestToBeSortedStrEmpty;
+begin
+  ExpectArrayOfStr([]).ToBeSorted;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1522,6 +1575,16 @@ begin
   LSuite.Test('ToMatch pass',              @TestToMatchPass);
   LSuite.Test('ToMatch fail',              @TestToMatchFail);
   LSuite.Test('Not_.ToMatch',              @TestToMatchNot);
+
+  LSuite.Test('ToBeSorted int pass',      @TestToBeSortedIntPass);
+  LSuite.Test('ToBeSorted int fail',      @TestToBeSortedIntFail);
+  LSuite.Test('ToBeSorted int empty',     @TestToBeSortedIntEmpty);
+  LSuite.Test('ToBeSorted int single',    @TestToBeSortedIntSingle);
+  LSuite.Test('ToBeSorted int equal',     @TestToBeSortedIntEqual);
+  LSuite.Test('Not_.ToBeSorted int',      @TestToBeSortedIntNot);
+  LSuite.Test('ToBeSorted str pass',      @TestToBeSortedStrPass);
+  LSuite.Test('ToBeSorted str fail',      @TestToBeSortedStrFail);
+  LSuite.Test('ToBeSorted str empty',     @TestToBeSortedStrEmpty);
 
   if not LSuite.Run then
   begin
