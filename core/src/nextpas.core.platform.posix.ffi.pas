@@ -356,7 +356,7 @@ function pthread_mutexattr_init(attr: Pointer): Int32; cdecl; external 'pthread'
 
 {** @desc 设置互斥锁类型
     @param attr 属性
-    @param kind 类型（PTHREAD_MUTEX_NORMAL/ERRORCHECK/RECURSIVE）
+    @param kind 互斥锁类型编号（由各 host base 定义）
     @return 0 成功 *}
 function pthread_mutexattr_settype(attr: Pointer; kind: Int32): Int32; cdecl; external 'pthread' name 'pthread_mutexattr_settype';
 
