@@ -308,12 +308,16 @@ var
   LCleanFds: array[0..8] of PtrInt;
   LCleanCount, LCleanIdx: Integer;
 begin
-  { Resolve path: search PATH if using custom env and name has no directory part }
-  if (FEnvMode <> pemInherit) and (not CommandPathHasDirectoryPart(FPath)) then
-  begin
+  { P0-1 fix: Resolve path consistently regardless of env mode }
+  { Build env first (needed for PATH search in all modes) }
+  if FEnvMode = pemInherit then
+    LFinalEnv := EnvironmentVariables
+  else
     LFinalEnv := BuildFinalEnv(FEnvMode, FEnvPairs);
-    LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv, FWorkDir);
-  end
+
+  { Resolve path: always search PATH if name has no directory part }
+  if not CommandPathHasDirectoryPart(FPath) then
+    LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv, FWorkDir)
   else
     LResolvedPath := FPath;
 
@@ -329,7 +333,6 @@ begin
     LEnvp := nil
   else
   begin
-    LFinalEnv := BuildFinalEnv(FEnvMode, FEnvPairs);
     LEnvc := Length(LFinalEnv) + 1;
     SetLength(LEnvp, LEnvc);
     for I := 0 to High(LFinalEnv) do
