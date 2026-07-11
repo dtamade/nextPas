@@ -24,6 +24,15 @@ function FsRemove(const APath: string): Boolean;
 function FsRemoveAll(const APath: string): Boolean;
 function FsRename(const AOld, ANew: string): Boolean;
 procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
+{** @desc 递归遍历目录树，只访问文件（跳过目录条目）
+ *
+ * @param ARoot  起始目录
+ * @param AFunc  回调函数，返回 False 停止遍历
+ *
+ * @note 回调只接收文件，不接收目录
+ * @note 不跟随符号链接
+ *}
+procedure FsWalkFiles(const ARoot: string; const AFunc: TWalkFunc);
 
 implementation
 
@@ -346,6 +355,9 @@ type
     Callback: TWalkFunc;
   end;
 
+var
+  GFilesOnlyBridge: PFsWalkBridge;
+
 function MapPlatformFileType(AFT: nextpas.core.platform.files.base.TPlatformFileType
   ): nextpas.core.fs.base.TFileType;
 begin
@@ -420,6 +432,28 @@ begin
   Result := pwaContinue;
 end;
 
+function FsWalkFilesPlatformCallback(const AEntry: TPlatformWalkEntry;
+  AUserData: Pointer): TPlatformWalkAction;
+var
+  LPasInfo: TFileInfo;
+  LPath: string;
+begin
+  LPasInfo := BuildWalkInfo(AEntry);
+  if LPasInfo.IsDir then
+  begin
+    Result := pwaContinue;
+    Exit;
+  end;
+  if AEntry.PathLen > 0 then
+    SetString(LPath, AEntry.Path, AEntry.PathLen)
+  else
+    LPath := '';
+  if GFilesOnlyBridge^.Callback(LPath, LPasInfo, nil) then
+    Result := pwaContinue
+  else
+    Result := pwaStop;
+end;
+
 procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
 var
   LBridge: TFsWalkBridge;
@@ -427,6 +461,20 @@ var
 begin
   LBridge.Callback := AFunc;
   LResult := platform_fs_walk(PAnsiChar(ARoot), @FsWalkPlatformCallback,
+    @LBridge, False{no follow symlinks});
+  if (LResult <> PLATFORM_WALK_COMPLETED) and
+     (LResult <> PLATFORM_WALK_STOPPED) then
+    RaiseFsError(LResult, 'walk', ARoot);
+end;
+
+procedure FsWalkFiles(const ARoot: string; const AFunc: TWalkFunc);
+var
+  LBridge: TFsWalkBridge;
+  LResult: Int32;
+begin
+  LBridge.Callback := AFunc;
+  GFilesOnlyBridge := @LBridge;
+  LResult := platform_fs_walk(PAnsiChar(ARoot), @FsWalkFilesPlatformCallback,
     @LBridge, False{no follow symlinks});
   if (LResult <> PLATFORM_WALK_COMPLETED) and
      (LResult <> PLATFORM_WALK_STOPPED) then

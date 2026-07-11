@@ -16,6 +16,7 @@ function FsReadFileLines(const APath: string): TStringArray;
 procedure FsWriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
 procedure FsAppendFile(const APath: string; const AData: TBytes);
+procedure FsAppendFileText(const APath: string; const AText: string);
 procedure FsWriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
 function FsCopyFile(const ASrc, ADst: string): Int64;
@@ -155,6 +156,18 @@ begin
   if Length(AData) > 0 then
     WriteAllOrRaise(LFile, AData[0], SizeUInt(Length(AData)), 'append file');
   LFile.Close;
+end;
+
+procedure FsAppendFileText(const APath: string; const AText: string);
+var
+  LBytes: TBytes;
+  LLen: Integer;
+begin
+  LLen := Length(AText);
+  SetLength(LBytes, LLen);
+  if LLen > 0 then
+    Move(AText[1], LBytes[0], LLen);
+  FsAppendFile(APath, LBytes);
 end;
 
 procedure FsWriteAtomic(const APath: string; const AData: TBytes;

@@ -1746,6 +1746,36 @@ begin
   Check(LDirCount >= 2, 'walk classifies directories');
 end;
 
+procedure TestWalkFiles;
+var
+  LRoot: string;
+  I: SizeInt;
+  LFileCount, LDirCount: Integer;
+begin
+  LRoot := GTmpDir + '/walkfiles';
+  FsMkdirAll(LRoot + '/sub/deep');
+  FsWriteFile(LRoot + '/root.txt', TBytes.Create(1));
+  FsWriteFile(LRoot + '/sub/child.txt', TBytes.Create(2));
+  FsWriteFile(LRoot + '/sub/deep/deep.txt', TBytes.Create(3));
+
+  GWalkVisited := nil;
+  GWalkFileTypes := nil;
+  WalkFiles(LRoot, @WalkCaptureCallback);
+
+  LFileCount := 0;
+  LDirCount := 0;
+  for I := 0 to High(GWalkFileTypes) do
+  begin
+    if GWalkFileTypes[I] = ftRegular then
+      Inc(LFileCount);
+    if GWalkFileTypes[I] = ftDirectory then
+      Inc(LDirCount);
+  end;
+  Check(LFileCount >= 3, 'WalkFiles visits all files');
+  Check(LDirCount = 0, 'WalkFiles skips directories');
+  FsRemoveAll(LRoot);
+end;
+
 procedure TestWalkStopsWhenCallbackReturnsFalse;
 var
   LRoot: string;
@@ -1934,6 +1964,7 @@ begin
     T.Test('Walk visits files and directories',
       @TestWalkVisitsFilesAndDirectories);
     T.Test('Walk classifies file types', @TestWalkClassifiesFileTypes);
+    T.Test('WalkFiles skips directories', @TestWalkFiles);
     T.Test('Walk stops when callback returns false',
       @TestWalkStopsWhenCallbackReturnsFalse);
 {$IFDEF NEXTPAS_UNIX}

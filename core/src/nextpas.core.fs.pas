@@ -164,6 +164,8 @@ function ReadDir(const APath: string): TDirEntryArray; inline;
 function OpenDir(const APath: string): IDirIterator; inline;
 {** @desc 递归遍历目录树，对每个条目调用回调函数 *}
 procedure Walk(const ARoot: string; const AFunc: TWalkFunc); inline;
+{** @desc 递归遍历目录树，只访问文件（跳过目录） *}
+procedure WalkFiles(const ARoot: string; const AFunc: TWalkFunc); inline;
 {**
  * @desc 列出目录中匹配 glob 模式的文件名
  *
@@ -343,7 +345,7 @@ end;
 
 procedure AppendFileText(const APath: string; const AText: string);
 begin
-  AppendFile(APath, Utf8TextToBytes(AText));
+  nextpas.core.fs.util.FsAppendFileText(APath, AText);
 end;
 
 procedure AppendFileLine(const APath: string; const ALine: string);
@@ -479,6 +481,11 @@ end;
 procedure Walk(const ARoot: string; const AFunc: TWalkFunc);
 begin
   nextpas.core.fs.dir.FsWalk(ARoot, AFunc);
+end;
+
+procedure WalkFiles(const ARoot: string; const AFunc: TWalkFunc);
+begin
+  nextpas.core.fs.dir.FsWalkFiles(ARoot, AFunc);
 end;
 
 function Glob(const ADir, APattern: string): TStringArray;
