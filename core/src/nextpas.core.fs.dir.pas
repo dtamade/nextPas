@@ -32,6 +32,7 @@ uses
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.fs,
+  nextpas.core.platform.error,
   nextpas.core.fs.util,
   nextpas.core.fs.path,
   nextpas.core.text.conv;
@@ -220,7 +221,7 @@ begin
   if LResult <> 0 then
   begin
     { 文件不存在时返回 True，保持与 Pascal Erase/DeleteFile 一致的行为 }
-    if LResult = 2 then  { ENOENT }
+    if LResult = PLATFORM_ERR_NOENT then
       Exit(True);
     RaiseFsError(LResult, 'lstat', APath);
   end;
@@ -246,7 +247,7 @@ begin
   if not IsRealDir(APath) then
   begin
     LResult := platform_file_unlink(PAnsiChar(APath));
-    if (LResult <> 0) and (LResult <> 2) then  { ENOENT is fine: nothing to remove }
+    if (LResult <> 0) and (LResult <> PLATFORM_ERR_NOENT) then  { ENOENT is fine: nothing to remove }
       RaiseFsError(LResult, 'removeall', APath);
     Exit(True);
   end;
@@ -265,7 +266,7 @@ begin
     else
     begin
       LResult := platform_file_unlink(PAnsiChar(LChild));
-      if (LResult <> 0) and (LResult <> 2) then  { ENOENT: vanished between readdir and unlink }
+      if (LResult <> 0) and (LResult <> PLATFORM_ERR_NOENT) then  { ENOENT: vanished between readdir and unlink }
         RaiseFsError(LResult, 'removeall', LChild);
     end;
   end;
