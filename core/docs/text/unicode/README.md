@@ -272,13 +272,13 @@ end;
 
 | 测试套件 | 测试数 | 覆盖范围 |
 |----------|--------|----------|
-| `test_property` | 16 | IsUpper/IsLower/IsAlpha/IsDigit/IsNumber/IsWhitespace/IsSeparator/IsControl/IsPunctuation/IsSymbol/IsMark/GeneralCategory/CaseMapping/Boundary/SMP |
+| `test_property` | 19 | IsUpper/IsLower/IsAlpha/IsDigit/IsNumber/IsWhitespace/IsSeparator/IsControl/IsPunctuation/IsSymbol/IsMark/GeneralCategory/CaseMapping/Boundary/SMP/HasBinaryProperty/GraphemeBreakProperty/PropertyCombinations |
 | `test_case` | 7 | 大小写映射、case fold |
 | `test_normalize` | 13 | NFD/NFC/NFKD/NFKC、QuickCheck(NFD/NFKD/NFC/NFKC)、CCC、SMP 规范化、压力测试 |
-| `test_enhance` | 6 | Script/Block 属性、便利函数、CJK 分词 |
+| `test_enhance` | 6 | Script/Block 属性、便利函数、CJK 分词、?! 序列合并 |
 | `test_grapheme_uax29` | 13 | UAX #29 全部 GB 规则 |
 | `test_collate` | 15 | DUCET 三级权重、排序键、强度级别、排序方法、SMP 排序、压力排序 |
-| **总计** | **70** | |
+| **总计** | **73** | |
 
 ```bash
 # 运行所有 unicode 测试
