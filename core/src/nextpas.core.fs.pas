@@ -163,6 +163,19 @@ function ReadDir(const APath: string): TDirEntryArray; inline;
 function OpenDir(const APath: string): IDirIterator; inline;
 {** @desc 递归遍历目录树，对每个条目调用回调函数 *}
 procedure Walk(const ARoot: string; const AFunc: TWalkFunc); inline;
+{**
+ * @desc 列出目录中匹配 glob 模式的文件名
+ *
+ * @params
+ *   ADir      目录路径
+ *   APattern  glob 模式（如 '*.txt', 'test_?.pas'）
+ *
+ * @return 匹配的完整路径数组
+ *
+ * @note 只搜索当前目录，不递归
+ * @note 使用 PathMatch 进行模式匹配
+ *}
+function Glob(const ADir, APattern: string): TStringArray;
 
 { Path operations }
 {** @desc 连接多个路径片段 *}
@@ -451,6 +464,32 @@ end;
 procedure Walk(const ARoot: string; const AFunc: TWalkFunc);
 begin
   nextpas.core.fs.dir.FsWalk(ARoot, AFunc);
+end;
+
+function Glob(const ADir, APattern: string): TStringArray;
+var
+  LEntries: TDirEntryArray;
+  LCount, I: Integer;
+begin
+  Result := nil;
+  LEntries := ReadDir(ADir);
+  LCount := 0;
+  for I := 0 to High(LEntries) do
+  begin
+    if nextpas.core.fs.path.FsPathMatch(APattern, LEntries[I].Name) then
+    begin
+      if LCount >= Length(Result) then
+      begin
+        if Length(Result) = 0 then
+          SetLength(Result, 16)
+        else
+          SetLength(Result, Length(Result) * 2);
+      end;
+      Result[LCount] := nextpas.core.fs.path.FsPathJoin([ADir, LEntries[I].Name]);
+      Inc(LCount);
+    end;
+  end;
+  SetLength(Result, LCount);
 end;
 
 function PathJoin(const AParts: array of string): string;

@@ -527,6 +527,26 @@ begin
   Check(not FsExists(LBase), 'deep tree gone');
 end;
 
+procedure TestGlob;
+var
+  LResults: TStringArray;
+begin
+  FsMkdir(GTmpDir + '/globtest');
+  FsWriteFile(GTmpDir + '/globtest/a.txt', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/globtest/b.txt', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/globtest/c.pas', TBytes.Create(1));
+  FsWriteFile(GTmpDir + '/globtest/d.log', TBytes.Create(1));
+  LResults := Glob(GTmpDir + '/globtest', '*.txt');
+  Check(Length(LResults) = 2, 'Glob *.txt finds 2 files');
+  LResults := Glob(GTmpDir + '/globtest', '*.pas');
+  Check(Length(LResults) = 1, 'Glob *.pas finds 1 file');
+  LResults := Glob(GTmpDir + '/globtest', '*');
+  Check(Length(LResults) = 4, 'Glob * finds all 4 files');
+  LResults := Glob(GTmpDir + '/globtest', '*.xyz');
+  Check(Length(LResults) = 0, 'Glob *.xyz finds nothing');
+  FsRemoveAll(GTmpDir + '/globtest');
+end;
+
 procedure TestRename;
 begin
   FsWriteFile(GTmpDir + '/old.txt', TBytes.Create(42));
@@ -1784,6 +1804,7 @@ begin
       @TestRemoveAllUnsafeRootGuardRaisesInvalidOperation);
     T.Test('RemoveAll', @TestRemoveAll);
     T.Test('RemoveAll deep tree (200 levels)', @TestRemoveAllDeepTree);
+    T.Test('Glob pattern matching', @TestGlob);
     T.Test('Rename', @TestRename);
     T.Test('Rename missing source raises not found',
       @TestRenameMissingSourceRaisesNotFound);
