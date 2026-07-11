@@ -17,6 +17,9 @@ var Code := Command('/bin/true').Status;  // 0
 // 只要 stdout 文本
 var Text := Capture('/usr/bin/fpc', ['--version']);
 
+// stdout + stderr 合并
+var Combined := CaptureCombined('/bin/sh', ['-c', 'echo out; echo err >&2']);
+
 // 在指定目录执行
 var Out2 := RunIn('/bin/ls', ['-la'], '/tmp');
 var Dir := CaptureIn('/bin/pwd', [], '/tmp');
