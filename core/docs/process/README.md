@@ -28,6 +28,12 @@ var Text := CaptureTimeout('/usr/bin/fpc', ['--version'], TDuration.FromSeconds(
 var Input := TBytes.Create(Ord('h'), Ord('e'), Ord('l'), Ord('l'), Ord('o'));
 var Out := RunWithInput('/bin/cat', [], Input);
 var Text := CaptureWithInput('/bin/cat', [], Input);
+
+// 通过 stdin 传入字符串
+var Text := CaptureWithInputString('/bin/cat', [], 'hello world');
+
+// 获取当前进程可执行文件路径
+var ExePath := Executable;
 ```
 
 ## Builder 模式

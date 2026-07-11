@@ -73,6 +73,26 @@ function RunWithInput(const APath: string; const AArgs: array of string;
 function CaptureWithInput(const APath: string; const AArgs: array of string;
   const AStdin: TBytes): string;
 {**
+ * @desc 执行子进程，通过 stdin 传入字符串，返回输出
+ *
+ * @params
+ *   APath    可执行文件路径
+ *   AArgs    命令行参数
+ *   AStdin   传入 stdin 的字符串
+ *}
+function RunWithInputString(const APath: string; const AArgs: array of string;
+  const AStdin: string): TProcessOutput;
+{**
+ * @desc 执行子进程，通过 stdin 传入字符串，返回 stdout 文本
+ *
+ * @params
+ *   APath    可执行文件路径
+ *   AArgs    命令行参数
+ *   AStdin   传入 stdin 的字符串
+ *}
+function CaptureWithInputString(const APath: string; const AArgs: array of string;
+  const AStdin: string): string;
+{**
  * @desc 带超时的同步执行，超时后自动 Kill
  *
  * @params
@@ -104,11 +124,21 @@ function CaptureTimeout(const APath: string; const AArgs: array of string;
  * @note 使用当前进程的 PATH 环境变量
  *}
 function LookPath(const AName: string): string;
+{** @desc 获取当前进程的可执行文件完整路径
+ *
+ * @return 可执行文件的绝对路径
+ *
+ * @note Linux 使用 /proc/self/exe
+ * @note 其他平台回退到 ParamStr(0)
+ * @note 路径可能不存在（如被移动/删除）
+ *}
+function Executable: string;
 
 implementation
 
 uses
-  nextpas.core.os.env;
+  nextpas.core.os.env,
+  nextpas.core.platform.args;
 
 function Command(const APath: string): ICommand;
 begin
@@ -167,6 +197,28 @@ begin
   Result := RunWithInput(APath, AArgs, AStdin).StdOut;
 end;
 
+function StringToBytes(const AStr: string): TBytes;
+var
+  LLen: Integer;
+begin
+  LLen := Length(AStr);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(AStr[1], Result[0], LLen);
+end;
+
+function RunWithInputString(const APath: string; const AArgs: array of string;
+  const AStdin: string): TProcessOutput;
+begin
+  Result := RunWithInput(APath, AArgs, StringToBytes(AStdin));
+end;
+
+function CaptureWithInputString(const APath: string; const AArgs: array of string;
+  const AStdin: string): string;
+begin
+  Result := RunWithInputString(APath, AArgs, AStdin).StdOut;
+end;
+
 function LookPath(const AName: string): string;
 var
   LEnv: TStringArray;
@@ -178,6 +230,19 @@ begin
     not CommandPathHasDirectoryPart(AName) then
     raise EProcessError.Create('executable not found in PATH: ' + AName);
   Result := LResolved;
+end;
+
+function Executable: string;
+var
+  LBuf: array[0..4095] of AnsiChar;
+  LLen: Int32;
+begin
+  LLen := platform_args_exe_path(@LBuf[0], SizeOf(LBuf));
+  if LLen < 0 then
+    raise EProcessError.Create('Failed to get executable path');
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(LBuf[0], Result[1], LLen);
 end;
 
 end.

@@ -1146,6 +1146,25 @@ begin
   Check('CaptureWithInput — has output', Length(LText) > 0);
 end;
 
+procedure TestExecutable;
+var
+  LPath: string;
+begin
+  LPath := Executable;
+  Check('Executable — not empty', Length(LPath) > 0);
+  Check('Executable — starts with /', LPath[1] = '/');
+  Check('Executable — file exists', FileExists(LPath));
+end;
+
+procedure TestCaptureWithInputString;
+var
+  LText: string;
+begin
+  LText := CaptureWithInputString('/bin/cat', [], 'hello world');
+  Check('CaptureWithInputString — has output', Length(LText) > 0);
+  Check('CaptureWithInputString — contains input', Pos('hello', LText) > 0);
+end;
+
 
 begin
   LPassed := 0;
@@ -1212,6 +1231,8 @@ begin
   TestCaptureTimeoutConvenience;
   TestRunWithInput;
   TestCaptureWithInput;
+  TestExecutable;
+  TestCaptureWithInputString;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');
