@@ -118,6 +118,11 @@ function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat
     @return 0 成功，否则返回错误码 *}
 function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
 
+{** @desc 检查文件是否存在（通过 stat）
+    @param APath 文件路径
+    @return True 文件存在 *}
+function FileExistsByStat(const APath: PAnsiChar): Boolean;
+
 {** @desc 获取文件状态（通过句柄）
     @param AHandle 文件句柄
     @param AStat 输出文件状态
@@ -527,6 +532,13 @@ begin
 {$ENDIF}
   FillPlatformStat(LStat, AStat);
   Result := 0;
+end;
+
+function FileExistsByStat(const APath: PAnsiChar): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_lstat(APath, LStat) = 0;
 end;
 
 function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32;

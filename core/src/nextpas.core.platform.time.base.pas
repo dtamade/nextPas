@@ -36,6 +36,9 @@ type
     {** @desc 计算星期几（0=周日, 1=周一, ..., 6=周六）
         @return 星期几 *}
     function DayOfWeek: Int32;
+    {** @desc 检查是否为闰年
+        @return True 如果是闰年 *}
+    function IsLeapYear: Boolean; inline;
   end;
 
 implementation
@@ -92,6 +95,11 @@ begin
   Result := (D + (13 * (M + 1)) div 5 + Y + Y div 4 - Y div 100 + Y div 400) mod 7;
   { Convert from Zeller's (0=Sat) to standard (0=Sun) }
   Result := (Result + 6) mod 7;
+end;
+
+function TPlatformTimeBreakdown.IsLeapYear: Boolean;
+begin
+  Result := ((Year mod 4 = 0) and (Year mod 100 <> 0)) or (Year mod 400 = 0);
 end;
 
 end.

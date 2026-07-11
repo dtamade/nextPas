@@ -18,6 +18,14 @@ type
     {** @desc 检查库句柄是否无效
         @return True 如果库句柄无效 *}
     function IsInvalid: Boolean; inline;
+    {** @desc 查找动态库中的符号
+        @param AName 符号名称
+        @param AAddr 输出参数，返回符号地址
+        @return 0 成功，PLATFORM_ERR_NOTFOUND 符号不存在 *}
+    function Sym(const AName: PAnsiChar; out AAddr: Pointer): Int32;
+    {** @desc 关闭动态库
+        @return 0 成功，PLATFORM_ERR_* 错误码 *}
+    function Close: Int32;
   end;
 
   {** @desc 动态库打开标志 *}
@@ -97,6 +105,16 @@ end;
 function TPlatformLibrary.IsInvalid: Boolean;
 begin
   Result := Handle = nil;
+end;
+
+function TPlatformLibrary.Sym(const AName: PAnsiChar; out AAddr: Pointer): Int32;
+begin
+  Result := platform_dl_sym(Self, AName, AAddr);
+end;
+
+function TPlatformLibrary.Close: Int32;
+begin
+  Result := platform_dl_close(Self);
 end;
 
 {** @desc 将类型安全的标志集合转换为整数标志
@@ -223,6 +241,16 @@ begin
   Result := Handle = 0;
 end;
 
+function TPlatformLibrary.Sym(const AName: PAnsiChar; out AAddr: Pointer): Int32;
+begin
+  Result := platform_dl_sym(Self, AName, AAddr);
+end;
+
+function TPlatformLibrary.Close: Int32;
+begin
+  Result := platform_dl_close(Self);
+end;
+
 function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
 var
@@ -322,6 +350,10 @@ function TPlatformLibrary.IsValid: Boolean;
 begin Result := Handle <> nil; end;
 function TPlatformLibrary.IsInvalid: Boolean;
 begin Result := Handle = nil; end;
+function TPlatformLibrary.Sym(const AName: PAnsiChar; out AAddr: Pointer): Int32;
+begin Result := platform_dl_sym(Self, AName, AAddr); end;
+function TPlatformLibrary.Close: Int32;
+begin Result := platform_dl_close(Self); end;
 function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
 begin FillChar(ALib, SizeOf(ALib), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;

@@ -122,6 +122,17 @@ type
     {** @desc 检查线程是否未启动或已等待
         @return True 如果线程句柄无效 *}
     function IsInvalid: Boolean; inline;
+    {** @desc 创建并启动线程
+        @param AProc 线程入口函数
+        @param AArg 传递给线程的参数
+        @return 0 成功，PLATFORM_ERR_* 错误码 *}
+    function Spawn(AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+    {** @desc 等待线程结束
+        @return 0 成功，PLATFORM_ERR_* 错误码 *}
+    function Wait: Int32;
+    {** @desc 检查线程是否仍在运行
+        @return True 线程仍在运行 *}
+    function IsAlive: Boolean;
   end;
 
 {** @desc 创建并启动线程
@@ -866,6 +877,28 @@ end;
 function TPlatformThreadRecord.IsInvalid: Boolean;
 begin
   Result := Handle = nil;
+end;
+
+function TPlatformThreadRecord.Spawn(AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+begin
+  Handle := nil;
+  Result := platform_thread_create(Handle, AProc, AArg);
+end;
+
+function TPlatformThreadRecord.Wait: Int32;
+var
+  LRet: Pointer;
+begin
+  if Handle = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_thread_join(Handle, LRet);
+  if Result = 0 then
+    Handle := nil;
+end;
+
+function TPlatformThreadRecord.IsAlive: Boolean;
+begin
+  Result := (Handle <> nil) and platform_thread_is_alive(Self);
 end;
 
 function platform_thread_spawn(out ARec: TPlatformThreadRecord;

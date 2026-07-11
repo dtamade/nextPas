@@ -8,7 +8,7 @@ interface
     @param AName 程序名称（或绝对路径）
     @param ABuf 输出缓冲区，返回完整路径
     @param ABufSize 缓冲区大小
-    @return >= 0 路径实际长度，PLATFORM_ERR_ENOENT 未找到 *}
+    @return >= 0 路径实际长度，PLATFORM_ERR_NOENT 未找到 *}
 function platform_which(const AName: PAnsiChar;
   ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
@@ -92,11 +92,11 @@ begin
   begin
     if IsExecutable(AName) then
       Exit(CopyFoundPath(AName, ABuf, ABufSize));
-    Exit(PLATFORM_ERR_ENOENT);
+    Exit(PLATFORM_ERR_NOENT);
   end;
 
   if not LoadPathEnv(LPathBuf, LPathLen) then
-    Exit(PLATFORM_ERR_ENOENT);
+    Exit(PLATFORM_ERR_NOENT);
 
   I := 0;
   while I <= LPathLen do
@@ -119,7 +119,7 @@ begin
   end;
 
   if ABuf <> nil then ABuf[0] := #0;
-  Result := PLATFORM_ERR_ENOENT;
+  Result := PLATFORM_ERR_NOENT;
 end;
 
 end.

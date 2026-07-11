@@ -174,6 +174,16 @@ type
   TPlatformPathRoot = record
     Kind: TPlatformPathRootKind;
     Len: Int32;
+    {** @desc 检查路径根是否为绝对路径
+        @return True 如果是绝对路径根 *}
+    function IsAbsolute: Boolean; inline;
+    {** @desc 检查路径根是否阻止 .. 回溯
+        @return True 如果阻止 .. *}
+    function BlocksDotDot: Boolean; inline;
+    {** @desc 检查路径根后是否需要分隔符
+        @param APath 原始路径
+        @return True 如果需要分隔符 *}
+    function NeedsSepBeforePart(const APath: PAnsiChar): Boolean; inline;
   end;
 
   TPathPart = record
@@ -216,6 +226,46 @@ function MakePathRoot(AKind: TPlatformPathRootKind; ALen: Int32): TPlatformPathR
 begin
   Result.Kind := AKind;
   Result.Len := ALen;
+end;
+
+{ TPlatformPathRoot helper methods }
+
+function TPlatformPathRoot.IsAbsolute: Boolean; inline;
+begin
+  case Kind of
+    prkPosixRoot,
+    prkWindowsDriveAbsolute,
+    prkWindowsUncShare,
+    prkWindowsExtendedUncShare,
+    prkWindowsExtendedDriveAbsolute,
+    prkWindowsDeviceRoot:
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
+function TPlatformPathRoot.BlocksDotDot: Boolean; inline;
+begin
+  case Kind of
+    prkPosixRoot,
+    prkWindowsDriveAbsolute,
+    prkWindowsRootedRelative,
+    prkWindowsUncShare,
+    prkWindowsExtendedUncShare,
+    prkWindowsExtendedDriveAbsolute,
+    prkWindowsDeviceRoot:
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
+function TPlatformPathRoot.NeedsSepBeforePart(const APath: PAnsiChar): Boolean; inline;
+begin
+  if (Len <= 0) or (APath = nil) or IsSep(APath[Len - 1]) then
+    Exit(False);
+  Result := Kind <> prkWindowsDriveRelative;
 end;
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -321,44 +371,7 @@ begin
 {$ENDIF}
 end;
 
-function PathRootBlocksDotDot(const ARoot: TPlatformPathRoot): Boolean; inline;
-begin
-  case ARoot.Kind of
-    prkPosixRoot,
-    prkWindowsDriveAbsolute,
-    prkWindowsRootedRelative,
-    prkWindowsUncShare,
-    prkWindowsExtendedUncShare,
-    prkWindowsExtendedDriveAbsolute,
-    prkWindowsDeviceRoot:
-      Result := True;
-  else
-    Result := False;
-  end;
-end;
-
-function PathRootNeedsSepBeforePart(const ARoot: TPlatformPathRoot;
-  const APath: PAnsiChar): Boolean; inline;
-begin
-  if (ARoot.Len <= 0) or (APath = nil) or IsSep(APath[ARoot.Len - 1]) then
-    Exit(False);
-  Result := ARoot.Kind <> prkWindowsDriveRelative;
-end;
-
-function PathRootIsAbsolute(const ARoot: TPlatformPathRoot): Boolean; inline;
-begin
-  case ARoot.Kind of
-    prkPosixRoot,
-    prkWindowsDriveAbsolute,
-    prkWindowsUncShare,
-    prkWindowsExtendedUncShare,
-    prkWindowsExtendedDriveAbsolute,
-    prkWindowsDeviceRoot:
-      Result := True;
-  else
-    Result := False;
-  end;
-end;
+{ PathRoot helpers are now record methods: TPlatformPathRoot.IsAbsolute / .BlocksDotDot / .NeedsSepBeforePart }
 
 function AsciiLower(C: AnsiChar): AnsiChar; inline;
 begin
@@ -739,7 +752,7 @@ begin
   if (APath = nil) or (APath[0] = #0) then
     Exit(False);
   LRoot := ClassifyPathRoot(APath, StrLen(APath));
-  Result := PathRootIsAbsolute(LRoot);
+  Result := LRoot.IsAbsolute;
 end;
 
 function platform_path_is_root(const APath: PAnsiChar): Boolean;
@@ -752,7 +765,7 @@ begin
   LLen := PathNameLenWithoutTrailingSeparators(APath);
   LRoot := ClassifyPathRoot(APath, LLen);
   Result := (LRoot.Len > 0) and (LRoot.Len = LLen) and
-    PathRootIsAbsolute(LRoot);
+    LRoot.IsAbsolute;
 end;
 
 function platform_path_normalize(const APath: PAnsiChar;
@@ -799,7 +812,7 @@ var
   function NeedsSepBeforePart(const AIndex: Int32): Boolean;
   begin
     Result := (AIndex > 0) or
-      ((AIndex = 0) and PathRootNeedsSepBeforePart(LRoot, APath));
+      ((AIndex = 0) and LRoot.NeedsSepBeforePart(APath));
   end;
 
   procedure CopyChunk(const ASrc: PAnsiChar; const ALen: Int32);
@@ -844,7 +857,7 @@ begin
     begin
       if (LPartCount > 0) and not IsDotDotPart(LParts[LPartCount - 1]) then
         Dec(LPartCount)
-      else if not PathRootBlocksDotDot(LRoot) then
+      else if not LRoot.BlocksDotDot then
         AddPart(LStart, 2);
     end
     else
