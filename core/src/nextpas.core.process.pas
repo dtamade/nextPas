@@ -53,6 +53,16 @@ function RunIn(const APath: string; const AArgs: array of string;
 {** @desc 执行子进程并返回 stdout 文本 *}
 function Capture(const APath: string; const AArgs: array of string): string;
 {**
+ * @desc 在指定工作目录中执行子进程并返回 stdout 文本
+ *
+ * @params
+ *   APath  可执行文件路径
+ *   AArgs  命令行参数
+ *   ADir   工作目录
+ *}
+function CaptureIn(const APath: string; const AArgs: array of string;
+  const ADir: string): string;
+{**
  * @desc 执行子进程，通过 stdin 传入数据，返回输出
  *
  * @params
@@ -92,6 +102,28 @@ function RunWithInputString(const APath: string; const AArgs: array of string;
  *}
 function CaptureWithInputString(const APath: string; const AArgs: array of string;
   const AStdin: string): string;
+{**
+ * @desc 在指定工作目录中执行子进程，通过 stdin 传入数据，返回输出
+ *
+ * @params
+ *   APath    可执行文件路径
+ *   AArgs    命令行参数
+ *   ADir     工作目录
+ *   AStdin   传入 stdin 的数据
+ *}
+function RunInWithInput(const APath: string; const AArgs: array of string;
+  const ADir: string; const AStdin: TBytes): TProcessOutput;
+{**
+ * @desc 在指定工作目录中执行子进程，通过 stdin 传入字符串，返回输出
+ *
+ * @params
+ *   APath    可执行文件路径
+ *   AArgs    命令行参数
+ *   ADir     工作目录
+ *   AStdin   传入 stdin 的字符串
+ *}
+function RunInWithInputString(const APath: string; const AArgs: array of string;
+  const ADir: string; const AStdin: string): TProcessOutput;
 {**
  * @desc 带超时的同步执行，超时后自动 Kill
  *
@@ -174,6 +206,12 @@ begin
   Result := LOutput.StdOut;
 end;
 
+function CaptureIn(const APath: string; const AArgs: array of string;
+  const ADir: string): string;
+begin
+  Result := RunIn(APath, AArgs, ADir).StdOut;
+end;
+
 function RunTimeout(const APath: string; const AArgs: array of string;
   const ATimeout: TDuration): TProcessOutput;
 begin
@@ -227,6 +265,27 @@ function CaptureWithInputString(const APath: string; const AArgs: array of strin
   const AStdin: string): string;
 begin
   Result := RunWithInputString(APath, AArgs, AStdin).StdOut;
+end;
+
+function RunInWithInput(const APath: string; const AArgs: array of string;
+  const ADir: string; const AStdin: TBytes): TProcessOutput;
+var
+  LChild: IChild;
+  LStdin: IWriter;
+begin
+  LChild := TCommand.New(APath).Args(AArgs).Dir(ADir).Stdin(stPiped)
+    .Stdout(stPiped).Stderr(stPiped).Spawn;
+  LStdin := LChild.TakeStdin;
+  if (LStdin <> nil) and (Length(AStdin) > 0) then
+    LStdin.Write(AStdin[0], Length(AStdin));
+  LStdin := nil;
+  Result := LChild.WaitWithOutput;
+end;
+
+function RunInWithInputString(const APath: string; const AArgs: array of string;
+  const ADir: string; const AStdin: string): TProcessOutput;
+begin
+  Result := RunInWithInput(APath, AArgs, ADir, StringToBytes(AStdin));
 end;
 
 function LookPath(const AName: string): string;

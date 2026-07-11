@@ -17,6 +17,10 @@ var Code := Command('/bin/true').Status;  // 0
 // 只要 stdout 文本
 var Text := Capture('/usr/bin/fpc', ['--version']);
 
+// 在指定目录执行
+var Out2 := RunIn('/bin/ls', ['-la'], '/tmp');
+var Dir := CaptureIn('/bin/pwd', [], '/tmp');
+
 // 查找 PATH 中的可执行文件
 var FpcPath := LookPath('fpc');  // '/usr/bin/fpc'
 

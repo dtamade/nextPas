@@ -752,6 +752,14 @@ begin
   Check('RunIn nonexistent dir — raises EProcessError', LRaised);
 end;
 
+procedure TestCaptureIn;
+var
+  LText: string;
+begin
+  LText := CaptureIn('/bin/pwd', [], '/');
+  Check('CaptureIn / — returns /', Trim(LText) = '/');
+end;
+
 procedure TestRunLargeOutput;
 var LOut: TProcessOutput;
 begin
@@ -1184,6 +1192,15 @@ begin
   Check('CaptureWithInputString — contains input', Pos('hello', LText) > 0);
 end;
 
+procedure TestRunInWithInputString;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := RunInWithInputString('/bin/cat', [], '/tmp', 'from stdin');
+  Check('RunInWithInputString — exit 0', LOut.ExitCode = 0);
+  Check('RunInWithInputString — contains input', Pos('stdin', LOut.StdOut) > 0);
+end;
+
 
 begin
   LPassed := 0;
@@ -1243,6 +1260,7 @@ begin
   TestCaptureEmpty;
   TestCaptureMultiLine;
   TestRunInNonexistentDir;
+  TestCaptureIn;
   TestRunLargeOutput;
   TestLookPath;
   TestTryLookPath;
@@ -1253,6 +1271,7 @@ begin
   TestCaptureWithInput;
   TestExecutable;
   TestCaptureWithInputString;
+  TestRunInWithInputString;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');
