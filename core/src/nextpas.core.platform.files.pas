@@ -892,6 +892,20 @@ end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
+
+{** @desc 将 Windows 文件属性映射为平台文件类型
+    @param AAttrs dwFileAttributes 值
+    @return TPlatformFileType 枚举值 *}
+function WindowsFileAttrsToFileType(AAttrs: DWORD): TPlatformFileType; inline;
+begin
+  if (AAttrs and DWORD($400)) <> 0 then
+    Result := ftSymlink
+  else if (AAttrs and DWORD($10)) <> 0 then
+    Result := ftDirectory
+  else
+    Result := ftRegular;
+end;
+
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
 begin
@@ -1094,12 +1108,7 @@ begin
   LSize := UInt64(LData.nFileSizeHigh) shl 32 or LData.nFileSizeLow;
   AStat.Size := Int64(LSize);
   AStat.Mode := LData.dwFileAttributes;
-  if (LData.dwFileAttributes and $400) <> 0 then
-    AStat.FileType := ftSymlink
-  else if (LData.dwFileAttributes and $10) <> 0 then
-    AStat.FileType := ftDirectory
-  else
-    AStat.FileType := ftRegular;
+  AStat.FileType := WindowsFileAttrsToFileType(LData.dwFileAttributes);
   Result := 0;
 end;
 
@@ -1122,12 +1131,7 @@ begin
   AStat.Size := Int64(LSize);
   AStat.Mode := LInfo.dwFileAttributes;
   AStat.NLink := LInfo.nNumberOfLinks;
-  if (LInfo.dwFileAttributes and $400) <> 0 then
-    AStat.FileType := ftSymlink
-  else if (LInfo.dwFileAttributes and $10) <> 0 then
-    AStat.FileType := ftDirectory
-  else
-    AStat.FileType := ftRegular;
+  AStat.FileType := WindowsFileAttrsToFileType(LInfo.dwFileAttributes);
   Result := 0;
 end;
 
@@ -1415,12 +1419,7 @@ begin
       @AEntry.Name[0], SizeOf(AEntry.Name));
     AEntry.Ino := 0;
 
-    if (AHandle.FindData.dwFileAttributes and $400) <> 0 then
-      AEntry.FileType := ftSymlink
-    else if (AHandle.FindData.dwFileAttributes and $10) <> 0 then
-      AEntry.FileType := ftDirectory
-    else
-      AEntry.FileType := ftRegular;
+    AEntry.FileType := WindowsFileAttrsToFileType(AHandle.FindData.dwFileAttributes);
 
     Result := 0;
     Exit;
