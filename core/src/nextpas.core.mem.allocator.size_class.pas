@@ -63,10 +63,14 @@ type
     FAllocCounts: array[0..SIZE_CLASS_COUNT-1] of UInt64;
     FLargeAllocCount: UInt64;
     FLargeFreeCount: UInt64;
+    { Pool tracking for cleanup }
+    FPools: array of Pointer;
+    FPoolCount: Integer;
     function FindClass(ASize: SizeUInt): Integer;
     procedure GrowClass(AClassIdx: Integer);
   public
     constructor Create(AInner: IAllocator);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -110,6 +114,20 @@ begin
   end;
   FLargeAllocCount := 0;
   FLargeFreeCount := 0;
+  FPools := nil;
+  FPoolCount := 0;
+end;
+
+destructor TSizeClassAllocator.Destroy;
+var
+  I: Integer;
+begin
+  for I := 0 to FPoolCount - 1 do
+    FInner.FreeMem(FPools[I]);
+  FPools := nil;
+  FPoolCount := 0;
+  FInner := nil;
+  inherited Destroy;
 end;
 
 function TSizeClassAllocator.FindClass(ASize: SizeUInt): Integer;
@@ -131,6 +149,11 @@ var
 begin
   LBlockSize := SIZE_CLASS_HEADER + FClassSizes[AClassIdx];
   LPool := PByte(FInner.GetMem(LBlockSize * GROW_COUNT));
+  { Track pool for cleanup }
+  if FPoolCount >= Length(FPools) then
+    SetLength(FPools, FPoolCount + 8);
+  FPools[FPoolCount] := LPool;
+  Inc(FPoolCount);
   for I := 0 to GROW_COUNT - 1 do
   begin
     LHeader := PSizeClassHeader(LPool + I * LBlockSize);
