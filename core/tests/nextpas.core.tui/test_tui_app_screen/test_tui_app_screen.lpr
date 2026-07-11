@@ -192,6 +192,67 @@ begin
   LStack.Free;
 end;
 
+procedure TestScreenStackPushSameTwice;
+var
+  LStack: TScreenStack;
+  LScreen: TTestScreen;
+  LExcept: Boolean;
+begin
+  LStack := TScreenStack.Create;
+  LScreen := MakeTestScreen;
+  LStack.Push(LScreen);
+  LExcept := False;
+  try
+    LStack.Push(LScreen); // same screen again
+  except
+    LExcept := True;
+  end;
+  Check(LExcept, 'Push same screen twice should raise');
+  Check(LStack.Count = 1, 'Count should still be 1');
+  LStack.Free;
+end;
+
+procedure TestScreenStackHandleEventEmpty;
+var
+  LStack: TScreenStack;
+  LEv: TEvent;
+begin
+  LStack := TScreenStack.Create;
+  LEv.Kind := evNone;
+  LStack.HandleEvent(LEv); // should not crash on empty stack
+  Check(True, 'HandleEvent on empty stack does not crash');
+  LStack.Free;
+end;
+
+procedure TestScreenStackHandleEventDelegates;
+var
+  LStack: TScreenStack;
+  LScreen: TTestScreen;
+  LEv: TEvent;
+begin
+  LStack := TScreenStack.Create;
+  LScreen := MakeTestScreen;
+  LStack.Push(LScreen);
+  LEv.Kind := evNone;
+  LStack.HandleEvent(LEv); // should delegate to top screen
+  Check(True, 'HandleEvent delegates to top screen');
+  LStack.Free;
+end;
+
+procedure TestScreenStackRenderEmpty;
+var
+  LStack: TScreenStack;
+  LBuf: TBuffer;
+begin
+  LStack := TScreenStack.Create;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 5));
+  try
+    LStack.Render(TRect.Make(0, 0, 10, 5), LBuf); // should not crash
+    Check(True, 'Render on empty stack does not crash');
+  finally LBuf.Free; end;
+  LStack.Free;
+end;
+
 begin
   T := TTestSuite.Create('tui_app_screen');
   T.Test('TScreenStack.Create', @TestScreenStackCreate);
@@ -204,5 +265,9 @@ begin
   T.Test('TScreenStack.QuitRequested', @TestScreenStackQuitRequested);
   T.Test('TScreenStack.ConsumeQuitRequested', @TestScreenStackConsumeQuitRequested);
   T.Test('TScreenStack.Push(nil) raises', @TestScreenStackPushNil);
+  T.Test('TScreenStack.Push same twice raises', @TestScreenStackPushSameTwice);
+  T.Test('TScreenStack.HandleEvent empty', @TestScreenStackHandleEventEmpty);
+  T.Test('TScreenStack.HandleEvent delegates', @TestScreenStackHandleEventDelegates);
+  T.Test('TScreenStack.Render empty', @TestScreenStackRenderEmpty);
   if not T.Run then Halt(1);
 end.
