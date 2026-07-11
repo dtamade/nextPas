@@ -1,8 +1,9 @@
 // ============================================================================
 // AVX2 Batch Array Operations
-// 策略: 单 asm 循环 + 4x YMM 展开 (每轮 32 float)
+// 策略: 单 asm 循环 + 8x YMM 展开 (每轮 64 float)
 //        pointer bump 代替 index*4 地址计算
-//        尾部在同一 asm 块内处理 (16/8/4/scalar)
+//        尾部在同一 asm 块内处理 (32/16/8/4/scalar)
+//        预取优化: 大数组使用 prefetchnta 预取下一批数据
 // ============================================================================
 
 procedure AVX2ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -19,39 +20,16 @@ begin
     mov rcx, pD
     mov r8, aCount
 
-    cmp r8, 4096
-    jae @loop64_setup
-    cmp r8, 32
-    jb @tail16
-
-  @loop32:
-    vmovups ymm0, [rax]
-    vaddps  ymm0, ymm0, [rdx]
-    vmovups [rcx], ymm0
-    vmovups ymm1, [rax + 32]
-    vaddps  ymm1, ymm1, [rdx + 32]
-    vmovups [rcx + 32], ymm1
-    vmovups ymm2, [rax + 64]
-    vaddps  ymm2, ymm2, [rdx + 64]
-    vmovups [rcx + 64], ymm2
-    vmovups ymm3, [rax + 96]
-    vaddps  ymm3, ymm3, [rdx + 96]
-    vmovups [rcx + 96], ymm3
-    add rax, 128
-    add rdx, 128
-    add rcx, 128
-    sub r8, 32
-    cmp r8, 32
-    jae @loop32
-    jmp @tail16
-
-  @loop64_setup:
+    // 小数组快速路径 (<64 elements)
     cmp r8, 64
-    jb @tail16
+    jb @tail32
+
+    // 大数组路径: 8x YMM 展开 + 预取
+    cmp r8, 1024
+    jae @loop64_prefetch
 
   @loop64:
-    prefetchnta [rax + 256]
-    prefetchnta [rdx + 256]
+    // 8x YMM 展开 (64 elements/iter)
     vmovups ymm0, [rax]
     vaddps  ymm0, ymm0, [rdx]
     vmovups [rcx], ymm0
@@ -82,6 +60,66 @@ begin
     sub r8, 64
     cmp r8, 64
     jae @loop64
+    jmp @tail32
+
+  @loop64_prefetch:
+    // 大数组路径: 8x YMM 展开 + 预取下一批数据
+    prefetchnta [rax + 512]
+    prefetchnta [rdx + 512]
+    prefetchnta [rax + 576]
+    prefetchnta [rdx + 576]
+
+    vmovups ymm0, [rax]
+    vaddps  ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vaddps  ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vaddps  ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vaddps  ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    vmovups ymm4, [rax + 128]
+    vaddps  ymm4, ymm4, [rdx + 128]
+    vmovups [rcx + 128], ymm4
+    vmovups ymm5, [rax + 160]
+    vaddps  ymm5, ymm5, [rdx + 160]
+    vmovups [rcx + 160], ymm5
+    vmovups ymm6, [rax + 192]
+    vaddps  ymm6, ymm6, [rdx + 192]
+    vmovups [rcx + 192], ymm6
+    vmovups ymm7, [rax + 224]
+    vaddps  ymm7, ymm7, [rdx + 224]
+    vmovups [rcx + 224], ymm7
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 64
+    cmp r8, 64
+    jae @loop64_prefetch
+    jmp @tail32
+
+  @tail32:
+    cmp r8, 32
+    jb @tail16
+    vmovups ymm0, [rax]
+    vaddps  ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vaddps  ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vaddps  ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vaddps  ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
 
   @tail16:
     cmp r8, 16
@@ -152,10 +190,89 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 小数组快速路径 (<64 elements)
+    cmp r8, 64
+    jb @tail32
+
+    // 大数组路径: 8x YMM 展开 + 预取
+    cmp r8, 1024
+    jae @loop64_prefetch
+
+  @loop64:
+    // 8x YMM 展开 (64 elements/iter)
+    vmovups ymm0, [rax]
+    vmulps  ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vmulps  ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vmulps  ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vmulps  ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    vmovups ymm4, [rax + 128]
+    vmulps  ymm4, ymm4, [rdx + 128]
+    vmovups [rcx + 128], ymm4
+    vmovups ymm5, [rax + 160]
+    vmulps  ymm5, ymm5, [rdx + 160]
+    vmovups [rcx + 160], ymm5
+    vmovups ymm6, [rax + 192]
+    vmulps  ymm6, ymm6, [rdx + 192]
+    vmovups [rcx + 192], ymm6
+    vmovups ymm7, [rax + 224]
+    vmulps  ymm7, ymm7, [rdx + 224]
+    vmovups [rcx + 224], ymm7
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 64
+    cmp r8, 64
+    jae @loop64
+    jmp @tail32
+
+  @loop64_prefetch:
+    // 大数组路径: 8x YMM 展开 + 预取下一批数据
+    prefetchnta [rax + 512]
+    prefetchnta [rdx + 512]
+    prefetchnta [rax + 576]
+    prefetchnta [rdx + 576]
+
+    vmovups ymm0, [rax]
+    vmulps  ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vmulps  ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vmulps  ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vmulps  ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    vmovups ymm4, [rax + 128]
+    vmulps  ymm4, ymm4, [rdx + 128]
+    vmovups [rcx + 128], ymm4
+    vmovups ymm5, [rax + 160]
+    vmulps  ymm5, ymm5, [rdx + 160]
+    vmovups [rcx + 160], ymm5
+    vmovups ymm6, [rax + 192]
+    vmulps  ymm6, ymm6, [rdx + 192]
+    vmovups [rcx + 192], ymm6
+    vmovups ymm7, [rax + 224]
+    vmulps  ymm7, ymm7, [rdx + 224]
+    vmovups [rcx + 224], ymm7
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 64
+    cmp r8, 64
+    jae @loop64_prefetch
+
+  @tail32:
     cmp r8, 32
     jb @tail16
-
-  @loop32:
     vmovups ymm0, [rax]
     vmulps  ymm0, ymm0, [rdx]
     vmovups [rcx], ymm0
@@ -172,8 +289,6 @@ begin
     add rdx, 128
     add rcx, 128
     sub r8, 32
-    cmp r8, 32
-    jae @loop32
 
   @tail16:
     cmp r8, 16
