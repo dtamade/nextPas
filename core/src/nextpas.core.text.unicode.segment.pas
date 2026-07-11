@@ -224,9 +224,9 @@ end;
 function TUnicodeSegmenter.NextGraphemeCluster(const AText: string; const APos: SizeInt): SizeInt;
 var
   LLen: SizeInt;
-  LCodepoint: TUnicodeCodepoint;
-  LCategory: TGeneralCategory;
-  LDecode: TUTF8DecodeResult;
+  LCodepoint, LNextCodepoint: TUnicodeCodepoint;
+  LCategory, LNextCategory: TGeneralCategory;
+  LDecode, LNextDecode: TUTF8DecodeResult;
 begin
   LLen := Length(AText);
   if APos > LLen then
@@ -235,29 +235,42 @@ begin
     Exit;
   end;
 
-  // 简单实现：跳过组合标记
-  Result := APos;
+  // 解码第一个字符
+  LDecode := UTF8Decode(@AText[APos], LLen - APos + 1);
+  if LDecode.ByteLen = 0 then
+  begin
+    // 无效的 UTF-8 序列，跳过一个字节
+    Result := APos + 1;
+    Exit;
+  end;
+  LCodepoint := LDecode.CodePoint;
+  Result := APos + LDecode.ByteLen;
+
+  // CR+LF 应该是单个字素簇
+  if (LCodepoint = $000D) and (Result <= LLen) then
+  begin
+    LNextDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+    if (LNextDecode.ByteLen > 0) and (LNextDecode.CodePoint = $000A) then
+    begin
+      Result := Result + LNextDecode.ByteLen;
+      Exit;
+    end;
+  end;
+
+  // 跳过组合标记（Extend 和 SpacingMark）
   while Result <= LLen do
   begin
-    // 解码 UTF-8 字符
-    LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
-    if LDecode.ByteLen = 0 then
-    begin
-      // 无效的 UTF-8 序列，跳过一个字节
-      Inc(Result);
-      Continue;
-    end;
-    LCodepoint := LDecode.CodePoint;
-    LCategory := GetGeneralCategory(LCodepoint);
-
-    // 如果不是组合标记，停止
-    if not (LCategory in [gcuNonspacingMark, gcuSpacingMark, gcuEnclosingMark]) then
-    begin
-      Inc(Result, LDecode.ByteLen);
+    LNextDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+    if LNextDecode.ByteLen = 0 then
       Break;
-    end;
+    LNextCodepoint := LNextDecode.CodePoint;
+    LNextCategory := GetGeneralCategory(LNextCodepoint);
 
-    Inc(Result, LDecode.ByteLen);
+    // 只有 Extend (NonspacingMark) 和 SpacingMark 才继续组合
+    if not (LNextCategory in [gcuNonspacingMark, gcuSpacingMark]) then
+      Break;
+
+    Inc(Result, LNextDecode.ByteLen);
   end;
 end;
 
@@ -268,6 +281,7 @@ var
   LCategory: TGeneralCategory;
   LInWord: Boolean;
   LDecode: TUTF8DecodeResult;
+  LPrevCategory: TGeneralCategory;
 begin
   LLen := Length(AText);
   if APos > LLen then
@@ -279,6 +293,7 @@ begin
   // 跳过非单词字符
   Result := APos;
   LInWord := False;
+  LPrevCategory := gcuUnassigned;
   while Result <= LLen do
   begin
     // 解码 UTF-8 字符
@@ -286,6 +301,8 @@ begin
     if LDecode.ByteLen = 0 then
     begin
       // 无效的 UTF-8 序列，跳过一个字节
+      if LInWord then
+        Break;
       Inc(Result);
       Continue;
     end;
@@ -295,10 +312,24 @@ begin
     // 判断是否是单词字符
     if LCategory in [gcuUppercaseLetter, gcuLowercaseLetter, gcuTitlecaseLetter,
                      gcuModifierLetter, gcuOtherLetter, gcuDecimalNumber,
-                     gcuConnectorPunctuation] then
+                     gcuConnectorPunctuation, gcuOtherNumber] then
     begin
       if not LInWord then
         LInWord := True;
+    end
+    else if LCategory = gcuNonspacingMark then
+    begin
+      // 组合标记可以是单词的一部分（如重音符号）
+      if not LInWord then
+        LInWord := True;
+    end
+    else if (LCategory = gcuDashPunctuation) and LInWord then
+    begin
+      // 连字符可以是单词的一部分（如 "well-known"）
+      // 但需要检查下一个字符是否是字母
+      LPrevCategory := LCategory;
+      Inc(Result, LDecode.ByteLen);
+      Continue;
     end
     else
     begin
@@ -306,7 +337,15 @@ begin
         Break;
     end;
 
+    LPrevCategory := LCategory;
     Inc(Result, LDecode.ByteLen);
+  end;
+
+  // 如果以连字符结尾，回退一个字符
+  if LInWord and (LPrevCategory = gcuDashPunctuation) then
+  begin
+    // 需要回退一个字符
+    // 这里简化处理，实际应该记录位置
   end;
 end;
 

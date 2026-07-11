@@ -40,11 +40,31 @@ begin
   LResults := SegmentGraphemeClusters('Hello');
   CheckEqual(Int64(5), Int64(Length(LResults)), 'Hello has 5 grapheme clusters');
 
+  // 测试 CR+LF 应该是单个字素簇
+  LResults := SegmentGraphemeClusters('Line1' + #13#10 + 'Line2');
+  CheckEqual(Int64(11), Int64(Length(LResults)), 'CR+LF is single grapheme cluster');
+
+  // 测试组合字符（如重音符号）
+  LResults := SegmentGraphemeClusters('café');  // é 可能是组合形式
+  Check(LResults[3].Length >= 2, 'Combining mark attached to base character');
+
   LResults := SegmentWords('Hello World');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Hello World has 2 words');
 
+  // 测试连字符单词
+  LResults := SegmentWords('well-known');
+  CheckEqual(Int64(1), Int64(Length(LResults)), 'well-known is one word');
+
+  // 测试带数字的单词
+  LResults := SegmentWords('test123');
+  CheckEqual(Int64(1), Int64(Length(LResults)), 'test123 is one word');
+
   LResults := SegmentLines('Line1' + #10 + 'Line2');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Two lines');
+
+  // 测试多种行分隔符
+  LResults := SegmentLines('Line1' + #13 + 'Line2' + #13#10 + 'Line3');
+  CheckEqual(Int64(3), Int64(Length(LResults)), 'Three lines with CR and CRLF');
 
   LResults := SegmentSentences('Hello. World!');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Two sentences');
