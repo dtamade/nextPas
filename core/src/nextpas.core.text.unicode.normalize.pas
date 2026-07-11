@@ -433,11 +433,17 @@ end;
 
 function IsNormalizedNFD(const s: string): Boolean;
 begin
+  // 先用 QuickCheck 快速判断（O(n) 无分配）
+  if QuickCheckNFD(s) then
+    Exit(True);
+  // QuickCheck 不确定时，回退到完整规范化比较
   Result := NFD(s) = s;
 end;
 
 function IsNormalizedNFC(const s: string): Boolean;
 begin
+  if QuickCheckNFC(s) then
+    Exit(True);
   Result := NFC(s) = s;
 end;
 

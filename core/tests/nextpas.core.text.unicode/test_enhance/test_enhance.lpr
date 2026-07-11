@@ -121,6 +121,33 @@ begin
   Check(not IsLetter(Ord('9')), '9 is not letter');
 end;
 
+procedure TestConvenienceFunctions;
+var
+  LArr: array[0..4] of string;
+begin
+  // CompareText
+  Check(CompareText('a', 'b') < 0, 'CompareText a < b');
+  Check(CompareText('b', 'a') > 0, 'CompareText b > a');
+  CheckEqual(CompareText('hello', 'hello'), 0, 'CompareText equal');
+
+  // GetSortKey
+  Check(Length(GetSortKey('A')) > 0, 'GetSortKey non-empty');
+  CheckEqual(Length(GetSortKey('')), 0, 'GetSortKey empty');
+
+  // SortStrings
+  LArr[0] := 'cherry';
+  LArr[1] := 'apple';
+  LArr[2] := 'banana';
+  LArr[3] := 'date';
+  LArr[4] := 'elderberry';
+  SortStrings(LArr);
+  CheckEqual(LArr[0], 'apple', 'SortStrings [0]');
+  CheckEqual(LArr[1], 'banana', 'SortStrings [1]');
+  CheckEqual(LArr[2], 'cherry', 'SortStrings [2]');
+  CheckEqual(LArr[3], 'date', 'SortStrings [3]');
+  CheckEqual(LArr[4], 'elderberry', 'SortStrings [4]');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.enhance');
   T.Test('Script properties', @TestScriptProperties);
@@ -128,5 +155,6 @@ begin
   T.Test('text segmentation', @TestSegmentation);
   T.Test('collation', @TestCollation);
   T.Test('enhanced properties', @TestEnhancedProperties);
+  T.Test('convenience functions', @TestConvenienceFunctions);
   if not T.Run then Halt(1);
 end.

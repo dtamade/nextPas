@@ -110,6 +110,11 @@ function UnicodeCollator: IUnicodeCollator; inline;
 function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator; inline;
 function DefaultCollationOptions: TCollationOptions; inline;
 
+// 便利函数
+function CompareText(const A, B: string): Integer; inline;
+function GetSortKey(const AText: string): TCollationKey; inline;
+procedure SortStrings(var AStrings: array of string);
+
 implementation
 
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean;
@@ -360,6 +365,37 @@ end;
 function DefaultCollationOptions: TCollationOptions;
 begin
   Result := nextpas.core.text.unicode.collate.DefaultCollationOptions;
+end;
+
+function CompareText(const A, B: string): Integer;
+begin
+  Result := UnicodeCollator.Compare(A, B);
+end;
+
+function GetSortKey(const AText: string): TCollationKey;
+begin
+  Result := UnicodeCollator.GetSortKey(AText);
+end;
+
+procedure SortStrings(var AStrings: array of string);
+var
+  LI, LJ: SizeInt;
+  LTemp: string;
+  LCollator: IUnicodeCollator;
+begin
+  LCollator := UnicodeCollator;
+  // 插入排序（对小数组高效，对大数组可替换为快排）
+  for LI := 1 to High(AStrings) do
+  begin
+    LTemp := AStrings[LI];
+    LJ := LI;
+    while (LJ > 0) and (LCollator.Compare(AStrings[LJ - 1], LTemp) > 0) do
+    begin
+      AStrings[LJ] := AStrings[LJ - 1];
+      Dec(LJ);
+    end;
+    AStrings[LJ] := LTemp;
+  end;
 end;
 
 end.
