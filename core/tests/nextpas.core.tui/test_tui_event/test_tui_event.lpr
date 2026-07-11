@@ -28,5 +28,6 @@ begin
   T := TTestSuite.Create('nextpas.core.tui.event');
   T.Test('none', @TestNone); T.Test('key char', @TestKeyChar);
   T.Test('key code', @TestKeyCode); T.Test('mouse', @TestMouse);
+  T.Test('resize', @TestResize);
   if not T.Run then Halt(1);
 end.
