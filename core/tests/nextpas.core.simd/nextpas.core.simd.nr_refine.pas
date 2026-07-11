@@ -107,14 +107,99 @@ begin
     [g_MaxRelErrRefine, Round(-Log2(g_MaxRelErrRefine))]));
 end;
 
+procedure TestRcpRefineF64;
+var
+  LSrc, LApprox, LRefine: array[0..N-1] of Double;
+  i: Integer;
+  LExact, LRelErr: Double;
+begin
+  for i := 0 to N - 1 do
+    LSrc[i] := 0.1 + i * 0.1;
+
+  ArrayRcpF64(@LSrc[0], @LApprox[0], N);
+  ArrayRcpRefineF64(@LSrc[0], @LRefine[0], N);
+
+  g_MaxRelErrApprox := 0;
+  g_MaxRelErrRefine := 0;
+
+  for i := 0 to N - 1 do
+  begin
+    Inc(g_TotalChecks);
+    LExact := 1.0 / LSrc[i];
+
+    LRelErr := Abs(LApprox[i] - LExact) / Abs(LExact);
+    if LRelErr > g_MaxRelErrApprox then
+      g_MaxRelErrApprox := LRelErr;
+
+    LRelErr := Abs(LRefine[i] - LExact) / Abs(LExact);
+    if LRelErr > g_MaxRelErrRefine then
+      g_MaxRelErrRefine := LRelErr;
+
+    if LRelErr > REFINE_TOL then
+      Fail(Format('RcpRefineF64[%d]: x=%.4g exact=%.16g got=%.16g relErr=%.2e',
+        [i, LSrc[i], LExact, LRefine[i], LRelErr]));
+  end;
+
+  WriteLn(Format('  RcpF64 approx max rel err: %.2e (~%d bits)',
+    [g_MaxRelErrApprox, Round(-Log2(g_MaxRelErrApprox))]));
+  WriteLn(Format('  RcpF64 refine max rel err: %.2e (~%d bits)',
+    [g_MaxRelErrRefine, Round(-Log2(g_MaxRelErrRefine))]));
+end;
+
+procedure TestRsqrtRefineF64;
+var
+  LSrc, LApprox, LRefine: array[0..N-1] of Double;
+  i: Integer;
+  LExact, LRelErr: Double;
+begin
+  for i := 0 to N - 1 do
+    LSrc[i] := 0.1 + i * 0.5;
+
+  ArrayRsqrtF64(@LSrc[0], @LApprox[0], N);
+  ArrayRsqrtRefineF64(@LSrc[0], @LRefine[0], N);
+
+  g_MaxRelErrApprox := 0;
+  g_MaxRelErrRefine := 0;
+
+  for i := 0 to N - 1 do
+  begin
+    Inc(g_TotalChecks);
+    LExact := 1.0 / Sqrt(LSrc[i]);
+
+    LRelErr := Abs(LApprox[i] - LExact) / Abs(LExact);
+    if LRelErr > g_MaxRelErrApprox then
+      g_MaxRelErrApprox := LRelErr;
+
+    LRelErr := Abs(LRefine[i] - LExact) / Abs(LExact);
+    if LRelErr > g_MaxRelErrRefine then
+      g_MaxRelErrRefine := LRelErr;
+
+    if LRelErr > REFINE_TOL then
+      Fail(Format('RsqrtRefineF64[%d]: x=%.4g exact=%.16g got=%.16g relErr=%.2e',
+        [i, LSrc[i], LExact, LRefine[i], LRelErr]));
+  end;
+
+  WriteLn(Format('  RsqrtF64 approx max rel err: %.2e (~%d bits)',
+    [g_MaxRelErrApprox, Round(-Log2(g_MaxRelErrApprox))]));
+  WriteLn(Format('  RsqrtF64 refine max rel err: %.2e (~%d bits)',
+    [g_MaxRelErrRefine, Round(-Log2(g_MaxRelErrRefine))]));
+end;
+
 begin
   WriteLn('[Newton-Raphson Refinement Precision Test]');
   WriteLn('Backend: ', GetBackendInfo(GetActiveBackend).Name);
   WriteLn('');
 
+  WriteLn('[F32]');
   TestRcpRefine;
   WriteLn('');
   TestRsqrtRefine;
+
+  WriteLn('');
+  WriteLn('[F64]');
+  TestRcpRefineF64;
+  WriteLn('');
+  TestRsqrtRefineF64;
 
   WriteLn('');
   WriteLn(Format('[SUMMARY] checks=%d failures=%d', [g_TotalChecks, g_Failures]));
