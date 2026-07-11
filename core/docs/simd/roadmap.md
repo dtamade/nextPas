@@ -274,7 +274,7 @@
 | ArrayAddF64 (1024) | 6x+ | 6.08x | ✅ 达标 |
 | ArrayAddI32 (1024) | 6x+ | 6.47x | ✅ 达标 |
 | ArrayMulF32 (16KB) | 4x+ | 2.52x | ⚠️ 需优化 |
-| MemEqual (4KB) | 4x+ | 2.94x | ⚠️ 需优化 |
+| MemEqual (4KB) | 4x+ | 4.41x | ✅ 达标 |
 | Sin/Cos/Exp (16K) | 30x+ | 50-60x | ✅ 超额 |
 | Ceil/Floor/Round | 50x+ | 100-226x | ✅ 超额 |
 
