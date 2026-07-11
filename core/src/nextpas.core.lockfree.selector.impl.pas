@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
+  nextpas.core.lockfree.base,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.lockfree.selector,
