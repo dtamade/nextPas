@@ -31,9 +31,9 @@ type
     function TryAcquire: TLockFreeRateLimiterResult;
     function TryAcquireN(const AN: Double): TLockFreeRateLimiterResult;
     procedure Close;
-    function IsClosed: Boolean;
-    function GetRate: Double;
-    function GetBurst: Double;
+    function IsClosed: Boolean; inline;
+    function GetRate: Double; inline;
+    function GetBurst: Double; inline;
   end;
 
 implementation
@@ -149,17 +149,17 @@ begin
   end;
 end;
 
-function TTokenBucketLimiter.IsClosed: Boolean;
+function TTokenBucketLimiter.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TTokenBucketLimiter.GetRate: Double;
+function TTokenBucketLimiter.GetRate: Double; inline;
 begin
   Result := FRate;
 end;
 
-function TTokenBucketLimiter.GetBurst: Double;
+function TTokenBucketLimiter.GetBurst: Double; inline;
 begin
   Result := FBurst;
 end;

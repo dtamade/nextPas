@@ -44,9 +44,9 @@ type
     function TryAdd: TLeakyBucketResult;
     function TryAddN(const AN: Double): TLeakyBucketResult;
     procedure Close;
-    function IsClosed: Boolean;
-    function GetLeakRate: Double;
-    function GetBucketSize: Double;
+    function IsClosed: Boolean; inline;
+    function GetLeakRate: Double; inline;
+    function GetBucketSize: Double; inline;
     function GetLevel: Double;
   end;
 
@@ -161,17 +161,17 @@ begin
   end;
 end;
 
-function TLeakyBucket.IsClosed: Boolean;
+function TLeakyBucket.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TLeakyBucket.GetLeakRate: Double;
+function TLeakyBucket.GetLeakRate: Double; inline;
 begin
   Result := FLeakRate;
 end;
 
-function TLeakyBucket.GetBucketSize: Double;
+function TLeakyBucket.GetBucketSize: Double; inline;
 begin
   Result := FBucketSize;
 end;

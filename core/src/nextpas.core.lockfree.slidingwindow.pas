@@ -48,10 +48,10 @@ type
     function TryAcquire: TSlidingWindowResult;
     function TryAcquireN(AN: Int64): TSlidingWindowResult;
     function GetEffectiveCount: Double;
-    function GetLimit: Int64;
-    function GetWindowMs: Int64;
+    function GetLimit: Int64; inline;
+    function GetWindowMs: Int64; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -189,12 +189,12 @@ begin
   end;
 end;
 
-function TSlidingWindowLimiter.GetLimit: Int64;
+function TSlidingWindowLimiter.GetLimit: Int64; inline;
 begin
   Result := FLimit;
 end;
 
-function TSlidingWindowLimiter.GetWindowMs: Int64;
+function TSlidingWindowLimiter.GetWindowMs: Int64; inline;
 begin
   Result := FWindowMs;
 end;
@@ -209,7 +209,7 @@ begin
   end;
 end;
 
-function TSlidingWindowLimiter.IsClosed: Boolean;
+function TSlidingWindowLimiter.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
