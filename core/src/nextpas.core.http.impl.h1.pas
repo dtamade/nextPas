@@ -496,6 +496,9 @@ begin
   if LMetadata.HasUnsupportedExpect then
     Exit(HTTP_STATUS_EXPECTATION_FAILED);
 
+  if LMetadata.HasInvalidContentLength then
+    Exit(HTTP_STATUS_BAD_REQUEST);
+
   if (AOptions.MaxBodySize > 0) and LMetadata.HasContentLength and
      (LMetadata.DeclaredContentLength > AOptions.MaxBodySize) then
     Exit(HTTP_STATUS_PAYLOAD_TOO_LARGE);

@@ -21,6 +21,7 @@ type
     HasDuplicateHost: Boolean;
     HasTransferEncoding: Boolean;
     HasContentLength: Boolean;
+    HasInvalidContentLength: Boolean;
     DeclaredContentLength: Int64;
     RequestDeclaresBody: Boolean;
     ExpectsContinue: Boolean;
@@ -1047,7 +1048,9 @@ begin
       FPendingRequestMetadata.HasContentLength := True;
       if FPendingRequestMetadata.DeclaredContentLength > 0 then
         FPendingRequestMetadata.RequestDeclaresBody := True;
-    end;
+    end
+    else
+      FPendingRequestMetadata.HasInvalidContentLength := True;
     Exit;
   end;
 
