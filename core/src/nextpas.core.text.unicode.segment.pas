@@ -64,11 +64,20 @@ uses
 
 var
   FUnicodeSegmenter: IUnicodeSegmenter;
+  FSegmenterCS: TRTLCriticalSection;
 
 function UnicodeSegmenter: IUnicodeSegmenter;
 begin
   if FUnicodeSegmenter = nil then
-    FUnicodeSegmenter := TUnicodeSegmenter.Create;
+  begin
+    EnterCriticalSection(FSegmenterCS);
+    try
+      if FUnicodeSegmenter = nil then
+        FUnicodeSegmenter := TUnicodeSegmenter.Create;
+    finally
+      LeaveCriticalSection(FSegmenterCS);
+    end;
+  end;
   Result := FUnicodeSegmenter;
 end;
 
@@ -602,6 +611,14 @@ begin
       begin
         Inc(Result, LDecode.ByteLen);
         LInSentence := True;
+        // 跳过连续相同的句子终止符（如 ... 三个句号）
+        while Result <= LLen do
+        begin
+          LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+          if (LDecode.ByteLen = 0) or (LDecode.CodePoint <> LCodepoint) then
+            Break;
+          Inc(Result, LDecode.ByteLen);
+        end;
         // 遇到句子结束符后，跳过结尾引号/括号再停止
         while Result <= LLen do
         begin
@@ -645,5 +662,11 @@ begin
     end;
   end;
 end;
+
+initialization
+  InitCriticalSection(FSegmenterCS);
+
+finalization
+  DoneCriticalSection(FSegmenterCS);
 
 end.

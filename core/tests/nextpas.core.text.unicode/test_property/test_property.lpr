@@ -11,74 +11,290 @@ uses
 var
   T: TTestSuite;
 
-procedure TestAsciiProperties;
+{ === IsUpper / IsLower === }
+
+procedure TestIsUpper;
 begin
-  Check(IsUpper(Ord('A')), 'A uppercase');
-  Check(IsLower(Ord('a')), 'a lowercase');
-  Check(IsAlpha(Ord('Z')), 'Z alpha');
-  Check(IsDigit(Ord('9')), '9 digit');
-  Check(IsWhitespace(Ord(' ')), 'space whitespace');
-  Check(IsControl(0), 'NUL control');
-  Check(IsLetter(Ord('Q')), 'Q letter');
-  Check(not IsLetter(Ord('9')), '9 not letter');
+  // ASCII
+  Check(IsUpper(Ord('A')), 'A upper');
+  Check(IsUpper(Ord('Z')), 'Z upper');
+  Check(not IsUpper(Ord('a')), 'a not upper');
+  Check(not IsUpper(Ord('0')), '0 not upper');
+  // BMP: Greek
+  Check(IsUpper($0391), 'Greek Alpha upper');
+  Check(IsUpper($03A9), 'Greek Omega upper');
+  Check(not IsUpper($03B1), 'Greek alpha not upper');
+  // BMP: Cyrillic
+  Check(IsUpper($0416), 'Cyrillic ZHE upper');
+  Check(not IsUpper($0436), 'Cyrillic zhe not upper');
+  // BMP: Latin Extended
+  Check(IsUpper($00C0), 'A-grave upper');
+  Check(IsUpper($0178), 'Y-diaeresis upper');
+  // SMP: Math Bold
+  Check(IsUpper($1D400), 'Math Bold A upper');
+  Check(not IsUpper($1D41A), 'Math Bold a not upper');
+  // Boundary
+  Check(not IsUpper($0000), 'NUL not upper');
+  Check(not IsUpper($10FFFF), 'U+10FFFF not upper');
 end;
 
-procedure TestBmpProperties;
+procedure TestIsLower;
 begin
-  CheckEqual(Int64(Ord(gcuOtherLetter)), Int64(Ord(GetGeneralCategory($4E2D))), 'CJK category');
+  // ASCII
+  Check(IsLower(Ord('a')), 'a lower');
+  Check(IsLower(Ord('z')), 'z lower');
+  Check(not IsLower(Ord('A')), 'A not lower');
+  Check(not IsLower(Ord('0')), '0 not lower');
+  // BMP: Greek
+  Check(IsLower($03B1), 'Greek alpha lower');
+  Check(IsLower($03C9), 'Greek omega lower');
+  Check(not IsLower($0391), 'Greek Alpha not lower');
+  // BMP: Cyrillic
+  Check(IsLower($0436), 'Cyrillic zhe lower');
+  Check(not IsLower($0416), 'Cyrillic ZHE not lower');
+  // BMP: Latin Extended
+  Check(IsLower($00E0), 'a-grave lower');
+  Check(IsLower($00FF), 'y-diaeresis lower');
+  // SMP: Math Bold
+  Check(IsLower($1D41A), 'Math Bold a lower');
+  Check(not IsLower($1D400), 'Math Bold A not lower');
+  // Boundary
+  Check(not IsLower($0000), 'NUL not lower');
+  Check(not IsLower($10FFFF), 'U+10FFFF not lower');
+end;
+
+{ === IsAlpha / IsLetter === }
+
+procedure TestIsAlpha;
+begin
+  Check(IsAlpha(Ord('A')), 'A alpha');
+  Check(IsAlpha(Ord('z')), 'z alpha');
+  Check(not IsAlpha(Ord('0')), '0 not alpha');
+  Check(not IsAlpha(Ord(' ')), 'space not alpha');
+  Check(IsAlpha($4E2D), 'CJK alpha');
+  Check(IsAlpha($0391), 'Greek Alpha alpha');
+  Check(IsAlpha($0416), 'Cyrillic ZHE alpha');
+  Check(IsAlpha($00C0), 'A-grave alpha');
+  Check(not IsAlpha($0021), 'exclamation not alpha');
+  Check(not IsAlpha($10FFFF), 'U+10FFFF not alpha');
+end;
+
+procedure TestIsLetter;
+begin
+  Check(IsLetter(Ord('A')), 'A letter');
+  Check(IsLetter(Ord('z')), 'z letter');
+  Check(not IsLetter(Ord('0')), '0 not letter');
+  Check(not IsLetter(Ord(' ')), 'space not letter');
   Check(IsLetter($4E2D), 'CJK letter');
-  Check(IsUpper($0391), 'Greek capital alpha uppercase');
-  Check(IsLower($03B1), 'Greek small alpha lowercase');
-  Check(IsUpper($0416), 'Cyrillic ZHE uppercase');
-  Check(IsLower($0436), 'Cyrillic zhe lowercase');
-  Check(IsWhitespace($2003), 'EM SPACE whitespace');
-  Check(IsSeparator($2003), 'EM SPACE separator');
-  Check(IsDigit($0660), 'Arabic-Indic zero digit');
-  Check(IsNumber($0660), 'Arabic-Indic zero number');
+  Check(IsLetter($12000), 'cuneiform letter');
+  Check(IsLetter($1D400), 'Math Bold A letter');
+  Check(not IsLetter($0021), 'exclamation not letter');
+  Check(not IsLetter($0301), 'combining acute not letter');
 end;
 
-procedure TestSmpProperties;
+{ === IsDigit / IsNumber === }
+
+procedure TestIsDigit;
 begin
-  CheckEqual(Int64(Ord(gcuUppercaseLetter)), Int64(Ord(GetGeneralCategory($1D400))), 'math bold capital A category');
-  Check(IsUpper($1D400), 'math bold capital A uppercase');
-  Check(IsLower($1D41A), 'math bold small a lowercase');
-  Check(IsAlpha($1D400), 'math bold capital A alphabetic');
-  CheckEqual(Int64(Ord(gcuOtherLetter)), Int64(Ord(GetGeneralCategory($12000))), 'cuneiform category');
-  Check(IsLetter($12000), 'cuneiform letter');
+  Check(IsDigit(Ord('0')), '0 digit');
+  Check(IsDigit(Ord('9')), '9 digit');
+  Check(not IsDigit(Ord('a')), 'a not digit');
+  Check(not IsDigit(Ord(' ')), 'space not digit');
+  Check(IsDigit($0660), 'Arabic-Indic zero digit');
+  Check(IsDigit($0669), 'Arabic-Indic nine digit');
+  Check(IsDigit($FF10), 'fullwidth zero digit');
+  Check(not IsDigit($066A), 'Arabic percent not digit');
+  Check(not IsDigit($4E2D), 'CJK not digit');
 end;
+
+procedure TestIsNumber;
+begin
+  Check(IsNumber(Ord('0')), '0 number');
+  Check(IsNumber(Ord('9')), '9 number');
+  Check(not IsNumber(Ord('a')), 'a not number');
+  Check(IsNumber($0660), 'Arabic-Indic zero number');
+  Check(IsNumber($FF10), 'fullwidth zero number');
+  Check(IsNumber($00B2), 'superscript 2 number');
+  Check(IsNumber($2153), 'fraction 1/3 number');
+  Check(not IsNumber($002D), 'hyphen not number');
+end;
+
+{ === IsWhitespace / IsSeparator === }
+
+procedure TestIsWhitespace;
+begin
+  Check(IsWhitespace(Ord(' ')), 'space whitespace');
+  Check(IsWhitespace(Ord($09)), 'tab whitespace');
+  Check(IsWhitespace(Ord($0A)), 'LF whitespace');
+  Check(IsWhitespace(Ord($0D)), 'CR whitespace');
+  Check(IsWhitespace($00A0), 'NBSP whitespace');
+  Check(IsWhitespace($2003), 'EM SPACE whitespace');
+  Check(not IsWhitespace($200B), 'ZWSP is Format, not whitespace');
+  Check(IsWhitespace($3000), 'IDEOGRAPHIC SPACE whitespace');
+  Check(not IsWhitespace(Ord('A')), 'A not whitespace');
+  Check(not IsWhitespace($0000), 'NUL not whitespace');
+end;
+
+procedure TestIsSeparator;
+begin
+  Check(not IsSeparator(Ord($0A)), 'LF is Control, not Separator');
+  Check(IsSeparator($2003), 'EM SPACE separator');
+  Check(IsSeparator($2028), 'LS separator');
+  Check(IsSeparator($2029), 'PS separator');
+  Check(not IsSeparator(Ord('A')), 'A not separator');
+  Check(IsSeparator(Ord(' ')), 'space is SpaceSeparator');
+end;
+
+{ === IsControl === }
+
+procedure TestIsControl;
+begin
+  Check(IsControl($0000), 'NUL control');
+  Check(IsControl($001F), 'US control');
+  Check(IsControl($007F), 'DEL control');
+  Check(IsControl($009F), 'APC control');
+  Check(not IsControl(Ord('A')), 'A not control');
+  Check(not IsControl($00A0), 'NBSP not control');
+end;
+
+{ === IsPunctuation / IsSymbol / IsMark === }
+
+procedure TestIsPunctuation;
+begin
+  Check(IsPunctuation($0021), 'exclamation punctuation');
+  Check(IsPunctuation($002E), 'period punctuation');
+  Check(IsPunctuation($003F), 'question punctuation');
+  Check(IsPunctuation($002C), 'comma punctuation');
+  Check(IsPunctuation($3001), 'ideographic comma punctuation');
+  Check(IsPunctuation($FF01), 'fullwidth exclamation punctuation');
+  Check(not IsPunctuation(Ord('A')), 'A not punctuation');
+  Check(not IsPunctuation(Ord('0')), '0 not punctuation');
+end;
+
+procedure TestIsSymbol;
+begin
+  Check(IsSymbol($002B), 'plus symbol');
+  Check(IsSymbol($003C), 'less-than symbol');
+  Check(IsSymbol($00A9), 'copyright symbol');
+  Check(IsSymbol($2603), 'snowman symbol');
+  Check(not IsSymbol(Ord('A')), 'A not symbol');
+  Check(not IsSymbol(Ord('0')), '0 not symbol');
+end;
+
+procedure TestIsMark;
+begin
+  Check(IsMark($0301), 'combining acute mark');
+  Check(IsMark($0308), 'combining diaeresis mark');
+  Check(IsMark($0327), 'combining cedilla mark');
+  Check(not IsMark(Ord('A')), 'A not mark');
+  Check(not IsMark(Ord(' ')), 'space not mark');
+end;
+
+{ === GeneralCategory === }
+
+procedure TestGeneralCategory;
+begin
+  CheckEqual(Int64(Ord(gcuUppercaseLetter)), Int64(Ord(GetGeneralCategory(Ord('A')))), 'A cat');
+  CheckEqual(Int64(Ord(gcuLowercaseLetter)), Int64(Ord(GetGeneralCategory(Ord('a')))), 'a cat');
+  CheckEqual(Int64(Ord(gcuDecimalNumber)), Int64(Ord(GetGeneralCategory(Ord('0')))), '0 cat');
+  CheckEqual(Int64(Ord(gcuControl)), Int64(Ord(GetGeneralCategory($0000))), 'NUL cat');
+  CheckEqual(Int64(Ord(gcuControl)), Int64(Ord(GetGeneralCategory($007F))), 'DEL cat');
+  CheckEqual(Int64(Ord(gcuSpaceSeparator)), Int64(Ord(GetGeneralCategory($2003))), 'EM SPACE cat');
+  CheckEqual(Int64(Ord(gcuLineSeparator)), Int64(Ord(GetGeneralCategory($2028))), 'LS cat');
+  CheckEqual(Int64(Ord(gcuParagraphSeparator)), Int64(Ord(GetGeneralCategory($2029))), 'PS cat');
+  CheckEqual(Int64(Ord(gcuSurrogate)), Int64(Ord(GetGeneralCategory($D800))), 'surrogate cat');
+  CheckEqual(Int64(Ord(gcuUnassigned)), Int64(Ord(GetGeneralCategory($10FFFF))), 'U+10FFFF cat');
+  CheckEqual(Int64(Ord(gcuOtherLetter)), Int64(Ord(GetGeneralCategory($4E2D))), 'CJK cat');
+  CheckEqual(Int64(Ord(gcuOtherLetter)), Int64(Ord(GetGeneralCategory($12000))), 'cuneiform cat');
+end;
+
+{ === Case Mapping === }
 
 procedure TestCaseMapping;
 begin
+  // ASCII
   CheckEqual(Int64(Ord('A')), Int64(CodepointToUpper(Ord('a'))), 'a upper');
   CheckEqual(Int64(Ord('a')), Int64(CodepointToLower(Ord('A'))), 'A lower');
+  CheckEqual(Int64(Ord('Z')), Int64(CodepointToUpper(Ord('z'))), 'z upper');
+  CheckEqual(Int64(Ord('z')), Int64(CodepointToLower(Ord('Z'))), 'Z lower');
+  // Latin Extended
+  CheckEqual(Int64($00C0), Int64(CodepointToUpper($00E0)), 'a-grave upper');
+  CheckEqual(Int64($00E0), Int64(CodepointToLower($00C0)), 'A-grave lower');
+  // German sharp s
   CheckEqual(Int64($00DF), Int64(CodepointToLower($1E9E)), 'capital sharp s lower');
   CheckEqual(Int64($00DF), Int64(CodepointToUpper($00DF)), 'sharp s simple upper unchanged');
   CheckEqual(Int64($1E9E), Int64(CodepointToTitle($1E9E)), 'capital sharp s title unchanged');
+  // Greek
+  CheckEqual(Int64($0391), Int64(CodepointToUpper($03B1)), 'Greek alpha upper');
+  CheckEqual(Int64($03B1), Int64(CodepointToLower($0391)), 'Greek Alpha lower');
+  // Cyrillic
+  CheckEqual(Int64($0416), Int64(CodepointToUpper($0436)), 'Cyrillic zhe upper');
+  CheckEqual(Int64($0436), Int64(CodepointToLower($0416)), 'Cyrillic ZHE lower');
+  // Identity
+  CheckEqual(Int64(Ord('0')), Int64(CodepointToUpper(Ord('0'))), '0 upper unchanged');
+  CheckEqual(Int64(Ord('0')), Int64(CodepointToLower(Ord('0'))), '0 lower unchanged');
+  CheckEqual(Int64($0301), Int64(CodepointToUpper($0301)), 'combining acute upper unchanged');
 end;
 
-procedure TestPunctuationSymbolAndMark;
-begin
-  Check(IsPunctuation($0021), 'exclamation punctuation');
-  Check(IsSymbol($002B), 'plus symbol');
-  Check(IsMark($0301), 'combining acute mark');
-end;
+{ === Boundary Cases === }
 
 procedure TestBoundaryCases;
 begin
   CheckEqual(Int64(Ord(gcuControl)), Int64(Ord(GetGeneralCategory($0000))), 'U+0000 category');
   CheckEqual(Int64(Ord(gcuUnassigned)), Int64(Ord(GetGeneralCategory($10FFFF))), 'U+10FFFF category');
   CheckEqual(Int64(Ord(gcuSurrogate)), Int64(Ord(GetGeneralCategory($D800))), 'surrogate category');
+  CheckEqual(Int64(Ord(gcuSurrogate)), Int64(Ord(GetGeneralCategory($DFFF))), 'surrogate end category');
   CheckEqual(Int64($10FFFF), Int64(CodepointToUpper($10FFFF)), 'U+10FFFF upper unchanged');
   CheckEqual(Int64($D800), Int64(CodepointToLower($D800)), 'surrogate lower unchanged');
+  Check(not IsAlpha($D800), 'surrogate not alpha');
+  Check(not IsDigit($D800), 'surrogate not digit');
+  Check(not IsUpper($D800), 'surrogate not upper');
+  Check(not IsLower($D800), 'surrogate not lower');
+end;
+
+{ === SMP Deep Coverage === }
+
+procedure TestSmpDeep;
+begin
+  // Emoji (U+1F600 range) - should be Symbol/Other
+  Check(not IsAlpha($1F600), 'emoji grin not alpha');
+  Check(not IsLetter($1F600), 'emoji grin not letter');
+  Check(not IsDigit($1F600), 'emoji grin not digit');
+  // CJK Extension B (U+20000)
+  Check(IsLetter($20000), 'CJK Ext B letter');
+  Check(IsAlpha($20000), 'CJK Ext B alpha');
+  Check(not IsUpper($20000), 'CJK Ext B not upper');
+  Check(not IsLower($20000), 'CJK Ext B not lower');
+  // Musical Symbol (U+1D11E)
+  Check(not IsAlpha($1D11E), 'musical not alpha');
+  // Mathematical Alphanumeric (U+1D400-U+1D7FF)
+  Check(IsUpper($1D400), 'Math Bold A upper');
+  Check(IsLower($1D41A), 'Math Bold a lower');
+  Check(IsAlpha($1D400), 'Math Bold A alpha');
+  Check(IsAlpha($1D41A), 'Math Bold a alpha');
+  // Deseret (U+10400)
+  Check(IsUpper($10400), 'Deseret AY upper');
+  Check(IsLower($10428), 'Deseret ay lower');
+  Check(IsAlpha($10400), 'Deseret AY alpha');
 end;
 
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode');
-  T.Test('ASCII properties', @TestAsciiProperties);
-  T.Test('BMP properties', @TestBmpProperties);
-  T.Test('SMP properties', @TestSmpProperties);
-  T.Test('case mapping', @TestCaseMapping);
-  T.Test('punctuation/symbol/mark', @TestPunctuationSymbolAndMark);
-  T.Test('boundary cases', @TestBoundaryCases);
+  T.Test('IsUpper', @TestIsUpper);
+  T.Test('IsLower', @TestIsLower);
+  T.Test('IsAlpha', @TestIsAlpha);
+  T.Test('IsLetter', @TestIsLetter);
+  T.Test('IsDigit', @TestIsDigit);
+  T.Test('IsNumber', @TestIsNumber);
+  T.Test('IsWhitespace', @TestIsWhitespace);
+  T.Test('IsSeparator', @TestIsSeparator);
+  T.Test('IsControl', @TestIsControl);
+  T.Test('IsPunctuation', @TestIsPunctuation);
+  T.Test('IsSymbol', @TestIsSymbol);
+  T.Test('IsMark', @TestIsMark);
+  T.Test('GeneralCategory', @TestGeneralCategory);
+  T.Test('CaseMapping', @TestCaseMapping);
+  T.Test('BoundaryCases', @TestBoundaryCases);
+  T.Test('SmpDeep', @TestSmpDeep);
   if not T.Run then Halt(1);
 end.

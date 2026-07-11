@@ -94,6 +94,7 @@ function IsNormalizedNFKC(const s: string): Boolean; inline;
 function QuickCheckNFD(const s: string): Boolean; inline;
 function QuickCheckNFKD(const s: string): Boolean; inline;
 function QuickCheckNFC(const s: string): Boolean; inline;
+function QuickCheckNFKC(const s: string): Boolean; inline;
 function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte; inline;
 
 // 文本分割函数
@@ -314,6 +315,11 @@ begin
   Result := nextpas.core.text.unicode.normalize.QuickCheckNFKD(s);
 end;
 
+function QuickCheckNFKC(const s: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFKC(s);
+end;
+
 function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte;
 begin
   Result := nextpas.core.text.unicode.normalize.GetCanonicalCombiningClass(ACp);
@@ -389,25 +395,61 @@ begin
   Result := UnicodeCollator.GetSortKey(AText);
 end;
 
-procedure SortStrings(var AStrings: array of string);
+procedure QuickSortStrings(var AStrings: array of string;
+  const ACollator: IUnicodeCollator; ALo, AHi: SizeInt);
 var
+  LPivot: string;
   LI, LJ: SizeInt;
   LTemp: string;
-  LCollator: IUnicodeCollator;
 begin
-  LCollator := UnicodeCollator;
-  // 插入排序（对小数组高效，对大数组可替换为快排）
-  for LI := 1 to High(AStrings) do
+  if ALo >= AHi then
+    Exit;
+  // Lomuto partition: pivot at AHi
+  LPivot := AStrings[AHi];
+  LJ := ALo;
+  for LI := ALo to AHi - 1 do
   begin
-    LTemp := AStrings[LI];
-    LJ := LI;
-    while (LJ > 0) and (LCollator.Compare(AStrings[LJ - 1], LTemp) > 0) do
+    if ACollator.Compare(AStrings[LI], LPivot) <= 0 then
     begin
-      AStrings[LJ] := AStrings[LJ - 1];
-      Dec(LJ);
+      LTemp := AStrings[LJ]; AStrings[LJ] := AStrings[LI]; AStrings[LI] := LTemp;
+      Inc(LJ);
     end;
-    AStrings[LJ] := LTemp;
   end;
+  // Place pivot at final position
+  LTemp := AStrings[LJ]; AStrings[LJ] := AStrings[AHi]; AStrings[AHi] := LTemp;
+
+  QuickSortStrings(AStrings, ACollator, ALo, LJ - 1);
+  QuickSortStrings(AStrings, ACollator, LJ + 1, AHi);
+end;
+
+procedure SortStrings(var AStrings: array of string);
+var
+  LCollator: IUnicodeCollator;
+  LLen: SizeInt;
+  LI, LJ: SizeInt;
+  LTemp: string;
+begin
+  LLen := High(AStrings) - Low(AStrings) + 1;
+  if LLen <= 1 then
+    Exit;
+  LCollator := UnicodeCollator;
+  // Small arrays: insertion sort; large arrays: quicksort
+  if LLen <= 16 then
+  begin
+    for LI := 1 to High(AStrings) do
+    begin
+      LTemp := AStrings[LI];
+      LJ := LI;
+      while (LJ > 0) and (LCollator.Compare(AStrings[LJ - 1], LTemp) > 0) do
+      begin
+        AStrings[LJ] := AStrings[LJ - 1];
+        Dec(LJ);
+      end;
+      AStrings[LJ] := LTemp;
+    end;
+  end
+  else
+    QuickSortStrings(AStrings, LCollator, Low(AStrings), High(AStrings));
 end;
 
 end.

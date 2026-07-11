@@ -23,6 +23,7 @@ function IsNormalizedNFKC(const s: string): Boolean;
 function QuickCheckNFD(const s: string): Boolean;
 function QuickCheckNFKD(const s: string): Boolean;
 function QuickCheckNFC(const s: string): Boolean;
+function QuickCheckNFKC(const s: string): Boolean;
 
 // 获取码点的 Canonical Combining Class (CCC)
 // 0 = starter, 1-240 = combining mark ordering
@@ -232,6 +233,7 @@ begin
       if (LPrevCcc = 0) or (LPrevCcc <= LCcc) then
         Break;
       ABuffer.ReplaceAt(LPos, ABuffer.ItemAt(LPos - 1));
+      LCcc := LPrevCcc;  // 移动后继承前一个 CCC，避免下次重复查表
       Dec(LPos);
     end;
     ABuffer.ReplaceAt(LPos, LCp);
@@ -461,6 +463,8 @@ end;
 
 function IsNormalizedNFKC(const s: string): Boolean;
 begin
+  if QuickCheckNFKC(s) then
+    Exit(True);
   Result := NFKC(s) = s;
 end;
 
@@ -575,6 +579,61 @@ begin
       begin
         if FindComposition(LStarter, LCp, LComposed) and (LComposed <> LStarter) then
           Exit(False); // 可以组合但没有组合，不是 NFC
+      end;
+    end;
+
+    LPrevCcc := LCcc;
+  end;
+  Result := True;
+end;
+
+function QuickCheckNFKC(const s: string): Boolean;
+var
+  LIter: TUTF8Iterator;
+  LCp: UInt32;
+  LPrevCcc: Byte;
+  LCcc: Byte;
+  LKind: Byte;
+  LStarter: TUnicodeCodepoint;
+  LHasStarter: Boolean;
+  LComposed: TUnicodeCodepoint;
+begin
+  // QuickCheck NFKC: 检查是否已经是 NFKC 形式
+  // 条件：无兼容分解(kind=2) + combining class 非递减 + 无可组合 starter+combining 对
+  if s = '' then
+    Exit(True);
+  if IsAsciiString(s) then
+    Exit(True);
+
+  LPrevCcc := 0;
+  LHasStarter := False;
+  LStarter := 0;
+  LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
+  while LIter.Next(LCp) do
+  begin
+    // 检查是否有兼容分解（kind=2）
+    LKind := GetDecompositionKind(LCp);
+    if LKind = 2 then
+      Exit(False); // 有兼容分解字符，不是 NFKC
+
+    LCcc := GetCanonicalCombiningClass(LCp);
+
+    // 检查 combining class 顺序
+    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
+      Exit(False);
+
+    // 检查是否可以组合
+    if LCcc = 0 then
+    begin
+      LStarter := LCp;
+      LHasStarter := True;
+    end
+    else if LHasStarter then
+    begin
+      if (LPrevCcc = 0) or (LPrevCcc < LCcc) then
+      begin
+        if FindComposition(LStarter, LCp, LComposed) and (LComposed <> LStarter) then
+          Exit(False);
       end;
     end;
 

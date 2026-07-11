@@ -4,6 +4,7 @@ program test_unicode_collate;
 
 uses
   nextpas.core.test,
+  nextpas.core.text.utf8,
   nextpas.core.text.unicode.types,
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.collate,
@@ -11,6 +12,30 @@ uses
 
 var
   T: TTestSuite;
+
+procedure AppendUtf8(var ADst: string; const ACp: TUnicodeCodepoint);
+var
+  LBuf: array[0..3] of Byte;
+  LLen: Byte;
+  LOldLen: SizeInt;
+  I: Byte;
+begin
+  LLen := UTF8Encode(ACp, @LBuf[0]);
+  Check(LLen > 0, 'test codepoint must be UTF-8 encodable');
+  LOldLen := Length(ADst);
+  SetLength(ADst, LOldLen + LLen);
+  for I := 0 to LLen - 1 do
+    ADst[LOldLen + I + 1] := AnsiChar(LBuf[I]);
+end;
+
+function Utf8Of(const ACps: array of TUnicodeCodepoint): string;
+var
+  I: SizeInt;
+begin
+  Result := '';
+  for I := 0 to High(ACps) do
+    AppendUtf8(Result, ACps[I]);
+end;
 
 procedure TestWeightLookup;
 var
@@ -177,9 +202,9 @@ var
 begin
   LCollator := UnicodeCollator;
 
-  // Equals
-  Check(LCollator.Equals('hello', 'hello'), 'hello equals hello');
-  Check(not LCollator.Equals('hello', 'world'), 'hello not equals world');
+  // TextEquals
+  Check(LCollator.TextEquals('hello', 'hello'), 'hello equals hello');
+  Check(not LCollator.TextEquals('hello', 'world'), 'hello not equals world');
 
   // StartsWith
   Check(LCollator.StartsWith('hello world', 'hello'), 'starts with hello');
@@ -313,6 +338,63 @@ begin
   Check(LTertiaryCol.Compare('a', 'A') <> 0, 'a != A (tertiary)');
 end;
 
+{ === SMP Collation === }
+
+procedure TestSmpCollation;
+var
+  LCollator: IUnicodeCollator;
+begin
+  LCollator := UnicodeCollator;
+
+  // CJK Extension B (U+20000) - may have no DUCET weight, so compare may be 0
+  // Just verify it doesn't crash
+  LCollator.Compare(Utf8Of([$20000]), Utf8Of([$20001]));
+
+  // Math Bold A (U+1D400) - has compatibility decomposition to 'A'
+  // After NFD, it becomes 'A', so it should sort near 'A'
+  Check(LCollator.Compare(Utf8Of([$1D400]), 'B') < 0,
+    'Math Bold A sorts before B (decomposes to A)');
+
+  // Deseret (U+10400) - no decomposition
+  Check(LCollator.Compare(Utf8Of([$10400]), Utf8Of([$10401])) < 0,
+    'Deseret AY < Deseret OW');
+
+  // Sort key generation for SMP
+  Check(Length(LCollator.GetSortKey(Utf8Of([$20000]))) > 0,
+    'CJK Ext B sort key non-empty');
+end;
+
+{ === Stress Collation === }
+
+procedure TestStressCollation;
+var
+  LCollator: IUnicodeCollator;
+  LArr5: array[0..4] of string;
+  LArr20: array[0..19] of string;
+  LI: SizeInt;
+begin
+  LCollator := UnicodeCollator;
+
+  // Verify sort with insertion sort threshold (≤16 elements)
+  LArr5[0] := 'cherry';
+  LArr5[1] := 'apple';
+  LArr5[2] := 'elderberry';
+  LArr5[3] := 'banana';
+  LArr5[4] := 'date';
+  SortStrings(LArr5);
+  Check(LCollator.Compare(LArr5[0], LArr5[1]) <= 0, '5-elem sorted 0-1');
+  Check(LCollator.Compare(LArr5[1], LArr5[2]) <= 0, '5-elem sorted 1-2');
+  Check(LCollator.Compare(LArr5[2], LArr5[3]) <= 0, '5-elem sorted 2-3');
+  Check(LCollator.Compare(LArr5[3], LArr5[4]) <= 0, '5-elem sorted 3-4');
+
+  // Verify sort with quicksort (>16 elements)
+  for LI := 0 to 19 do
+    LArr20[LI] := 'str' + Chr(Ord('t') - LI);
+  SortStrings(LArr20);
+  for LI := 1 to 19 do
+    Check(LCollator.Compare(LArr20[LI - 1], LArr20[LI]) <= 0, '20-elem sorted');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.collate');
   T.Test('WeightLookup', @TestWeightLookup);
@@ -328,5 +410,7 @@ begin
   T.Test('WeightPacking', @TestWeightPacking);
   T.Test('SortKeyConsistency', @TestSortKeyConsistency);
   T.Test('StrengthLevels', @TestStrengthLevels);
+  T.Test('SmpCollation', @TestSmpCollation);
+  T.Test('StressCollation', @TestStressCollation);
   if not T.Run then Halt(1);
 end.

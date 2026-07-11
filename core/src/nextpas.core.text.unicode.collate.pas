@@ -33,7 +33,7 @@ type
     ['{C3D4E5F6-A7B8-9012-CDEF-123456789012}']
     function Compare(const A, B: string): Integer;
     function GetSortKey(const AText: string): TCollationKey;
-    function Equals(const A, B: string): Boolean;
+    function TextEquals(const A, B: string): Boolean;
     function StartsWith(const AText, APrefix: string): Boolean;
     function EndsWith(const AText, ASuffix: string): Boolean;
     function IndexOf(const AText, ASubstring: string): SizeInt;
@@ -65,7 +65,7 @@ type
     constructor Create(const AOptions: TCollationOptions);
     function Compare(const A, B: string): Integer;
     function GetSortKey(const AText: string): TCollationKey;
-    function Equals(const A, B: string): Boolean;
+    function TextEquals(const A, B: string): Boolean;
     function StartsWith(const AText, APrefix: string): Boolean;
     function EndsWith(const AText, ASuffix: string): Boolean;
     function IndexOf(const AText, ASubstring: string): SizeInt;
@@ -100,6 +100,7 @@ uses
 
 var
   FUnicodeCollator: IUnicodeCollator;
+  FCollatorCS: TRTLCriticalSection;
 
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;
 var
@@ -140,7 +141,15 @@ end;
 function UnicodeCollator: IUnicodeCollator;
 begin
   if FUnicodeCollator = nil then
-    FUnicodeCollator := TUnicodeCollator.Create(DefaultCollationOptions);
+  begin
+    EnterCriticalSection(FCollatorCS);
+    try
+      if FUnicodeCollator = nil then
+        FUnicodeCollator := TUnicodeCollator.Create(DefaultCollationOptions);
+    finally
+      LeaveCriticalSection(FCollatorCS);
+    end;
+  end;
   Result := FUnicodeCollator;
 end;
 
@@ -167,7 +176,7 @@ var
   LWeights: TWeightArray;
   LPrimary: UInt16;
 begin
-  LCapacity := Length(ANormalized) div 2 + 1;
+  LCapacity := Length(ANormalized) div 3 + 16;  // UTF-8 最小 3 字节/码点
   SetLength(LWeights, LCapacity);
   LCount := 0;
 
@@ -351,7 +360,7 @@ begin
   Result := CompareWeights(LWeightsA, LWeightsB);
 end;
 
-function TUnicodeCollator.Equals(const A, B: string): Boolean;
+function TUnicodeCollator.TextEquals(const A, B: string): Boolean;
 begin
   Result := Compare(A, B) = 0;
 end;
@@ -407,5 +416,11 @@ function TUnicodeCollator.Contains(const AText, ASubstring: string): Boolean;
 begin
   Result := IndexOf(AText, ASubstring) > 0;
 end;
+
+initialization
+  InitCriticalSection(FCollatorCS);
+
+finalization
+  DoneCriticalSection(FCollatorCS);
 
 end.

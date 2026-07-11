@@ -116,8 +116,8 @@ begin
   Check(LCollator.Compare('a', 'b') < 0, 'a < b');
   Check(LCollator.Compare('b', 'a') > 0, 'b > a');
   Check(LCollator.Compare('a', 'a') = 0, 'a = a');
-  Check(LCollator.Equals('a', 'a'), 'a equals a');
-  Check(not LCollator.Equals('a', 'b'), 'a not equals b');
+  Check(LCollator.TextEquals('a', 'a'), 'a equals a');
+  Check(not LCollator.TextEquals('a', 'b'), 'a not equals b');
   Check(LCollator.StartsWith('Hello', 'He'), 'Hello starts with He');
   Check(not LCollator.StartsWith('Hello', 'Wo'), 'Hello not starts with Wo');
   Check(LCollator.EndsWith('Hello', 'lo'), 'Hello ends with lo');

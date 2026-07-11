@@ -181,6 +181,69 @@ begin
     'cedilla and acute have different CCC');
 end;
 
+{ === SMP Normalization === }
+
+procedure TestSmpNormalization;
+begin
+  // CJK Extension B (U+20000) - should be stable
+  CheckEqual(Utf8Of([$20000]), NFD(Utf8Of([$20000])), 'CJK Ext B NFD stable');
+  CheckEqual(Utf8Of([$20000]), NFC(Utf8Of([$20000])), 'CJK Ext B NFC stable');
+  CheckEqual(Utf8Of([$20000]), NFKD(Utf8Of([$20000])), 'CJK Ext B NFKD stable');
+  CheckEqual(Utf8Of([$20000]), NFKC(Utf8Of([$20000])), 'CJK Ext B NFKC stable');
+  Check(IsNormalizedNFD(Utf8Of([$20000])), 'CJK Ext B is NFD');
+  Check(IsNormalizedNFC(Utf8Of([$20000])), 'CJK Ext B is NFC');
+
+  // Math Bold A (U+1D400) - has compatibility decomposition
+  Check(not IsNormalizedNFKD(Utf8Of([$1D400])), 'Math Bold A not NFKD');
+  Check(not IsNormalizedNFKC(Utf8Of([$1D400])), 'Math Bold A not NFKC');
+  Check(not QuickCheckNFKD(Utf8Of([$1D400])), 'Math Bold A not NFKD QuickCheck');
+
+  // Musical Symbol (U+1D11E) - no decomposition, should be stable
+  Check(IsNormalizedNFKD(Utf8Of([$1D11E])), 'Musical is NFKD (no decomposition)');
+  Check(IsNormalizedNFKC(Utf8Of([$1D11E])), 'Musical is NFKC (no decomposition)');
+
+  // Deseret (U+10400) - no decomposition, should be stable
+  Check(IsNormalizedNFD(Utf8Of([$10400])), 'Deseret AY is NFD');
+  Check(IsNormalizedNFC(Utf8Of([$10400])), 'Deseret AY is NFC');
+end;
+
+{ === Stress Test === }
+
+procedure TestStressNormalization;
+var
+  LLong: string;
+  LI: SizeInt;
+  LNFD: string;
+  LNFC: string;
+begin
+  // 1000 个 precomposed e-acute → 应全部分解
+  LLong := '';
+  for LI := 1 to 1000 do
+    LLong := LLong + Utf8Of([$00E9]);
+  LNFD := NFD(LLong);
+  Check(Length(LNFD) > Length(LLong), 'NFD expanded 1000 e-acute');
+  Check(IsNormalizedNFD(LNFD), 'NFD of 1000 e-acute is normalized');
+  LNFC := NFC(LLong);
+  CheckEqual(LLong, LNFC, 'NFC of precomposed is identity');
+  Check(IsNormalizedNFC(LNFC), 'NFC of 1000 e-acute is normalized');
+
+  // 500 个 CJK 字符 — 无分解，应保持不变
+  LLong := '';
+  for LI := 1 to 500 do
+    LLong := LLong + Utf8Of([$4E00 + (LI mod 100)]);
+  Check(IsNormalizedNFD(LLong), '500 CJK is NFD');
+  Check(IsNormalizedNFC(LLong), '500 CJK is NFC');
+  Check(IsNormalizedNFKD(LLong), '500 CJK is NFKD');
+  Check(IsNormalizedNFKC(LLong), '500 CJK is NFKC');
+
+  // 混合 combining marks: a + 10 combining acute
+  LLong := Utf8Of([Ord('a')]);
+  for LI := 1 to 10 do
+    LLong := LLong + Utf8Of([$0301]);
+  LNFD := NFD(LLong);
+  Check(IsNormalizedNFD(LNFD), 'a + 10 acute is NFD');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.normalize');
   T.Test('canonical decomposition', @TestCanonicalDecomposition);
@@ -194,5 +257,7 @@ begin
   T.Test('QuickCheck functions', @TestQuickCheck);
   T.Test('boundary behavior', @TestBoundaryBehavior);
   T.Test('canonical combining class', @TestCanonicalCombiningClass);
+  T.Test('SMP normalization', @TestSmpNormalization);
+  T.Test('stress normalization', @TestStressNormalization);
   if not T.Run then Halt(1);
 end.
