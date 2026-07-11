@@ -283,6 +283,26 @@ begin
   UnsetEnv('NEXTPAS_TEST_EXPDEF');
 end;
 
+procedure TestExpandEnvStrict;
+var
+  LRaised: Boolean;
+begin
+  SetEnv('NEXTPAS_TEST_STRICT', 'value');
+  { Existing var should work }
+  CheckEqual('value', ExpandEnvStrict('$NEXTPAS_TEST_STRICT'),
+    'ExpandEnvStrict existing var');
+  { Undefined var should raise }
+  LRaised := False;
+  try
+    ExpandEnvStrict('$NEXTPAS_TEST_UNDEF_STRICT_XYZ');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ExpandEnvStrict raises on undefined var');
+  UnsetEnv('NEXTPAS_TEST_STRICT');
+end;
+
 { --- main --- }
 
 begin
@@ -317,5 +337,6 @@ begin
   T.Test('UserConfigDir', @TestUserConfigDir);
   T.Test('GetEnvDefault', @TestGetEnvDefault);
   T.Test('ExpandEnvWithDefault', @TestExpandEnvWithDefault);
+  T.Test('ExpandEnvStrict', @TestExpandEnvStrict);
   if not T.Run then Halt(1);
 end.

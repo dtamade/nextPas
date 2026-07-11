@@ -43,6 +43,7 @@
 |------|------|
 | `ExpandEnv(AValue)` | 展开 `${VAR}` 和 `$VAR` 占位符（未定义→空） |
 | `ExpandEnvWithDefault(AValue, ADefault)` | 展开 `${VAR}` 和 `$VAR`（未定义→默认值） |
+| `ExpandEnvStrict(AValue)` | 展开 `${VAR}` 和 `$VAR`（未定义→抛异常） |
 
 ## 使用示例
 

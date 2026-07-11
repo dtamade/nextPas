@@ -65,6 +65,17 @@ function ExpandEnv(const AValue: string): string;
  * @note 未定义的变量展开为 ADefault（而非空字符串）
  *}
 function ExpandEnvWithDefault(const AValue, ADefault: string): string;
+{**
+ * @desc 展开字符串中的环境变量引用（未定义的变量抛出异常）
+ *
+ * @params
+ *   AValue  包含 $VAR 或 ${VAR} 引用的字符串
+ *
+ * @note 支持 $NAME 和 ${NAME} 两种语法
+ * @note 未定义的变量会抛出 EArgumentError
+ * @note 适用于配置文件等需要严格环境变量的场景
+ *}
+function ExpandEnvStrict(const AValue: string): string;
 {** @desc 获取用户主目录
  *
  * @return 主目录路径（Unix: $HOME, Windows: %USERPROFILE%）
@@ -351,6 +362,68 @@ begin
             LBuilder.AppendStr(ADefault)
           else
             LBuilder.AppendStr(LResolved);
+        end;
+        Continue;
+      end
+      else
+      begin
+        LBuilder.AppendChar(AValue[I]);
+        Inc(I);
+      end;
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
+end;
+
+function ExpandEnvStrict(const AValue: string): string;
+var
+  I, LStart: Integer;
+  LName: string;
+  LResolved: string;
+  LBuilder: TBufStringBuilder;
+begin
+  LBuilder.Init(Length(AValue));
+  try
+    I := 1;
+    while I <= Length(AValue) do
+    begin
+      if (AValue[I] = '$') and (I < Length(AValue)) and (AValue[I + 1] = '{') then
+      begin
+        LStart := I + 2;
+        I := LStart;
+        while (I <= Length(AValue)) and (AValue[I] <> '}') do
+          Inc(I);
+        if I > Length(AValue) then
+          raise EArgumentError.Create(
+            'unterminated ${...} in environment expansion');
+        LName := Copy(AValue, LStart, I - LStart);
+        ValidateEnvName(LName);
+        LResolved := GetEnvironmentVariable(LName);
+        if LResolved = '' then
+          raise EArgumentError.Create(
+            'undefined environment variable: ' + LName);
+        LBuilder.AppendStr(LResolved);
+        Inc(I);
+        Continue;
+      end
+      else if (AValue[I] = '$') and (I < Length(AValue)) then
+      begin
+        LStart := I + 1;
+        I := LStart;
+        while (I <= Length(AValue)) and (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+          Inc(I);
+        if I = LStart then
+          LBuilder.AppendChar('$')
+        else
+        begin
+          LName := Copy(AValue, LStart, I - LStart);
+          LResolved := GetEnvironmentVariable(LName);
+          if LResolved = '' then
+            raise EArgumentError.Create(
+              'undefined environment variable: ' + LName);
+          LBuilder.AppendStr(LResolved);
         end;
         Continue;
       end
