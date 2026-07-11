@@ -204,6 +204,10 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 - [ ] **ABI 兼容**
   - [ ] 与 FPC 编译的 .o/.so 互相调用
   - [ ] C interop 完整（c-interop-specification.md 全部落地）
+- [ ] **现代工具链基础**
+  - [ ] `nextpas test` 从 thin wrapper 收敛到 workspace/package discovery、确定 list/filter plan、target attribution 与可回放 evidence
+  - [ ] `LanguageServiceSession` 的 session/revision/overlay/invalidation/query 内部契约可执行验证；公开 LSP server 留给 AL4
+  - [ ] formatter core 冻结 source/trivia truth、edit result 和失败语义，并通过确定性、幂等性、AST 语义保持及评论/编译指令无损 gate
 
 ### 典型特征
 
@@ -215,6 +219,7 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 | 后端 | LLVM + 1 额外后端 |
 | 目标 | Linux x86_64 + 1 额外目标 |
 | ABI | 与 FPC/C 互操作 |
+| 工具链基础 | test、内部 language service 与 formatter core 共享 compiler/workspace truth |
 
 ### 禁止回退信号
 
@@ -222,6 +227,8 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 - FPC 依赖重新引入
 - 性能回归到低于 FPC 水平
 - ABI 兼容性破坏
+- test、language service 或 formatter 各自复制 parser、semantic model、workspace model 或 result contract
+- formatter 丢失、重排或错误绑定评论和编译指令
 
 ---
 
@@ -239,7 +246,10 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
   - [ ] 跳转定义、查找引用、重命名、补全、悬停类型
   - [ ] 增量诊断推送（输入时实时报错）
   - [ ] Code actions（自动修复、重构）
-  - [ ] 格式化（formatter）
+- [ ] **Formatter 完整**
+  - [ ] `fmt` check/write workflow、原子写入和一致的 diagnostics/result envelope
+  - [ ] 评论与编译指令的内容、顺序和语法关联保持稳定
+  - [ ] IDE/LSP formatting adapter 复用 formatter core，不实现第二套排版逻辑
 - [ ] **Package Manager**
   - [ ] 包注册表（registry）
   - [ ] 依赖解析（dependency resolution）
@@ -263,7 +273,7 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 
 | 维度 | AL4 特征 |
 |------|---------|
-| 开发体验 | IDE + LSP + Package Manager 完整 |
+| 开发体验 | IDE + LSP + Formatter + Package Manager 完整 |
 | GUI | 自有 GUI Framework + IDE |
 | 文档 | API + 教程 + 语言参考 |
 | 社区 | 贡献指南 + 示例 + 注册表 |
@@ -271,6 +281,7 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 ### 禁止回退信号
 
 - LSP 功能退化
+- Formatter 丢失评论、编译指令或出现非幂等输出
 - Package Manager 数据丢失
 - GUI Framework 不兼容破坏
 

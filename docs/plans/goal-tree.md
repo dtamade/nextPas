@@ -1,9 +1,9 @@
 <!-- 项目总控地图 -->
-<!-- 版本: v2.2 | 日期: 2026-07-06 -->
+<!-- 版本: v2.3 | 日期: 2026-07-11 -->
 <!-- 每轮工作前查阅，结束后同步状态 -->
 <!-- 自举路线图: docs/plans/selfhost-roadmap.md v3.0 -->
 
-# nextPas 目标树 v2.2
+# nextPas 目标树 v2.3
 
 打造 FreePascal 领域最优秀的编译器+标准库生态系统。
 
@@ -101,6 +101,9 @@
 | S2 | 标准库完整（975 模块 nextPas 编译） | 🔲 | 0 处 FPC 依赖 |
 | S3 | 性能 ≥ FPC -O2 | 🔲 | 编译速度 + 生成代码 |
 | S4 | 多目标后端（LLVM + 1 额外） | 🔲 | Cranelift 或 GCC |
+| S5 | `nextpas test` 生产契约收敛 | 🏗️ | 从现有 thin wrapper 晋级到 workspace/package discovery、确定 list/filter 和 target evidence |
+| S6 | shared language service 内部边界 | 🔲 | session/revision/overlay/invalidation/query；不承诺公开 LSP server |
+| S7 | formatter core contract | 🔲 | source/trivia truth、edit result、确定性、幂等、语义保持和失败路径 |
 
 ### 生产可用 5 门
 
@@ -108,24 +111,29 @@
 |----|------|------|
 | Correctness | helper/overload/type-check/imported callable 等语义面收口 |   待评估 |
 | Determinism | 全量/增量/重复构建产物一致性 |   待评估 |
-| Tooling | 诊断、query、doctor、env、pkg 与 compiler truth 一致 |   待评估 |
+| Tooling | 诊断、query、test、doctor、env、pkg 与 compiler truth 一致 |   待评估 |
 | Performance | 冷编译/热编译基线稳定 |   待评估 |
 | Operability | 调试信息、崩溃归因、最小发布与回退路径 |   待评估 |
 
 ---
 
-## 阶段 4: AL4 生态期 — IDE/LSP/Package Manager
+## 阶段 4: AL4 生态期 — 现代开发者工具链 + IDE 生态
 
-**目标**: 完整开发者体验
+**目标**: 统一的 CLI、LSP、格式化、测试、包管理和 IDE 开发体验
 **前置条件**: AL3 退出条件全部完成
 
 | 节点 | 内容 | 状态 | 备注 |
 |------|------|------|------|
-| E1 | LSP 完整（跳转/引用/补全/诊断） | 🔲 | |
-| E2 | Package Manager | 🔲 | registry + 依赖解析 + lockfile |
-| E3 | GUI Framework | 🔲 | 窗口/布局/控件/渲染 |
-| E4 | IDE 可用 | 🔲 | 自有 IDE 或 VS Code 插件 |
-| E5 | 文档完整 | 🔲 | API + 教程 + 语言参考 |
+| E1 | 公开 LSP server / protocol adapter | 🔲 | diagnostics/跳转/引用/补全/rename；只投影 shared language service truth |
+| E2 | `fmt` 产品 workflow | 🔲 | `--check` + 原子 write mode；复用 AL3 formatter core contract |
+| E3 | Package Manager | 🔲 | registry + 依赖解析 + lockfile |
+| E4 | GUI Framework | 🔲 | 窗口/布局/控件/渲染 |
+| E5 | IDE 可用 | 🔲 | 自有 IDE 或 LSP 客户端复用 language service、test harness 与 tooling truth |
+| E6 | 文档完整 | 🔲 | API + 教程 + 语言参考 + tooling workflow |
+
+Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
+`language-service-specification.md`、`developer-tooling-specification.md` 与
+`test-harness-specification.md` 为准；本目标树只追踪阶段和完成证据。
 
 ---
 
@@ -172,6 +180,7 @@
 | 2026-07-05 | 架构计划 v2.2 | compiler-architecture-plan.md，15 周 5 阶段 + 规范对齐 + 风险矩阵 + 源码对标 |
 | 2026-07-05 | 架构成熟度等级 | architecture-maturity-levels.md AL0-AL5 定义完成 |
 | 2026-07-05 | 目标树 v2.1 | 5 阶段 + AL 等级标注 + AL3-AL5 长期目标 |
+| 2026-07-11 | 目标树 v2.3 | 增加 LSP server、formatter 与 test 的分阶段里程碑和 promotion mapping |
 
 ---
 
@@ -187,4 +196,4 @@
 | `selfhost-roadmap.md` | 自举路线图 |
 | `PLAN.md` | 根总控计划 |
 
-*最后更新: 2026-07-05 | 版本: v2.1*
+*最后更新: 2026-07-11 | 版本: v2.3*
