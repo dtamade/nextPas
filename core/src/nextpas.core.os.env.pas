@@ -56,6 +56,7 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.text.conv,
+  nextpas.core.text.builder,
   nextpas.core.platform.env;
 
 type
@@ -190,46 +191,53 @@ function ExpandEnv(const AValue: string): string;
 var
   I, LStart: Integer;
   LName: string;
+  LBuilder: TBufStringBuilder;
 begin
-  Result := '';
-  I := 1;
-  while I <= Length(AValue) do
-  begin
-    if (AValue[I] = '$') and (I < Length(AValue)) and (AValue[I + 1] = '{') then
+  { P1-6 optimization: Use TBufStringBuilder for O(n) instead of O(n²) }
+  LBuilder.Init(Length(AValue));
+  try
+    I := 1;
+    while I <= Length(AValue) do
     begin
-      LStart := I + 2;
-      I := LStart;
-      while (I <= Length(AValue)) and (AValue[I] <> '}') do
+      if (AValue[I] = '$') and (I < Length(AValue)) and (AValue[I + 1] = '{') then
+      begin
+        LStart := I + 2;
+        I := LStart;
+        while (I <= Length(AValue)) and (AValue[I] <> '}') do
+          Inc(I);
+        if I > Length(AValue) then
+          raise EArgumentError.Create(
+            'unterminated ${...} in environment expansion');
+        LName := Copy(AValue, LStart, I - LStart);
+        ValidateEnvName(LName);
+        LBuilder.AppendStr(GetEnvironmentVariable(LName));
         Inc(I);
-      if I > Length(AValue) then
-        raise EArgumentError.Create(
-          'unterminated ${...} in environment expansion');
-      LName := Copy(AValue, LStart, I - LStart);
-      ValidateEnvName(LName);
-      Result := Result + GetEnvironmentVariable(LName);
-      Inc(I);
-      Continue;
-    end
-    else if (AValue[I] = '$') and (I < Length(AValue)) then
-    begin
-      LStart := I + 1;
-      I := LStart;
-      while (I <= Length(AValue)) and (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
-        Inc(I);
-      if I = LStart then
-        Result := Result + '$'
+        Continue;
+      end
+      else if (AValue[I] = '$') and (I < Length(AValue)) then
+      begin
+        LStart := I + 1;
+        I := LStart;
+        while (I <= Length(AValue)) and (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+          Inc(I);
+        if I = LStart then
+          LBuilder.AppendChar('$')
+        else
+        begin
+          LName := Copy(AValue, LStart, I - LStart);
+          LBuilder.AppendStr(GetEnvironmentVariable(LName));
+        end;
+        Continue;
+      end
       else
       begin
-        LName := Copy(AValue, LStart, I - LStart);
-        Result := Result + GetEnvironmentVariable(LName);
+        LBuilder.AppendChar(AValue[I]);
+        Inc(I);
       end;
-      Continue;
-    end
-    else
-    begin
-      Result := Result + AValue[I];
-      Inc(I);
     end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
 end;
 
