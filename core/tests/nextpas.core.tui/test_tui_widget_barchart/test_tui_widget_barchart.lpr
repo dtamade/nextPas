@@ -214,6 +214,51 @@ begin
   end;
 end;
 
+procedure TestBarChartRenderSmallArea;
+var
+  LChart: IBarChart;
+  LBuffer: TBuffer;
+begin
+  LChart := TBarChart.New([TBarData.Make('A', 10.0)]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 2));
+  try
+    LChart.Render(TRect.Make(0, 0, 5, 2), LBuffer);
+    Check(True, 'Small area does not crash');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestBarChartRenderMultipleBars;
+var
+  LChart: IBarChart;
+  LBuffer: TBuffer;
+  LBars: array[0..4] of TBarData;
+begin
+  LBars[0] := TBarData.Make('A', 10.0);
+  LBars[1] := TBarData.Make('B', 20.0);
+  LBars[2] := TBarData.Make('C', 30.0);
+  LBars[3] := TBarData.Make('D', 40.0);
+  LBars[4] := TBarData.Make('E', 50.0);
+  LChart := TBarChart.New(LBars);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 10));
+  try
+    LChart.Render(TRect.Make(0, 0, 40, 10), LBuffer);
+    Check(True, 'Multiple bars render');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestBarDataMakeZeroValue;
+var
+  LData: TBarData;
+begin
+  LData := TBarData.Make('Zero', 0.0);
+  Check(LData.Label_ = 'Zero', 'Label should be Zero');
+  Check(LData.Value = 0.0, 'Value should be 0.0');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.barchart');
   T.Test('TBarData.Make', @TestBarDataMake);
@@ -232,5 +277,8 @@ begin
   T.Test('render empty', @TestBarChartRenderEmpty);
   T.Test('render with block', @TestBarChartRenderWithBlock);
   T.Test('render empty area', @TestBarChartRenderEmptyArea);
+  T.Test('render small area', @TestBarChartRenderSmallArea);
+  T.Test('render multiple bars', @TestBarChartRenderMultipleBars);
+  T.Test('TBarData make zero value', @TestBarDataMakeZeroValue);
   if not T.Run then Halt(1);
 end.
