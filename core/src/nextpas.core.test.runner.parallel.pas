@@ -297,6 +297,7 @@ var
   LRepeatCount, LRepeatI: Integer;
 begin
   Result := nil;
+  LSubCtx := nil;  { Explicit init — prevents EAccessViolation in cleanup for ekTableTest }
   R := PThreadRec(AArg);
   LConfig := ResolveConfig(R^.Config);
   LOutSink := ResolveOutSink(LConfig);
@@ -516,6 +517,7 @@ begin
       else
         R^.Res^ := MakeTestResult(R^.Entry.Name, LStatus,
           '', LDurMs);
+      LResultWritten := True;
     end;
   finally
     SafeRelease(R^.Mtx, LConfig);
@@ -524,9 +526,19 @@ begin
   finally
     { P0 #1 fix: release TTestContext BEFORE GExecState.
       TTestContext destructor calls RunCleanups, which may indirectly
-      access GExecState via InternalFail/SetTestContext. }
-    SetCurrentTestContext(nil);
-    LSubCtx := nil;
+      access GExecState via InternalFail/SetTestContext.
+
+      P2 fix: wrap in try-except to prevent cleanup EAccessViolation from
+      propagating to the outer except handler, which would double-count the
+      test as both pass and fail. For ekTableTest, LSubCtx is never assigned
+      (stack garbage) — LSubCtx := nil may trigger EAccessViolation when FPC
+      tries to finalize the old value. }
+    try
+      SetCurrentTestContext(nil);
+      LSubCtx := nil;
+    except
+      { Swallow cleanup errors — the test result is already committed. }
+    end;
   end;
   { Separate finally for GExecState — must run even if TTestContext
     cleanup raises (e.g., a cleanup callback throws). The thread-local
