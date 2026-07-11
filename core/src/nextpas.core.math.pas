@@ -100,6 +100,8 @@ function BatchSinF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
 function BatchCosF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
+function BatchSinCosF32(const AInput: array of Single;
+                        var ASinOutput, ACosOutput: array of Single): SizeInt;
 function BatchTanF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
 function BatchExpF32(const AInput: array of Single;
@@ -413,6 +415,12 @@ function BatchCosF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
 begin
   Result := nextpas.core.math.batch.BatchCosF32(AInput, AOutput);
+end;
+
+function BatchSinCosF32(const AInput: array of Single;
+                        var ASinOutput, ACosOutput: array of Single): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchSinCosF32(AInput, ASinOutput, ACosOutput);
 end;
 
 function BatchTanF32(const AInput: array of Single;

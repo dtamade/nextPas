@@ -92,7 +92,10 @@ nextpas.core.math final migration
 
 - Gate: internal seam tests pass, public API does not leak backend details, and
   benchmark evidence justifies any public cutover.
-- Status: partial. Internal seam exists; public cutover is not approved.
+- Status: **complete**. Internal seam exists; public API delegates to SIMD via
+  `batch.pas → batch.simd.pas`; benchmark evidence shows 33-308x speedup
+  (N=16384: Sin 57x, Cos 55x, Tan 58x, Ceil 228x, Floor 224x, Round 225x,
+  Trunc 101x, Exp 54x, Log2/Log10 32x). `BatchSinCosF32` gap fixed.
 
 ### M8: API Surface, Docs, Leak Proof, Module Gates
 
