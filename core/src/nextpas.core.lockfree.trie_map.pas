@@ -38,6 +38,12 @@ type
 
   TTrieMapForEachCallback = reference to procedure(const AKey, AValue: AnsiString);
 
+  PTriePair = ^TTriePair;
+  TTriePair = record
+    Key: AnsiString;
+    Value: AnsiString;
+  end;
+
   PTrieNode = ^TTrieNode;
   TTrieNode = record
     IsLeaf: Boolean;
@@ -78,6 +84,9 @@ type
       ADepth: Int32; const AKey: AnsiString): Boolean;
     procedure ForEachNode(ANode: PTrieNode;
       ACallback: TTrieMapForEachCallback);
+    procedure CollectNode(ANode: PTrieNode;
+      var APairs: array of TTriePair;
+      var ACount: Integer);
     procedure Lock; inline;
     procedure Unlock; inline;
   public
@@ -424,14 +433,43 @@ begin
     ForEachNode(ANode^.Children[I], ACallback);
 end;
 
-procedure TConcurrentTrieMap.ForEach(ACallback: TTrieMapForEachCallback);
+procedure TConcurrentTrieMap.CollectNode(ANode: PTrieNode;
+  var APairs: array of TTriePair;
+  var ACount: Integer);
+var
+  I: Int32;
 begin
+  if ANode = nil then
+    Exit;
+  if ANode^.IsLeaf then
+  begin
+    APairs[ACount].Key := ANode^.Key;
+    APairs[ACount].Value := ANode^.Value;
+    Inc(ACount);
+    Exit;
+  end;
+  for I := 0 to TRIE_BRANCH_FACTOR - 1 do
+    CollectNode(ANode^.Children[I], APairs, ACount);
+end;
+
+procedure TConcurrentTrieMap.ForEach(ACallback: TTrieMapForEachCallback);
+var
+  LPairs: array of TTriePair;
+  LCount, LI: Integer;
+begin
+  LCount := FSize;
+  if LCount = 0 then
+    Exit;
+  SetLength(LPairs, LCount);
+  LCount := 0;
   Lock;
   try
-    ForEachNode(FRoot, ACallback);
+    CollectNode(FRoot, LPairs, LCount);
   finally
     Unlock;
   end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LPairs[LI].Key, LPairs[LI].Value);
 end;
 
 end.

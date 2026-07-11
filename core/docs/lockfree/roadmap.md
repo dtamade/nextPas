@@ -104,7 +104,7 @@
 | `lockfree.treap` | Treap (随机化BST) | ✅ 完成 | 7 |
 | `lockfree.scapegoat` | Scapegoat Tree (无旋转平衡BST) | ✅ 完成 | 7 |
 | `lockfree.radix` | Radix Tree (压缩前缀树) | ✅ 完成 | 7 |
-| `lockfree.bplus` | B+ Tree (数据库索引) | ⚠️ 有泄漏 | 8 |
+| `lockfree.bplus` | B+ Tree (数据库索引) | ✅ 完成 | 8 |
 | `lockfree.tdigest` | T-Digest (流式分位数) | ✅ 完成 | 4 |
 | `lockfree.spacesaving` | Space-Saving (Top-K) | ✅ 完成 | 3 |
 | `lockfree.arccache` | ARC Cache (自适应缓存) | ✅ 完成 | 4 |
@@ -480,7 +480,7 @@ L3: nextpas.core.lockfree.* (数据结构)
 | Treap | 随机化 BST，期望 O(log n) | 7 |
 | Scapegoat Tree | 无旋转平衡 BST，摊还 O(log n) | 7 |
 | Radix Tree | 压缩前缀树，O(k) 字符串查找 | 7 |
-| B+ Tree | 数据库索引结构，范围查询 | 8 (有泄漏待修复) |
+| B+ Tree | 数据库索引结构，范围查询 | 8 |
 
 **总计**: 87 文件, ~33000 行, 73 数据结构
 

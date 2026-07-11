@@ -461,19 +461,36 @@ end;
 
 procedure TConcurrentSkipListMap.ForEach(ACallback: TSkipListMapForEachCallback);
 var
+  LPairs: array of record
+    Key, Value: AnsiString;
+  end;
+  LCount, LI: Integer;
   LNode: PSkipListMapNode;
 begin
   GlobalLock;
   try
+    LCount := 0;
     LNode := FHead^.Next[0];
     while LNode <> FTail do
     begin
-      ACallback(LNode^.Key, LNode^.Value);
+      Inc(LCount);
+      LNode := LNode^.Next[0];
+    end;
+    SetLength(LPairs, LCount);
+    LCount := 0;
+    LNode := FHead^.Next[0];
+    while LNode <> FTail do
+    begin
+      LPairs[LCount].Key := LNode^.Key;
+      LPairs[LCount].Value := LNode^.Value;
+      Inc(LCount);
       LNode := LNode^.Next[0];
     end;
   finally
     GlobalUnlock;
   end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LPairs[LI].Key, LPairs[LI].Value);
 end;
 
 end.

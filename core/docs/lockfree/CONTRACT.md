@@ -111,6 +111,8 @@
 | **其他** | lockfree.versionvector | Version Vector |
 | **其他** | lockfree.wrr | 加权轮询 |
 | **其他** | lockfree.matrix | 并发矩阵 |
+| **扩展** | lockfree.hashmap.rtm | RTM 优化 HashMap (硬件事务内存) |
+| **扩展** | lockfree.hashmap.numa | NUMA 感知 HashMap |
 | **门面** | lockfree.pas | 门面 re-export |
 
 ### 1.2 核心类型（187 个类型 re-export）

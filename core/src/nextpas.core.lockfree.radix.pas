@@ -11,6 +11,12 @@ type
   TRadixResult = (rdInserted, rdUpdated, rdRemoved, rdNotFound, rdExists, rdClosed);
   TRadixForEachCallback = procedure(const AKey: AnsiString; AValue: Int64);
 
+  PRadixPair = ^TRadixPair;
+  TRadixPair = record
+    Key: AnsiString;
+    Value: Int64;
+  end;
+
   PRadixNode = ^TRadixNode;
   TRadixNode = record
     Prefix: AnsiString;
@@ -40,6 +46,7 @@ type
     function FindChild(ANode: PRadixNode; AChar: AnsiChar): Integer;
     procedure ClearSubtree(ANode: PRadixNode);
     procedure ForEachSubtree(ANode: PRadixNode; const APath: AnsiString; ACallback: TRadixForEachCallback);
+    procedure CollectSubtree(ANode: PRadixNode; const APath: AnsiString; var APairs: array of TRadixPair; var ACount: Integer);
   public
     constructor Create;
     destructor Destroy; override;
@@ -351,13 +358,41 @@ begin
     ForEachSubtree(ANode^.Children[LI], LFullPath, ACallback);
 end;
 
+procedure TConcurrentRadixTree.CollectSubtree(ANode: PRadixNode; const APath: AnsiString; var APairs: array of TRadixPair; var ACount: Integer);
+var
+  LI: Integer;
+  LFullPath: AnsiString;
+begin
+  if ANode = nil then
+    Exit;
+  LFullPath := APath + ANode^.Prefix;
+  if ANode^.IsLeaf then
+  begin
+    APairs[ACount].Key := LFullPath;
+    APairs[ACount].Value := ANode^.Value;
+    Inc(ACount);
+  end;
+  for LI := 0 to ANode^.ChildCount - 1 do
+    CollectSubtree(ANode^.Children[LI], LFullPath, APairs, ACount);
+end;
+
 procedure TConcurrentRadixTree.ForEach(ACallback: TRadixForEachCallback);
+var
+  LPairs: array of TRadixPair;
+  LCount, LI: Integer;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit;
+  LCount := GetCount;
+  if LCount = 0 then
+    Exit;
+  SetLength(LPairs, LCount);
+  LCount := 0;
   Lock;
-  ForEachSubtree(FRoot, '', ACallback);
+  CollectSubtree(FRoot, '', LPairs, LCount);
   Unlock;
+  for LI := 0 to LCount - 1 do
+    ACallback(LPairs[LI].Key, LPairs[LI].Value);
 end;
 
 procedure TConcurrentRadixTree.ClearSubtree(ANode: PRadixNode);

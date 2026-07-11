@@ -102,7 +102,9 @@ uses
   nextpas.core.lockfree.xorfilter,
   nextpas.core.lockfree.slidingwindow,
   nextpas.core.lockfree.reservoirsampling,
-  nextpas.core.lockfree.leftright;
+  nextpas.core.lockfree.leftright,
+  nextpas.core.lockfree.hashmap.rtm,
+  nextpas.core.lockfree.hashmap.numa;
 
 const
   SEGQUEUE_SEGMENT_CAPACITY = nextpas.core.lockfree.segqueue.SEGQUEUE_SEGMENT_CAPACITY;
@@ -825,6 +827,22 @@ type
   }
   TLeftRight = nextpas.core.lockfree.leftright.TLeftRight;
   TLeftRightResult = nextpas.core.lockfree.leftright.TLeftRightResult;
+
+  {** @desc RTM 优化 HashMap — 硬件事务内存加速
+    @details 读操作使用 Intel TSX RTM 事务内存，减少锁竞争。
+      不支持 RTM 时自动退化为普通分片锁。
+    @see TRtmHashMapImpl 详细文档和示例
+  }
+  generic TRtmHashMap<TKey, TValue> = class(specialize TRtmHashMapImpl<TKey, TValue>)
+  end;
+
+  {** @desc NUMA 感知 HashMap — 按 NUMA 节点分片
+    @details 按 NUMA 节点分片，减少跨节点内存访问。
+      适用于 NUMA 架构的多核服务器。
+    @see TNumaShardedHashMapImpl 详细文档和示例
+  }
+  generic TNumaShardedHashMap<TKey, TValue> = class(specialize TNumaShardedHashMapImpl<TKey, TValue>)
+  end;
 
 implementation
 
