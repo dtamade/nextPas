@@ -224,6 +224,95 @@ begin
   Check(LDiffView <> nil, 'Builder chaining should work');
 end;
 
+procedure TestDiffViewNewEmpty;
+var
+  LDiffView: IDiffView;
+begin
+  LDiffView := TDiffView.New([]);
+  Check(LDiffView <> nil, 'New with empty lines should not be nil');
+end;
+
+procedure TestDiffViewRenderEmpty;
+var
+  LDiffView: IDiffView;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LDiffView := TDiffView.New([]);
+  LArea := TRect.Make(0, 0, 20, 5);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LDiffView.Render(LArea, LBuffer);
+    Check(True, 'Render empty diffview should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestDiffViewRenderSmallArea;
+var
+  LDiffView: IDiffView;
+  LBuffer: TBuffer;
+  LArea: TRect;
+  LLines: array[0..0] of TDiffLine;
+begin
+  LLines[0].Kind := dlAdded;
+  LLines[0].Text := '+ test';
+  LLines[0].OldNum := 0;
+  LLines[0].NewNum := 1;
+  LDiffView := TDiffView.New(LLines);
+  LArea := TRect.Make(0, 0, 5, 2);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LDiffView.Render(LArea, LBuffer);
+    Check(True, 'Render in small area should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestDiffViewFromUnifiedDiffEmpty;
+var
+  LDiffView: IDiffView;
+begin
+  LDiffView := TDiffView.FromUnifiedDiff('');
+  Check(LDiffView <> nil, 'FromUnifiedDiff empty should not be nil');
+end;
+
+procedure TestDiffViewMultipleLines;
+var
+  LDiffView: IDiffView;
+  LBuffer: TBuffer;
+  LArea: TRect;
+  LLines: array[0..3] of TDiffLine;
+begin
+  LLines[0].Kind := dlHeader;
+  LLines[0].Text := '--- a/file.pas';
+  LLines[0].OldNum := 0;
+  LLines[0].NewNum := 0;
+  LLines[1].Kind := dlContext;
+  LLines[1].Text := ' line1';
+  LLines[1].OldNum := 1;
+  LLines[1].NewNum := 1;
+  LLines[2].Kind := dlRemoved;
+  LLines[2].Text := '-line2';
+  LLines[2].OldNum := 2;
+  LLines[2].NewNum := 0;
+  LLines[3].Kind := dlAdded;
+  LLines[3].Text := '+line3';
+  LLines[3].OldNum := 0;
+  LLines[3].NewNum := 2;
+  LDiffView := TDiffView.New(LLines);
+  LArea := TRect.Make(0, 0, 30, 10);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LDiffView.Render(LArea, LBuffer);
+    Check(True, 'Render multiple lines should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.diffview');
   T.Test('TDiffLineKind enum', @TestDiffLineKindEnum);
@@ -241,5 +330,10 @@ begin
   T.Test('TDiffView.Render', @TestDiffViewRender);
   T.Test('TDiffView.RenderStateful', @TestDiffViewRenderStateful);
   T.Test('TDiffView builder chaining', @TestDiffViewBuilderChaining);
+  T.Test('TDiffView.New empty', @TestDiffViewNewEmpty);
+  T.Test('TDiffView.Render empty', @TestDiffViewRenderEmpty);
+  T.Test('TDiffView.Render small area', @TestDiffViewRenderSmallArea);
+  T.Test('TDiffView.FromUnifiedDiff empty', @TestDiffViewFromUnifiedDiffEmpty);
+  T.Test('TDiffView multiple lines', @TestDiffViewMultipleLines);
   if not T.Run then Halt(1);
 end.
