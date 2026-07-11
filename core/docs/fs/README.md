@@ -54,6 +54,8 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `Create(APath, APerm)` | 创建新文件（已存在则截断），返回 `IFile` |
 | `CopyFile(ASrc, ADst)` | 复制文件，返回写入字节数 |
 | `TempFile(ADir, APattern)` | 创建临时文件，返回 `IFile` |
+| `TempDir(ADir, APattern)` | 创建临时目录，返回路径 |
+| `Glob(ADir, APattern)` | 列出匹配 glob 模式的文件 |
 
 ### 便利函数
 
@@ -117,6 +119,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `PathTrimSep(APath)` | 去除末尾分隔符 |
 | `PathChangeExt(APath, ANewExt)` | 替换扩展名 |
 | `PathWithoutExt(APath)` | 去除扩展名 |
+| `PathMatch(APattern, AName)` | glob 模式匹配 |
 
 ### 工具函数
 
@@ -139,7 +142,7 @@ make -C core/tests/nextpas.core.fs/test_fs_ifile clean test
 make -C core/tests/nextpas.core.fs/test_fs_text clean test
 ```
 
-179 个测试，heaptrc 零泄漏。
+330 个测试，heaptrc 零泄漏。
 
 ### 特殊行为说明
 
