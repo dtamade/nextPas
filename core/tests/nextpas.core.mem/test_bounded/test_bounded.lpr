@@ -79,18 +79,26 @@ end;
 procedure TestStats;
 var
   LAlloc: TBoundedAllocator;
+  LPtr1: Pointer;
+  LPtr2: Pointer;
   LStats: TBoundedStats;
 begin
   LAlloc := TBoundedAllocator.Create(DefaultAllocator, 1000);
+  LPtr1 := nil;
+  LPtr2 := nil;
   try
-    LAlloc.GetMem(100);
-    LAlloc.GetMem(200);
+    LPtr1 := LAlloc.GetMem(100);
+    LPtr2 := LAlloc.GetMem(200);
     LStats := LAlloc.GetStats;
     Check(LStats.AllocCount = 2, 'alloc count = 2');
     Check(LStats.ActiveBytes = 300, 'active = 300');
     Check(LStats.PeakBytes = 300, 'peak = 300');
     Check(LStats.LimitBytes = 1000, 'limit = 1000');
   finally
+    if LPtr2 <> nil then
+      LAlloc.FreeMem(LPtr2);
+    if LPtr1 <> nil then
+      LAlloc.FreeMem(LPtr1);
     LAlloc.Free;
   end;
 end;

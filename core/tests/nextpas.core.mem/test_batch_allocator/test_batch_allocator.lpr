@@ -87,11 +87,13 @@ procedure TestStats;
 var
   LAlloc: TBatchAllocator;
   LBlocks: array[0..3] of Pointer;
+  LPtr: Pointer;
   LStats: TBatchStats;
 begin
   LAlloc := TBatchAllocator.Create(GetRtlAllocator);
+  LPtr := nil;
   try
-    LAlloc.GetMem(32);
+    LPtr := LAlloc.GetMem(32);
     LAlloc.BatchAlloc(64, 4, LBlocks);
 
     LStats := LAlloc.GetStats;
@@ -104,6 +106,8 @@ begin
     LStats := LAlloc.GetStats;
     Check(LStats.TotalBlocksFreed >= 4, 'blocks freed');
   finally
+    if LPtr <> nil then
+      LAlloc.FreeMem(LPtr);
     LAlloc.Free;
   end;
 end;
@@ -130,13 +134,17 @@ end;
 procedure TestNilAllocator;
 var
   LAlloc: TBatchAllocator;
+  LPtr: Pointer;
 begin
   LAlloc := TBatchAllocator.Create(GetRtlAllocator);
+  LPtr := nil;
   try
     // Zero-size allocation returns nil or valid pointer
-    LAlloc.GetMem(0);
+    LPtr := LAlloc.GetMem(0);
     Check(True, 'no crash');
   finally
+    if LPtr <> nil then
+      LAlloc.FreeMem(LPtr);
     LAlloc.Free;
   end;
 end;
