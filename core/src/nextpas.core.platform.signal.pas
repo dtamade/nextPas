@@ -428,7 +428,7 @@ begin
     Result := 0;
   end
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function MaybeRemoveWindowsConsoleCtrlHandler: Int32;
@@ -444,7 +444,7 @@ begin
     Result := 0;
   end
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_signal_set(ASignal: Int32;
@@ -506,14 +506,14 @@ begin
     if GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0) then
       Result := 0
     else
-      Result := Int32(GetLastError);
+      Result := platform_get_last_error;
   end
   else if ASignal = PLATFORM_SIGBREAK then
   begin
     if GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, 0) then
       Result := 0
     else
-      Result := Int32(GetLastError);
+      Result := platform_get_last_error;
   end
   else
     Result := Int32(ERROR_NOT_SUPPORTED);

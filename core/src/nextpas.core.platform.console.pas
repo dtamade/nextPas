@@ -475,7 +475,7 @@ begin
   end;
   AHandle := GetStdHandle(LStd);
   if (AHandle = nil) or (AHandle = HANDLE(INVALID_HANDLE_VALUE)) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Result := 0;
 end;
 
@@ -527,7 +527,7 @@ begin
   Result := WindowsConsoleHandleFromFd(AFd, LHandle);
   if Result <> 0 then Exit;
   if not GetConsoleScreenBufferInfo(LHandle, @LInfo) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   ASize.Cols := Int32(LInfo.srWindowRight - LInfo.srWindowLeft + 1);
   ASize.Rows := Int32(LInfo.srWindowBottom - LInfo.srWindowTop + 1);
   Result := 0;
@@ -543,14 +543,14 @@ begin
   if Result <> 0 then Exit;
   LSaved := 0;
   if not GetConsoleMode(LHandle, @LSaved) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Move(LSaved, AMode.Opaque[0], SizeOf(LSaved));
   LRaw := LSaved;
   LRaw := LRaw and not (ENABLE_LINE_INPUT or ENABLE_ECHO_INPUT or
     ENABLE_PROCESSED_INPUT);
   LRaw := LRaw or ENABLE_VIRTUAL_TERMINAL_INPUT;
   if not SetConsoleMode(LHandle, LRaw) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Result := 0;
 end;
 
@@ -563,7 +563,7 @@ begin
   if Result <> 0 then Exit;
   Move(AMode.Opaque[0], LMode, SizeOf(LMode));
   if not SetConsoleMode(LHandle, LMode) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Result := 0;
 end;
 

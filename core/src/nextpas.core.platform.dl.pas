@@ -263,14 +263,14 @@ begin
       of the calling process, equivalent to dlopen(NULL, ...). }
     ALib.Handle := PtrUInt(GetModuleHandleW(nil));
     if ALib.Handle = 0 then
-      Exit(Int32(GetLastError));
+      Exit(platform_get_last_error);
     Exit(0);
   end;
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
     Exit(Int32(ERROR_INVALID_NAME));
   ALib.Handle := PtrUInt(LoadLibraryW(PWideChar(LPath)));
   if ALib.Handle = 0 then
-    Result := Int32(GetLastError)
+    Result := platform_get_last_error
   else
     Result := 0;
 end;
@@ -285,7 +285,7 @@ begin
     Exit(PLATFORM_ERR_INVALID);
   AAddr := Pointer(GetProcAddress(HMODULE(ALib.Handle), AName));
   if AAddr = nil then
-    Result := Int32(GetLastError)
+    Result := platform_get_last_error
   else
     Result := 0;
 end;
@@ -297,7 +297,7 @@ begin
   if FreeLibrary(HMODULE(ALib.Handle)) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
   ALib.Handle := 0;
 end;
 

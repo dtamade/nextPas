@@ -187,7 +187,7 @@ begin
   begin
     if GetLastError = ERROR_ENVVAR_NOT_FOUND then
       Exit(Int32(ERROR_ENVVAR_NOT_FOUND));
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   end;
 
   SetLength(LValue, LResult + 1);
@@ -219,7 +219,7 @@ begin
   if SetEnvironmentVariableW(PWideChar(LName), PWideChar(LValue)) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_env_unset(const AName: PAnsiChar): Int32;
@@ -233,7 +233,7 @@ begin
   if SetEnvironmentVariableW(PWideChar(LName), nil) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_env_exists(const AName: PAnsiChar): Boolean;
@@ -261,7 +261,7 @@ begin
 
   LBlock := GetEnvironmentStringsW;
   if LBlock = nil then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   try
     LCur := PWideChar(LBlock);
     while LCur^ <> #0 do

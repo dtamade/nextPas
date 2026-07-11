@@ -279,12 +279,12 @@ begin
   LSize.Y := Int16(ASize.Rows);
 
   if not CreatePipe(@LPipeInRead, @LPipeInWrite, nil, 0) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   if not CreatePipe(@LPipeOutRead, @LPipeOutWrite, nil, 0) then
   begin
     CloseHandle(LPipeInRead);
     CloseHandle(LPipeInWrite);
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   end;
 
   LHr := CreatePseudoConsole(LSize, LPipeInRead, LPipeOutWrite, 0, APty.ConPty);
@@ -336,7 +336,7 @@ begin
   begin
     FreeMem(LAttrList);
     AFailStage := ptssPipe;
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   end;
 
   if not UpdateProcThreadAttribute(LAttrList, 0,
@@ -346,7 +346,7 @@ begin
     DeleteProcThreadAttributeList(LAttrList);
     FreeMem(LAttrList);
     AFailStage := ptssTiocsctty;
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   end;
 
   LSiEx.lpAttributeList := LAttrList;
@@ -393,7 +393,7 @@ begin
     DeleteProcThreadAttributeList(LAttrList);
     FreeMem(LAttrList);
     AFailStage := ptssExec;
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   end;
 
   DeleteProcThreadAttributeList(LAttrList);

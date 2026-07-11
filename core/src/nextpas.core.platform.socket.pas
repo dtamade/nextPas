@@ -965,7 +965,7 @@ function platform_socket_create(const ADomain, AType, AProtocol: Int32;
 begin
   ASocket.Value := PtrUInt(winsock_socket(ADomain, AType, AProtocol));
   if ASocket.Value = PtrUInt(-1) then
-    Result := WSAGetLastError
+    Result := platform_get_last_error
   else
     Result := 0;
 end;
@@ -977,7 +977,7 @@ begin
   if closesocket(TSocket(ASocket.Value)) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
   ASocket.Value := PtrUInt(-1);
 end;
 
@@ -987,7 +987,7 @@ begin
   if winsock_bind(TSocket(ASocket.Value), AAddr, AAddrLen) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
 end;
 
 function platform_socket_listen(const ASocket: TPlatformSocket;
@@ -996,7 +996,7 @@ begin
   if winsock_listen(TSocket(ASocket.Value), ABacklog) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
 end;
 
 function platform_socket_accept(const ASocket: TPlatformSocket;
@@ -1008,7 +1008,7 @@ begin
   if LS = TSocket(-1) then
   begin
     AClient.Value := PtrUInt(-1);
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
   end
   else
   begin
@@ -1023,7 +1023,7 @@ begin
   if winsock_connect(TSocket(ASocket.Value), AAddr, AAddrLen) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
 end;
 
 function platform_socket_send(const ASocket: TPlatformSocket;
@@ -1038,7 +1038,7 @@ begin
     Exit(0);
   LResult := winsock_send(TSocket(ASocket.Value), ABuf, ALen, AFlags);
   if LResult < 0 then
-    Result := WSAGetLastError
+    Result := platform_get_last_error
   else
   begin
     ASent := LResult;
@@ -1058,7 +1058,7 @@ begin
     Exit(0);
   LResult := winsock_recv(TSocket(ASocket.Value), ABuf, ALen, AFlags);
   if LResult < 0 then
-    Result := WSAGetLastError
+    Result := platform_get_last_error
   else
   begin
     ARecvd := LResult;
@@ -1072,7 +1072,7 @@ begin
   if winsock_shutdown(TSocket(ASocket.Value), AHow) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
 end;
 
 function platform_socket_setsockopt(const ASocket: TPlatformSocket;
@@ -1081,7 +1081,7 @@ begin
   if winsock_setsockopt(TSocket(ASocket.Value), ALevel, AOptName, AOptVal, AOptLen) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
 end;
 
 function platform_socket_getsockname(const ASocket: TPlatformSocket;
@@ -1090,7 +1090,7 @@ begin
   if winsock_getsockname(TSocket(ASocket.Value), AAddr, AAddrLen) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
 end;
 
 function platform_socket_getpeername(const ASocket: TPlatformSocket;
@@ -1099,7 +1099,7 @@ begin
   if winsock_getpeername(TSocket(ASocket.Value), AAddr, AAddrLen) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
 end;
 
 function platform_socket_sendto(const ASocket: TPlatformSocket;
@@ -1117,7 +1117,7 @@ begin
   if LResult < 0 then
   begin
     ASent := 0;
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
   end
   else
   begin
@@ -1141,7 +1141,7 @@ begin
   if LResult < 0 then
   begin
     ARecvd := 0;
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
   end
   else
   begin
@@ -1209,7 +1209,7 @@ begin
   if ioctlsocket(TSocket(ASocket.Value), FIONBIO, @LMode) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
 end;
 
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
@@ -1372,7 +1372,7 @@ begin
     PAnsiChar(AOptVal), AOptLen) = 0 then
     Result := 0
   else
-    Result := WSAGetLastError;
+    Result := platform_get_last_error;
 end;
 
 function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket;

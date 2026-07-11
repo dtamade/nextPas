@@ -1076,7 +1076,7 @@ begin
   if not CreateProcessW(nil, PWideChar(LCmd), nil, nil, AInheritHandles,
     LCreationFlags, LEnvPtr, LCwdPtr, @AStartupInfo,
     @AProcessInfo) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Result := 0;
 end;
 
@@ -1116,10 +1116,10 @@ begin
     Exit(PLATFORM_ERR_TIMEDOUT);
   end;
   if LWait <> 0 then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   LExitCode := 0;
   if not GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   AResult.Status := psExited;
   AResult.ExitCode := Int32(LExitCode);
   Result := 0;
@@ -1137,7 +1137,7 @@ begin
     Exit(0);
   end;
   if LWait <> 0 then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   LExitCode := 0;
   GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode);
   AResult.Status := psExited;
@@ -1160,7 +1160,7 @@ begin
     if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then
       Result := 0
     else
-      Result := Int32(GetLastError);
+      Result := platform_get_last_error;
   end
   else
     Result := PLATFORM_ERR_UNSUPPORTED;
@@ -1185,7 +1185,7 @@ begin
   LSA.nLength := SizeOf(LSA);
   LSA.bInheritHandle := True;
   if not CreatePipe(@LReadHandle, @LWriteHandle, @LSA, 0) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   AReadHandle := PtrInt(PtrUInt(LReadHandle));
   AWriteHandle := PtrInt(PtrUInt(LWriteHandle));
   Result := 0;
@@ -1206,7 +1206,7 @@ begin
     FILE_SHARE_READ or FILE_SHARE_WRITE, nil, OPEN_EXISTING,
     FILE_ATTRIBUTE_NORMAL, nil);
   if LHandle = HANDLE(PtrInt(-1)) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   AHandle := PtrInt(PtrUInt(LHandle));
   Result := 0;
 end;
@@ -1216,7 +1216,7 @@ begin
   if AHandle < 0 then
     Exit(0);
   if not CloseHandle(HANDLE(PtrUInt(AHandle))) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   AHandle := -1;
   Result := 0;
 end;
@@ -1296,10 +1296,10 @@ begin
   LSA.nLength := SizeOf(LSA);
   LSA.bInheritHandle := True;
   if not CreatePipe(@LStdoutRd, @LStdoutWr, @LSA, 0) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   if not SetHandleInformation(LStdoutRd, HANDLE_FLAG_INHERIT, 0) then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(LStdoutRd);
     CloseHandle(LStdoutWr);
     Exit;
@@ -1311,7 +1311,7 @@ begin
     FILE_ATTRIBUTE_NORMAL, nil);
   if LDevNullRead = HANDLE(PtrInt(-1)) then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(LStdoutRd);
     CloseHandle(LStdoutWr);
     Exit;
@@ -1321,7 +1321,7 @@ begin
     FILE_ATTRIBUTE_NORMAL, nil);
   if LDevNullWrite = HANDLE(PtrInt(-1)) then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(LDevNullRead);
     CloseHandle(LStdoutRd);
     CloseHandle(LStdoutWr);
