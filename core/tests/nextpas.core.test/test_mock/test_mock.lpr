@@ -823,6 +823,107 @@ begin
   WithMock(@TestCalledInOrderEmptyImpl);
 end;
 
+{ ── VerifyInOrder (TMock method) ─────────────────────────────────────────── }
+
+procedure TestVerifyInOrderSuccessImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Init', []);
+    AMock.RecordCall('Execute', []);
+    AMock.RecordCall('Cleanup', []);
+    AMock.VerifyInOrder(['Init', 'Execute', 'Cleanup']);
+end;
+
+procedure TestVerifyInOrderSuccess;
+begin
+  WithMock(@TestVerifyInOrderSuccessImpl);
+end;
+
+procedure TestVerifyInOrderFailWrongOrderImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Execute', []);
+    AMock.RecordCall('Init', []);
+    AMock.RecordCall('Cleanup', []);
+  ExpectFail(procedure
+  begin
+      AMock.VerifyInOrder(['Init', 'Execute', 'Cleanup']);
+  end);
+end;
+
+procedure TestVerifyInOrderFailWrongOrder;
+begin
+  WithMock(@TestVerifyInOrderFailWrongOrderImpl);
+end;
+
+procedure TestVerifyInOrderFailMissingImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Init', []);
+    AMock.RecordCall('Cleanup', []);
+  ExpectFail(procedure
+  begin
+      AMock.VerifyInOrder(['Init', 'Execute', 'Cleanup']);
+  end);
+end;
+
+procedure TestVerifyInOrderFailMissing;
+begin
+  WithMock(@TestVerifyInOrderFailMissingImpl);
+end;
+
+procedure TestVerifyInOrderSingleMethodImpl(AMock: TMock);
+begin
+    AMock.RecordCall('Foo', []);
+    AMock.VerifyInOrder(['Foo']);
+end;
+
+procedure TestVerifyInOrderSingleMethod;
+begin
+  WithMock(@TestVerifyInOrderSingleMethodImpl);
+end;
+
+procedure TestVerifyInOrderEmptyImpl(AMock: TMock);
+begin
+    { Empty order list — should pass vacuously }
+    AMock.RecordCall('Foo', []);
+    AMock.VerifyInOrder([]);
+end;
+
+procedure TestVerifyInOrderEmpty;
+begin
+  WithMock(@TestVerifyInOrderEmptyImpl);
+end;
+
+{ ── GetCallHistory ───────────────────────────────────────────────────────── }
+
+procedure TestGetCallHistoryEmptyImpl(AMock: TMock);
+var
+  LHistory: string;
+begin
+    LHistory := AMock.GetCallHistory;
+    CheckTrue(Pos('no calls', LHistory) > 0, 'history says no calls when empty');
+end;
+
+procedure TestGetCallHistoryEmpty;
+begin
+  WithMock(@TestGetCallHistoryEmptyImpl);
+end;
+
+procedure TestGetCallHistoryRecordsImpl(AMock: TMock);
+var
+  LHistory: string;
+begin
+    AMock.RecordCall('Foo', ['a']);
+    AMock.RecordCall('Bar', ['b', 'c']);
+    LHistory := AMock.GetCallHistory;
+    CheckTrue(Pos('Foo', LHistory) > 0, 'history contains Foo');
+    CheckTrue(Pos('Bar', LHistory) > 0, 'history contains Bar');
+    CheckTrue(Pos('a', LHistory) > 0, 'history contains arg a');
+end;
+
+procedure TestGetCallHistoryRecords;
+begin
+  WithMock(@TestGetCallHistoryRecordsImpl);
+end;
+
 procedure TestCalledWithSuccessImpl(AMock: TMock);
 begin
     AMock.RecordCall('Foo', ['bar', 'baz']);
@@ -1604,6 +1705,17 @@ begin
   Suite.Test('TestCalledInOrderSingleMethod', @TestCalledInOrderSingleMethod);
   Suite.Test('TestCalledInOrderWithInterveningCalls', @TestCalledInOrderWithInterveningCalls);
   Suite.Test('TestCalledInOrderEmpty', @TestCalledInOrderEmpty);
+
+  { VerifyInOrder — TMock method }
+  Suite.Test('TestVerifyInOrderSuccess', @TestVerifyInOrderSuccess);
+  Suite.Test('TestVerifyInOrderFailWrongOrder', @TestVerifyInOrderFailWrongOrder);
+  Suite.Test('TestVerifyInOrderFailMissing', @TestVerifyInOrderFailMissing);
+  Suite.Test('TestVerifyInOrderSingleMethod', @TestVerifyInOrderSingleMethod);
+  Suite.Test('TestVerifyInOrderEmpty', @TestVerifyInOrderEmpty);
+
+  { GetCallHistory }
+  Suite.Test('TestGetCallHistoryEmpty', @TestGetCallHistoryEmpty);
+  Suite.Test('TestGetCallHistoryRecords', @TestGetCallHistoryRecords);
 
   { v3.1: CalledWith / CalledExactlyWith }
   Suite.Test('TestCalledWithSuccess', @TestCalledWithSuccess);
