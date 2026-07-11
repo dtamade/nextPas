@@ -480,7 +480,7 @@ test.pas (facade, 537 lines) — 纯 re-export, 无逻辑
   ├── test.discovery (177) — L4: RTTI 自动发现
   ├── test.mock (1529)     — L4: Mock 框架 (TMock + 期望验证 + 调用历史)
   ├── test.prop (2704)     — L4: 属性测试 + 模糊测试 + 语料库 + shrinking
-  ├── test.helpers (178)   — L4: ExpectFail, WithMock, MakeBufferConfig 辅助
+  ├── test.helpers (195)   — L4: ExpectFail, WithMock, MakeBufferConfig, WithTempDir, WithTempFile 辅助
   └── test.bench (206)     — L4: 测试框架与 bench 模块集成
 
 内部模块 (不在 facade re-export):
@@ -735,7 +735,7 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 | test.discovery.pas | 177 | L4 | RTTI 自动发现 |
 | test.mock.pas | 1529 | L4 | Mock 框架 |
 | test.prop.pas | 2695 | L4 | 属性测试、模糊测试、语料库 |
-| test.helpers.pas | 178 | L4 | 测试辅助 (ExpectFail, WithMock) |
+| test.helpers.pas | 195 | L4 | 测试辅助 (ExpectFail, WithMock, WithTempDir, WithTempFile) |
 | test.bench.pas | 206 | L4 | 测试框架与 bench 模块集成 |
 | test.pas | 537 | 门面 | 纯 re-export |
 | **总计** | **15208** | | |

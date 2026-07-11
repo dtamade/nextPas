@@ -27,7 +27,7 @@
 | test.output.json.pas | JSON 输出格式 | ~185 |
 | test.output.tap.pas | TAP v13 输出格式 | ~123 |
 | test.prop.pas | 属性测试 + 模糊测试 + 语料库 + shrinking | ~2704 |
-| test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig 辅助 | ~178 |
+| test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig, WithTempDir, WithTempFile 辅助 | ~195 |
 | test.bench.pas | 测试框架与 bench 模块集成 | ~206 |
 
 ---
@@ -300,7 +300,7 @@ end;
 
 ## 9. 变更日志
 
-### v8.2 (2026-07-11) — test.bench 测试覆盖 + 契约更新
+### v8.2 (2026-07-11) — test.bench 测试覆盖 + helpers 增强
 
 **新增**：
 - `test_bench` 测试套件（22 tests / 53 assertions）：完整覆盖 `nextpas.core.test.bench` 全部公共 API
@@ -310,11 +310,11 @@ end;
   - `CheckBenchPerformance` 3 个测试（通过/失败/未执行）
   - `CheckBenchThroughput` 3 个测试（通过/失败/未执行）
   - 自定义消息转发 2 个测试
+- `WithTempFile` 辅助函数：创建临时文件、执行回调、自动清理（与 `WithTempDir` 对称）
 
 **更新**：
 - CONTRACT.md 测试覆盖表从 ~500+ 更新为 819 测试过程 / 2276 断言（精确计数）
-- 新增 `test_bench` 行到覆盖表
-- 各套件测试计数修正为实际值
+- `test.helpers.pas` 行数更新 ~178 → ~195
 
 ### v8.1 (2026-07-11) — 第二轮深度审查
 

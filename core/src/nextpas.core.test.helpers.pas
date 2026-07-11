@@ -5,7 +5,9 @@
 
   ExpectFail       — verify that a closure raises EAssertionFailed
   WithMock         — create+run+free a TMock in one call
-  ExpectFailWithMock — mock lifecycle + assertion-failure check }
+  ExpectFailWithMock — mock lifecycle + assertion-failure check
+  WithTempDir      — create/cleanup temp directory
+  WithTempFile     — create/cleanup temp file }
 unit nextpas.core.test.helpers;
 
 {$I nextpas.core.settings.inc}
@@ -22,6 +24,7 @@ uses
 type
   TMockProc = procedure(AMock: TMock);
   TTempDirProc = procedure(const ADir: string);
+  TTempFileProc = procedure(const APath: string);
 
 { Verify closure raises EAssertionFailed.
   Optional AContains: substring check on the message. }
@@ -58,6 +61,17 @@ function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
       CheckTrue(FileExists(Dir + '/test.txt'));
     end); }
 procedure WithTempDir(AProc: TTempDirProc);
+
+{ Create a temporary file, run AProc(path), then delete it.
+  The file is always cleaned up, even on exception.
+  AExt: file extension (default '.tmp').
+  Example:
+    WithTempFile(procedure(const Path: string)
+    begin
+      WriteFileContents(Path, 'hello');
+      CheckTrue(FileExists(Path));
+    end); }
+procedure WithTempFile(AProc: TTempFileProc; const AExt: string = '.tmp');
 
 implementation
 
@@ -169,6 +183,29 @@ begin
   finally
     try
       RemoveAll(LDir);
+    except
+      { Cleanup failure should not mask the original test exception }
+    end;
+  end;
+end;
+
+procedure WithTempFile(AProc: TTempFileProc; const AExt: string);
+var
+  LBaseDir, LPath: string;
+begin
+  LBaseDir := platform_env_get_str('TMPDIR');
+  if LBaseDir = '' then
+    LBaseDir := '/tmp';
+  LBaseDir := IncludeTrailingPathDelimiter(LBaseDir);
+  LPath := LBaseDir + 'nextpas_tmp_' +
+    IntToStr(Int64(@AProc)) + '_' +
+    IntToStr(GetTickCount64) + AExt;
+  try
+    AProc(LPath);
+  finally
+    try
+      if FileExists(LPath) then
+        DeleteFile(LPath);
     except
       { Cleanup failure should not mask the original test exception }
     end;
