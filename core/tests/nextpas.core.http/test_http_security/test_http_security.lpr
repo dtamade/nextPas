@@ -267,6 +267,11 @@ begin
         ATimedOut := True;
         Break;
       end;
+      on ETimeoutError do
+      begin
+        ATimedOut := True;
+        Break;
+      end;
     end;
     if LN = 0 then
     begin
