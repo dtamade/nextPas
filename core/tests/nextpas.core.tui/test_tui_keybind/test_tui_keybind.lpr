@@ -10,6 +10,17 @@ uses
 var
   T: TTestSuite;
   GActionCalled: Boolean;
+  GMethodCalled: Boolean;
+
+type
+  THelper = class
+    procedure MethodAction;
+  end;
+
+procedure THelper.MethodAction;
+begin
+  GMethodCalled := True;
+end;
 
 procedure DummyAction;
 begin
@@ -201,6 +212,124 @@ begin
   LMgr.BindKey(kmNormal, kcEnter, @DummyAction, 'Confirm');
   LHelp := LMgr.HelpText;
   Check(Length(LHelp) > 0, 'Help text should not be empty');
+  Check(Pos('[N]', LHelp) > 0, 'Help text should contain mode prefix [N]');
+  Check(Pos('q', LHelp) > 0, 'Help text should contain key q');
+  Check(Pos('Enter', LHelp) > 0, 'Help text should contain Enter');
+  Check(Pos('Quit', LHelp) > 0, 'Help text should contain description');
+  LMgr.Free;
+end;
+
+procedure TestKeybindManagerHandleKeyAlt;
+var
+  LMgr: TKeybindManager;
+  LKey: TKeyEvent;
+  LHandled: Boolean;
+begin
+  GActionCalled := False;
+  LMgr := TKeybindManager.Create;
+  LMgr.BindAlt(kmNormal, 'x', @DummyAction, 'Cut');
+  LKey.Code := kcChar;
+  LKey.Ch := Ord('x');
+  LKey.Modifiers := [kmAlt];
+  LHandled := LMgr.HandleKey(LKey);
+  Check(LHandled, 'Should handle Alt+X');
+  Check(GActionCalled, 'Action should be called for Alt+X');
+  LMgr.Free;
+end;
+
+procedure TestKeybindManagerHandleKeyModifierMismatch;
+var
+  LMgr: TKeybindManager;
+  LKey: TKeyEvent;
+  LHandled: Boolean;
+begin
+  GActionCalled := False;
+  LMgr := TKeybindManager.Create;
+  LMgr.BindCtrl(kmNormal, 'c', @DummyAction, 'Copy');
+  // Press 'c' without Ctrl — should NOT match
+  LKey.Code := kcChar;
+  LKey.Ch := Ord('c');
+  LKey.Modifiers := [];
+  LHandled := LMgr.HandleKey(LKey);
+  Check(not LHandled, 'Should not handle c without Ctrl modifier');
+  Check(not GActionCalled, 'Action should not be called');
+  LMgr.Free;
+end;
+
+procedure TestKeybindManagerMethodBinding;
+var
+  LMgr: TKeybindManager;
+  LHelper: THelper;
+  LKey: TKeyEvent;
+  LHandled: Boolean;
+begin
+  GMethodCalled := False;
+  LHelper := THelper.Create;
+  LMgr := TKeybindManager.Create;
+  LMgr.BindCharMethod(kmNormal, 's', @LHelper.MethodAction, 'Save');
+  Check(LMgr.BindingCount = 1, 'Should have 1 method binding');
+  Check(LMgr.GetBinding(0).ActionKind = kaMethod, 'Should be method kind');
+  LKey.Code := kcChar;
+  LKey.Ch := Ord('s');
+  LKey.Modifiers := [];
+  LHandled := LMgr.HandleKey(LKey);
+  Check(LHandled, 'Should handle s key via method');
+  Check(GMethodCalled, 'Method action should be called');
+  LMgr.Free;
+  LHelper.Free;
+end;
+
+procedure TestKeybindManagerFirstNoMatchSecondMatch;
+var
+  LMgr: TKeybindManager;
+  LKey: TKeyEvent;
+  LHandled: Boolean;
+  LSecondCalled: Boolean;
+begin
+  GActionCalled := False;
+  LSecondCalled := False;
+  LMgr := TKeybindManager.Create;
+  LMgr.BindChar(kmNormal, 'a', @DummyAction, 'Action A');
+  // Bind a different char as second
+  LMgr.BindCtrl(kmNormal, 'c', @DummyAction, 'Action C');
+  // Press Ctrl+C — should match second binding
+  LKey.Code := kcChar;
+  LKey.Ch := Ord('c');
+  LKey.Modifiers := [kmCtrl];
+  LHandled := LMgr.HandleKey(LKey);
+  Check(LHandled, 'Should handle Ctrl+C (second binding)');
+  Check(GActionCalled, 'Action should be called');
+  LMgr.Free;
+end;
+
+procedure TestKeybindManagerHandleKeyShift;
+var
+  LMgr: TKeybindManager;
+  LKey: TKeyEvent;
+  LHandled: Boolean;
+begin
+  GActionCalled := False;
+  LMgr := TKeybindManager.Create;
+  LMgr.Bind(kmNormal, kcChar, Ord('Z'), [kmShift], @DummyAction, 'Shift+Z');
+  LKey.Code := kcChar;
+  LKey.Ch := Ord('Z');
+  LKey.Modifiers := [kmShift];
+  LHandled := LMgr.HandleKey(LKey);
+  Check(LHandled, 'Should handle Shift+Z');
+  Check(GActionCalled, 'Action should be called for Shift+Z');
+  LMgr.Free;
+end;
+
+procedure TestKeybindManagerHelpTextCtrl;
+var
+  LMgr: TKeybindManager;
+  LHelp: AnsiString;
+begin
+  LMgr := TKeybindManager.Create;
+  LMgr.BindCtrl(kmInsert, 's', @DummyAction, 'Save');
+  LHelp := LMgr.HelpText;
+  Check(Pos('[I]', LHelp) > 0, 'Help text should show Insert mode as [I]');
+  Check(Pos('C-s', LHelp) > 0, 'Help text should show Ctrl prefix');
   LMgr.Free;
 end;
 
@@ -219,5 +348,11 @@ begin
   T.Test('TKeybindManager.HandleKey Ctrl', @TestKeybindManagerHandleKeyCtrl);
   T.Test('TKeybindManager.HandleKey Enter', @TestKeybindManagerHandleKeyEnter);
   T.Test('TKeybindManager.HelpText', @TestKeybindManagerHelpText);
+  T.Test('TKeybindManager.HandleKey Alt', @TestKeybindManagerHandleKeyAlt);
+  T.Test('TKeybindManager.HandleKey modifier mismatch', @TestKeybindManagerHandleKeyModifierMismatch);
+  T.Test('TKeybindManager.MethodBinding', @TestKeybindManagerMethodBinding);
+  T.Test('TKeybindManager first no match second match', @TestKeybindManagerFirstNoMatchSecondMatch);
+  T.Test('TKeybindManager.HandleKey Shift', @TestKeybindManagerHandleKeyShift);
+  T.Test('TKeybindManager.HelpText Ctrl mode', @TestKeybindManagerHelpTextCtrl);
   if not T.Run then Halt(1);
 end.
