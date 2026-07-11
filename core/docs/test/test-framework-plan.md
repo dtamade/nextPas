@@ -198,42 +198,42 @@ S.Test('no leak', @MyTest);
 
 ## 实施阶段
 
-### Phase 1: 基础骨架（~400 行）
-- [ ] ETestFailure, ETestSkipped 异常类
-- [ ] TTestEntry, TSuiteEntry 记录
-- [ ] TTestSuite 核心（Create, Test, SetSetup/Teardown, Run, Summary）
-- [ ] 基础 ANSI 颜色输出
-- [ ] 基础过滤
+### Phase 1: 基础骨架（~400 行）✅
+- [x] ETestFailure, ETestSkipped 异常类
+- [x] TTestEntry, TSuiteEntry 记录
+- [x] TTestSuite 核心（Create, Test, SetSetup/Teardown, Run, Summary）
+- [x] 基础 ANSI 颜色输出
+- [x] 基础过滤
 
-### Phase 2: Check* API（~200 行）
-- [ ] Check, CheckEqual (4 重载), CheckNotEqual
-- [ ] CheckTrue, CheckFalse, CheckNil, CheckNotNil
-- [ ] CheckContains, CheckStartsWith, CheckEndsWith
-- [ ] CheckSame, CheckInRange, CheckLength
-- [ ] CheckRaises, CheckNoRaise
-- [ ] Fail, Skip
+### Phase 2: Check* API（~200 行）✅
+- [x] Check, CheckEqual (4 重载), CheckNotEqual
+- [x] CheckTrue, CheckFalse, CheckNil, CheckNotNil
+- [x] CheckContains, CheckStartsWith, CheckEndsWith
+- [x] CheckSame, CheckInRange, CheckLength
+- [x] CheckRaises, CheckNoRaise
+- [x] Fail, Skip
 
-### Phase 3: IExpectation API（~300 行）
-- [ ] TExpectation 类 + IExpectation 接口
-- [ ] Expect 5 重载（string, Int64, Boolean, Pointer, TTestProc）
-- [ ] Not_ 切换
-- [ ] 所有 To* 方法实现
-- [ ] 自定义失败消息支持
+### Phase 3: IExpectation API（~300 行）✅
+- [x] TExpectation 类 + IExpectation 接口
+- [x] Expect 5 重载（string, Int64, Boolean, Pointer, TTestProc）
+- [x] Not_ 切换
+- [x] 所有 To* 方法实现
+- [x] 自定义失败消息支持
 
-### Phase 4: 并行 + Runner（~200 行）
-- [ ] TSuiteRunner 记录
-- [ ] RunParallel（IThreadPool + TAtomicInt32 + IMutex）
-- [ ] 命令行过滤参数解析
-- [ ] 子测试 (Ctx.Run) 支持
-- [ ] HeapTrace 泄漏检测
+### Phase 4: 并行 + Runner（~200 行）✅
+- [x] TSuiteRunner 记录
+- [x] RunParallel（IThreadPool + TAtomicInt32 + IMutex）
+- [x] 命令行过滤参数解析
+- [x] 子测试 (Ctx.Run) 支持
+- [x] HeapTrace 泄漏检测
 
-### Phase 5: 测试 + 文档（~800 行测试代码）
-- [ ] test_assertions — Check* API 全覆盖
-- [ ] test_expect — IExpectation API 全覆盖
-- [ ] test_runner — Runner 功能测试
-- [ ] test_parallel — 并行正确性测试
-- [ ] test_subtests — 子测试功能测试
-- [ ] docs/test/README.md 文档
+### Phase 5: 测试 + 文档（~800 行测试代码）✅
+- [x] test_assertions — Check* API 全覆盖
+- [x] test_expect — IExpectation API 全覆盖
+- [x] test_runner — Runner 功能测试
+- [x] test_parallel — 并行正确性测试
+- [x] test_subtests — 子测试功能测试
+- [x] docs/test/README.md 文档
 
 ## 验收标准
 
