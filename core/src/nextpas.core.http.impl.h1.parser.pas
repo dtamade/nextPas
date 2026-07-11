@@ -311,9 +311,26 @@ end;
 function CapturedHeaderValueTrimmedToInt64(const AValue: string;
   const AValuePtr: PAnsiChar; const AValueLen: SizeUInt;
   out AResult: Int64): Boolean; inline;
+var
+  LTrimmed: string;
+  LStart: SizeUInt;
 begin
   if AValue <> '' then
-    Exit(TryStrToInt64(TextTrim(AValue), AResult));
+  begin
+    LTrimmed := TextTrim(AValue);
+    // RFC 9110 §8.6: leading zeros in Content-Length are invalid
+    if (Length(LTrimmed) > 1) and (LTrimmed[1] = '0') then
+      Exit(False);
+    Exit(TryStrToInt64(LTrimmed, AResult));
+  end;
+  // Zero-copy path: skip leading spaces, then check for leading zeros
+  LStart := 0;
+  while (LStart < AValueLen) and (AValuePtr[LStart] = ' ') do
+    Inc(LStart);
+  if (LStart < AValueLen) and (AValuePtr[LStart] = '0') and
+     ((LStart + 1 < AValueLen) and (AValuePtr[LStart + 1] >= '0') and
+      (AValuePtr[LStart + 1] <= '9')) then
+    Exit(False);
   Result := TryParseTrimmedInt64Span(AValuePtr, AValueLen, AResult);
 end;
 

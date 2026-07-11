@@ -478,6 +478,9 @@ begin
   Result := 0;
   if ALen = 0 then
     Exit(-1);
+  // RFC 9110 §8.6: leading zeros in Content-Length are invalid
+  if (ALen > 1) and (ABuf[0] = '0') then
+    Exit(-1);
   for LI := 0 to ALen - 1 do
   begin
     if (ABuf[LI] < '0') or (ABuf[LI] > '9') then

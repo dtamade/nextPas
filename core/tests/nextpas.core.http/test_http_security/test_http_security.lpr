@@ -3754,7 +3754,7 @@ begin
   RunExpectEarlyRejectSecurityCase(
     LOpts,
     REQ,
-    'HTTP/1.1 413 Payload Too Large',
+    'HTTP/1.1 400 Bad Request',
     'epoll Expect huge Content-Length early reject');
 end;
 
