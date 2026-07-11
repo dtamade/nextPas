@@ -78,6 +78,14 @@ begin
 
   LResults := SegmentSentences('Hello. World!');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Two sentences');
+
+  // 测试 CJK 句子结束符
+  LResults := SegmentSentences('你好。世界！');
+  CheckEqual(Int64(2), Int64(Length(LResults)), 'Two CJK sentences');
+
+  // 测试句子后的引号
+  LResults := SegmentSentences('He said "Hello." She replied.');
+  CheckEqual(Int64(2), Int64(Length(LResults)), 'Sentence with closing quote');
 end;
 
 procedure TestCollation;

@@ -329,6 +329,18 @@ begin
       // 但需要检查下一个字符是否是字母
       LPrevCategory := LCategory;
       Inc(Result, LDecode.ByteLen);
+      // 如果连字符后面不是字母，则单词在此结束
+      if Result <= LLen then
+      begin
+        LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+        if LDecode.ByteLen = 0 then
+          Break;
+        LCodepoint := LDecode.CodePoint;
+        LCategory := GetGeneralCategory(LCodepoint);
+        if not (LCategory in [gcuUppercaseLetter, gcuLowercaseLetter, gcuTitlecaseLetter,
+                             gcuModifierLetter, gcuOtherLetter]) then
+          Break;
+      end;
       Continue;
     end
     else
@@ -339,13 +351,6 @@ begin
 
     LPrevCategory := LCategory;
     Inc(Result, LDecode.ByteLen);
-  end;
-
-  // 如果以连字符结尾，回退一个字符
-  if LInWord and (LPrevCategory = gcuDashPunctuation) then
-  begin
-    // 需要回退一个字符
-    // 这里简化处理，实际应该记录位置
   end;
 end;
 
@@ -430,7 +435,7 @@ begin
     Exit;
   end;
 
-  // 简单实现：查找句子结束符
+  // 基于 UAX #29 简化实现：查找句子结束符
   Result := APos;
   LInSentence := False;
   while Result <= LLen do
@@ -440,20 +445,50 @@ begin
     if LDecode.ByteLen = 0 then
     begin
       // 无效的 UTF-8 序列，跳过一个字节
+      if LInSentence then
+        Break;
       Inc(Result);
       Continue;
     end;
     LCodepoint := LDecode.CodePoint;
 
-    // 检查句子结束符
+    // 检查句子结束符（ASCII + CJK + 其他 Unicode 终止符）
     case LCodepoint of
       $002E, // .
       $003F, // ?
-      $0021: // !
+      $0021, // !
+      $3002, // 。 IDEOGRAPHIC FULL STOP
+      $FF01, // ！ FULLWIDTH EXCLAMATION MARK
+      $FF1F: // ？ FULLWIDTH QUESTION MARK
       begin
         Inc(Result, LDecode.ByteLen);
         LInSentence := True;
-        // 遇到句子结束符后停止
+        // 遇到句子结束符后，跳过结尾引号/括号再停止
+        while Result <= LLen do
+        begin
+          LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
+          if LDecode.ByteLen = 0 then
+            Break;
+          LCodepoint := LDecode.CodePoint;
+          // 跳过结尾标点：引号、括号等
+          case LCodepoint of
+            $0022, // "
+            $0027, // '
+            $0029, // )
+            $005D, // ]
+            $007D, // }
+            $FF07, // ＇ FULLWIDTH APOSTROPHE
+            $FF09, // ） FULLWIDTH RIGHT PARENTHESIS
+            $300D, // 」 RIGHT CORNER BRACKET
+            $300F, // 』 RIGHT WHITE CORNER BRACKET
+            $3011, // 】 RIGHT BLACK LENTICULAR BRACKET
+            $2019, // ' RIGHT SINGLE QUOTATION MARK
+            $201D: // " RIGHT DOUBLE QUOTATION MARK
+              Inc(Result, LDecode.ByteLen);
+          else
+            Break;
+          end;
+        end;
         Break;
       end;
       $000A, // LF
