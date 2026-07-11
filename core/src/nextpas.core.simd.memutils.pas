@@ -401,6 +401,41 @@ begin
   pD := dst;
   remaining := size;
 
+  // Large copy path with prefetching (> 4KB)
+  if remaining >= 4096 then
+  begin
+    // Copy 128 bytes at a time with prefetch (8 x 16 bytes)
+    while remaining >= 128 do
+    begin
+      asm
+        mov rax, pS
+        mov rdx, pD
+        // Prefetch next cache line
+        prefetchnta [rax + 256]
+        // Copy 128 bytes
+        movdqu xmm0, [rax]
+        movdqu xmm1, [rax + 16]
+        movdqu xmm2, [rax + 32]
+        movdqu xmm3, [rax + 48]
+        movdqu xmm4, [rax + 64]
+        movdqu xmm5, [rax + 80]
+        movdqu xmm6, [rax + 96]
+        movdqu xmm7, [rax + 112]
+        movdqu [rdx], xmm0
+        movdqu [rdx + 16], xmm1
+        movdqu [rdx + 32], xmm2
+        movdqu [rdx + 48], xmm3
+        movdqu [rdx + 64], xmm4
+        movdqu [rdx + 80], xmm5
+        movdqu [rdx + 96], xmm6
+        movdqu [rdx + 112], xmm7
+      end;
+      Inc(pS, 128);
+      Inc(pD, 128);
+      Dec(remaining, 128);
+    end;
+  end;
+
   // Copy 64 bytes at a time (4 x 16 bytes)
   while remaining >= 64 do
   begin
