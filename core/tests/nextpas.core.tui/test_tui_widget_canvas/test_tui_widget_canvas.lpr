@@ -197,6 +197,89 @@ begin
     Check(LCanvas.GetDot(I, I), 'Dot should be set at (' + IntToStr(I) + ',' + IntToStr(I) + ')');
 end;
 
+procedure TestCanvasRenderEmpty;
+var
+  LCanvas: ICanvas;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LCanvas := TCanvas.New(5, 5);
+  LArea := TRect.Make(0, 0, 10, 10);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LCanvas.Render(LArea, LBuffer);
+    Check(True, 'Render empty canvas should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestCanvasRenderSmallArea;
+var
+  LCanvas: ICanvas;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LCanvas := TCanvas.New(10, 10);
+  LCanvas.SetDot(0, 0);
+  LArea := TRect.Make(0, 0, 2, 2);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LCanvas.Render(LArea, LBuffer);
+    Check(True, 'Render in small area should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestCanvasDrawLineZeroLength;
+var
+  LCanvas: ICanvas;
+begin
+  LCanvas := TCanvas.New(10, 10);
+  LCanvas.DrawLine(5, 5, 5, 5);
+  Check(LCanvas.GetDot(5, 5), 'Zero-length line should set dot at (5,5)');
+end;
+
+procedure TestCanvasDrawRectZeroSize;
+var
+  LCanvas: ICanvas;
+begin
+  LCanvas := TCanvas.New(10, 10);
+  LCanvas.DrawRect(3, 3, 3, 3);
+  Check(LCanvas.GetDot(3, 3), 'Zero-size rect should set dot at (3,3)');
+end;
+
+procedure TestCanvasDrawCircleZeroRadius;
+var
+  LCanvas: ICanvas;
+begin
+  LCanvas := TCanvas.New(10, 10);
+  LCanvas.DrawCircle(5, 5, 0);
+  Check(LCanvas.GetDot(5, 5), 'Zero-radius circle should set dot at center');
+end;
+
+procedure TestCanvasSetDotBoundary;
+var
+  LCanvas: ICanvas;
+begin
+  LCanvas := TCanvas.New(10, 10);
+  LCanvas.SetDot(-1, 0);
+  LCanvas.SetDot(0, -1);
+  LCanvas.SetDot(20, 0);
+  LCanvas.SetDot(0, 40);
+  Check(True, 'SetDot out of bounds should not crash');
+end;
+
+procedure TestCanvasClearDotNotSet;
+var
+  LCanvas: ICanvas;
+begin
+  LCanvas := TCanvas.New(10, 10);
+  LCanvas.ClearDot(5, 5);
+  Check(not LCanvas.GetDot(5, 5), 'ClearDot on unset dot should be no-op');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.canvas');
   T.Test('TCanvas.New', @TestCanvasNew);
@@ -214,5 +297,12 @@ begin
   T.Test('TCanvas.WithStyle', @TestCanvasWithStyle);
   T.Test('TCanvas.Render', @TestCanvasRender);
   T.Test('TCanvas multiple dots', @TestCanvasMultipleDots);
+  T.Test('TCanvas.Render empty', @TestCanvasRenderEmpty);
+  T.Test('TCanvas.Render small area', @TestCanvasRenderSmallArea);
+  T.Test('TCanvas.DrawLine zero length', @TestCanvasDrawLineZeroLength);
+  T.Test('TCanvas.DrawRect zero size', @TestCanvasDrawRectZeroSize);
+  T.Test('TCanvas.DrawCircle zero radius', @TestCanvasDrawCircleZeroRadius);
+  T.Test('TCanvas.SetDot boundary', @TestCanvasSetDotBoundary);
+  T.Test('TCanvas.ClearDot not set', @TestCanvasClearDotNotSet);
   if not T.Run then Halt(1);
 end.
