@@ -75,11 +75,11 @@ type
     function Remove(AKey: Int64): TRBTreeResult;
     function Find(AKey: Int64; out AValue: Int64): Boolean;
     function Contains(AKey: Int64): Boolean;
-    function GetCount: Int64;
+    function GetCount: Int64; inline;
     procedure ForEach(ACallback: TRBForEachCallback);
     procedure Clear;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -476,7 +476,7 @@ begin
   end;
 end;
 
-function TConcurrentRBTree.GetCount: Int64;
+function TConcurrentRBTree.GetCount: Int64; inline;
 begin
   Result := AtomicLoad64(FCount, moRelaxed);
 end;
@@ -539,7 +539,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TConcurrentRBTree.IsClosed: Boolean;
+function TConcurrentRBTree.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

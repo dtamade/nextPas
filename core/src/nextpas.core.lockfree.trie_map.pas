@@ -104,9 +104,9 @@ type
     {** @desc 删除键值对 }
     function Remove(const AKey: AnsiString): TTrieMapResult;
     {** @desc 当前元素数量 }
-    function Count: Int32;
+    function Count: Int32; inline;
     {** @desc 是否为空 }
-    function IsEmpty: Boolean;
+    function IsEmpty: Boolean; inline;
     {** @desc 清空所有元素 }
     procedure Clear;
     {** @desc 遍历所有键值对 }
@@ -409,12 +409,12 @@ begin
   end;
 end;
 
-function TConcurrentTrieMap.Count: Int32;
+function TConcurrentTrieMap.Count: Int32; inline;
 begin
   Result := AtomicLoad32(FSize);
 end;
 
-function TConcurrentTrieMap.IsEmpty: Boolean;
+function TConcurrentTrieMap.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad32(FSize) = 0;
 end;

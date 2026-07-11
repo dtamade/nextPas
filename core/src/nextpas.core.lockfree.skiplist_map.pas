@@ -84,9 +84,9 @@ type
     {** @desc 删除键值对 }
     function Remove(const AKey: AnsiString): TSkipListMapResult;
     {** @desc 当前元素数量 }
-    function Count: Int32;
+    function Count: Int32; inline;
     {** @desc 是否为空 }
-    function IsEmpty: Boolean;
+    function IsEmpty: Boolean; inline;
     {** @desc 清空所有元素 }
     procedure Clear;
     {** @desc 最小的键值对 }
@@ -341,12 +341,12 @@ begin
   end;
 end;
 
-function TConcurrentSkipListMap.Count: Int32;
+function TConcurrentSkipListMap.Count: Int32; inline;
 begin
   Result := AtomicLoad32(FSize);
 end;
 
-function TConcurrentSkipListMap.IsEmpty: Boolean;
+function TConcurrentSkipListMap.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad32(FSize) = 0;
 end;

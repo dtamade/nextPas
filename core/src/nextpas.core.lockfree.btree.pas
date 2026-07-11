@@ -116,7 +116,7 @@ type
 
     {** @desc 获取元素数量
       @return 元素数量 }
-    function Count: Integer;
+    function Count: Integer; inline;
 
     {** @desc 遍历所有元素
       @param ACallback 回调函数 }
@@ -676,7 +676,7 @@ begin
   Result := Find(AKey, LDummy);
 end;
 
-function TConcurrentBTreeImpl.Count: Integer;
+function TConcurrentBTreeImpl.Count: Integer; inline;
 begin
   Result := AtomicLoad32(FSize, moRelaxed);
 end;
