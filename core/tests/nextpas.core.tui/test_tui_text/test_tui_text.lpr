@@ -120,6 +120,69 @@ begin
   CheckEqual(Int64(1), Int64(LText.Height), 'single line');
 end;
 
+procedure TestSpanColored;
+var
+  LSpan: TSpan;
+begin
+  LSpan := TSpan.Colored('test', TUI_GREEN);
+  Check(ColorEquals(LSpan.Style.Fg, TUI_GREEN), 'Colored sets fg');
+  CheckEqual('test', LSpan.Content, 'Colored content');
+end;
+
+procedure TestSpanBold;
+var
+  LSpan: TSpan;
+begin
+  LSpan := TSpan.Bold('bold');
+  Check(mbBold in LSpan.Style.AddMod, 'Bold sets bold modifier');
+  CheckEqual('bold', LSpan.Content, 'Bold content');
+end;
+
+procedure TestSpanEmpty;
+var
+  LSpan: TSpan;
+begin
+  LSpan := TSpan.Raw('');
+  CheckEqual('', LSpan.Content, 'Empty span content');
+  CheckEqual(Int64(0), Int64(LSpan.Width), 'Empty span width 0');
+end;
+
+procedure TestLineEmpty;
+var
+  LLine: TLine;
+begin
+  LLine := TLine.Empty;
+  CheckEqual(Int64(0), Int64(System.Length(LLine.Spans)), 'Empty line has 0 spans');
+  CheckEqual(Int64(0), Int64(LLine.Width), 'Empty line width 0');
+end;
+
+procedure TestTextEmpty;
+var
+  LText: TText;
+begin
+  LText := TText.Empty;
+  CheckEqual(Int64(0), Int64(LText.Height), 'Empty text height 0');
+  CheckEqual(Int64(0), Int64(LText.Width), 'Empty text width 0');
+end;
+
+procedure TestTextRaw;
+var
+  LText: TText;
+begin
+  LText := TText.Raw('hello');
+  CheckEqual(Int64(1), Int64(LText.Height), 'Raw height 1');
+  CheckEqual(Int64(5), Int64(LText.Width), 'Raw width 5');
+end;
+
+procedure TestLineAlignmentLeft;
+var
+  LLine: TLine;
+begin
+  LLine := TLine.FromString('x').WithAlignment(caLeft);
+  Check(LLine.HasAlignment, 'has alignment');
+  Check(LLine.Alignment = caLeft, 'left alignment');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.text');
   T.Test('span raw', @TestSpanRaw);
@@ -134,5 +197,12 @@ begin
   T.Test('text trailing lf', @TestTextTrailingLF);
   T.Test('text from lines', @TestTextFromLines);
   T.Test('text styled', @TestTextStyled);
+  T.Test('span colored', @TestSpanColored);
+  T.Test('span bold', @TestSpanBold);
+  T.Test('span empty', @TestSpanEmpty);
+  T.Test('line empty', @TestLineEmpty);
+  T.Test('text empty', @TestTextEmpty);
+  T.Test('text raw', @TestTextRaw);
+  T.Test('line alignment left', @TestLineAlignmentLeft);
   if not T.Run then Halt(1);
 end.
