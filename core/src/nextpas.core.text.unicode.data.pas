@@ -113,7 +113,8 @@ end;
 
 function TUnicodeDataManager.GetDecompositionMapping(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap; out AIsCompatibility: Boolean): Byte;
 begin
-  // TODO: 实现分解映射查询
+  // 未实现：normalize.pas 使用独立的数据表，不依赖此接口
+  Assert(False, 'GetDecompositionMapping not implemented — use normalize.pas directly');
   AIsCompatibility := False;
   ADst[0] := ACp;
   Result := 1;
@@ -121,13 +122,15 @@ end;
 
 function TUnicodeDataManager.GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte;
 begin
-  // TODO: 实现规范组合类查询
+  // 未实现：normalize.pas 使用独立的数据表，不依赖此接口
+  Assert(False, 'GetCanonicalCombiningClass not implemented — use normalize.pas directly');
   Result := 0;
 end;
 
 function TUnicodeDataManager.GetCompositionExclusion(const ACp: TUnicodeCodepoint): Boolean;
 begin
-  // TODO: 实现组合排除查询
+  // 未实现：normalize.pas 使用独立的数据表，不依赖此接口
+  Assert(False, 'GetCompositionExclusion not implemented — use normalize.pas directly');
   Result := False;
 end;
 
