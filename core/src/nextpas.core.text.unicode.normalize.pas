@@ -21,6 +21,7 @@ function IsNormalizedNFKC(const s: string): Boolean;
 // 快速检查：返回 True 表示确定已规范化，False 表示可能未规范化
 // 比完整规范化快得多，适合"先快速检查再决定是否规范化"的模式
 function QuickCheckNFD(const s: string): Boolean;
+function QuickCheckNFKD(const s: string): Boolean;
 function QuickCheckNFC(const s: string): Boolean;
 
 // 获取码点的 Canonical Combining Class (CCC)
@@ -453,6 +454,8 @@ end;
 
 function IsNormalizedNFKD(const s: string): Boolean;
 begin
+  if QuickCheckNFKD(s) then
+    Exit(True);
   Result := NFKD(s) = s;
 end;
 
@@ -470,7 +473,8 @@ var
   LKind: Byte;
 begin
   // QuickCheck NFD: 检查是否已经是 NFD 形式
-  // 条件：没有可分解字符 + combining class 非递减
+  // 条件：没有规范可分解字符(LKind=1) + combining class 非递减
+  // 注意：兼容分解(LKind=2)在 NFD 中是允许的
   if s = '' then
     Exit(True);
   if IsAsciiString(s) then
@@ -480,15 +484,48 @@ begin
   LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
   while LIter.Next(LCp) do
   begin
-    // 检查是否可以分解（canonical 或 compatibility）
+    // 检查是否有规范分解（kind=1）
     LKind := GetDecompositionKind(LCp);
-    if LKind <> 0 then
-      Exit(False); // 有可分解字符，肯定不是 NFD
+    if LKind = 1 then
+      Exit(False); // 有规范可分解字符，不是 NFD
 
     // 检查 combining class 顺序
     LCcc := GetCanonicalCombiningClass(LCp);
     if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
       Exit(False); // combining class 递减，不是 NFD
+    LPrevCcc := LCcc;
+  end;
+  Result := True;
+end;
+
+function QuickCheckNFKD(const s: string): Boolean;
+var
+  LIter: TUTF8Iterator;
+  LCp: UInt32;
+  LPrevCcc: Byte;
+  LCcc: Byte;
+  LKind: Byte;
+begin
+  // QuickCheck NFKD: 检查是否已经是 NFKD 形式
+  // 条件：没有可分解字符(规范或兼容) + combining class 非递减
+  if s = '' then
+    Exit(True);
+  if IsAsciiString(s) then
+    Exit(True);
+
+  LPrevCcc := 0;
+  LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
+  while LIter.Next(LCp) do
+  begin
+    // 检查是否有任何分解（kind=1 规范 或 kind=2 兼容）
+    LKind := GetDecompositionKind(LCp);
+    if LKind <> 0 then
+      Exit(False);
+
+    // 检查 combining class 顺序
+    LCcc := GetCanonicalCombiningClass(LCp);
+    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
+      Exit(False);
     LPrevCcc := LCcc;
   end;
   Result := True;

@@ -117,6 +117,13 @@ begin
   // Hangul
   Check(IsNormalizedNFKD(Utf8Of([$1100, $1161, $11A8])), 'Hangul decomposed is NFKD');
   Check(not IsNormalizedNFKD(Utf8Of([$AC01])), 'Hangul composed is not NFKD');
+
+  // QuickCheck NFKD
+  Check(QuickCheckNFKD(''), 'empty is NFKD');
+  Check(QuickCheckNFKD('ASCII'), 'ASCII is NFKD');
+  Check(not QuickCheckNFKD(Utf8Of([$210C])), 'black-letter H is not NFKD (QuickCheck)');
+  Check(not QuickCheckNFKD(Utf8Of([$00E9])), 'precomposed e acute is not NFKD (QuickCheck)');
+  Check(QuickCheckNFKD(Utf8Of([$0061, $0301])), 'decomposed e acute is NFKD (QuickCheck)');
 end;
 
 procedure TestQuickCheck;
@@ -129,6 +136,9 @@ begin
   LDecomposed := Utf8Of([$0061, $0306, $0301]);
   Check(QuickCheckNFD(LDecomposed), 'decomposed a+breve+acute is NFD');
   Check(not QuickCheckNFD(Utf8Of([$00E9])), 'precomposed e acute is not NFD');
+
+  // NFD allows compatibility characters (they don't decompose canonically)
+  Check(QuickCheckNFD(Utf8Of([$210C])), 'black-letter H is NFD (compat allowed)');
 
   // QuickCheck NFC
   Check(QuickCheckNFC(''), 'empty is NFC');

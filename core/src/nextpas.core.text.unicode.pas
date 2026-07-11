@@ -92,6 +92,7 @@ function IsNormalizedNFC(const s: string): Boolean; inline;
 function IsNormalizedNFKD(const s: string): Boolean; inline;
 function IsNormalizedNFKC(const s: string): Boolean; inline;
 function QuickCheckNFD(const s: string): Boolean; inline;
+function QuickCheckNFKD(const s: string): Boolean; inline;
 function QuickCheckNFC(const s: string): Boolean; inline;
 function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte; inline;
 
@@ -306,6 +307,11 @@ end;
 function QuickCheckNFC(const s: string): Boolean;
 begin
   Result := nextpas.core.text.unicode.normalize.QuickCheckNFC(s);
+end;
+
+function QuickCheckNFKD(const s: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFKD(s);
 end;
 
 function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte;
