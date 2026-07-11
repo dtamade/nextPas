@@ -237,6 +237,59 @@ begin
   end;
 end;
 
+procedure TestGaugeRenderSmallArea;
+var
+  LGauge: IGauge;
+  LBuffer: TBuffer;
+begin
+  LGauge := TGauge.New.WithRatio(0.5);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  try
+    LGauge.Render(TRect.Make(0, 0, 3, 1), LBuffer);
+    Check(True, 'gauge renders in small area');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestGaugeRenderWithLabel;
+var
+  LGauge: IGauge;
+  LBuffer: TBuffer;
+begin
+  LGauge := TGauge.New.WithRatio(0.5).WithLabel('Loading...');
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LGauge.Render(TRect.Make(0, 0, 20, 1), LBuffer);
+    Check(True, 'gauge with label renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestGaugePercentBoundary;
+var
+  LGauge: IGauge;
+  LBuffer: TBuffer;
+begin
+  LGauge := TGauge.New.WithPercent(0);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LGauge.Render(TRect.Make(0, 0, 10, 1), LBuffer);
+    Check(True, '0% gauge renders');
+  finally
+    LBuffer.Free;
+  end;
+  LGauge := TGauge.New.WithPercent(100);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LGauge.Render(TRect.Make(0, 0, 10, 1), LBuffer);
+    Check(True, '100% gauge renders');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.gauge');
   T.Test('TGauge.New', @TestGaugeNew);
@@ -255,5 +308,8 @@ begin
   T.Test('with block render', @TestGaugeWithBlockRender);
   T.Test('percent conversion', @TestGaugePercentConversion);
   T.Test('ratio clamping', @TestGaugeRatioClamping);
+  T.Test('render small area', @TestGaugeRenderSmallArea);
+  T.Test('render with label', @TestGaugeRenderWithLabel);
+  T.Test('percent boundary', @TestGaugePercentBoundary);
   if not T.Run then Halt(1);
 end.
