@@ -64,6 +64,9 @@ procedure RegisterBackendRebuilder(backend: TSimdBackend; rebuilder: TBackendReb
 
 // === Function Dispatch Tables ===
 type
+  // Dispatch table sub-record types (modular organization)
+  {$I nextpas.core.simd.dispatch.types.inc}
+
   // Dispatch table for all SIMD operations.
   // This is a stable in-repo dispatch contract for nextpas.core itself, but not
   // a public binary ABI: BackendInfo carries managed string fields.
@@ -72,6 +75,29 @@ type
 // Pointer to dispatch table
 type
   PSimdDispatchTable = ^TSimdDispatchTable;
+
+// === Dispatch Table Accessor Types ===
+// These types provide sub-record access to the flat dispatch table
+// They are zero-cost wrappers that delegate to the flat fields
+{$I nextpas.core.simd.dispatch.accessors.inc}
+
+// === Dispatch Table Accessor Helpers ===
+// Helper functions to get accessor instances from the dispatch table
+
+// Get F32x4 accessor for the current dispatch table
+function GetF32x4Accessor: TF32x4Accessor; inline;
+
+// Get F64x2 accessor for the current dispatch table
+function GetF64x2Accessor: TF64x2Accessor; inline;
+
+// Get Memory accessor for the current dispatch table
+function GetMemoryAccessor: TMemoryAccessor; inline;
+
+// Get Batch F32 accessor for the current dispatch table
+function GetBatchF32Accessor: TBatchF32Accessor; inline;
+
+// Get Batch F64 accessor for the current dispatch table
+function GetBatchF64Accessor: TBatchF64Accessor; inline;
 
 // Get current dispatch table
 function GetDispatchTable: PSimdDispatchTable; inline;
@@ -1123,6 +1149,36 @@ begin
   // 恢复后端信息（不复制源后端的信息）
   dispatchTable.Backend := savedBackend;
   dispatchTable.BackendInfo := savedInfo;
+end;
+
+// === Dispatch Table Accessor Implementations ===
+{$I nextpas.core.simd.dispatch.accessors.impl.inc}
+
+// === Dispatch Table Accessor Helper Implementations ===
+
+function GetF32x4Accessor: TF32x4Accessor; inline;
+begin
+  Result := TF32x4Accessor.Create(GetDispatchTable);
+end;
+
+function GetF64x2Accessor: TF64x2Accessor; inline;
+begin
+  Result := TF64x2Accessor.Create(GetDispatchTable);
+end;
+
+function GetMemoryAccessor: TMemoryAccessor; inline;
+begin
+  Result := TMemoryAccessor.Create(GetDispatchTable);
+end;
+
+function GetBatchF32Accessor: TBatchF32Accessor; inline;
+begin
+  Result := TBatchF32Accessor.Create(GetDispatchTable);
+end;
+
+function GetBatchF64Accessor: TBatchF64Accessor; inline;
+begin
+  Result := TBatchF64Accessor.Create(GetDispatchTable);
 end;
 
 // === Initialization ===

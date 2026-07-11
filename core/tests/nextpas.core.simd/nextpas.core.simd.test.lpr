@@ -45,6 +45,7 @@ uses
   nextpas.core.simd.stats.testcase,
   nextpas.core.simd.rvvparity.testcase,
   nextpas.core.simd.bench,
+  test_dispatch_accessors,
   nextpas.core.simd.base,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.dispatch,
@@ -209,6 +210,7 @@ begin
   AddFixture(TTestCase_SimdSignal.Create, 'TTestCase_SimdSignal');
   AddFixture(TTestCase_SimdStats.Create, 'TTestCase_SimdStats');
   AddFixture(TTestCase_RVVParity.Create, 'TTestCase_RVVParity');
+  AddFixture(TTestDispatchAccessors.Create, 'TTestDispatchAccessors');
   {$IFDEF CPUX86_64}
   AddFixture(TTestCase_SSE3Correctness.Create, 'TTestCase_SSE3Correctness');
   {$ENDIF}
