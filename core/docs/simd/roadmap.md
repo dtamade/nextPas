@@ -1,6 +1,6 @@
 # nextpas.core.simd 路线图和计划任务
 
-> 最后更新: 2026-07-11 (Phase 12 性能优化 + 静态调度完善)
+> 最后更新: 2026-07-11 (Phase 15-16 SSE2/AVX2 F64 批量操作 SIMD 实现)
 
 ## 当前状态
 
@@ -68,6 +68,8 @@
 | Phase 12: 性能优化 + 静态调度 | ✅ 100% | 8x YMM展开 + 超越函数静态调度 |
 | Phase 13: F64 超越函数补全 | ✅ 100% | 11个F64超越函数完整覆盖 |
 | Phase 14: F64 批量操作扩展 | ✅ 100% | 17个F64扩展操作 (Axpy/Rcp/Rsqrt/Tan/Sign/Fract/Mod/Pow/Lerp/ReLU/AbsDiff/Norm/LinearReLU/Step/Smoothstep/Atan2/Hypot) |
+| Phase 15: SSE2 F64 批量操作 SIMD | ✅ 100% | 17个SSE2 SIMD实现 (2x XMM展开, 4 doubles/iteration) |
+| Phase 16: AVX2 F64 批量操作 SIMD | ✅ 100% | 17个AVX2 SIMD实现 (2x YMM展开, 8 doubles/iteration) |
 
 ### 进行中 (⚠️)
 

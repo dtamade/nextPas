@@ -1346,18 +1346,18 @@
   {$DEFINE SIMD_STATIC_ArrayMulScalarF64 := SSE2ArrayMulScalarF64}
   {$DEFINE SIMD_STATIC_ReduceSumF64 := SSE2ReduceSumF64}
   {$DEFINE SIMD_STATIC_ReduceDotF64 := SSE2ReduceDotF64}
-  // Transcendental operations (scalar fallback - no SSE2 F64 transcendental impl yet)
-  {$DEFINE SIMD_STATIC_ArraySinF64 := ScalarArraySinF64}
-  {$DEFINE SIMD_STATIC_ArrayCosF64 := ScalarArrayCosF64}
+  // F64 Transcendental operations (SSE2 SIMD)
+  {$DEFINE SIMD_STATIC_ArraySinF64 := SSE2ArraySinF64}
+  {$DEFINE SIMD_STATIC_ArrayCosF64 := SSE2ArrayCosF64}
   {$DEFINE SIMD_STATIC_ArraySinCosF64 := ScalarArraySinCosF64}
-  {$DEFINE SIMD_STATIC_ArrayExpF64 := ScalarArrayExpF64}
-  {$DEFINE SIMD_STATIC_ArrayLogF64 := ScalarArrayLogF64}
-  {$DEFINE SIMD_STATIC_ArrayLog2F64 := ScalarArrayLog2F64}
-  {$DEFINE SIMD_STATIC_ArrayLog10F64 := ScalarArrayLog10F64}
-  {$DEFINE SIMD_STATIC_ArrayCeilF64 := ScalarArrayCeilF64}
-  {$DEFINE SIMD_STATIC_ArrayFloorF64 := ScalarArrayFloorF64}
-  {$DEFINE SIMD_STATIC_ArrayRoundF64 := ScalarArrayRoundF64}
-  {$DEFINE SIMD_STATIC_ArrayTruncF64 := ScalarArrayTruncF64}
+  {$DEFINE SIMD_STATIC_ArrayExpF64 := SSE2ArrayExpF64}
+  {$DEFINE SIMD_STATIC_ArrayLogF64 := SSE2ArrayLogF64}
+  {$DEFINE SIMD_STATIC_ArrayLog2F64 := SSE2ArrayLog2F64}
+  {$DEFINE SIMD_STATIC_ArrayLog10F64 := SSE2ArrayLog10F64}
+  {$DEFINE SIMD_STATIC_ArrayCeilF64 := SSE2ArrayCeilF64}
+  {$DEFINE SIMD_STATIC_ArrayFloorF64 := SSE2ArrayFloorF64}
+  {$DEFINE SIMD_STATIC_ArrayRoundF64 := SSE2ArrayRoundF64}
+  {$DEFINE SIMD_STATIC_ArrayTruncF64 := SSE2ArrayTruncF64}
   // F64 Extended operations (SSE2 SIMD)
   {$DEFINE SIMD_STATIC_ArrayAxpyF64 := SSE2ArrayAxpyF64}
   {$DEFINE SIMD_STATIC_ArrayRcpF64 := SSE2ArrayRcpF64}

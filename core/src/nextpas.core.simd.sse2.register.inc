@@ -751,6 +751,30 @@ begin
   dispatchTable.ArrayNormF32 := @SSE2ArrayNormF32;
   dispatchTable.ArrayLinearReLUF32 := @SSE2ArrayLinearReLUF32;
 
+  // F64 Transcendental (SSE2 with loop unrolling)
+  dispatchTable.ArraySinF64 := @SSE2ArraySinF64;
+  dispatchTable.ArrayCosF64 := @SSE2ArrayCosF64;
+  dispatchTable.ArrayExpF64 := @SSE2ArrayExpF64;
+  dispatchTable.ArrayLogF64 := @SSE2ArrayLogF64;
+  dispatchTable.ArrayLog2F64 := @SSE2ArrayLog2F64;
+  dispatchTable.ArrayLog10F64 := @SSE2ArrayLog10F64;
+
+  // F64 Rounding (SSE4.1 roundpd)
+  if HasSSE41 then
+  begin
+    dispatchTable.ArrayCeilF64 := @SSE2ArrayCeilF64;
+    dispatchTable.ArrayFloorF64 := @SSE2ArrayFloorF64;
+    dispatchTable.ArrayRoundF64 := @SSE2ArrayRoundF64;
+    dispatchTable.ArrayTruncF64 := @SSE2ArrayTruncF64;
+  end
+  else
+  begin
+    dispatchTable.ArrayCeilF64 := @ScalarArrayCeilF64;
+    dispatchTable.ArrayFloorF64 := @ScalarArrayFloorF64;
+    dispatchTable.ArrayRoundF64 := @ScalarArrayRoundF64;
+    dispatchTable.ArrayTruncF64 := @ScalarArrayTruncF64;
+  end;
+
   // Register the backend
   RegisterBackend(sbSSE2, dispatchTable);
 end;

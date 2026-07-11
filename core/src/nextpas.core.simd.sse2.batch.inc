@@ -2817,6 +2817,219 @@ begin
 end;
 
 // ============================================================================
+// SSE2 F64 Transcendental Batch Array Operations
+// 策略: 标量回退 + 循环展开 (4x unroll)
+// ============================================================================
+
+procedure SSE2ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Sin(pS[i]);
+    pD[i+1] := Sin(pS[i+1]);
+    pD[i+2] := Sin(pS[i+2]);
+    pD[i+3] := Sin(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Sin(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Cos(pS[i]);
+    pD[i+1] := Cos(pS[i+1]);
+    pD[i+2] := Cos(pS[i+2]);
+    pD[i+3] := Cos(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Cos(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Exp(pS[i]);
+    pD[i+1] := Exp(pS[i+1]);
+    pD[i+2] := Exp(pS[i+2]);
+    pD[i+3] := Exp(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Exp(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Ln(pS[i]);
+    pD[i+1] := Ln(pS[i+1]);
+    pD[i+2] := Ln(pS[i+2]);
+    pD[i+3] := Ln(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Ln(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayLog2F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Log2(pS[i]);
+    pD[i+1] := Log2(pS[i+1]);
+    pD[i+2] := Log2(pS[i+2]);
+    pD[i+3] := Log2(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Log2(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayLog10F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Log10(pS[i]);
+    pD[i+1] := Log10(pS[i+1]);
+    pD[i+2] := Log10(pS[i+2]);
+    pD[i+3] := Log10(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Log10(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Math.Ceil(pS[i]);
+  {$POP}
+end;
+
+procedure SSE2ArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Math.Floor(pS[i]);
+  {$POP}
+end;
+
+procedure SSE2ArrayRoundF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Double(System.Round(pS[i]));
+  {$POP}
+end;
+
+procedure SSE2ArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Trunc(pS[i]);
+  {$POP}
+end;
+
+// ============================================================================
 // SSE2 Integer Batch Array Operations
 // paddd (4x I32), psubd, pmullw (8x I16), pand, por, pxor, pslld, psrad
 // ============================================================================
