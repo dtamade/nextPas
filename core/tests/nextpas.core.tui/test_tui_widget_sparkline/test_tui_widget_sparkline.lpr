@@ -191,6 +191,40 @@ begin
   end;
 end;
 
+procedure TestSparklineRenderSmallArea;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+begin
+  LSparkline := TSparkline.New([1.0, 2.0]);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  try
+    LSparkline.Render(TRect.Make(0, 0, 3, 1), LBuffer);
+    Check(True, 'Small area does not crash');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestSparklineManyPoints;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+  LData: array[0..19] of Double;
+  I: Integer;
+begin
+  for I := 0 to 19 do
+    LData[I] := Sin(I * 0.5) * 10.0 + 10.0;
+  LSparkline := TSparkline.New(LData);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 5));
+  try
+    LSparkline.Render(TRect.Make(0, 0, 20, 5), LBuffer);
+    Check(True, 'Many points render');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.sparkline');
   T.Test('TSparkline.New', @TestSparklineNew);
@@ -205,5 +239,7 @@ begin
   T.Test('render empty area', @TestSparklineRenderEmptyArea);
   T.Test('explicit max', @TestSparklineWithExplicitMax);
   T.Test('single data point', @TestSparklineSingleDataPoint);
+  T.Test('render small area', @TestSparklineRenderSmallArea);
+  T.Test('many points', @TestSparklineManyPoints);
   if not T.Run then Halt(1);
 end.
