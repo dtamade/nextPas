@@ -123,11 +123,13 @@ Unicode 规范化算法（UAX #15），支持 NFC/NFD/NFKC/NFKD。
 | 函数 | 用途 |
 |------|------|
 | `SegmentGraphemeClusters` | 字素簇分割（完整 GB 规则） |
-| `SegmentWords` | 单词分割 |
+| `SegmentWords` | 单词分割（CJK 表意文字独立分词） |
 | `SegmentSentences` | 句子分割 |
 | `SegmentLines` | 行分割 |
 
 **支持的 GB 规则**: GB1, GB3, GB4, GB5, GB6, GB7, GB8, GB9, GB9a, GB9b, GB11, GB12-13, GB999
+
+**CJK 分词**: CJK 表意文字（U+4E00-U+9FFF, U+3400-U+4DBF, U+F900-U+FAFF）每个字符作为独立单词返回。
 
 ### collate — 排序规则（DUCET）
 
@@ -273,7 +275,7 @@ end;
 | `test_property` | 6 | 属性查询、类别、二值属性 |
 | `test_case` | 7 | 大小写映射、case fold |
 | `test_normalize` | 10 | NFD/NFC/NFKD/NFKC、QuickCheck |
-| `test_enhance` | 5 | Script/Block 属性 |
+| `test_enhance` | 6 | Script/Block 属性、便利函数、CJK 分词 |
 | `test_grapheme_uax29` | 13 | UAX #29 全部 GB 规则 |
 | `test_collate` | 13 | DUCET 三级权重、排序键、强度级别、排序方法 |
 | **总计** | **54** | |
