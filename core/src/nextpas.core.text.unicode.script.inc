@@ -9,7 +9,7 @@ const
   SCRIPT_RANGES: array[0..SCRIPT_RANGES_COUNT - 1] of record
     Lo: TUnicodeCodepoint;
     Hi: TUnicodeCodepoint;
-    Script: Byte;
+    Script: Word;
   end = (
     (Lo: $0000; Hi: $001F; Script: Ord(usCommon)),
     (Lo: $0020; Hi: $0020; Script: Ord(usCommon)),

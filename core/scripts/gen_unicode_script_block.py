@@ -364,7 +364,7 @@ BLOCK_NAMES = {
     "Gothic": "ubGothic",
     "Old Permic": "ubOldPermic",
     "Ugaritic": "ubUgaritic",
-    "Old Persian": "ugOldPersian",
+    "Old Persian": "ubOldPersian",
     "Deseret": "ubDeseret",
     "Shavian": "ubShavian",
     "Osmanya": "ubOsmanya",
@@ -397,7 +397,7 @@ BLOCK_NAMES = {
     "Rumi Numeral Symbols": "ubRumiNumeralSymbols",
     "Yezidi": "ubYezidi",
     "Arabic Extended-C": "ubArabicExtendedC",
-    "Old Sogdian": "ugOldSogdian",
+    "Old Sogdian": "ubOldSogdian",
     "Sogdian": "ubSogdian",
     "Old Uyghur": "ubOldUyghur",
     "Chorasmian": "ubChorasmian",
@@ -419,15 +419,15 @@ BLOCK_NAMES = {
     "Modi": "ubModi",
     "Mongolian Supplement": "ubMongolianSupplement",
     "Takri": "ubTakri",
-    "Myanmar Extended-C": "ugMyanmarExtendedC",
-    "Ahom": "ugAhom",
+    "Myanmar Extended-C": "ubMyanmarExtendedC",
+    "Ahom": "ubAhom",
     "Dogra": "ubDogra",
     "Nandinagari": "ubNandinagari",
     "Zanabazar Square": "ubZanabazarSquare",
     "Soyombo": "ubSoyombo",
     "Unified Canadian Aboriginal Syllabics Extended-A": "ubUnifiedCanadianAboriginalSyllabicsExtendedA",
     "Pau Cin Hau": "ubPauCinHau",
-    "Devanagari Extended-A": "ugDevanagariExtendedA",
+    "Devanagari Extended-A": "ubDevanagariExtendedA",
     "Bhaiksuki": "ubBhaiksuki",
     "Marchen": "ubMarchen",
     "Masaram Gondi": "ubMasaramGondi",
@@ -438,12 +438,12 @@ BLOCK_NAMES = {
     "Tamil Supplement": "ubTamilSupplement",
     "Cuneiform": "ubCuneiform",
     "Cuneiform Numbers and Punctuation": "ubCuneiformNumbersAndPunctuation",
-    "Early Dynastic Cuneiform": "ugEarlyDynasticCuneiform",
+    "Early Dynastic Cuneiform": "ubEarlyDynasticCuneiform",
     "Cypro-Minoan": "ubCyproMinoan",
-    "Egyptian Hieroglyphs": "ugEgyptianHieroglyphs",
+    "Egyptian Hieroglyphs": "ubEgyptianHieroglyphs",
     "Egyptian Hieroglyphs Extended-A": "ubEgyptianHieroglyphsExtendedA",
-    "Anatolian Hieroglyphs": "ugAnatolianHieroglyphs",
-    "Gurung Khema": "ugGurungKhema",
+    "Anatolian Hieroglyphs": "ubAnatolianHieroglyphs",
+    "Gurung Khema": "ubGurungKhema",
     "Bamum Supplement": "ubBamumSupplement",
     "Mro": "ubMro",
     "Tangsa": "ubTangsa",
@@ -456,7 +456,7 @@ BLOCK_NAMES = {
     "Tangut Components": "ubTangutComponents",
     "Khitan Small Script": "ubKhitanSmallScript",
     "Tangut Supplement": "ubTangutSupplement",
-    "Kaktovik Numerals": "ugKaktovikNumerals",
+    "Kaktovik Numerals": "ubKaktovikNumerals",
     "Katakana Extended": "ubKatakanaExtended",
     "Katakana Phonetic Extensions Supplement": "ubKatakanaPhoneticExtensionsSupplement",
     "CJK Unified Ideographs Extension B": "ubCJKUnifiedIdeographsExtensionB",
@@ -547,7 +547,7 @@ def generate_script_inc(ranges: List[Tuple[int, int, str]], version: str) -> str
     lines.append("  SCRIPT_RANGES: array[0..SCRIPT_RANGES_COUNT - 1] of record")
     lines.append("    Lo: TUnicodeCodepoint;")
     lines.append("    Hi: TUnicodeCodepoint;")
-    lines.append("    Script: Byte;")
+    lines.append("    Script: Word;")
     lines.append("  end = (")
 
     for i, (start, end, script) in enumerate(ranges):
@@ -573,7 +573,7 @@ def generate_block_inc(ranges: List[Tuple[int, int, str]], version: str) -> str:
     lines.append("  BLOCK_RANGES: array[0..BLOCK_RANGES_COUNT - 1] of record")
     lines.append("    Lo: TUnicodeCodepoint;")
     lines.append("    Hi: TUnicodeCodepoint;")
-    lines.append("    Block: Byte;")
+    lines.append("    Block: Word;")
     lines.append("  end = (")
 
     for i, (start, end, block) in enumerate(ranges):
