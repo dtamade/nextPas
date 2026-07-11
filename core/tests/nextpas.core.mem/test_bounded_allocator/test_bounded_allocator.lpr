@@ -39,6 +39,7 @@ begin
   try
     LPtr := LAlloc.GetMem(64);
     Check(LPtr <> nil, 'first alloc ok');
+    LAlloc.FreeMem(LPtr);
 
     LPtr := LAlloc.GetMem(128);
     Check(LPtr = nil, 'over limit rejected');
@@ -95,12 +96,13 @@ end;
 procedure TestStats;
 var
   LAlloc: TBoundedAllocator;
+  LPtr1, LPtr2: Pointer;
   LStats: TBoundedStats;
 begin
   LAlloc := TBoundedAllocator.Create(GetRtlAllocator, 256);
   try
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(32);
+    LPtr1 := LAlloc.GetMem(64);
+    LPtr2 := LAlloc.GetMem(32);
     LAlloc.GetMem(512); // rejected
 
     LStats := LAlloc.GetStats;
@@ -108,6 +110,9 @@ begin
     Check(LStats.RejectedCount >= 1, 'rejected');
     Check(LStats.ActiveBytes >= 96, 'active');
     Check(LStats.LimitBytes = 256, 'limit');
+
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr2);
   finally
     LAlloc.Free;
   end;

@@ -95,18 +95,22 @@ end;
 procedure TestStats;
 var
   LDebug: TDebugAllocator;
+  LPtr1, LPtr2: Pointer;
   LStats: TDebugAllocStats;
 begin
   LDebug := TDebugAllocator.Create(DefaultAllocator);
   try
-    LDebug.GetMem(64);
-    LDebug.GetMem(128);
+    LPtr1 := LDebug.GetMem(64);
+    LPtr2 := LDebug.GetMem(128);
 
     LStats := LDebug.GetStats;
     Check(LStats.TotalAllocs = 2, 'total allocs should be 2');
     Check(LStats.ActiveAllocs = 2, 'active allocs should be 2');
     Check(LStats.ActiveBytes = 192, 'active bytes should be 192');
     Check(LStats.PeakAllocs = 2, 'peak allocs should be 2');
+
+    LDebug.FreeMem(LPtr1);
+    LDebug.FreeMem(LPtr2);
   finally
     LDebug.Free;
   end;
