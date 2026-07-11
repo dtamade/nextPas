@@ -1189,6 +1189,26 @@ begin
   Check('CaptureInTimeout — returns /tmp', Trim(LText) = '/tmp');
 end;
 
+procedure TestCaptureTimeoutCombined;
+var
+  LCombined: string;
+begin
+  LCombined := CaptureTimeoutCombined('/bin/sh',
+    ['-c', 'echo "out"; echo "err" >&2'], TDuration.FromSeconds(5));
+  Check('CaptureTimeoutCombined — has stdout', Pos('out', LCombined) > 0);
+  Check('CaptureTimeoutCombined — has stderr', Pos('err', LCombined) > 0);
+end;
+
+procedure TestCaptureInTimeoutCombined;
+var
+  LCombined: string;
+begin
+  LCombined := CaptureInTimeoutCombined('/bin/sh',
+    ['-c', 'echo "cwd:$(pwd)"; echo "err" >&2'], '/', TDuration.FromSeconds(5));
+  Check('CaptureInTimeoutCombined — has stdout', Pos('cwd:/', LCombined) > 0);
+  Check('CaptureInTimeoutCombined — has stderr', Pos('err', LCombined) > 0);
+end;
+
 procedure TestRunWithInput;
 var
   LOut: TProcessOutput;
@@ -1309,6 +1329,8 @@ begin
   TestCaptureTimeoutConvenience;
   TestRunInTimeout;
   TestCaptureInTimeout;
+  TestCaptureTimeoutCombined;
+  TestCaptureInTimeoutCombined;
   TestRunWithInput;
   TestCaptureWithInput;
   TestExecutable;

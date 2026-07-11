@@ -260,6 +260,16 @@ begin
   CheckEqual('line3', LRead[2], 'FsWriteFileLines line 3');
 end;
 
+procedure TestFsWriteFileLines_Empty;
+var
+  LLines: TStringArray;
+begin
+  LLines := nil;
+  FsWriteFileLines(GTmpDir + '/writelines_empty.txt', LLines);
+  CheckEqual(Int64(0), FsFileSize(GTmpDir + '/writelines_empty.txt'),
+    'FsWriteFileLines empty array creates empty file');
+end;
+
 procedure TestFsAppendFileLines;
 var
   LRead: TStringArray;
@@ -1863,20 +1873,20 @@ begin
 end;
 {$ENDIF}
 
-procedure TestFsTouch;
+procedure TestFsEnsureFile;
 var
   LPath: string;
 begin
-  LPath := GTmpDir + '/touch_test.txt';
+  LPath := GTmpDir + '/ensure_file_test.txt';
   { File doesn't exist — should create it }
-  Check(not FsExists(LPath), 'FsTouch: file does not exist before');
-  FsTouch(LPath);
-  Check(FsExists(LPath), 'FsTouch: file exists after touch');
-  Check(FsFileSize(LPath) = 0, 'FsTouch: created file is empty');
+  Check(not FsExists(LPath), 'FsEnsureFile: file does not exist before');
+  FsEnsureFile(LPath);
+  Check(FsExists(LPath), 'FsEnsureFile: file exists after call');
+  Check(FsFileSize(LPath) = 0, 'FsEnsureFile: created file is empty');
   { File exists — should not modify it }
   FsWriteFile(LPath, TBytes.Create($41, $42, $43));
-  FsTouch(LPath);
-  Check(FsFileSize(LPath) = 3, 'FsTouch: existing file not modified');
+  FsEnsureFile(LPath);
+  Check(FsFileSize(LPath) = 3, 'FsEnsureFile: existing file not modified');
   FsRemove(LPath);
 end;
 
@@ -1909,6 +1919,7 @@ begin
     T.Test('ReadFile/WriteFile', @TestReadWriteFile);
     T.Test('FsWriteFileText', @TestFsWriteFileText);
     T.Test('FsWriteFileLines', @TestFsWriteFileLines);
+    T.Test('FsWriteFileLines_Empty', @TestFsWriteFileLines_Empty);
     T.Test('FsAppendFileLines', @TestFsAppendFileLines);
     T.Test('WriteAtomic', @TestWriteAtomic);
     T.Test('CopyFile', @TestCopyFile);
@@ -2044,7 +2055,7 @@ begin
     T.Test('WalkFiles skips directories', @TestWalkFiles);
     T.Test('Walk stops when callback returns false',
       @TestWalkStopsWhenCallbackReturnsFalse);
-    T.Test('FsTouch creates and preserves', @TestFsTouch);
+    T.Test('FsEnsureFile creates and preserves', @TestFsEnsureFile);
     T.Test('FsGetTempDir returns valid dir', @TestFsGetTempDir);
 {$IFDEF NEXTPAS_UNIX}
     T.Test('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);

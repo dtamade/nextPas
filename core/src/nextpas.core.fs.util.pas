@@ -40,8 +40,8 @@ function FsReadlink(const APath: string): string;
 function FsGetCwd: string;
 procedure FsSetCwd(const APath: string);
 function FsGetEnv(const AName: string): string;
-{** @desc 创建空文件（文件已存在则不修改） *}
-procedure FsTouch(const APath: string);
+{** @desc 确保文件存在（不存在则创建空文件，已存在则不修改） *}
+procedure FsEnsureFile(const APath: string);
 {** @desc 获取系统临时目录路径（不创建目录） *}
 function FsGetTempDir: string;
 
@@ -328,12 +328,10 @@ var
   LI, LAttempt: Integer;
   LResult: Int32;
 begin
-  if ADir = '' then
-    LBase := GetEnv('TMPDIR');
-  if (ADir = '') and (LBase = '') then
-    LBase := '/tmp';
   if ADir <> '' then
-    LBase := ADir;
+    LBase := ADir
+  else
+    LBase := FsGetTempDir;
 
   for LAttempt := 0 to MAX_ATTEMPTS - 1 do
   begin
@@ -661,7 +659,7 @@ begin
   Result := nextpas.core.os.env.GetEnvironmentVariable(AName);
 end;
 
-procedure FsTouch(const APath: string);
+procedure FsEnsureFile(const APath: string);
 begin
   if not FsExists(APath) then
     FsWriteFile(APath, nil);
@@ -674,7 +672,7 @@ var
 begin
   LLen := platform_fs_temp_dir(@LBuf[0], SizeOf(LBuf));
   if LLen <= 0 then
-    raise EIOError.Create('Failed to get temp directory');
+    raise EIOError.Create('Failed to get temp directory (code=' + IntToStr(LLen) + ')');
   SetLength(Result, LLen);
   if LLen > 0 then
     Move(LBuf[0], Result[1], LLen);

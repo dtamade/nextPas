@@ -39,6 +39,10 @@ if TryLookPath('fpc', FpcPath) then
 var Out := RunTimeout('/usr/bin/fpc', ['--version'], TDuration.FromSeconds(30));
 var Text := CaptureTimeout('/usr/bin/fpc', ['--version'], TDuration.FromSeconds(30));
 
+// 带超时 + stdout+stderr 合并
+var Combined := CaptureTimeoutCombined('/bin/sh', ['-c', 'echo out; echo err >&2'], TDuration.FromSeconds(5));
+var Combined2 := CaptureInTimeoutCombined('/bin/sh', ['-c', 'pwd; echo err >&2'], '/tmp', TDuration.FromSeconds(5));
+
 // 通过 stdin 传入数据
 var Input := TBytes.Create(Ord('h'), Ord('e'), Ord('l'), Ord('l'), Ord('o'));
 var Out := RunWithInput('/bin/cat', [], Input);

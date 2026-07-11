@@ -77,7 +77,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `WriteAtomic(APath, AData)` | 原子写入（先写临时文件再 rename） |
 | `ScanFileLines(APath)` | 返回 `IScanner` 按行扫描 |
 | `MapFileLines(APath)` | 返回 `IMappedLines` 内存映射读取 |
-| `FsTouch(APath)` | 创建空文件（已存在则不修改） |
+| `FsEnsureFile(APath)` | 确保文件存在（不存在则创建空文件，已存在则不修改） |
 | `FsGetTempDir` | 获取系统临时目录路径 |
 
 ### 文件属性

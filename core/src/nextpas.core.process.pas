@@ -62,11 +62,15 @@ function Capture(const APath: string; const AArgs: array of string): string;
  *}
 function CaptureIn(const APath: string; const AArgs: array of string;
   const ADir: string): string;
-{** @desc 执行子进程并返回 stdout + stderr 合并文本 *}
+{** @desc 执行子进程并返回 stdout + stderr 合并文本
+ *  @note stdout 和 stderr 按进程写入顺序交错拼接，无分隔符。
+ *        如需区分两个流，请使用 Run(...) 然后分别读取 .StdOut 和 .StdErr。 *}
 function CaptureCombined(const APath: string;
   const AArgs: array of string): string;
 {**
  * @desc 在指定工作目录中执行子进程并返回 stdout + stderr 合并文本
+ *
+ * @note stdout 和 stderr 按进程写入顺序交错拼接，无分隔符。
  *
  * @params
  *   APath  可执行文件路径
@@ -179,6 +183,15 @@ function RunInTimeout(const APath: string; const AArgs: array of string;
  *}
 function CaptureInTimeout(const APath: string; const AArgs: array of string;
   const ADir: string; const ATimeout: TDuration): string;
+{** @desc 带超时执行并返回 stdout + stderr 合并文本
+ *  @note stdout 和 stderr 按进程写入顺序交错拼接，无分隔符。 *}
+function CaptureTimeoutCombined(const APath: string;
+  const AArgs: array of string; const ATimeout: TDuration): string;
+{** @desc 在指定工作目录中带超时执行并返回 stdout + stderr 合并文本
+ *  @note stdout 和 stderr 按进程写入顺序交错拼接，无分隔符。 *}
+function CaptureInTimeoutCombined(const APath: string;
+  const AArgs: array of string; const ADir: string;
+  const ATimeout: TDuration): string;
 {**
  * @desc 在 PATH 中搜索可执行文件（类似 Go 的 exec.LookPath）
  *
@@ -289,6 +302,25 @@ begin
   Result := RunInTimeout(APath, AArgs, ADir, ATimeout).StdOut;
 end;
 
+function CaptureTimeoutCombined(const APath: string;
+  const AArgs: array of string; const ATimeout: TDuration): string;
+var
+  LOutput: TProcessOutput;
+begin
+  LOutput := RunTimeout(APath, AArgs, ATimeout);
+  Result := LOutput.StdOut + LOutput.StdErr;
+end;
+
+function CaptureInTimeoutCombined(const APath: string;
+  const AArgs: array of string; const ADir: string;
+  const ATimeout: TDuration): string;
+var
+  LOutput: TProcessOutput;
+begin
+  LOutput := RunInTimeout(APath, AArgs, ADir, ATimeout);
+  Result := LOutput.StdOut + LOutput.StdErr;
+end;
+
 function RunWithInput(const APath: string; const AArgs: array of string;
   const AStdin: TBytes): TProcessOutput;
 var
@@ -393,7 +425,7 @@ var
 begin
   LLen := platform_args_exe_path(@LBuf[0], SizeOf(LBuf));
   if LLen < 0 then
-    raise EProcessError.Create('Failed to get executable path');
+    raise EProcessError.Create('Failed to get executable path (code=' + IntToStr(LLen) + ')');
   SetLength(Result, LLen);
   if LLen > 0 then
     Move(LBuf[0], Result[1], LLen);

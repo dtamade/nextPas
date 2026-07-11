@@ -303,6 +303,44 @@ begin
   UnsetEnv('NEXTPAS_TEST_STRICT');
 end;
 
+procedure TestExpandEnvStrict_BraceSyntax;
+var
+  LRaised: Boolean;
+begin
+  SetEnv('NEXTPAS_TEST_BRACE', 'hello');
+  // ${VAR} syntax should work
+  CheckEqual('hello', ExpandEnvStrict('${NEXTPAS_TEST_BRACE}'),
+    'ExpandEnvStrict ${VAR} syntax');
+  // ${UNDEF} should raise
+  LRaised := False;
+  try
+    ExpandEnvStrict('${NEXTPAS_TEST_UNDEF_BRACE_XYZ}');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ExpandEnvStrict raises on undefined ${VAR}');
+  // Unterminated ${ should raise
+  LRaised := False;
+  try
+    ExpandEnvStrict('${NEXTPAS_TEST_BRACE');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ExpandEnvStrict raises on unterminated ${');
+  UnsetEnv('NEXTPAS_TEST_BRACE');
+end;
+
+procedure TestExpandEnvStrict_EmptyValue;
+begin
+  SetEnv('NEXTPAS_TEST_EMPTY', '');
+  { Empty value should NOT raise — var is defined, just empty }
+  CheckEqual('', ExpandEnvStrict('$NEXTPAS_TEST_EMPTY'),
+    'ExpandEnvStrict empty value does not raise');
+  UnsetEnv('NEXTPAS_TEST_EMPTY');
+end;
+
 { --- main --- }
 
 begin
@@ -338,5 +376,7 @@ begin
   T.Test('GetEnvDefault', @TestGetEnvDefault);
   T.Test('ExpandEnvWithDefault', @TestExpandEnvWithDefault);
   T.Test('ExpandEnvStrict', @TestExpandEnvStrict);
+  T.Test('ExpandEnvStrict_BraceSyntax', @TestExpandEnvStrict_BraceSyntax);
+  T.Test('ExpandEnvStrict_EmptyValue', @TestExpandEnvStrict_EmptyValue);
   if not T.Run then Halt(1);
 end.

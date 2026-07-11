@@ -400,8 +400,7 @@ begin
             'unterminated ${...} in environment expansion');
         LName := Copy(AValue, LStart, I - LStart);
         ValidateEnvName(LName);
-        LResolved := GetEnvironmentVariable(LName);
-        if LResolved = '' then
+        if not TryGetEnv(LName, LResolved) then
           raise EArgumentError.Create(
             'undefined environment variable: ' + LName);
         LBuilder.AppendStr(LResolved);
@@ -419,8 +418,7 @@ begin
         else
         begin
           LName := Copy(AValue, LStart, I - LStart);
-          LResolved := GetEnvironmentVariable(LName);
-          if LResolved = '' then
+          if not TryGetEnv(LName, LResolved) then
             raise EArgumentError.Create(
               'undefined environment variable: ' + LName);
           LBuilder.AppendStr(LResolved);

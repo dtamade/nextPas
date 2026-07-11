@@ -213,6 +213,21 @@ begin
   Check(PathNormalize('') = '', 'normalize empty');
 end;
 
+procedure TestPathNormalizeEdgeCases;
+begin
+  { Multiple consecutive slashes }
+  Check(PathNormalize('//home///user') = '/home/user', 'normalize multiple slashes');
+  { Trailing slash removed (except root) }
+  Check(PathNormalize('/home/user/') = '/home/user', 'normalize trailing slash');
+  Check(PathNormalize('/') = '/', 'normalize root preserved');
+  { .. at root — cannot go above root }
+  Check(PathNormalize('/..') = '/', 'normalize .. at root');
+  Check(PathNormalize('/../..') = '/', 'normalize ../.. at root');
+  { . at various positions }
+  Check(PathNormalize('./foo') = 'foo', 'normalize leading dot');
+  Check(PathNormalize('foo/.') = 'foo', 'normalize trailing dot');
+end;
+
 procedure TestPathNormalizeLongResult;
 var
   LSegment: string;
@@ -437,6 +452,7 @@ begin
   T.Test('PathIsAbsolute', @TestPathIsAbsolute);
   T.Test('PathIsRelative', @TestPathIsRelative);
   T.Test('PathNormalize', @TestPathNormalize);
+  T.Test('PathNormalizeEdgeCases', @TestPathNormalizeEdgeCases);
   T.Test('PathNormalize long result', @TestPathNormalizeLongResult);
   T.Test('PathRelative', @TestPathRelative);
   T.Test('PathRelative long result', @TestPathRelativeLongResult);
