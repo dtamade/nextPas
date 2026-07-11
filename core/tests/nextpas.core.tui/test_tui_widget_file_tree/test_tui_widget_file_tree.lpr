@@ -37,8 +37,9 @@ var
   LState: TFileTreeState;
 begin
   LState := TFileTreeState.Empty;
+  // With no nodes, SelectNext should not change Selected
   LState.SelectNext;
-  Check(LState.Selected = 1, 'Should move to 1');
+  Check(LState.Selected = 0, 'Should stay at 0 with no nodes');
 end;
 
 procedure TestFileTreeStateSelectPrev;
@@ -117,8 +118,12 @@ begin
   LTree := TFileTree.New;
   LArea := TRect.Make(0, 0, 30, 10);
   LBuf := TBuffer.CreateEmpty(LArea);
-  LTree.Render(LArea, LBuf);
-  Check(True, 'Should render file tree');
+  try
+    LTree.Render(LArea, LBuf);
+    Check(True, 'Should render file tree');
+  finally
+    LBuf.Free;
+  end;
 end;
 
 procedure TestFileTreeRenderStateful;
@@ -132,8 +137,68 @@ begin
   LState := TFileTreeState.Empty;
   LArea := TRect.Make(0, 0, 30, 10);
   LBuf := TBuffer.CreateEmpty(LArea);
-  LTree.RenderStateful(LArea, LBuf, LState);
-  Check(True, 'Should render stateful file tree');
+  try
+    LTree.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'Should render stateful file tree');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestFileTreeRenderEmpty;
+var
+  LTree: IFileTree;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LTree := TFileTree.New;
+  LArea := TRect.Make(0, 0, 10, 5);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LTree.Render(LArea, LBuf);
+    Check(True, 'Should render empty file tree');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestFileTreeRenderSmallArea;
+var
+  LTree: IFileTree;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LTree := TFileTree.New;
+  LArea := TRect.Make(0, 0, 3, 2);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LTree.Render(LArea, LBuf);
+    Check(True, 'Should render in small area');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestFileTreeStateSelectNextMultiple;
+var
+  LState: TFileTreeState;
+begin
+  LState := TFileTreeState.Empty;
+  // With no nodes, SelectNext should not crash
+  LState.SelectNext;
+  Check(LState.Selected = 0, 'Should stay at 0 with no nodes');
+end;
+
+procedure TestFileTreeStateSelectPrevMultiple;
+var
+  LState: TFileTreeState;
+begin
+  LState := TFileTreeState.Empty;
+  LState.Selected := 5;
+  LState.SelectPrev;
+  LState.SelectPrev;
+  LState.SelectPrev;
+  Check(LState.Selected = 2, 'Should be at 2 after 3 SelectPrev from 5');
 end;
 
 procedure TestFileTreeBuilderChaining;
@@ -168,5 +233,9 @@ begin
   T.Test('TFileTree.Render', @TestFileTreeRender);
   T.Test('TFileTree.RenderStateful', @TestFileTreeRenderStateful);
   T.Test('TFileTree builder chaining', @TestFileTreeBuilderChaining);
+  T.Test('TFileTree.Render empty', @TestFileTreeRenderEmpty);
+  T.Test('TFileTree.Render small area', @TestFileTreeRenderSmallArea);
+  T.Test('TFileTreeState.SelectNext multiple', @TestFileTreeStateSelectNextMultiple);
+  T.Test('TFileTreeState.SelectPrev multiple', @TestFileTreeStateSelectPrevMultiple);
   if not T.Run then Halt(1);
 end.
