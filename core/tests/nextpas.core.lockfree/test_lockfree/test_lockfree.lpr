@@ -4017,6 +4017,38 @@ begin
   end;
 end;
 
+{ SPMC boundary conditions }
+
+procedure TestSpmcTryEnqueueClosed;
+var
+  LQ: TIntSpmc;
+begin
+  LQ := TIntSpmc.Create(8);
+  try
+    LQ.Close;
+    Check(not LQ.TryEnqueue(1), 'enqueue to closed returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpmcTryDequeueClosed;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(8);
+  try
+    LQ.TryEnqueue(1);
+    LQ.Close;
+    Check(LQ.TryDequeue(LV), 'dequeue from closed with data succeeds');
+    CheckEqual(1, LV, 'dequeued value matches');
+    Check(not LQ.TryDequeue(LV), 'dequeue from closed empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
 { Channel IsEmpty }
 
 procedure TestChannelIsEmpty;
@@ -6605,6 +6637,8 @@ begin
   T.Test('MPSC TryEnqueue + ApproxCount', @TestMpscTryEnqueue);
   T.Test('SegQueue TryEnqueue + Close', @TestSegQueueTryEnqueueClose);
   T.Test('SPMC Close', @TestSpmcClose);
+  T.Test('SPMC TryEnqueue closed', @TestSpmcTryEnqueueClosed);
+  T.Test('SPMC TryDequeue closed', @TestSpmcTryDequeueClosed);
   T.Test('Channel IsEmpty', @TestChannelIsEmpty);
   T.Test('Selector TrySelect', @TestSelectorTrySelect);
   T.Test('Channel 4P+4C stress', @TestChannelStress);
