@@ -62,7 +62,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 |------|---------|--------|
 | `test_assertions` | Check* 过程式断言 API + NaN/边界/epsilon 覆盖 | 112 |
 | `test_expect` | IExpectation 流式断言 API + NaN/Pointer/Double/epsilon 边界 | 126 |
-| `test_mock` | TMock 录制/验证/返回值/参数匹配/typed 返回/ResetAll | 82 |
+| `test_mock` | TMock 录制/验证/返回值/参数匹配/typed 返回/ResetAll/CalledInOrder | 99 |
 | `test_output` | ANSI、StatusDot、filter、timeout、JUnit/TAP/JSON 格式化、brace expansion、层级过滤、hierarchical+glob 组合、TAP/JSON compliance | 79 |
 | `test_runner` | TTestRunner 多 suite、lifecycle、subtest、timeout、空 suite、ShouldFail、FormatDuration、shuffle、failfast、list、determinism、verbose、runtimeout、cleanup、benchmark、parallel空suite防护、glob边界、test timeout exceeded、config zero-value、complex filter、benchmark N scaling、suite-level retry、CleanupTableAllocations 幂等、FormatDuration locale | 117 |
 | `test_lifecycle` | TestTable、TTestClosure、lifecycle 组合、facade 符号完整性 | 30 |
