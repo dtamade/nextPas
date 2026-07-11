@@ -4561,6 +4561,38 @@ begin
   end;
 end;
 
+{ MPMC boundary conditions }
+
+procedure TestMpmcTryEnqueueClosed;
+var
+  LQ: TIntMpmc;
+begin
+  LQ := TIntMpmc.Create(8);
+  try
+    LQ.Close;
+    Check(not LQ.TryEnqueue(1), 'enqueue to closed returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMpmcTryDequeueClosed;
+var
+  LQ: TIntMpmc;
+  LV: Integer;
+begin
+  LQ := TIntMpmc.Create(8);
+  try
+    LQ.TryEnqueue(1);
+    LQ.Close;
+    Check(LQ.TryDequeue(LV), 'dequeue from closed with data succeeds');
+    CheckEqual(1, LV, 'dequeued value matches');
+    Check(not LQ.TryDequeue(LV), 'dequeue from closed empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
 { ============================================================ }
 { Edge-case: Stack capacity=1                                   }
 { ============================================================ }
@@ -6698,6 +6730,8 @@ begin
   T.Test('SPSC TryEnqueue closed', @TestSpscTryEnqueueClosed);
   T.Test('SPSC TryDequeue closed', @TestSpscTryDequeueClosed);
   T.Test('MPMC capacity=1', @TestMpmcCapacityOne);
+  T.Test('MPMC TryEnqueue closed', @TestMpmcTryEnqueueClosed);
+  T.Test('MPMC TryDequeue closed', @TestMpmcTryDequeueClosed);
   T.Test('Stack capacity=1', @TestStackCapacityOne);
   T.Test('Deque capacity=1', @TestDequeCapacityOne);
   T.Test('Deque TrySteal empty', @TestDequeTryStealEmpty);
