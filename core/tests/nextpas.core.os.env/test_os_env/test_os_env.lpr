@@ -5,6 +5,7 @@ program test_os_env;
 uses
   nextpas.core.test,
   nextpas.core.errors,
+  nextpas.core.text.base,
   nextpas.core.os.env;
 
 var
@@ -212,6 +213,26 @@ begin
     'ExpandEnv undefined $VAR returns empty');
 end;
 
+procedure TestEnvKeys;
+var
+  LKeys: TStringArray;
+  I: Integer;
+  LFoundHome: Boolean;
+begin
+  SetEnv('NEXTPAS_TEST_ENVKEYS', 'test123');
+  LKeys := EnvKeys;
+  Check(Length(LKeys) > 0, 'EnvKeys returns non-empty array');
+  LFoundHome := False;
+  for I := 0 to High(LKeys) do
+  begin
+    Check(Pos('=', LKeys[I]) = 0, 'EnvKeys entries have no = sign: ' + LKeys[I]);
+    if LKeys[I] = 'NEXTPAS_TEST_ENVKEYS' then
+      LFoundHome := True;
+  end;
+  Check(LFoundHome, 'EnvKeys contains NEXTPAS_TEST_ENVKEYS');
+  UnsetEnv('NEXTPAS_TEST_ENVKEYS');
+end;
+
 { --- main --- }
 
 begin
@@ -240,5 +261,6 @@ begin
   T.Test('ExpandEnv text$', @TestExpandEnv_DollarAtEnd);
   T.Test('ExpandEnv $VAR + ${VAR}', @TestExpandEnv_MixedSyntax);
   T.Test('ExpandEnv $UNDEFINED', @TestExpandEnv_DollarVarUndefined);
+  T.Test('EnvKeys', @TestEnvKeys);
   if not T.Run then Halt(1);
 end.

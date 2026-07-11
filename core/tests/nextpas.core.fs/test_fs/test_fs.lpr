@@ -545,6 +545,9 @@ begin
   LResults := Glob(GTmpDir + '/globtest', '*.xyz');
   Check(Length(LResults) = 0, 'Glob *.xyz finds nothing');
   FsRemoveAll(GTmpDir + '/globtest');
+  { Non-existent directory returns empty array, not exception }
+  LResults := Glob(GTmpDir + '/nonexistent-glob-dir', '*');
+  Check(Length(LResults) = 0, 'Glob non-existent dir returns empty');
 end;
 
 procedure TestRename;

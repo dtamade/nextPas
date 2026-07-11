@@ -18,6 +18,8 @@ uses
 
 {** @desc 返回所有环境变量，格式为 "NAME=VALUE" 字符串数组 *}
 function EnvironmentVariables: TStringArray;
+{** @desc 返回所有环境变量名（不含值）*}
+function EnvKeys: TStringArray;
 {** @desc 获取环境变量值，不存在返回空字符串 *}
 function GetEnvironmentVariable(const AName: string): string;
 {** @desc 获取环境变量值（GetEnvironmentVariable 的简写） *}
@@ -111,6 +113,26 @@ begin
   RaiseEnvError(platform_env_enumerate(@CollectEnvEntry, @LValues),
     'environment enumeration', '');
   Result := LValues;
+end;
+
+function EnvKeys: TStringArray;
+var
+  LAll: TStringArray;
+  I, P, LCount: Integer;
+begin
+  LAll := EnvironmentVariables;
+  SetLength(Result, Length(LAll));
+  LCount := 0;
+  for I := 0 to High(LAll) do
+  begin
+    P := Pos('=', LAll[I]);
+    if P > 1 then
+    begin
+      Result[LCount] := Copy(LAll[I], 1, P - 1);
+      Inc(LCount);
+    end;
+  end;
+  SetLength(Result, LCount);
 end;
 
 function GetEnvironmentVariable(const AName: string): string;

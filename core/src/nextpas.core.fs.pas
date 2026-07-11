@@ -472,7 +472,12 @@ var
   LCount, I: Integer;
 begin
   Result := nil;
-  LEntries := ReadDir(ADir);
+  try
+    LEntries := ReadDir(ADir);
+  except
+    { Directory doesn't exist or can't be read — return empty }
+    Exit;
+  end;
   LCount := 0;
   for I := 0 to High(LEntries) do
   begin
