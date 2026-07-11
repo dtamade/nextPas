@@ -507,6 +507,26 @@ begin
   Check(not FsExists(GTmpDir + '/rmall'), 'gone');
 end;
 
+procedure TestRemoveAllDeepTree;
+var
+  LBase, LPath: string;
+  I: Integer;
+begin
+  { P2-7 regression test: deep directory tree must not stack overflow.
+    Creates 200 nested directories, each with a file. }
+  LBase := GTmpDir + '/rmall-deep';
+  LPath := LBase;
+  for I := 1 to 200 do
+  begin
+    LPath := LPath + '/d';
+    FsMkdirAll(LPath);
+    FsWriteFile(LPath + '/f.txt', TBytes.Create(I and $FF));
+  end;
+  Check(FsExists(LBase + '/d/d/f.txt'), 'deep tree created');
+  Check(FsRemoveAll(LBase), 'deep removeall');
+  Check(not FsExists(LBase), 'deep tree gone');
+end;
+
 procedure TestRename;
 begin
   FsWriteFile(GTmpDir + '/old.txt', TBytes.Create(42));
@@ -1021,6 +1041,21 @@ begin
   CheckContains(LBody, 'SetLength(Result, LRead)',
     'FsReadFile crops the result to actual bytes read');
 end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestFsReadFileProcFilesystem;
+var
+  LData: TBytes;
+  LText: string;
+begin
+  { P1-7 regression test: /proc files report size=0 but have content.
+    FsReadFile must fall back to growing read for such files. }
+  LData := FsReadFile('/proc/self/status');
+  Check(Length(LData) > 0, '/proc/self/status is non-empty');
+  LText := string(PAnsiChar(@LData[0]));
+  Check(Pos('Name:', LText) > 0, '/proc/self/status contains Name:');
+end;
+{$ENDIF}
 
 procedure TestFsCwdRoundTrip;
 var
@@ -1728,6 +1763,7 @@ begin
     T.Test('RemoveAll unsafe root guard raises invalid operation',
       @TestRemoveAllUnsafeRootGuardRaisesInvalidOperation);
     T.Test('RemoveAll', @TestRemoveAll);
+    T.Test('RemoveAll deep tree (200 levels)', @TestRemoveAllDeepTree);
     T.Test('Rename', @TestRename);
     T.Test('Rename missing source raises not found',
       @TestRenameMissingSourceRaisesNotFound);
@@ -1810,6 +1846,10 @@ begin
       @TestTempFilePathBufferConstantContract);
     T.Test('FsReadFile uses read_into contract',
       @TestFsReadFileUsesReadIntoContract);
+    {$IFDEF NEXTPAS_LINUX}
+    T.Test('FsReadFile /proc filesystem (size=0)',
+      @TestFsReadFileProcFilesystem);
+    {$ENDIF}
     T.Test('FsGetCwd/FsSetCwd roundtrip', @TestFsCwdRoundTrip);
     T.Test('FsSetCwd invalid path raises mapped fs error',
       @TestFsSetCwdInvalidPathRaisesNotFound);
