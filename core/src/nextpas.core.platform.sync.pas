@@ -388,15 +388,7 @@ begin
     {$ELSE}
     if PTHREAD_CONDATTR_SETCLOCK_SUPPORTED <> 0 then
     begin
-      {$IFDEF NEXTPAS_LINUX}
       Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
-      {$ELSEIF defined(NEXTPAS_ANDROID)}
-      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
-      {$ELSEIF defined(NEXTPAS_FREEBSD)}
-      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
-      {$ELSE}
-      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
-      {$ENDIF}
       if Result <> 0 then
         Exit;
     end;

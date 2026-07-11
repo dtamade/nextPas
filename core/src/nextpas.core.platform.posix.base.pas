@@ -337,7 +337,6 @@ const
   MADV_SEQUENTIAL = cint(2);
   MADV_WILLNEED   = cint(3);
   MADV_DONTNEED   = cint(4);
-  MADV_HUGEPAGE   = cint(14);
 
   MS_ASYNC      = cint(1);
   MS_INVALIDATE = cint(2);

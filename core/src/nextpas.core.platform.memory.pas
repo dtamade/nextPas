@@ -114,10 +114,17 @@ implementation
 uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
-{$ELSEIF defined(NEXTPAS_UNIX)}
+{$ELSE}
+  {$IFDEF NEXTPAS_LINUX}
+uses
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.linux.base;
+  {$ELSE}
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi;
+  {$ENDIF}
 {$ENDIF}
 
 const
