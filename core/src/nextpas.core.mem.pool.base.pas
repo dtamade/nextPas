@@ -9,7 +9,7 @@ type
    *
    * 接口选择决策树:
    *   - 需要固定大小块池 + 容量/可用量查询？→ IBlockPool (blockpool.pas)
-   *   - 需要可变大小分配 + 固定大小 Acquire 兼容？→ IMemoryPool (pool.memory_pool.pas)
+   *   - 需要可变大小分配 + 固定大小 Acquire 兼容？→ IMemoryPool (本单元)
    *   - 只需通用 Acquire/Release 抽象？→ IPool (本单元)
    *
    * IPool vs IBlockPool 签名差异说明:

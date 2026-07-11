@@ -87,7 +87,7 @@ Pool 侧：
 - `nextpas.core.mem.pool.slab` — 页级 slab 池
 - `nextpas.core.mem.pool.slab.concurrent` — 并发 slab 池
 - `nextpas.core.mem.pool.slab.sharded` — 分片 slab 池
-- `nextpas.core.mem.pool.memory_pool` — `IMemoryPool` 接口定义
+- `nextpas.core.mem.pool.base` — `IPool` / `IMemoryPool` 接口定义
 - `nextpas.core.mem.pool.object_pool` — 泛型对象池（`IObjectPool<T>`）
 - `nextpas.core.mem.pool.allocator` — 池分配器（池 → IAllocator 包装）
 - `nextpas.core.mem.pool` — Pool 侧聚合门面

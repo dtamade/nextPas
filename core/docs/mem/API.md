@@ -654,7 +654,7 @@ LIFO 栈池，适合确定性生命周期的临时对象。
 
 ### `IMemoryPool`
 
-内存池接口（来自 `nextpas.core.mem.pool.memory_pool`）。
+内存池接口（定义在 `nextpas.core.mem.pool.base`，继承自 `IPool`）。
 
 ## 容器
 
