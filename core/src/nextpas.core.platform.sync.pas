@@ -483,6 +483,7 @@ function platform_sync_host_pthread_timeout_deadline_after_ns(
   const ANanoseconds: UInt64;
   out ADeadline: timespec): Int32; inline;
 begin
+  FillChar(ADeadline, SizeOf(ADeadline), 0);
   if clock_gettime(PTHREAD_TIMEOUT_CLOCK_ID, @ADeadline) <> 0 then
     Exit(PLATFORM_ERR_INVALID);
   platform_posix_timespec_add_ns(ADeadline, ANanoseconds);

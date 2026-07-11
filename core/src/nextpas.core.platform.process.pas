@@ -1404,6 +1404,7 @@ var
   LAccess: DWORD;
   LHandle: HANDLE;
 begin
+  AHandle := -1;
   LNulPath := 'NUL';
   if AForWrite then
     LAccess := GENERIC_WRITE
