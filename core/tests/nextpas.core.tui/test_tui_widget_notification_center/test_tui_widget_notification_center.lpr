@@ -120,6 +120,80 @@ begin
   Check(True, 'Should render stateful notification center');
 end;
 
+procedure TestNotificationCenterGetCount;
+var
+  LCenter: INotificationCenter;
+begin
+  LCenter := TNotificationCenter.New;
+  Check(LCenter.GetCount = 0, 'Initial count should be 0');
+  LCenter.Push(TNotification.Make('Msg 1', nlInfo));
+  Check(LCenter.GetCount = 1, 'Count should be 1 after push');
+  LCenter.Push(TNotification.Make('Msg 2', nlWarning));
+  Check(LCenter.GetCount = 2, 'Count should be 2 after second push');
+end;
+
+procedure TestNotificationCenterUnreadCount;
+var
+  LCenter: INotificationCenter;
+begin
+  LCenter := TNotificationCenter.New;
+  Check(LCenter.UnreadCount = 0, 'Initial unread should be 0');
+  LCenter.Push(TNotification.Make('Msg 1', nlInfo));
+  LCenter.Push(TNotification.Make('Msg 2', nlInfo));
+  Check(LCenter.UnreadCount = 2, 'Both should be unread');
+  LCenter.MarkRead(0);
+  Check(LCenter.UnreadCount = 1, 'One unread after MarkRead(0)');
+end;
+
+procedure TestNotificationCenterMarkAllReadUnreadCount;
+var
+  LCenter: INotificationCenter;
+begin
+  LCenter := TNotificationCenter.New;
+  LCenter.Push(TNotification.Make('Msg 1', nlInfo));
+  LCenter.Push(TNotification.Make('Msg 2', nlInfo));
+  LCenter.Push(TNotification.Make('Msg 3', nlInfo));
+  LCenter.MarkAllRead;
+  Check(LCenter.UnreadCount = 0, 'All read → unread = 0');
+end;
+
+procedure TestNotificationCenterGetItem;
+var
+  LCenter: INotificationCenter;
+  LNotif: TNotification;
+begin
+  LCenter := TNotificationCenter.New;
+  LCenter.Push(TNotification.Make('Title1', nlError).WithBody('Body1'));
+  LNotif := LCenter.GetItem(0);
+  Check(LNotif.Title = 'Title1', 'GetItem title should match');
+  Check(LNotif.Body = 'Body1', 'GetItem body should match');
+  Check(LNotif.Level = nlError, 'GetItem level should match');
+  Check(not LNotif.Read, 'GetItem should be unread by default');
+end;
+
+procedure TestNotificationCenterClearResetsCount;
+var
+  LCenter: INotificationCenter;
+begin
+  LCenter := TNotificationCenter.New;
+  LCenter.Push(TNotification.Make('Msg', nlInfo));
+  LCenter.Push(TNotification.Make('Msg', nlInfo));
+  LCenter.Clear;
+  Check(LCenter.GetCount = 0, 'Clear should reset count to 0');
+  Check(LCenter.UnreadCount = 0, 'Clear should reset unread to 0');
+end;
+
+procedure TestNotificationCenterMarkReadOutOfBounds;
+var
+  LCenter: INotificationCenter;
+begin
+  LCenter := TNotificationCenter.New;
+  LCenter.Push(TNotification.Make('Msg', nlInfo));
+  LCenter.MarkRead(-1);  // should not crash
+  LCenter.MarkRead(5);   // should not crash
+  Check(LCenter.UnreadCount = 1, 'Out of bounds MarkRead should not affect state');
+end;
+
 begin
   T := TTestSuite.Create('tui_widget_notification_center');
   T.Test('TNotification.Make', @TestNotificationMake);
@@ -132,5 +206,11 @@ begin
   T.Test('TNotificationCenter.Clear', @TestNotificationCenterClear);
   T.Test('TNotificationCenter.Render', @TestNotificationCenterRender);
   T.Test('TNotificationCenter.RenderStateful', @TestNotificationCenterRenderStateful);
+  T.Test('TNotificationCenter.GetCount', @TestNotificationCenterGetCount);
+  T.Test('TNotificationCenter.UnreadCount', @TestNotificationCenterUnreadCount);
+  T.Test('TNotificationCenter.MarkAllRead resets unread', @TestNotificationCenterMarkAllReadUnreadCount);
+  T.Test('TNotificationCenter.GetItem', @TestNotificationCenterGetItem);
+  T.Test('TNotificationCenter.Clear resets count', @TestNotificationCenterClearResetsCount);
+  T.Test('TNotificationCenter.MarkRead out of bounds', @TestNotificationCenterMarkReadOutOfBounds);
   if not T.Run then Halt(1);
 end.
