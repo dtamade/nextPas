@@ -179,6 +179,7 @@ implementation
 {$ENDIF}
 uses
   nextpas.core.platform.error,
+  nextpas.core.platform.signal,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.helpers,
   nextpas.core.platform.posix.ffi,
@@ -539,7 +540,7 @@ end;
 
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin
-  Result := platform_process_signal(AProc, 9);
+  Result := platform_process_signal(AProc, PLATFORM_SIGKILL);
 end;
 
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
@@ -1155,7 +1156,7 @@ end;
 
 function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32): Int32;
 begin
-  if ASignal = 9 then
+  if ASignal = PLATFORM_SIGKILL then
   begin
     if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then
       Result := 0
@@ -1168,7 +1169,7 @@ end;
 
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin
-  Result := platform_process_signal(AProc, 9);
+  Result := platform_process_signal(AProc, PLATFORM_SIGKILL);
 end;
 
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
