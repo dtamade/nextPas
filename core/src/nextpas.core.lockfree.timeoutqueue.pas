@@ -39,12 +39,12 @@ type
     function TryDequeue(out AValue: T): TLockFreeTimeoutQueueResult;
     function DequeueWait(out AValue: T): TLockFreeTimeoutQueueResult;
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): TLockFreeTimeoutQueueResult;
-    function GetCount: Int64;
-    function GetCapacity: Int64;
-    function GetTimeoutNs: Int64;
-    function IsEmpty: Boolean;
+    function GetCount: Int64; inline;
+    function GetCapacity: Int64; inline;
+    function GetTimeoutNs: Int64; inline;
+    function IsEmpty: Boolean; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -184,7 +184,7 @@ begin
   end;
 end;
 
-function TTimeoutQueueImpl.GetCount: Int64;
+function TTimeoutQueueImpl.GetCount: Int64; inline;
 var
   LHead, LTail: Int64;
 begin
@@ -196,17 +196,17 @@ begin
     Result := 0;
 end;
 
-function TTimeoutQueueImpl.GetCapacity: Int64;
+function TTimeoutQueueImpl.GetCapacity: Int64; inline;
 begin
   Result := FCapacity;
 end;
 
-function TTimeoutQueueImpl.GetTimeoutNs: Int64;
+function TTimeoutQueueImpl.GetTimeoutNs: Int64; inline;
 begin
   Result := FTimeoutNs;
 end;
 
-function TTimeoutQueueImpl.IsEmpty: Boolean;
+function TTimeoutQueueImpl.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad64(FHead, moAcquire) = AtomicLoad64(FTail, moAcquire);
 end;
@@ -216,7 +216,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TTimeoutQueueImpl.IsClosed: Boolean;
+function TTimeoutQueueImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

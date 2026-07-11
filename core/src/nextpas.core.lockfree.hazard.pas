@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.hazard;
+{**
+ * @desc Hazard Pointer memory reclamation scheme.
+ *
+ * @details Lock-free memory reclamation using hazard pointers:
+ *   - Each thread publishes pointers it's currently accessing
+ *   - Retired nodes are only reclaimed when no thread holds a hazard pointer
+ *   - Complements EBR (Epoch-Based Reclamation) for different use cases
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Acquire/Release: per-thread hazard pointer management
+ *   - Retire: thread-safe retirement list
+ *   - Reclaim: safe reclamation when no hazards exist
+ *
+ * @see Hazard Pointers — Maged Michael, 2004
+ * @see EBR — Epoch-Based Reclamation (complementary approach)
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -7,6 +23,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
+  nextpas.core.lockfree.base,
   nextpas.core.lockfree.ebr;
 
 const
@@ -78,7 +95,7 @@ type
         高频调用场景应缓存结果或改用 TEbrDomain。 }
     function ActiveThreads: PtrUInt;
     {** @desc 退休待回收数 }
-    function RetiredCount: PtrUInt;
+    function RetiredCount: PtrUInt; inline;
   end;
 
   {** @desc Hazard Pointer RAII 守卫（自动 Register/Protect/Clear/Unregister）
@@ -430,7 +447,7 @@ begin
   end;
 end;
 
-function THazardDomain.RetiredCount: PtrUInt;
+function THazardDomain.RetiredCount: PtrUInt; inline;
 begin
   Result := PtrUInt(AtomicLoad32(FGlobalRetiredCount, moAcquire));
 end;

@@ -46,7 +46,7 @@ type
     function Estimate: Int64;
     procedure Reset;
     function Merge(AOther: THyperLogLog): Boolean;
-    function RegisterCount: Int32;
+    function RegisterCount: Int32; inline;
   end;
 
 implementation
@@ -202,7 +202,7 @@ begin
   Result := True;
 end;
 
-function THyperLogLog.RegisterCount: Int32;
+function THyperLogLog.RegisterCount: Int32; inline;
 begin
   Result := FM;
 end;

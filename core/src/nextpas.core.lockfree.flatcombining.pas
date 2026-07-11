@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.flatcombining;
+{**
+ * @desc Flat Combining synchronization primitive.
+ *
+ * @details Lock-free synchronization using publication arrays:
+ *   - Threads publish operations in a shared publication array
+ *   - One thread combines and executes all pending operations
+ *   - Reduces cache contention compared to traditional locks
+ *   - Supports Incr/Decr/Add/Sub/Read operations
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Incr/Decr/Add/Sub/Read: publish and wait for completion
+ *   - Close: safe to call from any thread
+ *
+ * @see Flat Combining — Hendler et al., 2010
+ * @see Lock-free synchronization — publication array pattern
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -38,7 +54,7 @@ type
     destructor Destroy; override;
     function Apply(AOp: TFCOpType; AOperand: Int64): Int64;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
   {** @desc 基于 Flat Combining 的并发计数器 }
@@ -56,7 +72,7 @@ type
     function Sub(const AValue: Int64): Int64;
     function GetValue: Int64;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -109,7 +125,7 @@ end;
 
 function TFlatCombiningLock.TryAcquire: Boolean;
 begin
-  Result := AtomicCompareExchange32(FLock, 0, 1) = 0;
+  Result := AtomicCompareExchange32(FLock, 0, 1, moAcqRel) = 0;
 end;
 
 procedure TFlatCombiningLock.Release;
@@ -196,7 +212,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TFlatCombiningLock.IsClosed: Boolean;
+function TFlatCombiningLock.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
@@ -248,7 +264,7 @@ begin
   FLock.Close;
 end;
 
-function TFlatCombiningCounter.IsClosed: Boolean;
+function TFlatCombiningCounter.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

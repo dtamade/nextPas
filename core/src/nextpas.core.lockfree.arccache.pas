@@ -72,9 +72,9 @@ type
     function Get(AKey: UInt64; out AValue: UInt64): TARCCacheStatus;
     function Put(AKey, AValue: UInt64): TARCCacheStatus;
     function GetSize: Integer;
-    function GetCapacity: Integer;
+    function GetCapacity: Integer; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -87,7 +87,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -402,7 +402,7 @@ begin
   end;
 end;
 
-function TARCCacheImpl.GetCapacity: Integer;
+function TARCCacheImpl.GetCapacity: Integer; inline;
 begin
   Result := FCapacity;
 end;
@@ -417,7 +417,7 @@ begin
   end;
 end;
 
-function TARCCacheImpl.IsClosed: Boolean;
+function TARCCacheImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

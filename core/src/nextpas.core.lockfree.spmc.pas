@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.spmc;
+{**
+ * @desc Lock-free Single-Producer Multi-Consumer bounded queue.
+ *
+ * @details Sequence-based SPMC queue using cache-line padding:
+ *   - Bounded capacity (power-of-2 required)
+ *   - Non-blocking TryEnqueue/TryDequeue
+ *   - Blocking EnqueueWait/DequeueWait with timeout variants
+ *   - Close semantics with drain support
+ *
+ * @concurrency Thread-safe for single producer and multiple consumers:
+ *   - Enqueue: only producer thread can call
+ *   - Dequeue: multiple consumer threads compete via CAS
+ *   - Close: safe to call from any thread
+ *
+ * @see SPMC queue — single producer, multiple consumers
+ * @see Dmitry Vyukov SPMC queue — lock-free bounded queue
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -51,17 +68,17 @@ type
     {** @desc 带超时出队；超时返回 False }
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     {** @desc 近似空判断（快照，非线性化） }
-    function IsEmpty: Boolean;
+    function IsEmpty: Boolean; inline;
     {** @desc 近似满判断（快照，非线性化） }
-    function IsFull: Boolean;
+    function IsFull: Boolean; inline;
     {** @desc 近似计数（快照，非线性化） }
-    function ApproxCount: PtrUInt;
+    function ApproxCount: PtrUInt; inline;
     {** @desc 队列实际容量（2 的幂） }
-    function Capacity: PtrUInt;
+    function Capacity: PtrUInt; inline;
     {** @desc 关闭队列（唤醒所有等待者，已入队数据仍可读） }
     procedure Close;
     {** @desc 队列是否已关闭 }
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
   generic TSpmcQueue<T> = class(specialize TSpmcQueueImpl<T>)
@@ -252,17 +269,17 @@ begin
   end;
 end;
 
-function TSpmcQueueImpl.IsEmpty: Boolean;
+function TSpmcQueueImpl.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad64(FEnqueuePos, moRelaxed) <= AtomicLoad64(FDequeuePos, moRelaxed);
 end;
 
-function TSpmcQueueImpl.IsFull: Boolean;
+function TSpmcQueueImpl.IsFull: Boolean; inline;
 begin
   Result := AtomicLoad64(FEnqueuePos, moRelaxed) >= (AtomicLoad64(FDequeuePos, moRelaxed) + Int64(FCapacity));
 end;
 
-function TSpmcQueueImpl.ApproxCount: PtrUInt;
+function TSpmcQueueImpl.ApproxCount: PtrUInt; inline;
 var
   LEnq, LDeq: Int64;
 begin
@@ -274,7 +291,7 @@ begin
     Result := 0;
 end;
 
-function TSpmcQueueImpl.Capacity: PtrUInt;
+function TSpmcQueueImpl.Capacity: PtrUInt; inline;
 begin
   Result := FCapacity;
 end;
@@ -286,7 +303,7 @@ begin
   LockFreeWakeAll(@FSpaceEpoch);
 end;
 
-function TSpmcQueueImpl.IsClosed: Boolean;
+function TSpmcQueueImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

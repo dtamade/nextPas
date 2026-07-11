@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.dag;
+{**
+ * @desc Concurrent Directed Acyclic Graph (DAG) with per-node locks.
+ *
+ * @note This is NOT a lock-free structure. It uses per-node atomic locks
+ *       for fine-grained concurrency control.
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - FindNode/HasEdge/TopologicalSort: shared read locks
+ *   - AddNode/RemoveNode/AddEdge/RemoveEdge: exclusive write locks
+ *
+ * @see DAG — dependency graphs, build systems, task scheduling
+ * @see TopologicalSort — cycle detection and ordering
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -58,8 +73,8 @@ type
     function AddEdge(AFromId, AToId: Int64): TDagResult;
     function RemoveEdge(AFromId, AToId: Int64): TDagResult;
     function HasEdge(AFromId, AToId: Int64): Boolean;
-    function GetNodeCount: Int64;
-    function GetEdgeCount: Int64;
+    function GetNodeCount: Int64; inline;
+    function GetEdgeCount: Int64; inline;
     function InDegree(AId: Int64): Int32;
     function OutDegree(AId: Int64): Int32;
     { Returns -1 if the stored graph contains a cycle. }
@@ -213,9 +228,22 @@ begin
 end;
 
 procedure TConcurrentDAG.LockDag;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TConcurrentDAG.UnlockDag;
@@ -246,17 +274,17 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(dagClosed);
   LockDag;
-  if FindNode(AId) <> nil then
-  begin
+  try
+    if FindNode(AId) <> nil then
+      Exit(dagExists);
+    LNode := AllocDagNode(AId);
+    LNode^.Next := FRoot;
+    FRoot := LNode;
+    AtomicFetchAdd64(FNodeCount, 1, moRelaxed);
+    Result := dagOk;
+  finally
     UnlockDag;
-    Exit(dagExists);
   end;
-  LNode := AllocDagNode(AId);
-  LNode^.Next := FRoot;
-  FRoot := LNode;
-  AtomicFetchAdd64(FNodeCount, 1, moRelaxed);
-  UnlockDag;
-  Result := dagOk;
 end;
 
 function TConcurrentDAG.RemoveNode(AId: Int64): TDagResult;
@@ -269,41 +297,44 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(dagClosed);
   LockDag;
-  { Remove node from list }
-  LPrev := nil;
-  LCurrent := FRoot;
-  while LCurrent <> nil do
-  begin
-    if LCurrent^.Id = AId then
+  try
+    { Remove node from list }
+    LPrev := nil;
+    LCurrent := FRoot;
+    while LCurrent <> nil do
     begin
-      if LPrev = nil then
-        FRoot := LCurrent^.Next
-      else
-        LPrev^.Next := LCurrent^.Next;
-      LRemovedEdges := RemoveIncomingEdgesLocked(AId);
-      LEdge := LCurrent^.OutEdges;
-      while LEdge <> nil do
+      if LCurrent^.Id = AId then
       begin
-        LNextEdge := LEdge^.Next;
-        LTarget := FindNode(LEdge^.TargetId);
-        if LTarget <> nil then
-          AtomicFetchSub32(LTarget^.InCount, 1, moRelaxed);
-        Inc(LRemovedEdges);
-        Dispose(LEdge);
-        LEdge := LNextEdge;
+        if LPrev = nil then
+          FRoot := LCurrent^.Next
+        else
+          LPrev^.Next := LCurrent^.Next;
+        LRemovedEdges := RemoveIncomingEdgesLocked(AId);
+        LEdge := LCurrent^.OutEdges;
+        while LEdge <> nil do
+        begin
+          LNextEdge := LEdge^.Next;
+          LTarget := FindNode(LEdge^.TargetId);
+          if LTarget <> nil then
+            AtomicFetchSub32(LTarget^.InCount, 1, moRelaxed);
+          Inc(LRemovedEdges);
+          Dispose(LEdge);
+          LEdge := LNextEdge;
+        end;
+        if LRemovedEdges > 0 then
+          AtomicFetchSub64(FEdgeCount, LRemovedEdges, moRelaxed);
+        LCurrent^.OutEdges := nil;
+        Dispose(LCurrent);
+        AtomicFetchSub64(FNodeCount, 1, moRelaxed);
+        Exit(dagOk);
       end;
-      if LRemovedEdges > 0 then
-        AtomicFetchSub64(FEdgeCount, LRemovedEdges, moRelaxed);
-      LCurrent^.OutEdges := nil;
-      Dispose(LCurrent);
-      AtomicFetchSub64(FNodeCount, 1, moRelaxed);
-      UnlockDag;
-      Exit(dagOk);
+      LPrev := LCurrent;
+      LCurrent := LCurrent^.Next;
     end;
-    LPrev := LCurrent;
-    LCurrent := LCurrent^.Next;
+    Result := dagNotFound;
+  finally
+    UnlockDag;
   end;
-  UnlockDag;
   Result := dagNotFound;
 end;
 
@@ -421,12 +452,12 @@ begin
   end;
 end;
 
-function TConcurrentDAG.GetNodeCount: Int64;
+function TConcurrentDAG.GetNodeCount: Int64; inline;
 begin
   Result := AtomicLoad64(FNodeCount, moAcquire);
 end;
 
-function TConcurrentDAG.GetEdgeCount: Int64;
+function TConcurrentDAG.GetEdgeCount: Int64; inline;
 begin
   Result := AtomicLoad64(FEdgeCount, moAcquire);
 end;
@@ -659,17 +690,20 @@ var
   LNode, LNext: PDagNode;
 begin
   LockDag;
-  LNode := FRoot;
-  while LNode <> nil do
-  begin
-    LNext := LNode^.Next;
-    FreeNode(LNode);
-    LNode := LNext;
+  try
+    LNode := FRoot;
+    while LNode <> nil do
+    begin
+      LNext := LNode^.Next;
+      FreeNode(LNode);
+      LNode := LNext;
+    end;
+    FRoot := nil;
+    AtomicStore64(FNodeCount, 0, moRelaxed);
+    AtomicStore64(FEdgeCount, 0, moRelaxed);
+  finally
+    UnlockDag;
   end;
-  FRoot := nil;
-  AtomicStore64(FNodeCount, 0, moRelaxed);
-  AtomicStore64(FEdgeCount, 0, moRelaxed);
-  UnlockDag;
 end;
 
 procedure TConcurrentDAG.Close;

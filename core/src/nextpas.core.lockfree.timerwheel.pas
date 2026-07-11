@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.timerwheel;
+{**
+ * @desc Concurrent Timer Wheel with per-wheel spin lock.
+ *
+ * @details Efficient timer management using circular array:
+ *   - Schedule: add timer with callback and delay
+ *   - Cancel: remove scheduled timer
+ *   - Tick/TickN: advance timer wheel and execute due callbacks
+ *   - Close: graceful shutdown
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Schedule/Cancel: exclusive write lock
+ *   - Tick/TickN: exclusive write lock
+ *
+ * @see Timer Wheel — efficient timer management data structure
+ * @see Linux kernel timer wheel — similar implementation
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -72,9 +88,22 @@ begin
 end;
 
 procedure TTimerWheel.Lock;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ThreadSwitch;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TTimerWheel.Unlock;

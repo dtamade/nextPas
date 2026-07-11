@@ -38,6 +38,12 @@ type
 
   TTrieMapForEachCallback = reference to procedure(const AKey, AValue: AnsiString);
 
+  PTriePair = ^TTriePair;
+  TTriePair = record
+    Key: AnsiString;
+    Value: AnsiString;
+  end;
+
   PTrieNode = ^TTrieNode;
   TTrieNode = record
     IsLeaf: Boolean;
@@ -78,6 +84,9 @@ type
       ADepth: Int32; const AKey: AnsiString): Boolean;
     procedure ForEachNode(ANode: PTrieNode;
       ACallback: TTrieMapForEachCallback);
+    procedure CollectNode(ANode: PTrieNode;
+      var APairs: array of TTriePair;
+      var ACount: Integer);
     procedure Lock; inline;
     procedure Unlock; inline;
   public
@@ -95,9 +104,9 @@ type
     {** @desc 删除键值对 }
     function Remove(const AKey: AnsiString): TTrieMapResult;
     {** @desc 当前元素数量 }
-    function Count: Int32;
+    function Count: Int32; inline;
     {** @desc 是否为空 }
-    function IsEmpty: Boolean;
+    function IsEmpty: Boolean; inline;
     {** @desc 清空所有元素 }
     procedure Clear;
     {** @desc 遍历所有键值对 }
@@ -107,7 +116,8 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.lockfree.base;
 
 { FNV-1a hash }
 function TConcurrentTrieMap.HashKey(const AKey: AnsiString): UInt32;
@@ -298,14 +308,27 @@ begin
 end;
 
 procedure TConcurrentTrieMap.Lock;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
-    { spin };
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TConcurrentTrieMap.Unlock;
 begin
-  AtomicExchange32(FLock, 0);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 constructor TConcurrentTrieMap.Create;
@@ -386,12 +409,12 @@ begin
   end;
 end;
 
-function TConcurrentTrieMap.Count: Int32;
+function TConcurrentTrieMap.Count: Int32; inline;
 begin
   Result := AtomicLoad32(FSize);
 end;
 
-function TConcurrentTrieMap.IsEmpty: Boolean;
+function TConcurrentTrieMap.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad32(FSize) = 0;
 end;
@@ -424,14 +447,43 @@ begin
     ForEachNode(ANode^.Children[I], ACallback);
 end;
 
-procedure TConcurrentTrieMap.ForEach(ACallback: TTrieMapForEachCallback);
+procedure TConcurrentTrieMap.CollectNode(ANode: PTrieNode;
+  var APairs: array of TTriePair;
+  var ACount: Integer);
+var
+  I: Int32;
 begin
+  if ANode = nil then
+    Exit;
+  if ANode^.IsLeaf then
+  begin
+    APairs[ACount].Key := ANode^.Key;
+    APairs[ACount].Value := ANode^.Value;
+    Inc(ACount);
+    Exit;
+  end;
+  for I := 0 to TRIE_BRANCH_FACTOR - 1 do
+    CollectNode(ANode^.Children[I], APairs, ACount);
+end;
+
+procedure TConcurrentTrieMap.ForEach(ACallback: TTrieMapForEachCallback);
+var
+  LPairs: array of TTriePair;
+  LCount, LI: Integer;
+begin
+  LCount := FSize;
+  if LCount = 0 then
+    Exit;
+  SetLength(LPairs, LCount);
+  LCount := 0;
   Lock;
   try
-    ForEachNode(FRoot, ACallback);
+    CollectNode(FRoot, LPairs, LCount);
   finally
     Unlock;
   end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LPairs[LI].Key, LPairs[LI].Value);
 end;
 
 end.

@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.treap;
+{**
+ * @desc Concurrent Treap (Randomized BST) with per-tree spin lock.
+ *
+ * @note This is NOT a lock-free structure. It uses an atomic spin lock
+ *       to protect write operations (insert/remove).
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains/ForEach: shared read access
+ *   - Insert/Remove/Clear: exclusive write lock
+ *
+ * @see Treap — tree + heap, randomized balanced BST
+ * @see Aragon & Seidel, 1989 — original paper
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -92,7 +107,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -270,15 +285,15 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(trClosed);
   Lock;
-  LOldCount := FCount;
-  FRoot := InsertNode(FRoot, AKey, AValue);
-  if FCount > LOldCount then
-  begin
+  try
+    LOldCount := FCount;
+    FRoot := InsertNode(FRoot, AKey, AValue);
+    if FCount > LOldCount then
+      Exit(trInserted);
+    Result := trUpdated;
+  finally
     Unlock;
-    Exit(trInserted);
   end;
-  Unlock;
-  Result := trUpdated;
 end;
 
 function TConcurrentTreap.Remove(AKey: Int64): TTreapResult;
@@ -288,15 +303,15 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(trClosed);
   Lock;
-  LOldCount := FCount;
-  FRoot := DeleteNode(FRoot, AKey);
-  if FCount < LOldCount then
-  begin
+  try
+    LOldCount := FCount;
+    FRoot := DeleteNode(FRoot, AKey);
+    if FCount < LOldCount then
+      Exit(trRemoved);
+    Result := trNotFound;
+  finally
     Unlock;
-    Exit(trRemoved);
   end;
-  Unlock;
-  Result := trNotFound;
 end;
 
 function TConcurrentTreap.Find(AKey: Int64; out AValue: Int64): Boolean;
@@ -309,16 +324,18 @@ begin
     Exit(False);
   end;
   Lock;
-  LNode := FindNode(FRoot, AKey);
-  if LNode <> nil then
-  begin
-    AValue := LNode^.Value;
+  try
+    LNode := FindNode(FRoot, AKey);
+    if LNode <> nil then
+    begin
+      AValue := LNode^.Value;
+      Exit(True);
+    end;
+    AValue := 0;
+    Result := False;
+  finally
     Unlock;
-    Exit(True);
   end;
-  Unlock;
-  AValue := 0;
-  Result := False;
 end;
 
 function TConcurrentTreap.Contains(AKey: Int64): Boolean;
@@ -328,9 +345,12 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
   Lock;
-  LNode := FindNode(FRoot, AKey);
-  Unlock;
-  Result := LNode <> nil;
+  try
+    LNode := FindNode(FRoot, AKey);
+    Result := LNode <> nil;
+  finally
+    Unlock;
+  end;
 end;
 
 function TConcurrentTreap.GetCount: Int64;
@@ -382,10 +402,13 @@ end;
 procedure TConcurrentTreap.Clear;
 begin
   Lock;
-  ClearSubtree(FRoot);
-  FRoot := nil;
-  FCount := 0;
-  Unlock;
+  try
+    ClearSubtree(FRoot);
+    FRoot := nil;
+    FCount := 0;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TConcurrentTreap.Close;

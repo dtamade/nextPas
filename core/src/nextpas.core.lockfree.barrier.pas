@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.barrier;
+{**
+ * @desc Concurrent Cyclic Barrier with generation tracking.
+ *
+ * @details Synchronization barrier for multiple threads:
+ *   - Wait: block until all parties arrive
+ *   - Timeout variants for bounded waiting
+ *   - Generation tracking for reuse
+ *   - Close semantics for graceful shutdown
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Wait: threads block until all parties arrive
+ *   - Close: safe to call from any thread
+ *
+ * @see Cyclic Barrier — reusable synchronization point
+ * @see Java CyclicBarrier — similar barrier implementation
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -41,11 +57,11 @@ type
     destructor Destroy; override;
     function Await: TCyclicBarrierWaitResult;
     function AwaitTimeout(const ATimeoutNs: Int64): TCyclicBarrierWaitResult;
-    function GetParties: Int64;
+    function GetParties: Int64; inline;
     function GetNumberWaiting: Int64;
     procedure Reset;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -68,7 +84,14 @@ end;
 
 destructor TCyclicBarrier.Destroy;
 begin
-  Dispose(FGeneration);
+  Close;
+  AcquireState;
+  try
+    Dispose(FGeneration);
+    FGeneration := nil;
+  finally
+    ReleaseState;
+  end;
   inherited Destroy;
 end;
 
@@ -216,7 +239,7 @@ begin
   Result := AwaitInternal(ATimeoutNs);
 end;
 
-function TCyclicBarrier.GetParties: Int64;
+function TCyclicBarrier.GetParties: Int64; inline;
 begin
   Result := FParties;
 end;
@@ -256,7 +279,7 @@ begin
   end;
 end;
 
-function TCyclicBarrier.IsClosed: Boolean;
+function TCyclicBarrier.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

@@ -44,9 +44,9 @@ type
     function TryAdd: TLeakyBucketResult;
     function TryAddN(const AN: Double): TLeakyBucketResult;
     procedure Close;
-    function IsClosed: Boolean;
-    function GetLeakRate: Double;
-    function GetBucketSize: Double;
+    function IsClosed: Boolean; inline;
+    function GetLeakRate: Double; inline;
+    function GetBucketSize: Double; inline;
     function GetLevel: Double;
   end;
 
@@ -80,9 +80,22 @@ begin
 end;
 
 procedure TLeakyBucket.Lock;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ThreadSwitch;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TLeakyBucket.Unlock;
@@ -148,17 +161,17 @@ begin
   end;
 end;
 
-function TLeakyBucket.IsClosed: Boolean;
+function TLeakyBucket.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TLeakyBucket.GetLeakRate: Double;
+function TLeakyBucket.GetLeakRate: Double; inline;
 begin
   Result := FLeakRate;
 end;
 
-function TLeakyBucket.GetBucketSize: Double;
+function TLeakyBucket.GetBucketSize: Double; inline;
 begin
   Result := FBucketSize;
 end;

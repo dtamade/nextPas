@@ -97,9 +97,9 @@ type
     {** @desc 删除键值对 }
     function Remove(const AKey: AnsiString): TTTLCacheResult;
     {** @desc 当前元素数量（包含可能过期的） }
-    function Count: Int32;
+    function Count: Int32; inline;
     {** @desc 是否为空 }
-    function IsEmpty: Boolean;
+    function IsEmpty: Boolean; inline;
     {** @desc 清空所有元素 }
     procedure Clear;
     {** @desc 设置新的默认 TTL }
@@ -109,7 +109,8 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.lockfree.base;
 
 function TTTLCache.GetNowMs: Int64;
 begin
@@ -138,14 +139,27 @@ begin
 end;
 
 procedure TTTLCache.Lock;
+var
+  LSpin: Integer;
 begin
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
-    { spin };
+  LSpin := 0;
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TTTLCache.Unlock;
 begin
-  AtomicExchange32(FLock, 0);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 function TTTLCache.FindNode(const AKey: AnsiString): PTTLNode;
@@ -400,12 +414,12 @@ begin
   end;
 end;
 
-function TTTLCache.Count: Int32;
+function TTTLCache.Count: Int32; inline;
 begin
   Result := AtomicLoad32(FCount);
 end;
 
-function TTTLCache.IsEmpty: Boolean;
+function TTTLCache.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad32(FCount) = 0;
 end;

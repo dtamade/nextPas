@@ -28,13 +28,13 @@ type
     {** 记录一个值 }
     procedure RecordValue(AValue: Int64);
     {** 获取样本数量 }
-    function Count: Int64;
+    function Count: Int64; inline;
     {** 获取总和 }
-    function Sum: Int64;
+    function Sum: Int64; inline;
     {** 获取最小值 }
-    function Min: Int64;
+    function Min: Int64; inline;
     {** 获取最大值 }
-    function Max: Int64;
+    function Max: Int64; inline;
     {** 获取均值 (Sum div Count) }
     function Mean: Int64;
     {** 重置所有统计 }
@@ -79,24 +79,24 @@ begin
   until AtomicCompareExchange64(FMax, LOldMax, LNewMax, moAcqRel) = LOldMax;
 end;
 
-function TConcurrentStatsCounter.Count: Int64;
+function TConcurrentStatsCounter.Count: Int64; inline;
 begin
   Result := AtomicLoad64(FCount, moRelaxed);
 end;
 
-function TConcurrentStatsCounter.Sum: Int64;
+function TConcurrentStatsCounter.Sum: Int64; inline;
 begin
   Result := AtomicLoad64(FSum, moRelaxed);
 end;
 
-function TConcurrentStatsCounter.Min: Int64;
+function TConcurrentStatsCounter.Min: Int64; inline;
 begin
   Result := AtomicLoad64(FMin, moRelaxed);
   if Result = High(Int64) then
     Result := 0;
 end;
 
-function TConcurrentStatsCounter.Max: Int64;
+function TConcurrentStatsCounter.Max: Int64; inline;
 begin
   Result := AtomicLoad64(FMax, moRelaxed);
   if Result = Low(Int64) then

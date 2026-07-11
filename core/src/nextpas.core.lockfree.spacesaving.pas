@@ -77,9 +77,9 @@ type
     function Add(AItem: UInt64): TSpaceSavingStatus;
     function TopK(out AResult: TSpaceSavingResult): TSpaceSavingStatus;
     function TotalItems: UInt64;
-    function GetK: Integer;
+    function GetK: Integer; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -329,7 +329,7 @@ begin
   end;
 end;
 
-function TSpaceSavingImpl.GetK: Integer;
+function TSpaceSavingImpl.GetK: Integer; inline;
 begin
   Result := FCapacity;
 end;
@@ -344,7 +344,7 @@ begin
   end;
 end;
 
-function TSpaceSavingImpl.IsClosed: Boolean;
+function TSpaceSavingImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

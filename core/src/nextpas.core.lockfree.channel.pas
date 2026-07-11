@@ -1,4 +1,22 @@
 unit nextpas.core.lockfree.channel;
+{**
+ * @desc Lock-free bounded MPMC channel using sequence-based slots.
+ *
+ * @details Multi-producer multi-consumer channel with:
+ *   - Bounded capacity with dynamic resize support
+ *   - Blocking Send/Receive with timeout variants
+ *   - Non-blocking TrySend/TryReceive
+ *   - Close semantics with drain support
+ *   - Selector integration for multiplexing
+ *
+ * @concurrency Thread-safe for multiple producers and consumers:
+ *   - Send/TrySend: producers compete for slots
+ *   - Receive/TryReceive: consumers compete for data
+ *   - Close: safe to call from any thread
+ *
+ * @see Go channels — similar CSP model
+ * @see Rust crossbeam::channel — similar bounded channel
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -565,14 +583,15 @@ begin
         LOldIdx := PtrUInt(LRecv + Int64(LI)) and FMask;
         LNewIdx := LI and LNewMask;
         LNewSlots[LNewIdx].Value := FSlots[LOldIdx].Value;
-        AtomicStore64(LNewSlots[LNewIdx].Sequence, Int64(LI) + 1, moRelaxed);
+        AtomicStore64(LNewSlots[LNewIdx].Sequence, Int64(LI) + 1, moRelease);
       end;
 
     FSlots := LNewSlots;
     FCapacity := LNewCap;
     FMask := LNewMask;
-    AtomicStore64(FRecvPos, 0, moRelaxed);
-    AtomicStore64(FSendPos, Int64(LCount), moRelaxed);
+    // moRelease: 确保所有新槽位数据对后续读者可见
+    AtomicStore64(FRecvPos, 0, moRelease);
+    AtomicStore64(FSendPos, Int64(LCount), moRelease);
     Result := True;
   finally
     AtomicStore32(FResizing, 0, moRelease);

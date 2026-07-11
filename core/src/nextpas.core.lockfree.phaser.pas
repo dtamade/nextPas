@@ -41,8 +41,8 @@ type
     function GetUnarrived: Int64;
     procedure Terminate;
     procedure Close;
-    function IsClosed: Boolean;
-    function IsTerminated: Boolean;
+    function IsClosed: Boolean; inline;
+    function IsTerminated: Boolean; inline;
   end;
 
 implementation
@@ -241,12 +241,12 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TPhaser.IsClosed: Boolean;
+function TPhaser.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TPhaser.IsTerminated: Boolean;
+function TPhaser.IsTerminated: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

@@ -50,11 +50,11 @@ type
     {** @desc 检查元素是否存在
       @param AKey 要检查的键
       @return 如果存在返回 True }
-    function Contains(const AKey: TKey): Boolean;
+    function Contains(const AKey: TKey): Boolean; inline;
 
     {** @desc 获取元素数量
       @return 元素数量 }
-    function Count: PtrUInt;
+    function Count: PtrUInt; inline;
 
     {** @desc 清空所有元素 }
     procedure Clear;
@@ -89,14 +89,14 @@ begin
   Result := FMap.Remove(AKey);
 end;
 
-function TConcurrentHashSetImpl.Contains(const AKey: TKey): Boolean;
+function TConcurrentHashSetImpl.Contains(const AKey: TKey): Boolean; inline;
 var
   LDummy: Boolean;
 begin
   Result := FMap.Find(AKey, LDummy);
 end;
 
-function TConcurrentHashSetImpl.Count: PtrUInt;
+function TConcurrentHashSetImpl.Count: PtrUInt; inline;
 begin
   Result := FMap.Count;
 end;

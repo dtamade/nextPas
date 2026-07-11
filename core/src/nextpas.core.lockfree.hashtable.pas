@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.hashtable;
+{**
+ * @desc Lock-free Hash Table with open addressing and linear probing.
+ *
+ * @details Active-reader gate for lock-free reads, writer spin lock for writes:
+ *   - Open addressing with linear probing for collision resolution
+ *   - Power-of-2 capacity with bit-mask modulo
+ *   - Insert/Find/Remove/Contains operations
+ *   - Dynamic resize support
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains: lock-free reads via active-reader gate
+ *   - Insert/Remove: exclusive writer lock
+ *   - Resize: coordinated with active readers
+ *
+ * @see Open Addressing — collision resolution strategy
+ * @see Linear Probing — cache-friendly probing sequence
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -68,13 +85,13 @@ type
     {** 是否包含键 }
     function Contains(const AKey: TKey): Boolean;
     {** 大致数量 }
-    function ApproxCount: Int64;
+    function ApproxCount: Int64; inline;
     {** 是否为空 }
-    function IsEmpty: Boolean;
+    function IsEmpty: Boolean; inline;
     {** 关闭 }
     procedure Close;
     {** 是否已关闭 }
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -134,9 +151,22 @@ begin
 end;
 
 procedure TLockFreeHashTableImpl.LockWriter;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcquire) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TLockFreeHashTableImpl.UnlockWriter;
@@ -328,12 +358,12 @@ begin
   end;
 end;
 
-function TLockFreeHashTableImpl.ApproxCount: Int64;
+function TLockFreeHashTableImpl.ApproxCount: Int64; inline;
 begin
   Result := AtomicLoad64(FCount, moRelaxed);
 end;
 
-function TLockFreeHashTableImpl.IsEmpty: Boolean;
+function TLockFreeHashTableImpl.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad64(FCount, moRelaxed) = 0;
 end;
@@ -348,7 +378,7 @@ begin
   end;
 end;
 
-function TLockFreeHashTableImpl.IsClosed: Boolean;
+function TLockFreeHashTableImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

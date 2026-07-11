@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.linkedlist;
+{**
+ * @desc Concurrent Linked List with per-list spin lock.
+ *
+ * @details Ordered linked list with spin lock protection:
+ *   - Insert: ordered insertion (maintains ascending order)
+ *   - Remove: delete specified value
+ *   - Contains: check if value exists
+ *   - ForEach: iterate all elements
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Contains/ForEach: shared read access
+ *   - Insert/Remove/Clear: exclusive write lock
+ *
+ * @see Linked List — dynamic ordered collection
+ * @see Concurrent collections — thread-safe list implementations
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -78,9 +94,22 @@ begin
 end;
 
 procedure TConcurrentLinkedListImpl.LockList;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TConcurrentLinkedListImpl.UnlockList;

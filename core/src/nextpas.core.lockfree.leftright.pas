@@ -56,10 +56,10 @@ type
     { Write side: exclusive }
     procedure Write(AWriteCallback: TLeftRightWriteCallback; ACopyCallback: TLeftRightCopyCallback; AData: Pointer);
     { State }
-    function GetReadIndex: Int32;
-    function GetReaderCount: Int32;
+    function GetReadIndex: Int32; inline;
+    function GetReaderCount: Int32; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -169,12 +169,12 @@ begin
   end;
 end;
 
-function TLeftRight.GetReadIndex: Int32;
+function TLeftRight.GetReadIndex: Int32; inline;
 begin
   Result := AtomicLoad32(FReadIndex, moAcquire);
 end;
 
-function TLeftRight.GetReaderCount: Int32;
+function TLeftRight.GetReaderCount: Int32; inline;
 begin
   Result := AtomicLoad32(FReaderCount, moAcquire);
 end;
@@ -184,7 +184,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TLeftRight.IsClosed: Boolean;
+function TLeftRight.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.actor;
+{**
+ * @desc Actor model implementation with MPSC mailbox.
+ *
+ * @details Message-driven concurrency model:
+ *   - Each Actor has an independent mailbox (MPSC queue)
+ *   - Messages are processed sequentially by the actor
+ *   - Supports Spawn/Send/Ask/Stop lifecycle
+ *   - ActorSystem manages actor creation and supervision
+ *
+ * @concurrency Thread-safe message passing:
+ *   - Send: multiple threads can send messages concurrently
+ *   - Process: actor processes messages one at a time
+ *   - Stop: graceful shutdown with drain support
+ *
+ * @see Erlang/OTP — actor model reference implementation
+ * @see Akka (Scala/JVM) — similar actor system design
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -301,16 +318,20 @@ end;
 
 procedure TActorSystem.AcquireLock;
 var
-  LSpinCount: Int32;
+  LSpin: Integer;
 begin
-  LSpinCount := 0;
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcquire) <> 0 do
   begin
-    Inc(LSpinCount);
-    if LSpinCount <= 64 then
-      CpuPause
-    else
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
       ThreadSwitch;
+    end
+    else
+      CpuPause;
   end;
 end;
 

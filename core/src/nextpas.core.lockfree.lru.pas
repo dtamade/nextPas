@@ -49,10 +49,10 @@ type
     function Remove(const AKey: TKey): Boolean;
     procedure Clear;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     function IsEmpty: Boolean;
     function Count: PtrUInt;
-    function Capacity: PtrUInt;
+    function Capacity: PtrUInt; inline;
   end;
 
   generic TConcurrentLruCache<TKey, TValue> = class(specialize TConcurrentLruCacheImpl<TKey, TValue>)
@@ -143,9 +143,22 @@ begin
 end;
 
 procedure TConcurrentLruCacheImpl.LockBucket(AIdx: PtrUInt);
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLocks[AIdx], 0, 1) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TConcurrentLruCacheImpl.UnlockBucket(AIdx: PtrUInt);
@@ -333,7 +346,7 @@ begin
   end;
 end;
 
-function TConcurrentLruCacheImpl.IsClosed: Boolean;
+function TConcurrentLruCacheImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
@@ -358,7 +371,7 @@ begin
   end;
 end;
 
-function TConcurrentLruCacheImpl.Capacity: PtrUInt;
+function TConcurrentLruCacheImpl.Capacity: PtrUInt; inline;
 begin
   Result := FMaxItems;
 end;
