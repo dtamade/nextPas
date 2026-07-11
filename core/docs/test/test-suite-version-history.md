@@ -70,7 +70,7 @@ nextPas 项目自研的轻量级测试框架，支持串行/并行执行、子�
 | `test_diagnostics` | 错误诊断、stack trace、Double 比较、Error vs Failure | 17 |
 | `test_advanced` | RTTI discovery、retry、TAP/JSON 输出格式 | 19 |
 | `test_subtests` | 子测试嵌套、ITestContext、failure 传播、AfterEach 失败、cleanup | 1 |
-| `test_stress` | 高并发压力测试、大量测试注册、内存密集 | 1 |
+| `test_stress` | 高并发压力测试、大量测试注册、内存密集、mock/expect/array 压力 | 9 |
 | `test_prop` | Property-based testing — GenString/GenInt/GenBool/GenBytes + shrinking + Map/Filter/Choice/OneOf combinators + PropFail/PropWithResult + GenArray/GenTuple/BindInt + FuzzStructured/FuzzParallel/ICoverageTracker | 37 |
 
 ## 运行方式
