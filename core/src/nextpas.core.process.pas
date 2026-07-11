@@ -9,6 +9,7 @@ interface
 
 uses
   nextpas.core.text.base,
+  nextpas.core.time.base,
   nextpas.core.process.base,
   nextpas.core.process.child,
   nextpas.core.process.command,
@@ -50,6 +51,26 @@ function RunIn(const APath: string; const AArgs: array of string;
 {** @desc 执行子进程并返回 stdout 文本 *}
 function Capture(const APath: string; const AArgs: array of string): string;
 {**
+ * @desc 带超时的同步执行，超时后自动 Kill
+ *
+ * @params
+ *   APath     可执行文件路径
+ *   AArgs     命令行参数
+ *   ATimeout  超时时间
+ *}
+function RunTimeout(const APath: string; const AArgs: array of string;
+  const ATimeout: TDuration): TProcessOutput;
+{**
+ * @desc 带超时的执行并返回 stdout 文本
+ *
+ * @params
+ *   APath     可执行文件路径
+ *   AArgs     命令行参数
+ *   ATimeout  超时时间
+ *}
+function CaptureTimeout(const APath: string; const AArgs: array of string;
+  const ATimeout: TDuration): string;
+{**
  * @desc 在 PATH 中搜索可执行文件（类似 Go 的 exec.LookPath）
  *
  * @params
@@ -89,6 +110,18 @@ var
 begin
   LOutput := Run(APath, AArgs);
   Result := LOutput.StdOut;
+end;
+
+function RunTimeout(const APath: string; const AArgs: array of string;
+  const ATimeout: TDuration): TProcessOutput;
+begin
+  Result := TCommand.New(APath).Args(AArgs).Timeout(ATimeout).Output;
+end;
+
+function CaptureTimeout(const APath: string; const AArgs: array of string;
+  const ATimeout: TDuration): string;
+begin
+  Result := RunTimeout(APath, AArgs, ATimeout).StdOut;
 end;
 
 function LookPath(const AName: string): string;

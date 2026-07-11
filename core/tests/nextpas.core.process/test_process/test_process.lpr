@@ -1103,6 +1103,27 @@ begin
   Check('Signal — signal is SIGTERM (15)', LOut.ExitCode = 128 + 15);
 end;
 
+procedure TestRunTimeoutConvenience;
+var
+  LOut: TProcessOutput;
+  LStart: TInstant;
+begin
+  { RunTimeout convenience function }
+  LStart := TInstant.Now;
+  LOut := RunTimeout('/bin/sleep', ['60'], TDuration.FromMilliseconds(200));
+  Check('RunTimeout — signaled', LOut.Status = psSignaled);
+  Check('RunTimeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
+end;
+
+procedure TestCaptureTimeoutConvenience;
+var
+  LText: string;
+begin
+  { CaptureTimeout returns stdout of fast command }
+  LText := CaptureTimeout('/bin/echo', ['hello'], TDuration.FromSeconds(5));
+  Check('CaptureTimeout — has output', Length(LText) > 0);
+end;
+
 
 begin
   LPassed := 0;
@@ -1165,6 +1186,8 @@ begin
   TestRunLargeOutput;
   TestLookPath;
   TestSignal;
+  TestRunTimeoutConvenience;
+  TestCaptureTimeoutConvenience;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');
