@@ -25,6 +25,15 @@ type
     {** @desc 检查管道是否无效（任一端无效）
         @return True 如果管道无效 *}
     function IsInvalid: Boolean; inline;
+    {** @desc 关闭管道读端
+        @return 0 成功，PLATFORM_ERR_BADF 管道无效 *}
+    function CloseRead: Int32;
+    {** @desc 关闭管道写端
+        @return 0 成功，PLATFORM_ERR_BADF 管道无效 *}
+    function CloseWrite: Int32;
+    {** @desc 关闭管道两端
+        @return 0 成功 *}
+    function Close: Int32;
   end;
 
 {** @desc 创建匿名管道
@@ -87,6 +96,21 @@ begin
   Result := (ReadFd < 0) or (WriteFd < 0);
 end;
 
+function TPlatformPipe.CloseRead: Int32;
+begin
+  Result := platform_pipe_close_read(Self);
+end;
+
+function TPlatformPipe.CloseWrite: Int32;
+begin
+  Result := platform_pipe_close_write(Self);
+end;
+
+function TPlatformPipe.Close: Int32;
+begin
+  Result := platform_pipe_close(Self);
+end;
+
 function platform_pipe_create(out APipe: TPlatformPipe): Int32;
 var
   LFds: array[0..1] of Int32;
@@ -144,6 +168,41 @@ uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 
+function TPlatformPipe.IsReadValid: Boolean;
+begin
+  Result := ReadFd >= 0;
+end;
+
+function TPlatformPipe.IsWriteValid: Boolean;
+begin
+  Result := WriteFd >= 0;
+end;
+
+function TPlatformPipe.IsValid: Boolean;
+begin
+  Result := (ReadFd >= 0) and (WriteFd >= 0);
+end;
+
+function TPlatformPipe.IsInvalid: Boolean;
+begin
+  Result := (ReadFd < 0) or (WriteFd < 0);
+end;
+
+function TPlatformPipe.CloseRead: Int32;
+begin
+  Result := platform_pipe_close_read(Self);
+end;
+
+function TPlatformPipe.CloseWrite: Int32;
+begin
+  Result := platform_pipe_close_write(Self);
+end;
+
+function TPlatformPipe.Close: Int32;
+begin
+  Result := platform_pipe_close(Self);
+end;
+
 function platform_pipe_create(out APipe: TPlatformPipe): Int32;
 var
   LRead, LWrite: HANDLE;
@@ -194,6 +253,41 @@ end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
+function TPlatformPipe.IsReadValid: Boolean;
+begin
+  Result := ReadFd >= 0;
+end;
+
+function TPlatformPipe.IsWriteValid: Boolean;
+begin
+  Result := WriteFd >= 0;
+end;
+
+function TPlatformPipe.IsValid: Boolean;
+begin
+  Result := (ReadFd >= 0) and (WriteFd >= 0);
+end;
+
+function TPlatformPipe.IsInvalid: Boolean;
+begin
+  Result := (ReadFd < 0) or (WriteFd < 0);
+end;
+
+function TPlatformPipe.CloseRead: Int32;
+begin
+  Result := platform_pipe_close_read(Self);
+end;
+
+function TPlatformPipe.CloseWrite: Int32;
+begin
+  Result := platform_pipe_close_write(Self);
+end;
+
+function TPlatformPipe.Close: Int32;
+begin
+  Result := platform_pipe_close(Self);
+end;
+
 function platform_pipe_create(out APipe: TPlatformPipe): Int32;
 begin FillChar(APipe, SizeOf(APipe), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pipe_close_read(var APipe: TPlatformPipe): Int32;
