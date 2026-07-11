@@ -53,9 +53,9 @@ type
     function Contains(const AKey: TKey): Boolean;
     procedure Clear;
     procedure Close;
-    function IsClosed: Boolean;
-    function IsEmpty: Boolean;
-    function Count: PtrUInt;
+    function IsClosed: Boolean; inline;
+    function IsEmpty: Boolean; inline;
+    function Count: PtrUInt; inline;
     function GetHitRate: Double;
   end;
 
@@ -338,17 +338,17 @@ begin
   end;
 end;
 
-function TConcurrentLFUCacheImpl.IsClosed: Boolean;
+function TConcurrentLFUCacheImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TConcurrentLFUCacheImpl.IsEmpty: Boolean;
+function TConcurrentLFUCacheImpl.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad64(FCount, moRelaxed) = 0;
 end;
 
-function TConcurrentLFUCacheImpl.Count: PtrUInt;
+function TConcurrentLFUCacheImpl.Count: PtrUInt; inline;
 begin
   Result := PtrUInt(AtomicLoad64(FCount, moRelaxed));
 end;

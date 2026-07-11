@@ -97,9 +97,9 @@ type
     {** @desc 删除键值对 }
     function Remove(const AKey: AnsiString): TTTLCacheResult;
     {** @desc 当前元素数量（包含可能过期的） }
-    function Count: Int32;
+    function Count: Int32; inline;
     {** @desc 是否为空 }
-    function IsEmpty: Boolean;
+    function IsEmpty: Boolean; inline;
     {** @desc 清空所有元素 }
     procedure Clear;
     {** @desc 设置新的默认 TTL }
@@ -414,12 +414,12 @@ begin
   end;
 end;
 
-function TTTLCache.Count: Int32;
+function TTTLCache.Count: Int32; inline;
 begin
   Result := AtomicLoad32(FCount);
 end;
 
-function TTTLCache.IsEmpty: Boolean;
+function TTTLCache.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad32(FCount) = 0;
 end;
