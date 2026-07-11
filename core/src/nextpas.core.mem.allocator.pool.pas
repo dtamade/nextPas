@@ -223,6 +223,8 @@ function TPoolAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LRaw: PByte;
 begin
+  if ASize = 0 then
+    Exit(nil);
   { 超过固定块大小的请求，fallback 到内部分配器（带标记头） }
   if ASize > FBlockSize then
   begin

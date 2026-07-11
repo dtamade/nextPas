@@ -87,7 +87,8 @@ var
 begin
   LAlloc := TSizeClassAllocator.Create(DefaultAllocator);
   try
-    LPtr := LAlloc.GetMem(131072);
+    { Max size class is 262144; use 524288 to ensure large object path }
+    LPtr := LAlloc.GetMem(524288);
     Check(LPtr <> nil, 'large alloc succeeds');
     LStats := LAlloc.GetStats;
     Check(LStats.LargeAllocCount >= 1, 'delegated to inner');

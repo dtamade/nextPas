@@ -220,6 +220,8 @@ var
   LPost: PUInt64;
   LUserPtr: Pointer;
 begin
+  if ASize = 0 then
+    Exit(nil);
   Result := nil;
   { Check for overflow in size calculation }
   LTotalSize := ASize + HEADER_SIZE + POST_SENTINEL_SIZE;

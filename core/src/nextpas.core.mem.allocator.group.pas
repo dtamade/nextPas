@@ -130,6 +130,8 @@ function TGroupAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LAligned: SizeUInt;
 begin
+  if ASize = 0 then
+    Exit(nil);
   if FActiveGroup < 0 then
     Exit(nil);
 

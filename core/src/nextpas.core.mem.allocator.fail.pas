@@ -90,6 +90,9 @@ end;
 procedure TFailAllocator.SetFailAt(AFailAt: UInt64);
 begin
   FFailAt := AFailAt;
+  FTotalAttempts := 0;
+  FFailCount := 0;
+  FSuccessCount := 0;
 end;
 
 function TFailAllocator.GetMem(ASize: SizeUInt): Pointer; inline;

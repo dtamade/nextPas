@@ -68,7 +68,7 @@ end;
 function TRtlAllocator.Traits: TAllocatorTraits; inline;
 begin
   Result.ZeroInitialized := True;
-  Result.ThreadSafe := False;
+  Result.ThreadSafe := True;
   Result.SupportsRealloc := True;
 end;
 

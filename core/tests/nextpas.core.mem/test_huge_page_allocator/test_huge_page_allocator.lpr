@@ -117,7 +117,7 @@ begin
   LAlloc := THugePageAllocator.Create(GetRtlAllocator, hps2MB, 2 * 1024 * 1024);
   try
     LTraits := LAlloc.Traits;
-    Check(not LTraits.ThreadSafe, 'RTL allocator is not thread-safe');
+    Check(LTraits.ThreadSafe, 'RTL allocator is thread-safe');
   finally
     LAlloc.Free;
   end;

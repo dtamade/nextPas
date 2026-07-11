@@ -66,7 +66,7 @@ var
   LAlloc: IAllocator;
 begin
   LAlloc := GetRtlAllocator;
-  Check(LAlloc.GetMem(0) <> nil, 'GetMem(0) returns non-nil from RTL');
+  Check(LAlloc.GetMem(0) = nil, 'GetMem(0) returns nil');
 end;
 
 procedure TestFreeMemNilNoOp;

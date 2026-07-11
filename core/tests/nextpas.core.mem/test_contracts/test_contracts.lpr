@@ -624,7 +624,7 @@ var
 begin
   LAllocator := GetRtlAllocator as nextpas.core.mem.intf.IAllocator;
   LTraits := LAllocator.Traits;
-  Check(not LTraits.ThreadSafe, 'RTL allocator is not thread-safe (single-threaded default)');
+  Check(LTraits.ThreadSafe, 'RTL allocator is thread-safe');
 
   LPtr := LAllocator.GetMem(16);
   try

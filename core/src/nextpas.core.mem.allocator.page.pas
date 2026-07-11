@@ -68,6 +68,8 @@ function TPageAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LAligned: SizeUInt;
 begin
+  if ASize = 0 then
+    Exit(nil);
   if ASize < PAGE_MIN_SIZE then
     ASize := PAGE_MIN_SIZE;
   LAligned := AlignToPage(ASize);

@@ -87,6 +87,8 @@ function TArenaGroupAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LAligned: SizeUInt;
 begin
+  if ASize = 0 then
+    Exit(nil);
   LAligned := (ASize + 7) and not SizeUInt(7);
   if FOffset + LAligned > FRegionSize then
     Exit(nil);
