@@ -2540,7 +2540,10 @@ begin
       LWs.Close(1000, RepeatChar('x', 124));
     except
       on E: EHttpError do
+      begin
         LWs.WriteText(E.Message);
+        LWs.Close(1000, '');
+      end;
     end;
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
