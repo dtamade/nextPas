@@ -585,19 +585,34 @@ procedure TShardedHashMapImpl.ForEach(const ACallback: TForEachCallback);
 var
   LShardIdx: PtrUInt;
   LEntryIdx: PtrUInt;
+  LKeys: array of TKey;
+  LValues: array of TValue;
+  LCount, LI: PtrUInt;
 begin
   for LShardIdx := 0 to FShardCount - 1 do
   begin
+    LCount := FShards[LShardIdx].Count;
+    if LCount = 0 then
+      Continue;
+    SetLength(LKeys, LCount);
+    SetLength(LValues, LCount);
+    LCount := 0;
     ShardReadLock(FShards[LShardIdx]);
     try
       for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
       begin
         if FShards[LShardIdx].Entries[LEntryIdx].State = esOccupied then
-          ACallback(FShards[LShardIdx].Entries[LEntryIdx].Key, FShards[LShardIdx].Entries[LEntryIdx].Value);
+        begin
+          LKeys[LCount] := FShards[LShardIdx].Entries[LEntryIdx].Key;
+          LValues[LCount] := FShards[LShardIdx].Entries[LEntryIdx].Value;
+          Inc(LCount);
+        end;
       end;
     finally
       ShardReadUnlock(FShards[LShardIdx]);
     end;
+    for LI := 0 to LCount - 1 do
+      ACallback(LKeys[LI], LValues[LI]);
   end;
 end;
 
@@ -605,19 +620,34 @@ procedure TShardedHashMapImpl.ForEachCtx(const ACallback: TForEachCtxCallback; A
 var
   LShardIdx: PtrUInt;
   LEntryIdx: PtrUInt;
+  LKeys: array of TKey;
+  LValues: array of TValue;
+  LCount, LI: PtrUInt;
 begin
   for LShardIdx := 0 to FShardCount - 1 do
   begin
+    LCount := FShards[LShardIdx].Count;
+    if LCount = 0 then
+      Continue;
+    SetLength(LKeys, LCount);
+    SetLength(LValues, LCount);
+    LCount := 0;
     ShardReadLock(FShards[LShardIdx]);
     try
       for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
       begin
         if FShards[LShardIdx].Entries[LEntryIdx].State = esOccupied then
-          ACallback(FShards[LShardIdx].Entries[LEntryIdx].Key, FShards[LShardIdx].Entries[LEntryIdx].Value, AContext);
+        begin
+          LKeys[LCount] := FShards[LShardIdx].Entries[LEntryIdx].Key;
+          LValues[LCount] := FShards[LShardIdx].Entries[LEntryIdx].Value;
+          Inc(LCount);
+        end;
       end;
     finally
       ShardReadUnlock(FShards[LShardIdx]);
     end;
+    for LI := 0 to LCount - 1 do
+      ACallback(LKeys[LI], LValues[LI], AContext);
   end;
 end;
 
