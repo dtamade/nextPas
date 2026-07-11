@@ -1073,8 +1073,6 @@ var
   LComparisons: array of TBenchComparison;
   LCount: Integer;
   LIdx: Integer;
-  LBaseStats, LCurrStats: TBenchStats;
-  LPValue: Double;
   LMap: TBaselineMap;
   LJ: Integer;
   I: Integer;
@@ -1109,33 +1107,11 @@ begin
       else
         LComparisons[LIdx].Ratio := 1.0;
 
-      { Welch's t-test: 用当前结果的采样统计量与基线做对比 }
-      if (FResults[I].SampleCount > 1) and (FResults[I].StdDev > 0) then
-      begin
-        LCurrStats := Default(TBenchStats);
-        LCurrStats.Mean := FResults[I].NsPerOp;
-        LCurrStats.StdDev := FResults[I].StdDev;
-        LCurrStats.SampleCount := FResults[I].SampleCount;
-
-        LBaseStats := Default(TBenchStats);
-        LBaseStats.Mean := FBaselines[LJ].NsPerOp;
-        { 基线没有 StdDev/SampleCount，使用当前结果的作为保守估计 }
-        LBaseStats.StdDev := FResults[I].StdDev;
-        LBaseStats.SampleCount := FResults[I].SampleCount;
-
-        LPValue := FStatsAnalyzer.ComputeApproximatePValue(LCurrStats, LBaseStats);
-        LComparisons[LIdx].HasStatisticalTest := True;
-        LComparisons[LIdx].ApproximatePValue := LPValue;
-        LComparisons[LIdx].IsSignificant := LPValue < BENCH_SIGNIFICANCE_ALPHA;
-      end
-      else
-      begin
-        { 采样不足，退回启发式判断 }
-        LComparisons[LIdx].HasStatisticalTest := False;
-        LComparisons[LIdx].IsSignificant :=
-          Abs(LComparisons[LIdx].Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
-        LComparisons[LIdx].ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
-      end;
+      { Baseline 只有均值，没有独立方差或原始样本，不能做统计检验 }
+      LComparisons[LIdx].HasStatisticalTest := False;
+      LComparisons[LIdx].IsSignificant :=
+        Abs(LComparisons[LIdx].Ratio - 1.0) > BENCH_MATRIX_DIFF_THRESHOLD;
+      LComparisons[LIdx].ApproximatePValue := BENCH_MATRIX_DIFF_THRESHOLD;
 
       Inc(LCount);
       end;
