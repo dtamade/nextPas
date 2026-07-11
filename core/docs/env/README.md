@@ -21,6 +21,14 @@
 | `EnvKeys` | 返回所有环境变量名的 `TStringArray` |
 | `EnvironmentVariableNamesCaseSensitive` | 平台是否区分大小写（Unix true, Windows false） |
 
+### 便利目录
+
+| 函数 | 说明 |
+|------|------|
+| `UserHomeDir` | 用户主目录（Unix: `$HOME`, Windows: `%USERPROFILE%`） |
+| `UserCacheDir` | 用户缓存目录（Unix: `$HOME/.cache`, Windows: `%LOCALAPPDATA%`） |
+| `UserConfigDir` | 用户配置目录（Unix: `$HOME/.config`, Windows: `%APPDATA%`） |
+
 ### 写入
 
 | 函数 | 说明 |

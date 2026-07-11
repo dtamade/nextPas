@@ -52,6 +52,27 @@ procedure UnsetEnv(const AName: string);
  * @note 未定义的变量展开为空字符串
  *}
 function ExpandEnv(const AValue: string): string;
+{** @desc 获取用户主目录
+ *
+ * @return 主目录路径（Unix: $HOME, Windows: %USERPROFILE%）
+ *
+ * @note 环境变量不存在时返回空字符串
+ *}
+function UserHomeDir: string;
+{** @desc 获取用户缓存目录
+ *
+ * @return 缓存目录路径（Unix: $HOME/.cache, Windows: %LOCALAPPDATA%）
+ *
+ * @note 环境变量不存在时返回空字符串
+ *}
+function UserCacheDir: string;
+{** @desc 获取用户配置目录
+ *
+ * @return 配置目录路径（Unix: $HOME/.config, Windows: %APPDATA%）
+ *
+ * @note 环境变量不存在时返回空字符串
+ *}
+function UserConfigDir: string;
 
 implementation
 
@@ -261,6 +282,45 @@ begin
   finally
     LBuilder.Done;
   end;
+end;
+
+function UserHomeDir: string;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := GetEnv('USERPROFILE');
+{$ELSE}
+  Result := GetEnv('HOME');
+{$ENDIF}
+end;
+
+function UserCacheDir: string;
+var
+  LHome: string;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := GetEnv('LOCALAPPDATA');
+{$ELSE}
+  LHome := GetEnv('HOME');
+  if LHome <> '' then
+    Result := LHome + '/.cache'
+  else
+    Result := '';
+{$ENDIF}
+end;
+
+function UserConfigDir: string;
+var
+  LHome: string;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := GetEnv('APPDATA');
+{$ELSE}
+  LHome := GetEnv('HOME');
+  if LHome <> '' then
+    Result := LHome + '/.config'
+  else
+    Result := '';
+{$ENDIF}
 end;
 
 end.

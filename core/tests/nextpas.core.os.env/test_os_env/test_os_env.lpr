@@ -233,6 +233,33 @@ begin
   UnsetEnv('NEXTPAS_TEST_ENVKEYS');
 end;
 
+procedure TestUserHomeDir;
+var
+  LHome: string;
+begin
+  LHome := UserHomeDir;
+  Check(LHome <> '', 'UserHomeDir is not empty');
+  Check(LHome[1] = '/', 'UserHomeDir starts with / (Unix)');
+end;
+
+procedure TestUserCacheDir;
+var
+  LCache: string;
+begin
+  LCache := UserCacheDir;
+  Check(LCache <> '', 'UserCacheDir is not empty');
+  Check(Pos('.cache', LCache) > 0, 'UserCacheDir contains .cache');
+end;
+
+procedure TestUserConfigDir;
+var
+  LConfig: string;
+begin
+  LConfig := UserConfigDir;
+  Check(LConfig <> '', 'UserConfigDir is not empty');
+  Check(Pos('.config', LConfig) > 0, 'UserConfigDir contains .config');
+end;
+
 { --- main --- }
 
 begin
@@ -262,5 +289,8 @@ begin
   T.Test('ExpandEnv $VAR + ${VAR}', @TestExpandEnv_MixedSyntax);
   T.Test('ExpandEnv $UNDEFINED', @TestExpandEnv_DollarVarUndefined);
   T.Test('EnvKeys', @TestEnvKeys);
+  T.Test('UserHomeDir', @TestUserHomeDir);
+  T.Test('UserCacheDir', @TestUserCacheDir);
+  T.Test('UserConfigDir', @TestUserConfigDir);
   if not T.Run then Halt(1);
 end.
