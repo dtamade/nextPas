@@ -141,6 +141,13 @@ make -C core/tests/nextpas.core.fs/test_fs_text clean test
 
 179 个测试，heaptrc 零泄漏。
 
+### 特殊行为说明
+
+- **ReadFile + /proc**: 支持 `/proc` 等虚拟文件系统（stat 报告 size=0 但实际有内容）
+- **ReadFileText 编码**: 自动检测 BOM（UTF-8/UTF-16LE/UTF-16BE）；无 BOM 且非合法 UTF-8 时回退 Latin-1
+- **RemoveAll**: 迭代式实现，支持任意深度目录树（不会栈溢出）
+- **TempFile**: 统一权限为 0644，无论是否指定目录
+
 ## 基准
 
 ```bash
