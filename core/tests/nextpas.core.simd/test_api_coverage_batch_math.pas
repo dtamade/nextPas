@@ -13,6 +13,7 @@ var
   src2: array[0..3] of Double;
   src3: array[0..3] of Double;
   dst: array[0..3] of Double;
+  dst2: array[0..3] of Double;
 begin
   src[0] := 0; src[1] := Pi / 2; src[2] := Pi; src[3] := 1;
   ArraySinF64(@src[0], @dst[0], 4);
@@ -20,13 +21,68 @@ begin
   Check(Abs(dst[1] - 1.0) < 1e-10, 'Sin[pi/2]');
   ArrayCosF64(@src[0], @dst[0], 4);
   Check(Abs(dst[0] - 1.0) < 1e-10, 'Cos[0]');
+
+  // Test ArraySinCosF64
+  ArraySinCosF64(@src[0], @dst[0], @dst2[0], 4);
+  Check(Abs(dst[0]) < 1e-10, 'SinCos Sin[0]');
+  Check(Abs(dst[1] - 1.0) < 1e-10, 'SinCos Sin[pi/2]');
+  Check(Abs(dst2[0] - 1.0) < 1e-10, 'SinCos Cos[0]');
+  Check(Abs(dst2[1]) < 1e-10, 'SinCos Cos[pi/2]');
+
   src[0] := 1; src[1] := Exp(1.0); src[2] := Exp(2.0); src[3] := 1;
   ArrayLogF64(@src[0], @dst[0], 4);
   Check(Abs(dst[0]) < 1e-10, 'Log[1]');
   Check(Abs(dst[1] - 1.0) < 1e-10, 'Log[e]');
+
+  // Test ArrayLog2F64
+  src[0] := 1; src[1] := 2; src[2] := 4; src[3] := 8;
+  ArrayLog2F64(@src[0], @dst[0], 4);
+  Check(Abs(dst[0]) < 1e-10, 'Log2[1]');
+  Check(Abs(dst[1] - 1.0) < 1e-10, 'Log2[2]');
+  Check(Abs(dst[2] - 2.0) < 1e-10, 'Log2[4]');
+  Check(Abs(dst[3] - 3.0) < 1e-10, 'Log2[8]');
+
+  // Test ArrayLog10F64
+  src[0] := 1; src[1] := 10; src[2] := 100; src[3] := 1000;
+  ArrayLog10F64(@src[0], @dst[0], 4);
+  Check(Abs(dst[0]) < 1e-10, 'Log10[1]');
+  Check(Abs(dst[1] - 1.0) < 1e-10, 'Log10[10]');
+  Check(Abs(dst[2] - 2.0) < 1e-10, 'Log10[100]');
+  Check(Abs(dst[3] - 3.0) < 1e-10, 'Log10[1000]');
+
   src[0] := 0; src[1] := 1; src[2] := 2; src[3] := 3;
   ArrayExpF64(@src[0], @dst[0], 4);
   Check(Abs(dst[0] - 1.0) < 1e-10, 'Exp[0]');
+
+  // Test ArrayCeilF64
+  src[0] := 1.2; src[1] := 2.5; src[2] := 3.7; src[3] := 4.1;
+  ArrayCeilF64(@src[0], @dst[0], 4);
+  Check(dst[0] = 2.0, 'Ceil[1.2]');
+  Check(dst[1] = 3.0, 'Ceil[2.5]');
+  Check(dst[2] = 4.0, 'Ceil[3.7]');
+  Check(dst[3] = 5.0, 'Ceil[4.1]');
+
+  // Test ArrayFloorF64
+  ArrayFloorF64(@src[0], @dst[0], 4);
+  Check(dst[0] = 1.0, 'Floor[1.2]');
+  Check(dst[1] = 2.0, 'Floor[2.5]');
+  Check(dst[2] = 3.0, 'Floor[3.7]');
+  Check(dst[3] = 4.0, 'Floor[4.1]');
+
+  // Test ArrayRoundF64
+  ArrayRoundF64(@src[0], @dst[0], 4);
+  Check(dst[0] = 1.0, 'Round[1.2]');
+  Check(dst[1] = 3.0, 'Round[2.5]');
+  Check(dst[2] = 4.0, 'Round[3.7]');
+  Check(dst[3] = 4.0, 'Round[4.1]');
+
+  // Test ArrayTruncF64
+  ArrayTruncF64(@src[0], @dst[0], 4);
+  Check(dst[0] = 1.0, 'Trunc[1.2]');
+  Check(dst[1] = 2.0, 'Trunc[2.5]');
+  Check(dst[2] = 3.0, 'Trunc[3.7]');
+  Check(dst[3] = 4.0, 'Trunc[4.1]');
+
   src[0] := 1; src[1] := 2; src[2] := 3; src[3] := 4;
   src2[0] := 10; src2[1] := 20; src2[2] := 30; src2[3] := 40;
   src3[0] := 100; src3[1] := 200; src3[2] := 300; src3[3] := 400;
