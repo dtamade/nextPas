@@ -109,7 +109,7 @@ begin
   LAlloc := TCrtAllocator.Create;
   try
     LTraits := LAlloc.Traits;
-    Check(not LTraits.SupportsRealloc, 'does not support realloc');
+    Check(LTraits.SupportsRealloc, 'supports realloc');
   finally
     LAlloc.Free;
   end;
