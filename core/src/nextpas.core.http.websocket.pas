@@ -663,8 +663,9 @@ var
   LHdrLen: Integer;
   LPayloadLen: SizeUInt;
   LMaskKey: array[0..3] of Byte;
-  LMaskedPayload: string;
-  I: SizeUInt;
+  LBuf: TBytes;
+  LBufLen: SizeUInt;
+  I, J: SizeUInt;
 begin
   LPayloadLen := SizeUInt(Length(APayload));
 
@@ -708,27 +709,31 @@ begin
       LHdr[8] := Byte(LPayloadLen shr 8);
       LHdr[9] := Byte(LPayloadLen);
       LHdrLen := 10;
-      { Mask key goes after 10-byte header }
     end;
 
-    IoWriteAll(FWriter, LHdr[0], SizeUInt(LHdrLen));
-
-    { Write mask key if 64-bit length }
+    { Build single buffer: header + [mask-key +] masked payload }
     if LPayloadLen >= 65536 then
-      IoWriteAll(FWriter, LMaskKey[0], 4);
-
-    { Write masked payload }
+      LBufLen := SizeUInt(LHdrLen) + 4 + LPayloadLen
+    else
+      LBufLen := SizeUInt(LHdrLen) + LPayloadLen;
+    SetLength(LBuf, LBufLen);
+    Move(LHdr[0], LBuf[0], SizeUInt(LHdrLen));
+    I := SizeUInt(LHdrLen);
+    if LPayloadLen >= 65536 then
+    begin
+      Move(LMaskKey[0], LBuf[I], 4);
+      Inc(I, 4);
+    end;
     if LPayloadLen > 0 then
     begin
-      SetLength(LMaskedPayload, LPayloadLen);
-      for I := 0 to LPayloadLen - 1 do
-        LMaskedPayload[I + 1] := Chr(Ord(APayload[I + 1]) xor LMaskKey[I mod 4]);
-      IoWriteAll(FWriter, LMaskedPayload[1], LPayloadLen);
+      for J := 0 to LPayloadLen - 1 do
+        LBuf[I + J] := Byte(Ord(APayload[J + 1]) xor LMaskKey[J mod 4]);
     end;
+    IoWriteAll(FWriter, LBuf[0], LBufLen);
   end
   else
   begin
-    { Server frames: no masking }
+    { Server frames: no masking — merge header + payload into single write }
     if LPayloadLen < 126 then
     begin
       LHdr[1] := Byte(LPayloadLen);
@@ -755,9 +760,12 @@ begin
       LHdrLen := 10;
     end;
 
-    IoWriteAll(FWriter, LHdr[0], SizeUInt(LHdrLen));
+    LBufLen := SizeUInt(LHdrLen) + LPayloadLen;
+    SetLength(LBuf, LBufLen);
+    Move(LHdr[0], LBuf[0], SizeUInt(LHdrLen));
     if LPayloadLen > 0 then
-      IoWriteAll(FWriter, APayload[1], LPayloadLen);
+      Move(APayload[1], LBuf[LHdrLen], LPayloadLen);
+    IoWriteAll(FWriter, LBuf[0], LBufLen);
   end;
 end;
 

@@ -2484,8 +2484,11 @@ begin
       until Pos(#13#10#13#10, LResp) > 0;
       Check(Pos('HTTP/1.1 101', LResp) > 0, 'outgoing-ping-oversize: got 101');
 
-      LResp := '';
-      repeat
+      { Preserve leftover bytes after HTTP headers — the WebSocket frame
+        may have arrived in the same TCP segment as the 101 response. }
+      LResp := Copy(LResp, Pos(#13#10#13#10, LResp) + 4, Length(LResp));
+      while Length(LResp) < 4 do
+      begin
         try
           LN := LConn.Read(LBuf[0], 4096);
         except
@@ -2495,8 +2498,10 @@ begin
         begin
           SetLength(LResp, Length(LResp) + Int32(LN));
           Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
-        end;
-      until (Length(LResp) >= 4) or (LN = 0);
+        end
+        else
+          Break;
+      end;
 
       Check(Length(LResp) >= 4, 'outgoing-ping-oversize: got response');
       Check(Ord(LResp[1]) = $88, 'outgoing-ping-oversize: server sends close frame');
@@ -2573,8 +2578,11 @@ begin
       until Pos(#13#10#13#10, LResp) > 0;
       Check(Pos('HTTP/1.1 101', LResp) > 0, 'outgoing-close-oversize: got 101');
 
-      LResp := '';
-      repeat
+      { Preserve leftover bytes after HTTP headers — the WebSocket frame
+        may have arrived in the same TCP segment as the 101 response. }
+      LResp := Copy(LResp, Pos(#13#10#13#10, LResp) + 4, Length(LResp));
+      while Length(LResp) < 4 do
+      begin
         try
           LN := LConn.Read(LBuf[0], 4096);
         except
@@ -2584,8 +2592,10 @@ begin
         begin
           SetLength(LResp, Length(LResp) + Int32(LN));
           Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
-        end;
-      until (Length(LResp) >= 4) or (LN = 0);
+        end
+        else
+          Break;
+      end;
 
       Check(Length(LResp) >= 4, 'outgoing-close-oversize: got response');
       Check(Ord(LResp[1]) = $81, 'outgoing-close-oversize: server sends text frame');
@@ -2654,8 +2664,11 @@ begin
       until Pos(#13#10#13#10, LResp) > 0;
       Check(Pos('HTTP/1.1 101', LResp) > 0, ACaseName + ': got 101');
 
-      LResp := '';
-      repeat
+      { Preserve leftover bytes after HTTP headers — the WebSocket frame
+        may have arrived in the same TCP segment as the 101 response. }
+      LResp := Copy(LResp, Pos(#13#10#13#10, LResp) + 4, Length(LResp));
+      while Length(LResp) < 4 do
+      begin
         try
           LN := LConn.Read(LBuf[0], 4096);
         except
@@ -2665,8 +2678,10 @@ begin
         begin
           SetLength(LResp, Length(LResp) + Int32(LN));
           Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
-        end;
-      until (Length(LResp) >= 4) or (LN = 0);
+        end
+        else
+          Break;
+      end;
 
       Check(Length(LResp) >= 4, ACaseName + ': got response');
       Check(Ord(LResp[1]) = $81, ACaseName + ': server sends text frame');
@@ -2750,8 +2765,11 @@ begin
       until Pos(#13#10#13#10, LResp) > 0;
       Check(Pos('HTTP/1.1 101', LResp) > 0, 'outgoing-text-invalid-utf8: got 101');
 
-      LResp := '';
-      repeat
+      { Preserve leftover bytes after HTTP headers — the WebSocket frame
+        may have arrived in the same TCP segment as the 101 response. }
+      LResp := Copy(LResp, Pos(#13#10#13#10, LResp) + 4, Length(LResp));
+      while Length(LResp) < 4 do
+      begin
         try
           LN := LConn.Read(LBuf[0], 4096);
         except
@@ -2761,8 +2779,10 @@ begin
         begin
           SetLength(LResp, Length(LResp) + Int32(LN));
           Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
-        end;
-      until (Length(LResp) >= 4) or (LN = 0);
+        end
+        else
+          Break;
+      end;
 
       Check(Length(LResp) >= 4, 'outgoing-text-invalid-utf8: got response');
       Check(Ord(LResp[1]) = $81, 'outgoing-text-invalid-utf8: server sends text frame');
