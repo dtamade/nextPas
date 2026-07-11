@@ -29,11 +29,31 @@ const
   PLATFORM_SIGWINCH = 28;
 {$ENDIF}
 
+{** @desc 设置信号处理函数（POSIX sigaction / Windows SetConsoleCtrlHandler）
+    @param ASignal 信号编号（PLATFORM_SIGINT / PLATFORM_SIGTERM 等）
+    @param AHandler 信号处理回调函数
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
+
+{** @desc 忽略指定信号（POSIX SIG_IGN / Windows 移除处理器）
+    @param ASignal 信号编号
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_signal_ignore(ASignal: Int32): Int32;
+
+{** @desc 重置信号为默认行为（POSIX SIG_DFL / Windows 移除处理器）
+    @param ASignal 信号编号
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_signal_reset(ASignal: Int32): Int32;
+
+{** @desc 阻塞信号（POSIX sigprocmask SIG_BLOCK / Windows 不支持）
+    @param ASignal 信号编号
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_signal_block(ASignal: Int32): Int32;
+
+{** @desc 解除信号阻塞（POSIX sigprocmask SIG_UNBLOCK / Windows 不支持）
+    @param ASignal 信号编号
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_signal_unblock(ASignal: Int32): Int32;
 
 {** @desc 向当前进程发送信号（POSIX raise / Windows GenerateConsoleCtrlEvent） *}

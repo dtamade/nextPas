@@ -214,8 +214,20 @@ type
     function IsDone: Boolean; inline;
   end;
 
+{** @desc 初始化 Once 同步原语
+    @param AOnce Once 句柄
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_once_init(var AOnce: TPlatformOnce): Int32;
+
+{** @desc 销毁 Once 同步原语
+    @param AOnce Once 句柄
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_once_destroy(var AOnce: TPlatformOnce): Int32;
+
+{** @desc 保证函数仅执行一次（线程安全）
+    @param AOnce Once 句柄
+    @param AProc 待执行的函数指针（cdecl 过程）
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_once_exec(var AOnce: TPlatformOnce; AProc: Pointer): Int32;
 
 implementation
