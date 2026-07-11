@@ -149,11 +149,11 @@ begin
   try
     LP := LPool.GetMem(32);
     Check(LP <> nil, 'GetMem(32)');
-    LMemSize := LPool.MemSize(LP);
+    LMemSize := LPool.MemSizeOf(LP);
     Check(LMemSize >= 32, 'MemSize >= requested 32');
     LPool.FreeMem(LP);
     // nil MemSize should return 0
-    Check(LPool.MemSize(nil) = 0, 'MemSize(nil) = 0');
+    Check(LPool.MemSizeOf(nil) = 0, 'MemSize(nil) = 0');
   finally
     LPool.Free;
   end;
@@ -319,7 +319,7 @@ begin
     LP := LPool.GetMem(4096);
     if LP <> nil then
     begin
-      LMemSize := LPool.MemSize(LP);
+      LMemSize := LPool.MemSizeOf(LP);
       Check(LMemSize >= 4096, 'large object MemSize >= 4096');
       LPool.FreeMem(LP);
     end;

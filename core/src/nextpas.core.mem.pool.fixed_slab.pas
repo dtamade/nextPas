@@ -114,8 +114,6 @@ type
 
     function Traits: TAllocatorTraits;
 
-    function MemSizeOf(APtr: Pointer): SizeUInt;
-
     function Owns(APtr: Pointer): Boolean;
     function PageShift: SizeUInt; inline;
     function RegionStart: PByte; inline;
@@ -738,11 +736,6 @@ begin
   end
   else
     Result := 0;
-end;
-
-function TFixedSlabPool.MemSizeOf(APtr: Pointer): SizeUInt;
-begin
-  Result := MemSizeOf(APtr);
 end;
 
 function TFixedSlabPool.GetMem(ASize: SizeUInt): Pointer;
