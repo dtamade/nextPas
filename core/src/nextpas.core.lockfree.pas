@@ -371,12 +371,12 @@ type
   TLockFreeWorkStealingResult = nextpas.core.lockfree.workstealing.TLockFreeWorkStealingResult;
 
   {** @desc 并发快照隔离
-    @details 每个事务看到数据库在事务开始时的快照。
-      支持多版本并发控制 (MVCC)。
+    @details 基于 MVCC 的快照隔离实现。
+      每个事务看到数据库在事务开始时的快照。
+      支持多版本并发控制，写-写冲突检测。
     @see TSnapshotIsolationImpl 详细文档和示例
   }
-  generic TSnapshotIsolation<TValue> = class(specialize TSnapshotIsolationImpl<TValue>)
-  end;
+  TSnapshotIsolation = nextpas.core.lockfree.snapshot.TSnapshotIsolationImpl;
   TSnapshotResult = nextpas.core.lockfree.snapshot.TSnapshotResult;
 
   {** @desc 并发无锁图

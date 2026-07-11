@@ -1,13 +1,16 @@
 {******************************************************************************
   nextpas.core.lockfree.deque_lf
 
-  Lock-Free Deque — double-ended queue with atomic operations.
+  Concurrent Deque — double-ended queue with spin-lock protection.
 
   Design:
   - Array-based circular buffer for O(1) push/pop at both ends
-  - Spin lock for thread safety during resize
+  - Spin lock for thread safety (NOT lock-free — name is historical)
   - Automatic capacity doubling when full
   - PushLeft/PushRight/PopLeft/PopRight
+
+  Note: Despite the "lock-free" prefix (historical naming), this module uses
+  a spin lock for mutual exclusion. For true lock-free deque, see collections.deque.
 
   2026-07-06  Phase 4
 ******************************************************************************}

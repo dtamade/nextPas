@@ -565,14 +565,15 @@ begin
         LOldIdx := PtrUInt(LRecv + Int64(LI)) and FMask;
         LNewIdx := LI and LNewMask;
         LNewSlots[LNewIdx].Value := FSlots[LOldIdx].Value;
-        AtomicStore64(LNewSlots[LNewIdx].Sequence, Int64(LI) + 1, moRelaxed);
+        AtomicStore64(LNewSlots[LNewIdx].Sequence, Int64(LI) + 1, moRelease);
       end;
 
     FSlots := LNewSlots;
     FCapacity := LNewCap;
     FMask := LNewMask;
-    AtomicStore64(FRecvPos, 0, moRelaxed);
-    AtomicStore64(FSendPos, Int64(LCount), moRelaxed);
+    // moRelease: 确保所有新槽位数据对后续读者可见
+    AtomicStore64(FRecvPos, 0, moRelease);
+    AtomicStore64(FSendPos, Int64(LCount), moRelease);
     Result := True;
   finally
     AtomicStore32(FResizing, 0, moRelease);

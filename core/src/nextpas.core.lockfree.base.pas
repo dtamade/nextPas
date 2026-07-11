@@ -39,6 +39,8 @@ end;
 
 function LockFreeNextPow2(const AValue: PtrUInt): PtrUInt;
 begin
+  if AValue = 0 then
+    Exit(0);
   if LockFreeIsPow2(AValue) then
     Exit(AValue);
   if AValue > LockFreeMaxPowerOfTwo then
