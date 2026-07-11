@@ -66,7 +66,7 @@ type
     function AllocMem(ASize: SizeUInt): Pointer;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
     procedure FreeMem(APtr: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     // IAllocator aligned allocation
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
     procedure FreeAligned(APtr: Pointer);
@@ -346,11 +346,11 @@ begin
   end;
 end;
 
-function TSlabPoolConcurrent.MemSize(APtr: Pointer): SizeUInt;
+function TSlabPoolConcurrent.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   FLock.Acquire;
   try
-    Result := FInner.MemSize(APtr);
+    Result := FInner.MemSizeOf(APtr);
   finally
     FLock.Release;
   end;

@@ -260,15 +260,15 @@ begin
 
     LPoolPtr := GAllocator.GetMem(16);
     try
-      Check(Int64(16) = Int64(GPoolAllocator.GetMemSize(LPoolPtr)), 'pool pointer requested size');
+      Check(Int64(16) = Int64(GPoolAllocator.MemSizeOf(LPoolPtr)), 'pool pointer requested size');
 
       GPtr := GAllocator.GetMem(16);
       Check(GPtr <> nil, 'pool exhaustion should allocate via fallback');
       Check(Int64(LBaselineGetCalls + 1) = Int64(GFallback.GetCalls), 'fallback should allocate exhausted request once');
-      Check(Int64(16) = Int64(GPoolAllocator.GetMemSize(GPtr)), 'fallback pointer requested size');
+      Check(Int64(16) = Int64(GPoolAllocator.MemSizeOf(GPtr)), 'fallback pointer requested size');
 
       GAllocator.FreeMem(GPtr);
-      Check(Int64(0) = Int64(GPoolAllocator.GetMemSize(GPtr)), 'freed fallback pointer size is unknown');
+      Check(Int64(0) = Int64(GPoolAllocator.MemSizeOf(GPtr)), 'freed fallback pointer size is unknown');
       Check(Int64(LBaselineFreeCalls + 1) = Int64(GFallback.FreeCalls), 'tracked fallback pointer should free once');
       CheckRaisesAllocError(@FreeFallbackPointerAgain, aeInvalidPointer, 'fallback double FreeMem');
       Check(Int64(LBaselineFreeCalls + 1) = Int64(GFallback.FreeCalls), 'fallback double free must not be forwarded');
