@@ -252,6 +252,12 @@ begin
   end;
 
   PassTest('Runner config isolation');
+  LRunnerA := Default(TSuiteRunner);
+  LRunnerB := Default(TSuiteRunner);
+  LSuiteA := Default(TTestSuite);
+  LSuiteB := Default(TTestSuite);
+  LOutA := nil;
+  LOutB := nil;
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -2181,6 +2187,7 @@ begin
       FailTest('CacheGet: should not find non-existent entry');
     { Clean up test cache directory }
     LCache.Invalidate;
+    LCache := Default(TTestCache);
     PassTest('TestCache');
   end;
 
@@ -2212,6 +2219,7 @@ begin
     if LCacheKey1 = LCacheKey2 then
       FailTest('CacheKey: different tag filters should produce different keys');
     LCache.Invalidate;
+    LCache := Default(TTestCache);
     PassTest('CacheKey filter difference');
   end;
 
@@ -2249,6 +2257,8 @@ begin
     { Clean up cache directory }
     LCache := TTestCache.Create('../../../build/projects/nextpas.core.test/test_runner/cache');
     LCache.Invalidate;
+    LCache := Default(TTestCache);
+    LCacheRunSuite := Default(TTestSuite);
     PassTest('Cache integration in runner');
   end;
 
@@ -2393,4 +2403,5 @@ begin
   LFailFastSuite := Default(TTestSuite);
   LClosureSuite := Default(TTestSuite);
   LCleanupSuite := Default(TTestSuite);
+  LCache := Default(TTestCache);
 end.

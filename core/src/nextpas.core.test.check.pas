@@ -18,7 +18,11 @@ procedure CheckEqual(const AExpected, AActual: string); overload;
 procedure CheckEqual(const AExpected, AActual: Int64); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckEqual(const AExpected, AActual: Pointer;
+  const AMessage: string); overload;
 procedure CheckEqual(const AExpected, AActual: UInt64); overload;
+procedure CheckEqual(const AExpected, AActual: UInt64;
+  const AMessage: string); overload;
 { CheckEqual for Double — uses CheckNear (absolute epsilon |a-b| <= AEpsilon).
   Default epsilon is 1e-10, suitable for small-to-moderate values.
   For large values (e.g. 1e15+), absolute epsilon is too tight — use
@@ -43,13 +47,21 @@ procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean;
   const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckNotEqual(const AExpected, AActual: Pointer;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: UInt64); overload;
+procedure CheckNotEqual(const AExpected, AActual: UInt64;
+  const AMessage: string); overload;
 { CheckNotEqual for Double — uses absolute epsilon |a-b| <= AEpsilon.
   For floating-point tolerance comparisons, use CheckNotNear directly. }
 procedure CheckNotEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
 procedure CheckEqual(const AExpected, AActual: TBytes); overload;
+procedure CheckEqual(const AExpected, AActual: TBytes;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: TBytes); overload;
+procedure CheckNotEqual(const AExpected, AActual: TBytes;
+  const AMessage: string); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
 procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
@@ -401,18 +413,32 @@ begin
   CheckEqual(AExpected, AActual, '');
 end;
 
-procedure CheckEqual(const AExpected, AActual: Pointer);
+procedure CheckEqual(const AExpected, AActual: Pointer;
+  const AMessage: string);
 begin
   if AExpected <> AActual then
-    InternalFail('Expected pointer $' + IntToHex(NativeUInt(AExpected), 16) +
+    FailPrepend(AMessage,
+      'Expected pointer $' + IntToHex(NativeUInt(AExpected), 16) +
       ' but got $' + IntToHex(NativeUInt(AActual), 16));
+end;
+
+procedure CheckEqual(const AExpected, AActual: Pointer);
+begin
+  CheckEqual(AExpected, AActual, '');
+end;
+
+procedure CheckEqual(const AExpected, AActual: UInt64;
+  const AMessage: string);
+begin
+  if AExpected <> AActual then
+    FailPrepend(AMessage,
+      'Expected ' + UIntToStr(AExpected) +
+      ' but got ' + UIntToStr(AActual));
 end;
 
 procedure CheckEqual(const AExpected, AActual: UInt64);
 begin
-  if AExpected <> AActual then
-    InternalFail('Expected ' + UIntToStr(AExpected) +
-      ' but got ' + UIntToStr(AActual));
+  CheckEqual(AExpected, AActual, '');
 end;
 
 { CheckNotEqual: 3-arg first, 2-arg delegates }
@@ -454,18 +480,32 @@ begin
   CheckNotEqual(AExpected, AActual, '');
 end;
 
-procedure CheckNotEqual(const AExpected, AActual: Pointer);
+procedure CheckNotEqual(const AExpected, AActual: Pointer;
+  const AMessage: string);
 begin
   if AExpected = AActual then
-    InternalFail('Expected values to differ but both are $' +
+    FailPrepend(AMessage,
+      'Expected values to differ but both are $' +
       IntToHex(NativeUInt(AActual), 16));
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: Pointer);
+begin
+  CheckNotEqual(AExpected, AActual, '');
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: UInt64;
+  const AMessage: string);
+begin
+  if AExpected = AActual then
+    FailPrepend(AMessage,
+      'Expected values to differ but both are ' +
+      UIntToStr(AActual));
 end;
 
 procedure CheckNotEqual(const AExpected, AActual: UInt64);
 begin
-  if AExpected = AActual then
-    InternalFail('Expected values to differ but both are ' +
-      UIntToStr(AActual));
+  CheckNotEqual(AExpected, AActual, '');
 end;
 
 procedure CheckNear(const AExpected, AActual: Double;
@@ -613,21 +653,30 @@ begin
       FloatToStr(AExpected) + ' (+/-' + FloatToStr(AEpsilon) + ')');
 end;
 
-procedure CheckEqual(const AExpected, AActual: TBytes);
+procedure CheckEqual(const AExpected, AActual: TBytes;
+  const AMessage: string);
 var
   I: Integer;
 begin
   if Length(AExpected) <> Length(AActual) then
-    InternalFail('Expected TBytes length ' + IntToStr(Length(AExpected)) +
+    FailPrepend(AMessage,
+      'Expected TBytes length ' + IntToStr(Length(AExpected)) +
       ' but got ' + IntToStr(Length(AActual)));
   for I := 0 to High(AExpected) do
     if AExpected[I] <> AActual[I] then
-      InternalFail('TBytes differ at index ' + IntToStr(I) +
+      FailPrepend(AMessage,
+        'TBytes differ at index ' + IntToStr(I) +
         ': expected $' + IntToHex(AExpected[I], 2) +
         ' but got $' + IntToHex(AActual[I], 2));
 end;
 
-procedure CheckNotEqual(const AExpected, AActual: TBytes);
+procedure CheckEqual(const AExpected, AActual: TBytes);
+begin
+  CheckEqual(AExpected, AActual, '');
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: TBytes;
+  const AMessage: string);
 var
   I: Integer;
   LDiffer: Boolean;
@@ -642,8 +691,14 @@ begin
       Break;
     end;
   if not LDiffer then
-    InternalFail('Expected TBytes to differ but both are identical (' +
+    FailPrepend(AMessage,
+      'Expected TBytes to differ but both are identical (' +
       IntToStr(Length(AExpected)) + ' bytes)');
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: TBytes);
+begin
+  CheckNotEqual(AExpected, AActual, '');
 end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
@@ -1252,6 +1307,64 @@ end;
 
 { ── Array Containment ──────────────────────────────────────────────────────── }
 
+{ ── Shared array-contains helpers (P2-new-1: eliminate duplicated list-building) }
+
+procedure CheckArrayContainsStr(const AArray: array of string;
+  const AValue, AMessage: string);
+const
+  MaxListItems = 10;
+var
+  I, LCount, LLimit: Integer;
+  LList: string;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      Exit;
+  LCount := Length(AArray);
+  if LCount < MaxListItems then
+    LLimit := LCount
+  else
+    LLimit := MaxListItems;
+  LList := '';
+  for I := 0 to LLimit - 1 do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + '"' + AArray[I] + '"';
+  end;
+  if LCount > MaxListItems then
+    LList := LList + ', ... (' + IntToStr(LCount - MaxListItems) + ' more)';
+  FailPrepend(AMessage, 'Expected array to contain "' + AValue +
+    '" but it contains [' + LList + '] (' + IntToStr(LCount) + ' items)');
+end;
+
+procedure CheckArrayContainsInt(const AArray: array of Int64;
+  AValue: Int64; const AMessage: string);
+const
+  MaxListItems = 10;
+var
+  I, LCount, LLimit: Integer;
+  LList: string;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      Exit;
+  LCount := Length(AArray);
+  if LCount < MaxListItems then
+    LLimit := LCount
+  else
+    LLimit := MaxListItems;
+  LList := '';
+  for I := 0 to LLimit - 1 do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + IntToStr(AArray[I]);
+  end;
+  if LCount > MaxListItems then
+    LList := LList + ', ... (' + IntToStr(LCount - MaxListItems) + ' more)';
+  FailPrepend(AMessage, 'Expected array to contain ' + IntToStr(AValue) +
+    ' but it contains [' + LList + '] (' + IntToStr(LCount) + ' items)');
+end;
+
 procedure CheckArrayContains(const AArray: array of string;
   const AValue: string);
 begin
@@ -1260,22 +1373,8 @@ end;
 
 procedure CheckArrayContains(const AArray: array of string;
   const AValue: string; const AMessage: string);
-var
-  I: Integer;
-  LList: string;
 begin
-  for I := 0 to High(AArray) do
-    if AArray[I] = AValue then
-      Exit;
-  { Not found — build list for error message }
-  LList := '';
-  for I := 0 to High(AArray) do
-  begin
-    if I > 0 then LList := LList + ', ';
-    LList := LList + '"' + AArray[I] + '"';
-  end;
-  FailPrepend(AMessage, 'Expected array to contain "' + AValue +
-    '" but it contains [' + LList + ']');
+  CheckArrayContainsStr(AArray, AValue, AMessage);
 end;
 
 procedure CheckArrayContains(const AArray: array of Int64;
@@ -1286,22 +1385,8 @@ end;
 
 procedure CheckArrayContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string);
-var
-  I: Integer;
-  LList: string;
 begin
-  for I := 0 to High(AArray) do
-    if AArray[I] = AValue then
-      Exit;
-  { Not found — build list for error message }
-  LList := '';
-  for I := 0 to High(AArray) do
-  begin
-    if I > 0 then LList := LList + ', ';
-    LList := LList + IntToStr(AArray[I]);
-  end;
-  FailPrepend(AMessage, 'Expected array to contain ' + IntToStr(AValue) +
-    ' but it contains [' + LList + ']');
+  CheckArrayContainsInt(AArray, AValue, AMessage);
 end;
 
 procedure CheckArrayNotContains(const AArray: array of string;

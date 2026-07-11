@@ -190,6 +190,9 @@ begin Result := nextpas.core.test.config.GetCacheEnabled(AConfig); end;
 function GetCacheDir(const AConfig: TTestConfig): string;
 begin Result := nextpas.core.test.config.GetCacheDir(AConfig); end;
 
+function GetConfigVersion(const AConfig: TTestConfig): Integer;
+begin Result := nextpas.core.test.config.GetConfigVersion(AConfig); end;
+
 function FormatDuration(AMillis: Int64): string;
 begin Result := nextpas.core.test.output.FormatDuration(AMillis); end;
 

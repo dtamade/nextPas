@@ -2046,13 +2046,14 @@ function TSuiteRunner.RunAllIterLoop(
   AIsParallel: Boolean; APool: IThreadPool): Boolean;
 var
   I, LIter, LRepeatAll: Integer;
-  LAllPassed, LOverallPassed: Boolean;
+  LAllPassed, LIterAllPassed: Boolean;
   LSuiteResult: TTestRunResult;
   LConfig: TTestConfig;
   LOutSink: IOutputSink;
   LStart: TInstant;
   LFailFast: Boolean;
   LMaxFailures: Integer;
+  LGrandPass, LGrandFail, LGrandSkip: Integer;
 begin
   LConfig := RunnerConfig(Self);
   LOutSink := ResolveOutSink(LConfig);
@@ -2071,11 +2072,12 @@ begin
   WriteRunnerBanner(Name, LConfig, LOutSink, AIsParallel);
 
   LAllPassed := True;
-  LOverallPassed := True;  { Accumulates across all iterations — never reset }
+  LIterAllPassed := True;
   TotalPass := 0;
   TotalFail := 0;
   TotalSkip := 0;
   TotalDuration := 0;
+  LGrandPass := 0; LGrandFail := 0; LGrandSkip := 0;
   SetLength(AResults, Length(Suites));
 
   for LIter := 1 to LRepeatAll do
@@ -2089,8 +2091,7 @@ begin
       TotalPass := 0;
       TotalFail := 0;
       TotalSkip := 0;
-      LAllPassed := True; { Reset for next iteration — stale False from prior iter
-        would trigger FailFast immediately, skipping all suites }
+      LAllPassed := True;
     end;
     LStart := TInstant.Now;
     for I := 0 to High(Suites) do
@@ -2129,15 +2130,21 @@ begin
         '  Iteration ' + IntToStr(LIter) + ' completed in ' +
         FormatDuration(LStart.Elapsed.AsMilliseconds), LConfig));
     if not LAllPassed then
-      LOverallPassed := False;  { Accumulate: any failed iteration → overall fail }
+      LIterAllPassed := False;
+    Inc(LGrandPass, TotalPass);
+    Inc(LGrandFail, TotalFail);
+    Inc(LGrandSkip, TotalSkip);
   end;
 
+  TotalPass := LGrandPass;
+  TotalFail := LGrandFail;
+  TotalSkip := LGrandSkip;
   for I := 0 to High(Suites) do
     Suites[I].CleanupTableAllocations;
 
   HasRun := True;
   LastResults := AResults;
-  Result := LOverallPassed;
+  Result := LIterAllPassed;
   if GetJsonOutput(LConfig) then
     LOutSink.WriteLn(JSONReport(AResults, Name));
 end;

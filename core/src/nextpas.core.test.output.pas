@@ -665,6 +665,20 @@ end;
 
 { ── Glob matching (internal) ───────────────────────────────────────────────── }
 
+{ ── Glob matching helpers ────────────────────────────────────────────────── }
+
+{ BuildAlt: construct a pattern string by concatenating three segments.
+  P2 #4: wraps the Copy+Copy+Copy pattern in a single function for clarity.
+  Future optimization: replace with SetLength+Move for single allocation. }
+function BuildAlt(const ASrc1: string; AStart1, ALen1: Integer;
+                  const ASrc2: string; AStart2, ALen2: Integer;
+                  const ASrc3: string; AStart3, ALen3: Integer): string;
+begin
+  Result := Copy(ASrc1, AStart1, ALen1) +
+            Copy(ASrc2, AStart2, ALen2) +
+            Copy(ASrc3, AStart3, ALen3);
+end;
+
 function MatchesGlob(const AName, APattern: string; ADepth: Integer = 0): Boolean;
 { Iterative backtracking glob matcher with brace expansion support.
   Handles '*', '?', and brace groups (alt1,alt2,...).
@@ -701,10 +715,10 @@ begin
       begin
         if APattern[J] = ',' then
         begin
-          { Top-level comma: try this alternative }
-          LAlt := Copy(APattern, 1, I - 1) +
-                  Copy(APattern, LStart, J - LStart) +
-                  Copy(APattern, LEnd + 1, Length(APattern));
+          { Top-level comma: build alternative via BuildAlt helper }
+          LAlt := BuildAlt(APattern, 1, I - 1,
+                           APattern, LStart, J - LStart,
+                           APattern, LEnd + 1, Length(APattern));
           if MatchesGlob(AName, LAlt, ADepth + 1) then
             Exit(True);
           LStart := J + 1;
@@ -724,10 +738,10 @@ begin
         end;
         Inc(J);
       end;
-      { Try last alternative (after last top-level comma, or entire content) }
-      LAlt := Copy(APattern, 1, I - 1) +
-              Copy(APattern, LStart, LEnd - LStart) +
-              Copy(APattern, LEnd + 1, Length(APattern));
+      { Try last alternative: build via BuildAlt helper }
+      LAlt := BuildAlt(APattern, 1, I - 1,
+                       APattern, LStart, LEnd - LStart,
+                       APattern, LEnd + 1, Length(APattern));
       Exit(MatchesGlob(AName, LAlt, ADepth + 1));
     end;
     Inc(I);

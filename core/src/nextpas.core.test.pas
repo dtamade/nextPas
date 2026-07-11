@@ -361,6 +361,7 @@ function  GetBenchTimeMs(const AConfig: TTestConfig): Integer;
 function  GetBenchMem(const AConfig: TTestConfig): Boolean;
 function  GetCacheEnabled(const AConfig: TTestConfig): Boolean;
 function  GetCacheDir(const AConfig: TTestConfig): string;
+function  GetConfigVersion(const AConfig: TTestConfig): Integer;
 function  FormatDuration(AMillis: Int64): string;
 function  GetTopSlowest(const AResults: TTestResults;
   ACount: Integer): TTestResults;
