@@ -82,7 +82,7 @@ REQUIRED_CONTROL_DOC_MARKERS = (
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "Current roadmap position: M8 nearly complete, M7 partial, M9 not started.",
+        "Current roadmap position: M8 nearly complete, M7 complete, M9 not started.",
     ),
     (
         "docs/math/GOAL_TREE.md",
