@@ -8,7 +8,8 @@ unit nextpas.core.platform.pty;
 interface
 
 uses
-  nextpas.core.platform.pty.base;
+  nextpas.core.platform.pty.base,
+  nextpas.core.platform.posix.errno;
 
 {** @desc 打开伪终端对
     @param ASize 终端尺寸

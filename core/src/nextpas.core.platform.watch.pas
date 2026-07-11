@@ -95,6 +95,7 @@ implementation
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.posix.errno,
   nextpas.core.platform.error,
   nextpas.core.platform.linux.base,
   nextpas.core.platform.linux.ffi;
@@ -248,6 +249,7 @@ end;
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.posix.errno,
 {$IFDEF NEXTPAS_MACOS}
   nextpas.core.platform.darwin.base,
   nextpas.core.platform.darwin.ffi;
@@ -412,7 +414,8 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
-  nextpas.core.platform.windows.base;
+  nextpas.core.platform.windows.base,
+  nextpas.core.platform.posix.errno;
 
 function TPlatformWatcher.IsValid: Boolean;
 begin

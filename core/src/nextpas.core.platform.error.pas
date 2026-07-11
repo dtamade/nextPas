@@ -5,7 +5,8 @@ unit nextpas.core.platform.error;
 interface
 
 uses
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.platform.posix.errno;
 
 { Portable platform error codes — canonical definitions
  *

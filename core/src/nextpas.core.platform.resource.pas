@@ -5,7 +5,8 @@ unit nextpas.core.platform.resource;
 interface
 
 uses
-  nextpas.core.platform.resource.base;
+  nextpas.core.platform.resource.base,
+  nextpas.core.platform.posix.errno;
 
 type
   TPlatformResourceLimitKind = nextpas.core.platform.resource.base.TPlatformResourceLimitKind;

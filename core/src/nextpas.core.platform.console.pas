@@ -4,6 +4,9 @@ unit nextpas.core.platform.console;
 
 interface
 
+uses
+  nextpas.core.platform.posix.errno;
+
 { POSIX raw/read/write/wait support is Linux-only; Windows uses a separate
   standard-handle implementation; macOS/FreeBSD return PLATFORM_ERR_UNSUPPORTED
   or cwError for raw/read/write/wait. }

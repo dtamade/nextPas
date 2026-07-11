@@ -5,6 +5,7 @@ unit nextpas.core.platform.socket;
 interface
 
 uses
+  nextpas.core.platform.posix.errno,
   nextpas.core.platform.socket.base,
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,

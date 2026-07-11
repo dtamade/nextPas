@@ -16,7 +16,8 @@ unit nextpas.core.platform.fs;
 interface
 
 uses
-  nextpas.core.platform.files.base;
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.posix.errno;
 
 type
   {** @desc 目录遍历操作枚举 *}

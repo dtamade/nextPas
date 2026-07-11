@@ -4,6 +4,9 @@ unit nextpas.core.platform.signal;
 
 interface
 
+uses
+  nextpas.core.platform.posix.errno;
+
 type
   TPlatformSignalHandler = procedure(ASignal: Int32); cdecl;
 

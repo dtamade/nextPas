@@ -5,7 +5,8 @@ unit nextpas.core.platform.thread;
 interface
 
 uses
-  nextpas.core.platform.thread.base;
+  nextpas.core.platform.thread.base,
+  nextpas.core.platform.posix.errno;
 
 type
   TPlatformThreadHandle = nextpas.core.platform.thread.base.TPlatformThreadHandle;

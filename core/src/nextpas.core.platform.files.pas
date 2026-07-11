@@ -16,6 +16,7 @@ unit nextpas.core.platform.files;
 interface
 
 uses
+  nextpas.core.platform.posix.errno,
   nextpas.core.platform.files.base,
   nextpas.core.platform.error;
 

@@ -4,6 +4,9 @@ unit nextpas.core.platform.args;
 
 interface
 
+uses
+  nextpas.core.platform.posix.errno;
+
 {** @desc 获取命令行参数个数
     @return 参数个数（不包含程序名） *}
 function platform_args_count: Int32;

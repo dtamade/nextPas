@@ -5,7 +5,8 @@ unit nextpas.core.platform.process;
 interface
 
 uses
-  nextpas.core.platform.process.base;
+  nextpas.core.platform.process.base,
+  nextpas.core.platform.posix.errno;
 
 {** @desc 创建子进程
     @param APath 可执行文件路径
