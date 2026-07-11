@@ -30,9 +30,9 @@ type
     function PrefixSum(AIndex: Int32; out ASum: Int64): TFenwickResult;
     function RangeSum(ALeft, ARight: Int32; out ASum: Int64): TFenwickResult;
     function GetValue(AIndex: Int32; out AValue: Int64): TFenwickResult;
-    function GetSize: Int32;
+    function GetSize: Int32; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -174,7 +174,7 @@ begin
   Result := fwOk;
 end;
 
-function TConcurrentFenwickTree.GetSize: Int32;
+function TConcurrentFenwickTree.GetSize: Int32; inline;
 begin
   Result := FSize;
 end;
@@ -184,7 +184,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TConcurrentFenwickTree.IsClosed: Boolean;
+function TConcurrentFenwickTree.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

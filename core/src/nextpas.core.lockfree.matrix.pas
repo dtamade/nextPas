@@ -75,7 +75,7 @@ type
     function Inverse(out AResult: TMatrixImpl): TMatrixStatus;
 
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -420,7 +420,7 @@ begin
   end;
 end;
 
-function TMatrixImpl.IsClosed: Boolean;
+function TMatrixImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

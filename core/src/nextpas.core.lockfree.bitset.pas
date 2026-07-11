@@ -46,7 +46,7 @@ type
     {** 原子清除并返回旧值 }
     function TestAndClear(AIndex: Int32): Boolean;
     {** 获取大致位数 }
-    function BitCount: Int32;
+    function BitCount: Int32; inline;
     {** 统计设置为 1 的位数（近似） }
     function PopCount: Int64;
     {** 清除所有位 }
@@ -208,7 +208,7 @@ begin
   Result := (LOld and (Int64(1) shl LBitIdx)) <> 0;
 end;
 
-function TConcurrentBitSet.BitCount: Int32;
+function TConcurrentBitSet.BitCount: Int32; inline;
 begin
   Result := FWordCount * 64;
 end;
