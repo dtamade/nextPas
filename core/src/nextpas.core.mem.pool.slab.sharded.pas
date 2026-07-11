@@ -925,10 +925,6 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.MemSizeOf(APtr: Pointer): SizeUInt;
-var
-  LShard: Integer;
-  LIsFallback: Boolean;
 begin
   if APtr = nil then Exit(0);
   if not TryRouteShardIndex(APtr, LShard, LIsFallback) then Exit(0);

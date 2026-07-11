@@ -27,7 +27,7 @@ type
     function AllocMem(ASize: SizeUInt): Pointer;
     function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
     procedure FreeMem(ADst: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
     procedure FreeAligned(APtr: Pointer);
     function Traits: TAllocatorTraits;
@@ -129,7 +129,7 @@ begin
     System.FreeMem(ADst);
 end;
 
-function .MemSizeOf(APtr: Pointer): SizeUInt;
+function TFixedSlabRecordingAllocator.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;

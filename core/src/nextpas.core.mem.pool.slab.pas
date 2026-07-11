@@ -238,8 +238,6 @@ type
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
     {** 释放内存块，指针不属于本池时抛出 ESlabPoolCorruption *}
     procedure FreeMem(APtr: Pointer);
-    {** 返回指针对应的分配大小（MemSizeOf 别名）*}
-    function MemSizeOf(APtr: Pointer): SizeUInt;
     // 兼容统计
     {** 累计分配次数 *}
     property TotalAllocs: SizeUInt read FTotalAllocs;
@@ -1183,11 +1181,6 @@ begin
   end
   else
     raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
-end;
-
-function TSlabPool.MemSizeOf(APtr: Pointer): SizeUInt;
-begin
-  Result := MemSizeOf(APtr);
 end;
 
 procedure TSlabPool.Reset;

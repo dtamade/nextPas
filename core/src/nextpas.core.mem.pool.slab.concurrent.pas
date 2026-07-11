@@ -405,10 +405,6 @@ begin
   end;
 end;
 
-function TSlabPoolConcurrent.MemSizeOf(APtr: Pointer): SizeUInt;
-begin
-  FLock.Acquire;
-  try
     Result := FInner.MemSizeOf(APtr);
   finally
     FLock.Release;
