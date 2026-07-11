@@ -52,7 +52,10 @@ var Done: TProcessOutput;
 if not Child.TryWait(Done) then
   WriteLn('still running...');
 
-// 终止
+// 发送信号（SIGTERM=15 优雅终止）
+Child.Signal(15);
+
+// 或强制终止（SIGKILL）
 Child.Kill;
 var Result := Child.Wait;
 ```
@@ -137,4 +140,4 @@ make -C core/tests/nextpas.core.process/test_process_deep clean test
 make -C core/tests/nextpas.core.process/test_process_pipe_contract clean test
 ```
 
-261 个测试，覆盖所有公共 API，heaptrc 零泄漏。
+264 个测试，覆盖所有公共 API，heaptrc 零泄漏。

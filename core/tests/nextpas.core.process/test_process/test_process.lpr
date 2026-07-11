@@ -1088,6 +1088,22 @@ begin
 end;
 
 
+procedure TestSignal;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  { Signal(SIGTERM) terminates child gracefully }
+  LChild := TCommand.New('/bin/sleep').Arg('60').Spawn;
+  Check('Signal — child is running', LChild.Pid > 0);
+  LChild.Signal(15);  { SIGTERM }
+  LOut := LChild.Wait;
+  Check('Signal — terminated by signal', LOut.Status = psSignaled);
+  { ExitCode is 128 + signal number on Linux }
+  Check('Signal — signal is SIGTERM (15)', LOut.ExitCode = 128 + 15);
+end;
+
+
 begin
   LPassed := 0;
   LFailed := 0;
@@ -1148,6 +1164,7 @@ begin
   TestRunInNonexistentDir;
   TestRunLargeOutput;
   TestLookPath;
+  TestSignal;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');

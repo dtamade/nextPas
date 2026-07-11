@@ -32,6 +32,10 @@ type
     procedure Detach;
     {** 发送 SIGKILL 终止子进程 *}
     procedure Kill;
+    {** 发送指定信号给子进程
+     *    @param ASignal  信号号（如 SIGTERM=15, SIGINT=2）
+     *    @note 常用信号：SIGTERM(15)=优雅终止, SIGINT(2)=中断, SIGKILL(9)=强制终止 *}
+    procedure Signal(ASignal: Integer);
     {** 子进程 PID *}
     function Pid: Integer;
     {** 取走 stdin 写入器（调用后 IChild 不再持有）*}
@@ -68,6 +72,7 @@ type
     function TryWait(out AOutput: TProcessOutput): Boolean;
     procedure Detach;
     procedure Kill;
+    procedure Signal(ASignal: Integer);
     function Pid: Integer;
     function TakeStdin: IWriter;
     function TakeStdout: IReader;
@@ -266,6 +271,17 @@ begin
   LErr := platform_process_kill(FProc);
   if LErr <> 0 then
     RaiseProcessPlatformError('platform_process_kill', LErr);
+end;
+
+procedure TChild.Signal(ASignal: Integer);
+var
+  LErr: Int32;
+begin
+  if FWaited then Exit;
+  EnsureAttached;
+  LErr := platform_process_signal(FProc, ASignal);
+  if LErr <> 0 then
+    RaiseProcessPlatformError('platform_process_signal', LErr);
 end;
 
 function TChild.Pid: Integer;

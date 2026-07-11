@@ -37,7 +37,8 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath）
 | `ICommand.Timeout(ADuration)` | 设置超时 |
 | `IChild.Wait: TProcessOutput` | 阻塞等待 |
 | `IChild.TryWait: Boolean` | 非阻塞检查 |
-| `IChild.Kill` | 终止子进程 |
+| `IChild.Kill` | 终止子进程（SIGKILL） |
+| `IChild.Signal(ASignal)` | 发送指定信号（如 SIGTERM=15） |
 | `IChild.Detach` | 放弃生命周期管理 |
 | `IChild.TakeStdin/Stdout/Stderr` | 取走管道 |
 | `IChild.WaitWithOutput: TProcessOutput` | 并发读取 + 等待 |
@@ -84,11 +85,11 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath）
 
 | 测试文件 | 测试数 | 说明 |
 |----------|--------|------|
-| test_process | 177 | 全面 API 测试（spawn/wait/env/timeout/pipe/lookpath） |
+| test_process | 180 | 全面 API 测试（spawn/wait/env/timeout/pipe/lookpath/signal） |
 | test_process_command | 47 | ICommand builder 测试 |
 | test_process_deep | 20 | 深度测试（timeout/large output/multiple） |
 | test_process_pipe_contract | 17 | 管道契约测试（EINTR/EAGAIN/broken pipe） |
-| **合计** | **4 个测试目录** | **261** |
+| **合计** | **4 个测试目录** | **264** |
 
 ---
 
