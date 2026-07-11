@@ -92,12 +92,15 @@ begin
   if (AIndex < 1) or (AIndex > FSize) then
     Exit(fwOutOfBounds);
   Lock;
-  while AIndex <= FSize do
-  begin
-    FData[AIndex] := FData[AIndex] + ADelta;
-    AIndex := AIndex + LowBit(AIndex);
+  try
+    while AIndex <= FSize do
+    begin
+      FData[AIndex] := FData[AIndex] + ADelta;
+      AIndex := AIndex + LowBit(AIndex);
+    end;
+  finally
+    Unlock;
   end;
-  Unlock;
   Result := fwOk;
 end;
 
@@ -117,12 +120,15 @@ begin
   end;
   LSum := 0;
   Lock;
-  while AIndex > 0 do
-  begin
-    LSum := LSum + FData[AIndex];
-    AIndex := AIndex - LowBit(AIndex);
+  try
+    while AIndex > 0 do
+    begin
+      LSum := LSum + FData[AIndex];
+      AIndex := AIndex - LowBit(AIndex);
+    end;
+  finally
+    Unlock;
   end;
-  Unlock;
   ASum := LSum;
   Result := fwOk;
 end;

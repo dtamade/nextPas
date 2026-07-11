@@ -189,66 +189,65 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(rdClosed);
   Lock;
-  LNode := FRoot;
-  LRemain := AKey;
-  while System.Length(LRemain) > 0 do
-  begin
-    LIdx := FindChild(LNode, LRemain[1]);
-    if LIdx < 0 then
+  try
+    LNode := FRoot;
+    LRemain := AKey;
+    while System.Length(LRemain) > 0 do
     begin
-      LNew := CreateNode(LRemain);
-      LNew^.Value := AValue;
-      LNew^.IsLeaf := True;
-      AddChild(LNode, LNew);
-      AtomicFetchAdd64(FCount, 1, moRelaxed);
-      Unlock;
-      Exit(rdInserted);
-    end;
-    LChild := LNode^.Children[LIdx];
-    LPrefixLen := CommonPrefixLen(LRemain, LChild^.Prefix);
-    if LPrefixLen = System.Length(LChild^.Prefix) then
-    begin
-      LNode := LChild;
-      LRemain := Copy(LRemain, LPrefixLen + 1, MaxInt);
-    end
-    else
-    begin
-      LNew := CreateNode(Copy(LChild^.Prefix, 1, LPrefixLen));
-      LChild^.Prefix := Copy(LChild^.Prefix, LPrefixLen + 1, MaxInt);
-      AddChild(LNew, LChild);
-      LNode^.Children[LIdx] := LNew;
-      if LPrefixLen = System.Length(LRemain) then
+      LIdx := FindChild(LNode, LRemain[1]);
+      if LIdx < 0 then
       begin
+        LNew := CreateNode(LRemain);
         LNew^.Value := AValue;
         LNew^.IsLeaf := True;
+        AddChild(LNode, LNew);
         AtomicFetchAdd64(FCount, 1, moRelaxed);
-        Unlock;
         Exit(rdInserted);
+      end;
+      LChild := LNode^.Children[LIdx];
+      LPrefixLen := CommonPrefixLen(LRemain, LChild^.Prefix);
+      if LPrefixLen = System.Length(LChild^.Prefix) then
+      begin
+        LNode := LChild;
+        LRemain := Copy(LRemain, LPrefixLen + 1, MaxInt);
       end
       else
       begin
-        LRemain := Copy(LRemain, LPrefixLen + 1, MaxInt);
-        LChild := CreateNode(LRemain);
-        LChild^.Value := AValue;
-        LChild^.IsLeaf := True;
+        LNew := CreateNode(Copy(LChild^.Prefix, 1, LPrefixLen));
+        LChild^.Prefix := Copy(LChild^.Prefix, LPrefixLen + 1, MaxInt);
         AddChild(LNew, LChild);
-        AtomicFetchAdd64(FCount, 1, moRelaxed);
-        Unlock;
-        Exit(rdInserted);
+        LNode^.Children[LIdx] := LNew;
+        if LPrefixLen = System.Length(LRemain) then
+        begin
+          LNew^.Value := AValue;
+          LNew^.IsLeaf := True;
+          AtomicFetchAdd64(FCount, 1, moRelaxed);
+          Exit(rdInserted);
+        end
+        else
+        begin
+          LRemain := Copy(LRemain, LPrefixLen + 1, MaxInt);
+          LChild := CreateNode(LRemain);
+          LChild^.Value := AValue;
+          LChild^.IsLeaf := True;
+          AddChild(LNew, LChild);
+          AtomicFetchAdd64(FCount, 1, moRelaxed);
+          Exit(rdInserted);
+        end;
       end;
     end;
-  end;
-  if LNode^.IsLeaf then
-  begin
+    if LNode^.IsLeaf then
+    begin
+      LNode^.Value := AValue;
+      Exit(rdUpdated);
+    end;
     LNode^.Value := AValue;
+    LNode^.IsLeaf := True;
+    AtomicFetchAdd64(FCount, 1, moRelaxed);
+    Result := rdInserted;
+  finally
     Unlock;
-    Exit(rdUpdated);
   end;
-  LNode^.Value := AValue;
-  LNode^.IsLeaf := True;
-  AtomicFetchAdd64(FCount, 1, moRelaxed);
-  Unlock;
-  Result := rdInserted;
 end;
 
 function TConcurrentRadixTree.Remove(const AKey: AnsiString): TRadixResult;
@@ -260,33 +259,27 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(rdClosed);
   Lock;
-  LNode := FRoot;
-  LRemain := AKey;
-  while System.Length(LRemain) > 0 do
-  begin
-    LIdx := FindChild(LNode, LRemain[1]);
-    if LIdx < 0 then
+  try
+    LNode := FRoot;
+    LRemain := AKey;
+    while System.Length(LRemain) > 0 do
     begin
-      Unlock;
-      Exit(rdNotFound);
+      LIdx := FindChild(LNode, LRemain[1]);
+      if LIdx < 0 then
+        Exit(rdNotFound);
+      if Copy(LRemain, 1, System.Length(LNode^.Children[LIdx]^.Prefix)) <> LNode^.Children[LIdx]^.Prefix then
+        Exit(rdNotFound);
+      LNode := LNode^.Children[LIdx];
+      LRemain := Copy(LRemain, System.Length(LNode^.Prefix) + 1, MaxInt);
     end;
-    if Copy(LRemain, 1, System.Length(LNode^.Children[LIdx]^.Prefix)) <> LNode^.Children[LIdx]^.Prefix then
-    begin
-      Unlock;
+    if not LNode^.IsLeaf then
       Exit(rdNotFound);
-    end;
-    LNode := LNode^.Children[LIdx];
-    LRemain := Copy(LRemain, System.Length(LNode^.Prefix) + 1, MaxInt);
-  end;
-  if not LNode^.IsLeaf then
-  begin
+    LNode^.IsLeaf := False;
+    AtomicFetchSub64(FCount, 1, moRelaxed);
+    Result := rdRemoved;
+  finally
     Unlock;
-    Exit(rdNotFound);
   end;
-  LNode^.IsLeaf := False;
-  AtomicFetchSub64(FCount, 1, moRelaxed);
-  Unlock;
-  Result := rdRemoved;
 end;
 
 function TConcurrentRadixTree.Find(const AKey: AnsiString; out AValue: Int64): Boolean;
@@ -301,35 +294,35 @@ begin
     Exit(False);
   end;
   Lock;
-  LNode := FRoot;
-  LRemain := AKey;
-  while System.Length(LRemain) > 0 do
-  begin
-    LIdx := FindChild(LNode, LRemain[1]);
-    if LIdx < 0 then
+  try
+    LNode := FRoot;
+    LRemain := AKey;
+    while System.Length(LRemain) > 0 do
     begin
-      Unlock;
-      AValue := 0;
-      Exit(False);
+      LIdx := FindChild(LNode, LRemain[1]);
+      if LIdx < 0 then
+      begin
+        AValue := 0;
+        Exit(False);
+      end;
+      if Copy(LRemain, 1, System.Length(LNode^.Children[LIdx]^.Prefix)) <> LNode^.Children[LIdx]^.Prefix then
+      begin
+        AValue := 0;
+        Exit(False);
+      end;
+      LNode := LNode^.Children[LIdx];
+      LRemain := Copy(LRemain, System.Length(LNode^.Prefix) + 1, MaxInt);
     end;
-    if Copy(LRemain, 1, System.Length(LNode^.Children[LIdx]^.Prefix)) <> LNode^.Children[LIdx]^.Prefix then
+    if LNode^.IsLeaf then
     begin
-      Unlock;
-      AValue := 0;
-      Exit(False);
+      AValue := LNode^.Value;
+      Exit(True);
     end;
-    LNode := LNode^.Children[LIdx];
-    LRemain := Copy(LRemain, System.Length(LNode^.Prefix) + 1, MaxInt);
-  end;
-  if LNode^.IsLeaf then
-  begin
-    AValue := LNode^.Value;
+    AValue := 0;
+    Result := False;
+  finally
     Unlock;
-    Exit(True);
   end;
-  Unlock;
-  AValue := 0;
-  Result := False;
 end;
 
 function TConcurrentRadixTree.Contains(const AKey: AnsiString): Boolean;
