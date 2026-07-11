@@ -253,6 +253,72 @@ begin
   end;
 end;
 
+procedure TestTreeRenderSmallArea;
+var
+  Tree: ITree;
+  Buf: TBuffer;
+begin
+  Tree := TTree.New([TTreeNode.Make('root')]);
+  Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 2));
+  try
+    Tree.Render(TRect.Make(0, 0, 5, 2), Buf);
+    Check(True, 'tree renders in small area');
+  finally
+    Buf.Free;
+  end;
+end;
+
+procedure TestTreeStateToggleMultiple;
+var
+  State: TTreeState;
+begin
+  State := TTreeState.Empty;
+  State.EnsureSize(3);
+  State.Toggle(0);
+  State.Toggle(1);
+  Check(State.IsOpen(0), 'node 0 should be open');
+  Check(State.IsOpen(1), 'node 1 should be open');
+  Check(not State.IsOpen(2), 'node 2 should be closed');
+  State.Toggle(0);
+  Check(not State.IsOpen(0), 'node 0 should be closed after toggle');
+end;
+
+procedure TestTreeStateEnsureSizeIdempotent;
+var
+  State: TTreeState;
+begin
+  State := TTreeState.Empty;
+  State.EnsureSize(5);
+  State.EnsureSize(5);
+  CheckEqual(5, Length(State.Opened), 'ensure size should be idempotent');
+end;
+
+procedure TestTreeNodeWithEmptyChildren;
+var
+  Node: TTreeNode;
+begin
+  Node := TTreeNode.Make('leaf').WithChildren([]);
+  CheckEqual(0, Length(Node.Children), 'empty children array');
+  CheckEqual('leaf', Node.Label_, 'label preserved');
+end;
+
+procedure TestTreeRenderMultipleRoots;
+var
+  Tree: ITree;
+  Buf: TBuffer;
+  LLines: TBufferLines;
+begin
+  Tree := TTree.New([TTreeNode.Make('root1'), TTreeNode.Make('root2')]);
+  Buf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 10));
+  try
+    Tree.Render(TRect.Make(0, 0, 20, 10), Buf);
+    LLines := Buf.AsLines;
+    Check(Pos('root1', LLines[0]) > 0, 'root1 should be rendered');
+  finally
+    Buf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.tree');
 
@@ -277,6 +343,11 @@ begin
   T.Test('tree render with block', @TestTreeRenderWithBlock);
   T.Test('tree builder chaining', @TestTreeBuilderChaining);
   T.Test('tree flat count', @TestTreeFlatCount);
+  T.Test('tree render small area', @TestTreeRenderSmallArea);
+  T.Test('tree state toggle multiple', @TestTreeStateToggleMultiple);
+  T.Test('tree state ensure size idempotent', @TestTreeStateEnsureSizeIdempotent);
+  T.Test('tree node with empty children', @TestTreeNodeWithEmptyChildren);
+  T.Test('tree render multiple roots', @TestTreeRenderMultipleRoots);
 
   if not T.Run then Halt(1);
 end.
