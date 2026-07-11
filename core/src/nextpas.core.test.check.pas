@@ -819,12 +819,20 @@ end;
 
 { ── Double comparison operators ────────────────────────────────────────────── }
 
+procedure RequireNotNaN(const AValue, AThreshold: Double;
+  const AOp: string);
+{ Shared NaN guard for double comparisons. Fails with descriptive message
+  if either value is NaN. }
+begin
+  if IsNan(AValue) or IsNan(AThreshold) then
+    InternalFail('Expected ' + FloatToStr(AValue) + ' ' + AOp + ' ' +
+      FloatToStr(AThreshold) + ' (NaN)');
+end;
+
 procedure CheckGreaterThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AThreshold) then
-    InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(AValue, AThreshold, '>');
   if AValue <= AThreshold then
     if Abs(AValue - AThreshold) <= AEpsilon then
       InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
@@ -837,9 +845,7 @@ end;
 procedure CheckLessThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AThreshold) then
-    InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(AValue, AThreshold, '<');
   if AValue >= AThreshold then
     if Abs(AValue - AThreshold) <= AEpsilon then
       InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
@@ -852,9 +858,7 @@ end;
 procedure CheckGreaterOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AThreshold) then
-    InternalFail('Expected ' + FloatToStr(AValue) + ' >= ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(AValue, AThreshold, '>=');
   if AValue < AThreshold then
     if Abs(AValue - AThreshold) <= AEpsilon then
       Exit { within epsilon of equal — pass }
@@ -866,9 +870,7 @@ end;
 procedure CheckLessOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AThreshold) then
-    InternalFail('Expected ' + FloatToStr(AValue) + ' <= ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(AValue, AThreshold, '<=');
   if AValue > AThreshold then
     if Abs(AValue - AThreshold) <= AEpsilon then
       Exit { within epsilon of equal — pass }
