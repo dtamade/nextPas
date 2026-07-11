@@ -369,6 +369,7 @@ begin
       'Connection: Upgrade'#13#10 +
       'Sec-WebSocket-Key: ' + LKey + #13#10 +
       'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
       #13#10, 256);
     Check(Pos('HTTP/1.1 101', LResp) > 0, 'should get 101 status');
     Check(Pos('Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=', LResp) > 0,
@@ -473,6 +474,7 @@ begin
       'Upgrade: websocket'#13#10 +
       'Connection: Upgrade'#13#10 +
       'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
       #13#10, 256);
     Check(Pos('HTTP/1.1 400', LResp) > 0, 'should get 400 without Key');
   finally
@@ -498,6 +500,7 @@ var
       'Connection: Upgrade'#13#10 +
       'Sec-WebSocket-Key: ' + AKey + #13#10 +
       'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
       #13#10, 256);
     Check(Pos('HTTP/1.1 400', LResp) > 0,
       ACaseName + ': should get 400 for invalid Key');
@@ -563,6 +566,7 @@ begin
       'Connection: keep-alive, notupgrade'#13#10 +
       'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
       'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
       #13#10, 256);
     Check(Pos('HTTP/1.1 400', LResp) > 0,
       'should get 400 without exact Connection upgrade token');
@@ -610,6 +614,7 @@ begin
       'Connection: Upgrade'#13#10 +
       'Sec-WebSocket-Key: ' + LKey + #13#10 +
       'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
       #13#10, 256);
     Check(Pos('HTTP/1.1 101', LResp) > 0,
       'duplicate Connection headers should expose upgrade token');
@@ -657,6 +662,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -746,6 +752,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
     LFrame := BuildMaskedFrame($01, 'hello');
     LCombined := LReq + LFrame;
@@ -823,6 +830,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
     LFrame1 := BuildMaskedFrameWithFin($01, 'hel', False);
     LFrame2 := BuildMaskedFrame($00, 'lo');
@@ -901,6 +909,7 @@ begin
       'Connection: Upgrade'#13#10 +
       'Sec-WebSocket-Key: ' + LKey + #13#10 +
       'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
       #13#10, 256);
     Check(Pos('HTTP/1.1 400', LResp) > 0,
       'negative websocket limits rejected before hijack');
@@ -946,6 +955,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1063,6 +1073,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1153,6 +1164,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1243,6 +1255,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1332,6 +1345,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1421,6 +1435,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1510,6 +1525,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1599,6 +1615,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1688,6 +1705,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1778,6 +1796,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1872,6 +1891,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -1962,6 +1982,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2052,6 +2073,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2143,6 +2165,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2245,6 +2268,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2348,6 +2372,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2441,6 +2466,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2526,6 +2552,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2606,6 +2633,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2701,6 +2729,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2781,6 +2810,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
@@ -2867,6 +2897,7 @@ begin
             'Connection: Upgrade'#13#10 +
             'Sec-WebSocket-Key: ' + LKey + #13#10 +
             'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://localhost'#13#10 +
             #13#10;
 
     LConn := TcpConnect('127.0.0.1', LPort);
