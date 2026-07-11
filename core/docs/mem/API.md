@@ -744,6 +744,251 @@ constructor Create(ADefault: IAllocator);
 procedure SetNodeAllocator(ANode: Integer; AAlloc: IAllocator);
 ```
 
+## 通用分配器
+
+### `TAlignedAllocator`
+
+对齐分配器，保证返回指针对齐到指定边界。
+
+```pascal
+constructor Create(AInner: IAllocator; AAlignment: SizeUInt = 16);
+```
+
+### `TBoundedAllocator`
+
+有界分配器，超过字节限制时返回 nil。
+
+```pascal
+constructor Create(AInner: IAllocator; ALimitBytes: UInt64);
+```
+
+### `TCoalesceAllocator`
+
+合并分配器，相邻空闲块自动合并减少碎片。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TCountingAllocator`
+
+计数分配器，跟踪分配/释放次数和字节数。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TCowAllocator`
+
+写时复制分配器，Share 创建共享引用，WriteNotify 触发复制。
+
+```pascal
+constructor Create(AInner: IAllocator);
+function Share(APtr: Pointer): Pointer;
+function WriteNotify(APtr: Pointer): Pointer;
+function IsShared(APtr: Pointer): Boolean;
+```
+
+### `TCrtAllocator`
+
+CRT 堆分配器，使用 C 运行时库的 malloc/free。
+
+```pascal
+constructor Create;
+```
+
+### `TDualAllocator`
+
+双分配器，按大小路由到不同后端。
+
+```pascal
+constructor Create(ASmall, ALarge: IAllocator; AThreshold: SizeUInt = 1024);
+```
+
+### `TFailAllocator`
+
+故障注入分配器，第 N 次分配失败（用于测试）。
+
+```pascal
+constructor Create(AInner: IAllocator; AFailAt: UInt64 = 0);
+procedure SetFailAt(AFailAt: UInt64);
+```
+
+### `TFreelistAllocator`
+
+空闲链表分配器，回收的块放入链表供下次分配。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TGroupAllocator`
+
+分组分配器，批量分配减少系统调用。
+
+```pascal
+constructor Create(AInner: IAllocator; AGroupSize: SizeUInt = GROUP_DEFAULT_SIZE);
+```
+
+### `TGrowingAllocator`
+
+增长分配器，mimalloc/tcmalloc 风格：TLS 缓存 + 中央池 + 跨线程释放。
+
+```pascal
+constructor Create(AInner: IAllocator; ASlabSize: SizeUInt = 65536);
+```
+
+### `THotswapAllocator`
+
+热切换分配器，运行时替换后端分配器。
+
+```pascal
+constructor Create(AInitial: IAllocator);
+procedure Swap(ANew: IAllocator);
+```
+
+### `THugePageAllocator`
+
+大页分配器，透明大页 (THP) 支持。
+
+```pascal
+constructor Create(AInner: IAllocator; APageSize: THugePageSize = hps2MB; AThreshold: SizeUInt = 2 * 1024 * 1024);
+```
+
+### `TMappedFileAllocator`
+
+文件映射分配器，mmap 匿名映射。
+
+```pascal
+constructor Create(AInner: IAllocator; ARegionSize: SizeUInt = 1024 * 1024);
+```
+
+### `TPageAllocator`
+
+页分配器，按页大小对齐分配。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TPoolAllocator`
+
+池分配器，固定大小块池。
+
+```pascal
+constructor Create(AInner: IAllocator; ABlockSize: SizeUInt; ACapacity: Integer);
+```
+
+### `TPool2Allocator`
+
+池分配器 v2，改进的固定大小块池。
+
+```pascal
+constructor Create(AInner: IAllocator; ABlockSize: SizeUInt);
+```
+
+### `TRtlAllocator`
+
+RTL 分配器，使用 Free Pascal 运行时库的 System.GetMem。
+
+```pascal
+constructor Create;
+```
+
+### `TScopedAllocator`
+
+作用域分配器，Reset 一次性释放所有分配。
+
+```pascal
+constructor Create(AInner: IAllocator);
+procedure Reset;
+```
+
+### `TSizeClassAllocator`
+
+大小类分配器，16 个大小类 (8B-64KB) 自动路由。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TSlabAllocator`
+
+Slab 分配器，8 个大小类 (8B-1024B) + 大对象直通。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TSlidingAllocator`
+
+滑动分配器，环形缓冲区风格的帧分配。
+
+```pascal
+constructor Create(AInner: IAllocator; ARegionSize: SizeUInt = SLIDING_DEFAULT_SIZE);
+```
+
+### `TStackAllocator`
+
+栈分配器，LIFO 顺序释放。
+
+```pascal
+constructor Create(AInner: IAllocator; ACapacity: SizeUInt);
+function GetMark: TStackMark;
+procedure FreeToMark(AMark: TStackMark);
+```
+
+### `TStatsAllocator`
+
+统计分配器，跟踪分配/释放/峰值等统计信息。
+
+```pascal
+constructor Create(AInner: IAllocator);
+function GetStats: TAllocatorStats;
+procedure Reset;
+```
+
+### `TThreadCacheAllocator`
+
+线程缓存分配器，TLS 缓存减少锁争用。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TThreadSafeAllocator`
+
+线程安全分配器，互斥锁包装任意分配器。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TZeroedAllocator`
+
+零初始化分配器，所有分配自动清零。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TArena2Allocator`
+
+Arena 分配器 v2，可增长的 arena。
+
+```pascal
+constructor Create(AInner: IAllocator; APageSize: SizeUInt = 4096);
+procedure Reset;
+```
+
+### `TArenaGroupAllocator`
+
+Arena 分组分配器，多个 arena 轮转。
+
+```pascal
+constructor Create(AInner: IAllocator; ARegionSize: SizeUInt = ARENA_GROUP_DEFAULT_SIZE);
+```
+
 ## Pool 类型
 
 ### `IPool`
