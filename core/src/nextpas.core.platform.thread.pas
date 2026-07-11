@@ -523,6 +523,39 @@ begin
     15 { PR_SET_NAME }, PtrUInt(@LName[0]), 0, 0, 0));
   if Result <> 0 then Result := platform_get_errno;
 end;
+{$ELSEIF defined(NEXTPAS_MACOS)}
+var
+  LName: array[0..15] of AnsiChar;
+  LLen: Int32;
+begin
+  if AName = nil then Exit(PLATFORM_ERR_INVALID);
+  LLen := 0;
+  while (AName[LLen] <> #0) and (LLen < 15) do
+  begin
+    LName[LLen] := AName[LLen];
+    Inc(LLen);
+  end;
+  LName[LLen] := #0;
+  Result := nextpas.core.platform.darwin.ffi.pthread_setname_np(@LName[0]);
+  if Result <> 0 then Result := platform_get_errno;
+end;
+{$ELSEIF defined(NEXTPAS_FREEBSD)}
+var
+  LName: array[0..15] of AnsiChar;
+  LLen: Int32;
+begin
+  if AName = nil then Exit(PLATFORM_ERR_INVALID);
+  LLen := 0;
+  while (AName[LLen] <> #0) and (LLen < 15) do
+  begin
+    LName[LLen] := AName[LLen];
+    Inc(LLen);
+  end;
+  LName[LLen] := #0;
+  Result := nextpas.core.platform.freebsd.ffi.pthread_setname_np(
+    nextpas.core.platform.freebsd.ffi.pthread_getthreadid_np, @LName[0]);
+  if Result <> 0 then Result := platform_get_errno;
+end;
 {$ELSE}
 begin
   Result := PLATFORM_ERR_UNSUPPORTED;

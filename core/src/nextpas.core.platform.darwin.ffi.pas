@@ -27,6 +27,8 @@ function mach_timebase_info(out info: mach_timebase_info_data_t): Int32; cdecl; 
     @return 0 成功 *}
 function pthread_threadid_np(thread: Pointer; thread_id: PUInt64): Int32; cdecl; external 'pthread' name 'pthread_threadid_np';
 
+function pthread_setname_np(const AName: PAnsiChar): Int32; cdecl; external 'pthread' name 'pthread_setname_np';
+
 { Errno }
 
 {** @desc 获取 errno 指针（macOS 版本） *}
