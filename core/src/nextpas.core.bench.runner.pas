@@ -102,6 +102,8 @@ type
     FBridgeParamFunc: TBenchParamFunc;
     FBridgeSimpleFunc: TBenchSimpleFunc;
     FBridgeParamValue: Int64;
+    { F-01: bridge entry name for parallel context propagation }
+    FBridgeEntryName: string;
     {** 公共初始化逻辑（Create/CreateNoEnv 共用） }
     procedure InitDefaults;
 
@@ -249,6 +251,7 @@ begin
 
   LContext := TBenchContext.Create;
   LContextObj := LContext as TBenchContext;
+  LContextObj.SetName(LRunner.FBridgeEntryName);
   for LIteration := 1 to AIterations do
   begin
     LContextObj.SetIterations(LIteration);
@@ -272,6 +275,7 @@ begin
   begin
     { F-01: write to pre-created context instead of creating new one }
     LTargetCtx := LRunner.FParallelContexts[AThreadId] as TBenchContext;
+    LTargetCtx.SetName(LRunner.FBridgeEntryName);
     LTargetCtx.SetIterations(LContextObj.GetIterations);
     LTargetCtx.SetBytes(LContextObj.GetBytesPerOp);
     LTargetCtx.SetAllocs(LContextObj.GetAllocsPerOp);
@@ -725,6 +729,7 @@ begin
     FBridgeParamFunc := AEntry.ParamFunc;
     FBridgeSimpleFunc := AEntry.SimpleFunc;
     FBridgeParamValue := AEntry.ParamValue;
+    FBridgeEntryName := AEntry.Name;
     { F-16: 并发断言 — 检测是否已有另一个 RunOne 在执行并行 benchmark }
     if InterlockedCompareExchange(GBridgeBusy, 1, 0) <> 0 then
       raise EBenchError.Create(
@@ -739,6 +744,7 @@ begin
       FBridgeParamFunc := nil;
       FBridgeSimpleFunc := nil;
       FBridgeParamValue := 0;
+      FBridgeEntryName := '';
       GBridgeRunner := nil;
       GBridgeBusy := 0;
       FParallelBridgeFunc := nil;
