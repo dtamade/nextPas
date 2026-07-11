@@ -356,7 +356,7 @@ begin
     DeleteProcThreadAttributeList(LAttrList);
     FreeMem(LAttrList);
     AFailStage := ptssExec;
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   end;
 
   LCwdPtr := nil;
@@ -367,7 +367,7 @@ begin
       DeleteProcThreadAttributeList(LAttrList);
       FreeMem(LAttrList);
       AFailStage := ptssChdir;
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     end;
     LCwdPtr := PWideChar(LCwd);
   end;
@@ -381,7 +381,7 @@ begin
       DeleteProcThreadAttributeList(LAttrList);
       FreeMem(LAttrList);
       AFailStage := ptssExec;
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     end;
     LEnvPtr := PWideChar(LEnvBlock);
     LCreationFlags := LCreationFlags or CREATE_UNICODE_ENVIRONMENT;

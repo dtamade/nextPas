@@ -1052,13 +1052,13 @@ var
 begin
   FillChar(AProcessInfo, SizeOf(AProcessInfo), 0);
   if not platform_windows_argv_to_command_line(APath, AArgv, LCmd) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
 
   LCwdPtr := nil;
   if ACwd <> nil then
   begin
     if not platform_windows_utf8_to_wide_checked(ACwd, LCwd) then
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     LCwdPtr := PWideChar(LCwd);
   end;
 
@@ -1066,7 +1066,7 @@ begin
   if AEnvp <> nil then
   begin
     if not platform_windows_envp_to_wide_block(AEnvp, LEnvBlock) then
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     LEnvPtr := PWideChar(LEnvBlock);
   end;
 

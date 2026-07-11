@@ -453,9 +453,9 @@ var
   LIndex: Int32;
 begin
   if not WindowsSignalIndex(ASignal, LIndex) then
-    Exit(Int32(ERROR_NOT_SUPPORTED));
+    Exit(PLATFORM_ERR_UNSUPPORTED);
   if not Assigned(AHandler) then
-    Exit(Int32(ERROR_INVALID_PARAMETER));
+    Exit(PLATFORM_ERR_INVALID);
   Result := EnsureWindowsConsoleCtrlHandler;
   if Result <> 0 then
     Exit;
@@ -469,7 +469,7 @@ var
   LIndex: Int32;
 begin
   if not WindowsSignalIndex(ASignal, LIndex) then
-    Exit(Int32(ERROR_NOT_SUPPORTED));
+    Exit(PLATFORM_ERR_UNSUPPORTED);
   GWindowsSignalHandlers[LIndex] := nil;
   GWindowsSignalModes[LIndex] := WINDOWS_SIGNAL_DEFAULT;
   Result := MaybeRemoveWindowsConsoleCtrlHandler;
@@ -480,7 +480,7 @@ var
   LIndex: Int32;
 begin
   if not WindowsSignalIndex(ASignal, LIndex) then
-    Exit(Int32(ERROR_NOT_SUPPORTED));
+    Exit(PLATFORM_ERR_UNSUPPORTED);
   Result := EnsureWindowsConsoleCtrlHandler;
   if Result <> 0 then
     Exit;
@@ -491,12 +491,12 @@ end;
 
 function platform_signal_block(ASignal: Int32): Int32;
 begin
-  Result := Int32(ERROR_NOT_SUPPORTED);
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
 function platform_signal_unblock(ASignal: Int32): Int32;
 begin
-  Result := Int32(ERROR_NOT_SUPPORTED);
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
 function platform_signal_raise(ASignal: Int32): Int32;
@@ -516,7 +516,7 @@ begin
       Result := platform_get_last_error;
   end
   else
-    Result := Int32(ERROR_NOT_SUPPORTED);
+    Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 

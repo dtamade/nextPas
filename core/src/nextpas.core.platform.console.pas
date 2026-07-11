@@ -471,7 +471,7 @@ begin
     1: LStd := STD_OUTPUT_HANDLE;
     2: LStd := STD_ERROR_HANDLE;
   else
-    Exit(Int32(ERROR_INVALID_HANDLE));
+    Exit(PLATFORM_ERR_BADF);
   end;
   AHandle := GetStdHandle(LStd);
   if (AHandle = nil) or (AHandle = HANDLE(INVALID_HANDLE_VALUE)) then

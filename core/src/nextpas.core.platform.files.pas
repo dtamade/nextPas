@@ -908,7 +908,7 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   case AMode of
     fomReadOnly:  LAccess := GENERIC_READ;
     fomWriteOnly: LAccess := GENERIC_WRITE;
@@ -1087,7 +1087,7 @@ var
 begin
   FillChar(AStat, SizeOf(AStat), 0);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not GetFileAttributesExW(PWideChar(LPath), GetFileExInfoStandard, @LData) then
     Exit(platform_get_last_error);
   LSize := UInt64(LData.nFileSizeHigh) shl 32 or LData.nFileSizeLow;
@@ -1139,7 +1139,7 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not GetFileAttributesExW(PWideChar(LPath), GetFileExInfoStandard, @LData) then
     Exit(platform_get_last_error);
   LAttr := LData.dwFileAttributes;
@@ -1170,7 +1170,7 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if CreateDirectoryW(PWideChar(LPath), nil) then
     Result := 0
   else
@@ -1182,7 +1182,7 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if RemoveDirectoryW(PWideChar(LPath)) then
     Result := 0
   else
@@ -1194,7 +1194,7 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if DeleteFileW(PWideChar(LPath)) then
     Result := 0
   else
@@ -1207,9 +1207,9 @@ var
   LNewPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(AOldPath, LOldPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(ANewPath, LNewPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if MoveFileW(PWideChar(LOldPath), PWideChar(LNewPath)) then
     Result := 0
   else
@@ -1238,7 +1238,7 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if SetCurrentDirectoryW(PWideChar(LPath)) then
     Result := 0
   else
@@ -1294,9 +1294,9 @@ var
   LLinkPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(ATarget, LTarget) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(ALinkPath, LLinkPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   LFlags := 0;
   if platform_file_stat(ATarget, LStat) = 0 then
     if LStat.FileType = ftDirectory then
@@ -1321,7 +1321,7 @@ begin
   if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   LHandle := CreateFileW(PWideChar(LPath), 0,
     FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
     nil, OPEN_EXISTING, $02200000, nil);
@@ -1333,7 +1333,7 @@ begin
     Exit(platform_get_last_error);
   LWideBuf[LBytesReturned] := #0;
   if not platform_windows_wide_to_utf8_checked(@LWideBuf[0], LUtf8) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   LStart := 0;
   if (Length(LUtf8) >= 4) and (LUtf8[1] = '\') and (LUtf8[2] = '\') and
      (LUtf8[3] = '?') and (LUtf8[4] = '\') then
@@ -1359,7 +1359,7 @@ begin
   AHandle.Finished := False;
 
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   LPattern := LPath;
   LLen := Length(LPattern);
   if (LLen > 0) and (LPattern[LLen] <> '\') and (LPattern[LLen] <> '/') then
@@ -1411,7 +1411,7 @@ begin
       Continue;
 
     if not platform_windows_wide_to_utf8_checked(LNamePtr, LNameUtf8) then
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     AEntry.NameLen := platform_windows_copy_utf8_to_buffer(LNameUtf8,
       @AEntry.Name[0], SizeOf(AEntry.Name));
     AEntry.Ino := 0;
@@ -1439,7 +1439,7 @@ begin
     AHandle.FindHandle := HANDLE(PtrInt(-1));
   end
   else
-    Result := Int32(ERROR_INVALID_HANDLE);
+    Result := PLATFORM_ERR_BADF;
 end;
 {$ENDIF}
 

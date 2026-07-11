@@ -741,7 +741,7 @@ begin
   LBytes := SizeUInt(LNewCapacity) * SizeOf(TPlatformPollEntry);
   GetMem(LNewEntries, LBytes);
   if LNewEntries = nil then
-    Exit(Int32(ERROR_NOT_ENOUGH_MEMORY));
+    Exit(PLATFORM_ERR_NOMEM);
   FillChar(LNewEntries^, LBytes, 0);
   if (APoller.Entries <> nil) and (APoller.Count > 0) then
     Move(APoller.Entries^, LNewEntries^,
@@ -873,9 +873,9 @@ var
   LEntries: PPlatformPollEntryArray;
 begin
   if AFd = WINDOWS_INVALID_POLL_SOCKET then
-    Exit(Int32(ERROR_INVALID_HANDLE));
+    Exit(PLATFORM_ERR_BADF);
   if WindowsFindPollEntry(APoller, AFd) >= 0 then
-    Exit(Int32(ERROR_ALREADY_EXISTS));
+    Exit(PLATFORM_ERR_EXIST);
   Result := WindowsEnsurePollCapacity(APoller, APoller.Count + 1);
   if Result <> 0 then
     Exit(Result);
@@ -896,7 +896,7 @@ var
 begin
   LIndex := WindowsFindPollEntry(APoller, AFd);
   if LIndex < 0 then
-    Exit(Int32(ERROR_NOT_FOUND));
+    Exit(PLATFORM_ERR_NOENT);
   LEntries := WindowsPollEntries(APoller);
   LEntries^[LIndex].Events := AEvents;
   LEntries^[LIndex].UserData := AUserData;
@@ -912,7 +912,7 @@ var
 begin
   LIndex := WindowsFindPollEntry(APoller, AFd);
   if LIndex < 0 then
-    Exit(Int32(ERROR_NOT_FOUND));
+    Exit(PLATFORM_ERR_NOENT);
   LEntries := WindowsPollEntries(APoller);
   LMoveCount := APoller.Count - LIndex - 1;
   if LMoveCount > 0 then
@@ -954,7 +954,7 @@ var
   LErr: Int32;
 begin
   if APoller.WakeWriteSocket = WINDOWS_INVALID_POLL_SOCKET then
-    Exit(Int32(ERROR_NOT_SUPPORTED));
+    Exit(PLATFORM_ERR_UNSUPPORTED);
   LByte := 1;
   LSent := winsock_send(TSocket(APoller.WakeWriteSocket), @LByte, 1, 0);
   if LSent = 1 then
@@ -972,7 +972,7 @@ var
   LErr: Int32;
 begin
   if APoller.WakeReadSocket = WINDOWS_INVALID_POLL_SOCKET then
-    Exit(Int32(ERROR_NOT_SUPPORTED));
+    Exit(PLATFORM_ERR_UNSUPPORTED);
   repeat
     LRead := winsock_recv(TSocket(APoller.WakeReadSocket), @LBuffer[0],
       SizeOf(LBuffer), 0);
@@ -999,14 +999,14 @@ var
 begin
   ACount := 0;
   if (AEntries = nil) or (AMaxEntries <= 0) then
-    Exit(Int32(ERROR_INVALID_PARAMETER));
+    Exit(PLATFORM_ERR_INVALID);
   if APoller.Count <= 0 then
     Exit(0);
 
   LPollFds := nil;
   GetMem(LPollFds, SizeUInt(APoller.Count) * SizeOf(TWSAPollFd));
   if LPollFds = nil then
-    Exit(Int32(ERROR_NOT_ENOUGH_MEMORY));
+    Exit(PLATFORM_ERR_NOMEM);
   try
     LEntries := WindowsPollEntries(APoller);
     for LI := 0 to APoller.Count - 1 do

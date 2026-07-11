@@ -267,7 +267,7 @@ begin
     Exit(0);
   end;
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   ALib.Handle := PtrUInt(LoadLibraryW(PWideChar(LPath)));
   if ALib.Handle = 0 then
     Result := platform_get_last_error
