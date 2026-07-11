@@ -4,92 +4,26 @@ unit nextpas.core.text.unicode.base;
 
 interface
 
+uses
+  nextpas.core.text.unicode.types;
+
 type
-  TUnicodeCodepoint = UInt32;
-
-  TGeneralCategory = (
-    gcuUppercaseLetter,
-    gcuLowercaseLetter,
-    gcuTitlecaseLetter,
-    gcuModifierLetter,
-    gcuOtherLetter,
-    gcuNonspacingMark,
-    gcuSpacingMark,
-    gcuEnclosingMark,
-    gcuDecimalNumber,
-    gcuLetterNumber,
-    gcuOtherNumber,
-    gcuConnectorPunctuation,
-    gcuDashPunctuation,
-    gcuOpenPunctuation,
-    gcuClosePunctuation,
-    gcuInitialPunctuation,
-    gcuFinalPunctuation,
-    gcuOtherPunctuation,
-    gcuMathSymbol,
-    gcuCurrencySymbol,
-    gcuModifierSymbol,
-    gcuOtherSymbol,
-    gcuSpaceSeparator,
-    gcuLineSeparator,
-    gcuParagraphSeparator,
-    gcuControl,
-    gcuFormat,
-    gcuSurrogate,
-    gcuPrivateUse,
-    gcuUnassigned
-  );
-
-  TBinaryProperty = (
-    ubpAlphabetic,
-    ubpLowercase,
-    ubpUppercase,
-    ubpCased,
-    ubpCaseIgnorable,
-    ubpIdStart,
-    ubpIdContinue,
-    ubpXidStart,
-    ubpXidContinue,
-    ubpWhiteSpace,
-    ubpGraphemeBase,
-    ubpGraphemeExtend,
-    ubpMath,
-    ubpEmoji,
-    ubpEmojiPresentation,
-    ubpEmojiModifier,
-    ubpEmojiModifierBase,
-    ubpEmojiComponent,
-    ubpDefaultIgnorableCodePoint,
-    ubpDeprecated,
-    ubpSoftDotted
-  );
-
-  TGeneralCategorySet = set of TGeneralCategory;
-
-  TCodepointRange2 = record
-    Lo: TUnicodeCodepoint;
-    Hi: TUnicodeCodepoint;
-    Delta: Int32;
-  end;
-
-  TCodepointRange3 = record
-    Lo: TUnicodeCodepoint;
-    Hi: TUnicodeCodepoint;
-    Value: Byte;
-  end;
-
-  TCaseFoldMap = array[0..7] of TUnicodeCodepoint;
-
-  TCaseFoldEntry = record
-    Cp: TUnicodeCodepoint;
-    Len: Byte;
-    Map: TCaseFoldMap;
-  end;
+  // 重新导出类型以保持向后兼容
+  TUnicodeCodepoint = nextpas.core.text.unicode.types.TUnicodeCodepoint;
+  TGeneralCategory = nextpas.core.text.unicode.types.TGeneralCategory;
+  TBinaryProperty = nextpas.core.text.unicode.types.TBinaryProperty;
+  TGeneralCategorySet = nextpas.core.text.unicode.types.TGeneralCategorySet;
+  TCodepointRange2 = nextpas.core.text.unicode.types.TCodepointRange2;
+  TCodepointRange3 = nextpas.core.text.unicode.types.TCodepointRange3;
+  TCaseFoldMap = nextpas.core.text.unicode.types.TCaseFoldMap;
+  TCaseFoldEntry = nextpas.core.text.unicode.types.TCaseFoldEntry;
+  TUnicodeScript = nextpas.core.text.unicode.types.TUnicodeScript;
+  TUnicodeBlock = nextpas.core.text.unicode.types.TUnicodeBlock;
 
 const
-  UNICODE_MAX_CODEPOINT = TUnicodeCodepoint($10FFFF);
-  UNICODE_SURROGATE_FIRST = TUnicodeCodepoint($D800);
-  UNICODE_SURROGATE_LAST = TUnicodeCodepoint($DFFF);
+  UNICODE_MAX_CODEPOINT = nextpas.core.text.unicode.types.UNICODE_MAX_CODEPOINT;
+  UNICODE_SURROGATE_FIRST = nextpas.core.text.unicode.types.UNICODE_SURROGATE_FIRST;
+  UNICODE_SURROGATE_LAST = nextpas.core.text.unicode.types.UNICODE_SURROGATE_LAST;
 
 function FindRange2(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange2): Int32; inline;
 function FindRange3Value(const ACp: TUnicodeCodepoint; const ARanges: array of TCodepointRange3;

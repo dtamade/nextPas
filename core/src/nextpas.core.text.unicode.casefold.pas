@@ -5,6 +5,7 @@ unit nextpas.core.text.unicode.casefold;
 interface
 
 uses
+  nextpas.core.text.unicode.types,
   nextpas.core.text.unicode.base,
   nextpas.core.text.utf8;
 

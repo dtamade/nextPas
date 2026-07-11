@@ -5,6 +5,7 @@ unit nextpas.core.text.unicode.props;
 interface
 
 uses
+  nextpas.core.text.unicode.types,
   nextpas.core.text.unicode.base;
 
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;

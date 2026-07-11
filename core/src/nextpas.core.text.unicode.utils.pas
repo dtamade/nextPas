@@ -5,6 +5,7 @@ unit nextpas.core.text.unicode.utils;
 interface
 
 uses
+  nextpas.core.text.unicode.types,
   nextpas.core.text.unicode.base;
 
 type
