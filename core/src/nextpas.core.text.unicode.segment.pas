@@ -76,7 +76,7 @@ end;
 
 function TUnicodeSegmenter.SegmentGraphemeClusters(const AText: string): TSegmentResultArray;
 var
-  LPos, LStart, LLen: SizeInt;
+  LPos, LStart, LLen, LCount, LCapacity: SizeInt;
   LResults: TSegmentResultArray;
 begin
   LLen := Length(AText);
@@ -86,24 +86,33 @@ begin
     Exit;
   end;
 
-  SetLength(LResults, 0);
+  // 预分配空间，避免动态增长
+  LCapacity := LLen div 2 + 1;
+  SetLength(LResults, LCapacity);
+  LCount := 0;
   LPos := 1;
   while LPos <= LLen do
   begin
     LStart := LPos;
     LPos := NextGraphemeCluster(AText, LPos);
-    SetLength(LResults, Length(LResults) + 1);
-    LResults[High(LResults)].Start := LStart;
-    LResults[High(LResults)].Length := LPos - LStart;
-    LResults[High(LResults)].SegmentType := stGraphemeCluster;
+    if LCount >= LCapacity then
+    begin
+      LCapacity := LCapacity * 2;
+      SetLength(LResults, LCapacity);
+    end;
+    LResults[LCount].Start := LStart;
+    LResults[LCount].Length := LPos - LStart;
+    LResults[LCount].SegmentType := stGraphemeCluster;
+    Inc(LCount);
   end;
 
+  SetLength(LResults, LCount);
   Result := LResults;
 end;
 
 function TUnicodeSegmenter.SegmentWords(const AText: string): TSegmentResultArray;
 var
-  LPos, LStart, LLen: SizeInt;
+  LPos, LStart, LLen, LCount, LCapacity: SizeInt;
   LResults: TSegmentResultArray;
 begin
   LLen := Length(AText);
@@ -113,7 +122,10 @@ begin
     Exit;
   end;
 
-  SetLength(LResults, 0);
+  // 预分配空间
+  LCapacity := LLen div 4 + 1;
+  SetLength(LResults, LCapacity);
+  LCount := 0;
   LPos := 1;
   while LPos <= LLen do
   begin
@@ -121,19 +133,25 @@ begin
     LPos := NextWord(AText, LPos);
     if LPos > LStart then
     begin
-      SetLength(LResults, Length(LResults) + 1);
-      LResults[High(LResults)].Start := LStart;
-      LResults[High(LResults)].Length := LPos - LStart;
-      LResults[High(LResults)].SegmentType := stWord;
+      if LCount >= LCapacity then
+      begin
+        LCapacity := LCapacity * 2;
+        SetLength(LResults, LCapacity);
+      end;
+      LResults[LCount].Start := LStart;
+      LResults[LCount].Length := LPos - LStart;
+      LResults[LCount].SegmentType := stWord;
+      Inc(LCount);
     end;
   end;
 
+  SetLength(LResults, LCount);
   Result := LResults;
 end;
 
 function TUnicodeSegmenter.SegmentLines(const AText: string): TSegmentResultArray;
 var
-  LPos, LStart, LLen: SizeInt;
+  LPos, LStart, LLen, LCount, LCapacity: SizeInt;
   LResults: TSegmentResultArray;
 begin
   LLen := Length(AText);
@@ -143,24 +161,33 @@ begin
     Exit;
   end;
 
-  SetLength(LResults, 0);
+  // 预分配空间
+  LCapacity := 16;
+  SetLength(LResults, LCapacity);
+  LCount := 0;
   LPos := 1;
   while LPos <= LLen do
   begin
     LStart := LPos;
     LPos := NextLine(AText, LPos);
-    SetLength(LResults, Length(LResults) + 1);
-    LResults[High(LResults)].Start := LStart;
-    LResults[High(LResults)].Length := LPos - LStart;
-    LResults[High(LResults)].SegmentType := stLine;
+    if LCount >= LCapacity then
+    begin
+      LCapacity := LCapacity * 2;
+      SetLength(LResults, LCapacity);
+    end;
+    LResults[LCount].Start := LStart;
+    LResults[LCount].Length := LPos - LStart;
+    LResults[LCount].SegmentType := stLine;
+    Inc(LCount);
   end;
 
+  SetLength(LResults, LCount);
   Result := LResults;
 end;
 
 function TUnicodeSegmenter.SegmentSentences(const AText: string): TSegmentResultArray;
 var
-  LPos, LStart, LLen: SizeInt;
+  LPos, LStart, LLen, LCount, LCapacity: SizeInt;
   LResults: TSegmentResultArray;
 begin
   LLen := Length(AText);
@@ -170,18 +197,27 @@ begin
     Exit;
   end;
 
-  SetLength(LResults, 0);
+  // 预分配空间
+  LCapacity := 8;
+  SetLength(LResults, LCapacity);
+  LCount := 0;
   LPos := 1;
   while LPos <= LLen do
   begin
     LStart := LPos;
     LPos := NextSentence(AText, LPos);
-    SetLength(LResults, Length(LResults) + 1);
-    LResults[High(LResults)].Start := LStart;
-    LResults[High(LResults)].Length := LPos - LStart;
-    LResults[High(LResults)].SegmentType := stSentence;
+    if LCount >= LCapacity then
+    begin
+      LCapacity := LCapacity * 2;
+      SetLength(LResults, LCapacity);
+    end;
+    LResults[LCount].Start := LStart;
+    LResults[LCount].Length := LPos - LStart;
+    LResults[LCount].SegmentType := stSentence;
+    Inc(LCount);
   end;
 
+  SetLength(LResults, LCount);
   Result := LResults;
 end;
 

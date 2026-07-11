@@ -44,6 +44,10 @@ type
   TUnicodeCollator = class(TInterfacedObject, IUnicodeCollator)
   private
     FOptions: TCollationOptions;
+    // 缓存最近使用的规范化字符串
+    FLastA, FLastB: string;
+    FLastNormalizedA, FLastNormalizedB: string;
+    function GetNormalized(const AText: string): string;
   public
     constructor Create(const AOptions: TCollationOptions);
     function Compare(const A, B: string): Integer;
@@ -100,6 +104,42 @@ constructor TUnicodeCollator.Create(const AOptions: TCollationOptions);
 begin
   inherited Create;
   FOptions := AOptions;
+  FLastA := '';
+  FLastB := '';
+  FLastNormalizedA := '';
+  FLastNormalizedB := '';
+end;
+
+function TUnicodeCollator.GetNormalized(const AText: string): string;
+begin
+  // 简单缓存：如果字符串相同，直接返回缓存结果
+  if AText = FLastA then
+    Exit(FLastNormalizedA);
+  if AText = FLastB then
+    Exit(FLastNormalizedB);
+
+  // 计算规范化形式
+  Result := NFD(AText);
+
+  // 更新缓存
+  if FLastA = '' then
+  begin
+    FLastA := AText;
+    FLastNormalizedA := Result;
+  end
+  else if FLastB = '' then
+  begin
+    FLastB := AText;
+    FLastNormalizedB := Result;
+  end
+  else
+  // 覆盖最早的缓存
+  begin
+    FLastA := FLastB;
+    FLastNormalizedA := FLastNormalizedB;
+    FLastB := AText;
+    FLastNormalizedB := Result;
+  end;
 end;
 
 function TUnicodeCollator.Compare(const A, B: string): Integer;
@@ -110,9 +150,9 @@ var
   LCategoryA, LCategoryB: TGeneralCategory;
   LDecodeA, LDecodeB: TUTF8DecodeResult;
 begin
-  // 规范化输入
-  LA := NFD(A);
-  LB := NFD(B);
+  // 使用缓存的规范化形式
+  LA := GetNormalized(A);
+  LB := GetNormalized(B);
 
   // 简单实现：逐字符比较
   LI := 1;
@@ -211,8 +251,8 @@ var
   LDecode: TUTF8DecodeResult;
   LKeyPos: SizeInt;
 begin
-  // 规范化输入
-  LNormalized := NFD(AText);
+  // 使用缓存的规范化形式
+  LNormalized := GetNormalized(AText);
 
   // 简单实现：生成基本排序键
   SetLength(LKey, Length(LNormalized) * 4); // 预分配空间
