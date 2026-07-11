@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.rbtree;
+{**
+ * @desc Concurrent Red-Black Tree with per-tree spin lock.
+ *
+ * @note This is NOT a lock-free structure. It uses an atomic spin lock
+ *       to protect write operations (insert/remove).
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains/ForEach: shared read access
+ *   - Insert/Remove/Clear: exclusive write lock
+ *
+ * @see Red-Black Tree — self-balancing BST with O(log n) operations
+ * @see Java TreeMap — similar ordered map implementation
+ *}
 
 {$I nextpas.core.settings.inc}
 

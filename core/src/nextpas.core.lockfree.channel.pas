@@ -1,4 +1,22 @@
 unit nextpas.core.lockfree.channel;
+{**
+ * @desc Lock-free bounded MPMC channel using sequence-based slots.
+ *
+ * @details Multi-producer multi-consumer channel with:
+ *   - Bounded capacity with dynamic resize support
+ *   - Blocking Send/Receive with timeout variants
+ *   - Non-blocking TrySend/TryReceive
+ *   - Close semantics with drain support
+ *   - Selector integration for multiplexing
+ *
+ * @concurrency Thread-safe for multiple producers and consumers:
+ *   - Send/TrySend: producers compete for slots
+ *   - Receive/TryReceive: consumers compete for data
+ *   - Close: safe to call from any thread
+ *
+ * @see Go channels — similar CSP model
+ * @see Rust crossbeam::channel — similar bounded channel
+ *}
 
 {$I nextpas.core.settings.inc}
 

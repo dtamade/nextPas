@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.dag;
+{**
+ * @desc Concurrent Directed Acyclic Graph (DAG) with per-node locks.
+ *
+ * @note This is NOT a lock-free structure. It uses per-node atomic locks
+ *       for fine-grained concurrency control.
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - FindNode/HasEdge/TopologicalSort: shared read locks
+ *   - AddNode/RemoveNode/AddEdge/RemoveEdge: exclusive write locks
+ *
+ * @see DAG — dependency graphs, build systems, task scheduling
+ * @see TopologicalSort — cycle detection and ordering
+ *}
 
 {$I nextpas.core.settings.inc}
 

@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.bplus;
+{**
+ * @desc Concurrent B+ Tree with read-write lock.
+ *
+ * @note This is NOT a lock-free structure. It uses an atomic read-write lock
+ *       to keep root replacement and node reclamation safe for readers.
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains/ForEach/ForEachRange: shared read lock
+ *   - Insert/Remove/Clear: exclusive write lock
+ *
+ * @see B+ Tree — database index standard structure
+ * @see lmdb (C) — B+Tree for comparison
+ *}
 
 {$I nextpas.core.settings.inc}
 

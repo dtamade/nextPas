@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.hazard;
+{**
+ * @desc Hazard Pointer memory reclamation scheme.
+ *
+ * @details Lock-free memory reclamation using hazard pointers:
+ *   - Each thread publishes pointers it's currently accessing
+ *   - Retired nodes are only reclaimed when no thread holds a hazard pointer
+ *   - Complements EBR (Epoch-Based Reclamation) for different use cases
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Acquire/Release: per-thread hazard pointer management
+ *   - Retire: thread-safe retirement list
+ *   - Reclaim: safe reclamation when no hazards exist
+ *
+ * @see Hazard Pointers — Maged Michael, 2004
+ * @see EBR — Epoch-Based Reclamation (complementary approach)
+ *}
 
 {$I nextpas.core.settings.inc}
 
