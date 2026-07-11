@@ -3963,6 +3963,38 @@ begin
   end;
 end;
 
+{ MPSC boundary conditions }
+
+procedure TestMpscTryDequeueEmpty;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+begin
+  LQ := TIntMpsc.Create;
+  try
+    Check(not LQ.TryDequeue(LV), 'dequeue from empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMpscTryDequeueClosed;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+begin
+  LQ := TIntMpsc.Create;
+  try
+    LQ.TryEnqueue(1);
+    LQ.Close;
+    Check(LQ.TryDequeue(LV), 'dequeue from closed with data succeeds');
+    CheckEqual(1, LV, 'dequeued value matches');
+    Check(not LQ.TryDequeue(LV), 'dequeue from closed empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
 { SegQueue TryEnqueue + Close }
 
 procedure TestSegQueueTryEnqueueClose;
@@ -6635,6 +6667,8 @@ begin
   T.Test('SPMC dequeue timeout on data', @TestSpmcDequeueTimeoutOnData);
 
   T.Test('MPSC TryEnqueue + ApproxCount', @TestMpscTryEnqueue);
+  T.Test('MPSC TryDequeue empty', @TestMpscTryDequeueEmpty);
+  T.Test('MPSC TryDequeue closed', @TestMpscTryDequeueClosed);
   T.Test('SegQueue TryEnqueue + Close', @TestSegQueueTryEnqueueClose);
   T.Test('SPMC Close', @TestSpmcClose);
   T.Test('SPMC TryEnqueue closed', @TestSpmcTryEnqueueClosed);
