@@ -155,8 +155,68 @@ begin
   LState := TVirtualListState.Create(100);
   LArea := TRect.Make(0, 0, 30, 10);
   LBuf := TBuffer.CreateEmpty(LArea);
-  LList.RenderStateful(LArea, LBuf, LState);
-  Check(True, 'Should render stateful virtual list');
+  try
+    LList.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'Should render stateful virtual list');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestVirtualListRenderEmpty;
+var
+  LList: IVirtualList;
+  LState: TVirtualListState;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LList := TVirtualList.New(@TestItemProvider);
+  LState := TVirtualListState.Create(0);
+  LArea := TRect.Make(0, 0, 20, 5);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LList.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'Should render empty virtual list');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestVirtualListRenderSmallArea;
+var
+  LList: IVirtualList;
+  LState: TVirtualListState;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LList := TVirtualList.New(@TestItemProvider);
+  LState := TVirtualListState.Create(10);
+  LArea := TRect.Make(0, 0, 5, 2);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LList.RenderStateful(LArea, LBuf, LState);
+    Check(True, 'Should render in small area');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestVirtualListStatePageDownBoundary;
+var
+  LState: TVirtualListState;
+begin
+  LState := TVirtualListState.Create(5);
+  LState.PageDown(10);
+  Check(LState.Selected = 4, 'Should not exceed total');
+end;
+
+procedure TestVirtualListStatePageUpBoundary;
+var
+  LState: TVirtualListState;
+begin
+  LState := TVirtualListState.Create(100);
+  LState.PageUp(10);
+  Check(LState.Selected = 0, 'Should not go below 0');
 end;
 
 procedure TestVirtualListBuilderChaining;
@@ -190,5 +250,9 @@ begin
   T.Test('TVirtualList.WithShowIndex', @TestVirtualListWithShowIndex);
   T.Test('TVirtualList.RenderStateful', @TestVirtualListRenderStateful);
   T.Test('TVirtualList builder chaining', @TestVirtualListBuilderChaining);
+  T.Test('TVirtualList render empty', @TestVirtualListRenderEmpty);
+  T.Test('TVirtualList render small area', @TestVirtualListRenderSmallArea);
+  T.Test('TVirtualListState.PageDown boundary', @TestVirtualListStatePageDownBoundary);
+  T.Test('TVirtualListState.PageUp boundary', @TestVirtualListStatePageUpBoundary);
   if not T.Run then Halt(1);
 end.
