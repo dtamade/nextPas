@@ -1147,6 +1147,7 @@ var
   LOutbound: IH1OutboundBuffer;
   LResponseWriter: IWriter;
   LDrainStarted: Boolean;
+  LKeepAlive: Boolean;
 begin
   Result := tscoServer;
   LW := nil;
@@ -1155,9 +1156,16 @@ begin
   LDrainStarted := False;
   try
     if FParserIsSnapshot then
-      FKeepAlive := True
+      LKeepAlive := True
     else
-      FKeepAlive := ShouldKeepAlive(FParser);
+      LKeepAlive := ShouldKeepAlive(FParser);
+
+    { Enforce MaxRequestsPerConnection before writing response headers }
+    Inc(FRequestCount);
+    if (FOptions.MaxRequestsPerConnection > 0) and
+       (FRequestCount >= FOptions.MaxRequestsPerConnection) then
+      LKeepAlive := False;
+    FKeepAlive := LKeepAlive;
 
     if HasHttp11HostPolicyError(FParser) then
     begin
@@ -1192,9 +1200,9 @@ begin
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
-    if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
+    if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.SetHeader('connection', 'keep-alive');
-    if not FKeepAlive then
+    if not LKeepAlive then
       LW.GetHeaders.SetHeader('connection', 'close');
 
     FHandler.ServeHTTP(LReq, LW);
@@ -1211,12 +1219,6 @@ begin
     LDrainStarted := True;
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
-
-    { Increment request count and enforce MaxRequestsPerConnection }
-    Inc(FRequestCount);
-    if (FOptions.MaxRequestsPerConnection > 0) and
-       (FRequestCount >= FOptions.MaxRequestsPerConnection) then
-      FKeepAlive := False;
 
   except
     on E: Exception do
@@ -1266,6 +1268,13 @@ begin
       LKeepAlive := True
     else
       LKeepAlive := ShouldKeepAlive(FParser);
+
+    { Enforce MaxRequestsPerConnection before writing response headers }
+    Inc(FRequestCount);
+    if (FOptions.MaxRequestsPerConnection > 0) and
+       (FRequestCount >= FOptions.MaxRequestsPerConnection) then
+      LKeepAlive := False;
+    FKeepAlive := LKeepAlive;
 
     if HasHttp11HostPolicyError(FParser) then
     begin
@@ -1317,12 +1326,6 @@ begin
     end;
 
     LW.Flush;
-
-    { Increment request count and enforce MaxRequestsPerConnection }
-    Inc(FRequestCount);
-    if (FOptions.MaxRequestsPerConnection > 0) and
-       (FRequestCount >= FOptions.MaxRequestsPerConnection) then
-      LKeepAlive := False;
 
     ACloseAfterDrain := not LKeepAlive;
     AOutbound := LOutbound;
