@@ -222,6 +222,37 @@ begin
   );
 end;
 
+procedure TestSortKeyEncoding;
+var
+  LCollator: IUnicodeCollator;
+  LKey: TCollationKey;
+  LWeight: UInt16;
+begin
+  LCollator := UnicodeCollator;
+
+  // Single character 'A': weight = 0x23EC, terminator = 0x0001
+  LKey := LCollator.GetSortKey('A');
+  CheckEqual(Length(LKey), 4, 'A sort key is 4 bytes (2 weight + 2 terminator)');
+  LWeight := (UInt16(LKey[0]) shl 8) or LKey[1];
+  CheckEqual(Int64(LWeight), Int64(GetCollationPrimaryWeight(Ord('A'))),
+    'A sort key weight matches primary weight');
+  CheckEqual(LKey[2], 0, 'Terminator high byte is 0');
+  CheckEqual(LKey[3], 1, 'Terminator low byte is 1');
+
+  // Two characters 'AB': 2 weights + terminator = 6 bytes
+  LKey := LCollator.GetSortKey('AB');
+  CheckEqual(Length(LKey), 6, 'AB sort key is 6 bytes');
+
+  // Empty string: 0 bytes
+  LKey := LCollator.GetSortKey('');
+  CheckEqual(Length(LKey), 0, 'Empty sort key is 0 bytes');
+
+  // Ignorable characters are skipped
+  // Combining acute (U+0301) has weight 0, should be skipped
+  LKey := LCollator.GetSortKey('a' + #$CC#$81);  // a + combining acute
+  CheckEqual(Length(LKey), 4, 'a+combining acute same length as a (combining skipped)');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.collate');
   T.Test('PrimaryWeightLookup', @TestPrimaryWeightLookup);
@@ -233,5 +264,6 @@ begin
   T.Test('EmptyAndEdgeCases', @TestEmptyAndEdgeCases);
   T.Test('IgnorableCharacters', @TestIgnorableCharacters);
   T.Test('ScriptOrdering', @TestScriptOrdering);
+  T.Test('SortKeyEncoding', @TestSortKeyEncoding);
   if not T.Run then Halt(1);
 end.

@@ -137,8 +137,8 @@ begin
   // NFD 规范化
   LNormalized := NFD(AText);
 
-  // 预分配：每个 codepoint 最多 3 字节权重 + 1 字节分隔符
-  SetLength(LKey, Length(LNormalized) + 4);
+  // 预分配：每个 codepoint 2 字节权重 + 2 字节终止符
+  SetLength(LKey, (Length(LNormalized) div 2 + 1) * 2 + 2);
   LKeyPos := 0;
 
   LIter.Init(PByte(PAnsiChar(LNormalized)), SizeUInt(Length(LNormalized)));
@@ -150,29 +150,22 @@ begin
     if LWeight = 0 then
       Continue;
 
-    // 确保空间
+    // 确保空间（2 字节权重 + 2 字节终止符）
     if LKeyPos + 4 > Length(LKey) then
       SetLength(LKey, Length(LKey) * 2);
 
-    // 编码权重为 2 字节（大端序，避免与分隔符 0x00 冲突）
-    if LWeight >= $0100 then
-    begin
-      LKey[LKeyPos] := Byte(LWeight shr 8);
-      Inc(LKeyPos);
-    end;
-    LKey[LKeyPos] := Byte(LWeight and $FF);
-    Inc(LKeyPos);
-
-    // 权重之间插入分隔符 0x00，确保可比性
-    LKey[LKeyPos] := 0;
-    Inc(LKeyPos);
+    // 固定 2 字节大端编码（高字节在前）
+    LKey[LKeyPos] := Byte(LWeight shr 8);
+    LKey[LKeyPos + 1] := Byte(LWeight and $FF);
+    Inc(LKeyPos, 2);
   end;
 
-  // 终止符
-  if LKeyPos + 1 > Length(LKey) then
-    SetLength(LKey, LKeyPos + 1);
+  // 终止符 0x0001（不会与任何有效权重冲突，DUCET 最小非零权重为 0x0200）
+  if LKeyPos + 2 > Length(LKey) then
+    SetLength(LKey, LKeyPos + 2);
   LKey[LKeyPos] := 0;
-  Inc(LKeyPos);
+  LKey[LKeyPos + 1] := 1;
+  Inc(LKeyPos, 2);
 
   SetLength(LKey, LKeyPos);
   Result := LKey;
