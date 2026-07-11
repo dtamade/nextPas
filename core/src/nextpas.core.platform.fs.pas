@@ -1041,19 +1041,19 @@ begin
 end;
 
 { Remove file }
-function platform_fs_remove_file(const APath: PAnsiChar): Int32;
+function platform_fs_remove_file(const APath: PAnsiChar): Int32; inline;
 begin
   Result := platform_file_unlink(APath);
 end;
 
 { Remove empty directory }
-function platform_fs_remove_dir(const APath: PAnsiChar): Int32;
+function platform_fs_remove_dir(const APath: PAnsiChar): Int32; inline;
 begin
   Result := platform_file_rmdir(APath);
 end;
 
 { Rename file or directory }
-function platform_fs_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
+function platform_fs_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32; inline;
 begin
   Result := platform_file_rename(AOldPath, ANewPath);
 end;

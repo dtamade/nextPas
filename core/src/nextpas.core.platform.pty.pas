@@ -254,7 +254,7 @@ begin
   end;
 end;
 
-function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
+function platform_pty_master_fd(const APty: TPlatformPty): PtrInt; inline;
 begin
   Result := PtrInt(APty.MasterFd);
 end;
