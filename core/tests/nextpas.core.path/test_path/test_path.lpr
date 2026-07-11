@@ -395,6 +395,8 @@ begin
   Check(PathJoinN(['/a']) = '/a', 'joinN 1 part');
   Check(PathJoinN(['', 'b']) = 'b', 'joinN empty + part');
   Check(PathJoinN(['/a', '', 'c']) = '/a/c', 'joinN middle empty');
+  Check(PathJoinN(['/a', 'b', 'c', 'd', 'e']) = '/a/b/c/d/e',
+    'joinN 5 parts');
 end;
 
 procedure TestPathClean;
@@ -403,6 +405,9 @@ begin
     'clean resolves dot-dot');
   Check(PathClean('/a//b///c') = '/a/b/c', 'clean removes duplicate seps');
   Check(PathClean('') = '', 'clean empty');
+  Check(PathClean('.') = '.', 'clean dot');
+  Check(PathClean('/') = '/', 'clean root');
+  Check(PathClean('/../..') = '/', 'clean above root');
 end;
 
 begin

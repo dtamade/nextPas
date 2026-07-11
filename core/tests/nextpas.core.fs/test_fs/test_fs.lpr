@@ -1866,11 +1866,16 @@ end;
 
 procedure TestFsGetTempDir;
 var
-  LDir: string;
+  LDir, LTestFile: string;
 begin
   LDir := FsGetTempDir;
   Check(LDir <> '', 'FsGetTempDir: returns non-empty');
   Check(FsIsDir(LDir), 'FsGetTempDir: directory exists');
+  { Verify temp dir is writable by creating a test file }
+  LTestFile := LDir + '/nextpas_test_write_check';
+  FsWriteFile(LTestFile, TBytes.Create(42));
+  Check(FsExists(LTestFile), 'FsGetTempDir: dir is writable');
+  FsRemove(LTestFile);
 end;
 
 begin
