@@ -571,6 +571,16 @@ begin
   FTable^.ArrayRsqrtF32(aSrc, aDst, aCount);
 end;
 
+procedure TBatchF32Accessor.ArrayRcpRefine(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayRcpRefineF32(aSrc, aDst, aCount);
+end;
+
+procedure TBatchF32Accessor.ArrayRsqrtRefine(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayRsqrtRefineF32(aSrc, aDst, aCount);
+end;
+
 procedure TBatchF32Accessor.ArrayAddScalar(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single); inline;
 begin
   FTable^.ArrayAddScalarF32(aSrc, aDst, aCount, aScalar);
@@ -796,6 +806,16 @@ end;
 procedure TBatchF64Accessor.ArraySqrt(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
   FTable^.ArraySqrtF64(aSrc, aDst, aCount);
+end;
+
+procedure TBatchF64Accessor.ArrayRcp(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayRcpF64(aSrc, aDst, aCount);
+end;
+
+procedure TBatchF64Accessor.ArrayRsqrt(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+begin
+  FTable^.ArrayRsqrtF64(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayMulScalar(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); inline;

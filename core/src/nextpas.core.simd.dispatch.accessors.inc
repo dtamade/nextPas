@@ -139,6 +139,8 @@ type
     procedure ArraySqrt(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
     procedure ArrayRcp(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
     procedure ArrayRsqrt(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+    procedure ArrayRcpRefine(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
+    procedure ArrayRsqrtRefine(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
     procedure ArrayAddScalar(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single); inline;
     procedure ArrayMulScalar(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single); inline;
     procedure ArrayClamp(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: Single); inline;
@@ -191,6 +193,8 @@ type
     procedure ArrayAbs(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
     procedure ArrayNeg(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
     procedure ArraySqrt(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+    procedure ArrayRcp(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+    procedure ArrayRsqrt(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
     procedure ArrayMulScalar(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); inline;
     procedure ArrayAddScalar(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); inline;
     procedure ArrayClamp(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double); inline;
