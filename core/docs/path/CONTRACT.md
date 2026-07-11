@@ -1,10 +1,10 @@
 # nextpas.core.path 代码契约
 
 **模块路径**：`core/src/nextpas.core.path.pas`（1 个源文件）
-**层级**：L1（依赖 L0: base; 委托 fs.path）
+**层级**：L2（依赖 L0-L1: platform.path; 委托 fs.path）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-07-11
+**版本**：2.0
 
 ---
 
@@ -22,12 +22,19 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | `PathJoin(ABase, AChild): string` | 连接两段路径 | — |
 | `PathJoin3(A, B, C): string` | 连接三段路径 | — |
 | `PathDir(APath): string` | 目录部分 | ExtractFilePath |
-| `PathName(APath): string` | 文件名（含扩展名） | ExtractFileName |
+| `PathBase(APath): string` | 文件名（含扩展名） | ExtractFileName |
+| `PathSplit(APath, ADir, ABase)` | 分离目录和文件名 | — |
 | `PathExt(APath): string` | 扩展名（含点） | ExtractFileExt |
-| `PathBaseName(APath): string` | 文件名（不含扩展名） | — |
 | `PathChangeExt(APath, AExt): string` | 更改扩展名 | ChangeFileExt |
 | `PathIsAbsolute(APath): Boolean` | 是否绝对路径 | — |
 | `PathNormalize(APath): string` | 规范化（消除 `.`/`..`） | — |
+| `PathRelative(ABase, ATarget): string` | 计算相对路径 | — |
+| `PathHasExt(APath): Boolean` | 是否有扩展名 | — |
+| `PathWithoutExt(APath): string` | 去除扩展名 | — |
+| `ExtractFilePath(AFileName): string` | 目录部分（末尾含分隔符） | ✓ |
+| `ExtractFileName(AFileName): string` | 文件名 | ✓ |
+| `ExtractFileExt(AFileName): string` | 扩展名 | ✓ |
+| `ChangeFileExt(AFileName, AExt): string` | 更改扩展名 | ✓ |
 
 ---
 
@@ -45,11 +52,24 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 
 ---
 
-## 4-6. 概要
+## 4. 线程安全
 
-- **线程安全**: ✅ 纯函数
-- **内存**: 返回新 string，调用方负责释放
-- **测试**: 1 个测试目录
+✅ 纯函数，线程安全。
+
+---
+
+## 5. 内存管理
+
+返回新 string，调用方负责释放。无全局缓存。
+
+---
+
+## 6. 测试覆盖
+
+| 测试文件 | 测试数 | 说明 |
+|----------|--------|------|
+| test_path | 24 | 路径操作全覆盖 + SysUtils 兼容 + 契约测试 |
+| **合计** | **1 个测试目录** | **24** |
 
 ---
 
@@ -58,3 +78,4 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-07-11 | 2.0 | 更新为实际 API 和测试数据 | Claude |
