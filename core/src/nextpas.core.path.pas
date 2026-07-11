@@ -38,6 +38,10 @@ function PathHasExt(const APath: string): Boolean;
 function PathWithoutExt(const APath: string): string;
 {** @desc glob 模式匹配（* 匹配任意非分隔符序列，? 匹配单字符，[a-z] 字符类） *}
 function PathMatch(const APattern, AName: string): Boolean;
+{** @desc 连接多个路径片段 *}
+function PathJoinN(const AParts: array of string): string;
+{** @desc 规范化路径（PathNormalize 的 Go 风格别名） *}
+function PathClean(const APath: string): string; inline;
 
 { SysUtils-compatible aliases }
 
@@ -157,6 +161,16 @@ end;
 function PathMatch(const APattern, AName: string): Boolean;
 begin
   Result := FsPathMatch(APattern, AName);
+end;
+
+function PathJoinN(const AParts: array of string): string;
+begin
+  Result := FsPathJoin(AParts);
+end;
+
+function PathClean(const APath: string): string;
+begin
+  Result := PathNormalize(APath);
 end;
 
 { SysUtils-compatible aliases }

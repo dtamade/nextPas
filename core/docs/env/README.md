@@ -41,7 +41,8 @@
 
 | 函数 | 说明 |
 |------|------|
-| `ExpandEnv(AValue)` | 展开 `${VAR}` 和 `$VAR` 占位符 |
+| `ExpandEnv(AValue)` | 展开 `${VAR}` 和 `$VAR` 占位符（未定义→空） |
+| `ExpandEnvWithDefault(AValue, ADefault)` | 展开 `${VAR}` 和 `$VAR`（未定义→默认值） |
 
 ## 使用示例
 

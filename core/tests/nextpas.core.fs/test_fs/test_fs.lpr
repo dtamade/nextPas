@@ -1820,6 +1820,32 @@ begin
 end;
 {$ENDIF}
 
+procedure TestFsTouch;
+var
+  LPath: string;
+begin
+  LPath := GTmpDir + '/touch_test.txt';
+  { File doesn't exist — should create it }
+  Check(not FsExists(LPath), 'FsTouch: file does not exist before');
+  FsTouch(LPath);
+  Check(FsExists(LPath), 'FsTouch: file exists after touch');
+  Check(FsFileSize(LPath) = 0, 'FsTouch: created file is empty');
+  { File exists — should not modify it }
+  FsWriteFile(LPath, TBytes.Create($41, $42, $43));
+  FsTouch(LPath);
+  Check(FsFileSize(LPath) = 3, 'FsTouch: existing file not modified');
+  FsRemove(LPath);
+end;
+
+procedure TestFsGetTempDir;
+var
+  LDir: string;
+begin
+  LDir := FsGetTempDir;
+  Check(LDir <> '', 'FsGetTempDir: returns non-empty');
+  Check(FsIsDir(LDir), 'FsGetTempDir: directory exists');
+end;
+
 begin
   SetupTmpDir;
   try
@@ -1967,6 +1993,8 @@ begin
     T.Test('WalkFiles skips directories', @TestWalkFiles);
     T.Test('Walk stops when callback returns false',
       @TestWalkStopsWhenCallbackReturnsFalse);
+    T.Test('FsTouch creates and preserves', @TestFsTouch);
+    T.Test('FsGetTempDir returns valid dir', @TestFsGetTempDir);
 {$IFDEF NEXTPAS_UNIX}
     T.Test('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
     T.Test('Walk opendir error callback', @TestWalkOpenDirErrorGoesToCallback);

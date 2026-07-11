@@ -20,6 +20,10 @@ var Text := Capture('/usr/bin/fpc', ['--version']);
 // 查找 PATH 中的可执行文件
 var FpcPath := LookPath('fpc');  // '/usr/bin/fpc'
 
+// 不抛异常版本
+if TryLookPath('fpc', FpcPath) then
+  WriteLn('fpc at: ', FpcPath);
+
 // 带超时执行（超时后自动 Kill）
 var Out := RunTimeout('/usr/bin/fpc', ['--version'], TDuration.FromSeconds(30));
 var Text := CaptureTimeout('/usr/bin/fpc', ['--version'], TDuration.FromSeconds(30));

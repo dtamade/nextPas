@@ -14,7 +14,9 @@
 
 | 函数 | 说明 |
 |------|------|
-| `PathJoin(Aparts)` | 拼接路径段 |
+| `PathJoin(ABase, AChild)` | 连接两个路径片段 |
+| `PathJoin3(A, B, C)` | 连接三个路径片段 |
+| `PathJoinN(AParts)` | 连接多个路径片段 |
 | `PathDir(APath)` | 提取目录部分 |
 | `PathBase(APath)` | 提取文件名（不含扩展名） |
 | `PathSplit(APath, ADir, ABase)` | 拆分目录和文件名 |
@@ -49,8 +51,10 @@ var
   LDir, LBase, LExt: string;
 begin
   { 路径拼接 }
-  WriteLn(PathJoin(['/home', 'user', 'file.txt']));
-  // → /home/user/file.txt
+  WriteLn(PathJoin('/home', 'user'));
+  // → /home/user
+  WriteLn(PathJoinN(['/home', 'user', 'docs', 'file.txt']));
+  // → /home/user/docs/file.txt
 
   { 路径拆分 }
   PathSplit('/home/user/file.txt', LDir, LBase);

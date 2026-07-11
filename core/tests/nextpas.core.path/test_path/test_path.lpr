@@ -388,6 +388,23 @@ begin
   Check(not PathMatch('abc', 'abcd'), 'literal does not match longer');
 end;
 
+procedure TestPathJoinN;
+begin
+  Check(PathJoinN(['/home', 'user', 'docs', 'file.txt']) = '/home/user/docs/file.txt',
+    'joinN 4 parts');
+  Check(PathJoinN(['/a']) = '/a', 'joinN 1 part');
+  Check(PathJoinN(['', 'b']) = 'b', 'joinN empty + part');
+  Check(PathJoinN(['/a', '', 'c']) = '/a/c', 'joinN middle empty');
+end;
+
+procedure TestPathClean;
+begin
+  Check(PathClean('/home/user/../user/./docs') = '/home/user/docs',
+    'clean resolves dot-dot');
+  Check(PathClean('/a//b///c') = '/a/b/c', 'clean removes duplicate seps');
+  Check(PathClean('') = '', 'clean empty');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.path');
   T.Test('PathJoin', @TestPathJoin);
@@ -420,6 +437,8 @@ begin
   T.Test('PathMatch escape', @TestPathMatchEscape);
   T.Test('PathMatch combined', @TestPathMatchCombined);
   T.Test('PathMatch edge cases', @TestPathMatchEdgeCases);
+  T.Test('PathJoinN', @TestPathJoinN);
+  T.Test('PathClean', @TestPathClean);
 {$IFDEF NEXTPAS_WINDOWS}
   T.Test('Windows root wrapper contract', @TestWindowsRootWrapperContract);
 {$ENDIF}

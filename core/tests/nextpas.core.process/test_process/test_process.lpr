@@ -1087,6 +1087,25 @@ begin
   end;
 end;
 
+procedure TestTryLookPath;
+var
+  LPath: string;
+begin
+  { TryLookPath finds common system binaries }
+  Check('TryLookPath sh — found', TryLookPath('sh', LPath));
+  Check('TryLookPath sh — not empty', LPath <> '');
+  Check('TryLookPath sh — contains sh', Pos('sh', LPath) > 0);
+
+  { TryLookPath finds absolute path }
+  Check('TryLookPath /bin/sh — found', TryLookPath('/bin/sh', LPath));
+  Check('TryLookPath /bin/sh — returns same path', LPath = '/bin/sh');
+
+  { TryLookPath returns false for non-existent binary }
+  Check('TryLookPath nonexistent — not found',
+    not TryLookPath('nonexistent_binary_12345', LPath));
+  Check('TryLookPath nonexistent — path empty', LPath = '');
+end;
+
 
 procedure TestSignal;
 var
@@ -1226,6 +1245,7 @@ begin
   TestRunInNonexistentDir;
   TestRunLargeOutput;
   TestLookPath;
+  TestTryLookPath;
   TestSignal;
   TestRunTimeoutConvenience;
   TestCaptureTimeoutConvenience;

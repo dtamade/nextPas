@@ -124,6 +124,16 @@ function CaptureTimeout(const APath: string; const AArgs: array of string;
  * @note 使用当前进程的 PATH 环境变量
  *}
 function LookPath(const AName: string): string;
+{**
+ * @desc 尝试在 PATH 中搜索可执行文件（不抛异常版本）
+ *
+ * @params
+ *   AName   可执行文件名或路径
+ *   APath   输出找到的完整路径
+ *
+ * @return 找到返回 true，未找到返回 false
+ *}
+function TryLookPath(const AName: string; out APath: string): Boolean;
 {** @desc 获取当前进程的可执行文件完整路径
  *
  * @return 可执行文件的绝对路径
@@ -230,6 +240,26 @@ begin
     not CommandPathHasDirectoryPart(AName) then
     raise EProcessError.Create('executable not found in PATH: ' + AName);
   Result := LResolved;
+end;
+
+function TryLookPath(const AName: string; out APath: string): Boolean;
+var
+  LEnv: TStringArray;
+  LResolved: string;
+begin
+  LEnv := EnvironmentVariables;
+  LResolved := ResolveExecutablePath(AName, LEnv);
+  if (LResolved = AName) and
+    not CommandPathHasDirectoryPart(AName) then
+  begin
+    APath := '';
+    Result := False;
+  end
+  else
+  begin
+    APath := LResolved;
+    Result := True;
+  end;
 end;
 
 function Executable: string;

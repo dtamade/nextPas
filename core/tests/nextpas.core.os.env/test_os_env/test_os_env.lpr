@@ -270,6 +270,19 @@ begin
   UnsetEnv('NEXTPAS_TEST_DEFAULT');
 end;
 
+procedure TestExpandEnvWithDefault;
+begin
+  SetEnv('NEXTPAS_TEST_EXPDEF', 'hello');
+  CheckEqual('hello world', ExpandEnvWithDefault('$NEXTPAS_TEST_EXPDEF world', 'NOPE'),
+    'ExpandEnvWithDefault existing var');
+  CheckEqual('NOPE world', ExpandEnvWithDefault('$NEXTPAS_TEST_MISSING_VAR world', 'NOPE'),
+    'ExpandEnvWithDefault missing var uses default');
+  CheckEqual('hello!=NOPE',
+    ExpandEnvWithDefault('${NEXTPAS_TEST_EXPDEF}!=$NEXTPAS_TEST_UNDEF_XYZ', 'NOPE'),
+    'ExpandEnvWithDefault mixed');
+  UnsetEnv('NEXTPAS_TEST_EXPDEF');
+end;
+
 { --- main --- }
 
 begin
@@ -303,5 +316,6 @@ begin
   T.Test('UserCacheDir', @TestUserCacheDir);
   T.Test('UserConfigDir', @TestUserConfigDir);
   T.Test('GetEnvDefault', @TestGetEnvDefault);
+  T.Test('ExpandEnvWithDefault', @TestExpandEnvWithDefault);
   if not T.Run then Halt(1);
 end.
