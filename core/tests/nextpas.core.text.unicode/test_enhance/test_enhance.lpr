@@ -20,6 +20,11 @@ begin
   CheckEqual(Int64(Ord(usCommon)), Int64(Ord(GetScript(Ord(' ')))), 'space is Common');
   Check(IsScript(Ord('A'), usLatin), 'A is Latin script');
   Check(not IsScript(Ord('A'), usGreek), 'A is not Greek script');
+
+  // 测试其他 Script
+  CheckEqual(Int64(Ord(usGreek)), Int64(Ord(GetScript($0391))), 'Alpha is Greek');  // Α
+  CheckEqual(Int64(Ord(usCyrillic)), Int64(Ord(GetScript($0410))), 'A is Cyrillic');  // А
+  CheckEqual(Int64(Ord(usHan)), Int64(Ord(GetScript($4E2D))), '中 is Han');  // 中
 end;
 
 procedure TestBlockProperties;
@@ -30,6 +35,11 @@ begin
   CheckEqual(Int64(Ord(ubBasicLatin)), Int64(Ord(GetBlock(Ord('0')))), '0 is Basic Latin');
   Check(IsBlock(Ord('A'), ubBasicLatin), 'A is Basic Latin block');
   Check(not IsBlock(Ord('A'), ubLatinExtendedA), 'A is not Latin Extended-A block');
+
+  // 测试其他 Block
+  CheckEqual(Int64(Ord(ubGreekAndCoptic)), Int64(Ord(GetBlock($0391))), 'Alpha is Greek and Coptic');  // Α
+  CheckEqual(Int64(Ord(ubCyrillic)), Int64(Ord(GetBlock($0410))), 'A is Cyrillic');  // А
+  CheckEqual(Int64(Ord(ubCJKUnifiedIdeographs)), Int64(Ord(GetBlock($4E2D))), '中 is CJK Unified Ideographs');  // 中
 end;
 
 procedure TestSegmentation;

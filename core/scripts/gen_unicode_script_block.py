@@ -605,6 +605,10 @@ def main():
     script_ranges = parse_scripts(scripts_text)
     block_ranges = parse_blocks(blocks_text)
 
+    # Sort by start codepoint for binary search
+    script_ranges.sort(key=lambda r: r[0])
+    block_ranges.sort(key=lambda r: r[0])
+
     # ── Step 3: Generate .inc files ──
     print("Step 3/3: Writing Pascal .inc files...", file=sys.stderr)
 
