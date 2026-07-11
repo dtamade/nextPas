@@ -64,7 +64,7 @@ function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32;
     @param AMaxEntries 数组最大容量
     @param ATimeoutMs 超时时间（毫秒，-1 表示无限等待）
     @param ACount 输出事件数量
-    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
+    @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
 function platform_poller_wait(var APoller: TPlatformPoller;
   AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int64;
   out ACount: Int32): Int32;

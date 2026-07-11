@@ -69,7 +69,7 @@ function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
     @param AProc 进程句柄
     @param AResult 输出进程结果
     @param ATimeoutMs 超时时间（毫秒，0 表示无限等待）
-    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
+    @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
 function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
 
@@ -493,7 +493,7 @@ begin
       if LNowNs >= LDeadlineNs then
       begin
         AResult.Status := psRunning;
-        Exit(PLATFORM_ERR_TIMEOUT);
+        Exit(PLATFORM_ERR_TIMEDOUT);
       end;
       LSleepReq.tv_sec := 0;
       LSleepReq.tv_nsec := 1000000; { 1 ms }
@@ -1113,7 +1113,7 @@ begin
   begin
     { WAIT_TIMEOUT: process still running }
     AResult.Status := psRunning;
-    Exit(PLATFORM_ERR_TIMEOUT);
+    Exit(PLATFORM_ERR_TIMEDOUT);
   end;
   if LWait <> 0 then
     Exit(Int32(GetLastError));

@@ -57,7 +57,7 @@ type
     {** @desc 等待文件系统事件
         @param AEvent 输出事件信息
         @param ATimeoutMs 超时时间（毫秒，-1 表示无限等待）
-        @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
+        @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
     function Poll(out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
     {** @desc 关闭监视器
         @return 0 成功，否则返回错误码 *}
@@ -80,7 +80,7 @@ function platform_watch_add(var AWatcher: TPlatformWatcher;
     @param AWatcher 监视器句柄
     @param AEvent 输出事件信息
     @param ATimeoutMs 超时时间（毫秒，-1 表示无限等待）
-    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
+    @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
   out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 
