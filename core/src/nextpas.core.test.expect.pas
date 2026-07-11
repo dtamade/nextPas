@@ -128,6 +128,16 @@ begin
   if A > B then Result := A else Result := B;
 end;
 
+procedure RequireNotNaN(const AValue, AThreshold: Double;
+  const AOp: string);
+{ Shared NaN guard for double comparison methods. Fails with descriptive
+  message if either value is NaN. }
+begin
+  if IsNan(AValue) or IsNan(AThreshold) then
+    InternalFail(FloatToStr(AValue) + ' ' + AOp + ' ' +
+      FloatToStr(AThreshold) + ' (NaN)');
+end;
+
 { ═════════════════════════════════════════════════════════════════════════════ }
 { TExpectation (fluent API)                                                    }
 { ═════════════════════════════════════════════════════════════════════════════ }
@@ -731,9 +741,7 @@ end;
 function TExpectation.ToBeGreaterThanD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeGreaterThanD');
-  if IsNan(FDoubleValue) or IsNan(AThreshold) then
-    InternalFail(FloatToStr(FDoubleValue) + ' is not > ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(FDoubleValue, AThreshold, 'is not >');
   CheckMatch(FDoubleValue > AThreshold,
     FloatToStr(FDoubleValue) + ' should not be > ' + FloatToStr(AThreshold),
     FloatToStr(FDoubleValue) + ' is not > ' + FloatToStr(AThreshold));
@@ -743,9 +751,7 @@ end;
 function TExpectation.ToBeLessThanD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeLessThanD');
-  if IsNan(FDoubleValue) or IsNan(AThreshold) then
-    InternalFail(FloatToStr(FDoubleValue) + ' is not < ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(FDoubleValue, AThreshold, 'is not <');
   CheckMatch(FDoubleValue < AThreshold,
     FloatToStr(FDoubleValue) + ' should not be < ' + FloatToStr(AThreshold),
     FloatToStr(FDoubleValue) + ' is not < ' + FloatToStr(AThreshold));
@@ -755,9 +761,7 @@ end;
 function TExpectation.ToBeGreaterOrEqualD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeGreaterOrEqualD');
-  if IsNan(FDoubleValue) or IsNan(AThreshold) then
-    InternalFail(FloatToStr(FDoubleValue) + ' is not >= ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(FDoubleValue, AThreshold, 'is not >=');
   CheckMatch(FDoubleValue >= AThreshold,
     FloatToStr(FDoubleValue) + ' should not be >= ' + FloatToStr(AThreshold),
     FloatToStr(FDoubleValue) + ' is not >= ' + FloatToStr(AThreshold));
@@ -767,9 +771,7 @@ end;
 function TExpectation.ToBeLessOrEqualD(const AThreshold: Double): IExpectation;
 begin
   RequireKind(ekDouble, 'ToBeLessOrEqualD');
-  if IsNan(FDoubleValue) or IsNan(AThreshold) then
-    InternalFail(FloatToStr(FDoubleValue) + ' is not <= ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(FDoubleValue, AThreshold, 'is not <=');
   CheckMatch(FDoubleValue <= AThreshold,
     FloatToStr(FDoubleValue) + ' should not be <= ' + FloatToStr(AThreshold),
     FloatToStr(FDoubleValue) + ' is not <= ' + FloatToStr(AThreshold));
