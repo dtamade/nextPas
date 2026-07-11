@@ -5034,6 +5034,51 @@ begin
   end;
 end;
 
+{ Channel boundary conditions }
+
+procedure TestChannelTryReceiveEmpty;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(8);
+  try
+    Check(not LCh.TryReceive(LV), 'receive from empty returns false');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelTryReceiveClosed;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(8);
+  try
+    LCh.TrySend(1);
+    LCh.Close;
+    Check(LCh.TryReceive(LV), 'receive from closed with data succeeds');
+    CheckEqual(1, LV, 'received value matches');
+    Check(not LCh.TryReceive(LV), 'receive from closed empty returns false');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelTrySendClosed;
+var
+  LCh: TIntChannel;
+begin
+  LCh := TIntChannel.Create(8);
+  try
+    LCh.Close;
+    Check(not LCh.TrySend(1), 'send to closed returns false');
+  finally
+    LCh.Free;
+  end;
+end;
+
 { ============================================================ }
 { Edge-case: Selector with single channel                       }
 { ============================================================ }
@@ -6753,6 +6798,9 @@ begin
   T.Test('Channel resize while full', @TestChannelResizeWhileFull);
   T.Test('Channel resize closed', @TestChannelResizeClosed);
   T.Test('Channel resize reject shrink below live count', @TestChannelResizeRejectShrinkBelowLiveCount);
+  T.Test('Channel TryReceive empty', @TestChannelTryReceiveEmpty);
+  T.Test('Channel TryReceive closed', @TestChannelTryReceiveClosed);
+  T.Test('Channel TrySend closed', @TestChannelTrySendClosed);
 
   T.Test('Selector single channel', @TestSelectorSingleChannel);
   T.Test('Selector TrySelect empty', @TestSelectorTrySelectEmpty);
