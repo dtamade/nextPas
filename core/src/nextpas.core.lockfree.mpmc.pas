@@ -70,11 +70,11 @@ type
     function EnqueueBatch(const AValues: array of T): PtrUInt;
     function DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
     procedure Close;
-    function IsClosed: Boolean;
-    function IsEmpty: Boolean;
-    function IsFull: Boolean;
-    function Capacity: PtrUInt;
-    function ApproxCount: PtrUInt;
+    function IsClosed: Boolean; inline;
+    function IsEmpty: Boolean; inline;
+    function IsFull: Boolean; inline;
+    function Capacity: PtrUInt; inline;
+    function ApproxCount: PtrUInt; inline;
   end;
 
   generic TMpmcQueue<T> = class(specialize TMpmcQueueImpl<T>)
@@ -342,7 +342,7 @@ begin
   LockFreeWakeAll(@FSpaceEpoch);
 end;
 
-function TMpmcQueueImpl.IsClosed: Boolean;
+function TMpmcQueueImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

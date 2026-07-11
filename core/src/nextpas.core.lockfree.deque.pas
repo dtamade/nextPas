@@ -48,10 +48,10 @@ type
     function TryPop(out AValue: T): Boolean;
     function TrySteal(out AValue: T): Boolean;
     procedure Close;
-    function IsClosed: Boolean;
-    function IsEmpty: Boolean;
-    function ApproxCount: PtrUInt;
-    function Capacity: PtrUInt;
+    function IsClosed: Boolean; inline;
+    function IsEmpty: Boolean; inline;
+    function ApproxCount: PtrUInt; inline;
+    function Capacity: PtrUInt; inline;
   end;
 
   generic TWorkStealingDeque<T> = class(specialize TWorkStealingDequeImpl<T>)
@@ -139,7 +139,7 @@ begin
   Result := True;
 end;
 
-function TWorkStealingDequeImpl.IsEmpty: Boolean;
+function TWorkStealingDequeImpl.IsEmpty: Boolean; inline;
 var
   LTop, LBottom: Int64;
 begin
@@ -153,12 +153,12 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TWorkStealingDequeImpl.IsClosed: Boolean;
+function TWorkStealingDequeImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TWorkStealingDequeImpl.ApproxCount: PtrUInt;
+function TWorkStealingDequeImpl.ApproxCount: PtrUInt; inline;
 var
   LTop, LBottom: Int64;
 begin
@@ -170,7 +170,7 @@ begin
     Result := 0;
 end;
 
-function TWorkStealingDequeImpl.Capacity: PtrUInt;
+function TWorkStealingDequeImpl.Capacity: PtrUInt; inline;
 begin
   Result := FCapacity;
 end;

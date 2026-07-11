@@ -58,9 +58,9 @@ type
     destructor Destroy; override;
     function Submit(const ATask: TWorkStealingTask; const AData: Pointer): Boolean;
     function Steal(out ATask: TWorkStealingTask; out AData: Pointer): TLockFreeWorkStealingResult;
-    function GetWorkerCount: Int64;
+    function GetWorkerCount: Int64; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -178,7 +178,7 @@ begin
   Result := wsEmpty;
 end;
 
-function TWorkStealingPool.GetWorkerCount: Int64;
+function TWorkStealingPool.GetWorkerCount: Int64; inline;
 begin
   Result := FWorkerCount;
 end;
@@ -199,7 +199,7 @@ begin
   end;
 end;
 
-function TWorkStealingPool.IsClosed: Boolean;
+function TWorkStealingPool.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

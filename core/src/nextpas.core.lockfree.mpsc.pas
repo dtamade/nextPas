@@ -55,8 +55,8 @@ type
     {** @desc 带超时出队（**严格单消费者**：只能由一个线程调用） }
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     procedure Close;
-    function IsClosed: Boolean;
-    function IsEmpty: Boolean;
+    function IsClosed: Boolean; inline;
+    function IsEmpty: Boolean; inline;
     {** @desc 近似元素计数（原子快照，非线性化） }
     function ApproxCount: PtrUInt;
   end;
@@ -229,12 +229,12 @@ begin
   LockFreeWakeAll(@FDataEpoch);
 end;
 
-function TMpscQueueImpl.IsClosed: Boolean;
+function TMpscQueueImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TMpscQueueImpl.IsEmpty: Boolean;
+function TMpscQueueImpl.IsEmpty: Boolean; inline;
 var
   LTail, LNext: PNode;
 begin

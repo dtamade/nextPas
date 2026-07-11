@@ -83,7 +83,7 @@ type
     {** @desc 关闭队列（已入队数据仍可读出） }
     procedure Close;
     {** @desc 队列是否已关闭 }
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     {** @desc 近似空判断 }
     function IsEmpty: Boolean;
     {** @desc 近似计数 }
@@ -259,7 +259,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TSegQueueImpl.IsClosed: Boolean;
+function TSegQueueImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
