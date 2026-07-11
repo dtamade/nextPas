@@ -4932,6 +4932,46 @@ begin
   end;
 end;
 
+{ Selector boundary conditions }
+
+procedure TestSelectorTrySelectEmpty;
+var
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+begin
+  LSel := TIntSelector.Create;
+  try
+    LResult := LSel.TrySelect;
+    Check(not LResult.Completed, 'select empty returns not completed');
+  finally
+    LSel.Free;
+  end;
+end;
+
+procedure TestSelectorClearResets;
+var
+  LSel: TIntSelector;
+  LCh1, LCh2: TIntChannel;
+  LV1, LV2: Integer;
+begin
+  LCh1 := TIntChannel.Create(8);
+  LCh2 := TIntChannel.Create(8);
+  LSel := TIntSelector.Create;
+  try
+    LV1 := 0;
+    LV2 := 0;
+    LSel.AddRecv(LCh1, LV1);
+    LSel.AddRecv(LCh2, LV2);
+    CheckEqual(2, LSel.CaseCount, 'case count before clear');
+    LSel.Clear;
+    CheckEqual(0, LSel.CaseCount, 'case count after clear');
+  finally
+    LSel.Free;
+    LCh1.Free;
+    LCh2.Free;
+  end;
+end;
+
 { ============================================================ }
 { Edge-case: EBR with many guards                               }
 { ============================================================ }
@@ -6579,6 +6619,8 @@ begin
   T.Test('Channel resize reject shrink below live count', @TestChannelResizeRejectShrinkBelowLiveCount);
 
   T.Test('Selector single channel', @TestSelectorSingleChannel);
+  T.Test('Selector TrySelect empty', @TestSelectorTrySelectEmpty);
+  T.Test('Selector clear resets', @TestSelectorClearResets);
   T.Test('EBR many guards', @TestEbrManyGuards);
 
   if not T.Run then Halt(1);
