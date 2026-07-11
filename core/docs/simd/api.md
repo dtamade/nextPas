@@ -1,6 +1,6 @@
 # nextpas.core.simd API 参考
 
-> 最后更新: 2026-07-06
+> 最后更新: 2026-07-11
 
 ## 概述
 
@@ -220,6 +220,29 @@ procedure ArrayAddF64(A, B, C: PDouble; Count: SizeUInt);
 procedure ArraySubF64(A, B, C: PDouble; Count: SizeUInt);
 procedure ArrayMulF64(A, B, C: PDouble; Count: SizeUInt);
 procedure ArrayDivF64(A, B, C: PDouble; Count: SizeUInt);
+procedure ArrayAbsF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayNegF64(A, B: PDouble; Count: SizeUInt);
+procedure ArraySqrtF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayClampF64(A, B: PDouble; Count: SizeUInt; Min, Max: Double);
+procedure ArrayFmaF64(A, B, C, D: PDouble; Count: SizeUInt);
+procedure ArrayMinF64(A, B, C: PDouble; Count: SizeUInt);
+procedure ArrayMaxF64(A, B, C: PDouble; Count: SizeUInt);
+```
+
+### F64 超越函数
+
+```pascal
+procedure ArraySinF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayCosF64(A, B: PDouble; Count: SizeUInt);
+procedure ArraySinCosF64(A, SinB, CosB: PDouble; Count: SizeUInt);
+procedure ArrayExpF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayLogF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayLog2F64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayLog10F64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayCeilF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayFloorF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayRoundF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayTruncF64(A, B: PDouble; Count: SizeUInt);
 ```
 
 ### I32 数组操作
