@@ -1325,6 +1325,7 @@ begin
       LKeepAlive := False;
 
     ACloseAfterDrain := not LKeepAlive;
+    AOutbound := LOutbound;
   except
     on E: Exception do
     begin
