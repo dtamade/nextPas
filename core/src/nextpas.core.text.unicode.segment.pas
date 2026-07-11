@@ -222,56 +222,170 @@ begin
 end;
 
 function TUnicodeSegmenter.NextGraphemeCluster(const AText: string; const APos: SizeInt): SizeInt;
+{**
+ * UAX #29 Grapheme Cluster Boundary algorithm (Unicode 16.0).
+ *
+ * Rules implemented:
+ *   GB1:  sot ÷
+ *   GB3:  CR × LF
+ *   GB4:  (Control|CR|LF) ÷
+ *   GB5:  ÷ (Control|CR|LF)
+ *   GB6:  L × (L|V|LV|LVT)
+ *   GB7:  (V|LV) × (V|T)
+ *   GB8:  (LVT|T) × T
+ *   GB9:  × (Extend|ZWJ)
+ *   GB9a: × SpacingMark
+ *   GB9b: Prepend ×
+ *   GB11: \p{Extended_Pictographic} Extend* ZWJ × \p{Extended_Pictographic}
+ *   GB12: sot (RI RI)* RI × RI
+ *   GB13: [^RI] (RI RI)* RI × RI
+ *   GB999: ÷
+ *}
 var
   LLen: SizeInt;
-  LCodepoint, LNextCodepoint: TUnicodeCodepoint;
-  LNextCategory: TGeneralCategory;
-  LDecode, LNextDecode: TUTF8DecodeResult;
+  LPos: SizeInt;
+  LCurGcb: TGraphemeBreakProperty;
+  LDecode: TUTF8DecodeResult;
+  LAheadPos: SizeInt;
+  LAheadGcb: TGraphemeBreakProperty;
+  LAheadDecode: TUTF8DecodeResult;
+  LRICount: SizeInt;
 begin
   LLen := Length(AText);
   if APos > LLen then
-  begin
-    Result := APos;
-    Exit;
-  end;
+    Exit(APos);
 
-  // 解码第一个字符
+  // Decode first codepoint
   LDecode := UTF8Decode(@AText[APos], LLen - APos + 1);
   if LDecode.ByteLen = 0 then
-  begin
-    // 无效的 UTF-8 序列，跳过一个字节
-    Result := APos + 1;
-    Exit;
-  end;
-  LCodepoint := LDecode.CodePoint;
-  Result := APos + LDecode.ByteLen;
+    Exit(APos + 1); // Invalid UTF-8
 
-  // CR+LF 应该是单个字素簇
-  if (LCodepoint = $000D) and (Result <= LLen) then
+  LPos := APos + LDecode.ByteLen;
+  LCurGcb := GetGraphemeBreakProperty(LDecode.CodePoint);
+
+  // GB4: (Control | CR | LF) ÷ — always isolated
+  if LCurGcb in [gbpCR, gbpLF, gbpControl] then
   begin
-    LNextDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
-    if (LNextDecode.ByteLen > 0) and (LNextDecode.CodePoint = $000A) then
+    // GB3: CR × LF
+    if (LCurGcb = gbpCR) and (LPos <= LLen) then
     begin
-      Result := Result + LNextDecode.ByteLen;
-      Exit;
+      LAheadDecode := UTF8Decode(@AText[LPos], LLen - LPos + 1);
+      if (LAheadDecode.ByteLen > 0) and (GetGraphemeBreakProperty(LAheadDecode.CodePoint) = gbpLF) then
+        Exit(LPos + LAheadDecode.ByteLen);
     end;
+    Exit(LPos);
   end;
 
-  // 跳过组合标记（Extend 和 SpacingMark）
-  while Result <= LLen do
+  // Track RI pairs: count consecutive RI characters
+  if LCurGcb = gbpRegionalIndicator then
+    LRICount := 1
+  else
+    LRICount := 0;
+
+  // Main loop: try to extend the cluster
+  while LPos <= LLen do
   begin
-    LNextDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
-    if LNextDecode.ByteLen = 0 then
+    LAheadDecode := UTF8Decode(@AText[LPos], LLen - LPos + 1);
+    if LAheadDecode.ByteLen = 0 then
       Break;
-    LNextCodepoint := LNextDecode.CodePoint;
-    LNextCategory := GetGeneralCategory(LNextCodepoint);
+    LAheadGcb := GetGraphemeBreakProperty(LAheadDecode.CodePoint);
+    LAheadPos := LPos + LAheadDecode.ByteLen;
 
-    // 只有 Extend (NonspacingMark) 和 SpacingMark 才继续组合
-    if not (LNextCategory in [gcuNonspacingMark, gcuSpacingMark]) then
+    // GB4: ÷ (Control | CR | LF)
+    if LAheadGcb in [gbpCR, gbpLF, gbpControl] then
       Break;
 
-    Inc(Result, LNextDecode.ByteLen);
+    // GB11: EP Extend* ZWJ × EP — must be checked BEFORE GB9
+    // If current is EP and next is ZWJ, look past ZWJ for EP
+    if (LCurGcb = gbpExtendedPictographic) and (LAheadGcb = gbpZWJ) then
+    begin
+      if LAheadPos <= LLen then
+      begin
+        LAheadDecode := UTF8Decode(@AText[LAheadPos], LLen - LAheadPos + 1);
+        if (LAheadDecode.ByteLen > 0) and
+           (GetGraphemeBreakProperty(LAheadDecode.CodePoint) = gbpExtendedPictographic) then
+        begin
+          // Consume both ZWJ and the following EP
+          LCurGcb := gbpExtendedPictographic;
+          LRICount := 0;
+          LPos := LAheadPos + LAheadDecode.ByteLen;
+          Continue;
+        end;
+      end;
+    end;
+
+    // GB9: × (Extend | ZWJ) — after GB11 check
+    if LAheadGcb in [gbpExtend, gbpZWJ] then
+    begin
+      LPos := LAheadPos;
+      Continue;
+    end;
+
+    // GB9a: × SpacingMark
+    if LAheadGcb = gbpSpacingMark then
+    begin
+      LPos := LAheadPos;
+      Continue;
+    end;
+
+    // GB9b: Prepend ×
+    if LCurGcb = gbpPrepend then
+    begin
+      LCurGcb := LAheadGcb;
+      if LAheadGcb = gbpRegionalIndicator then
+        LRICount := 1
+      else
+        LRICount := 0;
+      LPos := LAheadPos;
+      Continue;
+    end;
+
+    // GB6: L × (L | V | LV | LVT)
+    if (LCurGcb = gbpL) and (LAheadGcb in [gbpL, gbpV, gbpLV, gbpLVT]) then
+    begin
+      LCurGcb := LAheadGcb;
+      LRICount := 0;
+      LPos := LAheadPos;
+      Continue;
+    end;
+
+    // GB7: (V | LV) × (V | T)
+    if (LCurGcb in [gbpV, gbpLV]) and (LAheadGcb in [gbpV, gbpT]) then
+    begin
+      LCurGcb := LAheadGcb;
+      LRICount := 0;
+      LPos := LAheadPos;
+      Continue;
+    end;
+
+    // GB8: (LVT | T) × T
+    if (LCurGcb in [gbpLVT, gbpT]) and (LAheadGcb = gbpT) then
+    begin
+      LCurGcb := gbpT;
+      LRICount := 0;
+      LPos := LAheadPos;
+      Continue;
+    end;
+
+    // GB12-13: Regional Indicator pairs
+    if (LCurGcb = gbpRegionalIndicator) and (LAheadGcb = gbpRegionalIndicator) then
+    begin
+      Inc(LRICount);
+      // GB12/13: even count → no break (pair forming), odd → break (pair complete)
+      // LRICount=2 means we have 2 RIs = 1 pair → no break
+      // LRICount=3 means we have 3 RIs = 1 pair + 1 extra → break before 3rd
+      if LRICount mod 2 = 1 then
+        Break;
+      LCurGcb := gbpRegionalIndicator;
+      LPos := LAheadPos;
+      Continue;
+    end;
+
+    // GB999: ÷ Any — default break
+    Break;
   end;
+
+  Result := LPos;
 end;
 
 function TUnicodeSegmenter.NextWord(const AText: string; const APos: SizeInt): SizeInt;

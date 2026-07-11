@@ -26,6 +26,30 @@ from typing import Dict, List, Optional, Set, Tuple
 # ─── Unicode version ───────────────────────────────────────────────
 DEFAULT_VERSION = "16.0.0"
 UCD_BASE = "https://www.unicode.org/Public/{version}/ucd/"
+MAX_DECOMP_MAP_LEN = 18
+
+# ─── Grapheme_Cluster_Break constants ─────────────────────────────
+GCB_VALUES = [
+    "Other",                    # 0
+    "CR",                       # 1
+    "LF",                       # 2
+    "Control",                  # 3
+    "Extend",                   # 4
+    "ZWJ",                      # 5
+    "Regional_Indicator",      # 6
+    "Prepend",                  # 7
+    "SpacingMark",             # 8
+    "L",                        # 9
+    "V",                        # 10
+    "T",                        # 11
+    "LV",                       # 12
+    "LVT",                      # 13
+    "Extended_Pictographic",   # 14
+]
+
+GCB_NAME_TO_ORDINAL = {name: idx for idx, name in enumerate(GCB_VALUES)}
+
+# Hangul constants for L/V/T/LV/LVT derivation
 HANGUL_SBASE = 0xAC00
 HANGUL_LBASE = 0x1100
 HANGUL_VBASE = 0x1161
@@ -35,7 +59,6 @@ HANGUL_VCOUNT = 21
 HANGUL_TCOUNT = 28
 HANGUL_NCOUNT = HANGUL_VCOUNT * HANGUL_TCOUNT
 HANGUL_SCOUNT = HANGUL_LCOUNT * HANGUL_NCOUNT
-MAX_DECOMP_MAP_LEN = 18
 
 # ─── General Category constants ────────────────────────────────────
 CAT_NAMES = {
@@ -229,6 +252,47 @@ def parse_case_folding(text: str) -> List[CaseFoldData]:
         mapping = [int(c, 16) for c in mapping_str.split()]
         folds.append(CaseFoldData(cp=cp, status=status, mapping=mapping))
     return folds
+
+
+def parse_grapheme_break_property(gbp_text: str, emoji_text: str, records: Dict[int, CodepointData]) -> Dict[int, int]:
+    """Parse GraphemeBreakProperty.txt + emoji-data.txt → codepoint → GCB ordinal.
+
+    Derives Hangul L/V/T/LV/LVT from codepoint ranges.
+    Assigns Extended_Pictographic from emoji-data.txt.
+    Defaults to GCB_Other (0) for unassigned codepoints.
+    """
+    gcb: Dict[int, int] = {}
+
+    # Parse GraphemeBreakProperty.txt
+    for lo, hi, value in parse_ranges(gbp_text):
+        if value not in GCB_NAME_TO_ORDINAL:
+            continue
+        ordinal = GCB_NAME_TO_ORDINAL[value]
+        for cp in range(lo, hi + 1):
+            gcb[cp] = ordinal
+
+    # Parse Extended_Pictographic from emoji-data.txt
+    for lo, hi, value in parse_ranges(emoji_text):
+        if value == "Extended_Pictographic":
+            for cp in range(lo, hi + 1):
+                if cp not in gcb:
+                    gcb[cp] = GCB_NAME_TO_ORDINAL["Extended_Pictographic"]
+
+    # Derive Hangul L/V/T/LV/LVT from codepoint ranges
+    for cp in range(HANGUL_LBASE, HANGUL_LBASE + HANGUL_LCOUNT):
+        gcb[cp] = GCB_NAME_TO_ORDINAL["L"]
+    for cp in range(HANGUL_VBASE, HANGUL_VBASE + HANGUL_VCOUNT):
+        gcb[cp] = GCB_NAME_TO_ORDINAL["V"]
+    for cp in range(HANGUL_TBASE + 1, HANGUL_TBASE + HANGUL_TCOUNT):
+        gcb[cp] = GCB_NAME_TO_ORDINAL["T"]
+    for cp in range(HANGUL_SBASE, HANGUL_SBASE + HANGUL_SCOUNT):
+        sindex = cp - HANGUL_SBASE
+        if sindex % HANGUL_TCOUNT == 0:
+            gcb[cp] = GCB_NAME_TO_ORDINAL["LV"]
+        else:
+            gcb[cp] = GCB_NAME_TO_ORDINAL["LVT"]
+
+    return gcb
 
 
 def parse_simple_case_maps(records: Dict[int, CodepointData], unidata_text: str) -> Dict[int, CodepointData]:
@@ -599,6 +663,27 @@ def build_ccc_tables(records: Dict[int, CodepointData]) -> Tuple[List[List[int]]
     return bmp_table, smp_ranges
 
 
+def build_gcb_tables(gcb: Dict[int, int]) -> Tuple[List[List[int]], List[Tuple[int, int, int]]]:
+    """Build BMP stage-2 table + SMP ranges for Grapheme_Cluster_Break property."""
+    bmp_table = [[0] * 256 for _ in range(256)]  # default: Other (0)
+
+    for cp in range(0x10000):
+        val = gcb.get(cp, 0)
+        bmp_table[(cp >> 8) & 0xFF][cp & 0xFF] = val
+
+    smp_ranges: List[Tuple[int, int, int]] = []
+    range_start = 0x10000
+    current_val = gcb.get(range_start, 0)
+    for cp in range(0x10001, 0x10FFFF + 1):
+        val = gcb.get(cp, 0)
+        if val != current_val:
+            smp_ranges.append((range_start, cp - 1, current_val))
+            range_start = cp
+            current_val = val
+    smp_ranges.append((range_start, 0x10FFFF, current_val))
+    return bmp_table, smp_ranges
+
+
 def build_normalization_property_sets(derived_norm_text: str) -> Set[int]:
     composition_exclusions: Set[int] = set()
 
@@ -768,13 +853,14 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     # ── Step 1: Download all UCD files ──
-    print("Step 1/5: Downloading UCD files...", file=sys.stderr)
+    print("Step 1/6: Downloading UCD files...", file=sys.stderr)
     unidata_text = download_ucd(args.version, "UnicodeData.txt")
     derived_text = download_ucd(args.version, "DerivedCoreProperties.txt")
     casefold_text = download_ucd(args.version, "CaseFolding.txt")
     emoji_text = download_ucd(args.version, "emoji/emoji-data.txt")
     derived_norm_text = download_ucd(args.version, "DerivedNormalizationProps.txt")
     normalization_test_text = download_ucd(args.version, "NormalizationTest.txt")
+    gbp_text = download_ucd(args.version, "auxiliary/GraphemeBreakProperty.txt")
 
     # Optional but useful
     try:
@@ -787,15 +873,16 @@ def main():
         normalization_corrections_text = ""
 
     # ── Step 2: Parse ──
-    print("Step 2/5: Parsing UCD data...", file=sys.stderr)
+    print("Step 2/6: Parsing UCD data...", file=sys.stderr)
     records = parse_unicode_data(unidata_text)
     records = parse_simple_case_maps(records, unidata_text)
     folds = parse_case_folding(casefold_text)
     raw_decomposition = parse_decomposition(records)
     properties = build_property_ranges(derived_text, proplist_text, emoji_text)
+    gcb_map = parse_grapheme_break_property(gbp_text, emoji_text, records)
 
     # ── Step 3: Build tables ──
-    print("Step 3/5: Building lookup tables...", file=sys.stderr)
+    print("Step 3/6: Building lookup tables...", file=sys.stderr)
     cat_table = build_category_table(records)
     smp_ranges = build_smp_category_ranges(records)
 
@@ -808,9 +895,10 @@ def main():
     ccc_bmp_table, ccc_smp_ranges = build_ccc_tables(records)
     composition_exclusions = build_normalization_property_sets(derived_norm_text)
     compose_entries = build_composition_table(records, raw_decomposition, composition_exclusions)
+    gcb_bmp_table, gcb_smp_ranges = build_gcb_tables(gcb_map)
 
     # ── Step 4: Generate main data .inc ──
-    print("Step 4/5: Writing Pascal .inc files...", file=sys.stderr)
+    print("Step 4/6: Writing Pascal .inc files...", file=sys.stderr)
 
     cat_output = f"""// {{Auto-generated by gen_unicode_data.py — Unicode {args.version}}}
 // Generated: see core/scripts/gen_unicode_data.py
@@ -851,6 +939,7 @@ const
 """
 
     # ── Step 5: Generate binary properties .inc ──
+    print("Step 5/6: Generating binary properties...", file=sys.stderr)
     prop_output = f"""// {{Auto-generated by gen_unicode_data.py — Unicode {args.version}}}
 // Binary property range tables.
 
@@ -917,12 +1006,33 @@ const
 {pascal_compose_map(compose_entries, "COMPOSE_TABLE")}
 """
 
+    # ── Step 6: Generate GCB property .inc ──
+    print("Step 6/6: Generating GraphemeBreakProperty tables...", file=sys.stderr)
+
+    gcb_output = f"""// {{Auto-generated by gen_unicode_data.py — Unicode {args.version}}}
+// Grapheme_Cluster_Break property data from auxiliary/GraphemeBreakProperty.txt.
+//
+// GCB values (TGraphemeBreakProperty ordinal):
+//   0=Other, 1=CR, 2=LF, 3=Control, 4=Extend, 5=ZWJ,
+//   6=Regional_Indicator, 7=Prepend, 8=SpacingMark,
+//   9=L, 10=V, 11=T, 12=LV, 13=LVT, 14=Extended_Pictographic
+
+const
+  // ── BMP GCB Lookup (stage-2: [high][low] → GCB ordinal) ──
+{pascal_stage2_table(gcb_bmp_table, "GCB_BMP_TABLE", "Byte")}
+
+  // ── SMP GCB Ranges (0x10000-0x10FFFF) ──
+  GCB_SMP_RANGES_COUNT = {len(gcb_smp_ranges)};
+{pascal_ranges_list(gcb_smp_ranges, "GCB_SMP_RANGES")}
+"""
+
     # ── Write files ──
     files = {
         "nextpas.core.text.unicode.data.inc": cat_output,
         "nextpas.core.text.unicode.props.inc": prop_output,
         "nextpas.core.text.unicode.casefold.inc": fold_output,
         "nextpas.core.text.unicode.normalize.inc": normalize_output,
+        "nextpas.core.text.unicode.gcb.inc": gcb_output,
     }
 
     for fname, fcontent in files.items():
@@ -950,6 +1060,8 @@ const
     print(f"  Composition exclusions: {len(composition_exclusions)}", file=sys.stderr)
     print(f"  Composition entries: {len(compose_entries)}", file=sys.stderr)
     print(f"  CCC SMP ranges: {len(ccc_smp_ranges)}", file=sys.stderr)
+    print(f"  GCB BMP table: 256×256 = 65536 entries", file=sys.stderr)
+    print(f"  GCB SMP ranges: {len(gcb_smp_ranges)}", file=sys.stderr)
     print(f"  NormalizationTest data rows: {count_data_lines(normalization_test_text)}", file=sys.stderr)
     print(f"  NormalizationCorrections rows: {count_data_lines(normalization_corrections_text)}", file=sys.stderr)
     for prop in BINARY_PROPS:

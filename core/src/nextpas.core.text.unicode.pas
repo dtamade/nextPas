@@ -25,6 +25,7 @@ type
   TCodepointRange3 = nextpas.core.text.unicode.types.TCodepointRange3;
   TCaseFoldMap = nextpas.core.text.unicode.types.TCaseFoldMap;
   TCaseFoldEntry = nextpas.core.text.unicode.types.TCaseFoldEntry;
+  TGraphemeBreakProperty = nextpas.core.text.unicode.types.TGraphemeBreakProperty;
 
   // 新增类型
   TUnicodeScript = nextpas.core.text.unicode.types.TUnicodeScript;
@@ -48,6 +49,7 @@ const
 // 属性查询函数
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;
 function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory; inline;
+function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -108,6 +110,11 @@ end;
 function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory;
 begin
   Result := nextpas.core.text.unicode.props.GetGeneralCategory(ACp);
+end;
+
+function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty;
+begin
+  Result := nextpas.core.text.unicode.props.GetGraphemeBreakProperty(ACp);
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;

@@ -251,6 +251,25 @@ type
     usUnknown
   );
 
+  // Grapheme_Cluster_Break 属性枚举（Unicode 16.0, UAX #29）
+  TGraphemeBreakProperty = (
+    gbpOther,                 // 0
+    gbpCR,                    // 1
+    gbpLF,                    // 2
+    gbpControl,               // 3
+    gbpExtend,                // 4
+    gbpZWJ,                   // 5
+    gbpRegionalIndicator,    // 6
+    gbpPrepend,               // 7
+    gbpSpacingMark,           // 8
+    gbpL,                     // 9  Hangul Jamo Leading
+    gbpV,                     // 10 Hangul Jamo Vowel
+    gbpT,                     // 11 Hangul Jamo Trailing
+    gbpLV,                    // 12 Hangul Syllable LV
+    gbpLVT,                   // 13 Hangul Syllable LVT
+    gbpExtendedPictographic   // 14
+  );
+
   // Block 属性枚举（Unicode 16.0）
   TUnicodeBlock = (
     ubBasicLatin,
