@@ -598,10 +598,18 @@ begin
       AStatus := tsSkipped;
       AFailMsg := E.Message;
     end;
-    on E: EAbort do
-      raise;  { P0 #4 fix: user abort — propagate, don't swallow }
+    on E: EAssertionFailed do
+    begin
+      { Assertion inside ShouldFail = expected failure. Must come BEFORE
+        the EAbort catch because EAssertionFailed inherits from EAbort. }
+      AStatus := tsPassed;
+    end;
     on E: Exception do
     begin
+      { EAbort (user abort) — propagate, don't swallow.
+        Note: EAssertionFailed was already caught above. }
+      if E is EAbort then
+        raise;
       { Check exception class if specified }
       if (AEntry.ShouldFailClass <> nil) and
          not (E.InheritsFrom(AEntry.ShouldFailClass)) then

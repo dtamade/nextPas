@@ -527,12 +527,18 @@ begin
       access GExecState via InternalFail/SetTestContext. }
     SetCurrentTestContext(nil);
     LSubCtx := nil;
-    { Now safe to release GExecState — no callbacks can reference it. }
+  end;
+  { Separate finally for GExecState — must run even if TTestContext
+    cleanup raises (e.g., a cleanup callback throws). The thread-local
+    GExecState would otherwise leak, accumulating in long parallel runs. }
+  try
     if GExecState <> nil then
     begin
       Dispose(GExecState);
       GExecState := nil;
     end;
+  except
+    { Nothing we can do — GExecState may leak, but the worker is dying }
   end;
   except
     { Top-level catch: prevent worker thread exceptions from crashing the process.

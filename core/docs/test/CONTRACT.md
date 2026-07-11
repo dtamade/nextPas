@@ -84,10 +84,28 @@ IExpectation = interface
   function ToBeSame(const AExpected: Pointer): IExpectation;
   function ToEqualPointer(const AExpected: Pointer): IExpectation;
   function ToEqualD(const AExpected: Double; const AEpsilon: Double = 1e-10): IExpectation;
+  function ToBeNearRel(const AExpected: Double; const ARelEps: Double = 1e-9): IExpectation;
+  function ToNotBeNearRel(const AExpected: Double; const ARelEps: Double = 1e-9): IExpectation;
+  function ToBeNaN: IExpectation;
+  function ToBeNotNaN: IExpectation;
+  function ToEqualBytes(const AExpected: TBytes): IExpectation;
+  function ToEqualIntArray(const AExpected: array of Int64): IExpectation;
+  function ToEqualStrArray(const AExpected: array of string): IExpectation;
+  function ToContainInt(const AValue: Int64): IExpectation;
+  function ToContainStr(const AValue: string): IExpectation;
+  function ToContain(const AValue: Byte): IExpectation;
+  function ToBeEmpty: IExpectation;
+  function ToBeNotEmpty: IExpectation;
+  function ToBeOneOf(const AValues: array of string): IExpectation;
+  function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
+  function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
+  function ToMatch(const APattern: string): IExpectation;
+  function WithMessage(const AMessage: string): IExpectation;
+  procedure ToFailUnexpected(const AMessage: string = '');
 end;
 ```
 
-工厂函数：`Expect(string)`, `ExpectStr`, `ExpectInt`, `ExpectBool`, `ExpectDouble`, `ExpectPtr`, `ExpectProc`。
+工厂函数：`Expect(string)`, `ExpectStr`, `ExpectInt`, `ExpectBool`, `ExpectDouble`, `ExpectPtr`, `ExpectProc`, `ExpectBytes`, `ExpectArrayOfInt`, `ExpectArrayOfStr`。
 
 ### 2.3 IMockSetup / IMockVerify
 
@@ -113,6 +131,8 @@ IMockVerify = interface
   function  CalledWith(const AArgs: array of TMockValue): IMockVerify;
   function  CalledExactlyWith(ACount: Integer; const AArgs: array of string): IMockVerify;
   function  CalledExactlyWith(ACount: Integer; const AArgs: array of TMockValue): IMockVerify;
+  function  Count: Integer;
+  function  CalledInOrder(const AMethods: array of string): IMockVerify;
 end;
 ```
 
@@ -126,8 +146,13 @@ ITestContext = interface
   procedure Skip(const AReason: string = '');
   function  GetTestName: string;
   procedure Log(const AMessage: string);
+  procedure LogF(const AFormat: string; const AArgs: array of const);
   procedure OnCleanup(AProc: TTestProc);
   procedure OnCleanup(AProc: TTestClosure);
+  function  GetTempDir: string;
+  property  TempDir: string read GetTempDir;
+  procedure SetEnv(const AName, AValue: string);
+  procedure UnsetEnv(const AName: string);
 end;
 ```
 
