@@ -68,7 +68,14 @@ end;
 
 destructor TCyclicBarrier.Destroy;
 begin
-  Dispose(FGeneration);
+  Close;
+  AcquireState;
+  try
+    Dispose(FGeneration);
+    FGeneration := nil;
+  finally
+    ReleaseState;
+  end;
   inherited Destroy;
 end;
 

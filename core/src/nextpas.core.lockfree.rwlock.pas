@@ -83,20 +83,20 @@ end;
 
 function TConcurrentRwLock.WriteLock: Boolean;
 begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
   AtomicFetchAdd32(FWriterPending, 1, moAcqRel);
-  while True do
-  begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  try
+    while True do
     begin
-      AtomicFetchSub32(FWriterPending, 1, moAcqRel);
-      Exit(False);
+      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        Exit(False);
+      if TryWriteLock then
+        Exit(True);
+      CpuPause;
     end;
-    if TryWriteLock then
-    begin
-      AtomicFetchSub32(FWriterPending, 1, moAcqRel);
-      Exit(True);
-    end;
-    CpuPause;
+  finally
+    AtomicFetchSub32(FWriterPending, 1, moAcqRel);
   end;
 end;
 

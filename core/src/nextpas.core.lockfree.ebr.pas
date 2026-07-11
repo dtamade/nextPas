@@ -105,8 +105,11 @@ begin
     LActive := AtomicLoad32(FActiveCount, moAcquire);
     if LActive <= 0 then
       Exit;
-  until AtomicCompareExchange32(FActiveCount, LActive, LActive - 1,
-    moRelease) = LActive;
+    if AtomicCompareExchange32(FActiveCount, LActive, LActive - 1,
+      moRelease) = LActive then
+      Exit;
+    cpu_pause;
+  until False;
 end;
 
 procedure TEbrDomain.Retire(const AData: Pointer;
