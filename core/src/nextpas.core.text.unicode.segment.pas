@@ -225,7 +225,7 @@ function TUnicodeSegmenter.NextGraphemeCluster(const AText: string; const APos: 
 var
   LLen: SizeInt;
   LCodepoint, LNextCodepoint: TUnicodeCodepoint;
-  LCategory, LNextCategory: TGeneralCategory;
+  LNextCategory: TGeneralCategory;
   LDecode, LNextDecode: TUTF8DecodeResult;
 begin
   LLen := Length(AText);
@@ -420,7 +420,6 @@ function TUnicodeSegmenter.NextSentence(const AText: string; const APos: SizeInt
 var
   LLen: SizeInt;
   LCodepoint: TUnicodeCodepoint;
-  LCategory: TGeneralCategory;
   LInSentence: Boolean;
   LDecode: TUTF8DecodeResult;
 begin
@@ -445,7 +444,6 @@ begin
       Continue;
     end;
     LCodepoint := LDecode.CodePoint;
-    LCategory := GetGeneralCategory(LCodepoint);
 
     // 检查句子结束符
     case LCodepoint of
