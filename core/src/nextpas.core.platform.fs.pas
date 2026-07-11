@@ -395,6 +395,7 @@ end;
 
 
 function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+{$IFDEF NEXTPAS_UNIX}
 var
   LStat: TPlatformFileStat;
 begin
@@ -404,6 +405,14 @@ begin
     Exit(False);
   Result := (LStat.Mode and (PLATFORM_S_IXUSR or PLATFORM_S_IXGRP or PLATFORM_S_IXOTH)) <> 0;
 end;
+{$ELSE}
+begin
+  { Windows does not expose POSIX execute bits; always return False.
+    Callers needing Windows execute detection should check file extension
+    (.exe, .bat, .cmd, .com) or ACL via platform-specific APIs. }
+  Result := False;
+end;
+{$ENDIF}
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 var
   LStat: TPlatformFileStat;

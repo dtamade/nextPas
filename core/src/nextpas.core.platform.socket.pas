@@ -1203,6 +1203,8 @@ begin
   ARecvd := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
+  if AAddrLen = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if ALen <= 0 then
     Exit(0);
   LResult := winsock_recvfrom(TSocket(ASocket.Value), ABuf, ALen, AFlags, AAddr, AAddrLen);
