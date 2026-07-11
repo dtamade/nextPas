@@ -10,10 +10,10 @@ interface
 type
   {** @desc PTY 窗口大小 *}
   TPlatformPtySize = record
-    FCols: UInt16;
-    FRows: UInt16;
-    FXPixel: UInt16;
-    FYPixel: UInt16;
+    Cols: UInt16;
+    Rows: UInt16;
+    XPixel: UInt16;
+    YPixel: UInt16;
     {** @desc 检查窗口大小是否有效（行列均大于 0）
         @return True 如果窗口大小有效 *}
     function IsValid: Boolean; inline;
@@ -28,13 +28,13 @@ type
   {** @desc PTY 句柄（平台无关封装） *}
   TPlatformPty = record
   {$IFDEF NEXTPAS_UNIX}
-    FMasterFd: Int32;
-    FSlaveFd: Int32;
+    MasterFd: Int32;
+    SlaveFd: Int32;
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
-    FConPty: Pointer;
-    FPipeIn: PtrUInt;
-    FPipeOut: PtrUInt;
+    ConPty: Pointer;
+    PipeIn: PtrUInt;
+    PipeOut: PtrUInt;
   {$ENDIF}
     {** @desc 检查 PTY 是否有效（主从句柄均有效）
         @return True 如果 PTY 有效 *}
@@ -67,26 +67,26 @@ implementation
 
 function TPlatformPtySize.IsValid: Boolean;
 begin
-  Result := (FCols > 0) and (FRows > 0);
+  Result := (Cols > 0) and (Rows > 0);
 end;
 
 function TPlatformPtySize.IsInvalid: Boolean;
 begin
-  Result := (FCols = 0) or (FRows = 0);
+  Result := (Cols = 0) or (Rows = 0);
 end;
 
 function TPlatformPtySize.IsEmpty: Boolean;
 begin
-  Result := (FCols = 0) or (FRows = 0);
+  Result := (Cols = 0) or (Rows = 0);
 end;
 
 function TPlatformPty.IsValid: Boolean;
 begin
 {$IFDEF NEXTPAS_UNIX}
-  Result := (FMasterFd >= 0) and (FSlaveFd >= 0);
+  Result := (MasterFd >= 0) and (SlaveFd >= 0);
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  Result := (FConPty <> nil) and (FPipeIn <> 0) and (FPipeOut <> 0);
+  Result := (ConPty <> nil) and (PipeIn <> 0) and (PipeOut <> 0);
 {$ENDIF}
 end;
 
@@ -98,20 +98,20 @@ end;
 function TPlatformPty.IsMasterValid: Boolean;
 begin
 {$IFDEF NEXTPAS_UNIX}
-  Result := FMasterFd >= 0;
+  Result := MasterFd >= 0;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  Result := FConPty <> nil;
+  Result := ConPty <> nil;
 {$ENDIF}
 end;
 
 function TPlatformPty.IsSlaveValid: Boolean;
 begin
 {$IFDEF NEXTPAS_UNIX}
-  Result := FSlaveFd >= 0;
+  Result := SlaveFd >= 0;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  Result := (FPipeIn <> 0) and (FPipeOut <> 0);
+  Result := (PipeIn <> 0) and (PipeOut <> 0);
 {$ENDIF}
 end;
 
