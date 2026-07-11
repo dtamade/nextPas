@@ -260,6 +260,16 @@ begin
   Check(Pos('.config', LConfig) > 0, 'UserConfigDir contains .config');
 end;
 
+procedure TestGetEnvDefault;
+begin
+  SetEnv('NEXTPAS_TEST_DEFAULT', 'exists');
+  CheckEqual('exists', GetEnvDefault('NEXTPAS_TEST_DEFAULT', 'fallback'),
+    'GetEnvDefault returns existing value');
+  CheckEqual('fallback', GetEnvDefault('NEXTPAS_TEST_NONEXISTENT_VAR', 'fallback'),
+    'GetEnvDefault returns default for missing var');
+  UnsetEnv('NEXTPAS_TEST_DEFAULT');
+end;
+
 { --- main --- }
 
 begin
@@ -292,5 +302,6 @@ begin
   T.Test('UserHomeDir', @TestUserHomeDir);
   T.Test('UserCacheDir', @TestUserCacheDir);
   T.Test('UserConfigDir', @TestUserConfigDir);
+  T.Test('GetEnvDefault', @TestGetEnvDefault);
   if not T.Run then Halt(1);
 end.

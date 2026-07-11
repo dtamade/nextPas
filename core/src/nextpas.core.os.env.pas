@@ -40,6 +40,8 @@ function HasEnv(const AName: string): Boolean;
 function EnvironmentVariableNamesCaseSensitive: Boolean; inline;
 {** @desc 设置环境变量 *}
 procedure SetEnv(const AName, AValue: string);
+{** @desc 获取环境变量值，不存在时返回默认值 *}
+function GetEnvDefault(const AName, ADefault: string): string;
 {** @desc 删除环境变量 *}
 procedure UnsetEnv(const AName: string);
 {**
@@ -219,6 +221,13 @@ begin
   LN := AName;
   LV := AValue;
   RaiseEnvError(platform_env_set(PAnsiChar(LN), PAnsiChar(LV)), 'setenv', AName);
+end;
+
+function GetEnvDefault(const AName, ADefault: string): string;
+begin
+  Result := GetEnv(AName);
+  if Result = '' then
+    Result := ADefault;
 end;
 
 procedure UnsetEnv(const AName: string);
