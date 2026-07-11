@@ -492,7 +492,12 @@ begin
         LBuf[I] := #0;
         LR := platform_file_mkdir(@LBuf[0], AMode);
         if (LR <> 0) and (not platform_fs_is_dir(@LBuf[0])) then
+        begin
+          { If the path exists but is not a directory, return ENOTDIR }
+          if LR = PLATFORM_ERR_EXIST then
+            Exit(PLATFORM_ERR_ENOTDIR);
           Exit(LR);
+        end;
       {$IFDEF NEXTPAS_WINDOWS}
         LBuf[I] := '\';
       {$ELSE}
