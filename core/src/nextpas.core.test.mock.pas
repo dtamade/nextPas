@@ -64,6 +64,7 @@ type
     HasResult       : Boolean;
     ResultValue     : string;
     TypedReturnValue: TMockValue;
+    ArgHash         : Integer;  { P2 #6: pre-computed hash for O(1) arg mismatch detection }
   end;
 
   TMockCalls = specialize TArray<TMockCall>;
@@ -385,6 +386,18 @@ begin
   end;
 end;
 
+function MockValueHash(const AV: TMockValue): Integer;
+{ Quick hash for O(1) early mismatch detection in MatchingCallCountTyped. }
+begin
+  Result := Ord(AV.Kind);
+  case AV.Kind of
+    mvString: Result := Result * 31 + Length(AV.StrVal);
+    mvInt64:  Result := Result * 31 + Integer(AV.IntVal and $FFFFFFFF);
+    mvBool:   Result := Result * 31 + Ord(AV.BoolVal);
+    mvDouble: Result := Result * 31 + Integer(Trunc(AV.DblVal * 1000));
+  end;
+end;
+
 { ── Local helpers ──────────────────────────────────────────────────────────── }
 
 function FormatArgs(const AArgs: array of string): string;
@@ -439,6 +452,7 @@ begin
   ACall.HasResult        := False;
   ACall.ResultValue      := '';
   ACall.TypedReturnValue := MockUnsetValue;
+  ACall.ArgHash          := 0;
 end;
 
 procedure RecordOrder(var AOrder: specialize TArray<string>;
@@ -522,6 +536,7 @@ begin
   begin
     LCall.Args[I] := AArgs[I];
     LCall.TypedArgs[I] := MockStr(AArgs[I]);
+    LCall.ArgHash := LCall.ArgHash * 31 + Length(AArgs[I]);
   end;
   AppendCall(LCall, AMethodName);
 end;
@@ -539,6 +554,7 @@ begin
   begin
     LCall.TypedArgs[I] := AArgs[I];
     LCall.Args[I] := MockValueToString(AArgs[I]);
+    LCall.ArgHash := LCall.ArgHash * 31 + MockValueHash(AArgs[I]);
   end;
   AppendCall(LCall, AMethodName);
 end;
@@ -748,15 +764,22 @@ end;
 function TMockState.MatchingCallCount(const AMethodName: string;
   const AArgs: array of string): Integer;
 var
-  I, J: Integer;
+  I, J, LHash: Integer;
   LMatch: Boolean;
 begin
   Result := 0;
+  { P2 #6: pre-compute argument hash for O(1) early mismatch detection.
+    Reduces common case from O(n*m) to O(n) when args differ. }
+  LHash := 0;
+  for J := 0 to High(AArgs) do
+    LHash := LHash * 31 + Length(AArgs[J]);
   for I := 0 to High(FCalls) do
   begin
     if FCalls[I].MethodName <> AMethodName then
       Continue;
     if Length(FCalls[I].Args) <> Length(AArgs) then
+      Continue;
+    if LHash <> FCalls[I].ArgHash then
       Continue;
     LMatch := True;
     for J := 0 to High(AArgs) do
@@ -773,15 +796,21 @@ end;
 function TMockState.MatchingCallCountTyped(const AMethodName: string;
   const AArgs: array of TMockValue): Integer;
 var
-  I, J: Integer;
+  I, J, LHash: Integer;
   LMatch: Boolean;
 begin
   Result := 0;
+  { P2 #6: pre-compute argument hash for O(1) early mismatch detection }
+  LHash := 0;
+  for J := 0 to High(AArgs) do
+    LHash := LHash * 31 + MockValueHash(AArgs[J]);
   for I := 0 to High(FCalls) do
   begin
     if FCalls[I].MethodName <> AMethodName then
       Continue;
     if Length(FCalls[I].TypedArgs) <> Length(AArgs) then
+      Continue;
+    if LHash <> FCalls[I].ArgHash then
       Continue;
     LMatch := True;
     for J := 0 to High(AArgs) do

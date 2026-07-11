@@ -102,8 +102,8 @@ uses
   nextpas.core.platform.env,
   nextpas.core.fs;
 
-var
-  GTempDirCounter: Integer = 0;  { P2 #13: atomic counter for temp dir uniqueness }
+  var
+  GTempDirCounter: LongInt = 0;  { P2 #5: LongInt matches InterlockedIncrement signature exactly }
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Thread-local test context management                                          }
