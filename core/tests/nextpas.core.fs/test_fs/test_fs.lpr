@@ -233,6 +233,19 @@ begin
   CheckEqual(Byte(5), LRead[4]);
 end;
 
+procedure TestFsWriteFileText;
+var
+  LText: string;
+begin
+  FsWriteFileText(GTmpDir + '/writetext.txt', 'Hello, World!');
+  LText := FsReadFileText(GTmpDir + '/writetext.txt');
+  CheckEqual('Hello, World!', LText, 'FsWriteFileText basic');
+  { Overwrite }
+  FsWriteFileText(GTmpDir + '/writetext.txt', 'Overwritten');
+  LText := FsReadFileText(GTmpDir + '/writetext.txt');
+  CheckEqual('Overwritten', LText, 'FsWriteFileText overwrite');
+end;
+
 procedure TestWriteAtomic;
 var
   LData, LRead: TBytes;
@@ -1859,6 +1872,7 @@ begin
     T.Test('WriteAt', @TestWriteAt);
 
     T.Test('ReadFile/WriteFile', @TestReadWriteFile);
+    T.Test('FsWriteFileText', @TestFsWriteFileText);
     T.Test('WriteAtomic', @TestWriteAtomic);
     T.Test('CopyFile', @TestCopyFile);
 {$IFDEF NEXTPAS_LINUX}

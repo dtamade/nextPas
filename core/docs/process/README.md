@@ -163,4 +163,4 @@ make -C core/tests/nextpas.core.process/test_process_deep clean test
 make -C core/tests/nextpas.core.process/test_process_pipe_contract clean test
 ```
 
-264 个测试，覆盖所有公共 API，heaptrc 零泄漏。
+285 个测试，覆盖所有公共 API，heaptrc 零泄漏。
