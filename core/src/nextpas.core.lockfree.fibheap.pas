@@ -69,8 +69,8 @@ type
     function PeekMin(out AKey, AValue: Int64): TFibHeapResult;
     function DecreaseKey(ANode: PFibNode; ANewKey: Int64): TFibHeapResult;
     function Merge(AOther: TLockFreeFibonacciHeap): TFibHeapResult;
-    function Count: Int32;
-    function IsEmpty: Boolean;
+    function Count: Int32; inline;
+    function IsEmpty: Boolean; inline;
   end;
 
 implementation
@@ -433,12 +433,12 @@ begin
   end;
 end;
 
-function TLockFreeFibonacciHeap.Count: Int32;
+function TLockFreeFibonacciHeap.Count: Int32; inline;
 begin
   Result := AtomicLoad32(FCount, moAcquire);
 end;
 
-function TLockFreeFibonacciHeap.IsEmpty: Boolean;
+function TLockFreeFibonacciHeap.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad32(FCount, moAcquire) = 0;
 end;
