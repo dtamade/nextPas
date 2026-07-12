@@ -162,7 +162,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 ## 当前执行窗口 (2026-07-12)
 
 1. [ ] 通过 latest-main candidate 落地 System identity/parent/cache 三个已审查提交。
-2. [ ] 修复并版本化 NPC cache framing，建立 fail-closed incremental gate。
+2. [x] 修复并版本化 NPC cache framing，建立 fail-closed incremental gate。
 3. [ ] 隔离 compiler test/build cache roots，再复跑 cold/immediate-warm compiler-pass。
 4. [ ] 修复 `classes_pass` 和仍存在的 warm-only regression。
 5. [ ] 恢复 canonical `make rebuild-compiler`，再建立 fail-closed B0 benchmark。

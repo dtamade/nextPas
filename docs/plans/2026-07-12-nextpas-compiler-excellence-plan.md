@@ -322,9 +322,9 @@ same executable reality.
 2. Repair or version-isolate the NPC header/fingerprint framing mismatch; add
    save-load round-trip, wrong-fingerprint, truncated, corrupt-length, and
    hostile-count fail-closed regressions.
-3. Replace the fail-open incremental regression script with a mandatory harness
-   group that fails on missing stage0, failed compilation, missing artifacts,
-   corrupt cache entries, or clean/incremental semantic drift.
+3. Replace the fail-open incremental regression script with a mandatory
+   fail-closed gate that fails on missing stage0, failed compilation, missing
+   artifacts, corrupt cache entries, or clean/incremental semantic drift.
 4. Isolate compiler test/build cache roots from other worktrees and from each
    cold/warm sample.
 5. Run fresh `compiler-pass`; repair `classes_pass` and any remaining warm-only
@@ -338,14 +338,14 @@ same executable reality.
 
 ### Exit gate
 
-M0 slice 2 must create and register the `compiler-incremental` harness group.
-The command below does not exist at roadmap authoring time and cannot be counted
-as evidence until the group rejects missing stage0, failed compilation, and
-missing artifacts.
+As of `codex/compiler-system` commits `e670d082f` and `56a701add`, M0 slice 2
+is evidenced by a dedicated fail-closed gate instead of a runner-integrated
+`compiler-incremental` harness group. The current mandatory commands are:
 
 ```text
 make test-compiler-system-intrinsics
-make test TEST_FILTER=compiler-incremental
+make test-compiler-incremental-cache
+make test-incremental-gate
 make test TEST_FILTER=compiler-pass
 make test TEST_FILTER=compiler-fail
 make rebuild-compiler
@@ -353,7 +353,9 @@ make hygiene
 ```
 
 Cold and immediate-warm compiler-pass results must match. The gate must report
-fixture counts and failures, not only a shell exit code.
+failures for missing stage0, missing artifacts, cache corruption, and semantic
+drift. Folding this workflow into `tests/harness/runner.pas` remains a later
+refactor, not a prerequisite for counting M0 slice 2 evidence.
 
 ### Non-goals
 

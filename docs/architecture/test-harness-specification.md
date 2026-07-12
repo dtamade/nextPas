@@ -33,6 +33,13 @@
 
 shell 层负责公开入口，Pascal 层负责执行语义，snapshot 层负责长期 baseline 资产。
 
+并不是每一种 compiler truth 都必须立刻折叠进 `run_all_tests.sh`。需要多阶段源码变更、
+cache 破坏与恢复编排的 gate，可以先作为独立入口存在。当前事实例子是
+`tests/regression/verify_incremental.sh`：它由 `make test-incremental-gate`
+和 `make verify` 调用，负责 clean/seed/edit/warm/recovery 五阶段增量验证，
+同时强制私有 workspace、私有 out-dir、artifact confinement 与 NPC cache
+recovery truth。
+
 ## 稳定 group 与 fixture 命名契约
 
 第一阶段当前必须稳定暴露这些 group：
