@@ -5,7 +5,7 @@ unit nextpas.core.http.middleware.recovery;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.http.intf;
 
 type
