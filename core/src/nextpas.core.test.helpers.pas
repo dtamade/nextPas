@@ -62,7 +62,6 @@ procedure WithTempDir(AProc: TTempDirProc);
 implementation
 
 uses
-  SysUtils,
   nextpas.core.fs,
   nextpas.core.platform.env;
 
