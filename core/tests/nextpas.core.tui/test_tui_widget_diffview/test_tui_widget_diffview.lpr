@@ -3,7 +3,6 @@ program test_tui_widget_diffview;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,

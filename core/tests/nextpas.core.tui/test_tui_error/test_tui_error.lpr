@@ -3,7 +3,6 @@ program test_tui_error;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.exception,
   nextpas.core.tui.error,

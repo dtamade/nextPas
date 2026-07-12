@@ -1,7 +1,6 @@
 program test_tui_chat_theme;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
