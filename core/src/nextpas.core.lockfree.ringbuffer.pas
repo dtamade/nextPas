@@ -42,6 +42,7 @@ type
     function GetCapacity: Int64; inline;
     function IsEmpty: Boolean; inline;
     function IsFull: Boolean; inline;
+    function Drain(const AMaxCount: Int64 = High(Int64)): Int64;
     procedure Close;
     function IsClosed: Boolean; inline;
   end;
@@ -226,6 +227,21 @@ begin
   LHead := AtomicLoad64(FHead, moAcquire);
   LTail := AtomicLoad64(FTail, moAcquire);
   Result := (LHead - LTail) >= FCapacity;
+end;
+
+function TRingBufferImpl.Drain(const AMaxCount: Int64): Int64;
+var
+  LValue: T;
+  LCount: Int64;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if TryRead(LValue) <> rbWritten then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
 end;
 
 procedure TRingBufferImpl.Close;

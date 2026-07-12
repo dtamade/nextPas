@@ -62,6 +62,7 @@ type
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     function EnqueueBatch(const AValues: array of T): PtrUInt;
     function DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean;
     function IsEmpty: Boolean;
@@ -300,6 +301,21 @@ begin
   FHead := LHead + Int64(LCount);
   AtomicStore64(FHeadPublished, FHead, moRelease);
   LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
+  Result := LCount;
+end;
+
+function TSpscQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
   Result := LCount;
 end;
 

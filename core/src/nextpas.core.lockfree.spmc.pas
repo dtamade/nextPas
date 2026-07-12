@@ -77,6 +77,7 @@ type
     {** @desc 队列实际容量（2 的幂） }
     function Capacity: PtrUInt; inline;
     {** @desc 关闭队列（唤醒所有等待者，已入队数据仍可读） }
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     {** @desc 队列是否已关闭 }
     function IsClosed: Boolean; inline;
@@ -295,6 +296,21 @@ end;
 function TSpmcQueueImpl.Capacity: PtrUInt; inline;
 begin
   Result := FCapacity;
+end;
+
+function TSpmcQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
 end;
 
 procedure TSpmcQueueImpl.Close;

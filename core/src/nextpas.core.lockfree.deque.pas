@@ -48,6 +48,7 @@ type
     function TryPush(const AValue: T): Boolean;
     function TryPop(out AValue: T): Boolean;
     function TrySteal(out AValue: T): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean; inline;
     function IsEmpty: Boolean; inline;
@@ -147,6 +148,21 @@ begin
   LTop := AtomicLoad64(FTop, moAcquire);
   LBottom := AtomicLoad64(FBottom, moAcquire);
   Result := LTop >= LBottom;
+end;
+
+function TWorkStealingDequeImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryPop(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
 end;
 
 procedure TWorkStealingDequeImpl.Close;

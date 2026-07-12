@@ -90,6 +90,8 @@ type
     function IsEmpty: Boolean; inline;
     {** 关闭 }
     procedure Close;
+    {** 清空所有键值对 }
+    procedure Clear;
     {** 是否已关闭 }
     function IsClosed: Boolean; inline;
   end;
@@ -373,6 +375,28 @@ begin
   LockWriter;
   try
     AtomicStore32(FClosed, 1, moRelease);
+  finally
+    UnlockWriter;
+  end;
+end;
+
+procedure TLockFreeHashTableImpl.Clear;
+var
+  LI: Int32;
+begin
+  LockWriter;
+  try
+    for LI := 0 to FCapacity - 1 do
+    begin
+      if FSlots[LI].FState <> 0 then
+      begin
+        FSlots[LI].FKey := Default(TKey);
+        FSlots[LI].FValue := Default(TValue);
+        AtomicStore32(FSlots[LI].FState, 0, moRelease);
+      end;
+    end;
+    AtomicStore64(FCount, 0, moRelaxed);
+    FUsedCount := 0;
   finally
     UnlockWriter;
   end;

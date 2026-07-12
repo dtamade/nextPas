@@ -54,6 +54,7 @@ type
     function DequeueWait(out AValue: T): Boolean;
     {** @desc 带超时出队（**严格单消费者**：只能由一个线程调用） }
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean; inline;
     function IsEmpty: Boolean; inline;
@@ -221,6 +222,21 @@ begin
       Exit(TryDequeue(AValue));
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
   end;
+end;
+
+function TMpscQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
 end;
 
 procedure TMpscQueueImpl.Close;
