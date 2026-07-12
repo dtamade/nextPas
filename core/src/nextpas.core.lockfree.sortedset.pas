@@ -56,6 +56,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 procedure TConcurrentSortedSetImpl.Lock;
 var
   LSpin: Integer;
@@ -114,6 +117,8 @@ end;
 
 constructor TConcurrentSortedSetImpl.Create;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TConcurrentSortedSet: T must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   New(FData);
   FData^.FCount := 0;

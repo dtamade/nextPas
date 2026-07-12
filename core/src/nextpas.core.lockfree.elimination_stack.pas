@@ -83,6 +83,7 @@ type
     procedure SpinWait; inline;
   public
     constructor Create(const ACapacity: PtrUInt; const AElimSize: Int32 = ELIM_DEFAULT_ARRAY_SIZE);
+    destructor Destroy; override;
     function TryPush(const AValue: T): TEliminationStackResult;
     function TryPop(out AValue: T): TEliminationStackResult;
     procedure Close;
@@ -308,6 +309,12 @@ begin
       AtomicFetchSub64(FCount, 1, moRelaxed);
       AtomicStore32(FElimination[LI].State, ELIM_STATE_CANCELLED, moRelease);
     end;
+end;
+
+destructor TEliminationStackImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TEliminationStackImpl.IsClosed: Boolean;

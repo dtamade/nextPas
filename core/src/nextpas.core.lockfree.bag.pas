@@ -49,6 +49,7 @@ type
     procedure LeaveActiveEnqueue; inline;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryAdd(const AValue: T): TLockFreeBagAddResult;
     function TryTake(out AValue: T): Boolean;
     function AddWait(const AValue: T): Boolean;
@@ -308,6 +309,12 @@ begin
   LockFreeWakeAll(@FDataEpoch);
   // Wake all waiting producers (so they can see close)
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TLockFreeBagImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLockFreeBagImpl.IsClosed: Boolean;

@@ -36,6 +36,7 @@ type
       const AUseTimeout: Boolean): TConditionVariableWaitResult;
   public
     constructor Create;
+    destructor Destroy; override;
 
     {** @desc 释放 AMutex 并等待 Signal/Broadcast，唤醒后重新获取 AMutex }
     procedure Wait(AMutex: TConcurrentMutex);
@@ -266,6 +267,12 @@ begin
   finally
     ReleaseState;
   end;
+end;
+
+destructor TConditionVariable.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TConditionVariable.IsClosed: Boolean; inline;

@@ -59,6 +59,7 @@ type
     function FindSlot(AKey: UInt64; out AIdx: Int32): Boolean;
   public
     constructor Create(const ACapacity: Int32 = ROBINHOOD_DEFAULT_CAPACITY);
+    destructor Destroy; override;
     function Insert(AKey, AValue: UInt64): TRobinHoodResult;
     function Lookup(AKey: UInt64; out AValue: UInt64): TRobinHoodResult;
     function Delete(AKey: UInt64): TRobinHoodResult;
@@ -353,6 +354,12 @@ end;
 procedure TRobinHoodMap.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TRobinHoodMap.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TRobinHoodMap.IsClosed: Boolean;

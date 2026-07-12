@@ -31,6 +31,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: Int64);
+    destructor Destroy; override;
     function TryWrite(const AValue: T): TLockFreeRingBufferResult;
     function TryRead(out AValue: T): TLockFreeRingBufferResult;
     function WriteWait(const AValue: T): TLockFreeRingBufferResult;
@@ -230,6 +231,12 @@ end;
 procedure TRingBufferImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TRingBufferImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TRingBufferImpl.IsClosed: Boolean; inline;

@@ -28,6 +28,7 @@ type
     procedure Refill;
   public
     constructor Create(const ARatePerSecond: Double; const ABurst: Double);
+    destructor Destroy; override;
     function TryAcquire: TLockFreeRateLimiterResult;
     function TryAcquireN(const AN: Double): TLockFreeRateLimiterResult;
     procedure Close;
@@ -147,6 +148,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TTokenBucketLimiter.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TTokenBucketLimiter.IsClosed: Boolean; inline;

@@ -44,6 +44,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryPush(const AValue: T): Boolean;
     function TryPop(out AValue: T): Boolean;
     function TrySteal(out AValue: T): Boolean;
@@ -151,6 +152,12 @@ end;
 procedure TWorkStealingDequeImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TWorkStealingDequeImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TWorkStealingDequeImpl.IsClosed: Boolean; inline;

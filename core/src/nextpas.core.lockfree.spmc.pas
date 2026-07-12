@@ -55,6 +55,7 @@ type
   public
     {** @desc 创建 SPMC 环形队列（容量向上取 2 的幂） }
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     {** @desc 非阻塞入队；队列满时立即返回 False }
     function TryEnqueue(const AValue: T): Boolean;
     {** @desc 阻塞入队；队列满时等待直到有空间 }
@@ -301,6 +302,12 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TSpmcQueueImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TSpmcQueueImpl.IsClosed: Boolean; inline;

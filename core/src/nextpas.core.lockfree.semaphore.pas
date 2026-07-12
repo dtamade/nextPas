@@ -22,6 +22,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const AMaxPermits: Int64);
+    destructor Destroy; override;
     function TryAcquire: Boolean;
     function Acquire: Boolean;
     function AcquireTimeout(const ATimeoutNs: Int64): Boolean;
@@ -121,6 +122,12 @@ end;
 procedure TConcurrentSemaphore.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TConcurrentSemaphore.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TConcurrentSemaphore.IsClosed: Boolean; inline;

@@ -53,6 +53,7 @@ type
     function NextRandomBounded(const ABound: UInt64): UInt64;
   public
     constructor Create(const ACapacity: Int32 = RESERVOIR_DEFAULT_SIZE);
+    destructor Destroy; override;
     function Add(const AItem: T): TReservoirResult;
     function GetCount: Int64;
     function GetSampleSize: Int32;
@@ -252,6 +253,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TReservoirSamplerImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TReservoirSamplerImpl.IsClosed: Boolean;

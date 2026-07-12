@@ -41,6 +41,7 @@ type
     procedure Leak;
   public
     constructor Create(const ALeakRatePerSecond: Double; const ABucketSize: Double);
+    destructor Destroy; override;
     function TryAdd: TLeakyBucketResult;
     function TryAddN(const AN: Double): TLeakyBucketResult;
     procedure Close;
@@ -159,6 +160,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TLeakyBucket.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLeakyBucket.IsClosed: Boolean; inline;

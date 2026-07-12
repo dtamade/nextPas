@@ -31,6 +31,7 @@ type
     FClosed: Int32;
   public
     constructor Create;
+    destructor Destroy; override;
     function ReadLock: Int64;
     function TryReadLock: Int64;
     function TryReadLockTimeout(const ATimeoutNs: Int64): Int64;
@@ -252,6 +253,12 @@ end;
 procedure TStampedLock.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TStampedLock.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TStampedLock.IsClosed: Boolean; inline;

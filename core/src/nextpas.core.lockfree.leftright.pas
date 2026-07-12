@@ -50,6 +50,7 @@ type
     function HasReaders(AIndex: Int32): Boolean;
   public
     constructor Create;
+    destructor Destroy; override;
     { Read side: lock-free }
     function EnterRead: Int32;
     procedure ExitRead(AIndex: Int32);
@@ -182,6 +183,12 @@ end;
 procedure TLeftRight.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TLeftRight.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLeftRight.IsClosed: Boolean; inline;

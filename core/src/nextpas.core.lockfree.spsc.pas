@@ -53,6 +53,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryEnqueue(const AValue: T): Boolean;
     function TryDequeue(out AValue: T): Boolean;
     function EnqueueWait(const AValue: T): Boolean;
@@ -307,6 +308,12 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TSpscQueueImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TSpscQueueImpl.IsClosed: Boolean;

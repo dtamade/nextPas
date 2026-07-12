@@ -20,6 +20,7 @@ type
     FWriterPending: Int32;
   public
     constructor Create;
+    destructor Destroy; override;
     function TryReadLock: Boolean;
     function ReadLock: Boolean;
     function TryWriteLock: Boolean;
@@ -119,6 +120,12 @@ end;
 procedure TConcurrentRwLock.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TConcurrentRwLock.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TConcurrentRwLock.IsClosed: Boolean; inline;

@@ -19,6 +19,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const AInitialValue: Int64 = 0);
+    destructor Destroy; override;
     function Increment: Int64; inline;
     function Decrement: Int64; inline;
     function Add(const AValue: Int64): Int64; inline;
@@ -80,6 +81,12 @@ end;
 procedure TConcurrentCounter.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TConcurrentCounter.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TConcurrentCounter.IsClosed: Boolean; inline;

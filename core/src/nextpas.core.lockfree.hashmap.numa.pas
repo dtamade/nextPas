@@ -115,6 +115,8 @@ constructor TNumaShardedHashMapImpl.Create(const AInitialCapacityPerNode: PtrUIn
 var
   I: Integer;
 begin
+  if IsManagedType(TKey) or IsManagedType(TValue) then
+    raise EArgumentError.Create('TNumaShardedHashMap: TKey and TValue must be unmanaged');
   inherited Create;
   FNodeCount := NumaNodeCount;
   if FNodeCount < 1 then

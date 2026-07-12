@@ -35,6 +35,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: Int64; const ATimeoutNs: Int64);
+    destructor Destroy; override;
     function TryEnqueue(const AValue: T): Boolean;
     function TryDequeue(out AValue: T): TLockFreeTimeoutQueueResult;
     function DequeueWait(out AValue: T): TLockFreeTimeoutQueueResult;
@@ -214,6 +215,12 @@ end;
 procedure TTimeoutQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TTimeoutQueueImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TTimeoutQueueImpl.IsClosed: Boolean; inline;

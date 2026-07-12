@@ -50,6 +50,7 @@ type
     function UnpackTag(ATagged: Int64): UInt32; inline;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryPush(const AValue: T): Boolean;
     function TryPop(out AValue: T): Boolean;
     procedure Close;
@@ -163,6 +164,12 @@ end;
 procedure TLockFreeStackImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TLockFreeStackImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLockFreeStackImpl.IsClosed: Boolean;

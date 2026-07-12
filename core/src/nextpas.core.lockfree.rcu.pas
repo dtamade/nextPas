@@ -208,6 +208,8 @@ end;
 
 constructor TRcuPublisherImpl.Create(const AInitialValue: T);
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TRcuPublisher: T must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   FDomain := TRcuDomain.Create;
   FClosed := 0;

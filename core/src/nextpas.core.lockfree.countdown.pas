@@ -20,6 +20,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const AInitialCount: Int64);
+    destructor Destroy; override;
     procedure Done;
     procedure DoneN(const AN: Int64);
     procedure Wait;
@@ -110,6 +111,12 @@ end;
 procedure TCountDownLatch.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TCountDownLatch.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TCountDownLatch.IsClosed: Boolean; inline;

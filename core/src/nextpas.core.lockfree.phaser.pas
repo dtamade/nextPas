@@ -29,6 +29,7 @@ type
     function AwaitAdvanceInternal(const APhase: Int64; const ATimeoutNs: Int64): TLockFreePhaserArriveResult;
   public
     constructor Create(const AParties: Int64 = 0);
+    destructor Destroy; override;
     function Register: Int64;
     function Arrive: Int64;
     function ArriveAndAwaitAdvance: Int64;
@@ -239,6 +240,12 @@ end;
 procedure TPhaser.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TPhaser.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TPhaser.IsClosed: Boolean; inline;

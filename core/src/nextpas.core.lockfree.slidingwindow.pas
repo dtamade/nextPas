@@ -45,6 +45,7 @@ type
     procedure AdvanceWindow(ANowNs: UInt64);
   public
     constructor Create(const ALimitPerWindow: Int64; const AWindowMs: Int64);
+    destructor Destroy; override;
     function TryAcquire: TSlidingWindowResult;
     function TryAcquireN(AN: Int64): TSlidingWindowResult;
     function GetEffectiveCount: Double;
@@ -207,6 +208,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TSlidingWindowLimiter.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TSlidingWindowLimiter.IsClosed: Boolean; inline;

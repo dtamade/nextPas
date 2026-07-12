@@ -22,6 +22,7 @@ type
     FOwnerThreadId: Int64;
   public
     constructor Create;
+    destructor Destroy; override;
     function TryLock: Boolean;
     function Lock: Boolean;
     function LockTimeout(const ATimeoutNs: Int64): Boolean;
@@ -105,6 +106,12 @@ end;
 procedure TConcurrentMutex.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TConcurrentMutex.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TConcurrentMutex.IsClosed: Boolean; inline;

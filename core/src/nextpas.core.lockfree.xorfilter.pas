@@ -49,6 +49,7 @@ type
     function FingerPrint(AKey: UInt64): UInt32;
   public
     constructor Create(const AKeys: array of UInt64);
+    destructor Destroy; override;
     function Contains(AKey: UInt64): Boolean;
     function GetCount: Int32;
     function GetCapacity: Int32;
@@ -285,6 +286,12 @@ end;
 procedure TXorFilter.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TXorFilter.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TXorFilter.IsClosed: Boolean;
