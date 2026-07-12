@@ -193,10 +193,11 @@ procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
 {** @desc 308 Permanent Redirect (preserves method and body). }
 procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
   const ALocation: string); inline;
-{** @desc Write a JSON error response: {"error":{"code":"<code>","message":"<msg>"}}.
-   Sets content-type application/json. }
+{** @desc Write an RFC 7807 Problem Details error response.
+   Sets content-type application/problem+json. }
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
-  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+  const AStatus: THttpStatus; const ACode, AMessage: string;
+  const AInstance: string = ''): SizeUInt;
 {** @desc Write 400 Bad Request JSON error response. }
 function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -1169,13 +1170,18 @@ begin
 end;
 
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
-  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+  const AStatus: THttpStatus; const ACode, AMessage: string;
+  const AInstance: string = ''): SizeUInt;
 var
   LJson: string;
 begin
-  LJson := '{"error":{"code":"' + JsonEscapeStr(ACode) +
-    '","message":"' + JsonEscapeStr(AMessage) + '"}}';
-  Result := HttpWriteResponseString(AW, AStatus, 'application/json', LJson);
+  LJson := '{"type":"about:blank","title":"' + JsonEscapeStr(ACode) +
+    '","detail":"' + JsonEscapeStr(AMessage) +
+    '","status":' + IntToStr(AStatus);
+  if AInstance <> '' then
+    LJson := LJson + ',"instance":"' + JsonEscapeStr(AInstance) + '"';
+  LJson := LJson + '}';
+  Result := HttpWriteResponseString(AW, AStatus, 'application/problem+json', LJson);
 end;
 
 function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;

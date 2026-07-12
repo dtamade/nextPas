@@ -460,9 +460,10 @@ procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
 {** @desc 308 Permanent Redirect (preserves method and body). }
 procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
   const ALocation: string); inline;
-{** @desc Write a JSON error response: {"error":{"code":"<code>","message":"<msg>"}}. }
+{** @desc Write an RFC 7807 Problem Details error response. }
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
-  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt; inline;
+  const AStatus: THttpStatus; const ACode, AMessage: string;
+  const AInstance: string = ''): SizeUInt; inline;
 {** @desc Write 400 Bad Request JSON error response. }
 function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -1245,9 +1246,11 @@ begin
 end;
 
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
-  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+  const AStatus: THttpStatus; const ACode, AMessage: string;
+  const AInstance: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorResponse(AW, AStatus, ACode, AMessage);
+  Result := nextpas.core.http.message.HttpWriteErrorResponse(
+    AW, AStatus, ACode, AMessage, AInstance);
 end;
 
 function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
