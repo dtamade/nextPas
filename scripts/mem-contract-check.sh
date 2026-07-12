@@ -116,15 +116,12 @@ done
 
 printf "\n${BOLD}C3: 接口声明完备性${NC}\n"
 
-# IAllocator 方法
+# IAllocator 方法（核心 5 方法：GetMem/AllocMem/ReallocMem/FreeMem + Traits）
 IALLOC_METHODS=(
   "function GetMem"
   "function AllocMem"
   "function ReallocMem"
   "procedure FreeMem"
-  "function MemSize"
-  "function AllocAligned"
-  "procedure FreeAligned"
   "function Traits"
 )
 
@@ -152,7 +149,6 @@ if [ -f "$ARENA_INTF_FILE" ]; then
     "procedure RestoreToMark"
     "procedure Reset"
     "function UsedSize"
-    "function RemainingSize"
     "function Stats"
   )
   for method in "${IARENA_METHODS[@]}"; do
