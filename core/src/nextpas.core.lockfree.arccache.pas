@@ -41,7 +41,12 @@ type
     FNext: PARCNode;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc ARC 缓存
+    @details 自适应替换缓存。
+      - 自适应调整 T1/T2 比例
+      - 支持 Get/Put/Remove
+      - 适用场景：缓存系统、页面替换
+   * @concurrency Thread-safe (see source for details). }
   TARCCacheImpl = class
   private
     FCapacity: Integer;

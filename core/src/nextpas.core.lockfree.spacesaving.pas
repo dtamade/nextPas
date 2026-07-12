@@ -53,7 +53,13 @@ type
     FCount: Integer;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc Space-Saving 频繁项检测
+    @details 流式 Top-K 频繁项检测。
+      - 维护 K 个 (item, count, error) 三元组
+      - 新元素到来时，替换最小计数的元素
+      - 保证：所有返回项的真实频率 >= (总元素数 / K)
+      - 适用场景：流量分析、Top-K 查询、异常检测
+   * @concurrency Thread-safe (see source for details). }
   TSpaceSavingImpl = class
   private
     FEntries: array of TSpaceSavingEntry;
