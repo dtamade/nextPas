@@ -140,6 +140,8 @@ begin
     Exit(nil);
 
   LAligned := (ASize + 15) and not SizeUInt(15);
+  if LAligned < ASize then { overflow check }
+    Exit(nil);
 
   if FCurrentRegion = nil then
     GrowRegion(LAligned)
