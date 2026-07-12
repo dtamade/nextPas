@@ -331,7 +331,7 @@ begin
           'Host: localhost'#13#10 +
           'Connection: keep-alive'#13#10 +
           'Expect:  100-CONTINUE , fancy  '#13#10 +
-          'Content-Length:  0011  '#13#10#13#10 +
+          'Content-Length:  11  '#13#10#13#10 +
           'hello world';
   LP.Execute(PAnsiChar(LReq), Length(LReq));
   Check(LP.IsComplete, 'metadata span-fast request complete');
@@ -349,6 +349,25 @@ begin
     'metadata span-fast keeps case-insensitive 100-continue token');
   Check(LMetadata.HasUnsupportedExpect,
     'metadata span-fast keeps unsupported expect token');
+end;
+
+procedure TestRequestMetadataLeadingZeroContentLengthRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Content-Length: 0011'#13#10#13#10 +
+          'hello world';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  LMetadata := LP.GetRequestMetadata;
+  Check(not LMetadata.HasContentLength,
+    'leading-zero content-length is rejected per RFC 9110 8.6');
+  Check(LMetadata.HasInvalidContentLength,
+    'leading-zero content-length marks invalid flag');
 end;
 
 procedure TestRequestMetadataChunkedTransferEncoding;
@@ -2324,6 +2343,8 @@ begin
     @TestRequestMetadataFixedLengthExpectConnection);
   T.Test('Request metadata span fast path keeps trim and token semantics',
     @TestRequestMetadataSpanFastPathKeepsTrimAndTokenSemantics);
+  T.Test('Content-Length leading zeros rejected per RFC 9110 8.6',
+    @TestRequestMetadataLeadingZeroContentLengthRejected);
   T.Test('Request metadata chunked transfer-encoding',
     @TestRequestMetadataChunkedTransferEncoding);
   T.Test('Request metadata split duplicate watched headers',

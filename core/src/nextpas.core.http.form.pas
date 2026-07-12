@@ -36,8 +36,8 @@ function EncodeMultipartFormData(const AFields: TFormFieldArray;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.exception,
+  nextpas.core.text.conv,
   nextpas.core.http.url;
 
 { URL-decode a string, converting + to space }
@@ -452,8 +452,8 @@ begin
   begin
     { RFC 6266: Content-Disposition name needs quoted-string escaping }
     LEscapedName := RejectCRLF(AFields[LI].Name, 'field name');
-    LEscapedName := StringReplace(LEscapedName, '\', '\\', [rfReplaceAll]);
-    LEscapedName := StringReplace(LEscapedName, '"', '\"', [rfReplaceAll]);
+    LEscapedName := StringReplace(LEscapedName, '\', '\\', True);
+    LEscapedName := StringReplace(LEscapedName, '"', '\"', True);
     AddPart('--' + LBoundary + #13#10 +
             'Content-Disposition: form-data; name="' + LEscapedName + '"' + #13#10 +
             #13#10 + AFields[LI].Value + #13#10);
@@ -463,11 +463,11 @@ begin
   begin
     { RFC 6266: Content-Disposition filename needs quoted-string escaping }
     LEscapedFieldName := RejectCRLF(AFiles[LI].FieldName, 'file field name');
-    LEscapedFieldName := StringReplace(LEscapedFieldName, '\', '\\', [rfReplaceAll]);
-    LEscapedFieldName := StringReplace(LEscapedFieldName, '"', '\"', [rfReplaceAll]);
+    LEscapedFieldName := StringReplace(LEscapedFieldName, '\', '\\', True);
+    LEscapedFieldName := StringReplace(LEscapedFieldName, '"', '\"', True);
     LEscapedFileName := RejectCRLF(AFiles[LI].FileName, 'file name');
-    LEscapedFileName := StringReplace(LEscapedFileName, '\', '\\', [rfReplaceAll]);
-    LEscapedFileName := StringReplace(LEscapedFileName, '"', '\"', [rfReplaceAll]);
+    LEscapedFileName := StringReplace(LEscapedFileName, '\', '\\', True);
+    LEscapedFileName := StringReplace(LEscapedFileName, '"', '\"', True);
     AddPart('--' + LBoundary + #13#10 +
             'Content-Disposition: form-data; name="' + LEscapedFieldName + '"; filename="' + LEscapedFileName + '"' + #13#10 +
             'Content-Type: ' + RejectCRLF(AFiles[LI].ContentType, 'content type') + #13#10 +

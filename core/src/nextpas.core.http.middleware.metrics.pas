@@ -65,7 +65,7 @@ function MetricsMiddlewareWithFields(const ACallback: THttpMetricsFieldsCallback
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.http.base,
   nextpas.core.http.middleware,

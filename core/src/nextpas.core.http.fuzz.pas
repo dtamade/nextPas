@@ -49,7 +49,7 @@ type
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.exception,
   nextpas.core.http.base,
   nextpas.core.http.websocket;
 
