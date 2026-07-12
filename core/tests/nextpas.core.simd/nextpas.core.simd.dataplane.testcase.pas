@@ -348,6 +348,10 @@ var
     end;
   end;
 begin
+  LI64x4A := Default(TVecI64x4); LI64x4B := Default(TVecI64x4);
+  LI64x8A := Default(TVecI64x8); LI64x8B := Default(TVecI64x8);
+  LI32x16A := Default(TVecI32x16); LI32x16B := Default(TVecI32x16);
+
   LDataPlane := GetCurrentSimdDataPlane;
   LDispatch := GetDispatchTable;
   LDirectDispatch := GetDirectDispatchTable;
@@ -580,6 +584,10 @@ var
     end;
   end;
 begin
+  LI64x4A := Default(TVecI64x4); LI64x4B := Default(TVecI64x4);
+  LI64x8A := Default(TVecI64x8); LI64x8B := Default(TVecI64x8);
+  LI32x16A := Default(TVecI32x16); LI32x16B := Default(TVecI32x16);
+
   LDataPlane := GetCurrentSimdDataPlane;
   LDispatch := GetDispatchTable;
   LDirectDispatch := GetDirectDispatchTable;
@@ -1033,6 +1041,15 @@ var
     end;
   end;
 begin
+  LI32x8A := Default(TVecI32x8); LI32x8B := Default(TVecI32x8);
+  LU32x8A := Default(TVecU32x8); LU32x8B := Default(TVecU32x8);
+  LI64x4A := Default(TVecI64x4); LI64x4B := Default(TVecI64x4);
+  LU64x4A := Default(TVecU64x4); LU64x4B := Default(TVecU64x4);
+  LI32x16A := Default(TVecI32x16); LI32x16B := Default(TVecI32x16);
+  LU32x16A := Default(TVecU32x16); LU32x16B := Default(TVecU32x16);
+  LI64x8A := Default(TVecI64x8); LI64x8B := Default(TVecI64x8);
+  LU64x8A := Default(TVecU64x8); LU64x8B := Default(TVecU64x8);
+
   LDataPlane := GetCurrentSimdDataPlane;
   LDispatch := GetDispatchTable;
   LDirectDispatch := GetDirectDispatchTable;

@@ -2305,7 +2305,7 @@ begin
       mov    rcx, pD
       mov    r8, i
       shl    r8, 3
-      movsd  xmm7, LAlpha
+      movlpd xmm7, [LAlpha]
       pshufd xmm7, xmm7, $44
 
       movupd xmm0, [rax + r8]
@@ -2502,7 +2502,7 @@ begin
       mov    rcx, pD
       mov    r8, i
       shl    r8, 3
-      movsd  xmm7, LT
+      movlpd xmm7, [LT]
       pshufd xmm7, xmm7, $44
 
       movupd xmm0, [rdx + r8]
@@ -2624,9 +2624,9 @@ begin
       mov    rcx, pD
       mov    r8, i
       shl    r8, 3
-      movsd  xmm6, LMean
+      movlpd xmm6, [LMean]
       pshufd xmm6, xmm6, $44
-      movsd  xmm7, LInvStd
+      movlpd xmm7, [LInvStd]
       pshufd xmm7, xmm7, $44
 
       movupd xmm0, [rax + r8]
@@ -2667,9 +2667,9 @@ begin
       mov    rcx, pD
       mov    r8, i
       shl    r8, 3
-      movsd  xmm6, LScale
+      movlpd xmm6, [LScale]
       pshufd xmm6, xmm6, $44
-      movsd  xmm7, LBias
+      movlpd xmm7, [LBias]
       pshufd xmm7, xmm7, $44
       xorpd  xmm5, xmm5
 
@@ -3930,7 +3930,7 @@ begin
     test r8, r8
     jz @done
   @scalar_loop:
-    cvtsi2ss xmm0, [rax]
+    cvtsi2ss xmm0, dword ptr [rax]
     movss [rcx], xmm0
     add rax, 4
     add rcx, 4
@@ -5870,7 +5870,7 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movq xmm7, [LScalar]
+    movlpd xmm7, [LScalar]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
@@ -5908,7 +5908,7 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movq xmm7, [LScalar]
+    movlpd xmm7, [LScalar]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
@@ -5946,9 +5946,9 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movq xmm6, [LMin]
+    movlpd xmm6, [LMin]
     unpcklpd xmm6, xmm6
-    movq xmm7, [LMax]
+    movlpd xmm7, [LMax]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
@@ -5988,9 +5988,9 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movq xmm6, [LScale]
+    movlpd xmm6, [LScale]
     unpcklpd xmm6, xmm6
-    movq xmm7, [LBias]
+    movlpd xmm7, [LBias]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2

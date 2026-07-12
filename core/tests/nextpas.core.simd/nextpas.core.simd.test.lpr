@@ -257,6 +257,10 @@ begin
 end;
 
 begin
+  LDoBench := False;
+  LBenchOnly := False;
+  LPauseAtEnd := False;
+  LVectorAsmEnabled := False;
   ParseCustomArgs;
 
   WriteLn('=== nextpas.core.simd Test Suite ===');

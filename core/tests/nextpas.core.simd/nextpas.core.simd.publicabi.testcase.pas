@@ -40,7 +40,7 @@ unit nextpas.core.simd.publicabi.testcase;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.test,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.test,
   nextpas.core.simd,
   nextpas.core.simd.fixturehelpers,
   nextpas.core.simd.testcase,
@@ -5461,7 +5461,7 @@ begin
     CheckEqual(LMaxFacade, LMaxApi, 'MinMaxBytes parity(max)');
   except
     on E: Exception do
-      Fail(Format('Public ABI data-plane stage %s raised %s: %s', [LStage, E.ClassName, E.Message]));
+      Fail(TextFormat('Public ABI data-plane stage %s raised %s: %s', [LStage, E.ClassName, E.Message]));
   end;
 end;
 

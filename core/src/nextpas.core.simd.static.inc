@@ -1,27 +1,25 @@
-{
-  nextpas.core.simd.static.inc
-
-  Compile-time static dispatch macros for SIMD operations.
-
-  Usage:
-    {$DEFINE SIMD_STATIC_SSE2}
-    {$I nextpas.core.simd.static.inc}
-
-  This eliminates runtime dispatch overhead by directly calling
-  backend-specific implementations at compile time.
-
-  Supported backends:
-    - SIMD_STATIC_SSE2: Force SSE2 backend
-    - SIMD_STATIC_AVX2: Force AVX2 backend
-    - SIMD_STATIC_AVX512: Force AVX-512 backend
-    - SIMD_STATIC_NEON: Force NEON backend
-    - SIMD_STATIC_SCALAR: Force scalar fallback
-
-  Performance impact:
-    - Eliminates ~15-20 cycles per call (atomic_load + function pointer)
-    - Enables compiler inlining of SIMD operations
-    - Zero runtime overhead for backend selection
-}
+// nextpas.core.simd.static.inc
+//
+// Compile-time static dispatch macros for SIMD operations.
+//
+// Usage:
+//   {$DEFINE SIMD_STATIC_SSE2}
+//   {$I nextpas.core.simd.static.inc}
+//
+// This eliminates runtime dispatch overhead by directly calling
+// backend-specific implementations at compile time.
+//
+// Supported backends:
+//   - SIMD_STATIC_SSE2: Force SSE2 backend
+//   - SIMD_STATIC_AVX2: Force AVX2 backend
+//   - SIMD_STATIC_AVX512: Force AVX-512 backend
+//   - SIMD_STATIC_NEON: Force NEON backend
+//   - SIMD_STATIC_SCALAR: Force scalar fallback
+//
+// Performance impact:
+//   - Eliminates ~15-20 cycles per call (atomic_load + function pointer)
+//   - Enables compiler inlining of SIMD operations
+//   - Zero runtime overhead for backend selection
 
 {$IFDEF SIMD_STATIC_SSE2}
   {$DEFINE SIMD_STATIC_BACKEND}

@@ -7,6 +7,7 @@ interface
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
@@ -1083,13 +1084,13 @@ end;
 function FormatOps(Ops: Double): string;
 begin
   if Ops >= 1e9 then
-    Result := Format('%.2f G', [Ops / 1e9])
+    Result := TextFormat('%.2f G', [Ops / 1e9])
   else if Ops >= 1e6 then
-    Result := Format('%.2f M', [Ops / 1e6])
+    Result := TextFormat('%.2f M', [Ops / 1e6])
   else if Ops >= 1e3 then
-    Result := Format('%.2f K', [Ops / 1e3])
+    Result := TextFormat('%.2f K', [Ops / 1e3])
   else
-    Result := Format('%.0f  ', [Ops]);
+    Result := TextFormat('%.0f  ', [Ops]);
 end;
 
 function GetArchName: string;
@@ -1126,7 +1127,7 @@ begin
   for LIndex := 0 to High(Results) do
   begin
     if Results[LIndex].Size > 0 then
-      LSizeStr := Format('%4d B', [Results[LIndex].Size])
+      LSizeStr := TextFormat('%4d B', [Results[LIndex].Size])
     else
       LSizeStr := '     -';
 
@@ -1138,7 +1139,7 @@ begin
       LCandidateLabel := 'Active';
     LCompareStr := LBaselineLabel + '->' + LCandidateLabel;
     
-    WriteLn(Format('%-21s  %s  %-16s  %12s  %15s  %6.2fx', [
+    WriteLn(TextFormat('%-21s  %s  %-16s  %12s  %15s  %6.2fx', [
       Results[LIndex].Name,
       LSizeStr,
       LCompareStr,

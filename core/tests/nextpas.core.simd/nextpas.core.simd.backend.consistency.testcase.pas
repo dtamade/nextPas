@@ -5,7 +5,7 @@ unit nextpas.core.simd.backend.consistency.testcase;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.text.conv, Math, nextpas.core.simd.base,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, Math, nextpas.core.simd.base,
   nextpas.core.simd.fixturehelpers, nextpas.core.simd.dispatch,
   nextpas.core.simd.scalar;
 
@@ -197,9 +197,9 @@ end;
 function FormatConsistencyFailureText(const aResult: TConsistencyTestResult;
   const aDetailIndent: string): string;
 begin
-  Result := Format('%s / %s - %s', [GetConsistencyBackendName(aResult.Backend), aResult.TestName, aResult.ErrorMessage]);
+  Result := TextFormat('%s / %s - %s', [GetConsistencyBackendName(aResult.Backend), aResult.TestName, aResult.ErrorMessage]);
   if aResult.MaxDiff > 0 then
-    Result := Result + LineEnding + Format('%sMax diff: %g at index %d', [aDetailIndent, aResult.MaxDiff, aResult.DiffLocation]);
+    Result := Result + LineEnding + TextFormat('%sMax diff: %g at index %d', [aDetailIndent, aResult.MaxDiff, aResult.DiffLocation]);
 end;
 
 // =============================================================================
@@ -235,7 +235,7 @@ begin
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('AddF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('AddF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -252,7 +252,7 @@ begin
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SubF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('SubF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -269,7 +269,7 @@ begin
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MulF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('MulF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -287,7 +287,7 @@ begin
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('DivF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('DivF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -330,7 +330,7 @@ begin
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('AbsF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('AbsF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -348,7 +348,7 @@ begin
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SqrtF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('SqrtF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -367,7 +367,7 @@ begin
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MinF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('MinF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -383,7 +383,7 @@ begin
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MaxF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('MaxF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -423,7 +423,7 @@ begin
     if expectedMask <> actualMask then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('CmpEqF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
+      Result.ErrorMessage := TextFormat('CmpEqF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
       Exit;
     end;
 
@@ -438,7 +438,7 @@ begin
     if expectedMask <> actualMask then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('CmpLtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
+      Result.ErrorMessage := TextFormat('CmpLtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
       Exit;
     end;
 
@@ -453,7 +453,7 @@ begin
     if expectedMask <> actualMask then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('CmpGtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
+      Result.ErrorMessage := TextFormat('CmpGtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
       Exit;
     end;
 
@@ -490,7 +490,7 @@ begin
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceAddF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
+      Result.ErrorMessage := TextFormat('ReduceAddF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -506,7 +506,7 @@ begin
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceMinF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
+      Result.ErrorMessage := TextFormat('ReduceMinF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -522,7 +522,7 @@ begin
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceMaxF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
+      Result.ErrorMessage := TextFormat('ReduceMaxF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -538,7 +538,7 @@ begin
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceMulF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
+      Result.ErrorMessage := TextFormat('ReduceMulF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -577,7 +577,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('AddI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
+      Result.ErrorMessage := TextFormat('AddI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -593,7 +593,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SubI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
+      Result.ErrorMessage := TextFormat('SubI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -609,7 +609,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MulI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
+      Result.ErrorMessage := TextFormat('MulI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -649,7 +649,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('AndI32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('AndI32x4 mismatch at [%d]', [diffIdx]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -665,7 +665,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('OrI32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('OrI32x4 mismatch at [%d]', [diffIdx]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -681,7 +681,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('XorI32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('XorI32x4 mismatch at [%d]', [diffIdx]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -697,7 +697,7 @@ begin
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('NotI32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('NotI32x4 mismatch at [%d]', [diffIdx]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -774,7 +774,7 @@ begin
     if expectedIdx <> actualIdx then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MemFindByte mismatch: expected %d, got %d', [expectedIdx, actualIdx]);
+      Result.ErrorMessage := TextFormat('MemFindByte mismatch: expected %d, got %d', [expectedIdx, actualIdx]);
       Exit;
     end;
 
@@ -789,7 +789,7 @@ begin
     if expectedSum <> actualSum then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SumBytes mismatch: expected %d, got %d', [expectedSum, actualSum]);
+      Result.ErrorMessage := TextFormat('SumBytes mismatch: expected %d, got %d', [expectedSum, actualSum]);
       Exit;
     end;
 
@@ -853,12 +853,12 @@ begin
 
     if IsConsistencyTestSkipped(results[i]) then
     begin
-      WriteLn(Format('[SKIP] %s / %s - %s', [backendName, results[i].TestName, results[i].ErrorMessage]));
+      WriteLn(TextFormat('[SKIP] %s / %s - %s', [backendName, results[i].TestName, results[i].ErrorMessage]));
       Inc(skipCount);
     end
     else if results[i].Passed then
     begin
-      WriteLn(Format('[PASS] %s / %s', [backendName, results[i].TestName]));
+      WriteLn(TextFormat('[PASS] %s / %s', [backendName, results[i].TestName]));
       Inc(passCount);
     end
     else
@@ -870,10 +870,10 @@ begin
 
   WriteLn;
   WriteLn('=== Summary ===');
-  WriteLn(Format('Passed:  %d', [passCount]));
-  WriteLn(Format('Failed:  %d', [failCount]));
-  WriteLn(Format('Skipped: %d', [skipCount]));
-  WriteLn(Format('Total:   %d', [Length(results)]));
+  WriteLn(TextFormat('Passed:  %d', [passCount]));
+  WriteLn(TextFormat('Failed:  %d', [failCount]));
+  WriteLn(TextFormat('Skipped: %d', [skipCount]));
+  WriteLn(TextFormat('Total:   %d', [Length(results)]));
 
   if failCount = 0 then
     WriteLn('All consistency tests PASSED!')

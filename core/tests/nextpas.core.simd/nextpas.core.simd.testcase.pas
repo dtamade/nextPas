@@ -12,7 +12,7 @@ unit nextpas.core.simd.testcase;
 interface
 
 uses
-  nextpas.core.test, nextpas.core.base, nextpas.core.exception, nextpas.core.math, nextpas.core.text.conv, nextpas.core.simd, nextpas.core.simd.base,
+  nextpas.core.test, nextpas.core.base, nextpas.core.exception, nextpas.core.math, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.simd, nextpas.core.simd.base,
   nextpas.core.simd.fixturehelpers, nextpas.core.simd.utils, nextpas.core.simd.dispatch, nextpas.core.simd.scalar,
   nextpas.core.simd.backend.consistency.testcase, {$IFDEF CPUX86_64}
   nextpas.core.simd.sse2, nextpas.core.simd.avx2, {$ENDIF}
@@ -732,7 +732,8 @@ end;
 
 procedure TSimdBackendStatefulTestCase.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
   GetDispatchTable;
   FSavedBackend := GetCurrentBackend;
 end;
@@ -743,7 +744,8 @@ var
 begin
   LRestoredBackend := RestoreSavedBackendStateAndVerify(FSavedBackend, @GetCurrentBackend);
 
-  {{inherited TearDown; -- removed} -- removed}
+  // inherited TearDown; -- removed
+  // -- removed
 
   CheckTrue(LRestoredBackend, ClassName + ' should restore previous backend selection');
 end;
@@ -752,7 +754,8 @@ end;
 
 procedure TScalarBackendStatefulTestCase.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
   ForceBackend(sbScalar);
 end;
 
@@ -765,7 +768,8 @@ end;
 
 procedure TSimdVectorAsmStatefulTestCase.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
   FSavedVectorAsm := IsVectorAsmEnabled;
 end;
 
@@ -776,7 +780,8 @@ begin
   RestoreVectorAsmState;
   LRestoredVectorAsm := IsVectorAsmEnabled = FSavedVectorAsm;
 
-  {{inherited TearDown; -- removed} -- removed}
+  // inherited TearDown; -- removed
+  // -- removed
 
   CheckTrue(LRestoredVectorAsm, ClassName + ' should restore previous vector asm state');
 end;
@@ -793,7 +798,8 @@ end;
 
 procedure TSimdVectorAsmBackendStatefulTestCase.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
 
   // 强制开启 vector asm，并重新注册目标后端以刷新 dispatch table。
   SetVectorAsmEnabled(True);
@@ -1827,7 +1833,7 @@ begin
     CheckEqual(Ord(LOriginalBackend), Ord(GetCurrentBackend), 'Scalar should remain forced before helper restore test executes');
 
     LResult := TestF32x4Arithmetic(LTargetBackend);
-    CheckTrue(LResult.Passed, Format('Standalone helper sanity check failed for backend %s: %s', [GetConsistencyBackendName(LTargetBackend), LResult.ErrorMessage]));
+    CheckTrue(LResult.Passed, TextFormat('Standalone helper sanity check failed for backend %s: %s', [GetConsistencyBackendName(LTargetBackend), LResult.ErrorMessage]));
     CheckEqual(Ord(LOriginalBackend), Ord(GetCurrentBackend), 'Standalone backend consistency helper should preserve previous forced backend selection');
   finally
     CheckTrue(RestoreSavedBackendStateAndVerify(LEntryBackend, @GetCurrentBackend), 'Backend vector consistency helper meta-test should restore entry backend selection');
@@ -2369,7 +2375,8 @@ end;
 
 procedure TTestCase_AVX512BackendRequirements.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
   SetVectorAsmEnabled(True);
   RegisterAVX512Backend;
 end;
@@ -10357,8 +10364,10 @@ begin
 
   LResult := VecI64x2AndNot(LVecA, LVecB);
 
-  CheckEqual(QWord($F0F0F0F0F0F0F0F0), QWord(LResult.i[0]), 'VecI64x2AndNot lane 0');
+  {$PUSH}{$WARNINGS OFF}
+  CheckEqual(QWord($F0F0F0F0) shl 32 or QWord($F0F0F0F0), QWord(LResult.i[0]), 'VecI64x2AndNot lane 0');
   CheckEqual(QWord(0), QWord(LResult.i[1]), 'VecI64x2AndNot lane 1');
+  {$POP}
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI64x2_Compare_Basic;
@@ -10489,10 +10498,12 @@ begin
 
   LResult := VecI64x4AndNot(LVecA, LVecB);
 
-  CheckEqual(QWord($F0F0F0F0F0F0F0F0), QWord(LResult.i[0]), 'VecI64x4AndNot lane 0');
+  {$PUSH}{$WARNINGS OFF}
+  CheckEqual(QWord($F0F0F0F0) shl 32 or QWord($F0F0F0F0), QWord(LResult.i[0]), 'VecI64x4AndNot lane 0');
   CheckEqual(QWord(0), QWord(LResult.i[1]), 'VecI64x4AndNot lane 1');
   CheckEqual(QWord($3333333333333333), QWord(LResult.i[2]), 'VecI64x4AndNot lane 2');
   CheckEqual(QWord($4444444444444444), QWord(LResult.i[3]), 'VecI64x4AndNot lane 3');
+  {$POP}
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI64x4_Compare_Basic;
@@ -10589,8 +10600,10 @@ begin
 
   LResult := VecU64x2AndNot(LVecA, LVecB);
 
-  CheckEqual(QWord($F0F0F0F0F0F0F0F0), LResult.u[0], 'VecU64x2AndNot lane 0');
+  {$PUSH}{$WARNINGS OFF}
+  CheckEqual(QWord($F0F0F0F0) shl 32 or QWord($F0F0F0F0), LResult.u[0], 'VecU64x2AndNot lane 0');
   CheckEqual(QWord($123456789ABCDEF0), LResult.u[1], 'VecU64x2AndNot lane 1');
+  {$POP}
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecU64x2_Compare_Unsigned;
@@ -12628,8 +12641,10 @@ begin
   v.u[0] := High(UInt64);  // max UInt64 = $FFFFFFFFFFFFFFFF
   v.u[1] := QWord($123456789ABCDEF0);
   
+  {$PUSH}{$WARNINGS OFF}
   CheckEqual(High(UInt64), v.u[0], 'u[0] should be max UInt64');
   CheckEqual(QWord($123456789ABCDEF0), v.u[1], 'u[1] should be $123456789ABCDEF0');
+  {$POP}
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU64x2_TypeDef_RawAccess;
@@ -13460,8 +13475,10 @@ var
   m: TMaskF64x2;
 begin
   m := MaskF64x2AllTrue;
-  CheckEqual(High(UInt64), m.m[0], 'm[0] should be max UInt64');
-  CheckEqual(High(UInt64), m.m[1], 'm[1] should be max UInt64');
+  {$PUSH}{$WARNINGS OFF}
+  CheckEqual(not UInt64(0), m.m[0], 'm[0] should be max UInt64');
+  CheckEqual(not UInt64(0), m.m[1], 'm[1] should be max UInt64');
+  {$POP}
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF64x2_ToBitmask;

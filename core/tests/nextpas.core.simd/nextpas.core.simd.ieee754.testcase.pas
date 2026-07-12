@@ -1701,6 +1701,11 @@ var
   end;
 
 begin
+  LSSE2RoundF32x8 := Default(TVecF32x8); LSSE2TruncF32x8 := Default(TVecF32x8);
+  LSSE2RoundF64x4 := Default(TVecF64x4); LSSE2TruncF64x4 := Default(TVecF64x4);
+  LSSE2RoundF32x16 := Default(TVecF32x16); LSSE2TruncF32x16 := Default(TVecF32x16);
+  LSSE2RoundF64x8 := Default(TVecF64x8); LSSE2TruncF64x8 := Default(TVecF64x8);
+
   if not IsBackendRegistered(sbAVX2) then
     Exit;
 
@@ -1872,6 +1877,11 @@ var
   end;
 
 begin
+  LSSE2FloorF32x8 := Default(TVecF32x8); LSSE2CeilF32x8 := Default(TVecF32x8);
+  LSSE2FloorF64x4 := Default(TVecF64x4); LSSE2CeilF64x4 := Default(TVecF64x4);
+  LSSE2FloorF32x16 := Default(TVecF32x16); LSSE2CeilF32x16 := Default(TVecF32x16);
+  LSSE2FloorF64x8 := Default(TVecF64x8); LSSE2CeilF64x8 := Default(TVecF64x8);
+
   if not IsBackendRegistered(sbAVX2) then
     Exit;
 
@@ -2109,6 +2119,11 @@ var
   end;
 
 begin
+  LSSE2FloorF32x8 := Default(TVecF32x8); LSSE2CeilF32x8 := Default(TVecF32x8);
+  LSSE2FloorF64x4 := Default(TVecF64x4); LSSE2CeilF64x4 := Default(TVecF64x4);
+  LSSE2FloorF32x16 := Default(TVecF32x16); LSSE2CeilF32x16 := Default(TVecF32x16);
+  LSSE2FloorF64x8 := Default(TVecF64x8); LSSE2CeilF64x8 := Default(TVecF64x8);
+
   if not IsBackendRegistered(sbAVX2) then
     Exit;
 

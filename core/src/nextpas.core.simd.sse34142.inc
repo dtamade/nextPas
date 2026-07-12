@@ -254,7 +254,7 @@ begin
     movups xmm0, [rax]
     movups xmm1, [rdx]
     dppd xmm0, xmm1, $3F
-    movsd [Result], xmm0
+    movlpd [Result], xmm0
   end;
 end;
 
