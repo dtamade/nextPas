@@ -125,6 +125,152 @@ begin
   Check(LTooltip <> nil, 'Builder chaining should work');
 end;
 
+{ === New tests === }
+
+procedure TestTooltipAbovePosition;
+var
+  LTooltip: ITooltip;
+  LBuffer: TBuffer;
+  LArea, LAnchor: TRect;
+begin
+  LTooltip := TTooltip.New('Tip').WithPosition(ttpAbove);
+  LArea := TRect.Make(0, 0, 40, 20);
+  LAnchor := TRect.Make(10, 10, 5, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LTooltip.RenderAt(LAnchor, LArea, LBuffer);
+    Check(True, 'above position renders');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestTooltipBelowPosition;
+var
+  LTooltip: ITooltip;
+  LBuffer: TBuffer;
+  LArea, LAnchor: TRect;
+begin
+  LTooltip := TTooltip.New('Tip').WithPosition(ttpBelow);
+  LArea := TRect.Make(0, 0, 40, 20);
+  LAnchor := TRect.Make(10, 5, 5, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LTooltip.RenderAt(LAnchor, LArea, LBuffer);
+    Check(True, 'below position renders');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestTooltipLeftPosition;
+var
+  LTooltip: ITooltip;
+  LBuffer: TBuffer;
+  LArea, LAnchor: TRect;
+begin
+  LTooltip := TTooltip.New('Tip').WithPosition(ttpLeft);
+  LArea := TRect.Make(0, 0, 40, 20);
+  LAnchor := TRect.Make(20, 10, 5, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LTooltip.RenderAt(LAnchor, LArea, LBuffer);
+    Check(True, 'left position renders');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestTooltipRightPosition;
+var
+  LTooltip: ITooltip;
+  LBuffer: TBuffer;
+  LArea, LAnchor: TRect;
+begin
+  LTooltip := TTooltip.New('Tip').WithPosition(ttpRight);
+  LArea := TRect.Make(0, 0, 40, 20);
+  LAnchor := TRect.Make(5, 10, 5, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LTooltip.RenderAt(LAnchor, LArea, LBuffer);
+    Check(True, 'right position renders');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestTooltipEmptyText;
+var
+  LTooltip: ITooltip;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LTooltip := TTooltip.New('');
+  LArea := TRect.Make(0, 0, 20, 10);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LTooltip.Render(LArea, LBuffer);
+    Check(True, 'empty text does not crash');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestTooltipMaxWidthClip;
+var
+  LTooltip: ITooltip;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LTooltip := TTooltip.New('Very long tooltip text that exceeds max width').WithMaxWidth(10);
+  LArea := TRect.Make(0, 0, 40, 10);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LTooltip.Render(LArea, LBuffer);
+    Check(True, 'max width clips');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestTooltipBoundaryFlip;
+var
+  LTooltip: ITooltip;
+  LBuffer: TBuffer;
+  LArea, LAnchor: TRect;
+begin
+  { Anchor at top-left, tooltip above would go off-screen }
+  LTooltip := TTooltip.New('Tip').WithPosition(ttpAbove);
+  LArea := TRect.Make(0, 0, 20, 10);
+  LAnchor := TRect.Make(0, 0, 5, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LTooltip.RenderAt(LAnchor, LArea, LBuffer);
+    Check(True, 'boundary flip does not crash');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestTooltipSmallBounds;
+var
+  LTooltip: ITooltip;
+  LBuffer: TBuffer;
+  LArea, LAnchor: TRect;
+begin
+  LTooltip := TTooltip.New('Tip').WithPosition(ttpBelow);
+  LArea := TRect.Make(0, 0, 3, 2);
+  LAnchor := TRect.Make(0, 0, 1, 1);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LTooltip.RenderAt(LAnchor, LArea, LBuffer);
+    Check(True, 'small bounds does not crash');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestTooltipContentVisible;
+var
+  LTooltip: ITooltip;
+  LBuffer: TBuffer;
+  LArea: TRect;
+  LRow: AnsiString;
+begin
+  LTooltip := TTooltip.New('Hi');
+  LArea := TRect.Make(0, 0, 20, 10);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LTooltip.Render(LArea, LBuffer);
+    LRow := LBuffer.RowAsString(1);
+    Check(Pos('Hi', LRow) > 0, 'tooltip text visible');
+  finally LBuffer.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.tooltip');
   T.Test('TTooltipPosition enum', @TestTooltipPositionEnum);
@@ -136,5 +282,14 @@ begin
   T.Test('TTooltip.Render', @TestTooltipRender);
   T.Test('TTooltip.RenderAt', @TestTooltipRenderAt);
   T.Test('TTooltip builder chaining', @TestTooltipBuilderChaining);
+  T.Test('Tooltip above position', @TestTooltipAbovePosition);
+  T.Test('Tooltip below position', @TestTooltipBelowPosition);
+  T.Test('Tooltip left position', @TestTooltipLeftPosition);
+  T.Test('Tooltip right position', @TestTooltipRightPosition);
+  T.Test('Tooltip empty text', @TestTooltipEmptyText);
+  T.Test('Tooltip max width clip', @TestTooltipMaxWidthClip);
+  T.Test('Tooltip boundary flip', @TestTooltipBoundaryFlip);
+  T.Test('Tooltip small bounds', @TestTooltipSmallBounds);
+  T.Test('Tooltip content visible', @TestTooltipContentVisible);
   if not T.Run then Halt(1);
 end.
