@@ -282,6 +282,7 @@ begin
     Data.TextLen := Length(AText);
     Data.ChildStart := -1;
     Data.ChildCount := 0;
+    Data.ChildCapacity := 0;
 
     FOwner.FNodeText := FOwner.FNodeText + AText;
     Idx := FOwner.FNodes.Count;
@@ -312,6 +313,10 @@ end;
 procedure TGreenNode.AppendChild(const AChild: TGreenNode);
 var
   D: TGreenNodeData;
+  ExistingChildIndex: LongInt;
+  NewChildCapacity: LongInt;
+  NewChildStart: LongInt;
+  OldChildStart: LongInt;
 begin
   if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count)
     or (AChild = nil) then
@@ -321,13 +326,24 @@ begin
     Exit;
   FOwner.CheckMutable;
   D := FOwner.FNodes[FIndex];
-  if D.ChildStart < 0 then
+  if D.ChildCount >= D.ChildCapacity then
   begin
-    D.ChildStart := AChild.FIndex;
-    D.ChildCount := 1;
-  end
-  else
-    Inc(D.ChildCount);
+    OldChildStart := D.ChildStart;
+    if D.ChildCapacity = 0 then
+      NewChildCapacity := 1
+    else
+      NewChildCapacity := D.ChildCapacity * 2;
+    NewChildStart := FOwner.FChildIndices.Count;
+    for ExistingChildIndex := 0 to NewChildCapacity - 1 do
+      FOwner.FChildIndices.Push(-1);
+    for ExistingChildIndex := 0 to D.ChildCount - 1 do
+      FOwner.FChildIndices[NewChildStart + ExistingChildIndex] :=
+        FOwner.FChildIndices[OldChildStart + ExistingChildIndex];
+    D.ChildStart := NewChildStart;
+    D.ChildCapacity := NewChildCapacity;
+  end;
+  FOwner.FChildIndices[D.ChildStart + D.ChildCount] := AChild.FIndex;
+  Inc(D.ChildCount);
   FOwner.FNodes[FIndex] := D;
 end;
 
@@ -407,17 +423,22 @@ end;
 function TGreenNode.ChildAt(const AIndex: LongInt): TGreenNode;
 var
   D: TGreenNodeData;
-  ChildIdx: LongInt;
+  ChildLinkIndex: LongInt;
+  ChildNodeIndex: LongInt;
 begin
   if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
     Exit(nil);
   D := FOwner.FNodes[FIndex];
   if (AIndex < 0) or (AIndex >= D.ChildCount) or (D.ChildStart < 0) then
     Exit(nil);
-  ChildIdx := D.ChildStart + AIndex;
-  if (ChildIdx >= 0) and (ChildIdx < FOwner.FFacades.Count) then
+  ChildLinkIndex := D.ChildStart + AIndex;
+  if (ChildLinkIndex >= 0) and
+    (ChildLinkIndex < FOwner.FChildIndices.Count) then
   begin
-    Result := FOwner.FFacades[ChildIdx];
+    ChildNodeIndex := FOwner.FChildIndices[ChildLinkIndex];
+    if (ChildNodeIndex < 0) or (ChildNodeIndex >= FOwner.FFacades.Count) then
+      Exit(nil);
+    Result := FOwner.FFacades[ChildNodeIndex];
     { Guard against cyclic AST: if child is self, return nil to break recursion }
     if (Result <> nil) and (Result.FOwner = FOwner) and (Result.FIndex = FIndex) then
       Result := nil;
@@ -425,4 +446,3 @@ begin
   else
     Result := nil;
 end;
-

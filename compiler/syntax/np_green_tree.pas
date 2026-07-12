@@ -73,9 +73,9 @@ type
   {**
    * TGreenNodeData — Compact rowan-style node storage
    *
-   * 28 bytes per node, stored contiguously in TVec.
+   * 32 bytes per node, stored contiguously in TVec.
    * Text is centralized in TGreenTreeData.Text.
-   * Children referenced by (ChildStart, ChildCount) — contiguous in FFacades.
+   * Children referenced by a range in TGreenTree.FChildIndices.
    *}
   TGreenNodeData = packed record
     Kind: TGreenNodeKind;
@@ -85,6 +85,7 @@ type
     TextLen: LongInt;
     ChildStart: LongInt;
     ChildCount: LongInt;
+    ChildCapacity: LongInt;
   end;
 
   {**
@@ -153,10 +154,11 @@ type
    FImplementationUses: array of string;
    FForeignProcedureDecls: array of TForeignProcedureDecl;
    FRootNode: TGreenNode;
-   { Rowan-style compact storage: FNodes[i] <-> FFacades[i] strictly 1:1 }
+   { Rowan-style compact storage: FNodes[i] <-> FFacades[i] strictly 1:1. }
    FNodes: specialize TVec<TGreenNodeData>;
    FNodeText: string;
    FFacades: specialize TVec<TGreenNode>;
+   FChildIndices: specialize TVec<LongInt>;
    { Allocate node data and facade in the tree. Returns facade. }
    procedure AppendInterfaceUse(const AUseName: string);
    procedure AppendImplementationUse(const AUseName: string);
@@ -419,11 +421,13 @@ begin
   SetLength(FForeignProcedureDecls, 0);
   FNodes := specialize TVec<TGreenNodeData>.Create;
   FFacades := specialize TVec<TGreenNode>.Create;
+  FChildIndices := specialize TVec<LongInt>.Create;
   FNodeText := '';
 end;
 
 destructor TGreenTree.Destroy;
 begin
+  FChildIndices.Free;
   FFacades.Free;
   FNodes.Free;
   inherited Destroy;
