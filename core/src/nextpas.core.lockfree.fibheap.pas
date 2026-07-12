@@ -42,7 +42,14 @@ type
     Right: PFibNode;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 斐波那契堆
+    @details 并发斐波那契堆。
+      - 懒合并：Insert 均摊 O(1)
+      - 合并两个堆 O(1)
+      - ExtractMin 触发合并（均摊 O(log n)）
+      - 自旋锁保护写操作，Min 读无锁
+      - 适用场景：优先队列、Dijkstra 算法、调度
+   * @concurrency Thread-safe (see source for details). }
   TLockFreeFibonacciHeap = class
   private
     FMin: PFibNode;

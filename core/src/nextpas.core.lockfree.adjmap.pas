@@ -66,7 +66,13 @@ type
     FDistance: Int64;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 邻接表图
+    @details 加权图邻接表 + 最短路径。
+      - 使用哈希表存储顶点和边，O(1) 顶点/边查找
+      - Dijkstra 算法求单源最短路径
+      - 拓扑排序支持 DAG
+      - 适用场景：图算法、路径规划、依赖分析
+   * @concurrency Thread-safe (see source for details). }
   TAdjMapImpl = class
   private
     FVertices: array of TAdjVertex;
