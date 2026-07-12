@@ -75,8 +75,16 @@ begin
 end;
 
 procedure TScrollViewState.ScrollDown(N: Integer);
+var
+  LMax: Integer;
 begin
   Inc(OffsetY, N);
+  if ContentHeight > 0 then
+  begin
+    LMax := ContentHeight - 1;
+    if LMax < 0 then LMax := 0;
+    if OffsetY > LMax then OffsetY := LMax;
+  end;
 end;
 
 procedure TScrollViewState.PageUp(ViewHeight: Integer);

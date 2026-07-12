@@ -124,6 +124,42 @@ begin
   Check(S.OffsetY = 15, 'Should be 15 after 3x5');
 end;
 
+procedure TestScrollDownClampsToContentHeight;
+var S: TScrollViewState;
+begin
+  S := TScrollViewState.Empty;
+  S.ContentHeight := 20;
+  S.ScrollDown(100);
+  CheckEqual(19, S.OffsetY, 'clamped to ContentHeight-1');
+end;
+
+procedure TestScrollDownClampsExact;
+var S: TScrollViewState;
+begin
+  S := TScrollViewState.Empty;
+  S.ContentHeight := 10;
+  S.ScrollDown(10);
+  CheckEqual(9, S.OffsetY, 'exact ContentHeight clamps');
+end;
+
+procedure TestScrollDownZeroContent;
+var S: TScrollViewState;
+begin
+  S := TScrollViewState.Empty;
+  S.ContentHeight := 0;
+  S.ScrollDown(5);
+  CheckEqual(5, S.OffsetY, 'zero content allows scroll');
+end;
+
+procedure TestPageDownClamps;
+var S: TScrollViewState;
+begin
+  S := TScrollViewState.Empty;
+  S.ContentHeight := 15;
+  S.PageDown(100);
+  CheckEqual(14, S.OffsetY, 'PageDown clamps');
+end;
+
 procedure TestBuilderChaining;
 var S1, S2: TStyle;
 begin S1.Fg := IndexedColor(1); S2.Fg := IndexedColor(2); Check(TScrollView.New.WithStyle(S1).WithScrollbarStyle(S2).WithShowScrollbar(True) <> nil, 'chain'); end;
@@ -145,6 +181,10 @@ begin
   T.Test('WithShowScrollbar', @TestWithShowScrollbar);
   T.Test('Render', @TestRender);
   T.Test('RenderStateful', @TestRenderStateful);
+  T.Test('ScrollDown clamps', @TestScrollDownClampsToContentHeight);
+  T.Test('ScrollDown clamps exact', @TestScrollDownClampsExact);
+  T.Test('ScrollDown zero content', @TestScrollDownZeroContent);
+  T.Test('PageDown clamps', @TestPageDownClamps);
   T.Test('Builder chaining', @TestBuilderChaining);
   T.Test('Render empty', @TestRenderEmpty);
   T.Test('Render small area', @TestRenderSmallArea);

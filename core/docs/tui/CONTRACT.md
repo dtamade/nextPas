@@ -121,7 +121,7 @@ end;
 
 ## 6. 测试
 
-- 95 个测试目录，1524+ T.Test 注册
+- 95 个测试目录，1567 T.Test 注册
 - heaptrc 全覆盖（编译器标志 `-gh -dHEAPTRC_ACTIVE`）
 - 0 泄漏，0 失败
 
