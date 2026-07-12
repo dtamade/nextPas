@@ -47,7 +47,13 @@ type
     mtOutOfBounds = 5
   );
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 并发矩阵
+    @details 并发矩阵运算。
+      - 固定大小矩阵，行主序存储
+      - 支持基本运算：Multiply, Transpose, Inverse, Determinant
+      - 分块矩阵乘法提高缓存命中率
+      - 适用场景：科学计算、线性代数、图像处理
+   * @concurrency Thread-safe (see source for details). }
   TMatrixImpl = class
   public
     FData: TMatrixData;
