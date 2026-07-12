@@ -141,9 +141,7 @@ begin
       FloatToStr(AThreshold) + ' (NaN)');
 end;
 
-{ ═════════════════════════════════════════════════════════════════════════════ }
-{ TExpectation (fluent API)                                                    }
-{ ═════════════════════════════════════════════════════════════════════════════ }
+{ ── TExpectation (fluent API) ──────────────────────────────────────────────── }
 
 type
   TExpectationKind = (
@@ -163,7 +161,18 @@ const
   );
 
 type
-  TExpectation = class(TInterfacedObject, IExpectation)
+  { Non-atomic refcount base for single-threaded test scenarios.
+    Avoids InterlockedDecrement overhead (~30ns) per interface release. }
+  TExpectationBase = class(TObject, IUnknown)
+  private
+    FRefCount: LongInt;
+  public
+    function QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+    function _AddRef: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+    function _Release: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+  end;
+
+  TExpectation = class(TExpectationBase, IExpectation)
   private
     FKind       : TExpectationKind;
     FStrValue   : string;
@@ -187,6 +196,19 @@ type
     constructor CreateBytes(const AValue: TBytes);
     constructor CreateIntArray(const AValues: array of Int64);
     constructor CreateStrArray(const AValues: array of string);
+
+    { Object pool support }
+    procedure ResetState;
+      { Reset all fields to default values for pool reuse. }
+    class function AllocStr(const AValue: string): TExpectation;
+    class function AllocInt(const AValue: Int64): TExpectation;
+    class function AllocBool(AValue: Boolean): TExpectation;
+    class function AllocPtr(const AValue: Pointer): TExpectation;
+    class function AllocProc(AProc: TTestProc): TExpectation;
+    class function AllocDouble(const AValue: Double): TExpectation;
+    class function AllocBytes(const AValue: TBytes): TExpectation;
+    class function AllocIntArray(const AValues: array of Int64): TExpectation;
+    class function AllocStrArray(const AValues: array of string): TExpectation;
 
     procedure RequireKind(AKind: TExpectationKind;
       const AMethod: string);
@@ -269,6 +291,90 @@ type
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
+{ ── Expectation Object Pool ────────────────────────────────────────────────── }
+
+const
+  MAX_POOL_SIZE = 64;
+
+type
+  TExpectationPool = record
+    Pool: array[0..MAX_POOL_SIZE-1] of TExpectation;
+    Count: Integer;
+    procedure Init;
+    function Acquire: TExpectation;
+    procedure Release(AExp: TExpectation);
+  end;
+
+var
+  ThreadPool: TExpectationPool;
+
+procedure TExpectationPool.Init;
+var
+  I: Integer;
+begin
+  Count := 0;
+  for I := 0 to MAX_POOL_SIZE - 1 do
+    Pool[I] := nil;
+end;
+
+function TExpectationPool.Acquire: TExpectation;
+begin
+  if Count > 0 then
+  begin
+    Dec(Count);
+    Result := Pool[Count];
+    Pool[Count] := nil;
+  end
+  else
+    Result := nil;
+end;
+
+procedure TExpectationPool.Release(AExp: TExpectation);
+begin
+  if (AExp <> nil) and (Count < MAX_POOL_SIZE) then
+  begin
+    AExp.ResetState;
+    Pool[Count] := AExp;
+    Inc(Count);
+  end
+  else if AExp <> nil then
+    AExp.Free;
+end;
+
+{ ── TExpectationBase (non-atomic refcount) ─────────────────────────────────── }
+
+function TExpectationBase.QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+begin
+  if GetInterface(IID, Obj) then
+    Result := 0
+  else
+    Result := LongInt(E_NOINTERFACE);
+end;
+
+function TExpectationBase._AddRef: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+begin
+  Inc(FRefCount);
+  Result := FRefCount;
+end;
+
+function TExpectationBase._Release: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+begin
+  Dec(FRefCount);
+  Result := FRefCount;
+  if Result = 0 then
+  begin
+    if ThreadPool.Count < MAX_POOL_SIZE then
+    begin
+      { Return to pool: finalize managed types, then store pointer }
+      (Self as TExpectation).ResetState;
+      ThreadPool.Pool[ThreadPool.Count] := Self as TExpectation;
+      Inc(ThreadPool.Count);
+    end
+    else
+      Free;
+  end;
+end;
+
 constructor TExpectation.CreateStr(const AValue: string);
 begin
   inherited Create;
@@ -349,18 +455,150 @@ begin
     FStrArrayValue[I] := AValues[I];
 end;
 
+procedure TExpectation.ResetState;
+begin
+  FKind := ekString;
+  FStrValue := '';
+  FIntValue := 0;
+  FBoolValue := False;
+  FPtrValue := nil;
+  FProcValue := nil;
+  FDoubleValue := 0.0;
+  FBytesValue := nil;
+  FNegated := False;
+  FMessage := '';
+  FIntArrayValue := nil;
+  FStrArrayValue := nil;
+end;
+
+class function TExpectation.AllocStr(const AValue: string): TExpectation;
+begin
+  Result := ThreadPool.Acquire;
+  if Result = nil then
+    Result := TExpectation.CreateStr(AValue)
+  else
+  begin
+    Result.FKind := ekString;
+    Result.FStrValue := AValue;
+  end;
+end;
+
+class function TExpectation.AllocInt(const AValue: Int64): TExpectation;
+begin
+  Result := ThreadPool.Acquire;
+  if Result = nil then
+    Result := TExpectation.CreateInt(AValue)
+  else
+  begin
+    Result.FKind := ekInt64;
+    Result.FIntValue := AValue;
+  end;
+end;
+
+class function TExpectation.AllocBool(AValue: Boolean): TExpectation;
+begin
+  Result := ThreadPool.Acquire;
+  if Result = nil then
+    Result := TExpectation.CreateBool(AValue)
+  else
+  begin
+    Result.FKind := ekBool;
+    Result.FBoolValue := AValue;
+  end;
+end;
+
+class function TExpectation.AllocPtr(const AValue: Pointer): TExpectation;
+begin
+  Result := ThreadPool.Acquire;
+  if Result = nil then
+    Result := TExpectation.CreatePtr(AValue)
+  else
+  begin
+    Result.FKind := ekPointer;
+    Result.FPtrValue := AValue;
+  end;
+end;
+
+class function TExpectation.AllocProc(AProc: TTestProc): TExpectation;
+begin
+  Result := ThreadPool.Acquire;
+  if Result = nil then
+    Result := TExpectation.CreateProc(AProc)
+  else
+  begin
+    Result.FKind := ekProc;
+    Result.FProcValue := AProc;
+  end;
+end;
+
+class function TExpectation.AllocDouble(const AValue: Double): TExpectation;
+begin
+  Result := ThreadPool.Acquire;
+  if Result = nil then
+    Result := TExpectation.CreateDouble(AValue)
+  else
+  begin
+    Result.FKind := ekDouble;
+    Result.FDoubleValue := AValue;
+  end;
+end;
+
+class function TExpectation.AllocBytes(const AValue: TBytes): TExpectation;
+begin
+  Result := ThreadPool.Acquire;
+  if Result = nil then
+    Result := TExpectation.CreateBytes(AValue)
+  else
+  begin
+    Result.FKind := ekBytes;
+    Result.FBytesValue := AValue;
+  end;
+end;
+
+class function TExpectation.AllocIntArray(const AValues: array of Int64): TExpectation;
+var
+  I: Integer;
+begin
+  Result := ThreadPool.Acquire;
+  if Result = nil then
+    Result := TExpectation.CreateIntArray(AValues)
+  else
+  begin
+    Result.FKind := ekIntArray;
+    SetLength(Result.FIntArrayValue, Length(AValues));
+    for I := 0 to High(AValues) do
+      Result.FIntArrayValue[I] := AValues[I];
+  end;
+end;
+
+class function TExpectation.AllocStrArray(const AValues: array of string): TExpectation;
+var
+  I: Integer;
+begin
+  Result := ThreadPool.Acquire;
+  if Result = nil then
+    Result := TExpectation.CreateStrArray(AValues)
+  else
+  begin
+    Result.FKind := ekStrArray;
+    SetLength(Result.FStrArrayValue, Length(AValues));
+    for I := 0 to High(AValues) do
+      Result.FStrArrayValue[I] := AValues[I];
+  end;
+end;
+
 function TExpectation.CloneSelf: TExpectation;
 begin
   case FKind of
-    ekString:   Result := TExpectation.CreateStr(FStrValue);
-    ekInt64:    Result := TExpectation.CreateInt(FIntValue);
-    ekBool:     Result := TExpectation.CreateBool(FBoolValue);
-    ekPointer:  Result := TExpectation.CreatePtr(FPtrValue);
-    ekProc:     Result := TExpectation.CreateProc(FProcValue);
-    ekDouble:   Result := TExpectation.CreateDouble(FDoubleValue);
-    ekBytes:    Result := TExpectation.CreateBytes(FBytesValue);
-    ekIntArray: Result := TExpectation.CreateIntArray(FIntArrayValue);
-    ekStrArray: Result := TExpectation.CreateStrArray(FStrArrayValue);
+    ekString:   Result := TExpectation.AllocStr(FStrValue);
+    ekInt64:    Result := TExpectation.AllocInt(FIntValue);
+    ekBool:     Result := TExpectation.AllocBool(FBoolValue);
+    ekPointer:  Result := TExpectation.AllocPtr(FPtrValue);
+    ekProc:     Result := TExpectation.AllocProc(FProcValue);
+    ekDouble:   Result := TExpectation.AllocDouble(FDoubleValue);
+    ekBytes:    Result := TExpectation.AllocBytes(FBytesValue);
+    ekIntArray: Result := TExpectation.AllocIntArray(FIntArrayValue);
+    ekStrArray: Result := TExpectation.AllocStrArray(FStrArrayValue);
   end;
   Result.FNegated := FNegated;
   Result.FMessage := FMessage;
@@ -1330,52 +1568,68 @@ end;
 
 function Expect(const AValue: string): IExpectation;
 begin
-  Result := TExpectation.CreateStr(AValue);
+  Result := TExpectation.AllocStr(AValue);
 end;
 
 function ExpectStr(const AValue: string): IExpectation;
 begin
-  Result := TExpectation.CreateStr(AValue);
+  Result := TExpectation.AllocStr(AValue);
 end;
 
 function ExpectInt(const AValue: Int64): IExpectation;
 begin
-  Result := TExpectation.CreateInt(AValue);
+  Result := TExpectation.AllocInt(AValue);
 end;
 
 function ExpectBool(AValue: Boolean): IExpectation;
 begin
-  Result := TExpectation.CreateBool(AValue);
+  Result := TExpectation.AllocBool(AValue);
 end;
 
 function ExpectDouble(const AValue: Double): IExpectation;
 begin
-  Result := TExpectation.CreateDouble(AValue);
+  Result := TExpectation.AllocDouble(AValue);
 end;
 
 function ExpectPtr(const AValue: Pointer): IExpectation;
 begin
-  Result := TExpectation.CreatePtr(AValue);
+  Result := TExpectation.AllocPtr(AValue);
 end;
 
 function ExpectProc(AProc: TTestProc): IExpectation;
 begin
-  Result := TExpectation.CreateProc(AProc);
+  Result := TExpectation.AllocProc(AProc);
 end;
 
 function ExpectBytes(const AValue: TBytes): IExpectation;
 begin
-  Result := TExpectation.CreateBytes(AValue);
+  Result := TExpectation.AllocBytes(AValue);
 end;
 
 function ExpectArrayOfInt(const AValues: array of Int64): IExpectation;
 begin
-  Result := TExpectation.CreateIntArray(AValues);
+  Result := TExpectation.AllocIntArray(AValues);
 end;
 
 function ExpectArrayOfStr(const AValues: array of string): IExpectation;
 begin
-  Result := TExpectation.CreateStrArray(AValues);
+  Result := TExpectation.AllocStrArray(AValues);
+end;
+
+{ ── Initialization / Finalization ──────────────────────────────────────────── }
+
+initialization
+  ThreadPool.Init;
+
+finalization
+begin
+  { Release all pooled expectations }
+  while ThreadPool.Count > 0 do
+  begin
+    Dec(ThreadPool.Count);
+    ThreadPool.Pool[ThreadPool.Count].Free;
+    ThreadPool.Pool[ThreadPool.Count] := nil;
+  end;
 end;
 
 end.
