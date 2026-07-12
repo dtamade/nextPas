@@ -373,6 +373,119 @@ begin
     Check(LCollator.Compare(LArr20[LI - 1], LArr20[LI]) <= 0, '20-elem sorted');
 end;
 
+{ === Quaternary & Identical Strength === }
+
+procedure TestQuaternaryIdentical;
+var
+  LQuatOpts, LIdentOpts: TCollationOptions;
+  LQuatCol, LIdentCol: IUnicodeCollator;
+begin
+  // csQuaternary: codepoint-based tiebreaker
+  LQuatOpts := DefaultCollationOptions;
+  LQuatOpts.Strength := csQuaternary;
+  LQuatCol := UnicodeCollatorWithOptions(LQuatOpts);
+
+  // a and A have same primary/secondary/tertiary at csTertiary, but different at quaternary
+  // (codepoint 0x61 vs 0x41)
+  Check(LQuatCol.Compare('a', 'A') <> 0, 'a != A (quaternary)');
+
+  // Same string must be equal
+  CheckEqual(LQuatCol.Compare('hello', 'hello'), 0, 'hello == hello (quaternary)');
+
+  // csIdentical: raw codepoint comparison
+  LIdentOpts := DefaultCollationOptions;
+  LIdentOpts.Strength := csIdentical;
+  LIdentCol := UnicodeCollatorWithOptions(LIdentOpts);
+
+  // a and A: different codepoints
+  Check(LIdentCol.Compare('a', 'A') <> 0, 'a != A (identical)');
+
+  // Sort key must have more levels than tertiary
+  Check(Length(LIdentCol.GetSortKey('test')) > Length(UnicodeCollator.GetSortKey('test')),
+    'Identical sort key > default sort key length');
+end;
+
+{ === CaseLevel === }
+
+procedure TestCaseLevel;
+var
+  LOpts: TCollationOptions;
+  LCollator: IUnicodeCollator;
+begin
+  LOpts := DefaultCollationOptions;
+  LOpts.CaseLevel := True;
+  LCollator := UnicodeCollatorWithOptions(LOpts);
+
+  // With CaseLevel, 'a' and 'A' should differ at the case level
+  // (even though they're equal at primary)
+  Check(LCollator.Compare('a', 'A') <> 0, 'a != A (CaseLevel)');
+
+  // Uppercase sorts after lowercase in CaseLevel mode
+  Check(LCollator.Compare('a', 'A') < 0, 'a < A (CaseLevel)');
+
+  // Sort key with CaseLevel is longer than without
+  Check(Length(LCollator.GetSortKey('Hello')) > Length(UnicodeCollator.GetSortKey('Hello')),
+    'CaseLevel sort key > default sort key');
+end;
+
+{ === FrenchAccents === }
+
+procedure TestFrenchAccents;
+var
+  LOpts: TCollationOptions;
+  LFrCol, LDefCol: IUnicodeCollator;
+begin
+  LOpts := DefaultCollationOptions;
+  LOpts.FrenchAccents := True;
+  LOpts.Strength := csSecondary;
+  LFrCol := UnicodeCollatorWithOptions(LOpts);
+
+  LOpts := DefaultCollationOptions;
+  LOpts.Strength := csSecondary;
+  LDefCol := UnicodeCollatorWithOptions(LOpts);
+
+  // Both collators should handle basic comparison
+  Check(LFrCol.Compare('a', 'b') < 0, 'a < b (French)');
+  Check(LFrCol.Compare('b', 'a') > 0, 'b > a (French)');
+
+  // Same string must be equal
+  CheckEqual(LFrCol.Compare('hello', 'hello'), 0, 'hello == hello (French)');
+end;
+
+{ === NumericOrdering === }
+
+procedure TestNumericOrdering;
+var
+  LOpts: TCollationOptions;
+  LNumCol, LDefCol: IUnicodeCollator;
+begin
+  LOpts := DefaultCollationOptions;
+  LOpts.NumericOrdering := True;
+  LNumCol := UnicodeCollatorWithOptions(LOpts);
+  LDefCol := UnicodeCollator;
+
+  // file9 < file10 with numeric ordering
+  Check(LNumCol.Compare('file9', 'file10') < 0, 'file9 < file10 (numeric)');
+
+  // Without numeric ordering, file9 > file10 (lexicographic)
+  Check(LDefCol.Compare('file9', 'file10') > 0, 'file9 > file10 (lexicographic)');
+
+  // file2 < file10
+  Check(LNumCol.Compare('file2', 'file10') < 0, 'file2 < file10 (numeric)');
+
+  // file100 > file99
+  Check(LNumCol.Compare('file99', 'file100') < 0, 'file99 < file100 (numeric)');
+
+  // Non-digit strings still compare normally
+  Check(LNumCol.Compare('abc', 'def') < 0, 'abc < def (numeric)');
+
+  // Mixed: digit vs non-digit
+  Check(LNumCol.Compare('1', 'a') < 0, '1 < a (numeric)');
+
+  // Sort key consistency
+  Check(Length(LNumCol.GetSortKey('file10')) > 0, 'numeric sort key non-empty');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.collate');
   T.Test('WeightLookup', @TestWeightLookup);
@@ -390,5 +503,9 @@ begin
   T.Test('StrengthLevels', @TestStrengthLevels);
   T.Test('SmpCollation', @TestSmpCollation);
   T.Test('StressCollation', @TestStressCollation);
+  T.Test('QuaternaryIdentical', @TestQuaternaryIdentical);
+  T.Test('CaseLevel', @TestCaseLevel);
+  T.Test('FrenchAccents', @TestFrenchAccents);
+  T.Test('NumericOrdering', @TestNumericOrdering);
   if not T.Run then Halt(1);
 end.

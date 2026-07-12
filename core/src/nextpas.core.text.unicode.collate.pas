@@ -46,6 +46,9 @@ type
     Primary: UInt16;
     Secondary: Byte;
     Tertiary: Byte;
+    Codepoint: TUnicodeCodepoint;  // 原始码点，用于 csIdentical/NumericOrdering
+    IsDigit: Boolean;              // 是否属于数字序列（NumericOrdering 使用）
+    DigitValue: UInt32;            // 数字序列的数值（仅 IsDigit=True 时有效）
   end;
 
   // 权重数组（预分配，避免每级重复迭代）
@@ -94,6 +97,7 @@ implementation
 uses
   nextpas.core.text.unicode.normalize,
   nextpas.core.text.unicode.base,
+  nextpas.core.text.unicode.props,
   nextpas.core.text.utf8;
 
 {$I nextpas.core.text.unicode.collate.inc}
@@ -107,6 +111,21 @@ begin
     if A[I] <> B[I] then
       Exit(False);
   Result := True;
+end;
+
+{ CaseLevel 辅助：0=小写/无大小写, 8=大写, 9=混合大小写 }
+function GetCaseLevel(const ACp: TUnicodeCodepoint): Byte;
+var
+  LIsUpper, LIsLower: Boolean;
+begin
+  LIsUpper := IsUpper(ACp);
+  LIsLower := IsLower(ACp);
+  if LIsUpper and LIsLower then
+    Result := 9   // mixed case (titlecase)
+  else if LIsUpper then
+    Result := 8   // uppercase
+  else
+    Result := 0;  // lowercase or uncased
 end;
 
 var
@@ -177,6 +196,45 @@ begin
   FOptions := AOptions;
 end;
 
+{ NumericOrdering 辅助：检测连续数字序列并填入数值 }
+procedure FillDigitSequences(var AWeights: TWeightArray);
+var
+  LI, LStart, LLen: SizeInt;
+  LValue: UInt32;
+  LDigit: UInt32;
+begin
+  LLen := Length(AWeights);
+  LI := 0;
+  while LI < LLen do
+  begin
+    // ASCII 数字: U+0030..U+0039
+    if (AWeights[LI].Codepoint >= $30) and (AWeights[LI].Codepoint <= $39) then
+    begin
+      LStart := LI;
+      LValue := 0;
+      // 扫描连续数字
+      while (LI < LLen) and (AWeights[LI].Codepoint >= $30) and (AWeights[LI].Codepoint <= $39) do
+      begin
+        LDigit := AWeights[LI].Codepoint - $30;
+        if LValue <= (High(UInt32) - LDigit) div 10 then
+          LValue := LValue * 10 + LDigit
+        else
+          LValue := High(UInt32);  // 溢出保护
+        Inc(LI);
+      end;
+      // 回填数值
+      while LStart < LI do
+      begin
+        AWeights[LStart].IsDigit := True;
+        AWeights[LStart].DigitValue := LValue;
+        Inc(LStart);
+      end;
+    end
+    else
+      Inc(LI);
+  end;
+end;
+
 function TUnicodeCollator.CollectWeights(const ANormalized: string): TWeightArray;
 var
   LIter: TUTF8Iterator;
@@ -211,10 +269,18 @@ begin
     LWeights[LCount].Primary := LPrimary;
     LWeights[LCount].Secondary := UnpackSecondary(LWeight);
     LWeights[LCount].Tertiary := UnpackTertiary(LWeight);
+    LWeights[LCount].Codepoint := LCp;
+    LWeights[LCount].IsDigit := False;
+    LWeights[LCount].DigitValue := 0;
     Inc(LCount);
   end;
 
   SetLength(LWeights, LCount);
+
+  // NumericOrdering 后处理：检测连续数字序列，计算数值
+  if FOptions.NumericOrdering then
+    FillDigitSequences(LWeights);
+
   Result := LWeights;
 end;
 
@@ -227,21 +293,53 @@ var
 begin
   LLen := Length(AWeights);
   // 预分配：每级 N*2 字节 + 分隔符 + 终止符
-  if FOptions.Strength >= csTertiary then
-    SetLength(LKey, LLen * 6 + 4)
+  if FOptions.Strength >= csIdentical then
+    SetLength(LKey, LLen * 12 + 7)
+  else if FOptions.Strength >= csQuaternary then
+    SetLength(LKey, LLen * 10 + 6)
+  else if FOptions.Strength >= csTertiary then
+    if FOptions.CaseLevel then
+      SetLength(LKey, LLen * 8 + 5)
+    else
+      SetLength(LKey, LLen * 6 + 4)
   else if FOptions.Strength >= csSecondary then
-    SetLength(LKey, LLen * 4 + 3)
+    if FOptions.CaseLevel then
+      SetLength(LKey, LLen * 4 + 4)
+    else
+      SetLength(LKey, LLen * 4 + 3)
   else
     SetLength(LKey, LLen * 2 + 2);
 
   LKeyPos := 0;
 
   // ── Level 1: Primary weights ──
-  for LI := 0 to LLen - 1 do
+  if FOptions.NumericOrdering then
   begin
-    LKey[LKeyPos] := Byte(AWeights[LI].Primary shr 8);
-    LKey[LKeyPos + 1] := Byte(AWeights[LI].Primary and $FF);
-    Inc(LKeyPos, 2);
+    // 数值排序：数字序列用数值编码
+    for LI := 0 to LLen - 1 do
+    begin
+      if AWeights[LI].IsDigit then
+      begin
+        // 用数值的高2字节编码（最多65535）
+        LKey[LKeyPos] := Byte(AWeights[LI].DigitValue shr 8);
+        LKey[LKeyPos + 1] := Byte(AWeights[LI].DigitValue and $FF);
+      end
+      else
+      begin
+        LKey[LKeyPos] := Byte(AWeights[LI].Primary shr 8);
+        LKey[LKeyPos + 1] := Byte(AWeights[LI].Primary and $FF);
+      end;
+      Inc(LKeyPos, 2);
+    end;
+  end
+  else
+  begin
+    for LI := 0 to LLen - 1 do
+    begin
+      LKey[LKeyPos] := Byte(AWeights[LI].Primary shr 8);
+      LKey[LKeyPos + 1] := Byte(AWeights[LI].Primary and $FF);
+      Inc(LKeyPos, 2);
+    end;
   end;
   LKey[LKeyPos] := $01;
   Inc(LKeyPos);
@@ -259,6 +357,19 @@ begin
     Inc(LKeyPos);
   end;
 
+  // ── Level 2.5: Case Level ──
+  if FOptions.CaseLevel and (FOptions.Strength >= csSecondary) then
+  begin
+    for LI := 0 to LLen - 1 do
+    begin
+      LKey[LKeyPos] := 0;
+      LKey[LKeyPos + 1] := GetCaseLevel(AWeights[LI].Codepoint);
+      Inc(LKeyPos, 2);
+    end;
+    LKey[LKeyPos] := $01;
+    Inc(LKeyPos);
+  end;
+
   // ── Level 3: Tertiary weights ──
   if FOptions.Strength >= csTertiary then
   begin
@@ -267,6 +378,34 @@ begin
       LKey[LKeyPos] := 0;
       LKey[LKeyPos + 1] := AWeights[LI].Tertiary;
       Inc(LKeyPos, 2);
+    end;
+    LKey[LKeyPos] := $01;
+    Inc(LKeyPos);
+  end;
+
+  // ── Level 4: Quaternary (codepoint as2-byte value) ──
+  if FOptions.Strength >= csQuaternary then
+  begin
+    for LI := 0 to LLen - 1 do
+    begin
+      LKey[LKeyPos] := Byte(AWeights[LI].Codepoint shr 8);
+      LKey[LKeyPos + 1] := Byte(AWeights[LI].Codepoint and $FF);
+      Inc(LKeyPos, 2);
+    end;
+    LKey[LKeyPos] := $01;
+    Inc(LKeyPos);
+  end;
+
+  // ── Level 5: Identical (codepoint as 4-byte value) ──
+  if FOptions.Strength >= csIdentical then
+  begin
+    for LI := 0 to LLen - 1 do
+    begin
+      LKey[LKeyPos] := Byte(AWeights[LI].Codepoint shr 24);
+      LKey[LKeyPos + 1] := Byte((AWeights[LI].Codepoint shr 16) and $FF);
+      LKey[LKeyPos + 2] := Byte((AWeights[LI].Codepoint shr 8) and $FF);
+      LKey[LKeyPos + 3] := Byte(AWeights[LI].Codepoint and $FF);
+      Inc(LKeyPos, 4);
     end;
     LKey[LKeyPos] := $01;
     Inc(LKeyPos);
@@ -293,12 +432,39 @@ begin
     LMin := LLenB;
 
   // ── Level 1: Primary ──
-  for LI := 0 to LMin - 1 do
+  if FOptions.NumericOrdering then
   begin
-    if AWeightsA[LI].Primary < AWeightsB[LI].Primary then
-      Exit(-1);
-    if AWeightsA[LI].Primary > AWeightsB[LI].Primary then
-      Exit(1);
+    // 数值排序：数字序列按数值比较
+    for LI := 0 to LMin - 1 do
+    begin
+      if AWeightsA[LI].IsDigit and AWeightsB[LI].IsDigit then
+      begin
+        // 两者都是数字：按数值比较（跳过同一序列中的后续数字）
+        if AWeightsA[LI].DigitValue < AWeightsB[LI].DigitValue then
+          Exit(-1);
+        if AWeightsA[LI].DigitValue > AWeightsB[LI].DigitValue then
+          Exit(1);
+        // 数值相同：跳过同一数字序列的剩余部分
+      end
+      else
+      begin
+        // 非数字或混合：按主权重比较
+        if AWeightsA[LI].Primary < AWeightsB[LI].Primary then
+          Exit(-1);
+        if AWeightsA[LI].Primary > AWeightsB[LI].Primary then
+          Exit(1);
+      end;
+    end;
+  end
+  else
+  begin
+    for LI := 0 to LMin - 1 do
+    begin
+      if AWeightsA[LI].Primary < AWeightsB[LI].Primary then
+        Exit(-1);
+      if AWeightsA[LI].Primary > AWeightsB[LI].Primary then
+        Exit(1);
+    end;
   end;
   if LLenA < LLenB then Exit(-1);
   if LLenA > LLenB then Exit(1);
@@ -306,11 +472,38 @@ begin
   // ── Level 2: Secondary ──
   if FOptions.Strength >= csSecondary then
   begin
+    if FOptions.FrenchAccents then
+    begin
+      // 法语重音排序：从右到左比较
+      for LI := LMin - 1 downto 0 do
+      begin
+        if AWeightsA[LI].Secondary < AWeightsB[LI].Secondary then
+          Exit(-1);
+        if AWeightsA[LI].Secondary > AWeightsB[LI].Secondary then
+          Exit(1);
+      end;
+    end
+    else
+    begin
+      for LI := 0 to LMin - 1 do
+      begin
+        if AWeightsA[LI].Secondary < AWeightsB[LI].Secondary then
+          Exit(-1);
+        if AWeightsA[LI].Secondary > AWeightsB[LI].Secondary then
+          Exit(1);
+      end;
+    end;
+  end;
+
+  // ── Level 2.5: Case Level (CaseLevel=True 时插入) ──
+  if FOptions.CaseLevel and (FOptions.Strength >= csSecondary) then
+  begin
     for LI := 0 to LMin - 1 do
     begin
-      if AWeightsA[LI].Secondary < AWeightsB[LI].Secondary then
+      // 0 = lowercase/uncased, 8 = uppercase, 9 = mixed
+      if GetCaseLevel(AWeightsA[LI].Codepoint) < GetCaseLevel(AWeightsB[LI].Codepoint) then
         Exit(-1);
-      if AWeightsA[LI].Secondary > AWeightsB[LI].Secondary then
+      if GetCaseLevel(AWeightsA[LI].Codepoint) > GetCaseLevel(AWeightsB[LI].Codepoint) then
         Exit(1);
     end;
   end;
@@ -323,6 +516,30 @@ begin
       if AWeightsA[LI].Tertiary < AWeightsB[LI].Tertiary then
         Exit(-1);
       if AWeightsA[LI].Tertiary > AWeightsB[LI].Tertiary then
+        Exit(1);
+    end;
+  end;
+
+  // ── Level 4: Quaternary (codepoint fallback) ──
+  if FOptions.Strength >= csQuaternary then
+  begin
+    for LI := 0 to LMin - 1 do
+    begin
+      if AWeightsA[LI].Codepoint < AWeightsB[LI].Codepoint then
+        Exit(-1);
+      if AWeightsA[LI].Codepoint > AWeightsB[LI].Codepoint then
+        Exit(1);
+    end;
+  end;
+
+  // ── Level 5: Identical (raw codepoint comparison) ──
+  if FOptions.Strength >= csIdentical then
+  begin
+    for LI := 0 to LMin - 1 do
+    begin
+      if AWeightsA[LI].Codepoint < AWeightsB[LI].Codepoint then
+        Exit(-1);
+      if AWeightsA[LI].Codepoint > AWeightsB[LI].Codepoint then
         Exit(1);
     end;
   end;

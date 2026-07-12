@@ -147,11 +147,23 @@ Unicode 规范化算法（UAX #15），支持 NFC/NFD/NFKC/NFKD。
 | `IUnicodeCollator.GetSortKey` | 生成排序键 |
 | `IUnicodeCollator.Equals` / `StartsWith` / `EndsWith` / `Contains` / `IndexOf` | 语义操作 |
 
-**排序键格式**: NFD 规范化 → 单遍权重收集 → 三级权重排序键
+**排序键格式**: NFD 规范化 → 单遍权重收集 → 多级权重排序键
 - Level 1: 主权重（2 字节大端）— 基础字符排序
 - Level 2: 次权重（2 字节大端）— 变音差异
+- Level 2.5: 大小写级别（2 字节大端）— CaseLevel=True 时插入
 - Level 3: 三级权重（2 字节大端）— 大小写/假名差异
+- Level 4: 四级权重（2 字节码点）— csQuaternary 时启用
+- Level 5: 相同级别（4 字节码点）— csIdentical 时启用
 - 级别分隔符: 0x01，终止符: 0x00
+
+**排序选项** (`TCollationOptions`):
+
+| 选项 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `Strength` | `TCollationStrength` | `csTertiary` | 排序强度（P/S/T/Q/I） |
+| `CaseLevel` | `Boolean` | `False` | 大小写作为独立级别（法语排序） |
+| `FrenchAccents` | `Boolean` | `False` | 法语重音排序（从右到左比较次权重） |
+| `NumericOrdering` | `Boolean` | `False` | 数字按数值排序（file9 < file10） |
 
 **性能优化**:
 - `GetSortKey`: 单遍收集所有权重（`CollectWeights`），然后写入各级（避免 3 次迭代）
@@ -277,9 +289,9 @@ end;
 | `test_normalize` | 13 | NFD/NFC/NFKD/NFKC、QuickCheck(NFD/NFKD/NFC/NFKC)、CCC、SMP 规范化、压力测试 |
 | `test_enhance` | 8 | Script/Block 属性、便利函数、CJK 分词、?! 序列合并、Next* API、单词分割边界 |
 | `test_grapheme_uax29` | 13 | UAX #29 全部 GB 规则 |
-| `test_collate` | 15 | DUCET 三级权重、排序键、强度级别、排序方法、SMP 排序、压力排序 |
+| `test_collate` | 19 | DUCET 三级权重、排序键、强度级别(P/T/Q/I)、排序方法、SMP 排序、压力排序、CaseLevel、FrenchAccents、NumericOrdering |
 | `test_data` | 10 | IUnicodeDataManager 接口全覆盖：GeneralCategory/BinaryProperty/Script/Block/CaseMapping/CaseFoldFull/Decomposition/CCC/CompositionExclusion/Singleton |
-| **总计** | **85** | |
+| **总计** | **89** | |
 
 ```bash
 # 运行所有 unicode 测试
