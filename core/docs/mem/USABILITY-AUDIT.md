@@ -127,7 +127,7 @@
 
 ### F-08 [P2] Pool 接口碎片 — IPool / IMemoryPool / IAllocator 三套 API
 
-**位置**: `nextpas.core.mem.pool.base.pas`, `nextpas.core.mem.pool.memory_pool.pas`
+**位置**: `nextpas.core.mem.pool.base.pas`
 
 - `IPool`: Acquire/Release（固定大小）
 - `IMemoryPool`: 继承 IPool + GetMem/FreeMem（可变大小）
@@ -216,7 +216,7 @@ end;
 
 ### F-14 [P2-已修复] IMemoryPool 接口边界文档缺失
 
-**位置**: `nextpas.core.mem.pool.memory_pool.pas`
+**位置**: `nextpas.core.mem.pool.base.pas`
 
 **问题**: IMemoryPool 文档未说明与 IAllocator 的区别。
 
@@ -274,7 +274,7 @@ end;
 
 **问题**: 通过 IPool 引用调用 Acquire 分配最小 slab 单元；通过 IAllocator 引用调用 GetMem(64) 走 size-class 路由。同一对象、两种分配语义。
 
-**修复**: 在 pool.memory_pool.pas IMemoryPool 文档中添加语义边界说明，明确 Acquire vs GetMem 的分配粒度差异和推荐用法。
+**修复**: 在 pool.base.pas IMemoryPool 文档中添加语义边界说明，明确 Acquire vs GetMem 的分配粒度差异和推荐用法。
 
 ---
 

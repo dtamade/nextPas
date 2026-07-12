@@ -58,6 +58,7 @@ type
     FRejectedCount: UInt64;
   public
     constructor Create(AInner: IAllocator; ALimitBytes: UInt64);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -87,6 +88,12 @@ begin
   FAllocCount := 0;
   FFreeCount := 0;
   FRejectedCount := 0;
+end;
+
+destructor TBoundedAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 procedure TBoundedAllocator.SetLimit(ALimitBytes: UInt64);

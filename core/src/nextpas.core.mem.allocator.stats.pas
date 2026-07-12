@@ -24,7 +24,12 @@
   POSSIBILITY OF SUCH DAMAGE.
 }
 
-{ Stats allocator — wraps any allocator with performance statistics collection. }
+{ Stats allocator — wraps any allocator with performance statistics collection.
+
+  @deprecated Use TAllocStatsAllocator from nextpas.core.mem.stats instead.
+  TStatsAllocator uses non-atomic counters and is NOT thread-safe.
+  TAllocStatsAllocator provides atomic counters, histogram, and collector pattern.
+  This file is retained for backward compatibility with existing tests. }
 
 {$I nextpas.core.settings.inc}
 
@@ -68,6 +73,7 @@ type
     FMaxAllocSize: SizeUInt;
   public
     constructor Create(AInner: IAllocator);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -93,6 +99,12 @@ begin
     raise EArgumentNil.Create('TStatsAllocator.Create: AInner cannot be nil');
   FInner := AInner;
   Reset;
+end;
+
+destructor TStatsAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 procedure TStatsAllocator.Reset;

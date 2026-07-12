@@ -69,6 +69,51 @@ uses
   nextpas.core.mem.registry,
   nextpas.core.mem.allocator.compact,
   nextpas.core.mem.allocator.callback,
+  nextpas.core.mem.allocator.bump,
+  nextpas.core.mem.allocator.cascade,
+  nextpas.core.mem.allocator.bitmap,
+  nextpas.core.mem.allocator.batch,
+  nextpas.core.mem.allocator.sentinel,
+  nextpas.core.mem.allocator.guard,
+  nextpas.core.mem.allocator.leak_report,
+  nextpas.core.mem.allocator.logging,
+  nextpas.core.mem.allocator.debug_alloc,
+  nextpas.core.mem.allocator.watermark,
+  nextpas.core.mem.allocator.sampling,
+  nextpas.core.mem.allocator.prefix,
+  nextpas.core.mem.allocator.prediction,
+  nextpas.core.mem.allocator.replay,
+  nextpas.core.mem.allocator.numa,
+  nextpas.core.mem.allocator.aligned,
+  nextpas.core.mem.allocator.arena2,
+  nextpas.core.mem.allocator.arena_group,
+  nextpas.core.mem.allocator.bounded,
+  nextpas.core.mem.allocator.coalesce,
+  nextpas.core.mem.allocator.counting,
+  nextpas.core.mem.allocator.cow,
+  nextpas.core.mem.allocator.crt,
+  nextpas.core.mem.allocator.dual,
+  nextpas.core.mem.allocator.fail,
+  nextpas.core.mem.allocator.foundation,
+  nextpas.core.mem.allocator.freelist,
+  nextpas.core.mem.allocator.group,
+  nextpas.core.mem.allocator.growing,
+  nextpas.core.mem.allocator.hotswap,
+  nextpas.core.mem.allocator.huge_page,
+  nextpas.core.mem.allocator.mapped_file,
+  nextpas.core.mem.allocator.page,
+  nextpas.core.mem.allocator.pool,
+  nextpas.core.mem.allocator.pool2,
+  nextpas.core.mem.allocator.rtl,
+  nextpas.core.mem.allocator.scoped,
+  nextpas.core.mem.allocator.size_class,
+  nextpas.core.mem.allocator.slab,
+  nextpas.core.mem.allocator.sliding,
+  nextpas.core.mem.allocator.stack,
+  nextpas.core.mem.allocator.stats,
+  nextpas.core.mem.allocator.thread_cache,
+  nextpas.core.mem.allocator.thread_safe,
+  nextpas.core.mem.allocator.zeroed,
   nextpas.core.mem.budget;
 
 type
@@ -149,6 +194,7 @@ type
 
   // === 统计/监控 ===
   TAllocSnapshot = nextpas.core.mem.stats.TAllocSnapshot;
+  TAllocHistogram = nextpas.core.mem.stats.TAllocHistogram;
   TAllocStatsCollector = nextpas.core.mem.stats.TAllocStatsCollector;
   TAllocStatsAllocator = nextpas.core.mem.stats.TAllocStatsAllocator;
 
@@ -171,6 +217,85 @@ type
   TAllocMemCallback = nextpas.core.mem.allocator.callback.TAllocMemCallback;
   TReallocMemCallback = nextpas.core.mem.allocator.callback.TReallocMemCallback;
   TFreeMemCallback = nextpas.core.mem.allocator.callback.TFreeMemCallback;
+
+  // === 高性能分配器 ===
+  TBumpAllocator = nextpas.core.mem.allocator.bump.TBumpAllocator;
+  TCascadeAllocator = nextpas.core.mem.allocator.cascade.TCascadeAllocator;
+  TBitmapAllocator = nextpas.core.mem.allocator.bitmap.TBitmapAllocator;
+  TBatchAllocator = nextpas.core.mem.allocator.batch.TBatchAllocator;
+
+  // === 调试/监控分配器 ===
+  TSentinelAllocator = nextpas.core.mem.allocator.sentinel.TSentinelAllocator;
+  TGuardAllocator = nextpas.core.mem.allocator.guard.TGuardAllocator;
+  TLeakReportAllocator = nextpas.core.mem.allocator.leak_report.TLeakReportAllocator;
+  TLeakEntry = nextpas.core.mem.allocator.leak_report.TLeakEntry;
+  TLeakReportResult = nextpas.core.mem.allocator.leak_report.TLeakReportResult;
+  TLoggingAllocator = nextpas.core.mem.allocator.logging.TLoggingAllocator;
+  TDebugAllocator = nextpas.core.mem.allocator.debug_alloc.TDebugAllocator;
+  TWatermarkAllocator = nextpas.core.mem.allocator.watermark.TWatermarkAllocator;
+  TSamplingAllocator = nextpas.core.mem.allocator.sampling.TSamplingAllocator;
+  TSampleEntry = nextpas.core.mem.allocator.sampling.TSampleEntry;
+  TPrefixAllocator = nextpas.core.mem.allocator.prefix.TPrefixAllocator;
+  TPredictionAllocator = nextpas.core.mem.allocator.prediction.TPredictionAllocator;
+  TPredictionEntry = nextpas.core.mem.allocator.prediction.TPredictionEntry;
+  TPredictionResult = nextpas.core.mem.allocator.prediction.TPredictionResult;
+  TReplayAllocator = nextpas.core.mem.allocator.replay.TReplayAllocator;
+  TNumaAllocator = nextpas.core.mem.allocator.numa.TNumaAllocator;
+
+  // === 通用分配器 ===
+  TAlignedAllocator = nextpas.core.mem.allocator.aligned.TAlignedAllocator;
+  TAlignedStats = nextpas.core.mem.allocator.aligned.TAlignedStats;
+  TArena2Allocator = nextpas.core.mem.allocator.arena2.TArena2Allocator;
+  TArena2Stats = nextpas.core.mem.allocator.arena2.TArena2Stats;
+  TArenaGroupAllocator = nextpas.core.mem.allocator.arena_group.TArenaGroupAllocator;
+  TArenaGroupStats = nextpas.core.mem.allocator.arena_group.TArenaGroupStats;
+  TBoundedAllocator = nextpas.core.mem.allocator.bounded.TBoundedAllocator;
+  TBoundedStats = nextpas.core.mem.allocator.bounded.TBoundedStats;
+  TCoalesceAllocator = nextpas.core.mem.allocator.coalesce.TCoalesceAllocator;
+  TCoalesceStats = nextpas.core.mem.allocator.coalesce.TCoalesceStats;
+  TCountingAllocator = nextpas.core.mem.allocator.counting.TCountingAllocator;
+  TCountingStats = nextpas.core.mem.allocator.counting.TCountingStats;
+  TCowAllocator = nextpas.core.mem.allocator.cow.TCowAllocator;
+  TCowStats = nextpas.core.mem.allocator.cow.TCowStats;
+  TCrtAllocator = nextpas.core.mem.allocator.crt.TCrtAllocator;
+  TDualAllocator = nextpas.core.mem.allocator.dual.TDualAllocator;
+  TDualStats = nextpas.core.mem.allocator.dual.TDualStats;
+  TFailAllocator = nextpas.core.mem.allocator.fail.TFailAllocator;
+  TFailStats = nextpas.core.mem.allocator.fail.TFailStats;
+  TFreelistAllocator = nextpas.core.mem.allocator.freelist.TFreelistAllocator;
+  TFreelistStats = nextpas.core.mem.allocator.freelist.TFreelistStats;
+  TGroupAllocator = nextpas.core.mem.allocator.group.TGroupAllocator;
+  TGroupStats = nextpas.core.mem.allocator.group.TGroupStats;
+  TGrowingAllocator = nextpas.core.mem.allocator.growing.TGrowingAllocator;
+  THotswapAllocator = nextpas.core.mem.allocator.hotswap.THotswapAllocator;
+  THugePageAllocator = nextpas.core.mem.allocator.huge_page.THugePageAllocator;
+  THugePageStats = nextpas.core.mem.allocator.huge_page.THugePageStats;
+  THugePageSize = nextpas.core.mem.allocator.huge_page.THugePageSize;
+  TMappedFileAllocator = nextpas.core.mem.allocator.mapped_file.TMappedFileAllocator;
+  TMappedFileStats = nextpas.core.mem.allocator.mapped_file.TMappedFileStats;
+  TPageAllocator = nextpas.core.mem.allocator.page.TPageAllocator;
+  TPageStats = nextpas.core.mem.allocator.page.TPageStats;
+  TPoolAllocator = nextpas.core.mem.allocator.pool.TPoolAllocator;
+  TPoolStats = nextpas.core.mem.allocator.pool.TPoolStats;
+  TPool2Allocator = nextpas.core.mem.allocator.pool2.TPool2Allocator;
+  TPool2Stats = nextpas.core.mem.allocator.pool2.TPool2Stats;
+  TRtlAllocator = nextpas.core.mem.allocator.rtl.TRtlAllocator;
+  TScopedAllocator = nextpas.core.mem.allocator.scoped.TScopedAllocator;
+  TSizeClassAllocator = nextpas.core.mem.allocator.size_class.TSizeClassAllocator;
+  TSizeClassStats = nextpas.core.mem.allocator.size_class.TSizeClassStats;
+  TSlabAllocator = nextpas.core.mem.allocator.slab.TSlabAllocator;
+  TSlabStats = nextpas.core.mem.allocator.slab.TSlabStats;
+  TSlidingAllocator = nextpas.core.mem.allocator.sliding.TSlidingAllocator;
+  TSlidingStats = nextpas.core.mem.allocator.sliding.TSlidingStats;
+  TStackAllocator = nextpas.core.mem.allocator.stack.TStackAllocator;
+  TStackStats = nextpas.core.mem.allocator.stack.TStackStats;
+  TStackMark = nextpas.core.mem.allocator.stack.TStackMark;
+  TStatsAllocator = nextpas.core.mem.allocator.stats.TStatsAllocator;
+  TAllocatorStats = nextpas.core.mem.allocator.stats.TAllocatorStats;
+  TThreadCacheAllocator = nextpas.core.mem.allocator.thread_cache.TThreadCacheAllocator;
+  TThreadCacheStats = nextpas.core.mem.allocator.thread_cache.TThreadCacheStats;
+  TThreadSafeAllocator = nextpas.core.mem.allocator.thread_safe.TThreadSafeAllocator;
+  TZeroedAllocator = nextpas.core.mem.allocator.zeroed.TZeroedAllocator;
 
   // === 预算管理 ===
   TMemoryBudget = nextpas.core.mem.budget.TMemoryBudget;

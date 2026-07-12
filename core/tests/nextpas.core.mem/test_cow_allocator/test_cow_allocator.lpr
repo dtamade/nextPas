@@ -74,7 +74,7 @@ begin
     Check(PByte(LWritable)^ = $AB, 'data copied');
     Check(not LAlloc.IsShared(LWritable), 'no longer shared after copy');
 
-    LAlloc.FreeMem(LWritable);
+    LAlloc.FreeMem(LShared);
     LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
@@ -100,14 +100,14 @@ end;
 procedure TestStats;
 var
   LAlloc: TCowAllocator;
-  LPtr, LShared: Pointer;
+  LPtr, LShared, LCopy: Pointer;
   LStats: TCowStats;
 begin
   LAlloc := TCowAllocator.Create(GetRtlAllocator);
   try
     LPtr := LAlloc.GetMem(64);
     LShared := LAlloc.Share(LPtr);
-    LAlloc.WriteNotify(LShared);
+    LCopy := LAlloc.WriteNotify(LShared);
 
     LStats := LAlloc.GetStats;
     Check(LStats.TotalAllocs >= 1, 'total allocs');
@@ -115,6 +115,7 @@ begin
     Check(LStats.CopiedOnWrite >= 1, 'cow copies');
     Check(LStats.ActiveRefs >= 2, 'active refs');
 
+    LAlloc.FreeMem(LCopy);
     LAlloc.FreeMem(LShared);
     LAlloc.FreeMem(LPtr);
   finally

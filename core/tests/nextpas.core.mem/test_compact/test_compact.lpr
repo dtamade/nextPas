@@ -129,14 +129,16 @@ end;
 procedure TestCompactStats;
 var
   LCompact: TCompactAllocator;
+  LPtr: Pointer;
   LStats: TCompactStats;
 begin
   LCompact := TCompactAllocator.Create(DefaultAllocator);
   try
-    LCompact.GetMem(1024);
+    LPtr := LCompact.GetMem(1024);
 
     LStats := LCompact.GetStats;
     Check(LStats.TotalCompactions = 0, 'should have 0 compactions before compact');
+    LCompact.FreeMem(LPtr);
   finally
     LCompact.Free;
   end;

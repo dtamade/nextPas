@@ -19,15 +19,16 @@ var
 procedure TestBoundedReturnsNil;
 var
   LAlloc: TBoundedAllocator;
-  LPtr: Pointer;
+  LPtr, LPtr2: Pointer;
 begin
   LAlloc := TBoundedAllocator.Create(GetRtlAllocator, 256);
   try
     LPtr := LAlloc.GetMem(128);
     Check(LPtr <> nil, 'First alloc should succeed');
-    LPtr := LAlloc.GetMem(200);
-    Check(LPtr = nil, 'Exceeding limit should return nil');
-    LAlloc.FreeMem(LPtr); { Free nil is no-op }
+    LPtr2 := LAlloc.GetMem(200);
+    Check(LPtr2 = nil, 'Exceeding limit should return nil');
+    LAlloc.FreeMem(LPtr2); { Free nil is no-op }
+    LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
   end;

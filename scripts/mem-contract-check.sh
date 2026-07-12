@@ -250,24 +250,22 @@ else
   done
 fi
 
-# ── C7: TAllocator Do* 模板方法 ────────────────────────
+# ── C7: allocator.base re-export 兼容层 ────────────────
 
-printf "\n${BOLD}C7: TAllocator 模板方法${NC}\n"
+printf "\n${BOLD}C7: allocator.base re-export${NC}\n"
 
 ALLOC_BASE="$SRC_DIR/nextpas.core.mem.allocator.base.pas"
 if [ -f "$ALLOC_BASE" ]; then
-  TEMPLATE_METHODS=(
-    "DoGetMem"
-    "DoAllocMem"
-    "DoReallocMem"
-    "DoFreeMem"
-    "DoMemSize"
-  )
-  for method in "${TEMPLATE_METHODS[@]}"; do
-    if grep -q "function $method\|procedure $method" "$ALLOC_BASE"; then
-      ok "TAllocator.$method"
+  if grep -q "TAllocatorBase" "$ALLOC_BASE"; then
+    fail_check "TAllocatorBase 仍存在于 allocator.base.pas（应已删除）"
+  else
+    ok "TAllocatorBase 已移除"
+  fi
+  for alias in TAllocatorTraits IAllocator TMemAllocator; do
+    if grep -q "$alias" "$ALLOC_BASE"; then
+      ok "allocator.base re-export $alias"
     else
-      fail_check "TAllocator.$method 缺失于 allocator.base.pas"
+      fail_check "allocator.base.pas 缺少 re-export: $alias"
     fi
   done
 else

@@ -201,6 +201,9 @@ var
   LClassIdx: Int32;
   LRaw: PByte;
 begin
+  if ASize = 0 then
+    Exit(nil);
+
   LClassIdx := FindSizeClass(ASize);
   if LClassIdx < 0 then
   begin

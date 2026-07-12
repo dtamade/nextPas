@@ -149,8 +149,7 @@ var
 
 function DefaultStatsCollector: TAllocStatsCollector;
 begin
-  if GDefaultCollector = nil then
-    GDefaultCollector := TAllocStatsCollector.Create;
+  { Created in initialization section — no lazy init needed. }
   Result := GDefaultCollector;
 end;
 

@@ -60,6 +60,7 @@ type
   public
     constructor Create(AInner: IAllocator;
       AAlignment: SizeUInt = ALIGNED_DEFAULT_ALIGNMENT);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -103,17 +104,27 @@ begin
   FActiveAllocs := 0;
 end;
 
+destructor TAlignedAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
+end;
+
 function TAlignedAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LRaw: Pointer;
   LAligned: Pointer;
   LHdrPtr: PByte;
+  LExtra: SizeUInt;
 begin
   if ASize = 0 then
     Exit(nil);
 
   { Allocate extra space for alignment + header }
-  LRaw := FInner.GetMem(ASize + FAlignment + ALIGNED_HEADER_SIZE);
+  LExtra := FAlignment + ALIGNED_HEADER_SIZE;
+  if ASize + LExtra < ASize then { overflow check }
+    Exit(nil);
+  LRaw := FInner.GetMem(ASize + LExtra);
   if LRaw = nil then
     Exit(nil);
 

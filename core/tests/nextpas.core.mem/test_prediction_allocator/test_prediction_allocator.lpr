@@ -33,14 +33,19 @@ end;
 procedure TestTrackAllocations;
 var
   LAlloc: TPredictionAllocator;
+  LPtr1, LPtr2, LPtr3: Pointer;
 begin
   LAlloc := TPredictionAllocator.Create(GetRtlAllocator);
   try
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(128);
+    LPtr1 := LAlloc.GetMem(64);
+    LPtr2 := LAlloc.GetMem(64);
+    LPtr3 := LAlloc.GetMem(128);
 
     Check(LAlloc.TotalAllocations >= 3, 'tracked 3');
+
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr2);
+    LAlloc.FreeMem(LPtr3);
   finally
     LAlloc.Free;
   end;
@@ -49,20 +54,26 @@ end;
 procedure TestPredict;
 var
   LAlloc: TPredictionAllocator;
+  LPtrs: array[0..3] of Pointer;
   LPred: TPredictionResult;
 begin
   LAlloc := TPredictionAllocator.Create(GetRtlAllocator);
   try
     // Alloc size 64 many times to make it hot
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(128);
+    LPtrs[0] := LAlloc.GetMem(64);
+    LPtrs[1] := LAlloc.GetMem(64);
+    LPtrs[2] := LAlloc.GetMem(64);
+    LPtrs[3] := LAlloc.GetMem(128);
 
     LPred := LAlloc.Predict(4);
     Check(LPred.Count >= 1, 'has predictions');
     // Most frequent should be 64
     Check(LPred.Entries[0].AllocCount >= 3, 'top has 3+');
+
+    LAlloc.FreeMem(LPtrs[0]);
+    LAlloc.FreeMem(LPtrs[1]);
+    LAlloc.FreeMem(LPtrs[2]);
+    LAlloc.FreeMem(LPtrs[3]);
   finally
     LAlloc.Free;
   end;
@@ -71,17 +82,22 @@ end;
 procedure TestPreAllocate;
 var
   LAlloc: TPredictionAllocator;
+  LPtr1, LPtr2, LPtr3: Pointer;
 begin
   LAlloc := TPredictionAllocator.Create(GetRtlAllocator);
   try
     // Build pattern
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(128);
+    LPtr1 := LAlloc.GetMem(64);
+    LPtr2 := LAlloc.GetMem(64);
+    LPtr3 := LAlloc.GetMem(128);
 
     // Pre-allocate should not crash
     LAlloc.PreAllocate(2, 4);
     Check(True, 'pre-allocate ok');
+
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr2);
+    LAlloc.FreeMem(LPtr3);
   finally
     LAlloc.Free;
   end;
@@ -90,15 +106,19 @@ end;
 procedure TestResetStats;
 var
   LAlloc: TPredictionAllocator;
+  LPtr1, LPtr2: Pointer;
 begin
   LAlloc := TPredictionAllocator.Create(GetRtlAllocator);
   try
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(128);
+    LPtr1 := LAlloc.GetMem(64);
+    LPtr2 := LAlloc.GetMem(128);
     Check(LAlloc.TotalAllocations >= 2, 'before reset');
 
     LAlloc.ResetStats;
     Check(LAlloc.TotalAllocations = 0, 'after reset');
+
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr2);
   finally
     LAlloc.Free;
   end;

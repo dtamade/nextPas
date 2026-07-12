@@ -194,6 +194,241 @@ begin
   { LTracker 引用计数自动释放 }
 end;
 
+{ 验证新增 facade 导出的分配器类型可访问 }
+procedure TestNewExportsAccessible;
+var
+  LBump: TBumpAllocator;
+  LCascade: TCascadeAllocator;
+  LBitmap: TBitmapAllocator;
+  LBatch: TBatchAllocator;
+  LSentinel: TSentinelAllocator;
+  LGuard: TGuardAllocator;
+  LLeakReport: TLeakReportAllocator;
+  LLogging: TLoggingAllocator;
+  LDebug: TDebugAllocator;
+  LWatermark: TWatermarkAllocator;
+  LSampling: TSamplingAllocator;
+  LPrefix: TPrefixAllocator;
+  LPrediction: TPredictionAllocator;
+  LReplay: TReplayAllocator;
+  LNuma: TNumaAllocator;
+begin
+  { 只验证类型可访问，不测试功能（各分配器有专属测试） }
+  LBump := TBumpAllocator.Create(DefaultAllocator, 4096);
+  try
+    Check(LBump <> nil, 'TBumpAllocator accessible');
+  finally
+    LBump.Free;
+  end;
+
+  LCascade := TCascadeAllocator.Create([DefaultAllocator]);
+  try
+    Check(LCascade <> nil, 'TCascadeAllocator accessible');
+  finally
+    LCascade.Free;
+  end;
+
+  LBitmap := TBitmapAllocator.Create(DefaultAllocator, 64, 16);
+  try
+    Check(LBitmap <> nil, 'TBitmapAllocator accessible');
+  finally
+    LBitmap.Free;
+  end;
+
+  LBatch := TBatchAllocator.Create(DefaultAllocator);
+  try
+    Check(LBatch <> nil, 'TBatchAllocator accessible');
+  finally
+    LBatch.Free;
+  end;
+
+  LSentinel := TSentinelAllocator.Create(DefaultAllocator);
+  try
+    Check(LSentinel <> nil, 'TSentinelAllocator accessible');
+  finally
+    LSentinel.Free;
+  end;
+
+  LGuard := TGuardAllocator.Create;
+  try
+    Check(LGuard <> nil, 'TGuardAllocator accessible');
+  finally
+    LGuard.Free;
+  end;
+
+  LLeakReport := TLeakReportAllocator.Create(DefaultAllocator);
+  try
+    Check(LLeakReport <> nil, 'TLeakReportAllocator accessible');
+  finally
+    LLeakReport.Free;
+  end;
+
+  LLogging := TLoggingAllocator.Create(DefaultAllocator);
+  try
+    Check(LLogging <> nil, 'TLoggingAllocator accessible');
+  finally
+    LLogging.Free;
+  end;
+
+  LDebug := TDebugAllocator.Create(DefaultAllocator);
+  try
+    Check(LDebug <> nil, 'TDebugAllocator accessible');
+  finally
+    LDebug.Free;
+  end;
+
+  LWatermark := TWatermarkAllocator.Create(DefaultAllocator);
+  try
+    Check(LWatermark <> nil, 'TWatermarkAllocator accessible');
+  finally
+    LWatermark.Free;
+  end;
+
+  LSampling := TSamplingAllocator.Create(DefaultAllocator);
+  try
+    Check(LSampling <> nil, 'TSamplingAllocator accessible');
+  finally
+    LSampling.Free;
+  end;
+
+  LPrefix := TPrefixAllocator.Create(DefaultAllocator);
+  try
+    Check(LPrefix <> nil, 'TPrefixAllocator accessible');
+  finally
+    LPrefix.Free;
+  end;
+
+  LPrediction := TPredictionAllocator.Create(DefaultAllocator);
+  try
+    Check(LPrediction <> nil, 'TPredictionAllocator accessible');
+  finally
+    LPrediction.Free;
+  end;
+
+  LReplay := TReplayAllocator.Create(DefaultAllocator);
+  try
+    Check(LReplay <> nil, 'TReplayAllocator accessible');
+  finally
+    LReplay.Free;
+  end;
+
+  LNuma := TNumaAllocator.Create(DefaultAllocator);
+  try
+    Check(LNuma <> nil, 'TNumaAllocator accessible');
+  finally
+    LNuma.Free;
+  end;
+end;
+
+procedure TestAllAllocatorExportsAccessible;
+var
+  LAligned: TAlignedAllocator;
+  LBounded: TBoundedAllocator;
+  LCoalesce: TCoalesceAllocator;
+  LCounting: TCountingAllocator;
+  LCow: TCowAllocator;
+  LCrt: TCrtAllocator;
+  LDual: TDualAllocator;
+  LFail: TFailAllocator;
+  LFreelist: TFreelistAllocator;
+  LGroup: TGroupAllocator;
+  LHotswap: THotswapAllocator;
+  LPage: TPageAllocator;
+  LPool: TPoolAllocator;
+  LPool2: TPool2Allocator;
+  LRtl: TRtlAllocator;
+  LScoped: TScopedAllocator;
+  LSizeClass: TSizeClassAllocator;
+  LSlab: TSlabAllocator;
+  LSliding: TSlidingAllocator;
+  LStack: TStackAllocator;
+  LStats: TStatsAllocator;
+  LThreadCache: TThreadCacheAllocator;
+  LThreadSafe: TThreadSafeAllocator;
+  LZeroed: TZeroedAllocator;
+  LArena2: TArena2Allocator;
+  LArenaGroup: TArenaGroupAllocator;
+begin
+  { 验证所有新增的分配器类型可访问 }
+  LAligned := TAlignedAllocator.Create(DefaultAllocator, 16);
+  try Check(LAligned <> nil, 'TAlignedAllocator accessible'); finally LAligned.Free; end;
+
+  LBounded := TBoundedAllocator.Create(DefaultAllocator, 1024);
+  try Check(LBounded <> nil, 'TBoundedAllocator accessible'); finally LBounded.Free; end;
+
+  LCoalesce := TCoalesceAllocator.Create(DefaultAllocator);
+  try Check(LCoalesce <> nil, 'TCoalesceAllocator accessible'); finally LCoalesce.Free; end;
+
+  LCounting := TCountingAllocator.Create(DefaultAllocator);
+  try Check(LCounting <> nil, 'TCountingAllocator accessible'); finally LCounting.Free; end;
+
+  LCow := TCowAllocator.Create(DefaultAllocator);
+  try Check(LCow <> nil, 'TCowAllocator accessible'); finally LCow.Free; end;
+
+  LCrt := TCrtAllocator.Create;
+  try Check(LCrt <> nil, 'TCrtAllocator accessible'); finally LCrt.Free; end;
+
+  LDual := TDualAllocator.Create(DefaultAllocator, DefaultAllocator);
+  try Check(LDual <> nil, 'TDualAllocator accessible'); finally LDual.Free; end;
+
+  LFail := TFailAllocator.Create(DefaultAllocator, 0);
+  try Check(LFail <> nil, 'TFailAllocator accessible'); finally LFail.Free; end;
+
+  LFreelist := TFreelistAllocator.Create(DefaultAllocator);
+  try Check(LFreelist <> nil, 'TFreelistAllocator accessible'); finally LFreelist.Free; end;
+
+  LGroup := TGroupAllocator.Create(DefaultAllocator);
+  try Check(LGroup <> nil, 'TGroupAllocator accessible'); finally LGroup.Free; end;
+
+  LHotswap := THotswapAllocator.Create(DefaultAllocator);
+  try Check(LHotswap <> nil, 'THotswapAllocator accessible'); finally LHotswap.Free; end;
+
+  LPage := TPageAllocator.Create(DefaultAllocator);
+  try Check(LPage <> nil, 'TPageAllocator accessible'); finally LPage.Free; end;
+
+  LPool := TPoolAllocator.Create(DefaultAllocator, 64, 16);
+  try Check(LPool <> nil, 'TPoolAllocator accessible'); finally LPool.Free; end;
+
+  LPool2 := TPool2Allocator.Create(DefaultAllocator, 64);
+  try Check(LPool2 <> nil, 'TPool2Allocator accessible'); finally LPool2.Free; end;
+
+  LRtl := TRtlAllocator.Create;
+  try Check(LRtl <> nil, 'TRtlAllocator accessible'); finally LRtl.Free; end;
+
+  LScoped := TScopedAllocator.Create(DefaultAllocator);
+  try Check(LScoped <> nil, 'TScopedAllocator accessible'); finally LScoped.Free; end;
+
+  LSizeClass := TSizeClassAllocator.Create(DefaultAllocator);
+  try Check(LSizeClass <> nil, 'TSizeClassAllocator accessible'); finally LSizeClass.Free; end;
+
+  LSlab := TSlabAllocator.Create(DefaultAllocator);
+  try Check(LSlab <> nil, 'TSlabAllocator accessible'); finally LSlab.Free; end;
+
+  LSliding := TSlidingAllocator.Create(DefaultAllocator, 1024);
+  try Check(LSliding <> nil, 'TSlidingAllocator accessible'); finally LSliding.Free; end;
+
+  LStack := TStackAllocator.Create(DefaultAllocator, 4096);
+  try Check(LStack <> nil, 'TStackAllocator accessible'); finally LStack.Free; end;
+
+  LStats := TStatsAllocator.Create(DefaultAllocator);
+  try Check(LStats <> nil, 'TStatsAllocator accessible'); finally LStats.Free; end;
+
+  LThreadCache := TThreadCacheAllocator.Create(DefaultAllocator);
+  try Check(LThreadCache <> nil, 'TThreadCacheAllocator accessible'); finally LThreadCache.Free; end;
+
+  LThreadSafe := TThreadSafeAllocator.Create(DefaultAllocator);
+  try Check(LThreadSafe <> nil, 'TThreadSafeAllocator accessible'); finally LThreadSafe.Free; end;
+
+  LZeroed := TZeroedAllocator.Create(DefaultAllocator);
+  try Check(LZeroed <> nil, 'TZeroedAllocator accessible'); finally LZeroed.Free; end;
+
+  LArena2 := TArena2Allocator.Create(DefaultAllocator, 4096);
+  try Check(LArena2 <> nil, 'TArena2Allocator accessible'); finally LArena2.Free; end;
+
+  LArenaGroup := TArenaGroupAllocator.Create(DefaultAllocator);
+  try Check(LArenaGroup <> nil, 'TArenaGroupAllocator accessible'); finally LArenaGroup.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.facade');
   T.Test('DefaultAllocator not nil', @TestDefaultAllocatorNotNil);
@@ -208,6 +443,8 @@ begin
   T.Test('BlockPoolConcurrent accessible', @TestBlockPoolConcurrentAccessible);
   T.Test('SecureZero accessible', @TestSecureZeroAccessible);
   T.Test('TrackingAllocator accessible', @TestTrackingAllocatorAccessible);
+  T.Test('New exports accessible', @TestNewExportsAccessible);
+  T.Test('All allocator exports accessible', @TestAllAllocatorExportsAccessible);
   LRunPassed := T.Run;
 
   T.Summary;

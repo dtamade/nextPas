@@ -91,12 +91,16 @@ end;
 procedure TestResetStats;
 var
   LSampling: TSamplingAllocator;
+  LPtr1, LPtr2: Pointer;
 begin
   LSampling := TSamplingAllocator.Create(DefaultAllocator, 10);
   try
-    LSampling.GetMem(100);
-    LSampling.GetMem(200);
+    LPtr1 := LSampling.GetMem(100);
+    LPtr2 := LSampling.GetMem(200);
     Check(LSampling.TotalAllocs = 2, 'should have 2 allocs');
+
+    LSampling.FreeMem(LPtr1);
+    LSampling.FreeMem(LPtr2);
 
     LSampling.ResetStats;
     Check(LSampling.TotalAllocs = 0, 'should be 0 after reset');

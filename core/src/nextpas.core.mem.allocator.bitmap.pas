@@ -130,6 +130,7 @@ begin
   if FData <> nil then
     FInner.FreeMem(FData);
   FBitmap := nil;
+  FInner := nil;
   inherited Destroy;
 end;
 

@@ -38,6 +38,7 @@ uses
   nextpas.core.base,
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
+  nextpas.core.mem.error,
   nextpas.core.mem.allocator.base;
 
 const
@@ -69,11 +70,14 @@ type
     FFreeCountTotal: UInt64;
     FDoubleFreeCount: UInt64;
     FSequence: UInt32;
+    FPools: array of Pointer;
+    FPoolCount: Integer;
     procedure AllocatePool;
   public
     constructor Create(AInner: IAllocator; ABlockSize: SizeUInt;
       AAlignment: SizeUInt = POOL2_DEFAULT_ALIGNMENT;
       ACapacity: SizeUInt = 256);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -93,6 +97,10 @@ type
     Sequence: UInt32;
     BlockSize: SizeUInt;
     Next: Pointer;
+    { Padding to ensure HEADER_SIZE is 64 bytes (multiple of maximum alignment).
+      This guarantees that PByte(LHeader) + HEADER_SIZE is aligned when
+      LHeader itself is aligned. }
+    Padding: array[0..39] of Byte;
   end;
 
 const
@@ -128,8 +136,7 @@ begin
     FCapacity := ACapacity;
   if FAlignedBlockSize > 0 then
   begin
-    var LPoolSize := FAlignedBlockSize * FCapacity;
-    if LPoolSize div FAlignedBlockSize <> FCapacity then
+    if FAlignedBlockSize > High(SizeUInt) div FCapacity then
       raise EAllocError.Create(aeOutOfMemory, 'TPool2Allocator.Create: pool size overflow');
   end;
   FFreeList := nil;
@@ -139,20 +146,48 @@ begin
   FFreeCountTotal := 0;
   FDoubleFreeCount := 0;
   FSequence := 1;
+  FPools := nil;
+  FPoolCount := 0;
   AllocatePool;
+end;
+
+destructor TPool2Allocator.Destroy;
+var
+  I: Integer;
+begin
+  for I := 0 to FPoolCount - 1 do
+    FInner.FreeMem(FPools[I]);
+  FPools := nil;
+  FPoolCount := 0;
+  FInner := nil;
+  inherited Destroy;
 end;
 
 procedure TPool2Allocator.AllocatePool;
 var
   LPoolSize: SizeUInt;
-  LPool: PByte;
+  LRawPool, LPool: PByte;
   LHeader: PPool2Header;
   I: SizeUInt;
+  LOffset: SizeUInt;
 begin
-  LPoolSize := FAlignedBlockSize * FCapacity;
-  LPool := PByte(FInner.GetMem(LPoolSize));
-  if LPool = nil then
+  { Over-allocate to guarantee alignment of returned pointers }
+  LPoolSize := FAlignedBlockSize * FCapacity + FAlignment;
+  LRawPool := PByte(FInner.GetMem(LPoolSize));
+  if LRawPool = nil then
     raise EAllocError.Create(aeOutOfMemory, 'TPool2Allocator.AllocatePool: allocation failed');
+
+  { Track raw pointer for freeing }
+  if FPoolCount >= Length(FPools) then
+    SetLength(FPools, FPoolCount + 8);
+  FPools[FPoolCount] := LRawPool;
+  Inc(FPoolCount);
+
+  { Align the pool base to FAlignment }
+  LOffset := FAlignment - (SizeUInt(LRawPool) mod FAlignment);
+  if LOffset = FAlignment then
+    LOffset := 0;
+  LPool := LRawPool + LOffset;
 
   for I := 0 to FCapacity - 1 do
   begin

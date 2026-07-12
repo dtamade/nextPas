@@ -89,17 +89,21 @@ end;
 procedure TestStats;
 var
   LAlloc: TFailAllocator;
+  LPtr1, LPtr3: Pointer;
   LStats: TFailStats;
 begin
   LAlloc := TFailAllocator.Create(DefaultAllocator, 2);
   try
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(64);
+    LPtr1 := LAlloc.GetMem(64);
+    LAlloc.GetMem(64);  { fails, returns nil }
+    LPtr3 := LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
     Check(LStats.TotalAttempts = 3, 'total attempts = 3');
     Check(LStats.FailuresInjected = 1, 'failures = 1');
     Check(LStats.SuccessfulAllocs = 2, 'success = 2');
+
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr3);
   finally
     LAlloc.Free;
   end;
@@ -133,6 +137,7 @@ begin
   try
     LPtr := LAlloc.AllocMem(64);
     Check(LPtr <> nil, 'first allocmem succeeds');
+    LAlloc.FreeMem(LPtr);
     LPtr := LAlloc.AllocMem(64);
     Check(LPtr = nil, 'second allocmem fails');
   finally

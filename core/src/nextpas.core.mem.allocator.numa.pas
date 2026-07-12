@@ -275,6 +275,7 @@ end;
 
 procedure TNumaAllocator.FreeMem(APtr: Pointer); inline;
 begin
+  if APtr = nil then Exit;
   { Free goes through fallback — the memory is still valid regardless of node }
   FFallback.FreeMem(APtr);
 end;
