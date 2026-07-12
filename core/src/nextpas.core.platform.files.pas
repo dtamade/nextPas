@@ -1441,6 +1441,13 @@ begin
   else
     Result := Int32(ERROR_INVALID_HANDLE);
 end;
+
+function FileExistsByStat(const APath: PAnsiChar): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_lstat(APath, LStat) = 0;
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
