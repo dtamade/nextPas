@@ -159,6 +159,7 @@ begin
     FInner.FreeMem(FPools[I]);
   FPools := nil;
   FPoolCount := 0;
+  FInner := nil;
   inherited Destroy;
 end;
 

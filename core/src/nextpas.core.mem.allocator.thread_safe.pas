@@ -67,6 +67,7 @@ end;
 destructor TThreadSafeAllocator.Destroy;
 begin
   FLock.Done;
+  FInner := nil;
   inherited Destroy;
 end;
 

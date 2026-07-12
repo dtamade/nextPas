@@ -100,6 +100,7 @@ begin
   for LIdx := 0 to FRegionCount - 1 do
     if FRegions[LIdx] <> nil then
       FInner.FreeMem(FRegions[LIdx]);
+  FInner := nil;
   inherited Destroy;
 end;
 

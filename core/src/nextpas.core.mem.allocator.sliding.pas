@@ -76,6 +76,7 @@ destructor TSlidingAllocator.Destroy;
 begin
   if FRegion <> nil then
     FInner.FreeMem(FRegion);
+  FInner := nil;
   inherited Destroy;
 end;
 

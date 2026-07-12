@@ -103,6 +103,7 @@ begin
   FRegions := nil;
   FRegionCount := 0;
   FCurrentRegion := nil;
+  FInner := nil;
   inherited Destroy;
 end;
 
