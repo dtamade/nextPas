@@ -117,21 +117,21 @@
 
 ### 短期改进 (P2, 1-2 周)
 
-2. **CheckArrayEqual 多差异报告** — 可选模式显示所有差异
+2. **CheckArrayEqual 多差异报告** — 可选模式显示所有差异 ✅
    - 工作量: 2h
    - 收益: 调试效率提升
 
-3. **ToBeInstanceOf** — Expect API 类型检查
+3. **ToBeInstanceOf** — Expect API 类型检查 ✅
    - 工作量: 1h
    - 收益: API 完整性
 
-4. **Mock 参数捕获** — ArgumentCaptor 模式
+4. **Mock 参数捕获** — ArgumentCaptor 模式 ✅
    - 工作量: 3h
    - 收益: 高级测试能力
 
 ### 长期演进 (P3, 1-2 月)
 
-5. **彩色 diff** — ANSI 颜色高亮差异
+5. **彩色 diff** — ANSI 颜色高亮差异 ✅
 6. **性能 CI** — 基准测试回归自动检测
 7. **接口拆分** — 类型精确的 Expect API
 
