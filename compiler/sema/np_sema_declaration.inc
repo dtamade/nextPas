@@ -274,6 +274,7 @@ var
 begin
   if ANode = nil then
     Exit;
+  FillChar(Meta, SizeOf(Meta), 0);
   RecName := FModel.TypeAt(ATypeId - 1).Name;
   RecordScopeId := FModel.AddScope(skRecord, '', FCurrentScopeId);
   FieldIndex := 0;
@@ -398,6 +399,7 @@ var
 begin
   if ANode = nil then
     Exit;
+  FillChar(Meta, SizeOf(Meta), 0);
   IntfName := FModel.TypeAt(ATypeId - 1).Name;
   if (ANode.ChildCount > 0) and (ANode.ChildAt(0) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
@@ -838,6 +840,7 @@ var
 begin
   if ANode = nil then
     Exit;
+  FillChar(Meta, SizeOf(Meta), 0);
   ClassScopeId := FModel.AddScope(skRecord, '', FCurrentScopeId);
   ClsName := FModel.TypeAt(ATypeId - 1).Name;
   FieldIndex := 1;

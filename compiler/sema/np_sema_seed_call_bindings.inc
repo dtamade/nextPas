@@ -671,20 +671,17 @@ begin
           LDotPos := Pos('.', ANode.Text);
           LReceiverName := Copy(ANode.Text, 1, LDotPos - 1);
           LMemberName := Copy(ANode.Text, LDotPos + 1, Length(ANode.Text));
-          LReceiverTypeId := 0;
-          if SameText(LReceiverName, 'Self') and (FCurrentMethodClass <> '') then
-            LReceiverTypeId := FModel.FindTypeByName(FCurrentMethodClass)
-          else
-          begin
-            SymId := FModel.LookupSymbol(LReceiverName, FCurrentScopeId);
-            if SymId > 0 then
-            begin
-              Sym := FModel.SymbolAt(SymId - 1);
-              LReceiverTypeId := Sym.TypeId;
-            end;
-          end;
+          LReceiverTypeId := TypeIdForMemberReceiver(
+            LReceiverName,
+            FCurrentMethodClass,
+            FCurrentProcessingUnitId
+          );
           if LReceiverTypeId > 0 then
           begin
+            if SameText(LMemberName, 'Create') or
+              SameText(LMemberName, 'CreateFmt') or
+              SameText(LMemberName, 'CreateRes') then
+              Exit(LReceiverTypeId);
             LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
             LQualifiedName := LTypeName + '.' + LMemberName;
             for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
@@ -747,6 +744,10 @@ begin
           LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
         if LTypeName <> '' then
         begin
+          if SameText(ANode.ChildAt(1).Text, 'Create') or
+            SameText(ANode.ChildAt(1).Text, 'CreateFmt') or
+            SameText(ANode.ChildAt(1).Text, 'CreateRes') then
+            Exit(LReceiverTypeId);
           if FModel.GetFieldMetaByName(LReceiverTypeId, ANode.ChildAt(1).Text,
             LFieldMeta) then
             Result := LFieldMeta.TypeId
@@ -863,4 +864,3 @@ begin
   Ctx.BuiltinRegistry := FBuiltinRegistry;
   Result := np_sema_overload.AreTypesCompatible(Ctx, ALhsTypeId, ARhsTypeId);
 end;
-
