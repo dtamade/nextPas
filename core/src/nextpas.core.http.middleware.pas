@@ -8,7 +8,8 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.sync.intf,
-  nextpas.core.sync.spinlock;
+  nextpas.core.sync.spinlock,
+  nextpas.core.thread.intf;
 
 type
   { Function type for creating middleware from a closure }
@@ -72,6 +73,14 @@ function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpM
 function WhenMiddleware(
   const APredicate: TRequestPredicate;
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
+
+{** @desc Async middleware: dispatches handler execution to a thread pool.
+   Each request is submitted to APool, freeing the acceptor thread.
+   The handler runs on a pool thread and writes the response directly.
+
+   Example:
+     Server.Use(AsyncMiddleware(MyThreadPool)); }
+function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware;
 
 implementation
 
@@ -234,6 +243,22 @@ begin
         LWrapped.ServeHTTP(AReq, AW)
       else
         ANext.ServeHTTP(AReq, AW);
+    end);
+  end);
+end;
+
+function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware;
+begin
+  if APool = nil then
+    raise EHttpError.Create('HTTP async middleware thread pool must not be nil');
+  Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+  begin
+    Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      APool.Submit(procedure
+      begin
+        ANext.ServeHTTP(AReq, AW);
+      end);
     end);
   end);
 end;

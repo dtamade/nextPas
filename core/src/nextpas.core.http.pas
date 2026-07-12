@@ -11,6 +11,7 @@ interface
 uses
   nextpas.core.base,
   nextpas.core.io.intf,
+  nextpas.core.thread.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
@@ -297,6 +298,8 @@ function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpM
 function WhenMiddleware(
   const APredicate: TRequestPredicate;
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
+{** @desc Async middleware — dispatches handler execution to a thread pool. }
+function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware; inline;
 {** @desc Health check middleware at /healthz — returns 200 OK with {"status":"ok"}. }
 function HealthCheckMiddleware: IHttpMiddleware; inline;
 {** @desc Health check middleware at custom path — returns 200 OK with {"status":"ok"}. }
@@ -836,6 +839,11 @@ function WhenMiddleware(
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.WhenMiddleware(APredicate, AMiddleware);
+end;
+
+function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.AsyncMiddleware(APool);
 end;
 
 function HealthCheckMiddleware: IHttpMiddleware;
