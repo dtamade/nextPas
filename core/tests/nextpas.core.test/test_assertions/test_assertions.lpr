@@ -1210,6 +1210,29 @@ begin
   end, 'my string array');
 end;
 
+{ ── Multi-diff reporting ───────────────────────────────────────────────────── }
+
+procedure TestCheckArrayEqualMultiDiff;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual([1, 2, 3, 4, 5], [1, 99, 3, 88, 5]);
+  end, '2 of 5 positions');
+end;
+
+procedure TestCheckArrayEqualMultiDiffAllDiffer;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual([1, 2, 3], [10, 20, 30]);
+  end, '3 of 3 positions');
+end;
+
+procedure TestCheckArrayEqualStringMultiDiff;
+begin
+  ExpectFail(procedure begin
+    CheckArrayEqual(['a', 'b', 'c', 'd'], ['a', 'X', 'c', 'Y']);
+  end, '2 of 4 positions');
+end;
+
 { ── R60: CheckArrayContains/NotContains for TBytes ───────────────────────── }
 
 procedure TestCheckArrayContainsBytePass;
@@ -1532,6 +1555,9 @@ begin
   LSuite.Test('ArrayEqual string fail val',@TestCheckArrayEqualStringFailValue);
   LSuite.Test('ArrayEqual string empty',   @TestCheckArrayEqualStringEmpty);
   LSuite.Test('ArrayEqual string+msg',     @TestCheckArrayEqualStringWithMessage);
+  LSuite.Test('ArrayEqual multi-diff',     @TestCheckArrayEqualMultiDiff);
+  LSuite.Test('ArrayEqual multi-diff all', @TestCheckArrayEqualMultiDiffAllDiffer);
+  LSuite.Test('ArrayEqual string multi',   @TestCheckArrayEqualStringMultiDiff);
 
   { v8.0c: Interface nil checks }
   LSuite.Test('IsNil pass',               @TestCheckIsNilPass);

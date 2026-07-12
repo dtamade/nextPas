@@ -1225,6 +1225,22 @@ begin
   ExpectArrayOfStr(['a','b']).Not_.ToEqualStrArray(['a','b','c']);
 end;
 
+{ ── Multi-diff reporting ───────────────────────────────────────────────────── }
+
+procedure TestToEqualIntArrayMultiDiff;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfInt([1, 2, 3, 4, 5]).ToEqualIntArray([1, 99, 3, 88, 5]);
+  end, '2 of 5 positions');
+end;
+
+procedure TestToEqualStrArrayMultiDiff;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfStr(['a', 'b', 'c', 'd']).ToEqualStrArray(['a', 'X', 'c', 'Y']);
+  end, '2 of 4 positions');
+end;
+
 procedure TestToContainIntPass;
 begin
   ExpectArrayOfInt([1,2,3]).ToContainInt(2);
@@ -1508,9 +1524,11 @@ begin
   LSuite.Test('ToEqualIntArray fail',      @TestToEqualIntArrayFail);
   LSuite.Test('ToEqualIntArray diff len',  @TestToEqualIntArrayDiffLen);
   LSuite.Test('Not_.ToEqualIntArray',      @TestToEqualIntArrayNot);
+  LSuite.Test('ToEqualIntArray multi-diff',@TestToEqualIntArrayMultiDiff);
   LSuite.Test('ToEqualStrArray pass',      @TestToEqualStrArrayPass);
   LSuite.Test('ToEqualStrArray fail',      @TestToEqualStrArrayFail);
   LSuite.Test('Not_.ToEqualStrArray',      @TestToEqualStrArrayNot);
+  LSuite.Test('ToEqualStrArray multi-diff',@TestToEqualStrArrayMultiDiff);
   LSuite.Test('ToContainInt pass',         @TestToContainIntPass);
   LSuite.Test('ToContainInt fail',         @TestToContainIntFail);
   LSuite.Test('Not_.ToContainInt',         @TestToContainIntNot);

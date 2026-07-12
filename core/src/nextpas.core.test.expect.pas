@@ -1085,9 +1085,11 @@ begin
 end;
 
 function TExpectation.ToEqualIntArray(const AExpected: array of Int64): IExpectation;
+const
+  MAX_DIFFS = 10;
 var
-  I, LMin, LDiffIdx: Integer;
-  LMsg: string;
+  I, LMin, LDiffCount: Integer;
+  LMsg, LDiffs: string;
 begin
   RequireKind(ekIntArray, 'ToEqualIntArray');
   if Length(FIntArrayValue) <> Length(AExpected) then
@@ -1099,19 +1101,29 @@ begin
     Exit;
   end;
   LMin := Length(AExpected);
-  LDiffIdx := -1;
+  LDiffCount := 0;
+  LDiffs := '';
   for I := 0 to LMin - 1 do
+  begin
     if FIntArrayValue[I] <> AExpected[I] then
     begin
-      LDiffIdx := I;
-      Break;
+      Inc(LDiffCount);
+      if LDiffCount <= MAX_DIFFS then
+      begin
+        if LDiffs <> '' then LDiffs := LDiffs + #10;
+        LDiffs := LDiffs + '  [' + IntToStr(I) + '] expected ' +
+          IntToStr(AExpected[I]) + ' but got ' + IntToStr(FIntArrayValue[I]);
+      end;
     end;
-  if LDiffIdx >= 0 then
+  end;
+  if LDiffCount > 0 then
   begin
-    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) +
-      ': expected ' + IntToStr(AExpected[LDiffIdx]) +
-      ' but got ' + IntToStr(FIntArrayValue[LDiffIdx]);
-    CheckMatch(False, 'Expected arrays to be equal but ' + LMsg, LMsg);
+    LMsg := 'Arrays differ at ' + IntToStr(LDiffCount) + ' of ' +
+      IntToStr(LMin) + ' positions:';
+    if LDiffCount > MAX_DIFFS then
+      LMsg := LMsg + ' (showing first ' + IntToStr(MAX_DIFFS) + ')';
+    LMsg := LMsg + #10 + LDiffs;
+    CheckMatch(False, LMsg, LMsg);
   end
   else
     CheckMatch(True,
@@ -1121,9 +1133,11 @@ begin
 end;
 
 function TExpectation.ToEqualStrArray(const AExpected: array of string): IExpectation;
+const
+  MAX_DIFFS = 10;
 var
-  I, LMin, LDiffIdx: Integer;
-  LMsg: string;
+  I, LMin, LDiffCount: Integer;
+  LMsg, LDiffs: string;
 begin
   RequireKind(ekStrArray, 'ToEqualStrArray');
   if Length(FStrArrayValue) <> Length(AExpected) then
@@ -1135,19 +1149,29 @@ begin
     Exit;
   end;
   LMin := Length(AExpected);
-  LDiffIdx := -1;
+  LDiffCount := 0;
+  LDiffs := '';
   for I := 0 to LMin - 1 do
+  begin
     if FStrArrayValue[I] <> AExpected[I] then
     begin
-      LDiffIdx := I;
-      Break;
+      Inc(LDiffCount);
+      if LDiffCount <= MAX_DIFFS then
+      begin
+        if LDiffs <> '' then LDiffs := LDiffs + #10;
+        LDiffs := LDiffs + '  [' + IntToStr(I) + '] expected "' +
+          AExpected[I] + '" but got "' + FStrArrayValue[I] + '"';
+      end;
     end;
-  if LDiffIdx >= 0 then
+  end;
+  if LDiffCount > 0 then
   begin
-    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) + ':' +
-      #10'  expected: "' + AExpected[LDiffIdx] + '"' +
-      #10'    actual: "' + FStrArrayValue[LDiffIdx] + '"';
-    CheckMatch(False, 'Expected arrays to be equal but ' + LMsg, LMsg);
+    LMsg := 'Arrays differ at ' + IntToStr(LDiffCount) + ' of ' +
+      IntToStr(LMin) + ' positions:';
+    if LDiffCount > MAX_DIFFS then
+      LMsg := LMsg + ' (showing first ' + IntToStr(MAX_DIFFS) + ')';
+    LMsg := LMsg + #10 + LDiffs;
+    CheckMatch(False, LMsg, LMsg);
   end
   else
     CheckMatch(True,
