@@ -152,6 +152,13 @@ type
     procedure Options(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Connect(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Trace(const APattern: string; const AHandler: THttpHandlerFunc);
+    { Regex routes — secondary table, consulted when radix tree misses }
+    procedure HandleRegex(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure GetRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure PostRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure PutRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure DeleteRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure PatchRegex(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Use(const AMiddleware: IHttpMiddleware);
   end;
 

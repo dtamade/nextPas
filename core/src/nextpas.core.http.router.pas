@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.http.base,
-  nextpas.core.http.intf;
+  nextpas.core.http.intf,
+  nextpas.core.regex;
 
 type
   TRouteParam = record
@@ -28,8 +29,14 @@ type
         Handler: THttpHandlerFunc;
         HasHandler: Boolean;
       end;
+      TRegexRouteEntry = record
+        Pattern: string;
+        Regex: TRegex;
+        Handler: THttpHandlerFunc;
+      end;
     var
       FTrees: array[THttpMethod] of PRouteNode;
+      FRegexRoutes: array[THttpMethod] of array of TRegexRouteEntry;
       FMiddlewares: array of IHttpMiddleware;
     function NewNode(const APrefix: string; const AKind: TNodeKind): PRouteNode;
     procedure FreeNode(ANode: PRouteNode);
@@ -40,6 +47,7 @@ type
     destructor Destroy; override;
     { IHttpRouter }
     procedure Handle(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure HandleRegex(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Use(const AMiddleware: IHttpMiddleware);
     { IHttpHandler }
     procedure ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
@@ -53,6 +61,12 @@ type
     procedure Options(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Connect(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Trace(const APattern: string; const AHandler: THttpHandlerFunc);
+    { Regex route convenience }
+    procedure GetRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure PostRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure PutRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure DeleteRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure PatchRegex(const APattern: string; const AHandler: THttpHandlerFunc);
     { Test helper — public route lookup }
     function FindRoute(const AMethod: THttpMethod; const APath: string; out AParams: TRouteParams): THttpHandlerFunc;
   end;
@@ -140,11 +154,15 @@ end;
 destructor THttpRouter.Destroy;
 var
   LM: THttpMethod;
+  LI: SizeInt;
 begin
   for LM := Low(THttpMethod) to High(THttpMethod) do
   begin
     FreeNode(FTrees[LM]);
     FTrees[LM] := nil;
+    for LI := 0 to High(FRegexRoutes[LM]) do
+      FRegexRoutes[LM][LI].Regex.Free;
+    SetLength(FRegexRoutes[LM], 0);
   end;
   inherited Destroy;
 end;
@@ -432,6 +450,27 @@ begin
   InsertRoute(FTrees[AMethod], APattern, AHandler);
 end;
 
+procedure THttpRouter.HandleRegex(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
+var
+  LLen: SizeInt;
+  LEntry: TRegexRouteEntry;
+  LError: string;
+begin
+  if not Assigned(AHandler) then
+    raise EHttpError.Create('Route handler must not be nil');
+  if APattern = '' then
+    raise EHttpError.Create('Route pattern must not be empty');
+  if (Length(APattern) < 1) or (APattern[1] <> '/') then
+    raise EHttpError.Create('Route pattern must start with /');
+  if not TRegex.TryCompile(APattern, LEntry.Regex, LError) then
+    raise EHttpError.Create('Invalid regex route pattern: ' + LError);
+  LEntry.Pattern := APattern;
+  LEntry.Handler := AHandler;
+  LLen := Length(FRegexRoutes[AMethod]);
+  SetLength(FRegexRoutes[AMethod], LLen + 1);
+  FRegexRoutes[AMethod][LLen] := LEntry;
+end;
+
 procedure THttpRouter.Use(const AMiddleware: IHttpMiddleware);
 begin
   if AMiddleware = nil then
@@ -478,12 +517,30 @@ var
     LAllow := LAllow + HttpMethodToStr(AMethod);
   end;
 
+  function MatchRegexRoute(AMethod: THttpMethod): THttpHandlerFunc;
+  var
+    LI: SizeInt;
+  begin
+    Result := nil;
+    for LI := 0 to High(FRegexRoutes[AMethod]) do
+    begin
+      if FRegexRoutes[AMethod][LI].Regex.IsMatch(LPath) then
+        Exit(FRegexRoutes[AMethod][LI].Handler);
+    end;
+  end;
+
   function HasRouteFor(const AMethod: THttpMethod): Boolean;
   var
     LRouteParams: TRouteParams;
+    LI: SizeInt;
   begin
     LRouteParams := nil;
-    Result := MatchNode(FTrees[AMethod], LPath, LRouteParams) <> nil;
+    if MatchNode(FTrees[AMethod], LPath, LRouteParams) <> nil then
+      Exit(True);
+    for LI := 0 to High(FRegexRoutes[AMethod]) do
+      if FRegexRoutes[AMethod][LI].Regex.IsMatch(LPath) then
+        Exit(True);
+    Result := False;
   end;
 begin
   LMethod := AReq.Method;
@@ -496,10 +553,24 @@ begin
     Exit;
   end;
 
+  { Check regex routes for primary method }
+  LHandler := MatchRegexRoute(LMethod);
+  if LHandler <> nil then
+  begin
+    InvokeHandler(LHandler, LParams);
+    Exit;
+  end;
+
   if LMethod = hmHead then
   begin
     LParams := nil;
     LHandler := MatchNode(FTrees[hmGet], LPath, LParams);
+    if LHandler <> nil then
+    begin
+      InvokeHandler(LHandler, LParams);
+      Exit;
+    end;
+    LHandler := MatchRegexRoute(hmGet);
     if LHandler <> nil then
     begin
       InvokeHandler(LHandler, LParams);
@@ -576,6 +647,31 @@ end;
 procedure THttpRouter.Trace(const APattern: string; const AHandler: THttpHandlerFunc);
 begin
   Handle(hmTrace, APattern, AHandler);
+end;
+
+procedure THttpRouter.GetRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+begin
+  HandleRegex(hmGet, APattern, AHandler);
+end;
+
+procedure THttpRouter.PostRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+begin
+  HandleRegex(hmPost, APattern, AHandler);
+end;
+
+procedure THttpRouter.PutRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+begin
+  HandleRegex(hmPut, APattern, AHandler);
+end;
+
+procedure THttpRouter.DeleteRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+begin
+  HandleRegex(hmDelete, APattern, AHandler);
+end;
+
+procedure THttpRouter.PatchRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+begin
+  HandleRegex(hmPatch, APattern, AHandler);
 end;
 
 function THttpRouter.FindRoute(const AMethod: THttpMethod; const APath: string; out AParams: TRouteParams): THttpHandlerFunc;
