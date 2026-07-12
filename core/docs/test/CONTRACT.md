@@ -280,7 +280,25 @@ end;
 
 ---
 
-## 8. 测试覆盖
+## 8. 浮点比较速查表
+
+| 场景 | Check API | Expect API | 说明 |
+|------|-----------|------------|------|
+| 小值精确比较 | `CheckEqual(a, b)` | `ToEqualD(a)` | 默认 ε=1e-10 |
+| 大值比较 (1e15+) | `CheckNearRel(a, b)` | `ToBeNearRel(a)` | 相对容差 |
+| 自定义容差 | `CheckNear(a, b, eps)` | `ToBeNear(a, eps)` | 绝对容差 |
+| NaN 检查 | `CheckNaN(v)` / `CheckNotNaN(v)` | `ToBeNaN` / `ToBeNotNaN` | |
+| Infinity 检查 | `CheckInf(v)` / `CheckNotInf(v)` | — | Expect API 待补 |
+| 有限性检查 | `CheckFinite(v)` | — | Expect API 待补 |
+| 范围检查 | `CheckInRangeD(v, lo, hi)` | `ToBeInRangeD(lo, hi)` | |
+
+**⚠️ 常见陷阱**：
+- `CheckEqual(1e15, 1e15 + 1)` 默认会失败！用 `CheckNearRel` 或增大 epsilon
+- `ToBeOneOf([])` 空数组始终失败——值不可能是空集的成员
+
+---
+
+## 10. 测试覆盖
 
 | 套件 | 测试过程 | 断言数 | 覆盖范围 |
 |------|---------|--------|----------|
@@ -305,7 +323,7 @@ end;
 > 但 FPC 的隐式析构在 heaptrc DumpHeap 之后执行。`Default()` 提前归零不能减少计数，
 > 因为问题不在外层变量而在动态数组元素内部的编译器托管副本。这些不是真实泄漏。
 
-## 9. 变更日志
+## 11. 变更日志
 
 ### v8.4 (2026-07-11) — M4 heaptrc 时序调查 + 文档更新
 

@@ -63,7 +63,11 @@ type
     function ToBeSame(const AExpected: Pointer): IExpectation;
     { Pointer equality: same address (alias for ToBeSame). }
     function ToEqualPointer(const AExpected: Pointer): IExpectation;
-    { Double equality within epsilon (like CheckEqual(Double)). }
+    { Double equality within epsilon (like CheckEqual(Double)).
+      Uses absolute epsilon: |a-b| <= AEpsilon.
+      Default epsilon 1e-10 is suitable for small-to-moderate values.
+      For large values (e.g. 1e15+), absolute epsilon is too tight —
+      use ToBeNearRel for relative tolerance instead. }
     function ToEqualD(const AExpected: Double;
       const AEpsilon: Double = 1e-10): IExpectation;
     { Relative tolerance: |a-b| <= ARelEps * max(|a|, |b|).
@@ -94,7 +98,8 @@ type
     { Sorted check: works for int arrays and string arrays.
       ToBeSorted passes when elements are in non-decreasing order. }
     function ToBeSorted: IExpectation;
-    { Set membership: value must be one of the given values. }
+    { Set membership: value must be one of the given values.
+      Empty array always fails — value cannot be "one of" an empty set. }
     function ToBeOneOf(const AValues: array of string): IExpectation;
     function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
     function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
