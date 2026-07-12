@@ -7,7 +7,9 @@ uses
   nextpas.core.base.utils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
+  nextpas.core.tui.modifier,
   nextpas.core.tui.style,
+  nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.breadcrumb,
   nextpas.core.test;
@@ -40,8 +42,10 @@ begin
   LCrumb := TBreadcrumb.New(['A', 'B', 'C']).WithSeparator(' > ');
   LArea := TRect.Make(0, 0, 30, 1);
   LBuf := TBuffer.CreateEmpty(LArea);
-  LCrumb.Render(LArea, LBuf);
-  Check(True, 'Should render with custom separator');
+  try
+    LCrumb.Render(LArea, LBuf);
+    Check(True, 'Should render with custom separator');
+  finally LBuf.Free; end;
 end;
 
 procedure TestBreadcrumbWithStyle;
@@ -90,9 +94,10 @@ var
 begin
   LCrumb := TBreadcrumb.New(['Home', 'Documents', 'Project']);
   LArea := TRect.Make(0, 0, 40, 1); LBuf := TBuffer.CreateEmpty(LArea);
-  LArea := TRect.Make(0, 0, 40, 1);
-  LCrumb.Render(LArea, LBuf);
-  Check(True, 'Should render breadcrumb');
+  try
+    LCrumb.Render(LArea, LBuf);
+    Check(True, 'Should render breadcrumb');
+  finally LBuf.Free; end;
 end;
 
 procedure TestBreadcrumbRenderEmpty;
@@ -103,9 +108,10 @@ var
 begin
   LCrumb := TBreadcrumb.New([]);
   LArea := TRect.Make(0, 0, 20, 1); LBuf := TBuffer.CreateEmpty(LArea);
-  LArea := TRect.Make(0, 0, 20, 1);
-  LCrumb.Render(LArea, LBuf);
-  Check(True, 'Should render empty breadcrumb');
+  try
+    LCrumb.Render(LArea, LBuf);
+    Check(True, 'Should render empty breadcrumb');
+  finally LBuf.Free; end;
 end;
 
 procedure TestBreadcrumbTotalWidth;
@@ -133,6 +139,113 @@ begin
   Check(LCrumb <> nil, 'Should chain builder calls');
 end;
 
+{ === New tests === }
+
+procedure TestBreadcrumbContentVisible;
+var
+  LCrumb: IBreadcrumb;
+  LBuf: TBuffer;
+  LArea: TRect;
+  LRow: AnsiString;
+begin
+  LCrumb := TBreadcrumb.New(['Home', 'Docs']);
+  LArea := TRect.Make(0, 0, 30, 1); LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LCrumb.Render(LArea, LBuf);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('Home', LRow) > 0, 'Home visible');
+    Check(Pos('Docs', LRow) > 0, 'Docs visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestBreadcrumbSeparatorVisible;
+var
+  LCrumb: IBreadcrumb;
+  LBuf: TBuffer;
+  LArea: TRect;
+  LRow: AnsiString;
+begin
+  LCrumb := TBreadcrumb.New(['A', 'B']).WithSeparator(' | ');
+  LArea := TRect.Make(0, 0, 20, 1); LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LCrumb.Render(LArea, LBuf);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('|', LRow) > 0, 'separator visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestBreadcrumbActiveStyleApplied;
+var
+  LCrumb: IBreadcrumb;
+  LBuf: TBuffer;
+  LArea: TRect;
+  LCell: PCell;
+begin
+  LCrumb := TBreadcrumb.New(['A', 'B']).WithActive(1)
+    .WithActiveStyle(TStyle.Default.WithFg(TUI_RED));
+  LArea := TRect.Make(0, 0, 20, 1); LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LCrumb.Render(LArea, LBuf);
+    { 'B' starts at position2 (after 'A' + ' > ') }
+    LCell := LBuf.CellAt(4, 0);
+    if LCell <> nil then
+      Check(ColorEquals(TUI_RED, LCell^.Fg), 'active style applied');
+  finally LBuf.Free; end;
+end;
+
+procedure TestBreadcrumbWideClips;
+var
+  LCrumb: IBreadcrumb;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LCrumb := TBreadcrumb.New(['VeryLongName', 'AnotherLongName']);
+  LArea := TRect.Make(0, 0, 5, 1); LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LCrumb.Render(LArea, LBuf);
+    Check(True, 'wide content clips');
+  finally LBuf.Free; end;
+end;
+
+procedure TestBreadcrumbEmptyArea;
+var
+  LCrumb: IBreadcrumb;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LCrumb := TBreadcrumb.New(['A', 'B']);
+  LArea := TRect.Make(0, 0, 0, 0); LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LCrumb.Render(LArea, LBuf);
+    Check(True, 'empty area no crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestBreadcrumbSingleItem;
+var
+  LCrumb: IBreadcrumb;
+  LBuf: TBuffer;
+  LArea: TRect;
+  LRow: AnsiString;
+begin
+  LCrumb := TBreadcrumb.New(['Only']);
+  LArea := TRect.Make(0, 0, 20, 1); LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LCrumb.Render(LArea, LBuf);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('Only', LRow) > 0, 'single item visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestBreadcrumbTotalWidthCalc;
+var
+  LCrumb: IBreadcrumb;
+begin
+  LCrumb := TBreadcrumb.New(['AB', 'CD']).WithSeparator(' > ');
+  { AB(2) + ' > '(3) + CD(2) =7 }
+  CheckEqual(Int64(7), Int64(LCrumb.TotalWidth), 'total width calc');
+end;
+
 begin
   T := TTestSuite.Create('tui_widget_breadcrumb');
   T.Test('TBreadcrumb.New creates instance', @TestBreadcrumbNew);
@@ -146,5 +259,12 @@ begin
   T.Test('TBreadcrumb.Render with empty items', @TestBreadcrumbRenderEmpty);
   T.Test('TBreadcrumb.TotalWidth', @TestBreadcrumbTotalWidth);
   T.Test('TBreadcrumb builder chaining', @TestBreadcrumbBuilderChaining);
+  T.Test('Content visible', @TestBreadcrumbContentVisible);
+  T.Test('Separator visible', @TestBreadcrumbSeparatorVisible);
+  T.Test('Active style applied', @TestBreadcrumbActiveStyleApplied);
+  T.Test('Wide content clips', @TestBreadcrumbWideClips);
+  T.Test('Empty area', @TestBreadcrumbEmptyArea);
+  T.Test('Single item', @TestBreadcrumbSingleItem);
+  T.Test('Total width calc', @TestBreadcrumbTotalWidthCalc);
   if not T.Run then Halt(1);
 end.
