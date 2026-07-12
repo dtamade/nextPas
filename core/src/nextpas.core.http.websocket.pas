@@ -40,7 +40,7 @@ type
   TWebSocketFrame = record
     Fin: Boolean;
     Opcode: TWebSocketOpcode;
-    Payload: string;
+    Payload: TBytes;
   end;
 
   IWebSocket = interface
@@ -52,9 +52,9 @@ type
       Raises EHttpError on protocol errors or connection close. }
     function ReadMessage: TWebSocketFrame;
     procedure WriteText(const AData: string);
-    procedure WriteBinary(const AData: string);
-    procedure Ping(const AData: string);
-    procedure Pong(const AData: string);
+    procedure WriteBinary(const AData: TBytes);
+    procedure Ping(const AData: TBytes);
+    procedure Pong(const AData: TBytes);
     procedure Close(const ACode: UInt16; const AReason: string);
     function IsOpen: Boolean;
   end;
@@ -101,6 +101,7 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.io.util,
+  nextpas.core.bytes,
   nextpas.core.http.url,
   nextpas.core.http.headers,
   nextpas.core.http.message,
@@ -119,11 +120,11 @@ type
     FFragmentOpen: Boolean;
     FFragmentOpcode: TWebSocketOpcode;
     FFragmentPayloadSize: UInt64;
-    FFragmentTextPayload: string;
+    FFragmentBinaryPayload: TBytes;
     FOptions: TWebSocketOptions;
     FIsClient: Boolean;
-    procedure WriteFrame(AOpcode: TWebSocketOpcode; const APayload: string);
-    procedure WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: string);
+    procedure WriteFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes);
+    procedure WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: TBytes);
     procedure ReadExact(var ABuf; ACount: SizeUInt);
   public
     constructor Create(const AReader: IReader; const AWriter: IWriter;
@@ -131,14 +132,34 @@ type
     function ReadFrame: TWebSocketFrame;
     function ReadMessage: TWebSocketFrame;
     procedure WriteText(const AData: string);
-    procedure WriteBinary(const AData: string);
-    procedure Ping(const AData: string);
-    procedure Pong(const AData: string);
+    procedure WriteBinary(const AData: TBytes);
+    procedure Ping(const AData: TBytes);
+    procedure Pong(const AData: TBytes);
     procedure Close(const ACode: UInt16; const AReason: string);
     function IsOpen: Boolean;
   end;
 
 { Helpers }
+
+function StringToBytes(const AValue: string): TBytes;
+var
+  LLen: SizeInt;
+begin
+  LLen := Length(AValue);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(AValue[1], Result[0], LLen);
+end;
+
+function BytesToString(const AValue: TBytes): string;
+var
+  LLen: SizeInt;
+begin
+  LLen := Length(AValue);
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(AValue[0], Result[1], LLen);
+end;
 
 class function TWebSocketOptions.Default: TWebSocketOptions;
 begin
@@ -267,7 +288,7 @@ begin
     (ACode <> 1015);
 end;
 
-procedure ValidateClosePayload(const APayload: string);
+procedure ValidateClosePayload(const APayload: TBytes);
 var
   LCode: UInt16;
 begin
@@ -276,11 +297,11 @@ begin
   if Length(APayload) = 1 then
     raise EHttpError.Create('WebSocket: invalid close frame payload');
 
-  LCode := (UInt16(Ord(APayload[1])) shl 8) or UInt16(Ord(APayload[2]));
+  LCode := (UInt16(APayload[0]) shl 8) or UInt16(APayload[1]);
   if not IsValidCloseCode(LCode) then
     raise EHttpError.Create('WebSocket: invalid close code');
   if (Length(APayload) > 2) and
-     (not UTF8IsValid(PByte(@APayload[3]), SizeUInt(Length(APayload) - 2))) then
+     (not UTF8IsValid(@APayload[2], SizeUInt(Length(APayload) - 2))) then
     raise EHttpError.Create('WebSocket: invalid close reason encoding');
 end;
 
@@ -309,7 +330,7 @@ begin
   Result := False;
 end;
 
-procedure ValidateControlPayloadSize(const APayload: string);
+procedure ValidateControlPayloadSize(const APayload: TBytes);
 begin
   if Length(APayload) > 125 then
     raise EHttpError.Create('WebSocket: control frame payload too large');
@@ -419,7 +440,7 @@ begin
   FFragmentOpen := False;
   FFragmentOpcode := wsOpContinuation;
   FFragmentPayloadSize := 0;
-  FFragmentTextPayload := '';
+  FFragmentBinaryPayload := nil;
 end;
 
 procedure TWebSocketImpl.ReadExact(var ABuf; ACount: SizeUInt);
@@ -446,7 +467,7 @@ var
   LMaskKey: array[0..3] of Byte;
   LMasked: Boolean;
   LOpcode: Byte;
-  LBuf: string;
+  LBuf: TBytes;
   I: SizeUInt;
 begin
   Result := Default(TWebSocketFrame);
@@ -523,13 +544,13 @@ begin
   if LMasked then
     ReadExact(LMaskKey[0], 4);
 
-  SetLength(LBuf, LPayloadLen);
+  SetLength(LBuf, SizeUInt(LPayloadLen));
   if LPayloadLen > 0 then
   begin
-    ReadExact(LBuf[1], SizeUInt(LPayloadLen));
+    ReadExact(LBuf[0], SizeUInt(LPayloadLen));
     if LMasked then
       for I := 0 to SizeUInt(LPayloadLen) - 1 do
-        LBuf[I + 1] := Chr(Ord(LBuf[I + 1]) xor LMaskKey[I mod 4]);
+        LBuf[I] := LBuf[I] xor LMaskKey[I mod 4];
   end;
 
   Result.Payload := LBuf;
@@ -544,16 +565,20 @@ begin
   begin
     if FFragmentOpcode = wsOpText then
     begin
-      FFragmentTextPayload := FFragmentTextPayload + Result.Payload;
+      FFragmentBinaryPayload := BytesConcat(FFragmentBinaryPayload, Result.Payload);
       if Result.Fin then
-        ValidateTextPayload(FFragmentTextPayload);
-    end;
+        ValidateTextPayload(BytesToString(FFragmentBinaryPayload));
+    end
+    else
+      FFragmentBinaryPayload := BytesConcat(FFragmentBinaryPayload, Result.Payload);
     if Result.Fin then
     begin
+      if FFragmentOpcode = wsOpText then
+        Result.Payload := FFragmentBinaryPayload;
       FFragmentOpen := False;
       FFragmentOpcode := wsOpContinuation;
       FFragmentPayloadSize := 0;
-      FFragmentTextPayload := '';
+      FFragmentBinaryPayload := nil;
     end
     else
       Inc(FFragmentPayloadSize, LPayloadLen);
@@ -563,17 +588,14 @@ begin
     if Result.Fin then
     begin
       if Result.Opcode = wsOpText then
-        ValidateTextPayload(Result.Payload);
+        ValidateTextPayload(BytesToString(Result.Payload));
     end
     else
     begin
       FFragmentOpen := True;
       FFragmentOpcode := Result.Opcode;
       FFragmentPayloadSize := LPayloadLen;
-      if Result.Opcode = wsOpText then
-        FFragmentTextPayload := Result.Payload
-      else
-        FFragmentTextPayload := '';
+      FFragmentBinaryPayload := Result.Payload;
     end;
   end;
 end;
@@ -581,7 +603,7 @@ end;
 function TWebSocketImpl.ReadMessage: TWebSocketFrame;
 var
   LFrame: TWebSocketFrame;
-  LPayload: string;
+  LPayload: TBytes;
   LMessageOpcode: TWebSocketOpcode;
 begin
   { Read frames until we get a complete data message }
@@ -639,7 +661,7 @@ begin
             end;
             if LFrame.Opcode <> wsOpContinuation then
               raise EHttpError.Create('WebSocket: expected continuation frame');
-            LPayload := LPayload + LFrame.Payload;
+            LPayload := BytesConcat(LPayload, LFrame.Payload);
             if LFrame.Fin then
             begin
               Result.Opcode := LMessageOpcode;
@@ -657,7 +679,7 @@ begin
   end;
 end;
 
-procedure TWebSocketImpl.WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: string);
+procedure TWebSocketImpl.WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: TBytes);
 var
   LHdr: array[0..9] of Byte;
   LHdrLen: Integer;
@@ -727,7 +749,7 @@ begin
     if LPayloadLen > 0 then
     begin
       for J := 0 to LPayloadLen - 1 do
-        LBuf[I + J] := Byte(Ord(APayload[J + 1]) xor LMaskKey[J mod 4]);
+        LBuf[I + J] := APayload[J] xor LMaskKey[J mod 4];
     end;
     IoWriteAll(FWriter, LBuf[0], LBufLen);
   end
@@ -764,12 +786,12 @@ begin
     SetLength(LBuf, LBufLen);
     Move(LHdr[0], LBuf[0], SizeUInt(LHdrLen));
     if LPayloadLen > 0 then
-      Move(APayload[1], LBuf[LHdrLen], LPayloadLen);
+      Move(APayload[0], LBuf[LHdrLen], LPayloadLen);
     IoWriteAll(FWriter, LBuf[0], LBufLen);
   end;
 end;
 
-procedure TWebSocketImpl.WriteFrame(AOpcode: TWebSocketOpcode; const APayload: string);
+procedure TWebSocketImpl.WriteFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes);
 begin
   if not IsOpen then
     raise EHttpError.Create('WebSocket: connection closed');
@@ -781,35 +803,37 @@ end;
 procedure TWebSocketImpl.WriteText(const AData: string);
 begin
   ValidateTextPayload(AData);
-  WriteFrame(wsOpText, AData);
+  WriteFrame(wsOpText, StringToBytes(AData));
 end;
 
-procedure TWebSocketImpl.WriteBinary(const AData: string);
+procedure TWebSocketImpl.WriteBinary(const AData: TBytes);
 begin
   WriteFrame(wsOpBinary, AData);
 end;
 
-procedure TWebSocketImpl.Ping(const AData: string);
+procedure TWebSocketImpl.Ping(const AData: TBytes);
 begin
   WriteFrame(wsOpPing, AData);
 end;
 
-procedure TWebSocketImpl.Pong(const AData: string);
+procedure TWebSocketImpl.Pong(const AData: TBytes);
 begin
   WriteFrame(wsOpPong, AData);
 end;
 
 procedure TWebSocketImpl.Close(const ACode: UInt16; const AReason: string);
 var
-  LPayload: string;
+  LPayload: TBytes;
+  LReasonBytes: TBytes;
 begin
   if FCloseSent then
     Exit; { Already sent close }
-  SetLength(LPayload, 2 + Length(AReason));
-  LPayload[1] := Chr(ACode shr 8);
-  LPayload[2] := Chr(ACode and $FF);
-  if Length(AReason) > 0 then
-    Move(AReason[1], LPayload[3], Length(AReason));
+  LReasonBytes := StringToBytes(AReason);
+  SetLength(LPayload, 2 + Length(LReasonBytes));
+  LPayload[0] := Byte(ACode shr 8);
+  LPayload[1] := Byte(ACode and $FF);
+  if Length(LReasonBytes) > 0 then
+    Move(LReasonBytes[0], LPayload[2], Length(LReasonBytes));
   ValidateControlPayloadSize(LPayload);
   ValidateClosePayload(LPayload);
   FCloseSent := True;
