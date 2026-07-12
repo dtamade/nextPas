@@ -36,7 +36,14 @@ type
   end;
   PRingNode = ^TRingNode;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 一致性哈希环
+    @details 带虚拟节点的分布式哈希环。
+      - 环是排序的 (hash, node-name) 对数组
+      - 每个物理节点有多个虚拟节点确保均匀分布
+      - 查找使用二分搜索：O(log N)
+      - FNV-1a 哈希用于环位置
+      - 适用场景：分布式缓存、负载均衡、分片
+   * @concurrency Thread-safe (see source for details). }
   TConsistentHashRing = class
   private
     FNodes: array of TRingNode;

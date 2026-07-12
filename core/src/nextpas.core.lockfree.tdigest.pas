@@ -44,7 +44,13 @@ type
     FCount: UInt64;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc T-Digest 流式分位数估计器
+    @details 流式分位数估计。
+      - Add: O(k) — 维护有序质心列表
+      - Quantile: O(k) — 线性扫描
+      - 空间: O(k)
+      - 适用场景：实时分位数计算、监控指标、性能分析
+   * @concurrency Thread-safe (see source for details). }
   TTDigestImpl = class
   private
     FCentroids: array of TCentroid;

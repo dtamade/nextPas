@@ -64,7 +64,16 @@ type
    *   - 最大支持 2^32 个位 (UInt32)
    *   - 单线程写，多线程读安全（不可变容器引用）
    *}
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc Roaring 位图
+    @details 压缩位图，支持 O(1) 位操作。
+      - 高 16 位选择"容器"（最多 65536 个容器）
+      - 每个容器以两种格式存储 16 位值：
+        - 数组容器：排序的 uint16 数组，O(n) 空间，O(log n) 查找
+        - 位图容器：8KB 位图，O(1) 查找，固定空间
+      - 自动提升：数组 → 位图（当计数超过阈值 4096）
+      - 集合操作：AND/OR/XOR 使用容器级合并
+      - 适用场景：位集合、集合运算、稀疏数据表示
+   * @concurrency Thread-safe (see source for details). }
   TRoaringBitmap = class
   private
     FContainers: array[0..RB_MAX_CONTAINERS - 1] of PRBContainer;

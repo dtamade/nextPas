@@ -42,7 +42,15 @@ type
    *   - 线程安全：原子计数器
    *   - 仅删除已成功添加且尚未删除的元素；删除误报键会破坏保证
    *}
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 计数布隆过滤器
+    @details 支持删除的布隆过滤器。
+      - 多个哈希函数，每个映射到计数器数组
+      - Add: 递增所有哈希位置
+      - Remove: 递减所有哈希位置
+      - Contains: 检查所有哈希位置是否 > 0
+      - 可能有假阳性，无假阴性
+      - 适用场景：成员测试、去重、基数估计
+   * @concurrency Thread-safe (see source for details). }
   TCountingBloomFilter = class
   private
     FWidth: Int32;

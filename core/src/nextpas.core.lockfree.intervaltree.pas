@@ -47,7 +47,14 @@ type
 
   TIntervalArray = array of TInterval;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 并发区间树
+    @details 基于增强 BST 的区间重叠查询树。
+      - 每个节点存储区间 [lo, hi] 及子树最大端点
+      - Insert/Remove 使用自旋锁，查询无锁（COW 快照）
+      - FindOverlapping: 返回与点重叠的所有区间
+      - FindRange: 返回与 [lo, hi] 重叠的所有区间
+      - 适用场景：调度、日历、IP 范围查找、基因组区间
+   * @concurrency Thread-safe (see source for details). }
   TIntervalTree = class
   private
     FRoot: PIntervalNode;

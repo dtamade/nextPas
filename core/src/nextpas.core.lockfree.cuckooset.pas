@@ -31,7 +31,14 @@ type
     csrFull
   );
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 并发 Cuckoo 哈希集合
+    @details 基于两个哈希表的 O(1) 查找集合。
+      - 每个元素恰好有 2 个可能位置
+      - 查找：检查两个位置，O(1) 最坏情况
+      - 插入：如果两个位置都被占用，驱逐一个并重新插入
+      - 自动扩容
+      - 适用场景：快速成员测试、去重
+   * @concurrency Thread-safe (see source for details). }
   TCuckooSet = class
   private
     FTable1: array of AnsiString;

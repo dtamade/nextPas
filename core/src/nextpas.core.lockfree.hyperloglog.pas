@@ -29,7 +29,16 @@ uses
   SysUtils;
 
 type
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc HyperLogLog 基数估计器
+    @details 概率基数估计器。
+      - 使用 2^p 个寄存器（桶）
+      - 哈希每个元素，使用前 p 位作为桶索引
+      - 统计剩余位的前导零
+      - 每个桶存储最大前导零
+      - 调和均值进行估计
+      - 标准误差：1.04 / sqrt(2^p)
+      - 适用场景：唯一计数估计、基数估计
+   * @concurrency Thread-safe (see source for details). }
   THyperLogLog = class
   private
     FRegisters: array of Int32;

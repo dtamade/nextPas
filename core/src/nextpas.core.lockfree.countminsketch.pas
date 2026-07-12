@@ -28,7 +28,14 @@ uses
   SysUtils;
 
 type
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 计数最小草图
+    @details 概率频率估计器。
+      - 2D 计数器数组：[depth][width]
+      - 多个哈希函数，每行一个
+      - CAS 递增支持并发更新
+      - Estimate 返回跨行最小值（保守估计）
+      - 适用场景：网络流量分析、频率估计、限流
+   * @concurrency Thread-safe (see source for details). }
   TCountMinSketch = class
   private
     FCounters: array of array of Int32;
