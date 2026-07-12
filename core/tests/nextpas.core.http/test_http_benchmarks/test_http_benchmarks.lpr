@@ -3,10 +3,15 @@ program test_http_benchmarks;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
   Process,
-  SysUtils,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.path,
+  nextpas.core.fs,
+  nextpas.core.os.env,
+  nextpas.core.text,
+  nextpas.core.text.conv,
+  nextpas.core.time.base,
+  nextpas.core.time.sleep;
 
 var
   T: TTestSuite;
@@ -118,7 +123,7 @@ end;
 
 function ResolveMakeExecutable: string;
 begin
-  Result := Trim(GetEnvironmentVariable('MAKE'));
+  Result := Trim(GetEnv('MAKE'));
   if Result = '' then
     Result := 'make';
 end;
@@ -159,7 +164,7 @@ begin
     while LProcess.Running do
     begin
       AppendAvailableProcessOutput(LProcess, AOutput);
-      Sleep(10);
+      TSleep.ForDuration(TDuration.FromMilliseconds(10));
     end;
     AppendAvailableProcessOutput(LProcess, AOutput);
     LProcess.WaitOnExit;
@@ -182,18 +187,13 @@ end;
 
 procedure CheckLineContains(const AOutput, AExpectedLine, ALabel: string);
 var
-  LLines: TStringList;
-  I: Integer;
+  LLines: TStringArray;
+  I: SizeInt;
 begin
-  LLines := TStringList.Create;
-  try
-    LLines.Text := AOutput;
-    for I := 0 to LLines.Count - 1 do
-      if LLines[I] = AExpectedLine then
-        Exit;
-  finally
-    LLines.Free;
-  end;
+  LLines := TextSplit(AOutput, LineEnding);
+  for I := 0 to High(LLines) do
+    if LLines[I] = AExpectedLine then
+      Exit;
   Fail(ALabel + ' missing line: ' + AExpectedLine + LineEnding + AOutput);
 end;
 
@@ -206,26 +206,21 @@ end;
 
 procedure CheckBenchmarkRunRow(const AOutput, ARowName, ALabel: string);
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LLine: string;
   LFound: Boolean;
-  I: Integer;
+  I: SizeInt;
 begin
   LFound := False;
-  LLines := TStringList.Create;
-  try
-    LLines.Text := AOutput;
-    for I := 0 to LLines.Count - 1 do
+  LLines := TextSplit(AOutput, LineEnding);
+  for I := 0 to High(LLines) do
+  begin
+    LLine := LLines[I];
+    if (Pos(ARowName, LLine) > 0) and (Pos(' iters', LLine) > 0) then
     begin
-      LLine := LLines[I];
-      if (Pos(ARowName, LLine) > 0) and (Pos(' iters', LLine) > 0) then
-      begin
-        LFound := True;
-        Break;
-      end;
+      LFound := True;
+      Break;
     end;
-  finally
-    LLines.Free;
   end;
   Check(LFound, ALabel + ' missing benchmark run row: ' + ARowName +
     LineEnding + AOutput);
@@ -327,38 +322,46 @@ end;
 function CollectTopLevelPascalBenchmarkProjectsWithoutMakefile(
   const ABenchmarksRootDir: string): string;
 var
-  LSearch: TSearchRec;
-  LLprSearch: TSearchRec;
+  LEntries: TDirEntryArray;
+  LEntry: TDirEntry;
   LProjectDir: string;
-  LMissing: TStringList;
+  LSubEntries: TDirEntryArray;
+  LSub: TDirEntry;
+  LHasLpr: Boolean;
+  LMissing: string;
 begin
-  LMissing := TStringList.Create;
-  try
-    if FindFirst(PathJoin(ABenchmarksRootDir, '*'), faDirectory, LSearch) = 0 then
+  LMissing := '';
+  LEntries := ReadDir(ABenchmarksRootDir);
+  for LEntry in LEntries do
+  begin
+    if (LEntry.Name = '.') or (LEntry.Name = '..') then
+      Continue;
+    if not LEntry.IsDir then
+      Continue;
+
+    LProjectDir := PathJoin(ABenchmarksRootDir, LEntry.Name);
+    LSubEntries := ReadDir(LProjectDir);
+    LHasLpr := False;
+    for LSub in LSubEntries do
     begin
-      repeat
-        if (LSearch.Name = '.') or (LSearch.Name = '..') then
-          Continue;
-        if (LSearch.Attr and faDirectory) = 0 then
-          Continue;
-
-        LProjectDir := PathJoin(ABenchmarksRootDir, LSearch.Name);
-        if FindFirst(PathJoin(LProjectDir, '*.lpr'), faAnyFile, LLprSearch) <> 0 then
-          Continue;
-        FindClose(LLprSearch);
-
-        if FileExists(PathJoin(LProjectDir, 'Makefile')) then
-          Continue;
-
-        LMissing.Add(LSearch.Name);
-      until FindNext(LSearch) <> 0;
-      FindClose(LSearch);
+      if (Length(LSub.Name) > 4) and
+         (Copy(LSub.Name, Length(LSub.Name) - 3, 4) = '.lpr') then
+      begin
+        LHasLpr := True;
+        Break;
+      end;
     end;
+    if not LHasLpr then
+      Continue;
 
-    Result := Trim(LMissing.Text);
-  finally
-    LMissing.Free;
+    if FileExists(PathJoin(LProjectDir, 'Makefile')) then
+      Continue;
+
+    if LMissing <> '' then
+      LMissing := LMissing + LineEnding;
+    LMissing := LMissing + LEntry.Name;
   end;
+  Result := Trim(LMissing);
 end;
 
 procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string;
@@ -702,16 +705,8 @@ begin
 end;
 
 function LoadTextFile(const APath: string): string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(APath);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  Result := FsReadFileText(APath);
 end;
 
 function ExtractSourceBlock(const ASource, AStartMarker, AEndMarker,
@@ -4868,7 +4863,7 @@ var
   LExitCode: Integer;
   LOutput: string;
 begin
-  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  LLhttpRoot := Trim(GetEnv(LlhttpRootEnvName));
   if LLhttpRoot = '' then
     Exit;
 
@@ -4898,7 +4893,7 @@ var
   LExitCode: Integer;
   LOutput: string;
 begin
-  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  LLhttpRoot := Trim(GetEnv(LlhttpRootEnvName));
   if LLhttpRoot = '' then
     Exit;
 
@@ -4935,7 +4930,7 @@ var
   LExitCode: Integer;
   LOutput: string;
 begin
-  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  LLhttpRoot := Trim(GetEnv(LlhttpRootEnvName));
   if LLhttpRoot = '' then
     Exit;
 
@@ -4973,7 +4968,7 @@ var
   LExitCode: Integer;
   LOutput: string;
 begin
-  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  LLhttpRoot := Trim(GetEnv(LlhttpRootEnvName));
   if LLhttpRoot = '' then
     Exit;
 
@@ -5025,7 +5020,7 @@ begin
     'build/projects/nextpas.core.http/bench_h1parser/flag_matrix/smoke');
   LResultsPath := PathJoin(LOutputDir, 'results.tsv');
   LEnvPath := PathJoin(LOutputDir, 'env.txt');
-  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  LLhttpRoot := Trim(GetEnv(LlhttpRootEnvName));
 
   if LLhttpRoot <> '' then
   begin
@@ -5033,16 +5028,16 @@ begin
     LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
     LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
     LEnvVars[2] := 'LLHTTP_ROOT=' + LLhttpRoot;
-    LEnvVars[3] := 'PATH=' + GetEnvironmentVariable('PATH');
-    LEnvVars[4] := 'HOME=' + GetEnvironmentVariable('HOME');
+    LEnvVars[3] := 'PATH=' + GetEnv('PATH');
+    LEnvVars[4] := 'HOME=' + GetEnv('HOME');
   end
   else
   begin
     SetLength(LEnvVars, 4);
     LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
     LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
-    LEnvVars[2] := 'PATH=' + GetEnvironmentVariable('PATH');
-    LEnvVars[3] := 'HOME=' + GetEnvironmentVariable('HOME');
+    LEnvVars[2] := 'PATH=' + GetEnv('PATH');
+    LEnvVars[3] := 'HOME=' + GetEnv('HOME');
   end;
 
   RunProcessAndCaptureWithEnv(LRunnerPath, ['--smoke', '--no-perf'],
@@ -5095,7 +5090,7 @@ begin
     'build/projects/nextpas.core.http/bench_h1parser/flag_matrix/smoke');
   LResultsPath := PathJoin(LOutputDir, 'results.tsv');
   LEnvPath := PathJoin(LOutputDir, 'env.txt');
-  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  LLhttpRoot := Trim(GetEnv(LlhttpRootEnvName));
 
   if LLhttpRoot <> '' then
   begin
@@ -5103,16 +5098,16 @@ begin
     LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
     LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
     LEnvVars[2] := 'LLHTTP_ROOT=' + LLhttpRoot;
-    LEnvVars[3] := 'PATH=' + GetEnvironmentVariable('PATH');
-    LEnvVars[4] := 'HOME=' + GetEnvironmentVariable('HOME');
+    LEnvVars[3] := 'PATH=' + GetEnv('PATH');
+    LEnvVars[4] := 'HOME=' + GetEnv('HOME');
   end
   else
   begin
     SetLength(LEnvVars, 4);
     LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
     LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
-    LEnvVars[2] := 'PATH=' + GetEnvironmentVariable('PATH');
-    LEnvVars[3] := 'HOME=' + GetEnvironmentVariable('HOME');
+    LEnvVars[2] := 'PATH=' + GetEnv('PATH');
+    LEnvVars[3] := 'HOME=' + GetEnv('HOME');
   end;
 
   RunProcessAndCaptureWithEnv(LRunnerPath, ['--smoke', '--perf'],
@@ -5157,7 +5152,7 @@ begin
   LResultsPath := PathJoin(LOutputDir, 'results.tsv');
   LSummaryPath := PathJoin(LOutputDir, 'summary.tsv');
   LEnvPath := PathJoin(LOutputDir, 'env.txt');
-  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  LLhttpRoot := Trim(GetEnv(LlhttpRootEnvName));
 
   if LLhttpRoot <> '' then
   begin
@@ -5165,16 +5160,16 @@ begin
     LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
     LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
     LEnvVars[2] := 'LLHTTP_ROOT=' + LLhttpRoot;
-    LEnvVars[3] := 'PATH=' + GetEnvironmentVariable('PATH');
-    LEnvVars[4] := 'HOME=' + GetEnvironmentVariable('HOME');
+    LEnvVars[3] := 'PATH=' + GetEnv('PATH');
+    LEnvVars[4] := 'HOME=' + GetEnv('HOME');
   end
   else
   begin
     SetLength(LEnvVars, 4);
     LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
     LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
-    LEnvVars[2] := 'PATH=' + GetEnvironmentVariable('PATH');
-    LEnvVars[3] := 'HOME=' + GetEnvironmentVariable('HOME');
+    LEnvVars[2] := 'PATH=' + GetEnv('PATH');
+    LEnvVars[3] := 'HOME=' + GetEnv('HOME');
   end;
 
   RunProcessAndCaptureWithEnv(LRunnerPath, ['--smoke', '--no-perf', '--runs', '2'],
@@ -5222,7 +5217,7 @@ begin
   LRunnerPath := ResolveH1FlagMatrixRunnerPath(LRootDir);
   LUnsafeOutputDir := PathJoin(LRootDir,
     'build/projects/nextpas.core.http/flag_matrix_unsafe_smoke');
-  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  LLhttpRoot := Trim(GetEnv(LlhttpRootEnvName));
 
   if LLhttpRoot <> '' then
   begin
@@ -5231,8 +5226,8 @@ begin
     LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
     LEnvVars[2] := 'LLHTTP_ROOT=' + LLhttpRoot;
     LEnvVars[3] := 'NEXTPAS_FLAG_MATRIX_OUTPUT_DIR=' + LUnsafeOutputDir;
-    LEnvVars[4] := 'PATH=' + GetEnvironmentVariable('PATH');
-    LEnvVars[5] := 'HOME=' + GetEnvironmentVariable('HOME');
+    LEnvVars[4] := 'PATH=' + GetEnv('PATH');
+    LEnvVars[5] := 'HOME=' + GetEnv('HOME');
   end
   else
   begin
@@ -5240,8 +5235,8 @@ begin
     LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
     LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
     LEnvVars[2] := 'NEXTPAS_FLAG_MATRIX_OUTPUT_DIR=' + LUnsafeOutputDir;
-    LEnvVars[3] := 'PATH=' + GetEnvironmentVariable('PATH');
-    LEnvVars[4] := 'HOME=' + GetEnvironmentVariable('HOME');
+    LEnvVars[3] := 'PATH=' + GetEnv('PATH');
+    LEnvVars[4] := 'HOME=' + GetEnv('HOME');
   end;
 
   RunProcessAndCaptureWithEnv(LRunnerPath, ['--smoke', '--no-perf'],

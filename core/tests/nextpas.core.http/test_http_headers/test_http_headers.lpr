@@ -3,11 +3,11 @@ program test_http_headers;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers;
@@ -16,16 +16,8 @@ var
   T: TTestSuite;
 
 function LoadTextFile(const APath: string): string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(APath);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  Result := FsReadFileText(APath);
 end;
 
 procedure CheckSourceNotContains(const ASource, AFragment, ALabel: string);
@@ -51,37 +43,26 @@ end;
 
 procedure CheckSourceTreeNotContains(const ADir, AMask, AFragment, ALabel: string);
 var
-  LSearch: TSearchRec;
+  LEntries: TDirEntryArray;
+  LEntry: TDirEntry;
   LPath: string;
 begin
-  if FindFirst(IncludeTrailingPathDelimiter(ADir) + AMask, faAnyFile, LSearch) = 0 then
+  LEntries := ReadDir(ADir);
+  for LEntry in LEntries do
   begin
-    try
-      repeat
-        if (LSearch.Attr and faDirectory) = 0 then
-        begin
-          LPath := IncludeTrailingPathDelimiter(ADir) + LSearch.Name;
-          if IsHttpHandwrittenSource(LPath) then
-            CheckSourceFileNotContains(LPath, AFragment, ALabel);
-        end;
-      until FindNext(LSearch) <> 0;
-    finally
-      FindClose(LSearch);
+    LPath := IncludeTrailingPathDelimiter(ADir) + LEntry.Name;
+    if not LEntry.IsDir then
+    begin
+      if IsHttpHandwrittenSource(LPath) then
+        CheckSourceFileNotContains(LPath, AFragment, ALabel + ': ' + LPath);
     end;
   end;
-
-  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*', faDirectory, LSearch) = 0 then
+  for LEntry in LEntries do
   begin
-    try
-      repeat
-        if ((LSearch.Attr and faDirectory) <> 0) and
-           (LSearch.Name <> '.') and (LSearch.Name <> '..') then
-          CheckSourceTreeNotContains(IncludeTrailingPathDelimiter(ADir) + LSearch.Name,
-            AMask, AFragment, ALabel);
-      until FindNext(LSearch) <> 0;
-    finally
-      FindClose(LSearch);
-    end;
+    if LEntry.IsDir and (LEntry.Name <> '.') and (LEntry.Name <> '..') then
+      CheckSourceTreeNotContains(
+        IncludeTrailingPathDelimiter(ADir) + LEntry.Name,
+        AMask, AFragment, ALabel);
   end;
 end;
 

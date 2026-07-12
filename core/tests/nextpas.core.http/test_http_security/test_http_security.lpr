@@ -8,7 +8,6 @@ program test_http_security;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.text.conv,

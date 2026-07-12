@@ -247,6 +247,10 @@ function DeleteFile(const APath: string): Boolean; inline;
 function GetCurrentDir: string; inline;
 {** @desc 获取环境变量（SysUtils GetEnvironmentVariable 兼容） *}
 function GetEnvironmentVariable(const AName: string): string; inline;
+{** @desc 获取命令行参数数量（SysUtils ParamCount 兼容） *}
+function ParamCount: Integer; inline;
+{** @desc 获取指定索引的命令行参数（SysUtils ParamStr 兼容） *}
+function ParamStr(AIndex: Integer): string; inline;
 
 implementation
 
@@ -632,6 +636,16 @@ end;
 function GetEnvironmentVariable(const AName: string): string;
 begin
   Result := GetEnv(AName);
+end;
+
+function ParamCount: Integer;
+begin
+  Result := System.ParamCount;
+end;
+
+function ParamStr(AIndex: Integer): string;
+begin
+  Result := System.ParamStr(AIndex);
 end;
 
 end.

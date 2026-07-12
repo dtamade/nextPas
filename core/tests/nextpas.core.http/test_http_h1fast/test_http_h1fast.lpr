@@ -3,7 +3,7 @@ program test_http_h1fast;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,

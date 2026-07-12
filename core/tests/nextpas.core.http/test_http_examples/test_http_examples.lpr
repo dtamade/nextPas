@@ -4,9 +4,7 @@ program test_http_examples;
 
 uses
   nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix,{$ENDIF}
-  Classes,
   Process,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.io.intf,
@@ -14,7 +12,13 @@ uses
   nextpas.core.net,
   nextpas.core.http,
   nextpas.core.time.base,
-  nextpas.core.time.deadline;
+  nextpas.core.time.deadline,
+  nextpas.core.time.sleep,
+  nextpas.core.path,
+  nextpas.core.fs,
+  nextpas.core.os.env,
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 var
   T: TTestSuite;
@@ -98,7 +102,7 @@ end;
 
 function ResolveMakeExecutable: string;
 begin
-  Result := Trim(GetEnvironmentVariable('MAKE'));
+  Result := Trim(GetEnv('MAKE'));
   if Result = '' then
     Result := 'make';
 end;
@@ -126,7 +130,7 @@ begin
     while LProcess.Running do
     begin
       AppendAvailableProcessOutput(LProcess, AOutput);
-      Sleep(10);
+      TSleep.ForDuration(TDuration.FromMilliseconds(10));
     end;
     AppendAvailableProcessOutput(LProcess, AOutput);
     LProcess.WaitOnExit;
@@ -135,7 +139,7 @@ begin
     on E: Exception do
     begin
       AExitCode := -1;
-      AOutput := Format('%s: %s', [E.ClassName, E.Message]);
+      AOutput := TextFormat('%s: %s', [E.ClassName, E.Message]);
     end;
   end;
   LProcess.Free;
@@ -314,7 +318,7 @@ begin
       AppendAvailableProcessOutput(AProcess, AOutput);
       if not AProcess.Running then
         Break;
-      Sleep(10);
+      TSleep.ForDuration(TDuration.FromMilliseconds(10));
     end;
 
     if AProcess.Running then
@@ -329,7 +333,7 @@ begin
         AppendAvailableProcessOutput(AProcess, AOutput);
         if not AProcess.Running then
           Break;
-        Sleep(10);
+        TSleep.ForDuration(TDuration.FromMilliseconds(10));
       end;
     end;
   end;
@@ -371,7 +375,7 @@ begin
         Exit;
       if not AProcess.Running then
         Break;
-      Sleep(10);
+      TSleep.ForDuration(TDuration.FromMilliseconds(10));
     end;
   except
     on E: Exception do
@@ -526,7 +530,7 @@ begin
         Exit;
       if not AProcess.Running then
         Break;
-      Sleep(10);
+      TSleep.ForDuration(TDuration.FromMilliseconds(10));
     end;
   except
     on E: Exception do
@@ -650,7 +654,7 @@ begin
         Exit;
       if not AProcess.Running then
         Break;
-      Sleep(10);
+      TSleep.ForDuration(TDuration.FromMilliseconds(10));
     end;
   except
     on E: Exception do

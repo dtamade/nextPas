@@ -3,7 +3,7 @@ program test_http_h2_session;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,

@@ -8,7 +8,7 @@ program test_http_contract;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,

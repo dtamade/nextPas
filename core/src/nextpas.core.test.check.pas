@@ -312,7 +312,8 @@ uses
   nextpas.core.platform.env,   { platform_env_get_str for snapshot update flag }
   nextpas.core.fs,             { ReadFileText/WriteFileText for snapshot I/O }
   nextpas.core.regex,          { RegexIsMatch for CheckMatch }
-  nextpas.core.test.output;    { ColorDiff for colored string comparison }
+  nextpas.core.test.output,    { ColorDiff for colored string comparison }
+  nextpas.core.test.config;    { DefaultConfig for TTestConfig default }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin

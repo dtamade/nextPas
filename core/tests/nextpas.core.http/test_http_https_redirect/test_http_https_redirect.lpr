@@ -4,7 +4,6 @@ program test_http_https_redirect;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.text.conv,

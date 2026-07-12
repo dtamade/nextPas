@@ -3,7 +3,6 @@ program test_http_h2_client;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.io.base,
