@@ -275,14 +275,15 @@ end;
 | `test_property` | 19 | IsUpper/IsLower/IsAlpha/IsDigit/IsNumber/IsWhitespace/IsSeparator/IsControl/IsPunctuation/IsSymbol/IsMark/GeneralCategory/CaseMapping/Boundary/SMP/HasBinaryProperty/GraphemeBreakProperty/PropertyCombinations |
 | `test_case` | 7 | 大小写映射、case fold |
 | `test_normalize` | 13 | NFD/NFC/NFKD/NFKC、QuickCheck(NFD/NFKD/NFC/NFKC)、CCC、SMP 规范化、压力测试 |
-| `test_enhance` | 6 | Script/Block 属性、便利函数、CJK 分词、?! 序列合并 |
+| `test_enhance` | 8 | Script/Block 属性、便利函数、CJK 分词、?! 序列合并、Next* API、单词分割边界 |
 | `test_grapheme_uax29` | 13 | UAX #29 全部 GB 规则 |
 | `test_collate` | 15 | DUCET 三级权重、排序键、强度级别、排序方法、SMP 排序、压力排序 |
-| **总计** | **73** | |
+| `test_data` | 10 | IUnicodeDataManager 接口全覆盖：GeneralCategory/BinaryProperty/Script/Block/CaseMapping/CaseFoldFull/Decomposition/CCC/CompositionExclusion/Singleton |
+| **总计** | **85** | |
 
 ```bash
 # 运行所有 unicode 测试
-for t in test_case test_enhance test_grapheme_uax29 test_normalize test_property test_collate; do
+for t in test_case test_data test_enhance test_grapheme_uax29 test_normalize test_property test_collate; do
   make -C core/tests/nextpas.core.text.unicode/$t clean test
 done
 ```

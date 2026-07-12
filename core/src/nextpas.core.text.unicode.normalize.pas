@@ -29,6 +29,17 @@ function QuickCheckNFKC(const s: string): Boolean;
 // 0 = starter, 1-240 = combining mark ordering
 function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte;
 
+// 获取码点的分解映射
+// 返回分解长度 (0=无分解, 1=自身, 2+=分解序列)
+// AIsCompatibility=True 表示兼容性分解 (NFKC/NFKD 使用)
+function GetDecompositionMapping(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeCodepoint; out ALen: Byte;
+  out AIsCompatibility: Boolean): Boolean;
+
+// 检查码点是否是组合排除 (Full_Composition_Exclusion)
+// 被排除的码点不会在 NFC 组合阶段被生成
+function IsCompositionExcluded(const ACp: TUnicodeCodepoint): Boolean;
+
 implementation
 
 uses
@@ -178,6 +189,60 @@ begin
     Exit(LValue);
 
   Result := 0;
+end;
+
+function GetDecompositionMapping(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeCodepoint; out ALen: Byte;
+  out AIsCompatibility: Boolean): Boolean;
+var
+  LEntry: TDecompEntry;
+  LKind: Byte;
+  LI: Byte;
+begin
+  LKind := GetDecompositionKind(ACp);
+  if LKind = 0 then
+  begin
+    ALen := 0;
+    AIsCompatibility := False;
+    Exit(False);
+  end;
+
+  AIsCompatibility := LKind = 2;
+  if FindDecomposition(ACp, LEntry) then
+  begin
+    ALen := LEntry.Len;
+    for LI := 0 to LEntry.Len - 1 do
+      if LI <= High(ADst) then
+        ADst[LI] := LEntry.Map[LI];
+    Exit(True);
+  end;
+
+  // 无映射表项但有 kind 值：自身即规范形式
+  ALen := 1;
+  ADst[0] := ACp;
+  Result := True;
+end;
+
+function IsCompositionExcluded(const ACp: TUnicodeCodepoint): Boolean;
+var
+  LKind: Byte;
+begin
+  // 有兼容性分解的码点总是被排除
+  LKind := GetDecompositionKind(ACp);
+  if LKind = 2 then
+    Exit(True);
+
+  // Hangul 音节和 Jamo 不参与表组合（有独立组合逻辑）
+  if (ACp >= HANGUL_SBASE) and (ACp < HANGUL_SBASE + HANGUL_SCOUNT) then
+    Exit(True);
+  if (ACp >= HANGUL_LBASE) and (ACp < HANGUL_LBASE + HANGUL_LCOUNT) then
+    Exit(True);
+  if (ACp >= HANGUL_VBASE) and (ACp < HANGUL_VBASE + HANGUL_VCOUNT) then
+    Exit(True);
+  if (ACp >= HANGUL_TBASE) and (ACp < HANGUL_TBASE + HANGUL_TCOUNT) then
+    Exit(True);
+
+  Result := False;
 end;
 
 function FindComposition(const AStarter, ACombining: TUnicodeCodepoint; out AResult: TUnicodeCodepoint): Boolean;
