@@ -128,11 +128,29 @@ end;
 procedure TSemanticModel.SetTypeParent(const ATypeId: LongInt;
   const AParentTypeId: LongInt);
 var
+  CurrentTypeId: LongInt;
+  Depth: LongInt;
   Idx: LongInt;
 begin
   Idx := ATypeId - 1;
-  if (Idx >= 0) and (Idx < Length(FTypes)) then
-    FTypes[Idx].ParentTypeId := AParentTypeId;
+  if (Idx < 0) or (Idx >= Length(FTypes)) then
+    Exit;
+
+  CurrentTypeId := AParentTypeId;
+  Depth := 0;
+  while CurrentTypeId <> 0 do
+  begin
+    if (CurrentTypeId < 1) or (CurrentTypeId > Length(FTypes)) then
+      Exit;
+    if CurrentTypeId = ATypeId then
+      Exit;
+    if Depth >= Length(FTypes) then
+      Exit;
+    CurrentTypeId := FTypes[CurrentTypeId - 1].ParentTypeId;
+    Inc(Depth);
+  end;
+
+  FTypes[Idx].ParentTypeId := AParentTypeId;
 end;
 
 procedure TSemanticModel.SetTypeAliasTarget(const ATypeId: LongInt;
@@ -384,4 +402,3 @@ begin
   if (Idx >= 0) and (Idx < Length(FSymbols)) then
     FSymbols[Idx].ReturnTypeId := AReturnTypeId;
 end;
-

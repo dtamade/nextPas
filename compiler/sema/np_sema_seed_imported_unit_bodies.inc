@@ -158,6 +158,7 @@ var
   DiskUnit: TDiskCachedUnit;
   Fingerprint: UInt32;
   DiskHit: Boolean;
+  SymbolCacheEligible: Boolean;
   ResolvedTypeId: LongInt;
   Age: Int64;
   SymBefore, SymAfter, J, NextCache: LongInt;
@@ -172,6 +173,8 @@ begin
     for Index := FUnitGraph.ResolvedUnitCount - 1 downto 0 do
     begin
       ResolvedUnit := FUnitGraph.ResolvedUnitAt(Index);
+      SymbolCacheEligible := not SameText(
+        ResolvedUnit.CanonicalName, 'System');
       if SameText(ResolvedUnit.CanonicalName, FUnitGraph.RootName) then
         Continue;
       SourcePath := ResolvedUnit.SourcePath;
@@ -186,7 +189,8 @@ begin
 
       Age := FsStat(SourcePath).ModTime;
       CacheIdx := -1;
-      if SameText(ResolvedUnit.OriginClass, 'installed-source') then
+      if SymbolCacheEligible and
+        SameText(ResolvedUnit.OriginClass, 'installed-source') then
         CacheIdx := FindCachedUnit(SourcePath, Age);
       if CacheIdx >= 0 then
       begin
@@ -208,8 +212,12 @@ begin
       end;
 
       { In-memory cache miss — try persistent disk cache }
-      Fingerprint := ComputeSourceFingerprintFromFile(SourcePath);
-      DiskHit := GDiskCache.TryLoad(OwnerUnitId, Fingerprint, DiskUnit);
+      DiskHit := False;
+      if SymbolCacheEligible then
+      begin
+        Fingerprint := ComputeSourceFingerprintFromFile(SourcePath);
+        DiskHit := GDiskCache.TryLoad(OwnerUnitId, Fingerprint, DiskUnit);
+      end;
       if DiskHit then
       begin
         SymBefore := FModel.SymbolCount;
@@ -287,6 +295,9 @@ begin
       UnitLexer := TLexerResult.Create(SourceText);
       PPDefines := TDefineTable.Create;
       PPDefines.SeedFPCDefines;
+      { The non-FPC branch is the compiler-visible System kernel surface. }
+      if SameText(ResolvedUnit.CanonicalName, 'System') then
+        PPDefines.Undef('FPC');
       IncResolver := TFileIncludeResolver.Create(ExtractFileDir(SourcePath));
       IncResolver.AddSearchPath(ExtractFileDir(SourcePath));
       IncResolver.AddSearchPath(
@@ -317,7 +328,7 @@ begin
       UnitLexer.Free;
       SymAfter := FModel.SymbolCount;
 
-      if (SymAfter > SymBefore) and
+      if SymbolCacheEligible and (SymAfter > SymBefore) and
         SameText(ResolvedUnit.OriginClass, 'installed-source') then
       begin
         if GImportedUnitCacheCount >= Length(GImportedUnitCache) then

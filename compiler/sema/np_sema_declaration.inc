@@ -1223,6 +1223,48 @@ var
   AliasLocalMeta: TTypeMetadata;
   TypeName: string;
   TypeKind: string;
+  ReusedSystemIntrinsic: Boolean;
+  function IsSystemIntrinsicSelfAlias(const ADeclaration: TGreenNode;
+    const AName: string): Boolean;
+  var
+    TypeNode: TGreenNode;
+  begin
+    Result := False;
+    if not SameText(AOwnerUnitId, 'system') then
+      Exit;
+    if ADeclaration.ChildCount <> 1 then
+      Exit;
+
+    TypeNode := ADeclaration.ChildAt(0);
+    if (TypeNode = nil) or (TypeNode.NodeKind <> gnkIdentifier) or
+      not SameText(TypeNode.Text, AName) then
+      Exit;
+    Result := True;
+  end;
+  function ReusableSystemIntrinsicTypeId(const ADeclaration: TGreenNode;
+    const AName: string): LongInt;
+  var
+    ExistingType: TSemanticType;
+  begin
+    Result := 0;
+    if not IsSystemIntrinsicSelfAlias(ADeclaration, AName) then
+      Exit;
+
+    Result := FModel.FindTypeByName(AName);
+    if (Result <= 0) or (Result > FModel.TypeCount) then
+    begin
+      Result := 0;
+      Exit;
+    end;
+
+    ExistingType := FModel.TypeAt(Result - 1);
+    if not (SameText(ExistingType.Kind, 'builtin') or
+      SameText(ExistingType.Kind, 'alias')) then
+    begin
+      Result := 0;
+      Exit;
+    end;
+  end;
 begin
   if ANode = nil then
     Exit;
@@ -1246,12 +1288,17 @@ begin
       TypeName := Copy(TypeName, 19, Length(TypeName));
       TypeKind := 'enum';
     end;
-    TypeId := FModel.AddType(TypeName, TypeKind);
+    TypeId := ReusableSystemIntrinsicTypeId(Child, TypeName);
+    ReusedSystemIntrinsic := TypeId > 0;
+    if not ReusedSystemIntrinsic then
+      TypeId := FModel.AddType(TypeName, TypeKind);
     FModel.SetTypeOwner(TypeId, AOwnerUnitId);
     SymbolId := FModel.AddSymbol(TypeName, 'type', AOwnerUnitId, TypeId,
       Child.ByteOffset);
     if FCurrentScopeId > 0 then
       FModel.SetSymbolScope(SymbolId, FCurrentScopeId);
+    if ReusedSystemIntrinsic then
+      Continue;
     for J := 0 to Child.ChildCount - 1 do
     begin
       TypeChild := Child.ChildAt(J);
@@ -1378,7 +1425,9 @@ begin
       begin
         AliasTargetId := ResolveTypeIdForOwner(
           TypeChild.Text, AOwnerUnitId);
-        if AliasTargetId > 0 then
+        if (AliasTargetId > 0) and
+          ((AliasTargetId <> TypeId) or
+           not IsSystemIntrinsicSelfAlias(Child, TypeName)) then
         begin
           AliasHasTargetMeta := FModel.GetTypeMeta(
             AliasTargetId, AliasTargetMeta);
@@ -1890,4 +1939,3 @@ begin
     end;
   end;
 end;
-
