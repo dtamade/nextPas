@@ -16,8 +16,13 @@ type
 
 function FsReadDir(const APath: string): TDirEntryArray;
 function FsOpenDir(const APath: string): IDirIterator;
+{** @desc 创建单级目录
+    @note 成功返回 True；失败时抛出异常（EAlreadyExistsError / EPermissionError 等），
+          因此返回值恒为 True。保留 Boolean 返回值仅为向后兼容。 *}
 function FsMkdir(const APath: string;
   const APerm: TFilePermission = PermDirDefault): Boolean;
+{** @desc 递归创建目录（等同 mkdir -p）
+    @note 成功返回 True；失败时抛出异常。保留 Boolean 返回值仅为向后兼容。 *}
 function FsMkdirAll(const APath: string;
   const APerm: TFilePermission = PermDirDefault): Boolean;
 function FsRemove(const APath: string): Boolean;
