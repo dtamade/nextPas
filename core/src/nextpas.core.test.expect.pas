@@ -300,12 +300,14 @@ type
   TExpectationPool = record
     Pool: array[0..MAX_POOL_SIZE-1] of TExpectation;
     Count: Integer;
+    Initialized: Boolean;
     procedure Init;
     function Acquire: TExpectation;
     procedure Release(AExp: TExpectation);
   end;
 
-var
+threadvar
+  { Thread-local pool — each thread gets its own pool instance }
   ThreadPool: TExpectationPool;
 
 procedure TExpectationPool.Init;
@@ -313,12 +315,15 @@ var
   I: Integer;
 begin
   Count := 0;
+  Initialized := True;
   for I := 0 to MAX_POOL_SIZE - 1 do
     Pool[I] := nil;
 end;
 
 function TExpectationPool.Acquire: TExpectation;
 begin
+  if not Initialized then
+    Init;
   if Count > 0 then
   begin
     Dec(Count);
@@ -1616,19 +1621,19 @@ begin
   Result := TExpectation.AllocStrArray(AValues);
 end;
 
-{ ── Initialization / Finalization ──────────────────────────────────────────── }
-
-initialization
-  ThreadPool.Init;
+{ ── Finalization ──────────────────────────────────────────────────────────── }
 
 finalization
 begin
-  { Release all pooled expectations }
-  while ThreadPool.Count > 0 do
+  { Release all pooled expectations when thread exits }
+  if ThreadPool.Initialized then
   begin
-    Dec(ThreadPool.Count);
-    ThreadPool.Pool[ThreadPool.Count].Free;
-    ThreadPool.Pool[ThreadPool.Count] := nil;
+    while ThreadPool.Count > 0 do
+    begin
+      Dec(ThreadPool.Count);
+      ThreadPool.Pool[ThreadPool.Count].Free;
+      ThreadPool.Pool[ThreadPool.Count] := nil;
+    end;
   end;
 end;
 
