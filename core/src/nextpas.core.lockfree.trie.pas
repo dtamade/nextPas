@@ -61,6 +61,7 @@ type
     function Delete(const AKey: string): TLockFreeTrieResult;
     function Contains(const AKey: string): Boolean;
     function GetCount: Int64;
+    function IsEmpty: Boolean;
     procedure Clear;
     procedure Close;
     function IsClosed: Boolean;
@@ -274,6 +275,11 @@ end;
 function TConcurrentTrieImpl.GetCount: Int64;
 begin
   Result := AtomicLoad64(FCount, moAcquire);
+end;
+
+function TConcurrentTrieImpl.IsEmpty: Boolean;
+begin
+  Result := AtomicLoad64(FCount, moRelaxed) = 0;
 end;
 
 procedure TConcurrentTrieImpl.Clear;

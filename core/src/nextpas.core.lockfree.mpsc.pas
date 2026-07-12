@@ -11,6 +11,10 @@ type
   {**
    * 多生产者单消费者无界队列（MPSC Queue）。
    *
+   * @concurrency Thread-safe with single-consumer constraint:
+   *   - Enqueue: multiple threads may call concurrently
+   *   - TryDequeue/DequeueWait/DequeueTimeout: single thread only
+   *
    * @constraints
    *   - **严格单消费者**：TryDequeue / DequeueWait / DequeueTimeout 只能由一个线程调用。
    *     多线程同时消费会导致数据竞争和 use-after-free。

@@ -37,7 +37,6 @@ type
 implementation
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
   nextpas.core.time.base;

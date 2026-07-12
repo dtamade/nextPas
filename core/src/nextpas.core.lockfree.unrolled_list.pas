@@ -71,6 +71,7 @@ type
     function Contains(const AValue: T): Boolean;
     function GetCount: Int32;
     function GetNodeCount: Int32;
+    function IsEmpty: Boolean;
     procedure Clear;
     procedure Close;
     function IsClosed: Boolean;
@@ -355,6 +356,11 @@ begin
   finally
     Unlock;
   end;
+end;
+
+function TConcurrentUnrolledListImpl.IsEmpty: Boolean;
+begin
+  Result := GetCount = 0;
 end;
 
 procedure TConcurrentUnrolledListImpl.Clear;

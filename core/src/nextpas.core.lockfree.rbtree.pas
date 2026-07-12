@@ -86,7 +86,6 @@ type
 implementation
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic;
 
 constructor TConcurrentRBTree.Create;

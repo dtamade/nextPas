@@ -5,7 +5,6 @@ unit nextpas.core.lockfree.selector;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.platform.thread;
 
