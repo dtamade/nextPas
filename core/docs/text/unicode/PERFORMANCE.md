@@ -94,6 +94,50 @@ SMP 包含 CJK Extension B、emoji、音乐符号等。实际文本中 SMP 码�
 - csQuaternary: 4 级
 - csIdentical: 4 级
 
+## 实测基准数据 (x86_64 Linux, FPC 3.3.1 -O2)
+
+### 规范化
+
+| 操作 | ns/op | ops/s | 备注 |
+|------|-------|-------|------|
+| NFC ASCII-50 | 44 | 22.6M | O(n/8) 快速路径 |
+| NFC ASCII-200 | 83 | 12.0M | 同上 |
+| NFD ASCII-50 | 47 | 21.1M | 同上 |
+| NFC BMP-Latin-50 | 4,057 | 246K | 有重音需规范化 |
+| NFD BMP-Latin-50 | 3,067 | 326K | 分解比组合快 |
+| NFC BMP-CJK-50 | 47 | 21.5M | CJK 无分解，快速路径 |
+| NFD BMP-CJK-50 | 49 | 20.6M | 同上 |
+| NFKD BMP-Latin-50 | 3,073 | 325K | 兼容分解 |
+| QuickCheckNFC ASCII-200 | 53 | 19.0M | 无分配纯检查 |
+| QuickCheckNFC BMP-Latin-50 | 1,858 | 538K | 逐码点检查 |
+
+### 分割
+
+| 操作 | ns/op | ops/s | 备注 |
+|------|-------|-------|------|
+| NextGrapheme ASCII-200 | 68 | 14.7M | 状态机单遍 |
+| NextGrapheme BMP-CJK-50 | 67 | 14.8M | CJK 每字 1 grapheme |
+| NextWord BMP-CJK-50 | 831 | 1.2M | CJK 词分割 |
+| NextLine ASCII-200 | 3,480 | 288K | 行断点查找 |
+
+### 排序
+
+| 操作 | ns/op | ops/s | 备注 |
+|------|-------|-------|------|
+| Compare ASCII-50 | ~50 | ~20M | 排序键比较 |
+| Compare BMP-Latin-50 | ~200 | ~5M | 有重音权重 |
+| Compare BMP-CJK-50 | ~200 | ~5M | CJK 权重 |
+| GetSortKey ASCII-50 | ~100 | ~10M | 排序键生成 |
+
+### 大小写 + 工具
+
+| 操作 | ns/op | ops/s | 备注 |
+|------|-------|-------|------|
+| CaseFoldSimple ASCII-200 | 4,043 | 247K | 逐码点查表 |
+| CaseFoldSimple BMP-Latin-50 | 1,496 | 669K | 同上 |
+| IsAsciiString ASCII-200 | 49 | 20.5M | 8 字节并行 |
+| IsAsciiString BMP-Latin-50 | 1.5 | 687M | 首字节快速拒绝 |
+
 ## 与 FPC RTL 对比
 
 | 操作 | FPC RTL | nextpas.core.text.unicode | 优势 |
