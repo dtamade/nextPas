@@ -24,8 +24,16 @@ uses
   np_semantic_model;
 
 const
-  NPC_MAGIC = $4E504301;  { 'NPC' + version 1 }
-  NPC_VERSION = 1;
+  { V2 wire format: magic | version | headerSize | payloadSize |
+    fingerprint[32] | payloadDigest[32] | payload }
+  NPC_MAGIC        = $4E504302;  { 'NPC\x02' }
+  NPC_VERSION       = 2;
+  NPC_HEADER_SIZE   = 80;   { 4+4+4+4+32+32 }
+  NPC_FINGERPRINT_SIZE = 32;
+  NPC_DIGEST_SIZE     = 32;
+  NPC_MAX_PAYLOAD_SIZE = 64 * 1024 * 1024;   { 64 MiB }
+  NPC_MAX_STRING_SIZE  = 8 * 1024 * 1024;    { 8 MiB }
+  NPC_MAX_SECTION_COUNT = 1000000;
 
 type
   {** 缓存条目元数据 }
@@ -42,13 +50,15 @@ type
   private
     FCacheDir: string;
     FEnabled: Boolean;
-    function EntryPath(const AUnitId: string): string;
     function ComputeSourceHash(const ASourceText: string): TBytes;
     function ComputeDepsHash(const ADeps: array of string): TBytes;
     function CombineFingerprint(const ASourceHash, ADepsHash: TBytes): TBytes;
   public
     constructor Create(const ACacheDir: string);
     destructor Destroy; override;
+
+    {** Return the cache file path for a unit }
+    function EntryPath(const AUnitId: string): string;
 
     {** 检查缓存是否可用 }
     function HasCache(const AUnitId: string;
@@ -202,9 +212,9 @@ type
   TBinaryReader = class
   private
     FBuf: TBytes;
-    FPos: LongInt;
     FSize: LongInt;
   public
+    FPos: LongInt;
     constructor Create(const AData: TBytes);
     destructor Destroy; override;
     function ReadByte: Byte;
@@ -266,6 +276,8 @@ begin
   Len := ReadInt32;
   if Len < 0 then
     raise Exception.Create('TBinaryReader: invalid string length');
+  if Len > NPC_MAX_STRING_SIZE then
+    raise Exception.Create('TBinaryReader: string exceeds max size');
   if Len = 0 then
     Exit('');
   if FPos + Len > FSize then
@@ -282,6 +294,8 @@ begin
   Len := ReadInt32;
   if Len < 0 then
     raise Exception.Create('TBinaryReader: invalid bytes length');
+  if Len > NPC_MAX_PAYLOAD_SIZE then
+    raise Exception.Create('TBinaryReader: bytes exceed max size');
   if Len = 0 then
     Exit(nil);
   if FPos + Len > FSize then
@@ -390,7 +404,9 @@ function TIncrementalCache.HasCache(const AUnitId: string;
 var
   Path: string;
   F: file;
+  ActualSize: Int64;
   Magic, Version: LongInt;
+  HeaderSize, PayloadSize: LongInt;
   StoredFp, ComputedFp: TBytes;
   SourceHash, DepsHash: TBytes;
 begin
@@ -407,13 +423,22 @@ begin
   AssignFile(F, Path);
   Reset(F, 1);
   try
+    ActualSize := System.FileSize(F);
+    if ActualSize < NPC_HEADER_SIZE then Exit;
+
     BlockRead(F, Magic, 4);
     if Magic <> NPC_MAGIC then Exit;
     BlockRead(F, Version, 4);
     if Version <> NPC_VERSION then Exit;
+    BlockRead(F, HeaderSize, 4);
+    if HeaderSize <> NPC_HEADER_SIZE then Exit;
+    BlockRead(F, PayloadSize, 4);
+    if PayloadSize < 0 then Exit;
+    if PayloadSize > NPC_MAX_PAYLOAD_SIZE then Exit;
+    if ActualSize <> Int64(NPC_HEADER_SIZE) + Int64(PayloadSize) then Exit;
 
-    SetLength(StoredFp, 32);
-    BlockRead(F, StoredFp[0], 32);
+    SetLength(StoredFp, NPC_FINGERPRINT_SIZE);
+    BlockRead(F, StoredFp[0], NPC_FINGERPRINT_SIZE);
 
     Result := (Length(StoredFp) = Length(ComputedFp)) and
               CompareMem(@StoredFp[0], @ComputedFp[0], Length(StoredFp));
@@ -755,10 +780,11 @@ function TIncrementalCache.Load(const AUnitId: string;
   out AModel: TSemanticModel): Boolean;
 var
   Path: string;
-  Data: TBytes;
+  Data, PayloadData, StoredDigest, ComputedDigest: TBytes;
   F: file;
-  FileSize: LongInt;
+  ActualSize: Int64;
   Magic, Version: LongInt;
+  HeaderSize, PayloadSize: LongInt;
   StoredFp, ComputedFp: TBytes;
   SourceHash, DepsHash: TBytes;
   R: TBinaryReader;
@@ -777,33 +803,67 @@ begin
   AssignFile(F, Path);
   Reset(F, 1);
   try
-    FileSize := System.FileSize(F);
-    if FileSize < 8 then Exit;
+    ActualSize := System.FileSize(F);
+    if ActualSize < NPC_HEADER_SIZE then Exit;
 
-    SetLength(Data, FileSize);
-    BlockRead(F, Data[0], FileSize);
+    SetLength(Data, ActualSize);
+    BlockRead(F, Data[0], ActualSize);
   finally
     CloseFile(F);
   end;
 
-  R := TBinaryReader.Create(Data);
+  { Fail closed on any framing error — no exception escapes }
   try
-    Magic := R.ReadInt32;
-    if Magic <> NPC_MAGIC then Exit;
-    Version := R.ReadInt32;
-    if Version <> NPC_VERSION then Exit;
+    R := TBinaryReader.Create(Data);
+    try
+      Magic := R.ReadInt32;
+      if Magic <> NPC_MAGIC then Exit;
+      Version := R.ReadInt32;
+      if Version <> NPC_VERSION then Exit;
+      HeaderSize := R.ReadInt32;
+      if HeaderSize <> NPC_HEADER_SIZE then Exit;
+      PayloadSize := R.ReadInt32;
+      if PayloadSize < 0 then Exit;
+      if PayloadSize > NPC_MAX_PAYLOAD_SIZE then Exit;
+      if ActualSize <> Int64(NPC_HEADER_SIZE) + Int64(PayloadSize) then Exit;
 
-    SetLength(StoredFp, 32);
-    Move(Data[8], StoredFp[0], 32);
+      { Fingerprint at offset 16 }
+      SetLength(StoredFp, NPC_FINGERPRINT_SIZE);
+      Move(Data[16], StoredFp[0], NPC_FINGERPRINT_SIZE);
+      R.FPos := NPC_HEADER_SIZE;  { skip past digest }
 
-    if not ((Length(StoredFp) = Length(ComputedFp)) and
-            CompareMem(@StoredFp[0], @ComputedFp[0], Length(StoredFp))) then
-      Exit;
+      if not ((Length(StoredFp) = Length(ComputedFp)) and
+              CompareMem(@StoredFp[0], @ComputedFp[0], Length(StoredFp))) then
+        Exit;
 
-    AModel := ReadSemanticModel(R);
-    Result := True;
-  finally
-    R.Free;
+      { Verify payload SHA-256 }
+      SetLength(PayloadData, PayloadSize);
+      if PayloadSize > 0 then
+        Move(Data[NPC_HEADER_SIZE], PayloadData[0], PayloadSize);
+      ComputedDigest := HashBytes(PayloadData);
+
+      SetLength(StoredDigest, NPC_DIGEST_SIZE);
+      Move(Data[48], StoredDigest[0], NPC_DIGEST_SIZE);
+
+      if not CompareMem(@StoredDigest[0], @ComputedDigest[0], NPC_DIGEST_SIZE) then
+        Exit;
+
+      AModel := ReadSemanticModel(R);
+      if AModel = nil then Exit;
+      Result := True;
+    finally
+      R.Free;
+    end;
+  except
+    on Exception do
+    begin
+      Result := False;
+      if AModel <> nil then
+      begin
+        AModel.Free;
+        AModel := nil;
+      end;
+    end;
   end;
 end;
 
@@ -813,10 +873,11 @@ procedure TIncrementalCache.Save(const AUnitId: string;
   const AModel: TSemanticModel);
 var
   Path: string;
-  W: TBinaryWriter;
-  Fp: TBytes;
+  W, PayloadW: TBinaryWriter;
+  Fp, Payload, PayloadDigest: TBytes;
   Data: TBytes;
   F: file;
+  PayloadSize: LongInt;
 begin
   if not FEnabled then Exit;
 
@@ -824,21 +885,36 @@ begin
   if not DirectoryExists(FCacheDir) then
     ForceDirectories(FCacheDir);
 
+  { Serialize payload first to compute size and digest }
+  PayloadW := TBinaryWriter.Create;
+  try
+    WriteSemanticModel(PayloadW, AModel);
+    Payload := PayloadW.Data;
+  finally
+    PayloadW.Free;
+  end;
+
+  PayloadSize := Length(Payload);
+
+  { Fingerprint: source + deps }
+  Fp := CombineFingerprint(
+    ComputeSourceHash(ASourceText),
+    ComputeDepsHash(ADeps));
+
+  { SHA-256 of payload }
+  PayloadDigest := HashBytes(Payload);
+
+  { Build V2 envelope }
   W := TBinaryWriter.Create;
   try
-    { Header }
     W.WriteInt32(NPC_MAGIC);
     W.WriteInt32(NPC_VERSION);
-
-    { Fingerprint (32 bytes SHA256) }
-    Fp := CombineFingerprint(
-      ComputeSourceHash(ASourceText),
-      ComputeDepsHash(ADeps));
-    W.WriteBytes(Fp);
-
-    { Model data }
-    WriteSemanticModel(W, AModel);
-
+    W.WriteInt32(NPC_HEADER_SIZE);
+    W.WriteInt32(PayloadSize);
+    W.WriteRaw(Fp[0], NPC_FINGERPRINT_SIZE);       { offset 16, raw 32 bytes }
+    W.WriteRaw(PayloadDigest[0], NPC_DIGEST_SIZE);  { offset 48, raw 32 bytes }
+    if PayloadSize > 0 then
+      W.WriteRaw(Payload[0], PayloadSize);
     Data := W.Data;
   finally
     W.Free;
