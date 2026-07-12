@@ -67,7 +67,15 @@ type
     Size: Int32;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 哈希映射 Trie
+    @details 持久化不可变 Trie 并发映射。
+      - 32 路分支（每级 5 位），32 位哈希最多 7 级
+      - 路径复制实现持久化：写操作沿路径创建新节点
+      - CAS 交换根指针实现原子更新
+      - 读操作跟随任意根快照 — 无锁
+      - 不可变节点：跨线程共享无需同步
+      - 适用场景：持久化映射、版本快照、函数式编程
+   * @concurrency Thread-safe (see source for details). }
   THashMappedTrie = class
   private
     FRoot: PHmtNode;

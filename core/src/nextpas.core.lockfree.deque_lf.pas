@@ -42,7 +42,12 @@ type
    *   - TValue 必须是 AnsiString
    *   - 自动扩容
    *}
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 双端队列
+    @details 基于循环数组的双端队列。
+      - 两端 O(1) Push/Pop 操作
+      - 自动扩容
+      - 适用场景：工作窃取、任务调度、滑动窗口
+   * @concurrency Thread-safe (see source for details). }
   TLockFreeDeque = class
   private
     FData: array of AnsiString;

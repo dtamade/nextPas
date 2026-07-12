@@ -51,7 +51,14 @@ type
     FActive: Boolean;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 加权轮询负载均衡器
+    @details 平滑加权轮询负载均衡。
+      - 每个后端有 weight（配置权重）和 current（当前权重）
+      - 每次选择 current 最大的后端
+      - 选择后 current -= totalWeight，其他后端 current += weight
+      - 实现平滑分配
+      - 适用场景：负载均衡、服务发现、流量分配
+   * @concurrency Thread-safe (see source for details). }
   TWRRImpl = class
   private
     FBackends: array of TWRRBackend;

@@ -33,7 +33,15 @@ const
 type
   TUnrolledResult = (ulOk, ulNotFound, ulExists, ulFull, ulClosed);
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 展开链表
+    @details 缓存友好的并发排序链表。
+      - 每个节点持有固定大小的元素数组 + 计数
+      - 节点内的元素保持排序
+      - 插入时：找到节点，按序插入，满时分裂
+      - 删除时：找到并移除，不足时合并邻居
+      - 比普通链表更好的缓存局部性
+      - 适用场景：有序集合、范围查询、缓存友好的数据结构
+   * @concurrency Thread-safe (see source for details). }
   generic TConcurrentUnrolledListImpl<T> = class
   private
     type

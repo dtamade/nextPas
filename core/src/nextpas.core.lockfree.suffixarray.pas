@@ -33,7 +33,13 @@ type
     Length: Int32;
   end;
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 后缀数组
+    @details 并发后缀数组字符串模式匹配。
+      - 预排序的后缀索引用于二分搜索
+      - O(m log n) 模式搜索，m = 模式长度，n = 文本长度
+      - 可选 LCP 数组增强搜索
+      - 适用场景：全文搜索、模式匹配、生物信息学
+   * @concurrency Thread-safe (see source for details). }
   TSuffixArray = class
   private
     FText: AnsiString;
