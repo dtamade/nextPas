@@ -165,9 +165,13 @@ begin
     if (GThreadRegistry[LSlot].FThreadId = LThreadId) and
        GThreadRegistry[LSlot].FActive then
     begin
-      { Clear cache pointer first, then mark inactive. }
-      AtomicStorePtr(GThreadRegistry[LSlot].FCache, nil, moRelease);
+      { Mark inactive first, then clear cache pointer.
+        FindThreadCache reads FCache then FActive — by marking inactive first
+        and issuing a release fence, any concurrent reader that sees FActive=True
+        is guaranteed to see the old FCache (still valid at that point).
+        Any reader that sees FActive=False returns nil. }
       GThreadRegistry[LSlot].FActive := False;
+      AtomicStorePtr(GThreadRegistry[LSlot].FCache, nil, moRelease);
     end;
   finally
     RegistryUnlock;
@@ -431,7 +435,6 @@ var
   LIndex: Int32;
   LNode: PFreeNode;
   LOwnerThreadId: QWord;
-  LOwnerCache: Pointer;
 begin
   if APtr = nil then
     Exit;
@@ -456,18 +459,13 @@ begin
     Exit;
   end;
   { Cross-thread free optimization: check if block belongs to another thread.
-    If so, push directly to owner's per-thread inbox (lock-free).
-    If owner thread has exited (cache not found), fall through to central pool. }
+    If so, return directly to central pool. We avoid pushing to the owner's
+    per-thread inbox because the owner thread may be exiting concurrently,
+    making its threadvar cache a dangling pointer (use-after-free).
+    Central pool free is always safe and correct. }
   LOwnerThreadId := FindSpanOwnerThreadId(FCentrals[LIndex], APtr);
   if (LOwnerThreadId <> 0) and (LOwnerThreadId <> GetCurrentThreadId) then
   begin
-    LOwnerCache := FindThreadCache(LOwnerThreadId);
-    if LOwnerCache <> nil then
-    begin
-      ThreadCacheInboxPush(PThreadCache(LOwnerCache)^, LIndex, APtr);
-      Exit;
-    end;
-    { Owner thread exited — return directly to central pool. }
     CentralPoolFree(FCentrals[LIndex], 1, @APtr, GThreadCache.FOpCount);
     Exit;
   end;
