@@ -36,7 +36,7 @@ uses
 
 function platform_args_count: Int32;
 begin
-  Result := System.ParamCount;
+  Result := ParamCount;
 end;
 
 function platform_args_get(AIndex: Int32; ABuf: PAnsiChar; ABufSize: Int32): Int32;
@@ -46,12 +46,12 @@ var
 begin
   if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
-  if (AIndex < 0) or (AIndex > System.ParamCount) then
+  if (AIndex < 0) or (AIndex > ParamCount) then
   begin
     ABuf[0] := #0;
     Exit(PLATFORM_ERR_INVALID);
   end;
-  S := System.ParamStr(AIndex);
+  S := ParamStr(AIndex);
   L := Length(S);
   if L >= ABufSize then
     L := ABufSize - 1;

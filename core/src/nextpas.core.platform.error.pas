@@ -472,7 +472,11 @@ begin
       WriteStderr(AMsg, LLen);
   end;
   WriteStderr(PAnsiChar(#10), 1);
-  System.Halt(1);
+  {$IFDEF NEXTPAS_UNIX}
+  posix_exit(1);
+  {$ELSE}
+  ExitProcess(1);
+  {$ENDIF}
 end;
 
 procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
@@ -513,9 +517,11 @@ begin
   end;
   WriteStderr(@LBuf[0], LCodeLen);
   WriteStderr(')'#10, 2);
-  // FPC/Delphi Halt ultimately uses an 8-bit process status on POSIX, so keep
-  // the truncation explicit for both positive and negative error codes.
-  System.Halt(ACode and $FF);
+  {$IFDEF NEXTPAS_UNIX}
+  posix_exit(ACode and $FF);
+  {$ELSE}
+  ExitProcess(DWORD(ACode and $FF));
+  {$ENDIF}
 end;
 
 end.
