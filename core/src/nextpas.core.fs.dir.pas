@@ -118,6 +118,26 @@ begin
       FCurrent.FileType := nextpas.core.fs.base.ftSymlink;
       FCurrent.IsDir := False;
     end;
+    nextpas.core.platform.files.base.ftCharDevice:
+    begin
+      FCurrent.FileType := nextpas.core.fs.base.ftCharDevice;
+      FCurrent.IsDir := False;
+    end;
+    nextpas.core.platform.files.base.ftBlockDevice:
+    begin
+      FCurrent.FileType := nextpas.core.fs.base.ftBlockDevice;
+      FCurrent.IsDir := False;
+    end;
+    nextpas.core.platform.files.base.ftFifo:
+    begin
+      FCurrent.FileType := nextpas.core.fs.base.ftFifo;
+      FCurrent.IsDir := False;
+    end;
+    nextpas.core.platform.files.base.ftSocket:
+    begin
+      FCurrent.FileType := nextpas.core.fs.base.ftSocket;
+      FCurrent.IsDir := False;
+    end;
   else
     FCurrent.FileType := nextpas.core.fs.base.ftUnknown;
     FCurrent.IsDir := False;
@@ -347,16 +367,13 @@ begin
   Result := True;
 end;
 
-{ FsWalk bridge types — unit-level so WalkCallback can be a plain function }
+{ FsWalk bridge — unit-level so callbacks can be plain functions }
 
 type
   PFsWalkBridge = ^TFsWalkBridge;
   TFsWalkBridge = record
     Callback: TWalkFunc;
   end;
-
-var
-  GFilesOnlyBridge: PFsWalkBridge;
 
 function MapPlatformFileType(AFT: nextpas.core.platform.files.base.TPlatformFileType
   ): nextpas.core.fs.base.TFileType;
@@ -435,9 +452,11 @@ end;
 function FsWalkFilesPlatformCallback(const AEntry: TPlatformWalkEntry;
   AUserData: Pointer): TPlatformWalkAction;
 var
+  LBridge: PFsWalkBridge;
   LPasInfo: TFileInfo;
   LPath: string;
 begin
+  LBridge := PFsWalkBridge(AUserData);
   LPasInfo := BuildWalkInfo(AEntry);
   if LPasInfo.IsDir then
   begin
@@ -448,7 +467,7 @@ begin
     SetString(LPath, AEntry.Path, AEntry.PathLen)
   else
     LPath := '';
-  if GFilesOnlyBridge^.Callback(LPath, LPasInfo, nil) then
+  if LBridge^.Callback(LPath, LPasInfo, nil) then
     Result := pwaContinue
   else
     Result := pwaStop;
@@ -473,7 +492,6 @@ var
   LResult: Int32;
 begin
   LBridge.Callback := AFunc;
-  GFilesOnlyBridge := @LBridge;
   LResult := platform_fs_walk(PAnsiChar(ARoot), @FsWalkFilesPlatformCallback,
     @LBridge, False{no follow symlinks});
   if (LResult <> PLATFORM_WALK_COMPLETED) and

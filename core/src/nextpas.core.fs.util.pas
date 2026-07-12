@@ -223,7 +223,7 @@ begin
     for I := 0 to High(ALines) do
     begin
       LBuilder.AppendStr(ALines[I]);
-      LBuilder.AppendChar(#10);
+      LBuilder.AppendStr(PLATFORM_LINE_ENDING);
     end;
     FsAppendFileText(APath, LBuilder.ToString);
   finally
@@ -490,47 +490,97 @@ end;
 
 function UTF16LEToUTF8(const ABytes: PByte; AByteLen: SizeInt): string;
 var
-  LCode: Word;
+  LCode: UInt32;
+  LBuilder: TBufStringBuilder;
   I: SizeInt;
 begin
-  Result := '';
-  I := 0;
-  while I + 1 < AByteLen do
-  begin
-    LCode := ABytes[I] + (ABytes[I + 1] shl 8);
-    Inc(I, 2);
-    if LCode < $80 then
-      Result := Result + AnsiChar(LCode)
-    else if LCode < $800 then
-      Result := Result + AnsiChar($C0 or (LCode shr 6))
-                       + AnsiChar($80 or (LCode and $3F))
-    else
-      Result := Result + AnsiChar($E0 or (LCode shr 12))
-                       + AnsiChar($80 or ((LCode shr 6) and $3F))
-                       + AnsiChar($80 or (LCode and $3F));
+  LBuilder.Init(AByteLen);
+  try
+    I := 0;
+    while I + 1 < AByteLen do
+    begin
+      LCode := ABytes[I] + (ABytes[I + 1] shl 8);
+      Inc(I, 2);
+      { Surrogate pair: high (D800-DBFF) followed by low (DC00-DFFF) }
+      if (LCode >= $D800) and (LCode <= $DBFF) then
+      begin
+        if I + 1 < AByteLen then
+        begin
+          LCode := ((LCode - $D800) shl 10) +
+                   (ABytes[I] + (ABytes[I + 1] shl 8) - $DC00) + $10000;
+          Inc(I, 2);
+          { 4-byte UTF-8 for U+10000..U+10FFFF }
+          LBuilder.AppendChar(AnsiChar($F0 or (LCode shr 18)));
+          LBuilder.AppendChar(AnsiChar($80 or ((LCode shr 12) and $3F)));
+          LBuilder.AppendChar(AnsiChar($80 or ((LCode shr 6) and $3F)));
+          LBuilder.AppendChar(AnsiChar($80 or (LCode and $3F)));
+        end;
+      end
+      else if LCode < $80 then
+        LBuilder.AppendChar(AnsiChar(LCode))
+      else if LCode < $800 then
+      begin
+        LBuilder.AppendChar(AnsiChar($C0 or (LCode shr 6)));
+        LBuilder.AppendChar(AnsiChar($80 or (LCode and $3F)));
+      end
+      else
+      begin
+        LBuilder.AppendChar(AnsiChar($E0 or (LCode shr 12)));
+        LBuilder.AppendChar(AnsiChar($80 or ((LCode shr 6) and $3F)));
+        LBuilder.AppendChar(AnsiChar($80 or (LCode and $3F)));
+      end;
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
 end;
 
 function UTF16BEToUTF8(const ABytes: PByte; AByteLen: SizeInt): string;
 var
-  LCode: Word;
+  LCode: UInt32;
+  LBuilder: TBufStringBuilder;
   I: SizeInt;
 begin
-  Result := '';
-  I := 0;
-  while I + 1 < AByteLen do
-  begin
-    LCode := (ABytes[I] shl 8) + ABytes[I + 1];
-    Inc(I, 2);
-    if LCode < $80 then
-      Result := Result + AnsiChar(LCode)
-    else if LCode < $800 then
-      Result := Result + AnsiChar($C0 or (LCode shr 6))
-                       + AnsiChar($80 or (LCode and $3F))
-    else
-      Result := Result + AnsiChar($E0 or (LCode shr 12))
-                       + AnsiChar($80 or ((LCode shr 6) and $3F))
-                       + AnsiChar($80 or (LCode and $3F));
+  LBuilder.Init(AByteLen);
+  try
+    I := 0;
+    while I + 1 < AByteLen do
+    begin
+      LCode := (ABytes[I] shl 8) + ABytes[I + 1];
+      Inc(I, 2);
+      { Surrogate pair: high (D800-DBFF) followed by low (DC00-DFFF) }
+      if (LCode >= $D800) and (LCode <= $DBFF) then
+      begin
+        if I + 1 < AByteLen then
+        begin
+          LCode := ((LCode - $D800) shl 10) +
+                   ((ABytes[I] shl 8) + ABytes[I + 1] - $DC00) + $10000;
+          Inc(I, 2);
+          { 4-byte UTF-8 for U+10000..U+10FFFF }
+          LBuilder.AppendChar(AnsiChar($F0 or (LCode shr 18)));
+          LBuilder.AppendChar(AnsiChar($80 or ((LCode shr 12) and $3F)));
+          LBuilder.AppendChar(AnsiChar($80 or ((LCode shr 6) and $3F)));
+          LBuilder.AppendChar(AnsiChar($80 or (LCode and $3F)));
+        end;
+      end
+      else if LCode < $80 then
+        LBuilder.AppendChar(AnsiChar(LCode))
+      else if LCode < $800 then
+      begin
+        LBuilder.AppendChar(AnsiChar($C0 or (LCode shr 6)));
+        LBuilder.AppendChar(AnsiChar($80 or (LCode and $3F)));
+      end
+      else
+      begin
+        LBuilder.AppendChar(AnsiChar($E0 or (LCode shr 12)));
+        LBuilder.AppendChar(AnsiChar($80 or ((LCode shr 6) and $3F)));
+        LBuilder.AppendChar(AnsiChar($80 or (LCode and $3F)));
+      end;
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
 end;
 
