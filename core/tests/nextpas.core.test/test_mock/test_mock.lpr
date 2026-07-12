@@ -1624,6 +1624,124 @@ begin
   end;
 end;
 
+{ ── TMockCaptor tests ─────────────────────────────────────────────────────── }
+
+procedure TestCaptorCaptureFrom;
+var
+  LM: TMock;
+  LC: TMockCaptor;
+begin
+  LM := TMock.Create;
+  LC := TMockCaptor.Create;
+  try
+    LM.RecordCall('Foo', ['hello', 'world']);
+    LC.CaptureFrom(LM, 'Foo', 0);
+    CheckEqual('hello', LC.Value);
+    CheckEqual(1, LC.Count);
+    LC.CaptureFrom(LM, 'Foo', 1);
+    CheckEqual('world', LC.Value);
+  finally
+    LC.Free;
+    LM.Free;
+  end;
+end;
+
+procedure TestCaptorCaptureAllFrom;
+var
+  LM: TMock;
+  LC: TMockCaptor;
+begin
+  LM := TMock.Create;
+  LC := TMockCaptor.Create;
+  try
+    LM.RecordCall('Foo', ['a']);
+    LM.RecordCall('Bar', ['x']);
+    LM.RecordCall('Foo', ['b']);
+    LC.CaptureAllFrom(LM, 'Foo', 0);
+    CheckEqual(2, LC.Count);
+    CheckEqual('a', LC.Values[0]);
+    CheckEqual('b', LC.Values[1]);
+  finally
+    LC.Free;
+    LM.Free;
+  end;
+end;
+
+procedure TestCaptorCaptureTyped;
+var
+  LM: TMock;
+  LC: TMockCaptor;
+begin
+  LM := TMock.Create;
+  LC := TMockCaptor.Create;
+  try
+    LM.RecordCallTyped('Foo', [MockInt(42), MockStr('test')]);
+    LC.CaptureTypedFrom(LM, 'Foo', 0);
+    CheckTrue(LC.TypedValue.Kind = mvInt64, 'kind');
+    CheckEqual(42, LC.TypedValue.IntVal);
+    LC.CaptureTypedFrom(LM, 'Foo', 1);
+    CheckTrue(LC.TypedValue.Kind = mvString, 'kind');
+    CheckEqual('test', LC.TypedValue.StrVal);
+  finally
+    LC.Free;
+    LM.Free;
+  end;
+end;
+
+procedure TestCaptorReset;
+var
+  LM: TMock;
+  LC: TMockCaptor;
+begin
+  LM := TMock.Create;
+  LC := TMockCaptor.Create;
+  try
+    LM.RecordCall('Foo', ['hello']);
+    LC.CaptureFrom(LM, 'Foo', 0);
+    CheckEqual(1, LC.Count);
+    LC.Reset;
+    CheckEqual(0, LC.Count);
+  finally
+    LC.Free;
+    LM.Free;
+  end;
+end;
+
+procedure TestCaptorNoCallsFail;
+var
+  LM: TMock;
+  LC: TMockCaptor;
+begin
+  LM := TMock.Create;
+  LC := TMockCaptor.Create;
+  try
+    ExpectFail(procedure begin
+      LC.CaptureFrom(LM, 'Foo', 0);
+    end, 'no calls');
+  finally
+    LC.Free;
+    LM.Free;
+  end;
+end;
+
+procedure TestCaptorIndexOutOfRange;
+var
+  LM: TMock;
+  LC: TMockCaptor;
+begin
+  LM := TMock.Create;
+  LC := TMockCaptor.Create;
+  try
+    LM.RecordCall('Foo', ['a']);
+    ExpectFail(procedure begin
+      LC.CaptureFrom(LM, 'Foo', 5);
+    end, 'out of range');
+  finally
+    LC.Free;
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -1780,6 +1898,14 @@ begin
   Suite.Test('TestWhenBoolReturn', @TestWhenBoolReturn);
   Suite.Test('TestWhenDoubleReturn', @TestWhenDoubleReturn);
   Suite.Test('TestWhenResetAllClears', @TestWhenResetAllClears);
+
+  { TMockCaptor }
+  Suite.Test('TestCaptorCaptureFrom', @TestCaptorCaptureFrom);
+  Suite.Test('TestCaptorCaptureAllFrom', @TestCaptorCaptureAllFrom);
+  Suite.Test('TestCaptorCaptureTyped', @TestCaptorCaptureTyped);
+  Suite.Test('TestCaptorReset', @TestCaptorReset);
+  Suite.Test('TestCaptorNoCallsFail', @TestCaptorNoCallsFail);
+  Suite.Test('TestCaptorIndexOutOfRange', @TestCaptorIndexOutOfRange);
 
   Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);
