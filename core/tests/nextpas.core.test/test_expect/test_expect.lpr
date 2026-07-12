@@ -1313,6 +1313,56 @@ begin
   end, 'pattern');
 end;
 
+{ ── ToBeInstanceOf ─────────────────────────────────────────────────────────── }
+
+procedure TestToBeInstanceOfPass;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectObj(LObj).ToBeInstanceOf(TObject);
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestToBeInstanceOfFail;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectFail(procedure begin
+      ExpectObj(LObj).ToBeInstanceOf(EAssertionFailed);
+    end, 'TObject');
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestToBeInstanceOfNil;
+begin
+  ExpectFail(procedure begin
+    ExpectPtr(nil).ToBeInstanceOf(TObject);
+  end, 'nil');
+end;
+
+procedure TestToBeInstanceOfNot;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectObj(LObj).Not_.ToBeInstanceOf(EAssertionFailed);
+    ExpectFail(procedure begin
+      ExpectObj(LObj).Not_.ToBeInstanceOf(TObject);
+    end, 'TObject');
+  finally
+    LObj.Free;
+  end;
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1540,6 +1590,10 @@ begin
   LSuite.Test('ToMatch pass',              @TestToMatchPass);
   LSuite.Test('ToMatch fail',              @TestToMatchFail);
   LSuite.Test('Not_.ToMatch',              @TestToMatchNot);
+  LSuite.Test('ToBeInstanceOf pass',       @TestToBeInstanceOfPass);
+  LSuite.Test('ToBeInstanceOf fail',       @TestToBeInstanceOfFail);
+  LSuite.Test('ToBeInstanceOf nil',        @TestToBeInstanceOfNil);
+  LSuite.Test('Not_.ToBeInstanceOf',       @TestToBeInstanceOfNot);
 
   if not LSuite.Run then
   begin

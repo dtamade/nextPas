@@ -18,6 +18,9 @@ begin Result := nextpas.core.test.expect.ExpectDouble(AValue); end;
 function ExpectPtr(const AValue: Pointer): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectPtr(AValue); end;
 
+function ExpectObj(const AValue: TObject): IExpectation;
+begin Result := nextpas.core.test.expect.ExpectObj(AValue); end;
+
 function ExpectProc(AProc: TTestProc): IExpectation;
 begin Result := nextpas.core.test.expect.ExpectProc(AProc); end;
 

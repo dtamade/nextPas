@@ -97,6 +97,9 @@ type
     function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
     { Regex matching: value must match the pattern. }
     function ToMatch(const APattern: string): IExpectation;
+    { Object type checking: value must be an instance of AClass.
+      Works with pointer expectations (ExpectPtr). }
+    function ToBeInstanceOf(AClass: TClass): IExpectation;
     { Unconditional failure — use in conditional branches. }
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
@@ -110,6 +113,8 @@ function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
 function ExpectDouble(const AValue: Double): IExpectation;
 function ExpectPtr(const AValue: Pointer): IExpectation;
+{ ExpectObj: create expectation for a TObject. Aliased to ExpectPtr internally. }
+function ExpectObj(const AValue: TObject): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 function ExpectBytes(const AValue: TBytes): IExpectation;
 function ExpectArrayOfInt(const AValues: array of Int64): IExpectation;
@@ -252,6 +257,7 @@ type
     function ToContain(const AValue: Byte): IExpectation;
     function ToBeEmpty: IExpectation;
     function ToBeNotEmpty: IExpectation;
+    function ToBeInstanceOf(AClass: TClass): IExpectation;
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
@@ -1299,6 +1305,31 @@ begin
   end;
 end;
 
+function TExpectation.ToBeInstanceOf(AClass: TClass): IExpectation;
+var
+  LObj: TObject;
+begin
+  RequireKind(ekPointer, 'ToBeInstanceOf');
+  if AClass = nil then
+    InternalFail('ToBeInstanceOf: AClass is nil');
+  LObj := TObject(FPtrValue);
+  if FNegated then
+  begin
+    if (LObj <> nil) and (LObj is AClass) then
+      InternalFail('Expected object not to be instance of ' + AClass.ClassName +
+        ' but it is');
+  end
+  else
+  begin
+    if LObj = nil then
+      InternalFail('Expected instance of ' + AClass.ClassName + ' but got nil')
+    else if not (LObj is AClass) then
+      InternalFail('Expected instance of ' + AClass.ClassName +
+        ' but got ' + LObj.ClassName);
+  end;
+  Result := Self;
+end;
+
 { ── Expect factories ──────────────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
@@ -1329,6 +1360,11 @@ end;
 function ExpectPtr(const AValue: Pointer): IExpectation;
 begin
   Result := TExpectation.CreatePtr(AValue);
+end;
+
+function ExpectObj(const AValue: TObject): IExpectation;
+begin
+  Result := TExpectation.CreatePtr(Pointer(AValue));
 end;
 
 function ExpectProc(AProc: TTestProc): IExpectation;
