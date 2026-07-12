@@ -296,6 +296,61 @@ type
     property State: TMockState read FState;
   end;
 
+{ ── Mock Argument Captor ──────────────────────────────────────────────────── }
+
+type
+  {** TMockCaptor — captures arguments from mock calls for later assertion.
+    Usage:
+      var LCaptor: TMockCaptor;
+      LCaptor := TMockCaptor.Create;
+      // After recording calls:
+      LMock.RecordCall('Foo', ['hello']);
+      // Capture from the last call to 'Foo':
+      LCaptor.CaptureFrom(LMock, 'Foo', 0); // capture arg index 0
+      CheckEqual('hello', LCaptor.Value);
+      // Or capture all args from all calls:
+      LCaptor.CaptureAllFrom(LMock, 'Foo', 0);
+      CheckEqual(1, LCaptor.Count);
+      CheckEqual('hello', LCaptor.Values[0]); }
+  TMockCaptor = class
+  private
+    FValues: specialize TArray<string>;
+    FTypedValues: specialize TArray<TMockValue>;
+    function GetCount: Integer;
+    function GetValue: string;
+    function GetTypedValue: TMockValue;
+    function GetValues(AIndex: Integer): string;
+    function GetTypedValues(AIndex: Integer): TMockValue;
+  public
+    constructor Create;
+    { Capture the argument at AArgIndex from the last call to AMethod.
+      Fails if no calls recorded or AArgIndex out of range. }
+    procedure CaptureFrom(const AMock: TMock; const AMethod: string;
+      AArgIndex: Integer);
+    { Capture the argument at AArgIndex from ALL calls to AMethod.
+      Appends to internal list. }
+    procedure CaptureAllFrom(const AMock: TMock; const AMethod: string;
+      AArgIndex: Integer);
+    { Capture the typed argument at AArgIndex from the last call to AMethod. }
+    procedure CaptureTypedFrom(const AMock: TMock; const AMethod: string;
+      AArgIndex: Integer);
+    { Capture the typed argument at AArgIndex from ALL calls to AMethod. }
+    procedure CaptureAllTypedFrom(const AMock: TMock; const AMethod: string;
+      AArgIndex: Integer);
+    { Number of captured values }
+    property Count: Integer read GetCount;
+    { Last captured string value (convenience for single-capture) }
+    property Value: string read GetValue;
+    { Last captured typed value }
+    property TypedValue: TMockValue read GetTypedValue;
+    { Captured string values by index }
+    property Values[AIndex: Integer]: string read GetValues;
+    { Captured typed values by index }
+    property TypedValues[AIndex: Integer]: TMockValue read GetTypedValues;
+    { Clear all captured values }
+    procedure Reset;
+  end;
+
 implementation
 
 { ── TMockValue helpers ─────────────────────────────────────────────────────── }
@@ -1525,6 +1580,152 @@ begin
       LActual := LActual + '(no calls recorded)';
     InternalFail('VerifyInOrder: expected call order ' + LActual);
   end;
+end;
+
+{ ── TMockCaptor implementation ─────────────────────────────────────────────── }
+
+constructor TMockCaptor.Create;
+begin
+  inherited Create;
+  SetLength(FValues, 0);
+  SetLength(FTypedValues, 0);
+end;
+
+function TMockCaptor.GetCount: Integer;
+begin
+  Result := Length(FValues);
+end;
+
+function TMockCaptor.GetValue: string;
+begin
+  if Length(FValues) = 0 then
+    InternalFail('TMockCaptor: no values captured');
+  Result := FValues[High(FValues)];
+end;
+
+function TMockCaptor.GetTypedValue: TMockValue;
+begin
+  if Length(FTypedValues) = 0 then
+    InternalFail('TMockCaptor: no typed values captured');
+  Result := FTypedValues[High(FTypedValues)];
+end;
+
+function TMockCaptor.GetValues(AIndex: Integer): string;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FValues)) then
+    InternalFail('TMockCaptor: index ' + IntToStr(AIndex) +
+      ' out of range (count=' + IntToStr(Length(FValues)) + ')');
+  Result := FValues[AIndex];
+end;
+
+function TMockCaptor.GetTypedValues(AIndex: Integer): TMockValue;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FTypedValues)) then
+    InternalFail('TMockCaptor: index ' + IntToStr(AIndex) +
+      ' out of range (count=' + IntToStr(Length(FTypedValues)) + ')');
+  Result := FTypedValues[AIndex];
+end;
+
+procedure TMockCaptor.CaptureFrom(const AMock: TMock; const AMethod: string;
+  AArgIndex: Integer);
+var
+  LCalls: TMockCalls;
+  I, LLast: Integer;
+begin
+  LCalls := AMock.State.Calls;
+  LLast := -1;
+  for I := 0 to High(LCalls) do
+    if LCalls[I].MethodName = AMethod then
+      LLast := I;
+  if LLast < 0 then
+    InternalFail('TMockCaptor: no calls to "' + AMethod + '" recorded');
+  if (AArgIndex < 0) or (AArgIndex > High(LCalls[LLast].Args)) then
+    InternalFail('TMockCaptor: arg index ' + IntToStr(AArgIndex) +
+      ' out of range for "' + AMethod + '"');
+  SetLength(FValues, 1);
+  FValues[0] := LCalls[LLast].Args[AArgIndex];
+end;
+
+procedure TMockCaptor.CaptureAllFrom(const AMock: TMock; const AMethod: string;
+  AArgIndex: Integer);
+var
+  LCalls: TMockCalls;
+  I, LCount: Integer;
+begin
+  LCalls := AMock.State.Calls;
+  LCount := 0;
+  for I := 0 to High(LCalls) do
+    if LCalls[I].MethodName = AMethod then
+      Inc(LCount);
+  if LCount = 0 then
+    InternalFail('TMockCaptor: no calls to "' + AMethod + '" recorded');
+  SetLength(FValues, LCount);
+  LCount := 0;
+  for I := 0 to High(LCalls) do
+  begin
+    if LCalls[I].MethodName = AMethod then
+    begin
+      if (AArgIndex < 0) or (AArgIndex > High(LCalls[I].Args)) then
+        InternalFail('TMockCaptor: arg index ' + IntToStr(AArgIndex) +
+          ' out of range for "' + AMethod + '"');
+      FValues[LCount] := LCalls[I].Args[AArgIndex];
+      Inc(LCount);
+    end;
+  end;
+end;
+
+procedure TMockCaptor.CaptureTypedFrom(const AMock: TMock;
+  const AMethod: string; AArgIndex: Integer);
+var
+  LCalls: TMockCalls;
+  I, LLast: Integer;
+begin
+  LCalls := AMock.State.Calls;
+  LLast := -1;
+  for I := 0 to High(LCalls) do
+    if LCalls[I].MethodName = AMethod then
+      LLast := I;
+  if LLast < 0 then
+    InternalFail('TMockCaptor: no calls to "' + AMethod + '" recorded');
+  if (AArgIndex < 0) or (AArgIndex > High(LCalls[LLast].TypedArgs)) then
+    InternalFail('TMockCaptor: typed arg index ' + IntToStr(AArgIndex) +
+      ' out of range for "' + AMethod + '"');
+  SetLength(FTypedValues, 1);
+  FTypedValues[0] := LCalls[LLast].TypedArgs[AArgIndex];
+end;
+
+procedure TMockCaptor.CaptureAllTypedFrom(const AMock: TMock;
+  const AMethod: string; AArgIndex: Integer);
+var
+  LCalls: TMockCalls;
+  I, LCount: Integer;
+begin
+  LCalls := AMock.State.Calls;
+  LCount := 0;
+  for I := 0 to High(LCalls) do
+    if LCalls[I].MethodName = AMethod then
+      Inc(LCount);
+  if LCount = 0 then
+    InternalFail('TMockCaptor: no calls to "' + AMethod + '" recorded');
+  SetLength(FTypedValues, LCount);
+  LCount := 0;
+  for I := 0 to High(LCalls) do
+  begin
+    if LCalls[I].MethodName = AMethod then
+    begin
+      if (AArgIndex < 0) or (AArgIndex > High(LCalls[I].TypedArgs)) then
+        InternalFail('TMockCaptor: typed arg index ' + IntToStr(AArgIndex) +
+          ' out of range for "' + AMethod + '"');
+      FTypedValues[LCount] := LCalls[I].TypedArgs[AArgIndex];
+      Inc(LCount);
+    end;
+  end;
+end;
+
+procedure TMockCaptor.Reset;
+begin
+  SetLength(FValues, 0);
+  SetLength(FTypedValues, 0);
 end;
 
 end.
