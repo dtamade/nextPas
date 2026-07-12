@@ -4,6 +4,7 @@ uses
   SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
+  nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
@@ -161,12 +162,126 @@ var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LRow: AnsiString;
 begin
   LT := TTabsWidget.New(['Tab1', 'Tab2', 'Tab3']);
   FillChar(LS, SizeOf(LS), 0);
-  // Very narrow area — should truncate
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 1));
   try
     LT.RenderStateful(TRect.Make(0, 0, 8, 1), LBuf, LS);
     LRow := LBuf.RowAsString(0);
     Check(Length(LRow) > 0, 'Should produce some output even when truncated');
+  finally LBuf.Free; end;
+end;
+
+{ === New tests === }
+
+procedure TestTabsSelectedOutOfBounds;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LRow: AnsiString;
+begin
+  LT := TTabsWidget.New(['A', 'B', 'C']);
+  FillChar(LS, SizeOf(LS), 0);
+  LS.Selected := 99;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 20, 1), LBuf, LS);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('A', LRow) > 0, 'renders with out-of-bounds selected');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsSelectedNegative;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LRow: AnsiString;
+begin
+  LT := TTabsWidget.New(['A', 'B']);
+  FillChar(LS, SizeOf(LS), 0);
+  LS.Selected := -1;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 10, 1), LBuf, LS);
+    LRow := LBuf.RowAsString(0);
+    Check(Length(LRow) > 0, 'renders with negative selected');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsActiveStyleApplied;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LCell: PCell;
+begin
+  LT := TTabsWidget.New(['A', 'B'])
+    .WithActiveStyle(TStyle.Default.WithFg(TUI_RED));
+  FillChar(LS, SizeOf(LS), 0);
+  LS.Selected := 0;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 10, 1), LBuf, LS);
+    LCell := LBuf.CellAt(0, 0);
+    Check(LCell <> nil, 'cell exists');
+    Check(ColorEquals(TUI_RED, LCell^.Fg), 'active style fg applied');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsInactiveStyleApplied;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LCell: PCell;
+begin
+  LT := TTabsWidget.New(['A', 'B'])
+    .WithInactiveStyle(TStyle.Default.WithFg(TUI_GRAY));
+  FillChar(LS, SizeOf(LS), 0);
+  LS.Selected := 0;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 10, 1), LBuf, LS);
+    { Second tab 'B' starts after separator ' | ' at position3 }
+    LCell := LBuf.CellAt(4, 0);
+    if LCell <> nil then
+      Check(ColorEquals(TUI_GRAY, LCell^.Fg), 'inactive style fg applied');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsNoSepBeforeFirst;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LRow: AnsiString;
+begin
+  LT := TTabsWidget.New(['A', 'B']).WithSeparator(' | ');
+  FillChar(LS, SizeOf(LS), 0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 10, 1), LBuf, LS);
+    LRow := LBuf.RowAsString(0);
+    { First char should be 'A', not separator }
+    Check(LRow[1] = 'A', 'no separator before first tab');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsVeryNarrowWithSep;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState;
+begin
+  LT := TTabsWidget.New(['A', 'B']).WithSeparator(' | ');
+  FillChar(LS, SizeOf(LS), 0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 2, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 2, 1), LBuf, LS);
+    Check(True, 'very narrow does not crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsEmptyArea;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState;
+begin
+  LT := TTabsWidget.New(['A', 'B']);
+  FillChar(LS, SizeOf(LS), 0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 0, 0));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 0, 0), LBuf, LS);
+    Check(True, 'empty area does not crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsEmptySeparator;
+var LT: ITabsWidget; LBuf: TBuffer; LS: TTabsState; LRow: AnsiString;
+begin
+  LT := TTabsWidget.New(['A', 'B']).WithSeparator('');
+  FillChar(LS, SizeOf(LS), 0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LT.RenderStateful(TRect.Make(0, 0, 10, 1), LBuf, LS);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('A', LRow) > 0, 'empty sep renders A');
+    Check(Pos('B', LRow) > 0, 'empty sep renders B');
   finally LBuf.Free; end;
 end;
 
@@ -187,5 +302,14 @@ begin
   T.Test('Tabs single tab', @TestTabsSingleTab);
   T.Test('Tabs custom separator', @TestTabsCustomSeparator);
   T.Test('Tabs truncation', @TestTabsTruncation);
+  { New tests }
+  T.Test('Tabs selected out of bounds', @TestTabsSelectedOutOfBounds);
+  T.Test('Tabs selected negative', @TestTabsSelectedNegative);
+  T.Test('Tabs active style applied', @TestTabsActiveStyleApplied);
+  T.Test('Tabs inactive style applied', @TestTabsInactiveStyleApplied);
+  T.Test('Tabs no sep before first', @TestTabsNoSepBeforeFirst);
+  T.Test('Tabs very narrow with sep', @TestTabsVeryNarrowWithSep);
+  T.Test('Tabs empty area', @TestTabsEmptyArea);
+  T.Test('Tabs empty separator', @TestTabsEmptySeparator);
   if not T.Run then Halt(1);
 end.

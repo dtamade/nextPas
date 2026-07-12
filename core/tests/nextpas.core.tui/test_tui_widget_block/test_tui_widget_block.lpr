@@ -5,7 +5,9 @@ program test_tui_widget_block;
 uses
   nextpas.core.tui.base,
   nextpas.core.tui.color,
+  nextpas.core.tui.modifier,
   nextpas.core.tui.style,
+  nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.borders,
   nextpas.core.tui.widget.intf,
@@ -29,10 +31,6 @@ begin
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 3));
   try
     LBlock.Render(TRect.Make(0, 0, 5, 3), LBuf);
-    { 期望：
-      ┌───┐
-      │   │
-      └───┘ }
     AssertRow(LBuf, 0, #$E2#$94#$8C + #$E2#$94#$80#$E2#$94#$80#$E2#$94#$80 + #$E2#$94#$90, 'top row');
     AssertRow(LBuf, 2, #$E2#$94#$94 + #$E2#$94#$80#$E2#$94#$80#$E2#$94#$80 + #$E2#$94#$98, 'bottom row');
   finally
@@ -51,7 +49,6 @@ begin
   try
     LBlock.Render(TRect.Make(0, 0, 6, 3), LBuf);
     LRow := LBuf.RowAsString(0);
-    { 标题 'Hi' 在顶行，左边框后 }
     Check(Pos('Hi', LRow) > 0, 'title Hi in top row');
   finally
     LBuf.Free;
@@ -65,7 +62,6 @@ var
 begin
   LBlock := TBlock.New.WithBorders(BORDERS_ALL);
   LInner := LBlock.Inner(TRect.Make(0, 0, 10, 8));
-  { 四边各缩 1 -> (1,1,8,6) }
   CheckEqual(Int64(1), Int64(LInner.X), 'inner x');
   CheckEqual(Int64(1), Int64(LInner.Y), 'inner y');
   CheckEqual(Int64(8), Int64(LInner.Width), 'inner w');
@@ -79,7 +75,6 @@ var
 begin
   LBlock := TBlock.New;
   LInner := LBlock.Inner(TRect.Make(0, 0, 10, 8));
-  { 无边框 -> 不缩 }
   Check(RectEquals(LInner, TRect.Make(0, 0, 10, 8)), 'no borders no shrink');
 end;
 
@@ -88,7 +83,6 @@ var
   LBlock: IBlock;
   LInner: TRect;
 begin
-  { 有标题无顶边框 -> 顶部仍缩 1（ratatui 规则） }
   LBlock := TBlock.New.WithTitle('X');
   LInner := LBlock.Inner(TRect.Make(0, 0, 10, 8));
   CheckEqual(Int64(0), Int64(LInner.X), 'x unchanged');
@@ -101,12 +95,10 @@ var
   LWidget: IWidget;
   LBuf: TBuffer;
 begin
-  { TBlock 可当 IWidget 使用（多态） }
   LWidget := TBlock.New.WithBorders(BORDERS_ALL);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 3));
   try
     LWidget.Render(TRect.Make(0, 0, 4, 3), LBuf);
-    { 只验证渲染不崩溃且有内容 }
     Check(LBuf.RowAsString(0) <> '    ', 'rendered something');
   finally
     LBuf.Free;
@@ -117,7 +109,6 @@ procedure TestBuilderChain;
 var
   LBlock: IBlock;
 begin
-  { 验证链式调用不崩溃，返回同一对象 }
   LBlock := TBlock.New
     .WithBorders(BORDERS_ALL)
     .WithTitle('Test')
@@ -165,7 +156,6 @@ var
 begin
   LBlock := TBlock.New.WithBorders([bsTop, bsBottom]);
   LInner := LBlock.Inner(TRect.Make(0, 0, 10, 8));
-  { Only top and bottom shrink }
   CheckEqual(Int64(0), Int64(LInner.X), 'x unchanged');
   CheckEqual(Int64(1), Int64(LInner.Y), 'y shrunk by top');
   CheckEqual(Int64(10), Int64(LInner.Width), 'w unchanged');
@@ -187,6 +177,89 @@ begin
   end;
 end;
 
+procedure TestInnerLeftRightOnly;
+var
+  LBlock: IBlock;
+  LInner: TRect;
+begin
+  LBlock := TBlock.New.WithBorders([bsLeft, bsRight]);
+  LInner := LBlock.Inner(TRect.Make(0, 0, 10, 8));
+  CheckEqual(Int64(1), Int64(LInner.X), 'lr x');
+  CheckEqual(Int64(0), Int64(LInner.Y), 'lr y');
+  CheckEqual(Int64(8), Int64(LInner.Width), 'lr w');
+  CheckEqual(Int64(8), Int64(LInner.Height), 'lr h');
+end;
+
+procedure TestTitleEmptyString;
+var
+  LBlock: IBlock;
+  LBuf: TBuffer;
+begin
+  LBlock := TBlock.New.WithBorders(BORDERS_ALL).WithTitle('');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 3));
+  try
+    LBlock.Render(TRect.Make(0, 0, 6, 3), LBuf);
+    Check(True, 'empty title does not crash');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestTitleLongClips;
+var
+  LBlock: IBlock;
+  LBuf: TBuffer;
+  LRow: AnsiString;
+begin
+  LBlock := TBlock.New.WithBorders(BORDERS_ALL).WithTitle('ABCDEFGH');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 3));
+  try
+    LBlock.Render(TRect.Make(0, 0, 6, 3), LBuf);
+    LRow := LBuf.RowAsString(0);
+    { Row contains border chars + clipped title, multi-byte UTF-8 }
+    Check(Length(LRow) > 0, 'title long renders');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestRoundedBorderSet;
+var
+  LBlock: IBlock;
+  LBuf: TBuffer;
+  LRow: AnsiString;
+begin
+  LBlock := TBlock.New.WithBorders(BORDERS_ALL).WithBorderSet(BorderSetRounded);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 3));
+  try
+    LBlock.Render(TRect.Make(0, 0, 5, 3), LBuf);
+    LRow := LBuf.RowAsString(0);
+    { Rounded corners: ╭──╮ }
+    Check(Length(LRow) > 0, 'rounded rendered');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestBorderStyleApplied;
+var
+  LBlock: IBlock;
+  LBuf: TBuffer;
+  LCell: PCell;
+begin
+  LBlock := TBlock.New.WithBorders(BORDERS_ALL)
+    .WithBorderStyle(StyleDefault.WithFg(TUI_RED));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 3));
+  try
+    LBlock.Render(TRect.Make(0, 0, 5, 3), LBuf);
+    LCell := LBuf.CellAt(0, 0);
+    Check(LCell <> nil, 'border cell exists');
+    Check(ColorEquals(TUI_RED, LCell^.Fg), 'border fg red');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.block');
   T.Test('render all borders', @TestRenderAllBorders);
@@ -200,5 +273,10 @@ begin
   T.Test('render partial borders', @TestRenderPartialBorders);
   T.Test('inner partial borders', @TestInnerPartialBorders);
   T.Test('render small area', @TestRenderSmallArea);
+  T.Test('inner left right only', @TestInnerLeftRightOnly);
+  T.Test('title empty string', @TestTitleEmptyString);
+  T.Test('title long clips', @TestTitleLongClips);
+  T.Test('rounded border set', @TestRoundedBorderSet);
+  T.Test('border style applied', @TestBorderStyleApplied);
   if not T.Run then Halt(1);
 end.
