@@ -378,17 +378,17 @@ begin
   {$ENDIF}
 end;
 
-function platform_monotonic_ns: TPlatformTimeNanoseconds;
+function platform_monotonic_ns: TPlatformTimeNanoseconds; inline;
 begin
   Result := platform_time_host_clock_monotonic_ns_u64;
 end;
 
-function platform_realtime_ns: TPlatformTimeNanoseconds;
+function platform_realtime_ns: TPlatformTimeNanoseconds; inline;
 begin
   Result := platform_time_host_clock_realtime_ns_u64;
 end;
 
-function platform_monotonic_resolution_ns: TPlatformTimeNanoseconds;
+function platform_monotonic_resolution_ns: TPlatformTimeNanoseconds; inline;
 begin
   Result := platform_time_host_clock_monotonic_resolution_ns_u64;
 end;

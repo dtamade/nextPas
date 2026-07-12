@@ -122,6 +122,17 @@ type
     {** @desc 检查线程是否未启动或已等待
         @return True 如果线程句柄无效 *}
     function IsInvalid: Boolean; inline;
+    {** @desc 创建并启动线程
+        @param AProc 线程入口函数
+        @param AArg 传递给线程的参数
+        @return 0 成功，PLATFORM_ERR_* 错误码 *}
+    function Spawn(AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+    {** @desc 等待线程结束
+        @return 0 成功，PLATFORM_ERR_* 错误码 *}
+    function Wait: Int32;
+    {** @desc 检查线程是否仍在运行
+        @return True 线程仍在运行 *}
+    function IsAlive: Boolean;
   end;
 
 {** @desc 创建并启动线程
@@ -512,6 +523,39 @@ begin
     15 { PR_SET_NAME }, PtrUInt(@LName[0]), 0, 0, 0));
   if Result <> 0 then Result := platform_get_errno;
 end;
+{$ELSEIF defined(NEXTPAS_MACOS)}
+var
+  LName: array[0..15] of AnsiChar;
+  LLen: Int32;
+begin
+  if AName = nil then Exit(PLATFORM_ERR_INVALID);
+  LLen := 0;
+  while (AName[LLen] <> #0) and (LLen < 15) do
+  begin
+    LName[LLen] := AName[LLen];
+    Inc(LLen);
+  end;
+  LName[LLen] := #0;
+  Result := nextpas.core.platform.darwin.ffi.pthread_setname_np(@LName[0]);
+  if Result <> 0 then Result := platform_get_errno;
+end;
+{$ELSEIF defined(NEXTPAS_FREEBSD)}
+var
+  LName: array[0..15] of AnsiChar;
+  LLen: Int32;
+begin
+  if AName = nil then Exit(PLATFORM_ERR_INVALID);
+  LLen := 0;
+  while (AName[LLen] <> #0) and (LLen < 15) do
+  begin
+    LName[LLen] := AName[LLen];
+    Inc(LLen);
+  end;
+  LName[LLen] := #0;
+  Result := nextpas.core.platform.freebsd.ffi.pthread_setname_np(
+    nextpas.core.platform.freebsd.ffi.pthread_getthreadid_np, @LName[0]);
+  if Result <> 0 then Result := platform_get_errno;
+end;
 {$ELSE}
 begin
   Result := PLATFORM_ERR_UNSUPPORTED;
@@ -558,7 +602,7 @@ uses
 
 function platform_thread_windows_last_error_i32: Int32; inline;
 begin
-  Result := Int32(GetLastError);
+  Result := platform_get_last_error;
 end;
 
 function platform_thread_windows_create_handle(
@@ -866,6 +910,28 @@ end;
 function TPlatformThreadRecord.IsInvalid: Boolean;
 begin
   Result := Handle = nil;
+end;
+
+function TPlatformThreadRecord.Spawn(AProc: TPlatformThreadProc; AArg: Pointer): Int32;
+begin
+  Handle := nil;
+  Result := platform_thread_create(Handle, AProc, AArg);
+end;
+
+function TPlatformThreadRecord.Wait: Int32;
+var
+  LRet: Pointer;
+begin
+  if Handle = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_thread_join(Handle, LRet);
+  if Result = 0 then
+    Handle := nil;
+end;
+
+function TPlatformThreadRecord.IsAlive: Boolean;
+begin
+  Result := (Handle <> nil) and platform_thread_is_alive(Self);
 end;
 
 function platform_thread_spawn(out ARec: TPlatformThreadRecord;

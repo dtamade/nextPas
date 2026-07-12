@@ -141,6 +141,52 @@ begin
       end);
 end;
 
+{ ── Stress 6: Mock 10K calls ─────────────────────────────────────────────── }
+
+procedure TestMockTenKCalls;
+var
+  LM: TMock;
+  I: Integer;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    for I := 1 to 10000 do
+      LM.RecordCall('Foo', ['arg' + IntToStr(I)]);
+    CheckEqual(10000, LM.CallCount('Foo'), '10K mock calls recorded');
+    CheckEqual('bar', LM.GetReturn('Foo'), 'return value preserved');
+  finally
+    LM.Free;
+  end;
+end;
+
+{ ── Stress 7: Expect API 10K calls ───────────────────────────────────────── }
+
+procedure TestExpectTenKCalls;
+var
+  I: Int64;
+begin
+  for I := 1 to 10000 do
+    ExpectInt(I).ToEqualInt(I);
+end;
+
+{ ── Stress 8: Large array comparison ─────────────────────────────────────── }
+
+procedure TestLargeArrayEqual;
+var
+  LA, LB: array of Int64;
+  I: Integer;
+begin
+  SetLength(LA, 10000);
+  SetLength(LB, 10000);
+  for I := 0 to 9999 do
+  begin
+    LA[I] := I;
+    LB[I] := I;
+  end;
+  ExpectArrayOfInt(LA).ToEqualIntArray(LB);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -156,6 +202,9 @@ begin
   LSuite.Test('100KB bytes equal',         @TestLargeBytesEqual);
   LSuite.Test('100KB bytes diff',          @TestLargeBytesDiff);
   LSuite.TestSubtest('1000 subtests',      @TestSubtestStress);
+  LSuite.Test('10K mock calls',            @TestMockTenKCalls);
+  LSuite.Test('10K expect calls',          @TestExpectTenKCalls);
+  LSuite.Test('10K array equal',           @TestLargeArrayEqual);
 
   if not LSuite.Run then
   begin

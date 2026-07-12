@@ -47,7 +47,7 @@ var
 begin
   if GLoaded then
   begin
-    Inc(GRefCount);
+    InterlockedIncrement(GRefCount);
     Exit(FT_ERR_OK);
   end;
 
@@ -83,7 +83,7 @@ begin
   Pointer(FT_Get_Char_Index) := LPtr;
 
   GLoaded := True;
-  GRefCount := 1;
+  InterlockedExchange(GRefCount, 1);
   Result := FT_ERR_OK;
 end;
 
@@ -91,8 +91,7 @@ procedure ft_unload;
 begin
   if not GLoaded then
     Exit;
-  Dec(GRefCount);
-  if GRefCount > 0 then
+  if InterlockedDecrement(GRefCount) > 0 then
     Exit;
 
   Pointer(FT_Init_FreeType) := nil;

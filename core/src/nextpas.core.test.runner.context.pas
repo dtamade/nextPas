@@ -98,12 +98,12 @@ type
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.path,
   nextpas.core.platform.env,
   nextpas.core.fs;
 
-var
-  GTempDirCounter: Integer = 0;  { P2 #13: atomic counter for temp dir uniqueness }
+  var
+  GTempDirCounter: LongInt = 0;  { P2 #5: LongInt matches InterlockedIncrement signature exactly }
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Thread-local test context management                                          }
@@ -286,7 +286,7 @@ begin
     { P2 #13 fix: use atomic counter + address for uniqueness — address alone
       can collide if object is freed and new object reuses the same address. }
     FTempDir := LBaseDir + 'nextpas_test_' +
-      StringReplace(FTestName, '/', '_', [rfReplaceAll]) + '_' +
+      StringReplace(FTestName, '/', '_', True) + '_' +
       IntToStr(Int64(Pointer(Self))) + '_' +
       IntToStr(InterlockedIncrement(GTempDirCounter));
     ForceDirectories(FTempDir);

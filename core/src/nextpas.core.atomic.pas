@@ -3404,11 +3404,42 @@ begin
 end;
 
 function atomic_fetch_max(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32;
+var
+  LOld, LNew: UInt32;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  Result := UInt32(atomic_fetch_max(PInt32(@aObj)^, PInt32(@aArg)^, aOrder));
-  {$POP}
+  AtomicValidateRmwOrder(aOrder);
+
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_release, mo_acq_rel:
+      WriteBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+  repeat
+    LOld := aObj;
+    if aArg > LOld then
+      LNew := aArg
+    else
+      LNew := LOld;
+    if UInt32(InterlockedCompareExchange(PInt32(@aObj)^, Int32(LNew), Int32(LOld))) = LOld then
+      Break;
+    cpu_pause;
+  until False;
+  Result := LOld;
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_consume, mo_acquire, mo_acq_rel:
+      ReadBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
 end;
 
 function atomic_fetch_max(var aObj: UInt32; aArg: UInt32): UInt32;
@@ -3574,11 +3605,42 @@ begin
 end;
 
 function atomic_fetch_min(var aObj: UInt32; aArg: UInt32; aOrder: memory_order_t): UInt32;
+var
+  LOld, LNew: UInt32;
 begin
-  {$PUSH}
-  {$WARN 4055 OFF}
-  Result := UInt32(atomic_fetch_min(PInt32(@aObj)^, PInt32(@aArg)^, aOrder));
-  {$POP}
+  AtomicValidateRmwOrder(aOrder);
+
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_release, mo_acq_rel:
+      WriteBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
+  repeat
+    LOld := aObj;
+    if aArg < LOld then
+      LNew := aArg
+    else
+      LNew := LOld;
+    if UInt32(InterlockedCompareExchange(PInt32(@aObj)^, Int32(LNew), Int32(LOld))) = LOld then
+      Break;
+    cpu_pause;
+  until False;
+  Result := LOld;
+  {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
+  case aOrder of
+    mo_seq_cst:
+      atomic_seq_cst_fence;
+    mo_consume, mo_acquire, mo_acq_rel:
+      ReadBarrier;
+  else
+    ;
+  end;
+  {$ENDIF}
 end;
 
 function atomic_fetch_min(var aObj: UInt32; aArg: UInt32): UInt32;
@@ -3856,7 +3918,7 @@ function atomic_fetch_max(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order
 begin
   {$PUSH}
   {$WARN 4055 OFF}
-  Result := PtrUInt(atomic_fetch_max(PPtrInt(@aObj)^, PPtrInt(@aArg)^, aOrder));
+  Result := PtrUInt(atomic_fetch_max_64(UInt64(aObj), UInt64(aArg), aOrder));
   {$POP}
 end;
 
@@ -3869,7 +3931,7 @@ function atomic_fetch_min(var aObj: PtrUInt; aArg: PtrUInt; aOrder: memory_order
 begin
   {$PUSH}
   {$WARN 4055 OFF}
-  Result := PtrUInt(atomic_fetch_min(PPtrInt(@aObj)^, PPtrInt(@aArg)^, aOrder));
+  Result := PtrUInt(atomic_fetch_min_64(UInt64(aObj), UInt64(aArg), aOrder));
   {$POP}
 end;
 

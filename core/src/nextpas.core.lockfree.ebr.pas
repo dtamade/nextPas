@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.ebr;
+{**
+ * @desc Epoch-Based Reclamation (EBR) memory reclamation.
+ *
+ * @details Lock-free memory reclamation using epoch counters:
+ *   - Enter/Leave: register/unregister as active reader
+ *   - Retire: mark memory for future reclamation
+ *   - Collect: reclaim memory when safe (no active readers)
+ *   - Domain-based: multiple independent reclamation domains
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Enter/Leave: per-thread guard management
+ *   - Retire: thread-safe retirement list
+ *   - Collect: safe reclamation when no guards exist
+ *
+ * @see Epoch-Based Reclamation — Fraser, 2004
+ * @see Hazard Pointers — complementary reclamation approach
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -37,8 +54,8 @@ type
     procedure Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc;
       const AUserData: Pointer = nil);
     procedure Collect;
-    function ActiveCount: PtrUInt;
-    function RetiredCount: PtrUInt;
+    function ActiveCount: PtrUInt; inline;
+    function RetiredCount: PtrUInt; inline;
   end;
 
   TEbrGuard = record
@@ -105,8 +122,11 @@ begin
     LActive := AtomicLoad32(FActiveCount, moAcquire);
     if LActive <= 0 then
       Exit;
-  until AtomicCompareExchange32(FActiveCount, LActive, LActive - 1,
-    moRelease) = LActive;
+    if AtomicCompareExchange32(FActiveCount, LActive, LActive - 1,
+      moRelease) = LActive then
+      Exit;
+    cpu_pause;
+  until False;
 end;
 
 procedure TEbrDomain.Retire(const AData: Pointer;
@@ -160,12 +180,12 @@ begin
     AtomicFetchSub64(FRetiredCount, LReclaimedCount, moAcqRel);
 end;
 
-function TEbrDomain.ActiveCount: PtrUInt;
+function TEbrDomain.ActiveCount: PtrUInt; inline;
 begin
   Result := PtrUInt(AtomicLoad32(FActiveCount, moAcquire));
 end;
 
-function TEbrDomain.RetiredCount: PtrUInt;
+function TEbrDomain.RetiredCount: PtrUInt; inline;
 begin
   Result := PtrUInt(AtomicLoad64(FRetiredCount, moAcquire));
 end;

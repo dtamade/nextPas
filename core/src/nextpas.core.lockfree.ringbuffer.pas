@@ -37,12 +37,12 @@ type
     function ReadWait(out AValue: T): TLockFreeRingBufferResult;
     function WriteTimeout(const AValue: T; const ATimeoutNs: Int64): TLockFreeRingBufferResult;
     function ReadTimeout(out AValue: T; const ATimeoutNs: Int64): TLockFreeRingBufferResult;
-    function Count: Int64;
-    function GetCapacity: Int64;
-    function IsEmpty: Boolean;
-    function IsFull: Boolean;
+    function Count: Int64; inline;
+    function GetCapacity: Int64; inline;
+    function IsEmpty: Boolean; inline;
+    function IsFull: Boolean; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -196,7 +196,7 @@ begin
   end;
 end;
 
-function TRingBufferImpl.Count: Int64;
+function TRingBufferImpl.Count: Int64; inline;
 var
   LHead, LTail: Int64;
 begin
@@ -208,17 +208,17 @@ begin
     Result := 0;
 end;
 
-function TRingBufferImpl.GetCapacity: Int64;
+function TRingBufferImpl.GetCapacity: Int64; inline;
 begin
   Result := FCapacity;
 end;
 
-function TRingBufferImpl.IsEmpty: Boolean;
+function TRingBufferImpl.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad64(FHead, moAcquire) = AtomicLoad64(FTail, moAcquire);
 end;
 
-function TRingBufferImpl.IsFull: Boolean;
+function TRingBufferImpl.IsFull: Boolean; inline;
 var
   LHead, LTail: Int64;
 begin
@@ -232,7 +232,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TRingBufferImpl.IsClosed: Boolean;
+function TRingBufferImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

@@ -161,12 +161,12 @@ begin
       AtomicStore32(FCounters[I, J], 0, moRelaxed);
 end;
 
-function TCountMinSketch.Depth: Int32;
+function TCountMinSketch.Depth: Int32; inline;
 begin
   Result := FDepth;
 end;
 
-function TCountMinSketch.Width: Int32;
+function TCountMinSketch.Width: Int32; inline;
 begin
   Result := FWidth;
 end;

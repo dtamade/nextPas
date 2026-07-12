@@ -438,12 +438,24 @@ begin
 end;
 
 procedure TAllocStatsAllocator.ResetStats;
+var
+  LActiveAllocs: Int64;
+  LIndex: Integer;
 begin
-  FTotalAllocs := 0;
-  FTotalFrees := 0;
-  FPeakAllocs := FActiveAllocs;
-  FTotalBytesAllocated := 0;
-  FillChar(FHistogram, SizeOf(FHistogram), 0);
+  InterlockedExchange64(FTotalAllocs, 0);
+  InterlockedExchange64(FTotalFrees, 0);
+  InterlockedExchange64(FTotalBytesAllocated, 0);
+
+  for LIndex := Low(FHistogram.Buckets) to High(FHistogram.Buckets) do
+    InterlockedExchange64(FHistogram.Buckets[LIndex], 0);
+  InterlockedExchange64(FHistogram.TotalBytes, 0);
+  InterlockedExchange64(FHistogram.TotalCount, 0);
+
+  LActiveAllocs := InterlockedCompareExchange64(FActiveAllocs, 0, 0);
+  InterlockedExchange64(FPeakAllocs, 0);
+  UpdatePeak(FPeakAllocs, LActiveAllocs);
+  LActiveAllocs := InterlockedCompareExchange64(FActiveAllocs, 0, 0);
+  UpdatePeak(FPeakAllocs, LActiveAllocs);
 end;
 
 function TAllocStatsAllocator.Traits: TAllocatorTraits;

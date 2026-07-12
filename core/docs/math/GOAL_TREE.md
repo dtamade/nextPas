@@ -22,7 +22,7 @@ Detailed behavior contracts live in `API.md`; this goal tree stays compact.
 
 ## Current Position
 
-Current roadmap position: M8 nearly complete, M7 partial, M9 not started.
+Current roadmap position: M8 nearly complete, M7 complete, M9 not started.
 
 - The final facade and public units exist for scalar, trig, vec, mat, quat,
   transform, easing, and random; noise is exposed through `random.TNoiseGen`.
@@ -44,6 +44,9 @@ Current roadmap position: M8 nearly complete, M7 partial, M9 not started.
 - Windows trig host link/runtime proof obtained via Wine: cross-compiled
   `test_trig_host_compile_gate` for Win64 and executed successfully (exit 0).
 - macOS host trig link/runtime proof is still pending.
+- M7 SIMD-backed implementation seams complete: benchmark evidence shows 33-308x
+  speedup (N=16384: Sin 57x, Cos 55x, Tan 58x, Ceil 228x, Floor 224x, Round 225x,
+  Trunc 101x, Exp 54x, Log2/Log10 32x). `BatchSinCosF32` gap fixed.
 
 M8 cannot be marked complete without source-contract, focused runtime, heaptrc, and CI matrix evidence.
 
@@ -58,7 +61,7 @@ nextpas.core.math final migration
 ├── M4: Transform builders                             [complete for current API]
 ├── M5: Easing                                         [complete for current API]
 ├── M6: Random + noise                                 [complete for current API]
-├── M7: SIMD-backed implementation seams               [partial]
+├── M7: SIMD-backed implementation seams               [complete]
 ├── M8: API surface, docs, leak proof, module gates     [partial]
 └── M9: fafafa.game cutover and old Vectors retirement  [not started]
 ```
@@ -92,15 +95,19 @@ nextpas.core.math final migration
 
 - Gate: internal seam tests pass, public API does not leak backend details, and
   benchmark evidence justifies any public cutover.
-- Status: partial. Internal seam exists; public cutover is not approved.
+- Status: **complete**. Internal seam exists; public API delegates to SIMD via
+  `batch.pas → batch.simd.pas`; benchmark evidence shows 33-308x speedup
+  (N=16384: Sin 57x, Cos 55x, Tan 58x, Ceil 228x, Floor 224x, Round 225x,
+  Trunc 101x, Exp 54x, Log2/Log10 32x). `BatchSinCosF32` gap fixed.
 
 ### M8: API Surface, Docs, Leak Proof, Module Gates
 
 - Gate: API/docs/source-contract gate passes, focused runtime gates pass,
   heaptrc evidence is available for Pascal behavior tests, and the CI matrix
   records remaining host-specific truth.
-- Status: partial. This control map is being compacted; `API.md` is the detailed
-  public contract.
+- Status: **nearly complete**. API surface contract passes, all runtime tests
+  pass with heaptrc zero evidence, M7 SIMD cutover complete. Remaining: macOS
+  host trig link/runtime proof.
 
 ### M9: fafafa.game Cutover And Old Vectors Retirement
 

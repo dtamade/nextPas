@@ -51,6 +51,27 @@ type
     {** @desc 检查是否为可写映射
         @return True 如果是可写映射 *}
     function IsWritable: Boolean; inline;
+    {** @desc 检查映射是否为空（Size = 0）
+        @return True 如果映射为空 *}
+    function IsEmpty: Boolean; inline;
+    {** @desc 刷新映射区域到磁盘
+        @param AOffset 偏移量
+        @param ASize 大小（0 表示全部）
+        @return 0 成功，否则返回错误码 *}
+    function Flush(AOffset: UInt64; ASize: UInt64): Int32;
+    {** @desc 锁定映射区域到物理内存
+        @param AOffset 偏移量
+        @param ASize 大小（0 表示全部）
+        @return 0 成功，否则返回错误码 *}
+    function Lock(AOffset: UInt64; ASize: UInt64): Int32;
+    {** @desc 解锁映射区域
+        @param AOffset 偏移量
+        @param ASize 大小（0 表示全部）
+        @return 0 成功，否则返回错误码 *}
+    function Unlock(AOffset: UInt64; ASize: UInt64): Int32;
+    {** @desc 关闭映射并释放资源
+        @return 0 成功，否则返回错误码 *}
+    function Close: Int32;
   end;
 
 {** @desc 映射整个文件到内存（只读）
@@ -112,11 +133,6 @@ function platform_mmap_close(var AMap: TPlatformMappedFile): Int32;
 {** @desc 获取系统内存页大小
     @return 内存页大小（字节） *}
 function platform_mmap_page_size: UInt64;
-
-{** @desc 检查文件是否存在（通过 stat）
-    @param APath 文件路径
-    @return True 文件存在 *}
-function FileExistsByStat(const APath: PAnsiChar): Boolean;
 
 {** @desc 创建共享内存对象
     @param AName 共享内存名称
@@ -190,6 +206,31 @@ begin
   Result := Access in [pmaWrite, pmaReadWrite];
 end;
 
+function TPlatformMappedFile.IsEmpty: Boolean;
+begin
+  Result := Size = 0;
+end;
+
+function TPlatformMappedFile.Flush(AOffset: UInt64; ASize: UInt64): Int32;
+begin
+  Result := platform_mmap_flush(Self, AOffset, ASize);
+end;
+
+function TPlatformMappedFile.Lock(AOffset: UInt64; ASize: UInt64): Int32;
+begin
+  Result := platform_mmap_lock(Self, AOffset, ASize);
+end;
+
+function TPlatformMappedFile.Unlock(AOffset: UInt64; ASize: UInt64): Int32;
+begin
+  Result := platform_mmap_unlock(Self, AOffset, ASize);
+end;
+
+function TPlatformMappedFile.Close: Int32;
+begin
+  Result := platform_mmap_close(Self);
+end;
+
 const
   PLATFORM_MMAP_INVALID_HANDLE = PtrInt(-1);
 
@@ -245,13 +286,6 @@ begin
   end
   else
     ASize := 0;
-end;
-
-function FileExistsByStat(const APath: PAnsiChar): Boolean;
-var
-  LSize: UInt64;
-begin
-  Result := FileStatSize(APath, LSize) = 0;
 end;
 
 function OpenModeForAccess(AAccess: TPlatformMapAccess): TPlatformFileOpenMode;
@@ -540,7 +574,7 @@ begin
     WindowsProtection(AAccess), UInt64High(LMapSize), UInt64Low(LMapSize), nil));
   if AMap.MapHandle = 0 then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     platform_file_close(LFile);
     ResetMap(AMap);
     Exit;
@@ -550,7 +584,7 @@ begin
     UInt64High(AOffset), UInt64Low(AOffset), PtrUInt(LMapSize));
   if AMap.Addr = nil then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     platform_file_close(LFile);
     ResetMap(AMap);
@@ -588,7 +622,7 @@ begin
     nil, WindowsProtection(AAccess), UInt64High(ASize), UInt64Low(ASize), nil));
   if AMap.MapHandle = 0 then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     ResetMap(AMap);
     Exit;
   end;
@@ -597,7 +631,7 @@ begin
     0, 0, PtrUInt(ASize));
   if AMap.Addr = nil then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     ResetMap(AMap);
     Exit;
@@ -632,7 +666,7 @@ begin
   if FlushViewOfFile(LPtr, LSize) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
   Result := PLATFORM_ERR_UNSUPPORTED;
@@ -655,7 +689,7 @@ begin
   if VirtualLock(LPtr, LSize) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
   Result := PLATFORM_ERR_UNSUPPORTED;
@@ -678,7 +712,7 @@ begin
   if VirtualUnlock(LPtr, LSize) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 {$ENDIF}
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
   Result := PLATFORM_ERR_UNSUPPORTED;
@@ -718,7 +752,7 @@ begin
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   if not UnmapViewOfFile(AMap.Addr) then
-    LResult := Int32(GetLastError);
+    LResult := platform_get_last_error;
   if AMap.MapHandle <> PLATFORM_MMAP_INVALID_HANDLE then
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
   if AMap.FileHandle <> PLATFORM_MMAP_INVALID_HANDLE then
@@ -822,7 +856,7 @@ begin
     PAnsiChar(LWinName)));
   if AMap.MapHandle = 0 then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     ResetMap(AMap);
     Exit;
   end;
@@ -832,7 +866,7 @@ begin
     0, 0, PtrUInt(ASize));
   if AMap.Addr = nil then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     ResetMap(AMap);
     Exit;
@@ -922,7 +956,7 @@ begin
     AMap.MapHandle := PtrInt(OpenFileMappingA(FILE_MAP_READ, False, PAnsiChar(LWinName)));
     if AMap.MapHandle = 0 then
     begin
-      Result := Int32(GetLastError);
+      Result := platform_get_last_error;
       ResetMap(AMap);
       Exit;
     end;
@@ -932,7 +966,7 @@ begin
     0, 0, 0);
   if AMap.Addr = nil then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     ResetMap(AMap);
     Exit;
@@ -940,7 +974,7 @@ begin
 
   if VirtualQuery(AMap.Addr, @LMemInfo, SizeOf(LMemInfo)) = 0 then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     UnmapViewOfFile(AMap.Addr);
     CloseHandle(HANDLE(PtrUInt(AMap.MapHandle)));
     ResetMap(AMap);

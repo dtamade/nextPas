@@ -19,15 +19,15 @@ type
     FClosed: Int32;
   public
     constructor Create(const AInitialValue: Int64 = 0);
-    function Increment: Int64;
-    function Decrement: Int64;
-    function Add(const AValue: Int64): Int64;
-    function Sub(const AValue: Int64): Int64;
-    function Load: Int64;
+    function Increment: Int64; inline;
+    function Decrement: Int64; inline;
+    function Add(const AValue: Int64): Int64; inline;
+    function Sub(const AValue: Int64): Int64; inline;
+    function Load: Int64; inline;
     procedure Store(const AValue: Int64);
     procedure Reset;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -42,27 +42,27 @@ begin
   FClosed := 0;
 end;
 
-function TConcurrentCounter.Increment: Int64;
+function TConcurrentCounter.Increment: Int64; inline;
 begin
   Result := AtomicFetchAdd64(FValue, 1, moRelaxed) + 1;
 end;
 
-function TConcurrentCounter.Decrement: Int64;
+function TConcurrentCounter.Decrement: Int64; inline;
 begin
   Result := AtomicFetchSub64(FValue, 1, moRelaxed) - 1;
 end;
 
-function TConcurrentCounter.Add(const AValue: Int64): Int64;
+function TConcurrentCounter.Add(const AValue: Int64): Int64; inline;
 begin
   Result := AtomicFetchAdd64(FValue, AValue, moRelaxed) + AValue;
 end;
 
-function TConcurrentCounter.Sub(const AValue: Int64): Int64;
+function TConcurrentCounter.Sub(const AValue: Int64): Int64; inline;
 begin
   Result := AtomicFetchSub64(FValue, AValue, moRelaxed) - AValue;
 end;
 
-function TConcurrentCounter.Load: Int64;
+function TConcurrentCounter.Load: Int64; inline;
 begin
   Result := AtomicLoad64(FValue, moRelaxed);
 end;
@@ -82,7 +82,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TConcurrentCounter.IsClosed: Boolean;
+function TConcurrentCounter.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

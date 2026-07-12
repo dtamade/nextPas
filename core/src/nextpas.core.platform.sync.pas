@@ -122,7 +122,7 @@ function platform_condvar_wait(var ACondVar: TPlatformCondVar; var AMutex: TPlat
     @param ACondVar 条件变量句柄
     @param AMutex 互斥锁句柄
     @param ATimeoutNs 超时时间（纳秒）
-    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
+    @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
 function platform_condvar_timedwait(var ACondVar: TPlatformCondVar; var AMutex: TPlatformMutex; const ATimeoutNs: Int64): Int32;
 
 {** @desc 唤醒一个等待线程
@@ -141,7 +141,7 @@ function platform_condvar_broadcast(var ACondVar: TPlatformCondVar): Int32;
     @param AAddr 监视的地址
     @param AExpected 期望值（值不匹配时立即返回）
     @param ATimeoutNs 超时时间（纳秒）
-    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
+    @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
 function platform_wait_address32(AAddr: PInt32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
 
 {** @desc 唤醒一个等待 32 位地址的线程
@@ -160,7 +160,7 @@ function platform_wake_address_all(AAddr: PInt32): Int32;
     @param AAddr 监视的地址
     @param AExpected 期望值（值不匹配时立即返回）
     @param ATimeoutNs 超时时间（纳秒）
-    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
+    @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
 function platform_wait_address64(AAddr: PInt64; const AExpected: Int64; const ATimeoutNs: Int64): Int32;
 
 {** @desc 唤醒一个等待 64 位地址的线程
@@ -214,8 +214,20 @@ type
     function IsDone: Boolean; inline;
   end;
 
+{** @desc 初始化 Once 同步原语
+    @param AOnce Once 句柄
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_once_init(var AOnce: TPlatformOnce): Int32;
+
+{** @desc 销毁 Once 同步原语
+    @param AOnce Once 句柄
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_once_destroy(var AOnce: TPlatformOnce): Int32;
+
+{** @desc 保证函数仅执行一次（线程安全）
+    @param AOnce Once 句柄
+    @param AProc 待执行的函数指针（cdecl 过程）
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_once_exec(var AOnce: TPlatformOnce; AProc: Pointer): Int32;
 
 implementation
@@ -518,7 +530,7 @@ begin
     PLATFORM_ERR_BUSY,
     PLATFORM_ERR_INVALID,
     PLATFORM_ERR_UNSUPPORTED,
-    PLATFORM_ERR_TIMEOUT);
+    PLATFORM_ERR_TIMEDOUT);
 end;
 
 function platform_posix_bucket_index(AAddr: PInt32): PtrUInt; inline;
@@ -613,7 +625,10 @@ begin
   if InterlockedCompareExchange(GPosixWaitBucketsState, 1, 0) = 0 then
   begin
     GPosixWaitBucketsInitResult := platform_posix_wait_buckets_init;
-    InterlockedExchange(GPosixWaitBucketsState, 2);
+    if GPosixWaitBucketsInitResult = 0 then
+      InterlockedExchange(GPosixWaitBucketsState, 2)
+    else
+      InterlockedExchange(GPosixWaitBucketsState, 0);
     Exit(GPosixWaitBucketsInitResult);
   end;
 
@@ -762,7 +777,7 @@ begin
     Exit;
 
   if ATimeoutNs = 0 then
-    Exit(PLATFORM_ERR_TIMEOUT);
+    Exit(PLATFORM_ERR_TIMEDOUT);
 
   repeat
     Result := platform_posix_ensure_wait_buckets;
@@ -811,7 +826,7 @@ begin
             Break;
           if LRemainingNs = 0 then
           begin
-            Result := PLATFORM_ERR_TIMEOUT;
+            Result := PLATFORM_ERR_TIMEDOUT;
             Break;
           end;
           LRet := platform_posix_condvar_timedwait_abs(
@@ -824,13 +839,13 @@ begin
             LBucket^.Generation, LGeneration, AAddr, AExpected) then
             LDone := True;
         end
-        else if LRet = PLATFORM_ERR_TIMEOUT then
+        else if LRet = PLATFORM_ERR_TIMEDOUT then
         begin
           if platform_posix_wait_address_released(
             LBucket^.Generation, LGeneration, AAddr, AExpected) then
             Result := 0
           else
-            Result := PLATFORM_ERR_TIMEOUT;
+            Result := PLATFORM_ERR_TIMEDOUT;
           LDone := True;
         end
         else
@@ -946,7 +961,7 @@ begin
     Exit;
 
   if ATimeoutNs = 0 then
-    Exit(PLATFORM_ERR_TIMEOUT);
+    Exit(PLATFORM_ERR_TIMEDOUT);
 
   repeat
     Result := platform_posix_ensure_wait_buckets;
@@ -995,7 +1010,7 @@ begin
             Break;
           if LRemainingNs = 0 then
           begin
-            Result := PLATFORM_ERR_TIMEOUT;
+            Result := PLATFORM_ERR_TIMEDOUT;
             Break;
           end;
           LRet := platform_posix_condvar_timedwait_abs(
@@ -1008,13 +1023,13 @@ begin
             LBucket^.Generation, LGeneration, AAddr, AExpected) then
             LDone := True;
         end
-        else if LRet = PLATFORM_ERR_TIMEOUT then
+        else if LRet = PLATFORM_ERR_TIMEDOUT then
         begin
           if platform_posix_wait_address_released64(
             LBucket^.Generation, LGeneration, AAddr, AExpected) then
             Result := 0
           else
-            Result := PLATFORM_ERR_TIMEOUT;
+            Result := PLATFORM_ERR_TIMEDOUT;
           LDone := True;
         end
         else
@@ -1290,7 +1305,7 @@ end;
 
 function platform_sync_windows_last_error_i32: Int32; inline;
 begin
-  Result := Int32(GetLastError);
+  Result := platform_get_last_error;
 end;
 
 function platform_sync_windows_timeout_ns_to_ms(const ATimeoutNs: Int64): DWORD; inline;
@@ -1435,7 +1450,7 @@ begin
   else
     Result := platform_sync_windows_timeout_result(
       platform_sync_windows_last_error_i32,
-      PLATFORM_ERR_TIMEOUT);
+      PLATFORM_ERR_TIMEDOUT);
 end;
 
 function platform_sync_windows_condvar_signal(ACondVar: Pointer): Int32; inline;
@@ -1501,7 +1516,7 @@ begin
   else
     Result := platform_sync_windows_timeout_result(
       platform_sync_windows_last_error_i32,
-      PLATFORM_ERR_TIMEOUT);
+      PLATFORM_ERR_TIMEDOUT);
 end;
 
 function platform_sync_windows_wake_address_one(AAddr: PInt32): Int32; inline;
@@ -1545,7 +1560,7 @@ begin
   else
     Result := platform_sync_windows_timeout_result(
       platform_sync_windows_last_error_i32,
-      PLATFORM_ERR_TIMEOUT);
+      PLATFORM_ERR_TIMEDOUT);
 end;
 
 { Mutex - SRWLOCK based (exclusive only for mutex semantics) }

@@ -110,7 +110,7 @@ type
     function AllocMem(ASize: SizeUInt): Pointer;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
     procedure FreeMem(APtr: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
 
     // IAllocator aligned allocation
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
@@ -121,7 +121,6 @@ type
   public
     // Diagnostics
     function Owns(APtr: Pointer): Boolean;
-    function MemSizeOf(APtr: Pointer): SizeUInt;
     function Stats: TSlabPoolStats;
     function GetPerfCounters: TSlabPerfCounters;
     function ShardCount: Integer; inline;
@@ -849,9 +848,20 @@ begin
   end;
 end;
 
-function TSlabPoolSharded.MemSize(APtr: Pointer): SizeUInt;
+function TSlabPoolSharded.MemSizeOf(APtr: Pointer): SizeUInt;
+var
+  LShard: Integer;
+  LIsFallback: Boolean;
 begin
-  Result := MemSizeOf(APtr);
+  if APtr = nil then Exit(0);
+  if not TryRouteShardIndex(APtr, LShard, LIsFallback) then Exit(0);
+
+  FShards[LShard].Lock.Acquire;
+  try
+    Result := FShards[LShard].Pool.MemSizeOf(APtr);
+  finally
+    FShards[LShard].Lock.Release;
+  end;
 end;
 
 function TSlabPoolSharded.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
@@ -920,22 +930,6 @@ begin
   FShards[LShard].Lock.Acquire;
   try
     Result := FShards[LShard].Pool.Owns(APtr);
-  finally
-    FShards[LShard].Lock.Release;
-  end;
-end;
-
-function TSlabPoolSharded.MemSizeOf(APtr: Pointer): SizeUInt;
-var
-  LShard: Integer;
-  LIsFallback: Boolean;
-begin
-  if APtr = nil then Exit(0);
-  if not TryRouteShardIndex(APtr, LShard, LIsFallback) then Exit(0);
-
-  FShards[LShard].Lock.Acquire;
-  try
-    Result := FShards[LShard].Pool.MemSizeOf(APtr);
   finally
     FShards[LShard].Lock.Release;
   end;

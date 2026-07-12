@@ -18,7 +18,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
-  nextpas.core.platform.thread;
+  nextpas.core.lockfree.base;
 
 const
   SKIPLIST_MAX_LEVEL = 20;
@@ -106,7 +106,7 @@ type
 
     {** @desc 获取元素数量
       @return 元素数量 }
-    function Count: Integer;
+    function Count: Integer; inline;
 
     {** @desc 遍历所有元素
       @param ACallback 回调函数 }
@@ -231,7 +231,7 @@ begin
     else
     begin
       LSpins := 0;
-      platform_thread_yield;
+      ThreadSwitch;
     end;
   until False;
 end;
@@ -255,7 +255,7 @@ begin
     else
     begin
       LSpins := 0;
-      platform_thread_yield;
+      ThreadSwitch;
     end;
   until False;
 end;
@@ -284,7 +284,7 @@ begin
     else
     begin
       LSpins := 0;
-      platform_thread_yield;
+      ThreadSwitch;
     end;
   until False;
 end;
@@ -308,7 +308,7 @@ begin
     else
     begin
       LSpins := 0;
-      platform_thread_yield;
+      ThreadSwitch;
     end;
   until False;
 end;
@@ -450,7 +450,7 @@ begin
   Result := Find(AKey, LDummy);
 end;
 
-function TConcurrentSkipListImpl.Count: Integer;
+function TConcurrentSkipListImpl.Count: Integer; inline;
 begin
   Result := AtomicLoad32(FSize, moRelaxed);
 end;

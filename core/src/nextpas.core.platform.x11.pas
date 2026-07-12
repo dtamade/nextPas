@@ -187,7 +187,7 @@ function x11_load: Int32;
 begin
   if GLoaded then
   begin
-    Inc(GRefCount);
+    InterlockedIncrement(GRefCount);
     Exit(X11_SUCCESS);
   end;
 
@@ -237,7 +237,7 @@ begin
     Pointer(XkbKeycodeToKeysym) := nil;
 
   GLoaded := True;
-  GRefCount := 1;
+  InterlockedExchange(GRefCount, 1);
   Result := X11_SUCCESS;
 end;
 
@@ -245,8 +245,7 @@ procedure x11_unload;
 begin
   if not GLoaded then
     Exit;
-  Dec(GRefCount);
-  if GRefCount > 0 then
+  if InterlockedDecrement(GRefCount) > 0 then
     Exit;
 
   Pointer(XOpenDisplay) := nil;

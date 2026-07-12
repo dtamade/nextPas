@@ -5,6 +5,7 @@ program test_property;
 uses
   nextpas.core.test,
   nextpas.core.text.unicode.base,
+  nextpas.core.text.unicode.types,
   nextpas.core.text.unicode;
 
 var

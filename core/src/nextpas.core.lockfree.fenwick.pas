@@ -30,9 +30,9 @@ type
     function PrefixSum(AIndex: Int32; out ASum: Int64): TFenwickResult;
     function RangeSum(ALeft, ARight: Int32; out ASum: Int64): TFenwickResult;
     function GetValue(AIndex: Int32; out AValue: Int64): TFenwickResult;
-    function GetSize: Int32;
+    function GetSize: Int32; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -63,7 +63,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -92,12 +92,15 @@ begin
   if (AIndex < 1) or (AIndex > FSize) then
     Exit(fwOutOfBounds);
   Lock;
-  while AIndex <= FSize do
-  begin
-    FData[AIndex] := FData[AIndex] + ADelta;
-    AIndex := AIndex + LowBit(AIndex);
+  try
+    while AIndex <= FSize do
+    begin
+      FData[AIndex] := FData[AIndex] + ADelta;
+      AIndex := AIndex + LowBit(AIndex);
+    end;
+  finally
+    Unlock;
   end;
-  Unlock;
   Result := fwOk;
 end;
 
@@ -117,12 +120,15 @@ begin
   end;
   LSum := 0;
   Lock;
-  while AIndex > 0 do
-  begin
-    LSum := LSum + FData[AIndex];
-    AIndex := AIndex - LowBit(AIndex);
+  try
+    while AIndex > 0 do
+    begin
+      LSum := LSum + FData[AIndex];
+      AIndex := AIndex - LowBit(AIndex);
+    end;
+  finally
+    Unlock;
   end;
-  Unlock;
   ASum := LSum;
   Result := fwOk;
 end;
@@ -168,7 +174,7 @@ begin
   Result := fwOk;
 end;
 
-function TConcurrentFenwickTree.GetSize: Int32;
+function TConcurrentFenwickTree.GetSize: Int32; inline;
 begin
   Result := FSize;
 end;
@@ -178,7 +184,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TConcurrentFenwickTree.IsClosed: Boolean;
+function TConcurrentFenwickTree.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

@@ -22,7 +22,7 @@ type
     ckShuffle, ckFailFast, ckList, ckShort, ckProgress, ckMaxFail,
     ckJsonOutput, ckVerbose, ckRunTimeout,
     ckBench, ckBenchTime, ckBenchMem, ckRun,
-    ckBenchSave, ckBenchCompare, ckCache);
+    ckBenchSave, ckBenchCompare, ckCache, ckVersion);
   TConfigKeys = set of TConfigKey;
 
   IOutputSink = interface
@@ -65,6 +65,7 @@ type
   end;
 
   TTestConfig = record
+    Version: Integer;       { serialization version for forward compatibility; 0 = v8, 1 = v9+ }
     FilterPattern: string;
     TagFilter: string;  { comma-separated tag filter; empty = no tag filter }
     TimeoutMs: UInt64;
@@ -172,6 +173,7 @@ procedure SetDefaultBenchSaveFile(const AFile: string);
 procedure SetDefaultBenchCompareFile(const AFile: string);
 procedure SetDefaultCacheEnabled(AEnabled: Boolean);
 procedure SetDefaultCacheDir(const ADir: string);
+function  GetConfigVersion(const AConfig: TTestConfig): Integer;
 function  GetRepeatAllCount(const AConfig: TTestConfig): Integer;
 function  GetSlowTestCount(const AConfig: TTestConfig): Integer;
 function  GetShuffleSeed(const AConfig: TTestConfig): Integer;
@@ -214,15 +216,15 @@ type
                 out AEntry: TCacheEntry): Boolean;
     procedure Put(const AKey: string; ATestName: string;
                 const AEntry: TCacheEntry);
-    procedure Clean(AmaxAgeDays: Integer = 30);
+    procedure Clean(AMaxAgeDays: Integer = 30);
     procedure Invalidate;
   end;
 
 implementation
 
 uses
-  SysUtils,
-  nextpas.core.fs;
+  nextpas.core.fs,
+  nextpas.core.time;
 
 var
   GDefaultConfig: TTestConfig;
@@ -230,6 +232,7 @@ var
 
 function CreateDefaultConfig: TTestConfig;
 begin
+  Result.Version := 1;
   Result.FilterPattern := '';
   Result.TagFilter := '';
   Result.TimeoutMs := 0;
@@ -284,6 +287,8 @@ begin
   if Result.CacheDir = '' then
     Result.CacheDir := LDefaults.CacheDir;
   { Numeric fields: merge if zero (zero-value check is sufficient) }
+  if Result.Version = 0 then
+    Result.Version := LDefaults.Version;
   if Result.TimeoutMs = 0 then
     Result.TimeoutMs := LDefaults.TimeoutMs;
   if Result.RetryCount = 0 then
@@ -511,6 +516,11 @@ end;
 procedure SetDefaultCacheDir(const ADir: string);
 begin
   GDefaultConfig.CacheDir := ADir;
+end;
+
+function GetConfigVersion(const AConfig: TTestConfig): Integer;
+begin
+  Result := AConfig.Version;
 end;
 
 function GetRepeatAllCount(const AConfig: TTestConfig): Integer;
@@ -1108,7 +1118,7 @@ begin
   end;
 end;
 
-procedure TTestCache.Clean(AmaxAgeDays: Integer);
+procedure TTestCache.Clean(AMaxAgeDays: Integer);
 var
   LDir: string;
   LKeyEntries, LCacheEntries: TDirEntryArray;
@@ -1116,21 +1126,22 @@ var
   LKeyDir, LCacheFile: string;
   LAgeSec: Int64;
   LMaxAgeSec: Int64;
-  LFileAge: LongInt;
-  LNow: LongInt;
+  LFileModSec: Int64;
+  LNowUnix: Int64;
+  LInfo: TFileInfo;
   LEmpty: Boolean;
 begin
   LDir := CacheDir;
   if (LDir = '') or not DirectoryExists(LDir) then
     Exit;
-  if AmaxAgeDays <= 0 then
+  if AMaxAgeDays <= 0 then
   begin
     { age 0 or negative = delete all }
     Invalidate;
     Exit;
   end;
-  LMaxAgeSec := Int64(AmaxAgeDays) * 86400;
-  LNow := DateTimeToFileDate(Now);
+  LMaxAgeSec := Int64(AMaxAgeDays) * 86400;
+  LNowUnix := DateTimeToUnix(DateTimeNow);
   try
     LKeyEntries := ReadDir(LDir);
   except
@@ -1153,10 +1164,11 @@ begin
         Continue;
       LCacheFile := LKeyDir + '/' + LCacheEntries[J].Name;
       try
-        LFileAge := FileAge(LCacheFile);
-        if LFileAge < 0 then
+        LInfo := Stat(LCacheFile);
+        if LInfo.ModTime <= 0 then
           Continue;
-        LAgeSec := Int64(LNow - LFileAge);
+        LFileModSec := LInfo.ModTime div 1000000000;
+        LAgeSec := LNowUnix - LFileModSec;
         if LAgeSec > LMaxAgeSec then
           Remove(LCacheFile)
         else

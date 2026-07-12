@@ -2243,6 +2243,25 @@ begin
   end;
 end;
 
+{ EBR boundary conditions }
+
+procedure TestEbrBoundaryConditions;
+var
+  LDomain: TEbrDomain;
+  LGuard1, LGuard2: TEbrGuard;
+begin
+  LDomain := TEbrDomain.Create;
+  try
+    { Multiple guards from same domain }
+    LGuard1 := TEbrGuard.Acquire(LDomain);
+    LGuard2 := TEbrGuard.Acquire(LDomain);
+    LGuard1.Release;
+    LGuard2.Release;
+  finally
+    LDomain.Free;
+  end;
+end;
+
 { Multi-thread stress tests }
 
 const
@@ -3944,6 +3963,38 @@ begin
   end;
 end;
 
+{ MPSC boundary conditions }
+
+procedure TestMpscTryDequeueEmpty;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+begin
+  LQ := TIntMpsc.Create;
+  try
+    Check(not LQ.TryDequeue(LV), 'dequeue from empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMpscTryDequeueClosed;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+begin
+  LQ := TIntMpsc.Create;
+  try
+    LQ.TryEnqueue(1);
+    LQ.Close;
+    Check(LQ.TryDequeue(LV), 'dequeue from closed with data succeeds');
+    CheckEqual(1, LV, 'dequeued value matches');
+    Check(not LQ.TryDequeue(LV), 'dequeue from closed empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
 { SegQueue TryEnqueue + Close }
 
 procedure TestSegQueueTryEnqueueClose;
@@ -3993,6 +4044,38 @@ begin
     Check(not LQ.TryDequeue(LV), 'empty after drain');
     Check(not LQ.DequeueWait(LV), 'DequeueWait on closed empty');
     Check(not LQ.DequeueTimeout(LV, 1000000), 'DequeueTimeout on closed empty');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ SPMC boundary conditions }
+
+procedure TestSpmcTryEnqueueClosed;
+var
+  LQ: TIntSpmc;
+begin
+  LQ := TIntSpmc.Create(8);
+  try
+    LQ.Close;
+    Check(not LQ.TryEnqueue(1), 'enqueue to closed returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpmcTryDequeueClosed;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+begin
+  LQ := TIntSpmc.Create(8);
+  try
+    LQ.TryEnqueue(1);
+    LQ.Close;
+    Check(LQ.TryDequeue(LV), 'dequeue from closed with data succeeds');
+    CheckEqual(1, LV, 'dequeued value matches');
+    Check(not LQ.TryDequeue(LV), 'dequeue from closed empty returns false');
   finally
     LQ.Free;
   end;
@@ -4425,6 +4508,38 @@ begin
   end;
 end;
 
+{ SPSC boundary conditions }
+
+procedure TestSpscTryEnqueueClosed;
+var
+  LQ: TIntSpsc;
+begin
+  LQ := TIntSpsc.Create(8);
+  try
+    LQ.Close;
+    Check(not LQ.TryEnqueue(1), 'enqueue to closed returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpscTryDequeueClosed;
+var
+  LQ: TIntSpsc;
+  LV: Integer;
+begin
+  LQ := TIntSpsc.Create(8);
+  try
+    LQ.TryEnqueue(1);
+    LQ.Close;
+    Check(LQ.TryDequeue(LV), 'dequeue from closed with data succeeds');
+    CheckEqual(1, LV, 'dequeued value matches');
+    Check(not LQ.TryDequeue(LV), 'dequeue from closed empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
 { ============================================================ }
 { Edge-case: MPMC capacity=1                                    }
 { ============================================================ }
@@ -4441,6 +4556,38 @@ begin
     Check(not LQ.TryEnqueue(99), 'enqueue to full capacity=1');
     Check(LQ.TryDequeue(LV), 'dequeue from capacity=1');
     CheckEqual(42, LV, 'value matches');
+  finally
+    LQ.Free;
+  end;
+end;
+
+{ MPMC boundary conditions }
+
+procedure TestMpmcTryEnqueueClosed;
+var
+  LQ: TIntMpmc;
+begin
+  LQ := TIntMpmc.Create(8);
+  try
+    LQ.Close;
+    Check(not LQ.TryEnqueue(1), 'enqueue to closed returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMpmcTryDequeueClosed;
+var
+  LQ: TIntMpmc;
+  LV: Integer;
+begin
+  LQ := TIntMpmc.Create(8);
+  try
+    LQ.TryEnqueue(1);
+    LQ.Close;
+    Check(LQ.TryDequeue(LV), 'dequeue from closed with data succeeds');
+    CheckEqual(1, LV, 'dequeued value matches');
+    Check(not LQ.TryDequeue(LV), 'dequeue from closed empty returns false');
   finally
     LQ.Free;
   end;
@@ -4484,6 +4631,118 @@ begin
     CheckEqual(42, LV, 'value matches');
   finally
     LD.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Deque: TrySteal boundary conditions                          }
+{ ============================================================ }
+
+procedure TestDequeTryStealEmpty;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(8);
+  try
+    Check(not LD.TrySteal(LV), 'steal from empty returns false');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestDequeTryStealClosed;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(8);
+  try
+    LD.TryPush(1);
+    LD.Close;
+    Check(LD.TrySteal(LV), 'steal from closed with data succeeds');
+    CheckEqual(1, LV, 'stolen value matches');
+    Check(not LD.TrySteal(LV), 'steal from closed empty returns false');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestDequeTryPopEmpty;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(8);
+  try
+    Check(not LD.TryPop(LV), 'pop from empty returns false');
+  finally
+    LD.Free;
+  end;
+end;
+
+procedure TestDequeTryPopClosed;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(8);
+  try
+    LD.TryPush(1);
+    LD.Close;
+    Check(LD.TryPop(LV), 'pop from closed with data succeeds');
+    CheckEqual(1, LV, 'popped value matches');
+    Check(not LD.TryPop(LV), 'pop from closed empty returns false');
+  finally
+    LD.Free;
+  end;
+end;
+
+{ ============================================================ }
+{ Stack: boundary conditions                                    }
+{ ============================================================ }
+
+procedure TestStackTryPopEmpty;
+var
+  LS: TIntStack;
+  LV: Integer;
+begin
+  LS := TIntStack.Create(8);
+  try
+    Check(not LS.TryPop(LV), 'pop from empty returns false');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestStackTryPopClosed;
+var
+  LS: TIntStack;
+  LV: Integer;
+begin
+  LS := TIntStack.Create(8);
+  try
+    LS.TryPush(1);
+    LS.Close;
+    Check(LS.TryPop(LV), 'pop from closed with data succeeds');
+    CheckEqual(1, LV, 'popped value matches');
+    Check(not LS.TryPop(LV), 'pop from closed empty returns false');
+  finally
+    LS.Free;
+  end;
+end;
+
+procedure TestStackPushFull;
+var
+  LS: TIntStack;
+begin
+  LS := TIntStack.Create(2);
+  try
+    Check(LS.TryPush(1), 'push 1');
+    Check(LS.TryPush(2), 'push 2');
+    Check(not LS.TryPush(3), 'push to full returns false');
+  finally
+    LS.Free;
   end;
 end;
 
@@ -4547,6 +4806,47 @@ begin
     for LI := 1 to KEY_COUNT do
       Check(LM.Remove(LI), 'remove must succeed');
     CheckEqual(PtrUInt(0), LM.Count, 'count after remove all');
+  finally
+    LM.Free;
+  end;
+end;
+
+{ HashMap boundary conditions }
+
+procedure TestHashMapFindEmpty;
+var
+  LM: TIntIntMap;
+  LV: Integer;
+begin
+  LM := TIntIntMap.Create(4);
+  try
+    Check(not LM.Find(1, LV), 'find in empty returns false');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapRemoveEmpty;
+var
+  LM: TIntIntMap;
+begin
+  LM := TIntIntMap.Create(4);
+  try
+    Check(not LM.Remove(1), 'remove from empty returns false');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestHashMapContainsMissing;
+var
+  LM: TIntIntMap;
+begin
+  LM := TIntIntMap.Create(4);
+  try
+    Check(not LM.Contains(1), 'contains missing returns false');
+    LM.Insert(1, 10);
+    Check(LM.Contains(1), 'contains existing returns true');
   finally
     LM.Free;
   end;
@@ -4775,6 +5075,51 @@ begin
   end;
 end;
 
+{ Channel boundary conditions }
+
+procedure TestChannelTryReceiveEmpty;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(8);
+  try
+    Check(not LCh.TryReceive(LV), 'receive from empty returns false');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelTryReceiveClosed;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(8);
+  try
+    LCh.TrySend(1);
+    LCh.Close;
+    Check(LCh.TryReceive(LV), 'receive from closed with data succeeds');
+    CheckEqual(1, LV, 'received value matches');
+    Check(not LCh.TryReceive(LV), 'receive from closed empty returns false');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelTrySendClosed;
+var
+  LCh: TIntChannel;
+begin
+  LCh := TIntChannel.Create(8);
+  try
+    LCh.Close;
+    Check(not LCh.TrySend(1), 'send to closed returns false');
+  finally
+    LCh.Free;
+  end;
+end;
+
 { ============================================================ }
 { Edge-case: Selector with single channel                       }
 { ============================================================ }
@@ -4798,6 +5143,46 @@ begin
   finally
     LSel.Free;
     LCh.Free;
+  end;
+end;
+
+{ Selector boundary conditions }
+
+procedure TestSelectorTrySelectEmpty;
+var
+  LSel: TIntSelector;
+  LResult: TSelectResult;
+begin
+  LSel := TIntSelector.Create;
+  try
+    LResult := LSel.TrySelect;
+    Check(not LResult.Completed, 'select empty returns not completed');
+  finally
+    LSel.Free;
+  end;
+end;
+
+procedure TestSelectorClearResets;
+var
+  LSel: TIntSelector;
+  LCh1, LCh2: TIntChannel;
+  LV1, LV2: Integer;
+begin
+  LCh1 := TIntChannel.Create(8);
+  LCh2 := TIntChannel.Create(8);
+  LSel := TIntSelector.Create;
+  try
+    LV1 := 0;
+    LV2 := 0;
+    LSel.AddRecv(LCh1, LV1);
+    LSel.AddRecv(LCh2, LV2);
+    CheckEqual(2, LSel.CaseCount, 'case count before clear');
+    LSel.Clear;
+    CheckEqual(0, LSel.CaseCount, 'case count after clear');
+  finally
+    LSel.Free;
+    LCh1.Free;
+    LCh2.Free;
   end;
 end;
 
@@ -4840,6 +5225,51 @@ begin
       LGot := True;
   end;
   Check(LGot, 'SegQueue managed type rejected');
+end;
+
+{ SegQueue boundary conditions }
+
+procedure TestSegQueueTryDequeueEmpty;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(not LQ.TryDequeue(LV), 'dequeue from empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSegQueueTryDequeueClosed;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    LQ.Enqueue(1);
+    LQ.Close;
+    Check(LQ.TryDequeue(LV), 'dequeue from closed with data succeeds');
+    CheckEqual(1, LV, 'dequeued value matches');
+    Check(not LQ.TryDequeue(LV), 'dequeue from closed empty returns false');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSegQueueTryEnqueueClosed;
+var
+  LQ: TIntSegQueue;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    LQ.Close;
+    Check(not LQ.TryEnqueue(1), 'enqueue to closed returns false');
+  finally
+    LQ.Free;
+  end;
 end;
 
 procedure TestLockFreeSourceContracts;
@@ -6300,6 +6730,7 @@ begin
   T.Test('EBR multi-guard retire+collect', @TestEbrMultiGuardRetireCollect);
   T.Test('EBR destroy reclaims retired', @TestEbrDestroyWithRetired);
   T.Test('EBR orphan remains with origin domain', @TestEbrOrphansStayWithOriginDomain);
+  T.Test('EBR boundary conditions', @TestEbrBoundaryConditions);
   T.Test('Channel basic', @TestChannelBasic);
   T.Test('Channel close', @TestChannelClose);
   T.Test('Channel close raises on Send', @TestChannelCloseRaiseOnSend);
@@ -6354,8 +6785,12 @@ begin
   T.Test('SPMC dequeue timeout on data', @TestSpmcDequeueTimeoutOnData);
 
   T.Test('MPSC TryEnqueue + ApproxCount', @TestMpscTryEnqueue);
+  T.Test('MPSC TryDequeue empty', @TestMpscTryDequeueEmpty);
+  T.Test('MPSC TryDequeue closed', @TestMpscTryDequeueClosed);
   T.Test('SegQueue TryEnqueue + Close', @TestSegQueueTryEnqueueClose);
   T.Test('SPMC Close', @TestSpmcClose);
+  T.Test('SPMC TryEnqueue closed', @TestSpmcTryEnqueueClosed);
+  T.Test('SPMC TryDequeue closed', @TestSpmcTryDequeueClosed);
   T.Test('Channel IsEmpty', @TestChannelIsEmpty);
   T.Test('Selector TrySelect', @TestSelectorTrySelect);
   T.Test('Channel 4P+4C stress', @TestChannelStress);
@@ -6369,17 +6804,34 @@ begin
   T.Test('Channel SPSC wrap-around', @TestChannelSpscWrapAround);
 
   T.Test('SegQueue managed reject', @TestSegQueueManagedReject);
+  T.Test('SegQueue TryDequeue empty', @TestSegQueueTryDequeueEmpty);
+  T.Test('SegQueue TryDequeue closed', @TestSegQueueTryDequeueClosed);
+  T.Test('SegQueue TryEnqueue closed', @TestSegQueueTryEnqueueClosed);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);
 
   { Edge-case tests }
   T.Test('SPSC capacity=1', @TestSpscCapacityOne);
   T.Test('SPSC capacity=2', @TestSpscCapacityTwo);
+  T.Test('SPSC TryEnqueue closed', @TestSpscTryEnqueueClosed);
+  T.Test('SPSC TryDequeue closed', @TestSpscTryDequeueClosed);
   T.Test('MPMC capacity=1', @TestMpmcCapacityOne);
+  T.Test('MPMC TryEnqueue closed', @TestMpmcTryEnqueueClosed);
+  T.Test('MPMC TryDequeue closed', @TestMpmcTryDequeueClosed);
   T.Test('Stack capacity=1', @TestStackCapacityOne);
   T.Test('Deque capacity=1', @TestDequeCapacityOne);
+  T.Test('Deque TrySteal empty', @TestDequeTryStealEmpty);
+  T.Test('Deque TrySteal closed', @TestDequeTryStealClosed);
+  T.Test('Deque TryPop empty', @TestDequeTryPopEmpty);
+  T.Test('Deque TryPop closed', @TestDequeTryPopClosed);
+  T.Test('Stack TryPop empty', @TestStackTryPopEmpty);
+  T.Test('Stack TryPop closed', @TestStackTryPopClosed);
+  T.Test('Stack push full', @TestStackPushFull);
   T.Test('HashMap single key stress', @TestHashMapSingleKeyStress);
   T.Test('HashMap many keys stress', @TestHashMapManyKeysStress);
+  T.Test('HashMap Find empty', @TestHashMapFindEmpty);
+  T.Test('HashMap Remove empty', @TestHashMapRemoveEmpty);
+  T.Test('HashMap Contains missing', @TestHashMapContainsMissing);
   T.Test('Channel capacity=2', @TestChannelCapacityTwo);
   T.Test('Channel SPSC capacity=1', @TestChannelSpscCapacityOne);
 
@@ -6390,8 +6842,13 @@ begin
   T.Test('Channel resize while full', @TestChannelResizeWhileFull);
   T.Test('Channel resize closed', @TestChannelResizeClosed);
   T.Test('Channel resize reject shrink below live count', @TestChannelResizeRejectShrinkBelowLiveCount);
+  T.Test('Channel TryReceive empty', @TestChannelTryReceiveEmpty);
+  T.Test('Channel TryReceive closed', @TestChannelTryReceiveClosed);
+  T.Test('Channel TrySend closed', @TestChannelTrySendClosed);
 
   T.Test('Selector single channel', @TestSelectorSingleChannel);
+  T.Test('Selector TrySelect empty', @TestSelectorTrySelectEmpty);
+  T.Test('Selector clear resets', @TestSelectorClearResets);
   T.Test('EBR many guards', @TestEbrManyGuards);
 
   if not T.Run then Halt(1);

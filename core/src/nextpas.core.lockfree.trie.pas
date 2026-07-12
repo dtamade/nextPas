@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.trie;
+{**
+ * @desc Concurrent Trie (Prefix Tree) with per-node locks.
+ *
+ * @details Prefix tree for key-value storage:
+ *   - Insert/Find/Delete/Contains operations
+ *   - Prefix matching for autocomplete scenarios
+ *   - IP routing table support
+ *   - Per-node locks for fine-grained concurrency
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains: shared read locks
+ *   - Insert/Delete/Clear: exclusive write locks
+ *
+ * @see Trie — prefix tree data structure
+ * @see IP Routing — longest prefix matching
+ *}
 
 {$I nextpas.core.settings.inc}
 

@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init, Unix,
   {$ENDIF}
-  nextpas.core.text.conv, Math,
+  nextpas.core.text.conv, Math, SysUtils,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
@@ -59,10 +59,15 @@ procedure DoCos(s, d: PSingle; c: SizeUInt);
 begin ArrayCosF32(s, d, c); end;
 
 var i: Integer;
+  savedMask: TFPUExceptionMask;
 begin
   WriteLn('[Transcendental Benchmark] N=', N, ' ITERS=', ITERS);
   WriteLn('  Backend: ', GetBackendInfo(GetActiveBackend).Name);
   WriteLn('');
+
+  // Mask FPU exceptions for benchmark (NaN/Inf handling)
+  savedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
 
   for i := 0 to N - 1 do
     Src[i] := (i - N div 2) * 0.01;
@@ -81,4 +86,5 @@ begin
 
   WriteLn('');
   WriteLn('[DONE]');
+  SetExceptionMask(savedMask);
 end.

@@ -1,4 +1,22 @@
 unit nextpas.core.lockfree.workstealing;
+{**
+ * @desc Work-Stealing thread pool implementation.
+ *
+ * @details Per-thread deques with work stealing:
+ *   - Each worker thread has its own deque
+ *   - Local tasks: LIFO push/pop (cache-friendly)
+ *   - Stolen tasks: FIFO steal (load balancing)
+ *   - Submit: add task to any worker's deque
+ *   - Close: graceful shutdown with task drain
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Submit: multiple threads can submit tasks concurrently
+ *   - Execute: worker threads process tasks in parallel
+ *   - Steal: idle threads steal from busy threads
+ *
+ * @see Work Stealing — Blumofe & Leiserson, 1999
+ * @see Java ForkJoinPool — similar work-stealing implementation
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -40,9 +58,9 @@ type
     destructor Destroy; override;
     function Submit(const ATask: TWorkStealingTask; const AData: Pointer): Boolean;
     function Steal(out ATask: TWorkStealingTask; out AData: Pointer): TLockFreeWorkStealingResult;
-    function GetWorkerCount: Int64;
+    function GetWorkerCount: Int64; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -160,7 +178,7 @@ begin
   Result := wsEmpty;
 end;
 
-function TWorkStealingPool.GetWorkerCount: Int64;
+function TWorkStealingPool.GetWorkerCount: Int64; inline;
 begin
   Result := FWorkerCount;
 end;
@@ -181,7 +199,7 @@ begin
   end;
 end;
 
-function TWorkStealingPool.IsClosed: Boolean;
+function TWorkStealingPool.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

@@ -152,7 +152,7 @@ Scalar helpers:
 
 Statistical helpers: `Sum`, `SumToDouble`, `SumInt`, `Mean`, `Variance`, `PopnVariance`, `StdDev`, `PopnStdDev`, `TotalVariance`, `SumSquaredDeviations`.
 
-Batch operations: `BatchDot`, `BatchNormalize`, `BatchTransform`, `BatchLerp`, `BatchClamp` (vector batches); `BatchSinF32`, `BatchCosF32`, `BatchTanF32`, `BatchExpF32`, `BatchLnF32`, `BatchLog10F32`, `BatchLog2F32`, `BatchSqrtF32`, `BatchAbsF32`, `BatchNegF32`, `BatchCeilF32`, `BatchFloorF32`, `BatchRoundF32`, `BatchTruncF32`, `BatchLerpF32`, `BatchClampF32`, `BatchScaleOffsetF32` (scalar batches).
+Batch operations: `BatchDot`, `BatchNormalize`, `BatchTransform`, `BatchLerp`, `BatchClamp` (vector batches); `BatchSinF32`, `BatchCosF32`, `BatchSinCosF32`, `BatchTanF32`, `BatchExpF32`, `BatchLnF32`, `BatchLog10F32`, `BatchLog2F32`, `BatchSqrtF32`, `BatchAbsF32`, `BatchNegF32`, `BatchCeilF32`, `BatchFloorF32`, `BatchRoundF32`, `BatchTruncF32`, `BatchLerpF32`, `BatchClampF32`, `BatchScaleOffsetF32` (scalar batches).
 
 ### SIMD Batch Operations
 

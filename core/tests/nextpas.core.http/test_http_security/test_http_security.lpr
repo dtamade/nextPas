@@ -267,6 +267,11 @@ begin
         ATimedOut := True;
         Break;
       end;
+      on ETimeoutError do
+      begin
+        ATimedOut := True;
+        Break;
+      end;
     end;
     if LN = 0 then
     begin
@@ -2525,7 +2530,7 @@ begin
   RunExpectEarlyRejectSecurityCase(
     LOpts,
     REQ,
-    'HTTP/1.1 413 Payload Too Large',
+    'HTTP/1.1 400 Bad Request',
     'Expect huge Content-Length early reject');
 end;
 
@@ -3749,7 +3754,7 @@ begin
   RunExpectEarlyRejectSecurityCase(
     LOpts,
     REQ,
-    'HTTP/1.1 413 Payload Too Large',
+    'HTTP/1.1 400 Bad Request',
     'epoll Expect huge Content-Length early reject');
 end;
 

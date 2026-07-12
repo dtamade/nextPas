@@ -84,9 +84,9 @@ type
     {** @desc 删除键值对 }
     function Remove(const AKey: AnsiString): TSkipListMapResult;
     {** @desc 当前元素数量 }
-    function Count: Int32;
+    function Count: Int32; inline;
     {** @desc 是否为空 }
-    function IsEmpty: Boolean;
+    function IsEmpty: Boolean; inline;
     {** @desc 清空所有元素 }
     procedure Clear;
     {** @desc 最小的键值对 }
@@ -104,7 +104,8 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.lockfree.base;
 
 function TConcurrentSkipListMap.RandomLevel: Int32;
 var
@@ -154,14 +155,27 @@ begin
 end;
 
 procedure TConcurrentSkipListMap.GlobalLock;
+var
+  LSpin: Integer;
 begin
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
-    { spin };
+  LSpin := 0;
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TConcurrentSkipListMap.GlobalUnlock;
 begin
-  AtomicExchange32(FLock, 0);
+  AtomicStore32(FLock, 0, moRelease);
 end;
 
 constructor TConcurrentSkipListMap.Create(AMaxLevel: Int32);
@@ -327,12 +341,12 @@ begin
   end;
 end;
 
-function TConcurrentSkipListMap.Count: Int32;
+function TConcurrentSkipListMap.Count: Int32; inline;
 begin
   Result := AtomicLoad32(FSize);
 end;
 
-function TConcurrentSkipListMap.IsEmpty: Boolean;
+function TConcurrentSkipListMap.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad32(FSize) = 0;
 end;
@@ -461,19 +475,36 @@ end;
 
 procedure TConcurrentSkipListMap.ForEach(ACallback: TSkipListMapForEachCallback);
 var
+  LPairs: array of record
+    Key, Value: AnsiString;
+  end;
+  LCount, LI: Integer;
   LNode: PSkipListMapNode;
 begin
   GlobalLock;
   try
+    LCount := 0;
     LNode := FHead^.Next[0];
     while LNode <> FTail do
     begin
-      ACallback(LNode^.Key, LNode^.Value);
+      Inc(LCount);
+      LNode := LNode^.Next[0];
+    end;
+    SetLength(LPairs, LCount);
+    LCount := 0;
+    LNode := FHead^.Next[0];
+    while LNode <> FTail do
+    begin
+      LPairs[LCount].Key := LNode^.Key;
+      LPairs[LCount].Value := LNode^.Value;
+      Inc(LCount);
       LNode := LNode^.Next[0];
     end;
   finally
     GlobalUnlock;
   end;
+  for LI := 0 to LCount - 1 do
+    ACallback(LPairs[LI].Key, LPairs[LI].Value);
 end;
 
 end.

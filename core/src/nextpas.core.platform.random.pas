@@ -128,7 +128,7 @@ begin
     else
       LChunk := DWORD(ALen - LDone);
     if not RtlGenRandom(Pointer(PtrUInt(ABuf) + LDone), LChunk) then
-      Exit(Int32(GetLastError));
+      Exit(platform_get_last_error);
     Inc(LDone, PtrUInt(LChunk));
   end;
   Result := 0;

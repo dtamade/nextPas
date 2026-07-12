@@ -10,7 +10,6 @@ unit nextpas.core.test.bench;
 interface
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.test.base,
   nextpas.core.time.base;
@@ -69,6 +68,7 @@ procedure CheckBenchThroughput(const AResult: TBenchTestResult;
 implementation
 
 uses
+  nextpas.core.text.format,
   nextpas.core.test.check;
 
 function DefaultBenchTestConfig: TBenchTestConfig;
@@ -183,7 +183,7 @@ begin
   if AMessage <> '' then
     LMsg := AMessage
   else
-    LMsg := Format('Benchmark "%s" performance %.1f ns/op exceeds threshold %.1f ns/op',
+    LMsg := TextFormat('Benchmark "%s" performance %.1f ns/op exceeds threshold %.1f ns/op',
       [AResult.Name, AResult.NsPerOp, AMaxNsPerOp]);
 
   Check(AResult.Executed and (AResult.NsPerOp <= AMaxNsPerOp), LMsg);
@@ -197,7 +197,7 @@ begin
   if AMessage <> '' then
     LMsg := AMessage
   else
-    LMsg := Format('Benchmark "%s" throughput %.0f ops/s below threshold %.0f ops/s',
+    LMsg := TextFormat('Benchmark "%s" throughput %.0f ops/s below threshold %.0f ops/s',
       [AResult.Name, AResult.OpsPerSec, AMinOpsPerSec]);
 
   Check(AResult.Executed and (AResult.OpsPerSec >= AMinOpsPerSec), LMsg);

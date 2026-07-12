@@ -37,10 +37,10 @@ type
     function Contains(const AValue: T): Boolean;
     procedure Clear;
     procedure Close;
-    function IsClosed: Boolean;
-    function Count: PtrUInt;
-    function BitCount: PtrUInt;
-    function HashCount: Integer;
+    function IsClosed: Boolean; inline;
+    function Count: PtrUInt; inline;
+    function BitCount: PtrUInt; inline;
+    function HashCount: Integer; inline;
   end;
 
   generic TConcurrentBloomFilter<T> = class(specialize TConcurrentBloomFilterImpl<T>)
@@ -184,22 +184,22 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TConcurrentBloomFilterImpl.IsClosed: Boolean;
+function TConcurrentBloomFilterImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TConcurrentBloomFilterImpl.Count: PtrUInt;
+function TConcurrentBloomFilterImpl.Count: PtrUInt; inline;
 begin
   Result := PtrUInt(AtomicLoad64(FCount, moAcquire));
 end;
 
-function TConcurrentBloomFilterImpl.BitCount: PtrUInt;
+function TConcurrentBloomFilterImpl.BitCount: PtrUInt; inline;
 begin
   Result := FBitCount;
 end;
 
-function TConcurrentBloomFilterImpl.HashCount: Integer;
+function TConcurrentBloomFilterImpl.HashCount: Integer; inline;
 begin
   Result := FHashCount;
 end;

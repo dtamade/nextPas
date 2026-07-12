@@ -27,6 +27,17 @@ function BatchSinF32(const AInput: array of Single;
 function BatchCosF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
 
+{** Batch simultaneous sine and cosine for Single arrays.
+ * Computes both sin(x) and cos(x) for each element in a single pass,
+ * which is faster than calling BatchSinF32 and BatchCosF32 separately.
+ * @param AInput Input array of angles in radians
+ * @param ASinOutput Output array for sine values
+ * @param ACosOutput Output array for cosine values
+ * @return Number of elements processed
+ *}
+function BatchSinCosF32(const AInput: array of Single;
+                        var ASinOutput, ACosOutput: array of Single): SizeInt;
+
 {** Batch tangent function for Single arrays.
  * Computes tangent of each element in the input array.
  * @param AInput Input array of angles in radians
@@ -258,6 +269,13 @@ function BatchCosF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
 begin
   Result := BatchCosSimdF32(AInput, AOutput);
+end;
+
+{ BatchSinCosF32 }
+function BatchSinCosF32(const AInput: array of Single;
+                        var ASinOutput, ACosOutput: array of Single): SizeInt;
+begin
+  Result := BatchSinCosSimdF32(AInput, ASinOutput, ACosOutput);
 end;
 
 { BatchTanF32 }

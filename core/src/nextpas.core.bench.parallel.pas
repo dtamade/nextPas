@@ -28,6 +28,8 @@ type
     ThreadCount: Integer;      // 线程数
     IterationsPerThread: Int64; // 每个线程的迭代次数
     WarmupIterations: Int64;   // 预热迭代次数
+    {** 顺序基准 NsPerOp（可选，>0 时用于计算真实加速比） }
+    SequentialNsPerOp: Double;
   end;
 
   {**
@@ -174,7 +176,6 @@ var
   LStartNs: UInt64;
   LEndNs: UInt64;
   LTotalIterations: Int64;
-  LSequentialNs: Double;
 begin
   // F-12: 并行热身 - 如果 ThreadCount > 1，用线程池预热各核心缓存
   if FConfig.WarmupIterations > 0 then
@@ -257,19 +258,15 @@ begin
       FResults.OpsPerSec := 0;
 
     // Calculate speedup and efficiency
-    LSequentialNs := 0;
-    for I := 0 to High(FResults.ThreadResults) do
-      LSequentialNs := LSequentialNs + FResults.ThreadResults[I].ElapsedNs;
-
-    if FResults.TotalNs > 0 then
-      FResults.Speedup := LSequentialNs / FResults.TotalNs
+    if (FConfig.SequentialNsPerOp > 0) and (FResults.NsPerOp > 0) then
+      FResults.Speedup := FConfig.SequentialNsPerOp / FResults.NsPerOp
     else
-      FResults.Speedup := 1;
+      FResults.Speedup := 0; { 无顺序基准时标记为 N/A }
 
-    if FConfig.ThreadCount > 0 then
+    if (FConfig.ThreadCount > 0) and (FResults.Speedup > 0) then
       FResults.Efficiency := FResults.Speedup / FConfig.ThreadCount
     else
-      FResults.Efficiency := 1;
+      FResults.Efficiency := 0;
   finally
     // Cleanup — always free thread objects (PF-16)
     for I := 0 to High(LThreads) do

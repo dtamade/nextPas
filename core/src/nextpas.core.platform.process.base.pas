@@ -101,6 +101,12 @@ type
     {** @desc 检查进程是否成功退出
         @return True 如果退出码为 0 *}
     function IsSuccess: Boolean; inline;
+    {** @desc 检查是否有标准输出
+        @return True 如果 StdoutLen > 0 *}
+    function HasStdout: Boolean; inline;
+    {** @desc 检查是否有标准错误输出
+        @return True 如果 StderrLen > 0 *}
+    function HasStderr: Boolean; inline;
   end;
 
 implementation
@@ -156,6 +162,16 @@ end;
 function TPlatformProcessExecResult.IsSuccess: Boolean;
 begin
   Result := ExitCode = 0;
+end;
+
+function TPlatformProcessExecResult.HasStdout: Boolean;
+begin
+  Result := StdoutLen > 0;
+end;
+
+function TPlatformProcessExecResult.HasStderr: Boolean;
+begin
+  Result := StderrLen > 0;
 end;
 
 end.

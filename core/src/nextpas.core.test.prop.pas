@@ -1573,13 +1573,32 @@ end;
 
 { ── Shrinking helper ──────────────────────────────────────────────────────── }
 
+{ P2 #7: forward declarations for depth-limited shrink helpers }
+function ShrinkStringDepth(AGen: IStringGenerator; const AFailed: string;
+  ATest: TStringTest; ADepth: Integer): string; forward;
+function ShrinkIntDepth(AGen: IIntGenerator; const AFailed: Int64;
+  ATest: TIntTest; ADepth: Integer): Int64; forward;
+function ShrinkBoolDepth(AGen: IBoolGenerator; const AFailed: Boolean;
+  ATest: TBoolTest; ADepth: Integer): Boolean; forward;
+function ShrinkBytesDepth(AGen: IBytesGenerator; const AFailed: TBytes;
+  ATest: TBytesTest; ADepth: Integer): TBytes; forward;
+
 function ShrinkString(AGen: IStringGenerator; const AFailed: string;
   ATest: TStringTest): string;
+begin
+  Result := ShrinkStringDepth(AGen, AFailed, ATest, 0);
+end;
+
+function ShrinkStringDepth(AGen: IStringGenerator; const AFailed: string;
+  ATest: TStringTest; ADepth: Integer): string;
 var
   LShrunk: specialize TArray<string>;
   I: Integer;
 begin
   Result := AFailed;
+  { P2 #7: guard against infinite shrink loops by capping iteration depth }
+  if ADepth > 100 then
+    Exit;
   LShrunk := AGen.Shrink(AFailed);
   for I := 0 to High(LShrunk) do
   begin
@@ -1590,7 +1609,7 @@ begin
     except
       on E: EAssertionFailed do
       begin
-        Result := ShrinkString(AGen, LShrunk[I], ATest);
+        Result := ShrinkStringDepth(AGen, LShrunk[I], ATest, ADepth + 1);
         Exit;
       end;
     end;
@@ -1599,11 +1618,20 @@ end;
 
 function ShrinkInt(AGen: IIntGenerator; const AFailed: Int64;
   ATest: TIntTest): Int64;
+begin
+  Result := ShrinkIntDepth(AGen, AFailed, ATest, 0);
+end;
+
+function ShrinkIntDepth(AGen: IIntGenerator; const AFailed: Int64;
+  ATest: TIntTest; ADepth: Integer): Int64;
 var
   LShrunk: specialize TArray<Int64>;
   I: Integer;
 begin
   Result := AFailed;
+  { P2 #7: guard against infinite shrink loops }
+  if ADepth > 100 then
+    Exit;
   LShrunk := AGen.Shrink(AFailed);
   for I := 0 to High(LShrunk) do
   begin
@@ -1615,7 +1643,7 @@ begin
     except
       on E: EAssertionFailed do
       begin
-        Result := ShrinkInt(AGen, LShrunk[I], ATest);
+        Result := ShrinkIntDepth(AGen, LShrunk[I], ATest, ADepth + 1);
         Exit;
       end;
     end;
@@ -1624,11 +1652,20 @@ end;
 
 function ShrinkBool(AGen: IBoolGenerator; const AFailed: Boolean;
   ATest: TBoolTest): Boolean;
+begin
+  Result := ShrinkBoolDepth(AGen, AFailed, ATest, 0);
+end;
+
+function ShrinkBoolDepth(AGen: IBoolGenerator; const AFailed: Boolean;
+  ATest: TBoolTest; ADepth: Integer): Boolean;
 var
   LShrunk: specialize TArray<Boolean>;
   I: Integer;
 begin
   Result := AFailed;
+  { P2 #7: guard against infinite shrink loops }
+  if ADepth > 100 then
+    Exit;
   LShrunk := AGen.Shrink(AFailed);
   for I := 0 to High(LShrunk) do
   begin
@@ -1639,7 +1676,7 @@ begin
     except
       on E: EAssertionFailed do
       begin
-        Result := ShrinkBool(AGen, LShrunk[I], ATest);
+        Result := ShrinkBoolDepth(AGen, LShrunk[I], ATest, ADepth + 1);
         Exit;
       end;
     end;
@@ -1648,6 +1685,12 @@ end;
 
 function ShrinkBytes(AGen: IBytesGenerator; const AFailed: TBytes;
   ATest: TBytesTest): TBytes;
+begin
+  Result := ShrinkBytesDepth(AGen, AFailed, ATest, 0);
+end;
+
+function ShrinkBytesDepth(AGen: IBytesGenerator; const AFailed: TBytes;
+  ATest: TBytesTest; ADepth: Integer): TBytes;
 var
   LShrunk: specialize TArray<TBytes>;
   I: Integer;
@@ -1663,6 +1706,9 @@ var
 
 begin
   Result := AFailed;
+  { P2 #7: guard against infinite shrink loops }
+  if ADepth > 100 then
+    Exit;
   LShrunk := AGen.Shrink(AFailed);
   for I := 0 to High(LShrunk) do
   begin
@@ -1673,7 +1719,7 @@ begin
     except
       on E: EAssertionFailed do
       begin
-        Result := ShrinkBytes(AGen, LShrunk[I], ATest);
+        Result := ShrinkBytesDepth(AGen, LShrunk[I], ATest, ADepth + 1);
         Exit;
       end;
     end;

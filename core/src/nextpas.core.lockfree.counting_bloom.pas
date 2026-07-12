@@ -67,7 +67,7 @@ type
     function Contains(const AKey: AnsiString): Boolean;
 
     { 已添加的元素计数 }
-    function Count: Int64;
+    function Count: Int64; inline;
 
     { 重置所有计数器 }
     procedure Reset;
@@ -176,7 +176,7 @@ begin
   end;
 end;
 
-function TCountingBloomFilter.Count: Int64;
+function TCountingBloomFilter.Count: Int64; inline;
 begin
   Result := AtomicLoad64(FCount);
 end;

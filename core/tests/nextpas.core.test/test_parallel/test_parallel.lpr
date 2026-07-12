@@ -100,6 +100,7 @@ begin
     FailTest('expected at least 1 failure from beforeEach');
   end;
   PassTest('✓ Parallel beforeEach failure');
+  LSuite := Default(TTestSuite);
 end;
 
 procedure TestParallelSetupFail;
@@ -121,6 +122,7 @@ begin
     FailTest('expected LastFail=1 for setup failure, got ' + IntToStr(LSuite.LastFail));
   end;
   PassTest('✓ Parallel setup failure');
+  LSuite := Default(TTestSuite);
 end;
 
 { ── R2-F22: Timeout + Retry + Skip in Parallel ──────────────────────────── }
@@ -151,6 +153,7 @@ begin
     FailTest('fast test should pass even with short timeout');
   end;
   PassTest('✓ Parallel timeout (fast tests pass)');
+  LSuite := Default(TTestSuite);
 end;
 
 procedure TestRetryInParallel;
@@ -169,6 +172,7 @@ begin
     FailTest('flaky test should have passed after retries');
   end;
   PassTest('✓ Retry in parallel');
+  LSuite := Default(TTestSuite);
 end;
 
 procedure TestSubtestSkipInParallel;
@@ -189,6 +193,7 @@ begin
     FailTest('expected at least 2 passes');
   end;
   PassTest('✓ Subtest skip in parallel');
+  LSuite := Default(TTestSuite);
 end;
 
 { ── R3-F16: Closure + Retry ────────────────────────────────────────────────── }
@@ -216,6 +221,7 @@ begin
     FailTest('closure retry should eventually pass');
   end;
   PassTest('✓ Closure + Retry');
+  LSuite := Default(TTestSuite);
 end;
 
 { ── R6-54: Parallel subtest skip behavior ────────────────────────────────── }
@@ -255,6 +261,7 @@ begin
     end;
   CheckTrue(LFoundSubtestSkip, 'subtest_entry should be skipped');
   PassTest('✓ Parallel subtest skip');
+  LSuite := Default(TTestSuite);
 end;
 
 { ── R6-56: Table test parallel result name uniqueness ────────────────────── }
@@ -288,6 +295,7 @@ begin
       if LResult.Results[I].Name = LResult.Results[J].Name then
         Fail('Duplicate result name: ' + LResult.Results[I].Name);
   PassTest('✓ Table parallel result name uniqueness');
+  LSuite := Default(TTestSuite);
 end;
 
 procedure TestParallelSinkInjection;
@@ -321,6 +329,7 @@ begin
     FailTest('parallel sink error output should stay empty for clean run');
   end;
   PassTest('✓ Parallel sink injection');
+  LSuite := Default(TTestSuite);
 end;
 
 { ── v3.1: MaxParallelWorkers batch dispatch ────────────────────────────────── }
@@ -369,6 +378,8 @@ begin
     FailTest('MaxConcurrent=' + IntToStr(GMaxConcurrent) + ', expected <= 2');
   end;
   PassTest('✓ MaxParallelWorkers batch dispatch');
+  LRunner := Default(TSuiteRunner);
+  LSuite := Default(TTestSuite);
 end;
 
 var
@@ -681,4 +692,10 @@ begin
   GShortSkipResult := Default(TTestRunResult);
   GVerbSuite := Default(TTestSuite);
   GVerbResult := Default(TTestRunResult);
+  { Release main block local variables }
+  LSuite := Default(TTestSuite);
+  LFailSuite := Default(TTestSuite);
+  LSkipSuite := Default(TTestSuite);
+  LRunner := Default(TSuiteRunner);
+  LResults := nil;
 end.

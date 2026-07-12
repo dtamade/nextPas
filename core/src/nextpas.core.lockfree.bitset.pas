@@ -46,7 +46,7 @@ type
     {** 原子清除并返回旧值 }
     function TestAndClear(AIndex: Int32): Boolean;
     {** 获取大致位数 }
-    function BitCount: Int32;
+    function BitCount: Int32; inline;
     {** 统计设置为 1 的位数（近似） }
     function PopCount: Int64;
     {** 清除所有位 }
@@ -77,13 +77,24 @@ end;
 
 procedure TConcurrentBitSet.EnsureCapacity(AIndex: Int32);
 var
-  LNeeded, LOldCount, I: Int32;
+  LNeeded, LOldCount, I, LSpin: Int32;
 begin
+  LSpin := 0;
   LNeeded := (AIndex div 64) + 1;
   if LNeeded <= FWordCount then
     Exit;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
   if LNeeded <= FWordCount then
   begin
     AtomicStore32(FLock, 0, moRelease);
@@ -197,7 +208,7 @@ begin
   Result := (LOld and (Int64(1) shl LBitIdx)) <> 0;
 end;
 
-function TConcurrentBitSet.BitCount: Int32;
+function TConcurrentBitSet.BitCount: Int32; inline;
 begin
   Result := FWordCount * 64;
 end;

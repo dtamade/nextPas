@@ -6,7 +6,7 @@ uses
   nextpas.core.test,
   nextpas.core.text.utf8,
   nextpas.core.text.unicode.base,
-  nextpas.core.text.unicode.&case,
+  nextpas.core.text.unicode.casefold,
   nextpas.core.text.unicode;
 
 var

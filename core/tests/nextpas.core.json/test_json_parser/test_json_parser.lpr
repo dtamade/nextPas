@@ -20,40 +20,39 @@ var
 
 const
   JSON_PARSER_SOURCE_PATH_FROM_TEST = '../../../src/nextpas.core.json.parser.pas';
-  JSON_PARSER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.json.parser.pas',
-  nextpas.core.mem.allocator.base;
+  JSON_PARSER_SOURCE_PATH_FROM_ROOT = 'core/src/nextpas.core.json.parser.pas';
 
 type
-  TFailingReallocateAllocator = class(TAllocator)
+  TFailingReallocateAllocator = class(TInterfacedObject, IAllocator)
   private
     FFailOnReallocateCall: SizeUInt;
     FReallocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnReallocateCall: SizeUInt);
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    procedure FreeAligned(APtr: Pointer); override;
-    function Traits: TAllocatorTraits; override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSizeOf(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
+    function Traits: TAllocatorTraits;
   end;
 
-  TFailingAllocateAllocator = class(TAllocator)
+  TFailingAllocateAllocator = class(TInterfacedObject, IAllocator)
   private
     FFailOnAllocateCall: SizeUInt;
     FAllocateCalls: SizeUInt;
   public
     constructor Create(const AFailOnAllocateCall: SizeUInt);
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    function MemSize(APtr: Pointer): SizeUInt; override;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    procedure FreeAligned(APtr: Pointer); override;
-    function Traits: TAllocatorTraits; override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function MemSizeOf(APtr: Pointer): SizeUInt;
+    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
+    procedure FreeAligned(APtr: Pointer);
+    function Traits: TAllocatorTraits;
   end;
 
 constructor TFailingReallocateAllocator.Create(
@@ -101,7 +100,7 @@ begin
     System.FreeMem(ADst);
 end;
 
-function TFailingReallocateAllocator.MemSize(APtr: Pointer): SizeUInt;
+function TFailingReallocateAllocator.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
@@ -122,8 +121,6 @@ begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
 constructor TFailingAllocateAllocator.Create(
@@ -173,7 +170,7 @@ begin
     System.FreeMem(ADst);
 end;
 
-function TFailingAllocateAllocator.MemSize(APtr: Pointer): SizeUInt;
+function TFailingAllocateAllocator.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   Result := 0;
 end;
@@ -194,8 +191,6 @@ begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
 function ReadSourceFile(const APath: string): string;

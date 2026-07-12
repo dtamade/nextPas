@@ -1,4 +1,20 @@
 unit nextpas.core.lockfree.merkle_tree;
+{**
+ * @desc Concurrent Merkle Hash Tree with per-tree spin lock.
+ *
+ * @details FNV-1a based Merkle tree for data integrity:
+ *   - AddLeaf/RemoveLeaf: manage leaf nodes
+ *   - GetRootHash: compute root hash for integrity verification
+ *   - GenerateProof/VerifyProof: Merkle proof generation and verification
+ *   - UpdateLeaf: incremental hash updates
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - GetRootHash/GenerateProof/VerifyProof: shared read access
+ *   - AddLeaf/RemoveLeaf/UpdateLeaf: exclusive write lock
+ *
+ * @see Merkle Tree — hash tree for data integrity
+ * @see Blockchain — distributed ledger using Merkle trees
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -166,9 +182,22 @@ begin
 end;
 
 procedure TMerkleTree.LockTree;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TMerkleTree.UnlockTree;

@@ -40,6 +40,7 @@ uses
   {$IFDEF NEXTPAS_ANDROID}
   , nextpas.core.platform.android.base
   {$ENDIF}
+  , nextpas.core.platform.error
   ;
 
 type
@@ -126,7 +127,7 @@ var
 begin
   FillChar(ALimit, SizeOf(ALimit), 0);
   if not TryMapResourceLimitKind(AKind, LResource) then
-    Exit(PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT);
+    Exit(PLATFORM_ERR_INVALID);
 
   FillChar(LHostLimit, SizeOf(LHostLimit), 0);
 {$IFDEF NEXTPAS_LINUX}
@@ -149,9 +150,9 @@ var
   LHostLimit: TPlatformHostRLimit;
 begin
   if not TryMapResourceLimitKind(AKind, LResource) then
-    Exit(PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT);
+    Exit(PLATFORM_ERR_INVALID);
   if not ResourceLimitValuesValid(ALimit) then
-    Exit(PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT);
+    Exit(PLATFORM_ERR_INVALID);
 
   FillHostResourceLimit(ALimit, LHostLimit);
 {$IFDEF NEXTPAS_LINUX}
@@ -173,8 +174,8 @@ function platform_resource_get_limit(
 begin
   FillChar(ALimit, SizeOf(ALimit), 0);
   if not ResourceLimitKindValid(AKind) then
-    Exit(PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT);
-  Result := PLATFORM_RESOURCE_ERROR_UNSUPPORTED;
+    Exit(PLATFORM_ERR_INVALID);
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
 function platform_resource_set_limit(
@@ -182,10 +183,10 @@ function platform_resource_set_limit(
   const ALimit: TPlatformResourceLimit): Int32;
 begin
   if not ResourceLimitKindValid(AKind) then
-    Exit(PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT);
+    Exit(PLATFORM_ERR_INVALID);
   if not ResourceLimitValuesValid(ALimit) then
-    Exit(PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT);
-  Result := PLATFORM_RESOURCE_ERROR_UNSUPPORTED;
+    Exit(PLATFORM_ERR_INVALID);
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 

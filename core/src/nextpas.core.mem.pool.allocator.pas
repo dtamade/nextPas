@@ -92,12 +92,11 @@ type
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
     procedure FreeMem(APtr: Pointer); inline;
-    function MemSize(APtr: Pointer): SizeUInt; inline;
+    function MemSizeOf(APtr: Pointer): SizeUInt; inline;
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; inline;
     procedure FreeAligned(APtr: Pointer); inline;
     function Traits: TAllocatorTraits; inline;
     // 扩展方法（非 IAllocator 接口，仅 TPoolAllocator 提供）
-    function GetMemSize(APtr: Pointer): SizeUInt; inline;
     function TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean; inline;
     function TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean; inline;
 
@@ -533,7 +532,7 @@ begin
     FFallback.FreeMem(APtr);
 end;
 
-function TPoolAllocator.MemSize(APtr: Pointer): SizeUInt; inline;
+function TPoolAllocator.MemSizeOf(APtr: Pointer): SizeUInt; inline;
 var
   LAlloc: TPoolAllocatorAlloc;
 begin
@@ -594,18 +593,6 @@ begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
-end;
-
-function TPoolAllocator.GetMemSize(APtr: Pointer): SizeUInt; inline;
-var
-  LAlloc: TPoolAllocatorAlloc;
-begin
-  if APtr = nil then
-    Exit(0);
-  if MapGet(APtr, LAlloc) then
-    Result := LAlloc.Size
-  else
-    Result := 0;
 end;
 
 function TPoolAllocator.TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean; inline;

@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.bplus;
+{**
+ * @desc Concurrent B+ Tree with read-write lock.
+ *
+ * @note This is NOT a lock-free structure. It uses an atomic read-write lock
+ *       to keep root replacement and node reclamation safe for readers.
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains/ForEach/ForEachRange: shared read lock
+ *   - Insert/Remove/Clear: exclusive write lock
+ *
+ * @see B+ Tree — database index standard structure
+ * @see lmdb (C) — B+Tree for comparison
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -115,7 +130,7 @@ var
   LSpin: Integer;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
   begin
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
@@ -407,19 +422,21 @@ begin
     Exit(False);
   end;
   Lock;
-  LLeaf := FindLeaf(AKey);
-  for LI := 0 to LLeaf^.KeyCount - 1 do
-  begin
-    if LLeaf^.Keys[LI] = AKey then
+  try
+    LLeaf := FindLeaf(AKey);
+    for LI := 0 to LLeaf^.KeyCount - 1 do
     begin
-      AValue := LLeaf^.Values[LI];
-      Unlock;
-      Exit(True);
+      if LLeaf^.Keys[LI] = AKey then
+      begin
+        AValue := LLeaf^.Values[LI];
+        Exit(True);
+      end;
     end;
+    AValue := 0;
+    Result := False;
+  finally
+    Unlock;
   end;
-  Unlock;
-  AValue := 0;
-  Result := False;
 end;
 
 function TConcurrentBPlusTree.Contains(AKey: Int64): Boolean;
@@ -536,11 +553,14 @@ end;
 procedure TConcurrentBPlusTree.Clear;
 begin
   Lock;
-  ClearSubtree(FRoot);
-  FRoot := CreateLeaf;
-  FFirstLeaf := FRoot;
-  FCount := 0;
-  Unlock;
+  try
+    ClearSubtree(FRoot);
+    FRoot := CreateLeaf;
+    FFirstLeaf := FRoot;
+    FCount := 0;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TConcurrentBPlusTree.Close;

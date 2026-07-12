@@ -89,6 +89,8 @@ begin
     if AName[I] = '=' then
       Exit(False);
     Inc(I);
+    if I > 256 then
+      Exit(False);
   end;
   Result := True;
 end;
@@ -177,17 +179,17 @@ begin
     { ABuf=nil queries length only; copy helper leaves the nil buffer untouched. }
     ABufSize := 0;
   if not platform_env_name_valid(AName) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(AName, LName) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
 
   SetLastError(ERROR_SUCCESS);
   LResult := GetEnvironmentVariableW(PWideChar(LName), nil, 0);
   if (LResult = 0) and (GetLastError <> ERROR_SUCCESS) then
   begin
     if GetLastError = ERROR_ENVVAR_NOT_FOUND then
-      Exit(Int32(ERROR_ENVVAR_NOT_FOUND));
-    Exit(Int32(GetLastError));
+      Exit(PLATFORM_ERR_NOENT);
+    Exit(platform_get_last_error);
   end;
 
   SetLength(LValue, LResult + 1);
@@ -196,10 +198,10 @@ begin
     DWORD(Length(LValue)));
   LLastError := GetLastError;
   if (LResult = 0) and (LLastError <> ERROR_SUCCESS) then
-    Exit(Int32(LLastError));
+    Exit(platform_get_last_error);
   LValue[LResult] := #0;
   if not platform_windows_wide_to_utf8_checked(@LValue[0], LUtf8) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufSize);
   Result := 0;
 end;
@@ -211,15 +213,15 @@ var
   LValue: UnicodeString;
 begin
   if (not platform_env_name_valid(AName)) or (AValue = nil) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(AName, LName) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(AValue, LValue) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if SetEnvironmentVariableW(PWideChar(LName), PWideChar(LValue)) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_env_unset(const AName: PAnsiChar): Int32;
@@ -227,13 +229,13 @@ var
   LName: UnicodeString;
 begin
   if not platform_env_name_valid(AName) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(AName, LName) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if SetEnvironmentVariableW(PWideChar(LName), nil) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_env_exists(const AName: PAnsiChar): Boolean;
@@ -257,17 +259,17 @@ var
   LUtf8: AnsiString;
 begin
   if not Assigned(ACallback) then
-    Exit(Int32(ERROR_INVALID_PARAMETER));
+    Exit(PLATFORM_ERR_INVALID);
 
   LBlock := GetEnvironmentStringsW;
   if LBlock = nil then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   try
     LCur := PWideChar(LBlock);
     while LCur^ <> #0 do
     begin
       if not platform_windows_wide_to_utf8_checked(LCur, LUtf8) then
-        Exit(Int32(ERROR_INVALID_DATA));
+        Exit(PLATFORM_ERR_INVALID);
       if not ACallback(PAnsiChar(LUtf8), AData) then
         Break;
       Inc(LCur, Length(UnicodeString(LCur)) + 1);

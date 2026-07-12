@@ -62,7 +62,8 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.lockfree.base;
 
 constructor TSuffixArray.Create;
 begin
@@ -105,9 +106,22 @@ begin
 end;
 
 procedure TSuffixArray.Lock;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    CpuPause;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TSuffixArray.Unlock;

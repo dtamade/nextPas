@@ -66,7 +66,7 @@ type
     function AllocMem(ASize: SizeUInt): Pointer;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
     procedure FreeMem(APtr: Pointer);
-    function MemSize(APtr: Pointer): SizeUInt;
+    function MemSizeOf(APtr: Pointer): SizeUInt;
     // IAllocator aligned allocation
     function AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
     procedure FreeAligned(APtr: Pointer);
@@ -76,7 +76,6 @@ type
     function Warmup(aUnitSize: SizeUInt; aMinPages: SizeUInt): SizeUInt;
     // Diagnostics forwarding
     function Owns(APtr: Pointer): Boolean;
-    function MemSizeOf(APtr: Pointer): SizeUInt;
     function Stats: TSlabPoolStats;
     function GetPerfCounters: TSlabPerfCounters;
     function SegmentCount: Integer;
@@ -346,11 +345,11 @@ begin
   end;
 end;
 
-function TSlabPoolConcurrent.MemSize(APtr: Pointer): SizeUInt;
+function TSlabPoolConcurrent.MemSizeOf(APtr: Pointer): SizeUInt;
 begin
   FLock.Acquire;
   try
-    Result := FInner.MemSize(APtr);
+    Result := FInner.MemSizeOf(APtr);
   finally
     FLock.Release;
   end;
@@ -400,16 +399,6 @@ begin
   FLock.Acquire;
   try
     Result := FInner.Owns(APtr);
-  finally
-    FLock.Release;
-  end;
-end;
-
-function TSlabPoolConcurrent.MemSizeOf(APtr: Pointer): SizeUInt;
-begin
-  FLock.Acquire;
-  try
-    Result := FInner.MemSizeOf(APtr);
   finally
     FLock.Release;
   end;

@@ -37,15 +37,15 @@ var
   LSize: TPlatformPtySize;
   LRc: Int32;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open should succeed');
-  Check(LPty.FMasterFd > 2, 'master fd > 2');
-  Check(LPty.FSlaveFd > 2, 'slave fd > 2');
-  Check(LPty.FMasterFd <> LPty.FSlaveFd, 'master <> slave');
+  Check(LPty.MasterFd > 2, 'master fd > 2');
+  Check(LPty.SlaveFd > 2, 'slave fd > 2');
+  Check(LPty.MasterFd <> LPty.SlaveFd, 'master <> slave');
   LRc := platform_pty_close(LPty);
   Check(LRc = 0, 'close should succeed');
 end;
@@ -56,15 +56,15 @@ var
   LSize: TPlatformPtySize;
   LRc: Int32;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
 
-  LSize.FCols := 120;
-  LSize.FRows := 40;
+  LSize.Cols := 120;
+  LSize.Rows := 40;
   LRc := platform_pty_resize(LPty, LSize);
   Check(LRc = 0, 'resize should succeed');
 
@@ -81,10 +81,10 @@ var
   LN: ssize_t;
   LArgv: array[0..2] of PAnsiChar;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
 
@@ -96,7 +96,7 @@ begin
   Check(LPid > 0, 'pid > 0');
 
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LN := read(LPty.FMasterFd, @LBuf[0], 255);
+  LN := read(LPty.MasterFd, @LBuf[0], 255);
   Check(LN > 0, 'should read output from pty');
 
   { PTY may add \r\n, check substring }
@@ -114,10 +114,10 @@ var
   LStage: TPlatformPtySpawnStage;
   LArgv: array[0..1] of PAnsiChar;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
 
@@ -138,10 +138,10 @@ var
   LStage: TPlatformPtySpawnStage;
   LArgv: array[0..3] of PAnsiChar;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
 
@@ -167,10 +167,10 @@ var
   LN: ssize_t;
   LArgv: array[0..3] of PAnsiChar;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
 
@@ -183,7 +183,7 @@ begin
   Check(LPid > 0, 'pid > 0');
 
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LN := read(LPty.FMasterFd, @LBuf[0], 255);
+  LN := read(LPty.MasterFd, @LBuf[0], 255);
   Check(LN > 0, 'should read output');
   Check(Pos('/tmp', string(PAnsiChar(@LBuf[0]))) > 0, 'output contains /tmp');
 
@@ -202,10 +202,10 @@ var
   LArgv: array[0..3] of PAnsiChar;
   LMsg: PAnsiChar;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
 
@@ -217,10 +217,10 @@ begin
   Check(LRc = 0, 'spawn echo shell');
 
   LMsg := 'roundtrip_test'#10;
-  write(LPty.FMasterFd, LMsg, 15);
+  write(LPty.MasterFd, LMsg, 15);
 
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LN := read(LPty.FMasterFd, @LBuf[0], 255);
+  LN := read(LPty.MasterFd, @LBuf[0], 255);
   Check(LN > 0, 'should read echo from cat');
   Check(Pos('roundtrip_test', string(PAnsiChar(@LBuf[0]))) > 0, 'roundtrip data');
 
@@ -234,13 +234,13 @@ var
   LSize: TPlatformPtySize;
   LRc: Int32;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
-  Check(platform_pty_master_fd(LPty) = PtrInt(LPty.FMasterFd), 'master_fd matches');
+  Check(platform_pty_master_fd(LPty) = PtrInt(LPty.MasterFd), 'master_fd matches');
   platform_pty_close(LPty);
 end;
 
@@ -250,10 +250,10 @@ var
   LSize: TPlatformPtySize;
   LRc: Int32;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
   Check(platform_pty_close(LPty) = 0, 'first close');
@@ -267,15 +267,15 @@ var
   LSize: TPlatformPtySize;
   LRc: Int32;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
   platform_pty_close(LPty);
 
-  LSize.FCols := 120;
+  LSize.Cols := 120;
   LRc := platform_pty_resize(LPty, LSize);
   Check(LRc <> 0, 'resize after close should fail');
 end;
@@ -291,10 +291,10 @@ var
   LArgv: array[0..3] of PAnsiChar;
   LEnvp: array[0..2] of PAnsiChar;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
 
@@ -309,7 +309,7 @@ begin
   Check(LPid > 0, 'pid > 0');
 
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LN := read(LPty.FMasterFd, @LBuf[0], 255);
+  LN := read(LPty.MasterFd, @LBuf[0], 255);
   Check(LN > 0, 'should read output');
   Check(Pos('hello_env', string(PAnsiChar(@LBuf[0]))) > 0, 'output contains env var');
 
@@ -327,10 +327,10 @@ var
   LN: ssize_t;
   LArgv: array[0..3] of PAnsiChar;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   LRc := platform_pty_open(LSize, LPty);
   Check(LRc = 0, 'open');
 
@@ -343,7 +343,7 @@ begin
   Check(LPid > 0, 'pid > 0');
 
   FillChar(LBuf, SizeOf(LBuf), 0);
-  LN := read(LPty.FMasterFd, @LBuf[0], 4095);
+  LN := read(LPty.MasterFd, @LBuf[0], 4095);
   Check(LN > 0, 'should read output');
   Check(Pos('line_1', string(PAnsiChar(@LBuf[0]))) > 0, 'output contains line_1');
 
@@ -360,8 +360,8 @@ begin
   Check(platform_pty_open(LSize, LPty) = 0, 'open');
   for I := 0 to 9 do
   begin
-    LSize.FCols := 80 + I;
-    LSize.FRows := 24 + I;
+    LSize.Cols := 80 + I;
+    LSize.Rows := 24 + I;
     Check(platform_pty_resize(LPty, LSize) = 0, 'resize ' + IntToStr(I));
   end;
   platform_pty_close(LPty);
@@ -373,10 +373,10 @@ var
   LSize: TPlatformPtySize;
   I: Int32;
 begin
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   for I := 0 to 9 do
   begin
     Check(platform_pty_open(LSize, LPty) = 0, 'open ' + IntToStr(I));
@@ -391,8 +391,8 @@ var
   LPid, LRc: Int32;
   LStage: TPlatformPtySpawnStage;
 begin
-  LSize.FCols := 80; LSize.FRows := 24;
-  LSize.FXPixel := 0; LSize.FYPixel := 0;
+  LSize.Cols := 80; LSize.Rows := 24;
+  LSize.XPixel := 0; LSize.YPixel := 0;
   Check(platform_pty_open(LSize, LPty) = 0, 'open');
   { nil argv is passed to execvp — behavior is implementation-defined }
   LRc := platform_pty_spawn(LPty, '/bin/true', nil, nil, nil, LPid, LStage);
@@ -418,10 +418,10 @@ var
   LStage: TPlatformPtySpawnStage;
 begin
   FillChar(LPty, SizeOf(LPty), 0);
-  LSize.FCols := 80;
-  LSize.FRows := 24;
-  LSize.FXPixel := 0;
-  LSize.FYPixel := 0;
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   Check(SizeOf(LPty) > 0, 'pty carrier has storage');
   if NeverRunShapeOnly then
   begin

@@ -148,6 +148,9 @@ type
     {** @desc 检查是否为特殊目录（. 或 ..）
         @return True 如果是特殊目录 *}
     function IsSpecialDir: Boolean; inline;
+    {** @desc 获取文件名字符串（带长度）
+        @return 文件名字符串切片 *}
+    function NameStr: AnsiString;
   end;
 
   {** @desc 目录遍历句柄（平台无关封装） *}
@@ -368,6 +371,11 @@ end;
 function TPlatformDirEntry.IsSpecialDir: Boolean;
 begin
   Result := IsCurrentDir or IsParentDir;
+end;
+
+function TPlatformDirEntry.NameStr: AnsiString;
+begin
+  SetString(Result, PAnsiChar(@Name[0]), NameLen);
 end;
 
 end.

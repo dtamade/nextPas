@@ -118,6 +118,11 @@ function platform_file_stat(const APath: PAnsiChar; out AStat: TPlatformFileStat
     @return 0 成功，否则返回错误码 *}
 function platform_file_lstat(const APath: PAnsiChar; out AStat: TPlatformFileStat): Int32;
 
+{** @desc 检查文件是否存在（通过 stat）
+    @param APath 文件路径
+    @return True 文件存在 *}
+function FileExistsByStat(const APath: PAnsiChar): Boolean;
+
 {** @desc 获取文件状态（通过句柄）
     @param AHandle 文件句柄
     @param AStat 输出文件状态
@@ -529,6 +534,13 @@ begin
   Result := 0;
 end;
 
+function FileExistsByStat(const APath: PAnsiChar): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_lstat(APath, LStat) = 0;
+end;
+
 function platform_file_fstat(const AHandle: TPlatformFileHandle; out AStat: TPlatformFileStat): Int32;
 var
   LStat: {$IFDEF NEXTPAS_LINUX}TPlatformLinuxStat{$ENDIF}
@@ -536,6 +548,7 @@ var
          {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
          {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
+  FillChar(AStat, SizeOf(AStat), 0);
 {$IFDEF NEXTPAS_LINUX}
   if __fxstat(1, AHandle.Value, LStat) <> 0 then
     Exit(platform_get_errno);
@@ -896,7 +909,7 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   case AMode of
     fomReadOnly:  LAccess := GENERIC_READ;
     fomWriteOnly: LAccess := GENERIC_WRITE;
@@ -917,7 +930,7 @@ begin
   AHandle.Value := CreateFileW(PWideChar(LPath), LAccess, FILE_SHARE_READ, nil,
     LDisposition, LFlags, nil);
   if AHandle.Value = HANDLE(PtrInt(-1)) then
-    Result := Int32(GetLastError)
+    Result := platform_get_last_error
   else
     Result := 0;
 end;
@@ -929,7 +942,7 @@ begin
   if CloseHandle(AHandle.Value) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
   AHandle.Value := HANDLE(PtrInt(-1));
 end;
 
@@ -950,7 +963,7 @@ begin
     Result := 0;
   end
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer;
@@ -970,7 +983,7 @@ begin
     Result := 0;
   end
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_pread(const AHandle: TPlatformFileHandle; ABuf: Pointer;
@@ -994,7 +1007,7 @@ begin
     Result := 0;
   end
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_pwrite(const AHandle: TPlatformFileHandle; ABuf: Pointer;
@@ -1018,7 +1031,7 @@ begin
     Result := 0;
   end
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
@@ -1036,7 +1049,7 @@ begin
   else
   begin
     ANewPos := -1;
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
   end;
 end;
 
@@ -1045,7 +1058,7 @@ begin
   if FlushFileBuffers(AHandle.Value) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_truncate(const AHandle: TPlatformFileHandle; ASize: Int64): Int32;
@@ -1054,14 +1067,14 @@ var
   LOldPos: Int64;
 begin
   if not SetFilePointerEx(AHandle.Value, 0, @LOldPos, FILE_CURRENT) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   if not SetFilePointerEx(AHandle.Value, ASize, @LNewPos, FILE_BEGIN) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   if SetEndOfFile(AHandle.Value) then
     Result := 0
   else
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     if not SetFilePointerEx(AHandle.Value, LOldPos, nil, FILE_BEGIN) then
       ; { best-effort restore; truncation error already captured in Result }
   end;
@@ -1075,9 +1088,9 @@ var
 begin
   FillChar(AStat, SizeOf(AStat), 0);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not GetFileAttributesExW(PWideChar(LPath), GetFileExInfoStandard, @LData) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   LSize := UInt64(LData.nFileSizeHigh) shl 32 or LData.nFileSizeLow;
   AStat.Size := Int64(LSize);
   AStat.Mode := LData.dwFileAttributes;
@@ -1104,7 +1117,7 @@ var
 begin
   FillChar(AStat, SizeOf(AStat), 0);
   if not GetFileInformationByHandle(AHandle.Value, @LInfo) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   LSize := UInt64(LInfo.nFileSizeHigh) shl 32 or LInfo.nFileSizeLow;
   AStat.Size := Int64(LSize);
   AStat.Mode := LInfo.dwFileAttributes;
@@ -1127,9 +1140,9 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not GetFileAttributesExW(PWideChar(LPath), GetFileExInfoStandard, @LData) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   LAttr := LData.dwFileAttributes;
   { Map owner-write bit (0o200 = $80) to the read-only attribute. }
   if (AMode and $80) <> 0 then
@@ -1139,7 +1152,7 @@ begin
   if SetFileAttributesW(PWideChar(LPath), LAttr) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_truncate_path(const APath: PAnsiChar; ASize: Int64): Int32;
@@ -1158,11 +1171,11 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if CreateDirectoryW(PWideChar(LPath), nil) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_rmdir(const APath: PAnsiChar): Int32;
@@ -1170,11 +1183,11 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if RemoveDirectoryW(PWideChar(LPath)) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_unlink(const APath: PAnsiChar): Int32;
@@ -1182,11 +1195,11 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if DeleteFileW(PWideChar(LPath)) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
@@ -1195,13 +1208,13 @@ var
   LNewPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(AOldPath, LOldPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(ANewPath, LNewPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if MoveFileW(PWideChar(LOldPath), PWideChar(LNewPath)) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_getcwd(ABuf: PAnsiChar; ASize: PtrUInt): PAnsiChar;
@@ -1226,11 +1239,11 @@ var
   LPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if SetCurrentDirectoryW(PWideChar(LPath)) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_lock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
@@ -1245,7 +1258,7 @@ begin
   if LockFileEx(AHandle.Value, LFlags, 0, $FFFFFFFF, $FFFFFFFF, @LOvl) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_trylock(const AHandle: TPlatformFileHandle; AExclusive: Boolean): Int32;
@@ -1260,7 +1273,7 @@ begin
   if LockFileEx(AHandle.Value, LFlags, 0, $FFFFFFFF, $FFFFFFFF, @LOvl) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_unlock(const AHandle: TPlatformFileHandle): Int32;
@@ -1271,7 +1284,7 @@ begin
   if UnlockFileEx(AHandle.Value, 0, $FFFFFFFF, $FFFFFFFF, @LOvl) then
     Result := 0
   else
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
 end;
 
 function platform_file_symlink(const ATarget: PAnsiChar; const ALinkPath: PAnsiChar): Int32;
@@ -1282,15 +1295,15 @@ var
   LLinkPath: UnicodeString;
 begin
   if not platform_windows_utf8_to_wide_checked(ATarget, LTarget) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(ALinkPath, LLinkPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   LFlags := 0;
   if platform_file_stat(ATarget, LStat) = 0 then
     if LStat.FileType = ftDirectory then
       LFlags := 1;
   if not CreateSymbolicLinkW(PWideChar(LLinkPath), PWideChar(LTarget), LFlags) then
-    Result := Int32(GetLastError)
+    Result := platform_get_last_error
   else
     Result := 0;
 end;
@@ -1309,19 +1322,19 @@ begin
   if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   LHandle := CreateFileW(PWideChar(LPath), 0,
     FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
     nil, OPEN_EXISTING, $02200000, nil);
   if LHandle = HANDLE(PtrInt(-1)) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   LBytesReturned := GetFinalPathNameByHandleW(LHandle, @LWideBuf[0], MAX_PATH, 0);
   CloseHandle(LHandle);
   if (LBytesReturned = 0) or (LBytesReturned >= MAX_PATH) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   LWideBuf[LBytesReturned] := #0;
   if not platform_windows_wide_to_utf8_checked(@LWideBuf[0], LUtf8) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   LStart := 0;
   if (Length(LUtf8) >= 4) and (LUtf8[1] = '\') and (LUtf8[2] = '\') and
      (LUtf8[3] = '?') and (LUtf8[4] = '\') then
@@ -1347,7 +1360,7 @@ begin
   AHandle.Finished := False;
 
   if not platform_windows_utf8_to_wide_checked(APath, LPath) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   LPattern := LPath;
   LLen := Length(LPattern);
   if (LLen > 0) and (LPattern[LLen] <> '\') and (LPattern[LLen] <> '/') then
@@ -1361,7 +1374,7 @@ begin
   if AHandle.FindHandle = HANDLE(PtrInt(-1)) then
   begin
     AHandle.Finished := True;
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     Exit;
   end;
   Result := 0;
@@ -1399,7 +1412,7 @@ begin
       Continue;
 
     if not platform_windows_wide_to_utf8_checked(LNamePtr, LNameUtf8) then
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     AEntry.NameLen := platform_windows_copy_utf8_to_buffer(LNameUtf8,
       @AEntry.Name[0], SizeOf(AEntry.Name));
     AEntry.Ino := 0;
@@ -1423,11 +1436,11 @@ begin
     if FindClose(AHandle.FindHandle) then
       Result := 0
     else
-      Result := Int32(GetLastError);
+      Result := platform_get_last_error;
     AHandle.FindHandle := HANDLE(PtrInt(-1));
   end
   else
-    Result := Int32(ERROR_INVALID_HANDLE);
+    Result := PLATFORM_ERR_BADF;
 end;
 {$ENDIF}
 

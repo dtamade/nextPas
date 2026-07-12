@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.forkjoin;
+{**
+ * @desc ForkJoin parallel execution framework.
+ *
+ * @details Work-stealing based parallel task execution:
+ *   - Submit: add task to thread pool
+ *   - Fork/Join: split and merge parallel tasks
+ *   - Work-stealing: idle threads steal from busy threads
+ *   - Close: graceful shutdown with task drain
+ *
+ * @concurrency Thread-safe for multiple threads:
+ *   - Submit: multiple threads can submit tasks concurrently
+ *   - Execute: worker threads process tasks in parallel
+ *   - Close: safe to call from any thread
+ *
+ * @see Fork/Join Framework — divide-and-conquer parallelism
+ * @see Java ForkJoinPool — similar parallel execution framework
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -65,13 +82,13 @@ type
     {** @desc 关闭池 }
     procedure Close;
     {** @desc 池是否已关闭 }
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     {** @desc 工作者数量 }
-    function WorkerCount: Int32;
+    function WorkerCount: Int32; inline;
     {** @desc 大致待处理任务数 }
-    function ApproxPendingCount: Int64;
+    function ApproxPendingCount: Int64; inline;
     {** @desc 大致已完成任务数 }
-    function ApproxCompletedCount: Int64;
+    function ApproxCompletedCount: Int64; inline;
   end;
 
 implementation
@@ -191,22 +208,22 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TLockFreeForkJoinPool.IsClosed: Boolean;
+function TLockFreeForkJoinPool.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TLockFreeForkJoinPool.WorkerCount: Int32;
+function TLockFreeForkJoinPool.WorkerCount: Int32; inline;
 begin
   Result := FWorkerCount;
 end;
 
-function TLockFreeForkJoinPool.ApproxPendingCount: Int64;
+function TLockFreeForkJoinPool.ApproxPendingCount: Int64; inline;
 begin
   Result := AtomicLoad64(FTaskCount, moRelaxed);
 end;
 
-function TLockFreeForkJoinPool.ApproxCompletedCount: Int64;
+function TLockFreeForkJoinPool.ApproxCompletedCount: Int64; inline;
 begin
   Result := AtomicLoad64(FCompletedCount, moRelaxed);
 end;

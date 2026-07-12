@@ -85,6 +85,19 @@ procedure platform_fatal(const AMsg: PAnsiChar);
     @param ACode 错误码；Halt 只接收 8-bit 退出码，此处显式做 ACode mod 256 截断 *}
 procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
 
+{** @desc 获取最后一次平台错误，映射为 PLATFORM_ERR_* 可移植错误码
+    POSIX 直接返回 errno（PLATFORM_ERR_* 常量 = Linux errno）。
+    Windows 通过 GetLastError() + ERROR_*/WSAE* → PLATFORM_ERR_* 映射。
+    @return PLATFORM_ERR_* 错误码，无错误时返回 0 *}
+function platform_get_last_error: Int32;
+
+
+{$IFDEF NEXTPAS_WINDOWS}
+{** @desc 将 Windows 原生错误码映射为 PLATFORM_ERR_* 可移植错误码 *}
+
+function platform_map_windows_error_code(const AErr: DWORD): Int32;
+{$ENDIF}
+
 implementation
 
 {$IF defined(NEXTPAS_UNIX)}
@@ -103,11 +116,61 @@ uses
   , nextpas.core.platform.unix.base
   {$ENDIF}
   ;
+
+function platform_get_last_error: Int32;
+begin
+  Result := platform_get_errno;
+end;
+
+
 {$ELSEIF defined(NEXTPAS_WINDOWS)}
 uses
   nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi
   ;
+
+function platform_map_windows_error_code(const AErr: DWORD): Int32;
+begin
+  case AErr of
+    ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND: Result := PLATFORM_ERR_NOENT;
+    ERROR_ACCESS_DENIED:                        Result := PLATFORM_ERR_PERM;
+    ERROR_FILE_EXISTS, ERROR_ALREADY_EXISTS:    Result := PLATFORM_ERR_EXIST;
+    ERROR_NOT_ENOUGH_MEMORY, ERROR_OUTOFMEMORY: Result := PLATFORM_ERR_NOMEM;
+    ERROR_DISK_FULL:                            Result := PLATFORM_ERR_NOSPC;
+    ERROR_INVALID_PARAMETER, ERROR_INVALID_NAME: Result := PLATFORM_ERR_INVALID;
+    ERROR_INVALID_HANDLE:                       Result := PLATFORM_ERR_BADF;
+    ERROR_NOT_SUPPORTED:                        Result := PLATFORM_ERR_UNSUPPORTED;
+    ERROR_BROKEN_PIPE:                          Result := PLATFORM_ERR_PIPE;
+    ERROR_TIMEOUT:                              Result := PLATFORM_ERR_TIMEDOUT;
+    ERROR_OPERATION_ABORTED:                    Result := PLATFORM_ERR_INTR;
+    ERROR_ENVVAR_NOT_FOUND:                     Result := PLATFORM_ERR_NOENT;
+    ERROR_NOT_FOUND:                            Result := PLATFORM_ERR_NOENT;
+    ERROR_MOD_NOT_FOUND, ERROR_PROC_NOT_FOUND:  Result := PLATFORM_ERR_NOENT;
+    ERROR_IO_PENDING:                           Result := PLATFORM_ERR_AGAIN;
+    WSAETIMEDOUT:                               Result := PLATFORM_ERR_TIMEDOUT;
+    WSAECONNRESET:                              Result := PLATFORM_ERR_CONNRESET;
+    WSAECONNREFUSED:                            Result := PLATFORM_ERR_CONNREFUSED;
+    WSAEWOULDBLOCK:                             Result := PLATFORM_ERR_AGAIN;
+    WSAENOBUFS:                                 Result := PLATFORM_ERR_NOMEM;
+    WSAEADDRINUSE:                              Result := PLATFORM_ERR_EXIST;
+    WSAENETUNREACH, WSAEHOSTUNREACH:            Result := PLATFORM_ERR_CONNREFUSED;
+    WSAENOTCONN:                                Result := PLATFORM_ERR_CONNREFUSED;
+    WSAECONNABORTED:                            Result := PLATFORM_ERR_CONNRESET;
+    WSAHOST_NOT_FOUND:                          Result := PLATFORM_ERR_NOENT;
+  else
+    Result := Int32(AErr);
+  end;
+end;
+
+function platform_get_last_error: Int32;
+var
+  LErr: DWORD;
+begin
+  LErr := GetLastError;
+  Result := platform_map_windows_error_code(LErr);
+end;
+
+
 {$ENDIF}
 
 function CopyPlatformErrorMessage(const AMessage: PAnsiChar; ABuf: PAnsiChar;

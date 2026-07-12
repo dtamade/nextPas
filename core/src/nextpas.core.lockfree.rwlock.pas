@@ -27,9 +27,9 @@ type
     procedure ReadUnlock;
     procedure WriteUnlock;
     procedure Close;
-    function IsClosed: Boolean;
-    function ReaderCount: Int32;
-    function IsWriteLocked: Boolean;
+    function IsClosed: Boolean; inline;
+    function ReaderCount: Int32; inline;
+    function IsWriteLocked: Boolean; inline;
   end;
 
 implementation
@@ -83,20 +83,20 @@ end;
 
 function TConcurrentRwLock.WriteLock: Boolean;
 begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(False);
   AtomicFetchAdd32(FWriterPending, 1, moAcqRel);
-  while True do
-  begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  try
+    while True do
     begin
-      AtomicFetchSub32(FWriterPending, 1, moAcqRel);
-      Exit(False);
+      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        Exit(False);
+      if TryWriteLock then
+        Exit(True);
+      CpuPause;
     end;
-    if TryWriteLock then
-    begin
-      AtomicFetchSub32(FWriterPending, 1, moAcqRel);
-      Exit(True);
-    end;
-    CpuPause;
+  finally
+    AtomicFetchSub32(FWriterPending, 1, moAcqRel);
   end;
 end;
 
@@ -121,12 +121,12 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TConcurrentRwLock.IsClosed: Boolean;
+function TConcurrentRwLock.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TConcurrentRwLock.ReaderCount: Int32;
+function TConcurrentRwLock.ReaderCount: Int32; inline;
 var
   LState: Int32;
 begin
@@ -137,7 +137,7 @@ begin
     Result := 0;
 end;
 
-function TConcurrentRwLock.IsWriteLocked: Boolean;
+function TConcurrentRwLock.IsWriteLocked: Boolean; inline;
 begin
   Result := AtomicLoad32(FState, moAcquire) < 0;
 end;

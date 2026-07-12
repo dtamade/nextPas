@@ -8,7 +8,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.platform.resource,
-  nextpas.core.platform.resource.base;
+  nextpas.core.platform.resource.base,
+  nextpas.core.platform.error;
 
 var
   T: TTestSuite;
@@ -41,7 +42,7 @@ begin
   LError := platform_resource_get_limit(prlkOpenFiles, LLimit);
 
   {$IFDEF NEXTPAS_WINDOWS}
-  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+  Check(LError = PLATFORM_ERR_UNSUPPORTED,
     'Windows must return the stable unsupported code for rlimit');
   Check(LLimit.Current = 0, 'unsupported get must clear current limit');
   Check(LLimit.Maximum = 0, 'unsupported get must clear maximum limit');
@@ -51,7 +52,7 @@ begin
   Check(LLimit.Maximum >= LLimit.Current,
     'open-file hard limit must be at least the soft limit');
   {$ELSE}
-  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+  Check(LError = PLATFORM_ERR_UNSUPPORTED,
     'unpromoted hosts must return unsupported until their rlimit ABI is proven');
   {$ENDIF}
 end;
@@ -77,10 +78,10 @@ begin
   Check(LAfter.Maximum = LLimit.Maximum,
     'setting the same hard limit must preserve maximum value');
   {$ELSE}
-  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+  Check(LError = PLATFORM_ERR_UNSUPPORTED,
     'unpromoted hosts must not pretend setrlimit exists');
   LError := platform_resource_set_limit(prlkOpenFiles, LLimit);
-  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+  Check(LError = PLATFORM_ERR_UNSUPPORTED,
     'unpromoted hosts must return unsupported for setrlimit');
   {$ENDIF}
 end;
@@ -98,12 +99,12 @@ begin
 
   LError := platform_resource_get_limit(
     LInvalidKind, LLimit);
-  Check(LError = PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT,
+  Check(LError = PLATFORM_ERR_INVALID,
     'invalid limit kind must return the stable invalid-argument code');
 
   LError := platform_resource_set_limit(
     LInvalidKind, LLimit);
-  Check(LError = PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT,
+  Check(LError = PLATFORM_ERR_INVALID,
     'invalid set limit kind must return the stable invalid-argument code');
 end;
 
@@ -116,7 +117,7 @@ begin
   LLimit.Maximum := 1;
 
   LError := platform_resource_set_limit(prlkOpenFiles, LLimit);
-  Check(LError = PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT,
+  Check(LError = PLATFORM_ERR_INVALID,
     'current limit greater than maximum must return invalid argument before host dispatch');
 end;
 
@@ -164,7 +165,7 @@ begin
   Check(LError = 0, 'Linux must get RLIMIT_STACK');
   Check(LLimit.Current > 0, 'stack size limit must be positive');
   {$ELSE}
-  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+  Check(LError = PLATFORM_ERR_UNSUPPORTED,
     'unpromoted hosts must return unsupported');
   {$ENDIF}
 end;
@@ -181,7 +182,7 @@ begin
   Check(LError = 0, 'Linux must get RLIMIT_CORE');
   { Core file size can be 0 (disabled) }
   {$ELSE}
-  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+  Check(LError = PLATFORM_ERR_UNSUPPORTED,
     'unpromoted hosts must return unsupported');
   {$ENDIF}
 end;
@@ -198,7 +199,7 @@ begin
   Check(LError = 0, 'Linux must get RLIMIT_NPROC');
   Check(LLimit.Current > 0, 'process count limit must be positive');
   {$ELSE}
-  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+  Check(LError = PLATFORM_ERR_UNSUPPORTED,
     'unpromoted hosts must return unsupported');
   {$ENDIF}
 end;
@@ -229,7 +230,7 @@ begin
   end;
   { If set failed, it's likely due to permissions - that's OK }
   {$ELSE}
-  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+  Check(LError = PLATFORM_ERR_UNSUPPORTED,
     'unpromoted hosts must return unsupported');
   {$ENDIF}
 end;
@@ -264,7 +265,7 @@ begin
   { On unsupported platforms, all should return unsupported }
   FillChar(LLimit, SizeOf(LLimit), 0);
   LError := platform_resource_get_limit(prlkCpuTime, LLimit);
-  Check(LError = PLATFORM_RESOURCE_ERROR_UNSUPPORTED,
+  Check(LError = PLATFORM_ERR_UNSUPPORTED,
     'unpromoted hosts must return unsupported for CPU time');
   {$ENDIF}
 end;

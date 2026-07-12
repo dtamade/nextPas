@@ -18,7 +18,11 @@ procedure CheckEqual(const AExpected, AActual: string); overload;
 procedure CheckEqual(const AExpected, AActual: Int64); overload;
 procedure CheckEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckEqual(const AExpected, AActual: Pointer;
+  const AMessage: string); overload;
 procedure CheckEqual(const AExpected, AActual: UInt64); overload;
+procedure CheckEqual(const AExpected, AActual: UInt64;
+  const AMessage: string); overload;
 { CheckEqual for Double — uses CheckNear (absolute epsilon |a-b| <= AEpsilon).
   Default epsilon is 1e-10, suitable for small-to-moderate values.
   For large values (e.g. 1e15+), absolute epsilon is too tight — use
@@ -43,13 +47,21 @@ procedure CheckNotEqual(const AExpected, AActual: Boolean); overload;
 procedure CheckNotEqual(const AExpected, AActual: Boolean;
   const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: Pointer); overload;
+procedure CheckNotEqual(const AExpected, AActual: Pointer;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: UInt64); overload;
+procedure CheckNotEqual(const AExpected, AActual: UInt64;
+  const AMessage: string); overload;
 { CheckNotEqual for Double — uses absolute epsilon |a-b| <= AEpsilon.
   For floating-point tolerance comparisons, use CheckNotNear directly. }
 procedure CheckNotEqual(const AExpected, AActual: Double;
   AEpsilon: Double = 1e-10); overload;
 procedure CheckEqual(const AExpected, AActual: TBytes); overload;
+procedure CheckEqual(const AExpected, AActual: TBytes;
+  const AMessage: string); overload;
 procedure CheckNotEqual(const AExpected, AActual: TBytes); overload;
+procedure CheckNotEqual(const AExpected, AActual: TBytes;
+  const AMessage: string); overload;
 procedure CheckTrue(AValue: Boolean; const AMessage: string = '');
 procedure CheckFalse(AValue: Boolean; const AMessage: string = '');
 procedure CheckNil(AValue: Pointer; const AMessage: string = '');
@@ -150,6 +162,15 @@ procedure CheckNotNearRel(const AExpected, AActual: Double;
 procedure CheckNaN(const AValue: Double; const AMessage: string = '');
 { CheckNotNaN — passes if AValue is NOT NaN. }
 procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
+
+{ ── Infinity Checks (v8.3) ────────────────────────────────────────────────── }
+
+{ CheckInf — passes if AValue is +Inf or -Inf. }
+procedure CheckInf(const AValue: Double; const AMessage: string = '');
+{ CheckNotInf — passes if AValue is NOT infinite. }
+procedure CheckNotInf(const AValue: Double; const AMessage: string = '');
+{ CheckFinite — passes if AValue is finite (not NaN, not Inf). }
+procedure CheckFinite(const AValue: Double; const AMessage: string = '');
 
 { ── Regex Matching ──────────────────────────────────────────────────────────── }
 
@@ -261,6 +282,28 @@ procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');
 
 { Check that an interface reference is not nil. }
 procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string = '');
+
+{ ── Emptiness Checks (v8.3) ───────────────────────────────────────────────── }
+
+{ Check that a string is empty (length = 0). }
+procedure CheckEmpty(const AValue: string); overload;
+procedure CheckEmpty(const AValue: string;
+  const AMessage: string); overload;
+
+{ Check that a string is not empty (length > 0). }
+procedure CheckNotEmpty(const AValue: string); overload;
+procedure CheckNotEmpty(const AValue: string;
+  const AMessage: string); overload;
+
+{ Check that a byte array is empty (length = 0). }
+procedure CheckEmpty(const AValue: TBytes); overload;
+procedure CheckEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
+
+{ Check that a byte array is not empty (length > 0). }
+procedure CheckNotEmpty(const AValue: TBytes); overload;
+procedure CheckNotEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
 
 implementation
 
@@ -401,18 +444,32 @@ begin
   CheckEqual(AExpected, AActual, '');
 end;
 
-procedure CheckEqual(const AExpected, AActual: Pointer);
+procedure CheckEqual(const AExpected, AActual: Pointer;
+  const AMessage: string);
 begin
   if AExpected <> AActual then
-    InternalFail('Expected pointer $' + IntToHex(NativeUInt(AExpected), 16) +
+    FailPrepend(AMessage,
+      'Expected pointer $' + IntToHex(NativeUInt(AExpected), 16) +
       ' but got $' + IntToHex(NativeUInt(AActual), 16));
+end;
+
+procedure CheckEqual(const AExpected, AActual: Pointer);
+begin
+  CheckEqual(AExpected, AActual, '');
+end;
+
+procedure CheckEqual(const AExpected, AActual: UInt64;
+  const AMessage: string);
+begin
+  if AExpected <> AActual then
+    FailPrepend(AMessage,
+      'Expected ' + UIntToStr(AExpected) +
+      ' but got ' + UIntToStr(AActual));
 end;
 
 procedure CheckEqual(const AExpected, AActual: UInt64);
 begin
-  if AExpected <> AActual then
-    InternalFail('Expected ' + UIntToStr(AExpected) +
-      ' but got ' + UIntToStr(AActual));
+  CheckEqual(AExpected, AActual, '');
 end;
 
 { CheckNotEqual: 3-arg first, 2-arg delegates }
@@ -454,18 +511,32 @@ begin
   CheckNotEqual(AExpected, AActual, '');
 end;
 
-procedure CheckNotEqual(const AExpected, AActual: Pointer);
+procedure CheckNotEqual(const AExpected, AActual: Pointer;
+  const AMessage: string);
 begin
   if AExpected = AActual then
-    InternalFail('Expected values to differ but both are $' +
+    FailPrepend(AMessage,
+      'Expected values to differ but both are $' +
       IntToHex(NativeUInt(AActual), 16));
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: Pointer);
+begin
+  CheckNotEqual(AExpected, AActual, '');
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: UInt64;
+  const AMessage: string);
+begin
+  if AExpected = AActual then
+    FailPrepend(AMessage,
+      'Expected values to differ but both are ' +
+      UIntToStr(AActual));
 end;
 
 procedure CheckNotEqual(const AExpected, AActual: UInt64);
 begin
-  if AExpected = AActual then
-    InternalFail('Expected values to differ but both are ' +
-      UIntToStr(AActual));
+  CheckNotEqual(AExpected, AActual, '');
 end;
 
 procedure CheckNear(const AExpected, AActual: Double;
@@ -564,6 +635,30 @@ begin
     FailPrepend(AMessage, 'Expected non-NaN but got NaN');
 end;
 
+{ ── Infinity Checks (v8.3) ────────────────────────────────────────────────── }
+
+procedure CheckInf(const AValue: Double; const AMessage: string);
+begin
+  if not IsInfinite(AValue) then
+    FailPrepend(AMessage,
+      'Expected infinite but got ' + FloatToStr(AValue));
+end;
+
+procedure CheckNotInf(const AValue: Double; const AMessage: string);
+begin
+  if IsInfinite(AValue) then
+    FailPrepend(AMessage,
+      'Expected finite but got ' + FloatToStr(AValue));
+end;
+
+procedure CheckFinite(const AValue: Double; const AMessage: string);
+begin
+  if IsNan(AValue) then
+    FailPrepend(AMessage, 'Expected finite but got NaN')
+  else if IsInfinite(AValue) then
+    FailPrepend(AMessage, 'Expected finite but got ' + FloatToStr(AValue));
+end;
+
 { ── Regex Matching ──────────────────────────────────────────────────────────── }
 
 procedure CheckMatch(const APattern, AStr: string);
@@ -613,21 +708,30 @@ begin
       FloatToStr(AExpected) + ' (+/-' + FloatToStr(AEpsilon) + ')');
 end;
 
-procedure CheckEqual(const AExpected, AActual: TBytes);
+procedure CheckEqual(const AExpected, AActual: TBytes;
+  const AMessage: string);
 var
   I: Integer;
 begin
   if Length(AExpected) <> Length(AActual) then
-    InternalFail('Expected TBytes length ' + IntToStr(Length(AExpected)) +
+    FailPrepend(AMessage,
+      'Expected TBytes length ' + IntToStr(Length(AExpected)) +
       ' but got ' + IntToStr(Length(AActual)));
   for I := 0 to High(AExpected) do
     if AExpected[I] <> AActual[I] then
-      InternalFail('TBytes differ at index ' + IntToStr(I) +
+      FailPrepend(AMessage,
+        'TBytes differ at index ' + IntToStr(I) +
         ': expected $' + IntToHex(AExpected[I], 2) +
         ' but got $' + IntToHex(AActual[I], 2));
 end;
 
-procedure CheckNotEqual(const AExpected, AActual: TBytes);
+procedure CheckEqual(const AExpected, AActual: TBytes);
+begin
+  CheckEqual(AExpected, AActual, '');
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: TBytes;
+  const AMessage: string);
 var
   I: Integer;
   LDiffer: Boolean;
@@ -642,8 +746,14 @@ begin
       Break;
     end;
   if not LDiffer then
-    InternalFail('Expected TBytes to differ but both are identical (' +
+    FailPrepend(AMessage,
+      'Expected TBytes to differ but both are identical (' +
       IntToStr(Length(AExpected)) + ' bytes)');
+end;
+
+procedure CheckNotEqual(const AExpected, AActual: TBytes);
+begin
+  CheckNotEqual(AExpected, AActual, '');
 end;
 
 procedure CheckTrue(AValue: Boolean; const AMessage: string);
@@ -819,12 +929,20 @@ end;
 
 { ── Double comparison operators ────────────────────────────────────────────── }
 
+procedure RequireNotNaN(const AValue, AThreshold: Double;
+  const AOp: string);
+{ Shared NaN guard for double comparisons. Fails with descriptive message
+  if either value is NaN. }
+begin
+  if IsNan(AValue) or IsNan(AThreshold) then
+    InternalFail('Expected ' + FloatToStr(AValue) + ' ' + AOp + ' ' +
+      FloatToStr(AThreshold) + ' (NaN)');
+end;
+
 procedure CheckGreaterThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AThreshold) then
-    InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(AValue, AThreshold, '>');
   if AValue <= AThreshold then
     if Abs(AValue - AThreshold) <= AEpsilon then
       InternalFail('Expected ' + FloatToStr(AValue) + ' > ' +
@@ -837,9 +955,7 @@ end;
 procedure CheckLessThanD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AThreshold) then
-    InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(AValue, AThreshold, '<');
   if AValue >= AThreshold then
     if Abs(AValue - AThreshold) <= AEpsilon then
       InternalFail('Expected ' + FloatToStr(AValue) + ' < ' +
@@ -852,9 +968,7 @@ end;
 procedure CheckGreaterOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AThreshold) then
-    InternalFail('Expected ' + FloatToStr(AValue) + ' >= ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(AValue, AThreshold, '>=');
   if AValue < AThreshold then
     if Abs(AValue - AThreshold) <= AEpsilon then
       Exit { within epsilon of equal — pass }
@@ -866,9 +980,7 @@ end;
 procedure CheckLessOrEqualD(const AValue, AThreshold: Double;
   const AEpsilon: Double);
 begin
-  if IsNan(AValue) or IsNan(AThreshold) then
-    InternalFail('Expected ' + FloatToStr(AValue) + ' <= ' +
-      FloatToStr(AThreshold) + ' (NaN)');
+  RequireNotNaN(AValue, AThreshold, '<=');
   if AValue > AThreshold then
     if Abs(AValue - AThreshold) <= AEpsilon then
       Exit { within epsilon of equal — pass }
@@ -914,7 +1026,7 @@ procedure CheckContainsCI(const AHaystack, ANeedle: string;
 begin
   if Length(ANeedle) = 0 then
     Exit;
-  if Pos(LowerCase(ANeedle), LowerCase(AHaystack)) = 0 then
+  if PosCI(ANeedle, AHaystack) = 0 then
     FailPrepend(AMessage, '"' + AHaystack + '" does not contain (ci) "' + ANeedle + '"');
 end;
 
@@ -930,7 +1042,7 @@ procedure CheckNotContainsCI(const AHaystack, ANeedle: string;
 begin
   if Length(ANeedle) = 0 then
     FailPrepend(AMessage, '"' + AHaystack + '" should not contain (ci) empty string');
-  if Pos(LowerCase(ANeedle), LowerCase(AHaystack)) > 0 then
+  if PosCI(ANeedle, AHaystack) > 0 then
     FailPrepend(AMessage, '"' + AHaystack + '" should not contain (ci) "' + ANeedle + '"');
 end;
 
@@ -944,7 +1056,7 @@ end;
 procedure CheckStartsWithCI(const AStr, APrefix: string;
   const AMessage: string);
 begin
-  if not StrStartsWith(LowerCase(AStr), LowerCase(APrefix)) then
+  if not StrStartsWithCI(AStr, APrefix) then
     FailPrepend(AMessage, '"' + AStr + '" does not start with (ci) "' + APrefix + '"');
 end;
 
@@ -958,7 +1070,7 @@ end;
 procedure CheckEndsWithCI(const AStr, ASuffix: string;
   const AMessage: string);
 begin
-  if not StrEndsWith(LowerCase(AStr), LowerCase(ASuffix)) then
+  if not StrEndsWithCI(AStr, ASuffix) then
     FailPrepend(AMessage, '"' + AStr + '" does not end with (ci) "' + ASuffix + '"');
 end;
 
@@ -1250,6 +1362,64 @@ end;
 
 { ── Array Containment ──────────────────────────────────────────────────────── }
 
+{ ── Shared array-contains helpers (P2-new-1: eliminate duplicated list-building) }
+
+procedure CheckArrayContainsStr(const AArray: array of string;
+  const AValue, AMessage: string);
+const
+  MaxListItems = 10;
+var
+  I, LCount, LLimit: Integer;
+  LList: string;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      Exit;
+  LCount := Length(AArray);
+  if LCount < MaxListItems then
+    LLimit := LCount
+  else
+    LLimit := MaxListItems;
+  LList := '';
+  for I := 0 to LLimit - 1 do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + '"' + AArray[I] + '"';
+  end;
+  if LCount > MaxListItems then
+    LList := LList + ', ... (' + IntToStr(LCount - MaxListItems) + ' more)';
+  FailPrepend(AMessage, 'Expected array to contain "' + AValue +
+    '" but it contains [' + LList + '] (' + IntToStr(LCount) + ' items)');
+end;
+
+procedure CheckArrayContainsInt(const AArray: array of Int64;
+  AValue: Int64; const AMessage: string);
+const
+  MaxListItems = 10;
+var
+  I, LCount, LLimit: Integer;
+  LList: string;
+begin
+  for I := 0 to High(AArray) do
+    if AArray[I] = AValue then
+      Exit;
+  LCount := Length(AArray);
+  if LCount < MaxListItems then
+    LLimit := LCount
+  else
+    LLimit := MaxListItems;
+  LList := '';
+  for I := 0 to LLimit - 1 do
+  begin
+    if I > 0 then LList := LList + ', ';
+    LList := LList + IntToStr(AArray[I]);
+  end;
+  if LCount > MaxListItems then
+    LList := LList + ', ... (' + IntToStr(LCount - MaxListItems) + ' more)';
+  FailPrepend(AMessage, 'Expected array to contain ' + IntToStr(AValue) +
+    ' but it contains [' + LList + '] (' + IntToStr(LCount) + ' items)');
+end;
+
 procedure CheckArrayContains(const AArray: array of string;
   const AValue: string);
 begin
@@ -1258,22 +1428,8 @@ end;
 
 procedure CheckArrayContains(const AArray: array of string;
   const AValue: string; const AMessage: string);
-var
-  I: Integer;
-  LList: string;
 begin
-  for I := 0 to High(AArray) do
-    if AArray[I] = AValue then
-      Exit;
-  { Not found — build list for error message }
-  LList := '';
-  for I := 0 to High(AArray) do
-  begin
-    if I > 0 then LList := LList + ', ';
-    LList := LList + '"' + AArray[I] + '"';
-  end;
-  FailPrepend(AMessage, 'Expected array to contain "' + AValue +
-    '" but it contains [' + LList + ']');
+  CheckArrayContainsStr(AArray, AValue, AMessage);
 end;
 
 procedure CheckArrayContains(const AArray: array of Int64;
@@ -1284,22 +1440,8 @@ end;
 
 procedure CheckArrayContains(const AArray: array of Int64;
   const AValue: Int64; const AMessage: string);
-var
-  I: Integer;
-  LList: string;
 begin
-  for I := 0 to High(AArray) do
-    if AArray[I] = AValue then
-      Exit;
-  { Not found — build list for error message }
-  LList := '';
-  for I := 0 to High(AArray) do
-  begin
-    if I > 0 then LList := LList + ', ';
-    LList := LList + IntToStr(AArray[I]);
-  end;
-  FailPrepend(AMessage, 'Expected array to contain ' + IntToStr(AValue) +
-    ' but it contains [' + LList + ']');
+  CheckArrayContainsInt(AArray, AValue, AMessage);
 end;
 
 procedure CheckArrayNotContains(const AArray: array of string;
@@ -1409,6 +1551,54 @@ begin
       FailPrepend(AMessage,
         'Array not sorted at index ' + IntToStr(I) +
         ': "' + AArray[I - 1] + '" > "' + AArray[I] + '"');
+end;
+
+{ ── Emptiness Checks (v8.3) ───────────────────────────────────────────────── }
+
+procedure CheckEmpty(const AValue: string);
+begin
+  CheckEmpty(AValue, '');
+end;
+
+procedure CheckEmpty(const AValue: string; const AMessage: string);
+begin
+  if Length(AValue) <> 0 then
+    FailWithDefault(AMessage,
+      'Expected empty string but got ' + IntToStr(Length(AValue)) + ' char(s)');
+end;
+
+procedure CheckNotEmpty(const AValue: string);
+begin
+  CheckNotEmpty(AValue, '');
+end;
+
+procedure CheckNotEmpty(const AValue: string; const AMessage: string);
+begin
+  if Length(AValue) = 0 then
+    FailWithDefault(AMessage, 'Expected non-empty string but got empty');
+end;
+
+procedure CheckEmpty(const AValue: TBytes);
+begin
+  CheckEmpty(AValue, '');
+end;
+
+procedure CheckEmpty(const AValue: TBytes; const AMessage: string);
+begin
+  if Length(AValue) <> 0 then
+    FailWithDefault(AMessage,
+      'Expected empty byte array but got ' + IntToStr(Length(AValue)) + ' byte(s)');
+end;
+
+procedure CheckNotEmpty(const AValue: TBytes);
+begin
+  CheckNotEmpty(AValue, '');
+end;
+
+procedure CheckNotEmpty(const AValue: TBytes; const AMessage: string);
+begin
+  if Length(AValue) = 0 then
+    FailWithDefault(AMessage, 'Expected non-empty byte array but got empty');
 end;
 
 end.

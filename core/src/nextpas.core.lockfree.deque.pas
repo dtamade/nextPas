@@ -1,4 +1,21 @@
 unit nextpas.core.lockfree.deque;
+{**
+ * @desc Lock-free work-stealing deque.
+ *
+ * @details Array-based deque for work-stealing algorithms:
+ *   - Owner thread: LIFO push/pop (cache-friendly)
+ *   - Thief threads: FIFO steal (load balancing)
+ *   - Bounded capacity (power-of-2 required)
+ *   - Close semantics with drain support
+ *
+ * @concurrency Thread-safe for owner and multiple thieves:
+ *   - TryPush/TryPop: only owner thread can call
+ *   - TrySteal: multiple thief threads compete via CAS
+ *   - Close: safe to call from any thread
+ *
+ * @see Work Stealing — Blumofe & Leiserson, 1999
+ * @see Cilk — work-stealing based parallel programming
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -31,10 +48,10 @@ type
     function TryPop(out AValue: T): Boolean;
     function TrySteal(out AValue: T): Boolean;
     procedure Close;
-    function IsClosed: Boolean;
-    function IsEmpty: Boolean;
-    function ApproxCount: PtrUInt;
-    function Capacity: PtrUInt;
+    function IsClosed: Boolean; inline;
+    function IsEmpty: Boolean; inline;
+    function ApproxCount: PtrUInt; inline;
+    function Capacity: PtrUInt; inline;
   end;
 
   generic TWorkStealingDeque<T> = class(specialize TWorkStealingDequeImpl<T>)
@@ -122,7 +139,7 @@ begin
   Result := True;
 end;
 
-function TWorkStealingDequeImpl.IsEmpty: Boolean;
+function TWorkStealingDequeImpl.IsEmpty: Boolean; inline;
 var
   LTop, LBottom: Int64;
 begin
@@ -136,12 +153,12 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TWorkStealingDequeImpl.IsClosed: Boolean;
+function TWorkStealingDequeImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TWorkStealingDequeImpl.ApproxCount: PtrUInt;
+function TWorkStealingDequeImpl.ApproxCount: PtrUInt; inline;
 var
   LTop, LBottom: Int64;
 begin
@@ -153,7 +170,7 @@ begin
     Result := 0;
 end;
 
-function TWorkStealingDequeImpl.Capacity: PtrUInt;
+function TWorkStealingDequeImpl.Capacity: PtrUInt; inline;
 begin
   Result := FCapacity;
 end;

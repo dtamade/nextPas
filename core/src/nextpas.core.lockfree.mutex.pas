@@ -27,9 +27,9 @@ type
     function LockTimeout(const ATimeoutNs: Int64): Boolean;
     procedure Unlock;
     procedure Close;
-    function IsClosed: Boolean;
-    function IsLocked: Boolean;
-    function IsOwnedByCurrentThread: Boolean;
+    function IsClosed: Boolean; inline;
+    function IsLocked: Boolean; inline;
+    function IsOwnedByCurrentThread: Boolean; inline;
   end;
 
 implementation
@@ -107,17 +107,17 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TConcurrentMutex.IsClosed: Boolean;
+function TConcurrentMutex.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TConcurrentMutex.IsLocked: Boolean;
+function TConcurrentMutex.IsLocked: Boolean; inline;
 begin
   Result := AtomicLoad32(FLocked, moAcquire) <> 0;
 end;
 
-function TConcurrentMutex.IsOwnedByCurrentThread: Boolean;
+function TConcurrentMutex.IsOwnedByCurrentThread: Boolean; inline;
 begin
   Result := IsLocked and
     (AtomicLoad64(FOwnerThreadId, moAcquire) = Int64(platform_thread_id));

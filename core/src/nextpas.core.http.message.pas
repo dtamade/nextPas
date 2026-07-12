@@ -814,7 +814,7 @@ begin
   ValidateRequestBodyHeaders(LHeaders, AContentLength);
   if AContentLength > 0 then
     LHeaders.SetHeader('content-length', IntToStr(AContentLength))
-  else if (ABody <> nil) and (AContentLength = 0) then
+  else if (ABody <> nil) and (AContentLength < 0) then
     { Body with unknown length: don't set content-length, let chunked handle it }
     LHeaders.SetHeader('transfer-encoding', 'chunked');
   Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders, ABody,

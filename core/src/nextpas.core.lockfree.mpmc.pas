@@ -1,4 +1,22 @@
 unit nextpas.core.lockfree.mpmc;
+{**
+ * @desc Lock-free Multi-Producer Multi-Consumer bounded queue.
+ *
+ * @details Sequence-based MPMC queue using cache-line padding:
+ *   - Bounded capacity (power-of-2 required)
+ *   - Non-blocking TryEnqueue/TryDequeue
+ *   - Blocking EnqueueWait/DequeueWait with timeout variants
+ *   - Batch operations for high-throughput scenarios
+ *   - Close semantics with drain support
+ *
+ * @concurrency Thread-safe for multiple producers and consumers:
+ *   - Enqueue: producers compete for slots via CAS
+ *   - Dequeue: consumers compete for data via CAS
+ *   - Close: safe to call from any thread
+ *
+ * @see Dmitry Vyukov MPMC queue — lock-free bounded queue
+ * @see crossbeam (Rust) — similar MPMC implementation
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -52,11 +70,11 @@ type
     function EnqueueBatch(const AValues: array of T): PtrUInt;
     function DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
     procedure Close;
-    function IsClosed: Boolean;
-    function IsEmpty: Boolean;
-    function IsFull: Boolean;
-    function Capacity: PtrUInt;
-    function ApproxCount: PtrUInt;
+    function IsClosed: Boolean; inline;
+    function IsEmpty: Boolean; inline;
+    function IsFull: Boolean; inline;
+    function Capacity: PtrUInt; inline;
+    function ApproxCount: PtrUInt; inline;
   end;
 
   generic TMpmcQueue<T> = class(specialize TMpmcQueueImpl<T>)
@@ -324,7 +342,7 @@ begin
   LockFreeWakeAll(@FSpaceEpoch);
 end;
 
-function TMpmcQueueImpl.IsClosed: Boolean;
+function TMpmcQueueImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

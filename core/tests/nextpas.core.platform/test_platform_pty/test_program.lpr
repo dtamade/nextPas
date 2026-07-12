@@ -20,8 +20,8 @@ var
 begin
   FillChar(LPty, SizeOf(LPty), 0);
   FillChar(LSize, SizeOf(LSize), 0);
-  LSize.FRows := 24;
-  LSize.FCols := 80;
+  LSize.Rows := 24;
+  LSize.Cols := 80;
   LRes := platform_pty_open(LSize, LPty);
   if LRes = PLATFORM_ERR_UNSUPPORTED then
   begin
@@ -61,8 +61,8 @@ var
 begin
   FillChar(LPty, SizeOf(LPty), 0);
   FillChar(LSize, SizeOf(LSize), 0);
-  LSize.FRows := 24;
-  LSize.FCols := 80;
+  LSize.Rows := 24;
+  LSize.Cols := 80;
   LRes := platform_pty_open(LSize, LPty);
   if LRes = PLATFORM_ERR_UNSUPPORTED then
   begin
@@ -83,8 +83,8 @@ var
 begin
   FillChar(LPty, SizeOf(LPty), 0);
   FillChar(LSize, SizeOf(LSize), 0);
-  LSize.FRows := 24;
-  LSize.FCols := 80;
+  LSize.Rows := 24;
+  LSize.Cols := 80;
   LRes := platform_pty_open(LSize, LPty);
   if LRes = PLATFORM_ERR_UNSUPPORTED then
   begin
@@ -104,8 +104,8 @@ var
 begin
   FillChar(LPty, SizeOf(LPty), 0);
   FillChar(LSize, SizeOf(LSize), 0);
-  LSize.FRows := 24;
-  LSize.FCols := 80;
+  LSize.Rows := 24;
+  LSize.Cols := 80;
   LRes := platform_pty_open(LSize, LPty);
   if LRes = PLATFORM_ERR_UNSUPPORTED then
   begin
@@ -126,8 +126,8 @@ var
 begin
   FillChar(LPty, SizeOf(LPty), 0);
   FillChar(LSize, SizeOf(LSize), 0);
-  LSize.FRows := 24;
-  LSize.FCols := 80;
+  LSize.Rows := 24;
+  LSize.Cols := 80;
   LRes := platform_pty_open(LSize, LPty);
   if LRes = PLATFORM_ERR_UNSUPPORTED then
   begin
@@ -137,8 +137,8 @@ begin
   Check(LRes = 0, 'open must succeed');
 
   FillChar(LNewSize, SizeOf(LNewSize), 0);
-  LNewSize.FRows := 50;
-  LNewSize.FCols := 120;
+  LNewSize.Rows := 50;
+  LNewSize.Cols := 120;
   LRes := platform_pty_resize(LPty, LNewSize);
   Check(LRes = 0, 'resize must succeed');
 
@@ -153,8 +153,8 @@ var
 begin
   FillChar(LPty, SizeOf(LPty), 0);
   FillChar(LSize, SizeOf(LSize), 0);
-  LSize.FRows := 24;
-  LSize.FCols := 80;
+  LSize.Rows := 24;
+  LSize.Cols := 80;
   LRes := platform_pty_open(LSize, LPty);
   if LRes = PLATFORM_ERR_UNSUPPORTED then
   begin
@@ -177,8 +177,8 @@ var
 begin
   FillChar(LPty, SizeOf(LPty), 0);
   FillChar(LSize, SizeOf(LSize), 0);
-  LSize.FRows := 24;
-  LSize.FCols := 80;
+  LSize.Rows := 24;
+  LSize.Cols := 80;
   LRes := platform_pty_open(LSize, LPty);
   if LRes = PLATFORM_ERR_UNSUPPORTED then
   begin
@@ -204,8 +204,8 @@ var
 begin
   FillChar(LPty, SizeOf(LPty), 0);
   FillChar(LSize, SizeOf(LSize), 0);
-  LSize.FRows := 24;
-  LSize.FCols := 80;
+  LSize.Rows := 24;
+  LSize.Cols := 80;
   LRes := platform_pty_open(LSize, LPty);
   if LRes = PLATFORM_ERR_UNSUPPORTED then
   begin

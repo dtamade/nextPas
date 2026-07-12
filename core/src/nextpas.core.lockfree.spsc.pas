@@ -1,4 +1,22 @@
 unit nextpas.core.lockfree.spsc;
+{**
+ * @desc Lock-free Single-Producer Single-Consumer bounded queue.
+ *
+ * @details Sequence-based SPSC queue using cache-line padding:
+ *   - Bounded capacity (power-of-2 required)
+ *   - Non-blocking TryEnqueue/TryDequeue
+ *   - Blocking EnqueueWait/DequeueWait with timeout variants
+ *   - Batch operations for high-throughput scenarios
+ *   - Close semantics with drain support
+ *
+ * @concurrency Thread-safe for single producer and single consumer:
+ *   - Enqueue: only producer thread can call
+ *   - Dequeue: only consumer thread can call
+ *   - Close: safe to call from any thread
+ *
+ * @see Dmitry Vyukov SPSC queue — lock-free bounded queue
+ * @see crossbeam (Rust) — similar SPSC implementation
+ *}
 
 {$I nextpas.core.settings.inc}
 

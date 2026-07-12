@@ -536,6 +536,7 @@ function THPackEncoder.MRUFind(const AName, AValue: AnsiString;
 var
   LSlot: SizeInt;
   LNameHash, LValueHash: UInt32;
+  LCachedName, LCachedValue: AnsiString;
 begin
   LNameHash := H2FNV1a(AName);
   LValueHash := H2FNV1a(AValue);
@@ -543,7 +544,13 @@ begin
   Result := (FMRUCache[LSlot].Index > 0) and
     (FMRUCache[LSlot].NameHash = LNameHash) and
     (FMRUCache[LSlot].ValueHash = LValueHash);
-  if Result then AIndex := FMRUCache[LSlot].Index;
+  if not Result then
+    Exit;
+  AIndex := FMRUCache[LSlot].Index;
+  { Verify the dynamic table entry still exists (hash collision protection) }
+  Result := FDynamicTable.Get(
+    AIndex - HPACK_STATIC_TABLE_COUNT - 1, LCachedName, LCachedValue) and
+    (LCachedName = AName) and (LCachedValue = AValue);
 end;
 
 procedure THPackEncoder.EncodeInteger(var AOut: AnsiString; AValue: UInt32;

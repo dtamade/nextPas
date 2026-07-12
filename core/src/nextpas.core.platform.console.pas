@@ -16,6 +16,9 @@ type
     {** @desc 检查尺寸是否有效（大于 0）
         @return True 如果尺寸有效 *}
     function IsValid: Boolean; inline;
+    {** @desc 检查尺寸是否无效（任一维度为 0）
+        @return True 如果尺寸无效 *}
+    function IsInvalid: Boolean; inline;
     {** @desc 检查尺寸是否为空
         @return True 如果行或列为 0 *}
     function IsEmpty: Boolean; inline;
@@ -184,6 +187,11 @@ const
 function TPlatformConsoleSize.IsValid: Boolean;
 begin
   Result := (Cols > 0) and (Rows > 0);
+end;
+
+function TPlatformConsoleSize.IsInvalid: Boolean;
+begin
+  Result := (Cols = 0) or (Rows = 0);
 end;
 
 function TPlatformConsoleSize.IsEmpty: Boolean;
@@ -438,6 +446,11 @@ begin
   Result := (Cols > 0) and (Rows > 0);
 end;
 
+function TPlatformConsoleSize.IsInvalid: Boolean;
+begin
+  Result := (Cols = 0) or (Rows = 0);
+end;
+
 function TPlatformConsoleSize.IsEmpty: Boolean;
 begin
   Result := (Cols = 0) or (Rows = 0);
@@ -458,11 +471,11 @@ begin
     1: LStd := STD_OUTPUT_HANDLE;
     2: LStd := STD_ERROR_HANDLE;
   else
-    Exit(Int32(ERROR_INVALID_HANDLE));
+    Exit(PLATFORM_ERR_BADF);
   end;
   AHandle := GetStdHandle(LStd);
   if (AHandle = nil) or (AHandle = HANDLE(INVALID_HANDLE_VALUE)) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Result := 0;
 end;
 
@@ -514,7 +527,7 @@ begin
   Result := WindowsConsoleHandleFromFd(AFd, LHandle);
   if Result <> 0 then Exit;
   if not GetConsoleScreenBufferInfo(LHandle, @LInfo) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   ASize.Cols := Int32(LInfo.srWindowRight - LInfo.srWindowLeft + 1);
   ASize.Rows := Int32(LInfo.srWindowBottom - LInfo.srWindowTop + 1);
   Result := 0;
@@ -530,14 +543,14 @@ begin
   if Result <> 0 then Exit;
   LSaved := 0;
   if not GetConsoleMode(LHandle, @LSaved) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Move(LSaved, AMode.Opaque[0], SizeOf(LSaved));
   LRaw := LSaved;
   LRaw := LRaw and not (ENABLE_LINE_INPUT or ENABLE_ECHO_INPUT or
     ENABLE_PROCESSED_INPUT);
   LRaw := LRaw or ENABLE_VIRTUAL_TERMINAL_INPUT;
   if not SetConsoleMode(LHandle, LRaw) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Result := 0;
 end;
 
@@ -550,7 +563,7 @@ begin
   if Result <> 0 then Exit;
   Move(AMode.Opaque[0], LMode, SizeOf(LMode));
   if not SetConsoleMode(LHandle, LMode) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Result := 0;
 end;
 

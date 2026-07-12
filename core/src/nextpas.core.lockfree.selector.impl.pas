@@ -1,4 +1,22 @@
 unit nextpas.core.lockfree.selector.impl;
+{**
+ * @desc Channel Selector implementation for multiplexing.
+ *
+ * @details Go-style select for channels:
+ *   - AddRecv: register channel for receiving
+ *   - AddSend: register channel for sending
+ *   - Select: blocking wait for any channel operation
+ *   - TrySelect: non-blocking check for ready channels
+ *   - SelectTimeout: blocking with timeout
+ *   - Clear: reset for reuse
+ *
+ * @concurrency Thread-safe for single selector user:
+ *   - Not thread-safe for concurrent Select calls on same selector
+ *   - Thread-safe for channel operations (channels handle their own concurrency)
+ *
+ * @see Go select — multiplexing channels
+ * @see epoll/kqueue — similar event multiplexing patterns
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -7,6 +25,7 @@ interface
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
+  nextpas.core.lockfree.base,
   nextpas.core.platform.thread,
   nextpas.core.platform.time,
   nextpas.core.lockfree.selector,

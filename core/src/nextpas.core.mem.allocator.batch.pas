@@ -85,6 +85,8 @@ implementation
 constructor TBatchAllocator.Create(AInner: IAllocator);
 begin
   inherited Create;
+  if AInner = nil then
+    raise EArgumentNil.Create('TBatchAllocator.Create: AInner cannot be nil');
   FInner := AInner;
   FBatchAllocCount := 0;
   FSingleAllocCount := 0;

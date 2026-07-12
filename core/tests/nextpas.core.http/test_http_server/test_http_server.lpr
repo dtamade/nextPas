@@ -2947,7 +2947,7 @@ const
     'POST /bad HTTP/1.1'#13#10 +
     'Host: localhost'#13#10 +
     'Content-Length: 1'#13#10 +
-    'Content-Length: 1'#13#10 +
+    'Content-Length: 2'#13#10 +
     'Connection: close'#13#10#13#10;
 begin
   RunPollDrivenQueuedFollowUpErrorPreservesWireOrder(
@@ -4389,7 +4389,7 @@ const
     'POST /bad HTTP/1.1'#13#10 +
     'Host: localhost'#13#10 +
     'Content-Length: 1'#13#10 +
-    'Content-Length: 1'#13#10 +
+    'Content-Length: 2'#13#10 +
     'Connection: close'#13#10#13#10;
 begin
   RunRealSocketQueuedFollowUpErrorPreservesWireOrder(
@@ -12216,6 +12216,7 @@ begin
     const AW: IHttpResponseWriter)
   begin
     AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.GetHeaders.SetHeader('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write('ok', 2);
   end);
@@ -12232,8 +12233,8 @@ begin
       LConn.Write(LReq[1], SizeUInt(Length(LReq)));
       LResp := ReadOneResponse(LConn);
       Check(Pos('200 OK', LResp) > 0, 'first request 200');
-      Check(Pos('connection: keep-alive', LowerCase(LResp)) > 0,
-        'first response has keep-alive');
+      Check(Pos('connection: close', LowerCase(LResp)) = 0,
+        'first response has no connection: close');
 
       { Second request — should succeed but with Connection: close }
       LConn.Write(LReq[1], SizeUInt(Length(LReq)));

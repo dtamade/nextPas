@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.test*.pas`（18 个源文件）
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-09
-**版本**：v8.0
+**最后更新**：2026-07-11
+**版本**：v8.4
 
 ---
 
@@ -14,10 +14,10 @@
 |------|------|-----|
 | test.pas | 门面：re-export 所有公共 API | ~537 |
 | test.base.pas | 基础类型（TTestEntry, TTestStatus, TBenchContext, ETestSkipped, threadvar） | ~836 |
-| test.check.pas | 过程式 Check* 断言 API（40+ 方法, 含 CI/Double/Array 变体） | ~1414 |
+| test.check.pas | 过程式 Check* 断言 API（50+ 方法, 含 Pointer/UInt64/TBytes AMessage 变体） | ~1500 |
 | test.expect.pas | 流式 IExpectation 接口 + TExpectation 实现（40+ 方法） | ~1330 |
-| test.mock.pas | TMock/TMockState 手动 Mock 框架（期望验证 + 调用历史） | ~1529 |
-| test.config.pas | TTestConfig record + IOutputSink + TTestCache + TBufferSink | ~1099 |
+| test.mock.pas | TMock/TMockState 手动 Mock 框架（期望验证 + 调用历史 + ArgHash 优化） | ~1600 |
+| test.config.pas | TTestConfig record（23 字段含 Version）+ IOutputSink + TTestCache + TBufferSink | ~1150 |
 | test.runner.pas | TTestSuite/TSuiteRunner + 串行/并行执行 + retry/shuffle/failfast | ~2225 |
 | test.runner.cli.pas | CLI 参数解析（--filter, --bench, --cache 等） | ~408 |
 | test.runner.parallel.pas | 并行 worker + timeout watchdog | ~521 |
@@ -27,7 +27,7 @@
 | test.output.json.pas | JSON 输出格式 | ~185 |
 | test.output.tap.pas | TAP v13 输出格式 | ~123 |
 | test.prop.pas | 属性测试 + 模糊测试 + 语料库 + shrinking | ~2704 |
-| test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig 辅助 | ~178 |
+| test.helpers.pas | ExpectFail, WithMock, MakeBufferConfig, WithTempDir, WithTempFile 辅助 | ~195 |
 | test.bench.pas | 测试框架与 bench 模块集成 | ~206 |
 
 ---
@@ -84,10 +84,29 @@ IExpectation = interface
   function ToBeSame(const AExpected: Pointer): IExpectation;
   function ToEqualPointer(const AExpected: Pointer): IExpectation;
   function ToEqualD(const AExpected: Double; const AEpsilon: Double = 1e-10): IExpectation;
+  function ToBeNearRel(const AExpected: Double; const ARelEps: Double = 1e-9): IExpectation;
+  function ToNotBeNearRel(const AExpected: Double; const ARelEps: Double = 1e-9): IExpectation;
+  function ToBeNaN: IExpectation;
+  function ToBeNotNaN: IExpectation;
+  function ToEqualBytes(const AExpected: TBytes): IExpectation;
+  function ToEqualIntArray(const AExpected: array of Int64): IExpectation;
+  function ToEqualStrArray(const AExpected: array of string): IExpectation;
+  function ToContainInt(const AValue: Int64): IExpectation;
+  function ToContainStr(const AValue: string): IExpectation;
+  function ToContain(const AValue: Byte): IExpectation;
+  function ToBeEmpty: IExpectation;
+  function ToBeNotEmpty: IExpectation;
+  function ToBeSorted: IExpectation;
+  function ToBeOneOf(const AValues: array of string): IExpectation;
+  function ToBeOneOfInt(const AValues: array of Int64): IExpectation;
+  function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
+  function ToMatch(const APattern: string): IExpectation;
+  function WithMessage(const AMessage: string): IExpectation;
+  procedure ToFailUnexpected(const AMessage: string = '');
 end;
 ```
 
-工厂函数：`Expect(string)`, `ExpectStr`, `ExpectInt`, `ExpectBool`, `ExpectDouble`, `ExpectPtr`, `ExpectProc`。
+工厂函数：`Expect(string)`, `ExpectStr`, `ExpectInt`, `ExpectBool`, `ExpectDouble`, `ExpectPtr`, `ExpectProc`, `ExpectBytes`, `ExpectArrayOfInt`, `ExpectArrayOfStr`。
 
 ### 2.3 IMockSetup / IMockVerify
 
@@ -113,6 +132,8 @@ IMockVerify = interface
   function  CalledWith(const AArgs: array of TMockValue): IMockVerify;
   function  CalledExactlyWith(ACount: Integer; const AArgs: array of string): IMockVerify;
   function  CalledExactlyWith(ACount: Integer; const AArgs: array of TMockValue): IMockVerify;
+  function  Count: Integer;
+  function  CalledInOrder(const AMethods: array of string): IMockVerify;
 end;
 ```
 
@@ -126,8 +147,13 @@ ITestContext = interface
   procedure Skip(const AReason: string = '');
   function  GetTestName: string;
   procedure Log(const AMessage: string);
+  procedure LogF(const AFormat: string; const AArgs: array of const);
   procedure OnCleanup(AProc: TTestProc);
   procedure OnCleanup(AProc: TTestClosure);
+  function  GetTempDir: string;
+  property  TempDir: string read GetTempDir;
+  procedure SetEnv(const AName, AValue: string);
+  procedure UnsetEnv(const AName: string);
 end;
 ```
 
@@ -135,7 +161,7 @@ end;
 
 ## 3. 核心类型
 
-### 3.1 TTestConfig (22 字段)
+### 3.1 TTestConfig (23 字段)
 
 ```pascal
 TTestConfig = record
@@ -162,6 +188,11 @@ TTestConfig = record
   BenchTimeMs   : Integer;     { benchmark 目标时长 (默认 1000ms) }
   BenchMem      : Boolean;     { --benchmem: 报告每次操作内存分配 }
   RunPattern    : string;      { --run: 精确测试名匹配 (大小写无关) }
+  Version       : Integer;     { 序列化版本号 (0=v8, 1=v9+); 向前兼容 }
+  BenchSaveFile : string;      { --benchsave=<file>: 保存 benchmark 结果到 JSON }
+  BenchCompareFile: string;    { --benchcompare=<file>: 与基线 JSON 比较 }
+  CacheEnabled  : Boolean;     { --cache: 使用测试结果缓存 }
+  CacheDir      : string;      { 缓存目录 (默认 .nextpas/test-cache/) }
 end;
 ```
 
@@ -249,18 +280,101 @@ end;
 
 ---
 
-## 8. 测试覆盖
+## 8. 浮点比较速查表
 
-| 套件 | 测试数 | 覆盖范围 |
-|------|--------|----------|
-| test_assertions | 108 | Check* 全方法 |
-| test_expect | 119 | IExpectation 全方法 + negation |
-| test_mock | 75 | TMock/IMockSetup/IMockVerify + typed CalledWith |
-| test_lifecycle | 15 | Setup/Teardown/BeforeEach/AfterEach/Cleanup |
-| test_diagnostics | 15 | 错误消息质量 + 字符串差异 |
-| test_output | 70 | ANSI/glob/JUnit/leak report |
-| test_runner | ~60 | CLI/filter/shuffle/retry/timeout/parallel |
-| test_parallel | 8 | 并行执行 + timeout |
-| test_subtests | ~10 | Run(RunNested + CleanupTableAllocations |
-| test_advanced | ~13 | DiscoverTests/TestFixture/ShouldFail/TestTable |
-| **总计** | **~500+** | **0 泄漏**（test_assertions 32B 是 FPC artifact） |
+| 场景 | Check API | Expect API | 说明 |
+|------|-----------|------------|------|
+| 小值精确比较 | `CheckEqual(a, b)` | `ToEqualD(a)` | 默认 ε=1e-10 |
+| 大值比较 (1e15+) | `CheckNearRel(a, b)` | `ToBeNearRel(a)` | 相对容差 |
+| 自定义容差 | `CheckNear(a, b, eps)` | `ToBeNear(a, eps)` | 绝对容差 |
+| NaN 检查 | `CheckNaN(v)` / `CheckNotNaN(v)` | `ToBeNaN` / `ToBeNotNaN` | |
+| Infinity 检查 | `CheckInf(v)` / `CheckNotInf(v)` | — | Expect API 待补 |
+| 有限性检查 | `CheckFinite(v)` | — | Expect API 待补 |
+| 范围检查 | `CheckInRangeD(v, lo, hi)` | `ToBeInRangeD(lo, hi)` | |
+
+**⚠️ 常见陷阱**：
+- `CheckEqual(1e15, 1e15 + 1)` 默认会失败！用 `CheckNearRel` 或增大 epsilon
+- `ToBeOneOf([])` 空数组始终失败——值不可能是空集的成员
+
+---
+
+## 10. 测试覆盖
+
+| 套件 | 测试过程 | 断言数 | 覆盖范围 |
+|------|---------|--------|----------|
+| test_assertions | 167 | 679 | Check* 全方法 (Pointer/UInt64/TBytes AMessage 变体) |
+| test_expect | 175 | 530 | IExpectation 全方法 + negation + array/bytes/match |
+| test_mock | 196 | 208 | TMock/IMockSetup/IMockVerify + CalledWith + CalledInOrder + GetCallHistory |
+| test_output | 83 | 311 | ANSI/glob/JUnit/TAP/JSON/leak report + Error vs Failure |
+| test_runner | 13 | 146 | CLI/filter/shuffle/retry/timeout/parallel/count |
+| test_lifecycle | 21 | 93 | Setup/Teardown/BeforeEach/AfterEach/Cleanup/TestTable |
+| test_prop | 50 | 50 | 属性测试 + 模糊测试 + 语料库 + shrinking |
+| test_bench | 22 | 53 | RunBenchTest/RunBenchSuite/CheckBenchPerformance/CheckBenchThroughput |
+| test_advanced | 19 | 49 | DiscoverTests/TestFixture/ShouldFail/TestTable |
+| test_diagnostics | 15 | 59 | 错误消息质量 + 字符串差异 |
+| test_parallel | 19 | 19 | 并行执行 + timeout + table parallel |
+| test_subtests | 29 | 59 | Run/RunNested + CleanupCallbacks + SinkPropagation |
+| test_stress | 10 | 20 | 10K 空测试 + 大字符串 + glob 性能 + 100K 行输出 |
+| **总计** | **819** | **2276** | FPC heaptrc 时序伪影见下 |
+
+> **FPC heaptrc 时序说明**：test_lifecycle(5 blocks/896B)、test_parallel(75 blocks/14KB)、test_runner(17 blocks/3KB)
+> 报告未释放内存块。经调查为 FPC 编译器管理的记录副本（TTestSuite=272B、TTestRunResult=40B），
+> 由 `TSuiteRunner.Suites: TArray<TTestSuite>` 等动态数组持有。这些托管记录在堆上创建副本，
+> 但 FPC 的隐式析构在 heaptrc DumpHeap 之后执行。`Default()` 提前归零不能减少计数，
+> 因为问题不在外层变量而在动态数组元素内部的编译器托管副本。这些不是真实泄漏。
+
+## 11. 变更日志
+
+### v8.4 (2026-07-11) — M4 heaptrc 时序调查 + 文档更新
+
+**调查结论**：
+- test_lifecycle(5 blocks/896B)、test_parallel(75 blocks/14KB)、test_runner(17 blocks/3KB) 报告未释放块
+- 根因：FPC 编译器管理的记录副本（TTestSuite=272B、TTestRunResult=40B），由动态数组 `TSuiteRunner.Suites: TArray<TTestSuite>` 持有
+- 编译器隐式析构在 heaptrc DumpHeap 之后执行，`Default()` 提前归零不能减少计数
+- 结论：非真实泄漏，是 FPC heaptrc 时序伪影
+
+### v8.3 (2026-07-11) — API 一致性补齐 + 测试覆盖 + 边界条件
+
+**新增**：
+- `CheckEmpty`/`CheckNotEmpty`：字符串和字节数组空值检查（4 个重载 + 4 个带消息重载）
+- `CheckInf`/`CheckNotInf`/`CheckFinite`：浮点无穷大和有限性检查
+- `ToBeSorted`：IExpectation 排序检查（支持 Int64 数组和字符串数组）
+- `test_config` 测试套件（38 tests）：完整覆盖 TTestConfig 默认值、TTestConfigBuilder 全部 22 个 With* 方法、TBufferSink、MakeBufferConfig
+- `test_discovery` 测试套件（8 tests）：完整覆盖 DiscoverTests + TTestFixture BeforeEach/AfterEach
+- `test_assertions` 新增 19 个测试：CheckEmpty/NotEmpty + CheckInf/NotInf/Finite
+- `test_expect` 新增 9 个测试：ToBeSorted Int64/字符串通过/失败/空/单元素/相等/否定
+
+**更新**：
+- CONTRACT.md 版本 v8.2 → v8.3
+- README.md API 参考表新增 CheckEmpty/CheckNotEmpty/CheckInf/CheckFinite/CheckSorted/CheckIsNil/CheckIsNotNil
+- 测试套件数 13 → 15
+
+### v8.2 (2026-07-11) — test.bench 测试覆盖 + helpers 增强
+
+**新增**：
+- `test_bench` 测试套件（22 tests / 53 assertions）：完整覆盖 `nextpas.core.test.bench` 全部公共 API
+  - `DefaultBenchTestConfig` 5 个默认值验证
+  - `RunBenchTest` 6 个测试（执行/名称/NsPerOp/OpsPerSec/迭代数/MaxIterations）
+  - `RunBenchSuite` 3 个测试（多条目/全执行/空套件）
+  - `CheckBenchPerformance` 3 个测试（通过/失败/未执行）
+  - `CheckBenchThroughput` 3 个测试（通过/失败/未执行）
+  - 自定义消息转发 2 个测试
+- `WithTempFile` 辅助函数：创建临时文件、执行回调、自动清理（与 `WithTempDir` 对称）
+
+**更新**：
+- CONTRACT.md 测试覆盖表从 ~500+ 更新为 819 测试过程 / 2276 断言（精确计数）
+- `test.helpers.pas` 行数更新 ~178 → ~195
+
+### v8.1 (2026-07-11) — 第二轮深度审查
+
+**P2 整改项**：
+- **P2-3**: TTestConfig 添加 `Version` 字段（向前兼容序列化）+ `GetConfigVersion` 访问器
+- **P2-4**: `MatchesGlob` brace expansion 使用 `BuildAlt` 单次分配替代 `Copy+Copy+Copy`
+- **P2-5**: `GTempDirCounter` 类型从 `Integer` 修正为 `LongInt`（匹配 `InterlockedIncrement` 签名）
+- **P2-6**: `MatchingCallCount` 添加 `ArgHash` 预计算，O(n×m) → O(n) 常见情况
+- **P2-7**: 所有 `Shrink*` 递归函数添加 `ADepth > 100` 迭代上限保护
+
+**新增改进**：
+- 提取 `CheckArrayContainsStr`/`CheckArrayContainsInt` 公共函数，消除重复的列表构建逻辑
+- `CheckEqual`/`CheckNotEqual` 的 Pointer/UInt64/TBytes 重载补全 `AMessage` 参数
+- `GTempDirCounter` 注释澄清原子语义

@@ -22,6 +22,7 @@ implementation
 
 uses
   nextpas.core.atomic,
+  nextpas.core.lockfree.base,
   nextpas.core.platform.sync;
 
 const

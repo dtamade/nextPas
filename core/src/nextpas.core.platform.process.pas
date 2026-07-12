@@ -69,7 +69,7 @@ function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
     @param AProc 进程句柄
     @param AResult 输出进程结果
     @param ATimeoutMs 超时时间（毫秒，0 表示无限等待）
-    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
+    @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
 function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
 
@@ -560,6 +560,7 @@ var
   LRet: pid_t;
   LDeadlineNs, LNowNs: TPlatformTimeNanoseconds;
   LSleepReq: timespec;
+  LWaitIter: Int32;
 begin
   FillChar(AResult, SizeOf(AResult), 0);
   LStatus := 0;
@@ -571,6 +572,7 @@ begin
   end
   else
   begin
+    LWaitIter := 0;
     LDeadlineNs := platform_monotonic_ns + TPlatformTimeNanoseconds(ATimeoutMs) * 1000000;
     repeat
       LRet := waitpid(AProc.Pid, @LStatus, WNOHANG);
@@ -590,10 +592,22 @@ begin
       if LNowNs >= LDeadlineNs then
       begin
         AResult.Status := psRunning;
-        Exit(PLATFORM_ERR_TIMEOUT);
+        Exit(PLATFORM_ERR_TIMEDOUT);
+      end;
+      { Exponential backoff: 0ns → 10μs → 100μs → 1ms → 10ms cap }
+      case LWaitIter of
+        0: LSleepReq.tv_nsec := 0;
+        1: LSleepReq.tv_nsec := 10000;      { 10 μs }
+        2: LSleepReq.tv_nsec := 100000;     { 100 μs }
+        3: LSleepReq.tv_nsec := 1000000;    { 1 ms }
+      else
+        begin
+          LSleepReq.tv_sec := 0;
+          LSleepReq.tv_nsec := 10000000;    { 10 ms cap }
+        end;
       end;
       LSleepReq.tv_sec := 0;
-      LSleepReq.tv_nsec := 1000000; { 1 ms }
+      Inc(LWaitIter);
       nanosleep(@LSleepReq, nil);
     until False;
   end;
@@ -1154,13 +1168,13 @@ var
 begin
   FillChar(AProcessInfo, SizeOf(AProcessInfo), 0);
   if not platform_windows_argv_to_command_line(APath, AArgv, LCmd) then
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
 
   LCwdPtr := nil;
   if ACwd <> nil then
   begin
     if not platform_windows_utf8_to_wide_checked(ACwd, LCwd) then
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     LCwdPtr := PWideChar(LCwd);
   end;
 
@@ -1168,7 +1182,7 @@ begin
   if AEnvp <> nil then
   begin
     if not platform_windows_envp_to_wide_block(AEnvp, LEnvBlock) then
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     LEnvPtr := PWideChar(LEnvBlock);
   end;
 
@@ -1178,7 +1192,7 @@ begin
   if not CreateProcessW(nil, PWideChar(LCmd), nil, nil, AInheritHandles,
     LCreationFlags, LEnvPtr, LCwdPtr, @AStartupInfo,
     @AProcessInfo) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   Result := 0;
 end;
 
@@ -1215,13 +1229,13 @@ begin
   begin
     { WAIT_TIMEOUT: process still running }
     AResult.Status := psRunning;
-    Exit(PLATFORM_ERR_TIMEOUT);
+    Exit(PLATFORM_ERR_TIMEDOUT);
   end;
   if LWait <> 0 then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   LExitCode := 0;
   if not GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   AResult.Status := psExited;
   AResult.ExitCode := Int32(LExitCode);
   Result := 0;
@@ -1239,7 +1253,7 @@ begin
     Exit(0);
   end;
   if LWait <> 0 then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   LExitCode := 0;
   GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode);
   AResult.Status := psExited;
@@ -1262,7 +1276,7 @@ begin
     if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then
       Result := 0
     else
-      Result := Int32(GetLastError);
+      Result := platform_get_last_error;
   end
   else
     Result := PLATFORM_ERR_UNSUPPORTED;
@@ -1287,7 +1301,7 @@ begin
   LSA.nLength := SizeOf(LSA);
   LSA.bInheritHandle := True;
   if not CreatePipe(@LReadHandle, @LWriteHandle, @LSA, 0) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   AReadHandle := PtrInt(PtrUInt(LReadHandle));
   AWriteHandle := PtrInt(PtrUInt(LWriteHandle));
   Result := 0;
@@ -1308,7 +1322,7 @@ begin
     FILE_SHARE_READ or FILE_SHARE_WRITE, nil, OPEN_EXISTING,
     FILE_ATTRIBUTE_NORMAL, nil);
   if LHandle = HANDLE(PtrInt(-1)) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   AHandle := PtrInt(PtrUInt(LHandle));
   Result := 0;
 end;
@@ -1318,7 +1332,7 @@ begin
   if AHandle < 0 then
     Exit(0);
   if not CloseHandle(HANDLE(PtrUInt(AHandle))) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   AHandle := -1;
   Result := 0;
 end;
@@ -1398,10 +1412,10 @@ begin
   LSA.nLength := SizeOf(LSA);
   LSA.bInheritHandle := True;
   if not CreatePipe(@LStdoutRd, @LStdoutWr, @LSA, 0) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   if not SetHandleInformation(LStdoutRd, HANDLE_FLAG_INHERIT, 0) then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(LStdoutRd);
     CloseHandle(LStdoutWr);
     Exit;
@@ -1413,7 +1427,7 @@ begin
     FILE_ATTRIBUTE_NORMAL, nil);
   if LDevNullRead = HANDLE(PtrInt(-1)) then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(LStdoutRd);
     CloseHandle(LStdoutWr);
     Exit;
@@ -1423,7 +1437,7 @@ begin
     FILE_ATTRIBUTE_NORMAL, nil);
   if LDevNullWrite = HANDLE(PtrInt(-1)) then
   begin
-    Result := Int32(GetLastError);
+    Result := platform_get_last_error;
     CloseHandle(LDevNullRead);
     CloseHandle(LStdoutRd);
     CloseHandle(LStdoutWr);

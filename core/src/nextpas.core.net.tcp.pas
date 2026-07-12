@@ -176,7 +176,7 @@ begin
   Result := 0;
   while LRemaining > 0 do
   begin
-    LResult := platform_socket_send(FSocket, LPtr, Int32(LRemaining), 0, LSent);
+    LResult := platform_socket_send(FSocket, LPtr, Int32(LRemaining), PLATFORM_MSG_NOSIGNAL, LSent);
     if LResult <> 0 then
     begin
       if (not FWriteDeadline.IsInfinite) and

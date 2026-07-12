@@ -1,4 +1,19 @@
 unit nextpas.core.lockfree.scapegoat;
+{**
+ * @desc Concurrent Scapegoat Tree with per-tree spin lock.
+ *
+ * @note This is NOT a lock-free structure. It uses an atomic spin lock
+ *       to protect write operations (insert/remove).
+ *       Placed in the lockfree namespace because it uses atomic primitives
+ *       and follows the same concurrent data structure patterns.
+ *
+ * @concurrency Thread-safe for multiple readers and writers:
+ *   - Find/Contains/ForEach: shared read access
+ *   - Insert/Remove/Clear: exclusive write lock
+ *
+ * @see Scapegoat Tree — rotation-free balanced BST
+ * @see Galperin & Rivest, 1993 — original paper
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -248,43 +263,45 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(sgClosed);
   Lock;
-  LParent := nil;
-  LNode := FRoot;
-  LDepth := 0;
-  while LNode <> nil do
-  begin
-    LParent := LNode;
-    if AKey = LNode^.Key then
+  try
+    LParent := nil;
+    LNode := FRoot;
+    LDepth := 0;
+    while LNode <> nil do
     begin
-      LNode^.Value := AValue;
-      Unlock;
-      Exit(sgUpdated);
-    end
-    else if AKey < LNode^.Key then
-      LNode := LNode^.Left
+      LParent := LNode;
+      if AKey = LNode^.Key then
+      begin
+        LNode^.Value := AValue;
+        Exit(sgUpdated);
+      end
+      else if AKey < LNode^.Key then
+        LNode := LNode^.Left
+      else
+        LNode := LNode^.Right;
+      Inc(LDepth);
+    end;
+    LNew := CreateNode(AKey, AValue, LParent);
+    if LParent = nil then
+      FRoot := LNew
+    else if AKey < LParent^.Key then
+      LParent^.Left := LNew
     else
-      LNode := LNode^.Right;
-    Inc(LDepth);
+      LParent^.Right := LNew;
+    AtomicFetchAdd64(FCount, 1, moRelaxed);
+    if FCount > FMaxCount then
+      FMaxCount := FCount;
+    LHeight := Round(Ln(Double(FCount)) / Ln(1.0 / FAlpha));
+    if LDepth > LHeight then
+    begin
+      LScapegoat := FindScapegoat(LNew);
+      if LScapegoat <> nil then
+        RebuildSubtree(LScapegoat);
+    end;
+    Result := sgInserted;
+  finally
+    Unlock;
   end;
-  LNew := CreateNode(AKey, AValue, LParent);
-  if LParent = nil then
-    FRoot := LNew
-  else if AKey < LParent^.Key then
-    LParent^.Left := LNew
-  else
-    LParent^.Right := LNew;
-  AtomicFetchAdd64(FCount, 1, moRelaxed);
-  if FCount > FMaxCount then
-    FMaxCount := FCount;
-  LHeight := Round(Ln(Double(FCount)) / Ln(1.0 / FAlpha));
-  if LDepth > LHeight then
-  begin
-    LScapegoat := FindScapegoat(LNew);
-    if LScapegoat <> nil then
-      RebuildSubtree(LScapegoat);
-  end;
-  Unlock;
-  Result := sgInserted;
 end;
 
 function TConcurrentScapegoatTree.Remove(AKey: Int64): TScapegoatResult;
@@ -294,74 +311,74 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(sgClosed);
   Lock;
-  LNode := FindNode(AKey);
-  if LNode = nil then
-  begin
+  try
+    LNode := FindNode(AKey);
+    if LNode = nil then
+      Exit(sgNotFound);
+    if (LNode^.Left = nil) and (LNode^.Right = nil) then
+    begin
+      LParent := LNode^.Parent;
+      if LParent = nil then
+        FRoot := nil
+      else if LParent^.Left = LNode then
+        LParent^.Left := nil
+      else
+        LParent^.Right := nil;
+      FreeNode(LNode);
+    end
+    else if LNode^.Left = nil then
+    begin
+      LParent := LNode^.Parent;
+      if LParent = nil then
+        FRoot := LNode^.Right
+      else if LParent^.Left = LNode then
+        LParent^.Left := LNode^.Right
+      else
+        LParent^.Right := LNode^.Right;
+      if LNode^.Right <> nil then
+        LNode^.Right^.Parent := LParent;
+      FreeNode(LNode);
+    end
+    else if LNode^.Right = nil then
+    begin
+      LParent := LNode^.Parent;
+      if LParent = nil then
+        FRoot := LNode^.Left
+      else if LParent^.Left = LNode then
+        LParent^.Left := LNode^.Left
+      else
+        LParent^.Right := LNode^.Left;
+      if LNode^.Left <> nil then
+        LNode^.Left^.Parent := LParent;
+      FreeNode(LNode);
+    end
+    else
+    begin
+      LSuccessor := LNode^.Right;
+      while LSuccessor^.Left <> nil do
+        LSuccessor := LSuccessor^.Left;
+      LNode^.Key := LSuccessor^.Key;
+      LNode^.Value := LSuccessor^.Value;
+      LParent := LSuccessor^.Parent;
+      if LParent^.Left = LSuccessor then
+        LParent^.Left := LSuccessor^.Right
+      else
+        LParent^.Right := LSuccessor^.Right;
+      if LSuccessor^.Right <> nil then
+        LSuccessor^.Right^.Parent := LParent;
+      FreeNode(LSuccessor);
+    end;
+    AtomicFetchSub64(FCount, 1, moRelaxed);
+    if FCount < FMaxCount * FAlpha * FAlpha then
+    begin
+      if FRoot <> nil then
+        RebuildSubtree(FRoot);
+      FMaxCount := FCount;
+    end;
+    Result := sgRemoved;
+  finally
     Unlock;
-    Exit(sgNotFound);
   end;
-  if (LNode^.Left = nil) and (LNode^.Right = nil) then
-  begin
-    LParent := LNode^.Parent;
-    if LParent = nil then
-      FRoot := nil
-    else if LParent^.Left = LNode then
-      LParent^.Left := nil
-    else
-      LParent^.Right := nil;
-    FreeNode(LNode);
-  end
-  else if LNode^.Left = nil then
-  begin
-    LParent := LNode^.Parent;
-    if LParent = nil then
-      FRoot := LNode^.Right
-    else if LParent^.Left = LNode then
-      LParent^.Left := LNode^.Right
-    else
-      LParent^.Right := LNode^.Right;
-    if LNode^.Right <> nil then
-      LNode^.Right^.Parent := LParent;
-    FreeNode(LNode);
-  end
-  else if LNode^.Right = nil then
-  begin
-    LParent := LNode^.Parent;
-    if LParent = nil then
-      FRoot := LNode^.Left
-    else if LParent^.Left = LNode then
-      LParent^.Left := LNode^.Left
-    else
-      LParent^.Right := LNode^.Left;
-    if LNode^.Left <> nil then
-      LNode^.Left^.Parent := LParent;
-    FreeNode(LNode);
-  end
-  else
-  begin
-    LSuccessor := LNode^.Right;
-    while LSuccessor^.Left <> nil do
-      LSuccessor := LSuccessor^.Left;
-    LNode^.Key := LSuccessor^.Key;
-    LNode^.Value := LSuccessor^.Value;
-    LParent := LSuccessor^.Parent;
-    if LParent^.Left = LSuccessor then
-      LParent^.Left := LSuccessor^.Right
-    else
-      LParent^.Right := LSuccessor^.Right;
-    if LSuccessor^.Right <> nil then
-      LSuccessor^.Right^.Parent := LParent;
-    FreeNode(LSuccessor);
-  end;
-  AtomicFetchSub64(FCount, 1, moRelaxed);
-  if FCount < FMaxCount * FAlpha * FAlpha then
-  begin
-    if FRoot <> nil then
-      RebuildSubtree(FRoot);
-    FMaxCount := FCount;
-  end;
-  Unlock;
-  Result := sgRemoved;
 end;
 
 function TConcurrentScapegoatTree.Find(AKey: Int64; out AValue: Int64): Boolean;
@@ -374,16 +391,18 @@ begin
     Exit(False);
   end;
   Lock;
-  LNode := FindNode(AKey);
-  if LNode <> nil then
-  begin
-    AValue := LNode^.Value;
+  try
+    LNode := FindNode(AKey);
+    if LNode <> nil then
+    begin
+      AValue := LNode^.Value;
+      Exit(True);
+    end;
+    AValue := 0;
+    Result := False;
+  finally
     Unlock;
-    Exit(True);
   end;
-  Unlock;
-  AValue := 0;
-  Result := False;
 end;
 
 function TConcurrentScapegoatTree.Contains(AKey: Int64): Boolean;
@@ -393,9 +412,12 @@ begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
   Lock;
-  LNode := FindNode(AKey);
-  Unlock;
-  Result := LNode <> nil;
+  try
+    LNode := FindNode(AKey);
+    Result := LNode <> nil;
+  finally
+    Unlock;
+  end;
 end;
 
 function TConcurrentScapegoatTree.GetCount: Int64;
@@ -447,11 +469,14 @@ end;
 procedure TConcurrentScapegoatTree.Clear;
 begin
   Lock;
-  ClearSubtree(FRoot);
-  FRoot := nil;
-  FCount := 0;
-  FMaxCount := 0;
-  Unlock;
+  try
+    ClearSubtree(FRoot);
+    FRoot := nil;
+    FCount := 0;
+    FMaxCount := 0;
+  finally
+    Unlock;
+  end;
 end;
 
 procedure TConcurrentScapegoatTree.Close;

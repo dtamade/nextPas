@@ -9,18 +9,6 @@ const
   PLATFORM_WATCH_MAX_FDS = 16;
 
 type
-  {** @desc 文件系统监视器（平台无关封装） *}
-  TPlatformWatcher = record
-    Fd: Int32;
-  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
-    WatchFds: array[0..PLATFORM_WATCH_MAX_FDS - 1] of Int32;
-    WatchCount: Int32;
-  {$ENDIF}
-    {** @desc 检查监视器是否有效
-        @return True 如果监视器有效 *}
-    function IsValid: Boolean; inline;
-  end;
-
   {** @desc 文件系统监视事件 *}
   TPlatformWatchEvent = record
     Name: array[0..255] of AnsiChar;
@@ -38,9 +26,42 @@ type
     {** @desc 检查是否为目录修改事件
         @return True 如果是目录修改事件 *}
     function IsDirModified: Boolean; inline;
+    {** @desc 检查是否为创建事件
+        @return True 如果是创建事件 *}
+    function IsCreated: Boolean; inline;
+    {** @desc 检查是否为删除事件
+        @return True 如果是删除事件 *}
+    function IsDeleted: Boolean; inline;
     {** @desc 获取文件名字符串（带长度）
         @return 文件名字符串切片 *}
     function NameStr: AnsiString;
+  end;
+
+  {** @desc 文件系统监视器（平台无关封装） *}
+  TPlatformWatcher = record
+    Fd: Int32;
+  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    WatchFds: array[0..PLATFORM_WATCH_MAX_FDS - 1] of Int32;
+    WatchCount: Int32;
+  {$ENDIF}
+    {** @desc 检查监视器是否有效
+        @return True 如果监视器有效 *}
+    function IsValid: Boolean; inline;
+    {** @desc 检查监视器是否无效
+        @return True 如果监视器无效 *}
+    function IsInvalid: Boolean; inline;
+    {** @desc 添加监视路径
+        @param APath 要监视的路径
+        @return 0 成功，否则返回错误码 *}
+    function Add(const APath: PAnsiChar): Int32;
+    {** @desc 等待文件系统事件
+        @param AEvent 输出事件信息
+        @param ATimeoutMs 超时时间（毫秒，-1 表示无限等待）
+        @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
+    function Poll(out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
+    {** @desc 关闭监视器
+        @return 0 成功，否则返回错误码 *}
+    function Close: Int32;
   end;
 
 {** @desc 创建文件系统监视器
@@ -59,7 +80,7 @@ function platform_watch_add(var AWatcher: TPlatformWatcher;
     @param AWatcher 监视器句柄
     @param AEvent 输出事件信息
     @param ATimeoutMs 超时时间（毫秒，-1 表示无限等待）
-    @return 0 成功，PLATFORM_ERR_TIMEOUT 超时 *}
+    @return 0 成功，PLATFORM_ERR_TIMEDOUT 超时 *}
 function platform_watch_poll(var AWatcher: TPlatformWatcher;
   out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 
@@ -83,6 +104,26 @@ begin
   Result := Fd >= 0;
 end;
 
+function TPlatformWatcher.IsInvalid: Boolean;
+begin
+  Result := Fd < 0;
+end;
+
+function TPlatformWatcher.Add(const APath: PAnsiChar): Int32;
+begin
+  Result := platform_watch_add(Self, APath);
+end;
+
+function TPlatformWatcher.Poll(out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
+begin
+  Result := platform_watch_poll(Self, AEvent, ATimeoutMs);
+end;
+
+function TPlatformWatcher.Close: Int32;
+begin
+  Result := platform_watch_close(Self);
+end;
+
 function TPlatformWatchEvent.HasAnyEvent: Boolean;
 begin
   Result := Modified or Created or Deleted;
@@ -96,6 +137,16 @@ end;
 function TPlatformWatchEvent.IsDirModified: Boolean;
 begin
   Result := Modified and IsDir;
+end;
+
+function TPlatformWatchEvent.IsCreated: Boolean;
+begin
+  Result := Created;
+end;
+
+function TPlatformWatchEvent.IsDeleted: Boolean;
+begin
+  Result := Deleted;
 end;
 
 function TPlatformWatchEvent.NameStr: AnsiString;
@@ -205,6 +256,31 @@ uses
   nextpas.core.platform.freebsd.ffi;
 {$ENDIF}
 
+function TPlatformWatcher.IsValid: Boolean;
+begin
+  Result := Fd >= 0;
+end;
+
+function TPlatformWatcher.IsInvalid: Boolean;
+begin
+  Result := Fd < 0;
+end;
+
+function TPlatformWatcher.Add(const APath: PAnsiChar): Int32;
+begin
+  Result := platform_watch_add(Self, APath);
+end;
+
+function TPlatformWatcher.Poll(out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
+begin
+  Result := platform_watch_poll(Self, AEvent, ATimeoutMs);
+end;
+
+function TPlatformWatcher.Close: Int32;
+begin
+  Result := platform_watch_close(Self);
+end;
+
 function TPlatformWatchEvent.HasAnyEvent: Boolean;
 begin
   Result := Modified or Created or Deleted;
@@ -218,6 +294,16 @@ end;
 function TPlatformWatchEvent.IsDirModified: Boolean;
 begin
   Result := Modified and IsDir;
+end;
+
+function TPlatformWatchEvent.IsCreated: Boolean;
+begin
+  Result := Created;
+end;
+
+function TPlatformWatchEvent.IsDeleted: Boolean;
+begin
+  Result := Deleted;
 end;
 
 function TPlatformWatchEvent.NameStr: AnsiString;
@@ -328,12 +414,41 @@ end;
 uses
   nextpas.core.platform.windows.base;
 
+function TPlatformWatcher.IsValid: Boolean;
+begin
+  Result := Fd >= 0;
+end;
+
+function TPlatformWatcher.IsInvalid: Boolean;
+begin
+  Result := Fd < 0;
+end;
+
+function TPlatformWatcher.Add(const APath: PAnsiChar): Int32;
+begin
+  Result := platform_watch_add(Self, APath);
+end;
+
+function TPlatformWatcher.Poll(out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
+begin
+  Result := platform_watch_poll(Self, AEvent, ATimeoutMs);
+end;
+
+function TPlatformWatcher.Close: Int32;
+begin
+  Result := platform_watch_close(Self);
+end;
+
 function TPlatformWatchEvent.HasAnyEvent: Boolean;
 begin Result := Modified or Created or Deleted; end;
 function TPlatformWatchEvent.IsFileModified: Boolean;
 begin Result := Modified and (not IsDir); end;
 function TPlatformWatchEvent.IsDirModified: Boolean;
 begin Result := Modified and IsDir; end;
+function TPlatformWatchEvent.IsCreated: Boolean;
+begin Result := Created; end;
+function TPlatformWatchEvent.IsDeleted: Boolean;
+begin Result := Deleted; end;
 function TPlatformWatchEvent.NameStr: AnsiString;
 begin SetString(Result, PAnsiChar(@Name[0]), NameLen); end;
 

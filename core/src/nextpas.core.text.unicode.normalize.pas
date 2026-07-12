@@ -5,6 +5,7 @@ unit nextpas.core.text.unicode.normalize;
 interface
 
 uses
+  nextpas.core.text.unicode.types,
   nextpas.core.text.unicode.base,
   nextpas.core.text.utf8;
 
@@ -65,6 +66,9 @@ end;
 
 function IsHangulT(const ACp: TUnicodeCodepoint): Boolean; inline;
 begin
+  // 注意：使用 > 而非 >=，因为 HANGUL_TBASE (U+11A7) 是 filler，
+  // 不是真实的 trailing jamo。真实的 T jamo 从 U+11A8 开始。
+  // 参见 Unicode Standard 3.12 Hangul Composition。
   Result := (ACp > HANGUL_TBASE) and (ACp < (HANGUL_TBASE + HANGUL_TCOUNT));
 end;
 
@@ -350,6 +354,8 @@ begin
       begin
         ABuffer.ReplaceAt(LStarterIndex, LComposed);
         ABuffer.DeleteAt(LLookahead);
+        // 组合后重置 LLastCcc：新字符是 starter 的一部分，不是 combining mark
+        LLastCcc := 0;
         Continue;
       end;
 

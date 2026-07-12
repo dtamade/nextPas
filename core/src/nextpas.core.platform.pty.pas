@@ -93,19 +93,19 @@ var
   LMaster, LSlave: cint;
 begin
   FillChar(APty, SizeOf(APty), 0);
-  APty.FMasterFd := -1;
-  APty.FSlaveFd := -1;
+  APty.MasterFd := -1;
+  APty.SlaveFd := -1;
 
-  LWs.ws_col := ASize.FCols;
-  LWs.ws_row := ASize.FRows;
-  LWs.ws_xpixel := ASize.FXPixel;
-  LWs.ws_ypixel := ASize.FYPixel;
+  LWs.ws_col := ASize.Cols;
+  LWs.ws_row := ASize.Rows;
+  LWs.ws_xpixel := ASize.XPixel;
+  LWs.ws_ypixel := ASize.YPixel;
 
   if openpty(@LMaster, @LSlave, nil, nil, @LWs) <> 0 then
     Exit(platform_get_errno);
 
-  APty.FMasterFd := LMaster;
-  APty.FSlaveFd := LSlave;
+  APty.MasterFd := LMaster;
+  APty.SlaveFd := LSlave;
   Result := 0;
 end;
 
@@ -155,34 +155,34 @@ begin
       posix_exit(127);
     end;
 
-    if ioctl(APty.FSlaveFd, TIOCSCTTY, Pointer(0)) < 0 then
+    if ioctl(APty.SlaveFd, TIOCSCTTY, Pointer(0)) < 0 then
     begin
       LErrno := platform_get_errno;
       WriteSpawnError(LErrPipe[1], ptssTiocsctty, LErrno);
       posix_exit(127);
     end;
 
-    if dup2(APty.FSlaveFd, 0) < 0 then
+    if dup2(APty.SlaveFd, 0) < 0 then
     begin
       LErrno := platform_get_errno;
       WriteSpawnError(LErrPipe[1], ptssDup, LErrno);
       posix_exit(127);
     end;
-    if dup2(APty.FSlaveFd, 1) < 0 then
+    if dup2(APty.SlaveFd, 1) < 0 then
     begin
       LErrno := platform_get_errno;
       WriteSpawnError(LErrPipe[1], ptssDup, LErrno);
       posix_exit(127);
     end;
-    if dup2(APty.FSlaveFd, 2) < 0 then
+    if dup2(APty.SlaveFd, 2) < 0 then
     begin
       LErrno := platform_get_errno;
       WriteSpawnError(LErrPipe[1], ptssDup, LErrno);
       posix_exit(127);
     end;
-    if APty.FSlaveFd > 2 then
-      close(APty.FSlaveFd);
-    close(APty.FMasterFd);
+    if APty.SlaveFd > 2 then
+      close(APty.SlaveFd);
+    close(APty.MasterFd);
 
     if (ACwd <> nil) and (ACwd[0] <> #0) then
     begin
@@ -206,8 +206,8 @@ begin
 
   { parent }
   close(LErrPipe[1]);
-  close(APty.FSlaveFd);
-  APty.FSlaveFd := -1;
+  close(APty.SlaveFd);
+  APty.SlaveFd := -1;
 
   FillChar(LWire, SizeOf(LWire), 0);
   LN := read(LErrPipe[0], @LWire, SizeOf(LWire));
@@ -229,11 +229,11 @@ function platform_pty_resize(var APty: TPlatformPty;
 var
   LWs: winsize;
 begin
-  LWs.ws_col := ASize.FCols;
-  LWs.ws_row := ASize.FRows;
-  LWs.ws_xpixel := ASize.FXPixel;
-  LWs.ws_ypixel := ASize.FYPixel;
-  if ioctl(APty.FMasterFd, TIOCSWINSZ, @LWs) < 0 then
+  LWs.ws_col := ASize.Cols;
+  LWs.ws_row := ASize.Rows;
+  LWs.ws_xpixel := ASize.XPixel;
+  LWs.ws_ypixel := ASize.YPixel;
+  if ioctl(APty.MasterFd, TIOCSWINSZ, @LWs) < 0 then
     Exit(platform_get_errno);
   Result := 0;
 end;
@@ -241,22 +241,22 @@ end;
 function platform_pty_close(var APty: TPlatformPty): Int32;
 begin
   Result := 0;
-  if APty.FSlaveFd >= 0 then
+  if APty.SlaveFd >= 0 then
   begin
-    close(APty.FSlaveFd);
-    APty.FSlaveFd := -1;
+    close(APty.SlaveFd);
+    APty.SlaveFd := -1;
   end;
-  if APty.FMasterFd >= 0 then
+  if APty.MasterFd >= 0 then
   begin
-    if close(APty.FMasterFd) <> 0 then
+    if close(APty.MasterFd) <> 0 then
       Result := platform_get_errno;
-    APty.FMasterFd := -1;
+    APty.MasterFd := -1;
   end;
 end;
 
-function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
+function platform_pty_master_fd(const APty: TPlatformPty): PtrInt; inline;
 begin
-  Result := PtrInt(APty.FMasterFd);
+  Result := PtrInt(APty.MasterFd);
 end;
 {$ENDIF}
 
@@ -275,19 +275,19 @@ var
   LHr: Int32;
 begin
   FillChar(APty, SizeOf(APty), 0);
-  LSize.X := Int16(ASize.FCols);
-  LSize.Y := Int16(ASize.FRows);
+  LSize.X := Int16(ASize.Cols);
+  LSize.Y := Int16(ASize.Rows);
 
   if not CreatePipe(@LPipeInRead, @LPipeInWrite, nil, 0) then
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   if not CreatePipe(@LPipeOutRead, @LPipeOutWrite, nil, 0) then
   begin
     CloseHandle(LPipeInRead);
     CloseHandle(LPipeInWrite);
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   end;
 
-  LHr := CreatePseudoConsole(LSize, LPipeInRead, LPipeOutWrite, 0, APty.FConPty);
+  LHr := CreatePseudoConsole(LSize, LPipeInRead, LPipeOutWrite, 0, APty.ConPty);
   CloseHandle(LPipeInRead);
   CloseHandle(LPipeOutWrite);
 
@@ -298,8 +298,8 @@ begin
     Exit(LHr);
   end;
 
-  APty.FPipeIn := PtrUInt(LPipeInWrite);
-  APty.FPipeOut := PtrUInt(LPipeOutRead);
+  APty.PipeIn := PtrUInt(LPipeInWrite);
+  APty.PipeOut := PtrUInt(LPipeOutRead);
   Result := 0;
 end;
 
@@ -330,23 +330,23 @@ begin
   LAttrSize := 0;
   InitializeProcThreadAttributeList(nil, 1, 0, LAttrSize);
   LAttrList := GetMem(LAttrSize);
-  if LAttrList = nil then Exit(Int32(8));
+  if LAttrList = nil then Exit(PLATFORM_ERR_NOMEM);
 
   if not InitializeProcThreadAttributeList(LAttrList, 1, 0, LAttrSize) then
   begin
     FreeMem(LAttrList);
     AFailStage := ptssPipe;
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   end;
 
   if not UpdateProcThreadAttribute(LAttrList, 0,
-    PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, APty.FConPty,
+    PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, APty.ConPty,
     SizeOf(HPCON), nil, nil) then
   begin
     DeleteProcThreadAttributeList(LAttrList);
     FreeMem(LAttrList);
     AFailStage := ptssTiocsctty;
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   end;
 
   LSiEx.lpAttributeList := LAttrList;
@@ -356,7 +356,7 @@ begin
     DeleteProcThreadAttributeList(LAttrList);
     FreeMem(LAttrList);
     AFailStage := ptssExec;
-    Exit(Int32(ERROR_INVALID_NAME));
+    Exit(PLATFORM_ERR_INVALID);
   end;
 
   LCwdPtr := nil;
@@ -367,7 +367,7 @@ begin
       DeleteProcThreadAttributeList(LAttrList);
       FreeMem(LAttrList);
       AFailStage := ptssChdir;
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     end;
     LCwdPtr := PWideChar(LCwd);
   end;
@@ -381,7 +381,7 @@ begin
       DeleteProcThreadAttributeList(LAttrList);
       FreeMem(LAttrList);
       AFailStage := ptssExec;
-      Exit(Int32(ERROR_INVALID_NAME));
+      Exit(PLATFORM_ERR_INVALID);
     end;
     LEnvPtr := PWideChar(LEnvBlock);
     LCreationFlags := LCreationFlags or CREATE_UNICODE_ENVIRONMENT;
@@ -393,7 +393,7 @@ begin
     DeleteProcThreadAttributeList(LAttrList);
     FreeMem(LAttrList);
     AFailStage := ptssExec;
-    Exit(Int32(GetLastError));
+    Exit(platform_get_last_error);
   end;
 
   DeleteProcThreadAttributeList(LAttrList);
@@ -409,34 +409,34 @@ function platform_pty_resize(var APty: TPlatformPty;
 var
   LSize: COORD;
 begin
-  LSize.X := Int16(ASize.FCols);
-  LSize.Y := Int16(ASize.FRows);
-  Result := ResizePseudoConsole(APty.FConPty, LSize);
+  LSize.X := Int16(ASize.Cols);
+  LSize.Y := Int16(ASize.Rows);
+  Result := ResizePseudoConsole(APty.ConPty, LSize);
 end;
 
 function platform_pty_close(var APty: TPlatformPty): Int32;
 begin
-  if APty.FConPty <> nil then
+  if APty.ConPty <> nil then
   begin
-    ClosePseudoConsole(APty.FConPty);
-    APty.FConPty := nil;
+    ClosePseudoConsole(APty.ConPty);
+    APty.ConPty := nil;
   end;
-  if APty.FPipeIn <> 0 then
+  if APty.PipeIn <> 0 then
   begin
-    CloseHandle(HANDLE(APty.FPipeIn));
-    APty.FPipeIn := 0;
+    CloseHandle(HANDLE(APty.PipeIn));
+    APty.PipeIn := 0;
   end;
-  if APty.FPipeOut <> 0 then
+  if APty.PipeOut <> 0 then
   begin
-    CloseHandle(HANDLE(APty.FPipeOut));
-    APty.FPipeOut := 0;
+    CloseHandle(HANDLE(APty.PipeOut));
+    APty.PipeOut := 0;
   end;
   Result := 0;
 end;
 
 function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
 begin
-  Result := PtrInt(APty.FPipeOut);
+  Result := PtrInt(APty.PipeOut);
 end;
 {$ENDIF}
 

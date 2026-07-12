@@ -1,4 +1,22 @@
 unit nextpas.core.lockfree.segqueue;
+{**
+ * @desc Lock-free unbounded MPMC queue using linked segments.
+ *
+ * @details Segment-based queue with dynamic growth:
+ *   - Unbounded capacity (grows by allocating segments)
+ *   - Non-blocking TryEnqueue/TryDequeue
+ *   - Blocking Enqueue with segment allocation
+ *   - Close semantics with drain support
+ *   - EBR-based memory reclamation for safe segment deallocation
+ *
+ * @concurrency Thread-safe for multiple producers and consumers:
+ *   - Enqueue: producers compete for slots via CAS
+ *   - Dequeue: consumers compete for data via CAS
+ *   - Close: safe to call from any thread
+ *
+ * @see Michael & Scott queue — classic lock-free queue design
+ * @see Segment-based queues — cache-friendly unbounded queue
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -65,7 +83,7 @@ type
     {** @desc 关闭队列（已入队数据仍可读出） }
     procedure Close;
     {** @desc 队列是否已关闭 }
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
     {** @desc 近似空判断 }
     function IsEmpty: Boolean;
     {** @desc 近似计数 }
@@ -241,7 +259,7 @@ begin
   AtomicStore32(FClosed, 1, moRelease);
 end;
 
-function TSegQueueImpl.IsClosed: Boolean;
+function TSegQueueImpl.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

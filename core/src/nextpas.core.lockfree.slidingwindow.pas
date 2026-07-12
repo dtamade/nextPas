@@ -48,10 +48,10 @@ type
     function TryAcquire: TSlidingWindowResult;
     function TryAcquireN(AN: Int64): TSlidingWindowResult;
     function GetEffectiveCount: Double;
-    function GetLimit: Int64;
-    function GetWindowMs: Int64;
+    function GetLimit: Int64; inline;
+    function GetWindowMs: Int64; inline;
     procedure Close;
-    function IsClosed: Boolean;
+    function IsClosed: Boolean; inline;
   end;
 
 implementation
@@ -86,9 +86,22 @@ begin
 end;
 
 procedure TSlidingWindowLimiter.Lock;
+var
+  LSpin: Integer;
 begin
+  LSpin := 0;
   while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
-    ThreadSwitch;
+  begin
+    Inc(LSpin);
+    if LSpin > LOCKFREE_SPIN_COUNT then
+    begin
+      if LSpin > LOCKFREE_SPIN_COUNT + LOCKFREE_YIELD_COUNT then
+        LSpin := LOCKFREE_SPIN_COUNT;
+      ThreadSwitch;
+    end
+    else
+      CpuPause;
+  end;
 end;
 
 procedure TSlidingWindowLimiter.Unlock;
@@ -176,12 +189,12 @@ begin
   end;
 end;
 
-function TSlidingWindowLimiter.GetLimit: Int64;
+function TSlidingWindowLimiter.GetLimit: Int64; inline;
 begin
   Result := FLimit;
 end;
 
-function TSlidingWindowLimiter.GetWindowMs: Int64;
+function TSlidingWindowLimiter.GetWindowMs: Int64; inline;
 begin
   Result := FWindowMs;
 end;
@@ -196,7 +209,7 @@ begin
   end;
 end;
 
-function TSlidingWindowLimiter.IsClosed: Boolean;
+function TSlidingWindowLimiter.IsClosed: Boolean; inline;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;

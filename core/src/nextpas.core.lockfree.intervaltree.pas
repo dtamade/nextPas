@@ -80,8 +80,8 @@ type
     function FindOverlapping(APoint: Int64): TIntervalArray;
     function FindRange(const ALo, AHi: Int64): TIntervalArray;
     function Contains(const ALo, AHi: Int64): Boolean;
-    function Count: Int32;
-    function IsEmpty: Boolean;
+    function Count: Int32; inline;
+    function IsEmpty: Boolean; inline;
   end;
 
 implementation
@@ -390,12 +390,12 @@ begin
   Result := False;
 end;
 
-function TIntervalTree.Count: Int32;
+function TIntervalTree.Count: Int32; inline;
 begin
   Result := AtomicLoad32(FCount, moAcquire);
 end;
 
-function TIntervalTree.IsEmpty: Boolean;
+function TIntervalTree.IsEmpty: Boolean; inline;
 begin
   Result := AtomicLoad32(FCount, moAcquire) = 0;
 end;
