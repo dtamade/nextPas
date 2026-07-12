@@ -80,6 +80,36 @@ begin
   CheckEqual(Int64(5), Int64(LInner[0].Height), 'inner height 5');
 end;
 
+procedure TestRatioConstraint;
+var
+  LRects: TRectArray;
+begin
+  { RatioConstraint(1,3) = 33% → 33% of 60 = 19, RatioConstraint(2,3) = 66% → 66% of 60 = 39 }
+  LRects := H(TRect.Make(0, 0, 60, 1), [RatioConstraint(1, 3), RatioConstraint(2, 3)]);
+  Check(LRects[0].Width > 0, 'ratio 1/3 has width');
+  Check(LRects[1].Width > LRects[0].Width, 'ratio 2/3 > 1/3');
+  CheckEqual(Int64(60), Int64(LRects[0].Width + LRects[1].Width), 'total preserved');
+end;
+
+procedure TestSingleConstraint;
+var
+  LRects: TRectArray;
+begin
+  LRects := H(TRect.Make(0, 0, 50, 1), [Flex()]);
+  CheckEqual(Int64(1), Int64(Length(LRects)), 'single constraint');
+  CheckEqual(Int64(50), Int64(LRects[0].Width), 'takes full width');
+end;
+
+procedure TestVSplitPosition;
+var
+  LRects: TRectArray;
+begin
+  LRects := V(TRect.Make(5, 10, 10, 20), [Fixed(5), Flex()]);
+  CheckEqual(Int64(5), Int64(LRects[0].X), 'X preserved');
+  CheckEqual(Int64(10), Int64(LRects[0].Y), 'first Y at origin');
+  CheckEqual(Int64(15), Int64(LRects[1].Y), 'second Y after first');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.layout.dsl');
   T.Test('constraint aliases', @TestConstraintAliases);
@@ -88,5 +118,8 @@ begin
   T.Test('AtLeast AtMost', @TestAtLeastAtMost);
   T.Test('Even function', @TestEvenFunction);
   T.Test('nested H then V split', @TestNestedHSplit);
+  T.Test('ratio constraint', @TestRatioConstraint);
+  T.Test('single constraint', @TestSingleConstraint);
+  T.Test('V split position', @TestVSplitPosition);
   if not T.Run then Halt(1);
 end.

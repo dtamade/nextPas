@@ -157,6 +157,175 @@ begin
   finally LBuf.Free; end;
 end;
 
+{ === TCalendar state === }
+procedure TestCalendarStateNavigation;
+var S: TCalendarState;
+begin
+  S := TCalendarState.Make(2026, 7, 15);
+  CheckEqual(2026, S.Year, 'initial year');
+  CheckEqual(7, S.Month, 'initial month');
+  CheckEqual(15, S.SelectedDay, 'initial day');
+
+  S.PrevMonth;
+  CheckEqual(6, S.Month, 'prev month');
+  CheckEqual(2026, S.Year, 'year unchanged');
+
+  S.NextMonth;
+  CheckEqual(7, S.Month, 'next month back');
+
+  S.NextMonth;
+  CheckEqual(8, S.Month, 'next month forward');
+
+  S.PrevDay;
+  CheckEqual(14, S.SelectedDay, 'prev day');
+
+  S.NextDay;
+  CheckEqual(15, S.SelectedDay, 'next day back');
+end;
+
+procedure TestCalendarDaysInMonth;
+var S: TCalendarState;
+begin
+  S := TCalendarState.Make(2026, 2, 1);
+  CheckEqual(28, S.DaysInMonth, 'Feb 2026 has 28 days');
+
+  S := TCalendarState.Make(2024, 2, 1);
+  CheckEqual(29, S.DaysInMonth, 'Feb 2024 leap year has 29 days');
+
+  S := TCalendarState.Make(2026, 1, 1);
+  CheckEqual(31, S.DaysInMonth, 'Jan has 31 days');
+
+  S := TCalendarState.Make(2026, 4, 1);
+  CheckEqual(30, S.DaysInMonth, 'Apr has 30 days');
+end;
+
+procedure TestCalendarRenderStateful;
+var
+  Cal: ICalendar;
+  LBuf: TBuffer;
+  LState: TCalendarState;
+begin
+  Cal := TCalendar.New;
+  LState := TCalendarState.Make(2026, 1, 15);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 22, 9));
+  try
+    Cal.RenderStateful(TRect.Make(0, 0, 22, 9), LBuf, LState);
+    Check(True, 'calendar RenderStateful renders');
+  finally LBuf.Free; end;
+end;
+
+procedure TestCalendarDayClamp;
+var S: TCalendarState;
+begin
+  S := TCalendarState.Make(2026, 1, 31);
+  S.NextMonth; { Jan 31 → Feb, day should clamp }
+  Check(S.SelectedDay <= S.DaysInMonth, 'day clamped to month length');
+end;
+
+{ === TLineChart builders === }
+procedure TestLineChartWithYRange;
+var LC: IWidget; LBuf: TBuffer;
+begin
+  LC := TLineChart.New([
+    TDataSeries.Create('CPU', [10.0, 50.0, 30.0, 80.0, 20.0])
+  ]).WithYRange(0.0, 100.0).WithShowAxes(True) as IWidget;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 12));
+  try
+    LC.Render(TRect.Make(0, 0, 40, 12), LBuf);
+    Check(True, 'linechart with Y range renders');
+  finally LBuf.Free; end;
+end;
+
+{ === TBreadcrumb builders === }
+procedure TestBreadcrumbWithSeparator;
+var BC: IBreadcrumb; LRow: AnsiString; LBuf: TBuffer;
+begin
+  BC := TBreadcrumb.New(['A', 'B', 'C']).WithSeparator('/');
+  CheckEqual(5, BC.TotalWidth, 'A/B/C = 5 cols');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    (BC as IWidget).Render(TRect.Make(0, 0, 20, 1), LBuf);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('/', LRow) > 0, 'custom separator visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestBreadcrumbWithActive;
+var BC: IBreadcrumb;
+begin
+  BC := TBreadcrumb.New(['Home', 'Settings', 'About']).WithActive(1);
+  Check(BC.TotalWidth > 0, 'breadcrumb with active has width');
+end;
+
+{ === TStatusBar builders === }
+procedure TestStatusBarWithCenter;
+var SB: IWidget; LBuf: TBuffer; LRow: AnsiString;
+begin
+  SB := TStatusBar.New
+    .WithLeft([TStatusSegment.Make('L')])
+    .WithCenter([TStatusSegment.Make('CENTER')])
+    .WithRight([TStatusSegment.Make('R')]) as IWidget;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 1));
+  try
+    SB.Render(TRect.Make(0, 0, 40, 1), LBuf);
+    LRow := LBuf.RowAsString(0);
+    Check(Pos('L', LRow) > 0, 'left visible');
+    Check(Pos('CENTER', LRow) > 0, 'center visible');
+    Check(Pos('R', LRow) > 0, 'right visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestStatusBarSegmentStyle;
+var Seg: TStatusSegment;
+begin
+  Seg := TStatusSegment.Make('test').WithStyle(StyleFg(TUI_RED));
+  Check(Seg.Text = 'test', 'segment text preserved');
+end;
+
+{ === TTimeline builders === }
+procedure TestTimelineWithNodeChar;
+var TL: IWidget; LBuf: TBuffer;
+begin
+  TL := TTimeline.New([
+    TTimelineEvent.Make('09:00', 'Start'),
+    TTimelineEvent.Make('10:00', 'End')
+  ]).WithNodeChar('*') as IWidget;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 6));
+  try
+    TL.Render(TRect.Make(0, 0, 30, 6), LBuf);
+    Check(True, 'timeline with custom node renders');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTimelineWithDescription;
+var TL: IWidget; LBuf: TBuffer; LRow: AnsiString;
+begin
+  TL := TTimeline.New([
+    TTimelineEvent.Make('09:00', 'Deploy').WithDescription('Production release v2.0')
+  ]) as IWidget;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 50, 4));
+  try
+    TL.Render(TRect.Make(0, 0, 50, 4), LBuf);
+    LRow := LBuf.RowAsString(1);
+    Check(Pos('Production', LRow) > 0, 'description visible');
+  finally LBuf.Free; end;
+end;
+
+{ === TProgressGroup builders === }
+procedure TestProgressGroupLabelWidth;
+var PG: IWidget; LBuf: TBuffer;
+begin
+  PG := TProgressGroup.New([
+    TProgressItem.Make('Short', 0.5),
+    TProgressItem.Make('VeryLongLabel', 0.8)
+  ]).WithLabelWidth(20).WithShowPercent(True) as IWidget;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 50, 3));
+  try
+    PG.Render(TRect.Make(0, 0, 50, 3), LBuf);
+    Check(True, 'progress group with label width renders');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.data');
   T.Test('linechart render', @TestLineChartRender);
@@ -168,5 +337,17 @@ begin
   T.Test('breadcrumb render', @TestBreadcrumbRender);
   T.Test('breadcrumb total width', @TestBreadcrumbTotalWidth);
   T.Test('statusbar render', @TestStatusBarRender);
+  T.Test('calendar state navigation', @TestCalendarStateNavigation);
+  T.Test('calendar days in month', @TestCalendarDaysInMonth);
+  T.Test('calendar render stateful', @TestCalendarRenderStateful);
+  T.Test('calendar day clamp', @TestCalendarDayClamp);
+  T.Test('linechart with y range', @TestLineChartWithYRange);
+  T.Test('breadcrumb separator', @TestBreadcrumbWithSeparator);
+  T.Test('breadcrumb active', @TestBreadcrumbWithActive);
+  T.Test('statusbar center', @TestStatusBarWithCenter);
+  T.Test('statusbar segment style', @TestStatusBarSegmentStyle);
+  T.Test('timeline node char', @TestTimelineWithNodeChar);
+  T.Test('timeline description', @TestTimelineWithDescription);
+  T.Test('progress_group label width', @TestProgressGroupLabelWidth);
   if not T.Run then Halt(1);
 end.
