@@ -52,6 +52,10 @@
   `docs/architecture/master-roadmap.md`
 - 编译器主路线图：
   `docs/architecture/compiler-roadmap.md`
+- 当前编译器执行计划：
+  `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`
+  负责 compiler/System truth、两跳自举、query、MIR、确定性与性能的 evidence-based
+  里程碑顺序。
 - 自举路线图：
   `docs/architecture/bootstrap-roadmap.md`
 - 当前活动主计划：

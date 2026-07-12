@@ -4,8 +4,11 @@
 > 每个等级有明确的进入条件、退出条件（升级门槛）、禁止回退信号。
 > 所有路线图和执行计划必须标注当前 AL 和目标 AL。
 >
-> **版本**: v1.0 | **日期**: 2026-07-05
+> **版本**: v1.1 | **日期**: 2026-07-12
 > **对标**: NASA TRL 1-9 (Technology Readiness Level), CMMI ML 1-5 (Capability Maturity Model)
+>
+> 历史等级标记正在按 live production gate 重新验证。当前执行证据和晋级顺序见
+> `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`；本文件中的旧勾选不单独构成完成证明。
 
 ---
 
@@ -25,9 +28,10 @@ AL4: 生态期 (Ecosystem)     — IDE/LSP/Package Manager/GUI Framework
 AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式化验证
 ```
 
-**当前等级**: AL2 (收敛期) ✅ 2026-07-06
-**下一目标**: AL3 (成熟期)
-**升级计划**: `docs/plans/compiler-architecture-plan.md` (15 周 P0-P4)
+**当前可证明等级**: AL1 (骨架期)
+**下一晋级**: AL2 (收敛期，历史完成声明正在复核)
+**长期目标**: AL3 (成熟期)
+**升级计划**: `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`
 
 ---
 
@@ -37,7 +41,7 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 
 ### 进入条件 (已完成才算进入)
 
-- [x] 编译器能编译自身（C0-C7 自举验证通过）
+- [x] C0-C7 compiler module/source probe 通过（不是可执行 B/C 自举证明）
 - [x] 有 compiler-pass 34/34 集成测试
 - [x] 有 self-compile 19/19
 - [x] core/ 模块覆盖率 99.1%
@@ -77,11 +81,11 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 ### 进入条件 (已完成才算进入)
 
 - [x] 编译器审计完成（compiler-audit.md, 36 findings）✅
-- [x] 架构升级计划就绪（compiler-architecture-plan.md v2.1）✅
+- [x] 架构升级计划历史基线就绪（`docs/plans/compiler-architecture-plan.md` v2.2）✅
 - [x] 架构成熟度等级定义完成（本文件）✅
 - [x] 规范体系就绪（53 份 docs/architecture/ 规范）✅
 
-### 退出条件 (全部完成才能升级到 AL2) ✅ 2026-07-06
+### 历史退出条件记录 (2026-07-06 声明完成，当前重新验证)
 
 - [x] **P0 完成**: 编译器接入标准库
   - [x] THashMap 替换 647 处 O(n) SameText
@@ -139,9 +143,9 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 
 ### 进入条件 (AL1 全部退出条件完成)
 
-- [ ] AL1 退出条件全部 ✅
+- [ ] AL1 退出条件已按当前 production gate 重新证明
 
-### 退出条件 (全部完成才能升级到 AL3) 🔄 2026-07-07
+### 历史退出条件记录 (2026-07-07 声明进行中，当前重新验证)
 
 - [x] **增量编译稳定** — PrepareIncrementalBuild/FinalizeIncrementalBuild 框架 + 回归测试
 - [x] **并行编译稳定** — TParallelScheduler + TTaskQueue 框架 + 回归测试
@@ -161,7 +165,7 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 | 编译模式 | 查询化成熟，增量+并行稳定 |
 | 符号查找 | THashMap + 符号 ID 快速路径 |
 | 内存管理 | Arena + interning，零碎片 |
-| 诊断 | LSP 推送 + 修复建议 + 错误代码体系 |
+| 诊断 | 可供内部 language service 消费的结构化诊断 + 修复建议 + 错误代码体系 |
 | 标准库使用 | > 50% 编译器模块来自 core/ |
 
 ### 禁止回退信号
@@ -335,34 +339,34 @@ AL5: 领先期 (Leadership)    — 性能超越 FPC，多目标后端，形式�
 2. **退出条件全部完成才算升级** — 部分完成不算进入下一级
 3. **禁止回退信号触发时，等级不降级但阻塞进一步升级** — 先修复回退，再继续
 4. **每完成一个等级，在 goal-tree.md 和本文件中标注完成日期**
-5. **所有执行计划（compiler-architecture-plan.md 等）必须标注当前 AL 和目标 AL**
+5. **所有执行计划必须标注当前可证明 AL 和目标 AL**
 
 ---
 
-## 当前状态 (2026-07-05)
+## 当前证据状态 (2026-07-12)
 
-| 等级 | 状态 | 完成日期 |
-|------|------|----------|
-| AL0: 混沌期 | ✅ 已完成 | 2026-07-03 (C7 自举验证) |
-| AL1: 骨架期 | 🔄 当前等级 | 预计 2026-10 (15 周 P0-P4) |
-| AL2: 收敛期 | 🔲 未开始 | 预计 2027 Q1-Q2 |
-| AL3: 成熟期 | 🔲 未开始 | 预计 2027 Q3-Q4 |
-| AL4: 生态期 | 🔲 未开始 | 预计 2028 |
-| AL5: 领先期 | 🔲 未开始 | 持续演进 |
+| 等级 | 当前证据状态 | 晋级依据 |
+|------|--------------|----------|
+| AL0: 混沌期 | 历史基线已越过 | 只保留历史能力记录，不等于 production self-host |
+| AL1: 骨架期 | 当前可证明等级 | pipeline/session/typed truth 骨架存在；M0 正在恢复完整 gate truth |
+| AL2: 收敛期 | 历史晋级声明复核中 | compiler excellence plan M0-M5 全部 promotion gate |
+| AL3: 成熟期 | 未晋级 | M7 production self-host、M8 internal tooling core 与生产 5 门 |
+| AL4: 生态期 | 未晋级 | M8 internal tooling 后的 public adapters 与生态 gate |
+| AL5: 领先期 | 未晋级 | M9 leadership evidence |
 
 ---
 
 ## 治理关联
 
-- **产品路线图**: `master-roadmap.md` — 按 AL 等级展开 7 段产品轴
-- **编译器路线图**: `compiler-roadmap.md` — 按 AL 等级展开编译器接管顺序
-- **自举路线图**: `bootstrap-roadmap.md` — stage0/1/2 映射到 AL0/1/3
-- **执行计划**: `docs/plans/compiler-architecture-plan.md` — 当前 AL1→AL2 的 15 周计划
+- **产品路线图**: `docs/architecture/master-roadmap.md` — 按 AL 等级展开 7 段产品轴
+- **编译器路线图**: `docs/architecture/compiler-roadmap.md` — 按 AL 等级展开编译器接管顺序
+- **自举路线图**: `docs/architecture/bootstrap-roadmap.md` — stage0/1/2 映射到 AL0/1/3
+- **执行计划**: `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md` — compiler correctness、self-host、query、MIR 与性能的当前晋级路线
 - **目标树**: `docs/plans/goal-tree.md` — 标注当前 AL 和目标 AL
-- **架构原则**: `architecture-principles-specification.md` — 每个 AL 的质量门槛
+- **架构原则**: `docs/architecture/architecture-principles-specification.md` — 每个 AL 的质量门槛
 
 ---
 
-*版本: v1.0 | 日期: 2026-07-05*
+*版本: v1.1 | 日期: 2026-07-12*
 *对标: NASA TRL 1-9, CMMI ML 1-5*
-*最后更新: 2026-07-05*
+*最后更新: 2026-07-12*

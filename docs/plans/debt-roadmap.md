@@ -1,7 +1,12 @@
 # 编译器债务路线图
 
-> 最后更新：2026-07-06
-> 基于 Codex 战略审查 + 实际验证，与 `selfhost-roadmap.md v3.0` 对齐。
+> **状态：历史快照。** 本文件保留 2026-07-06 的债务分类，不再定义当前优先级。
+> 当前 evidence-based 顺序见
+> `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`。
+> “resolver 编译全部索引单元”和 `platform-exclude` 方案已经被 live 证据推翻。
+>
+> 快照日期：2026-07-06；归档标记：2026-07-12
+> 基于 Codex 战略审查 + 实际验证，与 `docs/plans/selfhost-roadmap.md` v3.0 对齐。
 
 ## 已完成
 
@@ -15,7 +20,7 @@
 | C4 | record 辅助方法 | 2026-06-29 |
 | C5 | {$IFDEF} 条件编译支持 | 2026-07-03 |
 | C6 | owned string return | 2026-07-03 |
-| C7 | 自举验证 | 2026-07-03 |
+| C7 | compiler module/source probe | 2026-07-03 |
 | C8 | Sema 深化 (S1-S9) | 2026-06-30 |
 | C9 | HIR→MIR 降低优化 | 2026-07-03 |
 
@@ -31,11 +36,11 @@
 
 ---
 
-## 当前债务
+## 2026-07-06 债务快照
 
-### Phase 1 阻塞点：SIMD 汇编排除（1 周）
+### 当时的 Phase 1 阻塞判断：SIMD 汇编排除（已废止）
 
-> ⚠️ 这是真正的自举阻塞点，不是 L6-A。
+> ⚠️ 这是 2026-07-06 的判断，现已被 live resolver 证据推翻。
 
 **根因**: unit resolver 编译搜索路径中的所有单元（252 个），包括 `nextpas.core.simd.*`（含 Intel 内联汇编），导致 assembler 失败。
 
@@ -101,7 +106,7 @@
 
 ## 关联
 
-- 自举路线图: `docs/plans/selfhost-roadmap.md v3.0`
+- 自举路线图: `docs/plans/selfhost-roadmap.md` v3.0
 - Phase 0 任务: 状态真相统一 ✅ 已完成
-- Phase 1 任务: SIMD 汇编排除 ← 当前
+- 当前执行计划: `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`
 - 决策点: 6 个关键决策已确认

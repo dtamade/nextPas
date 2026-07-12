@@ -1,19 +1,22 @@
 <!-- 项目总控地图 -->
-<!-- 版本: v2.3 | 日期: 2026-07-11 -->
+<!-- 版本: v2.4 | 日期: 2026-07-12 -->
 <!-- 每轮工作前查阅，结束后同步状态 -->
-<!-- 自举路线图: docs/plans/selfhost-roadmap.md v3.0 -->
+<!-- 编译器执行计划: docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md -->
 
-# nextPas 目标树 v2.3
+# nextPas 目标树 v2.4
 
 打造 FreePascal 领域最优秀的编译器+标准库生态系统。
 
-**架构成熟度**: 当前 [AL2 收敛期] → 目标 [AL3 成熟期]
-**自举路线图**: `docs/plans/selfhost-roadmap.md v3.0`（Phase 0-5）
+**架构成熟度**: 当前可证明 [AL1 骨架期]；AL2 历史声明正在复核 → 目标 [AL3 成熟期]
+**编译器执行计划**: `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`（M0-M9）
 **等级定义**: `docs/architecture/architecture-maturity-levels.md`
+
+下方 2026-07-06 以前的勾选保留历史进度，不单独构成 production promotion evidence。
+当前状态以 fresh gate 和编译器执行计划中的 promotion dashboard 为准。
 
 ---
 
-## 阶段 0: AL0 混沌期 — 编译器自举（C0-C9）✅ 已完成
+## 阶段 0: AL0 混沌期 — 历史能力里程碑（live gate 复核中）
 
 **目标**: 用 nextPas 编译器编译自身 + 全部 core/ 模块
 
@@ -22,7 +25,7 @@
 | C0-C4 | 编译器基础架构 | ✅ | 2026-06-02 |
 | C5 | 预处理器 `{$IFDEF}` 支持 | ✅ | 2026-07-03 |
 | C6 | owned string return 改进 | ✅ | 2026-07-03 |
-| C7 | 自举验证 | ✅ | 2026-07-03 |
+| C7 | compiler module/source probe | ✅ | 2026-07-03 |
 | C8 | Sema 深化 (S1-S9) | ✅ | 2026-06-30 |
 | C9 | HIR→MIR 降低优化 | ✅ | 2026-07-03 |
 | L1-L5 | 语义/平台债务 | ✅ | 2026-07-06 |
@@ -31,7 +34,7 @@
 
 | 指标 | 值 |
 |------|-----|
-| compiler-pass | 53/53 ✅ |
+| compiler-pass | 最近一次完整运行 51/53；cache 修复后待 fresh 复核 |
 | self-compile | 19/19 ✅ |
 | core/ 覆盖率 | 963/972 (99.1%) |
 | FPC RTL 清零 | 0 直接依赖 ✅ |
@@ -41,35 +44,35 @@
 ## 阶段 1: AL1→AL2 骨架期→收敛期 — 自举冲刺 + 架构升级 🏗️ 当前阶段
 
 **目标**: 完成自举证据闭环 + 打造先进编译器架构
-**自举路线图**: `docs/plans/selfhost-roadmap.md v3.0`
-**总周期**: 6-9 周到自举成功 + 2-4 周到生产可用
-**退出条件**: 自举两跳验证通过 + AL1 全部退出条件
+**执行计划**: `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`
+**退出条件**: M0-M5 promotion gates 全部通过并重新判定 AL2
 
-### 自举路径 (Phase 0-5)
+### 当前编译器路径 (M0-M5)
 
-| Phase | 内容 | 状态 | 周期 |
-|-------|------|------|------|
-| Phase 0 | 状态真相统一 | ✅ | 2-3 天 |
-| Phase 1 | SIMD 汇编排除 + L6-A |   待开工 | 1 周 |
-| Phase 2 | 自举证据闭环 |   待开工 | 3-5 天 |
-| Phase 3 | 结构债收口 (Sema 拆分) |   待开工 | 1-2 周 |
-| Phase 4 | 增量编译产品化 |   待开工 | 1 周 |
-| Phase 5 | LLVM/并行/平台扩展 |   待开工 | 1-2 周 |
+| Milestone | 内容 | 状态 |
+|-----------|------|------|
+| M0 | compiler/System gate、rebuild 与状态真相恢复 | 🏗️ |
+| M1 | compiler/System bootstrap contract 收敛 | 🔲 |
+| M2 | 最小可执行 A→B→C 两跳自举证明 | 🔲 |
+| M3 | session owner、stable IDs、immutable snapshots | 🔲 |
+| M4 | typed query + dependency-aware incremental | 🔲 |
+| M5 | deterministic parallel + data-oriented performance | 🔲 |
 
-**关键发现** (2026-07-06):
-- L6-A (Class helper) 不是自举阻塞点，5 个"被阻塞"模块已验证可编译
-- 真正阻塞点：unit resolver 编译 SIMD 模块（含 Intel 内联汇编）导致 assembler 失败
-- 修复方案：unit resolver 增加 platform-exclude 机制
+**当前证据** (2026-07-12):
+- L6-A (Class helper) 不是自举阻塞点。
+- Resolver 只把真实依赖加入 `UnitGraph`；旧 252-unit 全索引编译结论已废止。
+- System identity/cache 修复已在 compiler-system lane，通过 focused gate，尚待 current-main replay。
+- 最近完整 compiler-pass 是 51/53；`scripts/rebuild-compiler.sh` 当前没有有效 build body。
+- 尚无可执行 B/C 两代编译器证据，不能把 module probe 写成两跳自举完成。
 
 **关键决策点**:
-1. stage2 自举唯一后端 = LLVM on Linux x86_64
-2. L6 只做 L6-A 最小解锁版，完整 helper 语义后置
-3. 增量/并行编译从"新功能"改成"真实性审计 + 产品化"
-4. 自举前不做大规模 Sema 重构
-5. 平台排除项改 A/B/C 分类管理
-6. "生产可用"单独立项，不与"自举成功"混同
+1. compiler 与 L0 System 作为同一 bootstrap spine 管理，但保持四层 owner 边界。
+2. 先完成 M2 两跳可执行性，再推进 query/parallel/MIR 大迁移。
+3. M2 的“能自举”和 M7 的“可复现生产自举”是两个独立 promotion gate。
+4. 增量、并行和 MIR 只按 production integration、correctness、determinism、performance 证据晋级。
+5. Public LSP/formatter adapter 后置，先建立 M8 shared language-service/formatter core。
 
-**P0-P4 全部完成 = AL1 退出条件满足 = 升级到 AL2**
+**M0-M5 全部通过后，才重新判定 AL1→AL2 晋级。**
 
 ---
 
@@ -77,6 +80,8 @@
 
 **目标**: 查询化编译稳定，增量+并行成熟，诊断达业界水平
 **前置条件**: AL1 退出条件全部完成
+
+下表只记录标准库合同覆盖历史，不代表 compiler AL2 promotion gate 已通过。
 
 | 节点 | 内容 | 状态 | 备注 |
 |------|------|------|------|
@@ -93,11 +98,13 @@
 
 **目标**: stage2 自举完成 + 生产可用 5 门全通过
 **前置条件**: AL2 退出条件全部完成
-**生产可用定义**: `docs/plans/selfhost-roadmap.md` "从自举成功到生产可用"
+**生产可用定义**:
+`docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md` M7 production self-host、
+M8 internal tooling core 和本节生产可用 5 门；M9 leadership 属于 AL5
 
 | 节点 | 内容 | 状态 | 备注 |
 |------|------|------|------|
-| S1 | stage2 自举（nextPas 编译 nextPas 编译 nextPas） | 🔲 | bit-identical 或语义等价 |
+| S1 | production self-host（M7） | 🔲 | M2 两跳基础上完成可复现、等价报告与发行产物 |
 | S2 | 标准库完整（975 模块 nextPas 编译） | 🔲 | 0 处 FPC 依赖 |
 | S3 | 性能 ≥ FPC -O2 | 🔲 | 编译速度 + 生成代码 |
 | S4 | 多目标后端（LLVM + 1 额外） | 🔲 | Cranelift 或 GCC |
@@ -132,8 +139,9 @@
 | E6 | 文档完整 | 🔲 | API + 教程 + 语言参考 + tooling workflow |
 
 Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
-`language-service-specification.md`、`developer-tooling-specification.md` 与
-`test-harness-specification.md` 为准；本目标树只追踪阶段和完成证据。
+`docs/architecture/language-service-specification.md`、
+`docs/architecture/developer-tooling-specification.md` 与
+`docs/architecture/test-harness-specification.md` 为准；本目标树只追踪阶段和完成证据。
 
 ---
 
@@ -144,28 +152,21 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 
 | 节点 | 内容 | 状态 | 备注 |
 |------|------|------|------|
-| X1 | 性能 > 2x FPC 编译速度 | 🔲 | |
+| X1 | 性能 > 2x FPC 编译速度 | 🔲 | 按 compiler excellence plan Leadership envelope 取证 |
 | X2 | 多目标完整（Linux/Win/macOS/WASM, x86_64/ARM64/RISC-V） | 🔲 | |
 | X3 | 形式化验证关键路径 | 🔲 | |
 | X4 | 社区 1000+ 第三方包 | 🔲 | |
 
 ---
 
-## 本周任务 (2026-07-05)
+## 当前执行窗口 (2026-07-12)
 
-1. [x] 治理文档刷新 (合并碎片文档 + 重写 goal-tree.md v2)
-2. [x] 编译器审计报告 (compiler-audit.md, 36 findings)
-3. [x] 编译器架构计划 v2.2 (compiler-architecture-plan.md, 15周 5阶段 + 规范对齐 + 风险矩阵 + 源码对标)
-4. [x] 架构成熟度等级定义 (architecture-maturity-levels.md, AL0-AL5)
-5. [ ] c2p_win32_compat 平台排除
-6. [ ] P0 启动：编译器负责人开工
-
-## 本月任务
-
-1. [ ] P0 完成：编译器接入标准库 (THashMap/TVec/Arena) + 基线测量
-2. [ ] P1 启动：Pipeline 接口化 + sema 拆分 Phase 1 (抽离 builtins)
-3. [ ] c2p_win32_compat 平台排除
-4. [ ] C7 深化: 多目标 IR、LLVM O2/LTO (smoke 已完成)
+1. [ ] 通过 latest-main candidate 落地 System identity/parent/cache 三个已审查提交。
+2. [ ] 修复并版本化 NPC cache framing，建立 fail-closed incremental gate。
+3. [ ] 隔离 compiler test/build cache roots，再复跑 cold/immediate-warm compiler-pass。
+4. [ ] 修复 `classes_pass` 和仍存在的 warm-only regression。
+5. [ ] 恢复 canonical `make rebuild-compiler`，再建立 fail-closed B0 benchmark。
+6. [ ] 完成 System 四层 contract ledger，进入 M2 A→B→C 两跳证明。
 
 ---
 
@@ -173,7 +174,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 
 | 日期 | 事件 | 备注 |
 |------|------|------|
-| 2026-07-03 | C7 自举验证完成 | self-compile 19/19, core/ 99.1% |
+| 2026-07-03 | C7 compiler module/source probe | self-compile 19/19, core/ 99.1% |
 | 2026-07-04 | 契约体系全部完成 | 57 模块全覆盖 |
 | 2026-07-05 | 架构诊断 | TSemanticAnalyzer God Class (279方法/1class) |
 | 2026-07-05 | 编译器审计 v1 | compiler-audit.md 合并 findings + critique，36 条量化发现 |
@@ -181,6 +182,7 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-05 | 架构成熟度等级 | architecture-maturity-levels.md AL0-AL5 定义完成 |
 | 2026-07-05 | 目标树 v2.1 | 5 阶段 + AL 等级标注 + AL3-AL5 长期目标 |
 | 2026-07-11 | 目标树 v2.3 | 增加 LSP server、formatter 与 test 的分阶段里程碑和 promotion mapping |
+| 2026-07-12 | Compiler excellence roadmap | 采用 Rust 式内部严谨性 + Go 式构建反馈，重新按 production evidence 计分 |
 
 ---
 
@@ -188,12 +190,13 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 
 | 文档 | 用途 |
 |------|------|
-| `goal-tree.md` (本文件) | 项目总控地图 |
-| `architecture-maturity-levels.md` | 架构成熟度等级 AL0-AL5 |
-| `compiler-architecture-plan.md` | 编译器架构升级 15 周计划（AL1→AL2） |
-| `compiler-audit.md` | 编译器 36 条量化审计发现 |
-| `debt-roadmap.md` | 技术债看板 |
-| `selfhost-roadmap.md` | 自举路线图 |
+| `docs/plans/goal-tree.md` (本文件) | 项目总控地图 |
+| `docs/architecture/architecture-maturity-levels.md` | 架构成熟度等级 AL0-AL5 |
+| `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md` | 当前 compiler correctness、self-host、query、MIR 与性能主路线 |
+| `docs/plans/compiler-architecture-plan.md` | v2.2 历史规划与测量快照 |
+| `docs/plans/compiler-audit.md` | 编译器 36 条量化审计发现 |
+| `docs/plans/debt-roadmap.md` | 2026-07-06 编译器债务历史快照 |
+| `docs/plans/selfhost-roadmap.md` | v3.0 自举执行顺序历史快照 |
 | `PLAN.md` | 根总控计划 |
 
-*最后更新: 2026-07-11 | 版本: v2.3*
+*最后更新: 2026-07-12 | 版本: v2.4*
