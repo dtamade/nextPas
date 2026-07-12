@@ -107,6 +107,14 @@ procedure WriteSlowTests(const ASlowTests: TTestResults;
 function FormatDuration(AMillis: Int64): string;
   { Format milliseconds as '12ms' or '1.23s' for >= 1000ms. }
 
+{ ── Colored Diff ──────────────────────────────────────────────────────────── }
+
+function ColorDiff(const AExpected, AActual: string;
+  const AConfig: TTestConfig): string;
+  { Produce a colored diff showing expected vs actual with ANSI highlighting.
+    Expected parts in green, actual parts in red.
+    Falls back to plain text when ANSI is disabled. }
+
 { ── Benchmark Output ─────────────────────────────────────────────────────── }
 
 function FormatBenchLine(const AR: nextpas.core.test.base.TBenchResult;
@@ -174,6 +182,10 @@ const
   C_YELLOW= ESC + '33m';
   C_CYAN  = ESC + '36m';
   C_DIM   = ESC + '2m';
+  C_UNDERLINE = ESC + '4m';
+  C_BG_RED    = ESC + '41m';
+  C_BG_GREEN  = ESC + '42m';
+  C_STRIKE    = ESC + '9m';
 
 var
   { Thread-safety: SetAnsiEnabled must be called BEFORE spawning worker threads.
@@ -579,6 +591,67 @@ begin
     else
       Result := IntToStr(AMillis div 1000) + '.' +
         Copy(IntToStr(1000 + LMs), 2, 2) + 's';
+  end;
+end;
+
+function ColorDiff(const AExpected, AActual: string;
+  const AConfig: TTestConfig): string;
+var
+  I, LMin, LDiffAt: Integer;
+  LUseAnsi: Boolean;
+  LExpLine, LActLine: string;
+begin
+  LUseAnsi := UseAnsi(AConfig);
+
+  { Find first differing position }
+  LMin := Length(AExpected);
+  if Length(AActual) < LMin then
+    LMin := Length(AActual);
+  LDiffAt := 1;
+  while (LDiffAt <= LMin) and (AExpected[LDiffAt] = AActual[LDiffAt]) do
+    Inc(LDiffAt);
+  if LDiffAt > LMin then
+    LDiffAt := LMin + 1; { difference is purely in length }
+
+  if LUseAnsi then
+  begin
+    { Build colored diff: common prefix in normal, difference highlighted }
+    if LDiffAt > 1 then
+    begin
+      { Common prefix }
+      LExpLine := C_DIM + Copy(AExpected, 1, LDiffAt - 1) + C_RESET;
+      LActLine := C_DIM + Copy(AActual, 1, LDiffAt - 1) + C_RESET;
+    end
+    else
+    begin
+      LExpLine := '';
+      LActLine := '';
+    end;
+
+    { Differing part: expected in green+strikethrough, actual in red+bold }
+    if LDiffAt <= Length(AExpected) then
+      LExpLine := LExpLine + C_GREEN + C_STRIKE +
+        Copy(AExpected, LDiffAt, Length(AExpected) - LDiffAt + 1) + C_RESET
+    else
+      LExpLine := LExpLine + C_DIM + '(empty)' + C_RESET;
+
+    if LDiffAt <= Length(AActual) then
+      LActLine := LActLine + C_RED + C_BOLD +
+        Copy(AActual, LDiffAt, Length(AActual) - LDiffAt + 1) + C_RESET
+    else
+      LActLine := LActLine + C_DIM + '(empty)' + C_RESET;
+
+    Result := 'Strings differ at position ' + IntToStr(LDiffAt) + ':' + #10 +
+      '  expected: ' + LExpLine + #10 +
+      '    actual: ' + LActLine;
+  end
+  else
+  begin
+    { Plain text fallback }
+    Result := 'Strings differ at position ' + IntToStr(LDiffAt) + ':' + #10 +
+      '  expected: "' + AExpected + '"'#10 +
+      '    actual: "' + AActual + '"'#10 +
+      '            ' + StringOfChar(' ', LDiffAt - 1) + '^';
   end;
 end;
 

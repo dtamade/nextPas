@@ -268,7 +268,8 @@ uses
   nextpas.core.math.scalar,     { IsNan for Double comparison NaN guards }
   nextpas.core.platform.env,   { platform_env_get_str for snapshot update flag }
   nextpas.core.fs,             { ReadFileText/WriteFileText for snapshot I/O }
-  nextpas.core.regex;          { RegexIsMatch for CheckMatch }
+  nextpas.core.regex,          { RegexIsMatch for CheckMatch }
+  nextpas.core.test.output;    { ColorDiff for colored string comparison }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin
@@ -337,35 +338,9 @@ end;
 
 procedure CheckEqual(const AExpected, AActual: string;
   const AMessage: string);
-var
-  LDiffPos, LMin, I: Integer;
 begin
   if AExpected <> AActual then
-  begin
-    if (Length(AExpected) > 40) or (Length(AActual) > 40) or
-       (Pos(#10, AExpected) > 0) or (Pos(#10, AActual) > 0) then
-      FailPrepend(AMessage, StringDiff(AExpected, AActual))
-    else
-    begin
-      { Find first differing position for short strings }
-      LMin := Length(AExpected);
-      if Length(AActual) < LMin then LMin := Length(AActual);
-      LDiffPos := 0;
-      for I := 1 to LMin do
-        if AExpected[I] <> AActual[I] then
-        begin
-          LDiffPos := I;
-          Break;
-        end;
-      if LDiffPos = 0 then
-        LDiffPos := LMin + 1; { difference is purely in length }
-      FailPrepend(AMessage,
-        'expected: "' + AExpected + '"'#10 +
-        '  actual: "' + AActual + '"'#10 +
-        '          ' + StringOfChar(' ', LDiffPos - 1) + '^' +
-        ' diff at pos ' + IntToStr(LDiffPos));
-    end;
-  end;
+    FailPrepend(AMessage, ColorDiff(AExpected, AActual, DefaultConfig));
 end;
 
 procedure CheckEqual(const AExpected, AActual: string);
