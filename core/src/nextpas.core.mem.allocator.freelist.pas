@@ -72,6 +72,7 @@ end;
 destructor TFreelistAllocator.Destroy;
 begin
   Drain;
+  FInner := nil;
   inherited Destroy;
 end;
 
