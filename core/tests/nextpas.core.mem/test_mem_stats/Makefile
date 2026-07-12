@@ -1,9 +1,7 @@
-PROGRAM := test_mem_stats
-include ../../common.mk
+.PHONY: clean test
 
-.PHONY: test-source-contract
+clean:
+	@:
 
-test: test-source-contract
-
-test-source-contract:
+test:
 	bash check_stats_atomic_reset.sh
