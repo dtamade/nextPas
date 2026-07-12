@@ -13,7 +13,8 @@ uses
   nextpas.core.text.unicode.script,
   nextpas.core.text.unicode.block,
   nextpas.core.text.unicode.segment,
-  nextpas.core.text.unicode.collate;
+  nextpas.core.text.unicode.collate,
+  nextpas.core.text.unicode.data;
 
 type
   // 基础类型
@@ -42,6 +43,7 @@ type
 
   // 接口类型
   IUnicodeSegmenter = nextpas.core.text.unicode.segment.IUnicodeSegmenter;
+  IUnicodeDataManager = nextpas.core.text.unicode.data.IUnicodeDataManager;
 
 const
   UNICODE_MAX_CODEPOINT = nextpas.core.text.unicode.types.UNICODE_MAX_CODEPOINT;
@@ -83,19 +85,23 @@ function UTF8CaseFold(const AValue: string): string; inline;
 function UTF8CaseFoldSimple(const AValue: string): string; inline;
 
 // 规范化函数
-function NFD(const s: string): string; inline;
-function NFC(const s: string): string; inline;
-function NFKD(const s: string): string; inline;
-function NFKC(const s: string): string; inline;
-function IsNormalizedNFD(const s: string): Boolean; inline;
-function IsNormalizedNFC(const s: string): Boolean; inline;
-function IsNormalizedNFKD(const s: string): Boolean; inline;
-function IsNormalizedNFKC(const s: string): Boolean; inline;
-function QuickCheckNFD(const s: string): Boolean; inline;
-function QuickCheckNFKD(const s: string): Boolean; inline;
-function QuickCheckNFC(const s: string): Boolean; inline;
-function QuickCheckNFKC(const s: string): Boolean; inline;
+function NFD(const AText: string): string; inline;
+function NFC(const AText: string): string; inline;
+function NFKD(const AText: string): string; inline;
+function NFKC(const AText: string): string; inline;
+function IsNormalizedNFD(const AText: string): Boolean; inline;
+function IsNormalizedNFC(const AText: string): Boolean; inline;
+function IsNormalizedNFKD(const AText: string): Boolean; inline;
+function IsNormalizedNFKC(const AText: string): Boolean; inline;
+function QuickCheckNFD(const AText: string): Boolean; inline;
+function QuickCheckNFKD(const AText: string): Boolean; inline;
+function QuickCheckNFC(const AText: string): Boolean; inline;
+function QuickCheckNFKC(const AText: string): Boolean; inline;
 function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte; inline;
+function GetDecompositionMapping(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeCodepoint; out ALen: Byte;
+  out AIsCompatibility: Boolean): Boolean; inline;
+function IsCompositionExcluded(const ACp: TUnicodeCodepoint): Boolean; inline;
 
 // 文本分割函数
 function UnicodeSegmenter: IUnicodeSegmenter; inline;
@@ -117,6 +123,9 @@ function DefaultCollationOptions: TCollationOptions; inline;
 function CompareText(const A, B: string): Integer; inline;
 function GetSortKey(const AText: string): TCollationKey; inline;
 procedure SortStrings(var AStrings: array of string);
+
+// 数据管理器
+function UnicodeData: IUnicodeDataManager; inline;
 
 implementation
 
@@ -260,69 +269,81 @@ begin
   Result := nextpas.core.text.unicode.casefold.UTF8CaseFoldSimple(AValue);
 end;
 
-function NFD(const s: string): string;
+function NFD(const AText: string): string;
 begin
-  Result := nextpas.core.text.unicode.normalize.NFD(s);
+  Result := nextpas.core.text.unicode.normalize.NFD(AText);
 end;
 
-function NFC(const s: string): string;
+function NFC(const AText: string): string;
 begin
-  Result := nextpas.core.text.unicode.normalize.NFC(s);
+  Result := nextpas.core.text.unicode.normalize.NFC(AText);
 end;
 
-function NFKD(const s: string): string;
+function NFKD(const AText: string): string;
 begin
-  Result := nextpas.core.text.unicode.normalize.NFKD(s);
+  Result := nextpas.core.text.unicode.normalize.NFKD(AText);
 end;
 
-function NFKC(const s: string): string;
+function NFKC(const AText: string): string;
 begin
-  Result := nextpas.core.text.unicode.normalize.NFKC(s);
+  Result := nextpas.core.text.unicode.normalize.NFKC(AText);
 end;
 
-function IsNormalizedNFD(const s: string): Boolean;
+function IsNormalizedNFD(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFD(s);
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFD(AText);
 end;
 
-function IsNormalizedNFC(const s: string): Boolean;
+function IsNormalizedNFC(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFC(s);
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFC(AText);
 end;
 
-function IsNormalizedNFKD(const s: string): Boolean;
+function IsNormalizedNFKD(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFKD(s);
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFKD(AText);
 end;
 
-function IsNormalizedNFKC(const s: string): Boolean;
+function IsNormalizedNFKC(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFKC(s);
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFKC(AText);
 end;
 
-function QuickCheckNFD(const s: string): Boolean;
+function QuickCheckNFD(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.QuickCheckNFD(s);
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFD(AText);
 end;
 
-function QuickCheckNFC(const s: string): Boolean;
+function QuickCheckNFC(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.QuickCheckNFC(s);
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFC(AText);
 end;
 
-function QuickCheckNFKD(const s: string): Boolean;
+function QuickCheckNFKD(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.QuickCheckNFKD(s);
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFKD(AText);
 end;
 
-function QuickCheckNFKC(const s: string): Boolean;
+function QuickCheckNFKC(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.QuickCheckNFKC(s);
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFKC(AText);
 end;
 
 function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte;
 begin
   Result := nextpas.core.text.unicode.normalize.GetCanonicalCombiningClass(ACp);
+end;
+
+function GetDecompositionMapping(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeCodepoint; out ALen: Byte;
+  out AIsCompatibility: Boolean): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.GetDecompositionMapping(ACp, ADst, ALen, AIsCompatibility);
+end;
+
+function IsCompositionExcluded(const ACp: TUnicodeCodepoint): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.IsCompositionExcluded(ACp);
 end;
 
 function UnicodeSegmenter: IUnicodeSegmenter;
@@ -450,6 +471,11 @@ begin
   end
   else
     QuickSortStrings(AStrings, LCollator, Low(AStrings), High(AStrings));
+end;
+
+function UnicodeData: IUnicodeDataManager;
+begin
+  Result := nextpas.core.text.unicode.data.UnicodeData;
 end;
 
 end.

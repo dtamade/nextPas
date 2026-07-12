@@ -9,21 +9,21 @@ uses
   nextpas.core.text.unicode.base,
   nextpas.core.text.utf8;
 
-function NFD(const s: string): string;
-function NFC(const s: string): string;
-function NFKD(const s: string): string;
-function NFKC(const s: string): string;
-function IsNormalizedNFD(const s: string): Boolean;
-function IsNormalizedNFC(const s: string): Boolean;
-function IsNormalizedNFKD(const s: string): Boolean;
-function IsNormalizedNFKC(const s: string): Boolean;
+function NFD(const AText: string): string;
+function NFC(const AText: string): string;
+function NFKD(const AText: string): string;
+function NFKC(const AText: string): string;
+function IsNormalizedNFD(const AText: string): Boolean;
+function IsNormalizedNFC(const AText: string): Boolean;
+function IsNormalizedNFKD(const AText: string): Boolean;
+function IsNormalizedNFKC(const AText: string): Boolean;
 
 // 快速检查：返回 True 表示确定已规范化，False 表示可能未规范化
 // 比完整规范化快得多，适合"先快速检查再决定是否规范化"的模式
-function QuickCheckNFD(const s: string): Boolean;
-function QuickCheckNFKD(const s: string): Boolean;
-function QuickCheckNFC(const s: string): Boolean;
-function QuickCheckNFKC(const s: string): Boolean;
+function QuickCheckNFD(const AText: string): Boolean;
+function QuickCheckNFKD(const AText: string): Boolean;
+function QuickCheckNFC(const AText: string): Boolean;
+function QuickCheckNFKC(const AText: string): Boolean;
 
 // 获取码点的 Canonical Combining Class (CCC)
 // 0 = starter, 1-240 = combining mark ordering
@@ -456,84 +456,84 @@ begin
   end;
 end;
 
-function NormalizeDecomposed(const s: string; const ACompatibility: Boolean): string;
+function NormalizeDecomposed(const AText: string; const ACompatibility: Boolean): string;
 var
   LBuffer: TCodepointBuffer;
 begin
-  if s = '' then
+  if AText = '' then
     Exit('');
-  if IsAsciiString(s) then
-    Exit(s);
+  if IsAsciiString(AText) then
+    Exit(AText);
 
-  DecomposeToBuffer(s, ACompatibility, LBuffer);
+  DecomposeToBuffer(AText, ACompatibility, LBuffer);
   Result := BufferToUtf8(LBuffer);
 end;
 
-function NormalizeComposed(const s: string; const ACompatibility: Boolean): string;
+function NormalizeComposed(const AText: string; const ACompatibility: Boolean): string;
 var
   LBuffer: TCodepointBuffer;
 begin
-  if s = '' then
+  if AText = '' then
     Exit('');
-  if IsAsciiString(s) then
-    Exit(s);
+  if IsAsciiString(AText) then
+    Exit(AText);
 
-  DecomposeToBuffer(s, ACompatibility, LBuffer);
+  DecomposeToBuffer(AText, ACompatibility, LBuffer);
   ComposeBufferWithHangul(LBuffer);
   Result := BufferToUtf8(LBuffer);
 end;
 
-function NFD(const s: string): string;
+function NFD(const AText: string): string;
 begin
-  Result := NormalizeDecomposed(s, False);
+  Result := NormalizeDecomposed(AText, False);
 end;
 
-function NFC(const s: string): string;
+function NFC(const AText: string): string;
 begin
-  Result := NormalizeComposed(s, False);
+  Result := NormalizeComposed(AText, False);
 end;
 
-function NFKD(const s: string): string;
+function NFKD(const AText: string): string;
 begin
-  Result := NormalizeDecomposed(s, True);
+  Result := NormalizeDecomposed(AText, True);
 end;
 
-function NFKC(const s: string): string;
+function NFKC(const AText: string): string;
 begin
-  Result := NormalizeComposed(s, True);
+  Result := NormalizeComposed(AText, True);
 end;
 
-function IsNormalizedNFD(const s: string): Boolean;
+function IsNormalizedNFD(const AText: string): Boolean;
 begin
   // 先用 QuickCheck 快速判断（O(n) 无分配）
-  if QuickCheckNFD(s) then
+  if QuickCheckNFD(AText) then
     Exit(True);
   // QuickCheck 不确定时，回退到完整规范化比较
-  Result := NFD(s) = s;
+  Result := NFD(AText) = AText;
 end;
 
-function IsNormalizedNFC(const s: string): Boolean;
+function IsNormalizedNFC(const AText: string): Boolean;
 begin
-  if QuickCheckNFC(s) then
+  if QuickCheckNFC(AText) then
     Exit(True);
-  Result := NFC(s) = s;
+  Result := NFC(AText) = AText;
 end;
 
-function IsNormalizedNFKD(const s: string): Boolean;
+function IsNormalizedNFKD(const AText: string): Boolean;
 begin
-  if QuickCheckNFKD(s) then
+  if QuickCheckNFKD(AText) then
     Exit(True);
-  Result := NFKD(s) = s;
+  Result := NFKD(AText) = AText;
 end;
 
-function IsNormalizedNFKC(const s: string): Boolean;
+function IsNormalizedNFKC(const AText: string): Boolean;
 begin
-  if QuickCheckNFKC(s) then
+  if QuickCheckNFKC(AText) then
     Exit(True);
-  Result := NFKC(s) = s;
+  Result := NFKC(AText) = AText;
 end;
 
-function QuickCheckNFD(const s: string): Boolean;
+function QuickCheckNFD(const AText: string): Boolean;
 var
   LIter: TUTF8Iterator;
   LCp: UInt32;
@@ -544,13 +544,13 @@ begin
   // QuickCheck NFD: 检查是否已经是 NFD 形式
   // 条件：没有规范可分解字符(LKind=1) + combining class 非递减
   // 注意：兼容分解(LKind=2)在 NFD 中是允许的
-  if s = '' then
+  if AText = '' then
     Exit(True);
-  if IsAsciiString(s) then
+  if IsAsciiString(AText) then
     Exit(True);
 
   LPrevCcc := 0;
-  LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
+  LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
   while LIter.Next(LCp) do
   begin
     // 检查是否有规范分解（kind=1）
@@ -567,7 +567,7 @@ begin
   Result := True;
 end;
 
-function QuickCheckNFKD(const s: string): Boolean;
+function QuickCheckNFKD(const AText: string): Boolean;
 var
   LIter: TUTF8Iterator;
   LCp: UInt32;
@@ -577,13 +577,13 @@ var
 begin
   // QuickCheck NFKD: 检查是否已经是 NFKD 形式
   // 条件：没有可分解字符(规范或兼容) + combining class 非递减
-  if s = '' then
+  if AText = '' then
     Exit(True);
-  if IsAsciiString(s) then
+  if IsAsciiString(AText) then
     Exit(True);
 
   LPrevCcc := 0;
-  LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
+  LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
   while LIter.Next(LCp) do
   begin
     // 检查是否有任何分解（kind=1 规范 或 kind=2 兼容）
@@ -603,7 +603,7 @@ end;
 { QuickCheck composed forms: 公共逻辑 }
 { ACheckCompatibility=True  → NFKC（检查 kind=2 兼容分解） }
 { ACheckCompatibility=False → NFC  （仅检查组合可能性） }
-function QuickCheckComposed(const s: string; const ACheckCompatibility: Boolean): Boolean;
+function QuickCheckComposed(const AText: string; const ACheckCompatibility: Boolean): Boolean;
 var
   LIter: TUTF8Iterator;
   LCp: UInt32;
@@ -614,15 +614,15 @@ var
   LHasStarter: Boolean;
   LComposed: TUnicodeCodepoint;
 begin
-  if s = '' then
+  if AText = '' then
     Exit(True);
-  if IsAsciiString(s) then
+  if IsAsciiString(AText) then
     Exit(True);
 
   LPrevCcc := 0;
   LHasStarter := False;
   LStarter := 0;
-  LIter.Init(PByte(PAnsiChar(s)), SizeUInt(Length(s)));
+  LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
   while LIter.Next(LCp) do
   begin
     // NFKC: 检查兼容分解（kind=2）
@@ -659,14 +659,14 @@ begin
   Result := True;
 end;
 
-function QuickCheckNFC(const s: string): Boolean;
+function QuickCheckNFC(const AText: string): Boolean;
 begin
-  Result := QuickCheckComposed(s, False);
+  Result := QuickCheckComposed(AText, False);
 end;
 
-function QuickCheckNFKC(const s: string): Boolean;
+function QuickCheckNFKC(const AText: string): Boolean;
 begin
-  Result := QuickCheckComposed(s, True);
+  Result := QuickCheckComposed(AText, True);
 end;
 
 { TCodepointBuffer }
