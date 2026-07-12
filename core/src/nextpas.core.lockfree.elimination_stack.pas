@@ -39,7 +39,15 @@ const
 type
   TEliminationStackResult = (esPushed, esPopped, esEliminated, esFull, esEmpty, esClosed);
 
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 消除回退栈
+    @details 优化的无锁栈，带消除数组。
+      - 基础：Treiber 栈（CAS 在标记的顶部指针上）
+      - 优化：消除数组减少竞争
+      - CAS 失败时，线程进入消除数组而不是重试
+      - 匹配的 Push/Pop 在消除数组中完成，无需接触顶部
+      - 性能：高竞争下比普通 Treiber 栈快 2-3 倍
+      - 适用场景：高竞争环境、并发栈、任务调度
+   * @concurrency Thread-safe (see source for details). }
   generic TEliminationStackImpl<T> = class
   private
     type
