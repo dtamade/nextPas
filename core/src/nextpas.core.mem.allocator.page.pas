@@ -62,6 +62,8 @@ end;
 function TPageAllocator.AlignToPage(ASize: SizeUInt): SizeUInt;
 begin
   Result := (ASize + PAGE_SIZE - 1) and not SizeUInt(PAGE_SIZE - 1);
+  if Result < ASize then { overflow check }
+    Result := 0;
 end;
 
 function TPageAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
@@ -73,6 +75,8 @@ begin
   if ASize < PAGE_MIN_SIZE then
     ASize := PAGE_MIN_SIZE;
   LAligned := AlignToPage(ASize);
+  if LAligned = 0 then
+    Exit(nil);
   Result := FInner.GetMem(LAligned);
   if Result <> nil then
   begin

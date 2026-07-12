@@ -108,12 +108,16 @@ var
   LRaw: Pointer;
   LAligned: Pointer;
   LHdrPtr: PByte;
+  LExtra: SizeUInt;
 begin
   if ASize = 0 then
     Exit(nil);
 
   { Allocate extra space for alignment + header }
-  LRaw := FInner.GetMem(ASize + FAlignment + ALIGNED_HEADER_SIZE);
+  LExtra := FAlignment + ALIGNED_HEADER_SIZE;
+  if ASize + LExtra < ASize then { overflow check }
+    Exit(nil);
+  LRaw := FInner.GetMem(ASize + LExtra);
   if LRaw = nil then
     Exit(nil);
 
