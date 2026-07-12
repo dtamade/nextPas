@@ -60,6 +60,7 @@ type
   public
     constructor Create(AInner: IAllocator;
       AAlignment: SizeUInt = ALIGNED_DEFAULT_ALIGNMENT);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -101,6 +102,12 @@ begin
   FAllocCount := 0;
   FFreeCount := 0;
   FActiveAllocs := 0;
+end;
+
+destructor TAlignedAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 function TAlignedAllocator.GetMem(ASize: SizeUInt): Pointer; inline;

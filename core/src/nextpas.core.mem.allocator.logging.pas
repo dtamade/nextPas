@@ -38,6 +38,7 @@ type
     FStats: TLoggingStats;
   public
     constructor Create(AInner: IAllocator; ALogProc: TLogProc = nil);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -62,6 +63,12 @@ begin
   FInner := AInner;
   FLogProc := ALogProc;
   FillChar(FStats, SizeOf(FStats), 0);
+end;
+
+destructor TLoggingAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 procedure TLoggingAllocator.SetLogProc(ALogProc: TLogProc);

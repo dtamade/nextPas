@@ -59,6 +59,7 @@ type
     FTotalBytes: UInt64;
   public
     constructor Create(AInner: IAllocator);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -83,6 +84,12 @@ begin
   FFreeCount := 0;
   FActiveAllocs := 0;
   FTotalBytes := 0;
+end;
+
+destructor TPrefixAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 function TPrefixAllocator.GetMem(ASize: SizeUInt): Pointer; inline;

@@ -36,6 +36,7 @@ type
     procedure DecActive;
   public
     constructor Create(AInner: IAllocator);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -60,6 +61,12 @@ begin
     raise EArgumentNil.Create('TCountingAllocator.Create: AInner cannot be nil');
   FInner := AInner;
   FillChar(FStats, SizeOf(FStats), 0);
+end;
+
+destructor TCountingAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 procedure TCountingAllocator.IncActive;

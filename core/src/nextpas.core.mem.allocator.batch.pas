@@ -72,6 +72,7 @@ type
 
     function Traits: TAllocatorTraits; inline;
     constructor Create(AInner: IAllocator);
+    destructor Destroy; override;
     function BatchAlloc(ASize: SizeUInt; ACount: Integer;
       out ABlocks: array of Pointer): Integer;
     procedure BatchFree(const ABlocks: array of Pointer; ACount: Integer);
@@ -94,6 +95,12 @@ begin
   FSingleFreeCount := 0;
   FTotalBlocksAlloc := 0;
   FTotalBlocksFree := 0;
+end;
+
+destructor TBatchAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 function TBatchAllocator.GetMem(ASize: SizeUInt): Pointer; inline;

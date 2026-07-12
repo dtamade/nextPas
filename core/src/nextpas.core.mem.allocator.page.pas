@@ -37,6 +37,7 @@ type
     function AlignToPage(ASize: SizeUInt): SizeUInt;
   public
     constructor Create(AInner: IAllocator);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -57,6 +58,12 @@ begin
   inherited Create;
   FInner := AInner;
   FillChar(FStats, SizeOf(FStats), 0);
+end;
+
+destructor TPageAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 function TPageAllocator.AlignToPage(ASize: SizeUInt): SizeUInt;

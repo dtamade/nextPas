@@ -65,6 +65,7 @@ type
 
     function Traits: TAllocatorTraits; inline;
     constructor Create(AInner: IAllocator; AFailAt: UInt64 = 0);
+    destructor Destroy; override;
     procedure SetFailAt(AFailAt: UInt64);
     function GetStats: TFailStats;
     property FailAt: UInt64 read FFailAt write SetFailAt;
@@ -93,6 +94,12 @@ begin
   FTotalAttempts := 0;
   FFailCount := 0;
   FSuccessCount := 0;
+end;
+
+destructor TFailAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 function TFailAllocator.GetMem(ASize: SizeUInt): Pointer; inline;

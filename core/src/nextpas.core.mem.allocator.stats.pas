@@ -73,6 +73,7 @@ type
     FMaxAllocSize: SizeUInt;
   public
     constructor Create(AInner: IAllocator);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -98,6 +99,12 @@ begin
     raise EArgumentNil.Create('TStatsAllocator.Create: AInner cannot be nil');
   FInner := AInner;
   Reset;
+end;
+
+destructor TStatsAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 procedure TStatsAllocator.Reset;

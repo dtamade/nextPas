@@ -27,6 +27,7 @@ type
     FInner: IAllocator;
   public
     constructor Create(AInner: IAllocator);
+    destructor Destroy; override;
     function GetMem(ASize: SizeUInt): Pointer; inline;
     function AllocMem(ASize: SizeUInt): Pointer; inline;
     function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
@@ -47,6 +48,12 @@ begin
   if AInner = nil then
     raise EAllocError.Create(aeInvalidLayout, 'TZeroedAllocator.Create: AInner must not be nil');
   FInner := AInner;
+end;
+
+destructor TZeroedAllocator.Destroy;
+begin
+  FInner := nil;
+  inherited Destroy;
 end;
 
 function TZeroedAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
