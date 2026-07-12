@@ -63,14 +63,14 @@ function Capture(const APath: string; const AArgs: array of string): string;
 function CaptureIn(const APath: string; const AArgs: array of string;
   const ADir: string): string;
 {** @desc 执行子进程并返回 stdout + stderr 合并文本
- *  @note stdout 和 stderr 按进程写入顺序交错拼接，无分隔符。
+ *  @note stdout 和 stderr 交错拼接（顺序取决于管道读取时序，不保证严格按写入顺序）。
  *        如需区分两个流，请使用 Run(...) 然后分别读取 .StdOut 和 .StdErr。 *}
 function CaptureCombined(const APath: string;
   const AArgs: array of string): string;
 {**
  * @desc 在指定工作目录中执行子进程并返回 stdout + stderr 合并文本
  *
- * @note stdout 和 stderr 按进程写入顺序交错拼接，无分隔符。
+ * @note stdout 和 stderr 交错拼接（顺序取决于管道读取时序，不保证严格按写入顺序）。
  *
  * @params
  *   APath  可执行文件路径
@@ -206,11 +206,11 @@ function RunInTimeout(const APath: string; const AArgs: array of string;
 function CaptureInTimeout(const APath: string; const AArgs: array of string;
   const ADir: string; const ATimeout: TDuration): string;
 {** @desc 带超时执行并返回 stdout + stderr 合并文本
- *  @note stdout 和 stderr 按进程写入顺序交错拼接，无分隔符。 *}
+ *  @note stdout 和 stderr 交错拼接（顺序取决于管道读取时序，不保证严格按写入顺序）。 *}
 function CaptureTimeoutCombined(const APath: string;
   const AArgs: array of string; const ATimeout: TDuration): string;
 {** @desc 在指定工作目录中带超时执行并返回 stdout + stderr 合并文本
- *  @note stdout 和 stderr 按进程写入顺序交错拼接，无分隔符。 *}
+ *  @note stdout 和 stderr 交错拼接（顺序取决于管道读取时序，不保证严格按写入顺序）。 *}
 function CaptureInTimeoutCombined(const APath: string;
   const AArgs: array of string; const ADir: string;
   const ATimeout: TDuration): string;
@@ -368,7 +368,7 @@ function StringToBytes(const AStr: string): TBytes;
 var
   LLen: Integer;
 begin
-  LLen := Length(AStr);
+  LLen := Length(AStr) * SizeOf(Char);
   SetLength(Result, LLen);
   if LLen > 0 then
     Move(AStr[1], Result[0], LLen);
@@ -423,12 +423,19 @@ function LookPath(const AName: string): string;
 var
   LEnv: TStringArray;
   LResolved: string;
+  LPath: string;
 begin
   LEnv := EnvironmentVariables;
   LResolved := ResolveExecutablePath(AName, LEnv);
   if (LResolved = AName) and
     not CommandPathHasDirectoryPart(AName) then
-    raise EProcessError.Create('executable not found in PATH: ' + AName);
+  begin
+    LPath := GetEnv('PATH');
+    if Length(LPath) > 200 then
+      LPath := Copy(LPath, 1, 200) + '...';
+    raise EProcessError.Create('executable not found in PATH: ' + AName +
+      ' (searched: ' + LPath + ')');
+  end;
   Result := LResolved;
 end;
 

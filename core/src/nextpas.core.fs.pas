@@ -299,43 +299,8 @@ end;
 
 procedure WriteFileLines(const APath: string; const ALines: TStringArray;
   const APerm: TFilePermission);
-var
-  LData, LLineBytes: TBytes;
-  LTotal, LPos, LLen, LI: SizeInt;
-  LNewline: TBytes;
 begin
-  LTotal := 0;
-  for LI := 0 to Length(ALines) - 1 do
-{$IFDEF NEXTPAS_WINDOWS}
-    Inc(LTotal, Length(ALines[LI]) + 2);
-{$ELSE}
-    Inc(LTotal, Length(ALines[LI]) + 1);
-{$ENDIF}
-  if LTotal = 0 then
-  begin
-    nextpas.core.fs.util.FsWriteFile(APath, nil, APerm);
-    Exit;
-  end;
-  SetLength(LData, LTotal);
-  LPos := 0;
-{$IFDEF NEXTPAS_WINDOWS}
-  LNewline := TBytes.Create(13, 10);
-{$ELSE}
-  LNewline := TBytes.Create(10);
-{$ENDIF}
-  for LI := 0 to Length(ALines) - 1 do
-  begin
-    LLineBytes := Utf8TextToBytes(ALines[LI]);
-    LLen := Length(LLineBytes);
-    if LLen > 0 then
-    begin
-      Move(LLineBytes[0], LData[LPos], LLen);
-      Inc(LPos, LLen);
-    end;
-    Move(LNewline[0], LData[LPos], Length(LNewline));
-    Inc(LPos, Length(LNewline));
-  end;
-  nextpas.core.fs.util.FsWriteFile(APath, LData, APerm);
+  nextpas.core.fs.util.FsWriteFileLines(APath, ALines, APerm);
 end;
 
 procedure AppendFile(const APath: string; const AData: TBytes);

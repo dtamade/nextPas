@@ -100,6 +100,10 @@ function platform_process_kill(const AProc: TPlatformProcess): Int32;
     @return 进程 ID *}
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 
+{** @desc 获取当前进程 ID
+    @return 当前进程 ID *}
+function platform_getpid: Int32;
+
 {** @desc 创建管道（用于进程间通信）
     @param AReadHandle 输出读端文件描述符
     @param AWriteHandle 输出写端文件描述符
@@ -116,6 +120,34 @@ function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrIn
     @param AHandle 文件描述符（置为 -1）
     @return 0 成功，否则返回错误码 *}
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
+
+{ Generic fd I/O — used by process.pipe }
+
+{** @desc 从文件描述符读取数据（自动重试 EINTR）
+    @param AFd 文件描述符
+    @param ABuf 读取缓冲区
+    @param ACount 读取字节数
+    @return 读取的字节数，0 表示 EOF，负值表示错误 *}
+function platform_io_read(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
+
+{** @desc 向文件描述符写入数据（自动重试 EINTR，处理部分写入）
+    @param AFd 文件描述符
+    @param ABuf 写入缓冲区
+    @param ACount 写入字节数
+    @return 写入的字节数，负值表示错误 *}
+function platform_io_write(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
+
+{** @desc 关闭文件描述符
+    @param AFd 文件描述符
+    @return 0 成功，否则返回错误码 *}
+function platform_io_close(AFd: PtrInt): Int32;
+
+{** @desc I/O 多路复用等待（poll，自动重试 EINTR）
+    @param AFds pollfd 数组
+    @param ACount 文件描述符数量
+    @param ATimeoutMs 超时时间（毫秒，-1 表示无限等待）
+    @return 就绪的描述符数量，0 表示超时，负值表示错误 *}
+function platform_io_poll(AFds: Pointer; ACount: Int32; ATimeoutMs: Int32): Int32;
 
 { Process convenience functions }
 
@@ -307,6 +339,70 @@ begin
   Result := PosixCheck(close(cint(AHandle)));
   if Result = 0 then
     AHandle := -1;
+end;
+
+function platform_io_read(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
+var
+  LRead: ssize_t;
+begin
+  if (AFd < 0) or (ABuf = nil) or (ACount = 0) then
+    Exit(-1);
+  repeat
+    LRead := read(cint(AFd), ABuf, ACount);
+    if LRead >= 0 then
+      Exit(LRead);
+    if platform_get_errno = ESysEINTR then
+      Continue;
+    Exit(-1);
+  until False;
+end;
+
+function platform_io_write(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
+var
+  LWritten: ssize_t;
+  LTotal: SizeUInt;
+begin
+  if (AFd < 0) or (ABuf = nil) or (ACount = 0) then
+    Exit(-1);
+  LTotal := 0;
+  repeat
+    LWritten := write(cint(AFd), Pointer(PtrUInt(ABuf) + LTotal), ACount - LTotal);
+    if LWritten > 0 then
+    begin
+      Inc(LTotal, SizeUInt(LWritten));
+      if LTotal = ACount then
+        Exit(PtrInt(LTotal));
+      Continue;
+    end;
+    if LWritten = 0 then
+      Exit(-1);
+    if platform_get_errno = ESysEINTR then
+      Continue;
+    Exit(-1);
+  until False;
+end;
+
+function platform_io_close(AFd: PtrInt): Int32;
+begin
+  if AFd < 0 then
+    Exit(0);
+  Result := PosixCheck(close(cint(AFd)));
+end;
+
+function platform_io_poll(AFds: Pointer; ACount: Int32; ATimeoutMs: Int32): Int32;
+var
+  LPollResult: Int32;
+begin
+  if (AFds = nil) or (ACount <= 0) then
+    Exit(-1);
+  repeat
+    LPollResult := poll(AFds, cuint(ACount), ATimeoutMs);
+    if LPollResult >= 0 then
+      Exit(LPollResult);
+    if platform_get_errno = ESysEINTR then
+      Continue;
+    Exit(-1);
+  until False;
 end;
 
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
@@ -546,6 +642,11 @@ end;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 begin
   Result := AProc.Pid;
+end;
+
+function platform_getpid: Int32;
+begin
+  Result := Int32(getpid);
 end;
 
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar;
@@ -1569,6 +1670,50 @@ begin
   else
     Result := Int32(LRead);
 end;
+
+function platform_getpid: Int32;
+begin
+  Result := Int32(GetCurrentProcessId);
+end;
+
+function platform_io_read(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
+var
+  LRead: DWORD;
+begin
+  if (AFd < 0) or (ABuf = nil) or (ACount = 0) then
+    Exit(-1);
+  if not ReadFile(HANDLE(PtrUInt(AFd)), ABuf, DWORD(ACount), @LRead, nil) then
+    Exit(-1);
+  Result := PtrInt(LRead);
+end;
+
+function platform_io_write(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
+var
+  LWritten: DWORD;
+begin
+  if (AFd < 0) or (ABuf = nil) or (ACount = 0) then
+    Exit(-1);
+  if not WriteFile(HANDLE(PtrUInt(AFd)), ABuf, DWORD(ACount), @LWritten, nil) then
+    Exit(-1);
+  Result := PtrInt(LWritten);
+end;
+
+function platform_io_close(AFd: PtrInt): Int32;
+begin
+  if AFd < 0 then
+    Exit(0);
+  if CloseHandle(HANDLE(PtrUInt(AFd))) then
+    Result := 0
+  else
+    Result := -1;
+end;
+
+function platform_io_poll(AFds: Pointer; ACount: Int32; ATimeoutMs: Int32): Int32;
+begin
+  { Windows uses WaitForMultipleObjects/IOCP, not poll.
+    This stub exists for interface completeness. }
+  Result := -1;
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
@@ -1616,6 +1761,16 @@ function platform_process_read_stdout(AStdoutRead: PtrInt;
 begin Result := -1; end;
 function platform_process_read_stderr(AStderrRead: PtrInt;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
+begin Result := -1; end;
+function platform_getpid: Int32;
+begin Result := -1; end;
+function platform_io_read(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
+begin Result := -1; end;
+function platform_io_write(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
+begin Result := -1; end;
+function platform_io_close(AFd: PtrInt): Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_io_poll(AFds: Pointer; ACount: Int32; ATimeoutMs: Int32): Int32;
 begin Result := -1; end;
 {$ENDIF}
 

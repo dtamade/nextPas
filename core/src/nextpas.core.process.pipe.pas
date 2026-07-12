@@ -51,9 +51,8 @@ uses
   nextpas.core.platform.error,
   nextpas.core.text.conv,
   {$IFDEF NEXTPAS_UNIX}
-  nextpas.core.platform.unix.base,
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.process,
   nextpas.core.platform.signal
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
@@ -64,7 +63,7 @@ uses
 
 {$IFDEF NEXTPAS_UNIX}
 var
-  GSigPipeIgnorePid: pid_t = 0;
+  GSigPipeIgnorePid: Int32 = 0;
 {$ENDIF}
 
 const
@@ -106,10 +105,10 @@ end;
 procedure EnsureSigPipeIgnored;
 var
   LErr: Int32;
-  LPid: pid_t;
+  LPid: Int32;
 begin
   {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
-  LPid := getpid;
+  LPid := platform_getpid;
   if GSigPipeIgnorePid = LPid then
     Exit;
   LErr := platform_signal_ignore(PLATFORM_SIGPIPE);
@@ -144,23 +143,19 @@ end;
 
 function TPipeReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
-  {$IFDEF NEXTPAS_UNIX}LRead: ssize_t;{$ENDIF}
+  {$IFDEF NEXTPAS_UNIX}LRead: PtrInt;{$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}LRead: DWORD;{$ENDIF}
 begin
   if FClosed then
     raise PipeClosedError('TPipeReader.Read');
   if ACount = 0 then Exit(0);
   {$IFDEF NEXTPAS_UNIX}
-  repeat
-    LRead := nextpas.core.platform.posix.ffi.read(FFd, @ABuf, ACount);
-    if LRead > 0 then
-      Exit(SizeUInt(LRead));
-    if LRead = 0 then
-      Exit(0);
-    if platform_get_errno = ESysEINTR then
-      Continue;
-    raise PipeSyscallError('TPipeReader.Read');
-  until False;
+  LRead := platform_io_read(FFd, @ABuf, ACount);
+  if LRead > 0 then
+    Exit(SizeUInt(LRead));
+  if LRead = 0 then
+    Exit(0);
+  raise PipeSyscallError('TPipeReader.Read');
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
   LRead := 0;
@@ -182,7 +177,7 @@ begin
   if FClosed then Exit;
   LCloseError := nil;
   {$IFDEF NEXTPAS_UNIX}
-  if nextpas.core.platform.posix.ffi.close(FFd) <> 0 then
+  if platform_io_close(FFd) <> 0 then
     LCloseError := PipeSyscallError('TPipeReader.Close');
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
@@ -223,8 +218,7 @@ end;
 
 function TPipeWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
-  {$IFDEF NEXTPAS_UNIX}LWritten: ssize_t;{$ENDIF}
-  {$IFDEF NEXTPAS_UNIX}LTotal: SizeUInt;{$ENDIF}
+  {$IFDEF NEXTPAS_UNIX}LWritten: PtrInt;{$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}LWritten: DWORD;{$ENDIF}
 begin
   if FClosed then
@@ -232,23 +226,10 @@ begin
   if ACount = 0 then Exit(0);
   {$IFDEF NEXTPAS_UNIX}
   EnsureSigPipeIgnored;
-  LTotal := 0;
-  repeat
-    LWritten := nextpas.core.platform.posix.ffi.write(FFd,
-      Pointer(PtrUInt(@ABuf) + LTotal), ACount - LTotal);
-    if LWritten > 0 then
-    begin
-      Inc(LTotal, SizeUInt(LWritten));
-      if LTotal = ACount then
-        Exit(LTotal);
-      Continue;
-    end;
-    if LWritten = 0 then
-      raise EIOError.Create('TPipeWriter.Write failed (zero progress)');
-    if platform_get_errno = ESysEINTR then
-      Continue;
+  LWritten := platform_io_write(FFd, @ABuf, ACount);
+  if LWritten < 0 then
     raise PipeSyscallError('TPipeWriter.Write');
-  until False;
+  Result := SizeUInt(LWritten);
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
   LWritten := 0;
@@ -265,7 +246,7 @@ begin
   if FClosed then Exit;
   LCloseError := nil;
   {$IFDEF NEXTPAS_UNIX}
-  if nextpas.core.platform.posix.ffi.close(FFd) <> 0 then
+  if platform_io_close(FFd) <> 0 then
     LCloseError := PipeSyscallError('TPipeWriter.Close');
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
@@ -293,14 +274,13 @@ function DrainReadHandle(const AHandle: PtrInt; var ATarget: string;
   var ACount: Integer): Boolean;
 var
   LBuf: array[0..PIPE_DRAIN_BUF_SIZE - 1] of Byte;
-  LRead: ssize_t;
-  LErr: Int32;
+  LRead: PtrInt;
 begin
   { P1-4 fix: Loop until EAGAIN/EOF for better throughput.
     Previously exited after first successful read, forcing a full
     poll→read→poll cycle per chunk. Now drains all available data. }
   repeat
-    LRead := nextpas.core.platform.posix.ffi.read(AHandle, @LBuf[0], SizeOf(LBuf));
+    LRead := platform_io_read(AHandle, @LBuf[0], SizeOf(LBuf));
     if LRead > 0 then
     begin
       AppendPipeChunk(ATarget, ACount, LBuf[0], LRead);
@@ -308,12 +288,8 @@ begin
     end;
     if LRead = 0 then
       Exit(True);
-    LErr := platform_get_errno;
-    if LErr = ESysEINTR then
-      Continue;
-    if LErr = ESysEAGAIN then
-      Exit(False);
-    raise PipeSystemError('DrainPipePair.read', LErr);
+    { EAGAIN means no more data available right now }
+    Exit(False);
   until False;
 end;
 
@@ -347,14 +323,9 @@ begin
   if LPollCount = 0 then
     Exit;
 
-  repeat
-    LPollResult := poll(@LPollFds[0], LPollCount, ATimeout);
-    if LPollResult >= 0 then
-      Break;
-    if platform_get_errno = ESysEINTR then
-      Continue;
+  LPollResult := platform_io_poll(@LPollFds[0], LPollCount, ATimeout);
+  if LPollResult < 0 then
     raise PipeSyscallError('DrainPipePair.poll');
-  until False;
 
   if LPollResult = 0 then
     Exit;

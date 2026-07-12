@@ -247,8 +247,7 @@ end;
 
 function GetEnvDefault(const AName, ADefault: string): string;
 begin
-  Result := GetEnv(AName);
-  if Result = '' then
+  if not TryGetEnv(AName, Result) then
     Result := ADefault;
 end;
 

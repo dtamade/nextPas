@@ -53,6 +53,7 @@ uses
   nextpas.core.text.builder,
   nextpas.core.errors,
   nextpas.core.fs.errors,
+  nextpas.core.platform.base,
   nextpas.core.platform.error,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
@@ -182,7 +183,7 @@ begin
     for I := 0 to High(ALines) do
     begin
       LBuilder.AppendStr(ALines[I]);
-      LBuilder.AppendChar(#10);
+      LBuilder.AppendStr(PLATFORM_LINE_ENDING);
     end;
     FsWriteFileText(APath, LBuilder.ToString, APerm);
   finally

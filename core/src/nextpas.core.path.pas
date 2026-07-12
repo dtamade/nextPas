@@ -59,9 +59,9 @@ const
 
 {** @desc 提取文件路径的目录部分（SysUtils 兼容，末尾带分隔符） *}
 function ExtractFilePath(const AFileName: string): string;
-{** @desc 提取文件路径的目录部分（SysUtils 兼容）。
-  注意：FPC SysUtils 中 ExtractFileDir 会去除尾部分隔符，ExtractFilePath 保留。
-  当前实现两者同义（均保留尾部分隔符），与 FPC 行为有细微差异。 *}
+{** @desc 提取文件路径的目录部分（SysUtils 兼容，末尾不带分隔符）。
+  注意：与 FPC SysUtils 行为一致 — ExtractFileDir 去除尾部分隔符，ExtractFilePath 保留。
+  根目录 '/' 例外：ExtractFileDir('/') 返回 '/'。 *}
 function ExtractFileDir(const AFileName: string): string;
 {** @desc 提取文件名部分（SysUtils 兼容） *}
 function ExtractFileName(const AFileName: string): string; inline;

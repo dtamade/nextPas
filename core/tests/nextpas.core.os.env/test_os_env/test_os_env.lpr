@@ -267,7 +267,11 @@ begin
     'GetEnvDefault returns existing value');
   CheckEqual('fallback', GetEnvDefault('NEXTPAS_TEST_NONEXISTENT_VAR', 'fallback'),
     'GetEnvDefault returns default for missing var');
+  SetEnv('NEXTPAS_TEST_DEFAULT_EMPTY', '');
+  CheckEqual('', GetEnvDefault('NEXTPAS_TEST_DEFAULT_EMPTY', 'fallback'),
+    'GetEnvDefault returns empty string for defined-empty var');
   UnsetEnv('NEXTPAS_TEST_DEFAULT');
+  UnsetEnv('NEXTPAS_TEST_DEFAULT_EMPTY');
 end;
 
 procedure TestExpandEnvWithDefault;

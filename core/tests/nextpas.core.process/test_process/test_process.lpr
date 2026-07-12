@@ -17,7 +17,7 @@ uses
   nextpas.core.process.pipe,
   nextpas.core.process.command,
   nextpas.core.io.intf,
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.process;
 
 var
   LPassed, LFailed: Integer;
@@ -210,7 +210,7 @@ var
   LPath: string;
   LContent: string;
 begin
-  LPath := FsGetTempDir + '/nextpas-process-detach-' + IntToStr(getpid) + '.txt';
+  LPath := FsGetTempDir + '/nextpas-process-detach-' + IntToStr(platform_getpid) + '.txt';
   if FsExists(LPath) then
     FsRemove(LPath);
 
@@ -939,7 +939,7 @@ var
   LRaised: Boolean;
 begin
   LToolName := 'nextpas_process_path_shadow';
-  LTempRoot := FsGetTempDir + '/nextpas-process-path-shadow-' + IntToStr(getpid);
+  LTempRoot := FsGetTempDir + '/nextpas-process-path-shadow-' + IntToStr(platform_getpid);
   LShadowDir := LTempRoot + '/shadow';
   LRealDir := LTempRoot + '/real';
   LShadowPath := LShadowDir + '/' + LToolName;
@@ -959,7 +959,7 @@ begin
     WriteLn(LFile, '#!/bin/sh');
     WriteLn(LFile, 'printf shadow-resolved');
     CloseFile(LFile);
-    nextpas.core.platform.posix.ffi.chmod(PAnsiChar(LRealPath), &755);
+    Chmod(LRealPath, TFilePermission(&755));
 
     LRaised := False;
     try
@@ -1010,7 +1010,7 @@ var
   LRaised: Boolean;
 begin
   LToolName := 'nextpas_process_dir_path_tool';
-  LTempRoot := FsGetTempDir + '/nextpas-process-dir-path-' + IntToStr(getpid);
+  LTempRoot := FsGetTempDir + '/nextpas-process-dir-path-' + IntToStr(platform_getpid);
   LToolDir := LTempRoot + '/tools';
   LToolPath := LToolDir + '/' + LToolName;
   if FsIsDir(LTempRoot) then
@@ -1022,7 +1022,7 @@ begin
     WriteLn(LFile, '#!/bin/sh');
     WriteLn(LFile, 'printf dir-path-resolved');
     CloseFile(LFile);
-    nextpas.core.platform.posix.ffi.chmod(PAnsiChar(LToolPath), &755);
+    Chmod(LToolPath, TFilePermission(&755));
 
     LRaised := False;
     try
