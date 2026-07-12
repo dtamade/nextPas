@@ -105,6 +105,8 @@ end;
 
 function TBatchAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then
+    Exit(nil);
   Inc(FSingleAllocCount);
   Inc(FTotalBlocksAlloc);
   Result := FInner.GetMem(ASize);
@@ -112,6 +114,8 @@ end;
 
 function TBatchAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
 begin
+  if ASize = 0 then
+    Exit(nil);
   Inc(FSingleAllocCount);
   Inc(FTotalBlocksAlloc);
   Result := FInner.AllocMem(ASize);

@@ -137,6 +137,9 @@ var
   LHeader: PHotswapHeader;
   LCurrent: IAllocator;
 begin
+  if ASize = 0 then
+    Exit(nil);
+
   LCurrent := FCurrent;
   LHeader := PHotswapHeader(LCurrent.GetMem(HOTSWAP_HEADER + ASize));
   if LHeader = nil then

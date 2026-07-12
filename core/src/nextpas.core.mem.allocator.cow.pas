@@ -215,6 +215,9 @@ function TCowAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LI: Integer;
 begin
+  if ASize = 0 then
+    Exit(nil);
+
   { 查找空闲槽位 }
   LI := 0;
   while (LI < COW_MAX_REFS) and (FRefs[LI].Key <> nil) do

@@ -236,6 +236,9 @@ var
   LClassIdx: Int32;
   LBlock: Pointer;
 begin
+  if ASize = 0 then
+    Exit(nil);
+
   { 查找合适的 size class }
   LClassIdx := FindSizeClass(ASize);
 
