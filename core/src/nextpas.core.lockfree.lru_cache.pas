@@ -48,7 +48,14 @@ type
    *   - 使用 spin lock 保证线程安全
    *   - 不是 lock-free，但性能良好
    *}
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc LRU 缓存
+    @details 并发最近最少使用缓存。
+      - 哈希表实现 O(1) 查找
+      - 双向链表实现 O(1) 淘汰排序
+      - Get 提升为最近使用
+      - Put 添加或更新，满时淘汰 LRU
+      - 适用场景：缓存系统、页面替换
+   * @concurrency Thread-safe (see source for details). }
   TConcurrentLRUCache = class
   private
     FBuckets: array[0..LRU_HASH_BUCKETS - 1] of PLruNode;
