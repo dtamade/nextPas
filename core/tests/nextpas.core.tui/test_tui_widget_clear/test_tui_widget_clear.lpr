@@ -3,7 +3,6 @@ program test_tui_widget_clear;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
@@ -114,11 +113,47 @@ begin
   end;
 end;
 
+procedure TestClearWidgetZeroSize;
+var
+  LWidget: IWidget;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LWidget := TClearWidget.New;
+  LArea := TRect.Make(0, 0, 0, 0);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LWidget.Render(LArea, LBuffer);
+    Check(True, 'Render on zero-size should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
+procedure TestClearWidgetOutOfBounds;
+var
+  LWidget: IWidget;
+  LBuffer: TBuffer;
+  LArea: TRect;
+begin
+  LWidget := TClearWidget.New;
+  LArea := TRect.Make(0, 0, 5, 5);
+  LBuffer := TBuffer.CreateEmpty(LArea);
+  try
+    LWidget.Render(TRect.Make(100, 100, 5, 5), LBuffer);
+    Check(True, 'Render out of bounds should not raise');
+  finally
+    LBuffer.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.clear');
   T.Test('TClearWidget.New', @TestClearWidgetNew);
   T.Test('TClearWidget.Render', @TestClearWidgetRender);
   T.Test('TClearWidget.Render partial', @TestClearWidgetRenderPartial);
   T.Test('TClearWidget.Render empty', @TestClearWidgetRenderEmpty);
+  T.Test('TClearWidget zero size', @TestClearWidgetZeroSize);
+  T.Test('TClearWidget out of bounds', @TestClearWidgetOutOfBounds);
   if not T.Run then Halt(1);
 end.
