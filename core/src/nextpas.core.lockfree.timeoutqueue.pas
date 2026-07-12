@@ -59,8 +59,6 @@ constructor TTimeoutQueueImpl.Create(const ACapacity: Int64; const ATimeoutNs: I
 var
   LI: Int64;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TTimeoutQueue: T must be unmanaged');
   if ACapacity <= 0 then
     raise EArgumentError.Create('TTimeoutQueue: capacity must be > 0');
   if ACapacity > (Int64(1) shl 62) then

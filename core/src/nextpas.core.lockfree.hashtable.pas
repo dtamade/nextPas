@@ -23,7 +23,6 @@ interface
 
 uses
   nextpas.core.atomic,
-  nextpas.core.errors,
   nextpas.core.lockfree.base;
 
 const
@@ -234,8 +233,6 @@ constructor TLockFreeHashTableImpl.Create(ACapacity: Int32);
 var
   I: Int32;
 begin
-  if IsManagedType(TKey) or IsManagedType(TValue) then
-    raise EArgumentError.Create('TLockFreeHashTable: TKey and TValue must be unmanaged');
   inherited Create;
   if ACapacity < 16 then
     ACapacity := 16;

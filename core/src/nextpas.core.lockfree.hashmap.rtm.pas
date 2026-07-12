@@ -5,7 +5,6 @@ unit nextpas.core.lockfree.hashmap.rtm;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree.hashmap,
   nextpas.core.lockfree.rtm;
@@ -91,8 +90,6 @@ uses
 
 constructor TRtmHashMapImpl.Create(const AInitialCapacity: PtrUInt);
 begin
-  if IsManagedType(TKey) or IsManagedType(TValue) then
-    raise EArgumentError.Create('TRtmHashMap: TKey and TValue must be unmanaged');
   inherited Create;
   FHashMap := THashMap.Create(AInitialCapacity);
   FRtmSupported := RtmIsSupported;

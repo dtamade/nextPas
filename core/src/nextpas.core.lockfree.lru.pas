@@ -70,10 +70,6 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
-  if IsManagedType(TKey) then
-    raise EArgumentError.Create('TConcurrentLruCache: TKey must be unmanaged');
-  if IsManagedType(TValue) then
-    raise EArgumentError.Create('TConcurrentLruCache: TValue must be unmanaged');
   if AMaxItems = 0 then
     raise EArgumentError.Create('TConcurrentLruCache: max items must be > 0');
   if ABucketCount = 0 then

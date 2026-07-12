@@ -79,9 +79,6 @@ type
 
 implementation
 
-uses
-  nextpas.core.errors;
-
 procedure TConcurrentLinkedListImpl.FreeList;
 var
   LNode, LNext: PNode;
@@ -122,8 +119,6 @@ end;
 
 constructor TConcurrentLinkedListImpl.Create;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TConcurrentLinkedList: T must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   FHead := nil;
   FCount := 0;

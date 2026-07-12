@@ -126,8 +126,6 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TLockFreeChannel: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeChannel: capacity must be > 0');
   inherited Create;

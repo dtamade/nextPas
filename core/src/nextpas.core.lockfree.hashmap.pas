@@ -377,8 +377,6 @@ var
   LI: PtrUInt;
   LCap: PtrUInt;
 begin
-  if IsManagedType(TKey) or IsManagedType(TValue) then
-    raise EArgumentError.Create('TShardedHashMap: TKey and TValue must be unmanaged');
   if SizeOf(TKey) = 0 then
     raise EArgumentError.Create('TShardedHashMap: TKey must have non-zero size');
   inherited Create;

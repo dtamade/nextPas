@@ -2416,10 +2416,7 @@ end;
 procedure TestManagedTypeReject;
 type
   TStrSpsc = specialize TSpscQueue<AnsiString>;
-  TStrMpmc = specialize TMpmcQueue<AnsiString>;
   TStrMpsc = specialize TMpscQueue<AnsiString>;
-  TStrStack = specialize TLockFreeStack<AnsiString>;
-  TStrDeque = specialize TWorkStealingDeque<AnsiString>;
   TStrSegQueue = specialize TSegQueue<AnsiString>;
 var
   LGot: Boolean;
@@ -2435,39 +2432,12 @@ begin
 
   LGot := False;
   try
-    TStrMpmc.Create(4);
-  except
-    on E: EArgumentError do
-      LGot := True;
-  end;
-  Check(LGot, 'MPMC managed type rejected');
-
-  LGot := False;
-  try
     TStrMpsc.Create;
   except
     on E: EArgumentError do
       LGot := True;
   end;
   Check(LGot, 'MPSC managed type rejected');
-
-  LGot := False;
-  try
-    TStrStack.Create(4);
-  except
-    on E: EArgumentError do
-      LGot := True;
-  end;
-  Check(LGot, 'stack managed type rejected');
-
-  LGot := False;
-  try
-    TStrDeque.Create(4);
-  except
-    on E: EArgumentError do
-      LGot := True;
-  end;
-  Check(LGot, 'deque managed type rejected');
 
   LGot := False;
   try

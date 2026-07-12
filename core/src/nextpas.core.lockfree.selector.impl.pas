@@ -124,8 +124,6 @@ implementation
 
 constructor TLockFreeSelectorImpl.Create(const AExpectedCount: PtrUInt);
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TLockFreeSelector: T must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   if AExpectedCount = 0 then
     SetLength(FCases, SELECTOR_DEFAULT_CAPACITY)

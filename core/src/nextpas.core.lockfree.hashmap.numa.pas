@@ -5,7 +5,6 @@ unit nextpas.core.lockfree.hashmap.numa;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.numa,
   nextpas.core.lockfree.hashmap;
@@ -116,8 +115,6 @@ constructor TNumaShardedHashMapImpl.Create(const AInitialCapacityPerNode: PtrUIn
 var
   I: Integer;
 begin
-  if IsManagedType(TKey) or IsManagedType(TValue) then
-    raise EArgumentError.Create('TNumaShardedHashMap: TKey and TValue must be unmanaged');
   inherited Create;
   FNodeCount := NumaNodeCount;
   if FNodeCount < 1 then

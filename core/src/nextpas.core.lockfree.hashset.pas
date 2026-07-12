@@ -12,7 +12,6 @@ unit nextpas.core.lockfree.hashset;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.lockfree.hashmap;
 
 type
@@ -69,8 +68,6 @@ implementation
 constructor TConcurrentHashSetImpl.Create(const AInitialCapacity: Integer);
 begin
   inherited Create;
-  if IsManagedType(TKey) then
-    raise EArgumentError.Create('TConcurrentHashSet: TKey must be unmanaged');
   FMap := TMap.Create(AInitialCapacity);
 end;
 
