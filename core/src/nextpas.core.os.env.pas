@@ -264,6 +264,7 @@ function ExpandEnv(const AValue: string): string;
 var
   I, LStart: Integer;
   LName: string;
+  LResolved: string;
   LBuilder: TBufStringBuilder;
 begin
   { P1-6 optimization: Use TBufStringBuilder for O(n) instead of O(n²) }
@@ -283,7 +284,8 @@ begin
             'unterminated ${...} in environment expansion');
         LName := Copy(AValue, LStart, I - LStart);
         ValidateEnvName(LName);
-        LBuilder.AppendStr(GetEnvironmentVariable(LName));
+        if TryGetEnv(LName, LResolved) then
+          LBuilder.AppendStr(LResolved);
         Inc(I);
         Continue;
       end
@@ -298,7 +300,8 @@ begin
         else
         begin
           LName := Copy(AValue, LStart, I - LStart);
-          LBuilder.AppendStr(GetEnvironmentVariable(LName));
+          if TryGetEnv(LName, LResolved) then
+            LBuilder.AppendStr(LResolved);
         end;
         Continue;
       end
