@@ -448,8 +448,10 @@ begin
 end;
 
 procedure WriteStderr(const S: PAnsiChar; ALen: Int32);
+{$IFNDEF NEXTPAS_UNIX}
 var
   LWritten: DWORD;
+{$ENDIF}
 begin
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.ffi.write(2, S, ALen);

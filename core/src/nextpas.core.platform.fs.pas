@@ -559,7 +559,6 @@ var
   LStat: TPlatformFileStat;
   LTotal: Int64;
   LSent: ssize_t;
-  LNewPos: Int64;
   LHasSourceSize: Boolean;
 {$ENDIF}
 begin
