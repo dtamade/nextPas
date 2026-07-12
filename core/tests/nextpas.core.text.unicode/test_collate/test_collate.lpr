@@ -486,6 +486,127 @@ begin
   Check(Length(LNumCol.GetSortKey('file10')) > 0, 'numeric sort key non-empty');
 end;
 
+{ === Script-Specific Ordering === }
+
+procedure TestThaiArabicOrdering;
+var
+  LCollator: IUnicodeCollator;
+begin
+  LCollator := UnicodeCollator;
+
+  // Thai characters (U+0E01-U+0E5B) should have non-zero weights
+  Check(GetCollationWeight($0E01) > 0, 'Thai KO KAI has non-zero weight');
+  Check(GetCollationWeight($0E02) > 0, 'Thai KHO KHAI has non-zero weight');
+
+  // Thai ordering: KO KAI < KHO KHAI
+  Check(
+    UnpackPrimary(GetCollationWeight($0E01)) < UnpackPrimary(GetCollationWeight($0E02)),
+    'Thai KO KAI < KHO KHAI (primary)');
+
+  // Arabic characters (U+0621-U+064A) should have non-zero weights
+  Check(GetCollationWeight($0627) > 0, 'Arabic ALEF has non-zero weight');
+  Check(GetCollationWeight($0628) > 0, 'Arabic BA has non-zero weight');
+
+  // Arabic ordering: ALEF < BA
+  Check(
+    UnpackPrimary(GetCollationWeight($0627)) < UnpackPrimary(GetCollationWeight($0628)),
+    'Arabic ALEF < BA (primary)');
+
+  // Thai sorts after Latin at primary level
+  Check(LCollator.Compare('z', Utf8Of([$0E01])) < 0, 'z < Thai KO KAI');
+
+  // Arabic sorts after Latin at primary level
+  Check(LCollator.Compare('z', Utf8Of([$0627])) < 0, 'z < Arabic ALEF');
+end;
+
+{ === Punctuation Sorting === }
+
+procedure TestPunctuationSorting;
+var
+  LCollator: IUnicodeCollator;
+begin
+  LCollator := UnicodeCollator;
+
+  // In DUCET, most ASCII punctuation has weight 0 (ignorable)
+  // This means punctuation sorts equal to empty at primary level
+  CheckEqual(Int64(GetCollationWeight(Ord('-'))), Int64(0), 'hyphen weight = 0 (ignorable)');
+  CheckEqual(Int64(GetCollationWeight(Ord('.'))), Int64(0), 'period weight = 0 (ignorable)');
+  CheckEqual(Int64(GetCollationWeight(Ord(' '))), Int64(0), 'space weight = 0 (ignorable)');
+  CheckEqual(Int64(GetCollationWeight(Ord(','))), Int64(0), 'comma weight = 0 (ignorable)');
+
+  // Dollar sign ($) has non-zero weight (position 0x24 = $21B12002)
+  Check(GetCollationWeight(Ord('$')) > 0, 'dollar sign has weight');
+
+  // At primary level, ignorable punctuation is invisible
+  CheckEqual(LCollator.Compare('ab', 'a-b'), 0, 'ab == a-b (hyphen ignorable)');
+  CheckEqual(LCollator.Compare('ab', 'a.b'), 0, 'ab == a.b (period ignorable)');
+  CheckEqual(LCollator.Compare('ab', 'a b'), 0, 'ab == a b (space ignorable)');
+
+  // Letters still sort correctly with embedded punctuation
+  Check(LCollator.Compare('ab', 'ac') < 0, 'ab < ac');
+  Check(LCollator.Compare('a-b', 'ac') < 0, 'a-b < ac (hyphen ignorable, b < c)');
+end;
+
+{ === Format Characters (Ignorable) === }
+
+procedure TestFormatCharacters;
+var
+  LCollator: IUnicodeCollator;
+  LZwsp, LZwnj, LZwj: string;
+begin
+  LCollator := UnicodeCollator;
+
+  // ZWSP (U+200B), ZWNJ (U+200C), ZWJ (U+200D)
+  LZwsp := Utf8Of([$200B]);
+  LZwnj := Utf8Of([$200C]);
+  LZwj := Utf8Of([$200D]);
+
+  // Format characters have zero weight (ignorable)
+  CheckEqual(Int64(GetCollationWeight($200B)), Int64(0), 'ZWSP weight = 0');
+  CheckEqual(Int64(GetCollationWeight($200C)), Int64(0), 'ZWNJ weight = 0');
+  CheckEqual(Int64(GetCollationWeight($200D)), Int64(0), 'ZWJ weight = 0');
+
+  // At primary level, format chars are invisible
+  CheckEqual(LCollator.Compare('ab', 'a' + LZwsp + 'b'), 0,
+    'ab == a+ZWSP+b (primary, format ignorable)');
+
+  // Soft hyphen (U+00AD) is also ignorable
+  CheckEqual(Int64(GetCollationWeight($00AD)), Int64(0), 'soft hyphen weight = 0');
+  CheckEqual(LCollator.Compare('ab', 'a' + Utf8Of([$00AD]) + 'b'), 0,
+    'ab == a+SHY+b (primary, format ignorable)');
+end;
+
+{ === Variable Weight Characters === }
+
+procedure TestVariableWeightChars;
+var
+  LCollator: IUnicodeCollator;
+begin
+  // In DUCET, most ASCII punctuation is "variable weight" with weight 0
+  // (ignorable at primary level). Our implementation uses the default DUCET weights.
+
+  LCollator := UnicodeCollator;
+
+  // ASCII punctuation has weight 0 (ignorable)
+  CheckEqual(Int64(GetCollationWeight(Ord(','))), Int64(0), 'comma weight = 0');
+  CheckEqual(Int64(GetCollationWeight(Ord(';'))), Int64(0), 'semicolon weight = 0');
+  CheckEqual(Int64(GetCollationWeight(Ord('!'))), Int64(0), 'exclamation weight = 0');
+  CheckEqual(Int64(GetCollationWeight(Ord('?'))), Int64(0), 'question weight = 0');
+  CheckEqual(Int64(GetCollationWeight(Ord('-'))), Int64(0), 'hyphen weight = 0');
+  CheckEqual(Int64(GetCollationWeight(Ord('.'))), Int64(0), 'period weight = 0');
+
+  // Dollar sign has non-zero weight (U+0024 = $21B12002)
+  Check(GetCollationWeight(Ord('$')) > 0, 'dollar has weight');
+  // Hash (#) also has weight 0 in DUCET
+  CheckEqual(Int64(GetCollationWeight(Ord('#'))), Int64(0), 'hash weight = 0');
+
+  // At primary level, all zero-weight punctuation is invisible
+  CheckEqual(LCollator.Compare('ab', 'a,b'), 0, 'ab == a,b (comma ignorable)');
+  CheckEqual(LCollator.Compare('ab', 'a;b'), 0, 'ab == a;b (semicolon ignorable)');
+  CheckEqual(LCollator.Compare('ab', 'a!b'), 0, 'ab == a!b (exclamation ignorable)');
+  CheckEqual(LCollator.Compare('ab', 'a?b'), 0, 'ab == a?b (question ignorable)');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.collate');
   T.Test('WeightLookup', @TestWeightLookup);
@@ -507,5 +628,9 @@ begin
   T.Test('CaseLevel', @TestCaseLevel);
   T.Test('FrenchAccents', @TestFrenchAccents);
   T.Test('NumericOrdering', @TestNumericOrdering);
+  T.Test('ThaiArabicOrdering', @TestThaiArabicOrdering);
+  T.Test('PunctuationSorting', @TestPunctuationSorting);
+  T.Test('FormatCharacters', @TestFormatCharacters);
+  T.Test('VariableWeightChars', @TestVariableWeightChars);
   if not T.Run then Halt(1);
 end.

@@ -226,11 +226,27 @@ end;
 function IsCompositionExcluded(const ACp: TUnicodeCodepoint): Boolean;
 var
   LKind: Byte;
+  LEntry: TDecompEntry;
+  LFirstCCC: Byte;
 begin
   // 有兼容性分解的码点总是被排除
   LKind := GetDecompositionKind(ACp);
   if LKind = 2 then
     Exit(True);
+
+  // 单例分解（canonical 分解到单个码点）= excluded
+  if LKind = 1 then
+  begin
+    if FindDecomposition(ACp, LEntry) then
+    begin
+      if LEntry.Len = 1 then
+        Exit(True);  // singleton
+      // 非 starter 分解（分解序列首码点 CCC > 0）= excluded
+      LFirstCCC := GetCanonicalCombiningClass(LEntry.Map[0]);
+      if LFirstCCC > 0 then
+        Exit(True);
+    end;
+  end;
 
   // Hangul 音节和 Jamo 不参与表组合（有独立组合逻辑）
   if (ACp >= HANGUL_SBASE) and (ACp < HANGUL_SBASE + HANGUL_SCOUNT) then
@@ -613,6 +629,7 @@ var
   LStarter: TUnicodeCodepoint;
   LHasStarter: Boolean;
   LComposed: TUnicodeCodepoint;
+  LEntry: TDecompEntry;
 begin
   if AText = '' then
     Exit(True);
@@ -631,6 +648,25 @@ begin
       LKind := GetDecompositionKind(LCp);
       if LKind = 2 then
         Exit(False);
+    end;
+
+    // NFC: 检查 composition exclusion（单例分解、非 starter 分解）
+    // 这些字符有规范分解但不会被重新组合，因此不是 NFC 形式
+    if not ACheckCompatibility then
+    begin
+      LKind := GetDecompositionKind(LCp);
+      if LKind = 1 then
+      begin
+        if FindDecomposition(LCp, LEntry) then
+        begin
+          // 单例分解（分解到单个码点）
+          if LEntry.Len = 1 then
+            Exit(False);
+          // 非 starter 分解（首码点 CCC > 0）
+          if GetCanonicalCombiningClass(LEntry.Map[0]) > 0 then
+            Exit(False);
+        end;
+      end;
     end;
 
     LCcc := GetCanonicalCombiningClass(LCp);
