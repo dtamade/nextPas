@@ -9,6 +9,7 @@ unit nextpas.core.http.websocket;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf;
@@ -89,7 +90,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.base,
+  nextpas.core.bytes,
   nextpas.core.errors,
   nextpas.core.hash,
   nextpas.core.hash.base,
@@ -101,7 +102,6 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.io.util,
-  nextpas.core.bytes,
   nextpas.core.http.url,
   nextpas.core.http.headers,
   nextpas.core.http.message,
