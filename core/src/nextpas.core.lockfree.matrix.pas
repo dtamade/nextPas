@@ -47,6 +47,7 @@ type
     mtOutOfBounds = 5
   );
 
+  {** @concurrency Thread-safe (see source for details). }
   TMatrixImpl = class
   public
     FData: TMatrixData;

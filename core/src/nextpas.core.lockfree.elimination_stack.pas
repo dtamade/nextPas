@@ -39,6 +39,7 @@ const
 type
   TEliminationStackResult = (esPushed, esPopped, esEliminated, esFull, esEmpty, esClosed);
 
+  {** @concurrency Thread-safe (see source for details). }
   generic TEliminationStackImpl<T> = class
   private
     type

@@ -28,6 +28,7 @@ uses
   SysUtils;
 
 type
+  {** @concurrency Thread-safe (see source for details). }
   TCountMinSketch = class
   private
     FCounters: array of array of Int32;

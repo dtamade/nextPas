@@ -22,6 +22,7 @@ type
       - Sentinel 节点简化空队列边界处理
       - 支持 Close 语义
       - 节点池自动扩容
+ * @concurrency Thread-safe (see source for details).
   }
   generic TLockFreeMsQueueImpl<T> = class
   private

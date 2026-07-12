@@ -44,6 +44,7 @@ type
     FCount: UInt64;
   end;
 
+  {** @concurrency Thread-safe (see source for details). }
   TTDigestImpl = class
   private
     FCentroids: array of TCentroid;

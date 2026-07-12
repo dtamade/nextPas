@@ -14,6 +14,7 @@ type
     @details 单个 map 锁串行化访问，每个键对应一个值列表。
       支持 Add/Find/Remove/Contains/Count/ForEach。
       适用于索引、标签系统等场景。
+ * @concurrency Thread-safe (see source for details).
   }
   generic TLockFreeMultiMapImpl<TKey, TValue> = class
   private

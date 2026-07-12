@@ -14,6 +14,7 @@ type
       - 所有操作原子化
       - 支持 Reset
       - 适用场景：性能监控、指标收集、延迟统计
+ * @concurrency Thread-safe (see source for details).
   }
   TConcurrentStatsCounter = class
   private
