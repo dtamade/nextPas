@@ -368,6 +368,9 @@ var
   LBlock: Pointer;
   LTotalNeeded: SizeUInt;
 begin
+  if ASize = 0 then
+    Exit(nil);
+
   { 查找空闲块 }
   LBlock := FindFreeBlock(ASize);
   if LBlock = nil then

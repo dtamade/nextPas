@@ -139,6 +139,7 @@ end;
 
 procedure TPredictionAllocator.FreeMem(APtr: Pointer); inline;
 begin
+  if APtr = nil then Exit;
   FInner.FreeMem(APtr);
 end;
 

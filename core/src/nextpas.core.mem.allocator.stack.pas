@@ -187,6 +187,9 @@ var
   LTotalSize: SizeUInt;
   LSizePtr: PSizeUInt;
 begin
+  if ASize = 0 then
+    Exit(nil);
+
   { size header + user data, aligned to 8 }
   LTotalSize := (SizeOf(SizeUInt) + ASize + 7) and not SizeUInt(7);
 

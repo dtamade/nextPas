@@ -76,6 +76,7 @@ end;
 
 procedure TZeroedAllocator.FreeMem(APtr: Pointer); inline;
 begin
+  if APtr = nil then Exit;
   FInner.FreeMem(APtr);
 end;
 

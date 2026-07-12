@@ -112,6 +112,7 @@ end;
 
 procedure TBatchAllocator.FreeMem(APtr: Pointer); inline;
 begin
+  if APtr = nil then Exit;
   Inc(FSingleFreeCount);
   Inc(FTotalBlocksFree);
   FInner.FreeMem(APtr);
