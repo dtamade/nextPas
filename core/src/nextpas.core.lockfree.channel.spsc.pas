@@ -109,6 +109,7 @@ destructor TLockFreeChannelSpscImpl.Destroy;
 var
   LI: PtrUInt;
 begin
+  Close;
   for LI := 0 to FCapacity - 1 do
     FSlots[LI].Value := Default(T);
   inherited;
