@@ -34,7 +34,14 @@ type
    * Append/Assoc 返回新版本，只复制修改路径上的 chunk；未修改 chunk
    * 通过原子引用计数共享。调用方拥有每个返回的 vector 对象。
    *}
-  {** @concurrency Thread-safe (see source for details). }
+  {** @desc 持久化不可变向量
+    @details 块级写时复制的持久化不可变向量。
+      - 值存储在固定的 32 元素块中
+      - 每个向量拥有自己的指针脊柱，保留未修改的块
+      - Append/Assoc 只复制修改路径上的块
+      - 原子引用计数允许不可变版本在读线程间独立释放
+      - 适用场景：函数式编程、版本控制、快照
+   * @concurrency Thread-safe (see source for details). }
   TPersistentVector = class
   private type
     PVectorChunk = ^TVectorChunk;
