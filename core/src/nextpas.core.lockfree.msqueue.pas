@@ -22,6 +22,7 @@ type
       - Sentinel 节点简化空队列边界处理
       - 支持 Close 语义
       - 节点池自动扩容
+ * @concurrency Thread-safe (see source for details).
   }
   generic TLockFreeMsQueueImpl<T> = class
   private
@@ -62,6 +63,7 @@ type
     function TryEnqueue(const AValue: T): Boolean;
     {** 出队 }
     function TryDequeue(out AValue: T): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     {** 关闭队列 }
     procedure Close;
     {** 队列是否已关闭 }
@@ -335,6 +337,21 @@ begin
   finally
     LeaveOperation;
   end;
+end;
+
+function TLockFreeMsQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
 end;
 
 procedure TLockFreeMsQueueImpl.Close;

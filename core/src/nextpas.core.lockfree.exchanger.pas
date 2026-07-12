@@ -47,6 +47,7 @@ type
     FClosed: Int32;
   public
     constructor Create;
+    destructor Destroy; override;
     function Exchange(const AValue: T; out AOutValue: T): TLockFreeExchangeResult;
     function ExchangeTimeout(const AValue: T; out AOutValue: T; const ATimeoutNs: Int64): TLockFreeExchangeResult;
     procedure Close;
@@ -62,8 +63,6 @@ uses
 
 constructor TExchangerImpl.Create;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TExchanger: T must be unmanaged');
   inherited Create;
   FState := EXCHANGER_STATE_EMPTY;
   FClosed := 0;
@@ -179,6 +178,12 @@ end;
 procedure TExchangerImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TExchangerImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TExchangerImpl.IsClosed: Boolean; inline;

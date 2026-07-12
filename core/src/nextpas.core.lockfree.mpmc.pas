@@ -61,6 +61,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryEnqueue(const AValue: T): Boolean;
     function TryDequeue(out AValue: T): Boolean;
     function EnqueueWait(const AValue: T): Boolean;
@@ -69,6 +70,7 @@ type
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     function EnqueueBatch(const AValues: array of T): PtrUInt;
     function DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean; inline;
     function IsEmpty: Boolean; inline;
@@ -103,8 +105,6 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TMpmcQueue: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TMpmcQueue: capacity must be > 0');
   inherited Create;
@@ -335,11 +335,32 @@ begin
   end;
 end;
 
+function TMpmcQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TMpmcQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TMpmcQueueImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TMpmcQueueImpl.IsClosed: Boolean; inline;

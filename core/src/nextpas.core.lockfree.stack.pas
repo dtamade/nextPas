@@ -50,8 +50,10 @@ type
     function UnpackTag(ATagged: Int64): UInt32; inline;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryPush(const AValue: T): Boolean;
     function TryPop(out AValue: T): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean;
     function IsEmpty: Boolean;
@@ -86,8 +88,6 @@ constructor TLockFreeStackImpl.Create(const ACapacity: PtrUInt);
 var
   LI: Int32;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TLockFreeStack: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeStack: capacity must be > 0');
   if ACapacity > PtrUInt(High(Int32)) then
@@ -160,9 +160,30 @@ begin
   Result := UnpackIdx(AtomicLoad64(FTop, moAcquire)) = -1;
 end;
 
+function TLockFreeStackImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryPop(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TLockFreeStackImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TLockFreeStackImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLockFreeStackImpl.IsClosed: Boolean;

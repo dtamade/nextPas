@@ -53,6 +53,7 @@ type
     procedure Unlock;
   public
     constructor Create(const ASlotCount: Int64; const ATickIntervalNs: Int64);
+    destructor Destroy; override;
     function Schedule(const ACallback: TTimerCallback; const AData: Pointer; const ADelayTicks: Int64): Int64;
     function Cancel(const ATimerId: Int64): TLockFreeTimerResult;
     procedure Tick;
@@ -249,6 +250,12 @@ end;
 procedure TTimerWheel.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TTimerWheel.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TTimerWheel.IsClosed: Boolean;

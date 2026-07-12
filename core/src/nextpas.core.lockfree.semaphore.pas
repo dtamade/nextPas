@@ -14,6 +14,7 @@ type
     @details 基于原子操作的信号量实现。
       支持 Acquire/Release/TryAcquire/AcquireTimeout。
       适用于资源池、限流等场景。
+ * @concurrency Thread-safe (see source for details).
   }
   TConcurrentSemaphore = class
   private
@@ -22,6 +23,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const AMaxPermits: Int64);
+    destructor Destroy; override;
     function TryAcquire: Boolean;
     function Acquire: Boolean;
     function AcquireTimeout(const ATimeoutNs: Int64): Boolean;
@@ -121,6 +123,12 @@ end;
 procedure TConcurrentSemaphore.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TConcurrentSemaphore.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TConcurrentSemaphore.IsClosed: Boolean; inline;

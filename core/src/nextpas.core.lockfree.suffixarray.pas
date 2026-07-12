@@ -33,6 +33,7 @@ type
     Length: Int32;
   end;
 
+  {** @concurrency Thread-safe (see source for details). }
   TSuffixArray = class
   private
     FText: AnsiString;

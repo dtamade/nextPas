@@ -27,6 +27,7 @@ type
 
   {** @desc 漏桶限流器
     @details 恒定速率漏水，请求加水。桶满则拒绝。
+  {** @concurrency Thread-safe (see source for details). }
       与 TokenBucket 互补：TokenBucket 允许突发，LeakyBucket 强制平滑输出。 }
   TLeakyBucket = class
   private
@@ -41,6 +42,7 @@ type
     procedure Leak;
   public
     constructor Create(const ALeakRatePerSecond: Double; const ABucketSize: Double);
+    destructor Destroy; override;
     function TryAdd: TLeakyBucketResult;
     function TryAddN(const AN: Double): TLeakyBucketResult;
     procedure Close;
@@ -159,6 +161,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TLeakyBucket.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLeakyBucket.IsClosed: Boolean; inline;

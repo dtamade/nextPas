@@ -29,6 +29,7 @@ type
 
   {** @desc 滑动窗口计数器限流器
     @details 结合当前窗口和上一个窗口的加权计数。
+  {** @concurrency Thread-safe (see source for details). }
       比固定窗口更准确，比滑动窗口日志更高效。 }
   TSlidingWindowLimiter = class
   private
@@ -45,6 +46,7 @@ type
     procedure AdvanceWindow(ANowNs: UInt64);
   public
     constructor Create(const ALimitPerWindow: Int64; const AWindowMs: Int64);
+    destructor Destroy; override;
     function TryAcquire: TSlidingWindowResult;
     function TryAcquireN(AN: Int64): TSlidingWindowResult;
     function GetEffectiveCount: Double;
@@ -207,6 +209,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TSlidingWindowLimiter.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TSlidingWindowLimiter.IsClosed: Boolean; inline;

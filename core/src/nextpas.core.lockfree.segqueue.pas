@@ -80,6 +80,7 @@ type
     function TryEnqueue(const AValue: T): Boolean;
     {** @desc 非阻塞出队；队列空时返回 False }
     function TryDequeue(out AValue: T): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     {** @desc 关闭队列（已入队数据仍可读出） }
     procedure Close;
     {** @desc 队列是否已关闭 }
@@ -252,6 +253,21 @@ begin
     Exit(False);
   Enqueue(AValue);
   Result := True;
+end;
+
+function TSegQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
 end;
 
 procedure TSegQueueImpl.Close;

@@ -9,6 +9,7 @@ unit nextpas.core.lockfree.skiplist;
  *
  * @see crossbeam-skiplist (Rust) — similar concurrent skip list design
  * @see java.util.concurrent.ConcurrentSkipListMap — reference implementation
+ * @concurrency Thread-safe (see source for details).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -137,8 +138,6 @@ var
   LI: Integer;
 begin
   inherited Create;
-  if IsManagedType(TKey) or IsManagedType(TValue) then
-    raise EArgumentError.Create('TConcurrentSkipList: TKey and TValue must be unmanaged');
   if AMaxLevel < 1 then
     raise EArgumentError.Create('TConcurrentSkipList: max level must be >= 1');
   if AMaxLevel > SKIPLIST_MAX_LEVEL then

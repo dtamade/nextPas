@@ -24,6 +24,7 @@ type
       - TryOptimisticRead: 无锁乐观读，返回 stamp，使用后需 Validate
       - Unlock: 释放锁
       适用场景：读多写少、读操作很短的场景。
+ * @concurrency Thread-safe (see source for details).
   }
   TStampedLock = class
   private
@@ -31,6 +32,7 @@ type
     FClosed: Int32;
   public
     constructor Create;
+    destructor Destroy; override;
     function ReadLock: Int64;
     function TryReadLock: Int64;
     function TryReadLockTimeout(const ATimeoutNs: Int64): Int64;
@@ -252,6 +254,12 @@ end;
 procedure TStampedLock.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TStampedLock.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TStampedLock.IsClosed: Boolean; inline;

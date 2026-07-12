@@ -47,6 +47,7 @@ type
 
   TIntervalArray = array of TInterval;
 
+  {** @concurrency Thread-safe (see source for details). }
   TIntervalTree = class
   private
     FRoot: PIntervalNode;

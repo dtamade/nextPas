@@ -4,6 +4,7 @@ unit nextpas.core.lockfree.hashset;
  *
  * @note This is a thin wrapper around TShardedHashMap that uses
  *       a fixed value (True) for all entries, providing set semantics.
+ * @concurrency Thread-safe (see source for details).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -11,7 +12,6 @@ unit nextpas.core.lockfree.hashset;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.lockfree.hashmap;
 
 type
@@ -68,8 +68,6 @@ implementation
 constructor TConcurrentHashSetImpl.Create(const AInitialCapacity: Integer);
 begin
   inherited Create;
-  if IsManagedType(TKey) then
-    raise EArgumentError.Create('TConcurrentHashSet: TKey must be unmanaged');
   FMap := TMap.Create(AInitialCapacity);
 end;
 

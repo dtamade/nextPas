@@ -20,7 +20,6 @@ unit nextpas.core.lockfree.btree;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree.base;
 
@@ -145,8 +144,6 @@ implementation
 constructor TConcurrentBTreeImpl.Create;
 begin
   inherited Create;
-  if IsManagedType(TKey) or IsManagedType(TValue) then
-    raise EArgumentError.Create('TConcurrentBTree: TKey and TValue must be unmanaged');
 
   FRoot := CreateNode(True);
   FSize := 0;

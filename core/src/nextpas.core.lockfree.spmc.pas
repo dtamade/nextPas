@@ -55,6 +55,7 @@ type
   public
     {** @desc 创建 SPMC 环形队列（容量向上取 2 的幂） }
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     {** @desc 非阻塞入队；队列满时立即返回 False }
     function TryEnqueue(const AValue: T): Boolean;
     {** @desc 阻塞入队；队列满时等待直到有空间 }
@@ -76,6 +77,7 @@ type
     {** @desc 队列实际容量（2 的幂） }
     function Capacity: PtrUInt; inline;
     {** @desc 关闭队列（唤醒所有等待者，已入队数据仍可读） }
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     {** @desc 队列是否已关闭 }
     function IsClosed: Boolean; inline;
@@ -91,8 +93,6 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TSpmcQueue: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TSpmcQueue: capacity must be > 0');
   inherited Create;
@@ -296,11 +296,32 @@ begin
   Result := FCapacity;
 end;
 
+function TSpmcQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TSpmcQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TSpmcQueueImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TSpmcQueueImpl.IsClosed: Boolean; inline;

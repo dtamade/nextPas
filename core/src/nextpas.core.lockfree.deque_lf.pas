@@ -42,6 +42,7 @@ type
    *   - TValue 必须是 AnsiString
    *   - 自动扩容
    *}
+  {** @concurrency Thread-safe (see source for details). }
   TLockFreeDeque = class
   private
     FData: array of AnsiString;

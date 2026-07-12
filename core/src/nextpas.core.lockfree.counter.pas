@@ -12,6 +12,7 @@ type
     @details 基于原子操作的高性能计数器。
       支持 Increment/Decrement/Add/Sub/Load/Store/Reset。
       适用于统计、计数等场景。
+ * @concurrency Thread-safe (see source for details).
   }
   TConcurrentCounter = class
   private
@@ -19,6 +20,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const AInitialValue: Int64 = 0);
+    destructor Destroy; override;
     function Increment: Int64; inline;
     function Decrement: Int64; inline;
     function Add(const AValue: Int64): Int64; inline;
@@ -80,6 +82,12 @@ end;
 procedure TConcurrentCounter.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TConcurrentCounter.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TConcurrentCounter.IsClosed: Boolean; inline;

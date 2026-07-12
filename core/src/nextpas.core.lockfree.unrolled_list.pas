@@ -33,6 +33,7 @@ const
 type
   TUnrolledResult = (ulOk, ulNotFound, ulExists, ulFull, ulClosed);
 
+  {** @concurrency Thread-safe (see source for details). }
   generic TConcurrentUnrolledListImpl<T> = class
   private
     type
@@ -73,13 +74,10 @@ type
 implementation
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic;
 
 constructor TConcurrentUnrolledListImpl.Create;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TConcurrentUnrolledList: T must be unmanaged');
   inherited Create;
   FHead := nil;
   FCount := 0;

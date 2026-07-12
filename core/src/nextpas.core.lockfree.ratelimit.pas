@@ -14,6 +14,7 @@ type
     @details 以恒定速率生成令牌，请求消耗令牌。
       令牌桶容量 = burst，每秒生成 rate 个令牌。
       适用于：API 限流、请求整形。
+ * @concurrency Thread-safe (see source for details).
   }
   TTokenBucketLimiter = class
   private
@@ -28,6 +29,7 @@ type
     procedure Refill;
   public
     constructor Create(const ARatePerSecond: Double; const ABurst: Double);
+    destructor Destroy; override;
     function TryAcquire: TLockFreeRateLimiterResult;
     function TryAcquireN(const AN: Double): TLockFreeRateLimiterResult;
     procedure Close;
@@ -147,6 +149,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TTokenBucketLimiter.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TTokenBucketLimiter.IsClosed: Boolean; inline;

@@ -53,6 +53,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryEnqueue(const AValue: T): Boolean;
     function TryDequeue(out AValue: T): Boolean;
     function EnqueueWait(const AValue: T): Boolean;
@@ -61,6 +62,7 @@ type
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     function EnqueueBatch(const AValues: array of T): PtrUInt;
     function DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean;
     function IsEmpty: Boolean;
@@ -302,11 +304,32 @@ begin
   Result := LCount;
 end;
 
+function TSpscQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TSpscQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TSpscQueueImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TSpscQueueImpl.IsClosed: Boolean;

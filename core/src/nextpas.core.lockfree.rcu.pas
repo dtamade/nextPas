@@ -22,6 +22,7 @@ type
     @details 管理读侧临界区和宽限期。
       读操作: 无锁 (只读 + Acquire barrier)。
       写操作: Copy → Modify → Publish (atomic swap) → 等待宽限期 → Free old。
+ * @concurrency Thread-safe (see source for details).
   }
   TRcuDomain = class
   private
@@ -208,6 +209,8 @@ end;
 
 constructor TRcuPublisherImpl.Create(const AInitialValue: T);
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TRcuPublisher: T must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   FDomain := TRcuDomain.Create;
   FClosed := 0;

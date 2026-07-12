@@ -14,6 +14,7 @@ type
     @details 基于分片锁 HashMap 实现，使用访问计数器近似 LRU。
       支持 Get/Put/Remove/Clear/Capacity/Count。
       适用于缓存、淘汰等场景。
+ * @concurrency Thread-safe (see source for details).
   }
   generic TConcurrentLruCacheImpl<TKey, TValue> = class
   private
@@ -69,10 +70,6 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
-  if IsManagedType(TKey) then
-    raise EArgumentError.Create('TConcurrentLruCache: TKey must be unmanaged');
-  if IsManagedType(TValue) then
-    raise EArgumentError.Create('TConcurrentLruCache: TValue must be unmanaged');
   if AMaxItems = 0 then
     raise EArgumentError.Create('TConcurrentLruCache: max items must be > 0');
   if ABucketCount = 0 then

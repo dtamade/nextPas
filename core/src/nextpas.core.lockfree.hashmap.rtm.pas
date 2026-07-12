@@ -5,7 +5,6 @@ unit nextpas.core.lockfree.hashmap.rtm;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree.hashmap,
   nextpas.core.lockfree.rtm;
@@ -40,6 +39,7 @@ type
     FRtmSupported: Boolean;
   public
     {** @desc 创建 RTM 优化的 HashMap
+  {** @concurrency Thread-safe (see source for details). }
       @param AInitialCapacity 初始容量 }
     constructor Create(const AInitialCapacity: PtrUInt = HASHMAP_DEFAULT_CAPACITY);
     destructor Destroy; override;

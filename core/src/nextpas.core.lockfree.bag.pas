@@ -14,6 +14,7 @@ type
     @details 基于 MPMC 队列实现，允许重复元素。
       支持 TryAdd/TryTake/Wait/Timeout/Close。
       适用于任务队列、工作池等场景。
+ * @concurrency Thread-safe (see source for details).
   }
   generic TLockFreeBagImpl<T> = class
   private
@@ -49,6 +50,7 @@ type
     procedure LeaveActiveEnqueue; inline;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryAdd(const AValue: T): TLockFreeBagAddResult;
     function TryTake(out AValue: T): Boolean;
     function AddWait(const AValue: T): Boolean;
@@ -90,8 +92,6 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TLockFreeBag: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeBag: capacity must be > 0');
   inherited Create;
@@ -308,6 +308,12 @@ begin
   LockFreeWakeAll(@FDataEpoch);
   // Wake all waiting producers (so they can see close)
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TLockFreeBagImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLockFreeBagImpl.IsClosed: Boolean;

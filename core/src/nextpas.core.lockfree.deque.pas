@@ -44,9 +44,11 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryPush(const AValue: T): Boolean;
     function TryPop(out AValue: T): Boolean;
     function TrySteal(out AValue: T): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean; inline;
     function IsEmpty: Boolean; inline;
@@ -67,8 +69,6 @@ constructor TWorkStealingDequeImpl.Create(const ACapacity: PtrUInt);
 var
   LCap: PtrUInt;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TWorkStealingDeque: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TWorkStealingDeque: capacity must be > 0');
   inherited Create;
@@ -148,9 +148,30 @@ begin
   Result := LTop >= LBottom;
 end;
 
+function TWorkStealingDequeImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryPop(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TWorkStealingDequeImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TWorkStealingDequeImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TWorkStealingDequeImpl.IsClosed: Boolean; inline;

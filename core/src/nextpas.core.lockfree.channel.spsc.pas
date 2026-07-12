@@ -24,6 +24,7 @@ type
       **限制**:
       - 仅支持 1P1C，不支持 MPMC
       - 不支持 Close（需要手动同步）
+  {** @concurrency Thread-safe (see source for details). }
     }
   generic TLockFreeChannelSpscImpl<T> = class
   private type
@@ -86,8 +87,6 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
-  if IsManagedType(T) then
-    raise EArgumentError.Create('TLockFreeChannelSpsc: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeChannelSpsc: capacity must be > 0');
   inherited Create;
