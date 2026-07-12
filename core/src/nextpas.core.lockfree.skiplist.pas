@@ -108,6 +108,8 @@ type
     {** @desc 获取元素数量
       @return 元素数量 }
     function Count: Integer; inline;
+    {** @desc 是否为空（等价于 Count = 0） }
+    function IsEmpty: Boolean; inline;
 
     {** @desc 遍历所有元素
       @param ACallback 回调函数 }
@@ -452,6 +454,11 @@ end;
 function TConcurrentSkipListImpl.Count: Integer; inline;
 begin
   Result := AtomicLoad32(FSize, moRelaxed);
+end;
+
+function TConcurrentSkipListImpl.IsEmpty: Boolean; inline;
+begin
+  Result := AtomicLoad32(FSize, moRelaxed) = 0;
 end;
 
 procedure TConcurrentSkipListImpl.ForEach(const ACallback: TForEachCallback);

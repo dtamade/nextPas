@@ -53,6 +53,8 @@ type
     function Count: Int32;
     {** 是否为空 }
     function IsEmpty: Boolean;
+    {** 清空所有元素 }
+    procedure Clear;
   end;
 
 implementation
@@ -194,6 +196,17 @@ begin
   Lock;
   try
     Result := FData^.FCount = 0;
+  finally
+    Unlock;
+  end;
+end;
+
+procedure TConcurrentSortedSetImpl.Clear;
+begin
+  Lock;
+  try
+    SetLength(FData^.FItems, 0);
+    FData^.FCount := 0;
   finally
     Unlock;
   end;

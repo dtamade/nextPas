@@ -56,6 +56,9 @@ type
       @return 元素数量 }
     function Count: PtrUInt; inline;
 
+    {** @desc 是否为空（等价于 Count = 0） }
+    function IsEmpty: Boolean;
+
     {** @desc 清空所有元素 }
     procedure Clear;
   end;
@@ -97,6 +100,11 @@ end;
 function TConcurrentHashSetImpl.Count: PtrUInt; inline;
 begin
   Result := FMap.Count;
+end;
+
+function TConcurrentHashSetImpl.IsEmpty: Boolean;
+begin
+  Result := FMap.IsEmpty;
 end;
 
 procedure TConcurrentHashSetImpl.Clear;

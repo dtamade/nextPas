@@ -113,6 +113,8 @@ type
       @note 返回值是各 shard 计数之和。在并发 Insert/Remove 下，
             与 ForEach 看到的元素集合可能不一致（各自是独立快照）。 }
     function Count: PtrUInt;
+    {** @desc 是否为空（等价于 Count = 0） }
+    function IsEmpty: Boolean;
 
     {** @desc 遍历所有元素（持锁，回调期间其他操作阻塞）
       @param ACallback 回调函数，接收 key 和 value
@@ -577,6 +579,11 @@ begin
     Inc(Result, FShards[LI].Count);
     ShardReadUnlock(FShards[LI]);
   end;
+end;
+
+function TShardedHashMapImpl.IsEmpty: Boolean;
+begin
+  Result := Count = 0;
 end;
 
 procedure TShardedHashMapImpl.ForEach(const ACallback: TForEachCallback);

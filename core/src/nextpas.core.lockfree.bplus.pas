@@ -91,6 +91,7 @@ type
     function Find(AKey: Int64; out AValue: Int64): Boolean;
     function Contains(AKey: Int64): Boolean;
     function GetCount: Int64;
+    function IsEmpty: Boolean;
     procedure ForEach(ACallback: TBplusForEachCallback);
     procedure RangeQuery(ALow, AHigh: Int64; ACallback: TBplusRangeCallback);
     procedure Clear;
@@ -449,6 +450,11 @@ end;
 function TConcurrentBPlusTree.GetCount: Int64;
 begin
   Result := AtomicLoad64(FCount, moRelaxed);
+end;
+
+function TConcurrentBPlusTree.IsEmpty: Boolean;
+begin
+  Result := AtomicLoad64(FCount, moRelaxed) = 0;
 end;
 
 procedure TConcurrentBPlusTree.ForEach(ACallback: TBplusForEachCallback);

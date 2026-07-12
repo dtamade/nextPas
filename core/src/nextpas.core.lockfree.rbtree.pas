@@ -76,6 +76,7 @@ type
     function Find(AKey: Int64; out AValue: Int64): Boolean;
     function Contains(AKey: Int64): Boolean;
     function GetCount: Int64; inline;
+    function IsEmpty: Boolean; inline;
     procedure ForEach(ACallback: TRBForEachCallback);
     procedure Clear;
     procedure Close;
@@ -479,6 +480,11 @@ end;
 function TConcurrentRBTree.GetCount: Int64; inline;
 begin
   Result := AtomicLoad64(FCount, moRelaxed);
+end;
+
+function TConcurrentRBTree.IsEmpty: Boolean; inline;
+begin
+  Result := AtomicLoad64(FCount, moRelaxed) = 0;
 end;
 
 procedure TConcurrentRBTree.CollectSubtree(ANode: PRBNode;
