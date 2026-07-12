@@ -310,6 +310,7 @@ end;
 function TChild.WaitWithOutput: TProcessOutput;
 const
   DRAIN_TIMEOUT_NS = 5000000000; { 5 seconds after process exit }
+  DEFAULT_DRAIN_TIMEOUT_NS = 30000000000; { 30 seconds for no-timeout mode }
 var
   LWait: TProcessOutput;
   LProcessResult: TPlatformProcessResult;
@@ -338,8 +339,31 @@ begin
       LStdoutClosed, LStderrClosed);
     if FTimeout.IsZero then
     begin
-      if LStdoutClosed and LStderrClosed then
+      { No explicit timeout: wait for process exit, then drain with safety deadline }
+      if not LHaveProcessResult then
+      begin
+        LErr := platform_process_try_wait(FProc, LProcessResult);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_try_wait', LErr);
+        if LProcessResult.Status <> nextpas.core.platform.process.base.psRunning then
+        begin
+          LHaveProcessResult := True;
+          LDrainDeadline := TInstant.Now.Add(
+            TDuration.FromNanoseconds(DEFAULT_DRAIN_TIMEOUT_NS));
+        end;
+      end;
+      if LHaveProcessResult and LStdoutClosed and LStderrClosed then
         Break;
+      { Force-close pipes if drain takes too long after process exit }
+      if LHaveProcessResult and
+         TInstant.Now.DurationSince(LDrainDeadline).IsPositive then
+      begin
+        FStdoutReader := nil;
+        FStderrReader := nil;
+        LStdoutClosed := True;
+        LStderrClosed := True;
+        Break;
+      end;
       Continue;
     end;
 

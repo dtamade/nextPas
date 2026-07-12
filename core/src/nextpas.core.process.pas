@@ -63,14 +63,16 @@ function Capture(const APath: string; const AArgs: array of string): string;
 function CaptureIn(const APath: string; const AArgs: array of string;
   const ADir: string): string;
 {** @desc 执行子进程并返回 stdout + stderr 合并文本
- *  @note stdout 和 stderr 交错拼接（顺序取决于管道读取时序，不保证严格按写入顺序）。
+ *  @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。
+ *        各自内部保持写入顺序，但合并后不交错。
  *        如需区分两个流，请使用 Run(...) 然后分别读取 .StdOut 和 .StdErr。 *}
 function CaptureCombined(const APath: string;
   const AArgs: array of string): string;
 {**
  * @desc 在指定工作目录中执行子进程并返回 stdout + stderr 合并文本
  *
- * @note stdout 和 stderr 交错拼接（顺序取决于管道读取时序，不保证严格按写入顺序）。
+ * @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。
+ *       各自内部保持写入顺序，但合并后不交错。
  *
  * @params
  *   APath  可执行文件路径
@@ -206,11 +208,11 @@ function RunInTimeout(const APath: string; const AArgs: array of string;
 function CaptureInTimeout(const APath: string; const AArgs: array of string;
   const ADir: string; const ATimeout: TDuration): string;
 {** @desc 带超时执行并返回 stdout + stderr 合并文本
- *  @note stdout 和 stderr 交错拼接（顺序取决于管道读取时序，不保证严格按写入顺序）。 *}
+ *  @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。 *}
 function CaptureTimeoutCombined(const APath: string;
   const AArgs: array of string; const ATimeout: TDuration): string;
 {** @desc 在指定工作目录中带超时执行并返回 stdout + stderr 合并文本
- *  @note stdout 和 stderr 交错拼接（顺序取决于管道读取时序，不保证严格按写入顺序）。 *}
+ *  @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。 *}
 function CaptureInTimeoutCombined(const APath: string;
   const AArgs: array of string; const ADir: string;
   const ATimeout: TDuration): string;

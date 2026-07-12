@@ -250,6 +250,9 @@ function GetEnvironmentVariable(const AName: string): string; inline;
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 function Utf8TextToBytes(const AText: string): TBytes;
 var
   LLen: SizeInt;
@@ -314,15 +317,9 @@ begin
 end;
 
 procedure AppendFileLine(const APath: string; const ALine: string);
-{$IFDEF NEXTPAS_WINDOWS}
 begin
-  AppendFileText(APath, ALine + #13#10);
+  nextpas.core.fs.util.FsAppendFileLines(APath, TStringArray.Create(ALine));
 end;
-{$ELSE}
-begin
-  AppendFileText(APath, ALine + #10);
-end;
-{$ENDIF}
 
 function ScanFileLines(const APath: string): IScanner;
 var
@@ -462,8 +459,9 @@ begin
   try
     LEntries := ReadDir(ADir);
   except
-    { Directory doesn't exist or can't be read — return empty }
-    Exit;
+    on E: ENotFoundError do
+      { Directory doesn't exist — return empty }
+      Exit;
   end;
   LCount := 0;
   for I := 0 to High(LEntries) do
