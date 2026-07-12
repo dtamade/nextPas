@@ -163,6 +163,15 @@ procedure CheckNaN(const AValue: Double; const AMessage: string = '');
 { CheckNotNaN — passes if AValue is NOT NaN. }
 procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
 
+{ ── Infinity Checks (v8.3) ────────────────────────────────────────────────── }
+
+{ CheckInf — passes if AValue is +Inf or -Inf. }
+procedure CheckInf(const AValue: Double; const AMessage: string = '');
+{ CheckNotInf — passes if AValue is NOT infinite. }
+procedure CheckNotInf(const AValue: Double; const AMessage: string = '');
+{ CheckFinite — passes if AValue is finite (not NaN, not Inf). }
+procedure CheckFinite(const AValue: Double; const AMessage: string = '');
+
 { ── Regex Matching ──────────────────────────────────────────────────────────── }
 
 { Check that AStr matches regex APattern. Uses nextpas.core.regex for matching.
@@ -273,6 +282,28 @@ procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');
 
 { Check that an interface reference is not nil. }
 procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string = '');
+
+{ ── Emptiness Checks (v8.3) ───────────────────────────────────────────────── }
+
+{ Check that a string is empty (length = 0). }
+procedure CheckEmpty(const AValue: string); overload;
+procedure CheckEmpty(const AValue: string;
+  const AMessage: string); overload;
+
+{ Check that a string is not empty (length > 0). }
+procedure CheckNotEmpty(const AValue: string); overload;
+procedure CheckNotEmpty(const AValue: string;
+  const AMessage: string); overload;
+
+{ Check that a byte array is empty (length = 0). }
+procedure CheckEmpty(const AValue: TBytes); overload;
+procedure CheckEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
+
+{ Check that a byte array is not empty (length > 0). }
+procedure CheckNotEmpty(const AValue: TBytes); overload;
+procedure CheckNotEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
 
 implementation
 
@@ -602,6 +633,30 @@ procedure CheckNotNaN(const AValue: Double; const AMessage: string);
 begin
   if IsNan(AValue) then
     FailPrepend(AMessage, 'Expected non-NaN but got NaN');
+end;
+
+{ ── Infinity Checks (v8.3) ────────────────────────────────────────────────── }
+
+procedure CheckInf(const AValue: Double; const AMessage: string);
+begin
+  if not IsInfinite(AValue) then
+    FailPrepend(AMessage,
+      'Expected infinite but got ' + FloatToStr(AValue));
+end;
+
+procedure CheckNotInf(const AValue: Double; const AMessage: string);
+begin
+  if IsInfinite(AValue) then
+    FailPrepend(AMessage,
+      'Expected finite but got ' + FloatToStr(AValue));
+end;
+
+procedure CheckFinite(const AValue: Double; const AMessage: string);
+begin
+  if IsNan(AValue) then
+    FailPrepend(AMessage, 'Expected finite but got NaN')
+  else if IsInfinite(AValue) then
+    FailPrepend(AMessage, 'Expected finite but got ' + FloatToStr(AValue));
 end;
 
 { ── Regex Matching ──────────────────────────────────────────────────────────── }
@@ -1496,6 +1551,54 @@ begin
       FailPrepend(AMessage,
         'Array not sorted at index ' + IntToStr(I) +
         ': "' + AArray[I - 1] + '" > "' + AArray[I] + '"');
+end;
+
+{ ── Emptiness Checks (v8.3) ───────────────────────────────────────────────── }
+
+procedure CheckEmpty(const AValue: string);
+begin
+  CheckEmpty(AValue, '');
+end;
+
+procedure CheckEmpty(const AValue: string; const AMessage: string);
+begin
+  if Length(AValue) <> 0 then
+    FailWithDefault(AMessage,
+      'Expected empty string but got ' + IntToStr(Length(AValue)) + ' char(s)');
+end;
+
+procedure CheckNotEmpty(const AValue: string);
+begin
+  CheckNotEmpty(AValue, '');
+end;
+
+procedure CheckNotEmpty(const AValue: string; const AMessage: string);
+begin
+  if Length(AValue) = 0 then
+    FailWithDefault(AMessage, 'Expected non-empty string but got empty');
+end;
+
+procedure CheckEmpty(const AValue: TBytes);
+begin
+  CheckEmpty(AValue, '');
+end;
+
+procedure CheckEmpty(const AValue: TBytes; const AMessage: string);
+begin
+  if Length(AValue) <> 0 then
+    FailWithDefault(AMessage,
+      'Expected empty byte array but got ' + IntToStr(Length(AValue)) + ' byte(s)');
+end;
+
+procedure CheckNotEmpty(const AValue: TBytes);
+begin
+  CheckNotEmpty(AValue, '');
+end;
+
+procedure CheckNotEmpty(const AValue: TBytes; const AMessage: string);
+begin
+  if Length(AValue) = 0 then
+    FailWithDefault(AMessage, 'Expected non-empty byte array but got empty');
 end;
 
 end.

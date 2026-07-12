@@ -372,3 +372,27 @@ begin nextpas.core.test.check.CheckSorted(AArray); end;
 procedure CheckSorted(const AArray: array of string;
   const AMessage: string);
 begin nextpas.core.test.check.CheckSorted(AArray, AMessage); end;
+
+procedure CheckEmpty(const AValue: string);
+begin nextpas.core.test.check.CheckEmpty(AValue); end;
+procedure CheckEmpty(const AValue: string; const AMessage: string);
+begin nextpas.core.test.check.CheckEmpty(AValue, AMessage); end;
+procedure CheckNotEmpty(const AValue: string);
+begin nextpas.core.test.check.CheckNotEmpty(AValue); end;
+procedure CheckNotEmpty(const AValue: string; const AMessage: string);
+begin nextpas.core.test.check.CheckNotEmpty(AValue, AMessage); end;
+procedure CheckEmpty(const AValue: TBytes);
+begin nextpas.core.test.check.CheckEmpty(AValue); end;
+procedure CheckEmpty(const AValue: TBytes; const AMessage: string);
+begin nextpas.core.test.check.CheckEmpty(AValue, AMessage); end;
+procedure CheckNotEmpty(const AValue: TBytes);
+begin nextpas.core.test.check.CheckNotEmpty(AValue); end;
+procedure CheckNotEmpty(const AValue: TBytes; const AMessage: string);
+begin nextpas.core.test.check.CheckNotEmpty(AValue, AMessage); end;
+
+procedure CheckInf(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckInf(AValue, AMessage); end;
+procedure CheckNotInf(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckNotInf(AValue, AMessage); end;
+procedure CheckFinite(const AValue: Double; const AMessage: string);
+begin nextpas.core.test.check.CheckFinite(AValue, AMessage); end;

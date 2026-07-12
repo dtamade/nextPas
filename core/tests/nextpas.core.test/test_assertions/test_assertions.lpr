@@ -1345,6 +1345,141 @@ begin
   end, 'NOT to match');
 end;
 
+{ ── CheckEmpty/CheckNotEmpty tests ─────────────────────────────────────────── }
+
+procedure TestCheckEmptyStringPass;
+begin
+  CheckEmpty('');
+end;
+
+procedure TestCheckEmptyStringFail;
+begin
+  ExpectFail(procedure begin
+    CheckEmpty('hello');
+  end, 'empty');
+end;
+
+procedure TestCheckNotEmptyStringPass;
+begin
+  CheckNotEmpty('hello');
+end;
+
+procedure TestCheckNotEmptyStringFail;
+begin
+  ExpectFail(procedure begin
+    CheckNotEmpty('');
+  end, 'non-empty');
+end;
+
+procedure TestCheckEmptyBytesPass;
+begin
+  CheckEmpty(TBytes(nil));
+end;
+
+procedure TestCheckEmptyBytesFail;
+var
+  LB: TBytes;
+begin
+  SetLength(LB, 1);
+  LB[0] := 42;
+  ExpectFail(procedure begin
+    CheckEmpty(LB);
+  end, 'empty');
+end;
+
+procedure TestCheckNotEmptyBytesPass;
+var
+  LB: TBytes;
+begin
+  SetLength(LB, 1);
+  LB[0] := 42;
+  CheckNotEmpty(LB);
+end;
+
+procedure TestCheckNotEmptyBytesFail;
+begin
+  ExpectFail(procedure begin
+    CheckNotEmpty(TBytes(nil));
+  end, 'non-empty');
+end;
+
+procedure TestCheckEmptyStringWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckEmpty('abc', 'must be empty');
+  end, 'must be empty');
+end;
+
+procedure TestCheckNotEmptyBytesWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckNotEmpty(TBytes(nil), 'must have data');
+  end, 'must have data');
+end;
+
+{ ── CheckInf/CheckFinite tests ─────────────────────────────────────────────── }
+
+procedure TestCheckInfPass;
+begin
+  CheckInf(1.0 / 0.0);
+  CheckInf(-1.0 / 0.0);
+end;
+
+procedure TestCheckInfFail;
+begin
+  ExpectFail(procedure begin
+    CheckInf(42.0);
+  end, 'infinite');
+end;
+
+procedure TestCheckNotInfPass;
+begin
+  CheckNotInf(42.0);
+  CheckNotInf(0.0);
+end;
+
+procedure TestCheckNotInfFail;
+begin
+  ExpectFail(procedure begin
+    CheckNotInf(1.0 / 0.0);
+  end, 'finite');
+end;
+
+procedure TestCheckFinitePass;
+begin
+  CheckFinite(42.0);
+  CheckFinite(0.0);
+  CheckFinite(-1.0);
+end;
+
+procedure TestCheckFiniteFailInf;
+begin
+  ExpectFail(procedure begin
+    CheckFinite(1.0 / 0.0);
+  end, 'finite');
+end;
+
+procedure TestCheckFiniteFailNaN;
+begin
+  ExpectFail(procedure begin
+    CheckFinite(0.0 / 0.0);
+  end, 'finite');
+end;
+
+procedure TestCheckInfWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckInf(42.0, 'must be infinite');
+  end, 'must be infinite');
+end;
+
+procedure TestCheckFiniteWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckFinite(1.0 / 0.0, 'must be finite');
+  end, 'must be finite');
+end;
+
 { ── CheckSorted tests ─────────────────────────────────────────────────────── }
 
 procedure TestCheckSortedIntPass;
@@ -1627,6 +1762,27 @@ begin
   LSuite.Test('Sorted string pass',        @TestCheckSortedStringPass);
   LSuite.Test('Sorted string fail',        @TestCheckSortedStringFail);
   LSuite.Test('Sorted string empty',       @TestCheckSortedStringEmpty);
+
+  LSuite.Test('Empty string pass',        @TestCheckEmptyStringPass);
+  LSuite.Test('Empty string fail',        @TestCheckEmptyStringFail);
+  LSuite.Test('NotEmpty string pass',     @TestCheckNotEmptyStringPass);
+  LSuite.Test('NotEmpty string fail',     @TestCheckNotEmptyStringFail);
+  LSuite.Test('Empty bytes pass',         @TestCheckEmptyBytesPass);
+  LSuite.Test('Empty bytes fail',         @TestCheckEmptyBytesFail);
+  LSuite.Test('NotEmpty bytes pass',      @TestCheckNotEmptyBytesPass);
+  LSuite.Test('NotEmpty bytes fail',      @TestCheckNotEmptyBytesFail);
+  LSuite.Test('Empty string+msg',         @TestCheckEmptyStringWithMessage);
+  LSuite.Test('NotEmpty bytes+msg',       @TestCheckNotEmptyBytesWithMessage);
+
+  LSuite.Test('Inf pass',                @TestCheckInfPass);
+  LSuite.Test('Inf fail',                @TestCheckInfFail);
+  LSuite.Test('NotInf pass',             @TestCheckNotInfPass);
+  LSuite.Test('NotInf fail',             @TestCheckNotInfFail);
+  LSuite.Test('Finite pass',             @TestCheckFinitePass);
+  LSuite.Test('Finite fail (Inf)',       @TestCheckFiniteFailInf);
+  LSuite.Test('Finite fail (NaN)',       @TestCheckFiniteFailNaN);
+  LSuite.Test('Inf+msg',                 @TestCheckInfWithMessage);
+  LSuite.Test('Finite+msg',             @TestCheckFiniteWithMessage);
 
   if not LSuite.Run then
   begin

@@ -220,6 +220,9 @@ procedure CheckNotNearRel(const AExpected, AActual: Double;
   const ARelEps: Double = 1e-9; const AMessage: string = '');
 procedure CheckNaN(const AValue: Double; const AMessage: string = '');
 procedure CheckNotNaN(const AValue: Double; const AMessage: string = '');
+procedure CheckInf(const AValue: Double; const AMessage: string = '');
+procedure CheckNotInf(const AValue: Double; const AMessage: string = '');
+procedure CheckFinite(const AValue: Double; const AMessage: string = '');
 
 { ── Regex Matching ──────────────────────────────────────────────────────────── }
 procedure CheckMatch(const APattern, AStr: string); overload;
@@ -289,6 +292,20 @@ procedure CheckSorted(const AArray: array of string;
 { ── Interface Nil Checks (v8.0c) ──────────────────────────────────────────── }
 procedure CheckIsNil(const AValue: IInterface; const AMessage: string = '');
 procedure CheckIsNotNil(const AValue: IInterface; const AMessage: string = '');
+
+{ ── Emptiness Checks (v8.3) ───────────────────────────────────────────────── }
+procedure CheckEmpty(const AValue: string); overload;
+procedure CheckEmpty(const AValue: string;
+  const AMessage: string); overload;
+procedure CheckNotEmpty(const AValue: string); overload;
+procedure CheckNotEmpty(const AValue: string;
+  const AMessage: string); overload;
+procedure CheckEmpty(const AValue: TBytes); overload;
+procedure CheckEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
+procedure CheckNotEmpty(const AValue: TBytes); overload;
+procedure CheckNotEmpty(const AValue: TBytes;
+  const AMessage: string); overload;
 
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
 
