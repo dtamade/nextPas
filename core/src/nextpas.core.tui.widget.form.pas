@@ -17,20 +17,40 @@ uses
   nextpas.core.tui.widget.intf;
 
 type
+  TCheckboxState = record
+    Checked: Boolean;
+    class function Empty: TCheckboxState; static;
+    procedure Toggle;
+  end;
+
+  TRadioGroupState = record
+    Selected: Integer;
+    class function Empty: TRadioGroupState; static;
+    procedure Select(AIdx: Integer);
+    procedure Next(ACount: Integer);
+    procedure Prev;
+  end;
+
   ICheckbox = interface(IWidget)
     ['{A1B2C3D4-E5F6-4718-9A0B-C1D2E3F4A5B6}']
     function WithStyle(const AStyle: TStyle): ICheckbox;
     function WithCheckedStyle(const AStyle: TStyle): ICheckbox;
+    { deprecated — use RenderStateful with TCheckboxState }
     procedure Toggle;
     function IsChecked: Boolean;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
+      var AState: TCheckboxState);
   end;
 
   IRadioGroup = interface(IWidget)
     ['{B2C3D4E5-F6A7-4829-0B1C-D2E3F4A5B6C7}']
     function WithStyle(const AStyle: TStyle): IRadioGroup;
     function WithSelectedStyle(const AStyle: TStyle): IRadioGroup;
+    { deprecated — use RenderStateful with TRadioGroupState }
     procedure Select(AIdx: Integer);
     function GetSelected: Integer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
+      var AState: TRadioGroupState);
   end;
 
   TCheckbox = class(TInterfacedObject, IWidget, ICheckbox)
@@ -46,6 +66,8 @@ type
     procedure Toggle;
     function IsChecked: Boolean;
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
+      var AState: TCheckboxState);
   end;
 
   TRadioGroup = class(TInterfacedObject, IWidget, IRadioGroup)
@@ -61,9 +83,48 @@ type
     procedure Select(AIdx: Integer);
     function GetSelected: Integer;
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
+      var AState: TRadioGroupState);
   end;
 
 implementation
+
+{ TCheckboxState }
+
+class function TCheckboxState.Empty: TCheckboxState;
+begin
+  Result.Checked := False;
+end;
+
+procedure TCheckboxState.Toggle;
+begin
+  Checked := not Checked;
+end;
+
+{ TRadioGroupState }
+
+class function TRadioGroupState.Empty: TRadioGroupState;
+begin
+  Result.Selected := 0;
+end;
+
+procedure TRadioGroupState.Select(AIdx: Integer);
+begin
+  if AIdx >= 0 then
+    Selected := AIdx;
+end;
+
+procedure TRadioGroupState.Next(ACount: Integer);
+begin
+  if (ACount > 0) and (Selected < ACount - 1) then
+    Inc(Selected);
+end;
+
+procedure TRadioGroupState.Prev;
+begin
+  if Selected > 0 then
+    Dec(Selected);
+end;
 
 { TCheckbox }
 
@@ -102,11 +163,20 @@ end;
 
 procedure TCheckbox.Render(const AArea: TRect; ABuffer: TBuffer);
 var
+  LState: TCheckboxState;
+begin
+  LState.Checked := FChecked;
+  RenderStateful(AArea, ABuffer, LState);
+end;
+
+procedure TCheckbox.RenderStateful(const AArea: TRect; ABuffer: TBuffer;
+  var AState: TCheckboxState);
+var
   Marker, Text: AnsiString;
   Sty: TStyle;
 begin
   if AArea.IsEmpty then Exit;
-  if FChecked then
+  if AState.Checked then
   begin
     Marker := '[x] ';
     Sty := FStyle.Patch(FCheckedStyle);
@@ -162,6 +232,15 @@ end;
 
 procedure TRadioGroup.Render(const AArea: TRect; ABuffer: TBuffer);
 var
+  LState: TRadioGroupState;
+begin
+  LState.Selected := FSelected;
+  RenderStateful(AArea, ABuffer, LState);
+end;
+
+procedure TRadioGroup.RenderStateful(const AArea: TRect; ABuffer: TBuffer;
+  var AState: TRadioGroupState);
+var
   I, Y, MaxRows: Integer;
   Marker, Text: AnsiString;
   Sty: TStyle;
@@ -172,7 +251,7 @@ begin
   for I := 0 to High(FItems) do
   begin
     if I >= MaxRows then Break;
-    if I = FSelected then
+    if I = AState.Selected then
     begin
       Marker := '(*) ';
       Sty := FStyle.Patch(FSelectedStyle);

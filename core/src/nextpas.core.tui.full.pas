@@ -360,6 +360,8 @@ type
   TNotificationCenter = nextpas.core.tui.widget.notification_center.TNotificationCenter;
   TCheckbox = nextpas.core.tui.widget.form.TCheckbox;
   TRadioGroup = nextpas.core.tui.widget.form.TRadioGroup;
+  TCheckboxState = nextpas.core.tui.widget.form.TCheckboxState;
+  TRadioGroupState = nextpas.core.tui.widget.form.TRadioGroupState;
   TToastManager = nextpas.core.tui.widget.toast.TToastManager;
 
   TChatTheme = nextpas.core.tui.widget.chat_theme.TTheme;
