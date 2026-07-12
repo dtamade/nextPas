@@ -79,11 +79,12 @@
 - 建议: 用 ANSI 颜色标记差异部分
 - 优先级: **P3** (视觉体验)
 
-**F6: 缺少性能回归 CI**
+**F6: 缺少性能回归 CI** ✅
 - 问题: 没有基准测试自动回归检测
 - 对标: Go 的 `benchstat` + CI 集成
 - 建议: 添加 `--benchcompare` 自动回归检测
 - 优先级: **P3** (CI 集成)
+- **已实现**: `test_perf_bench` 基准程序 + `perf-regression-check.sh` CI 脚本
 
 **F7: 接口未拆分**
 - 问题: `IExpectation` 包含所有类型的方法，类型提示不够精确
@@ -132,17 +133,18 @@
 ### 长期演进 (P3, 1-2 月)
 
 5. **彩色 diff** — ANSI 颜色高亮差异 ✅
-6. **性能 CI** — 基准测试回归自动检测
+6. **性能 CI** — 基准测试回归自动检测 ✅ test_perf_bench + perf-regression-check.sh
 7. **接口拆分** — 类型精确的 Expect API
 
 ---
 
 ## Next Steps
 
-1. **立即**: 修复 SysUtils 违规 (P1)
-2. **本周**: 实现 CheckArrayEqual 多差异报告 (P2)
-3. **下周**: 实现 ToBeInstanceOf + Mock 参数捕获 (P2)
-4. **本月**: 彩色 diff + 性能 CI (P3)
+1. **立即**: 修复 SysUtils 违规 (P1) ✅
+2. **本周**: 实现 CheckArrayEqual 多差异报告 (P2) ✅
+3. **下周**: 实现 ToBeInstanceOf + Mock 参数捕获 (P2) ✅
+4. **本月**: 彩色 diff + 性能 CI (P3) ✅
+5. **暂缓**: 接口拆分 (P3) — 向后兼容风险高，需要更多设计讨论
 
 ---
 
