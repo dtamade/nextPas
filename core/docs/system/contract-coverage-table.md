@@ -30,8 +30,8 @@ into readiness claims or public ABI.
 | `np.system.heap_free` | executable | object and array release nodes | `np_free` | `test_hir_large_alloc_runtime_smoke` | Allocation paths are partial evidence |
 | `np.system.object_free` | backend | object-free runtime contract | `np_object_free_release` | `test_hir_object_free_contract` | No full ownership proof |
 | `np.system.object_free.destroy` | HIR | object-free destroy marker | virtual `Destroy` dispatch | `test_hir_object_free_contract` | Direct dispatch not end-to-end proven |
-| `np.system.object_free.cleanup` | HIR | object-free cleanup marker | compiler-planned cleanup | `test_hir_object_free_contract` | Managed-field cleanup unproven |
-| `np.system.object_free.release` | backend | object-free release marker | `np_object_free_release` | `test_hir_object_free_contract` | Cleanup ordering unproven |
+| `np.system.object_free.cleanup` | HIR | object-free cleanup marker | compiler-planned cleanup | `test_hir_object_free_contract` | End-to-end cleanup effects unproven |
+| `np.system.object_free.release` | backend | object-free release marker | `np_object_free_release` | `test_hir_object_free_contract` | End-to-end release effects unproven |
 | `np.system.runtime_fault` | backend | fault-specific nodes | allocator and dynarray fault helpers | `runtime-contracts.md` | No focused lifecycle-fault proof |
 | `np.system.exception_try_push` | backend | try-begin runtime contract | `np_try_push` | `test_hir_exception` | No executable unwind proof |
 | `np.system.exception_try_pop` | backend | try-end runtime contract | `np_try_pop` | `test_hir_exception` | No executable unwind proof |

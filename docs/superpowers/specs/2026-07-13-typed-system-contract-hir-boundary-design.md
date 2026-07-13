@@ -90,9 +90,11 @@ Object-free contracts also form a block-local protocol. `sckObjectFree` opens
 the guarded sequence; destroy and cleanup may only appear while it is open;
 release requires an open sequence and then closes it. An ordinary instruction
 closes the sequence, and another root closes the old sequence before opening a
-new one. The verifier checks this order per block, while the emitter enforces
-the same active-guard precondition defensively. A root-only sequence remains
-valid for the current migration stage, so block end does not require release.
+new one. Every continuation must use the receiver `ValueId` captured by its
+root, and the destroy instruction must keep the root's destroy target. The
+verifier checks this identity and order per block, while the emitter enforces
+the same invariants defensively. A root-only sequence remains valid for the
+current migration stage, so block end does not require release.
 
 ## Preserve compatibility without preserving authority
 
@@ -122,11 +124,13 @@ The test then requires:
   operands, non-pointer operands, and missing required targets;
 - verifier and emitter rejection for destroy, cleanup, or release without an
   active object-free root;
+- verifier and emitter rejection when a continuation changes the guarded
+  receiver, or destroy changes the root's target;
 - LLVM nil guard, conditional branch, destroy call, cleanup/release ordering,
   and runtime declarations.
 
-The current implementation fails this test because it copies the untrusted
-display string into `IntrinsicName` and the emitter uses that string to decide
+The pre-slice implementation failed this test because it copied the untrusted
+display string into `IntrinsicName` and the emitter used that string to decide
 whether to emit the object-free sequence.
 
 ## Keep this slice bounded

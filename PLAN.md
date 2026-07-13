@@ -1,6 +1,6 @@
 # nextPas 项目总控计划
 
-> 最后更新：2026-07-12
+> 最后更新：2026-07-14
 > 当前可证明成熟度：AL1 骨架期；历史 AL2 声明正在按 production gate 复核
 > 当前编译器执行计划：`docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`
 > 成熟度定义：`docs/architecture/architecture-maturity-levels.md`
@@ -14,18 +14,21 @@
 
 ## 当前事实
 
-以下状态是 2026-07-12 可引用的起点，不得用更早的完成标记覆盖：
+以下状态是 2026-07-13 可引用的起点，不得用更早的完成标记覆盖：
 
-- `compiler-pass` 最近一次完整运行是 51/53；canonical System cache 修复后仍需 fresh
-  cold/immediate-warm 复跑。
-- `scripts/rebuild-compiler.sh` 没有有效 build body，当前不能作为 compiler rebuild 证据。
+- `compiler-pass` fresh command invocation 53/53，紧接的 immediate repeat 53/53；
+  `compiler-fail` 16/16。harness 仍复用 workspace `.nextpas` artifact roots，因此这两次运行
+  不能写成受控 cold/warm 证明。
+- canonical `make rebuild-compiler` 已返回 `rebuild-compiler=pass`。
 - C0-C7 和 22/22 stage2 记录证明 module/source-level probe，不证明可执行 B/C 两代编译器。
-- nextPas compiler cache (NPC) 的 fingerprint framing 读写不一致，root 调用还传入空依赖；
-  修复前不能宣称 production incremental compilation。
+- NPC V2 framing 与 path-safe entry identity 已落地；framing 14/14 和五阶段 fail-closed
+  incremental gate fresh 通过。root 调用仍传入空依赖，compiler test/build cache-root owner
+  也未冻结，因此不能宣称 production incremental compilation。
 - query database、parallel scheduler 和 MIR 均已有骨架，但尚未成为 typed、deterministic、
   verified 的默认生产路径。
-- System TypeId、type-parent graph 和 canonical source-backed cache 三个修复已在
-  `codex/compiler-system` lane 提交，尚待 latest-main candidate 的 path-limited replay。
+- System TypeId、type-parent graph、canonical source-backed cache 和 projection 已进入当前 main
+  基线。object-free root/destroy/cleanup/release 是首个由 `TSystemContractKind` 控制 HIR
+  validation 与 LLVM dispatch 的 production family；M1 其余 contract families 仍未迁移。
 
 因此当前等级保持 AL1。任何 AL2、self-host、incremental、parallel、MIR 或性能晋级都必须
 由 active roadmap 中的 fresh promotion gate 证明。
@@ -50,13 +53,15 @@
 
 ## 当前执行窗口
 
-1. 通过 latest-main landing candidate 回放三个已审查的 System/compiler 修复。
-2. 版本化 NPC cache framing，补 round-trip、wrong fingerprint、truncation、hostile count
-   和 mandatory incremental gate。
-3. 隔离 compiler test/build cache roots，复跑 cold/immediate-warm `compiler-pass`，修复
-   `classes_pass` 和剩余 warm-only regression。
-4. 恢复 canonical `make rebuild-compiler`，建立 fail-closed B0 benchmark 和完整进程树 RSS。
-5. 完成 System 四层 contract ledger，再进入 FPC-only-A 的 M2 A→B→C 证明。
+1. [x] 落地 System identity、parent graph、source-backed cache 和 canonical projection 修复。
+2. [x] 版本化 NPC cache framing，补 round-trip、corruption 和 mandatory incremental gate。
+3. [ ] 建立显式 compiler test/build cache-root owner/override，再跑受控 cold/warm full suite。
+4. [x] 恢复 compiler correctness baseline：compiler-pass 53/53 两次 invocation、
+   compiler-fail 16/16。
+5. [x] 恢复 canonical `make rebuild-compiler`。
+6. [ ] 建立 fail-closed B0 benchmark 和完整进程树 RSS。
+7. [ ] 继续 System typed contract migration；object-free 是首个 production family，M1 未完成。
+8. [ ] 完成 M1 exit gate 后进入 FPC-only-A 的 M2 A→B→C 证明。
 
 ## 权威文档
 

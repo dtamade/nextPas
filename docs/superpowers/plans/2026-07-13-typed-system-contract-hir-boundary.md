@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-> Execution status: Tasks 1-4 and Task 5 verification are complete; final review and landing are pending.
+> Execution status: Tasks 1-4, Task 5 verification, and the receiver/target review correction are complete; final review and landing are pending.
 
 **Goal:** Make the object-free compiler/System contract family use typed HIR identities for LLVM dispatch while preserving canonical semantic names as compatibility projections.
 
-**Architecture:** `THIRInstr` carries an explicit presence bit and `TSystemContractKind`. A single helper assigns the typed identity and projects the ledger name. The HIR builder assigns object-free kinds, and the LLVM emitter dispatches those kinds before legacy intrinsic strings and rejects unsupported typed contracts.
+**Architecture:** `THIRInstr` carries an explicit presence bit and `TSystemContractKind`. A single helper assigns the typed identity and projects the ledger name. The HIR builder assigns object-free kinds, and the LLVM emitter dispatches those kinds before legacy intrinsic strings and rejects unsupported typed contracts. Verifier and emitter sequence state bind every continuation to the root receiver and keep the root destroy target authoritative.
 
 **Tech Stack:** FreePascal/Object Pascal, the existing typed System contract ledger, HIR builder and LLVM emitter, Bash-driven compiler verification.
 
@@ -197,12 +197,18 @@ Add a separate block-local sequence pass to `THIRVerifier`. A root activates
 the sequence, destroy/cleanup require it, release requires and closes it, and a
 non-typed instruction closes it. Report
 `system-contract-sequence-root-missing:<kind>` for standalone continuations.
+Track the root receiver and destroy target while the sequence is active. Reject
+a continuation that changes receiver with
+`system-contract-sequence-receiver-mismatch`, and reject a destroy target that
+differs from the root with `system-contract-sequence-destroy-target-mismatch`.
 Do not require release at block end during this slice.
 
 The emitter must run structural validation before closing or opening any guard.
 Destroy, cleanup, and release must also require
 `FPendingObjectFreeActive=True`; otherwise they raise the same stable sequence
-error before emitting output.
+error before emitting output. The pending emitter state must retain the same
+root receiver and destroy target as the verifier, validate them before output,
+and clear them whenever the guard closes.
 
 - [x] **Step 3: Remove object-free string control flow**
 
@@ -218,10 +224,13 @@ instructions. Require verifier failures for a non-intrinsic kind, unsupported
 typed kind, missing operand, non-pointer operand, and missing required target.
 Directly send the malformed non-intrinsic instruction to the emitter and require
 the same `system-contract-kind-must-be-intrinsic` failure.
-Add one structurally valid standalone destroy and require both verifier and
-emitter to reject it with `system-contract-sequence-root-missing`.
-Also cover `sckObjectFreeCleanup` identity and placement when a cleanup class is
-present.
+Add structurally valid standalone destroy, cleanup, and release instructions,
+and require both verifier and emitter to reject each one with
+`system-contract-sequence-root-missing`. Add root-plus-continuation cases that
+change the receiver for all three continuation kinds and one destroy case that
+changes the target; require the stable sequence mismatch errors from both
+consumers. Also cover `sckObjectFreeCleanup` identity and placement when a
+cleanup class is present.
 
 Run the Task 1 compile command and then:
 
