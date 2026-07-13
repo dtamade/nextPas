@@ -232,6 +232,8 @@ procedure AssignSystemContract(var AInstr: THIRInstr;
   AKind: TSystemContractKind);
 function IsSystemContract(const AInstr: THIRInstr;
   AKind: TSystemContractKind): Boolean;
+function ValidateSystemContractInstr(const AInstr: THIRInstr;
+  ATypes: THIRTypeTable; out AError: string): Boolean;
 
 implementation
 
@@ -269,6 +271,78 @@ function IsSystemContract(const AInstr: THIRInstr;
 begin
   Result := AInstr.HasSystemContract and
     (AInstr.SystemContractKind = AKind);
+end;
+
+function ValidateSystemContractInstr(const AInstr: THIRInstr;
+  ATypes: THIRTypeTable; out AError: string): Boolean;
+var
+  ContractDefinition: TSystemContractDefinition;
+  ContractOrdinal: LongInt;
+  OperandType: THIRTypeRec;
+begin
+  AError := '';
+  if not AInstr.HasSystemContract then
+    Exit(True);
+
+  ContractOrdinal := Ord(AInstr.SystemContractKind);
+  if AInstr.Kind <> hikIntrinsic then
+  begin
+    AError := 'system-contract-kind-must-be-intrinsic:' +
+      IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+
+  case AInstr.SystemContractKind of
+    sckObjectFree,
+    sckObjectFreeDestroy,
+    sckObjectFreeCleanup,
+    sckObjectFreeRelease:
+      ;
+  else
+    AError := 'system-contract-kind-unsupported:' +
+      IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+
+  ContractDefinition := SystemContractAt(AInstr.SystemContractKind);
+  if AInstr.IntrinsicName <> ContractDefinition.SemanticName then
+  begin
+    AError := 'system-contract-name-mismatch:' + IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+
+  if Length(AInstr.Operands) <> 1 then
+  begin
+    AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+      ':' + IntToStr(Length(AInstr.Operands));
+    Exit(False);
+  end;
+
+  if ATypes = nil then
+  begin
+    AError := 'system-contract-type-table-missing:' +
+      IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+  OperandType := ATypes.GetType(AInstr.Operands[0].TypeId);
+  if OperandType.Kind <> htkPointer then
+  begin
+    AError := 'system-contract-operand-not-pointer:' +
+      IntToStr(ContractOrdinal) + ':' +
+      IntToStr(AInstr.Operands[0].TypeId);
+    Exit(False);
+  end;
+
+  if ((AInstr.SystemContractKind = sckObjectFree) or
+    (AInstr.SystemContractKind = sckObjectFreeDestroy) or
+    (AInstr.SystemContractKind = sckObjectFreeCleanup)) and
+    (AInstr.CallTarget = '') then
+  begin
+    AError := 'system-contract-target-missing:' +
+      IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+  Result := True;
 end;
 
 constructor THIRModule.Create(const AName: string);

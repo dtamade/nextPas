@@ -177,11 +177,16 @@ procedure THIRVerifier.VerifyTypes(const AFunc: THIRFunction);
 var
   BI, II: LongInt;
   Instr: THIRInstr;
+  ContractError: string;
 begin
   for BI := 0 to High(AFunc.Blocks) do
     for II := 0 to High(AFunc.Blocks[BI].Instrs) do
     begin
       Instr := AFunc.Blocks[BI].Instrs[II];
+      if Instr.HasSystemContract and
+        (not ValidateSystemContractInstr(Instr, FModule.Types,
+          ContractError)) then
+        AddError(AFunc.Name, AFunc.Blocks[BI].Id, ContractError);
       if Instr.Kind = hikAlloca then
       begin
         if Instr.TypeId = 0 then

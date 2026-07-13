@@ -14,13 +14,16 @@ var
   Func: THIRFunction;
   Instr: THIRInstr;
   OperandType: THIRTypeRec;
+  WorkerMeta: TTypeMetadata;
   LlvmText: string;
   FoundContract: Boolean;
   FoundOwnedDestroy: Boolean;
   FoundHeapRelease: Boolean;
+  CleanupCount: LongInt;
+  WorkerTypeId: LongInt;
   FuncIndex, BlockIndex, InstrIndex: LongInt;
   NullCheckPos, BranchPos, DestroyLabelPos, DestroyCallPos, ReleaseCallPos,
-  EndLabelPos: LongInt;
+  StringCleanupCallPos, DynArrayCleanupCallPos, EndLabelPos: LongInt;
 
 procedure Fail(const AMessage: string);
 begin
@@ -54,12 +57,146 @@ begin
   Result := Copy(AText, StartPos, EndPos - StartPos + Length(LineEnding + '}'));
 end;
 
+procedure AddContractInstr(AModule: THIRModule; AFuncId: THIRFuncId;
+  ABlockId: THIRBlockId; AResultType: THIRTypeId;
+  AContractKind: TSystemContractKind; AInstrKind: THIRInstrKind;
+  AOperandType: THIRTypeId; AOperandCount: LongInt;
+  const ACallTarget: string; ATamperName: Boolean);
+var
+  ContractInstr: THIRInstr;
+  OperandIndex: LongInt;
 begin
+  FillChar(ContractInstr, SizeOf(ContractInstr), 0);
+  ContractInstr.ResultId := AModule.NewValue;
+  ContractInstr.Kind := AInstrKind;
+  ContractInstr.TypeId := AResultType;
+  AssignSystemContract(ContractInstr, AContractKind);
+  ContractInstr.CallTarget := ACallTarget;
+  if ATamperName then
+    ContractInstr.IntrinsicName := 'tampered-system-contract-name';
+  SetLength(ContractInstr.Operands, AOperandCount);
+  for OperandIndex := 0 to AOperandCount - 1 do
+    ContractInstr.Operands[OperandIndex] := MakeTypedOperand(
+      ContractInstr.ResultId, AOperandType);
+  AModule.AddInstr(AFuncId, ABlockId, ContractInstr);
+end;
+
+function HasVerifierError(AVerifier: THIRVerifier;
+  const AExpected: string): Boolean;
+var
+  ErrorIndex: LongInt;
+begin
+  for ErrorIndex := 0 to AVerifier.ErrorCount - 1 do
+    if Pos(AExpected, AVerifier.ErrorAt(ErrorIndex).Message) > 0 then
+      Exit(True);
+  Result := False;
+end;
+
+procedure RecordMissingVerifierError(AVerifier: THIRVerifier;
+  const AExpected: string; var AMissing: string);
+begin
+  if not HasVerifierError(AVerifier, AExpected) then
+    AMissing := AMissing + AExpected + ';';
+end;
+
+procedure AssertMalformedSystemContractsRejected;
+var
+  ContractModule: THIRModule;
+  ContractVerifier: THIRVerifier;
+  ContractEmitter: THIRLlvmEmitter;
+  FuncId: THIRFuncId;
+  BlockId: THIRBlockId;
+  VoidType, PointerType, IntType: THIRTypeId;
+  Term: THIRTerminator;
+  Missing: string;
+  EmitterRejected: Boolean;
+begin
+  ContractModule := THIRModule.Create('malformed-system-contracts');
+  ContractVerifier := nil;
+  ContractEmitter := nil;
+  try
+    VoidType := ContractModule.Types.AddType(htkVoid, 'void');
+    PointerType := ContractModule.Types.AddPointerType(VoidType);
+    IntType := ContractModule.Types.AddIntType(64, True);
+    FuncId := ContractModule.AddFunction('malformed_contracts', VoidType);
+    BlockId := ContractModule.AddBlock(FuncId, 'entry');
+    ContractModule.SetEntryBlock(FuncId, BlockId);
+
+    AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
+      sckObjectFree, hikIntrinsic, PointerType, 0, 'TObject.Destroy', False);
+    AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
+      sckObjectFree, hikIntrinsic, IntType, 1, 'TObject.Destroy', False);
+    AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
+      sckObjectFree, hikIntrinsic, PointerType, 1, '', False);
+    AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
+      sckProcessInit, hikIntrinsic, PointerType, 1, 'np_process_init', False);
+    AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
+      sckObjectFree, hikCall, PointerType, 1, 'TObject.Destroy', False);
+    AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
+      sckObjectFree, hikIntrinsic, PointerType, 1, 'TObject.Destroy', True);
+
+    FillChar(Term, SizeOf(Term), 0);
+    Term.Kind := htkReturn;
+    ContractModule.SetTerminator(FuncId, BlockId, Term);
+
+    ContractVerifier := THIRVerifier.Create(ContractModule);
+    ContractVerifier.Verify;
+    Missing := '';
+    RecordMissingVerifierError(ContractVerifier,
+      'system-contract-operand-count', Missing);
+    RecordMissingVerifierError(ContractVerifier,
+      'system-contract-operand-not-pointer', Missing);
+    RecordMissingVerifierError(ContractVerifier,
+      'system-contract-target-missing', Missing);
+    RecordMissingVerifierError(ContractVerifier,
+      'system-contract-kind-unsupported', Missing);
+    RecordMissingVerifierError(ContractVerifier,
+      'system-contract-kind-must-be-intrinsic', Missing);
+    RecordMissingVerifierError(ContractVerifier,
+      'system-contract-name-mismatch', Missing);
+
+    ContractEmitter := THIRLlvmEmitter.Create(ContractModule);
+    EmitterRejected := False;
+    try
+      ContractEmitter.EmitInstr(
+        ContractModule.FunctionAt(0).Blocks[0].Instrs[0]);
+    except
+      on E: Exception do
+      begin
+        EmitterRejected := Pos('system-contract-operand-count', E.Message) > 0;
+        if not EmitterRejected then
+          Missing := Missing + 'emitter-error:' + E.Message + ';';
+      end;
+    end;
+    if not EmitterRejected then
+      Missing := Missing + 'emitter-system-contract-operand-count;';
+    if Missing <> '' then
+      Fail('malformed-system-contract-validation-missing:' + Missing);
+  finally
+    ContractEmitter.Free;
+    ContractVerifier.Free;
+    ContractModule.Free;
+  end;
+end;
+
+begin
+  AssertMalformedSystemContractsRejected;
   SemaModel := TSemanticModel.Create;
   Builder := nil;
   Emitter := nil;
   Verifier := nil;
   try
+    WorkerTypeId := SemaModel.AddType('Worker', 'class');
+    WorkerMeta := Default(TTypeMetadata);
+    SetLength(WorkerMeta.Fields, 2);
+    WorkerMeta.Fields[0].Name := 'Name';
+    WorkerMeta.Fields[0].Index := 0;
+    WorkerMeta.Fields[0].IsString := True;
+    WorkerMeta.Fields[1].Name := 'Items';
+    WorkerMeta.Fields[1].Index := 4;
+    WorkerMeta.Fields[1].IsDynArray := True;
+    SemaModel.SetTypeMeta(WorkerTypeId, WorkerMeta);
+    SemaModel.AddConstValue('Worker.Items$arr_elem_size', 8);
     SemaModel.AddTypedHirNode('var-decl-ptr-runtime', 'Worker', 0, 0, 'Worker');
     SemaModel.AddTypedHirNode(
       'object-free-runtime',
@@ -68,6 +205,7 @@ begin
       0,
       'var Worker' + #10 +
       'destroy TObject.Destroy' + #10 +
+      'cleanup-class Worker' + #10 +
       'nil-guard true' + #10 +
       'heap-release true' + #10
     );
@@ -89,6 +227,7 @@ begin
     FoundContract := False;
     FoundOwnedDestroy := False;
     FoundHeapRelease := False;
+    CleanupCount := 0;
     for FuncIndex := 0 to Builder.Module.FunctionCount - 1 do
     begin
       Func := Builder.Module.FunctionAt(FuncIndex);
@@ -161,6 +300,24 @@ begin
             if OperandType.Kind <> htkPointer then
               Fail('object-free-release-receiver-not-pointer');
           end;
+          if (Instr.Kind = hikIntrinsic) and
+            IsSystemContract(Instr, sckObjectFreeCleanup) then
+          begin
+            Inc(CleanupCount);
+            if Instr.IntrinsicName <>
+              SystemContractAt(sckObjectFreeCleanup).SemanticName then
+              Fail('object-free-cleanup-intrinsic-name-mismatch:' +
+                Instr.IntrinsicName);
+            if Instr.CallTarget = '' then
+              Fail('object-free-cleanup-target-missing');
+            if Length(Instr.Operands) <> 1 then
+              Fail('object-free-cleanup-operand-count:' +
+                IntToStr(Length(Instr.Operands)));
+            OperandType := Builder.Module.Types.GetType(
+              Instr.Operands[0].TypeId);
+            if OperandType.Kind <> htkPointer then
+              Fail('object-free-cleanup-receiver-not-pointer');
+          end;
         end;
     end;
 
@@ -170,6 +327,8 @@ begin
       Fail('missing-object-free-owned-destroy-intrinsic');
     if not FoundHeapRelease then
       Fail('missing-object-free-release-intrinsic');
+    if CleanupCount <> 2 then
+      Fail('object-free-cleanup-count:' + IntToStr(CleanupCount));
 
     Emitter := THIRLlvmEmitter.Create(Builder.Module);
     Emitter.EmitModule;
@@ -189,8 +348,18 @@ begin
     DestroyCallPos := FindAfter('@TObject.Destroy', LlvmText, DestroyLabelPos);
     if DestroyCallPos = 0 then
       Fail('missing-object-free-llvm-destroy-call');
+    StringCleanupCallPos := FindAfter(
+      'call void @np_object_string_cleanup_Worker(ptr ', LlvmText,
+      DestroyCallPos);
+    if StringCleanupCallPos = 0 then
+      Fail('missing-object-free-string-cleanup-after-destroy');
+    DynArrayCleanupCallPos := FindAfter(
+      'call void @np_object_dynarray_cleanup_Worker(ptr ', LlvmText,
+      StringCleanupCallPos);
+    if DynArrayCleanupCallPos = 0 then
+      Fail('missing-object-free-dynarray-cleanup-after-string-cleanup');
     ReleaseCallPos := FindAfter('call void @np_object_free_release(ptr ',
-      LlvmText, DestroyCallPos);
+      LlvmText, DynArrayCleanupCallPos);
     if ReleaseCallPos = 0 then
       Fail('missing-object-free-llvm-release-call-after-destroy');
     EndLabelPos := FindAfter(LineEnding + 'objectfree.end.', LlvmText,
@@ -199,7 +368,10 @@ begin
       Fail('missing-object-free-llvm-end-label-after-release');
     if not ((NullCheckPos < BranchPos) and (BranchPos < DestroyLabelPos) and
       (DestroyLabelPos < DestroyCallPos) and
-      (DestroyCallPos < ReleaseCallPos) and (ReleaseCallPos < EndLabelPos)) then
+      (DestroyCallPos < StringCleanupCallPos) and
+      (StringCleanupCallPos < DynArrayCleanupCallPos) and
+      (DynArrayCleanupCallPos < ReleaseCallPos) and
+      (ReleaseCallPos < EndLabelPos)) then
       Fail('object-free-llvm-guard-order');
     { Phase 3: np_object_free_release 已移至 libnprt.a runtime 模块 }
     if Pos('declare void @np_object_free_release(ptr %obj)', LlvmText) = 0 then

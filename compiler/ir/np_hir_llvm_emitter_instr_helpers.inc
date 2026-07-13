@@ -304,18 +304,22 @@ end;
 
 function THIRLlvmEmitter.EmitSystemContractInstr(
   const AInstr: THIRInstr): Boolean;
+var
+  ValidationError: string;
 begin
   if not AInstr.HasSystemContract then
     Exit(False);
+  if not ValidateSystemContractInstr(AInstr, FModule.Types,
+    ValidationError) then
+    raise Exception.Create(ValidationError);
   case AInstr.SystemContractKind of
     sckObjectFree:
       EmitObjectFreeGuardStart(AInstr);
     sckObjectFreeDestroy:
       EmitObjectFreeOwnedDestroy(AInstr);
     sckObjectFreeCleanup:
-      if Length(AInstr.Operands) >= 1 then
-        Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
-          ValueRef(AInstr.Operands[0].ValueId) + ')');
+      Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+        ValueRef(AInstr.Operands[0].ValueId) + ')');
     sckObjectFreeRelease:
       EmitObjectFreeRelease(AInstr);
   else
@@ -330,9 +334,6 @@ var
   CounterText: string;
   DestroyLabel: string;
 begin
-  if Length(AInstr.Operands) < 1 then
-    Exit;
-
   Inc(FObjectFreeCounter);
   CounterText := IntToStr(FObjectFreeCounter);
   DestroyLabel := 'objectfree.destroy.' + CounterText;
@@ -355,8 +356,7 @@ begin
   FNeedsAlloc := True;
   FNeedsFree := True;
   FNeedsObjectFreeRelease := True;
-  if Length(AInstr.Operands) >= 1 then
-    Emit('  call void @np_object_free_release(ptr ' +
-      ValueRef(AInstr.Operands[0].ValueId) + ')');
+  Emit('  call void @np_object_free_release(ptr ' +
+    ValueRef(AInstr.Operands[0].ValueId) + ')');
   ClosePendingObjectFreeGuard;
 end;
