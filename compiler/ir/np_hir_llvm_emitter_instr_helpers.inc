@@ -312,6 +312,18 @@ begin
   if not ValidateSystemContractInstr(AInstr, FModule.Types,
     ValidationError) then
     raise Exception.Create(ValidationError);
+  if FPendingObjectFreeActive and not IsObjectFreeGuardContinuation(AInstr) then
+    ClosePendingObjectFreeGuard;
+  case AInstr.SystemContractKind of
+    sckObjectFreeDestroy,
+    sckObjectFreeCleanup,
+    sckObjectFreeRelease:
+      if not FPendingObjectFreeActive then
+        raise Exception.Create('system-contract-sequence-root-missing:' +
+          IntToStr(Ord(AInstr.SystemContractKind)));
+  else
+    ;
+  end;
   case AInstr.SystemContractKind of
     sckObjectFree:
       EmitObjectFreeGuardStart(AInstr);

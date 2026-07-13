@@ -104,16 +104,19 @@ var
   ContractModule: THIRModule;
   ContractVerifier: THIRVerifier;
   ContractEmitter: THIRLlvmEmitter;
+  StandaloneEmitter: THIRLlvmEmitter;
   FuncId: THIRFuncId;
   BlockId: THIRBlockId;
   VoidType, PointerType, IntType: THIRTypeId;
   Term: THIRTerminator;
   Missing: string;
-  EmitterRejected, NonIntrinsicEmitterRejected: Boolean;
+  EmitterRejected, NonIntrinsicEmitterRejected,
+  StandaloneEmitterRejected: Boolean;
 begin
   ContractModule := THIRModule.Create('malformed-system-contracts');
   ContractVerifier := nil;
   ContractEmitter := nil;
+  StandaloneEmitter := nil;
   try
     VoidType := ContractModule.Types.AddType(htkVoid, 'void');
     PointerType := ContractModule.Types.AddPointerType(VoidType);
@@ -134,6 +137,9 @@ begin
       sckObjectFree, hikCall, PointerType, 1, 'TObject.Destroy', False);
     AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
       sckObjectFree, hikIntrinsic, PointerType, 1, 'TObject.Destroy', True);
+    AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
+      sckObjectFreeDestroy, hikIntrinsic, PointerType, 1,
+      'TObject.Destroy', False);
 
     FillChar(Term, SizeOf(Term), 0);
     Term.Kind := htkReturn;
@@ -154,6 +160,8 @@ begin
       'system-contract-kind-must-be-intrinsic', Missing);
     RecordMissingVerifierError(ContractVerifier,
       'system-contract-name-mismatch', Missing);
+    RecordMissingVerifierError(ContractVerifier,
+      'system-contract-sequence-root-missing', Missing);
 
     ContractEmitter := THIRLlvmEmitter.Create(ContractModule);
     EmitterRejected := False;
@@ -187,9 +195,26 @@ begin
     if not NonIntrinsicEmitterRejected then
       Missing := Missing +
         'emitter-system-contract-kind-must-be-intrinsic;';
+    StandaloneEmitter := THIRLlvmEmitter.Create(ContractModule);
+    StandaloneEmitterRejected := False;
+    try
+      StandaloneEmitter.EmitInstr(
+        ContractModule.FunctionAt(0).Blocks[0].Instrs[6]);
+    except
+      on E: Exception do
+      begin
+        StandaloneEmitterRejected := Pos(
+          'system-contract-sequence-root-missing', E.Message) > 0;
+        if not StandaloneEmitterRejected then
+          Missing := Missing + 'standalone-emitter-error:' + E.Message + ';';
+      end;
+    end;
+    if not StandaloneEmitterRejected then
+      Missing := Missing + 'emitter-system-contract-sequence-root-missing;';
     if Missing <> '' then
       Fail('malformed-system-contract-validation-missing:' + Missing);
   finally
+    StandaloneEmitter.Free;
     ContractEmitter.Free;
     ContractVerifier.Free;
     ContractModule.Free;

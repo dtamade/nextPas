@@ -3,15 +3,15 @@ var
   LlvmType, Op, LTruncVal: string;
   I, LDbgIdx: LongInt;
 begin
-  if FPendingObjectFreeActive and not IsObjectFreeGuardContinuation(AInstr) then
-    ClosePendingObjectFreeGuard;
-
   if AInstr.HasSystemContract then
   begin
     if not EmitSystemContractInstr(AInstr) then
       raise Exception.Create('system-contract-dispatch-not-handled');
     Exit;
   end;
+
+  if FPendingObjectFreeActive and not IsObjectFreeGuardContinuation(AInstr) then
+    ClosePendingObjectFreeGuard;
 
   LlvmType := TypeToLlvm(AInstr.TypeId);
 

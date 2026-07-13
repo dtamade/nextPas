@@ -25,6 +25,7 @@ type
     procedure VerifySSAUses(const AFunc: THIRFunction);
     procedure VerifyTerminators(const AFunc: THIRFunction);
     procedure VerifyTypes(const AFunc: THIRFunction);
+    procedure VerifySystemContractSequences(const AFunc: THIRFunction);
   public
     constructor Create(AModule: THIRModule);
     function Verify: Boolean;
@@ -35,7 +36,7 @@ type
 implementation
 
 uses
-  nextpas.core.text.conv;
+  nextpas.core.text.conv, np_system_contracts;
 
 constructor THIRVerifier.Create(AModule: THIRModule);
 begin
@@ -208,12 +209,57 @@ begin
     end;
 end;
 
+procedure THIRVerifier.VerifySystemContractSequences(
+  const AFunc: THIRFunction);
+var
+  BI, II: LongInt;
+  GuardActive: Boolean;
+  Instr: THIRInstr;
+  ContractError: string;
+begin
+  for BI := 0 to High(AFunc.Blocks) do
+  begin
+    GuardActive := False;
+    for II := 0 to High(AFunc.Blocks[BI].Instrs) do
+    begin
+      Instr := AFunc.Blocks[BI].Instrs[II];
+      if not Instr.HasSystemContract then
+      begin
+        GuardActive := False;
+        Continue;
+      end;
+      if not ValidateSystemContractInstr(Instr, FModule.Types,
+        ContractError) then
+        Continue;
+
+      case Instr.SystemContractKind of
+        sckObjectFree:
+          GuardActive := True;
+        sckObjectFreeDestroy,
+        sckObjectFreeCleanup,
+        sckObjectFreeRelease:
+        begin
+          if not GuardActive then
+            AddError(AFunc.Name, AFunc.Blocks[BI].Id,
+              'system-contract-sequence-root-missing:' +
+              IntToStr(Ord(Instr.SystemContractKind)));
+          if Instr.SystemContractKind = sckObjectFreeRelease then
+            GuardActive := False;
+        end;
+      else
+        ;
+      end;
+    end;
+  end;
+end;
+
 procedure THIRVerifier.VerifyFunction(const AFunc: THIRFunction);
 begin
   VerifySSADefs(AFunc);
   VerifySSAUses(AFunc);
   VerifyTerminators(AFunc);
   VerifyTypes(AFunc);
+  VerifySystemContractSequences(AFunc);
 end;
 
 function THIRVerifier.Verify: Boolean;
