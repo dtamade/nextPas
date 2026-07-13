@@ -290,7 +290,7 @@ end;
 function THIRLlvmEmitter.IsObjectFreeGuardContinuation(
   const AInstr: THIRInstr): Boolean;
 begin
-  if not AInstr.HasSystemContract then
+  if (not AInstr.HasSystemContract) or (AInstr.Kind <> hikIntrinsic) then
     Exit(False);
   case AInstr.SystemContractKind of
     sckObjectFreeDestroy,

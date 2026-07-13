@@ -6,6 +6,13 @@ begin
   if FPendingObjectFreeActive and not IsObjectFreeGuardContinuation(AInstr) then
     ClosePendingObjectFreeGuard;
 
+  if AInstr.HasSystemContract then
+  begin
+    if not EmitSystemContractInstr(AInstr) then
+      raise Exception.Create('system-contract-dispatch-not-handled');
+    Exit;
+  end;
+
   LlvmType := TypeToLlvm(AInstr.TypeId);
 
   case AInstr.Kind of
@@ -154,8 +161,6 @@ begin
     end;
     hikIntrinsic:
     begin
-      if EmitSystemContractInstr(AInstr) then
-        Exit;
       if AInstr.IntrinsicName = 'halt' then
       begin
         if FNeedsProcessLifecycle and not FProcessFiniEmitted then

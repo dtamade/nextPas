@@ -109,7 +109,7 @@ var
   VoidType, PointerType, IntType: THIRTypeId;
   Term: THIRTerminator;
   Missing: string;
-  EmitterRejected: Boolean;
+  EmitterRejected, NonIntrinsicEmitterRejected: Boolean;
 begin
   ContractModule := THIRModule.Create('malformed-system-contracts');
   ContractVerifier := nil;
@@ -170,6 +170,23 @@ begin
     end;
     if not EmitterRejected then
       Missing := Missing + 'emitter-system-contract-operand-count;';
+    NonIntrinsicEmitterRejected := False;
+    try
+      ContractEmitter.EmitInstr(
+        ContractModule.FunctionAt(0).Blocks[0].Instrs[4]);
+    except
+      on E: Exception do
+      begin
+        NonIntrinsicEmitterRejected := Pos(
+          'system-contract-kind-must-be-intrinsic', E.Message) > 0;
+        if not NonIntrinsicEmitterRejected then
+          Missing := Missing + 'non-intrinsic-emitter-error:' +
+            E.Message + ';';
+      end;
+    end;
+    if not NonIntrinsicEmitterRejected then
+      Missing := Missing +
+        'emitter-system-contract-kind-must-be-intrinsic;';
     if Missing <> '' then
       Fail('malformed-system-contract-validation-missing:' + Missing);
   finally
