@@ -47,6 +47,8 @@ type
     FIsCheckCounter: LongInt;
     FObjectFreeCounter: LongInt;
     FPendingObjectFreeActive: Boolean;
+    FPendingObjectFreeReceiverValueId: THIRValueId;
+    FPendingObjectFreeDestroyTarget: string;
     FPendingObjectFreeEndLabel: string;
     FNeedsExceptionRuntime: Boolean;
     FNeedsProcessLifecycle: Boolean;
@@ -159,6 +161,8 @@ begin
   FTryCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
+  FPendingObjectFreeReceiverValueId := 0;
+  FPendingObjectFreeDestroyTarget := '';
   FPendingObjectFreeEndLabel := '';
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "' + FLlvmTriple + '"');

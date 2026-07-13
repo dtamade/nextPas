@@ -234,6 +234,10 @@ function IsSystemContract(const AInstr: THIRInstr;
   AKind: TSystemContractKind): Boolean;
 function ValidateSystemContractInstr(const AInstr: THIRInstr;
   ATypes: THIRTypeTable; out AError: string): Boolean;
+function ValidateObjectFreeSequenceContinuation(
+  ARootReceiverValueId, AContinuationReceiverValueId: THIRValueId;
+  const ARootDestroyTarget, AContinuationTarget: string;
+  AContinuationKind: TSystemContractKind; out AError: string): Boolean;
 
 implementation
 
@@ -340,6 +344,26 @@ begin
   begin
     AError := 'system-contract-target-missing:' +
       IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+  Result := True;
+end;
+
+function ValidateObjectFreeSequenceContinuation(
+  ARootReceiverValueId, AContinuationReceiverValueId: THIRValueId;
+  const ARootDestroyTarget, AContinuationTarget: string;
+  AContinuationKind: TSystemContractKind; out AError: string): Boolean;
+begin
+  AError := '';
+  if AContinuationReceiverValueId <> ARootReceiverValueId then
+  begin
+    AError := 'system-contract-sequence-receiver-mismatch';
+    Exit(False);
+  end;
+  if (AContinuationKind = sckObjectFreeDestroy) and
+    (not SameText(AContinuationTarget, ARootDestroyTarget)) then
+  begin
+    AError := 'system-contract-sequence-destroy-target-mismatch';
     Exit(False);
   end;
   Result := True;

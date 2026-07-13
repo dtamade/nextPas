@@ -214,18 +214,24 @@ procedure THIRVerifier.VerifySystemContractSequences(
 var
   BI, II: LongInt;
   GuardActive: Boolean;
+  GuardReceiverValueId: THIRValueId;
+  GuardDestroyTarget: string;
   Instr: THIRInstr;
   ContractError: string;
 begin
   for BI := 0 to High(AFunc.Blocks) do
   begin
     GuardActive := False;
+    GuardReceiverValueId := 0;
+    GuardDestroyTarget := '';
     for II := 0 to High(AFunc.Blocks[BI].Instrs) do
     begin
       Instr := AFunc.Blocks[BI].Instrs[II];
       if not Instr.HasSystemContract then
       begin
         GuardActive := False;
+        GuardReceiverValueId := 0;
+        GuardDestroyTarget := '';
         Continue;
       end;
       if not ValidateSystemContractInstr(Instr, FModule.Types,
@@ -234,7 +240,11 @@ begin
 
       case Instr.SystemContractKind of
         sckObjectFree:
+        begin
           GuardActive := True;
+          GuardReceiverValueId := Instr.Operands[0].ValueId;
+          GuardDestroyTarget := Instr.CallTarget;
+        end;
         sckObjectFreeDestroy,
         sckObjectFreeCleanup,
         sckObjectFreeRelease:
@@ -242,9 +252,18 @@ begin
           if not GuardActive then
             AddError(AFunc.Name, AFunc.Blocks[BI].Id,
               'system-contract-sequence-root-missing:' +
-              IntToStr(Ord(Instr.SystemContractKind)));
+              IntToStr(Ord(Instr.SystemContractKind)))
+          else if not ValidateObjectFreeSequenceContinuation(
+            GuardReceiverValueId, Instr.Operands[0].ValueId,
+            GuardDestroyTarget, Instr.CallTarget,
+            Instr.SystemContractKind, ContractError) then
+            AddError(AFunc.Name, AFunc.Blocks[BI].Id, ContractError);
           if Instr.SystemContractKind = sckObjectFreeRelease then
+          begin
             GuardActive := False;
+            GuardReceiverValueId := 0;
+            GuardDestroyTarget := '';
+          end;
         end;
       else
         ;

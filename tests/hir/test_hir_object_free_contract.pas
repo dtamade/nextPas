@@ -61,7 +61,8 @@ procedure AddContractInstr(AModule: THIRModule; AFuncId: THIRFuncId;
   ABlockId: THIRBlockId; AResultType: THIRTypeId;
   AContractKind: TSystemContractKind; AInstrKind: THIRInstrKind;
   AOperandType: THIRTypeId; AOperandCount: LongInt;
-  const ACallTarget: string; ATamperName: Boolean);
+  const ACallTarget: string; ATamperName: Boolean;
+  AReceiverValueId: THIRValueId = 0);
 var
   ContractInstr: THIRInstr;
   OperandIndex: LongInt;
@@ -76,8 +77,12 @@ begin
     ContractInstr.IntrinsicName := 'tampered-system-contract-name';
   SetLength(ContractInstr.Operands, AOperandCount);
   for OperandIndex := 0 to AOperandCount - 1 do
+  begin
+    if AReceiverValueId = 0 then
+      AReceiverValueId := ContractInstr.ResultId;
     ContractInstr.Operands[OperandIndex] := MakeTypedOperand(
-      ContractInstr.ResultId, AOperandType);
+      AReceiverValueId, AOperandType);
+  end;
   AModule.AddInstr(AFuncId, ABlockId, ContractInstr);
 end;
 
@@ -221,8 +226,113 @@ begin
   end;
 end;
 
+procedure AssertObjectFreeSequenceOwnershipRejected;
+var
+  Missing: string;
+
+  procedure CheckSequence(AContinuationKind: TSystemContractKind;
+    AIncludeRoot, AUseRootReceiver: Boolean;
+    const ARootTarget, AContinuationTarget, AExpectedError,
+    ACaseName: string);
+  var
+    ContractModule: THIRModule;
+    ContractVerifier: THIRVerifier;
+    ContractEmitter: THIRLlvmEmitter;
+    FuncId: THIRFuncId;
+    BlockId: THIRBlockId;
+    VoidType, PointerType: THIRTypeId;
+    RootReceiver, ContinuationReceiver: THIRValueId;
+    ContinuationIndex: LongInt;
+    Term: THIRTerminator;
+    Func: THIRFunction;
+    EmitterRejected: Boolean;
+  begin
+    ContractModule := THIRModule.Create(ACaseName);
+    ContractVerifier := nil;
+    ContractEmitter := nil;
+    try
+      VoidType := ContractModule.Types.AddType(htkVoid, 'void');
+      PointerType := ContractModule.Types.AddPointerType(VoidType);
+      FuncId := ContractModule.AddFunction(ACaseName, VoidType);
+      BlockId := ContractModule.AddBlock(FuncId, 'entry');
+      ContractModule.SetEntryBlock(FuncId, BlockId);
+
+      RootReceiver := 0;
+      ContinuationIndex := 0;
+      if AIncludeRoot then
+      begin
+        AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
+          sckObjectFree, hikIntrinsic, PointerType, 1, ARootTarget, False);
+        Func := ContractModule.FunctionAt(0);
+        RootReceiver := Func.Blocks[0].Instrs[0].ResultId;
+        ContinuationIndex := 1;
+      end;
+      if AIncludeRoot and AUseRootReceiver then
+        ContinuationReceiver := RootReceiver
+      else
+        ContinuationReceiver := 0;
+      AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
+        AContinuationKind, hikIntrinsic, PointerType, 1,
+        AContinuationTarget, False, ContinuationReceiver);
+
+      FillChar(Term, SizeOf(Term), 0);
+      Term.Kind := htkReturn;
+      ContractModule.SetTerminator(FuncId, BlockId, Term);
+      Func := ContractModule.FunctionAt(0);
+
+      ContractVerifier := THIRVerifier.Create(ContractModule);
+      ContractVerifier.Verify;
+      if not HasVerifierError(ContractVerifier, AExpectedError) then
+        Missing := Missing + ACaseName + '-verifier;';
+
+      ContractEmitter := THIRLlvmEmitter.Create(ContractModule);
+      EmitterRejected := False;
+      try
+        if AIncludeRoot then
+          ContractEmitter.EmitInstr(Func.Blocks[0].Instrs[0]);
+        ContractEmitter.EmitInstr(
+          Func.Blocks[0].Instrs[ContinuationIndex]);
+      except
+        on E: Exception do
+        begin
+          EmitterRejected := Pos(AExpectedError, E.Message) > 0;
+          if not EmitterRejected then
+            Missing := Missing + ACaseName + '-emitter-error:' +
+              E.Message + ';';
+        end;
+      end;
+      if not EmitterRejected then
+        Missing := Missing + ACaseName + '-emitter;';
+    finally
+      ContractEmitter.Free;
+      ContractVerifier.Free;
+      ContractModule.Free;
+    end;
+  end;
+
+begin
+  Missing := '';
+  CheckSequence(sckObjectFreeDestroy, True, False, 'T', 'T',
+    'system-contract-sequence-receiver-mismatch', 'receiver-destroy');
+  CheckSequence(sckObjectFreeCleanup, True, False, 'T', 'cleanup_T',
+    'system-contract-sequence-receiver-mismatch', 'receiver-cleanup');
+  CheckSequence(sckObjectFreeRelease, True, False, 'T', '',
+    'system-contract-sequence-receiver-mismatch', 'receiver-release');
+  CheckSequence(sckObjectFreeDestroy, True, True, 'T', 'U',
+    'system-contract-sequence-destroy-target-mismatch', 'destroy-target');
+  CheckSequence(sckObjectFreeDestroy, False, False, '', 'T',
+    'system-contract-sequence-root-missing', 'missing-root-destroy');
+  CheckSequence(sckObjectFreeCleanup, False, False, '', 'cleanup_T',
+    'system-contract-sequence-root-missing', 'missing-root-cleanup');
+  CheckSequence(sckObjectFreeRelease, False, False, '', '',
+    'system-contract-sequence-root-missing', 'missing-root-release');
+  if Missing <> '' then
+    Fail('object-free-sequence-validation-missing:' + Missing);
+end;
+
 begin
   AssertMalformedSystemContractsRejected;
+  AssertObjectFreeSequenceOwnershipRejected;
   SemaModel := TSemanticModel.Create;
   Builder := nil;
   Emitter := nil;

@@ -47,6 +47,8 @@ begin
   FIsCheckCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
+  FPendingObjectFreeReceiverValueId := 0;
+  FPendingObjectFreeDestroyTarget := '';
   FPendingObjectFreeEndLabel := '';
   FNeedsExceptionRuntime := False;
   FNeedsProcessLifecycle := False;
@@ -284,6 +286,8 @@ begin
   Emit('  br label %' + FPendingObjectFreeEndLabel);
   Emit(FPendingObjectFreeEndLabel + ':');
   FPendingObjectFreeActive := False;
+  FPendingObjectFreeReceiverValueId := 0;
+  FPendingObjectFreeDestroyTarget := '';
   FPendingObjectFreeEndLabel := '';
 end;
 
@@ -320,7 +324,13 @@ begin
     sckObjectFreeRelease:
       if not FPendingObjectFreeActive then
         raise Exception.Create('system-contract-sequence-root-missing:' +
-          IntToStr(Ord(AInstr.SystemContractKind)));
+          IntToStr(Ord(AInstr.SystemContractKind)))
+      else if not ValidateObjectFreeSequenceContinuation(
+        FPendingObjectFreeReceiverValueId,
+        AInstr.Operands[0].ValueId, FPendingObjectFreeDestroyTarget,
+        AInstr.CallTarget, AInstr.SystemContractKind,
+        ValidationError) then
+        raise Exception.Create(ValidationError);
   else
     ;
   end;
@@ -355,6 +365,8 @@ begin
   Emit('  br i1 %objectfree.isnull.' + CounterText + ', label %' +
     FPendingObjectFreeEndLabel + ', label %' + DestroyLabel);
   Emit(DestroyLabel + ':');
+  FPendingObjectFreeReceiverValueId := AInstr.Operands[0].ValueId;
+  FPendingObjectFreeDestroyTarget := AInstr.CallTarget;
   FPendingObjectFreeActive := True;
 end;
 
