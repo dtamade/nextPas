@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> Execution status: Tasks 1-4 and Task 5 verification are complete; final review and landing are pending.
+
 **Goal:** Make the object-free compiler/System contract family use typed HIR identities for LLVM dispatch while preserving canonical semantic names as compatibility projections.
 
 **Architecture:** `THIRInstr` carries an explicit presence bit and `TSystemContractKind`. A single helper assigns the typed identity and projects the ledger name. The HIR builder assigns object-free kinds, and the LLVM emitter dispatches those kinds before legacy intrinsic strings and rejects unsupported typed contracts.
@@ -15,6 +17,7 @@
 **Production files:**
 
 - `compiler/ir/np_hir_model.pas`: typed identity storage and construction helpers.
+- `compiler/ir/np_hir_verifier.pas`: structural validation for typed contracts.
 - `compiler/ir/np_hir_builder.pas`: ledger dependency instead of direct string vocabulary.
 - `compiler/ir/np_hir_builder_runtime.inc`: guard, destroy, and release identity assignment.
 - `compiler/ir/np_hir_builder_cleanup.inc`: cleanup identity assignment.
@@ -25,6 +28,8 @@
 **Test and documentation files:**
 
 - `tests/hir/test_hir_object_free_contract.pas`: executable typed-boundary regression.
+- `core/tests/nextpas.core.system/Makefile`: hermetic object-free consumer target.
+- `core/tests/nextpas.core.system/test_system_source_contracts/check_system_source_contracts.sh`: typed source-contract and raw-string regression guard.
 - `docs/architecture/runtime-bootstrap-specification.md`: stable HIR contract ownership fact.
 - `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`: current M0 evidence and M1 progress.
 - `docs/plans/goal-tree.md`: current milestone state.
@@ -37,7 +42,7 @@ Temporary `task_plan.md`, `findings.md`, and `progress.md` are never committed.
 
 - Modify: `tests/hir/test_hir_object_free_contract.pas`
 
-- [ ] **Step 1: Add typed assertions before production changes**
+- [x] **Step 1: Add typed assertions before production changes**
 
 Import `np_system_contracts`, change the object-free typed HIR fixture display
 name from `np.system.object_free` to `untrusted-object-free-label`, and locate
@@ -58,13 +63,13 @@ Repeat the exact typed check and canonical projection assertion for
 `sckObjectFreeDestroy` and `sckObjectFreeRelease`. Keep all existing operand,
 LLVM ordering, and runtime declaration assertions.
 
-- [ ] **Step 2: Run the focused test and confirm RED**
+- [x] **Step 2: Run the focused test and confirm RED**
 
 Run:
 
 ```bash
 build_dir="$(mktemp -d)"
-fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir \
+fpc -Fucompiler/frontend -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir \
   -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src \
   -FE"$build_dir" -FU"$build_dir" \
   tests/hir/test_hir_object_free_contract.pas
@@ -82,7 +87,7 @@ display string.
 - Modify: `compiler/ir/np_hir_model.pas`
 - Test: `tests/hir/test_hir_object_free_contract.pas`
 
-- [ ] **Step 1: Add the representation and helper API**
+- [x] **Step 1: Add the representation and helper API**
 
 Add `np_system_contracts` to the interface uses and extend `THIRInstr`:
 
@@ -98,6 +103,8 @@ procedure AssignSystemContract(var AInstr: THIRInstr;
   AKind: TSystemContractKind);
 function IsSystemContract(const AInstr: THIRInstr;
   AKind: TSystemContractKind): Boolean;
+function ValidateSystemContractInstr(const AInstr: THIRInstr;
+  ATypes: THIRTypeTable; out AError: string): Boolean;
 ```
 
 Implement the helpers with the ledger as the only name source:
@@ -126,7 +133,12 @@ end;
 
 Add `SysUtils` to implementation uses for `ERangeError`.
 
-- [ ] **Step 2: Compile the test and keep it RED for missing builder behavior**
+The validator must reject typed instructions that are not `hikIntrinsic`, use
+an unmigrated kind, have a non-canonical text projection, do not have exactly
+one pointer operand, or omit a required target. Root, destroy, and cleanup
+require a target; release does not.
+
+- [x] **Step 2: Compile the test and keep it RED for missing builder behavior**
 
 Run the Task 1 compile command, then run the binary if compilation succeeds.
 Expected runtime failure: `missing-object-free-hir-intrinsic`.
@@ -141,9 +153,10 @@ Expected runtime failure: `missing-object-free-hir-intrinsic`.
 - Modify: `compiler/ir/np_hir_llvm_emitter.pas`
 - Modify: `compiler/ir/np_hir_llvm_emitter_instr_helpers.inc`
 - Modify: `compiler/ir/np_hir_llvm_emitter_instr.inc`
+- Modify: `compiler/ir/np_hir_verifier.pas`
 - Test: `tests/hir/test_hir_object_free_contract.pas`
 
-- [ ] **Step 1: Assign typed identities in the HIR builder**
+- [x] **Step 1: Assign typed identities in the HIR builder**
 
 Replace the implementation import of `nextpas.core.system.contracts` with
 `np_system_contracts`. Replace each direct object-free name assignment:
@@ -158,11 +171,13 @@ AssignSystemContract(Instr, sckObjectFreeRelease);
 `ProcessObjectFreeRuntime` must not copy `ANode.DisplayName` into
 `IntrinsicName`.
 
-- [ ] **Step 2: Add one typed emitter dispatch helper**
+- [x] **Step 2: Add one typed emitter dispatch helper**
 
-Declare `IsObjectFreeSystemContract` and `EmitSystemContractInstr` on
-`THIRLlvmEmitter`. Implement the first helper with `IsSystemContract` over the
-four object-free kinds.
+Declare `IsObjectFreeGuardContinuation` and `EmitSystemContractInstr` on
+`THIRLlvmEmitter`. The continuation predicate must accept only
+`sckObjectFreeDestroy`, `sckObjectFreeCleanup`, and `sckObjectFreeRelease`.
+It must not accept `sckObjectFree`, because a new root closes any previously
+pending guard before starting its own sequence.
 
 Implement `EmitSystemContractInstr` so it returns `False` only when
 `HasSystemContract=False`. Dispatch `sckObjectFree`,
@@ -170,14 +185,43 @@ Implement `EmitSystemContractInstr` so it returns `False` only when
 the existing emitter helpers. For any other typed kind, raise `Exception` with
 the numeric kind so new typed contracts cannot disappear silently.
 
-- [ ] **Step 3: Remove object-free string control flow**
+Before the emitter's general instruction-kind `case`, detect every instruction
+whose `HasSystemContract` is set, call `ValidateSystemContractInstr`, dispatch
+the typed contract, and exit. This placement prevents a malformed typed
+`hikCall` from bypassing validation through ordinary call lowering. Raise with
+the stable validation error when malformed HIR reaches codegen.
+`THIRVerifier.VerifyTypes` must call the same helper and add the returned error
+for every typed instruction.
 
-Use `IsObjectFreeSystemContract` in the pending-guard check. At the start of the
-`hikIntrinsic` branch, call `EmitSystemContractInstr` and exit when it handled
+Add a separate block-local sequence pass to `THIRVerifier`. A root activates
+the sequence, destroy/cleanup require it, release requires and closes it, and a
+non-typed instruction closes it. Report
+`system-contract-sequence-root-missing:<kind>` for standalone continuations.
+Do not require release at block end during this slice.
+
+The emitter must run structural validation before closing or opening any guard.
+Destroy, cleanup, and release must also require
+`FPendingObjectFreeActive=True`; otherwise they raise the same stable sequence
+error before emitting output.
+
+- [x] **Step 3: Remove object-free string control flow**
+
+Use `IsObjectFreeGuardContinuation` in the pending-guard check. At the start
+of the `hikIntrinsic` branch, call `EmitSystemContractInstr` and exit when it handled
 the instruction. Delete the four `SameText(IntrinsicName,
 NPSYSTEM_OBJECT_FREE...)` branches.
 
-- [ ] **Step 4: Run the focused test and confirm GREEN**
+- [x] **Step 4: Run the focused test and confirm GREEN**
+
+Before GREEN, extend the test with manually constructed malformed typed
+instructions. Require verifier failures for a non-intrinsic kind, unsupported
+typed kind, missing operand, non-pointer operand, and missing required target.
+Directly send the malformed non-intrinsic instruction to the emitter and require
+the same `system-contract-kind-must-be-intrinsic` failure.
+Add one structurally valid standalone destroy and require both verifier and
+emitter to reject it with `system-contract-sequence-root-missing`.
+Also cover `sckObjectFreeCleanup` identity and placement when a cleanup class is
+present.
 
 Run the Task 1 compile command and then:
 
@@ -191,9 +235,9 @@ Expected:
 hir-object-free-contract-status=pass
 ```
 
-- [ ] **Step 5: Commit the executable architecture slice**
+- [x] **Step 5: Commit the executable architecture slice**
 
-Stage only the seven production files and the HIR test. Review
+Stage only the eight production files and the HIR test. Review
 `git diff --cached`, then commit:
 
 ```text
@@ -208,24 +252,26 @@ feat(compiler-system): type object-free HIR contracts
 - Modify: `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`
 - Modify: `docs/plans/goal-tree.md`
 
-- [ ] **Step 1: Record the stable typed-boundary rule**
+- [x] **Step 1: Record the stable typed-boundary rule**
 
 Document that `THIRInstr.SystemContractKind` is authoritative for migrated
 families and `IntrinsicName` is a non-authoritative text projection. State that
 unmigrated families remain explicit roadmap debt.
 
-- [ ] **Step 2: Replace stale M0 status with current evidence**
+- [x] **Step 2: Replace stale M0 status with current evidence**
 
 Update the M0 baseline and exit-gate text to reflect the current main history:
 NPC V2 framing, fail-closed incremental gate, canonical System projection,
-query option initialization, source-backed System binding, 53/53 cold and warm
-compiler-pass, 16/16 compiler-fail, and successful compiler rebuild. Do not use
-old lane commit IDs as current evidence.
+query option initialization, source-backed System binding, 53/53 fresh command
+invocation plus 53/53 immediate repeat, 16/16 compiler-fail, and successful
+compiler rebuild. Keep explicit cache-root isolation and a controlled cold/warm
+full-suite pair open; do not relabel the repeat run as cache-warm evidence. Do
+not use old lane commit IDs as current evidence.
 
 Mark M1 typed migration as in progress and name object-free as the first
 production family. Do not mark M1 complete.
 
-- [ ] **Step 3: Validate documentation and commit**
+- [x] **Step 3: Validate documentation and commit**
 
 Run:
 
@@ -246,7 +292,7 @@ docs(compiler): reconcile M0 evidence and M1 progress
 
 ## Task 5: Verify the complete slice before landing
 
-- [ ] **Step 1: Run affected compiler and System gates**
+- [x] **Step 1: Run affected compiler and System gates**
 
 Run:
 
@@ -254,6 +300,12 @@ Run:
 make test-compiler-system-intrinsics
 make focused FOCUS=core/tests/nextpas.core.system/test_system_source_contracts
 make focused FOCUS=core/tests/nextpas.core.system/test_system_contracts
+make -C core/tests/nextpas.core.system test-object-free-runtime-contract
+make test-compiler-incremental-cache
+make test-incremental-gate
+# Fresh command invocation.
+make test TEST_FILTER=compiler-pass
+# Immediate repeat.
 make test TEST_FILTER=compiler-pass
 make test TEST_FILTER=compiler-fail
 make rebuild-compiler

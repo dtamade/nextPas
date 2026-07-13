@@ -48,6 +48,12 @@ initialization.
 `IsSystemContract` compares the presence bit and kind. Consumers must use this
 helper instead of comparing `IntrinsicName` with an `np.system.*` constant.
 
+`ValidateSystemContractInstr` freezes the structural contract shared by the
+HIR verifier and emitter. A typed instruction must be an intrinsic, use one of
+the migrated kinds, keep the canonical text projection, carry exactly one
+pointer operand, and provide a call target for root, destroy, and cleanup.
+Validation lives beside the HIR record so verifier and codegen cannot drift.
+
 ## Type the object-free family end to end through HIR
 
 The HIR builder assigns these identities:
@@ -63,10 +69,30 @@ The HIR builder assigns these identities:
 typed HIR node kind. It does not trust `TTypedHirNode.DisplayName` to select
 backend behavior.
 
-The LLVM emitter handles any instruction with `HasSystemContract=True` before
-legacy intrinsic-name dispatch. It accepts the four object-free kinds in this
-slice and fails closed for any other typed contract until that family has an
-explicit lowering.
+The LLVM emitter validates and handles any instruction with
+`HasSystemContract=True` before its general instruction-kind switch and before
+legacy intrinsic-name dispatch. A malformed typed `hikCall` therefore cannot
+bypass validation by entering ordinary call lowering. The typed handler accepts
+the four object-free kinds in this slice and fails closed for any other typed
+contract until that family has an explicit lowering.
+
+The pending object-free guard has a narrower continuation rule. Only destroy,
+cleanup, and release can continue an open sequence; a new object-free root must
+close the previous guard first. The typed continuation predicate preserves that
+existing control-flow invariant.
+
+Malformed typed HIR fails twice by design: `THIRVerifier` records a structured
+verification error, and the emitter raises if a caller bypasses verification.
+Missing operands or targets must never be treated as a successfully handled
+contract.
+
+Object-free contracts also form a block-local protocol. `sckObjectFree` opens
+the guarded sequence; destroy and cleanup may only appear while it is open;
+release requires an open sequence and then closes it. An ordinary instruction
+closes the sequence, and another root closes the old sequence before opening a
+new one. The verifier checks this order per block, while the emitter enforces
+the same active-guard precondition defensively. A root-only sequence remains
+valid for the current migration stage, so block end does not require release.
 
 ## Preserve compatibility without preserving authority
 
@@ -89,8 +115,13 @@ regression. Its semantic fixture uses a deliberately untrusted display name.
 The test then requires:
 
 - exact typed identities for guard, destroy, and release instructions;
+- typed cleanup identity and placement when managed fields require cleanup;
 - canonical ledger names in the compatibility projection;
 - pointer-typed receiver operands;
+- verifier rejection for wrong instruction kind, unknown typed kind, missing
+  operands, non-pointer operands, and missing required targets;
+- verifier and emitter rejection for destroy, cleanup, or release without an
+  active object-free root;
 - LLVM nil guard, conditional branch, destroy call, cleanup/release ordering,
   and runtime declarations.
 
