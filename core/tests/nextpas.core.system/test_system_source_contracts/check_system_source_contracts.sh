@@ -1224,9 +1224,16 @@ require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare voi
 require_repo_file "tests/hir/test_hir_object_free_contract.pas"
 require_repo_file "tests/semantic/test_semantic_call_bindings.pas"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-runtime"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.destroy"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.release"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np_system_contracts"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFree)"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeDestroy)"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeCleanup)"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeRelease)"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "SystemContractAt(sckObjectFree).SemanticName"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "untrusted-object-free-label"
+require_repo_reject_regex "tests/hir/test_hir_object_free_contract.pas" 'np[.]system[.]object_free'
+require_repo_reject_regex "tests/hir/test_hir_object_free_contract.pas" 'NPSYSTEM_OBJECT_FREE'
+require_repo_reject_regex "tests/hir/test_hir_object_free_contract.pas" 'SameText[[:space:]]*\([[:space:]]*Instr[.]IntrinsicName'
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_free_release"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "missing-object-free-release-helper-decl"
 require_repo_file "tests/hir/test_hir_field_dynarray_contract.pas"
@@ -1339,7 +1346,7 @@ require_token "tests/nextpas.core.system/Makefile" "test-typinfo-minimal"
 require_token "tests/nextpas.core.system/Makefile" "test-object-free-runtime-contract"
 require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_SOURCE"
 require_token "tests/nextpas.core.system/Makefile" "test_hir_object_free_contract.pas"
-require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_FPC_FLAGS"
+require_token "tests/nextpas.core.system/Makefile" 'OBJECT_FREE_RUNTIME_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend'
 require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_BINARY"
 require_token "tests/nextpas.core.system/Makefile" "test-field-dynarray-contract"
 require_token "tests/nextpas.core.system/Makefile" "FIELD_DYNARRAY_CONTRACT_SOURCE"
