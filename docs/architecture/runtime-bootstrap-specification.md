@@ -86,12 +86,21 @@ no-fold typed HIR 现在还会复制隐式 `TObject` 父类的 VMT slot/function
 `Obj.Free` lowering 到当前有效 `Destroy` runtime call；只继承 `System.TObject.Destroy`
 的普通 class 会落到 `TObject.Destroy`。同一 lowering 还会生成 `np.system.object_free`
 contract，记录 receiver、effective `Destroy`、nil guard 和 heap release intent。
-`THIRBuilder` 已把这个 contract 保留为 HIR `np.system.object_free` intrinsic marker，
-带 receiver pointer operand 和 effective `Destroy` target；紧随其后的匹配 `Destroy`
-lowering 会成为 `np.system.object_free.destroy` owned marker；`heap-release true` 还会成为
-`np.system.object_free.release` marker。LLVM HIR emitter 会把这组 marker 降成 receiver nil
-branch：nil receiver 直接汇合到 `objectfree.end.*`，非 nil receiver 进入
-`objectfree.destroy.*` 后调用 effective `Destroy`，再调用 `@np_object_free_release` hook。
+对已经迁移的 object-free family，`THIRBuilder` 通过 `AssignSystemContract` 写入
+`THIRInstr.HasSystemContract` 和 `THIRInstr.SystemContractKind`；`sckObjectFree`、
+`sckObjectFreeDestroy`、`sckObjectFreeCleanup` 和 `sckObjectFreeRelease` 是 lowering 与
+codegen 的权威 identity。`IntrinsicName` 仍由 typed ledger 投影为对应的
+`np.system.object_free*` 规范名，但只服务 diagnostics、dump 和兼容读取，不能决定 backend
+控制流。HIR verifier 与 LLVM emitter 共用结构 validator，要求受支持的 kind、canonical
+text projection、精确的 pointer operand 和必要 call target；emitter 在普通 instruction
+dispatch 之前验证并按 typed kind 分派，未知或 malformed typed contract fail closed。
+object-free root、destroy/cleanup、release 还形成 block-local sequence，continuation 没有 root
+时 verifier 和 emitter 都会拒绝。尚未迁移的 contract families 仍是 M1 显式债务，不能据此
+宣称整个 compiler/System 边界已经完成 typed migration。
+
+LLVM HIR emitter 会把这组 typed operations 降成 receiver nil branch：nil receiver 直接汇合到
+`objectfree.end.*`，非 nil receiver 进入 `objectfree.destroy.*` 后调用 effective `Destroy`，
+按计划执行 managed-field cleanup，再调用 `@np_object_free_release` hook。
 class allocation lowering 也已进入 `@np_object_alloc(i64 size)` helper，再由 helper 委托到底层
 `@np_alloc` 申请 16-byte header + payload；header offset 0 存 payload size，offset 8 存
 magic `1313882451`，返回值是 payload pointer。`@np_object_free_release` 会从 payload pointer

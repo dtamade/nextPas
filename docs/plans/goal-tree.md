@@ -1,9 +1,9 @@
 <!-- 项目总控地图 -->
-<!-- 版本: v2.4 | 日期: 2026-07-12 -->
+<!-- 版本: v2.5 | 日期: 2026-07-13 -->
 <!-- 每轮工作前查阅，结束后同步状态 -->
 <!-- 编译器执行计划: docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md -->
 
-# nextPas 目标树 v2.4
+# nextPas 目标树 v2.5
 
 打造 FreePascal 领域最优秀的编译器+标准库生态系统。
 
@@ -34,7 +34,7 @@
 
 | 指标 | 值 |
 |------|-----|
-| compiler-pass | 最近一次完整运行 51/53；cache 修复后待 fresh 复核 |
+| compiler-pass | 53/53 fresh invocation + 53/53 immediate repeat；cold/warm 全量门仍待显式 cache-root 隔离 |
 | self-compile | 19/19 ✅ |
 | core/ 覆盖率 | 963/972 (99.1%) |
 | FPC RTL 清零 | 0 直接依赖 ✅ |
@@ -52,17 +52,24 @@
 | Milestone | 内容 | 状态 |
 |-----------|------|------|
 | M0 | compiler/System gate、rebuild 与状态真相恢复 | 🏗️ |
-| M1 | compiler/System bootstrap contract 收敛 | 🔲 |
+| M1 | compiler/System bootstrap contract 收敛 | 🏗️ |
 | M2 | 最小可执行 A→B→C 两跳自举证明 | 🔲 |
 | M3 | session owner、stable IDs、immutable snapshots | 🔲 |
 | M4 | typed query + dependency-aware incremental | 🔲 |
 | M5 | deterministic parallel + data-oriented performance | 🔲 |
 
-**当前证据** (2026-07-12):
+**当前证据** (2026-07-13):
 - L6-A (Class helper) 不是自举阻塞点。
 - Resolver 只把真实依赖加入 `UnitGraph`；旧 252-unit 全索引编译结论已废止。
-- System identity/cache 修复已在 compiler-system lane，通过 focused gate，尚待 current-main replay。
-- 最近完整 compiler-pass 是 51/53；`scripts/rebuild-compiler.sh` 当前没有有效 build body。
+- System identity、parent graph、source-backed cache 与 canonical projection 已进入当前 main 基线；
+  System intrinsics、source contract 和 typed ledger focused gates fresh 通过。
+- compiler-pass fresh command invocation 53/53，紧接的 immediate repeat 53/53；compiler-fail 16/16，
+  `make rebuild-compiler` 返回 `rebuild-compiler=pass`。
+- NPC V2 framing 与 path-safe entry identity 已落地；framing 14/14 和五阶段 fail-closed
+  incremental gate 通过。compiler-pass harness 尚未隔离或清空 workspace `.nextpas` artifact
+  roots，因此两次 53/53 都不能写成 cold/warm-cache 证明。
+- M1 已落地第一个 production typed family：object-free 的 root、destroy、cleanup、release
+  由 `TSystemContractKind` 控制 HIR validation 和 LLVM dispatch；其余 contract families 仍待迁移。
 - 尚无可执行 B/C 两代编译器证据，不能把 module probe 写成两跳自举完成。
 
 **关键决策点**:
@@ -159,14 +166,17 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 
 ---
 
-## 当前执行窗口 (2026-07-12)
+## 当前执行窗口 (2026-07-13)
 
-1. [ ] 通过 latest-main candidate 落地 System identity/parent/cache 三个已审查提交。
+1. [x] 通过 latest-main candidate 落地 System identity/parent/cache 三个已审查提交。
 2. [x] 修复并版本化 NPC cache framing，建立 fail-closed incremental gate。
-3. [ ] 隔离 compiler test/build cache roots，再复跑 cold/immediate-warm compiler-pass。
-4. [ ] 修复 `classes_pass` 和仍存在的 warm-only regression。
-5. [ ] 恢复 canonical `make rebuild-compiler`，再建立 fail-closed B0 benchmark。
-6. [ ] 完成 System 四层 contract ledger，进入 M2 A→B→C 两跳证明。
+3. [ ] 给 compiler test/build 建立显式 cache-root owner/override，再跑真正隔离的 cold/warm
+   full compiler-pass；当前证据只算 fresh invocation + immediate repeat。
+4. [x] 恢复 compiler correctness baseline：compiler-pass 53/53 两次 invocation、compiler-fail 16/16。
+5. [x] 恢复 canonical `make rebuild-compiler`。
+6. [ ] 建立 fail-closed B0 benchmark 与 process-tree resource evidence。
+7. [ ] 继续 System typed contract migration；object-free 是第一个 production family，M1 未完成。
+8. [ ] 完成 M1 退出门后进入 M2 A→B→C 两跳证明。
 
 ---
 
@@ -183,6 +193,8 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | 2026-07-05 | 目标树 v2.1 | 5 阶段 + AL 等级标注 + AL3-AL5 长期目标 |
 | 2026-07-11 | 目标树 v2.3 | 增加 LSP server、formatter 与 test 的分阶段里程碑和 promotion mapping |
 | 2026-07-12 | Compiler excellence roadmap | 采用 Rust 式内部严谨性 + Go 式构建反馈，重新按 production evidence 计分 |
+| 2026-07-13 | M0 truth revalidation | NPC gates、53/53 immediate repeat、16/16 fail、rebuild 与 tooling fresh 通过；cache-root isolation 保持 open |
+| 2026-07-13 | M1 typed contract slice | object-free root/destroy/cleanup/release 成为首个 typed HIR-to-LLVM production family |
 
 ---
 
@@ -199,4 +211,4 @@ Owner 和 promotion gate 以 `docs/architecture/master-roadmap.md` 第 6 段、
 | `docs/plans/selfhost-roadmap.md` | v3.0 自举执行顺序历史快照 |
 | `PLAN.md` | 根总控计划 |
 
-*最后更新: 2026-07-12 | 版本: v2.4*
+*最后更新: 2026-07-13 | 版本: v2.5*

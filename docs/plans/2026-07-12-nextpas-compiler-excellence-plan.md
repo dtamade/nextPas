@@ -1,7 +1,7 @@
 # nextPas Compiler Excellence Roadmap
 
-> Version: 1.0
-> Date: 2026-07-12
+> Version: 1.1
+> Date: 2026-07-13
 > Status: active program roadmap
 > Current proven maturity: AL1; historical AL2 claims are under live revalidation
 > Promotion target: AL2 convergence, then an AL3 self-hosted production compiler
@@ -48,15 +48,15 @@ Public tooling work cannot move ahead of the compiler truth it consumes.
 The repository contains several useful components, but a component existing is
 not the same as a production capability.
 
-| Surface               | Live state on 2026-07-12                                                                                                                | Promotion gap                                                                                 |
+| Surface               | Live state on 2026-07-13                                                                                                                | Promotion gap                                                                                 |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Compiler/System cache | Canonical System source-backed bypass committed at `d41bb0259`; focused gate passes                                                     | Cold and immediate-warm full compiler gates, landing replay                                   |
-| `compiler-pass`       | Last pre-cache full run was 51/53                                                                                                       | Fresh run; repair `classes_pass`; verify `generic_ctor_propagation_pass` warm recovery        |
-| Compiler rebuild      | `scripts/rebuild-compiler.sh` contains only cleanup lines and undefined variables                                                       | Restore one canonical, hermetic build entry                                                   |
+| Compiler/System spine | Canonical System source/projection, identity, parent graph, and source-backed cache fixes are in the current main base; object-free is the first typed HIR family | M1 snapshot/source-only policy plus typed migration of every remaining contract family        |
+| `compiler-pass`       | Fresh command invocation 53/53 and immediate repeat 53/53; compiler-fail 16/16                                                         | Explicit cache-root isolation and a proven cold/warm full-suite pair                          |
+| Compiler rebuild      | Canonical `make rebuild-compiler` builds stage0 and reports `rebuild-compiler=pass`                                                     | Preserve the gate; benchmark startup/resource behavior through fail-closed B0                 |
 | Green tree            | Record-index facade, compact node/child storage, frozen after parse                                                                     | Profile allocation/text-copy costs; finish builder-side data discipline                       |
 | Semantic model        | Typed symbols/types/bindings exist; System identity guards improved                                                                     | Remove process-global imported-unit semantic cache authority; freeze snapshot ownership       |
 | Query database        | O(n) string/object array with prefix invalidation                                                                                       | Typed keys, revisions, dependency edges, cycles, ownership, concurrency                       |
-| Incremental cache     | nextPas compiler cache (NPC) serialization exists, but fingerprint framing is inconsistent and root callers pass empty dependency lists | M0 versioned round-trip/fail-closed repair; M4 dependency fingerprints and invalidation proof |
+| Incremental cache     | NPC V2 framing and path-safe entry identity pass 14/14 direct framing checks and the five-stage fail-closed gate; root callers still pass empty dependency lists | Explicit cache-root ownership, then M4 dependency fingerprints and invalidation proof         |
 | Parallel scheduler    | Standalone task-state model; batch selection has no dependency-readiness check or build-path caller                                     | Worker execution, dependency readiness, cancellation, deterministic commit order              |
 | MIR                   | Duplicated opt-in side path; session reports MIR ready when disabled and backend rebuilds its own HIR/MIR                               | One verified default MIR input, parity gate, translation validation, pass soundness           |
 | Backend               | LLVM and toolchain planning surfaces exist                                                                                              | One default MIR-to-codegen spine, stable artifact truth, code-quality budgets                 |
@@ -338,24 +338,41 @@ same executable reality.
 
 ### Exit gate
 
-As of `codex/compiler-system` commits `e670d082f` and `56a701add`, M0 slice 2
-is evidenced by a dedicated fail-closed gate instead of a runner-integrated
-`compiler-incremental` harness group. The current mandatory commands are:
+Fresh verification on 2026-07-13 proves the repaired NPC and compiler truth
+through dedicated fail-closed and executable gates. The current mandatory
+commands are:
 
 ```text
 make test-compiler-system-intrinsics
+make focused FOCUS=core/tests/nextpas.core.system/test_system_source_contracts
+make focused FOCUS=core/tests/nextpas.core.system/test_system_contracts
 make test-compiler-incremental-cache
 make test-incremental-gate
 make test TEST_FILTER=compiler-pass
+make test TEST_FILTER=compiler-pass
 make test TEST_FILTER=compiler-fail
 make rebuild-compiler
+make test-tooling
 make hygiene
 ```
 
-Cold and immediate-warm compiler-pass results must match. The gate must report
-failures for missing stage0, missing artifacts, cache corruption, and semantic
-drift. Folding this workflow into `tests/harness/runner.pas` remains a later
-refactor, not a prerequisite for counting M0 slice 2 evidence.
+The observed results are System intrinsics/source contracts green, typed ledger
+5/5 with zero unfreed blocks, NPC framing 14/14, all five incremental stages,
+compiler-pass 53/53 twice, compiler-fail 16/16, a successful stage0 rebuild,
+and tooling/hygiene green. The incremental gate reports failures for missing
+stage0, missing artifacts, cache corruption, and semantic drift.
+
+The two full compiler-pass runs are fresh command invocation plus immediate
+repeat correctness evidence, not a cold/warm measurement. The harness does not
+pass `--incremental`, stage0 defaults incremental mode off, and per-fixture
+incremental caches are absent. At the same time, the harness passes the worktree
+root as workspace and does not clear its shared `.nextpas/cache` and
+`.nextpas/out` artifact roots before the first run. M0 therefore remains in
+progress until deliverable 4 adds an explicit compiler-test/build cache-root
+owner or override and proves a truly isolated cold/warm full-suite pair.
+Folding the dedicated incremental workflow into `tests/harness/runner.pas`
+remains a later refactor, not a prerequisite for counting the five-stage
+incremental correctness evidence.
 
 ### Non-goals
 
@@ -385,6 +402,15 @@ explicit owner layers.
 5. Freeze object lifecycle, managed strings, arrays, interfaces, unit init/fini,
    process init/fini, allocation, faults, and halt contracts.
 6. Prove compiler and System consumer gates together before every landing.
+
+Current progress on 2026-07-13: object-free is the first production family whose
+HIR root, destroy, cleanup, and release operations carry `TSystemContractKind`.
+The builder assigns typed identity, the verifier and emitter share structural
+validation, block-local sequencing fails closed, and LLVM dispatch no longer
+uses raw object-free semantic names as control flow. `IntrinsicName` remains a
+canonical ledger projection for compatibility. This is an M1 implementation
+slice, not M1 completion; process/unit lifecycle, strings, dynamic arrays,
+interfaces, exceptions, allocation, fault, and halt families remain open.
 
 ### Exit gate
 
@@ -692,11 +718,11 @@ The roadmap dashboard records evidence, not optimistic percentages.
 
 | Capability               | State                                   | Current evidence                                                                                         | Next gate                                                                 |
 | ------------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| System semantic identity | integrated in lane                      | lane commits `dd9132419`, `feff78730`, `d41bb0259`; focused gate green                                   | latest-main replay and cold/warm compiler-pass                            |
-| Compiler correctness     | needs repair                            | last known 51/53 before cache fix                                                                        | fresh full gate, then `classes_pass` root cause                           |
-| Rebuild                  | broken                                  | tracked script has no build body                                                                         | hermetic rebuild RED/GREEN slice                                          |
+| System semantic identity | M1 typed migration in progress          | Canonical System baseline and the object-free typed HIR/LLVM family have green focused consumer gates | Define snapshot/source-only policy, then migrate the next contract families                |
+| Compiler correctness     | current baseline green                  | compiler-pass 53/53 fresh invocation plus 53/53 immediate repeat; compiler-fail 16/16                   | Explicit cache-root isolation and a proven cold/warm full-suite pair      |
+| Rebuild                  | integrated                              | canonical `make rebuild-compiler` reports `rebuild-compiler=pass`                                       | Keep green while B0 adds startup, failure, and resource evidence          |
 | Query engine             | skeleton                                | O(n) memo table and prefix invalidation                                                                  | typed-key design and dependency tests                                     |
-| Incremental compiler     | broken framing / experimental semantics | NPC writer uses length-prefixed fingerprint while readers consume raw bytes; root dependencies are empty | M0 framing round trip and truncation gate, then M4 dependency equivalence |
+| Incremental compiler     | framing corrected / semantics experimental | NPC V2 framing 14/14, path-safe entry identity, and five-stage fail-closed clean/edit/warm/corrupt proof; root dependencies are empty | Explicit cache-root ownership, then M4 dependency equivalence             |
 | Parallel compiler        | standalone skeleton                     | no readiness check, worker, or build-path caller                                                         | real worker execution and determinism stress                              |
 | MIR                      | duplicated opt-in side path             | session can report ready without a module; backend rebuilds HIR/MIR and verifier is minimal              | one session-owned verified default input and codegen parity gate          |
 | Benchmark truth          | broken                                  | compiler failures and unsupported targets are timed; stale IR and parent-only metrics are possible       | fail-closed B0 manifest and process-tree resource gate                    |
