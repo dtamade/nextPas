@@ -314,7 +314,7 @@ type
 implementation
 
 uses
-  nextpas.core.text.conv, nextpas.core.system.contracts;
+  nextpas.core.text.conv, np_system_contracts;
 
 procedure TExprStack.Init;
 begin

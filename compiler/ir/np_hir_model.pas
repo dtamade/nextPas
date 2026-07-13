@@ -5,7 +5,7 @@ unit np_hir_model;
 interface
 
 uses
-  np_hir_types;
+  np_hir_types, np_system_contracts;
 
 type
   THIRValueId = LongInt;
@@ -84,6 +84,8 @@ type
     FieldIndex: LongInt;
     CallTarget: string;
     IntrinsicName: string;
+    HasSystemContract: Boolean;
+    SystemContractKind: TSystemContractKind;
     FloatValue: Double;
     SourceLine: LongInt;
     SourceCol: LongInt;
@@ -226,11 +228,15 @@ type
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
 function MakeTypedOperand(AValueId: THIRValueId; ATypeId: THIRTypeId): THIROperand;
+procedure AssignSystemContract(var AInstr: THIRInstr;
+  AKind: TSystemContractKind);
+function IsSystemContract(const AInstr: THIRInstr;
+  AKind: TSystemContractKind): Boolean;
 
 implementation
 
 uses
-  nextpas.core.text.conv;
+  SysUtils, nextpas.core.text.conv;
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
 begin
@@ -242,6 +248,27 @@ function MakeTypedOperand(AValueId: THIRValueId; ATypeId: THIRTypeId): THIROpera
 begin
   Result.ValueId := AValueId;
   Result.TypeId := ATypeId;
+end;
+
+procedure AssignSystemContract(var AInstr: THIRInstr;
+  AKind: TSystemContractKind);
+var
+  ContractDefinition: TSystemContractDefinition;
+begin
+  ContractDefinition := SystemContractAt(AKind);
+  if ContractDefinition.SemanticName = '' then
+    raise ERangeError.Create('Unknown System contract kind: ' +
+      IntToStr(Ord(AKind)));
+  AInstr.HasSystemContract := True;
+  AInstr.SystemContractKind := AKind;
+  AInstr.IntrinsicName := ContractDefinition.SemanticName;
+end;
+
+function IsSystemContract(const AInstr: THIRInstr;
+  AKind: TSystemContractKind): Boolean;
+begin
+  Result := AInstr.HasSystemContract and
+    (AInstr.SystemContractKind = AKind);
 end;
 
 constructor THIRModule.Create(const AName: string);

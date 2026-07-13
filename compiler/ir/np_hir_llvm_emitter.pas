@@ -87,6 +87,8 @@ type
     procedure EmitFunction(const AFunc: THIRFunction);
     procedure EmitCallInstr(const AInstr: THIRInstr);
     procedure ClosePendingObjectFreeGuard;
+    function IsObjectFreeGuardContinuation(const AInstr: THIRInstr): Boolean;
+    function EmitSystemContractInstr(const AInstr: THIRInstr): Boolean;
     procedure EmitObjectFreeGuardStart(const AInstr: THIRInstr);
     procedure EmitObjectFreeOwnedDestroy(const AInstr: THIRInstr);
     procedure EmitObjectFreeRelease(const AInstr: THIRInstr);

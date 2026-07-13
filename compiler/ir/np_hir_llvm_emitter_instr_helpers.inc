@@ -1,6 +1,6 @@
 
 uses
-  nextpas.core.text.conv, nextpas.core.system.contracts;
+  SysUtils, nextpas.core.text.conv, np_system_contracts;
 
 const
   NP_ALLOCATOR_PAGE_SIZE = 4096;
@@ -287,6 +287,44 @@ begin
   FPendingObjectFreeEndLabel := '';
 end;
 
+function THIRLlvmEmitter.IsObjectFreeGuardContinuation(
+  const AInstr: THIRInstr): Boolean;
+begin
+  if not AInstr.HasSystemContract then
+    Exit(False);
+  case AInstr.SystemContractKind of
+    sckObjectFreeDestroy,
+    sckObjectFreeCleanup,
+    sckObjectFreeRelease:
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
+function THIRLlvmEmitter.EmitSystemContractInstr(
+  const AInstr: THIRInstr): Boolean;
+begin
+  if not AInstr.HasSystemContract then
+    Exit(False);
+  case AInstr.SystemContractKind of
+    sckObjectFree:
+      EmitObjectFreeGuardStart(AInstr);
+    sckObjectFreeDestroy:
+      EmitObjectFreeOwnedDestroy(AInstr);
+    sckObjectFreeCleanup:
+      if Length(AInstr.Operands) >= 1 then
+        Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+          ValueRef(AInstr.Operands[0].ValueId) + ')');
+    sckObjectFreeRelease:
+      EmitObjectFreeRelease(AInstr);
+  else
+    raise Exception.Create('Unsupported typed System contract kind: ' +
+      IntToStr(Ord(AInstr.SystemContractKind)));
+  end;
+  Result := True;
+end;
+
 procedure THIRLlvmEmitter.EmitObjectFreeGuardStart(const AInstr: THIRInstr);
 var
   CounterText: string;
@@ -322,4 +360,3 @@ begin
       ValueRef(AInstr.Operands[0].ValueId) + ')');
   ClosePendingObjectFreeGuard;
 end;
-

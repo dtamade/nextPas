@@ -312,7 +312,7 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := NPSYSTEM_OBJECT_FREE_CLEANUP;
+  AssignSystemContract(Instr, sckObjectFreeCleanup);
   Instr.CallTarget := 'np_object_string_cleanup_' + AClassName;
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(AReceiverPtr, GetPtrType);
@@ -331,7 +331,7 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := NPSYSTEM_OBJECT_FREE_CLEANUP;
+  AssignSystemContract(Instr, sckObjectFreeCleanup);
   Instr.CallTarget := 'np_object_dynarray_cleanup_' + AClassName;
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(AReceiverPtr, GetPtrType);

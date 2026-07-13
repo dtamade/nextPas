@@ -3,7 +3,7 @@ program test_hir_object_free_contract;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_semantic_model, np_hir_types, np_hir_model,
+  SysUtils, np_semantic_model, np_hir_types, np_hir_model, np_system_contracts,
   np_hir_builder, np_hir_llvm_emitter, np_hir_verifier;
 
 var
@@ -63,7 +63,7 @@ begin
     SemaModel.AddTypedHirNode('var-decl-ptr-runtime', 'Worker', 0, 0, 'Worker');
     SemaModel.AddTypedHirNode(
       'object-free-runtime',
-      'np.system.object_free',
+      'untrusted-object-free-label',
       0,
       0,
       'var Worker' + #10 +
@@ -97,11 +97,15 @@ begin
         begin
           Instr := Func.Blocks[BlockIndex].Instrs[InstrIndex];
           if (Instr.Kind = hikIntrinsic) and
-            SameText(Instr.IntrinsicName, 'np.system.object_free') then
+            IsSystemContract(Instr, sckObjectFree) then
           begin
             if FoundContract then
               Fail('duplicate-object-free-contract');
             FoundContract := True;
+            if Instr.IntrinsicName <>
+              SystemContractAt(sckObjectFree).SemanticName then
+              Fail('object-free-intrinsic-name-mismatch:' +
+                Instr.IntrinsicName);
             if not SameText(Instr.CallTarget, 'TObject.Destroy') then
               Fail('object-free-destroy-target-mismatch:' + Instr.CallTarget);
             if Length(Instr.Operands) <> 1 then
@@ -117,11 +121,15 @@ begin
             SameText(Instr.CallTarget, 'TObject.Destroy') then
             Fail('plain-object-free-destroy-call');
           if (Instr.Kind = hikIntrinsic) and
-            SameText(Instr.IntrinsicName, 'np.system.object_free.destroy') then
+            IsSystemContract(Instr, sckObjectFreeDestroy) then
           begin
             if FoundOwnedDestroy then
               Fail('duplicate-object-free-owned-destroy');
             FoundOwnedDestroy := True;
+            if Instr.IntrinsicName <>
+              SystemContractAt(sckObjectFreeDestroy).SemanticName then
+              Fail('object-free-owned-destroy-intrinsic-name-mismatch:' +
+                Instr.IntrinsicName);
             if not SameText(Instr.CallTarget, 'TObject.Destroy') then
               Fail('object-free-owned-destroy-target-mismatch:' +
                 Instr.CallTarget);
@@ -135,11 +143,15 @@ begin
               Fail('object-free-owned-destroy-receiver-not-pointer');
           end;
           if (Instr.Kind = hikIntrinsic) and
-            SameText(Instr.IntrinsicName, 'np.system.object_free.release') then
+            IsSystemContract(Instr, sckObjectFreeRelease) then
           begin
             if FoundHeapRelease then
               Fail('duplicate-object-free-release');
             FoundHeapRelease := True;
+            if Instr.IntrinsicName <>
+              SystemContractAt(sckObjectFreeRelease).SemanticName then
+              Fail('object-free-release-intrinsic-name-mismatch:' +
+                Instr.IntrinsicName);
             if Length(Instr.Operands) <> 1 then
               Fail('object-free-release-operand-count:' +
                 IntToStr(Length(Instr.Operands)));

@@ -205,7 +205,7 @@ begin
   if OwnsObjectFreeDestroy then
   begin
     Instr.Kind := hikIntrinsic;
-    Instr.IntrinsicName := NPSYSTEM_OBJECT_FREE_DESTROY;
+    AssignSystemContract(Instr, sckObjectFreeDestroy);
   end
   else
     Instr.Kind := hikCall;
@@ -226,7 +226,7 @@ begin
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.IntrinsicName := NPSYSTEM_OBJECT_FREE_RELEASE;
+    AssignSystemContract(Instr, sckObjectFreeRelease);
     SetLength(Instr.Operands, 1);
     Instr.Operands[0] := MakeTypedOperand(ObjectFreeReceiverValue, GetPtrType);
     EmitInstr(Instr);
@@ -296,7 +296,7 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := ANode.DisplayName;
+  AssignSystemContract(Instr, sckObjectFree);
   Instr.CallTarget := DestroyName;
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(ReceiverPtr, GetPtrType);

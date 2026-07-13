@@ -3,10 +3,7 @@ var
   LlvmType, Op, LTruncVal: string;
   I, LDbgIdx: LongInt;
 begin
-  if FPendingObjectFreeActive and not ((AInstr.Kind = hikIntrinsic) and
-    (SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_DESTROY) or
-    SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_CLEANUP) or
-    SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_RELEASE))) then
+  if FPendingObjectFreeActive and not IsObjectFreeGuardContinuation(AInstr) then
     ClosePendingObjectFreeGuard;
 
   LlvmType := TypeToLlvm(AInstr.TypeId);
@@ -157,6 +154,8 @@ begin
     end;
     hikIntrinsic:
     begin
+      if EmitSystemContractInstr(AInstr) then
+        Exit;
       if AInstr.IntrinsicName = 'halt' then
       begin
         if FNeedsProcessLifecycle and not FProcessFiniEmitted then
@@ -177,18 +176,6 @@ begin
           Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
             ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
-      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE) then
-        EmitObjectFreeGuardStart(AInstr)
-      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_DESTROY) then
-        EmitObjectFreeOwnedDestroy(AInstr)
-      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_CLEANUP) then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ')');
-      end
-      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_RELEASE) then
-        EmitObjectFreeRelease(AInstr)
       else if AInstr.IntrinsicName = 'write_int' then
       begin
         FNeedsWriteInt := True;
