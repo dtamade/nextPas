@@ -1,7 +1,7 @@
 # mem Scorecard
 
-**状态**: Active（SC1–SC5 脚手架已落地）  
-**权威入口**: `core/tests/nextpas.core.mem/scorecard/`  
+**状态**: Active（SC1–SC5 脚手架已落地）
+**权威入口**: `core/tests/nextpas.core.mem/scorecard/`
 **计划引用**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §7
 
 Ready 报告的性能证据以本 Scorecard 为准；历史微基准博物馆数据见 [BENCHMARKS.md](BENCHMARKS.md)。
@@ -35,17 +35,17 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 
 规则：
 
-- 禁止为 SC1 优化破坏 SC3 / 契约 C08。  
-- 默认堆或热路径改动至少附 SC1–SC4。  
-- 触达 scavenge / 归还 OS 时再附 SC5。  
-- SC5 可移植：用 `TGrowingAllocator.GetHeapStats`，不依赖 `/proc` RSS（RSS 对照可选）。  
+- 禁止为 SC1 优化破坏 SC3 / 契约 C08。
+- 默认堆或热路径改动至少附 SC1–SC4。
+- 触达 scavenge / 归还 OS 时再附 SC5。
+- SC5 可移植：用 `TGrowingAllocator.GetHeapStats`，不依赖 `/proc` RSS（RSS 对照可选）。
 - SC6/SC7（compiler / HTTP 真实路径）随上层集成落地。
 
 ---
 
 ## 基线快照
 
-**环境**: Linux x86_64, FPC 3.3.1  
+**环境**: Linux x86_64, FPC 3.3.1
 **日期**: 2026-07-14
 
 ### RELEASE=1（发布对照，无 heaptrc）

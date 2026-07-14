@@ -1,8 +1,8 @@
 # mem 标准库质量计划
 
-**状态**: Active  
-**Owner**: mem lane  
-**创建**: 2026-07-14  
+**状态**: Active
+**Owner**: mem lane
+**创建**: 2026-07-14
 **目标**: 把 `nextpas.core.mem` 从“分配器平台/博物馆”收敛为 **对标并在关键维度超过 Go runtime / Rust Allocator 生态** 的标准库级内存底座。
 
 相关文档：
@@ -52,8 +52,8 @@
 
 结论：
 
-1. **能力已经够用**，甚至过度。  
-2. **缺的是 stdlib 纪律**：默认栈、契约矩阵、门面瘦身、Scorecard、上层集成。  
+1. **能力已经够用**，甚至过度。
+2. **缺的是 stdlib 纪律**：默认栈、契约矩阵、门面瘦身、Scorecard、上层集成。
 3. 下一阶段 **禁止** 无 consumer 的新 allocator phase。
 
 ---
@@ -71,8 +71,8 @@
 
 规则：
 
-- 新类型默认进 Tier-3，除非有明确上层 consumer 与验收用例。  
-- Tier-3 只可通过子单元 `uses`（例如 `nextpas.core.mem.allocator.prediction`）。  
+- 新类型默认进 Tier-3，除非有明确上层 consumer 与验收用例。
+- Tier-3 只可通过子单元 `uses`（例如 `nextpas.core.mem.allocator.prediction`）。
 - 组合器不得改变底层 nil/0/OOM 契约。
 
 ### 3.2 Tier-0 — 默认栈（主攻）
@@ -186,9 +186,9 @@ NEXTPAS_MEM_DEBUG=sentinel,leak,stats
 
 **例外保留在门面的条件**（满足其一即可升到 Tier-1/2）：
 
-1. core 外或非 mem 测试有真实 `uses`  
-2. 编译器 / HTTP / collections 明确依赖  
-3. Scorecard 证明其不可被 Tier-0 替代  
+1. core 外或非 mem 测试有真实 `uses`
+2. 编译器 / HTTP / collections 明确依赖
+3. Scorecard 证明其不可被 Tier-0 替代
 
 ### 3.6 边界注意
 
@@ -309,11 +309,11 @@ make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
 
 初始优先登记：
 
-1. RTL / CRT / Mimalloc  
-2. Growing  
-3. Tracking / Sentinel / Fallback / Bounded / ThreadSafe  
-4. Local / Chunked / Virtual(+adapter) Arena  
-5. BlockPool / FixedPool / FixedSlab / SlabPool  
+1. RTL / CRT / Mimalloc
+2. Growing
+3. Tracking / Sentinel / Fallback / Bounded / ThreadSafe
+4. Local / Chunked / Virtual(+adapter) Arena
+5. BlockPool / FixedPool / FixedSlab / SlabPool
 
 Tier-3 不强制进矩阵；若保留门面资格则必须进。
 
@@ -325,11 +325,11 @@ Tier-3 不强制进矩阵；若保留门面资格则必须进。
 
 `nextpas.core.mem` 门面只包含：
 
-1. Tier-0 契约与默认工厂  
-2. Tier-0 主实现类型  
-3. Tier-1 精选组合器  
-4. Tier-2 精选诊断  
-5. Secure / OOM / Stats / Budget 运行时 API  
+1. Tier-0 契约与默认工厂
+2. Tier-0 主实现类型
+3. Tier-1 精选组合器
+4. Tier-2 精选诊断
+5. Secure / OOM / Stats / Budget 运行时 API
 
 **移除**：§3.5 Tier-3 的 uses 与 type alias。
 
@@ -345,9 +345,9 @@ Tier-3 不强制进矩阵；若保留门面资格则必须进。
 
 ### 6.3 明确不在本计划删除的
 
-- Tier-3 **源文件**（除非后续证明死码且无测试价值）  
-- 已有 focused 测试目录（可保留，作回归）  
-- CONTRACT 语义  
+- Tier-3 **源文件**（除非后续证明死码且无测试价值）
+- 已有 focused 测试目录（可保留，作回归）
+- CONTRACT 语义
 
 ---
 
@@ -367,8 +367,8 @@ Tier-3 不强制进矩阵；若保留门面资格则必须进。
 
 规则：
 
-- 微基准亮点可以写进 BENCHMARKS，但 **Ready 报告只认 Scorecard**。  
-- 禁止为 SC1 优化破坏 SC3/C08。  
+- 微基准亮点可以写进 BENCHMARKS，但 **Ready 报告只认 Scorecard**。
+- 禁止为 SC1 优化破坏 SC3/C08。
 - 每次默认堆或热路径改动必须附 SC1–SC4 至少；触达 scavenge/归还则附 SC5。
 
 历史数据入口：[BENCHMARKS.md](BENCHMARKS.md)。权威 Scorecard 入口与基线：[SCORECARD.md](SCORECARD.md)；程序：
@@ -423,12 +423,12 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 
 ## 9. 明确不做（本计划有效期内）
 
-1. 无 consumer 的新 allocator Phase（28+）  
-2. 把 `MemSize`/`AllocAligned` 塞回 `IAllocator`  
-3. 扩大 ring buffer 为通用容器中心  
-4. 用测试数量替代契约矩阵  
-5. 为微基准牺牲跨线程 free / realloc 语义  
-6. 在 mem 内重新实现 platform 级同步原语语义  
+1. 无 consumer 的新 allocator Phase（28+）
+2. 把 `MemSize`/`AllocAligned` 塞回 `IAllocator`
+3. 扩大 ring buffer 为通用容器中心
+4. 用测试数量替代契约矩阵
+5. 为微基准牺牲跨线程 free / realloc 语义
+6. 在 mem 内重新实现 platform 级同步原语语义
 
 ---
 
@@ -452,10 +452,10 @@ make focused FOCUS=core/tests/nextpas.core.mem/scorecard
 
 Ready 报告必须包含：
 
-- 分支 / worktree / HEAD  
-- Tier 影响面（是否动门面）  
-- Contract / Scorecard 证据  
-- 禁止带入的临时文件清单  
+- 分支 / worktree / HEAD
+- Tier 影响面（是否动门面）
+- Contract / Scorecard 证据
+- 禁止带入的临时文件清单
 
 ---
 
@@ -463,12 +463,12 @@ Ready 报告必须包含：
 
 按依赖从低到高：
 
-1. **Doc**：本计划 + README/API-GUIDE 导航 — ✅  
-2. **Facade slim**：按 §3.5 移除 Tier-3 门面导出 + 修 test_mem — ✅  
-3. **Contract matrix**：RTL + Growing + LocalArena — ✅  
-4. **Scorecard SC1–SC4 脚手架** — ✅  
-5. **Default dual-track D1** — ✅ 过程式 GetMem→DefaultHeap(Growing)；DefaultAllocator 仍为 IAllocator/RTL  
-6. **Default D2 / 上层集成** — next  
+1. **Doc**：本计划 + README/API-GUIDE 导航 — ✅
+2. **Facade slim**：按 §3.5 移除 Tier-3 门面导出 + 修 test_mem — ✅
+3. **Contract matrix**：RTL + Growing + LocalArena — ✅
+4. **Scorecard SC1–SC4 脚手架** — ✅
+5. **Default dual-track D1** — ✅ 过程式 GetMem→DefaultHeap(Growing)；DefaultAllocator 仍为 IAllocator/RTL
+6. **Default D2 / 上层集成** — next
 
 第 2 步有编译面影响（任何 `uses nextpas.core.mem` 再写 Tier-3 类型名会挂）——本仓库外部引用近乎为零，风险可控，但仍需全量搜引用后改。
 

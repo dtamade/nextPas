@@ -1,7 +1,7 @@
 # DEBUG 包装链设计（M2-5）
 
-**状态**: Design  
-**关联**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3.4 Tier-2、§8 M2-5  
+**状态**: Design
+**关联**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3.4 Tier-2、§8 M2-5
 **原则**: 热路径零成本；诊断只叠在 **IAllocator 插件面**，不绑架 `DefaultHeap`。
 
 ---
@@ -59,9 +59,9 @@ NEXTPAS_MEM_DEBUG=<token>[,<token>...]
 
 **解析规则**：
 
-- 大小写不敏感；未知 token → 忽略并（可选）stderr 警告一次  
-- 空值 / 未设置 → 无包装，`DefaultAllocator` = RTL 单例  
-- 顺序：固定规范序（上表），**不**按用户书写序乱叠（可预测、可测）  
+- 大小写不敏感；未知 token → 忽略并（可选）stderr 警告一次
+- 空值 / 未设置 → 无包装，`DefaultAllocator` = RTL 单例
+- 顺序：固定规范序（上表），**不**按用户书写序乱叠（可预测、可测）
 - 同一语义别名合并（`leak` ≡ `tracking` 的一种配置）
 
 规范链（示例 `sentinel,leak,stats`）：
@@ -90,14 +90,14 @@ procedure ResetDebugWrapForTests;                   // 仅测试
 
 约束：
 
-- 包装链在 **进程首次** `DefaultAllocator` 时惰性构建，之后单例  
-- 不在 `DefaultHeap` / Growing 初始化路径上读 env（避免启动抖动）  
-- 测试可 `ResetDebugWrapForTests` + `platform_env_set` 再触发重建  
+- 包装链在 **进程首次** `DefaultAllocator` 时惰性构建，之后单例
+- 不在 `DefaultHeap` / Growing 初始化路径上读 env（避免启动抖动）
+- 测试可 `ResetDebugWrapForTests` + `platform_env_set` 再触发重建
 
 **不做**：
 
-- 不把 DEBUG 链做成 `IAllocator` 默认热路径  
-- 不在 Growing 内部插钩子  
+- 不把 DEBUG 链做成 `IAllocator` 默认热路径
+- 不在 Growing 内部插钩子
 - 不引入新的全局锁热路径（构建链仅一次）
 
 ---
@@ -119,18 +119,18 @@ Focused gate 建议：`core/tests/nextpas.core.mem/test_debug_wrap/`（实现时
 
 ## 6. 与 Month 3 的衔接
 
-- 上层 HTTP/compiler 热路径继续 `DefaultHeap` / Arena  
-- 调试构建或测试夹具用 `DefaultAllocator` + env  
-- 未来 `MemStats` 可从 stats 包装器或 Growing 可观测字段双源导出，但 DEBUG 链不是 MemStats 唯一来源  
+- 上层 HTTP/compiler 热路径继续 `DefaultHeap` / Arena
+- 调试构建或测试夹具用 `DefaultAllocator` + env
+- 未来 `MemStats` 可从 stats 包装器或 Growing 可观测字段双源导出，但 DEBUG 链不是 MemStats 唯一来源
 
 ---
 
 ## 7. 实现优先级
 
-1. Token 解析 + 固定叠层顺序 + 单测  
-2. `tracking` + `sentinel` 最小可用  
-3. `stats`  
-4. 文档写入 README/API-GUIDE 一小节  
-5. （可选）`NEXTPAS_MEM_HEAP_DEBUG`  
+1. Token 解析 + 固定叠层顺序 + 单测
+2. `tracking` + `sentinel` 最小可用
+3. `stats`
+4. 文档写入 README/API-GUIDE 一小节
+5. （可选）`NEXTPAS_MEM_HEAP_DEBUG`
 
 本文件只定设计；落地前不改 `DefaultHeap` 语义。
