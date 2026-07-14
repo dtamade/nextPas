@@ -7,7 +7,8 @@ uses
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.test,
-  nextpas.core.mem.central;
+  nextpas.core.mem.central,
+  nextpas.core.mem.allocator.growing;
 
 var
   T: TTestSuite;
@@ -159,6 +160,98 @@ begin
   WriteLn('PASS: partial span no tick');
 end;
 
+{ Test: lifetime Released* counters advance on hard release. }
+procedure TestPoolStatsReleased;
+var
+  LPool: TCentralPool;
+  LStats: TCentralPoolStats;
+  LReleased: Int32;
+  LBytes: SizeUInt;
+begin
+  CentralPoolInit(LPool, 64);
+  AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, 100);
+  CentralPoolGetStats(LPool, LStats);
+  Check(LStats.LiveSpans = 1, 'live 1 before scavenge');
+  Check(LStats.IdleSpans = 1, 'idle 1');
+  Check(LStats.LiveBytes > 0, 'live bytes > 0');
+  Check(LStats.ReleasedSpans = 0, 'no release yet');
+  LBytes := LStats.LiveBytes;
+  LReleased := ScavengeCentralPools(LPool, 200, 50);
+  Check(LReleased = 1, 'released 1');
+  CentralPoolGetStats(LPool, LStats);
+  Check(LStats.LiveSpans = 0, 'live 0 after');
+  Check(LStats.LiveBytes = 0, 'live bytes 0');
+  Check(LStats.ReleasedSpans = 1, 'lifetime released spans');
+  Check(LStats.ReleasedBytes = LBytes, 'lifetime released bytes');
+  CentralPoolDestroy(LPool);
+  WriteLn('PASS: pool stats released');
+end;
+
+{ Test: soft decommit when age in [DECOMMIT, IDLE).
+  FLastFreeTick=0 means "not idle", so free at tick 1. }
+procedure TestPoolStatsDecommit;
+var
+  LPool: TCentralPool;
+  LStats: TCentralPoolStats;
+  LReleased: Int32;
+  LOp: UInt64;
+begin
+  CentralPoolInit(LPool, 64);
+  AllocAndFreeAll(LPool, CENTRAL_SPAN_SLOTS, 1);
+  { age = SCAVENGER_DECOMMIT_THRESHOLD (>= soft, < hard) → decommit only. }
+  LOp := 1 + SCAVENGER_DECOMMIT_THRESHOLD;
+  LReleased := ScavengeCentralPools(LPool, LOp, SCAVENGER_IDLE_THRESHOLD);
+  Check(LReleased = 0, 'no hard release');
+  Check(LPool.FEntries[0].FMemory <> nil, 'virtual kept');
+  Check(LPool.FEntries[0].FDecommitted, 'decommitted');
+  CentralPoolGetStats(LPool, LStats);
+  Check(LStats.DecommittedSpans = 1, 'live decommitted count');
+  Check(LStats.DecommitEvents = 1, 'lifetime decommit events');
+  Check(LStats.DecommittedBytes > 0, 'decommitted bytes');
+  Check(LStats.ReleasedSpans = 0, 'still no hard release');
+  CentralPoolDestroy(LPool);
+  WriteLn('PASS: pool stats decommit');
+end;
+
+{ Test: Growing.GetHeapStats + Scavenge on DefaultGrowingAllocator.
+  TLS refill/flush is wired to the global singleton (DefaultHeap path). }
+procedure TestGrowingHeapStats;
+var
+  LAlloc: TGrowingAllocator;
+  LBefore, LAfter: TGrowingHeapStats;
+  LPtrs: array[0..255] of Pointer;
+  I: Integer;
+  LReleased: Int32;
+  LSize: SizeUInt;
+  LBeforeReleased: UInt64;
+begin
+  LSize := 64;
+  LAlloc := DefaultGrowingAllocator;
+  Check(LAlloc <> nil, 'default growing present');
+
+  for I := 0 to High(LPtrs) do
+  begin
+    LPtrs[I] := LAlloc.GetMem(LSize);
+    Check(LPtrs[I] <> nil, 'alloc');
+  end;
+  for I := 0 to High(LPtrs) do
+    LAlloc.FreeMem(LPtrs[I], LSize);
+
+  LAlloc.GetHeapStats(LBefore);
+  Check(LBefore.LiveSpans >= 1, 'live spans after free');
+  Check(LBefore.LiveBytes > 0, 'live bytes after free');
+  LBeforeReleased := LBefore.ReleasedSpans;
+
+  { Force scavenge flushes TLS then hard-releases idle spans. }
+  LReleased := LAlloc.Scavenge;
+  Check(LReleased >= 1, 'scavenge released >= 1');
+  LAlloc.GetHeapStats(LAfter);
+  Check(LAfter.ReleasedSpans >= LBeforeReleased + 1, 'released spans++');
+  Check(LAfter.ReleasedBytes > LBefore.ReleasedBytes, 'released bytes++');
+  Check(LAfter.LiveBytes < LBefore.LiveBytes, 'live bytes decreased');
+  WriteLn('PASS: growing heap stats');
+end;
+
 { --- Main --- }
 
 begin
@@ -171,6 +264,9 @@ begin
   T.Test('scavenger_empty', @TestScavengerEmpty);
   T.Test('reused_span_clears_tick', @TestReusedSpanClearsTick);
   T.Test('partial_span_no_tick', @TestPartialSpanNoTick);
+  T.Test('pool_stats_released', @TestPoolStatsReleased);
+  T.Test('pool_stats_decommit', @TestPoolStatsDecommit);
+  T.Test('growing_heap_stats', @TestGrowingHeapStats);
 
   LRunPassed := T.Run;
   T.Summary;

@@ -15,6 +15,21 @@ uses
   nextpas.core.mem.shuffle;
 
 type
+  {** Aggregate scavenger / retention snapshot for TGrowingAllocator.
+      Portable alternative to process RSS for SC5-style long-run checks. }
+  TGrowingHeapStats = record
+    LiveSpans: Int32;
+    IdleSpans: Int32;
+    DecommittedSpans: Int32;
+    FreeSlots: SizeUInt;
+    LiveBytes: SizeUInt;        { virtual bytes still held by central spans }
+    ReleasedSpans: UInt64;      { lifetime hard FreeMem of idle spans }
+    ReleasedBytes: UInt64;
+    DecommitEvents: UInt64;
+    DecommittedBytes: UInt64;
+    OpCounter: UInt64;
+  end;
+
   {** Unified growing allocator.
       Routes allocations through:
         small (≤ MEM_SIZECLASS_MAX) → TLS cache → central pool → new span
@@ -49,6 +64,10 @@ type
         Slower than the two-parameter version — use when size is unknown. }
     procedure FreeMem(APtr: Pointer);
 
+    {** Lookup size-class capacity for a block owned by this allocator.
+        Returns False for nil, huge/System blocks, or foreign pointers. }
+    function TryBlockSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
+
     {** Allocate ASize bytes, zero-initialized. }
     function AllocMem(ASize: SizeUInt): Pointer;
 
@@ -73,9 +92,16 @@ type
         copies data, and frees the old block. }
     function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer;
 
-    {** Force a scavenge pass across all central pools.
-        Releases long-idle fully-free spans to OS. }
-    procedure Scavenge;
+    {** System-shaped realloc when old size is unknown (span scan or System).
+        Prefer ReallocMem(ptr, old, new) on hot paths. }
+    function ReallocMem(APtr: Pointer; ANewSize: SizeUInt): Pointer;
+
+    {** Force a scavenge pass across all central pools (release threshold 0).
+        Returns number of spans hard-released this pass. }
+    function Scavenge: Int32;
+
+    {** Aggregate live + lifetime scavenger counters across size classes. }
+    procedure GetHeapStats(out AStats: TGrowingHeapStats);
 
     {** Monotonic op counter for scavenger idle tracking. }
     property OpCounter: UInt64 read FOpCounter;
@@ -488,10 +514,12 @@ end;
 {$pop}
 
 {$push}{$R-}
-procedure TGrowingAllocator.FreeMem(APtr: Pointer);
+function TGrowingAllocator.TryBlockSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
 var
   I: Int32;
 begin
+  Result := False;
+  ASize := 0;
   if APtr = nil then
     Exit;
   { Always scan Self's centrals first (this instance may own the block). }
@@ -501,8 +529,8 @@ begin
       Continue;
     if FindSpanOwnerThreadId(FCentrals[I], APtr) <> 0 then
     begin
-      FreeMem(APtr, SizeClasses[I]);
-      Exit;
+      ASize := SizeClasses[I];
+      Exit(True);
     end;
   end;
   { If Self is not the global instance and global exists, try it too. }
@@ -514,12 +542,23 @@ begin
         Continue;
       if FindSpanOwnerThreadId(GGrowingAllocator.FCentrals[I], APtr) <> 0 then
       begin
-        GGrowingAllocator.FreeMem(APtr, SizeClasses[I]);
-        Exit;
+        ASize := SizeClasses[I];
+        Exit(True);
       end;
     end;
   end;
-  System.FreeMem(APtr);
+end;
+
+procedure TGrowingAllocator.FreeMem(APtr: Pointer);
+var
+  LSize: SizeUInt;
+begin
+  if APtr = nil then
+    Exit;
+  if TryBlockSize(APtr, LSize) then
+    FreeMem(APtr, LSize)
+  else
+    System.FreeMem(APtr);
 end;
 {$pop}
 
@@ -752,12 +791,63 @@ begin
   end;
 end;
 
-procedure TGrowingAllocator.Scavenge;
+function TGrowingAllocator.ReallocMem(APtr: Pointer; ANewSize: SizeUInt): Pointer;
+var
+  LOldSize: SizeUInt;
+begin
+  if APtr = nil then
+    Exit(GetMem(ANewSize));
+  if ANewSize = 0 then
+  begin
+    FreeMem(APtr);
+    Exit(nil);
+  end;
+  if TryBlockSize(APtr, LOldSize) then
+    Result := ReallocMem(APtr, LOldSize, ANewSize)
+  else
+    { Huge or foreign block: host System path (compiler kernel System). }
+    Result := System.ReallocMem(APtr, ANewSize);
+end;
+
+function TGrowingAllocator.Scavenge: Int32;
 var
   I: Int32;
+  LOp: UInt64;
 begin
+  Result := 0;
+  { TLS free lists hold slots that still look allocated in central bitmaps.
+    Flush this thread's cache so idle spans can become fully free.
+    FlushToCentral targets the global singleton (product DefaultHeap path). }
+  if Self = GGrowingAllocator then
+    ThreadCacheFlushAll(GThreadCache, @FlushToCentral);
+  LOp := GThreadCache.FOpCount;
+  if LOp = 0 then
+    LOp := FOpCounter;
+  AtomicExchange(FOpCounter, LOp);
   for I := 0 to MEM_SIZECLASS_COUNT - 1 do
-    ScavengeCentralPools(FCentrals[I], FOpCounter, 0);
+    Inc(Result, ScavengeCentralPools(FCentrals[I], LOp, 0));
+end;
+
+procedure TGrowingAllocator.GetHeapStats(out AStats: TGrowingHeapStats);
+var
+  I: Int32;
+  LPool: TCentralPoolStats;
+begin
+  FillChar(AStats, SizeOf(AStats), 0);
+  AStats.OpCounter := FOpCounter;
+  for I := 0 to MEM_SIZECLASS_COUNT - 1 do
+  begin
+    CentralPoolGetStats(FCentrals[I], LPool);
+    Inc(AStats.LiveSpans, LPool.LiveSpans);
+    Inc(AStats.IdleSpans, LPool.IdleSpans);
+    Inc(AStats.DecommittedSpans, LPool.DecommittedSpans);
+    Inc(AStats.FreeSlots, LPool.FreeSlots);
+    Inc(AStats.LiveBytes, LPool.LiveBytes);
+    Inc(AStats.ReleasedSpans, LPool.ReleasedSpans);
+    Inc(AStats.ReleasedBytes, LPool.ReleasedBytes);
+    Inc(AStats.DecommitEvents, LPool.DecommitEvents);
+    Inc(AStats.DecommittedBytes, LPool.DecommittedBytes);
+  end;
 end;
 
 function DefaultGrowingAllocator: TGrowingAllocator;
