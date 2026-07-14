@@ -1,9 +1,23 @@
 # nextpas.core.mem API 选择指南
 
 **目的**: 帮助开发者在 mem 模块的三套 API 体系中选择正确的入口。
-**最后更新**: 2026-07-03
+**最后更新**: 2026-07-14
+**质量计划**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md)（Tier 分层、门面瘦身、Default 迁移）
 
 ---
+
+## 标准路径 vs 专家路径
+
+优先使用 **Tier-0 标准路径**；需要策略/诊断时再选 Tier-1/2。Tier-3 Experimental 不进门面承诺，见质量计划 §3。
+
+| Tier | 你应该用什么 |
+|------|----------------|
+| **0 默认** | `DefaultHeap` / `GetMem`、`CreateDefaultArena` / `TLocalArena` / `TChunkedArena` / `TVirtualArena`、Fixed/Block/Slab 池 |
+| **1 组合** | `TFallbackAllocator`、`TBoundedAllocator`、`TThreadSafeAllocator`、`TAlignedAllocator`、`TStatsAllocator` … |
+| **2 诊断** | `TTrackingAllocator`、`TSentinelAllocator`、`TGuardAllocator`、`TFailAllocator` … |
+| **3 实验** | `TPredictionAllocator`、`TNumaAllocator`、`TReplayAllocator` 等 — 直接 `uses` 子单元，勿当默认 |
+
+热路径默认堆是 `DefaultHeap`（`TGrowingAllocator` 原生）。`DefaultAllocator` 是 IAllocator 注入面（RTL），不要在热循环里用。
 
 ## 三套 API 体系
 
@@ -22,22 +36,25 @@ mem 模块有三套命名体系，分别服务于不同语义场景：
 │
 ├─ 请求/帧/文档等有限生命周期？
 │  └─ 用 IArena (Alloc/Reset)
-│     ├─ 单线程 → TLocalArena / TChunkedArena
-│     └─ 多线程 → TArenaConcurrent
+│     ├─ 容量可知 → CreateDefaultArena / TLocalArena
+│     ├─ 需要增长 → TChunkedArena
+│     ├─ 超大/编译器热路径 → TVirtualArena
+│     └─ 多线程共享 → TArenaConcurrent（显式）
 │
 ├─ 频繁分配/释放相同大小的对象？
 │  └─ 用 IPool (Acquire/Release)
-│     ├─ 单线程 → TLocalBlockPool / TFixedSlabPool
+│     ├─ 单线程 → TLocalBlockPool / TFixedSlabPool / TFixedPool
 │     └─ 多线程 → TBlockPoolConcurrent / TShardedBlockPool
 │
 ├─ 通用内存分配（大小不固定）？
 │  └─ 用 IAllocator (GetMem/FreeMem)
-│     ├─ 默认 → DefaultAllocator
+│     ├─ 默认 → DefaultHeap / GetMem（Growing 原生）
+│     ├─ 高性能通用堆 → TGrowingAllocator
 │     ├─ 需要跟踪泄漏 → TTrackingAllocator
 │     ├─ 需要 OOM 降级 → TFallbackAllocator
 │     └─ 需要 slab 优化 → TSlabPool
 │
-└─ 不确定？→ 用 IAllocator (最通用)
+└─ 不确定？→ DefaultHeap / GetMem 或 CreateDefaultArena（最常见）
 ```
 
 ## 命名约定速查
@@ -105,11 +122,11 @@ Arena.Alloc(128);
 ```
 
 ```pascal
-// 正确：需要重分配时用 IAllocator
-var Alloc: IAllocator;
-Alloc := DefaultAllocator;
-var P := Alloc.GetMem(128);
-P := Alloc.ReallocMem(P, 256);
+// 正确：需要重分配时用默认堆（Growing）
+var P: Pointer;
+P := GetMem(128);
+P := ReallocMem(P, 128, 256);  // 已知 old size 的热路径
+FreeMem(P, 256);
 ```
 
 ### ❌ 用 IPool 分配不同大小的对象
@@ -133,17 +150,19 @@ Pool.GetMem(1024); // ✅ 大对象走 fallback
 
 门面 `nextpas.core.mem` 导出 65 个常用类型。以下高级功能需直接引用子模块：
 
-### Go-style Growing Allocator
+### Go-style Growing Allocator（即 DefaultHeap）
 
 ```pascal
-uses nextpas.core.mem.allocator.growing;
-
-// TGrowingAllocator: TLS cache → central pool → system GetMem
-// 架构匹配 Go mcache/mcentral/mheap，线程安全
+// 门面已导出：DefaultHeap / GetMem 即 Growing 热路径
 var GAlloc: TGrowingAllocator;
-GAlloc := DefaultGrowingAllocator;
-P := GAlloc.GetMem(64);  // ~5ns via TLS cache
+GAlloc := DefaultHeap;
+P := GAlloc.GetMem(64);  // TLS cache 热路径
 GAlloc.FreeMem(P, 64);
+
+// 可观测 / 强制归还（SC5）
+var Stats: TGrowingHeapStats;
+GAlloc.GetHeapStats(Stats);   // LiveBytes, ReleasedBytes, ...
+N := GAlloc.Scavenge;         // flush TLS → hard-release idle spans
 ```
 
 ### Span-based 内部分片

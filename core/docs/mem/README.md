@@ -4,6 +4,32 @@
 
 `nextpas.core.mem` 是 nextPas 框架的内存管理模块，提供高性能的内存分配器抽象和实现。
 
+**标准库质量方向**（进行中）：不再以 allocator 数量为目标，而以默认路径、契约一致性、Scorecard 与上层集成为准。详见 [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md)。
+
+**默认堆（双轨）**：
+
+| API | 实现 | 用途 |
+|-----|------|------|
+| `DefaultHeap` / `GetMem`·`FreeMem` | `TGrowingAllocator` 原生 | **热路径**（无 interface 间接调用） |
+| `DefaultAllocator: IAllocator` | RTL | 组合器/诊断注入，非热路径 |
+
+详见质量计划 §4.2。
+
+**契约矩阵**：`make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix`（RTL + Growing 原生 + LocalArena，C01–C12）。
+
+**Scorecard**：`make focused FOCUS=core/tests/nextpas.core.mem/scorecard`（SC1–SC5；文档 [SCORECARD.md](SCORECARD.md)）。
+
+**Growing/DefaultHeap 回归门禁**（改热路径必跑）：
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
+make focused FOCUS=core/tests/nextpas.core.mem/test_stability
+make focused FOCUS=core/tests/nextpas.core.mem/test_concurrent
+make focused FOCUS=core/tests/nextpas.core.mem/scorecard
+```
+
+**DEBUG 包装链（设计）**：[DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md) — 只叠 `DefaultAllocator`，不碰 `DefaultHeap`。
+
 ## 设计目标
 
 - **高性能**：超越 Go/Rust 标准库的内存分配性能
@@ -11,6 +37,7 @@
 - **零泄漏**：完善的内存泄漏检测机制
 - **接口优雅**：遵循 Rust trait / Go interface 风格的接口设计
 - **生产级质量**：完整的测试覆盖和基准对照
+- **stdlib 纪律**：小门面、强契约、可证明默认路径（见质量计划）
 
 ## 接口与 owner 关系
 
@@ -178,15 +205,27 @@ begin
 end;
 ```
 
-### IAllocator 接口
+### 默认堆（热路径）
+
+```pascal
+var
+  LP: Pointer;
+begin
+  LP := GetMem(256);           // → DefaultHeap (Growing)
+  FreeMem(LP, 256);            // 已知 size 的热路径 free
+  // 或：DefaultHeap.GetMem / FreeMem
+end;
+```
+
+### IAllocator 注入面
 
 ```pascal
 var
   LAllocator: IAllocator;
 begin
-  LAllocator := DefaultAllocator;  // 全局默认分配器
+  LAllocator := DefaultAllocator;  // RTL；给 Tracking/Fallback 等包装
   LP := LAllocator.GetMem(256);
-  // ...
+  LAllocator.FreeMem(LP);
 end;
 ```
 
@@ -230,6 +269,8 @@ end;
 - [API 选择指南](API-GUIDE.md)
 - [代码契约](CONTRACT.md)
 - [基准测试](BENCHMARKS.md)
+- [Scorecard SC1–SC5](SCORECARD.md)
+- [标准库质量计划](STDLIB-QUALITY-PLAN.md)
 - [可用性审计](USABILITY-AUDIT.md)
 - [审查报告](mem-findings.md) — 61项全部关闭
 - [归档文档](archive/) — 已完成的研究和计划文档
