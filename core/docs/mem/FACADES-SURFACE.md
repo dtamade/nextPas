@@ -69,9 +69,9 @@ nextpas.core.mem.blockpool.growable
 | 表面 | API |
 |------|-----|
 | 热堆 | `DefaultHeap` / `GetMem` / `FreeMem(ptr,size)` / `TryBlockSize` |
-| 注入 | `DefaultAllocator` / `ResolveAllocator` / `FreeMemOf` / `TryFreeMemOf` |
+| 注入 | `DefaultAllocator` / `ResolveAllocator` / `FreeMemOf` / `TryFreeMemOf` / `ReallocMemOf` / `TryReallocMemOf` |
 | Arena | `CreateDefaultArena` / `CreateArenaAllocator` / `CreateVirtualArenaAllocator` |
-| 诊断 | `GetMemStats` / `FormatMemStats` / `IsMemHeapDebugEnabled` / `IsMemHeapSafetyEnabled` / `IsMemArenaStrictEnabled` / `MemDebugCoverageGap` |
+| 诊断 | `GetMemStats` / `FormatMemStats` / `FormatMemDebugProfile` / `IsMemHeapDebugEnabled` / `IsMemHeapSafetyEnabled` / `IsMemArenaStrictEnabled` / `MemDebugCoverageGap` |
 | 错误 | `FormatAllocErrorMsg` / `IsWellFormedAllocErrorMsg` / `EAllocError` |
 | Try* | `TryGetMem` / `TryFreeMem` / `TryArenaAlloc` … |
 

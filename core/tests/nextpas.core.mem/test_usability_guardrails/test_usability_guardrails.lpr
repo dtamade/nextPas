@@ -329,6 +329,55 @@ begin
   RebuildDebug('');
 end;
 
+procedure TestReallocMemOfSizedSameHeap;
+{ R3: ReallocMemOf prefers DefaultHeap sized realloc when wrap off. }
+var
+  LPlugin: IAllocator;
+  LPtr, LNew: Pointer;
+  LSz: SizeUInt;
+  LBefore, LAfter: TMemStats;
+begin
+  RebuildDebug('');
+  LPlugin := DefaultAllocator;
+  GetMemStats(LBefore);
+  LPtr := LPlugin.GetMem(64);
+  Check(LPtr <> nil, 'plugin alloc');
+  Check(TryBlockSize(LPtr, LSz), 'size-class');
+  LNew := ReallocMemOf(LPlugin, LPtr, LSz, 128);
+  Check(LNew <> nil, 'ReallocMemOf grow');
+  Check(TryBlockSize(LNew, LSz), 'still size-class');
+  Check(LSz >= 128, 'class >= 128');
+  Check(TryReallocMemOf(LPlugin, LNew, LSz, 64, LPtr), 'TryReallocMemOf shrink');
+  Check(LPtr <> nil, 'shrink ptr');
+  FreeMemOf(LPlugin, LPtr, 64);
+  GetMemStats(LAfter);
+  Check(LAfter.LiveBytes <= LBefore.LiveBytes + 256, 'realloc round-trip live_bytes');
+end;
+
+procedure TestReallocMemOfUnderPluginDebugTracks;
+{ R3: under DEBUG wrap, ReallocMemOf must not bypass tracking. }
+var
+  LPlugin: IAllocator;
+  LTrack: TTrackingAllocator;
+  LPtr, LNew: Pointer;
+  LBefore: SizeInt;
+begin
+  RebuildDebug('tracking,stats');
+  LPlugin := DefaultAllocator;
+  LTrack := GetDebugWrapTracking;
+  Check(LTrack <> nil, 'tracking');
+  LBefore := LTrack.ActiveAllocCount;
+  LPtr := LPlugin.GetMem(48);
+  Check(LPtr <> nil, 'alloc');
+  Check(LTrack.ActiveAllocCount = LBefore + 1, 'tracked');
+  LNew := ReallocMemOf(LPlugin, LPtr, 48, 96);
+  Check(LNew <> nil, 'realloc under DEBUG');
+  Check(LTrack.ActiveAllocCount = LBefore + 1, 'still one active after realloc');
+  FreeMemOf(LPlugin, LNew, 96);
+  Check(LTrack.ActiveAllocCount = LBefore, 'free clears tracking');
+  RebuildDebug('');
+end;
+
 procedure TestDefaultAllocatorNotHotHeapType;
 var
   LHeap: TGrowingAllocator;
@@ -411,13 +460,58 @@ begin
   Check(Pos('free_slots=', LLine) > 0, 'free_slots field');
   Check(Pos('heap_debug=', LLine) > 0, 'heap_debug field');
   Check(Pos('heap_debug=n', LLine) > 0, 'HEAP_DEBUG off default');
+  Check(Pos('heap_safety=n', LLine) > 0, 'heap_safety off default');
+  Check(Pos('arena_strict=n', LLine) > 0, 'arena_strict off default');
   Check(Pos('debug=n', LLine) > 0, 'DEBUG wrap off default');
   Check(Pos('debug_process=n', LLine) > 0, 'debug_process default n');
   Check(Pos('debug_coverage_gap=n', LLine) > 0, 'gap default n');
   Check(Pos('debug_active_allocs=', LLine) = 0, 'no plugin counters when DEBUG off');
   GetMemStats(LStats);
   Check(FormatMemStats(LStats) = LLine, 'overload consistent');
+  Check(not LStats.HeapSafetyEnabled, 'stats HeapSafetyEnabled false');
+  Check(not LStats.ArenaStrictEnabled, 'stats ArenaStrictEnabled false');
   FreeMem(LPtr, 128);
+end;
+
+procedure TestFormatMemStatsSafetyAndArenaFlags;
+{ R1/R2: FormatMemStats exposes heap_safety and arena_strict when env on. }
+var
+  LLine: string;
+  LStats: TMemStats;
+begin
+  RebuildDebug('');
+  SetHeapSafetyEnv('1');
+  SetArenaStrictEnv('1');
+  ResetDebugWrapForTests;
+  Check(IsMemHeapSafetyEnabled, 'SAFETY on');
+  Check(IsMemArenaStrictEnabled, 'ARENA_STRICT on');
+  GetMemStats(LStats);
+  Check(LStats.HeapSafetyEnabled, 'stats safety');
+  Check(LStats.ArenaStrictEnabled, 'stats arena_strict');
+  LLine := FormatMemStats(LStats);
+  Check(Pos('heap_safety=y', LLine) > 0, 'heap_safety=y');
+  Check(Pos('arena_strict=y', LLine) > 0, 'arena_strict=y');
+  Check(Pos('heap_debug=y', LLine) > 0, 'SAFETY implies process route flag');
+  RebuildDebug('');
+end;
+
+procedure TestFormatMemDebugProfile;
+{ R4: one-line env profile without retention counters. }
+var
+  LProf: string;
+  LStats: TMemStats;
+begin
+  RebuildDebug('tracking,stats');
+  GetMemStats(LStats);
+  LProf := FormatMemDebugProfile(LStats);
+  Check(Pos('live_bytes=', LProf) = 0, 'profile has no live_bytes');
+  Check(Pos('heap_debug=n', LProf) > 0, 'profile heap_debug');
+  Check(Pos('heap_safety=n', LProf) > 0, 'profile heap_safety');
+  Check(Pos('arena_strict=n', LProf) > 0, 'profile arena_strict');
+  Check(Pos('debug=y', LProf) > 0, 'profile debug');
+  Check(Pos('debug_coverage_gap=y', LProf) > 0, 'profile gap');
+  Check(FormatMemDebugProfile = LProf, 'profile overload');
+  RebuildDebug('');
 end;
 
 procedure TestFormatMemStatsPluginTrack;
@@ -590,9 +684,13 @@ begin
   T.Test('process TryBlockSize facade', @TestProcessTryBlockSize);
   T.Test('FreeMemOf sized same-heap', @TestFreeMemOfSizedSameHeap);
   T.Test('FreeMemOf under plugin DEBUG tracks free', @TestFreeMemOfUnderPluginDebugTracksFree);
+  T.Test('ReallocMemOf sized same-heap', @TestReallocMemOfSizedSameHeap);
+  T.Test('ReallocMemOf under plugin DEBUG tracks', @TestReallocMemOfUnderPluginDebugTracks);
   T.Test('DefaultAllocator not hot heap type', @TestDefaultAllocatorNotHotHeapType);
   T.Test('dual-track same-heap round-trip', @TestDualTrackSameHeapRoundTrip);
   T.Test('FormatMemStats one-line snapshot', @TestFormatMemStats);
+  T.Test('FormatMemStats SAFETY/ARENA flags', @TestFormatMemStatsSafetyAndArenaFlags);
+  T.Test('FormatMemDebugProfile flags-only', @TestFormatMemDebugProfile);
   T.Test('FormatMemStats plugin track counters', @TestFormatMemStatsPluginTrack);
   T.Test('FormatMemStats HEAP_DEBUG process track', @TestFormatMemStatsHeapDebugProcessTrack);
   T.Test('HEAP_DEBUG alone no plugin counters', @TestHeapDebugAloneNoPluginCounters);

@@ -1,9 +1,9 @@
 # mem 可用性评估发现 — 专题调研报告
 
-**状态**: Research complete (+ post-impl Go/Rust parity for F5–F7)
-**日期**: 2026-07-16 / 修订 2026-07-17
-**范围**: 独立可用性评估 F1–F7
-**权威评估**: 综合分 7.7/10（B+）→ 修复后 9.1（见 USABILITY-SCORE）
+**状态**: Research complete (F1–F7 fixed; **R1–R5 residual** researched 2026-07-17)
+**日期**: 2026-07-16 / 修订 2026-07-17（二轮残留）
+**范围**: F1–F7 + 本轮残留 R1–R5（见 [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md)）
+**权威评估**: F1–F7 后 9.1 → 本轮审查 **8.9**（残留压诊断/一致性）→ 修复目标 **9.3**
 **非目标**: 合并双轨热路径、默认开启生产安全税、新增 allocator 种类、reopen product-table dual-track
 
 ---
@@ -126,4 +126,76 @@ F6 (facade) ──► 文档 + source contract（独立）
 | 改 FormatMemStats 行格式 | 中（断言） | 同步更新测试与 recipe |
 | 默认开启安全税 | **禁止** | N/A |
 
-**结论**: 全部七项可用 **观测 + opt-in 安全 + 助手 API + 契约测试 + 文档冻结** 在不破坏双轨零税默认的前提下修复。
+**结论（F1–F7）**: 七项已用 **观测 + opt-in 安全 + 助手 API + 契约测试 + 文档冻结** 落地。
+
+---
+
+## 5. 本轮残留 R1–R5（2026-07-17 复评）
+
+| ID | 分类 | 摘要 | 影响面 | 风险 | 优先级 |
+|----|------|------|--------|------|--------|
+| R1 | 诊断 | FormatMemStats 不打印 `heap_safety` | 运维/doctor | MEDIUM | P1 |
+| R2 | 诊断 | ArenaStrict 未进 TMemStats/FormatMemStats | 运维 | MEDIUM | P1 |
+| R3 | API 对称 | 缺 ReallocMemOf / TryReallocMemOf | 插件注入 | MEDIUM | P1 |
+| R4 | 可发现性 | 四 env 无单行 profile | 配方错误 | LOW–MED | P2 |
+| R5 | 门禁 | R1–R4 无 source/guardrails 锁 | 回归 | LOW | P0 |
+
+### R1 — FormatMemStats 省略 heap_safety
+
+| 项 | 内容 |
+|----|------|
+| **根因** | F3 加了 `TMemStats.HeapSafetyEnabled` 与 `IsMemHeapSafetyEnabled`，FormatMemStats 只扩展了 coverage_gap 族，漏打 safety 位。 |
+| **影响** | `NEXTPAS_MEM_HEAP_SAFETY=1` 时日志无法确认 profile；与 heap_debug 混淆。 |
+| **Go** | MemStats / GODEBUG 相关状态可观测，不藏半套开关。 |
+| **Rust** | 环境/feature 开关在诊断输出中显式（或编译期明确）。 |
+| **策略** | FormatMemStats 增加 `heap_safety=y|n`（读现有字段）。 |
+| **风险** | 低：格式追加字段；更新 guardrails 断言。 |
+
+### R2 — ArenaStrict 不可见
+
+| 项 | 内容 |
+|----|------|
+| **根因** | F4 只加 env 与 FreeMem 行为，未进进程 stats 快照。 |
+| **影响** | doctor 不知 ARENA_STRICT 是否生效。 |
+| **Go/Rust** | 行为开关应可查询（配置 dump / debug print）。 |
+| **策略** | `TMemStats.ArenaStrictEnabled` + FormatMemStats `arena_strict=`；GetMemStats 填 IsMemArenaStrictEnabled。 |
+| **风险** | 低。 |
+
+### R3 — 插件面缺 sized realloc 助手
+
+| 项 | 内容 |
+|----|------|
+| **根因** | F2 只补 FreeMemOf；过程式已有 `ReallocMem(ptr,old,new)`，插件面 IAllocator.ReallocMem 单参 new。 |
+| **影响** | collections 注入路径 sized realloc 不可对称调用；或绕过 tracking。 |
+| **Go** | 用户不 realloc 裸指针。 |
+| **Rust** | `realloc(ptr, Layout, new_size)` 强制带旧 Layout。 |
+| **策略** | `ReallocMemOf` / `TryReallocMemOf`：门控同 FreeMemOf（无 process DEBUG 且无 wrap 时 DefaultHeap sized realloc；否则 `AAllocator.ReallocMem(ptr,new)`）。 |
+| **风险** | 中低：与 FreeMemOf 同 stale-tracking 坑；必须共用门控。 |
+
+### R4 — 多 env 无单行 profile
+
+| 项 | 内容 |
+|----|------|
+| **根因** | 四独立 env 逐步叠加，无 `FormatMemDebugProfile` 一类入口。 |
+| **影响** | 用户/CI 拼配方易漏 HEAP_DEBUG → 假阴性。 |
+| **Go** | GODEBUG 字符串集中。 |
+| **Rust** | 少量 env + 文档；或 cargo 特性。 |
+| **策略** | 门面 `FormatMemDebugProfile`：一行 `heap_debug=… heap_safety=… arena_strict=… debug=… debug_process=… debug_coverage_gap=…`（可复用 GetMemStats）。 |
+| **风险** | 极低。 |
+
+### R5 — 门禁未锁 R1–R4
+
+| 项 | 内容 |
+|----|------|
+| **根因** | check_usability_docs / guardrails 停在 F1–F7。 |
+| **策略** | 扩展脚本与 Test*；禁止 Check(True)。 |
+| **风险** | 极低。 |
+
+### 依赖
+
+```text
+R5 ────────────────► 与实现同批锁门禁
+R1+R2 ──► FormatMemStats / TMemStats
+R4 ─────► FormatMemDebugProfile（依赖 GetMemStats 字段）
+R3 ─────► ReallocMemOf（复用 FreeMemOfAllowsSizedHeapFree）
+```

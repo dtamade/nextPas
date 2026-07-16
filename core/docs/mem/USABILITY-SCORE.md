@@ -1,9 +1,10 @@
 # nextpas.core.mem 可用性评分（权威）
 
-**评估日期**: 2026-07-17（F1–F7 修复后独立复评）
+**评估日期**: 2026-07-17（F1–F7 + R1–R5 修复后）
 **范围**: `nextpas.core.mem` 对外默认路径、契约、诊断、上层注入
 **对标**: Go `runtime` 分配默认 / Rust `GlobalAlloc` + 标准容器体验（工程可用性，非微基准）
-**前序**: 内部产品路径 10.0 记分通胀已废止；独立评估基线 **7.7** → 本轮 **9.1**
+**前序**: 独立基线 **7.7** → F1–F7 **9.1** → 二轮审查 **8.9** → R1–R5 **9.3**
+**本轮评估**: [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md)
 **调研/计划**: [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md) · [USABILITY-FIX-PLAN.md](USABILITY-FIX-PLAN.md)
 
 历史长报告 [USABILITY-AUDIT.md](USABILITY-AUDIT.md) 已 SUPERSEDED，仅作修复履历。
@@ -14,12 +15,12 @@
 
 | 项 | 值 |
 |----|-----|
-| **综合分** | **9.1 / 10** |
+| **综合分** | **9.3 / 10** |
 | **等级** | **HIGH** |
-| **趋势** | 独立基线 7.7 → F1–F7 修复后 **9.1**（废除 plus-chain 记分） |
+| **趋势** | 7.7 → F1–F7 **9.1** → 二轮审查 8.9 → R1–R5 **9.3**（废除 plus-chain 记分） |
 | **风险** | LOW–MEDIUM（热路径双 free 仍默认 UB；需 opt-in SAFETY/DEBUG） |
 
-**结论（一句话）**: 双轨零税默认保留；DEBUG 假阴性可观测；sized free / safety / arena strict / 错误助手 / 门面冻结补齐可发现性与调试路径。产品表 dual-track 主线 **CLOSED**（不 reopen）。
+**结论（一句话）**: 双轨零税默认保留；FormatMemStats 含 heap_safety/arena_strict；FreeMemOf+ReallocMemOf 对称；FormatMemDebugProfile 收敛多 env。产品表 dual-track 主线 **CLOSED**（不 reopen）。
 
 ### 故意默认堆（lifetime 理由；非 phase bulk reclaim 目标）
 
@@ -71,26 +72,31 @@
 | 维度 | 分 | 依据 |
 |------|----|------|
 | 默认路径正确性 | **9.5** | Growing 热路径；S5 同堆（Growing IAllocator / `GetGrowingIAllocator`）；H1+H2 RequestArena；compiler phase UnitBegin |
-| API 可发现性 | **9.2** | `WithRequestArena` / `HttpRequestAllocatorOf` / `HttpFormatProcessMemStats`；`FreeMemOf`；`FormatAllocErrorMsg`；门面冻结文档 |
-| 调用一致性 | **9.3** | HTTP Options/H1/H2 与 compiler UnitBegin/End 对称 bulk-reclaim；Arena FreeMem 默认 no-op + opt-in strict |
+| API 可发现性 | **9.3** | `WithRequestArena` / `HttpRequestAllocatorOf` / `HttpFormatProcessMemStats`；`FreeMemOf`/`ReallocMemOf`；`FormatMemDebugProfile`；门面冻结 |
+| 调用一致性 | **9.3** | HTTP Options/H1/H2 与 compiler UnitBegin/End 对称 bulk-reclaim；插件 free/realloc sized 对称；Arena strict |
 | 错误模型 | **9.0** | ERROR-POLICY + Try* + TryBlockSize/SC8 + FormatAllocErrorMsg；统一 catch 面文档化 |
-| 诊断可用性 | **9.4** | FormatMemStats（`heap_debug`/`debug`/`debug_process`/`debug_coverage_gap` + plugin 计数）；HEAP_DEBUG + HEAP_SAFETY；CI recipe |
-| 契约可证明 | **9.5** | guardrails F1–F7；contract_matrix；SC9 双轨；source-contract 文档门禁 |
+| 诊断可用性 | **9.5** | FormatMemStats（`heap_debug`/`heap_safety`/`arena_strict`/`debug_process`/`debug_coverage_gap`）；HEAP_DEBUG + HEAP_SAFETY；CI recipe |
+| 契约可证明 | **9.5** | guardrails F1–F7 + R1–R5；contract_matrix；SC9 双轨；source-contract 文档门禁 |
 | 性能默认 | **9.4** | 热路径零税；HEAP_DEBUG/SAFETY 默认关 |
 | 上层可集成 | **9.5** | hello options → native；compiler session 管线真实 MemAlloc；HttpRequestAllocatorOf |
-| **加权综合** | **9.1** | — |
+| **加权综合** | **9.3** | — |
 
-### F1–F7 修复状态
+### F1–F7 / R1–R5 修复状态
 
 | ID | 状态 | 证据 |
 |----|------|------|
 | F1 诊断假阴性 | **fixed** | `debug_process` / `debug_coverage_gap` + guardrails |
 | F2 sized free 助手 | **fixed** | `FreeMemOf` / `TryFreeMemOf`（DEBUG wrap 时不绕过 tracking） |
-| F3 opt-in safety | **fixed** | `NEXTPAS_MEM_HEAP_SAFETY` |
+| F3 opt-in safety | **fixed** | `NEXTPAS_MEM_HEAP_DEBUG` / `NEXTPAS_MEM_HEAP_SAFETY` |
 | F4 arena strict | **fixed** | `NEXTPAS_MEM_ARENA_STRICT` dual-mode |
 | F5 错误助手 | **fixed** | `FormatAllocErrorMsg` / ERROR-POLICY catch 面 |
 | F6 门面冻结 | **fixed** | [FACADES-SURFACE.md](FACADES-SURFACE.md) + source check |
 | F7 纪律 | **fixed** | 无空 always-true 断言；无 plus-chain 记分 |
+| R1 heap_safety 可观测 | **fixed** | FormatMemStats `heap_safety=` |
+| R2 arena_strict 可观测 | **fixed** | TMemStats + `arena_strict=` |
+| R3 ReallocMemOf | **fixed** | 同 FreeMemOf 门控 + tracking 测试 |
+| R4 FormatMemDebugProfile | **fixed** | 标志位一行 profile |
+| R5 门禁 | **fixed** | check_usability_docs + guardrails |
 
 ---
 
@@ -104,7 +110,8 @@
 | session/unit `FormatStats` + ops `mem-*-stats` | **落地** |
 | arena 契约回归 + HEAP_DEBUG / SAFETY 插件轨 | **落地** |
 | CI `rebuild-compiler` + stage0 flags 单源 + HEAP_DEBUG env recipe | **落地** |
-| F1–F7 可用性发现 | **落地**（本轮） |
+| F1–F7 可用性发现 | **落地** |
+| R1–R5 残留（stats/realloc/profile） | **落地**（本轮） |
 
 **默认 lane focused gate**（`docs/worktrees.md` / `make lane-focused LANE=mem`）：
 

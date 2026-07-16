@@ -85,6 +85,24 @@ need_grep "$ROOT/core/src/nextpas.core.mem.default.pas" 'debug_coverage_gap=' \
   'FormatMemStats must emit debug_coverage_gap'
 need_grep "$ROOT/core/src/nextpas.core.mem.default.pas" 'debug_process=' \
   'FormatMemStats must emit debug_process'
+need_grep "$ROOT/core/src/nextpas.core.mem.default.pas" 'heap_safety=' \
+  'FormatMemStats must emit heap_safety'
+need_grep "$ROOT/core/src/nextpas.core.mem.default.pas" 'arena_strict=' \
+  'FormatMemStats must emit arena_strict'
+need_grep "$ROOT/core/src/nextpas.core.mem.default.pas" 'function FormatMemDebugProfile' \
+  'default must expose FormatMemDebugProfile'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" 'function ReallocMemOf|function TryReallocMemOf' \
+  'mem facade must expose ReallocMemOf'
+need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'TestReallocMemOf|ReallocMemOf' \
+  'usability guardrails must lock ReallocMemOf'
+need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'heap_safety=y|TestFormatMemStatsSafety' \
+  'usability guardrails must lock heap_safety in FormatMemStats'
+need_grep "$MEM_DOCS/API-GUIDE.md" 'ReallocMemOf|FormatMemDebugProfile' \
+  'API-GUIDE must document ReallocMemOf or FormatMemDebugProfile'
+need_grep "$MEM_DOCS/USABILITY-EVAL-2026-07-17.md" 'R1|R3' \
+  'fresh eval report must list residual findings'
 need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
   'TestHeapSafetyOptInTracksProcessGetMem|HEAP_SAFETY' \
   'usability guardrails must lock HEAP_SAFETY process track'

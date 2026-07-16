@@ -63,6 +63,8 @@ type
     DebugCoverageGap: Boolean;
     {** NEXTPAS_MEM_HEAP_SAFETY truthy (dev double-free profile). }
     HeapSafetyEnabled: Boolean;
+    {** NEXTPAS_MEM_ARENA_STRICT truthy (Arena IAllocator FreeMem raises). }
+    ArenaStrictEnabled: Boolean;
   end;
 
 {** IAllocator plug-in default (Growing IAllocator, or DEBUG wrap chain).
@@ -80,10 +82,16 @@ procedure GetMemStats(out AStats: TMemStats);
 function GetMemStats: TMemStats;
 
 {** One-line human snapshot for logs/tests (not a hot path).
- *  Always: live_bytes/…/heap_debug/debug/debug_process/debug_coverage_gap.
+ *  Always: live_bytes/…/heap_debug/heap_safety/arena_strict/debug/
+ *  debug_process/debug_coverage_gap.
  *  When NEXTPAS_MEM_DEBUG built a wrap: also debug_active_* and debug_allocs/frees. }
 function FormatMemStats(const AStats: TMemStats): string;
 function FormatMemStats: string;
+
+{** One-line env/debug profile for doctor/logs (not a hot path).
+ *  Flags only: heap_debug/heap_safety/arena_strict/debug/debug_process/gap. }
+function FormatMemDebugProfile(const AStats: TMemStats): string;
+function FormatMemDebugProfile: string;
 
 {** Pure: DebugEnabled and not HeapDebugEnabled (process-heap false-negative). }
 function MemDebugCoverageGap(const AStats: TMemStats): Boolean; inline;
@@ -153,6 +161,7 @@ begin
   AStats.DebugStats := LCfg.WantStats;
   AStats.HeapDebugEnabled := IsMemHeapDebugEnabled;
   AStats.HeapSafetyEnabled := IsMemHeapSafetyEnabled;
+  AStats.ArenaStrictEnabled := IsMemArenaStrictEnabled;
   AStats.DebugObservesProcess := AStats.DebugEnabled and AStats.HeapDebugEnabled;
   AStats.DebugCoverageGap := AStats.DebugEnabled and (not AStats.HeapDebugEnabled);
 
@@ -204,6 +213,8 @@ begin
     ' idle_spans=' + IntToStr(Int64(AStats.IdleSpans)) +
     ' released_bytes=' + IntToStr(Int64(AStats.ReleasedBytes)) +
     ' heap_debug=' + FormatMemStatsYN(AStats.HeapDebugEnabled) +
+    ' heap_safety=' + FormatMemStatsYN(AStats.HeapSafetyEnabled) +
+    ' arena_strict=' + FormatMemStatsYN(AStats.ArenaStrictEnabled) +
     ' debug=' + FormatMemStatsYN(AStats.DebugEnabled) +
     ' debug_process=' + FormatMemStatsYN(AStats.DebugObservesProcess) +
     ' debug_coverage_gap=' + FormatMemStatsYN(AStats.DebugCoverageGap);
@@ -221,6 +232,26 @@ var
 begin
   GetMemStats(LStats);
   Result := FormatMemStats(LStats);
+end;
+
+function FormatMemDebugProfile(const AStats: TMemStats): string;
+begin
+  { Compact flags-only line for doctor / CI env recipes (no heap retention numbers). }
+  Result :=
+    'heap_debug=' + FormatMemStatsYN(AStats.HeapDebugEnabled) +
+    ' heap_safety=' + FormatMemStatsYN(AStats.HeapSafetyEnabled) +
+    ' arena_strict=' + FormatMemStatsYN(AStats.ArenaStrictEnabled) +
+    ' debug=' + FormatMemStatsYN(AStats.DebugEnabled) +
+    ' debug_process=' + FormatMemStatsYN(AStats.DebugObservesProcess) +
+    ' debug_coverage_gap=' + FormatMemStatsYN(AStats.DebugCoverageGap);
+end;
+
+function FormatMemDebugProfile: string;
+var
+  LStats: TMemStats;
+begin
+  GetMemStats(LStats);
+  Result := FormatMemDebugProfile(LStats);
 end;
 
 function GetDebugWrapConfig: TMemDebugWrapConfig;

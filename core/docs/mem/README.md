@@ -166,12 +166,15 @@ GetMemStats(S);
 | `LiveBytes` / `LiveSpans` / `IdleSpans` | DefaultHeap | 当前保留 |
 | `Released*` / `Decommit*` | DefaultHeap scavenge | 归还 OS 寿命计数 |
 | `heap_debug` / `HeapDebugEnabled` | HEAP_DEBUG 或 HEAP_SAFETY | 过程式路径是否走插件链 |
+| `heap_safety` / `HeapSafetyEnabled` | `NEXTPAS_MEM_HEAP_SAFETY` | dev 双 free profile |
+| `arena_strict` / `ArenaStrictEnabled` | `NEXTPAS_MEM_ARENA_STRICT` | Arena FreeMem raise |
 | `debug` / `DebugEnabled` | `NEXTPAS_MEM_DEBUG`（或 SAFETY 注入） | wrap 是否建成 |
 | `debug_process` / `DebugObservesProcess` | debug ∧ heap_debug | wrap 是否观察过程式 GetMem |
 | `debug_coverage_gap` | debug ∧ ¬heap_debug | **假阴性风险**（只 DEBUG 不看热路径） |
 | `DebugActiveAllocs` / `DebugAllocCount` | 仅 wrap 建成时 | 插件面诊断计数 |
 
-`FormatMemStats` 一行始终含 `debug_process=` / `debug_coverage_gap=`。
+`FormatMemStats` 一行始终含 `heap_safety=` / `arena_strict=` / `debug_process=` / `debug_coverage_gap=`。
+仅要开关快照时用 `FormatMemDebugProfile`（无 live_bytes 等保留计数）。
 
 Gate：`make focused FOCUS=core/tests/nextpas.core.mem/test_get_mem_stats`
 
@@ -203,7 +206,7 @@ NEXTPAS_MEM_HEAP_DEBUG=1   # 仅当必须覆盖过程式 GetMem；DefaultHeap �
 
 - **只**包装 `DefaultAllocator`（fail → stats → tracking → sentinel → Growing IAllocator）
 - 默认 **不**包装 `DefaultHeap` / 过程式 `GetMem`（热路径零税）
-- 门面：`IsMemHeapDebugEnabled` / `IsMemHeapSafetyEnabled` / `IsMemArenaStrictEnabled`、`FormatMemStats`、`FreeMemOf`、`FormatAllocErrorMsg`
+- 门面：`IsMemHeapDebugEnabled` / `IsMemHeapSafetyEnabled` / `IsMemArenaStrictEnabled`、`FormatMemStats`（含 `heap_safety`/`arena_strict`）、`FormatMemDebugProfile`、`FreeMemOf`/`ReallocMemOf`、`FormatAllocErrorMsg`
 - Token：`fail`/`oom`、`stats`、`tracking`/`leak`、`sentinel`
 - Gate：`make focused FOCUS=core/tests/nextpas.core.mem/test_debug_wrap`；体验锁：`test_usability_guardrails`
 - CI / verify：`make stage0-heap-debug-recipe`（`scripts/stage0-heap-debug-env-recipe.sh`；doctor 双轨投影）
