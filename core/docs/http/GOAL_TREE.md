@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-16 (Slice 0 — control-plane truth + gate audit)
+> Last updated: 2026-07-16 (P1 — keep-alive request-tail contract final)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -34,12 +34,20 @@ HTTP can be called stage-complete only when all of these hold:
 
 1. Public contracts and docs match source (`CONTRACT.md` / `ARCHITECTURE.md` / this tree).
 2. Main Makefile gate is green with heaptrc-sensitive suites at `0 unfreed` where claimed.
-3. H1 malformed/lifecycle/ownership open decisions are closed (especially keep-alive request-tail).
+3. H1 malformed/lifecycle/ownership open decisions are closed — keep-alive request-tail is **INV-12 final** (`CONTRACT.md` §3.1).
 4. H2 is reachable from facade options with live proof; design exclusions remain explicit.
 5. Runtime truth (threaded baseline + epoll poll path) is documented and not contradicted by gates.
 6. Performance claims stay scoped; no fake H3 surface.
 
 ### Recent Fixes (2026-07-16)
+
+**P1 (2026-07-16): Keep-alive request-tail contract final**
+
+- Decision: **final public contract**, not provisional transport truth.
+- Policy: framing-complete first request is delivered; unread tail is isolated into next-request pending buffer; partial follow-up must not be early-rejected; conclusively malformed / EOF-truncated follow-up becomes follow-up `400` after prior response; `Connection: close` + extra bytes stays same-request `400` with no handler.
+- Recorded as **INV-12** in `CONTRACT.md` §3.1; implementation comment on `FPending` drain loop in `impl.h1`.
+- Evidence already locked by `test_http_h1parser` + `test_http_server` + `test_http_security` (threaded/epoll garbage-tail / partial-complete / pipeline).
+- Explicit non-goals: do not reclassify a complete first request as same-request `400` solely because keep-alive garbage follows.
 
 **Slice 0 (2026-07-16): Control-plane truth + gate audit**
 
@@ -398,9 +406,7 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 
 As of 2026-07-16, ordered execution queue:
 
-1. **P1 — keep-alive request-tail contract decision**
-   - decide which CL/chunked garbage-tail behaviors are final public contract vs transport truth
-   - lock decision in `CONTRACT.md` + security/server focused proof
+1. **P1 — keep-alive request-tail contract decision** ✅ closed (INV-12)
 2. **P2 — H2 facade end-to-end proof**
    - live `NewHttpClient/Server` with `Options.WithVersion(hvHttp2)`
    - keep h2c Upgrade / push / WS-over-H2 as explicit exclusions

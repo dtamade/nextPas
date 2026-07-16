@@ -1394,6 +1394,11 @@ begin
       LHeadersDone := False;
       FContinueSent := False;
       LRejected := False;
+      { INV-12 keep-alive request-tail:
+        parser only consumes the current framed request; any remainder stays in
+        FPending for the next loop. Partial follow-up bytes are not rejected
+        early; conclusively malformed / EOF-truncated follow-ups become the
+        next request's 400 after the prior response. }
       repeat
         if FPending <> '' then
         begin

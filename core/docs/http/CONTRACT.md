@@ -116,6 +116,51 @@ IHttpServerSessionFactory[.WithContext]
 | INV-9 | public HTTP contract 保持同步直线型，不泄漏 epoll/reactor 细节 |
 | INV-10 | trailer 字段不污染普通请求 `Headers`；可保留 `Trailer:` 声明头 |
 | INV-11 | 错误响应 helper 默认 RFC 7807 Problem Details |
+| INV-12 | Keep-alive request-tail 见 §3.1（final public contract，非 provisional truth） |
+
+### 3.1 Keep-Alive Request-Tail（INV-12，2026-07-16 定稿）
+
+H1 server 对同连接上“当前请求 framing 完成后的未消费字节”采用 **request isolation + deferred follow-up parse**，而不是“首请求成功后立刻因尾巴拒整连接”或“把尾巴并进当前请求”。
+
+#### A. `Connection: close` 请求
+
+| 输入 | 契约 |
+|------|------|
+| `Content-Length` body 结束后仍有 extra bytes | **同请求** parser error → 显式 `400`，**不进入** handler |
+| chunked terminal chunk 结束后仍有 extra bytes | **同请求** parser error → 显式 `400`，**不进入** handler |
+
+#### B. Keep-alive 请求（默认 / 非 close）
+
+适用范围：fixed-length（`Content-Length`）、plain chunked、trailer-complete chunked。
+
+1. **Framing 完成即交付**
+   当前请求在 framing 完成时立刻完成并进入 handler；handler 只看到本请求声明长度/解码后的 body。
+2. **Tail 隔离**
+   未消费字节进入连接级 pending buffer（`TH1ServerConnectionState.FPending`），**不得**污染当前 method/url/headers/body。
+3. **合法 pipeline**
+   同 write / 后续 write 中的完整下一请求按序处理；首响应与次请求响应保持 wire 顺序。
+4. **Partial follow-up 不得早拒**
+   半截 follow-up request-line / headers 在连接仍可继续读时，**不得**提前当成 malformed；补齐后可成为合法第二请求。
+5. **Follow-up 400 时机**
+   仅当 follow-up **结论性 malformed**，或 peer half-close / EOF 使 follow-up 截断无法完成时，才对 **follow-up** 返回显式 `400`（排在先前成功响应之后）。
+6. **Garbage tail**
+   framing 完成后的垃圾字节（非合法 HTTP 请求起始）→ 首请求仍 `200`（若合法）→ follow-up `400`。
+
+#### C. 明确拒绝的收紧方案（不做）
+
+- 不因 keep-alive 尾巴把 **已完整 framing 的首请求** 改成同请求 `400`
+- 不在 partial follow-up 仍可能补全时主动“猜测拒绝”
+- 不把该契约泄漏为 public async/callback API
+
+#### D. 证据层
+
+| 层 | 套件 | 锁什么 |
+|----|------|--------|
+| parser | `test_http_h1parser` | 只消费首请求；partial 可补全；pipeline 不污染 |
+| server | `test_http_server` | handler body 边界；follow-up `400`；threaded + epoll |
+| security | `test_http_security` | raw-wire safe-handling / wire-order |
+
+状态：**final public contract**（不再记为 transport current truth）。
 
 ---
 
@@ -135,6 +180,7 @@ IHttpServerSessionFactory[.WithContext]
 
 - llhttp 翻译 parser + 保守 fast path
 - chunked / keep-alive / Expect:100-continue / hijack
+- keep-alive request-tail：INV-12（isolation + deferred follow-up parse）
 - threaded 正确性基线；Linux epoll poll-driven session 已落地
 
 ### H2
@@ -174,3 +220,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-01 | 1.0 | 初始 |
 | 2026-07-06 | 2.0 | 对齐接口重写（仍混有旧 record 描述） |
 | 2026-07-16 | 3.0 | 与真实 IHttp* 面、builder、H2、门禁清单对齐 |
+| 2026-07-16 | 3.1 | 定稿 INV-12 keep-alive request-tail final public contract |
