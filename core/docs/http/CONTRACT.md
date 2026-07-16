@@ -102,12 +102,23 @@ end;
   4. H1 `RoundTrip`：入口、新 dial 前、request write 后 / response read 前
   5. pool reconnect 重写前
   取消抛 `EHttpError(hekCanceled)`。卡在底层阻塞 `Read` 中时可能滞后，
-  直到该 read 返回并到达下一检查点。
+  直到该 read 返回并到达下一检查点。**取消不能单独保证有界等待**——
+  生产路径必须与 `Timeout` / `WithTimeout` 配对，以便阻塞 read 由
+  SO_RCVTIMEO/deadline 返回后到达下一检查点。
   超时仍为 `hekTimeout`（`WithTimeout` / client options）。
 - Client 超时拆分（`THttpClientOptions`）：
   - `Timeout`：socket 就绪后的 request 读/写 deadline（ms；0=无限）
   - `ConnectTimeout`：新 dial 后 **首写** budget（ms；0=同 Timeout）。
-    **不**打断阻塞 OS `connect()`；全量 dial 超时待 net 层增强。
+    **不**打断阻塞 OS `connect()`；名称中的 “Connect” 指 post-dial 首写
+    阶段，不是 OS dial 超时。全量 dial 超时 / mid-read cancel 见下方 Blocked 表。
+
+### 2.2.0a Net-dependent capabilities (Blocked)
+
+| Capability | HTTP surface today | Owner | Status |
+|------------|-------------------|-------|--------|
+| OS `connect()` dial timeout | `ConnectTimeout` **does not** bound dial; only post-dial first write | `nextpas.core.net` / platform | **Blocked** — no fake dial timeout field in http |
+| Interruptible blocked socket read on cancel | cancel checkpoints only; pair with `Timeout` | net + http transport | **Blocked** for true mid-read cancel |
+| HTTPS CONNECT / proxy auth | plain HTTP absolute-form proxy only | http + TLS tunnel design | **Deferred** (separate milestone) |
 
 ### 2.2.1 EHttpError.Kind
 
@@ -149,6 +160,9 @@ end;
   **过期**：解析 `Max-Age`（优先）与 `Expires`（IMF-fix）；到期在
   `StoreFromResponse` / `CookieHeaderFor` 时淘汰；`Max-Age<=0` 删除匹配项。
   Session cookie（无过期属性）不自动淘汰。无磁盘持久化。
+  **SameSite**（无完整 PSL）：解析 `SameSite=Strict|Lax|None`；缺省按 **Lax**；
+  `None` 必须带 `Secure` 否则不存储。SiteKey ≈ 主机最后两段 label（无 PSL）。
+  同站发送全部匹配 cookie；跨站仅发送 `SameSite=None`。
 - HTTP proxy：`THttpClientOptions.ProxyUrl` **或** fluent
   `IHttpClient.WithProxyUrl`（重建 transport；装饰器 re-stack）。
   明文 `http://host:port` 正向代理。H1 对目标 `http://` 经 proxy 发
@@ -156,6 +170,9 @@ end;
   net 层最小 hook：connect 到 proxy 主机而非目标主机。
 - `PostMultipart(Url, Fields, Files)`：multipart/form-data 便捷 POST
   （自动 boundary + `EncodeMultipartFormData`）。
+- `IHttpClient.GetString` / `GetBytes`：与 free function `HttpGetString` /
+  `HttpGetBytes` 等价（ensure 2xx + body）。
+- H1 默认 `User-Agent: nextpas-http/1.0`（请求未设置 `User-Agent` 时注入）。
 
 ### 2.2.4 IHttpResponse.Close
 

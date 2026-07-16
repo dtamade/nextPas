@@ -1,6 +1,6 @@
 # nextpas.core.http API Coverage Matrix
 
-最近更新：2026-07-16
+最近更新：2026-07-17
 
 这份矩阵只记录公开 API 的覆盖状态，不替代测试输出。状态含义：
 
@@ -11,19 +11,26 @@
 
 ## 当前结论
 
-- **2026-07-16 wave-5 可用性抛光（现行真相）**：
+- **2026-07-17 usability findings fix（现行真相）**：
+  - Research/plan：`2026-07-17-usability-findings-research.md`、
+    `2026-07-17-usability-fix-plan.md`。
   - Request 工厂白名单：`NewRequest(Method, TUrl|string)` + `NewGetRequest`；
-    推荐 `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` **已删除**。
+    推荐 `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` **已删除**
+    （下列 2026-07-06 段落中的多参 “本轮补齐” 仅为历史叙事，不是现行 API）。
+  - `ConnectTimeout` = post-dial first-write only；OS dial timeout / mid-read
+    cancel = **Blocked** on net（CONTRACT §2.2.0a）；取消须与 `Timeout` 配对。
+  - Public message/form/headers/stream 前置条件：`EHttpError(hekArgument)`。
+  - CookieJar：Max-Age/Expires + SameSite（default Lax；None 需 Secure；SiteKey 近似）。
+  - `IHttpClient.GetString` / `GetBytes`；H1 默认 `User-Agent: nextpas-http/1.0`。
+  - Proxy：明文 HTTP absolute-form only；HTTPS CONNECT deferred。
+  - H3：仅 seam；H3/QUIC non-goal。
+- **2026-07-16 wave-5 可用性抛光（已吸收）**：
   - H1 chunked request body：`Body(IReader)` 无 CL / `SendStreaming(..., CL<0)`。
   - Cancel：协作检查点（非 OS 中断）；见 CONTRACT §2.2。
-  - CookieJar：Max-Age/Expires 淘汰；`WithCookieJar`。
-  - Proxy：`WithProxyUrl` fluent + options；仅明文 HTTP absolute-form。
-  - `ConnectTimeout` vs `Timeout` 字段已拆分（dial OS 超时仍待 net）。
-  - `PostMultipart` 便捷 API。
-  - H3：仅 seam；HTTPS CONNECT：未实现（诚实排除）。
+  - CookieJar Max-Age/Expires；`WithCookieJar`；`WithProxyUrl`；`PostMultipart`。
 - 2026-07-16 控制面更新：
   - 主门禁 35 suites（见 `CONTRACT.md` / Makefile）；router/static/base/url/middleware 已纳入。
-  - 推荐 request 构造入口：`THttpRequestBuilder`；大量 `NewRequest` overload 已 deprecated。
+  - 推荐 request 构造入口：`THttpRequestBuilder`。
   - 已落地且有 focused 证据：per-request options decorator、form/json helpers、
     streaming body ownership（`SendStreaming`）、response charset auto helper、
     WebSocket client（`ConnectWebSocket`）、RFC 7807 error helpers。
@@ -34,15 +41,14 @@
     prior-knowledge（GET/POST/sequential/404）；顺带修了 session
     write-before-read drain 死锁与 IdleTimeout read-wait 回退。
   - API surface 审计已闭合（默认停扩面）：`THttpRequestBuilder` 为推荐入口；
-    仅 `NewRequest(Method, TUrl)` + `NewGetRequest` 非 deprecated；
-    facade 补齐 6 处与 `message.pas` 一致的 `deprecated`；
+    仅 `NewRequest(Method, TUrl|string)` + `NewGetRequest` 非 deprecated；
     `test_http_contract` source-contract 锁住 parity。
   - runtime/socket 成本隔离已闭合：成本阶梯见 `BENCHMARKS.md`；
     fullchain/server/h1parser 编译回归已修；`test_http_stress` 绿。
   - H3 honesty 已闭合：无内建 factory；`test_http_registry` 锁住未注册
     `hvHttp3` resolve 失败；解阻依赖独立 QUIC 模块。
   当前 HTTP lane 队列 P1–P5 已收口（H3 为诚实阻塞）。
-- 2026-07-06 API 对标结论（历史，仍有效的部分保留）：
+- 2026-07-06 API 对标结论（**历史档案**；多参 `NewRequest` 已删除，勿当作现行真相）：
   - 已够稳：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` / `IsRunning`
     的生命周期形状足够清晰，保持同步 facade，不把 Go `net/http` 或 Rust
     async runtime 细节泄漏到 public contract；handler / middleware / router
@@ -53,30 +59,17 @@
   - H2 已完整落地为 production-transport-ready 实现（frame/HPACK/stream/session/client/TLS），
     约 207 focused tests。H3 仍被 QUIC 模块阻塞。不创建伪 H3 public API。
   - Registry seam 有 future-version positive proof（custom hvHttp2/hvHttp3 factory）。
-  - client 侧 `NewRequest` overload 族与后续 builder/decorator/streaming 面均已有
-    focused/integration 证据；**不再**把 builder / form-json / streaming / charset
-    记为“刻意未认领”。后续扩面默认拒绝，除非有明确 contract 缺口。
-  - 本轮补齐：新增 `NewRequest(Method, Url, Headers, Body, ContentLength)` public
-    helper，经 `nextpas.core.http` facade 转发。nil headers 会创建空 header set；
-    body/positive length 会写入 `content-length`；negative content length 会抛
-    `EArgumentError`。caller-supplied `content-length` 现在必须是单个 numeric
-    value 且匹配 helper body length；duplicate、invalid、overflowing 或
-    conflicting value 都会 fail-fast。caller-supplied `transfer-encoding` 当前也
-    直接拒绝，避免在尚无 streaming/chunked request body ownership API 时构造 H1
-    writer 无法合法发送的请求。传入的 headers 视为 request-owned，helper 可能写入
-    `content-length`，调用方不应把同一 headers 对象复用到不同 request shape。
-    `test_http_message`、`test_http_contract` 和 `test_http_client` 分别锁住
-    helper contract、facade 可见性和 `IHttpClient.Send` live header/body 发送路径。
-  - 本轮补齐：新增 `NewRequest(Method, Url, Headers)` public helper。它只表达
-    method/url/custom headers，保持 nil body、`ContentLength = 0` 且不自动写入
-    `content-length`；调用方不必再为常见 headers-only request 手写
-    `Headers, nil, 0`。`test_http_message`、`test_http_contract` 和
-    `test_http_client` 分别锁住 helper contract、facade 可见性，以及 live
-    round-trip header/path/query 语义与“不自动发布 `content-length` header”这一条
-    client/server contract；显式单个 numeric `content-length: 0` 可保留，positive /
-    invalid / duplicate `content-length` 与任何 `transfer-encoding` 都会被拒绝。
-  - 同步收紧：为避免新增 `Headers` overload 破坏旧的 `NewRequest(Method, Url, nil)`
-    源兼容性，public surface 保留了 nil-literal compatibility shim。`nil` 第三参
+  - builder / form-json / streaming / charset 已有 focused 证据；后续扩面默认拒绝。
+  - ~~历史~~ 曾短暂存在多参 `NewRequest(Method, Url, Headers, Body, ContentLength)`
+    等 overload；**现行 surface 已物理删除**，仅保留
+    `NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
+  - ~~历史~~ 下列 “本轮补齐” 多参 helper 叙述保留为时间线，不再描述 live API。
+  - 本轮补齐（历史）：曾新增 `NewRequest(Method, Url, Headers, Body, ContentLength)`
+    public helper（已删除）。negative content length 等校验语义现由
+    builder / message 路径以 `EHttpError(hekArgument)` 表达。
+  - 本轮补齐（历史）：曾新增 `NewRequest(Method, Url, Headers)` public helper（已删除）。
+  - 同步收紧（历史）：为避免新增 `Headers` overload 破坏旧的 `NewRequest(Method, Url, nil)`
+    源兼容性，public surface 曾保留 nil-literal compatibility shim。`nil` 第三参
     仍解析成历史 empty-`TBytes` helper 语义，也就是 zero-length body +
     `content-length: 0`，不会静默落到新的 headers-only contract。对应
     compile/runtime proof 已加到 `test_http_message` 和 `test_http_contract`。

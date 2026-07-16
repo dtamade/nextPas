@@ -474,7 +474,7 @@ end;
 procedure RequireResponseWriter(const AW: IHttpResponseWriter);
 begin
   if AW = nil then
-    raise EArgumentError.Create('HTTP response writer is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP response writer is nil');
 end;
 
 function WriteAllResponseBodyString(const AW: IHttpResponseWriter;
@@ -847,7 +847,7 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ANilBody: Pointer): IHttpResponse;
 begin
   if ANilBody <> nil then
-    raise EArgumentError.Create(
+    raise EHttpError.Create(hekArgument,
       'HTTP nil-body response compatibility overload only accepts nil');
   Result := THttpResponse.Create(AStatus, AHeaders, nil);
 end;
@@ -957,7 +957,7 @@ var
   LTotal: SizeUInt;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('HTTP request is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP request is nil');
   LBody := AReq.Body;
   if LBody = nil then
     Exit(nil);
@@ -1030,10 +1030,11 @@ begin
   if not HttpStatusIsRedirect(AStatus) then
     raise EHttpError.Create(hekArgument, 'HttpRedirect requires a 3xx redirect status');
   if ALocation = '' then
-    raise EArgumentError.Create('HttpRedirect location must not be empty');
+    raise EHttpError.Create(hekArgument, 'HttpRedirect location must not be empty');
   { Reject protocol-relative URLs to prevent open redirect }
   if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
-    raise EArgumentError.Create('HttpRedirect: protocol-relative URL not allowed');
+    raise EHttpError.Create(hekArgument,
+      'HttpRedirect: protocol-relative URL not allowed');
   AW.GetHeaders.SetHeader('location', ALocation);
   LEscaped := HtmlEscapeAttr(ALocation);
   LBody := '<html><body>Redirecting to <a href="' + LEscaped + '">' +

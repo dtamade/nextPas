@@ -391,6 +391,8 @@ type
     function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
+    function GetString(const AUrl: string): string;
+    function GetBytes(const AUrl: string): TBytes;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
@@ -1973,6 +1975,16 @@ function TDownloadClient.Get(const AUrl: string): IHttpResponse;
 begin
   FSeenUrl := AUrl;
   Result := FResponse;
+end;
+
+function TDownloadClient.GetString(const AUrl: string): string;
+begin
+  Result := HttpGetString(Self, AUrl);
+end;
+
+function TDownloadClient.GetBytes(const AUrl: string): TBytes;
+begin
+  Result := HttpGetBytes(Self, AUrl);
 end;
 
 function TDownloadClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
@@ -8873,6 +8885,68 @@ begin
     'EffectiveConnectTimeout prefers ConnectTimeout');
 end;
 
+procedure TestClientDefaultUserAgent;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotUA: string;
+begin
+  LGotUA := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmGet, '/ua', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    LGotUA := AReq.Headers.Get('user-agent');
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ua');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('nextpas-http/1.0', LGotUA, 'default User-Agent injected when absent');
+    HttpReleaseResponseBody(LResp);
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientGetStringMethod;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmGet, '/hi', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LB := 'hello';
+    AW.GetHeaders.SetHeader('content-length', '5');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 5);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LBody := LClient.GetString(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/hi');
+    CheckEqual('hello', LBody, 'IHttpClient.GetString returns body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { HttpPostString/PutString/PatchString/DeleteString tests }
 
 procedure TestHttpPostStringSuccess;
@@ -9439,6 +9513,8 @@ begin
   T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);
   T.Test('Client ConnectTimeout option defaults',
     @TestClientConnectTimeoutOptionDefault);
+  T.Test('Client default User-Agent', @TestClientDefaultUserAgent);
+  T.Test('Client GetString method', @TestClientGetStringMethod);
   T.Test('PostString returns body on 200', @TestHttpPostStringSuccess);
   T.Test('PostString raises on 404', @TestHttpPostStringRaisesOn404);
   T.Test('PutString returns body on 200', @TestHttpPutStringSuccess);

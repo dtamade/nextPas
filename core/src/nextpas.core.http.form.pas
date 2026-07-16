@@ -40,6 +40,7 @@ implementation
 uses
   nextpas.core.exception,
   nextpas.core.text.conv,
+  nextpas.core.http.base,
   nextpas.core.http.url;
 
 { URL-decode a string, converting + to space }
@@ -424,7 +425,7 @@ var
 begin
   for LI := 1 to Length(AValue) do
     if AValue[LI] in [#13, #10, #0] then
-      raise EArgumentError.Create(
+      raise EHttpError.Create(hekArgument,
         AFieldName + ' must not contain CR/LF/NUL characters');
   Result := AValue;
 end;

@@ -643,7 +643,7 @@ begin
   try
     SetBearerAuth(LH, 'token');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'bearer helper rejects nil headers');
@@ -652,7 +652,7 @@ begin
   try
     SetBasicAuth(LH, 'user', 'pass');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'basic helper rejects nil headers');
@@ -671,7 +671,7 @@ begin
   try
     LH.ForEach(LCallback);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'foreach rejects nil callback');

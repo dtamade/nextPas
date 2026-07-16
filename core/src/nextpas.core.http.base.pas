@@ -103,10 +103,13 @@ type
   end;
 
   THttpClientOptions = record
-    { Request IO deadline (ms) for read/write after the socket is up. 0 = none. }
+    { Request IO deadline (ms) for read/write after the socket is up. 0 = none.
+      Pair with cancel: IHttpCancelToken is cooperative and will not interrupt a
+      blocked socket Read until the read returns (use Timeout to bound wait). }
     Timeout: Int64;
-    { New-dial write budget (ms). 0 = same as Timeout. Does not yet interrupt a
-      blocking OS connect(); it bounds post-dial write on newly opened sockets. }
+    { Post-dial first-write budget on newly opened sockets (ms). 0 = same as
+      Timeout. Does NOT interrupt a blocking OS connect(); OS dial timeout is a
+      net/platform capability (Blocked until net provides timed connect). }
     ConnectTimeout: Int64;
     MaxRedirects: Int32;
     MaxPoolSize: Int32;

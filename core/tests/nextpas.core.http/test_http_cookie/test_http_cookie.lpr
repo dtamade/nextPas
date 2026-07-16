@@ -5,6 +5,9 @@ program test_http_cookie;
 uses
   nextpas.core.test,
   nextpas.core.base,
+  nextpas.core.http.base,
+  nextpas.core.http.headers,
+  nextpas.core.http.intf,
   nextpas.core.http.cookie;
 
 procedure TestParseSimpleCookie;
@@ -254,6 +257,71 @@ begin
   end;
 end;
 
+procedure TestJarDropsSameSiteNoneWithoutSecure;
+var
+  LJar: IHttpCookieJar;
+  LHeaders: IHttpHeaders;
+  LUrl: TUrl;
+begin
+  LJar := NewHttpCookieJar;
+  LUrl := TUrl.Parse('https://example.com/');
+  LHeaders := NewHttpHeaders;
+  LHeaders.Add('set-cookie', 'x=1; SameSite=None; Path=/');
+  LJar.StoreFromResponse(LUrl, LHeaders);
+  CheckEqual('', LJar.CookieHeaderFor(LUrl),
+    'SameSite=None without Secure is not stored');
+end;
+
+procedure TestJarDefaultSameSiteLaxSendsSameSite;
+var
+  LJar: IHttpCookieJar;
+  LHeaders: IHttpHeaders;
+  LUrl: TUrl;
+  LCookie: string;
+begin
+  LJar := NewHttpCookieJar;
+  LUrl := TUrl.Parse('http://example.com/app');
+  LHeaders := NewHttpHeaders;
+  LHeaders.Add('set-cookie', 'sess=abc; Path=/');
+  LJar.StoreFromResponse(LUrl, LHeaders);
+  LCookie := LJar.CookieHeaderFor(LUrl);
+  Check(Pos('sess=abc', LCookie) > 0,
+    'absent SameSite defaults to Lax and sends on same-site request');
+end;
+
+procedure TestJarCrossSiteSuppressesLaxAndStrict;
+var
+  LJar: IHttpCookieJar;
+  LHeaders: IHttpHeaders;
+  LStoreUrl, LSameUrl, LCrossUrl: TUrl;
+  LCookie: string;
+begin
+  { Domain=net matches host "net" and "*.net". SiteKey("net")="net" while
+    SiteKey("foo.net")="foo.net" → cross-site under last-two-label approx. }
+  LJar := NewHttpCookieJar;
+  LStoreUrl := TUrl.Parse('https://net/');
+  LSameUrl := TUrl.Parse('https://net/path');
+  LCrossUrl := TUrl.Parse('https://foo.net/');
+  LHeaders := NewHttpHeaders;
+  LHeaders.Add('set-cookie',
+    'lax=1; Domain=net; Path=/; SameSite=Lax; Secure');
+  LHeaders.Add('set-cookie',
+    'strict=1; Domain=net; Path=/; SameSite=Strict; Secure');
+  LHeaders.Add('set-cookie',
+    'none=1; Domain=net; Path=/; SameSite=None; Secure');
+  LJar.StoreFromResponse(LStoreUrl, LHeaders);
+
+  LCookie := LJar.CookieHeaderFor(LSameUrl);
+  Check(Pos('lax=1', LCookie) > 0, 'same-site sends Lax');
+  Check(Pos('strict=1', LCookie) > 0, 'same-site sends Strict');
+  Check(Pos('none=1', LCookie) > 0, 'same-site sends None');
+
+  LCookie := LJar.CookieHeaderFor(LCrossUrl);
+  Check(Pos('lax=1', LCookie) = 0, 'cross-site suppresses Lax');
+  Check(Pos('strict=1', LCookie) = 0, 'cross-site suppresses Strict');
+  Check(Pos('none=1', LCookie) > 0, 'cross-site sends None only');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -283,5 +351,8 @@ begin
   T.Test('MakeCookieRejectsNonAsciiName', @TestMakeCookieRejectsNonAsciiName);
   T.Test('MakeCookieRejectsNonAsciiValue', @TestMakeCookieRejectsNonAsciiValue);
   T.Test('BuildCookieRejectsNonAsciiAttribute', @TestBuildCookieRejectsNonAsciiAttribute);
+  T.Test('JarDropsSameSiteNoneWithoutSecure', @TestJarDropsSameSiteNoneWithoutSecure);
+  T.Test('JarDefaultSameSiteLaxSendsSameSite', @TestJarDefaultSameSiteLaxSendsSameSite);
+  T.Test('JarCrossSiteSuppressesLaxAndStrict', @TestJarCrossSiteSuppressesLaxAndStrict);
   if not T.Run then Halt(1);
 end.

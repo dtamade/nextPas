@@ -2212,6 +2212,13 @@ begin
     LBuf.Write(CRLF[1], 2);
   end;
 
+  if not AReq.Headers.Has('user-agent') then
+  begin
+    LStr := 'user-agent: nextpas-http/1.0';
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
+
   LBuf.Write(CRLF[1], 2);
 
   if (AReq.Body <> nil) and (AReq.ContentLength > 0) then
