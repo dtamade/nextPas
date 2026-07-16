@@ -23,7 +23,11 @@
     `NewHttpClient`/`NewHttpServer` + `WithVersion(hvHttp2)` cleartext
     prior-knowledge（GET/POST/sequential/404）；顺带修了 session
     write-before-read drain 死锁与 IdleTimeout read-wait 回退。
-  下一优先：API surface 审计（默认停扩面），然后 runtime/socket 成本隔离。
+  - API surface 审计已闭合（默认停扩面）：`THttpRequestBuilder` 为推荐入口；
+    仅 `NewRequest(Method, TUrl)` + `NewGetRequest` 非 deprecated；
+    facade 补齐 6 处与 `message.pas` 一致的 `deprecated`；
+    `test_http_contract` source-contract 锁住 parity。
+  下一优先：runtime/socket 成本隔离；H3 仍 blocked on QUIC。
 - 2026-07-06 API 对标结论（历史，仍有效的部分保留）：
   - 已够稳：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` / `IsRunning`
     的生命周期形状足够清晰，保持同步 facade，不把 Go `net/http` 或 Rust
@@ -322,8 +326,14 @@
   `NewHttpClient(Options.WithVersion(hvHttp2))` 走 cleartext prior-knowledge，
   覆盖 GET 200 body、POST body round-trip、sequential GET、router 404；
   主门禁已纳入该 suite。TLS-ALPN H2 仍由下层 h2 client/session 覆盖；
-  h2c Upgrade / push / WS-over-H2 仍明确排除。下一步优先 API surface 审计
-  （默认停扩面）。
+  h2c Upgrade / push / WS-over-H2 仍明确排除。
+- Request construction 面已审计：`THttpRequestBuilder` 为推荐路径；
+  非 deprecated 工厂仅 `NewRequest(Method, TUrl)` 与 `NewGetRequest`；
+  其余 `NewRequest` / 全部 `NewStreamingRequest` 在 facade 与 `message.pas`
+  同标记 deprecated；`test_http_contract` 用 source-contract 防止 facade 再
+  丢 deprecation。Builder `Body(IReader)` 仍固定 `Content-Length: 0`，
+  已知长度流式请求不扩面加 `ContentLength()`。下一步优先 runtime/socket
+  成本隔离。
 - `bench_http_server` benchmark evidence summary: `test_http_benchmarks` 覆盖
   nextPas、Go `net/http`、Rust std-only 与可选 Hyper/Tokio comparator smoke，
   并锁住 runner / snapshot / H1 parser flag-matrix 的核心 truth markers；详细

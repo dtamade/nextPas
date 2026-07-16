@@ -92,44 +92,20 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 ### Messages
 
-- `NewRequest(Method, Url)` / `NewGetRequest(Path)` — build simple requests;
-  `Url` can be either a `TUrl` or a URL string.
-- `NewRequest(Method, Url, Headers)` — build a headers-only request with nil
-  body and zero `Content-Length`; this covers the common `GET` / `HEAD` /
-  custom-header case without forcing callers to spell `Headers, nil, 0`.
-  An explicit single numeric `Content-Length: 0` is accepted; positive,
-  invalid, duplicate, or oversized `Content-Length` is rejected because no body
-  is supplied.
-  `nil` as the third argument is not the headers-only form: it stays source
-  compatible with the older empty-`TBytes` helper and therefore still produces
-  a zero-length body with `Content-Length: 0`.
-- `NewRequest(Method, Url, Headers, Body, ContentLength)` — build custom
-  requests for `IHttpClient.Send`; `Url` can be either a `TUrl` or a URL string,
-  nil headers create an empty header set, body requests publish
-  `Content-Length`, and negative content length raises `EArgumentError`.
-  Caller-supplied `Content-Length` is valid only when it is a single numeric
-  value matching the helper body length; duplicate, invalid, oversized, or
-  conflicting values raise `EArgumentError`.
-- `NewRequest(Method, Url, Headers, BodyText)` — build a custom request with
-  a copied Pascal string body and generated `Content-Length`; callers still set
-  `Content-Type` explicitly on the supplied headers when needed.
-- `NewRequest(Method, Url, ContentType, BodyText)` — the same copied Pascal
-  string body helper, but for the common case where callers want to declare a
-  request `Content-Type` without hand-constructing a header set first.
-- `NewRequest(Method, Url, BodyText)` — the same copied Pascal string body
-  helper, but with auto-created empty headers when callers do not need custom
-  request headers.
-- `NewRequest(Method, Url, Headers, BodyBytes)` — build a custom request with
-  a copied `TBytes` body and generated `Content-Length`; this preserves binary
-  payload bytes without forcing callers through a Pascal string.
-- `NewRequest(Method, Url, ContentType, BodyBytes)` / `NewRequest(Method, Url,
-  ContentType, Body, ContentLength)` — the same binary / reader body helpers
-  for the common case where callers want `Content-Type` published without
-  allocating a separate `IHttpHeaders` first.
-- `NewRequest(Method, Url, BodyBytes)` / `NewRequest(Method, Url, Body,
-  ContentLength)` — the same binary / reader body helpers without an explicit
-  headers object; they still publish `Content-Length` and still do not guess
-  `Content-Type`.
+- **Recommended:** `THttpRequestBuilder.Create(Method, UrlString).Header(...).Body(...).Build`
+  — fluent construction; covers auth, content-type, query, per-request options.
+- **Still supported (non-deprecated):**
+  - `NewRequest(Method, TUrl)` — minimal primitive factory
+  - `NewGetRequest(Path)` — path-level GET helper
+- **Deprecated** (prefer builder): all other `NewRequest` overloads and all
+  `NewStreamingRequest` overloads (`'Use THttpRequestBuilder instead'`).
+  Facade markers must match `message.pas` (see `test_http_contract` source-contract).
+- Historical overload semantics (still true for deprecated helpers):
+  headers-only / body / body-text / body-bytes / content-type variants publish
+  `Content-Length` when a body is supplied; negative or conflicting
+  `Content-Length` raises `EArgumentError`.
+- Builder note: `Body(IReader)` currently builds with `Content-Length: 0`;
+  known-length streaming is not expanded on the builder yet.
 - Request helpers do not implement caller-supplied `Transfer-Encoding`; any
   `Transfer-Encoding` header raises `EArgumentError`. Streaming/chunked request
   body ownership remains a future API seam rather than a silent header escape

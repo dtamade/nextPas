@@ -44,11 +44,21 @@
 - 明确不做：h2c Upgrade、server push、WS-over-H2、TLS-ALPN facade E2E（已有
   下层 transport 覆盖）
 
+### P3 — API surface 审计（默认停扩面）
+
+- 推荐入口：`THttpRequestBuilder`；仅保留
+  `NewRequest(Method, TUrl)` + `NewGetRequest` 为非 deprecated 工厂
+- 修复 facade 6 处遗漏 `deprecated`（与 `message.pas` 对齐）
+- source-contract：`test_http_contract` 锁住 facade/message deprecation parity
+- 文档：`CONTRACT.md` / `README.md` builder-first；不新增第二套 API 族
+- 刻意不扩面：builder 不加 `ContentLength()`；`Body(IReader)` 仍 CL=0
+- 证据：`test_http_contract` → 31 passed / 0 unfreed
+
 ## 当前队列
 
 1. ~~P1 keep-alive request-tail~~ ✅
 2. ~~P2 H2 facade 端到端证明~~ ✅
-3. **P3 API surface 审计**（builder 优先，默认停扩面）
+3. ~~P3 API surface 审计~~ ✅
 4. **P4 runtime/socket 成本隔离**
 5. **P5 H3**（等 QUIC）
 

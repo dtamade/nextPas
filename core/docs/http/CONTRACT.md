@@ -60,9 +60,18 @@ end;
 ### 2.2 Request / Response
 
 - 公开类型是 **接口** `IHttpRequest` / `IHttpResponse`，不是裸 record wire 模型。
-- 推荐构造：`THttpRequestBuilder`（fluent）。
-- 旧 `NewRequest` / 部分 `NewStreamingRequest` overload 已 `deprecated 'Use THttpRequestBuilder instead'`。
+- 推荐构造：`THttpRequestBuilder`（fluent：Header / BasicAuth / BearerAuth /
+  ContentType / Body / QueryParam / Timeout / MaxRedirects / FollowRedirects / Build）。
+- **非 deprecated 工厂（仅 2 个）**：
+  - `NewRequest(Method, TUrl)` — 最小原始工厂（测试/内部桥接仍可直接用）
+  - `NewGetRequest(Path)` — 路径级 GET 便捷工厂
+- 其余 `NewRequest` / 全部 `NewStreamingRequest` overload 均
+  `deprecated 'Use THttpRequestBuilder instead'`；门面与 `message.pas` 必须同标记
+  （`test_http_contract` source-contract 锁住）。
 - Body 通过 `IReader` 表达；固定 body helpers 会复制到内存 reader 并发布 `Content-Length`。
+- Builder `Body(IReader)` 当前固定 `Content-Length: 0`（不扩面加
+  `ContentLength()` 前，已知长度流式请求仍走既有 deprecated overload 或
+  `SendStreaming`）。
 - Streaming：`NewStreamingRequest` + `SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
 
 ### 2.3 Router / Middleware
@@ -222,3 +231,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.0 | 与真实 IHttp* 面、builder、H2、门禁清单对齐 |
 | 2026-07-16 | 3.1 | 定稿 INV-12 keep-alive request-tail final public contract |
 | 2026-07-16 | 3.2 | H2 facade E2E 门禁 `test_http_h2_facade`；session write-drain 死锁修复 |
+| 2026-07-16 | 3.3 | P3 API audit：facade/message deprecation 对齐；builder-first 清单 |

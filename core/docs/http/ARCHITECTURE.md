@@ -17,7 +17,9 @@ H2 已落地完整的 transport 层（server session + client transport + TLS AL
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
 - `http.base` 现在拥有 `THttpClientOptions` / `THttpServerOptions` 这两个公共 options carrier。
 - `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责重定向/便捷请求构造/decorator，server 是建立在 `nextpas.core.net.server` 之上的 HTTP facade。
-- 推荐请求构造入口是 `THttpRequestBuilder`；大量 `NewRequest` overload 已标记 deprecated。
+- 推荐请求构造入口是 `THttpRequestBuilder`；非 deprecated 工厂仅
+  `NewRequest(Method, TUrl)` 与 `NewGetRequest`；其余 `NewRequest` /
+  `NewStreamingRequest` overload 在 facade 与 `message.pas` 同标记 deprecated。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，`hvHttp2` -> H2 transport；默认 client/server 版本为 `hvHttp11`。

@@ -1016,6 +1016,56 @@ begin
     'HTTP IsRunning delegates runtime truth to TCP server');
 end;
 
+procedure TestNewRequestFacadeDeprecationParitySourceContract;
+{ P3: facade must not silently drop deprecation markers that message.pas owns.
+  Only NewRequest(Method, TUrl) and NewGetRequest stay non-deprecated factories. }
+var
+  LFacade: string;
+  LMessage: string;
+begin
+  LFacade := ReadTextFile('../../../src/nextpas.core.http.pas');
+  LMessage := ReadTextFile('../../../src/nextpas.core.http.message.pas');
+
+  Check(SourceHas(LMessage,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload;'),
+    'message keeps NewRequest(Method, TUrl) as the non-deprecated primitive');
+  Check(SourceHas(LFacade,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;'),
+    'facade keeps NewRequest(Method, TUrl) as the non-deprecated primitive');
+  Check(SourceHas(LFacade, 'function NewGetRequest(const APath: string): IHttpRequest; inline;'),
+    'facade keeps NewGetRequest non-deprecated');
+
+  { Six TUrl body/header overloads previously lost deprecation on the facade. }
+  Check(SourceHas(LFacade,
+    'const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload; inline;'#10 +
+    '  deprecated ''Use THttpRequestBuilder instead'';'),
+    'facade deprecates NewRequest(TUrl, Body, ContentLength)');
+  Check(SourceHas(LFacade,
+    'const AHeaders: IHttpHeaders; const ABody: IReader;'#10 +
+    '  const AContentLength: Int64): IHttpRequest; overload; inline;'#10 +
+    '  deprecated ''Use THttpRequestBuilder instead'';'),
+    'facade deprecates NewRequest(TUrl, Headers, Body, ContentLength)');
+  Check(SourceHas(LFacade,
+    'const ABodyText: string): IHttpRequest; overload; inline;'#10 +
+    '  deprecated ''Use THttpRequestBuilder instead'';'),
+    'facade deprecates NewRequest(TUrl, BodyText)');
+  Check(SourceHas(LFacade,
+    'const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload; inline;'#10 +
+    '  deprecated ''Use THttpRequestBuilder instead'';'),
+    'facade deprecates NewRequest(TUrl, Headers, BodyText)');
+  Check(SourceHas(LFacade,
+    'const ABodyBytes: TBytes): IHttpRequest; overload; inline;'#10 +
+    '  deprecated ''Use THttpRequestBuilder instead'';'),
+    'facade deprecates NewRequest(TUrl, BodyBytes)');
+  Check(SourceHas(LFacade,
+    'const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;'#10 +
+    '  deprecated ''Use THttpRequestBuilder instead'';'),
+    'facade deprecates NewRequest(TUrl, Headers, BodyBytes)');
+
+  Check(SourceHas(LFacade, 'THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;'),
+    'facade re-exports THttpRequestBuilder as the recommended construction path');
+end;
+
 procedure TestChunkedRequestTrailerContract;
 var
   LRouter: IHttpRouter;
@@ -1224,6 +1274,8 @@ begin
     @TestHttpServerHonorsExplicitBackendSelection);
   T.Test('HttpServer facade owner-boundary source contract',
     @TestHttpServerFacadeOwnerBoundarySourceContract);
+  T.Test('NewRequest facade deprecation parity source contract',
+    @TestNewRequestFacadeDeprecationParitySourceContract);
   T.Test('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
   T.Test('Chunked request multiple trailer declaration contract',

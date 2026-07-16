@@ -413,9 +413,12 @@ As of 2026-07-16, ordered execution queue:
    - fixed `TH2ServerSession.Run` write-before-read drain deadlock and
      IdleTimeout fallback for keep-alive read waits
    - explicit exclusions remain: h2c Upgrade / push / WS-over-H2
-3. **P3 — API surface audit (no expansion by default)**
-   - `THttpRequestBuilder` is the recommended construction path
-   - inventory deprecated `NewRequest` overloads; avoid a second overlapping API family
+3. **P3 — API surface audit (no expansion by default)** ✅ closed
+   - recommended path: `THttpRequestBuilder`; only `NewRequest(Method, TUrl)`
+     and `NewGetRequest` stay non-deprecated factories
+   - fixed 6 facade overloads that had dropped `deprecated` vs `message.pas`
+   - source-contract in `test_http_contract` locks deprecation parity
+   - no second overlapping API family; builder `ContentLength()` not added
 4. **P4 — runtime/socket cost isolation**
    - continue narrow benchmarks for non-parser/non-writer costs
    - no ranking claims without scoped caveats
