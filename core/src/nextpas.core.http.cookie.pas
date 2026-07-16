@@ -2,6 +2,7 @@ unit nextpas.core.http.cookie;
 {**
  * @desc HTTP Cookie parsing and generation (RFC 6265).
  *       Parse request Cookie header, build Set-Cookie response headers.
+ *       Client-side IHttpCookieJar stores Set-Cookie and injects Cookie.
  *
  *       Usage (server-side):
  *         var LCookies: TRequestCookies;
@@ -22,9 +23,13 @@ unit nextpas.core.http.cookie;
 interface
 
 uses
-  nextpas.core.base;
+  nextpas.core.base,
+  nextpas.core.http.base,
+  nextpas.core.http.intf;
 
 type
+  IHttpCookieJar = nextpas.core.http.intf.IHttpCookieJar;
+
   TSameSite = (ssStrict, ssLax, ssNone);
 
   { Parsed Cookie header name=value pairs.
@@ -85,10 +90,15 @@ function MakeCookie(const AName, AValue: string): TSetCookie;
 { Parse a single 'name=value' pair (for use outside Cookie header context). }
 function ParseSingleCookie(const AStr: string; out AName, AValue: string): Boolean;
 
+{ Minimal RFC 6265 client cookie jar.
+   StoreFromResponse absorbs Set-Cookie; CookieHeaderFor builds Cookie for a URL. }
+function NewHttpCookieJar: IHttpCookieJar;
+
 implementation
 
 uses
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.sync;
 
 const
   { Maximum number of cookies to parse from a single Cookie header.
@@ -422,6 +432,297 @@ begin
     AValue := '';
     Result := AName <> '';
   end;
+end;
+
+{ IHttpCookieJar — minimal in-memory jar }
+
+type
+  TStoredCookie = record
+    Name: string;
+    Value: string;
+    Domain: string;
+    Path: string;
+    Secure: Boolean;
+    HostOnly: Boolean;
+  end;
+
+  THttpCookieJar = class(TInterfacedObject, IHttpCookieJar)
+  private
+    FLock: IMutex;
+    FItems: array of TStoredCookie;
+    function DomainMatches(const ACookieDomain, AHost: string;
+      const AHostOnly: Boolean): Boolean;
+    function PathMatches(const ACookiePath, ARequestPath: string): Boolean;
+    procedure Upsert(const AItem: TStoredCookie);
+  public
+    constructor Create;
+    destructor Destroy; override;
+    procedure StoreFromResponse(const AUrl: TUrl; const AHeaders: IHttpHeaders);
+    function CookieHeaderFor(const AUrl: TUrl): string;
+    procedure Clear;
+  end;
+
+function LowerAscii(const S: string): string;
+var
+  LI: SizeInt;
+begin
+  Result := S;
+  for LI := 1 to Length(Result) do
+    if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then
+      Result[LI] := Char(Ord(Result[LI]) + 32);
+end;
+
+function TrimSpaces(const S: string): string;
+var
+  LStart, LEnd: SizeInt;
+begin
+  LStart := 1;
+  LEnd := Length(S);
+  while (LStart <= LEnd) and (S[LStart] = ' ') do
+    Inc(LStart);
+  while (LEnd >= LStart) and (S[LEnd] = ' ') do
+    Dec(LEnd);
+  if LEnd < LStart then
+    Result := ''
+  else
+    Result := System.Copy(S, LStart, LEnd - LStart + 1);
+end;
+
+function ParseSetCookieLine(const AHeader: string; const ARequestUrl: TUrl;
+  out AItem: TStoredCookie): Boolean;
+var
+  LPos, LStart, LLen, LEq: SizeInt;
+  LPart, LAttr, LVal: string;
+  LFirst: Boolean;
+begin
+  Result := False;
+  AItem := Default(TStoredCookie);
+  LLen := Length(AHeader);
+  if LLen = 0 then
+    Exit;
+  LFirst := True;
+  LStart := 1;
+  LPos := 1;
+  while LPos <= LLen + 1 do
+  begin
+    if (LPos > LLen) or (AHeader[LPos] = ';') then
+    begin
+      LPart := TrimSpaces(System.Copy(AHeader, LStart, LPos - LStart));
+      if LPart <> '' then
+      begin
+        if LFirst then
+        begin
+          LEq := Pos('=', LPart);
+          if LEq <= 0 then
+            Exit(False);
+          AItem.Name := TrimSpaces(System.Copy(LPart, 1, LEq - 1));
+          AItem.Value := System.Copy(LPart, LEq + 1, MaxInt);
+          if AItem.Name = '' then
+            Exit(False);
+          LFirst := False;
+        end
+        else
+        begin
+          LEq := Pos('=', LPart);
+          if LEq > 0 then
+          begin
+            LAttr := LowerAscii(TrimSpaces(System.Copy(LPart, 1, LEq - 1)));
+            LVal := TrimSpaces(System.Copy(LPart, LEq + 1, MaxInt));
+          end
+          else
+          begin
+            LAttr := LowerAscii(LPart);
+            LVal := '';
+          end;
+          if LAttr = 'domain' then
+          begin
+            if (LVal <> '') and (LVal[1] = '.') then
+              LVal := System.Copy(LVal, 2, MaxInt);
+            AItem.Domain := LowerAscii(LVal);
+            AItem.HostOnly := False;
+          end
+          else if LAttr = 'path' then
+            AItem.Path := LVal
+          else if LAttr = 'secure' then
+            AItem.Secure := True;
+        end;
+      end;
+      if LPos > LLen then
+        Break;
+      Inc(LPos);
+      LStart := LPos;
+    end
+    else
+      Inc(LPos);
+  end;
+  if AItem.Name = '' then
+    Exit(False);
+  if AItem.Domain = '' then
+  begin
+    AItem.Domain := LowerAscii(ARequestUrl.Host);
+    AItem.HostOnly := True;
+  end;
+  if (AItem.Path = '') or (AItem.Path[1] <> '/') then
+  begin
+    { RFC 6265 §5.1.4 default-path }
+    LPart := ARequestUrl.Path;
+    if LPart = '' then
+      LPart := '/';
+    LEq := 0;
+    for LPos := Length(LPart) downto 1 do
+      if LPart[LPos] = '/' then
+      begin
+        LEq := LPos;
+        Break;
+      end;
+    if LEq <= 1 then
+      AItem.Path := '/'
+    else
+      AItem.Path := System.Copy(LPart, 1, LEq - 1);
+  end;
+  Result := True;
+end;
+
+constructor THttpCookieJar.Create;
+begin
+  inherited Create;
+  FLock := Mutex;
+  SetLength(FItems, 0);
+end;
+
+destructor THttpCookieJar.Destroy;
+begin
+  FLock := nil;
+  inherited Destroy;
+end;
+
+function THttpCookieJar.DomainMatches(const ACookieDomain, AHost: string;
+  const AHostOnly: Boolean): Boolean;
+var
+  LHost, LDomain: string;
+begin
+  LHost := LowerAscii(AHost);
+  LDomain := LowerAscii(ACookieDomain);
+  if LDomain = '' then
+    Exit(False);
+  if AHostOnly then
+    Exit(LHost = LDomain);
+  if LHost = LDomain then
+    Exit(True);
+  if Length(LHost) <= Length(LDomain) then
+    Exit(False);
+  Result := (System.Copy(LHost, Length(LHost) - Length(LDomain) + 1,
+    Length(LDomain)) = LDomain) and
+    (LHost[Length(LHost) - Length(LDomain)] = '.');
+end;
+
+function THttpCookieJar.PathMatches(const ACookiePath,
+  ARequestPath: string): Boolean;
+var
+  LReq: string;
+begin
+  LReq := ARequestPath;
+  if LReq = '' then
+    LReq := '/';
+  if ACookiePath = '' then
+    Exit(True);
+  if System.Copy(LReq, 1, Length(ACookiePath)) <> ACookiePath then
+    Exit(False);
+  if Length(LReq) = Length(ACookiePath) then
+    Exit(True);
+  if (ACookiePath[Length(ACookiePath)] = '/') or
+     (LReq[Length(ACookiePath) + 1] = '/') then
+    Exit(True);
+  Result := False;
+end;
+
+procedure THttpCookieJar.Upsert(const AItem: TStoredCookie);
+var
+  LI: SizeInt;
+begin
+  for LI := 0 to High(FItems) do
+    if (FItems[LI].Name = AItem.Name) and
+       (LowerAscii(FItems[LI].Domain) = LowerAscii(AItem.Domain)) and
+       (FItems[LI].Path = AItem.Path) then
+    begin
+      FItems[LI] := AItem;
+      Exit;
+    end;
+  SetLength(FItems, Length(FItems) + 1);
+  FItems[High(FItems)] := AItem;
+end;
+
+procedure THttpCookieJar.StoreFromResponse(const AUrl: TUrl;
+  const AHeaders: IHttpHeaders);
+var
+  LValues: TStringArray;
+  LI: SizeInt;
+  LItem: TStoredCookie;
+begin
+  if AHeaders = nil then
+    Exit;
+  LValues := AHeaders.GetAll('set-cookie');
+  if Length(LValues) = 0 then
+    Exit;
+  FLock.Acquire;
+  try
+    for LI := Low(LValues) to High(LValues) do
+      if ParseSetCookieLine(LValues[LI], AUrl, LItem) then
+        Upsert(LItem);
+  finally
+    FLock.Release;
+  end;
+end;
+
+function THttpCookieJar.CookieHeaderFor(const AUrl: TUrl): string;
+var
+  LI: SizeInt;
+  LHost, LPath, LScheme: string;
+  LSecure: Boolean;
+  LFirst: Boolean;
+begin
+  Result := '';
+  LHost := AUrl.Host;
+  LPath := AUrl.Path;
+  if LPath = '' then
+    LPath := '/';
+  LScheme := LowerAscii(AUrl.Scheme);
+  LSecure := LScheme = 'https';
+  LFirst := True;
+  FLock.Acquire;
+  try
+    for LI := 0 to High(FItems) do
+    begin
+      if FItems[LI].Secure and (not LSecure) then
+        Continue;
+      if not DomainMatches(FItems[LI].Domain, LHost, FItems[LI].HostOnly) then
+        Continue;
+      if not PathMatches(FItems[LI].Path, LPath) then
+        Continue;
+      if LFirst then
+        LFirst := False
+      else
+        Result := Result + '; ';
+      Result := Result + FItems[LI].Name + '=' + FItems[LI].Value;
+    end;
+  finally
+    FLock.Release;
+  end;
+end;
+
+procedure THttpCookieJar.Clear;
+begin
+  FLock.Acquire;
+  try
+    SetLength(FItems, 0);
+  finally
+    FLock.Release;
+  end;
+end;
+
+function NewHttpCookieJar: IHttpCookieJar;
+begin
+  Result := THttpCookieJar.Create;
 end;
 
 end.

@@ -1115,8 +1115,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPost, 'http://example.com/post',
-      NewHttpHeaders, LBody as IReader, 3));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPost, 'http://example.com/post').Headers(NewHttpHeaders).Body(LBody).ContentLength(3).Build);
     CheckEqual(Int64(201), Int64(LResp.StatusCode), 'post response status');
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -1160,8 +1159,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/filter',
-      LHeaders));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/filter').Headers(LHeaders).Build);
     LResp := nil;
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -1212,8 +1210,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/te-trailers',
-      LHeaders));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/te-trailers').Headers(LHeaders).Build);
     LResp := nil;
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -1256,8 +1253,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPost,
-      'http://example.com/settings-window', NewHttpHeaders, LBody as IReader, 4));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPost, 'http://example.com/settings-window').Headers(NewHttpHeaders).Body(LBody).ContentLength(4).Build);
     CheckEqual(Int64(200), Int64(LResp.StatusCode),
       'runtime SETTINGS response status');
 
@@ -1313,8 +1309,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPost,
-      'http://example.com/window-update', NewHttpHeaders, LBody as IReader, 4));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPost, 'http://example.com/window-update').Headers(NewHttpHeaders).Body(LBody).ContentLength(4).Build);
     CheckEqual(Int64(201), Int64(LResp.StatusCode),
       'WINDOW_UPDATE response status');
 
@@ -1958,8 +1953,7 @@ begin
     LTransport := NewH2ClientTransport(TH2ClientTransportOptions.Default);
     LHeaders := NewHttpHeaders;
     LHeaders.Add('connection', 'close');
-    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/close',
-      LHeaders));
+    LResp := LTransport.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/close').Headers(LHeaders).Build);
     LResp := nil;
     LHeaders := nil;
     LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/reuse'));
@@ -2314,8 +2308,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPost,
-      'http://example.com/stream-wu', NewHttpHeaders, LBody as IReader, 4));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPost, 'http://example.com/stream-wu').Headers(NewHttpHeaders).Body(LBody).ContentLength(4).Build);
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'stream WU response');
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -2705,8 +2698,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPut, 'http://example.com/item',
-      NewHttpHeaders, LBody as IReader, 4));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPut, 'http://example.com/item').Headers(NewHttpHeaders).Body(LBody).ContentLength(4).Build);
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'PUT response status');
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -2741,7 +2733,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/custom', LHeaders));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/custom').Headers(LHeaders).Build);
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
     Check(LCount >= 3, 'custom headers sent');
@@ -2855,7 +2847,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/headers', LHeaders));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/headers').Headers(LHeaders).Build);
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'multi-header response status');
   finally
     LResp := nil;

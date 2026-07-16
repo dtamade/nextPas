@@ -417,6 +417,7 @@ type
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
+    function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -2099,6 +2100,11 @@ begin
   Result := Self;
 end;
 
+function TDownloadClient.WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
+begin
+  Result := Self;
+end;
+
 function TZeroProgressWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   Result := 0;
@@ -2159,8 +2165,8 @@ begin
   try
     LClient.Send(LReq);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
   Check(LRaised, 'Client.Send rejects nil request');
 end;
@@ -2307,9 +2313,7 @@ begin
     LClient := NewHttpClient;
     LHeaders := NewHeaders;
     SetBasicAuth(LHeaders, 'Aladdin', 'open sesame');
-    LReq := NewRequest(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/auth',
-      LHeaders, nil, 0);
+    LReq := THttpRequestBuilder.Create(hmGet, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/auth').Headers(LHeaders).Build;
 
     LResp := LClient.Send(LReq);
 
@@ -2395,9 +2399,7 @@ begin
     LClient := NewHttpClient;
     LHeaders := NewHeaders;
     LHeaders.SetHeader('x-client', 'request-helper');
-    LReq := nextpas.core.http.NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/builder',
-      LHeaders, 'payload');
+    LReq := nextpas.core.http.THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/builder').Headers(LHeaders).Body('payload').Build;
 
     LResp := LClient.Send(LReq);
 
@@ -2456,9 +2458,7 @@ begin
     LClient := NewHttpClient;
     LHeaders := NewHeaders;
     LHeaders.SetHeader('x-client', 'headers-only');
-    LReq := nextpas.core.http.NewRequest(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/headers-only?x=1',
-      LHeaders);
+    LReq := nextpas.core.http.THttpRequestBuilder.Create(hmGet, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/headers-only?x=1').Headers(LHeaders).Build;
     Check(not LReq.Headers.Has('content-length'),
       'headers-only helper does not populate content-length during request construction');
 
@@ -2518,9 +2518,7 @@ begin
     LBody[2] := Ord('n');
     LBody[3] := 0;
     LBody[4] := 255;
-    LReq := nextpas.core.http.NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/bytes',
-      LHeaders, LBody);
+    LReq := nextpas.core.http.THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/bytes').Headers(LHeaders).Body(LBody).Build;
 
     LResp := LClient.Send(LReq);
 
@@ -2566,9 +2564,7 @@ begin
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LClient := NewHttpClient;
-    LReq := nextpas.core.http.NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/no-headers-string',
-      'payload');
+    LReq := nextpas.core.http.THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/no-headers-string').Body('payload').Build;
 
     LResp := LClient.Send(LReq);
 
@@ -2621,9 +2617,7 @@ begin
     LBody[0] := Ord('b');
     LBody[1] := 0;
     LBody[2] := 255;
-    LReq := nextpas.core.http.NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/no-headers-bytes',
-      LBody);
+    LReq := nextpas.core.http.THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/no-headers-bytes').Body(LBody).ContentLength(0).Build;
 
     LResp := LClient.Send(LReq);
 
@@ -2674,9 +2668,7 @@ begin
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LClient := NewHttpClient;
-    LReq := nextpas.core.http.NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/content-type-string',
-      'text/plain; charset=utf-8', 'payload');
+    LReq := nextpas.core.http.THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/content-type-string').ContentType('text/plain; charset=utf-8').Body('payload').Build;
 
     LResp := LClient.Send(LReq);
 
@@ -2734,9 +2726,7 @@ begin
     LBody[0] := Ord('b');
     LBody[1] := 0;
     LBody[2] := 255;
-    LReq := nextpas.core.http.NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/content-type-bytes',
-      'application/octet-stream', LBody);
+    LReq := nextpas.core.http.THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/content-type-bytes').ContentType('application/octet-stream').Body(LBody).Build;
 
     LResp := LClient.Send(LReq);
 
@@ -2801,7 +2791,8 @@ begin
   begin
     { Window covers timeout-wrap branch plus bare re-raise. }
     LReconnectBlock := Copy(LSource, LReconnectPos, 900);
-    Check(Pos('LConn := TcpConnect(LHost, LPort);', LReconnectBlock) > 0,
+    Check((Pos('LConn := TcpConnect(LConnectHost, LConnectPort);', LReconnectBlock) > 0) or
+          (Pos('LConn := TcpConnect(LHost, LPort);', LReconnectBlock) > 0),
       'h1 client pooled retry opens a fresh connection after body rewind');
     Check(Pos('try', LReconnectBlock) > 0,
       'h1 client pooled retry wraps fresh connection operations');
@@ -3560,9 +3551,7 @@ begin
     CheckEqual('ok', ReadBodyStr(LResp),
       'connection close token-list priming response body');
 
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      NewHeaders, StringBodyReader('payload'), Int64(7));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(NewHeaders).Body(StringBodyReader('payload')).ContentLength(Int64(7)).Build;
     LRaised := False;
     try
       LResp := LClient.Send(LReq);
@@ -3616,9 +3605,7 @@ begin
     LClient := NewHttpClient;
     LHeaders := NewHeaders;
     LHeaders.SetHeader('connection', 'keep-alive, close');
-    LReq := NewRequest(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/close-after-request',
-      LHeaders);
+    LReq := THttpRequestBuilder.Create(hmGet, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/close-after-request').Headers(LHeaders).Build;
     LResp := LClient.Send(LReq);
     CheckEqual(Int64(200), Int64(LResp.StatusCode),
       'request connection close token-list status');
@@ -3945,9 +3932,7 @@ begin
 
   try
     LClient := NewHttpClient;
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      NewHeaders, StringBodyReader('abcdef'), Int64(3));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(NewHeaders).Body(StringBodyReader('abcdef')).ContentLength(Int64(3)).Build;
     LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode),
@@ -3984,9 +3969,7 @@ begin
 
   try
     LClient := NewHttpClient;
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      NewHeaders, StringBodyReader('payload'), Int64(7));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(NewHeaders).Body(StringBodyReader('payload')).ContentLength(Int64(7)).Build;
     LReq.Headers.Remove('content-length');
     Check(not LReq.Headers.Has('content-length'),
       'test precondition removes request content-length header');
@@ -4029,9 +4012,7 @@ begin
 
   try
     LClient := NewHttpClient;
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      NewHeaders, StringBodyReader('abcdef'), Int64(0));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(NewHeaders).Body(StringBodyReader('abcdef')).ContentLength(Int64(0)).Build;
     LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(200), Int64(LResp.StatusCode),
@@ -4068,9 +4049,7 @@ begin
 
   try
     LClient := NewHttpClient;
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      NewHeaders, StringBodyReader('abc'), Int64(6));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(NewHeaders).Body(StringBodyReader('abc')).ContentLength(Int64(6)).Build;
     LRaised := False;
     try
       LClient.Send(LReq);
@@ -4322,8 +4301,8 @@ begin
   try
     nextpas.core.http.client.HttpReadResponseBodyString(LResp);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
   Check(LRaised, 'response body helper rejects nil response');
 end;
@@ -4439,8 +4418,8 @@ begin
   try
     nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
   Check(LRaised, 'response body bytes helper rejects nil response');
 end;
@@ -4617,8 +4596,8 @@ begin
   try
     HttpReleaseResponseBody(LResp);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
   Check(LRaised, 'release helper rejects nil response');
 end;
@@ -4636,8 +4615,7 @@ begin
   LTransportObj := TRequestBodyCaptureTransport.Create(LBody);
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
-    LBody as IReader, Int64(7));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(LBody as IReader).ContentLength(Int64(7)).Build;
 
   LResp := LClient.Send(LReq);
 
@@ -4666,8 +4644,7 @@ begin
   LTransportObj := TRequestBodyCaptureTransport.Create(LBody, True);
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
-    LBody as IReader, Int64(7));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(LBody as IReader).ContentLength(Int64(7)).Build;
 
   LRaised := False;
   try
@@ -4704,8 +4681,7 @@ begin
     LRespBody as IReader);
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
-    LReqBody as IReader, Int64(7));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(LReqBody as IReader).ContentLength(Int64(7)).Build;
 
   LRaised := False;
   try
@@ -4741,8 +4717,7 @@ begin
     LRespBody as IReader);
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
-    LReqBody as IReader, Int64(7));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(LReqBody as IReader).ContentLength(Int64(7)).Build;
 
   LRaisedRequestCloseError := False;
   LRaisedResponseCloseError := False;
@@ -4779,8 +4754,7 @@ begin
   LTransportObj := TRequestBodyCaptureTransport.Create(LReqBody, True);
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
-    LReqBody as IReader, Int64(7));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(LReqBody as IReader).ContentLength(Int64(7)).Build;
 
   LRaisedTransportError := False;
   LRaisedRequestCloseError := False;
@@ -5111,8 +5085,7 @@ begin
   LTransportObj.RedirectLocation := '/done';
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
-    LBody as IReader, Int64(7));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(LBody as IReader).ContentLength(Int64(7)).Build;
 
   LResp := LClient.Send(LReq);
 
@@ -5143,8 +5116,7 @@ begin
   LTransportObj.RedirectLocation := '/done';
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
-    LBody as IReader, Int64(7));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(LBody as IReader).ContentLength(Int64(7)).Build;
 
   LRaised := False;
   try
@@ -5299,7 +5271,7 @@ begin
     LTransportObj.RedirectStatus := LStatuses[LI];
     LTransport := LTransportObj;
     LClient := NewHttpClient(LTransport);
-    LReq := NewRequest(hmHead, 'http://example.test/old', NewHeaders, nil, 0);
+    LReq := THttpRequestBuilder.Create(hmHead, 'http://example.test/old').Headers(NewHeaders).Build;
     LResp := LClient.Send(LReq);
     CheckEqual(Int64(2), Int64(LTransportObj.Calls),
       'HEAD redirect performs second round trip');
@@ -5704,7 +5676,7 @@ begin
   LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
   LHeaders.SetHeader('cookie', 'session=abc');
   LHeaders.SetHeader('cookie2', 'legacy=1');
-  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
   LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'same-authority redirect performs second round trip');
@@ -5745,7 +5717,7 @@ begin
   LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
   LHeaders.SetHeader('cookie', 'session=def');
   LHeaders.SetHeader('cookie2', 'legacy=2');
-  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
   LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'cross-authority redirect performs second round trip');
@@ -5788,7 +5760,7 @@ begin
   LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
   LHeaders.SetHeader('cookie', 'session=scheme');
   LHeaders.SetHeader('cookie2', 'legacy=scheme');
-  LReq := NewRequest(hmGet, 'http://example.test:443/old', LHeaders, nil, 0);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test:443/old').Headers(LHeaders).Build;
   LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'scheme-change redirect performs second round trip');
@@ -5834,7 +5806,7 @@ begin
   LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
   LHeaders.SetHeader('cookie', 'session=sub');
   LHeaders.SetHeader('cookie2', 'legacy=sub');
-  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
   LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'subdomain redirect performs second round trip');
@@ -5872,7 +5844,7 @@ begin
   LClient := NewHttpClient(LTransport);
   LHeaders := NewHeaders;
   LHeaders.SetHeader('host', 'override.test');
-  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
   LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'relative redirect with custom host performs second round trip');
@@ -5901,7 +5873,7 @@ begin
   LClient := NewHttpClient(LTransport);
   LHeaders := NewHeaders;
   LHeaders.SetHeader('host', 'override.test');
-  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://example.test/old').Headers(LHeaders).Build;
   LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'default-port redirect performs second round trip');
@@ -6123,8 +6095,7 @@ begin
   LTransportObj.RedirectLocation := '/upload-copy';
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
-    StringBodyReader('payload'), Int64(7));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(StringBodyReader('payload')).ContentLength(Int64(7)).Build;
   LResp := LClient.Send(LReq);
   CheckEqual(Int64(2), Int64(LTransportObj.Calls),
     'temporary redirect performs second round trip');
@@ -6154,8 +6125,7 @@ begin
   LTransportObj.RedirectLocation := '/upload-copy';
   LTransport := LTransportObj;
   LClient := NewHttpClient(LTransport);
-  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
-    TOneShotReader.Create('payload') as IReader, Int64(7));
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.test/upload').Headers(NewHeaders).Body(TOneShotReader.Create('payload') as IReader).ContentLength(Int64(7)).Build;
   LRaised := False;
   try
     LClient.Send(LReq);
@@ -6182,10 +6152,10 @@ begin
   try
     NewHttpClient(LOptions);
   except
-    on E: EArgumentError do
-      LCaught := True;
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
   end;
-  Check(LCaught, 'negative client timeout raises EArgumentError');
+  Check(LCaught, 'negative client timeout raises hekArgument');
 
   LOptions := THttpClientOptions.Default;
   LOptions.MaxRedirects := -1;
@@ -6194,10 +6164,10 @@ begin
   try
     NewHttpClient(LTransport, LOptions);
   except
-    on E: EArgumentError do
-      LCaught := True;
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
   end;
-  Check(LCaught, 'negative client max redirects raises EArgumentError');
+  Check(LCaught, 'negative client max redirects raises hekArgument');
 end;
 
 { Test 5: Client respects max redirects (infinite loop -> error) }
@@ -6331,9 +6301,7 @@ begin
   try
     LClient := NewHttpClient;
     LBody := TTrackedRequestBody.Create('payload');
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      NewHeaders, LBody as IReader, Int64(7));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(NewHeaders).Body(LBody as IReader).ContentLength(Int64(7)).Build;
 
     LRaised := False;
     try
@@ -6397,9 +6365,7 @@ begin
 
     LHeaders := NewHeaders;
     LHeaders.SetHeader('idempotency-key', 'retry-safe');
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      LHeaders, StringBodyReader('payload'), Int64(7));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(LHeaders).Body(StringBodyReader('payload')).ContentLength(Int64(7)).Build;
     LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(2), Int64(GRetryAcceptCount),
@@ -6451,9 +6417,7 @@ begin
 
     LHeaders := NewHeaders;
     LHeaders.SetHeader('idempotency-key', 'retry-safe');
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      LHeaders, StringBodyReader('payload'), Int64(7));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(LHeaders).Body(StringBodyReader('payload')).ContentLength(Int64(7)).Build;
     LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(2), Int64(GRetryAcceptCount),
@@ -6518,9 +6482,7 @@ begin
 
     LHeaders := NewHeaders;
     LHeaders.SetHeader('idempotency-key', 'retry-safe');
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      LHeaders, StringBodyReader('abc'), Int64(6));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(LHeaders).Body(StringBodyReader('abc')).ContentLength(Int64(6)).Build;
 
     LRaised := False;
     LErrorMessage := '';
@@ -6609,9 +6571,7 @@ begin
     LBody := TPartialReadFailingRequestBody.Create('abc');
     LHeaders := NewHeaders;
     LHeaders.SetHeader('idempotency-key', 'retry-safe');
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      LHeaders, LBody as IReader, Int64(6));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(LHeaders).Body(LBody as IReader).ContentLength(Int64(6)).Build;
 
     LRaised := False;
     LErrorMessage := '';
@@ -6702,9 +6662,7 @@ begin
 
     LHeaders := NewHeaders;
     LHeaders.SetHeader('idempotency-key', 'retry-safe');
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      LHeaders, StringBodyReader('payload'), Int64(7));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(LHeaders).Body(StringBodyReader('payload')).ContentLength(Int64(7)).Build;
 
     LRaised := False;
     try
@@ -6767,9 +6725,7 @@ begin
       'priming request status 200');
     CheckEqual(Int64(1), Int64(GRetryAcceptCount), 'priming request opened first connection');
 
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      NewHeaders, StringBodyReader('payload'), Int64(7));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(NewHeaders).Body(StringBodyReader('payload')).ContentLength(Int64(7)).Build;
     LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(2), Int64(GRetryAcceptCount),
@@ -6819,9 +6775,7 @@ begin
 
     LHeaders := NewHeaders;
     LHeaders.SetHeader('idempotency-key', 'retry-safe');
-    LReq := NewRequest(hmPost,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
-      LHeaders, TOneShotReader.Create('payload') as IReader, Int64(7));
+    LReq := THttpRequestBuilder.Create(hmPost, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload').Headers(LHeaders).Body(TOneShotReader.Create('payload') as IReader).ContentLength(Int64(7)).Build;
     LResp := LClient.Send(LReq);
 
     CheckEqual(Int64(2), Int64(GRetryAcceptCount),
@@ -7179,9 +7133,7 @@ begin
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LHeaders := NewHeaders;
-    LReq := NewRequest(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/check-host',
-      LHeaders, nil, 0);
+    LReq := THttpRequestBuilder.Create(hmGet, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/check-host').Headers(LHeaders).Build;
     Check(not LHeaders.Has('host'),
       'auto host wire-only: source headers start without host');
     Check(not LReq.Headers.Has('host'),
@@ -7347,10 +7299,7 @@ begin
 
   try
     LClient := NewHttpClient;
-    LReq := NewRequest(hmGet,
-      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/wire-header',
-      TCustomWireHeader.Create(AHeaderName, AHeaderValue) as IHttpHeaders,
-      nil, 0);
+    LReq := THttpRequestBuilder.Create(hmGet, 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/wire-header').Headers(TCustomWireHeader.Create(AHeaderName, AHeaderValue) as IHttpHeaders).Build;
 
     LRaised := False;
     LRejectedHeader := False;
@@ -7899,7 +7848,7 @@ begin
   HttpReleaseResponseBody(LResp);
 
   // Test 4: Direct request with IHttpRequestWithOptions
-  LReq := NewRequest(hmGet, 'http://localhost/test', NewHeaders);
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/test').Headers(NewHeaders).Build;
   (LReq as IHttpRequestWithOptions).SetRequestOptions(
     Default(THttpRequestOptions).WithTimeout(15000));
   LResp := LClient.Send(LReq);
@@ -8054,24 +8003,20 @@ begin
     'chained builder query param');
 end;
 
-procedure TestBuilderReaderBodyRequiresContentLength;
+procedure TestBuilderReaderBodyWithoutContentLengthIsChunked;
 var
-  LCaught: Boolean;
+  LReq: IHttpRequest;
 begin
-  LCaught := False;
-  try
-    THttpRequestBuilder.Create(hmPost, 'http://localhost/api')
-      .Body(StringBodyReader('payload'))
-      .Build;
-  except
-    on E: EHttpError do
-    begin
-      LCaught := True;
-      Check(E.Kind = hekArgument, 'builder missing CL is hekArgument');
-    end;
-  end;
-  Check(LCaught,
-    'builder Body(IReader) without ContentLength fail-fasts');
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://localhost/api')
+    .Body(StringBodyReader('payload'))
+    .Build;
+  CheckEqual(Int64(-1), LReq.ContentLength,
+    'builder Body(IReader) without CL uses unknown-length sentinel');
+  CheckEqual('chunked', LowerCase(LReq.Headers.Get('transfer-encoding')),
+    'builder publishes transfer-encoding: chunked');
+  Check(not LReq.Headers.Has('content-length'),
+    'chunked body must not publish content-length');
+  Check(LReq.Body <> nil, 'chunked builder body is non-nil');
 end;
 
 procedure TestBuilderReaderBodyWithContentLength;
@@ -8282,10 +8227,10 @@ begin
   try
     HttpEnsureSuccess(nil);
   except
-    on E: EArgumentError do
-      LCaught := Pos('nil', E.Message) > 0;
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (Pos('nil', E.Message) > 0);
   end;
-  Check(LCaught, 'EnsureSuccess raises EArgumentError on nil');
+  Check(LCaught, 'EnsureSuccess raises hekArgument on nil');
 end;
 
 { HttpGetString / HttpGetBytes tests }
@@ -8454,10 +8399,10 @@ begin
   try
     LClient.WithRetry(-1);
   except
-    on E: EArgumentError do
-      LCaught := Pos('negative', E.Message) > 0;
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (Pos('negative', E.Message) > 0);
   end;
-  Check(LCaught, 'WithRetry(-1) raises EArgumentError');
+  Check(LCaught, 'WithRetry(-1) raises hekArgument');
 end;
 
 procedure TestWithRetryRetriesTimeoutException;
@@ -8511,6 +8456,255 @@ begin
   Check(LCaught, 'parse error surfaces');
   Check(LKind = hekParse, 'parse kind preserved');
   CheckEqual(1, LTransport.Calls, 'parse is not retried');
+end;
+
+procedure TestWithRetryDoesNotRetryNonIdempotentPost;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(5, HTTP_STATUS_SERVICE_UNAVAILABLE);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(3).Post('http://localhost/test',
+    'text/plain', 'payload');
+  Check(LResp <> nil, 'POST returns response');
+  CheckEqual(503, Int32(LResp.StatusCode), 'POST 5xx not retried without key');
+  CheckEqual(1, LTransport.Calls, 'POST without Idempotency-Key is single-shot');
+end;
+
+procedure TestWithRetryRetriesPostWithIdempotencyKey;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(2, HTTP_STATUS_SERVICE_UNAVAILABLE);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://localhost/test')
+    .Header('Idempotency-Key', 'k-1')
+    .Body('payload')
+    .Build;
+  LResp := LClient.WithRetry(3).Send(LReq);
+  Check(LResp <> nil, 'idempotent POST returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), 'idempotent POST eventually succeeds');
+  CheckEqual(3, LTransport.Calls, 'POST+Idempotency-Key retries like GET');
+end;
+
+procedure TestHttpIsRetrySafeRequestHelpers;
+var
+  LGet, LPost, LPostKey: IHttpRequest;
+begin
+  LGet := NewRequest(hmGet, TUrl.Parse('http://localhost/a'));
+  LPost := THttpRequestBuilder.Create(hmPost, 'http://localhost/b')
+    .Body('x').Build;
+  LPostKey := THttpRequestBuilder.Create(hmPost, 'http://localhost/c')
+    .Header('X-Idempotency-Key', 'z').Body('x').Build;
+  Check(HttpIsRetryableMethod(hmGet), 'GET is retryable method');
+  Check(not HttpIsRetryableMethod(hmPost), 'POST is not retryable method');
+  Check(HttpIsRetrySafeRequest(LGet), 'GET is retry-safe');
+  Check(not HttpIsRetrySafeRequest(LPost), 'POST without key is not safe');
+  Check(HttpIsRetrySafeRequest(LPostKey), 'POST with X-Idempotency-Key is safe');
+  Check(HttpHasRetryIdempotencyKey(LPostKey), 'key helper true');
+  Check(not HttpHasRetryIdempotencyKey(LPost), 'key helper false');
+end;
+
+procedure TestCancelTokenRaisesHekCanceledAtSend;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LToken: IHttpCancelToken;
+  LReq: IHttpRequest;
+  LCaught: Boolean;
+  LKind: THttpErrorKind;
+begin
+  LTransport := TRetryTestTransport.Create(0, HTTP_STATUS_OK);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LToken := NewHttpCancelToken;
+  LToken.Cancel;
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/test')
+    .CancelToken(LToken)
+    .Build;
+  LCaught := False;
+  LKind := hekUnknown;
+  try
+    LClient.Send(LReq);
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LKind := E.Kind;
+    end;
+  end;
+  Check(LCaught, 'canceled request raises');
+  Check(LKind = hekCanceled, 'cancel kind is hekCanceled');
+  CheckEqual(0, LTransport.Calls, 'canceled before transport RoundTrip');
+end;
+
+procedure TestCancelTokenNotCanceledAllowsSend;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LToken: IHttpCancelToken;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(0, HTTP_STATUS_OK);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LToken := NewHttpCancelToken;
+  LReq := THttpRequestBuilder.Create(hmGet, 'http://localhost/test')
+    .CancelToken(LToken)
+    .Build;
+  LResp := LClient.Send(LReq);
+  Check(LResp <> nil, 'uncanceled token allows send');
+  CheckEqual(200, Int32(LResp.StatusCode), 'status 200');
+  CheckEqual(1, LTransport.Calls, 'one transport call');
+end;
+
+procedure TestClientSendsChunkedRequestBody;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LGotBody: string;
+  LGotCL: Int64;
+  LGotTE: string;
+begin
+  LGotBody := '';
+  LGotCL := -2;
+  LGotTE := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/chunk-upload', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotBody := ReadReaderStr(AReq.Body);
+    LGotCL := AReq.ContentLength;
+    LGotTE := AReq.Headers.Get('transfer-encoding');
+    LB := 'ok';
+    AW.GetHeaders.SetHeader('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LReq := THttpRequestBuilder.Create(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/chunk-upload')
+      .ContentType('text/plain')
+      .Body(StringBodyReader('chunked-payload'))
+      .Build;
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'chunked request returns 200');
+    CheckEqual('chunked-payload', LGotBody, 'server decoded chunked request body');
+    CheckEqual('ok', ReadBodyStr(LResp), 'chunked request response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientCookieJarInjectsAndStores;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LJar: IHttpCookieJar;
+  LResp: IHttpResponse;
+  LSeenCookie: string;
+  LUrl: string;
+begin
+  LSeenCookie := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/set', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    AW.GetHeaders.Add('set-cookie', 'session=abc123; Path=/');
+    LB := 'set';
+    AW.GetHeaders.SetHeader('content-length', '3');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 3);
+  end);
+  LRouter.Get('/echo', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LSeenCookie := AReq.Headers.Get('cookie');
+    LB := 'echo';
+    AW.GetHeaders.SetHeader('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 4);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LJar := NewHttpCookieJar;
+    LClient := NewHttpClient.WithCookieJar(LJar);
+    LUrl := 'http://127.0.0.1:' + IntToStr(Int64(LPort));
+    LResp := LClient.Get(LUrl + '/set');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'set-cookie response 200');
+    HttpReleaseResponseBody(LResp);
+    LResp := LClient.Get(LUrl + '/echo');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'echo response 200');
+    Check(Pos('session=abc123', LSeenCookie) > 0,
+      'cookie jar injects stored Set-Cookie');
+    HttpReleaseResponseBody(LResp);
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientHttpProxyAbsoluteForm;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LResp: IHttpResponse;
+  LReqLine: string;
+  LLineEnd: SizeInt;
+begin
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 2'#13#10 +
+                   #13#10 +
+                   'ok';
+  GRawResponse2 := '';
+  GRawRequest1 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+  try
+    LOpts := THttpClientOptions.Default.WithProxyUrl(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)));
+    LClient := NewHttpClient(LOpts);
+    LResp := LClient.Get('http://example.test/proxy-path?q=1');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'proxy returns 200');
+    CheckEqual('ok', ReadBodyStr(LResp), 'proxy response body');
+    LLineEnd := Pos(#13#10, GRawRequest1);
+    Check(LLineEnd > 0, 'proxy received request-line');
+    LReqLine := System.Copy(GRawRequest1, 1, LLineEnd - 1);
+    Check(Pos('GET http://example.test/proxy-path?q=1 HTTP/1.1', LReqLine) > 0,
+      'proxy uses absolute-form request-target');
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawRequest1 := '';
+    GRawAcceptLimit := 0;
+  end;
 end;
 
 { HttpPostString/PutString/PatchString/DeleteString tests }
@@ -9030,8 +9224,8 @@ begin
   T.Test('Builder preserves existing query', @TestBuilderQueryParamsExistingQuery);
   T.Test('Builder per-request FollowRedirects(false)', @TestBuilderPerRequestOptions);
   T.Test('Builder full chaining', @TestBuilderChaining);
-  T.Test('Builder Body(IReader) requires ContentLength',
-    @TestBuilderReaderBodyRequiresContentLength);
+  T.Test('Builder Body(IReader) without CL is chunked',
+    @TestBuilderReaderBodyWithoutContentLengthIsChunked);
   T.Test('Builder Body(IReader)+ContentLength',
     @TestBuilderReaderBodyWithContentLength);
   T.Test('Builder empty string body is Content-Length 0',
@@ -9065,6 +9259,14 @@ begin
   T.Test('WithRetry retries hekTimeout exception', @TestWithRetryRetriesTimeoutException);
   T.Test('WithRetry retries hekConnect exception', @TestWithRetryRetriesConnectException);
   T.Test('WithRetry does not retry hekParse', @TestWithRetryDoesNotRetryParseException);
+  T.Test('WithRetry does not retry non-idempotent POST', @TestWithRetryDoesNotRetryNonIdempotentPost);
+  T.Test('WithRetry retries POST with Idempotency-Key', @TestWithRetryRetriesPostWithIdempotencyKey);
+  T.Test('HttpIsRetrySafeRequest helpers', @TestHttpIsRetrySafeRequestHelpers);
+  T.Test('CancelToken raises hekCanceled at Send', @TestCancelTokenRaisesHekCanceledAtSend);
+  T.Test('CancelToken allows send when not canceled', @TestCancelTokenNotCanceledAllowsSend);
+  T.Test('Client sends H1 chunked request body', @TestClientSendsChunkedRequestBody);
+  T.Test('Client cookie jar injects and stores', @TestClientCookieJarInjectsAndStores);
+  T.Test('Client HTTP proxy absolute-form', @TestClientHttpProxyAbsoluteForm);
   T.Test('PostString returns body on 200', @TestHttpPostStringSuccess);
   T.Test('PostString raises on 404', @TestHttpPostStringRaisesOn404);
   T.Test('PutString returns body on 200', @TestHttpPutStringSuccess);

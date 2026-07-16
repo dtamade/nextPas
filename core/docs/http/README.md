@@ -96,17 +96,14 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   — fluent construction; covers auth, content-type, query, per-request options.
 - **Public request factories (whitelist only):**
   - `NewRequest(Method, TUrl)` — minimal primitive factory
+  - `NewRequest(Method, string)` — URL-parse bridge (no headers/body)
   - `NewGetRequest(Path)` — path-level GET helper
   - Prefer `THttpRequestBuilder` for headers/body/auth/options.
-- `NewStreamingRequest` is **physically removed** (wave-3). Use the builder or
-  `IHttpClient.SendStreaming`.
-- Multi-arg `NewRequest` overloads remain **deprecated**
-  (`Use THttpRequestBuilder instead`); prefer builder / whitelist factories.
-  Physical deletion of multi-arg `NewRequest` is deferred (bulk test migration).
-- Builder note: `Body(IReader)` requires `ContentLength(N)` before `Build`;
-  missing length fail-fasts. Empty `Body('')` publishes `Content-Length: 0`.
-  Known-length streams: builder or `SendStreaming`. Request helpers reject
-  caller-supplied `Transfer-Encoding` and never auto-publish chunked TE.
+- `NewStreamingRequest` and multi-arg `NewRequest` overloads are **physically
+  removed**. Use the builder or `IHttpClient.SendStreaming`.
+- Builder note: `Body(IReader)` + `ContentLength(N)` for known length; missing
+  length may use H1 chunked request body. Empty `Body('')` publishes
+  `Content-Length: 0`.
 - `NewResponse(Status, Headers, Body)` — build responses; nil headers create
   an empty header set so callers can safely read or mutate `Resp.Headers`.
 - `NewResponse(Status, Headers, BodyText)` /
@@ -136,7 +133,14 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `SendStreaming` or builder + `Send`.
 - `WithRetry(N)` retries **5xx** and **retryable transport errors**
   (`HttpErrorIsRetryable`: timeout/connect) with exponential backoff; not 4xx.
-- Cancel: no separate cancel API; use timeouts (`WithTimeout` / client options).
+  Only **idempotent-safe** requests retry: GET/HEAD/OPTIONS/TRACE or
+  `Idempotency-Key` / `X-Idempotency-Key` (`HttpIsRetrySafeRequest`). Body is
+  rewound via `IStream` when present.
+- Cancel: `IHttpCancelToken` (cooperative) → `hekCanceled` at Send / redirect /
+  retry / RoundTrip checkpoints. Timeouts remain `hekTimeout`
+  (`WithTimeout` / client options).
+- `WithCookieJar(Jar)` — optional client cookie store (RFC 6265 minimal).
+- `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy (`http://host:port`).
 - `IHttpClient.Send` owns any close-capable request body for the duration of the
   request. After the final round trip or failure, `IReadCloser` / `ICloser` /
   `IStream` request bodies are closed.

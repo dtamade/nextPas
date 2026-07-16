@@ -183,6 +183,14 @@ type
     function IsRunning: Boolean;
   end;
 
+  { Minimal RFC 6265 client cookie store. }
+  IHttpCookieJar = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-4000000000C2}']
+    procedure StoreFromResponse(const AUrl: TUrl; const AHeaders: IHttpHeaders);
+    function CookieHeaderFor(const AUrl: TUrl): string;
+    procedure Clear;
+  end;
+
   IHttpClient = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000009}']
     function Send(const AReq: IHttpRequest): IHttpResponse;
@@ -222,6 +230,9 @@ type
        exceptions (timeout/connect) with exponential backoff (100ms base, max 5s).
        Does NOT retry on 4xx client errors. }
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
+    {** Optional cookie jar decorator. Injects Cookie before Send and absorbs
+       Set-Cookie after a successful response. }
+    function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
   end;
 
   { Transport layer — protocol implementations register these }

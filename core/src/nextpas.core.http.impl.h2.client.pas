@@ -301,20 +301,17 @@ end;
 
 function IsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
 begin
-  Result := AMethod in [hmGet, hmHead, hmOptions, hmTrace];
+  Result := HttpIsRetryableMethod(AMethod);
 end;
 
 function HasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
 begin
-  Result := (AReq <> nil) and (AReq.Headers <> nil) and
-    (AReq.Headers.Has('idempotency-key') or AReq.Headers.Has('x-idempotency-key'));
+  Result := HttpHasRetryIdempotencyKey(AReq);
 end;
 
 function IsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
 begin
-  if AReq = nil then
-    Exit(False);
-  Result := IsRetryableMethod(AReq.Method) or HasRetryIdempotencyKey(AReq);
+  Result := HttpIsRetrySafeRequest(AReq);
 end;
 
 function CaptureRetryBodyPosition(const AReq: IHttpRequest;
@@ -1375,6 +1372,9 @@ begin
   LResponse.StreamID := LStreamID;
   LStreamIndex := AddActiveStream(LStreamID);
   try
+    if (AReq.Body <> nil) and (AReq.ContentLength < 0) then
+      raise EHttpError.Create(hekArgument,
+        'HTTP/2 client does not support chunked/unknown-length request bodies');
     LHasBody := (AReq.Body <> nil) and (AReq.ContentLength > 0);
     SendRequestHeaders(LStreamID, AReq, not LHasBody);
     if LHasBody then

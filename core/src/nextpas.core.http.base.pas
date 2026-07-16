@@ -32,7 +32,8 @@ type
     hekBody,
     hekUpgrade,
     hekRegistry,
-    hekStatus
+    hekStatus,
+    hekCanceled
   );
 
   EHttpError = class(ENextPasError)
@@ -71,6 +72,15 @@ type
     function HasQueryParam(const AName: string): Boolean;
   end;
 
+  { Cooperative cancel token for in-flight client requests.
+     Call Cancel to mark canceled; ThrowIfCanceled raises hekCanceled. }
+  IHttpCancelToken = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-4000000000C1}']
+    function IsCanceled: Boolean;
+    procedure Cancel;
+    procedure ThrowIfCanceled;
+  end;
+
   THttpRequestOptions = record
     TimeoutMs: Int64;
     HasTimeout: Boolean;
@@ -78,13 +88,18 @@ type
     HasMaxRedirects: Boolean;
     FollowRedirects: Boolean;
     HasFollowRedirects: Boolean;
+    CancelToken: IHttpCancelToken;
+    HasCancelToken: Boolean;
     function WithTimeout(const ATimeoutMs: Int64): THttpRequestOptions;
     function WithMaxRedirects(const AMaxRedirects: Int32): THttpRequestOptions;
     function WithFollowRedirects(
       const AFollow: Boolean): THttpRequestOptions;
+    function WithCancelToken(
+      const AToken: IHttpCancelToken): THttpRequestOptions;
     function EffectiveTimeout(const ADefault: Int64): Int64;
     function EffectiveMaxRedirects(const ADefault: Int32): Int32;
     function EffectiveFollowRedirects(const ADefault: Boolean): Boolean;
+    function EffectiveCancelToken: IHttpCancelToken;
   end;
 
   THttpClientOptions = record
@@ -95,12 +110,15 @@ type
     Version: THttpVersion;
     UseRegistryVersion: Boolean;
     TLSContext: ISSLContext;
+    { Plain HTTP forward proxy (http://host:port). Empty = direct connect. }
+    ProxyUrl: string;
     class function Default: THttpClientOptions; static;
     function WithTimeout(const ATimeoutMs: Int64): THttpClientOptions;
     function WithMaxRedirects(const AMaxRedirects: Int32): THttpClientOptions;
     function WithFollowRedirects(const AFollow: Boolean): THttpClientOptions;
     function WithMaxPoolSize(const AMaxPoolSize: Int32): THttpClientOptions;
     function WithVersion(const AVersion: THttpVersion): THttpClientOptions;
+    function WithProxyUrl(const AProxyUrl: string): THttpClientOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
   end;
@@ -211,10 +229,16 @@ function HttpVersionToStr(const AVersion: THttpVersion): string;
 function HttpErrorIsTimeout(const E: Exception): Boolean;
 {** True for timeout or connect-class failures suitable for client retry. }
 function HttpErrorIsRetryable(const E: Exception): Boolean;
+{** True for caller-side errors: hekArgument / hekCanceled (not server faults). }
+function HttpErrorIsUserError(const E: Exception): Boolean;
 {** Map bare transport exceptions to EHttpError with Op=transport:
    ETimeoutError → hekTimeout; ENetworkError → hekConnect.
    Returns nil if caller should bare-re-raise the original exception with `raise`. }
 function HttpWrapTransportException(const E: Exception): Exception;
+{** Create a fresh cooperative cancel token. }
+function NewHttpCancelToken: IHttpCancelToken;
+{** Raise hekCanceled when AToken is non-nil and canceled. }
+procedure HttpThrowIfCanceled(const AToken: IHttpCancelToken);
 
 implementation
 
@@ -230,6 +254,8 @@ begin
       Result := ecInvalidArgument;
     hekTimeout:
       Result := ecTimeout;
+    hekCanceled:
+      Result := ecCancelled;
     hekParse:
       Result := ecParse;
     hekConnect, hekProtocol, hekRedirect, hekBody, hekUpgrade, hekRegistry,
@@ -295,6 +321,15 @@ begin
   Result := E is ENetworkError;
 end;
 
+function HttpErrorIsUserError(const E: Exception): Boolean;
+begin
+  if E = nil then
+    Exit(False);
+  if E is EHttpError then
+    Exit(EHttpError(E).Kind in [hekArgument, hekCanceled]);
+  Result := E is EArgumentError;
+end;
+
 function HttpWrapTransportException(const E: Exception): Exception;
 begin
   Result := nil;
@@ -304,6 +339,43 @@ begin
     Result := EHttpError.CreateOp(hekTimeout, 'transport', E.Message)
   else if E is ENetworkError then
     Result := EHttpError.CreateOp(hekConnect, 'transport', E.Message);
+end;
+
+type
+  THttpCancelToken = class(TInterfacedObject, IHttpCancelToken)
+  private
+    FCanceled: Boolean;
+  public
+    function IsCanceled: Boolean;
+    procedure Cancel;
+    procedure ThrowIfCanceled;
+  end;
+
+function THttpCancelToken.IsCanceled: Boolean;
+begin
+  Result := FCanceled;
+end;
+
+procedure THttpCancelToken.Cancel;
+begin
+  FCanceled := True;
+end;
+
+procedure THttpCancelToken.ThrowIfCanceled;
+begin
+  if FCanceled then
+    raise EHttpError.Create(hekCanceled, 'HTTP request canceled');
+end;
+
+function NewHttpCancelToken: IHttpCancelToken;
+begin
+  Result := THttpCancelToken.Create;
+end;
+
+procedure HttpThrowIfCanceled(const AToken: IHttpCancelToken);
+begin
+  if AToken <> nil then
+    AToken.ThrowIfCanceled;
 end;
 
 { Free functions }
@@ -769,6 +841,14 @@ begin
   Result.HasFollowRedirects := True;
 end;
 
+function THttpRequestOptions.WithCancelToken(
+  const AToken: IHttpCancelToken): THttpRequestOptions;
+begin
+  Result := Self;
+  Result.CancelToken := AToken;
+  Result.HasCancelToken := True;
+end;
+
 function THttpRequestOptions.EffectiveTimeout(const ADefault: Int64): Int64;
 begin
   if HasTimeout then
@@ -795,6 +875,14 @@ begin
     Result := ADefault;
 end;
 
+function THttpRequestOptions.EffectiveCancelToken: IHttpCancelToken;
+begin
+  if HasCancelToken then
+    Result := CancelToken
+  else
+    Result := nil;
+end;
+
 { THttpClientOptions }
 
 class function THttpClientOptions.Default: THttpClientOptions;
@@ -806,6 +894,7 @@ begin
   Result.Version := hvHttp11;
   Result.UseRegistryVersion := True;
   Result.TLSContext := nil;
+  Result.ProxyUrl := '';
 end;
 
 function THttpClientOptions.WithTimeout(const ATimeoutMs: Int64): THttpClientOptions;
@@ -838,6 +927,13 @@ begin
   Result := Self;
   Result.Version := AVersion;
   Result.UseRegistryVersion := False;
+end;
+
+function THttpClientOptions.WithProxyUrl(
+  const AProxyUrl: string): THttpClientOptions;
+begin
+  Result := Self;
+  Result.ProxyUrl := AProxyUrl;
 end;
 
 function THttpClientOptions.EffectiveVersion(

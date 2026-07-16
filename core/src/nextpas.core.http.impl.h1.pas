@@ -15,6 +15,8 @@ type
   TH1ClientTransportOptions = record
     Timeout: Int64;
     MaxPoolSize: Int32;
+    { Plain HTTP forward proxy URL (http://host:port). Empty = direct. }
+    ProxyUrl: string;
   end;
 
   TH1ServerTransportOptions = record
@@ -41,6 +43,7 @@ uses
   nextpas.core.http.headers, nextpas.core.http.message,
   nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast,
   nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer,
+  nextpas.core.http.impl.h1.chunked,
   nextpas.core.sync,
   nextpas.core.mem.arena.intf,
   nextpas.core.http.mem,
@@ -117,7 +120,7 @@ type
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
     procedure PoolClear;
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest;
-      const AAutoHost: string): Boolean;
+      const AAutoHost: string; const AAbsoluteForm: Boolean): Boolean;
     function ReadResponse(const AReader: IReader;
       const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
       out AResponseStarted: Boolean): IHttpResponse;
@@ -393,20 +396,17 @@ end;
 
 function IsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
 begin
-  Result := AMethod in [hmGet, hmHead, hmOptions, hmTrace];
+  Result := HttpIsRetryableMethod(AMethod);
 end;
 
 function HasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
 begin
-  Result := (AReq <> nil) and (AReq.Headers <> nil) and
-    (AReq.Headers.Has('idempotency-key') or AReq.Headers.Has('x-idempotency-key'));
+  Result := HttpHasRetryIdempotencyKey(AReq);
 end;
 
 function IsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
 begin
-  if AReq = nil then
-    Exit(False);
-  Result := IsRetryableMethod(AReq.Method) or HasRetryIdempotencyKey(AReq);
+  Result := HttpIsRetrySafeRequest(AReq);
 end;
 
 function IsSkippableInformationalResponse(const AStatus: THttpStatus): Boolean; inline;
@@ -420,6 +420,7 @@ function CaptureRetryBodyPosition(const AReq: IHttpRequest;
 begin
   ABodyStream := nil;
   AStartPosition := 0;
+  { ContentLength = 0 means no body bytes; < 0 is chunked unknown-length. }
   if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit(True);
   Result := Supports(AReq.Body, IStream, ABodyStream);
@@ -2120,28 +2121,48 @@ begin
 end;
 
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
-  const AReq: IHttpRequest; const AAutoHost: string): Boolean;
+  const AReq: IHttpRequest; const AAutoHost: string;
+  const AAbsoluteForm: Boolean): Boolean;
 const
   CRLF: AnsiString = #13#10;
 var
   LPath: string;
+  LUrl: TUrl;
   LBuf: IWriter;
+  LChunked: IWriter;
+  LChunkedFlusher: IFlusher;
   LFlusher: IFlusher;
   LN: SizeUInt;
   LRemaining: Int64;
   LReadSize: SizeUInt;
   LTmp: array[0..4095] of Byte;
   LStr: string;
+  LUseChunked: Boolean;
 begin
   Result := True;
   if not (AReq.Version in [hvHttp10, hvHttp11]) then
     raise EHttpError.Create(hekProtocol, 'h1 transport only supports HTTP/1.x requests');
 
-  LPath := AReq.Path;
-  if LPath = '' then
-    LPath := '/';
-  if AReq.RawQuery <> '' then
-    LPath := LPath + '?' + AReq.RawQuery;
+  LUrl := AReq.Url;
+  if AAbsoluteForm then
+  begin
+    { Proxy absolute-form request-target: scheme://host[:port]/path[?query] }
+    LPath := LUrl.ToString;
+    if LUrl.Fragment <> '' then
+    begin
+      { Fragment is never sent on the wire. }
+      if Pos('#', LPath) > 0 then
+        LPath := System.Copy(LPath, 1, Pos('#', LPath) - 1);
+    end;
+  end
+  else
+  begin
+    LPath := AReq.Path;
+    if LPath = '' then
+      LPath := '/';
+    if AReq.RawQuery <> '' then
+      LPath := LPath + '?' + AReq.RawQuery;
+  end;
   ValidateWireRequestTarget(LPath);
 
   LBuf := CreateBufferedWriter(AWriter, 4096);
@@ -2166,9 +2187,18 @@ begin
     LBuf.Write(CRLF[1], 2);
   end);
 
+  LUseChunked := (AReq.Body <> nil) and (AReq.ContentLength < 0);
+
   if (AReq.ContentLength > 0) and (not AReq.Headers.Has('content-length')) then
   begin
     LStr := 'content-length: ' + IntToStr(AReq.ContentLength);
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
+
+  if LUseChunked and (not AReq.Headers.Has('transfer-encoding')) then
+  begin
+    LStr := 'transfer-encoding: chunked';
     LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
     LBuf.Write(CRLF[1], 2);
   end;
@@ -2219,6 +2249,32 @@ begin
           'HTTP request body shorter than declared content-length');
       end;
     end;
+  end
+  else if LUseChunked then
+  begin
+    LChunked := TChunkedWriter.Create(LBuf);
+    while True do
+    begin
+      try
+        LN := AReq.Body.Read(LTmp[0], SizeUInt(SizeOf(LTmp)));
+      except
+        on E: Exception do
+        begin
+          if E is ETimeoutError then
+            raise EHttpError.CreateOp(hekTimeout, 'transport',
+              'HTTP request body read failed: ' + E.Message);
+          if E is EHttpError then
+            raise;
+          raise EHttpError.Create(hekProtocol,
+            'HTTP request body read failed: ' + E.Message);
+        end;
+      end;
+      if LN = 0 then
+        Break;
+      LChunked.Write(LTmp[0], LN);
+    end;
+    if Supports(LChunked, IFlusher, LChunkedFlusher) then
+      LChunkedFlusher.Flush;
   end;
 
   if Supports(LBuf, IFlusher, LFlusher) then
@@ -2320,6 +2376,10 @@ var
   LPoolHostKey: string;
   LAutoHost: string;
   LPort: UInt16;
+  LConnectHost: string;
+  LConnectPort: UInt16;
+  LProxyUrl: TUrl;
+  LUseAbsoluteForm: Boolean;
   LConn: ITcpStream;
   LResp: IHttpResponse;
   LPooled: Boolean;
@@ -2342,12 +2402,14 @@ begin
   // Per-request timeout override: check request options first, fall back to transport default
   LTimeoutMs := FOptions.Timeout;
   if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+  begin
     LTimeoutMs := LReqOpts.RequestOptions.EffectiveTimeout(FOptions.Timeout);
+    HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
+  end;
 
   LUrl := AReq.Url;
   ValidatePlainHttpClientUrlScheme(LUrl);
   LHost := LUrl.Host;
-  LPoolHostKey := CanonicalPoolHostKey(LHost);
   LAutoHost := '';
   if not AReq.Headers.Has('host') then
   begin
@@ -2359,20 +2421,42 @@ begin
   if LPort = 0 then
     LPort := 80;
 
+  LUseAbsoluteForm := False;
+  LConnectHost := LHost;
+  LConnectPort := LPort;
+  LPoolHostKey := CanonicalPoolHostKey(LHost);
+  if FOptions.ProxyUrl <> '' then
+  begin
+    LProxyUrl := TUrl.Parse(FOptions.ProxyUrl);
+    if LowerCase(LProxyUrl.Scheme) <> 'http' then
+      raise EHttpError.Create(hekArgument,
+        'HTTP client proxy must use http:// scheme');
+    if LProxyUrl.Host = '' then
+      raise EHttpError.Create(hekArgument, 'HTTP client proxy host is empty');
+    LConnectHost := LProxyUrl.Host;
+    LConnectPort := LProxyUrl.Port;
+    if LConnectPort = 0 then
+      LConnectPort := 80;
+    LUseAbsoluteForm := True;
+    { Pool by proxy + target so different targets do not share a proxy socket. }
+    LPoolHostKey := CanonicalPoolHostKey(LConnectHost) + '|' +
+      CanonicalPoolHostKey(LHost) + ':' + IntToStr(Int64(LPort));
+  end;
+
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LRequestDeadline := ClientRequestDeadline(LTimeoutMs);
   FPending := '';
-  LConn := PoolGet(LPoolHostKey, LPort);
+  LConn := PoolGet(LPoolHostKey, LConnectPort);
   LPooled := LConn <> nil;
   if not LPooled then
-    LConn := TcpConnect(LHost, LPort);
+    LConn := TcpConnect(LConnectHost, LConnectPort);
 
   ApplyClientDeadline(LConn, LRequestDeadline);
 
   LResponseStarted := False;
   LRequestWriteComplete := False;
   try
-    WriteRequest(LConn as IWriter, AReq, LAutoHost);
+    WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm);
     LRequestWriteComplete := True;
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
       LResponseStarted);
@@ -2384,7 +2468,8 @@ begin
         LConn.Close;
         if (not LRequestWriteComplete) or LResponseStarted or
            (not IsRetrySafeRequest(AReq)) or
-           ((AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil)) then
+           ((AReq.Body <> nil) and (AReq.ContentLength <> 0) and
+            (LBodyStream = nil)) then
         begin
           LWrapped := HttpWrapTransportException(E);
           if LWrapped <> nil then
@@ -2392,11 +2477,11 @@ begin
           raise;
         end;
         RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
-        LConn := TcpConnect(LHost, LPort);
+        LConn := TcpConnect(LConnectHost, LConnectPort);
         try
           ApplyClientDeadline(LConn, LRequestDeadline);
           LRequestWriteComplete := False;
-          WriteRequest(LConn as IWriter, AReq, LAutoHost);
+          WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm);
           LRequestWriteComplete := True;
           LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
             LResponseStarted);
@@ -2423,7 +2508,7 @@ begin
   end;
 
   if LKeepAlive and (not LRequestClose) then
-    PoolPut(LPoolHostKey, LPort, LConn)
+    PoolPut(LPoolHostKey, LConnectPort, LConn)
   else
     LConn.Close;
 
