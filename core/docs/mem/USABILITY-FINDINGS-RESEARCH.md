@@ -1,9 +1,9 @@
 # mem 可用性评估发现 — 专题调研报告
 
-**状态**: Research complete (pre-implementation)  
-**日期**: 2026-07-16  
+**状态**: Research complete (+ post-impl Go/Rust parity for F5–F7)  
+**日期**: 2026-07-16 / 修订 2026-07-17  
 **范围**: 独立可用性评估 F1–F7  
-**权威评估**: 综合分 7.7/10（B+），风险 MEDIUM  
+**权威评估**: 综合分 7.7/10（B+）→ 修复后 9.1（见 USABILITY-SCORE）  
 **非目标**: 合并双轨热路径、默认开启生产安全税、新增 allocator 种类、reopen product-table dual-track
 
 ---
@@ -63,8 +63,9 @@
 |----|------|
 | **根因** | Arena→IAllocator 适配器契约：生命周期属 Arena，`FreeMem` no-op 以便注入方无条件调用 Free。 |
 | **影响** | 误把 Arena 块当堆 free 时无信号。 |
-| **Go/Rust** | 类型/生命周期阻止混用。 |
-| **策略** | 默认保持 no-op（兼容）。Opt-in `NEXTPAS_MEM_ARENA_STRICT`（或 SAFETY profile 可开启）：`FreeMem(non-nil)` raise `EAllocError(aeInvalidPointer)` + `Type.Method: reason`。契约测试双模式。 |
+| **Go** | 无用户级 free；`sync.Pool` / 手写 bump 靠约定；混用不会 silent-free 堆块，但 GC 掩盖误用。 |
+| **Rust** | `bumpalo`/`typed-arena`：块不实现独立 `Drop` 释放；类型系统阻止 `Box`/`dealloc` 对 arena 指针；越界 API 在 debug 可 panic。 |
+| **策略** | 默认保持 no-op（兼容）。Opt-in `NEXTPAS_MEM_ARENA_STRICT`：`FreeMem(non-nil)` raise `EAllocError(aeInvalidPointer)` + `Type.Method: reason`。契约测试双模式。 |
 | **风险** | 中：若上层依赖 no-op Free，strict 会破；默认 off 可接受。 |
 
 ### F5 — 异常与消息不一致
@@ -73,6 +74,8 @@
 |----|------|
 | **根因** | 历史多异常类（`EMemFixedPool*`、`EStackPoolError`）；`EOutOfMemory` 不挂 `EAllocError`；消息格式推荐未工具化。 |
 | **影响** | `except on EAllocError` 不完整；消息机器不可靠解析。 |
+| **Go** | 错误是 `error` 接口；惯例 `fmt.Errorf("pkg.Op: %w", err)` / `errors.Is`/`As`；无异常层次树，但消息 stem 约定可机读。 |
+| **Rust** | `Result` + `thiserror`/`anyhow`；`Display`/`Error::source` 统一链；分配失败多为 `AllocError`/`try_reserve` 返回值而非 panic（`oom=panic` 可配）。 |
 | **策略** | 门面暴露 `FormatAllocErrorMsg` / `IsWellFormedAllocErrorMsg` 纯助手；ERROR-POLICY 写明统一 catch 面为 `ENextPasError` + `TAllocError` 码；本批 **新建/修改的 raise** 必须用助手；contract 测助手与若干代表路径。**不**做全库异常类大迁移（爆炸半径）。 |
 | **风险** | 低（助手+文档+抽测）；全库重写 raise 不做。 |
 
@@ -82,7 +85,9 @@
 |----|------|
 | **根因** | 分配器博物馆时代 re-export；S7 要求面小但门面仍含大量 Tier-1/2。 |
 | **影响** | 可发现性差；误用实验类型。 |
-| **策略** | **冻结**：文档白名单 + source-contract 测试禁止门面 `uses` Tier-3（prediction/numa/replay/…）。本批 **不** 大规模删除 Tier-2 re-export（兼容），禁止新增。 |
+| **Go** | 标准库 `runtime`/`sync` 面积极小；实验能力在 `x/` 或第三方；用户默认路径几乎只有 GC 堆。 |
+| **Rust** | `std::alloc` + `Global` 极小；特殊分配器在 `allocator_api` 特性或 crates.io；不把实验 crate 的类型 re-export 进 `std`。 |
+| **策略** | **冻结**：文档白名单 + source-contract 测试禁止门面 `uses` Tier-3（prediction/numa/replay/…）。本批 **不** 大规模删除 Tier-2 re-export（兼容），禁止新增。见 [FACADES-SURFACE.md](FACADES-SURFACE.md)。 |
 | **风险** | 低。 |
 
 ### F7 — 空断言与评分通胀
@@ -91,6 +96,8 @@
 |----|------|
 | **根因** | 占位 `Check(True,…)`；自评用 `10.0++++` 记进度。 |
 | **影响** | 门禁可信度与外部评估不一致。 |
+| **Go** | `testing` 要求失败路径可证明（`t.Fatal`/`cmp`）；无“永远 True”占位；质量分若存在则用独立 rubric（如 Go 官方博客/设计评审），不靠 `+` 串联自抬。 |
+| **Rust** | `assert!`/`assert_eq!` 绑定真实谓词；`cargo test` 不鼓励 no-op；crate 评分（crates.io/docs.rs）与工程自评分离，避免内部“满分链”。 |
 | **策略** | 删除空断言，改为真实双轨表面检查；USABILITY-SCORE 改为独立 rubric（基线 7.7 → 修复后重评），废除 plus-chain。 |
 | **风险** | 极低。 |
 

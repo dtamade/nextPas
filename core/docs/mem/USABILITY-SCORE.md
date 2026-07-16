@@ -16,7 +16,7 @@
 |----|-----|
 | **综合分** | **9.1 / 10** |
 | **等级** | **HIGH** |
-| **趋势** | 独立基线 7.7 → F1–F7 修复后 **9.1**（废除 `++++` 记分） |
+| **趋势** | 独立基线 7.7 → F1–F7 修复后 **9.1**（废除 plus-chain 记分） |
 | **风险** | LOW–MEDIUM（热路径双 free 仍默认 UB；需 opt-in SAFETY/DEBUG） |
 
 **结论（一句话）**: 双轨零税默认保留；DEBUG 假阴性可观测；sized free / safety / arena strict / 错误助手 / 门面冻结补齐可发现性与调试路径。产品表 dual-track 主线 **CLOSED**（不 reopen）。
@@ -90,7 +90,7 @@
 | F4 arena strict | **fixed** | `NEXTPAS_MEM_ARENA_STRICT` dual-mode |
 | F5 错误助手 | **fixed** | `FormatAllocErrorMsg` / ERROR-POLICY catch 面 |
 | F6 门面冻结 | **fixed** | [FACADES-SURFACE.md](FACADES-SURFACE.md) + source check |
-| F7 纪律 | **fixed** | 无空 `Check(True`；无 `++++` 记分 |
+| F7 纪律 | **fixed** | 无空 always-true 断言；无 plus-chain 记分 |
 
 ---
 
