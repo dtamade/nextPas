@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-16 (P1 — keep-alive request-tail contract final)
+> Last updated: 2026-07-16 (non-H3 stage-complete: full 35-suite gate green)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -17,16 +17,17 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 
 ## Current Position
 
-This lane is in **G2/G3/G4/G5 active hardening / completion closure**:
+This lane is **non-H3 stage-complete** (P1–P5 queue empty; full Makefile gate green):
 
 - G0 control and module discipline already exist in `AGENTS.md`, `core/AGENTS.md`, and `core/docs/design-conventions.md`.
-- G1 stable H1 public surface is largely landed: server/client/router/headers/url/message/middleware/static/websocket all exist and already have substantial focused coverage.
-- G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
-- G3 API and performance isolation is still active: client ergonomics landed builder/decorator/streaming/json/form surfaces; remaining work is surface audit and cost isolation, not unchecked expansion.
-- G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 207 focused tests. H2 is production-transport-ready, not just a foundation slice. All H2 test coverage gaps closed (client 55, frame 37, hpack 30). Session test hardening complete (55 tests, MaxConcurrentStreams check-order bug fixed).
-- G5 Static graduation complete: range requests (RFC 7233), ETag, Last-Modified, Cache-Control, Content-Disposition all implemented with 21 focused tests. WebSocket server + client landed.
-- H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
-- Module gate: `core/tests/nextpas.core.http/Makefile` now runs **34** focused suites; side suites are benchmarks/examples/smoke/integration/tls_real.
+- G1 stable H1 public surface is landed: server/client/router/headers/url/message/middleware/static/websocket all exist with substantial focused coverage.
+- G2 correctness and lifecycle proof is closed for the open keep-alive decision: **INV-12** is final public contract (`CONTRACT.md` §3.1); threaded and Linux `epoll` paths have broad raw-wire/server proof.
+- G3 API and performance isolation is closed for this stage: builder-first surface audit (P3) + residual cost ladder (P4); no second overlapping API family.
+- G4 H2 transport is landed and facade-reachable: live `NewHttpClient`/`NewHttpServer` + `Options.WithVersion(hvHttp2)` cleartext prior-knowledge proven by `test_http_h2_facade`; lower suites cover frame/hpack/session/client/TLS ALPN.
+- G5 Static graduation complete; WebSocket server + client landed (helper-level, not subsystem graduation).
+- H3 remains **closed-as-blocked** on independent QUIC (enum + registry seam only; no built-in factory).
+- Module gate: `core/tests/nextpas.core.http/Makefile` runs **35** focused suites (includes `test_http_h2_facade`); side suites are benchmarks/examples/smoke/integration/tls_real.
+- Full gate evidence (2026-07-16): `make focused FOCUS=core/tests/nextpas.core.http` → **1719 passed / 0 failed** across 35 suites; `make hygiene` pass.
 
 ### Stage completion definition (non-H3)
 
@@ -40,6 +41,26 @@ HTTP can be called stage-complete only when all of these hold:
 6. Performance claims stay scoped; no fake H3 surface.
 
 ### Recent Fixes (2026-07-16)
+
+**Stage-complete gate repair (2026-07-16): full 35-suite green**
+
+- SysUtils isolation drift in tests: `FsReadFileText`→`ReadFileText`, `Sleep`→`TSleep`,
+  `FileExists` via `nextpas.core.fs`.
+- RFC 7807 expectations aligned (`application/problem+json`, `title`/`detail`).
+- WebSocket tests updated for `TWebSocketFrame.Payload: TBytes` + Ping/Pong TBytes.
+- Headers source-contract mask now applied (`nextpas.core.http*.pas` etc.).
+- Evidence: 35 suites, 1719 passed / 0 failed, hygiene pass.
+
+**P2–P5 (2026-07-16): Queue closure toward non-H3 stage-complete**
+
+- **P2**: `test_http_h2_facade` live E2E; `TH2ServerSession.Run` drains writes after
+  `ExecuteReadyStreams`; IdleTimeout arms keep-alive reads when `ReadTimeout=0`.
+- **P3**: facade/message `deprecated` parity on `NewRequest` overloads; builder-first
+  inventory in `CONTRACT.md` / `README.md`; `test_http_contract` source lock.
+- **P4**: residual cost ladder in `BENCHMARKS.md`; restored `bench_fullchain` /
+  `bench_server` / `bench_h1parser` after SysUtils isolation; stress gate green.
+- **P5**: H3 honesty — no built-in factory; `test_http_registry` proves unregistered
+  `hvHttp3` resolve raises; unblock only after QUIC module.
 
 **P1 (2026-07-16): Keep-alive request-tail contract final**
 
@@ -198,11 +219,11 @@ HTTP can be called stage-complete only when all of these hold:
 
 ```text
 nextpas.core.http
-├── G0: Module control, docs, and verification discipline         [active baseline]
-├── G1: Stable public H1 surface                                 [mostly landed]
-├── G2: Correctness, safety, lifecycle, and ownership proof      [advanced]
-├── G3: API ergonomics and performance isolation                 [active]
-├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [H2 transport landed, test hardening]
+├── G0: Module control, docs, and verification discipline         [baseline]
+├── G1: Stable public H1 surface                                 [landed]
+├── G2: Correctness, safety, lifecycle, and ownership proof      [INV-12 final]
+├── G3: API ergonomics and performance isolation                 [stage-closed]
+├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [H2 facade-proven; H3 blocked]
 ├── G5: Static/WebSocket graduation gates                        [helper-level stable]
 └── G6: Cross-language benchmark truth and long-run positioning  [ongoing, not final]
 ```

@@ -5,7 +5,7 @@
 ## 控制面状态
 
 - Owner lane：`.worktrees/http` / 分支 `http`
-- 当前阶段：P1–P5 收口；H3 honesty closed-as-blocked on QUIC
+- 当前阶段：**non-H3 stage-complete**；H3 honesty closed-as-blocked on QUIC
 - 权威文档：
   - 完成度与切片队列 → `GOAL_TREE.md`
   - 稳定架构事实 → `ARCHITECTURE.md`
@@ -81,6 +81,15 @@
 3. ~~P3 API surface 审计~~ ✅
 4. ~~P4 runtime/socket 成本隔离~~ ✅
 5. ~~P5 H3 honesty~~ ✅ blocked on QUIC（无伪面）
+
+**下一动作（非功能开发）**：path-limited landing 由总控决定。
+H3 实现不在本 lane 开；需 QUIC 落地后新开 lane。
+
+## Stage-complete 证据（2026-07-16）
+
+- `make focused FOCUS=core/tests/nextpas.core.http` → **35 suites / 1719 passed / 0 failed**
+- `make hygiene` → pass
+- 附带：全量 gate 暴露的 SysUtils/RFC7807/WebSocket TBytes 测试漂移已修复
 
 ## 明确不做
 

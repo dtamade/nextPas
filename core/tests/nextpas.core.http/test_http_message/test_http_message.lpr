@@ -1691,7 +1691,8 @@ begin
   LM := TMockResponseWriter.Create;
   LW := LM;
   HttpWriteErrorResponse(LW, HTTP_STATUS_BAD_REQUEST, 'invalid_input', 'Missing field');
-  CheckEqual('application/json', LM.GetHeaders.Get('content-type'), 'content-type');
+  CheckEqual('application/problem+json', LM.GetHeaders.Get('content-type'),
+    'content-type is RFC 7807 problem+json');
   CheckEqual(Int64(400), Int64(LM.Status), 'status 400');
 end;
 
@@ -1703,8 +1704,9 @@ begin
   LM := TMockResponseWriter.Create;
   LW := LM;
   HttpWriteErrorResponse(LW, HTTP_STATUS_NOT_FOUND, 'not_found', 'Item not found');
-  Check(Pos('"code":"not_found"', LM.Body) > 0, 'body contains code');
-  Check(Pos('"message":"Item not found"', LM.Body) > 0, 'body contains message');
+  Check(Pos('"title":"not_found"', LM.Body) > 0, 'body contains title');
+  Check(Pos('"detail":"Item not found"', LM.Body) > 0, 'body contains detail');
+  Check(Pos('"status":404', LM.Body) > 0, 'body contains status');
 end;
 
 procedure TestErrorBadRequest;
@@ -1716,7 +1718,7 @@ begin
   LW := LM;
   HttpWriteErrorBadRequest(LW, 'Invalid JSON');
   CheckEqual(Int64(400), Int64(LM.Status), 'status 400');
-  Check(Pos('"code":"bad_request"', LM.Body) > 0, 'code is bad_request');
+  Check(Pos('"title":"bad_request"', LM.Body) > 0, 'title is bad_request');
 end;
 
 procedure TestErrorUnauthorized;
@@ -1728,7 +1730,7 @@ begin
   LW := LM;
   HttpWriteErrorUnauthorized(LW, 'Token expired');
   CheckEqual(Int64(401), Int64(LM.Status), 'status 401');
-  Check(Pos('"code":"unauthorized"', LM.Body) > 0, 'code is unauthorized');
+  Check(Pos('"title":"unauthorized"', LM.Body) > 0, 'title is unauthorized');
 end;
 
 procedure TestErrorForbidden;
@@ -1740,7 +1742,7 @@ begin
   LW := LM;
   HttpWriteErrorForbidden(LW, 'Access denied');
   CheckEqual(Int64(403), Int64(LM.Status), 'status 403');
-  Check(Pos('"code":"forbidden"', LM.Body) > 0, 'code is forbidden');
+  Check(Pos('"title":"forbidden"', LM.Body) > 0, 'title is forbidden');
 end;
 
 procedure TestErrorNotFound;
@@ -1752,7 +1754,7 @@ begin
   LW := LM;
   HttpWriteErrorNotFound(LW, 'User not found');
   CheckEqual(Int64(404), Int64(LM.Status), 'status 404');
-  Check(Pos('"code":"not_found"', LM.Body) > 0, 'code is not_found');
+  Check(Pos('"title":"not_found"', LM.Body) > 0, 'title is not_found');
 end;
 
 procedure TestErrorInternal;
@@ -1764,7 +1766,7 @@ begin
   LW := LM;
   HttpWriteErrorInternal(LW, 'Something broke');
   CheckEqual(Int64(500), Int64(LM.Status), 'status 500');
-  Check(Pos('"code":"internal_error"', LM.Body) > 0, 'code is internal_error');
+  Check(Pos('"title":"internal_error"', LM.Body) > 0, 'title is internal_error');
 end;
 
 procedure TestNoContentSets204;
@@ -1870,8 +1872,8 @@ begin
   LW := LM;
   HttpWriteErrorTooManyRequests(LW, 'Slow down');
   CheckEqual(Int64(429), Int64(LM.Status), 'status 429');
-  Check(Pos('"code":"too_many_requests"', LM.Body) > 0, 'code is too_many_requests');
-  Check(Pos('Slow down', LM.Body) > 0, 'message preserved');
+  Check(Pos('"title":"too_many_requests"', LM.Body) > 0, 'title is too_many_requests');
+  Check(Pos('Slow down', LM.Body) > 0, 'detail preserved');
 end;
 
 procedure TestErrorConflict;
@@ -1883,8 +1885,8 @@ begin
   LW := LM;
   HttpWriteErrorConflict(LW, 'Resource already exists');
   CheckEqual(Int64(409), Int64(LM.Status), 'status 409');
-  Check(Pos('"code":"conflict"', LM.Body) > 0, 'code is conflict');
-  Check(Pos('Resource already exists', LM.Body) > 0, 'message preserved');
+  Check(Pos('"title":"conflict"', LM.Body) > 0, 'title is conflict');
+  Check(Pos('Resource already exists', LM.Body) > 0, 'detail preserved');
 end;
 
 procedure TestErrorUnprocessableEntity;
@@ -1896,8 +1898,8 @@ begin
   LW := LM;
   HttpWriteErrorUnprocessableEntity(LW, 'Validation failed');
   CheckEqual(Int64(422), Int64(LM.Status), 'status 422');
-  Check(Pos('"code":"unprocessable_entity"', LM.Body) > 0, 'code is unprocessable_entity');
-  Check(Pos('Validation failed', LM.Body) > 0, 'message preserved');
+  Check(Pos('"title":"unprocessable_entity"', LM.Body) > 0, 'title is unprocessable_entity');
+  Check(Pos('Validation failed', LM.Body) > 0, 'detail preserved');
 end;
 
 procedure TestOkSets200;

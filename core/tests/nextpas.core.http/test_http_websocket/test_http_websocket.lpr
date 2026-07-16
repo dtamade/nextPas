@@ -649,7 +649,7 @@ begin
     LWs := UpgradeWebSocket(AReq, AW);
     LF := LWs.ReadFrame;
     if LF.Opcode = wsOpText then
-      LWs.WriteText(LF.Payload);
+      LWs.WriteText(UTF8BytesToString(LF.Payload));
     LWs.Close(1000, '');
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
@@ -739,7 +739,7 @@ begin
     LWs := UpgradeWebSocket(AReq, AW);
     LF := LWs.ReadFrame;
     if LF.Opcode = wsOpText then
-      LWs.WriteText(LF.Payload);
+      LWs.WriteText(UTF8BytesToString(LF.Payload));
     LWs.Close(1000, '');
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
@@ -991,9 +991,9 @@ begin
       LReceived := LServerSideWs.ReadFrame;
       Check(LReceived.Opcode = wsOpText,
         'upgrade-crash: server-owned websocket still reads text frame');
-      CheckEqual('probe', LReceived.Payload,
+      CheckEqual('probe', UTF8BytesToString(LReceived.Payload),
         'upgrade-crash: server-owned websocket reads probe payload');
-      LServerSideWs.WriteText(LReceived.Payload);
+      LServerSideWs.WriteText(UTF8BytesToString(LReceived.Payload));
 
       LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
       LFrameResp := '';
@@ -1057,7 +1057,7 @@ begin
     try
       LF := LWs.ReadFrame;
       if LF.Opcode = wsOpText then
-        LWs.WriteText(LF.Payload);
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
     except
       on E: EHttpError do
         LWs.Close(1002, 'protocol');
@@ -1239,7 +1239,7 @@ begin
     try
       LF := LWs.ReadFrame;
       if LF.Opcode = wsOpText then
-        LWs.WriteText(LF.Payload);
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
     except
       on E: EHttpError do
         LWs.Close(1002, 'protocol');
@@ -1329,7 +1329,7 @@ begin
     try
       LF := LWs.ReadFrame;
       if LF.Opcode = wsOpText then
-        LWs.WriteText(LF.Payload);
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
     except
       on E: EHttpError do
         LWs.Close(1002, 'protocol');
@@ -1599,7 +1599,7 @@ begin
     try
       LF := LWs.ReadFrame;
       if LF.Opcode = wsOpText then
-        LWs.WriteText(LF.Payload);
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
     except
       on E: EHttpError do
         LWs.Close(1002, 'protocol');
@@ -1966,7 +1966,7 @@ begin
     try
       LF := LWs.ReadFrame;
       if LF.Opcode = wsOpText then
-        LWs.WriteText(LF.Payload);
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
     except
       on E: EHttpError do
         LWs.Close(1002, 'protocol');
@@ -2057,7 +2057,7 @@ begin
     try
       LF := LWs.ReadFrame;
       if LF.Opcode = wsOpText then
-        LWs.WriteText(LF.Payload);
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
     except
       on E: EHttpError do
         LWs.Close(1002, 'protocol');
@@ -2149,7 +2149,7 @@ begin
     try
       LF := LWs.ReadFrame;
       if LF.Opcode = wsOpText then
-        LWs.WriteText(LF.Payload);
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
     except
       on E: EHttpError do
         LWs.Close(1002, E.Message);
@@ -2252,7 +2252,7 @@ begin
     try
       LF := LWs.ReadFrame;
       if LF.Opcode = wsOpText then
-        LWs.WriteText(LF.Payload);
+        LWs.WriteText(UTF8BytesToString(LF.Payload));
     except
       on E: EHttpError do
         LWs.Close(1009, E.Message);
@@ -2449,7 +2449,7 @@ begin
   begin
     LWs := UpgradeWebSocket(AReq, AW);
     try
-      LWs.Ping(RepeatChar('x', 126));
+      LWs.Ping(StringToUTF8Bytes(RepeatChar('x', 126)));
       LWs.WriteText('bad');
     except
       on E: EHttpError do

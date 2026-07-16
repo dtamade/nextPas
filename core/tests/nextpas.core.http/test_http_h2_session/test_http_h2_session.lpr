@@ -6,6 +6,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.io.base,
   nextpas.core.io.memory,

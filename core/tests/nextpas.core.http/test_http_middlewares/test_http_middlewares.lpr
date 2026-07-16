@@ -2896,8 +2896,9 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReqIntf, LW);
   CheckEqual(Int64(413), Int64(LWObj.Status), 'returns 413');
-  Check(Pos('"error"', LWObj.Body) > 0, 'response is JSON');
-  Check(Pos('payload_too_large', LWObj.Body) > 0, 'has error code');
+  CheckEqual('application/problem+json', LWObj.GetHeaders.Get('content-type'),
+    'content-type is RFC 7807 problem+json');
+  Check(Pos('"title":"payload_too_large"', LWObj.Body) > 0, 'has problem title');
 end;
 
 { Compression middleware tests }
@@ -3236,8 +3237,9 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReqIntf, LW);
   CheckEqual(Int64(415), Int64(LWObj.Status), 'returns 415');
-  Check(Pos('"error"', LWObj.Body) > 0, 'response is JSON');
-  Check(Pos('unsupported_media_type', LWObj.Body) > 0, 'has error code');
+  CheckEqual('application/problem+json', LWObj.GetHeaders.Get('content-type'),
+    'content-type is RFC 7807 problem+json');
+  Check(Pos('"title":"unsupported_media_type"', LWObj.Body) > 0, 'has problem title');
 end;
 
 { Deadline middleware tests }
@@ -3279,7 +3281,7 @@ begin
     HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       { Simulate slow handler }
-      Sleep(200);
+      TSleep.ForDuration(TDuration.FromMilliseconds(200));
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(PAnsiChar('slow response')^, 13);
     end),
