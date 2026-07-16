@@ -167,7 +167,7 @@ var
   LCollector: IHttpMetricsCollector;
 begin
   if ACollector = nil then
-    raise EArgumentError.Create('MetricsMiddleware collector must not be nil');
+    raise EHttpError.Create(hekArgument, 'MetricsMiddleware collector must not be nil');
   LCollector := ACollector;
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
@@ -191,7 +191,7 @@ var
   LCallback: THttpMetricsCallback;
 begin
   if not Assigned(ACallback) then
-    raise EArgumentError.Create('MetricsMiddlewareWith callback must not be nil');
+    raise EHttpError.Create(hekArgument, 'MetricsMiddlewareWith callback must not be nil');
   LCallback := ACallback;
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
@@ -214,7 +214,7 @@ var
   LCallback: THttpMetricsFieldsCallback;
 begin
   if not Assigned(ACallback) then
-    raise EArgumentError.Create('MetricsMiddlewareWithFields callback must not be nil');
+    raise EHttpError.Create(hekArgument, 'MetricsMiddlewareWithFields callback must not be nil');
   LCallback := ACallback;
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler

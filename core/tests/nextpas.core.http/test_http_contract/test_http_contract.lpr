@@ -900,20 +900,20 @@ begin
   try
     THttpServer.Create(LHandler, LOptions).Free;
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'THttpServer.Create rejects nil handler');
+  Check(LRaised, 'THttpServer.Create rejects nil handler as hekArgument');
 
   LRaised := False;
   try
     LServer := NewHttpServer(LHandler);
     LServer := nil;
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'NewHttpServer rejects nil handler');
+  Check(LRaised, 'NewHttpServer rejects nil handler as hekArgument');
 end;
 
 procedure TestHttpServerLifecycleContractOnInterface;

@@ -579,7 +579,10 @@ function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes; inline;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string; inline;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string; inline;
 {** @desc Raise EHttpError if response status is not 2xx (200-299). Returns AResp for chaining. }
-function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; inline;
+function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; overload; inline;
+{** @desc Same as HttpEnsureSuccess, with method/URL prefix in error messages. }
+function HttpEnsureSuccess(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IHttpResponse; overload; inline;
 {** @desc GET url, ensure 2xx, return body as string. Raises on non-2xx. }
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string; inline;
 {** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
@@ -1483,6 +1486,12 @@ end;
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
 begin
   Result := nextpas.core.http.client.HttpEnsureSuccess(AResp);
+end;
+
+function HttpEnsureSuccess(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IHttpResponse;
+begin
+  Result := nextpas.core.http.client.HttpEnsureSuccess(AResp, AMethod, AUrl);
 end;
 
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;

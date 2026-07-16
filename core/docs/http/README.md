@@ -28,7 +28,7 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 
 | Scenario | Start here |
 | --- | --- |
-| Client GET/POST JSON | `NewHttpClient`, `Get` / `PostJson`, `HttpReadResponseBodyString` |
+| Client GET/POST JSON | `NewHttpClient`, `Get` / `GetString` / `PostString` / `PostJson`, `HttpReadResponseBodyString` |
 | Fluent request | `THttpRequestBuilder` → `Send` |
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
 | Auth / retry / jar / proxy | `WithBearerAuth`, `WithRetry`, `WithCookieJar`, `WithProxyUrl` |
@@ -154,12 +154,16 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   Only **idempotent-safe** requests retry: GET/HEAD/OPTIONS/TRACE or
   `Idempotency-Key` / `X-Idempotency-Key` (`HttpIsRetrySafeRequest`). Body is
   rewound via `IStream` when present.
+- **Production client defaults**: always set a finite `Timeout` (options
+  `WithTimeout` / `THttpClientOptions.Timeout`). `Timeout=0` means unbounded
+  post-dial IO — fine for tests, unsafe as a production template. Examples such
+  as `http_get_client` use a 30s default for this reason.
 - Cancel: `IHttpCancelToken` is **cooperative** (not OS interrupt) →
   `hekCanceled` at Send / redirect / retry / H1 RoundTrip checkpoints
   (entry, pre-dial, post-write). A blocked socket read may lag until the
-  next checkpoint — **pair cancel with `Timeout`/`WithTimeout`** for bounded
-  wait. Timeouts remain `hekTimeout`. True mid-read cancel is **Blocked** on
-  net (see CONTRACT §2.2.0a).
+  next checkpoint — **cancel alone is not enough**; **pair cancel with
+  `Timeout`/`WithTimeout`** for bounded wait. Timeouts remain `hekTimeout`.
+  True mid-read cancel is **Blocked** on net (see CONTRACT §2.2.0a).
 - Timeouts: `THttpClientOptions.Timeout` = request read/write deadline after
   the socket is up; `ConnectTimeout` = **post-dial first-write** budget on new
   sockets (`0` = same as Timeout). It does **not** interrupt OS `connect()`;

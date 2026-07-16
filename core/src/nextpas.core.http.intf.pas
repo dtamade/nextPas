@@ -201,6 +201,14 @@ type
     function GetString(const AUrl: string): string;
     {** GET + ensure 2xx + body as TBytes. Raises EHttpError on non-2xx. }
     function GetBytes(const AUrl: string): TBytes;
+    {** POST + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function PostString(const AUrl, AContentType, ABody: string): string;
+    {** PUT + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function PutString(const AUrl, AContentType, ABody: string): string;
+    {** PATCH + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function PatchString(const AUrl, AContentType, ABody: string): string;
+    {** DELETE + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function DeleteString(const AUrl: string): string;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;

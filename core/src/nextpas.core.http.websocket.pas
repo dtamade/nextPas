@@ -171,9 +171,9 @@ end;
 procedure ValidateWebSocketOptions(const AOptions: TWebSocketOptions);
 begin
   if AOptions.MaxFrameSize < 0 then
-    raise EArgumentError.Create('WebSocket max frame size must not be negative');
+    raise EHttpError.Create(hekArgument, 'WebSocket max frame size must not be negative');
   if AOptions.MaxMessageSize < 0 then
-    raise EArgumentError.Create('WebSocket max message size must not be negative');
+    raise EHttpError.Create(hekArgument, 'WebSocket max message size must not be negative');
 end;
 
 function IsOWS(const ACh: Char): Boolean;
@@ -355,9 +355,9 @@ var
   LConn: ITcpStream;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('WebSocket upgrade request is nil');
+    raise EHttpError.Create(hekArgument, 'WebSocket upgrade request is nil');
   if AW = nil then
-    raise EArgumentError.Create('WebSocket upgrade response writer is nil');
+    raise EHttpError.Create(hekArgument, 'WebSocket upgrade response writer is nil');
   ValidateWebSocketOptions(AOptions);
 
   LUpgrade := LowerTrimOWS(AReq.Headers.Get('upgrade'));
@@ -1018,9 +1018,9 @@ var
   LUpgrade, LConnection, LAcceptHeader: string;
 begin
   if AClient = nil then
-    raise EArgumentError.Create('WebSocket client is nil');
+    raise EHttpError.Create(hekArgument, 'WebSocket client is nil');
   if AUrl = '' then
-    raise EArgumentError.Create('WebSocket URL is empty');
+    raise EHttpError.Create(hekArgument, 'WebSocket URL is empty');
   ValidateWebSocketOptions(AOptions);
 
   { Parse URL }

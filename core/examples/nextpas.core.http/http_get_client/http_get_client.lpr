@@ -32,7 +32,9 @@ begin
       LUrl := 'http://127.0.0.1:8080/hello/world?page=1';
   end;
 
-  LClient := NewHttpClient;
+  { Production template: always set a finite Timeout. Cancel alone does not
+    bound a blocked socket read (see CONTRACT §2.2 / §2.2.0a). }
+  LClient := NewHttpClient(THttpClientOptions.Default.WithTimeout(30000));
   LResp := LClient.Get(LUrl);
 
   WriteLn('url=', LUrl);

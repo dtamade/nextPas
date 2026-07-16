@@ -1472,10 +1472,10 @@ begin
   try
     MaxAgeMiddleware(-1);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  CheckTrue(LRaised, 'raises on negative max-age');
+  CheckTrue(LRaised, 'raises hekArgument on negative max-age');
 end;
 
 procedure TestCacheControlHandlerStillCalled;
@@ -1619,10 +1619,10 @@ begin
   try
     RateLimitMiddlewareWith(MakeRateLimitOpts(-1, 60));
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on negative max requests');
+  Check(LRaised, 'raises hekArgument on negative max requests');
 end;
 
 procedure TestRateLimitZeroWindowRaises;
@@ -1633,10 +1633,10 @@ begin
   try
     RateLimitMiddlewareWith(MakeRateLimitOpts(10, 0));
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on zero window');
+  Check(LRaised, 'raises hekArgument on zero window');
 end;
 
 { WhenMiddleware tests }
@@ -2104,10 +2104,10 @@ begin
   try
     MetricsMiddleware(nil);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on nil collector');
+  Check(LRaised, 'raises hekArgument on nil collector');
 end;
 
 procedure TestMetricsWithCallbackInvoked;
@@ -2210,10 +2210,10 @@ begin
   try
     MetricsMiddlewareWith(nil);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on nil callback');
+  Check(LRaised, 'raises hekArgument on nil callback');
 end;
 
 procedure TestMethodGuardAllowsGetMethod;
@@ -2455,10 +2455,10 @@ begin
   try
     MetricsMiddlewareWithFields(nil);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on nil callback');
+  Check(LRaised, 'raises hekArgument on nil callback');
 end;
 
 procedure TestMetricsTracksRequestBytes;
@@ -2654,8 +2654,8 @@ begin
     DecompressMiddleware(-1);
     Check(False, 'negative decompression limit must raise');
   except
-    on E: EArgumentError do
-      Check(True, 'negative decompression limit rejected');
+    on E: EHttpError do
+      Check(E.Kind = hekArgument, 'negative decompression limit rejected as hekArgument');
   end;
 end;
 
@@ -3353,10 +3353,10 @@ begin
   try
     DeadlineMiddleware(0);
   except
-    on E: EArgumentError do
-      LCaught := True;
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
   end;
-  Check(LCaught, 'zero timeout raises EArgumentError');
+  Check(LCaught, 'zero timeout raises hekArgument');
 end;
 
 procedure TestDeadlineReleasesBufferedWriter;
