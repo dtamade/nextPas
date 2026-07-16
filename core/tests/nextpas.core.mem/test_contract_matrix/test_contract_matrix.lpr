@@ -668,6 +668,32 @@ begin
   RunDefaultHeapCrossThreadFree;
 end;
 
+procedure TestFormatAllocErrorMsgHelpers;
+var
+  LMsg: string;
+begin
+  LMsg := FormatAllocErrorMsg('TLocalArenaAllocator', 'FreeMem',
+    'arena block; use Reset (ARENA_STRICT)');
+  Check(IsWellFormedAllocErrorMsg(LMsg), 'FormatAllocErrorMsg well-formed');
+  Check(LMsg = 'TLocalArenaAllocator.FreeMem: arena block; use Reset (ARENA_STRICT)',
+    'FormatAllocErrorMsg exact stem');
+  Check(not IsWellFormedAllocErrorMsg('broken'), 'reject non Type.Method form');
+end;
+
+procedure TestArenaAllocatorFreeMemDefaultNoOp;
+var
+  LAlloc: IAllocator;
+  LPtr: Pointer;
+begin
+  { C02-style: default arena FreeMem is no-op (compatible inject path). }
+  LAlloc := TLocalArenaAllocator.Create(4096);
+  LPtr := LAlloc.GetMem(64);
+  Check(LPtr <> nil, 'arena GetMem');
+  LAlloc.FreeMem(LPtr);
+  LAlloc.FreeMem(nil);
+  Check(LPtr <> nil, 'default FreeMem no-op leaves ptr value');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.contract_matrix');
   T.Test('RTL C01-C05 nil/0', @TestRtl_C01_C05);
@@ -687,6 +713,8 @@ begin
   T.Test('ChunkedArena Alloc0+C11-C12', @TestChunkedArena_Contracts);
   T.Test('FixedSlab IAllocator C01-C05/C07', @TestFixedSlab_IAllocatorContracts);
   T.Test('LocalBlockPool Release nil+double-free', @TestLocalBlockPool_ReleaseContracts);
+  T.Test('FormatAllocErrorMsg helpers', @TestFormatAllocErrorMsgHelpers);
+  T.Test('Arena IAllocator FreeMem default no-op', @TestArenaAllocatorFreeMemDefaultNoOp);
   LRunPassed := T.Run;
   T.Summary;
   if not LRunPassed then

@@ -238,18 +238,26 @@ function GetMemStats: TMemStats; inline;
 function FormatMemStats(const AStats: TMemStats): string; inline;
 function FormatMemStats: string; inline;
 
-{** True when NEXTPAS_MEM_HEAP_DEBUG is truthy (process GetMem → DefaultAllocator). }
+{** True when HEAP_DEBUG or HEAP_SAFETY routes process GetMem → DefaultAllocator. }
 function IsMemHeapDebugEnabled: Boolean; inline;
+function IsMemHeapSafetyEnabled: Boolean; inline;
+function IsMemArenaStrictEnabled: Boolean; inline;
+{** Pure helper: DEBUG wrap on but process heap not observed (false-negative). }
+function MemDebugCoverageGap(const AStats: TMemStats): Boolean; inline;
+
+{** Canonical raise-site message stem Type.Method: reason (see ERROR-POLICY). }
+function FormatAllocErrorMsg(const ATypeName, AMethod, AReason: string): string; inline;
+function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean; inline;
 
 {** 全局分配函数 — 默认走 DefaultHeap（Growing 原生）。
- *  当 NEXTPAS_MEM_HEAP_DEBUG 显式开启时，改走 DefaultAllocator（可被
+ *  当 HEAP_DEBUG / HEAP_SAFETY 显式开启时，改走 DefaultAllocator（可被
  *  NEXTPAS_MEM_DEBUG 包装观察；慢路径，生产勿开）。DefaultHeap 本体永不受影响。 }
 function GetMem(ASize: SizeUInt): Pointer; inline;
 function AllocMem(ASize: SizeUInt): Pointer; inline;
 function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 procedure FreeMem(APtr: Pointer); inline;
 {** Hot free when size is known (preferred over FreeMem(ptr)).
- *  HEAP_DEBUG 开启时 size 被忽略（经 IAllocator.FreeMem）。 }
+ *  HEAP_DEBUG 开启时 size 被忽略（经 IAllocator.FreeMem，以保留 tracking）。 }
 procedure FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
 {** Hot realloc when old size is known.
  *  HEAP_DEBUG 开启时走 IAllocator.ReallocMem(ptr, new)（old size 忽略）。 }
@@ -259,6 +267,14 @@ function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; inlin
  *  Use when size was lost and FreeMem(ptr,size) is still preferred after lookup.
  *  Single-arg FreeMem(ptr) already does this scan internally — prefer keeping size. }
 function TryBlockSize(APtr: Pointer; out ASize: SizeUInt): Boolean; inline;
+
+{** Sized free for an IAllocator surface when the block is on DefaultHeap (S5).
+ *  Uses DefaultHeap.FreeMem(ptr, classSize) when TryBlockSize succeeds and
+ *  process DEBUG route is off; otherwise AAllocator.FreeMem(ptr).
+ *  Keeps IAllocator five-method freeze; prefer this over bare FreeMem(ptr). }
+procedure FreeMemOf(const AAllocator: IAllocator; APtr: Pointer; ASize: SizeUInt); inline;
+function TryFreeMemOf(const AAllocator: IAllocator; APtr: Pointer;
+  ASize: SizeUInt): Boolean; inline;
 
 {** ERROR-POLICY actionable forms: resource failure = False + nil, never raise.
  *  Same backends as GetMem/AllocMem/ReallocMem (DefaultHeap / HEAP_DEBUG path). }
@@ -353,6 +369,31 @@ begin
   Result := nextpas.core.mem.default.IsMemHeapDebugEnabled;
 end;
 
+function IsMemHeapSafetyEnabled: Boolean;
+begin
+  Result := nextpas.core.mem.default.IsMemHeapSafetyEnabled;
+end;
+
+function IsMemArenaStrictEnabled: Boolean;
+begin
+  Result := nextpas.core.mem.default.IsMemArenaStrictEnabled;
+end;
+
+function MemDebugCoverageGap(const AStats: TMemStats): Boolean;
+begin
+  Result := nextpas.core.mem.default.MemDebugCoverageGap(AStats);
+end;
+
+function FormatAllocErrorMsg(const ATypeName, AMethod, AReason: string): string;
+begin
+  Result := nextpas.core.mem.error.FormatAllocErrorMsg(ATypeName, AMethod, AReason);
+end;
+
+function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean;
+begin
+  Result := nextpas.core.mem.error.IsWellFormedAllocErrorMsg(AMsg);
+end;
+
 function GetMem(ASize: SizeUInt): Pointer;
 begin
   if IsMemHeapDebugEnabled then
@@ -406,6 +447,45 @@ begin
   { Always query DefaultHeap ownership — HEAP_DEBUG still allocates from the
     same Growing heap (via growing_ia); size-class blocks remain visible. }
   Result := DefaultHeap.TryBlockSize(APtr, ASize);
+end;
+
+procedure FreeMemOf(const AAllocator: IAllocator; APtr: Pointer; ASize: SizeUInt);
+var
+  LClassSize: SizeUInt;
+begin
+  if APtr = nil then
+    Exit;
+  { Prefer sized DefaultHeap free when not on DEBUG process route (tracking
+    must still see Free via IAllocator when HEAP_DEBUG/SAFETY is on). }
+  if (ASize > 0) and (not IsMemHeapDebugEnabled) and
+    TryBlockSize(APtr, LClassSize) then
+  begin
+    DefaultHeap.FreeMem(APtr, LClassSize);
+    Exit;
+  end;
+  if AAllocator <> nil then
+    AAllocator.FreeMem(APtr)
+  else
+    FreeMem(APtr);
+end;
+
+function TryFreeMemOf(const AAllocator: IAllocator; APtr: Pointer;
+  ASize: SizeUInt): Boolean;
+var
+  LClassSize: SizeUInt;
+begin
+  if APtr = nil then
+    Exit(False);
+  if (ASize > 0) and (not IsMemHeapDebugEnabled) and
+    TryBlockSize(APtr, LClassSize) then
+  begin
+    DefaultHeap.FreeMem(APtr, LClassSize);
+    Exit(True);
+  end;
+  if AAllocator = nil then
+    Exit(False);
+  AAllocator.FreeMem(APtr);
+  Result := True;
 end;
 
 function TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean;

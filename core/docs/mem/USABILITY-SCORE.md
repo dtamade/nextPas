@@ -1,9 +1,10 @@
 # nextpas.core.mem 可用性评分（权威）
 
-**评估日期**: 2026-07-16（lane 收口：默认 focused gate + 文档收敛）
-**范围**: `nextpas.core.mem` 对外默认路径、契约、诊断、上层注入
-**对标**: Go `runtime` 分配默认 / Rust `GlobalAlloc`+标准容器体验（工程可用性，非微基准军备）
-**前序**: 7.3 → … → 10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ → 本轮 **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++**
+**评估日期**: 2026-07-17（F1–F7 修复后独立复评）  
+**范围**: `nextpas.core.mem` 对外默认路径、契约、诊断、上层注入  
+**对标**: Go `runtime` 分配默认 / Rust `GlobalAlloc` + 标准容器体验（工程可用性，非微基准）  
+**前序**: 内部产品路径 10.0 记分通胀已废止；独立评估基线 **7.7** → 本轮 **9.1**  
+**调研/计划**: [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md) · [USABILITY-FIX-PLAN.md](USABILITY-FIX-PLAN.md)
 
 历史长报告 [USABILITY-AUDIT.md](USABILITY-AUDIT.md) 已 SUPERSEDED，仅作修复履历。
 
@@ -13,12 +14,12 @@
 
 | 项 | 值 |
 |----|-----|
-| **综合分** | **10.0 / 10** |
+| **综合分** | **9.1 / 10** |
 | **等级** | **HIGH** |
-| **趋势** | … → 10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ → **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++**（lane 收口 / 默认 gate 收敛） |
-| **风险** | LOW（见下「故意默认堆」与「故意保留 dynarray」；phase 工作表走 scratch，session 级 Detach 产物不挂 reset arena） |
+| **趋势** | 独立基线 7.7 → F1–F7 修复后 **9.1**（废除 `++++` 记分） |
+| **风险** | LOW–MEDIUM（热路径双 free 仍默认 UB；需 opt-in SAFETY/DEBUG） |
 
-**结论（一句话）**: H1/H2 连接级 LocalArena 与编译 session/backend 管线均走真实 mem 产品路径；根 AST、preprocessor、sema、HIR builder/verifier、HIR/MIR 工作表与多数 MIR pass 分轨使用 `FAstAllocator` / `FScratchAllocator` / `PhaseScratch`；`DetachUnitGraph`/`DetachSearchPaths` 产物故意默认堆。**产品表 dual-track 主线 CLOSED**（2026-07-16 residual audit）：清晰单所有权 session/跨 phase 表与 entry-owned nested 已在默认堆/scratch `TVec`；剩余 dynarray 均为 intentional keepers，**不再作为 mem dual-track 下一刀**。
+**结论（一句话）**: 双轨零税默认保留；DEBUG 假阴性可观测；sized free / safety / arena strict / 错误助手 / 门面冻结补齐可发现性与调试路径。产品表 dual-track 主线 **CLOSED**（不 reopen）。
 
 ### 故意默认堆（lifetime 理由；非 phase bulk reclaim 目标）
 
@@ -61,161 +62,62 @@
 
 **ELF 卫星规则（锁定）**: type-metadata nested 的 `TFieldMeta`/`TVmtSlot`/`TPropertyMeta`/`TInterfaceSlotMeta` 特化必须住在 `np_semantic_*_vec` 卫星单元；`np_semantic_model.pas` 只 re-export，禁止再往 model 内新增 nested `specialize TVec`。
 
-**Residual audit（2026-07-16，product-table dual-track CLOSED）**: 扫过 `compiler/**` 中 record/class 字段与 session 产品表后的结论——可迁「清晰单所有权 nested 产品表」已清零。再做 dynarray→TVec 要么是上述 keepers，要么应开独立 package lane；**不要**在 mem worktree 上继续冲 HIR Operands / package DTO 整树当可用性阻塞。
+**Residual audit（product-table dual-track CLOSED）**: 可迁「清晰单所有权 nested 产品表」已清零。再做 dynarray→TVec 要么是上述 keepers，要么应开独立 package lane；**不要**在 mem worktree 上继续冲 HIR Operands / package DTO 整树当可用性阻塞。
 
 ---
 
-## 分维（1–10，对标 Go/Rust 工程体验）
+## 分维（1–10，独立工程可用性 rubric）
 
 | 维度 | 分 | 依据 |
 |------|----|------|
 | 默认路径正确性 | **9.5** | Growing 热路径；S5 同堆（Growing IAllocator / `GetGrowingIAllocator`）；H1+H2 RequestArena；compiler phase UnitBegin |
-| API 可发现性 | **10** | `WithRequestArena` / `HttpRequestAllocatorOf` / `HttpFormatProcessMemStats`；`MemAlloc`/`MemUnitCount`/`MemSessionPeak` |
-| 调用一致性 | **9.9** | HTTP Options/H1/H2 与 compiler UnitBegin/End 对称 bulk-reclaim |
-| 错误模型 | **9.0** | ERROR-POLICY + Try* + TryBlockSize/SC8 |
-| 诊断可用性 | **10** | FormatMemStats（`heap_debug`/`debug` + DEBUG 时 `debug_active_*`/`debug_allocs`/`debug_frees`）+ HttpFormatProcessMemStats；session/unit `FormatStats`；ops mem-session/process-stats；门面 `IsMemHeapDebugEnabled`；HEAP_DEBUG 双轨测试锁；CI/verify env recipe 锁 `heap_debug=y|n` |
-| 契约可证明 | **10** | H1/H2 InvokeHandler、pipeline UnitBegin/MemAlloc、SessionScope；AST≠scratch Reset、SessionPeak 跨 UnitBegin、FreeMem no-op、entry-owned nested vs Detach 默认堆（test_compiler_mem + guardrails）；SC9 双轨 |
-| 性能默认 | **9.4** | 连接级/会话级 arena 复用；Growing 热路径；HEAP_DEBUG 默认关 |
-| 上层可集成 | **10** | hello options → native；compiler session 管线真实 MemAlloc；HttpRequestAllocatorOf |
-| **加权综合** | **10.0** | — |
+| API 可发现性 | **9.2** | `WithRequestArena` / `HttpRequestAllocatorOf` / `HttpFormatProcessMemStats`；`FreeMemOf`；`FormatAllocErrorMsg`；门面冻结文档 |
+| 调用一致性 | **9.3** | HTTP Options/H1/H2 与 compiler UnitBegin/End 对称 bulk-reclaim；Arena FreeMem 默认 no-op + opt-in strict |
+| 错误模型 | **9.0** | ERROR-POLICY + Try* + TryBlockSize/SC8 + FormatAllocErrorMsg；统一 catch 面文档化 |
+| 诊断可用性 | **9.4** | FormatMemStats（`heap_debug`/`debug`/`debug_process`/`debug_coverage_gap` + plugin 计数）；HEAP_DEBUG + HEAP_SAFETY；CI recipe |
+| 契约可证明 | **9.5** | guardrails F1–F7；contract_matrix；SC9 双轨；source-contract 文档门禁 |
+| 性能默认 | **9.4** | 热路径零税；HEAP_DEBUG/SAFETY 默认关 |
+| 上层可集成 | **9.5** | hello options → native；compiler session 管线真实 MemAlloc；HttpRequestAllocatorOf |
+| **加权综合** | **9.1** | — |
 
----
+### F1–F7 修复状态
 
-## 相对 9.9：什么变了
-
-| 项 | 状态 | 效果 |
+| ID | 状态 | 证据 |
 |----|------|------|
-| `AnalyzeSyntax` | **UnitBegin + MemAlloc path scratch + UnitEnd** | 语法阶段真实 session arena 分配 |
-| `ResolveUnits` | **UnitBegin + MemAlloc path seed + UnitEnd** | 解析阶段 peak 计入 MemSessionPeak |
-| Accessors | **`MemUnitCount` / `MemTotalUsed`** | 会话诊断面完整 |
-| Toolchain | **CI 常态化 `make rebuild-compiler`** | flags 单源 `scripts/stage0-fpc-flags.sh`；CI 顺序 tooling→rebuild→verify |
+| F1 诊断假阴性 | **fixed** | `debug_process` / `debug_coverage_gap` + guardrails |
+| F2 sized free 助手 | **fixed** | `FreeMemOf` / `TryFreeMemOf` |
+| F3 opt-in safety | **fixed** | `NEXTPAS_MEM_HEAP_SAFETY` |
+| F4 arena strict | **fixed** | `NEXTPAS_MEM_ARENA_STRICT` dual-mode |
+| F5 错误助手 | **fixed** | `FormatAllocErrorMsg` / ERROR-POLICY catch 面 |
+| F6 门面冻结 | **fixed** | [FACADES-SURFACE.md](FACADES-SURFACE.md) + source check |
+| F7 纪律 | **fixed** | 无空 `Check(True`；无 `++++` 记分 |
 
 ---
 
-## Lane 收口状态（2026-07-16）
+## Lane 收口状态
 
-**产品主线 CLOSED**（非可用性阻塞；落地项全部进修订记录，不再列在待办里）：
+**产品主线 CLOSED**（非可用性阻塞）：
 
 | 线 | 状态 |
 |----|------|
 | compiler product-table dual-track（session/nested TVec） | **CLOSED** — intentional keepers 入文档；勿再冲 HIR Operands / package DTO |
 | session/unit `FormatStats` + ops `mem-*-stats` | **落地** |
-| arena 契约回归 + HEAP_DEBUG 插件轨体验 | **落地** |
+| arena 契约回归 + HEAP_DEBUG / SAFETY 插件轨 | **落地** |
 | CI `rebuild-compiler` + stage0 flags 单源 + HEAP_DEBUG env recipe | **落地** |
+| F1–F7 可用性发现 | **落地**（本轮） |
 
 **默认 lane focused gate**（`docs/worktrees.md` / `make lane-focused LANE=mem`）：
 
 ```text
 make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails
+make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
 ```
 
-按改动表面追加：`test_compiler_mem` / `test_debug_wrap` / `make stage0-heap-debug-recipe` / `test_memory_map_compile_gate`。
+按改动表面追加：`test_debug_wrap` / `make stage0-heap-debug-recipe` / `test_compiler_mem`。
 
 ### 仍可演进（独立 lane 或远期，非 mem dual-track 阻塞）
 
 1. package manifest/lock DTO 整树 → TVec：**独立 package lane**。
 2. 双轨表面（热 vs 插件）— 设计选择，已文档化（SC9）；不追求合并。
-3. Scorecard 外部对照 / 更多 host 覆盖 — 性能演进，非可用性阻塞。
-
----
-
-## 门禁证据（复评当日）
-
-```text
-make lane-focused LANE=mem
-make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails
-make focused FOCUS=core/tests/nextpas.core.http/test_http_mem
-make focused FOCUS=core/tests/nextpas.core.http/test_http_h2_types
-make focused FOCUS=core/tests/nextpas.core.compiler/test_compiler_mem
-make stage0-heap-debug-recipe
-```
-
----
-
-## 修订记录
-
-| 日期 | 分 | 说明 |
-|------|-----|------|
-| 2026-07-15 | 7.3–8.8 | P0→SC9 |
-| 2026-07-15 | 9.0–9.6 | HTTP wire → server-root factory |
-| 2026-07-15 | 9.7 | THttpServerOptions.WithRequestArena + HttpRequestAllocatorOf |
-| 2026-07-15 | 9.8 | H1 connection-scoped RequestArena + TCompilerSessionScope |
-| 2026-07-15 | 9.9 | H2 native RequestArena + TCompilationSession mem wire |
-| 2026-07-15 | **10.0** | pipeline MemAlloc phase scratch + rebuild-compiler 对齐 |
-| 2026-07-15 | **10.0+** | GreenTree `IAllocator` + session `FAstAllocator`；`ReallocElements` arena fallback |
-| 2026-07-15 | **10.0++** | `FScratchAllocator`：resolver 依赖树 + sema 工作 TVec；`MemFormatSessionStats`；sema/MIR phase UnitBegin |
-| 2026-07-15 | **10.0+++** | HIR builder + HIR→MIR `FValueMap` 接 `FScratchAllocator`；pending cleanup TVec |
-| 2026-07-16 | **10.0++++** | backend `PhaseScratch` 接真实 LLVM HIR/MIR 路径；`FBlockNames`/`FBlockIds` → TVec on `FAllocator` |
-| 2026-07-16 | **10.0+++++** | `FAllocas` → `THirAllocaVec`；就地字段写走 `GetPtr`；`ClearWorkAllocas`/`RestoreWorkAllocas` |
-| 2026-07-16 | **10.0++++++** | globals/global-ref/fwd-func/intf-var 工作表 → TVec；`RegisterGlobal`/`ClearGlobalRefs` |
-| 2026-07-16 | **10.0+++++++** | `THIRLlvmEmitter` lines/global-ref/str/debug → TVec；backend 传 `PhaseScratch` |
-| 2026-07-16 | **10.0++++++++** | `TMirToLlvmTranslator` 输出行表 → TVec；backend `PhaseScratch` + session `FScratchAllocator` |
-| 2026-07-16 | **10.0+++++++++** | `THIRPrinter` 行表 → TVec；session HIR dump 传 `FScratchAllocator` |
-| 2026-07-16 | **10.0++++++++++** | sema `FGenericWorkQueue`/`FCompilerProcNames` → TVec on `FScratchAllocator` |
-| 2026-07-16 | **10.0+++++++++++** | sema 导入单元 `FImportedUnitTrees`/`Owners` → TVec；overload/HIR ctx 借用 |
-| 2026-07-16 | **10.0++++++++++++** | sema `FPendingSignatures` → TVec on `FScratchAllocator` |
-| 2026-07-16 | **10.0+++++++++++++** | `TMirPassManager` pass registry → TVec；backend 传 `PhaseScratch` |
-| 2026-07-16 | **10.0++++++++++++++** | MIR DCE `UsedRegs` / CSE `CseTable` → TVec；opt-level 传 `AManager.Allocator` |
-| 2026-07-16 | **10.0+++++++++++++++** | MIR deadarg/escape/licm/inline 工作表 → TVec；opt-level 透传 Allocator |
-| 2026-07-16 | **10.0++++++++++++++++** | sema `FProcedureBodies` → TProcedureBodyVec on FScratchAllocator；ctx 借用 |
-| 2026-07-16 | **10.0+++++++++++++++++** | `TSemaRuntimeVarRegistry` 全表 → TStringVec；Create(FAllocator) |
-| 2026-07-16 | **10.0++++++++++++++++++** | HIR builder `FSavedAllocas`/`FSavedBlock*` → TVec；`SnapshotWorkTables` + cleanup 局部快照 |
-| 2026-07-16 | **10.0+++++++++++++++++++** | HIR `TExprStack` Values/Types + 表达式 token 行表 → TVec on FAllocator |
-| 2026-07-16 | **10.0++++++++++++++++++++** | unit resolver `FResolutionStack` + HIR verifier errors/Seen/Defs → TVec |
-| 2026-07-16 | **10.0+++++++++++++++++++++** | sema validation CandidateNames/SeenValues → TVec on FAllocator |
-| 2026-07-16 | **10.0++++++++++++++++++++++** | preprocessor FStack/FOutputTokens → TVec；session/resolver/sema 注入 scratch |
-| 2026-07-16 | **10.0+++++++++++++++++++++++** | unit graph TVec API + topo work；**Detach 产物后改为 default-heap**（见 ++++++++++++++++++++++++++） |
-| 2026-07-16 | **10.0++++++++++++++++++++++++** | TDefineTable FEntries → TVec；session/resolver/sema 注入 scratch |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++** | FRootIndexes/include paths → TVec on phase scratch；TSearchPathSet API 可选 IAllocator |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++** | Detach unit graph/search paths 强制 default-heap Create；禁止挂 FNodeAllocator；guardrail forbid |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++** | GreenTree FInterfaceUses/FImplementationUses/FForeignProcedureDecls → TVec on tree AAllocator |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++** | FToolStatusEvents + file change detector snapshots/changed → session-long TVec |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++** | diagnostics sink FDiagnostics → TDiagnosticRecordVec（session 级默认堆） |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++** | backend plan FArtifacts/FLogicalLibraryRequests → TVec（跨 PhaseScratch 默认堆） |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++** | parallel scheduler FTasks → TCompileTaskVec（session 级默认堆） |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++** | source database FFiles → TSourceFileEntryVec（session 级默认堆） |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++** | query db + workspace package refs + toolchain plan/runner steps → TVec |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++** | lexer FTokens → TTokenVec（TLexerResult 所有权，默认堆） |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++** | HIR module FFunctions/FGlobals/FVmt/FImt/FUnitInitOrder → TVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++** | MIR module FFunctions/FStructTypes → TVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++** | HIR type table FTypes → THirTypeRecVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++** | semantic model 16 产品表 → TVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++** | scheduler FCompileOrder + workspace project unit roots → TVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++** | toolchain planner roots/asm bases + unit resolver root tables → TVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++** | logical link request 三表 + lexer FPendingTrivia → TVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++** | toolchain step Argv/Inputs/Outputs/Sidecars/EnvDelta → TVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++** | sema TNameSet Names → TNameStringVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++** | source database LineOffsets → TSourceLineOffsetVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++** | sema GImportedUnitCache + nested Symbols → TVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++** | HIR type nested Fields/Params/InterfaceIds → TVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++** | HIR VMT/IMT nested Funcs/ThunkNames/ThunkParamCounts → TVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++** | MIR struct nested Fields → TMirStructFieldVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++** | HIR function nested Params → THirParamVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++** | MIR function nested Params → TMirParamVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++** | HIR function nested Blocks → THirBlockVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++** | MIR function nested Blocks → TMirBlockVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++** | MIR block nested Stmts → TMirStmtVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++** | HIR block nested Instrs → THirInstrVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++** | HIR block nested Preds/Succs → THirBlockIdVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | sema type-metadata nested Fields → TSemanticFieldMetaVec 默认堆 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | sema HirExpr nested Children → TSemanticHirChildVec 默认堆 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | sema type-metadata nested VmtSlots → TSemanticVmtSlotVec 默认堆（`np_semantic_vmt_slot_vec` 卫星单元避开 model .o section 上限） |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | sema type-metadata nested Properties → TSemanticPropertyMetaVec 默认堆（`np_semantic_property_meta_vec` 卫星单元） |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | sema type-metadata nested RetPtrMethods → TSemanticStringVec 默认堆（复用 model 内已有 string vec） |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | sema type-metadata nested InterfaceSlots → TSemanticInterfaceSlotMetaVec 默认堆（`np_semantic_interface_slot_vec` 卫星单元） |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | lexer token Leading/TrailingTrivia → TTriviaPieceVec 默认堆（CloneTokenWithTrivia 值拷贝路径） |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | sema type-metadata nested Fields → 卫星单元 `np_semantic_field_meta_vec`（specialize 迁出 model .o，释放 ELF section 余量） |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | product-table dual-track **lane 收敛**：intentional keepers 入文档；model 禁止再塞 nested type-meta `specialize`；ELF 卫星规则 + 审计结论锁定 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | diagnostics nested Related/Fixes/Candidates → TVec 默认堆（analyzer out dynarray 保留；emit clone；sink Destroy Free nested） |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | HIR terminator SwitchCases → THirSwitchCaseVec |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | MIR stmt Args / terminator SwitchCases → TVec |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | sema pending-signature nested ParamNames/ArgTypes → TStringVec |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | unit resolver search-index nested CandidatePaths → TUnitResolverStringVec |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | product-table dual-track **CLOSED**：residual audit；disk cache DTO / local scratch 入 keepers；mem 下一刀离开 dynarray→TVec |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | compiler session/unit `FormatStats` + `CompilerFormat*Stats`；`MemFormatSessionStats` 复用 core 行；诊断可用性 9.3→9.6 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | ops 接线：session 投影 `mem-session-stats` + doctor `mem-process-stats` + envelope JSON；诊断可用性 9.6→9.8 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | arena 契约回归：AST≠scratch、SessionPeak 跨 UnitBegin、FreeMem no-op、entry-owned nested；guardrails 钉 Reset 边界 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | HEAP_DEBUG/插件轨：FormatMemStats debug_allocs/frees；门面 IsMemHeapDebugEnabled；双轨 FormatMemStats 回归；诊断 9.8→9.9 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | CI 常态化 rebuild-compiler：stage0 flags 单源；CI tooling→rebuild→verify；verify 钉 mem-session/process-stats 投影 |
-| 2026-07-16 | **10.0+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | HEAP_DEBUG CI 联调：stage0-heap-debug-env-recipe；CI rebuild 后跑；verify 复用；双轨 heap_debug/debug 投影；诊断 9.9→10 |
-| 2026-07-16 | **10.0++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++** | lane 收口：默认 focused gate → test_usability_guardrails；文档收敛 CLOSED 主线；Ready 证据矩阵对齐 |
+3. 全库历史异常类统一到 `EAllocError` — 爆炸半径大，另开 slice。
+4. Scorecard 外部对照 / 更多 host 覆盖 — 性能演进，非可用性阻塞。

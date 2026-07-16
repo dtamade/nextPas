@@ -49,9 +49,65 @@ need_grep "$MEM_DOCS/README.md" 'ERROR-POLICY' 'README must link ERROR-POLICY'
 need_grep "$MEM_DOCS/README.md" '同.*进程堆|同一进程堆' 'README must state S5 same process heap'
 need_grep "$MEM_DOCS/README.md" 'GetRtlAllocator' 'README must mention explicit RTL opt-in'
 
-# Usability score authority (current headline score)
+# Usability score authority (current headline score; no plus-chain inflation)
 need_file "$MEM_DOCS/USABILITY-SCORE.md"
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" '10\.0|9\.[0-9]' 'USABILITY-SCORE must publish current score'
+forbid_grep "$MEM_DOCS/USABILITY-SCORE.md" '10\.0\+{2,}|9\.[0-9]\+{2,}' \
+  'USABILITY-SCORE must not use ++++ score inflation'
+need_file "$MEM_DOCS/FACADES-SURFACE.md"
+need_grep "$MEM_DOCS/FACADES-SURFACE.md" 'Tier-3|Experimental' \
+  'FACADES-SURFACE must define Tier-3 freeze'
+need_grep "$MEM_DOCS/README.md" 'FACADES-SURFACE' 'README must link FACADES-SURFACE'
+need_grep "$MEM_DOCS/ERROR-POLICY.md" 'FormatAllocErrorMsg' \
+  'ERROR-POLICY must document FormatAllocErrorMsg'
+need_grep "$MEM_DOCS/ERROR-POLICY.md" 'NEXTPAS_MEM_HEAP_SAFETY|HEAP_SAFETY' \
+  'ERROR-POLICY must document HEAP_SAFETY'
+need_grep "$MEM_DOCS/ERROR-POLICY.md" 'ARENA_STRICT' \
+  'ERROR-POLICY must document ARENA_STRICT'
+need_grep "$MEM_DOCS/ERROR-POLICY.md" 'ENextPasError|统一 catch' \
+  'ERROR-POLICY must document unified catch surface'
+need_grep "$MEM_DOCS/README.md" 'debug_coverage_gap' \
+  'README must document debug_coverage_gap'
+need_grep "$MEM_DOCS/README.md" 'NEXTPAS_MEM_HEAP_SAFETY|HEAP_SAFETY' \
+  'README must document HEAP_SAFETY'
+need_grep "$MEM_DOCS/API-GUIDE.md" 'FreeMemOf' 'API-GUIDE must document FreeMemOf'
+need_grep "$MEM_DOCS/API-GUIDE.md" 'debug_coverage_gap|DebugCoverageGap' \
+  'API-GUIDE must document coverage gap'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" 'function FreeMemOf|procedure FreeMemOf' \
+  'mem facade must expose FreeMemOf'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" 'function FormatAllocErrorMsg' \
+  'mem facade must expose FormatAllocErrorMsg'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" 'function IsMemHeapSafetyEnabled' \
+  'mem facade must expose IsMemHeapSafetyEnabled'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" 'function IsMemArenaStrictEnabled' \
+  'mem facade must expose IsMemArenaStrictEnabled'
+need_grep "$ROOT/core/src/nextpas.core.mem.default.pas" 'debug_coverage_gap=' \
+  'FormatMemStats must emit debug_coverage_gap'
+need_grep "$ROOT/core/src/nextpas.core.mem.default.pas" 'debug_process=' \
+  'FormatMemStats must emit debug_process'
+need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'TestHeapSafetyOptInTracksProcessGetMem|HEAP_SAFETY' \
+  'usability guardrails must lock HEAP_SAFETY process track'
+need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'TestFreeMemOfSizedSameHeap|FreeMemOf' \
+  'usability guardrails must lock FreeMemOf'
+need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'TestArenaStrictFreeMem|ARENA_STRICT' \
+  'usability guardrails must lock ARENA_STRICT dual-mode'
+need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'debug_coverage_gap' \
+  'usability guardrails must lock debug_coverage_gap'
+forbid_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'Check\(True,' \
+  'usability guardrails must not use empty Check(True,...) assertions'
+# F6: facade must not re-export Tier-3 experimental allocators
+for tier3 in prediction numa replay huge_page watermark sliding thread_cache \
+  mapped_file arena2 arena_group bitmap bump cascade coalesce compact cow dual \
+  freelist group page pool2 prefix size_class slab stack; do
+  forbid_grep "$ROOT/core/src/nextpas.core.mem.pas" \
+    "nextpas\\.core\\.mem\\.allocator\\.${tier3}" \
+    "mem facade must not uses Tier-3 allocator.${tier3}"
+done
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'GetGrowingIAllocator|Growing IAllocator' 'USABILITY-SCORE must cover S5 root'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'HEAP_DEBUG|NEXTPAS_MEM_HEAP_DEBUG' 'USABILITY-SCORE must cover HEAP_DEBUG opt-in'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'TryBlockSize|SC8' 'USABILITY-SCORE must cover TryBlockSize/SC8'
