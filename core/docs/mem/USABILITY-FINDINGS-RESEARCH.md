@@ -1,9 +1,9 @@
 # mem 可用性评估发现 — 专题调研报告
 
-**状态**: Research complete (+ post-impl Go/Rust parity for F5–F7)  
-**日期**: 2026-07-16 / 修订 2026-07-17  
-**范围**: 独立可用性评估 F1–F7  
-**权威评估**: 综合分 7.7/10（B+）→ 修复后 9.1（见 USABILITY-SCORE）  
+**状态**: Research complete (+ post-impl Go/Rust parity for F5–F7)
+**日期**: 2026-07-16 / 修订 2026-07-17
+**范围**: 独立可用性评估 F1–F7
+**权威评估**: 综合分 7.7/10（B+）→ 修复后 9.1（见 USABILITY-SCORE）
 **非目标**: 合并双轨热路径、默认开启生产安全税、新增 allocator 种类、reopen product-table dual-track
 
 ---

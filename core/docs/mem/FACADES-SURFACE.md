@@ -1,10 +1,10 @@
 # mem 门面表面冻结（F6）
 
-**状态**: Frozen  
-**权威**: 本文件 + `nextpas.core.mem.pas` uses 列表  
+**状态**: Frozen
+**权威**: 本文件 + `nextpas.core.mem.pas` uses 列表
 **门禁**: `test_usability_guardrails/check_usability_docs.sh`（禁止门面 uses Tier-3）
 
-本文件冻结 **`nextpas.core.mem` 门面允许 re-export 的单元范围**。  
+本文件冻结 **`nextpas.core.mem` 门面允许 re-export 的单元范围**。
 目标：可发现性与长期兼容；禁止再把门面当「分配器博物馆」。
 
 ---

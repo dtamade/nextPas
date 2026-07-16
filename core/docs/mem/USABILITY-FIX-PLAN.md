@@ -1,8 +1,8 @@
 # mem 可用性 F1–F7 实施规划
 
-**状态**: Implemented  
-**前置**: [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md)  
-**日期**: 2026-07-16 / 实施 2026-07-17  
+**状态**: Implemented
+**前置**: [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md)
+**日期**: 2026-07-16 / 实施 2026-07-17
 **确认门**: 调研 + 本计划落盘后统一实施（OBJECTIVE：完整实施）
 
 ### 实施检查清单
@@ -54,13 +54,13 @@ P2  M1 F5 (建议在 M5 前) → M5 F4 → M6 F6
 
 实施批次（编码时一次合入，逻辑顺序如下）：
 
-1. `mem.error` 助手（F5）  
-2. `mem.debug_wrap` safety/arena-strict env + HEAP_DEBUG 合成（F3/F4 env）  
-3. `mem.default` stats/format 覆盖缺口（F1）  
-4. `mem.pas` / `default` FreeMemOf（F2）  
-5. `allocator.arena` strict FreeMem（F4）  
-6. 文档：ERROR-POLICY、README、API-GUIDE、DEBUG-WRAP、FACADES-SURFACE、USABILITY-SCORE（F6/F7）  
-7. 测试：guardrails、contract_matrix 扩展 / 新小 gate  
+1. `mem.error` 助手（F5）
+2. `mem.debug_wrap` safety/arena-strict env + HEAP_DEBUG 合成（F3/F4 env）
+3. `mem.default` stats/format 覆盖缺口（F1）
+4. `mem.pas` / `default` FreeMemOf（F2）
+5. `allocator.arena` strict FreeMem（F4）
+6. 文档：ERROR-POLICY、README、API-GUIDE、DEBUG-WRAP、FACADES-SURFACE、USABILITY-SCORE（F6/F7）
+7. 测试：guardrails、contract_matrix 扩展 / 新小 gate
 
 ---
 
