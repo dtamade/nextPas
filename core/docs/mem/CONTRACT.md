@@ -20,7 +20,7 @@
 
 - Growing 原生 free：`FreeMem(ptr, size)`；单参 `FreeMem(ptr)` 为兼容路径（span 扫描；非 size-class 块可回落 `System.FreeMem`）。
 - 过程式 `TryBlockSize(ptr, out size)`：查询 `DefaultHeap` 是否拥有该 size-class 块；True 时 `size` 为 size-class 容量（≥ 原请求）。nil / huge / 外源指针 → False。
-- **同堆互释（S5）**：`DefaultHeap` 与未包装 `DefaultAllocator`（`GetGrowingIAllocator`）分配的 size-class 块可互相释放；DEBUG wrap 链上的块必须经同一 wrap 链释放（除非 HEAP_DEBUG 把过程式也并入链）。
+- **同堆互释（S5）**：`DefaultHeap` 与未包装 `DefaultAllocator`（`GetGrowingIAllocator`）分配的 size-class 块可互相释放；DEBUG wrap 链上的块必须经同一 wrap 链释放（除非 HEAP_DEBUG 把过程式也并入链）。`FreeMemOf` 仅在 wrap 关闭时短路 sized DefaultHeap free，避免绕过 tracking。
 - 双轨税证据：Scorecard **SC9**（`hot_heap` vs `plugin_ia`）。
 - `ResolveAllocator(nil)` → `GetGrowingIAllocator`（非 RTL）。
 - `NEXTPAS_MEM_DEBUG` **不得**改变 `DefaultHeap` 语义或性能。

@@ -85,7 +85,7 @@
 | ID | 状态 | 证据 |
 |----|------|------|
 | F1 诊断假阴性 | **fixed** | `debug_process` / `debug_coverage_gap` + guardrails |
-| F2 sized free 助手 | **fixed** | `FreeMemOf` / `TryFreeMemOf` |
+| F2 sized free 助手 | **fixed** | `FreeMemOf` / `TryFreeMemOf`（DEBUG wrap 时不绕过 tracking） |
 | F3 opt-in safety | **fixed** | `NEXTPAS_MEM_HEAP_SAFETY` |
 | F4 arena strict | **fixed** | `NEXTPAS_MEM_ARENA_STRICT` dual-mode |
 | F5 错误助手 | **fixed** | `FormatAllocErrorMsg` / ERROR-POLICY catch 面 |

@@ -270,7 +270,8 @@ function TryBlockSize(APtr: Pointer; out ASize: SizeUInt): Boolean; inline;
 
 {** Sized free for an IAllocator surface when the block is on DefaultHeap (S5).
  *  Uses DefaultHeap.FreeMem(ptr, classSize) when TryBlockSize succeeds and
- *  process DEBUG route is off; otherwise AAllocator.FreeMem(ptr).
+ *  neither process route (HEAP_DEBUG/SAFETY) nor NEXTPAS_MEM_DEBUG wrap is on;
+ *  otherwise AAllocator.FreeMem(ptr) so plugin tracking still observes free.
  *  Keeps IAllocator five-method freeze; prefer this over bare FreeMem(ptr). }
 procedure FreeMemOf(const AAllocator: IAllocator; APtr: Pointer; ASize: SizeUInt); inline;
 function TryFreeMemOf(const AAllocator: IAllocator; APtr: Pointer;
@@ -449,15 +450,20 @@ begin
   Result := DefaultHeap.TryBlockSize(APtr, ASize);
 end;
 
+function FreeMemOfAllowsSizedHeapFree: Boolean; inline;
+begin
+  { Sized DefaultHeap free must not run when any DEBUG wrap is live — otherwise
+    FreeMemOf bypasses tracking/sentinel Free and ActiveAllocCount goes stale. }
+  Result := (not IsMemHeapDebugEnabled) and (not GetDebugWrapConfig.Enabled);
+end;
+
 procedure FreeMemOf(const AAllocator: IAllocator; APtr: Pointer; ASize: SizeUInt);
 var
   LClassSize: SizeUInt;
 begin
   if APtr = nil then
     Exit;
-  { Prefer sized DefaultHeap free when not on DEBUG process route (tracking
-    must still see Free via IAllocator when HEAP_DEBUG/SAFETY is on). }
-  if (ASize > 0) and (not IsMemHeapDebugEnabled) and
+  if (ASize > 0) and FreeMemOfAllowsSizedHeapFree and
     TryBlockSize(APtr, LClassSize) then
   begin
     DefaultHeap.FreeMem(APtr, LClassSize);
@@ -476,7 +482,7 @@ var
 begin
   if APtr = nil then
     Exit(False);
-  if (ASize > 0) and (not IsMemHeapDebugEnabled) and
+  if (ASize > 0) and FreeMemOfAllowsSizedHeapFree and
     TryBlockSize(APtr, LClassSize) then
   begin
     DefaultHeap.FreeMem(APtr, LClassSize);
