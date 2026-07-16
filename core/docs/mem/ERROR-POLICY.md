@@ -112,7 +112,7 @@ raise EAllocError.Create(aeInvalidPointer, LMsg);
 | `TTrackingAllocator` 等 | 被包装的 `IAllocator` | 未注入的堆 |
 | `GetMemStats` / `FormatMemStats` | DefaultHeap + `debug`/`heap_debug`/`debug_process`/`debug_coverage_gap` | 不是 sanitizer |
 
-**禁止**在文档或示例中暗示“只设 `NEXTPAS_MEM_DEBUG` 即可查所有 `GetMem` 泄漏”。  
+**禁止**在文档或示例中暗示“只设 `NEXTPAS_MEM_DEBUG` 即可查所有 `GetMem` 泄漏”。
 假阴性信号：`debug_coverage_gap=y`（DEBUG 开但过程式堆未进链）。
 
 ---

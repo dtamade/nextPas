@@ -1,9 +1,9 @@
 # nextpas.core.mem 可用性评分（权威）
 
-**评估日期**: 2026-07-17（F1–F7 修复后独立复评）  
-**范围**: `nextpas.core.mem` 对外默认路径、契约、诊断、上层注入  
-**对标**: Go `runtime` 分配默认 / Rust `GlobalAlloc` + 标准容器体验（工程可用性，非微基准）  
-**前序**: 内部产品路径 10.0 记分通胀已废止；独立评估基线 **7.7** → 本轮 **9.1**  
+**评估日期**: 2026-07-17（F1–F7 修复后独立复评）
+**范围**: `nextpas.core.mem` 对外默认路径、契约、诊断、上层注入
+**对标**: Go `runtime` 分配默认 / Rust `GlobalAlloc` + 标准容器体验（工程可用性，非微基准）
+**前序**: 内部产品路径 10.0 记分通胀已废止；独立评估基线 **7.7** → 本轮 **9.1**
 **调研/计划**: [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md) · [USABILITY-FIX-PLAN.md](USABILITY-FIX-PLAN.md)
 
 历史长报告 [USABILITY-AUDIT.md](USABILITY-AUDIT.md) 已 SUPERSEDED，仅作修复履历。

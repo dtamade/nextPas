@@ -47,6 +47,8 @@ type
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    function PostMultipart(const AUrl: string; const AFields: TFormFieldArray;
+      const AFiles: THttpFileArray): IHttpResponse;
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
@@ -61,12 +63,16 @@ type
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
+    function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
+    function WithProxyUrl(const AProxyUrl: string): IHttpClient;
   end;
 
   { Decorator base: all convenience methods go through virtual Send. }
   THttpClientForwarder = class(TInterfacedObject, IHttpClient)
   protected
     FInner: IHttpClient;
+    { Rebuild this decorator around a new base (used by WithProxyUrl). }
+    function RebindInner(const AInner: IHttpClient): IHttpClient; virtual;
   public
     constructor Create(const AInner: IHttpClient);
     function Send(const AReq: IHttpRequest): IHttpResponse; virtual;
@@ -84,6 +90,8 @@ type
     function Head(const AUrl: string): IHttpResponse; virtual;
     function Options(const AUrl: string): IHttpResponse; virtual;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse; virtual;
+    function PostMultipart(const AUrl: string; const AFields: TFormFieldArray;
+      const AFiles: THttpFileArray): IHttpResponse; virtual;
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
@@ -98,11 +106,25 @@ type
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient; virtual;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient; virtual;
     function WithRetry(const AMaxRetries: Int32): IHttpClient; virtual;
+    function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient; virtual;
+    function WithProxyUrl(const AProxyUrl: string): IHttpClient; virtual;
+  end;
+
+  TCookieJarClient = class(THttpClientForwarder)
+  private
+    FJar: IHttpCookieJar;
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
+  public
+    constructor Create(const AInner: IHttpClient; const AJar: IHttpCookieJar);
+    function Send(const AReq: IHttpRequest): IHttpResponse; override;
   end;
 
   TAuthClient = class(THttpClientForwarder)
   private
     FAuthHeader: string;
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
   public
     constructor Create(const AInner: IHttpClient; const AAuthHeader: string);
     function Send(const AReq: IHttpRequest): IHttpResponse; override;
@@ -112,6 +134,8 @@ type
   private
     FName: string;
     FValue: string;
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
   public
     constructor Create(const AInner: IHttpClient; const AName, AValue: string);
     function Send(const AReq: IHttpRequest): IHttpResponse; override;
@@ -121,6 +145,8 @@ type
   private
     FRequestOptions: THttpRequestOptions;
     procedure ApplyOptions(const AReq: IHttpRequest);
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
   public
     constructor Create(const AInner: IHttpClient;
       const ARequestOptions: THttpRequestOptions);
@@ -130,6 +156,8 @@ type
   TRetryClient = class(THttpClientForwarder)
   private
     FMaxRetries: Int32;
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
   public
     constructor Create(const AInner: IHttpClient; const AMaxRetries: Int32);
     function Send(const AReq: IHttpRequest): IHttpResponse; override;
@@ -204,9 +232,9 @@ uses
 procedure CheckDownloadArgs(const AClient: IHttpClient; const AUrl: string);
 begin
   if AClient = nil then
-    raise EArgumentError.Create('HTTP download client is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP download client is nil');
   if AUrl = '' then
-    raise EArgumentError.Create('HTTP download URL is empty');
+    raise EHttpError.Create(hekArgument, 'HTTP download URL is empty');
 end;
 
 procedure CheckDownloadResponse(const AResp: IHttpResponse; const AUrl: string);
@@ -223,9 +251,12 @@ end;
 procedure ValidateClientOptions(const AOptions: THttpClientOptions);
 begin
   if AOptions.Timeout < 0 then
-    raise EArgumentError.Create('HTTP client timeout must not be negative');
+    raise EHttpError.Create(hekArgument, 'HTTP client timeout must not be negative');
+  if AOptions.ConnectTimeout < 0 then
+    raise EHttpError.Create(hekArgument,
+      'HTTP client connect timeout must not be negative');
   if AOptions.MaxRedirects < 0 then
-    raise EArgumentError.Create('HTTP client max redirects must not be negative');
+    raise EHttpError.Create(hekArgument, 'HTTP client max redirects must not be negative');
 end;
 
 procedure CloseRequestBody(const ABody: IReader);
@@ -667,6 +698,15 @@ begin
       AOptions.EffectiveVersion(GetDefaultClientVersion), AOptions);
 end;
 
+function RequestCancelToken(const AReq: IHttpRequest): IHttpCancelToken;
+var
+  LReqOpts: IHttpRequestWithOptions;
+begin
+  Result := nil;
+  if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+    Result := LReqOpts.RequestOptions.EffectiveCancelToken;
+end;
+
 function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32;
   var ARequestBodyCloseAttempted: Boolean): IHttpResponse;
 var
@@ -684,6 +724,7 @@ var
   LFollowRedirects: Boolean;
 begin
   LUrl := AReq.Url;
+  HttpThrowIfCanceled(RequestCancelToken(AReq));
   CaptureRedirectBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LResp := FTransport.RoundTrip(AReq);
   if LResp = nil then
@@ -703,6 +744,7 @@ begin
       (LResp.StatusCode = HTTP_STATUS_TEMPORARY_REDIRECT) or
       (LResp.StatusCode = HTTP_STATUS_PERMANENT_REDIRECT)) then
   begin
+    HttpThrowIfCanceled(RequestCancelToken(AReq));
     if ARedirectsLeft <= 0 then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
@@ -774,7 +816,8 @@ var
   LMaxRedirects: Int32;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('HTTP request is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP request is nil');
+  HttpThrowIfCanceled(RequestCancelToken(AReq));
   LRequestBodyCloseAttempted := False;
   LResp := nil;
 
@@ -908,6 +951,17 @@ begin
   Result := Post(AUrl, 'application/x-www-form-urlencoded', LBody);
 end;
 
+function THttpClient.PostMultipart(const AUrl: string;
+  const AFields: TFormFieldArray; const AFiles: THttpFileArray): IHttpResponse;
+var
+  LBoundary, LBody: string;
+begin
+  LBoundary := nextpas.core.http.form.NewMultipartBoundary;
+  LBody := nextpas.core.http.form.EncodeMultipartFormData(AFields, AFiles,
+    LBoundary);
+  Result := Post(AUrl, 'multipart/form-data; boundary=' + LBoundary, LBody);
+end;
+
 function THttpClient.PostJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
@@ -941,7 +995,11 @@ begin
   LBuilder := THttpRequestBuilder.Create(AMethod, AUrl);
   if AContentType <> '' then
     LBuilder := LBuilder.ContentType(AContentType);
-  Result := Send(LBuilder.Body(ABody).ContentLength(AContentLength).Build);
+  LBuilder := LBuilder.Body(ABody);
+  { ContentLength < 0 → H1 chunked framing (builder omits CL / sets TE). }
+  if AContentLength >= 0 then
+    LBuilder := LBuilder.ContentLength(AContentLength);
+  Result := Send(LBuilder.Build);
 end;
 
 function THttpClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
@@ -982,14 +1040,31 @@ begin
   Result := TRetryClient.Create(Self, AMaxRetries);
 end;
 
+function THttpClient.WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
+begin
+  if AJar = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP cookie jar is nil');
+  Result := TCookieJarClient.Create(Self, AJar);
+end;
+
+function THttpClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
+begin
+  Result := NewHttpClient(FOptions.WithProxyUrl(AProxyUrl));
+end;
+
 { THttpClientForwarder }
 
 constructor THttpClientForwarder.Create(const AInner: IHttpClient);
 begin
   inherited Create;
   if AInner = nil then
-    raise EArgumentError.Create('HTTP client decorator inner is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP client decorator inner is nil');
   FInner := AInner;
+end;
+
+function THttpClientForwarder.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := AInner;
 end;
 
 function THttpClientForwarder.Send(const AReq: IHttpRequest): IHttpResponse;
@@ -1099,6 +1174,17 @@ begin
   Result := Post(AUrl, 'application/x-www-form-urlencoded', LBody);
 end;
 
+function THttpClientForwarder.PostMultipart(const AUrl: string;
+  const AFields: TFormFieldArray; const AFiles: THttpFileArray): IHttpResponse;
+var
+  LBoundary, LBody: string;
+begin
+  LBoundary := nextpas.core.http.form.NewMultipartBoundary;
+  LBody := nextpas.core.http.form.EncodeMultipartFormData(AFields, AFiles,
+    LBoundary);
+  Result := Post(AUrl, 'multipart/form-data; boundary=' + LBoundary, LBody);
+end;
+
 function THttpClientForwarder.PostJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
@@ -1132,7 +1218,10 @@ begin
   LBuilder := THttpRequestBuilder.Create(AMethod, AUrl);
   if AContentType <> '' then
     LBuilder := LBuilder.ContentType(AContentType);
-  Result := Send(LBuilder.Body(ABody).ContentLength(AContentLength).Build);
+  LBuilder := LBuilder.Body(ABody);
+  if AContentLength >= 0 then
+    LBuilder := LBuilder.ContentLength(AContentLength);
+  Result := Send(LBuilder.Build);
 end;
 
 function THttpClientForwarder.WithBasicAuth(const AUsername,
@@ -1177,6 +1266,51 @@ begin
   Result := TRetryClient.Create(Self, AMaxRetries);
 end;
 
+function THttpClientForwarder.WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
+begin
+  if AJar = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP cookie jar is nil');
+  Result := TCookieJarClient.Create(Self, AJar);
+end;
+
+function THttpClientForwarder.WithProxyUrl(const AProxyUrl: string): IHttpClient;
+begin
+  Result := RebindInner(FInner.WithProxyUrl(AProxyUrl));
+end;
+
+{ TCookieJarClient }
+
+constructor TCookieJarClient.Create(const AInner: IHttpClient;
+  const AJar: IHttpCookieJar);
+begin
+  inherited Create(AInner);
+  FJar := AJar;
+end;
+
+function TCookieJarClient.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := TCookieJarClient.Create(AInner, FJar);
+end;
+
+function TCookieJarClient.Send(const AReq: IHttpRequest): IHttpResponse;
+var
+  LCookie: string;
+begin
+  if (AReq <> nil) and (AReq.Headers <> nil) and (FJar <> nil) then
+  begin
+    if not AReq.Headers.Has('cookie') then
+    begin
+      LCookie := FJar.CookieHeaderFor(AReq.Url);
+      if LCookie <> '' then
+        AReq.Headers.SetHeader('cookie', LCookie);
+    end;
+  end;
+  Result := inherited Send(AReq);
+  if (Result <> nil) and (Result.Headers <> nil) and (AReq <> nil) and
+     (FJar <> nil) then
+    FJar.StoreFromResponse(AReq.Url, Result.Headers);
+end;
+
 { TAuthClient }
 
 constructor TAuthClient.Create(const AInner: IHttpClient;
@@ -1184,6 +1318,11 @@ constructor TAuthClient.Create(const AInner: IHttpClient;
 begin
   inherited Create(AInner);
   FAuthHeader := AAuthHeader;
+end;
+
+function TAuthClient.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := TAuthClient.Create(AInner, FAuthHeader);
 end;
 
 function TAuthClient.Send(const AReq: IHttpRequest): IHttpResponse;
@@ -1203,6 +1342,11 @@ begin
   FValue := AValue;
 end;
 
+function THeaderClient.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := THeaderClient.Create(AInner, FName, FValue);
+end;
+
 function THeaderClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
   if (AReq <> nil) and (AReq.Headers <> nil) then
@@ -1217,6 +1361,12 @@ constructor TOptionsOverrideClient.Create(const AInner: IHttpClient;
 begin
   inherited Create(AInner);
   FRequestOptions := ARequestOptions;
+end;
+
+function TOptionsOverrideClient.RebindInner(
+  const AInner: IHttpClient): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(AInner, FRequestOptions);
 end;
 
 procedure TOptionsOverrideClient.ApplyOptions(const AReq: IHttpRequest);
@@ -1242,6 +1392,11 @@ begin
     LMerged.FollowRedirects := FRequestOptions.FollowRedirects;
     LMerged.HasFollowRedirects := True;
   end;
+  if FRequestOptions.HasCancelToken then
+  begin
+    LMerged.CancelToken := FRequestOptions.CancelToken;
+    LMerged.HasCancelToken := True;
+  end;
   LReqWithOpts.SetRequestOptions(LMerged);
 end;
 
@@ -1258,20 +1413,88 @@ constructor TRetryClient.Create(const AInner: IHttpClient;
 begin
   inherited Create(AInner);
   if AMaxRetries < 0 then
-    raise EArgumentError.Create('Retry count must not be negative');
+    raise EHttpError.Create(hekArgument, 'Retry count must not be negative');
   FMaxRetries := AMaxRetries;
+end;
+
+function TRetryClient.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := TRetryClient.Create(AInner, FMaxRetries);
+end;
+
+function CloneRetryRequest(const AReq: IHttpRequest;
+  const ABodyBytes: TBytes; const AHasBody: Boolean): IHttpRequest;
+var
+  LHeaders: IHttpHeaders;
+  LBody: IReader;
+  LOpts: IHttpRequestWithOptions;
+  LLen: Int64;
+begin
+  if (AReq.Headers <> nil) then
+    LHeaders := AReq.Headers.Clone
+  else
+    LHeaders := NewHttpHeaders;
+  if AHasBody then
+  begin
+    LBody := CreateBytesStreamFrom(ABodyBytes);
+    LLen := Int64(Length(ABodyBytes));
+    { Snapshotting makes length known: drop chunked TE and publish CL. }
+    if LHeaders.Has('transfer-encoding') then
+      LHeaders.Remove('transfer-encoding');
+    LHeaders.SetHeader('content-length', IntToStr(LLen));
+  end
+  else
+  begin
+    LBody := nil;
+    LLen := 0;
+  end;
+  Result := THttpRequest.Create(AReq.Method, AReq.Url, AReq.Version,
+    LHeaders, LBody, LLen);
+  if Supports(AReq, IHttpRequestWithOptions, LOpts) then
+    (Result as IHttpRequestWithOptions).SetRequestOptions(LOpts.RequestOptions);
 end;
 
 function TRetryClient.Send(const AReq: IHttpRequest): IHttpResponse;
 var
   LAttempt: Int32;
   LBackoffMs: Int64;
+  LBodyBytes: TBytes;
+  LHasBody: Boolean;
+  LReq: IHttpRequest;
+  LBodyStream: IStream;
 begin
+  { Non-idempotent requests never enter the retry loop (matches H1/H2 pool). }
+  if (AReq = nil) or (not HttpIsRetrySafeRequest(AReq)) or (FMaxRetries <= 0) then
+  begin
+    Result := inherited Send(AReq);
+    Exit;
+  end;
+
+  { Snapshot body once: each Send owns/closes its body, so rewind alone is not enough.
+     ContentLength < 0 (H1 chunked) also has a body that must be replayable. }
+  LHasBody := (AReq.Body <> nil) and (AReq.ContentLength <> 0);
+  if LHasBody then
+  begin
+    if not Supports(AReq.Body, IStream, LBodyStream) then
+    begin
+      Result := inherited Send(AReq);
+      Exit;
+    end;
+    LBodyBytes := nextpas.core.io.ReadAll(AReq.Body);
+    CloseRequestBodyIgnoringErrors(AReq.Body);
+  end
+  else
+    LBodyBytes := nil;
+
   LAttempt := 0;
   while True do
   begin
+    if LHasBody then
+      LReq := CloneRetryRequest(AReq, LBodyBytes, True)
+    else
+      LReq := AReq;
     try
-      Result := inherited Send(AReq);
+      Result := inherited Send(LReq);
       if (Result = nil) or (Result.StatusCode < 500) or
          (Result.StatusCode > 599) then
         Exit;
@@ -1286,6 +1509,7 @@ begin
       end;
     end;
     Inc(LAttempt);
+    HttpThrowIfCanceled(RequestCancelToken(AReq));
     LBackoffMs := 100 shl (LAttempt - 1); // 100, 200, 400, ...
     if LBackoffMs > 5000 then
       LBackoffMs := 5000;
@@ -1323,7 +1547,7 @@ var
 begin
   CheckDownloadArgs(AClient, AUrl);
   if ADest = nil then
-    raise EArgumentError.Create('HTTP download destination writer is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP download destination writer is nil');
 
   LResp := AClient.Get(AUrl);
   try
@@ -1349,7 +1573,7 @@ var
 begin
   CheckDownloadArgs(AClient, AUrl);
   if ADestPath = '' then
-    raise EArgumentError.Create('HTTP download destination path is empty');
+    raise EHttpError.Create(hekArgument, 'HTTP download destination path is empty');
 
   LResp := AClient.Get(AUrl);
   try
@@ -1399,7 +1623,7 @@ end;
 procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
 begin
   if AResp = nil then
-    raise EArgumentError.Create('HTTP response is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP response is nil');
   ReleaseResponseBody(AResp);
 end;
 
@@ -1408,7 +1632,7 @@ var
   LBody: IReader;
 begin
   if AResp = nil then
-    raise EArgumentError.Create('HTTP response is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP response is nil');
 
   LBody := AResp.Body;
   if LBody = nil then
@@ -1513,7 +1737,7 @@ end;
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
 begin
   if AResp = nil then
-    raise EArgumentError.Create('HTTP response is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP response is nil');
   if not nextpas.core.http.base.HttpStatusIsSuccess(AResp.StatusCode) then
     raise EHttpError.Create(hekStatus,
       'HTTP request failed with status ' +

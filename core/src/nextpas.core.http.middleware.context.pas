@@ -31,13 +31,25 @@ function ContextMiddleware: IHttpMiddleware;
    Returns nil if context middleware is not active or request has no bag. }
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
 
+{** Typed string helper: stores as owned TObject box; missing key → ''. }
+function HttpContextGetString(const ACtx: IHttpContext;
+  const AKey: string): string;
+procedure HttpContextSetString(const ACtx: IHttpContext;
+  const AKey, AValue: string);
+{** Typed Int64 helper: stores as owned box; missing key → 0. }
+function HttpContextGetInt64(const ACtx: IHttpContext;
+  const AKey: string): Int64;
+procedure HttpContextSetInt64(const ACtx: IHttpContext;
+  const AKey: string; const AValue: Int64);
+
 implementation
 
 uses
   nextpas.core.base.utils,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
-  nextpas.core.sync;
+  nextpas.core.sync,
+  nextpas.core.text.conv;
 
 type
   THttpContext = class(TInterfacedObject, IHttpContext)
@@ -230,6 +242,73 @@ begin
   if Supports(AReq, IHttpRequestWithContext, LWithCtx) then
     Exit(LWithCtx.GetContext);
   Result := nil;
+end;
+
+type
+  THttpContextStringBox = class
+  public
+    Value: string;
+    constructor Create(const AValue: string);
+  end;
+
+  THttpContextInt64Box = class
+  public
+    Value: Int64;
+    constructor Create(const AValue: Int64);
+  end;
+
+constructor THttpContextStringBox.Create(const AValue: string);
+begin
+  inherited Create;
+  Value := AValue;
+end;
+
+constructor THttpContextInt64Box.Create(const AValue: Int64);
+begin
+  inherited Create;
+  Value := AValue;
+end;
+
+function HttpContextGetString(const ACtx: IHttpContext;
+  const AKey: string): string;
+var
+  LObj: TObject;
+begin
+  Result := '';
+  if (ACtx = nil) or (AKey = '') then
+    Exit;
+  LObj := ACtx.GetValue(AKey);
+  if LObj is THttpContextStringBox then
+    Result := THttpContextStringBox(LObj).Value;
+end;
+
+procedure HttpContextSetString(const ACtx: IHttpContext;
+  const AKey, AValue: string);
+begin
+  if (ACtx = nil) or (AKey = '') then
+    Exit;
+  ACtx.SetOwnedValue(AKey, THttpContextStringBox.Create(AValue));
+end;
+
+function HttpContextGetInt64(const ACtx: IHttpContext;
+  const AKey: string): Int64;
+var
+  LObj: TObject;
+begin
+  Result := 0;
+  if (ACtx = nil) or (AKey = '') then
+    Exit;
+  LObj := ACtx.GetValue(AKey);
+  if LObj is THttpContextInt64Box then
+    Result := THttpContextInt64Box(LObj).Value;
+end;
+
+procedure HttpContextSetInt64(const ACtx: IHttpContext;
+  const AKey: string; const AValue: Int64);
+begin
+  if (ACtx = nil) or (AKey = '') then
+    Exit;
+  ACtx.SetOwnedValue(AKey, THttpContextInt64Box.Create(AValue));
 end;
 
 end.

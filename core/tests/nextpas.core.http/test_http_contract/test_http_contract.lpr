@@ -1017,8 +1017,8 @@ begin
 end;
 
 procedure TestNewRequestFacadeDeprecationParitySourceContract;
-{ P3: facade must not silently drop deprecation markers that message.pas owns.
-  Only NewRequest(Method, TUrl) and NewGetRequest stay non-deprecated factories. }
+{ Whitelist only: NewRequest(Method, TUrl|string) + NewGetRequest.
+  Multi-arg NewRequest and NewStreamingRequest are physically deleted. }
 var
   LFacade: string;
   LMessage: string;
@@ -1029,38 +1029,29 @@ begin
   Check(SourceHas(LMessage,
     'function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload;'),
     'message keeps NewRequest(Method, TUrl) as the non-deprecated primitive');
+  Check(SourceHas(LMessage,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload;'),
+    'message keeps NewRequest(Method, string) URL-parse bridge');
   Check(SourceHas(LFacade,
     'function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;'),
     'facade keeps NewRequest(Method, TUrl) as the non-deprecated primitive');
+  Check(SourceHas(LFacade,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload; inline;'),
+    'facade keeps NewRequest(Method, string) URL-parse bridge');
   Check(SourceHas(LFacade, 'function NewGetRequest(const APath: string): IHttpRequest; inline;'),
     'facade keeps NewGetRequest non-deprecated');
 
-  { Six TUrl body/header overloads previously lost deprecation on the facade. }
-  Check(SourceHas(LFacade,
-    'const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload; inline;'#10 +
-    '  deprecated ''Use THttpRequestBuilder instead'';'),
-    'facade deprecates NewRequest(TUrl, Body, ContentLength)');
-  Check(SourceHas(LFacade,
-    'const AHeaders: IHttpHeaders; const ABody: IReader;'#10 +
-    '  const AContentLength: Int64): IHttpRequest; overload; inline;'#10 +
-    '  deprecated ''Use THttpRequestBuilder instead'';'),
-    'facade deprecates NewRequest(TUrl, Headers, Body, ContentLength)');
-  Check(SourceHas(LFacade,
-    'const ABodyText: string): IHttpRequest; overload; inline;'#10 +
-    '  deprecated ''Use THttpRequestBuilder instead'';'),
-    'facade deprecates NewRequest(TUrl, BodyText)');
-  Check(SourceHas(LFacade,
-    'const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload; inline;'#10 +
-    '  deprecated ''Use THttpRequestBuilder instead'';'),
-    'facade deprecates NewRequest(TUrl, Headers, BodyText)');
-  Check(SourceHas(LFacade,
-    'const ABodyBytes: TBytes): IHttpRequest; overload; inline;'#10 +
-    '  deprecated ''Use THttpRequestBuilder instead'';'),
-    'facade deprecates NewRequest(TUrl, BodyBytes)');
-  Check(SourceHas(LFacade,
-    'const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;'#10 +
-    '  deprecated ''Use THttpRequestBuilder instead'';'),
-    'facade deprecates NewRequest(TUrl, Headers, BodyBytes)');
+  { Multi-arg NewRequest overloads removed from both units. }
+  Check(not SourceHas(LFacade, 'const ABody: IReader; const AContentLength: Int64): IHttpRequest'),
+    'facade has no NewRequest body+CL overload');
+  Check(not SourceHas(LFacade, 'const AHeaders: IHttpHeaders; const ABody: IReader;'),
+    'facade has no NewRequest headers+body overload');
+  Check(not SourceHas(LFacade, 'const ABodyText: string): IHttpRequest'),
+    'facade has no NewRequest body-text overload');
+  Check(not SourceHas(LFacade, 'const ABodyBytes: TBytes): IHttpRequest'),
+    'facade has no NewRequest body-bytes overload');
+  Check(not SourceHas(LMessage, 'deprecated ''Use THttpRequestBuilder instead'''),
+    'message no longer carries deprecated multi-arg NewRequest markers');
 
   Check(SourceHas(LFacade, 'THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;'),
     'facade re-exports THttpRequestBuilder as the recommended construction path');

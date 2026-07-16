@@ -62,6 +62,7 @@ type
   TUrl = nextpas.core.http.base.TUrl;
   THttpErrorKind = nextpas.core.http.base.THttpErrorKind;
   EHttpError = nextpas.core.http.base.EHttpError;
+  IHttpCancelToken = nextpas.core.http.base.IHttpCancelToken;
   THttpRequestOptions = nextpas.core.http.base.THttpRequestOptions;
 
   { Re-export interfaces }
@@ -126,6 +127,7 @@ type
   TSameSite = nextpas.core.http.cookie.TSameSite;
   TRequestCookies = nextpas.core.http.cookie.TRequestCookies;
   TSetCookie = nextpas.core.http.cookie.TSetCookie;
+  IHttpCookieJar = nextpas.core.http.intf.IHttpCookieJar;
 
   { Re-export server/client types }
   THttpServer = nextpas.core.http.server.THttpServer;
@@ -237,6 +239,18 @@ function HttpVersionToStr(const AVersion: THttpVersion): string; inline;
 function HttpErrorIsTimeout(const E: Exception): Boolean; inline;
 {** @desc True for timeout/connect failures suitable for client retry. }
 function HttpErrorIsRetryable(const E: Exception): Boolean; inline;
+{** @desc True for caller-side errors (hekArgument / hekCanceled). }
+function HttpErrorIsUserError(const E: Exception): Boolean; inline;
+{** @desc Create a cooperative cancel token for client requests. }
+function NewHttpCancelToken: IHttpCancelToken; inline;
+{** @desc Raise hekCanceled when token is non-nil and canceled. }
+procedure HttpThrowIfCanceled(const AToken: IHttpCancelToken); inline;
+{** @desc True for GET/HEAD/OPTIONS/TRACE. }
+function HttpIsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
+{** @desc True if request has Idempotency-Key or X-Idempotency-Key. }
+function HttpHasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
+{** @desc True when WithRetry / pool reconnect may re-issue the request. }
+function HttpIsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
 
 {** @desc Create empty mutable headers container }
 function NewHeaders: IHttpHeaders; inline;
@@ -338,6 +352,15 @@ function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware;
 function ContextMiddleware: IHttpMiddleware; inline;
 {** @desc Get the IHttpContext attached to a request. Returns nil if no context. }
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext; inline;
+{** @desc Typed context helpers (owned string/Int64 boxes). }
+function HttpContextGetString(const ACtx: IHttpContext;
+  const AKey: string): string; inline;
+procedure HttpContextSetString(const ACtx: IHttpContext;
+  const AKey, AValue: string); inline;
+function HttpContextGetInt64(const ACtx: IHttpContext;
+  const AKey: string): Int64; inline;
+procedure HttpContextSetInt64(const ACtx: IHttpContext;
+  const AKey: string; const AValue: Int64); inline;
 {** @desc Request Arena middleware — LocalArena per request; drop after handler. }
 function RequestArenaMiddleware: IHttpMiddleware; inline;
 {** @desc Request Arena middleware with custom capacity (0 = HTTP_DEFAULT_REQUEST_ARENA). }
@@ -386,80 +409,10 @@ function HttpProcessAllocator: IAllocator; inline;
 {** @desc Process DefaultHeap one-line snapshot for ops/debug (not hot path). }
 function HttpFormatProcessMemStats: string; inline;
 
-{** @desc Create IHttpRequest value type with method, URL, headers, body }
+{** @desc Create IHttpRequest (whitelist: Method+TUrl or Method+string URL).
+   Headers/body/auth → THttpRequestBuilder. }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ANilBody: Pointer): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ANilBody: Pointer): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyText: string): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyText: string): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType, ABodyText: string): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType, ABodyText: string): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
 function NewGetRequest(const APath: string): IHttpRequest; inline;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse; overload; inline;
@@ -597,6 +550,7 @@ function ParseCookies(const AHeaderValue: string): TRequestCookies; inline;
 function BuildSetCookie(const ACookie: TSetCookie): string; inline;
 function MakeCookie(const AName, AValue: string): TSetCookie; inline;
 function ParseSingleCookie(const AStr: string; out AName, AValue: string): Boolean; inline;
+function NewHttpCookieJar: IHttpCookieJar; inline;
 
 { Server/Client factories }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
@@ -660,6 +614,7 @@ function HttpDeleteJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
+function NewMultipartBoundary: string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string = ''): string; inline;
 
@@ -718,6 +673,36 @@ end;
 function HttpErrorIsRetryable(const E: Exception): Boolean;
 begin
   Result := nextpas.core.http.base.HttpErrorIsRetryable(E);
+end;
+
+function HttpErrorIsUserError(const E: Exception): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpErrorIsUserError(E);
+end;
+
+function NewHttpCancelToken: IHttpCancelToken;
+begin
+  Result := nextpas.core.http.base.NewHttpCancelToken;
+end;
+
+procedure HttpThrowIfCanceled(const AToken: IHttpCancelToken);
+begin
+  nextpas.core.http.base.HttpThrowIfCanceled(AToken);
+end;
+
+function HttpIsRetryableMethod(const AMethod: THttpMethod): Boolean;
+begin
+  Result := nextpas.core.http.message.HttpIsRetryableMethod(AMethod);
+end;
+
+function HttpHasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean;
+begin
+  Result := nextpas.core.http.message.HttpHasRetryIdempotencyKey(AReq);
+end;
+
+function HttpIsRetrySafeRequest(const AReq: IHttpRequest): Boolean;
+begin
+  Result := nextpas.core.http.message.HttpIsRetrySafeRequest(AReq);
 end;
 
 function NewHeaders: IHttpHeaders;
@@ -961,6 +946,30 @@ begin
   Result := nextpas.core.http.middleware.context.HttpContextOf(AReq);
 end;
 
+function HttpContextGetString(const ACtx: IHttpContext;
+  const AKey: string): string;
+begin
+  Result := nextpas.core.http.middleware.context.HttpContextGetString(ACtx, AKey);
+end;
+
+procedure HttpContextSetString(const ACtx: IHttpContext;
+  const AKey, AValue: string);
+begin
+  nextpas.core.http.middleware.context.HttpContextSetString(ACtx, AKey, AValue);
+end;
+
+function HttpContextGetInt64(const ACtx: IHttpContext;
+  const AKey: string): Int64;
+begin
+  Result := nextpas.core.http.middleware.context.HttpContextGetInt64(ACtx, AKey);
+end;
+
+procedure HttpContextSetInt64(const ACtx: IHttpContext;
+  const AKey: string; const AValue: Int64);
+begin
+  nextpas.core.http.middleware.context.HttpContextSetInt64(ACtx, AKey, AValue);
+end;
+
 function RequestArenaMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.requestarena.RequestArenaMiddleware;
@@ -1048,156 +1057,6 @@ end;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest;
 begin
   Result := nextpas.core.http.message.NewRequest(AMethod, AUrl);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ANilBody: Pointer): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ANilBody);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ANilBody: Pointer): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ANilBody);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABody,
-    AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABody,
-    AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType, ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType, ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABodyBytes);
 end;
 
 function NewGetRequest(const APath: string): IHttpRequest;
@@ -1516,6 +1375,11 @@ begin
   Result := nextpas.core.http.cookie.ParseSingleCookie(AStr, AName, AValue);
 end;
 
+function NewHttpCookieJar: IHttpCookieJar;
+begin
+  Result := nextpas.core.http.cookie.NewHttpCookieJar;
+end;
+
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
 begin
   Result := nextpas.core.http.server.NewHttpServer(AHandler);
@@ -1697,6 +1561,11 @@ end;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string;
 begin
   Result := nextpas.core.http.form.EncodeUrlEncodedForm(AFields);
+end;
+
+function NewMultipartBoundary: string;
+begin
+  Result := nextpas.core.http.form.NewMultipartBoundary;
 end;
 
 function EncodeMultipartFormData(const AFields: TFormFieldArray;

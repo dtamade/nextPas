@@ -68,7 +68,9 @@ var
   LH1Options: TH1ClientTransportOptions;
 begin
   LH1Options.Timeout := AOptions.Timeout;
+  LH1Options.ConnectTimeout := AOptions.ConnectTimeout;
   LH1Options.MaxPoolSize := AOptions.MaxPoolSize;
+  LH1Options.ProxyUrl := AOptions.ProxyUrl;
   Result := NewH1ClientTransport(LH1Options);
 end;
 

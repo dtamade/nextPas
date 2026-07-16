@@ -90,6 +90,8 @@ var
   LTimeout: EHttpError;
   LConnect: EHttpError;
   LParse: EHttpError;
+  LArg: EHttpError;
+  LCanceled: EHttpError;
   LBareTimeout: ETimeoutError;
   LNet: ENetworkError;
   LWrapped: Exception;
@@ -97,6 +99,8 @@ begin
   LTimeout := EHttpError.Create(hekTimeout, 'http timeout');
   LConnect := EHttpError.Create(hekConnect, 'connect failed');
   LParse := EHttpError.Create(hekParse, 'bad');
+  LArg := EHttpError.Create(hekArgument, 'bad arg');
+  LCanceled := EHttpError.Create(hekCanceled, 'canceled');
   LBareTimeout := ETimeoutError.Create('bare transport timeout');
   LNet := ENetworkError.Create('network failed');
   try
@@ -110,6 +114,11 @@ begin
     Check(HttpErrorIsRetryable(LBareTimeout), 'bare timeout is retryable');
     Check(HttpErrorIsRetryable(LNet), 'network error is retryable');
     Check(not HttpErrorIsRetryable(LParse), 'parse is not retryable');
+
+    Check(HttpErrorIsUserError(LArg), 'hekArgument is user error');
+    Check(HttpErrorIsUserError(LCanceled), 'hekCanceled is user error');
+    Check(not HttpErrorIsUserError(LTimeout), 'timeout is not user error');
+    Check(not HttpErrorIsUserError(LParse), 'parse is not user error');
 
     LWrapped := HttpWrapTransportException(LBareTimeout);
     try
@@ -135,6 +144,8 @@ begin
     LTimeout.Free;
     LConnect.Free;
     LParse.Free;
+    LArg.Free;
+    LCanceled.Free;
     LBareTimeout.Free;
     LNet.Free;
   end;
