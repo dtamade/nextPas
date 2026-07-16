@@ -110,7 +110,8 @@ raise EAllocError.Create(aeInvalidPointer, LMsg);
 | `NEXTPAS_MEM_HEAP_SAFETY` | 过程式路径 + 默认 tracking/sentinel | 默认关；dev 双 free profile |
 | `NEXTPAS_MEM_ARENA_STRICT` | Arena IAllocator FreeMem(non-nil) raise | 默认 no-op |
 | `TTrackingAllocator` 等 | 被包装的 `IAllocator` | 未注入的堆 |
-| `GetMemStats` / `FormatMemStats` | DefaultHeap + `debug`/`heap_debug`/`debug_process`/`debug_coverage_gap` | 不是 sanitizer |
+| `GetMemStats` / `FormatMemStats` | DefaultHeap + `heap_debug`/`heap_safety`/`arena_strict`/`debug`/`debug_process`/`debug_coverage_gap` | 不是 sanitizer |
+| `FormatMemDebugProfile` | 仅开关位一行（无 live_bytes） | 不是 sanitizer |
 
 **禁止**在文档或示例中暗示“只设 `NEXTPAS_MEM_DEBUG` 即可查所有 `GetMem` 泄漏”。
 假阴性信号：`debug_coverage_gap=y`（DEBUG 开但过程式堆未进链）。

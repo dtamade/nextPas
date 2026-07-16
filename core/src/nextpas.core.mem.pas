@@ -237,6 +237,9 @@ function GetMemStats: TMemStats; inline;
  *  Includes heap_debug/debug flags; DEBUG wrap adds debug_active_*/debug_allocs. }
 function FormatMemStats(const AStats: TMemStats): string; inline;
 function FormatMemStats: string; inline;
+{** One-line env/debug profile (flags only) for doctor/logs. }
+function FormatMemDebugProfile(const AStats: TMemStats): string; inline;
+function FormatMemDebugProfile: string; inline;
 
 {** True when HEAP_DEBUG or HEAP_SAFETY routes process GetMem → DefaultAllocator. }
 function IsMemHeapDebugEnabled: Boolean; inline;
@@ -276,6 +279,13 @@ function TryBlockSize(APtr: Pointer; out ASize: SizeUInt): Boolean; inline;
 procedure FreeMemOf(const AAllocator: IAllocator; APtr: Pointer; ASize: SizeUInt); inline;
 function TryFreeMemOf(const AAllocator: IAllocator; APtr: Pointer;
   ASize: SizeUInt): Boolean; inline;
+{** Sized realloc for IAllocator surface (S5). Same DEBUG-wrap gate as FreeMemOf:
+ *  bare same-heap → DefaultHeap.ReallocMem(ptr, classSize, new); else
+ *  AAllocator.ReallocMem(ptr, new) so plugin tracking observes. }
+function ReallocMemOf(const AAllocator: IAllocator; APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer; inline;
+function TryReallocMemOf(const AAllocator: IAllocator; APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt; out ANewPtr: Pointer): Boolean; inline;
 
 {** ERROR-POLICY actionable forms: resource failure = False + nil, never raise.
  *  Same backends as GetMem/AllocMem/ReallocMem (DefaultHeap / HEAP_DEBUG path). }
@@ -363,6 +373,16 @@ end;
 function FormatMemStats: string;
 begin
   Result := nextpas.core.mem.default.FormatMemStats;
+end;
+
+function FormatMemDebugProfile(const AStats: TMemStats): string;
+begin
+  Result := nextpas.core.mem.default.FormatMemDebugProfile(AStats);
+end;
+
+function FormatMemDebugProfile: string;
+begin
+  Result := nextpas.core.mem.default.FormatMemDebugProfile;
 end;
 
 function IsMemHeapDebugEnabled: Boolean;
@@ -492,6 +512,37 @@ begin
     Exit(False);
   AAllocator.FreeMem(APtr);
   Result := True;
+end;
+
+function ReallocMemOf(const AAllocator: IAllocator; APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt): Pointer;
+var
+  LClassSize: SizeUInt;
+begin
+  if APtr = nil then
+  begin
+    if AAllocator <> nil then
+      Exit(AAllocator.GetMem(ANewSize));
+    Exit(GetMem(ANewSize));
+  end;
+  if (AOldSize > 0) and FreeMemOfAllowsSizedHeapFree and
+    TryBlockSize(APtr, LClassSize) then
+    Exit(DefaultHeap.ReallocMem(APtr, LClassSize, ANewSize));
+  if AAllocator <> nil then
+    Exit(AAllocator.ReallocMem(APtr, ANewSize));
+  Result := ReallocMem(APtr, ANewSize);
+end;
+
+function TryReallocMemOf(const AAllocator: IAllocator; APtr: Pointer;
+  AOldSize, ANewSize: SizeUInt; out ANewPtr: Pointer): Boolean;
+begin
+  if (AAllocator = nil) and (APtr = nil) and (ANewSize > 0) then
+  begin
+    ANewPtr := nil;
+    Exit(False);
+  end;
+  ANewPtr := ReallocMemOf(AAllocator, APtr, AOldSize, ANewSize);
+  Result := (ANewPtr <> nil) or (ANewSize = 0);
 end;
 
 function TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean;

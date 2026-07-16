@@ -64,6 +64,9 @@ Writeln(FormatMemStats); // … debug_process=… debug_coverage_gap=…
 - 热路径不调用；DEBUG 字段默认全 0
 - 细节字段与 SC5 对齐：`TGrowingHeapStats`
 - 插件面 sized free 助手：`FreeMemOf(Alloc, P, Size)` / `TryFreeMemOf`（无 DEBUG wrap 且无 HEAP_DEBUG/SAFETY 时同堆走 DefaultHeap sized；否则走 `Alloc.FreeMem` 以保留 tracking）
+- 插件面 sized realloc：`ReallocMemOf(Alloc, P, Old, New)` / `TryReallocMemOf`（同门控；wrap 开时走 `Alloc.ReallocMem`）
+- 一行 env profile：`FormatMemDebugProfile`（`heap_debug`/`heap_safety`/`arena_strict`/`debug`/`debug_process`/`debug_coverage_gap`）
+- `FormatMemStats` 含 `heap_safety=` / `arena_strict=`（与 HEAP_DEBUG / coverage_gap 并列）
 - 错误消息：`FormatAllocErrorMsg` / `IsWellFormedAllocErrorMsg`（见 [ERROR-POLICY.md](ERROR-POLICY.md)）
 - 门面冻结：[FACADES-SURFACE.md](FACADES-SURFACE.md)
 
