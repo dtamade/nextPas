@@ -12,14 +12,16 @@
 
 | 项 | 值 |
 |----|-----|
-| **综合分（本轮审查时）** | **8.9 / 10** |
-| **综合分（R1–R5 修复后）** | **9.3 / 10**（见 [USABILITY-SCORE.md](USABILITY-SCORE.md)） |
+| **综合分（二轮审查时）** | **8.9 / 10** |
+| **综合分（R1–R5 修复后）** | **9.3 / 10** |
+| **综合分（三轮审查时）** | **9.15 / 10** |
+| **综合分（S1–S3 修复后）** | **9.3 / 10**（见 [USABILITY-SCORE.md](USABILITY-SCORE.md)） |
 | **等级** | **HIGH** |
-| **风险总评** | **LOW–MEDIUM**（热路径 UB 仍为设计选择；R1–R5 已关） |
-| **F1–F7** | 已修复，本轮视为基线 |
-| **本轮新发现** | **R1–R5** — **全部 fixed** |
+| **风险总评** | **LOW–MEDIUM**（热路径 UB 仍为设计选择；S1–S3 已关） |
+| **F1–F7 / R1–R5** | 已修复，视为基线 |
+| **三轮新发现** | **S1–S3** — **全部 fixed** |
 
-**一句话**: 双轨零税与 F1–F7 观测/安全 opt-in 已达标；残留短板是 **FormatMemStats 未暴露 SAFETY/ARENA_STRICT**、**插件面 sized realloc 助手缺失**、**多 env 无单行 profile**，以及对应契约门禁未锁。
+**一句话**: 双轨零税与观测/助手已达标；三轮必修是 **TryReallocMemOf 与 ReallocMemOf 成功语义不对称**，已修。
 
 故意不降分项：默认双 free=UB（与 Go 非 GC 手写 free / 零税一致，靠 opt-in SAFETY）；门面 Tier-1/2 兼容面（冻结不收缩）。
 
@@ -35,7 +37,15 @@
 | R4 | API 可发现性 | 四枚 env（DEBUG / HEAP_DEBUG / SAFETY / ARENA_STRICT）无**单行 profile**字符串 | doctor/日志需拼多个 Is* | LOW–MED | **P2** |
 | R5 | 契约/门禁 | guardrails / `check_usability_docs` **未锁** R1–R4 | 源契约可回归 | LOW | **P0**（与实现同批） |
 
-### 分维评分（审查时 / 1–10）
+### 三轮发现 S1–S3（已 fixed）
+
+| ID | 维度 | 摘要 | 风险 | 优先级 | 状态 |
+|----|------|------|------|--------|------|
+| S1 | 调用一致性 | `TryReallocMemOf(nil,nil,…)` 错误拒绝对 `ReallocMemOf` 合法 GetMem 回落 | MED | **P1** | **fixed** |
+| S2 | 错误提示 | `error.pas` 对齐 raise 未用 FormatAllocErrorMsg | LOW–MED | **P2** | **fixed**（仅 error 共享入口） |
+| S3 | 门禁 | 无 S1 契约测试 | LOW | **P0** | **fixed** |
+
+### 分维评分（二轮审查时 / 1–10）
 
 | 维度 | 分 | 依据 |
 |------|----|------|

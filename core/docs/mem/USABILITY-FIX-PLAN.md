@@ -1,6 +1,6 @@
-# mem 可用性实施规划（F1–F7 + R1–R5）
+# mem 可用性实施规划（F1–F7 + R1–R5 + S1–S3）
 
-**状态**: R1–R5 implemented
+**状态**: S1–S3 implemented
 **前置**: [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md) · [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md)
 **日期**: 2026-07-17
 **确认门**: 评估 + 调研 + 本计划落盘后 **统一实施**（禁止边调边改设计）
@@ -8,66 +8,64 @@
 ### 实施检查清单
 
 - [x] M0–M7 F1–F7（已落地）
-- [x] M8 R1+R2 FormatMemStats / TMemStats（heap_safety + arena_strict）
-- [x] M9 R3 ReallocMemOf / TryReallocMemOf
-- [x] M10 R4 FormatMemDebugProfile
-- [x] M11 R5 guardrails + check_usability_docs + score 9.3 + scratch logs
+- [x] M8–M11 R1–R5（已落地）
+- [x] M12 S1 TryReallocMemOf 与 ReallocMemOf 成功语义对称
+- [x] M13 S3 guardrails + check_usability_docs
+- [x] M14 S2 error.pas 对齐 raise 用 FormatAllocErrorMsg
+- [x] M15 文档复评 USABILITY-SCORE **9.3**
 
 ---
 
-## 1. 里程碑（本轮）
+## 1. 里程碑（三轮 S1–S3）
 
 | M | 名称 | 交付 | 依赖 | 优先级 |
 |---|------|------|------|--------|
-| **M8** | Stats 完整 | R1/R2：`ArenaStrictEnabled`；FormatMemStats `heap_safety=` `arena_strict=` | 无 | **P1** |
-| **M9** | Sized realloc | R3：`ReallocMemOf` / `TryReallocMemOf` + FreeMemOf 同门控 | M8 无强依赖 | **P1** |
-| **M10** | Profile 一行 | R4：`FormatMemDebugProfile` 门面 | M8 | **P2** |
-| **M11** | 门禁与复评 | R5：tests + docs + USABILITY-SCORE **9.3** + `{SCRATCH}` | M8–M10 | **P0** |
+| **M12** | Try 对称 | S1：删 `TryReallocMemOf` 错误早退 | 无 | **P1** |
+| **M13** | 门禁 | S3：`TestTryReallocMemOfNilAllocatorGetMem` + docs 锁 | M12 | **P0** |
+| **M14** | 错误助手 | S2：`SanitizeRuntimeAlignment` / `SanitizeConfigAlignment` | 无 | **P2** |
+| **M15** | 复评 | SCORE/EVAL/RESEARCH/FIX-PLAN | M12–M14 | **P2** |
 
 ### 依赖图
 
 ```text
-M8 (stats fields) ──┬──► M10 FormatMemDebugProfile
-                    └──► M11 docs/asserts
-M9 ReallocMemOf ─────────► M11 guardrails
+M12 TryReallocMemOf ──► M13 guardrails
+M14 error.pas ─────────► M15 docs
+M12 / M13 ─────────────► M15 docs
 ```
 
 ---
 
 ## 2. 实现要点（冻结设计）
 
-1. **不**默认开 HEAP_SAFETY / ARENA_STRICT / DEBUG。
-2. ReallocMemOf 门控：`FreeMemOfAllowsSizedHeapFree`（或重命名共享 helper `PluginSizedHeapFastPath`）。
-3. sized 成功：`DefaultHeap.ReallocMem(ptr, classSize, newSize)`；否则 `AAllocator.ReallocMem(ptr, newSize)`。
-4. FormatMemStats 追加字段位置固定在 `heap_debug=` 附近，保持单行。
-5. FormatMemDebugProfile 仅诊断字符串，热路径不调用。
+1. **删除** `TryReallocMemOf` 中 `(AAllocator=nil) and (APtr=nil) and (ANewSize>0)` 早退。
+2. 保留：`Result := (ANewPtr <> nil) or (ANewSize = 0)`；权威语义在 `ReallocMemOf`。
+3. S2 **仅** `error.pas` 对齐校验；不扫 pool/blockpool 历史 raise。
+4. **不**默认开 HEAP_SAFETY / ARENA_STRICT / DEBUG。
 
 ---
 
-## 3. 验证（M11）
+## 3. 验证（M15）
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails
 make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
+make focused FOCUS=core/tests/nextpas.core.mem/test_error
 make focused FOCUS=core/tests/nextpas.core.mem/test_debug_wrap
 make hygiene
-# logs → {SCRATCH}/
 ```
 
 | 发现 | 验收 |
 |------|------|
-| R1 | FormatMemStats 含 `heap_safety=`；SAFETY 开 → `y` |
-| R2 | 含 `arena_strict=`；env 开 → `y` |
-| R3 | ReallocMemOf 同堆 sized；DEBUG wrap 下 tracking 不 stale |
-| R4 | FormatMemDebugProfile 含全部开关键 |
-| R5 | check_usability_docs + guardrails 锁上述 |
+| S1 | `TryReallocMemOf(nil,nil,0,N,P)` → True + non-nil；可 FreeMem |
+| S2 | 非法对齐 raise 消息含 `Type.Method:` stem |
+| S3 | guardrails + check_usability_docs 锁 S1/S2 |
 
 ---
 
 ## 4. 回滚
 
-关 env；移除助手调用；FormatMemStats 字段追加可兼容忽略。
+恢复 `TryReallocMemOf` 早退；对齐消息回裸字符串；删对应测试。
 
 ## 5. 非目标
 
-双轨合并、默认安全税、EOutOfMemory 继承树大迁移、门面大规模删 Tier-2。
+双轨合并、默认安全税、EOutOfMemory 继承树大迁移、门面大规模删 Tier-2、全库 pool raise 格式扫改。
