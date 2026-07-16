@@ -22,6 +22,24 @@ Facade (nextpas.core.http) — single uses entry point
 Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`
 as the default client/server version.
 
+## Public Surface Map (by scenario)
+
+Use a single `uses nextpas.core.http` entry; pick APIs by job:
+
+| Scenario | Start here |
+| --- | --- |
+| Client GET/POST JSON | `NewHttpClient`, `Get` / `PostJson`, `HttpReadResponseBodyString` |
+| Fluent request | `THttpRequestBuilder` → `Send` |
+| Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
+| Auth / retry / jar / proxy | `WithBearerAuth`, `WithRetry`, `WithCookieJar`, `WithProxyUrl` |
+| Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, options `ConnectTimeout` |
+| Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
+| Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
+| Middleware | `CorsMiddleware`, `RecoveryMiddleware`, `Chain`, … |
+| WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` |
+| Static files | `ServeFile` / `ServeDir` |
+| Form parse | `ParseUrlEncodedForm` / `ParseMultipartFormData` |
+
 ## Quick Start
 
 Run the examples instead of copy-pasting a partial snippet:
@@ -136,11 +154,17 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   Only **idempotent-safe** requests retry: GET/HEAD/OPTIONS/TRACE or
   `Idempotency-Key` / `X-Idempotency-Key` (`HttpIsRetrySafeRequest`). Body is
   rewound via `IStream` when present.
-- Cancel: `IHttpCancelToken` (cooperative) → `hekCanceled` at Send / redirect /
-  retry / RoundTrip checkpoints. Timeouts remain `hekTimeout`
-  (`WithTimeout` / client options).
-- `WithCookieJar(Jar)` — optional client cookie store (RFC 6265 minimal).
-- `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy (`http://host:port`).
+- Cancel: `IHttpCancelToken` is **cooperative** (not OS interrupt) →
+  `hekCanceled` at Send / redirect / retry / H1 RoundTrip checkpoints
+  (entry, pre-dial, post-write). A blocked socket read may lag until the
+  next checkpoint. Timeouts remain `hekTimeout` (`WithTimeout` / options).
+- Timeouts: `THttpClientOptions.Timeout` = request read/write deadline after
+  the socket is up; `ConnectTimeout` = post-dial first-write budget on new
+  sockets (`0` = same as Timeout). OS `connect()` itself is not yet dial-timeouted.
+- `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction on store/use.
+- `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
+  (`http://host:port`); no HTTPS CONNECT in this slice.
+- `PostMultipart(Url, Fields, Files)` — multipart/form-data convenience POST.
 - `IHttpClient.Send` owns any close-capable request body for the duration of the
   request. After the final round trip or failure, `IReadCloser` / `ICloser` /
   `IStream` request bodies are closed.

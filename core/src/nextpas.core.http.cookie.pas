@@ -98,6 +98,10 @@ implementation
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.time,
+  nextpas.core.time.datetime,
+  nextpas.core.time.offsetdatetime,
+  nextpas.core.time.timezone,
   nextpas.core.sync;
 
 const
@@ -444,6 +448,8 @@ type
     Path: string;
     Secure: Boolean;
     HostOnly: Boolean;
+    { Unix seconds expiry; -1 = session (no expiry eviction). }
+    ExpiresAt: Int64;
   end;
 
   THttpCookieJar = class(TInterfacedObject, IHttpCookieJar)
@@ -454,6 +460,7 @@ type
       const AHostOnly: Boolean): Boolean;
     function PathMatches(const ACookiePath, ARequestPath: string): Boolean;
     procedure Upsert(const AItem: TStoredCookie);
+    procedure EvictExpiredLocked(const ANowUnix: Int64);
   public
     constructor Create;
     destructor Destroy; override;
@@ -488,15 +495,129 @@ begin
     Result := System.Copy(S, LStart, LEnd - LStart + 1);
 end;
 
+function CookieNowUnix: Int64;
+begin
+  Result := DateTimeToUnix(DateTimeUtcNow);
+end;
+
+function ParseInt64Digits(const AStr: string; out AValue: Int64): Boolean;
+var
+  LI: SizeInt;
+  LNeg: Boolean;
+  LDigit: Int64;
+begin
+  Result := False;
+  AValue := 0;
+  if AStr = '' then
+    Exit;
+  LI := 1;
+  LNeg := False;
+  if AStr[1] = '-' then
+  begin
+    LNeg := True;
+    LI := 2;
+    if Length(AStr) < 2 then
+      Exit;
+  end;
+  while LI <= Length(AStr) do
+  begin
+    if (AStr[LI] < '0') or (AStr[LI] > '9') then
+      Exit;
+    LDigit := Ord(AStr[LI]) - Ord('0');
+    if AValue > (High(Int64) - LDigit) div 10 then
+      Exit;
+    AValue := AValue * 10 + LDigit;
+    Inc(LI);
+  end;
+  if LNeg then
+    AValue := -AValue;
+  Result := True;
+end;
+
+function ParseCookieHttpDate(const ADate: string): Int64;
+{ Accepts IMF-fix preferred form: "Sun, 06 Nov 1994 08:49:37 GMT". Returns 0 on fail. }
+const
+  MONTH_NAMES: array[1..12] of string = (
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec');
+var
+  LLen, LPos, LMonth, LI: Integer;
+  LDay, LYear, LHour, LMinute, LSecond: Integer;
+  LMonthStr: string;
+  LDT: TOffsetDateTime;
+begin
+  Result := 0;
+  LLen := Length(ADate);
+  if LLen < 29 then
+    Exit;
+  { IMF-fix preferred: "Sun, 06 Nov 1994 08:49:37 GMT"
+    Fixed layout after weekday: SP DD SP Mon SP YYYY SP HH:MM:SS SP GMT }
+  LPos := 6; { first digit of DD }
+  if (LPos + 1 > LLen) then
+    Exit;
+  if (ADate[LPos] < '0') or (ADate[LPos] > '9') or
+     (ADate[LPos + 1] < '0') or (ADate[LPos + 1] > '9') then
+    Exit;
+  LDay := (Ord(ADate[LPos]) - Ord('0')) * 10 +
+    (Ord(ADate[LPos + 1]) - Ord('0'));
+  Inc(LPos, 3); { skip DD and following SP -> Mon }
+  if (LPos + 2 > LLen) then
+    Exit;
+  LMonthStr := System.Copy(ADate, LPos, 3);
+  LMonth := 0;
+  for LI := 1 to 12 do
+    if LMonthStr = MONTH_NAMES[LI] then
+    begin
+      LMonth := LI;
+      Break;
+    end;
+  if LMonth = 0 then
+    Exit;
+  Inc(LPos, 4); { Mon + SP -> YYYY }
+  if (LPos + 3 > LLen) then
+    Exit;
+  LYear := (Ord(ADate[LPos]) - Ord('0')) * 1000
+    + (Ord(ADate[LPos + 1]) - Ord('0')) * 100
+    + (Ord(ADate[LPos + 2]) - Ord('0')) * 10
+    + (Ord(ADate[LPos + 3]) - Ord('0'));
+  Inc(LPos, 5); { YYYY + SP -> HH }
+  if (LPos + 7 > LLen) then
+    Exit;
+  LHour := (Ord(ADate[LPos]) - Ord('0')) * 10 +
+    (Ord(ADate[LPos + 1]) - Ord('0'));
+  LMinute := (Ord(ADate[LPos + 3]) - Ord('0')) * 10 +
+    (Ord(ADate[LPos + 4]) - Ord('0'));
+  LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 +
+    (Ord(ADate[LPos + 7]) - Ord('0'));
+  try
+    LDT := TOffsetDateTime.Create(
+      TNaiveDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond),
+      TUtcOffset.UTC);
+    Result := LDT.ToUnixSeconds;
+  except
+    Result := 0;
+  end;
+end;
+
 function ParseSetCookieLine(const AHeader: string; const ARequestUrl: TUrl;
   out AItem: TStoredCookie): Boolean;
 var
   LPos, LStart, LLen, LEq: SizeInt;
   LPart, LAttr, LVal: string;
   LFirst: Boolean;
+  LMaxAge: Int64;
+  LExpiresAt: Int64;
+  LHasMaxAge: Boolean;
+  LHasExpires: Boolean;
+  LNow: Int64;
 begin
   Result := False;
   AItem := Default(TStoredCookie);
+  AItem.ExpiresAt := -1;
+  LHasMaxAge := False;
+  LHasExpires := False;
+  LExpiresAt := 0;
+  LMaxAge := 0;
   LLen := Length(AHeader);
   if LLen = 0 then
     Exit;
@@ -544,7 +665,18 @@ begin
           else if LAttr = 'path' then
             AItem.Path := LVal
           else if LAttr = 'secure' then
-            AItem.Secure := True;
+            AItem.Secure := True
+          else if LAttr = 'max-age' then
+          begin
+            if ParseInt64Digits(LVal, LMaxAge) then
+              LHasMaxAge := True;
+          end
+          else if LAttr = 'expires' then
+          begin
+            LExpiresAt := ParseCookieHttpDate(LVal);
+            if LExpiresAt > 0 then
+              LHasExpires := True;
+          end;
         end;
       end;
       if LPos > LLen then
@@ -580,6 +712,17 @@ begin
     else
       AItem.Path := System.Copy(LPart, 1, LEq - 1);
   end;
+  { RFC 6265: Max-Age preferred over Expires. Max-Age <= 0 → expire immediately. }
+  LNow := CookieNowUnix;
+  if LHasMaxAge then
+  begin
+    if LMaxAge <= 0 then
+      AItem.ExpiresAt := LNow - 1
+    else
+      AItem.ExpiresAt := LNow + LMaxAge;
+  end
+  else if LHasExpires then
+    AItem.ExpiresAt := LExpiresAt;
   Result := True;
 end;
 
@@ -636,10 +779,43 @@ begin
   Result := False;
 end;
 
+procedure THttpCookieJar.EvictExpiredLocked(const ANowUnix: Int64);
+var
+  LI, LWrite: SizeInt;
+begin
+  LWrite := 0;
+  for LI := 0 to High(FItems) do
+  begin
+    if (FItems[LI].ExpiresAt >= 0) and (FItems[LI].ExpiresAt <= ANowUnix) then
+      Continue;
+    if LWrite <> LI then
+      FItems[LWrite] := FItems[LI];
+    Inc(LWrite);
+  end;
+  if LWrite <> Length(FItems) then
+    SetLength(FItems, LWrite);
+end;
+
 procedure THttpCookieJar.Upsert(const AItem: TStoredCookie);
 var
   LI: SizeInt;
+  LNow: Int64;
 begin
+  LNow := CookieNowUnix;
+  { Expired / Max-Age=0 cookies delete any existing match. }
+  if (AItem.ExpiresAt >= 0) and (AItem.ExpiresAt <= LNow) then
+  begin
+    for LI := High(FItems) downto 0 do
+      if (FItems[LI].Name = AItem.Name) and
+         (LowerAscii(FItems[LI].Domain) = LowerAscii(AItem.Domain)) and
+         (FItems[LI].Path = AItem.Path) then
+      begin
+        if LI < High(FItems) then
+          FItems[LI] := FItems[High(FItems)];
+        SetLength(FItems, Length(FItems) - 1);
+      end;
+    Exit;
+  end;
   for LI := 0 to High(FItems) do
     if (FItems[LI].Name = AItem.Name) and
        (LowerAscii(FItems[LI].Domain) = LowerAscii(AItem.Domain)) and
@@ -666,6 +842,7 @@ begin
     Exit;
   FLock.Acquire;
   try
+    EvictExpiredLocked(CookieNowUnix);
     for LI := Low(LValues) to High(LValues) do
       if ParseSetCookieLine(LValues[LI], AUrl, LItem) then
         Upsert(LItem);
@@ -680,6 +857,7 @@ var
   LHost, LPath, LScheme: string;
   LSecure: Boolean;
   LFirst: Boolean;
+  LNow: Int64;
 begin
   Result := '';
   LHost := AUrl.Host;
@@ -689,8 +867,10 @@ begin
   LScheme := LowerAscii(AUrl.Scheme);
   LSecure := LScheme = 'https';
   LFirst := True;
+  LNow := CookieNowUnix;
   FLock.Acquire;
   try
+    EvictExpiredLocked(LNow);
     for LI := 0 to High(FItems) do
     begin
       if FItems[LI].Secure and (not LSecure) then

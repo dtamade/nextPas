@@ -614,6 +614,7 @@ function HttpDeleteJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
+function NewMultipartBoundary: string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string = ''): string; inline;
 
@@ -1560,6 +1561,11 @@ end;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string;
 begin
   Result := nextpas.core.http.form.EncodeUrlEncodedForm(AFields);
+end;
+
+function NewMultipartBoundary: string;
+begin
+  Result := nextpas.core.http.form.NewMultipartBoundary;
 end;
 
 function EncodeMultipartFormData(const AFields: TFormFieldArray;

@@ -242,7 +242,7 @@ type
     function BasicAuth(const AUsername, APassword: string): THttpRequestBuilder;
     function BearerAuth(const AToken: string): THttpRequestBuilder;
     function ContentType(const AContentType: string): THttpRequestBuilder;
-    { Known-length for Body(IReader). Required before Build when body is a reader. }
+    { Known-length for Body(IReader). Optional: omit for H1 chunked (CL = -1). }
     function ContentLength(const ALen: Int64): THttpRequestBuilder;
     function Body(const ABody: string): THttpRequestBuilder; overload;
     function Body(const ABody: TBytes): THttpRequestBuilder; overload;

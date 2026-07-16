@@ -103,7 +103,11 @@ type
   end;
 
   THttpClientOptions = record
+    { Request IO deadline (ms) for read/write after the socket is up. 0 = none. }
     Timeout: Int64;
+    { New-dial write budget (ms). 0 = same as Timeout. Does not yet interrupt a
+      blocking OS connect(); it bounds post-dial write on newly opened sockets. }
+    ConnectTimeout: Int64;
     MaxRedirects: Int32;
     MaxPoolSize: Int32;
     FollowRedirects: Boolean;
@@ -114,6 +118,7 @@ type
     ProxyUrl: string;
     class function Default: THttpClientOptions; static;
     function WithTimeout(const ATimeoutMs: Int64): THttpClientOptions;
+    function WithConnectTimeout(const ATimeoutMs: Int64): THttpClientOptions;
     function WithMaxRedirects(const AMaxRedirects: Int32): THttpClientOptions;
     function WithFollowRedirects(const AFollow: Boolean): THttpClientOptions;
     function WithMaxPoolSize(const AMaxPoolSize: Int32): THttpClientOptions;
@@ -121,6 +126,7 @@ type
     function WithProxyUrl(const AProxyUrl: string): THttpClientOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
+    function EffectiveConnectTimeout: Int64;
   end;
 
   THttpServerOptions = record
@@ -888,6 +894,7 @@ end;
 class function THttpClientOptions.Default: THttpClientOptions;
 begin
   Result.Timeout := 30000;
+  Result.ConnectTimeout := 0;
   Result.MaxRedirects := 10;
   Result.MaxPoolSize := 64;
   Result.FollowRedirects := True;
@@ -901,6 +908,21 @@ function THttpClientOptions.WithTimeout(const ATimeoutMs: Int64): THttpClientOpt
 begin
   Result := Self;
   Result.Timeout := ATimeoutMs;
+end;
+
+function THttpClientOptions.WithConnectTimeout(
+  const ATimeoutMs: Int64): THttpClientOptions;
+begin
+  Result := Self;
+  Result.ConnectTimeout := ATimeoutMs;
+end;
+
+function THttpClientOptions.EffectiveConnectTimeout: Int64;
+begin
+  if ConnectTimeout > 0 then
+    Result := ConnectTimeout
+  else
+    Result := Timeout;
 end;
 
 function THttpClientOptions.WithMaxRedirects(const AMaxRedirects: Int32): THttpClientOptions;

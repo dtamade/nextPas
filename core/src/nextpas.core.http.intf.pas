@@ -18,6 +18,7 @@ uses
 type
   TStringArray = nextpas.core.base.TStringArray;
   TFormFieldArray = nextpas.core.http.form.base.TFormFieldArray;
+  THttpFileArray = nextpas.core.http.form.base.THttpFileArray;
   TJsonValue = nextpas.core.json.value.TJsonValue;
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
@@ -208,6 +209,9 @@ type
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    {** multipart/form-data POST (fields + optional files). Boundary is generated. }
+    function PostMultipart(const AUrl: string; const AFields: TFormFieldArray;
+      const AFiles: THttpFileArray): IHttpResponse;
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
@@ -215,7 +219,8 @@ type
     {** Send a streaming request whose body is NOT buffered into memory.
        The body reader is passed directly to the transport. Send takes ownership
        of the body and closes it after the round trip (success or error).
-       Content-Length must be known and declared. }
+       AContentLength >= 0 publishes Content-Length; AContentLength < 0 selects
+       H1 Transfer-Encoding: chunked (H2 rejects unknown-length bodies). }
     function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
       const AContentType: string; const ABody: IReader;
       const AContentLength: Int64): IHttpResponse;
@@ -233,6 +238,9 @@ type
     {** Optional cookie jar decorator. Injects Cookie before Send and absorbs
        Set-Cookie after a successful response. }
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
+    {** Rebuild transport with plain HTTP forward proxy (http://host:port).
+       Decorators re-stack around the new base client. }
+    function WithProxyUrl(const AProxyUrl: string): IHttpClient;
   end;
 
   { Transport layer — protocol implementations register these }

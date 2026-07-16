@@ -32,6 +32,8 @@ function TryParseMultipartFormData(const ABody, ABoundary: string;
 { Encode multipart/form-data body. ABoundary is generated if empty. }
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string = ''): string;
+{ Generate a fresh multipart boundary token (safe for Content-Type). }
+function NewMultipartBoundary: string;
 
 implementation
 
@@ -399,7 +401,7 @@ begin
 end;
 
 { Generate a random boundary string }
-function GenerateBoundary: string;
+function NewMultipartBoundary: string;
 const
   CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 var
@@ -408,6 +410,11 @@ begin
   SetLength(Result, 36);
   for LI := 1 to 36 do
     Result[LI] := CHARS[1 + Random(Length(CHARS))];
+end;
+
+function GenerateBoundary: string; inline;
+begin
+  Result := NewMultipartBoundary;
 end;
 
 { Validate that a string contains no CR/LF/NUL characters (injection prevention) }

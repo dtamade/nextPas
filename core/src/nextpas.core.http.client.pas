@@ -47,6 +47,8 @@ type
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    function PostMultipart(const AUrl: string; const AFields: TFormFieldArray;
+      const AFiles: THttpFileArray): IHttpResponse;
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
@@ -62,12 +64,15 @@ type
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
+    function WithProxyUrl(const AProxyUrl: string): IHttpClient;
   end;
 
   { Decorator base: all convenience methods go through virtual Send. }
   THttpClientForwarder = class(TInterfacedObject, IHttpClient)
   protected
     FInner: IHttpClient;
+    { Rebuild this decorator around a new base (used by WithProxyUrl). }
+    function RebindInner(const AInner: IHttpClient): IHttpClient; virtual;
   public
     constructor Create(const AInner: IHttpClient);
     function Send(const AReq: IHttpRequest): IHttpResponse; virtual;
@@ -85,6 +90,8 @@ type
     function Head(const AUrl: string): IHttpResponse; virtual;
     function Options(const AUrl: string): IHttpResponse; virtual;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse; virtual;
+    function PostMultipart(const AUrl: string; const AFields: TFormFieldArray;
+      const AFiles: THttpFileArray): IHttpResponse; virtual;
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
@@ -100,11 +107,14 @@ type
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient; virtual;
     function WithRetry(const AMaxRetries: Int32): IHttpClient; virtual;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient; virtual;
+    function WithProxyUrl(const AProxyUrl: string): IHttpClient; virtual;
   end;
 
   TCookieJarClient = class(THttpClientForwarder)
   private
     FJar: IHttpCookieJar;
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
   public
     constructor Create(const AInner: IHttpClient; const AJar: IHttpCookieJar);
     function Send(const AReq: IHttpRequest): IHttpResponse; override;
@@ -113,6 +123,8 @@ type
   TAuthClient = class(THttpClientForwarder)
   private
     FAuthHeader: string;
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
   public
     constructor Create(const AInner: IHttpClient; const AAuthHeader: string);
     function Send(const AReq: IHttpRequest): IHttpResponse; override;
@@ -122,6 +134,8 @@ type
   private
     FName: string;
     FValue: string;
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
   public
     constructor Create(const AInner: IHttpClient; const AName, AValue: string);
     function Send(const AReq: IHttpRequest): IHttpResponse; override;
@@ -131,6 +145,8 @@ type
   private
     FRequestOptions: THttpRequestOptions;
     procedure ApplyOptions(const AReq: IHttpRequest);
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
   public
     constructor Create(const AInner: IHttpClient;
       const ARequestOptions: THttpRequestOptions);
@@ -140,6 +156,8 @@ type
   TRetryClient = class(THttpClientForwarder)
   private
     FMaxRetries: Int32;
+  protected
+    function RebindInner(const AInner: IHttpClient): IHttpClient; override;
   public
     constructor Create(const AInner: IHttpClient; const AMaxRetries: Int32);
     function Send(const AReq: IHttpRequest): IHttpResponse; override;
@@ -234,6 +252,9 @@ procedure ValidateClientOptions(const AOptions: THttpClientOptions);
 begin
   if AOptions.Timeout < 0 then
     raise EHttpError.Create(hekArgument, 'HTTP client timeout must not be negative');
+  if AOptions.ConnectTimeout < 0 then
+    raise EHttpError.Create(hekArgument,
+      'HTTP client connect timeout must not be negative');
   if AOptions.MaxRedirects < 0 then
     raise EHttpError.Create(hekArgument, 'HTTP client max redirects must not be negative');
 end;
@@ -930,6 +951,17 @@ begin
   Result := Post(AUrl, 'application/x-www-form-urlencoded', LBody);
 end;
 
+function THttpClient.PostMultipart(const AUrl: string;
+  const AFields: TFormFieldArray; const AFiles: THttpFileArray): IHttpResponse;
+var
+  LBoundary, LBody: string;
+begin
+  LBoundary := nextpas.core.http.form.NewMultipartBoundary;
+  LBody := nextpas.core.http.form.EncodeMultipartFormData(AFields, AFiles,
+    LBoundary);
+  Result := Post(AUrl, 'multipart/form-data; boundary=' + LBoundary, LBody);
+end;
+
 function THttpClient.PostJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
@@ -1015,6 +1047,11 @@ begin
   Result := TCookieJarClient.Create(Self, AJar);
 end;
 
+function THttpClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
+begin
+  Result := NewHttpClient(FOptions.WithProxyUrl(AProxyUrl));
+end;
+
 { THttpClientForwarder }
 
 constructor THttpClientForwarder.Create(const AInner: IHttpClient);
@@ -1023,6 +1060,11 @@ begin
   if AInner = nil then
     raise EHttpError.Create(hekArgument, 'HTTP client decorator inner is nil');
   FInner := AInner;
+end;
+
+function THttpClientForwarder.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := AInner;
 end;
 
 function THttpClientForwarder.Send(const AReq: IHttpRequest): IHttpResponse;
@@ -1132,6 +1174,17 @@ begin
   Result := Post(AUrl, 'application/x-www-form-urlencoded', LBody);
 end;
 
+function THttpClientForwarder.PostMultipart(const AUrl: string;
+  const AFields: TFormFieldArray; const AFiles: THttpFileArray): IHttpResponse;
+var
+  LBoundary, LBody: string;
+begin
+  LBoundary := nextpas.core.http.form.NewMultipartBoundary;
+  LBody := nextpas.core.http.form.EncodeMultipartFormData(AFields, AFiles,
+    LBoundary);
+  Result := Post(AUrl, 'multipart/form-data; boundary=' + LBoundary, LBody);
+end;
+
 function THttpClientForwarder.PostJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
@@ -1220,6 +1273,11 @@ begin
   Result := TCookieJarClient.Create(Self, AJar);
 end;
 
+function THttpClientForwarder.WithProxyUrl(const AProxyUrl: string): IHttpClient;
+begin
+  Result := RebindInner(FInner.WithProxyUrl(AProxyUrl));
+end;
+
 { TCookieJarClient }
 
 constructor TCookieJarClient.Create(const AInner: IHttpClient;
@@ -1227,6 +1285,11 @@ constructor TCookieJarClient.Create(const AInner: IHttpClient;
 begin
   inherited Create(AInner);
   FJar := AJar;
+end;
+
+function TCookieJarClient.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := TCookieJarClient.Create(AInner, FJar);
 end;
 
 function TCookieJarClient.Send(const AReq: IHttpRequest): IHttpResponse;
@@ -1257,6 +1320,11 @@ begin
   FAuthHeader := AAuthHeader;
 end;
 
+function TAuthClient.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := TAuthClient.Create(AInner, FAuthHeader);
+end;
+
 function TAuthClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
   if (AReq <> nil) and (AReq.Headers <> nil) then
@@ -1274,6 +1342,11 @@ begin
   FValue := AValue;
 end;
 
+function THeaderClient.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := THeaderClient.Create(AInner, FName, FValue);
+end;
+
 function THeaderClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
   if (AReq <> nil) and (AReq.Headers <> nil) then
@@ -1288,6 +1361,12 @@ constructor TOptionsOverrideClient.Create(const AInner: IHttpClient;
 begin
   inherited Create(AInner);
   FRequestOptions := ARequestOptions;
+end;
+
+function TOptionsOverrideClient.RebindInner(
+  const AInner: IHttpClient): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(AInner, FRequestOptions);
 end;
 
 procedure TOptionsOverrideClient.ApplyOptions(const AReq: IHttpRequest);
@@ -1336,6 +1415,11 @@ begin
   if AMaxRetries < 0 then
     raise EHttpError.Create(hekArgument, 'Retry count must not be negative');
   FMaxRetries := AMaxRetries;
+end;
+
+function TRetryClient.RebindInner(const AInner: IHttpClient): IHttpClient;
+begin
+  Result := TRetryClient.Create(AInner, FMaxRetries);
 end;
 
 function CloneRetryRequest(const AReq: IHttpRequest;

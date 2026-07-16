@@ -403,6 +403,8 @@ type
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    function PostMultipart(const AUrl: string; const AFields: TFormFieldArray;
+      const AFiles: THttpFileArray): IHttpResponse;
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
@@ -418,6 +420,7 @@ type
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
+    function WithProxyUrl(const AProxyUrl: string): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -2033,6 +2036,12 @@ begin
   Result := FResponse;
 end;
 
+function TDownloadClient.PostMultipart(const AUrl: string;
+  const AFields: TFormFieldArray; const AFiles: THttpFileArray): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
 function TDownloadClient.PostJson(const AUrl: string;
   const ABody: TJsonValue): IHttpResponse;
 begin
@@ -2101,6 +2110,11 @@ begin
 end;
 
 function TDownloadClient.WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
 begin
   Result := Self;
 end;
@@ -2789,8 +2803,9 @@ begin
     'h1 client pooled retry reconnect path is present');
   if LReconnectPos > 0 then
   begin
-    { Window covers timeout-wrap branch plus bare re-raise. }
-    LReconnectBlock := Copy(LSource, LReconnectPos, 900);
+    { Window covers ConnectTimeout re-arm, cancel checkpoints, timeout-wrap,
+      and bare re-raise on the fresh-connection path. }
+    LReconnectBlock := Copy(LSource, LReconnectPos, 1400);
     Check((Pos('LConn := TcpConnect(LConnectHost, LConnectPort);', LReconnectBlock) > 0) or
           (Pos('LConn := TcpConnect(LHost, LPort);', LReconnectBlock) > 0),
       'h1 client pooled retry opens a fresh connection after body rewind');
@@ -8707,6 +8722,157 @@ begin
   end;
 end;
 
+procedure TestClientWithProxyUrlFluentAbsoluteForm;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReqLine: string;
+  LLineEnd: SizeInt;
+begin
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 2'#13#10 +
+                   #13#10 +
+                   'ok';
+  GRawResponse2 := '';
+  GRawRequest1 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+  try
+    LClient := NewHttpClient.WithProxyUrl(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)));
+    LResp := LClient.Get('http://example.test/via-fluent');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'fluent proxy returns 200');
+    LLineEnd := Pos(#13#10, GRawRequest1);
+    Check(LLineEnd > 0, 'fluent proxy received request-line');
+    LReqLine := System.Copy(GRawRequest1, 1, LLineEnd - 1);
+    Check(Pos('GET http://example.test/via-fluent HTTP/1.1', LReqLine) > 0,
+      'fluent WithProxyUrl uses absolute-form');
+    HttpReleaseResponseBody(LResp);
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawRequest1 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
+procedure TestClientCookieJarExpiresMaxAge;
+var
+  LJar: IHttpCookieJar;
+  LHeaders: IHttpHeaders;
+  LUrl: TUrl;
+  LCookie: string;
+begin
+  LJar := NewHttpCookieJar;
+  LUrl := TUrl.Parse('http://example.test/path');
+  LHeaders := NewHeaders;
+  LHeaders.Add('set-cookie', 'gone=1; Max-Age=0; Path=/');
+  LJar.StoreFromResponse(LUrl, LHeaders);
+  LCookie := LJar.CookieHeaderFor(LUrl);
+  CheckEqual('', LCookie, 'Max-Age=0 cookie is not stored/injected');
+
+  LHeaders := NewHeaders;
+  LHeaders.Add('set-cookie', 'live=yes; Max-Age=3600; Path=/');
+  LJar.StoreFromResponse(LUrl, LHeaders);
+  LCookie := LJar.CookieHeaderFor(LUrl);
+  Check(Pos('live=yes', LCookie) > 0, 'positive Max-Age cookie is stored');
+
+  LJar := NewHttpCookieJar;
+  LHeaders := NewHeaders;
+  LHeaders.Add('set-cookie',
+    'stale=1; Expires=Sun, 06 Nov 1994 08:49:37 GMT; Path=/');
+  LJar.StoreFromResponse(LUrl, LHeaders);
+  LCookie := LJar.CookieHeaderFor(LUrl);
+  CheckEqual('', LCookie, 'past Expires cookie is not stored/injected');
+end;
+
+procedure TestClientPostMultipart;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LFields: TFormFieldArray;
+  LFiles: THttpFileArray;
+  LGotContentType: string;
+  LGotBody: string;
+begin
+  LGotContentType := '';
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmPost, '/up', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..4095] of AnsiChar;
+    LN: SizeUInt;
+    LChunk: string;
+  begin
+    LGotContentType := AReq.Headers.Get('content-type');
+    LGotBody := '';
+    if AReq.Body <> nil then
+    begin
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeOf(LBuf));
+        if LN > 0 then
+        begin
+          SetLength(LChunk, LN);
+          Move(LBuf[0], LChunk[1], LN);
+          LGotBody := LGotBody + LChunk;
+        end;
+      until LN = 0;
+    end;
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    SetLength(LFields, 1);
+    LFields[0].Name := 'title';
+    LFields[0].Value := 'hello';
+    SetLength(LFiles, 1);
+    LFiles[0].FieldName := 'file';
+    LFiles[0].FileName := 'a.txt';
+    LFiles[0].ContentType := 'text/plain';
+    LFiles[0].Content := 'xyz';
+    LClient := NewHttpClient;
+    LResp := LClient.PostMultipart(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/up', LFields, LFiles);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'multipart status 200');
+    Check(Pos('multipart/form-data; boundary=', LGotContentType) = 1,
+      'multipart content-type with boundary');
+    Check(Pos('name="title"', LGotBody) > 0, 'multipart body has field');
+    Check(Pos('filename="a.txt"', LGotBody) > 0, 'multipart body has file');
+    Check(Pos('xyz', LGotBody) > 0, 'multipart body has file content');
+    HttpReleaseResponseBody(LResp);
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientConnectTimeoutOptionDefault;
+var
+  LOpts: THttpClientOptions;
+begin
+  LOpts := THttpClientOptions.Default;
+  CheckEqual(Int64(0), LOpts.ConnectTimeout, 'default ConnectTimeout is 0');
+  CheckEqual(LOpts.Timeout, LOpts.EffectiveConnectTimeout,
+    'EffectiveConnectTimeout falls back to Timeout');
+  LOpts := LOpts.WithConnectTimeout(1500);
+  CheckEqual(Int64(1500), LOpts.ConnectTimeout, 'WithConnectTimeout sets field');
+  CheckEqual(Int64(1500), LOpts.EffectiveConnectTimeout,
+    'EffectiveConnectTimeout prefers ConnectTimeout');
+end;
+
 { HttpPostString/PutString/PatchString/DeleteString tests }
 
 procedure TestHttpPostStringSuccess;
@@ -9266,7 +9432,13 @@ begin
   T.Test('CancelToken allows send when not canceled', @TestCancelTokenNotCanceledAllowsSend);
   T.Test('Client sends H1 chunked request body', @TestClientSendsChunkedRequestBody);
   T.Test('Client cookie jar injects and stores', @TestClientCookieJarInjectsAndStores);
+  T.Test('Client cookie jar Max-Age=0 expires', @TestClientCookieJarExpiresMaxAge);
   T.Test('Client HTTP proxy absolute-form', @TestClientHttpProxyAbsoluteForm);
+  T.Test('Client WithProxyUrl fluent absolute-form',
+    @TestClientWithProxyUrlFluentAbsoluteForm);
+  T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);
+  T.Test('Client ConnectTimeout option defaults',
+    @TestClientConnectTimeoutOptionDefault);
   T.Test('PostString returns body on 200', @TestHttpPostStringSuccess);
   T.Test('PostString raises on 404', @TestHttpPostStringRaisesOn404);
   T.Test('PutString returns body on 200', @TestHttpPutStringSuccess);

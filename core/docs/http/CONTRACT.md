@@ -93,10 +93,21 @@ end;
   {GET, HEAD, OPTIONS, TRACE} **或** 请求带 `Idempotency-Key` /
   `X-Idempotency-Key`。非幂等（如裸 POST）即使 5xx/timeout 也只尝试一次。
   重试前若 body 可回放（`IStream`）则 rewind；非空且不可回放 body 不重试。
-- 请求取消：`IHttpCancelToken`（cooperative）+ `THttpRequestOptions` /
-  builder / client 挂钩。检查点：Send 入口、redirect 前、retry 退避前、
-  transport RoundTrip 边界。取消抛 `EHttpError(hekCanceled)`。
+- 请求取消：`IHttpCancelToken`（**协作检查点**，非 OS 级硬中断）+
+  `THttpRequestOptions` / builder / client 挂钩。
+  **检查点清单**：
+  1. `IHttpClient.Send` 入口
+  2. redirect 跟进前
+  3. `WithRetry` 退避前后
+  4. H1 `RoundTrip`：入口、新 dial 前、request write 后 / response read 前
+  5. pool reconnect 重写前
+  取消抛 `EHttpError(hekCanceled)`。卡在底层阻塞 `Read` 中时可能滞后，
+  直到该 read 返回并到达下一检查点。
   超时仍为 `hekTimeout`（`WithTimeout` / client options）。
+- Client 超时拆分（`THttpClientOptions`）：
+  - `Timeout`：socket 就绪后的 request 读/写 deadline（ms；0=无限）
+  - `ConnectTimeout`：新 dial 后 **首写** budget（ms；0=同 Timeout）。
+    **不**打断阻塞 OS `connect()`；全量 dial 超时待 net 层增强。
 
 ### 2.2.1 EHttpError.Kind
 
@@ -132,13 +143,19 @@ end;
 
 ### 2.2.3 CookieJar / Proxy（client 可用性）
 
-- `IHttpCookieJar`：按 RFC 6265 最小存储；`NewHttpCookieJar` + client
+- `IHttpCookieJar`：RFC 6265 最小存储；`NewHttpCookieJar` + client
   `WithCookieJar(Jar)` 在 Send 前注入 `Cookie`，在响应后吸收 `Set-Cookie`。
   默认 **无** jar（不隐式持久化）。
-- HTTP proxy：`THttpClientOptions.ProxyUrl` / `WithProxyUrl`（`http://host:port`
-  明文代理）。H1 对目标 `http://` 经 proxy 发 absolute-form request-line；
-  HTTPS CONNECT / 认证代理不在本 slice。net 层最小 hook：connect 到 proxy
-  主机而非目标主机（`TcpConnect` 目标由 transport 切换）。
+  **过期**：解析 `Max-Age`（优先）与 `Expires`（IMF-fix）；到期在
+  `StoreFromResponse` / `CookieHeaderFor` 时淘汰；`Max-Age<=0` 删除匹配项。
+  Session cookie（无过期属性）不自动淘汰。无磁盘持久化。
+- HTTP proxy：`THttpClientOptions.ProxyUrl` **或** fluent
+  `IHttpClient.WithProxyUrl`（重建 transport；装饰器 re-stack）。
+  明文 `http://host:port` 正向代理。H1 对目标 `http://` 经 proxy 发
+  absolute-form request-line；**HTTPS CONNECT / 认证代理不在本 slice**。
+  net 层最小 hook：connect 到 proxy 主机而非目标主机。
+- `PostMultipart(Url, Fields, Files)`：multipart/form-data 便捷 POST
+  （自动 boundary + `EncodeMultipartFormData`）。
 
 ### 2.2.4 IHttpResponse.Close
 

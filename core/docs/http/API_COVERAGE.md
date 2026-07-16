@@ -11,6 +11,16 @@
 
 ## 当前结论
 
+- **2026-07-16 wave-5 可用性抛光（现行真相）**：
+  - Request 工厂白名单：`NewRequest(Method, TUrl|string)` + `NewGetRequest`；
+    推荐 `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` **已删除**。
+  - H1 chunked request body：`Body(IReader)` 无 CL / `SendStreaming(..., CL<0)`。
+  - Cancel：协作检查点（非 OS 中断）；见 CONTRACT §2.2。
+  - CookieJar：Max-Age/Expires 淘汰；`WithCookieJar`。
+  - Proxy：`WithProxyUrl` fluent + options；仅明文 HTTP absolute-form。
+  - `ConnectTimeout` vs `Timeout` 字段已拆分（dial OS 超时仍待 net）。
+  - `PostMultipart` 便捷 API。
+  - H3：仅 seam；HTTPS CONNECT：未实现（诚实排除）。
 - 2026-07-16 控制面更新：
   - 主门禁 35 suites（见 `CONTRACT.md` / Makefile）；router/static/base/url/middleware 已纳入。
   - 推荐 request 构造入口：`THttpRequestBuilder`；大量 `NewRequest` overload 已 deprecated。

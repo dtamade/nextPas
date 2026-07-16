@@ -14,6 +14,8 @@ uses nextpas.core.io.intf, nextpas.core.net.intf, nextpas.core.net.server.intf, 
 type
   TH1ClientTransportOptions = record
     Timeout: Int64;
+    { Post-dial write budget for newly opened sockets; 0 = use Timeout. }
+    ConnectTimeout: Int64;
     MaxPoolSize: Int32;
     { Plain HTTP forward proxy URL (http://host:port). Empty = direct. }
     ProxyUrl: string;
@@ -2446,18 +2448,31 @@ begin
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LRequestDeadline := ClientRequestDeadline(LTimeoutMs);
   FPending := '';
+  if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+    HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
   LConn := PoolGet(LPoolHostKey, LConnectPort);
   LPooled := LConn <> nil;
   if not LPooled then
+  begin
     LConn := TcpConnect(LConnectHost, LConnectPort);
-
-  ApplyClientDeadline(LConn, LRequestDeadline);
+    { New dial: ConnectTimeout bounds post-dial write; request Timeout for read. }
+    if FOptions.ConnectTimeout > 0 then
+      ApplyClientDeadline(LConn, ClientRequestDeadline(FOptions.ConnectTimeout))
+    else
+      ApplyClientDeadline(LConn, LRequestDeadline);
+  end
+  else
+    ApplyClientDeadline(LConn, LRequestDeadline);
 
   LResponseStarted := False;
   LRequestWriteComplete := False;
   try
     WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm);
     LRequestWriteComplete := True;
+    if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+      HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
+    { Re-arm request deadline for response read (after connect-write budget). }
+    ApplyClientDeadline(LConn, LRequestDeadline);
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
       LResponseStarted);
   except
@@ -2477,12 +2492,21 @@ begin
           raise;
         end;
         RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
+        if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+          HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
         LConn := TcpConnect(LConnectHost, LConnectPort);
         try
-          ApplyClientDeadline(LConn, LRequestDeadline);
+          if FOptions.ConnectTimeout > 0 then
+            ApplyClientDeadline(LConn,
+              ClientRequestDeadline(FOptions.ConnectTimeout))
+          else
+            ApplyClientDeadline(LConn, LRequestDeadline);
           LRequestWriteComplete := False;
           WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm);
           LRequestWriteComplete := True;
+          if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+            HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
+          ApplyClientDeadline(LConn, LRequestDeadline);
           LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
             LResponseStarted);
         except
