@@ -1,6 +1,6 @@
 # nextpas.core.http API Coverage Matrix
 
-最近更新：2026-07-06
+最近更新：2026-07-16
 
 这份矩阵只记录公开 API 的覆盖状态，不替代测试输出。状态含义：
 
@@ -11,42 +11,28 @@
 
 ## 当前结论
 
-- 2026-07-06 API 对标结论：
+- 2026-07-16 控制面更新：
+  - 主门禁 34 suites（见 `CONTRACT.md` / Makefile）；router/static/base/url/middleware 已纳入。
+  - 推荐 request 构造入口：`THttpRequestBuilder`；大量 `NewRequest` overload 已 deprecated。
+  - 已落地且有 focused 证据：per-request options decorator、form/json helpers、
+    streaming body ownership（`SendStreaming`）、response charset auto helper、
+    WebSocket client（`ConnectWebSocket`）、RFC 7807 error helpers。
+  - H2 transport 已内建并注册；H3 仍仅 seam + blocked on QUIC。
+  - 下一优先不是继续扩 API，而是 keep-alive tail 契约决策与 H2 facade 端到端证明。
+- 2026-07-06 API 对标结论（历史，仍有效的部分保留）：
   - 已够稳：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` / `IsRunning`
     的生命周期形状足够清晰，保持同步 facade，不把 Go `net/http` 或 Rust
     async runtime 细节泄漏到 public contract；handler / middleware / router
     组合也已符合小接口、可组合、可测试的稳定面。
-  - 已够稳：static serving 与 WebSocket 仍停在 helper/facade 层更合适。当前
-    helper 已有 focused coverage；没有 range、streaming static file、WebSocket
-    extension negotiation 等稳定 contract 前，不扩大成独立 builder 或 service
-    family。
-  - 已够稳：H2/H3 public surface 仍只保留 registry / transport seam 和规划文档。
-    当前 H2 已完整落地为 production-transport-ready 实现，包括：
-    - Frame codec (RFC 9113): 10 种帧类型、13 种错误码、帧验证、padded payload 处理
-    - HPACK (RFC 7541): 编码器/解码器、动态表 MRU 缓存、Huffman 编解码
-    - Stream 状态机: 7 状态、HEADERS/CONTINUATION 组装、trailer 处理
-    - Server session: 客户端 preface 验证、SETTINGS 握手、帧分发、MaxConcurrentStreams 强制、GOAWAY 分裂 last-stream 跟踪
-    - Client transport: 同步 RoundTrip、连接池 (MaxPoolSize-governed)、stale 连接重试、server push 拒绝、PING/GOAWAY 处理
-    - TLS 集成: ALPN `h2` 协商、SNI、session factory seam
-    - 测试: 207 个 focused tests 跨 7 个 suites，所有覆盖缺口已关闭
-    H3 仍被 QUIC 模块阻塞。不创建伪 H3 public API，不用空实现制造”支持”假象。
-  - 继续补齐：landed internal registry 现在也有 future-version positive proof。
-    `test_http_registry` 直接锁住“调用方可注册 custom `hvHttp2` client transport /
-    custom `hvHttp3` server transport，并把它们设为 default version 供 concrete
-    constructor 消费”的 seam contract；`test_http_contract` 又进一步锁住
-    `nextpas.core.http.NewHttpClient(Options)` / `NewHttpServer(Handler, Options)`
-    这两条 facade consumer path 也会吃到同一套 future default 解析。以上都只证明
-    registry readiness，不声明任何内建 H2/H3 protocol implementation 已存在。
-  - 已补齐：client 侧核心 custom request construction gap 已实质收口。当前
-    `NewRequest` public surface 已覆盖 `TUrl` / URL string、headers-only、
-    nil-literal compatibility shim、`IReader + ContentLength`、Pascal `string`
-    body、`TBytes` body、显式 `Content-Type` body helper、以及“不先手造 headers”
-    的 convenience overload；调用方不必再直接构造 concrete `THttpRequest`，
-    就能清晰表达 method、headers、body 与 body length / ownership 形状。
-  - 暂不做：完整 fluent `IHttpRequestBuilder`、per-request timeout / redirect
-    override、form/json helper family、streaming/chunked request body ownership、
-    response charset decoding / sniffing 等扩展仍属于刻意未认领范围；这些能力
-    只有在 contract 足够清晰、能稳定公开时才继续扩面。
+  - 已够稳：static serving 与 WebSocket 仍停在 helper/facade 层更合适。static 已有
+    range/ETag/download focused coverage；WebSocket 已有 server+client focused coverage。
+    在没有 extension negotiation 等稳定 contract 前，不扩大成独立 service family。
+  - H2 已完整落地为 production-transport-ready 实现（frame/HPACK/stream/session/client/TLS），
+    约 207 focused tests。H3 仍被 QUIC 模块阻塞。不创建伪 H3 public API。
+  - Registry seam 有 future-version positive proof（custom hvHttp2/hvHttp3 factory）。
+  - client 侧 `NewRequest` overload 族与后续 builder/decorator/streaming 面均已有
+    focused/integration 证据；**不再**把 builder / form-json / streaming / charset
+    记为“刻意未认领”。后续扩面默认拒绝，除非有明确 contract 缺口。
   - 本轮补齐：新增 `NewRequest(Method, Url, Headers, Body, ContentLength)` public
     helper，经 `nextpas.core.http` facade 转发。nil headers 会创建空 header set；
     body/positive length 会写入 `content-length`；negative content length 会抛

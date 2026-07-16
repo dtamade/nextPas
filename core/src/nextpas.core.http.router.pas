@@ -161,9 +161,14 @@ begin
     FreeNode(FTrees[LM]);
     FTrees[LM] := nil;
     for LI := 0 to High(FRegexRoutes[LM]) do
+    begin
       FRegexRoutes[LM][LI].Regex.Free;
+      FRegexRoutes[LM][LI].Handler := nil;
+      FRegexRoutes[LM][LI].Pattern := '';
+    end;
     SetLength(FRegexRoutes[LM], 0);
   end;
+  SetLength(FMiddlewares, 0);
   inherited Destroy;
 end;
 

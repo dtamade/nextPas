@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 19 — streaming request body ownership API)
+> Last updated: 2026-07-16 (Slice 0 — control-plane truth + gate audit)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -17,15 +17,38 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 
 ## Current Position
 
-This lane is in **G2/G3/G4/G5 active hardening**:
+This lane is in **G2/G3/G4/G5 active hardening / completion closure**:
 
 - G0 control and module discipline already exist in `AGENTS.md`, `core/AGENTS.md`, and `core/docs/design-conventions.md`.
 - G1 stable H1 public surface is largely landed: server/client/router/headers/url/message/middleware/static/websocket all exist and already have substantial focused coverage.
 - G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
-- G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
+- G3 API and performance isolation is still active: client ergonomics landed builder/decorator/streaming/json/form surfaces; remaining work is surface audit and cost isolation, not unchecked expansion.
 - G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 207 focused tests. H2 is production-transport-ready, not just a foundation slice. All H2 test coverage gaps closed (client 55, frame 37, hpack 30). Session test hardening complete (55 tests, MaxConcurrentStreams check-order bug fixed).
-- G5 Static graduation complete: range requests (RFC 7233), ETag, Last-Modified, Cache-Control, Content-Disposition all implemented with 21 focused tests. WebSocket stable at 32 tests.
+- G5 Static graduation complete: range requests (RFC 7233), ETag, Last-Modified, Cache-Control, Content-Disposition all implemented with 21 focused tests. WebSocket server + client landed.
 - H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
+- Module gate: `core/tests/nextpas.core.http/Makefile` now runs **34** focused suites; side suites are benchmarks/examples/smoke/integration/tls_real.
+
+### Stage completion definition (non-H3)
+
+HTTP can be called stage-complete only when all of these hold:
+
+1. Public contracts and docs match source (`CONTRACT.md` / `ARCHITECTURE.md` / this tree).
+2. Main Makefile gate is green with heaptrc-sensitive suites at `0 unfreed` where claimed.
+3. H1 malformed/lifecycle/ownership open decisions are closed (especially keep-alive request-tail).
+4. H2 is reachable from facade options with live proof; design exclusions remain explicit.
+5. Runtime truth (threaded baseline + epoll poll path) is documented and not contradicted by gates.
+6. Performance claims stay scoped; no fake H3 surface.
+
+### Recent Fixes (2026-07-16)
+
+**Slice 0 (2026-07-16): Control-plane truth + gate audit**
+
+- Reconciled `CONTRACT.md` / `inbox.md` / this goal tree to current IHttp* surface, builder-first API, H2 status, and gate inventory.
+- Expanded main HTTP Makefile gate: 27 → 34 suites (`base`, `url`, `router`, `middleware`, `static`, `h1scan`, `h1outbound`).
+- Documented intentional side suites: `benchmarks`, `examples`, `smoke`, `integration`, `tls_real`.
+- Fixed `test_http_router` 404/405 expectations to RFC 7807 Problem Details (`application/problem+json`).
+- Fixed router group-test ownership cleanup and `THttpRouter.Destroy` middleware/regex handler release.
+- Evidence: `test_http_router` 30 passed / 0 failed / 0 unfreed.
 
 ### Recent Fixes (2026-07-07)
 
@@ -373,22 +396,22 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 
 ## Current Highest-Value Slices
 
-As of 2026-06-07, the best next slices are:
+As of 2026-07-16, ordered execution queue:
 
-1. **HTTP goal/control docs**
-   - keep this goal tree and HTTP docs aligned with real status
-   - separate stable architecture facts from active route decisions
-2. **Runtime/socket cost isolation**
-   - keep splitting non-parser/non-writer server cost with narrow benchmarks
-   - avoid jumping straight to final benchmark rankings
-3. **Client ergonomics, but only for real gaps**
-   - prefer one stable helper over a sprawling builder surface
-4. **Cross-language benchmark truth**
-   - keep Rust std-only vs. Hyper/Tokio labeling honest
-   - improve reproducibility and workload clarity before headline comparisons
-5. **Protocol seam readiness**
-   - continue H2 codec proof with broader HPACK integer/string/header-block coverage, frame-type-specific validation, and later QPACK/QUIC planning
-   - improve H2/H3 seam quality only where it reduces future design risk without faking support
+1. **P1 — keep-alive request-tail contract decision**
+   - decide which CL/chunked garbage-tail behaviors are final public contract vs transport truth
+   - lock decision in `CONTRACT.md` + security/server focused proof
+2. **P2 — H2 facade end-to-end proof**
+   - live `NewHttpClient/Server` with `Options.WithVersion(hvHttp2)`
+   - keep h2c Upgrade / push / WS-over-H2 as explicit exclusions
+3. **P3 — API surface audit (no expansion by default)**
+   - `THttpRequestBuilder` is the recommended construction path
+   - inventory deprecated `NewRequest` overloads; avoid a second overlapping API family
+4. **P4 — runtime/socket cost isolation**
+   - continue narrow benchmarks for non-parser/non-writer costs
+   - no ranking claims without scoped caveats
+5. **P5 — H3**
+   - blocked on QUIC; only maintain registry/version seams
 
 ## Immediate Do-Not-Drift Rules
 
