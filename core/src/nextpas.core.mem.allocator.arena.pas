@@ -9,6 +9,7 @@ uses
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
+  nextpas.core.mem.debug_wrap,
   nextpas.core.mem.arena.intf,
   nextpas.core.mem.arena.base,
   nextpas.core.base.utils,
@@ -146,7 +147,11 @@ procedure TLocalArenaAllocator.FreeMem(APtr: Pointer); inline;
 begin
   if APtr = nil then
     Exit;
-  { Arena ownership — FreeMem is no-op by contract. }
+  { Default: no-op (arena owns the block). Opt-in ARENA_STRICT makes mix-ups loud. }
+  if IsMemArenaStrictEnabled then
+    raise EAllocError.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TLocalArenaAllocator', 'FreeMem',
+        'arena block; use Reset/RestoreToMark (ARENA_STRICT)'));
 end;
 
 procedure TLocalArenaAllocator.Reset;
@@ -193,7 +198,12 @@ end;
 
 procedure TVirtualArenaAllocator.FreeMem(APtr: Pointer); inline;
 begin
-  { Arena 不支持单个释放 — no-op }
+  if APtr = nil then
+    Exit;
+  if IsMemArenaStrictEnabled then
+    raise EAllocError.Create(aeInvalidPointer,
+      FormatAllocErrorMsg('TVirtualArenaAllocator', 'FreeMem',
+        'arena block; use Reset (ARENA_STRICT)'));
 end;
 
 procedure TVirtualArenaAllocator.Reset;

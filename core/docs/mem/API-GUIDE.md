@@ -41,8 +41,12 @@ NEXTPAS_MEM_DEBUG=sentinel,leak,stats
 | `sentinel` | `TSentinelAllocator`（最内贴真实块） |
 
 - 固定叠层顺序，**不**按用户书写序乱叠
-- **不**包装 `DefaultHeap` / 过程式 `GetMem`（热路径零税）
+- **不**包装 `DefaultHeap` / 过程式 `GetMem`（热路径零税），除非：
+  - `NEXTPAS_MEM_HEAP_DEBUG=1` — 过程式改走 DefaultAllocator 链（慢）
+  - `NEXTPAS_MEM_HEAP_SAFETY=1` — 同上 + 无 token 时 inject tracking/sentinel
+- `NEXTPAS_MEM_ARENA_STRICT=1` — Arena IAllocator `FreeMem(non-nil)` raise（默认 no-op）
 - 测试/可观测：`GetDebugWrapConfig` / `GetDebugWrapTracking` / `ResetDebugWrapForTests`
+- 门面：`IsMemHeapDebugEnabled` / `IsMemHeapSafetyEnabled` / `IsMemArenaStrictEnabled`
 - 设计与验收：[DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md)
 
 ### 进程级 MemStats（M3-2）
@@ -51,12 +55,17 @@ NEXTPAS_MEM_DEBUG=sentinel,leak,stats
 var S: TMemStats;
 GetMemStats(S);
 // S.LiveBytes / ReleasedBytes / LiveSpans … ← DefaultHeap (Growing)
-// S.DebugActiveAllocs / DebugAllocCount … ← only if NEXTPAS_MEM_DEBUG built wraps
+// S.DebugCoverageGap / DebugObservesProcess … ← F1 假阴性可观测
+// S.DebugActiveAllocs / DebugAllocCount … ← only if DEBUG wrap built
+Writeln(FormatMemStats); // … debug_process=… debug_coverage_gap=…
 ```
 
 - 对标 Go `runtime.ReadMemStats` 的“一结构体读进程堆”体验
 - 热路径不调用；DEBUG 字段默认全 0
 - 细节字段与 SC5 对齐：`TGrowingHeapStats`
+- 插件面 sized free 助手：`FreeMemOf(Alloc, P, Size)` / `TryFreeMemOf`（同堆走 DefaultHeap sized）
+- 错误消息：`FormatAllocErrorMsg` / `IsWellFormedAllocErrorMsg`（见 [ERROR-POLICY.md](ERROR-POLICY.md)）
+- 门面冻结：[FACADES-SURFACE.md](FACADES-SURFACE.md)
 
 ## 三套 API 体系
 

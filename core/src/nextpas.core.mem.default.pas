@@ -11,7 +11,9 @@ unit nextpas.core.mem.default;
  * collections injection, and external backends (GetRtlAllocator still available).
  *
  * NEXTPAS_MEM_DEBUG wraps only DefaultAllocator (see mem.debug_wrap).
- * NEXTPAS_MEM_HEAP_DEBUG (opt-in) routes process GetMem through DefaultAllocator.
+ * NEXTPAS_MEM_HEAP_DEBUG / HEAP_SAFETY (opt-in) route process GetMem via
+ * DefaultAllocator. FormatMemStats exposes debug_coverage_gap when DEBUG is
+ * on but process traffic is not routed (false-negative guard).
  * GetMemStats (M3-2) snapshots DefaultHeap + optional DEBUG wrap counters.
  *}
 
@@ -55,6 +57,12 @@ type
     DebugFreeCount: UInt64;
     { --- Process path opt-in --- }
     HeapDebugEnabled: Boolean;
+    {** DEBUG wrap sees process GetMem (DebugEnabled and HeapDebugEnabled). }
+    DebugObservesProcess: Boolean;
+    {** DEBUG on but process GetMem not routed — leak false-negative risk. }
+    DebugCoverageGap: Boolean;
+    {** NEXTPAS_MEM_HEAP_SAFETY truthy (dev double-free profile). }
+    HeapSafetyEnabled: Boolean;
   end;
 
 {** IAllocator plug-in default (Growing IAllocator, or DEBUG wrap chain).
@@ -72,17 +80,22 @@ procedure GetMemStats(out AStats: TMemStats);
 function GetMemStats: TMemStats;
 
 {** One-line human snapshot for logs/tests (not a hot path).
- *  Always: live_bytes/free_slots/…/heap_debug/debug.
+ *  Always: live_bytes/…/heap_debug/debug/debug_process/debug_coverage_gap.
  *  When NEXTPAS_MEM_DEBUG built a wrap: also debug_active_* and debug_allocs/frees. }
 function FormatMemStats(const AStats: TMemStats): string;
 function FormatMemStats: string;
+
+{** Pure: DebugEnabled and not HeapDebugEnabled (process-heap false-negative). }
+function MemDebugCoverageGap(const AStats: TMemStats): Boolean; inline;
 
 { Re-export DEBUG wrap test/obs APIs from mem.debug_wrap. }
 function GetDebugWrapConfig: TMemDebugWrapConfig; inline;
 function GetDebugWrapTracking: TTrackingAllocator; inline;
 function GetDebugWrapStats: TStatsAllocator; inline;
-{** True when NEXTPAS_MEM_HEAP_DEBUG is truthy (process GetMem → DefaultAllocator). }
+{** True when HEAP_DEBUG or HEAP_SAFETY routes process GetMem → DefaultAllocator. }
 function IsMemHeapDebugEnabled: Boolean; inline;
+function IsMemHeapSafetyEnabled: Boolean; inline;
+function IsMemArenaStrictEnabled: Boolean; inline;
 procedure ResetDebugWrapForTests; inline;
 
 implementation
@@ -139,6 +152,9 @@ begin
   AStats.DebugTracking := LCfg.WantTracking;
   AStats.DebugStats := LCfg.WantStats;
   AStats.HeapDebugEnabled := IsMemHeapDebugEnabled;
+  AStats.HeapSafetyEnabled := IsMemHeapSafetyEnabled;
+  AStats.DebugObservesProcess := AStats.DebugEnabled and AStats.HeapDebugEnabled;
+  AStats.DebugCoverageGap := AStats.DebugEnabled and (not AStats.HeapDebugEnabled);
 
   if AStats.DebugEnabled then
   begin
@@ -171,11 +187,16 @@ begin
     Result := 'n';
 end;
 
+function MemDebugCoverageGap(const AStats: TMemStats): Boolean;
+begin
+  Result := AStats.DebugEnabled and (not AStats.HeapDebugEnabled);
+end;
+
 function FormatMemStats(const AStats: TMemStats): string;
 begin
   { Compact single-line snapshot (L0: base IntToStr only).
-    Plugin-track counters appear only when DEBUG wrap is built — keeps the
-    default doctor line short; HEAP_DEBUG alone only flips heap_debug=y. }
+    debug_process / debug_coverage_gap make DEBUG-only false-negatives visible.
+    Plugin counters appear only when DEBUG wrap is built. }
   Result :=
     'live_bytes=' + IntToStr(Int64(AStats.LiveBytes)) +
     ' free_slots=' + IntToStr(Int64(AStats.FreeSlots)) +
@@ -183,7 +204,9 @@ begin
     ' idle_spans=' + IntToStr(Int64(AStats.IdleSpans)) +
     ' released_bytes=' + IntToStr(Int64(AStats.ReleasedBytes)) +
     ' heap_debug=' + FormatMemStatsYN(AStats.HeapDebugEnabled) +
-    ' debug=' + FormatMemStatsYN(AStats.DebugEnabled);
+    ' debug=' + FormatMemStatsYN(AStats.DebugEnabled) +
+    ' debug_process=' + FormatMemStatsYN(AStats.DebugObservesProcess) +
+    ' debug_coverage_gap=' + FormatMemStatsYN(AStats.DebugCoverageGap);
   if AStats.DebugEnabled then
     Result := Result +
       ' debug_active_allocs=' + IntToStr(Int64(AStats.DebugActiveAllocs)) +
@@ -218,6 +241,16 @@ end;
 function IsMemHeapDebugEnabled: Boolean;
 begin
   Result := nextpas.core.mem.debug_wrap.IsMemHeapDebugEnabled;
+end;
+
+function IsMemHeapSafetyEnabled: Boolean;
+begin
+  Result := nextpas.core.mem.debug_wrap.IsMemHeapSafetyEnabled;
+end;
+
+function IsMemArenaStrictEnabled: Boolean;
+begin
+  Result := nextpas.core.mem.debug_wrap.IsMemArenaStrictEnabled;
 end;
 
 procedure ResetDebugWrapForTests;

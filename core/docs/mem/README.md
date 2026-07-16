@@ -165,7 +165,13 @@ GetMemStats(S);
 |--------|------|------|
 | `LiveBytes` / `LiveSpans` / `IdleSpans` | DefaultHeap | 当前保留 |
 | `Released*` / `Decommit*` | DefaultHeap scavenge | 归还 OS 寿命计数 |
-| `DebugActiveAllocs` / `DebugAllocCount` | 仅 `NEXTPAS_MEM_DEBUG` | 插件面诊断 |
+| `heap_debug` / `HeapDebugEnabled` | HEAP_DEBUG 或 HEAP_SAFETY | 过程式路径是否走插件链 |
+| `debug` / `DebugEnabled` | `NEXTPAS_MEM_DEBUG`（或 SAFETY 注入） | wrap 是否建成 |
+| `debug_process` / `DebugObservesProcess` | debug ∧ heap_debug | wrap 是否观察过程式 GetMem |
+| `debug_coverage_gap` | debug ∧ ¬heap_debug | **假阴性风险**（只 DEBUG 不看热路径） |
+| `DebugActiveAllocs` / `DebugAllocCount` | 仅 wrap 建成时 | 插件面诊断计数 |
+
+`FormatMemStats` 一行始终含 `debug_process=` / `debug_coverage_gap=`。
 
 Gate：`make focused FOCUS=core/tests/nextpas.core.mem/test_get_mem_stats`
 
@@ -177,22 +183,27 @@ Gate：`make focused FOCUS=core/tests/nextpas.core.mem/test_get_mem_stats`
 
 | 你在查什么 | 开什么 | 别指望 |
 |------------|--------|--------|
-| 注入面 / collections 泄漏 | `NEXTPAS_MEM_DEBUG=leak`（或 `sentinel,leak,stats`） | 过程式 `GetMem` |
+| 注入面 / collections 泄漏 | `NEXTPAS_MEM_DEBUG=leak`（或 `sentinel,leak,stats`） | 过程式 `GetMem`（见 `debug_coverage_gap=y`） |
 | 过程式 `GetMem` 泄漏 | **再加** `NEXTPAS_MEM_HEAP_DEBUG=1`（慢） | 热路径零税 |
-| 进程堆快照 | `GetMemStats` / `FormatMemStats`（无需 DEBUG） | `Debug*` 字段（仅插件面） |
+| dev 双 free profile | `NEXTPAS_MEM_HEAP_SAFETY=1`（自动 tracking+sentinel） | 生产默认开 |
+| Arena FreeMem 混用 | `NEXTPAS_MEM_ARENA_STRICT=1` | 默认 no-op 兼容 |
+| 进程堆快照 | `GetMemStats` / `FormatMemStats`（无需 DEBUG） | `DebugActive*` 仅 wrap 建成 |
 | doctor 一行进程诊断 | `nextpas doctor` → `mem-process-stats=` | session arena（用 build `mem-session-stats`） |
 
 ```bash
 NEXTPAS_MEM_DEBUG=sentinel,leak,stats
 NEXTPAS_MEM_HEAP_DEBUG=1   # 仅当必须覆盖过程式 GetMem；DefaultHeap 仍裸
+# 或：NEXTPAS_MEM_HEAP_SAFETY=1
 # FormatMemStats / doctor：
-#   heap_debug=y debug=y debug_active_allocs=… debug_allocs=… debug_frees=…
+#   heap_debug=y debug=y debug_process=y debug_coverage_gap=n
+#   debug_active_allocs=… debug_allocs=… debug_frees=…
+# 仅 DEBUG=stats → heap_debug=n debug=y debug_coverage_gap=y（假阴性可见）
 # 仅 HEAP_DEBUG=1、无 NEXTPAS_MEM_DEBUG → heap_debug=y debug=n（无 plugin 计数）
 ```
 
 - **只**包装 `DefaultAllocator`（fail → stats → tracking → sentinel → Growing IAllocator）
 - 默认 **不**包装 `DefaultHeap` / 过程式 `GetMem`（热路径零税）
-- 门面：`IsMemHeapDebugEnabled`、`FormatMemStats`（`heap_debug`/`debug` + 可选 plugin 计数）
+- 门面：`IsMemHeapDebugEnabled` / `IsMemHeapSafetyEnabled` / `IsMemArenaStrictEnabled`、`FormatMemStats`、`FreeMemOf`、`FormatAllocErrorMsg`
 - Token：`fail`/`oom`、`stats`、`tracking`/`leak`、`sentinel`
 - Gate：`make focused FOCUS=core/tests/nextpas.core.mem/test_debug_wrap`；体验锁：`test_usability_guardrails`
 - CI / verify：`make stage0-heap-debug-recipe`（`scripts/stage0-heap-debug-env-recipe.sh`；doctor 双轨投影）
@@ -329,8 +340,9 @@ end;
 
 ## 门面与 Tier
 
-- **门面** `nextpas.core.mem`：Tier-0 + 精选 Tier-1/2
+- **门面** `nextpas.core.mem`：Tier-0 + 精选 Tier-1/2（**冻结**：禁止新增 Tier-3）
 - **Experimental (Tier-3)**：直接 `uses` 子单元，无兼容承诺
+- 门面白名单 / Tier-3 黑名单：[FACADES-SURFACE.md](FACADES-SURFACE.md)
 - 分层规则与符号表：[STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3
 - 架构 / owner：[ARCHITECTURE.md](ARCHITECTURE.md)
 - 运行时契约全文：[CONTRACT.md](CONTRACT.md)

@@ -9,8 +9,10 @@ unit nextpas.core.mem.debug_wrap;
  * Enabled only when ≥1 known token is present (whitespace/unknown-only = off).
  *
  * Default: does NOT wrap DefaultHeap. Process GetMem stays bare Growing unless
- * NEXTPAS_MEM_HEAP_DEBUG is explicitly enabled (slow opt-in; routes process
- * GetMem/FreeMem/… through DefaultAllocator so wraps can observe them).
+ * NEXTPAS_MEM_HEAP_DEBUG or NEXTPAS_MEM_HEAP_SAFETY is truthy (slow opt-in;
+ * routes process GetMem/FreeMem/… through DefaultAllocator so wraps can observe).
+ * HEAP_SAFETY also injects tracking+sentinel when DEBUG tokens are absent.
+ * NEXTPAS_MEM_ARENA_STRICT: Arena IAllocator FreeMem(non-nil) raises.
  * DefaultAllocator root (no DEBUG) is Growing IAllocator (S5), not RTL.
  * See core/docs/mem/DEBUG-WRAP-DESIGN.md.
  *}
@@ -28,6 +30,10 @@ const
   MEM_DEBUG_ENV = 'NEXTPAS_MEM_DEBUG';
   {** Explicit opt-in: process GetMem/FreeMem route via DefaultAllocator (slow). }
   MEM_HEAP_DEBUG_ENV = 'NEXTPAS_MEM_HEAP_DEBUG';
+  {** Dev safety profile: process route + default tracking/sentinel if DEBUG empty. }
+  MEM_HEAP_SAFETY_ENV = 'NEXTPAS_MEM_HEAP_SAFETY';
+  {** Arena IAllocator FreeMem(non-nil) raises instead of silent no-op. }
+  MEM_ARENA_STRICT_ENV = 'NEXTPAS_MEM_ARENA_STRICT';
 
 type
   {** Snapshot of parsed DEBUG wrap intent and build state. }
@@ -38,6 +44,8 @@ type
     WantStats: Boolean;
     WantTracking: Boolean;
     WantSentinel: Boolean;
+    {** True when HEAP_SAFETY injected default tracking/sentinel. }
+    SafetyProfile: Boolean;
     IgnoredTokens: Integer;
     Built: Boolean;
   end;
@@ -54,15 +62,21 @@ function GetDebugWrapTracking: TTrackingAllocator;
 {** Stats layer if active (nil if not requested / not built). }
 function GetDebugWrapStats: TStatsAllocator;
 
-{** True when NEXTPAS_MEM_HEAP_DEBUG is truthy (lazy parse + cache).
+{** True when HEAP_DEBUG or HEAP_SAFETY is truthy (lazy parse + cache).
     Process GetMem/FreeMem must check this; DefaultHeap never does. }
 function IsMemHeapDebugEnabled: Boolean;
 
-{** Pure parse for HEAP_DEBUG env values (1/true/yes/on). }
+{** True when NEXTPAS_MEM_HEAP_SAFETY is truthy (dev double-free profile). }
+function IsMemHeapSafetyEnabled: Boolean;
+
+{** True when NEXTPAS_MEM_ARENA_STRICT is truthy. }
+function IsMemArenaStrictEnabled: Boolean;
+
+{** Pure parse for HEAP_DEBUG / SAFETY / ARENA_STRICT truthy env values. }
 function ParseMemHeapDebugEnv(const AEnv: AnsiString): Boolean;
 
 {** Drop singleton so next ResolveDefaultAllocator rebuilds from current env.
-    Also clears HEAP_DEBUG cache. Test-only; not for production hot paths. }
+    Also clears HEAP_DEBUG / SAFETY / ARENA_STRICT caches. Test-only. }
 procedure ResetDebugWrapForTests;
 
 {** Parse env string into flags (pure; no side effects). }
@@ -83,10 +97,10 @@ const
   STATE_READY = 2;
 
 const
-  { HEAP_DEBUG cache: 0 unread, 1 off, 2 on }
-  HEAP_DEBUG_UNREAD = 0;
-  HEAP_DEBUG_OFF = 1;
-  HEAP_DEBUG_ON = 2;
+  { Truthy-env cache: 0 unread, 1 off, 2 on }
+  ENV_UNREAD = 0;
+  ENV_OFF = 1;
+  ENV_ON = 2;
 
 var
   GState: SizeUInt;
@@ -95,6 +109,8 @@ var
   GTracking: TTrackingAllocator;
   GStats: TStatsAllocator;
   GHeapDebugState: SizeUInt;
+  GHeapSafetyState: SizeUInt;
+  GArenaStrictState: SizeUInt;
 
 function AsciiTokenEq(const ATok, AExpected: AnsiString): Boolean;
 var
@@ -143,8 +159,60 @@ begin
   AConfig.WantStats := False;
   AConfig.WantTracking := False;
   AConfig.WantSentinel := False;
+  AConfig.SafetyProfile := False;
   AConfig.IgnoredTokens := 0;
   AConfig.Built := False;
+end;
+
+function ParseMemHeapDebugEnv(const AEnv: AnsiString): Boolean;
+var
+  L: Integer;
+  LTok: AnsiString;
+  I: Integer;
+  C: AnsiChar;
+begin
+  L := Length(AEnv);
+  if L = 0 then
+    Exit(False);
+  LTok := AEnv;
+  while (Length(LTok) > 0) and ((LTok[1] = ' ') or (LTok[1] = #9)) do
+    Delete(LTok, 1, 1);
+  while (Length(LTok) > 0) and
+    ((LTok[Length(LTok)] = ' ') or (LTok[Length(LTok)] = #9)) do
+    Delete(LTok, Length(LTok), 1);
+  if LTok = '' then
+    Exit(False);
+  for I := 1 to Length(LTok) do
+  begin
+    C := LTok[I];
+    if (C >= 'A') and (C <= 'Z') then
+      LTok[I] := AnsiChar(Ord(C) + 32);
+  end;
+  Result := AsciiTokenEq(LTok, '1') or AsciiTokenEq(LTok, 'true') or
+    AsciiTokenEq(LTok, 'yes') or AsciiTokenEq(LTok, 'on') or
+    AsciiTokenEq(LTok, 'y');
+end;
+
+function CachedTruthyEnv(var AState: SizeUInt; const AEnvName: AnsiString): Boolean;
+var
+  LPrev: SizeUInt;
+  LEnv: AnsiString;
+  LOn: Boolean;
+  LNew: SizeUInt;
+begin
+  LPrev := AtomicCmpExchange(AState, ENV_UNREAD, ENV_UNREAD);
+  if LPrev = ENV_ON then
+    Exit(True);
+  if LPrev = ENV_OFF then
+    Exit(False);
+  LEnv := platform_env_get_str(AEnvName);
+  LOn := ParseMemHeapDebugEnv(LEnv);
+  if LOn then
+    LNew := ENV_ON
+  else
+    LNew := ENV_OFF;
+  AtomicCmpExchange(AState, LNew, ENV_UNREAD);
+  Result := AtomicCmpExchange(AState, 0, 0) = ENV_ON;
 end;
 
 procedure ParseMemDebugEnv(const AEnv: AnsiString; out AConfig: TMemDebugWrapConfig);
@@ -244,6 +312,14 @@ begin
   { We own the build (transition idle → building). }
   LEnv := platform_env_get_str(MEM_DEBUG_ENV);
   ParseMemDebugEnv(LEnv, LCfg);
+  { HEAP_SAFETY with no DEBUG tokens → inject tracking+sentinel for double-free. }
+  if (not LCfg.Enabled) and CachedTruthyEnv(GHeapSafetyState, MEM_HEAP_SAFETY_ENV) then
+  begin
+    LCfg.WantTracking := True;
+    LCfg.WantSentinel := True;
+    LCfg.Enabled := True;
+    LCfg.SafetyProfile := True;
+  end;
   if LCfg.Enabled then
     GRoot := BuildChain(LCfg)
   else
@@ -281,59 +357,22 @@ begin
   Result := GStats;
 end;
 
-function ParseMemHeapDebugEnv(const AEnv: AnsiString): Boolean;
-var
-  L: Integer;
-  LTok: AnsiString;
-  I: Integer;
-  C: AnsiChar;
+function IsMemHeapSafetyEnabled: Boolean;
 begin
-  L := Length(AEnv);
-  if L = 0 then
-    Exit(False);
-  { Trim spaces/tabs }
-  LTok := AEnv;
-  while (Length(LTok) > 0) and ((LTok[1] = ' ') or (LTok[1] = #9)) do
-    Delete(LTok, 1, 1);
-  while (Length(LTok) > 0) and
-    ((LTok[Length(LTok)] = ' ') or (LTok[Length(LTok)] = #9)) do
-    Delete(LTok, Length(LTok), 1);
-  if LTok = '' then
-    Exit(False);
-  { Lowercase ASCII for compare }
-  for I := 1 to Length(LTok) do
-  begin
-    C := LTok[I];
-    if (C >= 'A') and (C <= 'Z') then
-      LTok[I] := AnsiChar(Ord(C) + 32);
-  end;
-  Result := AsciiTokenEq(LTok, '1') or AsciiTokenEq(LTok, 'true') or
-    AsciiTokenEq(LTok, 'yes') or AsciiTokenEq(LTok, 'on') or
-    AsciiTokenEq(LTok, 'y');
+  Result := CachedTruthyEnv(GHeapSafetyState, MEM_HEAP_SAFETY_ENV);
+end;
+
+function IsMemArenaStrictEnabled: Boolean;
+begin
+  Result := CachedTruthyEnv(GArenaStrictState, MEM_ARENA_STRICT_ENV);
 end;
 
 function IsMemHeapDebugEnabled: Boolean;
-var
-  LPrev: SizeUInt;
-  LEnv: AnsiString;
-  LOn: Boolean;
-  LNew: SizeUInt;
 begin
-  LPrev := AtomicCmpExchange(GHeapDebugState, HEAP_DEBUG_UNREAD, HEAP_DEBUG_UNREAD);
-  if LPrev = HEAP_DEBUG_ON then
+  { Process path routes through DefaultAllocator when either flag is on. }
+  if CachedTruthyEnv(GHeapDebugState, MEM_HEAP_DEBUG_ENV) then
     Exit(True);
-  if LPrev = HEAP_DEBUG_OFF then
-    Exit(False);
-  { Unread or racing: parse env and publish. }
-  LEnv := platform_env_get_str(MEM_HEAP_DEBUG_ENV);
-  LOn := ParseMemHeapDebugEnv(LEnv);
-  if LOn then
-    LNew := HEAP_DEBUG_ON
-  else
-    LNew := HEAP_DEBUG_OFF;
-  AtomicCmpExchange(GHeapDebugState, LNew, HEAP_DEBUG_UNREAD);
-  { If another thread published first, re-read. }
-  Result := AtomicCmpExchange(GHeapDebugState, 0, 0) = HEAP_DEBUG_ON;
+  Result := IsMemHeapSafetyEnabled;
 end;
 
 procedure ResetDebugWrapForTests;
@@ -344,7 +383,9 @@ begin
   GStats := nil;
   ClearConfig(GConfig);
   AtomicExchange(GState, STATE_IDLE);
-  AtomicExchange(GHeapDebugState, HEAP_DEBUG_UNREAD);
+  AtomicExchange(GHeapDebugState, ENV_UNREAD);
+  AtomicExchange(GHeapSafetyState, ENV_UNREAD);
+  AtomicExchange(GArenaStrictState, ENV_UNREAD);
 end;
 
 initialization
@@ -352,7 +393,9 @@ initialization
   GRoot := nil;
   GTracking := nil;
   GStats := nil;
-  GHeapDebugState := HEAP_DEBUG_UNREAD;
+  GHeapDebugState := ENV_UNREAD;
+  GHeapSafetyState := ENV_UNREAD;
+  GArenaStrictState := ENV_UNREAD;
   ClearConfig(GConfig);
 
 finalization
@@ -360,6 +403,8 @@ finalization
   GTracking := nil;
   GStats := nil;
   ClearConfig(GConfig);
-  GHeapDebugState := HEAP_DEBUG_UNREAD;
+  GHeapDebugState := ENV_UNREAD;
+  GHeapSafetyState := ENV_UNREAD;
+  GArenaStrictState := ENV_UNREAD;
 
 end.

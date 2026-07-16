@@ -36,12 +36,18 @@ P := LAlloc.GetMem(n);
 ```bash
 NEXTPAS_MEM_DEBUG=tracking,stats
 NEXTPAS_MEM_HEAP_DEBUG=1   # 显式同意：过程式 GetMem/FreeMem 改走 DefaultAllocator 诊断链（慢）
+# 或 dev 安全 profile（无 DEBUG token 时自动 inject tracking+sentinel）：
+NEXTPAS_MEM_HEAP_SAFETY=1
+# Arena 适配器 FreeMem(non-nil) 改为 raise（默认仍 no-op）：
+NEXTPAS_MEM_ARENA_STRICT=1
 ```
 
 - 默认 **关**：过程式 `GetMem` 不进 DEBUG 链（热路径零税）。
-- 显式 **开**：过程式 `GetMem`/`FreeMem`/`AllocMem`/`ReallocMem` 经 `DefaultAllocator`，可被 tracking/stats/sentinel 观察。
+- 显式 **开**（`HEAP_DEBUG` 或 `HEAP_SAFETY`）：过程式 `GetMem`/`FreeMem`/`AllocMem`/`ReallocMem` 经 `DefaultAllocator`，可被 tracking/stats/sentinel 观察。
+- `HEAP_SAFETY` 且无 DEBUG token：自动 `tracking+sentinel`（dev 双 free profile）。
 - `DefaultHeap` **永远**不包装；Scorecard / 生产热路径仍用裸 Growing。
-- `GetMemStats.HeapDebugEnabled` 反映当前 opt-in 状态。
+- `IsMemHeapDebugEnabled` = HEAP_DEBUG **或** HEAP_SAFETY（过程式路由开关）。
+- `GetMemStats` / `FormatMemStats`：`heap_debug` / `debug` / `debug_process` / `debug_coverage_gap`（F1 假阴性可见）。
 
 ---
 
@@ -49,6 +55,9 @@ NEXTPAS_MEM_HEAP_DEBUG=1   # 显式同意：过程式 GetMem/FreeMem 改走 Defa
 
 ```text
 NEXTPAS_MEM_DEBUG=<token>[,<token>...]
+NEXTPAS_MEM_HEAP_DEBUG=<truthy>     # 1/true/yes/on
+NEXTPAS_MEM_HEAP_SAFETY=<truthy>    # process route + default tracking,sentinel
+NEXTPAS_MEM_ARENA_STRICT=<truthy>   # arena IAllocator FreeMem(non-nil) raises
 ```
 
 | Token | 包装器 | 顺序建议（外→内） |
@@ -155,5 +164,8 @@ make focused FOCUS=core/tests/nextpas.core.mem/test_debug_wrap
    - `scripts/stage0-heap-debug-env-recipe.sh`：fresh process doctor 断言默认 `heap_debug=n`、
      `NEXTPAS_MEM_HEAP_DEBUG=1` → `heap_debug=y`、`NEXTPAS_MEM_DEBUG=stats` 插件轨独立
    - 入口：`make stage0-heap-debug-recipe`（CI rebuild 后；`verify_local` 复用）
+8. F1 覆盖缺口字段 — ✅ `debug_process` / `debug_coverage_gap`（DEBUG-only → gap=y）
+9. F3 `NEXTPAS_MEM_HEAP_SAFETY` — ✅ process 路由 + 默认 tracking/sentinel
+10. F4 `NEXTPAS_MEM_ARENA_STRICT` — ✅ Arena IAllocator FreeMem dual-mode
 
-`DefaultHeap` 语义未改：DEBUG 只叠 `DefaultAllocator`；HEAP_DEBUG 也不绑架 `DefaultHeap` 本体。
+`DefaultHeap` 语义未改：DEBUG 只叠 `DefaultAllocator`；HEAP_DEBUG/SAFETY 也不绑架 `DefaultHeap` 本体。

@@ -121,11 +121,19 @@ type
  *}
 function AllocErrorToString(aError: TAllocError): string;
 
+{** Canonical raise-site message stem: Type.Method: reason
+ *  Pass the result as aMsg to EAllocError.Create / EOutOfMemory.Create.
+ *  Create still appends the TAllocError code string via BuildAllocMsg. }
+function FormatAllocErrorMsg(const ATypeName, AMethod, AReason: string): string;
+
+{** True when AMsg matches Type.Method: reason (dot before ": "). }
+function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean;
+
 {** SanitizeRuntimeAlignment: for runtime allocation calls where 0 is invalid.
-    Clamp AAlignment to >= SizeOf(Pointer), then validate power-of-two.
-    Returns the sanitized value. Raises EAllocError if alignment is not a
-    power of two after clamping.
-    Use this for AllocAligned/FreeAligned runtime paths. }
+ *  Clamp AAlignment to >= SizeOf(Pointer), then validate power-of-two.
+ *  Returns the sanitized value. Raises EAllocError if alignment is not a
+ *  power of two after clamping.
+ *  Use this for AllocAligned/FreeAligned runtime paths. }
 function SanitizeRuntimeAlignment(AAlignment: SizeUInt): SizeUInt;
 
 {** SanitizeConfigAlignment: for config/constructor alignment parameters.
@@ -157,6 +165,28 @@ const
 function AllocErrorToString(aError: TAllocError): string;
 begin
   Result := ERROR_MESSAGES[aError];
+end;
+
+function FormatAllocErrorMsg(const ATypeName, AMethod, AReason: string): string;
+begin
+  Result := ATypeName + '.' + AMethod + ': ' + AReason;
+end;
+
+function IsWellFormedAllocErrorMsg(const AMsg: string): Boolean;
+var
+  I, LDot, LColon: Integer;
+begin
+  LDot := 0;
+  LColon := 0;
+  for I := 1 to Length(AMsg) do
+  begin
+    if (AMsg[I] = '.') and (LDot = 0) then
+      LDot := I
+    else if (AMsg[I] = ':') and (LColon = 0) then
+      LColon := I;
+  end;
+  Result := (LDot > 1) and (LColon > LDot + 1) and
+    (LColon + 1 <= Length(AMsg)) and (AMsg[LColon + 1] = ' ');
 end;
 
 function AllocErrorCategory(aError: TAllocError): TErrorCategory;
