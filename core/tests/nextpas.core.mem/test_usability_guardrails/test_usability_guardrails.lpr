@@ -298,6 +298,37 @@ begin
   Check(not TryFreeMemOf(nil, Pointer(PtrUInt(1)), 16), 'nil alloc + foreign → False');
 end;
 
+procedure TestFreeMemOfUnderPluginDebugTracksFree;
+{ FreeMemOf must not bypass tracking Free when NEXTPAS_MEM_DEBUG is on
+  (HEAP_DEBUG still off). Sized DefaultHeap free would leave ActiveAllocCount stale. }
+var
+  LPlugin: IAllocator;
+  LTrack: TTrackingAllocator;
+  LPtr: Pointer;
+  LSz: SizeUInt;
+  LBefore: SizeInt;
+begin
+  RebuildDebug('tracking,stats');
+  Check(not IsMemHeapDebugEnabled, 'HEAP_DEBUG off');
+  LPlugin := DefaultAllocator;
+  LTrack := GetDebugWrapTracking;
+  Check(LTrack <> nil, 'tracking wrap');
+  LBefore := LTrack.ActiveAllocCount;
+
+  LPtr := LPlugin.GetMem(80);
+  Check(LPtr <> nil, 'plugin alloc under DEBUG');
+  Check(LTrack.ActiveAllocCount = LBefore + 1, 'alloc tracked');
+  Check(TryBlockSize(LPtr, LSz), 'same-heap size-class');
+  FreeMemOf(LPlugin, LPtr, LSz);
+  Check(LTrack.ActiveAllocCount = LBefore, 'FreeMemOf clears tracking (no stale active)');
+
+  LPtr := LPlugin.GetMem(64);
+  Check(LPtr <> nil, 'plugin alloc 2');
+  Check(TryFreeMemOf(LPlugin, LPtr, 64), 'TryFreeMemOf under DEBUG');
+  Check(LTrack.ActiveAllocCount = LBefore, 'TryFreeMemOf clears tracking');
+  RebuildDebug('');
+end;
+
 procedure TestDefaultAllocatorNotHotHeapType;
 var
   LHeap: TGrowingAllocator;
@@ -558,6 +589,7 @@ begin
   T.Test('process sized FreeMem/ReallocMem', @TestProcessSizedFreePreferred);
   T.Test('process TryBlockSize facade', @TestProcessTryBlockSize);
   T.Test('FreeMemOf sized same-heap', @TestFreeMemOfSizedSameHeap);
+  T.Test('FreeMemOf under plugin DEBUG tracks free', @TestFreeMemOfUnderPluginDebugTracksFree);
   T.Test('DefaultAllocator not hot heap type', @TestDefaultAllocatorNotHotHeapType);
   T.Test('dual-track same-heap round-trip', @TestDualTrackSameHeapRoundTrip);
   T.Test('FormatMemStats one-line snapshot', @TestFormatMemStats);

@@ -43,8 +43,8 @@
 | **影响** | 丢 size 合法但慢；注入路径难传 size。 |
 | **Go** | 用户不 free。 |
 | **Rust** | `dealloc(ptr, Layout)` 强制 size/align。 |
-| **策略** | 保持 `IAllocator` 五方法冻结。门面增加 **sized free 助手** `FreeMemOf(IAllocator, ptr, size)` / `TryFreeMemOf`：同堆块走 `DefaultHeap.FreeMem(ptr,size)`，否则回落 `AAllocator.FreeMem(ptr)`。过程式路径已有 sized 过载 — 用契约/guardrails 锁。**不**改 ERROR-POLICY nil/raise 铁律。 |
-| **风险** | 中低：误对非 Growing 块 sized free 须先 `TryBlockSize` 或仅在同堆路径使用；实现必须失败安全。 |
+| **策略** | 保持 `IAllocator` 五方法冻结。门面增加 **sized free 助手** `FreeMemOf(IAllocator, ptr, size)` / `TryFreeMemOf`：同堆块且无 process/plugin DEBUG 时走 `DefaultHeap.FreeMem(ptr,size)`，否则回落 `AAllocator.FreeMem(ptr)`（避免 tracking 漏 free）。过程式路径已有 sized 过载 — 用契约/guardrails 锁。**不**改 ERROR-POLICY nil/raise 铁律。 |
+| **风险** | 中低：误对非 Growing 块 sized free 须先 `TryBlockSize` 或仅在同堆路径使用；实现必须失败安全；DEBUG 开时禁止 sized 短路。 |
 
 ### F3 — 热路径编程错误 UB
 
