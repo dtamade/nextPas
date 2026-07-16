@@ -172,6 +172,7 @@ type
     function GetStatusCode: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
+    procedure Close;
   end;
 
   TCustomWireHeader = class(TInterfacedObject, IHttpHeaders)
@@ -1476,6 +1477,10 @@ end;
 function TNilHeadersRedirectResponse.GetBody: IReader;
 begin
   Result := nil;
+end;
+
+procedure TNilHeadersRedirectResponse.Close;
+begin
 end;
 
 constructor TCustomWireHeader.Create(const AName, AValue: string);
@@ -8112,6 +8117,53 @@ begin
     'chained builder query param');
 end;
 
+procedure TestBuilderReaderBodyRequiresContentLength;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    THttpRequestBuilder.Create(hmPost, 'http://localhost/api')
+      .Body(StringBodyReader('payload'))
+      .Build;
+  except
+    on E: EArgumentError do
+      LCaught := True;
+  end;
+  Check(LCaught,
+    'builder Body(IReader) without ContentLength fail-fasts');
+end;
+
+procedure TestBuilderReaderBodyWithContentLength;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://localhost/api')
+    .ContentType('text/plain')
+    .Body(StringBodyReader('payload'))
+    .ContentLength(7)
+    .Build;
+  CheckEqual(Int64(7), LReq.ContentLength,
+    'builder ContentLength applies to reader body');
+  CheckEqual('7', LReq.Headers.Get('content-length'),
+    'builder publishes matching content-length header');
+  Check(LReq.Body <> nil, 'builder reader body is non-nil');
+end;
+
+procedure TestBuilderEmptyStringBody;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://localhost/api')
+    .Body('')
+    .Build;
+  CheckEqual(Int64(0), LReq.ContentLength,
+    'empty string body publishes Content-Length 0');
+  CheckEqual('0', LReq.Headers.Get('content-length'),
+    'empty string body sets content-length header');
+  Check(LReq.Body <> nil, 'empty string body is still a body reader');
+end;
+
 { Streaming body tests }
 
 procedure TestNewStreamingRequestContentLength;
@@ -8984,6 +9036,12 @@ begin
   T.Test('Builder preserves existing query', @TestBuilderQueryParamsExistingQuery);
   T.Test('Builder per-request FollowRedirects(false)', @TestBuilderPerRequestOptions);
   T.Test('Builder full chaining', @TestBuilderChaining);
+  T.Test('Builder Body(IReader) requires ContentLength',
+    @TestBuilderReaderBodyRequiresContentLength);
+  T.Test('Builder Body(IReader)+ContentLength',
+    @TestBuilderReaderBodyWithContentLength);
+  T.Test('Builder empty string body is Content-Length 0',
+    @TestBuilderEmptyStringBody);
   T.Test('NewStreamingRequest sets content-length',
     @TestNewStreamingRequestContentLength);
   T.Test('SendStreaming closes body after send',

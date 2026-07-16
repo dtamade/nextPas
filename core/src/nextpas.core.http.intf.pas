@@ -28,12 +28,14 @@ type
   THeaderIterator = reference to procedure(const AName, AValue: string);
 
   {** Per-request context for middleware-to-handler data propagation.
-     Thread-safe key-value store attached to a request by context middleware.
-     Values are TObject descendants; nil means "not set".
+     Attached to the request via IHttpRequestWithContext (not a process-global map).
+     SetValue is non-owning (caller frees). SetOwnedValue is owned by context
+     (freed on overwrite/Remove/Destroy). Has reports key existence (nil values ok).
      Typical keys: 'auth_user', 'request_id', 'trace_id', 'session'. }
   IHttpContext = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000011}']
     procedure SetValue(const AKey: string; const AValue: TObject);
+    procedure SetOwnedValue(const AKey: string; const AValue: TObject);
     function GetValue(const AKey: string): TObject;
     function Has(const AKey: string): Boolean;
     procedure Remove(const AKey: string);
@@ -87,11 +89,22 @@ type
     property RequestOptions: THttpRequestOptions read GetRequestOptions;
   end;
 
+  { Optional request-scoped context bag (set by ContextMiddleware). }
+  IHttpRequestWithContext = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000010012}']
+    function GetContext: IHttpContext;
+    procedure SetContext(const ACtx: IHttpContext);
+    property Context: IHttpContext read GetContext;
+  end;
+
   IHttpResponse = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000003}']
     function GetStatusCode: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
+    { Release/drain body ownership. Idempotent. Preferred over relying only on
+      helpers; destructor also closes if not already closed. }
+    procedure Close;
     property StatusCode: THttpStatus read GetStatusCode;
     property Headers: IHttpHeaders read GetHeaders;
     property Body: IReader read GetBody;

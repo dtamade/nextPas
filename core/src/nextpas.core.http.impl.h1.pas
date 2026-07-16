@@ -31,7 +31,7 @@ function NewH1ServerTransport(const AOptions: TH1ServerTransportOptions): IHttpS
 
 implementation
 
-uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors, nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.text.conv, nextpas.core.http.headers, nextpas.core.http.message, nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast, nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer;
+uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors, nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.text.conv, nextpas.core.http.headers, nextpas.core.http.message, nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast, nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer, nextpas.core.sync;
 
 type
   TPoolEntry = record
@@ -95,7 +95,7 @@ type
     IHttpTransportIdleConnections)
   private
     FOptions: TH1ClientTransportOptions;
-    FPoolLock: TRTLCriticalSection;
+    FPoolLock: IMutex;
     FPool: array of TPoolEntry;
     FPoolCount: Int32;
     FPending: string;
@@ -310,7 +310,7 @@ begin
   for LI := 1 to Length(AValue) do
     if (((AValue[LI] < #32) and (AValue[LI] <> #9)) or
         (AValue[LI] = #127)) then
-      raise EHttpError.Create('invalid header value character');
+      raise EHttpError.Create(hekParse, 'invalid header value character');
 end;
 
 procedure ValidateWireRequestTarget(const ATarget: string);
@@ -319,7 +319,7 @@ var
 begin
   for LI := 1 to Length(ATarget) do
     if (ATarget[LI] <= #32) or (ATarget[LI] = #127) then
-      raise EHttpError.Create('invalid request target character');
+      raise EHttpError.Create(hekParse, 'invalid request target character');
 end;
 
 procedure ValidateWireHeaderName(const AName: string);
@@ -327,10 +327,10 @@ var
   LI: SizeInt;
 begin
   if AName = '' then
-    raise EHttpError.Create('empty header name');
+    raise EHttpError.Create(hekProtocol, 'empty header name');
   for LI := 1 to Length(AName) do
     if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
-      raise EHttpError.Create('invalid header name character');
+      raise EHttpError.Create(hekParse, 'invalid header name character');
 end;
 
 procedure ValidatePlainHttpClientUrlScheme(const AUrl: TUrl);
@@ -339,7 +339,7 @@ var
 begin
   LScheme := LowerCase(AUrl.Scheme);
   if (LScheme <> '') and (LScheme <> 'http') then
-    raise EHttpError.Create('unsupported HTTP client URL scheme: ' +
+    raise EHttpError.Create(hekProtocol, 'unsupported HTTP client URL scheme: ' +
       AUrl.Scheme);
 end;
 
@@ -417,7 +417,7 @@ begin
   if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit;
   if ABodyStream = nil then
-    raise EHttpError.Create('pooled retry request body is not replayable');
+    raise EHttpError.Create(hekProtocol, 'pooled retry request body is not replayable');
   ABodyStream.Position := AStartPosition;
 end;
 
@@ -1979,14 +1979,14 @@ begin
   FOptions := AOptions;
   if FOptions.MaxPoolSize <= 0 then
     FOptions.MaxPoolSize := 64;
-  InitCriticalSection(FPoolLock);
+  FPoolLock := Mutex;
   FPoolCount := 0;
 end;
 
 destructor TH1ClientTransport.Destroy;
 begin
   PoolClear;
-  DoneCriticalSection(FPoolLock);
+  FPoolLock := nil;
   inherited Destroy;
 end;
 
@@ -2020,7 +2020,7 @@ var
   LI: Int32;
 begin
   Result := nil;
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     for LI := 0 to FPoolCount - 1 do
       if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
@@ -2035,14 +2035,14 @@ begin
         Exit;
       end;
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
 end;
 
 procedure TH1ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const AConn: ITcpStream);
 begin
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
     begin
@@ -2058,7 +2058,7 @@ begin
     FPool[FPoolCount].Conn := AConn;
     Inc(FPoolCount);
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
 end;
 
@@ -2066,7 +2066,7 @@ procedure TH1ClientTransport.PoolClear;
 var
   LI: Int32;
 begin
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     for LI := 0 to FPoolCount - 1 do
       if FPool[LI].Conn <> nil then
@@ -2074,7 +2074,7 @@ begin
     FPoolCount := 0;
     SetLength(FPool, 0);
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
 end;
 
@@ -2094,7 +2094,7 @@ var
 begin
   Result := True;
   if not (AReq.Version in [hvHttp10, hvHttp11]) then
-    raise EHttpError.Create('h1 transport only supports HTTP/1.x requests');
+    raise EHttpError.Create(hekProtocol, 'h1 transport only supports HTTP/1.x requests');
 
   LPath := AReq.Path;
   if LPath = '' then
@@ -2153,7 +2153,7 @@ begin
         LN := AReq.Body.Read(LTmp[0], LReadSize);
       except
         on E: Exception do
-          raise EHttpError.Create('HTTP request body read failed: ' + E.Message);
+          raise EHttpError.Create(hekProtocol, 'HTTP request body read failed: ' + E.Message);
       end;
       if LN > 0 then
       begin
@@ -2166,7 +2166,7 @@ begin
       begin
         if Supports(LBuf, IFlusher, LFlusher) then
           LFlusher.Flush;
-        raise EHttpError.Create(
+        raise EHttpError.Create(hekBody,
           'HTTP request body shorter than declared content-length');
       end;
     end;
@@ -2239,15 +2239,15 @@ begin
 
   if LParser.IsComplete and
     IsSkippableInformationalResponse(LParser.GetStatusCode) then
-    raise EHttpError.Create('HTTP response incomplete: missing final response');
+    raise EHttpError.Create(hekProtocol, 'HTTP response incomplete: missing final response');
 
   if LSkippedInformational and (not LCurrentResponseStarted) then
-    raise EHttpError.Create('HTTP response incomplete: missing final response');
+    raise EHttpError.Create(hekProtocol, 'HTTP response incomplete: missing final response');
 
   if LParser.HasError then
-    raise EHttpError.Create('HTTP parse error: ' + LParser.ErrorMessage);
+    raise EHttpError.Create(hekParse, 'HTTP parse error: ' + LParser.ErrorMessage);
   if not LParser.IsComplete then
-    raise EHttpError.Create('HTTP response incomplete: connection closed');
+    raise EHttpError.Create(hekConnect, 'HTTP response incomplete: connection closed');
 
   FPending := LPending;
   LHasResponseTail := FPending <> '';

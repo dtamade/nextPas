@@ -20,9 +20,37 @@ type
   THttpStatus = UInt16;
   TTcpServerBackend = nextpas.core.net.server.base.TTcpServerBackend;
 
+  { Programmable HTTP error classification (single exception type, Kind field). }
+  THttpErrorKind = (
+    hekUnknown,
+    hekArgument,
+    hekTimeout,
+    hekConnect,
+    hekProtocol,
+    hekParse,
+    hekRedirect,
+    hekBody,
+    hekUpgrade,
+    hekRegistry,
+    hekStatus
+  );
+
   EHttpError = class(ENextPasError)
+  private
+    FKind: THttpErrorKind;
+    FStatus: THttpStatus;
+    FOp: string;
   public
     constructor Create(const AMessage: string); overload;
+    constructor Create(const AKind: THttpErrorKind;
+      const AMessage: string); overload;
+    constructor Create(const AKind: THttpErrorKind; const AMessage: string;
+      const AStatus: THttpStatus); overload;
+    constructor CreateOp(const AKind: THttpErrorKind; const AOp,
+      AMessage: string); overload;
+    property Kind: THttpErrorKind read FKind;
+    property Status: THttpStatus read FStatus;
+    property Op: string read FOp;
   end;
 
   TUrl = record
@@ -178,9 +206,56 @@ uses
 
 { EHttpError }
 
+function HttpErrorKindToCategory(const AKind: THttpErrorKind): TErrorCategory;
+begin
+  case AKind of
+    hekArgument:
+      Result := ecInvalidArgument;
+    hekTimeout:
+      Result := ecTimeout;
+    hekParse:
+      Result := ecParse;
+    hekConnect, hekProtocol, hekRedirect, hekBody, hekUpgrade, hekRegistry,
+      hekStatus, hekUnknown:
+      Result := ecNetwork;
+  else
+    Result := ecNetwork;
+  end;
+end;
+
 constructor EHttpError.Create(const AMessage: string);
 begin
   inherited Create(AMessage, ecNetwork);
+  FKind := hekUnknown;
+  FStatus := 0;
+  FOp := '';
+end;
+
+constructor EHttpError.Create(const AKind: THttpErrorKind;
+  const AMessage: string);
+begin
+  inherited Create(AMessage, HttpErrorKindToCategory(AKind));
+  FKind := AKind;
+  FStatus := 0;
+  FOp := '';
+end;
+
+constructor EHttpError.Create(const AKind: THttpErrorKind;
+  const AMessage: string; const AStatus: THttpStatus);
+begin
+  inherited Create(AMessage, HttpErrorKindToCategory(AKind));
+  FKind := AKind;
+  FStatus := AStatus;
+  FOp := '';
+end;
+
+constructor EHttpError.CreateOp(const AKind: THttpErrorKind; const AOp,
+  AMessage: string);
+begin
+  inherited Create(AMessage, HttpErrorKindToCategory(AKind));
+  FKind := AKind;
+  FStatus := 0;
+  FOp := AOp;
 end;
 
 { Free functions }
@@ -215,7 +290,7 @@ begin
   else if LUpper = 'CONNECT' then Result := hmConnect
   else if LUpper = 'TRACE' then Result := hmTrace
   else
-    raise EHttpError.Create('Unknown HTTP method: ' + AStr);
+    raise EHttpError.Create(hekParse, 'Unknown HTTP method: ' + AStr);
 end;
 
 function HttpStatusText(const ACode: THttpStatus): string;
@@ -313,9 +388,9 @@ var
   LPortVal: Int64;
 begin
   if (APort = '') or (not TryStrToInt(APort, LPortVal)) then
-    raise EHttpError.Create('Invalid port: ' + APort);
+    raise EHttpError.Create(hekParse, 'Invalid port: ' + APort);
   if (LPortVal < 0) or (LPortVal > 65535) then
-    raise EHttpError.Create('Port out of range: ' + APort);
+    raise EHttpError.Create(hekParse, 'Port out of range: ' + APort);
   Result := UInt16(LPortVal);
 end;
 
@@ -334,7 +409,7 @@ var
 begin
   Result := Default(TUrl);
   if ARaw = '' then
-    raise EHttpError.Create('Cannot parse empty URL');
+    raise EHttpError.Create(hekParse, 'Cannot parse empty URL');
 
   LRest := ARaw;
 
@@ -436,7 +511,7 @@ var
   LPos: SizeInt;
 begin
   if ARaw = '' then
-    raise EHttpError.Create('Cannot parse empty request-target');
+    raise EHttpError.Create(hekParse, 'Cannot parse empty request-target');
 
   if (ARaw[1] <> '/') and (ARaw[1] <> '*') and (Pos('://', ARaw) > 0) then
     Exit(TUrl.Parse(ARaw));

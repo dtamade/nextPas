@@ -56,8 +56,17 @@ begin
   LErr := EHttpError.Create('network boundary');
   try
     Check(LErr is ENextPasError, 'EHttpError inherits ENextPasError');
-    Check(LErr.Category = ecNetwork, 'EHttpError category is network');
+    Check(LErr.Category = ecNetwork, 'EHttpError default category is network');
+    Check(LErr.Kind = hekUnknown, 'EHttpError default Kind is unknown');
     CheckEqual('network boundary', LErr.Message, 'EHttpError preserves message');
+  finally
+    LErr.Free;
+  end;
+
+  LErr := EHttpError.Create(hekTimeout, 'deadline exceeded');
+  try
+    Check(LErr.Kind = hekTimeout, 'typed Create sets Kind');
+    Check(LErr.Category = ecTimeout, 'timeout Kind maps to ecTimeout');
   finally
     LErr.Free;
   end;
@@ -69,7 +78,8 @@ begin
     on E: EHttpError do
     begin
       LCaught := True;
-      Check(E.Category = ecNetwork, 'HttpStrToMethod error category is network');
+      Check(E.Kind = hekParse, 'HttpStrToMethod Kind is parse');
+      Check(E.Category = ecParse, 'HttpStrToMethod error category is parse');
     end;
   end;
   Check(LCaught, 'HttpStrToMethod raises EHttpError for invalid method');

@@ -14,7 +14,16 @@ uses
   nextpas.core.json;
 
 type
-  THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions)
+  { Builder body discriminant: distinguishes "no body" from empty string/bytes. }
+  THttpBuilderBodyKind = (
+    bbkNone,
+    bbkString,
+    bbkBytes,
+    bbkReader
+  );
+
+  THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions,
+    IHttpRequestWithContext)
   private
     type
       TPathParam = record
@@ -39,6 +48,7 @@ type
       FQueryParsed: Boolean;
       FQueryParams: TQueryParams;
       FRequestOptions: THttpRequestOptions;
+      FContext: IHttpContext;
     procedure EnsureUrlParsed;
     procedure EnsureRequestTargetParts;
   public
@@ -67,6 +77,8 @@ type
     function QueryParam(const AName: string): string;
     procedure SetRequestOptions(const AOptions: THttpRequestOptions);
     function GetRequestOptions: THttpRequestOptions;
+    function GetContext: IHttpContext;
+    procedure SetContext(const ACtx: IHttpContext);
   end;
 
   THttpResponse = class(TInterfacedObject, IHttpResponse)
@@ -74,12 +86,15 @@ type
     FStatusCode: THttpStatus;
     FHeaders: IHttpHeaders;
     FBody: IReader;
+    FBodyClosed: Boolean;
   public
     constructor Create(const AStatusCode: THttpStatus;
       const AHeaders: IHttpHeaders; const ABody: IReader);
+    destructor Destroy; override;
     function GetStatusCode: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
+    procedure Close;
   end;
 
 { Factory helpers }
@@ -292,7 +307,9 @@ type
     FBodyReader: IReader;
     FBodyString: string;
     FBodyBytes: TBytes;
-    FHasBody: Boolean;
+    FBodyKind: THttpBuilderBodyKind;
+    FContentLength: Int64;
+    FHasContentLength: Boolean;
     FContentType: string;
     FQueryParams: TQueryParams;
     FQueryCount: Int32;
@@ -303,6 +320,8 @@ type
     function BasicAuth(const AUsername, APassword: string): THttpRequestBuilder;
     function BearerAuth(const AToken: string): THttpRequestBuilder;
     function ContentType(const AContentType: string): THttpRequestBuilder;
+    { Known-length for Body(IReader). Required before Build when body is a reader. }
+    function ContentLength(const ALen: Int64): THttpRequestBuilder;
     function Body(const ABody: string): THttpRequestBuilder; overload;
     function Body(const ABody: TBytes): THttpRequestBuilder; overload;
     function Body(const ABody: IReader): THttpRequestBuilder; overload;
@@ -316,6 +335,7 @@ type
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.io.memory,
   nextpas.core.text.conv,
@@ -487,7 +507,7 @@ procedure ValidateFixedBodyResponseStatus(const AStatus: THttpStatus;
   const ABodyLength: Int64);
 begin
   if (ABodyLength > 0) and ResponseStatusMustNotHaveBody(AStatus) then
-    raise EHttpError.Create('HTTP response status must not include a body');
+    raise EHttpError.Create(hekArgument, 'HTTP response status must not include a body');
 end;
 
 procedure RequireResponseWriter(const AW: IHttpResponseWriter);
@@ -577,7 +597,7 @@ begin
   end;
 
   if FRawRequestTarget = '' then
-    raise EHttpError.Create('Cannot parse empty request-target');
+    raise EHttpError.Create(hekParse, 'Cannot parse empty request-target');
 
   if (FRawRequestTarget[1] <> '/') and (FRawRequestTarget[1] <> '*') and
     (Pos('://', FRawRequestTarget) > 0) then
@@ -720,6 +740,16 @@ begin
   Result := FRequestOptions;
 end;
 
+function THttpRequest.GetContext: IHttpContext;
+begin
+  Result := FContext;
+end;
+
+procedure THttpRequest.SetContext(const ACtx: IHttpContext);
+begin
+  FContext := ACtx;
+end;
+
 { THttpResponse }
 
 constructor THttpResponse.Create(const AStatusCode: THttpStatus;
@@ -729,6 +759,17 @@ begin
   FStatusCode := AStatusCode;
   FHeaders := HeadersOrNew(AHeaders);
   FBody := ABody;
+  FBodyClosed := False;
+end;
+
+destructor THttpResponse.Destroy;
+begin
+  try
+    Close;
+  except
+    { Destructor must not raise. }
+  end;
+  inherited;
 end;
 
 function THttpResponse.GetStatusCode: THttpStatus;
@@ -744,6 +785,41 @@ end;
 function THttpResponse.GetBody: IReader;
 begin
   Result := FBody;
+end;
+
+procedure THttpResponse.Close;
+var
+  LBody: IReader;
+  LReadCloser: IReadCloser;
+  LCloser: ICloser;
+  LStream: IStream;
+  LBuf: array[0..4095] of Byte;
+begin
+  if FBodyClosed then
+    Exit;
+  FBodyClosed := True;
+  LBody := FBody;
+  if LBody = nil then
+    Exit;
+
+  if Supports(LBody, IReadCloser, LReadCloser) then
+  begin
+    LReadCloser.Close;
+    Exit;
+  end;
+  if Supports(LBody, ICloser, LCloser) then
+  begin
+    LCloser.Close;
+    Exit;
+  end;
+  if Supports(LBody, IStream, LStream) then
+  begin
+    LStream.Close;
+    Exit;
+  end;
+
+  while LBody.Read(LBuf[0], SizeUInt(Length(LBuf))) > 0 do
+    ;
 end;
 
 { Factory helpers }
@@ -841,6 +917,9 @@ begin
   ValidateRequestBodyHeaders(LHeaders, AContentLength);
   if AContentLength > 0 then
     LHeaders.SetHeader('content-length', IntToStr(AContentLength))
+  else if (ABody <> nil) and (AContentLength = 0) then
+    { Explicit empty body (e.g. builder Body('')) publishes Content-Length: 0. }
+    LHeaders.SetHeader('content-length', '0')
   else if (ABody <> nil) and (AContentLength < 0) then
     { Body with unknown length: don't set content-length, let chunked handle it }
     LHeaders.SetHeader('transfer-encoding', 'chunked');
@@ -1005,12 +1084,12 @@ function HttpWriteResponseString(const AW: IHttpResponseWriter;
 begin
   RequireResponseWriter(AW);
   if HttpStatusIsInformational(AStatus) then
-    raise EHttpError.Create(
+    raise EHttpError.Create(hekArgument,
       'HTTP response string helper requires a final response status');
   if ResponseStatusMustNotHaveBody(AStatus) then
   begin
     if ABody <> '' then
-      raise EHttpError.Create('HTTP response status must not include a body');
+      raise EHttpError.Create(hekArgument, 'HTTP response status must not include a body');
     AW.WriteHeader(AStatus);
     Exit(0);
   end;
@@ -1039,12 +1118,12 @@ var
 begin
   RequireResponseWriter(AW);
   if HttpStatusIsInformational(AStatus) then
-    raise EHttpError.Create(
+    raise EHttpError.Create(hekArgument,
       'HTTP response bytes helper requires a final response status');
   if ResponseStatusMustNotHaveBody(AStatus) then
   begin
     if (ABody <> nil) and (Length(ABody) > 0) then
-      raise EHttpError.Create('HTTP response status must not include a body');
+      raise EHttpError.Create(hekArgument, 'HTTP response status must not include a body');
     AW.WriteHeader(AStatus);
     Exit(0);
   end;
@@ -1116,7 +1195,7 @@ begin
   LBody := HttpReadRequestBodyString(AReq);
   Result := JsonParse(LBody);
   if (Result <> nil) and Result.HasError then
-    raise EHttpError.Create('HTTP request body contains invalid JSON');
+    raise EHttpError.Create(hekParse, 'HTTP request body contains invalid JSON');
 end;
 
 { Escape a string for safe inclusion in an HTML attribute context.
@@ -1152,7 +1231,7 @@ var
 begin
   RequireResponseWriter(AW);
   if not HttpStatusIsRedirect(AStatus) then
-    raise EHttpError.Create('HttpRedirect requires a 3xx redirect status');
+    raise EHttpError.Create(hekArgument, 'HttpRedirect requires a 3xx redirect status');
   if ALocation = '' then
     raise EArgumentError.Create('HttpRedirect location must not be empty');
   { Reject protocol-relative URLs to prevent open redirect }
@@ -1330,7 +1409,9 @@ begin
   FBodyReader := nil;
   FBodyString := '';
   FBodyBytes := nil;
-  FHasBody := False;
+  FBodyKind := bbkNone;
+  FContentLength := 0;
+  FHasContentLength := False;
   FContentType := '';
   FQueryCount := 0;
   FRequestOptions := Default(THttpRequestOptions);
@@ -1371,6 +1452,17 @@ begin
   Result.FContentType := AContentType;
 end;
 
+function THttpRequestBuilder.ContentLength(
+  const ALen: Int64): THttpRequestBuilder;
+begin
+  Result := Self;
+  if ALen < 0 then
+    raise EArgumentError.Create(
+      'THttpRequestBuilder.ContentLength must be >= 0');
+  Result.FContentLength := ALen;
+  Result.FHasContentLength := True;
+end;
+
 function THttpRequestBuilder.Body(
   const ABody: string): THttpRequestBuilder;
 begin
@@ -1378,7 +1470,7 @@ begin
   Result.FBodyString := ABody;
   Result.FBodyReader := nil;
   Result.FBodyBytes := nil;
-  Result.FHasBody := True;
+  Result.FBodyKind := bbkString;
 end;
 
 function THttpRequestBuilder.Body(
@@ -1388,7 +1480,7 @@ begin
   Result.FBodyBytes := ABody;
   Result.FBodyString := '';
   Result.FBodyReader := nil;
-  Result.FHasBody := True;
+  Result.FBodyKind := bbkBytes;
 end;
 
 function THttpRequestBuilder.Body(
@@ -1398,7 +1490,7 @@ begin
   Result.FBodyReader := ABody;
   Result.FBodyString := '';
   Result.FBodyBytes := nil;
-  Result.FHasBody := True;
+  Result.FBodyKind := bbkReader;
 end;
 
 function THttpRequestBuilder.QueryParam(const AName,
@@ -1470,27 +1562,32 @@ begin
   if FContentType <> '' then
     LHeaders.SetHeader('content-type', FContentType);
 
-  if FHasBody then
-  begin
-    if FBodyReader <> nil then
-      Result := NewRequest(FMethod, LUrl, LHeaders, FBodyReader, 0)
-    else if FBodyString <> '' then
-    begin
-      LBodyString := FBodyString;
-      LBody := StringBodyReader(LBodyString);
-      Result := NewRequest(FMethod, LUrl, LHeaders, LBody, Int64(Length(LBodyString)));
-    end
-    else if FBodyBytes <> nil then
-    begin
-      LBodyBytes := FBodyBytes;
-      LBody := BytesBodyReader(LBodyBytes);
-      Result := NewRequest(FMethod, LUrl, LHeaders, LBody, Int64(Length(LBodyBytes)));
-    end
-    else
-      Result := NewRequest(FMethod, LUrl, LHeaders, nil, 0);
-  end
+  case FBodyKind of
+    bbkReader:
+      begin
+        if not FHasContentLength then
+          raise EArgumentError.Create(
+            'THttpRequestBuilder.Body(IReader) requires ContentLength(N); ' +
+            'use IHttpClient.SendStreaming for unknown-length bodies');
+        Result := NewRequest(FMethod, LUrl, LHeaders, FBodyReader, FContentLength);
+      end;
+    bbkString:
+      begin
+        LBodyString := FBodyString;
+        LBody := StringBodyReader(LBodyString);
+        Result := NewRequest(FMethod, LUrl, LHeaders, LBody,
+          Int64(Length(LBodyString)));
+      end;
+    bbkBytes:
+      begin
+        LBodyBytes := FBodyBytes;
+        LBody := BytesBodyReader(LBodyBytes);
+        Result := NewRequest(FMethod, LUrl, LHeaders, LBody,
+          Int64(Length(LBodyBytes)));
+      end;
   else
     Result := NewRequest(FMethod, LUrl, LHeaders, nil, 0);
+  end;
 
   if FRequestOptions.HasTimeout or FRequestOptions.HasMaxRedirects or
     FRequestOptions.HasFollowRedirects then

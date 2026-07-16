@@ -96,16 +96,16 @@ var
   LDigit: Int64;
 begin
   if AValue = '' then
-    raise EHttpError.Create('response content-length is invalid');
+    raise EHttpError.Create(hekProtocol, 'response content-length is invalid');
 
   Result := 0;
   for LI := 1 to Length(AValue) do
   begin
     if (AValue[LI] < '0') or (AValue[LI] > '9') then
-      raise EHttpError.Create('response content-length is invalid');
+      raise EHttpError.Create(hekProtocol, 'response content-length is invalid');
     LDigit := Ord(AValue[LI]) - Ord('0');
     if Result > ((High(Int64) - LDigit) div 10) then
-      raise EHttpError.Create('response content-length is too large');
+      raise EHttpError.Create(hekProtocol, 'response content-length is too large');
     Result := (Result * 10) + LDigit;
   end;
 end;
@@ -400,14 +400,14 @@ begin
   FContentLengthWritten := 0;
   LContentLengths := FHeaders.GetAll('content-length');
   if Length(LContentLengths) > 1 then
-    raise EHttpError.Create('response content-length is duplicated');
+    raise EHttpError.Create(hekProtocol, 'response content-length is duplicated');
   if Length(LContentLengths) = 1 then
   begin
     FDeclaredContentLength := ParseContentLengthValue(LContentLengths[0]);
     FHasDeclaredContentLength := True;
   end;
   if (Length(LContentLengths) > 0) and FHeaders.Has('transfer-encoding') then
-    raise EHttpError.Create(
+    raise EHttpError.Create(hekProtocol,
       'response cannot include both content-length and transfer-encoding');
 end;
 
@@ -416,9 +416,9 @@ begin
   if not FHasDeclaredContentLength then
     Exit;
   if ACount > SizeUInt(High(Int64)) then
-    raise EHttpError.Create('response body exceeds declared content-length');
+    raise EHttpError.Create(hekProtocol, 'response body exceeds declared content-length');
   if Int64(ACount) > FDeclaredContentLength - FContentLengthWritten then
-    raise EHttpError.Create('response body exceeds declared content-length');
+    raise EHttpError.Create(hekProtocol, 'response body exceeds declared content-length');
   Inc(FContentLengthWritten, Int64(ACount));
 end;
 
@@ -427,7 +427,7 @@ begin
   if (not FSuppressBody) and
      FHasDeclaredContentLength and
      (FContentLengthWritten <> FDeclaredContentLength) then
-    raise EHttpError.Create('response body shorter than declared content-length');
+    raise EHttpError.Create(hekProtocol, 'response body shorter than declared content-length');
 end;
 
 procedure TH1ResponseWriter.WriteHeader(const AStatus: THttpStatus);
@@ -468,11 +468,11 @@ end;
 function TH1ResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   if FFinalized then
-    raise EHttpError.Create('response already finalized');
+    raise EHttpError.Create(hekProtocol, 'response already finalized');
   if not FHeadersSent then
     WriteHeader(HTTP_STATUS_OK);
   if FNoBodyAllowed then
-    raise EHttpError.Create('response status must not include a body');
+    raise EHttpError.Create(hekProtocol, 'response status must not include a body');
   if FSuppressBody then
     Exit(ACount);
   TrackFixedLengthWrite(ACount);
@@ -511,7 +511,7 @@ end;
 function TH1ResponseWriter.Hijack: ITcpStream;
 begin
   if FConn = nil then
-    raise EHttpError.Create('Connection not available for hijack');
+    raise EHttpError.Create(hekProtocol, 'Connection not available for hijack');
   FHijacked := True;
   Result := FConn;
 end;

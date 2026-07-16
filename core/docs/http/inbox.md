@@ -82,14 +82,29 @@
 4. ~~P4 runtime/socket 成本隔离~~ ✅
 5. ~~P5 H3 honesty~~ ✅ blocked on QUIC（无伪面）
 
-**下一动作（非功能开发）**：path-limited landing 由总控决定。
+### 可用性修复队列（2026-07-16 评估后）
+
+规划见会话 plan；里程碑 M0–M7。默认：builder ContentLength+fail-fast；
+`EHttpError.Kind`；context 请求内生+owned values；response Close；IMutex；
+deprecated 本轮保留。
+
+1. ~~M0 控制面文档~~ ✅
+2. ~~M1 Builder body-kind / ContentLength / fail-fast~~ ✅
+3. ~~M2 EHttpError Kind 骨架 + 关键路径~~ ✅
+4. ~~M3 Context v2（附着 / SetOwnedValue / Has）~~ ✅
+5. ~~M4 IHttpResponse.Close~~ ✅
+6. ~~M5 TRTLCriticalSection → IMutex~~ ✅
+7. ~~M6 Kind 广覆盖~~ ✅
+8. ~~M7 全门禁 + 文档收口~~ ✅
+
 H3 实现不在本 lane 开；需 QUIC 落地后新开 lane。
+deprecated 物理删除为 optional M8（需单独确认）。
 
 ## Stage-complete 证据（2026-07-16）
 
-- `make focused FOCUS=core/tests/nextpas.core.http` → **35 suites / 1719 passed / 0 failed**
-- `make hygiene` → pass
-- 附带：全量 gate 暴露的 SysUtils/RFC7807/WebSocket TBytes 测试漂移已修复
+- 可用性修复波次收口：`make -C core/tests/nextpas.core.http clean test` →
+  **35 suites / 1723 passed / 0 failed**；`make hygiene` → pass
+- 先前基线：35 suites / 1719 passed（同日 stage-complete gate repair）
 
 ## 明确不做
 

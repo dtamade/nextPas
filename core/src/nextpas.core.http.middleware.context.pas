@@ -7,13 +7,13 @@ unit nextpas.core.http.middleware.context;
  *       Usage:
  *         router.Use(ContextMiddleware);
  *         // In auth middleware:
- *         HttpContextOf(AReq).SetValue('auth_user', LUserObj);
+ *         HttpContextOf(AReq).SetOwnedValue('auth_user', LUserObj);
  *         // In handler:
  *         LUser := HttpContextOf(AReq).GetValue('auth_user');
  *
- *       IHttpContext is attached via a thread-safe global map keyed by
- *       IHttpRequest pointer. The context is automatically released when
- *       the middleware returns (after the handler completes).
+ *       Context is attached on the request via IHttpRequestWithContext.
+ *       SetValue is non-owning; SetOwnedValue frees on overwrite/Remove/Destroy.
+ *       Has reports key existence (value may be nil).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -28,14 +28,16 @@ uses
 function ContextMiddleware: IHttpMiddleware;
 
 {** @desc Get the IHttpContext attached to a request.
-   Returns nil if context middleware is not active. }
+   Returns nil if context middleware is not active or request has no bag. }
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
 
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.http.base,
-  nextpas.core.http.middleware;
+  nextpas.core.http.middleware,
+  nextpas.core.sync;
 
 type
   THttpContext = class(TInterfacedObject, IHttpContext)
@@ -44,152 +46,140 @@ type
       TEntry = record
         Key: string;
         Value: TObject;
+        Owned: Boolean;
       end;
     var
       FEntries: array of TEntry;
-      FLock: TRTLCriticalSection;
+      FLock: IMutex;
+    procedure FreeOwnedAt(const AIndex: Int32);
+    procedure Put(const AKey: string; const AValue: TObject;
+      const AOwned: Boolean);
   public
     constructor Create;
     destructor Destroy; override;
     procedure SetValue(const AKey: string; const AValue: TObject);
+    procedure SetOwnedValue(const AKey: string; const AValue: TObject);
     function GetValue(const AKey: string): TObject;
     function Has(const AKey: string): Boolean;
     procedure Remove(const AKey: string);
   end;
-
-{ Global map: IHttpRequest pointer → IHttpContext }
-var
-  GContextMap: array of record
-    Req: Pointer;
-    Ctx: IHttpContext;
-  end;
-  GContextMapLock: TRTLCriticalSection;
-
-procedure MapPut(const AReq: IHttpRequest; const ACtx: IHttpContext);
-var
-  LI, LLen: Int32;
-  LPtr: Pointer;
-begin
-  LPtr := Pointer(AReq);
-  LLen := Length(GContextMap);
-  for LI := 0 to LLen - 1 do
-  begin
-    if GContextMap[LI].Req = LPtr then
-    begin
-      GContextMap[LI].Ctx := ACtx;
-      Exit;
-    end;
-  end;
-  SetLength(GContextMap, LLen + 1);
-  GContextMap[LLen].Req := LPtr;
-  GContextMap[LLen].Ctx := ACtx;
-end;
-
-function MapGet(const AReq: IHttpRequest): IHttpContext;
-var
-  LI, LLen: Int32;
-  LPtr: Pointer;
-begin
-  LPtr := Pointer(AReq);
-  LLen := Length(GContextMap);
-  for LI := 0 to LLen - 1 do
-  begin
-    if GContextMap[LI].Req = LPtr then
-      Exit(GContextMap[LI].Ctx);
-  end;
-  Result := nil;
-end;
-
-procedure MapRemove(const AReq: IHttpRequest);
-var
-  LI, LWrite, LLen: Int32;
-  LPtr: Pointer;
-begin
-  LPtr := Pointer(AReq);
-  LLen := Length(GContextMap);
-  LWrite := 0;
-  for LI := 0 to LLen - 1 do
-  begin
-    if GContextMap[LI].Req <> LPtr then
-    begin
-      if LWrite <> LI then
-        GContextMap[LWrite] := GContextMap[LI];
-      Inc(LWrite);
-    end;
-  end;
-  if LWrite < LLen then
-    SetLength(GContextMap, LWrite);
-end;
 
 { THttpContext }
 
 constructor THttpContext.Create;
 begin
   inherited Create;
-  InitCriticalSection(FLock);
+  FLock := Mutex;
 end;
 
 destructor THttpContext.Destroy;
+var
+  LI: Int32;
 begin
-  FEntries := nil;
-  DoneCriticalSection(FLock);
+  FLock.Acquire;
+  try
+    for LI := 0 to High(FEntries) do
+      FreeOwnedAt(LI);
+    FEntries := nil;
+  finally
+    FLock.Release;
+  end;
+  FLock := nil;
   inherited;
 end;
 
-procedure THttpContext.SetValue(const AKey: string; const AValue: TObject);
+procedure THttpContext.FreeOwnedAt(const AIndex: Int32);
+begin
+  if (AIndex < 0) or (AIndex > High(FEntries)) then
+    Exit;
+  if FEntries[AIndex].Owned and (FEntries[AIndex].Value <> nil) then
+  begin
+    FEntries[AIndex].Value.Free;
+    FEntries[AIndex].Value := nil;
+  end;
+  FEntries[AIndex].Owned := False;
+end;
+
+procedure THttpContext.Put(const AKey: string; const AValue: TObject;
+  const AOwned: Boolean);
 var
   LI, LLen: Int32;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     LLen := Length(FEntries);
     for LI := 0 to LLen - 1 do
     begin
       if FEntries[LI].Key = AKey then
       begin
+        FreeOwnedAt(LI);
         FEntries[LI].Value := AValue;
+        FEntries[LI].Owned := AOwned and (AValue <> nil);
         Exit;
       end;
     end;
     SetLength(FEntries, LLen + 1);
     FEntries[LLen].Key := AKey;
     FEntries[LLen].Value := AValue;
+    FEntries[LLen].Owned := AOwned and (AValue <> nil);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
+end;
+
+procedure THttpContext.SetValue(const AKey: string; const AValue: TObject);
+begin
+  Put(AKey, AValue, False);
+end;
+
+procedure THttpContext.SetOwnedValue(const AKey: string; const AValue: TObject);
+begin
+  Put(AKey, AValue, True);
 end;
 
 function THttpContext.GetValue(const AKey: string): TObject;
 var
   LI: Int32;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     for LI := 0 to High(FEntries) do
       if FEntries[LI].Key = AKey then
         Exit(FEntries[LI].Value);
     Result := nil;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 function THttpContext.Has(const AKey: string): Boolean;
+var
+  LI: Int32;
 begin
-  Result := GetValue(AKey) <> nil;
+  FLock.Acquire;
+  try
+    for LI := 0 to High(FEntries) do
+      if FEntries[LI].Key = AKey then
+        Exit(True);
+    Result := False;
+  finally
+    FLock.Release;
+  end;
 end;
 
 procedure THttpContext.Remove(const AKey: string);
 var
   LI, LWrite, LLen: Int32;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     LLen := Length(FEntries);
     LWrite := 0;
     for LI := 0 to LLen - 1 do
     begin
-      if FEntries[LI].Key <> AKey then
+      if FEntries[LI].Key = AKey then
+        FreeOwnedAt(LI)
+      else
       begin
         if LWrite <> LI then
           FEntries[LWrite] := FEntries[LI];
@@ -199,7 +189,7 @@ begin
     if LWrite < LLen then
       SetLength(FEntries, LWrite);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -211,45 +201,35 @@ begin
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
+      LWithCtx: IHttpRequestWithContext;
       LCtx: IHttpContext;
+      LAttached: Boolean;
     begin
-      LCtx := THttpContext.Create;
-      EnterCriticalSection(GContextMapLock);
-      try
-        MapPut(AReq, LCtx);
-      finally
-        LeaveCriticalSection(GContextMapLock);
+      LAttached := False;
+      LCtx := nil;
+      if Supports(AReq, IHttpRequestWithContext, LWithCtx) then
+      begin
+        LCtx := THttpContext.Create;
+        LWithCtx.SetContext(LCtx);
+        LAttached := True;
       end;
       try
         ANext.ServeHTTP(AReq, AW);
       finally
-        EnterCriticalSection(GContextMapLock);
-        try
-          MapRemove(AReq);
-        finally
-          LeaveCriticalSection(GContextMapLock);
-        end;
+        if LAttached then
+          LWithCtx.SetContext(nil);
       end;
     end);
   end);
 end;
 
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
+var
+  LWithCtx: IHttpRequestWithContext;
 begin
-  if AReq = nil then
-    Exit(nil);
-  EnterCriticalSection(GContextMapLock);
-  try
-    Result := MapGet(AReq);
-  finally
-    LeaveCriticalSection(GContextMapLock);
-  end;
+  if Supports(AReq, IHttpRequestWithContext, LWithCtx) then
+    Exit(LWithCtx.GetContext);
+  Result := nil;
 end;
-
-initialization
-  InitCriticalSection(GContextMapLock);
-
-finalization
-  DoneCriticalSection(GContextMapLock);
 
 end.

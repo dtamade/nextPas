@@ -214,8 +214,9 @@ begin
         raise EIOError.Create('HttpRequestReadBody: byte count overflow');
       Inc(LTotal, Int64(LN));
       if LTotal > AMaxBytes then
-        raise EHttpError.CreateFmt(
-          'Request body exceeds maximum allowed size (%d bytes)', [AMaxBytes]);
+        raise EHttpError.Create(hekBody,
+          'Request body exceeds maximum allowed size (' +
+          IntToStr(AMaxBytes) + ' bytes)');
 
       { Grow result buffer }
       if LResultLen + LN > LResultCap then

@@ -57,6 +57,7 @@ type
   THttpStatus = nextpas.core.http.base.THttpStatus;
   TTcpServerBackend = nextpas.core.http.base.TTcpServerBackend;
   TUrl = nextpas.core.http.base.TUrl;
+  THttpErrorKind = nextpas.core.http.base.THttpErrorKind;
   EHttpError = nextpas.core.http.base.EHttpError;
   THttpRequestOptions = nextpas.core.http.base.THttpRequestOptions;
 
@@ -64,6 +65,7 @@ type
   IHttpHeaders = nextpas.core.http.intf.IHttpHeaders;
   IHttpRequest = nextpas.core.http.intf.IHttpRequest;
   IHttpRequestWithOptions = nextpas.core.http.intf.IHttpRequestWithOptions;
+  IHttpRequestWithContext = nextpas.core.http.intf.IHttpRequestWithContext;
   IHttpResponse = nextpas.core.http.intf.IHttpResponse;
   IHttpResponseWriter = nextpas.core.http.intf.IHttpResponseWriter;
   IHttpHandler = nextpas.core.http.intf.IHttpHandler;

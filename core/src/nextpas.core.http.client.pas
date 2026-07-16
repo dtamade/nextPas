@@ -327,10 +327,12 @@ end;
 procedure CheckDownloadResponse(const AResp: IHttpResponse; const AUrl: string);
 begin
   if AResp = nil then
-    raise EHttpError.Create('HTTP download returned no response: ' + AUrl);
+    raise EHttpError.CreateOp(hekConnect, 'download', 'HTTP download returned no response: ' + AUrl);
   if (AResp.StatusCode < 200) or (AResp.StatusCode >= 300) then
-    raise EHttpError.Create('HTTP download failed with status ' +
-      IntToStr(Int64(AResp.StatusCode)) + ': ' + AUrl);
+    raise EHttpError.Create(hekStatus,
+      'HTTP download failed with status ' +
+      IntToStr(Int64(AResp.StatusCode)) + ': ' + AUrl,
+      AResp.StatusCode);
 end;
 
 procedure ValidateClientOptions(const AOptions: THttpClientOptions);
@@ -515,9 +517,9 @@ begin
   Result := TUrl.Parse(AUrl);
   Result.Scheme := AScheme;
   if Result.Host = '' then
-    raise EHttpError.Create('redirect URL host is empty');
+    raise EHttpError.Create(hekRedirect, 'redirect URL host is empty');
   if not RedirectAuthorityPortIsValid(AUrl) then
-    raise EHttpError.Create('redirect URL port is invalid');
+    raise EHttpError.Create(hekRedirect, 'redirect URL port is invalid');
 end;
 
 function DefaultPortForScheme(const AScheme: string): UInt16;
@@ -657,40 +659,15 @@ begin
   if (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit;
   if ABodyStream = nil then
-    raise EHttpError.Create('redirect request body is not replayable');
+    raise EHttpError.Create(hekBody, 'redirect request body is not replayable');
   ABodyStream.Position := AStartPosition;
 end;
 
 procedure ReleaseResponseBody(const AResp: IHttpResponse);
-var
-  LBody: IReader;
-  LReadCloser: IReadCloser;
-  LCloser: ICloser;
-  LStream: IStream;
-  LBuf: array[0..4095] of Byte;
 begin
-  if (AResp = nil) or (AResp.Body = nil) then
+  if AResp = nil then
     Exit;
-  LBody := AResp.Body;
-
-  if Supports(LBody, IReadCloser, LReadCloser) then
-  begin
-    LReadCloser.Close;
-    Exit;
-  end;
-  if Supports(LBody, ICloser, LCloser) then
-  begin
-    LCloser.Close;
-    Exit;
-  end;
-  if Supports(LBody, IStream, LStream) then
-  begin
-    LStream.Close;
-    Exit;
-  end;
-
-  while LBody.Read(LBuf[0], SizeUInt(Length(LBuf))) > 0 do
-    ;
+  AResp.Close;
 end;
 
 procedure ReleaseResponseBodyIgnoringErrors(const AResp: IHttpResponse);
@@ -790,13 +767,13 @@ begin
   if LScheme <> '' then
   begin
     if (LScheme <> 'http') and (LScheme <> 'https') then
-      raise EHttpError.Create('unsupported redirect URL scheme: ' + LScheme);
+      raise EHttpError.Create(hekRedirect, 'unsupported redirect URL scheme: ' + LScheme);
     Exit(ParseRedirectAuthorityUrl(ALocation, LScheme));
   end;
   if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
   begin
     if ABaseUrl.Scheme = '' then
-      raise EHttpError.Create('network-path redirect requires base URL scheme');
+      raise EHttpError.Create(hekRedirect, 'network-path redirect requires base URL scheme');
     Exit(ParseRedirectAuthorityUrl(ABaseUrl.Scheme + ':' + ALocation,
       ABaseUrl.Scheme));
   end;
@@ -854,7 +831,7 @@ begin
   CaptureRedirectBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LResp := FTransport.RoundTrip(AReq);
   if LResp = nil then
-    raise EHttpError.Create('HTTP transport returned no response');
+    raise EHttpError.CreateOp(hekConnect, 'round_trip', 'HTTP transport returned no response');
 
   // Determine redirect behavior: per-request override or client default
   LFollowRedirects := FOptions.FollowRedirects;
@@ -873,21 +850,21 @@ begin
     if ARedirectsLeft <= 0 then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create('too many redirects');
+      raise EHttpError.Create(hekRedirect, 'too many redirects');
     end;
 
     LRespHeaders := LResp.Headers;
     if LRespHeaders = nil then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create('redirect with no response headers');
+      raise EHttpError.Create(hekRedirect, 'redirect with no response headers');
     end;
 
     LLocations := LRespHeaders.GetAll('location');
     if Length(LLocations) > 1 then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create('redirect with duplicate Location headers');
+      raise EHttpError.Create(hekRedirect, 'redirect with duplicate Location headers');
     end;
 
     if Length(LLocations) = 1 then
@@ -897,7 +874,7 @@ begin
     if LLocation = '' then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create('redirect with no Location header');
+      raise EHttpError.Create(hekRedirect, 'redirect with no Location header');
     end;
 
     try
@@ -2272,7 +2249,8 @@ begin
 
     LDestDir := nextpas.core.fs.PathDir(ADestPath);
     if not nextpas.core.fs.MkdirAll(LDestDir) then
-      raise EHttpError.Create('HTTP download could not create directory: ' + LDestDir);
+      raise EHttpError.CreateOp(hekBody, 'download',
+        'HTTP download could not create directory: ' + LDestDir);
 
     LTempFile := nextpas.core.fs.TempFile(LDestDir,
       '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
@@ -2288,7 +2266,8 @@ begin
       LTempFile := nil;
 
       if not nextpas.core.fs.Rename(LTempPath, ADestPath) then
-        raise EHttpError.Create('HTTP download could not publish file: ' + ADestPath);
+        raise EHttpError.CreateOp(hekBody, 'download',
+          'HTTP download could not publish file: ' + ADestPath);
       LCommitted := True;
     finally
       if LTempFile <> nil then
@@ -2428,9 +2407,11 @@ begin
   if AResp = nil then
     raise EArgumentError.Create('HTTP response is nil');
   if not nextpas.core.http.base.HttpStatusIsSuccess(AResp.StatusCode) then
-    raise EHttpError.Create('HTTP request failed with status ' +
+    raise EHttpError.Create(hekStatus,
+      'HTTP request failed with status ' +
       IntToStr(Int64(AResp.StatusCode)) + ' ' +
-      nextpas.core.http.base.HttpStatusText(AResp.StatusCode));
+      nextpas.core.http.base.HttpStatusText(AResp.StatusCode),
+      AResp.StatusCode);
   Result := AResp;
 end;
 

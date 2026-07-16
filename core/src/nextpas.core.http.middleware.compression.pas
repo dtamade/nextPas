@@ -247,9 +247,9 @@ begin
   { Prevent memory DoS from unbounded buffering }
   if (AExtra > MAX_COMPRESS_BUFFER_SIZE) or
      (FBodyLen > MAX_COMPRESS_BUFFER_SIZE - AExtra) then
-    raise EHttpError.Create('Response body too large for compression buffering');
+    raise EHttpError.Create(hekBody, 'Response body too large for compression buffering');
   if AExtra > High(SizeUInt) - FBodyLen then
-    raise EHttpError.Create('Response body size overflow');
+    raise EHttpError.Create(hekBody, 'Response body size overflow');
   if FBodyLen + AExtra > SizeUInt(Length(FBody)) then
   begin
     LNewCap := SizeUInt(Length(FBody)) * 2;

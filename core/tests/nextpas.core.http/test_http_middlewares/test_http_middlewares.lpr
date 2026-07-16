@@ -74,13 +74,14 @@ type
     destructor Destroy; override;
   end;
 
-  TMockRequest = class(TInterfacedObject, IHttpRequest)
+  TMockRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithContext)
   private
     FMethod: THttpMethod;
     FUrl: TUrl;
     FHeaders: IHttpHeaders;
     FContentLength: Int64;
     FBodyReader: IReader;
+    FContext: IHttpContext;
   public
     constructor Create(const AMethod: THttpMethod; const APath: string);
     procedure SetContentLength(const AValue: Int64);
@@ -99,6 +100,8 @@ type
     function GetRemoteAddr: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
+    function GetContext: IHttpContext;
+    procedure SetContext(const ACtx: IHttpContext);
   end;
 
 { TMockResponseWriter }
@@ -255,6 +258,12 @@ begin Result := ''; end;
 
 function TMockRequest.QueryParam(const AName: string): string;
 begin Result := ''; end;
+
+function TMockRequest.GetContext: IHttpContext;
+begin Result := FContext; end;
+
+procedure TMockRequest.SetContext(const ACtx: IHttpContext);
+begin FContext := ACtx; end;
 
 { === Recovery Tests === }
 
@@ -2793,6 +2802,46 @@ begin
   Check(LGotHas, 'set/has/remove works');
 end;
 
+procedure TestContextMiddlewareSetOwnedValue;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LOwnedSeen: Boolean;
+  LOwned: TObject;
+begin
+  LOwnedSeen := False;
+  LOwned := TObject.Create;
+  try
+    LHandler := Chain(
+      HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      var
+        LCtx: IHttpContext;
+      begin
+        LCtx := HttpContextOf(AReq);
+        if LCtx <> nil then
+        begin
+          LCtx.SetOwnedValue('owned', LOwned);
+          LOwnedSeen := LCtx.Has('owned') and (LCtx.GetValue('owned') = LOwned);
+          LCtx.Remove('owned');
+          LOwnedSeen := LOwnedSeen and (not LCtx.Has('owned'));
+          LOwned := nil; { ownership transferred then freed by Remove }
+        end;
+        AW.WriteHeader(HTTP_STATUS_OK);
+      end),
+      [ContextMiddleware]
+    );
+    LReq := TMockRequest.Create(hmGet, '/test');
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReq, LW);
+    Check(LOwnedSeen, 'SetOwnedValue has/remove frees owned object');
+  finally
+    LOwned.Free;
+  end;
+end;
+
 procedure TestContextMiddlewareNilWithoutContext;
 var
   LReq: IHttpRequest;
@@ -3827,6 +3876,7 @@ begin
   { Context }
   T.Test('Context: creates context', @TestContextMiddlewareCreatesContext);
   T.Test('Context: set and get value', @TestContextMiddlewareSetGetValue);
+  T.Test('Context: SetOwnedValue', @TestContextMiddlewareSetOwnedValue);
   T.Test('Context: nil without middleware', @TestContextMiddlewareNilWithoutContext);
   T.Test('Context: cleans up after handler', @TestContextMiddlewareCleansUp);
   { RateLimit Retry-After }

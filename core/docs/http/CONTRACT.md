@@ -69,10 +69,33 @@ end;
   `deprecated 'Use THttpRequestBuilder instead'`；门面与 `message.pas` 必须同标记
   （`test_http_contract` source-contract 锁住）。
 - Body 通过 `IReader` 表达；固定 body helpers 会复制到内存 reader 并发布 `Content-Length`。
-- Builder `Body(IReader)` 当前固定 `Content-Length: 0`（不扩面加
-  `ContentLength()` 前，已知长度流式请求仍走既有 deprecated overload 或
-  `SendStreaming`）。
+- Builder body 契约（可用性修复后）：
+  - `Body(string|TBytes)`：按实际长度发布 `Content-Length`；**空 string** 仍是
+    有 body + `Content-Length: 0`（与「未调用 Body」区分）。
+  - `Body(IReader)` + **`ContentLength(N)`**：已知长度流式请求；`Build` 调用
+    `NewRequest(..., Reader, N)`。
+  - 仅 `Body(IReader)` 未声明长度 → **`Build` fail-fast**（`EArgumentError`），
+    **禁止**静默 `Content-Length: 0`。
+  - 未知长度 / 不可回放流：走 `SendStreaming`（不经 builder 假装已知 CL）。
 - Streaming：`NewStreamingRequest` + `SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
+
+### 2.2.1 EHttpError.Kind（可用性修复）
+
+- `EHttpError` 保留单一异常类型；增加 `THttpErrorKind`（Timeout/Connect/Protocol/
+  Parse/Redirect/Body/Upgrade/Registry/Status/…）与 `Kind` / 可选 `Status` / `Op`。
+- `Create(string)` 保持兼容（`Kind = hekUnknown`，Category 仍默认 network）。
+- 新代码优先 `Create(Kind, Message)`；调用方可 `except on E: EHttpError` 后匹配 Kind。
+
+### 2.2.2 IHttpContext（可用性修复）
+
+- Context 附着在 **请求对象**（`IHttpRequestWithContext`），不使用进程级 pointer map。
+- `SetValue` = 非拥有；`SetOwnedValue` = context 拥有并在覆盖/Remove/Destroy 时 Free。
+- `Has(Key)` = 键存在（允许 value=nil 的非拥有条目）。
+
+### 2.2.3 IHttpResponse.Close（可用性修复）
+
+- `Close` 语义对齐 `HttpReleaseResponseBody`（幂等）；析构时若未 Close 则自动 Close。
+- 调用方应先读完 body 再让 response 离开作用域，或显式 `Close` / Read helper。
 
 ### 2.3 Router / Middleware
 

@@ -102,7 +102,7 @@ end;
 constructor TMiddlewareChain.Create(const AHandler: IHttpHandler);
 begin
   if AHandler = nil then
-    raise EHttpError.Create('HTTP middleware chain root handler must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP middleware chain root handler must not be nil');
   inherited Create;
   FHandler := AHandler;
   FBuilt := nil;
@@ -125,7 +125,7 @@ end;
 procedure TMiddlewareChain.Use(const AMiddleware: IHttpMiddleware);
 begin
   if AMiddleware = nil then
-    raise EHttpError.Create('HTTP middleware must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP middleware must not be nil');
   SetLength(FMiddlewares, Length(FMiddlewares) + 1);
   FMiddlewares[High(FMiddlewares)] := AMiddleware;
   FBuilt := nil; // invalidate cached build
@@ -176,14 +176,14 @@ end;
 function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler;
 begin
   if not Assigned(AFunc) then
-    raise EHttpError.Create('HTTP handler callback must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP handler callback must not be nil');
   Result := TFuncHandler.Create(AFunc);
 end;
 
 function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler;
 begin
   if not Assigned(AMethod) then
-    raise EHttpError.Create('HTTP handler method must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP handler method must not be nil');
   Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
     AMethod(AReq, AW);
@@ -193,7 +193,7 @@ end;
 function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler;
 begin
   if not Assigned(AProc) then
-    raise EHttpError.Create('HTTP handler procedure must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP handler procedure must not be nil');
   Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
     AProc(AReq, AW);
@@ -203,7 +203,7 @@ end;
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;
 begin
   if not Assigned(AWrapFunc) then
-    raise EHttpError.Create('HTTP middleware callback must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP middleware callback must not be nil');
   Result := TFuncMiddleware.Create(AWrapFunc);
 end;
 
@@ -229,9 +229,9 @@ function WhenMiddleware(
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
 begin
   if not Assigned(APredicate) then
-    raise EHttpError.Create('HTTP conditional middleware predicate must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP conditional middleware predicate must not be nil');
   if AMiddleware = nil then
-    raise EHttpError.Create('HTTP conditional middleware must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP conditional middleware must not be nil');
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   var
     LWrapped: IHttpHandler;
@@ -250,7 +250,7 @@ end;
 function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware;
 begin
   if APool = nil then
-    raise EHttpError.Create('HTTP async middleware thread pool must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP async middleware thread pool must not be nil');
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)

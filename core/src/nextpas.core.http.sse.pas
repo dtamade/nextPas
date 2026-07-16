@@ -150,7 +150,7 @@ var
   LTotal, LWritten, LRemaining: SizeUInt;
 begin
   if not FOpen then
-    raise EHttpError.Create('SSE: stream already closed');
+    raise EHttpError.Create(hekProtocol, 'SSE: stream already closed');
   LLine := ALine + #10;
   LTotal := 0;
   while LTotal < SizeUInt(Length(LLine)) do
@@ -170,7 +170,7 @@ var
   LLines: string;
 begin
   if not FOpen then
-    raise EHttpError.Create('SSE: stream already closed');
+    raise EHttpError.Create(hekProtocol, 'SSE: stream already closed');
   if AEvent.Retry < 0 then
     raise EArgumentError.Create('SSE retry must not be negative');
   ValidateSSEFieldValue('event name', AEvent.Event, False);

@@ -103,7 +103,7 @@ begin
   LTlsConn := NewTlsServerTcpStream(FRawConn, FContext);
   LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LTlsConn)));
   if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
-    raise EHttpError.Create('h2 TLS server requires negotiated ALPN "h2"');
+    raise EHttpError.Create(hekProtocol, 'h2 TLS server requires negotiated ALPN "h2"');
 
   LSession := CreateInnerSession(LTlsConn);
   if LSession <> nil then

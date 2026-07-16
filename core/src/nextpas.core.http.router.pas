@@ -266,7 +266,7 @@ begin
       { Check for existing wildcard at this level }
       for LJ := 0 to High(LCur^.Children) do
         if LCur^.Children[LJ]^.Kind = nkWildcard then
-          raise EHttpError.Create('Duplicate wildcard at: ' + APath);
+          raise EHttpError.Create(hekArgument, 'Duplicate wildcard at: ' + APath);
       LChild := NewNode('', nkWildcard);
       LChild^.ParamName := Copy(LSeg, 3, Length(LSeg) - 2);
       SetLength(LCur^.Children, Length(LCur^.Children) + 1);
@@ -356,7 +356,7 @@ begin
 
   { Assign handler }
   if LCur^.HasHandler then
-    raise EHttpError.Create('Duplicate route: ' + APath);
+    raise EHttpError.Create(hekArgument, 'Duplicate route: ' + APath);
   LCur^.Handler := AHandler;
   LCur^.HasHandler := True;
 end;
@@ -447,11 +447,11 @@ end;
 procedure THttpRouter.Handle(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
 begin
   if not Assigned(AHandler) then
-    raise EHttpError.Create('Route handler must not be nil');
+    raise EHttpError.Create(hekArgument, 'Route handler must not be nil');
   if APattern = '' then
-    raise EHttpError.Create('Route pattern must not be empty');
+    raise EHttpError.Create(hekArgument, 'Route pattern must not be empty');
   if (Length(APattern) < 1) or (APattern[1] <> '/') then
-    raise EHttpError.Create('Route pattern must start with /');
+    raise EHttpError.Create(hekArgument, 'Route pattern must start with /');
   InsertRoute(FTrees[AMethod], APattern, AHandler);
 end;
 
@@ -462,13 +462,13 @@ var
   LError: string;
 begin
   if not Assigned(AHandler) then
-    raise EHttpError.Create('Route handler must not be nil');
+    raise EHttpError.Create(hekArgument, 'Route handler must not be nil');
   if APattern = '' then
-    raise EHttpError.Create('Route pattern must not be empty');
+    raise EHttpError.Create(hekArgument, 'Route pattern must not be empty');
   if (Length(APattern) < 1) or (APattern[1] <> '/') then
-    raise EHttpError.Create('Route pattern must start with /');
+    raise EHttpError.Create(hekArgument, 'Route pattern must start with /');
   if not TRegex.TryCompile(APattern, LEntry.Regex, LError) then
-    raise EHttpError.Create('Invalid regex route pattern: ' + LError);
+    raise EHttpError.Create(hekArgument, 'Invalid regex route pattern: ' + LError);
   LEntry.Pattern := APattern;
   LEntry.Handler := AHandler;
   LLen := Length(FRegexRoutes[AMethod]);
@@ -479,7 +479,7 @@ end;
 procedure THttpRouter.Use(const AMiddleware: IHttpMiddleware);
 begin
   if AMiddleware = nil then
-    raise EHttpError.Create('Route middleware must not be nil');
+    raise EHttpError.Create(hekArgument, 'Route middleware must not be nil');
   SetLength(FMiddlewares, Length(FMiddlewares) + 1);
   FMiddlewares[High(FMiddlewares)] := AMiddleware;
 end;

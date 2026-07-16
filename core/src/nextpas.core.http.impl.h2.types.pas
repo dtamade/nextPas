@@ -246,7 +246,7 @@ implementation
 
 procedure RaiseH2ConfigError(const AMessage: string);
 begin
-  raise EHttpError.Create(AMessage);
+  raise EHttpError.Create(hekArgument, AMessage);
 end;
 
 procedure EnsureNonNegativeTimeout(const AValue: Int64; const AName: string);

@@ -89,7 +89,7 @@ var
   LH1Options: TH1ServerTransportOptions;
 begin
   if AOptions.TLSContext <> nil then
-    raise EHttpError.Create(
+    raise EHttpError.Create(hekRegistry,
       'TLS HTTP server currently requires HTTP/2 transport selection');
   LH1Options.ReadTimeout := AOptions.ReadTimeout;
   LH1Options.WriteTimeout := AOptions.WriteTimeout;
@@ -131,9 +131,9 @@ procedure RegisterClientTransport(const AVersion: THttpVersion;
   const AFactory: THttpClientTransportFactory);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot register after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot register after initialization');
   if not Assigned(AFactory) then
-    raise EHttpError.Create('client transport factory must not be nil');
+    raise EHttpError.Create(hekRegistry, 'client transport factory must not be nil');
   GClientFactories[AVersion] := AFactory;
 end;
 
@@ -143,23 +143,23 @@ procedure RegisterServerTransport(const AVersion: THttpVersion;
   const AFactory: THttpServerTransportFactory);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot register after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot register after initialization');
   if not Assigned(AFactory) then
-    raise EHttpError.Create('server transport factory must not be nil');
+    raise EHttpError.Create(hekRegistry, 'server transport factory must not be nil');
   GServerFactories[AVersion] := AFactory;
 end;
 
 procedure UnregisterClientTransport(const AVersion: THttpVersion);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot unregister after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot unregister after initialization');
   GClientFactories[AVersion] := nil;
 end;
 
 procedure UnregisterServerTransport(const AVersion: THttpVersion);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot unregister after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot unregister after initialization');
   GServerFactories[AVersion] := nil;
 end;
 
@@ -190,9 +190,9 @@ end;
 procedure SetDefaultClientVersion(const AVersion: THttpVersion);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot change default after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot change default after initialization');
   if not HasClientTransport(AVersion) then
-    raise EHttpError.Create('no client transport registered for ' +
+    raise EHttpError.Create(hekRegistry, 'no client transport registered for ' +
       HttpVersionToStr(AVersion));
   GDefaultClientVersion := AVersion;
 end;
@@ -200,9 +200,9 @@ end;
 procedure SetDefaultServerVersion(const AVersion: THttpVersion);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot change default after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot change default after initialization');
   if not HasServerTransport(AVersion) then
-    raise EHttpError.Create('no server transport registered for ' +
+    raise EHttpError.Create(hekRegistry, 'no server transport registered for ' +
       HttpVersionToStr(AVersion));
   GDefaultServerVersion := AVersion;
 end;
@@ -228,7 +228,7 @@ var
   LFactory: THttpClientTransportFactory;
 begin
   if not TryGetClientTransportFactory(AVersion, LFactory) then
-    raise EHttpError.Create('no client transport registered for ' +
+    raise EHttpError.Create(hekRegistry, 'no client transport registered for ' +
       HttpVersionToStr(AVersion));
   Result := LFactory(AOptions);
 end;
@@ -239,7 +239,7 @@ var
   LFactory: THttpServerTransportFactory;
 begin
   if not TryGetServerTransportFactory(AVersion, LFactory) then
-    raise EHttpError.Create('no server transport registered for ' +
+    raise EHttpError.Create(hekRegistry, 'no server transport registered for ' +
       HttpVersionToStr(AVersion));
   Result := LFactory(AOptions);
 end;

@@ -104,8 +104,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   headers-only / body / body-text / body-bytes / content-type variants publish
   `Content-Length` when a body is supplied; negative or conflicting
   `Content-Length` raises `EArgumentError`.
-- Builder note: `Body(IReader)` currently builds with `Content-Length: 0`;
-  known-length streaming is not expanded on the builder yet.
+- Builder note: `Body(IReader)` requires `ContentLength(N)` before `Build`;
+  missing length fail-fasts. Empty `Body('')` publishes `Content-Length: 0`.
+  Unknown-length streams use `SendStreaming`, not the builder.
 - Request helpers do not implement caller-supplied `Transfer-Encoding`; any
   `Transfer-Encoding` header raises `EArgumentError`. Streaming/chunked request
   body ownership remains a future API seam rather than a silent header escape

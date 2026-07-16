@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-16 (non-H3 stage-complete: full 35-suite gate green)
+> Last updated: 2026-07-16 (usability-fix M0–M7 closed; non-H3 stage-complete)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -17,17 +17,16 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 
 ## Current Position
 
-This lane is **non-H3 stage-complete** (P1–P5 queue empty; full Makefile gate green):
+This lane is **non-H3 stage-complete** on protocol surface, and the
+**usability-fix wave (M0–M7)** is **closed**:
 
-- G0 control and module discipline already exist in `AGENTS.md`, `core/AGENTS.md`, and `core/docs/design-conventions.md`.
-- G1 stable H1 public surface is landed: server/client/router/headers/url/message/middleware/static/websocket all exist with substantial focused coverage.
-- G2 correctness and lifecycle proof is closed for the open keep-alive decision: **INV-12** is final public contract (`CONTRACT.md` §3.1); threaded and Linux `epoll` paths have broad raw-wire/server proof.
-- G3 API and performance isolation is closed for this stage: builder-first surface audit (P3) + residual cost ladder (P4); no second overlapping API family.
-- G4 H2 transport is landed and facade-reachable: live `NewHttpClient`/`NewHttpServer` + `Options.WithVersion(hvHttp2)` cleartext prior-knowledge proven by `test_http_h2_facade`; lower suites cover frame/hpack/session/client/TLS ALPN.
-- G5 Static graduation complete; WebSocket server + client landed (helper-level, not subsystem graduation).
-- H3 remains **closed-as-blocked** on independent QUIC (enum + registry seam only; no built-in factory).
-- Module gate: `core/tests/nextpas.core.http/Makefile` runs **35** focused suites (includes `test_http_h2_facade`); side suites are benchmarks/examples/smoke/integration/tls_real.
-- Full gate evidence (2026-07-16): `make focused FOCUS=core/tests/nextpas.core.http` → **1719 passed / 0 failed** across 35 suites; `make hygiene` pass.
+- G0–G5 and H3 honesty remain as previously closed (see below / Recent Fixes).
+- Closed queue: builder `ContentLength` + fail-fast; `EHttpError.Kind`;
+  request-attached context + `SetOwnedValue`; `IHttpResponse.Close`; `IMutex`;
+  Kind coverage on main raise sites; full module gate + docs.
+- Module gate: `core/tests/nextpas.core.http/Makefile` runs **35** focused suites.
+- Full gate evidence (2026-07-16 usability wave): **1723 passed / 0 failed**.
+- Optional remaining: M8 physical delete of deprecated overloads (needs confirm).
 
 ### Stage completion definition (non-H3)
 
@@ -42,6 +41,17 @@ HTTP can be called stage-complete only when all of these hold:
 
 ### Recent Fixes (2026-07-16)
 
+**Usability-fix wave M0–M7 (2026-07-16)**
+
+- Builder: `ContentLength()`, body-kind, fail-fast when `Body(IReader)` lacks length;
+  empty string body is not “no body”.
+- `EHttpError.Kind` (`THttpErrorKind`) + Category mapping; main raise sites tagged.
+- Context: request-attached via `IHttpRequestWithContext`; drop process-global map;
+  `SetOwnedValue` / fixed `Has`; `IMutex`.
+- `IHttpResponse.Close` + destructor auto-close; client helpers call `Close`.
+- Pool/metrics/ratelimit/context: `TRTLCriticalSection` → `IMutex`.
+- Evidence: 35 suites, **1723** passed / 0 failed, hygiene pass.
+
 **Stage-complete gate repair (2026-07-16): full 35-suite green**
 
 - SysUtils isolation drift in tests: `FsReadFileText`→`ReadFileText`, `Sleep`→`TSleep`,
@@ -49,7 +59,7 @@ HTTP can be called stage-complete only when all of these hold:
 - RFC 7807 expectations aligned (`application/problem+json`, `title`/`detail`).
 - WebSocket tests updated for `TWebSocketFrame.Payload: TBytes` + Ping/Pong TBytes.
 - Headers source-contract mask now applied (`nextpas.core.http*.pas` etc.).
-- Evidence: 35 suites, 1719 passed / 0 failed, hygiene pass.
+- Prior evidence: 35 suites, 1719 passed / 0 failed, hygiene pass.
 
 **P2–P5 (2026-07-16): Queue closure toward non-H3 stage-complete**
 

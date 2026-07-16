@@ -1353,7 +1353,7 @@ var
 begin
   LOriginalHeaders := AStream.Headers;
   if LOriginalHeaders = nil then
-    raise EHttpError.Create('h2 stream missing headers');
+    raise EHttpError.Create(hekProtocol, 'h2 stream missing headers');
   LMethod := HttpMethodFromPseudo(ExtractPseudoHeader(LOriginalHeaders, ':method'));
   LPath := ExtractPseudoHeader(LOriginalHeaders, ':path');
   LScheme := ExtractPseudoHeader(LOriginalHeaders, ':scheme');
