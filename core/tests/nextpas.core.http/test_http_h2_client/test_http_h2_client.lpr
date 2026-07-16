@@ -4,6 +4,7 @@ program test_http_h2_client;
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.io.intf,
   nextpas.core.io.base,
   nextpas.core.io.memory,

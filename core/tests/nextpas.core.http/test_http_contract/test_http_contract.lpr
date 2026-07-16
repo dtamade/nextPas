@@ -10,6 +10,7 @@ uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.io.intf,

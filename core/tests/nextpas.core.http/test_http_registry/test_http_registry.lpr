@@ -5,6 +5,7 @@ program test_http_registry;
 uses
   nextpas.core.thread.init,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.test,
   nextpas.core.net,
   nextpas.core.net.base,
