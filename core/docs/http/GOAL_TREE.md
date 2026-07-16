@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-16 (usability-fix wave-2 D1–D7 / M1–M5; non-H3 stage-complete)
+> Last updated: 2026-07-16 (usability-fix wave-3 M0–M6 closed; non-H3 stage-complete)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -17,18 +17,22 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 
 ## Current Position
 
-This lane is **non-H3 stage-complete** on protocol surface, and the
-**usability-fix waves** are closed through wave-2 (D1–D7 / M1–M5):
+This lane is **non-H3 stage-complete** on protocol surface. Usability-fix
+waves **1–3 are closed** (wave-3 defaults D1–D8):
 
 - G0–G5 and H3 honesty remain as previously closed (see below / Recent Fixes).
 - Wave-1 (M0–M7): builder `ContentLength` + fail-fast; `EHttpError.Kind`;
   request-attached context + `SetOwnedValue`; `IHttpResponse.Close`; `IMutex`.
 - Wave-2 (M1–M5): transport `hekTimeout` wrap; message-shape `hekArgument`;
   `HttpErrorIsTimeout` / `HttpErrorIsRetryable`; `THttpRequestWrapper` fidelity;
-  `Post(IReader)` fail-fast (no silent ReadAll); examples/tests FPC RTL isolation
-  via `process`/`text.conv`/`os.env`/`fs`/`path`.
+  `Post(IReader)` fail-fast then **wave-3 deletes** those overloads; RTL isolation.
+- Wave-3 (M0–M6): `WithRetry` = 5xx + `IsRetryable`; connect wrap `hekConnect`;
+  delete `IReader` client convenience overloads; known-CL only (dead TE branch
+  removed); physical delete `NewStreamingRequest`; multi-arg `NewRequest` stays
+  deprecated (bulk delete deferred); whitelist non-deprecated factories remain
+  `NewRequest(Method, TUrl)` + `NewGetRequest`; cancel = timeout docs only;
+  decorator forwarder; no facade split.
 - Module gate: `core/tests/nextpas.core.http/Makefile` runs **35** focused suites.
-- Optional remaining: M6 physical delete of deprecated overloads (needs confirm).
 
 ### Stage completion definition (non-H3)
 
@@ -43,6 +47,19 @@ HTTP can be called stage-complete only when all of these hold:
 
 ### Recent Fixes (2026-07-16)
 
+**Usability-fix wave-3 M0–M6 (2026-07-16, closed)**
+
+- `WithRetry`: 5xx responses **and** `HttpErrorIsRetryable` exceptions.
+- Transport wrap: bare `ENetworkError` → `hekConnect` + `Op=transport` (with timeout).
+- Delete `IHttpClient` `Post/Put/Patch/Delete(IReader)` convenience overloads.
+- Known-CL only: remove dead `Transfer-Encoding: chunked` branch in `NewRequest`.
+- Physical delete public `NewStreamingRequest`; multi-arg `NewRequest` remains
+  deprecated (follow-up bulk migration); public non-deprecated factories =
+  `NewRequest(Method, TUrl)` + `NewGetRequest` + builder.
+- Client decorators: `THttpClientForwarder` base (Send-centric).
+- Cancel: docs only (timeout path = cancel surrogate).
+- Evidence: full 35 Makefile suites green; hygiene pass.
+
 **Usability-fix wave-2 M1–M5 (2026-07-16)**
 
 - Transport: H1/H2 client wrap bare `ETimeoutError` → `hekTimeout` + `Op=transport`.
@@ -51,7 +68,8 @@ HTTP can be called stage-complete only when all of these hold:
 - Helpers: `HttpErrorIsTimeout` / `HttpErrorIsRetryable` on base + facade.
 - Middleware: `THttpRequestWrapper` forwards context/options; bodycache/decompress
   inherit it.
-- Client: `Post/Put/Patch/Delete(IReader)` fail-fast (no silent ReadAll).
+- Client: `Post/Put/Patch/Delete(IReader)` fail-fast (no silent ReadAll) — superseded
+  by wave-3 deletion of those overloads.
 - RTL isolation: examples drop SysUtils; `test_http_examples` /
   `test_http_benchmarks` use `nextpas.core.process` instead of `Process`/`BaseUnix`.
 - Cross-module: `process.pipe.DrainReadHandle` no longer loops to EAGAIN on
@@ -113,12 +131,11 @@ HTTP can be called stage-complete only when all of these hold:
 
 **Phase 19 (2026-07-07): Streaming Request Body Ownership API**
 
-- **`NewStreamingRequest`**: factory functions that create `IHttpRequest` with a non-buffered `IReader` body — the body is passed directly to the transport, not read into memory
 - **`IHttpClient.SendStreaming`**: sends a streaming request with explicit body ownership contract — `Send` takes ownership and closes the body after the round trip (success or error)
-- **Body ownership contract**: documented in `NewStreamingRequest` docstring — caller creates body, `Send` closes it; for redirects, non-seekable streams raise `EHttpError('redirect request body is not replayable')`
-- **Decorator support**: `TAuthClient`/`THeaderClient`/`TOptionsOverrideClient` all implement `SendStreaming` with correct header injection and options merging
-- **Re-exported**: `NewStreamingRequest` overloads available from `nextpas.core.http` facade
-- **Tests**: 5 new tests (content-length, body closed after send, body closed on error, headers preserved, redirect ownership), 166 client total / 0 leaks
+- **Body ownership contract**: caller creates body, `Send`/`SendStreaming` closes it; for redirects, non-seekable streams raise `EHttpError('redirect request body is not replayable')`
+- **Decorator support**: auth/header/options/retry forwarders implement `SendStreaming` via `THttpClientForwarder`
+- **Wave-3 note**: `NewStreamingRequest` factory overloads were later **physically removed**; known-length streaming construction is builder `Body(IReader)+ContentLength` or `SendStreaming`
+- **Tests**: streaming content-length, body closed after send, body closed on error, headers preserved, redirect ownership
 
 **Phase 18 (2026-07-07): Fluent Request Builder**
 
@@ -325,7 +342,7 @@ Already landed:
 - `WithTimeout`/`WithMaxRedirects`/`WithFollowRedirects` per-request options decorator (overrides client defaults for a single request)
 - `IHttpRequestWithOptions` interface + `THttpRequestOptions` record for per-request option overrides
 - `THttpRequestBuilder` fluent request builder (Header, BasicAuth, BearerAuth, ContentType, Body, QueryParam, Timeout, MaxRedirects, FollowRedirects, Build)
-- `NewStreamingRequest` + `SendStreaming` streaming body ownership API (non-buffered IReader, explicit close-on-send contract, redirect replayability caveat)
+- Builder / `SendStreaming` streaming body ownership API (non-buffered IReader, explicit close-on-send contract, redirect replayability caveat); `NewStreamingRequest` removed
 - per-request timeout override at transport level (H1 transport checks `IHttpRequestWithOptions` to override `FOptions.Timeout`)
 - `HttpEnsureSuccess` response status guard (raises EHttpError on non-2xx, returns response for chaining)
 

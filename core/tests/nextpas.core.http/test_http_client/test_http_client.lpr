@@ -321,8 +321,12 @@ type
     FFailCount: Int32;
     FCalls: Int32;
     FFailStatus: THttpStatus;
+    FRaiseKind: THttpErrorKind;
+    FRaiseOnFail: Boolean;
   public
     constructor Create(const AFailCount: Int32; const AFailStatus: THttpStatus);
+    constructor CreateRaising(const AFailCount: Int32;
+      const ARaiseKind: THttpErrorKind);
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
   end;
@@ -387,17 +391,13 @@ type
     function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Delete(const AUrl: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
@@ -1795,6 +1795,19 @@ begin
   FFailCount := AFailCount;
   FFailStatus := AFailStatus;
   FCalls := 0;
+  FRaiseKind := hekUnknown;
+  FRaiseOnFail := False;
+end;
+
+constructor TRetryTestTransport.CreateRaising(const AFailCount: Int32;
+  const ARaiseKind: THttpErrorKind);
+begin
+  inherited Create;
+  FFailCount := AFailCount;
+  FFailStatus := HTTP_STATUS_OK;
+  FCalls := 0;
+  FRaiseKind := ARaiseKind;
+  FRaiseOnFail := True;
 end;
 
 function TRetryTestTransport.RoundTrip(
@@ -1803,6 +1816,8 @@ var
   LHeaders: IHttpHeaders;
 begin
   Inc(FCalls);
+  if FRaiseOnFail and (FCalls <= FFailCount) then
+    raise EHttpError.Create(FRaiseKind, 'retry transport fail kind');
   LHeaders := NewHttpHeaders;
   LHeaders.SetHeader('content-length', '0');
   if FCalls <= FFailCount then
@@ -1956,22 +1971,12 @@ begin
   Result := FResponse;
 end;
 
-function TDownloadClient.Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-begin
-  Result := FResponse;
-end;
-
 function TDownloadClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
 begin
   Result := FResponse;
 end;
 
 function TDownloadClient.Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
-begin
-  Result := FResponse;
-end;
-
-function TDownloadClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
 begin
   Result := FResponse;
 end;
@@ -1991,22 +1996,12 @@ begin
   Result := FResponse;
 end;
 
-function TDownloadClient.Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-begin
-  Result := FResponse;
-end;
-
 function TDownloadClient.Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
 begin
   Result := FResponse;
 end;
 
 function TDownloadClient.Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
-begin
-  Result := FResponse;
-end;
-
-function TDownloadClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
 begin
   Result := FResponse;
 end;
@@ -2816,8 +2811,8 @@ begin
       'h1 client pooled retry closes fresh connection on failure');
     Check(Pos('raise;', LReconnectBlock) > 0,
       'h1 client pooled retry preserves the original fresh failure');
-    Check(Pos('hekTimeout', LReconnectBlock) > 0,
-      'h1 client pooled retry maps bare transport timeout to hekTimeout');
+    Check(Pos('HttpWrapTransportException', LReconnectBlock) > 0,
+      'h1 client pooled retry wraps bare transport timeout/connect errors');
   end;
 end;
 
@@ -4807,74 +4802,25 @@ begin
     'request body cleanup was still attempted once');
 end;
 
-procedure TestClientPostReaderClosesSourceBodyAfterBuffering;
+procedure TestClientSendStreamingKnownLengthBody;
 var
   LBody: TTrackedRequestBody;
+  LTransportObj: TRequestBodyCaptureTransport;
+  LTransport: IHttpTransport;
   LClient: IHttpClient;
-  LRaised: Boolean;
-  LKind: THttpErrorKind;
+  LResp: IHttpResponse;
 begin
   LBody := TTrackedRequestBody.Create('payload');
-  LClient := NewHttpClient(TRequestBodyCaptureTransport.Create(nil) as IHttpTransport);
-  LRaised := False;
-  LKind := hekUnknown;
-  try
-    LClient.Post('http://example.test/upload', 'text/plain', LBody as IReader);
-  except
-    on E: EHttpError do
-    begin
-      LRaised := True;
-      LKind := E.Kind;
-    end;
-  end;
-  Check(LRaised, 'reader shortcut fail-fasts without silent ReadAll');
-  Check(LKind = hekArgument, 'reader shortcut raises hekArgument');
-  Check(not LBody.Closed,
-    'fail-fast path does not consume/close reader body via buffering');
-end;
-
-procedure CheckClientReaderShortcutKeepsReadErrorWhenCloseFails(
-  const ALabel: string; const AMethod: THttpMethod);
-var
-  LBody: TReadAndCloseFailingRequestBody;
-  LClient: IHttpClient;
-  LRaised: Boolean;
-  LKind: THttpErrorKind;
-begin
-  LBody := TReadAndCloseFailingRequestBody.Create;
-  LClient := NewHttpClient(TRequestBodyCaptureTransport.Create(nil) as IHttpTransport);
-  LRaised := False;
-  LKind := hekUnknown;
-  try
-    case AMethod of
-      hmPost:
-        LClient.Post('http://example.test/upload', 'text/plain',
-          LBody as IReader);
-      hmPut:
-        LClient.Put('http://example.test/upload', 'text/plain',
-          LBody as IReader);
-      hmPatch:
-        LClient.Patch('http://example.test/upload', 'text/plain',
-          LBody as IReader);
-    else
-      raise EArgumentError.Create('unsupported reader shortcut method');
-    end;
-  except
-    on E: EHttpError do
-    begin
-      LRaised := True;
-      LKind := E.Kind;
-    end;
-  end;
-  Check(LRaised, ALabel + ' reader shortcut fail-fasts');
-  Check(LKind = hekArgument, ALabel + ' reader shortcut is hekArgument');
-end;
-
-procedure TestClientReaderShortcutsKeepReadErrorWhenCloseFails;
-begin
-  CheckClientReaderShortcutKeepsReadErrorWhenCloseFails('POST', hmPost);
-  CheckClientReaderShortcutKeepsReadErrorWhenCloseFails('PUT', hmPut);
-  CheckClientReaderShortcutKeepsReadErrorWhenCloseFails('PATCH', hmPatch);
+  LTransportObj := TRequestBodyCaptureTransport.Create(nil);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.SendStreaming(hmPost, 'http://example.test/upload',
+    'text/plain', LBody as IReader, Int64(7));
+  CheckEqual(Int64(200), Int64(LResp.StatusCode), 'streaming returns response');
+  CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LTransportObj.SeenMethod)),
+    'streaming method');
+  CheckEqual(Int64(7), LTransportObj.SeenContentLength, 'streaming content-length');
+  CheckEqual('payload', LTransportObj.SeenBody, 'streaming body');
 end;
 
 procedure CheckShortcutOmitsEmptyContentType(
@@ -4895,7 +4841,6 @@ end;
 
 procedure TestClientShortcutBodyOverloadsOmitEmptyContentType;
 var
-  LBody: TTrackedRequestBody;
   LTransportObj: TRequestBodyCaptureTransport;
   LTransport: IHttpTransport;
   LClient: IHttpClient;
@@ -4924,18 +4869,14 @@ begin
   CheckShortcutOmitsEmptyContentType('put bytes', LTransportObj, hmPut,
     'b' + #0 + #255);
 
-  LBody := TTrackedRequestBody.Create('stream-body');
-  LClient := NewHttpClient(TRequestBodyCaptureTransport.Create(nil) as IHttpTransport);
-  try
-    LClient.Patch('http://example.test/upload', '', LBody as IReader);
-    Check(False, 'patch reader empty content-type must fail-fast');
-  except
-    on E: EHttpError do
-      Check(E.Kind = hekArgument,
-        'patch reader empty content-type raises hekArgument');
-  end;
-  Check(not LBody.Closed,
-    'fail-fast reader path does not buffer/close source body');
+  LTransportObj := TRequestBodyCaptureTransport.Create(nil);
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Patch('http://example.test/upload', '', 'stream-body');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'patch string empty content-type returns transport response');
+  CheckShortcutOmitsEmptyContentType('patch string', LTransportObj, hmPatch,
+    'stream-body');
 end;
 
 procedure TestHttpGetToFileWritesFinalPathAtomically;
@@ -8165,15 +8106,18 @@ end;
 
 { Streaming body tests }
 
-procedure TestNewStreamingRequestContentLength;
+procedure TestBuilderStreamingRequestContentLength;
 var
   LBody: TTrackedRequestBody;
   LReq: IHttpRequest;
 begin
   LBody := TTrackedRequestBody.Create('streaming-data');
-  LReq := NewStreamingRequest(hmPost, 'http://localhost/upload',
-    'application/octet-stream', LBody as IReader, 14);
-  Check(LReq <> nil, 'NewStreamingRequest returns non-nil');
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://localhost/upload')
+    .ContentType('application/octet-stream')
+    .Body(LBody as IReader)
+    .ContentLength(14)
+    .Build;
+  Check(LReq <> nil, 'builder streaming request returns non-nil');
   CheckEqual(Int64(hmPost), Int64(LReq.Method), 'streaming request method');
   CheckEqual('application/octet-stream', LReq.Headers.Get('content-type'),
     'streaming request content-type');
@@ -8223,17 +8167,17 @@ begin
   Check(LCaught, 'SendStreaming propagates body close error');
 end;
 
-procedure TestNewStreamingRequestWithHeaders;
+procedure TestBuilderStreamingRequestWithHeaders;
 var
   LBody: TTrackedRequestBody;
-  LHeaders: IHttpHeaders;
   LReq: IHttpRequest;
 begin
   LBody := TTrackedRequestBody.Create('data');
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('x-custom', 'phase19');
-  LReq := NewStreamingRequest(hmPut, 'http://localhost/update',
-    LHeaders, LBody as IReader, 4);
+  LReq := THttpRequestBuilder.Create(hmPut, 'http://localhost/update')
+    .Header('x-custom', 'phase19')
+    .Body(LBody as IReader)
+    .ContentLength(4)
+    .Build;
   CheckEqual('phase19', LReq.Headers.Get('x-custom'),
     'streaming request preserves custom headers');
   CheckEqual('4', LReq.Headers.Get('content-length'),
@@ -8514,6 +8458,59 @@ begin
       LCaught := Pos('negative', E.Message) > 0;
   end;
   Check(LCaught, 'WithRetry(-1) raises EArgumentError');
+end;
+
+procedure TestWithRetryRetriesTimeoutException;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.CreateRaising(2, hekTimeout);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(3).Get('http://localhost/test');
+  Check(LResp <> nil, 'timeout retry returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), 'timeout retry eventually succeeds');
+  CheckEqual(3, LTransport.Calls, 'timeout: 2 fails + 1 success');
+end;
+
+procedure TestWithRetryRetriesConnectException;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.CreateRaising(1, hekConnect);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(2).Get('http://localhost/test');
+  Check(LResp <> nil, 'connect retry returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), 'connect retry eventually succeeds');
+  CheckEqual(2, LTransport.Calls, 'connect: 1 fail + 1 success');
+end;
+
+procedure TestWithRetryDoesNotRetryParseException;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+  LKind: THttpErrorKind;
+begin
+  LTransport := TRetryTestTransport.CreateRaising(5, hekParse);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  LKind := hekUnknown;
+  try
+    LClient.WithRetry(3).Get('http://localhost/test');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LKind := E.Kind;
+    end;
+  end;
+  Check(LCaught, 'parse error surfaces');
+  Check(LKind = hekParse, 'parse kind preserved');
+  CheckEqual(1, LTransport.Calls, 'parse is not retried');
 end;
 
 { HttpPostString/PutString/PatchString/DeleteString tests }
@@ -8882,10 +8879,8 @@ begin
     @TestClientKeepsRequestBodyCloseErrorWhenResponseReleaseFails);
   T.Test('Client Send keeps transport error when request body close fails',
     @TestClientKeepsTransportErrorWhenRequestBodyCloseFails);
-  T.Test('Client reader shortcut closes source body after buffering',
-    @TestClientPostReaderClosesSourceBodyAfterBuffering);
-  T.Test('Client reader shortcuts keep read error when close fails',
-    @TestClientReaderShortcutsKeepReadErrorWhenCloseFails);
+  T.Test('SendStreaming known-length body',
+    @TestClientSendStreamingKnownLengthBody);
   T.Test('Client shortcut body overloads omit empty content-type',
     @TestClientShortcutBodyOverloadsOmitEmptyContentType);
   T.Test('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
@@ -9041,14 +9036,14 @@ begin
     @TestBuilderReaderBodyWithContentLength);
   T.Test('Builder empty string body is Content-Length 0',
     @TestBuilderEmptyStringBody);
-  T.Test('NewStreamingRequest sets content-length',
-    @TestNewStreamingRequestContentLength);
+  T.Test('Builder streaming request sets content-length',
+    @TestBuilderStreamingRequestContentLength);
   T.Test('SendStreaming closes body after send',
     @TestSendStreamingBodyClosedAfterSend);
   T.Test('SendStreaming closes body on error',
     @TestSendStreamingBodyClosedOnError);
-  T.Test('NewStreamingRequest preserves headers',
-    @TestNewStreamingRequestWithHeaders);
+  T.Test('Builder streaming request preserves headers',
+    @TestBuilderStreamingRequestWithHeaders);
   T.Test('Streaming body ownership on redirect',
     @TestStreamingBodyOwnershipOnRedirect);
   T.Test('HttpEnsureSuccess passes on 200', @TestHttpEnsureSuccess200);
@@ -9067,6 +9062,9 @@ begin
   T.Test('WithRetry(0) means no retry', @TestWithRetryZeroMeansNoRetry);
   T.Test('WithRetry chains with WithBearerAuth', @TestWithRetryChainsWithAuth);
   T.Test('WithRetry rejects negative count', @TestWithRetryRejectsNegative);
+  T.Test('WithRetry retries hekTimeout exception', @TestWithRetryRetriesTimeoutException);
+  T.Test('WithRetry retries hekConnect exception', @TestWithRetryRetriesConnectException);
+  T.Test('WithRetry does not retry hekParse', @TestWithRetryDoesNotRetryParseException);
   T.Test('PostString returns body on 200', @TestHttpPostStringSuccess);
   T.Test('PostString raises on 404', @TestHttpPostStringRaisesOn404);
   T.Test('PutString returns body on 200', @TestHttpPutStringSuccess);

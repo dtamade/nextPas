@@ -119,8 +119,18 @@ begin
     finally
       LWrapped.Free;
     end;
+    LWrapped := HttpWrapTransportException(LNet);
+    try
+      Check(LWrapped is EHttpError, 'network wrap produces EHttpError');
+      Check(EHttpError(LWrapped).Kind = hekConnect, 'network wrap sets hekConnect');
+      CheckEqual('transport', EHttpError(LWrapped).Op, 'network wrap sets transport op');
+    finally
+      LWrapped.Free;
+    end;
     Check(HttpWrapTransportException(LConnect) = nil,
-      'non-timeout wrap returns nil');
+      'already-typed EHttpError wrap returns nil');
+    Check(HttpWrapTransportException(LParse) = nil,
+      'non-transport wrap returns nil');
   finally
     LTimeout.Free;
     LConnect.Free;

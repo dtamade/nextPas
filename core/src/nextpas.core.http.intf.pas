@@ -188,17 +188,13 @@ type
     function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Delete(const AUrl: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
@@ -221,8 +217,9 @@ type
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-    {** @desc Returns a decorator that retries failed requests up to AMaxRetries times.
-       Retries on 5xx server errors with exponential backoff (100ms base, max 5s).
+    {** @desc Returns a decorator that retries failed requests up to AMaxRetries
+       extra attempts. Retries on 5xx responses and HttpErrorIsRetryable
+       exceptions (timeout/connect) with exponential backoff (100ms base, max 5s).
        Does NOT retry on 4xx client errors. }
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
   end;

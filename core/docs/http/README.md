@@ -94,25 +94,19 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 - **Recommended:** `THttpRequestBuilder.Create(Method, UrlString).Header(...).Body(...).Build`
   — fluent construction; covers auth, content-type, query, per-request options.
-- **Still supported (non-deprecated):**
+- **Public request factories (whitelist only):**
   - `NewRequest(Method, TUrl)` — minimal primitive factory
   - `NewGetRequest(Path)` — path-level GET helper
-- **Deprecated** (prefer builder): all other `NewRequest` overloads and all
-  `NewStreamingRequest` overloads (`'Use THttpRequestBuilder instead'`).
-  Facade markers must match `message.pas` (see `test_http_contract` source-contract).
-- Historical overload semantics (still true for deprecated helpers):
-  headers-only / body / body-text / body-bytes / content-type variants publish
-  `Content-Length` when a body is supplied; negative or conflicting
-  `Content-Length` raises `EArgumentError`.
+  - Prefer `THttpRequestBuilder` for headers/body/auth/options.
+- `NewStreamingRequest` is **physically removed** (wave-3). Use the builder or
+  `IHttpClient.SendStreaming`.
+- Multi-arg `NewRequest` overloads remain **deprecated**
+  (`Use THttpRequestBuilder instead`); prefer builder / whitelist factories.
+  Physical deletion of multi-arg `NewRequest` is deferred (bulk test migration).
 - Builder note: `Body(IReader)` requires `ContentLength(N)` before `Build`;
   missing length fail-fasts. Empty `Body('')` publishes `Content-Length: 0`.
-  Unknown-length streams use `SendStreaming`, not the builder.
-- Request helpers do not implement caller-supplied `Transfer-Encoding`; any
-  `Transfer-Encoding` header raises `EArgumentError`. Streaming/chunked request
-  body ownership remains a future API seam rather than a silent header escape
-  hatch. When a headers object is supplied, the helper treats it as
-  request-owned and may write `Content-Length`; do not reuse the same headers
-  object for a different request shape.
+  Known-length streams: builder or `SendStreaming`. Request helpers reject
+  caller-supplied `Transfer-Encoding` and never auto-publish chunked TE.
 - `NewResponse(Status, Headers, Body)` — build responses; nil headers create
   an empty header set so callers can safely read or mutate `Resp.Headers`.
 - `NewResponse(Status, Headers, BodyText)` /
@@ -136,20 +130,16 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `IHttpClient.Send(Req)` / `CloseIdleConnections` / `Get(Url)` /
   `Post(Url, ContentType, Body)` / `Put` / `Delete` / `Patch` / `Head`;
   `Send(nil)` raises `EArgumentError`
-- `Post` / `Put` / `Patch` expose three shortcut body forms:
-  `IReader`, Pascal `string`, and `TBytes`.
-- All three shortcut body forms publish `Content-Length`; a non-empty caller
-  supplied `Content-Type` is forwarded, while an empty content type omits the
-  header instead of sending an empty header value. The `IReader` form still
-  buffers to bytes rather than routing payload through a Pascal string, while
-  the `string` / `TBytes` forms reuse the public `NewRequest(..., BodyText)` /
-  `NewRequest(..., BodyBytes)` helpers.
+- `Post` / `Put` / `Patch` / `Delete` body shortcuts accept Pascal `string` and
+  `TBytes` only (publish `Content-Length`). Non-empty caller `Content-Type` is
+  forwarded; empty content type omits the header. Stream bodies use
+  `SendStreaming` or builder + `Send`.
+- `WithRetry(N)` retries **5xx** and **retryable transport errors**
+  (`HttpErrorIsRetryable`: timeout/connect) with exponential backoff; not 4xx.
+- Cancel: no separate cancel API; use timeouts (`WithTimeout` / client options).
 - `IHttpClient.Send` owns any close-capable request body for the duration of the
   request. After the final round trip or failure, `IReadCloser` / `ICloser` /
-  `IStream` request bodies are closed. The `Post` / `Put` / `Patch`
-  `IReader` shortcut closes the source reader after buffering it to bytes for
-  `Content-Length`, so callers do not have to close a file/stream body
-  separately once the helper returns.
+  `IStream` request bodies are closed.
 - `CloseIdleConnections` is a lifecycle seam for explicitly releasing idle
   keep-alive state. The public client does not leak H1 pool details; transports
   that own idle pooled connections may implement the optional capability and

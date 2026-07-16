@@ -426,18 +426,6 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
   deprecated 'Use THttpRequestBuilder instead';
 function NewGetRequest(const APath: string): IHttpRequest; inline;
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-  overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-  deprecated 'Use THttpRequestBuilder instead';
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse; overload; inline;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
@@ -1135,29 +1123,6 @@ end;
 function NewGetRequest(const APath: string): IHttpRequest;
 begin
   Result := nextpas.core.http.message.NewGetRequest(APath);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewStreamingRequest(AMethod, AUrl,
-    ABody, AContentLength);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewStreamingRequest(AMethod, AUrl,
-    AHeaders, ABody, AContentLength);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewStreamingRequest(AMethod, AUrl,
-    AContentType, ABody, AContentLength);
 end;
 
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse;

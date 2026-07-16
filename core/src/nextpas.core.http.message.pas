@@ -172,23 +172,6 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload;
   deprecated 'Use THttpRequestBuilder instead';
 function NewGetRequest(const APath: string): IHttpRequest;
-{** Create a request with a streaming body that is NOT buffered into memory.
-   The body reader is passed directly to the transport. The caller must ensure
-   the body remains valid until Send closes it. Content-Length must be known
-   and declared by the caller. If the body supports IStream seeking, redirect
-   retries will rewind automatically; otherwise redirects that change the body
-   (301/302/303) will close the stream and drop the body. }
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse; overload;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
@@ -922,12 +905,10 @@ begin
   ValidateRequestBodyHeaders(LHeaders, AContentLength);
   if AContentLength > 0 then
     LHeaders.SetHeader('content-length', IntToStr(AContentLength))
-  else if (ABody <> nil) and (AContentLength = 0) then
-    { Explicit empty body (e.g. builder Body('')) publishes Content-Length: 0. }
-    LHeaders.SetHeader('content-length', '0')
-  else if (ABody <> nil) and (AContentLength < 0) then
-    { Body with unknown length: don't set content-length, let chunked handle it }
-    LHeaders.SetHeader('transfer-encoding', 'chunked');
+  else if ABody <> nil then
+    { Known-CL only: explicit empty body publishes Content-Length: 0.
+      Unknown-length / negative CL already fail-fast above. }
+    LHeaders.SetHeader('content-length', '0');
   Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders, ABody,
     AContentLength);
 end;
@@ -1023,26 +1004,6 @@ begin
   LUrl := Default(TUrl);
   LUrl.Path := APath;
   Result := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, nil, ABody, AContentLength);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, AHeaders, ABody, AContentLength);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, AContentType, ABody, AContentLength);
 end;
 
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;

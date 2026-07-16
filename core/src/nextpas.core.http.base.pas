@@ -203,8 +203,9 @@ function HttpVersionToStr(const AVersion: THttpVersion): string;
 function HttpErrorIsTimeout(const E: Exception): Boolean;
 {** True for timeout or connect-class failures suitable for client retry. }
 function HttpErrorIsRetryable(const E: Exception): Boolean;
-{** Map bare ETimeoutError to EHttpError(hekTimeout). Returns nil if caller
-   should bare-re-raise the original exception with `raise`. }
+{** Map bare transport exceptions to EHttpError with Op=transport:
+   ETimeoutError → hekTimeout; ENetworkError → hekConnect.
+   Returns nil if caller should bare-re-raise the original exception with `raise`. }
 function HttpWrapTransportException(const E: Exception): Exception;
 
 implementation
@@ -289,8 +290,12 @@ end;
 function HttpWrapTransportException(const E: Exception): Exception;
 begin
   Result := nil;
-  if (E <> nil) and (E is ETimeoutError) then
-    Result := EHttpError.CreateOp(hekTimeout, 'transport', E.Message);
+  if E = nil then
+    Exit;
+  if E is ETimeoutError then
+    Result := EHttpError.CreateOp(hekTimeout, 'transport', E.Message)
+  else if E is ENetworkError then
+    Result := EHttpError.CreateOp(hekConnect, 'transport', E.Message);
 end;
 
 { Free functions }

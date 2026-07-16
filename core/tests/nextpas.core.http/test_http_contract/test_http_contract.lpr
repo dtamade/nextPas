@@ -1064,6 +1064,12 @@ begin
 
   Check(SourceHas(LFacade, 'THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;'),
     'facade re-exports THttpRequestBuilder as the recommended construction path');
+
+  { NewStreamingRequest physically deleted — builder / SendStreaming only. }
+  Check(not SourceHas(LMessage, 'function NewStreamingRequest'),
+    'message no longer declares NewStreamingRequest');
+  Check(not SourceHas(LFacade, 'function NewStreamingRequest'),
+    'facade no longer declares NewStreamingRequest');
 end;
 
 procedure TestChunkedRequestTrailerContract;

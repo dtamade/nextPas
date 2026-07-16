@@ -28,8 +28,6 @@ type
     FTransport: IHttpTransport;
     function DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32;
       var ARequestBodyCloseAttempted: Boolean): IHttpResponse;
-    function DoBodyRequest(const AMethod: THttpMethod;
-      const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
   public
     constructor Create(const AOptions: THttpClientOptions); overload;
     constructor Create(const ATransport: IHttpTransport;
@@ -37,17 +35,13 @@ type
     function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Delete(const AUrl: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
@@ -69,185 +63,76 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
   end;
 
-  { Decorator that adds Authorization header to every request }
-  TAuthClient = class(TInterfacedObject, IHttpClient)
-  private
+  { Decorator base: all convenience methods go through virtual Send. }
+  THttpClientForwarder = class(TInterfacedObject, IHttpClient)
+  protected
     FInner: IHttpClient;
+  public
+    constructor Create(const AInner: IHttpClient);
+    function Send(const AReq: IHttpRequest): IHttpResponse; virtual;
+    procedure CloseIdleConnections; virtual;
+    function Get(const AUrl: string): IHttpResponse; virtual;
+    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload; virtual;
+    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload; virtual;
+    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload; virtual;
+    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload; virtual;
+    function Delete(const AUrl: string): IHttpResponse; overload; virtual;
+    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload; virtual;
+    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload; virtual;
+    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload; virtual;
+    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload; virtual;
+    function Head(const AUrl: string): IHttpResponse; virtual;
+    function Options(const AUrl: string): IHttpResponse; virtual;
+    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse; virtual;
+    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
+    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
+    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
+    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse; virtual;
+    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
+      const AContentType: string; const ABody: IReader;
+      const AContentLength: Int64): IHttpResponse; virtual;
+    function WithBasicAuth(const AUsername, APassword: string): IHttpClient; virtual;
+    function WithBearerAuth(const AToken: string): IHttpClient; virtual;
+    function WithHeader(const AName, AValue: string): IHttpClient; virtual;
+    function WithTimeout(const ATimeoutMs: Int64): IHttpClient; virtual;
+    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient; virtual;
+    function WithFollowRedirects(const AFollow: Boolean): IHttpClient; virtual;
+    function WithRetry(const AMaxRetries: Int32): IHttpClient; virtual;
+  end;
+
+  TAuthClient = class(THttpClientForwarder)
+  private
     FAuthHeader: string;
-    function DoBodyRequest(const AMethod: THttpMethod;
-      const AUrl, AContentType, ABody: string): IHttpResponse;
   public
     constructor Create(const AInner: IHttpClient; const AAuthHeader: string);
-    function Send(const AReq: IHttpRequest): IHttpResponse;
-    procedure CloseIdleConnections;
-    function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Delete(const AUrl: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Head(const AUrl: string): IHttpResponse;
-    function Options(const AUrl: string): IHttpResponse;
-    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
-    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
-      const AContentType: string; const ABody: IReader;
-      const AContentLength: Int64): IHttpResponse;
-    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
-    function WithBearerAuth(const AToken: string): IHttpClient;
-    function WithHeader(const AName, AValue: string): IHttpClient;
-    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
-    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
-    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-    function WithRetry(const AMaxRetries: Int32): IHttpClient;
+    function Send(const AReq: IHttpRequest): IHttpResponse; override;
   end;
 
-  { Decorator that adds an arbitrary header to every request }
-  THeaderClient = class(TInterfacedObject, IHttpClient)
+  THeaderClient = class(THttpClientForwarder)
   private
-    FInner: IHttpClient;
-    FHeaderName: string;
-    FHeaderValue: string;
-    procedure InjectHeader(const AReq: IHttpRequest);
-    function DoBodyRequest(const AMethod: THttpMethod;
-      const AUrl, AContentType, ABody: string): IHttpResponse;
+    FName: string;
+    FValue: string;
   public
-    constructor Create(const AInner: IHttpClient;
-      const AHeaderName, AHeaderValue: string);
-    function Send(const AReq: IHttpRequest): IHttpResponse;
-    procedure CloseIdleConnections;
-    function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Delete(const AUrl: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Head(const AUrl: string): IHttpResponse;
-    function Options(const AUrl: string): IHttpResponse;
-    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
-    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
-      const AContentType: string; const ABody: IReader;
-      const AContentLength: Int64): IHttpResponse;
-    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
-    function WithBearerAuth(const AToken: string): IHttpClient;
-    function WithHeader(const AName, AValue: string): IHttpClient;
-    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
-    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
-    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-    function WithRetry(const AMaxRetries: Int32): IHttpClient;
+    constructor Create(const AInner: IHttpClient; const AName, AValue: string);
+    function Send(const AReq: IHttpRequest): IHttpResponse; override;
   end;
 
-  { Decorator that overrides per-request options (timeout, redirect behavior) }
-  TOptionsOverrideClient = class(TInterfacedObject, IHttpClient)
+  TOptionsOverrideClient = class(THttpClientForwarder)
   private
-    FInner: IHttpClient;
     FRequestOptions: THttpRequestOptions;
     procedure ApplyOptions(const AReq: IHttpRequest);
-    function DoBodyRequest(const AMethod: THttpMethod;
-      const AUrl, AContentType, ABody: string): IHttpResponse;
   public
     constructor Create(const AInner: IHttpClient;
       const ARequestOptions: THttpRequestOptions);
-    function Send(const AReq: IHttpRequest): IHttpResponse;
-    procedure CloseIdleConnections;
-    function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Delete(const AUrl: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Head(const AUrl: string): IHttpResponse;
-    function Options(const AUrl: string): IHttpResponse;
-    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
-    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
-      const AContentType: string; const ABody: IReader;
-      const AContentLength: Int64): IHttpResponse;
-    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
-    function WithBearerAuth(const AToken: string): IHttpClient;
-    function WithHeader(const AName, AValue: string): IHttpClient;
-    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
-    function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
-    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-    function WithRetry(const AMaxRetries: Int32): IHttpClient;
+    function Send(const AReq: IHttpRequest): IHttpResponse; override;
   end;
 
-  { Decorator that retries failed requests with exponential backoff }
-  TRetryClient = class(TInterfacedObject, IHttpClient)
+  TRetryClient = class(THttpClientForwarder)
   private
-    FInner: IHttpClient;
     FMaxRetries: Int32;
-    function DoBodyRequest(const AMethod: THttpMethod;
-      const AUrl, AContentType, ABody: string): IHttpResponse;
   public
     constructor Create(const AInner: IHttpClient; const AMaxRetries: Int32);
-    function Send(const AReq: IHttpRequest): IHttpResponse;
-    procedure CloseIdleConnections;
-    function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Delete(const AUrl: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Head(const AUrl: string): IHttpResponse;
-    function Options(const AUrl: string): IHttpResponse;
-    function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
-    function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-    function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
-      const AContentType: string; const ABody: IReader;
-      const AContentLength: Int64): IHttpResponse;
-    function WithBasicAuth(const AUsername, APassword: string): IHttpClient;
-    function WithBearerAuth(const AToken: string): IHttpClient;
-    function WithHeader(const AName, AValue: string): IHttpClient;
-    function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
-    function WithMaxRedirects(const AMaxRetries: Int32): IHttpClient;
-    function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-    function WithRetry(const AMaxRetries: Int32): IHttpClient;
+    function Send(const AReq: IHttpRequest): IHttpResponse; override;
   end;
 
 function NewHttpClient: IHttpClient; overload;
@@ -564,44 +449,26 @@ begin
     Result := hmGet;
 end;
 
-function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABody: IReader): IHttpRequest;
-var
-  LHeaders: IHttpHeaders;
-begin
-  { Known-length streams must use SendStreaming or NewRequest(..., Reader, CL).
-    Convenience Post/Put/Patch/Delete(IReader) no longer silently ReadAll. }
-  if ABody <> nil then
-    raise EHttpError.Create(hekArgument,
-      'IHttpClient body reader helpers do not buffer IReader; use string/TBytes ' +
-      'overloads or IHttpClient.SendStreaming with Content-Length');
-
-  LHeaders := NewHttpHeaders;
-  if AContentType <> '' then
-    LHeaders.SetHeader('content-type', AContentType);
-  Result := NewRequest(AMethod, AUrl, LHeaders, nil, 0);
-end;
-
 function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl: string;
   const AContentType, ABody: string): IHttpRequest; overload;
 var
-  LHeaders: IHttpHeaders;
+  LBuilder: THttpRequestBuilder;
 begin
-  LHeaders := NewHttpHeaders;
+  LBuilder := THttpRequestBuilder.Create(AMethod, AUrl);
   if AContentType <> '' then
-    LHeaders.SetHeader('content-type', AContentType);
-  Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
+    LBuilder := LBuilder.ContentType(AContentType);
+  Result := LBuilder.Body(ABody).Build;
 end;
 
 function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl,
   AContentType: string; const ABody: TBytes): IHttpRequest; overload;
 var
-  LHeaders: IHttpHeaders;
+  LBuilder: THttpRequestBuilder;
 begin
-  LHeaders := NewHttpHeaders;
+  LBuilder := THttpRequestBuilder.Create(AMethod, AUrl);
   if AContentType <> '' then
-    LHeaders.SetHeader('content-type', AContentType);
-  Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
+    LBuilder := LBuilder.ContentType(AContentType);
+  Result := LBuilder.Body(ABody).Build;
 end;
 
 function RedirectHeadersFor(const AReq: IHttpRequest; const AInitialUrl,
@@ -899,17 +766,6 @@ begin
     Result := LResp;
 end;
 
-function THttpClient.DoBodyRequest(const AMethod: THttpMethod;
-  const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LUrl: TUrl;
-  LReq: IHttpRequest;
-begin
-  LUrl := TUrl.Parse(AUrl);
-  LReq := BufferedBodyRequest(AMethod, LUrl, AContentType, ABody);
-  Result := Send(LReq);
-end;
-
 function THttpClient.Send(const AReq: IHttpRequest): IHttpResponse;
 var
   LRequestBodyCloseAttempted: Boolean;
@@ -973,11 +829,6 @@ begin
   Result := Send(LReq);
 end;
 
-function THttpClient.Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
-end;
-
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
 begin
   Result := Send(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
@@ -986,11 +837,6 @@ end;
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
 begin
   Result := Send(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
-end;
-
-function THttpClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
 end;
 
 function THttpClient.Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
@@ -1013,11 +859,6 @@ begin
   Result := Send(LReq);
 end;
 
-function THttpClient.Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
-end;
-
 function THttpClient.Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
 begin
   Result := Send(BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody));
@@ -1026,11 +867,6 @@ end;
 function THttpClient.Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
 begin
   Result := Send(BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody));
-end;
-
-function THttpClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
 end;
 
 function THttpClient.Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
@@ -1100,11 +936,12 @@ function THttpClient.SendStreaming(const AMethod: THttpMethod;
   const AUrl: string; const AContentType: string; const ABody: IReader;
   const AContentLength: Int64): IHttpResponse;
 var
-  LReq: IHttpRequest;
+  LBuilder: THttpRequestBuilder;
 begin
-  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
-    AContentLength);
-  Result := Send(LReq);
+  LBuilder := THttpRequestBuilder.Create(AMethod, AUrl);
+  if AContentType <> '' then
+    LBuilder := LBuilder.ContentType(AContentType);
+  Result := Send(LBuilder.Body(ABody).ContentLength(AContentLength).Build);
 end;
 
 function THttpClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
@@ -1145,490 +982,232 @@ begin
   Result := TRetryClient.Create(Self, AMaxRetries);
 end;
 
+{ THttpClientForwarder }
+
+constructor THttpClientForwarder.Create(const AInner: IHttpClient);
+begin
+  inherited Create;
+  if AInner = nil then
+    raise EArgumentError.Create('HTTP client decorator inner is nil');
+  FInner := AInner;
+end;
+
+function THttpClientForwarder.Send(const AReq: IHttpRequest): IHttpResponse;
+begin
+  Result := FInner.Send(AReq);
+end;
+
+procedure THttpClientForwarder.CloseIdleConnections;
+begin
+  FInner.CloseIdleConnections;
+end;
+
+function THttpClientForwarder.Get(const AUrl: string): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+  Result := Send(LReq);
+end;
+
+function THttpClientForwarder.Post(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
+end;
+
+function THttpClientForwarder.Post(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
+end;
+
+function THttpClientForwarder.Put(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
+end;
+
+function THttpClientForwarder.Put(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
+end;
+
+function THttpClientForwarder.Delete(const AUrl: string): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LReq := THttpRequest.Create(hmDelete, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+  Result := Send(LReq);
+end;
+
+function THttpClientForwarder.Delete(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody));
+end;
+
+function THttpClientForwarder.Delete(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody));
+end;
+
+function THttpClientForwarder.Patch(const AUrl, AContentType: string;
+  const ABody: string): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
+end;
+
+function THttpClientForwarder.Patch(const AUrl, AContentType: string;
+  const ABody: TBytes): IHttpResponse;
+begin
+  Result := Send(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
+end;
+
+function THttpClientForwarder.Head(const AUrl: string): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LReq := THttpRequest.Create(hmHead, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+  Result := Send(LReq);
+end;
+
+function THttpClientForwarder.Options(const AUrl: string): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LReq := THttpRequest.Create(hmOptions, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+  Result := Send(LReq);
+end;
+
+function THttpClientForwarder.PostForm(const AUrl: string;
+  const AFields: TFormFieldArray): IHttpResponse;
+var
+  LBody: string;
+begin
+  LBody := nextpas.core.http.form.EncodeUrlEncodedForm(AFields);
+  Result := Post(AUrl, 'application/x-www-form-urlencoded', LBody);
+end;
+
+function THttpClientForwarder.PostJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := Post(AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THttpClientForwarder.PutJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := Put(AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THttpClientForwarder.PatchJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := Patch(AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THttpClientForwarder.DeleteJson(const AUrl: string;
+  const ABody: TJsonValue): IHttpResponse;
+begin
+  Result := Delete(AUrl, 'application/json', JsonStringify(ABody));
+end;
+
+function THttpClientForwarder.SendStreaming(const AMethod: THttpMethod;
+  const AUrl: string; const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpResponse;
+var
+  LBuilder: THttpRequestBuilder;
+begin
+  LBuilder := THttpRequestBuilder.Create(AMethod, AUrl);
+  if AContentType <> '' then
+    LBuilder := LBuilder.ContentType(AContentType);
+  Result := Send(LBuilder.Body(ABody).ContentLength(AContentLength).Build);
+end;
+
+function THttpClientForwarder.WithBasicAuth(const AUsername,
+  APassword: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(Self, 'Basic ' +
+    Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
+end;
+
+function THttpClientForwarder.WithBearerAuth(const AToken: string): IHttpClient;
+begin
+  Result := TAuthClient.Create(Self, 'Bearer ' + AToken);
+end;
+
+function THttpClientForwarder.WithHeader(const AName, AValue: string): IHttpClient;
+begin
+  Result := THeaderClient.Create(Self, AName, AValue);
+end;
+
+function THttpClientForwarder.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
+end;
+
+function THttpClientForwarder.WithMaxRedirects(
+  const AMaxRedirects: Int32): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithMaxRedirects(AMaxRedirects));
+end;
+
+function THttpClientForwarder.WithFollowRedirects(
+  const AFollow: Boolean): IHttpClient;
+begin
+  Result := TOptionsOverrideClient.Create(Self,
+    Default(THttpRequestOptions).WithFollowRedirects(AFollow));
+end;
+
+function THttpClientForwarder.WithRetry(const AMaxRetries: Int32): IHttpClient;
+begin
+  Result := TRetryClient.Create(Self, AMaxRetries);
+end;
+
 { TAuthClient }
 
-constructor TAuthClient.Create(const AInner: IHttpClient; const AAuthHeader: string);
+constructor TAuthClient.Create(const AInner: IHttpClient;
+  const AAuthHeader: string);
 begin
-  FInner := AInner;
+  inherited Create(AInner);
   FAuthHeader := AAuthHeader;
 end;
 
 function TAuthClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
-  AReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(AReq);
-end;
-
-procedure TAuthClient.CloseIdleConnections;
-begin
-  FInner.CloseIdleConnections;
-end;
-
-function TAuthClient.Get(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmGet, AUrl, '', '');
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.DoBodyRequest(const AMethod: THttpMethod;
-  const AUrl, AContentType, ABody: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(AMethod, AUrl, AContentType, ABody);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPost, TUrl.Parse(AUrl), AContentType, ABody);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
-end;
-
-function TAuthClient.Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPost, AUrl, AContentType, ABody);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPut, TUrl.Parse(AUrl), AContentType, ABody);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
-end;
-
-function TAuthClient.Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPut, AUrl, AContentType, ABody);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Delete(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, AUrl, '', '');
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, TUrl.Parse(AUrl), AContentType, ABody);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
-end;
-
-function TAuthClient.Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPatch, TUrl.Parse(AUrl), AContentType, ABody);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
-end;
-
-function TAuthClient.Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Head(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmHead, AUrl, '', '');
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.Options(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmOptions, AUrl, '', '');
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, 'application/x-www-form-urlencoded', EncodeUrlEncodedForm(AFields));
-end;
-
-function TAuthClient.PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TAuthClient.PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPut, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TAuthClient.PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPatch, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TAuthClient.DeleteJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TAuthClient.SendStreaming(const AMethod: THttpMethod;
-  const AUrl: string; const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
-    AContentLength);
-  LReq.Headers.SetHeader('authorization', FAuthHeader);
-  Result := FInner.Send(LReq);
-end;
-
-function TAuthClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
-begin
-  Result := TAuthClient.Create(FInner, 'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
-end;
-
-function TAuthClient.WithBearerAuth(const AToken: string): IHttpClient;
-begin
-  Result := TAuthClient.Create(FInner, 'Bearer ' + AToken);
-end;
-
-function TAuthClient.WithHeader(const AName, AValue: string): IHttpClient;
-begin
-  Result := THeaderClient.Create(Self, AName, AValue);
-end;
-
-function TAuthClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
-begin
-  Result := TOptionsOverrideClient.Create(Self,
-    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
-end;
-
-function TAuthClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
-begin
-  Result := TOptionsOverrideClient.Create(Self,
-    Default(THttpRequestOptions).WithMaxRedirects(AMaxRedirects));
-end;
-
-function TAuthClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-begin
-  Result := TOptionsOverrideClient.Create(Self,
-    Default(THttpRequestOptions).WithFollowRedirects(AFollow));
-end;
-
-function TAuthClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
-begin
-  Result := TRetryClient.Create(Self, AMaxRetries);
+  if (AReq <> nil) and (AReq.Headers <> nil) then
+    AReq.Headers.SetHeader('authorization', FAuthHeader);
+  Result := inherited Send(AReq);
 end;
 
 { THeaderClient }
 
 constructor THeaderClient.Create(const AInner: IHttpClient;
-  const AHeaderName, AHeaderValue: string);
+  const AName, AValue: string);
 begin
-  FInner := AInner;
-  FHeaderName := AHeaderName;
-  FHeaderValue := AHeaderValue;
-end;
-
-procedure THeaderClient.InjectHeader(const AReq: IHttpRequest);
-begin
-  AReq.Headers.SetHeader(FHeaderName, FHeaderValue);
+  inherited Create(AInner);
+  FName := AName;
+  FValue := AValue;
 end;
 
 function THeaderClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
-  InjectHeader(AReq);
-  Result := FInner.Send(AReq);
-end;
-
-procedure THeaderClient.CloseIdleConnections;
-begin
-  FInner.CloseIdleConnections;
-end;
-
-function THeaderClient.Get(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmGet, AUrl, '', '');
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.DoBodyRequest(const AMethod: THttpMethod;
-  const AUrl, AContentType, ABody: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(AMethod, AUrl, AContentType, ABody);
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Post(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPost, TUrl.Parse(AUrl), AContentType, ABody);
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Post(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
-end;
-
-function THeaderClient.Post(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPost, AUrl, AContentType, ABody);
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Put(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPut, TUrl.Parse(AUrl), AContentType, ABody);
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Put(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
-end;
-
-function THeaderClient.Put(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPut, AUrl, AContentType, ABody);
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Delete(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, AUrl, '', '');
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, TUrl.Parse(AUrl), AContentType, ABody);
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
-end;
-
-function THeaderClient.Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody);
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Patch(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPatch, TUrl.Parse(AUrl), AContentType, ABody);
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Patch(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
-end;
-
-function THeaderClient.Patch(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody);
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Head(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmHead, AUrl, '', '');
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.Options(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmOptions, AUrl, '', '');
-  InjectHeader(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.PostForm(const AUrl: string;
-  const AFields: TFormFieldArray): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, 'application/x-www-form-urlencoded',
-    EncodeUrlEncodedForm(AFields));
-end;
-
-function THeaderClient.PostJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function THeaderClient.PutJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPut, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function THeaderClient.PatchJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPatch, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function THeaderClient.DeleteJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function THeaderClient.SendStreaming(const AMethod: THttpMethod;
-  const AUrl: string; const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
-    AContentLength);
-  LReq.Headers.SetHeader(FHeaderName, FHeaderValue);
-  Result := FInner.Send(LReq);
-end;
-
-function THeaderClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
-begin
-  Result := TAuthClient.Create(Self, 'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
-end;
-
-function THeaderClient.WithBearerAuth(const AToken: string): IHttpClient;
-begin
-  Result := TAuthClient.Create(Self, 'Bearer ' + AToken);
-end;
-
-function THeaderClient.WithHeader(const AName, AValue: string): IHttpClient;
-begin
-  Result := THeaderClient.Create(Self, AName, AValue);
-end;
-
-function THeaderClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
-begin
-  Result := TOptionsOverrideClient.Create(Self,
-    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
-end;
-
-function THeaderClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
-begin
-  Result := TOptionsOverrideClient.Create(Self,
-    Default(THttpRequestOptions).WithMaxRedirects(AMaxRedirects));
-end;
-
-function THeaderClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-begin
-  Result := TOptionsOverrideClient.Create(Self,
-    Default(THttpRequestOptions).WithFollowRedirects(AFollow));
-end;
-
-function THeaderClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
-begin
-  Result := TRetryClient.Create(Self, AMaxRetries);
+  if (AReq <> nil) and (AReq.Headers <> nil) then
+    AReq.Headers.SetHeader(FName, FValue);
+  Result := inherited Send(AReq);
 end;
 
 { TOptionsOverrideClient }
@@ -1636,20 +1215,18 @@ end;
 constructor TOptionsOverrideClient.Create(const AInner: IHttpClient;
   const ARequestOptions: THttpRequestOptions);
 begin
-  FInner := AInner;
+  inherited Create(AInner);
   FRequestOptions := ARequestOptions;
 end;
 
 procedure TOptionsOverrideClient.ApplyOptions(const AReq: IHttpRequest);
 var
   LReqWithOpts: IHttpRequestWithOptions;
-  LExisting: THttpRequestOptions;
   LMerged: THttpRequestOptions;
 begin
   if not Supports(AReq, IHttpRequestWithOptions, LReqWithOpts) then
     Exit;
-  LExisting := LReqWithOpts.RequestOptions;
-  LMerged := LExisting;
+  LMerged := LReqWithOpts.RequestOptions;
   if FRequestOptions.HasTimeout then
   begin
     LMerged.TimeoutMs := FRequestOptions.TimeoutMs;
@@ -1668,266 +1245,18 @@ begin
   LReqWithOpts.SetRequestOptions(LMerged);
 end;
 
-function TOptionsOverrideClient.DoBodyRequest(const AMethod: THttpMethod;
-  const AUrl, AContentType, ABody: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(AMethod, AUrl, AContentType, ABody);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
 function TOptionsOverrideClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
   ApplyOptions(AReq);
-  Result := FInner.Send(AReq);
-end;
-
-procedure TOptionsOverrideClient.CloseIdleConnections;
-begin
-  FInner.CloseIdleConnections;
-end;
-
-function TOptionsOverrideClient.Get(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmGet, AUrl, '', '');
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Post(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPost, TUrl.Parse(AUrl), AContentType, ABody);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Post(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
-end;
-
-function TOptionsOverrideClient.Post(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPost, AUrl, AContentType, ABody);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Put(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPut, TUrl.Parse(AUrl), AContentType, ABody);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Put(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
-end;
-
-function TOptionsOverrideClient.Put(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPut, AUrl, AContentType, ABody);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Delete(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, AUrl, '', '');
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Delete(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, TUrl.Parse(AUrl), AContentType, ABody);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Delete(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
-end;
-
-function TOptionsOverrideClient.Delete(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Patch(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPatch, TUrl.Parse(AUrl), AContentType, ABody);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Patch(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
-end;
-
-function TOptionsOverrideClient.Patch(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Head(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmHead, AUrl, '', '');
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.Options(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmOptions, AUrl, '', '');
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.PostForm(const AUrl: string;
-  const AFields: TFormFieldArray): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, 'application/x-www-form-urlencoded',
-    EncodeUrlEncodedForm(AFields));
-end;
-
-function TOptionsOverrideClient.PostJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TOptionsOverrideClient.PutJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPut, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TOptionsOverrideClient.PatchJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPatch, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TOptionsOverrideClient.DeleteJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TOptionsOverrideClient.SendStreaming(const AMethod: THttpMethod;
-  const AUrl: string; const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
-    AContentLength);
-  ApplyOptions(LReq);
-  Result := FInner.Send(LReq);
-end;
-
-function TOptionsOverrideClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
-begin
-  Result := TAuthClient.Create(Self, 'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
-end;
-
-function TOptionsOverrideClient.WithBearerAuth(const AToken: string): IHttpClient;
-begin
-  Result := TAuthClient.Create(Self, 'Bearer ' + AToken);
-end;
-
-function TOptionsOverrideClient.WithHeader(const AName, AValue: string): IHttpClient;
-begin
-  Result := THeaderClient.Create(Self, AName, AValue);
-end;
-
-function TOptionsOverrideClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
-var
-  LOpts: THttpRequestOptions;
-begin
-  LOpts := FRequestOptions;
-  LOpts.TimeoutMs := ATimeoutMs;
-  LOpts.HasTimeout := True;
-  Result := TOptionsOverrideClient.Create(FInner, LOpts);
-end;
-
-function TOptionsOverrideClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
-var
-  LOpts: THttpRequestOptions;
-begin
-  LOpts := FRequestOptions;
-  LOpts.MaxRedirects := AMaxRedirects;
-  LOpts.HasMaxRedirects := True;
-  Result := TOptionsOverrideClient.Create(FInner, LOpts);
-end;
-
-function TOptionsOverrideClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-var
-  LOpts: THttpRequestOptions;
-begin
-  LOpts := FRequestOptions;
-  LOpts.FollowRedirects := AFollow;
-  LOpts.HasFollowRedirects := True;
-  Result := TOptionsOverrideClient.Create(FInner, LOpts);
-end;
-
-function TOptionsOverrideClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
-begin
-  Result := TRetryClient.Create(Self, AMaxRetries);
+  Result := inherited Send(AReq);
 end;
 
 { TRetryClient }
 
-constructor TRetryClient.Create(const AInner: IHttpClient; const AMaxRetries: Int32);
+constructor TRetryClient.Create(const AInner: IHttpClient;
+  const AMaxRetries: Int32);
 begin
-  inherited Create;
-  FInner := AInner;
+  inherited Create(AInner);
   if AMaxRetries < 0 then
     raise EArgumentError.Create('Retry count must not be negative');
   FMaxRetries := AMaxRetries;
@@ -1938,240 +1267,30 @@ var
   LAttempt: Int32;
   LBackoffMs: Int64;
 begin
-  Result := FInner.Send(AReq);
-  for LAttempt := 1 to FMaxRetries do
+  LAttempt := 0;
+  while True do
   begin
-    if (Result = nil) or (Result.StatusCode < 500) or (Result.StatusCode > 599) then
-      Exit;
-    HttpReleaseResponseBody(Result);
-    LBackoffMs := 100 shl (LAttempt - 1); // 100, 200, 400, 800, ...
+    try
+      Result := inherited Send(AReq);
+      if (Result = nil) or (Result.StatusCode < 500) or
+         (Result.StatusCode > 599) then
+        Exit;
+      if LAttempt >= FMaxRetries then
+        Exit;
+      HttpReleaseResponseBody(Result);
+    except
+      on E: Exception do
+      begin
+        if (not HttpErrorIsRetryable(E)) or (LAttempt >= FMaxRetries) then
+          raise;
+      end;
+    end;
+    Inc(LAttempt);
+    LBackoffMs := 100 shl (LAttempt - 1); // 100, 200, 400, ...
     if LBackoffMs > 5000 then
       LBackoffMs := 5000;
     platform_thread_sleep_ns(UInt64(LBackoffMs) * 1000000);
-    Result := FInner.Send(AReq);
   end;
-end;
-
-procedure TRetryClient.CloseIdleConnections;
-begin
-  FInner.CloseIdleConnections;
-end;
-
-function TRetryClient.Get(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmGet, AUrl, '', '');
-  Result := Send(LReq);
-end;
-
-function TRetryClient.DoBodyRequest(const AMethod: THttpMethod;
-  const AUrl, AContentType, ABody: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(AMethod, AUrl, AContentType, ABody);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Post(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPost, TUrl.Parse(AUrl), AContentType, ABody);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Post(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, AContentType, ABody);
-end;
-
-function TRetryClient.Post(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPost, AUrl, AContentType, ABody);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Put(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPut, TUrl.Parse(AUrl), AContentType, ABody);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Put(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPut, AUrl, AContentType, ABody);
-end;
-
-function TRetryClient.Put(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPut, AUrl, AContentType, ABody);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Delete(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, AUrl, '', '');
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Delete(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, TUrl.Parse(AUrl), AContentType, ABody);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Delete(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmDelete, AUrl, AContentType, ABody);
-end;
-
-function TRetryClient.Delete(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmDelete, AUrl, AContentType, ABody);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Patch(const AUrl, AContentType: string;
-  const ABody: IReader): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPatch, TUrl.Parse(AUrl), AContentType, ABody);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Patch(const AUrl, AContentType: string;
-  const ABody: string): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPatch, AUrl, AContentType, ABody);
-end;
-
-function TRetryClient.Patch(const AUrl, AContentType: string;
-  const ABody: TBytes): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Head(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmHead, AUrl, '', '');
-  Result := Send(LReq);
-end;
-
-function TRetryClient.Options(const AUrl: string): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := BufferedBodyRequest(hmOptions, AUrl, '', '');
-  Result := Send(LReq);
-end;
-
-function TRetryClient.PostForm(const AUrl: string;
-  const AFields: TFormFieldArray): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, 'application/x-www-form-urlencoded',
-    EncodeUrlEncodedForm(AFields));
-end;
-
-function TRetryClient.PostJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPost, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TRetryClient.PutJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPut, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TRetryClient.PatchJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmPatch, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TRetryClient.DeleteJson(const AUrl: string;
-  const ABody: TJsonValue): IHttpResponse;
-begin
-  Result := DoBodyRequest(hmDelete, AUrl, 'application/json', JsonStringify(ABody));
-end;
-
-function TRetryClient.SendStreaming(const AMethod: THttpMethod;
-  const AUrl: string; const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpResponse;
-var
-  LReq: IHttpRequest;
-begin
-  LReq := NewStreamingRequest(AMethod, AUrl, AContentType, ABody,
-    AContentLength);
-  Result := Send(LReq);
-end;
-
-function TRetryClient.WithBasicAuth(const AUsername, APassword: string): IHttpClient;
-begin
-  Result := TAuthClient.Create(Self, 'Basic ' + Base64Encode(StringToUTF8Bytes(AUsername + ':' + APassword)));
-end;
-
-function TRetryClient.WithBearerAuth(const AToken: string): IHttpClient;
-begin
-  Result := TAuthClient.Create(Self, 'Bearer ' + AToken);
-end;
-
-function TRetryClient.WithHeader(const AName, AValue: string): IHttpClient;
-begin
-  Result := THeaderClient.Create(Self, AName, AValue);
-end;
-
-function TRetryClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
-begin
-  Result := TOptionsOverrideClient.Create(Self,
-    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
-end;
-
-function TRetryClient.WithMaxRedirects(const AMaxRetries: Int32): IHttpClient;
-begin
-  Result := TOptionsOverrideClient.Create(Self,
-    Default(THttpRequestOptions).WithMaxRedirects(AMaxRetries));
-end;
-
-function TRetryClient.WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-begin
-  Result := TOptionsOverrideClient.Create(Self,
-    Default(THttpRequestOptions).WithFollowRedirects(AFollow));
-end;
-
-function TRetryClient.WithRetry(const AMaxRetries: Int32): IHttpClient;
-begin
-  Result := TRetryClient.Create(Self, AMaxRetries);
 end;
 
 { Factory functions }

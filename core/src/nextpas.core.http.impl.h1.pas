@@ -2292,6 +2292,7 @@ var
   LRequestDeadline: TDeadline;
   LTimeoutMs: Int64;
   LReqOpts: IHttpRequestWithOptions;
+  LWrapped: Exception;
 begin
   if AReq = nil then
     raise EArgumentError.Create('h1 client transport requires request');
@@ -2345,8 +2346,9 @@ begin
            (not IsRetrySafeRequest(AReq)) or
            ((AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil)) then
         begin
-          if E is ETimeoutError then
-            raise EHttpError.CreateOp(hekTimeout, 'transport', E.Message);
+          LWrapped := HttpWrapTransportException(E);
+          if LWrapped <> nil then
+            raise LWrapped;
           raise;
         end;
         RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
@@ -2362,8 +2364,9 @@ begin
           on E2: Exception do
           begin
             LConn.Close;
-            if E2 is ETimeoutError then
-              raise EHttpError.CreateOp(hekTimeout, 'transport', E2.Message);
+            LWrapped := HttpWrapTransportException(E2);
+            if LWrapped <> nil then
+              raise LWrapped;
             raise;
           end;
         end;
@@ -2371,8 +2374,9 @@ begin
       else
       begin
         LConn.Close;
-        if E is ETimeoutError then
-          raise EHttpError.CreateOp(hekTimeout, 'transport', E.Message);
+        LWrapped := HttpWrapTransportException(E);
+        if LWrapped <> nil then
+          raise LWrapped;
         raise;
       end;
     end;

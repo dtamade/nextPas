@@ -65,9 +65,12 @@ end;
 - **非 deprecated 工厂（仅 2 个）**：
   - `NewRequest(Method, TUrl)` — 最小原始工厂（测试/内部桥接仍可直接用）
   - `NewGetRequest(Path)` — 路径级 GET 便捷工厂
-- 其余 `NewRequest` / 全部 `NewStreamingRequest` overload 均
-  `deprecated 'Use THttpRequestBuilder instead'`；门面与 `message.pas` 必须同标记
-  （`test_http_contract` source-contract 锁住）。
+- 多参 `NewRequest` overload 仍 `deprecated 'Use THttpRequestBuilder instead'`
+  （门面与 `message.pas` 同标记；`test_http_contract` source-contract 锁住）。
+  物理删除多参工厂需 bulk 测迁移，作为 follow-up。
+- `NewStreamingRequest` **已物理删除**；已知长度流式 body 用
+  `THttpRequestBuilder.Body(IReader)+ContentLength` 或
+  `IHttpClient.SendStreaming`。
 - Body 通过 `IReader` 表达；固定 body helpers 会复制到内存 reader 并发布 `Content-Length`。
 - Builder body 契约（可用性修复后）：
   - `Body(string|TBytes)`：按实际长度发布 `Content-Length`；**空 string** 仍是
@@ -77,11 +80,16 @@ end;
   - 仅 `Body(IReader)` 未声明长度 → **`Build` fail-fast**（`EHttpError(hekArgument)`），
     **禁止**静默 `Content-Length: 0`。
   - 未知长度 / 不可回放流：走 `SendStreaming`（不经 builder 假装已知 CL）。
-- Streaming：`NewStreamingRequest` + `SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
-- Client convenience `Post/Put/Patch/Delete(IReader)`：**fail-fast** `hekArgument`
-  （不再静默 `ReadAll`）。已知长度流用 `SendStreaming` 或
-  `NewRequest(..., Reader, ContentLength)` / builder `Body(IReader)+ContentLength`；
-  小缓冲 body 用 string/`TBytes` 重载。
+- Streaming：`SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
+- Client convenience `Post/Put/Patch/Delete` **仅** `string` / `TBytes` body 重载
+  （**无** `IReader` 便捷 overload）。已知长度流式 body 走
+  `SendStreaming(Method, Url, ContentType, Reader, ContentLength)` 或
+  builder `Body(IReader)+ContentLength` 后 `Send`；小缓冲 body 用 string/`TBytes`。
+- `WithRetry(N)`：对 **5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
+  （`hekTimeout` / `hekConnect` / 裸 `ETimeoutError` / `ENetworkError`）在
+  最多 N 次额外尝试内指数退避重试（100ms 基、封顶 5s）。**不**重试 4xx。
+- 请求取消：当前 **无** 独立 cancel token；超时路径与 `WithTimeout` /
+  `THttpClientOptions.Timeout` 共用，分类为 `hekTimeout`（文档契约，非独立 API）。
 
 ### 2.2.1 EHttpError.Kind（可用性修复）
 
@@ -90,13 +98,16 @@ end;
 - `Create(string)` 保持兼容（`Kind = hekUnknown`，Category 仍默认 network）。
 - 新代码优先 `Create(Kind, Message)`；调用方可 `except on E: EHttpError` 后匹配 Kind。
 - **消息形状错误**（非法/冲突 Content-Length、不支持 Transfer-Encoding、
-  builder 非法 CL、client IReader 便捷路径）→ `hekArgument`（不是裸
-  `EArgumentError`）。**配置/nil 前置条件**（nil writer/client、负超时等）仍可
-  用 `EArgumentError`。
-- Transport 边界：裸 `ETimeoutError` 在 H1/H2 client RoundTrip 包装为
-  `EHttpError.CreateOp(hekTimeout, 'transport', ...)`。
+  builder 非法 CL）→ `hekArgument`（不是裸 `EArgumentError`）。
+  **配置/nil 前置条件**（nil writer/client、负超时等）仍可用 `EArgumentError`。
+- Transport 边界：裸 `ETimeoutError` → `hekTimeout` + `Op=transport`；
+  裸 `ENetworkError`（含 connect 失败）→ `hekConnect` + `Op=transport`
+  （H1/H2 client RoundTrip 经 `HttpWrapTransportException`）。
 - 门面 helper：`HttpErrorIsTimeout` / `HttpErrorIsRetryable`（timeout + connect
-  类可重试；也识别边界前的裸 `ETimeoutError`）。
+  类可重试；也识别边界前的裸 `ETimeoutError` / `ENetworkError`）。
+- Request body framing：**仅 known Content-Length**。`NewRequest`/builder 在
+  `ContentLength < 0` 时 fail-fast；**不**通过静默写 `Transfer-Encoding: chunked`
+  伪装未知长度（未知长度走 `SendStreaming` 契约，当前仍要求调用方声明 CL）。
 
 ### 2.2.2 IHttpContext（可用性修复）
 
@@ -282,3 +293,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.4 | P4 成本隔离阶梯 + HTTP benches SysUtils 隔离修复 |
 | 2026-07-16 | 3.5 | P5 H3 honesty：无内建 H3 factory；QUIC 阻塞显式化 |
 | 2026-07-16 | 3.6 | Usability wave-2：hekTimeout wrap、hekArgument 消息形状、IReader fail-fast、THttpRequestWrapper、RTL isolation |
+| 2026-07-16 | 3.7 | Usability wave-3：WithRetry=5xx+IsRetryable；connect wrap；删 IReader client overload；known-CL only；删 NewStreamingRequest；多参 NewRequest 仍 deprecated；decorator forwarder |

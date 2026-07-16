@@ -333,10 +333,10 @@
   h2c Upgrade / push / WS-over-H2 仍明确排除。
 - Request construction 面已审计：`THttpRequestBuilder` 为推荐路径；
   非 deprecated 工厂仅 `NewRequest(Method, TUrl)` 与 `NewGetRequest`；
-  其余 `NewRequest` / 全部 `NewStreamingRequest` 在 facade 与 `message.pas`
-  同标记 deprecated；`test_http_contract` 用 source-contract 防止 facade 再
-  丢 deprecation。Builder `Body(IReader)` 仍固定 `Content-Length: 0`，
-  已知长度流式请求不扩面加 `ContentLength()`。
+  多参 `NewRequest` 在 facade 与 `message.pas` 同标记 deprecated；
+  `NewStreamingRequest` 已物理删除（builder / `SendStreaming`）；
+  `test_http_contract` 用 source-contract 锁 deprecation 与删除。
+  Builder `Body(IReader)` 要求 `ContentLength(N)`，缺长度 fail-fast。
 - runtime/socket 成本隔离已闭合：L0–L4 阶梯见 `BENCHMARKS.md`；
   `bench_fullchain` 输出 `cost_isolation_ladder` / `dispatch_split`，
   并通过 `NEXTPAS_BENCH_FILTER` / `NEXTPAS_BENCH_MAX_ITERS` 驱动
