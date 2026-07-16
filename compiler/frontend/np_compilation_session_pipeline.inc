@@ -4,6 +4,9 @@ begin
   FreeAndNil(FAstFacade);
   FreeAndNil(FGreenTree);
   FreeAndNil(FLexerResult);
+  { Drop AST arena slabs after trees freed (buffers may no-op FreeMem). }
+  if FAstAllocator <> nil then
+    (FAstAllocator as TVirtualArenaAllocator).Reset;
 end;
 
 procedure TCompilationSession.ResetResolutionState;
@@ -62,7 +65,8 @@ end;
 
 procedure TCompilationSession.ClearToolStatusEvents;
 begin
-  SetLength(FToolStatusEvents, 0);
+  if FToolStatusEvents <> nil then
+    FToolStatusEvents.Clear;
 end;
 
 procedure TCompilationSession.AppendToolStatusEvent(
@@ -80,22 +84,23 @@ procedure TCompilationSession.AppendToolStatusEvent(
   const AExitCode: LongInt
 );
 var
-  NextIndex: SizeInt;
+  Event: TToolStatusEventRecord;
 begin
-  NextIndex := Length(FToolStatusEvents);
-  SetLength(FToolStatusEvents, NextIndex + 1);
-  FToolStatusEvents[NextIndex].EventKind := AEventKind;
-  FToolStatusEvents[NextIndex].StepId := AStepId;
-  FToolStatusEvents[NextIndex].ToolRole := AToolRole;
-  FToolStatusEvents[NextIndex].ProfileId := AProfileId;
-  FToolStatusEvents[NextIndex].LogicalExecutable := ALogicalExecutable;
-  FToolStatusEvents[NextIndex].SysrootRef := ASysrootRef;
-  FToolStatusEvents[NextIndex].ResolvedPath := AResolvedPath;
-  FToolStatusEvents[NextIndex].Status := AStatus;
-  FToolStatusEvents[NextIndex].ResultValue := AResultValue;
-  FToolStatusEvents[NextIndex].Summary := ASummary;
-  FToolStatusEvents[NextIndex].HasExitCode := AHasExitCode;
-  FToolStatusEvents[NextIndex].ExitCode := AExitCode;
+  if FToolStatusEvents = nil then
+    FToolStatusEvents := TToolStatusEventVec.Create;
+  Event.EventKind := AEventKind;
+  Event.StepId := AStepId;
+  Event.ToolRole := AToolRole;
+  Event.ProfileId := AProfileId;
+  Event.LogicalExecutable := ALogicalExecutable;
+  Event.SysrootRef := ASysrootRef;
+  Event.ResolvedPath := AResolvedPath;
+  Event.Status := AStatus;
+  Event.ResultValue := AResultValue;
+  Event.Summary := ASummary;
+  Event.HasExitCode := AHasExitCode;
+  Event.ExitCode := AExitCode;
+  FToolStatusEvents.Push(Event);
 end;
 
 function TCompilationSession.BuildTracePlanId: string;
@@ -111,11 +116,17 @@ end;
 function TCompilationSession.PrimaryToolResolvedPath: string;
 var
   Index: LongInt;
+  Event: ^TToolStatusEventRecord;
 begin
-  for Index := High(FToolStatusEvents) downto 0 do
-    if (FToolStatusEvents[Index].ResolvedPath <> '') and
-      nextpas.core.text.SameText(FToolStatusEvents[Index].StepId, PrimaryToolStepId) then
-      Exit(FToolStatusEvents[Index].ResolvedPath);
+  if FToolStatusEvents <> nil then
+    for Index := LongInt(FToolStatusEvents.Count) - 1 downto 0 do
+    begin
+      { Prefer GetPtr: full record Items[] copy of multi-string events is fragile. }
+      Event := FToolStatusEvents.GetPtr(SizeUInt(Index));
+      if (Event^.ResolvedPath <> '') and
+        nextpas.core.text.SameText(Event^.StepId, PrimaryToolStepId) then
+        Exit(Event^.ResolvedPath);
+    end;
 
   if FToolchainPlan <> nil then
     Exit(FToolchainPlan.PrimaryToolExecutableRef);
@@ -127,7 +138,7 @@ function TCompilationSession.BuildStepOutputsJson(
   const AToolStep: TToolInvocationStep
 ): string;
 begin
-  Result := BuildToolArtifactArrayJson(AToolStep.Outputs);
+  Result := BuildToolArtifactVecJson(AToolStep.Outputs);
 end;
 
 function TCompilationSession.CollectAdditionalAssemblyBaseNames: TStringArray;
@@ -182,19 +193,7 @@ function TCompilationSession.FindToolInvocationStep(
 var
   Index: LongInt;
 begin
-  Result.StepId := '';
-  Result.ToolRole := '';
-  Result.ProfileId := '';
-  Result.SysrootRef := '';
-  Result.LogicalExecutable := '';
-  Result.ExecutableRef := '';
-  Result.WorkingDirectory := '';
-  Result.FailureMapping := '';
-  SetLength(Result.Argv, 0);
-  SetLength(Result.EnvDelta, 0);
-  SetLength(Result.Inputs, 0);
-  SetLength(Result.Outputs, 0);
-  SetLength(Result.Sidecars, 0);
+  ClearToolInvocationStepView(Result);
 
   if FToolchainPlan = nil then
     Exit;
@@ -366,62 +365,121 @@ var
   Defines: TDefineTable;
   IncResolver: TFileIncludeResolver;
   SourceDir: string;
+  CanonPath: string;
+  PathScratch: PAnsiChar;
+  PathLen: SizeUInt;
+  ScratchSize: SizeUInt;
 begin
-  ResetSyntaxState;
-  RawLexer := TLexerResult.Create(FSourceDatabase.RootSourceText,
-    FDiagnosticsSink, FRootFileId);
-  Defines := TDefineTable.Create;
-  Defines.SeedFPCDefines;
-  SourceDir := ExtractFileDir(FSourceDatabase.RootSourceCanonicalPath);
-  IncResolver := TFileIncludeResolver.Create(SourceDir);
-  IncResolver.AddSearchPath(SourceDir);
-  PP := TPreprocessor.Create(Defines, True, IncResolver);
-  PP.Process(RawLexer);
-  FLexerResult := PP.ToLexerResult;
-  PP.Free;
-  RawLexer.Free;
-  FGreenTree := ParseGreenTree(FLexerResult, FDiagnosticsSink, FRootFileId);
-  FAstFacade := TAstFacade.Create(FGreenTree);
+  { Unit phase over session VirtualArena: MemAlloc scratch, UnitEnd bulk-reclaims. }
+  FMemScope.UnitBegin;
+  try
+    ResetSyntaxState;
 
-  if FDiagnosticsSink.HasErrors or (FGreenTree = nil) or not FGreenTree.IsValid then
-    FSyntaxStatus := 'failure'
-  else
-    FSyntaxStatus := 'ready';
+    { Phase scratch: canonical path bytes + work region for include path setup.
+      Owned by FMemScope; do not FreeMem. Falls back to string path if OOM. }
+    CanonPath := FSourceDatabase.RootSourceCanonicalPath;
+    PathLen := SizeUInt(Length(CanonPath));
+    ScratchSize := PathLen + 1 + 256;
+    PathScratch := PAnsiChar(MemAlloc(ScratchSize));
+    if PathScratch <> nil then
+    begin
+      if PathLen > 0 then
+        Move(CanonPath[1], PathScratch^, PathLen);
+      PathScratch[PathLen] := #0;
+      SetString(SourceDir, PathScratch, SizeInt(PathLen));
+      SourceDir := ExtractFileDir(SourceDir);
+    end
+    else
+      SourceDir := ExtractFileDir(CanonPath);
+
+    RawLexer := TLexerResult.Create(FSourceDatabase.RootSourceText,
+      FDiagnosticsSink, FRootFileId);
+    Defines := TDefineTable.Create(FScratchAllocator);
+    Defines.SeedFPCDefines;
+    IncResolver := TFileIncludeResolver.Create(SourceDir, FScratchAllocator);
+    IncResolver.AddSearchPath(SourceDir);
+    PP := TPreprocessor.Create(Defines, True, IncResolver, FScratchAllocator);
+    PP.Process(RawLexer);
+    FLexerResult := PP.ToLexerResult;
+    PP.Free;
+    RawLexer.Free;
+    FGreenTree := ParseGreenTree(
+      FLexerResult, FDiagnosticsSink, FRootFileId, FAstAllocator);
+    FAstFacade := TAstFacade.Create(FGreenTree);
+
+    if FDiagnosticsSink.HasErrors or (FGreenTree = nil) or not FGreenTree.IsValid then
+      FSyntaxStatus := 'failure'
+    else
+      FSyntaxStatus := 'ready';
+  finally
+    FMemScope.UnitEnd;
+  end;
 end;
 
 procedure TCompilationSession.ResolveUnits;
 var
   Resolver: TUnitResolver;
+  PathScratch: PAnsiChar;
+  RootPath: string;
+  PathLen: SizeUInt;
+  ScratchUsed: SizeUInt;
 begin
-  ResetResolutionState;
-  if (FAstFacade = nil) or not FAstFacade.IsValid then
-  begin
-    FResolutionStatus := 'failure';
-    Exit;
-  end;
-
-  Resolver := TUnitResolver.Create(
-    FSourceDatabase,
-    FTargetFacts,
-    FDiagnosticsSink,
-    FRootFileId,
-    FOptions.WorkspaceModel.ProjectUnitRootInfos,
-    FOptions.ExplicitUnitRoots
-  );
+  { Unit phase: resolution scratch on session arena; UnitEnd records peak. }
+  FMemScope.UnitBegin;
   try
-    Resolver.ResolveRoot(FAstFacade);
-    FSearchIndexStatus := Resolver.SearchIndexStatus;
-    FIndexedSearchRootCount := Resolver.IndexedRootCount;
-    FSearchIndexScanCount := Resolver.SearchIndexScanCount;
-    FSearchPathSet := Resolver.DetachSearchPaths;
-    FUnitGraph := Resolver.DetachUnitGraph;
-    FResolutionStatus := Resolver.ResolutionStatus;
-  finally
-    Resolver.Free;
-  end;
+    ResetResolutionState;
+    if (FAstFacade = nil) or not FAstFacade.IsValid then
+    begin
+      FResolutionStatus := 'failure';
+      Exit;
+    end;
 
-  if (FUnitGraph <> nil) and (FUnitGraph.ResolvedUnitCount > FUnitStateCount) then
-    FUnitStateCount := FUnitGraph.ResolvedUnitCount;
+    { Phase scratch: root path bytes + work region (no FreeMem; UnitEnd reclaims). }
+    RootPath := FSourceDatabase.RootSourceCanonicalPath;
+    PathLen := SizeUInt(Length(RootPath));
+    PathScratch := PAnsiChar(MemAlloc(PathLen + 1 + 64));
+    ScratchUsed := 0;
+    if PathScratch <> nil then
+    begin
+      if PathLen > 0 then
+        Move(RootPath[1], PathScratch^, PathLen);
+      PathScratch[PathLen] := #0;
+      ScratchUsed := PathLen + 1;
+    end;
+
+    { FScratchAllocator only for phase-local resolver work (stack/indexes/dep PP).
+      DetachUnitGraph/DetachSearchPaths own default-heap TVecs for session use. }
+    Resolver := TUnitResolver.Create(
+      FSourceDatabase,
+      FTargetFacts,
+      FDiagnosticsSink,
+      FRootFileId,
+      FOptions.WorkspaceModel.ProjectUnitRootInfos,
+      FOptions.ExplicitUnitRoots,
+      FScratchAllocator
+    );
+    try
+      Resolver.ResolveRoot(FAstFacade);
+      FSearchIndexStatus := Resolver.SearchIndexStatus;
+      FIndexedSearchRootCount := Resolver.IndexedRootCount;
+      FSearchIndexScanCount := Resolver.SearchIndexScanCount;
+      FSearchPathSet := Resolver.DetachSearchPaths;
+      FUnitGraph := Resolver.DetachUnitGraph;
+      FResolutionStatus := Resolver.ResolutionStatus;
+    finally
+      Resolver.Free;
+    end;
+
+    if (FUnitGraph <> nil) and (FUnitGraph.ResolvedUnitCount > FUnitStateCount) then
+      FUnitStateCount := FUnitGraph.ResolvedUnitCount;
+    { ScratchUsed documents phase path seed size; MemSessionPeak tracks peak. }
+    if (ScratchUsed > 0) and (PathScratch <> nil) and (PathScratch[0] = #0) and
+       (PathLen > 0) then
+      ScratchUsed := 0; { inconsistent seed — ignore }
+    ResetScratchAllocator;
+  finally
+    FMemScope.UnitEnd;
+  end;
 end;
 
 procedure TCompilationSession.AnalyzeSemantics;
@@ -430,6 +488,7 @@ var
   CacheKey: string;
   CachedModel: TObject;
   DiskModel: TSemanticModel;
+  PhaseScratch: Pointer;
 begin
   { Query cache: if we already analyzed this file, skip }
   CacheKey := 'semantic:' + FSourceDatabase.RootSourceCanonicalPath;
@@ -463,42 +522,54 @@ begin
     end;
   end;
 
-  ResetSemanticState;
-  if (FAstFacade = nil) or (FUnitGraph = nil) or (FResolutionStatus <> 'ready') then
-  begin
-    FSemanticStatus := 'failure';
-    Exit;
-  end;
-
-  Analyzer := TSemanticAnalyzer.Create(
-    FAstFacade,
-    FUnitGraph,
-    FDiagnosticsSink,
-    FRootFileId,
-    FOptions.NoFold
-  );
+  FMemScope.UnitBegin;
   try
-    Analyzer.Analyze;
-    FSemanticModel := Analyzer.DetachModel;
-    if FSemanticModel = nil then
-      FSemanticStatus := 'deferred'
-    else
+    ResetSemanticState;
+    if (FAstFacade = nil) or (FUnitGraph = nil) or (FResolutionStatus <> 'ready') then
     begin
-      FSemanticStatus := FSemanticModel.Status;
-      { Cache for incremental compilation — query DB owns the reference }
-      if FSemanticStatus = 'ready' then
+      FSemanticStatus := 'failure';
+      Exit;
+    end;
+
+    { Phase scratch header + analyzer working storage on FScratchAllocator. }
+    PhaseScratch := MemAlloc(256);
+    if PhaseScratch = nil then
+      ; { OOM soft: analyzer still runs on default heap if scratch nil }
+
+    Analyzer := TSemanticAnalyzer.Create(
+      FAstFacade,
+      FUnitGraph,
+      FDiagnosticsSink,
+      FRootFileId,
+      FOptions.NoFold,
+      FScratchAllocator
+    );
+    try
+      Analyzer.Analyze;
+      FSemanticModel := Analyzer.DetachModel;
+      if FSemanticModel = nil then
+        FSemanticStatus := 'deferred'
+      else
       begin
-        FQueryDB.Store(CacheKey, FSemanticModel);
-        { Save to persistent disk cache }
-        FIncrementalCache.Save(
-          FSourceDatabase.RootSourceCanonicalPath,
-          FSourceDatabase.RootSourceText,
-          [],
-          FSemanticModel);
+        FSemanticStatus := FSemanticModel.Status;
+        { Cache for incremental compilation — query DB owns the reference }
+        if FSemanticStatus = 'ready' then
+        begin
+          FQueryDB.Store(CacheKey, FSemanticModel);
+          { Save to persistent disk cache }
+          FIncrementalCache.Save(
+            FSourceDatabase.RootSourceCanonicalPath,
+            FSourceDatabase.RootSourceText,
+            [],
+            FSemanticModel);
+        end;
       end;
+    finally
+      Analyzer.Free;
+      ResetScratchAllocator;
     end;
   finally
-    Analyzer.Free;
+    FMemScope.UnitEnd;
   end;
 end;
 
@@ -510,60 +581,76 @@ var
   Lowering: THirToMirLowering;
   LlvmTranslator: TMirToLlvmTranslator;
   LlvmOutput: string;
+  PhaseScratch: Pointer;
 begin
-  ResetIrState;
-  if (FSemanticModel = nil) or (FSemanticStatus <> 'ready') then
-  begin
-    FMirStatus := 'failure';
-    Exit;
-  end;
+  FMemScope.UnitBegin;
+  try
+    ResetIrState;
+    if (FSemanticModel = nil) or (FSemanticStatus <> 'ready') then
+    begin
+      FMirStatus := 'failure';
+      Exit;
+    end;
 
-  FMirStatus := 'ready';
+    FMirStatus := 'ready';
+    PhaseScratch := MemAlloc(128);
+    if PhaseScratch = nil then
+      ; { soft OOM }
 
-  // MIR lowering is enabled via NEXTPAS_MIR=1 env var (opt-in during development)
-  if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
-  begin
-    HirBuilder := THIRBuilder.Create(FSemanticModel, FSourceDatabase, FRootFileId);
-    try
-      HirBuilder.Build;
-
-      Lowering := THirToMirLowering.Create(HirBuilder.Module);
+    // MIR lowering is enabled via NEXTPAS_MIR=1 env var (opt-in during development)
+    if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
+    begin
+      { HIR/MIR working storage on FScratchAllocator; MIR module detaches to heap. }
+      HirBuilder := THIRBuilder.Create(
+        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator);
       try
-        Lowering.Lower;
-        FMirModule := Lowering.DetachModule;
-      finally
-        Lowering.Free;
-      end;
+        HirBuilder.Build;
 
-      if GetEnvironmentVariable('NEXTPAS_MIR_DUMP') = '1' then
-      begin
-        LlvmTranslator := TMirToLlvmTranslator.Create(FMirModule);
+        Lowering := THirToMirLowering.Create(HirBuilder.Module, FScratchAllocator);
         try
-          LlvmOutput := LlvmTranslator.Translate;
+          Lowering.Lower;
+          FMirModule := Lowering.DetachModule;
         finally
-          LlvmTranslator.Free;
+          Lowering.Free;
         end;
-      end;
-    finally
-      HirBuilder.Free;
-    end;
-  end
-  else if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
-  begin
-    HirBuilder := THIRBuilder.Create(FSemanticModel, FSourceDatabase, FRootFileId);
-    try
-      HirBuilder.Build;
-      HirPath := ChangeFileExt(FOptions.BuildContext.ResolvedSourcePath, '.hir');
-      HirPrinter := THIRPrinter.Create(HirBuilder.Module);
-      try
-        HirPrinter.Print;
-        HirPrinter.SaveToFile(HirPath);
+
+        if GetEnvironmentVariable('NEXTPAS_MIR_DUMP') = '1' then
+        begin
+          { MIR→LLVM output lines on FScratchAllocator TVec }
+          LlvmTranslator := TMirToLlvmTranslator.Create(FMirModule, FScratchAllocator);
+          try
+            LlvmOutput := LlvmTranslator.Translate;
+          finally
+            LlvmTranslator.Free;
+          end;
+        end;
       finally
-        HirPrinter.Free;
+        HirBuilder.Free;
+        ResetScratchAllocator;
       end;
-    finally
-      HirBuilder.Free;
+    end
+    else if GetEnvironmentVariable('NEXTPAS_HIR_DUMP') = '1' then
+    begin
+      HirBuilder := THIRBuilder.Create(
+        FSemanticModel, FSourceDatabase, FRootFileId, FScratchAllocator);
+      try
+        HirBuilder.Build;
+        HirPath := ChangeFileExt(FOptions.BuildContext.ResolvedSourcePath, '.hir');
+        { HIR dump lines on FScratchAllocator TVec }
+        HirPrinter := THIRPrinter.Create(HirBuilder.Module, FScratchAllocator);
+        try
+          HirPrinter.Print;
+          HirPrinter.SaveToFile(HirPath);
+        finally
+          HirPrinter.Free;
+        end;
+      finally
+        HirBuilder.Free;
+        ResetScratchAllocator;
+      end;
     end;
+  finally
+    FMemScope.UnitEnd;
   end;
 end;
 

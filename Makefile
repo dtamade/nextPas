@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract
+.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -12,6 +12,11 @@ contract:
 	./scripts/run-all-contract-checks.sh
 
 stage0: rebuild-compiler
+
+# Fresh-process doctor projection under NEXTPAS_MEM_HEAP_DEBUG / NEXTPAS_MEM_DEBUG.
+# Requires build/stage0-bootstrap/nextpas (run make rebuild-compiler first).
+stage0-heap-debug-recipe:
+	./scripts/stage0-heap-debug-env-recipe.sh
 
 verify: hygiene contract
 	$(MAKE) test-compiler-incremental-cache

@@ -207,19 +207,8 @@ begin
   FSavedFuncId := FCurrentFuncId;
   FSavedBlockId := FCurrentBlockId;
   FSavedEntryBlockId := FEntryBlockId;
-  FSavedAllocaCount := FAllocaCount;
   FInStartFunc := False;
-  SetLength(FSavedAllocas, FAllocaCount);
-  for I := 0 to FAllocaCount - 1 do
-    FSavedAllocas[I] := FAllocas[I];
-  FSavedBlockCount := FBlockCount;
-  SetLength(FSavedBlockNames, FBlockCount);
-  SetLength(FSavedBlockIds, FBlockCount);
-  for I := 0 to FBlockCount - 1 do
-  begin
-    FSavedBlockNames[I] := FBlockNames[I];
-    FSavedBlockIds[I] := FBlockIds[I];
-  end;
+  SnapshotWorkTables(FSavedAllocas, FSavedBlockNames, FSavedBlockIds);
 
   FuncName := ANode.DisplayName;
   Rest := ANode.Operand;
@@ -276,9 +265,9 @@ begin
   FCurrentBlockId := EntryBlock;
   FEntryBlockId := EntryBlock;
   FBlockTerminated := False;
-  FAllocaCount := 0;
-  FGlobalRefCount := 0;
-  FBlockCount := 0;
+  ClearWorkAllocas;
+  ClearGlobalRefs;
+  ClearWorkBlocks;
 
   if RetSuffix = 's' then
   begin
@@ -360,13 +349,14 @@ begin
     Instr.Kind := hikAlloca;
     Instr.TypeId := GetPtrType;
     EmitInstr(Instr);
-    for I := 0 to FAllocaCount - 1 do
-      if SameText(FAllocas[I].Name, VarName) then
-      begin
-        FAllocas[I].Value := Instr.ResultId;
-        FAllocas[I].TypeId := GetPtrType;
-        Break;
-      end;
+    if FAllocas.Count > 0 then
+      for I := 0 to LongInt(FAllocas.Count) - 1 do
+        if SameText(FAllocas[I].Name, VarName) then
+        begin
+          FAllocas.GetPtr(I)^.Value := Instr.ResultId;
+          FAllocas.GetPtr(I)^.TypeId := GetPtrType;
+          Break;
+        end;
   end;
   V := FindAlloca(VarName);
   if IsVarParamAlloca(VarName) then
@@ -467,8 +457,8 @@ begin
   for I := 0 to VmtCount - 1 do
   begin
     if FSemaModel.GetTypeMetaByName(AClassName, Meta) and
-      (I < Length(Meta.VmtSlots)) then
-      FuncName := Meta.VmtSlots[I].FuncQualName
+      (Meta.VmtSlots <> nil) and (I < LongInt(Meta.VmtSlots.Count)) then
+      FuncName := Meta.VmtSlots[SizeUInt(I)].FuncQualName
     else if not FSemaModel.LookupStringConstValue(
       AClassName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
@@ -520,8 +510,8 @@ begin
   for I := 0 to VmtCount - 1 do
   begin
     if FSemaModel.GetTypeMetaByName(ClsName, Meta) and
-      (I < Length(Meta.VmtSlots)) then
-      FuncName := Meta.VmtSlots[I].FuncQualName
+      (Meta.VmtSlots <> nil) and (I < LongInt(Meta.VmtSlots.Count)) then
+      FuncName := Meta.VmtSlots[SizeUInt(I)].FuncQualName
     else if not FSemaModel.LookupStringConstValue(
       ClsName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
@@ -546,8 +536,8 @@ begin
         Funcs[0] := '';
       for I := 0 to VmtCount - 1 do
       begin
-        if I < Length(Meta.VmtSlots) then
-          FuncName := Meta.VmtSlots[I].FuncQualName
+        if (Meta.VmtSlots <> nil) and (I < LongInt(Meta.VmtSlots.Count)) then
+          FuncName := Meta.VmtSlots[SizeUInt(I)].FuncQualName
         else
           FuncName := '';
         if (FuncName <> '') and (Pos('.', FuncName) > 0) and
@@ -629,11 +619,11 @@ begin
   EmitInstr(Instr);
 
   if FSemaModel.GetTypeMetaByName(ClsName, Meta) and
-    (Length(Meta.InterfaceSlots) > 0) then
+    (Meta.InterfaceSlots <> nil) and (Meta.InterfaceSlots.Count > 0) then
   begin
-    for I := 0 to High(Meta.InterfaceSlots) do
+    for I := 0 to LongInt(Meta.InterfaceSlots.Count) - 1 do
     begin
-      EmitInterfaceSlotStore(ObjPtr, ClsName, Meta.InterfaceSlots[I]);
+      EmitInterfaceSlotStore(ObjPtr, ClsName, Meta.InterfaceSlots[SizeUInt(I)]);
     end;
   end;
 end;
@@ -657,12 +647,12 @@ begin
   SetLength(ParamCounts, IntfMeta.VmtCount);
   for I := 0 to IntfMeta.VmtCount - 1 do
   begin
-    if I < Length(IntfMeta.VmtSlots) then
+    if (IntfMeta.VmtSlots <> nil) and (I < LongInt(IntfMeta.VmtSlots.Count)) then
     begin
       ThunkNames[I] := AClassName + '._intf_thunk_' + IntfName + '_' +
-        IntfMeta.VmtSlots[I].MethodName;
+        IntfMeta.VmtSlots[SizeUInt(I)].MethodName;
       SymId := FSemaModel.FindSymbolByName(
-        IntfName + '.' + IntfMeta.VmtSlots[I].MethodName);
+        IntfName + '.' + IntfMeta.VmtSlots[SizeUInt(I)].MethodName);
       if SymId > 0 then
         ParamCounts[I] := FSemaModel.SymbolAt(SymId - 1).ParamCount
       else

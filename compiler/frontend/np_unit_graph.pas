@@ -3,10 +3,13 @@ unit np_unit_graph;
 {$mode objfpc}{$H+}
 {$UNITPATH .}
 {$UNITPATH ../../rtl/core/text}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec,
   nextpas.core.text.conv, np_source_database, np_text_primitives;
 
 type
@@ -51,12 +54,21 @@ type
     TargetUnitId: string;
   end;
 
+  TResolvedUnitVec = specialize TVec<TResolvedUnit>;
+  TUnitGraphEdgeVec = specialize TVec<TUnitGraphEdge>;
+  TUnitGraphLongIntVec = specialize TVec<LongInt>;
+  TSearchPathEntryVec = specialize TVec<TSearchPathEntry>;
+
   TSearchPathSet = class
   private
-    FEntries: array of TSearchPathEntry;
+    FAllocator: IAllocator;
+    FEntries: TSearchPathEntryVec;
     function IndexOfRootPath(const ARootPath: string): LongInt;
   public
-    constructor Create;
+    { Optional AAllocator for entry TVec. Detach products use default (nil)
+      so buffers outlive phase ResetScratchAllocator. }
+    constructor Create(AAllocator: IAllocator = nil);
+    destructor Destroy; override;
     procedure AddRoot(
       const ARootPath: string;
       const AScopeName: string;
@@ -73,10 +85,12 @@ type
 
   TUnitGraph = class
   private
-    FResolvedUnits: array of TResolvedUnit;
-    FEdges: array of TUnitGraphEdge;
+    FAllocator: IAllocator;
+    FResolvedUnits: TResolvedUnitVec;
+    FEdges: TUnitGraphEdgeVec;
     FRootName: string;
     FStatus: string;
+    function CreateLongIntVec: TUnitGraphLongIntVec;
     function IndexOfUnitId(const AUnitId: string): LongInt;
     function EdgeExists(
       const AKind: TUnitGraphEdgeKind;
@@ -84,7 +98,10 @@ type
       const ATargetUnitId: string
     ): Boolean;
   public
-    constructor Create;
+    { Optional AAllocator for units/edges/topo TVec. Detach products use default
+      (nil) so buffers outlive phase ResetScratchAllocator. }
+    constructor Create(AAllocator: IAllocator = nil);
+    destructor Destroy; override;
     procedure AddResolvedUnit(const AUnit: TResolvedUnit);
     procedure AddEdge(
       const AKind: TUnitGraphEdgeKind;
@@ -172,17 +189,27 @@ begin
   Result.FileId := AFileId;
 end;
 
-constructor TSearchPathSet.Create;
+constructor TSearchPathSet.Create(AAllocator: IAllocator);
 begin
   inherited Create;
-  SetLength(FEntries, 0);
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+    FEntries := TSearchPathEntryVec.Create(0, FAllocator)
+  else
+    FEntries := TSearchPathEntryVec.Create;
+end;
+
+destructor TSearchPathSet.Destroy;
+begin
+  FEntries.Free;
+  inherited Destroy;
 end;
 
 function TSearchPathSet.IndexOfRootPath(const ARootPath: string): LongInt;
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FEntries) - 1 do
+  for Index := 0 to LongInt(FEntries.Count) - 1 do
     if FEntries[Index].RootPath = ARootPath then
       Exit(Index);
 
@@ -199,7 +226,7 @@ procedure TSearchPathSet.AddRoot(
 );
 var
   CanonicalRootPath: string;
-  NextIndex: SizeInt;
+  Entry: TSearchPathEntry;
 begin
   if Trim(ARootPath) = '' then
     Exit;
@@ -208,33 +235,32 @@ begin
   if IndexOfRootPath(CanonicalRootPath) >= 0 then
     Exit;
 
-  NextIndex := Length(FEntries);
-  SetLength(FEntries, NextIndex + 1);
-  FEntries[NextIndex].RootPath := CanonicalRootPath;
-  FEntries[NextIndex].ScopeName := AScopeName;
+  Entry.RootPath := CanonicalRootPath;
+  Entry.ScopeName := AScopeName;
   if Trim(AProvenanceKind) <> '' then
-    FEntries[NextIndex].ProvenanceKind := AProvenanceKind
+    Entry.ProvenanceKind := AProvenanceKind
   else
-    FEntries[NextIndex].ProvenanceKind := AScopeName;
-  FEntries[NextIndex].PackageName := APackageName;
+    Entry.ProvenanceKind := AScopeName;
+  Entry.PackageName := APackageName;
   if Trim(AManifestPath) <> '' then
-    FEntries[NextIndex].ManifestPath := NormalizeCorePath(AManifestPath)
+    Entry.ManifestPath := NormalizeCorePath(AManifestPath)
   else
-    FEntries[NextIndex].ManifestPath := '';
+    Entry.ManifestPath := '';
   if Trim(AWorkspaceMemberPath) <> '' then
-    FEntries[NextIndex].WorkspaceMemberPath := NormalizeCorePath(AWorkspaceMemberPath)
+    Entry.WorkspaceMemberPath := NormalizeCorePath(AWorkspaceMemberPath)
   else
-    FEntries[NextIndex].WorkspaceMemberPath := '';
+    Entry.WorkspaceMemberPath := '';
+  FEntries.Push(Entry);
 end;
 
 function TSearchPathSet.Count: LongInt;
 begin
-  Result := Length(FEntries);
+  Result := LongInt(FEntries.Count);
 end;
 
 function TSearchPathSet.EntryAt(const AIndex: LongInt): TSearchPathEntry;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FEntries)) then
+  if (AIndex < 0) or (AIndex >= LongInt(FEntries.Count)) then
   begin
     Result.RootPath := '';
     Result.ScopeName := '';
@@ -258,20 +284,44 @@ begin
   Result := EntryAt(AIndex).ScopeName;
 end;
 
-constructor TUnitGraph.Create;
+constructor TUnitGraph.Create(AAllocator: IAllocator);
 begin
   inherited Create;
-  SetLength(FResolvedUnits, 0);
-  SetLength(FEdges, 0);
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+  begin
+    FResolvedUnits := TResolvedUnitVec.Create(0, FAllocator);
+    FEdges := TUnitGraphEdgeVec.Create(0, FAllocator);
+  end
+  else
+  begin
+    FResolvedUnits := TResolvedUnitVec.Create;
+    FEdges := TUnitGraphEdgeVec.Create;
+  end;
   FRootName := '';
   FStatus := 'deferred';
+end;
+
+destructor TUnitGraph.Destroy;
+begin
+  FEdges.Free;
+  FResolvedUnits.Free;
+  inherited Destroy;
+end;
+
+function TUnitGraph.CreateLongIntVec: TUnitGraphLongIntVec;
+begin
+  if FAllocator <> nil then
+    Result := TUnitGraphLongIntVec.Create(0, FAllocator)
+  else
+    Result := TUnitGraphLongIntVec.Create;
 end;
 
 function TUnitGraph.IndexOfUnitId(const AUnitId: string): LongInt;
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FResolvedUnits) - 1 do
+  for Index := 0 to LongInt(FResolvedUnits.Count) - 1 do
     if FResolvedUnits[Index].UnitId = AUnitId then
       Exit(Index);
 
@@ -286,7 +336,7 @@ function TUnitGraph.EdgeExists(
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FEdges) - 1 do
+  for Index := 0 to LongInt(FEdges.Count) - 1 do
     if (FEdges[Index].Kind = AKind) and
       (FEdges[Index].SourceUnitId = ASourceUnitId) and
       (FEdges[Index].TargetUnitId = ATargetUnitId) then
@@ -298,7 +348,7 @@ end;
 procedure TUnitGraph.AddResolvedUnit(const AUnit: TResolvedUnit);
 var
   ExistingIndex: LongInt;
-  NextIndex: SizeInt;
+  Existing: TResolvedUnit;
 begin
   if AUnit.UnitId = '' then
     Exit;
@@ -306,18 +356,17 @@ begin
   ExistingIndex := IndexOfUnitId(AUnit.UnitId);
   if ExistingIndex >= 0 then
   begin
-    if (FResolvedUnits[ExistingIndex].SourcePath = '') and (AUnit.SourcePath <> '') then
+    Existing := FResolvedUnits[ExistingIndex];
+    if (Existing.SourcePath = '') and (AUnit.SourcePath <> '') then
       FResolvedUnits[ExistingIndex] := AUnit
-    else if SameText(FResolvedUnits[ExistingIndex].OriginClass, 'implicit-runtime') and
+    else if SameText(Existing.OriginClass, 'implicit-runtime') and
       (AUnit.SourcePath <> '') and
       (not SameText(AUnit.OriginClass, 'implicit-runtime')) then
       FResolvedUnits[ExistingIndex] := AUnit;
     Exit;
   end;
 
-  NextIndex := Length(FResolvedUnits);
-  SetLength(FResolvedUnits, NextIndex + 1);
-  FResolvedUnits[NextIndex] := AUnit;
+  FResolvedUnits.Push(AUnit);
 end;
 
 procedure TUnitGraph.AddEdge(
@@ -326,16 +375,15 @@ procedure TUnitGraph.AddEdge(
   const ATargetUnitId: string
 );
 var
-  NextIndex: SizeInt;
+  Edge: TUnitGraphEdge;
 begin
   if EdgeExists(AKind, ASourceUnitId, ATargetUnitId) then
     Exit;
 
-  NextIndex := Length(FEdges);
-  SetLength(FEdges, NextIndex + 1);
-  FEdges[NextIndex].Kind := AKind;
-  FEdges[NextIndex].SourceUnitId := ASourceUnitId;
-  FEdges[NextIndex].TargetUnitId := ATargetUnitId;
+  Edge.Kind := AKind;
+  Edge.SourceUnitId := ASourceUnitId;
+  Edge.TargetUnitId := ATargetUnitId;
+  FEdges.Push(Edge);
 end;
 
 function TUnitGraph.HasUnit(const AUnitId: string): Boolean;
@@ -360,12 +408,12 @@ end;
 
 function TUnitGraph.ResolvedUnitCount: LongInt;
 begin
-  Result := Length(FResolvedUnits);
+  Result := LongInt(FResolvedUnits.Count);
 end;
 
 function TUnitGraph.ResolvedUnitAt(const AIndex: LongInt): TResolvedUnit;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FResolvedUnits)) then
+  if (AIndex < 0) or (AIndex >= LongInt(FResolvedUnits.Count)) then
   begin
     Result.UnitId := '';
     Result.CanonicalName := '';
@@ -382,7 +430,7 @@ end;
 
 function TUnitGraph.EdgeCount: LongInt;
 begin
-  Result := Length(FEdges);
+  Result := LongInt(FEdges.Count);
 end;
 
 procedure TUnitGraph.SetRootName(const AName: string);
@@ -412,16 +460,14 @@ end;
 
 function TUnitGraph.TopologicalInitOrder: TStringArray;
 var
-  N, E, I, J, Front, Rear: LongInt;
-  InDeg: array of LongInt;
-  Queue: array of LongInt;
-  Sorted: array of LongInt;
-  SortedCount: LongInt;
+  N, E, I, J, Front: LongInt;
+  InDeg, Queue, Sorted: TUnitGraphLongIntVec;
   SrcIdx, TgtIdx: LongInt;
   SystemIdx: LongInt;
+  Deg: LongInt;
 begin
-  N := Length(FResolvedUnits);
-  E := Length(FEdges);
+  N := LongInt(FResolvedUnits.Count);
+  E := LongInt(FEdges.Count);
 
   if N = 0 then
   begin
@@ -429,89 +475,88 @@ begin
     Exit;
   end;
 
-  // Build in-degree from ugeInterfaceUse and ugeImplementationUse edges.
-  // An edge (Source -> Target) means Source depends on Target,
-  // so Target must init before Source: Target's in-degree is unaffected,
-  // but we increment in-degree of the dependant (Source).
-  SetLength(InDeg, N);
-  for I := 0 to N - 1 do
-    InDeg[I] := 0;
-
-  for I := 0 to E - 1 do
-  begin
-    if (FEdges[I].Kind <> ugeInterfaceUse) and
-       (FEdges[I].Kind <> ugeImplementationUse) then
-      Continue;
-    // SourceUnitId depends on TargetUnitId
-    SrcIdx := IndexOfUnitId(FEdges[I].SourceUnitId);
-    if SrcIdx < 0 then Continue;
-    Inc(InDeg[SrcIdx]);
-  end;
-
-  // Kahn's algorithm: BFS from units with in-degree 0
-  SetLength(Queue, N);
-  Front := 0;
-  Rear := 0;
-
-  for I := 0 to N - 1 do
-    if InDeg[I] = 0 then
-    begin
-      Queue[Rear] := I;
-      Inc(Rear);
-    end;
-
-  SetLength(Sorted, N);
-  SortedCount := 0;
-
-  while Front < Rear do
-  begin
-    I := Queue[Front];
-    Inc(Front);
-    Sorted[SortedCount] := I;
-    Inc(SortedCount);
-
-    // For all edges where I is the target (I must init before sources
-    // that depend on it), decrease the source's in-degree
-    for J := 0 to E - 1 do
-    begin
-      if (FEdges[J].Kind <> ugeInterfaceUse) and
-         (FEdges[J].Kind <> ugeImplementationUse) then
-        Continue;
-      TgtIdx := IndexOfUnitId(FEdges[J].TargetUnitId);
-      if TgtIdx <> I then Continue;
-      SrcIdx := IndexOfUnitId(FEdges[J].SourceUnitId);
-      if SrcIdx < 0 then Continue;
-      Dec(InDeg[SrcIdx]);
-      if InDeg[SrcIdx] = 0 then
-      begin
-        Queue[Rear] := SrcIdx;
-        Inc(Rear);
-      end;
-    end;
-  end;
-
-  // If not all units were sorted, there is a cycle.
-  // Report what we can; remaining units are appended in original order.
-  if SortedCount < N then
-  begin
+  InDeg := CreateLongIntVec;
+  Queue := CreateLongIntVec;
+  Sorted := CreateLongIntVec;
+  try
+    // Build in-degree from ugeInterfaceUse and ugeImplementationUse edges.
+    // An edge (Source -> Target) means Source depends on Target,
+    // so Target must init before Source: Target's in-degree is unaffected,
+    // but we increment in-degree of the dependant (Source).
+    { Capacity only — Ensure() raises Count and would double after Push. }
+    InDeg.EnsureCapacity(SizeUInt(N));
     for I := 0 to N - 1 do
+      InDeg.Push(0);
+
+    for I := 0 to E - 1 do
     begin
-      if InDeg[I] > 0 then
+      if (FEdges[I].Kind <> ugeInterfaceUse) and
+         (FEdges[I].Kind <> ugeImplementationUse) then
+        Continue;
+      // SourceUnitId depends on TargetUnitId
+      SrcIdx := IndexOfUnitId(FEdges[I].SourceUnitId);
+      if SrcIdx < 0 then Continue;
+      Deg := InDeg[SrcIdx];
+      Inc(Deg);
+      InDeg[SrcIdx] := Deg;
+    end;
+
+    // Kahn's algorithm: BFS from units with in-degree 0
+    Queue.EnsureCapacity(SizeUInt(N));
+    Sorted.EnsureCapacity(SizeUInt(N));
+    Front := 0;
+
+    for I := 0 to N - 1 do
+      if InDeg[I] = 0 then
+        Queue.Push(I);
+
+    while Front < LongInt(Queue.Count) do
+    begin
+      I := Queue[Front];
+      Inc(Front);
+      Sorted.Push(I);
+
+      // For all edges where I is the target (I must init before sources
+      // that depend on it), decrease the source's in-degree
+      for J := 0 to E - 1 do
       begin
-        Sorted[SortedCount] := I;
-        Inc(SortedCount);
+        if (FEdges[J].Kind <> ugeInterfaceUse) and
+           (FEdges[J].Kind <> ugeImplementationUse) then
+          Continue;
+        TgtIdx := IndexOfUnitId(FEdges[J].TargetUnitId);
+        if TgtIdx <> I then Continue;
+        SrcIdx := IndexOfUnitId(FEdges[J].SourceUnitId);
+        if SrcIdx < 0 then Continue;
+        Deg := InDeg[SrcIdx];
+        Dec(Deg);
+        InDeg[SrcIdx] := Deg;
+        if Deg = 0 then
+          Queue.Push(SrcIdx);
       end;
     end;
-  end;
 
-  // Convert indices to canonical names
-  SetLength(Result, SortedCount);
-  for I := 0 to SortedCount - 1 do
-    Result[I] := FResolvedUnits[Sorted[I]].CanonicalName;
+    // If not all units were sorted, there is a cycle.
+    // Report what we can; remaining units are appended in original order.
+    if LongInt(Sorted.Count) < N then
+    begin
+      for I := 0 to N - 1 do
+        if InDeg[I] > 0 then
+          Sorted.Push(I);
+    end;
+
+    // Convert indices to canonical names
+    SetLength(Result, LongInt(Sorted.Count));
+    for I := 0 to LongInt(Sorted.Count) - 1 do
+      Result[I] := FResolvedUnits[Sorted[I]].CanonicalName;
+  finally
+    Sorted.Free;
+    Queue.Free;
+    InDeg.Free;
+  end;
 
   // Ensure System unit is first if present
   SystemIdx := -1;
-  for I := 0 to SortedCount - 1 do
+  for I := 0 to High(Result) do
     if SameText(Result[I], 'system') then
     begin
       SystemIdx := I;

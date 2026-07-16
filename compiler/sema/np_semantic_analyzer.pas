@@ -15,6 +15,7 @@ uses
   np_hir_types, np_sema_name_set, np_sema_builtins, np_sema_overload,
   np_sema_type_check, np_hir_lowering, np_sema_runtime_vars,
   np_sema_string_ownership,
+  nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 
 {$I np_sema_analyzer_types.inc}
@@ -39,17 +40,18 @@ type
     TypeRefName: string;
     ByteOffset: LongInt;
   end;
+  TCachedSymbolEntryVec = specialize TVec<TCachedSymbolEntry>;
 
   TCachedUnitSymbols = record
     SourcePath: string;
     FileAge: Int64;
-    Symbols: array of TCachedSymbolEntry;
-    SymbolCount: LongInt;
+    Symbols: TCachedSymbolEntryVec;
   end;
+  PCachedUnitSymbols = ^TCachedUnitSymbols;
+  TCachedUnitSymbolsVec = specialize TVec<TCachedUnitSymbols>;
 
 var
-  GImportedUnitCache: array of TCachedUnitSymbols;
-  GImportedUnitCacheCount: LongInt = 0;
+  GImportedUnitCache: TCachedUnitSymbolsVec = nil;
   GDiskCache: TDiskSymbolCache = nil;
 
 { === Ownership bridge callbacks === }
@@ -248,15 +250,43 @@ begin
   Ctx.EmitSemaError := @OwnershipBridge_EmitSemaError;
 end;
 
+procedure EnsureImportedUnitCache;
+begin
+  if GImportedUnitCache = nil then
+    GImportedUnitCache := TCachedUnitSymbolsVec.Create;
+end;
+
 function FindCachedUnit(const APath: string; AAge: Int64): LongInt;
 var
   I: LongInt;
 begin
-  for I := 0 to GImportedUnitCacheCount - 1 do
+  Result := -1;
+  if GImportedUnitCache = nil then
+    Exit;
+  for I := 0 to LongInt(GImportedUnitCache.Count) - 1 do
     if SameText(GImportedUnitCache[I].SourcePath, APath) and
       (GImportedUnitCache[I].FileAge = AAge) then
       Exit(I);
-  Result := -1;
+end;
+
+function AppendImportedUnitCacheEntry(
+  const ASourcePath: string;
+  const AAge: Int64;
+  const ASymbolCount: LongInt
+): PCachedUnitSymbols;
+var
+  Entry: TCachedUnitSymbols;
+begin
+  EnsureImportedUnitCache;
+  Entry := Default(TCachedUnitSymbols);
+  Entry.SourcePath := ASourcePath;
+  Entry.FileAge := AAge;
+  if ASymbolCount > 0 then
+    Entry.Symbols := TCachedSymbolEntryVec.Create(SizeUInt(ASymbolCount))
+  else
+    Entry.Symbols := TCachedSymbolEntryVec.Create;
+  GImportedUnitCache.Push(Entry);
+  Result := GImportedUnitCache.GetPtr(GImportedUnitCache.Count - 1);
 end;
 
 function ContainsString(
@@ -301,7 +331,8 @@ constructor TSemanticAnalyzer.Create(
   const AUnitGraph: TUnitGraph;
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId;
-  const ANoFold: Boolean
+  const ANoFold: Boolean;
+  const AAllocator: IAllocator
 );
 begin
   inherited Create;
@@ -310,16 +341,39 @@ begin
   FDiagnostics := ADiagnostics;
   FRootFileId := ARootFileId;
   FNoFold := ANoFold;
+  FAllocator := AAllocator;
   FModel := TSemanticModel.Create;
   FBlockLabelCounter := 0;
   FCurrentScopeId := 0;
-  FBreakLabels := specialize TVec<string>.Create;
-  FContinueLabels := specialize TVec<string>.Create;
-  { FVarParamNames now managed by FRuntimeVars }
-  FInliningStack := specialize TVec<string>.Create;
-  FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
+  if FAllocator <> nil then
+  begin
+    FBreakLabels := specialize TVec<string>.Create(0, FAllocator);
+    FContinueLabels := specialize TVec<string>.Create(0, FAllocator);
+    FInliningStack := specialize TVec<string>.Create(0, FAllocator);
+    FGenericCache := specialize TVec<TGenericCacheEntry>.Create(0, FAllocator);
+    FCompilerProcNames := specialize TVec<string>.Create(0, FAllocator);
+    FGenericWorkQueue := specialize TVec<LongInt>.Create(0, FAllocator);
+    FPendingSignatures := TPendingSignatureVec.Create(0, FAllocator);
+    FProcedureBodies := TProcedureBodyVec.Create(0, FAllocator);
+    FImportedUnitOwners := TSemaImportedOwnerVec.Create(0, FAllocator);
+    FImportedUnitTrees := TSemaImportedTreeVec.Create(0, FAllocator);
+  end
+  else
+  begin
+    FBreakLabels := specialize TVec<string>.Create;
+    FContinueLabels := specialize TVec<string>.Create;
+    { FVarParamNames now managed by FRuntimeVars }
+    FInliningStack := specialize TVec<string>.Create;
+    FGenericCache := specialize TVec<TGenericCacheEntry>.Create;
+    FCompilerProcNames := specialize TVec<string>.Create;
+    FGenericWorkQueue := specialize TVec<LongInt>.Create;
+    FPendingSignatures := TPendingSignatureVec.Create;
+    FProcedureBodies := TProcedureBodyVec.Create;
+    FImportedUnitOwners := TSemaImportedOwnerVec.Create;
+    FImportedUnitTrees := TSemaImportedTreeVec.Create;
+  end;
   FBuiltinRegistry := TBuiltinRegistry.Create;
-  FRuntimeVars := TSemaRuntimeVarRegistry.Create;
+  FRuntimeVars := TSemaRuntimeVarRegistry.Create(FAllocator);
 end;
 
 {$I np_sema_string_ownership_helpers.inc}

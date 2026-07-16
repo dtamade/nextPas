@@ -205,23 +205,24 @@ procedure EmitErrorWithFix(
 );
 var
   Fix: TSuggestedFix;
-  Fixes: TSuggestedFixArray;
+  Fixes: TSuggestedFixVec;
   Payload: TDiagnosticPayload;
   Span: TCoreSourceSpan;
 begin
+  Payload := Default(TDiagnosticPayload);
   Payload.Kind := dpkNone;
   Span := BuildCoreSourceSpan(AFileId, AByteOffset, 0);
 
   ASink.EmitErrorWithPayload(ACode, APhase, Span, AMessage, Payload);
 
-  { Attach fix to last diagnostic }
   if (AFixDescription <> '') and (AReplacementText <> '') then
   begin
     Fix.Description := AFixDescription;
     Fix.ReplacementSpan := Span;
     Fix.ReplacementText := AReplacementText;
-    SetLength(Fixes, 1);
-    Fixes[0] := Fix;
+    Fixes := TSuggestedFixVec.Create;
+    Fixes.Push(Fix);
+    ASink.AdoptSuggestedFixesOnLast(Fixes);
   end;
 end;
 

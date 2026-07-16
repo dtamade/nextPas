@@ -97,6 +97,9 @@ begin
   LH1Options.MaxHeaderSize := AOptions.MaxHeaderSize;
   LH1Options.MaxBodySize := AOptions.MaxBodySize;
   LH1Options.MaxRequestsPerConnection := AOptions.MaxRequestsPerConnection;
+  { H1 native connection-scoped RequestArena (Reset per request). }
+  LH1Options.RequestArena := AOptions.RequestArena;
+  LH1Options.RequestArenaCapacity := AOptions.RequestArenaCapacity;
   Result := NewH1ServerTransport(LH1Options);
 end;
 
@@ -118,6 +121,9 @@ begin
     LH2Options.MaxBodySize := UInt32(AOptions.MaxBodySize)
   else
     LH2Options.MaxBodySize := 0;
+  { H2 native connection-scoped RequestArena (Reset per stream request). }
+  LH2Options.RequestArena := AOptions.RequestArena;
+  LH2Options.RequestArenaCapacity := AOptions.RequestArenaCapacity;
   LInnerTransport := NewH2ServerTransport(LH2Options);
   if AOptions.TLSContext <> nil then
     Result := NewH2TlsServerTransport(AOptions.TLSContext, LInnerTransport)

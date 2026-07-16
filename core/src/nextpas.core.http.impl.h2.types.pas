@@ -172,6 +172,9 @@ type
     IdleTimeout: Int64;
     ReadIdleTimeout: Int64;
     PingTimeout: Int64;
+    { Connection-scoped LocalArena: Reset per stream request (serial on session). }
+    RequestArena: Boolean;
+    RequestArenaCapacity: SizeUInt;
     class function Default: TH2ServerTransportOptions; static;
     procedure Validate;
     function ToSettings: TH2Settings;
@@ -340,6 +343,8 @@ begin
   Result.IdleTimeout := 30000;
   Result.ReadIdleTimeout := 0;
   Result.PingTimeout := 5000;
+  Result.RequestArena := False;
+  Result.RequestArenaCapacity := 0;
 end;
 
 procedure TH2ServerTransportOptions.Validate;

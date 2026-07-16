@@ -553,7 +553,7 @@ begin
   end;
   LName[LLen] := #0;
   Result := nextpas.core.platform.freebsd.ffi.pthread_setname_np(
-    nextpas.core.platform.freebsd.ffi.pthread_getthreadid_np, @LName[0]);
+    pthread_self, @LName[0]);
   if Result <> 0 then Result := platform_get_errno;
 end;
 {$ELSE}

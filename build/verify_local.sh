@@ -26,7 +26,8 @@ VERIFY_SELECTOR="verify-local"
 CORE_PLATFORM_TIME_WIN64_CHECK_STATUS=skip
 CORE_PLATFORM_THREAD_WIN64_CHECK_STATUS=skip
 CORE_PLATFORM_SYNC_WIN64_CHECK_STATUS=skip
-STAGE0_FPC_FLAGS="-Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src"
+# shellcheck source=../scripts/stage0-fpc-flags.sh
+. "$REPO_ROOT/scripts/stage0-fpc-flags.sh"
 LEX_SNAPSHOT_FPC_FLAGS="-Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src"
 LEX_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src -O2"
 STAGE0_BUILD_DIR="$VERIFY_RUN_TMP_DIR/stage0-bootstrap"
@@ -1644,6 +1645,8 @@ require_output_pattern '^tool-run-step-count=3$' "$STAGE0_SMOKE_OUTPUT" 'missing
 require_output_pattern '^primary-tool-run-status=success$' "$STAGE0_SMOKE_OUTPUT" 'missing-primary-tool-run-status'
 require_output_pattern '^primary-tool-role=host-compiler$' "$STAGE0_SMOKE_OUTPUT" 'missing-primary-tool-role'
 require_output_pattern '^primary-tool-profile-id=fpc-stage0-host$' "$STAGE0_SMOKE_OUTPUT" 'missing-primary-tool-profile-id'
+require_output_pattern '^mem-session-stats=mem session:' "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-mem-session-stats'
+require_output_pattern '^command-envelope=.*"memSessionStats":"mem session:' "$STAGE0_SMOKE_OUTPUT" 'missing-stage0-mem-session-stats-envelope'
 require_output_pattern '^primary-tool-step-id=host-fpc-emit-asm$' "$STAGE0_SMOKE_OUTPUT" 'missing-primary-tool-step-id'
 require_output_pattern '^primary-tool-logical-executable=fpc$' "$STAGE0_SMOKE_OUTPUT" 'missing-primary-tool-logical-executable'
 require_output_pattern '^primary-tool-sysroot-ref=runtime-sdk:linux-x86_64$' "$STAGE0_SMOKE_OUTPUT" 'missing-primary-tool-sysroot-ref'
@@ -6406,7 +6409,10 @@ printf 'stage0-env-clean-check=pass\n'
 
 printf 'stage0-doctor=running\n'
 printf 'stage0-doctor-command=%s doctor --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"
-if ! NEXTPAS_REPO_ROOT="$REPO_ROOT" "$STAGE0_BINARY" doctor --target "$TARGET_ID" --workspace "$REPO_ROOT" >"$STAGE0_DOCTOR_OUTPUT" 2>&1; then
+# Isolate ambient NEXTPAS_MEM_* so default doctor always proves heap_debug=n/debug=n.
+if ! env -u NEXTPAS_MEM_HEAP_DEBUG -u NEXTPAS_MEM_DEBUG \
+  NEXTPAS_REPO_ROOT="$REPO_ROOT" \
+  "$STAGE0_BINARY" doctor --target "$TARGET_ID" --workspace "$REPO_ROOT" >"$STAGE0_DOCTOR_OUTPUT" 2>&1; then
   cat "$STAGE0_DOCTOR_OUTPUT"
   fail 'stage0-doctor-failed'
 fi
@@ -6433,6 +6439,8 @@ require_output_pattern '^doctor-finding-count=2$' "$STAGE0_DOCTOR_OUTPUT" 'missi
 require_output_pattern '^doctor-finding-code=doctor\.runtime-sdk-missing$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-finding-code'
 require_output_pattern '^doctor-finding-severity=warning$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-finding-severity'
 require_output_pattern '^doctor-status=(warning|healthy)$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-status'
+require_output_pattern '^mem-process-stats=.*heap_debug=n' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-mem-process-stats-default-off'
+require_output_pattern '^command-envelope=.*"memProcessStats":".*heap_debug=n' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-mem-process-stats-envelope-default-off'
 require_output_pattern '^status=success$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-success-status'
 require_output_pattern '^result=success$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-success-result'
 require_output_pattern '^command-outcome=success$' "$STAGE0_DOCTOR_OUTPUT" 'missing-stage0-doctor-command-outcome'
@@ -6669,6 +6677,14 @@ require_output_pattern '^human-summary=invalid-arguments$' "$STAGE0_DOCTOR_INVAL
 require_output_pattern '^command-envelope=.*"command":"doctor"' "$STAGE0_DOCTOR_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-doctor-invalid-arguments-envelope-command'
 require_output_pattern '^command-envelope=.*"selector":"doctor".*"failureKind":"invalid-arguments"' "$STAGE0_DOCTOR_INVALID_ARGUMENTS_OUTPUT" 'missing-stage0-doctor-invalid-arguments-envelope-failure'
 printf 'stage0-doctor-check=pass\n'
+
+printf 'stage0-heap-debug-env-recipe=running\n'
+# Opt-in dual-track doctor projection (HEAP_DEBUG / MEM_DEBUG). Shared with CI.
+if ! STAGE0_BINARY="$STAGE0_BINARY" TARGET_ID="$TARGET_ID" \
+  "$REPO_ROOT/scripts/stage0-heap-debug-env-recipe.sh"; then
+  fail 'stage0-heap-debug-env-recipe-failed'
+fi
+printf 'stage0-heap-debug-env-recipe=pass\n'
 
 printf 'stage0-query-symbols-check=running\n'
 printf 'stage0-query-symbols-command=%s query symbols examples/smoke/hello_with_units.pas --target %s --workspace %s\n' "$STAGE0_BINARY" "$TARGET_ID" "$REPO_ROOT"

@@ -441,6 +441,11 @@ begin
   Check(LOptions.Version = hvHttp11, 'default server version field');
   Check(LOptions.UseRegistryVersion, 'default server uses registry version');
   Check(LOptions.TLSContext = nil, 'default server TLS context is nil');
+  Check(not LOptions.RequestArena, 'default RequestArena off');
+  CheckEqual(Int64(0), Int64(LOptions.RequestArenaCapacity), 'default arena cap 0');
+  LOptions := LOptions.WithRequestArena(4096);
+  Check(LOptions.RequestArena, 'WithRequestArena enables');
+  CheckEqual(Int64(4096), Int64(LOptions.RequestArenaCapacity), 'WithRequestArena cap');
 end;
 
 procedure TestHttpOptionsWithVersion;

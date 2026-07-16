@@ -54,7 +54,8 @@ ICollection                    ← 非泛型根（PtrIter/Count/Clear/IsEmpty）
 ### 1.3 内存分配器集成
 
 所有容器通过 `IAllocator` 接口注入分配器：
-- 构造时 `ResolveAllocator(nil) → GetRtlAllocator`
+- 构造时 `ResolveAllocator(nil)` / `DefaultAllocator` → **Growing IAllocator 根**（与 `DefaultHeap` 同进程堆；S5）
+- 显式 RTL 仅在传入 `GetRtlAllocator` 时
 - 存储在 `FAllocator: IAllocator` 字段
 - 所有内部堆分配通过 FAllocator
 
@@ -138,7 +139,7 @@ ICollection                    ← 非泛型根（PtrIter/Count/Clear/IsEmpty）
 ### 5.2 Allocator 集成
 
 - 所有容器支持 `Create(AAllocator: IAllocator)` 构造
-- `AAllocator=nil` → `GetRtlAllocator`（系统默认）
+- `AAllocator=nil` → `GetGrowingIAllocator` / `DefaultAllocator`（与 DefaultHeap 同进程堆）
 - 内部 buffer 的 Realloc/Free 全部通过 FAllocator
 - Destroy 释放所有内部 buffer，heaptrc 0 泄漏
 

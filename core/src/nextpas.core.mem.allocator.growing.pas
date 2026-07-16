@@ -394,37 +394,12 @@ begin
     System.GetMem(Result, ASize);
     Exit;
   end;
-  { Fast path for common small sizes: skip SizeClassIndex lookup. }
-  if ASize <= 256 then
+  { Size-class index: must match SizeClassIndex (see FastSizeClassIndex).
+    Prior band1 formula (size shr 6)+14 was off-by-one vs the class table and
+    mixed freelist slots across classes, truncating ReallocMem copies. }
+  LIndex := FastSizeClassIndex(ASize);
+  if LIndex >= 0 then
   begin
-    LIndex := Int32((ASize + 15) shr 4) - 1;
-    LNode := GThreadCache.FHeads[LIndex];
-    if LNode <> nil then
-    begin
-      GThreadCache.FHeads[LIndex] := LNode^.FNext;
-      Dec(GThreadCache.FCounts[LIndex]);
-      Result := Pointer(LNode);
-      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_ALLOC);{$ENDIF}
-      Exit(Result);
-    end;
-  end
-  else if ASize <= 1024 then
-  begin
-    { Fast formula for band 1 (256-1024, 64B step): (size shr 6) + 14 }
-    LIndex := Int32(ASize shr 6) + 14;
-    LNode := GThreadCache.FHeads[LIndex];
-    if LNode <> nil then
-    begin
-      GThreadCache.FHeads[LIndex] := LNode^.FNext;
-      Dec(GThreadCache.FCounts[LIndex]);
-      Result := Pointer(LNode);
-      {$IFDEF DEBUG}FillChar(Result^, ASize, MEM_POISON_ALLOC);{$ENDIF}
-      Exit(Result);
-    end;
-  end
-  else
-  begin
-    LIndex := SizeClassIndex(ASize);
     LNode := GThreadCache.FHeads[LIndex];
     if LNode <> nil then
     begin
@@ -472,13 +447,8 @@ begin
     System.FreeMem(APtr);
     Exit;
   end;
-  { Compute size class index. }
-  if ASize <= 256 then
-    LIndex := Int32((ASize + 15) shr 4) - 1
-  else if ASize <= 1024 then
-    LIndex := Int32(ASize shr 6) + 14
-  else
-    LIndex := SizeClassIndex(ASize);
+  { Compute size class index (must match GetMem / SizeClassIndex). }
+  LIndex := FastSizeClassIndex(ASize);
   if LIndex < 0 then
   begin
     System.FreeMem(APtr);
@@ -550,6 +520,12 @@ begin
 end;
 
 procedure TGrowingAllocator.FreeMem(APtr: Pointer);
+{**
+ * Compat free without caller size (slower than FreeMem(ptr, size)).
+ * Prefer FreeMem(APtr, ASize) on hot paths.
+ * Lookup order: TLS / span map → if owned, sized free; else System.FreeMem
+ * (huge blocks that bypassed size-classes). Wrong-heap pointers remain UB.
+ *}
 var
   LSize: SizeUInt;
 begin
@@ -593,13 +569,10 @@ begin
     end;
     Exit;
   end;
-  { Compute size class index once. }
-  if ASize <= 256 then
-    LIndex := Int32((ASize + 15) shr 4) - 1
-  else if ASize <= 1024 then
-    LIndex := Int32(ASize shr 6) + 14
-  else
-    LIndex := SizeClassIndex(ASize);
+  { Compute size class index once (must match GetMem / SizeClassIndex). }
+  LIndex := FastSizeClassIndex(ASize);
+  if LIndex < 0 then
+    Exit;
   { Pre-fill cache if empty. }
   if GThreadCache.FHeads[LIndex] = nil then
     ThreadCacheRefill(GThreadCache, LIndex, @RefillFromCentral);
@@ -649,13 +622,10 @@ begin
     end;
     Exit;
   end;
-  { Compute size class index once. }
-  if ASize <= 256 then
-    LIndex := Int32((ASize + 15) shr 4) - 1
-  else if ASize <= 1024 then
-    LIndex := Int32(ASize shr 6) + 14
-  else
-    LIndex := SizeClassIndex(ASize);
+  { Compute size class index once (must match GetMem / SizeClassIndex). }
+  LIndex := FastSizeClassIndex(ASize);
+  if LIndex < 0 then
+    Exit;
   { Push all blocks to cache, flush when full. }
   for I := 0 to ACount - 1 do
   begin
@@ -697,20 +667,13 @@ begin
     LCount := MAX_MIXED;
   LBase := ABlocks;
   LSizesPtr := PSizeUIntArray(ASizes);
-  { Pre-compute class indices once. }
+  { Pre-compute class indices once (must match GetMem / SizeClassIndex). }
   for I := 0 to LCount - 1 do
   begin
     LSizes[I] := LSizesPtr^[I];
     LSize := LSizes[I];
-    if LSize <= MEM_SIZECLASS_MAX then
-    begin
-      if LSize <= 256 then
-        LClasses[I] := Int32((LSize + 15) shr 4) - 1
-      else if LSize <= 1024 then
-        LClasses[I] := Int32(LSize shr 6) + 14
-      else
-        LClasses[I] := SizeClassIndex(LSize);
-    end
+    if (LSize > 0) and (LSize <= MEM_SIZECLASS_MAX) then
+      LClasses[I] := FastSizeClassIndex(LSize)
     else
       LClasses[I] := -1;
   end;

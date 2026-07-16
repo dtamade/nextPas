@@ -78,9 +78,9 @@ type
     RootAst: TAstFacade;
     CurrentProcessingUnitId: string;
     CurrentScopeId: LongInt;
-    ProcedureBodies: TProcedureBodyArray;
-    ImportedUnitOwners: array of string;
-    ImportedUnitTrees: array of TGreenTree;
+    ProcedureBodies: TProcedureBodyVec;
+    ImportedUnitOwners: TSemaImportedOwnerVec;
+    ImportedUnitTrees: TSemaImportedTreeVec;
     BuiltinRegistry: TBuiltinRegistry;
     HirModule: THIRModule;
     Diagnostics: TDiagnosticsSink;

@@ -504,16 +504,13 @@ begin
           ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', True), ',', '$', True);
           if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
           begin
-            for K := 0 to Length(FProcedureBodies) - 1 do
+            for K := 0 to LongInt(FProcedureBodies.Count) - 1 do
               if (Pos(FuncName + '<', FProcedureBodies[K].Name) = 1) then
               begin
                 RegisterProcedureBody(ArgName,
                   FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
                   FProcedureBodies[K].OwnerUnitId);
-                if FGenericWorkCount >= Length(FGenericWorkQueue) then
-                  SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
-                FGenericWorkQueue[FGenericWorkCount] := Length(FProcedureBodies) - 1;
-                Inc(FGenericWorkCount);
+                FGenericWorkQueue.Push(LongInt(FProcedureBodies.Count) - 1);
                 Break;
               end;
           end;
@@ -526,16 +523,13 @@ begin
           ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', True), ',', '$', True);
           if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
           begin
-            for K := 0 to Length(FProcedureBodies) - 1 do
+            for K := 0 to LongInt(FProcedureBodies.Count) - 1 do
               if (Pos(FuncName + '<', FProcedureBodies[K].Name) = 1) then
               begin
                 RegisterProcedureBody(ArgName,
                   FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
                   FProcedureBodies[K].OwnerUnitId);
-                if FGenericWorkCount >= Length(FGenericWorkQueue) then
-                  SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
-                FGenericWorkQueue[FGenericWorkCount] := Length(FProcedureBodies) - 1;
-                Inc(FGenericWorkCount);
+                FGenericWorkQueue.Push(LongInt(FProcedureBodies.Count) - 1);
                 Break;
               end;
           end;

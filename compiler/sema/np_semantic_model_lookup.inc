@@ -3,10 +3,10 @@ function TSemanticModel.FindSymbolInScope(const AName: string;
 var
   I: LongInt;
 begin
-  for I := 0 to Length(FSymbols) - 1 do
-    if (FSymbols[I].ScopeId = AScopeId) and
-      SameText(FSymbols[I].Name, AName) then
-      Exit(FSymbols[I].SymbolId);
+  for I := 0 to LongInt(FSymbols.Count) - 1 do
+    if (FSymbols[SizeUInt(I)].ScopeId = AScopeId) and
+      SameText(FSymbols[SizeUInt(I)].Name, AName) then
+      Exit(FSymbols[SizeUInt(I)].SymbolId);
   Result := 0;
 end;
 
@@ -23,15 +23,15 @@ begin
     if Result > 0 then
       Exit;
     Idx := CurrentScope - 1;
-    if (Idx >= 0) and (Idx < Length(FScopes)) then
-      CurrentScope := FScopes[Idx].ParentScopeId
+    if (Idx >= 0) and (Idx < LongInt(FScopes.Count)) then
+      CurrentScope := FScopes[SizeUInt(Idx)].ParentScopeId
     else
       CurrentScope := 0;
   end;
-  for Idx := 0 to Length(FSymbols) - 1 do
-    if (FSymbols[Idx].ScopeId = 0) and
-      SameText(FSymbols[Idx].Name, AName) then
-      Exit(FSymbols[Idx].SymbolId);
+  for Idx := 0 to LongInt(FSymbols.Count) - 1 do
+    if (FSymbols[SizeUInt(Idx)].ScopeId = 0) and
+      SameText(FSymbols[SizeUInt(Idx)].Name, AName) then
+      Exit(FSymbols[SizeUInt(Idx)].SymbolId);
   Result := 0;
 end;
 
@@ -43,10 +43,11 @@ begin
   Result := LookupSymbol(AName, AStartScopeId);
   if Result > 0 then
     Exit;
-  for Idx := 0 to Length(FScopes) - 1 do
-    if (FScopes[Idx].Kind = skUnit) and (FScopes[Idx].ParentScopeId = 1) then
+  for Idx := 0 to LongInt(FScopes.Count) - 1 do
+    if (FScopes[SizeUInt(Idx)].Kind = skUnit) and
+      (FScopes[SizeUInt(Idx)].ParentScopeId = 1) then
     begin
-      Result := FindSymbolInScope(AName, FScopes[Idx].ScopeId);
+      Result := FindSymbolInScope(AName, FScopes[SizeUInt(Idx)].ScopeId);
       if Result > 0 then
         Exit;
     end;
@@ -54,8 +55,8 @@ end;
 
 function TSemanticModel.ScopeAt(const AIndex: LongInt): TSemanticScope;
 begin
-  if (AIndex >= 0) and (AIndex < Length(FScopes)) then
-    Result := FScopes[AIndex]
+  if (AIndex >= 0) and (AIndex < LongInt(FScopes.Count)) then
+    Result := FScopes[SizeUInt(AIndex)]
   else
   begin
     Result.ScopeId := 0;
@@ -73,21 +74,21 @@ function TSemanticModel.AddTypedHirNode(
   const AOperand: string
 ): LongInt;
 var
-  NextIndex: SizeInt;
+  Entry: TTypedHirNode;
 begin
-  NextIndex := Length(FTypedHirNodes);
-  SetLength(FTypedHirNodes, NextIndex + 1);
-  FTypedHirNodes[NextIndex].HirNodeId := NextIndex + 1;
-  FTypedHirNodes[NextIndex].Kind := AKind;
-  FTypedHirNodes[NextIndex].NodeKind := ParseHirNodeKind(AKind);
-  FTypedHirNodes[NextIndex].DisplayName := ADisplayName;
-  FTypedHirNodes[NextIndex].SymbolId := ASymbolId;
-  FTypedHirNodes[NextIndex].TypeId := ATypeId;
-  FTypedHirNodes[NextIndex].Operand := AOperand;
-  FTypedHirNodes[NextIndex].ExprId := 0;
-  FTypedHirNodes[NextIndex].TargetExprId := 0;
-  FTypedHirNodes[NextIndex].GreenNodeRef := NilGreenNode;
-  Result := FTypedHirNodes[NextIndex].HirNodeId;
+  Entry := Default(TTypedHirNode);
+  Entry.HirNodeId := LongInt(FTypedHirNodes.Count) + 1;
+  Entry.Kind := AKind;
+  Entry.NodeKind := ParseHirNodeKind(AKind);
+  Entry.DisplayName := ADisplayName;
+  Entry.SymbolId := ASymbolId;
+  Entry.TypeId := ATypeId;
+  Entry.Operand := AOperand;
+  Entry.ExprId := 0;
+  Entry.TargetExprId := 0;
+  Entry.GreenNodeRef := NilGreenNode;
+  FTypedHirNodes.Push(Entry);
+  Result := Entry.HirNodeId;
 end;
 
 function TSemanticModel.AddHirExpr(
@@ -103,24 +104,28 @@ function TSemanticModel.AddHirExpr(
   const AValueClass: TSemanticHirValueClass
 ): LongInt;
 var
-  NextIndex: SizeInt;
+  Entry: TSemanticHirExpr;
   I: LongInt;
 begin
-  NextIndex := Length(FHirExprs);
-  SetLength(FHirExprs, NextIndex + 1);
-  FHirExprs[NextIndex].ExprId := NextIndex + 1;
-  FHirExprs[NextIndex].Kind := AKind;
-  FHirExprs[NextIndex].TypeId := ATypeId;
-  FHirExprs[NextIndex].SymbolId := ASymbolId;
-  SetLength(FHirExprs[NextIndex].Children, Length(AChildren));
-  for I := 0 to High(AChildren) do
-    FHirExprs[NextIndex].Children[I] := AChildren[I];
-  FHirExprs[NextIndex].LiteralInt := ALiteralInt;
-  FHirExprs[NextIndex].LiteralStr := ALiteralStr;
-  FHirExprs[NextIndex].Op := AOp;
-  FHirExprs[NextIndex].SourceOffset := ASourceOffset;
-  FHirExprs[NextIndex].ValueClass := AValueClass;
-  Result := FHirExprs[NextIndex].ExprId;
+  Entry := Default(TSemanticHirExpr);
+  Entry.ExprId := LongInt(FHirExprs.Count) + 1;
+  Entry.Kind := AKind;
+  Entry.TypeId := ATypeId;
+  Entry.SymbolId := ASymbolId;
+  Entry.Children := nil;
+  if Length(AChildren) > 0 then
+  begin
+    Entry.Children := TSemanticHirChildVec.Create(SizeUInt(Length(AChildren)));
+    for I := 0 to High(AChildren) do
+      Entry.Children.Push(AChildren[I]);
+  end;
+  Entry.LiteralInt := ALiteralInt;
+  Entry.LiteralStr := ALiteralStr;
+  Entry.Op := AOp;
+  Entry.SourceOffset := ASourceOffset;
+  Entry.ValueClass := AValueClass;
+  FHirExprs.Push(Entry);
+  Result := Entry.ExprId;
 end;
 
 procedure TSemanticModel.SetTypedHirNodeExprId(const AHirNodeId: LongInt;
@@ -129,11 +134,11 @@ var
   Idx: LongInt;
 begin
   Idx := AHirNodeId - 1;
-  if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
+  if (Idx < 0) or (Idx >= LongInt(FTypedHirNodes.Count)) then
     Exit;
-  if (AExprId < 0) or (AExprId > Length(FHirExprs)) then
+  if (AExprId < 0) or (AExprId > LongInt(FHirExprs.Count)) then
     Exit;
-  FTypedHirNodes[Idx].ExprId := AExprId;
+  FTypedHirNodes.GetPtr(SizeUInt(Idx))^.ExprId := AExprId;
 end;
 
 procedure TSemanticModel.SetTypedHirNodeTargetExprId(
@@ -142,11 +147,11 @@ var
   Idx: LongInt;
 begin
   Idx := AHirNodeId - 1;
-  if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
+  if (Idx < 0) or (Idx >= LongInt(FTypedHirNodes.Count)) then
     Exit;
-  if (AExprId < 0) or (AExprId > Length(FHirExprs)) then
+  if (AExprId < 0) or (AExprId > LongInt(FHirExprs.Count)) then
     Exit;
-  FTypedHirNodes[Idx].TargetExprId := AExprId;
+  FTypedHirNodes.GetPtr(SizeUInt(Idx))^.TargetExprId := AExprId;
 end;
 
 procedure TSemanticModel.SetTypedHirNodeGreenRef(
@@ -155,9 +160,9 @@ var
   Idx: LongInt;
 begin
   Idx := AHirNodeId - 1;
-  if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
+  if (Idx < 0) or (Idx >= LongInt(FTypedHirNodes.Count)) then
     Exit;
-  FTypedHirNodes[Idx].GreenNodeRef := AGreenNode;
+  FTypedHirNodes.GetPtr(SizeUInt(Idx))^.GreenNodeRef := AGreenNode;
 end;
 
 procedure TSemanticModel.SetTypedHirNodeIsThreadVar(
@@ -166,9 +171,9 @@ var
   Idx: LongInt;
 begin
   Idx := AHirNodeId - 1;
-  if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
+  if (Idx < 0) or (Idx >= LongInt(FTypedHirNodes.Count)) then
     Exit;
-  FTypedHirNodes[Idx].IsThreadVar := AIsThreadVar;
+  FTypedHirNodes.GetPtr(SizeUInt(Idx))^.IsThreadVar := AIsThreadVar;
 end;
 
 function TSemanticModel.AddBinding(
@@ -179,28 +184,28 @@ function TSemanticModel.AddBinding(
   const ATargetSymbolId: LongInt
 ): LongInt;
 var
-  NextIndex: SizeInt;
+  Entry: TSemanticBinding;
 begin
-  NextIndex := Length(FBindings);
-  SetLength(FBindings, NextIndex + 1);
-  FBindings[NextIndex].BindingId := NextIndex + 1;
-  FBindings[NextIndex].Kind := AKind;
-  FBindings[NextIndex].Name := AName;
-  FBindings[NextIndex].OwnerUnitId := AOwnerUnitId;
-  FBindings[NextIndex].ByteOffset := AByteOffset;
-  FBindings[NextIndex].TargetSymbolId := ATargetSymbolId;
-  Result := FBindings[NextIndex].BindingId;
+  Entry := Default(TSemanticBinding);
+  Entry.BindingId := LongInt(FBindings.Count) + 1;
+  Entry.Kind := AKind;
+  Entry.Name := AName;
+  Entry.OwnerUnitId := AOwnerUnitId;
+  Entry.ByteOffset := AByteOffset;
+  Entry.TargetSymbolId := ATargetSymbolId;
+  FBindings.Push(Entry);
+  Result := Entry.BindingId;
 end;
 
 function TSemanticModel.AddRuntimeContract(const AName: string): LongInt;
 var
-  NextIndex: SizeInt;
+  Entry: TRuntimeContract;
 begin
-  NextIndex := Length(FRuntimeContracts);
-  SetLength(FRuntimeContracts, NextIndex + 1);
-  FRuntimeContracts[NextIndex].ContractId := NextIndex + 1;
-  FRuntimeContracts[NextIndex].Name := AName;
-  Result := FRuntimeContracts[NextIndex].ContractId;
+  Entry := Default(TRuntimeContract);
+  Entry.ContractId := LongInt(FRuntimeContracts.Count) + 1;
+  Entry.Name := AName;
+  FRuntimeContracts.Push(Entry);
+  Result := Entry.ContractId;
 end;
 
 function TSemanticModel.AddForeignProcedureBinding(
@@ -211,17 +216,17 @@ function TSemanticModel.AddForeignProcedureBinding(
   const ASymbolId: LongInt
 ): LongInt;
 var
-  NextIndex: SizeInt;
+  Entry: TSemanticForeignProcedureBinding;
 begin
-  NextIndex := Length(FForeignProcedureBindings);
-  SetLength(FForeignProcedureBindings, NextIndex + 1);
-  FForeignProcedureBindings[NextIndex].BindingId := NextIndex + 1;
-  FForeignProcedureBindings[NextIndex].PascalName := APascalName;
-  FForeignProcedureBindings[NextIndex].CallingConvention := ACallingConvention;
-  FForeignProcedureBindings[NextIndex].LibraryId := ALibraryId;
-  FForeignProcedureBindings[NextIndex].ExternalSymbolName := AExternalSymbolName;
-  FForeignProcedureBindings[NextIndex].SymbolId := ASymbolId;
-  Result := FForeignProcedureBindings[NextIndex].BindingId;
+  Entry := Default(TSemanticForeignProcedureBinding);
+  Entry.BindingId := LongInt(FForeignProcedureBindings.Count) + 1;
+  Entry.PascalName := APascalName;
+  Entry.CallingConvention := ACallingConvention;
+  Entry.LibraryId := ALibraryId;
+  Entry.ExternalSymbolName := AExternalSymbolName;
+  Entry.SymbolId := ASymbolId;
+  FForeignProcedureBindings.Push(Entry);
+  Result := Entry.BindingId;
 end;
 
 function TSemanticModel.AddLibraryRequest(
@@ -231,20 +236,19 @@ function TSemanticModel.AddLibraryRequest(
 ): LongInt;
 var
   Index: LongInt;
-  NextIndex: SizeInt;
+  Entry: TSemanticLibraryRequest;
 begin
-  for Index := 0 to Length(FLibraryRequests) - 1 do
-    if SameText(FLibraryRequests[Index].LogicalId, ALogicalId) and
-      SameText(FLibraryRequests[Index].LinkageKind, ALinkageKind) and
-      SameText(FLibraryRequests[Index].Strength, AStrength) then
-      Exit(FLibraryRequests[Index].RequestId);
+  for Index := 0 to LongInt(FLibraryRequests.Count) - 1 do
+    if SameText(FLibraryRequests[SizeUInt(Index)].LogicalId, ALogicalId) and
+      SameText(FLibraryRequests[SizeUInt(Index)].LinkageKind, ALinkageKind) and
+      SameText(FLibraryRequests[SizeUInt(Index)].Strength, AStrength) then
+      Exit(FLibraryRequests[SizeUInt(Index)].RequestId);
 
-  NextIndex := Length(FLibraryRequests);
-  SetLength(FLibraryRequests, NextIndex + 1);
-  FLibraryRequests[NextIndex].RequestId := NextIndex + 1;
-  FLibraryRequests[NextIndex].LogicalId := ALogicalId;
-  FLibraryRequests[NextIndex].LinkageKind := ALinkageKind;
-  FLibraryRequests[NextIndex].Strength := AStrength;
-  Result := FLibraryRequests[NextIndex].RequestId;
+  Entry := Default(TSemanticLibraryRequest);
+  Entry.RequestId := LongInt(FLibraryRequests.Count) + 1;
+  Entry.LogicalId := ALogicalId;
+  Entry.LinkageKind := ALinkageKind;
+  Entry.Strength := AStrength;
+  FLibraryRequests.Push(Entry);
+  Result := Entry.RequestId;
 end;
-

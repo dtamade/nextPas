@@ -10,30 +10,25 @@ var
   OwnedStringReturn: Boolean;
   PtrReturnClass: string;
   Folded, Value: Int64;
-  WorkQueue: array of LongInt;
-  NodeId, WorkCount, WorkHead: LongInt;
+  NodeId, WorkHead: LongInt;
   Found: Boolean;
 begin
-  if Length(FGenericWorkQueue) < Length(FProcedureBodies) + 64 then
-    SetLength(FGenericWorkQueue, Length(FProcedureBodies) + 64);
+  FGenericWorkQueue.EnsureCapacity(LongInt(FProcedureBodies.Count) + 64);
   WorkHead := 0;
-  for I := 0 to Length(FProcedureBodies) - 1 do
+  for I := 0 to LongInt(FProcedureBodies.Count) - 1 do
   begin
     if (FProcedureBodies[I].Body = nil) then
       Continue;
     if Pos('<', FProcedureBodies[I].Name) > 0 then
       Continue;
     Found := False;
-    for J := 0 to FGenericWorkCount - 1 do
+    for J := 0 to LongInt(FGenericWorkQueue.Count) - 1 do
       if FGenericWorkQueue[J] = I then begin Found := True; Break; end;
     if Found then Continue;
-    if FGenericWorkCount >= Length(FGenericWorkQueue) then
-      SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
-    FGenericWorkQueue[FGenericWorkCount] := I;
-    Inc(FGenericWorkCount);
+    FGenericWorkQueue.Push(I);
   end;
 
-  while WorkHead < FGenericWorkCount do
+  while WorkHead < LongInt(FGenericWorkQueue.Count) do
   begin
     I := FGenericWorkQueue[WorkHead];
     Inc(WorkHead);

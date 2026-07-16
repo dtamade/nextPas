@@ -80,9 +80,11 @@ function HasInstrKind(const AFunc: THIRFunction; const AKind: THIRInstrKind): Bo
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = AKind then
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = AKind then
         Exit(True);
   Result := False;
 end;
@@ -91,10 +93,12 @@ function HasConstLoad(const AFunc: THIRFunction; const AName: string): Boolean;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikLoad) and
-        (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName = AName) then
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = hikLoad) and
+        (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].IntrinsicName = AName) then
         Exit(True);
   Result := False;
 end;
@@ -103,9 +107,10 @@ function HasCondBranch(const AFunc: THIRFunction): Boolean;
 var
   BlockIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    if (AFunc.Blocks[BlockIndex].Terminator.Kind = htkCondBranch) and
-      (AFunc.Blocks[BlockIndex].Terminator.Condition <> 0) then
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if (AFunc.Blocks[SizeUInt(BlockIndex)].Terminator.Kind = htkCondBranch) and
+      (AFunc.Blocks[SizeUInt(BlockIndex)].Terminator.Condition <> 0) then
       Exit(True);
   Result := False;
 end;

@@ -288,7 +288,7 @@ end;
 
 destructor TBuiltinRegistry.Destroy;
 begin
-  SetLength(FNames.Names, 0);
+  NameSetFree(FNames);
   inherited Destroy;
 end;
 

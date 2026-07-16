@@ -172,7 +172,7 @@ begin
     EmitterRejected := False;
     try
       ContractEmitter.EmitInstr(
-        ContractModule.FunctionAt(0).Blocks[0].Instrs[0]);
+        ContractModule.FunctionAt(0).Blocks[SizeUInt(0)].Instrs[SizeUInt(0)]);
     except
       on E: Exception do
       begin
@@ -186,7 +186,7 @@ begin
     NonIntrinsicEmitterRejected := False;
     try
       ContractEmitter.EmitInstr(
-        ContractModule.FunctionAt(0).Blocks[0].Instrs[4]);
+        ContractModule.FunctionAt(0).Blocks[SizeUInt(0)].Instrs[SizeUInt(4)]);
     except
       on E: Exception do
       begin
@@ -204,7 +204,7 @@ begin
     StandaloneEmitterRejected := False;
     try
       StandaloneEmitter.EmitInstr(
-        ContractModule.FunctionAt(0).Blocks[0].Instrs[6]);
+        ContractModule.FunctionAt(0).Blocks[SizeUInt(0)].Instrs[SizeUInt(6)]);
     except
       on E: Exception do
       begin
@@ -264,7 +264,7 @@ var
         AddContractInstr(ContractModule, FuncId, BlockId, VoidType,
           sckObjectFree, hikIntrinsic, PointerType, 1, ARootTarget, False);
         Func := ContractModule.FunctionAt(0);
-        RootReceiver := Func.Blocks[0].Instrs[0].ResultId;
+        RootReceiver := Func.Blocks[SizeUInt(0)].Instrs[SizeUInt(0)].ResultId;
         ContinuationIndex := 1;
       end;
       if AIncludeRoot and AUseRootReceiver then
@@ -289,9 +289,9 @@ var
       EmitterRejected := False;
       try
         if AIncludeRoot then
-          ContractEmitter.EmitInstr(Func.Blocks[0].Instrs[0]);
+          ContractEmitter.EmitInstr(Func.Blocks[SizeUInt(0)].Instrs[SizeUInt(0)]);
         ContractEmitter.EmitInstr(
-          Func.Blocks[0].Instrs[ContinuationIndex]);
+          Func.Blocks[SizeUInt(0)].Instrs[SizeUInt(ContinuationIndex)]);
       except
         on E: Exception do
         begin
@@ -383,10 +383,11 @@ begin
     for FuncIndex := 0 to Builder.Module.FunctionCount - 1 do
     begin
       Func := Builder.Module.FunctionAt(FuncIndex);
-      for BlockIndex := 0 to High(Func.Blocks) do
-        for InstrIndex := 0 to High(Func.Blocks[BlockIndex].Instrs) do
+      for BlockIndex := 0 to LongInt(Func.Blocks.Count) - 1 do
+        if Func.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+          for InstrIndex := 0 to LongInt(Func.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
         begin
-          Instr := Func.Blocks[BlockIndex].Instrs[InstrIndex];
+          Instr := Func.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
           if (Instr.Kind = hikIntrinsic) and
             IsSystemContract(Instr, sckObjectFree) then
           begin

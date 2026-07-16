@@ -97,8 +97,8 @@ begin
     PreRegisterOwnedStringReturnConsumers;
   if FNoFold then
     PreRegisterFunctionReturnTypes;
-  FGenericWorkCount := 0;
-  SetLength(FGenericWorkQueue, 64);
+  FGenericWorkQueue.Clear;
+  FGenericWorkQueue.EnsureCapacity(64);
   SeedHaltCalls;
   { process_fini 在用户代码之后 seed，确保退出序列为:
     process_init → 用户 main → process_fini (对标 FPC 的 init→main→flush→finalize 序列) }

@@ -100,7 +100,7 @@ begin
       RebindInNode(RootNode, NormalizeUnitIdentity(FUnitGraph.RootName));
   end;
 
-  for Index := 0 to Length(FImportedUnitTrees) - 1 do
+  for Index := 0 to LongInt(FImportedUnitTrees.Count) - 1 do
     RebindInNode(FImportedUnitTrees[Index].RootNode, FImportedUnitOwners[Index]);
 end;
 

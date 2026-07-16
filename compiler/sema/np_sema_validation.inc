@@ -49,8 +49,8 @@ var
   Child: TGreenNode;
   SymId: LongInt;
   Name: string;
-  CandidateNames: array of string;
-  CandidateCount: LongInt;
+  CandidateNames: specialize TVec<string>;
+  CandidateArr: array of string;
   Sym: TSemanticSymbol;
   Suggestion: string;
 begin
@@ -68,19 +68,24 @@ begin
             not IsRuntimeVar(Name) then
           begin
             { Build candidate list for "Did you mean?" suggestion }
-            CandidateCount := 0;
-            SetLength(CandidateNames, FModel.SymbolCount);
-            for I := 0 to FModel.SymbolCount - 1 do
-            begin
-              Sym := FModel.SymbolAt(I);
-              if (Sym.ScopeId = FCurrentScopeId) and (Sym.Name <> '') then
+            if FAllocator <> nil then
+              CandidateNames := specialize TVec<string>.Create(0, FAllocator)
+            else
+              CandidateNames := specialize TVec<string>.Create;
+            try
+              for I := 0 to FModel.SymbolCount - 1 do
               begin
-                CandidateNames[CandidateCount] := Sym.Name;
-                Inc(CandidateCount);
+                Sym := FModel.SymbolAt(I);
+                if (Sym.ScopeId = FCurrentScopeId) and (Sym.Name <> '') then
+                  CandidateNames.Push(Sym.Name);
               end;
+              SetLength(CandidateArr, LongInt(CandidateNames.Count));
+              for I := 0 to LongInt(CandidateNames.Count) - 1 do
+                CandidateArr[I] := CandidateNames[I];
+              Suggestion := SuggestDidYouMean(Name, CandidateArr, 3);
+            finally
+              CandidateNames.Free;
             end;
-            SetLength(CandidateNames, CandidateCount);
-            Suggestion := SuggestDidYouMean(Name, CandidateNames, 3);
             if Suggestion <> '' then
               EmitSemaError(
                 'sema.undeclared-identifier',
@@ -428,47 +433,50 @@ var
   I, J, K: LongInt;
   Child, Selector, Label1, Label2: TGreenNode;
   Val1, Val2: Int64;
-  SeenValues: array of Int64;
-  SeenCount: LongInt;
+  SeenValues: specialize TVec<Int64>;
 begin
   if ANode = nil then
     Exit;
   if ANode.NodeKind = gnkCaseStatement then
   begin
-    SeenCount := 0;
-    SetLength(SeenValues, 0);
-    for I := 0 to ANode.ChildCount - 1 do
-    begin
-      Selector := ANode.ChildAt(I);
-      if (Selector = nil) or (Selector.NodeKind <> gnkCaseSelector) then
-        Continue;
-      for J := 0 to Selector.ChildCount - 1 do
+    if FAllocator <> nil then
+      SeenValues := specialize TVec<Int64>.Create(0, FAllocator)
+    else
+      SeenValues := specialize TVec<Int64>.Create;
+    try
+      for I := 0 to ANode.ChildCount - 1 do
       begin
-        Label1 := Selector.ChildAt(J);
-        if (Label1 = nil) or (Label1.NodeKind <> gnkCaseLabel) then
+        Selector := ANode.ChildAt(I);
+        if (Selector = nil) or (Selector.NodeKind <> gnkCaseSelector) then
           Continue;
-        if (Label1.ChildCount > 0) and
-          EvaluateIntegerConstant(Label1.ChildAt(0), Val1) then
+        for J := 0 to Selector.ChildCount - 1 do
         begin
-          for K := 0 to SeenCount - 1 do
+          Label1 := Selector.ChildAt(J);
+          if (Label1 = nil) or (Label1.NodeKind <> gnkCaseLabel) then
+            Continue;
+          if (Label1.ChildCount > 0) and
+            EvaluateIntegerConstant(Label1.ChildAt(0), Val1) then
           begin
-            if SeenValues[K] = Val1 then
+            for K := 0 to LongInt(SeenValues.Count) - 1 do
             begin
-              FDiagnostics.EmitWarning(
-                'sema.duplicate-case-label',
-                'sema',
-                FRootFileId,
-                Label1.ByteOffset,
-                'duplicate case label value ' + IntToStr(Val1)
-              );
-              Break;
+              if SeenValues[K] = Val1 then
+              begin
+                FDiagnostics.EmitWarning(
+                  'sema.duplicate-case-label',
+                  'sema',
+                  FRootFileId,
+                  Label1.ByteOffset,
+                  'duplicate case label value ' + IntToStr(Val1)
+                );
+                Break;
+              end;
             end;
+            SeenValues.Push(Val1);
           end;
-          Inc(SeenCount);
-          SetLength(SeenValues, SeenCount);
-          SeenValues[SeenCount - 1] := Val1;
         end;
       end;
+    finally
+      SeenValues.Free;
     end;
   end
   else

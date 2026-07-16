@@ -287,14 +287,8 @@ begin
       end
       else if AInstr.IntrinsicName = 'global_ref' then
       begin
-        if FGlobalRefCount >= Length(FGlobalRefNames) then
-        begin
-          SetLength(FGlobalRefNames, FGlobalRefCount + 16);
-          SetLength(FGlobalRefIds, FGlobalRefCount + 16);
-        end;
-        FGlobalRefNames[FGlobalRefCount] := AInstr.CallTarget;
-        FGlobalRefIds[FGlobalRefCount] := AInstr.ResultId;
-        Inc(FGlobalRefCount);
+        FGlobalRefNames.Push(AInstr.CallTarget);
+        FGlobalRefIds.Push(AInstr.ResultId);
       end
       else if AInstr.IntrinsicName = 'gep_i64' then
       begin
@@ -854,11 +848,11 @@ begin
 
   { Append debug location metadata if available }
   if FDebugInfoEnabled and (FCurrentDISubprogram >= 0) and
-    (AInstr.SourceLine > 0) and (FLineCount > 0) then
+    (AInstr.SourceLine > 0) and (FLines.Count > 0) then
   begin
     LDbgIdx := EmitDILocation(AInstr.SourceLine, AInstr.SourceCol);
     if LDbgIdx >= 0 then
-      FLines[FLineCount - 1] := FLines[FLineCount - 1] +
-        ', !dbg !' + IntToStr(LDbgIdx);
+      FLines.GetPtr(FLines.Count - 1)^ :=
+        FLines[FLines.Count - 1] + ', !dbg !' + IntToStr(LDbgIdx);
   end;
 end;

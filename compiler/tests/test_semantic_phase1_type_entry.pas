@@ -256,9 +256,9 @@ begin
       Fail('byte-assign-expr-not-cast');
     if not SameText(TypeNameOf(Model, Expr.TypeId), 'Byte') then
       Fail('byte-cast-target-type:' + TypeNameOf(Model, Expr.TypeId));
-    if Length(Expr.Children) < 1 then
+    if SemanticHirChildCount(Expr.Children) < 1 then
       Fail('byte-cast-missing-child');
-    LeftExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    LeftExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     if not SameText(TypeNameOf(Model, LeftExpr.TypeId), 'Integer') then
       Fail('byte-cast-child-type:' + TypeNameOf(Model, LeftExpr.TypeId));
 

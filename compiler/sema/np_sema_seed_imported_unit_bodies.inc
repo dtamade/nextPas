@@ -161,8 +161,10 @@ var
   SymbolCacheEligible: Boolean;
   ResolvedTypeId: LongInt;
   Age: Int64;
-  SymBefore, SymAfter, J, NextCache: LongInt;
+  SymBefore, SymAfter, J: LongInt;
   Sym: TSemanticSymbol;
+  CacheEntry: PCachedUnitSymbols;
+  CachedSym: TCachedSymbolEntry;
 begin
   if FUnitGraph = nil then
     Exit;
@@ -194,8 +196,8 @@ begin
         CacheIdx := FindCachedUnit(SourcePath, Age);
       if CacheIdx >= 0 then
       begin
-        for J := 0 to GImportedUnitCache[CacheIdx].SymbolCount - 1 do
-          with GImportedUnitCache[CacheIdx].Symbols[J] do
+        for J := 0 to LongInt(GImportedUnitCache[SizeUInt(CacheIdx)].Symbols.Count) - 1 do
+          with GImportedUnitCache[SizeUInt(CacheIdx)].Symbols[SizeUInt(J)] do
           begin
             { Skip cached type symbols if a type with this name already
               exists in the model (e.g. seeded in SeedBuiltinTypes). }
@@ -249,29 +251,21 @@ begin
         { Promote disk cache entry to in-memory cache }
         if SymAfter > SymBefore then
         begin
-          if GImportedUnitCacheCount >= Length(GImportedUnitCache) then
-            SetLength(GImportedUnitCache, GImportedUnitCacheCount + 16);
-          NextCache := GImportedUnitCacheCount;
-          Inc(GImportedUnitCacheCount);
-          GImportedUnitCache[NextCache].SourcePath := SourcePath;
-          GImportedUnitCache[NextCache].FileAge := Age;
-          GImportedUnitCache[NextCache].SymbolCount := SymAfter - SymBefore;
-          SetLength(GImportedUnitCache[NextCache].Symbols, SymAfter - SymBefore);
+          CacheEntry := AppendImportedUnitCacheEntry(
+            SourcePath, Age, SymAfter - SymBefore);
           for J := SymBefore to SymAfter - 1 do
           begin
             Sym := FModel.SymbolAt(J);
-            with GImportedUnitCache[NextCache].Symbols[J - SymBefore] do
-            begin
-              Name := Sym.Name;
-              Kind := Sym.Kind;
-              OwnerUnitId := Sym.OwnerUnitId;
-              ParamCount := Sym.ParamCount;
-              MinParamCount := Sym.MinParamCount;
-              ParamSignature := Sym.ParamSignature;
-              TypeId := Sym.TypeId;
-              TypeRefName := '';
-              ByteOffset := Sym.ByteOffset;
-            end;
+            CachedSym.Name := Sym.Name;
+            CachedSym.Kind := Sym.Kind;
+            CachedSym.OwnerUnitId := Sym.OwnerUnitId;
+            CachedSym.ParamCount := Sym.ParamCount;
+            CachedSym.MinParamCount := Sym.MinParamCount;
+            CachedSym.ParamSignature := Sym.ParamSignature;
+            CachedSym.TypeId := Sym.TypeId;
+            CachedSym.TypeRefName := '';
+            CachedSym.ByteOffset := Sym.ByteOffset;
+            CacheEntry^.Symbols.Push(CachedSym);
           end;
         end;
         Continue;
@@ -293,12 +287,12 @@ begin
       end;
       Close(F);
       UnitLexer := TLexerResult.Create(SourceText);
-      PPDefines := TDefineTable.Create;
+      PPDefines := TDefineTable.Create(FAllocator);
       PPDefines.SeedFPCDefines;
       { The non-FPC branch is the compiler-visible System kernel surface. }
       if SameText(ResolvedUnit.CanonicalName, 'System') then
         PPDefines.Undef('FPC');
-      IncResolver := TFileIncludeResolver.Create(ExtractFileDir(SourcePath));
+      IncResolver := TFileIncludeResolver.Create(ExtractFileDir(SourcePath), FAllocator);
       IncResolver.AddSearchPath(ExtractFileDir(SourcePath));
       IncResolver.AddSearchPath(
         ExtractFileDir(ExtractFileDir(SourcePath)) + DirectorySeparator + 'objpas');
@@ -307,7 +301,7 @@ begin
         DirectorySeparator + 'sysutils');
       IncResolver.AddSearchPath(
         ExtractFileDir(ExtractFileDir(SourcePath)) + DirectorySeparator + 'inc');
-      PP := TPreprocessor.Create(PPDefines, True, IncResolver);
+      PP := TPreprocessor.Create(PPDefines, True, IncResolver, FAllocator);
       try
         PP.Process(UnitLexer);
         UnitLexer.Free;
@@ -317,7 +311,7 @@ begin
       end;
 
       SymBefore := FModel.SymbolCount;
-      UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0);
+      UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0, FAllocator);
       if (UnitTree <> nil) and (UnitTree.RootNode <> nil) then
       begin
         RegisterImportedUnitTree(UnitTree, OwnerUnitId);
@@ -331,14 +325,8 @@ begin
       if SymbolCacheEligible and (SymAfter > SymBefore) and
         SameText(ResolvedUnit.OriginClass, 'installed-source') then
       begin
-        if GImportedUnitCacheCount >= Length(GImportedUnitCache) then
-          SetLength(GImportedUnitCache, GImportedUnitCacheCount + 16);
-        NextCache := GImportedUnitCacheCount;
-        Inc(GImportedUnitCacheCount);
-        GImportedUnitCache[NextCache].SourcePath := SourcePath;
-        GImportedUnitCache[NextCache].FileAge := Age;
-        GImportedUnitCache[NextCache].SymbolCount := SymAfter - SymBefore;
-        SetLength(GImportedUnitCache[NextCache].Symbols, SymAfter - SymBefore);
+        CacheEntry := AppendImportedUnitCacheEntry(
+          SourcePath, Age, SymAfter - SymBefore);
         { Also build disk cache entry }
         DiskUnit.UnitId := OwnerUnitId;
         DiskUnit.SourcePath := SourcePath;
@@ -348,21 +336,19 @@ begin
         for J := SymBefore to SymAfter - 1 do
         begin
           Sym := FModel.SymbolAt(J);
-          with GImportedUnitCache[NextCache].Symbols[J - SymBefore] do
-          begin
-            Name := Sym.Name;
-            Kind := Sym.Kind;
-            OwnerUnitId := Sym.OwnerUnitId;
-            ParamCount := Sym.ParamCount;
-            MinParamCount := Sym.MinParamCount;
-            ParamSignature := Sym.ParamSignature;
-            TypeId := Sym.TypeId;
-            if Sym.TypeId > 0 then
-              TypeRefName := FModel.TypeAt(Sym.TypeId - 1).Name
-            else
-              TypeRefName := '';
-            ByteOffset := Sym.ByteOffset;
-          end;
+          CachedSym.Name := Sym.Name;
+          CachedSym.Kind := Sym.Kind;
+          CachedSym.OwnerUnitId := Sym.OwnerUnitId;
+          CachedSym.ParamCount := Sym.ParamCount;
+          CachedSym.MinParamCount := Sym.MinParamCount;
+          CachedSym.ParamSignature := Sym.ParamSignature;
+          CachedSym.TypeId := Sym.TypeId;
+          if Sym.TypeId > 0 then
+            CachedSym.TypeRefName := FModel.TypeAt(Sym.TypeId - 1).Name
+          else
+            CachedSym.TypeRefName := '';
+          CachedSym.ByteOffset := Sym.ByteOffset;
+          CacheEntry^.Symbols.Push(CachedSym);
           DiskUnit.Symbols[J - SymBefore].Name := Sym.Name;
           DiskUnit.Symbols[J - SymBefore].Kind := Sym.Kind;
           DiskUnit.Symbols[J - SymBefore].OwnerUnitId := OwnerUnitId;

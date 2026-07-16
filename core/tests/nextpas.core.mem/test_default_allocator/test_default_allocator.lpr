@@ -1,8 +1,8 @@
 program test_default_allocator;
 {**
- * Default dual-track:
- *   DefaultHeap / GetMem — Growing hot path (concrete)
- *   DefaultAllocator     — IAllocator plug-in surface (RTL)
+ * Default dual-track (S5):
+ *   DefaultHeap / GetMem — Growing hot path (concrete, no vtable)
+ *   DefaultAllocator     — IAllocator plug-in surface (Growing IAllocator root)
  *}
 
 {$I nextpas.core.settings.inc}
@@ -15,6 +15,8 @@ uses
   nextpas.core.exception,
   nextpas.core.test,
   nextpas.core.mem,
+  nextpas.core.mem.allocator.growing_ia,
+  nextpas.core.mem.allocator.rtl,
   nextpas.core.platform.thread;
 
 const
@@ -218,15 +220,48 @@ begin
   LAlloc := DefaultAllocator;
   Check(LHeap <> nil, 'heap present');
   Check(LAlloc <> nil, 'allocator present');
-  { Plugin path still works independently. }
+  Check(LAlloc = GetGrowingIAllocator, 'DefaultAllocator is Growing IAllocator root');
+  Check(LAlloc <> GetRtlAllocator, 'DefaultAllocator is not RTL');
+  { Plugin path still works independently (vtable surface). }
   LPtr := LAlloc.GetMem(64);
   Check(LPtr <> nil, 'DefaultAllocator.GetMem');
   LAlloc.FreeMem(LPtr);
-  { Must not free DefaultAllocator blocks via DefaultHeap FreeMem(ptr,size)
-    blindly — only prove both tracks allocate independently. }
   LPtr := LHeap.GetMem(64);
   Check(LPtr <> nil, 'DefaultHeap.GetMem');
   LHeap.FreeMem(LPtr, 64);
+end;
+
+procedure TestSameHeapPluginAndHot;
+var
+  LHeap: TGrowingAllocator;
+  LAlloc: IAllocator;
+  LPtr: Pointer;
+  LSz: SizeUInt;
+begin
+  LHeap := DefaultHeap;
+  LAlloc := DefaultAllocator;
+  { Alloc via plugin, free via hot FreeMem(ptr) — same Growing heap. }
+  LPtr := LAlloc.GetMem(48);
+  Check(LPtr <> nil, 'plugin GetMem');
+  Check(LHeap.TryBlockSize(LPtr, LSz), 'block owned by DefaultHeap');
+  Check(LSz >= 48, 'size class covers request');
+  LHeap.FreeMem(LPtr);
+
+  { Alloc via hot, free via plugin FreeMem(ptr). }
+  LPtr := LHeap.GetMem(24);
+  Check(LPtr <> nil, 'heap GetMem');
+  LAlloc.FreeMem(LPtr);
+  Check(True, 'cross free both directions');
+end;
+
+procedure TestResolveAllocatorUsesProcessHeap;
+var
+  LNil, LExpl: IAllocator;
+begin
+  LNil := ResolveAllocator(nil);
+  Check(LNil = GetGrowingIAllocator, 'ResolveAllocator(nil) → Growing root');
+  LExpl := GetRtlAllocator;
+  Check(ResolveAllocator(LExpl) = LExpl, 'ResolveAllocator identity for explicit');
 end;
 
 begin
@@ -237,6 +272,8 @@ begin
   T.Test('process GetMem uses DefaultHeap', @TestProcessGetMemUsesHeap);
   T.Test('DefaultHeap concurrent', @TestDefaultHeapConcurrent);
   T.Test('dual-track separation', @TestDualTrackSeparation);
+  T.Test('same heap plugin and hot', @TestSameHeapPluginAndHot);
+  T.Test('ResolveAllocator process heap', @TestResolveAllocatorUsesProcessHeap);
   LRunPassed := T.Run;
 
   T.Summary;

@@ -27,9 +27,10 @@ begin
     begin
       Emit('  switch i64 ' + ValueRef(ATerm.Condition) +
         ', label %bb' + IntToStr(ATerm.DefaultBlock) + ' [');
-      for I := 0 to High(ATerm.SwitchCases) do
-        Emit('    i64 ' + IntToStr(ATerm.SwitchCases[I].Value) +
-          ', label %bb' + IntToStr(ATerm.SwitchCases[I].TargetBlock));
+      if ATerm.SwitchCases <> nil then
+        for I := 0 to LongInt(ATerm.SwitchCases.Count) - 1 do
+          Emit('    i64 ' + IntToStr(ATerm.SwitchCases[SizeUInt(I)].Value) +
+            ', label %bb' + IntToStr(ATerm.SwitchCases[SizeUInt(I)].TargetBlock));
       Emit('  ]');
     end;
     htkUnreachable:
@@ -45,8 +46,8 @@ begin
   for I := 0 to FModule.FunctionCount - 1 do
   begin
     F := FModule.FunctionAt(I);
-    if SameText(F.Name, AName) and (Length(F.Params) > 0) and
-      (F.Params[0].Name = 'sret_ptr') then
+    if SameText(F.Name, AName) and (F.Params <> nil) and
+      (F.Params.Count > 0) and (F.Params[0].Name = 'sret_ptr') then
       Exit(True);
   end;
   Result := False;
@@ -76,29 +77,32 @@ begin
   begin
     { Emit LLVM declare for external functions }
     ParamStr := '';
-    for I := 0 to High(AFunc.Params) do
-    begin
-      if ParamStr <> '' then
-        ParamStr := ParamStr + ', ';
-      ParamStr := ParamStr + TypeToLlvm(AFunc.Params[I].TypeId);
-    end;
+    if AFunc.Params <> nil then
+      for I := 0 to LongInt(AFunc.Params.Count) - 1 do
+      begin
+        if ParamStr <> '' then
+          ParamStr := ParamStr + ', ';
+        ParamStr := ParamStr + TypeToLlvm(AFunc.Params[SizeUInt(I)].TypeId);
+      end;
     RetStr := TypeToLlvm(AFunc.ReturnTypeId);
     Emit('declare ' + RetStr + ' @' + AFunc.ExternalName + '(' + ParamStr + ')');
     Exit;
   end;
-  FGlobalRefCount := 0;
+  ClearGlobalRefs;
 
   ParamStr := '';
-  for I := 0 to High(AFunc.Params) do
-  begin
-    { Skip sret_ptr for IsTStringReturnAbi — emitter generates %agg.result }
-    if AFunc.IsTStringReturnAbi and (AFunc.Params[I].Name = 'sret_ptr') then
-      Continue;
-    if ParamStr <> '' then
-      ParamStr := ParamStr + ', ';
-    ParamStr := ParamStr + TypeToLlvm(AFunc.Params[I].TypeId) +
-      ' ' + ValueRef(AFunc.Params[I].ValueId);
-  end;
+  if AFunc.Params <> nil then
+    for I := 0 to LongInt(AFunc.Params.Count) - 1 do
+    begin
+      { Skip sret_ptr for IsTStringReturnAbi — emitter generates %agg.result }
+      if AFunc.IsTStringReturnAbi and
+        (AFunc.Params[SizeUInt(I)].Name = 'sret_ptr') then
+        Continue;
+      if ParamStr <> '' then
+        ParamStr := ParamStr + ', ';
+      ParamStr := ParamStr + TypeToLlvm(AFunc.Params[SizeUInt(I)].TypeId) +
+        ' ' + ValueRef(AFunc.Params[SizeUInt(I)].ValueId);
+    end;
 
   T := FModule.Types.GetType(AFunc.ReturnTypeId);
   if AFunc.IsTStringReturnAbi then
@@ -110,7 +114,8 @@ begin
     else
       ParamStr := 'ptr sret(%TString) %agg.result';
   end
-  else if (Length(AFunc.Params) > 0) and (AFunc.Params[0].Name = 'sret_ptr') then
+  else if (AFunc.Params <> nil) and (AFunc.Params.Count > 0) and
+    (AFunc.Params[0].Name = 'sret_ptr') then
     RetStr := 'void'
   else if AFunc.UsesOwnedStringReturnAbi then
     RetStr := '{ptr, i64, ptr, i64}'
@@ -145,14 +150,16 @@ begin
     Emit('define ' + RetStr + ' @' + AFunc.Name +
       '(' + ParamStr + ') {');
 
-  for I := 0 to High(AFunc.Blocks) do
-  begin
-    Emit('bb' + IntToStr(AFunc.Blocks[I].Id) + ':');
-    for J := 0 to High(AFunc.Blocks[I].Instrs) do
-      EmitInstr(AFunc.Blocks[I].Instrs[J]);
-    if not BlockEndsWithIntrinsicReturn(AFunc.Blocks[I]) then
-      EmitTerminator(AFunc.Blocks[I].Terminator);
-  end;
+  if AFunc.Blocks <> nil then
+    for I := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    begin
+      Emit('bb' + IntToStr(AFunc.Blocks[SizeUInt(I)].Id) + ':');
+      if AFunc.Blocks[SizeUInt(I)].Instrs <> nil then
+        for J := 0 to LongInt(AFunc.Blocks[SizeUInt(I)].Instrs.Count) - 1 do
+          EmitInstr(AFunc.Blocks[SizeUInt(I)].Instrs[SizeUInt(J)]);
+      if not BlockEndsWithIntrinsicReturn(AFunc.Blocks[SizeUInt(I)]) then
+        EmitTerminator(AFunc.Blocks[SizeUInt(I)].Terminator);
+    end;
 
   Emit('}');
 end;

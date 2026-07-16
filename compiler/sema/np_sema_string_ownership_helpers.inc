@@ -541,16 +541,18 @@ begin
     Exit;
   if not Meta.IsRecord then
     Exit;
-  for I := 0 to High(Meta.Fields) do
+  if Meta.Fields = nil then
+    Exit(False);
+  for I := 0 to LongInt(Meta.Fields.Count) - 1 do
   begin
-    if Meta.Fields[I].IsString or Meta.Fields[I].IsDynArray then
+    if Meta.Fields[SizeUInt(I)].IsString or Meta.Fields[SizeUInt(I)].IsDynArray then
       Exit(True);
     { 递归检查嵌套 record }
-    if Meta.Fields[I].IsRecord then
+    if Meta.Fields[SizeUInt(I)].IsRecord then
     begin
-      if (Meta.Fields[I].TypeId > 0) and
-        (Meta.Fields[I].TypeId <= FModel.TypeCount) and
-        IsManagedRecord(FModel.TypeAt(Meta.Fields[I].TypeId - 1).Name) then
+      if (Meta.Fields[SizeUInt(I)].TypeId > 0) and
+        (Meta.Fields[SizeUInt(I)].TypeId <= FModel.TypeCount) and
+        IsManagedRecord(FModel.TypeAt(Meta.Fields[SizeUInt(I)].TypeId - 1).Name) then
         Exit(True);
     end;
   end;
@@ -687,16 +689,11 @@ end;
 
 procedure TSemanticAnalyzer.RegisterImportedUnitTree(const ATree: TGreenTree;
   const AOwnerUnitId: string);
-var
-  NextIndex: SizeInt;
 begin
   if ATree = nil then
     Exit;
-  NextIndex := Length(FImportedUnitTrees);
-  SetLength(FImportedUnitTrees, NextIndex + 1);
-  SetLength(FImportedUnitOwners, NextIndex + 1);
-  FImportedUnitTrees[NextIndex] := ATree;
-  FImportedUnitOwners[NextIndex] := AOwnerUnitId;
+  FImportedUnitTrees.Push(ATree);
+  FImportedUnitOwners.Push(AOwnerUnitId);
 end;
 
 function TSemanticAnalyzer.LookupPtrReturnFunc(const AName: string): string;
@@ -890,14 +887,33 @@ end;
 destructor TSemanticAnalyzer.Destroy;
 var
   Index: LongInt;
+  Pending: PPendingSignatureEntry;
 begin
-  for Index := 0 to Length(FImportedUnitTrees) - 1 do
-    FImportedUnitTrees[Index].Free;
+  if FImportedUnitTrees <> nil then
+    for Index := 0 to LongInt(FImportedUnitTrees.Count) - 1 do
+      FImportedUnitTrees[Index].Free;
+  FImportedUnitTrees.Free;
+  FImportedUnitOwners.Free;
   FBreakLabels.Free;
   FContinueLabels.Free;
   { FVarParamNames now managed by FRuntimeVars }
   FInliningStack.Free;
   FGenericCache.Free;
+  FCompilerProcNames.Free;
+  FGenericWorkQueue.Free;
+  if FPendingSignatures <> nil then
+  begin
+    for Index := 0 to LongInt(FPendingSignatures.Count) - 1 do
+    begin
+      Pending := FPendingSignatures.GetPtr(SizeUInt(Index));
+      Pending^.ParamNames.Free;
+      Pending^.ParamNames := nil;
+      Pending^.ArgTypes.Free;
+      Pending^.ArgTypes := nil;
+    end;
+  end;
+  FPendingSignatures.Free;
+  FProcedureBodies.Free;
   FBuiltinRegistry.Free;
   FRuntimeVars.Free;
   FModel.Free;

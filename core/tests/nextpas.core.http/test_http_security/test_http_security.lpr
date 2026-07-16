@@ -219,6 +219,9 @@ begin
   Result.IdleTimeout := AHttpOptions.IdleTimeout;
   Result.MaxHeaderSize := AHttpOptions.MaxHeaderSize;
   Result.MaxBodySize := AHttpOptions.MaxBodySize;
+  Result.MaxRequestsPerConnection := AHttpOptions.MaxRequestsPerConnection;
+  Result.RequestArena := AHttpOptions.RequestArena;
+  Result.RequestArenaCapacity := AHttpOptions.RequestArenaCapacity;
 end;
 
 function SocketFromRuntime(const ARuntime: ITcpSocketRuntime): TPlatformSocket;

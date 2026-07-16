@@ -81,7 +81,7 @@ begin
   HasArgTypeIds := (Length(AArgTypeIds) = AArgCount) and
     TypeIdArrayHasKnownTypes(AArgTypeIds);
 
-  for Index := 0 to Length(Ctx.ProcedureBodies) - 1 do
+  for Index := 0 to LongInt(Ctx.ProcedureBodies.Count) - 1 do
     if SameText(Ctx.ProcedureBodies[Index].Name, AName) then
     begin
       if SameText(Ctx.ProcedureBodies[Index].OwnerUnitId, RootOwnerUnitId) or

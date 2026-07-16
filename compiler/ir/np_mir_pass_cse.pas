@@ -9,6 +9,7 @@
  *   3. 遇到重复表达式时，用已有寄存器替换
  *
  * 表达式指纹：Op + Lhs.Value + Rhs.Value（或 Src.Value）
+ * CseTable 可挂 phase-scratch IAllocator（TVec on PhaseScratch）。
  *
  * 对标：rustc mir::transform::cse, LLVM EarlyCSE
  *}
@@ -16,15 +17,28 @@
 unit np_mir_pass_cse;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
-  np_mir_model, np_mir_optimize;
+  np_mir_model, np_mir_optimize,
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec;
 
 type
+  TCseEntry = record
+    Fingerprint: string;
+    ResultReg: TMirValueId;
+  end;
+
+  TMirCseEntryVec = specialize TVec<TCseEntry>;
+
   TMirCsePass = class(TInterfacedObject, IMirOptimizationPass)
+  private
+    FAllocator: IAllocator;
   public
+    constructor Create(AAllocator: IAllocator = nil);
     function Name: string;
     function Run(var AModule: TMirModule): Boolean;
   end;
@@ -34,11 +48,11 @@ implementation
 uses
   SysUtils;
 
-type
-  TCseEntry = record
-    Fingerprint: string;
-    ResultReg: TMirValueId;
-  end;
+constructor TMirCsePass.Create(AAllocator: IAllocator);
+begin
+  inherited Create;
+  FAllocator := AAllocator;
+end;
 
 function BuildBinaryFingerprint(const AOp: TMirOp;
   const ALhs, ARhs: TMirOperand): string;
@@ -66,64 +80,74 @@ var
   Fn: TMirFunction;
   Stmt: TMirStmt;
   Fingerprint: string;
-  CseTable: array of TCseEntry;
+  CseTable: TMirCseEntryVec;
+  Entry: TCseEntry;
   Found: Boolean;
   ElimCount: LongInt;
 begin
   Result := True;
   ElimCount := 0;
 
-  for FuncIdx := 0 to AModule.FunctionCount - 1 do
-  begin
-    Fn := AModule.FunctionAt(FuncIdx);
-
-    for BlkIdx := 0 to High(Fn.Blocks) do
+  if FAllocator <> nil then
+    CseTable := TMirCseEntryVec.Create(0, FAllocator)
+  else
+    CseTable := TMirCseEntryVec.Create;
+  try
+    for FuncIdx := 0 to AModule.FunctionCount - 1 do
     begin
-      SetLength(CseTable, 0);
+      Fn := AModule.FunctionAt(FuncIdx);
 
-      for StmtIdx := 0 to High(Fn.Blocks[BlkIdx].Stmts) do
+      if Fn.Blocks <> nil then
+      for BlkIdx := 0 to LongInt(Fn.Blocks.Count) - 1 do
       begin
-        if not AModule.GetStmt(FuncIdx, Fn.Blocks[BlkIdx].Id, StmtIdx, Stmt) then
-          Continue;
+        CseTable.Clear;
 
-        { Build fingerprint }
-        case Stmt.Kind of
-          mskBinary:
-            Fingerprint := BuildBinaryFingerprint(Stmt.Op, Stmt.Lhs, Stmt.Rhs);
-          mskUnary:
-            Fingerprint := BuildUnaryFingerprint(Stmt.Op, Stmt.Src);
-          else
-            Fingerprint := '';
-        end;
+        if Fn.Blocks[SizeUInt(BlkIdx)].Stmts <> nil then
+          for StmtIdx := 0 to LongInt(Fn.Blocks[SizeUInt(BlkIdx)].Stmts.Count) - 1 do
+        begin
+          if not AModule.GetStmt(FuncIdx, Fn.Blocks[SizeUInt(BlkIdx)].Id, StmtIdx, Stmt) then
+            Continue;
 
-        if Fingerprint = '' then
-          Continue;
-
-        { Search CSE table }
-        Found := False;
-        for I := 0 to High(CseTable) do
-          if CseTable[I].Fingerprint = Fingerprint then
-          begin
-            { Replace with cached result }
-            Stmt.Kind := mskAssign;
-            Stmt.Src.Kind := mokMove;
-            Stmt.Src.Value := CseTable[I].ResultReg;
-            AModule.SetStmt(FuncIdx, Fn.Blocks[BlkIdx].Id, StmtIdx, Stmt);
-            Found := True;
-            Inc(ElimCount);
-            Break;
+          { Build fingerprint }
+          case Stmt.Kind of
+            mskBinary:
+              Fingerprint := BuildBinaryFingerprint(Stmt.Op, Stmt.Lhs, Stmt.Rhs);
+            mskUnary:
+              Fingerprint := BuildUnaryFingerprint(Stmt.Op, Stmt.Src);
+            else
+              Fingerprint := '';
           end;
 
-        { Not found — add to CSE table }
-        if not Found and (Stmt.Dst > 0) then
-        begin
-          I := Length(CseTable);
-          SetLength(CseTable, I + 1);
-          CseTable[I].Fingerprint := Fingerprint;
-          CseTable[I].ResultReg := Stmt.Dst;
+          if Fingerprint = '' then
+            Continue;
+
+          { Search CSE table }
+          Found := False;
+          for I := 0 to LongInt(CseTable.Count) - 1 do
+            if CseTable[I].Fingerprint = Fingerprint then
+            begin
+              { Replace with cached result }
+              Stmt.Kind := mskAssign;
+              Stmt.Src.Kind := mokMove;
+              Stmt.Src.Value := CseTable[I].ResultReg;
+              AModule.SetStmt(FuncIdx, Fn.Blocks[SizeUInt(BlkIdx)].Id, StmtIdx, Stmt);
+              Found := True;
+              Inc(ElimCount);
+              Break;
+            end;
+
+          { Not found — add to CSE table }
+          if not Found and (Stmt.Dst > 0) then
+          begin
+            Entry.Fingerprint := Fingerprint;
+            Entry.ResultReg := Stmt.Dst;
+            CseTable.Push(Entry);
+          end;
         end;
       end;
     end;
+  finally
+    CseTable.Free;
   end;
 end;
 

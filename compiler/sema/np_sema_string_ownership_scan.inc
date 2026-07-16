@@ -121,7 +121,7 @@ begin
       if RootNode <> nil then
         ScanTopLevelOwnedStringReturnConsumers(Ctx, RootNode, Changed);
     end;
-    for I := 0 to Length(Ctx.ProcedureBodies) - 1 do
+    for I := 0 to LongInt(Ctx.ProcedureBodies.Count) - 1 do
     begin
       Entry := Ctx.ProcedureBodies[I];
       if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
@@ -153,7 +153,7 @@ begin
     traversed imported units' code and caused false positives. }
   if not Ctx.Diagnostics.HasErrors then
   begin
-    for I := 0 to Length(Ctx.ProcedureBodies) - 1 do
+    for I := 0 to LongInt(Ctx.ProcedureBodies.Count) - 1 do
     begin
       Entry := Ctx.ProcedureBodies[I];
       if (Entry.Body = nil) or (Entry.Decl = nil) or (Pos('<', Entry.Name) > 0) then
@@ -255,16 +255,18 @@ begin
       Continue;
     Blob := VarName + #9 + TypeName;
     NeedCleanup := False;
-    for J := 0 to High(Meta.Fields) do
+    if Meta.Fields = nil then
+      Continue;
+    for J := 0 to LongInt(Meta.Fields.Count) - 1 do
     begin
-      if Meta.Fields[J].IsString then
+      if Meta.Fields[SizeUInt(J)].IsString then
       begin
-        Blob := Blob + #9 + Meta.Fields[J].Name + ':s';
+        Blob := Blob + #9 + Meta.Fields[SizeUInt(J)].Name + ':s';
         NeedCleanup := True;
       end
-      else if Meta.Fields[J].IsDynArray then
+      else if Meta.Fields[SizeUInt(J)].IsDynArray then
       begin
-        Blob := Blob + #9 + Meta.Fields[J].Name + ':d';
+        Blob := Blob + #9 + Meta.Fields[SizeUInt(J)].Name + ':d';
         NeedCleanup := True;
       end;
     end;

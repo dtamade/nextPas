@@ -271,6 +271,7 @@ var
   RecName: string;
   Meta: TTypeMetadata;
   FieldMeta: TTypeMetadata;
+  Field: TFieldMeta;
 begin
   if ANode = nil then
     Exit;
@@ -290,10 +291,11 @@ begin
   Meta.ArrHighBound := -1;
   Meta.ArrLength := 0;
   Meta.IsStaticArray := False;
-  SetLength(Meta.Fields, 0);
-  SetLength(Meta.VmtSlots, 0);
-  SetLength(Meta.RetPtrMethods, 0);
-  SetLength(Meta.Properties, 0);
+  Meta.Fields := nil;
+  Meta.VmtSlots := nil;
+  Meta.RetPtrMethods := nil;
+  Meta.Properties := nil;
+  Meta.InterfaceSlots := nil;
   for I := 0 to ANode.ChildCount - 1 do
   begin
     Child := ANode.ChildAt(I);
@@ -336,27 +338,30 @@ begin
       Child.ByteOffset);
     FModel.SetSymbolScope(FModel.SymbolCount, RecordScopeId);
     FModel.AddConstValue(RecName + '.' + Child.Text + '$idx', FieldIndex);
-    SetLength(Meta.Fields, Length(Meta.Fields) + 1);
-    Meta.Fields[High(Meta.Fields)].Name := Child.Text;
-    Meta.Fields[High(Meta.Fields)].Index := FieldIndex;
+    Field := Default(TFieldMeta);
+    Field.Name := Child.Text;
+    Field.Index := FieldIndex;
     { 检测字段类型 — 与 class 字段路径一致 }
-    Meta.Fields[High(Meta.Fields)].IsString :=
+    Field.IsString :=
       (TypeChild <> nil) and (TypeChild.NodeKind = gnkIdentifier) and
       (SameText(TypeChild.Text, 'String') or
        SameText(TypeChild.Text, 'AnsiString'));
-    Meta.Fields[High(Meta.Fields)].IsPointer := False;
-    Meta.Fields[High(Meta.Fields)].IsDynArray :=
+    Field.IsPointer := False;
+    Field.IsDynArray :=
       (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
       (Child.ChildAt(0).NodeKind = gnkArrayType);
-    Meta.Fields[High(Meta.Fields)].IsRecord :=
+    Field.IsRecord :=
       (FieldTypeId > 0) and FModel.GetTypeMeta(FieldTypeId, FieldMeta) and
       FieldMeta.IsRecord;
-    Meta.Fields[High(Meta.Fields)].TypeId := FieldTypeId;
-    if Meta.Fields[High(Meta.Fields)].IsString then
+    Field.TypeId := FieldTypeId;
+    if Meta.Fields = nil then
+      Meta.Fields := TSemanticFieldMetaVec.Create;
+    Meta.Fields.Push(Field);
+    if Field.IsString then
       Inc(FieldIndex, 3)
-    else if Meta.Fields[High(Meta.Fields)].IsDynArray then
+    else if Field.IsDynArray then
       Inc(FieldIndex, 2)
-    else if Meta.Fields[High(Meta.Fields)].IsRecord then
+    else if Field.IsRecord then
     begin
       if (FieldTypeId > 0) and FModel.GetTypeMeta(FieldTypeId, FieldMeta) then
         Inc(FieldIndex, FieldMeta.Size div 8)
@@ -394,6 +399,7 @@ var
   IntfName, ParentIntfName, MethShort: string;
   SymbolId: LongInt;
   Meta: TTypeMetadata;
+  Slot: TVmtSlot;
   ParentIntfTypeId: LongInt;
   Symbol: TSemanticSymbol;
 begin
@@ -472,10 +478,11 @@ begin
     ArrHighBound := -1;
     ArrLength := 0;
     IsStaticArray := False;
-    SetLength(Fields, 0);
-    SetLength(VmtSlots, 0);
-    SetLength(RetPtrMethods, 0);
-    SetLength(Properties, 0);
+    Fields := nil;
+    VmtSlots := nil;
+    RetPtrMethods := nil;
+    Properties := nil;
+    InterfaceSlots := nil;
   end;
   for I := 0 to FModel.SymbolCount - 1 do
   begin
@@ -484,10 +491,13 @@ begin
       (Pos(IntfName + '.', Symbol.Name) = 1) then
     begin
       MethShort := Copy(Symbol.Name, Length(IntfName) + 2, MaxInt);
-      SetLength(Meta.VmtSlots, Meta.VmtCount + 1);
-      Meta.VmtSlots[Meta.VmtCount].MethodName := MethShort;
-      Meta.VmtSlots[Meta.VmtCount].SlotIndex := Meta.VmtCount;
-      Meta.VmtSlots[Meta.VmtCount].FuncQualName := IntfName + '.' + MethShort;
+      Slot := Default(TVmtSlot);
+      Slot.MethodName := MethShort;
+      Slot.SlotIndex := Meta.VmtCount;
+      Slot.FuncQualName := IntfName + '.' + MethShort;
+      if Meta.VmtSlots = nil then
+        Meta.VmtSlots := TSemanticVmtSlotVec.Create;
+      Meta.VmtSlots.Push(Slot);
       Inc(Meta.VmtCount);
     end;
   end;
@@ -570,6 +580,7 @@ var
   I, J, SlotOffset: LongInt;
   IntfName, ClsName: string;
   Meta: TTypeMetadata;
+  Slot: TInterfaceSlotMeta;
   IntfNames: array of string;
   IntfCount: LongInt;
 begin
@@ -595,12 +606,19 @@ begin
     Exit;
   SlotOffset := LongInt(Meta.Size div 8);
   if SlotOffset <= 0 then
-    SlotOffset := Length(Meta.Fields) + 1;
-  SetLength(Meta.InterfaceSlots, IntfCount);
+    if Meta.Fields = nil then
+      SlotOffset := 1
+    else
+      SlotOffset := LongInt(Meta.Fields.Count) + 1;
+  { Build a fresh entry-owned vec; SetTypeMeta frees any previous table-owned
+    InterfaceSlots pointer from GetTypeMeta without touching it here. }
+  Meta.InterfaceSlots := TSemanticInterfaceSlotMetaVec.Create(SizeUInt(IntfCount));
   for I := 0 to IntfCount - 1 do
   begin
-    Meta.InterfaceSlots[I].InterfaceName := IntfNames[I];
-    Meta.InterfaceSlots[I].SlotOffset := SlotOffset + I;
+    Slot := Default(TInterfaceSlotMeta);
+    Slot.InterfaceName := IntfNames[I];
+    Slot.SlotOffset := SlotOffset + I;
+    Meta.InterfaceSlots.Push(Slot);
     FModel.AddConstValue(ClsName + '$intf_offset_' + IntfNames[I],
       (SlotOffset + I) * 8);
   end;
@@ -777,44 +795,72 @@ begin
   FModel.SetTypeGenericParent(ATypeId, ParentTypeId, ArgIndices);
 end;
 
+procedure FreePendingSignatureNested(var AEntry: TPendingSignatureEntry);
+begin
+  AEntry.ParamNames.Free;
+  AEntry.ParamNames := nil;
+  AEntry.ArgTypes.Free;
+  AEntry.ArgTypes := nil;
+end;
+
+function ClonePendingStringVec(
+  const ASrc: TStringVec;
+  AAllocator: IAllocator
+): TStringVec;
+var
+  I: SizeInt;
+begin
+  if ASrc = nil then
+    Exit(nil);
+  if AAllocator <> nil then
+    Result := TStringVec.Create(ASrc.Count, AAllocator)
+  else
+    Result := TStringVec.Create(ASrc.Count);
+  for I := 0 to SizeInt(ASrc.Count) - 1 do
+    Result.Push(ASrc[SizeUInt(I)]);
+end;
+
 procedure TSemanticAnalyzer.CompletePendingSignatures;
 var
   I, BodyIdx: LongInt;
   Decl: TGreenNode;
   SubstSig: string;
   QualName: string;
+  Entry: PPendingSignatureEntry;
 begin
-  for I := 0 to Length(FPendingSignatures) - 1 do
+  if FPendingSignatures = nil then
+    Exit;
+  for I := 0 to LongInt(FPendingSignatures.Count) - 1 do
   begin
-    QualName := FPendingSignatures[I].GenericName + '.' +
-      FPendingSignatures[I].MethodShortName;
+    Entry := FPendingSignatures.GetPtr(SizeUInt(I));
+    QualName := Entry^.GenericName + '.' + Entry^.MethodShortName;
     Decl := nil;
-    for BodyIdx := 0 to Length(FProcedureBodies) - 1 do
+    for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
     begin
       if SameText(FProcedureBodies[BodyIdx].Name, QualName) and
-        SameText(FProcedureBodies[BodyIdx].OwnerUnitId,
-          FPendingSignatures[I].OwnerUnitId) then
+        SameText(FProcedureBodies[BodyIdx].OwnerUnitId, Entry^.OwnerUnitId) then
       begin
         Decl := FProcedureBodies[BodyIdx].Decl;
         Break;
       end;
     end;
     if Decl = nil then
-      for BodyIdx := 0 to Length(FProcedureBodies) - 1 do
+      for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
         if SameText(FProcedureBodies[BodyIdx].Name, QualName) then
         begin
           Decl := FProcedureBodies[BodyIdx].Decl;
           Break;
         end;
-    if Decl <> nil then
+    if (Decl <> nil) and (Entry^.ParamNames <> nil) and
+      (Entry^.ArgTypes <> nil) then
     begin
       SubstSig := GetSubstitutedParamSignature(Decl,
-        FPendingSignatures[I].ParamNames,
-        FPendingSignatures[I].ArgTypes);
-      FModel.SetSymbolParamSignature(FPendingSignatures[I].SymbolId, SubstSig);
+        Entry^.ParamNames.ToArray, Entry^.ArgTypes.ToArray);
+      FModel.SetSymbolParamSignature(Entry^.SymbolId, SubstSig);
     end;
+    FreePendingSignatureNested(Entry^);
   end;
-  SetLength(FPendingSignatures, 0);
+  FPendingSignatures.Clear;
 end;
 
 procedure TSemanticAnalyzer.ProcessClassFields(const ANode: TGreenNode;
@@ -833,6 +879,8 @@ var
   PointerTypeId: LongInt;
   SymbolId: LongInt;
   Meta, ParentMeta: TTypeMetadata;
+  Field: TFieldMeta;
+  Slot: TVmtSlot;
   VmtCount: LongInt;
   HasParentMeta: Boolean;
   IsArrayField, IsDynArrayField: Boolean;
@@ -857,10 +905,11 @@ begin
   if (ParentName = '') and (not SameText(ClsName, 'TObject')) then
     ParentName := 'TObject';
   VmtCount := 0;
-  SetLength(Meta.Fields, 0);
-  SetLength(Meta.VmtSlots, 0);
-  SetLength(Meta.RetPtrMethods, 0);
-  SetLength(Meta.Properties, 0);
+  Meta.Fields := nil;
+  Meta.VmtSlots := nil;
+  Meta.RetPtrMethods := nil;
+  Meta.Properties := nil;
+  Meta.InterfaceSlots := nil;
   HasParentMeta := (ParentName <> '') and FModel.GetTypeMetaByName(ParentName, ParentMeta);
   if ParentName <> '' then
   begin
@@ -870,31 +919,33 @@ begin
       FieldIndex := LongInt(ParentFieldVal) div 8;
       if HasParentMeta then
       begin
-        for J := 0 to High(ParentMeta.Fields) do
-        begin
-          FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$idx',
-            ParentMeta.Fields[J].Index);
-          if ParentMeta.Fields[J].IsString then
-            FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$str', 1);
-          if ParentMeta.Fields[J].IsPointer then
-            FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$ptr', 1);
-          if ParentMeta.Fields[J].IsDynArray then
-            FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$arr', 1);
-          if FModel.LookupStringConstValue(
-            ParentName + '.' + ParentMeta.Fields[J].Name + '$arr_elem_type',
-            ParentStringVal) then
-            FModel.AddStringConstValue(
-              ClsName + '.' + ParentMeta.Fields[J].Name + '$arr_elem_type',
-              ParentStringVal);
-          if FModel.LookupConstValue(
-            ParentName + '.' + ParentMeta.Fields[J].Name + '$arr_elem_size',
-            ParentFieldVal) then
-            FModel.AddConstValue(
-              ClsName + '.' + ParentMeta.Fields[J].Name + '$arr_elem_size',
-              ParentFieldVal);
-          SetLength(Meta.Fields, Length(Meta.Fields) + 1);
-          Meta.Fields[High(Meta.Fields)] := ParentMeta.Fields[J];
-        end;
+        if ParentMeta.Fields <> nil then
+          for J := 0 to LongInt(ParentMeta.Fields.Count) - 1 do
+          begin
+            FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[SizeUInt(J)].Name + '$idx',
+              ParentMeta.Fields[SizeUInt(J)].Index);
+            if ParentMeta.Fields[SizeUInt(J)].IsString then
+              FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[SizeUInt(J)].Name + '$str', 1);
+            if ParentMeta.Fields[SizeUInt(J)].IsPointer then
+              FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[SizeUInt(J)].Name + '$ptr', 1);
+            if ParentMeta.Fields[SizeUInt(J)].IsDynArray then
+              FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[SizeUInt(J)].Name + '$arr', 1);
+            if FModel.LookupStringConstValue(
+              ParentName + '.' + ParentMeta.Fields[SizeUInt(J)].Name + '$arr_elem_type',
+              ParentStringVal) then
+              FModel.AddStringConstValue(
+                ClsName + '.' + ParentMeta.Fields[SizeUInt(J)].Name + '$arr_elem_type',
+                ParentStringVal);
+            if FModel.LookupConstValue(
+              ParentName + '.' + ParentMeta.Fields[SizeUInt(J)].Name + '$arr_elem_size',
+              ParentFieldVal) then
+              FModel.AddConstValue(
+                ClsName + '.' + ParentMeta.Fields[SizeUInt(J)].Name + '$arr_elem_size',
+                ParentFieldVal);
+            if Meta.Fields = nil then
+              Meta.Fields := TSemanticFieldMetaVec.Create;
+            Meta.Fields.Push(ParentMeta.Fields[SizeUInt(J)]);
+          end;
       end
       else
       begin
@@ -944,16 +995,19 @@ begin
     begin
       VmtCount := ParentMeta.VmtCount;
       FModel.AddConstValue(ClsName + '$vmt_count', VmtCount);
-      for J := 0 to High(ParentMeta.VmtSlots) do
-      begin
-        FModel.AddConstValue(ClsName + '$vmt_slot_' +
-          ParentMeta.VmtSlots[J].MethodName, ParentMeta.VmtSlots[J].SlotIndex);
-        FModel.AddStringConstValue(ClsName + '$vmt_func_' +
-          IntToStr(ParentMeta.VmtSlots[J].SlotIndex),
-          ParentMeta.VmtSlots[J].FuncQualName);
-        SetLength(Meta.VmtSlots, Length(Meta.VmtSlots) + 1);
-        Meta.VmtSlots[High(Meta.VmtSlots)] := ParentMeta.VmtSlots[J];
-      end;
+      if ParentMeta.VmtSlots <> nil then
+        for J := 0 to LongInt(ParentMeta.VmtSlots.Count) - 1 do
+        begin
+          FModel.AddConstValue(ClsName + '$vmt_slot_' +
+            ParentMeta.VmtSlots[SizeUInt(J)].MethodName,
+            ParentMeta.VmtSlots[SizeUInt(J)].SlotIndex);
+          FModel.AddStringConstValue(ClsName + '$vmt_func_' +
+            IntToStr(ParentMeta.VmtSlots[SizeUInt(J)].SlotIndex),
+            ParentMeta.VmtSlots[SizeUInt(J)].FuncQualName);
+          if Meta.VmtSlots = nil then
+            Meta.VmtSlots := TSemanticVmtSlotVec.Create;
+          Meta.VmtSlots.Push(ParentMeta.VmtSlots[SizeUInt(J)]);
+        end;
     end
     else
     begin
@@ -1084,20 +1138,22 @@ begin
       end
       else
         Inc(FieldIndex);
-      SetLength(Meta.Fields, Length(Meta.Fields) + 1);
-      Meta.Fields[High(Meta.Fields)].Name := Child.Text;
-      Meta.Fields[High(Meta.Fields)].Index :=
-        TypeMetaFieldIndex(ClsName, Child.Text);
-      Meta.Fields[High(Meta.Fields)].IsString :=
+      Field := Default(TFieldMeta);
+      Field.Name := Child.Text;
+      Field.Index := TypeMetaFieldIndex(ClsName, Child.Text);
+      Field.IsString :=
         (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
         (SameText(Child.ChildAt(0).Text, 'String') or
          SameText(Child.ChildAt(0).Text, 'AnsiString'));
-      Meta.Fields[High(Meta.Fields)].IsPointer :=
+      Field.IsPointer :=
         (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
         ((TypeMetaSize(Child.ChildAt(0).Text) > 0) or
          SameText(Child.ChildAt(0).Text, ClsName));
-      Meta.Fields[High(Meta.Fields)].IsDynArray := IsDynArrayField;
-      Meta.Fields[High(Meta.Fields)].TypeId := FieldTypeId;
+      Field.IsDynArray := IsDynArrayField;
+      Field.TypeId := FieldTypeId;
+      if Meta.Fields = nil then
+        Meta.Fields := TSemanticFieldMetaVec.Create;
+      Meta.Fields.Push(Field);
     end
     else if Child.NodeKind = gnkClassMethod then
     begin
@@ -1123,11 +1179,13 @@ begin
             FModel.AddStringConstValue(
               ClsName + '$vmt_func_' + IntToStr(VmtCount),
               ClsName + '.' + NameNode.Text);
-            SetLength(Meta.VmtSlots, Length(Meta.VmtSlots) + 1);
-            Meta.VmtSlots[High(Meta.VmtSlots)].MethodName := NameNode.Text;
-            Meta.VmtSlots[High(Meta.VmtSlots)].SlotIndex := VmtCount;
-            Meta.VmtSlots[High(Meta.VmtSlots)].FuncQualName :=
-              ClsName + '.' + NameNode.Text;
+            Slot := Default(TVmtSlot);
+            Slot.MethodName := NameNode.Text;
+            Slot.SlotIndex := VmtCount;
+            Slot.FuncQualName := ClsName + '.' + NameNode.Text;
+            if Meta.VmtSlots = nil then
+              Meta.VmtSlots := TSemanticVmtSlotVec.Create;
+            Meta.VmtSlots.Push(Slot);
             Inc(VmtCount);
             FModel.AddConstValue(ClsName + '$vmt_count', VmtCount);
             if Pos(';abstract', Child.Text) > 0 then
@@ -1144,12 +1202,14 @@ begin
               FModel.AddStringConstValue(
                 ClsName + '$vmt_func_' + IntToStr(ParentFieldVal),
                 ClsName + '.' + NameNode.Text);
-              for J := 0 to High(Meta.VmtSlots) do
-                if Meta.VmtSlots[J].SlotIndex = ParentFieldVal then
-                begin
-                  Meta.VmtSlots[J].FuncQualName := ClsName + '.' + NameNode.Text;
-                  Break;
-                end;
+              if Meta.VmtSlots <> nil then
+                for J := 0 to LongInt(Meta.VmtSlots.Count) - 1 do
+                  if Meta.VmtSlots.GetPtr(SizeUInt(J))^.SlotIndex = ParentFieldVal then
+                  begin
+                    Meta.VmtSlots.GetPtr(SizeUInt(J))^.FuncQualName :=
+                      ClsName + '.' + NameNode.Text;
+                    Break;
+                  end;
             end;
           end;
           if (Child.ChildCount > 1) and (Child.ChildAt(1) <> nil) and
@@ -1480,6 +1540,7 @@ var
   ParentName: string;
   ParentSym: TSemanticSymbol;
   AlreadyExists: Boolean;
+  Entry: TPendingSignatureEntry;
 begin
   LtPos := Pos('<', ASpecText);
   if LtPos <= 0 then
@@ -1625,7 +1686,7 @@ begin
       if (ParamNames.Count > 0) and (ArgTypes.Count >= ParamNames.Count) then
       begin
         Decl := nil;
-        for BodyIdx := 0 to Length(FProcedureBodies) - 1 do
+        for BodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
         begin
           if SameText(FProcedureBodies[BodyIdx].Name, GenericName + '.' + MethodShortName) then
           begin
@@ -1637,18 +1698,14 @@ begin
           SubstSig := GetSubstitutedParamSignature(Decl, ParamNames.ToArray, ArgTypes.ToArray)
         else
         begin
-          BodyIdx := Length(FPendingSignatures);
-          SetLength(FPendingSignatures, BodyIdx + 1);
-          FPendingSignatures[BodyIdx].SymbolId := NewSymbolId;
-          FPendingSignatures[BodyIdx].GenericName := GenericName;
-          FPendingSignatures[BodyIdx].MethodShortName := MethodShortName;
-          FPendingSignatures[BodyIdx].OwnerUnitId := AOwnerUnitId;
-          SetLength(FPendingSignatures[BodyIdx].ParamNames, ParamNames.Count);
-          for BodyIdx := 0 to ParamNames.Count - 1 do
-            FPendingSignatures[High(FPendingSignatures)].ParamNames[BodyIdx] := ParamNames[BodyIdx];
-          SetLength(FPendingSignatures[High(FPendingSignatures)].ArgTypes, ArgTypes.Count);
-          for BodyIdx := 0 to ArgTypes.Count - 1 do
-            FPendingSignatures[High(FPendingSignatures)].ArgTypes[BodyIdx] := ArgTypes[BodyIdx];
+          Entry := Default(TPendingSignatureEntry);
+          Entry.SymbolId := NewSymbolId;
+          Entry.GenericName := GenericName;
+          Entry.MethodShortName := MethodShortName;
+          Entry.OwnerUnitId := AOwnerUnitId;
+          Entry.ParamNames := ClonePendingStringVec(ParamNames, FAllocator);
+          Entry.ArgTypes := ClonePendingStringVec(ArgTypes, FAllocator);
+          FPendingSignatures.Push(Entry);
         end;
       end;
       FModel.SetSymbolParamSignature(NewSymbolId, SubstSig);
@@ -1786,16 +1843,18 @@ begin
   if (SizeVal >= 0) and HasGenericMeta then
   begin
     FModel.AddConstValue(InstanceName + '$vmt_count', SizeVal);
-    for I := 0 to High(GenericMeta.VmtSlots) do
-    begin
-      SubstSig := GenericMeta.VmtSlots[I].FuncQualName;
-      if Pos(GenericName + '.', SubstSig) = 1 then
-        SubstSig := InstanceName + Copy(SubstSig, Length(GenericName) + 1, MaxInt);
-      FModel.AddStringConstValue(InstanceName + '$vmt_func_' +
-        IntToStr(GenericMeta.VmtSlots[I].SlotIndex), SubstSig);
-      FModel.AddConstValue(InstanceName + '$vmt_slot_' +
-        GenericMeta.VmtSlots[I].MethodName, GenericMeta.VmtSlots[I].SlotIndex);
-    end;
+    if GenericMeta.VmtSlots <> nil then
+      for I := 0 to LongInt(GenericMeta.VmtSlots.Count) - 1 do
+      begin
+        SubstSig := GenericMeta.VmtSlots[SizeUInt(I)].FuncQualName;
+        if Pos(GenericName + '.', SubstSig) = 1 then
+          SubstSig := InstanceName + Copy(SubstSig, Length(GenericName) + 1, MaxInt);
+        FModel.AddStringConstValue(InstanceName + '$vmt_func_' +
+          IntToStr(GenericMeta.VmtSlots[SizeUInt(I)].SlotIndex), SubstSig);
+        FModel.AddConstValue(InstanceName + '$vmt_slot_' +
+          GenericMeta.VmtSlots[SizeUInt(I)].MethodName,
+          GenericMeta.VmtSlots[SizeUInt(I)].SlotIndex);
+      end;
   end
   else if SizeVal >= 0 then
   begin

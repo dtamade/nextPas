@@ -154,6 +154,11 @@ begin
     ASession.UnitStateCount,
     ASession.UnitStateCount > 0
   );
+  AppendJsonStringField(
+    AFields,
+    'memSessionStats',
+    ASession.MemSessionStats
+  );
   AppendJsonIntegerField(
     AFields,
     'diagnosticCount',
@@ -645,6 +650,11 @@ begin
   );
   if AContext.FindingsJson <> '' then
     AppendJsonField(AFields, 'doctorFindings', AContext.FindingsJson);
+  AppendJsonStringField(
+    AFields,
+    'memProcessStats',
+    AContext.MemProcessStats
+  );
 end;
 
 procedure AppendQueryProjectionJsonFields(

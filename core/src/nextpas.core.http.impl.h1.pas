@@ -24,6 +24,9 @@ type
     MaxHeaderSize: Int32;
     MaxBodySize: Int64;
     MaxRequestsPerConnection: Int32;
+    { Connection-scoped LocalArena: Reset per request, attach for handlers. }
+    RequestArena: Boolean;
+    RequestArenaCapacity: SizeUInt;
   end;
 
 function NewH1ClientTransport(const AOptions: TH1ClientTransportOptions): IHttpTransport;
@@ -31,7 +34,17 @@ function NewH1ServerTransport(const AOptions: TH1ServerTransportOptions): IHttpS
 
 implementation
 
-uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors, nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.text.conv, nextpas.core.http.headers, nextpas.core.http.message, nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast, nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer, nextpas.core.sync;
+uses
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors,
+  nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
+  nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.text.conv,
+  nextpas.core.http.headers, nextpas.core.http.message,
+  nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast,
+  nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer,
+  nextpas.core.sync,
+  nextpas.core.mem.arena.intf,
+  nextpas.core.http.mem,
+  nextpas.core.http.middleware.requestarena;
 
 type
   TPoolEntry = record
@@ -211,6 +224,9 @@ type
     FPollWriteDeadline: TDeadline;
     FParserIsSnapshot: Boolean;
     FRequestCount: Int32;
+    FRequestArena: IArena;
+    procedure InvokeHandler(const AReq: IHttpRequest;
+      const AW: IHttpResponseWriter);
     procedure ArmPollReadDeadline(const ATimeoutMs: Int64;
       const AIsIdle: Boolean);
     procedure ArmPollRequestReadDeadline;
@@ -899,6 +915,11 @@ begin
   FParser := NewH1RequestParser;
   FPending := '';
   FKeepAlive := True;
+  { Connection-scoped request arena: one LocalArena, Reset per request. }
+  if AOptions.RequestArena then
+    FRequestArena := HttpCreateRequestArena(AOptions.RequestArenaCapacity)
+  else
+    FRequestArena := nil;
   if FOptions.IdleTimeout > 0 then
     FIdleMs := FOptions.IdleTimeout
   else
@@ -928,6 +949,25 @@ begin
   FRequestCount := 0;
   if FStreamRuntime <> nil then
     ArmPollRequestReadDeadline;
+end;
+
+procedure TH1ServerConnectionState.InvokeHandler(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter);
+begin
+  if FRequestArena = nil then
+  begin
+    FHandler.ServeHTTP(AReq, AW);
+    Exit;
+  end;
+  { Connection-scoped LocalArena: Reset → attach → ServeHTTP → detach → Reset. }
+  FRequestArena.Reset;
+  HttpAttachRequestArena(AReq, FRequestArena);
+  try
+    FHandler.ServeHTTP(AReq, AW);
+  finally
+    HttpDetachRequestArena(AReq);
+    FRequestArena.Reset;
+  end;
 end;
 
 procedure TH1ServerConnectionState.ArmPollReadDeadline(const ATimeoutMs: Int64;
@@ -1209,7 +1249,7 @@ begin
     if not LKeepAlive then
       LW.GetHeaders.SetHeader('connection', 'close');
 
-    FHandler.ServeHTTP(LReq, LW);
+    InvokeHandler(LReq, LW);
 
     if (LW as TH1ResponseWriter).IsHijacked then
     begin
@@ -1320,7 +1360,7 @@ begin
     if not LKeepAlive then
       LW.GetHeaders.SetHeader('connection', 'close');
 
-    FHandler.ServeHTTP(LReq, LW);
+    InvokeHandler(LReq, LW);
 
     if (LW as TH1ResponseWriter).IsHijacked then
     begin

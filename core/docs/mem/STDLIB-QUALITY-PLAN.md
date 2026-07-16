@@ -1,6 +1,6 @@
 # mem 标准库质量计划
 
-**状态**: Active
+**状态**: Active — **product dual-track CLOSED**（2026-07-16）；维护与 landing 候选，不再开 dynarray→TVec 产品表冲刺
 **Owner**: mem lane
 **创建**: 2026-07-14
 **目标**: 把 `nextpas.core.mem` 从“分配器平台/博物馆”收敛为 **对标并在关键维度超过 Go runtime / Rust Allocator 生态** 的标准库级内存底座。
@@ -14,7 +14,8 @@
 - [BENCHMARKS.md](BENCHMARKS.md) — 历史基准
 - [SCORECARD.md](SCORECARD.md) — SC1–SC4 权威性能入口
 - [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md) — DEBUG 包装链（M2-5）
-- [USABILITY-AUDIT.md](USABILITY-AUDIT.md) — 可用性审计
+- [USABILITY-SCORE.md](USABILITY-SCORE.md) — **权威**可用性评分（post-S5 / lane 收口）
+- [USABILITY-AUDIT.md](USABILITY-AUDIT.md) — 历史可用性长报告（SUPERSEDED）
 
 ---
 
@@ -22,15 +23,15 @@
 
 不是“拥有更多分配器类”，而是同时满足：
 
-| # | 标准 | 验收信号 |
-|---|------|----------|
-| S1 | **默认路径无聊且正确** | 新人 10 分钟会选；99% 场景只用 Default + Arena + Pool |
-| S2 | **契约全平台一致** | Tier-0/1 全部通过同一 Contract Matrix |
-| S3 | **性能可信** | Scorecard 7 项持续对照 glibc / Go / Rust，不全靠 ns/op |
-| S4 | **诊断零成本默认、一键打开** | DEBUG/env 可叠 Sentinel/Leak/Stats，不改业务代码 |
-| S5 | **运行时集成** | 至少 2 条上层热路径（compiler / HTTP 或等价）默认吃 mem |
-| S6 | **确定性生命周期优势** | Arena/Pool 在延迟敏感场景 p99 优于 GC 语言对照 |
-| S7 | **API 面小、长期兼容** | 门面只暴露 Tier-0 + 精选 Tier-1；Experimental 无兼容承诺 |
+| # | 标准 | 验收信号 | 状态（2026-07-15） |
+|---|------|----------|-------------------|
+| S1 | **默认路径无聊且正确** | 新人 10 分钟会选；99% 场景只用 Default + Arena + Pool | ✅ README 手册 + 决策树 |
+| S2 | **契约全平台一致** | Tier-0/1 全部通过同一 Contract Matrix | ✅ `test_contract_matrix` |
+| S3 | **性能可信** | Scorecard 持续对照 system；不全靠 ns/op | ✅ SC1–SC7 + RELEASE 基线 |
+| S4 | **诊断零成本默认、一键打开** | DEBUG/env 可叠 Sentinel/Leak/Stats，不改业务代码 | ✅ `NEXTPAS_MEM_DEBUG` |
+| S5 | **运行时集成** | 上层 IAllocator 默认吃 DefaultHeap（collections 等） | ✅ 2026-07-15（Growing IAllocator 根；compiler/HTTP 直热路径另议） |
+| S6 | **确定性生命周期优势** | Arena/Pool 在延迟敏感场景可证明 | ✅ SC4；外部对照扩展中 |
+| S7 | **API 面小、长期兼容** | 门面只暴露 Tier-0 + 精选 Tier-1；Experimental 无兼容承诺 | ✅ 门面瘦身 |
 
 **不做成功标准**：allocator 文件数、测试目录数、roadmap phase 序号。
 
@@ -43,9 +44,9 @@
 | 源文件 | ~105 | 过大，需分层而非继续膨胀 |
 | 测试目录 | ~145 | 覆盖面广，但“每类 7 测”不等于契约一致 |
 | `IAllocator` | 5 方法 + Traits | 接口形状正确，应冻结 |
-| 门面 re-export | 几乎全量 allocator | **失败点**：产品感像博物馆 |
+| 门面 re-export | Tier-0/1/2 精选（Tier-3 已出门面） | 收敛中；见 §3 |
 | `DefaultHeap` / 过程式 `GetMem` | **Growing 原生**（D1 已切） | 热路径无 IAllocator |
-| `DefaultAllocator` | **RTL (`IAllocator` 注入面）** | 组合器/诊断后端，非热路径 |
+| `DefaultAllocator` | **Growing IAllocator 根 + 可选 DEBUG 链**（S5） | 组合器/诊断/collections 注入；同堆非热路径 |
 | 外部消费者 | 多数 niche allocator ≈ 0 | 证明门面膨胀无生态刚需 |
 | 微基准 | Growing/Arena 亮眼 | 需补跨线程 free、RSS、p99、真实路径 |
 | 并发正确性 | Growing 已修 MPSC 等深坑 | 仍需作为长期回归主轴 |
@@ -83,7 +84,9 @@
 |------|------|------|
 | `IAllocator` / `TAllocatorTraits` | `mem.intf` | 通用堆契约 |
 | `IArena` / `TArenaMark` / `TArenaStats` | `arena.intf` / `arena.base` | 线性生命周期契约 |
-| `DefaultAllocator` / `GetMem`/`FreeMem`/... | `mem` / `mem.default` | 全局默认 |
+| `DefaultHeap` / 过程式 `GetMem`/`FreeMem`/... | `mem` / `mem.default` | **热路径**默认堆（Growing） |
+| `DefaultAllocator` | `mem` / `mem.default` | **插件面**（Growing IAllocator + 可选 DEBUG 链） |
+| `TMemStats` / `GetMemStats` | `mem` / `mem.default` | 进程级快照（见可观测表） |
 | `CreateDefaultArena` / `CreateChunkedArena` | `mem` | 工厂 |
 | `EAllocError` 族 | `mem.error` | 错误词汇 |
 | `SecureZero*` | `mem.secure` | 安全清零 |
@@ -92,8 +95,9 @@
 
 | 符号 | 单元 | 角色 | 备注 |
 |------|------|------|------|
-| `TGrowingAllocator` | `allocator.growing` | **目标默认堆** | TLS + central；性能主轴 |
-| `TRtlAllocator` | `allocator.rtl` | FPC RTL 后端 | 当前 Default；保留为 fallback/bootstrap |
+| `TGrowingAllocator` | `allocator.growing` | **热路径默认堆**（`DefaultHeap`） | TLS + central；性能主轴 |
+| `TRtlAllocator` | `allocator.rtl` | FPC RTL 后端 | 显式 `GetRtlAllocator`；bootstrap/fallback |
+| `TGrowingIAllocator` | `allocator.growing_ia` | Growing 的 IAllocator 适配 | `DefaultAllocator` 根（S5）；`ResolveAllocator(nil)` |
 | `TCrtAllocator` | `allocator.crt` | CRT 后端 | 条件编译 |
 | `TMimallocAllocator` | `allocator.mimalloc` | 第三方后端 | 优雅降级 |
 | `TMemoryMapAllocator` | `allocator.mmap` | 匿名映射后端 | 大对象/特殊场景 |
@@ -126,7 +130,9 @@
 
 | 符号 | 单元 | 角色 |
 |------|------|------|
-| `TAllocSnapshot` / `TAllocHistogram` / `TAllocStatsCollector` | `mem.stats` | MemStats 原料 |
+| `TMemStats` / `GetMemStats` | `mem.default` / `mem` | **进程级统一快照**（DefaultHeap + 可选 DEBUG） |
+| `TGrowingHeapStats` / `GetHeapStats` | `allocator.growing` | Growing 原生 scavenger 字段 |
+| `TAllocSnapshot` / `TAllocHistogram` / `TAllocStatsCollector` | `mem.stats` | IAllocator 包装器统计原料 |
 | `TOomHandler` / `TOomEvent` | `mem.oom` | OOM 回调 |
 | `TMemoryBudget` / `TBudgetAllocator` | `mem.budget` | 任务预算 |
 | `TMemoryMap` / `TSharedMemory` | `mem.memory_map` | 映射载体（匿名/共享原语） |
@@ -166,13 +172,13 @@
 | `TSamplingAllocator` | 采样画像 |
 | `TCountingAllocator` | 简单活跃计数 |
 
-目标体验（后续实现）：
+目标体验（已落地，见 [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md)）：
 
 ```text
 NEXTPAS_MEM_DEBUG=sentinel,leak,stats
 ```
 
-等价于自动包装 `DefaultAllocator`，业务代码无感。
+等价于自动包装 `DefaultAllocator`，业务代码无感；`DefaultHeap` 不受影响。
 
 ### 3.5 Tier-3 — Experimental / 库存（踢出门面）
 
@@ -214,8 +220,9 @@ NEXTPAS_MEM_DEBUG=sentinel,leak,stats
        多线程共享 arena → TArenaConcurrent（显式）
   否 → 固定大小高频对象？
          是 → BlockPool / FixedSlab / FixedPool
-         否 → DefaultAllocator（目标：Growing）
-诊断？ → 包装 Tracking / Sentinel / Guard（或 env 一键）
+         否 → DefaultHeap / GetMem（Growing 热路径）
+              需要 IAllocator 注入 → DefaultAllocator（Growing 根 ± DEBUG）
+诊断？ → 包装 Tracking / Sentinel / Guard（或 env 一键；仅插件面）
 OOM/预算？ → Fallback / Bounded / Budget / OomHandler
 ```
 
@@ -226,9 +233,9 @@ OOM/预算？ → Fallback / Bounded / Budget / OomHandler
 | 轨道 | API | 实现 | 用途 |
 |------|-----|------|------|
 | **热路径** | `DefaultHeap` / 过程式 `GetMem`·`FreeMem`·`AllocMem`·`ReallocMem` | `TGrowingAllocator` 原生（直接调用） | 框架默认堆 |
-| **插件面** | `DefaultAllocator: IAllocator` | 当前 RTL | 组合器/诊断/外部注入 |
+| **插件面** | `DefaultAllocator: IAllocator` | Growing IAllocator 根 + 可选 DEBUG 链 | 组合器/诊断/collections 注入（**同堆**） |
 
-**不**把 Growing 包成 `IAllocator` 再当默认热路径。
+热路径 **不**经 IAllocator 虚调用。插件面适配器只服务注入签名（`FreeMem(ptr)`），不替代 `DefaultHeap`。
 
 分阶段：
 
@@ -236,9 +243,9 @@ OOM/预算？ → Fallback / Bounded / Budget / OomHandler
 |------|------|------|------|
 | D0 | 过程式 GetMem 也走 RTL IAllocator | — | 历史 |
 | D1 双轨 | 过程式 GetMem → `DefaultHeap`（Growing）；`DefaultAllocator` 仍 RTL | contract + default tests | ✅ 2026-07-14 |
-| D2 可切换 | env 可选把插件面/对照后端切到 Growing 适配（若需要） | 上层 1 条路径 | pending |
-| D3 固化文档 | 示例/上层全部按 DefaultHeap | Scorecard + consumer | pending |
-| D4 | 可选：删除误导性“Default=RTL”旧说法 | 无回归 | pending |
+| D2 DEBUG 链 | `NEXTPAS_MEM_DEBUG` 叠诊断到 `DefaultAllocator`（不碰热路径） | `test_debug_wrap` | ✅ 2026-07-15 |
+| D3 固化文档 | 示例/手册按 DefaultHeap 为热路径 | README + API-GUIDE + Scorecard | ✅ 文档 2026-07-15 |
+| D4 / S5 | `DefaultAllocator` / `ResolveAllocator(nil)` → Growing IAllocator 根 | default + debug_wrap + usability + collections | ✅ 2026-07-15 |
 
 **禁止**：为“统一接口”让热路径重新走 IAllocator 虚调用。
 
@@ -277,12 +284,16 @@ make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
 
 当前登记：
 
-| 实现 | C01–C05 | C06 OOM | C07 Zero | C08 Thread | C09 NoRealloc | C10 Leak | C11 Align | C12 Mark |
-|------|---------|---------|----------|------------|---------------|----------|-----------|----------|
-| RTL (`IAllocator`) | PASS | PASS (via Fail) | PASS | PASS smoke | N/A | PASS (Track) | N/A | N/A |
-| `TVirtualArenaAllocator` | — | — | — | — | PASS | — | — | — |
-| `TGrowingAllocator` (native) | PASS* | — | PASS* | PASS smoke | N/A | PASS* | N/A | N/A |
-| `TLocalArena` | N/A | N/A | N/A | N/A | N/A | N/A | PASS | PASS |
+| 实现 | C01–C05 | C06 OOM | C07 Zero | C08 Thread | C09 NoRealloc | C10 Leak | C11 Align | C12 Mark | 池 nil/双 free |
+|------|---------|---------|----------|------------|---------------|----------|-----------|----------|----------------|
+| RTL (`IAllocator`) | PASS | PASS (via Fail) | PASS | PASS smoke | N/A | PASS (Track) | N/A | N/A | N/A |
+| `TVirtualArenaAllocator` | — | — | — | — | PASS | — | — | — | N/A |
+| `TGrowingAllocator` (native) | PASS* | — | PASS* | PASS smoke | N/A | PASS* | N/A | N/A | N/A |
+| `DefaultHeap` (process) | PASS* | — | PASS* | cross-thread free | N/A | — | N/A | N/A | N/A |
+| `TLocalArena` | N/A | N/A | N/A | N/A | N/A | N/A | PASS | PASS | N/A |
+| `TChunkedArena` | Alloc(0) | — | — | N/A | N/A | N/A | PASS | PASS | N/A |
+| `TFixedSlabPool` as `IAllocator` | PASS | — | PASS | — | — | — | — | — | — |
+| `TLocalBlockPool` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | PASS |
 
 \* Growing 非 `IAllocator`：`ReallocMem(ptr, old, new)` / `FreeMem(ptr, size)` 热路径；契约按原生表面适配。
 
@@ -401,9 +412,9 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 |----|------|------|
 | M2-1 | Growing：跨线程 free / thread-exit drain 回归固化 | `test_stability` + `test_concurrent` + matrix DefaultHeap cross-thread | ✅ 锁定门禁 2026-07-14 |
 | M2-2 | Growing：scavenge / 归还 OS 策略 + 可观测字段 | SC5 基线 + GetHeapStats | ✅ 2026-07-14 |
-| M2-3 | Default 双轨 D1→D2 | D1 ✅；D2 改为 DEBUG 链（见 M2-5），不再把热路径切回 RTL | D1 ✅ / D2→M2-5 |
-| M2-4 | Arena 接入至少 1 条真实路径（compiler 或 HTTP） | 集成测试 | pending |
-| M2-5 | DEBUG 包装链设计（不一定一次做完实现） | [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md) | ✅ 设计 2026-07-14 |
+| M2-3 | Default 双轨 D1→D2 | D1 ✅；D2 = DEBUG 链叠 `DefaultAllocator`（见 M2-5） | D1 ✅ / D2 ✅ 2026-07-15 |
+| M2-4 | Arena 接入至少 1 条真实路径（compiler 或 HTTP） | 集成测试 | ✅ 2026-07-15 mem 侧 `test_stdlib_integration`（compiler/HTTP 模式）；源模块接线仍跨 lane |
+| M2-5 | DEBUG 包装链 | [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md) + `test_debug_wrap` | ✅ 设计+实现 2026-07-15 |
 
 **出口**：Growing 可被选为默认；真实路径有证据；长跑 RSS 有数字。
 
@@ -411,11 +422,11 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 
 | ID | 工作 | 验收 |
 |----|------|------|
-| M3-1 | Default 迁移 D3（若门槛满足） | 默认 Growing |
-| M3-2 | `MemStats` 统一导出 | 一函数/一结构体 |
-| M3-3 | 容器/字符串或 collections 注入 IAllocator（最小切片） | 跨模块报告 |
-| M3-4 | Windows/FreeBSD 契约与 Linux 同门禁 | 交叉/目标 gate |
-| M3-5 | 文档重写为标准库手册口吻 | README/API-GUIDE 以 Tier 为纲 |
+| M3-1 | Default 迁移 D3（文档/默认叙述） | README/API 以 DefaultHeap 为唯一热路径推荐 | ✅ 文档 2026-07-15；S5 后 API.md 对齐 |
+| M3-2 | `MemStats` 统一导出 | `TMemStats` / `GetMemStats` + `test_get_mem_stats` | ✅ 2026-07-15 |
+| M3-3 | 容器注入默认吃 process heap | S5：`DefaultAllocator`→Growing；collections 无改源 | ✅ 2026-07-15（`test_hashmap` + same-heap gates） |
+| M3-4 | Windows/FreeBSD 契约与 Linux 同门禁 | 交叉/目标 gate | ✅ 2026-07-15 `test_mem_cross_os_compile_gate`（FORCE_HOST Windows+FreeBSD compile-only） |
+| M3-5 | 文档重写为标准库手册口吻 | README/API-GUIDE 以 Tier 为纲 | ✅ 2026-07-15 |
 
 **出口**：S1–S7 中至少 S1–S4、S6 可勾选；S5 有实质性进展。
 
@@ -467,8 +478,8 @@ Ready 报告必须包含：
 2. **Facade slim**：按 §3.5 移除 Tier-3 门面导出 + 修 test_mem — ✅
 3. **Contract matrix**：RTL + Growing + LocalArena — ✅
 4. **Scorecard SC1–SC4 脚手架** — ✅
-5. **Default dual-track D1** — ✅ 过程式 GetMem→DefaultHeap(Growing)；DefaultAllocator 仍为 IAllocator/RTL
-6. **Default D2 / 上层集成** — next
+5. **Default dual-track D1** — ✅ 过程式 GetMem→DefaultHeap(Growing)；DefaultAllocator 曾为 IAllocator/RTL
+6. **Default D2 / S5 上层集成** — ✅ DEBUG 链 + DefaultAllocator→Growing IAllocator（collections 自动同堆）
 
 第 2 步有编译面影响（任何 `uses nextpas.core.mem` 再写 Tier-3 类型名会挂）——本仓库外部引用近乎为零，风险可控，但仍需全量搜引用后改。
 
@@ -485,3 +496,82 @@ Ready 报告必须包含：
 | 2026-07-14 | **Default 双轨 D1**：`DefaultHeap`/`GetMem`→Growing 原生；`DefaultAllocator` 保持 IAllocator/RTL 注入面；Growing 增加 `TryBlockSize` 与 `ReallocMem(ptr,new)`；**不**经 IAllocator 适配器 |
 | 2026-07-14 | **M2-1/M2-5**：contract_matrix 增加 DefaultHeap C01–C05/C07 + cross-thread free；Scorecard SC1 增加 `default_heap` 行；DEBUG 包装链设计见 [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md)（只叠 IAllocator，不碰热路径） |
 | 2026-07-14 | **回归门禁锁定**：`test_stability`、`test_concurrent`、`test_contract_matrix`、`scorecard` 为 Growing/DefaultHeap 变更必跑 |
+| 2026-07-15 | **M2-5 DEBUG 包装链落地**：`nextpas.core.mem.debug_wrap`；`NEXTPAS_MEM_DEBUG` 惰性叠 fail/stats/tracking/sentinel 到 `DefaultAllocator`；`DefaultHeap` 不受影响；gate `test_debug_wrap` |
+| 2026-07-15 | **M3-2 MemStats 统一导出**：`TMemStats` / `GetMemStats` 聚合 DefaultHeap（`TGrowingHeapStats`）+ 可选 DEBUG wrap 计数；门面 re-export；gate `test_get_mem_stats`（与既有 `test_mem_stats`/TAllocStats 分离） |
+| 2026-07-15 | **M3-5 手册化 + Scorecard 重基线**：README 改写为 30 秒上手 / 双轨 / 决策树 / 契约 / 可观测 / DEBUG；API-GUIDE 对齐；SCORECARD RELEASE=1 数字刷新；S1–S4/S6–S7 文档勾选 |
+| 2026-07-15 | **mem-only 规范化审计**：`ParseMemDebugEnv` Enabled 仅在已知 token 时为真（空白/纯分隔符不再误启用）；ARCHITECTURE/STDLIB/CONTRACT/DEBUG-WRAP/USABILITY 与双轨事实对齐 |
+| 2026-07-15 | **可用性 P0 落地（mem-only）**：ERROR-POLICY 冻结；README/API-GUIDE 反例；契约矩阵扩 ChunkedArena/FixedSlab/LocalBlockPool；`test_usability_guardrails`（双轨+DEBUG 盲区+source-contract）；USABILITY-AUDIT superseded |
+| 2026-07-15 | **S5 上层吃 DefaultHeap**：`TGrowingIAllocator`（`allocator.growing_ia`）作 `DefaultAllocator` / `ResolveAllocator(nil)` 根；DEBUG 链内层同；`GetRtlAllocator` 仍可显式；collections 无需改源即同堆；门禁 `test_default_allocator` / `test_debug_wrap` / `test_usability_guardrails` |
+| 2026-07-15 | **可用性复评 post-S5**：[USABILITY-SCORE.md](USABILITY-SCORE.md) 权威分 **8.2 / HIGH**（7.3→8.2）；README S5 勾选；API.md / M3-3 对齐；guardrails 源契约盯 S5 同堆叙述 |
+| 2026-07-15 | **SC6/SC7 + M2-4/M3-4**：Scorecard 补 compiler AST（VirtualArena）与 HTTP per-request（LocalArena p99）；`test_stdlib_integration` 锁定四模式；`test_mem_cross_os_compile_gate` Windows/FreeBSD FORCE_HOST；可用性复评见 [USABILITY-SCORE.md](USABILITY-SCORE.md) |
+| 2026-07-15 | **HEAP_DEBUG opt-in**：`NEXTPAS_MEM_HEAP_DEBUG` 让过程式 GetMem/FreeMem 经 DefaultAllocator 诊断链（`DefaultHeap` 仍裸）；`TMemStats.HeapDebugEnabled`；gate `test_debug_wrap` / guardrails；可用性 **8.6** |
+| 2026-07-15 | **SC8 + TryBlockSize 门面**：Scorecard SC8 对比 `FreeMem(ptr,size)` vs `FreeMem(ptr)`；过程式 `TryBlockSize` re-export；guardrails + docs；可用性 **8.7** |
+| 2026-07-15 | **SC9 双轨税**：Scorecard SC9 `hot_heap` vs `plugin_ia` + `same_heap`；guardrail 同堆双向互释；可用性 **8.8** |
+| 2026-07-15 | **冲 9.0**：`nextpas.core.http.mem` 产品接线 + facade re-export；`test_http_mem`；cross-OS 独立 FU + host runtime；FreeBSD `O_SYNC`/`pthread_setname` 修；可用性 **9.0** |
+| 2026-07-15 | **冲 9.1**：`TLocalArenaAllocator`；`CreateArenaAllocator` 真正走 LocalArena 容量契约；`CreateVirtualArenaAllocator`；`nextpas.core.compiler.mem` + `test_compiler_mem`；可用性 **9.1** |
+| 2026-07-15 | **冲 9.2**：`RequestArenaMiddleware` / `HttpRequestArenaOf` 真实 HTTP 生命周期；Arena 工厂契约写入 README/API-GUIDE + usability guardrails；rtl `TBumpArena` 标明继任；可用性 **9.2** |
+| 2026-07-15 | **冲 9.3**：`HttpUseRequestArena`；hello 示例切 middleware 产品路径；stdlib P5 collections DefaultAllocator 同堆；可用性 **9.3** |
+| 2026-07-15 | **冲 9.4**：`TCompilerUnitScope`；`unit_arena_demo` 示例；`FormatMemStats` 一行诊断；可用性 **9.4** |
+| 2026-07-15 | **冲 9.5**：`TryGetMem`/`TryFreeMem`/`TryArenaAlloc` ERROR-POLICY 可操作面；`http_server_options_demo` RequestArena；可用性 **9.5** |
+| 2026-07-15 | **冲 9.6**：`HttpWithRequestArena` / `NewHttpServerWithRequestArena` 服务端根接线；`HttpFormatProcessMemStats`；hello `/memstats`；可用性 **9.6** |
+| 2026-07-15 | **冲 9.7**：`THttpServerOptions.WithRequestArena` 服务内核 carrier；`HttpRequestAllocatorOf`；hello 走 options 路径；可用性 **9.7** |
+| 2026-07-15 | **冲 9.8**：H1 连接级 RequestArena（`InvokeHandler`/`HttpAttach`）+ registry 透传 + `TCompilerSessionScope`；可用性 **9.8** |
+| 2026-07-15 | **冲 9.9**：H2 连接级 RequestArena + `TCompilationSession` mem 生命周期（`MemAlloc`）；可用性 **9.9** |
+| 2026-07-15 | **冲 10.0**：`AnalyzeSyntax`/`ResolveUnits` `UnitBegin`+`MemAlloc` phase scratch + `UnitEnd`；`MemUnitCount`；`rebuild-compiler.sh` 对齐 main；可用性 **10.0** |
+| 2026-07-15 | **冲 10.0+ AST**：`TGreenTree.Create(IAllocator)` + session `FAstAllocator`；`ReallocElements` 在 `SupportsRealloc=False` 时 alloc+copy；`TVec` 可在 VirtualArena 增长 |
+| 2026-07-15 | **冲 10.0++ sema/scratch**：`FScratchAllocator` 供 `TUnitResolver` 依赖树与 `TSemanticAnalyzer` 工作 TVec；`MemFormatSessionStats`；AnalyzeSemantics/LowerToMir UnitBegin |
+| 2026-07-15 | **冲 10.0+++ HIR/MIR**：`THIRBuilder`/`THirToMirLowering` 接 `FScratchAllocator`；`FValueMap`/`pending cleanup` TVec |
+| 2026-07-16 | **冲 10.0++++ backend**：`np_backend_plan` `PhaseScratch` 接真实 LLVM HIR/MIR；`FBlockNames`/`FBlockIds` → TVec |
+| 2026-07-16 | **冲 10.0+++++ allocas**：`FAllocas` → `THirAllocaVec` on phase allocator；`GetPtr` 就地更新 |
+| 2026-07-16 | **冲 10.0++++++ builder tables**：globals/fwd/intf 工作表全迁 TVec；`RegisterGlobal`/`ClearGlobalRefs` |
+| 2026-07-16 | **冲 10.0+++++++ LLVM emitter**：emit lines/refs/str/debug TVec + backend `PhaseScratch` |
+| 2026-07-16 | **冲 10.0++++++++ MIR→LLVM**：`TMirToLlvmTranslator` 输出行表 TVec + PhaseScratch / FScratchAllocator |
+| 2026-07-16 | **冲 10.0+++++++++ HIR printer**：`THIRPrinter` 行表 TVec + session FScratchAllocator |
+| 2026-07-16 | **冲 10.0++++++++++ sema queues**：`FGenericWorkQueue`/`FCompilerProcNames` TVec on FScratchAllocator |
+| 2026-07-16 | **冲 10.0+++++++++++ sema imports**：导入单元 trees/owners TVec；overload/HIR ctx 借用引用 |
+| 2026-07-16 | **冲 10.0++++++++++++ sema pending sig**：`FPendingSignatures` TVec on FScratchAllocator |
+| 2026-07-16 | **冲 10.0+++++++++++++ MIR pass mgr**：`TMirPassManager` pass registry TVec + PhaseScratch |
+| 2026-07-16 | **冲 10.0++++++++++++++ MIR DCE/CSE**：`UsedRegs`/`CseTable` TVec + `AManager.Allocator` |
+| 2026-07-16 | **冲 10.0+++++++++++++++ MIR pass 工作表**：deadarg/escape/licm/inline TVec + Allocator 透传 |
+| 2026-07-16 | **冲 10.0++++++++++++++++ sema procedure bodies**：`FProcedureBodies` TVec + overload/ownership/HIR ctx 借用 |
+| 2026-07-16 | **冲 10.0+++++++++++++++++ runtime vars**：`TSemaRuntimeVarRegistry` 全 string 表 TVec + FAllocator |
+| 2026-07-16 | **冲 10.0++++++++++++++++++ HIR FSaved 快照**：`FSavedAllocas`/`FSavedBlockNames`/`FSavedBlockIds` TVec + SnapshotWorkTables |
+| 2026-07-16 | **冲 10.0+++++++++++++++++++ HIR expr stack**：`TExprStack` Values/Types + ParseIntExpr 行表 TVec |
+| 2026-07-16 | **冲 10.0++++++++++++++++++++ resolver/verifier**：resolution stack + HIR verifier FErrors/Seen/Defs TVec |
+| 2026-07-16 | **冲 10.0+++++++++++++++++++++ sema validation**：CandidateNames/case SeenValues TVec on FAllocator |
+| 2026-07-16 | **冲 10.0++++++++++++++++++++++ preprocessor**：条件栈 + 输出 token TVec；session/resolver/sema 注入 allocator |
+| 2026-07-16 | **冲 10.0+++++++++++++++++++++++ unit graph**：resolved units/edges + topo work TVec；resolver 注入 FNodeAllocator |
+| 2026-07-16 | **冲 10.0++++++++++++++++++++++++ define table**：FEntries TVec；session/resolver/sema 注入 allocator |
+| 2026-07-16 | **冲 10.0+++++++++++++++++++++++++ search/root/include**：TSearchPathSet + FRootIndexes + include paths TVec |
+| 2026-07-16 | **冲 10.0++++++++++++++++++++++++++ … product tables**：session/跨 phase 产品表 + type-metadata nested + HIR/MIR nested + lexer trivia → 默认堆 TVec；ELF 卫星单元 |
+| 2026-07-16 | **冲 product-table dual-track 收敛**：intentional keepers 入 `USABILITY-SCORE`；`np_semantic_model` 禁止 nested type-meta specialize；主线不再以固定 arity / package DTO 整树为 mem 阻塞 |
+| 2026-07-16 | **product-table dual-track CLOSED**：residual audit 清零可迁 nested；disk cache DTO/local scratch 入 keepers；mem 下一刀离开 dynarray→TVec 产品表冲刺 |
+| 2026-07-16 | **冲 session/unit FormatStats**：`TCompilerSessionScope`/`TCompilerUnitScope` 一行诊断 + `CompilerFormat*Stats`；`MemFormatSessionStats` 复用 core 行；诊断可用性 9.6 |
+| 2026-07-16 | **冲 doctor/ops mem stats**：build/query 投影 `mem-session-stats`←`MemFormatSessionStats`；doctor `mem-process-stats`←`FormatMemStats`；envelope JSON；诊断可用性 9.8 |
+| 2026-07-16 | **冲 arena 契约回归**：`test_compiler_mem` 锁 AST/scratch 独立、SessionPeak、FreeMem no-op、entry-owned nested；guardrails 钉 `ResetScratchAllocator`/`ResetSyntaxState` |
+| 2026-07-16 | **冲 HEAP_DEBUG/插件轨体验**：`FormatMemStats` 补 `debug_allocs`/`debug_frees`；门面 `IsMemHeapDebugEnabled`；guardrails 锁插件轨 vs 过程式轨；诊断 9.9 |
+| 2026-07-16 | **冲 CI 常态化 rebuild-compiler**：`scripts/stage0-fpc-flags.sh` 单源；root CI tooling→rebuild→verify；verify smoke/doctor 钉 mem-session/process-stats |
+| 2026-07-16 | **冲 HEAP_DEBUG CI 联调配方**：`scripts/stage0-heap-debug-env-recipe.sh`；`make stage0-heap-debug-recipe`；CI rebuild 后跑；verify 复用；诊断 10 |
+| 2026-07-16 | **lane 收口**：默认 focused gate → `test_usability_guardrails`（`lane-focused LANE=mem`）；`docs/worktrees.md` 矩阵对齐；USABILITY-SCORE 待办收敛为 CLOSED 主线 + 独立演进项 |
+
+## Lane Ready 证据包（收口后）
+
+默认 first evidence：
+
+```bash
+make lane-focused LANE=mem
+# ≡ make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails
+```
+
+按表面追加：
+
+| 表面 | 额外 evidence |
+|------|----------------|
+| compiler session/product tables / arena | `make focused FOCUS=core/tests/nextpas.core.compiler/test_compiler_mem` |
+| DEBUG wrap 链 | `make focused FOCUS=core/tests/nextpas.core.mem/test_debug_wrap` |
+| doctor mem-process-stats / env 双轨 | `make stage0-heap-debug-recipe`（需先 `make rebuild-compiler`） |
+| HTTP request arena | `make focused FOCUS=core/tests/nextpas.core.http/test_http_mem` |
+| mapping / platform compile | `make focused FOCUS=core/tests/nextpas.core.mem/test_memory_map_compile_gate` |
+| tooling / CI wiring | `make test-tooling` |
+
+**禁止带入 landing**：临时 `task_plan.md` / chat 笔记；未验证的 keepers 反转；package DTO 整树迁移。

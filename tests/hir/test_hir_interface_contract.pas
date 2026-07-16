@@ -50,10 +50,11 @@ begin
     for FuncIndex := 0 to Builder.Module.FunctionCount - 1 do
     begin
       Func := Builder.Module.FunctionAt(FuncIndex);
-      for BlockIndex := 0 to High(Func.Blocks) do
-        for InstrIndex := 0 to High(Func.Blocks[BlockIndex].Instrs) do
+      for BlockIndex := 0 to LongInt(Func.Blocks.Count) - 1 do
+        if Func.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+          for InstrIndex := 0 to LongInt(Func.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
         begin
-          Instr := Func.Blocks[BlockIndex].Instrs[InstrIndex];
+          Instr := Func.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
           if (Instr.Kind = hikIntrinsic) and SameText(Instr.IntrinsicName, 'intf_addref') then
             Inc(AddrefCount);
           if (Instr.Kind = hikIntrinsic) and SameText(Instr.IntrinsicName, 'intf_release') then

@@ -14,7 +14,8 @@ esac
 SCRIPT_DIR=$(CDPATH= cd -- "${SCRIPT_PATH%/*}" && pwd)
 ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 OUT="$ROOT/build/stage0-bootstrap"
-STAGE0_FPC_FLAGS="-Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src"
+# shellcheck source=stage0-fpc-flags.sh
+. "$SCRIPT_DIR/stage0-fpc-flags.sh"
 
 mkdir -p "$OUT"
 

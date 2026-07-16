@@ -550,9 +550,9 @@ begin
       W.WriteByte(Ord(Kind));
       W.WriteInt32(TypeId);
       W.WriteInt32(SymbolId);
-      W.WriteInt32(Length(Children));
-      for J := 0 to High(Children) do
-        W.WriteInt32(Children[J]);
+      W.WriteInt32(SemanticHirChildCount(Children));
+      for J := 0 to (SemanticHirChildCount(Children) - 1) do
+        W.WriteInt32(Children[SizeUInt(J)]);
       W.WriteInt64(LiteralInt);
       W.WriteInt64(Int64(LiteralFloat));  { bitcast }
       W.WriteStr(LiteralStr);
@@ -619,6 +619,7 @@ var
   Bnd: TSemanticBinding;
   Hir: TTypedHirNode;
   Expr: TSemanticHirExpr;
+  ChildIds: array of LongInt;
   Rc: TRuntimeContract;
   Fpb: TSemanticForeignProcedureBinding;
   Lr: TSemanticLibraryRequest;
@@ -714,9 +715,9 @@ begin
     Expr.TypeId := R.ReadInt32;
     Expr.SymbolId := R.ReadInt32;
     CC := R.ReadInt32;
-    SetLength(Expr.Children, CC);
+    SetLength(ChildIds, CC);
     for J := 0 to CC - 1 do
-      Expr.Children[J] := R.ReadInt32;
+      ChildIds[J] := R.ReadInt32;
     Expr.LiteralInt := R.ReadInt64;
     Expr.LiteralFloat := Double(R.ReadInt64);
     Expr.LiteralStr := R.ReadStr;
@@ -724,7 +725,7 @@ begin
     Expr.SourceOffset := R.ReadInt32;
     Expr.ValueClass := TSemanticHirValueClass(R.ReadByte);
     Result.AddHirExpr(Expr.Kind, Expr.TypeId, Expr.SymbolId,
-      Expr.Children, Expr.LiteralInt, Expr.LiteralFloat,
+      ChildIds, Expr.LiteralInt, Expr.LiteralFloat,
       Expr.LiteralStr, Expr.Op, Expr.SourceOffset, Expr.ValueClass);
   end;
 

@@ -1,4 +1,4 @@
-# mem Scorecard SC1–SC5 (STDLIB-QUALITY-PLAN §7)
+# mem Scorecard SC1–SC7 (STDLIB-QUALITY-PLAN §7)
 #
 # Default: focused gate with heaptrc (correctness + repro under CI-like flags).
 # For publishable numbers (closer to production):

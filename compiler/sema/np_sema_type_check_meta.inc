@@ -50,10 +50,10 @@ function TypeMetaFieldIndex(const AModel: TSemanticModel;
   const ATypeName, AFieldName: string): Int64;
 var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if AModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].Index);
+  if AModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.Fields <> nil) then
+    for I := 0 to LongInt(Meta.Fields.Count) - 1 do
+      if SameText(Meta.Fields[SizeUInt(I)].Name, AFieldName) then
+        Exit(Meta.Fields[SizeUInt(I)].Index);
   if AModel.LookupConstValue(ATypeName + '.' + AFieldName + '$idx', V) then
     Exit(V);
   Result := -1;
@@ -63,10 +63,10 @@ function TypeMetaFieldIsStr(const AModel: TSemanticModel;
   const ATypeName, AFieldName: string): Boolean;
 var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if AModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].IsString);
+  if AModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.Fields <> nil) then
+    for I := 0 to LongInt(Meta.Fields.Count) - 1 do
+      if SameText(Meta.Fields[SizeUInt(I)].Name, AFieldName) then
+        Exit(Meta.Fields[SizeUInt(I)].IsString);
   Result := AModel.LookupConstValue(ATypeName + '.' + AFieldName + '$str', V);
 end;
 
@@ -74,10 +74,10 @@ function TypeMetaFieldIsPtr(const AModel: TSemanticModel;
   const ATypeName, AFieldName: string): Boolean;
 var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if AModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].IsPointer);
+  if AModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.Fields <> nil) then
+    for I := 0 to LongInt(Meta.Fields.Count) - 1 do
+      if SameText(Meta.Fields[SizeUInt(I)].Name, AFieldName) then
+        Exit(Meta.Fields[SizeUInt(I)].IsPointer);
   Result := AModel.LookupConstValue(ATypeName + '.' + AFieldName + '$ptr', V);
 end;
 
@@ -85,10 +85,10 @@ function TypeMetaFieldIsDynArray(const AModel: TSemanticModel;
   const ATypeName, AFieldName: string): Boolean;
 var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if AModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-        Exit(Meta.Fields[I].IsDynArray);
+  if AModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.Fields <> nil) then
+    for I := 0 to LongInt(Meta.Fields.Count) - 1 do
+      if SameText(Meta.Fields[SizeUInt(I)].Name, AFieldName) then
+        Exit(Meta.Fields[SizeUInt(I)].IsDynArray);
   Result := AModel.LookupConstValue(ATypeName + '.' + AFieldName + '$arr', V);
 end;
 
@@ -106,10 +106,10 @@ function TypeMetaVmtSlot(const AModel: TSemanticModel;
   const ATypeName, AMethodName: string): Int64;
 var Meta: TTypeMetadata; I: LongInt; V: Int64;
 begin
-  if AModel.GetTypeMetaByName(ATypeName, Meta) then
-    for I := 0 to High(Meta.VmtSlots) do
-      if SameText(Meta.VmtSlots[I].MethodName, AMethodName) then
-        Exit(Meta.VmtSlots[I].SlotIndex);
+  if AModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.VmtSlots <> nil) then
+    for I := 0 to LongInt(Meta.VmtSlots.Count) - 1 do
+      if SameText(Meta.VmtSlots[SizeUInt(I)].MethodName, AMethodName) then
+        Exit(Meta.VmtSlots[SizeUInt(I)].SlotIndex);
   if AModel.LookupConstValue(ATypeName + '$vmt_slot_' + AMethodName, V) then
     Exit(V);
   Result := -1;

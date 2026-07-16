@@ -32,6 +32,8 @@ type
     RootFileId: LongInt;
     SourceFileCount: LongInt;
     UnitStateCount: LongInt;
+    { One-line session arena stats from TCompilationSession.MemFormatSessionStats. }
+    MemSessionStats: string;
   end;
 
   TSyntaxProjectionContext = record
@@ -203,6 +205,8 @@ type
     FindingCount: LongInt;
     FirstFinding: TDoctorFinding;
     FindingsJson: string;
+    { Process DefaultHeap one-line snapshot (FormatMemStats); not session arena. }
+    MemProcessStats: string;
   end;
 
   TQueryProjectionContext = record

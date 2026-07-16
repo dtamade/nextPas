@@ -8,32 +8,20 @@ begin
   FFrozen := True;
 end;
 procedure TGreenTree.AppendInterfaceUse(const AUseName: string);
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FInterfaceUses);
-  SetLength(FInterfaceUses, NextIndex + 1);
-  FInterfaceUses[NextIndex] := AUseName;
+  FInterfaceUses.Push(AUseName);
 end;
 
 procedure TGreenTree.AppendImplementationUse(const AUseName: string);
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FImplementationUses);
-  SetLength(FImplementationUses, NextIndex + 1);
-  FImplementationUses[NextIndex] := AUseName;
+  FImplementationUses.Push(AUseName);
 end;
 
 procedure TGreenTree.AppendForeignProcedureDecl(
   const AForeignProcedureDecl: TForeignProcedureDecl
 );
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FForeignProcedureDecls);
-  SetLength(FForeignProcedureDecls, NextIndex + 1);
-  FForeignProcedureDecls[NextIndex] := AForeignProcedureDecl;
+  FForeignProcedureDecls.Push(AForeignProcedureDecl);
 end;
 
 function TGreenTree.RootKindName: string;
@@ -43,12 +31,12 @@ end;
 
 function TGreenTree.InterfaceUseCount: LongInt;
 begin
-  Result := Length(FInterfaceUses);
+  Result := LongInt(FInterfaceUses.Count);
 end;
 
 function TGreenTree.InterfaceUseAt(const AIndex: LongInt): string;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FInterfaceUses)) then
+  if (AIndex < 0) or (AIndex >= LongInt(FInterfaceUses.Count)) then
     Exit('');
 
   Result := FInterfaceUses[AIndex];
@@ -56,12 +44,12 @@ end;
 
 function TGreenTree.ImplementationUseCount: LongInt;
 begin
-  Result := Length(FImplementationUses);
+  Result := LongInt(FImplementationUses.Count);
 end;
 
 function TGreenTree.ImplementationUseAt(const AIndex: LongInt): string;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FImplementationUses)) then
+  if (AIndex < 0) or (AIndex >= LongInt(FImplementationUses.Count)) then
     Exit('');
 
   Result := FImplementationUses[AIndex];
@@ -69,14 +57,14 @@ end;
 
 function TGreenTree.ForeignProcedureDeclCount: LongInt;
 begin
-  Result := Length(FForeignProcedureDecls);
+  Result := LongInt(FForeignProcedureDecls.Count);
 end;
 
 function TGreenTree.ForeignProcedureDeclAt(
   const AIndex: LongInt
 ): TForeignProcedureDecl;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FForeignProcedureDecls)) then
+  if (AIndex < 0) or (AIndex >= LongInt(FForeignProcedureDecls.Count)) then
   begin
     Result.ProcedureName := '';
     Result.CallingConvention := '';
@@ -112,6 +100,16 @@ function ParseGreenTree(
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId
 ): TGreenTree;
+begin
+  Result := ParseGreenTree(ALexer, ADiagnostics, ARootFileId, nil);
+end;
+
+function ParseGreenTree(
+  const ALexer: TLexerResult;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId;
+  const AAllocator: IAllocator
+): TGreenTree;
 var
   Cursor: LongInt;
   Current: TToken;
@@ -120,7 +118,10 @@ var
   DeclaredNameOffset: LongInt;
   PreviousExpressionTree: TGreenTree;
 begin
-  Result := TGreenTree.Create;
+  if AAllocator <> nil then
+    Result := TGreenTree.Create(AAllocator)
+  else
+    Result := TGreenTree.Create;
   PreviousExpressionTree := ActiveExpressionTree;
   ActiveExpressionTree := Result;
   try

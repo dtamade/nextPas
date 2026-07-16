@@ -8,20 +8,26 @@
 unit np_query_database;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   SysUtils,
-  nextpas.core.text.strings;
+  nextpas.core.text.strings,
+  nextpas.core.collections.vec;
 
 type
+  TQueryEntry = record
+    Key: string;
+    Value: TObject;
+  end;
+  PQueryEntry = ^TQueryEntry;
+  TQueryEntryVec = specialize TVec<TQueryEntry>;
+
   TQueryDatabase = class
   private
-    FEntries: array of record
-      Key: string;
-      Value: TObject;
-    end;
+    FEntries: TQueryEntryVec;
   public
     constructor Create;
     destructor Destroy; override;
@@ -35,16 +41,24 @@ implementation
 constructor TQueryDatabase.Create;
 begin
   inherited Create;
-  SetLength(FEntries, 0);
+  FEntries := TQueryEntryVec.Create;
 end;
 
 destructor TQueryDatabase.Destroy;
 var
   I: LongInt;
+  Entry: PQueryEntry;
 begin
-  for I := 0 to High(FEntries) do
-    FEntries[I].Value := nil;  { 不释放 — 所有权在调用者 }
-  SetLength(FEntries, 0);
+  if FEntries <> nil then
+  begin
+    for I := 0 to LongInt(FEntries.Count) - 1 do
+    begin
+      Entry := FEntries.GetPtr(SizeUInt(I));
+      Entry^.Value := nil;  { 不释放 — 所有权在调用者 }
+    end;
+  end;
+  FEntries.Free;
+  FEntries := nil;
   inherited Destroy;
 end;
 
@@ -52,37 +66,50 @@ function TQueryDatabase.Get(const AKey: string; ADefault: TObject): TObject;
 var
   I: LongInt;
 begin
-  for I := 0 to High(FEntries) do
-    if FEntries[I].Key = AKey then
-      Exit(FEntries[I].Value);
+  if FEntries = nil then
+    Exit(ADefault);
+  for I := 0 to LongInt(FEntries.Count) - 1 do
+    if FEntries[SizeUInt(I)].Key = AKey then
+      Exit(FEntries[SizeUInt(I)].Value);
   Result := ADefault;
 end;
 
 procedure TQueryDatabase.Store(const AKey: string; AValue: TObject);
 var
   I: LongInt;
+  Entry: TQueryEntry;
+  EntryPtr: PQueryEntry;
 begin
+  if FEntries = nil then
+    FEntries := TQueryEntryVec.Create;
   { Overwrite existing entry if key matches }
-  for I := 0 to High(FEntries) do
-    if FEntries[I].Key = AKey then
+  for I := 0 to LongInt(FEntries.Count) - 1 do
+    if FEntries[SizeUInt(I)].Key = AKey then
     begin
-      FEntries[I].Value := AValue;
+      EntryPtr := FEntries.GetPtr(SizeUInt(I));
+      EntryPtr^.Value := AValue;
       Exit;
     end;
   { Append new entry }
-  I := Length(FEntries);
-  SetLength(FEntries, I + 1);
-  FEntries[I].Key := AKey;
-  FEntries[I].Value := AValue;
+  Entry := Default(TQueryEntry);
+  Entry.Key := AKey;
+  Entry.Value := AValue;
+  FEntries.Push(Entry);
 end;
 
 procedure TQueryDatabase.InvalidatePrefix(const APrefix: string);
 var
   I: LongInt;
+  EntryPtr: PQueryEntry;
 begin
-  for I := 0 to High(FEntries) do
-    if Pos(APrefix, FEntries[I].Key) = 1 then
-      FEntries[I].Value := nil;
+  if FEntries = nil then
+    Exit;
+  for I := 0 to LongInt(FEntries.Count) - 1 do
+  begin
+    EntryPtr := FEntries.GetPtr(SizeUInt(I));
+    if Pos(APrefix, EntryPtr^.Key) = 1 then
+      EntryPtr^.Value := nil;
+  end;
 end;
 
 end.

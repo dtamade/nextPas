@@ -100,11 +100,13 @@ function HasAllocaWidth(const AModule: THIRModule; const AFunc: THIRFunction;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikAlloca) and
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = hikAlloca) and
         TypeIsIntWidth(AModule,
-          AFunc.Blocks[BlockIndex].Instrs[InstrIndex].TypeId,
+          AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].TypeId,
           ABitWidth, ASigned) then
         Exit(True);
   Result := False;
@@ -115,11 +117,13 @@ function HasStoreWidth(const AModule: THIRModule; const AFunc: THIRFunction;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikStore) and
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = hikStore) and
         TypeIsIntWidth(AModule,
-          AFunc.Blocks[BlockIndex].Instrs[InstrIndex].TypeId,
+          AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].TypeId,
           ABitWidth, ASigned) then
         Exit(True);
   Result := False;
@@ -130,11 +134,13 @@ function HasBoolAlloca(const AModule: THIRModule;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikAlloca) and
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = hikAlloca) and
         TypeIsBool(AModule,
-          AFunc.Blocks[BlockIndex].Instrs[InstrIndex].TypeId) then
+          AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].TypeId) then
         Exit(True);
   Result := False;
 end;
@@ -145,10 +151,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikCmpEq) and (Length(Instr.Operands) >= 2) and
         TypeIsBool(AModule, Instr.TypeId) and
         TypeIsIntWidth(AModule, Instr.Operands[0].TypeId, 8, False) and
@@ -164,10 +172,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikZext) and
         TypeIsIntWidth(AModule, Instr.TypeId, 32, True) and
         (Length(Instr.Operands) >= 1) and

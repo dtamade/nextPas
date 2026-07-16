@@ -83,6 +83,7 @@ end;
 procedure THIRBuilder.ProcessSwitch(const ANode: TTypedHirNode);
 var
   Term: THIRTerminator;
+  CaseEntry: THIRSwitchCase;
   V: THIRValueId;
   Blob, Line, Rest, ValStr, LabelStr: string;
   SwitchPos, NlPos, TabPos, CaseCount, I: LongInt;
@@ -102,7 +103,8 @@ begin
   FillChar(Term, SizeOf(Term), 0);
   Term.Kind := htkSwitch;
   Term.Condition := V;
-  SetLength(Term.SwitchCases, CaseCount);
+  if CaseCount > 0 then
+    Term.SwitchCases := THirSwitchCaseVec.Create(SizeUInt(CaseCount));
 
   for I := 0 to CaseCount - 1 do
   begin
@@ -117,8 +119,9 @@ begin
     if TabPos = 0 then Continue;
     ValStr := Copy(Line, 1, TabPos - 1);
     LabelStr := Copy(Line, TabPos + 1, Length(Line));
-    Term.SwitchCases[I].Value := StrToInt64Def(ValStr, 0);
-    Term.SwitchCases[I].TargetBlock := EnsureBlock(LabelStr);
+    CaseEntry.Value := StrToInt64Def(ValStr, 0);
+    CaseEntry.TargetBlock := EnsureBlock(LabelStr);
+    Term.SwitchCases.Push(CaseEntry);
   end;
 
   NlPos := Pos(#10, Rest);

@@ -138,21 +138,22 @@ begin
     'linker-script',
     ExpandFileName(LinkerScriptPath)
   );
-  for Index := 0 to Length(FAdditionalAssemblyBaseNames) - 1 do
-  begin
-    AdditionalBaseName := FAdditionalAssemblyBaseNames[Index];
-    if Trim(AdditionalBaseName) = '' then
-      Continue;
-    if nextpas.core.text.SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
-      Continue;
-    AdditionalAssemblyPath := IncludeTrailingPathDelimiter(BackendCacheRoot) +
-      AdditionalBaseName + '.s';
-    FPlan.AddStepOutput(
-      EmitAsmStep,
-      'assembly-text',
-      ExpandFileName(AdditionalAssemblyPath)
-    );
-  end;
+  if FAdditionalAssemblyBaseNames <> nil then
+    for Index := 0 to LongInt(FAdditionalAssemblyBaseNames.Count) - 1 do
+    begin
+      AdditionalBaseName := FAdditionalAssemblyBaseNames[SizeUInt(Index)];
+      if Trim(AdditionalBaseName) = '' then
+        Continue;
+      if nextpas.core.text.SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
+        Continue;
+      AdditionalAssemblyPath := IncludeTrailingPathDelimiter(BackendCacheRoot) +
+        AdditionalBaseName + '.s';
+      FPlan.AddStepOutput(
+        EmitAsmStep,
+        'assembly-text',
+        ExpandFileName(AdditionalAssemblyPath)
+      );
+    end;
 
   AssemblerExecutable := FirstStringOrDefault(AssemblerProfile.DriverCandidates, 'as');
   StepIndex := FPlan.AddStep(
@@ -182,53 +183,54 @@ begin
     'object-file',
     ExpandFileName(ObjectArtifactPath)
   );
-  for Index := 0 to Length(FAdditionalAssemblyBaseNames) - 1 do
-  begin
-    AdditionalBaseName := FAdditionalAssemblyBaseNames[Index];
-    if Trim(AdditionalBaseName) = '' then
-      Continue;
-    if nextpas.core.text.SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
-      Continue;
-    AdditionalAssemblyPath := IncludeTrailingPathDelimiter(BackendCacheRoot) +
-      AdditionalBaseName + '.s';
-    AdditionalObjectPath := IncludeTrailingPathDelimiter(BackendCacheRoot) +
-      AdditionalBaseName + '.o';
-    AdditionalAssembleStep := FPlan.AddStep(
-      'native-assemble-' + LowerCase(AdditionalBaseName),
-      AssemblerExecutable,
-      AssemblerExecutable,
-      BackendCacheRoot,
-      'toolchain.assembler-exec-failed'
-    );
-    FPlan.SetStepContext(
-      AdditionalAssembleStep,
-      'assembler',
-      AssemblerProfile.Id,
-      BuildSysrootRef
-    );
-    FPlan.AddStepArg(AdditionalAssembleStep, '--64');
-    FPlan.AddStepArg(AdditionalAssembleStep, '-o');
-    FPlan.AddStepArg(
-      AdditionalAssembleStep,
-      ExpandFileName(AdditionalObjectPath)
-    );
-    FPlan.AddStepArg(
-      AdditionalAssembleStep,
-      ExpandFileName(AdditionalAssemblyPath)
-    );
-    FPlan.AddStepInput(
-      AdditionalAssembleStep,
-      'assembly-text',
-      ExpandFileName(AdditionalAssemblyPath)
-    );
-    FPlan.AddStepOutput(
-      AdditionalAssembleStep,
-      'object-file',
-      ExpandFileName(AdditionalObjectPath)
-    );
-    // Add dependent unit .o to linker inputs so multi-unit programs link correctly
-    FPlan.AddLogicalObjectInput(ExpandFileName(AdditionalObjectPath));
-  end;
+  if FAdditionalAssemblyBaseNames <> nil then
+    for Index := 0 to LongInt(FAdditionalAssemblyBaseNames.Count) - 1 do
+    begin
+      AdditionalBaseName := FAdditionalAssemblyBaseNames[SizeUInt(Index)];
+      if Trim(AdditionalBaseName) = '' then
+        Continue;
+      if nextpas.core.text.SameText(AdditionalBaseName, ChangeFileExt(ExtractFileName(FSourcePath), '')) then
+        Continue;
+      AdditionalAssemblyPath := IncludeTrailingPathDelimiter(BackendCacheRoot) +
+        AdditionalBaseName + '.s';
+      AdditionalObjectPath := IncludeTrailingPathDelimiter(BackendCacheRoot) +
+        AdditionalBaseName + '.o';
+      AdditionalAssembleStep := FPlan.AddStep(
+        'native-assemble-' + LowerCase(AdditionalBaseName),
+        AssemblerExecutable,
+        AssemblerExecutable,
+        BackendCacheRoot,
+        'toolchain.assembler-exec-failed'
+      );
+      FPlan.SetStepContext(
+        AdditionalAssembleStep,
+        'assembler',
+        AssemblerProfile.Id,
+        BuildSysrootRef
+      );
+      FPlan.AddStepArg(AdditionalAssembleStep, '--64');
+      FPlan.AddStepArg(AdditionalAssembleStep, '-o');
+      FPlan.AddStepArg(
+        AdditionalAssembleStep,
+        ExpandFileName(AdditionalObjectPath)
+      );
+      FPlan.AddStepArg(
+        AdditionalAssembleStep,
+        ExpandFileName(AdditionalAssemblyPath)
+      );
+      FPlan.AddStepInput(
+        AdditionalAssembleStep,
+        'assembly-text',
+        ExpandFileName(AdditionalAssemblyPath)
+      );
+      FPlan.AddStepOutput(
+        AdditionalAssembleStep,
+        'object-file',
+        ExpandFileName(AdditionalObjectPath)
+      );
+      // Add dependent unit .o to linker inputs so multi-unit programs link correctly
+      FPlan.AddLogicalObjectInput(ExpandFileName(AdditionalObjectPath));
+    end;
 
   if not RequiresLink then
   begin

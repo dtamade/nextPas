@@ -10,19 +10,8 @@ begin
   FSavedFuncId := FCurrentFuncId;
   FSavedBlockId := FCurrentBlockId;
   FSavedEntryBlockId := FEntryBlockId;
-  FSavedAllocaCount := FAllocaCount;
   FInStartFunc := False;
-  SetLength(FSavedAllocas, FAllocaCount);
-  for I := 0 to FAllocaCount - 1 do
-    FSavedAllocas[I] := FAllocas[I];
-  FSavedBlockCount := FBlockCount;
-  SetLength(FSavedBlockNames, FBlockCount);
-  SetLength(FSavedBlockIds, FBlockCount);
-  for I := 0 to FBlockCount - 1 do
-  begin
-    FSavedBlockNames[I] := FBlockNames[I];
-    FSavedBlockIds[I] := FBlockIds[I];
-  end;
+  SnapshotWorkTables(FSavedAllocas, FSavedBlockNames, FSavedBlockIds);
 
   TabPos := Pos(#9, ANode.Operand);
   ColonPos := Pos(':', ANode.Operand);
@@ -72,9 +61,9 @@ begin
     FCurrentBlockId := EntryBlock;
     FEntryBlockId := EntryBlock;
     FBlockTerminated := False;
-    FAllocaCount := 0;
-    FGlobalRefCount := 0;
-    FBlockCount := 0;
+    ClearWorkAllocas;
+    ClearGlobalRefs;
+    ClearWorkBlocks;
     FPendingParamCount := 0;
     FPendingParamLlvmIdx := 0;
 
@@ -168,9 +157,9 @@ begin
     FCurrentBlockId := EntryBlock;
     FEntryBlockId := EntryBlock;
     FBlockTerminated := False;
-    FAllocaCount := 0;
-    FGlobalRefCount := 0;
-    FBlockCount := 0;
+    ClearWorkAllocas;
+    ClearGlobalRefs;
+    ClearWorkBlocks;
     if ((Length(Rest) > 1) and (Rest[1] = 'r')) or
        (Rest = 'so') or (Rest = 's') then
     begin
@@ -188,23 +177,12 @@ begin
 end;
 
 procedure THIRBuilder.ProcessFunctionEnd(const ANode: TTypedHirNode);
-var
-  I: LongInt;
 begin
   FCurrentFuncId := FSavedFuncId;
   FCurrentBlockId := FSavedBlockId;
   FEntryBlockId := FSavedEntryBlockId;
-  FAllocaCount := FSavedAllocaCount;
-  if FAllocaCount > Length(FAllocas) then
-    SetLength(FAllocas, FAllocaCount + 32);
-  for I := 0 to FSavedAllocaCount - 1 do
-    FAllocas[I] := FSavedAllocas[I];
-  FBlockCount := FSavedBlockCount;
-  for I := 0 to FSavedBlockCount - 1 do
-  begin
-    FBlockNames[I] := FSavedBlockNames[I];
-    FBlockIds[I] := FSavedBlockIds[I];
-  end;
+  RestoreWorkAllocas(FSavedAllocas);
+  RestoreWorkBlocks(FSavedBlockNames, FSavedBlockIds);
 end;
 
 procedure THIRBuilder.ProcessExternalDecl(const ANode: TTypedHirNode);

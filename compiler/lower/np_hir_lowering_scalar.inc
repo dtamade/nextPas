@@ -197,12 +197,13 @@ var
     AFieldName := FieldNode.Text;
     if not Ctx.Model.GetTypeMetaByName(APointeeTypeName, Meta) then
       Exit(False);
-    for I := 0 to High(Meta.Fields) do
-      if SameText(Meta.Fields[I].Name, AFieldName) then
-      begin
-        AFieldMeta := Meta.Fields[I];
-        Exit(AFieldMeta.TypeId > 0);
-      end;
+    if Meta.Fields <> nil then
+      for I := 0 to LongInt(Meta.Fields.Count) - 1 do
+        if SameText(Meta.Fields[SizeUInt(I)].Name, AFieldName) then
+        begin
+          AFieldMeta := Meta.Fields[SizeUInt(I)];
+          Exit(AFieldMeta.TypeId > 0);
+        end;
     Result := False;
   end;
 

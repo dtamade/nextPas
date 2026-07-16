@@ -1,18 +1,23 @@
 unit np_hir_printer;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
-  np_hir_types, np_hir_model;
+  np_hir_types, np_hir_model,
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec;
 
 type
+  THirPrintLineVec = specialize TVec<string>;
+
   THIRPrinter = class
   private
     FModule: THIRModule;
-    FLines: array of string;
-    FLineCount: LongInt;
+    FAllocator: IAllocator;
+    FLines: THirPrintLineVec;
     procedure Emit(const S: string);
     procedure AppendLast(const S: string);
     function LastLine: string;
@@ -23,7 +28,9 @@ type
     procedure PrintFunction(const AFunc: THIRFunction);
     procedure PrintGlobal(const AGlobal: THIRGlobal);
   public
-    constructor Create(AModule: THIRModule);
+    constructor Create(AModule: THIRModule;
+      AAllocator: IAllocator = nil);
+    destructor Destroy; override;
     procedure Print;
     function AsText: string;
     procedure SaveToFile(const APath: string);
@@ -34,32 +41,39 @@ implementation
 uses
   nextpas.core.text.conv;
 
-constructor THIRPrinter.Create(AModule: THIRModule);
+constructor THIRPrinter.Create(AModule: THIRModule;
+  AAllocator: IAllocator);
 begin
   inherited Create;
   FModule := AModule;
-  FLineCount := 0;
-  SetLength(FLines, 0);
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+    FLines := THirPrintLineVec.Create(0, FAllocator)
+  else
+    FLines := THirPrintLineVec.Create;
+end;
+
+destructor THIRPrinter.Destroy;
+begin
+  FLines.Free;
+  inherited Destroy;
 end;
 
 procedure THIRPrinter.Emit(const S: string);
 begin
-  if FLineCount >= Length(FLines) then
-    SetLength(FLines, FLineCount + 128);
-  FLines[FLineCount] := S;
-  Inc(FLineCount);
+  FLines.Push(S);
 end;
 
 procedure THIRPrinter.AppendLast(const S: string);
 begin
-  if FLineCount > 0 then
-    FLines[FLineCount - 1] := FLines[FLineCount - 1] + S;
+  if FLines.Count > 0 then
+    FLines.GetPtr(FLines.Count - 1)^ := FLines[FLines.Count - 1] + S;
 end;
 
 function THIRPrinter.LastLine: string;
 begin
-  if FLineCount > 0 then
-    Result := FLines[FLineCount - 1]
+  if FLines.Count > 0 then
+    Result := FLines[FLines.Count - 1]
   else
     Result := '';
 end;
@@ -216,9 +230,10 @@ begin
     htkSwitch:
     begin
       Emit('    switch %' + IntToStr(ATerm.Condition) + ' [');
-      for I := 0 to High(ATerm.SwitchCases) do
-        Emit('      ' + IntToStr(ATerm.SwitchCases[I].Value) +
-          ' -> bb' + IntToStr(ATerm.SwitchCases[I].TargetBlock));
+      if ATerm.SwitchCases <> nil then
+        for I := 0 to LongInt(ATerm.SwitchCases.Count) - 1 do
+          Emit('      ' + IntToStr(ATerm.SwitchCases[SizeUInt(I)].Value) +
+            ' -> bb' + IntToStr(ATerm.SwitchCases[SizeUInt(I)].TargetBlock));
       Emit('      default -> bb' + IntToStr(ATerm.DefaultBlock));
       Emit('    ]');
     end;
@@ -233,18 +248,20 @@ var
   PredStr: string;
 begin
   PredStr := '';
-  for I := 0 to High(ABlock.Preds) do
-  begin
-    if I > 0 then PredStr := PredStr + ', ';
-    PredStr := PredStr + 'bb' + IntToStr(ABlock.Preds[I]);
-  end;
+  if ABlock.Preds <> nil then
+    for I := 0 to LongInt(ABlock.Preds.Count) - 1 do
+    begin
+      if I > 0 then PredStr := PredStr + ', ';
+      PredStr := PredStr + 'bb' + IntToStr(ABlock.Preds[SizeUInt(I)]);
+    end;
   if PredStr <> '' then
     Emit('  bb' + IntToStr(ABlock.Id) + ' (' + ABlock.Name + ')  ; preds: ' + PredStr)
   else
     Emit('  bb' + IntToStr(ABlock.Id) + ' (' + ABlock.Name + '):');
 
-  for I := 0 to High(ABlock.Instrs) do
-    PrintInstr(ABlock.Instrs[I]);
+  if ABlock.Instrs <> nil then
+    for I := 0 to LongInt(ABlock.Instrs.Count) - 1 do
+      PrintInstr(ABlock.Instrs[SizeUInt(I)]);
 
   PrintTerminator(ABlock.Terminator);
   Emit('');
@@ -257,17 +274,19 @@ var
   T: THIRTypeRec;
 begin
   ParamStr := '';
-  for I := 0 to High(AFunc.Params) do
-  begin
-    if I > 0 then ParamStr := ParamStr + ', ';
-    T := FModule.Types.GetType(AFunc.Params[I].TypeId);
-    if AFunc.Params[I].IsVar then
-      ParamStr := ParamStr + 'var ';
-    if AFunc.Params[I].IsConst then
-      ParamStr := ParamStr + 'const ';
-    ParamStr := ParamStr + '%' + IntToStr(AFunc.Params[I].ValueId) + ': ';
-    ParamStr := ParamStr + TypeKindStr(T.Kind);
-  end;
+  if AFunc.Params <> nil then
+    for I := 0 to LongInt(AFunc.Params.Count) - 1 do
+    begin
+      if I > 0 then ParamStr := ParamStr + ', ';
+      T := FModule.Types.GetType(AFunc.Params[SizeUInt(I)].TypeId);
+      if AFunc.Params[SizeUInt(I)].IsVar then
+        ParamStr := ParamStr + 'var ';
+      if AFunc.Params[SizeUInt(I)].IsConst then
+        ParamStr := ParamStr + 'const ';
+      ParamStr := ParamStr + '%' +
+        IntToStr(AFunc.Params[SizeUInt(I)].ValueId) + ': ';
+      ParamStr := ParamStr + TypeKindStr(T.Kind);
+    end;
 
   Emit('');
   if AFunc.IsExternal then
@@ -277,8 +296,9 @@ begin
     Emit('func @' + AFunc.Name + '(' + ParamStr + ') -> ');
     PrintType(AFunc.ReturnTypeId);
     AppendLast(' {');
-    for I := 0 to High(AFunc.Blocks) do
-      PrintBlock(AFunc.Blocks[I]);
+    if AFunc.Blocks <> nil then
+      for I := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+        PrintBlock(AFunc.Blocks[SizeUInt(I)]);
     Emit('}');
   end;
 end;
@@ -295,7 +315,7 @@ procedure THIRPrinter.Print;
 var
   I: LongInt;
 begin
-  FLineCount := 0;
+  FLines.Clear;
   Emit('; HIR Module: ' + FModule.ModuleName);
   Emit('; Types: ' + IntToStr(FModule.Types.Count));
   Emit('; Functions: ' + IntToStr(FModule.FunctionCount));
@@ -314,8 +334,9 @@ var
   I: LongInt;
 begin
   Result := '';
-  for I := 0 to FLineCount - 1 do
-    Result := Result + FLines[I] + LineEnding;
+  if FLines.Count > 0 then
+    for I := 0 to FLines.Count - 1 do
+      Result := Result + FLines[I] + LineEnding;
 end;
 
 procedure THIRPrinter.SaveToFile(const APath: string);
@@ -325,8 +346,9 @@ var
 begin
   AssignFile(F, APath);
   Rewrite(F);
-  for I := 0 to FLineCount - 1 do
-    WriteLn(F, FLines[I]);
+  if FLines.Count > 0 then
+    for I := 0 to FLines.Count - 1 do
+      WriteLn(F, FLines[I]);
   CloseFile(F);
 end;
 

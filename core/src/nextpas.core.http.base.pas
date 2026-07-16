@@ -121,6 +121,12 @@ type
     Version: THttpVersion;
     UseRegistryVersion: Boolean;
     TLSContext: ISSLContext;
+    { RequestArena: when True, enable per-request LocalArena. Default H1/H2
+      transport uses connection-scoped arena (Reset per request/stream); custom /
+      H3 transport falls back to HttpWithRequestArena middleware. Default False. }
+    RequestArena: Boolean;
+    { RequestArenaCapacity: 0 = HTTP_DEFAULT_REQUEST_ARENA when RequestArena. }
+    RequestArenaCapacity: SizeUInt;
     class function Default: THttpServerOptions; static;
     function WithVersion(const AVersion: THttpVersion): THttpServerOptions;
     function WithReadTimeout(const AMs: Int64): THttpServerOptions;
@@ -130,6 +136,8 @@ type
     function WithMaxBodySize(const ABytes: Int64): THttpServerOptions;
     function WithShutdownTimeout(const AMs: Int64): THttpServerOptions;
     function WithMaxRequestsPerConnection(const AMax: Int32): THttpServerOptions;
+    {** Enable per-request LocalArena at the server root (0 capacity = default). }
+    function WithRequestArena(ACapacity: SizeUInt = 0): THttpServerOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
   end;
@@ -856,6 +864,8 @@ begin
   Result.Version := hvHttp11;
   Result.UseRegistryVersion := True;
   Result.TLSContext := nil;
+  Result.RequestArena := False;
+  Result.RequestArenaCapacity := 0;
 end;
 
 function THttpServerOptions.WithVersion(
@@ -906,6 +916,13 @@ function THttpServerOptions.WithMaxRequestsPerConnection(const AMax: Int32): THt
 begin
   Result := Self;
   Result.MaxRequestsPerConnection := AMax;
+end;
+
+function THttpServerOptions.WithRequestArena(ACapacity: SizeUInt): THttpServerOptions;
+begin
+  Result := Self;
+  Result.RequestArena := True;
+  Result.RequestArenaCapacity := ACapacity;
 end;
 
 function THttpServerOptions.EffectiveVersion(

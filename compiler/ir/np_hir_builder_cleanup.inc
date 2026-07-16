@@ -353,10 +353,9 @@ var
   SavedBlockId: THIRBlockId;
   SavedEntryBlockId: THIRBlockId;
   SavedBlockTerminated: Boolean;
-  SavedAllocaCount, SavedBlockCount: LongInt;
-  SavedAllocas: array of TAllocaEntry;
-  SavedBlockNames: array of string;
-  SavedBlockIds: array of THIRBlockId;
+  SavedAllocas: THirAllocaVec;
+  SavedBlockNames: THirNameVec;
+  SavedBlockIds: THirBlockIdVec;
 begin
   if AClassName = '' then
     Exit;
@@ -370,97 +369,86 @@ begin
   SavedBlockId := FCurrentBlockId;
   SavedEntryBlockId := FEntryBlockId;
   SavedBlockTerminated := FBlockTerminated;
-  SavedAllocaCount := FAllocaCount;
-  SetLength(SavedAllocas, FAllocaCount);
-  for I := 0 to FAllocaCount - 1 do
-    SavedAllocas[I] := FAllocas[I];
-  SavedBlockCount := FBlockCount;
-  SetLength(SavedBlockNames, FBlockCount);
-  SetLength(SavedBlockIds, FBlockCount);
-  for I := 0 to FBlockCount - 1 do
-  begin
-    SavedBlockNames[I] := FBlockNames[I];
-    SavedBlockIds[I] := FBlockIds[I];
-  end;
+  SavedAllocas := CreateAllocaVec;
+  SavedBlockNames := CreateNameVec;
+  SavedBlockIds := CreateBlockIdVec;
+  try
+    SnapshotWorkTables(SavedAllocas, SavedBlockNames, SavedBlockIds);
 
-  FuncId := FModule.AddFunction(
-    'np_object_string_cleanup_' + AClassName,
-    FModule.Types.AddType(htkVoid, 'void'));
-  FModule.AddFunctionParam(FuncId, 'obj', GetPtrType, False, False);
-  EntryBlock := FModule.AddBlock(FuncId, 'entry');
-  FModule.SetEntryBlock(FuncId, EntryBlock);
+    FuncId := FModule.AddFunction(
+      'np_object_string_cleanup_' + AClassName,
+      FModule.Types.AddType(htkVoid, 'void'));
+    FModule.AddFunctionParam(FuncId, 'obj', GetPtrType, False, False);
+    EntryBlock := FModule.AddBlock(FuncId, 'entry');
+    FModule.SetEntryBlock(FuncId, EntryBlock);
 
-  FCurrentFuncId := FuncId;
-  FCurrentBlockId := EntryBlock;
-  FEntryBlockId := EntryBlock;
-  FBlockTerminated := False;
-  FAllocaCount := 0;
-  FBlockCount := 0;
+    FCurrentFuncId := FuncId;
+    FCurrentBlockId := EntryBlock;
+    FEntryBlockId := EntryBlock;
+    FBlockTerminated := False;
+    ClearWorkAllocas;
+    ClearWorkBlocks;
 
-  ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[0].ValueId;
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikAlloca;
-  Instr.TypeId := GetPtrType;
-  EmitInstr(Instr);
-  ObjSlot := Instr.ResultId;
-  RegisterAllocaEntry('obj', ObjSlot, GetPtrType, False);
-  EmitStore(GetPtrType, ParamValueId, ObjSlot);
-
-  for I := High(Meta.Fields) downto 0 do
-  begin
-    if not Meta.Fields[I].IsString then
-      Continue;
-
-    PtrSlot := FieldSlotPtr(ParamValueId, Meta.Fields[I].Index);
-    LenSlot := FieldSlotPtr(ParamValueId, Meta.Fields[I].Index + 1);
-    OwnerSlot := FieldSlotPtr(ParamValueId, Meta.Fields[I].Index + 2);
-    AllocSizeSlot := FieldSlotPtr(ParamValueId, Meta.Fields[I].Index + 3);
-    if (PtrSlot = 0) or (LenSlot = 0) or (OwnerSlot = 0) or
-      (AllocSizeSlot = 0) then
-      Continue;
-
+    ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[0].ValueId;
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikIntrinsic;
-    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.IntrinsicName := 'string_release';
-    SetLength(Instr.Operands, 2);
-    Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, OwnerSlot), GetPtrType);
-    Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntTypeByWidth(32, True), AllocSizeSlot), GetIntTypeByWidth(32, True));
+    Instr.Kind := hikAlloca;
+    Instr.TypeId := GetPtrType;
     EmitInstr(Instr);
+    ObjSlot := Instr.ResultId;
+    RegisterAllocaEntry('obj', ObjSlot, GetPtrType, False);
+    EmitStore(GetPtrType, ParamValueId, ObjSlot);
 
-    NullVal := EmitNullPtrValue;
-    ZeroVal := EmitConstIntSmart(0);
-    if (NullVal <> 0) and (ZeroVal <> 0) then
+    if Meta.Fields <> nil then
+    for I := LongInt(Meta.Fields.Count) - 1 downto 0 do
     begin
-      EmitStore(GetPtrType, NullVal, PtrSlot);
-      EmitStore(GetIntTypeByWidth(32, True), ZeroVal, LenSlot);
-      EmitStore(GetPtrType, NullVal, OwnerSlot);
-      EmitStore(GetIntTypeByWidth(32, True), ZeroVal, AllocSizeSlot);
+      if not Meta.Fields[SizeUInt(I)].IsString then
+        Continue;
+
+      PtrSlot := FieldSlotPtr(ParamValueId, Meta.Fields[SizeUInt(I)].Index);
+      LenSlot := FieldSlotPtr(ParamValueId, Meta.Fields[SizeUInt(I)].Index + 1);
+      OwnerSlot := FieldSlotPtr(ParamValueId, Meta.Fields[SizeUInt(I)].Index + 2);
+      AllocSizeSlot := FieldSlotPtr(ParamValueId, Meta.Fields[SizeUInt(I)].Index + 3);
+      if (PtrSlot = 0) or (LenSlot = 0) or (OwnerSlot = 0) or
+        (AllocSizeSlot = 0) then
+        Continue;
+
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+      Instr.IntrinsicName := 'string_release';
+      SetLength(Instr.Operands, 2);
+      Instr.Operands[0] := MakeTypedOperand(EmitLoad(GetPtrType, OwnerSlot), GetPtrType);
+      Instr.Operands[1] := MakeTypedOperand(EmitLoad(GetIntTypeByWidth(32, True), AllocSizeSlot), GetIntTypeByWidth(32, True));
+      EmitInstr(Instr);
+
+      NullVal := EmitNullPtrValue;
+      ZeroVal := EmitConstIntSmart(0);
+      if (NullVal <> 0) and (ZeroVal <> 0) then
+      begin
+        EmitStore(GetPtrType, NullVal, PtrSlot);
+        EmitStore(GetIntTypeByWidth(32, True), ZeroVal, LenSlot);
+        EmitStore(GetPtrType, NullVal, OwnerSlot);
+        EmitStore(GetIntTypeByWidth(32, True), ZeroVal, AllocSizeSlot);
+      end;
     end;
-  end;
 
-  FillChar(Term, SizeOf(Term), 0);
-  Term.Kind := htkReturn;
-  Term.ReturnValue := 0;
-  FModule.SetTerminator(FuncId, EntryBlock, Term);
+    FillChar(Term, SizeOf(Term), 0);
+    Term.Kind := htkReturn;
+    Term.ReturnValue := 0;
+    FModule.SetTerminator(FuncId, EntryBlock, Term);
 
-  FCurrentFuncId := SavedFuncId;
-  FCurrentBlockId := SavedBlockId;
-  FEntryBlockId := SavedEntryBlockId;
-  FBlockTerminated := SavedBlockTerminated;
-  FAllocaCount := SavedAllocaCount;
-  SetLength(FAllocas, Length(SavedAllocas));
-  for I := 0 to High(SavedAllocas) do
-    FAllocas[I] := SavedAllocas[I];
-  FBlockCount := SavedBlockCount;
-  SetLength(FBlockNames, Length(SavedBlockNames));
-  SetLength(FBlockIds, Length(SavedBlockIds));
-  for I := 0 to High(SavedBlockNames) do
-  begin
-    FBlockNames[I] := SavedBlockNames[I];
-    FBlockIds[I] := SavedBlockIds[I];
+    FCurrentFuncId := SavedFuncId;
+    FCurrentBlockId := SavedBlockId;
+    FEntryBlockId := SavedEntryBlockId;
+    FBlockTerminated := SavedBlockTerminated;
+    RestoreWorkAllocas(SavedAllocas);
+    RestoreWorkBlocks(SavedBlockNames, SavedBlockIds);
+  finally
+    SavedBlockIds.Free;
+    SavedBlockNames.Free;
+    SavedAllocas.Free;
   end;
 end;
 
@@ -479,10 +467,9 @@ var
   SavedEntryBlockId: THIRBlockId;
   SavedBlockTerminated: Boolean;
   ElemSize: Int64;
-  SavedAllocaCount, SavedBlockCount: LongInt;
-  SavedAllocas: array of TAllocaEntry;
-  SavedBlockNames: array of string;
-  SavedBlockIds: array of THIRBlockId;
+  SavedAllocas: THirAllocaVec;
+  SavedBlockNames: THirNameVec;
+  SavedBlockIds: THirBlockIdVec;
 begin
   if AClassName = '' then
     Exit;
@@ -496,106 +483,95 @@ begin
   SavedBlockId := FCurrentBlockId;
   SavedEntryBlockId := FEntryBlockId;
   SavedBlockTerminated := FBlockTerminated;
-  SavedAllocaCount := FAllocaCount;
-  SetLength(SavedAllocas, FAllocaCount);
-  for I := 0 to FAllocaCount - 1 do
-    SavedAllocas[I] := FAllocas[I];
-  SavedBlockCount := FBlockCount;
-  SetLength(SavedBlockNames, FBlockCount);
-  SetLength(SavedBlockIds, FBlockCount);
-  for I := 0 to FBlockCount - 1 do
-  begin
-    SavedBlockNames[I] := FBlockNames[I];
-    SavedBlockIds[I] := FBlockIds[I];
-  end;
+  SavedAllocas := CreateAllocaVec;
+  SavedBlockNames := CreateNameVec;
+  SavedBlockIds := CreateBlockIdVec;
+  try
+    SnapshotWorkTables(SavedAllocas, SavedBlockNames, SavedBlockIds);
 
-  FuncId := FModule.AddFunction(
-    'np_object_dynarray_cleanup_' + AClassName,
-    FModule.Types.AddType(htkVoid, 'void'));
-  FModule.AddFunctionParam(FuncId, 'obj', GetPtrType, False, False);
-  EntryBlock := FModule.AddBlock(FuncId, 'entry');
-  FModule.SetEntryBlock(FuncId, EntryBlock);
+    FuncId := FModule.AddFunction(
+      'np_object_dynarray_cleanup_' + AClassName,
+      FModule.Types.AddType(htkVoid, 'void'));
+    FModule.AddFunctionParam(FuncId, 'obj', GetPtrType, False, False);
+    EntryBlock := FModule.AddBlock(FuncId, 'entry');
+    FModule.SetEntryBlock(FuncId, EntryBlock);
 
-  FCurrentFuncId := FuncId;
-  FCurrentBlockId := EntryBlock;
-  FEntryBlockId := EntryBlock;
-  FBlockTerminated := False;
-  FAllocaCount := 0;
-  FBlockCount := 0;
+    FCurrentFuncId := FuncId;
+    FCurrentBlockId := EntryBlock;
+    FEntryBlockId := EntryBlock;
+    FBlockTerminated := False;
+    ClearWorkAllocas;
+    ClearWorkBlocks;
 
-  ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[0].ValueId;
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikAlloca;
-  Instr.TypeId := GetPtrType;
-  EmitInstr(Instr);
-  ObjSlot := Instr.ResultId;
-  RegisterAllocaEntry('obj', ObjSlot, GetPtrType, False);
-  EmitStore(GetPtrType, ParamValueId, ObjSlot);
-
-  for I := High(Meta.Fields) downto 0 do
-  begin
-    if not Meta.Fields[I].IsDynArray then
-      Continue;
-
-    PtrSlot := FieldSlotPtr(ParamValueId, Meta.Fields[I].Index);
-    LenSlot := FieldSlotPtr(ParamValueId, Meta.Fields[I].Index + 1);
-    if (PtrSlot = 0) or (LenSlot = 0) then
-      Continue;
-
-    PtrVal := EmitLoad(GetPtrType, PtrSlot);
-    LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenSlot);
-    if not FSemaModel.LookupConstValue(
-      AClassName + '.' + Meta.Fields[I].Name + '$arr_elem_size',
-      ElemSize) then
-      ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True))
-    else
-      ElemSizeVal := EmitConstIntOfType(ElemSize, GetIntTypeByWidth(64, True));
-    if ElemSizeVal = 0 then
-      Continue;
-
+    ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[0].ValueId;
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikIntrinsic;
-    Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.IntrinsicName := 'dynarray_release';
-    SetLength(Instr.Operands, 3);
-    Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
-    Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
-    Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
-    EmitInstr(Instr);
-
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikLoad;
+    Instr.Kind := hikAlloca;
     Instr.TypeId := GetPtrType;
-    Instr.IntrinsicName := 'null';
     EmitInstr(Instr);
-    NullVal := Instr.ResultId;
-    ZeroVal := EmitConstIntSmart(0);
-    EmitStore(GetPtrType, NullVal, PtrSlot);
-    EmitStore(GetIntTypeByWidth(32, True), ZeroVal, LenSlot);
-  end;
+    ObjSlot := Instr.ResultId;
+    RegisterAllocaEntry('obj', ObjSlot, GetPtrType, False);
+    EmitStore(GetPtrType, ParamValueId, ObjSlot);
 
-  FillChar(Term, SizeOf(Term), 0);
-  Term.Kind := htkReturn;
-  Term.ReturnValue := 0;
-  FModule.SetTerminator(FuncId, EntryBlock, Term);
+    if Meta.Fields <> nil then
+    for I := LongInt(Meta.Fields.Count) - 1 downto 0 do
+    begin
+      if not Meta.Fields[SizeUInt(I)].IsDynArray then
+        Continue;
 
-  FCurrentFuncId := SavedFuncId;
-  FCurrentBlockId := SavedBlockId;
-  FEntryBlockId := SavedEntryBlockId;
-  FBlockTerminated := SavedBlockTerminated;
-  FAllocaCount := SavedAllocaCount;
-  SetLength(FAllocas, Length(SavedAllocas));
-  for I := 0 to High(SavedAllocas) do
-    FAllocas[I] := SavedAllocas[I];
-  FBlockCount := SavedBlockCount;
-  SetLength(FBlockNames, Length(SavedBlockNames));
-  SetLength(FBlockIds, Length(SavedBlockIds));
-  for I := 0 to High(SavedBlockNames) do
-  begin
-    FBlockNames[I] := SavedBlockNames[I];
-    FBlockIds[I] := SavedBlockIds[I];
+      PtrSlot := FieldSlotPtr(ParamValueId, Meta.Fields[SizeUInt(I)].Index);
+      LenSlot := FieldSlotPtr(ParamValueId, Meta.Fields[SizeUInt(I)].Index + 1);
+      if (PtrSlot = 0) or (LenSlot = 0) then
+        Continue;
+
+      PtrVal := EmitLoad(GetPtrType, PtrSlot);
+      LenVal := EmitLoad(GetIntTypeByWidth(32, True), LenSlot);
+      if not FSemaModel.LookupConstValue(
+        AClassName + '.' + Meta.Fields[SizeUInt(I)].Name + '$arr_elem_size',
+        ElemSize) then
+        ElemSizeVal := EmitConstIntOfType(8, GetIntTypeByWidth(64, True))
+      else
+        ElemSizeVal := EmitConstIntOfType(ElemSize, GetIntTypeByWidth(64, True));
+      if ElemSizeVal = 0 then
+        Continue;
+
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+      Instr.IntrinsicName := 'dynarray_release';
+      SetLength(Instr.Operands, 3);
+      Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
+      Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntTypeByWidth(32, True));
+      Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntTypeByWidth(64, True));
+      EmitInstr(Instr);
+
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikLoad;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'null';
+      EmitInstr(Instr);
+      NullVal := Instr.ResultId;
+      ZeroVal := EmitConstIntSmart(0);
+      EmitStore(GetPtrType, NullVal, PtrSlot);
+      EmitStore(GetIntTypeByWidth(32, True), ZeroVal, LenSlot);
+    end;
+
+    FillChar(Term, SizeOf(Term), 0);
+    Term.Kind := htkReturn;
+    Term.ReturnValue := 0;
+    FModule.SetTerminator(FuncId, EntryBlock, Term);
+
+    FCurrentFuncId := SavedFuncId;
+    FCurrentBlockId := SavedBlockId;
+    FEntryBlockId := SavedEntryBlockId;
+    FBlockTerminated := SavedBlockTerminated;
+    RestoreWorkAllocas(SavedAllocas);
+    RestoreWorkBlocks(SavedBlockNames, SavedBlockIds);
+  finally
+    SavedBlockIds.Free;
+    SavedBlockNames.Free;
+    SavedAllocas.Free;
   end;
 end;

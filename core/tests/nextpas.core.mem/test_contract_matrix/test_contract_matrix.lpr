@@ -3,9 +3,10 @@ program test_contract_matrix;
  * Contract Conformance Matrix (STDLIB-QUALITY-PLAN §5)
  *
  * Shared cases C01–C12 for Tier-0 surfaces:
- *   - IAllocator: RTL (full matrix)
- *   - TGrowingAllocator: native API (not IAllocator; adapted cases)
- *   - TLocalArena: C11–C12
+ *   - IAllocator: RTL (full matrix), TFixedSlabPool (C01–C05/C07/C10)
+ *   - TGrowingAllocator / DefaultHeap: native API (adapted)
+ *   - TLocalArena / TChunkedArena: C11–C12 (+ Alloc(0))
+ *   - TLocalBlockPool: Release(nil) no-op + double-free raises
  *
  * Fail injection (C06) and SupportsRealloc=False (C09) use Tier-1/0 wrappers.
  *}
@@ -28,7 +29,10 @@ uses
   nextpas.core.mem.allocator.tracking,
   nextpas.core.mem.arena.base,
   nextpas.core.mem.arena.intf,
-  nextpas.core.mem.arena.local;
+  nextpas.core.mem.arena.local,
+  nextpas.core.mem.arena.chunked,
+  nextpas.core.mem.pool,
+  nextpas.core.mem.pool.fixed_slab;
 
 var
   T: TTestSuite;
@@ -443,6 +447,84 @@ begin
   RunLocalArenaAlignedAndMark;
 end;
 
+{ --- ChunkedArena C11–C12 + zero-size --- }
+
+procedure RunChunkedArenaContracts;
+var
+  LIface: IArena;
+  LPtr, LPtr2: Pointer;
+  LMark: TArenaMark;
+  LUsed: SizeUInt;
+begin
+  LIface := TChunkedArena.Create(4 * 1024, 0);
+  Check(LIface.Alloc(0) = nil, 'ChunkedArena Alloc(0)=nil');
+
+  LPtr := LIface.AllocAligned(32, 64);
+  Check(LPtr <> nil, 'ChunkedArena C11 AllocAligned');
+  Check(IsAligned(LPtr, 64), 'ChunkedArena C11 aligned');
+  Check(LIface.AllocAligned(8, 3) = nil, 'ChunkedArena C11 bad align=nil');
+
+  LMark := LIface.SaveMark;
+  LUsed := LIface.UsedSize;
+  LPtr2 := LIface.Alloc(256);
+  Check(LPtr2 <> nil, 'ChunkedArena C12 alloc');
+  Check(LIface.UsedSize > LUsed, 'ChunkedArena C12 used grows');
+  LIface.RestoreToMark(LMark);
+  Check(LIface.UsedSize = LUsed, 'ChunkedArena C12 restore');
+  LIface.Reset;
+  Check(LIface.UsedSize = 0, 'ChunkedArena C12 Reset');
+  LIface := nil;
+end;
+
+procedure TestChunkedArena_Contracts;
+begin
+  RunChunkedArenaContracts;
+end;
+
+{ --- FixedSlab as IAllocator (nil/0 + zeroed) --- }
+
+procedure TestFixedSlab_IAllocatorContracts;
+var
+  LPool: TFixedSlabPool;
+  LAlloc: IAllocator;
+begin
+  LPool := TFixedSlabPool.Create(64 * 1024);
+  LAlloc := LPool;
+  RunIAllocatorNilZeroContracts(LAlloc, 'FixedSlab');
+  RunIAllocatorZeroedAndRoundtrip(LAlloc, 'FixedSlab');
+  LAlloc := nil;
+end;
+
+{ --- LocalBlockPool release contracts --- }
+
+procedure TestLocalBlockPool_ReleaseContracts;
+var
+  LPool: TLocalBlockPool;
+  LPtr: Pointer;
+  LRaised: Boolean;
+begin
+  LPool := TLocalBlockPool.Create(64, 32);
+  try
+    LPool.Release(nil);
+    Check(True, 'LocalBlockPool Release(nil) no-op');
+
+    LPtr := LPool.Acquire;
+    Check(LPtr <> nil, 'LocalBlockPool Acquire');
+    LPool.Release(LPtr);
+
+    LRaised := False;
+    try
+      LPool.Release(LPtr);
+    except
+      on E: EAllocError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'LocalBlockPool double free raises');
+  finally
+    LPool.Free;
+  end;
+end;
+
 { --- DefaultHeap process path (D1 dual-track hot path) --- }
 
 procedure RunDefaultHeapNilZeroContracts;
@@ -602,6 +684,9 @@ begin
   T.Test('DefaultHeap C07/C10 + FreeMem(ptr)', @TestDefaultHeap_C07_C10);
   T.Test('DefaultHeap cross-thread free', @TestDefaultHeap_CrossThread);
   T.Test('LocalArena C11-C12 align+mark', @TestLocalArena_C11_C12);
+  T.Test('ChunkedArena Alloc0+C11-C12', @TestChunkedArena_Contracts);
+  T.Test('FixedSlab IAllocator C01-C05/C07', @TestFixedSlab_IAllocatorContracts);
+  T.Test('LocalBlockPool Release nil+double-free', @TestLocalBlockPool_ReleaseContracts);
   LRunPassed := T.Run;
   T.Summary;
   if not LRunPassed then

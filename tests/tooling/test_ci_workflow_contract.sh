@@ -79,10 +79,18 @@ root_ci_line_number() {
 }
 
 require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make test-tooling$' 'root tooling gate'
+require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make rebuild-compiler$' 'root rebuild-compiler gate'
+require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make stage0-heap-debug-recipe$' 'root stage0 HEAP_DEBUG env recipe'
 require_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make verify$' 'root verify gate'
 reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: ./build/verify_local[.]sh$' 'direct verify_local bypasses Makefile hygiene'
+reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: ./scripts/rebuild-compiler[.]sh$' 'direct rebuild-compiler bypasses Makefile hygiene'
+reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: ./scripts/stage0-heap-debug-env-recipe[.]sh$' 'direct HEAP_DEBUG recipe bypasses Makefile gate'
 reject_pattern "$TEST_HARNESS_SPEC" 'Linux CI 当前直接复用 `./build/verify_local[.]sh`' 'test harness spec must not document direct verify_local CI wiring'
 require_pattern "$TEST_HARNESS_SPEC" 'Linux CI 当前.*`make verify`' 'test harness spec documents Makefile-backed verify CI wiring'
+require_pattern "$TEST_HARNESS_SPEC" 'make rebuild-compiler' 'test harness spec documents rebuild-compiler CI gate'
+require_pattern "$TEST_HARNESS_SPEC" 'stage0-heap-debug-recipe|HEAP_DEBUG' 'test harness spec documents HEAP_DEBUG env recipe'
+require_makefile_target 'rebuild-compiler' 'root rebuild-compiler Makefile target'
+require_makefile_target 'stage0-heap-debug-recipe' 'root stage0 HEAP_DEBUG recipe Makefile target'
 reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make lane-focused' 'lane-focused is local/reporting tooling, not CI matrix'
 reject_pattern "$CORE_CI_WORKFLOW" '^[[:space:]]+run: make lane-focused' 'core CI must not consume local/reporting lane-focused helper'
 reject_pattern "$CI_WORKFLOW" '^[[:space:]]+run: make landing-check .*LANE=' 'landing-check LANE is local/reporting tooling, not CI matrix'
@@ -97,10 +105,22 @@ require_pattern "$CORE_CI_WORKFLOW" 'make -C \.\. core-ci-best-effort-test CORE_
 require_pattern "$CORE_CI_WORKFLOW" 'make -C "[$]GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD' 'core CI FreeBSD uses root Makefile best-effort gate'
 
 tooling_line=$(root_ci_line_number '^[[:space:]]+run: make test-tooling$')
+rebuild_line=$(root_ci_line_number '^[[:space:]]+run: make rebuild-compiler$')
+heap_debug_line=$(root_ci_line_number '^[[:space:]]+run: make stage0-heap-debug-recipe$')
 verify_line=$(root_ci_line_number '^[[:space:]]+run: make verify$')
 
-if [ "$tooling_line" -ge "$verify_line" ]; then
-  printf 'CI workflow contract failed: make test-tooling must run before make verify\n' >&2
+if [ "$tooling_line" -ge "$rebuild_line" ]; then
+  printf 'CI workflow contract failed: make test-tooling must run before make rebuild-compiler\n' >&2
+  exit 1
+fi
+
+if [ "$rebuild_line" -ge "$heap_debug_line" ]; then
+  printf 'CI workflow contract failed: make rebuild-compiler must run before make stage0-heap-debug-recipe\n' >&2
+  exit 1
+fi
+
+if [ "$heap_debug_line" -ge "$verify_line" ]; then
+  printf 'CI workflow contract failed: make stage0-heap-debug-recipe must run before make verify\n' >&2
   exit 1
 fi
 

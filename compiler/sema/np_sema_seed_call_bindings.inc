@@ -66,12 +66,13 @@ begin
       end
       else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
       begin
+        Payload := Default(TDiagnosticPayload);
         Payload.Kind := dpkWrongArgumentCount;
         Payload.ActualCount := MemberActualArgCount;
         Payload.ExpectedCount := 0;
         if Length(MemberCandidates) > 0 then
           Payload.ExpectedCount := MemberCandidates[0].ParamCount;
-        Payload.Candidates := MemberCandidates;
+        Payload.Candidates := CloneOverloadCandidatesFromArray(MemberCandidates);
         FDiagnostics.EmitErrorWithPayload(
           'sema.wrong-argument-count', 'sema',
           BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
@@ -87,8 +88,9 @@ begin
         )
       else if SameText(ResolutionFailureKind, 'no-matching-overload') then
       begin
+        Payload := Default(TDiagnosticPayload);
         Payload.Kind := dpkOverloadCandidates;
-        Payload.Candidates := MemberCandidates;
+        Payload.Candidates := CloneOverloadCandidatesFromArray(MemberCandidates);
         FDiagnostics.EmitErrorWithPayload(
           'sema.no-matching-overload', 'sema',
           BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
@@ -255,7 +257,7 @@ begin
   RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
   FCurrentProcessingUnitId := RootOwnerUnitId;
   SeedCallBindingsInNode(FRootAst.RootNode, '', RootOwnerUnitId);
-  for Index := 0 to Length(FProcedureBodies) - 1 do
+  for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
     if (Pos('.', FProcedureBodies[Index].Name) > 0) and
       OwnerUnitAllowsProjectSourceDiagnostic(
         FProcedureBodies[Index].OwnerUnitId
@@ -684,7 +686,7 @@ begin
               Exit(LReceiverTypeId);
             LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
             LQualifiedName := LTypeName + '.' + LMemberName;
-            for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+            for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
               if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
               begin
                 Result := DeclReturnTypeId(
@@ -754,7 +756,7 @@ begin
           else
           begin
             LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-            for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+            for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
               if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
               begin
                 Result := DeclReturnTypeId(
@@ -770,7 +772,7 @@ begin
                 LReceiverTypeId := FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom;
                 LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
                 LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-                for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+                for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
                   if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
                   begin
                     Result := DeclReturnTypeId(
@@ -790,7 +792,7 @@ begin
                   LReceiverTypeId := FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom;
                 LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
                 LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-                for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+                for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
                   if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
                   begin
                     Result := DeclReturnTypeId(

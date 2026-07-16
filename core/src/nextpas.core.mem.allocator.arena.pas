@@ -15,6 +15,30 @@ uses
   nextpas.core.mem.arena.virtual;
 
 type
+  {** TLocalArenaAllocator
+   *
+   *  Capacity-bounded IAllocator over TLocalArena.
+   *  FreeMem is no-op; reclaim by dropping the interface (or Reset).
+   *  CreateArenaAllocator factory uses this backend.
+   *  Non-thread-safe.
+   *}
+  TLocalArenaAllocator = class(TInterfacedObject, IAllocator)
+  private
+    FArena: IArena;
+  public
+    constructor Create(ACapacity: SizeUInt); overload;
+    constructor Create(const AArena: IArena); overload;
+
+    function GetMem(ASize: SizeUInt): Pointer; inline;
+    function AllocMem(ASize: SizeUInt): Pointer; inline;
+    function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+    procedure FreeMem(APtr: Pointer); inline;
+    function Traits: TAllocatorTraits; inline;
+
+    procedure Reset;
+    property Arena: IArena read FArena;
+  end;
+
   {** TVirtualArenaAllocator
    *
    *  将 TVirtualArena 包装为 IAllocator 接口。
@@ -44,7 +68,7 @@ type
     property Arena: TVirtualArena read FArena;
   end;
 
-{** 兼容性别名 }
+{** 兼容性别名（VirtualArena 路径；容量边界请用 TLocalArenaAllocator） }
 TFastArenaAllocator = TVirtualArenaAllocator;
 
 type
@@ -78,6 +102,64 @@ type
   end;
 
 implementation
+
+uses
+  nextpas.core.mem.arena.local;
+
+{ TLocalArenaAllocator }
+
+constructor TLocalArenaAllocator.Create(ACapacity: SizeUInt);
+begin
+  Create(TLocalArena.Create(ACapacity) as IArena);
+end;
+
+constructor TLocalArenaAllocator.Create(const AArena: IArena);
+begin
+  inherited Create;
+  FArena := AArena;
+end;
+
+function TLocalArenaAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
+begin
+  if ASize = 0 then
+    Exit(nil);
+  Result := FArena.Alloc(ASize);
+end;
+
+function TLocalArenaAllocator.AllocMem(ASize: SizeUInt): Pointer; inline;
+begin
+  if ASize = 0 then
+    Exit(nil);
+  Result := FArena.AllocZeroed(ASize);
+end;
+
+function TLocalArenaAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
+begin
+  Result := nil;
+  if (APtr = nil) and (ASize = 0) then
+    Exit;
+  raise EAllocError.Create(aeReallocNotSupported,
+    'TLocalArenaAllocator.ReallocMem: arena does not track individual allocation sizes');
+end;
+
+procedure TLocalArenaAllocator.FreeMem(APtr: Pointer); inline;
+begin
+  if APtr = nil then
+    Exit;
+  { Arena ownership — FreeMem is no-op by contract. }
+end;
+
+procedure TLocalArenaAllocator.Reset;
+begin
+  FArena.Reset;
+end;
+
+function TLocalArenaAllocator.Traits: TAllocatorTraits; inline;
+begin
+  Result.ZeroInitialized := True;
+  Result.ThreadSafe := False;
+  Result.SupportsRealloc := False;
+end;
 
 { TVirtualArenaAllocator }
 

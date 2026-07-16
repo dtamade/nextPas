@@ -151,11 +151,13 @@ begin
     begin
       Changed := False;
 
-      for BlkIdx := 0 to High(Fn.Blocks) do
+      if Fn.Blocks <> nil then
+      for BlkIdx := 0 to LongInt(Fn.Blocks.Count) - 1 do
       begin
-        for StmtIdx := 0 to High(Fn.Blocks[BlkIdx].Stmts) do
+        if Fn.Blocks[SizeUInt(BlkIdx)].Stmts <> nil then
+          for StmtIdx := 0 to LongInt(Fn.Blocks[SizeUInt(BlkIdx)].Stmts.Count) - 1 do
         begin
-          if not AModule.GetStmt(FuncIdx, Fn.Blocks[BlkIdx].Id, StmtIdx, Stmt) then
+          if not AModule.GetStmt(FuncIdx, Fn.Blocks[SizeUInt(BlkIdx)].Id, StmtIdx, Stmt) then
             Continue;
 
           case Stmt.Kind of
@@ -164,7 +166,7 @@ begin
               begin
                 Stmt.Kind := mskAssign;
                 Stmt.Src := Folded;
-                AModule.SetStmt(FuncIdx, Fn.Blocks[BlkIdx].Id, StmtIdx, Stmt);
+                AModule.SetStmt(FuncIdx, Fn.Blocks[SizeUInt(BlkIdx)].Id, StmtIdx, Stmt);
                 Changed := True;
                 Inc(TotalFolds);
               end;
@@ -174,7 +176,7 @@ begin
               begin
                 Stmt.Kind := mskAssign;
                 Stmt.Src := Folded;
-                AModule.SetStmt(FuncIdx, Fn.Blocks[BlkIdx].Id, StmtIdx, Stmt);
+                AModule.SetStmt(FuncIdx, Fn.Blocks[SizeUInt(BlkIdx)].Id, StmtIdx, Stmt);
                 Changed := True;
                 Inc(TotalFolds);
               end;

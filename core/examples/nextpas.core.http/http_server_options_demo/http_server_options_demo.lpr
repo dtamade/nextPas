@@ -6,6 +6,7 @@ uses
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.http,
+  nextpas.core.mem,
   nextpas.core.io,
   nextpas.core.text.conv;
 
@@ -83,10 +84,17 @@ begin
     LPort := 8081;
 
   LRouter := NewRouter;
+  { Request-scoped LocalArena (nextpas.core.mem product wire). }
+  HttpUseRequestArena(LRouter);
   LRouter.Get('/health',
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       WritePlainText(AW, HTTP_STATUS_OK, BuildServerOptionsBody(LOptions));
+    end);
+  LRouter.Get('/memstats',
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      WritePlainText(AW, HTTP_STATUS_OK, HttpFormatProcessMemStats + LineEnding);
     end);
 
   LRouter.Get('/hello/:name',
@@ -94,9 +102,17 @@ begin
     var
       LBody: string;
       LName: string;
+      LArena: IArena;
+      LScratch: Pointer;
+      LUsed: SizeUInt;
     begin
+      LArena := HttpRequestArenaOf(AReq);
+      LUsed := 0;
+      if (LArena <> nil) and TryArenaAlloc(LArena, 128, LScratch) then
+        LUsed := LArena.UsedSize;
       LName := AReq.PathParam('name');
       LBody := 'hello=' + LName + LineEnding +
+        'arena-used=' + IntToStr(Int64(LUsed)) + LineEnding +
         BuildServerOptionsBody(LOptions);
       WritePlainText(AW, HTTP_STATUS_OK, LBody);
     end);
@@ -106,11 +122,16 @@ begin
     var
       LBytes: TBytes;
       LBody: string;
+      LArena: IArena;
+      LScratch: Pointer;
     begin
       if AReq.Body <> nil then
         LBytes := ReadAll(AReq.Body)
       else
         SetLength(LBytes, 0);
+      LArena := HttpRequestArenaOf(AReq);
+      if LArena <> nil then
+        TryArenaAlloc(LArena, 64, LScratch);
       LBody :=
         'bytes=' + IntToStr(Int64(Length(LBytes))) + LineEnding +
         'body=' + BytesToString(LBytes) + LineEnding +

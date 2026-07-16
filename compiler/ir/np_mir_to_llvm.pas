@@ -5,24 +5,35 @@
  * 对标 rustc_codegen_llvm。
  *
  * 完整实现：MIR 语句 → LLVM IR 指令逐条翻译。
+ * 输出缓冲走可选 phase-scratch IAllocator 上的 TVec 行表，
+ * 避免二次字符串拼接；调用方传入 PhaseScratch / FScratchAllocator。
  *}
 
 unit np_mir_to_llvm;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
-  np_mir_model;
+  np_mir_model,
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec;
 
 type
+  TMirLlvmLineVec = specialize TVec<string>;
+
   TMirToLlvmTranslator = class
   private
     FModule: TMirModule;
-    FOutput: string;
+    FAllocator: IAllocator;
+    FLines: TMirLlvmLineVec;
+    FCurrentLine: string;
+    procedure FlushLine;
     procedure Emit(const AText: string);
     procedure EmitLn(const AText: string);
+    function BuildOutput: string;
     function LlvmTypeName(ABitWidth: LongInt; AIsSigned: Boolean): string;
     function LlvmTypeForOperand(const AOp: TMirOperand): string;
     function LlvmTypeForStmt(const AStmt: TMirStmt): string;
@@ -35,7 +46,9 @@ type
     procedure TranslateTerminator(const ATerm: TMirTerminator);
     procedure EmitStructTypes;
   public
-    constructor Create(const AModule: TMirModule);
+    constructor Create(const AModule: TMirModule;
+      AAllocator: IAllocator = nil);
+    destructor Destroy; override;
     function Translate: string;
     procedure SaveToFile(const APath: string);
   end;
@@ -45,21 +58,52 @@ implementation
 uses
   nextpas.core.text.conv;
 
-constructor TMirToLlvmTranslator.Create(const AModule: TMirModule);
+constructor TMirToLlvmTranslator.Create(const AModule: TMirModule;
+  AAllocator: IAllocator);
 begin
   inherited Create;
   FModule := AModule;
-  FOutput := '';
+  FAllocator := AAllocator;
+  FCurrentLine := '';
+  if FAllocator <> nil then
+    FLines := TMirLlvmLineVec.Create(0, FAllocator)
+  else
+    FLines := TMirLlvmLineVec.Create;
+end;
+
+destructor TMirToLlvmTranslator.Destroy;
+begin
+  FLines.Free;
+  inherited Destroy;
+end;
+
+procedure TMirToLlvmTranslator.FlushLine;
+begin
+  FLines.Push(FCurrentLine);
+  FCurrentLine := '';
 end;
 
 procedure TMirToLlvmTranslator.Emit(const AText: string);
 begin
-  FOutput := FOutput + AText;
+  FCurrentLine := FCurrentLine + AText;
 end;
 
 procedure TMirToLlvmTranslator.EmitLn(const AText: string);
 begin
-  FOutput := FOutput + AText + #10;
+  FCurrentLine := FCurrentLine + AText;
+  FlushLine;
+end;
+
+function TMirToLlvmTranslator.BuildOutput: string;
+var
+  I: LongInt;
+begin
+  if FCurrentLine <> '' then
+    FlushLine;
+  Result := '';
+  if FLines.Count > 0 then
+    for I := 0 to FLines.Count - 1 do
+      Result := Result + FLines[I] + #10;
 end;
 
 function TMirToLlvmTranslator.LlvmTypeName(ABitWidth: LongInt;
@@ -152,11 +196,13 @@ begin
   begin
     ST := FModule.StructTypeAt(I);
     Emit('%' + ST.Name + ' = type {');
-    for J := 0 to High(ST.Fields) do
-    begin
-      if J > 0 then Emit(', ');
-      Emit(LlvmTypeName(ST.Fields[J].BitWidth, ST.Fields[J].IsSigned));
-    end;
+    if ST.Fields <> nil then
+      for J := 0 to LongInt(ST.Fields.Count) - 1 do
+      begin
+        if J > 0 then Emit(', ');
+        Emit(LlvmTypeName(ST.Fields[SizeUInt(J)].BitWidth,
+          ST.Fields[SizeUInt(J)].IsSigned));
+      end;
     EmitLn('}');
   end;
   if FModule.StructTypeCount > 0 then
@@ -176,16 +222,19 @@ begin
 
   Emit('define ' + LlvmTypeName(AFunc.ReturnBitWidth,
     AFunc.ReturnIsSigned) + ' @' + AFunc.Name + '(');
-  for I := 0 to High(AFunc.Params) do
-  begin
-    if I > 0 then Emit(', ');
-    Emit(LlvmTypeName(AFunc.Params[I].BitWidth,
-      AFunc.Params[I].IsSigned) + ' %' + AFunc.Params[I].Name);
-  end;
+  if AFunc.Params <> nil then
+    for I := 0 to LongInt(AFunc.Params.Count) - 1 do
+    begin
+      if I > 0 then Emit(', ');
+      Emit(LlvmTypeName(AFunc.Params[SizeUInt(I)].BitWidth,
+        AFunc.Params[SizeUInt(I)].IsSigned) + ' %' +
+        AFunc.Params[SizeUInt(I)].Name);
+    end;
   EmitLn(') {');
 
-  for I := 0 to High(AFunc.Blocks) do
-    TranslateBlock(AFunc, AFunc.Blocks[I]);
+  if AFunc.Blocks <> nil then
+      for I := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    TranslateBlock(AFunc, AFunc.Blocks[SizeUInt(I)]);
 
   EmitLn('}');
   EmitLn('');
@@ -197,8 +246,9 @@ var
   I: LongInt;
 begin
   EmitLn(ABlock.Name + ':');
-  for I := 0 to High(ABlock.Stmts) do
-    TranslateStmt(ABlock.Stmts[I]);
+  if ABlock.Stmts <> nil then
+          for I := 0 to LongInt(ABlock.Stmts.Count) - 1 do
+    TranslateStmt(ABlock.Stmts[SizeUInt(I)]);
   TranslateTerminator(ABlock.Terminator);
 end;
 
@@ -285,11 +335,12 @@ begin
         if Ty = 'void' then Ty := 'i32';
         Emit('  %' + IntToStr(AStmt.Dst) + ' = call ' + Ty +
           ' @' + AStmt.FuncName + '(');
-        for I := 0 to High(AStmt.Args) do
-        begin
-          if I > 0 then Emit(', ');
-          Emit(OpStr(AStmt.Args[I]));
-        end;
+        if AStmt.Args <> nil then
+          for I := 0 to LongInt(AStmt.Args.Count) - 1 do
+          begin
+            if I > 0 then Emit(', ');
+            Emit(OpStr(AStmt.Args[SizeUInt(I)]));
+          end;
         EmitLn(')');
       end;
   end;
@@ -319,9 +370,10 @@ begin
       begin
         Emit('  switch i32 %' + IntToStr(ATerm.SwitchValue) +
           ', label %bb' + IntToStr(ATerm.DefaultBlock) + ' [');
-        for I := 0 to High(ATerm.SwitchCases) do
-          Emit(' i32 ' + IntToStr(ATerm.SwitchCases[I].Value) +
-            ', label %bb' + IntToStr(ATerm.SwitchCases[I].Target));
+        if ATerm.SwitchCases <> nil then
+          for I := 0 to LongInt(ATerm.SwitchCases.Count) - 1 do
+            Emit(' i32 ' + IntToStr(ATerm.SwitchCases[SizeUInt(I)].Value) +
+              ', label %bb' + IntToStr(ATerm.SwitchCases[SizeUInt(I)].Target));
         EmitLn(' ]');
       end;
 
@@ -334,25 +386,28 @@ function TMirToLlvmTranslator.Translate: string;
 var
   I: LongInt;
 begin
-  FOutput := '';
+  FLines.Clear;
+  FCurrentLine := '';
   EmitLn('; MIR → LLVM IR');
   EmitLn('; Module: ' + FModule.ModuleName);
   EmitLn('');
   EmitStructTypes;
   for I := 0 to FModule.FunctionCount - 1 do
     TranslateFunction(FModule.FunctionAt(I));
-  Result := FOutput;
+  Result := BuildOutput;
 end;
-
 
 procedure TMirToLlvmTranslator.SaveToFile(const APath: string);
 var
   F: TextFile;
+  I: LongInt;
 begin
   Translate;
   AssignFile(F, APath);
   Rewrite(F);
-  Write(F, FOutput);
+  if FLines.Count > 0 then
+    for I := 0 to FLines.Count - 1 do
+      WriteLn(F, FLines[I]);
   CloseFile(F);
 end;
 end.

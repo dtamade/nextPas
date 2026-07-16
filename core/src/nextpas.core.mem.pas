@@ -3,14 +3,18 @@ unit nextpas.core.mem;
  * @desc 内存管理门面：IAllocator 抽象、默认分配器、工具函数。
  *
  * @note 选择指南（Tier-0 标准路径优先）：
- *   - 通用堆热路径 → DefaultHeap / GetMem·FreeMem（Growing 原生，无 IAllocator）
- *   - IAllocator 注入/组合 → DefaultAllocator（当前 RTL；包装器后端）
+ *   - 通用堆热路径 → DefaultHeap / GetMem·FreeMem(size)（Growing 原生，无 IAllocator）
+ *   - IAllocator 注入/组合 → DefaultAllocator（Growing IAllocator 根；可选 NEXTPAS_MEM_DEBUG 包装）
  *   - 请求/帧级生命周期 → CreateDefaultArena (IArena)，用 Reset 一次性释放
  *   - 需要 IAllocator 接口的 Arena → CreateArenaAllocator（仅分配不释放）
  *   - 高频固定大小对象 → CreateFixedSlabPool / TFixedSlabPool / TLocalBlockPool
  *   - 高频可变大小对象 → TSlabPool / TSizeClassPool
  *   - 并发场景 → TSlabPoolConcurrent / TSlabPoolSharded / TBlockPoolConcurrent
  *   - 测试泄漏检测 → TTrackingAllocator 包装任意 IAllocator
+ *
+ * @note 双轨硬规则：
+ *   - NEXTPAS_MEM_DEBUG 只叠 DefaultAllocator，不观察过程式 GetMem。
+ *   - 错误模型见 core/docs/mem/ERROR-POLICY.md（资源不足=nil；编程错误=raise）。
  *
  * @note 门面只 re-export Tier-0/1/2。Experimental (Tier-3) 请直接 uses 子单元。
  *       分层与迁移见 core/docs/mem/STDLIB-QUALITY-PLAN.md。
@@ -33,6 +37,7 @@ uses
   nextpas.core.mem.intf,
   nextpas.core.mem.error,
   nextpas.core.mem.default,
+  nextpas.core.mem.debug_wrap,
   nextpas.core.mem.mutex,
   nextpas.core.mem.rwlock,
   nextpas.core.mem.arena.base,
@@ -82,6 +87,7 @@ uses
   nextpas.core.mem.allocator.fail,
   nextpas.core.mem.allocator.foundation,
   nextpas.core.mem.allocator.growing,
+  nextpas.core.mem.allocator.growing_ia,
   nextpas.core.mem.allocator.hotswap,
   nextpas.core.mem.allocator.pool,
   nextpas.core.mem.allocator.rtl,
@@ -123,13 +129,17 @@ type
 
   { --- Tier-0: 默认堆与后端 --- }
   TGrowingAllocator = nextpas.core.mem.allocator.growing.TGrowingAllocator;
+  TGrowingHeapStats = nextpas.core.mem.allocator.growing.TGrowingHeapStats;
+  TMemStats = nextpas.core.mem.default.TMemStats;
   TRtlAllocator = nextpas.core.mem.allocator.rtl.TRtlAllocator;
   TCrtAllocator = nextpas.core.mem.allocator.crt.TCrtAllocator;
   TMimallocAllocator = nextpas.core.mem.allocator.mimalloc.TMimallocAllocator;
   TMemoryMapAllocator = nextpas.core.mem.allocator.mmap.TMemoryMapAllocator;
 
   { --- Tier-0: Arena ↔ Allocator 桥 --- }
+  TLocalArenaAllocator = nextpas.core.mem.allocator.arena.TLocalArenaAllocator;
   TArenaAllocator = nextpas.core.mem.allocator.arena.TFastArenaAllocator;
+  TVirtualArenaAllocator = nextpas.core.mem.allocator.arena.TVirtualArenaAllocator;
   TVirtualArenaAdapter = nextpas.core.mem.allocator.arena.TVirtualArenaAdapter;
 
   { --- Tier-0: Pool / BlockPool --- }
@@ -205,22 +215,65 @@ type
   TCountingAllocator = nextpas.core.mem.allocator.counting.TCountingAllocator;
   TCountingStats = nextpas.core.mem.allocator.counting.TCountingStats;
 
-{** IAllocator plug-in default (RTL). For composers/diagnostics injection. }
+{** IAllocator plug-in default (Growing IAllocator root, optional NEXTPAS_MEM_DEBUG wraps).
+    Same process heap as DefaultHeap; still not the zero-vtable hot path. }
 function DefaultAllocator: IAllocator; inline;
 
 {** Process hot-path heap (Growing singleton, concrete type). }
 function DefaultHeap: TGrowingAllocator; inline;
 function DefaultGrowingAllocator: TGrowingAllocator; inline;
 
-{** 全局分配函数 — 走 DefaultHeap（Growing 原生，无 interface 间接调用） }
+{** Process IAllocator default root (unwrapped Growing adapter; used by DefaultAllocator). }
+function GetGrowingIAllocator: IAllocator; inline;
+{** Explicit FPC RTL IAllocator backend (bootstrap / explicit opt-in). }
+function GetRtlAllocator: IAllocator; inline;
+{** nil → process default heap IAllocator; else identity. }
+function ResolveAllocator(const AAllocator: IAllocator): IAllocator; inline;
+
+{** Process MemStats: DefaultHeap retention + optional DEBUG wrap counters. }
+procedure GetMemStats(out AStats: TMemStats); inline;
+function GetMemStats: TMemStats; inline;
+{** One-line process MemStats for logs/tests (not a hot path).
+ *  Includes heap_debug/debug flags; DEBUG wrap adds debug_active_*/debug_allocs. }
+function FormatMemStats(const AStats: TMemStats): string; inline;
+function FormatMemStats: string; inline;
+
+{** True when NEXTPAS_MEM_HEAP_DEBUG is truthy (process GetMem → DefaultAllocator). }
+function IsMemHeapDebugEnabled: Boolean; inline;
+
+{** 全局分配函数 — 默认走 DefaultHeap（Growing 原生）。
+ *  当 NEXTPAS_MEM_HEAP_DEBUG 显式开启时，改走 DefaultAllocator（可被
+ *  NEXTPAS_MEM_DEBUG 包装观察；慢路径，生产勿开）。DefaultHeap 本体永不受影响。 }
 function GetMem(ASize: SizeUInt): Pointer; inline;
 function AllocMem(ASize: SizeUInt): Pointer; inline;
 function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 procedure FreeMem(APtr: Pointer); inline;
-{** Hot free when size is known (preferred over FreeMem(ptr)). }
+{** Hot free when size is known (preferred over FreeMem(ptr)).
+ *  HEAP_DEBUG 开启时 size 被忽略（经 IAllocator.FreeMem）。 }
 procedure FreeMem(APtr: Pointer; ASize: SizeUInt); inline;
-{** Hot realloc when old size is known. }
+{** Hot realloc when old size is known.
+ *  HEAP_DEBUG 开启时走 IAllocator.ReallocMem(ptr, new)（old size 忽略）。 }
 function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer; inline;
+{** Lookup size-class capacity for a block owned by DefaultHeap (Growing).
+ *  True + size-class size for size-class blocks; False for nil / huge / foreign.
+ *  Use when size was lost and FreeMem(ptr,size) is still preferred after lookup.
+ *  Single-arg FreeMem(ptr) already does this scan internally — prefer keeping size. }
+function TryBlockSize(APtr: Pointer; out ASize: SizeUInt): Boolean; inline;
+
+{** ERROR-POLICY actionable forms: resource failure = False + nil, never raise.
+ *  Same backends as GetMem/AllocMem/ReallocMem (DefaultHeap / HEAP_DEBUG path). }
+function TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean; inline;
+function TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean; inline;
+function TryReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt;
+  out ANewPtr: Pointer): Boolean; inline;
+function TryReallocMem(APtr: Pointer; ANewSize: SizeUInt;
+  out ANewPtr: Pointer): Boolean; inline;
+{** Free a DefaultHeap-owned block after TryBlockSize recovery.
+ *  True if freed; False for nil / foreign / unrecoverable size. Prefer FreeMem(ptr,size). }
+function TryFreeMem(APtr: Pointer): Boolean; inline;
+{** Arena Alloc with Boolean outcome (nil capacity = False). }
+function TryArenaAlloc(const AArena: IArena; ASize: SizeUInt;
+  out APtr: Pointer): Boolean; inline;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer; inline;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer; inline;
@@ -233,8 +286,10 @@ function CreatePoolAllocator(ABlockSize: SizeUInt; ACapacity: Integer;
 function CreateDefaultArena(ACapacity: SizeUInt): IArena;
 {** 创建可增长 Arena（TChunkedArena，指定初始容量和最大容量） }
 function CreateChunkedArena(AInitialSize: SizeUInt; AMaxSize: SizeUInt = 0): IArena;
-{** 创建 Arena 包装的 IAllocator（TLocalArena 后端，仅分配不释放） }
+{** 创建容量有界 Arena 包装的 IAllocator（TLocalArena 后端，FreeMem no-op） }
 function CreateArenaAllocator(ACapacity: SizeUInt): IAllocator;
+{** 创建 VirtualArena 包装的 IAllocator（编译单元 / 大 AST；FreeMem no-op，Reset 回收） }
+function CreateVirtualArenaAllocator(AAlignment: SizeUInt = 0): IAllocator;
 
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt); inline;
 procedure SecureZeroBytes(var AData: TBytes); inline;
@@ -258,34 +313,149 @@ begin
   Result := nextpas.core.mem.default.DefaultGrowingAllocator;
 end;
 
+function GetGrowingIAllocator: IAllocator;
+begin
+  Result := nextpas.core.mem.allocator.growing_ia.GetGrowingIAllocator;
+end;
+
+function GetRtlAllocator: IAllocator;
+begin
+  Result := nextpas.core.mem.allocator.rtl.GetRtlAllocator;
+end;
+
+function ResolveAllocator(const AAllocator: IAllocator): IAllocator;
+begin
+  Result := nextpas.core.mem.allocator.rtl.ResolveAllocator(AAllocator);
+end;
+
+procedure GetMemStats(out AStats: TMemStats);
+begin
+  nextpas.core.mem.default.GetMemStats(AStats);
+end;
+
+function GetMemStats: TMemStats;
+begin
+  Result := nextpas.core.mem.default.GetMemStats;
+end;
+
+function FormatMemStats(const AStats: TMemStats): string;
+begin
+  Result := nextpas.core.mem.default.FormatMemStats(AStats);
+end;
+
+function FormatMemStats: string;
+begin
+  Result := nextpas.core.mem.default.FormatMemStats;
+end;
+
+function IsMemHeapDebugEnabled: Boolean;
+begin
+  Result := nextpas.core.mem.default.IsMemHeapDebugEnabled;
+end;
+
 function GetMem(ASize: SizeUInt): Pointer;
 begin
-  Result := DefaultHeap.GetMem(ASize);
+  if IsMemHeapDebugEnabled then
+    Result := DefaultAllocator.GetMem(ASize)
+  else
+    Result := DefaultHeap.GetMem(ASize);
 end;
 
 function AllocMem(ASize: SizeUInt): Pointer;
 begin
-  Result := DefaultHeap.AllocMem(ASize);
+  if IsMemHeapDebugEnabled then
+    Result := DefaultAllocator.AllocMem(ASize)
+  else
+    Result := DefaultHeap.AllocMem(ASize);
 end;
 
 function ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer;
 begin
-  Result := DefaultHeap.ReallocMem(APtr, ASize);
+  if IsMemHeapDebugEnabled then
+    Result := DefaultAllocator.ReallocMem(APtr, ASize)
+  else
+    Result := DefaultHeap.ReallocMem(APtr, ASize);
 end;
 
 procedure FreeMem(APtr: Pointer);
 begin
-  DefaultHeap.FreeMem(APtr);
+  if IsMemHeapDebugEnabled then
+    DefaultAllocator.FreeMem(APtr)
+  else
+    DefaultHeap.FreeMem(APtr);
 end;
 
 procedure FreeMem(APtr: Pointer; ASize: SizeUInt);
 begin
-  DefaultHeap.FreeMem(APtr, ASize);
+  if IsMemHeapDebugEnabled then
+    DefaultAllocator.FreeMem(APtr)
+  else
+    DefaultHeap.FreeMem(APtr, ASize);
 end;
 
 function ReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt): Pointer;
 begin
-  Result := DefaultHeap.ReallocMem(APtr, AOldSize, ANewSize);
+  if IsMemHeapDebugEnabled then
+    Result := DefaultAllocator.ReallocMem(APtr, ANewSize)
+  else
+    Result := DefaultHeap.ReallocMem(APtr, AOldSize, ANewSize);
+end;
+
+function TryBlockSize(APtr: Pointer; out ASize: SizeUInt): Boolean;
+begin
+  { Always query DefaultHeap ownership — HEAP_DEBUG still allocates from the
+    same Growing heap (via growing_ia); size-class blocks remain visible. }
+  Result := DefaultHeap.TryBlockSize(APtr, ASize);
+end;
+
+function TryGetMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
+begin
+  APtr := GetMem(ASize);
+  Result := APtr <> nil;
+end;
+
+function TryAllocMem(ASize: SizeUInt; out APtr: Pointer): Boolean;
+begin
+  APtr := AllocMem(ASize);
+  Result := APtr <> nil;
+end;
+
+function TryReallocMem(APtr: Pointer; AOldSize, ANewSize: SizeUInt;
+  out ANewPtr: Pointer): Boolean;
+begin
+  ANewPtr := ReallocMem(APtr, AOldSize, ANewSize);
+  Result := (ANewPtr <> nil) or (ANewSize = 0);
+end;
+
+function TryReallocMem(APtr: Pointer; ANewSize: SizeUInt;
+  out ANewPtr: Pointer): Boolean;
+begin
+  ANewPtr := ReallocMem(APtr, ANewSize);
+  Result := (ANewPtr <> nil) or (ANewSize = 0);
+end;
+
+function TryFreeMem(APtr: Pointer): Boolean;
+var
+  LSize: SizeUInt;
+begin
+  if APtr = nil then
+    Exit(False);
+  if not TryBlockSize(APtr, LSize) then
+    Exit(False);
+  FreeMem(APtr, LSize);
+  Result := True;
+end;
+
+function TryArenaAlloc(const AArena: IArena; ASize: SizeUInt;
+  out APtr: Pointer): Boolean;
+begin
+  if AArena = nil then
+  begin
+    APtr := nil;
+    Exit(False);
+  end;
+  APtr := AArena.Alloc(ASize);
+  Result := APtr <> nil;
 end;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
@@ -328,7 +498,15 @@ end;
 
 function CreateArenaAllocator(ACapacity: SizeUInt): IAllocator;
 begin
-  Result := TArenaAllocator.Create(ACapacity);
+  Result := TLocalArenaAllocator.Create(ACapacity);
+end;
+
+function CreateVirtualArenaAllocator(AAlignment: SizeUInt): IAllocator;
+begin
+  if AAlignment = 0 then
+    Result := TVirtualArenaAllocator.Create
+  else
+    Result := TVirtualArenaAllocator.Create(AAlignment);
 end;
 
 procedure SecureZeroMemory(ABuffer: Pointer; ASize: NativeUInt);

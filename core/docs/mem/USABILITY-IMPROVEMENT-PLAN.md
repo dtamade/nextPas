@@ -1,8 +1,12 @@
 # mem 模块可用性改进调研报告
 
+> **历史文档（2026-07-05）**。文中 “通用场景 → DefaultAllocator” 等表述已过时。
+> 当前权威：`README.md` / `API-GUIDE.md` / `STDLIB-QUALITY-PLAN.md` / **[USABILITY-SCORE.md](USABILITY-SCORE.md)**（post-S5 **8.2**）。
+> 双轨：热路径 `DefaultHeap`，插件面 `DefaultAllocator`（S5 起同进程堆）。
+
 **调研日期**: 2026-07-05  
 **目标范围**: 短期 3 项 + 中期 3 项 + 长期 3 项  
-**当前状态**: 9/9 任务全部完成 ✅
+**当前状态**: 9/9 任务全部完成 ✅（计划本身历史归档；产品事实以上述权威文档为准）
 
 ---
 

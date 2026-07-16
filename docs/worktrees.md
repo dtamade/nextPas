@@ -231,7 +231,7 @@ source/compile/runtime/CI evidence。不要用单个绿色命令替代所有 tru
 | --- | --- | --- |
 | platform | `make focused FOCUS=core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix` | affected host/source-contract gates, forced-compile gates, and any runtime gate that actually ran |
 | compiler | not the default focused gate; use `bash build/verify_local.sh` only as a verify exception after the narrow compiler fixture or smoke command is named | targeted compiler fixture, toolchain failure truth, or smoke command that proves the changed compiler surface |
-| mem | `make focused FOCUS=core/tests/nextpas.core.mem/test_memory_map_compile_gate` | allocator/runtime gate plus heaptrc/no-leak proof when ownership, allocation, or mapping behavior changes |
+| mem | `make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails` | product dual-track / HEAP_DEBUG / FormatMemStats surface; plus `test_compiler_mem` when compiler product tables change, `test_debug_wrap` when wrap chain changes, `make stage0-heap-debug-recipe` when doctor mem-process-stats or env recipe changes, and `test_memory_map_compile_gate` when mapping/platform compile surface changes |
 | system | `make focused FOCUS=core/tests/nextpas.core.system/test_system_source_contracts` | source-contract result plus any runtime or forced-compile gate for changed `system.*` units |
 | config | `make focused FOCUS=core/tests/nextpas.core.config/test_config` | format-specific export/import gate when INI, TOML, YAML, examples, or mutation semantics change |
 | http | `make focused FOCUS=core/tests/nextpas.core.http/test_http_client` | parser/writer/router/server/runtime gate matching the touched HTTP surface |

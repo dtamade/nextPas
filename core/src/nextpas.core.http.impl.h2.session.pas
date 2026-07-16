@@ -17,6 +17,7 @@ uses
   nextpas.core.net.server.intf,
   nextpas.core.platform.io.base,
   nextpas.core.time.deadline,
+  nextpas.core.mem.arena.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.impl.h2.frame,
@@ -115,6 +116,9 @@ type
     FShutdownErrorCode: UInt32;
     FReadDeadline: TDeadline;
     FWriteDeadline: TDeadline;
+    FRequestArena: IArena;
+    procedure InvokeHandler(const AReq: IHttpRequest;
+      const AW: IHttpResponseWriter);
     function StreamBodyTooLarge(const AStream: TH2Stream): Boolean;
     procedure ArmReadDeadline(const ATimeoutMs: Int64);
     procedure ArmWriteDeadline(const ATimeoutMs: Int64);
@@ -204,7 +208,9 @@ uses
   nextpas.core.io.memory,
   nextpas.core.time.base,
   nextpas.core.http.headers,
-  nextpas.core.http.message;
+  nextpas.core.http.message,
+  nextpas.core.http.mem,
+  nextpas.core.http.middleware.requestarena;
 
 {** Hard limit on accumulated read buffer to prevent memory exhaustion.
     16 MB is generous for legitimate traffic; an attacker sending tiny
@@ -606,6 +612,11 @@ begin
   FConn := AConn;
   FHandler := AHandler;
   FOptions := AOptions;
+  { Connection-scoped request arena: Reset per stream request (session is serial). }
+  if AOptions.RequestArena then
+    FRequestArena := HttpCreateRequestArena(AOptions.RequestArenaCapacity)
+  else
+    FRequestArena := nil;
   FState := h2sesExpectPreface;
   FStreams := TH2StreamMap.Create;
   FRemoteSettings := TH2Settings.Default;
@@ -1415,6 +1426,25 @@ begin
   end;
 end;
 
+procedure TH2ServerSession.InvokeHandler(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter);
+begin
+  if FRequestArena = nil then
+  begin
+    FHandler.ServeHTTP(AReq, AW);
+    Exit;
+  end;
+  { Session-serial: one LocalArena, Reset per stream request. }
+  FRequestArena.Reset;
+  HttpAttachRequestArena(AReq, FRequestArena);
+  try
+    FHandler.ServeHTTP(AReq, AW);
+  finally
+    HttpDetachRequestArena(AReq);
+    FRequestArena.Reset;
+  end;
+end;
+
 procedure TH2ServerSession.ExecuteStreamRequest(const AStream: TH2Stream);
 var
   LReq: IHttpRequest;
@@ -1439,7 +1469,7 @@ begin
   LReq := BuildRequestFromStream(AStream);
   LWriterObj := TH2ResponseWriter.Create;
   try
-    FHandler.ServeHTTP(LReq, LWriterObj as IHttpResponseWriter);
+    InvokeHandler(LReq, LWriterObj as IHttpResponseWriter);
     AStream.MarkRequestHandled;
     EncodeResponse(AStream, LWriterObj);
   except

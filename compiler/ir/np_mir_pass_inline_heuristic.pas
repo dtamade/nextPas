@@ -46,15 +46,17 @@ var
   Cost: LongInt;
 begin
   TotalStmts := 0;
-  for I := 0 to High(AFunc.Blocks) do
-    Inc(TotalStmts, Length(AFunc.Blocks[I].Stmts));
+  if AFunc.Blocks <> nil then
+    for I := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+      if AFunc.Blocks[SizeUInt(I)].Stmts <> nil then
+        Inc(TotalStmts, LongInt(AFunc.Blocks[SizeUInt(I)].Stmts.Count));
 
   { Base cost = number of statements }
   Cost := TotalStmts;
 
   { Penalty for multiple blocks (control flow) }
-  if Length(AFunc.Blocks) > 1 then
-    Inc(Cost, (Length(AFunc.Blocks) - 1) * 5);
+  if (AFunc.Blocks <> nil) and (AFunc.Blocks.Count > 1) then
+    Inc(Cost, (LongInt(AFunc.Blocks.Count) - 1) * 5);
 
   { Penalty for external functions }
   if AFunc.IsExternal then
@@ -77,17 +79,19 @@ begin
   for FI := 0 to AModule.FunctionCount - 1 do
   begin
     Fn := AModule.FunctionAt(FI);
-    for BI := 0 to High(Fn.Blocks) do
-      for SI := 0 to High(Fn.Blocks[BI].Stmts) do
+    if Fn.Blocks <> nil then
+      for BI := 0 to LongInt(Fn.Blocks.Count) - 1 do
+      if Fn.Blocks[SizeUInt(BI)].Stmts <> nil then
+          for SI := 0 to LongInt(Fn.Blocks[SizeUInt(BI)].Stmts.Count) - 1 do
       begin
-        if not AModule.GetStmt(FI, Fn.Blocks[BI].Id, SI, Stmt) then
+        if not AModule.GetStmt(FI, Fn.Blocks[SizeUInt(BI)].Id, SI, Stmt) then
           Continue;
         if (Stmt.Kind = mskCall) and (Stmt.FuncName = ACalleeName) then
         begin
           { Check if block is in a loop (name contains 'loop' or 'body') }
-          if (Pos('loop', Fn.Blocks[BI].Name) > 0) or
-             (Pos('body', Fn.Blocks[BI].Name) > 0) or
-             (Pos('for', Fn.Blocks[BI].Name) > 0) then
+          if (Pos('loop', Fn.Blocks[SizeUInt(BI)].Name) > 0) or
+             (Pos('body', Fn.Blocks[SizeUInt(BI)].Name) > 0) or
+             (Pos('for', Fn.Blocks[SizeUInt(BI)].Name) > 0) then
             Inc(Result, 3)  { Higher weight for loop call sites }
           else
             Inc(Result);

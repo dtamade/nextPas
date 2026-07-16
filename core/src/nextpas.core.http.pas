@@ -35,6 +35,7 @@ uses
   nextpas.core.http.middleware.bodycache,
   nextpas.core.http.middleware.serverheader,
   nextpas.core.http.middleware.context,
+  nextpas.core.http.middleware.requestarena,
   nextpas.core.http.middleware.compression,
   nextpas.core.http.middleware.decompress,
   nextpas.core.http.middleware.deadline,
@@ -49,7 +50,8 @@ uses
   nextpas.core.http.client,
   nextpas.core.http.stream,
   nextpas.core.http.sse,
-  nextpas.core.http.cookie;
+  nextpas.core.http.cookie,
+  nextpas.core.http.mem;
 
 type
   { Re-export base types }
@@ -87,6 +89,10 @@ type
   IHttpContext = nextpas.core.http.intf.IHttpContext;
   IWebSocket = nextpas.core.http.websocket.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
+  { Request-scoped mem types (see http.mem / RequestArenaMiddleware) }
+  IArena = nextpas.core.http.mem.IArena;
+  IAllocator = nextpas.core.http.mem.IAllocator;
+  TGrowingAllocator = nextpas.core.http.mem.TGrowingAllocator;
 
   { Re-export callback types }
   THttpHandlerFunc = nextpas.core.http.intf.THttpHandlerFunc;
@@ -332,6 +338,19 @@ function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware;
 function ContextMiddleware: IHttpMiddleware; inline;
 {** @desc Get the IHttpContext attached to a request. Returns nil if no context. }
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext; inline;
+{** @desc Request Arena middleware — LocalArena per request; drop after handler. }
+function RequestArenaMiddleware: IHttpMiddleware; inline;
+{** @desc Request Arena middleware with custom capacity (0 = HTTP_DEFAULT_REQUEST_ARENA). }
+function RequestArenaMiddlewareWith(ACapacity: SizeUInt): IHttpMiddleware; inline;
+{** @desc Arena attached by RequestArenaMiddleware. Returns nil if inactive. }
+function HttpRequestArenaOf(const AReq: IHttpRequest): IArena; inline;
+{** @desc IAllocator over request LocalArena (FreeMem no-op). Nil if inactive. }
+function HttpRequestAllocatorOf(const AReq: IHttpRequest): IAllocator; inline;
+{** @desc Mount RequestArenaMiddleware on a router (0 capacity = default 256 KiB). }
+procedure HttpUseRequestArena(const ARouter: IHttpRouter; ACapacity: SizeUInt = 0); inline;
+{** @desc Wrap any IHttpHandler with RequestArenaMiddleware (server-level; 0 = default). }
+function HttpWithRequestArena(const AHandler: IHttpHandler;
+  ACapacity: SizeUInt = 0): IHttpHandler; inline;
 {** @desc Response compression middleware (gzip/deflate). Compresses responses >= 1024 bytes. }
 function CompressionMiddleware: IHttpMiddleware; inline;
 {** @desc Response compression middleware with custom minimum body size. }
@@ -350,6 +369,22 @@ function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware; inline;
 function HstsMiddleware: IHttpMiddleware; inline;
 {** @desc HSTS middleware with custom options (max-age, includeSubDomains, preload). }
 function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware; inline;
+
+{ --- Request-scoped memory (nextpas.core.mem product wire; see http.mem) --- }
+
+const
+  HTTP_DEFAULT_REQUEST_ARENA = nextpas.core.http.mem.HTTP_DEFAULT_REQUEST_ARENA;
+
+{** @desc Per-request IArena for handler scratch; drop at request end (no FreeMem). }
+function HttpCreateRequestArena(ACapacity: SizeUInt = 0): IArena; inline;
+{** @desc Per-request IAllocator (Arena FreeMem no-op) for inject-style handlers. }
+function HttpCreateRequestAllocator(ACapacity: SizeUInt = 0): IAllocator; inline;
+{** @desc Process DefaultHeap for long-lived server state. }
+function HttpProcessHeap: TGrowingAllocator; inline;
+{** @desc Process DefaultAllocator plug-in surface. }
+function HttpProcessAllocator: IAllocator; inline;
+{** @desc Process DefaultHeap one-line snapshot for ops/debug (not hot path). }
+function HttpFormatProcessMemStats: string; inline;
 
 {** @desc Create IHttpRequest value type with method, URL, headers, body }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
@@ -569,6 +604,14 @@ function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServer
 function NewHttpServer(const AHandler: IHttpHandler; const ATransport: IHttpServerTransport): IHttpServer; overload; inline;
 function NewHttpServer(const AHandler: IHttpHandler; const ATransport: IHttpServerTransport;
   const AOptions: THttpServerOptions): IHttpServer; overload; inline;
+{** @desc NewHttpServer with request LocalArena wired at the handler root. }
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler): IHttpServer; overload; inline;
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions): IHttpServer; overload; inline;
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  AArenaCapacity: SizeUInt): IHttpServer; overload; inline;
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions; AArenaCapacity: SizeUInt): IHttpServer; overload; inline;
 function NewHttpClient: IHttpClient; inline;
 function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient; overload; inline;
 function NewHttpClient(const ATransport: IHttpTransport): IHttpClient; overload; inline;
@@ -916,6 +959,43 @@ end;
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext;
 begin
   Result := nextpas.core.http.middleware.context.HttpContextOf(AReq);
+end;
+
+function RequestArenaMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestarena.RequestArenaMiddleware;
+end;
+
+function RequestArenaMiddlewareWith(ACapacity: SizeUInt): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestarena.RequestArenaMiddlewareWith(ACapacity);
+end;
+
+function HttpRequestArenaOf(const AReq: IHttpRequest): IArena;
+begin
+  Result := nextpas.core.http.middleware.requestarena.HttpRequestArenaOf(AReq);
+end;
+
+function HttpRequestAllocatorOf(const AReq: IHttpRequest): IAllocator;
+begin
+  Result := nextpas.core.http.middleware.requestarena.HttpRequestAllocatorOf(AReq);
+end;
+
+procedure HttpUseRequestArena(const ARouter: IHttpRouter; ACapacity: SizeUInt);
+begin
+  if ARouter = nil then
+    raise EHttpError.Create('HttpUseRequestArena: router must not be nil');
+  if ACapacity = 0 then
+    ARouter.Use(RequestArenaMiddleware)
+  else
+    ARouter.Use(RequestArenaMiddlewareWith(ACapacity));
+end;
+
+function HttpWithRequestArena(const AHandler: IHttpHandler;
+  ACapacity: SizeUInt): IHttpHandler;
+begin
+  Result := nextpas.core.http.middleware.requestarena.HttpWithRequestArena(
+    AHandler, ACapacity);
 end;
 
 function CompressionMiddleware: IHttpMiddleware;
@@ -1459,6 +1539,31 @@ begin
   Result := nextpas.core.http.server.NewHttpServer(AHandler, ATransport, AOptions);
 end;
 
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler): IHttpServer;
+begin
+  { Options carrier path — THttpServer.Create applies RequestArena wrap once. }
+  Result := NewHttpServer(AHandler, THttpServerOptions.Default.WithRequestArena);
+end;
+
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions): IHttpServer;
+begin
+  Result := NewHttpServer(AHandler, AOptions.WithRequestArena);
+end;
+
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  AArenaCapacity: SizeUInt): IHttpServer;
+begin
+  Result := NewHttpServer(AHandler,
+    THttpServerOptions.Default.WithRequestArena(AArenaCapacity));
+end;
+
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions; AArenaCapacity: SizeUInt): IHttpServer;
+begin
+  Result := NewHttpServer(AHandler, AOptions.WithRequestArena(AArenaCapacity));
+end;
+
 function NewHttpClient: IHttpClient;
 begin
   Result := nextpas.core.http.client.NewHttpClient;
@@ -1598,6 +1703,31 @@ function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string): string;
 begin
   Result := nextpas.core.http.form.EncodeMultipartFormData(AFields, AFiles, ABoundary);
+end;
+
+function HttpCreateRequestArena(ACapacity: SizeUInt): IArena;
+begin
+  Result := nextpas.core.http.mem.HttpCreateRequestArena(ACapacity);
+end;
+
+function HttpCreateRequestAllocator(ACapacity: SizeUInt): IAllocator;
+begin
+  Result := nextpas.core.http.mem.HttpCreateRequestAllocator(ACapacity);
+end;
+
+function HttpProcessHeap: TGrowingAllocator;
+begin
+  Result := nextpas.core.http.mem.HttpProcessHeap;
+end;
+
+function HttpProcessAllocator: IAllocator;
+begin
+  Result := nextpas.core.http.mem.HttpProcessAllocator;
+end;
+
+function HttpFormatProcessMemStats: string;
+begin
+  Result := nextpas.core.http.mem.HttpFormatProcessMemStats;
 end;
 
 end.

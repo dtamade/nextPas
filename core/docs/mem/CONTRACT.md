@@ -2,9 +2,28 @@
 
 **模块路径**：`core/src/nextpas.core.mem*.pas`（105 个源文件）
 **层级**：L0-L3（内部分层）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-12
-**版本**：1.6
+**最后更新**：2026-07-15
+**版本**：1.7
+
+**关联冻结策略**：[ERROR-POLICY.md](ERROR-POLICY.md)（nil vs raise）
+**默认双轨**：[README.md](README.md) — 热路径 `DefaultHeap` / 插件面 `DefaultAllocator`
+
+---
+
+## 0. 默认双轨（契约级）
+
+| API | 后端 | 契约角色 |
+|-----|------|----------|
+| `DefaultHeap` / 过程式 `GetMem`·`FreeMem`·`AllocMem`·`ReallocMem` | `TGrowingAllocator` | **热路径默认堆** |
+| `DefaultAllocator: IAllocator` | Growing IAllocator 根 ± `NEXTPAS_MEM_DEBUG` | **注入/诊断面**，非热路径；**同进程堆** |
+| `GetRtlAllocator` | `TRtlAllocator` | 显式 RTL 后端 / bootstrap |
+
+- Growing 原生 free：`FreeMem(ptr, size)`；单参 `FreeMem(ptr)` 为兼容路径（span 扫描；非 size-class 块可回落 `System.FreeMem`）。
+- 过程式 `TryBlockSize(ptr, out size)`：查询 `DefaultHeap` 是否拥有该 size-class 块；True 时 `size` 为 size-class 容量（≥ 原请求）。nil / huge / 外源指针 → False。
+- **同堆互释（S5）**：`DefaultHeap` 与未包装 `DefaultAllocator`（`GetGrowingIAllocator`）分配的 size-class 块可互相释放；DEBUG wrap 链上的块必须经同一 wrap 链释放（除非 HEAP_DEBUG 把过程式也并入链）。
+- 双轨税证据：Scorecard **SC9**（`hot_heap` vs `plugin_ia`）。
+- `ResolveAllocator(nil)` → `GetGrowingIAllocator`（非 RTL）。
+- `NEXTPAS_MEM_DEBUG` **不得**改变 `DefaultHeap` 语义或性能。
 
 ---
 
@@ -134,7 +153,7 @@ constructor EOutOfMemory.CreateMsg(const aMsg: string);
 
 ### 全局不变量
 
-- **[INV-1]** `FAllocator` 字段永远非 nil（构造时通过内联 nil→GetRtlAllocator fallback 保证）
+- **[INV-1]** `FAllocator` 字段永远非 nil（构造时通过内联 nil→GetGrowingIAllocator / ResolveAllocator fallback 保证）
 - **[INV-2]** 对齐参数必须是 2 的幂（`IsPowerOfTwo` 验证）
 - **[INV-3]** `IAllocator` 实现的 `GetMem` 返回 nil 表示 OOM（不抛异常）
 - **[INV-4]** `IAllocator` 实现的 `FreeMem(nil)` 必须安全（调用方保证 nil 不传入）
@@ -210,7 +229,8 @@ Exception
 
 | 类型 | 线程安全 | 机制 | 说明 |
 |------|----------|------|------|
-| `TRtlAllocator` | ✅ | FPC RTL 保证 | 系统默认分配器 |
+| `TRtlAllocator` | ✅ | FPC RTL 保证 | 显式 `GetRtlAllocator`；`DefaultAllocator` 根是 Growing IAllocator |
+| `TGrowingIAllocator` | ✅ | Growing 适配 | `DefaultAllocator` / `ResolveAllocator(nil)` 根 |
 | `TGrowingAllocator` | ✅ | TLS cache + central lock | 核心分配器 |
 | `TTrackingAllocator` | ✅ | 内部 TMemMutex | 测试用 |
 | `TFallbackAllocator` | ❌ | 无 | 调用方负责同步 |
@@ -259,7 +279,7 @@ Arena（IArena 实现）
 ```
 IAllocator 实现：
   Create → [GetMem/FreeMem 循环] → Destroy
-    └── FAllocator 通过内联 nil→GetRtlAllocator fallback 绑定，生命周期跟随调用方
+    └── FAllocator 通过内联 nil→ResolveAllocator/GetGrowingIAllocator fallback 绑定，生命周期跟随调用方
 
 IArena 实现：
   Create → [Alloc 循环] → Reset → [Alloc 循环] → Destroy

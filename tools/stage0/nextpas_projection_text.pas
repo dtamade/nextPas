@@ -240,6 +240,11 @@ begin
     'unit-state-count',
     ASession.UnitStateCount
   );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'mem-session-stats',
+    ASession.MemSessionStats
+  );
 end;
 procedure PrintDiagnosticsCountsProjection(const UseStdErr: Boolean; const ADiagnostics: TDiagnosticProjectionContext);
 begin
@@ -862,6 +867,11 @@ begin
     UseStdErr,
     'doctor-finding-suggested-action',
     AContext.FirstFinding.SuggestedAction
+  );
+  WriteProjectionTextIfPresent(
+    UseStdErr,
+    'mem-process-stats',
+    AContext.MemProcessStats
   );
 end;
 procedure PrintQueryProjectionFields(const UseStdErr: Boolean; const AContext: TQueryProjectionContext);

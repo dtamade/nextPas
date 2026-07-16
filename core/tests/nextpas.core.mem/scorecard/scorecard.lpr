@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * mem Scorecard SC1–SC5 (STDLIB-QUALITY-PLAN §7)
+ * mem Scorecard SC1–SC9 (STDLIB-QUALITY-PLAN §7)
  *
  * Fixed scenarios for Ready reports. Micro-bench museum numbers go to
  * BENCHMARKS.md; this program is the authoritative local repro for:
@@ -9,8 +9,12 @@ program scorecard;
  *   SC3 cross-thread free (correctness + throughput)
  *   SC4 arena reset+reuse
  *   SC5 long-run scavenge retention (LiveBytes / ReleasedBytes)
+ *   SC6 compiler-like AST churn (VirtualArena unit reset)
+ *   SC7 http-like per-request arena (LocalArena p99)
+ *   SC8 FreeMem(ptr,size) vs FreeMem(ptr) tax (DefaultHeap)
+ *   SC9 dual-track: DefaultHeap vs DefaultAllocator (vtable + scan tax)
  *
- * Baselines: Growing native API, System/glibc, LocalArena.
+ * Baselines: Growing native API, System/glibc, LocalArena, VirtualArena.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -21,9 +25,12 @@ uses
   nextpas.core.base,
   nextpas.core.atomic.core,
   nextpas.core.platform.time,
+  nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.mem.allocator.growing,
-  nextpas.core.mem.arena.local;
+  nextpas.core.mem.allocator.growing_ia,
+  nextpas.core.mem.arena.local,
+  nextpas.core.mem.arena.virtual;
 
 const
   { SC1 }
@@ -51,6 +58,28 @@ const
   SC5_BATCH = 256;
   SC5_SIZE = 64;
   SC5_SCAVENGE_EVERY = 4;
+
+  { SC6 compiler-like AST churn (one VirtualArena, reset per "unit") }
+  SC6_UNITS = 200;
+  SC6_NODES_PER_UNIT = 4000;
+  SC6_WARMUP_UNITS = 4;
+  SC6_NODE_SIZES: array[0..7] of SizeUInt = (24, 32, 40, 48, 64, 96, 128, 256);
+
+  { SC7 http-like per-request LocalArena }
+  SC7_REQUESTS = 5000;
+  SC7_WARMUP = 100;
+  SC7_ARENA_CAP = 256 * 1024;
+  SC7_BODY_SIZES: array[0..4] of SizeUInt = (64, 256, 1024, 4096, 8192);
+
+  { SC8 sized vs unsized FreeMem on DefaultHeap }
+  SC8_ITERS = 200000;
+  SC8_WARMUP = 5000;
+  SC8_SIZE = 64;
+
+  { SC9 dual-track hot heap vs plugin IAllocator }
+  SC9_ITERS = 200000;
+  SC9_WARMUP = 5000;
+  SC9_SIZE = 64;
 
 type
   TScoreRow = record
@@ -543,6 +572,366 @@ begin
     LPeakLive, LFinalLive, LReleasedBytes, LReleasedSpans);
 end;
 
+{ --- SC6: compiler-like AST churn on VirtualArena --- }
+
+procedure RunSC6;
+var
+  LArena: TVirtualArena;
+  LStart, LEnd: UInt64;
+  LPtr: Pointer;
+  LPeakUsed: Int64;
+  LFinalUsed: Int64;
+  LOps: UInt64;
+  LNs: Int64;
+  LOk: Boolean;
+  U, N: Integer;
+  LSize: SizeUInt;
+begin
+  WriteLn('SC6 compiler AST churn (virtual_arena) ...');
+  LOk := True;
+  LPeakUsed := 0;
+  TVirtualArena_Init(LArena);
+  try
+    { warmup units }
+    for U := 1 to SC6_WARMUP_UNITS do
+    begin
+      for N := 0 to SC6_NODES_PER_UNIT - 1 do
+      begin
+        LSize := SC6_NODE_SIZES[N mod Length(SC6_NODE_SIZES)];
+        LPtr := LArena.Alloc(LSize);
+        if LPtr = nil then
+          LOk := False
+        else
+          PByte(LPtr)^ := Byte(N);
+      end;
+      LArena.Reset;
+    end;
+
+    LStart := platform_monotonic_ns;
+    for U := 1 to SC6_UNITS do
+    begin
+      for N := 0 to SC6_NODES_PER_UNIT - 1 do
+      begin
+        LSize := SC6_NODE_SIZES[N mod Length(SC6_NODE_SIZES)];
+        LPtr := LArena.Alloc(LSize);
+        if LPtr = nil then
+          LOk := False
+        else
+        begin
+          { mimic AST node header write }
+          PByte(LPtr)^ := Byte(N);
+          if LSize >= 8 then
+            PLongWord(LPtr)^ := LongWord(N);
+        end;
+      end;
+      if Int64(LArena.PeakUsed) > LPeakUsed then
+        LPeakUsed := Int64(LArena.PeakUsed);
+      { unit boundary: drop all AST at once }
+      LArena.Reset;
+    end;
+    LEnd := platform_monotonic_ns;
+    LFinalUsed := Int64(LArena.TotalUsed);
+  finally
+    TVirtualArena_Release(LArena);
+  end;
+
+  LOps := UInt64(SC6_UNITS) * UInt64(SC6_NODES_PER_UNIT);
+  if LOps > 0 then
+    LNs := Int64((LEnd - LStart) div LOps)
+  else
+    LNs := 0;
+  if LPeakUsed < 1 then
+    LOk := False;
+  { After last Reset, live usage must drop (bump rewind). }
+  if LFinalUsed > (LPeakUsed div 4) then
+    LOk := False;
+  AddRow('SC6', 'virtual_arena', LNs, 0, LOps, LOk,
+    'AST-like mixed nodes; Reset per unit',
+    LPeakUsed, LFinalUsed, 0, 0);
+end;
+
+{ --- SC7: http-like per-request LocalArena (p99 request latency) --- }
+
+procedure RunSC7RequestPath(const ASubject: string; AUseArena: Boolean);
+var
+  LArena: TLocalArena;
+  LSamples: array of Int64;
+  LStart, LEnd, LReqStart, LReqEnd: UInt64;
+  LHdr, LBody, LTmp: Pointer;
+  LBodySize: SizeUInt;
+  LOps: UInt64;
+  LNs, LP99: Int64;
+  LOk: Boolean;
+  R, K: Integer;
+  LSysPtrs: array[0..7] of Pointer;
+  LSysCount: Integer;
+begin
+  WriteLn('SC7 http request (', ASubject, ') ...');
+  LOk := True;
+  SetLength(LSamples, SC7_REQUESTS);
+  LArena := nil;
+  if AUseArena then
+    LArena := TLocalArena.Create(SC7_ARENA_CAP);
+  try
+    { warmup }
+    for R := 1 to SC7_WARMUP do
+    begin
+      if AUseArena then
+      begin
+        LHdr := LArena.AllocFast(128);
+        LBody := LArena.AllocFast(SC7_BODY_SIZES[R mod Length(SC7_BODY_SIZES)]);
+        LTmp := LArena.AllocFast(64);
+        if (LHdr = nil) or (LBody = nil) or (LTmp = nil) then
+          LOk := False;
+        LArena.Reset;
+      end
+      else
+      begin
+        System.GetMem(LHdr, 128);
+        System.GetMem(LBody, SC7_BODY_SIZES[R mod Length(SC7_BODY_SIZES)]);
+        System.GetMem(LTmp, 64);
+        if (LHdr = nil) or (LBody = nil) or (LTmp = nil) then
+          LOk := False;
+        System.FreeMem(LHdr);
+        System.FreeMem(LBody);
+        System.FreeMem(LTmp);
+      end;
+    end;
+
+    LStart := platform_monotonic_ns;
+    for R := 0 to SC7_REQUESTS - 1 do
+    begin
+      LReqStart := platform_monotonic_ns;
+      LBodySize := SC7_BODY_SIZES[R mod Length(SC7_BODY_SIZES)];
+      if AUseArena then
+      begin
+        { request scope: header + body + a few temps (Go request-local style) }
+        LHdr := LArena.AllocFast(128);
+        LBody := LArena.AllocFast(LBodySize);
+        if (LHdr = nil) or (LBody = nil) then
+          LOk := False
+        else
+        begin
+          PByte(LHdr)^ := Byte(R);
+          PByte(LBody)^ := Byte(R xor $A5);
+        end;
+        for K := 0 to 3 do
+        begin
+          LTmp := LArena.AllocFast(48 + SizeUInt(K) * 16);
+          if LTmp = nil then
+            LOk := False
+          else
+            PByte(LTmp)^ := Byte(K);
+        end;
+        LArena.Reset;
+      end
+      else
+      begin
+        LSysCount := 0;
+        System.GetMem(LHdr, 128);
+        System.GetMem(LBody, LBodySize);
+        LSysPtrs[0] := LHdr;
+        LSysPtrs[1] := LBody;
+        LSysCount := 2;
+        if (LHdr = nil) or (LBody = nil) then
+          LOk := False
+        else
+        begin
+          PByte(LHdr)^ := Byte(R);
+          PByte(LBody)^ := Byte(R xor $A5);
+        end;
+        for K := 0 to 3 do
+        begin
+          System.GetMem(LTmp, 48 + SizeUInt(K) * 16);
+          LSysPtrs[LSysCount] := LTmp;
+          Inc(LSysCount);
+          if LTmp = nil then
+            LOk := False
+          else
+            PByte(LTmp)^ := Byte(K);
+        end;
+        for K := LSysCount - 1 downto 0 do
+          if LSysPtrs[K] <> nil then
+            System.FreeMem(LSysPtrs[K]);
+      end;
+      LReqEnd := platform_monotonic_ns;
+      LSamples[R] := Int64(LReqEnd - LReqStart);
+    end;
+    LEnd := platform_monotonic_ns;
+  finally
+    if LArena <> nil then
+      LArena.Free;
+  end;
+
+  { ops = requests (latency is per-request, not per-alloc) }
+  LOps := SC7_REQUESTS;
+  if LOps > 0 then
+    LNs := Int64((LEnd - LStart) div LOps)
+  else
+    LNs := 0;
+  LP99 := Percentile99(LSamples, SC7_REQUESTS);
+  if LP99 <= 0 then
+    LOk := False;
+  AddRow('SC7', ASubject, LNs, LP99, LOps, LOk,
+    'per-request scope; p99=request_ns');
+end;
+
+procedure RunSC7;
+begin
+  RunSC7RequestPath('local_arena', True);
+  RunSC7RequestPath('system', False);
+end;
+
+{ --- SC8: FreeMem(ptr,size) vs FreeMem(ptr) on DefaultHeap --- }
+
+procedure RunSC8;
+var
+  LHeap: TGrowingAllocator;
+  LStart, LEnd: UInt64;
+  LPtr: Pointer;
+  I: Integer;
+  LOps: UInt64;
+  LNsSized, LNsUnsized: Int64;
+  LOk: Boolean;
+  LSz: SizeUInt;
+begin
+  WriteLn('SC8 sized vs unsized FreeMem ...');
+  LHeap := DefaultHeap;
+  LOk := LHeap <> nil;
+  LOps := SC8_ITERS;
+
+  { sized FreeMem(ptr, size) — preferred hot path }
+  for I := 1 to SC8_WARMUP do
+  begin
+    LPtr := LHeap.GetMem(SC8_SIZE);
+    if LPtr = nil then LOk := False;
+    LHeap.FreeMem(LPtr, SC8_SIZE);
+  end;
+  LStart := platform_monotonic_ns;
+  for I := 1 to SC8_ITERS do
+  begin
+    LPtr := LHeap.GetMem(SC8_SIZE);
+    if LPtr = nil then LOk := False;
+    LHeap.FreeMem(LPtr, SC8_SIZE);
+  end;
+  LEnd := platform_monotonic_ns;
+  if LOps > 0 then
+    LNsSized := Int64((LEnd - LStart) div LOps)
+  else
+    LNsSized := 0;
+  AddRow('SC8', 'free_sized', LNsSized, 0, LOps, LOk,
+    'GetMem+FreeMem(ptr,size) 64B');
+
+  { unsized FreeMem(ptr) — span scan / TryBlockSize path }
+  LOk := LHeap <> nil;
+  for I := 1 to SC8_WARMUP do
+  begin
+    LPtr := LHeap.GetMem(SC8_SIZE);
+    if LPtr = nil then LOk := False;
+    LHeap.FreeMem(LPtr);
+  end;
+  LStart := platform_monotonic_ns;
+  for I := 1 to SC8_ITERS do
+  begin
+    LPtr := LHeap.GetMem(SC8_SIZE);
+    if LPtr = nil then LOk := False;
+    LHeap.FreeMem(LPtr);
+  end;
+  LEnd := platform_monotonic_ns;
+  if LOps > 0 then
+    LNsUnsized := Int64((LEnd - LStart) div LOps)
+  else
+    LNsUnsized := 0;
+  { Gate: both succeed; document tax (unsized should not be faster than sized
+    on a quiet machine; allow equality under noise). }
+  if LNsUnsized < 0 then
+    LOk := False;
+  AddRow('SC8', 'free_unsized', LNsUnsized, 0, LOps, LOk,
+    'GetMem+FreeMem(ptr) span-scan');
+
+  { Correctness: TryBlockSize recovers size-class for a live block. }
+  LPtr := LHeap.GetMem(SC8_SIZE);
+  LOk := (LPtr <> nil) and LHeap.TryBlockSize(LPtr, LSz) and (LSz >= SC8_SIZE);
+  if LPtr <> nil then
+    LHeap.FreeMem(LPtr, SC8_SIZE);
+  AddRow('SC8', 'try_block_size', 0, 0, 1, LOk,
+    'TryBlockSize returns size-class >= request');
+end;
+
+{ --- SC9: dual-track DefaultHeap vs DefaultAllocator --- }
+
+procedure RunSC9;
+var
+  LHeap: TGrowingAllocator;
+  LPlugin: IAllocator;
+  LStart, LEnd: UInt64;
+  LPtr, LCross: Pointer;
+  I: Integer;
+  LOps: UInt64;
+  LNsHot, LNsPlugin: Int64;
+  LOk: Boolean;
+  LSz: SizeUInt;
+begin
+  WriteLn('SC9 dual-track hot vs plugin ...');
+  LHeap := DefaultHeap;
+  LPlugin := DefaultAllocator;
+  LOk := (LHeap <> nil) and (LPlugin <> nil);
+  LOps := SC9_ITERS;
+
+  { Hot: concrete DefaultHeap + sized free (zero IAllocator vtable). }
+  for I := 1 to SC9_WARMUP do
+  begin
+    LPtr := LHeap.GetMem(SC9_SIZE);
+    if LPtr = nil then LOk := False;
+    LHeap.FreeMem(LPtr, SC9_SIZE);
+  end;
+  LStart := platform_monotonic_ns;
+  for I := 1 to SC9_ITERS do
+  begin
+    LPtr := LHeap.GetMem(SC9_SIZE);
+    if LPtr = nil then LOk := False;
+    LHeap.FreeMem(LPtr, SC9_SIZE);
+  end;
+  LEnd := platform_monotonic_ns;
+  if LOps > 0 then
+    LNsHot := Int64((LEnd - LStart) div LOps)
+  else
+    LNsHot := 0;
+  AddRow('SC9', 'hot_heap', LNsHot, 0, LOps, LOk,
+    'DefaultHeap GetMem+FreeMem(size)');
+
+  { Plugin: IAllocator virtual GetMem/FreeMem (same Growing heap). }
+  LOk := LPlugin <> nil;
+  for I := 1 to SC9_WARMUP do
+  begin
+    LPtr := LPlugin.GetMem(SC9_SIZE);
+    if LPtr = nil then LOk := False;
+    LPlugin.FreeMem(LPtr);
+  end;
+  LStart := platform_monotonic_ns;
+  for I := 1 to SC9_ITERS do
+  begin
+    LPtr := LPlugin.GetMem(SC9_SIZE);
+    if LPtr = nil then LOk := False;
+    LPlugin.FreeMem(LPtr);
+  end;
+  LEnd := platform_monotonic_ns;
+  if LOps > 0 then
+    LNsPlugin := Int64((LEnd - LStart) div LOps)
+  else
+    LNsPlugin := 0;
+  AddRow('SC9', 'plugin_ia', LNsPlugin, 0, LOps, LOk,
+    'DefaultAllocator GetMem+FreeMem (vtable)');
+
+  { Same-heap ownership: plugin alloc freeable via hot sized free. }
+  LCross := LPlugin.GetMem(SC9_SIZE);
+  LOk := (LCross <> nil) and LHeap.TryBlockSize(LCross, LSz) and (LSz >= SC9_SIZE);
+  if LCross <> nil then
+    LHeap.FreeMem(LCross, LSz);
+  AddRow('SC9', 'same_heap', 0, 0, 1, LOk,
+    'plugin alloc + DefaultHeap FreeMem(size)');
+end;
+
 { --- report --- }
 
 procedure WriteMops(AMopsX100: Int64);
@@ -565,7 +954,7 @@ var
   LStatus: string;
 begin
   WriteLn;
-  WriteLn('=== mem Scorecard SC1-SC5 ===');
+  WriteLn('=== mem Scorecard SC1-SC9 ===');
   WriteLn('id   subject        ns/op    p99     Mops/s    ops        status  note');
   WriteLn('---- -------------- -------- ------- --------- ---------- ------- ----');
   for I := 0 to GRowCount - 1 do
@@ -593,6 +982,11 @@ begin
       Write(' releasedB=', GRows[I].ReleasedBytes);
       Write(' releasedSpans=', GRows[I].ReleasedSpans);
     end;
+    if GRows[I].Id = 'SC6' then
+    begin
+      Write(' | peakUsed=', GRows[I].PeakLive);
+      Write(' finalUsed=', GRows[I].FinalLive);
+    end;
     WriteLn;
   end;
   WriteLn;
@@ -605,7 +999,7 @@ end;
 begin
   GRowCount := 0;
   GFailed := 0;
-  SetLength(GRows, 16);
+  SetLength(GRows, 24);
   GAlloc := TGrowingAllocator.Create;
   try
     RunSC1;
@@ -613,6 +1007,10 @@ begin
     RunSC3;
     RunSC4;
     RunSC5;
+    RunSC6;
+    RunSC7;
+    RunSC8;
+    RunSC9;
     PrintReport;
   finally
     GAlloc.Free;
