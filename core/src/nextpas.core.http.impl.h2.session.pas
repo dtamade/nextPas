@@ -637,9 +637,16 @@ begin
 end;
 
 procedure TH2ServerSession.ArmReadDeadline(const ATimeoutMs: Int64);
+var
+  LTimeoutMs: Int64;
 begin
-  if ATimeoutMs > 0 then
-    FReadDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs))
+  { Prefer explicit read timeout; fall back to idle timeout for keep-alive waits
+    so blocking Run() does not hang forever after a response is flushed. }
+  LTimeoutMs := ATimeoutMs;
+  if (LTimeoutMs <= 0) and (FOptions.IdleTimeout > 0) then
+    LTimeoutMs := FOptions.IdleTimeout;
+  if LTimeoutMs > 0 then
+    FReadDeadline := TDeadline.After(TDuration.FromMilliseconds(LTimeoutMs))
   else
     FReadDeadline := TDeadline.Infinite;
   FConn.SetReadDeadline(FReadDeadline);
@@ -1621,6 +1628,11 @@ begin
       Break;
     ApplyAllPendingWindowUpdates;
     ExecuteReadyStreams;
+    { Flush responses (and SETTINGS ACK / RST / WINDOW_UPDATE) before blocking
+      on the next read. Otherwise a keep-alive client waiting for headers will
+      deadlock with a server blocked in FillReadBufferBlocking. }
+    if not DrainWriteBuffer then
+      Break;
     if (FState = h2sesShuttingDown) and (FStreams.ActiveCount = 0) then
     begin
       if not FGoawaySent then

@@ -198,7 +198,7 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 
 ## 6. 测试门禁
 
-主门禁：`core/tests/nextpas.core.http/Makefile`（34 suites）
+主门禁：`core/tests/nextpas.core.http/Makefile`（35 suites）
 
 纳入：base/url/headers/message/form/cookie/router/middleware(s)/hsts/static/
 client/contract/registry/h1*/server/security/stress/h2*/websocket*/fuzz/https_redirect
@@ -221,3 +221,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-06 | 2.0 | 对齐接口重写（仍混有旧 record 描述） |
 | 2026-07-16 | 3.0 | 与真实 IHttp* 面、builder、H2、门禁清单对齐 |
 | 2026-07-16 | 3.1 | 定稿 INV-12 keep-alive request-tail final public contract |
+| 2026-07-16 | 3.2 | H2 facade E2E 门禁 `test_http_h2_facade`；session write-drain 死锁修复 |

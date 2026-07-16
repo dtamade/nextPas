@@ -32,10 +32,22 @@
 - 证据：`test_http_h1parser` / `test_http_server` / `test_http_security`
 - 不做：因 keep-alive 垃圾尾巴把已完成首请求改成同请求 `400`
 
+### P2 — H2 facade 端到端证明
+
+- 新增 `test_http_h2_facade`：live `NewHttpClient` / `NewHttpServer` +
+  `Options.WithVersion(hvHttp2)` cleartext prior-knowledge
+- 覆盖：GET 200、POST body round-trip、sequential GET、router 404
+- 修复 `TH2ServerSession.Run`：`ExecuteReadyStreams` 后 `DrainWriteBuffer`，
+  避免 keep-alive 客户端等 headers / 服务端阻塞 read 的死锁
+- `ArmReadDeadline` 在 `ReadTimeout=0` 时回退 `IdleTimeout`，避免 join hang
+- 证据：`test_http_h2_facade` → 4 passed / 0 failed / 0 unfreed
+- 明确不做：h2c Upgrade、server push、WS-over-H2、TLS-ALPN facade E2E（已有
+  下层 transport 覆盖）
+
 ## 当前队列
 
 1. ~~P1 keep-alive request-tail~~ ✅
-2. **P2 H2 facade 端到端证明**
+2. ~~P2 H2 facade 端到端证明~~ ✅
 3. **P3 API surface 审计**（builder 优先，默认停扩面）
 4. **P4 runtime/socket 成本隔离**
 5. **P5 H3**（等 QUIC）

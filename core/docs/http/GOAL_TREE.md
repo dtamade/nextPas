@@ -407,9 +407,12 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 As of 2026-07-16, ordered execution queue:
 
 1. **P1 — keep-alive request-tail contract decision** ✅ closed (INV-12)
-2. **P2 — H2 facade end-to-end proof**
-   - live `NewHttpClient/Server` with `Options.WithVersion(hvHttp2)`
-   - keep h2c Upgrade / push / WS-over-H2 as explicit exclusions
+2. **P2 — H2 facade end-to-end proof** ✅ closed
+   - live `NewHttpClient/Server` + `Options.WithVersion(hvHttp2)` cleartext
+     prior-knowledge proven by `test_http_h2_facade` (4 cases, 0 unfreed)
+   - fixed `TH2ServerSession.Run` write-before-read drain deadlock and
+     IdleTimeout fallback for keep-alive read waits
+   - explicit exclusions remain: h2c Upgrade / push / WS-over-H2
 3. **P3 — API surface audit (no expansion by default)**
    - `THttpRequestBuilder` is the recommended construction path
    - inventory deprecated `NewRequest` overloads; avoid a second overlapping API family
