@@ -5,7 +5,7 @@
 ## 控制面状态
 
 - Owner lane：`.worktrees/http` / 分支 `http`
-- 当前阶段：G2/G3/G4 收口；H3 blocked on QUIC
+- 当前阶段：P1–P5 收口；H3 honesty closed-as-blocked on QUIC
 - 权威文档：
   - 完成度与切片队列 → `GOAL_TREE.md`
   - 稳定架构事实 → `ARCHITECTURE.md`
@@ -64,13 +64,23 @@
 - 负载门禁：`test_http_stress` 3/0，0 unfreed
 - 不做：跨语言排名断言、HTTP 内复制 net.server runtime
 
+### P5 — H3 honesty（blocked on QUIC）
+
+- **状态**：closed-as-blocked（诚实阻塞，不是伪完成）
+- 仅有：`hvHttp3` 枚举 + registry seam + `HttpVersionToStr`
+- 无：`impl.h3`、内建 client/server factory、空 facade
+- 证据：`test_http_registry` 锁住 builtins 不注册 H3；未注册 resolve → `EHttpError`
+- custom `Register*Transport(hvHttp3, ...)` 仍可作为 future-version positive proof
+- **解阻条件**：独立 QUIC 模块（连接/流/TLS）落地后，再开 H3 frame/QPACK 实现 lane
+- 不做：空 H3 public API、在 HTTP 内手写 QUIC
+
 ## 当前队列
 
 1. ~~P1 keep-alive request-tail~~ ✅
 2. ~~P2 H2 facade 端到端证明~~ ✅
 3. ~~P3 API surface 审计~~ ✅
 4. ~~P4 runtime/socket 成本隔离~~ ✅
-5. **P5 H3**（等 QUIC）
+5. ~~P5 H3 honesty~~ ✅ blocked on QUIC（无伪面）
 
 ## 明确不做
 

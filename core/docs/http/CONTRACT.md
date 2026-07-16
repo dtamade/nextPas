@@ -200,8 +200,10 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 
 ### H3
 
-- **未实现**；仅版本枚举 + registry seam
-- 阻塞：独立 QUIC 模块
+- **未实现**；仅版本枚举 + registry seam（`hvHttp3` / `HttpVersionToStr`）
+- 内建 `RegisterBuiltins` **不**注册 H3 client/server factory
+- 未注册时 `Resolve*Transport(hvHttp3)` → `EHttpError`（`test_http_registry`）
+- 阻塞：独立 QUIC 模块（连接/流/TLS）；禁止空 H3 facade
 
 ---
 
@@ -233,3 +235,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.2 | H2 facade E2E 门禁 `test_http_h2_facade`；session write-drain 死锁修复 |
 | 2026-07-16 | 3.3 | P3 API audit：facade/message deprecation 对齐；builder-first 清单 |
 | 2026-07-16 | 3.4 | P4 成本隔离阶梯 + HTTP benches SysUtils 隔离修复 |
+| 2026-07-16 | 3.5 | P5 H3 honesty：无内建 H3 factory；QUIC 阻塞显式化 |

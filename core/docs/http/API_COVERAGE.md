@@ -29,7 +29,9 @@
     `test_http_contract` source-contract 锁住 parity。
   - runtime/socket 成本隔离已闭合：成本阶梯见 `BENCHMARKS.md`；
     fullchain/server/h1parser 编译回归已修；`test_http_stress` 绿。
-  下一优先：H3（blocked on QUIC；仅维护 registry/version seams）。
+  - H3 honesty 已闭合：无内建 factory；`test_http_registry` 锁住未注册
+    `hvHttp3` resolve 失败；解阻依赖独立 QUIC 模块。
+  当前 HTTP lane 队列 P1–P5 已收口（H3 为诚实阻塞）。
 - 2026-07-06 API 对标结论（历史，仍有效的部分保留）：
   - 已够稳：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` / `IsRunning`
     的生命周期形状足够清晰，保持同步 facade，不把 Go `net/http` 或 Rust
@@ -338,7 +340,11 @@
 - runtime/socket 成本隔离已闭合：L0–L4 阶梯见 `BENCHMARKS.md`；
   `bench_fullchain` 输出 `cost_isolation_ladder` / `dispatch_split`，
   并通过 `NEXTPAS_BENCH_FILTER` / `NEXTPAS_BENCH_MAX_ITERS` 驱动
-  `TBenchSuite`。下一步仅 H3（QUIC 阻塞）。
+  `TBenchSuite`。
+- H3 公开面保持诚实：builtins 不注册 `hvHttp3` transport；
+  `test_http_registry` 直接锁住 client/server resolve 在未注册时抛
+  `EHttpError`。custom registry 注入仍可作为 future-version seam 证明。
+  实现 H3 前必须先有独立 QUIC 模块。
 - `bench_http_server` benchmark evidence summary: `test_http_benchmarks` 覆盖
   nextPas、Go `net/http`、Rust std-only 与可选 Hyper/Tokio comparator smoke，
   并锁住 runner / snapshot / H1 parser flag-matrix 的核心 truth markers；详细

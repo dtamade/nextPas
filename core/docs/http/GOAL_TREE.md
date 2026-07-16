@@ -426,8 +426,10 @@ As of 2026-07-16, ordered execution queue:
    - restored HTTP benches after SysUtils isolation (`fullchain`/`server`/`h1parser`)
    - fullchain wires filter/max-iters and isolation markers; stress gate green
    - no ranking claims without scoped caveats
-5. **P5 — H3**
-   - blocked on QUIC; only maintain registry/version seams
+5. **P5 — H3 honesty** ✅ closed-as-blocked
+   - no built-in H3 factory; enum + registry seam only
+   - `test_http_registry` proves unregistered `hvHttp3` resolve raises
+   - unblock requires independent QUIC module before H3 frame/QPACK work
 
 ## Immediate Do-Not-Drift Rules
 
