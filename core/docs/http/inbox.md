@@ -54,12 +54,22 @@
 - 刻意不扩面：builder 不加 `ContentLength()`；`Body(IReader)` 仍 CL=0
 - 证据：`test_http_contract` → 31 passed / 0 unfreed
 
+### P4 — runtime/socket 成本隔离
+
+- 成本阶梯写入 `BENCHMARKS.md`：L0 `net/bench_tcp` → L1 micros →
+  L2 fullchain Direct → L3 Router/Middleware → L4 server comparison
+- 修复 SysUtils 清理后编译回归：`bench_fullchain` / `bench_server` /
+  `bench_h1parser`（env/Exception + 缺逗号）
+- `bench_fullchain` 接线 `SetFilter`/`SetMaxIterations`，输出 isolation markers
+- 负载门禁：`test_http_stress` 3/0，0 unfreed
+- 不做：跨语言排名断言、HTTP 内复制 net.server runtime
+
 ## 当前队列
 
 1. ~~P1 keep-alive request-tail~~ ✅
 2. ~~P2 H2 facade 端到端证明~~ ✅
 3. ~~P3 API surface 审计~~ ✅
-4. **P4 runtime/socket 成本隔离**
+4. ~~P4 runtime/socket 成本隔离~~ ✅
 5. **P5 H3**（等 QUIC）
 
 ## 明确不做

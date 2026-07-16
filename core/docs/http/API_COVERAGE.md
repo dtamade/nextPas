@@ -27,7 +27,9 @@
     仅 `NewRequest(Method, TUrl)` + `NewGetRequest` 非 deprecated；
     facade 补齐 6 处与 `message.pas` 一致的 `deprecated`；
     `test_http_contract` source-contract 锁住 parity。
-  下一优先：runtime/socket 成本隔离；H3 仍 blocked on QUIC。
+  - runtime/socket 成本隔离已闭合：成本阶梯见 `BENCHMARKS.md`；
+    fullchain/server/h1parser 编译回归已修；`test_http_stress` 绿。
+  下一优先：H3（blocked on QUIC；仅维护 registry/version seams）。
 - 2026-07-06 API 对标结论（历史，仍有效的部分保留）：
   - 已够稳：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` / `IsRunning`
     的生命周期形状足够清晰，保持同步 facade，不把 Go `net/http` 或 Rust
@@ -332,8 +334,11 @@
   其余 `NewRequest` / 全部 `NewStreamingRequest` 在 facade 与 `message.pas`
   同标记 deprecated；`test_http_contract` 用 source-contract 防止 facade 再
   丢 deprecation。Builder `Body(IReader)` 仍固定 `Content-Length: 0`，
-  已知长度流式请求不扩面加 `ContentLength()`。下一步优先 runtime/socket
-  成本隔离。
+  已知长度流式请求不扩面加 `ContentLength()`。
+- runtime/socket 成本隔离已闭合：L0–L4 阶梯见 `BENCHMARKS.md`；
+  `bench_fullchain` 输出 `cost_isolation_ladder` / `dispatch_split`，
+  并通过 `NEXTPAS_BENCH_FILTER` / `NEXTPAS_BENCH_MAX_ITERS` 驱动
+  `TBenchSuite`。下一步仅 H3（QUIC 阻塞）。
 - `bench_http_server` benchmark evidence summary: `test_http_benchmarks` 覆盖
   nextPas、Go `net/http`、Rust std-only 与可选 Hyper/Tokio comparator smoke，
   并锁住 runner / snapshot / H1 parser flag-matrix 的核心 truth markers；详细

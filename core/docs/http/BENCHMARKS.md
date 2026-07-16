@@ -22,6 +22,45 @@ had no project `Makefile`, no stable metadata contract, and no focused gate.
 The maintained benchmark truth now lives only in the focused assets above and
 the Go / Rust comparator projects.
 
+## Residual Cost Isolation Ladder (P4)
+
+Use this ladder when attributing keep-alive cost. Numbers below are **local
+characterization smoke** from 2026-07-16 on this machine — not rankings.
+
+| Layer | Asset | What it isolates |
+| ----- | ----- | ---------------- |
+| L0 | `benchmarks/nextpas.core.net/bench_tcp` | pure TCP loopback (no HTTP) |
+| L1 | `bench_h1parser` / `bench_headers` / `bench_router` / `bench_h1writer` / `bench_h1outbound` | in-memory protocol pieces, no real socket |
+| L2 | `bench_fullchain` `Direct/*` | real HTTP + socket, no router |
+| L3 | `bench_fullchain` `Router/*` / `Middleware/*` | dispatch / middleware delta over L2 |
+| L4 | `bench_server` + Go/Rust comparators | multi-thread throughput; not epoll ranking |
+
+`bench_fullchain` emits:
+
+- `operation=http.fullchain.keepalive`
+- `backend=<threaded|epoll>`
+- `bench_max_iters` / `bench_filter` (wired into `TBenchSuite`)
+- `cost_isolation_ladder=net_bench_tcp|micro|direct|router_middleware|server_comparison`
+- `dispatch_split=Direct/*=direct_handler;Router/*=router;Middleware/*=middleware_router`
+
+Fresh local smoke (2026-07-16):
+
+| layer | row | note | ns/op (approx) |
+| ----- | --- | ---- | -------------: |
+| L0 | TCP echo round-trip 1KB | different payload than hello | ~33700 |
+| L2 | Direct/Plaintext 13B | HTTP + socket, no router | ~40500 |
+| L3 | Middleware/Noop / Router/Plaintext | same connection shape | ~44–53k |
+
+Do **not** subtract L0 from L2 as a precise residual: payload and read/write
+shapes differ. Durable conclusion: socket/runtime floor is a first-order share
+of fullchain cost; further wins need L1 micros or profiled hotspots, not more
+ranking tables.
+
+SysUtils isolation note (2026-07-16): HTTP benches no longer rely on implicit
+`SysUtils` symbols. `bench_fullchain` / `bench_server` use
+`nextpas.core.os.env` + `nextpas.core.errors`; `bench_h1parser` uses
+`os.env` / `text.conv` and repairs multi-line call commas.
+
 ## Run the Server Comparison
 
 Run the comparison harness:

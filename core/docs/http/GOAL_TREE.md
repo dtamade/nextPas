@@ -334,7 +334,9 @@ Current isolation direction:
 - writer plus outbound drain combination
 - full-chain correlation with direct/router/middleware workload splits
 
-What still matters most now is isolating remaining runtime/socket overhead and other non-parser/non-writer costs, not collecting more final benchmark tables too early.
+P4 residual cost isolation is closed: ladder + benches restored. Further
+performance work should profile specific L1/L2 hotspots with scoped caveats,
+not collect more ranking tables.
 
 ## Protocol Evolution Gates
 
@@ -419,8 +421,10 @@ As of 2026-07-16, ordered execution queue:
    - fixed 6 facade overloads that had dropped `deprecated` vs `message.pas`
    - source-contract in `test_http_contract` locks deprecation parity
    - no second overlapping API family; builder `ContentLength()` not added
-4. **P4 — runtime/socket cost isolation**
-   - continue narrow benchmarks for non-parser/non-writer costs
+4. **P4 — runtime/socket cost isolation** ✅ closed
+   - residual cost ladder documented in `BENCHMARKS.md` (L0 tcp → L4 comparison)
+   - restored HTTP benches after SysUtils isolation (`fullchain`/`server`/`h1parser`)
+   - fullchain wires filter/max-iters and isolation markers; stress gate green
    - no ranking claims without scoped caveats
 5. **P5 — H3**
    - blocked on QUIC; only maintain registry/version seams

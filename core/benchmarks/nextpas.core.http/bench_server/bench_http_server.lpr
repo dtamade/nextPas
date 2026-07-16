@@ -3,6 +3,9 @@ program bench_http_server;
 uses
   nextpas.core.thread.init,
   nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.errors,
+  nextpas.core.os.env,
+  nextpas.core.text.conv,
   nextpas.core.http.base, nextpas.core.http.intf, nextpas.core.http.server,
   nextpas.core.http.middleware, nextpas.core.net, nextpas.core.net.intf,
   nextpas.core.time.base, nextpas.core.time.deadline,

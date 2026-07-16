@@ -232,3 +232,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.1 | 定稿 INV-12 keep-alive request-tail final public contract |
 | 2026-07-16 | 3.2 | H2 facade E2E 门禁 `test_http_h2_facade`；session write-drain 死锁修复 |
 | 2026-07-16 | 3.3 | P3 API audit：facade/message deprecation 对齐；builder-first 清单 |
+| 2026-07-16 | 3.4 | P4 成本隔离阶梯 + HTTP benches SysUtils 隔离修复 |
