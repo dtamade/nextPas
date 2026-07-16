@@ -509,7 +509,8 @@ begin
   Result := False;
   if E = nil then
     Exit(False);
-  Result := (E is ETimeoutError) or (E is ENetworkError);
+  Result := HttpErrorIsTimeout(E) or (E is ENetworkError) or
+    ((E is EHttpError) and (EHttpError(E).Kind = hekConnect));
 end;
 
 { TReadPrependTcpStream }
@@ -2153,7 +2154,15 @@ begin
         LN := AReq.Body.Read(LTmp[0], LReadSize);
       except
         on E: Exception do
-          raise EHttpError.Create(hekProtocol, 'HTTP request body read failed: ' + E.Message);
+        begin
+          if E is ETimeoutError then
+            raise EHttpError.CreateOp(hekTimeout, 'transport',
+              'HTTP request body read failed: ' + E.Message);
+          if E is EHttpError then
+            raise;
+          raise EHttpError.Create(hekProtocol,
+            'HTTP request body read failed: ' + E.Message);
+        end;
       end;
       if LN > 0 then
       begin
@@ -2327,35 +2336,45 @@ begin
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
       LResponseStarted);
   except
-    if LPooled then
+    on E: Exception do
     begin
-      LConn.Close;
-      if not LRequestWriteComplete then
-        raise;
-      if LResponseStarted then
-        raise;
-      if not IsRetrySafeRequest(AReq) then
-        raise;
-      if (AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil) then
-        raise;
-      RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
-      LConn := TcpConnect(LHost, LPort);
-      try
-        ApplyClientDeadline(LConn, LRequestDeadline);
-        LRequestWriteComplete := False;
-        WriteRequest(LConn as IWriter, AReq, LAutoHost);
-        LRequestWriteComplete := True;
-        LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-          LResponseStarted);
-      except
+      if LPooled then
+      begin
         LConn.Close;
+        if (not LRequestWriteComplete) or LResponseStarted or
+           (not IsRetrySafeRequest(AReq)) or
+           ((AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil)) then
+        begin
+          if E is ETimeoutError then
+            raise EHttpError.CreateOp(hekTimeout, 'transport', E.Message);
+          raise;
+        end;
+        RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
+        LConn := TcpConnect(LHost, LPort);
+        try
+          ApplyClientDeadline(LConn, LRequestDeadline);
+          LRequestWriteComplete := False;
+          WriteRequest(LConn as IWriter, AReq, LAutoHost);
+          LRequestWriteComplete := True;
+          LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
+            LResponseStarted);
+        except
+          on E2: Exception do
+          begin
+            LConn.Close;
+            if E2 is ETimeoutError then
+              raise EHttpError.CreateOp(hekTimeout, 'transport', E2.Message);
+            raise;
+          end;
+        end;
+      end
+      else
+      begin
+        LConn.Close;
+        if E is ETimeoutError then
+          raise EHttpError.CreateOp(hekTimeout, 'transport', E.Message);
         raise;
       end;
-    end
-    else
-    begin
-      LConn.Close;
-      raise;
     end;
   end;
 

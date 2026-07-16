@@ -568,29 +568,18 @@ function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AContentType: string; const ABody: IReader): IHttpRequest;
 var
   LHeaders: IHttpHeaders;
-  LBody: TBytes;
 begin
+  { Known-length streams must use SendStreaming or NewRequest(..., Reader, CL).
+    Convenience Post/Put/Patch/Delete(IReader) no longer silently ReadAll. }
+  if ABody <> nil then
+    raise EHttpError.Create(hekArgument,
+      'IHttpClient body reader helpers do not buffer IReader; use string/TBytes ' +
+      'overloads or IHttpClient.SendStreaming with Content-Length');
+
   LHeaders := NewHttpHeaders;
   if AContentType <> '' then
     LHeaders.SetHeader('content-type', AContentType);
-
-  if ABody <> nil then
-  begin
-    try
-      LBody := nextpas.core.io.ReadAll(ABody);
-    except
-      on E: Exception do
-      begin
-        CloseRequestBodyIgnoringErrors(ABody);
-        raise;
-      end;
-    end;
-    CloseRequestBody(ABody);
-  end
-  else
-    LBody := nil;
-
-  Result := NewRequest(AMethod, AUrl, LHeaders, LBody);
+  Result := NewRequest(AMethod, AUrl, LHeaders, nil, 0);
 end;
 
 function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl: string;

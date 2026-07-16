@@ -74,10 +74,14 @@ end;
     有 body + `Content-Length: 0`（与「未调用 Body」区分）。
   - `Body(IReader)` + **`ContentLength(N)`**：已知长度流式请求；`Build` 调用
     `NewRequest(..., Reader, N)`。
-  - 仅 `Body(IReader)` 未声明长度 → **`Build` fail-fast**（`EArgumentError`），
+  - 仅 `Body(IReader)` 未声明长度 → **`Build` fail-fast**（`EHttpError(hekArgument)`），
     **禁止**静默 `Content-Length: 0`。
   - 未知长度 / 不可回放流：走 `SendStreaming`（不经 builder 假装已知 CL）。
 - Streaming：`NewStreamingRequest` + `SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
+- Client convenience `Post/Put/Patch/Delete(IReader)`：**fail-fast** `hekArgument`
+  （不再静默 `ReadAll`）。已知长度流用 `SendStreaming` 或
+  `NewRequest(..., Reader, ContentLength)` / builder `Body(IReader)+ContentLength`；
+  小缓冲 body 用 string/`TBytes` 重载。
 
 ### 2.2.1 EHttpError.Kind（可用性修复）
 
@@ -85,17 +89,35 @@ end;
   Parse/Redirect/Body/Upgrade/Registry/Status/…）与 `Kind` / 可选 `Status` / `Op`。
 - `Create(string)` 保持兼容（`Kind = hekUnknown`，Category 仍默认 network）。
 - 新代码优先 `Create(Kind, Message)`；调用方可 `except on E: EHttpError` 后匹配 Kind。
+- **消息形状错误**（非法/冲突 Content-Length、不支持 Transfer-Encoding、
+  builder 非法 CL、client IReader 便捷路径）→ `hekArgument`（不是裸
+  `EArgumentError`）。**配置/nil 前置条件**（nil writer/client、负超时等）仍可
+  用 `EArgumentError`。
+- Transport 边界：裸 `ETimeoutError` 在 H1/H2 client RoundTrip 包装为
+  `EHttpError.CreateOp(hekTimeout, 'transport', ...)`。
+- 门面 helper：`HttpErrorIsTimeout` / `HttpErrorIsRetryable`（timeout + connect
+  类可重试；也识别边界前的裸 `ETimeoutError`）。
 
 ### 2.2.2 IHttpContext（可用性修复）
 
 - Context 附着在 **请求对象**（`IHttpRequestWithContext`），不使用进程级 pointer map。
 - `SetValue` = 非拥有；`SetOwnedValue` = context 拥有并在覆盖/Remove/Destroy 时 Free。
 - `Has(Key)` = 键存在（允许 value=nil 的非拥有条目）。
+- Middleware request 装饰基类 `THttpRequestWrapper` 转发
+  `IHttpRequestWithContext` / `IHttpRequestWithOptions`，避免 bodycache/decompress
+  等包装丢 `Supports` 保真。
 
 ### 2.2.3 IHttpResponse.Close（可用性修复）
 
 - `Close` 语义对齐 `HttpReleaseResponseBody`（幂等）；析构时若未 Close 则自动 Close。
 - 调用方应先读完 body 再让 response 离开作用域，或显式 `Close` / Read helper。
+
+### 2.2.4 FPC RTL 隔离（可用性修复）
+
+- 生产 HTTP 源与 examples/tests：**禁止**直接 `uses SysUtils` / `Process` /
+  `BaseUnix`（仅 `nextpas.core.system` 可直接依赖 FPC RTL）。
+- 子进程：`nextpas.core.process`（`Command` / `IChild`）；文本：`text.conv`；
+  环境：`os.env`；路径/文件：`path` / `fs`。
 
 ### 2.3 Router / Middleware
 
@@ -259,3 +281,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.3 | P3 API audit：facade/message deprecation 对齐；builder-first 清单 |
 | 2026-07-16 | 3.4 | P4 成本隔离阶梯 + HTTP benches SysUtils 隔离修复 |
 | 2026-07-16 | 3.5 | P5 H3 honesty：无内建 H3 factory；QUIC 阻塞显式化 |
+| 2026-07-16 | 3.6 | Usability wave-2：hekTimeout wrap、hekArgument 消息形状、IReader fail-fast、THttpRequestWrapper、RTL isolation |

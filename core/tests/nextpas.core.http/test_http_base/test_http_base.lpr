@@ -85,6 +85,51 @@ begin
   Check(LCaught, 'HttpStrToMethod raises EHttpError for invalid method');
 end;
 
+procedure TestHttpErrorKindHelpers;
+var
+  LTimeout: EHttpError;
+  LConnect: EHttpError;
+  LParse: EHttpError;
+  LBareTimeout: ETimeoutError;
+  LNet: ENetworkError;
+  LWrapped: Exception;
+begin
+  LTimeout := EHttpError.Create(hekTimeout, 'http timeout');
+  LConnect := EHttpError.Create(hekConnect, 'connect failed');
+  LParse := EHttpError.Create(hekParse, 'bad');
+  LBareTimeout := ETimeoutError.Create('bare transport timeout');
+  LNet := ENetworkError.Create('network failed');
+  try
+    Check(HttpErrorIsTimeout(LTimeout), 'hekTimeout is timeout');
+    Check(HttpErrorIsTimeout(LBareTimeout), 'bare ETimeoutError is timeout');
+    Check(not HttpErrorIsTimeout(LConnect), 'hekConnect is not timeout');
+    Check(not HttpErrorIsTimeout(nil), 'nil is not timeout');
+
+    Check(HttpErrorIsRetryable(LTimeout), 'timeout is retryable');
+    Check(HttpErrorIsRetryable(LConnect), 'connect is retryable');
+    Check(HttpErrorIsRetryable(LBareTimeout), 'bare timeout is retryable');
+    Check(HttpErrorIsRetryable(LNet), 'network error is retryable');
+    Check(not HttpErrorIsRetryable(LParse), 'parse is not retryable');
+
+    LWrapped := HttpWrapTransportException(LBareTimeout);
+    try
+      Check(LWrapped is EHttpError, 'wrap produces EHttpError');
+      Check(EHttpError(LWrapped).Kind = hekTimeout, 'wrap sets hekTimeout');
+      CheckEqual('transport', EHttpError(LWrapped).Op, 'wrap sets transport op');
+    finally
+      LWrapped.Free;
+    end;
+    Check(HttpWrapTransportException(LConnect) = nil,
+      'non-timeout wrap returns nil');
+  finally
+    LTimeout.Free;
+    LConnect.Free;
+    LParse.Free;
+    LBareTimeout.Free;
+    LNet.Free;
+  end;
+end;
+
 procedure TestHttpStatusText;
 begin
   CheckEqual('Continue', HttpStatusText(100), '100');
@@ -461,6 +506,7 @@ begin
   T.Test('HttpMethodToStr', @TestHttpMethodToStr);
   T.Test('HttpStrToMethod', @TestHttpStrToMethod);
   T.Test('EHttpError category', @TestHttpErrorCategory);
+  T.Test('HttpError Kind helpers', @TestHttpErrorKindHelpers);
   T.Test('HttpStatusText', @TestHttpStatusText);
   T.Test('HttpStatus class helpers', @TestHttpStatusClassHelpers);
   T.Test('HttpVersionToStr', @TestHttpVersionToStr);

@@ -3,9 +3,9 @@ program http_websocket_echo_demo;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
-  nextpas.core.http;
+  nextpas.core.http,
+  nextpas.core.text.conv;
 
 procedure WritePlainText(const AW: IHttpResponseWriter; const AStatus: THttpStatus;
   const ABody: string);
@@ -15,6 +15,13 @@ begin
   AW.WriteHeader(AStatus);
   if ABody <> '' then
     AW.Write(ABody[1], SizeUInt(Length(ABody)));
+end;
+
+function BytesToString(const ABytes: TBytes): string;
+begin
+  SetLength(Result, Length(ABytes));
+  if Length(ABytes) > 0 then
+    Move(ABytes[0], Result[1], Length(ABytes));
 end;
 
 var
@@ -43,11 +50,19 @@ begin
     var
       LWs: IWebSocket;
       LFrame: TWebSocketFrame;
+      LWsOpts: TWebSocketOptions;
     begin
-      LWs := UpgradeWebSocket(AReq, AW);
+      { Demo accepts non-browser clients (no Origin) for smoke/scripts. }
+      LWsOpts := TWebSocketOptions.Default;
+      LWsOpts.OnCheckOrigin :=
+        function(const AOrigin: string): Boolean
+        begin
+          Result := True;
+        end;
+      LWs := UpgradeWebSocket(AReq, AW, LWsOpts);
       LFrame := LWs.ReadFrame;
       if LFrame.Opcode = wsOpText then
-        LWs.WriteText('echo=' + LFrame.Payload)
+        LWs.WriteText('echo=' + BytesToString(LFrame.Payload))
       else
         LWs.WriteText('unsupported-opcode=' + IntToStr(Int64(Ord(LFrame.Opcode))));
       LWs.Close(1000, 'bye');

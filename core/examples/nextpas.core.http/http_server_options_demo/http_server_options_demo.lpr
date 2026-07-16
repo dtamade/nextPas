@@ -3,8 +3,8 @@ program http_server_options_demo;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.http,
   nextpas.core.io,
   nextpas.core.text.conv;
@@ -41,7 +41,7 @@ begin
   if LLower = 'epoll' then
     Exit(TCP_SERVER_BACKEND_EPOLL);
 
-  raise Exception.Create('unknown backend: ' + AValue +
+  raise EArgumentError.Create('unknown backend: ' + AValue +
     ' (expected threaded or epoll)');
 end;
 

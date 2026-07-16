@@ -3,8 +3,9 @@ program http_get_client;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  nextpas.core.http;
+  nextpas.core.http,
+  nextpas.core.os.env,
+  nextpas.core.text.conv;
 
 procedure PrintHeaders(const AHeaders: IHttpHeaders);
 begin

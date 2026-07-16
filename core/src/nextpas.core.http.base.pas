@@ -199,6 +199,14 @@ function HttpStatusIsClientError(const ACode: THttpStatus): Boolean;
 function HttpStatusIsServerError(const ACode: THttpStatus): Boolean;
 function HttpVersionToStr(const AVersion: THttpVersion): string;
 
+{** True if E is EHttpError(hekTimeout) or a bare ETimeoutError (pre-boundary). }
+function HttpErrorIsTimeout(const E: Exception): Boolean;
+{** True for timeout or connect-class failures suitable for client retry. }
+function HttpErrorIsRetryable(const E: Exception): Boolean;
+{** Map bare ETimeoutError to EHttpError(hekTimeout). Returns nil if caller
+   should bare-re-raise the original exception with `raise`. }
+function HttpWrapTransportException(const E: Exception): Exception;
+
 implementation
 
 uses
@@ -256,6 +264,33 @@ begin
   FKind := AKind;
   FStatus := 0;
   FOp := AOp;
+end;
+
+function HttpErrorIsTimeout(const E: Exception): Boolean;
+begin
+  if E = nil then
+    Exit(False);
+  if E is EHttpError then
+    Exit(EHttpError(E).Kind = hekTimeout);
+  Result := E is ETimeoutError;
+end;
+
+function HttpErrorIsRetryable(const E: Exception): Boolean;
+begin
+  if E = nil then
+    Exit(False);
+  if HttpErrorIsTimeout(E) then
+    Exit(True);
+  if E is EHttpError then
+    Exit(EHttpError(E).Kind in [hekConnect, hekTimeout]);
+  Result := E is ENetworkError;
+end;
+
+function HttpWrapTransportException(const E: Exception): Exception;
+begin
+  Result := nil;
+  if (E <> nil) and (E is ETimeoutError) then
+    Result := EHttpError.CreateOp(hekTimeout, 'transport', E.Message);
 end;
 
 { Free functions }

@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-16 (usability-fix M0–M7 closed; non-H3 stage-complete)
+> Last updated: 2026-07-16 (usability-fix wave-2 D1–D7 / M1–M5; non-H3 stage-complete)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -18,15 +18,17 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 ## Current Position
 
 This lane is **non-H3 stage-complete** on protocol surface, and the
-**usability-fix wave (M0–M7)** is **closed**:
+**usability-fix waves** are closed through wave-2 (D1–D7 / M1–M5):
 
 - G0–G5 and H3 honesty remain as previously closed (see below / Recent Fixes).
-- Closed queue: builder `ContentLength` + fail-fast; `EHttpError.Kind`;
-  request-attached context + `SetOwnedValue`; `IHttpResponse.Close`; `IMutex`;
-  Kind coverage on main raise sites; full module gate + docs.
+- Wave-1 (M0–M7): builder `ContentLength` + fail-fast; `EHttpError.Kind`;
+  request-attached context + `SetOwnedValue`; `IHttpResponse.Close`; `IMutex`.
+- Wave-2 (M1–M5): transport `hekTimeout` wrap; message-shape `hekArgument`;
+  `HttpErrorIsTimeout` / `HttpErrorIsRetryable`; `THttpRequestWrapper` fidelity;
+  `Post(IReader)` fail-fast (no silent ReadAll); examples/tests FPC RTL isolation
+  via `process`/`text.conv`/`os.env`/`fs`/`path`.
 - Module gate: `core/tests/nextpas.core.http/Makefile` runs **35** focused suites.
-- Full gate evidence (2026-07-16 usability wave): **1723 passed / 0 failed**.
-- Optional remaining: M8 physical delete of deprecated overloads (needs confirm).
+- Optional remaining: M6 physical delete of deprecated overloads (needs confirm).
 
 ### Stage completion definition (non-H3)
 
@@ -40,6 +42,24 @@ HTTP can be called stage-complete only when all of these hold:
 6. Performance claims stay scoped; no fake H3 surface.
 
 ### Recent Fixes (2026-07-16)
+
+**Usability-fix wave-2 M1–M5 (2026-07-16)**
+
+- Transport: H1/H2 client wrap bare `ETimeoutError` → `hekTimeout` + `Op=transport`.
+- Taxonomy: message-shape validation uses `hekArgument`; config/nil stays
+  `EArgumentError`.
+- Helpers: `HttpErrorIsTimeout` / `HttpErrorIsRetryable` on base + facade.
+- Middleware: `THttpRequestWrapper` forwards context/options; bodycache/decompress
+  inherit it.
+- Client: `Post/Put/Patch/Delete(IReader)` fail-fast (no silent ReadAll).
+- RTL isolation: examples drop SysUtils; `test_http_examples` /
+  `test_http_benchmarks` use `nextpas.core.process` instead of `Process`/`BaseUnix`.
+- Cross-module: `process.pipe.DrainReadHandle` no longer loops to EAGAIN on
+  blocking parent pipes (hang with long-lived children).
+- Examples readiness: after ready markers, poll real HTTP GET until serving;
+  websocket demo allows non-browser Origin for smoke.
+- Docs: `CONTRACT.md` §2.2.x updated for Kind helpers, body fail-fast, isolation.
+- Evidence: 35 Makefile suites all green; `test_http_examples` 5/5; hygiene pass.
 
 **Usability-fix wave M0–M7 (2026-07-16)**
 

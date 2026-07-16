@@ -276,21 +276,18 @@ var
   LBuf: array[0..PIPE_DRAIN_BUF_SIZE - 1] of Byte;
   LRead: PtrInt;
 begin
-  { P1-4 fix: Loop until EAGAIN/EOF for better throughput.
-    Previously exited after first successful read, forcing a full
-    poll→read→poll cycle per chunk. Now drains all available data. }
-  repeat
-    LRead := platform_io_read(AHandle, @LBuf[0], SizeOf(LBuf));
-    if LRead > 0 then
-    begin
-      AppendPipeChunk(ATarget, ACount, LBuf[0], LRead);
-      Continue;
-    end;
-    if LRead = 0 then
-      Exit(True);
-    { EAGAIN means no more data available right now }
+  { Parent pipe ends are blocking. After poll reports readability, one
+    read is safe; looping until EAGAIN hangs while the child still holds
+    the write end open. Callers re-enter via poll for remaining data. }
+  LRead := platform_io_read(AHandle, @LBuf[0], SizeOf(LBuf));
+  if LRead > 0 then
+  begin
+    AppendPipeChunk(ATarget, ACount, LBuf[0], LRead);
     Exit(False);
-  until False;
+  end;
+  if LRead = 0 then
+    Exit(True); { EOF / peer closed write end }
+  Exit(False); { error or transient; caller may retry }
 end;
 
 procedure DrainWithPoll(const AStdout, AStderr: IPipeDrainReader;

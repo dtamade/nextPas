@@ -3,7 +3,6 @@ program hello_http_server;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.http,
   nextpas.core.text.conv;
 

@@ -5,6 +5,7 @@ unit nextpas.core.http.middleware;
 interface
 
 uses
+  nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.sync.intf,
@@ -17,6 +18,34 @@ type
 
   { Predicate for conditional middleware — returns True to apply, False to skip }
   TRequestPredicate = reference to function(const AReq: IHttpRequest): Boolean;
+
+  {** Request decorator base. Forwards IHttpRequest and optional extension
+     interfaces (context/options) to FInner so middleware wrappers do not drop
+     Supports(IHttpRequestWithContext/Options). Override GetBody/GetHeaders/
+     GetContentLength as needed. }
+  THttpRequestWrapper = class(TInterfacedObject, IHttpRequest,
+    IHttpRequestWithOptions, IHttpRequestWithContext)
+  protected
+    FInner: IHttpRequest;
+    function GetMethod: THttpMethod; virtual;
+    function GetUrl: TUrl; virtual;
+    function GetPath: string; virtual;
+    function GetRawQuery: string; virtual;
+    function GetVersion: THttpVersion; virtual;
+    function GetHeaders: IHttpHeaders; virtual;
+    function GetTrailers: IHttpHeaders; virtual;
+    function GetBody: IReader; virtual;
+    function GetContentLength: Int64; virtual;
+    function GetRemoteAddr: string; virtual;
+    function PathParam(const AName: string): string; virtual;
+    function QueryParam(const AName: string): string; virtual;
+    function GetRequestOptions: THttpRequestOptions; virtual;
+    procedure SetRequestOptions(const AOptions: THttpRequestOptions); virtual;
+    function GetContext: IHttpContext; virtual;
+    procedure SetContext(const ACtx: IHttpContext); virtual;
+  public
+    constructor Create(const AInner: IHttpRequest);
+  end;
 
   { Wraps a THttpHandlerFunc into IHttpHandler }
   TFuncHandler = class(TInterfacedObject, IHttpHandler)
@@ -83,6 +112,112 @@ function WhenMiddleware(
 function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware;
 
 implementation
+
+uses
+  nextpas.core.base.utils;
+
+{ THttpRequestWrapper }
+
+constructor THttpRequestWrapper.Create(const AInner: IHttpRequest);
+begin
+  inherited Create;
+  FInner := AInner;
+end;
+
+function THttpRequestWrapper.GetMethod: THttpMethod;
+begin
+  Result := FInner.GetMethod;
+end;
+
+function THttpRequestWrapper.GetUrl: TUrl;
+begin
+  Result := FInner.GetUrl;
+end;
+
+function THttpRequestWrapper.GetPath: string;
+begin
+  Result := FInner.GetPath;
+end;
+
+function THttpRequestWrapper.GetRawQuery: string;
+begin
+  Result := FInner.GetRawQuery;
+end;
+
+function THttpRequestWrapper.GetVersion: THttpVersion;
+begin
+  Result := FInner.GetVersion;
+end;
+
+function THttpRequestWrapper.GetHeaders: IHttpHeaders;
+begin
+  Result := FInner.GetHeaders;
+end;
+
+function THttpRequestWrapper.GetTrailers: IHttpHeaders;
+begin
+  Result := FInner.GetTrailers;
+end;
+
+function THttpRequestWrapper.GetBody: IReader;
+begin
+  Result := FInner.GetBody;
+end;
+
+function THttpRequestWrapper.GetContentLength: Int64;
+begin
+  Result := FInner.GetContentLength;
+end;
+
+function THttpRequestWrapper.GetRemoteAddr: string;
+begin
+  Result := FInner.GetRemoteAddr;
+end;
+
+function THttpRequestWrapper.PathParam(const AName: string): string;
+begin
+  Result := FInner.PathParam(AName);
+end;
+
+function THttpRequestWrapper.QueryParam(const AName: string): string;
+begin
+  Result := FInner.QueryParam(AName);
+end;
+
+function THttpRequestWrapper.GetRequestOptions: THttpRequestOptions;
+var
+  LOpts: IHttpRequestWithOptions;
+begin
+  if Supports(FInner, IHttpRequestWithOptions, LOpts) then
+    Exit(LOpts.GetRequestOptions);
+  Result := Default(THttpRequestOptions);
+end;
+
+procedure THttpRequestWrapper.SetRequestOptions(
+  const AOptions: THttpRequestOptions);
+var
+  LOpts: IHttpRequestWithOptions;
+begin
+  if Supports(FInner, IHttpRequestWithOptions, LOpts) then
+    LOpts.SetRequestOptions(AOptions);
+end;
+
+function THttpRequestWrapper.GetContext: IHttpContext;
+var
+  LCtx: IHttpRequestWithContext;
+begin
+  if Supports(FInner, IHttpRequestWithContext, LCtx) then
+    Exit(LCtx.GetContext);
+  Result := nil;
+end;
+
+procedure THttpRequestWrapper.SetContext(const ACtx: IHttpContext);
+var
+  LCtx: IHttpRequestWithContext;
+begin
+  if Supports(FInner, IHttpRequestWithContext, LCtx) then
+    LCtx.SetContext(ACtx);
+end;
 
 { TFuncHandler }
 

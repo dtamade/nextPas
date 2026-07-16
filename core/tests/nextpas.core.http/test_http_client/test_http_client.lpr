@@ -2352,13 +2352,10 @@ begin
   try
     LClient := NewHttpClient;
     LPostData := 'key=value';
-    LBodyStream := CreateBytesStreamFrom(nil);
-    (LBodyStream as IWriter).Write(LPostData[1], SizeUInt(Length(LPostData)));
-    LBodyStream.Position := 0;
     LResp := LClient.Post(
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/submit',
       'application/x-www-form-urlencoded',
-      LBodyStream as IReader);
+      LPostData);
     CheckEqual(Int64(201), Int64(LResp.StatusCode), 'status 201');
     LBody := ReadBodyStr(LResp);
     CheckEqual('accepted', LBody, 'body matches');
@@ -2807,7 +2804,8 @@ begin
     'h1 client pooled retry reconnect path is present');
   if LReconnectPos > 0 then
   begin
-    LReconnectBlock := Copy(LSource, LReconnectPos, 520);
+    { Window covers timeout-wrap branch plus bare re-raise. }
+    LReconnectBlock := Copy(LSource, LReconnectPos, 900);
     Check(Pos('LConn := TcpConnect(LHost, LPort);', LReconnectBlock) > 0,
       'h1 client pooled retry opens a fresh connection after body rewind');
     Check(Pos('try', LReconnectBlock) > 0,
@@ -2818,6 +2816,8 @@ begin
       'h1 client pooled retry closes fresh connection on failure');
     Check(Pos('raise;', LReconnectBlock) > 0,
       'h1 client pooled retry preserves the original fresh failure');
+    Check(Pos('hekTimeout', LReconnectBlock) > 0,
+      'h1 client pooled retry maps bare transport timeout to hekTimeout');
   end;
 end;
 
@@ -2959,7 +2959,7 @@ begin
     LResp := LClient.Put(
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource',
       'application/json',
-      StringBodyReader('{"name":"next"}'));
+      '{"name":"next"}');
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     Check(LGotMethod = hmPut, 'server received PUT');
     CheckEqual('application/json', LGotContentType, 'content-type forwarded');
@@ -3048,7 +3048,7 @@ begin
     LResp := LClient.Patch(
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource',
       'application/merge-patch+json',
-      StringBodyReader('{"enabled":true}'));
+      '{"enabled":true}');
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     Check(LGotMethod = hmPatch, 'server received PATCH');
     CheckEqual('application/merge-patch+json', LGotContentType, 'content-type forwarded');
@@ -4810,29 +4810,27 @@ end;
 procedure TestClientPostReaderClosesSourceBodyAfterBuffering;
 var
   LBody: TTrackedRequestBody;
-  LTransportObj: TRequestBodyCaptureTransport;
-  LTransport: IHttpTransport;
   LClient: IHttpClient;
-  LResp: IHttpResponse;
+  LRaised: Boolean;
+  LKind: THttpErrorKind;
 begin
   LBody := TTrackedRequestBody.Create('payload');
-  LTransportObj := TRequestBodyCaptureTransport.Create(LBody);
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-
-  LResp := LClient.Post('http://example.test/upload', 'text/plain',
-    LBody as IReader);
-
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'reader shortcut close path returns transport response');
-  Check(LTransportObj.TrackedBodyClosedAtEntry,
-    'reader shortcut closes source body before RoundTrip');
-  Check(LTransportObj.TrackedBodyClosedBeforeReturn,
-    'reader shortcut keeps source body closed while transport runs');
-  CheckEqual('payload', LTransportObj.SeenBody,
-    'reader shortcut still sends copied payload bytes');
-  Check(LBody.Closed,
-    'reader shortcut closes close-capable source body after buffering');
+  LClient := NewHttpClient(TRequestBodyCaptureTransport.Create(nil) as IHttpTransport);
+  LRaised := False;
+  LKind := hekUnknown;
+  try
+    LClient.Post('http://example.test/upload', 'text/plain', LBody as IReader);
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LKind := E.Kind;
+    end;
+  end;
+  Check(LRaised, 'reader shortcut fail-fasts without silent ReadAll');
+  Check(LKind = hekArgument, 'reader shortcut raises hekArgument');
+  Check(not LBody.Closed,
+    'fail-fast path does not consume/close reader body via buffering');
 end;
 
 procedure CheckClientReaderShortcutKeepsReadErrorWhenCloseFails(
@@ -4840,14 +4838,13 @@ procedure CheckClientReaderShortcutKeepsReadErrorWhenCloseFails(
 var
   LBody: TReadAndCloseFailingRequestBody;
   LClient: IHttpClient;
-  LRaisedReadError: Boolean;
-  LRaisedCloseError: Boolean;
+  LRaised: Boolean;
+  LKind: THttpErrorKind;
 begin
   LBody := TReadAndCloseFailingRequestBody.Create;
   LClient := NewHttpClient(TRequestBodyCaptureTransport.Create(nil) as IHttpTransport);
-  LRaisedReadError := False;
-  LRaisedCloseError := False;
-
+  LRaised := False;
+  LKind := hekUnknown;
   try
     case AMethod of
       hmPost:
@@ -4863,21 +4860,14 @@ begin
       raise EArgumentError.Create('unsupported reader shortcut method');
     end;
   except
-    on E: Exception do
+    on E: EHttpError do
     begin
-      LRaisedReadError := E.Message = 'request body read failed';
-      LRaisedCloseError := E.Message = 'request body close failed';
+      LRaised := True;
+      LKind := E.Kind;
     end;
   end;
-
-  Check(LRaisedReadError,
-    ALabel + ' reader shortcut preserves primary request body read error');
-  Check(not LRaisedCloseError,
-    ALabel + ' reader shortcut close failure does not replace read error');
-  Check(LBody.Closed,
-    ALabel + ' reader shortcut still attempts close after read failure');
-  CheckEqual(Int64(1), Int64(LBody.CloseCount),
-    ALabel + ' reader shortcut closes source body once after read failure');
+  Check(LRaised, ALabel + ' reader shortcut fail-fasts');
+  Check(LKind = hekArgument, ALabel + ' reader shortcut is hekArgument');
 end;
 
 procedure TestClientReaderShortcutsKeepReadErrorWhenCloseFails;
@@ -4935,17 +4925,17 @@ begin
     'b' + #0 + #255);
 
   LBody := TTrackedRequestBody.Create('stream-body');
-  LTransportObj := TRequestBodyCaptureTransport.Create(LBody);
-  LTransport := LTransportObj;
-  LClient := NewHttpClient(LTransport);
-  LResp := LClient.Patch('http://example.test/upload', '',
-    LBody as IReader);
-  CheckEqual(Int64(200), Int64(LResp.StatusCode),
-    'patch reader empty content-type returns transport response');
-  CheckShortcutOmitsEmptyContentType('patch reader', LTransportObj, hmPatch,
-    'stream-body');
-  Check(LBody.Closed,
-    'reader shortcut still closes source body with empty content-type');
+  LClient := NewHttpClient(TRequestBodyCaptureTransport.Create(nil) as IHttpTransport);
+  try
+    LClient.Patch('http://example.test/upload', '', LBody as IReader);
+    Check(False, 'patch reader empty content-type must fail-fast');
+  except
+    on E: EHttpError do
+      Check(E.Kind = hekArgument,
+        'patch reader empty content-type raises hekArgument');
+  end;
+  Check(not LBody.Closed,
+    'fail-fast reader path does not buffer/close source body');
 end;
 
 procedure TestHttpGetToFileWritesFinalPathAtomically;
@@ -5266,7 +5256,7 @@ begin
   try
     LClient := NewHttpClient;
     LResp := LClient.Post('http://127.0.0.1:' + IntToStr(Int64(LPort)) +
-      '/submit', 'text/plain', StringBodyReader('payload') as IReader);
+      '/submit', 'text/plain', 'payload');
     CheckEqual(Int64(200), Int64(LResp.StatusCode),
       '303 redirect followed to final response');
     Check(LGotFinalMethod = hmGet, '303 redirect changes POST to GET');
@@ -7142,10 +7132,16 @@ begin
     try
       LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/slow');
     except
-      on E: ETimeoutError do
+      on E: EHttpError do
+      begin
         LCaught := True;
+        Check(E.Kind = hekTimeout, 'timeout Kind is hekTimeout');
+        Check(HttpErrorIsTimeout(E), 'HttpErrorIsTimeout recognizes boundary error');
+      end;
+      on E: ETimeoutError do
+        Check(False, 'transport timeout must not escape as bare ETimeoutError');
     end;
-    Check(LCaught, 'timeout raises ETimeoutError');
+    Check(LCaught, 'timeout raises EHttpError(hekTimeout)');
   finally
     StopServer(LServer, LHandle);
     { Wait for the slow handler thread to finish (it sleeps 2s) }
@@ -8127,8 +8123,11 @@ begin
       .Body(StringBodyReader('payload'))
       .Build;
   except
-    on E: EArgumentError do
+    on E: EHttpError do
+    begin
       LCaught := True;
+      Check(E.Kind = hekArgument, 'builder missing CL is hekArgument');
+    end;
   end;
   Check(LCaught,
     'builder Body(IReader) without ContentLength fail-fasts');

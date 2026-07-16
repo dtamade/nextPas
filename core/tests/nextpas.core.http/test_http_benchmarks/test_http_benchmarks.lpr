@@ -3,11 +3,12 @@ program test_http_benchmarks;
 {$I nextpas.core.settings.inc}
 
 uses
-  Process,
   nextpas.core.test,
   nextpas.core.path,
   nextpas.core.fs,
   nextpas.core.os.env,
+  nextpas.core.process,
+  nextpas.core.process.base,
   nextpas.core.text,
   nextpas.core.text.conv,
   nextpas.core.time.base,
@@ -59,22 +60,6 @@ const
   BenchBackendEnvName = 'NEXTPAS_BENCH_BACKEND';
   BenchMaxItersSmokeValue = '2000';
   FullchainSmokeIterations = '128';
-
-procedure AppendAvailableProcessOutput(AProcess: TProcess; var AOutput: string);
-var
-  LBuffer: array[0..2047] of Byte;
-  LBytesRead: LongInt;
-  LChunk: RawByteString;
-begin
-  while AProcess.Output.NumBytesAvailable > 0 do
-  begin
-    LBytesRead := AProcess.Output.Read(LBuffer, SizeOf(LBuffer));
-    if LBytesRead <= 0 then
-      Break;
-    SetString(LChunk, PAnsiChar(@LBuffer[0]), LBytesRead);
-    AOutput := AOutput + string(LChunk);
-  end;
-end;
 
 function PathJoin(const ALeft, ARight: string): string;
 begin
@@ -146,29 +131,32 @@ procedure RunProcessAndCaptureWithEnv(const AExecutable: string;
   const AEnvironment: array of string; out AExitCode: Integer;
   out AOutput: string);
 var
-  LProcess: TProcess;
-  I: Integer;
+  LCmd: ICommand;
+  LOut: TProcessOutput;
+  I, LEq: Integer;
+  LPair, LKey, LValue: string;
 begin
   AExitCode := -1;
   AOutput := '';
-  LProcess := TProcess.Create(nil);
   try
-    LProcess.Executable := AExecutable;
-    LProcess.CurrentDirectory := AWorkingDir;
-    for I := Low(AArguments) to High(AArguments) do
-      LProcess.Parameters.Add(AArguments[I]);
+    LCmd := Command(AExecutable)
+      .Args(AArguments)
+      .Dir(AWorkingDir)
+      .Stdout(stPiped)
+      .Stderr(stPiped);
     for I := Low(AEnvironment) to High(AEnvironment) do
-      LProcess.Environment.Add(AEnvironment[I]);
-    LProcess.Options := [poUsePipes, poStderrToOutPut];
-    LProcess.Execute;
-    while LProcess.Running do
     begin
-      AppendAvailableProcessOutput(LProcess, AOutput);
-      TSleep.ForDuration(TDuration.FromMilliseconds(10));
+      LPair := AEnvironment[I];
+      LEq := Pos('=', LPair);
+      if LEq <= 1 then
+        Continue;
+      LKey := Copy(LPair, 1, LEq - 1);
+      LValue := Copy(LPair, LEq + 1, Length(LPair) - LEq);
+      LCmd.EnvAdd(LKey, LValue);
     end;
-    AppendAvailableProcessOutput(LProcess, AOutput);
-    LProcess.WaitOnExit;
-    AExitCode := LProcess.ExitCode;
+    LOut := LCmd.Spawn.WaitWithOutput;
+    AExitCode := LOut.ExitCode;
+    AOutput := LOut.StdOut + LOut.StdErr;
   except
     on E: Exception do
     begin
@@ -176,7 +164,6 @@ begin
       AOutput := E.ClassName + ': ' + E.Message;
     end;
   end;
-  LProcess.Free;
 end;
 
 procedure CheckContains(const AOutput, AFragment, ALabel: string);

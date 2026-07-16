@@ -29,24 +29,15 @@ uses
   nextpas.core.http.middleware;
 
 type
-  TDecompressedRequest = class(TInterfacedObject, IHttpRequest)
+  TDecompressedRequest = class(THttpRequestWrapper)
   private
-    FInner: IHttpRequest;
     FHeaders: IHttpHeaders;
     FBody: IReader;
     FContentLength: Int64;
-    function GetMethod: THttpMethod;
-    function GetUrl: TUrl;
-    function GetPath: string;
-    function GetRawQuery: string;
-    function GetVersion: THttpVersion;
-    function GetHeaders: IHttpHeaders;
-    function GetTrailers: IHttpHeaders;
-    function GetBody: IReader;
-    function GetContentLength: Int64;
-    function GetRemoteAddr: string;
-    function PathParam(const AName: string): string;
-    function QueryParam(const AName: string): string;
+  protected
+    function GetHeaders: IHttpHeaders; override;
+    function GetBody: IReader; override;
+    function GetContentLength: Int64; override;
   public
     constructor Create(const AInner: IHttpRequest; const AHeaders: IHttpHeaders;
       const ABody: IReader; const AContentLength: Int64);
@@ -56,46 +47,15 @@ constructor TDecompressedRequest.Create(const AInner: IHttpRequest;
   const AHeaders: IHttpHeaders; const ABody: IReader;
   const AContentLength: Int64);
 begin
-  inherited Create;
-  FInner := AInner;
+  inherited Create(AInner);
   FHeaders := AHeaders;
   FBody := ABody;
   FContentLength := AContentLength;
 end;
 
-function TDecompressedRequest.GetMethod: THttpMethod;
-begin
-  Result := FInner.Method;
-end;
-
-function TDecompressedRequest.GetUrl: TUrl;
-begin
-  Result := FInner.Url;
-end;
-
-function TDecompressedRequest.GetPath: string;
-begin
-  Result := FInner.Path;
-end;
-
-function TDecompressedRequest.GetRawQuery: string;
-begin
-  Result := FInner.RawQuery;
-end;
-
-function TDecompressedRequest.GetVersion: THttpVersion;
-begin
-  Result := FInner.Version;
-end;
-
 function TDecompressedRequest.GetHeaders: IHttpHeaders;
 begin
   Result := FHeaders;
-end;
-
-function TDecompressedRequest.GetTrailers: IHttpHeaders;
-begin
-  Result := FInner.Trailers;
 end;
 
 function TDecompressedRequest.GetBody: IReader;
@@ -106,21 +66,6 @@ end;
 function TDecompressedRequest.GetContentLength: Int64;
 begin
   Result := FContentLength;
-end;
-
-function TDecompressedRequest.GetRemoteAddr: string;
-begin
-  Result := FInner.RemoteAddr;
-end;
-
-function TDecompressedRequest.PathParam(const AName: string): string;
-begin
-  Result := FInner.PathParam(AName);
-end;
-
-function TDecompressedRequest.QueryParam(const AName: string): string;
-begin
-  Result := FInner.QueryParam(AName);
 end;
 
 function DecompressMiddleware(const AMaxSize: Int64): IHttpMiddleware;
@@ -193,4 +138,5 @@ begin
     end);
   end);
 end;
+
 end.

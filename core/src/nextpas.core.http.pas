@@ -10,6 +10,7 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.thread.intf,
   nextpas.core.http.base,
@@ -226,6 +227,10 @@ function HttpStatusIsClientError(const ACode: THttpStatus): Boolean; inline;
 function HttpStatusIsServerError(const ACode: THttpStatus): Boolean; inline;
 {** @desc Convert HTTP version enum to string (e.g. hvHttp11 → "HTTP/1.1") }
 function HttpVersionToStr(const AVersion: THttpVersion): string; inline;
+{** @desc True if E is EHttpError(hekTimeout) or bare ETimeoutError. }
+function HttpErrorIsTimeout(const E: Exception): Boolean; inline;
+{** @desc True for timeout/connect failures suitable for client retry. }
+function HttpErrorIsRetryable(const E: Exception): Boolean; inline;
 
 {** @desc Create empty mutable headers container }
 function NewHeaders: IHttpHeaders; inline;
@@ -672,6 +677,16 @@ end;
 function HttpVersionToStr(const AVersion: THttpVersion): string;
 begin
   Result := nextpas.core.http.base.HttpVersionToStr(AVersion);
+end;
+
+function HttpErrorIsTimeout(const E: Exception): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpErrorIsTimeout(E);
+end;
+
+function HttpErrorIsRetryable(const E: Exception): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpErrorIsRetryable(E);
 end;
 
 function NewHeaders: IHttpHeaders;

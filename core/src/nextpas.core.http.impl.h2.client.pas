@@ -1599,39 +1599,52 @@ begin
     Result := LConn.RoundTrip(AReq);
     LRequestWriteComplete := True;
   except
-    if LPooled then
+    on E: Exception do
     begin
-      LConn.Close;
-      LConn.Free;
-      if (not LRequestWriteComplete) and (not IsRetrySafeRequest(AReq)) then
-        raise;
-      if (AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil) then
-        raise;
-      RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
-      LRawConn := H2ClientDial(LHost, LPort);
-      if LSecure then
+      if LPooled then
       begin
-        LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,
-          HTTP2_ALPN_PROTOCOL);
-        LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
-        if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
-          raise EHttpError.Create(hekProtocol,
-            'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
-      end;
-      LConn := TH2ClientConnection.Create(LRawConn, FOptions);
-      try
-        Result := LConn.RoundTrip(AReq);
-      except
         LConn.Close;
         LConn.Free;
+        if ((not LRequestWriteComplete) and (not IsRetrySafeRequest(AReq))) or
+           ((AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil)) then
+        begin
+          if E is ETimeoutError then
+            raise EHttpError.CreateOp(hekTimeout, 'transport', E.Message);
+          raise;
+        end;
+        RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
+        LRawConn := H2ClientDial(LHost, LPort);
+        if LSecure then
+        begin
+          LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,
+            HTTP2_ALPN_PROTOCOL);
+          LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
+          if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
+            raise EHttpError.Create(hekProtocol,
+              'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
+        end;
+        LConn := TH2ClientConnection.Create(LRawConn, FOptions);
+        try
+          Result := LConn.RoundTrip(AReq);
+        except
+          on E2: Exception do
+          begin
+            LConn.Close;
+            LConn.Free;
+            if E2 is ETimeoutError then
+              raise EHttpError.CreateOp(hekTimeout, 'transport', E2.Message);
+            raise;
+          end;
+        end;
+      end
+      else
+      begin
+        LConn.Close;
+        LConn.Free;
+        if E is ETimeoutError then
+          raise EHttpError.CreateOp(hekTimeout, 'transport', E.Message);
         raise;
       end;
-    end
-    else
-    begin
-      LConn.Close;
-      LConn.Free;
-      raise;
     end;
   end;
   if HeadersHaveConnectionCloseToken(AReq.Headers) or (not LConn.IsReusable) then

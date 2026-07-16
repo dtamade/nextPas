@@ -548,7 +548,7 @@ begin
   try
     NewRequest(hmPost, LUrl, NewHttpHeaders, nil, -1);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'request helper rejects negative content-length');
@@ -568,7 +568,7 @@ begin
   try
     NewRequest(hmPost, LUrl, LHeaders, 'hello');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -608,7 +608,7 @@ begin
   try
     NewRequest(hmPost, LUrl, LHeaders, 'hello');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'request helper rejects duplicate content-length headers');
@@ -628,7 +628,7 @@ begin
   try
     NewRequest(hmPost, LUrl, LHeaders, 'hello');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'request helper rejects invalid content-length header');
@@ -648,7 +648,7 @@ begin
   try
     NewRequest(hmPost, LUrl, LHeaders);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -687,7 +687,7 @@ begin
   try
     NewRequest(hmPost, LUrl, LHeaders, nil, 5);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -708,7 +708,7 @@ begin
   try
     NewRequest(hmPost, LUrl, LHeaders, 'hello');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -729,7 +729,7 @@ begin
   try
     NewRequest(hmPost, LUrl, LHeaders);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -970,7 +970,7 @@ begin
   try
     NewResponse(HTTP_STATUS_OK, LHeaders, 'hello');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
 
@@ -990,7 +990,7 @@ begin
   try
     NewResponse(HTTP_STATUS_OK, LHeaders, 'hello');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
 

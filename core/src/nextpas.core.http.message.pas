@@ -438,15 +438,15 @@ var
   LDigit: Int64;
 begin
   if AValue = '' then
-    raise EArgumentError.Create('HTTP request content-length is invalid');
+    raise EHttpError.Create(hekArgument, 'HTTP request content-length is invalid');
   Result := 0;
   for LI := 1 to Length(AValue) do
   begin
     if (AValue[LI] < '0') or (AValue[LI] > '9') then
-      raise EArgumentError.Create('HTTP request content-length is invalid');
+      raise EHttpError.Create(hekArgument, 'HTTP request content-length is invalid');
     LDigit := Ord(AValue[LI]) - Ord('0');
     if Result > ((High(Int64) - LDigit) div 10) then
-      raise EArgumentError.Create('HTTP request content-length is too large');
+      raise EHttpError.Create(hekArgument, 'HTTP request content-length is too large');
     Result := (Result * 10) + LDigit;
   end;
 end;
@@ -462,15 +462,18 @@ begin
 
   LValues := AHeaders.GetAll('content-length');
   if AHeaders.Has('transfer-encoding') then
-    raise EArgumentError.Create('HTTP request transfer-encoding is unsupported');
+    raise EHttpError.Create(hekArgument,
+      'HTTP request transfer-encoding is unsupported');
 
   if Length(LValues) = 0 then
     Exit;
   if Length(LValues) <> 1 then
-    raise EArgumentError.Create('HTTP request content-length is duplicated');
+    raise EHttpError.Create(hekArgument,
+      'HTTP request content-length is duplicated');
   LHeaderLength := ParseDeclaredContentLength(LValues[0]);
   if LHeaderLength <> ADeclaredContentLength then
-    raise EArgumentError.Create('HTTP request content-length conflicts with body length');
+    raise EHttpError.Create(hekArgument,
+      'HTTP request content-length conflicts with body length');
 end;
 
 procedure ValidateFixedBodyResponseHeaders(const AHeaders: IHttpHeaders;
@@ -483,16 +486,18 @@ begin
     Exit;
 
   if AHeaders.Has('transfer-encoding') then
-    raise EArgumentError.Create('HTTP response transfer-encoding is unsupported');
+    raise EHttpError.Create(hekArgument,
+      'HTTP response transfer-encoding is unsupported');
 
   LValues := AHeaders.GetAll('content-length');
   if Length(LValues) = 0 then
     Exit;
   if Length(LValues) <> 1 then
-    raise EArgumentError.Create('HTTP response content-length is duplicated');
+    raise EHttpError.Create(hekArgument,
+      'HTTP response content-length is duplicated');
   LHeaderLength := ParseDeclaredContentLength(LValues[0]);
   if LHeaderLength <> ABodyLength then
-    raise EArgumentError.Create(
+    raise EHttpError.Create(hekArgument,
       'HTTP response content-length conflicts with body length');
 end;
 
@@ -906,9 +911,9 @@ var
   LHeaders: IHttpHeaders;
 begin
   if AContentLength < 0 then
-    raise EArgumentError.Create('HTTP request content-length is negative');
+    raise EHttpError.Create(hekArgument, 'HTTP request content-length is negative');
   if (ABody = nil) and (AContentLength > 0) then
-    raise EArgumentError.Create(
+    raise EHttpError.Create(hekArgument,
       'HTTP request body is nil but content-length is positive');
 
   LHeaders := AHeaders;
@@ -1457,7 +1462,7 @@ function THttpRequestBuilder.ContentLength(
 begin
   Result := Self;
   if ALen < 0 then
-    raise EArgumentError.Create(
+    raise EHttpError.Create(hekArgument,
       'THttpRequestBuilder.ContentLength must be >= 0');
   Result.FContentLength := ALen;
   Result.FHasContentLength := True;
@@ -1566,7 +1571,7 @@ begin
     bbkReader:
       begin
         if not FHasContentLength then
-          raise EArgumentError.Create(
+          raise EHttpError.Create(hekArgument,
             'THttpRequestBuilder.Body(IReader) requires ContentLength(N); ' +
             'use IHttpClient.SendStreaming for unknown-length bodies');
         Result := NewRequest(FMethod, LUrl, LHeaders, FBodyReader, FContentLength);
