@@ -35,6 +35,8 @@ type
     function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
+    function GetString(const AUrl: string): string;
+    function GetBytes(const AUrl: string): TBytes;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
@@ -78,6 +80,8 @@ type
     function Send(const AReq: IHttpRequest): IHttpResponse; virtual;
     procedure CloseIdleConnections; virtual;
     function Get(const AUrl: string): IHttpResponse; virtual;
+    function GetString(const AUrl: string): string; virtual;
+    function GetBytes(const AUrl: string): TBytes; virtual;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload; virtual;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload; virtual;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload; virtual;
@@ -872,6 +876,16 @@ begin
   Result := Send(LReq);
 end;
 
+function THttpClient.GetString(const AUrl: string): string;
+begin
+  Result := HttpGetString(Self, AUrl);
+end;
+
+function THttpClient.GetBytes(const AUrl: string): TBytes;
+begin
+  Result := HttpGetBytes(Self, AUrl);
+end;
+
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
 begin
   Result := Send(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
@@ -1085,6 +1099,16 @@ begin
   LUrl := TUrl.Parse(AUrl);
   LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
   Result := Send(LReq);
+end;
+
+function THttpClientForwarder.GetString(const AUrl: string): string;
+begin
+  Result := HttpGetString(Self, AUrl);
+end;
+
+function THttpClientForwarder.GetBytes(const AUrl: string): TBytes;
+begin
+  Result := HttpGetBytes(Self, AUrl);
 end;
 
 function THttpClientForwarder.Post(const AUrl, AContentType: string;

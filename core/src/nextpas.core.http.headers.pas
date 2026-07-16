@@ -81,7 +81,7 @@ end;
 procedure RequireHeaders(const AHeaders: IHttpHeaders);
 begin
   if AHeaders = nil then
-    raise EArgumentError.Create('HTTP headers are nil');
+    raise EHttpError.Create(hekArgument, 'HTTP headers are nil');
 end;
 
 { THttpHeaders }
@@ -405,7 +405,7 @@ var
   LI: Int32;
 begin
   if ACallback = nil then
-    raise EArgumentError.Create('HTTP header iterator is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP header iterator is nil');
 
   for LI := 0 to FCount - 1 do
     ACallback(FEntries[LI].Name, FEntries[LI].Value);

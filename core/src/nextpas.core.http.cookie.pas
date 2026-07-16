@@ -448,6 +448,7 @@ type
     Path: string;
     Secure: Boolean;
     HostOnly: Boolean;
+    SameSite: TSameSite;
     { Unix seconds expiry; -1 = session (no expiry eviction). }
     ExpiresAt: Int64;
   end;
@@ -498,6 +499,44 @@ end;
 function CookieNowUnix: Int64;
 begin
   Result := DateTimeToUnix(DateTimeUtcNow);
+end;
+
+{ SiteKey approximation without PSL: host with ≤1 label, or last two labels.
+  e.g. a.b.example.com → example.com; localhost → localhost. }
+function CookieSiteKey(const AHost: string): string;
+var
+  LHost: string;
+  LDot, LPrev: SizeInt;
+begin
+  LHost := LowerAscii(AHost);
+  if LHost = '' then
+    Exit('');
+  LDot := 0;
+  LPrev := 0;
+  for LPrev := Length(LHost) downto 1 do
+    if LHost[LPrev] = '.' then
+    begin
+      if LDot = 0 then
+        LDot := LPrev
+      else
+      begin
+        Result := System.Copy(LHost, LPrev + 1, MaxInt);
+        Exit;
+      end;
+    end;
+  if LDot > 0 then
+    Result := LHost
+  else
+    Result := LHost;
+end;
+
+function SameSiteAllowsSend(const ASameSite: TSameSite;
+  const ASameSiteRequest: Boolean): Boolean;
+begin
+  if ASameSiteRequest then
+    Exit(True);
+  { Cross-site: only SameSite=None (Secure already required at store). }
+  Result := ASameSite = ssNone;
 end;
 
 function ParseInt64Digits(const AStr: string; out AValue: Int64): Boolean;
@@ -614,6 +653,7 @@ begin
   Result := False;
   AItem := Default(TStoredCookie);
   AItem.ExpiresAt := -1;
+  AItem.SameSite := ssLax; { modern default when attribute absent }
   LHasMaxAge := False;
   LHasExpires := False;
   LExpiresAt := 0;
@@ -666,6 +706,17 @@ begin
             AItem.Path := LVal
           else if LAttr = 'secure' then
             AItem.Secure := True
+          else if LAttr = 'samesite' then
+          begin
+            LVal := LowerAscii(LVal);
+            if LVal = 'strict' then
+              AItem.SameSite := ssStrict
+            else if LVal = 'lax' then
+              AItem.SameSite := ssLax
+            else if LVal = 'none' then
+              AItem.SameSite := ssNone;
+            { Unknown SameSite values are ignored (keep default Lax). }
+          end
           else if LAttr = 'max-age' then
           begin
             if ParseInt64Digits(LVal, LMaxAge) then
@@ -712,6 +763,9 @@ begin
     else
       AItem.Path := System.Copy(LPart, 1, LEq - 1);
   end;
+  { SameSite=None requires Secure; otherwise reject the cookie. }
+  if (AItem.SameSite = ssNone) and (not AItem.Secure) then
+    Exit(False);
   { RFC 6265: Max-Age preferred over Expires. Max-Age <= 0 → expire immediately. }
   LNow := CookieNowUnix;
   if LHasMaxAge then
@@ -858,6 +912,8 @@ var
   LSecure: Boolean;
   LFirst: Boolean;
   LNow: Int64;
+  LRequestSite: string;
+  LSameSiteRequest: Boolean;
 begin
   Result := '';
   LHost := AUrl.Host;
@@ -866,6 +922,7 @@ begin
     LPath := '/';
   LScheme := LowerAscii(AUrl.Scheme);
   LSecure := LScheme = 'https';
+  LRequestSite := CookieSiteKey(LHost);
   LFirst := True;
   LNow := CookieNowUnix;
   FLock.Acquire;
@@ -878,6 +935,9 @@ begin
       if not DomainMatches(FItems[LI].Domain, LHost, FItems[LI].HostOnly) then
         Continue;
       if not PathMatches(FItems[LI].Path, LPath) then
+        Continue;
+      LSameSiteRequest := CookieSiteKey(FItems[LI].Domain) = LRequestSite;
+      if not SameSiteAllowsSend(FItems[LI].SameSite, LSameSiteRequest) then
         Continue;
       if LFirst then
         LFirst := False

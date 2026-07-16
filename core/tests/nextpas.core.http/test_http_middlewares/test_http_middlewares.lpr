@@ -3533,7 +3533,7 @@ begin
     HttpWriteStream(LW, LReader as IReader, 0);
     Check(False, 'HttpWriteStream zero buffer must raise');
   except
-    on E: EArgumentError do Check(True, 'HttpWriteStream zero buffer rejected');
+    on E: EHttpError do Check(True, 'HttpWriteStream zero buffer rejected');
   end;
 
   LReader := TMockReader.Create(LData);
@@ -3541,7 +3541,7 @@ begin
     HttpWriteStreamWithLength(LW, 1, LReader as IReader, 0);
     Check(False, 'HttpWriteStreamWithLength zero buffer must raise');
   except
-    on E: EArgumentError do Check(True,
+    on E: EHttpError do Check(True,
       'HttpWriteStreamWithLength zero buffer rejected');
   end;
 
@@ -3553,7 +3553,7 @@ begin
       end);
     Check(False, 'HttpRequestReadChunks zero buffer must raise');
   except
-    on E: EArgumentError do Check(True,
+    on E: EHttpError do Check(True,
       'HttpRequestReadChunks zero buffer rejected');
   end;
 
@@ -3562,7 +3562,7 @@ begin
     HttpRequestReadBody(LReader as IReader, 1, 0);
     Check(False, 'HttpRequestReadBody zero buffer must raise');
   except
-    on E: EArgumentError do Check(True,
+    on E: EHttpError do Check(True,
       'HttpRequestReadBody zero buffer rejected');
   end;
 end;

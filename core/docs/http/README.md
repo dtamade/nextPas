@@ -157,13 +157,19 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - Cancel: `IHttpCancelToken` is **cooperative** (not OS interrupt) →
   `hekCanceled` at Send / redirect / retry / H1 RoundTrip checkpoints
   (entry, pre-dial, post-write). A blocked socket read may lag until the
-  next checkpoint. Timeouts remain `hekTimeout` (`WithTimeout` / options).
+  next checkpoint — **pair cancel with `Timeout`/`WithTimeout`** for bounded
+  wait. Timeouts remain `hekTimeout`. True mid-read cancel is **Blocked** on
+  net (see CONTRACT §2.2.0a).
 - Timeouts: `THttpClientOptions.Timeout` = request read/write deadline after
-  the socket is up; `ConnectTimeout` = post-dial first-write budget on new
-  sockets (`0` = same as Timeout). OS `connect()` itself is not yet dial-timeouted.
-- `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction on store/use.
+  the socket is up; `ConnectTimeout` = **post-dial first-write** budget on new
+  sockets (`0` = same as Timeout). It does **not** interrupt OS `connect()`;
+  OS dial timeout is **Blocked** on net (no fake dial field in http).
+- `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite
+  store/send (default Lax; None requires Secure; SiteKey approx, no PSL).
 - `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
   (`http://host:port`); no HTTPS CONNECT in this slice.
+- `IHttpClient.GetString` / `GetBytes` and free `HttpGetString` / `HttpGetBytes`.
+- H1 default `User-Agent: nextpas-http/1.0` when the request omits it.
 - `PostMultipart(Url, Fields, Files)` — multipart/form-data convenience POST.
 - `IHttpClient.Send` owns any close-capable request body for the duration of the
   request. After the final round trip or failure, `IReadCloser` / `ICloser` /

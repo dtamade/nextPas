@@ -1373,7 +1373,7 @@ begin
   try
     HttpWriteResponseBytes(nil, HTTP_STATUS_OK, 'application/octet-stream', LData);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   CheckTrue(LRaised, 'raises on nil writer');
@@ -1459,7 +1459,7 @@ begin
   try
     HttpReadRequestBodyBytes(nil);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'ReadRequestBodyBytes nil request raises');
@@ -1473,7 +1473,7 @@ begin
   try
     HttpReadRequestBodyString(nil);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'ReadRequestBodyString nil request raises');
@@ -1562,7 +1562,7 @@ begin
   try
     HttpRedirect(LW, HTTP_STATUS_FOUND, '');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   CheckTrue(LRaised, 'raises on empty location');
@@ -1576,7 +1576,7 @@ begin
   try
     HttpRedirect(nil, HTTP_STATUS_FOUND, '/page');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   CheckTrue(LRaised, 'raises on nil writer');
@@ -1666,7 +1666,7 @@ begin
   try
     HttpRedirect(nil, HTTP_STATUS_FOUND, '//evil.com/steal');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'Protocol-relative URL must be rejected to prevent open redirect');
@@ -1781,7 +1781,7 @@ begin
   try
     HttpWriteResponseNoContent(nil);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'raises on nil writer');

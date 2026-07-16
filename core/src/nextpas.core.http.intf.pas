@@ -197,6 +197,10 @@ type
     function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
+    {** GET + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function GetString(const AUrl: string): string;
+    {** GET + ensure 2xx + body as TBytes. Raises EHttpError on non-2xx. }
+    function GetBytes(const AUrl: string): TBytes;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
