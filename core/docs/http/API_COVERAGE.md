@@ -11,19 +11,32 @@
 
 ## 当前结论
 
-- **2026-07-17 usability findings fix（现行真相）**：
-  - Research/plan：`2026-07-17-usability-findings-research.md`、
-    `2026-07-17-usability-fix-plan.md`。
+- **2026-07-17 residual usability fix（现行真相；以本条为准）**：
+  - Research/plan：`2026-07-17-usability-residual-research.md`、
+    `2026-07-17-usability-residual-fix-plan.md`（以及 wave-6
+    `2026-07-17-usability-findings-research.md` / fix-plan）。
   - Request 工厂白名单：`NewRequest(Method, TUrl|string)` + `NewGetRequest`；
-    推荐 `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` **已删除**
-    （下列 2026-07-06 段落中的多参 “本轮补齐” 仅为历史叙事，不是现行 API）。
+    推荐 `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` **已删除**。
+    **下列 2026-07-06 长段落中的多参 “本轮补齐 / 现在都接受” 为 Historical archive，
+    不是 live API**——勿按那些 overload 写新代码。
+  - Production discipline：client 必须设 `Timeout` / `WithTimeout`；cancel 须与
+    Timeout 配对（CONTRACT §2.2 Production defaults）。
   - `ConnectTimeout` = post-dial first-write only；OS dial timeout / mid-read
-    cancel = **Blocked** on net（CONTRACT §2.2.0a）；取消须与 `Timeout` 配对。
-  - Public message/form/headers/stream 前置条件：`EHttpError(hekArgument)`。
-  - CookieJar：Max-Age/Expires + SameSite（default Lax；None 需 Secure；SiteKey 近似）。
-  - `IHttpClient.GetString` / `GetBytes`；H1 默认 `User-Agent: nextpas-http/1.0`。
-  - Proxy：明文 HTTP absolute-form only；HTTPS CONNECT deferred。
+    cancel = **Blocked** on net（CONTRACT §2.2.0a）。
+  - Public construction preconditions（message/form/headers/stream/**server/**
+    **websocket/middleware**）：`EHttpError(hekArgument)`。
+  - CookieJar：Max-Age/Expires + SameSite（default Lax；None 需 Secure；SiteKey 近似；
+    full PSL deferred）。
+  - ensure-2xx：free-fn `HttpGet/Post/Put/Patch/DeleteString` + 方法对称
+    `IHttpClient.GetString` / `GetBytes` / `PostString` / `PutString` /
+    `PatchString` / `DeleteString`。非 2xx 错误消息含 `METHOD url` 前缀
+    （`HttpEnsureSuccess(Resp, Method, Url)` overload）。
+  - H1 默认 `User-Agent: nextpas-http/1.0`。
+  - Proxy：明文 HTTP absolute-form only；HTTPS CONNECT / Retry-After /
+    Response metadata expand = **Deferred**（见 residual research §2.7）。
   - H3：仅 seam；H3/QUIC non-goal。
+- **2026-07-17 usability findings fix（wave-6，已吸收）**：
+  - 同上现行真相的子集（hekArgument message 层、GetString、SameSite、docs honesty）。
 - **2026-07-16 wave-5 可用性抛光（已吸收）**：
   - H1 chunked request body：`Body(IReader)` 无 CL / `SendStreaming(..., CL<0)`。
   - Cancel：协作检查点（非 OS 中断）；见 CONTRACT §2.2。
@@ -48,106 +61,23 @@
   - H3 honesty 已闭合：无内建 factory；`test_http_registry` 锁住未注册
     `hvHttp3` resolve 失败；解阻依赖独立 QUIC 模块。
   当前 HTTP lane 队列 P1–P5 已收口（H3 为诚实阻塞）。
-- 2026-07-06 API 对标结论（**历史档案**；多参 `NewRequest` 已删除，勿当作现行真相）：
-  - 已够稳：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` / `IsRunning`
-    的生命周期形状足够清晰，保持同步 facade，不把 Go `net/http` 或 Rust
-    async runtime 细节泄漏到 public contract；handler / middleware / router
-    组合也已符合小接口、可组合、可测试的稳定面。
-  - 已够稳：static serving 与 WebSocket 仍停在 helper/facade 层更合适。static 已有
-    range/ETag/download focused coverage；WebSocket 已有 server+client focused coverage。
-    在没有 extension negotiation 等稳定 contract 前，不扩大成独立 service family。
-  - H2 已完整落地为 production-transport-ready 实现（frame/HPACK/stream/session/client/TLS），
-    约 207 focused tests。H3 仍被 QUIC 模块阻塞。不创建伪 H3 public API。
-  - Registry seam 有 future-version positive proof（custom hvHttp2/hvHttp3 factory）。
-  - builder / form-json / streaming / charset 已有 focused 证据；后续扩面默认拒绝。
-  - ~~历史~~ 曾短暂存在多参 `NewRequest(Method, Url, Headers, Body, ContentLength)`
-    等 overload；**现行 surface 已物理删除**，仅保留
-    `NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
-  - ~~历史~~ 下列 “本轮补齐” 多参 helper 叙述保留为时间线，不再描述 live API。
-  - 本轮补齐（历史）：曾新增 `NewRequest(Method, Url, Headers, Body, ContentLength)`
-    public helper（已删除）。negative content length 等校验语义现由
-    builder / message 路径以 `EHttpError(hekArgument)` 表达。
-  - 本轮补齐（历史）：曾新增 `NewRequest(Method, Url, Headers)` public helper（已删除）。
-  - 同步收紧（历史）：为避免新增 `Headers` overload 破坏旧的 `NewRequest(Method, Url, nil)`
-    源兼容性，public surface 曾保留 nil-literal compatibility shim。`nil` 第三参
-    仍解析成历史 empty-`TBytes` helper 语义，也就是 zero-length body +
-    `content-length: 0`，不会静默落到新的 headers-only contract。对应
-    compile/runtime proof 已加到 `test_http_message` 和 `test_http_contract`。
-  - 继续补齐：`NewRequest(Method, Url)` 与
-    `NewRequest(Method, Url, Headers, Body, ContentLength)` 现在都接受 URL string
-    overload。调用方可以直接用 `NewRequest(hmPost, 'http://...')` 构造
-    `IHttpClient.Send` 请求，不必先手写 `TUrl.Parse`；解析、nil headers、
-    `content-length` 与 negative length 语义沿用同一 helper contract。
-  - 继续补齐：新增 `NewRequest(Method, Url, Headers, BodyText)` public helper。
-    调用方可以用 Pascal string 构造 request body；helper 会复制 string 到
-    in-memory reader 并发布 `Content-Length`，但不自动设置 `Content-Type`。
-    `test_http_message`、`test_http_contract` 与 `test_http_client` 分别锁住
-    helper contract、facade 可见性和 live `IHttpClient.Send` 发送路径。
-  - 继续补齐：新增 `NewRequest(Method, Url, Headers, BodyBytes)` public helper。
-    调用方可以用 `TBytes` 构造 binary request body；helper 会复制 bytes 到
-    in-memory reader 并发布 `Content-Length`，但同样不自动设置 `Content-Type`。
-    `test_http_message` 锁住 `TUrl` 与 URL string overload，`test_http_contract`
-    锁住 facade 可见性，`test_http_client` 锁住 live `IHttpClient.Send` 发送零字节
-    与高字节 payload 的路径。这补齐 Go/Rust 常见 binary body ergonomics，但仍不
-    引入完整 request builder 或 streaming/chunked request body ownership API。
-  - 继续补齐：`NewRequest(Method, Url, Body, ContentLength)`、
-    `NewRequest(Method, Url, BodyText)` 与 `NewRequest(Method, Url, BodyBytes)`
-    现在也直接支持“不先手造 headers”的 public overload。它们复用现有
-    `Headers=nil` contract：自动创建空 header set，只发布 `Content-Length`，
-    但不猜测 `Content-Type`。`test_http_message`、`test_http_contract` 与
-    `test_http_client` 分别锁住 helper contract、facade 可见性和 live
-    `IHttpClient.Send` 发送路径。这样调用方可以像 Go `NewRequest(...)` /
-    Rust 常见 request body helper 那样先表达 method/url/body，再按需决定是否
-    追加 custom headers，而不必为了“无自定义头”也先分配一个 header 容器。
-  - 继续补齐：新增 `NewRequest(Method, Url, ContentType, BodyText)`、
-    `NewRequest(Method, Url, ContentType, BodyBytes)` 与
-    `NewRequest(Method, Url, ContentType, Body, ContentLength)` public helper。
-    这组 overload 解决了“调用方只想声明 request body 的 `Content-Type`，却仍得先
-    手造一个 headers 容器”的剩余 ergonomics 缺口。helper 只发布调用方显式提供的
-    `content-type` 与既有 `content-length`，不再额外猜测其他 header，也不上完整
-    builder family。`test_http_message`、`test_http_contract` 与
-    `test_http_client` 分别锁住 helper contract、facade 可见性和 live
-    `IHttpClient.Send` 发送路径。
-  - 继续收紧：`IHttpClient.Post` / `Put` / `Patch` shortcut 现在共享内部
-    bytes-buffer request helper。它们仍会读取 `IReader` 以发布 `Content-Length`，
-    但不再先 materialize 到 Pascal string 再转回 bytes；`test_http_client` 用
-    source-contract 锁住 single helper 与 no-string-buffer 实现形状，并继续保留
-    live POST / PUT / PATCH 行为覆盖。
-  - 本轮补齐：`IHttpClient.Post` / `Put` / `Patch` 现在也直接接受 Pascal
-    `string` 与 `TBytes` body overload。三种 shortcut body 形状都会发布
-    `Content-Length`，并转发调用方显式提供的非空 `Content-Type`；空
-    content type 会省略该 header 而不是发送空 header value。`string` /
-    `TBytes` overload 复用现有 `NewRequest(..., BodyText)` /
-    `NewRequest(..., BodyBytes)` contract，而不是再扩一层新的 free-function
-    facade。`test_http_client` 锁住 live string / bytes body wire 语义，
-    `test_http_contract` 锁住 facade surface 可见性。
-  - 继续补齐：新增 `HttpReadResponseBodyString(Resp)` public helper。它直接消费
-    `IHttpResponse.Body` reader 并返回 Pascal string；nil body 返回 `''`，nil
-    response 抛 `EArgumentError`。`test_http_client` 锁住 live response、消费
-    reader、nil body 和 nil response 语义，`test_http_contract` 锁住 facade
-    可见性，`http_get_client` example 也已改用该 helper。
-  - 继续补齐：新增 `HttpReadResponseBodyBytes(Resp)` public helper。它直接消费
-    `IHttpResponse.Body` reader 并返回 `TBytes`；nil body 返回空 bytes，nil
-    response 抛 `EArgumentError`。`test_http_client` 锁住 live binary body、
-    reader 消费、nil body 和 nil response 语义，`test_http_contract` 锁住
-    facade 可见性。这个 helper 对齐 Go `io.ReadAll(resp.Body)` / Rust bytes
-    取用的基础 ergonomics，但不声明 response streaming、charset decoding 或
-    content-type sniffing。
-  - 继续收紧：`HttpGetToWriter` / `HttpGetToFile` 现在把被 helper 消费或丢弃的
-    response body 纳入 helper ownership。成功 copy、copy 失败、非 2xx rejection
-    都会释放 close-capable body；plain `IReader` body 仍走 drain fallback。
-    `test_http_client` 用 injected client/closable body 锁住 success、writer
-    failure 和 non-2xx 三条路径。这对齐 Go/Rust 中“helper 代替调用方消费 body
-    时也负责释放”的资源语义，但不新增 response streaming public API。
-  - 继续补齐：新增 `HttpReleaseResponseBody(Resp)` public helper。调用方拿到
-    `IHttpResponse` 后如果决定不读取 body，可以显式释放 body ownership：
-    close-capable body 会被关闭，plain `IReader` body 会被 drain 到 EOF，nil body
-    是 no-op，nil response 抛 `EArgumentError`。`test_http_client` 锁住 close /
-    drain / nil body / nil response 语义，`test_http_contract` 锁住 facade
-    可见性。这对齐 Go/Rust 常见“未消费响应体也要显式释放/丢弃”的使用面。
-    `HttpReadResponseBodyString` / `HttpReadResponseBodyBytes` 会消费并释放 body；
-    `HttpReleaseResponseBody` 只用于调用方决定不读取 body 时显式释放。
-    当前仍不新增 streaming response API。
+- **Historical archive (NOT live API)** — 2026-07-06 API 对标时间线。
+  多参 `NewRequest` / `NewStreamingRequest` 等 overload **已物理删除**。
+  现行工厂仅：`NewRequest(Method, TUrl|string)` + `NewGetRequest` +
+  `THttpRequestBuilder`。下列 “本轮补齐 / 现在都接受” 叙述只作历史，
+  **不要**当作当前 public surface。
+  - 已够稳（仍真）：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` /
+    `IsRunning` 同步 facade；handler / middleware / router 组合面；static +
+    WebSocket helper 层；H2 production-transport-ready；H3 仍被 QUIC 阻塞。
+  - ~~已删除~~ 多参 `NewRequest(Method, Url, Headers, Body, ContentLength)` 及
+    BodyText / BodyBytes / ContentType 等 overload 时间线（曾短暂存在；
+    现由 `THttpRequestBuilder` 覆盖）。
+  - ~~措辞纠正~~ 旧文“现在都接受 URL string overload”仅指**当时**多参 helper；
+    当前不存在那些 overload。
+  - 仍真且 live：`IHttpClient.Post` / `Put` / `Patch` 的 string/`TBytes`
+    body shortcut；`HttpReadResponseBodyString` / `Bytes` / `HttpReleaseResponseBody` /
+    `HttpGetToWriter` / `HttpGetToFile` body ownership（nil response 现为
+    `EHttpError(hekArgument)`，非历史 `EArgumentError`）。
   - 继续收紧：`NewResponse(Status, nil, Body)` 现在与 request helper 的 nil
     headers 语义对齐，会创建空 `IHttpHeaders`，调用方可以安全读取或追加
     response headers。`test_http_message` 锁住 helper contract，`test_http_contract`

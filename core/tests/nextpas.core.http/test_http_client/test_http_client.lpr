@@ -393,6 +393,10 @@ type
     function Get(const AUrl: string): IHttpResponse;
     function GetString(const AUrl: string): string;
     function GetBytes(const AUrl: string): TBytes;
+    function PostString(const AUrl, AContentType, ABody: string): string;
+    function PutString(const AUrl, AContentType, ABody: string): string;
+    function PatchString(const AUrl, AContentType, ABody: string): string;
+    function DeleteString(const AUrl: string): string;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
@@ -1985,6 +1989,26 @@ end;
 function TDownloadClient.GetBytes(const AUrl: string): TBytes;
 begin
   Result := HttpGetBytes(Self, AUrl);
+end;
+
+function TDownloadClient.PostString(const AUrl, AContentType, ABody: string): string;
+begin
+  Result := HttpPostString(Self, AUrl, AContentType, ABody);
+end;
+
+function TDownloadClient.PutString(const AUrl, AContentType, ABody: string): string;
+begin
+  Result := HttpPutString(Self, AUrl, AContentType, ABody);
+end;
+
+function TDownloadClient.PatchString(const AUrl, AContentType, ABody: string): string;
+begin
+  Result := HttpPatchString(Self, AUrl, AContentType, ABody);
+end;
+
+function TDownloadClient.DeleteString(const AUrl: string): string;
+begin
+  Result := HttpDeleteString(Self, AUrl);
 end;
 
 function TDownloadClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
@@ -6035,7 +6059,7 @@ begin
     LClient.Get('http://example.test/old');
   except
     on E: EHttpError do
-      LRaised := E.Message = 'redirect with duplicate Location headers';
+      LRaised := Pos('redirect with duplicate Location headers', E.Message) > 0;
   end;
 
   Check(LRaised, 'duplicate redirect Location raises EHttpError');
@@ -6072,7 +6096,7 @@ begin
   end;
 
   Check(LRaised, 'redirect policy error raises EHttpError');
-  CheckEqual('redirect with duplicate Location headers', LMessage,
+  Check(Pos('redirect with duplicate Location headers', LMessage) > 0,
     'redirect policy error is not masked by body close failure');
   CheckEqual(Int64(1), Int64(LTransportObj.Calls),
     'redirect policy error stops before follow-up round trip');
@@ -8290,9 +8314,39 @@ begin
     HttpGetString(LClient, 'http://localhost/missing');
   except
     on E: EHttpError do
-      LCaught := (Pos('404', E.Message) > 0) and (Pos('Not Found', E.Message) > 0);
+      LCaught := (Pos('404', E.Message) > 0) and
+        (Pos('Not Found', E.Message) > 0) and
+        (Pos('GET', E.Message) > 0) and
+        (Pos('http://localhost/missing', E.Message) > 0);
   end;
-  Check(LCaught, 'GetString raises EHttpError on 404');
+  Check(LCaught, 'GetString raises EHttpError on 404 with method/URL context');
+end;
+
+procedure TestHttpEnsureSuccessContextIncludesMethodUrl;
+var
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LCaught: Boolean;
+  LMsg: string;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-length', '0');
+  LResp := NewResponse(HTTP_STATUS_NOT_FOUND, LHeaders, nil);
+  LCaught := False;
+  LMsg := '';
+  try
+    HttpEnsureSuccess(LResp, 'GET', 'http://example.test/item');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := E.Kind = hekStatus;
+      LMsg := E.Message;
+    end;
+  end;
+  Check(LCaught, 'EnsureSuccess context raises hekStatus');
+  Check(Pos('GET', LMsg) > 0, 'EnsureSuccess context includes method');
+  Check(Pos('http://example.test/item', LMsg) > 0, 'EnsureSuccess context includes URL');
+  Check(Pos('404', LMsg) > 0, 'EnsureSuccess context includes status');
 end;
 
 procedure TestHttpGetBytesSuccess;
@@ -8947,6 +9001,55 @@ begin
   end;
 end;
 
+procedure TestClientPostStringMethod;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LBody: string;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := LClient.PostString('http://localhost/test', 'text/plain', 'hello');
+  CheckEqual('', LBody, 'IHttpClient.PostString returns body on 200');
+end;
+
+procedure TestClientPostStringRaisesWithContext;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LTransport.RedirectStatus := HTTP_STATUS_NOT_FOUND;
+  LTransport.RedirectLocation := '';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  try
+    LClient.PostString('http://localhost/error', 'text/plain', 'body');
+  except
+    on E: EHttpError do
+      LCaught := (Pos('404', E.Message) > 0) and
+        (Pos('POST', E.Message) > 0) and
+        (Pos('http://localhost/error', E.Message) > 0);
+  end;
+  Check(LCaught, 'IHttpClient.PostString raises with method/URL context');
+end;
+
+procedure TestClientPutPatchDeleteStringMethods;
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  CheckEqual('', LClient.PutString('http://localhost/p', 'text/plain', 'x'),
+    'IHttpClient.PutString on 200');
+  CheckEqual('', LClient.PatchString('http://localhost/p', 'text/plain', 'x'),
+    'IHttpClient.PatchString on 200');
+  CheckEqual('', LClient.DeleteString('http://localhost/p'),
+    'IHttpClient.DeleteString on 200');
+end;
+
 { HttpPostString/PutString/PatchString/DeleteString tests }
 
 procedure TestHttpPostStringSuccess;
@@ -9485,6 +9588,8 @@ begin
   T.Test('HttpEnsureSuccess raises on 404', @TestHttpEnsureSuccessRaisesOn404);
   T.Test('HttpEnsureSuccess raises on 500', @TestHttpEnsureSuccessRaisesOn500);
   T.Test('HttpEnsureSuccess raises on nil', @TestHttpEnsureSuccessRaisesOnNil);
+  T.Test('HttpEnsureSuccess context includes method/URL',
+    @TestHttpEnsureSuccessContextIncludesMethodUrl);
   T.Test('GetString returns body on 200', @TestHttpGetStringSuccess);
   T.Test('GetString raises on 404', @TestHttpGetStringRaisesOn404);
   T.Test('GetBytes returns body on 200', @TestHttpGetBytesSuccess);
@@ -9515,6 +9620,11 @@ begin
     @TestClientConnectTimeoutOptionDefault);
   T.Test('Client default User-Agent', @TestClientDefaultUserAgent);
   T.Test('Client GetString method', @TestClientGetStringMethod);
+  T.Test('Client PostString method', @TestClientPostStringMethod);
+  T.Test('Client PostString raises with context',
+    @TestClientPostStringRaisesWithContext);
+  T.Test('Client Put/Patch/DeleteString methods',
+    @TestClientPutPatchDeleteStringMethods);
   T.Test('PostString returns body on 200', @TestHttpPostStringSuccess);
   T.Test('PostString raises on 404', @TestHttpPostStringRaisesOn404);
   T.Test('PutString returns body on 200', @TestHttpPutStringSuccess);

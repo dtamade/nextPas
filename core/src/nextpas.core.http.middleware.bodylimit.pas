@@ -29,7 +29,7 @@ uses
 function BodyLimitMiddleware(const AMaxBytes: Int64): IHttpMiddleware;
 begin
   if AMaxBytes < 0 then
-    raise EArgumentError.Create('body limit must not be negative');
+    raise EHttpError.Create(hekArgument, 'body limit must not be negative');
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin

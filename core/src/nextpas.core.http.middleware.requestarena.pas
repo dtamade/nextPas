@@ -58,6 +58,7 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.http.mem,
   nextpas.core.mem.allocator.arena;
@@ -180,7 +181,7 @@ function HttpWithRequestArena(const AHandler: IHttpHandler;
   ACapacity: SizeUInt): IHttpHandler;
 begin
   if AHandler = nil then
-    raise EArgumentError.Create('HttpWithRequestArena: handler must not be nil');
+    raise EHttpError.Create(hekArgument, 'HttpWithRequestArena: handler must not be nil');
   if ACapacity = 0 then
     Result := Chain(AHandler, [RequestArenaMiddleware])
   else

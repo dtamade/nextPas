@@ -71,7 +71,7 @@ end;
 function DecompressMiddleware(const AMaxSize: Int64): IHttpMiddleware;
 begin
   if AMaxSize < 0 then
-    raise EArgumentError.Create('decompression max size must not be negative');
+    raise EHttpError.Create(hekArgument, 'decompression max size must not be negative');
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin
@@ -101,7 +101,7 @@ begin
       { Decompress }
       try
         if (AMaxSize > 0) and (UInt64(AMaxSize) > UInt64(High(SizeUInt))) then
-          raise EArgumentError.Create('decompression max size exceeds platform capacity');
+          raise EHttpError.Create(hekArgument, 'decompression max size exceeds platform capacity');
         if (LEncoding = 'gzip') and (AMaxSize > 0) then
           LDecompressed := GzipDecompressWithMaxOutputSize(
             LBodyBytes, SizeUInt(AMaxSize))
@@ -113,6 +113,15 @@ begin
         else
           LDecompressed := DeflateDecompress(LBodyBytes);
       except
+        on E: EHttpError do
+          if E.Kind = hekArgument then
+            raise
+          else
+          begin
+            HttpWriteErrorResponse(AW, HTTP_STATUS_BAD_REQUEST,
+              'invalid_body', 'Failed to decompress request body');
+            Exit;
+          end;
         on E: EArgumentError do
           raise;
         on E: Exception do

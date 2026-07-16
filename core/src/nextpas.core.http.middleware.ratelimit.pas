@@ -249,9 +249,9 @@ end;
 function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware;
 begin
   if AOptions.MaxRequests <= 0 then
-    raise EArgumentError.Create('rate limit max requests must be positive');
+    raise EHttpError.Create(hekArgument, 'rate limit max requests must be positive');
   if AOptions.WindowSeconds <= 0 then
-    raise EArgumentError.Create('rate limit window seconds must be positive');
+    raise EHttpError.Create(hekArgument, 'rate limit window seconds must be positive');
   Result := TRateLimitMiddleware.Create(AOptions);
 end;
 

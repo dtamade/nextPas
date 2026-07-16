@@ -37,6 +37,10 @@ type
     function Get(const AUrl: string): IHttpResponse;
     function GetString(const AUrl: string): string;
     function GetBytes(const AUrl: string): TBytes;
+    function PostString(const AUrl, AContentType, ABody: string): string;
+    function PutString(const AUrl, AContentType, ABody: string): string;
+    function PatchString(const AUrl, AContentType, ABody: string): string;
+    function DeleteString(const AUrl: string): string;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
@@ -82,6 +86,10 @@ type
     function Get(const AUrl: string): IHttpResponse; virtual;
     function GetString(const AUrl: string): string; virtual;
     function GetBytes(const AUrl: string): TBytes; virtual;
+    function PostString(const AUrl, AContentType, ABody: string): string; virtual;
+    function PutString(const AUrl, AContentType, ABody: string): string; virtual;
+    function PatchString(const AUrl, AContentType, ABody: string): string; virtual;
+    function DeleteString(const AUrl: string): string; virtual;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload; virtual;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload; virtual;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload; virtual;
@@ -180,7 +188,10 @@ function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
 {** @desc Raise EHttpError if response status is not 2xx (200-299). Returns AResp for chaining. }
-function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
+function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; overload;
+{** @desc Same as HttpEnsureSuccess, with method/URL prefix in error messages. }
+function HttpEnsureSuccess(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IHttpResponse; overload;
 {** @desc GET url, ensure 2xx, return body as string. Raises on non-2xx. }
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
 {** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
@@ -233,6 +244,39 @@ uses
   nextpas.core.http.impl.registry,
   nextpas.core.platform.thread;
 
+{ Prefix client failure messages with "METHOD url: detail" when context is known. }
+function FormatHttpClientContext(const AMethod, AUrl: string): string;
+begin
+  if (AMethod <> '') and (AUrl <> '') then
+    Result := AMethod + ' ' + AUrl
+  else if AUrl <> '' then
+    Result := AUrl
+  else
+    Result := AMethod;
+end;
+
+function FormatHttpClientError(const AMethod, AUrl, ADetail: string): string;
+var
+  LCtx: string;
+begin
+  LCtx := FormatHttpClientContext(AMethod, AUrl);
+  if LCtx = '' then
+    Result := ADetail
+  else if ADetail = '' then
+    Result := LCtx
+  else
+    Result := LCtx + ': ' + ADetail;
+end;
+
+function FormatHttpStatusFailure(const AMethod, AUrl: string;
+  const AStatus: THttpStatus): string;
+begin
+  Result := FormatHttpClientError(AMethod, AUrl,
+    'HTTP request failed with status ' +
+    IntToStr(Int64(AStatus)) + ' ' +
+    nextpas.core.http.base.HttpStatusText(AStatus));
+end;
+
 procedure CheckDownloadArgs(const AClient: IHttpClient; const AUrl: string);
 begin
   if AClient = nil then
@@ -244,11 +288,14 @@ end;
 procedure CheckDownloadResponse(const AResp: IHttpResponse; const AUrl: string);
 begin
   if AResp = nil then
-    raise EHttpError.CreateOp(hekConnect, 'download', 'HTTP download returned no response: ' + AUrl);
+    raise EHttpError.CreateOp(hekConnect, 'download',
+      FormatHttpClientError('GET', AUrl, 'HTTP download returned no response'));
   if (AResp.StatusCode < 200) or (AResp.StatusCode >= 300) then
     raise EHttpError.Create(hekStatus,
-      'HTTP download failed with status ' +
-      IntToStr(Int64(AResp.StatusCode)) + ': ' + AUrl,
+      FormatHttpClientError('GET', AUrl,
+        'HTTP download failed with status ' +
+        IntToStr(Int64(AResp.StatusCode)) + ' ' +
+        nextpas.core.http.base.HttpStatusText(AResp.StatusCode)),
       AResp.StatusCode);
 end;
 
@@ -732,7 +779,9 @@ begin
   CaptureRedirectBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LResp := FTransport.RoundTrip(AReq);
   if LResp = nil then
-    raise EHttpError.CreateOp(hekConnect, 'round_trip', 'HTTP transport returned no response');
+    raise EHttpError.CreateOp(hekConnect, 'round_trip',
+      FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+        'HTTP transport returned no response'));
 
   // Determine redirect behavior: per-request override or client default
   LFollowRedirects := FOptions.FollowRedirects;
@@ -752,21 +801,27 @@ begin
     if ARedirectsLeft <= 0 then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect, 'too many redirects');
+      raise EHttpError.Create(hekRedirect,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+          'too many redirects'));
     end;
 
     LRespHeaders := LResp.Headers;
     if LRespHeaders = nil then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect, 'redirect with no response headers');
+      raise EHttpError.Create(hekRedirect,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+          'redirect with no response headers'));
     end;
 
     LLocations := LRespHeaders.GetAll('location');
     if Length(LLocations) > 1 then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect, 'redirect with duplicate Location headers');
+      raise EHttpError.Create(hekRedirect,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+          'redirect with duplicate Location headers'));
     end;
 
     if Length(LLocations) = 1 then
@@ -776,7 +831,9 @@ begin
     if LLocation = '' then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect, 'redirect with no Location header');
+      raise EHttpError.Create(hekRedirect,
+        FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+          'redirect with no Location header'));
     end;
 
     try
@@ -884,6 +941,26 @@ end;
 function THttpClient.GetBytes(const AUrl: string): TBytes;
 begin
   Result := HttpGetBytes(Self, AUrl);
+end;
+
+function THttpClient.PostString(const AUrl, AContentType, ABody: string): string;
+begin
+  Result := HttpPostString(Self, AUrl, AContentType, ABody);
+end;
+
+function THttpClient.PutString(const AUrl, AContentType, ABody: string): string;
+begin
+  Result := HttpPutString(Self, AUrl, AContentType, ABody);
+end;
+
+function THttpClient.PatchString(const AUrl, AContentType, ABody: string): string;
+begin
+  Result := HttpPatchString(Self, AUrl, AContentType, ABody);
+end;
+
+function THttpClient.DeleteString(const AUrl: string): string;
+begin
+  Result := HttpDeleteString(Self, AUrl);
 end;
 
 function THttpClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
@@ -1109,6 +1186,29 @@ end;
 function THttpClientForwarder.GetBytes(const AUrl: string): TBytes;
 begin
   Result := HttpGetBytes(Self, AUrl);
+end;
+
+function THttpClientForwarder.PostString(const AUrl, AContentType,
+  ABody: string): string;
+begin
+  Result := HttpPostString(Self, AUrl, AContentType, ABody);
+end;
+
+function THttpClientForwarder.PutString(const AUrl, AContentType,
+  ABody: string): string;
+begin
+  Result := HttpPutString(Self, AUrl, AContentType, ABody);
+end;
+
+function THttpClientForwarder.PatchString(const AUrl, AContentType,
+  ABody: string): string;
+begin
+  Result := HttpPatchString(Self, AUrl, AContentType, ABody);
+end;
+
+function THttpClientForwarder.DeleteString(const AUrl: string): string;
+begin
+  Result := HttpDeleteString(Self, AUrl);
 end;
 
 function THttpClientForwarder.Post(const AUrl, AContentType: string;
@@ -1758,17 +1858,22 @@ begin
   end;
 end;
 
-function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
+function HttpEnsureSuccess(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IHttpResponse;
 begin
   if AResp = nil then
-    raise EHttpError.Create(hekArgument, 'HTTP response is nil');
+    raise EHttpError.Create(hekArgument,
+      FormatHttpClientError(AMethod, AUrl, 'HTTP response is nil'));
   if not nextpas.core.http.base.HttpStatusIsSuccess(AResp.StatusCode) then
     raise EHttpError.Create(hekStatus,
-      'HTTP request failed with status ' +
-      IntToStr(Int64(AResp.StatusCode)) + ' ' +
-      nextpas.core.http.base.HttpStatusText(AResp.StatusCode),
+      FormatHttpStatusFailure(AMethod, AUrl, AResp.StatusCode),
       AResp.StatusCode);
   Result := AResp;
+end;
+
+function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
+begin
+  Result := HttpEnsureSuccess(AResp, '', '');
 end;
 
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
@@ -1777,7 +1882,7 @@ var
 begin
   LResp := AClient.Get(AUrl);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'GET', AUrl);
     Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
@@ -1791,7 +1896,7 @@ var
 begin
   LResp := AClient.Get(AUrl);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'GET', AUrl);
     Result := HttpReadResponseBodyBytes(LResp);
   except
     HttpReleaseResponseBody(LResp);
@@ -1806,7 +1911,7 @@ var
 begin
   LResp := AClient.Post(AUrl, AContentType, ABody);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'POST', AUrl);
     Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
@@ -1821,7 +1926,7 @@ var
 begin
   LResp := AClient.Put(AUrl, AContentType, ABody);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'PUT', AUrl);
     Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
@@ -1836,7 +1941,7 @@ var
 begin
   LResp := AClient.Patch(AUrl, AContentType, ABody);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'PATCH', AUrl);
     Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
@@ -1851,7 +1956,7 @@ var
 begin
   LResp := AClient.Delete(AUrl);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'DELETE', AUrl);
     Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
@@ -1862,13 +1967,13 @@ end;
 function HttpHead(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
 begin
   Result := AClient.Head(AUrl);
-  HttpEnsureSuccess(Result);
+  HttpEnsureSuccess(Result, 'HEAD', AUrl);
 end;
 
 function HttpOptions(const AClient: IHttpClient; const AUrl: string): IHttpResponse;
 begin
   Result := AClient.Options(AUrl);
-  HttpEnsureSuccess(Result);
+  HttpEnsureSuccess(Result, 'OPTIONS', AUrl);
 end;
 
 function HttpPostJson(const AClient: IHttpClient;
@@ -1878,7 +1983,7 @@ var
 begin
   LResp := AClient.Post(AUrl, 'application/json', ABody.Stringify);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'POST', AUrl);
     Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
@@ -1893,7 +1998,7 @@ var
 begin
   LResp := AClient.Put(AUrl, 'application/json', ABody.Stringify);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'PUT', AUrl);
     Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
@@ -1908,7 +2013,7 @@ var
 begin
   LResp := AClient.Patch(AUrl, 'application/json', ABody.Stringify);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'PATCH', AUrl);
     Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);
@@ -1923,7 +2028,7 @@ var
 begin
   LResp := AClient.Delete(AUrl, 'application/json', ABody.Stringify);
   try
-    HttpEnsureSuccess(LResp);
+    HttpEnsureSuccess(LResp, 'DELETE', AUrl);
     Result := HttpReadResponseBodyString(LResp);
   except
     HttpReleaseResponseBody(LResp);

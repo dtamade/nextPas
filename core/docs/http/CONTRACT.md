@@ -111,6 +111,12 @@ end;
   - `ConnectTimeout`：新 dial 后 **首写** budget（ms；0=同 Timeout）。
     **不**打断阻塞 OS `connect()`；名称中的 “Connect” 指 post-dial 首写
     阶段，不是 OS dial 超时。全量 dial 超时 / mid-read cancel 见下方 Blocked 表。
+- **Production defaults（可用性纪律）**：
+  - 生产 client **必须**设置有限 `Timeout`（`WithTimeout` 或 options）。
+  - `Timeout=0` 仅适合明确需要无限等待的测试/特殊工具。
+  - **禁止**把“只挂 cancel、不设 Timeout”当作有界等待模板。
+  - 示例 `http_get_client` 默认 `WithTimeout(30000)`。
+  - OS dial 有界与 mid-read 硬取消见 §2.2.0a（Blocked on net）。
 
 ### 2.2.0a Net-dependent capabilities (Blocked)
 
@@ -129,8 +135,13 @@ end;
 - 新代码优先 `Create(Kind, Message)`；调用方可 `except on E: EHttpError` 后匹配 Kind。
 - **消息形状错误**（非法/冲突 Content-Length、不支持 Transfer-Encoding、
   builder 非法 CL）→ `hekArgument`。
-- **配置/nil 前置条件**（nil writer/client、负超时/负 max redirects 等）→
-  也归 `hekArgument`（不再裸 `EArgumentError`，便于统一 `HttpErrorIsUserError`）。
+- **配置/nil 前置条件**（nil writer/client、负超时/负 max redirects、
+  server/websocket/middleware 构造参数等）→ 也归 `hekArgument`
+  （不再裸 `EArgumentError`，便于统一 `HttpErrorIsUserError`）。
+- **ensure-2xx / download / redirect 客户端错误消息**：在已知 method/URL 时
+  前缀为 `METHOD url: detail`（如 `GET http://example/path: HTTP request failed
+  with status 404 Not Found`）。`HttpEnsureSuccess` 提供无上下文与
+  `(Resp, Method, Url)` 两形态。
 - Transport 边界：裸 `ETimeoutError` → `hekTimeout` + `Op=transport`；
   裸 `ENetworkError`（含 connect 失败）→ `hekConnect` + `Op=transport`
   （H1/H2 client RoundTrip 经 `HttpWrapTransportException`）。

@@ -891,8 +891,9 @@ begin
       LWs := UpgradeWebSocket(AReq, AW, LOptions);
       LWs.Close(1000, '');
     except
-      on E: EArgumentError do
+      on E: EHttpError do
       begin
+        Check(E.Kind = hekArgument, 'negative MaxFrameSize is hekArgument');
         AW.GetHeaders.SetHeader('content-length', '0');
         AW.WriteHeader(HTTP_STATUS_BAD_REQUEST);
       end;
