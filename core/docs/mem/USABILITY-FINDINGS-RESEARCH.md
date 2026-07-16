@@ -1,10 +1,10 @@
 # mem 可用性评估发现 — 专题调研报告
 
-**状态**: Research complete (F1–F7 fixed; **R1–R5 residual** researched 2026-07-17)
-**日期**: 2026-07-16 / 修订 2026-07-17（二轮残留）
-**范围**: F1–F7 + 本轮残留 R1–R5（见 [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md)）
-**权威评估**: F1–F7 后 9.1 → 本轮审查 **8.9**（残留压诊断/一致性）→ 修复目标 **9.3**
-**非目标**: 合并双轨热路径、默认开启生产安全税、新增 allocator 种类、reopen product-table dual-track
+**状态**: Research complete (F1–F7 + R1–R5 fixed; **S1–S3 residual** researched + implemented 2026-07-17)
+**日期**: 2026-07-16 / 修订 2026-07-17（三轮残留 S1–S3）
+**范围**: F1–F7 + R1–R5 + S1–S3（见 [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md)）
+**权威评估**: … → R1–R5 **9.3** → 三轮审查 **9.15** → S1–S3 **9.3**
+**非目标**: 合并双轨热路径、默认开启生产安全税、新增 allocator 种类、reopen product-table dual-track、全库 pool raise 扫改
 
 ---
 
@@ -199,3 +199,38 @@ R1+R2 ──► FormatMemStats / TMemStats
 R4 ─────► FormatMemDebugProfile（依赖 GetMemStats 字段）
 R3 ─────► ReallocMemOf（复用 FreeMemOfAllowsSizedHeapFree）
 ```
+
+---
+
+## 6. 三轮残留 S1–S3（2026-07-17）
+
+| ID | 分类 | 摘要 | 影响面 | 风险 | 优先级 |
+|----|------|------|--------|------|--------|
+| S1 | API 对称 | TryReallocMemOf 错误拒绝 nil allocator GetMem 回落 | 插件助手 | MEDIUM | P1 |
+| S2 | 错误消息 | error.pas 对齐 raise 裸字符串 | 机读日志 | LOW–MED | P2 |
+| S3 | 门禁 | S1 无 guardrails | 回归 | LOW | P0 |
+
+### S1 — Try/非 Try 成功语义
+
+| 项 | 内容 |
+|----|------|
+| **根因** | 防御性早退过严：禁止无 allocator + 无 ptr 时走 process GetMem。 |
+| **影响** | `ReallocMemOf(nil,nil,0,N)` 成功；`TryReallocMemOf` 同入参 False — 违反 ERROR-POLICY「Try=同一后端+Boolean」。 |
+| **Go/Rust** | 错误形态单一；包装层不比底层更严。 |
+| **策略** | 删早退；`Result := (ptr<>nil) or (newSize=0)`。 |
+| **风险** | 低：行为变宽。 |
+
+### S2 — 对齐 raise 助手
+
+| 项 | 内容 |
+|----|------|
+| **根因** | F5 只强制「本批新建」；Sanitize* 为历史裸字符串。 |
+| **策略** | 仅改 `SanitizeRuntimeAlignment` / `SanitizeConfigAlignment`。 |
+| **风险** | 极低；全库 pool 不扫。 |
+
+### S3 — 门禁
+
+| 项 | 内容 |
+|----|------|
+| **策略** | `TestTryReallocMemOfNilAllocatorGetMem` + check_usability_docs。 |
+| **风险** | 极低。 |

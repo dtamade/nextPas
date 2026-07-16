@@ -536,11 +536,8 @@ end;
 function TryReallocMemOf(const AAllocator: IAllocator; APtr: Pointer;
   AOldSize, ANewSize: SizeUInt; out ANewPtr: Pointer): Boolean;
 begin
-  if (AAllocator = nil) and (APtr = nil) and (ANewSize > 0) then
-  begin
-    ANewPtr := nil;
-    Exit(False);
-  end;
+  { Same success semantics as ReallocMemOf + Boolean: no extra rejects.
+    nil allocator + nil ptr + size>0 falls back to process GetMem (S1). }
   ANewPtr := ReallocMemOf(AAllocator, APtr, AOldSize, ANewSize);
   Result := (ANewPtr <> nil) or (ANewSize = 0);
 end;

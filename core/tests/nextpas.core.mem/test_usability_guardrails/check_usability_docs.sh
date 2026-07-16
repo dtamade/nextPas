@@ -97,6 +97,18 @@ need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usab
   'TestReallocMemOf|ReallocMemOf' \
   'usability guardrails must lock ReallocMemOf'
 need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'TestTryReallocMemOfNilAllocatorGetMem' \
+  'usability guardrails must lock TryReallocMemOf nil-allocator symmetry (S1)'
+need_grep "$ROOT/core/src/nextpas.core.mem.error.pas" \
+  'SanitizeRuntimeAlignment' \
+  'error.pas SanitizeRuntimeAlignment must remain (S2 surface)'
+need_grep "$ROOT/core/src/nextpas.core.mem.error.pas" \
+  "FormatAllocErrorMsg\\('SanitizeRuntimeAlignment'" \
+  'error.pas alignment raises must use FormatAllocErrorMsg (S2)'
+need_grep "$ROOT/core/src/nextpas.core.mem.error.pas" \
+  "FormatAllocErrorMsg\\('SanitizeConfigAlignment'" \
+  'error.pas config alignment raises must use FormatAllocErrorMsg (S2)'
+need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
   'heap_safety=y|TestFormatMemStatsSafety' \
   'usability guardrails must lock heap_safety in FormatMemStats'
 need_grep "$MEM_DOCS/API-GUIDE.md" 'ReallocMemOf|FormatMemDebugProfile' \

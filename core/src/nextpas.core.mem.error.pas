@@ -246,7 +246,9 @@ begin
   if AAlignment < SizeOf(Pointer) then
     AAlignment := SizeOf(Pointer);
   if (AAlignment and (AAlignment - 1)) <> 0 then
-    raise EAllocError.Create(aeAlignmentNotSupported, 'Alignment must be power of two and >= pointer size');
+    raise EAllocError.Create(aeAlignmentNotSupported,
+      FormatAllocErrorMsg('SanitizeRuntimeAlignment', 'Sanitize',
+        'alignment must be power of two and >= pointer size'));
   Result := AAlignment;
 end;
 
@@ -255,7 +257,9 @@ begin
   if AAlignment = 0 then
     Exit(DEFAULT_ALIGNMENT);
   if (AAlignment and (AAlignment - 1)) <> 0 then
-    raise EAllocError.Create(aeAlignmentNotSupported, 'Alignment must be power of 2');
+    raise EAllocError.Create(aeAlignmentNotSupported,
+      FormatAllocErrorMsg('SanitizeConfigAlignment', 'Sanitize',
+        'alignment must be power of 2'));
   if AAlignment < DEFAULT_ALIGNMENT then
     AAlignment := DEFAULT_ALIGNMENT;
   Result := AAlignment;

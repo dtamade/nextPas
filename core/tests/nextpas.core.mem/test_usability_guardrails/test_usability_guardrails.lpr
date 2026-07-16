@@ -378,6 +378,28 @@ begin
   RebuildDebug('');
 end;
 
+procedure TestTryReallocMemOfNilAllocatorGetMem;
+{ S1: TryReallocMemOf must mirror ReallocMemOf — nil allocator + nil ptr
+  + size>0 falls back to process GetMem (no extra reject). }
+var
+  LPtr, LTry: Pointer;
+  LOk: Boolean;
+begin
+  RebuildDebug('');
+  LPtr := ReallocMemOf(nil, nil, 0, 64);
+  Check(LPtr <> nil, 'ReallocMemOf(nil,nil) → GetMem');
+  FreeMem(LPtr, 64);
+
+  LOk := TryReallocMemOf(nil, nil, 0, 64, LTry);
+  Check(LOk, 'TryReallocMemOf(nil,nil) success');
+  Check(LTry <> nil, 'TryReallocMemOf out ptr');
+  FreeMem(LTry, 64);
+
+  LOk := TryReallocMemOf(nil, nil, 0, 0, LTry);
+  Check(LOk, 'TryReallocMemOf size=0 → True');
+  Check(LTry = nil, 'size=0 → nil ptr');
+end;
+
 procedure TestDefaultAllocatorNotHotHeapType;
 var
   LHeap: TGrowingAllocator;
@@ -686,6 +708,7 @@ begin
   T.Test('FreeMemOf under plugin DEBUG tracks free', @TestFreeMemOfUnderPluginDebugTracksFree);
   T.Test('ReallocMemOf sized same-heap', @TestReallocMemOfSizedSameHeap);
   T.Test('ReallocMemOf under plugin DEBUG tracks', @TestReallocMemOfUnderPluginDebugTracks);
+  T.Test('TryReallocMemOf nil-allocator GetMem', @TestTryReallocMemOfNilAllocatorGetMem);
   T.Test('DefaultAllocator not hot heap type', @TestDefaultAllocatorNotHotHeapType);
   T.Test('dual-track same-heap round-trip', @TestDualTrackSameHeapRoundTrip);
   T.Test('FormatMemStats one-line snapshot', @TestFormatMemStats);

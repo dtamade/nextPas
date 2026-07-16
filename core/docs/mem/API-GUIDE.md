@@ -1,7 +1,7 @@
 # nextpas.core.mem API 选择指南
 
 **目的**: 在三套 API 体系中选对入口（stdlib 手册决策树）。
-**最后更新**: 2026-07-15
+**最后更新**: 2026-07-17
 **入口**: [README.md](README.md) · **计划**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md)
 
 ---
@@ -64,7 +64,7 @@ Writeln(FormatMemStats); // … debug_process=… debug_coverage_gap=…
 - 热路径不调用；DEBUG 字段默认全 0
 - 细节字段与 SC5 对齐：`TGrowingHeapStats`
 - 插件面 sized free 助手：`FreeMemOf(Alloc, P, Size)` / `TryFreeMemOf`（无 DEBUG wrap 且无 HEAP_DEBUG/SAFETY 时同堆走 DefaultHeap sized；否则走 `Alloc.FreeMem` 以保留 tracking）
-- 插件面 sized realloc：`ReallocMemOf(Alloc, P, Old, New)` / `TryReallocMemOf`（同门控；wrap 开时走 `Alloc.ReallocMem`）
+- 插件面 sized realloc：`ReallocMemOf(Alloc, P, Old, New)` / `TryReallocMemOf`（同门控；wrap 开时走 `Alloc.ReallocMem`；**Try 与非 Try 成功语义一致**，含 nil allocator → process GetMem）
 - 一行 env profile：`FormatMemDebugProfile`（`heap_debug`/`heap_safety`/`arena_strict`/`debug`/`debug_process`/`debug_coverage_gap`）
 - `FormatMemStats` 含 `heap_safety=` / `arena_strict=`（与 HEAP_DEBUG / coverage_gap 并列）
 - 错误消息：`FormatAllocErrorMsg` / `IsWellFormedAllocErrorMsg`（见 [ERROR-POLICY.md](ERROR-POLICY.md)）

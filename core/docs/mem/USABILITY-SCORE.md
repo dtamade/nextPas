@@ -1,9 +1,9 @@
 # nextpas.core.mem 可用性评分（权威）
 
-**评估日期**: 2026-07-17（F1–F7 + R1–R5 修复后）
+**评估日期**: 2026-07-17（F1–F7 + R1–R5 + S1–S3 修复后）
 **范围**: `nextpas.core.mem` 对外默认路径、契约、诊断、上层注入
 **对标**: Go `runtime` 分配默认 / Rust `GlobalAlloc` + 标准容器体验（工程可用性，非微基准）
-**前序**: 独立基线 **7.7** → F1–F7 **9.1** → 二轮审查 **8.9** → R1–R5 **9.3**
+**前序**: 独立基线 **7.7** → F1–F7 **9.1** → 二轮审查 **8.9** → R1–R5 **9.3** → 三轮审查 **9.15** → S1–S3 **9.3**
 **本轮评估**: [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md)
 **调研/计划**: [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md) · [USABILITY-FIX-PLAN.md](USABILITY-FIX-PLAN.md)
 
@@ -17,10 +17,10 @@
 |----|-----|
 | **综合分** | **9.3 / 10** |
 | **等级** | **HIGH** |
-| **趋势** | 7.7 → F1–F7 **9.1** → 二轮审查 8.9 → R1–R5 **9.3**（废除 plus-chain 记分） |
+| **趋势** | 7.7 → F1–F7 **9.1** → 二轮 8.9 → R1–R5 **9.3** → 三轮 9.15 → S1–S3 **9.3**（废除 plus-chain 记分） |
 | **风险** | LOW–MEDIUM（热路径双 free 仍默认 UB；需 opt-in SAFETY/DEBUG） |
 
-**结论（一句话）**: 双轨零税默认保留；FormatMemStats 含 heap_safety/arena_strict；FreeMemOf+ReallocMemOf 对称；FormatMemDebugProfile 收敛多 env。产品表 dual-track 主线 **CLOSED**（不 reopen）。
+**结论（一句话）**: 双轨零税默认保留；FormatMemStats 含 heap_safety/arena_strict；FreeMemOf+ReallocMemOf 对称；TryReallocMemOf 与 ReallocMemOf 同成功语义；FormatMemDebugProfile 收敛多 env。产品表 dual-track 主线 **CLOSED**（不 reopen）。
 
 ### 故意默认堆（lifetime 理由；非 phase bulk reclaim 目标）
 
@@ -73,10 +73,10 @@
 |------|----|------|
 | 默认路径正确性 | **9.5** | Growing 热路径；S5 同堆（Growing IAllocator / `GetGrowingIAllocator`）；H1+H2 RequestArena；compiler phase UnitBegin |
 | API 可发现性 | **9.3** | `WithRequestArena` / `HttpRequestAllocatorOf` / `HttpFormatProcessMemStats`；`FreeMemOf`/`ReallocMemOf`；`FormatMemDebugProfile`；门面冻结 |
-| 调用一致性 | **9.3** | HTTP Options/H1/H2 与 compiler UnitBegin/End 对称 bulk-reclaim；插件 free/realloc sized 对称；Arena strict |
-| 错误模型 | **9.0** | ERROR-POLICY + Try* + TryBlockSize/SC8 + FormatAllocErrorMsg；统一 catch 面文档化 |
+| 调用一致性 | **9.4** | HTTP Options/H1/H2 与 compiler UnitBegin/End 对称 bulk-reclaim；插件 free/realloc sized 对称；TryReallocMemOf ≡ ReallocMemOf 成功语义（S1）；Arena strict |
+| 错误模型 | **9.1** | ERROR-POLICY + Try* + TryBlockSize/SC8 + FormatAllocErrorMsg；对齐校验 raise 走助手（S2）；统一 catch 面文档化 |
 | 诊断可用性 | **9.5** | FormatMemStats（`heap_debug`/`heap_safety`/`arena_strict`/`debug_process`/`debug_coverage_gap`）；HEAP_DEBUG + HEAP_SAFETY；CI recipe |
-| 契约可证明 | **9.5** | guardrails F1–F7 + R1–R5；contract_matrix；SC9 双轨；source-contract 文档门禁 |
+| 契约可证明 | **9.5** | guardrails F1–F7 + R1–R5 + S1–S3；contract_matrix；SC9 双轨；source-contract 文档门禁 |
 | 性能默认 | **9.4** | 热路径零税；HEAP_DEBUG/SAFETY 默认关 |
 | 上层可集成 | **9.5** | hello options → native；compiler session 管线真实 MemAlloc；HttpRequestAllocatorOf |
 | **加权综合** | **9.3** | — |
@@ -97,6 +97,9 @@
 | R3 ReallocMemOf | **fixed** | 同 FreeMemOf 门控 + tracking 测试 |
 | R4 FormatMemDebugProfile | **fixed** | 标志位一行 profile |
 | R5 门禁 | **fixed** | check_usability_docs + guardrails |
+| S1 TryReallocMemOf 对称 | **fixed** | nil allocator + nil ptr → process GetMem；与 ReallocMemOf 同语义 |
+| S2 对齐 raise 助手 | **fixed** | SanitizeRuntime/ConfigAlignment 用 FormatAllocErrorMsg |
+| S3 门禁 | **fixed** | TestTryReallocMemOfNilAllocatorGetMem + check_usability_docs |
 
 ---
 
@@ -111,7 +114,8 @@
 | arena 契约回归 + HEAP_DEBUG / SAFETY 插件轨 | **落地** |
 | CI `rebuild-compiler` + stage0 flags 单源 + HEAP_DEBUG env recipe | **落地** |
 | F1–F7 可用性发现 | **落地** |
-| R1–R5 残留（stats/realloc/profile） | **落地**（本轮） |
+| R1–R5 残留（stats/realloc/profile） | **落地** |
+| S1–S3 三轮残留（Try 对称 / 对齐消息 / 门禁） | **落地**（本轮） |
 
 **默认 lane focused gate**（`docs/worktrees.md` / `make lane-focused LANE=mem`）：
 
