@@ -55,6 +55,8 @@
 
 **跨模块**（http/async/net）仍无 lockfree 容器 uses；H2-6 **不**为证明而强行改上层模块。若未来接入，遵守 Close→join→Free。
 
+> **R8 脚注**：R8 轴（NUMA / RTM / formal，见 [`r8-research-status.md`](r8-research-status.md)）**无**跨模块生产依赖——这是**预期**状态（Experimental / T3 direct import only），不是审计缺口。
+
 ### 2.3 Close / Destroy 纪律抽检
 
 抽检 T1 实现单元（`spsc` / `mpmc` / `mpsc` / `spmc` / `segqueue` / `msqueue` / `stack` / `deque` / `channel*`）：均实现 `Close`；`Destroy` 路径与 R1/R2 契约（Close+drain 或 Close 唤醒）一致。

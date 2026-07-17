@@ -81,6 +81,9 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 
 T1 成熟度不在本表：T1 为 **Ready-for-consumer**（见 READY）。T3 = Experimental 的子集（研究扩展）。
 
+**R8 研究 pack（opt-in close-out）**：诚实状态见 [`r8-research-status.md`](r8-research-status.md)；形式化入口 [`formal/README.md`](formal/README.md)。
+R8 轴 **不** 因文档收口而升入 T1 / 默认门面；生产化属重大变更。
+
 **不做（H2-2）**：把任一 T2 档升入默认门面；统一重写 T2 算法；改变 Closed 语义。
 
 ---
@@ -353,15 +356,20 @@ Key/Value 双参数类型用：
 | `test_lockfree_*` | 子模块独立套件 | 90+ suites |
 | `examples/.../t1_close_join_free` | H2-6 真实消费者证明 | manual / `make run` |
 
-### 6.1 Formal / 已知限制（H2-5）
+### 6.1 Formal / 已知限制（H2-5）+ R8 research status
+
+诚实总览（NUMA / RTM / formal）：[`r8-research-status.md`](r8-research-status.md)。
+如何跑 TLC / 无 TLC 时 model-only：[`formal/README.md`](formal/README.md)。
+可选研究门：`make -C core/tests/nextpas.core.lockfree verify-r8`（**不**替代 `verify-t1`；**不**升 T1）。
 
 | 模型 | 路径 | 覆盖 | 限制 |
 |------|------|------|------|
 | SPSC | `formal/tla/SpscQueue.tla` | 有界 SPSC 协议 | 研究证据；非 CI 默认门 |
 | MPMC | `formal/tla/MpmcQueue.tla` | 有界 MPMC sequence | 同上 |
 | Channel | `formal/tla/LockFreeChannel.tla` | channel 发送/接收 | 同上；cap=1 以 R5 测试为准 |
+| Stack | `formal/tla/LockFreeStack.tla` | LIFO + Close 拒绝 publish | 同上；R8 加深；model-only 若无 TLC |
 
-形式化模型加深 **不** 改变 T1 运行时契约。失败场景优先修 bug；无法修则记入本表。
+形式化模型加深 **不** 改变 T1 运行时契约。R8 research pack close-out **不** 晋升 T1。失败场景优先修 bug；无法修则记入本表。
 | `test_atomic` | 原子操作/内存序/CAS/wait/notify | **~45** tests |
 
 入口：
