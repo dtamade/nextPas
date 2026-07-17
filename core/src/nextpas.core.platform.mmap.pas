@@ -162,7 +162,6 @@ function platform_shm_close(var AMap: TPlatformMappedFile): Int32;
 implementation
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.platform.error,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base
@@ -405,6 +404,17 @@ begin
     Result := '/' + AName;
 end;
 
+function ReplaceCharAll(const AStr: string; AFrom, ATo: Char): string;
+var
+  LIndex: Integer;
+begin
+  { Local helper: L0 platform must not depend on L1 text.conv StringReplace. }
+  Result := AStr;
+  for LIndex := 1 to Length(Result) do
+    if Result[LIndex] = AFrom then
+      Result[LIndex] := ATo;
+end;
+
 function BuildSharedFallbackPath(const AName: string): string;
 var
   LDir: string;
@@ -417,7 +427,7 @@ begin
   LBase := AName;
   if (LBase <> '') and (LBase[1] = '/') then
     Delete(LBase, 1, 1);
-  LBase := StringReplace(LBase, '/', '_', True);
+  LBase := ReplaceCharAll(LBase, '/', '_');
 
   if (LDir <> '') and (LDir[Length(LDir)] <> '/') then
     LDir := LDir + '/';
