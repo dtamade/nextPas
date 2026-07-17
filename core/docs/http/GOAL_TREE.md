@@ -25,9 +25,9 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | non-H3 stage-complete | 完成（H3 诚实 blocked on QUIC） |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | ~35 focused suites |
-| **NEXT** | **只看 [`ROADMAP.md`](ROADMAP.md)**（当前 Era 0 / Wave J；满自治 Goal Loop） |
+| **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（满自治 Goal Loop；本文件不写具体 Wave 名） |
 
-四支柱与推荐路径、Done when、Gates、Inbox 均在 ROADMAP；此处不双写波次表。
+四支柱、推荐路径、Done when、Gates、Inbox 均只在 ROADMAP 维护。
 
 ### Stage completion definition (non-H3)
 
@@ -259,16 +259,9 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 
 **Not a live backlog.** Ordered work + Goal Loop: [`ROADMAP.md`](ROADMAP.md).
 
-| Closed | Outcome |
-|--------|---------|
-| Stage P1–P5 | non-H3 stage-complete |
-| Wave A–I | usability + cookie site + response metadata + proxy Basic-only |
+Closed eras (detail only in ROADMAP / archive): stage P1–P5, usability A–I, and any wave already marked landed on ROADMAP.
 
-| Active default path (see ROADMAP) |
-|-----------------------------------|
-| Era 0 J→K→L′ · Era 1 C1→C2→C3 · Era 2 E1→E2 · Era 3 A1→A2 · Era 4 P1→P3→P5 · Era 5 H3 Blocked |
-
-If ROADMAP and any archive/cycle note disagree, **ROADMAP wins**.
+**Live ordered path and current NEXT**: only [`ROADMAP.md`](ROADMAP.md). If archive notes disagree, **ROADMAP wins**.
 
 ## Immediate Do-Not-Drift Rules
 

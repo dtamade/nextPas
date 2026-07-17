@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave J Error Op hygiene landed）
+**Updated**: 2026-07-17（Wave L′ doc dual-status kill；NEXT=C1）
 
 ---
 
@@ -72,7 +72,8 @@ CHECKPOINT（不阻塞续波）:
 | Wave I Proxy auth | 完成（Basic only freeze；Digest/NTLM Park） |
 | Wave J Error Op hygiene | 完成（热点 CreateOp + source-contract + CONTRACT Op 表） |
 | Wave K Surface freeze | 完成（工厂白名单已冻；无 deprecated；ARCHITECTURE 对齐） |
-| **下一执行点** | **Era 0 / Wave L′ — Doc dual-status kill** |
+| Wave L′ Doc dual-status | 完成（GOAL_TREE/API_COVERAGE/README 无 NEXT Wave 双写） |
+| **下一执行点** | **Era 1 / Wave C1 — Content-Encoding** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
@@ -147,15 +148,16 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
-| **Do** | GOAL_TREE / API_COVERAGE / README 顶部只保留「NEXT → ROADMAP Wave X」指针；去掉与 ROADMAP 重复的下一执行点双写；archive 索引不膨胀 |
+| **Status** | **landed** |
+| **Do** | GOAL_TREE / API_COVERAGE / README 顶部只保留「NEXT → ROADMAP」指针；去掉与 ROADMAP 重复的下一执行点双写；archive 索引不膨胀 |
 | **Don't** | 重写历史叙事；把 archive 当 backlog |
 | **Done when** | 全局搜「下一执行点」仅 ROADMAP 有权威表；GOAL_TREE Current Position 一行指针 |
 | **Gates** | docs-only：`git diff --check`；可选 hygiene |
 | **Land paths** | `core/docs/http/**` |
 | **Next** | Wave C1 |
+| **Evidence** | GOAL_TREE/API_COVERAGE/README 不写具体 NEXT Wave；「下一执行点」仅 ROADMAP |
 
-**Era 0 Done when**：J/K/L′ 均为 landed；全库只有一个 NEXT 权威。
+**Era 0 Done when**：J/K/L′ 均为 landed；全库只有一个 NEXT 权威。 **Met.**
 
 ---
 
@@ -167,7 +169,7 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | client/server 侧 gzip（优先）编解码契约：middleware 或 content 辅助；自动/显式 decode 写进 CONTRACT；focused 证明 |
 | **Don't** | 自研压缩核（优先用已有 core 能力；若无原语则 **最小** 引入或 Blocked 升级底层）；伪装完整浏览器 content 栈；默认 br 除非底层已有 |
 | **Done when** | 至少 gzip 请求或响应路径一条生产可用；非法/不支持编码诚实错误；CONTRACT + focused |
@@ -388,15 +390,15 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave L′ 仍是 NEXT
-2. GOAL_TREE / API_COVERAGE / README 只保留 NEXT → ROADMAP 指针
-3. docs-only diff --check；可选 hygiene
-4. path-limited land main
-5. 本文件：Wave L′ → landed；Wave C1 → NEXT；changelog 一行
+1. 打开本文件确认 Wave C1 仍是 NEXT
+2. 评估 gzip Content-Encoding 路径（优先已有 compress 原语）
+3. 实现最小生产可用 gzip + CONTRACT + focused
+4. path-limited land main（跨模块路径须声明）
+5. 本文件：Wave C1 → landed；Wave C2 → NEXT；changelog 一行
 6. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave L′，然后自动续波。**
+**没有用户指令时：默认执行 Wave C1，然后自动续波。**
 
 ---
 
@@ -424,3 +426,5 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave I landed；Wave J = NEXT |
 | 2026-07-17 | **完整时代表**：Era 0–5 + X；Goal Loop 满自治；Inbox；每波 Done when/Gates；推荐路径 J→K→L′→C1→C2→C3→E1→E2→A1→A2→P1→P3→P5 |
 | 2026-07-17 | Wave J landed：热点 CreateOp（cancel/ensure/connect/transport…）+ source-contract；Wave K = NEXT |
+| 2026-07-17 | Wave K landed：surface freeze 审计 + ARCHITECTURE 对齐 + contract 锁无 deprecated |
+| 2026-07-17 | Wave L′ landed：doc dual-status kill；Era 0 完成；Wave C1 = NEXT |
