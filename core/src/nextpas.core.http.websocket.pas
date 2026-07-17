@@ -26,7 +26,16 @@ type
     { If set, called during upgrade to validate the Origin header.
       When nil, all origins are accepted (no validation). }
     OnCheckOrigin: TWebSocketOriginCheck;
+    { OS dial budget in ms (TcpConnect timeout). >0 bounds dial;
+      0 = unbounded dial. Default Production discipline: 30000. }
+    ConnectTimeout: Int64;
+    { Handshake I/O deadline after dial (ms). >0 applies read/write
+      deadline for upgrade request/response; 0 = unbounded handshake I/O.
+      Default Production discipline: 30000. }
+    Timeout: Int64;
     class function Default: TWebSocketOptions; static;
+    function WithConnectTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
+    function WithTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
   end;
 
   TWebSocketOpcode = (
@@ -102,6 +111,8 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.io.util,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline,
   nextpas.core.http.url,
   nextpas.core.http.headers,
   nextpas.core.http.message,
@@ -166,6 +177,22 @@ begin
   Result.MaxFrameSize := WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
   Result.MaxMessageSize := WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
   Result.OnCheckOrigin := nil;
+  { Match HTTP client production discipline: bounded dial + handshake. }
+  Result.ConnectTimeout := 30000;
+  Result.Timeout := 30000;
+end;
+
+function TWebSocketOptions.WithConnectTimeout(
+  const ATimeoutMs: Int64): TWebSocketOptions;
+begin
+  Result := Self;
+  Result.ConnectTimeout := ATimeoutMs;
+end;
+
+function TWebSocketOptions.WithTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
+begin
+  Result := Self;
+  Result.Timeout := ATimeoutMs;
 end;
 
 procedure ValidateWebSocketOptions(const AOptions: TWebSocketOptions);
@@ -174,6 +201,54 @@ begin
     raise EHttpError.Create(hekArgument, 'WebSocket max frame size must not be negative');
   if AOptions.MaxMessageSize < 0 then
     raise EHttpError.Create(hekArgument, 'WebSocket max message size must not be negative');
+  if AOptions.ConnectTimeout < 0 then
+    raise EHttpError.Create(hekArgument,
+      'WebSocket ConnectTimeout must not be negative');
+  if AOptions.Timeout < 0 then
+    raise EHttpError.Create(hekArgument,
+      'WebSocket Timeout must not be negative');
+end;
+
+{ ConnectTimeout>0 wins for OS dial; else Timeout; 0 = unbounded. }
+function WebSocketEffectiveDialTimeoutMs(
+  const AOptions: TWebSocketOptions): Int64;
+begin
+  if AOptions.ConnectTimeout > 0 then
+    Result := AOptions.ConnectTimeout
+  else
+    Result := AOptions.Timeout;
+end;
+
+procedure ApplyWebSocketStreamDeadline(const AConn: ITcpStream;
+  const ATimeoutMs: Int64);
+var
+  LDeadline: TDeadline;
+begin
+  if (AConn = nil) or (ATimeoutMs <= 0) then
+    Exit;
+  LDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs));
+  AConn.SetReadDeadline(LDeadline);
+  AConn.SetWriteDeadline(LDeadline);
+end;
+
+procedure ClearWebSocketStreamDeadline(const AConn: ITcpStream);
+begin
+  if AConn = nil then
+    Exit;
+  AConn.SetReadDeadline(TDeadline.Infinite);
+  AConn.SetWriteDeadline(TDeadline.Infinite);
+end;
+
+procedure RaiseWebSocketTransport(const E: Exception);
+var
+  LWrapped: Exception;
+begin
+  LWrapped := HttpWrapTransportException(E);
+  if LWrapped <> nil then
+    raise LWrapped;
+  if E = nil then
+    raise EHttpError.CreateOp(hekConnect, 'websocket', 'WebSocket transport failure');
+  raise EHttpError.CreateOp(hekConnect, 'websocket', 'WebSocket: ' + E.Message);
 end;
 
 function IsOWS(const ACh: Char): Boolean;
@@ -1009,13 +1084,15 @@ var
   LParsedUrl: TUrl;
   LScheme, LHost, LPath, LKey, LAccept: string;
   LPort: UInt16;
-  LConn, LTlsConn: ITcpStream;
+  LConn, LTlsConn, LActive: ITcpStream;
   LReader: IReader;
   LWriter: IWriter;
   LRequest: string;
   LStatusCode: Integer;
   LHeaders: TStringArray;
   LUpgrade, LConnection, LAcceptHeader: string;
+  LDialMs: Int64;
+  LHandshakeMs: Int64;
 begin
   if AClient = nil then
     raise EHttpError.Create(hekArgument, 'WebSocket client is nil');
@@ -1055,73 +1132,114 @@ begin
       LPort := 80;
   end;
 
-  { Establish TCP connection }
-  LConn := TcpConnect(LHost, LPort);
-  if LConn = nil then
-    raise EHttpError.Create(hekConnect, 'WebSocket: failed to connect to ' + LHost + ':' + IntToStr(LPort));
-
-  { Wrap with TLS if wss:// }
-  if LScheme = 'wss' then
-  begin
-    LTlsConn := NewTlsClientTcpStream(LConn, nil, LHost, 'http/1.1');
-    LReader := LTlsConn as IReader;
-    LWriter := LTlsConn as IWriter;
-  end
-  else
-  begin
-    LReader := LConn as IReader;
-    LWriter := LConn as IWriter;
+  { Establish TCP connection with OS dial budget (H1/H2 client parity). }
+  LDialMs := WebSocketEffectiveDialTimeoutMs(AOptions);
+  try
+    if LDialMs > 0 then
+      LConn := TcpConnect(LHost, LPort, LDialMs)
+    else
+      LConn := TcpConnect(LHost, LPort);
+  except
+    on E: Exception do
+      RaiseWebSocketTransport(E);
   end;
+  if LConn = nil then
+    raise EHttpError.CreateOp(hekConnect, 'websocket',
+      'WebSocket: failed to connect to ' + LHost + ':' + IntToStr(LPort));
 
-  { Generate Sec-WebSocket-Key }
-  LKey := GenerateWebSocketKey;
+  LActive := LConn;
+  try
+    { Handshake I/O budget: Timeout if set, else ConnectTimeout residual. }
+    LHandshakeMs := AOptions.Timeout;
+    if LHandshakeMs <= 0 then
+      LHandshakeMs := AOptions.ConnectTimeout;
+    ApplyWebSocketStreamDeadline(LActive, LHandshakeMs);
 
-  { Build upgrade request }
-  LRequest := 'GET ' + LPath + ' HTTP/1.1'#13#10 +
-              'Host: ' + LHost;
-  if (LScheme = 'ws') and (LPort <> 80) then
-    LRequest := LRequest + ':' + IntToStr(LPort)
-  else if (LScheme = 'wss') and (LPort <> 443) then
-    LRequest := LRequest + ':' + IntToStr(LPort);
-  LRequest := LRequest + #13#10 +
-              'Upgrade: websocket'#13#10 +
-              'Connection: Upgrade'#13#10 +
-              'Sec-WebSocket-Key: ' + LKey + #13#10 +
-              'Sec-WebSocket-Version: 13'#13#10;
-  { Origin header: required by server-side default validation (RFC 6455 §4.1) }
-  if LScheme = 'wss' then
-    LRequest := LRequest + 'Origin: https://' + LHost + #13#10
-  else
-    LRequest := LRequest + 'Origin: http://' + LHost + #13#10;
-  LRequest := LRequest + #13#10;
+    { Wrap with TLS if wss:// }
+    if LScheme = 'wss' then
+    begin
+      try
+        LTlsConn := NewTlsClientTcpStream(LConn, nil, LHost, 'http/1.1');
+      except
+        on E: Exception do
+          RaiseWebSocketTransport(E);
+      end;
+      LActive := LTlsConn;
+      ApplyWebSocketStreamDeadline(LActive, LHandshakeMs);
+      LReader := LTlsConn as IReader;
+      LWriter := LTlsConn as IWriter;
+    end
+    else
+    begin
+      LReader := LConn as IReader;
+      LWriter := LConn as IWriter;
+    end;
 
-  { Send upgrade request }
-  IoWriteAll(LWriter, LRequest[1], SizeUInt(Length(LRequest)));
+    { Generate Sec-WebSocket-Key }
+    LKey := GenerateWebSocketKey;
 
-  { Read response }
-  ReadHttpResponse(LReader, LStatusCode, LHeaders);
+    { Build upgrade request }
+    LRequest := 'GET ' + LPath + ' HTTP/1.1'#13#10 +
+                'Host: ' + LHost;
+    if (LScheme = 'ws') and (LPort <> 80) then
+      LRequest := LRequest + ':' + IntToStr(LPort)
+    else if (LScheme = 'wss') and (LPort <> 443) then
+      LRequest := LRequest + ':' + IntToStr(LPort);
+    LRequest := LRequest + #13#10 +
+                'Upgrade: websocket'#13#10 +
+                'Connection: Upgrade'#13#10 +
+                'Sec-WebSocket-Key: ' + LKey + #13#10 +
+                'Sec-WebSocket-Version: 13'#13#10;
+    { Origin header: required by server-side default validation (RFC 6455 §4.1) }
+    if LScheme = 'wss' then
+      LRequest := LRequest + 'Origin: https://' + LHost + #13#10
+    else
+      LRequest := LRequest + 'Origin: http://' + LHost + #13#10;
+    LRequest := LRequest + #13#10;
 
-  { Validate response }
-  if LStatusCode <> 101 then
-    raise EHttpError.Create(hekUpgrade, 'WebSocket: expected 101, got ' + IntToStr(LStatusCode));
+    { Send upgrade request + read response under handshake deadline }
+    try
+      IoWriteAll(LWriter, LRequest[1], SizeUInt(Length(LRequest)));
+      ReadHttpResponse(LReader, LStatusCode, LHeaders);
+    except
+      on E: Exception do
+        RaiseWebSocketTransport(E);
+    end;
 
-  LUpgrade := LowerCase(FindHeader(LHeaders, 'Upgrade'));
-  LConnection := LowerCase(FindHeader(LHeaders, 'Connection'));
-  LAcceptHeader := FindHeader(LHeaders, 'Sec-WebSocket-Accept');
+    { Validate response }
+    if LStatusCode <> 101 then
+      raise EHttpError.Create(hekUpgrade, 'WebSocket: expected 101, got ' + IntToStr(LStatusCode));
 
-  if not HeaderValueHasToken(LUpgrade, 'websocket') then
-    raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Upgrade header');
-  if not HeaderValueHasToken(LConnection, 'upgrade') then
-    raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Connection header');
-  if LAcceptHeader = '' then
-    raise EHttpError.Create(hekUpgrade, 'WebSocket: missing Sec-WebSocket-Accept header');
+    LUpgrade := LowerCase(FindHeader(LHeaders, 'Upgrade'));
+    LConnection := LowerCase(FindHeader(LHeaders, 'Connection'));
+    LAcceptHeader := FindHeader(LHeaders, 'Sec-WebSocket-Accept');
 
-  { Validate Accept key }
-  if not ValidateAcceptKey(LKey, LAcceptHeader) then
-    raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Sec-WebSocket-Accept');
+    if not HeaderValueHasToken(LUpgrade, 'websocket') then
+      raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Upgrade header');
+    if not HeaderValueHasToken(LConnection, 'upgrade') then
+      raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Connection header');
+    if LAcceptHeader = '' then
+      raise EHttpError.Create(hekUpgrade, 'WebSocket: missing Sec-WebSocket-Accept header');
 
-  { Create WebSocket client }
-  Result := TWebSocketImpl.Create(LReader, LWriter, AOptions, True);
+    { Validate Accept key }
+    if not ValidateAcceptKey(LKey, LAcceptHeader) then
+      raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Sec-WebSocket-Accept');
+
+    { Post-handshake: clear connect/handshake deadlines for long-lived frames. }
+    ClearWebSocketStreamDeadline(LActive);
+
+    { Create WebSocket client }
+    Result := TWebSocketImpl.Create(LReader, LWriter, AOptions, True);
+    LActive := nil; { ownership transferred into IWebSocket }
+    LConn := nil;
+    LTlsConn := nil;
+  except
+    if LActive <> nil then
+      LActive.Close
+    else if LConn <> nil then
+      LConn.Close;
+    raise;
+  end;
 end;
 
 initialization

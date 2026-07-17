@@ -8,6 +8,7 @@ uses
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.net.base,
@@ -207,12 +208,112 @@ begin
   end;
 end;
 
+procedure TestWebSocketOptionsDefaultTimeouts;
+var
+  LOpts: TWebSocketOptions;
+begin
+  LOpts := TWebSocketOptions.Default;
+  CheckEqual(Int64(30000), LOpts.ConnectTimeout,
+    'Default ConnectTimeout is 30000 (production discipline)');
+  CheckEqual(Int64(30000), LOpts.Timeout,
+    'Default Timeout is 30000 for handshake I/O');
+  LOpts := LOpts.WithConnectTimeout(1500).WithTimeout(5000);
+  CheckEqual(Int64(1500), LOpts.ConnectTimeout, 'WithConnectTimeout sets field');
+  CheckEqual(Int64(5000), LOpts.Timeout, 'WithTimeout sets field');
+end;
+
+procedure TestWebSocketConnectTimeoutSourceContract;
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.websocket.pas');
+  Check(Pos('LDialMs := WebSocketEffectiveDialTimeoutMs(AOptions);', LSource) > 0,
+    'ConnectWebSocket computes effective dial budget');
+  Check(Pos('LConn := TcpConnect(LHost, LPort, LDialMs)', LSource) > 0,
+    'ConnectWebSocket uses timed TcpConnect when budget > 0');
+  Check(Pos('ApplyWebSocketStreamDeadline(LActive, LHandshakeMs);', LSource) > 0,
+    'handshake deadline applied after dial');
+  Check(Pos('ClearWebSocketStreamDeadline(LActive);', LSource) > 0,
+    'deadlines cleared after successful upgrade');
+  Check(Pos('Result.ConnectTimeout := 30000;', LSource) > 0,
+    'Default ConnectTimeout is 30000');
+end;
+
+{ Live WS dial timeout via backlog-full peer (same technique as test_net). }
+procedure TestWebSocketLiveConnectTimeout;
+var
+  LListener: ITcpListener;
+  LFillers: array of ITcpStream;
+  LConn: ITcpStream;
+  LOpts: TWebSocketOptions;
+  LPort: UInt16;
+  I: Integer;
+  LFilled: Boolean;
+  LGot: Boolean;
+  LKind: THttpErrorKind;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LPort := LListener.LocalAddr.Port;
+  SetLength(LFillers, 0);
+  LFilled := False;
+  for I := 1 to 256 do
+  begin
+    try
+      LConn := TcpConnect('127.0.0.1', LPort, 100);
+      SetLength(LFillers, Length(LFillers) + 1);
+      LFillers[High(LFillers)] := LConn;
+    except
+      on E: ETimeoutError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+      on E: ENetworkError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+    end;
+  end;
+  Check(LFilled or (Length(LFillers) > 0),
+    'backlog fill made progress for WS connect-timeout setup');
+  LOpts := TWebSocketOptions.Default.WithConnectTimeout(200).WithTimeout(200);
+  LGot := False;
+  LKind := hekUnknown;
+  try
+    ConnectWebSocket('ws://127.0.0.1:' + IntToStr(LPort) + '/ws', LOpts);
+  except
+    on E: EHttpError do
+    begin
+      LKind := E.Kind;
+      LGot := E.Kind in [hekTimeout, hekConnect];
+    end;
+    on E: ETimeoutError do
+    begin
+      LGot := True;
+      LKind := hekTimeout;
+    end;
+  end;
+  Check(LGot,
+    'live WS dial timeout surfaces as hekTimeout/hekConnect (kind=' +
+    IntToStr(Ord(LKind)) + ')');
+  for I := 0 to High(LFillers) do
+    if LFillers[I] <> nil then
+      LFillers[I].Close;
+  LListener.Close;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.http.websocket.client');
 
   T.Test('WebSocket client echoes text', @TestClientEcho);
   T.Test('WebSocket client handles ping/pong', @TestClientPingPong);
   T.Test('WebSocket client rejects invalid scheme', @TestClientRejectsInvalidScheme);
+  T.Test('WebSocket options default timeouts', @TestWebSocketOptionsDefaultTimeouts);
+  T.Test('WebSocket ConnectTimeout source contract',
+    @TestWebSocketConnectTimeoutSourceContract);
+  T.Test('WebSocket live ConnectTimeout via backlog-full peer',
+    @TestWebSocketLiveConnectTimeout);
 
   if not T.Run then Halt(1);
 end.

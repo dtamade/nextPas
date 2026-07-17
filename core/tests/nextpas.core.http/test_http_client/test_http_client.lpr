@@ -8977,6 +8977,173 @@ begin
     LSource) > 0, 'IHttpClient declares WithConnectTimeout');
 end;
 
+{ Live H1 dial timeout through NewHttpClient (backlog-full peer; no blackhole IP). }
+procedure TestClientLiveConnectTimeout;
+var
+  LListener: ITcpListener;
+  LFillers: array of ITcpStream;
+  LConn: ITcpStream;
+  LClient: IHttpClient;
+  LPort: UInt16;
+  I: Integer;
+  LFilled: Boolean;
+  LGot: Boolean;
+  LKind: THttpErrorKind;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LPort := LListener.LocalAddr.Port;
+  SetLength(LFillers, 0);
+  LFilled := False;
+  for I := 1 to 256 do
+  begin
+    try
+      LConn := TcpConnect('127.0.0.1', LPort, 100);
+      SetLength(LFillers, Length(LFillers) + 1);
+      LFillers[High(LFillers)] := LConn;
+    except
+      on E: ETimeoutError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+      on E: ENetworkError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+    end;
+  end;
+  Check(LFilled or (Length(LFillers) > 0),
+    'backlog fill made progress for client connect-timeout setup');
+  LClient := NewHttpClient.WithConnectTimeout(200).WithTimeout(5000);
+  LGot := False;
+  LKind := hekUnknown;
+  try
+    LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/');
+  except
+    on E: EHttpError do
+    begin
+      LKind := E.Kind;
+      LGot := E.Kind in [hekTimeout, hekConnect];
+    end;
+    on E: ETimeoutError do
+    begin
+      LGot := True;
+      LKind := hekTimeout;
+    end;
+  end;
+  Check(LGot,
+    'live client dial timeout surfaces as hekTimeout/hekConnect (kind=' +
+    IntToStr(Ord(LKind)) + ')');
+  for I := 0 to High(LFillers) do
+    if LFillers[I] <> nil then
+      LFillers[I].Close;
+  LListener.Close;
+end;
+
+var
+  GMidReadCancelPort: UInt16 = 0;
+  GMidReadCancelToken: IHttpCancelToken = nil;
+
+function MidReadCancelSignalThread(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  platform_thread_sleep_ns(80000000); { 80ms }
+  if GMidReadCancelToken <> nil then
+    GMidReadCancelToken.Cancel;
+end;
+
+function MidReadHoldServerThread(AArg: Pointer): Pointer; cdecl;
+var
+  LListener: ITcpListener;
+  LConn: ITcpStream;
+  LBuf: array[0..1023] of Byte;
+begin
+  Result := nil;
+  LListener := TcpListen('127.0.0.1', 0);
+  GMidReadCancelPort := LListener.LocalAddr.Port;
+  try
+    LConn := LListener.Accept;
+    try
+      { Drain request line/headers then hold without response body. }
+      try
+        LConn.Read(LBuf[0], SizeOf(LBuf));
+      except
+      end;
+      platform_thread_sleep_ns(2000000000); { 2s hold if cancel fails }
+    finally
+      if LConn <> nil then
+        LConn.Close;
+    end;
+  finally
+    LListener.Close;
+  end;
+end;
+
+{ Live mid-read cancel: server holds after accept; client cancel → hekCanceled. }
+procedure TestClientLiveMidReadCancel;
+var
+  LServerHandle: TPlatformThreadHandle;
+  LCancelHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LToken: IHttpCancelToken;
+  LReq: IHttpRequest;
+  LGot: Boolean;
+  LKind: THttpErrorKind;
+  LWait: Int32;
+begin
+  GMidReadCancelPort := 0;
+  GMidReadCancelToken := nil;
+  platform_thread_create(LServerHandle, @MidReadHoldServerThread, nil);
+  LWait := 0;
+  while (GMidReadCancelPort = 0) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+  Check(GMidReadCancelPort <> 0, 'mid-read hold server published port');
+
+  LToken := NewHttpCancelToken;
+  GMidReadCancelToken := LToken;
+  platform_thread_create(LCancelHandle, @MidReadCancelSignalThread, nil);
+  LClient := NewHttpClient.WithTimeout(10000);
+  LReq := THttpRequestBuilder.Create(hmGet,
+    'http://127.0.0.1:' + IntToStr(Int64(GMidReadCancelPort)) + '/')
+    .CancelToken(LToken)
+    .Build;
+  LGot := False;
+  LKind := hekUnknown;
+  try
+    LClient.Send(LReq);
+  except
+    on E: EHttpError do
+    begin
+      LKind := E.Kind;
+      LGot := E.Kind = hekCanceled;
+    end;
+    on E: ECancelledError do
+    begin
+      LGot := True;
+      LKind := hekCanceled;
+    end;
+  end;
+  platform_thread_join(LCancelHandle, LRet);
+  platform_thread_join(LServerHandle, LRet);
+  GMidReadCancelToken := nil;
+  Check(LGot, 'live mid-read cancel surfaces hekCanceled (kind=' +
+    IntToStr(Ord(LKind)) + ')');
+end;
+
+procedure TestClientRedirectCreateOpSourceContract;
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  Check(Pos('raise EHttpError.CreateOp(hekRedirect, ''redirect'',', LSource) > 0,
+    'redirect failures use CreateOp with Op=redirect');
+end;
+
 procedure TestClientDefaultUserAgent;
 var
   LRouter: THttpRouter;
@@ -9657,6 +9824,12 @@ begin
     @TestClientWithConnectTimeoutFluent);
   T.Test('Client WithConnectTimeout source contract',
     @TestClientWithConnectTimeoutSourceContract);
+  T.Test('Client live ConnectTimeout via backlog-full peer',
+    @TestClientLiveConnectTimeout);
+  T.Test('Client live mid-read cancel via hold server',
+    @TestClientLiveMidReadCancel);
+  T.Test('Client redirect CreateOp source contract',
+    @TestClientRedirectCreateOpSourceContract);
   T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);
   T.Test('Client ConnectTimeout option defaults',
     @TestClientConnectTimeoutOptionDefault);

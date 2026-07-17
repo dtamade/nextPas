@@ -803,7 +803,7 @@ begin
     if ARedirectsLeft <= 0 then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect,
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
         FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
           'too many redirects'));
     end;
@@ -812,7 +812,7 @@ begin
     if LRespHeaders = nil then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect,
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
         FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
           'redirect with no response headers'));
     end;
@@ -821,7 +821,7 @@ begin
     if Length(LLocations) > 1 then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect,
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
         FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
           'redirect with duplicate Location headers'));
     end;
@@ -833,7 +833,7 @@ begin
     if LLocation = '' then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect,
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
         FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
           'redirect with no Location header'));
     end;
@@ -845,7 +845,7 @@ begin
       begin
         ReleaseResponseBodyIgnoringErrors(LResp);
         if E.Kind = hekRedirect then
-          raise EHttpError.Create(hekRedirect,
+          raise EHttpError.CreateOp(hekRedirect, 'redirect',
             FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
               E.Message))
         else
@@ -876,9 +876,9 @@ begin
         RewindRedirectBody(AReq, LBodyStream, LBodyStartPosition);
       except
         on E: EHttpError do
-          raise EHttpError.Create(E.Kind,
+          raise EHttpError.CreateOp(E.Kind, 'redirect',
             FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
-              E.Message), E.Status);
+              E.Message));
         else
           raise;
       end;

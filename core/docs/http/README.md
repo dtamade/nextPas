@@ -36,7 +36,7 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
 | Middleware | `CorsMiddleware`, `RecoveryMiddleware`, `Chain`, … |
-| WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` |
+| WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` + `TWebSocketOptions.ConnectTimeout`/`Timeout` (Default 30s) |
 | Static files | `ServeFile` / `ServeDir` |
 | Form parse | `ParseUrlEncodedForm` / `ParseMultipartFormData` |
 
@@ -257,8 +257,11 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ### WebSocket
 
 - `UpgradeWebSocket(Req, Writer[, Options])` — 升级 HTTP 连接并返回 handler-owned `IWebSocket`
-- `TWebSocketOptions` — 公开 carrier，当前包括 `MaxFrameSize` 与 `MaxMessageSize`
-- `TWebSocketOptions.Default` — 默认限制为 16 MiB frame / 64 MiB message，调用方可按 endpoint 调整
+- `ConnectWebSocket(Url[, Options])` — 客户端 dial + upgrade；生产路径有界
+- `TWebSocketOptions` — `MaxFrameSize` / `MaxMessageSize` / `ConnectTimeout` / `Timeout` /
+  `OnCheckOrigin`；fluent `WithConnectTimeout` / `WithTimeout`
+- `TWebSocketOptions.Default` — 16 MiB frame / 64 MiB message；**ConnectTimeout=Timeout=30000**
+  （OS dial + handshake I/O）；`=0` 显式恢复无界
 
 `MaxFrameSize` 在 payload 分配/读取前检查 declared frame length；`MaxMessageSize`
 会累计 fragmented message，超过限制时由 `ReadFrame` 抛出 `EHttpError`。

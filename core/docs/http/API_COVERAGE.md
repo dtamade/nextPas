@@ -11,7 +11,28 @@
 
 ## 当前结论
 
-- **2026-07-17 cycle-4 usability fix（现行真相；以本条为准）**：
+- **2026-07-17 cycle-6 usability inventory（只读；现行评估入口）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle6.md`、
+    `2026-07-17-usability-cycle6-research.md`、
+    `2026-07-17-usability-cycle6-fix-plan.md`（score **96/100**；Wave A = land cycle-5）。
+  - Open residual：cycle-5 uncommitted→land；WS mid-frame cancel P2；H2 live dial optional；
+    Deferred product list unchanged.
+- **2026-07-17 cycle-5 usability fix（已吸收 / Wave A land）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle5.md`、
+    `2026-07-17-usability-cycle5-research.md`、
+    `2026-07-17-usability-cycle5-fix-plan.md`（baseline `fb0bbeae0`，score 94→fix）。
+  - **Landed**：
+    - CONTRACT §2.1 `IHttpClient` 片段与 live 接口对齐（含 `WithConnectTimeout` /
+      `WithProxyUrl` / ensure-*String / JSON 双层表）。
+    - WebSocket client：`TWebSocketOptions.ConnectTimeout`/`Timeout` Default=30000；
+      timed `TcpConnect` + handshake deadline + clear after 101。
+    - Live http e2e：`test_http_client` backlog-full dial timeout + mid-read cancel hold server。
+    - Live WS e2e：`test_http_websocket_client` backlog-full dial timeout。
+    - Client redirect hot-path `CreateOp(Op=redirect)`。
+  - **Residual honesty**：cancel 切片 ~50ms；server Default RW=0 仍兼容测试。
+  - **Deferred** 仍真：CONNECT / Retry-After / full PSL / Response metadata /
+    ensure-2xx JSON **decode** / Op-everywhere / H3。
+- **2026-07-17 cycle-4 usability fix（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle4.md`、
     `2026-07-17-usability-cycle4-research.md`、
     `2026-07-17-usability-cycle4-fix-plan.md`（baseline `a12f8dd9b`，score 91→fix）。
