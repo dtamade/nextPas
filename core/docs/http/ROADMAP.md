@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave A1 H2 production edges；NEXT=A2）
+**Updated**: 2026-07-17（Wave A2 Client pool；NEXT=P1）
 
 ---
 
@@ -79,12 +79,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave E1 Error taxonomy | 完成（Kind 分类表 + Op 对齐；公开面无裸 EArgumentError；source-contract） |
 | Wave E2 Options/decorator | 完成（With* 链语义表；外层胜；Timeout/ConnectTimeout/Production 分界） |
 | Wave A1 H2 production edges | 完成（GOAWAY mid-response + 池/多路/流控边角表 + residual 诚实） |
-| **下一执行点** | **Era 3 / Wave A2 — Client pool sophistication** |
+| Wave A2 Client pool | 完成（per-authority MaxPoolSize + idle clear + H1/H2 选择策略 CONTRACT） |
+| **下一执行点** | **Era 4 / Wave P1 — Profile one hotspot** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~88%   高级 ~72%   优雅 ~85%   性能 ~50%
+完整 ~90%   高级 ~78%   优雅 ~86%   性能 ~50%
 ```
 
 ---
@@ -288,12 +289,13 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 空闲清理、按 authority 池限、H1/H2 选择策略文档化 + 必要代码 |
 | **Don't** | 完整服务发现 / LB |
 | **Done when** | CONTRACT 有池语义；focused 覆盖至少 idle clear + 上限行为 |
 | **Gates** | client + H1/H2 client |
 | **Next** | Wave P1 |
+| **Evidence** | CONTRACT pool + H1/H2 选择表；MaxPoolSize per-authority（H1/H2）；CloseIdle + client 267 / h2_client 66 |
 
 ### Wave A3+（默认 parked）
 
@@ -316,7 +318,7 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | 只动一个 L1/L2 热点（parser materialize / header / writer / drain 择一）；前后有 bench 或 micro 证据 |
 | **Don't** | 同时改多个热点；为数字加假 API |
 | **Done when** | 单热点有前后数据 + 相关 correctness gate 绿 |
@@ -402,14 +404,14 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave A1 仍是 NEXT
-2. H2 流控边角 / GOAWAY 消费 / 池与多路：有失败证据再改；诚实 residual 亦可
-3. H2 client/session focused + path-limited land
-4. 本文件：Wave A1 → landed；Wave A2 → NEXT；changelog 一行
+1. 打开本文件确认 Wave P1 仍是 NEXT
+2. 只动一个 L1/L2 热点；前后有 bench/micro 证据
+3. 相关 correctness gate + path-limited land
+4. 本文件：Wave P1 → landed；Wave P3 → NEXT；changelog 一行
 5. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave A1，然后自动续波。**
+**没有用户指令时：默认执行 Wave P1，然后自动续波。**
 
 ---
 
@@ -444,3 +446,5 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave C3 landed：Range/`Accept-Ranges`/流式契约；Era 1 完成；Wave E1 = NEXT |
 | 2026-07-17 | Wave E1 landed：Kind 分类表 + 公开面无裸 EArgumentError + Op source-contract；Wave E2 = NEXT |
 | 2026-07-17 | Wave E2 landed：With* 链语义表 + 外层胜 + Timeout/ConnectTimeout/Production；Era 2 完成；Wave A1 = NEXT |
+| 2026-07-17 | Wave A1 landed：H2 production edges 表 + mid-response GOAWAY focused；Wave A2 = NEXT |
+| 2026-07-17 | Wave A2 landed：per-authority MaxPoolSize + idle clear + H1/H2 选择策略；Era 3 完成；Wave P1 = NEXT |

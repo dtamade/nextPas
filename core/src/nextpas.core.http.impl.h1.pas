@@ -17,6 +17,8 @@ type
     { OS dial + post-dial first-write budget for newly opened sockets (ms).
       0 = dial uses Timeout when Timeout > 0; post-dial first-write uses Timeout. }
     ConnectTimeout: Int64;
+    { Max idle connections retained per pool authority key (host/port, with
+      scheme/proxy variants encoded in the host key). Not a global pool cap. }
     MaxPoolSize: Int32;
     { Plain HTTP forward proxy URL (http://[user:pass@]host:port). Empty = direct.
       For https targets, client dials proxy and opens a CONNECT tunnel, then
@@ -2271,13 +2273,23 @@ end;
 
 procedure TH1ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const AConn: ITcpStream);
+var
+  LI: Int32;
+  LAuthorityIdle: Int32;
 begin
   FPoolLock.Acquire;
   try
-    if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
+    if FOptions.MaxPoolSize > 0 then
     begin
-      AConn.Close;
-      Exit;
+      LAuthorityIdle := 0;
+      for LI := 0 to FPoolCount - 1 do
+        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+          Inc(LAuthorityIdle);
+      if LAuthorityIdle >= FOptions.MaxPoolSize then
+      begin
+        AConn.Close;
+        Exit;
+      end;
     end;
     AConn.SetReadDeadline(TDeadline.Infinite);
     AConn.SetWriteDeadline(TDeadline.Infinite);

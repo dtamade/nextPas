@@ -115,6 +115,8 @@ type
       uses Timeout. }
     ConnectTimeout: Int64;
     MaxRedirects: Int32;
+    { Max idle connections retained per pool authority (host/port/scheme key).
+      Default 64. Not a global cap across authorities. }
     MaxPoolSize: Int32;
     FollowRedirects: Boolean;
     Version: THttpVersion;
