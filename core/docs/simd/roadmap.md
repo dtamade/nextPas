@@ -1,6 +1,6 @@
 # nextpas.core.simd 路线图和计划任务
 
-> 最后更新: 2026-07-11 (Phase 19 Dispatch Table 模块化 Phase 1 + F32/F64 操作对等)
+> 最后更新: 2026-07-17 (cpuinfo fail-close 修复 + 文档真相；Phase 19 仍停在 Phase 1)
 
 ## 当前状态
 
@@ -92,15 +92,18 @@
 | POWER VSX | 🔒 STUB | 需 nextpas 后端 |
 | MIPS MSA | 🔒 STUB | FPC mips64el InternalError |
 
-### 下一步工作 (Phase 7+)
+### 下一步工作 (真实 backlog)
 
 | 目标 | 优先级 | 说明 |
 |------|--------|------|
-| 批量操作深度优化 | P0 | ArrayAdd/Mul/Div 循环展开 + 预取 |
-| SIMD vs 标量基准修正 | P0 | FPC 自动向量化导致基准不公平 |
-| 宽向量(512-bit)批处理 | P1 | AVX-512 批量操作优化 |
-| 内存操作优化 | P1 | MemCopy/MemSet 非对齐快速路径 |
-| 编译器集成 | P2 | nextpas 编译器 SIMD 内建支持 |
+| Phase 19 Phase 2–6 | P0 | 将 Scalar/SSE2/AVX2/AVX512/NEON/RVV backend 迁到 dispatch 子记录布局 |
+| math 公开 Batch\*F64 | P1 | simd 已有 Array\*F64；math 门面尚未暴露 F64 batch 族 |
+| G16 RVV Phase 3 | P2 | 需真实 RISC-V 硬件证据 |
+| G17 Phase 4 | P2 | dispatch 开销硬件测量 |
+| 编译器集成 | P3 | nextpas 编译器 SIMD 内建支持（长期） |
+| LASX/WASM/VSX/MSA | 🔒 | 等待 nextpas 编译器后端 |
+
+> Phase 7–18 已完成，不再列在“下一步”。细节见上方“已完成”表。
 
 ## 问题分析
 

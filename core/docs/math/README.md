@@ -2,7 +2,7 @@
 
 `nextpas.core.math` is the framework-owned math entry point for scalar helpers,
 trigonometry, vectors, matrices, quaternions, transforms, easing, deterministic
-random generators, and noise.
+random generators, noise, and SIMD-backed batch operations.
 
 Most consumers should use the facade:
 
@@ -32,43 +32,29 @@ Detailed behavior contracts live in `API.md`; this README stays compact.
 - `nextpas.core.math.transform`: projection, view, model, and 2D camera builders.
 - `nextpas.core.math.easing`: `TEasingFunction` and the `Ease*` family.
 - `nextpas.core.math.random`: `TRandomState`, `TRandomGen`, and `TNoiseGen`.
+- `nextpas.core.math.batch`: public F32 scalar-array batch API (SIMD-backed).
+- `nextpas.core.math.vec.batch`: public vector-array batch API.
+
+## Layer And Ownership
+
+- Registry layer: **L0** (same governance set as `base` / `simd` / `atomic`).
+- Batch/impl SIMD units consume only the public `nextpas.core.simd` facade.
+- Private SIMD backend/dispatch/cpuinfo/dataplane units must not appear in math
+  production sources.
 
 ## Verification Entry Points
 
-Run the API/docs/source-contract gate:
-
 ```sh
+# Preferred focused suite (17 projects, heaptrc on Pascal tests)
+make -C core/tests/nextpas.core.math clean test
+
+# API/docs/source-contract gate
 make -C core core-math-api-surface-smoke
-```
 
-Run the facade-only consumer gate:
-
-```sh
-make -C core core-math-facade-local-smoke
-```
-
-Run the facade overview example gate:
-
-```sh
-make -C core core-math-overview-local-smoke
-```
-
-Run the broader local module smoke:
-
-```sh
+# Broader local smokes
 make -C core core-math-smoke
-```
-
-Run the current-host trig proof:
-
-```sh
-make -C core core-math-trig-local-smoke
-```
-
-Run the full focused math suite when preparing a broader landing package:
-
-```sh
 make -C core core-math-full-local-smoke
+make -C core core-math-trig-local-smoke
 ```
 
 For landing review, also run:
@@ -84,19 +70,17 @@ git status --short --branch
 - `API.md` is the public behavior contract and command reference.
 - `GOAL_TREE.md` is the roadmap/status control map.
 - `FINAL_API_MIGRATION_DESIGN.md` records stable design decisions only.
-- Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric
-  literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those
-  base constants.
-- Public docs must not reintroduce legacy vector bridge type names, old
-  `Vectors` imports, or old source paths.
-- Public math value-type methods currently remain scalar. The internal
-  `math.impl.simd` seam is not public API and is not wired into the public
-  value-type methods.
-- M8 remains partial until host trig link evidence and SIMD cutover decisions are resolved.
+- Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those base constants.
+- Public value-type methods remain scalar. SIMD acceleration is exposed through public batch APIs (`math.batch` / `math.vec.batch`), not through value-type methods.
+- `math.impl.simd` is an internal seam only and is not public API.
+- Public batch surface is currently F32 scalar arrays + selected vec batch. simd already provides F64 `Array*F64` kernels; math has not re-exported a public `Batch*F64` family yet (tracked backlog).
+- Linux local focused suite is green with heaptrc zero evidence.
+- Windows trig host link/runtime proof exists via Wine.
+- M8 is complete on Linux+Windows; macOS host trig proof is deferred.
 
 ## Remaining Gaps
 
-- macOS and Windows host trig link/runtime smoke evidence.
-- Profiling-backed SIMD cutover decisions and benchmark evidence.
-- `fafafa.game` cutover to final `nextpas.core.math.*` names.
-- Remaining scalar/trig/vector hardening slices listed in `GOAL_TREE.md`.
+- macOS host trig link/runtime smoke evidence (deferred; blocks full host matrix).
+- Public `Batch*F64` parity with existing F32 batch / simd `Array*F64`.
+- `fafafa.game` cutover to final `nextpas.core.math.*` names (M9).
+- Do not wire public value-type methods through SIMD without profiled evidence.

@@ -1,6 +1,6 @@
 # nextpas.core.simd 模块
 
-> 最后更新: 2026-07-06
+> 最后更新: 2026-07-17
 
 ## 概述
 
@@ -15,9 +15,12 @@
 
 ### 当前状态
 
-- **Backend Adapters**: ✅ 真正 SIMD 汇编实现
-- **Intrinsics 层**: ⚠️ FP 算术是标量回退，整数/Load/Store 是真正 SIMD
-- **分派器层**: ⚠️ FPC 编译器限制，无法内联函数指针
+- **Backend Adapters**: ✅ x86 SSE2/AVX2/AVX-512 与 NEON 真 SIMD 汇编；scalar 全覆盖回退
+- **批量 / 超越函数**: ✅ F32/F64 `Array*` 批量与超越函数后端已对等（见 roadmap Phase 13–18）
+- **Intrinsics 层**: ✅ 主路径使用真实 ISA 指令；实验性 ISA 仍可能 stub
+- **分派器层**: ✅ 运行时函数指针表；Phase 19 子记录模块化仅完成 Phase 1
+- **cpuinfo**: ✅ 主路径稳定；invalid backend / AVX fail-close 契约在 2026-07-17 收紧
+- **验证基线 (2026-07-17)**: `make -C core/tests/nextpas.core.simd clean test` → 1738 passed
 
 ## 快速入门
 
@@ -43,11 +46,11 @@ end;
 | [intrinsics.md](intrinsics.md) | Intrinsics 层详解 |
 | [dispatch.md](dispatch.md) | 分派器层详解 |
 | [platforms.md](platforms.md) | 平台支持 |
-| [roadmap.md](roadmap.md) | 路线图 |
+| [roadmap.md](roadmap.md) | 路线图与当前下一步 |
 | [plan.md](plan.md) | 实施计划 |
-| [progress.md](progress.md) | 进度跟踪 |
 | [methodology.md](methodology.md) | 工作方法论 |
 | [maintenance.md](maintenance.md) | 维护指南 |
+| [design/dispatch-table-modularization.md](design/dispatch-table-modularization.md) | Phase 19 设计 |
 
 ## 架构概览
 
