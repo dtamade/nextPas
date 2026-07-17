@@ -108,6 +108,18 @@ need_grep "$ROOT/core/src/nextpas.core.mem.error.pas" \
 need_grep "$ROOT/core/src/nextpas.core.mem.error.pas" \
   "FormatAllocErrorMsg\\('SanitizeConfigAlignment'" \
   'error.pas config alignment raises must use FormatAllocErrorMsg (S2)'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" \
+  'aeInvalidLayout' \
+  'AllocArray overflow must use aeInvalidLayout (T2)'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" \
+  'ResolveAllocator\(AAllocator\)' \
+  'AllocZeroed/AllocArray must ResolveAllocator nil (T3)'
+need_grep "$ROOT/core/src/nextpas.core.mem.allocator.arena.pas" \
+  "FormatAllocErrorMsg\\('TLocalArenaAllocator', 'ReallocMem'" \
+  'arena ReallocMem must use FormatAllocErrorMsg (T1)'
+need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'TestAllocArrayOverflowIsInvalidLayout|TestAllocZeroedAllocArrayNilAllocator' \
+  'usability guardrails must lock T2/T3'
 need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
   'heap_safety=y|TestFormatMemStatsSafety' \
   'usability guardrails must lock heap_safety in FormatMemStats'

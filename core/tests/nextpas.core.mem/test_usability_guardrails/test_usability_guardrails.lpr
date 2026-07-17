@@ -654,6 +654,85 @@ begin
   Check(not IsWellFormedAllocErrorMsg('NoDot: reason'), 'missing type.method dot');
 end;
 
+procedure TestAllocZeroedAllocArrayNilAllocator;
+{ T3: nil IAllocator resolves to process default heap (S5). }
+var
+  LPtr: Pointer;
+  LSz: SizeUInt;
+begin
+  RebuildDebug('');
+  LPtr := AllocZeroed(nil, 32);
+  Check(LPtr <> nil, 'AllocZeroed(nil) non-nil');
+  Check(PByte(LPtr)^ = 0, 'zeroed first byte');
+  Check(TryBlockSize(LPtr, LSz), 'same-heap size-class');
+  FreeMem(LPtr, LSz);
+
+  LPtr := AllocArray(nil, 4, 8);
+  Check(LPtr <> nil, 'AllocArray(nil) non-nil');
+  Check(TryBlockSize(LPtr, LSz), 'array on DefaultHeap');
+  FreeMem(LPtr, LSz);
+end;
+
+procedure TestAllocArrayOverflowIsInvalidLayout;
+{ T2: count*elemSize overflow is programming error, not EOutOfMemory. }
+var
+  LRaised: Boolean;
+  LCode: TAllocError;
+  LMsg: string;
+  LCount: SizeUInt;
+  LElem: SizeUInt;
+begin
+  LRaised := False;
+  LCode := aeNone;
+  LMsg := '';
+  { Runtime locals: avoid FPC compile-time fold of (High div 2)+1 overflow. }
+  LCount := High(SizeUInt);
+  LElem := 2;
+  try
+    AllocArray(DefaultAllocator, LCount, LElem);
+    Check(False, 'overflow must raise');
+  except
+    on E: EAllocError do
+    begin
+      LRaised := True;
+      LCode := E.Error;
+      LMsg := E.Message;
+    end;
+  end;
+  Check(LRaised, 'raised EAllocError');
+  Check(LCode = aeInvalidLayout, 'aeInvalidLayout not OOM');
+  Check(Pos('AllocArray.AllocArray:', LMsg) > 0, 'FormatAllocErrorMsg stem in message');
+end;
+
+procedure TestArenaReallocUsesFormatAllocErrorMsg;
+{ T1: Arena ReallocMem raise path uses well-formed stem (via FormatAllocErrorMsg). }
+var
+  LAlloc: IAllocator;
+  LPtr: Pointer;
+  LRaised: Boolean;
+  LMsg: string;
+begin
+  RebuildDebug('');
+  LAlloc := CreateArenaAllocator(4096);
+  LPtr := LAlloc.GetMem(16);
+  Check(LPtr <> nil, 'arena alloc');
+  LRaised := False;
+  LMsg := '';
+  try
+    LAlloc.ReallocMem(LPtr, 32);
+    Check(False, 'arena realloc must raise');
+  except
+    on E: EAllocError do
+    begin
+      LRaised := True;
+      LMsg := E.Message;
+      Check(E.Error = aeReallocNotSupported, 'aeReallocNotSupported');
+    end;
+  end;
+  Check(LRaised, 'realloc raised');
+  Check(Pos('TLocalArenaAllocator.ReallocMem:', LMsg) > 0, 'well-formed ReallocMem stem');
+end;
+
 procedure TestArenaStrictFreeMem;
 var
   LAlloc: IAllocator;
@@ -719,6 +798,9 @@ begin
   T.Test('HEAP_DEBUG alone no plugin counters', @TestHeapDebugAloneNoPluginCounters);
   T.Test('TryGetMem/TryFreeMem ERROR-POLICY forms', @TestTryGetMemAndTryFreeMem);
   T.Test('FormatAllocErrorMsg helpers', @TestFormatAllocErrorMsg);
+  T.Test('AllocZeroed/AllocArray nil allocator', @TestAllocZeroedAllocArrayNilAllocator);
+  T.Test('AllocArray overflow InvalidLayout', @TestAllocArrayOverflowIsInvalidLayout);
+  T.Test('Arena Realloc FormatAllocErrorMsg', @TestArenaReallocUsesFormatAllocErrorMsg);
   T.Test('Arena FreeMem strict dual-mode', @TestArenaStrictFreeMem);
 
   LRunPassed := T.Run;
