@@ -22,6 +22,14 @@ Windows truth tiers are **unchanged** by this slice (no new real-Windows or
 Wine matrix promotion). Wine compile remains environment-dependent
 (`ppcrossx64` required).
 
+### 2026-07-17 usability residual (M0–M7)
+
+- `PLATFORM_ERR_UNKNOWN` (-8): Windows unmapped host errors never passthrough raw `ERROR_*`
+- `PLATFORM_ERR_PATH_TOO_LONG` stays -7 (domain path clamp; not OS ENAMETOOLONG)
+- `platform_io_*` dual-API documented as transitional for process.pipe
+- EXAMPLES.md: no SysUtils in sample code
+- Authority: ERROR-HANDLING / RETURN-SEMANTICS / API-REFERENCE aligned
+
 ## Host Status
 
 | Host | Current truth | Required next proof |

@@ -19,7 +19,7 @@
 | platform.error.pas | 错误码常量 + 消息映射 | PLATFORM_ERR_*, platform_error_message |
 | platform.info.pas | OS/架构/字节序检测 | platform_info_os, platform_info_arch |
 | platform.time.pas | 时间 API | platform_monotonic_ns, platform_wallclock_ns |
-| platform.io.pas | 文件 I/O (deprecated) | platform_io_read, platform_io_write |
+| platform.process.pas (`platform_io_*`) | 过渡 fd I/O（process.pipe；value/sentinel） | platform_io_read, platform_io_write, platform_io_poll; close 为 error-code |
 | platform.files.pas | 文件操作 | platform_file_open, platform_file_stat, platform_dir_open |
 | platform.fs.pas | 文件系统高级操作 | platform_fs_mkdir_p, platform_fs_copy, platform_fs_glob |
 | platform.path.pas | 路径操作 | platform_path_join, platform_path_dirname |

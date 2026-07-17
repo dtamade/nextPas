@@ -9,6 +9,7 @@ uses
   nextpas.core.fs,
   nextpas.core.fs.util,
   nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.platform.error,
   nextpas.core.platform.args,
   nextpas.core.platform.resource,
@@ -72,10 +73,13 @@ begin
   CheckEqual(Int64(104), Int64(PLATFORM_ERR_CONNRESET), 'CONNRESET=104');
   CheckEqual(Int64(110), Int64(PLATFORM_ERR_TIMEDOUT), 'TIMEDOUT=110');
   CheckEqual(Int64(111), Int64(PLATFORM_ERR_CONNREFUSED), 'CONNREFUSED=111');
-  CheckEqual(Int64(-7), Int64(PLATFORM_ERR_PATH_TOO_LONG), 'PATH_TOO_LONG=-7');
+  CheckEqual(Int64(-7), Int64(PLATFORM_ERR_PATH_TOO_LONG), 'PATH_TOO_LONG=-7 domain clamp');
+  CheckEqual(Int64(-8), Int64(PLATFORM_ERR_UNKNOWN), 'UNKNOWN=-8');
   { bare -1 is not a portable PLATFORM_ERR_* value }
   Check(PLATFORM_ERR_INVALID <> -1, 'INVALID is not bare -1');
   Check(PLATFORM_ERR_UNSUPPORTED <> -1, 'UNSUPPORTED is not bare -1');
+  Check(PLATFORM_ERR_UNKNOWN <> -1, 'UNKNOWN is not bare -1');
+  Check(PLATFORM_ERR_PATH_TOO_LONG <> 36, 'PATH_TOO_LONG is not ENAMETOOLONG 36');
 end;
 
 procedure TestErrorMessageLengthApi;
@@ -226,6 +230,37 @@ begin
   LSrc := ReadRaw(ResolveSrc('nextpas.core.platform.error.pas'));
   Check(Pos('Exit(-1)', LSrc) = 0, 'error.pas must not Exit(-1)');
   Check(Pos('Result := -1', LSrc) = 0, 'error.pas must not Result := -1');
+  Check(Pos('Result := Int32(AErr)', LSrc) = 0,
+    'Windows map must not passthrough raw ERROR_* via Int32(AErr)');
+  Check(Pos('PLATFORM_ERR_UNKNOWN', LSrc) > 0, 'error.pas defines PLATFORM_ERR_UNKNOWN');
+  Check(Pos('Result := PLATFORM_ERR_UNKNOWN', LSrc) > 0,
+    'Windows map else assigns PLATFORM_ERR_UNKNOWN');
+end;
+
+procedure TestUnknownErrorPortable;
+var
+  LBuf: array[0..127] of AnsiChar;
+  R: Int32;
+begin
+  CheckEqual(Int64(-8), Int64(PLATFORM_ERR_UNKNOWN), 'UNKNOWN constant -8');
+  R := platform_error_message(PLATFORM_ERR_UNKNOWN, @LBuf[0], SizeOf(LBuf));
+  Check(R > 0, 'UNKNOWN has portable message length');
+  Check(Pos('unknown', LowerCase(LBuf)) > 0, 'UNKNOWN message mentions unknown');
+  Check(platform_error_category(PLATFORM_ERR_UNKNOWN) = ecInternal,
+    'UNKNOWN category is ecInternal');
+end;
+
+procedure TestPathTooLongDomainNotEnametoolog;
+var
+  LBuf: array[0..127] of AnsiChar;
+  R: Int32;
+begin
+  CheckEqual(Int64(-7), Int64(PLATFORM_ERR_PATH_TOO_LONG), 'PATH_TOO_LONG stays -7');
+  R := platform_error_message(PLATFORM_ERR_PATH_TOO_LONG, @LBuf[0], SizeOf(LBuf));
+  Check(R > 0, 'PATH_TOO_LONG message length');
+  Check(Pos('path too long', LowerCase(LBuf)) > 0, 'PATH_TOO_LONG message');
+  Check(platform_error_category(PLATFORM_ERR_PATH_TOO_LONG) = ecInvalidArgument,
+    'PATH_TOO_LONG is ecInvalidArgument');
 end;
 
 procedure TestIoCloseIsErrorCodeApi;
@@ -311,6 +346,14 @@ begin
     'ERROR-HANDLING table row INVALID=22');
   CheckContains(LText, 'there is **no** `platform_err_ok`',
     'ERROR-HANDLING forbids PLATFORM_ERR_OK constant');
+  CheckContains(LText, 'platform_err_unknown',
+    'ERROR-HANDLING lists PLATFORM_ERR_UNKNOWN');
+  CheckContains(LText, '| `platform_err_unknown` | -8 |',
+    'ERROR-HANDLING table row UNKNOWN=-8');
+  CheckContains(LText, 'never raw',
+    'ERROR-HANDLING forbids raw ERROR_* passthrough');
+  CheckContains(LText, 'not os `enametoolong`',
+    'ERROR-HANDLING documents PATH_TOO_LONG domain rationale');
 end;
 
 procedure TestApiReferenceNoPhantomErrors;
@@ -348,8 +391,47 @@ begin
     'API-REFERENCE lists live PLATFORM_ERR_UNSUPPORTED');
   CheckContains(LText, 'platform_err_nospc',
     'API-REFERENCE lists live PLATFORM_ERR_NOSPC');
+  CheckContains(LText, 'platform_err_unknown',
+    'API-REFERENCE lists live PLATFORM_ERR_UNKNOWN');
   CheckContains(LText, 'error-handling.md',
     'API-REFERENCE points to ERROR-HANDLING authority');
+end;
+
+procedure TestDualApiDeprecationSignals;
+var
+  LProc, LRet, LEx: string;
+begin
+  LProc := LowerCase(ReadRaw(ResolveSrc('nextpas.core.platform.process.pas')));
+  Check(Pos('transitional dual-api', LProc) > 0,
+    'process.pas marks platform_io_* as transitional dual-API');
+  Check(Pos('prefer platform.files', LProc) > 0,
+    'process.pas points new code to platform.files / *_ex');
+
+  LRet := LowerCase(FsReadFileText(ResolveDocs('RETURN-SEMANTICS.md')));
+  Check(Pos('transitional', LRet) > 0, 'RETURN-SEMANTICS documents transitional io helpers');
+  Check(Pos('platform_io_read', LRet) > 0, 'RETURN-SEMANTICS names platform_io_read');
+  Check(Pos('dual api', LRet) > 0, 'RETURN-SEMANTICS has Dual API section');
+
+  LEx := LowerCase(FsReadFileText(ResolveDocs('EXAMPLES.md')));
+  { ban uses-clause style SysUtils, allow the ban rule text itself }
+  Check(Pos('sysutils,', LEx) = 0, 'EXAMPLES.md must not uses SysUtils,');
+  Check(Pos('sysutils;', LEx) = 0, 'EXAMPLES.md must not uses SysUtils;');
+  Check(Pos('禁止', LEx) > 0, 'EXAMPLES.md has ban rule text');
+  Check(Pos('sysutils', LEx) > 0, 'EXAMPLES.md ban rule names SysUtils');
+end;
+
+procedure TestOutInitOnSpawnSource;
+var
+  LSrc: string;
+begin
+  LSrc := ReadRaw(ResolveSrc('nextpas.core.platform.process.pas'));
+  { failure paths for spawn / unsupported stubs zero out-params }
+  Check(Pos('FillChar(AProc, SizeOf(AProc), 0)', LSrc) > 0,
+    'spawn paths FillChar AProc out-param');
+  Check(Pos('AReadHandle := -1', LSrc) > 0,
+    'pipe create failure/unsupported sets read handle sentinel');
+  Check(Pos('AWriteHandle := -1', LSrc) > 0,
+    'pipe create failure/unsupported sets write handle sentinel');
 end;
 
 procedure TestGetpidIsSentinelApi;
@@ -368,6 +450,10 @@ begin
   T.Test('production units no FPC SysUtils/BaseUnix/Windows/Classes', @TestProductionUnitsNoFpcRtl);
   T.Test('platform test tree no uses SysUtils/BaseUnix', @TestPlatformTestTreeNoFpcRtlUses);
   T.Test('error.pas source has no bare -1 failure exits', @TestErrorMessageSourceNoBareMinusOne);
+  T.Test('UNKNOWN portable code + message + category', @TestUnknownErrorPortable);
+  T.Test('PATH_TOO_LONG stays domain -7', @TestPathTooLongDomainNotEnametoolog);
+  T.Test('dual-API deprecation signals + EXAMPLES no SysUtils', @TestDualApiDeprecationSignals);
+  T.Test('out-init on spawn/pipe source contracts', @TestOutInitOnSpawnSource);
   T.Test('windows io_close is error-code API', @TestIoCloseIsErrorCodeApi);
   T.Test('resource uses PLATFORM_ERR_* family', @TestResourceUsesPlatformErr);
   T.Test('args runtime host cmdline', @TestArgsRuntime);

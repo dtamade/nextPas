@@ -29,11 +29,18 @@ These mirror focused-runtime Linux errno numbers. Non-Linux hosts map native err
 | `PLATFORM_ERR_CONNRESET` | 104 | Connection reset by peer |
 | `PLATFORM_ERR_TIMEDOUT` | 110 | Operation timed out |
 | `PLATFORM_ERR_CONNREFUSED` | 111 | Connection refused |
-| `PLATFORM_ERR_PATH_TOO_LONG` | -7 | Path exceeds `PLATFORM_FS_MAX_PATH` |
+| `PLATFORM_ERR_PATH_TOO_LONG` | -7 | Domain path exceeds `PLATFORM_FS_MAX_PATH` (not OS `ENAMETOOLONG`) |
+| `PLATFORM_ERR_UNKNOWN` | -8 | Host native error could not be mapped to a portable `PLATFORM_ERR_*` |
 
 Aliases (same values): `PLATFORM_ERR_ENOENT`, `PLATFORM_ERR_EEXIST`, `PLATFORM_ERR_ENOTDIR`, `PLATFORM_ERR_TIMEOUT`, `PLATFORM_ERR_INVALID_HANDLE`.
 
 There is **no** `PLATFORM_ERR_OK` constant; success is the integer `0`.
+
+### Mapping rules
+
+- **POSIX**: `platform_get_last_error` returns host errno; known values already match `PLATFORM_ERR_*` Linux numbers. Unknown errno values stay as host errno for `platform_error_message` (strerror) but categorize as `ecInternal` when not in the portable set.
+- **Windows**: `platform_map_windows_error_code` maps `ERROR_*` / `WSAE*` into `PLATFORM_ERR_*`. **Unmapped codes become `PLATFORM_ERR_UNKNOWN`**, never raw `ERROR_*` passthrough.
+- **`PATH_TOO_LONG` (-7)** is a client-side domain limit used by `platform.fs` path clamps; it is intentionally not Linux `ENAMETOOLONG` (36).
 
 ## 2. Call pattern (error-code APIs)
 

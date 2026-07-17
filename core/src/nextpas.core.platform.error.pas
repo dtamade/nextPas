@@ -30,12 +30,17 @@ uses
  *     ESysETIMEDOUT → PLATFORM_ERR_TIMEDOUT   (110)
  *     ESysEOPNOTSUPP → PLATFORM_ERR_UNSUPPORTED (95)
  *
- *   Windows ERROR_* mapping:
- *     ERROR_FILE_NOT_FOUND → ecNotFound
- *     ERROR_ACCESS_DENIED  → ecPermission
- *     ERROR_DISK_FULL      → ecResourceExhausted
- *     ERROR_TIMEOUT        → ecTimeout
- *     WSAETIMEDOUT         → ecTimeout
+ *   Windows ERROR_* mapping (via platform_map_windows_error_code):
+ *     ERROR_FILE_NOT_FOUND → PLATFORM_ERR_NOENT
+ *     ERROR_ACCESS_DENIED  → PLATFORM_ERR_PERM
+ *     ERROR_DISK_FULL      → PLATFORM_ERR_NOSPC
+ *     ERROR_TIMEOUT        → PLATFORM_ERR_TIMEDOUT
+ *     WSAETIMEDOUT         → PLATFORM_ERR_TIMEDOUT
+ *     unmapped ERROR_*/WSAE* → PLATFORM_ERR_UNKNOWN (never raw passthrough)
+ *
+ *   Domain codes (not host errno):
+ *     PLATFORM_ERR_PATH_TOO_LONG (-7) — client path clamp, not ENAMETOOLONG
+ *     PLATFORM_ERR_UNKNOWN (-8) — unmapped host native error
  *}
 const
   PLATFORM_ERR_PERM        = 1;     { Operation not permitted }
@@ -56,7 +61,8 @@ const
   PLATFORM_ERR_CONNRESET   = 104;   { Connection reset by peer }
   PLATFORM_ERR_CONNREFUSED = 111;   { Connection refused }
   PLATFORM_ERR_TIMEDOUT    = 110;   { Operation timed out }
-  PLATFORM_ERR_PATH_TOO_LONG = -7;  { Path exceeds PLATFORM_FS_MAX_PATH }
+  PLATFORM_ERR_PATH_TOO_LONG = -7;  { Domain path limit (PLATFORM_FS_MAX_PATH); not OS ENAMETOOLONG }
+  PLATFORM_ERR_UNKNOWN     = -8;   { Host native error could not be mapped to a portable PLATFORM_ERR_* }
 
   { Aliases for backward compatibility }
   PLATFORM_ERR_ENOENT      = PLATFORM_ERR_NOENT;
@@ -159,7 +165,8 @@ begin
     WSAECONNABORTED:                            Result := PLATFORM_ERR_CONNRESET;
     WSAHOST_NOT_FOUND:                          Result := PLATFORM_ERR_NOENT;
   else
-    Result := Int32(AErr);
+    { Never passthrough raw ERROR_*/WSAE* into the portable code space. }
+    Result := PLATFORM_ERR_UNKNOWN;
   end;
 end;
 
@@ -236,6 +243,8 @@ begin
       ALen := CopyPlatformErrorMessage('operation timed out', ABuf, ABufSize);
     PLATFORM_ERR_PATH_TOO_LONG:
       ALen := CopyPlatformErrorMessage('path too long', ABuf, ABufSize);
+    PLATFORM_ERR_UNKNOWN:
+      ALen := CopyPlatformErrorMessage('unknown platform error', ABuf, ABufSize);
   else
     Result := False;
     ALen := -1;
@@ -337,6 +346,8 @@ begin
       Exit(ecNone);
     PLATFORM_ERR_INVALID, PLATFORM_ERR_PATH_TOO_LONG:
       Exit(ecInvalidArgument);
+    PLATFORM_ERR_UNKNOWN:
+      Exit(ecInternal);
     PLATFORM_ERR_UNSUPPORTED, PLATFORM_ERR_NOSYS:
       Exit(ecNotSupported);
     PLATFORM_ERR_TIMEDOUT:

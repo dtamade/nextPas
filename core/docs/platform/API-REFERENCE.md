@@ -399,7 +399,8 @@ OK constant under the PLATFORM_ERR family).
 | `PLATFORM_ERR_CONNRESET` | 104 | 连接重置 |
 | `PLATFORM_ERR_TIMEDOUT` | 110 | 超时（alias `PLATFORM_ERR_TIMEOUT`） |
 | `PLATFORM_ERR_CONNREFUSED` | 111 | 连接拒绝 |
-| `PLATFORM_ERR_PATH_TOO_LONG` | -7 | 路径过长 |
+| `PLATFORM_ERR_PATH_TOO_LONG` | -7 | 路径过长（域内 `PLATFORM_FS_MAX_PATH`，非 OS ENAMETOOLONG） |
+| `PLATFORM_ERR_UNKNOWN` | -8 | 无法映射的宿主原生错误（Windows 未映射码；禁止 raw ERROR_* 透传） |
 
 Do not invent catalog-only error names. Use the live table above and
 ERROR-HANDLING; never alias NOT_FOUND/EXISTS/ACCESS/FULL/ABORTED/NETWORK
