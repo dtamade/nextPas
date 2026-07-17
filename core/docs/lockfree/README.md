@@ -17,6 +17,7 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 |------|------|
 | [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
 | [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
+| [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
@@ -34,6 +35,13 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | `TLockFreeSelector` | concurrent multiplexer | poll + backoff over channels | yes |
 | `TShardedHashMap` / `TConcurrentHashMap` | **lock-based concurrent** | per-shard spin lock (+ optimistic read path) | yes (honest concurrent alias) |
 | Trees (SkipList/BTree/RBTree/Treap/…), caches, CRDT, filters, RTM/NUMA maps, most sync primitives in `lockfree.*` | **lock-based concurrent** or specialized | spin/RW locks as documented per unit | **no** — import unit directly |
+
+**命名诚实脚注（R7）**：
+- `nextpas.core.lockfree.deque_lf`：单元名含 `lf`，实现为 **spin-lock** deque，不是 lock-free；真 lock-free work-stealing 见 `TWorkStealingDeque`（`lockfree.deque`）。
+- `TShardedHashMap` / `TConcurrentHashMap`：T1 门面类型，**分片自旋锁**，不是 lock-free map。
+- 多数 T2 树/缓存/过滤器/同步器：落在 `lockfree.*` 命名空间只表示“并发 + 原子原语”，**不**表示 progress 为 lock-free。
+- `collections` 模块另有自有 `TConcurrentHashMap`，与 lockfree 门面别名 **不是**同一类型。
+- 完整例外表：[`CONTRACT.md`](CONTRACT.md) §0；消费者扫描：[`consumer-audit.md`](consumer-audit.md)。
 
 Single-owner means concurrent multi-owner use is outside the contract (e.g. multiple SPSC producers).
 
