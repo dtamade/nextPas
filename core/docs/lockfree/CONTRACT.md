@@ -4,7 +4,7 @@
 **层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-17
-**版本**：2.3
+**版本**：2.4
 
 ---
 
@@ -209,6 +209,19 @@ type
 `plain Enqueue` / `Send` 在 closed 时仍抛 `EInvalidOperationError`。
 无界结构（SegQueue / MPSC）：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（不会出现 `lfteFull`）。
 
+### 1.5 Channel capacity=1（R5）
+
+`TLockFreeChannel<T>` 接受请求容量 1（向上取整后仍为 1）。per-slot sequence 使用与 `TMpmcQueue` 相同的 empty/full 分离编码（`empty(pos)=pos*2`，`full(pos)=pos*2+1`），因此单槽 channel 下 `TrySend`/`TrySendEx` 与 `TryReceive`/`TryReceiveEx` 可区分 full 与 empty：
+
+| 状态（未 closed） | Boolean | Try\*Ex `AError` |
+|-------------------|---------|------------------|
+| 空 | `TryReceive` False | `lfteEmpty` |
+| 满 | `TrySend` False | `lfteFull` |
+| 有空间 | `TrySend` True | `lfteNone` |
+| 有数据 | `TryReceive` True | `lfteNone` |
+
+`TLockFreeChannelSpsc` 用 count 路径，本就支持 cap=1；本条锁定 MPMC Channel 与队列对齐。
+
 ---
 
 ## 2. 不变量
@@ -217,7 +230,8 @@ type
 - 无锁栈 TryPush/TryPop 满足 LIFO 顺序
 - 工作窃取双端队列：Owner 从尾部 TryPop，Thief 从头部 TrySteal；**有 Close**
 - SPSC 队列：单生产者单消费者，无锁
-- MPMC 队列：多生产者多消费者，无锁
+- MPMC 队列：多生产者多消费者，无锁；capacity=1 时 empty/full sequence 可分
+- Channel（MPMC）：同 MPMC empty/full sequence 编码；capacity=1 时 full/empty 可分
 - SegQueue：无界 **MPMC**（不是 MPSC）
 - 分片 HashMap：每个分片独立锁，减少竞争；`TConcurrentHashMap` 与其同实现
 - 所有 T1 泛型容器要求 T（及 HashMap 的 TKey/TValue）为非托管类型；构造时 `IsManagedType` 拒绝

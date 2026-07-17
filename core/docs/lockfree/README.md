@@ -89,6 +89,7 @@ closed、当前为空且没有 admitted producer 仍可能发布时才把 closed
 `TMpmcQueue<T>.EnqueueBatch` / `DequeueBatch` are convenience loops over consecutive `TryEnqueue` / `TryDequeue` calls: they return the successful prefix so far when the next single-item operation would fail, instead of waiting for the remainder or promising a shared batch linearization point.
 `TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
 `TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
+`TLockFreeChannel<T>` uses the same empty/full sequence encoding, so capacity=1 also distinguishes full (`TrySend`/`TrySendEx` → `lfteFull`) from empty (`TryReceive`/`TryReceiveEx` → `lfteEmpty`).
 
 `TMpscQueue<T>` 是多 producer、单 consumer 队列。`Close` 后 `TryEnqueue` 返回 False，`Enqueue`
 抛出 `EInvalidOperationError`（与 `TLockFreeChannel.Send` 对齐）。`Close` 唤醒 blocked consumer。
@@ -247,7 +248,8 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 `TLockFreeChannel<T>` 是有界无锁 Channel，序列号驱动的 **MPMC-style** 通道（多 producer / 多 consumer）。
 
 **设计特点**:
-- 容量自动向上取整到 2 的幂（位运算优化）
+- 容量自动向上取整到 2 的幂（位运算优化）；**capacity=1 合法**，full/empty 可分
+- per-slot sequence 与 `TMpmcQueue` 相同：empty/full 分离 token
 - 阻塞/非阻塞/超时三种发送和接收模式
 - Close 后已入队数据仍可读
 - Send 到已关闭 channel 抛异常，TrySend 返回 False（Go 对齐）

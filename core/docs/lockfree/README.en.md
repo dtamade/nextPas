@@ -70,6 +70,7 @@ Batch APIs are convenience methods over consecutive single-element operations, n
 `TMpmcQueue<T>.EnqueueBatch` / `DequeueBatch` are convenience loops over consecutive `TryEnqueue` / `TryDequeue` calls: they return the successful prefix so far when the next single-item operation would fail, instead of waiting for the remainder or promising a shared batch linearization point.
 `TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
 `TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
+`TLockFreeChannel<T>` uses the same empty/full sequence encoding, so capacity=1 also distinguishes full (`TrySend`/`TrySendEx` → `lfteFull`) from empty (`TryReceive`/`TryReceiveEx` → `lfteEmpty`).
 
 `TMpscQueue<T>` is a multi-producer, single-consumer queue. After `Close`, `TryEnqueue` returns False and plain
 `Enqueue` raises `EInvalidOperationError` (aligned with `TLockFreeChannel.Send`). `Close` also wakes blocked
@@ -213,7 +214,8 @@ The current design is safe under these conditions:
 `TLockFreeChannel<T>` is a bounded lock-free Channel, sequence-number driven MPMC channel.
 
 **Design Features**:
-- Capacity automatically rounded up to power-of-two (bitwise optimization)
+- Capacity automatically rounded up to power-of-two (bitwise optimization); **capacity=1 is valid** with distinguishable full/empty
+- Per-slot sequence uses the same empty/full token encoding as `TMpmcQueue`
 - Blocking/non-blocking/timeout send and receive modes
 - Already-enqueued data still readable after Close
 - Send to closed channel throws exception, TrySend returns False (Go-aligned)

@@ -46,6 +46,7 @@
 | **R2** 可用性 Wave-2 | 剩余 generic 守卫（btree/trie/selector.impl）；SegQueue Destroy Close；bench 去 RTL 符号；CONTRACT 例外表；api-ref `moSeqCst` | `334a61a69` |
 | **R3** 诊断 API 试点 | `TLockFreeTryError` + Channel/ChannelSPSC/SegQueue `Try*Ex` | `373f86896`；lockfree **171** |
 | **R4** Try\*Ex 扩面 | SPSC/MPMC/SPMC/MPSC/Stack `Try*Ex`；CONTRACT §1.4 | 已完成；lockfree **176** |
+| **R5** Channel cap=1 | MPMC Channel empty/full sequence 编码（方案 A）；`TestChannelCapacityOneFullEmpty`；CONTRACT §1.5 | 见本轮 landing |
 
 ### 1.3 成熟度（诚实）
 
@@ -61,7 +62,6 @@
 
 | 优先级 | 缺口 | 对应阶段 |
 |--------|------|----------|
-| P1 | MPMC Channel **capacity=1** full/empty 语义薄弱（测试用 cap≥2） | **R5** |
 | P2 | 验证证据未固化为可复用 gate 脚本/artifact 约定 | **R6** |
 | P2 | managed 拒绝文案不统一 | **R6** |
 | P2 | `api-reference` 与 live 仍可能局部漂移 | **R6** |
@@ -127,20 +127,17 @@ R8  研究线（NUMA/TSX/TLA）              可选，重大变更需讨论
 | **优先级** | P1 |
 | **验收** | 默认验证门绿；每种结构至少：success / full 或 empty / closed；文档表更新；path-limited 可 land |
 
-### R5 — Channel capacity=1 语义硬化
+### R5 — Channel capacity=1 语义硬化 — **DONE（方案 A）**
 
 **目标**：MPMC Channel 在 capacity=1 时 full 与 empty 可区分（或文档明确「最小推荐 cap≥2」+ source-contract）。
 
 | 项 | 内容 |
 |----|------|
-| **交付物** | 实现修复 **或** 契约降级二选一（优先实现修复若成本可控）；回归测试 cap=1；CONTRACT 明确句 |
+| **交付物** | **方案 A**：Channel 采用与 `TMpmcQueue` 相同的 empty/full sequence 编码；`TestChannelCapacityOneFullEmpty`；`TestChannelTryExDiagnostics` 改用 `Create(1)`；CONTRACT §1.5 |
 | **依赖** | 理解现有 sequence 协议；可与 R4 并行调研 |
 | **优先级** | P1 |
 | **验收** | cap=1 下 `TrySendEx`/`TryReceiveEx` 语义与 CONTRACT 一致；主门绿 |
-
-**决策点（实施前二选一，写进 commit）**：
-- **A** 修序列/计数协议使 cap=1 正确
-- **B** 构造拒绝 cap=1 或文档+测试强制 cap≥2
+| **决策** | **A**（实现修复）：`EmptySequence(pos)=pos*2` / `FullSequence(pos)=pos*2+1`；非 B |
 
 ### R6 — 工程卫生与证据
 
@@ -203,7 +200,7 @@ R8  研究线（NUMA/TSX/TLA）              可选，重大变更需讨论
 | Q4 | R6：优先模块 Makefile 目标 | **确认** |
 | Q5 | 旧 phase 归档横幅保留 | **确认** |
 
-**当前执行**: **R5**（Channel capacity=1 语义硬化）。
+**当前执行**: **R6**（R5 已交付，方案 A）。
 
 ---
 
