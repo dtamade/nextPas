@@ -484,10 +484,44 @@ begin
     'files seek initializes ANewPos sentinel before work');
   Check(Pos('FillChar(AStat, SizeOf(AStat), 0)', LFiles) > 0,
     'files stat zero-initializes AStat out-param');
+  { unsupported stubs must out-init too (RETURN §13) }
+  Check(Pos('AHandle.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED', LFiles) > 0,
+    'files open unsupported stub sets AHandle sentinel');
 
   LSock := ReadRaw(ResolveSrc('nextpas.core.platform.socket.pas'));
   Check(Pos('ASocket.Value := -1', LSock) > 0,
     'socket create unsupported/failure sets socket sentinel');
+  Check(Pos('AClient.Value := -1', LSock) > 0,
+    'socket accept unsupported stub sets AClient sentinel');
+  Check(Pos('ASocket1.Value := -1', LSock) > 0,
+    'socket_pair failure/unsupported sets ASocket1 sentinel');
+end;
+
+procedure TestContractTableLiveNames;
+var
+  LContract, LRet: string;
+begin
+  LContract := LowerCase(FsReadFileText(ResolveDocs('CONTRACT.md')));
+  Check(Pos('platform_resource_get_limit', LContract) > 0,
+    'CONTRACT names live resource_get_limit');
+  Check(Pos('platform_pipe_create', LContract) > 0,
+    'CONTRACT names live pipe_create');
+  Check(Pos('platform_realtime_ns', LContract) > 0,
+    'CONTRACT names live realtime_ns');
+  Check(Pos('platform_fs_copy_file', LContract) > 0,
+    'CONTRACT names live fs_copy_file');
+  Check(Pos('platform_fmt_snprintf', LContract) = 0,
+    'CONTRACT has no ghost fmt_snprintf');
+  Check(Pos('platform_pipe_open', LContract) = 0,
+    'CONTRACT has no ghost pipe_open');
+  Check(Pos('platform_wallclock_ns', LContract) = 0,
+    'CONTRACT has no ghost wallclock_ns');
+  Check(Pos('platform_fs_glob', LContract) = 0,
+    'CONTRACT has no ghost fs_glob');
+
+  LRet := LowerCase(FsReadFileText(ResolveDocs('RETURN-SEMANTICS.md')));
+  Check(Pos('platform_str_find', LRet) > 0,
+    'RETURN documents str_find as index value-sentinel');
 end;
 
 procedure TestDlErrorAndLengthContracts;
@@ -573,6 +607,7 @@ begin
   T.Test('dual-API deprecation signals + EXAMPLES no SysUtils', @TestDualApiDeprecationSignals);
   T.Test('out-init on spawn/pipe source contracts', @TestOutInitOnSpawnSource);
   T.Test('out-init files open + socket create', @TestOutInitFilesAndSocket);
+  T.Test('CONTRACT table live API names + str_find', @TestContractTableLiveNames);
   T.Test('dl_error INVALID + length contracts', @TestDlErrorAndLengthContracts);
   T.Test('error-code modules no bare Result := -1', @TestErrorCodeApisNoBareMinusOneStub);
   T.Test('SHORT alias IO + parse INVALID contracts', @TestShortAliasAndParseContracts);

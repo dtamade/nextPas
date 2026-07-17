@@ -46,6 +46,13 @@ Wine matrix promotion). Wine compile remains environment-dependent
 - F6 raw OS side-channel **Won't this wave**; F7 POSIX/Windows asymmetry **documented**; F10 diagnostics deferred
 - Host truth tiers **unchanged** (no fake promotion)
 
+### 2026-07-17 usability residual wave-4 (assessment 8.21)
+
+- CONTRACT §1.1 submodule table aligned to live API names (no resource_get / fmt_snprintf / pipe_open ghosts)
+- unsupported stubs: files open + socket create/accept (+ Windows socket_pair) out-init sentinels
+- USABILITY banner → 8.21; API-REFERENCE cross-links RETURN/ERROR; RETURN names `str_find` as index value-sentinel
+- F6 raw OS API / F8 doctest / F9 rename / host truth **unchanged** (Won't or deferred)
+
 ## Host Status
 
 | Host | Current truth | Required next proof |

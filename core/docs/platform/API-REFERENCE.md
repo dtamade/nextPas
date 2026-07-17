@@ -1,10 +1,17 @@
 # Platform API 参考手册
 
 **日期**: 2026-07-06
-**更新**: 2026-07-08 (v1.2: breakdown_utc 月份循环修复)
-**版本**: v1.1
+**更新**: 2026-07-17 (wave-4: return/error cross-links; catalog names must match live sources)
+**版本**: v1.3
 **模块数**: 24
 **API数**: ~1067
+
+**Authority companions** (do not invent names from this catalog alone):
+
+- Errors: [ERROR-HANDLING.md](ERROR-HANDLING.md) + `nextpas.core.platform.error.pas`
+- Return tiers / out-init / length / dual-IO: [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md)
+- Module table (live names): [CONTRACT.md](CONTRACT.md)
+- Examples: [EXAMPLES.md](EXAMPLES.md), [BEST-PRACTICES.md](BEST-PRACTICES.md)
 
 ---
 
