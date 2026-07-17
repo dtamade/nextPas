@@ -24,8 +24,9 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | G0–G5 骨架 | 完成 |
 | non-H3 stage-complete | 完成（INV-12 keep-alive；H2 facade live；API 审计；bench 诚实；H3 无假 facade） |
 | Usability Wave A–F | 完成并 landed main |
+| Wave G Cookie site | 完成（eTLD+1 + PSL 子集） |
 | 主 Makefile gate | 35 focused suites |
-| **下一执行点** | **[`ROADMAP.md`](ROADMAP.md) Wave G — Cookie public-suffix (SiteKey)** |
+| **下一执行点** | **[`ROADMAP.md`](ROADMAP.md) Wave H — Response metadata** |
 
 日常客户端主路径已齐。剩下是 product depth（PSL、响应元数据、代理鉴权变体）与协议演进（H2 边角、H3/QUIC）。
 
@@ -264,7 +265,8 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 |-----|---------|
 | Stage P1–P5 (2026-07-16) | keep-alive INV-12 · H2 facade · API audit · bench honesty · H3 blocked-honest — **closed** |
 | Usability Wave A–F (2026-07-17) | dial/cancel · GetJson/Retry-After · CONNECT · direct HTTPS · proxy Basic · HTTP-date · WithTLSContext · *JsonDocument — **landed main** |
-| **Next** | **ROADMAP Phase P / Wave G — Cookie public-suffix (SiteKey)** |
+| Wave G (2026-07-17) | Cookie eTLD+1 SiteKey · multi-label PSL subset · reject Domain=public-suffix — **landed** |
+| **Next** | **ROADMAP Phase P / Wave H — Response metadata** |
 
 If ROADMAP and any cycle assessment disagree, **ROADMAP wins** until explicitly revised.
 
