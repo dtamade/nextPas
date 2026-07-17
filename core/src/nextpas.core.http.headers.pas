@@ -23,6 +23,8 @@ type
     procedure EnsureCapacity(const ARequired: Int32);
     function FindFirst(const AName: string): Int32; inline;
     function FindFirstNormalized(const ANorm: string): Int32; inline;
+    { AQuery may be mixed-case; stored names are canonical lowercase. No alloc. }
+    function FindFirstEqualFold(const AQuery: string): Int32; inline;
     class function NeedsNormalize(const AName: string): Boolean; static; inline;
     class function Normalize(const AName: string): string; static;
     class function NormalizeIfNeeded(const AName: string): string; static; inline;
@@ -30,6 +32,10 @@ type
     class function NormalizeParsedNameSpan(const AName: PAnsiChar;
       const ANameLen: SizeUInt): string; static;
     class function ValidateNameAndNeedsNormalize(const AName: string): Boolean; static;
+    { Single pass: token-char validate + case-fold. Lowercase names share AName
+      (no alloc); mixed/upper builds canonical form while validating. }
+    class procedure ValidateAndNormalizeName(const AName: string;
+      out ANorm: string); static;
     class procedure ValidateValue(const AValue: string); static;
   public
     procedure SetHeader(const AName, AValue: string);
@@ -187,6 +193,48 @@ begin
   end;
 end;
 
+class procedure THttpHeaders.ValidateAndNormalizeName(const AName: string;
+  out ANorm: string);
+var
+  LI, LLen: SizeInt;
+  LCh: AnsiChar;
+begin
+  LLen := Length(AName);
+  if LLen = 0 then
+    raise EHttpError.Create(hekParse, 'empty header name');
+  LI := 1;
+  while LI <= LLen do
+  begin
+    LCh := AnsiChar(AName[LI]);
+    if not IsHttpHeaderNameChar(LCh) then
+      raise EHttpError.Create(hekParse, 'invalid header name character');
+    if (LCh >= 'A') and (LCh <= 'Z') then
+    begin
+      { First uppercase: allocate canonical form, copy validated prefix, fold
+        this char, then finish the name in the same pass. }
+      SetLength(ANorm, LLen);
+      if LI > 1 then
+        Move(AName[1], ANorm[1], SizeUInt(LI - 1));
+      ANorm[LI] := Chr(Ord(LCh) + 32);
+      Inc(LI);
+      while LI <= LLen do
+      begin
+        LCh := AnsiChar(AName[LI]);
+        if not IsHttpHeaderNameChar(LCh) then
+          raise EHttpError.Create(hekParse, 'invalid header name character');
+        if (LCh >= 'A') and (LCh <= 'Z') then
+          ANorm[LI] := Chr(Ord(LCh) + 32)
+        else
+          ANorm[LI] := Char(LCh);
+        Inc(LI);
+      end;
+      Exit;
+    end;
+    Inc(LI);
+  end;
+  ANorm := AName;
+end;
+
 { RFC 9110 §5.5: Field value components MUST NOT include CR or LF
   except when used within a quoted-string. HTAB (#9) is allowed.
   This implementation rejects all control chars < #32 except HTAB,
@@ -229,16 +277,41 @@ begin
   Result := -1;
 end;
 
+function THttpHeaders.FindFirstEqualFold(const AQuery: string): Int32; inline;
+var
+  LI, LJ, LLen: SizeInt;
+  LStored: string;
+  LCh: Char;
+begin
+  LLen := Length(AQuery);
+  for LI := 0 to FCount - 1 do
+  begin
+    LStored := FEntries[LI].Name;
+    if Length(LStored) <> LLen then
+      Continue;
+    LJ := 1;
+    while LJ <= LLen do
+    begin
+      LCh := AQuery[LJ];
+      if (LCh >= 'A') and (LCh <= 'Z') then
+        LCh := Chr(Ord(LCh) + 32);
+      if LStored[LJ] <> LCh then
+        Break;
+      Inc(LJ);
+    end;
+    if LJ > LLen then
+      Exit(Int32(LI));
+  end;
+  Result := -1;
+end;
+
 procedure THttpHeaders.SetHeader(const AName, AValue: string);
 var
   LNorm: string;
   LI, LDst: Int32;
   LFound: Boolean;
 begin
-  if ValidateNameAndNeedsNormalize(AName) then
-    LNorm := Normalize(AName)
-  else
-    LNorm := AName;
+  ValidateAndNormalizeName(AName, LNorm);
   ValidateValue(AValue);
   LFound := False;
   LDst := 0;
@@ -280,10 +353,7 @@ procedure THttpHeaders.Add(const AName, AValue: string);
 var
   LNorm: string;
 begin
-  if ValidateNameAndNeedsNormalize(AName) then
-    LNorm := Normalize(AName)
-  else
-    LNorm := AName;
+  ValidateAndNormalizeName(AName, LNorm);
   ValidateValue(AValue);
   EnsureCapacity(FCount + 1);
   FEntries[FCount].Name := LNorm;
@@ -335,17 +405,14 @@ end;
 
 function THttpHeaders.Get(const AName: string): string;
 var
-  LNorm: string;
   LIdx: Int32;
 begin
-  { Single pass: validate token chars + detect uppercase, then at most one
-    Normalize allocation. Avoids Validate + FindFirst double-scan (and double
-    Normalize on mixed-case names). }
+  { Lowercase path: validate once + exact match (no alloc). Mixed/upper path:
+    validate once + equal-fold scan (no Normalize heap string). }
   if ValidateNameAndNeedsNormalize(AName) then
-    LNorm := Normalize(AName)
+    LIdx := FindFirstEqualFold(AName)
   else
-    LNorm := AName;
-  LIdx := FindFirstNormalized(LNorm);
+    LIdx := FindFirstNormalized(AName);
   if LIdx >= 0 then
     Result := FEntries[LIdx].Value
   else
@@ -358,10 +425,8 @@ var
   LI, LCount: Int32;
 begin
   Result := nil;
-  if ValidateNameAndNeedsNormalize(AName) then
-    LNorm := Normalize(AName)
-  else
-    LNorm := AName;
+  { Multi-value fill needs a stable canonical key; one validate+fold pass. }
+  ValidateAndNormalizeName(AName, LNorm);
 
   LCount := 0;
   for LI := 0 to FCount - 1 do
@@ -382,14 +447,11 @@ begin
 end;
 
 function THttpHeaders.Has(const AName: string): Boolean;
-var
-  LNorm: string;
 begin
   if ValidateNameAndNeedsNormalize(AName) then
-    LNorm := Normalize(AName)
+    Result := FindFirstEqualFold(AName) >= 0
   else
-    LNorm := AName;
-  Result := FindFirstNormalized(LNorm) >= 0;
+    Result := FindFirstNormalized(AName) >= 0;
 end;
 
 procedure THttpHeaders.Remove(const AName: string);
@@ -397,10 +459,7 @@ var
   LNorm: string;
   LI, LDst: Int32;
 begin
-  if ValidateNameAndNeedsNormalize(AName) then
-    LNorm := Normalize(AName)
-  else
-    LNorm := AName;
+  ValidateAndNormalizeName(AName, LNorm);
   LDst := 0;
   for LI := 0 to FCount - 1 do
   begin

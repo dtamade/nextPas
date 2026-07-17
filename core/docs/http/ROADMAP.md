@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave X4 landed → **NEXT = X5**）
+**Updated**: 2026-07-17（Wave X5 landed → **Era 6 Done**）
 
 ---
 
@@ -90,12 +90,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave X2 net cancel floor | 完成（waitable socketpair+poll 唤醒；SLA ~20ms；probe-only ~10ms slice） |
 | Wave X3 Client pool idle TTL | 完成（IdleTTL 默认 90s；借出/归还淘汰；0=关闭） |
 | Wave X4 TLS OpenSSL residual | 完成（PinValidator FreeAndNil；HTTPS residual 11→1×41B process-lifetime） |
-| **下一执行点** | **Wave X5** — Comparator + profiled win |
+| Wave X5 Comparator + profiled win | 完成（equal-fold Get/Has；fullchain 刷新；无假 H3） |
+| **下一执行点** | **Era 6 Done** — 无默认 NEXT；Inbox 仅升格后开工 |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~92%   高级 ~82%   优雅 ~86%   性能 ~70%  (Excellence: H1/H2/WS)
+完整 ~92%   高级 ~85%   优雅 ~88%   性能 ~78%  (Excellence: H1/H2/WS landed)
 ```
 
 ---
@@ -459,15 +460,16 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 刷新 BENCHMARKS / server comparison 本机 snapshot + caveats；profile 一刀可解释优化（可回落 net/tls/http）；对标 Go/Rust 同负载表述 |
 | **Don't** | 为数字牺牲正确性；无 profile 乱优化；假 H3 行 |
 | **Done when** | BENCHMARKS 有 Excellence 一行证据；正确性 focused 不回退 |
 | **Gates** | 相关 bench 可跑；http 核心 focused 抽样；hygiene |
 | **Land paths** | benches/docs + 必要 src；跨模块仅当 profile 证明 |
 | **Next** | Era 6 Done / STOP 或 Inbox |
+| **Evidence** | `FindFirstEqualFold`：Get hit uppercase **128.9→89.7 ns**（~30%）；fullchain Direct/Router × threaded/epoll 本机刷新；comparator honesty 无假 H3；`test_http_headers` 28/0 unfreed |
 
-**Era 6 Done when**：X0–X5 landed（或 X5 证据充分且剩余诚实 Park）；H3 仍无 facade；四支柱可再评估。
+**Era 6 Done when**：X0–X5 landed（或 X5 证据充分且剩余诚实 Park）；H3 仍无 facade；四支柱可再评估。 **Met**（X0–X5 landed；H3 仍 Blocked）。
 
 ---
 
@@ -513,11 +515,11 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ```text
 1. Era 0–4 landed；framework-complete (non-H3) 已立住
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
-3. Era 6 NEXT = Wave X5（comparator/profile）；之后 Era 6 Done
+3. Era 6 X0–X5 landed — Excellence Done；默认 STOP（Inbox 仅升格后开工）
 4. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：执行 Era 6 推荐路径（X5…），不要空转 H3。**
+**没有用户指令时：Era 6 已 Done — STOP；不要空转 H3；Inbox 仅升格后开工。**
 
 ---
 
@@ -562,3 +564,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave X2 landed：net waitable cancel（socketpair+poll）+ SLA；Wave X3 = NEXT |
 | 2026-07-17 | Wave X3 landed：client pool IdleTTL（默认 90s / 0=off）+ get/put 淘汰；Wave X4 = NEXT |
 | 2026-07-17 | Wave X4 landed：TLS PinValidator FreeAndNil；HTTPS residual 11→1×41B；Wave X5 = NEXT |
+| 2026-07-17 | Wave X5 landed：headers equal-fold Get/Has（uppercase ~30%）；fullchain 刷新；Era 6 Done |
