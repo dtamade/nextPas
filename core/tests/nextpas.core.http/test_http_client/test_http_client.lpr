@@ -28,6 +28,7 @@ uses
   nextpas.core.http.form.base,
   nextpas.core.json,
   nextpas.core.json.value,
+  nextpas.core.compress,
   nextpas.core.http,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -4808,6 +4809,227 @@ begin
     LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/nocharset');
     LBody := nextpas.core.http.client.HttpReadResponseBodyStringAuto(LResp);
     CheckEqual('hello world', LBody, 'no charset defaults to utf-8');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+function TestStringToBytes(const AValue: string): TBytes;
+begin
+  SetLength(Result, Length(AValue));
+  if Length(AValue) > 0 then
+    Move(AValue[1], Result[0], Length(AValue));
+end;
+
+procedure TestHttpDecodeContentEncodingGzip;
+var
+  LPlain, LCompressed, LDecoded: TBytes;
+begin
+  LPlain := TestStringToBytes('hello gzip world');
+  LCompressed := GzipCompress(LPlain);
+  LDecoded := HttpDecodeContentEncoding('gzip', LCompressed);
+  CheckEqual('hello gzip world', BytesToTestString(LDecoded),
+    'gzip Content-Encoding decodes');
+end;
+
+procedure TestHttpDecodeContentEncodingDeflate;
+var
+  LPlain, LCompressed, LDecoded: TBytes;
+begin
+  LPlain := TestStringToBytes('hello deflate world');
+  LCompressed := DeflateCompress(LPlain);
+  LDecoded := HttpDecodeContentEncoding('deflate', LCompressed);
+  CheckEqual('hello deflate world', BytesToTestString(LDecoded),
+    'deflate Content-Encoding decodes');
+end;
+
+procedure TestHttpDecodeContentEncodingIdentityAndEmpty;
+var
+  LPlain, LDecoded: TBytes;
+begin
+  LPlain := TestStringToBytes('plain');
+  LDecoded := HttpDecodeContentEncoding('', LPlain);
+  CheckEqual('plain', BytesToTestString(LDecoded), 'empty encoding is pass-through');
+  LDecoded := HttpDecodeContentEncoding('identity', LPlain);
+  CheckEqual('plain', BytesToTestString(LDecoded), 'identity encoding is pass-through');
+end;
+
+procedure TestHttpDecodeContentEncodingUnsupported;
+var
+  LRaised: Boolean;
+  LOp: string;
+  LKind: THttpErrorKind;
+begin
+  LRaised := False;
+  LOp := '';
+  LKind := hekUnknown;
+  try
+    HttpDecodeContentEncoding('br', TestStringToBytes('x'));
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LKind := E.Kind;
+      LOp := E.Op;
+    end;
+  end;
+  Check(LRaised, 'unsupported Content-Encoding raises');
+  Check(LKind = hekProtocol, 'unsupported encoding is hekProtocol');
+  CheckEqual('content_encoding', LOp, 'unsupported encoding Op=content_encoding');
+end;
+
+procedure TestHttpDecodeContentEncodingMultiCodingRejected;
+var
+  LRaised: Boolean;
+  LOp: string;
+begin
+  LRaised := False;
+  LOp := '';
+  try
+    HttpDecodeContentEncoding('gzip, deflate', TestStringToBytes('x'));
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LOp := E.Op;
+      Check(E.Kind = hekProtocol, 'multi-coding is hekProtocol');
+    end;
+  end;
+  Check(LRaised, 'multi Content-Encoding raises');
+  CheckEqual('content_encoding', LOp, 'multi-coding Op=content_encoding');
+end;
+
+procedure TestHttpDecodeContentEncodingCorrupt;
+var
+  LRaised: Boolean;
+  LOp: string;
+  LKind: THttpErrorKind;
+  LJunk: TBytes;
+begin
+  LJunk := TestStringToBytes('not-gzip-payload');
+  LRaised := False;
+  LOp := '';
+  LKind := hekUnknown;
+  try
+    HttpDecodeContentEncoding('gzip', LJunk);
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LKind := E.Kind;
+      LOp := E.Op;
+    end;
+  end;
+  Check(LRaised, 'corrupt gzip raises');
+  Check(LKind = hekBody, 'corrupt payload is hekBody');
+  CheckEqual('content_encoding', LOp, 'corrupt payload Op=content_encoding');
+end;
+
+procedure TestHttpDecodeContentEncodingMaxSize;
+var
+  LPlain, LCompressed: TBytes;
+  LRaised: Boolean;
+begin
+  LPlain := TestStringToBytes('0123456789abcdefghij');
+  LCompressed := GzipCompress(LPlain);
+  LRaised := False;
+  try
+    HttpDecodeContentEncoding('gzip', LCompressed, 5);
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      CheckEqual('content_encoding', E.Op, 'max-size failure Op=content_encoding');
+      Check(E.Kind = hekBody, 'max-size decode failure is hekBody');
+    end;
+  end;
+  Check(LRaised, 'max decompressed size is enforced');
+end;
+
+procedure TestHttpReadResponseBodyBytesDecodedGzip;
+var
+  LHeaders: IHttpHeaders;
+  LPlain, LCompressed, LDecoded: TBytes;
+  LResp: IHttpResponse;
+begin
+  LPlain := TestStringToBytes('decoded-body');
+  LCompressed := GzipCompress(LPlain);
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-encoding', 'gzip');
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LCompressed);
+  LDecoded := HttpReadResponseBodyBytesDecoded(LResp);
+  CheckEqual('decoded-body', BytesToTestString(LDecoded),
+    'response helper decodes Content-Encoding gzip');
+end;
+
+procedure TestHttpReadResponseBodyBytesDecodedNoEncodingIsRaw;
+var
+  LHeaders: IHttpHeaders;
+  LResp: IHttpResponse;
+  LDecoded: TBytes;
+begin
+  LHeaders := NewHttpHeaders;
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, TestStringToBytes('raw-body'));
+  LDecoded := HttpReadResponseBodyBytesDecoded(LResp);
+  CheckEqual('raw-body', BytesToTestString(LDecoded),
+    'missing Content-Encoding returns raw body');
+end;
+
+procedure TestHttpReadResponseBodyStringDecodedGzip;
+var
+  LHeaders: IHttpHeaders;
+  LPlain, LCompressed: TBytes;
+  LResp: IHttpResponse;
+  LText: string;
+begin
+  LPlain := TestStringToBytes('string-decoded');
+  LCompressed := GzipCompress(LPlain);
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-encoding', 'gzip');
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LCompressed);
+  LText := HttpReadResponseBodyStringDecoded(LResp);
+  CheckEqual('string-decoded', LText, 'string decoded helper');
+end;
+
+procedure TestHttpReadResponseBodyBytesDecodedLiveCompression;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LBody: string;
+  LPlain: string;
+  LHandler: IHttpHandler;
+  I: Integer;
+begin
+  { Body large enough for default CompressionMiddleware min size (1024). }
+  LPlain := '';
+  for I := 1 to 1200 do
+    LPlain := LPlain + 'a';
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/gzip-body', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LPlain))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LPlain[1], SizeUInt(Length(LPlain)));
+  end);
+  LHandler := Chain(LRouter as IHttpHandler, [CompressionMiddleware]);
+  LHandle := StartServer(LHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LReq := THttpRequestBuilder.Create(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/gzip-body')
+      .Header('accept-encoding', 'gzip')
+      .Build;
+    LResp := LClient.Send(LReq);
+    CheckEqual('gzip', LowerCase(LResp.Headers.Get('content-encoding')),
+      'server compression sets Content-Encoding gzip');
+    LBody := HttpReadResponseBodyStringDecoded(LResp);
+    CheckEqual(LPlain, LBody, 'client decodes live gzip response');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -10599,6 +10821,26 @@ begin
   T.Test('HttpReadResponseBodyStringAuto UTF-8', @TestHttpReadResponseBodyStringAutoUtf8);
   T.Test('HttpReadResponseBodyStringAuto Latin-1', @TestHttpReadResponseBodyStringAutoLatin1);
   T.Test('HttpReadResponseBodyStringAuto no charset', @TestHttpReadResponseBodyStringAutoNoCharset);
+  T.Test('HttpDecodeContentEncoding gzip', @TestHttpDecodeContentEncodingGzip);
+  T.Test('HttpDecodeContentEncoding deflate', @TestHttpDecodeContentEncodingDeflate);
+  T.Test('HttpDecodeContentEncoding identity/empty',
+    @TestHttpDecodeContentEncodingIdentityAndEmpty);
+  T.Test('HttpDecodeContentEncoding unsupported br',
+    @TestHttpDecodeContentEncodingUnsupported);
+  T.Test('HttpDecodeContentEncoding multi-coding rejected',
+    @TestHttpDecodeContentEncodingMultiCodingRejected);
+  T.Test('HttpDecodeContentEncoding corrupt gzip',
+    @TestHttpDecodeContentEncodingCorrupt);
+  T.Test('HttpDecodeContentEncoding max size',
+    @TestHttpDecodeContentEncodingMaxSize);
+  T.Test('HttpReadResponseBodyBytesDecoded gzip',
+    @TestHttpReadResponseBodyBytesDecodedGzip);
+  T.Test('HttpReadResponseBodyBytesDecoded no encoding raw',
+    @TestHttpReadResponseBodyBytesDecodedNoEncodingIsRaw);
+  T.Test('HttpReadResponseBodyStringDecoded gzip',
+    @TestHttpReadResponseBodyStringDecodedGzip);
+  T.Test('HttpReadResponseBodyStringDecoded live CompressionMiddleware',
+    @TestHttpReadResponseBodyBytesDecodedLiveCompression);
   T.Test('HttpReleaseResponseBody closes close-capable body',
     @TestHttpReleaseResponseBodyClosesCloseCapableBody);
   T.Test('HttpReleaseResponseBody drains plain reader',

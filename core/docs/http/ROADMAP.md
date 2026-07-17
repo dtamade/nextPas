@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave L′ doc dual-status kill；NEXT=C1）
+**Updated**: 2026-07-17（Wave C1 Content-Encoding；NEXT=C2）
 
 ---
 
@@ -73,12 +73,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave J Error Op hygiene | 完成（热点 CreateOp + source-contract + CONTRACT Op 表） |
 | Wave K Surface freeze | 完成（工厂白名单已冻；无 deprecated；ARCHITECTURE 对齐） |
 | Wave L′ Doc dual-status | 完成（GOAL_TREE/API_COVERAGE/README 无 NEXT Wave 双写） |
-| **下一执行点** | **Era 1 / Wave C1 — Content-Encoding** |
+| Wave C1 Content-Encoding | 完成（client decode helper + server middleware 契约 + Op=`content_encoding`） |
+| **下一执行点** | **Era 1 / Wave C2 — Conditional + cache helpers** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~80%   高级 ~60%   优雅 ~70%   性能 ~50%
+完整 ~82%   高级 ~60%   优雅 ~70%   性能 ~50%
 ```
 
 ---
@@ -169,19 +170,20 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | client/server 侧 gzip（优先）编解码契约：middleware 或 content 辅助；自动/显式 decode 写进 CONTRACT；focused 证明 |
 | **Don't** | 自研压缩核（优先用已有 core 能力；若无原语则 **最小** 引入或 Blocked 升级底层）；伪装完整浏览器 content 栈；默认 br 除非底层已有 |
 | **Done when** | 至少 gzip 请求或响应路径一条生产可用；非法/不支持编码诚实错误；CONTRACT + focused |
 | **Gates** | 新或扩展 focused suite + client/server 相关 gate |
 | **Land paths** | http 源/测/文档；（若必须）声明的压缩/底层最小路径 |
 | **Next** | Wave C2 |
+| **Evidence** | server：`CompressionMiddleware`/`DecompressMiddleware`；client：`HttpDecodeContentEncoding` + `HttpReadResponseBody*Decoded`；raw helpers 不自动解；Op=`content_encoding`；`test_http_client` + `test_http_middlewares` |
 
 ### Wave C2 — Conditional + cache helpers
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | `ETag` / `If-None-Match` / `If-Modified-Since` 辅助与 304 路径；静态 `ServeFile` 可接条件请求 |
 | **Don't** | 完整 HTTP cache 实现、启发式缓存策略框架 |
 | **Done when** | 条件请求最小正确面 focused；CONTRACT 有行为表 |
@@ -390,15 +392,15 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave C1 仍是 NEXT
-2. 评估 gzip Content-Encoding 路径（优先已有 compress 原语）
-3. 实现最小生产可用 gzip + CONTRACT + focused
-4. path-limited land main（跨模块路径须声明）
-5. 本文件：Wave C1 → landed；Wave C2 → NEXT；changelog 一行
+1. 打开本文件确认 Wave C2 仍是 NEXT
+2. ETag / If-None-Match / If-Modified-Since + 304 最小路径
+3. ServeFile 可接条件请求；CONTRACT 行为表 + focused
+4. path-limited land main
+5. 本文件：Wave C2 → landed；Wave C3 → NEXT；changelog 一行
 6. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave C1，然后自动续波。**
+**没有用户指令时：默认执行 Wave C2，然后自动续波。**
 
 ---
 
@@ -428,3 +430,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave J landed：热点 CreateOp（cancel/ensure/connect/transport…）+ source-contract；Wave K = NEXT |
 | 2026-07-17 | Wave K landed：surface freeze 审计 + ARCHITECTURE 对齐 + contract 锁无 deprecated |
 | 2026-07-17 | Wave L′ landed：doc dual-status kill；Era 0 完成；Wave C1 = NEXT |
+| 2026-07-17 | Wave C1 landed：client Content-Encoding decode + CONTRACT；Wave C2 = NEXT |

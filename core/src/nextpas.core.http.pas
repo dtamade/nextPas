@@ -579,6 +579,15 @@ procedure HttpReleaseResponseBody(const AResp: IHttpResponse); inline;
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes; inline;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string; inline;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string; inline;
+{** @desc Decode body bytes for a single Content-Encoding (gzip/deflate/identity). }
+function HttpDecodeContentEncoding(const AEncoding: string;
+  const ABody: TBytes; const AMaxSize: Int64 = 0): TBytes; inline;
+{** @desc Read wire body then decode via Content-Encoding. }
+function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64 = 0): TBytes; inline;
+{** @desc Decoded response body as string. }
+function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64 = 0): string; inline;
 {** @desc Raise EHttpError if response status is not 2xx (200-299). Returns AResp for chaining. }
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; overload; inline;
 {** @desc Same as HttpEnsureSuccess, with method/URL prefix in error messages. }
@@ -1504,6 +1513,27 @@ end;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
 begin
   Result := nextpas.core.http.client.HttpReadResponseBodyStringAuto(AResp);
+end;
+
+function HttpDecodeContentEncoding(const AEncoding: string;
+  const ABody: TBytes; const AMaxSize: Int64): TBytes;
+begin
+  Result := nextpas.core.http.client.HttpDecodeContentEncoding(
+    AEncoding, ABody, AMaxSize);
+end;
+
+function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64): TBytes;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseBodyBytesDecoded(
+    AResp, AMaxSize);
+end;
+
+function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64): string;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseBodyStringDecoded(
+    AResp, AMaxSize);
 end;
 
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
