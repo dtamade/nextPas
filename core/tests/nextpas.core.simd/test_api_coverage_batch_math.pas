@@ -417,6 +417,295 @@ begin
   Check(Abs(dst[3] - 1.0) < 1e-10, 'Hypot[0,1]');
 end;
 
+procedure TestBatchF64ExtendedSecondSample;
+var
+  src: array[0..3] of Double;
+  src2: array[0..3] of Double;
+  src3: array[0..3] of Double;
+  edge: array[0..3] of Double;
+  dst: array[0..3] of Double;
+  dst2: array[0..3] of Double;
+begin
+  src[0] := 1.0; src[1] := 2.0; src[2] := 4.0; src[3] := 8.0;
+  ArrayLog2F64(@src[0], @dst[0], 4);
+  CheckDouble(dst[2], 2.0, 'Log2F64 sample2[2]');
+  src[0] := 1.0; src[1] := 10.0; src[2] := 100.0; src[3] := 1000.0;
+  ArrayLog10F64(@src[0], @dst[0], 4);
+  CheckDouble(dst[2], 2.0, 'Log10F64 sample2[2]');
+
+  src[0] := 1.25; src[1] := 2.5; src[2] := 3.75; src[3] := 4.1;
+  ArrayCeilF64(@src[0], @dst[0], 4);
+  CheckDouble(dst[0], 2.0, 'CeilF64 sample2[0]');
+  ArrayFloorF64(@src[0], @dst[0], 4);
+  CheckDouble(dst[1], 2.0, 'FloorF64 sample2[1]');
+  ArrayRoundF64(@src[0], @dst[0], 4);
+  CheckDouble(dst[0], 1.0, 'RoundF64 sample2[0]');
+  ArrayTruncF64(@src[0], @dst[0], 4);
+  CheckDouble(dst[2], 3.0, 'TruncF64 sample2[2]');
+
+  src[0] := 0.0; src[1] := Pi / 4; src[2] := Pi / 6; src[3] := -Pi / 4;
+  ArrayTanF64(@src[0], @dst[0], 4);
+  CheckDouble(dst[1], 1.0, 'TanF64 sample2[1]', 1e-8);
+  ArraySinCosF64(@src[0], @dst[0], @dst2[0], 4);
+  CheckDouble(dst[0], 0.0, 'SinCosF64 Sin sample2[0]', 1e-10);
+  CheckDouble(dst2[1], Cos(Pi / 4), 'SinCosF64 Cos sample2[1]', 1e-8);
+
+  src[0] := 2.0; src[1] := -4.0; src[2] := 0.0; src[3] := 0.5;
+  ArraySignF64(@src[0], @dst[0], 4);
+  CheckDouble(dst[1], -1.0, 'SignF64 sample2[1]');
+  src[0] := 2.25; src[1] := -1.75; src[2] := 3.0; src[3] := 0.125;
+  ArrayFractF64(@src[0], @dst[0], 4);
+  CheckDouble(dst[0], 0.25, 'FractF64 sample2[0]');
+  src[0] := 7.0; src[1] := 8.0; src[2] := 9.0; src[3] := 10.0;
+  ArrayModF64(@src[0], @dst[0], 4, 4.0);
+  CheckDouble(dst[2], 1.0, 'ModF64 sample2[2]');
+  src[0] := 2.0; src[1] := 3.0; src[2] := 4.0; src[3] := 5.0;
+  ArrayPowF64(@src[0], @dst[0], 4, 3.0);
+  CheckDouble(dst[1], 27.0, 'PowF64 sample2[1]');
+
+  src[0] := 0.0; src[1] := 10.0; src[2] := 20.0; src[3] := 30.0;
+  src2[0] := 10.0; src2[1] := 20.0; src2[2] := 30.0; src2[3] := 40.0;
+  ArrayLerpF64(@src[0], @src2[0], @dst[0], 4, 0.25);
+  CheckDouble(dst[0], 2.5, 'LerpF64 sample2[0]');
+
+  src[0] := 2.0; src[1] := -3.0; src[2] := 0.0; src[3] := 4.0;
+  ArrayReLUF64(@src[0], @dst[0], 4);
+  CheckDouble(dst[1], 0.0, 'ReLUF64 sample2[1]');
+  src[0] := 9.0; src[1] := 1.0; src[2] := 4.0; src[3] := 6.0;
+  src2[0] := 3.0; src2[1] := 5.0; src2[2] := 4.0; src2[3] := 2.0;
+  ArrayAbsDiffF64(@src[0], @src2[0], @dst[0], 4);
+  CheckDouble(dst[0], 6.0, 'AbsDiffF64 sample2[0]');
+  src[0] := 5.0; src[1] := 15.0; src[2] := 25.0; src[3] := 35.0;
+  ArrayNormF64(@src[0], @dst[0], 4, 20.0, 0.5);
+  CheckDouble(dst[2], 2.5, 'NormF64 sample2[2]');
+  src[0] := 1.0; src[1] := -2.0; src[2] := 3.0; src[3] := -4.0;
+  ArrayLinearReLUF64(@src[0], @dst[0], 4, 0.5, -1.0);
+  CheckDouble(dst[0], 0.0, 'LinearReLUF64 sample2[0]');
+  CheckDouble(dst[2], 0.5, 'LinearReLUF64 sample2[2]');
+
+  edge[0] := 1.0; edge[1] := 1.0; edge[2] := 1.0; edge[3] := 1.0;
+  src[0] := 0.0; src[1] := 1.0; src[2] := 2.0; src[3] := 0.5;
+  ArrayStepF64(@edge[0], @src[0], @dst[0], 4);
+  CheckDouble(dst[0], 0.0, 'StepF64 sample2[0]');
+  CheckDouble(dst[2], 1.0, 'StepF64 sample2[2]');
+  edge[0] := 0.0; edge[1] := 0.0; edge[2] := 0.0; edge[3] := 0.0;
+  src2[0] := 2.0; src2[1] := 2.0; src2[2] := 2.0; src2[3] := 2.0;
+  src[0] := 0.0; src[1] := 1.0; src[2] := 2.0; src[3] := 0.5;
+  ArraySmoothstepF64(@edge[0], @src2[0], @src[0], @dst[0], 4);
+  CheckDouble(dst[0], 0.0, 'SmoothstepF64 sample2[0]');
+  CheckDouble(dst[2], 1.0, 'SmoothstepF64 sample2[2]');
+
+  src[0] := 1.0; src[1] := 0.0; src[2] := -1.0; src[3] := 1.0;
+  src2[0] := 0.0; src2[1] := 1.0; src2[2] := 1.0; src2[3] := 1.0;
+  ArrayAtan2F64(@src[0], @src2[0], @dst[0], 4);
+  CheckDouble(dst[0], Pi / 2, 'Atan2F64 sample2[0]', 1e-10);
+  src[0] := 6.0; src[1] := 9.0; src[2] := 0.0; src[3] := 5.0;
+  src2[0] := 8.0; src2[1] := 12.0; src2[2] := 7.0; src2[3] := 12.0;
+  ArrayHypotF64(@src[0], @src2[0], @dst[0], 4);
+  CheckDouble(dst[0], 10.0, 'HypotF64 sample2[0]');
+  CheckDouble(dst[1], 15.0, 'HypotF64 sample2[1]');
+
+  src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 4.0;
+  src2[0] := 5.0; src2[1] := 6.0; src2[2] := 7.0; src2[3] := 8.0;
+  ArrayAxpyF64(-1.0, @src[0], @src2[0], @dst[0], 4);
+  CheckDouble(dst[0], 4.0, 'AxpyF64 sample2[0]');
+  CheckDouble(dst[3], 4.0, 'AxpyF64 sample2[3]');
+end;
+
+procedure TestBatchF32MissingFacades;
+var
+  src: array[0..3] of Single;
+  src2: array[0..3] of Single;
+  src3: array[0..3] of Single;
+  edge: array[0..3] of Single;
+  dst: array[0..3] of Single;
+  dst2: array[0..3] of Single;
+begin
+  src[0] := -5.0; src[1] := 5.0; src[2] := 15.0; src[3] := 25.0;
+  ArrayClampF32(@src[0], @dst[0], 4, 0.0, 20.0);
+  CheckFloat(dst[0], 0.0, 'ClampF32[-5]');
+  CheckFloat(dst[1], 5.0, 'ClampF32[5]');
+  CheckFloat(dst[3], 20.0, 'ClampF32[25]');
+
+  src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 4.0;
+  src2[0] := 10.0; src2[1] := 20.0; src2[2] := 30.0; src2[3] := 40.0;
+  src3[0] := 100.0; src3[1] := 200.0; src3[2] := 300.0; src3[3] := 400.0;
+  ArrayFmaF32(@src[0], @src2[0], @src3[0], @dst[0], 4);
+  CheckFloat(dst[0], 110.0, 'FmaF32[0]');
+  CheckFloat(dst[3], 560.0, 'FmaF32[3]', 1e-3);
+
+  src[0] := 0.0; src[1] := Pi / 4; src[2] := Pi / 6; src[3] := -Pi / 4;
+  ArrayTanF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 0.0, 'TanF32[0]');
+  CheckFloat(dst[1], 1.0, 'TanF32[pi/4]', 1e-4);
+  ArraySinCosF32(@src[0], @dst[0], @dst2[0], 4);
+  CheckFloat(dst[0], 0.0, 'SinCosF32 Sin[0]', 1e-5);
+  CheckFloat(dst2[0], 1.0, 'SinCosF32 Cos[0]', 1e-5);
+
+  src[0] := 1.0; src[1] := 2.0; src[2] := 4.0; src[3] := 8.0;
+  ArrayLog2F32(@src[0], @dst[0], 4);
+  CheckFloat(dst[1], 1.0, 'Log2F32[2]');
+  CheckFloat(dst[3], 3.0, 'Log2F32[8]');
+  src[0] := 1.0; src[1] := 10.0; src[2] := 100.0; src[3] := 1000.0;
+  ArrayLog10F32(@src[0], @dst[0], 4);
+  CheckFloat(dst[1], 1.0, 'Log10F32[10]');
+  CheckFloat(dst[2], 2.0, 'Log10F32[100]');
+
+  src[0] := 0.0; src[1] := 1.0; src[2] := 1.0; src[3] := -1.0;
+  src2[0] := 1.0; src2[1] := 0.0; src2[2] := 1.0; src2[3] := 1.0;
+  ArrayAtan2F32(@src[0], @src2[0], @dst[0], 4);
+  CheckFloat(dst[0], 0.0, 'Atan2F32[0,1]');
+  CheckFloat(dst[1], Pi / 2, 'Atan2F32[1,0]', 1e-4);
+  src[0] := 3.0; src[1] := 5.0; src[2] := 8.0; src[3] := 0.0;
+  src2[0] := 4.0; src2[1] := 12.0; src2[2] := 15.0; src2[3] := 1.0;
+  ArrayHypotF32(@src[0], @src2[0], @dst[0], 4);
+  CheckFloat(dst[0], 5.0, 'HypotF32[3,4]');
+  CheckFloat(dst[1], 13.0, 'HypotF32[5,12]');
+
+  src[0] := 1.2; src[1] := 2.5; src[2] := 3.7; src[3] := 4.1;
+  ArrayCeilF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 2.0, 'CeilF32[1.2]');
+  CheckFloat(dst[2], 4.0, 'CeilF32[3.7]');
+  ArrayFloorF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 1.0, 'FloorF32[1.2]');
+  CheckFloat(dst[1], 2.0, 'FloorF32[2.5]');
+  ArrayRoundF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 1.0, 'RoundF32[1.2]');
+  CheckFloat(dst[1], 2.0, 'RoundF32[2.5 banker]');
+  ArrayTruncF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 1.0, 'TruncF32[1.2]');
+  CheckFloat(dst[2], 3.0, 'TruncF32[3.7]');
+
+  src[0] := 1.5; src[1] := 2.7; src[2] := -1.3; src[3] := 3.0;
+  ArrayFractF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 0.5, 'FractF32[1.5]');
+  CheckFloat(dst[1], 0.7, 'FractF32[2.7]', 1e-4);
+
+  src[0] := 0.0; src[1] := 0.0; src[2] := 0.0; src[3] := 0.0;
+  src2[0] := 10.0; src2[1] := 20.0; src2[2] := 30.0; src2[3] := 40.0;
+  ArrayLerpF32(@src[0], @src2[0], @dst[0], 4, 0.5);
+  CheckFloat(dst[0], 5.0, 'LerpF32[0]');
+  CheckFloat(dst[1], 10.0, 'LerpF32[1]');
+
+  src[0] := 10.0; src[1] := 11.0; src[2] := 12.0; src[3] := 13.0;
+  ArrayModF32(@src[0], @dst[0], 4, 3.0);
+  CheckFloat(dst[0], 1.0, 'ModF32[10,3]');
+  CheckFloat(dst[2], 0.0, 'ModF32[12,3]');
+
+  src[0] := 5.0; src[1] := -3.0; src[2] := 0.0; src[3] := 0.001;
+  ArraySignF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 1.0, 'SignF32[5]');
+  CheckFloat(dst[1], -1.0, 'SignF32[-3]');
+  CheckFloat(dst[2], 0.0, 'SignF32[0]');
+
+  edge[0] := 0.0; edge[1] := 0.0; edge[2] := 0.0; edge[3] := 0.0;
+  src[0] := -1.0; src[1] := 0.0; src[2] := 1.0; src[3] := 0.5;
+  ArrayStepF32(@edge[0], @src[0], @dst[0], 4);
+  CheckFloat(dst[0], 0.0, 'StepF32[-1]');
+  CheckFloat(dst[1], 1.0, 'StepF32[0]');
+  CheckFloat(dst[2], 1.0, 'StepF32[1]');
+
+  edge[0] := 0.0; edge[1] := 0.0; edge[2] := 0.0; edge[3] := 0.0;
+  src2[0] := 1.0; src2[1] := 1.0; src2[2] := 1.0; src2[3] := 1.0;
+  src[0] := 0.0; src[1] := 0.5; src[2] := 1.0; src[3] := 0.25;
+  ArraySmoothstepF32(@edge[0], @src2[0], @src[0], @dst[0], 4);
+  CheckFloat(dst[0], 0.0, 'SmoothstepF32[0]');
+  CheckFloat(dst[1], 0.5, 'SmoothstepF32[0.5]', 1e-5);
+  CheckFloat(dst[2], 1.0, 'SmoothstepF32[1]');
+end;
+
+procedure TestBatchF32ExtendedSecondSample;
+var
+  src: array[0..3] of Single;
+  src2: array[0..3] of Single;
+  src3: array[0..3] of Single;
+  edge: array[0..3] of Single;
+  dst: array[0..3] of Single;
+  dst2: array[0..3] of Single;
+begin
+  src[0] := -2.0; src[1] := 0.5; src[2] := 5.0; src[3] := 11.0;
+  ArrayClampF32(@src[0], @dst[0], 4, 0.0, 10.0);
+  CheckFloat(dst[0], 0.0, 'ClampF32 sample2[0]');
+  CheckFloat(dst[3], 10.0, 'ClampF32 sample2[3]');
+
+  src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 4.0;
+  src2[0] := 4.0; src2[1] := 3.0; src2[2] := 2.0; src2[3] := 1.0;
+  src3[0] := 10.0; src3[1] := 20.0; src3[2] := 30.0; src3[3] := 40.0;
+  ArrayFmaF32(@src[0], @src2[0], @src3[0], @dst[0], 4);
+  CheckFloat(dst[0], 14.0, 'FmaF32 sample2[0]');
+  ArrayMinF32(@src[0], @src2[0], @dst[0], 4);
+  CheckFloat(dst[0], 1.0, 'MinF32 sample2b[0]');
+  ArrayMaxF32(@src[0], @src2[0], @dst[0], 4);
+  CheckFloat(dst[3], 4.0, 'MaxF32 sample2b[3]');
+
+  src[0] := 1.0; src[1] := 2.0; src[2] := 3.0; src[3] := 4.0;
+  src2[0] := 10.0; src2[1] := 20.0; src2[2] := 30.0; src2[3] := 40.0;
+  ArrayAxpyF32(2.0, @src[0], @src2[0], @dst[0], 4);
+  CheckFloat(dst[0], 12.0, 'AxpyF32 sample2[0]');
+  CheckFloat(dst[3], 48.0, 'AxpyF32 sample2[3]');
+  src[0] := -3.5; src[1] := 8.0; src[2] := 0.5; src[3] := 2.0;
+  CheckFloat(ReduceMinF32(@src[0], 4), -3.5, 'ReduceMinF32 sample2');
+
+  src[0] := 0.0; src[1] := Pi / 6; src[2] := Pi / 3; src[3] := -Pi / 6;
+  ArrayTanF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[1], 1.0 / Sqrt(3.0), 'TanF32 sample2[1]', 1e-4);
+  ArraySinCosF32(@src[0], @dst[0], @dst2[0], 4);
+  CheckFloat(dst[1], 0.5, 'SinCosF32 Sin sample2[1]', 1e-4);
+  CheckFloat(dst2[0], 1.0, 'SinCosF32 Cos sample2[0]', 1e-4);
+
+  src[0] := 1.0; src[1] := 4.0; src[2] := 16.0; src[3] := 32.0;
+  ArrayLog2F32(@src[0], @dst[0], 4);
+  CheckFloat(dst[2], 4.0, 'Log2F32 sample2[2]');
+  src[0] := 1.0; src[1] := 100.0; src[2] := 1000.0; src[3] := 0.1;
+  ArrayLog10F32(@src[0], @dst[0], 4);
+  CheckFloat(dst[2], 3.0, 'Log10F32 sample2[2]', 1e-4);
+
+  src[0] := 1.0; src[1] := -1.0; src[2] := 0.0; src[3] := 1.0;
+  src2[0] := 1.0; src2[1] := 1.0; src2[2] := 1.0; src2[3] := 0.0;
+  ArrayAtan2F32(@src[0], @src2[0], @dst[0], 4);
+  CheckFloat(dst[0], Pi / 4, 'Atan2F32 sample2[0]', 1e-4);
+  src[0] := 6.0; src[1] := 9.0; src[2] := 0.0; src[3] := 5.0;
+  src2[0] := 8.0; src2[1] := 12.0; src2[2] := 7.0; src2[3] := 12.0;
+  ArrayHypotF32(@src[0], @src2[0], @dst[0], 4);
+  CheckFloat(dst[0], 10.0, 'HypotF32 sample2[0]');
+  CheckFloat(dst[1], 15.0, 'HypotF32 sample2[1]');
+
+  src[0] := 1.25; src[1] := -1.75; src[2] := 2.1; src[3] := -0.25;
+  ArrayCeilF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[1], -1.0, 'CeilF32 sample2[1]');
+  ArrayFloorF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 1.0, 'FloorF32 sample2[0]');
+  ArrayRoundF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 1.0, 'RoundF32 sample2[0]');
+  ArrayTruncF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[1], -1.0, 'TruncF32 sample2[1]');
+  ArrayFractF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[0], 0.25, 'FractF32 sample2[0]');
+
+  src[0] := 0.0; src[1] := 10.0; src[2] := 20.0; src[3] := 30.0;
+  src2[0] := 10.0; src2[1] := 20.0; src2[2] := 30.0; src2[3] := 40.0;
+  ArrayLerpF32(@src[0], @src2[0], @dst[0], 4, 0.25);
+  CheckFloat(dst[0], 2.5, 'LerpF32 sample2[0]');
+  src[0] := 7.0; src[1] := 8.0; src[2] := 9.0; src[3] := 10.0;
+  ArrayModF32(@src[0], @dst[0], 4, 4.0);
+  CheckFloat(dst[2], 1.0, 'ModF32 sample2[2]');
+  src[0] := 2.0; src[1] := -4.0; src[2] := 0.0; src[3] := 0.5;
+  ArraySignF32(@src[0], @dst[0], 4);
+  CheckFloat(dst[1], -1.0, 'SignF32 sample2[1]');
+
+  edge[0] := 1.0; edge[1] := 1.0; edge[2] := 1.0; edge[3] := 1.0;
+  src[0] := 0.0; src[1] := 1.0; src[2] := 2.0; src[3] := 0.5;
+  ArrayStepF32(@edge[0], @src[0], @dst[0], 4);
+  CheckFloat(dst[0], 0.0, 'StepF32 sample2[0]');
+  CheckFloat(dst[2], 1.0, 'StepF32 sample2[2]');
+  edge[0] := 0.0; edge[1] := 0.0; edge[2] := 0.0; edge[3] := 0.0;
+  src2[0] := 2.0; src2[1] := 2.0; src2[2] := 2.0; src2[3] := 2.0;
+  src[0] := 0.0; src[1] := 1.0; src[2] := 2.0; src[3] := 0.5;
+  ArraySmoothstepF32(@edge[0], @src2[0], @src[0], @dst[0], 4);
+  CheckFloat(dst[0], 0.0, 'SmoothstepF32 sample2[0]');
+  CheckFloat(dst[2], 1.0, 'SmoothstepF32 sample2[2]');
+end;
+
 begin
   StartApiCoverageSuite('API Coverage Batch Math');
   TestArrayF64;
@@ -424,5 +713,8 @@ begin
   TestBatchF64ThinCoverageSecondSample;
   TestBatchF32RefineAndConversionSecondSample;
   TestF64ExtendedOperations;
+  TestBatchF64ExtendedSecondSample;
+  TestBatchF32MissingFacades;
+  TestBatchF32ExtendedSecondSample;
   PrintApiCoverageSummary;
 end.

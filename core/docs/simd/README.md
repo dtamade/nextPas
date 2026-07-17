@@ -24,12 +24,12 @@
 - **Mask**: ✅ NEON 绑定 portable `SharedMask*` + `scMaskedOps`（Wave B）
 - **NEON Memory**: ⚠️ 9/15 自有；6 槽刻意 scalar（DiffRange/Copy/Fill/Reverse/BytesIndexOf/Utf8Validate）→ roadmap Phase 22
 - **cpuinfo**: ✅ 主路径稳定
-- **活动阶段**: Phase 20 文档真相面 → 确认后 Phase 21 api-coverage
-- **验证基线 (2026-07-17, HEAD `8403ebc04`)**:
+- **活动阶段**: Phase 20–21 已收口 → **Phase 22 NEON Memory 真叶**
+- **验证基线 (2026-07-17)**:
   - `make focused FOCUS=core/tests/nextpas.core.simd` → **1740 passed**
-  - `neon-optin-focused` → **1740 passed**
+  - `neon-optin-focused` → **1740 passed**（Wave B 后）
   - `make hygiene` → pass
-  - `api-coverage-contract` → **FAIL**（missing≈27 / thin≈26，Phase 21 主线）
+  - `api-coverage-contract` → **OK**（720/720 covered，missing=0 / thin=0，strict-thin）
 
 ## 快速入门
 

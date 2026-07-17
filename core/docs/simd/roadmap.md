@@ -20,7 +20,7 @@
 
 ---
 
-## 1. 现状盘点 (2026-07-17, HEAD `8403ebc04`)
+## 1. 现状盘点 (2026-07-17；Phase 20–21 收口后)
 
 ### 1.1 定位
 
@@ -58,20 +58,20 @@ Facade (flat public API)
 
 | Gate | 状态 | 说明 |
 |------|------|------|
-| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | 1740 passed（2026-07-17） |
-| `make -C core/tests/nextpas.core.simd neon-optin-focused` | ✅ | 1740 passed |
+| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | 1740+ passed（2026-07-17） |
+| `make -C core/tests/nextpas.core.simd neon-optin-focused` | ✅ | 与 focused 同量级 |
 | `make hygiene` | ✅ | pass |
-| `api-coverage-contract` | ❌ | missing≈27 / thin≈26（**真实质量债**，非文档笔误） |
+| `api-coverage-contract` | ✅ | missing=0 / thin=0（Phase 21 收口，strict-thin 未降） |
 | RVV 真机 Phase 3 | ⏸ | 需 RISC-V 硬件证据 |
 | 性能部分目标 | ⚠️ | 如 ArrayMulF32 等仍低于历史目标线（见 §5） |
 
-### 1.5 文档问题（本次整理要解决）
+### 1.5 文档问题（Phase 20 已处理）
 
-1. 路线图几乎全是 **已完成清单**，缺少可执行「下一步」
-2. `plan.md` 停在 Phase 10 时代，与代码脱节
-3. 多份旧 plan（PHASE11 / DEEPENING / TODO_CLEANUP / file-merge）与主线重复
-4. README 验证数字 / api-coverage 状态过时
-5. methodology 引用不存在的 `progress.md`
+1. ~~路线图几乎全是已完成清单~~ → 已改为 Phase 20+ 可执行主线
+2. ~~`plan.md` 与代码脱节~~ → 薄指针，仅跟踪当前阶段
+3. ~~多份旧 plan 与主线重复~~ → 标注 archived
+4. ~~README 验证数字过时~~ → 与本表同步
+5. ~~methodology 引用 `progress.md`~~ → 已去掉
 
 ---
 
@@ -85,11 +85,11 @@ Facade (flat public API)
 
 ---
 
-## 3. 活动路线（Phase 20+）— 待确认后执行
+## 3. 活动路线（Phase 20+）
 
-> 下列阶段是 **可执行主线**。确认后按优先级推进，不依赖反复催促；重大变更再改本表。
+> 下列阶段是 **可执行主线**。重大范围变更先改本表再动刀。
 
-### Phase 20 — 文档与真相面收口  【P0 · 当前】
+### Phase 20 — 文档与真相面收口  【P0 · 已完成】
 
 | 项 | 内容 |
 |----|------|
@@ -97,18 +97,21 @@ Facade (flat public API)
 | **交付物** | 本文件结构；README 索引与验证数字；`plan.md` 改为「当前阶段指针」；methodology 去掉失效引用；旧 plan 文件标注 archived |
 | **依赖** | 无代码依赖 |
 | **验收** | 新人只读 README + roadmap 能回答：现状 / 下一步 / 跑什么 gate；无互相矛盾的「进行中」表 |
+| **状态** | ✅ `b68facf33` 文档提交 |
 
-### Phase 21 — 质量门修复（api-coverage）  【P0】
+### Phase 21 — 质量门修复（api-coverage）  【P0 · 已完成】
 
 | 项 | 内容 |
 |----|------|
-| **目标** | `api-coverage-contract` 变绿（或明确降级策略经确认） |
-| **交付物** | 补齐 missing≈27 公共 API 测试引用；thin 符号达到 `min_refs=2`；必要时刷新 checklist |
-| **依赖** | Phase 20 完成（避免文档再谎报绿） |
-| **验收** | `make -C core/tests/nextpas.core.simd api-coverage-contract` 通过；`api-coverage-focused` 可选加强 |
-| **非目标** | 不为刷绿删除公共 API；不降低 strict 标准除非单独 ADR |
+| **目标** | `api-coverage-contract` 变绿（不降低 strict） |
+| **交付物** | 补齐 27 个 missing 公共 API 测试引用；26 个 thin 符号达到 `min_refs=2` |
+| **做法** | 扩展 `test_api_coverage_batch_math.pas`（F32 扩展 facade + F64/F32 第二样本）与 `test_api_coverage_wide_vectors.pas`（I16x32/I8x64/U8x64 CmpLe/Ge/Ne） |
+| **依赖** | Phase 20 完成 |
+| **验收** | `api-coverage-contract` → missing=0 thin=0；api-coverage 测试可运行全绿 |
+| **非目标** | 不为刷绿删除公共 API；不降低 strict 标准 |
+| **状态** | ✅ 源码 token 扫描 + 运行时断言双过 |
 
-### Phase 22 — NEON Memory 真叶  【P1】
+### Phase 22 — NEON Memory 真叶  【P1 · 当前】
 
 | 项 | 内容 |
 |----|------|
@@ -182,7 +185,7 @@ P20 文档真相面 ──► P21 api-coverage 绿
    P26 编译器（阻塞） / P27 新 ISA（阻塞）
 ```
 
-**默认下一刀（确认后）**：收完 Phase 20 → 立即 Phase 21。
+**默认下一刀**：Phase 22a — NEON `Copy` / `Fill` / `DiffRange` 真叶。
 
 ---
 
@@ -243,7 +246,7 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 
 | 决策 | 选项 | 默认建议 |
 |------|------|----------|
-| api-coverage 红点 | 补测 vs 降 strict | **补测**（P21） |
+| api-coverage 红点 | 补测 vs 降 strict | **补测**（P21 ✅ 已采用） |
 | NEON Memory 6 槽 | 全做 vs 先 3 高频 | **先 Copy/Fill/DiffRange**（P22a） |
 | NEON Batch 范围 | 全表 vs 最小代表集 | **最小代表集**（P23） |
 | RVV 无硬件 | 只契约 vs 停更 | **只契约诚实化**（P24a） |
@@ -253,11 +256,12 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 
 ## 9. 当前指针
 
-- **活动阶段**: Phase 20（文档与真相面收口）— 进行中  
-- **下一执行**: Phase 21（api-coverage）— 待 Phase 20 确认后开工  
+- **活动阶段**: Phase 22 — NEON Memory 真叶（优先 Copy/Fill/DiffRange）  
+- **已收口**: Phase 20 文档真相面；Phase 21 api-coverage-contract（missing=0 / thin=0）  
 - **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等  
 
 ---
 
 *修订记录*  
-- 2026-07-17: 重写为 forward-looking 主线；归档 Phase 1–19 / Wave B；建立 Phase 20–27。
+- 2026-07-17: 重写为 forward-looking 主线；归档 Phase 1–19 / Wave B；建立 Phase 20–27。  
+- 2026-07-17: Phase 20 提交；Phase 21 补 facade 覆盖测试并变绿；指针切到 Phase 22。
