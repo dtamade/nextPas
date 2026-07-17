@@ -56,9 +56,13 @@ type
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncAccept(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncConnect(AFd: PtrInt; AAddr: Pointer; AAddrLen: UInt32;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncClose(AFd: PtrInt;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
     { I/O with deadline }
@@ -402,6 +406,14 @@ begin
   Result := FPoller.AsyncAccept(AFd, AAddr, AAddrLen, AFlags, ACallback, AContext);
 end;
 
+function TAsyncLoop.AsyncConnect(AFd: PtrInt; AAddr: Pointer; AAddrLen: UInt32;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncConnect(AFd, AAddr, AAddrLen, ACallback, AContext);
+end;
+
 function TAsyncLoop.AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
@@ -416,6 +428,14 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext);
+end;
+
+function TAsyncLoop.AsyncClose(AFd: PtrInt;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncClose(AFd, ACallback, AContext);
 end;
 
 function TAsyncLoop.Poll: Int32;
