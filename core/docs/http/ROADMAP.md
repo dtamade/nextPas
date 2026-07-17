@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave P5 G6 close；**framework-complete (non-H3)**）
+**Updated**: 2026-07-17（Era 6 Excellence 开启；X0 landed → **NEXT = X1**）
 
 ---
 
@@ -21,9 +21,10 @@
 
 - 只按本文件有序表推进；`archive/` 不是 backlog。
 - 不扩 API 只为对标 Go/Rust 清单（见 GOAL_TREE Do-Not-Drift）。
-- 跨模块问题标 **Blocked**，不在 http 堆 workaround。
+- 跨模块默认：标 **Blocked** 或不在 http 堆 workaround；**Era 6** 起，为 H1/H2/WS 更好可 **受控** 改 `net`/`tls`（及最小 platform），须在本波 Land paths 声明 + 双端 gate。
 - 一波 **最多 3 项**；land 后必须回写本文件。
 - 改序 / 升格 Inbox / 改 non-goal：先改本文件，再写代码。
+- **无 H3 需求**：Era 5 保持 Blocked；禁止空 facade。
 
 ---
 
@@ -83,12 +84,14 @@ CHECKPOINT（不阻塞续波）:
 | Wave P1 Profile hotspot | 完成（headers Get/Has fuse；Get miss ~17% 本机 micro） |
 | Wave P3 epoll vs threaded | 完成（fullchain Direct/Router 同 workload 本机 snapshot + caveat） |
 | Wave P5 G6 closure | 完成（stage performance complete 标准 + GOAL_TREE/BENCHMARKS 对齐） |
-| **下一执行点** | **framework-complete (non-H3)** — Era 5 H3-* **Blocked** on QUIC；STOP（勿空转 facade） |
+| framework-complete (non-H3) | **yes**（Era 0–4）；H3 仍 Blocked / 无产品需求 |
+| Wave X0 Excellence open | 完成（Era 6 表 + 推荐路径 + residual 可主动消除声明） |
+| **下一执行点** | **Wave X1** — WebSocket 生产契约收口 |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~92%   高级 ~80%   优雅 ~86%   性能 ~70%  (non-H3 framework-complete)
+完整 ~92%   高级 ~82%   优雅 ~86%   性能 ~70%  (Excellence: H1/H2/WS)
 ```
 
 ---
@@ -114,12 +117,9 @@ CHECKPOINT（不阻塞续波）:
 ## 推荐默认执行路径（goal 默认跟这条）
 
 ```text
-Era 0:  J → K → L′
-Era 1:  C1 → C2 → C3   （C4/C5 仅 Inbox 升格后）
-Era 2:  E1 → E2
-Era 3:  A1 → A2         （A3+ 默认 parked / 低优先）
-Era 4:  P1 → P3 → P5
-Era 5:  H3-* Blocked until QUIC — 跳过，不空转
+Era 0–4:  landed（framework-complete non-H3）
+Era 5:    H3-* Blocked — 跳过（无产品需求；禁止空 facade）
+Era 6:    X0 → X1 → X2 → X3 → X4 → X5   （H1/H2/WS 精品 + 跨模块反哺）
 ```
 
 ---
@@ -373,6 +373,94 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 | H3-2 | later | server session + ALPN + registry 统一 |
 
 goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空转实现假 facade。
+**产品立场（2026-07-17）**：当前 **无 H3 需求**；Excellence 专注 H1/H2/WS。
+
+---
+
+## Era 6 — Excellence（H1/H2/WS 精品 + 跨模块反哺）
+
+**目标**：在 framework-complete (non-H3) 之上，把 H1/H2 client/server 与 WebSocket 打成 **可对标 Go/Rust 的选定维度胜利**（正确性、可预测性、证据型性能、Pascal 一流 API）——**不是**协议军备 / 清单扩 API。
+
+**跨模块授权**：本时代为消除 http residual，可最小改 `net` / `tls`（及必要 `platform`）；每波 Land paths 声明；双端 focused；Ready 单列 cross-module。
+
+**对标维度（非 API 清单）**：正确性边角可证；Kind/Op/池/超时可预测；同机 harness 性能证据；小接口同步契约。
+
+### Wave X0 — Open Excellence era（docs）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed** |
+| **Do** | 写本 Era 有序表；推荐路径 X0→X5；GOAL_TREE/CONTRACT residual 声明可主动消除；H3 保持 Blocked |
+| **Don't** | 改业务代码；开 H3 |
+| **Done when** | 全局 NEXT 唯一指向 X1；执行者只读本文件可开工 |
+| **Gates** | `git diff --check`；`make hygiene` |
+| **Land paths** | `core/docs/http/**` |
+| **Next** | Wave X1 |
+| **Evidence** | ROADMAP Era 6；GOAL_TREE Excellence 指针；CONTRACT residual 表 |
+
+### Wave X1 — WebSocket 生产契约收口
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **NEXT** |
+| **Do** | CONTRACT WS 生命周期表（Open/Read-Write/Ping/Close/`IsOpen`/重复 Close/错误 Kind-Op）；生产边角 focused（双向 Close 后读写、cancel→`hekCanceled`、upgrade 所有权）；GOAL_TREE G5 / API_COVERAGE 毕业证据（不扩扩展族） |
+| **Don't** | WS-over-H2；permessage-deflate / 子协议全家桶；新 Options 家族 |
+| **Done when** | CONTRACT 有生命周期表；`test_http_websocket` + `test_http_websocket_client` 全绿；WS 路径 heaptrc 0 unfreed；文档不再仅写「未证明 helper」 |
+| **Gates** | `make focused FOCUS=core/tests/nextpas.core.http/test_http_websocket`；`…/test_http_websocket_client`；`git diff --check`；`make hygiene` |
+| **Land paths** | `core/src/nextpas.core.http.websocket.pas`；facade 若触及；`core/tests/nextpas.core.http/test_http_websocket*/**`；`core/docs/http/**` |
+| **Next** | Wave X2 |
+| **Evidence** | （land 后填） |
+
+### Wave X2 — net cancel 地板（跨模块）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | queued after X1 |
+| **Do** | 降低/替代 `NET_IO_CANCEL_SLICE_MS=50` 轮询；Linux 优先可唤醒阻塞读（poll+eventfd/pipe 或等价）；保持 `INetCancelToken`/`ECancelledError` 语义；CONTRACT 更新；http client + WS cancel 回归 |
+| **Don't** | 重写 async runtime；无证据改 epoll server 模型；为 Windows 完美对等拖死主路径（可 Linux 证明 + 其它 OS residual） |
+| **Done when** | cancel 唤醒 SLA 有 focused 证据（显著优于 50ms 切片模型或诚实新 residual）；client/WS cancel 绿 |
+| **Gates** | net 相关 focused（实现时点名）；`test_http_client`；`test_http_websocket_client`；hygiene；diff --check |
+| **Land paths** | `core/src/nextpas.core.net*`（最小）；必要时 `core/src/nextpas.core.platform*`（最小）；`core/tests/nextpas.core.net/**`；http tests/docs |
+| **Next** | Wave X3 |
+| **Risk** | 并行 lane `core-net-async-io`：改前 worktree audit；冲突则 Needs Review |
+
+### Wave X3 — Client pool idle TTL
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | queued after X2 |
+| **Do** | 墙钟 idle TTL（对齐 options / With* 外层胜）；借出/归还淘汰过期 idle；与 per-authority `MaxPoolSize` 一致；focused + CONTRACT pool 表 |
+| **Don't** | 全局跨 host 连接上限；主动 HTTP 健康探测（除非另升格） |
+| **Done when** | 过期不复用、未过期复用、`CloseIdleConnections` 仍全清 有测；CONTRACT 去掉「无 idle TTL」residual 或改写为可配置 |
+| **Gates** | `test_http_client`；`test_http_h2_client`；hygiene；diff --check |
+| **Land paths** | http client / H1 / H2 pool 实现 + tests + `core/docs/http/**` |
+| **Next** | Wave X4 |
+
+### Wave X4 — TLS OpenSSL residual（跨模块）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | queued after X3 |
+| **Do** | 收敛 factory/`CreateContext` heaptrc unfreed（owner=tls）；http HTTPS/H2/`tls_real` 回归；缩小 CONTRACT residual claim |
+| **Don't** | 换 TLS 后端；在 http 吞泄漏；清无关全库泄漏 |
+| **Done when** | client HTTPS 路径 0 unfreed **或** residual 缩到明确子路径 + 证据 |
+| **Gates** | tls 相关 focused；`test_http_client`；`test_http_tls_real`（若存在）；hygiene |
+| **Land paths** | `core/src/nextpas.core.tls*`（最小）+ tests；http docs residual |
+| **Next** | Wave X5 |
+
+### Wave X5 — Comparator + profiled win
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | queued after X4 |
+| **Do** | 刷新 BENCHMARKS / server comparison 本机 snapshot + caveats；profile 一刀可解释优化（可回落 net/tls/http）；对标 Go/Rust 同负载表述 |
+| **Don't** | 为数字牺牲正确性；无 profile 乱优化；假 H3 行 |
+| **Done when** | BENCHMARKS 有 Excellence 一行证据；正确性 focused 不回退 |
+| **Gates** | 相关 bench 可跑；http 核心 focused 抽样；hygiene |
+| **Land paths** | benches/docs + 必要 src；跨模块仅当 profile 证明 |
+| **Next** | Era 6 Done / STOP 或 Inbox |
+
+**Era 6 Done when**：X0–X5 landed（或 X5 证据充分且剩余诚实 Park）；H3 仍无 facade；四支柱可再评估。
 
 ---
 
@@ -381,14 +469,18 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 项 | 立场 |
 |----|------|
 | server `Default` RW=0 | **Keep**（测试兼容）；生产用 `THttpServerOptions.Production` |
-| cancel ~50 ms 切片 | **Residual-honest**（非 OS 硬中断） |
-| OpenSSL factory unfreed | **跨模块 residual**；http 不单独清零宣称 |
+| cancel ~50 ms 切片 | **当前 residual**；**Era 6 X2** 授权在 net 主动改进（非 http 永久认命） |
+| OpenSSL factory unfreed | **tls residual**；**Era 6 X4** 授权在 tls 收敛；http 不单独清零宣称 |
+| pool 无 idle TTL | **当前 residual**；**Era 6 X3** 消除 |
 | JSON dual raw vs ensure-string | **Keep** 三层模型 |
 | Digest / NTLM / Negotiate proxy auth | **Park**（Wave I） |
 | 完整企业代理栈 | **Park** 除非真实 consumer |
 | SOCKS proxy | **Park**（更偏 net） |
 | Server push | **Non-goal**（ENABLE_PUSH=0） |
 | h2c Upgrade | **Park**（cleartext H2 = prior knowledge only） |
+| H2 同连接多路 RoundTrip API | **Park**（新公开面；另设计） |
+| WS-over-H2 / H2 CONNECT | **Park** until real consumer |
+| H3 / QUIC | **Blocked / 无产品需求**；禁止空 facade |
 | 为对标而扩 API | **禁止** |
 
 ---
@@ -403,20 +495,22 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 想法 | 备注 |
 |------|------|
-| （空） | 有想法往这里加 |
+| H2 同连接多路并发 API | 需独立设计 Wave；非默认路径 |
+| WS 扩展协商（permessage-deflate 等） | 仅真实 consumer 升格 |
+| pool 主动健康探测 | 可在 idle TTL 之后 |
 
 ---
 
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 默认路径 Era 0–4 已 landed；模块 **framework-complete (non-H3)**
-2. Era 5 H3-* 仍 **Blocked on QUIC** — 禁止空 facade；勿假 claim
-3. 新工作仅：Inbox 升格为有序 Wave，或用户显式指令
-4. 不要用 archive/ 当 backlog
+1. Era 0–4 landed；framework-complete (non-H3) 已立住
+2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
+3. Era 6 NEXT = Wave X1（WS 生产契约）；之后 X2→X3→X4→X5
+4. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：STOP（framework-complete non-H3）。不要空转 H3。**
+**没有用户指令时：执行 Era 6 推荐路径（X1…），不要空转 H3。**
 
 ---
 
@@ -456,3 +550,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave P1 landed：headers Get/Has fuse（Get miss ~17% 本机）；BENCHMARKS 前后表；Wave P3 = NEXT |
 | 2026-07-17 | Wave P3 landed：fullchain Direct/Router × threaded/epoll 本机 snapshot + caveats；Wave P5 = NEXT |
 | 2026-07-17 | Wave P5 landed：G6 stage performance complete；**framework-complete (non-H3)**；H3 Blocked STOP |
+| 2026-07-17 | **Era 6 Excellence** 开启（X0）：H1/H2/WS 精品路径 X1→X5；跨模块 net/tls 受控授权；H3 仍无需求；Wave X1 = NEXT |
