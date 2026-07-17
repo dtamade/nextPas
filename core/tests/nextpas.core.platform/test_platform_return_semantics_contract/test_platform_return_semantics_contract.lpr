@@ -6,11 +6,15 @@ program test_platform_return_semantics_contract;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.base,
   nextpas.core.fs,
   nextpas.core.fs.util,
+  nextpas.core.fs.glob,
+  nextpas.core.path,
   nextpas.core.text.conv,
   nextpas.core.exception,
   nextpas.core.platform.error,
+  nextpas.core.platform.fmt,
   nextpas.core.platform.args,
   nextpas.core.platform.resource,
   nextpas.core.platform.resource.base,
@@ -112,32 +116,50 @@ begin
   CheckContains(LSrc, '/proc/self/cmdline', 'unix args reads host cmdline');
 end;
 
+function ResolveSrcRoot: string;
+begin
+  if DirectoryExists(SRC_ROOT_FROM_TEST) then
+    Exit(SRC_ROOT_FROM_TEST);
+  if DirectoryExists(SRC_ROOT_FROM_REPO) then
+    Exit(SRC_ROOT_FROM_REPO);
+  Result := SRC_ROOT_FROM_TEST;
+end;
+
+procedure AssertNoBareFpcRtlInSource(const APath, ALabel: string);
+var
+  LSrc: string;
+begin
+  Check(FileExists(APath), 'source exists: ' + ALabel);
+  LSrc := ReadLower(APath);
+  { bare unit names only — nextpas.core.platform.windows.* is legal }
+  Check(Pos('sysutils,', LSrc) = 0, ALabel + ' no SysUtils,');
+  Check(Pos('sysutils;', LSrc) = 0, ALabel + ' no SysUtils;');
+  Check(Pos('baseunix,', LSrc) = 0, ALabel + ' no BaseUnix,');
+  Check(Pos('baseunix;', LSrc) = 0, ALabel + ' no BaseUnix;');
+  Check(Pos('  windows;', LSrc) = 0, ALabel + ' no bare Windows;');
+  Check(Pos('  windows,', LSrc) = 0, ALabel + ' no bare Windows,');
+  Check(Pos('  classes;', LSrc) = 0, ALabel + ' no Classes;');
+  Check(Pos('  classes,', LSrc) = 0, ALabel + ' no Classes,');
+  Check(Pos('  unix;', LSrc) = 0, ALabel + ' no bare Unix;');
+  Check(Pos('  unix,', LSrc) = 0, ALabel + ' no bare Unix,');
+  Check(Pos('  ctypes;', LSrc) = 0, ALabel + ' no bare ctypes;');
+  Check(Pos('  ctypes,', LSrc) = 0, ALabel + ' no bare ctypes,');
+end;
+
 procedure TestProductionUnitsNoFpcRtl;
 var
-  LNames: array[0..8] of string;
+  LRoot: string;
+  LFiles: TStringArray;
   I: Int32;
-  LSrc, LPath: string;
+  LName: string;
 begin
-  LNames[0] := 'nextpas.core.platform.args.pas';
-  LNames[1] := 'nextpas.core.platform.error.pas';
-  LNames[2] := 'nextpas.core.platform.resource.pas';
-  LNames[3] := 'nextpas.core.platform.process.pas';
-  LNames[4] := 'nextpas.core.platform.files.pas';
-  LNames[5] := 'nextpas.core.platform.fs.pas';
-  LNames[6] := 'nextpas.core.platform.io.pas';
-  LNames[7] := 'nextpas.core.platform.env.pas';
-  LNames[8] := 'nextpas.core.platform.console.pas';
-  for I := Low(LNames) to High(LNames) do
+  LRoot := ResolveSrcRoot;
+  LFiles := FsGlob(LRoot, 'nextpas.core.platform*.pas');
+  Check(Length(LFiles) >= 40, 'expected full platform production unit set');
+  for I := 0 to High(LFiles) do
   begin
-    LPath := ResolveSrc(LNames[I]);
-    Check(FileExists(LPath), 'source exists: ' + LNames[I]);
-    LSrc := ReadLower(LPath);
-    CheckAbsent(LSrc, 'sysutils', LNames[I] + ' must not reference SysUtils');
-    CheckAbsent(LSrc, 'baseunix', LNames[I] + ' must not reference BaseUnix');
-    CheckAbsent(LSrc, '  windows;', LNames[I] + ' no FPC Windows unit');
-    CheckAbsent(LSrc, '  windows,', LNames[I] + ' no FPC Windows unit');
-    CheckAbsent(LSrc, '  classes;', LNames[I] + ' no Classes');
-    CheckAbsent(LSrc, '  classes,', LNames[I] + ' no Classes');
+    LName := ExtractFileName(LFiles[I]);
+    AssertNoBareFpcRtlInSource(LFiles[I], LName);
   end;
 end;
 
@@ -418,6 +440,9 @@ begin
   Check(Pos('sysutils;', LEx) = 0, 'EXAMPLES.md must not uses SysUtils;');
   Check(Pos('禁止', LEx) > 0, 'EXAMPLES.md has ban rule text');
   Check(Pos('sysutils', LEx) > 0, 'EXAMPLES.md ban rule names SysUtils');
+  Check(Pos('fileio', LEx) = 0, 'EXAMPLES.md must not reference ghost unit fileio');
+  Check(Pos('platform_net_', LEx) = 0, 'EXAMPLES.md must not use ghost platform_net_*');
+  Check(Pos('platform.files', LEx) > 0, 'EXAMPLES.md uses live platform.files');
 end;
 
 procedure TestOutInitOnSpawnSource;
@@ -432,6 +457,49 @@ begin
     'pipe create failure/unsupported sets read handle sentinel');
   Check(Pos('AWriteHandle := -1', LSrc) > 0,
     'pipe create failure/unsupported sets write handle sentinel');
+end;
+
+procedure TestOutInitFilesAndSocket;
+var
+  LFiles, LSock: string;
+begin
+  LFiles := ReadRaw(ResolveSrc('nextpas.core.platform.files.pas'));
+  Check(Pos('AHandle.Value := -1', LFiles) > 0,
+    'files open_ex initializes AHandle to invalid before work');
+  Check(Pos('ABytesRead := 0', LFiles) > 0,
+    'files read initializes ABytesRead out-param');
+
+  LSock := ReadRaw(ResolveSrc('nextpas.core.platform.socket.pas'));
+  Check(Pos('ASocket.Value := -1', LSock) > 0,
+    'socket create unsupported/failure sets socket sentinel');
+end;
+
+procedure TestShortAliasAndParseContracts;
+var
+  LFs, LFmt, LRet: string;
+  LVal: Int64;
+  R: Int32;
+begin
+  LFs := ReadRaw(ResolveSrc('nextpas.core.platform.fs.pas'));
+  Check(Pos('PLATFORM_FS_SHORT_READ_ERROR = PLATFORM_ERR_IO', LFs) > 0,
+    'SHORT_READ aliases PLATFORM_ERR_IO');
+  Check(Pos('PLATFORM_FS_SHORT_WRITE_ERROR = PLATFORM_ERR_IO', LFs) > 0,
+    'SHORT_WRITE aliases PLATFORM_ERR_IO');
+  Check(Pos('PLATFORM_FS_SHORT_READ_ERROR = -6', LFs) = 0,
+    'SHORT_READ no longer parallel -6');
+  Check(Pos('PLATFORM_FS_SHORT_WRITE_ERROR = -5', LFs) = 0,
+    'SHORT_WRITE no longer parallel -5');
+
+  LFmt := ReadRaw(ResolveSrc('nextpas.core.platform.fmt.pas'));
+  Check(Pos('function platform_parse_int', LFmt) > 0, 'parse_int present');
+  { runtime: parse failure is INVALID not bare -1 }
+  R := platform_parse_int(PAnsiChar(''), 0, LVal);
+  Check(R = PLATFORM_ERR_INVALID, 'parse empty is PLATFORM_ERR_INVALID');
+  Check(R <> -1, 'parse empty is not bare -1');
+
+  LRet := LowerCase(FsReadFileText(ResolveDocs('RETURN-SEMANTICS.md')));
+  Check(Pos('platform_parse_', LRet) > 0, 'RETURN documents parse error-code');
+  Check(Pos('platform_err_io', LRet) > 0, 'RETURN documents SHORT→IO');
 end;
 
 procedure TestGetpidIsSentinelApi;
@@ -454,6 +522,8 @@ begin
   T.Test('PATH_TOO_LONG stays domain -7', @TestPathTooLongDomainNotEnametoolog);
   T.Test('dual-API deprecation signals + EXAMPLES no SysUtils', @TestDualApiDeprecationSignals);
   T.Test('out-init on spawn/pipe source contracts', @TestOutInitOnSpawnSource);
+  T.Test('out-init files open + socket create', @TestOutInitFilesAndSocket);
+  T.Test('SHORT alias IO + parse INVALID contracts', @TestShortAliasAndParseContracts);
   T.Test('windows io_close is error-code API', @TestIoCloseIsErrorCodeApi);
   T.Test('resource uses PLATFORM_ERR_* family', @TestResourceUsesPlatformErr);
   T.Test('args runtime host cmdline', @TestArgsRuntime);

@@ -30,6 +30,14 @@ Wine matrix promotion). Wine compile remains environment-dependent
 - EXAMPLES.md: no SysUtils in sample code
 - Authority: ERROR-HANDLING / RETURN-SEMANTICS / API-REFERENCE aligned
 
+### 2026-07-17 usability residual wave-2 (assessment 7.28)
+
+- EXAMPLES rewritten to live `files`/`fs`/`socket`/`env`/`fmt` APIs (no `fileio` / `platform.net_*` ghosts)
+- `PLATFORM_FS_SHORT_*` → alias `PLATFORM_ERR_IO`; `platform_parse_*` fails with `PLATFORM_ERR_INVALID`
+- CONTRACT L0 wording: host FFI + ban FPC RTL (not “depends on FPC RTL”)
+- Full production RTL uses scan + expanded out-init contracts in return_semantics gate
+- Windows/macOS/Android truth tiers **unchanged** (no fake promotion)
+
 ## Host Status
 
 | Host | Current truth | Required next proof |

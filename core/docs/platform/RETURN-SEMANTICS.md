@@ -21,6 +21,8 @@ Authority companion to [CONTRACT.md](CONTRACT.md). Live constants: `nextpas.core
 7. Live gate: `core/tests/nextpas.core.platform/test_platform_return_semantics_contract`.
 8. Windows unmapped host errors map to `PLATFORM_ERR_UNKNOWN` (-8), never raw `ERROR_*` passthrough.
 9. `PLATFORM_ERR_PATH_TOO_LONG` stays **-7** (domain path clamp); not OS `ENAMETOOLONG` (36).
+10. `PLATFORM_FS_SHORT_*_ERROR` aliases `PLATFORM_ERR_IO` (5) — no parallel `-5`/`-6` public values.
+11. `platform_parse_*` is **error-code**: success `0`, failure `PLATFORM_ERR_INVALID` (not bare `-1`). Index find APIs remain value/sentinel (`-1` = not found).
 
 ## files / fs / io stance
 

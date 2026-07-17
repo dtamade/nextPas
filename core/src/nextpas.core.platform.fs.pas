@@ -17,7 +17,8 @@ interface
 
 uses
   nextpas.core.platform.files.base,
-  nextpas.core.platform.posix.errno;
+  nextpas.core.platform.posix.errno,
+  nextpas.core.platform.error;
 
 type
   {** @desc 目录遍历操作枚举 *}
@@ -72,10 +73,10 @@ const
   PLATFORM_WALK_BADARGS   = -1;
   {** @desc 最大遍历深度 *}
   PLATFORM_WALK_MAX_DEPTH = 256;
-  {** @desc 短读错误 *}
-  PLATFORM_FS_SHORT_READ_ERROR = -6;
-  {** @desc 路径过长错误 *}
-  PLATFORM_FS_PATH_TOO_LONG = -7;
+  {** @desc 短读错误 — alias PLATFORM_ERR_IO (单一错误族，不再使用平行 -6) *}
+  PLATFORM_FS_SHORT_READ_ERROR = PLATFORM_ERR_IO;
+  {** @desc 路径过长 — alias PLATFORM_ERR_PATH_TOO_LONG (-7 域钳制) *}
+  PLATFORM_FS_PATH_TOO_LONG = PLATFORM_ERR_PATH_TOO_LONG;
   {** @desc 动态读取初始块大小（64KB） *}
   PLATFORM_FS_READ_CHUNK_SIZE = 65536;
 
@@ -238,8 +239,7 @@ implementation
 uses
   nextpas.core.platform.files,
   nextpas.core.platform.env,
-  nextpas.core.platform.random,
-  nextpas.core.platform.error
+  nextpas.core.platform.random
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
@@ -283,7 +283,8 @@ begin
 end;
 
 const
-  PLATFORM_FS_SHORT_WRITE_ERROR = -5;
+  { short write — alias PLATFORM_ERR_IO (single error family; was parallel -5) }
+  PLATFORM_FS_SHORT_WRITE_ERROR = PLATFORM_ERR_IO;
   { POSIX permission bits — universal across all Unix systems }
   PLATFORM_S_IXUSR = $0040;  { 0100 octal: owner execute }
   PLATFORM_S_IXGRP = $0008;  { 0010 octal: group execute }

@@ -41,6 +41,9 @@ There is **no** `PLATFORM_ERR_OK` constant; success is the integer `0`.
 - **POSIX**: `platform_get_last_error` returns host errno; known values already match `PLATFORM_ERR_*` Linux numbers. Unknown errno values stay as host errno for `platform_error_message` (strerror) but categorize as `ecInternal` when not in the portable set.
 - **Windows**: `platform_map_windows_error_code` maps `ERROR_*` / `WSAE*` into `PLATFORM_ERR_*`. **Unmapped codes become `PLATFORM_ERR_UNKNOWN`**, never raw `ERROR_*` passthrough.
 - **`PATH_TOO_LONG` (-7)** is a client-side domain limit used by `platform.fs` path clamps; it is intentionally not Linux `ENAMETOOLONG` (36).
+- **`PLATFORM_FS_SHORT_READ_ERROR` / `PLATFORM_FS_SHORT_WRITE_ERROR`** are **aliases of `PLATFORM_ERR_IO` (5)**. They are not a second public error family and no longer use parallel magic values `-6`/`-5`.
+- **`platform_parse_*`**: failure is `PLATFORM_ERR_INVALID` (error-code tier), never bare `-1`.
+- **Observability note (F7 deferred)**: portable code space does not carry raw `GetLastError` / errno for unmapped Windows codes (`UNKNOWN`). Host-side debug logs remain the place for raw OS codes until a dedicated side-channel API is introduced.
 
 ## 2. Call pattern (error-code APIs)
 
