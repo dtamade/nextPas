@@ -1,10 +1,10 @@
-# Atomic & Lockfree Consumer Audit (R7)
+# Atomic & Lockfree Consumer Audit (R7 + H2-6)
 
 > **日期**: 2026-07-17
 > **范围**: `core/` 内 `uses nextpas.core.lockfree*` / `uses nextpas.core.atomic*`
 > **方法**: ripgrep 扫描 `core/src/**/*.pas` 的 uses 子句；抽样查看 Close/Destroy 与 legacy CAS 调用形态
-> **主线**: [`roadmap.md`](roadmap.md) **R7**
-> **状态**: **DONE** — 无强制代码修复（未发现一刀切安全的 Close/Destroy 误用）
+> **主线**: R7 完成；H2-6 增加最小真实消费者证据
+> **状态**: **R7 DONE** + **H2-6 consumer proof**
 
 ---
 
@@ -40,8 +40,20 @@
 | 区域 | 角色 |
 |------|------|
 | `core/tests/nextpas.core.lockfree/**` | 主消费者：T1 `test_lockfree` / `test_lockfree_stress` + 大量 T2 单测 `.lpr` |
-| `core/benchmarks/nextpas.core.lockfree/**`（若存在） | 性能证据，非生产契约 |
-| `core/examples/**` | 本轮扫描未发现对 `nextpas.core.lockfree` 的 uses |
+| `core/benchmarks/nextpas.core.lockfree/**` | 性能证据；须带 H2-4 信封（见 [`bench-envelope.md`](bench-envelope.md)） |
+| `core/examples/lockfree_example.lpr` | 教学示例（单线程 API 面） |
+| `core/examples/nextpas.core.lockfree/t1_close_join_free/` | **H2-6**：多线程 `Close → join → Free` 真实消费者证明 |
+| `nextpas.core.lockfree.workstealing` | **模块内** T1 消费者：`TWorkStealingPool` 持有 `TWorkStealingDeque` |
+
+### 2.4 H2-6 最小真实消费者
+
+| 路径 | 证明点 |
+|------|--------|
+| `core/examples/nextpas.core.lockfree/t1_close_join_free/` | 1 producer + 1 consumer + `TLockFreeChannel`；`Try*Ex`；**Close → join → Free** |
+| `test_lockfree_stress` `TestChannelCloseJoinFree` | 2P+2C stress 加深同一生命周期（H2-5） |
+| `lockfree.workstealing` | 生产单元级消费 `TWorkStealingDeque`（仍属 lockfree 模块内） |
+
+**跨模块**（http/async/net）仍无 lockfree 容器 uses；H2-6 **不**为证明而强行改上层模块。若未来接入，遵守 Close→join→Free。
 
 ### 2.3 Close / Destroy 纪律抽检
 
@@ -90,7 +102,8 @@
 | `AtomicCompareExchange32/64/Ptr`（返回观测值） | lockfree 热路径、sync.*、id.* | **legacy 兼容**；勿在新代码扩散 |
 | FPC `InterlockedCompareExchange` | `simd.dispatch` 等历史路径 | 模块外遗留；新路径应走 atomic 门面 |
 
-详见 [`../atomic/CONTRACT.md`](../atomic/CONTRACT.md) §1.4 Legacy CAS 弃用偏好（**不删符号**）。
+**H2-3 脚注**：测试/审计中出现 legacy CAS **不等于** preferred。新代码与触达修改必须 `atomic_*` / `TAtomic*`。
+详见 [`../atomic/CONTRACT.md`](../atomic/CONTRACT.md) §1.4（**不删符号**）。
 
 ---
 
@@ -111,8 +124,9 @@
 - [x] 本审计文档
 - [x] atomic legacy CAS 偏好写入 CONTRACT（+ README 交叉引用）
 - [x] T2 命名诚实脚注扩充
-- [x] roadmap R7 = DONE；当前执行 = none（主线完成至 R7；R8 研究 opt-in）
+- [x] roadmap R7 = DONE；H2 为后续主线（见 [`roadmap-h2.md`](roadmap-h2.md)）
 - [x] 无强制代码删除 / 无大 refactor
+- [x] H2-6：`t1_close_join_free` 示例 + stress Close-join-Free
 
 ---
 

@@ -4,7 +4,7 @@
 **层级**：L0（依赖 base；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-17
-**版本**：1.2
+**版本**：1.3
 
 ---
 
@@ -62,27 +62,36 @@ TMemoryOrder = (moRelaxed, moAcquire, moRelease, moAcqRel, moSeqCst);
 2. 需要类型安全所有权时用 `TAtomic*` + `moAcquire` 等 PascalCase 别名
 3. 不要在同一函数内混用两套命名；模块内保持一种风格
 
-### 1.4 Legacy CAS / PascalCase 弃用偏好（R7）
+### 1.4 Preferred path vs legacy CAS（R7 + H2-3）
 
-**不删除任何公开符号。** 下列表面无限期保留以兼容已有 call site（尤其 `lockfree` 与 `sync` 热路径），但**新代码与触达修改**应迁向首选 API。
+**首选路径（Preferred）** — 新代码 / 触达修改必须走这里：
+
+| 场景 | Preferred API |
+|------|----------------|
+| 标量 RMW / load-store | `atomic_load` / `atomic_store` / `atomic_fetch_*` + `mo_*` |
+| CAS | `atomic_compare_exchange_strong` / `_weak`（Boolean + `var AExpected`） |
+| 类型安全存储 | `TAtomicInt32` / `TAtomicUInt64` / `TAtomicBool` / `TAtomicPtr<T>` 等 + PascalCase `moAcquire`… |
+| 指针字节偏移 | 主门面 `atomic_fetch_add/sub(var Pointer; PtrInt)` |
+
+**legacy（保留、非首选）** — **不删除任何公开符号**：
 
 | 表面 | 返回/语义 | 偏好 |
 |------|-----------|------|
-| `AtomicCompareExchange32/64/Ptr` | 返回 **观测值**（成功时 ≈ Desired 写入后的旧 expected 路径；调用方用 `= AExpected` 判成功） | **legacy** |
-| `atomic_compare_exchange` / `_strong` / `_weak`（`var AExpected`） | 返回 **Boolean**；失败时写回观测值到 `AExpected` | **首选**（C11 风格） |
-| `TAtomic*.CompareExchangeStrong/Weak` | Boolean + `var AExpected`；typed 存储 | **首选**（类型边界清晰时） |
-| `AtomicLoad32/64`、`AtomicStore32/64`、`AtomicFetchAdd*`、`AtomicWait*` 等 PascalCase | 与 `atomic_*` 等价包装 | **legacy 兼容**；新代码用 `atomic_*` |
+| `AtomicCompareExchange32/64/Ptr` | 返回 **观测值**（调用方用 `= AExpected` 判成功） | **legacy** |
+| `AtomicLoad32/64`、`AtomicStore32/64`、`AtomicFetchAdd*`、`AtomicWait*` 等 PascalCase | 与 `atomic_*` 等价包装 | **legacy 兼容** |
+| `atomic.compat` pointer bitwise / 算术 overload | 旧调用点 | **legacy**；主门面 **禁止扩大** |
 
 **日程（文档纪律，非删码里程碑）**：
 
 1. **即日起**：新单元、新函数、重构触达点 → `atomic_*` 或 `TAtomic*`。
 2. **不强制** 全库机械替换 `AtomicCompareExchange*`（lockfree 内联热路径体量大；正确性优先于重命名）。
 3. **禁止** 在 `nextpas.core.atomic` 主门面继续扩大 pointer bitwise / 新的 PascalCase 别名；扩展放 `atomic.compat` 且需评审。
-4. 未来若删 legacy，须单独修订本 CONTRACT + roadmap 重大变更流程（当前 **不做**）。
+4. 未来若删 legacy，须单独修订本 CONTRACT + roadmap **重大变更**流程（当前 **不做**；H2 D3）。
 
 常见误读：把 `AtomicCompareExchange32(...)` 的返回值当 Boolean。它是 **Int32 观测值**，不是 `True/False`。
 
-消费者分布见 [`../lockfree/consumer-audit.md`](../lockfree/consumer-audit.md)。
+**测试 / 审计脚注**：atomic 测试门覆盖 preferred 与 legacy 两面以保兼容；覆盖 **≠** 鼓励新代码用 legacy。
+消费者分布与 preferred 占比见 [`../lockfree/consumer-audit.md`](../lockfree/consumer-audit.md) §3.3 / H2-3 脚注。
 
 ---
 
