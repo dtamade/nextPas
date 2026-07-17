@@ -19,12 +19,22 @@ Authority companion to [CONTRACT.md](CONTRACT.md). Live constants: `nextpas.core
 5. `platform_error_message` is a length API: on failure return `PLATFORM_ERR_*`, not bare `-1`.
 6. `platform_io_close` is an **error-code** API (`0` / `PLATFORM_ERR_*`). `platform_io_read` / `platform_io_write` / `platform_io_poll` remain **value/sentinel** (byte counts or ready count; failure sentinel `-1`).
 7. Live gate: `core/tests/nextpas.core.platform/test_platform_return_semantics_contract`.
+8. Windows unmapped host errors map to `PLATFORM_ERR_UNKNOWN` (-8), never raw `ERROR_*` passthrough.
+9. `PLATFORM_ERR_PATH_TOO_LONG` stays **-7** (domain path clamp); not OS `ENAMETOOLONG` (36).
 
 ## files / fs / io stance
 
 - **files**: handle and directory primitives (`open`/`read`/`write`/`stat`/`dir_*`).
 - **fs**: path-level composition (`mkdir_p`, `copy`, `exists`, `temp_dir`); may call files.
-- **io**: poller/event surface (`platform.io`); generic fd helpers living under `process` (`platform_io_read` etc.) are value/sentinel and transitional for `process.pipe`. Prefer `platform.files` / `*_ex` process pipe APIs for new code.
+- **io**: poller/event surface (`platform.io`); generic fd helpers living under `process` (`platform_io_read` / `write` / `poll`) are **transitional / dual-API** value/sentinel surfaces for `process.pipe` only. New code must prefer `platform.files` and `platform_process_*_ex`. Do not expand `platform_io_*` surface.
+
+## Dual API deprecation (process)
+
+| Legacy | Prefer | Notes |
+|--------|--------|-------|
+| `platform_process_write_stdin` / `read_stdout` / `read_stderr` | `*_ex` variants | FPC `deprecated`; length/-1 wrappers |
+| `platform_io_read` / `write` / `poll` | `platform.files` / process `*_ex` | Kept for process.pipe; value/sentinel; not for new public use |
+| `platform_io_close` | `platform_process_close_handle` / files close | Error-code API; keep
 
 ## Args ownership
 

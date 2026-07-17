@@ -9,6 +9,7 @@ uses
   nextpas.core.fs,
   nextpas.core.fs.util,
   nextpas.core.text.conv,
+  nextpas.core.exception,
   nextpas.core.platform.error,
   nextpas.core.platform.args,
   nextpas.core.platform.resource,
@@ -72,10 +73,13 @@ begin
   CheckEqual(Int64(104), Int64(PLATFORM_ERR_CONNRESET), 'CONNRESET=104');
   CheckEqual(Int64(110), Int64(PLATFORM_ERR_TIMEDOUT), 'TIMEDOUT=110');
   CheckEqual(Int64(111), Int64(PLATFORM_ERR_CONNREFUSED), 'CONNREFUSED=111');
-  CheckEqual(Int64(-7), Int64(PLATFORM_ERR_PATH_TOO_LONG), 'PATH_TOO_LONG=-7');
+  CheckEqual(Int64(-7), Int64(PLATFORM_ERR_PATH_TOO_LONG), 'PATH_TOO_LONG=-7 domain clamp');
+  CheckEqual(Int64(-8), Int64(PLATFORM_ERR_UNKNOWN), 'UNKNOWN=-8');
   { bare -1 is not a portable PLATFORM_ERR_* value }
   Check(PLATFORM_ERR_INVALID <> -1, 'INVALID is not bare -1');
   Check(PLATFORM_ERR_UNSUPPORTED <> -1, 'UNSUPPORTED is not bare -1');
+  Check(PLATFORM_ERR_UNKNOWN <> -1, 'UNKNOWN is not bare -1');
+  Check(PLATFORM_ERR_PATH_TOO_LONG <> 36, 'PATH_TOO_LONG is not ENAMETOOLONG 36');
 end;
 
 procedure TestErrorMessageLengthApi;
@@ -137,6 +141,88 @@ begin
   end;
 end;
 
+function ResolveTestPath(const AFromTest, AFromRoot: string): string;
+begin
+  if FileExists(AFromTest) then
+    Exit(AFromTest);
+  if FileExists(AFromRoot) then
+    Exit(AFromRoot);
+  Result := AFromTest;
+end;
+
+procedure CheckTestSourceNoFpcRtlUses(const AFromTest, AFromRoot, ALabel: string);
+var
+  LPath, LSrc: string;
+begin
+  LPath := ResolveTestPath(AFromTest, AFromRoot);
+  Check(FileExists(LPath), 'test source exists: ' + ALabel);
+  LSrc := LowerCase(FsReadFileText(LPath));
+  { ban uses-clause style references }
+  Check(Pos('sysutils,', LSrc) = 0, ALabel + ' must not uses SysUtils,');
+  Check(Pos('sysutils;', LSrc) = 0, ALabel + ' must not uses SysUtils;');
+  Check(Pos('baseunix,', LSrc) = 0, ALabel + ' must not uses BaseUnix,');
+  Check(Pos('baseunix;', LSrc) = 0, ALabel + ' must not uses BaseUnix;');
+  Check(Pos('sysutils.', LSrc) = 0, ALabel + ' must not call SysUtils.*');
+  Check(Pos('baseunix.', LSrc) = 0, ALabel + ' must not call BaseUnix.*');
+end;
+
+procedure TestPlatformTestTreeNoFpcRtlUses;
+begin
+  { previously offending wine/windows harnesses — must stay clean }
+  CheckTestSourceNoFpcRtlUses(
+    '../test_platform_linux_modern/test_platform_linux_modern.lpr',
+    'core/tests/nextpas.core.platform/test_platform_linux_modern/test_platform_linux_modern.lpr',
+    'linux_modern');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.args/test_platform_args_wine/test_platform_args_wine.lpr',
+    'core/tests/nextpas.core.platform.args/test_platform_args_wine/test_platform_args_wine.lpr',
+    'args_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.console/test_platform_console_wine/test_platform_console_wine.lpr',
+    'core/tests/nextpas.core.platform.console/test_platform_console_wine/test_platform_console_wine.lpr',
+    'console_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.memory/test_platform_memory_wine/test_platform_memory_wine.lpr',
+    'core/tests/nextpas.core.platform.memory/test_platform_memory_wine/test_platform_memory_wine.lpr',
+    'memory_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.pty/test_platform_pty_wine/test_platform_pty_wine.lpr',
+    'core/tests/nextpas.core.platform.pty/test_platform_pty_wine/test_platform_pty_wine.lpr',
+    'pty_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.resource/test_platform_resource_wine/test_platform_resource_wine.lpr',
+    'core/tests/nextpas.core.platform.resource/test_platform_resource_wine/test_platform_resource_wine.lpr',
+    'resource_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.signal/test_platform_signal_wine/test_platform_signal_wine.lpr',
+    'core/tests/nextpas.core.platform.signal/test_platform_signal_wine/test_platform_signal_wine.lpr',
+    'signal_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.signal/test_platform_windows_signal_contract/test_platform_windows_signal_contract.lpr',
+    'core/tests/nextpas.core.platform.signal/test_platform_windows_signal_contract/test_platform_windows_signal_contract.lpr',
+    'windows_signal_contract');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.socket/test_platform_socket_windows_real/test_platform_socket_windows_real.lpr',
+    'core/tests/nextpas.core.platform.socket/test_platform_socket_windows_real/test_platform_socket_windows_real.lpr',
+    'socket_windows_real');
+  CheckTestSourceNoFpcRtlUses(
+    '../test_platform_io_windows_real/test_platform_io_windows_real.lpr',
+    'core/tests/nextpas.core.platform/test_platform_io_windows_real/test_platform_io_windows_real.lpr',
+    'io_windows_real');
+  CheckTestSourceNoFpcRtlUses(
+    '../test_platform_windows_utf16_contract/test_platform_windows_utf16_contract.lpr',
+    'core/tests/nextpas.core.platform/test_platform_windows_utf16_contract/test_platform_windows_utf16_contract.lpr',
+    'windows_utf16_contract');
+  CheckTestSourceNoFpcRtlUses(
+    '../test_platform_wine_ci_matrix_contract/test_platform_wine_ci_matrix_contract.lpr',
+    'core/tests/nextpas.core.platform/test_platform_wine_ci_matrix_contract/test_platform_wine_ci_matrix_contract.lpr',
+    'wine_ci_matrix_contract');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.watch/test_platform_watch_wine/test_platform_watch_wine.lpr',
+    'core/tests/nextpas.core.platform.watch/test_platform_watch_wine/test_platform_watch_wine.lpr',
+    'watch_wine');
+end;
+
 procedure TestErrorMessageSourceNoBareMinusOne;
 var
   LSrc: string;
@@ -144,6 +230,37 @@ begin
   LSrc := ReadRaw(ResolveSrc('nextpas.core.platform.error.pas'));
   Check(Pos('Exit(-1)', LSrc) = 0, 'error.pas must not Exit(-1)');
   Check(Pos('Result := -1', LSrc) = 0, 'error.pas must not Result := -1');
+  Check(Pos('Result := Int32(AErr)', LSrc) = 0,
+    'Windows map must not passthrough raw ERROR_* via Int32(AErr)');
+  Check(Pos('PLATFORM_ERR_UNKNOWN', LSrc) > 0, 'error.pas defines PLATFORM_ERR_UNKNOWN');
+  Check(Pos('Result := PLATFORM_ERR_UNKNOWN', LSrc) > 0,
+    'Windows map else assigns PLATFORM_ERR_UNKNOWN');
+end;
+
+procedure TestUnknownErrorPortable;
+var
+  LBuf: array[0..127] of AnsiChar;
+  R: Int32;
+begin
+  CheckEqual(Int64(-8), Int64(PLATFORM_ERR_UNKNOWN), 'UNKNOWN constant -8');
+  R := platform_error_message(PLATFORM_ERR_UNKNOWN, @LBuf[0], SizeOf(LBuf));
+  Check(R > 0, 'UNKNOWN has portable message length');
+  Check(Pos('unknown', LowerCase(LBuf)) > 0, 'UNKNOWN message mentions unknown');
+  Check(platform_error_category(PLATFORM_ERR_UNKNOWN) = ecInternal,
+    'UNKNOWN category is ecInternal');
+end;
+
+procedure TestPathTooLongDomainNotEnametoolog;
+var
+  LBuf: array[0..127] of AnsiChar;
+  R: Int32;
+begin
+  CheckEqual(Int64(-7), Int64(PLATFORM_ERR_PATH_TOO_LONG), 'PATH_TOO_LONG stays -7');
+  R := platform_error_message(PLATFORM_ERR_PATH_TOO_LONG, @LBuf[0], SizeOf(LBuf));
+  Check(R > 0, 'PATH_TOO_LONG message length');
+  Check(Pos('path too long', LowerCase(LBuf)) > 0, 'PATH_TOO_LONG message');
+  Check(platform_error_category(PLATFORM_ERR_PATH_TOO_LONG) = ecInvalidArgument,
+    'PATH_TOO_LONG is ecInvalidArgument');
 end;
 
 procedure TestIoCloseIsErrorCodeApi;
@@ -200,14 +317,20 @@ begin
   Check(R > 0, 'exe_path length > 0');
 end;
 
+function ResolveDocs(const AName: string): string;
+begin
+  if FileExists('../../../docs/platform/' + AName) then
+    Exit('../../../docs/platform/' + AName);
+  if FileExists('core/docs/platform/' + AName) then
+    Exit('core/docs/platform/' + AName);
+  Result := '../../../docs/platform/' + AName;
+end;
+
 procedure TestDocsAuthorityPresent;
 var
   LPath, LText: string;
 begin
-  if FileExists('../../../docs/platform/RETURN-SEMANTICS.md') then
-    LPath := '../../../docs/platform/RETURN-SEMANTICS.md'
-  else
-    LPath := 'core/docs/platform/RETURN-SEMANTICS.md';
+  LPath := ResolveDocs('RETURN-SEMANTICS.md');
   Check(FileExists(LPath), 'RETURN-SEMANTICS.md exists');
   LText := LowerCase(FsReadFileText(LPath));
   CheckContains(LText, 'error-code', 'return tiers document error-code');
@@ -216,16 +339,99 @@ begin
   CheckContains(LText, 'platform_err_', 'return tiers cite PLATFORM_ERR_*');
   CheckContains(LText, 'paramcount', 'return tiers ban ParamCount');
 
-  if FileExists('../../../docs/platform/ERROR-HANDLING.md') then
-    LPath := '../../../docs/platform/ERROR-HANDLING.md'
-  else
-    LPath := 'core/docs/platform/ERROR-HANDLING.md';
+  LPath := ResolveDocs('ERROR-HANDLING.md');
   LText := LowerCase(FsReadFileText(LPath));
   CheckContains(LText, 'platform_err_invalid', 'ERROR-HANDLING lists INVALID');
   CheckContains(LText, '| `platform_err_invalid` | 22 |',
     'ERROR-HANDLING table row INVALID=22');
   CheckContains(LText, 'there is **no** `platform_err_ok`',
     'ERROR-HANDLING forbids PLATFORM_ERR_OK constant');
+  CheckContains(LText, 'platform_err_unknown',
+    'ERROR-HANDLING lists PLATFORM_ERR_UNKNOWN');
+  CheckContains(LText, '| `platform_err_unknown` | -8 |',
+    'ERROR-HANDLING table row UNKNOWN=-8');
+  CheckContains(LText, 'never raw',
+    'ERROR-HANDLING forbids raw ERROR_* passthrough');
+  CheckContains(LText, 'not os `enametoolong`',
+    'ERROR-HANDLING documents PATH_TOO_LONG domain rationale');
+end;
+
+procedure TestApiReferenceNoPhantomErrors;
+var
+  LPath, LText: string;
+begin
+  { API-REFERENCE is in README Authority; it must not invent error names.
+    Live table lives in ERROR-HANDLING.md / error.pas. }
+  LPath := ResolveDocs('API-REFERENCE.md');
+  Check(FileExists(LPath), 'API-REFERENCE.md exists');
+  LText := LowerCase(FsReadFileText(LPath));
+
+  CheckAbsent(LText, 'platform_err_ok',
+    'API-REFERENCE must not invent PLATFORM_ERR_OK');
+  CheckAbsent(LText, 'platform_err_not_found',
+    'API-REFERENCE must not invent PLATFORM_ERR_NOT_FOUND');
+  CheckAbsent(LText, 'platform_err_exists',
+    'API-REFERENCE must not invent PLATFORM_ERR_EXISTS');
+  CheckAbsent(LText, 'platform_err_access',
+    'API-REFERENCE must not invent PLATFORM_ERR_ACCESS');
+  CheckAbsent(LText, 'platform_err_full',
+    'API-REFERENCE must not invent PLATFORM_ERR_FULL');
+  CheckAbsent(LText, 'platform_err_aborted',
+    'API-REFERENCE must not invent PLATFORM_ERR_ABORTED');
+  CheckAbsent(LText, 'platform_err_network',
+    'API-REFERENCE must not invent PLATFORM_ERR_NETWORK');
+
+  CheckContains(LText, 'platform_err_noent',
+    'API-REFERENCE lists live PLATFORM_ERR_NOENT');
+  CheckContains(LText, 'platform_err_exist',
+    'API-REFERENCE lists live PLATFORM_ERR_EXIST');
+  CheckContains(LText, 'platform_err_invalid',
+    'API-REFERENCE lists live PLATFORM_ERR_INVALID');
+  CheckContains(LText, 'platform_err_unsupported',
+    'API-REFERENCE lists live PLATFORM_ERR_UNSUPPORTED');
+  CheckContains(LText, 'platform_err_nospc',
+    'API-REFERENCE lists live PLATFORM_ERR_NOSPC');
+  CheckContains(LText, 'platform_err_unknown',
+    'API-REFERENCE lists live PLATFORM_ERR_UNKNOWN');
+  CheckContains(LText, 'error-handling.md',
+    'API-REFERENCE points to ERROR-HANDLING authority');
+end;
+
+procedure TestDualApiDeprecationSignals;
+var
+  LProc, LRet, LEx: string;
+begin
+  LProc := LowerCase(ReadRaw(ResolveSrc('nextpas.core.platform.process.pas')));
+  Check(Pos('transitional dual-api', LProc) > 0,
+    'process.pas marks platform_io_* as transitional dual-API');
+  Check(Pos('prefer platform.files', LProc) > 0,
+    'process.pas points new code to platform.files / *_ex');
+
+  LRet := LowerCase(FsReadFileText(ResolveDocs('RETURN-SEMANTICS.md')));
+  Check(Pos('transitional', LRet) > 0, 'RETURN-SEMANTICS documents transitional io helpers');
+  Check(Pos('platform_io_read', LRet) > 0, 'RETURN-SEMANTICS names platform_io_read');
+  Check(Pos('dual api', LRet) > 0, 'RETURN-SEMANTICS has Dual API section');
+
+  LEx := LowerCase(FsReadFileText(ResolveDocs('EXAMPLES.md')));
+  { ban uses-clause style SysUtils, allow the ban rule text itself }
+  Check(Pos('sysutils,', LEx) = 0, 'EXAMPLES.md must not uses SysUtils,');
+  Check(Pos('sysutils;', LEx) = 0, 'EXAMPLES.md must not uses SysUtils;');
+  Check(Pos('禁止', LEx) > 0, 'EXAMPLES.md has ban rule text');
+  Check(Pos('sysutils', LEx) > 0, 'EXAMPLES.md ban rule names SysUtils');
+end;
+
+procedure TestOutInitOnSpawnSource;
+var
+  LSrc: string;
+begin
+  LSrc := ReadRaw(ResolveSrc('nextpas.core.platform.process.pas'));
+  { failure paths for spawn / unsupported stubs zero out-params }
+  Check(Pos('FillChar(AProc, SizeOf(AProc), 0)', LSrc) > 0,
+    'spawn paths FillChar AProc out-param');
+  Check(Pos('AReadHandle := -1', LSrc) > 0,
+    'pipe create failure/unsupported sets read handle sentinel');
+  Check(Pos('AWriteHandle := -1', LSrc) > 0,
+    'pipe create failure/unsupported sets write handle sentinel');
 end;
 
 procedure TestGetpidIsSentinelApi;
@@ -242,11 +448,17 @@ begin
   T.Test('error_message is length API (no bare -1)', @TestErrorMessageLengthApi);
   T.Test('args host source no FPC RTL params', @TestArgsHostSourceNoRtl);
   T.Test('production units no FPC SysUtils/BaseUnix/Windows/Classes', @TestProductionUnitsNoFpcRtl);
+  T.Test('platform test tree no uses SysUtils/BaseUnix', @TestPlatformTestTreeNoFpcRtlUses);
   T.Test('error.pas source has no bare -1 failure exits', @TestErrorMessageSourceNoBareMinusOne);
+  T.Test('UNKNOWN portable code + message + category', @TestUnknownErrorPortable);
+  T.Test('PATH_TOO_LONG stays domain -7', @TestPathTooLongDomainNotEnametoolog);
+  T.Test('dual-API deprecation signals + EXAMPLES no SysUtils', @TestDualApiDeprecationSignals);
+  T.Test('out-init on spawn/pipe source contracts', @TestOutInitOnSpawnSource);
   T.Test('windows io_close is error-code API', @TestIoCloseIsErrorCodeApi);
   T.Test('resource uses PLATFORM_ERR_* family', @TestResourceUsesPlatformErr);
   T.Test('args runtime host cmdline', @TestArgsRuntime);
   T.Test('docs authority present', @TestDocsAuthorityPresent);
+  T.Test('API-REFERENCE has no phantom PLATFORM_ERR_*', @TestApiReferenceNoPhantomErrors);
   T.Test('getpid is value/sentinel api', @TestGetpidIsSentinelApi);
   if not T.Run then Halt(1);
 end.

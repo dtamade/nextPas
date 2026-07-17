@@ -3,7 +3,6 @@ program test_platform_pty_wine;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.platform.pty.base,
   nextpas.core.platform.pty,
   nextpas.core.platform.error;

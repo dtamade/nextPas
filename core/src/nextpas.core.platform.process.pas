@@ -122,9 +122,13 @@ function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrIn
     @return 0 成功，否则返回错误码 *}
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
 
-{ Generic fd I/O — used by process.pipe }
+{ Generic fd I/O — transitional dual-API for process.pipe only.
+  Prefer platform.files / platform_process_*_ex for new code.
+  platform_io_read/write/poll: value/sentinel (byte count or ready count; -1 on failure).
+  platform_io_close: error-code (0 / PLATFORM_ERR_*). }
 
 {** @desc 从文件描述符读取数据（自动重试 EINTR）
+    @note Transitional dual-API for process.pipe; prefer platform.files / *_ex.
     @param AFd 文件描述符
     @param ABuf 读取缓冲区
     @param ACount 读取字节数
@@ -132,6 +136,7 @@ function platform_process_close_handle(var AHandle: PtrInt): Int32;
 function platform_io_read(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
 
 {** @desc 向文件描述符写入数据（自动重试 EINTR，处理部分写入）
+    @note Transitional dual-API for process.pipe; prefer platform.files / *_ex.
     @param AFd 文件描述符
     @param ABuf 写入缓冲区
     @param ACount 写入字节数
@@ -144,6 +149,7 @@ function platform_io_write(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt
 function platform_io_close(AFd: PtrInt): Int32;
 
 {** @desc I/O 多路复用等待（poll，自动重试 EINTR）
+    @note Transitional dual-API for process.pipe; prefer platform.io poller for new code.
     @param AFds pollfd 数组
     @param ACount 文件描述符数量
     @param ATimeoutMs 超时时间（毫秒，-1 表示无限等待）

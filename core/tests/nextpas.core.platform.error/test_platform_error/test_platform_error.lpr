@@ -283,6 +283,19 @@ begin
     'PATH_TOO_LONG maps to ecInvalidArgument');
 end;
 
+procedure TestUnknownConstantAndMessage;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  CheckEqual(Int64(-8), Int64(PLATFORM_ERR_UNKNOWN), 'UNKNOWN is -8');
+  R := platform_error_message(PLATFORM_ERR_UNKNOWN, @Buf[0], 256);
+  Check(R > 0, 'UNKNOWN message length > 0');
+  Check(StrContains(@Buf[0], 'unknown'), 'UNKNOWN message contains unknown');
+  Check(platform_error_category(PLATFORM_ERR_UNKNOWN) = ecInternal,
+    'UNKNOWN maps to ecInternal');
+end;
+
 { POSIX errno category mapping tests }
 procedure TestPosixCategoryEnoent;
 begin
@@ -604,6 +617,7 @@ begin
   T.Test('EEXIST maps to ecAlreadyExists', @TestCategoryEexist);
   T.Test('ENOTDIR maps to ecNotFound', @TestCategoryEnotdir);
   T.Test('PATH_TOO_LONG maps to ecInvalidArgument', @TestCategoryPathTooLong);
+  T.Test('UNKNOWN constant message and category', @TestUnknownConstantAndMessage);
   { POSIX errno category tests }
   T.Test('POSIX ENOENT(2) maps to ecNotFound', @TestPosixCategoryEnoent);
   T.Test('POSIX EPERM(1) maps to ecPermission', @TestPosixCategoryEperm);

@@ -12,9 +12,9 @@ Not an FPC `BaseUnix` / `Windows` / `SysUtils` compatibility layer.
 | [runtime-truth-matrix.md](runtime-truth-matrix.md) | Host/seam truth with evidence labels only |
 | [CONTRACT.md](CONTRACT.md) | Module contract: APIs, invariants, errors, ownership |
 | [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md) | Three-tier return model + RTL isolation freeze |
-| [ERROR-HANDLING.md](ERROR-HANDLING.md) | Live `PLATFORM_ERR_*` table (must match `error.pas`) |
+| [ERROR-HANDLING.md](ERROR-HANDLING.md) | **Error authority**: live `PLATFORM_ERR_*` table (must match `error.pas`) |
 | [QUICKSTART.md](QUICKSTART.md) | Common usage patterns |
-| [API-REFERENCE.md](API-REFERENCE.md) | Public API catalog |
+| [API-REFERENCE.md](API-REFERENCE.md) | Public API catalog; error names must match ERROR-HANDLING (no phantoms) |
 
 ## Current truth (one line)
 

@@ -3,7 +3,6 @@ program test_platform_resource_wine;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.platform.resource,
   nextpas.core.platform.resource.base;
 
