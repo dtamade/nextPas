@@ -1570,43 +1570,69 @@ function TH2ClientTransport.PoolGet(const AHost: string;
   const APort: UInt16; const ASecure: Boolean): TH2ClientConnection;
 var
   LI: Int32;
+  LCandidate: TH2ClientConnection;
+  LToClose: array of TH2ClientConnection;
+  LCloseCount: Int32;
 begin
+  { Never Close/Free while holding FPoolLock — same hang class as H1 pool. }
   Result := nil;
-  FPoolLock.Acquire;
-  try
-    LI := 0;
-    while LI < FPoolCount do
-    begin
-      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
-         (FPool[LI].Secure = ASecure) then
+  LCloseCount := 0;
+  SetLength(LToClose, 0);
+  while True do
+  begin
+    LCandidate := nil;
+    FPoolLock.Acquire;
+    try
+      LI := 0;
+      while LI < FPoolCount do
       begin
-        if PoolEntryExpired(FPool[LI]) then
+        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
+           (FPool[LI].Secure = ASecure) then
         begin
-          if FPool[LI].Conn <> nil then
+          if PoolEntryExpired(FPool[LI]) then
           begin
-            FPool[LI].Conn.Close;
-            FPool[LI].Conn.Free;
+            if FPool[LI].Conn <> nil then
+            begin
+              if LCloseCount >= Length(LToClose) then
+                SetLength(LToClose, LCloseCount + 4);
+              LToClose[LCloseCount] := FPool[LI].Conn;
+              Inc(LCloseCount);
+            end;
+            PoolRemoveAt(LI);
+            Continue;
           end;
+          LCandidate := FPool[LI].Conn;
           PoolRemoveAt(LI);
-          Continue;
+          Break;
         end;
-        Result := FPool[LI].Conn;
-        PoolRemoveAt(LI);
-        if (Result <> nil) and Result.IsReusable then
-          Exit;
-        if Result <> nil then
-        begin
-          Result.Close;
-          Result.Free;
-        end;
-        Result := nil;
-        Exit;
+        Inc(LI);
       end;
-      Inc(LI);
+    finally
+      FPoolLock.Release;
     end;
-  finally
-    FPoolLock.Release;
+
+    if LCandidate = nil then
+      Break;
+
+    if LCandidate.IsReusable then
+    begin
+      Result := LCandidate;
+      Break;
+    end;
+
+    if LCloseCount >= Length(LToClose) then
+      SetLength(LToClose, LCloseCount + 4);
+    LToClose[LCloseCount] := LCandidate;
+    Inc(LCloseCount);
   end;
+
+  for LI := 0 to LCloseCount - 1 do
+    if LToClose[LI] <> nil then
+    try
+      LToClose[LI].Close;
+      LToClose[LI].Free;
+    except
+    end;
 end;
 
 procedure TH2ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
@@ -1614,16 +1640,18 @@ procedure TH2ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
 var
   LI: Int32;
   LAuthorityIdle: Int32;
+  LToClose: array of TH2ClientConnection;
+  LCloseCount: Int32;
+  LReject: Boolean;
 begin
+  LCloseCount := 0;
+  SetLength(LToClose, 0);
+  LReject := False;
   FPoolLock.Acquire;
   try
     if (AConn = nil) or (not AConn.IsReusable) then
     begin
-      if AConn <> nil then
-      begin
-        AConn.Close;
-        AConn.Free;
-      end;
+      LReject := AConn <> nil;
       Exit;
     end;
     LI := 0;
@@ -1634,8 +1662,10 @@ begin
       begin
         if FPool[LI].Conn <> nil then
         begin
-          FPool[LI].Conn.Close;
-          FPool[LI].Conn.Free;
+          if LCloseCount >= Length(LToClose) then
+            SetLength(LToClose, LCloseCount + 4);
+          LToClose[LCloseCount] := FPool[LI].Conn;
+          Inc(LCloseCount);
         end;
         PoolRemoveAt(LI);
       end
@@ -1651,8 +1681,7 @@ begin
           Inc(LAuthorityIdle);
       if LAuthorityIdle >= FOptions.MaxPoolSize then
       begin
-        AConn.Close;
-        AConn.Free;
+        LReject := True;
         Exit;
       end;
     end;
@@ -1667,25 +1696,53 @@ begin
   finally
     FPoolLock.Release;
   end;
+
+  if LReject and (AConn <> nil) then
+  begin
+    if LCloseCount >= Length(LToClose) then
+      SetLength(LToClose, LCloseCount + 4);
+    LToClose[LCloseCount] := AConn;
+    Inc(LCloseCount);
+  end;
+  for LI := 0 to LCloseCount - 1 do
+    if LToClose[LI] <> nil then
+    try
+      LToClose[LI].Close;
+      LToClose[LI].Free;
+    except
+    end;
 end;
 
 procedure TH2ClientTransport.PoolClear;
 var
   LI: Int32;
+  LToClose: array of TH2ClientConnection;
+  LCloseCount: Int32;
 begin
+  LCloseCount := 0;
+  SetLength(LToClose, 0);
   FPoolLock.Acquire;
   try
     for LI := 0 to FPoolCount - 1 do
       if FPool[LI].Conn <> nil then
       begin
-        FPool[LI].Conn.Close;
-        FPool[LI].Conn.Free;
+        if LCloseCount >= Length(LToClose) then
+          SetLength(LToClose, LCloseCount + 4);
+        LToClose[LCloseCount] := FPool[LI].Conn;
+        Inc(LCloseCount);
       end;
     FPool := nil;
     FPoolCount := 0;
   finally
     FPoolLock.Release;
   end;
+  for LI := 0 to LCloseCount - 1 do
+    if LToClose[LI] <> nil then
+    try
+      LToClose[LI].Close;
+      LToClose[LI].Free;
+    except
+    end;
 end;
 
 function TH2ClientTransport.SecureClientContext: ISSLContext;
