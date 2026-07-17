@@ -13,11 +13,11 @@
 
 - **向前开发入口**：**仅** [`ROADMAP.md`](ROADMAP.md)（多时代 + Goal Loop；本文件不维护 NEXT Wave 名）。
 - **Stage**：framework-complete (non-H3)；H3 诚实 blocked / 无产品需求。
-- **Excellence**：Era 6（ROADMAP X1–X5）— H1/H2/WS 精品；net/tls 可受控反哺。
+- **Excellence**：Era 6（ROADMAP X0–X5）**Done** — H1/H2/WS 精品；net/tls 受控反哺已落地（cancel waitable、TLS PinValidator）。
 - **可用性 A–I + J/K**：主路径齐；Op hygiene；工厂白名单已冻。
 - **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
 - **前置条件错误**：公开面 nil/非法参数 → `EHttpError(hekArgument)`。
-- **Residual-honest（可被 Era 6 收敛）**：cancel waitable landed（X2；Windows socketpair residual / probe-only ~10ms）；OpenSSL factory unfreed（X4/tls）；pool 无 idle TTL（X3）；server `Default` RW=0 keep。
+- **Residual-honest（Era 6 后）**：cancel waitable landed（X2；Windows socketpair residual / probe-only ~10ms）；pool IdleTTL landed（X3；默认 90s / 0=off）；OpenSSL PinValidator free landed（X4；HTTPS 余 1×41B process-lifetime）；headers equal-fold Get/Has landed（X5）；server `Default` RW=0 keep。
 - **WebSocket**：production-helper lifecycle 契约见 CONTRACT §2.2.3c；证据 `test_http_websocket` + `test_http_websocket_client`（含 close lifecycle / cancel Op）。
 - **历史档案**：[`archive/`](archive/README.md)。与 ROADMAP 冲突时以 ROADMAP + 源码为准。
 

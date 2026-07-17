@@ -540,3 +540,817 @@ asm
 .Lnotequal:
   mov   w0, #0
 end;
+
+// === Phase 22a: NEON Memory Copy / Fill / DiffRange ===
+
+procedure MemCopy_NEON(src, dst: Pointer; len: SizeUInt); assembler; nostackframe;
+asm
+  // x0 = src, x1 = dst, x2 = len
+  cbz   x2, .Lcopy_done
+  cbz   x0, .Lcopy_done
+  cbz   x1, .Lcopy_done
+  cmp   x0, x1
+  b.eq  .Lcopy_done
+
+.Lcopy_loop16:
+  cmp   x2, #16
+  b.lo  .Lcopy_tail
+  // ICE-safe 16-byte load/store
+  ldp   x3, x4, [x0], #16
+  stp   x3, x4, [x1], #16
+  sub   x2, x2, #16
+  cbnz  x2, .Lcopy_loop16
+  b     .Lcopy_done
+
+.Lcopy_tail:
+  cbz   x2, .Lcopy_done
+.Lcopy_tail_loop:
+  ldrb  w3, [x0], #1
+  strb  w3, [x1], #1
+  subs  x2, x2, #1
+  b.ne  .Lcopy_tail_loop
+
+.Lcopy_done:
+  ret
+end;
+
+procedure MemSet_NEON(dst: Pointer; len: SizeUInt; value: Byte); assembler; nostackframe;
+asm
+  // x0 = dst, x1 = len, w2 = value
+  cbz   x1, .Lset_done
+  cbz   x0, .Lset_done
+  dup   v0.16b, w2
+
+.Lset_loop16:
+  cmp   x1, #16
+  b.lo  .Lset_tail
+  // ICE-safe store of broadcast byte
+  umov  x3, v0.d[0]
+  umov  x4, v0.d[1]
+  stp   x3, x4, [x0], #16
+  sub   x1, x1, #16
+  cbnz  x1, .Lset_loop16
+  b     .Lset_done
+
+.Lset_tail:
+  cbz   x1, .Lset_done
+.Lset_tail_loop:
+  strb  w2, [x0], #1
+  subs  x1, x1, #1
+  b.ne  .Lset_tail_loop
+
+.Lset_done:
+  ret
+end;
+
+function MemDiffRange_NEON(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean; assembler; nostackframe;
+asm
+  // x0 = a, x1 = b, x2 = len, x3 = &firstDiff, x4 = &lastDiff
+  // Return: w0 = Boolean
+  str   xzr, [x3]
+  str   xzr, [x4]
+  cbz   x2, .Ldiff_false
+
+  // nil handling: either nil and pointers differ → full range
+  cbz   x0, .Ldiff_nil
+  cbz   x1, .Ldiff_nil
+  cmp   x0, x1
+  b.eq  .Ldiff_false
+
+  mov   x5, x0               // save a base
+  mov   x6, x1               // save b base
+  mov   x7, x2               // save len
+  mov   x8, #0               // offset = 0
+
+  // ---- find first difference (16-byte NEON compare) ----
+.Ldiff_first_loop:
+  cmp   x2, #16
+  b.lo  .Ldiff_first_tail
+  ldp   x9, x10, [x0]
+  fmov  d0, x9
+  fmov  d2, x10
+  ins   v0.d[1], v2.d[0]
+  ldp   x9, x10, [x1]
+  fmov  d1, x9
+  fmov  d2, x10
+  ins   v1.d[1], v2.d[0]
+  cmeq  v0.16b, v0.16b, v1.16b
+  uminv b2, v0.16b
+  umov  w9, v2.b[0]
+  cmp   w9, #255
+  b.ne  .Ldiff_first_in_block
+  add   x0, x0, #16
+  add   x1, x1, #16
+  add   x8, x8, #16
+  sub   x2, x2, #16
+  cbnz  x2, .Ldiff_first_loop
+  b     .Ldiff_false
+
+.Ldiff_first_in_block:
+  // Scan 16 lanes for first unequal byte (mask byte != 0xFF)
+  mov   w10, #0
+.Ldiff_first_scan:
+  umov  w9, v0.b[0]
+  cmp   w9, #255
+  b.ne  .Ldiff_first_found
+  ext   v0.16b, v0.16b, v0.16b, #1
+  add   w10, w10, #1
+  cmp   w10, #16
+  b.lo  .Ldiff_first_scan
+  // Should not reach; treat as continue
+  add   x0, x0, #16
+  add   x1, x1, #16
+  add   x8, x8, #16
+  sub   x2, x2, #16
+  cbnz  x2, .Ldiff_first_loop
+  b     .Ldiff_false
+
+.Ldiff_first_found:
+  add   x8, x8, x10          // first offset
+  str   x8, [x3]
+  // last defaults to first; refine from end
+  str   x8, [x4]
+  b     .Ldiff_find_last
+
+.Ldiff_first_tail:
+  cbz   x2, .Ldiff_false
+.Ldiff_first_tail_loop:
+  ldrb  w9, [x0], #1
+  ldrb  w10, [x1], #1
+  cmp   w9, w10
+  b.ne  .Ldiff_first_tail_found
+  add   x8, x8, #1
+  subs  x2, x2, #1
+  b.ne  .Ldiff_first_tail_loop
+  b     .Ldiff_false
+
+.Ldiff_first_tail_found:
+  str   x8, [x3]
+  str   x8, [x4]
+
+  // ---- find last difference: scan backward from end (scalar; one-shot) ----
+.Ldiff_find_last:
+  // x5=a base, x6=b base, x7=len, first in [x3]
+  ldr   x8, [x3]             // firstDiff
+  sub   x9, x7, #1           // i = len-1
+.Ldiff_last_loop:
+  cmp   x9, x8
+  b.ls  .Ldiff_true          // i <= first → last already first
+  ldrb  w10, [x5, x9]
+  ldrb  w11, [x6, x9]
+  cmp   w10, w11
+  b.ne  .Ldiff_last_found
+  sub   x9, x9, #1
+  b     .Ldiff_last_loop
+
+.Ldiff_last_found:
+  str   x9, [x4]
+  b     .Ldiff_true
+
+.Ldiff_nil:
+  // one nil (or both nil with different pointers already excluded by equal len==0)
+  // if a <> b (pointer inequality): full range
+  cmp   x0, x1
+  b.eq  .Ldiff_false
+  str   xzr, [x3]
+  sub   x2, x2, #1
+  str   x2, [x4]
+  b     .Ldiff_true
+
+.Ldiff_true:
+  mov   w0, #1
+  ret
+
+.Ldiff_false:
+  mov   w0, #0
+  ret
+end;
+
+// === Phase 22b: NEON Memory Reverse / BytesIndexOf / Utf8Validate ===
+
+procedure MemReverse_NEON(p: Pointer; len: SizeUInt); assembler; nostackframe;
+asm
+  // x0 = p, x1 = len
+  cbz   x0, .Lrev_done
+  cmp   x1, #1
+  b.ls  .Lrev_done
+
+  // x2 = left, x3 = right (last byte)
+  mov   x2, x0
+  add   x3, x0, x1
+  sub   x3, x3, #1
+
+  // ---- 16-byte block reverse from both ends ----
+.Lrev_loop16:
+  // need left+30 < right  (two non-overlapping 16B windows)
+  add   x4, x2, #30
+  cmp   x4, x3
+  b.hs  .Lrev_loop8
+  // load left 16
+  ldp   x5, x6, [x2]
+  fmov  d0, x5
+  fmov  d2, x6
+  ins   v0.d[1], v2.d[0]
+  // load right-15 16
+  sub   x7, x3, #15
+  ldp   x5, x6, [x7]
+  fmov  d1, x5
+  fmov  d2, x6
+  ins   v1.d[1], v2.d[0]
+  // reverse each 16B vector: rev64 within halves, then swap halves
+  rev64 v0.16b, v0.16b
+  ext   v0.16b, v0.16b, v0.16b, #8
+  rev64 v1.16b, v1.16b
+  ext   v1.16b, v1.16b, v1.16b, #8
+  // store left-reversed to right window, right-reversed to left
+  umov  x5, v0.d[0]
+  umov  x6, v0.d[1]
+  stp   x5, x6, [x7]
+  umov  x5, v1.d[0]
+  umov  x6, v1.d[1]
+  stp   x5, x6, [x2]
+  add   x2, x2, #16
+  sub   x3, x3, #16
+  b     .Lrev_loop16
+
+  // ---- 8-byte reverse via rev ----
+.Lrev_loop8:
+  add   x4, x2, #14
+  cmp   x4, x3
+  b.hs  .Lrev_loop1
+  ldr   x5, [x2]
+  sub   x7, x3, #7
+  ldr   x6, [x7]
+  rev   x5, x5
+  rev   x6, x6
+  str   x6, [x2]
+  str   x5, [x7]
+  add   x2, x2, #8
+  sub   x3, x3, #8
+  b     .Lrev_loop8
+
+  // ---- byte tail ----
+.Lrev_loop1:
+  cmp   x2, x3
+  b.hs  .Lrev_done
+  ldrb  w5, [x2]
+  ldrb  w6, [x3]
+  strb  w6, [x2]
+  strb  w5, [x3]
+  add   x2, x2, #1
+  sub   x3, x3, #1
+  b     .Lrev_loop1
+
+.Lrev_done:
+  ret
+end;
+
+function BytesIndexOf_NEON(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt; assembler; nostackframe;
+asm
+  // x0 = haystack, x1 = haystackLen, x2 = needle, x3 = needleLen
+  // return: x0 = PtrInt index or -1
+  // Match scalar edge semantics.
+  cbz   x1, .Lbix_miss
+  cbz   x3, .Lbix_miss
+  cbz   x0, .Lbix_miss
+  cbz   x2, .Lbix_miss
+  cmp   x3, x1
+  b.hi  .Lbix_miss
+
+  // search window length = haystackLen - needleLen + 1
+  sub   x4, x1, x3
+  add   x4, x4, #1          // x4 = searchLen
+  mov   x5, x0              // x5 = hay base
+  mov   x6, #0              // x6 = offset
+  ldrb  w7, [x2]            // first needle byte
+  dup   v0.16b, w7
+
+  // single-byte needle: pure NEON first-byte search (same shape as MemFindByte)
+  cmp   x3, #1
+  b.eq  .Lbix_one
+
+.Lbix_loop16:
+  cmp   x4, #16
+  b.lo  .Lbix_tail
+  ldp   x8, x9, [x5, x6]
+  fmov  d1, x8
+  fmov  d2, x9
+  ins   v1.d[1], v2.d[0]
+  cmeq  v1.16b, v1.16b, v0.16b
+  umaxv b2, v1.16b
+  umov  w8, v2.b[0]
+  cbnz  w8, .Lbix_scan16
+  add   x6, x6, #16
+  sub   x4, x4, #16
+  cbnz  x4, .Lbix_loop16
+  b     .Lbix_miss
+
+.Lbix_scan16:
+  mov   w9, #0              // lane
+.Lbix_scan_lane:
+  umov  w8, v1.b[0]
+  cbz   w8, .Lbix_next_lane
+  // candidate at offset x6 + w9; verify full needle
+  add   x10, x6, x9         // candidate index
+  mov   x11, #0             // j
+.Lbix_verify:
+  cmp   x11, x3
+  b.eq  .Lbix_hit
+  add   x12, x5, x10
+  ldrb  w8, [x12, x11]
+  ldrb  w13, [x2, x11]
+  cmp   w8, w13
+  b.ne  .Lbix_next_lane
+  add   x11, x11, #1
+  b     .Lbix_verify
+
+.Lbix_next_lane:
+  ext   v1.16b, v1.16b, v1.16b, #1
+  add   w9, w9, #1
+  cmp   w9, #16
+  b.lo  .Lbix_scan_lane
+  // no verified hit in this block
+  add   x6, x6, #16
+  sub   x4, x4, #16
+  cbnz  x4, .Lbix_loop16
+  b     .Lbix_miss
+
+.Lbix_one:
+  // reuse searchLen in x4, first byte already in v0
+.Lbix_one_loop16:
+  cmp   x4, #16
+  b.lo  .Lbix_one_tail
+  ldp   x8, x9, [x5, x6]
+  fmov  d1, x8
+  fmov  d2, x9
+  ins   v1.d[1], v2.d[0]
+  cmeq  v1.16b, v1.16b, v0.16b
+  umaxv b2, v1.16b
+  umov  w8, v2.b[0]
+  cbnz  w8, .Lbix_one_found16
+  add   x6, x6, #16
+  sub   x4, x4, #16
+  cbnz  x4, .Lbix_one_loop16
+  b     .Lbix_miss
+
+.Lbix_one_found16:
+  mov   w9, #0
+.Lbix_one_scan:
+  umov  w8, v1.b[0]
+  cbnz  w8, .Lbix_one_hit
+  ext   v1.16b, v1.16b, v1.16b, #1
+  add   w9, w9, #1
+  cmp   w9, #16
+  b.lo  .Lbix_one_scan
+  add   x6, x6, #16
+  sub   x4, x4, #16
+  cbnz  x4, .Lbix_one_loop16
+  b     .Lbix_miss
+
+.Lbix_one_hit:
+  add   x0, x6, x9
+  ret
+
+.Lbix_one_tail:
+  cbz   x4, .Lbix_miss
+.Lbix_one_tail_loop:
+  ldrb  w8, [x5, x6]
+  cmp   w8, w7
+  b.eq  .Lbix_hit_idx
+  add   x6, x6, #1
+  subs  x4, x4, #1
+  b.ne  .Lbix_one_tail_loop
+  b     .Lbix_miss
+
+.Lbix_tail:
+  cbz   x4, .Lbix_miss
+.Lbix_tail_loop:
+  // scalar first-byte filter then full verify
+  ldrb  w8, [x5, x6]
+  cmp   w8, w7
+  b.ne  .Lbix_tail_next
+  mov   x11, #0
+.Lbix_tail_verify:
+  cmp   x11, x3
+  b.eq  .Lbix_hit_idx
+  add   x12, x5, x6
+  ldrb  w8, [x12, x11]
+  ldrb  w13, [x2, x11]
+  cmp   w8, w13
+  b.ne  .Lbix_tail_next
+  add   x11, x11, #1
+  b     .Lbix_tail_verify
+.Lbix_tail_next:
+  add   x6, x6, #1
+  subs  x4, x4, #1
+  b.ne  .Lbix_tail_loop
+  b     .Lbix_miss
+
+.Lbix_hit:
+  add   x0, x6, x9
+  ret
+
+.Lbix_hit_idx:
+  mov   x0, x6
+  ret
+
+.Lbix_miss:
+  mov   x0, #-1
+  ret
+end;
+
+function Utf8Validate_NEON(p: Pointer; len: SizeUInt): Boolean; assembler; nostackframe;
+asm
+  // x0 = p, x1 = len
+  // Return: w0 = Boolean
+  // NEON ASCII fast path + scalar-parity multi-byte checks.
+  cbz   x1, .Lutf8_true
+  cbz   x0, .Lutf8_false
+
+  mov   x2, x0              // base
+  mov   x3, x1              // remaining
+  mov   x4, #0              // offset
+
+  // ---- 16-byte ASCII scan ----
+.Lutf8_ascii16:
+  cmp   x3, #16
+  b.lo  .Lutf8_scalar
+  ldp   x5, x6, [x2, x4]
+  fmov  d0, x5
+  fmov  d2, x6
+  ins   v0.d[1], v2.d[0]
+  // any high bit? max byte >= 0x80
+  umaxv b1, v0.16b
+  umov  w5, v1.b[0]
+  tbnz  w5, #7, .Lutf8_scalar
+  add   x4, x4, #16
+  sub   x3, x3, #16
+  cbnz  x3, .Lutf8_ascii16
+  b     .Lutf8_true
+
+  // ---- scalar-parity validation from offset x4 ----
+.Lutf8_scalar:
+  // x2=base, x1=original len, x4=i
+.Lutf8_loop:
+  cmp   x4, x1
+  b.hs  .Lutf8_true
+  ldrb  w5, [x2, x4]        // b
+  // ASCII?
+  tbz   w5, #7, .Lutf8_ascii1
+
+  // 2-byte: C2..DF
+  cmp   w5, #0xC2
+  b.lo  .Lutf8_false
+  cmp   w5, #0xDF
+  b.ls  .Lutf8_seq2
+  // 3-byte: E0..EF  (top nibble E)
+  and   w6, w5, #0xF0
+  cmp   w6, #0xE0
+  b.eq  .Lutf8_seq3
+  // 4-byte: F0..F4
+  cmp   w5, #0xF0
+  b.lo  .Lutf8_false
+  cmp   w5, #0xF4
+  b.hi  .Lutf8_false
+  b     .Lutf8_seq4
+
+.Lutf8_ascii1:
+  add   x4, x4, #1
+  b     .Lutf8_loop
+
+.Lutf8_seq2:
+  // need 1 continuation
+  add   x6, x4, #1
+  cmp   x6, x1
+  b.hs  .Lutf8_false
+  ldrb  w7, [x2, x6]
+  and   w8, w7, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  add   x4, x4, #2
+  b     .Lutf8_loop
+
+.Lutf8_seq3:
+  // need 2 continuations + overlong/surrogate checks
+  add   x6, x4, #2
+  cmp   x6, x1
+  b.hs  .Lutf8_false
+  add   x6, x4, #1
+  ldrb  w7, [x2, x6]        // b2
+  and   w8, w7, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  add   x6, x4, #2
+  ldrb  w9, [x2, x6]        // b3
+  and   w8, w9, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  // (b==E0 && b2<A0) invalid overlong
+  cmp   w5, #0xE0
+  b.ne  .Lutf8_seq3_sur
+  cmp   w7, #0xA0
+  b.lo  .Lutf8_false
+.Lutf8_seq3_sur:
+  // (b==ED && b2>=A0) invalid surrogate
+  cmp   w5, #0xED
+  b.ne  .Lutf8_seq3_ok
+  cmp   w7, #0xA0
+  b.hs  .Lutf8_false
+.Lutf8_seq3_ok:
+  add   x4, x4, #3
+  b     .Lutf8_loop
+
+.Lutf8_seq4:
+  // need 3 continuations + range checks
+  add   x6, x4, #3
+  cmp   x6, x1
+  b.hs  .Lutf8_false
+  add   x6, x4, #1
+  ldrb  w7, [x2, x6]        // b2
+  and   w8, w7, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  add   x6, x4, #2
+  ldrb  w9, [x2, x6]
+  and   w8, w9, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  add   x6, x4, #3
+  ldrb  w9, [x2, x6]
+  and   w8, w9, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  // (b==F0 && b2<90) overlong
+  cmp   w5, #0xF0
+  b.ne  .Lutf8_seq4_max
+  cmp   w7, #0x90
+  b.lo  .Lutf8_false
+.Lutf8_seq4_max:
+  // (b==F4 && b2>=90) too large
+  cmp   w5, #0xF4
+  b.ne  .Lutf8_seq4_ok
+  cmp   w7, #0x90
+  b.hs  .Lutf8_false
+.Lutf8_seq4_ok:
+  add   x4, x4, #4
+  b     .Lutf8_loop
+
+.Lutf8_true:
+  mov   w0, #1
+  ret
+
+.Lutf8_false:
+  mov   w0, #0
+  ret
+end;
+
+// === Phase 23a: NEON BatchF32 ArrayAdd / ArraySub / ArrayMul ===
+// ABI (AAPCS64): x0=aSrc1, x1=aSrc2, x2=aDst, x3=aCount
+// ICE-safe: ldp/fmov/ins + fadd/fsub/fmul vN.4s + umov/stp; scalar s-reg tail.
+
+procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larradd_done
+
+.Larradd_loop4:
+  cmp   x3, #4
+  b.lo  .Larradd_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fadd  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larradd_loop4
+
+.Larradd_tail:
+  cbz   x3, .Larradd_done
+.Larradd_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fadd  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larradd_tail_loop
+
+.Larradd_done:
+  ret
+end;
+
+procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larrsub_done
+
+.Larrsub_loop4:
+  cmp   x3, #4
+  b.lo  .Larrsub_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fsub  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larrsub_loop4
+
+.Larrsub_tail:
+  cbz   x3, .Larrsub_done
+.Larrsub_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fsub  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larrsub_tail_loop
+
+.Larrsub_done:
+  ret
+end;
+
+procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larrmul_done
+
+.Larrmul_loop4:
+  cmp   x3, #4
+  b.lo  .Larrmul_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fmul  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larrmul_loop4
+
+.Larrmul_tail:
+  cbz   x3, .Larrmul_done
+.Larrmul_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fmul  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larrmul_tail_loop
+
+.Larrmul_done:
+  ret
+end;
+
+// === Phase 23b: NEON BatchF32 ArrayMin / ArrayMax / ArrayAbs / ArrayNeg ===
+// Min/Max ABI: x0=aSrc1, x1=aSrc2, x2=aDst, x3=aCount
+// Abs/Neg ABI: x0=aSrc, x1=aDst, x2=aCount
+// ICE-safe: ldp/fmov/ins + fmin/fmax/fabs/fneg + umov/stp; scalar s-reg tail.
+
+procedure NEONArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larrmin_done
+
+.Larrmin_loop4:
+  cmp   x3, #4
+  b.lo  .Larrmin_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fmin  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larrmin_loop4
+
+.Larrmin_tail:
+  cbz   x3, .Larrmin_done
+.Larrmin_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fmin  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larrmin_tail_loop
+
+.Larrmin_done:
+  ret
+end;
+
+procedure NEONArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larrmax_done
+
+.Larrmax_loop4:
+  cmp   x3, #4
+  b.lo  .Larrmax_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fmax  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larrmax_loop4
+
+.Larrmax_tail:
+  cbz   x3, .Larrmax_done
+.Larrmax_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fmax  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larrmax_tail_loop
+
+.Larrmax_done:
+  ret
+end;
+
+procedure NEONArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x2, .Larrabs_done
+
+.Larrabs_loop4:
+  cmp   x2, #4
+  b.lo  .Larrabs_tail
+  ldp   x3, x4, [x0], #16
+  fmov  d0, x3
+  fmov  d1, x4
+  ins   v0.d[1], v1.d[0]
+  fabs  v0.4s, v0.4s
+  umov  x3, v0.d[0]
+  umov  x4, v0.d[1]
+  stp   x3, x4, [x1], #16
+  sub   x2, x2, #4
+  b     .Larrabs_loop4
+
+.Larrabs_tail:
+  cbz   x2, .Larrabs_done
+.Larrabs_tail_loop:
+  ldr   s0, [x0], #4
+  fabs  s0, s0
+  str   s0, [x1], #4
+  subs  x2, x2, #1
+  b.ne  .Larrabs_tail_loop
+
+.Larrabs_done:
+  ret
+end;
+
+procedure NEONArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x2, .Larrneg_done
+
+.Larrneg_loop4:
+  cmp   x2, #4
+  b.lo  .Larrneg_tail
+  ldp   x3, x4, [x0], #16
+  fmov  d0, x3
+  fmov  d1, x4
+  ins   v0.d[1], v1.d[0]
+  fneg  v0.4s, v0.4s
+  umov  x3, v0.d[0]
+  umov  x4, v0.d[1]
+  stp   x3, x4, [x1], #16
+  sub   x2, x2, #4
+  b     .Larrneg_loop4
+
+.Larrneg_tail:
+  cbz   x2, .Larrneg_done
+.Larrneg_tail_loop:
+  ldr   s0, [x0], #4
+  fneg  s0, s0
+  str   s0, [x1], #4
+  subs  x2, x2, #1
+  b.ne  .Larrneg_tail_loop
+
+.Larrneg_done:
+  ret
+end;

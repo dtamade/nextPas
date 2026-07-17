@@ -252,6 +252,62 @@ function BatchStepF32(const AEdge, AInput: array of Single;
 function BatchSmoothstepF32(const AEdge0, AEdge1, AInput: array of Single;
                             var AOutput: array of Single): SizeInt;
 
+{ Double-precision public batch API — F32 parity over Array*F64. }
+function BatchSinF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchCosF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchSinCosF64(const AInput: array of Double;
+                        var ASinOutput, ACosOutput: array of Double): SizeInt;
+function BatchTanF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchExpF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchLnF64(const AInput: array of Double;
+                    var AOutput: array of Double): SizeInt;
+function BatchLog10F64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchLog2F64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchSqrtF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchAbsF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchNegF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchCeilF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchFloorF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchRoundF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchTruncF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchLerpF64(const AStart, AEnd: array of Double;
+                      const AT: Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchClampF64(const AInput: array of Double;
+                       const AMin, AMax: Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchScaleOffsetF64(const AInput: array of Double;
+                             const AScale, AOffset: Double;
+                             var AOutput: array of Double): SizeInt;
+function BatchAtan2F64(const AY, AX: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchHypotF64(const AX, AY: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchFractF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchModF64(const AInput: array of Double;
+                     const ADivisor: Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchSignF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchStepF64(const AEdge, AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchSmoothstepF64(const AEdge0, AEdge1, AInput: array of Double;
+                            var AOutput: array of Double): SizeInt;
+
 implementation
 
 uses
@@ -436,6 +492,164 @@ function BatchSmoothstepF32(const AEdge0, AEdge1, AInput: array of Single;
                             var AOutput: array of Single): SizeInt;
 begin
   Result := BatchSmoothstepSimdF32(AEdge0, AEdge1, AInput, AOutput);
+end;
+
+{ F64 public wrappers }
+
+function BatchSinF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchSinSimdF64(AInput, AOutput);
+end;
+
+function BatchCosF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchCosSimdF64(AInput, AOutput);
+end;
+
+function BatchSinCosF64(const AInput: array of Double;
+                        var ASinOutput, ACosOutput: array of Double): SizeInt;
+begin
+  Result := BatchSinCosSimdF64(AInput, ASinOutput, ACosOutput);
+end;
+
+function BatchTanF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchTanSimdF64(AInput, AOutput);
+end;
+
+function BatchExpF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchExpSimdF64(AInput, AOutput);
+end;
+
+function BatchLnF64(const AInput: array of Double;
+                    var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchLnSimdF64(AInput, AOutput);
+end;
+
+function BatchLog10F64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchLog10SimdF64(AInput, AOutput);
+end;
+
+function BatchLog2F64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchLog2SimdF64(AInput, AOutput);
+end;
+
+function BatchSqrtF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchSqrtSimdF64(AInput, AOutput);
+end;
+
+function BatchAbsF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchAbsSimdF64(AInput, AOutput);
+end;
+
+function BatchNegF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchNegSimdF64(AInput, AOutput);
+end;
+
+function BatchCeilF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchCeilSimdF64(AInput, AOutput);
+end;
+
+function BatchFloorF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchFloorSimdF64(AInput, AOutput);
+end;
+
+function BatchRoundF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchRoundSimdF64(AInput, AOutput);
+end;
+
+function BatchTruncF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchTruncSimdF64(AInput, AOutput);
+end;
+
+function BatchLerpF64(const AStart, AEnd: array of Double;
+                      const AT: Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchLerpSimdF64(AStart, AEnd, AT, AOutput);
+end;
+
+function BatchClampF64(const AInput: array of Double;
+                       const AMin, AMax: Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  if AMin > AMax then
+    raise EArgumentError.Create('Clamp: minimum must not exceed maximum');
+  Result := BatchClampSimdF64(AInput, AMin, AMax, AOutput);
+end;
+
+function BatchScaleOffsetF64(const AInput: array of Double;
+                             const AScale, AOffset: Double;
+                             var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchScaleOffsetSimdF64(AInput, AScale, AOffset, AOutput);
+end;
+
+function BatchAtan2F64(const AY, AX: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchAtan2SimdF64(AY, AX, AOutput);
+end;
+
+function BatchHypotF64(const AX, AY: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchHypotSimdF64(AX, AY, AOutput);
+end;
+
+function BatchFractF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchFractSimdF64(AInput, AOutput);
+end;
+
+function BatchModF64(const AInput: array of Double;
+                     const ADivisor: Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchModSimdF64(AInput, ADivisor, AOutput);
+end;
+
+function BatchSignF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchSignSimdF64(AInput, AOutput);
+end;
+
+function BatchStepF64(const AEdge, AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchStepSimdF64(AEdge, AInput, AOutput);
+end;
+
+function BatchSmoothstepF64(const AEdge0, AEdge1, AInput: array of Double;
+                            var AOutput: array of Double): SizeInt;
+begin
+  Result := BatchSmoothstepSimdF64(AEdge0, AEdge1, AInput, AOutput);
 end;
 
 end.

@@ -1236,7 +1236,7 @@ var
 begin
   SetActiveBackend(sbScalar);
   LDispatch := GetDispatchTable;
-  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'Scalar dispatch for wide Round/Trunc should exist');
+  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'Scalar dispatch for wide Round/Trunc should exist');
 
   for LIndex := 0 to 7 do
   begin
@@ -1253,8 +1253,8 @@ begin
     end;
   end;
 
-  LRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-  LTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
+  LRoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+  LTruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
   for LIndex := 0 to 7 do
     AssertSingleLane('Scalar F32x8[' + IntToStr(LIndex) + ']', LIndex, LRoundF32x8.f[LIndex], LTruncF32x8.f[LIndex]);
 
@@ -1293,8 +1293,8 @@ begin
       LInF64x4.d[LIndex] := 1000000.75;
     end;
 
-  LRoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-  LTruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+  LRoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+  LTruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
   for LIndex := 0 to 3 do
     AssertDoubleLane('Scalar F64x4[' + IntToStr(LIndex) + ']', LIndex, LRoundF64x4.d[LIndex], LTruncF64x4.d[LIndex]);
 
@@ -1416,7 +1416,7 @@ begin
   SetVectorAsmEnabled(True);
   SetActiveBackend(sbSSE2);
   LDispatch := GetDispatchTable;
-  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'SSE2 dispatch for wide Round/Trunc should exist');
+  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'SSE2 dispatch for wide Round/Trunc should exist');
 
   for LIndex := 0 to 7 do
   begin
@@ -1433,8 +1433,8 @@ begin
     end;
   end;
 
-  LRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-  LTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
+  LRoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+  LTruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
   for LIndex := 0 to 7 do
     AssertSingleLane('SSE2 F32x8[' + IntToStr(LIndex) + ']', LIndex, LRoundF32x8.f[LIndex], LTruncF32x8.f[LIndex]);
 
@@ -1473,8 +1473,8 @@ begin
       LInF64x4.d[LIndex] := 1000000.75;
     end;
 
-  LRoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-  LTruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+  LRoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+  LTruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
   for LIndex := 0 to 3 do
     AssertDoubleLane('SSE2 F64x4[' + IntToStr(LIndex) + ']', LIndex, LRoundF64x4.d[LIndex], LTruncF64x4.d[LIndex]);
 
@@ -1701,6 +1701,11 @@ var
   end;
 
 begin
+  LSSE2RoundF32x8 := Default(TVecF32x8); LSSE2TruncF32x8 := Default(TVecF32x8);
+  LSSE2RoundF64x4 := Default(TVecF64x4); LSSE2TruncF64x4 := Default(TVecF64x4);
+  LSSE2RoundF32x16 := Default(TVecF32x16); LSSE2TruncF32x16 := Default(TVecF32x16);
+  LSSE2RoundF64x8 := Default(TVecF64x8); LSSE2TruncF64x8 := Default(TVecF64x8);
+
   if not IsBackendRegistered(sbAVX2) then
     Exit;
 
@@ -1748,12 +1753,12 @@ begin
   SetVectorAsmEnabled(False);
   SetActiveBackend(sbScalar);
   LDispatch := GetDispatchTable;
-  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'Scalar dispatch should provide wide Round/Trunc');
+  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'Scalar dispatch should provide wide Round/Trunc');
 
-  LScalarRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-  LScalarTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-  LScalarRoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-  LScalarTruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+  LScalarRoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+  LScalarTruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+  LScalarRoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+  LScalarTruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
   LScalarRoundF32x16 := VecF32x16Round(LInF32x16);
   LScalarTruncF32x16 := VecF32x16Trunc(LInF32x16);
   LScalarRoundF64x8 := VecF64x8Round(LInF64x8);
@@ -1765,12 +1770,12 @@ begin
     SetVectorAsmEnabled(True);
     SetActiveBackend(sbSSE2);
     LDispatch := GetDispatchTable;
-    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'SSE2 dispatch should provide wide Round/Trunc');
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'SSE2 dispatch should provide wide Round/Trunc');
 
-    LSSE2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-    LSSE2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-    LSSE2RoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-    LSSE2TruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+    LSSE2RoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+    LSSE2TruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+    LSSE2RoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+    LSSE2TruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
     LSSE2RoundF32x16 := VecF32x16Round(LInF32x16);
     LSSE2TruncF32x16 := VecF32x16Trunc(LInF32x16);
     LSSE2RoundF64x8 := VecF64x8Round(LInF64x8);
@@ -1784,12 +1789,12 @@ begin
     Exit;
 
   LDispatch := GetDispatchTable;
-  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'AVX2 dispatch should provide wide Round/Trunc');
+  CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'AVX2 dispatch should provide wide Round/Trunc');
 
-  LAVX2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-  LAVX2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-  LAVX2RoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-  LAVX2TruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+  LAVX2RoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+  LAVX2TruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+  LAVX2RoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+  LAVX2TruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
   LAVX2RoundF32x16 := VecF32x16Round(LInF32x16);
   LAVX2TruncF32x16 := VecF32x16Trunc(LInF32x16);
   LAVX2RoundF64x8 := VecF64x8Round(LInF64x8);
@@ -1872,6 +1877,11 @@ var
   end;
 
 begin
+  LSSE2FloorF32x8 := Default(TVecF32x8); LSSE2CeilF32x8 := Default(TVecF32x8);
+  LSSE2FloorF64x4 := Default(TVecF64x4); LSSE2CeilF64x4 := Default(TVecF64x4);
+  LSSE2FloorF32x16 := Default(TVecF32x16); LSSE2CeilF32x16 := Default(TVecF32x16);
+  LSSE2FloorF64x8 := Default(TVecF64x8); LSSE2CeilF64x8 := Default(TVecF64x8);
+
   if not IsBackendRegistered(sbAVX2) then
     Exit;
 
@@ -1917,12 +1927,12 @@ begin
   SetVectorAsmEnabled(False);
     SetActiveBackend(sbScalar);
     LDispatch := GetDispatchTable;
-    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'Scalar dispatch should provide wide Floor/Ceil');
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.FloorF32x8) and Assigned(LDispatch^.CoreVectors.CeilF32x8) and Assigned(LDispatch^.CoreVectors.FloorF64x4) and Assigned(LDispatch^.CoreVectors.CeilF64x4), 'Scalar dispatch should provide wide Floor/Ceil');
 
-    LScalarFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-    LScalarCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-    LScalarFloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-    LScalarCeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
+    LScalarFloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+    LScalarCeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+    LScalarFloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+    LScalarCeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
     LScalarFloorF32x16 := VecF32x16Floor(LInF32x16);
     LScalarCeilF32x16 := VecF32x16Ceil(LInF32x16);
     LScalarFloorF64x8 := VecF64x8Floor(LInF64x8);
@@ -1933,12 +1943,12 @@ begin
       SetVectorAsmEnabled(True);
       SetActiveBackend(sbSSE2);
       LDispatch := GetDispatchTable;
-      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'SSE2 dispatch should provide wide Floor/Ceil');
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.FloorF32x8) and Assigned(LDispatch^.CoreVectors.CeilF32x8) and Assigned(LDispatch^.CoreVectors.FloorF64x4) and Assigned(LDispatch^.CoreVectors.CeilF64x4), 'SSE2 dispatch should provide wide Floor/Ceil');
 
-      LSSE2FloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-      LSSE2CeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-      LSSE2FloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-      LSSE2CeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
+      LSSE2FloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+      LSSE2CeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+      LSSE2FloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+      LSSE2CeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
       LSSE2FloorF32x16 := VecF32x16Floor(LInF32x16);
       LSSE2CeilF32x16 := VecF32x16Ceil(LInF32x16);
       LSSE2FloorF64x8 := VecF64x8Floor(LInF64x8);
@@ -1951,12 +1961,12 @@ begin
       Exit;
 
     LDispatch := GetDispatchTable;
-    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'AVX2 dispatch should provide wide Floor/Ceil');
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.FloorF32x8) and Assigned(LDispatch^.CoreVectors.CeilF32x8) and Assigned(LDispatch^.CoreVectors.FloorF64x4) and Assigned(LDispatch^.CoreVectors.CeilF64x4), 'AVX2 dispatch should provide wide Floor/Ceil');
 
-    LAVX2FloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-    LAVX2CeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-    LAVX2FloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-    LAVX2CeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
+    LAVX2FloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+    LAVX2CeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+    LAVX2FloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+    LAVX2CeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
     LAVX2FloorF32x16 := VecF32x16Floor(LInF32x16);
     LAVX2CeilF32x16 := VecF32x16Ceil(LInF32x16);
     LAVX2FloorF64x8 := VecF64x8Floor(LInF64x8);
@@ -2109,6 +2119,11 @@ var
   end;
 
 begin
+  LSSE2FloorF32x8 := Default(TVecF32x8); LSSE2CeilF32x8 := Default(TVecF32x8);
+  LSSE2FloorF64x4 := Default(TVecF64x4); LSSE2CeilF64x4 := Default(TVecF64x4);
+  LSSE2FloorF32x16 := Default(TVecF32x16); LSSE2CeilF32x16 := Default(TVecF32x16);
+  LSSE2FloorF64x8 := Default(TVecF64x8); LSSE2CeilF64x8 := Default(TVecF64x8);
+
   if not IsBackendRegistered(sbAVX2) then
     Exit;
 
@@ -2129,12 +2144,12 @@ begin
       SetVectorAsmEnabled(False);
       SetActiveBackend(sbScalar);
       LDispatch := GetDispatchTable;
-      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'Scalar dispatch should provide wide Floor/Ceil');
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.FloorF32x8) and Assigned(LDispatch^.CoreVectors.CeilF32x8) and Assigned(LDispatch^.CoreVectors.FloorF64x4) and Assigned(LDispatch^.CoreVectors.CeilF64x4), 'Scalar dispatch should provide wide Floor/Ceil');
 
-      LScalarFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-      LScalarCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-      LScalarFloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-      LScalarCeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
+      LScalarFloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+      LScalarCeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+      LScalarFloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+      LScalarCeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
       LScalarFloorF32x16 := VecF32x16Floor(LInF32x16);
       LScalarCeilF32x16 := VecF32x16Ceil(LInF32x16);
       LScalarFloorF64x8 := VecF64x8Floor(LInF64x8);
@@ -2145,12 +2160,12 @@ begin
         SetVectorAsmEnabled(True);
         SetActiveBackend(sbSSE2);
         LDispatch := GetDispatchTable;
-        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'SSE2 dispatch should provide wide Floor/Ceil');
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.FloorF32x8) and Assigned(LDispatch^.CoreVectors.CeilF32x8) and Assigned(LDispatch^.CoreVectors.FloorF64x4) and Assigned(LDispatch^.CoreVectors.CeilF64x4), 'SSE2 dispatch should provide wide Floor/Ceil');
 
-        LSSE2FloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-        LSSE2CeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-        LSSE2FloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-        LSSE2CeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
+        LSSE2FloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+        LSSE2CeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+        LSSE2FloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+        LSSE2CeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
         LSSE2FloorF32x16 := VecF32x16Floor(LInF32x16);
         LSSE2CeilF32x16 := VecF32x16Ceil(LInF32x16);
         LSSE2FloorF64x8 := VecF64x8Floor(LInF64x8);
@@ -2163,12 +2178,12 @@ begin
         Exit;
 
       LDispatch := GetDispatchTable;
-      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'AVX2 dispatch should provide wide Floor/Ceil');
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.FloorF32x8) and Assigned(LDispatch^.CoreVectors.CeilF32x8) and Assigned(LDispatch^.CoreVectors.FloorF64x4) and Assigned(LDispatch^.CoreVectors.CeilF64x4), 'AVX2 dispatch should provide wide Floor/Ceil');
 
-      LAVX2FloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-      LAVX2CeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-      LAVX2FloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-      LAVX2CeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
+      LAVX2FloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+      LAVX2CeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+      LAVX2FloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+      LAVX2CeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
       LAVX2FloorF32x16 := VecF32x16Floor(LInF32x16);
       LAVX2CeilF32x16 := VecF32x16Ceil(LInF32x16);
       LAVX2FloorF64x8 := VecF64x8Floor(LInF64x8);
@@ -2374,12 +2389,12 @@ begin
       SetVectorAsmEnabled(False);
       SetActiveBackend(sbScalar);
       LDispatch := GetDispatchTable;
-      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'Scalar dispatch should provide wide Round/Trunc');
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'Scalar dispatch should provide wide Round/Trunc');
 
-      LScalarRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-      LScalarTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-      LScalarRoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-      LScalarTruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+      LScalarRoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+      LScalarTruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+      LScalarRoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+      LScalarTruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
       LScalarRoundF32x16 := VecF32x16Round(LInF32x16);
       LScalarTruncF32x16 := VecF32x16Trunc(LInF32x16);
       LScalarRoundF64x8 := VecF64x8Round(LInF64x8);
@@ -2390,12 +2405,12 @@ begin
         SetVectorAsmEnabled(True);
         SetActiveBackend(sbSSE2);
         LDispatch := GetDispatchTable;
-        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'SSE2 dispatch should provide wide Round/Trunc');
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'SSE2 dispatch should provide wide Round/Trunc');
 
-        LSSE2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-        LSSE2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-        LSSE2RoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-        LSSE2TruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+        LSSE2RoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+        LSSE2TruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+        LSSE2RoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+        LSSE2TruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
         LSSE2RoundF32x16 := VecF32x16Round(LInF32x16);
         LSSE2TruncF32x16 := VecF32x16Trunc(LInF32x16);
         LSSE2RoundF64x8 := VecF64x8Round(LInF64x8);
@@ -2408,12 +2423,12 @@ begin
         Exit;
 
       LDispatch := GetDispatchTable;
-      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'AVX2 dispatch should provide wide Round/Trunc');
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'AVX2 dispatch should provide wide Round/Trunc');
 
-      LAVX2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-      LAVX2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-      LAVX2RoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-      LAVX2TruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+      LAVX2RoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+      LAVX2TruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+      LAVX2RoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+      LAVX2TruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
       LAVX2RoundF32x16 := VecF32x16Round(LInF32x16);
       LAVX2TruncF32x16 := VecF32x16Trunc(LInF32x16);
       LAVX2RoundF64x8 := VecF64x8Round(LInF64x8);
@@ -2544,12 +2559,12 @@ begin
   SetVectorAsmEnabled(False);
     SetActiveBackend(sbScalar);
     LDispatch := GetDispatchTable;
-    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'Scalar dispatch should provide wide Round/Trunc');
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'Scalar dispatch should provide wide Round/Trunc');
 
-    LScalarRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-    LScalarTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-    LScalarRoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-    LScalarTruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+    LScalarRoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+    LScalarTruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+    LScalarRoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+    LScalarTruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
     LScalarRoundF32x16 := VecF32x16Round(LInF32x16);
     LScalarTruncF32x16 := VecF32x16Trunc(LInF32x16);
     LScalarRoundF64x8 := VecF64x8Round(LInF64x8);
@@ -2560,12 +2575,12 @@ begin
       SetVectorAsmEnabled(True);
       SetActiveBackend(sbSSE2);
       LDispatch := GetDispatchTable;
-      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'SSE2 dispatch should provide wide Round/Trunc');
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'SSE2 dispatch should provide wide Round/Trunc');
 
-      LSSE2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-      LSSE2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-      LSSE2RoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-      LSSE2TruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+      LSSE2RoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+      LSSE2TruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+      LSSE2RoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+      LSSE2TruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
       LSSE2RoundF32x16 := VecF32x16Round(LInF32x16);
       LSSE2TruncF32x16 := VecF32x16Trunc(LInF32x16);
       LSSE2RoundF64x8 := VecF64x8Round(LInF64x8);
@@ -2578,12 +2593,12 @@ begin
       Exit;
 
     LDispatch := GetDispatchTable;
-    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4), 'AVX2 dispatch should provide wide Round/Trunc');
+    CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4), 'AVX2 dispatch should provide wide Round/Trunc');
 
-    LAVX2RoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-    LAVX2TruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-    LAVX2RoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-    LAVX2TruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
+    LAVX2RoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+    LAVX2TruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+    LAVX2RoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+    LAVX2TruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
     LAVX2RoundF32x16 := VecF32x16Round(LInF32x16);
     LAVX2TruncF32x16 := VecF32x16Trunc(LInF32x16);
     LAVX2RoundF64x8 := VecF64x8Round(LInF64x8);
@@ -2729,38 +2744,38 @@ begin
     try
       LDispatch := GetDispatchTable;
       CheckNotNil(LDispatch, 'Dispatch table should be available');
-      CheckTrue(Assigned(LDispatch^.RoundF32x4) and Assigned(LDispatch^.TruncF32x4) and Assigned(LDispatch^.FloorF32x4) and Assigned(LDispatch^.CeilF32x4), 'Round/Trunc/Floor/Ceil F32x4 should be assigned');
-      CheckTrue(Assigned(LDispatch^.RoundF64x2) and Assigned(LDispatch^.TruncF64x2) and Assigned(LDispatch^.FloorF64x2) and Assigned(LDispatch^.CeilF64x2), 'Round/Trunc/Floor/Ceil F64x2 should be assigned');
+      CheckTrue(Assigned(LDispatch^.CoreVectors.RoundF32x4) and Assigned(LDispatch^.CoreVectors.TruncF32x4) and Assigned(LDispatch^.CoreVectors.FloorF32x4) and Assigned(LDispatch^.CoreVectors.CeilF32x4), 'Round/Trunc/Floor/Ceil F32x4 should be assigned');
+      CheckTrue(Assigned(LDispatch^.CoreVectors.RoundF64x2) and Assigned(LDispatch^.CoreVectors.TruncF64x2) and Assigned(LDispatch^.CoreVectors.FloorF64x2) and Assigned(LDispatch^.CoreVectors.CeilF64x2), 'Round/Trunc/Floor/Ceil F64x2 should be assigned');
 
       SetActiveBackend(sbScalar);
       LDispatch := GetDispatchTable;
-      LExpectedRoundF32x4 := LDispatch^.RoundF32x4(LInF32x4);
-      LExpectedTruncF32x4 := LDispatch^.TruncF32x4(LInF32x4);
-      LExpectedFloorF32x4 := LDispatch^.FloorF32x4(LInF32x4);
-      LExpectedCeilF32x4 := LDispatch^.CeilF32x4(LInF32x4);
-      LExpectedRoundF64x2 := LDispatch^.RoundF64x2(LInF64x2);
-      LExpectedTruncF64x2 := LDispatch^.TruncF64x2(LInF64x2);
-      LExpectedFloorF64x2 := LDispatch^.FloorF64x2(LInF64x2);
-      LExpectedCeilF64x2 := LDispatch^.CeilF64x2(LInF64x2);
-      LExpectedRoundSignedZeroF32x4 := LDispatch^.RoundF32x4(LInSignedZeroF32x4);
-      LExpectedTruncSignedZeroF32x4 := LDispatch^.TruncF32x4(LInSignedZeroF32x4);
-      LExpectedRoundSignedZeroF64x2 := LDispatch^.RoundF64x2(LInSignedZeroF64x2);
-      LExpectedTruncSignedZeroF64x2 := LDispatch^.TruncF64x2(LInSignedZeroF64x2);
+      LExpectedRoundF32x4 := LDispatch^.CoreVectors.RoundF32x4(LInF32x4);
+      LExpectedTruncF32x4 := LDispatch^.CoreVectors.TruncF32x4(LInF32x4);
+      LExpectedFloorF32x4 := LDispatch^.CoreVectors.FloorF32x4(LInF32x4);
+      LExpectedCeilF32x4 := LDispatch^.CoreVectors.CeilF32x4(LInF32x4);
+      LExpectedRoundF64x2 := LDispatch^.CoreVectors.RoundF64x2(LInF64x2);
+      LExpectedTruncF64x2 := LDispatch^.CoreVectors.TruncF64x2(LInF64x2);
+      LExpectedFloorF64x2 := LDispatch^.CoreVectors.FloorF64x2(LInF64x2);
+      LExpectedCeilF64x2 := LDispatch^.CoreVectors.CeilF64x2(LInF64x2);
+      LExpectedRoundSignedZeroF32x4 := LDispatch^.CoreVectors.RoundF32x4(LInSignedZeroF32x4);
+      LExpectedTruncSignedZeroF32x4 := LDispatch^.CoreVectors.TruncF32x4(LInSignedZeroF32x4);
+      LExpectedRoundSignedZeroF64x2 := LDispatch^.CoreVectors.RoundF64x2(LInSignedZeroF64x2);
+      LExpectedTruncSignedZeroF64x2 := LDispatch^.CoreVectors.TruncF64x2(LInSignedZeroF64x2);
 
       SetActiveBackend(LBackend);
       LDispatch := GetDispatchTable;
-      LActualRoundF32x4 := LDispatch^.RoundF32x4(LInF32x4);
-      LActualTruncF32x4 := LDispatch^.TruncF32x4(LInF32x4);
-      LActualFloorF32x4 := LDispatch^.FloorF32x4(LInF32x4);
-      LActualCeilF32x4 := LDispatch^.CeilF32x4(LInF32x4);
-      LActualRoundF64x2 := LDispatch^.RoundF64x2(LInF64x2);
-      LActualTruncF64x2 := LDispatch^.TruncF64x2(LInF64x2);
-      LActualFloorF64x2 := LDispatch^.FloorF64x2(LInF64x2);
-      LActualCeilF64x2 := LDispatch^.CeilF64x2(LInF64x2);
-      LActualRoundSignedZeroF32x4 := LDispatch^.RoundF32x4(LInSignedZeroF32x4);
-      LActualTruncSignedZeroF32x4 := LDispatch^.TruncF32x4(LInSignedZeroF32x4);
-      LActualRoundSignedZeroF64x2 := LDispatch^.RoundF64x2(LInSignedZeroF64x2);
-      LActualTruncSignedZeroF64x2 := LDispatch^.TruncF64x2(LInSignedZeroF64x2);
+      LActualRoundF32x4 := LDispatch^.CoreVectors.RoundF32x4(LInF32x4);
+      LActualTruncF32x4 := LDispatch^.CoreVectors.TruncF32x4(LInF32x4);
+      LActualFloorF32x4 := LDispatch^.CoreVectors.FloorF32x4(LInF32x4);
+      LActualCeilF32x4 := LDispatch^.CoreVectors.CeilF32x4(LInF32x4);
+      LActualRoundF64x2 := LDispatch^.CoreVectors.RoundF64x2(LInF64x2);
+      LActualTruncF64x2 := LDispatch^.CoreVectors.TruncF64x2(LInF64x2);
+      LActualFloorF64x2 := LDispatch^.CoreVectors.FloorF64x2(LInF64x2);
+      LActualCeilF64x2 := LDispatch^.CoreVectors.CeilF64x2(LInF64x2);
+      LActualRoundSignedZeroF32x4 := LDispatch^.CoreVectors.RoundF32x4(LInSignedZeroF32x4);
+      LActualTruncSignedZeroF32x4 := LDispatch^.CoreVectors.TruncF32x4(LInSignedZeroF32x4);
+      LActualRoundSignedZeroF64x2 := LDispatch^.CoreVectors.RoundF64x2(LInSignedZeroF64x2);
+      LActualTruncSignedZeroF64x2 := LDispatch^.CoreVectors.TruncF64x2(LInSignedZeroF64x2);
 
       for LIndex := 0 to 3 do
       begin
@@ -2848,17 +2863,17 @@ begin
       try
         LDispatch := GetDispatchTable;
         CheckNotNil(LDispatch, 'Dispatch table should be available');
-        CheckTrue(Assigned(LDispatch^.RoundF64x2) and Assigned(LDispatch^.TruncF64x2) and Assigned(LDispatch^.FloorF64x2) and Assigned(LDispatch^.CeilF64x2), 'Round/Trunc/Floor/Ceil F64x2 should be assigned');
+        CheckTrue(Assigned(LDispatch^.CoreVectors.RoundF64x2) and Assigned(LDispatch^.CoreVectors.TruncF64x2) and Assigned(LDispatch^.CoreVectors.FloorF64x2) and Assigned(LDispatch^.CoreVectors.CeilF64x2), 'Round/Trunc/Floor/Ceil F64x2 should be assigned');
 
         SetActiveBackend(sbScalar);
         LDispatch := GetDispatchTable;
         CheckNotNil(LDispatch, 'Scalar dispatch should be available');
         for LCaseIndex := 0 to SAMPLE_CASE_COUNT - 1 do
         begin
-          LExpectedRound[LCaseIndex] := LDispatch^.RoundF64x2(LInputs[LCaseIndex]);
-          LExpectedTrunc[LCaseIndex] := LDispatch^.TruncF64x2(LInputs[LCaseIndex]);
-          LExpectedFloor[LCaseIndex] := LDispatch^.FloorF64x2(LInputs[LCaseIndex]);
-          LExpectedCeil[LCaseIndex] := LDispatch^.CeilF64x2(LInputs[LCaseIndex]);
+          LExpectedRound[LCaseIndex] := LDispatch^.CoreVectors.RoundF64x2(LInputs[LCaseIndex]);
+          LExpectedTrunc[LCaseIndex] := LDispatch^.CoreVectors.TruncF64x2(LInputs[LCaseIndex]);
+          LExpectedFloor[LCaseIndex] := LDispatch^.CoreVectors.FloorF64x2(LInputs[LCaseIndex]);
+          LExpectedCeil[LCaseIndex] := LDispatch^.CoreVectors.CeilF64x2(LInputs[LCaseIndex]);
         end;
 
         SetActiveBackend(LBackend);
@@ -2866,10 +2881,10 @@ begin
         CheckNotNil(LDispatch, 'Non-x86 dispatch should be available');
         for LCaseIndex := 0 to SAMPLE_CASE_COUNT - 1 do
         begin
-          LActualRound[LCaseIndex] := LDispatch^.RoundF64x2(LInputs[LCaseIndex]);
-          LActualTrunc[LCaseIndex] := LDispatch^.TruncF64x2(LInputs[LCaseIndex]);
-          LActualFloor[LCaseIndex] := LDispatch^.FloorF64x2(LInputs[LCaseIndex]);
-          LActualCeil[LCaseIndex] := LDispatch^.CeilF64x2(LInputs[LCaseIndex]);
+          LActualRound[LCaseIndex] := LDispatch^.CoreVectors.RoundF64x2(LInputs[LCaseIndex]);
+          LActualTrunc[LCaseIndex] := LDispatch^.CoreVectors.TruncF64x2(LInputs[LCaseIndex]);
+          LActualFloor[LCaseIndex] := LDispatch^.CoreVectors.FloorF64x2(LInputs[LCaseIndex]);
+          LActualCeil[LCaseIndex] := LDispatch^.CoreVectors.CeilF64x2(LInputs[LCaseIndex]);
         end;
 
         for LCaseIndex := 0 to SAMPLE_CASE_COUNT - 1 do
@@ -2926,8 +2941,8 @@ var
   var
     LLocalLaneIndex: Integer;
   begin
-    LExpectedF32x8 := LScalarTable.ClampF32x8(LInputF32x8, LMinValF32x8, LMaxValF32x8);
-    LActualF32x8 := LRISCVVTable.ClampF32x8(LInputF32x8, LMinValF32x8, LMaxValF32x8);
+    LExpectedF32x8 := LScalarTable.CoreVectors.ClampF32x8(LInputF32x8, LMinValF32x8, LMaxValF32x8);
+    LActualF32x8 := LRISCVVTable.CoreVectors.ClampF32x8(LInputF32x8, LMinValF32x8, LMaxValF32x8);
     for LLocalLaneIndex := 0 to 7 do
       AssertSingleParity(aLabel + '[' + IntToStr(LLocalLaneIndex) + ']', LExpectedF32x8.f[LLocalLaneIndex], LActualF32x8.f[LLocalLaneIndex]);
   end;
@@ -2936,8 +2951,8 @@ var
   var
     LLocalLaneIndex: Integer;
   begin
-    LExpectedF32x16 := LScalarTable.ClampF32x16(LInputF32x16, LMinValF32x16, LMaxValF32x16);
-    LActualF32x16 := LRISCVVTable.ClampF32x16(LInputF32x16, LMinValF32x16, LMaxValF32x16);
+    LExpectedF32x16 := LScalarTable.CoreVectors.ClampF32x16(LInputF32x16, LMinValF32x16, LMaxValF32x16);
+    LActualF32x16 := LRISCVVTable.CoreVectors.ClampF32x16(LInputF32x16, LMinValF32x16, LMaxValF32x16);
     for LLocalLaneIndex := 0 to 15 do
       AssertSingleParity(aLabel + '[' + IntToStr(LLocalLaneIndex) + ']', LExpectedF32x16.f[LLocalLaneIndex], LActualF32x16.f[LLocalLaneIndex]);
   end;
@@ -2954,7 +2969,7 @@ begin
   end;
   {$ENDIF}
 
-  CheckTrue(Assigned(LRISCVVTable.ClampF32x8) and Assigned(LRISCVVTable.ClampF32x16), 'RISCVV dispatch should provide wide F32 clamp helpers');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.ClampF32x8) and Assigned(LRISCVVTable.CoreVectors.ClampF32x16), 'RISCVV dispatch should provide wide F32 clamp helpers');
 
   LInputF32x8.f[0] := NaNF32;
   LInputF32x8.f[1] := 3.0;
@@ -3135,8 +3150,8 @@ var
     LExpected: Double;
     LActual: Double;
   begin
-    LExpected := LScalarTable.DotF64x2(aA, aB);
-    LActual := LRISCVVTable.DotF64x2(aA, aB);
+    LExpected := LScalarTable.CoreVectors.DotF64x2(aA, aB);
+    LActual := LRISCVVTable.CoreVectors.DotF64x2(aA, aB);
     AssertDoubleSemantics('RISCVV direct DotF64x2 ' + aLabel, LExpected, LActual);
   end;
 
@@ -3145,8 +3160,8 @@ var
     LExpected: Double;
     LActual: Double;
   begin
-    LExpected := LScalarTable.DotF64x4(aA, aB);
-    LActual := LRISCVVTable.DotF64x4(aA, aB);
+    LExpected := LScalarTable.CoreVectors.DotF64x4(aA, aB);
+    LActual := LRISCVVTable.CoreVectors.DotF64x4(aA, aB);
     AssertDoubleSemantics('RISCVV direct DotF64x4 ' + aLabel, LExpected, LActual);
   end;
 begin
@@ -3162,9 +3177,9 @@ begin
   end;
   {$ENDIF}
 
-  CheckTrue(Assigned(LRISCVVTable.DotF64x2) and Assigned(LRISCVVTable.DotF64x4), 'RISCVV registered table should provide DotF64 slots');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.DotF64x2) and Assigned(LRISCVVTable.CoreVectors.DotF64x4), 'RISCVV registered table should provide DotF64 slots');
 
-  CheckTrue((PtrUInt(LScalarTable.DotF64x2) <> PtrUInt(LRISCVVTable.DotF64x2)) and (PtrUInt(LScalarTable.DotF64x4) <> PtrUInt(LRISCVVTable.DotF64x4)), 'RISCVV DotF64 registered slots should stay backend-owned in the registered table');
+  CheckTrue((PtrUInt(LScalarTable.CoreVectors.DotF64x2) <> PtrUInt(LRISCVVTable.CoreVectors.DotF64x2)) and (PtrUInt(LScalarTable.CoreVectors.DotF64x4) <> PtrUInt(LRISCVVTable.CoreVectors.DotF64x4)), 'RISCVV DotF64 registered slots should stay backend-owned in the registered table');
 
   LA2.d[0] := NegZeroF64;
   LA2.d[1] := 2.0;
@@ -3269,9 +3284,9 @@ begin
   end;
   {$ENDIF}
 
-  CheckTrue(Assigned(LRISCVVTable.RoundF32x8) and Assigned(LRISCVVTable.TruncF32x8) and Assigned(LRISCVVTable.RoundF64x4) and Assigned(LRISCVVTable.TruncF64x4) and Assigned(LRISCVVTable.RoundF32x16) and Assigned(LRISCVVTable.TruncF32x16) and Assigned(LRISCVVTable.RoundF64x8) and Assigned(LRISCVVTable.TruncF64x8), 'RISCVV registered table should provide wide Round/Trunc');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.RoundF32x8) and Assigned(LRISCVVTable.CoreVectors.TruncF32x8) and Assigned(LRISCVVTable.CoreVectors.RoundF64x4) and Assigned(LRISCVVTable.CoreVectors.TruncF64x4) and Assigned(LRISCVVTable.CoreVectors.RoundF32x16) and Assigned(LRISCVVTable.CoreVectors.TruncF32x16) and Assigned(LRISCVVTable.CoreVectors.RoundF64x8) and Assigned(LRISCVVTable.CoreVectors.TruncF64x8), 'RISCVV registered table should provide wide Round/Trunc');
 
-  CheckTrue((PtrUInt(LScalarTable.RoundF32x8) <> PtrUInt(LRISCVVTable.RoundF32x8)) and (PtrUInt(LScalarTable.TruncF32x8) <> PtrUInt(LRISCVVTable.TruncF32x8)) and (PtrUInt(LScalarTable.RoundF64x4) <> PtrUInt(LRISCVVTable.RoundF64x4)) and (PtrUInt(LScalarTable.TruncF64x4) <> PtrUInt(LRISCVVTable.TruncF64x4)) and (PtrUInt(LScalarTable.RoundF32x16) <> PtrUInt(LRISCVVTable.RoundF32x16)) and (PtrUInt(LScalarTable.TruncF32x16) <> PtrUInt(LRISCVVTable.TruncF32x16)) and (PtrUInt(LScalarTable.RoundF64x8) <> PtrUInt(LRISCVVTable.RoundF64x8)) and (PtrUInt(LScalarTable.TruncF64x8) <> PtrUInt(LRISCVVTable.TruncF64x8)), 'RISCVV wide Round/Trunc should stay backend-owned in the registered table');
+  CheckTrue((PtrUInt(LScalarTable.CoreVectors.RoundF32x8) <> PtrUInt(LRISCVVTable.CoreVectors.RoundF32x8)) and (PtrUInt(LScalarTable.CoreVectors.TruncF32x8) <> PtrUInt(LRISCVVTable.CoreVectors.TruncF32x8)) and (PtrUInt(LScalarTable.CoreVectors.RoundF64x4) <> PtrUInt(LRISCVVTable.CoreVectors.RoundF64x4)) and (PtrUInt(LScalarTable.CoreVectors.TruncF64x4) <> PtrUInt(LRISCVVTable.CoreVectors.TruncF64x4)) and (PtrUInt(LScalarTable.CoreVectors.RoundF32x16) <> PtrUInt(LRISCVVTable.CoreVectors.RoundF32x16)) and (PtrUInt(LScalarTable.CoreVectors.TruncF32x16) <> PtrUInt(LRISCVVTable.CoreVectors.TruncF32x16)) and (PtrUInt(LScalarTable.CoreVectors.RoundF64x8) <> PtrUInt(LRISCVVTable.CoreVectors.RoundF64x8)) and (PtrUInt(LScalarTable.CoreVectors.TruncF64x8) <> PtrUInt(LRISCVVTable.CoreVectors.TruncF64x8)), 'RISCVV wide Round/Trunc should stay backend-owned in the registered table');
 
   LInF32x8.f[0] := 0.0;
   LInF32x8.f[1] := NegZeroF32;
@@ -3311,25 +3326,25 @@ begin
   LInF64x8.d[6] := -0.5;
   LInF64x8.d[7] := -1.5;
 
-  LExpectedRoundF32x8 := LScalarTable.RoundF32x8(LInF32x8);
-  LExpectedTruncF32x8 := LScalarTable.TruncF32x8(LInF32x8);
-  LActualRoundF32x8 := LRISCVVTable.RoundF32x8(LInF32x8);
-  LActualTruncF32x8 := LRISCVVTable.TruncF32x8(LInF32x8);
+  LExpectedRoundF32x8 := LScalarTable.CoreVectors.RoundF32x8(LInF32x8);
+  LExpectedTruncF32x8 := LScalarTable.CoreVectors.TruncF32x8(LInF32x8);
+  LActualRoundF32x8 := LRISCVVTable.CoreVectors.RoundF32x8(LInF32x8);
+  LActualTruncF32x8 := LRISCVVTable.CoreVectors.TruncF32x8(LInF32x8);
 
-  LExpectedRoundF64x4 := LScalarTable.RoundF64x4(LInF64x4);
-  LExpectedTruncF64x4 := LScalarTable.TruncF64x4(LInF64x4);
-  LActualRoundF64x4 := LRISCVVTable.RoundF64x4(LInF64x4);
-  LActualTruncF64x4 := LRISCVVTable.TruncF64x4(LInF64x4);
+  LExpectedRoundF64x4 := LScalarTable.CoreVectors.RoundF64x4(LInF64x4);
+  LExpectedTruncF64x4 := LScalarTable.CoreVectors.TruncF64x4(LInF64x4);
+  LActualRoundF64x4 := LRISCVVTable.CoreVectors.RoundF64x4(LInF64x4);
+  LActualTruncF64x4 := LRISCVVTable.CoreVectors.TruncF64x4(LInF64x4);
 
-  LExpectedRoundF32x16 := LScalarTable.RoundF32x16(LInF32x16);
-  LExpectedTruncF32x16 := LScalarTable.TruncF32x16(LInF32x16);
-  LActualRoundF32x16 := LRISCVVTable.RoundF32x16(LInF32x16);
-  LActualTruncF32x16 := LRISCVVTable.TruncF32x16(LInF32x16);
+  LExpectedRoundF32x16 := LScalarTable.CoreVectors.RoundF32x16(LInF32x16);
+  LExpectedTruncF32x16 := LScalarTable.CoreVectors.TruncF32x16(LInF32x16);
+  LActualRoundF32x16 := LRISCVVTable.CoreVectors.RoundF32x16(LInF32x16);
+  LActualTruncF32x16 := LRISCVVTable.CoreVectors.TruncF32x16(LInF32x16);
 
-  LExpectedRoundF64x8 := LScalarTable.RoundF64x8(LInF64x8);
-  LExpectedTruncF64x8 := LScalarTable.TruncF64x8(LInF64x8);
-  LActualRoundF64x8 := LRISCVVTable.RoundF64x8(LInF64x8);
-  LActualTruncF64x8 := LRISCVVTable.TruncF64x8(LInF64x8);
+  LExpectedRoundF64x8 := LScalarTable.CoreVectors.RoundF64x8(LInF64x8);
+  LExpectedTruncF64x8 := LScalarTable.CoreVectors.TruncF64x8(LInF64x8);
+  LActualRoundF64x8 := LRISCVVTable.CoreVectors.RoundF64x8(LInF64x8);
+  LActualTruncF64x8 := LRISCVVTable.CoreVectors.TruncF64x8(LInF64x8);
 
   for LIndex := 0 to 7 do
   begin
@@ -3385,20 +3400,20 @@ var
 
   procedure AssertReduceParityF32x4(const aLabel: string; const aInput: TVecF32x4);
   begin
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x4', LScalarDispatch^.ReduceMinF32x4(aInput), LBackendDispatch^.ReduceMinF32x4(aInput));
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x4', LScalarDispatch^.ReduceMaxF32x4(aInput), LBackendDispatch^.ReduceMaxF32x4(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x4', LScalarDispatch^.CoreVectors.ReduceMinF32x4(aInput), LBackendDispatch^.CoreVectors.ReduceMinF32x4(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x4', LScalarDispatch^.CoreVectors.ReduceMaxF32x4(aInput), LBackendDispatch^.CoreVectors.ReduceMaxF32x4(aInput));
   end;
 
   procedure AssertReduceParityF32x8(const aLabel: string; const aInput: TVecF32x8);
   begin
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x8', LScalarDispatch^.ReduceMinF32x8(aInput), LBackendDispatch^.ReduceMinF32x8(aInput));
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x8', LScalarDispatch^.ReduceMaxF32x8(aInput), LBackendDispatch^.ReduceMaxF32x8(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x8', LScalarDispatch^.CoreVectors.ReduceMinF32x8(aInput), LBackendDispatch^.CoreVectors.ReduceMinF32x8(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x8', LScalarDispatch^.CoreVectors.ReduceMaxF32x8(aInput), LBackendDispatch^.CoreVectors.ReduceMaxF32x8(aInput));
   end;
 
   procedure AssertReduceParityF32x16(const aLabel: string; const aInput: TVecF32x16);
   begin
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x16', LScalarDispatch^.ReduceMinF32x16(aInput), LBackendDispatch^.ReduceMinF32x16(aInput));
-    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x16', LScalarDispatch^.ReduceMaxF32x16(aInput), LBackendDispatch^.ReduceMaxF32x16(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF32x16', LScalarDispatch^.CoreVectors.ReduceMinF32x16(aInput), LBackendDispatch^.CoreVectors.ReduceMinF32x16(aInput));
+    AssertSingleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF32x16', LScalarDispatch^.CoreVectors.ReduceMaxF32x16(aInput), LBackendDispatch^.CoreVectors.ReduceMaxF32x16(aInput));
   end;
 
 begin
@@ -3417,12 +3432,12 @@ begin
       SetActiveBackend(sbScalar);
       LScalarDispatch := GetDispatchTable;
       CheckNotNil(LScalarDispatch, 'Scalar dispatch should be available');
-      CheckTrue(Assigned(LScalarDispatch^.ReduceMinF32x4) and Assigned(LScalarDispatch^.ReduceMaxF32x4) and Assigned(LScalarDispatch^.ReduceMinF32x8) and Assigned(LScalarDispatch^.ReduceMaxF32x8) and Assigned(LScalarDispatch^.ReduceMinF32x16) and Assigned(LScalarDispatch^.ReduceMaxF32x16), 'Scalar dispatch should provide F32 reductions');
+      CheckTrue(Assigned(LScalarDispatch^.CoreVectors.ReduceMinF32x4) and Assigned(LScalarDispatch^.CoreVectors.ReduceMaxF32x4) and Assigned(LScalarDispatch^.CoreVectors.ReduceMinF32x8) and Assigned(LScalarDispatch^.CoreVectors.ReduceMaxF32x8) and Assigned(LScalarDispatch^.CoreVectors.ReduceMinF32x16) and Assigned(LScalarDispatch^.CoreVectors.ReduceMaxF32x16), 'Scalar dispatch should provide F32 reductions');
 
       SetActiveBackend(LBackend);
       LBackendDispatch := GetDispatchTable;
       CheckNotNil(LBackendDispatch, 'Non-x86 dispatch should be available');
-      CheckTrue(Assigned(LBackendDispatch^.ReduceMinF32x4) and Assigned(LBackendDispatch^.ReduceMaxF32x4) and Assigned(LBackendDispatch^.ReduceMinF32x8) and Assigned(LBackendDispatch^.ReduceMaxF32x8) and Assigned(LBackendDispatch^.ReduceMinF32x16) and Assigned(LBackendDispatch^.ReduceMaxF32x16), 'Non-x86 dispatch should provide F32 reductions');
+      CheckTrue(Assigned(LBackendDispatch^.CoreVectors.ReduceMinF32x4) and Assigned(LBackendDispatch^.CoreVectors.ReduceMaxF32x4) and Assigned(LBackendDispatch^.CoreVectors.ReduceMinF32x8) and Assigned(LBackendDispatch^.CoreVectors.ReduceMaxF32x8) and Assigned(LBackendDispatch^.CoreVectors.ReduceMinF32x16) and Assigned(LBackendDispatch^.CoreVectors.ReduceMaxF32x16), 'Non-x86 dispatch should provide F32 reductions');
 
       LInputF32x4.f[0] := NaNF32;
       LInputF32x4.f[1] := 3.0;
@@ -3608,20 +3623,20 @@ var
 
   procedure AssertReduceParityF64x2(const aLabel: string; const aInput: TVecF64x2);
   begin
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x2', LScalarDispatch^.ReduceMinF64x2(aInput), LBackendDispatch^.ReduceMinF64x2(aInput));
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x2', LScalarDispatch^.ReduceMaxF64x2(aInput), LBackendDispatch^.ReduceMaxF64x2(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x2', LScalarDispatch^.CoreVectors.ReduceMinF64x2(aInput), LBackendDispatch^.CoreVectors.ReduceMinF64x2(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x2', LScalarDispatch^.CoreVectors.ReduceMaxF64x2(aInput), LBackendDispatch^.CoreVectors.ReduceMaxF64x2(aInput));
   end;
 
   procedure AssertReduceParityF64x4(const aLabel: string; const aInput: TVecF64x4);
   begin
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x4', LScalarDispatch^.ReduceMinF64x4(aInput), LBackendDispatch^.ReduceMinF64x4(aInput));
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x4', LScalarDispatch^.ReduceMaxF64x4(aInput), LBackendDispatch^.ReduceMaxF64x4(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x4', LScalarDispatch^.CoreVectors.ReduceMinF64x4(aInput), LBackendDispatch^.CoreVectors.ReduceMinF64x4(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x4', LScalarDispatch^.CoreVectors.ReduceMaxF64x4(aInput), LBackendDispatch^.CoreVectors.ReduceMaxF64x4(aInput));
   end;
 
   procedure AssertReduceParityF64x8(const aLabel: string; const aInput: TVecF64x8);
   begin
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x8', LScalarDispatch^.ReduceMinF64x8(aInput), LBackendDispatch^.ReduceMinF64x8(aInput));
-    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x8', LScalarDispatch^.ReduceMaxF64x8(aInput), LBackendDispatch^.ReduceMaxF64x8(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMinF64x8', LScalarDispatch^.CoreVectors.ReduceMinF64x8(aInput), LBackendDispatch^.CoreVectors.ReduceMinF64x8(aInput));
+    AssertDoubleParity(IEEE754BackendName(LBackend) + ' ' + aLabel + ' ReduceMaxF64x8', LScalarDispatch^.CoreVectors.ReduceMaxF64x8(aInput), LBackendDispatch^.CoreVectors.ReduceMaxF64x8(aInput));
   end;
 
 begin
@@ -3640,30 +3655,30 @@ begin
       SetActiveBackend(sbScalar);
       LScalarDispatch := GetDispatchTable;
       CheckNotNil(LScalarDispatch, 'Scalar dispatch should be available');
-      CheckTrue(Assigned(LScalarDispatch^.MinF64x2) and Assigned(LScalarDispatch^.MaxF64x2) and Assigned(LScalarDispatch^.ReduceMinF64x2) and Assigned(LScalarDispatch^.ReduceMaxF64x2) and Assigned(LScalarDispatch^.ReduceMinF64x4) and Assigned(LScalarDispatch^.ReduceMaxF64x4) and Assigned(LScalarDispatch^.ReduceMinF64x8) and Assigned(LScalarDispatch^.ReduceMaxF64x8), 'Scalar dispatch should provide F64x2/F64x4/F64x8 min/max reductions');
+      CheckTrue(Assigned(LScalarDispatch^.CoreVectors.MinF64x2) and Assigned(LScalarDispatch^.CoreVectors.MaxF64x2) and Assigned(LScalarDispatch^.CoreVectors.ReduceMinF64x2) and Assigned(LScalarDispatch^.CoreVectors.ReduceMaxF64x2) and Assigned(LScalarDispatch^.CoreVectors.ReduceMinF64x4) and Assigned(LScalarDispatch^.CoreVectors.ReduceMaxF64x4) and Assigned(LScalarDispatch^.CoreVectors.ReduceMinF64x8) and Assigned(LScalarDispatch^.CoreVectors.ReduceMaxF64x8), 'Scalar dispatch should provide F64x2/F64x4/F64x8 min/max reductions');
 
       SetActiveBackend(LBackend);
       LBackendDispatch := GetDispatchTable;
       CheckNotNil(LBackendDispatch, 'Non-x86 dispatch should be available');
-      CheckTrue(Assigned(LBackendDispatch^.MinF64x2) and Assigned(LBackendDispatch^.MaxF64x2) and Assigned(LBackendDispatch^.ReduceMinF64x2) and Assigned(LBackendDispatch^.ReduceMaxF64x2) and Assigned(LBackendDispatch^.ReduceMinF64x4) and Assigned(LBackendDispatch^.ReduceMaxF64x4) and Assigned(LBackendDispatch^.ReduceMinF64x8) and Assigned(LBackendDispatch^.ReduceMaxF64x8), 'Non-x86 dispatch should provide F64x2/F64x4/F64x8 min/max reductions');
+      CheckTrue(Assigned(LBackendDispatch^.CoreVectors.MinF64x2) and Assigned(LBackendDispatch^.CoreVectors.MaxF64x2) and Assigned(LBackendDispatch^.CoreVectors.ReduceMinF64x2) and Assigned(LBackendDispatch^.CoreVectors.ReduceMaxF64x2) and Assigned(LBackendDispatch^.CoreVectors.ReduceMinF64x4) and Assigned(LBackendDispatch^.CoreVectors.ReduceMaxF64x4) and Assigned(LBackendDispatch^.CoreVectors.ReduceMinF64x8) and Assigned(LBackendDispatch^.CoreVectors.ReduceMaxF64x8), 'Non-x86 dispatch should provide F64x2/F64x4/F64x8 min/max reductions');
 
       LLeftF64x2.d[0] := NaNF64;
       LLeftF64x2.d[1] := 5.0;
       LRightF64x2.d[0] := 3.0;
       LRightF64x2.d[1] := NaNF64;
-      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' NaN MinF64x2', LScalarDispatch^.MinF64x2(LLeftF64x2, LRightF64x2),
-        LBackendDispatch^.MinF64x2(LLeftF64x2, LRightF64x2));
-      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' NaN MaxF64x2', LScalarDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2),
-        LBackendDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2));
+      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' NaN MinF64x2', LScalarDispatch^.CoreVectors.MinF64x2(LLeftF64x2, LRightF64x2),
+        LBackendDispatch^.CoreVectors.MinF64x2(LLeftF64x2, LRightF64x2));
+      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' NaN MaxF64x2', LScalarDispatch^.CoreVectors.MaxF64x2(LLeftF64x2, LRightF64x2),
+        LBackendDispatch^.CoreVectors.MaxF64x2(LLeftF64x2, LRightF64x2));
 
       LLeftF64x2.d[0] := 0.0;
       LLeftF64x2.d[1] := NegZeroF64;
       LRightF64x2.d[0] := NegZeroF64;
       LRightF64x2.d[1] := 0.0;
-      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' SignedZero MinF64x2', LScalarDispatch^.MinF64x2(LLeftF64x2, LRightF64x2),
-        LBackendDispatch^.MinF64x2(LLeftF64x2, LRightF64x2));
-      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' SignedZero MaxF64x2', LScalarDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2),
-        LBackendDispatch^.MaxF64x2(LLeftF64x2, LRightF64x2));
+      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' SignedZero MinF64x2', LScalarDispatch^.CoreVectors.MinF64x2(LLeftF64x2, LRightF64x2),
+        LBackendDispatch^.CoreVectors.MinF64x2(LLeftF64x2, LRightF64x2));
+      AssertVecF64x2Parity(IEEE754BackendName(LBackend) + ' SignedZero MaxF64x2', LScalarDispatch^.CoreVectors.MaxF64x2(LLeftF64x2, LRightF64x2),
+        LBackendDispatch^.CoreVectors.MaxF64x2(LLeftF64x2, LRightF64x2));
 
       LInputF64x2.d[0] := NaNF64;
       LInputF64x2.d[1] := 3.0;
@@ -3815,12 +3830,12 @@ begin
       SetActiveBackend(sbScalar);
       LScalarDispatch := GetDispatchTable;
       CheckNotNil(LScalarDispatch, 'Scalar dispatch should be available');
-      CheckTrue(Assigned(LScalarDispatch^.MinF32x8) and Assigned(LScalarDispatch^.MaxF32x8) and Assigned(LScalarDispatch^.MinF32x16) and Assigned(LScalarDispatch^.MaxF32x16), 'Scalar dispatch should provide wide F32 min/max');
+      CheckTrue(Assigned(LScalarDispatch^.CoreVectors.MinF32x8) and Assigned(LScalarDispatch^.CoreVectors.MaxF32x8) and Assigned(LScalarDispatch^.CoreVectors.MinF32x16) and Assigned(LScalarDispatch^.CoreVectors.MaxF32x16), 'Scalar dispatch should provide wide F32 min/max');
 
       SetActiveBackend(LBackend);
       LBackendDispatch := GetDispatchTable;
       CheckNotNil(LBackendDispatch, 'Non-x86 dispatch should be available');
-      CheckTrue(Assigned(LBackendDispatch^.MinF32x8) and Assigned(LBackendDispatch^.MaxF32x8) and Assigned(LBackendDispatch^.MinF32x16) and Assigned(LBackendDispatch^.MaxF32x16), 'Non-x86 dispatch should provide wide F32 min/max');
+      CheckTrue(Assigned(LBackendDispatch^.CoreVectors.MinF32x8) and Assigned(LBackendDispatch^.CoreVectors.MaxF32x8) and Assigned(LBackendDispatch^.CoreVectors.MinF32x16) and Assigned(LBackendDispatch^.CoreVectors.MaxF32x16), 'Non-x86 dispatch should provide wide F32 min/max');
 
       LLeftF32x8.f[0] := NaNF32;
       LLeftF32x8.f[1] := 5.0;
@@ -3838,10 +3853,10 @@ begin
       LRightF32x8.f[5] := 4.0;
       LRightF32x8.f[6] := 0.0;
       LRightF32x8.f[7] := NegZeroF32;
-      AssertVecF32x8Parity(IEEE754BackendName(LBackend) + ' Special MinF32x8', LScalarDispatch^.MinF32x8(LLeftF32x8, LRightF32x8),
-        LBackendDispatch^.MinF32x8(LLeftF32x8, LRightF32x8));
-      AssertVecF32x8Parity(IEEE754BackendName(LBackend) + ' Special MaxF32x8', LScalarDispatch^.MaxF32x8(LLeftF32x8, LRightF32x8),
-        LBackendDispatch^.MaxF32x8(LLeftF32x8, LRightF32x8));
+      AssertVecF32x8Parity(IEEE754BackendName(LBackend) + ' Special MinF32x8', LScalarDispatch^.CoreVectors.MinF32x8(LLeftF32x8, LRightF32x8),
+        LBackendDispatch^.CoreVectors.MinF32x8(LLeftF32x8, LRightF32x8));
+      AssertVecF32x8Parity(IEEE754BackendName(LBackend) + ' Special MaxF32x8', LScalarDispatch^.CoreVectors.MaxF32x8(LLeftF32x8, LRightF32x8),
+        LBackendDispatch^.CoreVectors.MaxF32x8(LLeftF32x8, LRightF32x8));
 
       LLeftF32x16.f[0] := NaNF32;
       LLeftF32x16.f[1] := 5.0;
@@ -3875,10 +3890,10 @@ begin
       LRightF32x16.f[13] := NegZeroF32;
       LRightF32x16.f[14] := NaNF32;
       LRightF32x16.f[15] := 17.0;
-      AssertVecF32x16Parity(IEEE754BackendName(LBackend) + ' Special MinF32x16', LScalarDispatch^.MinF32x16(LLeftF32x16, LRightF32x16),
-        LBackendDispatch^.MinF32x16(LLeftF32x16, LRightF32x16));
-      AssertVecF32x16Parity(IEEE754BackendName(LBackend) + ' Special MaxF32x16', LScalarDispatch^.MaxF32x16(LLeftF32x16, LRightF32x16),
-        LBackendDispatch^.MaxF32x16(LLeftF32x16, LRightF32x16));
+      AssertVecF32x16Parity(IEEE754BackendName(LBackend) + ' Special MinF32x16', LScalarDispatch^.CoreVectors.MinF32x16(LLeftF32x16, LRightF32x16),
+        LBackendDispatch^.CoreVectors.MinF32x16(LLeftF32x16, LRightF32x16));
+      AssertVecF32x16Parity(IEEE754BackendName(LBackend) + ' Special MaxF32x16', LScalarDispatch^.CoreVectors.MaxF32x16(LLeftF32x16, LRightF32x16),
+        LBackendDispatch^.CoreVectors.MaxF32x16(LLeftF32x16, LRightF32x16));
     finally
       ResetToAutomaticBackend;
     end;
@@ -3950,12 +3965,12 @@ begin
       SetActiveBackend(sbScalar);
       LScalarDispatch := GetDispatchTable;
       CheckNotNil(LScalarDispatch, 'Scalar dispatch should be available');
-      CheckTrue(Assigned(LScalarDispatch^.MinF64x4) and Assigned(LScalarDispatch^.MaxF64x4) and Assigned(LScalarDispatch^.MinF64x8) and Assigned(LScalarDispatch^.MaxF64x8), 'Scalar dispatch should provide wide F64 min/max');
+      CheckTrue(Assigned(LScalarDispatch^.CoreVectors.MinF64x4) and Assigned(LScalarDispatch^.CoreVectors.MaxF64x4) and Assigned(LScalarDispatch^.CoreVectors.MinF64x8) and Assigned(LScalarDispatch^.CoreVectors.MaxF64x8), 'Scalar dispatch should provide wide F64 min/max');
 
       SetActiveBackend(LBackend);
       LBackendDispatch := GetDispatchTable;
       CheckNotNil(LBackendDispatch, 'Non-x86 dispatch should be available');
-      CheckTrue(Assigned(LBackendDispatch^.MinF64x4) and Assigned(LBackendDispatch^.MaxF64x4) and Assigned(LBackendDispatch^.MinF64x8) and Assigned(LBackendDispatch^.MaxF64x8), 'Non-x86 dispatch should provide wide F64 min/max');
+      CheckTrue(Assigned(LBackendDispatch^.CoreVectors.MinF64x4) and Assigned(LBackendDispatch^.CoreVectors.MaxF64x4) and Assigned(LBackendDispatch^.CoreVectors.MinF64x8) and Assigned(LBackendDispatch^.CoreVectors.MaxF64x8), 'Non-x86 dispatch should provide wide F64 min/max');
 
       LLeftF64x4.d[0] := NaNF64;
       LLeftF64x4.d[1] := 5.0;
@@ -3965,10 +3980,10 @@ begin
       LRightF64x4.d[1] := NaNF64;
       LRightF64x4.d[2] := NegZeroF64;
       LRightF64x4.d[3] := 0.0;
-      AssertVecF64x4Parity(IEEE754BackendName(LBackend) + ' Special MinF64x4', LScalarDispatch^.MinF64x4(LLeftF64x4, LRightF64x4),
-        LBackendDispatch^.MinF64x4(LLeftF64x4, LRightF64x4));
-      AssertVecF64x4Parity(IEEE754BackendName(LBackend) + ' Special MaxF64x4', LScalarDispatch^.MaxF64x4(LLeftF64x4, LRightF64x4),
-        LBackendDispatch^.MaxF64x4(LLeftF64x4, LRightF64x4));
+      AssertVecF64x4Parity(IEEE754BackendName(LBackend) + ' Special MinF64x4', LScalarDispatch^.CoreVectors.MinF64x4(LLeftF64x4, LRightF64x4),
+        LBackendDispatch^.CoreVectors.MinF64x4(LLeftF64x4, LRightF64x4));
+      AssertVecF64x4Parity(IEEE754BackendName(LBackend) + ' Special MaxF64x4', LScalarDispatch^.CoreVectors.MaxF64x4(LLeftF64x4, LRightF64x4),
+        LBackendDispatch^.CoreVectors.MaxF64x4(LLeftF64x4, LRightF64x4));
 
       LLeftF64x8.d[0] := NaNF64;
       LLeftF64x8.d[1] := 5.0;
@@ -3986,10 +4001,10 @@ begin
       LRightF64x8.d[5] := 4.0;
       LRightF64x8.d[6] := 0.0;
       LRightF64x8.d[7] := NegZeroF64;
-      AssertVecF64x8Parity(IEEE754BackendName(LBackend) + ' Special MinF64x8', LScalarDispatch^.MinF64x8(LLeftF64x8, LRightF64x8),
-        LBackendDispatch^.MinF64x8(LLeftF64x8, LRightF64x8));
-      AssertVecF64x8Parity(IEEE754BackendName(LBackend) + ' Special MaxF64x8', LScalarDispatch^.MaxF64x8(LLeftF64x8, LRightF64x8),
-        LBackendDispatch^.MaxF64x8(LLeftF64x8, LRightF64x8));
+      AssertVecF64x8Parity(IEEE754BackendName(LBackend) + ' Special MinF64x8', LScalarDispatch^.CoreVectors.MinF64x8(LLeftF64x8, LRightF64x8),
+        LBackendDispatch^.CoreVectors.MinF64x8(LLeftF64x8, LRightF64x8));
+      AssertVecF64x8Parity(IEEE754BackendName(LBackend) + ' Special MaxF64x8', LScalarDispatch^.CoreVectors.MaxF64x8(LLeftF64x8, LRightF64x8),
+        LBackendDispatch^.CoreVectors.MaxF64x8(LLeftF64x8, LRightF64x8));
     finally
       ResetToAutomaticBackend;
     end;
@@ -4152,64 +4167,64 @@ begin
     try
       LDispatch := GetDispatchTable;
       CheckNotNil(LDispatch, 'Dispatch table should be available');
-      CheckTrue(Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8), 'Round/Trunc/Floor/Ceil F32x8 should be assigned');
-      CheckTrue(Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4), 'Round/Trunc/Floor/Ceil F64x4 should be assigned');
-      CheckTrue(Assigned(LDispatch^.RoundF32x16) and Assigned(LDispatch^.TruncF32x16) and Assigned(LDispatch^.FloorF32x16) and Assigned(LDispatch^.CeilF32x16), 'Round/Trunc/Floor/Ceil F32x16 should be assigned');
-      CheckTrue(Assigned(LDispatch^.RoundF64x8) and Assigned(LDispatch^.TruncF64x8) and Assigned(LDispatch^.FloorF64x8) and Assigned(LDispatch^.CeilF64x8), 'Round/Trunc/Floor/Ceil F64x8 should be assigned');
+      CheckTrue(Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.FloorF32x8) and Assigned(LDispatch^.CoreVectors.CeilF32x8), 'Round/Trunc/Floor/Ceil F32x8 should be assigned');
+      CheckTrue(Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4) and Assigned(LDispatch^.CoreVectors.FloorF64x4) and Assigned(LDispatch^.CoreVectors.CeilF64x4), 'Round/Trunc/Floor/Ceil F64x4 should be assigned');
+      CheckTrue(Assigned(LDispatch^.CoreVectors.RoundF32x16) and Assigned(LDispatch^.CoreVectors.TruncF32x16) and Assigned(LDispatch^.CoreVectors.FloorF32x16) and Assigned(LDispatch^.CoreVectors.CeilF32x16), 'Round/Trunc/Floor/Ceil F32x16 should be assigned');
+      CheckTrue(Assigned(LDispatch^.CoreVectors.RoundF64x8) and Assigned(LDispatch^.CoreVectors.TruncF64x8) and Assigned(LDispatch^.CoreVectors.FloorF64x8) and Assigned(LDispatch^.CoreVectors.CeilF64x8), 'Round/Trunc/Floor/Ceil F64x8 should be assigned');
 
       SetActiveBackend(sbScalar);
       LDispatch := GetDispatchTable;
-      LExpectedRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-      LExpectedTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-      LExpectedFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-      LExpectedCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-      LExpectedRoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-      LExpectedTruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
-      LExpectedFloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-      LExpectedCeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
-      LExpectedRoundF32x16 := LDispatch^.RoundF32x16(LInF32x16);
-      LExpectedTruncF32x16 := LDispatch^.TruncF32x16(LInF32x16);
-      LExpectedFloorF32x16 := LDispatch^.FloorF32x16(LInF32x16);
-      LExpectedCeilF32x16 := LDispatch^.CeilF32x16(LInF32x16);
-      LExpectedRoundF64x8 := LDispatch^.RoundF64x8(LInF64x8);
-      LExpectedTruncF64x8 := LDispatch^.TruncF64x8(LInF64x8);
-      LExpectedFloorF64x8 := LDispatch^.FloorF64x8(LInF64x8);
-      LExpectedCeilF64x8 := LDispatch^.CeilF64x8(LInF64x8);
-      LExpectedRoundSignedZeroF32x8 := LDispatch^.RoundF32x8(LInSignedZeroF32x8);
-      LExpectedTruncSignedZeroF32x8 := LDispatch^.TruncF32x8(LInSignedZeroF32x8);
-      LExpectedRoundSignedZeroF64x4 := LDispatch^.RoundF64x4(LInSignedZeroF64x4);
-      LExpectedTruncSignedZeroF64x4 := LDispatch^.TruncF64x4(LInSignedZeroF64x4);
-      LExpectedRoundSignedZeroF32x16 := LDispatch^.RoundF32x16(LInSignedZeroF32x16);
-      LExpectedTruncSignedZeroF32x16 := LDispatch^.TruncF32x16(LInSignedZeroF32x16);
-      LExpectedRoundSignedZeroF64x8 := LDispatch^.RoundF64x8(LInSignedZeroF64x8);
-      LExpectedTruncSignedZeroF64x8 := LDispatch^.TruncF64x8(LInSignedZeroF64x8);
+      LExpectedRoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+      LExpectedTruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+      LExpectedFloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+      LExpectedCeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+      LExpectedRoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+      LExpectedTruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
+      LExpectedFloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+      LExpectedCeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
+      LExpectedRoundF32x16 := LDispatch^.CoreVectors.RoundF32x16(LInF32x16);
+      LExpectedTruncF32x16 := LDispatch^.CoreVectors.TruncF32x16(LInF32x16);
+      LExpectedFloorF32x16 := LDispatch^.CoreVectors.FloorF32x16(LInF32x16);
+      LExpectedCeilF32x16 := LDispatch^.CoreVectors.CeilF32x16(LInF32x16);
+      LExpectedRoundF64x8 := LDispatch^.CoreVectors.RoundF64x8(LInF64x8);
+      LExpectedTruncF64x8 := LDispatch^.CoreVectors.TruncF64x8(LInF64x8);
+      LExpectedFloorF64x8 := LDispatch^.CoreVectors.FloorF64x8(LInF64x8);
+      LExpectedCeilF64x8 := LDispatch^.CoreVectors.CeilF64x8(LInF64x8);
+      LExpectedRoundSignedZeroF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInSignedZeroF32x8);
+      LExpectedTruncSignedZeroF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInSignedZeroF32x8);
+      LExpectedRoundSignedZeroF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInSignedZeroF64x4);
+      LExpectedTruncSignedZeroF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInSignedZeroF64x4);
+      LExpectedRoundSignedZeroF32x16 := LDispatch^.CoreVectors.RoundF32x16(LInSignedZeroF32x16);
+      LExpectedTruncSignedZeroF32x16 := LDispatch^.CoreVectors.TruncF32x16(LInSignedZeroF32x16);
+      LExpectedRoundSignedZeroF64x8 := LDispatch^.CoreVectors.RoundF64x8(LInSignedZeroF64x8);
+      LExpectedTruncSignedZeroF64x8 := LDispatch^.CoreVectors.TruncF64x8(LInSignedZeroF64x8);
 
       SetActiveBackend(LBackend);
       LDispatch := GetDispatchTable;
-      LActualRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-      LActualTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-      LActualFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-      LActualCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-      LActualRoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-      LActualTruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
-      LActualFloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-      LActualCeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
-      LActualRoundF32x16 := LDispatch^.RoundF32x16(LInF32x16);
-      LActualTruncF32x16 := LDispatch^.TruncF32x16(LInF32x16);
-      LActualFloorF32x16 := LDispatch^.FloorF32x16(LInF32x16);
-      LActualCeilF32x16 := LDispatch^.CeilF32x16(LInF32x16);
-      LActualRoundF64x8 := LDispatch^.RoundF64x8(LInF64x8);
-      LActualTruncF64x8 := LDispatch^.TruncF64x8(LInF64x8);
-      LActualFloorF64x8 := LDispatch^.FloorF64x8(LInF64x8);
-      LActualCeilF64x8 := LDispatch^.CeilF64x8(LInF64x8);
-      LActualRoundSignedZeroF32x8 := LDispatch^.RoundF32x8(LInSignedZeroF32x8);
-      LActualTruncSignedZeroF32x8 := LDispatch^.TruncF32x8(LInSignedZeroF32x8);
-      LActualRoundSignedZeroF64x4 := LDispatch^.RoundF64x4(LInSignedZeroF64x4);
-      LActualTruncSignedZeroF64x4 := LDispatch^.TruncF64x4(LInSignedZeroF64x4);
-      LActualRoundSignedZeroF32x16 := LDispatch^.RoundF32x16(LInSignedZeroF32x16);
-      LActualTruncSignedZeroF32x16 := LDispatch^.TruncF32x16(LInSignedZeroF32x16);
-      LActualRoundSignedZeroF64x8 := LDispatch^.RoundF64x8(LInSignedZeroF64x8);
-      LActualTruncSignedZeroF64x8 := LDispatch^.TruncF64x8(LInSignedZeroF64x8);
+      LActualRoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+      LActualTruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+      LActualFloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+      LActualCeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+      LActualRoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+      LActualTruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
+      LActualFloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+      LActualCeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
+      LActualRoundF32x16 := LDispatch^.CoreVectors.RoundF32x16(LInF32x16);
+      LActualTruncF32x16 := LDispatch^.CoreVectors.TruncF32x16(LInF32x16);
+      LActualFloorF32x16 := LDispatch^.CoreVectors.FloorF32x16(LInF32x16);
+      LActualCeilF32x16 := LDispatch^.CoreVectors.CeilF32x16(LInF32x16);
+      LActualRoundF64x8 := LDispatch^.CoreVectors.RoundF64x8(LInF64x8);
+      LActualTruncF64x8 := LDispatch^.CoreVectors.TruncF64x8(LInF64x8);
+      LActualFloorF64x8 := LDispatch^.CoreVectors.FloorF64x8(LInF64x8);
+      LActualCeilF64x8 := LDispatch^.CoreVectors.CeilF64x8(LInF64x8);
+      LActualRoundSignedZeroF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInSignedZeroF32x8);
+      LActualTruncSignedZeroF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInSignedZeroF32x8);
+      LActualRoundSignedZeroF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInSignedZeroF64x4);
+      LActualTruncSignedZeroF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInSignedZeroF64x4);
+      LActualRoundSignedZeroF32x16 := LDispatch^.CoreVectors.RoundF32x16(LInSignedZeroF32x16);
+      LActualTruncSignedZeroF32x16 := LDispatch^.CoreVectors.TruncF32x16(LInSignedZeroF32x16);
+      LActualRoundSignedZeroF64x8 := LDispatch^.CoreVectors.RoundF64x8(LInSignedZeroF64x8);
+      LActualTruncSignedZeroF64x8 := LDispatch^.CoreVectors.TruncF64x8(LInSignedZeroF64x8);
 
       for LIndex := 0 to 7 do
       begin
@@ -4398,29 +4413,29 @@ begin
 
         SetActiveBackend(sbScalar);
         LDispatch := GetDispatchTable;
-        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4) and Assigned(LDispatch^.FloorF32x16) and Assigned(LDispatch^.CeilF32x16) and Assigned(LDispatch^.FloorF64x8) and Assigned(LDispatch^.CeilF64x8), 'Scalar dispatch should provide wide Floor/Ceil');
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.FloorF32x8) and Assigned(LDispatch^.CoreVectors.CeilF32x8) and Assigned(LDispatch^.CoreVectors.FloorF64x4) and Assigned(LDispatch^.CoreVectors.CeilF64x4) and Assigned(LDispatch^.CoreVectors.FloorF32x16) and Assigned(LDispatch^.CoreVectors.CeilF32x16) and Assigned(LDispatch^.CoreVectors.FloorF64x8) and Assigned(LDispatch^.CoreVectors.CeilF64x8), 'Scalar dispatch should provide wide Floor/Ceil');
 
-        LScalarFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-        LScalarCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-        LScalarFloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-        LScalarCeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
-        LScalarFloorF32x16 := LDispatch^.FloorF32x16(LInF32x16);
-        LScalarCeilF32x16 := LDispatch^.CeilF32x16(LInF32x16);
-        LScalarFloorF64x8 := LDispatch^.FloorF64x8(LInF64x8);
-        LScalarCeilF64x8 := LDispatch^.CeilF64x8(LInF64x8);
+        LScalarFloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+        LScalarCeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+        LScalarFloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+        LScalarCeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
+        LScalarFloorF32x16 := LDispatch^.CoreVectors.FloorF32x16(LInF32x16);
+        LScalarCeilF32x16 := LDispatch^.CoreVectors.CeilF32x16(LInF32x16);
+        LScalarFloorF64x8 := LDispatch^.CoreVectors.FloorF64x8(LInF64x8);
+        LScalarCeilF64x8 := LDispatch^.CoreVectors.CeilF64x8(LInF64x8);
 
         SetActiveBackend(LBackend);
         LDispatch := GetDispatchTable;
-        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.FloorF32x8) and Assigned(LDispatch^.CeilF32x8) and Assigned(LDispatch^.FloorF64x4) and Assigned(LDispatch^.CeilF64x4) and Assigned(LDispatch^.FloorF32x16) and Assigned(LDispatch^.CeilF32x16) and Assigned(LDispatch^.FloorF64x8) and Assigned(LDispatch^.CeilF64x8), 'Non-x86 dispatch should provide wide Floor/Ceil');
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.FloorF32x8) and Assigned(LDispatch^.CoreVectors.CeilF32x8) and Assigned(LDispatch^.CoreVectors.FloorF64x4) and Assigned(LDispatch^.CoreVectors.CeilF64x4) and Assigned(LDispatch^.CoreVectors.FloorF32x16) and Assigned(LDispatch^.CoreVectors.CeilF32x16) and Assigned(LDispatch^.CoreVectors.FloorF64x8) and Assigned(LDispatch^.CoreVectors.CeilF64x8), 'Non-x86 dispatch should provide wide Floor/Ceil');
 
-        LBackendFloorF32x8 := LDispatch^.FloorF32x8(LInF32x8);
-        LBackendCeilF32x8 := LDispatch^.CeilF32x8(LInF32x8);
-        LBackendFloorF64x4 := LDispatch^.FloorF64x4(LInF64x4);
-        LBackendCeilF64x4 := LDispatch^.CeilF64x4(LInF64x4);
-        LBackendFloorF32x16 := LDispatch^.FloorF32x16(LInF32x16);
-        LBackendCeilF32x16 := LDispatch^.CeilF32x16(LInF32x16);
-        LBackendFloorF64x8 := LDispatch^.FloorF64x8(LInF64x8);
-        LBackendCeilF64x8 := LDispatch^.CeilF64x8(LInF64x8);
+        LBackendFloorF32x8 := LDispatch^.CoreVectors.FloorF32x8(LInF32x8);
+        LBackendCeilF32x8 := LDispatch^.CoreVectors.CeilF32x8(LInF32x8);
+        LBackendFloorF64x4 := LDispatch^.CoreVectors.FloorF64x4(LInF64x4);
+        LBackendCeilF64x4 := LDispatch^.CoreVectors.CeilF64x4(LInF64x4);
+        LBackendFloorF32x16 := LDispatch^.CoreVectors.FloorF32x16(LInF32x16);
+        LBackendCeilF32x16 := LDispatch^.CoreVectors.CeilF32x16(LInF32x16);
+        LBackendFloorF64x8 := LDispatch^.CoreVectors.FloorF64x8(LInF64x8);
+        LBackendCeilF64x8 := LDispatch^.CoreVectors.CeilF64x8(LInF64x8);
 
         for LIndex := 0 to 7 do
         begin
@@ -4616,29 +4631,29 @@ begin
 
         SetActiveBackend(sbScalar);
         LDispatch := GetDispatchTable;
-        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4) and Assigned(LDispatch^.RoundF32x16) and Assigned(LDispatch^.TruncF32x16) and Assigned(LDispatch^.RoundF64x8) and Assigned(LDispatch^.TruncF64x8), 'Scalar dispatch should provide wide Round/Trunc');
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4) and Assigned(LDispatch^.CoreVectors.RoundF32x16) and Assigned(LDispatch^.CoreVectors.TruncF32x16) and Assigned(LDispatch^.CoreVectors.RoundF64x8) and Assigned(LDispatch^.CoreVectors.TruncF64x8), 'Scalar dispatch should provide wide Round/Trunc');
 
-        LScalarRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-        LScalarTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-        LScalarRoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-        LScalarTruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
-        LScalarRoundF32x16 := LDispatch^.RoundF32x16(LInF32x16);
-        LScalarTruncF32x16 := LDispatch^.TruncF32x16(LInF32x16);
-        LScalarRoundF64x8 := LDispatch^.RoundF64x8(LInF64x8);
-        LScalarTruncF64x8 := LDispatch^.TruncF64x8(LInF64x8);
+        LScalarRoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+        LScalarTruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+        LScalarRoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+        LScalarTruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
+        LScalarRoundF32x16 := LDispatch^.CoreVectors.RoundF32x16(LInF32x16);
+        LScalarTruncF32x16 := LDispatch^.CoreVectors.TruncF32x16(LInF32x16);
+        LScalarRoundF64x8 := LDispatch^.CoreVectors.RoundF64x8(LInF64x8);
+        LScalarTruncF64x8 := LDispatch^.CoreVectors.TruncF64x8(LInF64x8);
 
         SetActiveBackend(LBackend);
         LDispatch := GetDispatchTable;
-        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.RoundF32x8) and Assigned(LDispatch^.TruncF32x8) and Assigned(LDispatch^.RoundF64x4) and Assigned(LDispatch^.TruncF64x4) and Assigned(LDispatch^.RoundF32x16) and Assigned(LDispatch^.TruncF32x16) and Assigned(LDispatch^.RoundF64x8) and Assigned(LDispatch^.TruncF64x8), 'Non-x86 dispatch should provide wide Round/Trunc');
+        CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.RoundF32x8) and Assigned(LDispatch^.CoreVectors.TruncF32x8) and Assigned(LDispatch^.CoreVectors.RoundF64x4) and Assigned(LDispatch^.CoreVectors.TruncF64x4) and Assigned(LDispatch^.CoreVectors.RoundF32x16) and Assigned(LDispatch^.CoreVectors.TruncF32x16) and Assigned(LDispatch^.CoreVectors.RoundF64x8) and Assigned(LDispatch^.CoreVectors.TruncF64x8), 'Non-x86 dispatch should provide wide Round/Trunc');
 
-        LBackendRoundF32x8 := LDispatch^.RoundF32x8(LInF32x8);
-        LBackendTruncF32x8 := LDispatch^.TruncF32x8(LInF32x8);
-        LBackendRoundF64x4 := LDispatch^.RoundF64x4(LInF64x4);
-        LBackendTruncF64x4 := LDispatch^.TruncF64x4(LInF64x4);
-        LBackendRoundF32x16 := LDispatch^.RoundF32x16(LInF32x16);
-        LBackendTruncF32x16 := LDispatch^.TruncF32x16(LInF32x16);
-        LBackendRoundF64x8 := LDispatch^.RoundF64x8(LInF64x8);
-        LBackendTruncF64x8 := LDispatch^.TruncF64x8(LInF64x8);
+        LBackendRoundF32x8 := LDispatch^.CoreVectors.RoundF32x8(LInF32x8);
+        LBackendTruncF32x8 := LDispatch^.CoreVectors.TruncF32x8(LInF32x8);
+        LBackendRoundF64x4 := LDispatch^.CoreVectors.RoundF64x4(LInF64x4);
+        LBackendTruncF64x4 := LDispatch^.CoreVectors.TruncF64x4(LInF64x4);
+        LBackendRoundF32x16 := LDispatch^.CoreVectors.RoundF32x16(LInF32x16);
+        LBackendTruncF32x16 := LDispatch^.CoreVectors.TruncF32x16(LInF32x16);
+        LBackendRoundF64x8 := LDispatch^.CoreVectors.RoundF64x8(LInF64x8);
+        LBackendTruncF64x8 := LDispatch^.CoreVectors.TruncF64x8(LInF64x8);
 
         for LIndex := 0 to 7 do
         begin

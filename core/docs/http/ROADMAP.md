@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave X2 landed → **NEXT = X3**）
+**Updated**: 2026-07-17（Wave X5 landed → **Era 6 Done**）
 
 ---
 
@@ -88,12 +88,15 @@ CHECKPOINT（不阻塞续波）:
 | Wave X0 Excellence open | 完成（Era 6 表 + 推荐路径 + residual 可主动消除声明） |
 | Wave X1 WS production contract | 完成（lifecycle 表 + close/cancel Op focused；heaptrc 0） |
 | Wave X2 net cancel floor | 完成（waitable socketpair+poll 唤醒；SLA ~20ms；probe-only ~10ms slice） |
-| **下一执行点** | **Wave X3** — Client pool idle TTL |
+| Wave X3 Client pool idle TTL | 完成（IdleTTL 默认 90s；借出/归还淘汰；0=关闭） |
+| Wave X4 TLS OpenSSL residual | 完成（PinValidator FreeAndNil；HTTPS residual 11→1×41B process-lifetime） |
+| Wave X5 Comparator + profiled win | 完成（equal-fold Get/Has；fullchain 刷新；无假 H3） |
+| **下一执行点** | **Era 6 Done** — 无默认 NEXT；Inbox 仅升格后开工 |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~92%   高级 ~82%   优雅 ~86%   性能 ~70%  (Excellence: H1/H2/WS)
+完整 ~92%   高级 ~85%   优雅 ~88%   性能 ~78%  (Excellence: H1/H2/WS landed)
 ```
 
 ---
@@ -431,39 +434,42 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 墙钟 idle TTL（对齐 options / With* 外层胜）；借出/归还淘汰过期 idle；与 per-authority `MaxPoolSize` 一致；focused + CONTRACT pool 表 |
 | **Don't** | 全局跨 host 连接上限；主动 HTTP 健康探测（除非另升格） |
 | **Done when** | 过期不复用、未过期复用、`CloseIdleConnections` 仍全清 有测；CONTRACT 去掉「无 idle TTL」residual 或改写为可配置 |
 | **Gates** | `test_http_client`；`test_http_h2_client`；hygiene；diff --check |
 | **Land paths** | http client / H1 / H2 pool 实现 + tests + `core/docs/http/**` |
 | **Next** | Wave X4 |
+| **Evidence** | `THttpClientOptions.IdleTTL` 默认 90000ms；`WithIdleTTL`；H1/H2 `IdleAtMs` + `PoolEntryExpired` on get/put；`IdleTTL=0` 关闭墙钟淘汰；client 269 / h2_client 66 pass；CONTRACT pool 表 |
 
 ### Wave X4 — TLS OpenSSL residual（跨模块）
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued after X3 |
+| **Status** | **landed** |
 | **Do** | 收敛 factory/`CreateContext` heaptrc unfreed（owner=tls）；http HTTPS/H2/`tls_real` 回归；缩小 CONTRACT residual claim |
 | **Don't** | 换 TLS 后端；在 http 吞泄漏；清无关全库泄漏 |
 | **Done when** | client HTTPS 路径 0 unfreed **或** residual 缩到明确子路径 + 证据 |
 | **Gates** | tls 相关 focused；`test_http_client`；`test_http_tls_real`（若存在）；hygiene |
 | **Land paths** | `core/src/nextpas.core.tls*`（最小）+ tests；http docs residual |
 | **Next** | Wave X5 |
+| **Evidence** | `TOpenSSLContext`/`TWinSSLContext` Destroy `FreeAndNil(FPinValidator)`；client HTTPS residual **11×~32B → 1×41B** process-lifetime（无可靠 call stack；非 per-request）；非 HTTPS 路径 0 unfreed；h2_client 66/0 unfreed；source-contract 锁 PinValidator free；`test_http_tls_real` 既有 TThread 编译红点（非本波引入） |
 
 ### Wave X5 — Comparator + profiled win
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued after X4 |
+| **Status** | **landed** |
 | **Do** | 刷新 BENCHMARKS / server comparison 本机 snapshot + caveats；profile 一刀可解释优化（可回落 net/tls/http）；对标 Go/Rust 同负载表述 |
 | **Don't** | 为数字牺牲正确性；无 profile 乱优化；假 H3 行 |
 | **Done when** | BENCHMARKS 有 Excellence 一行证据；正确性 focused 不回退 |
 | **Gates** | 相关 bench 可跑；http 核心 focused 抽样；hygiene |
 | **Land paths** | benches/docs + 必要 src；跨模块仅当 profile 证明 |
 | **Next** | Era 6 Done / STOP 或 Inbox |
+| **Evidence** | `FindFirstEqualFold`：Get hit uppercase **128.9→89.7 ns**（~30%）；fullchain Direct/Router × threaded/epoll 本机刷新；comparator honesty 无假 H3；`test_http_headers` 28/0 unfreed |
 
-**Era 6 Done when**：X0–X5 landed（或 X5 证据充分且剩余诚实 Park）；H3 仍无 facade；四支柱可再评估。
+**Era 6 Done when**：X0–X5 landed（或 X5 证据充分且剩余诚实 Park）；H3 仍无 facade；四支柱可再评估。 **Met**（X0–X5 landed；H3 仍 Blocked）。
 
 ---
 
@@ -473,8 +479,8 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 |----|------|
 | server `Default` RW=0 | **Keep**（测试兼容）；生产用 `THttpServerOptions.Production` |
 | cancel ~50 ms 切片 | **X2 landed**：waitable token 近即时唤醒；probe-only 退回 ~10ms slice；Windows 无 socketpair 时 residual |
-| OpenSSL factory unfreed | **tls residual**；**Era 6 X4** 授权在 tls 收敛；http 不单独清零宣称 |
-| pool 无 idle TTL | **当前 residual**；**Era 6 X3** 消除 |
+| OpenSSL factory unfreed | **X4 landed**：PinValidator 所有权修复；client HTTPS 余 **1×41B** process-lifetime residual（诚实）；非 HTTPS 0 |
+| pool idle TTL | **X3 landed**：`IdleTTL` 默认 90s；0=关闭墙钟淘汰；`CloseIdleConnections` 仍全清 |
 | JSON dual raw vs ensure-string | **Keep** 三层模型 |
 | Digest / NTLM / Negotiate proxy auth | **Park**（Wave I） |
 | 完整企业代理栈 | **Park** 除非真实 consumer |
@@ -509,11 +515,11 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ```text
 1. Era 0–4 landed；framework-complete (non-H3) 已立住
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
-3. Era 6 NEXT = Wave X3（pool idle TTL）；之后 X4→X5
+3. Era 6 X0–X5 landed — Excellence Done；默认 STOP（Inbox 仅升格后开工）
 4. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：执行 Era 6 推荐路径（X3…），不要空转 H3。**
+**没有用户指令时：Era 6 已 Done — STOP；不要空转 H3；Inbox 仅升格后开工。**
 
 ---
 
@@ -556,3 +562,6 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | **Era 6 Excellence** 开启（X0）：H1/H2/WS 精品路径 X1→X5；跨模块 net/tls 受控授权；H3 仍无需求；Wave X1 = NEXT |
 | 2026-07-17 | Wave X1 landed：WS lifecycle 表 + close/cancel Op focused；Wave X2 = NEXT |
 | 2026-07-17 | Wave X2 landed：net waitable cancel（socketpair+poll）+ SLA；Wave X3 = NEXT |
+| 2026-07-17 | Wave X3 landed：client pool IdleTTL（默认 90s / 0=off）+ get/put 淘汰；Wave X4 = NEXT |
+| 2026-07-17 | Wave X4 landed：TLS PinValidator FreeAndNil；HTTPS residual 11→1×41B；Wave X5 = NEXT |
+| 2026-07-17 | Wave X5 landed：headers equal-fold Get/Has（uppercase ~30%）；fullchain 刷新；Era 6 Done |

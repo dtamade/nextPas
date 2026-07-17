@@ -1820,7 +1820,7 @@ end;
 procedure TTestCase_RVVParity.Test_AddU64x2;
 var a, b, rvv, scalar: TVecU64x2;
 begin
-  a := MakeU64x2(1, $FFFFFFFFFFFFFFFF);
+  a := MakeU64x2(1, High(UInt64));
   b := MakeU64x2(10, 1);
   rvv := ScalarAddU64x2(a, b);
   scalar := ScalarAddU64x2(a, b);
@@ -1875,7 +1875,7 @@ end;
 procedure TTestCase_RVVParity.Test_NotU64x2;
 var a, rvv, scalar: TVecU64x2;
 begin
-  a := MakeU64x2(0, $FFFFFFFFFFFFFFFF);
+  a := MakeU64x2(0, High(UInt64));
   rvv := ScalarNotU64x2(a);
   scalar := ScalarNotU64x2(a);
   CheckEqual(scalar.u[0], rvv.u[0], 'NotU64x2[0]');
@@ -2025,8 +2025,8 @@ end;
 procedure TTestCase_RVVParity.Test_AndI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
-  a := MakeI8x16($FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
-  b := MakeI8x16($0F,$FF,$0F,$55,$AA,$00,$FF,$F0, $0F,$FF,$0F,$55,$AA,$00,$FF,$F0);
+  a := MakeI8x16(-1,-16,16,-86,85,-1,0,15, -1,-16,16,-86,85,-1,0,15);
+  b := MakeI8x16(15,-1,-16,85,-86,0,-1,16, 15,-1,-16,85,-86,0,-1,16);
   rvv := ScalarAndI8x16(a, b);
   scalar := ScalarAndI8x16(a, b);
   for i := 0 to 15 do
@@ -2036,8 +2036,8 @@ end;
 procedure TTestCase_RVVParity.Test_OrI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
-  a := MakeI8x16($FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
-  b := MakeI8x16($0F,$FF,$0F,$55,$AA,$00,$FF,$F0, $0F,$FF,$0F,$55,$AA,$00,$FF,$F0);
+  a := MakeI8x16(-1,-16,16,-86,85,-1,0,15, -1,-16,16,-86,85,-1,0,15);
+  b := MakeI8x16(15,-1,-16,85,-86,0,-1,16, 15,-1,-16,85,-86,0,-1,16);
   rvv := ScalarOrI8x16(a, b);
   scalar := ScalarOrI8x16(a, b);
   for i := 0 to 15 do
@@ -2047,8 +2047,8 @@ end;
 procedure TTestCase_RVVParity.Test_XorI8x16;
 var a, b, rvv, scalar: TVecI8x16; i: Integer;
 begin
-  a := MakeI8x16($FF,$0F,$F0,$AA,$55,$FF,$00,$0F, $FF,$0F,$F0,$AA,$55,$FF,$00,$0F);
-  b := MakeI8x16($0F,$FF,$0F,$55,$AA,$00,$FF,$F0, $0F,$FF,$0F,$55,$AA,$00,$FF,$F0);
+  a := MakeI8x16(-1,-16,16,-86,85,-1,0,15, -1,-16,16,-86,85,-1,0,15);
+  b := MakeI8x16(15,-1,-16,85,-86,0,-1,16, 15,-1,-16,85,-86,0,-1,16);
   rvv := ScalarXorI8x16(a, b);
   scalar := ScalarXorI8x16(a, b);
   for i := 0 to 15 do

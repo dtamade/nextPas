@@ -104,6 +104,64 @@ make -C benchmarks/nextpas.core.http/bench_headers clean run
 Caveat: single-host micro only; not fullchain ranking. Correctness:
 `make focused FOCUS=core/tests/nextpas.core.http/test_http_headers` (28 pass).
 
+### Wave X5 Excellence: equal-fold Get/Has + ladder refresh (2026-07-17)
+
+**Hotspot (profiled)**: public `THttpHeaders.Get` / `Has` on mixed-case names
+still allocated a canonical `Normalize` string every lookup after Wave P1’s
+validate+normalize fuse. Mixed-case lookups are common for client libraries that
+send `Host` / `CONNECTION`-style names.
+
+**Change**: after one `ValidateNameAndNeedsNormalize` pass, lowercase queries
+use exact `FindFirstNormalized`; mixed/upper queries use
+`FindFirstEqualFold` (fold query chars against stored lowercase names, **no**
+heap string). Write paths (`Set`/`Add`/`Remove`/`GetAll`) still materialize a
+canonical name via `ValidateAndNormalizeName` (single validate+fold pass).
+
+**Command** (repo `core/`):
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=200000 \
+  make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+**Local before/after** (Linux 6.12 amd64, FPC 3.3.1, 44 cores, same machine,
+mean ns/op, `MAX_ITERS=200000`):
+
+| row | before (P1 residual) | after (X5) | note |
+| --- | -------------------: | ---------: | ---- |
+| Get hit uppercase (5 headers, last) | 128.9 | **89.7** | ~30% faster; primary X5 win |
+| Get hit (5 headers, last) | 80.5 | 77.5 | lowercase path; noise / same class |
+| Get miss (3 headers) | 83.7 | 80.4 | lowercase path; noise |
+| GetAll miss (5 headers) | 69.7 | 67.3 | noise |
+| Has (3 headers) | 79.0 | 75.9 | noise |
+
+**Fullchain ladder refresh** (same day; single connection keep-alive;
+`NEXTPAS_BENCH_MAX_ITERS=5000` unless noted):
+
+| workload | backend | mean ns/op | ops/s (mean) |
+| -------- | ------- | ---------: | -----------: |
+| Direct/Plaintext | threaded | 46640 | ~21.4k |
+| Direct/Plaintext | epoll | 95181 | ~10.5k |
+| Router/Plaintext | threaded | 43970 | ~22.7k |
+| Router/Plaintext | epoll | 97640 | ~10.2k |
+| Middleware/Noop | threaded | 48570 | ~20.6k |
+
+Full-suite smoke at `MAX_ITERS=200` (threaded) also completed Router/JSON ~
+51.8 µs, Echo/1KB ~65.0 µs, Sink/16KB ~57.3 µs, Param ~47.8 µs — no H3 row.
+
+**Comparator honesty (Go/Rust)**:
+
+- Use `benchmarks/nextpas.core.http/run_server_comparison.sh` /
+  `capture_server_comparison_snapshot.sh` for multi-thread L4; nextPas backend
+  switches via `NEXTPAS_BENCH_BACKEND` / `--nextpas-backend` only.
+- Do **not** rank epoll vs Go/Rust on single-connection fullchain; do **not**
+  invent H3 comparator lines.
+- Same caveats as Wave P3: one machine, one day; threaded often wins this
+  sequential shape; epoll targets many concurrent fds.
+
+Correctness: `make focused FOCUS=core/tests/nextpas.core.http/test_http_headers`
+(28 pass, 0 unfreed).
+
 ### Wave P3: threaded vs epoll fullchain (2026-07-17)
 
 **Goal**: same L2/L3 keep-alive workload on both nextPas backends; honest local

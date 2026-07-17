@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-17 (Era 6 Excellence open; framework-complete non-H3 retained)
+> Last updated: 2026-07-17 (Era 6 Excellence Done X0–X5; framework-complete non-H3 retained)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — ordered Eras/Waves, Goal Loop, Inbox. This file is north star + stage truth, **not** a day-to-day backlog.
@@ -26,7 +26,7 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | G6 performance evidence | **stage-closed**（见下「G6 stage performance complete」；细节在 [`BENCHMARKS.md`](BENCHMARKS.md)） |
 | non-H3 stage-complete | 完成（H3 诚实 blocked on QUIC；无产品需求） |
 | **framework-complete (non-H3)** | **yes** — Era 0–4 默认路径 landed |
-| **Excellence (Era 6)** | **in progress** — H1/H2/WS 精品；可受控反哺 net/tls（见 ROADMAP） |
+| **Excellence (Era 6)** | **Done** — X0–X5 landed（WS/cancel/IdleTTL/TLS residual/equal-fold+comparator）；H3 仍 Blocked |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | ~35 focused suites |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
@@ -260,7 +260,7 @@ Design exclusions (by design, not gaps):
 
 Remaining H2 hardening:
 - Test coverage vs h2-test-coverage-plan.md targets: client 55/55 (✅ closed), frame 37/35 (✅ closed), hpack 30/30 (✅ closed); session gap closed
-- Real TLS runtime proof: ✅ `test_http_tls_real` (5 tests, self-signed cert + handshake + stream wrapper + H2 transport creation); 9 unfreed blocks are in openssl backend layer, not HTTP
+- Real TLS runtime proof: ✅ OpenSSL path covered by client HTTPS + H2 ALPN focused；`test_http_tls_real` currently compile-blocked on `TThread` (pre-existing). Wave X4: PinValidator free; client HTTPS residual 1×41B process-lifetime
 - Documentation alignment (this document and ARCHITECTURE.md)
 
 H3 is blocked on the QUIC module. Only `nextpas.core.tls.quic.crypto.pas` (QUIC v1 crypto primitives) exists; no QPACK/HTTP3 frame/stream source code.

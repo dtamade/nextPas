@@ -174,6 +174,7 @@ type
       Port: UInt16;
       Secure: Boolean;
       Conn: TH2ClientConnection;
+      IdleAtMs: UInt64;
     end;
   private
     FOptions: TH2ClientTransportOptions;
@@ -181,6 +182,8 @@ type
     FPoolLock: IMutex;
     FPool: array of TH2PoolEntry;
     FPoolCount: Int32;
+    function PoolEntryExpired(const AEntry: TH2PoolEntry): Boolean;
+    procedure PoolRemoveAt(const AIndex: Int32);
     function PoolGet(const AHost: string; const APort: UInt16;
       const ASecure: Boolean): TH2ClientConnection;
     procedure PoolPut(const AHost: string; const APort: UInt16;
@@ -214,6 +217,7 @@ uses
   nextpas.core.errors,
   nextpas.core.net,
   nextpas.core.time.base,
+  nextpas.core.time,
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.impl.tls.stream,
@@ -1538,6 +1542,30 @@ begin
   inherited Destroy;
 end;
 
+function TH2ClientTransport.PoolEntryExpired(const AEntry: TH2PoolEntry): Boolean;
+var
+  LNow: UInt64;
+  LAge: UInt64;
+begin
+  Result := False;
+  if FOptions.IdleTTL <= 0 then
+    Exit;
+  LNow := GetTickCount64;
+  if LNow >= AEntry.IdleAtMs then
+    LAge := LNow - AEntry.IdleAtMs
+  else
+    LAge := 0;
+  Result := LAge >= UInt64(FOptions.IdleTTL);
+end;
+
+procedure TH2ClientTransport.PoolRemoveAt(const AIndex: Int32);
+begin
+  if (AIndex < 0) or (AIndex >= FPoolCount) then
+    Exit;
+  FPool[AIndex] := FPool[FPoolCount - 1];
+  Dec(FPoolCount);
+end;
+
 function TH2ClientTransport.PoolGet(const AHost: string;
   const APort: UInt16; const ASecure: Boolean): TH2ClientConnection;
 var
@@ -1546,13 +1574,24 @@ begin
   Result := nil;
   FPoolLock.Acquire;
   try
-    for LI := 0 to FPoolCount - 1 do
+    LI := 0;
+    while LI < FPoolCount do
+    begin
       if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
          (FPool[LI].Secure = ASecure) then
       begin
+        if PoolEntryExpired(FPool[LI]) then
+        begin
+          if FPool[LI].Conn <> nil then
+          begin
+            FPool[LI].Conn.Close;
+            FPool[LI].Conn.Free;
+          end;
+          PoolRemoveAt(LI);
+          Continue;
+        end;
         Result := FPool[LI].Conn;
-        FPool[LI] := FPool[FPoolCount - 1];
-        Dec(FPoolCount);
+        PoolRemoveAt(LI);
         if (Result <> nil) and Result.IsReusable then
           Exit;
         if Result <> nil then
@@ -1563,6 +1602,8 @@ begin
         Result := nil;
         Exit;
       end;
+      Inc(LI);
+    end;
   finally
     FPoolLock.Release;
   end;
@@ -1585,6 +1626,22 @@ begin
       end;
       Exit;
     end;
+    LI := 0;
+    while LI < FPoolCount do
+    begin
+      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
+         (FPool[LI].Secure = ASecure) and PoolEntryExpired(FPool[LI]) then
+      begin
+        if FPool[LI].Conn <> nil then
+        begin
+          FPool[LI].Conn.Close;
+          FPool[LI].Conn.Free;
+        end;
+        PoolRemoveAt(LI);
+      end
+      else
+        Inc(LI);
+    end;
     if FOptions.MaxPoolSize > 0 then
     begin
       LAuthorityIdle := 0;
@@ -1605,6 +1662,7 @@ begin
     FPool[FPoolCount].Port := APort;
     FPool[FPoolCount].Secure := ASecure;
     FPool[FPoolCount].Conn := AConn;
+    FPool[FPoolCount].IdleAtMs := GetTickCount64;
     Inc(FPoolCount);
   finally
     FPoolLock.Release;

@@ -77,6 +77,38 @@ procedure ScalarArrayLinearF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aB
 procedure ScalarArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
 procedure ScalarArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
+// === Batch Array Operations - Transcendental F64 ===
+procedure ScalarArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArraySinCosF64(aSrc, aSinDst, aCosDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayLog2F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayLog10F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayRoundF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+// === Batch Array Operations - F64 Extended ===
+procedure ScalarArrayAxpyF64(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayRcpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayRsqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayRcpRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayRsqrtRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayTanF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArraySignF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayFractF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayModF64(aSrc, aDst: PDouble; aCount: SizeUInt; aDivisor: Double);
+procedure ScalarArrayPowF64(aSrc, aDst: PDouble; aCount: SizeUInt; aExponent: Double);
+procedure ScalarArrayLerpF64(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double);
+procedure ScalarArrayReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayAbsDiffF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayNormF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMean, aInvStd: Double);
+procedure ScalarArrayLinearReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+procedure ScalarArrayStepF64(aEdge, aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArraySmoothstepF64(aEdge0, aEdge1, aSrc, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayAtan2F64(aY, aX, aDst: PDouble; aCount: SizeUInt);
+procedure ScalarArrayHypotF64(aX, aY, aDst: PDouble; aCount: SizeUInt);
 // === Batch Array Operations - Transcendental F32 ===
 procedure ScalarArrayExpF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 procedure ScalarArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt);

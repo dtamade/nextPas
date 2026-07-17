@@ -10,7 +10,7 @@ interface
 
 uses
   Math, nextpas.core.test, nextpas.core.simd.signal,
-  nextpas.core.simd.base, nextpas.core.text.conv, nextpas.core.simd.alloc;
+  nextpas.core.simd.base, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.simd.alloc;
 
 {$M+}
 type
@@ -746,7 +746,7 @@ begin
       LSum := 0;
       for j := 0 to LFftSize div 2 do
         LSum := LSum + LBank[i * (LFftSize div 2 + 1) + j];
-      CheckTrue(LSum > 0, Format('Filter %d should have non-zero energy', [i]));
+      CheckTrue(LSum > 0, TextFormat('Filter %d should have non-zero energy', [i]));
     end;
   finally
     SimdFree(LBank);

@@ -77,6 +77,10 @@ begin
     sbAVX512: Result := 'AVX-512';
     sbNEON: Result := 'NEON';
     sbRISCVV: Result := 'RISC-V V';
+    sbLASX: Result := 'LoongArch LASX';
+    sbWASM: Result := 'WebAssembly SIMD';
+    sbVSX: Result := 'POWER VSX';
+    sbMSA: Result := 'MIPS MSA';
   end;
 end;
 
@@ -94,6 +98,10 @@ begin
     sbAVX512: Result := 'x86-64 AVX-512 SIMD implementation';
     sbNEON: Result := 'ARM NEON 128-bit SIMD';
     sbRISCVV: Result := 'RISC-V Vector Extension (RVV)';
+    sbLASX: Result := 'LoongArch LASX 256-bit SIMD';
+    sbWASM: Result := 'WebAssembly SIMD128';
+    sbVSX: Result := 'POWER VSX SIMD';
+    sbMSA: Result := 'MIPS MSA SIMD';
   end;
 end;
 

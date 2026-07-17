@@ -13,7 +13,7 @@ type
 
   TPlatformSecureZeroBackend = (
     pszbFallbackFillCharBarrier,
-    pszbWindowsNativeDeferred,
+    pszbWindowsPermanentFallback,
     pszbPosixExplicitBZero
   );
 
@@ -216,6 +216,10 @@ begin
 {$ELSEIF defined(NEXTPAS_MACOS)}
   { macOS uses memset_s (C11); still counts as native secure-zero. }
   Result := pszbPosixExplicitBZero;
+{$ELSEIF defined(NEXTPAS_WINDOWS)}
+  { No stable dual-host user-mode secure-zero DLL export (Wine + real Windows
+    SDK). Permanent FillChar+barrier path; see D3.b decision tokens below. }
+  Result := pszbWindowsPermanentFallback;
 {$ELSE}
   Result := pszbFallbackFillCharBarrier;
 {$ENDIF}
@@ -233,11 +237,13 @@ end;
 
 {
   secure-zero-backend=fallback-fillchar-readwritebarrier
-  windows-native-secure-zero=deferred
+  windows-native-secure-zero=permanent-fallback
+  windows-secure-zero-decision=D3.b-permanent-fillchar-barrier
   posix-native-secure-zero=explicit_bzero (Linux/FreeBSD) or memset_s (macOS)
-  native-secure-zero-promotion-requires=host-owned-ffi-or-dynamic-loading-seam
+  native-secure-zero-promotion-requires=host-owned-ffi-export-with-wine-and-real-windows-proof
   secure-zero-forced-compile-truth=source-contract
   windows-runtime-ready=false
+  windows-native-export=unavailable
   fallback-barrier-caveat=ReadWriteBarrier prevents compiler reordering but
     is not a full hardware memory fence. On weakly-ordered architectures
     (ARM, POWER) this may not prevent hardware reordering of the zero-fill

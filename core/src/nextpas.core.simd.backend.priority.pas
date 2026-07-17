@@ -54,6 +54,10 @@ begin
     sbSSE42: Result := 70;
     sbAVX2: Result := 80;
     sbAVX512: Result := 90;
+    sbLASX: Result := 25;    // LoongArch LASX 256-bit SIMD
+    sbWASM: Result := 15;    // WebAssembly SIMD128
+    sbVSX: Result := 25;     // POWER VSX
+    sbMSA: Result := 15;     // MIPS MSA
   end;
 end;
 

@@ -37,12 +37,12 @@ begin
   Check(PLATFORM_SIGBREAK = 21, 'PLATFORM_SIGBREAK = 21 (Windows)');
   {$ENDIF}
 
-  // Test 2: signal set returns ok
-  WriteLn('Test 2: signal set returns ok');
+  // Test 2: nil handler is invalid (Windows and POSIX)
+  WriteLn('Test 2: signal set rejects nil handler');
   LRet := platform_signal_set(PLATFORM_SIGINT, nil);
-  Check(LRet = 0, 'signal_set(nil) returns ok');
+  Check(LRet <> 0, 'signal_set(nil) returns error');
 
-  // Test 3: signal ignore returns ok
+  // Test 3: signal ignore returns ok (Windows console path installs handler)
   WriteLn('Test 3: signal ignore returns ok');
   LRet := platform_signal_ignore(PLATFORM_SIGINT);
   Check(LRet = 0, 'signal_ignore returns ok');
@@ -52,16 +52,24 @@ begin
   LRet := platform_signal_reset(PLATFORM_SIGINT);
   Check(LRet = 0, 'signal_reset returns ok');
 
-  // Test 5: signal block returns ok (Windows may succeed or fail)
+  // Test 5: block is unsupported on Windows; POSIX may succeed
   WriteLn('Test 5: signal block behavior');
   LRet := platform_signal_block(PLATFORM_SIGINT);
-  // Windows may not support blocking, just log the result
+{$IFDEF NEXTPAS_WINDOWS}
+  Check(LRet <> 0, 'signal_block unsupported on Windows');
+{$ELSE}
+  Check(LRet = 0, 'signal_block returns ok on POSIX');
+{$ENDIF}
   WriteLn('    signal_block returned: ', LRet);
 
-  // Test 6: signal unblock returns ok (Windows may succeed or fail)
+  // Test 6: unblock is unsupported on Windows; POSIX may succeed
   WriteLn('Test 6: signal unblock behavior');
   LRet := platform_signal_unblock(PLATFORM_SIGINT);
-  // Windows may not support unblocking, just log the result
+{$IFDEF NEXTPAS_WINDOWS}
+  Check(LRet <> 0, 'signal_unblock unsupported on Windows');
+{$ELSE}
+  Check(LRet = 0, 'signal_unblock returns ok on POSIX');
+{$ENDIF}
   WriteLn('    signal_unblock returned: ', LRet);
 
   WriteLn;

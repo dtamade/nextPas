@@ -352,6 +352,8 @@ begin
       'HTTP client connect timeout must not be negative');
   if AOptions.MaxRedirects < 0 then
     raise EHttpError.Create(hekArgument, 'HTTP client max redirects must not be negative');
+  if AOptions.IdleTTL < 0 then
+    raise EHttpError.Create(hekArgument, 'HTTP client IdleTTL must not be negative');
 end;
 
 procedure CloseRequestBody(const ABody: IReader);

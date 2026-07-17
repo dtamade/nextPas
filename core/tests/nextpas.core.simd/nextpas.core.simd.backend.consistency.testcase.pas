@@ -5,7 +5,7 @@ unit nextpas.core.simd.backend.consistency.testcase;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.text.conv, Math, nextpas.core.simd.base,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, Math, nextpas.core.simd.base,
   nextpas.core.simd.fixturehelpers, nextpas.core.simd.dispatch,
   nextpas.core.simd.scalar;
 
@@ -197,9 +197,9 @@ end;
 function FormatConsistencyFailureText(const aResult: TConsistencyTestResult;
   const aDetailIndent: string): string;
 begin
-  Result := Format('%s / %s - %s', [GetConsistencyBackendName(aResult.Backend), aResult.TestName, aResult.ErrorMessage]);
+  Result := TextFormat('%s / %s - %s', [GetConsistencyBackendName(aResult.Backend), aResult.TestName, aResult.ErrorMessage]);
   if aResult.MaxDiff > 0 then
-    Result := Result + LineEnding + Format('%sMax diff: %g at index %d', [aDetailIndent, aResult.MaxDiff, aResult.DiffLocation]);
+    Result := Result + LineEnding + TextFormat('%sMax diff: %g at index %d', [aDetailIndent, aResult.MaxDiff, aResult.DiffLocation]);
 end;
 
 // =============================================================================
@@ -227,15 +227,15 @@ begin
     dispatch := GetDispatchTable;
 
     // 测试 Add
-    expected := dispatch^.AddF32x4(a, b);
+    expected := dispatch^.CoreVectors.AddF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.AddF32x4(a, b);
+    actual := dispatch^.CoreVectors.AddF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('AddF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('AddF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -244,15 +244,15 @@ begin
     // 测试 Sub
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.SubF32x4(a, b);
+    expected := dispatch^.CoreVectors.SubF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.SubF32x4(a, b);
+    actual := dispatch^.CoreVectors.SubF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SubF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('SubF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -261,15 +261,15 @@ begin
     // 测试 Mul
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.MulF32x4(a, b);
+    expected := dispatch^.CoreVectors.MulF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.MulF32x4(a, b);
+    actual := dispatch^.CoreVectors.MulF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MulF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('MulF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -279,15 +279,15 @@ begin
     b := MakeVecF32x4(0.5, 2.0, -1.25, 4.0);
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.DivF32x4(a, b);
+    expected := dispatch^.CoreVectors.DivF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.DivF32x4(a, b);
+    actual := dispatch^.CoreVectors.DivF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('DivF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('DivF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -322,15 +322,15 @@ begin
     a := MakeVecF32x4(-1.5, 2.0, -3.25, 0.0);
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.AbsF32x4(a);
+    expected := dispatch^.CoreVectors.AbsF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.AbsF32x4(a);
+    actual := dispatch^.CoreVectors.AbsF32x4(a);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('AbsF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('AbsF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -340,15 +340,15 @@ begin
     a := MakeVecF32x4(1.0, 4.0, 9.0, 16.0);
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.SqrtF32x4(a);
+    expected := dispatch^.CoreVectors.SqrtF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.SqrtF32x4(a);
+    actual := dispatch^.CoreVectors.SqrtF32x4(a);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SqrtF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('SqrtF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -359,15 +359,15 @@ begin
     b := MakeVecF32x4(2.0, 1.5, 4.0, 3.0);
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.MinF32x4(a, b);
+    expected := dispatch^.CoreVectors.MinF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.MinF32x4(a, b);
+    actual := dispatch^.CoreVectors.MinF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MinF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('MinF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -375,15 +375,15 @@ begin
 
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.MaxF32x4(a, b);
+    expected := dispatch^.CoreVectors.MaxF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.MaxF32x4(a, b);
+    actual := dispatch^.CoreVectors.MaxF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MaxF32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('MaxF32x4 mismatch at [%d]', [diffIdx]);
       Result.MaxDiff := maxDiff;
       Result.DiffLocation := diffIdx;
       Exit;
@@ -415,45 +415,45 @@ begin
     // 测试 CmpEq
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedMask := dispatch^.CmpEqF32x4(a, b);
+    expectedMask := dispatch^.CoreVectors.CmpEqF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualMask := dispatch^.CmpEqF32x4(a, b);
+    actualMask := dispatch^.CoreVectors.CmpEqF32x4(a, b);
 
     if expectedMask <> actualMask then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('CmpEqF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
+      Result.ErrorMessage := TextFormat('CmpEqF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
       Exit;
     end;
 
     // 测试 CmpLt
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedMask := dispatch^.CmpLtF32x4(a, b);
+    expectedMask := dispatch^.CoreVectors.CmpLtF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualMask := dispatch^.CmpLtF32x4(a, b);
+    actualMask := dispatch^.CoreVectors.CmpLtF32x4(a, b);
 
     if expectedMask <> actualMask then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('CmpLtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
+      Result.ErrorMessage := TextFormat('CmpLtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
       Exit;
     end;
 
     // 测试 CmpGt
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedMask := dispatch^.CmpGtF32x4(a, b);
+    expectedMask := dispatch^.CoreVectors.CmpGtF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualMask := dispatch^.CmpGtF32x4(a, b);
+    actualMask := dispatch^.CoreVectors.CmpGtF32x4(a, b);
 
     if expectedMask <> actualMask then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('CmpGtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
+      Result.ErrorMessage := TextFormat('CmpGtF32x4 mask mismatch: expected $%x, got $%x', [expectedMask, actualMask]);
       Exit;
     end;
 
@@ -482,15 +482,15 @@ begin
     // 测试 ReduceAdd
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedVal := dispatch^.ReduceAddF32x4(a);
+    expectedVal := dispatch^.CoreVectors.ReduceAddF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualVal := dispatch^.ReduceAddF32x4(a);
+    actualVal := dispatch^.CoreVectors.ReduceAddF32x4(a);
 
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceAddF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
+      Result.ErrorMessage := TextFormat('ReduceAddF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -498,15 +498,15 @@ begin
     // 测试 ReduceMin
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedVal := dispatch^.ReduceMinF32x4(a);
+    expectedVal := dispatch^.CoreVectors.ReduceMinF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualVal := dispatch^.ReduceMinF32x4(a);
+    actualVal := dispatch^.CoreVectors.ReduceMinF32x4(a);
 
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceMinF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
+      Result.ErrorMessage := TextFormat('ReduceMinF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -514,15 +514,15 @@ begin
     // 测试 ReduceMax
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedVal := dispatch^.ReduceMaxF32x4(a);
+    expectedVal := dispatch^.CoreVectors.ReduceMaxF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualVal := dispatch^.ReduceMaxF32x4(a);
+    actualVal := dispatch^.CoreVectors.ReduceMaxF32x4(a);
 
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceMaxF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
+      Result.ErrorMessage := TextFormat('ReduceMaxF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -530,15 +530,15 @@ begin
     // 测试 ReduceMul
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedVal := dispatch^.ReduceMulF32x4(a);
+    expectedVal := dispatch^.CoreVectors.ReduceMulF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualVal := dispatch^.ReduceMulF32x4(a);
+    actualVal := dispatch^.CoreVectors.ReduceMulF32x4(a);
 
     if not FloatEqual(expectedVal, actualVal) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('ReduceMulF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
+      Result.ErrorMessage := TextFormat('ReduceMulF32x4 mismatch: expected %f, got %f', [expectedVal, actualVal]);
       Result.MaxDiff := Abs(expectedVal - actualVal);
       Exit;
     end;
@@ -569,15 +569,15 @@ begin
     // 测试 Add
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.AddI32x4(a, b);
+    expected := dispatch^.CoreVectors.AddI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.AddI32x4(a, b);
+    actual := dispatch^.CoreVectors.AddI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('AddI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
+      Result.ErrorMessage := TextFormat('AddI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -585,15 +585,15 @@ begin
     // 测试 Sub
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.SubI32x4(a, b);
+    expected := dispatch^.CoreVectors.SubI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.SubI32x4(a, b);
+    actual := dispatch^.CoreVectors.SubI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SubI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
+      Result.ErrorMessage := TextFormat('SubI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -601,15 +601,15 @@ begin
     // 测试 Mul
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.MulI32x4(a, b);
+    expected := dispatch^.CoreVectors.MulI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.MulI32x4(a, b);
+    actual := dispatch^.CoreVectors.MulI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MulI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
+      Result.ErrorMessage := TextFormat('MulI32x4 mismatch at [%d]: expected %d, got %d', [diffIdx, expected.i[diffIdx], actual.i[diffIdx]]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -641,15 +641,15 @@ begin
     // 测试 And
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.AndI32x4(a, b);
+    expected := dispatch^.CoreVectors.AndI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.AndI32x4(a, b);
+    actual := dispatch^.CoreVectors.AndI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('AndI32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('AndI32x4 mismatch at [%d]', [diffIdx]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -657,15 +657,15 @@ begin
     // 测试 Or
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.OrI32x4(a, b);
+    expected := dispatch^.CoreVectors.OrI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.OrI32x4(a, b);
+    actual := dispatch^.CoreVectors.OrI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('OrI32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('OrI32x4 mismatch at [%d]', [diffIdx]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -673,15 +673,15 @@ begin
     // 测试 Xor
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.XorI32x4(a, b);
+    expected := dispatch^.CoreVectors.XorI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.XorI32x4(a, b);
+    actual := dispatch^.CoreVectors.XorI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('XorI32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('XorI32x4 mismatch at [%d]', [diffIdx]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -689,15 +689,15 @@ begin
     // 测试 Not
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.NotI32x4(a);
+    expected := dispatch^.CoreVectors.NotI32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.NotI32x4(a);
+    actual := dispatch^.CoreVectors.NotI32x4(a);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('NotI32x4 mismatch at [%d]', [diffIdx]);
+      Result.ErrorMessage := TextFormat('NotI32x4 mismatch at [%d]', [diffIdx]);
       Result.DiffLocation := diffIdx;
       Exit;
     end;
@@ -736,10 +736,10 @@ begin
     // 测试 MemEqual（相等情况）
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedBool := dispatch^.MemEqual(@buf1[0], @buf1[0], 256);
+    expectedBool := dispatch^.Memory.Equal(@buf1[0], @buf1[0], 256);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualBool := dispatch^.MemEqual(@buf1[0], @buf1[0], 256);
+    actualBool := dispatch^.Memory.Equal(@buf1[0], @buf1[0], 256);
 
     if expectedBool <> actualBool then
     begin
@@ -751,10 +751,10 @@ begin
     // 测试 MemEqual（不等情况）
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedBool := dispatch^.MemEqual(@buf1[0], @buf2[0], 256);
+    expectedBool := dispatch^.Memory.Equal(@buf1[0], @buf2[0], 256);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualBool := dispatch^.MemEqual(@buf1[0], @buf2[0], 256);
+    actualBool := dispatch^.Memory.Equal(@buf1[0], @buf2[0], 256);
 
     if expectedBool <> actualBool then
     begin
@@ -766,30 +766,30 @@ begin
     // 测试 MemFindByte
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedIdx := dispatch^.MemFindByte(@buf1[0], 256, 100);
+    expectedIdx := dispatch^.Memory.FindByte(@buf1[0], 256, 100);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualIdx := dispatch^.MemFindByte(@buf1[0], 256, 100);
+    actualIdx := dispatch^.Memory.FindByte(@buf1[0], 256, 100);
 
     if expectedIdx <> actualIdx then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('MemFindByte mismatch: expected %d, got %d', [expectedIdx, actualIdx]);
+      Result.ErrorMessage := TextFormat('MemFindByte mismatch: expected %d, got %d', [expectedIdx, actualIdx]);
       Exit;
     end;
 
     // 测试 SumBytes
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedSum := dispatch^.SumBytes(@buf1[0], 256);
+    expectedSum := dispatch^.Memory.SumBytes(@buf1[0], 256);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualSum := dispatch^.SumBytes(@buf1[0], 256);
+    actualSum := dispatch^.Memory.SumBytes(@buf1[0], 256);
 
     if expectedSum <> actualSum then
     begin
       Result.Passed := False;
-      Result.ErrorMessage := Format('SumBytes mismatch: expected %d, got %d', [expectedSum, actualSum]);
+      Result.ErrorMessage := TextFormat('SumBytes mismatch: expected %d, got %d', [expectedSum, actualSum]);
       Exit;
     end;
 
@@ -853,12 +853,12 @@ begin
 
     if IsConsistencyTestSkipped(results[i]) then
     begin
-      WriteLn(Format('[SKIP] %s / %s - %s', [backendName, results[i].TestName, results[i].ErrorMessage]));
+      WriteLn(TextFormat('[SKIP] %s / %s - %s', [backendName, results[i].TestName, results[i].ErrorMessage]));
       Inc(skipCount);
     end
     else if results[i].Passed then
     begin
-      WriteLn(Format('[PASS] %s / %s', [backendName, results[i].TestName]));
+      WriteLn(TextFormat('[PASS] %s / %s', [backendName, results[i].TestName]));
       Inc(passCount);
     end
     else
@@ -870,10 +870,10 @@ begin
 
   WriteLn;
   WriteLn('=== Summary ===');
-  WriteLn(Format('Passed:  %d', [passCount]));
-  WriteLn(Format('Failed:  %d', [failCount]));
-  WriteLn(Format('Skipped: %d', [skipCount]));
-  WriteLn(Format('Total:   %d', [Length(results)]));
+  WriteLn(TextFormat('Passed:  %d', [passCount]));
+  WriteLn(TextFormat('Failed:  %d', [failCount]));
+  WriteLn(TextFormat('Skipped: %d', [skipCount]));
+  WriteLn(TextFormat('Total:   %d', [Length(results)]));
 
   if failCount = 0 then
     WriteLn('All consistency tests PASSED!')
