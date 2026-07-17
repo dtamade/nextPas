@@ -12,7 +12,7 @@
 
 | 面 | 结论 |
 |----|------|
-| **lockfree 跨模块生产消费者** | **无**。`core/src` 中除 `nextpas.core.lockfree*` 自身与注释提及外，没有其它生产单元 `uses nextpas.core.lockfree*` |
+| **lockfree 跨模块生产消费者** | **H3-1**：`nextpas.core.async.loop` 直接 `uses nextpas.core.lockfree.mpsc`（`TAsyncLoop.Post` pending 队列）。其余模块仍无 lockfree 容器 uses |
 | **atomic 跨模块生产消费者** | **有**。约 20+ 个 L0–L2 单元直接依赖 `nextpas.core.atomic`（见 §3） |
 | **Close → join → Free 误用** | **未发现**需一刀切修复的跨模块误用（因为没有跨模块 lockfree 容器消费者） |
 | **legacy CAS** | lockfree 与部分 sync/id 热路径大量使用 `AtomicCompareExchange*`（返回观测值）；文档标记首选 `atomic_*` / `TAtomic*`，**不删 API** |
@@ -29,11 +29,12 @@
 | 单元 | 关系 | 说明 |
 |------|------|------|
 | `nextpas.core.lockfree*`（门面 + T1–T3 子单元） | **owner / 自用** | 内部 uses `lockfree.base` / `wait` / `ebr` / `deque` 等 |
+| **`nextpas.core.async.loop`** | **H3-1 生产消费者** | `uses nextpas.core.lockfree.mpsc`；`FPending: TMpscQueueImpl<TAsyncPendingItem>`；Close→discard→Free |
 | `nextpas.core.bench.run.pas` | **注释 only** | `@see nextpas.core.lockfree.ebr`；无 uses |
 | `nextpas.core.collections.hashmap.pas` | **注释 only** | 文档指向 `TShardedHashMap`；无 uses |
 | `nextpas.core.collections.concurrent.hashmap.pas` | **同名异实现** | 自有 `TConcurrentHashMap`，**不是** lockfree 门面别名 |
 
-**判定**：当前 core 生产树把 lockfree 当作 **可复用库 + 自测主体**，尚未被 HTTP/async/net 等上层模块直接拉入队列/通道类型。
+**判定**：H3-1 起 **async.loop** 为第一个跨模块 T1 容器消费者；HTTP/net 仍未直接 uses lockfree。
 
 ### 2.2 测试 / 基准 / 示例
 
@@ -53,7 +54,7 @@
 | `test_lockfree_stress` `TestChannelCloseJoinFree` | 2P+2C stress 加深同一生命周期（H2-5） |
 | `lockfree.workstealing` | 生产单元级消费 `TWorkStealingDeque`（仍属 lockfree 模块内） |
 
-**跨模块**（http/async/net）仍无 lockfree 容器 uses；H2-6 **不**为证明而强行改上层模块。若未来接入，遵守 Close→join→Free。
+**跨模块**：async.loop 已接入（H3-1）。http/net 仍无。H2-6 示例 + H3-1 生产路径均遵守 Close 纪律（loop 外 join Post 线程后再 Close/Free）。
 
 > **R8 脚注**：R8 轴（NUMA / RTM / formal，见 [`r8-research-status.md`](r8-research-status.md)）**无**跨模块生产依赖——这是**预期**状态（Experimental / T3 direct import only），不是审计缺口。
 

@@ -1,9 +1,8 @@
 # Atomic & Lockfree — Horizon-3 章程
 
-> **状态**: **H3 charter only**（2026-07-17）— **NOT in progress** / **NOT auto-started**
-> **Owner**: atomic-lockfree lane（或 successor worktree）
-> **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）
-> **本文件仅是 H3 章程**。不授权 H3-1… 实现；需单独授权后方可开工。
+> **状态**: **H3 Wave-1 in progress**（2026-07-17）— H3-0e + **H3-1 authorized**；H3-2…H3-4 未授权
+> **Owner**: atomic-lockfree lane（`.worktrees/atomic-lockfree`）
+> **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）+ 受控 consumer `async.loop`
 > 冲突时以 **CONTRACT + [`roadmap.md`](roadmap.md) + 本文件** 为准；状态入口见 [`READY.md`](READY.md)。
 
 ---
@@ -28,24 +27,34 @@
 
 | 阶段 | 名称 | 交付 | 状态 |
 |------|------|------|------|
-| **H3-0** | 章程与状态 | 本文件 + READY 指针 | **charter done when landed**（文档；非执行授权） |
-| **H3-1** | 跨模块真实接入 | async/thread/net 等**已有**路径上的最小 T1 队列/Channel；`Close → join → Free` | **未授权** |
+| **H3-0** | 章程与状态 | 本文件 + READY 指针 | **charter landed** |
+| **H3-0e** | Wave-1 状态切换 | READY → H3 in progress | **in progress** |
+| **H3-1** | 跨模块真实接入 | **async.loop Post → T1 MPSC**；`Close → discard → Free`；loop 外 join producers | **in progress** |
 | **H3-2** | T2 Guarded 生产契约子集 | 1–2 个类型：Close / managed / progress 文档与契约；**不进**默认门面 | **未授权** |
 | **H3-3** | Consumer regression 门 | focused gate 或 source-contract，覆盖跨模块消费者 | **未授权** |
 | **H3-4** | 证据与文档卫生 | bench envelope 同步；api-ref 与契约对齐 | **未授权** |
 
 ```
-H2 complete / Maintenance  ── 当前默认
-         │
-         │  (opt-in docs) R8 research pack close-out
+H2 complete / Maintenance
          │
          ▼
-H3-0  章程（本文件）── charter only；NOT auto-start
+H3-0  章程 landed
          │
-         │  ★ 需单独授权 ★
          ▼
-H3-1 … H3-4  ── 未开工
+H3-0e + H3-1  Wave-1  ── in progress（async.loop → lockfree.mpsc）
+         │
+         ▼
+H3-2 … H3-4  ── 未授权
 ```
+
+### H3-1 选型（Wave-1 锁定）
+
+| 项 | 选择 |
+|----|------|
+| 接入点 | `TAsyncLoop` 跨线程 `Post` / `DrainPending` |
+| 原语 | `specialize TMpscQueueImpl<TAsyncPendingItem>`（`lockfree.mpsc`） |
+| 不做 | 替换 poller/timer；有界 Channel；thread.pool.worksteal 全量改写 |
+| 依赖方向 | async → lockfree；**禁止** lockfree → async |
 
 ---
 

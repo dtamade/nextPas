@@ -1,21 +1,20 @@
 # Atomic & Lockfree — Ready / Horizon-2 状态
 
-> **Status**: **H2 complete / Maintenance / Lane archived**（base: R0–R7 + RC Ready；Horizon-2 H2-0…H2-6 landed；Maint + H3 charter + R8 pack landed）
+> **Status**: **H3 Wave-1 in progress**（base: R0–R7 + RC Ready + H2 complete + H3 charter；lane reopened on `atomic-lockfree` worktree）
 > **Date**: 2026-07-17
-> **Owner**: atomic-lockfree lane (**archived**)
-> **Scope**: `nextpas.core.atomic` (L0) + `nextpas.core.lockfree` (L1)
+> **Owner**: atomic-lockfree lane
+> **Scope**: `nextpas.core.atomic` (L0) + `nextpas.core.lockfree` (L1) + controlled consumer `async.loop`
 
 Mainline stages **R0–R7 and RC Ready close-out are complete**.
 **Horizon-2 (H2-0…H2-6) is complete** — see [`roadmap-h2.md`](roadmap-h2.md).
-**Current execution line**: **Maintenance** (T1/atomic bugfix, contract amendments, verify-t1 hygiene, docs sync).
-**H3**: charter only — see [`roadmap-h3.md`](roadmap-h3.md); **H3 not started** / **not auto-started**.
+**Current execution line**: **H3 Wave-1** — H3-0e status + **H3-1** async `Post` path → T1 MPSC.
+**H3**: charter [`roadmap-h3.md`](roadmap-h3.md)；**H3-1 authorized** (user 2026-07-17); H3-2…H3-4 not started.
 **R8** research pack close-out (docs + optional `verify-r8`): see [`r8-research-status.md`](r8-research-status.md).
 R8 remains **opt-in research** and is **not** a default production item.
-Do **not** invent an R9; next production-oriented horizon is **H3** (charter only until authorized).
+Do **not** invent an R9.
 
-**Lane archived** after Maintenance + H3 charter + R8 research pack land.
-Future **H3 implementation** must open a **new worktree** (suggested: `atomic-lockfree-h3` or `codex/core-lockfree-h3` via `scripts/worktree-add.sh`).
-Default production posture remains **Maintenance** until H3 execution is authorized.
+Lane previously archived after Maint + H3 charter + R8 pack; **reopened** on `.worktrees/atomic-lockfree` for H3 Wave-1.
+Default after Wave-1 land: return to **Maintenance** unless H3-2… is authorized.
 
 Archive: `archive/atomic-lockfree-h2-complete-20260717` (H2-1…H2-6 land HEAD `d93780c27`);
 close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
@@ -54,15 +53,16 @@ Details, deliverables, non-goals, and acceptance: [`roadmap-h2.md`](roadmap-h2.m
 
 ---
 
-## Horizon-3 — **charter only / NOT started**
+## Horizon-3 — **Wave-1 in progress**
 
 | Item | Status |
 |------|--------|
-| H3 charter | [`roadmap-h3.md`](roadmap-h3.md) — docs only |
-| H3-1…H3-4 implementation | **not authorized** / **not auto-started** |
-| Default production line | still **Maintenance** |
+| H3 charter | [`roadmap-h3.md`](roadmap-h3.md) |
+| **H3-0e** status switch | **in progress** (this document) |
+| **H3-1** async T1 MPSC on `TAsyncLoop.Post` | **in progress** |
+| H3-2…H3-4 | **not started** |
 
-H3 does **not** start because docs landed. Separate authorization is required for H3-1.
+Cross-module: `nextpas.core.async.loop` → `nextpas.core.lockfree.mpsc` (approved L1→L1; lockfree must not depend on async).
 
 ---
 
