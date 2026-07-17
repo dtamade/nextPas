@@ -86,10 +86,16 @@ else
   mark_blocked "wine-runtime-smoke-script"
 fi
 
-# Real Windows / macOS host evidence is external; never invent readiness.
-mark_blocked "real-windows-ci-runner"
+# Real Windows GHA matrix script exists; full ci-matrix promotion still deferred.
+if [[ -f "$REPO_ROOT/core/scripts/platform-windows-ci-matrix.ps1" ]]; then
+  mark_ready "real-windows-ci-matrix-script"
+  note "GHA job test-windows-runtime runs platform-windows-ci-matrix.ps1 (focused real-Windows gates)"
+else
+  mark_blocked "real-windows-ci-matrix-script"
+fi
+mark_blocked "windows-ci-matrix-promoted"
 mark_blocked "macos-focused-runtime-host"
-note "LT4 promotion to ci-matrix / macOS focused-runtime still requires real hosts"
+note "ROADMAP D1.d still required before truth=ci-matrix; macOS is D2"
 
 echo "ready (${#ready[@]}):"
 for item in "${ready[@]}"; do
