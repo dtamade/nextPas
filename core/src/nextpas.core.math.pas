@@ -95,6 +95,35 @@ function BatchClamp(const AVectors: array of TVec3f;
                     const AMin, AMax: TVec3f;
                     var ADest: array of TVec3f): SizeInt; overload;
 
+{ Vector batch Double (M-V1 minimal parity with F32 core set) }
+function BatchDot(const ALeft, ARight: array of TVec2d;
+                  var AResults: array of Double): SizeInt; overload;
+function BatchDot(const ALeft, ARight: array of TVec3d;
+                  var AResults: array of Double): SizeInt; overload;
+function BatchDot(const ALeft, ARight: array of TVec4d;
+                  var AResults: array of Double): SizeInt; overload;
+
+function BatchNormalize(var AVectors: array of TVec2d): SizeInt; overload;
+function BatchNormalize(var AVectors: array of TVec3d): SizeInt; overload;
+function BatchNormalize(var AVectors: array of TVec4d): SizeInt; overload;
+function BatchNormalize(const ASource: array of TVec3d;
+                        var ADest: array of TVec3d): SizeInt; overload;
+
+function BatchTransform(const AMatrix: TMat3d;
+                        const ASource: array of TVec2d;
+                        var ADest: array of TVec2d): SizeInt; overload;
+function BatchTransform(const AMatrix: TMat4d;
+                        const ASource: array of TVec3d;
+                        var ADest: array of TVec3d): SizeInt; overload;
+
+function BatchLerp(const AStart, AEnd: array of TVec3d;
+                   const AT: Double;
+                   var ADest: array of TVec3d): SizeInt; overload;
+
+function BatchClamp(const AVectors: array of TVec3d;
+                    const AMin, AMax: TVec3d;
+                    var ADest: array of TVec3d): SizeInt; overload;
+
 { Batch scalar operations }
 function BatchSinF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
@@ -439,6 +468,73 @@ end;
 function BatchClamp(const AVectors: array of TVec3f;
                     const AMin, AMax: TVec3f;
                     var ADest: array of TVec3f): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchClamp(AVectors, AMin, AMax, ADest);
+end;
+
+function BatchDot(const ALeft, ARight: array of TVec2d;
+                  var AResults: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchDot(ALeft, ARight, AResults);
+end;
+
+function BatchDot(const ALeft, ARight: array of TVec3d;
+                  var AResults: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchDot(ALeft, ARight, AResults);
+end;
+
+function BatchDot(const ALeft, ARight: array of TVec4d;
+                  var AResults: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchDot(ALeft, ARight, AResults);
+end;
+
+function BatchNormalize(var AVectors: array of TVec2d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchNormalize(var AVectors: array of TVec3d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchNormalize(var AVectors: array of TVec4d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchNormalize(const ASource: array of TVec3d;
+                        var ADest: array of TVec3d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(ASource, ADest);
+end;
+
+function BatchTransform(const AMatrix: TMat3d;
+                        const ASource: array of TVec2d;
+                        var ADest: array of TVec2d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchTransform(AMatrix, ASource, ADest);
+end;
+
+function BatchTransform(const AMatrix: TMat4d;
+                        const ASource: array of TVec3d;
+                        var ADest: array of TVec3d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchTransform(AMatrix, ASource, ADest);
+end;
+
+function BatchLerp(const AStart, AEnd: array of TVec3d;
+                   const AT: Double;
+                   var ADest: array of TVec3d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchLerp(AStart, AEnd, AT, ADest);
+end;
+
+function BatchClamp(const AVectors: array of TVec3d;
+                    const AMin, AMax: TVec3d;
+                    var ADest: array of TVec3d): SizeInt;
 begin
   Result := nextpas.core.math.vec.batch.BatchClamp(AVectors, AMin, AMax, ADest);
 end;

@@ -7,12 +7,12 @@
 ## 当前 Goal
 
 ```text
-CURRENT = M-V1  (见 GOAL_QUEUE.md)
+CURRENT = M-V2  (见 GOAL_QUEUE.md)
 ```
 
 | 字段 | 值 |
 |------|-----|
-| 阶段 | M-V1 — math vec.batch Double minimal parity |
+| 阶段 | M-V2 — math residual docs + lane mode |
 | 优先级 | P1 |
 | 验收 | GOAL_QUEUE 卡内 GATES |
 
@@ -20,28 +20,26 @@ CURRENT = M-V1  (见 GOAL_QUEUE.md)
 
 ### 刚完成
 
-- [x] Phase 20–23b / G0 / M-C1 / S24a
-- [x] **S25a** performance-methodology + `bench_hotspots`
-- [x] **S25b** 诚实 re-baseline（vsTrue SLA 全绿；AddF32 正式 4x+ / stretch 6x+）
+- [x] Phase 20–23b / G0 / M-C1 / S24a / S25a / S25b
+- [x] **M-V1** vec.batch Double 最小对称（Dot/Normalize/Transform/Lerp/Clamp）
 
 ### 队列摘要
 
-- [ ] **M-V1** math vec.batch Double 最小对称（CURRENT）
-- [ ] M-V2 residual docs
+- [ ] **M-V2** residual docs / lane-complete（CURRENT）
 - [ ] Q1/Q2 指针与 linkage
 
 入口命令（与卡一致）:
 
 ```bash
-make -C core/tests/nextpas.core.math clean test
+# docs-focused; math clean test only if residual claims need proof
 make hygiene
+git diff --check
 ```
 
 ## 非当前工作（勿抢跑）
 
-- AddF32 stretch 6x 微优化（可选独立卡）
-- 整表 BatchF64/Integer
-- RVV 真机叶（无硬件）
+- AddF32 stretch 6x 微优化
+- 整表 BatchF64/Integer / RVV 真机
 - M9 / macOS / compiler / 新 ISA
 
 细节以 [GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md) 与 [roadmap.md](roadmap.md) 为准。

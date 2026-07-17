@@ -35,7 +35,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=M-V1
+CURRENT=M-V2
 ```
 
 ---
@@ -176,20 +176,21 @@ CURRENT=M-V1
 | **STOP** | Failures requiring private simd coupling |
 | **EVIDENCE** | `make -C core/tests/nextpas.core.math clean test` → exit 0; `MATH_API_SURFACE OK: scanned=70 findings=0`; 16 Pascal suites / 305 tests, 0 failed; heaptrc 0 unfreed on all suites |
 
-### M-V1 — vec.batch Double minimal parity  【CURRENT】
+### M-V1 — vec.batch Double minimal parity  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
+| **STATUS** | done (2026-07-17) |
 | **NEXT** | M-V2 |
 | **WHY** | Complete advanced public batch symmetry (F32-first gap) |
-| **IN_SCOPE_PATHS** | `core/src/nextpas.core.math.vec.batch*`; tests `test_vec_batch*`; `core/docs/math/API.md` |
+| **IN_SCOPE_PATHS** | `core/src/nextpas.core.math.vec.batch*`; root facade; tests `test_vec_batch*`; `core/docs/math/API.md` |
 | **OUT_OF_SCOPE** | Value-type SIMD methods; M9; private simd |
-| **DELIVERABLES** | Minimal Double set mirroring F32 vec.batch core ops (document exact list in commit) |
-| **GATES** | `make -C core/tests/nextpas.core.math clean test`; `make -C core core-math-api-surface-smoke` if API grows; hygiene |
+| **DELIVERABLES** | Minimal Double set mirroring F32 vec.batch core ops |
+| **GATES** | `make -C core/tests/nextpas.core.math clean test`; api-surface if API grows; hygiene |
 | **DoD** | Tests+API.md; CURRENT→M-V2 |
+| **EVIDENCE** | Double overloads: BatchDot(2d/3d/4d), Normalize(2d/3d/4d + 3d src-dst), Transform(Mat3d×2d, Mat4d×3d MultPoint), Lerp/Clamp TVec3d; value-type loops; facade re-export; test_vec_batch +6 Double cases |
 
-### M-V2 — math residual docs + lane mode
+### M-V2 — math residual docs + lane mode  【CURRENT】
 
 | Field | Content |
 |-------|---------|
@@ -275,7 +276,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 
 - [x] M0–M8 available-host gates
 - [x] Public batch F32/F64 via public simd
-- [ ] vec.batch Double minimal parity **or** explicit frozen non-goal (M-V1)
+- [x] vec.batch Double minimal parity (M-V1)
 - [ ] Residual backlog clean (M-V2)
 - [x] Consumer smoke after Batch leaves (M-C1)
 - [x] M9/macOS explicitly blocked (not silent)
@@ -293,7 +294,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 ## Default order (happy path)
 
 ```text
-G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b ✅ → M-V1 → M-V2 → Q1 → Q2 → IDLE
+G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b ✅ → M-V1 ✅ → M-V2 → Q1 → Q2 → IDLE
          (S23c optional)                       (S24b only if hardware)
 ```
 

@@ -278,7 +278,16 @@ Batch operations process vector arrays for bulk computation:
 - `BatchLerp`: interpolates between two vector arrays
 - `BatchClamp`: clamps a vector array to min/max bounds
 
-All batch functions return the number of processed elements. They accept mismatched array lengths by processing `Min(Length(ALeft), Length(ARight))` elements.
+**F32 core set** (public overloads): `TVec2f`/`TVec3f`/`TVec4f` for Dot and Normalize-in-place;
+`TVec3f` source→dest Normalize; `TMat3f×TVec2f` and `TMat4f×TVec3f` Transform; `TVec3f` Lerp/Clamp.
+Hot `TVec3f`/`TVec4f` paths may use `vec.batch.simd` (public simd only).
+
+**Double minimal parity (M-V1)**: same core op list for `TVec2d`/`TVec3d`/`TVec4d` with
+`Double` results / `T` factor, plus `TMat3d×TVec2d` and `TMat4d×TVec3d` Transform.
+Double implementations use value-type element loops (`TVec*d` methods / `TMat4d.MultPoint`);
+they do **not** import private simd backends.
+
+All batch functions return the number of processed elements. They accept mismatched array lengths by processing `Min(Length(...))` across inputs and outputs; empty → `0`.
 
 ## Matrices
 

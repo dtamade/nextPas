@@ -113,12 +113,12 @@ Executable work is queued in [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QU
 
 ### In-lane residual (goal-queue)
 
-1. **M-V1** — `vec.batch` Double minimal parity (F32-first gap).
-2. **M-V2** — residual docs / lane-complete checklist cleanup.
+1. **M-V2** — residual docs / lane-complete checklist cleanup.
 
 ### Done (archive; not active work)
 
 - **M-C1** — math consumer smoke after NEON Batch leaves (2026-07-17; full math clean test green).
+- **M-V1** — `vec.batch` Double minimal parity (2026-07-17): BatchDot/Normalize/Transform/Lerp/Clamp for TVec*d; value-type loops; tests + API.md.
 - Public `Batch*F64` family (facade + simd wrappers + tests).
 
 ### Deferred / blocked
