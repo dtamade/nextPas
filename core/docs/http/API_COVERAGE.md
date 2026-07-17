@@ -11,12 +11,14 @@
 
 ## 当前结论
 
-- **2026-07-17 cycle-11 usability Wave F（现行评估/修复入口）**：
+- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（post Wave F；下一波 **Wave G Cookie PSL**）。
+  本文件以下 cycle 段为证据/历史，不替代 ROADMAP 排序。
+- **2026-07-17 cycle-11 usability Wave F（已吸收 / landed main）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle11.md`、
     `2026-07-17-usability-cycle11-research.md`、
     `2026-07-17-usability-cycle11-fix-plan.md`
     （Wave F = HTTP-date Retry-After + WithTLSContext + *JsonDocument）。
-  - **Wave F（本切片）**：
+  - **Wave F（landed）**：
     - `WithRetry`：`Retry-After` 支持 delta-seconds **与** IMF-fix HTTP-date
       （硬顶 60s；过去 → 0；非法 → 指数退避）。
     - `THttpClientOptions.WithTLSContext` / `IHttpClient.WithTLSContext`
@@ -25,8 +27,7 @@
       ensure-2xx + decode；`HttpPostJson` string API 不变。
     - 测试：past HTTP-date retry、fluent TLS direct https、PostJsonDocument
       200/404/invalid（`test_http_client`）。
-  - **Deferred** 仍真：full PSL / Response metadata / Op-everywhere / H3 /
-    Digest / SOCKS。
+  - 历史 Deferred 排序见 **ROADMAP Phase P/R/X**（不再在此复述为「现行入口」）。
 - **2026-07-17 cycle-10 usability Wave E（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle10.md`、
     `2026-07-17-usability-cycle10-research.md`、

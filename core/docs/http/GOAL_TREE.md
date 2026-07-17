@@ -1,7 +1,9 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-17 (usability cycle-11 Wave F: HTTP-date Retry-After + WithTLSContext + JsonDocument)
+> Last updated: 2026-07-17 (post Wave F; forward work owned by `ROADMAP.md`)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
+>
+> **Forward execution**: see [`ROADMAP.md`](ROADMAP.md) (ordered phases / next wave). This file is north star + stage truth, not the day-to-day backlog.
 
 ## North Star And Scope
 
@@ -489,30 +491,16 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 
 ## Current Highest-Value Slices
 
-As of 2026-07-16, ordered execution queue:
+**Do not use this section as a live backlog.** Ordered forward work lives in
+[`ROADMAP.md`](ROADMAP.md). Summary:
 
-1. **P1 — keep-alive request-tail contract decision** ✅ closed (INV-12)
-2. **P2 — H2 facade end-to-end proof** ✅ closed
-   - live `NewHttpClient/Server` + `Options.WithVersion(hvHttp2)` cleartext
-     prior-knowledge proven by `test_http_h2_facade` (4 cases, 0 unfreed)
-   - fixed `TH2ServerSession.Run` write-before-read drain deadlock and
-     IdleTimeout fallback for keep-alive read waits
-   - explicit exclusions remain: h2c Upgrade / push / WS-over-H2
-3. **P3 — API surface audit (no expansion by default)** ✅ closed
-   - recommended path: `THttpRequestBuilder`; only `NewRequest(Method, TUrl)`
-     and `NewGetRequest` stay non-deprecated factories
-   - fixed 6 facade overloads that had dropped `deprecated` vs `message.pas`
-   - source-contract in `test_http_contract` locks deprecation parity
-   - no second overlapping API family; builder `ContentLength()` not added
-4. **P4 — runtime/socket cost isolation** ✅ closed
-   - residual cost ladder documented in `BENCHMARKS.md` (L0 tcp → L4 comparison)
-   - restored HTTP benches after SysUtils isolation (`fullchain`/`server`/`h1parser`)
-   - fullchain wires filter/max-iters and isolation markers; stress gate green
-   - no ranking claims without scoped caveats
-5. **P5 — H3 honesty** ✅ closed-as-blocked
-   - no built-in H3 factory; enum + registry seam only
-   - `test_http_registry` proves unregistered `hvHttp3` resolve raises
-   - unblock requires independent QUIC module before H3 frame/QPACK work
+| Era | Outcome |
+|-----|---------|
+| Stage P1–P5 (2026-07-16) | keep-alive INV-12 · H2 facade · API audit · bench honesty · H3 blocked-honest — **closed** |
+| Usability Wave A–F (2026-07-17) | dial/cancel · GetJson/Retry-After · CONNECT · direct HTTPS · proxy Basic · HTTP-date · WithTLSContext · *JsonDocument — **landed main** |
+| **Next** | **ROADMAP Phase P / Wave G — Cookie public-suffix (SiteKey)** |
+
+If ROADMAP and any cycle assessment disagree, **ROADMAP wins** until explicitly revised.
 
 ## Immediate Do-Not-Drift Rules
 
