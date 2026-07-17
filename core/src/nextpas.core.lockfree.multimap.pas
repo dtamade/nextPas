@@ -10,11 +10,11 @@ uses
 type
   TLockFreeMultiMapAddResult = (mmAdded, mmKeyExists, mmFull, mmClosed);
 
-  {** @desc 自旋锁保护的并发 MultiMap（一个键可以有多个值）
-    @details 单个 map 锁串行化访问，每个键对应一个值列表。
-      支持 Add/Find/Remove/Contains/Count/ForEach。
-      适用于索引、标签系统等场景。
- * @concurrency Thread-safe (see source for details).
+  {** @desc 并发 MultiMap（一键多值）— T2 Guarded / H3-2 生产子集
+    @details **单 map 自旋锁**（非分片、非 lock-free）；每键值列表。
+      Managed Key/Value 在 Create 拒绝。Close 后 Add→mmClosed；已有数据可读/可删。
+      **不**经默认 `uses nextpas.core.lockfree` 门面；见 CONTRACT §0.3。
+ * @concurrency Thread-safe; progress = lock-based (one spin lock).
   }
   generic TLockFreeMultiMapImpl<TKey, TValue> = class
   private
@@ -92,6 +92,7 @@ var
   LI: PtrUInt;
   LPair: PPair;
 begin
+  Close;
   for LI := 0 to FCapacity - 1 do
   begin
     LPair := FBuckets[LI];
@@ -99,6 +100,7 @@ begin
     begin
       SetLength(LPair^.Values, 0);
       Dispose(LPair);
+      FBuckets[LI] := nil;
     end;
   end;
   SetLength(FBuckets, 0);

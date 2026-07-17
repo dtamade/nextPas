@@ -238,6 +238,37 @@ begin
     'Bag full detection must not read dequeue position non-atomically');
 end;
 
+procedure TestBagH3_2ProductionContract;
+var
+  LSource: string;
+  LFacade: string;
+  LFile: TextFile;
+  LLine: string;
+begin
+  LSource := ReadBagSource;
+  Check(Pos('if IsManagedType(T) then', LSource) > 0,
+    'H3-2 Bag rejects managed T at Create');
+  Check(Pos('procedure Close', LSource) > 0, 'H3-2 Bag exposes Close');
+  Check(Pos('arClosed', LSource) > 0, 'H3-2 Bag uses arClosed on closed add');
+  Check(Pos('Close;' + LineEnding + '  inherited Destroy', LSource) > 0,
+    'H3-2 Bag Destroy closes first');
+
+  LFacade := '';
+  AssignFile(LFile, '../../../src/nextpas.core.lockfree.pas');
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      LFacade := LFacade + LLine + LineEnding;
+    end;
+  finally
+    CloseFile(LFile);
+  end;
+  Check(Pos('lockfree.bag', LFacade) = 0,
+    'H3-2 Bag must not be re-exported by default lockfree facade');
+end;
+
 begin
   WriteLn('=== test_lockfree_bag ===');
   WriteLn;
@@ -265,6 +296,9 @@ begin
 
   TestBagClosePublicationContract;
   WriteLn('  + Close publication contract');
+
+  TestBagH3_2ProductionContract;
+  WriteLn('  + H3-2 production contract pins');
 
   WriteLn;
   WriteLn('All bag tests passed!');
