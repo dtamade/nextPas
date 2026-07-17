@@ -51,7 +51,9 @@ var
   GRawAcceptLimit: Int32;
   GRawAcceptCount: Int32;
   GAcceptCount: Int32;
+  GAcceptCountAlt: Int32;
   GPoolListener: ITcpListener;
+  GPoolListenerAlt: ITcpListener;
   GRetryListener: ITcpListener;
   GRetryAcceptCount: Int32;
   GRetryPooledMethod: string;
@@ -484,6 +486,7 @@ begin
 end;
 
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl; forward;
+function PoolAcceptThreadAlt(AArg: Pointer): Pointer; cdecl; forward;
 function PoolAuthorityCaseThread(AArg: Pointer): Pointer; cdecl; forward;
 
 function RawResponseThread(AArg: Pointer): Pointer; cdecl;
@@ -3045,6 +3048,27 @@ begin
     LDestroyBlock := Copy(LSource, LDestroyPos, 256);
     Check(Pos('PoolClear;', LDestroyBlock) > 0,
       'h1 client transport destructor closes pooled idle connections');
+  end;
+end;
+
+procedure TestH1ClientPoolMaxSizePerAuthoritySourceContract;
+var
+  LSource: string;
+  LPutPos: SizeInt;
+  LPutBlock: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  LPutPos := Pos('procedure TH1ClientTransport.PoolPut(', LSource);
+  Check(LPutPos > 0, 'h1 PoolPut is present');
+  if LPutPos > 0 then
+  begin
+    LPutBlock := Copy(LSource, LPutPos, 900);
+    Check(Pos('LAuthorityIdle', LPutBlock) > 0,
+      'h1 PoolPut counts idle connections per authority');
+    Check(Pos('FPoolCount >= FOptions.MaxPoolSize', LPutBlock) = 0,
+      'h1 PoolPut does not use global FPoolCount as MaxPoolSize cap');
+    Check(Pos('LAuthorityIdle >= FOptions.MaxPoolSize', LPutBlock) > 0,
+      'h1 PoolPut enforces MaxPoolSize against per-authority idle count');
   end;
 end;
 
@@ -6778,6 +6802,65 @@ begin
   end;
 end;
 
+procedure TestClientMaxPoolSizeIsPerAuthority;
+var
+  LPortA, LPortB: UInt16;
+  LHandleA, LHandleB: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+  LUrlA, LUrlB: string;
+begin
+  { MaxPoolSize=1 is per authority: two ports each keep one idle and both reuse.
+    A global cap of 1 would drop the second authority and re-accept it. }
+  GAcceptCount := 0;
+  GAcceptCountAlt := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  GPoolListenerAlt := NetTcpListen('127.0.0.1', 0);
+  LPortA := GPoolListener.LocalAddr.Port;
+  LPortB := GPoolListenerAlt.LocalAddr.Port;
+  platform_thread_create(LHandleA, @PoolAcceptThread, nil);
+  platform_thread_create(LHandleB, @PoolAcceptThreadAlt, nil);
+  try
+    LOptions := THttpClientOptions.Default.WithMaxPoolSize(1);
+    LClient := NewHttpClient(LOptions);
+    LUrlA := 'http://127.0.0.1:' + IntToStr(Int64(LPortA)) + '/a';
+    LUrlB := 'http://127.0.0.1:' + IntToStr(Int64(LPortB)) + '/b';
+
+    LResp := LClient.Get(LUrlA);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority A first status');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUrlB);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority B first status');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUrlA);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority A reuse status');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUrlB);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority B reuse status');
+    HttpReleaseResponseBody(LResp);
+
+    CheckEqual(Int64(1), Int64(GAcceptCount),
+      'authority A accepted once under MaxPoolSize=1');
+    CheckEqual(Int64(1), Int64(GAcceptCountAlt),
+      'authority B accepted once under MaxPoolSize=1');
+    LClient := nil;
+  finally
+    GPoolListener.Close;
+    GPoolListenerAlt.Close;
+    platform_thread_join(LHandleA, LRet);
+    platform_thread_join(LHandleB, LRet);
+    GPoolListener := nil;
+    GPoolListenerAlt := nil;
+    GAcceptCount := 0;
+    GAcceptCountAlt := 0;
+  end;
+end;
+
 procedure TestClientTimeoutDoesNotPoisonIdleConnectionReuse;
 var
   LPort: UInt16;
@@ -8006,6 +8089,51 @@ begin
                     'ok';
           LConn.Write(LReply[1], SizeUInt(Length(LReply)));
           { Remove processed request from buffer }
+          System.Delete(LAccum, 1, LP + 3);
+        end;
+      end;
+    except
+    end;
+    LConn.Close;
+  end;
+end;
+
+function PoolAcceptThreadAlt(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LReply: string;
+  LAccum: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  while True do
+  begin
+    try
+      LConn := GPoolListenerAlt.Accept;
+    except
+      Break;
+    end;
+    if LConn = nil then Break;
+    InterlockedIncrement(GAcceptCountAlt);
+    try
+      LAccum := '';
+      while True do
+      begin
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN = 0 then Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+        while True do
+        begin
+          LP := Pos(#13#10#13#10, LAccum);
+          if LP = 0 then Break;
+          LReply := 'HTTP/1.1 200 OK'#13#10 +
+                    'Content-Length: 2'#13#10 +
+                    #13#10 +
+                    'ok';
+          LConn.Write(LReply[1], SizeUInt(Length(LReply)));
           System.Delete(LAccum, 1, LP + 3);
         end;
       end;
@@ -10810,6 +10938,8 @@ begin
     @TestClientShortcutBodyImplementationUsesBytesBuffer);
   T.Test('H1 client transport destroy closes idle pool source contract',
     @TestH1ClientTransportDestroyClosesIdlePoolSourceContract);
+  T.Test('H1 client pool MaxPoolSize per authority source contract',
+    @TestH1ClientPoolMaxSizePerAuthoritySourceContract);
   T.Test('H1 client pooled retry fresh failure closes connection source contract',
     @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
   T.Test('Client POST string body overload',
@@ -11010,6 +11140,8 @@ begin
   T.Test('Client respects max redirects', @TestClientMaxRedirects);
   T.Test('Client CloseIdleConnections drops pooled connections',
     @TestClientCloseIdleConnectionsDropsPooledConnections);
+  T.Test('Client MaxPoolSize is per authority',
+    @TestClientMaxPoolSizeIsPerAuthority);
   T.Test('Client timeout does not poison idle connection reuse',
     @TestClientTimeoutDoesNotPoisonIdleConnectionReuse);
   T.Test('Client request write failure closes body and drops connection',

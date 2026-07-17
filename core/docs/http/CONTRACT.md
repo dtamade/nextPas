@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（约 58 个源文件）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-17
-**版本**：3.1
+**最后更新**：2026-07-17（Wave A2 pool + protocol select）
+**版本**：3.2
 
 ---
 
@@ -536,6 +536,28 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 - 公开 `IHttpClient` 不暴露“单连接并发多请求”多路 API；多请求并发依赖多连接或上层调度。
 - OpenSSL backend heaptrc residual 属 tls 层，不在 http 内清零。
 - H3 / QUIC、h2c Upgrade、CONNECT/WS-over-H2：排除或 Blocked（见下节 / ROADMAP）。
+
+#### Client connection pool（Wave A2）
+
+| 语义 | 行为 | 证据 |
+|------|------|------|
+| Pool key / authority | H1：canonical host + port（`https\|` / `connect\|` / proxy+target 变体编码进 key）；H2：host + port + secure | H1/H2 pool reuse tests |
+| `MaxPoolSize` | **每 authority 最大空闲连接数**（默认 64）；**不是**跨 host 全局上限 | `test_http_client` / `test_http_h2_client` per-authority |
+| Idle put | 仅 keep-alive / `IsReusable` 连接入池；超 per-authority 上限则关闭新归还连接 | pool max / non-reusable tests |
+| Idle clear | `IHttpClient.CloseIdleConnections` → transport `IHttpTransportIdleConnections.CloseIdleConnections` 清空全部 authority 的空闲项；destroy 亦 `PoolClear` | CloseIdle + destroy source-contract |
+| 无 idle TTL | 当前**无**按墙钟自动淘汰空闲连接；调用方用 `CloseIdleConnections` 或进程结束 | residual（诚实） |
+| 并发模型 | 同步 `RoundTrip` 串行一流；同 transport 可多线程各自 RoundTrip（池 mutex）；**无**同连接多路 API | A1 residual |
+
+#### H1 / H2 选择策略（Wave A2）
+
+| 规则 | 行为 |
+|------|------|
+| 默认 | `THttpClientOptions.Default` → `UseRegistryVersion=True` → registry `GetDefaultClientVersion` = **`hvHttp11`** |
+| 钉版本 | `WithVersion(hvHttp2)` / `WithVersion(hvHttp11)` 设 `UseRegistryVersion=False`，构造时 `ResolveClientTransport` 选 factory |
+| 无自动升级 | **不会**在 H1 client 上因 ALPN 自动切到 H2；版本在 **client 构造时**选定 |
+| H2 HTTPS | ALPN 必须协商 `h2`，否则 `hekProtocol` |
+| H2 cleartext | prior knowledge only（`http://`）；无 h2c Upgrade |
+| H3 | 未注册 factory；`Resolve*Transport(hvHttp3)` → `hekRegistry`；Blocked on QUIC |
 
 ### H3
 

@@ -2233,20 +2233,24 @@ end;
 
 { -- Connection pool tests -- }
 
-procedure TestTransportPoolMaxSizeEnforced;
+procedure TestTransportPoolMaxSizeIsPerAuthority;
 var
   LTransport: IHttpTransport;
   LOptions: TH2ClientTransportOptions;
   LStream1, LStream2: TFakeTcpStream;
   LResp: IHttpResponse;
 begin
+  { MaxPoolSize is per authority: with limit=1, two hosts each keep one idle
+    and both reuse. Global-cap semantics would drop host2 and re-dial it. }
   ResetDialQueue;
   LStream1 := TFakeTcpStream.Create(
     ComposeServerHandshake +
-    ComposeResponse(1, '200', '', []));
+    ComposeResponse(1, '200', '', []) +
+    ComposeResponse(3, '200', '', []));
   LStream2 := TFakeTcpStream.Create(
     ComposeServerHandshake +
-    ComposeResponse(1, '200', '', []));
+    ComposeResponse(1, '200', '', []) +
+    ComposeResponse(3, '200', '', []));
   QueueDialConn(LStream1 as ITcpStream);
   QueueDialConn(LStream2 as ITcpStream);
   SetH2ClientDialFuncForTests(@TestDial);
@@ -2258,7 +2262,12 @@ begin
     LResp := nil;
     LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://host2.com/b'));
     LResp := nil;
-    CheckEqual(Int64(2), Int64(GDialIndex), 'max pool size=1 forces new dial');
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://host1.com/c'));
+    LResp := nil;
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://host2.com/d'));
+    LResp := nil;
+    CheckEqual(Int64(2), Int64(GDialIndex),
+      'per-authority MaxPoolSize=1 reuses idle for each host');
   finally
     ResetH2ClientDialFuncForTests;
     ResetDialQueue;
@@ -3403,7 +3412,8 @@ begin
   T.Test('Multiple requests on same connection', @TestMultipleRequestsOnSameConnection);
   T.Test('Empty response body', @TestEmptyResponseBody);
   T.Test('Response with multiple headers', @TestResponseWithMultipleHeaders);
-  T.Test('Transport pool max size enforced', @TestTransportPoolMaxSizeEnforced);
+  T.Test('Transport pool max size is per authority',
+    @TestTransportPoolMaxSizeIsPerAuthority);
   T.Test('Transport pool different hosts separate entries', @TestTransportPoolDifferentHostsSeparateEntries);
   T.Test('Transport non-reusable conn not pooled', @TestTransportNonReusableConnNotPooled);
   T.Test('Transport connection:close prevents pooling', @TestTransportConnectionCloseHeaderPreventsPooling);

@@ -184,6 +184,8 @@ type
     Timeout: Int64;
     { OS dial + post-dial first-write budget (ms). 0 = fall back to Timeout. }
     ConnectTimeout: Int64;
+    { Max idle connections retained per authority (host/port/secure).
+      Not a global pool cap across hosts. Must be > 0. }
     MaxPoolSize: Int32;
     HeaderTableSize: UInt32;
     EnablePush: Boolean;
