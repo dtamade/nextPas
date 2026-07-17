@@ -4,7 +4,7 @@
 **层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-17
-**版本**：2.2
+**版本**：2.3
 
 ---
 
@@ -54,7 +54,7 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 
 | 类别 | 文件 | 职责 |
 |------|------|------|
-| **基础** | lockfree.base | TCacheLinePad, LockFreeNextPow2, LockFreePrefetch |
+| **基础** | lockfree.base | TCacheLinePad, TLockFreeTryError, LockFreeNextPow2, LockFreePrefetch |
 | **基础** | lockfree.wait | LockFreeWaitData/Space, LockFreeNotifyData/Space |
 | **内存回收** | lockfree.ebr | 基于 Epoch 的内存回收 (EBR) |
 | **内存回收** | lockfree.hazard | Hazard Pointer 内存回收 |
@@ -113,7 +113,9 @@ end;
 generic TSegQueue<T> = class
   procedure Enqueue(const AValue: T);          // closed -> EInvalidOperationError
   function TryEnqueue(const AValue: T): Boolean; // closed -> False
+  function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
@@ -162,6 +164,28 @@ generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<
 - **MPSC**：同 SegQueue publish 策略；生命周期 **Close → join producers/waiters → Free**。
 - **MSQueue**：`Destroy` 执行 **Close + drain**；调用方仍须 join 活跃 producer/consumer。`Close → join → Free` 是安全生命周期；Destroy 的 Close+drain **不替代** join。
 - **Channel**：`Send` closed 抛异常；`TrySend` 返回 False。
+
+### 1.4 Diagnostic Try*Ex（可选）
+
+Boolean 热路径 `TrySend` / `TryEnqueue` / `TryReceive` / `TryDequeue` **保持不变**。
+需要区分 full / empty / closed 时使用可选诊断 API（Wave-3 pilot：Channel / Channel SPSC / SegQueue）：
+
+```pascal
+type
+  TLockFreeTryError = (lfteNone, lfteFull, lfteEmpty, lfteClosed);
+```
+
+| 结果 | Result | AError |
+|------|--------|--------|
+| 成功 | True | `lfteNone` |
+| 有界满（未 closed） | False | `lfteFull` |
+| 空（未 closed） | False | `lfteEmpty` |
+| closed 后 publish | False | `lfteClosed` |
+| closed 且 empty consume | False | `lfteClosed` |
+
+实现为现有 `Try*` + `IsClosed` 的薄包装，不替代 Boolean API。
+`plain Enqueue` / `Send` 在 closed 时仍抛 `EInvalidOperationError`。
+SegQueue 无界：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（不会出现 `lfteFull`）。
 
 ---
 

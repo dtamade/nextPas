@@ -1247,6 +1247,11 @@ uses
   nextpas.core.platform.windows.utf16,
   nextpas.core.platform.error;
 
+const
+  { Mirrors nextpas.core.platform.signal.PLATFORM_SIGKILL (contract number 9).
+    Windows process path does not uses signal unit to avoid pulling console-handler deps. }
+  PLATFORM_SIGKILL = 9;
+
 function IsInvalidOutputBuffer(ABuf: PAnsiChar; ABufLen: Int32): Boolean; inline;
 begin
   Result := (ABufLen < 0) or ((ABuf = nil) and (ABufLen > 0));
