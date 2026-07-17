@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.cuckooset;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   TCuckooSetResult = (

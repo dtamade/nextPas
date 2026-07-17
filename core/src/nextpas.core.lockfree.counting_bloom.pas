@@ -20,7 +20,7 @@ unit nextpas.core.lockfree.counting_bloom;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   CBF_DEFAULT_WIDTH = 65536;

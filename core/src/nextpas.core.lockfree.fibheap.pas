@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.fibheap;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   TFibHeapResult = (

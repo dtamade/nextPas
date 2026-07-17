@@ -24,7 +24,7 @@ unit nextpas.core.lockfree.tdigest;
 interface
 
 uses
-  Math,
+  nextpas.core.math,
   nextpas.core.lockfree.base,
   nextpas.core.atomic;
 

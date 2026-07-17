@@ -20,8 +20,8 @@ type
    *     多线程同时消费会导致数据竞争和 use-after-free。
    *   - Enqueue 可由多个线程并发调用。
    *   - T 必须是 unmanaged 类型。
-   *   - Close 后 Enqueue 仍可发布已 admitted 的元素；调用方必须自行停止 producer。
-   *   - Destroy 前必须调用 Close 并 drain 队列。
+   *   - Close 后 TryEnqueue 返回 False；Enqueue 抛出 EInvalidOperationError（与 Channel.Send 对齐）。
+   *   - 生命周期：Close → join producers/waiters → Free。Destroy 会 Close+drain，但不能替代 join。
    *
    * @safety
    *   FTail 的非原子读取是刻意设计，依赖 single-consumer contract 保证安全。
@@ -46,11 +46,13 @@ type
     function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode; inline;
     procedure AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t); inline;
     function AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode; inline;
+    procedure PublishNode(const AValue: T);
   public
     constructor Create;
     destructor Destroy; override;
+    {** @desc 入队；已关闭时抛出 EInvalidOperationError（与 Channel.Send 对齐） }
     procedure Enqueue(const AValue: T);
-    {** @desc 非阻塞入队；已关闭时返回 False（语义与 Enqueue 相同，仅增加关闭检查） }
+    {** @desc 非阻塞入队；已关闭时返回 False }
     function TryEnqueue(const AValue: T): Boolean;
     {** @desc 非阻塞出队（**严格单消费者**：只能由一个线程调用） }
     function TryDequeue(out AValue: T): Boolean;
@@ -117,13 +119,13 @@ begin
     Exit;
   end;
   { Wake any blocked single-consumer DequeueWait/Timeout, then drain remaining nodes.
-    Callers must still stop and join producers before Free; Enqueue does not observe Close. }
+    Callers must still stop and join producers before Free; Close alone is not a join barrier. }
   Close;
   while TryDequeue(LV) do;
   inherited;
 end;
 
-procedure TMpscQueueImpl.Enqueue(const AValue: T);
+procedure TMpscQueueImpl.PublishNode(const AValue: T);
 var
   LNode, LPrev: PNode;
 begin
@@ -138,11 +140,18 @@ begin
     LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
 end;
 
+procedure TMpscQueueImpl.Enqueue(const AValue: T);
+begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    raise EInvalidOperationError.Create('TMpscQueue: Enqueue on closed queue');
+  PublishNode(AValue);
+end;
+
 function TMpscQueueImpl.TryEnqueue(const AValue: T): Boolean;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  Enqueue(AValue);
+  PublishNode(AValue);
   Result := True;
 end;
 

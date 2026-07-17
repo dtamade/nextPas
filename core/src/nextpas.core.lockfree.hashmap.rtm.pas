@@ -86,7 +86,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 constructor TRtmHashMapImpl.Create(const AInitialCapacity: PtrUInt);
 begin
@@ -97,7 +97,8 @@ end;
 
 destructor TRtmHashMapImpl.Destroy;
 begin
-  FreeAndNil(FHashMap);
+  FHashMap.Free;
+  FHashMap := nil;
   inherited;
 end;
 

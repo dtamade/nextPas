@@ -20,7 +20,7 @@ unit nextpas.core.lockfree.trie_hmt;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   HMT_BRANCH_BITS = 5;
@@ -208,7 +208,7 @@ begin
   repeat
     if AtomicCompareExchange32(FLock, 0, 1, moAcquire) = 0 then
       Exit;
-    Sleep(0);
+    ThreadSwitch;
   until False;
 end;
 

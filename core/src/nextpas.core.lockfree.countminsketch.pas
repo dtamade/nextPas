@@ -25,7 +25,7 @@ unit nextpas.core.lockfree.countminsketch;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   {** @desc 计数最小草图

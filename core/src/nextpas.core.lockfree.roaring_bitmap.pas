@@ -25,7 +25,7 @@ unit nextpas.core.lockfree.roaring_bitmap;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   RB_CONTAINER_BITS = 16;

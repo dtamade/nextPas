@@ -26,7 +26,7 @@ unit nextpas.core.lockfree.hyperloglog;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   {** @desc HyperLogLog 基数估计器

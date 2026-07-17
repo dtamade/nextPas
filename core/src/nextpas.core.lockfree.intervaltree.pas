@@ -20,7 +20,8 @@ unit nextpas.core.lockfree.intervaltree;
 interface
 
 uses
-  SysUtils, Math;
+  nextpas.core.errors,
+  nextpas.core.math;
 
 type
   TIntervalTreeResult = (

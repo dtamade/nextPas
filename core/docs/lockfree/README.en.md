@@ -5,7 +5,7 @@
 `nextpas.core.lockfree` provides reusable lock-free-oriented / concurrent data structures for nextpas.core internals. This module primarily serves runtime/framework internal hot paths rather than claiming to be a complete replacement for Rust std, Go std, or C++ std concurrent containers; **lock-free progress claims only apply to types listed as lock-free in the matrix**, and only where underlying platform atomics are themselves lock-free.
 
 All structures only accept unmanaged element types; `string`, interface, dynamic array and other managed types are rejected.
-`TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.
+All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TSpmcQueue`, `TSegQueue`, `TLockFreeMsQueue`, `TLockFreeStack`, `TWorkStealingDeque`, `TLockFreeChannel`, `TLockFreeChannelSpsc`, `TShardedHashMap` keys/values) reject managed types at construction with `EArgumentError`.
 
 **Layer**: L1 (depends on L0 `base` + `atomic`; see `core/docs/core-module-registry.md`).
 
@@ -71,9 +71,10 @@ Batch APIs are convenience methods over consecutive single-element operations, n
 `TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
 `TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
 
-`TMpscQueue<T>` is a multi-producer, single-consumer queue. `Enqueue` is a procedure, not returning close result; `TryEnqueue`
-returns False after `Close`; `Close` only serves as consumer wait wakeup and termination signal. Callers must stop producers cooperatively,
-join producers, and drain the queue before destroying the object. `ApproxCount` is an atomic counter snapshot.
+`TMpscQueue<T>` is a multi-producer, single-consumer queue. After `Close`, `TryEnqueue` returns False and plain
+`Enqueue` raises `EInvalidOperationError` (aligned with `TLockFreeChannel.Send`). `Close` also wakes blocked
+consumers. Lifecycle: Close → join producers/waiters → Free. `Destroy` performs Close+drain but does not replace
+joining live producers. `ApproxCount` is an atomic counter snapshot.
 
 `TSegQueue<T>` is an unbounded MPMC queue based on segmented linked ring. `Enqueue` extends storage at segment granularity when the current tail segment has no successor; `TryEnqueue` returns False after `Close`; `TryDequeue` only returns success when the corresponding slot's sequence has been published. `ApproxCount` / `IsEmpty` are snapshot helpers over current enqueue/dequeue positions, not promising a shared linearization view under contention. `Close` does not affect reading of already-enqueued data.
 
@@ -99,7 +100,7 @@ rather than overflowing and continuing construction.
 
 `TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.
 `TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers. Enqueue calls admitted before observing the closed flag may still publish at their normal per-item linearization point; calls that observe `Close` fail, and consumers only treat closed-empty as terminal after no admitted producer can still publish.
-`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False, while plain `Enqueue` does not; callers must stop and join producers before destroy.
+`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False; plain `Enqueue` raises `EInvalidOperationError` after `Close`; callers must Close → join producers/waiters → Free.
 `TSegQueue<T>` permits multiple concurrent producers and consumers; segment retirement is internal and readers observe only FIFO dequeue success/failure.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
@@ -314,16 +315,17 @@ producer-side waiting operations should return failure, consumer-side can contin
 `TMpmcQueue<T>.Close` wakes already-blocked `EnqueueWait` / `DequeueWait` calls so blocked producers and consumers stop waiting even without a timeout.
 `TMpmcQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so blocked producers and consumers stop waiting promptly instead of sleeping until the full timeout.
 
-`TMpscQueue<T>`'s `Close` does not automatically fail `Enqueue`. It only wakes waiting consumers, and makes
-`DequeueWait` / `DequeueTimeout` return failure when currently empty. Before destruction, these must be satisfied:
+After `TMpscQueue<T>.Close`: `TryEnqueue` returns False, plain `Enqueue` raises `EInvalidOperationError`,
+and `DequeueWait` / `DequeueTimeout` return failure when currently empty. `Close` wakes blocked consumers.
+Before destruction, these must be satisfied:
 `TMpscQueue<T>.Close` wakes already-blocked `DequeueWait` consumers so a closed-empty queue stops waiting even without a timeout.
 `TMpscQueue<T>.Close` wakes already-blocked `DequeueTimeout` consumers so a closed-empty queue stops waiting promptly.
 
 1. `Close` has been called.
-2. Producers have stopped and joined.
-3. Consumer has drained the queue.
+2. Producers have stopped and joined (`Close` is not a join barrier).
+3. Consumer has drained the queue (or rely on Destroy Close+drain).
 
-Debug build `TMpscQueue.Destroy` retains close-before-destroy and drained-before-destroy asserts to enforce this discipline.
+`TMpscQueue.Destroy` calls `Close` then drains remaining nodes; callers must still join producers/waiters before `Free`.
 
 ## Atomic Dependency
 

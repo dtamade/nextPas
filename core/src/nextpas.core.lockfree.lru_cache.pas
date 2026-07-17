@@ -18,7 +18,7 @@ unit nextpas.core.lockfree.lru_cache;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   LRU_DEFAULT_CAPACITY = 1024;
