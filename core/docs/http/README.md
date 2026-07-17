@@ -5,12 +5,15 @@ middleware chaining, and a centralized internal transport registry.
 
 ## Module Docs
 
-- **`ROADMAP.md`** — **forward work only** (phases, next wave, non-goals); start here before coding
-- `GOAL_TREE.md` — north star, stage definition, do-not-drift rules
-- `CONTRACT.md` — public behavior contract
-- `ARCHITECTURE.md` — stable architecture facts, runtime ownership, and protocol seams
-- `API_COVERAGE.md` — public API proof and parity decisions
-- `BENCHMARKS.md` — benchmark truth, microbenchmark evidence, and comparator caveats
+| Doc | Role |
+|-----|------|
+| **[`ROADMAP.md`](ROADMAP.md)** | **Forward work only** — start here before coding |
+| [`GOAL_TREE.md`](GOAL_TREE.md) | North star, stage definition, do-not-drift rules |
+| [`CONTRACT.md`](CONTRACT.md) | Public behavior contract |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable architecture facts, runtime ownership, protocol seams |
+| [`API_COVERAGE.md`](API_COVERAGE.md) | Public API evidence matrix |
+| [`BENCHMARKS.md`](BENCHMARKS.md) | Benchmark truth and comparator caveats |
+| [`archive/`](archive/README.md) | Historical waves only — **not** a backlog |
 
 ## Architecture
 
