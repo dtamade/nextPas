@@ -77,7 +77,7 @@ end;
 
 function TPlatformPtySize.IsEmpty: Boolean;
 begin
-  Result := (Cols = 0) or (Rows = 0);
+  Result := (Cols = 0) and (Rows = 0);
 end;
 
 function TPlatformPty.IsValid: Boolean;
@@ -101,7 +101,7 @@ begin
   Result := MasterFd >= 0;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  Result := ConPty <> nil;
+  Result := (PipeIn <> 0) and (PipeOut <> 0);
 {$ENDIF}
 end;
 
@@ -111,7 +111,7 @@ begin
   Result := SlaveFd >= 0;
 {$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
-  Result := (PipeIn <> 0) and (PipeOut <> 0);
+  Result := ConPty <> nil;
 {$ENDIF}
 end;
 
