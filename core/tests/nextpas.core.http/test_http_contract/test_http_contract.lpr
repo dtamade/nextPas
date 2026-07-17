@@ -1061,6 +1061,12 @@ begin
     'message no longer declares NewStreamingRequest');
   Check(not SourceHas(LFacade, 'function NewStreamingRequest'),
     'facade no longer declares NewStreamingRequest');
+
+  { Wave K freeze: no deprecated markers on request factories. }
+  Check(not SourceHas(LFacade, 'deprecated'),
+    'facade has no deprecated markers');
+  Check(not SourceHas(LMessage, 'deprecated'),
+    'message has no deprecated markers');
 end;
 
 procedure TestChunkedRequestTrailerContract;
