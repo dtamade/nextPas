@@ -1884,7 +1884,7 @@ begin
   if CloseHandle(HANDLE(PtrUInt(AFd))) then
     Result := 0
   else
-    Result := -1;
+    Result := platform_get_last_error;
 end;
 
 function platform_io_poll(AFds: Pointer; ACount: Int32; ATimeoutMs: Int32): Int32;

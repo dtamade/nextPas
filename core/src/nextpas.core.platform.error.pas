@@ -256,7 +256,7 @@ begin
   if LMsg = nil then
   begin
     ABuf[0] := #0;
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   end;
   LLen := 0;
   while LMsg[LLen] <> #0 do
@@ -286,7 +286,7 @@ begin
   if LLen = 0 then
   begin
     ABuf[0] := #0;
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   end;
   // Strip trailing \r\n
   I := Int32(LLen);

@@ -109,14 +109,17 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 
 ## 2. 不变量
 
-### 2.1 两类返回语义（必须区分）
+### 2.1 三类返回语义（必须区分）
+
+完整表见 [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md)。
 
 | 类别 | 约定 | 示例 |
 |------|------|------|
-| **Error-code APIs** | `Int32`：`0` = 成功；正数/映射后的 `PLATFORM_ERR_*` = 失败；`PLATFORM_ERR_UNSUPPORTED` (95) = 主机不支持 | `platform_file_open`, `platform_process_write_stdin_ex` |
-| **Value / sentinel APIs** | 返回业务值；无效用 sentinel（常为 `-1`/`nil`/0） | `platform_pty_master_fd`（无效 fd = -1）、index 查找未命中（-1）、内存分配（nil） |
+| **Error-code APIs** | `Int32`：`0` = 成功；`PLATFORM_ERR_*` = 失败；禁止 bare `-1` 作为错误码 | `platform_file_open`, `platform_process_write_stdin_ex`, `platform_resource_get_limit` |
+| **Length / size APIs** | `>= 0` = 长度；失败返回 `PLATFORM_ERR_*` | `platform_args_get`, `platform_error_message`, `platform_fs_temp_dir` |
+| **Value / sentinel APIs** | 业务值；无效用 sentinel（`-1`/`nil`） | `platform_pty_master_fd`、`platform_io_read` 字节数、`platform_aligned_alloc` |
 
-禁止在新的 **Error-code API** 的失败路径返回无语义 `-1`。Legacy 兼容包装可以保留 `-1`，但必须 `deprecated` 并指向 `*_ex`。
+禁止在 **Error-code API** 失败路径返回无语义 `-1`。Legacy 长度包装可以保留 `-1`，但必须 `deprecated` 并指向 `*_ex`。
 
 ### 2.2 其它不变量
 
@@ -143,8 +146,16 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
   - `PLATFORM_ERR_AGAIN` (11) — 资源暂时不可用
   - `PLATFORM_ERR_UNSUPPORTED` (95) — 不支持的操作
   - `PLATFORM_ERR_PATH_TOO_LONG` (-7) — 路径超过 PLATFORM_FS_MAX_PATH
-- **错误消息**: `platform_error_message(ACode, ABuf, ABufSize)` 返回人类可读消息
-- **错误分类**: `platform_error_category(ACode)` 返回 `TPlatformErrorCategory`
+- **错误消息**: `platform_error_message` 是 length API：成功返回写入字节数，失败返回 `PLATFORM_ERR_*`
+- **错误分类**: `platform_error_category(ACode)` 返回 `TErrorCategory`（`nextpas.core.exception`）
+- **单一错误族**: 资源限制等 API 同样返回 `PLATFORM_ERR_*`，无独立 `PLATFORM_RESOURCE_ERROR_*` 公共语言
+- **RTL 隔离**: 生产 platform 不得 `uses SysUtils`/`BaseUnix`/`Windows`/`Classes`；`platform.args` 不得依赖 `ParamCount`/`ParamStr`
+
+### 3.1 files / fs / io 边界
+
+- **files**: 句柄与目录原语
+- **fs**: 路径级组合（可调用 files）
+- **io**: poller；`process` 内 `platform_io_*` 为 value/sentinel 过渡 API
 
 ---
 

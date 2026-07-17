@@ -15,7 +15,7 @@ type
 {** @desc 获取系统资源限制
     @param AKind 资源类型
     @param ALimit 输出参数，返回当前和最大限制
-    @return 0 成功，PLATFORM_RESOURCE_ERROR_* 错误码 *}
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_resource_get_limit(
   AKind: TPlatformResourceLimitKind;
   out ALimit: TPlatformResourceLimit): Int32;
@@ -23,7 +23,7 @@ function platform_resource_get_limit(
 {** @desc 设置系统资源限制（需要权限）
     @param AKind 资源类型
     @param ALimit 新的限制值
-    @return 0 成功，PLATFORM_RESOURCE_ERROR_* 错误码 *}
+    @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_resource_set_limit(
   AKind: TPlatformResourceLimitKind;
   const ALimit: TPlatformResourceLimit): Int32;

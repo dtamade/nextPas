@@ -590,9 +590,9 @@ begin
   T.Test('small buffer truncation', @TestSmallBuffer);
   T.Test('fatal API exists', @TestFatalExists);
   T.Test('fatal behavior (via subprocess)', @TestFatalBehavior);
-  T.Test('nil buffer returns -1', @TestNilBuffer);
-  T.Test('zero length buffer returns -1', @TestZeroLengthBuffer);
-  T.Test('negative length buffer returns -1', @TestNegativeLengthBuffer);
+  T.Test('nil buffer returns PLATFORM_ERR_INVALID', @TestNilBuffer);
+  T.Test('zero length buffer returns PLATFORM_ERR_INVALID', @TestZeroLengthBuffer);
+  T.Test('negative length buffer returns PLATFORM_ERR_INVALID', @TestNegativeLengthBuffer);
   T.Test('INVALID maps to ecInvalidArgument', @TestCategoryInvalid);
   T.Test('UNSUPPORTED maps to ecNotSupported', @TestCategoryUnsupported);
   T.Test('TIMEOUT maps to ecTimeout', @TestCategoryTimeout);
