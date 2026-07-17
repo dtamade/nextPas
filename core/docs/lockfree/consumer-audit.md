@@ -1,9 +1,9 @@
 # Atomic & Lockfree Consumer Audit (R7)
 
-> **日期**: 2026-07-17  
-> **范围**: `core/` 内 `uses nextpas.core.lockfree*` / `uses nextpas.core.atomic*`  
-> **方法**: ripgrep 扫描 `core/src/**/*.pas` 的 uses 子句；抽样查看 Close/Destroy 与 legacy CAS 调用形态  
-> **主线**: [`roadmap.md`](roadmap.md) **R7**  
+> **日期**: 2026-07-17
+> **范围**: `core/` 内 `uses nextpas.core.lockfree*` / `uses nextpas.core.atomic*`
+> **方法**: ripgrep 扫描 `core/src/**/*.pas` 的 uses 子句；抽样查看 Close/Destroy 与 legacy CAS 调用形态
+> **主线**: [`roadmap.md`](roadmap.md) **R7**
 > **状态**: **DONE** — 无强制代码修复（未发现一刀切安全的 Close/Destroy 误用）
 
 ---
@@ -51,8 +51,8 @@
 
 **Advisory（给未来接入方）**：
 
-1. 多线程：先 `Close`，再 join 所有 producer/waiter，再 `Free`。  
-2. 不要依赖 `Destroy` 作为并发停机屏障。  
+1. 多线程：先 `Close`，再 join 所有 producer/waiter，再 `Free`。
+2. 不要依赖 `Destroy` 作为并发停机屏障。
 3. 诊断路径优先 `Try*Ex`（R3/R4），避免把 full/empty/closed 糊成单一 Boolean。
 
 ---
@@ -107,12 +107,12 @@
 
 ## 5. R7 交付勾选
 
-- [x] core 内 lockfree / atomic uses 扫描  
-- [x] 本审计文档  
-- [x] atomic legacy CAS 偏好写入 CONTRACT（+ README 交叉引用）  
-- [x] T2 命名诚实脚注扩充  
-- [x] roadmap R7 = DONE；当前执行 = none（主线完成至 R7；R8 研究 opt-in）  
-- [x] 无强制代码删除 / 无大 refactor  
+- [x] core 内 lockfree / atomic uses 扫描
+- [x] 本审计文档
+- [x] atomic legacy CAS 偏好写入 CONTRACT（+ README 交叉引用）
+- [x] T2 命名诚实脚注扩充
+- [x] roadmap R7 = DONE；当前执行 = none（主线完成至 R7；R8 研究 opt-in）
+- [x] 无强制代码删除 / 无大 refactor
 
 ---
 
