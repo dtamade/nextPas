@@ -489,7 +489,8 @@ type
 - `Send` to closed channel throws `EInvalidOperationError` (Go panic aligned)
 - `TrySend` to closed channel returns `False` (Go select ok=false aligned)
 - Already-enqueued data still readable after Close
-- Capacity automatically rounded up to power-of-two
+- Capacity automatically rounded up to power-of-two; **capacity=1 supported** with distinguishable full/empty (same empty/full sequence encoding as MPMC; R5)
+- Optional `TrySendEx` / `TryReceiveEx`: full→`lfteFull`, empty→`lfteEmpty`, closed→`lfteClosed`
 - `TryResize` dynamically adjusts capacity (spin-flag mechanism)
 
 ---

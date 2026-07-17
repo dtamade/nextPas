@@ -486,7 +486,8 @@ type
 - `Send` 到已关闭 channel 抛 `EInvalidOperationError`（Go panic 对齐）
 - `TrySend` 到已关闭 channel 返回 `False`（Go select ok=false 对齐）
 - 已入队数据在 Close 后仍可读
-- 容量自动向上取整到 2 的幂
+- 容量自动向上取整到 2 的幂；**capacity=1 支持** full/empty 可分（与 MPMC empty/full sequence 对齐；R5）
+- 可选 `TrySendEx` / `TryReceiveEx`：full→`lfteFull`，empty→`lfteEmpty`，closed→`lfteClosed`
 
 ---
 

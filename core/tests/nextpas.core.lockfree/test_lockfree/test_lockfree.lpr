@@ -5183,6 +5183,41 @@ begin
 end;
 
 { ============================================================ }
+{ Edge-case: Channel capacity=1 full/empty (R5)                 }
+{ ============================================================ }
+
+procedure TestChannelCapacityOneFullEmpty;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LCh := TIntChannel.Create(1);
+  try
+    CheckEqual(Int64(1), Int64(LCh.Capacity), 'capacity=1');
+    Check(LCh.IsEmpty, 'empty initially');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'empty TryReceiveEx fails');
+    Check(LErr = lfteEmpty, 'empty is lfteEmpty');
+    Check(LCh.TrySend(42), 'send to capacity=1');
+    Check(not LCh.IsEmpty, 'not empty after send');
+    Check(not LCh.TrySend(99), 'send to full capacity=1 fails');
+    Check(not LCh.TrySendEx(100, LErr), 'full TrySendEx fails');
+    Check(LErr = lfteFull, 'full is lfteFull');
+    Check(LCh.TryReceive(LV), 'receive from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+    Check(LCh.IsEmpty, 'empty after receive');
+    Check(not LCh.TryReceive(LV), 'receive from empty fails');
+    Check(LCh.TrySendEx(7, LErr), 'resend after drain');
+    Check(LErr = lfteNone, 'resend success is lfteNone');
+    Check(LCh.TryReceiveEx(LV, LErr), 'rereceive after resend');
+    CheckEqual(7, LV, 'resend value matches');
+    Check(LErr = lfteNone, 'rereceive success is lfteNone');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
 { Edge-case: Channel capacity=2                                 }
 { ============================================================ }
 
@@ -5660,21 +5695,16 @@ var
   LV: Integer;
   LErr: TLockFreeTryError;
 begin
-  { MPMC channel sequence protocol needs capacity>=2 to observe full (same as capacity-enforce tests). }
-  LCh := TIntChannel.Create(2);
+  { R5: empty/full sequence tokens allow capacity=1 full vs empty diagnostics. }
+  LCh := TIntChannel.Create(1);
   try
     Check(LCh.TrySendEx(21, LErr), 'Channel TrySendEx success');
     Check(LErr = lfteNone, 'Channel success error is lfteNone');
-    Check(LCh.TrySendEx(20, LErr), 'Channel second TrySendEx success');
-    Check(LErr = lfteNone, 'Channel second success error is lfteNone');
     Check(not LCh.TrySendEx(22, LErr), 'Channel full TrySendEx fails');
     Check(LErr = lfteFull, 'Channel full is lfteFull');
     Check(LCh.TryReceiveEx(LV, LErr), 'Channel TryReceiveEx success');
     CheckEqual(21, LV, 'Channel TryReceiveEx value');
     Check(LErr = lfteNone, 'Channel receive success error is lfteNone');
-    Check(LCh.TryReceiveEx(LV, LErr), 'Channel second TryReceiveEx success');
-    CheckEqual(20, LV, 'Channel second TryReceiveEx value');
-    Check(LErr = lfteNone, 'Channel second receive success error is lfteNone');
     Check(not LCh.TryReceiveEx(LV, LErr), 'Channel empty TryReceiveEx fails');
     Check(LErr = lfteEmpty, 'Channel empty not closed is lfteEmpty');
     LCh.Close;
@@ -7508,6 +7538,7 @@ begin
   T.Test('HashMap Find empty', @TestHashMapFindEmpty);
   T.Test('HashMap Remove empty', @TestHashMapRemoveEmpty);
   T.Test('HashMap Contains missing', @TestHashMapContainsMissing);
+  T.Test('Channel capacity=1 full/empty', @TestChannelCapacityOneFullEmpty);
   T.Test('Channel capacity=2', @TestChannelCapacityTwo);
   T.Test('Channel SPSC capacity=1', @TestChannelSpscCapacityOne);
 
