@@ -1,8 +1,8 @@
 # Atomic & Lockfree — Ready / Horizon-2 状态
 
-> **Status**: **H2 complete / Maintenance**（base: R0–R7 + RC Ready；Horizon-2 H2-0…H2-6 landed）
+> **Status**: **H2 complete / Maintenance / Lane archived**（base: R0–R7 + RC Ready；Horizon-2 H2-0…H2-6 landed；Maint + H3 charter + R8 pack landed）
 > **Date**: 2026-07-17
-> **Owner**: atomic-lockfree lane
+> **Owner**: atomic-lockfree lane (**archived**)
 > **Scope**: `nextpas.core.atomic` (L0) + `nextpas.core.lockfree` (L1)
 
 Mainline stages **R0–R7 and RC Ready close-out are complete**.
@@ -12,6 +12,10 @@ Mainline stages **R0–R7 and RC Ready close-out are complete**.
 **R8** research pack close-out (docs + optional `verify-r8`): see [`r8-research-status.md`](r8-research-status.md).
 R8 remains **opt-in research** and is **not** a default production item.
 Do **not** invent an R9; next production-oriented horizon is **H3** (charter only until authorized).
+
+**Lane archived** after Maintenance + H3 charter + R8 research pack land.
+Future **H3 implementation** must open a **new worktree** (suggested: `atomic-lockfree-h3` or `codex/core-lockfree-h3` via `scripts/worktree-add.sh`).
+Default production posture remains **Maintenance** until H3 execution is authorized.
 
 Archive: `archive/atomic-lockfree-h2-complete-20260717` (H2-1…H2-6 land HEAD `d93780c27`);
 close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
@@ -159,7 +163,7 @@ make -C core/tests/nextpas.core.lockfree verify-r8
 
 ---
 
-## Archive tags (R4–R7 + Ready + H2)
+## Archive tags (R4–R7 + Ready + H2 + Maint/H3/R8)
 
 | Stage | Tag / SHA |
 |-------|-----------|
@@ -171,6 +175,10 @@ make -C core/tests/nextpas.core.lockfree verify-r8
 | H2-0 charter | `archive/atomic-lockfree-h2-0-landed-20260717` (`03086c0c3`) |
 | H2-1…H2-6 land | `archive/atomic-lockfree-h2-complete-20260717` (`d93780c27`) |
 | H2 close-out docs | `archive/atomic-lockfree-h2-closeout-20260717` |
+| H3 charter | `archive/atomic-lockfree-h3-charter-20260717` |
+| R8 research close-out | `archive/atomic-lockfree-r8-research-20260717` |
+| Lane final (local archive) | `archive/atomic-lockfree-lane-final-20260717` |
+| Lane archive note | `archive/atomic-lockfree-lane-archive-note-20260717` |
 
 ---
 
