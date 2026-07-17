@@ -32,8 +32,8 @@ Detailed behavior contracts live in `API.md`; this README stays compact.
 - `nextpas.core.math.transform`: projection, view, model, and 2D camera builders.
 - `nextpas.core.math.easing`: `TEasingFunction` and the `Ease*` family.
 - `nextpas.core.math.random`: `TRandomState`, `TRandomGen`, and `TNoiseGen`.
-- `nextpas.core.math.batch`: public F32 scalar-array batch API (SIMD-backed).
-- `nextpas.core.math.vec.batch`: public vector-array batch API.
+- `nextpas.core.math.batch`: public F32/F64 scalar-array batch API (SIMD-backed).
+- `nextpas.core.math.vec.batch`: public vector-array batch API (F32 core + Double minimal parity).
 
 ## Layer And Ownership
 
@@ -74,10 +74,12 @@ git status --short --branch
 - Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those base constants.
 - Public value-type methods remain scalar. SIMD acceleration is exposed through public batch APIs (`math.batch` / `math.vec.batch`), not through value-type methods.
 - `math.impl.simd` is an internal seam only and is not public API.
-- Public batch surface covers F32 and F64 scalar arrays plus selected vec batch. `Batch*F64` is a thin open-array facade over simd `Array*F64` (same core set as public F32: sin/cos/exp/ln/sqrt/abs/neg/ceil/floor/round/trunc/lerp/clamp/scale-offset).
+- Public batch surface covers F32 and F64 scalar arrays plus `vec.batch` F32 core and Double minimal parity (Dot/Normalize/Transform/Lerp/Clamp). `Batch*F64` is a thin open-array facade over simd `Array*F64` (same core set as public F32: sin/cos/exp/ln/sqrt/abs/neg/ceil/floor/round/trunc/lerp/clamp/scale-offset).
+- Math in-lane residual (M-C1 / M-V1 / M-V2) is closed; next goals are quality wave Q1/Q2 in the shared GOAL_QUEUE.
 - Linux local focused suite is green with heaptrc zero evidence.
 - Windows trig host link/runtime proof exists via Wine.
 - M8 is complete on Linux+Windows; macOS host trig proof is deferred.
+- M9 fafafa.game cutover remains blocked until product authorization (not a silent unknown).
 
 ## Remaining Gaps
 

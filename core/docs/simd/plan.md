@@ -7,39 +7,38 @@
 ## 当前 Goal
 
 ```text
-CURRENT = M-V2  (见 GOAL_QUEUE.md)
+CURRENT = Q1  (见 GOAL_QUEUE.md)
 ```
 
 | 字段 | 值 |
 |------|-----|
-| 阶段 | M-V2 — math residual docs + lane mode |
-| 优先级 | P1 |
+| 阶段 | Q1 — Pointer freshness（CURRENT / README / roadmap 对齐） |
+| 优先级 | P2 |
 | 验收 | GOAL_QUEUE 卡内 GATES |
 
 **不要在聊天里用「继续」驱动开发。** 开 goal 时只跑 `CURRENT` 卡片到 commit，并翻指针。
 
 ### 刚完成
 
-- [x] Phase 20–23b / G0 / M-C1 / S24a / S25a / S25b
-- [x] **M-V1** vec.batch Double 最小对称（Dot/Normalize/Transform/Lerp/Clamp）
+- [x] Phase 20–23b / Phase 25 / G0 / S24a / S25a / S25b
+- [x] M-C1 / **M-V1** / **M-V2**（math residual 关闭）
 
 ### 队列摘要
 
-- [ ] **M-V2** residual docs / lane-complete（CURRENT）
-- [ ] Q1/Q2 指针与 linkage
+- [ ] **Q1** 指针新鲜度（CURRENT）
+- [ ] Q2 math↔simd linkage
+- [ ] IDLE（lane 无在途代码目标）
 
-入口命令（与卡一致）:
+入口:
 
 ```bash
-# docs-focused; math clean test only if residual claims need proof
-make hygiene
 git diff --check
+make hygiene
 ```
 
 ## 非当前工作（勿抢跑）
 
-- AddF32 stretch 6x 微优化
-- 整表 BatchF64/Integer / RVV 真机
-- M9 / macOS / compiler / 新 ISA
+- M9 / macOS / RVV 真机 / compiler / 新 ISA（见 Wave 4 blocked）
+- 新 math 功能里程碑（residual 已关）
 
 细节以 [GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md) 与 [roadmap.md](roadmap.md) 为准。

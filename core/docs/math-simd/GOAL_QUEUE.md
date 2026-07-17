@@ -35,7 +35,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=M-V2
+CURRENT=Q1
 ```
 
 ---
@@ -190,18 +190,19 @@ CURRENT=M-V2
 | **DoD** | Tests+API.md; CURRENT→M-V2 |
 | **EVIDENCE** | Double overloads: BatchDot(2d/3d/4d), Normalize(2d/3d/4d + 3d src-dst), Transform(Mat3d×2d, Mat4d×3d MultPoint), Lerp/Clamp TVec3d; value-type loops; facade re-export; test_vec_batch +6 Double cases |
 
-### M-V2 — math residual docs + lane mode  【CURRENT】
+### M-V2 — math residual docs + lane mode  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
+| **STATUS** | done (2026-07-17) |
 | **NEXT** | Q1 |
 | **WHY** | Clean backlog: in-lane vs deferred vs out-of-lane |
-| **IN_SCOPE_PATHS** | `core/docs/math/**` |
+| **IN_SCOPE_PATHS** | `core/docs/math/**` (+ pointer docs as needed) |
 | **OUT_OF_SCOPE** | Code changes unless docs demand |
 | **DELIVERABLES** | GOAL_TREE residual sections; macOS/M9 blocked; lane complete checklist |
 | **GATES** | diff-check |
 | **DoD** | CURRENT→Q1 |
+| **EVIDENCE** | GOAL_TREE: residual closed; backlog classified; math lane-complete checklist; macOS/M9 blocked table |
 
 ### M9 — fafafa.game cutover  【blocked】
 
@@ -222,7 +223,7 @@ CURRENT=M-V2
 
 ## Wave 3 — quality / elegance
 
-### Q1 — Pointer freshness
+### Q1 — Pointer freshness  【CURRENT】
 
 | Field | Content |
 |-------|---------|
@@ -270,14 +271,14 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 - [x] RVV honesty (S24a)
 - [x] Perf method + hotspot remeasure (S25a)
 - [x] Hotspot close-or-revise (S25b re-baseline)
-- [ ] Docs CURRENT coherent
+- [ ] Docs CURRENT coherent (Q1)
 
 ### math lane-complete
 
 - [x] M0–M8 available-host gates
 - [x] Public batch F32/F64 via public simd
 - [x] vec.batch Double minimal parity (M-V1)
-- [ ] Residual backlog clean (M-V2)
+- [x] Residual backlog clean (M-V2)
 - [x] Consumer smoke after Batch leaves (M-C1)
 - [x] M9/macOS explicitly blocked (not silent)
 
@@ -294,7 +295,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 ## Default order (happy path)
 
 ```text
-G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b ✅ → M-V1 ✅ → M-V2 → Q1 → Q2 → IDLE
+G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b ✅ → M-V1 ✅ → M-V2 ✅ → Q1 → Q2 → IDLE
          (S23c optional)                       (S24b only if hardware)
 ```
 

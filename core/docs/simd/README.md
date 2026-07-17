@@ -26,7 +26,7 @@
 - **NEON Batch\***: ⚠️ Phase 23a/23b 已接管 F32 Add/Sub/Mul/Min/Max/Abs/Neg；其余 Batch 槽仍 scalar
 - **RVV Memory/Batch**: ✅ **故意 0 叶 scalar**（S24a 契约锁定；真叶等 S24b 硬件）
 - **cpuinfo**: ✅ 主路径稳定
-- **活动阶段**: Phase 20–23b + Phase 25 + M-C1 + S24a/S25a/S25b + **M-V1** 已收口；**Goal CURRENT=M-V2**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
+- **活动阶段**: Phase 20–23b + Phase 25 + math residual (M-C1/M-V1/M-V2) 已收口；**Goal CURRENT=Q1**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
 - **验证基线 (2026-07-17)**:
   - `make focused FOCUS=core/tests/nextpas.core.simd` → **1740+ passed**
   - `neon-optin-focused` → **1740+ passed**

@@ -23,34 +23,36 @@ Detailed behavior contracts live in `API.md`; this goal tree stays compact.
 ## Current Position
 
 Current roadmap position: M8 complete on Linux+Windows with macOS deferred, M7 complete, M9 not started.
-Lane residual: **M-C1 done** (consumer smoke after NEON Batch leaves); next math residual is M-V1 via GOAL_QUEUE after simd S24a/S25.
 
-Verified on this lane (2026-07-17, `math-simd`):
+**math residual (M-C1 / M-V1 / M-V2): closed** on this lane (2026-07-17).
+Next executable work is quality wave **Q1** in
+[`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) — not new math code
+milestones.
+
+Verified (2026-07-17, `math-simd`):
 
 - `make -C core/tests/nextpas.core.math clean test` → exit 0
-  (17 projects: source-contract + 16 Pascal suites, **305 tests**, heaptrc 0 unfreed)
+  (17 projects; Pascal suites green; heaptrc 0 unfreed)
 - `MATH_API_SURFACE OK: scanned=70 findings=0`
-- Math production sources import only public `nextpas.core.simd` (no private backend/dispatch/cpuinfo/dataplane units)
-- Public batch API is F32-complete via `batch.pas → batch.simd.pas`
-- Benchmark evidence (M7): 33-308x on N=16384 batch kernels
+- Production math imports only public `nextpas.core.simd` (no private backends)
+- Public batch: scalar F32/F64 + `vec.batch` F32 core + **Double minimal parity (M-V1)**
 - M8 complete for available host matrix; macOS trig host proof remains deferred until a mac runner exists.
 
-### M-C1 consumer smoke (after Phase 23a/23b NEON BatchF32)
+### Residual archive (closed)
 
-- **When**: 2026-07-17, post S23a/S23b (NEON BatchF32 Add/Sub/Mul/Min/Max/Abs/Neg leaves).
-- **Command**: `make -C core/tests/nextpas.core.math clean test` → **exit 0**.
-- **API surface**: `MATH_API_SURFACE OK: scanned=70 findings=0`.
-- **Runtime**: 16 suites, 305 passed / 0 failed; heaptrc 0 unfreed on every suite.
-- **Boundary**: still public `nextpas.core.simd` only — no private backend imports required to stay green.
-- **Outcome**: math remains a valid consumer of simd after NEON Batch high-frequency leaves; CURRENT advanced to **S24a**.
+| ID | What | Status |
+|----|------|--------|
+| M-C1 | Consumer smoke after NEON BatchF32 leaves | done — full math clean test green |
+| M-V1 | `vec.batch` Double core ops | done — Dot/Normalize/Transform/Lerp/Clamp |
+| M-V2 | Residual docs + lane mode cleanup | **done** (this file) |
 
-Host matrix:
+### Host matrix
 
 | Host | Trig link/runtime proof | Status |
 |------|-------------------------|--------|
 | Linux x86_64 | local focused + trig smoke | done |
 | Windows x86_64 | Wine cross-compile + run | done |
-| macOS | not available in this lane | deferred |
+| macOS | not available in this lane | **blocked** (see below) |
 
 ## Roadmap
 
@@ -65,77 +67,64 @@ nextpas.core.math final migration
 ├── M6: Random + noise                                 [complete for current API]
 ├── M7: SIMD-backed implementation seams               [complete]
 ├── M8: API surface, docs, leak proof, module gates     [complete; macOS matrix deferred]
-└── M9: fafafa.game cutover and old Vectors retirement  [not started]
+└── M9: fafafa.game cutover and old Vectors retirement  [blocked — product auth]
 ```
 
-## Milestone Gates
+## Milestone Gates (summary)
 
-### M0–M1
-
-- Status: complete for the current public API scope.
-
-### M2: Scalar + Trig Foundation
-
-- Gate: scalar/trig focused tests pass with heaptrc, no public `math.ffi`,
-  and host trig routes proven.
-- Status: **complete on available hosts**. Linux and Windows (Wine) proven.
-  macOS host truth is explicitly deferred until a mac runner is available.
-
-### M3–M6: Value Types, Transforms, Easing, Random, Noise
-
-- Status: complete for the current API scope; see `API.md`.
-
-### M7: SIMD-Backed Implementation Seams
-
-- Status: **complete**. Public batch API delegates to SIMD via
-  `batch.pas → batch.simd.pas`. Value-type methods remain scalar by design.
-
-### M8: API Surface, Docs, Leak Proof, Module Gates
-
-- Gate: API/docs/source-contract gate passes, focused runtime gates pass,
-  heaptrc evidence exists, remaining host-specific truth is recorded.
-- Status: **complete for current gate definition**.
-  - API surface, runtime, heaptrc: green on Linux
-  - Windows trig proof: recorded
-  - macOS: deferred and tracked (not a silent unknown)
-
-### M9: fafafa.game Cutover And Old Vectors Retirement
-
-- Status: not started. Requires cross-product coordination.
+- **M0–M1**: complete for current public API scope.
+- **M2**: complete on available hosts (Linux + Windows/Wine). macOS deferred.
+- **M3–M6**: complete for current API; see `API.md`.
+- **M7**: complete. Public batch → public simd only. Value-type methods stay scalar.
+- **M8**: complete for current gate definition on Linux+Windows; macOS deferred.
+- **M9**: **not started / blocked** until product authorization + cross-lane plan.
 
 ## Lane mode
 
-**residual + consumer-of-simd** — M0–M8 are done on available hosts.
-Executable work is queued in [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)
-(`M-C1`, `M-V1`, `M-V2`). Do not invent new milestones in chat.
+**math-in-lane residual closed.** Mode is now:
 
-## Active Backlog (classified)
+- **consumer-of-simd** (keep public-only simd boundary)
+- **quality / pointer hygiene** via GOAL_QUEUE Wave 3 (`Q1` → `Q2` → `IDLE`)
 
-### In-lane residual (goal-queue)
+Do not invent new math milestones in chat. Do not auto-start Wave 4 walls.
 
-1. **M-V2** — residual docs / lane-complete checklist cleanup.
+## Backlog classification
 
-### Done (archive; not active work)
+### In-lane residual (math code)
 
-- **M-C1** — math consumer smoke after NEON Batch leaves (2026-07-17; full math clean test green).
-- **M-V1** — `vec.batch` Double minimal parity (2026-07-17): BatchDot/Normalize/Transform/Lerp/Clamp for TVec*d; value-type loops; tests + API.md.
-- Public `Batch*F64` family (facade + simd wrappers + tests).
+*None.* M-C1 / M-V1 / M-V2 closed.
 
-### Deferred / blocked
+### In-lane quality (shared queue, not math feature work)
 
-1. **macOS trig host proof** — blocked until mac host/CI exists.
-2. **M9 fafafa.game cutover** — blocked until product authorization (out of lane).
-3. **Value-type SIMD cutover** — forbidden without profiled evidence and explicit
-   public contract design.
+1. **Q1** — pointer freshness (CURRENT / README / roadmap alignment)
+2. **Q2** — math↔simd linkage table
 
-## Explicit Non-Goals (current lane)
+### Explicitly blocked (out of default queue)
+
+| Item | BLOCKED_UNTIL |
+|------|----------------|
+| **macOS trig host proof** | macOS runner / CI host |
+| **M9 fafafa.game cutover** | product authorization + cross-lane plan |
+| **Value-type SIMD cutover** | profiled evidence + public contract design |
+
+### Math lane-complete checklist
+
+- [x] M0–M8 on available hosts
+- [x] Public batch F32/F64 via public simd
+- [x] `vec.batch` Double minimal parity (M-V1)
+- [x] Consumer smoke after Batch leaves (M-C1)
+- [x] Residual docs / backlog classification (M-V2)
+- [x] M9 / macOS explicitly blocked (not silent unknowns)
+- [ ] Q1/Q2 pointer + linkage (shared quality wave)
+
+## Explicit Non-Goals
 
 - Do not reintroduce `math.ffi` or naked `external 'm'`.
 - Do not import private simd backend units from math.
 - Do not raw-merge this long-lived lane into `main`; use path-limited landing.
-- Do not start M9 or macOS goals from this queue without lifting BLOCKED_UNTIL.
+- Do not start M9 or macOS goals without lifting `BLOCKED_UNTIL`.
 
 ## Goal entry
 
 Open [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) and execute **CURRENT** only.
-Default simd-first order: `S23a ✅ → S23b ✅ → M-C1 ✅ → S24a → …`.
+Happy path (archive): `… → M-C1 ✅ → … → M-V1 ✅ → M-V2 ✅ → Q1 → Q2 → IDLE`.
