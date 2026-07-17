@@ -7,23 +7,24 @@ Not an FPC `BaseUnix` / `Windows` / `SysUtils` compatibility layer.
 
 | Document | Role |
 | --- | --- |
+| [ROADMAP.md](ROADMAP.md) | **Sole forward-execution plan** (phases D0–D5, acceptance criteria) |
 | [master-spec.md](master-spec.md) | Owner boundaries, truth tiers, readiness/completion split |
-| [goal-tree.md](goal-tree.md) | Phase state and evidence gaps |
+| [goal-tree.md](goal-tree.md) | Phase state log and evidence gaps (not the forward queue) |
 | [runtime-truth-matrix.md](runtime-truth-matrix.md) | Host/seam truth with evidence labels only |
 | [CONTRACT.md](CONTRACT.md) | Module contract: APIs, invariants, errors, ownership |
 | [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md) | Three-tier return model + RTL isolation freeze |
 | [ERROR-HANDLING.md](ERROR-HANDLING.md) | **Error authority**: live `PLATFORM_ERR_*` table (must match `error.pas`) |
 | [QUICKSTART.md](QUICKSTART.md) | Common usage patterns |
 | [API-REFERENCE.md](API-REFERENCE.md) | Public API catalog; error names must match ERROR-HANDLING (no phantoms) |
-| [residual-roadmap.md](residual-roadmap.md) | Long-term residual backlog (LT0–LT4); usability **maintenance @ 8.21** |
+| [residual-roadmap.md](residual-roadmap.md) | Closed residual program LT0–LT3 + dual-IO/F6 freeze; remaining host work → ROADMAP |
 
 ## Current truth (one line)
 
 Linux x86_64 is `focused-runtime` across facade modules. Windows has Wine smoke
-plus partial real-Windows runtime; macOS / FreeBSD / Android remain
-`source-contract` / `forced-compile`. See [goal-tree.md](goal-tree.md).
-Usability score is frozen at **8.21** (maintenance); residual work is scheduled in
-[residual-roadmap.md](residual-roadmap.md), not open-ended assessment waves.
+plus partial real-Windows runtime (GHA focused gates); macOS / FreeBSD / Android remain
+`source-contract` / `forced-compile` / best-effort. Evidence: [goal-tree.md](goal-tree.md).
+Usability **8.21** is maintenance-only. **Execute work from [ROADMAP.md](ROADMAP.md)**, not from
+open-ended assessment waves or historical ROADMAP-v2.
 
 ## Focused verification
 
@@ -57,11 +58,11 @@ feature units (`platform.files`, `platform.process`, ...) for real work.
 
 ## Historical / non-authority
 
-These remain for history or migration reference; do not treat as current truth:
+These remain for history or migration reference; do not treat as current truth or forward queue:
 
 - [api-reference.md](api-reference.md) — superseded by `API-REFERENCE.md`
-- [ROADMAP.md](ROADMAP.md) — historical roadmap snapshot (**ignore embedded 8.56 score**)
-- [ROADMAP-v2.md](ROADMAP-v2.md) — planning snapshot; verify against goal-tree
+- [ROADMAP-v2.md](ROADMAP-v2.md) — 2026-07-06 planning snapshot (**stale**; ignore 8.56 score)
 - [GOVERNANCE-PLAN.md](GOVERNANCE-PLAN.md), daily reports, [TEST-COVERAGE-REPORT.md](TEST-COVERAGE-REPORT.md), [API-CONSISTENCY-PLAN.md](API-CONSISTENCY-PLAN.md)
-- [USABILITY-ASSESSMENT.md](USABILITY-ASSESSMENT.md) — body is 2026-07-06 historical; **only the top banner score is current** (wave-4)
+- [USABILITY-ASSESSMENT.md](USABILITY-ASSESSMENT.md) — body historical; **banner 8.21 only** is current
+- `core/docs/plans/*platform*` — old completion / Windows-real plans; verify against ROADMAP + goal-tree
 - `../platform-ffi-*` — ABI evidence indexes until fully folded here

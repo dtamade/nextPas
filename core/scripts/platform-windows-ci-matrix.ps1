@@ -1,0 +1,97 @@
+# platform-windows-ci-matrix.ps1
+#
+# Real Windows host CI matrix (not Wine).
+# Runs the same suite directories used by platform-wine-ci-matrix.sh with native
+# `make clean test` so {$IFDEF NEXTPAS_WINDOWS} paths execute on the host.
+#
+# Usage (from repo root or core/):
+#   pwsh core/scripts/platform-windows-ci-matrix.ps1
+#   pwsh scripts/platform-windows-ci-matrix.ps1   # when cwd is core/
+#
+# Evidence: truth=real-windows-runtime-ci (focused gates).
+# Do NOT print truth=ci-matrix until ROADMAP D1.d promotion criteria are met.
+
+$ErrorActionPreference = 'Stop'
+
+function Resolve-CoreRoot {
+  $here = $PSScriptRoot
+  if (Test-Path (Join-Path $here '..\src\nextpas.core.platform.pas')) {
+    return (Resolve-Path (Join-Path $here '..')).Path
+  }
+  if (Test-Path (Join-Path $here 'src\nextpas.core.platform.pas')) {
+    return (Resolve-Path $here).Path
+  }
+  throw "Unable to resolve core/ root from $here"
+}
+
+$CoreRoot = Resolve-CoreRoot
+Set-Location $CoreRoot
+
+$ModuleEntries = @(
+  @{ Name = 'platform.time';    Dir = 'tests/nextpas.core.platform.time/test_platform_time_wine' }
+  @{ Name = 'platform.memory';  Dir = 'tests/nextpas.core.platform.memory/test_platform_memory_wine' }
+  @{ Name = 'platform.sync';    Dir = 'tests/nextpas.core.platform.sync/test_platform_sync_wine' }
+  @{ Name = 'platform.thread';  Dir = 'tests/nextpas.core.platform.thread/test_platform_thread_wine' }
+  @{ Name = 'platform.io';      Dir = 'tests/nextpas.core.platform.io/test_platform_io_wine' }
+  @{ Name = 'platform.process'; Dir = 'tests/nextpas.core.platform.process/test_platform_process_wine' }
+  @{ Name = 'platform.files';   Dir = 'tests/nextpas.core.platform.files/test_platform_files_wine' }
+  @{ Name = 'platform.fs';      Dir = 'tests/nextpas.core.platform.fs/test_platform_fs_wine' }
+  @{ Name = 'platform.path';    Dir = 'tests/nextpas.core.platform.path/test_platform_path_wine' }
+  @{ Name = 'platform.env';     Dir = 'tests/nextpas.core.platform.env/test_platform_env_wine' }
+  @{ Name = 'platform.mmap';    Dir = 'tests/nextpas.core.platform.mmap/test_platform_mmap_wine' }
+  @{ Name = 'platform.random';  Dir = 'tests/nextpas.core.platform.random/test_platform_random_wine' }
+  @{ Name = 'platform.socket';  Dir = 'tests/nextpas.core.platform.socket/test_platform_socket_wine' }
+  @{ Name = 'io.reactor.iocp'; Dir = 'tests/nextpas.core.io.uring/test_reactor_iocp_wine' }
+)
+
+$ExtraRealGates = @(
+  @{ Name = 'poller.windows_runtime_smoke'; Dir = 'tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke' }
+  @{ Name = 'platform.io.windows_real';     Dir = 'tests/nextpas.core.platform/test_platform_io_windows_real' }
+  @{ Name = 'platform.socket.windows_real'; Dir = 'tests/nextpas.core.platform.socket/test_platform_socket_windows_real' }
+)
+
+$AllEntries = $ModuleEntries + $ExtraRealGates
+$pass = 0
+$fail = 0
+$failed = @()
+
+Write-Output '=== Platform Windows CI Matrix (real host) ==='
+Write-Output 'truth=real-windows-runtime-ci; focused gates; not full ci-matrix promotion'
+Write-Output "core=$CoreRoot"
+Write-Output ''
+
+foreach ($entry in $AllEntries) {
+  $dir = $entry.Dir
+  $name = $entry.Name
+  if (-not (Test-Path $dir)) {
+    Write-Output "FAIL $name : missing directory $dir"
+    $fail++
+    $failed += "$name (missing $dir)"
+    continue
+  }
+
+  Write-Output "=== real-windows: $name ($dir) ==="
+  & make -C $dir clean test
+  if ($LASTEXITCODE -ne 0) {
+    Write-Output "FAIL $name (exit $LASTEXITCODE)"
+    $fail++
+    $failed += "$name (exit $LASTEXITCODE)"
+  } else {
+    Write-Output "PASS $name"
+    $pass++
+  }
+  Write-Output ''
+}
+
+Write-Output "summary: pass=$pass fail=$fail total=$($AllEntries.Count)"
+Write-Output "truth=real-windows-runtime-ci; gates_passed=$pass; gates_failed=$fail"
+
+if ($fail -gt 0) {
+  Write-Output 'failed:'
+  foreach ($item in $failed) {
+    Write-Output "  - $item"
+  }
+  exit 1
+}
+
+exit 0
