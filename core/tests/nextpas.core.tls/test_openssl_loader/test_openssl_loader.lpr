@@ -29,7 +29,7 @@ var
   LHandle: TOpenSSLLibHandle;
 begin
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-  Check('libcrypto loaded', LHandle <> 0);
+  Check('libcrypto loaded', LHandle.IsValid);
 end;
 
 procedure TestLoadLibSSL;
@@ -37,7 +37,7 @@ var
   LHandle: TOpenSSLLibHandle;
 begin
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-  Check('libssl loaded', LHandle <> 0);
+  Check('libssl loaded', LHandle.IsValid);
 end;
 
 procedure TestVersionDetection;
@@ -56,7 +56,7 @@ var
   LPtr: Pointer;
 begin
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibCrypto);
-  if LHandle = 0 then Exit;
+  if not LHandle.IsValid then Exit;
 
   LPtr := TOpenSSLLoader.GetFunction(LHandle, 'EVP_sha256');
   Check('EVP_sha256 found', LPtr <> nil);
@@ -82,7 +82,7 @@ var
   LPtr: Pointer;
 begin
   LHandle := TOpenSSLLoader.GetLibraryHandle(osslLibSSL);
-  if LHandle = 0 then Exit;
+  if not LHandle.IsValid then Exit;
 
   LPtr := TOpenSSLLoader.GetFunction(LHandle, 'SSL_CTX_new');
   Check('SSL_CTX_new found', LPtr <> nil);
@@ -104,7 +104,7 @@ begin
   Check('after unload: not loaded', not TOpenSSLLoader.IsLoaded(osslLibCrypto));
 
   // Reload
-  Check('reload: libcrypto', TOpenSSLLoader.GetLibraryHandle(osslLibCrypto) <> 0);
+  Check('reload: libcrypto', TOpenSSLLoader.GetLibraryHandle(osslLibCrypto).IsValid);
   Check('reload: is loaded again', TOpenSSLLoader.IsLoaded(osslLibCrypto));
 end;
 
