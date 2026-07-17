@@ -17,6 +17,13 @@ Do not promote a module past the strongest evidence tier it currently holds.
 
 ## Evidence
 
+L0/L1 kernel evidence rows (module source-contract gates pin these strings):
+
+| Module | Surface | Evidence |
+| --- | --- | --- |
+| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | source-contract / forced compile / focused runtime: atomic 43/43 |
+| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | source-contract / focused runtime / stress: lockfree stress 14/14 |
+
 | Domain | Owner modules | Current evidence |
 | --- | --- | --- |
 | Text / bytes / encoding | `text`, `bytes`, `encoding` | `source-contract` + `focused-runtime` on Linux |
