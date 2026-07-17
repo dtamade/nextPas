@@ -11,7 +11,7 @@
 
 ## 当前结论
 
-- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（多时代 + Goal Loop；**NEXT = Wave J**，之后自动 J→K→L′→C1…）。
+- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（多时代 + Goal Loop；**NEXT = Wave K**，之后 K→L′→C1…）。
 - **Stage**：non-H3 stage-complete；H3 诚实 blocked on QUIC。
 - **可用性 A–I**：主路径齐；Cookie eTLD+1；`FinalUrl`/`Version`；proxy **Basic only**。
 - **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
@@ -53,4 +53,4 @@
 
 **不在此维护有序列表。** 见 [`ROADMAP.md`](ROADMAP.md) Era 0–5 + Goal Loop。
 
-摘要：NEXT = Wave J（Op hygiene）→ 满自治按推荐路径续波；H3 Blocked on QUIC。
+摘要：Wave J Op hygiene landed → NEXT = Wave K；满自治按推荐路径续波；H3 Blocked on QUIC。

@@ -10089,6 +10089,55 @@ begin
   LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
   Check(Pos('raise EHttpError.CreateOp(hekRedirect, ''redirect'',', LSource) > 0,
     'redirect failures use CreateOp with Op=redirect');
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''round_trip'',', LSource) > 0,
+    'nil transport response uses CreateOp with Op=round_trip');
+  Check(Pos('raise EHttpError.CreateOp(hekStatus, ''ensure'',', LSource) > 0,
+    'HttpEnsureSuccess non-2xx uses CreateOp with Op=ensure');
+end;
+
+procedure TestClientCancelAndTransportCreateOpSourceContract;
+var
+  LBase: string;
+  LH1: string;
+begin
+  LBase := ReadFileText('../../../src/nextpas.core.http.base.pas');
+  LH1 := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('raise EHttpError.CreateOp(hekCanceled, ''cancel'',', LBase) > 0,
+    'cancel token uses CreateOp with Op=cancel');
+  Check(Pos('EHttpError.CreateOp(hekTimeout, ''transport'',', LBase) > 0,
+    'HttpWrapTransportException timeout uses Op=transport');
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''connect'',', LH1) > 0,
+    'proxy CONNECT failures use CreateOp with Op=connect');
+  Check(Pos('raise EHttpError.CreateOp(hekParse, ''transport'',', LH1) > 0,
+    'H1 response parse failures use CreateOp with Op=transport');
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''transport'',', LH1) > 0,
+    'H1 incomplete response uses CreateOp with Op=transport');
+end;
+
+procedure TestHttpEnsureSuccessOpIsEnsure;
+var
+  LResp: IHttpResponse;
+  LOp: string;
+  LStatus: THttpStatus;
+  LCaught: Boolean;
+begin
+  LOp := '';
+  LStatus := 0;
+  LCaught := False;
+  LResp := NewResponse(HTTP_STATUS_NOT_FOUND, NewHeaders, nil);
+  try
+    HttpEnsureSuccess(LResp, 'GET', 'http://example.test/x');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LOp := E.Op;
+      LStatus := E.Status;
+    end;
+  end;
+  Check(LCaught, 'EnsureSuccess raises');
+  CheckEqual('ensure', LOp, 'EnsureSuccess Op=ensure');
+  CheckEqual(Int64(HTTP_STATUS_NOT_FOUND), Int64(LStatus), 'EnsureSuccess preserves Status');
 end;
 
 procedure TestClientDefaultUserAgent;
@@ -10814,6 +10863,10 @@ begin
     @TestClientLiveMidReadCancel);
   T.Test('Client redirect CreateOp source contract',
     @TestClientRedirectCreateOpSourceContract);
+  T.Test('Client cancel/transport CreateOp source contract',
+    @TestClientCancelAndTransportCreateOpSourceContract);
+  T.Test('HttpEnsureSuccess Op=ensure on non-2xx',
+    @TestHttpEnsureSuccessOpIsEnsure);
   T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);
   T.Test('Client ConnectTimeout option defaults',
     @TestClientConnectTimeoutOptionDefault);

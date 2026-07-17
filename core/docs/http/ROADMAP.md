@@ -1,8 +1,8 @@
 # nextpas.core.http Roadmap
 
-**Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。  
-**Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。  
-**Updated**: 2026-07-17（完整时代表 + Goal Loop；推荐默认包）
+**Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
+**Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
+**Updated**: 2026-07-17（Wave J Error Op hygiene landed）
 
 ---
 
@@ -70,7 +70,8 @@ CHECKPOINT（不阻塞续波）:
 | Wave G Cookie site | 完成（eTLD+1 + PSL 子集） |
 | Wave H Response metadata | 完成（FinalUrl + Version） |
 | Wave I Proxy auth | 完成（Basic only freeze；Digest/NTLM Park） |
-| **下一执行点** | **Era 0 / Wave J — Error Op hygiene** |
+| Wave J Error Op hygiene | 完成（热点 CreateOp + source-contract + CONTRACT Op 表） |
+| **下一执行点** | **Era 0 / Wave K — Surface freeze audit** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
@@ -119,19 +120,20 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 热点路径补齐 `CreateOp`：client `Send` / redirect / retry / H1 `RoundTrip` 边界；source-contract 锁定 Op 集合或关键名 |
 | **Don't** | 全模块 Op-everywhere；改错误分类语义（那是 E1） |
 | **Done when** | 上述热点失败路径带稳定 Op；新增/更新 focused 或 source-contract 证明；heaptrc 敏感 gate 仍 `0 unfreed`（若适用） |
 | **Gates** | `make focused FOCUS=core/tests/nextpas.core.http/test_http_client`（及本波触及的 H1/contract/source-contract suite） |
 | **Land paths** | `core/src/nextpas.core.http*`；相关 tests；`core/docs/http/*` |
 | **Next** | Wave K |
+| **Evidence** | `test_http_client` 251 passed；`test_http_base` 32 passed；Op 表：`redirect`/`round_trip`/`transport`/`connect`/`cancel`/`ensure`/`download`/`json` |
 
 ### Wave K — Surface freeze audit
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | 扫 facade / message 工厂：无残留 deprecated 死面；tests/examples 只走 `THttpRequestBuilder` + 白名单 `NewRequest`/`NewGetRequest`；删无引用死入口 |
 | **Don't** | 新公开 API 家族；大范围重命名 |
 | **Done when** | 无生产 deprecated 请求工厂；examples/tests 编译路径干净；CONTRACT/README 与源码一致 |
@@ -291,7 +293,7 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 ## Era 4 — Performance（高性能）
 
-**目标**：G6 收成可复现证据，不是排行榜文案。  
+**目标**：G6 收成可复现证据，不是排行榜文案。
 **规则**：正确性回归不过 → 性能改动整波回滚。
 
 ### Wave P1 — Profile one hotspot
@@ -384,15 +386,15 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave J 仍是 NEXT
-2. 盘点 client Send / redirect / retry / H1 RoundTrip 的 CreateOp 缺口
-3. 补齐热点 Op + source-contract；focused gate 绿
+1. 打开本文件确认 Wave K 仍是 NEXT
+2. 扫 facade/message 工厂与 tests/examples：无 deprecated 死面
+3. 必要时修路径 + contract/examples gate
 4. path-limited land main
-5. 本文件：Wave J → landed；Wave K → NEXT；changelog 一行
-6. 不要等用户「继续」——按 Goal Loop 进入 Wave K
+5. 本文件：Wave K → landed；Wave L′ → NEXT；changelog 一行
+6. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave J，然后自动续波。**
+**没有用户指令时：默认执行 Wave K，然后自动续波。**
 
 ---
 
@@ -419,3 +421,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave H landed；Wave I = NEXT |
 | 2026-07-17 | Wave I landed；Wave J = NEXT |
 | 2026-07-17 | **完整时代表**：Era 0–5 + X；Goal Loop 满自治；Inbox；每波 Done when/Gates；推荐路径 J→K→L′→C1→C2→C3→E1→E2→A1→A2→P1→P3→P5 |
+| 2026-07-17 | Wave J landed：热点 CreateOp（cancel/ensure/connect/transport…）+ source-contract；Wave K = NEXT |
