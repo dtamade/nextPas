@@ -4,7 +4,6 @@ program test_lockfree_workstealing;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.workstealing,
   nextpas.core.lockfree,
   nextpas.core.atomic,

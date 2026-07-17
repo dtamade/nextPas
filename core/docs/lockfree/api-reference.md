@@ -459,7 +459,7 @@ end;
 
 ## Channel (nextpas.core.lockfree.channel)
 
-有界无锁 Channel，序列号驱动的 MPSC/SPMC 通道。
+有界无锁 Channel，序列号驱动的 **MPMC-style** 通道。
 
 ```pascal
 type

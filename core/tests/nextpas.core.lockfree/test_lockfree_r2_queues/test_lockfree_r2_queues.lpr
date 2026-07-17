@@ -3,8 +3,7 @@ program test_lockfree_r2_queues;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.lockfree.ringbuffer,

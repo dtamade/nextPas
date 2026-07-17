@@ -3,7 +3,7 @@ program test_lockfree_numa;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.atomic,
   nextpas.core.lockfree.hashmap,
   nextpas.core.lockfree.hashmap.numa;

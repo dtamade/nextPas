@@ -461,7 +461,7 @@ end;
 
 ## Channel (nextpas.core.lockfree.channel)
 
-Bounded lock-free Channel, sequence-number driven MPSC/SPMC channel.
+Bounded lock-free Channel, sequence-number driven **MPMC-style** channel.
 
 ```pascal
 type

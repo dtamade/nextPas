@@ -3,7 +3,6 @@ program test_lockfree_multimap;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.multimap,
   nextpas.core.test;
 

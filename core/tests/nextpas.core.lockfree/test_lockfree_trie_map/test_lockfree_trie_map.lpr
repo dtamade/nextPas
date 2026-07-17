@@ -4,7 +4,7 @@
 program test_lockfree_trie_map;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.trie_map;
 
 var

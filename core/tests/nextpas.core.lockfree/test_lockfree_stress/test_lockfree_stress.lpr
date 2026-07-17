@@ -4,8 +4,8 @@ program test_lockfree_stress;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree,

@@ -2,7 +2,9 @@
 program test_lockfree_timeseries_ringbuffer;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.platform.thread,
+  nextpas.core.platform.time,
   nextpas.core.lockfree.timeseries_ringbuffer;
 
 var
@@ -109,7 +111,7 @@ begin
   WriteLn('--- GetRange ---');
   LBuf := TTimeSeriesRingBuffer.Create(10, 0);
   try
-    LNow := Int64(GetTickCount64);
+    LNow := Int64(platform_monotonic_ns div 1000000);
     LBuf.Append('a');
     LBuf.Append('b');
     LBuf.Append('c');
@@ -149,7 +151,7 @@ begin
   try
     Check(LBuf.AppendWithTTL('short', 5) = tsrOk, 'append short ttl');
     Check(LBuf.AppendWithTTL('forever', 0) = tsrOk, 'append infinite ttl');
-    Sleep(15);
+    platform_thread_sleep_ms(15);
     Check(LBuf.Count = 1, 'expired entry removed from count');
     Check(LBuf.Latest(LEntry) = tsrOk, 'latest survives expiry sweep');
     Check(LEntry.Value = 'forever', 'infinite ttl entry survives');

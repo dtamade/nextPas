@@ -137,6 +137,10 @@ constructor TConcurrentSkipListImpl.Create(const AMaxLevel: Integer);
 var
   LI: Integer;
 begin
+  if IsManagedType(TKey) then
+    raise EArgumentError.Create('TConcurrentSkipList: TKey must be unmanaged (no string/interface/dynarray)');
+  if IsManagedType(TValue) then
+    raise EArgumentError.Create('TConcurrentSkipList: TValue must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   if AMaxLevel < 1 then
     raise EArgumentError.Create('TConcurrentSkipList: max level must be >= 1');

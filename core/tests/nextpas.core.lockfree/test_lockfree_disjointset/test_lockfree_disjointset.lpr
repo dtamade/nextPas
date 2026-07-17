@@ -4,8 +4,8 @@ program test_lockfree_disjointset;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
+  nextpas.core.text.conv,
   nextpas.core.atomic,
   nextpas.core.lockfree.disjointset;
 

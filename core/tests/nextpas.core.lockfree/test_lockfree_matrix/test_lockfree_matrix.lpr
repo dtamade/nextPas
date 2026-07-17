@@ -3,7 +3,6 @@ program test_lockfree_matrix;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.matrix,
   nextpas.core.test;
 

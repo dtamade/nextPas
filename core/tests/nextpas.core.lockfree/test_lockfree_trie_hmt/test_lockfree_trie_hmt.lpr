@@ -2,7 +2,7 @@
 program test_lockfree_trie_hmt;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.trie_hmt;
 
 var

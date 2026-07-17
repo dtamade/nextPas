@@ -2,7 +2,8 @@
 program test_lockfree_counting_bloom;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
   nextpas.core.lockfree.counting_bloom;

@@ -2,8 +2,9 @@
 program test_lockfree_ttl_cache;
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.platform.thread,
   nextpas.core.lockfree.ttl_cache;
 
 var
@@ -140,7 +141,7 @@ begin
   LCache := TTTLCache.Create(4, 60000);
   try
     Check(LCache.PutWithTTL('short', 'value', 1) = ttlOk, 'put short ttl');
-    Sleep(5);
+    platform_thread_sleep_ms(5);
     Check(LCache.Get('short', LVal) = ttlExpired, 'expired get removes entry');
     Check(LCache.Count = 0, 'expired entry decrements count');
   finally

@@ -3,7 +3,6 @@ program test_lockfree_countdown;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.errors,
   nextpas.core.lockfree.countdown,
   nextpas.core.lockfree,

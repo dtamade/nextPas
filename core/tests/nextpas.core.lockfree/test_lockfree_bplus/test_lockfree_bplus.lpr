@@ -3,7 +3,6 @@ program test_lockfree_bplus;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.bplus,
   nextpas.core.atomic,
   nextpas.core.test;

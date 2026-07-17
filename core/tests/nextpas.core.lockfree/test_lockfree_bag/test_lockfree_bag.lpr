@@ -3,7 +3,6 @@ program test_lockfree_bag;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.bag,
   nextpas.core.test;
 

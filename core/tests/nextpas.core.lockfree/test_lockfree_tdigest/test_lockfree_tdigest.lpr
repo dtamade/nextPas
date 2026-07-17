@@ -3,8 +3,7 @@ program test_lockfree_tdigest;
 {$mode objfpc}{$H+}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
   nextpas.core.lockfree.tdigest,
   nextpas.core.lockfree,
   nextpas.core.atomic,

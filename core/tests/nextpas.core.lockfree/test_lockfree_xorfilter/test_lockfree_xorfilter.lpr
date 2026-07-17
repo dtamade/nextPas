@@ -3,7 +3,6 @@ program test_lockfree_xorfilter;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.xorfilter,
   nextpas.core.test;
 

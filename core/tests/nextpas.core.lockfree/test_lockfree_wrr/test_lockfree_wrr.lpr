@@ -3,7 +3,7 @@ program test_lockfree_wrr;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.wrr,
   nextpas.core.lockfree,
   nextpas.core.atomic,

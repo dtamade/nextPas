@@ -3,7 +3,6 @@ program test_lockfree_leftright;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.leftright,
   nextpas.core.test;
 
