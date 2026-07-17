@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave P3 threaded vs epoll；NEXT=P5）
+**Updated**: 2026-07-17（Wave P5 G6 close；**framework-complete (non-H3)**）
 
 ---
 
@@ -82,12 +82,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave A2 Client pool | 完成（per-authority MaxPoolSize + idle clear + H1/H2 选择策略 CONTRACT） |
 | Wave P1 Profile hotspot | 完成（headers Get/Has fuse；Get miss ~17% 本机 micro） |
 | Wave P3 epoll vs threaded | 完成（fullchain Direct/Router 同 workload 本机 snapshot + caveat） |
-| **下一执行点** | **Era 4 / Wave P5 — G6 closure criteria** |
+| Wave P5 G6 closure | 完成（stage performance complete 标准 + GOAL_TREE/BENCHMARKS 对齐） |
+| **下一执行点** | **framework-complete (non-H3)** — Era 5 H3-* **Blocked** on QUIC；STOP（勿空转 facade） |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~90%   高级 ~78%   优雅 ~86%   性能 ~62%
+完整 ~92%   高级 ~80%   优雅 ~86%   性能 ~70%  (non-H3 framework-complete)
 ```
 
 ---
@@ -344,12 +345,13 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 定义并满足「stage performance complete」：ladder 可跑、无假 claim、GOAL_TREE G6 与 BENCHMARKS 对齐 |
 | **Don't** | 无限采集 ranking 表 |
 | **Done when** | G6 退出「ongoing 无标准」；标准写进 GOAL_TREE + BENCHMARKS |
 | **Gates** | docs + 既有 bench smoke |
 | **Next** | Era 5 检查；若 H3 仍 Blocked → 模块 goal 可标 **framework-complete (non-H3)** 并 STOP 或转 Inbox |
+| **Evidence** | GOAL_TREE G6 stage-closed 表（8 条）；BENCHMARKS P5 入口；P1/P3 证据链；H3 仍 Blocked |
 
 ### Wave P2 / P4（夹在路径外，按需）
 
@@ -408,14 +410,13 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave P5 仍是 NEXT
-2. 定义 stage performance complete；GOAL_TREE G6 + BENCHMARKS 对齐；无假 claim
-3. docs + 既有 bench smoke；path-limited land
-4. 本文件：Wave P5 → landed；Era 5 H3 Blocked → framework-complete (non-H3)；changelog 一行
-5. 自动续波或 STOP（H3 仍 Blocked）
+1. 默认路径 Era 0–4 已 landed；模块 **framework-complete (non-H3)**
+2. Era 5 H3-* 仍 **Blocked on QUIC** — 禁止空 facade；勿假 claim
+3. 新工作仅：Inbox 升格为有序 Wave，或用户显式指令
+4. 不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：默认执行 Wave P5，然后自动续波。**
+**没有用户指令时：STOP（framework-complete non-H3）。不要空转 H3。**
 
 ---
 
@@ -454,3 +455,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave A2 landed：per-authority MaxPoolSize + idle clear + H1/H2 选择策略；Era 3 完成；Wave P1 = NEXT |
 | 2026-07-17 | Wave P1 landed：headers Get/Has fuse（Get miss ~17% 本机）；BENCHMARKS 前后表；Wave P3 = NEXT |
 | 2026-07-17 | Wave P3 landed：fullchain Direct/Router × threaded/epoll 本机 snapshot + caveats；Wave P5 = NEXT |
+| 2026-07-17 | Wave P5 landed：G6 stage performance complete；**framework-complete (non-H3)**；H3 Blocked STOP |

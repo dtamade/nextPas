@@ -1,8 +1,29 @@
 # nextpas.core.http Benchmarks
 
-This page records the current HTTP server benchmark harness and one local
-snapshot. Treat the numbers as evidence for this machine and toolchain, not as
+This page records the current HTTP server benchmark harness and local
+snapshots. Treat the numbers as evidence for this machine and toolchain, not as
 a permanent ranking across platforms.
+
+## Stage performance complete (G6 / Wave P5)
+
+**Status**: stage-closed (2026-07-17).
+
+Exit criteria are owned by [`GOAL_TREE.md`](GOAL_TREE.md) § “G6 stage performance
+complete”. This file holds **commands + local numbers**; GOAL_TREE holds the
+checklist that ends “ongoing with no standard.”
+
+| Criterion (short) | Where proven here |
+| ----------------- | ----------------- |
+| Ladder L0–L4 documented | Residual Cost Isolation Ladder |
+| L1 micros runnable | project Makefiles under `benchmarks/nextpas.core.http/bench_*` |
+| L2/L3 fullchain + backend metadata | Wave P3 commands (`NEXTPAS_BENCH_BACKEND`) |
+| threaded vs epoll same workload | Wave P3 snapshot table |
+| One L1 hotspot before/after | Wave P1 headers Get/Has |
+| Comparator honesty | Run the Server Comparison (not epoll ranking) |
+| No fake H3 | H3 remains unregistered / Blocked (CONTRACT) |
+
+Framework-complete **(non-H3)** does **not** require infinite ranking refresh.
+Optional P2/P4 and future hotspots are demand-driven only.
 
 The maintained Pascal benchmark assets under `benchmarks/nextpas.core.http/`
 are the focused projects with their own project `Makefile`s and focused smoke
