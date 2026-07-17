@@ -40,7 +40,7 @@ begin
   if LUseVectorAsm then
   begin
     // Override 64-bit comparison with PCMPGTQ
-    dispatchTable.CmpGtI64x2 := @SSE42CmpGtI64x2;
+    dispatchTable.CoreVectors.CmpGtI64x2 := @SSE42CmpGtI64x2;
 
     // SSE4.2 pcmpestri substring search
     dispatchTable.Memory.BytesIndexOf := @BytesIndexOf_SSE42;

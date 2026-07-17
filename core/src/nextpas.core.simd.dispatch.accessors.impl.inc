@@ -10,228 +10,228 @@ end;
 
 function TF32x4Accessor.Add(const a, b: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.AddF32x4(a, b);
+  Result := FTable^.CoreVectors.AddF32x4(a, b);
 end;
 
 function TF32x4Accessor.Sub(const a, b: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.SubF32x4(a, b);
+  Result := FTable^.CoreVectors.SubF32x4(a, b);
 end;
 
 function TF32x4Accessor.Mul(const a, b: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.MulF32x4(a, b);
+  Result := FTable^.CoreVectors.MulF32x4(a, b);
 end;
 
 function TF32x4Accessor.Divide(const a, b: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.DivF32x4(a, b);
+  Result := FTable^.CoreVectors.DivF32x4(a, b);
 end;
 
 function TF32x4Accessor.Neg(const a: TVecF32x4): TVecF32x4; inline;
 begin
   // Negate by subtracting from zero
-  Result := FTable^.SubF32x4(FTable^.ZeroF32x4(), a);
+  Result := FTable^.CoreVectors.SubF32x4(FTable^.CoreVectors.ZeroF32x4(), a);
 end;
 
 function TF32x4Accessor.Abs(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.AbsF32x4(a);
+  Result := FTable^.CoreVectors.AbsF32x4(a);
 end;
 
 function TF32x4Accessor.Sqrt(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.SqrtF32x4(a);
+  Result := FTable^.CoreVectors.SqrtF32x4(a);
 end;
 
 function TF32x4Accessor.Min(const a, b: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.MinF32x4(a, b);
+  Result := FTable^.CoreVectors.MinF32x4(a, b);
 end;
 
 function TF32x4Accessor.Max(const a, b: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.MaxF32x4(a, b);
+  Result := FTable^.CoreVectors.MaxF32x4(a, b);
 end;
 
 function TF32x4Accessor.Clamp(const a, minVal, maxVal: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.ClampF32x4(a, minVal, maxVal);
+  Result := FTable^.CoreVectors.ClampF32x4(a, minVal, maxVal);
 end;
 
 function TF32x4Accessor.Fma(const a, b, c: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.FmaF32x4(a, b, c);
+  Result := FTable^.CoreVectors.FmaF32x4(a, b, c);
 end;
 
 function TF32x4Accessor.Floor(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.FloorF32x4(a);
+  Result := FTable^.CoreVectors.FloorF32x4(a);
 end;
 
 function TF32x4Accessor.Ceil(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.CeilF32x4(a);
+  Result := FTable^.CoreVectors.CeilF32x4(a);
 end;
 
 function TF32x4Accessor.Round(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.RoundF32x4(a);
+  Result := FTable^.CoreVectors.RoundF32x4(a);
 end;
 
 function TF32x4Accessor.Trunc(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.TruncF32x4(a);
+  Result := FTable^.CoreVectors.TruncF32x4(a);
 end;
 
 function TF32x4Accessor.Rcp(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.RcpF32x4(a);
+  Result := FTable^.CoreVectors.RcpF32x4(a);
 end;
 
 function TF32x4Accessor.Rsqrt(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.RsqrtF32x4(a);
+  Result := FTable^.CoreVectors.RsqrtF32x4(a);
 end;
 
 function TF32x4Accessor.CmpEq(const a, b: TVecF32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpEqF32x4(a, b);
+  Result := FTable^.CoreVectors.CmpEqF32x4(a, b);
 end;
 
 function TF32x4Accessor.CmpLt(const a, b: TVecF32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpLtF32x4(a, b);
+  Result := FTable^.CoreVectors.CmpLtF32x4(a, b);
 end;
 
 function TF32x4Accessor.CmpLe(const a, b: TVecF32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpLeF32x4(a, b);
+  Result := FTable^.CoreVectors.CmpLeF32x4(a, b);
 end;
 
 function TF32x4Accessor.CmpGt(const a, b: TVecF32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpGtF32x4(a, b);
+  Result := FTable^.CoreVectors.CmpGtF32x4(a, b);
 end;
 
 function TF32x4Accessor.CmpGe(const a, b: TVecF32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpGeF32x4(a, b);
+  Result := FTable^.CoreVectors.CmpGeF32x4(a, b);
 end;
 
 function TF32x4Accessor.CmpNe(const a, b: TVecF32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpNeF32x4(a, b);
+  Result := FTable^.CoreVectors.CmpNeF32x4(a, b);
 end;
 
 function TF32x4Accessor.Dot4(const a, b: TVecF32x4): Single; inline;
 begin
-  Result := FTable^.DotF32x4(a, b);
+  Result := FTable^.CoreVectors.DotF32x4(a, b);
 end;
 
 function TF32x4Accessor.Dot3(const a, b: TVecF32x4): Single; inline;
 begin
-  Result := FTable^.DotF32x3(a, b);
+  Result := FTable^.CoreVectors.DotF32x3(a, b);
 end;
 
 function TF32x4Accessor.Cross3(const a, b: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.CrossF32x3(a, b);
+  Result := FTable^.CoreVectors.CrossF32x3(a, b);
 end;
 
 function TF32x4Accessor.Length4(const a: TVecF32x4): Single; inline;
 begin
-  Result := FTable^.LengthF32x4(a);
+  Result := FTable^.CoreVectors.LengthF32x4(a);
 end;
 
 function TF32x4Accessor.Length3(const a: TVecF32x4): Single; inline;
 begin
-  Result := FTable^.LengthF32x3(a);
+  Result := FTable^.CoreVectors.LengthF32x3(a);
 end;
 
 function TF32x4Accessor.Normalize4(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.NormalizeF32x4(a);
+  Result := FTable^.CoreVectors.NormalizeF32x4(a);
 end;
 
 function TF32x4Accessor.Normalize3(const a: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.NormalizeF32x3(a);
+  Result := FTable^.CoreVectors.NormalizeF32x3(a);
 end;
 
 function TF32x4Accessor.ReduceAdd(const a: TVecF32x4): Single; inline;
 begin
-  Result := FTable^.ReduceAddF32x4(a);
+  Result := FTable^.CoreVectors.ReduceAddF32x4(a);
 end;
 
 function TF32x4Accessor.ReduceMin(const a: TVecF32x4): Single; inline;
 begin
-  Result := FTable^.ReduceMinF32x4(a);
+  Result := FTable^.CoreVectors.ReduceMinF32x4(a);
 end;
 
 function TF32x4Accessor.ReduceMax(const a: TVecF32x4): Single; inline;
 begin
-  Result := FTable^.ReduceMaxF32x4(a);
+  Result := FTable^.CoreVectors.ReduceMaxF32x4(a);
 end;
 
 function TF32x4Accessor.ReduceMul(const a: TVecF32x4): Single; inline;
 begin
-  Result := FTable^.ReduceMulF32x4(a);
+  Result := FTable^.CoreVectors.ReduceMulF32x4(a);
 end;
 
 function TF32x4Accessor.Load(p: PSingle): TVecF32x4; inline;
 begin
-  Result := FTable^.LoadF32x4(p);
+  Result := FTable^.CoreVectors.LoadF32x4(p);
 end;
 
 function TF32x4Accessor.LoadAligned(p: PSingle): TVecF32x4; inline;
 begin
-  Result := FTable^.LoadF32x4Aligned(p);
+  Result := FTable^.CoreVectors.LoadF32x4Aligned(p);
 end;
 
 procedure TF32x4Accessor.Store(p: PSingle; const a: TVecF32x4); inline;
 begin
-  FTable^.StoreF32x4(p, a);
+  FTable^.CoreVectors.StoreF32x4(p, a);
 end;
 
 procedure TF32x4Accessor.StoreAligned(p: PSingle; const a: TVecF32x4); inline;
 begin
-  FTable^.StoreF32x4Aligned(p, a);
+  FTable^.CoreVectors.StoreF32x4Aligned(p, a);
 end;
 
 function TF32x4Accessor.Splat(value: Single): TVecF32x4; inline;
 begin
-  Result := FTable^.SplatF32x4(value);
+  Result := FTable^.CoreVectors.SplatF32x4(value);
 end;
 
 function TF32x4Accessor.Zero: TVecF32x4; inline;
 begin
-  Result := FTable^.ZeroF32x4();
+  Result := FTable^.CoreVectors.ZeroF32x4();
 end;
 
 function TF32x4Accessor.Make(x, y, z, w: Single): TVecF32x4; inline;
 begin
   // Create vector from individual components using Insert
-  Result := FTable^.ZeroF32x4();
-  Result := FTable^.InsertF32x4(Result, x, 0);
-  Result := FTable^.InsertF32x4(Result, y, 1);
-  Result := FTable^.InsertF32x4(Result, z, 2);
-  Result := FTable^.InsertF32x4(Result, w, 3);
+  Result := FTable^.CoreVectors.ZeroF32x4();
+  Result := FTable^.CoreVectors.InsertF32x4(Result, x, 0);
+  Result := FTable^.CoreVectors.InsertF32x4(Result, y, 1);
+  Result := FTable^.CoreVectors.InsertF32x4(Result, z, 2);
+  Result := FTable^.CoreVectors.InsertF32x4(Result, w, 3);
 end;
 
 function TF32x4Accessor.Select(const mask: TMask4; const a, b: TVecF32x4): TVecF32x4; inline;
 begin
-  Result := FTable^.SelectF32x4(mask, a, b);
+  Result := FTable^.CoreVectors.SelectF32x4(mask, a, b);
 end;
 
 function TF32x4Accessor.Extract(const a: TVecF32x4; index: Integer): Single; inline;
 begin
-  Result := FTable^.ExtractF32x4(a, index);
+  Result := FTable^.CoreVectors.ExtractF32x4(a, index);
 end;
 
 function TF32x4Accessor.Insert(const a: TVecF32x4; value: Single; index: Integer): TVecF32x4; inline;
 begin
-  Result := FTable^.InsertF32x4(a, value, index);
+  Result := FTable^.CoreVectors.InsertF32x4(a, value, index);
 end;
 
 // --- TF64x2Accessor ---
@@ -243,188 +243,188 @@ end;
 
 function TF64x2Accessor.Add(const a, b: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.AddF64x2(a, b);
+  Result := FTable^.CoreVectors.AddF64x2(a, b);
 end;
 
 function TF64x2Accessor.Sub(const a, b: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.SubF64x2(a, b);
+  Result := FTable^.CoreVectors.SubF64x2(a, b);
 end;
 
 function TF64x2Accessor.Mul(const a, b: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.MulF64x2(a, b);
+  Result := FTable^.CoreVectors.MulF64x2(a, b);
 end;
 
 function TF64x2Accessor.Divide(const a, b: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.DivF64x2(a, b);
+  Result := FTable^.CoreVectors.DivF64x2(a, b);
 end;
 
 function TF64x2Accessor.Neg(const a: TVecF64x2): TVecF64x2; inline;
 begin
   // Negate by subtracting from zero
-  Result := FTable^.SubF64x2(FTable^.ZeroF64x2(), a);
+  Result := FTable^.CoreVectors.SubF64x2(FTable^.CoreVectors.ZeroF64x2(), a);
 end;
 
 function TF64x2Accessor.Abs(const a: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.AbsF64x2(a);
+  Result := FTable^.CoreVectors.AbsF64x2(a);
 end;
 
 function TF64x2Accessor.Sqrt(const a: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.SqrtF64x2(a);
+  Result := FTable^.CoreVectors.SqrtF64x2(a);
 end;
 
 function TF64x2Accessor.Min(const a, b: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.MinF64x2(a, b);
+  Result := FTable^.CoreVectors.MinF64x2(a, b);
 end;
 
 function TF64x2Accessor.Max(const a, b: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.MaxF64x2(a, b);
+  Result := FTable^.CoreVectors.MaxF64x2(a, b);
 end;
 
 function TF64x2Accessor.Clamp(const a, minVal, maxVal: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.ClampF64x2(a, minVal, maxVal);
+  Result := FTable^.CoreVectors.ClampF64x2(a, minVal, maxVal);
 end;
 
 function TF64x2Accessor.Fma(const a, b, c: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.FmaF64x2(a, b, c);
+  Result := FTable^.CoreVectors.FmaF64x2(a, b, c);
 end;
 
 function TF64x2Accessor.Floor(const a: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.FloorF64x2(a);
+  Result := FTable^.CoreVectors.FloorF64x2(a);
 end;
 
 function TF64x2Accessor.Ceil(const a: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.CeilF64x2(a);
+  Result := FTable^.CoreVectors.CeilF64x2(a);
 end;
 
 function TF64x2Accessor.Round(const a: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.RoundF64x2(a);
+  Result := FTable^.CoreVectors.RoundF64x2(a);
 end;
 
 function TF64x2Accessor.Trunc(const a: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.TruncF64x2(a);
+  Result := FTable^.CoreVectors.TruncF64x2(a);
 end;
 
 function TF64x2Accessor.CmpEq(const a, b: TVecF64x2): TMask2; inline;
 begin
-  Result := FTable^.CmpEqF64x2(a, b);
+  Result := FTable^.CoreVectors.CmpEqF64x2(a, b);
 end;
 
 function TF64x2Accessor.CmpLt(const a, b: TVecF64x2): TMask2; inline;
 begin
-  Result := FTable^.CmpLtF64x2(a, b);
+  Result := FTable^.CoreVectors.CmpLtF64x2(a, b);
 end;
 
 function TF64x2Accessor.CmpLe(const a, b: TVecF64x2): TMask2; inline;
 begin
-  Result := FTable^.CmpLeF64x2(a, b);
+  Result := FTable^.CoreVectors.CmpLeF64x2(a, b);
 end;
 
 function TF64x2Accessor.CmpGt(const a, b: TVecF64x2): TMask2; inline;
 begin
-  Result := FTable^.CmpGtF64x2(a, b);
+  Result := FTable^.CoreVectors.CmpGtF64x2(a, b);
 end;
 
 function TF64x2Accessor.CmpGe(const a, b: TVecF64x2): TMask2; inline;
 begin
-  Result := FTable^.CmpGeF64x2(a, b);
+  Result := FTable^.CoreVectors.CmpGeF64x2(a, b);
 end;
 
 function TF64x2Accessor.CmpNe(const a, b: TVecF64x2): TMask2; inline;
 begin
-  Result := FTable^.CmpNeF64x2(a, b);
+  Result := FTable^.CoreVectors.CmpNeF64x2(a, b);
 end;
 
 function TF64x2Accessor.Dot(const a, b: TVecF64x2): Double; inline;
 begin
-  Result := FTable^.DotF64x2(a, b);
+  Result := FTable^.CoreVectors.DotF64x2(a, b);
 end;
 
 function TF64x2Accessor.ReduceAdd(const a: TVecF64x2): Double; inline;
 begin
-  Result := FTable^.ReduceAddF64x2(a);
+  Result := FTable^.CoreVectors.ReduceAddF64x2(a);
 end;
 
 function TF64x2Accessor.ReduceMin(const a: TVecF64x2): Double; inline;
 begin
-  Result := FTable^.ReduceMinF64x2(a);
+  Result := FTable^.CoreVectors.ReduceMinF64x2(a);
 end;
 
 function TF64x2Accessor.ReduceMax(const a: TVecF64x2): Double; inline;
 begin
-  Result := FTable^.ReduceMaxF64x2(a);
+  Result := FTable^.CoreVectors.ReduceMaxF64x2(a);
 end;
 
 function TF64x2Accessor.ReduceMul(const a: TVecF64x2): Double; inline;
 begin
-  Result := FTable^.ReduceMulF64x2(a);
+  Result := FTable^.CoreVectors.ReduceMulF64x2(a);
 end;
 
 function TF64x2Accessor.Load(p: PDouble): TVecF64x2; inline;
 begin
-  Result := FTable^.LoadF64x2(p);
+  Result := FTable^.CoreVectors.LoadF64x2(p);
 end;
 
 function TF64x2Accessor.LoadAligned(p: PDouble): TVecF64x2; inline;
 begin
   // F64x2 doesn't have aligned load in dispatch table, use regular load
-  Result := FTable^.LoadF64x2(p);
+  Result := FTable^.CoreVectors.LoadF64x2(p);
 end;
 
 procedure TF64x2Accessor.Store(p: PDouble; const a: TVecF64x2); inline;
 begin
-  FTable^.StoreF64x2(p, a);
+  FTable^.CoreVectors.StoreF64x2(p, a);
 end;
 
 procedure TF64x2Accessor.StoreAligned(p: PDouble; const a: TVecF64x2); inline;
 begin
   // F64x2 doesn't have aligned store in dispatch table, use regular store
-  FTable^.StoreF64x2(p, a);
+  FTable^.CoreVectors.StoreF64x2(p, a);
 end;
 
 function TF64x2Accessor.Splat(value: Double): TVecF64x2; inline;
 begin
-  Result := FTable^.SplatF64x2(value);
+  Result := FTable^.CoreVectors.SplatF64x2(value);
 end;
 
 function TF64x2Accessor.Zero: TVecF64x2; inline;
 begin
-  Result := FTable^.ZeroF64x2();
+  Result := FTable^.CoreVectors.ZeroF64x2();
 end;
 
 function TF64x2Accessor.Make(x, y: Double): TVecF64x2; inline;
 begin
   // Create vector from individual components using Insert
-  Result := FTable^.ZeroF64x2();
-  Result := FTable^.InsertF64x2(Result, x, 0);
-  Result := FTable^.InsertF64x2(Result, y, 1);
+  Result := FTable^.CoreVectors.ZeroF64x2();
+  Result := FTable^.CoreVectors.InsertF64x2(Result, x, 0);
+  Result := FTable^.CoreVectors.InsertF64x2(Result, y, 1);
 end;
 
 function TF64x2Accessor.Select(const mask: TMask2; const a, b: TVecF64x2): TVecF64x2; inline;
 begin
-  Result := FTable^.SelectF64x2(mask, a, b);
+  Result := FTable^.CoreVectors.SelectF64x2(mask, a, b);
 end;
 
 function TF64x2Accessor.Extract(const a: TVecF64x2; index: Integer): Double; inline;
 begin
-  Result := FTable^.ExtractF64x2(a, index);
+  Result := FTable^.CoreVectors.ExtractF64x2(a, index);
 end;
 
 function TF64x2Accessor.Insert(const a: TVecF64x2; value: Double; index: Integer): TVecF64x2; inline;
 begin
-  Result := FTable^.InsertF64x2(a, value, index);
+  Result := FTable^.CoreVectors.InsertF64x2(a, value, index);
 end;
 
 // --- TMemoryAccessor ---
@@ -1012,17 +1012,17 @@ end;
 
 function TI32x4Accessor.Add(const a, b: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.AddI32x4(a, b);
+  Result := FTable^.CoreVectors.AddI32x4(a, b);
 end;
 
 function TI32x4Accessor.Sub(const a, b: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.SubI32x4(a, b);
+  Result := FTable^.CoreVectors.SubI32x4(a, b);
 end;
 
 function TI32x4Accessor.Mul(const a, b: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.MulI32x4(a, b);
+  Result := FTable^.CoreVectors.MulI32x4(a, b);
 end;
 
 function TI32x4Accessor.Neg(const a: TVecI32x4): TVecI32x4; inline;
@@ -1034,87 +1034,87 @@ begin
   LZero.i[1] := 0;
   LZero.i[2] := 0;
   LZero.i[3] := 0;
-  Result := FTable^.SubI32x4(LZero, a);
+  Result := FTable^.CoreVectors.SubI32x4(LZero, a);
 end;
 
 function TI32x4Accessor.BitAnd(const a, b: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.AndI32x4(a, b);
+  Result := FTable^.CoreVectors.AndI32x4(a, b);
 end;
 
 function TI32x4Accessor.BitOr(const a, b: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.OrI32x4(a, b);
+  Result := FTable^.CoreVectors.OrI32x4(a, b);
 end;
 
 function TI32x4Accessor.BitXor(const a, b: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.XorI32x4(a, b);
+  Result := FTable^.CoreVectors.XorI32x4(a, b);
 end;
 
 function TI32x4Accessor.BitNot(const a: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.NotI32x4(a);
+  Result := FTable^.CoreVectors.NotI32x4(a);
 end;
 
 function TI32x4Accessor.BitAndNot(const a, b: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.AndNotI32x4(a, b);
+  Result := FTable^.CoreVectors.AndNotI32x4(a, b);
 end;
 
 function TI32x4Accessor.ShiftLeft(const a: TVecI32x4; count: Integer): TVecI32x4; inline;
 begin
-  Result := FTable^.ShiftLeftI32x4(a, count);
+  Result := FTable^.CoreVectors.ShiftLeftI32x4(a, count);
 end;
 
 function TI32x4Accessor.ShiftRight(const a: TVecI32x4; count: Integer): TVecI32x4; inline;
 begin
-  Result := FTable^.ShiftRightI32x4(a, count);
+  Result := FTable^.CoreVectors.ShiftRightI32x4(a, count);
 end;
 
 function TI32x4Accessor.ShiftRightArith(const a: TVecI32x4; count: Integer): TVecI32x4; inline;
 begin
-  Result := FTable^.ShiftRightArithI32x4(a, count);
+  Result := FTable^.CoreVectors.ShiftRightArithI32x4(a, count);
 end;
 
 function TI32x4Accessor.CmpEq(const a, b: TVecI32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpEqI32x4(a, b);
+  Result := FTable^.CoreVectors.CmpEqI32x4(a, b);
 end;
 
 function TI32x4Accessor.CmpLt(const a, b: TVecI32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpLtI32x4(a, b);
+  Result := FTable^.CoreVectors.CmpLtI32x4(a, b);
 end;
 
 function TI32x4Accessor.CmpGt(const a, b: TVecI32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpGtI32x4(a, b);
+  Result := FTable^.CoreVectors.CmpGtI32x4(a, b);
 end;
 
 function TI32x4Accessor.CmpLe(const a, b: TVecI32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpLeI32x4(a, b);
+  Result := FTable^.CoreVectors.CmpLeI32x4(a, b);
 end;
 
 function TI32x4Accessor.CmpGe(const a, b: TVecI32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpGeI32x4(a, b);
+  Result := FTable^.CoreVectors.CmpGeI32x4(a, b);
 end;
 
 function TI32x4Accessor.CmpNe(const a, b: TVecI32x4): TMask4; inline;
 begin
-  Result := FTable^.CmpNeI32x4(a, b);
+  Result := FTable^.CoreVectors.CmpNeI32x4(a, b);
 end;
 
 function TI32x4Accessor.Min(const a, b: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.MinI32x4(a, b);
+  Result := FTable^.CoreVectors.MinI32x4(a, b);
 end;
 
 function TI32x4Accessor.Max(const a, b: TVecI32x4): TVecI32x4; inline;
 begin
-  Result := FTable^.MaxI32x4(a, b);
+  Result := FTable^.CoreVectors.MaxI32x4(a, b);
 end;
 
 function TI32x4Accessor.Load(p: PInt32): TVecI32x4; inline;
@@ -1138,19 +1138,19 @@ end;
 procedure TI32x4Accessor.Store(p: PInt32; const a: TVecI32x4); inline;
 begin
   // Not available in dispatch table, use Extract as workaround
-  p[0] := FTable^.ExtractI32x4(a, 0);
-  p[1] := FTable^.ExtractI32x4(a, 1);
-  p[2] := FTable^.ExtractI32x4(a, 2);
-  p[3] := FTable^.ExtractI32x4(a, 3);
+  p[0] := FTable^.CoreVectors.ExtractI32x4(a, 0);
+  p[1] := FTable^.CoreVectors.ExtractI32x4(a, 1);
+  p[2] := FTable^.CoreVectors.ExtractI32x4(a, 2);
+  p[3] := FTable^.CoreVectors.ExtractI32x4(a, 3);
 end;
 
 procedure TI32x4Accessor.StoreAligned(p: PInt32; const a: TVecI32x4); inline;
 begin
   // Not available in dispatch table, use Extract as workaround
-  p[0] := FTable^.ExtractI32x4(a, 0);
-  p[1] := FTable^.ExtractI32x4(a, 1);
-  p[2] := FTable^.ExtractI32x4(a, 2);
-  p[3] := FTable^.ExtractI32x4(a, 3);
+  p[0] := FTable^.CoreVectors.ExtractI32x4(a, 0);
+  p[1] := FTable^.CoreVectors.ExtractI32x4(a, 1);
+  p[2] := FTable^.CoreVectors.ExtractI32x4(a, 2);
+  p[3] := FTable^.CoreVectors.ExtractI32x4(a, 3);
 end;
 
 function TI32x4Accessor.Splat(value: Int32): TVecI32x4; inline;
@@ -1197,12 +1197,12 @@ end;
 
 function TI32x4Accessor.Extract(const a: TVecI32x4; index: Integer): Int32; inline;
 begin
-  Result := FTable^.ExtractI32x4(a, index);
+  Result := FTable^.CoreVectors.ExtractI32x4(a, index);
 end;
 
 function TI32x4Accessor.Insert(const a: TVecI32x4; value: Int32; index: Integer): TVecI32x4; inline;
 begin
-  Result := FTable^.InsertI32x4(a, value, index);
+  Result := FTable^.CoreVectors.InsertI32x4(a, value, index);
 end;
 
 // --- TMaskAccessor ---

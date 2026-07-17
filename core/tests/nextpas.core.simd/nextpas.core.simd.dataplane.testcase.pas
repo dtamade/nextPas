@@ -59,11 +59,11 @@ begin
   CheckTrue(LDispatch <> nil, 'dispatch table should be assigned');
   CheckTrue(LApi <> nil, 'public API table should be assigned');
 
-  CheckTrue(LDataPlane^.VecF32x4AddPtr = Pointer(LDispatch^.AddF32x4), 'VecF32x4Add fast path should match dispatch slot');
-  CheckTrue(LDataPlane^.VecI16x32AddPtr = Pointer(LDispatch^.AddI16x32), 'VecI16x32Add fast path should match dispatch slot');
-  CheckTrue(LDataPlane^.VecU32x16MulPtr = Pointer(LDispatch^.MulU32x16), 'VecU32x16Mul fast path should match dispatch slot');
-  CheckTrue(LDataPlane^.VecU64x8AddPtr = Pointer(LDispatch^.AddU64x8), 'VecU64x8Add fast path should match dispatch slot');
-  CheckTrue(LDataPlane^.VecU8x64MaxPtr = Pointer(LDispatch^.MaxU8x64), 'VecU8x64Max fast path should match dispatch slot');
+  CheckTrue(LDataPlane^.VecF32x4AddPtr = Pointer(LDispatch^.CoreVectors.AddF32x4), 'VecF32x4Add fast path should match dispatch slot');
+  CheckTrue(LDataPlane^.VecI16x32AddPtr = Pointer(LDispatch^.CoreVectors.AddI16x32), 'VecI16x32Add fast path should match dispatch slot');
+  CheckTrue(LDataPlane^.VecU32x16MulPtr = Pointer(LDispatch^.CoreVectors.MulU32x16), 'VecU32x16Mul fast path should match dispatch slot');
+  CheckTrue(LDataPlane^.VecU64x8AddPtr = Pointer(LDispatch^.CoreVectors.AddU64x8), 'VecU64x8Add fast path should match dispatch slot');
+  CheckTrue(LDataPlane^.VecU8x64MaxPtr = Pointer(LDispatch^.CoreVectors.MaxU8x64), 'VecU8x64Max fast path should match dispatch slot');
 
   CheckTrue(LDataPlane^.MemEqualPtr = Pointer(LDispatch^.Memory.Equal), 'MemEqual binding should match dispatch slot');
   CheckTrue(LDataPlane^.MemFindBytePtr = Pointer(LDispatch^.Memory.FindByte), 'MemFindByte binding should match dispatch slot');
@@ -361,9 +361,9 @@ begin
   CheckNotNil(LDirectDispatch, 'direct dispatch table should be assigned for compare/mask snapshot test');
   CheckTrue(LDataPlane^.Dispatch = LDispatch, 'data-plane dispatch should match current dispatch for compare/mask snapshot test');
 
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.CmpLtI64x4), 'data-plane dispatch CmpLtI64x4 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.CmpLtI64x8), 'data-plane dispatch CmpLtI64x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.CmpLtI32x16), 'data-plane dispatch CmpLtI32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.CmpLtI64x4), 'data-plane dispatch CmpLtI64x4 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.CmpLtI64x8), 'data-plane dispatch CmpLtI64x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.CmpLtI32x16), 'data-plane dispatch CmpLtI32x16 should be assigned');
   CheckTrue(Assigned(LDataPlane^.Dispatch^.Mask.Mask4All), 'data-plane dispatch Mask4All should be assigned');
   CheckTrue(Assigned(LDataPlane^.Dispatch^.Mask.Mask4Any), 'data-plane dispatch Mask4Any should be assigned');
   CheckTrue(Assigned(LDataPlane^.Dispatch^.Mask.Mask4None), 'data-plane dispatch Mask4None should be assigned');
@@ -384,30 +384,30 @@ begin
   begin
     LoadCase(LCaseIdx);
 
-    LMask4DataPlane := LDataPlane^.Dispatch^.CmpLtI64x4(LI64x4A, LI64x4B);
+    LMask4DataPlane := LDataPlane^.Dispatch^.CoreVectors.CmpLtI64x4(LI64x4A, LI64x4B);
     LMask4Scalar := ScalarCmpLtI64x4(LI64x4A, LI64x4B);
     CheckEqual(Integer(LMask4Scalar), Integer(LMask4DataPlane), 'data-plane dispatch CmpLtI64x4 should match scalar semantics case=' + IntToStr(LCaseIdx));
-    CheckEqual(Integer(LDirectDispatch^.CmpLtI64x4(LI64x4A, LI64x4B)), Integer(LMask4DataPlane), 'data-plane dispatch CmpLtI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx));
+    CheckEqual(Integer(LDirectDispatch^.CoreVectors.CmpLtI64x4(LI64x4A, LI64x4B)), Integer(LMask4DataPlane), 'data-plane dispatch CmpLtI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask4All(LMask4Scalar), LDataPlane^.Dispatch^.Mask.Mask4All(LMask4DataPlane), 'data-plane dispatch Mask4All should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask4Any(LMask4Scalar), LDataPlane^.Dispatch^.Mask.Mask4Any(LMask4DataPlane), 'data-plane dispatch Mask4Any should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask4None(LMask4Scalar), LDataPlane^.Dispatch^.Mask.Mask4None(LMask4DataPlane), 'data-plane dispatch Mask4None should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask4PopCount(LMask4Scalar), LDataPlane^.Dispatch^.Mask.Mask4PopCount(LMask4DataPlane), 'data-plane dispatch Mask4PopCount should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask4FirstSet(LMask4Scalar), LDataPlane^.Dispatch^.Mask.Mask4FirstSet(LMask4DataPlane), 'data-plane dispatch Mask4FirstSet should match scalar helper case=' + IntToStr(LCaseIdx));
 
-    LMask8DataPlane := LDataPlane^.Dispatch^.CmpLtI64x8(LI64x8A, LI64x8B);
+    LMask8DataPlane := LDataPlane^.Dispatch^.CoreVectors.CmpLtI64x8(LI64x8A, LI64x8B);
     LMask8Scalar := ScalarCmpLtI64x8(LI64x8A, LI64x8B);
     CheckEqual(Integer(LMask8Scalar), Integer(LMask8DataPlane), 'data-plane dispatch CmpLtI64x8 should match scalar semantics case=' + IntToStr(LCaseIdx));
-    CheckEqual(Integer(LDirectDispatch^.CmpLtI64x8(LI64x8A, LI64x8B)), Integer(LMask8DataPlane), 'data-plane dispatch CmpLtI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx));
+    CheckEqual(Integer(LDirectDispatch^.CoreVectors.CmpLtI64x8(LI64x8A, LI64x8B)), Integer(LMask8DataPlane), 'data-plane dispatch CmpLtI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask8All(LMask8Scalar), LDataPlane^.Dispatch^.Mask.Mask8All(LMask8DataPlane), 'data-plane dispatch Mask8All should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask8Any(LMask8Scalar), LDataPlane^.Dispatch^.Mask.Mask8Any(LMask8DataPlane), 'data-plane dispatch Mask8Any should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask8None(LMask8Scalar), LDataPlane^.Dispatch^.Mask.Mask8None(LMask8DataPlane), 'data-plane dispatch Mask8None should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask8PopCount(LMask8Scalar), LDataPlane^.Dispatch^.Mask.Mask8PopCount(LMask8DataPlane), 'data-plane dispatch Mask8PopCount should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask8FirstSet(LMask8Scalar), LDataPlane^.Dispatch^.Mask.Mask8FirstSet(LMask8DataPlane), 'data-plane dispatch Mask8FirstSet should match scalar helper case=' + IntToStr(LCaseIdx));
 
-    LMask16DataPlane := LDataPlane^.Dispatch^.CmpLtI32x16(LI32x16A, LI32x16B);
+    LMask16DataPlane := LDataPlane^.Dispatch^.CoreVectors.CmpLtI32x16(LI32x16A, LI32x16B);
     LMask16Scalar := ScalarCmpLtI32x16(LI32x16A, LI32x16B);
     CheckEqual(Integer(LMask16Scalar), Integer(LMask16DataPlane), 'data-plane dispatch CmpLtI32x16 should match scalar semantics case=' + IntToStr(LCaseIdx));
-    CheckEqual(Integer(LDirectDispatch^.CmpLtI32x16(LI32x16A, LI32x16B)), Integer(LMask16DataPlane), 'data-plane dispatch CmpLtI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx));
+    CheckEqual(Integer(LDirectDispatch^.CoreVectors.CmpLtI32x16(LI32x16A, LI32x16B)), Integer(LMask16DataPlane), 'data-plane dispatch CmpLtI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask16All(LMask16Scalar), LDataPlane^.Dispatch^.Mask.Mask16All(LMask16DataPlane), 'data-plane dispatch Mask16All should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask16Any(LMask16Scalar), LDataPlane^.Dispatch^.Mask.Mask16Any(LMask16DataPlane), 'data-plane dispatch Mask16Any should match scalar helper case=' + IntToStr(LCaseIdx));
     CheckEqual(ScalarMask16None(LMask16Scalar), LDataPlane^.Dispatch^.Mask.Mask16None(LMask16DataPlane), 'data-plane dispatch Mask16None should match scalar helper case=' + IntToStr(LCaseIdx));
@@ -597,75 +597,75 @@ begin
   CheckNotNil(LDirectDispatch, 'direct dispatch table should be assigned for wide bitwise/shift snapshot test');
   CheckTrue(LDataPlane^.Dispatch = LDispatch, 'data-plane dispatch should match current dispatch for wide bitwise/shift snapshot test');
 
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AndNotI32x16), 'data-plane dispatch AndNotI32x16 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.ShiftLeftI32x16), 'data-plane dispatch ShiftLeftI32x16 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.ShiftRightArithI32x16), 'data-plane dispatch ShiftRightArithI32x16 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AndNotI64x4), 'data-plane dispatch AndNotI64x4 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.ShiftRightArithI64x4), 'data-plane dispatch ShiftRightArithI64x4 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AndI64x8), 'data-plane dispatch AndI64x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.OrI64x8), 'data-plane dispatch OrI64x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.XorI64x8), 'data-plane dispatch XorI64x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.NotI64x8), 'data-plane dispatch NotI64x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.ShiftRightI64x4), 'data-plane dispatch ShiftRightI64x4 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AndNotI32x16), 'data-plane dispatch AndNotI32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.ShiftLeftI32x16), 'data-plane dispatch ShiftLeftI32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.ShiftRightArithI32x16), 'data-plane dispatch ShiftRightArithI32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AndNotI64x4), 'data-plane dispatch AndNotI64x4 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.ShiftRightArithI64x4), 'data-plane dispatch ShiftRightArithI64x4 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AndI64x8), 'data-plane dispatch AndI64x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.OrI64x8), 'data-plane dispatch OrI64x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.XorI64x8), 'data-plane dispatch XorI64x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.NotI64x8), 'data-plane dispatch NotI64x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.ShiftRightI64x4), 'data-plane dispatch ShiftRightI64x4 should be assigned');
 
   for LCaseIdx := 0 to 2 do
   begin
     LoadCase(LCaseIdx);
 
-    LI32x16DataPlane := LDataPlane^.Dispatch^.AndNotI32x16(LI32x16A, LI32x16B);
+    LI32x16DataPlane := LDataPlane^.Dispatch^.CoreVectors.AndNotI32x16(LI32x16A, LI32x16B);
     LI32x16Scalar := ScalarAndNotI32x16(LI32x16A, LI32x16B);
     AssertVecI32x16Equal('data-plane dispatch AndNotI32x16 should match scalar semantics case=' + IntToStr(LCaseIdx), LI32x16Scalar, LI32x16DataPlane);
-    AssertVecI32x16Equal('data-plane dispatch AndNotI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AndNotI32x16(LI32x16A, LI32x16B), LI32x16DataPlane);
+    AssertVecI32x16Equal('data-plane dispatch AndNotI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AndNotI32x16(LI32x16A, LI32x16B), LI32x16DataPlane);
 
-    LI64x4DataPlane := LDataPlane^.Dispatch^.AndNotI64x4(LI64x4A, LI64x4B);
+    LI64x4DataPlane := LDataPlane^.Dispatch^.CoreVectors.AndNotI64x4(LI64x4A, LI64x4B);
     LI64x4Scalar := ScalarAndNotI64x4(LI64x4A, LI64x4B);
     AssertVecI64x4Equal('data-plane dispatch AndNotI64x4 should match scalar semantics case=' + IntToStr(LCaseIdx), LI64x4Scalar, LI64x4DataPlane);
-    AssertVecI64x4Equal('data-plane dispatch AndNotI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AndNotI64x4(LI64x4A, LI64x4B), LI64x4DataPlane);
+    AssertVecI64x4Equal('data-plane dispatch AndNotI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AndNotI64x4(LI64x4A, LI64x4B), LI64x4DataPlane);
 
-    LI64x8DataPlane := LDataPlane^.Dispatch^.AndI64x8(LI64x8A, LI64x8B);
+    LI64x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.AndI64x8(LI64x8A, LI64x8B);
     LI64x8Scalar := ScalarAndI64x8(LI64x8A, LI64x8B);
     AssertVecI64x8Equal('data-plane dispatch AndI64x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LI64x8Scalar, LI64x8DataPlane);
-    AssertVecI64x8Equal('data-plane dispatch AndI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AndI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
+    AssertVecI64x8Equal('data-plane dispatch AndI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AndI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
 
-    LI64x8DataPlane := LDataPlane^.Dispatch^.OrI64x8(LI64x8A, LI64x8B);
+    LI64x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.OrI64x8(LI64x8A, LI64x8B);
     LI64x8Scalar := ScalarOrI64x8(LI64x8A, LI64x8B);
     AssertVecI64x8Equal('data-plane dispatch OrI64x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LI64x8Scalar, LI64x8DataPlane);
-    AssertVecI64x8Equal('data-plane dispatch OrI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.OrI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
+    AssertVecI64x8Equal('data-plane dispatch OrI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.OrI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
 
-    LI64x8DataPlane := LDataPlane^.Dispatch^.XorI64x8(LI64x8A, LI64x8B);
+    LI64x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.XorI64x8(LI64x8A, LI64x8B);
     LI64x8Scalar := ScalarXorI64x8(LI64x8A, LI64x8B);
     AssertVecI64x8Equal('data-plane dispatch XorI64x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LI64x8Scalar, LI64x8DataPlane);
-    AssertVecI64x8Equal('data-plane dispatch XorI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.XorI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
+    AssertVecI64x8Equal('data-plane dispatch XorI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.XorI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
 
-    LI64x8DataPlane := LDataPlane^.Dispatch^.NotI64x8(LI64x8A);
+    LI64x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.NotI64x8(LI64x8A);
     LI64x8Scalar := ScalarNotI64x8(LI64x8A);
     AssertVecI64x8Equal('data-plane dispatch NotI64x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LI64x8Scalar, LI64x8DataPlane);
-    AssertVecI64x8Equal('data-plane dispatch NotI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.NotI64x8(LI64x8A), LI64x8DataPlane);
+    AssertVecI64x8Equal('data-plane dispatch NotI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.NotI64x8(LI64x8A), LI64x8DataPlane);
 
     for LShiftIndex := 0 to High(C_SHIFT32) do
     begin
-      LI32x16DataPlane := LDataPlane^.Dispatch^.ShiftLeftI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
+      LI32x16DataPlane := LDataPlane^.Dispatch^.CoreVectors.ShiftLeftI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
       LI32x16Scalar := ScalarShiftLeftI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
       AssertVecI32x16Equal('data-plane dispatch ShiftLeftI32x16 should match scalar semantics case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT32[LShiftIndex]), LI32x16Scalar, LI32x16DataPlane);
-      AssertVecI32x16Equal('data-plane dispatch ShiftLeftI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT32[LShiftIndex]), LDirectDispatch^.ShiftLeftI32x16(LI32x16A, C_SHIFT32[LShiftIndex]), LI32x16DataPlane);
+      AssertVecI32x16Equal('data-plane dispatch ShiftLeftI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT32[LShiftIndex]), LDirectDispatch^.CoreVectors.ShiftLeftI32x16(LI32x16A, C_SHIFT32[LShiftIndex]), LI32x16DataPlane);
 
-      LI32x16DataPlane := LDataPlane^.Dispatch^.ShiftRightArithI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
+      LI32x16DataPlane := LDataPlane^.Dispatch^.CoreVectors.ShiftRightArithI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
       LI32x16Scalar := ScalarShiftRightArithI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
       AssertVecI32x16Equal('data-plane dispatch ShiftRightArithI32x16 should match scalar semantics case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT32[LShiftIndex]), LI32x16Scalar, LI32x16DataPlane);
-      AssertVecI32x16Equal('data-plane dispatch ShiftRightArithI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT32[LShiftIndex]), LDirectDispatch^.ShiftRightArithI32x16(LI32x16A, C_SHIFT32[LShiftIndex]), LI32x16DataPlane);
+      AssertVecI32x16Equal('data-plane dispatch ShiftRightArithI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT32[LShiftIndex]), LDirectDispatch^.CoreVectors.ShiftRightArithI32x16(LI32x16A, C_SHIFT32[LShiftIndex]), LI32x16DataPlane);
     end;
 
     for LShiftIndex := 0 to High(C_SHIFT64) do
     begin
-      LI64x4DataPlane := LDataPlane^.Dispatch^.ShiftRightI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
+      LI64x4DataPlane := LDataPlane^.Dispatch^.CoreVectors.ShiftRightI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
       LI64x4Scalar := ScalarShiftRightI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
       AssertVecI64x4Equal('data-plane dispatch ShiftRightI64x4 should match scalar semantics case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT64[LShiftIndex]), LI64x4Scalar, LI64x4DataPlane);
-      AssertVecI64x4Equal('data-plane dispatch ShiftRightI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT64[LShiftIndex]), LDirectDispatch^.ShiftRightI64x4(LI64x4A, C_SHIFT64[LShiftIndex]), LI64x4DataPlane);
+      AssertVecI64x4Equal('data-plane dispatch ShiftRightI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT64[LShiftIndex]), LDirectDispatch^.CoreVectors.ShiftRightI64x4(LI64x4A, C_SHIFT64[LShiftIndex]), LI64x4DataPlane);
 
-      LI64x4DataPlane := LDataPlane^.Dispatch^.ShiftRightArithI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
+      LI64x4DataPlane := LDataPlane^.Dispatch^.CoreVectors.ShiftRightArithI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
       LI64x4Scalar := ScalarShiftRightArithI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
       AssertVecI64x4Equal('data-plane dispatch ShiftRightArithI64x4 should match scalar semantics case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT64[LShiftIndex]), LI64x4Scalar, LI64x4DataPlane);
-      AssertVecI64x4Equal('data-plane dispatch ShiftRightArithI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT64[LShiftIndex]), LDirectDispatch^.ShiftRightArithI64x4(LI64x4A, C_SHIFT64[LShiftIndex]), LI64x4DataPlane);
+      AssertVecI64x4Equal('data-plane dispatch ShiftRightArithI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx) + ' shift=' + IntToStr(C_SHIFT64[LShiftIndex]), LDirectDispatch^.CoreVectors.ShiftRightArithI64x4(LI64x4A, C_SHIFT64[LShiftIndex]), LI64x4DataPlane);
     end;
   end;
 end;
@@ -1059,142 +1059,142 @@ begin
   CheckNotNil(LDirectDispatch, 'direct dispatch table should be assigned for wide arithmetic/minmax snapshot test');
   CheckTrue(LDataPlane^.Dispatch = LDispatch, 'data-plane dispatch should match current dispatch for wide arithmetic/minmax snapshot test');
 
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AddI32x8), 'data-plane dispatch AddI32x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.MulI32x8), 'data-plane dispatch MulI32x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.SubI32x8), 'data-plane dispatch SubI32x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AddU32x8), 'data-plane dispatch AddU32x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.SubU32x8), 'data-plane dispatch SubU32x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.MulU32x8), 'data-plane dispatch MulU32x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.MinU32x8), 'data-plane dispatch MinU32x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.MaxU32x8), 'data-plane dispatch MaxU32x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AddI64x4), 'data-plane dispatch AddI64x4 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.SubI64x4), 'data-plane dispatch SubI64x4 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AddU64x4), 'data-plane dispatch AddU64x4 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.SubU64x4), 'data-plane dispatch SubU64x4 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AddI32x16), 'data-plane dispatch AddI32x16 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.MinI32x16), 'data-plane dispatch MinI32x16 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.MulI32x16), 'data-plane dispatch MulI32x16 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.MinU32x16), 'data-plane dispatch MinU32x16 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.MulU32x16), 'data-plane dispatch MulU32x16 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.MaxU32x16), 'data-plane dispatch MaxU32x16 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AddI64x8), 'data-plane dispatch AddI64x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.SubI64x8), 'data-plane dispatch SubI64x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.AddU64x8), 'data-plane dispatch AddU64x8 should be assigned');
-  CheckTrue(Assigned(LDataPlane^.Dispatch^.SubU64x8), 'data-plane dispatch SubU64x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AddI32x8), 'data-plane dispatch AddI32x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.MulI32x8), 'data-plane dispatch MulI32x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.SubI32x8), 'data-plane dispatch SubI32x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AddU32x8), 'data-plane dispatch AddU32x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.SubU32x8), 'data-plane dispatch SubU32x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.MulU32x8), 'data-plane dispatch MulU32x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.MinU32x8), 'data-plane dispatch MinU32x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.MaxU32x8), 'data-plane dispatch MaxU32x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AddI64x4), 'data-plane dispatch AddI64x4 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.SubI64x4), 'data-plane dispatch SubI64x4 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AddU64x4), 'data-plane dispatch AddU64x4 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.SubU64x4), 'data-plane dispatch SubU64x4 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AddI32x16), 'data-plane dispatch AddI32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.MinI32x16), 'data-plane dispatch MinI32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.MulI32x16), 'data-plane dispatch MulI32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.MinU32x16), 'data-plane dispatch MinU32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.MulU32x16), 'data-plane dispatch MulU32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.MaxU32x16), 'data-plane dispatch MaxU32x16 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AddI64x8), 'data-plane dispatch AddI64x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.SubI64x8), 'data-plane dispatch SubI64x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.AddU64x8), 'data-plane dispatch AddU64x8 should be assigned');
+  CheckTrue(Assigned(LDataPlane^.Dispatch^.CoreVectors.SubU64x8), 'data-plane dispatch SubU64x8 should be assigned');
 
   for LCaseIdx := 0 to 2 do
   begin
     LoadCase(LCaseIdx);
 
-    LI32x8DataPlane := LDataPlane^.Dispatch^.AddI32x8(LI32x8A, LI32x8B);
+    LI32x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.AddI32x8(LI32x8A, LI32x8B);
     LI32x8Scalar := ScalarAddI32x8(LI32x8A, LI32x8B);
     AssertVecI32x8Equal('data-plane dispatch AddI32x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LI32x8Scalar, LI32x8DataPlane);
-    AssertVecI32x8Equal('data-plane dispatch AddI32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AddI32x8(LI32x8A, LI32x8B), LI32x8DataPlane);
+    AssertVecI32x8Equal('data-plane dispatch AddI32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AddI32x8(LI32x8A, LI32x8B), LI32x8DataPlane);
 
-    LI32x8DataPlane := LDataPlane^.Dispatch^.MulI32x8(LI32x8A, LI32x8B);
+    LI32x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.MulI32x8(LI32x8A, LI32x8B);
     LI32x8Scalar := ScalarMulI32x8(LI32x8A, LI32x8B);
     AssertVecI32x8Equal('data-plane dispatch MulI32x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LI32x8Scalar, LI32x8DataPlane);
-    AssertVecI32x8Equal('data-plane dispatch MulI32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.MulI32x8(LI32x8A, LI32x8B), LI32x8DataPlane);
+    AssertVecI32x8Equal('data-plane dispatch MulI32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.MulI32x8(LI32x8A, LI32x8B), LI32x8DataPlane);
 
-    LI32x8DataPlane := LDataPlane^.Dispatch^.SubI32x8(LI32x8A, LI32x8B);
+    LI32x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.SubI32x8(LI32x8A, LI32x8B);
     LI32x8Scalar := ScalarSubI32x8(LI32x8A, LI32x8B);
     AssertVecI32x8Equal('data-plane dispatch SubI32x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LI32x8Scalar, LI32x8DataPlane);
-    AssertVecI32x8Equal('data-plane dispatch SubI32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.SubI32x8(LI32x8A, LI32x8B), LI32x8DataPlane);
+    AssertVecI32x8Equal('data-plane dispatch SubI32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.SubI32x8(LI32x8A, LI32x8B), LI32x8DataPlane);
 
-    LU32x8DataPlane := LDataPlane^.Dispatch^.AddU32x8(LU32x8A, LU32x8B);
+    LU32x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.AddU32x8(LU32x8A, LU32x8B);
     LU32x8Scalar := ScalarAddU32x8(LU32x8A, LU32x8B);
     AssertVecU32x8Equal('data-plane dispatch AddU32x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LU32x8Scalar, LU32x8DataPlane);
-    AssertVecU32x8Equal('data-plane dispatch AddU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AddU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
+    AssertVecU32x8Equal('data-plane dispatch AddU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AddU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
 
-    LU32x8DataPlane := LDataPlane^.Dispatch^.SubU32x8(LU32x8A, LU32x8B);
+    LU32x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.SubU32x8(LU32x8A, LU32x8B);
     LU32x8Scalar := ScalarSubU32x8(LU32x8A, LU32x8B);
     AssertVecU32x8Equal('data-plane dispatch SubU32x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LU32x8Scalar, LU32x8DataPlane);
-    AssertVecU32x8Equal('data-plane dispatch SubU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.SubU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
+    AssertVecU32x8Equal('data-plane dispatch SubU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.SubU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
 
-    LU32x8DataPlane := LDataPlane^.Dispatch^.MulU32x8(LU32x8A, LU32x8B);
+    LU32x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.MulU32x8(LU32x8A, LU32x8B);
     LU32x8Scalar := ScalarMulU32x8(LU32x8A, LU32x8B);
     AssertVecU32x8Equal('data-plane dispatch MulU32x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LU32x8Scalar, LU32x8DataPlane);
-    AssertVecU32x8Equal('data-plane dispatch MulU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.MulU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
+    AssertVecU32x8Equal('data-plane dispatch MulU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.MulU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
 
-    LU32x8DataPlane := LDataPlane^.Dispatch^.MinU32x8(LU32x8A, LU32x8B);
+    LU32x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.MinU32x8(LU32x8A, LU32x8B);
     LU32x8Scalar := ScalarMinU32x8(LU32x8A, LU32x8B);
     AssertVecU32x8Equal('data-plane dispatch MinU32x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LU32x8Scalar, LU32x8DataPlane);
-    AssertVecU32x8Equal('data-plane dispatch MinU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.MinU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
+    AssertVecU32x8Equal('data-plane dispatch MinU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.MinU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
 
-    LU32x8DataPlane := LDataPlane^.Dispatch^.MaxU32x8(LU32x8A, LU32x8B);
+    LU32x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.MaxU32x8(LU32x8A, LU32x8B);
     LU32x8Scalar := ScalarMaxU32x8(LU32x8A, LU32x8B);
     AssertVecU32x8Equal('data-plane dispatch MaxU32x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LU32x8Scalar, LU32x8DataPlane);
-    AssertVecU32x8Equal('data-plane dispatch MaxU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.MaxU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
+    AssertVecU32x8Equal('data-plane dispatch MaxU32x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.MaxU32x8(LU32x8A, LU32x8B), LU32x8DataPlane);
 
-    LI64x4DataPlane := LDataPlane^.Dispatch^.AddI64x4(LI64x4A, LI64x4B);
+    LI64x4DataPlane := LDataPlane^.Dispatch^.CoreVectors.AddI64x4(LI64x4A, LI64x4B);
     LI64x4Scalar := ScalarAddI64x4(LI64x4A, LI64x4B);
     AssertVecI64x4Equal('data-plane dispatch AddI64x4 should match scalar semantics case=' + IntToStr(LCaseIdx), LI64x4Scalar, LI64x4DataPlane);
-    AssertVecI64x4Equal('data-plane dispatch AddI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AddI64x4(LI64x4A, LI64x4B), LI64x4DataPlane);
+    AssertVecI64x4Equal('data-plane dispatch AddI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AddI64x4(LI64x4A, LI64x4B), LI64x4DataPlane);
 
-    LI64x4DataPlane := LDataPlane^.Dispatch^.SubI64x4(LI64x4A, LI64x4B);
+    LI64x4DataPlane := LDataPlane^.Dispatch^.CoreVectors.SubI64x4(LI64x4A, LI64x4B);
     LI64x4Scalar := ScalarSubI64x4(LI64x4A, LI64x4B);
     AssertVecI64x4Equal('data-plane dispatch SubI64x4 should match scalar semantics case=' + IntToStr(LCaseIdx), LI64x4Scalar, LI64x4DataPlane);
-    AssertVecI64x4Equal('data-plane dispatch SubI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.SubI64x4(LI64x4A, LI64x4B), LI64x4DataPlane);
+    AssertVecI64x4Equal('data-plane dispatch SubI64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.SubI64x4(LI64x4A, LI64x4B), LI64x4DataPlane);
 
-    LU64x4DataPlane := LDataPlane^.Dispatch^.AddU64x4(LU64x4A, LU64x4B);
+    LU64x4DataPlane := LDataPlane^.Dispatch^.CoreVectors.AddU64x4(LU64x4A, LU64x4B);
     LU64x4Scalar := ScalarAddU64x4(LU64x4A, LU64x4B);
     AssertVecU64x4Equal('data-plane dispatch AddU64x4 should match scalar semantics case=' + IntToStr(LCaseIdx), LU64x4Scalar, LU64x4DataPlane);
-    AssertVecU64x4Equal('data-plane dispatch AddU64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AddU64x4(LU64x4A, LU64x4B), LU64x4DataPlane);
+    AssertVecU64x4Equal('data-plane dispatch AddU64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AddU64x4(LU64x4A, LU64x4B), LU64x4DataPlane);
 
-    LU64x4DataPlane := LDataPlane^.Dispatch^.SubU64x4(LU64x4A, LU64x4B);
+    LU64x4DataPlane := LDataPlane^.Dispatch^.CoreVectors.SubU64x4(LU64x4A, LU64x4B);
     LU64x4Scalar := ScalarSubU64x4(LU64x4A, LU64x4B);
     AssertVecU64x4Equal('data-plane dispatch SubU64x4 should match scalar semantics case=' + IntToStr(LCaseIdx), LU64x4Scalar, LU64x4DataPlane);
-    AssertVecU64x4Equal('data-plane dispatch SubU64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.SubU64x4(LU64x4A, LU64x4B), LU64x4DataPlane);
+    AssertVecU64x4Equal('data-plane dispatch SubU64x4 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.SubU64x4(LU64x4A, LU64x4B), LU64x4DataPlane);
 
-    LI32x16DataPlane := LDataPlane^.Dispatch^.AddI32x16(LI32x16A, LI32x16B);
+    LI32x16DataPlane := LDataPlane^.Dispatch^.CoreVectors.AddI32x16(LI32x16A, LI32x16B);
     LI32x16Scalar := ScalarAddI32x16(LI32x16A, LI32x16B);
     AssertVecI32x16Equal('data-plane dispatch AddI32x16 should match scalar semantics case=' + IntToStr(LCaseIdx), LI32x16Scalar, LI32x16DataPlane);
-    AssertVecI32x16Equal('data-plane dispatch AddI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AddI32x16(LI32x16A, LI32x16B), LI32x16DataPlane);
+    AssertVecI32x16Equal('data-plane dispatch AddI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AddI32x16(LI32x16A, LI32x16B), LI32x16DataPlane);
 
-    LI32x16DataPlane := LDataPlane^.Dispatch^.MinI32x16(LI32x16A, LI32x16B);
+    LI32x16DataPlane := LDataPlane^.Dispatch^.CoreVectors.MinI32x16(LI32x16A, LI32x16B);
     LI32x16Scalar := ScalarMinI32x16(LI32x16A, LI32x16B);
     AssertVecI32x16Equal('data-plane dispatch MinI32x16 should match scalar semantics case=' + IntToStr(LCaseIdx), LI32x16Scalar, LI32x16DataPlane);
-    AssertVecI32x16Equal('data-plane dispatch MinI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.MinI32x16(LI32x16A, LI32x16B), LI32x16DataPlane);
+    AssertVecI32x16Equal('data-plane dispatch MinI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.MinI32x16(LI32x16A, LI32x16B), LI32x16DataPlane);
 
-    LI32x16DataPlane := LDataPlane^.Dispatch^.MulI32x16(LI32x16A, LI32x16B);
+    LI32x16DataPlane := LDataPlane^.Dispatch^.CoreVectors.MulI32x16(LI32x16A, LI32x16B);
     LI32x16Scalar := ScalarMulI32x16(LI32x16A, LI32x16B);
     AssertVecI32x16Equal('data-plane dispatch MulI32x16 should match scalar semantics case=' + IntToStr(LCaseIdx), LI32x16Scalar, LI32x16DataPlane);
-    AssertVecI32x16Equal('data-plane dispatch MulI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.MulI32x16(LI32x16A, LI32x16B), LI32x16DataPlane);
+    AssertVecI32x16Equal('data-plane dispatch MulI32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.MulI32x16(LI32x16A, LI32x16B), LI32x16DataPlane);
 
-    LU32x16DataPlane := LDataPlane^.Dispatch^.MulU32x16(LU32x16A, LU32x16B);
+    LU32x16DataPlane := LDataPlane^.Dispatch^.CoreVectors.MulU32x16(LU32x16A, LU32x16B);
     LU32x16Scalar := ScalarMulU32x16(LU32x16A, LU32x16B);
     AssertVecU32x16Equal('data-plane dispatch MulU32x16 should match scalar semantics case=' + IntToStr(LCaseIdx), LU32x16Scalar, LU32x16DataPlane);
-    AssertVecU32x16Equal('data-plane dispatch MulU32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.MulU32x16(LU32x16A, LU32x16B), LU32x16DataPlane);
+    AssertVecU32x16Equal('data-plane dispatch MulU32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.MulU32x16(LU32x16A, LU32x16B), LU32x16DataPlane);
 
-    LU32x16DataPlane := LDataPlane^.Dispatch^.MinU32x16(LU32x16A, LU32x16B);
+    LU32x16DataPlane := LDataPlane^.Dispatch^.CoreVectors.MinU32x16(LU32x16A, LU32x16B);
     LU32x16Scalar := ScalarMinU32x16(LU32x16A, LU32x16B);
     AssertVecU32x16Equal('data-plane dispatch MinU32x16 should match scalar semantics case=' + IntToStr(LCaseIdx), LU32x16Scalar, LU32x16DataPlane);
-    AssertVecU32x16Equal('data-plane dispatch MinU32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.MinU32x16(LU32x16A, LU32x16B), LU32x16DataPlane);
+    AssertVecU32x16Equal('data-plane dispatch MinU32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.MinU32x16(LU32x16A, LU32x16B), LU32x16DataPlane);
 
-    LU32x16DataPlane := LDataPlane^.Dispatch^.MaxU32x16(LU32x16A, LU32x16B);
+    LU32x16DataPlane := LDataPlane^.Dispatch^.CoreVectors.MaxU32x16(LU32x16A, LU32x16B);
     LU32x16Scalar := ScalarMaxU32x16(LU32x16A, LU32x16B);
     AssertVecU32x16Equal('data-plane dispatch MaxU32x16 should match scalar semantics case=' + IntToStr(LCaseIdx), LU32x16Scalar, LU32x16DataPlane);
-    AssertVecU32x16Equal('data-plane dispatch MaxU32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.MaxU32x16(LU32x16A, LU32x16B), LU32x16DataPlane);
+    AssertVecU32x16Equal('data-plane dispatch MaxU32x16 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.MaxU32x16(LU32x16A, LU32x16B), LU32x16DataPlane);
 
-    LI64x8DataPlane := LDataPlane^.Dispatch^.AddI64x8(LI64x8A, LI64x8B);
+    LI64x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.AddI64x8(LI64x8A, LI64x8B);
     LI64x8Scalar := ScalarAddI64x8(LI64x8A, LI64x8B);
     AssertVecI64x8Equal('data-plane dispatch AddI64x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LI64x8Scalar, LI64x8DataPlane);
-    AssertVecI64x8Equal('data-plane dispatch AddI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AddI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
+    AssertVecI64x8Equal('data-plane dispatch AddI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AddI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
 
-    LI64x8DataPlane := LDataPlane^.Dispatch^.SubI64x8(LI64x8A, LI64x8B);
+    LI64x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.SubI64x8(LI64x8A, LI64x8B);
     LI64x8Scalar := ScalarSubI64x8(LI64x8A, LI64x8B);
     AssertVecI64x8Equal('data-plane dispatch SubI64x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LI64x8Scalar, LI64x8DataPlane);
-    AssertVecI64x8Equal('data-plane dispatch SubI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.SubI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
+    AssertVecI64x8Equal('data-plane dispatch SubI64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.SubI64x8(LI64x8A, LI64x8B), LI64x8DataPlane);
 
-    LU64x8DataPlane := LDataPlane^.Dispatch^.AddU64x8(LU64x8A, LU64x8B);
+    LU64x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.AddU64x8(LU64x8A, LU64x8B);
     LU64x8Scalar := ScalarAddU64x8(LU64x8A, LU64x8B);
     AssertVecU64x8Equal('data-plane dispatch AddU64x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LU64x8Scalar, LU64x8DataPlane);
-    AssertVecU64x8Equal('data-plane dispatch AddU64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.AddU64x8(LU64x8A, LU64x8B), LU64x8DataPlane);
+    AssertVecU64x8Equal('data-plane dispatch AddU64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.AddU64x8(LU64x8A, LU64x8B), LU64x8DataPlane);
 
-    LU64x8DataPlane := LDataPlane^.Dispatch^.SubU64x8(LU64x8A, LU64x8B);
+    LU64x8DataPlane := LDataPlane^.Dispatch^.CoreVectors.SubU64x8(LU64x8A, LU64x8B);
     LU64x8Scalar := ScalarSubU64x8(LU64x8A, LU64x8B);
     AssertVecU64x8Equal('data-plane dispatch SubU64x8 should match scalar semantics case=' + IntToStr(LCaseIdx), LU64x8Scalar, LU64x8DataPlane);
-    AssertVecU64x8Equal('data-plane dispatch SubU64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.SubU64x8(LU64x8A, LU64x8B), LU64x8DataPlane);
+    AssertVecU64x8Equal('data-plane dispatch SubU64x8 should match direct dispatch case=' + IntToStr(LCaseIdx), LDirectDispatch^.CoreVectors.SubU64x8(LU64x8A, LU64x8B), LU64x8DataPlane);
   end;
 end;
 

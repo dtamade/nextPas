@@ -39,17 +39,17 @@ begin
   // Override vector operations with SSE2-accelerated versions
   if LUseVectorAsm then
   begin
-    dispatchTable.AddF32x4 := @SSE2AddF32x4_i386;
-    dispatchTable.SubF32x4 := @SSE2SubF32x4_i386;
-    dispatchTable.MulF32x4 := @SSE2MulF32x4_i386;
-    dispatchTable.DivF32x4 := @SSE2DivF32x4_i386;
-    dispatchTable.AddI32x4 := @SSE2AddI32x4_i386;
-    dispatchTable.SubI32x4 := @SSE2SubI32x4_i386;
-    dispatchTable.MulI32x4 := @SSE2MulI32x4_i386;
-    dispatchTable.AddF64x2 := @SSE2AddF64x2_i386;
-    dispatchTable.SubF64x2 := @SSE2SubF64x2_i386;
-    dispatchTable.MulF64x2 := @SSE2MulF64x2_i386;
-    dispatchTable.DivF64x2 := @SSE2DivF64x2_i386;
+    dispatchTable.CoreVectors.AddF32x4 := @SSE2AddF32x4_i386;
+    dispatchTable.CoreVectors.SubF32x4 := @SSE2SubF32x4_i386;
+    dispatchTable.CoreVectors.MulF32x4 := @SSE2MulF32x4_i386;
+    dispatchTable.CoreVectors.DivF32x4 := @SSE2DivF32x4_i386;
+    dispatchTable.CoreVectors.AddI32x4 := @SSE2AddI32x4_i386;
+    dispatchTable.CoreVectors.SubI32x4 := @SSE2SubI32x4_i386;
+    dispatchTable.CoreVectors.MulI32x4 := @SSE2MulI32x4_i386;
+    dispatchTable.CoreVectors.AddF64x2 := @SSE2AddF64x2_i386;
+    dispatchTable.CoreVectors.SubF64x2 := @SSE2SubF64x2_i386;
+    dispatchTable.CoreVectors.MulF64x2 := @SSE2MulF64x2_i386;
+    dispatchTable.CoreVectors.DivF64x2 := @SSE2DivF64x2_i386;
   end;
 
   // Register the backend

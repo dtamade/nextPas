@@ -117,8 +117,8 @@ function VecU32x4CmpNe(const a, b: TVecU32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpNeU32x4) then
-    Result := dispatch^.CmpNeU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpNeU32x4) then
+    Result := dispatch^.CoreVectors.CmpNeU32x4(a, b)
   else
   begin
     Result := 0;

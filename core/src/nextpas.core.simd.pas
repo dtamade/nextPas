@@ -2419,56 +2419,56 @@ function VecI8x16SatAdd(const a, b: TVecI8x16): TVecI8x16;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.I8x16SatAdd(a, b);
+  Result := dispatch^.CoreVectors.I8x16SatAdd(a, b);
 end;
 
 function VecI8x16SatSub(const a, b: TVecI8x16): TVecI8x16;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.I8x16SatSub(a, b);
+  Result := dispatch^.CoreVectors.I8x16SatSub(a, b);
 end;
 
 function VecI16x8SatAdd(const a, b: TVecI16x8): TVecI16x8;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.I16x8SatAdd(a, b);
+  Result := dispatch^.CoreVectors.I16x8SatAdd(a, b);
 end;
 
 function VecI16x8SatSub(const a, b: TVecI16x8): TVecI16x8;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.I16x8SatSub(a, b);
+  Result := dispatch^.CoreVectors.I16x8SatSub(a, b);
 end;
 
 function VecU8x16SatAdd(const a, b: TVecU8x16): TVecU8x16;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.U8x16SatAdd(a, b);
+  Result := dispatch^.CoreVectors.U8x16SatAdd(a, b);
 end;
 
 function VecU8x16SatSub(const a, b: TVecU8x16): TVecU8x16;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.U8x16SatSub(a, b);
+  Result := dispatch^.CoreVectors.U8x16SatSub(a, b);
 end;
 
 function VecU16x8SatAdd(const a, b: TVecU16x8): TVecU16x8;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.U16x8SatAdd(a, b);
+  Result := dispatch^.CoreVectors.U16x8SatAdd(a, b);
 end;
 
 function VecU16x8SatSub(const a, b: TVecU16x8): TVecU16x8;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.U16x8SatSub(a, b);
+  Result := dispatch^.CoreVectors.U16x8SatSub(a, b);
 end;
 
 // === Shuffle/Permute Operations (wrappers for simd.utils) ===

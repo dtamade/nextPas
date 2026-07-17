@@ -158,12 +158,12 @@ uses
 {$PUSH}{$R-}{$Q-}  // Disable overflow checks for wraparound semantics
 operator + (const a, b: TVecI64x2): TVecI64x2;
 begin
-  Result := GetDirectDispatchTable^.AddI64x2(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddI64x2(a, b);
 end;
 
 operator - (const a, b: TVecI64x2): TVecI64x2;
 begin
-  Result := GetDirectDispatchTable^.SubI64x2(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubI64x2(a, b);
 end;
 
 operator - (const a: TVecI64x2): TVecI64x2;
@@ -202,132 +202,132 @@ end;
 
 operator + (const a, b: TVecU32x4): TVecU32x4;
 begin
-  Result := GetDirectDispatchTable^.AddU32x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddU32x4(a, b);
 end;
 
 operator - (const a, b: TVecU32x4): TVecU32x4;
 begin
-  Result := GetDirectDispatchTable^.SubU32x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubU32x4(a, b);
 end;
 
 operator * (const a, b: TVecU32x4): TVecU32x4;
 begin
-  Result := GetDirectDispatchTable^.MulU32x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.MulU32x4(a, b);
 end;
 
 operator and (const a, b: TVecU32x4): TVecU32x4;
 begin
-  Result := GetDirectDispatchTable^.AndU32x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AndU32x4(a, b);
 end;
 
 operator or (const a, b: TVecU32x4): TVecU32x4;
 begin
-  Result := GetDirectDispatchTable^.OrU32x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.OrU32x4(a, b);
 end;
 
 operator xor (const a, b: TVecU32x4): TVecU32x4;
 begin
-  Result := GetDirectDispatchTable^.XorU32x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.XorU32x4(a, b);
 end;
 
 operator not (const a: TVecU32x4): TVecU32x4;
 begin
-  Result := GetDirectDispatchTable^.NotU32x4(a);
+  Result := GetDirectDispatchTable^.CoreVectors.NotU32x4(a);
 end;
 
 operator + (const a, b: TVecU64x2): TVecU64x2;
 begin
-  Result := GetDirectDispatchTable^.AddU64x2(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddU64x2(a, b);
 end;
 
 operator - (const a, b: TVecU64x2): TVecU64x2;
 begin
-  Result := GetDirectDispatchTable^.SubU64x2(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubU64x2(a, b);
 end;
 
 operator and (const a, b: TVecU64x2): TVecU64x2;
 begin
-  Result := GetDirectDispatchTable^.AndU64x2(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AndU64x2(a, b);
 end;
 
 operator or (const a, b: TVecU64x2): TVecU64x2;
 begin
-  Result := GetDirectDispatchTable^.OrU64x2(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.OrU64x2(a, b);
 end;
 
 operator xor (const a, b: TVecU64x2): TVecU64x2;
 begin
-  Result := GetDirectDispatchTable^.XorU64x2(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.XorU64x2(a, b);
 end;
 
 operator not (const a: TVecU64x2): TVecU64x2;
 begin
-  Result := GetDirectDispatchTable^.NotU64x2(a);
+  Result := GetDirectDispatchTable^.CoreVectors.NotU64x2(a);
 end;
 
 operator + (const a, b: TVecU16x8): TVecU16x8;
 begin
-  Result := GetDirectDispatchTable^.AddU16x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddU16x8(a, b);
 end;
 
 operator - (const a, b: TVecU16x8): TVecU16x8;
 begin
-  Result := GetDirectDispatchTable^.SubU16x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubU16x8(a, b);
 end;
 
 operator * (const a, b: TVecU16x8): TVecU16x8;
 begin
-  Result := GetDirectDispatchTable^.MulU16x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.MulU16x8(a, b);
 end;
 
 operator and (const a, b: TVecU16x8): TVecU16x8;
 begin
-  Result := GetDirectDispatchTable^.AndU16x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AndU16x8(a, b);
 end;
 
 operator or (const a, b: TVecU16x8): TVecU16x8;
 begin
-  Result := GetDirectDispatchTable^.OrU16x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.OrU16x8(a, b);
 end;
 
 operator xor (const a, b: TVecU16x8): TVecU16x8;
 begin
-  Result := GetDirectDispatchTable^.XorU16x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.XorU16x8(a, b);
 end;
 
 operator not (const a: TVecU16x8): TVecU16x8;
 begin
-  Result := GetDirectDispatchTable^.NotU16x8(a);
+  Result := GetDirectDispatchTable^.CoreVectors.NotU16x8(a);
 end;
 
 operator + (const a, b: TVecU8x16): TVecU8x16;
 begin
-  Result := GetDirectDispatchTable^.AddU8x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddU8x16(a, b);
 end;
 
 operator - (const a, b: TVecU8x16): TVecU8x16;
 begin
-  Result := GetDirectDispatchTable^.SubU8x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubU8x16(a, b);
 end;
 
 operator and (const a, b: TVecU8x16): TVecU8x16;
 begin
-  Result := GetDirectDispatchTable^.AndU8x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AndU8x16(a, b);
 end;
 
 operator or (const a, b: TVecU8x16): TVecU8x16;
 begin
-  Result := GetDirectDispatchTable^.OrU8x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.OrU8x16(a, b);
 end;
 
 operator xor (const a, b: TVecU8x16): TVecU8x16;
 begin
-  Result := GetDirectDispatchTable^.XorU8x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.XorU8x16(a, b);
 end;
 
 operator not (const a: TVecU8x16): TVecU8x16;
 begin
-  Result := GetDirectDispatchTable^.NotU8x16(a);
+  Result := GetDirectDispatchTable^.CoreVectors.NotU8x16(a);
 end;
 
 {$POP}
@@ -337,22 +337,22 @@ end;
 
 operator + (const a, b: TVecF32x8): TVecF32x8;
 begin
-  Result := GetDirectDispatchTable^.AddF32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddF32x8(a, b);
 end;
 
 operator - (const a, b: TVecF32x8): TVecF32x8;
 begin
-  Result := GetDirectDispatchTable^.SubF32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubF32x8(a, b);
 end;
 
 operator * (const a, b: TVecF32x8): TVecF32x8;
 begin
-  Result := GetDirectDispatchTable^.MulF32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.MulF32x8(a, b);
 end;
 
 operator / (const a, b: TVecF32x8): TVecF32x8;
 begin
-  Result := GetDirectDispatchTable^.DivF32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.DivF32x8(a, b);
 end;
 
 operator - (const a: TVecF32x8): TVecF32x8;
@@ -368,22 +368,22 @@ end;
 
 operator + (const a, b: TVecF64x4): TVecF64x4;
 begin
-  Result := GetDirectDispatchTable^.AddF64x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddF64x4(a, b);
 end;
 
 operator - (const a, b: TVecF64x4): TVecF64x4;
 begin
-  Result := GetDirectDispatchTable^.SubF64x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubF64x4(a, b);
 end;
 
 operator * (const a, b: TVecF64x4): TVecF64x4;
 begin
-  Result := GetDirectDispatchTable^.MulF64x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.MulF64x4(a, b);
 end;
 
 operator / (const a, b: TVecF64x4): TVecF64x4;
 begin
-  Result := GetDirectDispatchTable^.DivF64x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.DivF64x4(a, b);
 end;
 
 operator - (const a: TVecF64x4): TVecF64x4;
@@ -398,12 +398,12 @@ end;
 
 operator + (const a, b: TVecI32x8): TVecI32x8;
 begin
-  Result := GetDirectDispatchTable^.AddI32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddI32x8(a, b);
 end;
 
 operator - (const a, b: TVecI32x8): TVecI32x8;
 begin
-  Result := GetDirectDispatchTable^.SubI32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubI32x8(a, b);
 end;
 
 operator - (const a: TVecI32x8): TVecI32x8;
@@ -419,8 +419,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.MulI32x8) then
-    Result := dt^.MulI32x8(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.MulI32x8) then
+    Result := dt^.CoreVectors.MulI32x8(a, b)
   else
   begin
     for i := 0 to 7 do
@@ -434,8 +434,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.AndI32x8) then
-    Result := dt^.AndI32x8(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.AndI32x8) then
+    Result := dt^.CoreVectors.AndI32x8(a, b)
   else
   begin
     for i := 0 to 7 do
@@ -448,8 +448,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.OrI32x8) then
-    Result := dt^.OrI32x8(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.OrI32x8) then
+    Result := dt^.CoreVectors.OrI32x8(a, b)
   else
   begin
     for i := 0 to 7 do
@@ -462,8 +462,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.XorI32x8) then
-    Result := dt^.XorI32x8(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.XorI32x8) then
+    Result := dt^.CoreVectors.XorI32x8(a, b)
   else
   begin
     for i := 0 to 7 do
@@ -476,8 +476,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.NotI32x8) then
-    Result := dt^.NotI32x8(a)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.NotI32x8) then
+    Result := dt^.CoreVectors.NotI32x8(a)
   else
   begin
     for i := 0 to 7 do
@@ -490,67 +490,67 @@ end;
 
 operator + (const a, b: TVecU32x8): TVecU32x8;
 begin
-  Result := GetDirectDispatchTable^.AddU32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddU32x8(a, b);
 end;
 
 operator - (const a, b: TVecU32x8): TVecU32x8;
 begin
-  Result := GetDirectDispatchTable^.SubU32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubU32x8(a, b);
 end;
 
 operator * (const a, b: TVecU32x8): TVecU32x8;
 begin
-  Result := GetDirectDispatchTable^.MulU32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.MulU32x8(a, b);
 end;
 
 operator and (const a, b: TVecU32x8): TVecU32x8;
 begin
-  Result := GetDirectDispatchTable^.AndU32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AndU32x8(a, b);
 end;
 
 operator or (const a, b: TVecU32x8): TVecU32x8;
 begin
-  Result := GetDirectDispatchTable^.OrU32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.OrU32x8(a, b);
 end;
 
 operator xor (const a, b: TVecU32x8): TVecU32x8;
 begin
-  Result := GetDirectDispatchTable^.XorU32x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.XorU32x8(a, b);
 end;
 
 operator not (const a: TVecU32x8): TVecU32x8;
 begin
-  Result := GetDirectDispatchTable^.NotU32x8(a);
+  Result := GetDirectDispatchTable^.CoreVectors.NotU32x8(a);
 end;
 
 operator + (const a, b: TVecU64x4): TVecU64x4;
 begin
-  Result := GetDirectDispatchTable^.AddU64x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddU64x4(a, b);
 end;
 
 operator - (const a, b: TVecU64x4): TVecU64x4;
 begin
-  Result := GetDirectDispatchTable^.SubU64x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubU64x4(a, b);
 end;
 
 operator and (const a, b: TVecU64x4): TVecU64x4;
 begin
-  Result := GetDirectDispatchTable^.AndU64x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AndU64x4(a, b);
 end;
 
 operator or (const a, b: TVecU64x4): TVecU64x4;
 begin
-  Result := GetDirectDispatchTable^.OrU64x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.OrU64x4(a, b);
 end;
 
 operator xor (const a, b: TVecU64x4): TVecU64x4;
 begin
-  Result := GetDirectDispatchTable^.XorU64x4(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.XorU64x4(a, b);
 end;
 
 operator not (const a: TVecU64x4): TVecU64x4;
 begin
-  Result := GetDirectDispatchTable^.NotU64x4(a);
+  Result := GetDirectDispatchTable^.CoreVectors.NotU64x4(a);
 end;
 
 {$POP}
@@ -563,8 +563,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.AddF32x16) then
-    Result := dt^.AddF32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.AddF32x16) then
+    Result := dt^.CoreVectors.AddF32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -577,8 +577,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.SubF32x16) then
-    Result := dt^.SubF32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.SubF32x16) then
+    Result := dt^.CoreVectors.SubF32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -591,8 +591,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.MulF32x16) then
-    Result := dt^.MulF32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.MulF32x16) then
+    Result := dt^.CoreVectors.MulF32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -605,8 +605,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.DivF32x16) then
-    Result := dt^.DivF32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.DivF32x16) then
+    Result := dt^.CoreVectors.DivF32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -629,8 +629,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.AddF64x8) then
-    Result := dt^.AddF64x8(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.AddF64x8) then
+    Result := dt^.CoreVectors.AddF64x8(a, b)
   else
   begin
     for i := 0 to 7 do
@@ -643,8 +643,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.SubF64x8) then
-    Result := dt^.SubF64x8(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.SubF64x8) then
+    Result := dt^.CoreVectors.SubF64x8(a, b)
   else
   begin
     for i := 0 to 7 do
@@ -657,8 +657,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.MulF64x8) then
-    Result := dt^.MulF64x8(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.MulF64x8) then
+    Result := dt^.CoreVectors.MulF64x8(a, b)
   else
   begin
     for i := 0 to 7 do
@@ -671,8 +671,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.DivF64x8) then
-    Result := dt^.DivF64x8(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.DivF64x8) then
+    Result := dt^.CoreVectors.DivF64x8(a, b)
   else
   begin
     for i := 0 to 7 do
@@ -695,8 +695,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.AddI32x16) then
-    Result := dt^.AddI32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.AddI32x16) then
+    Result := dt^.CoreVectors.AddI32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -709,8 +709,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.SubI32x16) then
-    Result := dt^.SubI32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.SubI32x16) then
+    Result := dt^.CoreVectors.SubI32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -731,8 +731,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.MulI32x16) then
-    Result := dt^.MulI32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.MulI32x16) then
+    Result := dt^.CoreVectors.MulI32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -746,8 +746,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.AndI32x16) then
-    Result := dt^.AndI32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.AndI32x16) then
+    Result := dt^.CoreVectors.AndI32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -760,8 +760,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.OrI32x16) then
-    Result := dt^.OrI32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.OrI32x16) then
+    Result := dt^.CoreVectors.OrI32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -774,8 +774,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.XorI32x16) then
-    Result := dt^.XorI32x16(a, b)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.XorI32x16) then
+    Result := dt^.CoreVectors.XorI32x16(a, b)
   else
   begin
     for i := 0 to 15 do
@@ -788,8 +788,8 @@ var dt: PSimdDispatchTable;
     i: Integer;
 begin
   dt := GetDirectDispatchTable;
-  if (dt <> nil) and Assigned(dt^.NotI32x16) then
-    Result := dt^.NotI32x16(a)
+  if (dt <> nil) and Assigned(dt^.CoreVectors.NotI32x16) then
+    Result := dt^.CoreVectors.NotI32x16(a)
   else
   begin
     for i := 0 to 15 do
@@ -802,97 +802,97 @@ end;
 
 operator + (const a, b: TVecU32x16): TVecU32x16;
 begin
-  Result := GetDirectDispatchTable^.AddU32x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddU32x16(a, b);
 end;
 
 operator - (const a, b: TVecU32x16): TVecU32x16;
 begin
-  Result := GetDirectDispatchTable^.SubU32x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubU32x16(a, b);
 end;
 
 operator * (const a, b: TVecU32x16): TVecU32x16;
 begin
-  Result := GetDirectDispatchTable^.MulU32x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.MulU32x16(a, b);
 end;
 
 operator and (const a, b: TVecU32x16): TVecU32x16;
 begin
-  Result := GetDirectDispatchTable^.AndU32x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AndU32x16(a, b);
 end;
 
 operator or (const a, b: TVecU32x16): TVecU32x16;
 begin
-  Result := GetDirectDispatchTable^.OrU32x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.OrU32x16(a, b);
 end;
 
 operator xor (const a, b: TVecU32x16): TVecU32x16;
 begin
-  Result := GetDirectDispatchTable^.XorU32x16(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.XorU32x16(a, b);
 end;
 
 operator not (const a: TVecU32x16): TVecU32x16;
 begin
-  Result := GetDirectDispatchTable^.NotU32x16(a);
+  Result := GetDirectDispatchTable^.CoreVectors.NotU32x16(a);
 end;
 
 operator + (const a, b: TVecU64x8): TVecU64x8;
 begin
-  Result := GetDirectDispatchTable^.AddU64x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddU64x8(a, b);
 end;
 
 operator - (const a, b: TVecU64x8): TVecU64x8;
 begin
-  Result := GetDirectDispatchTable^.SubU64x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubU64x8(a, b);
 end;
 
 operator and (const a, b: TVecU64x8): TVecU64x8;
 begin
-  Result := GetDirectDispatchTable^.AndU64x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AndU64x8(a, b);
 end;
 
 operator or (const a, b: TVecU64x8): TVecU64x8;
 begin
-  Result := GetDirectDispatchTable^.OrU64x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.OrU64x8(a, b);
 end;
 
 operator xor (const a, b: TVecU64x8): TVecU64x8;
 begin
-  Result := GetDirectDispatchTable^.XorU64x8(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.XorU64x8(a, b);
 end;
 
 operator not (const a: TVecU64x8): TVecU64x8;
 begin
-  Result := GetDirectDispatchTable^.NotU64x8(a);
+  Result := GetDirectDispatchTable^.CoreVectors.NotU64x8(a);
 end;
 
 operator + (const a, b: TVecU8x64): TVecU8x64;
 begin
-  Result := GetDirectDispatchTable^.AddU8x64(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AddU8x64(a, b);
 end;
 
 operator - (const a, b: TVecU8x64): TVecU8x64;
 begin
-  Result := GetDirectDispatchTable^.SubU8x64(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.SubU8x64(a, b);
 end;
 
 operator and (const a, b: TVecU8x64): TVecU8x64;
 begin
-  Result := GetDirectDispatchTable^.AndU8x64(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.AndU8x64(a, b);
 end;
 
 operator or (const a, b: TVecU8x64): TVecU8x64;
 begin
-  Result := GetDirectDispatchTable^.OrU8x64(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.OrU8x64(a, b);
 end;
 
 operator xor (const a, b: TVecU8x64): TVecU8x64;
 begin
-  Result := GetDirectDispatchTable^.XorU8x64(a, b);
+  Result := GetDirectDispatchTable^.CoreVectors.XorU8x64(a, b);
 end;
 
 operator not (const a: TVecU8x64): TVecU8x64;
 begin
-  Result := GetDirectDispatchTable^.NotU8x64(a);
+  Result := GetDirectDispatchTable^.CoreVectors.NotU8x64(a);
 end;
 
 {$POP}

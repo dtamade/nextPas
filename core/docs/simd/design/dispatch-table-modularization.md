@@ -185,12 +185,16 @@ end;
 4. facade 公开 `Mem*`/`Mask*` API、accessor、dataplane、adapter map、text.utf8、相关 tests/benches 同步迁路径
 5. **保持不变**：`TNextPasSimdPublicApi` / V2 Public ABI 字段名仍 flat（`MemEqual`/`MemSet`/`SumBytes`…）；对外 facade 签名不变
 
-### Phase 5: CoreVectors 嵌表 (下一步)
-1. 定义 `TSimdCoreVectorOps`（types 尚无）并将 ~533 个向量 flat 槽迁入
-2. 机械路径迁移，零语义改动；强验证后单主题 commit
+### Phase 5: CoreVectors 嵌表 — ✅ (2026-07-17)
+1. 定义 `TSimdCoreVectorOps`（533 字段，字段名保持完整：`AddF32x4` / `SelectF32x16` / sat / AndNot…，不缩短为 `Add`）
+2. `TSimdDispatchTable` 中原 flat 向量槽全部迁入 `CoreVectors: TSimdCoreVectorOps`
+3. Scalar baseline、SSE2/SSE3/SSE4.1/SSE4.2/AVX2/AVX512/NEON/RVV register fill 改为 `dispatchTable.CoreVectors.*`
+4. facade / accessors / dataplane / adapter map / algorithms / arrays / ops / impl.* / tests / benches 同步迁路径
+5. source-contract `Pos('dispatchtable.corevectors.*')` 对齐（Fma/Select 宽向量等）
+6. **保持不变**：对外 facade 签名与 Public ABI 字段名仍 flat；仅内部 dispatch 访问路径变化
 
-### Phase 6: 清理和优化
-1. 移除过渡期 flat 残留与重复命名
+### Phase 6: 清理和优化 (下一步)
+1. 移除过渡期 flat 残留与重复命名（若有）
 2. NEON / RVV register 与 x86 路径对齐审计
 3. 更新基准测试与 roadmap 完成态
 

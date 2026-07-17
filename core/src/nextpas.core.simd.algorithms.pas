@@ -45,14 +45,14 @@ var
   LD: PSimdDispatchTable;
 begin
   LD := GetDirectDispatchTable;
-  if (LD <> nil) and Assigned(LD^.AddF32x8) then
+  if (LD <> nil) and Assigned(LD^.CoreVectors.AddF32x8) then
   begin
     Result.Width := sw256;
     Result.F32Lanes := 8;
     Result.F64Lanes := 4;
     Result.Alignment := 32;
   end
-  else if (LD <> nil) and Assigned(LD^.AddF32x4) then
+  else if (LD <> nil) and Assigned(LD^.CoreVectors.AddF32x4) then
   begin
     Result.Width := sw128;
     Result.F32Lanes := 4;

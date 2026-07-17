@@ -635,10 +635,10 @@ function DispatchTableRepresentativeSliceMatchesLocal(const aTable, aExpected: T
 begin
   Result := (aTable.Backend = aExpected.Backend) and
     BackendInfoMatchesLocal(aTable.BackendInfo, aExpected.BackendInfo) and
-    (Pointer(aTable.AddF32x4) = Pointer(aExpected.AddF32x4)) and
-    (Pointer(aTable.MulF32x4) = Pointer(aExpected.MulF32x4)) and
-    (Pointer(aTable.AddI32x4) = Pointer(aExpected.AddI32x4)) and
-    (Pointer(aTable.SelectF32x4) = Pointer(aExpected.SelectF32x4));
+    (Pointer(aTable.CoreVectors.AddF32x4) = Pointer(aExpected.CoreVectors.AddF32x4)) and
+    (Pointer(aTable.CoreVectors.MulF32x4) = Pointer(aExpected.CoreVectors.MulF32x4)) and
+    (Pointer(aTable.CoreVectors.AddI32x4) = Pointer(aExpected.CoreVectors.AddI32x4)) and
+    (Pointer(aTable.CoreVectors.SelectF32x4) = Pointer(aExpected.CoreVectors.SelectF32x4));
 end;
 
 function SameBackendArrayLocal(const aLeft, aRight: TSimdBackendArray): Boolean;
@@ -939,7 +939,7 @@ begin
       end;
 
       // 验证函数指针有效
-      if not Assigned(dt^.AddF32x4) then
+      if not Assigned(dt^.CoreVectors.AddF32x4) then
       begin
         FErrorMsg := TextFormat('Worker %d, iter %d: AddF32x4 not assigned', [FWorkerIndex, i]);
         Exit;
@@ -948,7 +948,7 @@ begin
       // 执行实际操作验证功能正常
       a := MakeSplatF32x4(1.0);
       b := MakeSplatF32x4(2.0);
-      c := dt^.AddF32x4(a, b);
+      c := dt^.CoreVectors.AddF32x4(a, b);
 
       if Abs(VecF32x4Extract(c, 0) - 3.0) > FLOAT_EPSILON then
       begin
@@ -1222,7 +1222,7 @@ begin
       end;
 
       LDispatch := GetDispatchTable;
-      if (LDispatch = nil) or (not Assigned(LDispatch^.AddF32x4)) then
+      if (LDispatch = nil) or (not Assigned(LDispatch^.CoreVectors.AddF32x4)) then
       begin
         FErrorMsg := TextFormat('dispatch unavailable at iter %d', [LIndex]);
         Exit;
@@ -1262,7 +1262,7 @@ begin
       SetVectorAsmEnabled(LTargetEnabled);
 
       LDispatch := GetDispatchTable;
-      if (LDispatch = nil) or (not Assigned(LDispatch^.SubF32x4)) then
+      if (LDispatch = nil) or (not Assigned(LDispatch^.CoreVectors.SubF32x4)) then
       begin
         FErrorMsg := TextFormat('multi-writer dispatch unavailable at iter %d', [LIndex]);
         Exit;
@@ -1270,7 +1270,7 @@ begin
 
       LA := MakeSplatF32x4(4.0);
       LB := MakeSplatF32x4(-1.0);
-      LC := LDispatch^.SubF32x4(LA, LB);
+      LC := LDispatch^.CoreVectors.SubF32x4(LA, LB);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - 5.0) > FLOAT_EPSILON then
       begin
@@ -1307,7 +1307,7 @@ begin
     for LIndex := 0 to FIterations - 1 do
     begin
       LDispatch := GetDispatchTable;
-      if (LDispatch = nil) or (not Assigned(LDispatch^.AddF32x4)) then
+      if (LDispatch = nil) or (not Assigned(LDispatch^.CoreVectors.AddF32x4)) then
       begin
         FErrorMsg := TextFormat('dispatch unavailable at iter %d', [LIndex]);
         Exit;
@@ -1315,7 +1315,7 @@ begin
 
       LA := MakeSplatF32x4(1.0);
       LB := MakeSplatF32x4(2.0);
-      LC := LDispatch^.AddF32x4(LA, LB);
+      LC := LDispatch^.CoreVectors.AddF32x4(LA, LB);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - 3.0) > FLOAT_EPSILON then
       begin
@@ -1759,9 +1759,9 @@ begin
          (not DispatchTableRepresentativeSliceMatchesLocal(LObservedTable, FExpectedTableB)) then
       begin
         FErrorMsg := TextFormat(
-          'backend ops mixed snapshot at iter %d: info=(%s) add=[A:%s B:%s] mul=[A:%s B:%s] addi=[A:%s B:%s] select=[A:%s B:%s]', [LIndex, DescribeBackendInfoLocal(LObservedTable.BackendInfo), BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableA.AddF32x4)),
-           BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableB.AddF32x4)), BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableA.MulF32x4)), BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableB.MulF32x4)), BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableA.AddI32x4)),
-           BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableB.AddI32x4)), BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableA.SelectF32x4)), BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableB.SelectF32x4))]);
+          'backend ops mixed snapshot at iter %d: info=(%s) add=[A:%s B:%s] mul=[A:%s B:%s] addi=[A:%s B:%s] select=[A:%s B:%s]', [LIndex, DescribeBackendInfoLocal(LObservedTable.BackendInfo), BoolToStr(Pointer(LObservedTable.CoreVectors.AddF32x4) = Pointer(FExpectedTableA.CoreVectors.AddF32x4)),
+           BoolToStr(Pointer(LObservedTable.CoreVectors.AddF32x4) = Pointer(FExpectedTableB.CoreVectors.AddF32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.MulF32x4) = Pointer(FExpectedTableA.CoreVectors.MulF32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.MulF32x4) = Pointer(FExpectedTableB.CoreVectors.MulF32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.AddI32x4) = Pointer(FExpectedTableA.CoreVectors.AddI32x4)),
+           BoolToStr(Pointer(LObservedTable.CoreVectors.AddI32x4) = Pointer(FExpectedTableB.CoreVectors.AddI32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.SelectF32x4) = Pointer(FExpectedTableA.CoreVectors.SelectF32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.SelectF32x4) = Pointer(FExpectedTableB.CoreVectors.SelectF32x4))]);
         Exit;
       end;
     end;
@@ -2086,12 +2086,12 @@ begin
       end;
 
       LDispatch := GetDispatchTable;
-      if (LDispatch = nil) or (not Assigned(LDispatch^.AddF32x4)) then
+      if (LDispatch = nil) or (not Assigned(LDispatch^.CoreVectors.AddF32x4)) then
       begin
         FErrorMsg := TextFormat('mixed-control dispatch unavailable at iter %d', [LIndex]);
         Exit;
       end;
-      if (not Assigned(LDispatch^.RoundF32x4)) or (not Assigned(LDispatch^.TruncF32x4)) then
+      if (not Assigned(LDispatch^.CoreVectors.RoundF32x4)) or (not Assigned(LDispatch^.CoreVectors.TruncF32x4)) then
       begin
         FErrorMsg := TextFormat('mixed-control round/trunc unavailable at iter %d', [LIndex]);
         Exit;
@@ -2099,7 +2099,7 @@ begin
 
       LA := MakeSplatF32x4(1.0);
       LB := MakeSplatF32x4(2.0);
-      LC := LDispatch^.AddF32x4(LA, LB);
+      LC := LDispatch^.CoreVectors.AddF32x4(LA, LB);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - 3.0) > FLOAT_EPSILON then
       begin
@@ -2108,7 +2108,7 @@ begin
       end;
 
       LProbe := MakeSplatF32x4(-1.75);
-      LC := LDispatch^.RoundF32x4(LProbe);
+      LC := LDispatch^.CoreVectors.RoundF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - (-2.0)) > FLOAT_EPSILON then
       begin
@@ -2116,7 +2116,7 @@ begin
         Exit;
       end;
 
-      LC := LDispatch^.TruncF32x4(LProbe);
+      LC := LDispatch^.CoreVectors.TruncF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - (-1.0)) > FLOAT_EPSILON then
       begin
@@ -3287,10 +3287,10 @@ var
   function IsScalarBackedForRepresentativeSlots(const aBackendTable, aScalarTable: TSimdDispatchTable): Boolean;
   begin
     Result :=
-      (Pointer(aBackendTable.AddF32x4) = Pointer(aScalarTable.AddF32x4)) and
-      (Pointer(aBackendTable.MulF32x4) = Pointer(aScalarTable.MulF32x4)) and
-      (Pointer(aBackendTable.AddI32x4) = Pointer(aScalarTable.AddI32x4)) and
-      (Pointer(aBackendTable.SelectF32x4) = Pointer(aScalarTable.SelectF32x4));
+      (Pointer(aBackendTable.CoreVectors.AddF32x4) = Pointer(aScalarTable.CoreVectors.AddF32x4)) and
+      (Pointer(aBackendTable.CoreVectors.MulF32x4) = Pointer(aScalarTable.CoreVectors.MulF32x4)) and
+      (Pointer(aBackendTable.CoreVectors.AddI32x4) = Pointer(aScalarTable.CoreVectors.AddI32x4)) and
+      (Pointer(aBackendTable.CoreVectors.SelectF32x4) = Pointer(aScalarTable.CoreVectors.SelectF32x4));
   end;
 begin
   LOldVectorAsm := IsVectorAsmEnabled;
@@ -3317,10 +3317,10 @@ begin
     LDisabledTable := LOriginalTable;
     LDisabledTable.BackendInfo.Available := False;
     LDisabledTable.BackendInfo.Capabilities := [];
-    LDisabledTable.AddF32x4 := LScalarTable.AddF32x4;
-    LDisabledTable.MulF32x4 := LScalarTable.MulF32x4;
-    LDisabledTable.AddI32x4 := LScalarTable.AddI32x4;
-    LDisabledTable.SelectF32x4 := LScalarTable.SelectF32x4;
+    LDisabledTable.CoreVectors.AddF32x4 := LScalarTable.CoreVectors.AddF32x4;
+    LDisabledTable.CoreVectors.MulF32x4 := LScalarTable.CoreVectors.MulF32x4;
+    LDisabledTable.CoreVectors.AddI32x4 := LScalarTable.CoreVectors.AddI32x4;
+    LDisabledTable.CoreVectors.SelectF32x4 := LScalarTable.CoreVectors.SelectF32x4;
 
     SetLength(LWriters, WRITER_THREADS);
     SetLength(LReaders, READER_THREADS);
@@ -3836,21 +3836,21 @@ begin
 
       ResetToAutomaticBackend;
       LDispatch := GetDispatchTable;
-      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.AddF32x4) and
-        Assigned(LDispatch^.RoundF32x4) and Assigned(LDispatch^.TruncF32x4),
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.AddF32x4) and
+        Assigned(LDispatch^.CoreVectors.RoundF32x4) and Assigned(LDispatch^.CoreVectors.TruncF32x4),
         'Post-round dispatch should be available');
 
       LA := MakeSplatF32x4(1.0);
       LB := MakeSplatF32x4(2.0);
-      LC := LDispatch^.AddF32x4(LA, LB);
+      LC := LDispatch^.CoreVectors.AddF32x4(LA, LB);
       LValue := VecF32x4Extract(LC, 0);
       CheckTrue(Abs(LValue - 3.0) <= FLOAT_EPSILON, 'Post-round AddF32x4 sanity mismatch on round ' + IntToStr(LRound));
 
       LProbe := MakeSplatF32x4(-1.75);
-      LC := LDispatch^.RoundF32x4(LProbe);
+      LC := LDispatch^.CoreVectors.RoundF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
       CheckTrue(Abs(LValue - (-2.0)) <= FLOAT_EPSILON, 'Post-round RoundF32x4 sanity mismatch on round ' + IntToStr(LRound));
-      LC := LDispatch^.TruncF32x4(LProbe);
+      LC := LDispatch^.CoreVectors.TruncF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
       CheckTrue(Abs(LValue - (-1.0)) <= FLOAT_EPSILON, 'Post-round TruncF32x4 sanity mismatch on round ' + IntToStr(LRound));
 

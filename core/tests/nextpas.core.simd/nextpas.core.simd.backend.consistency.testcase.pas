@@ -227,10 +227,10 @@ begin
     dispatch := GetDispatchTable;
 
     // 测试 Add
-    expected := dispatch^.AddF32x4(a, b);
+    expected := dispatch^.CoreVectors.AddF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.AddF32x4(a, b);
+    actual := dispatch^.CoreVectors.AddF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
@@ -244,10 +244,10 @@ begin
     // 测试 Sub
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.SubF32x4(a, b);
+    expected := dispatch^.CoreVectors.SubF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.SubF32x4(a, b);
+    actual := dispatch^.CoreVectors.SubF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
@@ -261,10 +261,10 @@ begin
     // 测试 Mul
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.MulF32x4(a, b);
+    expected := dispatch^.CoreVectors.MulF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.MulF32x4(a, b);
+    actual := dispatch^.CoreVectors.MulF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
@@ -279,10 +279,10 @@ begin
     b := MakeVecF32x4(0.5, 2.0, -1.25, 4.0);
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.DivF32x4(a, b);
+    expected := dispatch^.CoreVectors.DivF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.DivF32x4(a, b);
+    actual := dispatch^.CoreVectors.DivF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
@@ -322,10 +322,10 @@ begin
     a := MakeVecF32x4(-1.5, 2.0, -3.25, 0.0);
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.AbsF32x4(a);
+    expected := dispatch^.CoreVectors.AbsF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.AbsF32x4(a);
+    actual := dispatch^.CoreVectors.AbsF32x4(a);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
@@ -340,10 +340,10 @@ begin
     a := MakeVecF32x4(1.0, 4.0, 9.0, 16.0);
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.SqrtF32x4(a);
+    expected := dispatch^.CoreVectors.SqrtF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.SqrtF32x4(a);
+    actual := dispatch^.CoreVectors.SqrtF32x4(a);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
@@ -359,10 +359,10 @@ begin
     b := MakeVecF32x4(2.0, 1.5, 4.0, 3.0);
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.MinF32x4(a, b);
+    expected := dispatch^.CoreVectors.MinF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.MinF32x4(a, b);
+    actual := dispatch^.CoreVectors.MinF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
@@ -375,10 +375,10 @@ begin
 
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.MaxF32x4(a, b);
+    expected := dispatch^.CoreVectors.MaxF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.MaxF32x4(a, b);
+    actual := dispatch^.CoreVectors.MaxF32x4(a, b);
 
     if not VecF32x4Equal(expected, actual, FLOAT_TOLERANCE, maxDiff, diffIdx) then
     begin
@@ -415,10 +415,10 @@ begin
     // 测试 CmpEq
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedMask := dispatch^.CmpEqF32x4(a, b);
+    expectedMask := dispatch^.CoreVectors.CmpEqF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualMask := dispatch^.CmpEqF32x4(a, b);
+    actualMask := dispatch^.CoreVectors.CmpEqF32x4(a, b);
 
     if expectedMask <> actualMask then
     begin
@@ -430,10 +430,10 @@ begin
     // 测试 CmpLt
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedMask := dispatch^.CmpLtF32x4(a, b);
+    expectedMask := dispatch^.CoreVectors.CmpLtF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualMask := dispatch^.CmpLtF32x4(a, b);
+    actualMask := dispatch^.CoreVectors.CmpLtF32x4(a, b);
 
     if expectedMask <> actualMask then
     begin
@@ -445,10 +445,10 @@ begin
     // 测试 CmpGt
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedMask := dispatch^.CmpGtF32x4(a, b);
+    expectedMask := dispatch^.CoreVectors.CmpGtF32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualMask := dispatch^.CmpGtF32x4(a, b);
+    actualMask := dispatch^.CoreVectors.CmpGtF32x4(a, b);
 
     if expectedMask <> actualMask then
     begin
@@ -482,10 +482,10 @@ begin
     // 测试 ReduceAdd
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedVal := dispatch^.ReduceAddF32x4(a);
+    expectedVal := dispatch^.CoreVectors.ReduceAddF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualVal := dispatch^.ReduceAddF32x4(a);
+    actualVal := dispatch^.CoreVectors.ReduceAddF32x4(a);
 
     if not FloatEqual(expectedVal, actualVal) then
     begin
@@ -498,10 +498,10 @@ begin
     // 测试 ReduceMin
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedVal := dispatch^.ReduceMinF32x4(a);
+    expectedVal := dispatch^.CoreVectors.ReduceMinF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualVal := dispatch^.ReduceMinF32x4(a);
+    actualVal := dispatch^.CoreVectors.ReduceMinF32x4(a);
 
     if not FloatEqual(expectedVal, actualVal) then
     begin
@@ -514,10 +514,10 @@ begin
     // 测试 ReduceMax
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedVal := dispatch^.ReduceMaxF32x4(a);
+    expectedVal := dispatch^.CoreVectors.ReduceMaxF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualVal := dispatch^.ReduceMaxF32x4(a);
+    actualVal := dispatch^.CoreVectors.ReduceMaxF32x4(a);
 
     if not FloatEqual(expectedVal, actualVal) then
     begin
@@ -530,10 +530,10 @@ begin
     // 测试 ReduceMul
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedVal := dispatch^.ReduceMulF32x4(a);
+    expectedVal := dispatch^.CoreVectors.ReduceMulF32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualVal := dispatch^.ReduceMulF32x4(a);
+    actualVal := dispatch^.CoreVectors.ReduceMulF32x4(a);
 
     if not FloatEqual(expectedVal, actualVal) then
     begin
@@ -569,10 +569,10 @@ begin
     // 测试 Add
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.AddI32x4(a, b);
+    expected := dispatch^.CoreVectors.AddI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.AddI32x4(a, b);
+    actual := dispatch^.CoreVectors.AddI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
@@ -585,10 +585,10 @@ begin
     // 测试 Sub
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.SubI32x4(a, b);
+    expected := dispatch^.CoreVectors.SubI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.SubI32x4(a, b);
+    actual := dispatch^.CoreVectors.SubI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
@@ -601,10 +601,10 @@ begin
     // 测试 Mul
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.MulI32x4(a, b);
+    expected := dispatch^.CoreVectors.MulI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.MulI32x4(a, b);
+    actual := dispatch^.CoreVectors.MulI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
@@ -641,10 +641,10 @@ begin
     // 测试 And
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.AndI32x4(a, b);
+    expected := dispatch^.CoreVectors.AndI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.AndI32x4(a, b);
+    actual := dispatch^.CoreVectors.AndI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
@@ -657,10 +657,10 @@ begin
     // 测试 Or
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.OrI32x4(a, b);
+    expected := dispatch^.CoreVectors.OrI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.OrI32x4(a, b);
+    actual := dispatch^.CoreVectors.OrI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
@@ -673,10 +673,10 @@ begin
     // 测试 Xor
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.XorI32x4(a, b);
+    expected := dispatch^.CoreVectors.XorI32x4(a, b);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.XorI32x4(a, b);
+    actual := dispatch^.CoreVectors.XorI32x4(a, b);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin
@@ -689,10 +689,10 @@ begin
     // 测试 Not
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expected := dispatch^.NotI32x4(a);
+    expected := dispatch^.CoreVectors.NotI32x4(a);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actual := dispatch^.NotI32x4(a);
+    actual := dispatch^.CoreVectors.NotI32x4(a);
 
     if not VecI32x4Equal(expected, actual, diffIdx) then
     begin

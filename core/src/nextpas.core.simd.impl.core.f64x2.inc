@@ -5,8 +5,8 @@ function VecF64x2Add(const a, b: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AddF64x2) then
-    Result := dispatch^.AddF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AddF64x2) then
+    Result := dispatch^.CoreVectors.AddF64x2(a, b)
   else
   begin
     Result.d[0] := a.d[0] + b.d[0];
@@ -18,8 +18,8 @@ function VecF64x2Sub(const a, b: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SubF64x2) then
-    Result := dispatch^.SubF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SubF64x2) then
+    Result := dispatch^.CoreVectors.SubF64x2(a, b)
   else
   begin
     Result.d[0] := a.d[0] - b.d[0];
@@ -31,8 +31,8 @@ function VecF64x2Mul(const a, b: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.MulF64x2) then
-    Result := dispatch^.MulF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.MulF64x2) then
+    Result := dispatch^.CoreVectors.MulF64x2(a, b)
   else
   begin
     Result.d[0] := a.d[0] * b.d[0];
@@ -44,8 +44,8 @@ function VecF64x2Div(const a, b: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.DivF64x2) then
-    Result := dispatch^.DivF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.DivF64x2) then
+    Result := dispatch^.CoreVectors.DivF64x2(a, b)
   else
   begin
     Result.d[0] := a.d[0] / b.d[0];
@@ -59,8 +59,8 @@ function VecF64x2CmpEq(const a, b: TVecF64x2): TMask2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpEqF64x2) then
-    Result := dispatch^.CmpEqF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpEqF64x2) then
+    Result := dispatch^.CoreVectors.CmpEqF64x2(a, b)
   else begin
     Result := 0;
     if a.d[0] = b.d[0] then Result := Result or 1;
@@ -72,8 +72,8 @@ function VecF64x2CmpLt(const a, b: TVecF64x2): TMask2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpLtF64x2) then
-    Result := dispatch^.CmpLtF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpLtF64x2) then
+    Result := dispatch^.CoreVectors.CmpLtF64x2(a, b)
   else begin
     Result := 0;
     if a.d[0] < b.d[0] then Result := Result or 1;
@@ -85,8 +85,8 @@ function VecF64x2CmpLe(const a, b: TVecF64x2): TMask2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpLeF64x2) then
-    Result := dispatch^.CmpLeF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpLeF64x2) then
+    Result := dispatch^.CoreVectors.CmpLeF64x2(a, b)
   else begin
     Result := 0;
     if a.d[0] <= b.d[0] then Result := Result or 1;
@@ -98,8 +98,8 @@ function VecF64x2CmpGt(const a, b: TVecF64x2): TMask2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpGtF64x2) then
-    Result := dispatch^.CmpGtF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpGtF64x2) then
+    Result := dispatch^.CoreVectors.CmpGtF64x2(a, b)
   else begin
     Result := 0;
     if a.d[0] > b.d[0] then Result := Result or 1;
@@ -111,8 +111,8 @@ function VecF64x2CmpGe(const a, b: TVecF64x2): TMask2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpGeF64x2) then
-    Result := dispatch^.CmpGeF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpGeF64x2) then
+    Result := dispatch^.CoreVectors.CmpGeF64x2(a, b)
   else begin
     Result := 0;
     if a.d[0] >= b.d[0] then Result := Result or 1;
@@ -124,8 +124,8 @@ function VecF64x2CmpNe(const a, b: TVecF64x2): TMask2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpNeF64x2) then
-    Result := dispatch^.CmpNeF64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpNeF64x2) then
+    Result := dispatch^.CoreVectors.CmpNeF64x2(a, b)
   else begin
     Result := 0;
     if a.d[0] <> b.d[0] then Result := Result or 1;
@@ -138,8 +138,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.AbsF64x2) then
-    Result := LDispatch^.AbsF64x2(a)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.AbsF64x2) then
+    Result := LDispatch^.CoreVectors.AbsF64x2(a)
   else
   begin
     Result.d[0] := Abs(a.d[0]);
@@ -152,8 +152,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.SqrtF64x2) then
-    Result := LDispatch^.SqrtF64x2(a)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.SqrtF64x2) then
+    Result := LDispatch^.CoreVectors.SqrtF64x2(a)
   else
   begin
     Result.d[0] := Sqrt(a.d[0]);
@@ -166,8 +166,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.MinF64x2) then
-    Result := LDispatch^.MinF64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.MinF64x2) then
+    Result := LDispatch^.CoreVectors.MinF64x2(a, b)
   else
   begin
     if a.d[0] < b.d[0] then Result.d[0] := a.d[0] else Result.d[0] := b.d[0];
@@ -180,8 +180,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.MaxF64x2) then
-    Result := LDispatch^.MaxF64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.MaxF64x2) then
+    Result := LDispatch^.CoreVectors.MaxF64x2(a, b)
   else
   begin
     if a.d[0] > b.d[0] then Result.d[0] := a.d[0] else Result.d[0] := b.d[0];
@@ -195,7 +195,7 @@ function VecF64x2Fma(const a, b, c: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.FmaF64x2(a, b, c);
+  Result := dispatch^.CoreVectors.FmaF64x2(a, b, c);
 end;
 
 // === F64x2 Rounding Functions ===
@@ -204,35 +204,35 @@ function VecF64x2Floor(const a: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.FloorF64x2(a);
+  Result := dispatch^.CoreVectors.FloorF64x2(a);
 end;
 
 function VecF64x2Ceil(const a: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.CeilF64x2(a);
+  Result := dispatch^.CoreVectors.CeilF64x2(a);
 end;
 
 function VecF64x2Round(const a: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.RoundF64x2(a);
+  Result := dispatch^.CoreVectors.RoundF64x2(a);
 end;
 
 function VecF64x2Trunc(const a: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.TruncF64x2(a);
+  Result := dispatch^.CoreVectors.TruncF64x2(a);
 end;
 
 function VecF64x2Clamp(const a, minVal, maxVal: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.ClampF64x2(a, minVal, maxVal);
+  Result := dispatch^.CoreVectors.ClampF64x2(a, minVal, maxVal);
 end;
 
 function VecF64x2ReduceAdd(const a: TVecF64x2): Double;
@@ -240,8 +240,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.ReduceAddF64x2) then
-    Result := LDispatch^.ReduceAddF64x2(a)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.ReduceAddF64x2) then
+    Result := LDispatch^.CoreVectors.ReduceAddF64x2(a)
   else
     Result := a.d[0] + a.d[1];
 end;
@@ -251,8 +251,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.ReduceMinF64x2) then
-    Result := LDispatch^.ReduceMinF64x2(a)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.ReduceMinF64x2) then
+    Result := LDispatch^.CoreVectors.ReduceMinF64x2(a)
   else if a.d[0] < a.d[1] then
     Result := a.d[0]
   else
@@ -264,8 +264,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.ReduceMaxF64x2) then
-    Result := LDispatch^.ReduceMaxF64x2(a)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.ReduceMaxF64x2) then
+    Result := LDispatch^.CoreVectors.ReduceMaxF64x2(a)
   else if a.d[0] > a.d[1] then
     Result := a.d[0]
   else
@@ -277,8 +277,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.ReduceMulF64x2) then
-    Result := LDispatch^.ReduceMulF64x2(a)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.ReduceMulF64x2) then
+    Result := LDispatch^.CoreVectors.ReduceMulF64x2(a)
   else
     Result := a.d[0] * a.d[1];
 end;
@@ -288,8 +288,8 @@ function VecF64x2Load(p: PDouble): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.LoadF64x2) then
-    Result := dispatch^.LoadF64x2(p)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.LoadF64x2) then
+    Result := dispatch^.CoreVectors.LoadF64x2(p)
   else
   begin
     Result.d[0] := p[0];
@@ -301,8 +301,8 @@ procedure VecF64x2Store(p: PDouble; const a: TVecF64x2);
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.StoreF64x2) then
-    dispatch^.StoreF64x2(p, a)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.StoreF64x2) then
+    dispatch^.CoreVectors.StoreF64x2(p, a)
   else
   begin
     p[0] := a.d[0];
@@ -314,8 +314,8 @@ function VecF64x2Splat(value: Double): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SplatF64x2) then
-    Result := dispatch^.SplatF64x2(value)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SplatF64x2) then
+    Result := dispatch^.CoreVectors.SplatF64x2(value)
   else
   begin
     Result.d[0] := value;
@@ -327,8 +327,8 @@ function VecF64x2Zero: TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ZeroF64x2) then
-    Result := dispatch^.ZeroF64x2()
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ZeroF64x2) then
+    Result := dispatch^.CoreVectors.ZeroF64x2()
   else
   begin
     Result.d[0] := 0.0;
@@ -340,8 +340,8 @@ function VecF64x2Select(const mask: TMask2; const a, b: TVecF64x2): TVecF64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SelectF64x2) then
-    Result := dispatch^.SelectF64x2(mask, a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SelectF64x2) then
+    Result := dispatch^.CoreVectors.SelectF64x2(mask, a, b)
   else
   begin
     // 标量回退实现
@@ -358,8 +358,8 @@ var
   i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SelectI32x4) then
-    Result := dispatch^.SelectI32x4(mask, a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SelectI32x4) then
+    Result := dispatch^.CoreVectors.SelectI32x4(mask, a, b)
   else
   begin
     for i := 0 to 3 do
@@ -374,8 +374,8 @@ var
   la, lb, lr: UInt32;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SelectF32x8) then
-    Result := dispatch^.SelectF32x8(mask, a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SelectF32x8) then
+    Result := dispatch^.CoreVectors.SelectF32x8(mask, a, b)
   else
   begin
     for i := 0 to 7 do
@@ -395,8 +395,8 @@ var
   la64, lb64, lr64: UInt64;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SelectF64x4) then
-    Result := dispatch^.SelectF64x4(mask, a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SelectF64x4) then
+    Result := dispatch^.CoreVectors.SelectF64x4(mask, a, b)
   else
   begin
     for i := 0 to 3 do
@@ -557,8 +557,8 @@ function VecI32x4Add(const a, b: TVecI32x4): TVecI32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AddI32x4) then
-    Result := dispatch^.AddI32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AddI32x4) then
+    Result := dispatch^.CoreVectors.AddI32x4(a, b)
   else
   begin
     Result.i[0] := a.i[0] + b.i[0];
@@ -572,8 +572,8 @@ function VecI32x4Sub(const a, b: TVecI32x4): TVecI32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SubI32x4) then
-    Result := dispatch^.SubI32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SubI32x4) then
+    Result := dispatch^.CoreVectors.SubI32x4(a, b)
   else
   begin
     Result.i[0] := a.i[0] - b.i[0];

@@ -4038,10 +4038,10 @@ var
   function IsScalarBackedForRepresentativeSlots(const aBackendTable, aScalarTable: TSimdDispatchTable): Boolean;
   begin
     Result :=
-      (Pointer(aBackendTable.AddF32x4) = Pointer(aScalarTable.AddF32x4)) and
-      (Pointer(aBackendTable.MulF32x4) = Pointer(aScalarTable.MulF32x4)) and
-      (Pointer(aBackendTable.AddI32x4) = Pointer(aScalarTable.AddI32x4)) and
-      (Pointer(aBackendTable.SelectF32x4) = Pointer(aScalarTable.SelectF32x4));
+      (Pointer(aBackendTable.CoreVectors.AddF32x4) = Pointer(aScalarTable.CoreVectors.AddF32x4)) and
+      (Pointer(aBackendTable.CoreVectors.MulF32x4) = Pointer(aScalarTable.CoreVectors.MulF32x4)) and
+      (Pointer(aBackendTable.CoreVectors.AddI32x4) = Pointer(aScalarTable.CoreVectors.AddI32x4)) and
+      (Pointer(aBackendTable.CoreVectors.SelectF32x4) = Pointer(aScalarTable.CoreVectors.SelectF32x4));
   end;
 begin
   ResetToAutomaticBackend;
@@ -4244,19 +4244,19 @@ begin
     CheckEqual(Ord(LBackend), Ord(LInitialDispatch^.Backend), 'Initial dispatch backend should match current backend in dispatch snapshot reuse test');
 
     LModifiedTable := LOriginalTable;
-    LModifiedTable.ReduceAddF32x4 := @SyntheticReduceAddF32x4CurrentDispatch;
+    LModifiedTable.CoreVectors.ReduceAddF32x4 := @SyntheticReduceAddF32x4CurrentDispatch;
     RegisterBackend(LBackend, LModifiedTable);
     try
       LModifiedDispatch := GetDispatchTable;
       CheckNotNil(LModifiedDispatch, 'Current dispatch should stay assigned after synthetic re-register');
       CheckTrue(PtrUInt(LModifiedDispatch) <> PtrUInt(LInitialDispatch), 'Same-backend synthetic re-register should publish a different dispatch snapshot while table contents differ');
-      CheckTrue(Pointer(LModifiedDispatch^.ReduceAddF32x4) = Pointer(@SyntheticReduceAddF32x4CurrentDispatch), 'Synthetic re-register should update the active dispatch slot');
+      CheckTrue(Pointer(LModifiedDispatch^.CoreVectors.ReduceAddF32x4) = Pointer(@SyntheticReduceAddF32x4CurrentDispatch), 'Synthetic re-register should update the active dispatch slot');
 
       RegisterBackend(LBackend, LOriginalTable);
       LFinalDispatch := GetDispatchTable;
       CheckNotNil(LFinalDispatch, 'Current dispatch should stay assigned after restoring original backend table');
       CheckTrue(PtrUInt(LFinalDispatch) = PtrUInt(LInitialDispatch), 'Restoring the original backend table should reuse the original published dispatch snapshot');
-      CheckTrue(Pointer(LFinalDispatch^.ReduceAddF32x4) = Pointer(LOriginalTable.ReduceAddF32x4), 'Restored dispatch snapshot should expose the original ReduceAddF32x4 slot');
+      CheckTrue(Pointer(LFinalDispatch^.CoreVectors.ReduceAddF32x4) = Pointer(LOriginalTable.CoreVectors.ReduceAddF32x4), 'Restored dispatch snapshot should expose the original ReduceAddF32x4 slot');
     finally
       RegisterBackend(LBackend, LOriginalTable);
     end;
@@ -4440,17 +4440,17 @@ begin
   LInput.f[3] := -4.125;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.ReduceAddF32x4 := @SyntheticReduceAddF32x4CurrentDispatch;
-  LModifiedTable.ReduceMinF32x4 := @SyntheticReduceMinF32x4CurrentDispatch;
-  LModifiedTable.ReduceMaxF32x4 := @SyntheticReduceMaxF32x4CurrentDispatch;
-  LModifiedTable.ReduceMulF32x4 := @SyntheticReduceMulF32x4CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceAddF32x4 := @SyntheticReduceAddF32x4CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMinF32x4 := @SyntheticReduceMinF32x4CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMaxF32x4 := @SyntheticReduceMaxF32x4CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMulF32x4 := @SyntheticReduceMulF32x4CurrentDispatch;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Re-registering the current backend should preserve the active backend id for VecF32x4 reduce facade dispatch test');
-    CheckNear(42.25, GetDispatchTable^.ReduceAddF32x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF32x4 after re-register');
-    CheckNear(-314.5, GetDispatchTable^.ReduceMinF32x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF32x4 after re-register');
-    CheckNear(271.75, GetDispatchTable^.ReduceMaxF32x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF32x4 after re-register');
-    CheckNear(-9.5, GetDispatchTable^.ReduceMulF32x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF32x4 after re-register');
+    CheckNear(42.25, GetDispatchTable^.CoreVectors.ReduceAddF32x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF32x4 after re-register');
+    CheckNear(-314.5, GetDispatchTable^.CoreVectors.ReduceMinF32x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF32x4 after re-register');
+    CheckNear(271.75, GetDispatchTable^.CoreVectors.ReduceMaxF32x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF32x4 after re-register');
+    CheckNear(-9.5, GetDispatchTable^.CoreVectors.ReduceMulF32x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF32x4 after re-register');
 
     CheckNear(42.25, VecF32x4ReduceAdd(LInput), 0.0, 'VecF32x4ReduceAdd should track current dispatch table after re-register');
     CheckNear(-314.5, VecF32x4ReduceMin(LInput), 0.0, 'VecF32x4ReduceMin should track current dispatch table after re-register');
@@ -4477,17 +4477,17 @@ begin
   LInput.d[1] := -1.25;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.ReduceAddF64x2 := @SyntheticReduceAddF64x2CurrentDispatch;
-  LModifiedTable.ReduceMinF64x2 := @SyntheticReduceMinF64x2CurrentDispatch;
-  LModifiedTable.ReduceMaxF64x2 := @SyntheticReduceMaxF64x2CurrentDispatch;
-  LModifiedTable.ReduceMulF64x2 := @SyntheticReduceMulF64x2CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceAddF64x2 := @SyntheticReduceAddF64x2CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMinF64x2 := @SyntheticReduceMinF64x2CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMaxF64x2 := @SyntheticReduceMaxF64x2CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMulF64x2 := @SyntheticReduceMulF64x2CurrentDispatch;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Re-registering the current backend should preserve the active backend id for VecF64x2 reduce facade dispatch test');
-    CheckNear(77.5, GetDispatchTable^.ReduceAddF64x2(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF64x2 after re-register');
-    CheckNear(-88.25, GetDispatchTable^.ReduceMinF64x2(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF64x2 after re-register');
-    CheckNear(909.5, GetDispatchTable^.ReduceMaxF64x2(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF64x2 after re-register');
-    CheckNear(-12.75, GetDispatchTable^.ReduceMulF64x2(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF64x2 after re-register');
+    CheckNear(77.5, GetDispatchTable^.CoreVectors.ReduceAddF64x2(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF64x2 after re-register');
+    CheckNear(-88.25, GetDispatchTable^.CoreVectors.ReduceMinF64x2(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF64x2 after re-register');
+    CheckNear(909.5, GetDispatchTable^.CoreVectors.ReduceMaxF64x2(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF64x2 after re-register');
+    CheckNear(-12.75, GetDispatchTable^.CoreVectors.ReduceMulF64x2(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF64x2 after re-register');
 
     CheckNear(77.5, VecF64x2ReduceAdd(LInput), 0.0, 'VecF64x2ReduceAdd should track current dispatch table after re-register');
     CheckNear(-88.25, VecF64x2ReduceMin(LInput), 0.0, 'VecF64x2ReduceMin should track current dispatch table after re-register');
@@ -4524,27 +4524,27 @@ begin
     LInputB.d[1] := -3.75;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.AbsF64x2 := @SyntheticAbsF64x2CurrentDispatch;
-  LModifiedTable.SqrtF64x2 := @SyntheticSqrtF64x2CurrentDispatch;
-  LModifiedTable.MinF64x2 := @SyntheticMinF64x2CurrentDispatch;
-  LModifiedTable.MaxF64x2 := @SyntheticMaxF64x2CurrentDispatch;
+  LModifiedTable.CoreVectors.AbsF64x2 := @SyntheticAbsF64x2CurrentDispatch;
+  LModifiedTable.CoreVectors.SqrtF64x2 := @SyntheticSqrtF64x2CurrentDispatch;
+  LModifiedTable.CoreVectors.MinF64x2 := @SyntheticMinF64x2CurrentDispatch;
+  LModifiedTable.CoreVectors.MaxF64x2 := @SyntheticMaxF64x2CurrentDispatch;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Re-registering the current backend should preserve the active backend id for VecF64x2 math facade dispatch test');
 
-    LExpected := GetDispatchTable^.AbsF64x2(LInputA);
+    LExpected := GetDispatchTable^.CoreVectors.AbsF64x2(LInputA);
     AssertVecF64x2Equal('Current dispatch table should expose synthetic AbsF64x2 after re-register', SyntheticAbsF64x2CurrentDispatch(LInputA), LExpected);
     AssertVecF64x2Equal('VecF64x2Abs should track current dispatch table after re-register', LExpected, VecF64x2Abs(LInputA));
 
-    LExpected := GetDispatchTable^.SqrtF64x2(LInputA);
+    LExpected := GetDispatchTable^.CoreVectors.SqrtF64x2(LInputA);
     AssertVecF64x2Equal('Current dispatch table should expose synthetic SqrtF64x2 after re-register', SyntheticSqrtF64x2CurrentDispatch(LInputA), LExpected);
     AssertVecF64x2Equal('VecF64x2Sqrt should track current dispatch table after re-register', LExpected, VecF64x2Sqrt(LInputA));
 
-    LExpected := GetDispatchTable^.MinF64x2(LInputA, LInputB);
+    LExpected := GetDispatchTable^.CoreVectors.MinF64x2(LInputA, LInputB);
     AssertVecF64x2Equal('Current dispatch table should expose synthetic MinF64x2 after re-register', SyntheticMinF64x2CurrentDispatch(LInputA, LInputB), LExpected);
     AssertVecF64x2Equal('VecF64x2Min should track current dispatch table after re-register', LExpected, VecF64x2Min(LInputA, LInputB));
 
-    LExpected := GetDispatchTable^.MaxF64x2(LInputA, LInputB);
+    LExpected := GetDispatchTable^.CoreVectors.MaxF64x2(LInputA, LInputB);
     AssertVecF64x2Equal('Current dispatch table should expose synthetic MaxF64x2 after re-register', SyntheticMaxF64x2CurrentDispatch(LInputA, LInputB), LExpected);
     AssertVecF64x2Equal('VecF64x2Max should track current dispatch table after re-register', LExpected, VecF64x2Max(LInputA, LInputB));
   finally
@@ -4583,22 +4583,22 @@ begin
     LExpectedNormalize3 := SyntheticNormalizeF32x3CurrentDispatch(LInputA);
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.DotF32x4 := @SyntheticDotF32x4CurrentDispatch;
-  LModifiedTable.DotF32x3 := @SyntheticDotF32x3CurrentDispatch;
-  LModifiedTable.LengthF32x4 := @SyntheticLengthF32x4CurrentDispatch;
-  LModifiedTable.LengthF32x3 := @SyntheticLengthF32x3CurrentDispatch;
-  LModifiedTable.NormalizeF32x4 := @SyntheticNormalizeF32x4CurrentDispatch;
-  LModifiedTable.NormalizeF32x3 := @SyntheticNormalizeF32x3CurrentDispatch;
+  LModifiedTable.CoreVectors.DotF32x4 := @SyntheticDotF32x4CurrentDispatch;
+  LModifiedTable.CoreVectors.DotF32x3 := @SyntheticDotF32x3CurrentDispatch;
+  LModifiedTable.CoreVectors.LengthF32x4 := @SyntheticLengthF32x4CurrentDispatch;
+  LModifiedTable.CoreVectors.LengthF32x3 := @SyntheticLengthF32x3CurrentDispatch;
+  LModifiedTable.CoreVectors.NormalizeF32x4 := @SyntheticNormalizeF32x4CurrentDispatch;
+  LModifiedTable.CoreVectors.NormalizeF32x3 := @SyntheticNormalizeF32x3CurrentDispatch;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Re-registering the current backend should preserve the active backend id for VecF32 vector math facade dispatch test');
-    CheckNear(37.125, GetDispatchTable^.DotF32x4(LInputA, LInputB), 0.0, 'Current dispatch table should expose synthetic DotF32x4 after re-register');
-    CheckNear(-18.75, GetDispatchTable^.DotF32x3(LInputA, LInputB), 0.0, 'Current dispatch table should expose synthetic DotF32x3 after re-register');
-    CheckNear(99.5, GetDispatchTable^.LengthF32x4(LInputA), 0.0, 'Current dispatch table should expose synthetic LengthF32x4 after re-register');
-    CheckNear(55.25, GetDispatchTable^.LengthF32x3(LInputA), 0.0, 'Current dispatch table should expose synthetic LengthF32x3 after re-register');
+    CheckNear(37.125, GetDispatchTable^.CoreVectors.DotF32x4(LInputA, LInputB), 0.0, 'Current dispatch table should expose synthetic DotF32x4 after re-register');
+    CheckNear(-18.75, GetDispatchTable^.CoreVectors.DotF32x3(LInputA, LInputB), 0.0, 'Current dispatch table should expose synthetic DotF32x3 after re-register');
+    CheckNear(99.5, GetDispatchTable^.CoreVectors.LengthF32x4(LInputA), 0.0, 'Current dispatch table should expose synthetic LengthF32x4 after re-register');
+    CheckNear(55.25, GetDispatchTable^.CoreVectors.LengthF32x3(LInputA), 0.0, 'Current dispatch table should expose synthetic LengthF32x3 after re-register');
 
-    LActualNormalize4 := GetDispatchTable^.NormalizeF32x4(LInputA);
-    LActualNormalize3 := GetDispatchTable^.NormalizeF32x3(LInputA);
+    LActualNormalize4 := GetDispatchTable^.CoreVectors.NormalizeF32x4(LInputA);
+    LActualNormalize3 := GetDispatchTable^.CoreVectors.NormalizeF32x3(LInputA);
     for LIndex := 0 to 3 do
     begin
       CheckNear(LExpectedNormalize4.f[LIndex], LActualNormalize4.f[LIndex], 0.0, 'Current dispatch table should expose synthetic NormalizeF32x4 after re-register lane ' + IntToStr(LIndex));
@@ -4671,15 +4671,15 @@ begin
     LInputF64x4B.d[3] := 8.0;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.DotF32x8 := @SyntheticDotF32x8CurrentDispatch;
-  LModifiedTable.DotF64x2 := @SyntheticDotF64x2CurrentDispatch;
-  LModifiedTable.DotF64x4 := @SyntheticDotF64x4CurrentDispatch;
+  LModifiedTable.CoreVectors.DotF32x8 := @SyntheticDotF32x8CurrentDispatch;
+  LModifiedTable.CoreVectors.DotF64x2 := @SyntheticDotF64x2CurrentDispatch;
+  LModifiedTable.CoreVectors.DotF64x4 := @SyntheticDotF64x4CurrentDispatch;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Re-registering the current backend should preserve the active backend id for wide float dot facade dispatch test');
-    CheckNear(512.25, GetDispatchTable^.DotF32x8(LInputF32x8A, LInputF32x8B), 0.0, 'Current dispatch table should expose synthetic DotF32x8 after re-register');
-    CheckNear(-204.5, GetDispatchTable^.DotF64x2(LInputF64x2A, LInputF64x2B), 0.0, 'Current dispatch table should expose synthetic DotF64x2 after re-register');
-    CheckNear(8192.125, GetDispatchTable^.DotF64x4(LInputF64x4A, LInputF64x4B), 0.0, 'Current dispatch table should expose synthetic DotF64x4 after re-register');
+    CheckNear(512.25, GetDispatchTable^.CoreVectors.DotF32x8(LInputF32x8A, LInputF32x8B), 0.0, 'Current dispatch table should expose synthetic DotF32x8 after re-register');
+    CheckNear(-204.5, GetDispatchTable^.CoreVectors.DotF64x2(LInputF64x2A, LInputF64x2B), 0.0, 'Current dispatch table should expose synthetic DotF64x2 after re-register');
+    CheckNear(8192.125, GetDispatchTable^.CoreVectors.DotF64x4(LInputF64x4A, LInputF64x4B), 0.0, 'Current dispatch table should expose synthetic DotF64x4 after re-register');
 
     CheckNear(512.25, VecF32x8Dot(LInputF32x8A, LInputF32x8B), 0.0, 'VecF32x8Dot should track current dispatch table after re-register');
     CheckNear(-204.5, VecF64x2Dot(LInputF64x2A, LInputF64x2B), 0.0, 'VecF64x2Dot should track current dispatch table after re-register');
@@ -4707,17 +4707,17 @@ begin
     LInput.d[3] := -4.75;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.ReduceAddF64x4 := @SyntheticReduceAddF64x4CurrentDispatch;
-  LModifiedTable.ReduceMinF64x4 := @SyntheticReduceMinF64x4CurrentDispatch;
-  LModifiedTable.ReduceMaxF64x4 := @SyntheticReduceMaxF64x4CurrentDispatch;
-  LModifiedTable.ReduceMulF64x4 := @SyntheticReduceMulF64x4CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceAddF64x4 := @SyntheticReduceAddF64x4CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMinF64x4 := @SyntheticReduceMinF64x4CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMaxF64x4 := @SyntheticReduceMaxF64x4CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMulF64x4 := @SyntheticReduceMulF64x4CurrentDispatch;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Re-registering the current backend should preserve the active backend id for VecF64x4 reduce facade dispatch test');
-    CheckNear(401.25, GetDispatchTable^.ReduceAddF64x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF64x4 after re-register');
-    CheckNear(-222.5, GetDispatchTable^.ReduceMinF64x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF64x4 after re-register');
-    CheckNear(909.75, GetDispatchTable^.ReduceMaxF64x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF64x4 after re-register');
-    CheckNear(-17.0, GetDispatchTable^.ReduceMulF64x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF64x4 after re-register');
+    CheckNear(401.25, GetDispatchTable^.CoreVectors.ReduceAddF64x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF64x4 after re-register');
+    CheckNear(-222.5, GetDispatchTable^.CoreVectors.ReduceMinF64x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF64x4 after re-register');
+    CheckNear(909.75, GetDispatchTable^.CoreVectors.ReduceMaxF64x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF64x4 after re-register');
+    CheckNear(-17.0, GetDispatchTable^.CoreVectors.ReduceMulF64x4(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF64x4 after re-register');
 
     CheckNear(401.25, VecF64x4ReduceAdd(LInput), 0.0, 'VecF64x4ReduceAdd should track current dispatch table after re-register');
     CheckNear(-222.5, VecF64x4ReduceMin(LInput), 0.0, 'VecF64x4ReduceMin should track current dispatch table after re-register');
@@ -4750,17 +4750,17 @@ begin
     LInput.f[7] := -8.25;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.ReduceAddF32x8 := @SyntheticReduceAddF32x8CurrentDispatch;
-  LModifiedTable.ReduceMinF32x8 := @SyntheticReduceMinF32x8CurrentDispatch;
-  LModifiedTable.ReduceMaxF32x8 := @SyntheticReduceMaxF32x8CurrentDispatch;
-  LModifiedTable.ReduceMulF32x8 := @SyntheticReduceMulF32x8CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceAddF32x8 := @SyntheticReduceAddF32x8CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMinF32x8 := @SyntheticReduceMinF32x8CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMaxF32x8 := @SyntheticReduceMaxF32x8CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMulF32x8 := @SyntheticReduceMulF32x8CurrentDispatch;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Re-registering the current backend should preserve the active backend id for VecF32x8 reduce facade dispatch test');
-    CheckNear(123.5, GetDispatchTable^.ReduceAddF32x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF32x8 after re-register');
-    CheckNear(-456.75, GetDispatchTable^.ReduceMinF32x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF32x8 after re-register');
-    CheckNear(789.125, GetDispatchTable^.ReduceMaxF32x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF32x8 after re-register');
-    CheckNear(-33.25, GetDispatchTable^.ReduceMulF32x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF32x8 after re-register');
+    CheckNear(123.5, GetDispatchTable^.CoreVectors.ReduceAddF32x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF32x8 after re-register');
+    CheckNear(-456.75, GetDispatchTable^.CoreVectors.ReduceMinF32x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF32x8 after re-register');
+    CheckNear(789.125, GetDispatchTable^.CoreVectors.ReduceMaxF32x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF32x8 after re-register');
+    CheckNear(-33.25, GetDispatchTable^.CoreVectors.ReduceMulF32x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF32x8 after re-register');
 
     CheckNear(123.5, VecF32x8ReduceAdd(LInput), 0.0, 'VecF32x8ReduceAdd should track current dispatch table after re-register');
     CheckNear(-456.75, VecF32x8ReduceMin(LInput), 0.0, 'VecF32x8ReduceMin should track current dispatch table after re-register');
@@ -4793,17 +4793,17 @@ begin
     LInput.d[7] := -8.0;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.ReduceAddF64x8 := @SyntheticReduceAddF64x8CurrentDispatch;
-  LModifiedTable.ReduceMinF64x8 := @SyntheticReduceMinF64x8CurrentDispatch;
-  LModifiedTable.ReduceMaxF64x8 := @SyntheticReduceMaxF64x8CurrentDispatch;
-  LModifiedTable.ReduceMulF64x8 := @SyntheticReduceMulF64x8CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceAddF64x8 := @SyntheticReduceAddF64x8CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMinF64x8 := @SyntheticReduceMinF64x8CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMaxF64x8 := @SyntheticReduceMaxF64x8CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMulF64x8 := @SyntheticReduceMulF64x8CurrentDispatch;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Re-registering the current backend should preserve the active backend id for VecF64x8 reduce facade dispatch test');
-    CheckNear(615.875, GetDispatchTable^.ReduceAddF64x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF64x8 after re-register');
-    CheckNear(-712.5, GetDispatchTable^.ReduceMinF64x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF64x8 after re-register');
-    CheckNear(1337.25, GetDispatchTable^.ReduceMaxF64x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF64x8 after re-register');
-    CheckNear(-91.5, GetDispatchTable^.ReduceMulF64x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF64x8 after re-register');
+    CheckNear(615.875, GetDispatchTable^.CoreVectors.ReduceAddF64x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF64x8 after re-register');
+    CheckNear(-712.5, GetDispatchTable^.CoreVectors.ReduceMinF64x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF64x8 after re-register');
+    CheckNear(1337.25, GetDispatchTable^.CoreVectors.ReduceMaxF64x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF64x8 after re-register');
+    CheckNear(-91.5, GetDispatchTable^.CoreVectors.ReduceMulF64x8(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF64x8 after re-register');
 
     CheckNear(615.875, VecF64x8ReduceAdd(LInput), 0.0, 'VecF64x8ReduceAdd should track current dispatch table after re-register');
     CheckNear(-712.5, VecF64x8ReduceMin(LInput), 0.0, 'VecF64x8ReduceMin should track current dispatch table after re-register');
@@ -4844,17 +4844,17 @@ begin
     LInput.f[15] := -16.0;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.ReduceAddF32x16 := @SyntheticReduceAddF32x16CurrentDispatch;
-  LModifiedTable.ReduceMinF32x16 := @SyntheticReduceMinF32x16CurrentDispatch;
-  LModifiedTable.ReduceMaxF32x16 := @SyntheticReduceMaxF32x16CurrentDispatch;
-  LModifiedTable.ReduceMulF32x16 := @SyntheticReduceMulF32x16CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceAddF32x16 := @SyntheticReduceAddF32x16CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMinF32x16 := @SyntheticReduceMinF32x16CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMaxF32x16 := @SyntheticReduceMaxF32x16CurrentDispatch;
+  LModifiedTable.CoreVectors.ReduceMulF32x16 := @SyntheticReduceMulF32x16CurrentDispatch;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckEqual(Ord(LBackend), Ord(GetCurrentBackend), 'Re-registering the current backend should preserve the active backend id for VecF32x16 reduce facade dispatch test');
-    CheckNear(2048.5, GetDispatchTable^.ReduceAddF32x16(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF32x16 after re-register');
-    CheckNear(-1024.25, GetDispatchTable^.ReduceMinF32x16(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF32x16 after re-register');
-    CheckNear(4096.75, GetDispatchTable^.ReduceMaxF32x16(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF32x16 after re-register');
-    CheckNear(-256.5, GetDispatchTable^.ReduceMulF32x16(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF32x16 after re-register');
+    CheckNear(2048.5, GetDispatchTable^.CoreVectors.ReduceAddF32x16(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceAddF32x16 after re-register');
+    CheckNear(-1024.25, GetDispatchTable^.CoreVectors.ReduceMinF32x16(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMinF32x16 after re-register');
+    CheckNear(4096.75, GetDispatchTable^.CoreVectors.ReduceMaxF32x16(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMaxF32x16 after re-register');
+    CheckNear(-256.5, GetDispatchTable^.CoreVectors.ReduceMulF32x16(LInput), 0.0, 'Current dispatch table should expose synthetic ReduceMulF32x16 after re-register');
 
     CheckNear(2048.5, VecF32x16ReduceAdd(LInput), 0.0, 'VecF32x16ReduceAdd should track current dispatch table after re-register');
     CheckNear(-1024.25, VecF32x16ReduceMin(LInput), 0.0, 'VecF32x16ReduceMin should track current dispatch table after re-register');
@@ -4874,44 +4874,44 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AndNotI64x2), 'Dispatch.AndNotI64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftLeftI64x2), 'Dispatch.ShiftLeftI64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightI64x2), 'Dispatch.ShiftRightI64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightArithI64x2), 'Dispatch.ShiftRightArithI64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MinI64x2), 'Dispatch.MinI64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MaxI64x2), 'Dispatch.MaxI64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndNotI64x2), 'Dispatch.CoreVectors.AndNotI64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftLeftI64x2), 'Dispatch.CoreVectors.ShiftLeftI64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightI64x2), 'Dispatch.CoreVectors.ShiftRightI64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightArithI64x2), 'Dispatch.CoreVectors.ShiftRightArithI64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MinI64x2), 'Dispatch.CoreVectors.MinI64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MaxI64x2), 'Dispatch.CoreVectors.MaxI64x2 should be assigned');
 
   LA.i[0] := $0F0F0F0F0F0F0F0F;
   LA.i[1] := -16;
   LB.i[0] := $00FF00FF00FF00FF;
   LB.i[1] := 7;
 
-  LVecByDispatch := LDispatch^.AndNotI64x2(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AndNotI64x2(LA, LB);
   LVecByFacade := VecI64x2AndNot(LA, LB);
   CheckEqual(LVecByFacade.i[0], LVecByDispatch.i[0], 'Dispatch/Facade AndNotI64x2 lane0 parity');
   CheckEqual(LVecByFacade.i[1], LVecByDispatch.i[1], 'Dispatch/Facade AndNotI64x2 lane1 parity');
 
-  LVecByDispatch := LDispatch^.ShiftLeftI64x2(LA, 3);
+  LVecByDispatch := LDispatch^.CoreVectors.ShiftLeftI64x2(LA, 3);
   LVecByFacade := VecI64x2ShiftLeft(LA, 3);
   CheckEqual(LVecByFacade.i[0], LVecByDispatch.i[0], 'Dispatch/Facade ShiftLeftI64x2 lane0 parity');
   CheckEqual(LVecByFacade.i[1], LVecByDispatch.i[1], 'Dispatch/Facade ShiftLeftI64x2 lane1 parity');
 
-  LVecByDispatch := LDispatch^.ShiftRightI64x2(LA, 4);
+  LVecByDispatch := LDispatch^.CoreVectors.ShiftRightI64x2(LA, 4);
   LVecByFacade := VecI64x2ShiftRight(LA, 4);
   CheckEqual(LVecByFacade.i[0], LVecByDispatch.i[0], 'Dispatch/Facade ShiftRightI64x2 lane0 parity');
   CheckEqual(LVecByFacade.i[1], LVecByDispatch.i[1], 'Dispatch/Facade ShiftRightI64x2 lane1 parity');
 
-  LVecByDispatch := LDispatch^.ShiftRightArithI64x2(LA, 2);
+  LVecByDispatch := LDispatch^.CoreVectors.ShiftRightArithI64x2(LA, 2);
   LVecByFacade := VecI64x2ShiftRightArith(LA, 2);
   CheckEqual(LVecByFacade.i[0], LVecByDispatch.i[0], 'Dispatch/Facade ShiftRightArithI64x2 lane0 parity');
   CheckEqual(LVecByFacade.i[1], LVecByDispatch.i[1], 'Dispatch/Facade ShiftRightArithI64x2 lane1 parity');
 
-  LVecByDispatch := LDispatch^.MinI64x2(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.MinI64x2(LA, LB);
   LVecByFacade := VecI64x2Min(LA, LB);
   CheckEqual(LVecByFacade.i[0], LVecByDispatch.i[0], 'Dispatch/Facade MinI64x2 lane0 parity');
   CheckEqual(LVecByFacade.i[1], LVecByDispatch.i[1], 'Dispatch/Facade MinI64x2 lane1 parity');
 
-  LVecByDispatch := LDispatch^.MaxI64x2(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.MaxI64x2(LA, LB);
   LVecByFacade := VecI64x2Max(LA, LB);
   CheckEqual(LVecByFacade.i[0], LVecByDispatch.i[0], 'Dispatch/Facade MaxI64x2 lane0 parity');
   CheckEqual(LVecByFacade.i[1], LVecByDispatch.i[1], 'Dispatch/Facade MaxI64x2 lane1 parity');
@@ -4927,44 +4927,44 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddU64x2), 'Dispatch.AddU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubU64x2), 'Dispatch.SubU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndU64x2), 'Dispatch.AndU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrU64x2), 'Dispatch.OrU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorU64x2), 'Dispatch.XorU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotU64x2), 'Dispatch.NotU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndNotU64x2), 'Dispatch.AndNotU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqU64x2), 'Dispatch.CmpEqU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtU64x2), 'Dispatch.CmpLtU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtU64x2), 'Dispatch.CmpGtU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MinU64x2), 'Dispatch.MinU64x2 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MaxU64x2), 'Dispatch.MaxU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddU64x2), 'Dispatch.CoreVectors.AddU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubU64x2), 'Dispatch.CoreVectors.SubU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndU64x2), 'Dispatch.CoreVectors.AndU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrU64x2), 'Dispatch.CoreVectors.OrU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorU64x2), 'Dispatch.CoreVectors.XorU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotU64x2), 'Dispatch.CoreVectors.NotU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndNotU64x2), 'Dispatch.CoreVectors.AndNotU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqU64x2), 'Dispatch.CoreVectors.CmpEqU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtU64x2), 'Dispatch.CoreVectors.CmpLtU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtU64x2), 'Dispatch.CoreVectors.CmpGtU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MinU64x2), 'Dispatch.CoreVectors.MinU64x2 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MaxU64x2), 'Dispatch.CoreVectors.MaxU64x2 should be assigned');
 
   LA.u[0] := QWord($F0F0F0F0F0F0F0F0);
   LA.u[1] := 20;
   LB.u[0] := $00FF00FF00FF00FF;
   LB.u[1] := 30;
 
-  LVecByDispatch := LDispatch^.AddU64x2(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AddU64x2(LA, LB);
   LVecByFacade := VecU64x2Add(LA, LB);
   CheckEqual(LVecByFacade.u[0], LVecByDispatch.u[0], 'Dispatch/Facade AddU64x2 lane0 parity');
   CheckEqual(LVecByFacade.u[1], LVecByDispatch.u[1], 'Dispatch/Facade AddU64x2 lane1 parity');
 
-  LVecByDispatch := LDispatch^.AndNotU64x2(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AndNotU64x2(LA, LB);
   LVecByFacade := VecU64x2AndNot(LA, LB);
   CheckEqual(LVecByFacade.u[0], LVecByDispatch.u[0], 'Dispatch/Facade AndNotU64x2 lane0 parity');
   CheckEqual(LVecByFacade.u[1], LVecByDispatch.u[1], 'Dispatch/Facade AndNotU64x2 lane1 parity');
 
-  CheckEqual(Integer(VecU64x2CmpEq(LA, LB)), Integer(LDispatch^.CmpEqU64x2(LA, LB)), 'Dispatch/Facade CmpEqU64x2 parity');
-  CheckEqual(Integer(VecU64x2CmpLt(LA, LB)), Integer(LDispatch^.CmpLtU64x2(LA, LB)), 'Dispatch/Facade CmpLtU64x2 parity');
-  CheckEqual(Integer(VecU64x2CmpGt(LA, LB)), Integer(LDispatch^.CmpGtU64x2(LA, LB)), 'Dispatch/Facade CmpGtU64x2 parity');
+  CheckEqual(Integer(VecU64x2CmpEq(LA, LB)), Integer(LDispatch^.CoreVectors.CmpEqU64x2(LA, LB)), 'Dispatch/Facade CmpEqU64x2 parity');
+  CheckEqual(Integer(VecU64x2CmpLt(LA, LB)), Integer(LDispatch^.CoreVectors.CmpLtU64x2(LA, LB)), 'Dispatch/Facade CmpLtU64x2 parity');
+  CheckEqual(Integer(VecU64x2CmpGt(LA, LB)), Integer(LDispatch^.CoreVectors.CmpGtU64x2(LA, LB)), 'Dispatch/Facade CmpGtU64x2 parity');
 
-  LVecByDispatch := LDispatch^.MinU64x2(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.MinU64x2(LA, LB);
   LVecByFacade := VecU64x2Min(LA, LB);
   CheckEqual(LVecByFacade.u[0], LVecByDispatch.u[0], 'Dispatch/Facade MinU64x2 lane0 parity');
   CheckEqual(LVecByFacade.u[1], LVecByDispatch.u[1], 'Dispatch/Facade MinU64x2 lane1 parity');
 
-  LVecByDispatch := LDispatch^.MaxU64x2(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.MaxU64x2(LA, LB);
   LVecByFacade := VecU64x2Max(LA, LB);
   CheckEqual(LVecByFacade.u[0], LVecByDispatch.u[0], 'Dispatch/Facade MaxU64x2 lane0 parity');
   CheckEqual(LVecByFacade.u[1], LVecByDispatch.u[1], 'Dispatch/Facade MaxU64x2 lane1 parity');
@@ -4975,19 +4975,19 @@ begin
   LB.u[0] := 0;
   LB.u[1] := 2;
 
-  LMaskByDispatch := LDispatch^.CmpLtU64x2(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpLtU64x2(LA, LB);
   CheckEqual(Integer(TMask2(2)), Integer(LMaskByDispatch), 'Dispatch CmpLtU64x2 expected mask');
-  LMaskByDispatch := LDispatch^.CmpGtU64x2(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpGtU64x2(LA, LB);
   CheckEqual(Integer(TMask2(1)), Integer(LMaskByDispatch), 'Dispatch CmpGtU64x2 expected mask');
 
   CheckEqual(Integer(TMask2(2)), Integer(VecU64x2CmpLt(LA, LB)), 'Facade CmpLtU64x2 expected mask');
   CheckEqual(Integer(TMask2(1)), Integer(VecU64x2CmpGt(LA, LB)), 'Facade CmpGtU64x2 expected mask');
 
-  LVecByDispatch := LDispatch^.MinU64x2(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.MinU64x2(LA, LB);
   CheckEqual(QWord(0), LVecByDispatch.u[0], 'Dispatch MinU64x2 expected lane0');
   CheckEqual(QWord(1), LVecByDispatch.u[1], 'Dispatch MinU64x2 expected lane1');
 
-  LVecByDispatch := LDispatch^.MaxU64x2(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.MaxU64x2(LA, LB);
   CheckEqual(QWord($FFFFFFFFFFFFFFFF), LVecByDispatch.u[0], 'Dispatch MaxU64x2 expected lane0');
   CheckEqual(QWord(2), LVecByDispatch.u[1], 'Dispatch MaxU64x2 expected lane1');
 end;
@@ -5002,24 +5002,24 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddU32x8), 'Dispatch.AddU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubU32x8), 'Dispatch.SubU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MulU32x8), 'Dispatch.MulU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndU32x8), 'Dispatch.AndU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrU32x8), 'Dispatch.OrU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorU32x8), 'Dispatch.XorU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotU32x8), 'Dispatch.NotU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndNotU32x8), 'Dispatch.AndNotU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftLeftU32x8), 'Dispatch.ShiftLeftU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightU32x8), 'Dispatch.ShiftRightU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqU32x8), 'Dispatch.CmpEqU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtU32x8), 'Dispatch.CmpLtU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtU32x8), 'Dispatch.CmpGtU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLeU32x8), 'Dispatch.CmpLeU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGeU32x8), 'Dispatch.CmpGeU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpNeU32x8), 'Dispatch.CmpNeU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MinU32x8), 'Dispatch.MinU32x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MaxU32x8), 'Dispatch.MaxU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddU32x8), 'Dispatch.CoreVectors.AddU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubU32x8), 'Dispatch.CoreVectors.SubU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MulU32x8), 'Dispatch.CoreVectors.MulU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndU32x8), 'Dispatch.CoreVectors.AndU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrU32x8), 'Dispatch.CoreVectors.OrU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorU32x8), 'Dispatch.CoreVectors.XorU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotU32x8), 'Dispatch.CoreVectors.NotU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndNotU32x8), 'Dispatch.CoreVectors.AndNotU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftLeftU32x8), 'Dispatch.CoreVectors.ShiftLeftU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightU32x8), 'Dispatch.CoreVectors.ShiftRightU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqU32x8), 'Dispatch.CoreVectors.CmpEqU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtU32x8), 'Dispatch.CoreVectors.CmpLtU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtU32x8), 'Dispatch.CoreVectors.CmpGtU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeU32x8), 'Dispatch.CoreVectors.CmpLeU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeU32x8), 'Dispatch.CoreVectors.CmpGeU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeU32x8), 'Dispatch.CoreVectors.CmpNeU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MinU32x8), 'Dispatch.CoreVectors.MinU32x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MaxU32x8), 'Dispatch.CoreVectors.MaxU32x8 should be assigned');
 
   LA.u[0] := 1;          LB.u[0] := 2;
   LA.u[1] := 3;          LB.u[1] := 4;
@@ -5030,29 +5030,29 @@ begin
   LA.u[6] := $80000000;  LB.u[6] := $7FFFFFFF;
   LA.u[7] := 42;         LB.u[7] := 43;
 
-  LVecByDispatch := LDispatch^.AddU32x8(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AddU32x8(LA, LB);
   LVecByFacade := VecU32x8Add(LA, LB);
   CheckEqual(LVecByFacade.u[0], LVecByDispatch.u[0], 'Dispatch/Facade AddU32x8 lane0 parity');
   CheckEqual(LVecByFacade.u[1], LVecByDispatch.u[1], 'Dispatch/Facade AddU32x8 lane1 parity');
   CheckEqual(LVecByFacade.u[2], LVecByDispatch.u[2], 'Dispatch/Facade AddU32x8 lane2 parity');
   CheckEqual(LVecByFacade.u[3], LVecByDispatch.u[3], 'Dispatch/Facade AddU32x8 lane3 parity');
 
-  LVecByDispatch := LDispatch^.AndNotU32x8(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AndNotU32x8(LA, LB);
   LVecByFacade := VecU32x8AndNot(LA, LB);
   CheckEqual(LVecByFacade.u[0], LVecByDispatch.u[0], 'Dispatch/Facade AndNotU32x8 lane0 parity');
   CheckEqual(LVecByFacade.u[1], LVecByDispatch.u[1], 'Dispatch/Facade AndNotU32x8 lane1 parity');
   CheckEqual(LVecByFacade.u[2], LVecByDispatch.u[2], 'Dispatch/Facade AndNotU32x8 lane2 parity');
   CheckEqual(LVecByFacade.u[3], LVecByDispatch.u[3], 'Dispatch/Facade AndNotU32x8 lane3 parity');
 
-  LMaskByDispatch := LDispatch^.CmpNeU32x8(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpNeU32x8(LA, LB);
   CheckEqual(Integer(VecU32x8CmpNe(LA, LB)), Integer(LMaskByDispatch), 'Dispatch/Facade CmpNeU32x8 parity');
 
-  LVecByDispatch := LDispatch^.MinU32x8(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.MinU32x8(LA, LB);
   LVecByFacade := VecU32x8Min(LA, LB);
   CheckEqual(LVecByFacade.u[0], LVecByDispatch.u[0], 'Dispatch/Facade MinU32x8 lane0 parity');
   CheckEqual(LVecByFacade.u[1], LVecByDispatch.u[1], 'Dispatch/Facade MinU32x8 lane1 parity');
 
-  LVecByDispatch := LDispatch^.MaxU32x8(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.MaxU32x8(LA, LB);
   LVecByFacade := VecU32x8Max(LA, LB);
   CheckEqual(LVecByFacade.u[0], LVecByDispatch.u[0], 'Dispatch/Facade MaxU32x8 lane0 parity');
   CheckEqual(LVecByFacade.u[1], LVecByDispatch.u[1], 'Dispatch/Facade MaxU32x8 lane1 parity');
@@ -5068,32 +5068,32 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddF64x4), 'Dispatch.AddF64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubF64x4), 'Dispatch.SubF64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MulF64x4), 'Dispatch.MulF64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.DivF64x4), 'Dispatch.DivF64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.RcpF64x4), 'Dispatch.RcpF64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AbsF64x4), 'Dispatch.AbsF64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SqrtF64x4), 'Dispatch.SqrtF64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MinF64x4), 'Dispatch.MinF64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MaxF64x4), 'Dispatch.MaxF64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddF64x4), 'Dispatch.CoreVectors.AddF64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubF64x4), 'Dispatch.CoreVectors.SubF64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MulF64x4), 'Dispatch.CoreVectors.MulF64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.DivF64x4), 'Dispatch.CoreVectors.DivF64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.RcpF64x4), 'Dispatch.CoreVectors.RcpF64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AbsF64x4), 'Dispatch.CoreVectors.AbsF64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SqrtF64x4), 'Dispatch.CoreVectors.SqrtF64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MinF64x4), 'Dispatch.CoreVectors.MinF64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MaxF64x4), 'Dispatch.CoreVectors.MaxF64x4 should be assigned');
 
   LA.d[0] := 2.0;   LB.d[0] := 1.0;
   LA.d[1] := -4.0;  LB.d[1] := 2.0;
   LA.d[2] := 0.5;   LB.d[2] := 8.0;
   LA.d[3] := 16.0;  LB.d[3] := 4.0;
 
-  LVecByDispatch := LDispatch^.AddF64x4(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AddF64x4(LA, LB);
   LVecByFacade := VecF64x4Add(LA, LB);
   for LIndex := 0 to 3 do
     CheckNear(LVecByFacade.d[LIndex], LVecByDispatch.d[LIndex], 1e-12, 'Dispatch/Facade AddF64x4 lane parity');
 
-  LVecByDispatch := LDispatch^.RcpF64x4(LB);
+  LVecByDispatch := LDispatch^.CoreVectors.RcpF64x4(LB);
   LVecByFacade := VecF64x4Rcp(LB);
   for LIndex := 0 to 3 do
     CheckNear(LVecByFacade.d[LIndex], LVecByDispatch.d[LIndex], 1e-12, 'Dispatch/Facade RcpF64x4 lane parity');
 
-  LVecByDispatch := LDispatch^.MinF64x4(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.MinF64x4(LA, LB);
   LVecByFacade := VecF64x4Min(LA, LB);
   for LIndex := 0 to 3 do
     CheckNear(LVecByFacade.d[LIndex], LVecByDispatch.d[LIndex], 1e-12, 'Dispatch/Facade MinF64x4 lane parity');
@@ -5110,22 +5110,22 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddI64x4), 'Dispatch.AddI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubI64x4), 'Dispatch.SubI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndI64x4), 'Dispatch.AndI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrI64x4), 'Dispatch.OrI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorI64x4), 'Dispatch.XorI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotI64x4), 'Dispatch.NotI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndNotI64x4), 'Dispatch.AndNotI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftLeftI64x4), 'Dispatch.ShiftLeftI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightI64x4), 'Dispatch.ShiftRightI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightArithI64x4), 'Dispatch.ShiftRightArithI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqI64x4), 'Dispatch.CmpEqI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtI64x4), 'Dispatch.CmpLtI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtI64x4), 'Dispatch.CmpGtI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLeI64x4), 'Dispatch.CmpLeI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGeI64x4), 'Dispatch.CmpGeI64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpNeI64x4), 'Dispatch.CmpNeI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddI64x4), 'Dispatch.CoreVectors.AddI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubI64x4), 'Dispatch.CoreVectors.SubI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndI64x4), 'Dispatch.CoreVectors.AndI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrI64x4), 'Dispatch.CoreVectors.OrI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorI64x4), 'Dispatch.CoreVectors.XorI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotI64x4), 'Dispatch.CoreVectors.NotI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndNotI64x4), 'Dispatch.CoreVectors.AndNotI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftLeftI64x4), 'Dispatch.CoreVectors.ShiftLeftI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightI64x4), 'Dispatch.CoreVectors.ShiftRightI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightArithI64x4), 'Dispatch.CoreVectors.ShiftRightArithI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqI64x4), 'Dispatch.CoreVectors.CmpEqI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtI64x4), 'Dispatch.CoreVectors.CmpLtI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtI64x4), 'Dispatch.CoreVectors.CmpGtI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeI64x4), 'Dispatch.CoreVectors.CmpLeI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeI64x4), 'Dispatch.CoreVectors.CmpGeI64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeI64x4), 'Dispatch.CoreVectors.CmpNeI64x4 should be assigned');
 
   LA.i[0] := -1;
   LA.i[1] := 5;
@@ -5136,36 +5136,36 @@ begin
   LB.i[2] := 7;
   LB.i[3] := 9;
 
-  LVecByDispatch := LDispatch^.AndNotI64x4(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AndNotI64x4(LA, LB);
   LVecByFacade := VecI64x4AndNot(LA, LB);
   CheckEqual(LVecByFacade.i[0], LVecByDispatch.i[0], 'Dispatch/Facade AndNotI64x4 lane0 parity');
   CheckEqual(LVecByFacade.i[1], LVecByDispatch.i[1], 'Dispatch/Facade AndNotI64x4 lane1 parity');
   CheckEqual(LVecByFacade.i[2], LVecByDispatch.i[2], 'Dispatch/Facade AndNotI64x4 lane2 parity');
   CheckEqual(LVecByFacade.i[3], LVecByDispatch.i[3], 'Dispatch/Facade AndNotI64x4 lane3 parity');
 
-  LVecByDispatch := LDispatch^.ShiftLeftI64x4(LA, 2);
+  LVecByDispatch := LDispatch^.CoreVectors.ShiftLeftI64x4(LA, 2);
   LVecByFacade := VecI64x4ShiftLeft(LA, 2);
   CheckEqual(LVecByFacade.i[0], LVecByDispatch.i[0], 'Dispatch/Facade ShiftLeftI64x4 lane0 parity');
   CheckEqual(LVecByFacade.i[1], LVecByDispatch.i[1], 'Dispatch/Facade ShiftLeftI64x4 lane1 parity');
   CheckEqual(LVecByFacade.i[2], LVecByDispatch.i[2], 'Dispatch/Facade ShiftLeftI64x4 lane2 parity');
   CheckEqual(LVecByFacade.i[3], LVecByDispatch.i[3], 'Dispatch/Facade ShiftLeftI64x4 lane3 parity');
 
-  LVecByDispatch := LDispatch^.ShiftRightArithI64x4(LA, 2);
+  LVecByDispatch := LDispatch^.CoreVectors.ShiftRightArithI64x4(LA, 2);
   LVecByFacade := VecI64x4ShiftRightArith(LA, 2);
   CheckEqual(LVecByFacade.i[0], LVecByDispatch.i[0], 'Dispatch/Facade ShiftRightArithI64x4 lane0 parity');
   CheckEqual(LVecByFacade.i[1], LVecByDispatch.i[1], 'Dispatch/Facade ShiftRightArithI64x4 lane1 parity');
   CheckEqual(LVecByFacade.i[2], LVecByDispatch.i[2], 'Dispatch/Facade ShiftRightArithI64x4 lane2 parity');
   CheckEqual(LVecByFacade.i[3], LVecByDispatch.i[3], 'Dispatch/Facade ShiftRightArithI64x4 lane3 parity');
 
-  LMaskByDispatch := LDispatch^.CmpLtI64x4(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpLtI64x4(LA, LB);
   CheckEqual(Integer(TMask4(9)), Integer(LMaskByDispatch), 'Dispatch CmpLtI64x4 expected mask');
   CheckEqual(Integer(TMask4(9)), Integer(VecI64x4CmpLt(LA, LB)), 'Facade CmpLtI64x4 expected mask');
 
-  LMaskByDispatch := LDispatch^.CmpGtI64x4(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpGtI64x4(LA, LB);
   CheckEqual(Integer(TMask4(2)), Integer(LMaskByDispatch), 'Dispatch CmpGtI64x4 expected mask');
   CheckEqual(Integer(TMask4(2)), Integer(VecI64x4CmpGt(LA, LB)), 'Facade CmpGtI64x4 expected mask');
 
-  LMaskByDispatch := LDispatch^.CmpEqI64x4(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpEqI64x4(LA, LB);
   CheckEqual(Integer(TMask4(4)), Integer(LMaskByDispatch), 'Dispatch CmpEqI64x4 expected mask');
   CheckEqual(Integer(TMask4(4)), Integer(VecI64x4CmpEq(LA, LB)), 'Facade CmpEqI64x4 expected mask');
 end;
@@ -5180,20 +5180,20 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddU64x4), 'Dispatch.AddU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubU64x4), 'Dispatch.SubU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndU64x4), 'Dispatch.AndU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrU64x4), 'Dispatch.OrU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorU64x4), 'Dispatch.XorU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotU64x4), 'Dispatch.NotU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftLeftU64x4), 'Dispatch.ShiftLeftU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightU64x4), 'Dispatch.ShiftRightU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqU64x4), 'Dispatch.CmpEqU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtU64x4), 'Dispatch.CmpLtU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtU64x4), 'Dispatch.CmpGtU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLeU64x4), 'Dispatch.CmpLeU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGeU64x4), 'Dispatch.CmpGeU64x4 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpNeU64x4), 'Dispatch.CmpNeU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddU64x4), 'Dispatch.CoreVectors.AddU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubU64x4), 'Dispatch.CoreVectors.SubU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndU64x4), 'Dispatch.CoreVectors.AndU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrU64x4), 'Dispatch.CoreVectors.OrU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorU64x4), 'Dispatch.CoreVectors.XorU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotU64x4), 'Dispatch.CoreVectors.NotU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftLeftU64x4), 'Dispatch.CoreVectors.ShiftLeftU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightU64x4), 'Dispatch.CoreVectors.ShiftRightU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqU64x4), 'Dispatch.CoreVectors.CmpEqU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtU64x4), 'Dispatch.CoreVectors.CmpLtU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtU64x4), 'Dispatch.CoreVectors.CmpGtU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeU64x4), 'Dispatch.CoreVectors.CmpLeU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeU64x4), 'Dispatch.CoreVectors.CmpGeU64x4 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeU64x4), 'Dispatch.CoreVectors.CmpNeU64x4 should be assigned');
 
   LA.u[0] := QWord($FFFFFFFFFFFFFFFF);
   LA.u[1] := 0;
@@ -5204,22 +5204,22 @@ begin
   LB.u[2] := 5;
   LB.u[3] := 8;
 
-  LVecByDispatch := LDispatch^.AddU64x4(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AddU64x4(LA, LB);
   LVecByFacade := VecU64x4Add(LA, LB);
   CheckEqual(LVecByFacade.u[0], LVecByDispatch.u[0], 'Dispatch/Facade AddU64x4 lane0 parity');
   CheckEqual(LVecByFacade.u[1], LVecByDispatch.u[1], 'Dispatch/Facade AddU64x4 lane1 parity');
   CheckEqual(LVecByFacade.u[2], LVecByDispatch.u[2], 'Dispatch/Facade AddU64x4 lane2 parity');
   CheckEqual(LVecByFacade.u[3], LVecByDispatch.u[3], 'Dispatch/Facade AddU64x4 lane3 parity');
 
-  LMaskByDispatch := LDispatch^.CmpLtU64x4(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpLtU64x4(LA, LB);
   CheckEqual(Integer(TMask4(2)), Integer(LMaskByDispatch), 'Dispatch CmpLtU64x4 expected mask');
   CheckEqual(Integer(TMask4(2)), Integer(VecU64x4CmpLt(LA, LB)), 'Facade CmpLtU64x4 expected mask');
 
-  LMaskByDispatch := LDispatch^.CmpGtU64x4(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpGtU64x4(LA, LB);
   CheckEqual(Integer(TMask4(9)), Integer(LMaskByDispatch), 'Dispatch CmpGtU64x4 expected mask');
   CheckEqual(Integer(TMask4(9)), Integer(VecU64x4CmpGt(LA, LB)), 'Facade CmpGtU64x4 expected mask');
 
-  LMaskByDispatch := LDispatch^.CmpEqU64x4(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpEqU64x4(LA, LB);
   CheckEqual(Integer(TMask4(4)), Integer(LMaskByDispatch), 'Dispatch CmpEqU64x4 expected mask');
   CheckEqual(Integer(TMask4(4)), Integer(VecU64x4CmpEq(LA, LB)), 'Facade CmpEqU64x4 expected mask');
 end;
@@ -5236,18 +5236,18 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddI64x8), 'Dispatch.AddI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubI64x8), 'Dispatch.SubI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndI64x8), 'Dispatch.AndI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrI64x8), 'Dispatch.OrI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorI64x8), 'Dispatch.XorI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotI64x8), 'Dispatch.NotI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqI64x8), 'Dispatch.CmpEqI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtI64x8), 'Dispatch.CmpLtI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtI64x8), 'Dispatch.CmpGtI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLeI64x8), 'Dispatch.CmpLeI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGeI64x8), 'Dispatch.CmpGeI64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpNeI64x8), 'Dispatch.CmpNeI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddI64x8), 'Dispatch.CoreVectors.AddI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubI64x8), 'Dispatch.CoreVectors.SubI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndI64x8), 'Dispatch.CoreVectors.AndI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrI64x8), 'Dispatch.CoreVectors.OrI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorI64x8), 'Dispatch.CoreVectors.XorI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotI64x8), 'Dispatch.CoreVectors.NotI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqI64x8), 'Dispatch.CoreVectors.CmpEqI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtI64x8), 'Dispatch.CoreVectors.CmpLtI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtI64x8), 'Dispatch.CoreVectors.CmpGtI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeI64x8), 'Dispatch.CoreVectors.CmpLeI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeI64x8), 'Dispatch.CoreVectors.CmpGeI64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeI64x8), 'Dispatch.CoreVectors.CmpNeI64x8 should be assigned');
 
   LA.i[0] := -1;   LB.i[0] := 0;
   LA.i[1] := 5;    LB.i[1] := 1;
@@ -5258,57 +5258,57 @@ begin
   LA.i[6] := 100;  LB.i[6] := 200;
   LA.i[7] := -50;  LB.i[7] := -60;
 
-  LVecByDispatch := LDispatch^.AddI64x8(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AddI64x8(LA, LB);
   LVecByScalar := ScalarAddI64x8(LA, LB);
   for LIndex := 0 to 7 do
     CheckEqual(LVecByScalar.i[LIndex], LVecByDispatch.i[LIndex], 'Dispatch/Scalar AddI64x8 lane' + IntToStr(LIndex));
 
-  LVecByDispatch := LDispatch^.SubI64x8(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.SubI64x8(LA, LB);
   LVecByScalar := ScalarSubI64x8(LA, LB);
   for LIndex := 0 to 7 do
     CheckEqual(LVecByScalar.i[LIndex], LVecByDispatch.i[LIndex], 'Dispatch/Scalar SubI64x8 lane' + IntToStr(LIndex));
 
-  LVecByDispatch := LDispatch^.AndI64x8(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.AndI64x8(LA, LB);
   LVecByScalar := ScalarAndI64x8(LA, LB);
   for LIndex := 0 to 7 do
     CheckEqual(LVecByScalar.i[LIndex], LVecByDispatch.i[LIndex], 'Dispatch/Scalar AndI64x8 lane' + IntToStr(LIndex));
 
-  LVecByDispatch := LDispatch^.OrI64x8(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.OrI64x8(LA, LB);
   LVecByScalar := ScalarOrI64x8(LA, LB);
   for LIndex := 0 to 7 do
     CheckEqual(LVecByScalar.i[LIndex], LVecByDispatch.i[LIndex], 'Dispatch/Scalar OrI64x8 lane' + IntToStr(LIndex));
 
-  LVecByDispatch := LDispatch^.XorI64x8(LA, LB);
+  LVecByDispatch := LDispatch^.CoreVectors.XorI64x8(LA, LB);
   LVecByScalar := ScalarXorI64x8(LA, LB);
   for LIndex := 0 to 7 do
     CheckEqual(LVecByScalar.i[LIndex], LVecByDispatch.i[LIndex], 'Dispatch/Scalar XorI64x8 lane' + IntToStr(LIndex));
 
-  LVecByDispatch := LDispatch^.NotI64x8(LA);
+  LVecByDispatch := LDispatch^.CoreVectors.NotI64x8(LA);
   LVecByScalar := ScalarNotI64x8(LA);
   for LIndex := 0 to 7 do
     CheckEqual(LVecByScalar.i[LIndex], LVecByDispatch.i[LIndex], 'Dispatch/Scalar NotI64x8 lane' + IntToStr(LIndex));
 
-  LMaskByDispatch := LDispatch^.CmpEqI64x8(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpEqI64x8(LA, LB);
   LMaskByScalar := ScalarCmpEqI64x8(LA, LB);
   CheckEqual(Integer(LMaskByScalar), Integer(LMaskByDispatch), 'Dispatch/Scalar CmpEqI64x8 parity');
 
-  LMaskByDispatch := LDispatch^.CmpLtI64x8(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpLtI64x8(LA, LB);
   LMaskByScalar := ScalarCmpLtI64x8(LA, LB);
   CheckEqual(Integer(LMaskByScalar), Integer(LMaskByDispatch), 'Dispatch/Scalar CmpLtI64x8 parity');
 
-  LMaskByDispatch := LDispatch^.CmpGtI64x8(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpGtI64x8(LA, LB);
   LMaskByScalar := ScalarCmpGtI64x8(LA, LB);
   CheckEqual(Integer(LMaskByScalar), Integer(LMaskByDispatch), 'Dispatch/Scalar CmpGtI64x8 parity');
 
-  LMaskByDispatch := LDispatch^.CmpLeI64x8(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpLeI64x8(LA, LB);
   LMaskByScalar := ScalarCmpLeI64x8(LA, LB);
   CheckEqual(Integer(LMaskByScalar), Integer(LMaskByDispatch), 'Dispatch/Scalar CmpLeI64x8 parity');
 
-  LMaskByDispatch := LDispatch^.CmpGeI64x8(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpGeI64x8(LA, LB);
   LMaskByScalar := ScalarCmpGeI64x8(LA, LB);
   CheckEqual(Integer(LMaskByScalar), Integer(LMaskByDispatch), 'Dispatch/Scalar CmpGeI64x8 parity');
 
-  LMaskByDispatch := LDispatch^.CmpNeI64x8(LA, LB);
+  LMaskByDispatch := LDispatch^.CoreVectors.CmpNeI64x8(LA, LB);
   LMaskByScalar := ScalarCmpNeI64x8(LA, LB);
   CheckEqual(Integer(LMaskByScalar), Integer(LMaskByDispatch), 'Dispatch/Scalar CmpNeI64x8 parity');
 end;
@@ -5326,17 +5326,17 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.LoadF32x16), 'Dispatch.LoadF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.StoreF32x16), 'Dispatch.StoreF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SplatF32x16), 'Dispatch.SplatF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ZeroF32x16), 'Dispatch.ZeroF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SelectF32x16), 'Dispatch.SelectF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ClampF32x16), 'Dispatch.ClampF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.FmaF32x16), 'Dispatch.FmaF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.FloorF32x16), 'Dispatch.FloorF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CeilF32x16), 'Dispatch.CeilF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.RoundF32x16), 'Dispatch.RoundF32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.TruncF32x16), 'Dispatch.TruncF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.LoadF32x16), 'Dispatch.CoreVectors.LoadF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.StoreF32x16), 'Dispatch.CoreVectors.StoreF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SplatF32x16), 'Dispatch.CoreVectors.SplatF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ZeroF32x16), 'Dispatch.CoreVectors.ZeroF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SelectF32x16), 'Dispatch.CoreVectors.SelectF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ClampF32x16), 'Dispatch.CoreVectors.ClampF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.FmaF32x16), 'Dispatch.CoreVectors.FmaF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.FloorF32x16), 'Dispatch.CoreVectors.FloorF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CeilF32x16), 'Dispatch.CoreVectors.CeilF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.RoundF32x16), 'Dispatch.CoreVectors.RoundF32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.TruncF32x16), 'Dispatch.CoreVectors.TruncF32x16 should be assigned');
 
   for LIndex := 0 to 15 do
   begin
@@ -5346,28 +5346,28 @@ begin
     LSource[LIndex] := LIndex + 0.5;
   end;
 
-  LByDispatch := LDispatch^.FmaF32x16(LA, LB, LC);
+  LByDispatch := LDispatch^.CoreVectors.FmaF32x16(LA, LB, LC);
   LByFacade := VecF32x16Fma(LA, LB, LC);
   for LIndex := 0 to 15 do
     CheckNear(LByDispatch.f[LIndex], LByFacade.f[LIndex], 0.0001, 'Dispatch/Facade FmaF32x16 lane ' + IntToStr(LIndex));
 
-  LByDispatch := LDispatch^.ClampF32x16(LByDispatch, LDispatch^.SplatF32x16(3.0), LDispatch^.SplatF32x16(20.0));
+  LByDispatch := LDispatch^.CoreVectors.ClampF32x16(LByDispatch, LDispatch^.CoreVectors.SplatF32x16(3.0), LDispatch^.CoreVectors.SplatF32x16(20.0));
   LByFacade := VecF32x16Clamp(LByFacade, VecF32x16Splat(3.0), VecF32x16Splat(20.0));
   for LIndex := 0 to 15 do
     CheckNear(LByDispatch.f[LIndex], LByFacade.f[LIndex], 0.0001, 'Dispatch/Facade ClampF32x16 lane ' + IntToStr(LIndex));
 
   LMask := TMask16($5555);
-  LByDispatch := LDispatch^.SelectF32x16(LMask, LA, LB);
+  LByDispatch := LDispatch^.CoreVectors.SelectF32x16(LMask, LA, LB);
   LByFacade := VecF32x16Select(LMask, LA, LB);
   for LIndex := 0 to 15 do
     CheckNear(LByDispatch.f[LIndex], LByFacade.f[LIndex], 0.0001, 'Dispatch/Facade SelectF32x16 lane ' + IntToStr(LIndex));
 
-  LByDispatch := LDispatch^.LoadF32x16(@LSource[0]);
+  LByDispatch := LDispatch^.CoreVectors.LoadF32x16(@LSource[0]);
   LByFacade := VecF32x16Load(@LSource[0]);
   for LIndex := 0 to 15 do
     CheckNear(LByDispatch.f[LIndex], LByFacade.f[LIndex], 0.0001, 'Dispatch/Facade LoadF32x16 lane ' + IntToStr(LIndex));
 
-  LDispatch^.StoreF32x16(@LStoredDispatch[0], LByDispatch);
+  LDispatch^.CoreVectors.StoreF32x16(@LStoredDispatch[0], LByDispatch);
   VecF32x16Store(@LStoredFacade[0], LByFacade);
   for LIndex := 0 to 15 do
     CheckNear(LStoredDispatch[LIndex], LStoredFacade[LIndex], 0.0001, 'Dispatch/Facade StoreF32x16 lane ' + IntToStr(LIndex));
@@ -5385,17 +5385,17 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.LoadF64x8), 'Dispatch.LoadF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.StoreF64x8), 'Dispatch.StoreF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SplatF64x8), 'Dispatch.SplatF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ZeroF64x8), 'Dispatch.ZeroF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SelectF64x8), 'Dispatch.SelectF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ClampF64x8), 'Dispatch.ClampF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.FmaF64x8), 'Dispatch.FmaF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.FloorF64x8), 'Dispatch.FloorF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CeilF64x8), 'Dispatch.CeilF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.RoundF64x8), 'Dispatch.RoundF64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.TruncF64x8), 'Dispatch.TruncF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.LoadF64x8), 'Dispatch.CoreVectors.LoadF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.StoreF64x8), 'Dispatch.CoreVectors.StoreF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SplatF64x8), 'Dispatch.CoreVectors.SplatF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ZeroF64x8), 'Dispatch.CoreVectors.ZeroF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SelectF64x8), 'Dispatch.CoreVectors.SelectF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ClampF64x8), 'Dispatch.CoreVectors.ClampF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.FmaF64x8), 'Dispatch.CoreVectors.FmaF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.FloorF64x8), 'Dispatch.CoreVectors.FloorF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CeilF64x8), 'Dispatch.CoreVectors.CeilF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.RoundF64x8), 'Dispatch.CoreVectors.RoundF64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.TruncF64x8), 'Dispatch.CoreVectors.TruncF64x8 should be assigned');
 
   for LIndex := 0 to 7 do
   begin
@@ -5405,28 +5405,28 @@ begin
     LSource[LIndex] := LIndex + 0.125;
   end;
 
-  LByDispatch := LDispatch^.FmaF64x8(LA, LB, LC);
+  LByDispatch := LDispatch^.CoreVectors.FmaF64x8(LA, LB, LC);
   LByFacade := VecF64x8Fma(LA, LB, LC);
   for LIndex := 0 to 7 do
     CheckNear(LByDispatch.d[LIndex], LByFacade.d[LIndex], 0.000001, 'Dispatch/Facade FmaF64x8 lane ' + IntToStr(LIndex));
 
-  LByDispatch := LDispatch^.ClampF64x8(LByDispatch, LDispatch^.SplatF64x8(4.0), LDispatch^.SplatF64x8(20.0));
+  LByDispatch := LDispatch^.CoreVectors.ClampF64x8(LByDispatch, LDispatch^.CoreVectors.SplatF64x8(4.0), LDispatch^.CoreVectors.SplatF64x8(20.0));
   LByFacade := VecF64x8Clamp(LByFacade, VecF64x8Splat(4.0), VecF64x8Splat(20.0));
   for LIndex := 0 to 7 do
     CheckNear(LByDispatch.d[LIndex], LByFacade.d[LIndex], 0.000001, 'Dispatch/Facade ClampF64x8 lane ' + IntToStr(LIndex));
 
   LMask := TMask8($55);
-  LByDispatch := LDispatch^.SelectF64x8(LMask, LA, LB);
+  LByDispatch := LDispatch^.CoreVectors.SelectF64x8(LMask, LA, LB);
   LByFacade := VecF64x8Select(LMask, LA, LB);
   for LIndex := 0 to 7 do
     CheckNear(LByDispatch.d[LIndex], LByFacade.d[LIndex], 0.000001, 'Dispatch/Facade SelectF64x8 lane ' + IntToStr(LIndex));
 
-  LByDispatch := LDispatch^.LoadF64x8(@LSource[0]);
+  LByDispatch := LDispatch^.CoreVectors.LoadF64x8(@LSource[0]);
   LByFacade := VecF64x8Load(@LSource[0]);
   for LIndex := 0 to 7 do
     CheckNear(LByDispatch.d[LIndex], LByFacade.d[LIndex], 0.000001, 'Dispatch/Facade LoadF64x8 lane ' + IntToStr(LIndex));
 
-  LDispatch^.StoreF64x8(@LStoredDispatch[0], LByDispatch);
+  LDispatch^.CoreVectors.StoreF64x8(@LStoredDispatch[0], LByDispatch);
   VecF64x8Store(@LStoredFacade[0], LByFacade);
   for LIndex := 0 to 7 do
     CheckNear(LStoredDispatch[LIndex], LStoredFacade[LIndex], 0.000001, 'Dispatch/Facade StoreF64x8 lane ' + IntToStr(LIndex));
@@ -5444,24 +5444,24 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddU32x16), 'Dispatch.AddU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubU32x16), 'Dispatch.SubU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MulU32x16), 'Dispatch.MulU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndU32x16), 'Dispatch.AndU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrU32x16), 'Dispatch.OrU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorU32x16), 'Dispatch.XorU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotU32x16), 'Dispatch.NotU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndNotU32x16), 'Dispatch.AndNotU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftLeftU32x16), 'Dispatch.ShiftLeftU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightU32x16), 'Dispatch.ShiftRightU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqU32x16), 'Dispatch.CmpEqU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtU32x16), 'Dispatch.CmpLtU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtU32x16), 'Dispatch.CmpGtU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLeU32x16), 'Dispatch.CmpLeU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGeU32x16), 'Dispatch.CmpGeU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpNeU32x16), 'Dispatch.CmpNeU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MinU32x16), 'Dispatch.MinU32x16 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MaxU32x16), 'Dispatch.MaxU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddU32x16), 'Dispatch.CoreVectors.AddU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubU32x16), 'Dispatch.CoreVectors.SubU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MulU32x16), 'Dispatch.CoreVectors.MulU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndU32x16), 'Dispatch.CoreVectors.AndU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrU32x16), 'Dispatch.CoreVectors.OrU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorU32x16), 'Dispatch.CoreVectors.XorU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotU32x16), 'Dispatch.CoreVectors.NotU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndNotU32x16), 'Dispatch.CoreVectors.AndNotU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftLeftU32x16), 'Dispatch.CoreVectors.ShiftLeftU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightU32x16), 'Dispatch.CoreVectors.ShiftRightU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqU32x16), 'Dispatch.CoreVectors.CmpEqU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtU32x16), 'Dispatch.CoreVectors.CmpLtU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtU32x16), 'Dispatch.CoreVectors.CmpGtU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeU32x16), 'Dispatch.CoreVectors.CmpLeU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeU32x16), 'Dispatch.CoreVectors.CmpGeU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeU32x16), 'Dispatch.CoreVectors.CmpNeU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MinU32x16), 'Dispatch.CoreVectors.MinU32x16 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MaxU32x16), 'Dispatch.CoreVectors.MaxU32x16 should be assigned');
 
   for LIndex := 0 to 15 do
   begin
@@ -5469,7 +5469,7 @@ begin
     LB.u[LIndex] := DWord(300 - LIndex * 7);
   end;
 
-  LVecDispatch := LDispatch^.AddU32x16(LA, LB);
+  LVecDispatch := LDispatch^.CoreVectors.AddU32x16(LA, LB);
   LVecFacade := VecU32x16Add(LA, LB);
   LVecScalar := ScalarAddU32x16(LA, LB);
   for LIndex := 0 to 15 do
@@ -5478,12 +5478,12 @@ begin
     CheckEqual(LVecDispatch.u[LIndex], LVecScalar.u[LIndex], 'Dispatch/Scalar AddU32x16 lane ' + IntToStr(LIndex));
   end;
 
-  LVecDispatch := LDispatch^.ShiftRightU32x16(LA, 3);
+  LVecDispatch := LDispatch^.CoreVectors.ShiftRightU32x16(LA, 3);
   LVecFacade := VecU32x16ShiftRight(LA, 3);
   for LIndex := 0 to 15 do
     CheckEqual(LVecDispatch.u[LIndex], LVecFacade.u[LIndex], 'Dispatch/Facade ShiftRightU32x16 lane ' + IntToStr(LIndex));
 
-  LMaskDispatch := LDispatch^.CmpLeU32x16(LA, LB);
+  LMaskDispatch := LDispatch^.CoreVectors.CmpLeU32x16(LA, LB);
   LMaskScalar := ScalarCmpLeU32x16(LA, LB);
   CheckEqual(Integer(LMaskScalar), Integer(LMaskDispatch), 'Dispatch/Scalar CmpLeU32x16 parity');
 end;
@@ -5499,20 +5499,20 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddU64x8), 'Dispatch.AddU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubU64x8), 'Dispatch.SubU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndU64x8), 'Dispatch.AndU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrU64x8), 'Dispatch.OrU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorU64x8), 'Dispatch.XorU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotU64x8), 'Dispatch.NotU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftLeftU64x8), 'Dispatch.ShiftLeftU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightU64x8), 'Dispatch.ShiftRightU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqU64x8), 'Dispatch.CmpEqU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtU64x8), 'Dispatch.CmpLtU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtU64x8), 'Dispatch.CmpGtU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLeU64x8), 'Dispatch.CmpLeU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGeU64x8), 'Dispatch.CmpGeU64x8 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpNeU64x8), 'Dispatch.CmpNeU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddU64x8), 'Dispatch.CoreVectors.AddU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubU64x8), 'Dispatch.CoreVectors.SubU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndU64x8), 'Dispatch.CoreVectors.AndU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrU64x8), 'Dispatch.CoreVectors.OrU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorU64x8), 'Dispatch.CoreVectors.XorU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotU64x8), 'Dispatch.CoreVectors.NotU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftLeftU64x8), 'Dispatch.CoreVectors.ShiftLeftU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightU64x8), 'Dispatch.CoreVectors.ShiftRightU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqU64x8), 'Dispatch.CoreVectors.CmpEqU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtU64x8), 'Dispatch.CoreVectors.CmpLtU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtU64x8), 'Dispatch.CoreVectors.CmpGtU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeU64x8), 'Dispatch.CoreVectors.CmpLeU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeU64x8), 'Dispatch.CoreVectors.CmpGeU64x8 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeU64x8), 'Dispatch.CoreVectors.CmpNeU64x8 should be assigned');
 
   for LIndex := 0 to 7 do
   begin
@@ -5520,7 +5520,7 @@ begin
     LB.u[LIndex] := QWord(LIndex) * 33;
   end;
 
-  LVecDispatch := LDispatch^.XorU64x8(LA, LB);
+  LVecDispatch := LDispatch^.CoreVectors.XorU64x8(LA, LB);
   LVecFacade := VecU64x8Xor(LA, LB);
   LVecScalar := ScalarXorU64x8(LA, LB);
   for LIndex := 0 to 7 do
@@ -5529,7 +5529,7 @@ begin
     CheckEqual(LVecDispatch.u[LIndex], LVecScalar.u[LIndex], 'Dispatch/Scalar XorU64x8 lane ' + IntToStr(LIndex));
   end;
 
-  LMaskDispatch := LDispatch^.CmpGtU64x8(LA, LB);
+  LMaskDispatch := LDispatch^.CoreVectors.CmpGtU64x8(LA, LB);
   LMaskScalar := ScalarCmpGtU64x8(LA, LB);
   CheckEqual(Integer(LMaskScalar), Integer(LMaskDispatch), 'Dispatch/Scalar CmpGtU64x8 parity');
 end;
@@ -5545,21 +5545,21 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddI16x32), 'Dispatch.AddI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubI16x32), 'Dispatch.SubI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndI16x32), 'Dispatch.AndI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrI16x32), 'Dispatch.OrI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorI16x32), 'Dispatch.XorI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotI16x32), 'Dispatch.NotI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndNotI16x32), 'Dispatch.AndNotI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftLeftI16x32), 'Dispatch.ShiftLeftI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightI16x32), 'Dispatch.ShiftRightI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.ShiftRightArithI16x32), 'Dispatch.ShiftRightArithI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqI16x32), 'Dispatch.CmpEqI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtI16x32), 'Dispatch.CmpLtI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtI16x32), 'Dispatch.CmpGtI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MinI16x32), 'Dispatch.MinI16x32 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MaxI16x32), 'Dispatch.MaxI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddI16x32), 'Dispatch.CoreVectors.AddI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubI16x32), 'Dispatch.CoreVectors.SubI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndI16x32), 'Dispatch.CoreVectors.AndI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrI16x32), 'Dispatch.CoreVectors.OrI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorI16x32), 'Dispatch.CoreVectors.XorI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotI16x32), 'Dispatch.CoreVectors.NotI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndNotI16x32), 'Dispatch.CoreVectors.AndNotI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftLeftI16x32), 'Dispatch.CoreVectors.ShiftLeftI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightI16x32), 'Dispatch.CoreVectors.ShiftRightI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.ShiftRightArithI16x32), 'Dispatch.CoreVectors.ShiftRightArithI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqI16x32), 'Dispatch.CoreVectors.CmpEqI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtI16x32), 'Dispatch.CoreVectors.CmpLtI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtI16x32), 'Dispatch.CoreVectors.CmpGtI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MinI16x32), 'Dispatch.CoreVectors.MinI16x32 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MaxI16x32), 'Dispatch.CoreVectors.MaxI16x32 should be assigned');
 
   for LIndex := 0 to 31 do
   begin
@@ -5567,7 +5567,7 @@ begin
     LB.i[LIndex] := SmallInt(8 - LIndex);
   end;
 
-  LVecDispatch := LDispatch^.SubI16x32(LA, LB);
+  LVecDispatch := LDispatch^.CoreVectors.SubI16x32(LA, LB);
   LVecFacade := VecI16x32Sub(LA, LB);
   LVecScalar := ScalarSubI16x32(LA, LB);
   for LIndex := 0 to 31 do
@@ -5576,7 +5576,7 @@ begin
     CheckEqual(LVecDispatch.i[LIndex], LVecScalar.i[LIndex], 'Dispatch/Scalar SubI16x32 lane ' + IntToStr(LIndex));
   end;
 
-  LMaskDispatch := LDispatch^.CmpLtI16x32(LA, LB);
+  LMaskDispatch := LDispatch^.CoreVectors.CmpLtI16x32(LA, LB);
   LMaskScalar := ScalarCmpLtI16x32(LA, LB);
   CheckEqual(LongInt(LMaskScalar), LongInt(LMaskDispatch), 'Dispatch/Scalar CmpLtI16x32 parity');
 end;
@@ -5592,18 +5592,18 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddI8x64), 'Dispatch.AddI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubI8x64), 'Dispatch.SubI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndI8x64), 'Dispatch.AndI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrI8x64), 'Dispatch.OrI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorI8x64), 'Dispatch.XorI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotI8x64), 'Dispatch.NotI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndNotI8x64), 'Dispatch.AndNotI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqI8x64), 'Dispatch.CmpEqI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtI8x64), 'Dispatch.CmpLtI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtI8x64), 'Dispatch.CmpGtI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MinI8x64), 'Dispatch.MinI8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MaxI8x64), 'Dispatch.MaxI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddI8x64), 'Dispatch.CoreVectors.AddI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubI8x64), 'Dispatch.CoreVectors.SubI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndI8x64), 'Dispatch.CoreVectors.AndI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrI8x64), 'Dispatch.CoreVectors.OrI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorI8x64), 'Dispatch.CoreVectors.XorI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotI8x64), 'Dispatch.CoreVectors.NotI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndNotI8x64), 'Dispatch.CoreVectors.AndNotI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqI8x64), 'Dispatch.CoreVectors.CmpEqI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtI8x64), 'Dispatch.CoreVectors.CmpLtI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtI8x64), 'Dispatch.CoreVectors.CmpGtI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MinI8x64), 'Dispatch.CoreVectors.MinI8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MaxI8x64), 'Dispatch.CoreVectors.MaxI8x64 should be assigned');
 
   for LIndex := 0 to 63 do
   begin
@@ -5611,7 +5611,7 @@ begin
     LB.i[LIndex] := ShortInt((20 - LIndex) mod 37);
   end;
 
-  LVecDispatch := LDispatch^.AndNotI8x64(LA, LB);
+  LVecDispatch := LDispatch^.CoreVectors.AndNotI8x64(LA, LB);
   LVecFacade := VecI8x64AndNot(LA, LB);
   LVecScalar := ScalarAndNotI8x64(LA, LB);
   for LIndex := 0 to 63 do
@@ -5620,7 +5620,7 @@ begin
     CheckEqual(LVecDispatch.i[LIndex], LVecScalar.i[LIndex], 'Dispatch/Scalar AndNotI8x64 lane ' + IntToStr(LIndex));
   end;
 
-  LMaskDispatch := LDispatch^.CmpEqI8x64(LA, LB);
+  LMaskDispatch := LDispatch^.CoreVectors.CmpEqI8x64(LA, LB);
   LMaskScalar := ScalarCmpEqI8x64(LA, LB);
   CheckEqual(QWord(LMaskScalar), QWord(LMaskDispatch), 'Dispatch/Scalar CmpEqI8x64 parity');
 end;
@@ -5636,17 +5636,17 @@ begin
   LDispatch := GetDispatchTable;
   CheckNotNil(LDispatch, 'Dispatch table should be available');
 
-  CheckTrue(Assigned(LDispatch^.AddU8x64), 'Dispatch.AddU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.SubU8x64), 'Dispatch.SubU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.AndU8x64), 'Dispatch.AndU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.OrU8x64), 'Dispatch.OrU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.XorU8x64), 'Dispatch.XorU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.NotU8x64), 'Dispatch.NotU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpEqU8x64), 'Dispatch.CmpEqU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpLtU8x64), 'Dispatch.CmpLtU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.CmpGtU8x64), 'Dispatch.CmpGtU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MinU8x64), 'Dispatch.MinU8x64 should be assigned');
-  CheckTrue(Assigned(LDispatch^.MaxU8x64), 'Dispatch.MaxU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AddU8x64), 'Dispatch.CoreVectors.AddU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.SubU8x64), 'Dispatch.CoreVectors.SubU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.AndU8x64), 'Dispatch.CoreVectors.AndU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.OrU8x64), 'Dispatch.CoreVectors.OrU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.XorU8x64), 'Dispatch.CoreVectors.XorU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.NotU8x64), 'Dispatch.CoreVectors.NotU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpEqU8x64), 'Dispatch.CoreVectors.CmpEqU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLtU8x64), 'Dispatch.CoreVectors.CmpLtU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGtU8x64), 'Dispatch.CoreVectors.CmpGtU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MinU8x64), 'Dispatch.CoreVectors.MinU8x64 should be assigned');
+  CheckTrue(Assigned(LDispatch^.CoreVectors.MaxU8x64), 'Dispatch.CoreVectors.MaxU8x64 should be assigned');
 
   for LIndex := 0 to 63 do
   begin
@@ -5654,7 +5654,7 @@ begin
     LB.u[LIndex] := Byte((255 - LIndex * 2) and $FF);
   end;
 
-  LVecDispatch := LDispatch^.MaxU8x64(LA, LB);
+  LVecDispatch := LDispatch^.CoreVectors.MaxU8x64(LA, LB);
   LVecFacade := VecU8x64Max(LA, LB);
   LVecScalar := ScalarMaxU8x64(LA, LB);
   for LIndex := 0 to 63 do
@@ -5663,7 +5663,7 @@ begin
     CheckEqual(LVecDispatch.u[LIndex], LVecScalar.u[LIndex], 'Dispatch/Scalar MaxU8x64 lane ' + IntToStr(LIndex));
   end;
 
-  LMaskDispatch := LDispatch^.CmpGtU8x64(LA, LB);
+  LMaskDispatch := LDispatch^.CoreVectors.CmpGtU8x64(LA, LB);
   LMaskScalar := ScalarCmpGtU8x64(LA, LB);
   CheckEqual(QWord(LMaskScalar), QWord(LMaskDispatch), 'Dispatch/Scalar CmpGtU8x64 parity');
 end;
@@ -6598,10 +6598,10 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSE2, LSSE2Table) then
     Exit;
 
-  CheckTrue(Assigned(LSSE2Table.MulI32x4), 'SSE2 MulI32x4 should be assigned');
-  CheckTrue(Assigned(LSSE2Table.MulU32x4), 'SSE2 MulU32x4 should be assigned');
-  CheckTrue(Pointer(LSSE2Table.MulI32x4) <> Pointer(LScalarTable.MulI32x4), 'SSE2 MulI32x4 should not remain scalar fallback when vector asm is enabled');
-  CheckTrue(Pointer(LSSE2Table.MulU32x4) <> Pointer(LScalarTable.MulU32x4), 'SSE2 MulU32x4 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.MulI32x4), 'SSE2 MulI32x4 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.MulU32x4), 'SSE2 MulU32x4 should be assigned');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.MulI32x4) <> Pointer(LScalarTable.CoreVectors.MulI32x4), 'SSE2 MulI32x4 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.MulU32x4) <> Pointer(LScalarTable.CoreVectors.MulU32x4), 'SSE2 MulU32x4 should not remain scalar fallback when vector asm is enabled');
 
   LI32A.i[0] := -1;
   LI32A.i[1] := 12345;
@@ -6622,11 +6622,11 @@ begin
   LU32B.u[3] := DWord($02468ACE);
 
   LI32Expected := ScalarMulI32x4(LI32A, LI32B);
-  LI32Actual := LSSE2Table.MulI32x4(LI32A, LI32B);
+  LI32Actual := LSSE2Table.CoreVectors.MulI32x4(LI32A, LI32B);
   AssertVecI32x4Equal('SSE2 MulI32x4 parity', LI32Expected, LI32Actual);
 
   LU32Expected := ScalarMulU32x4(LU32A, LU32B);
-  LU32Actual := LSSE2Table.MulU32x4(LU32A, LU32B);
+  LU32Actual := LSSE2Table.CoreVectors.MulU32x4(LU32A, LU32B);
   AssertVecU32x4Equal('SSE2 MulU32x4 parity', LU32Expected, LU32Actual);
 
   for LIndex := 0 to 3 do
@@ -6654,10 +6654,10 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSE2, LSSE2Table) then
     Exit;
 
-  CheckTrue(Assigned(LSSE2Table.CmpEqI64x2), 'SSE2 CmpEqI64x2 should be assigned');
-  CheckTrue(Assigned(LSSE2Table.CmpGtI64x2), 'SSE2 CmpGtI64x2 should be assigned');
-  CheckTrue(Pointer(LSSE2Table.CmpEqI64x2) <> Pointer(LScalarTable.CmpEqI64x2), 'SSE2 CmpEqI64x2 should not remain scalar fallback when vector asm is enabled');
-  CheckTrue(Pointer(LSSE2Table.CmpGtI64x2) <> Pointer(LScalarTable.CmpGtI64x2), 'SSE2 CmpGtI64x2 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.CmpEqI64x2), 'SSE2 CmpEqI64x2 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.CmpGtI64x2), 'SSE2 CmpGtI64x2 should be assigned');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.CmpEqI64x2) <> Pointer(LScalarTable.CoreVectors.CmpEqI64x2), 'SSE2 CmpEqI64x2 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.CmpGtI64x2) <> Pointer(LScalarTable.CoreVectors.CmpGtI64x2), 'SSE2 CmpGtI64x2 should not remain scalar fallback when vector asm is enabled');
 
   LCanRunSSE2 := LSSE2Table.BackendInfo.Available and TrySetActiveBackend(sbSSE2);
   if not LCanRunSSE2 then
@@ -6683,15 +6683,15 @@ begin
   LGtMask2B.i[1] := -2147483648;
 
   LMaskExpected := ScalarCmpEqI64x2(LEqA, LEqB);
-  LMaskActual := LCurrentDispatch^.CmpEqI64x2(LEqA, LEqB);
+  LMaskActual := LCurrentDispatch^.CoreVectors.CmpEqI64x2(LEqA, LEqB);
   CheckEqual(Integer(LMaskExpected), Integer(LMaskActual), 'SSE2 CmpEqI64x2 scalar parity');
 
   LMaskExpected := ScalarCmpGtI64x2(LGtMask1A, LGtMask1B);
-  LMaskActual := LCurrentDispatch^.CmpGtI64x2(LGtMask1A, LGtMask1B);
+  LMaskActual := LCurrentDispatch^.CoreVectors.CmpGtI64x2(LGtMask1A, LGtMask1B);
   CheckEqual(Integer(LMaskExpected), Integer(LMaskActual), 'SSE2 CmpGtI64x2 scalar parity mask1');
 
   LMaskExpected := ScalarCmpGtI64x2(LGtMask2A, LGtMask2B);
-  LMaskActual := LCurrentDispatch^.CmpGtI64x2(LGtMask2A, LGtMask2B);
+  LMaskActual := LCurrentDispatch^.CoreVectors.CmpGtI64x2(LGtMask2A, LGtMask2B);
   CheckEqual(Integer(LMaskExpected), Integer(LMaskActual), 'SSE2 CmpGtI64x2 scalar parity mask2');
 end;
 
@@ -6735,20 +6735,20 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSE2, LSSE2Table) then
     Exit;
 
-  CheckTrue(Assigned(LSSE2Table.RoundF32x4), 'SSE2 RoundF32x4 should be assigned');
-  CheckTrue(Assigned(LSSE2Table.LengthF32x4), 'SSE2 LengthF32x4 should be assigned');
-  CheckTrue(Assigned(LSSE2Table.LengthF32x3), 'SSE2 LengthF32x3 should be assigned');
-  CheckTrue(Assigned(LSSE2Table.NormalizeF32x4), 'SSE2 NormalizeF32x4 should be assigned');
-  CheckTrue(Assigned(LSSE2Table.NormalizeF32x3), 'SSE2 NormalizeF32x3 should be assigned');
-  CheckTrue(Assigned(LSSE2Table.DotF32x3), 'SSE2 DotF32x3 should be assigned');
-  CheckTrue(Assigned(LSSE2Table.CrossF32x3), 'SSE2 CrossF32x3 should be assigned');
-  CheckTrue(Pointer(LSSE2Table.RoundF32x4) <> Pointer(LScalarTable.RoundF32x4), 'SSE2 RoundF32x4 should not remain scalar fallback when vector asm is enabled');
-  CheckTrue(Pointer(LSSE2Table.LengthF32x4) <> Pointer(LScalarTable.LengthF32x4), 'SSE2 LengthF32x4 should not remain scalar fallback when vector asm is enabled');
-  CheckTrue(Pointer(LSSE2Table.LengthF32x3) <> Pointer(LScalarTable.LengthF32x3), 'SSE2 LengthF32x3 should not remain scalar fallback when vector asm is enabled');
-  CheckTrue(Pointer(LSSE2Table.NormalizeF32x4) <> Pointer(LScalarTable.NormalizeF32x4), 'SSE2 NormalizeF32x4 should not remain scalar fallback when vector asm is enabled');
-  CheckTrue(Pointer(LSSE2Table.NormalizeF32x3) <> Pointer(LScalarTable.NormalizeF32x3), 'SSE2 NormalizeF32x3 should not remain scalar fallback when vector asm is enabled');
-  CheckTrue(Pointer(LSSE2Table.DotF32x3) <> Pointer(LScalarTable.DotF32x3), 'SSE2 DotF32x3 should not remain scalar fallback when vector asm is enabled');
-  CheckTrue(Pointer(LSSE2Table.CrossF32x3) <> Pointer(LScalarTable.CrossF32x3), 'SSE2 CrossF32x3 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.RoundF32x4), 'SSE2 RoundF32x4 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.LengthF32x4), 'SSE2 LengthF32x4 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.LengthF32x3), 'SSE2 LengthF32x3 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.NormalizeF32x4), 'SSE2 NormalizeF32x4 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.NormalizeF32x3), 'SSE2 NormalizeF32x3 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.DotF32x3), 'SSE2 DotF32x3 should be assigned');
+  CheckTrue(Assigned(LSSE2Table.CoreVectors.CrossF32x3), 'SSE2 CrossF32x3 should be assigned');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.RoundF32x4) <> Pointer(LScalarTable.CoreVectors.RoundF32x4), 'SSE2 RoundF32x4 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.LengthF32x4) <> Pointer(LScalarTable.CoreVectors.LengthF32x4), 'SSE2 LengthF32x4 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.LengthF32x3) <> Pointer(LScalarTable.CoreVectors.LengthF32x3), 'SSE2 LengthF32x3 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.NormalizeF32x4) <> Pointer(LScalarTable.CoreVectors.NormalizeF32x4), 'SSE2 NormalizeF32x4 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.NormalizeF32x3) <> Pointer(LScalarTable.CoreVectors.NormalizeF32x3), 'SSE2 NormalizeF32x3 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.DotF32x3) <> Pointer(LScalarTable.CoreVectors.DotF32x3), 'SSE2 DotF32x3 should not remain scalar fallback when vector asm is enabled');
+  CheckTrue(Pointer(LSSE2Table.CoreVectors.CrossF32x3) <> Pointer(LScalarTable.CoreVectors.CrossF32x3), 'SSE2 CrossF32x3 should not remain scalar fallback when vector asm is enabled');
 
   LCanRunSSE2 := LSSE2Table.BackendInfo.Available and TrySetActiveBackend(sbSSE2);
   if not LCanRunSSE2 then
@@ -6805,39 +6805,39 @@ begin
   LCrossB.f[3] := 123.0;
 
   LRoundExpected := ScalarRoundF32x4(LRoundInput);
-  LRoundActual := LCurrentDispatch^.RoundF32x4(LRoundInput);
+  LRoundActual := LCurrentDispatch^.CoreVectors.RoundF32x4(LRoundInput);
   AssertVecF32x4Equal('SSE2 RoundF32x4 scalar parity', LRoundExpected, LRoundActual, 0.0);
 
   LLength4Expected := ScalarLengthF32x4(LLengthInput);
-  LLength4Actual := LCurrentDispatch^.LengthF32x4(LLengthInput);
+  LLength4Actual := LCurrentDispatch^.CoreVectors.LengthF32x4(LLengthInput);
   CheckNear(LLength4Expected, LLength4Actual, 1e-5, 'SSE2 LengthF32x4 scalar parity');
 
   LLength3Expected := ScalarLengthF32x3(LLengthInput);
-  LLength3Actual := LCurrentDispatch^.LengthF32x3(LLengthInput);
+  LLength3Actual := LCurrentDispatch^.CoreVectors.LengthF32x3(LLengthInput);
   CheckNear(LLength3Expected, LLength3Actual, 1e-5, 'SSE2 LengthF32x3 scalar parity');
 
   LDotExpected := ScalarDotF32x3(LDotA, LDotB);
-  LDotActual := LCurrentDispatch^.DotF32x3(LDotA, LDotB);
+  LDotActual := LCurrentDispatch^.CoreVectors.DotF32x3(LDotA, LDotB);
   CheckNear(LDotExpected, LDotActual, 0.0, 'SSE2 DotF32x3 scalar parity');
 
   LCrossExpected := ScalarCrossF32x3(LCrossA, LCrossB);
-  LCrossActual := LCurrentDispatch^.CrossF32x3(LCrossA, LCrossB);
+  LCrossActual := LCurrentDispatch^.CoreVectors.CrossF32x3(LCrossA, LCrossB);
   AssertVecF32x4Equal('SSE2 CrossF32x3 scalar parity', LCrossExpected, LCrossActual, 0.0);
 
   LNormalize4Expected := ScalarNormalizeF32x4(LNormalize4Input);
-  LNormalize4Actual := LCurrentDispatch^.NormalizeF32x4(LNormalize4Input);
+  LNormalize4Actual := LCurrentDispatch^.CoreVectors.NormalizeF32x4(LNormalize4Input);
   AssertVecF32x4Equal('SSE2 NormalizeF32x4 scalar parity', LNormalize4Expected, LNormalize4Actual, 0.0);
 
   LNormalize4ZeroExpected := ScalarNormalizeF32x4(LNormalize4ZeroInput);
-  LNormalize4ZeroActual := LCurrentDispatch^.NormalizeF32x4(LNormalize4ZeroInput);
+  LNormalize4ZeroActual := LCurrentDispatch^.CoreVectors.NormalizeF32x4(LNormalize4ZeroInput);
   AssertVecF32x4Equal('SSE2 NormalizeF32x4 zero scalar parity', LNormalize4ZeroExpected, LNormalize4ZeroActual, 0.0);
 
   LNormalize3Expected := ScalarNormalizeF32x3(LNormalize3Input);
-  LNormalize3Actual := LCurrentDispatch^.NormalizeF32x3(LNormalize3Input);
+  LNormalize3Actual := LCurrentDispatch^.CoreVectors.NormalizeF32x3(LNormalize3Input);
   AssertVecF32x4Equal('SSE2 NormalizeF32x3 scalar parity', LNormalize3Expected, LNormalize3Actual, 0.0);
 
   LNormalize3ZeroExpected := ScalarNormalizeF32x3(LNormalize3ZeroInput);
-  LNormalize3ZeroActual := LCurrentDispatch^.NormalizeF32x3(LNormalize3ZeroInput);
+  LNormalize3ZeroActual := LCurrentDispatch^.CoreVectors.NormalizeF32x3(LNormalize3ZeroInput);
   AssertVecF32x4Equal('SSE2 NormalizeF32x3 zero scalar parity', LNormalize3ZeroExpected, LNormalize3ZeroActual, 0.0);
 end;
 
@@ -7066,39 +7066,39 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertSourceContains('LoadF32x8', 'table.LoadF32x8 := @NEONLoadF32x8_ASM;');
-  AssertSourceContains('LoadF32x16', 'table.LoadF32x16 := @NEONLoadF32x16_ASM;');
-  AssertSourceContains('LoadF64x4', 'table.LoadF64x4 := @NEONLoadF64x4_ASM;');
-  AssertSourceContains('LoadF64x8', 'table.LoadF64x8 := @NEONLoadF64x8_ASM;');
-  AssertSourceContains('StoreF32x8', 'table.StoreF32x8 := @NEONStoreF32x8_ASM;');
-  AssertSourceContains('StoreF32x16', 'table.StoreF32x16 := @NEONStoreF32x16_ASM;');
-  AssertSourceContains('StoreF64x4', 'table.StoreF64x4 := @NEONStoreF64x4_ASM;');
-  AssertSourceContains('StoreF64x8', 'table.StoreF64x8 := @NEONStoreF64x8_ASM;');
-  AssertSourceContains('SplatF32x8', 'table.SplatF32x8 := @NEONSplatF32x8_ASM;');
-  AssertSourceContains('SplatF32x16', 'table.SplatF32x16 := @NEONSplatF32x16_ASM;');
-  AssertSourceContains('SplatF64x4', 'table.SplatF64x4 := @NEONSplatF64x4_ASM;');
-  AssertSourceContains('SplatF64x8', 'table.SplatF64x8 := @NEONSplatF64x8_ASM;');
-  AssertSourceContains('ZeroF32x8', 'table.ZeroF32x8 := @NEONZeroF32x8_ASM;');
-  AssertSourceContains('ZeroF32x16', 'table.ZeroF32x16 := @NEONZeroF32x16_ASM;');
-  AssertSourceContains('ZeroF64x4', 'table.ZeroF64x4 := @NEONZeroF64x4_ASM;');
-  AssertSourceContains('ZeroF64x8', 'table.ZeroF64x8 := @NEONZeroF64x8_ASM;');
+  AssertSourceContains('LoadF32x8', 'table.CoreVectors.LoadF32x8 := @NEONLoadF32x8_ASM;');
+  AssertSourceContains('LoadF32x16', 'table.CoreVectors.LoadF32x16 := @NEONLoadF32x16_ASM;');
+  AssertSourceContains('LoadF64x4', 'table.CoreVectors.LoadF64x4 := @NEONLoadF64x4_ASM;');
+  AssertSourceContains('LoadF64x8', 'table.CoreVectors.LoadF64x8 := @NEONLoadF64x8_ASM;');
+  AssertSourceContains('StoreF32x8', 'table.CoreVectors.StoreF32x8 := @NEONStoreF32x8_ASM;');
+  AssertSourceContains('StoreF32x16', 'table.CoreVectors.StoreF32x16 := @NEONStoreF32x16_ASM;');
+  AssertSourceContains('StoreF64x4', 'table.CoreVectors.StoreF64x4 := @NEONStoreF64x4_ASM;');
+  AssertSourceContains('StoreF64x8', 'table.CoreVectors.StoreF64x8 := @NEONStoreF64x8_ASM;');
+  AssertSourceContains('SplatF32x8', 'table.CoreVectors.SplatF32x8 := @NEONSplatF32x8_ASM;');
+  AssertSourceContains('SplatF32x16', 'table.CoreVectors.SplatF32x16 := @NEONSplatF32x16_ASM;');
+  AssertSourceContains('SplatF64x4', 'table.CoreVectors.SplatF64x4 := @NEONSplatF64x4_ASM;');
+  AssertSourceContains('SplatF64x8', 'table.CoreVectors.SplatF64x8 := @NEONSplatF64x8_ASM;');
+  AssertSourceContains('ZeroF32x8', 'table.CoreVectors.ZeroF32x8 := @NEONZeroF32x8_ASM;');
+  AssertSourceContains('ZeroF32x16', 'table.CoreVectors.ZeroF32x16 := @NEONZeroF32x16_ASM;');
+  AssertSourceContains('ZeroF64x4', 'table.CoreVectors.ZeroF64x4 := @NEONZeroF64x4_ASM;');
+  AssertSourceContains('ZeroF64x8', 'table.CoreVectors.ZeroF64x8 := @NEONZeroF64x8_ASM;');
 
-  AssertSourceOmits('LoadF32x8 wrapper rebinding', 'table.LoadF32x8 := @NEONLoadF32x8;');
-  AssertSourceOmits('LoadF32x16 wrapper rebinding', 'table.LoadF32x16 := @NEONLoadF32x16;');
-  AssertSourceOmits('LoadF64x4 wrapper rebinding', 'table.LoadF64x4 := @NEONLoadF64x4;');
-  AssertSourceOmits('LoadF64x8 wrapper rebinding', 'table.LoadF64x8 := @NEONLoadF64x8;');
-  AssertSourceOmits('StoreF32x8 wrapper rebinding', 'table.StoreF32x8 := @NEONStoreF32x8;');
-  AssertSourceOmits('StoreF32x16 wrapper rebinding', 'table.StoreF32x16 := @NEONStoreF32x16;');
-  AssertSourceOmits('StoreF64x4 wrapper rebinding', 'table.StoreF64x4 := @NEONStoreF64x4;');
-  AssertSourceOmits('StoreF64x8 wrapper rebinding', 'table.StoreF64x8 := @NEONStoreF64x8;');
-  AssertSourceOmits('SplatF32x8 wrapper rebinding', 'table.SplatF32x8 := @NEONSplatF32x8;');
-  AssertSourceOmits('SplatF32x16 wrapper rebinding', 'table.SplatF32x16 := @NEONSplatF32x16;');
-  AssertSourceOmits('SplatF64x4 wrapper rebinding', 'table.SplatF64x4 := @NEONSplatF64x4;');
-  AssertSourceOmits('SplatF64x8 wrapper rebinding', 'table.SplatF64x8 := @NEONSplatF64x8;');
-  AssertSourceOmits('ZeroF32x8 wrapper rebinding', 'table.ZeroF32x8 := @NEONZeroF32x8;');
-  AssertSourceOmits('ZeroF32x16 wrapper rebinding', 'table.ZeroF32x16 := @NEONZeroF32x16;');
-  AssertSourceOmits('ZeroF64x4 wrapper rebinding', 'table.ZeroF64x4 := @NEONZeroF64x4;');
-  AssertSourceOmits('ZeroF64x8 wrapper rebinding', 'table.ZeroF64x8 := @NEONZeroF64x8;');
+  AssertSourceOmits('LoadF32x8 wrapper rebinding', 'table.CoreVectors.LoadF32x8 := @NEONLoadF32x8;');
+  AssertSourceOmits('LoadF32x16 wrapper rebinding', 'table.CoreVectors.LoadF32x16 := @NEONLoadF32x16;');
+  AssertSourceOmits('LoadF64x4 wrapper rebinding', 'table.CoreVectors.LoadF64x4 := @NEONLoadF64x4;');
+  AssertSourceOmits('LoadF64x8 wrapper rebinding', 'table.CoreVectors.LoadF64x8 := @NEONLoadF64x8;');
+  AssertSourceOmits('StoreF32x8 wrapper rebinding', 'table.CoreVectors.StoreF32x8 := @NEONStoreF32x8;');
+  AssertSourceOmits('StoreF32x16 wrapper rebinding', 'table.CoreVectors.StoreF32x16 := @NEONStoreF32x16;');
+  AssertSourceOmits('StoreF64x4 wrapper rebinding', 'table.CoreVectors.StoreF64x4 := @NEONStoreF64x4;');
+  AssertSourceOmits('StoreF64x8 wrapper rebinding', 'table.CoreVectors.StoreF64x8 := @NEONStoreF64x8;');
+  AssertSourceOmits('SplatF32x8 wrapper rebinding', 'table.CoreVectors.SplatF32x8 := @NEONSplatF32x8;');
+  AssertSourceOmits('SplatF32x16 wrapper rebinding', 'table.CoreVectors.SplatF32x16 := @NEONSplatF32x16;');
+  AssertSourceOmits('SplatF64x4 wrapper rebinding', 'table.CoreVectors.SplatF64x4 := @NEONSplatF64x4;');
+  AssertSourceOmits('SplatF64x8 wrapper rebinding', 'table.CoreVectors.SplatF64x8 := @NEONSplatF64x8;');
+  AssertSourceOmits('ZeroF32x8 wrapper rebinding', 'table.CoreVectors.ZeroF32x8 := @NEONZeroF32x8;');
+  AssertSourceOmits('ZeroF32x16 wrapper rebinding', 'table.CoreVectors.ZeroF32x16 := @NEONZeroF32x16;');
+  AssertSourceOmits('ZeroF64x4 wrapper rebinding', 'table.CoreVectors.ZeroF64x4 := @NEONZeroF64x4;');
+  AssertSourceOmits('ZeroF64x8 wrapper rebinding', 'table.CoreVectors.ZeroF64x8 := @NEONZeroF64x8;');
 
   AssertDeadWrapperRemoved('NEONLoadF32x8', 'function NEONLoadF32x8(');
   AssertDeadWrapperRemoved('NEONLoadF32x16', 'function NEONLoadF32x16(');
@@ -7126,22 +7126,22 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertRuntimeSlotExpectation('LoadF32x8', Pointer(LScalarTable.LoadF32x8), Pointer(LNEONTable.LoadF32x8));
-  AssertRuntimeSlotExpectation('LoadF32x16', Pointer(LScalarTable.LoadF32x16), Pointer(LNEONTable.LoadF32x16));
-  AssertRuntimeSlotExpectation('LoadF64x4', Pointer(LScalarTable.LoadF64x4), Pointer(LNEONTable.LoadF64x4));
-  AssertRuntimeSlotExpectation('LoadF64x8', Pointer(LScalarTable.LoadF64x8), Pointer(LNEONTable.LoadF64x8));
-  AssertRuntimeSlotExpectation('StoreF32x8', Pointer(LScalarTable.StoreF32x8), Pointer(LNEONTable.StoreF32x8));
-  AssertRuntimeSlotExpectation('StoreF32x16', Pointer(LScalarTable.StoreF32x16), Pointer(LNEONTable.StoreF32x16));
-  AssertRuntimeSlotExpectation('StoreF64x4', Pointer(LScalarTable.StoreF64x4), Pointer(LNEONTable.StoreF64x4));
-  AssertRuntimeSlotExpectation('StoreF64x8', Pointer(LScalarTable.StoreF64x8), Pointer(LNEONTable.StoreF64x8));
-  AssertRuntimeSlotExpectation('SplatF32x8', Pointer(LScalarTable.SplatF32x8), Pointer(LNEONTable.SplatF32x8));
-  AssertRuntimeSlotExpectation('SplatF32x16', Pointer(LScalarTable.SplatF32x16), Pointer(LNEONTable.SplatF32x16));
-  AssertRuntimeSlotExpectation('SplatF64x4', Pointer(LScalarTable.SplatF64x4), Pointer(LNEONTable.SplatF64x4));
-  AssertRuntimeSlotExpectation('SplatF64x8', Pointer(LScalarTable.SplatF64x8), Pointer(LNEONTable.SplatF64x8));
-  AssertRuntimeSlotExpectation('ZeroF32x8', Pointer(LScalarTable.ZeroF32x8), Pointer(LNEONTable.ZeroF32x8));
-  AssertRuntimeSlotExpectation('ZeroF32x16', Pointer(LScalarTable.ZeroF32x16), Pointer(LNEONTable.ZeroF32x16));
-  AssertRuntimeSlotExpectation('ZeroF64x4', Pointer(LScalarTable.ZeroF64x4), Pointer(LNEONTable.ZeroF64x4));
-  AssertRuntimeSlotExpectation('ZeroF64x8', Pointer(LScalarTable.ZeroF64x8), Pointer(LNEONTable.ZeroF64x8));
+  AssertRuntimeSlotExpectation('LoadF32x8', Pointer(LScalarTable.CoreVectors.LoadF32x8), Pointer(LNEONTable.CoreVectors.LoadF32x8));
+  AssertRuntimeSlotExpectation('LoadF32x16', Pointer(LScalarTable.CoreVectors.LoadF32x16), Pointer(LNEONTable.CoreVectors.LoadF32x16));
+  AssertRuntimeSlotExpectation('LoadF64x4', Pointer(LScalarTable.CoreVectors.LoadF64x4), Pointer(LNEONTable.CoreVectors.LoadF64x4));
+  AssertRuntimeSlotExpectation('LoadF64x8', Pointer(LScalarTable.CoreVectors.LoadF64x8), Pointer(LNEONTable.CoreVectors.LoadF64x8));
+  AssertRuntimeSlotExpectation('StoreF32x8', Pointer(LScalarTable.CoreVectors.StoreF32x8), Pointer(LNEONTable.CoreVectors.StoreF32x8));
+  AssertRuntimeSlotExpectation('StoreF32x16', Pointer(LScalarTable.CoreVectors.StoreF32x16), Pointer(LNEONTable.CoreVectors.StoreF32x16));
+  AssertRuntimeSlotExpectation('StoreF64x4', Pointer(LScalarTable.CoreVectors.StoreF64x4), Pointer(LNEONTable.CoreVectors.StoreF64x4));
+  AssertRuntimeSlotExpectation('StoreF64x8', Pointer(LScalarTable.CoreVectors.StoreF64x8), Pointer(LNEONTable.CoreVectors.StoreF64x8));
+  AssertRuntimeSlotExpectation('SplatF32x8', Pointer(LScalarTable.CoreVectors.SplatF32x8), Pointer(LNEONTable.CoreVectors.SplatF32x8));
+  AssertRuntimeSlotExpectation('SplatF32x16', Pointer(LScalarTable.CoreVectors.SplatF32x16), Pointer(LNEONTable.CoreVectors.SplatF32x16));
+  AssertRuntimeSlotExpectation('SplatF64x4', Pointer(LScalarTable.CoreVectors.SplatF64x4), Pointer(LNEONTable.CoreVectors.SplatF64x4));
+  AssertRuntimeSlotExpectation('SplatF64x8', Pointer(LScalarTable.CoreVectors.SplatF64x8), Pointer(LNEONTable.CoreVectors.SplatF64x8));
+  AssertRuntimeSlotExpectation('ZeroF32x8', Pointer(LScalarTable.CoreVectors.ZeroF32x8), Pointer(LNEONTable.CoreVectors.ZeroF32x8));
+  AssertRuntimeSlotExpectation('ZeroF32x16', Pointer(LScalarTable.CoreVectors.ZeroF32x16), Pointer(LNEONTable.CoreVectors.ZeroF32x16));
+  AssertRuntimeSlotExpectation('ZeroF64x4', Pointer(LScalarTable.CoreVectors.ZeroF64x4), Pointer(LNEONTable.CoreVectors.ZeroF64x4));
+  AssertRuntimeSlotExpectation('ZeroF64x8', Pointer(LScalarTable.CoreVectors.ZeroF64x8), Pointer(LNEONTable.CoreVectors.ZeroF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_DotFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -7188,9 +7188,9 @@ begin
   AssertDeadWrapperRemoved('NEONDotF64x2', 'function NEONDotF64x2(');
   AssertDeadWrapperRemoved('NEONDotF64x4', 'function NEONDotF64x4(');
 
-  AssertRegisterKeepsBaseScalar('DotF32x8', 'table.DotF32x8 := @NEONDotF32x8;');
-  AssertRegisterKeepsBaseScalar('DotF64x2', 'table.DotF64x2 := @NEONDotF64x2;');
-  AssertRegisterKeepsBaseScalar('DotF64x4', 'table.DotF64x4 := @NEONDotF64x4;');
+  AssertRegisterKeepsBaseScalar('DotF32x8', 'table.CoreVectors.DotF32x8 := @NEONDotF32x8;');
+  AssertRegisterKeepsBaseScalar('DotF64x2', 'table.CoreVectors.DotF64x2 := @NEONDotF64x2;');
+  AssertRegisterKeepsBaseScalar('DotF64x4', 'table.CoreVectors.DotF64x4 := @NEONDotF64x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -7201,9 +7201,9 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('DotF32x8', Pointer(LScalarTable.DotF32x8), Pointer(LNEONTable.DotF32x8));
-  AssertSlotReusesScalar('DotF64x2', Pointer(LScalarTable.DotF64x2), Pointer(LNEONTable.DotF64x2));
-  AssertSlotReusesScalar('DotF64x4', Pointer(LScalarTable.DotF64x4), Pointer(LNEONTable.DotF64x4));
+  AssertSlotReusesScalar('DotF32x8', Pointer(LScalarTable.CoreVectors.DotF32x8), Pointer(LNEONTable.CoreVectors.DotF32x8));
+  AssertSlotReusesScalar('DotF64x2', Pointer(LScalarTable.CoreVectors.DotF64x2), Pointer(LNEONTable.CoreVectors.DotF64x2));
+  AssertSlotReusesScalar('DotF64x4', Pointer(LScalarTable.CoreVectors.DotF64x4), Pointer(LNEONTable.CoreVectors.DotF64x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_WideFallbackOnlySlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -7317,76 +7317,76 @@ begin
   AssertDeadWrapperRemoved('NEONCmpGeU64x8', 'function NEONCmpGeU64x8(');
   AssertDeadWrapperRemoved('NEONCmpNeU64x8', 'function NEONCmpNeU64x8(');
 
-  AssertRegisterKeepsBaseScalar('AddI16x32', 'table.AddI16x32 := @NEONAddI16x32;');
-  AssertRegisterKeepsBaseScalar('SubI16x32', 'table.SubI16x32 := @NEONSubI16x32;');
-  AssertRegisterKeepsBaseScalar('AndI16x32', 'table.AndI16x32 := @NEONAndI16x32;');
-  AssertRegisterKeepsBaseScalar('OrI16x32', 'table.OrI16x32 := @NEONOrI16x32;');
-  AssertRegisterKeepsBaseScalar('XorI16x32', 'table.XorI16x32 := @NEONXorI16x32;');
-  AssertRegisterKeepsBaseScalar('NotI16x32', 'table.NotI16x32 := @NEONNotI16x32;');
-  AssertRegisterKeepsBaseScalar('AndNotI16x32', 'table.AndNotI16x32 := @NEONAndNotI16x32;');
-  AssertRegisterKeepsBaseScalar('CmpEqI16x32', 'table.CmpEqI16x32 := @NEONCmpEqI16x32;');
-  AssertRegisterKeepsBaseScalar('CmpLtI16x32', 'table.CmpLtI16x32 := @NEONCmpLtI16x32;');
-  AssertRegisterKeepsBaseScalar('CmpGtI16x32', 'table.CmpGtI16x32 := @NEONCmpGtI16x32;');
-  AssertRegisterKeepsBaseScalar('MinI16x32', 'table.MinI16x32 := @NEONMinI16x32;');
-  AssertRegisterKeepsBaseScalar('MaxI16x32', 'table.MaxI16x32 := @NEONMaxI16x32;');
-  AssertRegisterKeepsBaseScalar('ShiftLeftI16x32', 'table.ShiftLeftI16x32 := @NEONShiftLeftI16x32;');
-  AssertRegisterKeepsBaseScalar('ShiftRightI16x32', 'table.ShiftRightI16x32 := @NEONShiftRightI16x32;');
-  AssertRegisterKeepsBaseScalar('ShiftRightArithI16x32', 'table.ShiftRightArithI16x32 := @NEONShiftRightArithI16x32;');
-  AssertRegisterKeepsBaseScalar('AddI8x64', 'table.AddI8x64 := @NEONAddI8x64;');
-  AssertRegisterKeepsBaseScalar('SubI8x64', 'table.SubI8x64 := @NEONSubI8x64;');
-  AssertRegisterKeepsBaseScalar('AndI8x64', 'table.AndI8x64 := @NEONAndI8x64;');
-  AssertRegisterKeepsBaseScalar('OrI8x64', 'table.OrI8x64 := @NEONOrI8x64;');
-  AssertRegisterKeepsBaseScalar('XorI8x64', 'table.XorI8x64 := @NEONXorI8x64;');
-  AssertRegisterKeepsBaseScalar('NotI8x64', 'table.NotI8x64 := @NEONNotI8x64;');
-  AssertRegisterKeepsBaseScalar('AndNotI8x64', 'table.AndNotI8x64 := @NEONAndNotI8x64;');
-  AssertRegisterKeepsBaseScalar('CmpEqI8x64', 'table.CmpEqI8x64 := @NEONCmpEqI8x64;');
-  AssertRegisterKeepsBaseScalar('CmpLtI8x64', 'table.CmpLtI8x64 := @NEONCmpLtI8x64;');
-  AssertRegisterKeepsBaseScalar('CmpGtI8x64', 'table.CmpGtI8x64 := @NEONCmpGtI8x64;');
-  AssertRegisterKeepsBaseScalar('MinI8x64', 'table.MinI8x64 := @NEONMinI8x64;');
-  AssertRegisterKeepsBaseScalar('MaxI8x64', 'table.MaxI8x64 := @NEONMaxI8x64;');
-  AssertRegisterKeepsBaseScalar('AddU8x64', 'table.AddU8x64 := @NEONAddU8x64;');
-  AssertRegisterKeepsBaseScalar('SubU8x64', 'table.SubU8x64 := @NEONSubU8x64;');
-  AssertRegisterKeepsBaseScalar('AndU8x64', 'table.AndU8x64 := @NEONAndU8x64;');
-  AssertRegisterKeepsBaseScalar('OrU8x64', 'table.OrU8x64 := @NEONOrU8x64;');
-  AssertRegisterKeepsBaseScalar('XorU8x64', 'table.XorU8x64 := @NEONXorU8x64;');
-  AssertRegisterKeepsBaseScalar('NotU8x64', 'table.NotU8x64 := @NEONNotU8x64;');
-  AssertRegisterKeepsBaseScalar('CmpEqU8x64', 'table.CmpEqU8x64 := @NEONCmpEqU8x64;');
-  AssertRegisterKeepsBaseScalar('CmpLtU8x64', 'table.CmpLtU8x64 := @NEONCmpLtU8x64;');
-  AssertRegisterKeepsBaseScalar('CmpGtU8x64', 'table.CmpGtU8x64 := @NEONCmpGtU8x64;');
-  AssertRegisterKeepsBaseScalar('MinU8x64', 'table.MinU8x64 := @NEONMinU8x64;');
-  AssertRegisterKeepsBaseScalar('MaxU8x64', 'table.MaxU8x64 := @NEONMaxU8x64;');
-  AssertRegisterKeepsBaseScalar('AddU32x16', 'table.AddU32x16 := @NEONAddU32x16;');
-  AssertRegisterKeepsBaseScalar('SubU32x16', 'table.SubU32x16 := @NEONSubU32x16;');
-  AssertRegisterKeepsBaseScalar('MulU32x16', 'table.MulU32x16 := @NEONMulU32x16;');
-  AssertRegisterKeepsBaseScalar('AndU32x16', 'table.AndU32x16 := @NEONAndU32x16;');
-  AssertRegisterKeepsBaseScalar('OrU32x16', 'table.OrU32x16 := @NEONOrU32x16;');
-  AssertRegisterKeepsBaseScalar('XorU32x16', 'table.XorU32x16 := @NEONXorU32x16;');
-  AssertRegisterKeepsBaseScalar('NotU32x16', 'table.NotU32x16 := @NEONNotU32x16;');
-  AssertRegisterKeepsBaseScalar('AndNotU32x16', 'table.AndNotU32x16 := @NEONAndNotU32x16;');
-  AssertRegisterKeepsBaseScalar('ShiftLeftU32x16', 'table.ShiftLeftU32x16 := @NEONShiftLeftU32x16;');
-  AssertRegisterKeepsBaseScalar('ShiftRightU32x16', 'table.ShiftRightU32x16 := @NEONShiftRightU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpEqU32x16', 'table.CmpEqU32x16 := @NEONCmpEqU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpLtU32x16', 'table.CmpLtU32x16 := @NEONCmpLtU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpGtU32x16', 'table.CmpGtU32x16 := @NEONCmpGtU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpLeU32x16', 'table.CmpLeU32x16 := @NEONCmpLeU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpGeU32x16', 'table.CmpGeU32x16 := @NEONCmpGeU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpNeU32x16', 'table.CmpNeU32x16 := @NEONCmpNeU32x16;');
-  AssertRegisterKeepsBaseScalar('MinU32x16', 'table.MinU32x16 := @NEONMinU32x16;');
-  AssertRegisterKeepsBaseScalar('MaxU32x16', 'table.MaxU32x16 := @NEONMaxU32x16;');
-  AssertRegisterKeepsBaseScalar('AddU64x8', 'table.AddU64x8 := @NEONAddU64x8;');
-  AssertRegisterKeepsBaseScalar('SubU64x8', 'table.SubU64x8 := @NEONSubU64x8;');
-  AssertRegisterKeepsBaseScalar('AndU64x8', 'table.AndU64x8 := @NEONAndU64x8;');
-  AssertRegisterKeepsBaseScalar('OrU64x8', 'table.OrU64x8 := @NEONOrU64x8;');
-  AssertRegisterKeepsBaseScalar('XorU64x8', 'table.XorU64x8 := @NEONXorU64x8;');
-  AssertRegisterKeepsBaseScalar('NotU64x8', 'table.NotU64x8 := @NEONNotU64x8;');
-  AssertRegisterKeepsBaseScalar('ShiftLeftU64x8', 'table.ShiftLeftU64x8 := @NEONShiftLeftU64x8;');
-  AssertRegisterKeepsBaseScalar('ShiftRightU64x8', 'table.ShiftRightU64x8 := @NEONShiftRightU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpEqU64x8', 'table.CmpEqU64x8 := @NEONCmpEqU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpLtU64x8', 'table.CmpLtU64x8 := @NEONCmpLtU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpGtU64x8', 'table.CmpGtU64x8 := @NEONCmpGtU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpLeU64x8', 'table.CmpLeU64x8 := @NEONCmpLeU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpGeU64x8', 'table.CmpGeU64x8 := @NEONCmpGeU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpNeU64x8', 'table.CmpNeU64x8 := @NEONCmpNeU64x8;');
+  AssertRegisterKeepsBaseScalar('AddI16x32', 'table.CoreVectors.AddI16x32 := @NEONAddI16x32;');
+  AssertRegisterKeepsBaseScalar('SubI16x32', 'table.CoreVectors.SubI16x32 := @NEONSubI16x32;');
+  AssertRegisterKeepsBaseScalar('AndI16x32', 'table.CoreVectors.AndI16x32 := @NEONAndI16x32;');
+  AssertRegisterKeepsBaseScalar('OrI16x32', 'table.CoreVectors.OrI16x32 := @NEONOrI16x32;');
+  AssertRegisterKeepsBaseScalar('XorI16x32', 'table.CoreVectors.XorI16x32 := @NEONXorI16x32;');
+  AssertRegisterKeepsBaseScalar('NotI16x32', 'table.CoreVectors.NotI16x32 := @NEONNotI16x32;');
+  AssertRegisterKeepsBaseScalar('AndNotI16x32', 'table.CoreVectors.AndNotI16x32 := @NEONAndNotI16x32;');
+  AssertRegisterKeepsBaseScalar('CmpEqI16x32', 'table.CoreVectors.CmpEqI16x32 := @NEONCmpEqI16x32;');
+  AssertRegisterKeepsBaseScalar('CmpLtI16x32', 'table.CoreVectors.CmpLtI16x32 := @NEONCmpLtI16x32;');
+  AssertRegisterKeepsBaseScalar('CmpGtI16x32', 'table.CoreVectors.CmpGtI16x32 := @NEONCmpGtI16x32;');
+  AssertRegisterKeepsBaseScalar('MinI16x32', 'table.CoreVectors.MinI16x32 := @NEONMinI16x32;');
+  AssertRegisterKeepsBaseScalar('MaxI16x32', 'table.CoreVectors.MaxI16x32 := @NEONMaxI16x32;');
+  AssertRegisterKeepsBaseScalar('ShiftLeftI16x32', 'table.CoreVectors.ShiftLeftI16x32 := @NEONShiftLeftI16x32;');
+  AssertRegisterKeepsBaseScalar('ShiftRightI16x32', 'table.CoreVectors.ShiftRightI16x32 := @NEONShiftRightI16x32;');
+  AssertRegisterKeepsBaseScalar('ShiftRightArithI16x32', 'table.CoreVectors.ShiftRightArithI16x32 := @NEONShiftRightArithI16x32;');
+  AssertRegisterKeepsBaseScalar('AddI8x64', 'table.CoreVectors.AddI8x64 := @NEONAddI8x64;');
+  AssertRegisterKeepsBaseScalar('SubI8x64', 'table.CoreVectors.SubI8x64 := @NEONSubI8x64;');
+  AssertRegisterKeepsBaseScalar('AndI8x64', 'table.CoreVectors.AndI8x64 := @NEONAndI8x64;');
+  AssertRegisterKeepsBaseScalar('OrI8x64', 'table.CoreVectors.OrI8x64 := @NEONOrI8x64;');
+  AssertRegisterKeepsBaseScalar('XorI8x64', 'table.CoreVectors.XorI8x64 := @NEONXorI8x64;');
+  AssertRegisterKeepsBaseScalar('NotI8x64', 'table.CoreVectors.NotI8x64 := @NEONNotI8x64;');
+  AssertRegisterKeepsBaseScalar('AndNotI8x64', 'table.CoreVectors.AndNotI8x64 := @NEONAndNotI8x64;');
+  AssertRegisterKeepsBaseScalar('CmpEqI8x64', 'table.CoreVectors.CmpEqI8x64 := @NEONCmpEqI8x64;');
+  AssertRegisterKeepsBaseScalar('CmpLtI8x64', 'table.CoreVectors.CmpLtI8x64 := @NEONCmpLtI8x64;');
+  AssertRegisterKeepsBaseScalar('CmpGtI8x64', 'table.CoreVectors.CmpGtI8x64 := @NEONCmpGtI8x64;');
+  AssertRegisterKeepsBaseScalar('MinI8x64', 'table.CoreVectors.MinI8x64 := @NEONMinI8x64;');
+  AssertRegisterKeepsBaseScalar('MaxI8x64', 'table.CoreVectors.MaxI8x64 := @NEONMaxI8x64;');
+  AssertRegisterKeepsBaseScalar('AddU8x64', 'table.CoreVectors.AddU8x64 := @NEONAddU8x64;');
+  AssertRegisterKeepsBaseScalar('SubU8x64', 'table.CoreVectors.SubU8x64 := @NEONSubU8x64;');
+  AssertRegisterKeepsBaseScalar('AndU8x64', 'table.CoreVectors.AndU8x64 := @NEONAndU8x64;');
+  AssertRegisterKeepsBaseScalar('OrU8x64', 'table.CoreVectors.OrU8x64 := @NEONOrU8x64;');
+  AssertRegisterKeepsBaseScalar('XorU8x64', 'table.CoreVectors.XorU8x64 := @NEONXorU8x64;');
+  AssertRegisterKeepsBaseScalar('NotU8x64', 'table.CoreVectors.NotU8x64 := @NEONNotU8x64;');
+  AssertRegisterKeepsBaseScalar('CmpEqU8x64', 'table.CoreVectors.CmpEqU8x64 := @NEONCmpEqU8x64;');
+  AssertRegisterKeepsBaseScalar('CmpLtU8x64', 'table.CoreVectors.CmpLtU8x64 := @NEONCmpLtU8x64;');
+  AssertRegisterKeepsBaseScalar('CmpGtU8x64', 'table.CoreVectors.CmpGtU8x64 := @NEONCmpGtU8x64;');
+  AssertRegisterKeepsBaseScalar('MinU8x64', 'table.CoreVectors.MinU8x64 := @NEONMinU8x64;');
+  AssertRegisterKeepsBaseScalar('MaxU8x64', 'table.CoreVectors.MaxU8x64 := @NEONMaxU8x64;');
+  AssertRegisterKeepsBaseScalar('AddU32x16', 'table.CoreVectors.AddU32x16 := @NEONAddU32x16;');
+  AssertRegisterKeepsBaseScalar('SubU32x16', 'table.CoreVectors.SubU32x16 := @NEONSubU32x16;');
+  AssertRegisterKeepsBaseScalar('MulU32x16', 'table.CoreVectors.MulU32x16 := @NEONMulU32x16;');
+  AssertRegisterKeepsBaseScalar('AndU32x16', 'table.CoreVectors.AndU32x16 := @NEONAndU32x16;');
+  AssertRegisterKeepsBaseScalar('OrU32x16', 'table.CoreVectors.OrU32x16 := @NEONOrU32x16;');
+  AssertRegisterKeepsBaseScalar('XorU32x16', 'table.CoreVectors.XorU32x16 := @NEONXorU32x16;');
+  AssertRegisterKeepsBaseScalar('NotU32x16', 'table.CoreVectors.NotU32x16 := @NEONNotU32x16;');
+  AssertRegisterKeepsBaseScalar('AndNotU32x16', 'table.CoreVectors.AndNotU32x16 := @NEONAndNotU32x16;');
+  AssertRegisterKeepsBaseScalar('ShiftLeftU32x16', 'table.CoreVectors.ShiftLeftU32x16 := @NEONShiftLeftU32x16;');
+  AssertRegisterKeepsBaseScalar('ShiftRightU32x16', 'table.CoreVectors.ShiftRightU32x16 := @NEONShiftRightU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpEqU32x16', 'table.CoreVectors.CmpEqU32x16 := @NEONCmpEqU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpLtU32x16', 'table.CoreVectors.CmpLtU32x16 := @NEONCmpLtU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpGtU32x16', 'table.CoreVectors.CmpGtU32x16 := @NEONCmpGtU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpLeU32x16', 'table.CoreVectors.CmpLeU32x16 := @NEONCmpLeU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpGeU32x16', 'table.CoreVectors.CmpGeU32x16 := @NEONCmpGeU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpNeU32x16', 'table.CoreVectors.CmpNeU32x16 := @NEONCmpNeU32x16;');
+  AssertRegisterKeepsBaseScalar('MinU32x16', 'table.CoreVectors.MinU32x16 := @NEONMinU32x16;');
+  AssertRegisterKeepsBaseScalar('MaxU32x16', 'table.CoreVectors.MaxU32x16 := @NEONMaxU32x16;');
+  AssertRegisterKeepsBaseScalar('AddU64x8', 'table.CoreVectors.AddU64x8 := @NEONAddU64x8;');
+  AssertRegisterKeepsBaseScalar('SubU64x8', 'table.CoreVectors.SubU64x8 := @NEONSubU64x8;');
+  AssertRegisterKeepsBaseScalar('AndU64x8', 'table.CoreVectors.AndU64x8 := @NEONAndU64x8;');
+  AssertRegisterKeepsBaseScalar('OrU64x8', 'table.CoreVectors.OrU64x8 := @NEONOrU64x8;');
+  AssertRegisterKeepsBaseScalar('XorU64x8', 'table.CoreVectors.XorU64x8 := @NEONXorU64x8;');
+  AssertRegisterKeepsBaseScalar('NotU64x8', 'table.CoreVectors.NotU64x8 := @NEONNotU64x8;');
+  AssertRegisterKeepsBaseScalar('ShiftLeftU64x8', 'table.CoreVectors.ShiftLeftU64x8 := @NEONShiftLeftU64x8;');
+  AssertRegisterKeepsBaseScalar('ShiftRightU64x8', 'table.CoreVectors.ShiftRightU64x8 := @NEONShiftRightU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpEqU64x8', 'table.CoreVectors.CmpEqU64x8 := @NEONCmpEqU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpLtU64x8', 'table.CoreVectors.CmpLtU64x8 := @NEONCmpLtU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpGtU64x8', 'table.CoreVectors.CmpGtU64x8 := @NEONCmpGtU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpLeU64x8', 'table.CoreVectors.CmpLeU64x8 := @NEONCmpLeU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpGeU64x8', 'table.CoreVectors.CmpGeU64x8 := @NEONCmpGeU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpNeU64x8', 'table.CoreVectors.CmpNeU64x8 := @NEONCmpNeU64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -7397,76 +7397,76 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('AddI16x32', Pointer(LScalarTable.AddI16x32), Pointer(LNEONTable.AddI16x32));
-  AssertSlotReusesScalar('SubI16x32', Pointer(LScalarTable.SubI16x32), Pointer(LNEONTable.SubI16x32));
-  AssertSlotReusesScalar('AndI16x32', Pointer(LScalarTable.AndI16x32), Pointer(LNEONTable.AndI16x32));
-  AssertSlotReusesScalar('OrI16x32', Pointer(LScalarTable.OrI16x32), Pointer(LNEONTable.OrI16x32));
-  AssertSlotReusesScalar('XorI16x32', Pointer(LScalarTable.XorI16x32), Pointer(LNEONTable.XorI16x32));
-  AssertSlotReusesScalar('NotI16x32', Pointer(LScalarTable.NotI16x32), Pointer(LNEONTable.NotI16x32));
-  AssertSlotReusesScalar('AndNotI16x32', Pointer(LScalarTable.AndNotI16x32), Pointer(LNEONTable.AndNotI16x32));
-  AssertSlotReusesScalar('CmpEqI16x32', Pointer(LScalarTable.CmpEqI16x32), Pointer(LNEONTable.CmpEqI16x32));
-  AssertSlotReusesScalar('CmpLtI16x32', Pointer(LScalarTable.CmpLtI16x32), Pointer(LNEONTable.CmpLtI16x32));
-  AssertSlotReusesScalar('CmpGtI16x32', Pointer(LScalarTable.CmpGtI16x32), Pointer(LNEONTable.CmpGtI16x32));
-  AssertSlotReusesScalar('MinI16x32', Pointer(LScalarTable.MinI16x32), Pointer(LNEONTable.MinI16x32));
-  AssertSlotReusesScalar('MaxI16x32', Pointer(LScalarTable.MaxI16x32), Pointer(LNEONTable.MaxI16x32));
-  AssertSlotReusesScalar('ShiftLeftI16x32', Pointer(LScalarTable.ShiftLeftI16x32), Pointer(LNEONTable.ShiftLeftI16x32));
-  AssertSlotReusesScalar('ShiftRightI16x32', Pointer(LScalarTable.ShiftRightI16x32), Pointer(LNEONTable.ShiftRightI16x32));
-  AssertSlotReusesScalar('ShiftRightArithI16x32', Pointer(LScalarTable.ShiftRightArithI16x32), Pointer(LNEONTable.ShiftRightArithI16x32));
-  AssertSlotReusesScalar('AddI8x64', Pointer(LScalarTable.AddI8x64), Pointer(LNEONTable.AddI8x64));
-  AssertSlotReusesScalar('SubI8x64', Pointer(LScalarTable.SubI8x64), Pointer(LNEONTable.SubI8x64));
-  AssertSlotReusesScalar('AndI8x64', Pointer(LScalarTable.AndI8x64), Pointer(LNEONTable.AndI8x64));
-  AssertSlotReusesScalar('OrI8x64', Pointer(LScalarTable.OrI8x64), Pointer(LNEONTable.OrI8x64));
-  AssertSlotReusesScalar('XorI8x64', Pointer(LScalarTable.XorI8x64), Pointer(LNEONTable.XorI8x64));
-  AssertSlotReusesScalar('NotI8x64', Pointer(LScalarTable.NotI8x64), Pointer(LNEONTable.NotI8x64));
-  AssertSlotReusesScalar('AndNotI8x64', Pointer(LScalarTable.AndNotI8x64), Pointer(LNEONTable.AndNotI8x64));
-  AssertSlotReusesScalar('CmpEqI8x64', Pointer(LScalarTable.CmpEqI8x64), Pointer(LNEONTable.CmpEqI8x64));
-  AssertSlotReusesScalar('CmpLtI8x64', Pointer(LScalarTable.CmpLtI8x64), Pointer(LNEONTable.CmpLtI8x64));
-  AssertSlotReusesScalar('CmpGtI8x64', Pointer(LScalarTable.CmpGtI8x64), Pointer(LNEONTable.CmpGtI8x64));
-  AssertSlotReusesScalar('MinI8x64', Pointer(LScalarTable.MinI8x64), Pointer(LNEONTable.MinI8x64));
-  AssertSlotReusesScalar('MaxI8x64', Pointer(LScalarTable.MaxI8x64), Pointer(LNEONTable.MaxI8x64));
-  AssertSlotReusesScalar('AddU8x64', Pointer(LScalarTable.AddU8x64), Pointer(LNEONTable.AddU8x64));
-  AssertSlotReusesScalar('SubU8x64', Pointer(LScalarTable.SubU8x64), Pointer(LNEONTable.SubU8x64));
-  AssertSlotReusesScalar('AndU8x64', Pointer(LScalarTable.AndU8x64), Pointer(LNEONTable.AndU8x64));
-  AssertSlotReusesScalar('OrU8x64', Pointer(LScalarTable.OrU8x64), Pointer(LNEONTable.OrU8x64));
-  AssertSlotReusesScalar('XorU8x64', Pointer(LScalarTable.XorU8x64), Pointer(LNEONTable.XorU8x64));
-  AssertSlotReusesScalar('NotU8x64', Pointer(LScalarTable.NotU8x64), Pointer(LNEONTable.NotU8x64));
-  AssertSlotReusesScalar('CmpEqU8x64', Pointer(LScalarTable.CmpEqU8x64), Pointer(LNEONTable.CmpEqU8x64));
-  AssertSlotReusesScalar('CmpLtU8x64', Pointer(LScalarTable.CmpLtU8x64), Pointer(LNEONTable.CmpLtU8x64));
-  AssertSlotReusesScalar('CmpGtU8x64', Pointer(LScalarTable.CmpGtU8x64), Pointer(LNEONTable.CmpGtU8x64));
-  AssertSlotReusesScalar('MinU8x64', Pointer(LScalarTable.MinU8x64), Pointer(LNEONTable.MinU8x64));
-  AssertSlotReusesScalar('MaxU8x64', Pointer(LScalarTable.MaxU8x64), Pointer(LNEONTable.MaxU8x64));
-  AssertSlotReusesScalar('AddU32x16', Pointer(LScalarTable.AddU32x16), Pointer(LNEONTable.AddU32x16));
-  AssertSlotReusesScalar('SubU32x16', Pointer(LScalarTable.SubU32x16), Pointer(LNEONTable.SubU32x16));
-  AssertSlotReusesScalar('MulU32x16', Pointer(LScalarTable.MulU32x16), Pointer(LNEONTable.MulU32x16));
-  AssertSlotReusesScalar('AndU32x16', Pointer(LScalarTable.AndU32x16), Pointer(LNEONTable.AndU32x16));
-  AssertSlotReusesScalar('OrU32x16', Pointer(LScalarTable.OrU32x16), Pointer(LNEONTable.OrU32x16));
-  AssertSlotReusesScalar('XorU32x16', Pointer(LScalarTable.XorU32x16), Pointer(LNEONTable.XorU32x16));
-  AssertSlotReusesScalar('NotU32x16', Pointer(LScalarTable.NotU32x16), Pointer(LNEONTable.NotU32x16));
-  AssertSlotReusesScalar('AndNotU32x16', Pointer(LScalarTable.AndNotU32x16), Pointer(LNEONTable.AndNotU32x16));
-  AssertSlotReusesScalar('ShiftLeftU32x16', Pointer(LScalarTable.ShiftLeftU32x16), Pointer(LNEONTable.ShiftLeftU32x16));
-  AssertSlotReusesScalar('ShiftRightU32x16', Pointer(LScalarTable.ShiftRightU32x16), Pointer(LNEONTable.ShiftRightU32x16));
-  AssertSlotReusesScalar('CmpEqU32x16', Pointer(LScalarTable.CmpEqU32x16), Pointer(LNEONTable.CmpEqU32x16));
-  AssertSlotReusesScalar('CmpLtU32x16', Pointer(LScalarTable.CmpLtU32x16), Pointer(LNEONTable.CmpLtU32x16));
-  AssertSlotReusesScalar('CmpGtU32x16', Pointer(LScalarTable.CmpGtU32x16), Pointer(LNEONTable.CmpGtU32x16));
-  AssertSlotReusesScalar('CmpLeU32x16', Pointer(LScalarTable.CmpLeU32x16), Pointer(LNEONTable.CmpLeU32x16));
-  AssertSlotReusesScalar('CmpGeU32x16', Pointer(LScalarTable.CmpGeU32x16), Pointer(LNEONTable.CmpGeU32x16));
-  AssertSlotReusesScalar('CmpNeU32x16', Pointer(LScalarTable.CmpNeU32x16), Pointer(LNEONTable.CmpNeU32x16));
-  AssertSlotReusesScalar('MinU32x16', Pointer(LScalarTable.MinU32x16), Pointer(LNEONTable.MinU32x16));
-  AssertSlotReusesScalar('MaxU32x16', Pointer(LScalarTable.MaxU32x16), Pointer(LNEONTable.MaxU32x16));
-  AssertSlotReusesScalar('AddU64x8', Pointer(LScalarTable.AddU64x8), Pointer(LNEONTable.AddU64x8));
-  AssertSlotReusesScalar('SubU64x8', Pointer(LScalarTable.SubU64x8), Pointer(LNEONTable.SubU64x8));
-  AssertSlotReusesScalar('AndU64x8', Pointer(LScalarTable.AndU64x8), Pointer(LNEONTable.AndU64x8));
-  AssertSlotReusesScalar('OrU64x8', Pointer(LScalarTable.OrU64x8), Pointer(LNEONTable.OrU64x8));
-  AssertSlotReusesScalar('XorU64x8', Pointer(LScalarTable.XorU64x8), Pointer(LNEONTable.XorU64x8));
-  AssertSlotReusesScalar('NotU64x8', Pointer(LScalarTable.NotU64x8), Pointer(LNEONTable.NotU64x8));
-  AssertSlotReusesScalar('ShiftLeftU64x8', Pointer(LScalarTable.ShiftLeftU64x8), Pointer(LNEONTable.ShiftLeftU64x8));
-  AssertSlotReusesScalar('ShiftRightU64x8', Pointer(LScalarTable.ShiftRightU64x8), Pointer(LNEONTable.ShiftRightU64x8));
-  AssertSlotReusesScalar('CmpEqU64x8', Pointer(LScalarTable.CmpEqU64x8), Pointer(LNEONTable.CmpEqU64x8));
-  AssertSlotReusesScalar('CmpLtU64x8', Pointer(LScalarTable.CmpLtU64x8), Pointer(LNEONTable.CmpLtU64x8));
-  AssertSlotReusesScalar('CmpGtU64x8', Pointer(LScalarTable.CmpGtU64x8), Pointer(LNEONTable.CmpGtU64x8));
-  AssertSlotReusesScalar('CmpLeU64x8', Pointer(LScalarTable.CmpLeU64x8), Pointer(LNEONTable.CmpLeU64x8));
-  AssertSlotReusesScalar('CmpGeU64x8', Pointer(LScalarTable.CmpGeU64x8), Pointer(LNEONTable.CmpGeU64x8));
-  AssertSlotReusesScalar('CmpNeU64x8', Pointer(LScalarTable.CmpNeU64x8), Pointer(LNEONTable.CmpNeU64x8));
+  AssertSlotReusesScalar('AddI16x32', Pointer(LScalarTable.CoreVectors.AddI16x32), Pointer(LNEONTable.CoreVectors.AddI16x32));
+  AssertSlotReusesScalar('SubI16x32', Pointer(LScalarTable.CoreVectors.SubI16x32), Pointer(LNEONTable.CoreVectors.SubI16x32));
+  AssertSlotReusesScalar('AndI16x32', Pointer(LScalarTable.CoreVectors.AndI16x32), Pointer(LNEONTable.CoreVectors.AndI16x32));
+  AssertSlotReusesScalar('OrI16x32', Pointer(LScalarTable.CoreVectors.OrI16x32), Pointer(LNEONTable.CoreVectors.OrI16x32));
+  AssertSlotReusesScalar('XorI16x32', Pointer(LScalarTable.CoreVectors.XorI16x32), Pointer(LNEONTable.CoreVectors.XorI16x32));
+  AssertSlotReusesScalar('NotI16x32', Pointer(LScalarTable.CoreVectors.NotI16x32), Pointer(LNEONTable.CoreVectors.NotI16x32));
+  AssertSlotReusesScalar('AndNotI16x32', Pointer(LScalarTable.CoreVectors.AndNotI16x32), Pointer(LNEONTable.CoreVectors.AndNotI16x32));
+  AssertSlotReusesScalar('CmpEqI16x32', Pointer(LScalarTable.CoreVectors.CmpEqI16x32), Pointer(LNEONTable.CoreVectors.CmpEqI16x32));
+  AssertSlotReusesScalar('CmpLtI16x32', Pointer(LScalarTable.CoreVectors.CmpLtI16x32), Pointer(LNEONTable.CoreVectors.CmpLtI16x32));
+  AssertSlotReusesScalar('CmpGtI16x32', Pointer(LScalarTable.CoreVectors.CmpGtI16x32), Pointer(LNEONTable.CoreVectors.CmpGtI16x32));
+  AssertSlotReusesScalar('MinI16x32', Pointer(LScalarTable.CoreVectors.MinI16x32), Pointer(LNEONTable.CoreVectors.MinI16x32));
+  AssertSlotReusesScalar('MaxI16x32', Pointer(LScalarTable.CoreVectors.MaxI16x32), Pointer(LNEONTable.CoreVectors.MaxI16x32));
+  AssertSlotReusesScalar('ShiftLeftI16x32', Pointer(LScalarTable.CoreVectors.ShiftLeftI16x32), Pointer(LNEONTable.CoreVectors.ShiftLeftI16x32));
+  AssertSlotReusesScalar('ShiftRightI16x32', Pointer(LScalarTable.CoreVectors.ShiftRightI16x32), Pointer(LNEONTable.CoreVectors.ShiftRightI16x32));
+  AssertSlotReusesScalar('ShiftRightArithI16x32', Pointer(LScalarTable.CoreVectors.ShiftRightArithI16x32), Pointer(LNEONTable.CoreVectors.ShiftRightArithI16x32));
+  AssertSlotReusesScalar('AddI8x64', Pointer(LScalarTable.CoreVectors.AddI8x64), Pointer(LNEONTable.CoreVectors.AddI8x64));
+  AssertSlotReusesScalar('SubI8x64', Pointer(LScalarTable.CoreVectors.SubI8x64), Pointer(LNEONTable.CoreVectors.SubI8x64));
+  AssertSlotReusesScalar('AndI8x64', Pointer(LScalarTable.CoreVectors.AndI8x64), Pointer(LNEONTable.CoreVectors.AndI8x64));
+  AssertSlotReusesScalar('OrI8x64', Pointer(LScalarTable.CoreVectors.OrI8x64), Pointer(LNEONTable.CoreVectors.OrI8x64));
+  AssertSlotReusesScalar('XorI8x64', Pointer(LScalarTable.CoreVectors.XorI8x64), Pointer(LNEONTable.CoreVectors.XorI8x64));
+  AssertSlotReusesScalar('NotI8x64', Pointer(LScalarTable.CoreVectors.NotI8x64), Pointer(LNEONTable.CoreVectors.NotI8x64));
+  AssertSlotReusesScalar('AndNotI8x64', Pointer(LScalarTable.CoreVectors.AndNotI8x64), Pointer(LNEONTable.CoreVectors.AndNotI8x64));
+  AssertSlotReusesScalar('CmpEqI8x64', Pointer(LScalarTable.CoreVectors.CmpEqI8x64), Pointer(LNEONTable.CoreVectors.CmpEqI8x64));
+  AssertSlotReusesScalar('CmpLtI8x64', Pointer(LScalarTable.CoreVectors.CmpLtI8x64), Pointer(LNEONTable.CoreVectors.CmpLtI8x64));
+  AssertSlotReusesScalar('CmpGtI8x64', Pointer(LScalarTable.CoreVectors.CmpGtI8x64), Pointer(LNEONTable.CoreVectors.CmpGtI8x64));
+  AssertSlotReusesScalar('MinI8x64', Pointer(LScalarTable.CoreVectors.MinI8x64), Pointer(LNEONTable.CoreVectors.MinI8x64));
+  AssertSlotReusesScalar('MaxI8x64', Pointer(LScalarTable.CoreVectors.MaxI8x64), Pointer(LNEONTable.CoreVectors.MaxI8x64));
+  AssertSlotReusesScalar('AddU8x64', Pointer(LScalarTable.CoreVectors.AddU8x64), Pointer(LNEONTable.CoreVectors.AddU8x64));
+  AssertSlotReusesScalar('SubU8x64', Pointer(LScalarTable.CoreVectors.SubU8x64), Pointer(LNEONTable.CoreVectors.SubU8x64));
+  AssertSlotReusesScalar('AndU8x64', Pointer(LScalarTable.CoreVectors.AndU8x64), Pointer(LNEONTable.CoreVectors.AndU8x64));
+  AssertSlotReusesScalar('OrU8x64', Pointer(LScalarTable.CoreVectors.OrU8x64), Pointer(LNEONTable.CoreVectors.OrU8x64));
+  AssertSlotReusesScalar('XorU8x64', Pointer(LScalarTable.CoreVectors.XorU8x64), Pointer(LNEONTable.CoreVectors.XorU8x64));
+  AssertSlotReusesScalar('NotU8x64', Pointer(LScalarTable.CoreVectors.NotU8x64), Pointer(LNEONTable.CoreVectors.NotU8x64));
+  AssertSlotReusesScalar('CmpEqU8x64', Pointer(LScalarTable.CoreVectors.CmpEqU8x64), Pointer(LNEONTable.CoreVectors.CmpEqU8x64));
+  AssertSlotReusesScalar('CmpLtU8x64', Pointer(LScalarTable.CoreVectors.CmpLtU8x64), Pointer(LNEONTable.CoreVectors.CmpLtU8x64));
+  AssertSlotReusesScalar('CmpGtU8x64', Pointer(LScalarTable.CoreVectors.CmpGtU8x64), Pointer(LNEONTable.CoreVectors.CmpGtU8x64));
+  AssertSlotReusesScalar('MinU8x64', Pointer(LScalarTable.CoreVectors.MinU8x64), Pointer(LNEONTable.CoreVectors.MinU8x64));
+  AssertSlotReusesScalar('MaxU8x64', Pointer(LScalarTable.CoreVectors.MaxU8x64), Pointer(LNEONTable.CoreVectors.MaxU8x64));
+  AssertSlotReusesScalar('AddU32x16', Pointer(LScalarTable.CoreVectors.AddU32x16), Pointer(LNEONTable.CoreVectors.AddU32x16));
+  AssertSlotReusesScalar('SubU32x16', Pointer(LScalarTable.CoreVectors.SubU32x16), Pointer(LNEONTable.CoreVectors.SubU32x16));
+  AssertSlotReusesScalar('MulU32x16', Pointer(LScalarTable.CoreVectors.MulU32x16), Pointer(LNEONTable.CoreVectors.MulU32x16));
+  AssertSlotReusesScalar('AndU32x16', Pointer(LScalarTable.CoreVectors.AndU32x16), Pointer(LNEONTable.CoreVectors.AndU32x16));
+  AssertSlotReusesScalar('OrU32x16', Pointer(LScalarTable.CoreVectors.OrU32x16), Pointer(LNEONTable.CoreVectors.OrU32x16));
+  AssertSlotReusesScalar('XorU32x16', Pointer(LScalarTable.CoreVectors.XorU32x16), Pointer(LNEONTable.CoreVectors.XorU32x16));
+  AssertSlotReusesScalar('NotU32x16', Pointer(LScalarTable.CoreVectors.NotU32x16), Pointer(LNEONTable.CoreVectors.NotU32x16));
+  AssertSlotReusesScalar('AndNotU32x16', Pointer(LScalarTable.CoreVectors.AndNotU32x16), Pointer(LNEONTable.CoreVectors.AndNotU32x16));
+  AssertSlotReusesScalar('ShiftLeftU32x16', Pointer(LScalarTable.CoreVectors.ShiftLeftU32x16), Pointer(LNEONTable.CoreVectors.ShiftLeftU32x16));
+  AssertSlotReusesScalar('ShiftRightU32x16', Pointer(LScalarTable.CoreVectors.ShiftRightU32x16), Pointer(LNEONTable.CoreVectors.ShiftRightU32x16));
+  AssertSlotReusesScalar('CmpEqU32x16', Pointer(LScalarTable.CoreVectors.CmpEqU32x16), Pointer(LNEONTable.CoreVectors.CmpEqU32x16));
+  AssertSlotReusesScalar('CmpLtU32x16', Pointer(LScalarTable.CoreVectors.CmpLtU32x16), Pointer(LNEONTable.CoreVectors.CmpLtU32x16));
+  AssertSlotReusesScalar('CmpGtU32x16', Pointer(LScalarTable.CoreVectors.CmpGtU32x16), Pointer(LNEONTable.CoreVectors.CmpGtU32x16));
+  AssertSlotReusesScalar('CmpLeU32x16', Pointer(LScalarTable.CoreVectors.CmpLeU32x16), Pointer(LNEONTable.CoreVectors.CmpLeU32x16));
+  AssertSlotReusesScalar('CmpGeU32x16', Pointer(LScalarTable.CoreVectors.CmpGeU32x16), Pointer(LNEONTable.CoreVectors.CmpGeU32x16));
+  AssertSlotReusesScalar('CmpNeU32x16', Pointer(LScalarTable.CoreVectors.CmpNeU32x16), Pointer(LNEONTable.CoreVectors.CmpNeU32x16));
+  AssertSlotReusesScalar('MinU32x16', Pointer(LScalarTable.CoreVectors.MinU32x16), Pointer(LNEONTable.CoreVectors.MinU32x16));
+  AssertSlotReusesScalar('MaxU32x16', Pointer(LScalarTable.CoreVectors.MaxU32x16), Pointer(LNEONTable.CoreVectors.MaxU32x16));
+  AssertSlotReusesScalar('AddU64x8', Pointer(LScalarTable.CoreVectors.AddU64x8), Pointer(LNEONTable.CoreVectors.AddU64x8));
+  AssertSlotReusesScalar('SubU64x8', Pointer(LScalarTable.CoreVectors.SubU64x8), Pointer(LNEONTable.CoreVectors.SubU64x8));
+  AssertSlotReusesScalar('AndU64x8', Pointer(LScalarTable.CoreVectors.AndU64x8), Pointer(LNEONTable.CoreVectors.AndU64x8));
+  AssertSlotReusesScalar('OrU64x8', Pointer(LScalarTable.CoreVectors.OrU64x8), Pointer(LNEONTable.CoreVectors.OrU64x8));
+  AssertSlotReusesScalar('XorU64x8', Pointer(LScalarTable.CoreVectors.XorU64x8), Pointer(LNEONTable.CoreVectors.XorU64x8));
+  AssertSlotReusesScalar('NotU64x8', Pointer(LScalarTable.CoreVectors.NotU64x8), Pointer(LNEONTable.CoreVectors.NotU64x8));
+  AssertSlotReusesScalar('ShiftLeftU64x8', Pointer(LScalarTable.CoreVectors.ShiftLeftU64x8), Pointer(LNEONTable.CoreVectors.ShiftLeftU64x8));
+  AssertSlotReusesScalar('ShiftRightU64x8', Pointer(LScalarTable.CoreVectors.ShiftRightU64x8), Pointer(LNEONTable.CoreVectors.ShiftRightU64x8));
+  AssertSlotReusesScalar('CmpEqU64x8', Pointer(LScalarTable.CoreVectors.CmpEqU64x8), Pointer(LNEONTable.CoreVectors.CmpEqU64x8));
+  AssertSlotReusesScalar('CmpLtU64x8', Pointer(LScalarTable.CoreVectors.CmpLtU64x8), Pointer(LNEONTable.CoreVectors.CmpLtU64x8));
+  AssertSlotReusesScalar('CmpGtU64x8', Pointer(LScalarTable.CoreVectors.CmpGtU64x8), Pointer(LNEONTable.CoreVectors.CmpGtU64x8));
+  AssertSlotReusesScalar('CmpLeU64x8', Pointer(LScalarTable.CoreVectors.CmpLeU64x8), Pointer(LNEONTable.CoreVectors.CmpLeU64x8));
+  AssertSlotReusesScalar('CmpGeU64x8', Pointer(LScalarTable.CoreVectors.CmpGeU64x8), Pointer(LNEONTable.CoreVectors.CmpGeU64x8));
+  AssertSlotReusesScalar('CmpNeU64x8', Pointer(LScalarTable.CoreVectors.CmpNeU64x8), Pointer(LNEONTable.CoreVectors.CmpNeU64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmFloatCompareSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -7534,30 +7534,30 @@ begin
   AssertDeadWrapperRemoved('NEONCmpNeF64x4', 'function NEONCmpNeF64x4(');
   AssertDeadWrapperRemoved('NEONCmpNeF64x8', 'function NEONCmpNeF64x8(');
 
-  AssertRegisterKeepsBaseScalar('CmpEqF32x16', 'table.CmpEqF32x16 := @NEONCmpEqF32x16;');
-  AssertRegisterKeepsBaseScalar('CmpEqF32x8', 'table.CmpEqF32x8 := @NEONCmpEqF32x8;');
-  AssertRegisterKeepsBaseScalar('CmpEqF64x4', 'table.CmpEqF64x4 := @NEONCmpEqF64x4;');
-  AssertRegisterKeepsBaseScalar('CmpEqF64x8', 'table.CmpEqF64x8 := @NEONCmpEqF64x8;');
-  AssertRegisterKeepsBaseScalar('CmpGeF32x16', 'table.CmpGeF32x16 := @NEONCmpGeF32x16;');
-  AssertRegisterKeepsBaseScalar('CmpGeF32x8', 'table.CmpGeF32x8 := @NEONCmpGeF32x8;');
-  AssertRegisterKeepsBaseScalar('CmpGeF64x4', 'table.CmpGeF64x4 := @NEONCmpGeF64x4;');
-  AssertRegisterKeepsBaseScalar('CmpGeF64x8', 'table.CmpGeF64x8 := @NEONCmpGeF64x8;');
-  AssertRegisterKeepsBaseScalar('CmpGtF32x16', 'table.CmpGtF32x16 := @NEONCmpGtF32x16;');
-  AssertRegisterKeepsBaseScalar('CmpGtF32x8', 'table.CmpGtF32x8 := @NEONCmpGtF32x8;');
-  AssertRegisterKeepsBaseScalar('CmpGtF64x4', 'table.CmpGtF64x4 := @NEONCmpGtF64x4;');
-  AssertRegisterKeepsBaseScalar('CmpGtF64x8', 'table.CmpGtF64x8 := @NEONCmpGtF64x8;');
-  AssertRegisterKeepsBaseScalar('CmpLeF32x16', 'table.CmpLeF32x16 := @NEONCmpLeF32x16;');
-  AssertRegisterKeepsBaseScalar('CmpLeF32x8', 'table.CmpLeF32x8 := @NEONCmpLeF32x8;');
-  AssertRegisterKeepsBaseScalar('CmpLeF64x4', 'table.CmpLeF64x4 := @NEONCmpLeF64x4;');
-  AssertRegisterKeepsBaseScalar('CmpLeF64x8', 'table.CmpLeF64x8 := @NEONCmpLeF64x8;');
-  AssertRegisterKeepsBaseScalar('CmpLtF32x16', 'table.CmpLtF32x16 := @NEONCmpLtF32x16;');
-  AssertRegisterKeepsBaseScalar('CmpLtF32x8', 'table.CmpLtF32x8 := @NEONCmpLtF32x8;');
-  AssertRegisterKeepsBaseScalar('CmpLtF64x4', 'table.CmpLtF64x4 := @NEONCmpLtF64x4;');
-  AssertRegisterKeepsBaseScalar('CmpLtF64x8', 'table.CmpLtF64x8 := @NEONCmpLtF64x8;');
-  AssertRegisterKeepsBaseScalar('CmpNeF32x16', 'table.CmpNeF32x16 := @NEONCmpNeF32x16;');
-  AssertRegisterKeepsBaseScalar('CmpNeF32x8', 'table.CmpNeF32x8 := @NEONCmpNeF32x8;');
-  AssertRegisterKeepsBaseScalar('CmpNeF64x4', 'table.CmpNeF64x4 := @NEONCmpNeF64x4;');
-  AssertRegisterKeepsBaseScalar('CmpNeF64x8', 'table.CmpNeF64x8 := @NEONCmpNeF64x8;');
+  AssertRegisterKeepsBaseScalar('CmpEqF32x16', 'table.CoreVectors.CmpEqF32x16 := @NEONCmpEqF32x16;');
+  AssertRegisterKeepsBaseScalar('CmpEqF32x8', 'table.CoreVectors.CmpEqF32x8 := @NEONCmpEqF32x8;');
+  AssertRegisterKeepsBaseScalar('CmpEqF64x4', 'table.CoreVectors.CmpEqF64x4 := @NEONCmpEqF64x4;');
+  AssertRegisterKeepsBaseScalar('CmpEqF64x8', 'table.CoreVectors.CmpEqF64x8 := @NEONCmpEqF64x8;');
+  AssertRegisterKeepsBaseScalar('CmpGeF32x16', 'table.CoreVectors.CmpGeF32x16 := @NEONCmpGeF32x16;');
+  AssertRegisterKeepsBaseScalar('CmpGeF32x8', 'table.CoreVectors.CmpGeF32x8 := @NEONCmpGeF32x8;');
+  AssertRegisterKeepsBaseScalar('CmpGeF64x4', 'table.CoreVectors.CmpGeF64x4 := @NEONCmpGeF64x4;');
+  AssertRegisterKeepsBaseScalar('CmpGeF64x8', 'table.CoreVectors.CmpGeF64x8 := @NEONCmpGeF64x8;');
+  AssertRegisterKeepsBaseScalar('CmpGtF32x16', 'table.CoreVectors.CmpGtF32x16 := @NEONCmpGtF32x16;');
+  AssertRegisterKeepsBaseScalar('CmpGtF32x8', 'table.CoreVectors.CmpGtF32x8 := @NEONCmpGtF32x8;');
+  AssertRegisterKeepsBaseScalar('CmpGtF64x4', 'table.CoreVectors.CmpGtF64x4 := @NEONCmpGtF64x4;');
+  AssertRegisterKeepsBaseScalar('CmpGtF64x8', 'table.CoreVectors.CmpGtF64x8 := @NEONCmpGtF64x8;');
+  AssertRegisterKeepsBaseScalar('CmpLeF32x16', 'table.CoreVectors.CmpLeF32x16 := @NEONCmpLeF32x16;');
+  AssertRegisterKeepsBaseScalar('CmpLeF32x8', 'table.CoreVectors.CmpLeF32x8 := @NEONCmpLeF32x8;');
+  AssertRegisterKeepsBaseScalar('CmpLeF64x4', 'table.CoreVectors.CmpLeF64x4 := @NEONCmpLeF64x4;');
+  AssertRegisterKeepsBaseScalar('CmpLeF64x8', 'table.CoreVectors.CmpLeF64x8 := @NEONCmpLeF64x8;');
+  AssertRegisterKeepsBaseScalar('CmpLtF32x16', 'table.CoreVectors.CmpLtF32x16 := @NEONCmpLtF32x16;');
+  AssertRegisterKeepsBaseScalar('CmpLtF32x8', 'table.CoreVectors.CmpLtF32x8 := @NEONCmpLtF32x8;');
+  AssertRegisterKeepsBaseScalar('CmpLtF64x4', 'table.CoreVectors.CmpLtF64x4 := @NEONCmpLtF64x4;');
+  AssertRegisterKeepsBaseScalar('CmpLtF64x8', 'table.CoreVectors.CmpLtF64x8 := @NEONCmpLtF64x8;');
+  AssertRegisterKeepsBaseScalar('CmpNeF32x16', 'table.CoreVectors.CmpNeF32x16 := @NEONCmpNeF32x16;');
+  AssertRegisterKeepsBaseScalar('CmpNeF32x8', 'table.CoreVectors.CmpNeF32x8 := @NEONCmpNeF32x8;');
+  AssertRegisterKeepsBaseScalar('CmpNeF64x4', 'table.CoreVectors.CmpNeF64x4 := @NEONCmpNeF64x4;');
+  AssertRegisterKeepsBaseScalar('CmpNeF64x8', 'table.CoreVectors.CmpNeF64x8 := @NEONCmpNeF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -7568,30 +7568,30 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('CmpEqF32x16', Pointer(LScalarTable.CmpEqF32x16), Pointer(LNEONTable.CmpEqF32x16));
-  AssertSlotReusesScalar('CmpEqF32x8', Pointer(LScalarTable.CmpEqF32x8), Pointer(LNEONTable.CmpEqF32x8));
-  AssertSlotReusesScalar('CmpEqF64x4', Pointer(LScalarTable.CmpEqF64x4), Pointer(LNEONTable.CmpEqF64x4));
-  AssertSlotReusesScalar('CmpEqF64x8', Pointer(LScalarTable.CmpEqF64x8), Pointer(LNEONTable.CmpEqF64x8));
-  AssertSlotReusesScalar('CmpGeF32x16', Pointer(LScalarTable.CmpGeF32x16), Pointer(LNEONTable.CmpGeF32x16));
-  AssertSlotReusesScalar('CmpGeF32x8', Pointer(LScalarTable.CmpGeF32x8), Pointer(LNEONTable.CmpGeF32x8));
-  AssertSlotReusesScalar('CmpGeF64x4', Pointer(LScalarTable.CmpGeF64x4), Pointer(LNEONTable.CmpGeF64x4));
-  AssertSlotReusesScalar('CmpGeF64x8', Pointer(LScalarTable.CmpGeF64x8), Pointer(LNEONTable.CmpGeF64x8));
-  AssertSlotReusesScalar('CmpGtF32x16', Pointer(LScalarTable.CmpGtF32x16), Pointer(LNEONTable.CmpGtF32x16));
-  AssertSlotReusesScalar('CmpGtF32x8', Pointer(LScalarTable.CmpGtF32x8), Pointer(LNEONTable.CmpGtF32x8));
-  AssertSlotReusesScalar('CmpGtF64x4', Pointer(LScalarTable.CmpGtF64x4), Pointer(LNEONTable.CmpGtF64x4));
-  AssertSlotReusesScalar('CmpGtF64x8', Pointer(LScalarTable.CmpGtF64x8), Pointer(LNEONTable.CmpGtF64x8));
-  AssertSlotReusesScalar('CmpLeF32x16', Pointer(LScalarTable.CmpLeF32x16), Pointer(LNEONTable.CmpLeF32x16));
-  AssertSlotReusesScalar('CmpLeF32x8', Pointer(LScalarTable.CmpLeF32x8), Pointer(LNEONTable.CmpLeF32x8));
-  AssertSlotReusesScalar('CmpLeF64x4', Pointer(LScalarTable.CmpLeF64x4), Pointer(LNEONTable.CmpLeF64x4));
-  AssertSlotReusesScalar('CmpLeF64x8', Pointer(LScalarTable.CmpLeF64x8), Pointer(LNEONTable.CmpLeF64x8));
-  AssertSlotReusesScalar('CmpLtF32x16', Pointer(LScalarTable.CmpLtF32x16), Pointer(LNEONTable.CmpLtF32x16));
-  AssertSlotReusesScalar('CmpLtF32x8', Pointer(LScalarTable.CmpLtF32x8), Pointer(LNEONTable.CmpLtF32x8));
-  AssertSlotReusesScalar('CmpLtF64x4', Pointer(LScalarTable.CmpLtF64x4), Pointer(LNEONTable.CmpLtF64x4));
-  AssertSlotReusesScalar('CmpLtF64x8', Pointer(LScalarTable.CmpLtF64x8), Pointer(LNEONTable.CmpLtF64x8));
-  AssertSlotReusesScalar('CmpNeF32x16', Pointer(LScalarTable.CmpNeF32x16), Pointer(LNEONTable.CmpNeF32x16));
-  AssertSlotReusesScalar('CmpNeF32x8', Pointer(LScalarTable.CmpNeF32x8), Pointer(LNEONTable.CmpNeF32x8));
-  AssertSlotReusesScalar('CmpNeF64x4', Pointer(LScalarTable.CmpNeF64x4), Pointer(LNEONTable.CmpNeF64x4));
-  AssertSlotReusesScalar('CmpNeF64x8', Pointer(LScalarTable.CmpNeF64x8), Pointer(LNEONTable.CmpNeF64x8));
+  AssertSlotReusesScalar('CmpEqF32x16', Pointer(LScalarTable.CoreVectors.CmpEqF32x16), Pointer(LNEONTable.CoreVectors.CmpEqF32x16));
+  AssertSlotReusesScalar('CmpEqF32x8', Pointer(LScalarTable.CoreVectors.CmpEqF32x8), Pointer(LNEONTable.CoreVectors.CmpEqF32x8));
+  AssertSlotReusesScalar('CmpEqF64x4', Pointer(LScalarTable.CoreVectors.CmpEqF64x4), Pointer(LNEONTable.CoreVectors.CmpEqF64x4));
+  AssertSlotReusesScalar('CmpEqF64x8', Pointer(LScalarTable.CoreVectors.CmpEqF64x8), Pointer(LNEONTable.CoreVectors.CmpEqF64x8));
+  AssertSlotReusesScalar('CmpGeF32x16', Pointer(LScalarTable.CoreVectors.CmpGeF32x16), Pointer(LNEONTable.CoreVectors.CmpGeF32x16));
+  AssertSlotReusesScalar('CmpGeF32x8', Pointer(LScalarTable.CoreVectors.CmpGeF32x8), Pointer(LNEONTable.CoreVectors.CmpGeF32x8));
+  AssertSlotReusesScalar('CmpGeF64x4', Pointer(LScalarTable.CoreVectors.CmpGeF64x4), Pointer(LNEONTable.CoreVectors.CmpGeF64x4));
+  AssertSlotReusesScalar('CmpGeF64x8', Pointer(LScalarTable.CoreVectors.CmpGeF64x8), Pointer(LNEONTable.CoreVectors.CmpGeF64x8));
+  AssertSlotReusesScalar('CmpGtF32x16', Pointer(LScalarTable.CoreVectors.CmpGtF32x16), Pointer(LNEONTable.CoreVectors.CmpGtF32x16));
+  AssertSlotReusesScalar('CmpGtF32x8', Pointer(LScalarTable.CoreVectors.CmpGtF32x8), Pointer(LNEONTable.CoreVectors.CmpGtF32x8));
+  AssertSlotReusesScalar('CmpGtF64x4', Pointer(LScalarTable.CoreVectors.CmpGtF64x4), Pointer(LNEONTable.CoreVectors.CmpGtF64x4));
+  AssertSlotReusesScalar('CmpGtF64x8', Pointer(LScalarTable.CoreVectors.CmpGtF64x8), Pointer(LNEONTable.CoreVectors.CmpGtF64x8));
+  AssertSlotReusesScalar('CmpLeF32x16', Pointer(LScalarTable.CoreVectors.CmpLeF32x16), Pointer(LNEONTable.CoreVectors.CmpLeF32x16));
+  AssertSlotReusesScalar('CmpLeF32x8', Pointer(LScalarTable.CoreVectors.CmpLeF32x8), Pointer(LNEONTable.CoreVectors.CmpLeF32x8));
+  AssertSlotReusesScalar('CmpLeF64x4', Pointer(LScalarTable.CoreVectors.CmpLeF64x4), Pointer(LNEONTable.CoreVectors.CmpLeF64x4));
+  AssertSlotReusesScalar('CmpLeF64x8', Pointer(LScalarTable.CoreVectors.CmpLeF64x8), Pointer(LNEONTable.CoreVectors.CmpLeF64x8));
+  AssertSlotReusesScalar('CmpLtF32x16', Pointer(LScalarTable.CoreVectors.CmpLtF32x16), Pointer(LNEONTable.CoreVectors.CmpLtF32x16));
+  AssertSlotReusesScalar('CmpLtF32x8', Pointer(LScalarTable.CoreVectors.CmpLtF32x8), Pointer(LNEONTable.CoreVectors.CmpLtF32x8));
+  AssertSlotReusesScalar('CmpLtF64x4', Pointer(LScalarTable.CoreVectors.CmpLtF64x4), Pointer(LNEONTable.CoreVectors.CmpLtF64x4));
+  AssertSlotReusesScalar('CmpLtF64x8', Pointer(LScalarTable.CoreVectors.CmpLtF64x8), Pointer(LNEONTable.CoreVectors.CmpLtF64x8));
+  AssertSlotReusesScalar('CmpNeF32x16', Pointer(LScalarTable.CoreVectors.CmpNeF32x16), Pointer(LNEONTable.CoreVectors.CmpNeF32x16));
+  AssertSlotReusesScalar('CmpNeF32x8', Pointer(LScalarTable.CoreVectors.CmpNeF32x8), Pointer(LNEONTable.CoreVectors.CmpNeF32x8));
+  AssertSlotReusesScalar('CmpNeF64x4', Pointer(LScalarTable.CoreVectors.CmpNeF64x4), Pointer(LNEONTable.CoreVectors.CmpNeF64x4));
+  AssertSlotReusesScalar('CmpNeF64x8', Pointer(LScalarTable.CoreVectors.CmpNeF64x8), Pointer(LNEONTable.CoreVectors.CmpNeF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_WideRcpAndReductionSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -7652,23 +7652,23 @@ begin
   AssertDeadWrapperRemoved('NEONReduceMulF64x4', 'function NEONReduceMulF64x4(');
   AssertDeadWrapperRemoved('NEONReduceMulF64x8', 'function NEONReduceMulF64x8(');
 
-  AssertRegisterKeepsBaseScalar('RcpF64x4', 'table.RcpF64x4 := @NEONRcpF64x4;');
-  AssertRegisterKeepsBaseScalar('ReduceAddF32x16', 'table.ReduceAddF32x16 := @NEONReduceAddF32x16;');
-  AssertRegisterKeepsBaseScalar('ReduceAddF32x8', 'table.ReduceAddF32x8 := @NEONReduceAddF32x8;');
-  AssertRegisterKeepsBaseScalar('ReduceAddF64x4', 'table.ReduceAddF64x4 := @NEONReduceAddF64x4;');
-  AssertRegisterKeepsBaseScalar('ReduceAddF64x8', 'table.ReduceAddF64x8 := @NEONReduceAddF64x8;');
-  AssertRegisterKeepsBaseScalar('ReduceMaxF32x16', 'table.ReduceMaxF32x16 := @NEONReduceMaxF32x16;');
-  AssertRegisterKeepsBaseScalar('ReduceMaxF32x8', 'table.ReduceMaxF32x8 := @NEONReduceMaxF32x8;');
-  AssertRegisterKeepsBaseScalar('ReduceMaxF64x4', 'table.ReduceMaxF64x4 := @NEONReduceMaxF64x4;');
-  AssertRegisterKeepsBaseScalar('ReduceMaxF64x8', 'table.ReduceMaxF64x8 := @NEONReduceMaxF64x8;');
-  AssertRegisterKeepsBaseScalar('ReduceMinF32x16', 'table.ReduceMinF32x16 := @NEONReduceMinF32x16;');
-  AssertRegisterKeepsBaseScalar('ReduceMinF32x8', 'table.ReduceMinF32x8 := @NEONReduceMinF32x8;');
-  AssertRegisterKeepsBaseScalar('ReduceMinF64x4', 'table.ReduceMinF64x4 := @NEONReduceMinF64x4;');
-  AssertRegisterKeepsBaseScalar('ReduceMinF64x8', 'table.ReduceMinF64x8 := @NEONReduceMinF64x8;');
-  AssertRegisterKeepsBaseScalar('ReduceMulF32x16', 'table.ReduceMulF32x16 := @NEONReduceMulF32x16;');
-  AssertRegisterKeepsBaseScalar('ReduceMulF32x8', 'table.ReduceMulF32x8 := @NEONReduceMulF32x8;');
-  AssertRegisterKeepsBaseScalar('ReduceMulF64x4', 'table.ReduceMulF64x4 := @NEONReduceMulF64x4;');
-  AssertRegisterKeepsBaseScalar('ReduceMulF64x8', 'table.ReduceMulF64x8 := @NEONReduceMulF64x8;');
+  AssertRegisterKeepsBaseScalar('RcpF64x4', 'table.CoreVectors.RcpF64x4 := @NEONRcpF64x4;');
+  AssertRegisterKeepsBaseScalar('ReduceAddF32x16', 'table.CoreVectors.ReduceAddF32x16 := @NEONReduceAddF32x16;');
+  AssertRegisterKeepsBaseScalar('ReduceAddF32x8', 'table.CoreVectors.ReduceAddF32x8 := @NEONReduceAddF32x8;');
+  AssertRegisterKeepsBaseScalar('ReduceAddF64x4', 'table.CoreVectors.ReduceAddF64x4 := @NEONReduceAddF64x4;');
+  AssertRegisterKeepsBaseScalar('ReduceAddF64x8', 'table.CoreVectors.ReduceAddF64x8 := @NEONReduceAddF64x8;');
+  AssertRegisterKeepsBaseScalar('ReduceMaxF32x16', 'table.CoreVectors.ReduceMaxF32x16 := @NEONReduceMaxF32x16;');
+  AssertRegisterKeepsBaseScalar('ReduceMaxF32x8', 'table.CoreVectors.ReduceMaxF32x8 := @NEONReduceMaxF32x8;');
+  AssertRegisterKeepsBaseScalar('ReduceMaxF64x4', 'table.CoreVectors.ReduceMaxF64x4 := @NEONReduceMaxF64x4;');
+  AssertRegisterKeepsBaseScalar('ReduceMaxF64x8', 'table.CoreVectors.ReduceMaxF64x8 := @NEONReduceMaxF64x8;');
+  AssertRegisterKeepsBaseScalar('ReduceMinF32x16', 'table.CoreVectors.ReduceMinF32x16 := @NEONReduceMinF32x16;');
+  AssertRegisterKeepsBaseScalar('ReduceMinF32x8', 'table.CoreVectors.ReduceMinF32x8 := @NEONReduceMinF32x8;');
+  AssertRegisterKeepsBaseScalar('ReduceMinF64x4', 'table.CoreVectors.ReduceMinF64x4 := @NEONReduceMinF64x4;');
+  AssertRegisterKeepsBaseScalar('ReduceMinF64x8', 'table.CoreVectors.ReduceMinF64x8 := @NEONReduceMinF64x8;');
+  AssertRegisterKeepsBaseScalar('ReduceMulF32x16', 'table.CoreVectors.ReduceMulF32x16 := @NEONReduceMulF32x16;');
+  AssertRegisterKeepsBaseScalar('ReduceMulF32x8', 'table.CoreVectors.ReduceMulF32x8 := @NEONReduceMulF32x8;');
+  AssertRegisterKeepsBaseScalar('ReduceMulF64x4', 'table.CoreVectors.ReduceMulF64x4 := @NEONReduceMulF64x4;');
+  AssertRegisterKeepsBaseScalar('ReduceMulF64x8', 'table.CoreVectors.ReduceMulF64x8 := @NEONReduceMulF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -7679,23 +7679,23 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('RcpF64x4', Pointer(LScalarTable.RcpF64x4), Pointer(LNEONTable.RcpF64x4));
-  AssertSlotReusesScalar('ReduceAddF32x16', Pointer(LScalarTable.ReduceAddF32x16), Pointer(LNEONTable.ReduceAddF32x16));
-  AssertSlotReusesScalar('ReduceAddF32x8', Pointer(LScalarTable.ReduceAddF32x8), Pointer(LNEONTable.ReduceAddF32x8));
-  AssertSlotReusesScalar('ReduceAddF64x4', Pointer(LScalarTable.ReduceAddF64x4), Pointer(LNEONTable.ReduceAddF64x4));
-  AssertSlotReusesScalar('ReduceAddF64x8', Pointer(LScalarTable.ReduceAddF64x8), Pointer(LNEONTable.ReduceAddF64x8));
-  AssertSlotReusesScalar('ReduceMaxF32x16', Pointer(LScalarTable.ReduceMaxF32x16), Pointer(LNEONTable.ReduceMaxF32x16));
-  AssertSlotReusesScalar('ReduceMaxF32x8', Pointer(LScalarTable.ReduceMaxF32x8), Pointer(LNEONTable.ReduceMaxF32x8));
-  AssertSlotReusesScalar('ReduceMaxF64x4', Pointer(LScalarTable.ReduceMaxF64x4), Pointer(LNEONTable.ReduceMaxF64x4));
-  AssertSlotReusesScalar('ReduceMaxF64x8', Pointer(LScalarTable.ReduceMaxF64x8), Pointer(LNEONTable.ReduceMaxF64x8));
-  AssertSlotReusesScalar('ReduceMinF32x16', Pointer(LScalarTable.ReduceMinF32x16), Pointer(LNEONTable.ReduceMinF32x16));
-  AssertSlotReusesScalar('ReduceMinF32x8', Pointer(LScalarTable.ReduceMinF32x8), Pointer(LNEONTable.ReduceMinF32x8));
-  AssertSlotReusesScalar('ReduceMinF64x4', Pointer(LScalarTable.ReduceMinF64x4), Pointer(LNEONTable.ReduceMinF64x4));
-  AssertSlotReusesScalar('ReduceMinF64x8', Pointer(LScalarTable.ReduceMinF64x8), Pointer(LNEONTable.ReduceMinF64x8));
-  AssertSlotReusesScalar('ReduceMulF32x16', Pointer(LScalarTable.ReduceMulF32x16), Pointer(LNEONTable.ReduceMulF32x16));
-  AssertSlotReusesScalar('ReduceMulF32x8', Pointer(LScalarTable.ReduceMulF32x8), Pointer(LNEONTable.ReduceMulF32x8));
-  AssertSlotReusesScalar('ReduceMulF64x4', Pointer(LScalarTable.ReduceMulF64x4), Pointer(LNEONTable.ReduceMulF64x4));
-  AssertSlotReusesScalar('ReduceMulF64x8', Pointer(LScalarTable.ReduceMulF64x8), Pointer(LNEONTable.ReduceMulF64x8));
+  AssertSlotReusesScalar('RcpF64x4', Pointer(LScalarTable.CoreVectors.RcpF64x4), Pointer(LNEONTable.CoreVectors.RcpF64x4));
+  AssertSlotReusesScalar('ReduceAddF32x16', Pointer(LScalarTable.CoreVectors.ReduceAddF32x16), Pointer(LNEONTable.CoreVectors.ReduceAddF32x16));
+  AssertSlotReusesScalar('ReduceAddF32x8', Pointer(LScalarTable.CoreVectors.ReduceAddF32x8), Pointer(LNEONTable.CoreVectors.ReduceAddF32x8));
+  AssertSlotReusesScalar('ReduceAddF64x4', Pointer(LScalarTable.CoreVectors.ReduceAddF64x4), Pointer(LNEONTable.CoreVectors.ReduceAddF64x4));
+  AssertSlotReusesScalar('ReduceAddF64x8', Pointer(LScalarTable.CoreVectors.ReduceAddF64x8), Pointer(LNEONTable.CoreVectors.ReduceAddF64x8));
+  AssertSlotReusesScalar('ReduceMaxF32x16', Pointer(LScalarTable.CoreVectors.ReduceMaxF32x16), Pointer(LNEONTable.CoreVectors.ReduceMaxF32x16));
+  AssertSlotReusesScalar('ReduceMaxF32x8', Pointer(LScalarTable.CoreVectors.ReduceMaxF32x8), Pointer(LNEONTable.CoreVectors.ReduceMaxF32x8));
+  AssertSlotReusesScalar('ReduceMaxF64x4', Pointer(LScalarTable.CoreVectors.ReduceMaxF64x4), Pointer(LNEONTable.CoreVectors.ReduceMaxF64x4));
+  AssertSlotReusesScalar('ReduceMaxF64x8', Pointer(LScalarTable.CoreVectors.ReduceMaxF64x8), Pointer(LNEONTable.CoreVectors.ReduceMaxF64x8));
+  AssertSlotReusesScalar('ReduceMinF32x16', Pointer(LScalarTable.CoreVectors.ReduceMinF32x16), Pointer(LNEONTable.CoreVectors.ReduceMinF32x16));
+  AssertSlotReusesScalar('ReduceMinF32x8', Pointer(LScalarTable.CoreVectors.ReduceMinF32x8), Pointer(LNEONTable.CoreVectors.ReduceMinF32x8));
+  AssertSlotReusesScalar('ReduceMinF64x4', Pointer(LScalarTable.CoreVectors.ReduceMinF64x4), Pointer(LNEONTable.CoreVectors.ReduceMinF64x4));
+  AssertSlotReusesScalar('ReduceMinF64x8', Pointer(LScalarTable.CoreVectors.ReduceMinF64x8), Pointer(LNEONTable.CoreVectors.ReduceMinF64x8));
+  AssertSlotReusesScalar('ReduceMulF32x16', Pointer(LScalarTable.CoreVectors.ReduceMulF32x16), Pointer(LNEONTable.CoreVectors.ReduceMulF32x16));
+  AssertSlotReusesScalar('ReduceMulF32x8', Pointer(LScalarTable.CoreVectors.ReduceMulF32x8), Pointer(LNEONTable.CoreVectors.ReduceMulF32x8));
+  AssertSlotReusesScalar('ReduceMulF64x4', Pointer(LScalarTable.CoreVectors.ReduceMulF64x4), Pointer(LNEONTable.CoreVectors.ReduceMulF64x4));
+  AssertSlotReusesScalar('ReduceMulF64x8', Pointer(LScalarTable.CoreVectors.ReduceMulF64x8), Pointer(LNEONTable.CoreVectors.ReduceMulF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_ExtractInsertSelectSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -7755,21 +7755,21 @@ begin
   AssertDeadWrapperRemoved('NEONSelectF64x8', 'function NEONSelectF64x8(');
   AssertDeadWrapperRemoved('NEONSelectI32x4', 'function NEONSelectI32x4(');
 
-  AssertRegisterKeepsBaseScalar('ExtractF32x16', 'table.ExtractF32x16 := @NEONExtractF32x16;');
-  AssertRegisterKeepsBaseScalar('ExtractF32x8', 'table.ExtractF32x8 := @NEONExtractF32x8;');
-  AssertRegisterKeepsBaseScalar('ExtractF64x4', 'table.ExtractF64x4 := @NEONExtractF64x4;');
-  AssertRegisterKeepsBaseScalar('ExtractI32x4', 'table.ExtractI32x4 := @NEONExtractI32x4;');
-  AssertRegisterKeepsBaseScalar('ExtractI64x2', 'table.ExtractI64x2 := @NEONExtractI64x2;');
-  AssertRegisterKeepsBaseScalar('InsertF32x16', 'table.InsertF32x16 := @NEONInsertF32x16;');
-  AssertRegisterKeepsBaseScalar('InsertF32x8', 'table.InsertF32x8 := @NEONInsertF32x8;');
-  AssertRegisterKeepsBaseScalar('InsertF64x4', 'table.InsertF64x4 := @NEONInsertF64x4;');
-  AssertRegisterKeepsBaseScalar('InsertI32x4', 'table.InsertI32x4 := @NEONInsertI32x4;');
-  AssertRegisterKeepsBaseScalar('InsertI64x2', 'table.InsertI64x2 := @NEONInsertI64x2;');
-  AssertRegisterKeepsBaseScalar('SelectF32x16', 'table.SelectF32x16 := @NEONSelectF32x16;');
-  AssertRegisterKeepsBaseScalar('SelectF32x8', 'table.SelectF32x8 := @NEONSelectF32x8;');
-  AssertRegisterKeepsBaseScalar('SelectF64x4', 'table.SelectF64x4 := @NEONSelectF64x4;');
-  AssertRegisterKeepsBaseScalar('SelectF64x8', 'table.SelectF64x8 := @NEONSelectF64x8;');
-  AssertRegisterKeepsBaseScalar('SelectI32x4', 'table.SelectI32x4 := @NEONSelectI32x4;');
+  AssertRegisterKeepsBaseScalar('ExtractF32x16', 'table.CoreVectors.ExtractF32x16 := @NEONExtractF32x16;');
+  AssertRegisterKeepsBaseScalar('ExtractF32x8', 'table.CoreVectors.ExtractF32x8 := @NEONExtractF32x8;');
+  AssertRegisterKeepsBaseScalar('ExtractF64x4', 'table.CoreVectors.ExtractF64x4 := @NEONExtractF64x4;');
+  AssertRegisterKeepsBaseScalar('ExtractI32x4', 'table.CoreVectors.ExtractI32x4 := @NEONExtractI32x4;');
+  AssertRegisterKeepsBaseScalar('ExtractI64x2', 'table.CoreVectors.ExtractI64x2 := @NEONExtractI64x2;');
+  AssertRegisterKeepsBaseScalar('InsertF32x16', 'table.CoreVectors.InsertF32x16 := @NEONInsertF32x16;');
+  AssertRegisterKeepsBaseScalar('InsertF32x8', 'table.CoreVectors.InsertF32x8 := @NEONInsertF32x8;');
+  AssertRegisterKeepsBaseScalar('InsertF64x4', 'table.CoreVectors.InsertF64x4 := @NEONInsertF64x4;');
+  AssertRegisterKeepsBaseScalar('InsertI32x4', 'table.CoreVectors.InsertI32x4 := @NEONInsertI32x4;');
+  AssertRegisterKeepsBaseScalar('InsertI64x2', 'table.CoreVectors.InsertI64x2 := @NEONInsertI64x2;');
+  AssertRegisterKeepsBaseScalar('SelectF32x16', 'table.CoreVectors.SelectF32x16 := @NEONSelectF32x16;');
+  AssertRegisterKeepsBaseScalar('SelectF32x8', 'table.CoreVectors.SelectF32x8 := @NEONSelectF32x8;');
+  AssertRegisterKeepsBaseScalar('SelectF64x4', 'table.CoreVectors.SelectF64x4 := @NEONSelectF64x4;');
+  AssertRegisterKeepsBaseScalar('SelectF64x8', 'table.CoreVectors.SelectF64x8 := @NEONSelectF64x8;');
+  AssertRegisterKeepsBaseScalar('SelectI32x4', 'table.CoreVectors.SelectI32x4 := @NEONSelectI32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -7787,21 +7787,21 @@ begin
       Exit;
     {$ENDIF}
 
-    AssertSlotReusesScalar('ExtractF32x16', Pointer(LScalarTable.ExtractF32x16), Pointer(LNEONTable.ExtractF32x16));
-    AssertSlotReusesScalar('ExtractF32x8', Pointer(LScalarTable.ExtractF32x8), Pointer(LNEONTable.ExtractF32x8));
-    AssertSlotReusesScalar('ExtractF64x4', Pointer(LScalarTable.ExtractF64x4), Pointer(LNEONTable.ExtractF64x4));
-    AssertSlotReusesScalar('ExtractI32x4', Pointer(LScalarTable.ExtractI32x4), Pointer(LNEONTable.ExtractI32x4));
-    AssertSlotReusesScalar('ExtractI64x2', Pointer(LScalarTable.ExtractI64x2), Pointer(LNEONTable.ExtractI64x2));
-    AssertSlotReusesScalar('InsertF32x16', Pointer(LScalarTable.InsertF32x16), Pointer(LNEONTable.InsertF32x16));
-    AssertSlotReusesScalar('InsertF32x8', Pointer(LScalarTable.InsertF32x8), Pointer(LNEONTable.InsertF32x8));
-    AssertSlotReusesScalar('InsertF64x4', Pointer(LScalarTable.InsertF64x4), Pointer(LNEONTable.InsertF64x4));
-    AssertSlotReusesScalar('InsertI32x4', Pointer(LScalarTable.InsertI32x4), Pointer(LNEONTable.InsertI32x4));
-    AssertSlotReusesScalar('InsertI64x2', Pointer(LScalarTable.InsertI64x2), Pointer(LNEONTable.InsertI64x2));
-    AssertSlotReusesScalar('SelectF32x16', Pointer(LScalarTable.SelectF32x16), Pointer(LNEONTable.SelectF32x16));
-    AssertSlotReusesScalar('SelectF32x8', Pointer(LScalarTable.SelectF32x8), Pointer(LNEONTable.SelectF32x8));
-    AssertSlotReusesScalar('SelectF64x4', Pointer(LScalarTable.SelectF64x4), Pointer(LNEONTable.SelectF64x4));
-    AssertSlotReusesScalar('SelectF64x8', Pointer(LScalarTable.SelectF64x8), Pointer(LNEONTable.SelectF64x8));
-    AssertSlotReusesScalar('SelectI32x4', Pointer(LScalarTable.SelectI32x4), Pointer(LNEONTable.SelectI32x4));
+    AssertSlotReusesScalar('ExtractF32x16', Pointer(LScalarTable.CoreVectors.ExtractF32x16), Pointer(LNEONTable.CoreVectors.ExtractF32x16));
+    AssertSlotReusesScalar('ExtractF32x8', Pointer(LScalarTable.CoreVectors.ExtractF32x8), Pointer(LNEONTable.CoreVectors.ExtractF32x8));
+    AssertSlotReusesScalar('ExtractF64x4', Pointer(LScalarTable.CoreVectors.ExtractF64x4), Pointer(LNEONTable.CoreVectors.ExtractF64x4));
+    AssertSlotReusesScalar('ExtractI32x4', Pointer(LScalarTable.CoreVectors.ExtractI32x4), Pointer(LNEONTable.CoreVectors.ExtractI32x4));
+    AssertSlotReusesScalar('ExtractI64x2', Pointer(LScalarTable.CoreVectors.ExtractI64x2), Pointer(LNEONTable.CoreVectors.ExtractI64x2));
+    AssertSlotReusesScalar('InsertF32x16', Pointer(LScalarTable.CoreVectors.InsertF32x16), Pointer(LNEONTable.CoreVectors.InsertF32x16));
+    AssertSlotReusesScalar('InsertF32x8', Pointer(LScalarTable.CoreVectors.InsertF32x8), Pointer(LNEONTable.CoreVectors.InsertF32x8));
+    AssertSlotReusesScalar('InsertF64x4', Pointer(LScalarTable.CoreVectors.InsertF64x4), Pointer(LNEONTable.CoreVectors.InsertF64x4));
+    AssertSlotReusesScalar('InsertI32x4', Pointer(LScalarTable.CoreVectors.InsertI32x4), Pointer(LNEONTable.CoreVectors.InsertI32x4));
+    AssertSlotReusesScalar('InsertI64x2', Pointer(LScalarTable.CoreVectors.InsertI64x2), Pointer(LNEONTable.CoreVectors.InsertI64x2));
+    AssertSlotReusesScalar('SelectF32x16', Pointer(LScalarTable.CoreVectors.SelectF32x16), Pointer(LNEONTable.CoreVectors.SelectF32x16));
+    AssertSlotReusesScalar('SelectF32x8', Pointer(LScalarTable.CoreVectors.SelectF32x8), Pointer(LNEONTable.CoreVectors.SelectF32x8));
+    AssertSlotReusesScalar('SelectF64x4', Pointer(LScalarTable.CoreVectors.SelectF64x4), Pointer(LNEONTable.CoreVectors.SelectF64x4));
+    AssertSlotReusesScalar('SelectF64x8', Pointer(LScalarTable.CoreVectors.SelectF64x8), Pointer(LNEONTable.CoreVectors.SelectF64x8));
+    AssertSlotReusesScalar('SelectI32x4', Pointer(LScalarTable.CoreVectors.SelectI32x4), Pointer(LNEONTable.CoreVectors.SelectI32x4));
   finally
     SetVectorAsmEnabled(LOldVectorAsm);
     RebindSimdDataPlane;
@@ -7871,12 +7871,12 @@ begin
   AssertDeadAutowrapWrapperRemoved('NEONFmaF64x4', 'function NEONFmaF64x4(');
   AssertDeadAutowrapWrapperRemoved('NEONFmaF64x8', 'function NEONFmaF64x8(');
 
-  AssertAsmBindingStillPresent('FmaF32x4', 'table.FmaF32x4 := @NEONFmaF32x4;');
-  AssertAsmBindingStillPresent('FmaF32x16', 'table.FmaF32x16 := @NEONFmaF32x16;');
-  AssertAsmBindingStillPresent('FmaF32x8', 'table.FmaF32x8 := @NEONFmaF32x8;');
-  AssertAsmBindingStillPresent('FmaF64x2', 'table.FmaF64x2 := @NEONFmaF64x2;');
-  AssertAsmBindingStillPresent('FmaF64x4', 'table.FmaF64x4 := @NEONFmaF64x4;');
-  AssertAsmBindingStillPresent('FmaF64x8', 'table.FmaF64x8 := @NEONFmaF64x8;');
+  AssertAsmBindingStillPresent('FmaF32x4', 'table.CoreVectors.FmaF32x4 := @NEONFmaF32x4;');
+  AssertAsmBindingStillPresent('FmaF32x16', 'table.CoreVectors.FmaF32x16 := @NEONFmaF32x16;');
+  AssertAsmBindingStillPresent('FmaF32x8', 'table.CoreVectors.FmaF32x8 := @NEONFmaF32x8;');
+  AssertAsmBindingStillPresent('FmaF64x2', 'table.CoreVectors.FmaF64x2 := @NEONFmaF64x2;');
+  AssertAsmBindingStillPresent('FmaF64x4', 'table.CoreVectors.FmaF64x4 := @NEONFmaF64x4;');
+  AssertAsmBindingStillPresent('FmaF64x8', 'table.CoreVectors.FmaF64x8 := @NEONFmaF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -7887,12 +7887,12 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('FmaF32x4', Pointer(LScalarTable.FmaF32x4), Pointer(LNEONTable.FmaF32x4));
-  AssertSlotReusesScalar('FmaF32x16', Pointer(LScalarTable.FmaF32x16), Pointer(LNEONTable.FmaF32x16));
-  AssertSlotReusesScalar('FmaF32x8', Pointer(LScalarTable.FmaF32x8), Pointer(LNEONTable.FmaF32x8));
-  AssertSlotReusesScalar('FmaF64x2', Pointer(LScalarTable.FmaF64x2), Pointer(LNEONTable.FmaF64x2));
-  AssertSlotReusesScalar('FmaF64x4', Pointer(LScalarTable.FmaF64x4), Pointer(LNEONTable.FmaF64x4));
-  AssertSlotReusesScalar('FmaF64x8', Pointer(LScalarTable.FmaF64x8), Pointer(LNEONTable.FmaF64x8));
+  AssertSlotReusesScalar('FmaF32x4', Pointer(LScalarTable.CoreVectors.FmaF32x4), Pointer(LNEONTable.CoreVectors.FmaF32x4));
+  AssertSlotReusesScalar('FmaF32x16', Pointer(LScalarTable.CoreVectors.FmaF32x16), Pointer(LNEONTable.CoreVectors.FmaF32x16));
+  AssertSlotReusesScalar('FmaF32x8', Pointer(LScalarTable.CoreVectors.FmaF32x8), Pointer(LNEONTable.CoreVectors.FmaF32x8));
+  AssertSlotReusesScalar('FmaF64x2', Pointer(LScalarTable.CoreVectors.FmaF64x2), Pointer(LNEONTable.CoreVectors.FmaF64x2));
+  AssertSlotReusesScalar('FmaF64x4', Pointer(LScalarTable.CoreVectors.FmaF64x4), Pointer(LNEONTable.CoreVectors.FmaF64x4));
+  AssertSlotReusesScalar('FmaF64x8', Pointer(LScalarTable.CoreVectors.FmaF64x8), Pointer(LNEONTable.CoreVectors.FmaF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowReciprocalSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -7942,8 +7942,8 @@ begin
   AssertDeadWrapperRemoved('NEONRcpF32x4', 'function NEONRcpF32x4(');
   AssertDeadWrapperRemoved('NEONRsqrtF32x4', 'function NEONRsqrtF32x4(');
 
-  AssertAsmBindingStillPresent('RcpF32x4', 'table.RcpF32x4 := @NEONRcpF32x4;');
-  AssertAsmBindingStillPresent('RsqrtF32x4', 'table.RsqrtF32x4 := @NEONRsqrtF32x4;');
+  AssertAsmBindingStillPresent('RcpF32x4', 'table.CoreVectors.RcpF32x4 := @NEONRcpF32x4;');
+  AssertAsmBindingStillPresent('RsqrtF32x4', 'table.CoreVectors.RsqrtF32x4 := @NEONRsqrtF32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -7954,8 +7954,8 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('RcpF32x4', Pointer(LScalarTable.RcpF32x4), Pointer(LNEONTable.RcpF32x4));
-  AssertSlotReusesScalar('RsqrtF32x4', Pointer(LScalarTable.RsqrtF32x4), Pointer(LNEONTable.RsqrtF32x4));
+  AssertSlotReusesScalar('RcpF32x4', Pointer(LScalarTable.CoreVectors.RcpF32x4), Pointer(LNEONTable.CoreVectors.RcpF32x4));
+  AssertSlotReusesScalar('RsqrtF32x4', Pointer(LScalarTable.CoreVectors.RsqrtF32x4), Pointer(LNEONTable.CoreVectors.RsqrtF32x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowI16U16ShiftSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -8008,11 +8008,11 @@ begin
   AssertDeadWrapperRemoved('NEONShiftRightI16x8', 'function NEONShiftRightI16x8(');
   AssertDeadWrapperRemoved('NEONShiftRightU16x8', 'function NEONShiftRightU16x8(');
 
-  AssertAsmBindingStillPresent('ShiftLeftI16x8', 'table.ShiftLeftI16x8 := @NEONShiftLeftI16x8;');
-  AssertAsmBindingStillPresent('ShiftLeftU16x8', 'table.ShiftLeftU16x8 := @NEONShiftLeftU16x8;');
-  AssertAsmBindingStillPresent('ShiftRightArithI16x8', 'table.ShiftRightArithI16x8 := @NEONShiftRightArithI16x8;');
-  AssertAsmBindingStillPresent('ShiftRightI16x8', 'table.ShiftRightI16x8 := @NEONShiftRightI16x8;');
-  AssertAsmBindingStillPresent('ShiftRightU16x8', 'table.ShiftRightU16x8 := @NEONShiftRightU16x8;');
+  AssertAsmBindingStillPresent('ShiftLeftI16x8', 'table.CoreVectors.ShiftLeftI16x8 := @NEONShiftLeftI16x8;');
+  AssertAsmBindingStillPresent('ShiftLeftU16x8', 'table.CoreVectors.ShiftLeftU16x8 := @NEONShiftLeftU16x8;');
+  AssertAsmBindingStillPresent('ShiftRightArithI16x8', 'table.CoreVectors.ShiftRightArithI16x8 := @NEONShiftRightArithI16x8;');
+  AssertAsmBindingStillPresent('ShiftRightI16x8', 'table.CoreVectors.ShiftRightI16x8 := @NEONShiftRightI16x8;');
+  AssertAsmBindingStillPresent('ShiftRightU16x8', 'table.CoreVectors.ShiftRightU16x8 := @NEONShiftRightU16x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8023,11 +8023,11 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('ShiftLeftI16x8', Pointer(LScalarTable.ShiftLeftI16x8), Pointer(LNEONTable.ShiftLeftI16x8));
-  AssertSlotReusesScalar('ShiftLeftU16x8', Pointer(LScalarTable.ShiftLeftU16x8), Pointer(LNEONTable.ShiftLeftU16x8));
-  AssertSlotReusesScalar('ShiftRightArithI16x8', Pointer(LScalarTable.ShiftRightArithI16x8), Pointer(LNEONTable.ShiftRightArithI16x8));
-  AssertSlotReusesScalar('ShiftRightI16x8', Pointer(LScalarTable.ShiftRightI16x8), Pointer(LNEONTable.ShiftRightI16x8));
-  AssertSlotReusesScalar('ShiftRightU16x8', Pointer(LScalarTable.ShiftRightU16x8), Pointer(LNEONTable.ShiftRightU16x8));
+  AssertSlotReusesScalar('ShiftLeftI16x8', Pointer(LScalarTable.CoreVectors.ShiftLeftI16x8), Pointer(LNEONTable.CoreVectors.ShiftLeftI16x8));
+  AssertSlotReusesScalar('ShiftLeftU16x8', Pointer(LScalarTable.CoreVectors.ShiftLeftU16x8), Pointer(LNEONTable.CoreVectors.ShiftLeftU16x8));
+  AssertSlotReusesScalar('ShiftRightArithI16x8', Pointer(LScalarTable.CoreVectors.ShiftRightArithI16x8), Pointer(LNEONTable.CoreVectors.ShiftRightArithI16x8));
+  AssertSlotReusesScalar('ShiftRightI16x8', Pointer(LScalarTable.CoreVectors.ShiftRightI16x8), Pointer(LNEONTable.CoreVectors.ShiftRightI16x8));
+  AssertSlotReusesScalar('ShiftRightU16x8', Pointer(LScalarTable.CoreVectors.ShiftRightU16x8), Pointer(LNEONTable.CoreVectors.ShiftRightU16x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64MemorySlots_Reuse_BaseScalar_When_Wrappers_Have_No_Live_SourceConsumers;
@@ -8079,10 +8079,10 @@ begin
   AssertDeadWrapperRemoved('NEONSplatF64x2', 'function NEONSplatF64x2(');
   AssertDeadWrapperRemoved('NEONZeroF64x2', 'function NEONZeroF64x2');
 
-  AssertAsmBindingStillPresent('LoadF64x2', 'table.LoadF64x2 := @NEONLoadF64x2;');
-  AssertAsmBindingStillPresent('StoreF64x2', 'table.StoreF64x2 := @NEONStoreF64x2;');
-  AssertAsmBindingStillPresent('SplatF64x2', 'table.SplatF64x2 := @NEONSplatF64x2;');
-  AssertAsmBindingStillPresent('ZeroF64x2', 'table.ZeroF64x2 := @NEONZeroF64x2;');
+  AssertAsmBindingStillPresent('LoadF64x2', 'table.CoreVectors.LoadF64x2 := @NEONLoadF64x2;');
+  AssertAsmBindingStillPresent('StoreF64x2', 'table.CoreVectors.StoreF64x2 := @NEONStoreF64x2;');
+  AssertAsmBindingStillPresent('SplatF64x2', 'table.CoreVectors.SplatF64x2 := @NEONSplatF64x2;');
+  AssertAsmBindingStillPresent('ZeroF64x2', 'table.CoreVectors.ZeroF64x2 := @NEONZeroF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8093,10 +8093,10 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('LoadF64x2', Pointer(LScalarTable.LoadF64x2), Pointer(LNEONTable.LoadF64x2));
-  AssertSlotReusesScalar('StoreF64x2', Pointer(LScalarTable.StoreF64x2), Pointer(LNEONTable.StoreF64x2));
-  AssertSlotReusesScalar('SplatF64x2', Pointer(LScalarTable.SplatF64x2), Pointer(LNEONTable.SplatF64x2));
-  AssertSlotReusesScalar('ZeroF64x2', Pointer(LScalarTable.ZeroF64x2), Pointer(LNEONTable.ZeroF64x2));
+  AssertSlotReusesScalar('LoadF64x2', Pointer(LScalarTable.CoreVectors.LoadF64x2), Pointer(LNEONTable.CoreVectors.LoadF64x2));
+  AssertSlotReusesScalar('StoreF64x2', Pointer(LScalarTable.CoreVectors.StoreF64x2), Pointer(LNEONTable.CoreVectors.StoreF64x2));
+  AssertSlotReusesScalar('SplatF64x2', Pointer(LScalarTable.CoreVectors.SplatF64x2), Pointer(LNEONTable.CoreVectors.SplatF64x2));
+  AssertSlotReusesScalar('ZeroF64x2', Pointer(LScalarTable.CoreVectors.ZeroF64x2), Pointer(LNEONTable.CoreVectors.ZeroF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideF32x8ArithmeticSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -8148,10 +8148,10 @@ begin
   AssertDeadWrapperRemoved('NEONMulF32x8', 'function NEONMulF32x8(');
   AssertDeadWrapperRemoved('NEONDivF32x8', 'function NEONDivF32x8(');
 
-  AssertAsmBindingStillPresent('AddF32x8', 'table.AddF32x8 := @NEONAddF32x8;');
-  AssertAsmBindingStillPresent('SubF32x8', 'table.SubF32x8 := @NEONSubF32x8;');
-  AssertAsmBindingStillPresent('MulF32x8', 'table.MulF32x8 := @NEONMulF32x8;');
-  AssertAsmBindingStillPresent('DivF32x8', 'table.DivF32x8 := @NEONDivF32x8;');
+  AssertAsmBindingStillPresent('AddF32x8', 'table.CoreVectors.AddF32x8 := @NEONAddF32x8;');
+  AssertAsmBindingStillPresent('SubF32x8', 'table.CoreVectors.SubF32x8 := @NEONSubF32x8;');
+  AssertAsmBindingStillPresent('MulF32x8', 'table.CoreVectors.MulF32x8 := @NEONMulF32x8;');
+  AssertAsmBindingStillPresent('DivF32x8', 'table.CoreVectors.DivF32x8 := @NEONDivF32x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8162,10 +8162,10 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('AddF32x8', Pointer(LScalarTable.AddF32x8), Pointer(LNEONTable.AddF32x8));
-  AssertSlotReusesScalar('SubF32x8', Pointer(LScalarTable.SubF32x8), Pointer(LNEONTable.SubF32x8));
-  AssertSlotReusesScalar('MulF32x8', Pointer(LScalarTable.MulF32x8), Pointer(LNEONTable.MulF32x8));
-  AssertSlotReusesScalar('DivF32x8', Pointer(LScalarTable.DivF32x8), Pointer(LNEONTable.DivF32x8));
+  AssertSlotReusesScalar('AddF32x8', Pointer(LScalarTable.CoreVectors.AddF32x8), Pointer(LNEONTable.CoreVectors.AddF32x8));
+  AssertSlotReusesScalar('SubF32x8', Pointer(LScalarTable.CoreVectors.SubF32x8), Pointer(LNEONTable.CoreVectors.SubF32x8));
+  AssertSlotReusesScalar('MulF32x8', Pointer(LScalarTable.CoreVectors.MulF32x8), Pointer(LNEONTable.CoreVectors.MulF32x8));
+  AssertSlotReusesScalar('DivF32x8', Pointer(LScalarTable.CoreVectors.DivF32x8), Pointer(LNEONTable.CoreVectors.DivF32x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideLeafFloatArithmeticSlots_Keep_SourceCompanions_But_Reuse_BaseScalar;
@@ -8225,18 +8225,18 @@ begin
   AssertWrapperStillPresent('NEONMulF64x8', 'function NEONMulF64x8(');
   AssertWrapperStillPresent('NEONDivF64x8', 'function NEONDivF64x8(');
 
-  AssertAsmBindingStillPresent('AddF32x16', 'table.AddF32x16 := @NEONAddF32x16;');
-  AssertAsmBindingStillPresent('AddF64x4', 'table.AddF64x4 := @NEONAddF64x4;');
-  AssertAsmBindingStillPresent('SubF32x16', 'table.SubF32x16 := @NEONSubF32x16;');
-  AssertAsmBindingStillPresent('SubF64x4', 'table.SubF64x4 := @NEONSubF64x4;');
-  AssertAsmBindingStillPresent('MulF32x16', 'table.MulF32x16 := @NEONMulF32x16;');
-  AssertAsmBindingStillPresent('MulF64x4', 'table.MulF64x4 := @NEONMulF64x4;');
-  AssertAsmBindingStillPresent('DivF32x16', 'table.DivF32x16 := @NEONDivF32x16;');
-  AssertAsmBindingStillPresent('DivF64x4', 'table.DivF64x4 := @NEONDivF64x4;');
-  AssertAsmBindingStillPresent('AddF64x8', 'table.AddF64x8 := @NEONAddF64x8;');
-  AssertAsmBindingStillPresent('SubF64x8', 'table.SubF64x8 := @NEONSubF64x8;');
-  AssertAsmBindingStillPresent('MulF64x8', 'table.MulF64x8 := @NEONMulF64x8;');
-  AssertAsmBindingStillPresent('DivF64x8', 'table.DivF64x8 := @NEONDivF64x8;');
+  AssertAsmBindingStillPresent('AddF32x16', 'table.CoreVectors.AddF32x16 := @NEONAddF32x16;');
+  AssertAsmBindingStillPresent('AddF64x4', 'table.CoreVectors.AddF64x4 := @NEONAddF64x4;');
+  AssertAsmBindingStillPresent('SubF32x16', 'table.CoreVectors.SubF32x16 := @NEONSubF32x16;');
+  AssertAsmBindingStillPresent('SubF64x4', 'table.CoreVectors.SubF64x4 := @NEONSubF64x4;');
+  AssertAsmBindingStillPresent('MulF32x16', 'table.CoreVectors.MulF32x16 := @NEONMulF32x16;');
+  AssertAsmBindingStillPresent('MulF64x4', 'table.CoreVectors.MulF64x4 := @NEONMulF64x4;');
+  AssertAsmBindingStillPresent('DivF32x16', 'table.CoreVectors.DivF32x16 := @NEONDivF32x16;');
+  AssertAsmBindingStillPresent('DivF64x4', 'table.CoreVectors.DivF64x4 := @NEONDivF64x4;');
+  AssertAsmBindingStillPresent('AddF64x8', 'table.CoreVectors.AddF64x8 := @NEONAddF64x8;');
+  AssertAsmBindingStillPresent('SubF64x8', 'table.CoreVectors.SubF64x8 := @NEONSubF64x8;');
+  AssertAsmBindingStillPresent('MulF64x8', 'table.CoreVectors.MulF64x8 := @NEONMulF64x8;');
+  AssertAsmBindingStillPresent('DivF64x8', 'table.CoreVectors.DivF64x8 := @NEONDivF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8247,18 +8247,18 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('AddF32x16', Pointer(LScalarTable.AddF32x16), Pointer(LNEONTable.AddF32x16));
-  AssertSlotReusesScalar('AddF64x4', Pointer(LScalarTable.AddF64x4), Pointer(LNEONTable.AddF64x4));
-  AssertSlotReusesScalar('SubF32x16', Pointer(LScalarTable.SubF32x16), Pointer(LNEONTable.SubF32x16));
-  AssertSlotReusesScalar('SubF64x4', Pointer(LScalarTable.SubF64x4), Pointer(LNEONTable.SubF64x4));
-  AssertSlotReusesScalar('MulF32x16', Pointer(LScalarTable.MulF32x16), Pointer(LNEONTable.MulF32x16));
-  AssertSlotReusesScalar('MulF64x4', Pointer(LScalarTable.MulF64x4), Pointer(LNEONTable.MulF64x4));
-  AssertSlotReusesScalar('DivF32x16', Pointer(LScalarTable.DivF32x16), Pointer(LNEONTable.DivF32x16));
-  AssertSlotReusesScalar('DivF64x4', Pointer(LScalarTable.DivF64x4), Pointer(LNEONTable.DivF64x4));
-  AssertSlotReusesScalar('AddF64x8', Pointer(LScalarTable.AddF64x8), Pointer(LNEONTable.AddF64x8));
-  AssertSlotReusesScalar('SubF64x8', Pointer(LScalarTable.SubF64x8), Pointer(LNEONTable.SubF64x8));
-  AssertSlotReusesScalar('MulF64x8', Pointer(LScalarTable.MulF64x8), Pointer(LNEONTable.MulF64x8));
-  AssertSlotReusesScalar('DivF64x8', Pointer(LScalarTable.DivF64x8), Pointer(LNEONTable.DivF64x8));
+  AssertSlotReusesScalar('AddF32x16', Pointer(LScalarTable.CoreVectors.AddF32x16), Pointer(LNEONTable.CoreVectors.AddF32x16));
+  AssertSlotReusesScalar('AddF64x4', Pointer(LScalarTable.CoreVectors.AddF64x4), Pointer(LNEONTable.CoreVectors.AddF64x4));
+  AssertSlotReusesScalar('SubF32x16', Pointer(LScalarTable.CoreVectors.SubF32x16), Pointer(LNEONTable.CoreVectors.SubF32x16));
+  AssertSlotReusesScalar('SubF64x4', Pointer(LScalarTable.CoreVectors.SubF64x4), Pointer(LNEONTable.CoreVectors.SubF64x4));
+  AssertSlotReusesScalar('MulF32x16', Pointer(LScalarTable.CoreVectors.MulF32x16), Pointer(LNEONTable.CoreVectors.MulF32x16));
+  AssertSlotReusesScalar('MulF64x4', Pointer(LScalarTable.CoreVectors.MulF64x4), Pointer(LNEONTable.CoreVectors.MulF64x4));
+  AssertSlotReusesScalar('DivF32x16', Pointer(LScalarTable.CoreVectors.DivF32x16), Pointer(LNEONTable.CoreVectors.DivF32x16));
+  AssertSlotReusesScalar('DivF64x4', Pointer(LScalarTable.CoreVectors.DivF64x4), Pointer(LNEONTable.CoreVectors.DivF64x4));
+  AssertSlotReusesScalar('AddF64x8', Pointer(LScalarTable.CoreVectors.AddF64x8), Pointer(LNEONTable.CoreVectors.AddF64x8));
+  AssertSlotReusesScalar('SubF64x8', Pointer(LScalarTable.CoreVectors.SubF64x8), Pointer(LNEONTable.CoreVectors.SubF64x8));
+  AssertSlotReusesScalar('MulF64x8', Pointer(LScalarTable.CoreVectors.MulF64x8), Pointer(LNEONTable.CoreVectors.MulF64x8));
+  AssertSlotReusesScalar('DivF64x8', Pointer(LScalarTable.CoreVectors.DivF64x8), Pointer(LNEONTable.CoreVectors.DivF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideMinMaxSlots_Keep_Necessary_Wrappers_But_Reuse_BaseScalar;
@@ -8320,14 +8320,14 @@ begin
   AssertWrapperStillPresent('NEONMaxF64x8', 'function NEONMaxF64x8(');
   AssertWrapperStillPresent('NEONMinF64x8', 'function NEONMinF64x8(');
 
-  AssertAsmBindingStillPresent('MaxF32x16', 'table.MaxF32x16 := @NEONMaxF32x16;');
-  AssertAsmBindingStillPresent('MaxF32x8', 'table.MaxF32x8 := @NEONMaxF32x8;');
-  AssertAsmBindingStillPresent('MaxF64x4', 'table.MaxF64x4 := @NEONMaxF64x4;');
-  AssertAsmBindingStillPresent('MaxF64x8', 'table.MaxF64x8 := @NEONMaxF64x8;');
-  AssertAsmBindingStillPresent('MinF32x16', 'table.MinF32x16 := @NEONMinF32x16;');
-  AssertAsmBindingStillPresent('MinF32x8', 'table.MinF32x8 := @NEONMinF32x8;');
-  AssertAsmBindingStillPresent('MinF64x4', 'table.MinF64x4 := @NEONMinF64x4;');
-  AssertAsmBindingStillPresent('MinF64x8', 'table.MinF64x8 := @NEONMinF64x8;');
+  AssertAsmBindingStillPresent('MaxF32x16', 'table.CoreVectors.MaxF32x16 := @NEONMaxF32x16;');
+  AssertAsmBindingStillPresent('MaxF32x8', 'table.CoreVectors.MaxF32x8 := @NEONMaxF32x8;');
+  AssertAsmBindingStillPresent('MaxF64x4', 'table.CoreVectors.MaxF64x4 := @NEONMaxF64x4;');
+  AssertAsmBindingStillPresent('MaxF64x8', 'table.CoreVectors.MaxF64x8 := @NEONMaxF64x8;');
+  AssertAsmBindingStillPresent('MinF32x16', 'table.CoreVectors.MinF32x16 := @NEONMinF32x16;');
+  AssertAsmBindingStillPresent('MinF32x8', 'table.CoreVectors.MinF32x8 := @NEONMinF32x8;');
+  AssertAsmBindingStillPresent('MinF64x4', 'table.CoreVectors.MinF64x4 := @NEONMinF64x4;');
+  AssertAsmBindingStillPresent('MinF64x8', 'table.CoreVectors.MinF64x8 := @NEONMinF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8338,14 +8338,14 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('MaxF32x16', Pointer(LScalarTable.MaxF32x16), Pointer(LNEONTable.MaxF32x16));
-  AssertSlotReusesScalar('MaxF32x8', Pointer(LScalarTable.MaxF32x8), Pointer(LNEONTable.MaxF32x8));
-  AssertSlotReusesScalar('MaxF64x4', Pointer(LScalarTable.MaxF64x4), Pointer(LNEONTable.MaxF64x4));
-  AssertSlotReusesScalar('MaxF64x8', Pointer(LScalarTable.MaxF64x8), Pointer(LNEONTable.MaxF64x8));
-  AssertSlotReusesScalar('MinF32x16', Pointer(LScalarTable.MinF32x16), Pointer(LNEONTable.MinF32x16));
-  AssertSlotReusesScalar('MinF32x8', Pointer(LScalarTable.MinF32x8), Pointer(LNEONTable.MinF32x8));
-  AssertSlotReusesScalar('MinF64x4', Pointer(LScalarTable.MinF64x4), Pointer(LNEONTable.MinF64x4));
-  AssertSlotReusesScalar('MinF64x8', Pointer(LScalarTable.MinF64x8), Pointer(LNEONTable.MinF64x8));
+  AssertSlotReusesScalar('MaxF32x16', Pointer(LScalarTable.CoreVectors.MaxF32x16), Pointer(LNEONTable.CoreVectors.MaxF32x16));
+  AssertSlotReusesScalar('MaxF32x8', Pointer(LScalarTable.CoreVectors.MaxF32x8), Pointer(LNEONTable.CoreVectors.MaxF32x8));
+  AssertSlotReusesScalar('MaxF64x4', Pointer(LScalarTable.CoreVectors.MaxF64x4), Pointer(LNEONTable.CoreVectors.MaxF64x4));
+  AssertSlotReusesScalar('MaxF64x8', Pointer(LScalarTable.CoreVectors.MaxF64x8), Pointer(LNEONTable.CoreVectors.MaxF64x8));
+  AssertSlotReusesScalar('MinF32x16', Pointer(LScalarTable.CoreVectors.MinF32x16), Pointer(LNEONTable.CoreVectors.MinF32x16));
+  AssertSlotReusesScalar('MinF32x8', Pointer(LScalarTable.CoreVectors.MinF32x8), Pointer(LNEONTable.CoreVectors.MinF32x8));
+  AssertSlotReusesScalar('MinF64x4', Pointer(LScalarTable.CoreVectors.MinF64x4), Pointer(LNEONTable.CoreVectors.MinF64x4));
+  AssertSlotReusesScalar('MinF64x8', Pointer(LScalarTable.CoreVectors.MinF64x8), Pointer(LNEONTable.CoreVectors.MinF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64MinMaxSlots_Keep_SourceCompanion_But_Reuse_BaseScalar;
@@ -8404,8 +8404,8 @@ begin
   AssertSourceConsumerStillPresent('NEONMaxF64x4', 'function NEONMaxF64x4(', 'Result.lo := NEONMaxF64x2(a.lo, b.lo);');
   AssertSourceConsumerStillPresent('NEONMinF64x4', 'function NEONMinF64x4(', 'Result.lo := NEONMinF64x2(a.lo, b.lo);');
 
-  AssertAsmBindingStillPresent('MaxF64x2', 'table.MaxF64x2 := @NEONMaxF64x2;');
-  AssertAsmBindingStillPresent('MinF64x2', 'table.MinF64x2 := @NEONMinF64x2;');
+  AssertAsmBindingStillPresent('MaxF64x2', 'table.CoreVectors.MaxF64x2 := @NEONMaxF64x2;');
+  AssertAsmBindingStillPresent('MinF64x2', 'table.CoreVectors.MinF64x2 := @NEONMinF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8416,8 +8416,8 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('MaxF64x2', Pointer(LScalarTable.MaxF64x2), Pointer(LNEONTable.MaxF64x2));
-  AssertSlotReusesScalar('MinF64x2', Pointer(LScalarTable.MinF64x2), Pointer(LNEONTable.MinF64x2));
+  AssertSlotReusesScalar('MaxF64x2', Pointer(LScalarTable.CoreVectors.MaxF64x2), Pointer(LNEONTable.CoreVectors.MaxF64x2));
+  AssertSlotReusesScalar('MinF64x2', Pointer(LScalarTable.CoreVectors.MinF64x2), Pointer(LNEONTable.CoreVectors.MinF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64SqrtSlots_Reuse_BaseScalar_When_Wrappers_Are_Dead;
@@ -8467,8 +8467,8 @@ begin
   AssertDeadWrapperRemoved('NEONSqrtF64x2', 'function NEONSqrtF64x2(');
   AssertDeadWrapperRemoved('NEONSqrtF64x4', 'function NEONSqrtF64x4(');
 
-  AssertAsmBindingStillPresent('SqrtF64x2', 'table.SqrtF64x2 := @NEONSqrtF64x2;');
-  AssertAsmBindingStillPresent('SqrtF64x4', 'table.SqrtF64x4 := @NEONSqrtF64x4;');
+  AssertAsmBindingStillPresent('SqrtF64x2', 'table.CoreVectors.SqrtF64x2 := @NEONSqrtF64x2;');
+  AssertAsmBindingStillPresent('SqrtF64x4', 'table.CoreVectors.SqrtF64x4 := @NEONSqrtF64x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8479,8 +8479,8 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('SqrtF64x2', Pointer(LScalarTable.SqrtF64x2), Pointer(LNEONTable.SqrtF64x2));
-  AssertSlotReusesScalar('SqrtF64x4', Pointer(LScalarTable.SqrtF64x4), Pointer(LNEONTable.SqrtF64x4));
+  AssertSlotReusesScalar('SqrtF64x2', Pointer(LScalarTable.CoreVectors.SqrtF64x2), Pointer(LNEONTable.CoreVectors.SqrtF64x2));
+  AssertSlotReusesScalar('SqrtF64x4', Pointer(LScalarTable.CoreVectors.SqrtF64x4), Pointer(LNEONTable.CoreVectors.SqrtF64x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64ExtremaReductionSlots_Reuse_BaseScalar_When_Wrappers_Have_No_SourceConsumers;
@@ -8530,8 +8530,8 @@ begin
   AssertDeadWrapperRemoved('NEONReduceMaxF64x2', 'function NEONReduceMaxF64x2(');
   AssertDeadWrapperRemoved('NEONReduceMinF64x2', 'function NEONReduceMinF64x2(');
 
-  AssertAsmBindingStillPresent('ReduceMaxF64x2', 'table.ReduceMaxF64x2 := @NEONReduceMaxF64x2;');
-  AssertAsmBindingStillPresent('ReduceMinF64x2', 'table.ReduceMinF64x2 := @NEONReduceMinF64x2;');
+  AssertAsmBindingStillPresent('ReduceMaxF64x2', 'table.CoreVectors.ReduceMaxF64x2 := @NEONReduceMaxF64x2;');
+  AssertAsmBindingStillPresent('ReduceMinF64x2', 'table.CoreVectors.ReduceMinF64x2 := @NEONReduceMinF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8542,8 +8542,8 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('ReduceMaxF64x2', Pointer(LScalarTable.ReduceMaxF64x2), Pointer(LNEONTable.ReduceMaxF64x2));
-  AssertSlotReusesScalar('ReduceMinF64x2', Pointer(LScalarTable.ReduceMinF64x2), Pointer(LNEONTable.ReduceMinF64x2));
+  AssertSlotReusesScalar('ReduceMaxF64x2', Pointer(LScalarTable.CoreVectors.ReduceMaxF64x2), Pointer(LNEONTable.CoreVectors.ReduceMaxF64x2));
+  AssertSlotReusesScalar('ReduceMinF64x2', Pointer(LScalarTable.CoreVectors.ReduceMinF64x2), Pointer(LNEONTable.CoreVectors.ReduceMinF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64RoundFamilySlots_Reuse_BaseScalar_When_Wrappers_Are_Dead;
@@ -8597,10 +8597,10 @@ begin
   AssertDeadWrapperRemoved('NEONRoundF64x4', 'function NEONRoundF64x4(');
   AssertDeadWrapperRemoved('NEONTruncF64x4', 'function NEONTruncF64x4(');
 
-  AssertAsmBindingStillPresent('CeilF64x2', 'table.CeilF64x2 := @NEONCeilF64x2;');
-  AssertAsmBindingStillPresent('FloorF64x2', 'table.FloorF64x2 := @NEONFloorF64x2;');
-  AssertAsmBindingStillPresent('RoundF64x2', 'table.RoundF64x2 := @NEONRoundF64x2;');
-  AssertAsmBindingStillPresent('TruncF64x2', 'table.TruncF64x2 := @NEONTruncF64x2;');
+  AssertAsmBindingStillPresent('CeilF64x2', 'table.CoreVectors.CeilF64x2 := @NEONCeilF64x2;');
+  AssertAsmBindingStillPresent('FloorF64x2', 'table.CoreVectors.FloorF64x2 := @NEONFloorF64x2;');
+  AssertAsmBindingStillPresent('RoundF64x2', 'table.CoreVectors.RoundF64x2 := @NEONRoundF64x2;');
+  AssertAsmBindingStillPresent('TruncF64x2', 'table.CoreVectors.TruncF64x2 := @NEONTruncF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8611,10 +8611,10 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('CeilF64x2', Pointer(LScalarTable.CeilF64x2), Pointer(LNEONTable.CeilF64x2));
-  AssertSlotReusesScalar('FloorF64x2', Pointer(LScalarTable.FloorF64x2), Pointer(LNEONTable.FloorF64x2));
-  AssertSlotReusesScalar('RoundF64x2', Pointer(LScalarTable.RoundF64x2), Pointer(LNEONTable.RoundF64x2));
-  AssertSlotReusesScalar('TruncF64x2', Pointer(LScalarTable.TruncF64x2), Pointer(LNEONTable.TruncF64x2));
+  AssertSlotReusesScalar('CeilF64x2', Pointer(LScalarTable.CoreVectors.CeilF64x2), Pointer(LNEONTable.CoreVectors.CeilF64x2));
+  AssertSlotReusesScalar('FloorF64x2', Pointer(LScalarTable.CoreVectors.FloorF64x2), Pointer(LNEONTable.CoreVectors.FloorF64x2));
+  AssertSlotReusesScalar('RoundF64x2', Pointer(LScalarTable.CoreVectors.RoundF64x2), Pointer(LNEONTable.CoreVectors.RoundF64x2));
+  AssertSlotReusesScalar('TruncF64x2', Pointer(LScalarTable.CoreVectors.TruncF64x2), Pointer(LNEONTable.CoreVectors.TruncF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideSqrtSlots_Reuse_BaseScalar_When_Wrappers_Are_Dead;
@@ -8666,10 +8666,10 @@ begin
   AssertDeadWrapperRemoved('NEONSqrtF64x4', 'function NEONSqrtF64x4(');
   AssertDeadWrapperRemoved('NEONSqrtF64x8', 'function NEONSqrtF64x8(');
 
-  AssertAsmBindingStillPresent('SqrtF32x16', 'table.SqrtF32x16 := @NEONSqrtF32x16;');
-  AssertAsmBindingStillPresent('SqrtF32x8', 'table.SqrtF32x8 := @NEONSqrtF32x8;');
-  AssertAsmBindingStillPresent('SqrtF64x4', 'table.SqrtF64x4 := @NEONSqrtF64x4;');
-  AssertAsmBindingStillPresent('SqrtF64x8', 'table.SqrtF64x8 := @NEONSqrtF64x8;');
+  AssertAsmBindingStillPresent('SqrtF32x16', 'table.CoreVectors.SqrtF32x16 := @NEONSqrtF32x16;');
+  AssertAsmBindingStillPresent('SqrtF32x8', 'table.CoreVectors.SqrtF32x8 := @NEONSqrtF32x8;');
+  AssertAsmBindingStillPresent('SqrtF64x4', 'table.CoreVectors.SqrtF64x4 := @NEONSqrtF64x4;');
+  AssertAsmBindingStillPresent('SqrtF64x8', 'table.CoreVectors.SqrtF64x8 := @NEONSqrtF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8680,10 +8680,10 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('SqrtF32x16', Pointer(LScalarTable.SqrtF32x16), Pointer(LNEONTable.SqrtF32x16));
-  AssertSlotReusesScalar('SqrtF32x8', Pointer(LScalarTable.SqrtF32x8), Pointer(LNEONTable.SqrtF32x8));
-  AssertSlotReusesScalar('SqrtF64x4', Pointer(LScalarTable.SqrtF64x4), Pointer(LNEONTable.SqrtF64x4));
-  AssertSlotReusesScalar('SqrtF64x8', Pointer(LScalarTable.SqrtF64x8), Pointer(LNEONTable.SqrtF64x8));
+  AssertSlotReusesScalar('SqrtF32x16', Pointer(LScalarTable.CoreVectors.SqrtF32x16), Pointer(LNEONTable.CoreVectors.SqrtF32x16));
+  AssertSlotReusesScalar('SqrtF32x8', Pointer(LScalarTable.CoreVectors.SqrtF32x8), Pointer(LNEONTable.CoreVectors.SqrtF32x8));
+  AssertSlotReusesScalar('SqrtF64x4', Pointer(LScalarTable.CoreVectors.SqrtF64x4), Pointer(LNEONTable.CoreVectors.SqrtF64x4));
+  AssertSlotReusesScalar('SqrtF64x8', Pointer(LScalarTable.CoreVectors.SqrtF64x8), Pointer(LNEONTable.CoreVectors.SqrtF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideRoundTruncSlots_Reuse_BaseScalar_When_Wrappers_Are_Dead;
@@ -8739,14 +8739,14 @@ begin
   AssertDeadWrapperRemoved('NEONTruncF64x4', 'function NEONTruncF64x4(');
   AssertDeadWrapperRemoved('NEONTruncF64x8', 'function NEONTruncF64x8(');
 
-  AssertAsmBindingStillPresent('RoundF32x8', 'table.RoundF32x8 := @NEONRoundF32x8;');
-  AssertAsmBindingStillPresent('RoundF32x16', 'table.RoundF32x16 := @NEONRoundF32x16;');
-  AssertAsmBindingStillPresent('RoundF64x4', 'table.RoundF64x4 := @NEONRoundF64x4;');
-  AssertAsmBindingStillPresent('RoundF64x8', 'table.RoundF64x8 := @NEONRoundF64x8;');
-  AssertAsmBindingStillPresent('TruncF32x8', 'table.TruncF32x8 := @NEONTruncF32x8;');
-  AssertAsmBindingStillPresent('TruncF32x16', 'table.TruncF32x16 := @NEONTruncF32x16;');
-  AssertAsmBindingStillPresent('TruncF64x4', 'table.TruncF64x4 := @NEONTruncF64x4;');
-  AssertAsmBindingStillPresent('TruncF64x8', 'table.TruncF64x8 := @NEONTruncF64x8;');
+  AssertAsmBindingStillPresent('RoundF32x8', 'table.CoreVectors.RoundF32x8 := @NEONRoundF32x8;');
+  AssertAsmBindingStillPresent('RoundF32x16', 'table.CoreVectors.RoundF32x16 := @NEONRoundF32x16;');
+  AssertAsmBindingStillPresent('RoundF64x4', 'table.CoreVectors.RoundF64x4 := @NEONRoundF64x4;');
+  AssertAsmBindingStillPresent('RoundF64x8', 'table.CoreVectors.RoundF64x8 := @NEONRoundF64x8;');
+  AssertAsmBindingStillPresent('TruncF32x8', 'table.CoreVectors.TruncF32x8 := @NEONTruncF32x8;');
+  AssertAsmBindingStillPresent('TruncF32x16', 'table.CoreVectors.TruncF32x16 := @NEONTruncF32x16;');
+  AssertAsmBindingStillPresent('TruncF64x4', 'table.CoreVectors.TruncF64x4 := @NEONTruncF64x4;');
+  AssertAsmBindingStillPresent('TruncF64x8', 'table.CoreVectors.TruncF64x8 := @NEONTruncF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8757,14 +8757,14 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('RoundF32x8', Pointer(LScalarTable.RoundF32x8), Pointer(LNEONTable.RoundF32x8));
-  AssertSlotReusesScalar('RoundF32x16', Pointer(LScalarTable.RoundF32x16), Pointer(LNEONTable.RoundF32x16));
-  AssertSlotReusesScalar('RoundF64x4', Pointer(LScalarTable.RoundF64x4), Pointer(LNEONTable.RoundF64x4));
-  AssertSlotReusesScalar('RoundF64x8', Pointer(LScalarTable.RoundF64x8), Pointer(LNEONTable.RoundF64x8));
-  AssertSlotReusesScalar('TruncF32x8', Pointer(LScalarTable.TruncF32x8), Pointer(LNEONTable.TruncF32x8));
-  AssertSlotReusesScalar('TruncF32x16', Pointer(LScalarTable.TruncF32x16), Pointer(LNEONTable.TruncF32x16));
-  AssertSlotReusesScalar('TruncF64x4', Pointer(LScalarTable.TruncF64x4), Pointer(LNEONTable.TruncF64x4));
-  AssertSlotReusesScalar('TruncF64x8', Pointer(LScalarTable.TruncF64x8), Pointer(LNEONTable.TruncF64x8));
+  AssertSlotReusesScalar('RoundF32x8', Pointer(LScalarTable.CoreVectors.RoundF32x8), Pointer(LNEONTable.CoreVectors.RoundF32x8));
+  AssertSlotReusesScalar('RoundF32x16', Pointer(LScalarTable.CoreVectors.RoundF32x16), Pointer(LNEONTable.CoreVectors.RoundF32x16));
+  AssertSlotReusesScalar('RoundF64x4', Pointer(LScalarTable.CoreVectors.RoundF64x4), Pointer(LNEONTable.CoreVectors.RoundF64x4));
+  AssertSlotReusesScalar('RoundF64x8', Pointer(LScalarTable.CoreVectors.RoundF64x8), Pointer(LNEONTable.CoreVectors.RoundF64x8));
+  AssertSlotReusesScalar('TruncF32x8', Pointer(LScalarTable.CoreVectors.TruncF32x8), Pointer(LNEONTable.CoreVectors.TruncF32x8));
+  AssertSlotReusesScalar('TruncF32x16', Pointer(LScalarTable.CoreVectors.TruncF32x16), Pointer(LNEONTable.CoreVectors.TruncF32x16));
+  AssertSlotReusesScalar('TruncF64x4', Pointer(LScalarTable.CoreVectors.TruncF64x4), Pointer(LNEONTable.CoreVectors.TruncF64x4));
+  AssertSlotReusesScalar('TruncF64x8', Pointer(LScalarTable.CoreVectors.TruncF64x8), Pointer(LNEONTable.CoreVectors.TruncF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmNarrowF64CompareAndSimpleReductionSlots_Reuse_BaseScalar_When_Wrappers_Have_No_SourceConsumers;
@@ -8820,14 +8820,14 @@ begin
   AssertDeadWrapperRemoved('NEONReduceAddF64x2', 'function NEONReduceAddF64x2(');
   AssertDeadWrapperRemoved('NEONReduceMulF64x2', 'function NEONReduceMulF64x2(');
 
-  AssertAsmBindingStillPresent('CmpEqF64x2', 'table.CmpEqF64x2 := @NEONCmpEqF64x2;');
-  AssertAsmBindingStillPresent('CmpGeF64x2', 'table.CmpGeF64x2 := @NEONCmpGeF64x2;');
-  AssertAsmBindingStillPresent('CmpGtF64x2', 'table.CmpGtF64x2 := @NEONCmpGtF64x2;');
-  AssertAsmBindingStillPresent('CmpLeF64x2', 'table.CmpLeF64x2 := @NEONCmpLeF64x2;');
-  AssertAsmBindingStillPresent('CmpLtF64x2', 'table.CmpLtF64x2 := @NEONCmpLtF64x2;');
-  AssertAsmBindingStillPresent('CmpNeF64x2', 'table.CmpNeF64x2 := @NEONCmpNeF64x2;');
-  AssertAsmBindingStillPresent('ReduceAddF64x2', 'table.ReduceAddF64x2 := @NEONReduceAddF64x2;');
-  AssertAsmBindingStillPresent('ReduceMulF64x2', 'table.ReduceMulF64x2 := @NEONReduceMulF64x2;');
+  AssertAsmBindingStillPresent('CmpEqF64x2', 'table.CoreVectors.CmpEqF64x2 := @NEONCmpEqF64x2;');
+  AssertAsmBindingStillPresent('CmpGeF64x2', 'table.CoreVectors.CmpGeF64x2 := @NEONCmpGeF64x2;');
+  AssertAsmBindingStillPresent('CmpGtF64x2', 'table.CoreVectors.CmpGtF64x2 := @NEONCmpGtF64x2;');
+  AssertAsmBindingStillPresent('CmpLeF64x2', 'table.CoreVectors.CmpLeF64x2 := @NEONCmpLeF64x2;');
+  AssertAsmBindingStillPresent('CmpLtF64x2', 'table.CoreVectors.CmpLtF64x2 := @NEONCmpLtF64x2;');
+  AssertAsmBindingStillPresent('CmpNeF64x2', 'table.CoreVectors.CmpNeF64x2 := @NEONCmpNeF64x2;');
+  AssertAsmBindingStillPresent('ReduceAddF64x2', 'table.CoreVectors.ReduceAddF64x2 := @NEONReduceAddF64x2;');
+  AssertAsmBindingStillPresent('ReduceMulF64x2', 'table.CoreVectors.ReduceMulF64x2 := @NEONReduceMulF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8838,14 +8838,14 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('CmpEqF64x2', Pointer(LScalarTable.CmpEqF64x2), Pointer(LNEONTable.CmpEqF64x2));
-  AssertSlotReusesScalar('CmpGeF64x2', Pointer(LScalarTable.CmpGeF64x2), Pointer(LNEONTable.CmpGeF64x2));
-  AssertSlotReusesScalar('CmpGtF64x2', Pointer(LScalarTable.CmpGtF64x2), Pointer(LNEONTable.CmpGtF64x2));
-  AssertSlotReusesScalar('CmpLeF64x2', Pointer(LScalarTable.CmpLeF64x2), Pointer(LNEONTable.CmpLeF64x2));
-  AssertSlotReusesScalar('CmpLtF64x2', Pointer(LScalarTable.CmpLtF64x2), Pointer(LNEONTable.CmpLtF64x2));
-  AssertSlotReusesScalar('CmpNeF64x2', Pointer(LScalarTable.CmpNeF64x2), Pointer(LNEONTable.CmpNeF64x2));
-  AssertSlotReusesScalar('ReduceAddF64x2', Pointer(LScalarTable.ReduceAddF64x2), Pointer(LNEONTable.ReduceAddF64x2));
-  AssertSlotReusesScalar('ReduceMulF64x2', Pointer(LScalarTable.ReduceMulF64x2), Pointer(LNEONTable.ReduceMulF64x2));
+  AssertSlotReusesScalar('CmpEqF64x2', Pointer(LScalarTable.CoreVectors.CmpEqF64x2), Pointer(LNEONTable.CoreVectors.CmpEqF64x2));
+  AssertSlotReusesScalar('CmpGeF64x2', Pointer(LScalarTable.CoreVectors.CmpGeF64x2), Pointer(LNEONTable.CoreVectors.CmpGeF64x2));
+  AssertSlotReusesScalar('CmpGtF64x2', Pointer(LScalarTable.CoreVectors.CmpGtF64x2), Pointer(LNEONTable.CoreVectors.CmpGtF64x2));
+  AssertSlotReusesScalar('CmpLeF64x2', Pointer(LScalarTable.CoreVectors.CmpLeF64x2), Pointer(LNEONTable.CoreVectors.CmpLeF64x2));
+  AssertSlotReusesScalar('CmpLtF64x2', Pointer(LScalarTable.CoreVectors.CmpLtF64x2), Pointer(LNEONTable.CoreVectors.CmpLtF64x2));
+  AssertSlotReusesScalar('CmpNeF64x2', Pointer(LScalarTable.CoreVectors.CmpNeF64x2), Pointer(LNEONTable.CoreVectors.CmpNeF64x2));
+  AssertSlotReusesScalar('ReduceAddF64x2', Pointer(LScalarTable.CoreVectors.ReduceAddF64x2), Pointer(LNEONTable.CoreVectors.ReduceAddF64x2));
+  AssertSlotReusesScalar('ReduceMulF64x2', Pointer(LScalarTable.CoreVectors.ReduceMulF64x2), Pointer(LNEONTable.CoreVectors.ReduceMulF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideClampSlots_Reuse_BaseScalar_For_F32_And_F64_When_NoAsm;
@@ -8904,11 +8904,11 @@ begin
   AssertWrapperStillPresent('NEONClampF64x4', 'function NEONClampF64x4(');
   AssertWrapperStillPresent('NEONClampF64x8', 'function NEONClampF64x8(');
 
-  AssertAsmBindingStillPresent('ClampF32x16', 'table.ClampF32x16 := @NEONClampF32x16;');
-  AssertAsmBindingStillPresent('ClampF32x8', 'table.ClampF32x8 := @NEONClampF32x8;');
-  AssertAsmBindingStillPresent('ClampF64x2', 'table.ClampF64x2 := @NEONClampF64x2;');
-  AssertAsmBindingStillPresent('ClampF64x4', 'table.ClampF64x4 := @NEONClampF64x4;');
-  AssertAsmBindingStillPresent('ClampF64x8', 'table.ClampF64x8 := @NEONClampF64x8;');
+  AssertAsmBindingStillPresent('ClampF32x16', 'table.CoreVectors.ClampF32x16 := @NEONClampF32x16;');
+  AssertAsmBindingStillPresent('ClampF32x8', 'table.CoreVectors.ClampF32x8 := @NEONClampF32x8;');
+  AssertAsmBindingStillPresent('ClampF64x2', 'table.CoreVectors.ClampF64x2 := @NEONClampF64x2;');
+  AssertAsmBindingStillPresent('ClampF64x4', 'table.CoreVectors.ClampF64x4 := @NEONClampF64x4;');
+  AssertAsmBindingStillPresent('ClampF64x8', 'table.CoreVectors.ClampF64x8 := @NEONClampF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -8919,16 +8919,16 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('ClampF32x16', Pointer(LScalarTable.ClampF32x16), Pointer(LNEONTable.ClampF32x16));
-  AssertSlotReusesScalar('ClampF32x8', Pointer(LScalarTable.ClampF32x8), Pointer(LNEONTable.ClampF32x8));
+  AssertSlotReusesScalar('ClampF32x16', Pointer(LScalarTable.CoreVectors.ClampF32x16), Pointer(LNEONTable.CoreVectors.ClampF32x16));
+  AssertSlotReusesScalar('ClampF32x8', Pointer(LScalarTable.CoreVectors.ClampF32x8), Pointer(LNEONTable.CoreVectors.ClampF32x8));
   {$IFDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
-  AssertSlotKeepsBackendOwnership('ClampF64x2', Pointer(LScalarTable.ClampF64x2), Pointer(LNEONTable.ClampF64x2));
-  AssertSlotKeepsBackendOwnership('ClampF64x4', Pointer(LScalarTable.ClampF64x4), Pointer(LNEONTable.ClampF64x4));
-  AssertSlotKeepsBackendOwnership('ClampF64x8', Pointer(LScalarTable.ClampF64x8), Pointer(LNEONTable.ClampF64x8));
+  AssertSlotKeepsBackendOwnership('ClampF64x2', Pointer(LScalarTable.CoreVectors.ClampF64x2), Pointer(LNEONTable.CoreVectors.ClampF64x2));
+  AssertSlotKeepsBackendOwnership('ClampF64x4', Pointer(LScalarTable.CoreVectors.ClampF64x4), Pointer(LNEONTable.CoreVectors.ClampF64x4));
+  AssertSlotKeepsBackendOwnership('ClampF64x8', Pointer(LScalarTable.CoreVectors.ClampF64x8), Pointer(LNEONTable.CoreVectors.ClampF64x8));
   {$ELSE}
-  AssertSlotReusesScalar('ClampF64x2', Pointer(LScalarTable.ClampF64x2), Pointer(LNEONTable.ClampF64x2));
-  AssertSlotReusesScalar('ClampF64x4', Pointer(LScalarTable.ClampF64x4), Pointer(LNEONTable.ClampF64x4));
-  AssertSlotReusesScalar('ClampF64x8', Pointer(LScalarTable.ClampF64x8), Pointer(LNEONTable.ClampF64x8));
+  AssertSlotReusesScalar('ClampF64x2', Pointer(LScalarTable.CoreVectors.ClampF64x2), Pointer(LNEONTable.CoreVectors.ClampF64x2));
+  AssertSlotReusesScalar('ClampF64x4', Pointer(LScalarTable.CoreVectors.ClampF64x4), Pointer(LNEONTable.CoreVectors.ClampF64x4));
+  AssertSlotReusesScalar('ClampF64x8', Pointer(LScalarTable.CoreVectors.ClampF64x8), Pointer(LNEONTable.CoreVectors.ClampF64x8));
   {$ENDIF}
 end;
 
@@ -8986,19 +8986,19 @@ begin
   AssertDeadWrapperRemoved('NEONFloorF64x4', 'function NEONFloorF64x4(');
   AssertDeadWrapperRemoved('NEONFloorF64x8', 'function NEONFloorF64x8(');
 
-  AssertRegisterKeepsBaseScalar('AbsF32x16', 'table.AbsF32x16 := @NEONAbsF32x16;');
-  AssertRegisterKeepsBaseScalar('AbsF32x8', 'table.AbsF32x8 := @NEONAbsF32x8;');
-  AssertRegisterKeepsBaseScalar('AbsF64x2', 'table.AbsF64x2 := @NEONAbsF64x2;');
-  AssertRegisterKeepsBaseScalar('AbsF64x4', 'table.AbsF64x4 := @NEONAbsF64x4;');
-  AssertRegisterKeepsBaseScalar('AbsF64x8', 'table.AbsF64x8 := @NEONAbsF64x8;');
-  AssertRegisterKeepsBaseScalar('CeilF32x16', 'table.CeilF32x16 := @NEONCeilF32x16;');
-  AssertRegisterKeepsBaseScalar('CeilF32x8', 'table.CeilF32x8 := @NEONCeilF32x8;');
-  AssertRegisterKeepsBaseScalar('CeilF64x4', 'table.CeilF64x4 := @NEONCeilF64x4;');
-  AssertRegisterKeepsBaseScalar('CeilF64x8', 'table.CeilF64x8 := @NEONCeilF64x8;');
-  AssertRegisterKeepsBaseScalar('FloorF32x16', 'table.FloorF32x16 := @NEONFloorF32x16;');
-  AssertRegisterKeepsBaseScalar('FloorF32x8', 'table.FloorF32x8 := @NEONFloorF32x8;');
-  AssertRegisterKeepsBaseScalar('FloorF64x4', 'table.FloorF64x4 := @NEONFloorF64x4;');
-  AssertRegisterKeepsBaseScalar('FloorF64x8', 'table.FloorF64x8 := @NEONFloorF64x8;');
+  AssertRegisterKeepsBaseScalar('AbsF32x16', 'table.CoreVectors.AbsF32x16 := @NEONAbsF32x16;');
+  AssertRegisterKeepsBaseScalar('AbsF32x8', 'table.CoreVectors.AbsF32x8 := @NEONAbsF32x8;');
+  AssertRegisterKeepsBaseScalar('AbsF64x2', 'table.CoreVectors.AbsF64x2 := @NEONAbsF64x2;');
+  AssertRegisterKeepsBaseScalar('AbsF64x4', 'table.CoreVectors.AbsF64x4 := @NEONAbsF64x4;');
+  AssertRegisterKeepsBaseScalar('AbsF64x8', 'table.CoreVectors.AbsF64x8 := @NEONAbsF64x8;');
+  AssertRegisterKeepsBaseScalar('CeilF32x16', 'table.CoreVectors.CeilF32x16 := @NEONCeilF32x16;');
+  AssertRegisterKeepsBaseScalar('CeilF32x8', 'table.CoreVectors.CeilF32x8 := @NEONCeilF32x8;');
+  AssertRegisterKeepsBaseScalar('CeilF64x4', 'table.CoreVectors.CeilF64x4 := @NEONCeilF64x4;');
+  AssertRegisterKeepsBaseScalar('CeilF64x8', 'table.CoreVectors.CeilF64x8 := @NEONCeilF64x8;');
+  AssertRegisterKeepsBaseScalar('FloorF32x16', 'table.CoreVectors.FloorF32x16 := @NEONFloorF32x16;');
+  AssertRegisterKeepsBaseScalar('FloorF32x8', 'table.CoreVectors.FloorF32x8 := @NEONFloorF32x8;');
+  AssertRegisterKeepsBaseScalar('FloorF64x4', 'table.CoreVectors.FloorF64x4 := @NEONFloorF64x4;');
+  AssertRegisterKeepsBaseScalar('FloorF64x8', 'table.CoreVectors.FloorF64x8 := @NEONFloorF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -9009,19 +9009,19 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('AbsF32x16', Pointer(LScalarTable.AbsF32x16), Pointer(LNEONTable.AbsF32x16));
-  AssertSlotReusesScalar('AbsF32x8', Pointer(LScalarTable.AbsF32x8), Pointer(LNEONTable.AbsF32x8));
-  AssertSlotReusesScalar('AbsF64x2', Pointer(LScalarTable.AbsF64x2), Pointer(LNEONTable.AbsF64x2));
-  AssertSlotReusesScalar('AbsF64x4', Pointer(LScalarTable.AbsF64x4), Pointer(LNEONTable.AbsF64x4));
-  AssertSlotReusesScalar('AbsF64x8', Pointer(LScalarTable.AbsF64x8), Pointer(LNEONTable.AbsF64x8));
-  AssertSlotReusesScalar('CeilF32x16', Pointer(LScalarTable.CeilF32x16), Pointer(LNEONTable.CeilF32x16));
-  AssertSlotReusesScalar('CeilF32x8', Pointer(LScalarTable.CeilF32x8), Pointer(LNEONTable.CeilF32x8));
-  AssertSlotReusesScalar('CeilF64x4', Pointer(LScalarTable.CeilF64x4), Pointer(LNEONTable.CeilF64x4));
-  AssertSlotReusesScalar('CeilF64x8', Pointer(LScalarTable.CeilF64x8), Pointer(LNEONTable.CeilF64x8));
-  AssertSlotReusesScalar('FloorF32x16', Pointer(LScalarTable.FloorF32x16), Pointer(LNEONTable.FloorF32x16));
-  AssertSlotReusesScalar('FloorF32x8', Pointer(LScalarTable.FloorF32x8), Pointer(LNEONTable.FloorF32x8));
-  AssertSlotReusesScalar('FloorF64x4', Pointer(LScalarTable.FloorF64x4), Pointer(LNEONTable.FloorF64x4));
-  AssertSlotReusesScalar('FloorF64x8', Pointer(LScalarTable.FloorF64x8), Pointer(LNEONTable.FloorF64x8));
+  AssertSlotReusesScalar('AbsF32x16', Pointer(LScalarTable.CoreVectors.AbsF32x16), Pointer(LNEONTable.CoreVectors.AbsF32x16));
+  AssertSlotReusesScalar('AbsF32x8', Pointer(LScalarTable.CoreVectors.AbsF32x8), Pointer(LNEONTable.CoreVectors.AbsF32x8));
+  AssertSlotReusesScalar('AbsF64x2', Pointer(LScalarTable.CoreVectors.AbsF64x2), Pointer(LNEONTable.CoreVectors.AbsF64x2));
+  AssertSlotReusesScalar('AbsF64x4', Pointer(LScalarTable.CoreVectors.AbsF64x4), Pointer(LNEONTable.CoreVectors.AbsF64x4));
+  AssertSlotReusesScalar('AbsF64x8', Pointer(LScalarTable.CoreVectors.AbsF64x8), Pointer(LNEONTable.CoreVectors.AbsF64x8));
+  AssertSlotReusesScalar('CeilF32x16', Pointer(LScalarTable.CoreVectors.CeilF32x16), Pointer(LNEONTable.CoreVectors.CeilF32x16));
+  AssertSlotReusesScalar('CeilF32x8', Pointer(LScalarTable.CoreVectors.CeilF32x8), Pointer(LNEONTable.CoreVectors.CeilF32x8));
+  AssertSlotReusesScalar('CeilF64x4', Pointer(LScalarTable.CoreVectors.CeilF64x4), Pointer(LNEONTable.CoreVectors.CeilF64x4));
+  AssertSlotReusesScalar('CeilF64x8', Pointer(LScalarTable.CoreVectors.CeilF64x8), Pointer(LNEONTable.CoreVectors.CeilF64x8));
+  AssertSlotReusesScalar('FloorF32x16', Pointer(LScalarTable.CoreVectors.FloorF32x16), Pointer(LNEONTable.CoreVectors.FloorF32x16));
+  AssertSlotReusesScalar('FloorF32x8', Pointer(LScalarTable.CoreVectors.FloorF32x8), Pointer(LNEONTable.CoreVectors.FloorF32x8));
+  AssertSlotReusesScalar('FloorF64x4', Pointer(LScalarTable.CoreVectors.FloorF64x4), Pointer(LNEONTable.CoreVectors.FloorF64x4));
+  AssertSlotReusesScalar('FloorF64x8', Pointer(LScalarTable.CoreVectors.FloorF64x8), Pointer(LNEONTable.CoreVectors.FloorF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_MaskHelperSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -9231,42 +9231,42 @@ begin
   AssertSourceCompositionStillPresent('NEONCmpEqU64x4', 'Result := NEONCombineMask2To4(NEONCmpEqU64x2(a.lo, b.lo), NEONCmpEqU64x2(a.hi, b.hi));');
   AssertSourceCompositionStillPresent('NEONCmpGeU64x4', 'TMask2(Byte(MASK2_ALL_SET) xor Byte(NEONCmpLtU64x2(a.lo, b.lo)))');
 
-  AssertAsmBindingStillPresent('CmpEqI32x16', 'table.CmpEqI32x16 := @NEONCmpEqI32x16;');
-  AssertAsmBindingStillPresent('CmpEqI32x8', 'table.CmpEqI32x8 := @NEONCmpEqI32x8;');
-  AssertAsmBindingStillPresent('CmpEqI64x4', 'table.CmpEqI64x4 := @NEONCmpEqI64x4;');
-  AssertAsmBindingStillPresent('CmpEqI64x8', 'table.CmpEqI64x8 := @NEONCmpEqI64x8;');
-  AssertAsmBindingStillPresent('CmpEqU32x8', 'table.CmpEqU32x8 := @NEONCmpEqU32x8;');
-  AssertAsmBindingStillPresent('CmpEqU64x4', 'table.CmpEqU64x4 := @NEONCmpEqU64x4;');
-  AssertAsmBindingStillPresent('CmpGeI32x16', 'table.CmpGeI32x16 := @NEONCmpGeI32x16;');
-  AssertAsmBindingStillPresent('CmpGeI32x8', 'table.CmpGeI32x8 := @NEONCmpGeI32x8;');
-  AssertAsmBindingStillPresent('CmpGeI64x4', 'table.CmpGeI64x4 := @NEONCmpGeI64x4;');
-  AssertAsmBindingStillPresent('CmpGeI64x8', 'table.CmpGeI64x8 := @NEONCmpGeI64x8;');
-  AssertAsmBindingStillPresent('CmpGeU32x8', 'table.CmpGeU32x8 := @NEONCmpGeU32x8;');
-  AssertAsmBindingStillPresent('CmpGeU64x4', 'table.CmpGeU64x4 := @NEONCmpGeU64x4;');
-  AssertAsmBindingStillPresent('CmpGtI32x16', 'table.CmpGtI32x16 := @NEONCmpGtI32x16;');
-  AssertAsmBindingStillPresent('CmpGtI32x8', 'table.CmpGtI32x8 := @NEONCmpGtI32x8;');
-  AssertAsmBindingStillPresent('CmpGtI64x4', 'table.CmpGtI64x4 := @NEONCmpGtI64x4;');
-  AssertAsmBindingStillPresent('CmpGtI64x8', 'table.CmpGtI64x8 := @NEONCmpGtI64x8;');
-  AssertAsmBindingStillPresent('CmpGtU32x8', 'table.CmpGtU32x8 := @NEONCmpGtU32x8;');
-  AssertAsmBindingStillPresent('CmpGtU64x4', 'table.CmpGtU64x4 := @NEONCmpGtU64x4;');
-  AssertAsmBindingStillPresent('CmpLeI32x16', 'table.CmpLeI32x16 := @NEONCmpLeI32x16;');
-  AssertAsmBindingStillPresent('CmpLeI32x8', 'table.CmpLeI32x8 := @NEONCmpLeI32x8;');
-  AssertAsmBindingStillPresent('CmpLeI64x4', 'table.CmpLeI64x4 := @NEONCmpLeI64x4;');
-  AssertAsmBindingStillPresent('CmpLeI64x8', 'table.CmpLeI64x8 := @NEONCmpLeI64x8;');
-  AssertAsmBindingStillPresent('CmpLeU32x8', 'table.CmpLeU32x8 := @NEONCmpLeU32x8;');
-  AssertAsmBindingStillPresent('CmpLeU64x4', 'table.CmpLeU64x4 := @NEONCmpLeU64x4;');
-  AssertAsmBindingStillPresent('CmpLtI32x16', 'table.CmpLtI32x16 := @NEONCmpLtI32x16;');
-  AssertAsmBindingStillPresent('CmpLtI32x8', 'table.CmpLtI32x8 := @NEONCmpLtI32x8;');
-  AssertAsmBindingStillPresent('CmpLtI64x4', 'table.CmpLtI64x4 := @NEONCmpLtI64x4;');
-  AssertAsmBindingStillPresent('CmpLtI64x8', 'table.CmpLtI64x8 := @NEONCmpLtI64x8;');
-  AssertAsmBindingStillPresent('CmpLtU32x8', 'table.CmpLtU32x8 := @NEONCmpLtU32x8;');
-  AssertAsmBindingStillPresent('CmpLtU64x4', 'table.CmpLtU64x4 := @NEONCmpLtU64x4;');
-  AssertAsmBindingStillPresent('CmpNeI32x16', 'table.CmpNeI32x16 := @NEONCmpNeI32x16;');
-  AssertAsmBindingStillPresent('CmpNeI32x8', 'table.CmpNeI32x8 := @NEONCmpNeI32x8;');
-  AssertAsmBindingStillPresent('CmpNeI64x4', 'table.CmpNeI64x4 := @NEONCmpNeI64x4;');
-  AssertAsmBindingStillPresent('CmpNeI64x8', 'table.CmpNeI64x8 := @NEONCmpNeI64x8;');
-  AssertAsmBindingStillPresent('CmpNeU32x8', 'table.CmpNeU32x8 := @NEONCmpNeU32x8;');
-  AssertAsmBindingStillPresent('CmpNeU64x4', 'table.CmpNeU64x4 := @NEONCmpNeU64x4;');
+  AssertAsmBindingStillPresent('CmpEqI32x16', 'table.CoreVectors.CmpEqI32x16 := @NEONCmpEqI32x16;');
+  AssertAsmBindingStillPresent('CmpEqI32x8', 'table.CoreVectors.CmpEqI32x8 := @NEONCmpEqI32x8;');
+  AssertAsmBindingStillPresent('CmpEqI64x4', 'table.CoreVectors.CmpEqI64x4 := @NEONCmpEqI64x4;');
+  AssertAsmBindingStillPresent('CmpEqI64x8', 'table.CoreVectors.CmpEqI64x8 := @NEONCmpEqI64x8;');
+  AssertAsmBindingStillPresent('CmpEqU32x8', 'table.CoreVectors.CmpEqU32x8 := @NEONCmpEqU32x8;');
+  AssertAsmBindingStillPresent('CmpEqU64x4', 'table.CoreVectors.CmpEqU64x4 := @NEONCmpEqU64x4;');
+  AssertAsmBindingStillPresent('CmpGeI32x16', 'table.CoreVectors.CmpGeI32x16 := @NEONCmpGeI32x16;');
+  AssertAsmBindingStillPresent('CmpGeI32x8', 'table.CoreVectors.CmpGeI32x8 := @NEONCmpGeI32x8;');
+  AssertAsmBindingStillPresent('CmpGeI64x4', 'table.CoreVectors.CmpGeI64x4 := @NEONCmpGeI64x4;');
+  AssertAsmBindingStillPresent('CmpGeI64x8', 'table.CoreVectors.CmpGeI64x8 := @NEONCmpGeI64x8;');
+  AssertAsmBindingStillPresent('CmpGeU32x8', 'table.CoreVectors.CmpGeU32x8 := @NEONCmpGeU32x8;');
+  AssertAsmBindingStillPresent('CmpGeU64x4', 'table.CoreVectors.CmpGeU64x4 := @NEONCmpGeU64x4;');
+  AssertAsmBindingStillPresent('CmpGtI32x16', 'table.CoreVectors.CmpGtI32x16 := @NEONCmpGtI32x16;');
+  AssertAsmBindingStillPresent('CmpGtI32x8', 'table.CoreVectors.CmpGtI32x8 := @NEONCmpGtI32x8;');
+  AssertAsmBindingStillPresent('CmpGtI64x4', 'table.CoreVectors.CmpGtI64x4 := @NEONCmpGtI64x4;');
+  AssertAsmBindingStillPresent('CmpGtI64x8', 'table.CoreVectors.CmpGtI64x8 := @NEONCmpGtI64x8;');
+  AssertAsmBindingStillPresent('CmpGtU32x8', 'table.CoreVectors.CmpGtU32x8 := @NEONCmpGtU32x8;');
+  AssertAsmBindingStillPresent('CmpGtU64x4', 'table.CoreVectors.CmpGtU64x4 := @NEONCmpGtU64x4;');
+  AssertAsmBindingStillPresent('CmpLeI32x16', 'table.CoreVectors.CmpLeI32x16 := @NEONCmpLeI32x16;');
+  AssertAsmBindingStillPresent('CmpLeI32x8', 'table.CoreVectors.CmpLeI32x8 := @NEONCmpLeI32x8;');
+  AssertAsmBindingStillPresent('CmpLeI64x4', 'table.CoreVectors.CmpLeI64x4 := @NEONCmpLeI64x4;');
+  AssertAsmBindingStillPresent('CmpLeI64x8', 'table.CoreVectors.CmpLeI64x8 := @NEONCmpLeI64x8;');
+  AssertAsmBindingStillPresent('CmpLeU32x8', 'table.CoreVectors.CmpLeU32x8 := @NEONCmpLeU32x8;');
+  AssertAsmBindingStillPresent('CmpLeU64x4', 'table.CoreVectors.CmpLeU64x4 := @NEONCmpLeU64x4;');
+  AssertAsmBindingStillPresent('CmpLtI32x16', 'table.CoreVectors.CmpLtI32x16 := @NEONCmpLtI32x16;');
+  AssertAsmBindingStillPresent('CmpLtI32x8', 'table.CoreVectors.CmpLtI32x8 := @NEONCmpLtI32x8;');
+  AssertAsmBindingStillPresent('CmpLtI64x4', 'table.CoreVectors.CmpLtI64x4 := @NEONCmpLtI64x4;');
+  AssertAsmBindingStillPresent('CmpLtI64x8', 'table.CoreVectors.CmpLtI64x8 := @NEONCmpLtI64x8;');
+  AssertAsmBindingStillPresent('CmpLtU32x8', 'table.CoreVectors.CmpLtU32x8 := @NEONCmpLtU32x8;');
+  AssertAsmBindingStillPresent('CmpLtU64x4', 'table.CoreVectors.CmpLtU64x4 := @NEONCmpLtU64x4;');
+  AssertAsmBindingStillPresent('CmpNeI32x16', 'table.CoreVectors.CmpNeI32x16 := @NEONCmpNeI32x16;');
+  AssertAsmBindingStillPresent('CmpNeI32x8', 'table.CoreVectors.CmpNeI32x8 := @NEONCmpNeI32x8;');
+  AssertAsmBindingStillPresent('CmpNeI64x4', 'table.CoreVectors.CmpNeI64x4 := @NEONCmpNeI64x4;');
+  AssertAsmBindingStillPresent('CmpNeI64x8', 'table.CoreVectors.CmpNeI64x8 := @NEONCmpNeI64x8;');
+  AssertAsmBindingStillPresent('CmpNeU32x8', 'table.CoreVectors.CmpNeU32x8 := @NEONCmpNeU32x8;');
+  AssertAsmBindingStillPresent('CmpNeU64x4', 'table.CoreVectors.CmpNeU64x4 := @NEONCmpNeU64x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -9277,42 +9277,42 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('CmpEqI32x16', Pointer(LScalarTable.CmpEqI32x16), Pointer(LNEONTable.CmpEqI32x16));
-  AssertSlotReusesScalar('CmpEqI32x8', Pointer(LScalarTable.CmpEqI32x8), Pointer(LNEONTable.CmpEqI32x8));
-  AssertSlotReusesScalar('CmpEqI64x4', Pointer(LScalarTable.CmpEqI64x4), Pointer(LNEONTable.CmpEqI64x4));
-  AssertSlotReusesScalar('CmpEqI64x8', Pointer(LScalarTable.CmpEqI64x8), Pointer(LNEONTable.CmpEqI64x8));
-  AssertSlotReusesScalar('CmpEqU32x8', Pointer(LScalarTable.CmpEqU32x8), Pointer(LNEONTable.CmpEqU32x8));
-  AssertSlotReusesScalar('CmpEqU64x4', Pointer(LScalarTable.CmpEqU64x4), Pointer(LNEONTable.CmpEqU64x4));
-  AssertSlotReusesScalar('CmpGeI32x16', Pointer(LScalarTable.CmpGeI32x16), Pointer(LNEONTable.CmpGeI32x16));
-  AssertSlotReusesScalar('CmpGeI32x8', Pointer(LScalarTable.CmpGeI32x8), Pointer(LNEONTable.CmpGeI32x8));
-  AssertSlotReusesScalar('CmpGeI64x4', Pointer(LScalarTable.CmpGeI64x4), Pointer(LNEONTable.CmpGeI64x4));
-  AssertSlotReusesScalar('CmpGeI64x8', Pointer(LScalarTable.CmpGeI64x8), Pointer(LNEONTable.CmpGeI64x8));
-  AssertSlotReusesScalar('CmpGeU32x8', Pointer(LScalarTable.CmpGeU32x8), Pointer(LNEONTable.CmpGeU32x8));
-  AssertSlotReusesScalar('CmpGeU64x4', Pointer(LScalarTable.CmpGeU64x4), Pointer(LNEONTable.CmpGeU64x4));
-  AssertSlotReusesScalar('CmpGtI32x16', Pointer(LScalarTable.CmpGtI32x16), Pointer(LNEONTable.CmpGtI32x16));
-  AssertSlotReusesScalar('CmpGtI32x8', Pointer(LScalarTable.CmpGtI32x8), Pointer(LNEONTable.CmpGtI32x8));
-  AssertSlotReusesScalar('CmpGtI64x4', Pointer(LScalarTable.CmpGtI64x4), Pointer(LNEONTable.CmpGtI64x4));
-  AssertSlotReusesScalar('CmpGtI64x8', Pointer(LScalarTable.CmpGtI64x8), Pointer(LNEONTable.CmpGtI64x8));
-  AssertSlotReusesScalar('CmpGtU32x8', Pointer(LScalarTable.CmpGtU32x8), Pointer(LNEONTable.CmpGtU32x8));
-  AssertSlotReusesScalar('CmpGtU64x4', Pointer(LScalarTable.CmpGtU64x4), Pointer(LNEONTable.CmpGtU64x4));
-  AssertSlotReusesScalar('CmpLeI32x16', Pointer(LScalarTable.CmpLeI32x16), Pointer(LNEONTable.CmpLeI32x16));
-  AssertSlotReusesScalar('CmpLeI32x8', Pointer(LScalarTable.CmpLeI32x8), Pointer(LNEONTable.CmpLeI32x8));
-  AssertSlotReusesScalar('CmpLeI64x4', Pointer(LScalarTable.CmpLeI64x4), Pointer(LNEONTable.CmpLeI64x4));
-  AssertSlotReusesScalar('CmpLeI64x8', Pointer(LScalarTable.CmpLeI64x8), Pointer(LNEONTable.CmpLeI64x8));
-  AssertSlotReusesScalar('CmpLeU32x8', Pointer(LScalarTable.CmpLeU32x8), Pointer(LNEONTable.CmpLeU32x8));
-  AssertSlotReusesScalar('CmpLeU64x4', Pointer(LScalarTable.CmpLeU64x4), Pointer(LNEONTable.CmpLeU64x4));
-  AssertSlotReusesScalar('CmpLtI32x16', Pointer(LScalarTable.CmpLtI32x16), Pointer(LNEONTable.CmpLtI32x16));
-  AssertSlotReusesScalar('CmpLtI32x8', Pointer(LScalarTable.CmpLtI32x8), Pointer(LNEONTable.CmpLtI32x8));
-  AssertSlotReusesScalar('CmpLtI64x4', Pointer(LScalarTable.CmpLtI64x4), Pointer(LNEONTable.CmpLtI64x4));
-  AssertSlotReusesScalar('CmpLtI64x8', Pointer(LScalarTable.CmpLtI64x8), Pointer(LNEONTable.CmpLtI64x8));
-  AssertSlotReusesScalar('CmpLtU32x8', Pointer(LScalarTable.CmpLtU32x8), Pointer(LNEONTable.CmpLtU32x8));
-  AssertSlotReusesScalar('CmpLtU64x4', Pointer(LScalarTable.CmpLtU64x4), Pointer(LNEONTable.CmpLtU64x4));
-  AssertSlotReusesScalar('CmpNeI32x16', Pointer(LScalarTable.CmpNeI32x16), Pointer(LNEONTable.CmpNeI32x16));
-  AssertSlotReusesScalar('CmpNeI32x8', Pointer(LScalarTable.CmpNeI32x8), Pointer(LNEONTable.CmpNeI32x8));
-  AssertSlotReusesScalar('CmpNeI64x4', Pointer(LScalarTable.CmpNeI64x4), Pointer(LNEONTable.CmpNeI64x4));
-  AssertSlotReusesScalar('CmpNeI64x8', Pointer(LScalarTable.CmpNeI64x8), Pointer(LNEONTable.CmpNeI64x8));
-  AssertSlotReusesScalar('CmpNeU32x8', Pointer(LScalarTable.CmpNeU32x8), Pointer(LNEONTable.CmpNeU32x8));
-  AssertSlotReusesScalar('CmpNeU64x4', Pointer(LScalarTable.CmpNeU64x4), Pointer(LNEONTable.CmpNeU64x4));
+  AssertSlotReusesScalar('CmpEqI32x16', Pointer(LScalarTable.CoreVectors.CmpEqI32x16), Pointer(LNEONTable.CoreVectors.CmpEqI32x16));
+  AssertSlotReusesScalar('CmpEqI32x8', Pointer(LScalarTable.CoreVectors.CmpEqI32x8), Pointer(LNEONTable.CoreVectors.CmpEqI32x8));
+  AssertSlotReusesScalar('CmpEqI64x4', Pointer(LScalarTable.CoreVectors.CmpEqI64x4), Pointer(LNEONTable.CoreVectors.CmpEqI64x4));
+  AssertSlotReusesScalar('CmpEqI64x8', Pointer(LScalarTable.CoreVectors.CmpEqI64x8), Pointer(LNEONTable.CoreVectors.CmpEqI64x8));
+  AssertSlotReusesScalar('CmpEqU32x8', Pointer(LScalarTable.CoreVectors.CmpEqU32x8), Pointer(LNEONTable.CoreVectors.CmpEqU32x8));
+  AssertSlotReusesScalar('CmpEqU64x4', Pointer(LScalarTable.CoreVectors.CmpEqU64x4), Pointer(LNEONTable.CoreVectors.CmpEqU64x4));
+  AssertSlotReusesScalar('CmpGeI32x16', Pointer(LScalarTable.CoreVectors.CmpGeI32x16), Pointer(LNEONTable.CoreVectors.CmpGeI32x16));
+  AssertSlotReusesScalar('CmpGeI32x8', Pointer(LScalarTable.CoreVectors.CmpGeI32x8), Pointer(LNEONTable.CoreVectors.CmpGeI32x8));
+  AssertSlotReusesScalar('CmpGeI64x4', Pointer(LScalarTable.CoreVectors.CmpGeI64x4), Pointer(LNEONTable.CoreVectors.CmpGeI64x4));
+  AssertSlotReusesScalar('CmpGeI64x8', Pointer(LScalarTable.CoreVectors.CmpGeI64x8), Pointer(LNEONTable.CoreVectors.CmpGeI64x8));
+  AssertSlotReusesScalar('CmpGeU32x8', Pointer(LScalarTable.CoreVectors.CmpGeU32x8), Pointer(LNEONTable.CoreVectors.CmpGeU32x8));
+  AssertSlotReusesScalar('CmpGeU64x4', Pointer(LScalarTable.CoreVectors.CmpGeU64x4), Pointer(LNEONTable.CoreVectors.CmpGeU64x4));
+  AssertSlotReusesScalar('CmpGtI32x16', Pointer(LScalarTable.CoreVectors.CmpGtI32x16), Pointer(LNEONTable.CoreVectors.CmpGtI32x16));
+  AssertSlotReusesScalar('CmpGtI32x8', Pointer(LScalarTable.CoreVectors.CmpGtI32x8), Pointer(LNEONTable.CoreVectors.CmpGtI32x8));
+  AssertSlotReusesScalar('CmpGtI64x4', Pointer(LScalarTable.CoreVectors.CmpGtI64x4), Pointer(LNEONTable.CoreVectors.CmpGtI64x4));
+  AssertSlotReusesScalar('CmpGtI64x8', Pointer(LScalarTable.CoreVectors.CmpGtI64x8), Pointer(LNEONTable.CoreVectors.CmpGtI64x8));
+  AssertSlotReusesScalar('CmpGtU32x8', Pointer(LScalarTable.CoreVectors.CmpGtU32x8), Pointer(LNEONTable.CoreVectors.CmpGtU32x8));
+  AssertSlotReusesScalar('CmpGtU64x4', Pointer(LScalarTable.CoreVectors.CmpGtU64x4), Pointer(LNEONTable.CoreVectors.CmpGtU64x4));
+  AssertSlotReusesScalar('CmpLeI32x16', Pointer(LScalarTable.CoreVectors.CmpLeI32x16), Pointer(LNEONTable.CoreVectors.CmpLeI32x16));
+  AssertSlotReusesScalar('CmpLeI32x8', Pointer(LScalarTable.CoreVectors.CmpLeI32x8), Pointer(LNEONTable.CoreVectors.CmpLeI32x8));
+  AssertSlotReusesScalar('CmpLeI64x4', Pointer(LScalarTable.CoreVectors.CmpLeI64x4), Pointer(LNEONTable.CoreVectors.CmpLeI64x4));
+  AssertSlotReusesScalar('CmpLeI64x8', Pointer(LScalarTable.CoreVectors.CmpLeI64x8), Pointer(LNEONTable.CoreVectors.CmpLeI64x8));
+  AssertSlotReusesScalar('CmpLeU32x8', Pointer(LScalarTable.CoreVectors.CmpLeU32x8), Pointer(LNEONTable.CoreVectors.CmpLeU32x8));
+  AssertSlotReusesScalar('CmpLeU64x4', Pointer(LScalarTable.CoreVectors.CmpLeU64x4), Pointer(LNEONTable.CoreVectors.CmpLeU64x4));
+  AssertSlotReusesScalar('CmpLtI32x16', Pointer(LScalarTable.CoreVectors.CmpLtI32x16), Pointer(LNEONTable.CoreVectors.CmpLtI32x16));
+  AssertSlotReusesScalar('CmpLtI32x8', Pointer(LScalarTable.CoreVectors.CmpLtI32x8), Pointer(LNEONTable.CoreVectors.CmpLtI32x8));
+  AssertSlotReusesScalar('CmpLtI64x4', Pointer(LScalarTable.CoreVectors.CmpLtI64x4), Pointer(LNEONTable.CoreVectors.CmpLtI64x4));
+  AssertSlotReusesScalar('CmpLtI64x8', Pointer(LScalarTable.CoreVectors.CmpLtI64x8), Pointer(LNEONTable.CoreVectors.CmpLtI64x8));
+  AssertSlotReusesScalar('CmpLtU32x8', Pointer(LScalarTable.CoreVectors.CmpLtU32x8), Pointer(LNEONTable.CoreVectors.CmpLtU32x8));
+  AssertSlotReusesScalar('CmpLtU64x4', Pointer(LScalarTable.CoreVectors.CmpLtU64x4), Pointer(LNEONTable.CoreVectors.CmpLtU64x4));
+  AssertSlotReusesScalar('CmpNeI32x16', Pointer(LScalarTable.CoreVectors.CmpNeI32x16), Pointer(LNEONTable.CoreVectors.CmpNeI32x16));
+  AssertSlotReusesScalar('CmpNeI32x8', Pointer(LScalarTable.CoreVectors.CmpNeI32x8), Pointer(LNEONTable.CoreVectors.CmpNeI32x8));
+  AssertSlotReusesScalar('CmpNeI64x4', Pointer(LScalarTable.CoreVectors.CmpNeI64x4), Pointer(LNEONTable.CoreVectors.CmpNeI64x4));
+  AssertSlotReusesScalar('CmpNeI64x8', Pointer(LScalarTable.CoreVectors.CmpNeI64x8), Pointer(LNEONTable.CoreVectors.CmpNeI64x8));
+  AssertSlotReusesScalar('CmpNeU32x8', Pointer(LScalarTable.CoreVectors.CmpNeU32x8), Pointer(LNEONTable.CoreVectors.CmpNeU32x8));
+  AssertSlotReusesScalar('CmpNeU64x4', Pointer(LScalarTable.CoreVectors.CmpNeU64x4), Pointer(LNEONTable.CoreVectors.CmpNeU64x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned;
@@ -9348,94 +9348,94 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('AddI64x2', 'table.AddI64x2 := @NEONAddI64x2;');
-  AssertRegisterHasAsmOwnedSlot('CmpEqI64x2', 'table.CmpEqI64x2 := @NEONCmpEqI64x2;');
-  AssertRegisterHasAsmOwnedSlot('AddI32x4', 'table.AddI32x4 := @NEONAddI32x4;');
-  AssertRegisterHasAsmOwnedSlot('AndI32x4', 'table.AndI32x4 := @NEONAndI32x4;');
-  AssertRegisterHasAsmOwnedSlot('CmpEqI32x4', 'table.CmpEqI32x4 := @NEONCmpEqI32x4;');
-  AssertRegisterHasAsmOwnedSlot('AddU32x4', 'table.AddU32x4 := @NEONAddU32x4;');
-  AssertRegisterHasAsmOwnedSlot('CmpEqU32x4', 'table.CmpEqU32x4 := @NEONCmpEqU32x4;');
-  AssertRegisterHasAsmOwnedSlot('AddI16x8', 'table.AddI16x8 := @NEONAddI16x8;');
-  AssertRegisterHasAsmOwnedSlot('AddI8x16', 'table.AddI8x16 := @NEONAddI8x16;');
-  AssertRegisterHasAsmOwnedSlot('AddU16x8', 'table.AddU16x8 := @NEONAddU16x8;');
-  AssertRegisterHasAsmOwnedSlot('AddU8x16', 'table.AddU8x16 := @NEONAddU8x16;');
-  AssertRegisterHasAsmOwnedSlot('AddI32x8', 'table.AddI32x8 := @NEONAddI32x8;');
-  AssertRegisterHasAsmOwnedSlot('AddU32x8', 'table.AddU32x8 := @NEONAddU32x8;');
-  AssertRegisterHasAsmOwnedSlot('AddU64x4', 'table.AddU64x4 := @NEONAddU64x4;');
-  AssertRegisterHasAsmOwnedSlot('AndI32x8', 'table.AndI32x8 := @NEONAndI32x8;');
-  AssertRegisterHasAsmOwnedSlot('AndI64x4', 'table.AndI64x4 := @NEONAndI64x4;');
-  AssertRegisterHasAsmOwnedSlot('AndNotI32x8', 'table.AndNotI32x8 := @NEONAndNotI32x8;');
-  AssertRegisterHasAsmOwnedSlot('AndNotI64x4', 'table.AndNotI64x4 := @NEONAndNotI64x4;');
-  AssertRegisterHasAsmOwnedSlot('AndNotU32x8', 'table.AndNotU32x8 := @NEONAndNotU32x8;');
-  AssertRegisterHasAsmOwnedSlot('AndU32x8', 'table.AndU32x8 := @NEONAndU32x8;');
-  AssertRegisterHasAsmOwnedSlot('AndU64x4', 'table.AndU64x4 := @NEONAndU64x4;');
-  AssertRegisterHasAsmOwnedSlot('MaxU32x8', 'table.MaxU32x8 := @NEONMaxU32x8;');
-  AssertRegisterHasAsmOwnedSlot('MinU32x8', 'table.MinU32x8 := @NEONMinU32x8;');
-  AssertRegisterHasAsmOwnedSlot('MulI32x8', 'table.MulI32x8 := @NEONMulI32x8;');
-  AssertRegisterHasAsmOwnedSlot('NotI32x8', 'table.NotI32x8 := @NEONNotI32x8;');
-  AssertRegisterHasAsmOwnedSlot('NotI64x4', 'table.NotI64x4 := @NEONNotI64x4;');
-  AssertRegisterHasAsmOwnedSlot('NotU32x8', 'table.NotU32x8 := @NEONNotU32x8;');
-  AssertRegisterHasAsmOwnedSlot('NotU64x4', 'table.NotU64x4 := @NEONNotU64x4;');
-  AssertRegisterHasAsmOwnedSlot('OrI32x8', 'table.OrI32x8 := @NEONOrI32x8;');
-  AssertRegisterHasAsmOwnedSlot('OrI64x4', 'table.OrI64x4 := @NEONOrI64x4;');
-  AssertRegisterHasAsmOwnedSlot('OrU32x8', 'table.OrU32x8 := @NEONOrU32x8;');
-  AssertRegisterHasAsmOwnedSlot('OrU64x4', 'table.OrU64x4 := @NEONOrU64x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftLeftI32x16', 'table.ShiftLeftI32x16 := @NEONShiftLeftI32x16;');
-  AssertRegisterHasAsmOwnedSlot('ShiftLeftI32x8', 'table.ShiftLeftI32x8 := @NEONShiftLeftI32x8;');
-  AssertRegisterHasAsmOwnedSlot('ShiftLeftI64x4', 'table.ShiftLeftI64x4 := @NEONShiftLeftI64x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftLeftU32x8', 'table.ShiftLeftU32x8 := @NEONShiftLeftU32x8;');
-  AssertRegisterHasAsmOwnedSlot('ShiftLeftU64x4', 'table.ShiftLeftU64x4 := @NEONShiftLeftU64x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightArithI32x16', 'table.ShiftRightArithI32x16 := @NEONShiftRightArithI32x16;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightArithI32x8', 'table.ShiftRightArithI32x8 := @NEONShiftRightArithI32x8;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightI32x16', 'table.ShiftRightI32x16 := @NEONShiftRightI32x16;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightI32x8', 'table.ShiftRightI32x8 := @NEONShiftRightI32x8;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightI64x4', 'table.ShiftRightI64x4 := @NEONShiftRightI64x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightArithI64x4', 'table.ShiftRightArithI64x4 := @NEONShiftRightArithI64x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightU32x8', 'table.ShiftRightU32x8 := @NEONShiftRightU32x8;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightU64x4', 'table.ShiftRightU64x4 := @NEONShiftRightU64x4;');
-  AssertRegisterHasAsmOwnedSlot('SubI32x8', 'table.SubI32x8 := @NEONSubI32x8;');
-  AssertRegisterHasAsmOwnedSlot('SubU32x8', 'table.SubU32x8 := @NEONSubU32x8;');
-  AssertRegisterHasAsmOwnedSlot('SubU64x4', 'table.SubU64x4 := @NEONSubU64x4;');
-  AssertRegisterHasAsmOwnedSlot('XorI32x8', 'table.XorI32x8 := @NEONXorI32x8;');
-  AssertRegisterHasAsmOwnedSlot('XorI64x4', 'table.XorI64x4 := @NEONXorI64x4;');
-  AssertRegisterHasAsmOwnedSlot('XorU32x8', 'table.XorU32x8 := @NEONXorU32x8;');
-  AssertRegisterHasAsmOwnedSlot('XorU64x4', 'table.XorU64x4 := @NEONXorU64x4;');
-  AssertRegisterHasAsmOwnedSlot('LoadI64x4', 'table.LoadI64x4 := @NEONLoadI64x4_ASM;');
-  AssertRegisterHasAsmOwnedSlot('SplatI64x4', 'table.SplatI64x4 := @NEONSplatI64x4_ASM;');
-  AssertRegisterHasAsmOwnedSlot('StoreI64x4', 'table.StoreI64x4 := @NEONStoreI64x4_ASM;');
-  AssertRegisterHasAsmOwnedSlot('ZeroI64x4', 'table.ZeroI64x4 := @NEONZeroI64x4_ASM;');
-  AssertRegisterKeepsBaseScalar('AddU64x2', 'table.AddU64x2 := @NEONAddU64x2;');
-  AssertRegisterKeepsBaseScalar('CmpEqU64x2', 'table.CmpEqU64x2 := @NEONCmpEqU64x2;');
-  AssertRegisterKeepsBaseScalar('MinI32x4', 'table.MinI32x4 := @NEONMinI32x4;');
-  AssertRegisterKeepsBaseScalar('MaxI32x4', 'table.MaxI32x4 := @NEONMaxI32x4;');
-  AssertRegisterKeepsBaseScalar('MulU32x4', 'table.MulU32x4 := @NEONMulU32x4;');
-  AssertRegisterKeepsBaseScalar('AddI32x16', 'table.AddI32x16 := @NEONAddI32x16;');
-  AssertRegisterKeepsBaseScalar('AddI64x4', 'table.AddI64x4 := @NEONAddI64x4;');
-  AssertRegisterKeepsBaseScalar('AddI64x8', 'table.AddI64x8 := @NEONAddI64x8;');
-  AssertRegisterKeepsBaseScalar('AndI32x16', 'table.AndI32x16 := @NEONAndI32x16;');
-  AssertRegisterKeepsBaseScalar('AndI64x8', 'table.AndI64x8 := @NEONAndI64x8;');
-  AssertRegisterKeepsBaseScalar('AndNotI32x16', 'table.AndNotI32x16 := @NEONAndNotI32x16;');
-  AssertRegisterKeepsBaseScalar('ExtractI32x16', 'table.ExtractI32x16 := @NEONExtractI32x16;');
-  AssertRegisterKeepsBaseScalar('ExtractI32x8', 'table.ExtractI32x8 := @NEONExtractI32x8;');
-  AssertRegisterKeepsBaseScalar('ExtractI64x4', 'table.ExtractI64x4 := @NEONExtractI64x4;');
-  AssertRegisterKeepsBaseScalar('InsertI32x16', 'table.InsertI32x16 := @NEONInsertI32x16;');
-  AssertRegisterKeepsBaseScalar('InsertI32x8', 'table.InsertI32x8 := @NEONInsertI32x8;');
-  AssertRegisterKeepsBaseScalar('InsertI64x4', 'table.InsertI64x4 := @NEONInsertI64x4;');
-  AssertRegisterKeepsBaseScalar('MaxI32x16', 'table.MaxI32x16 := @NEONMaxI32x16;');
-  AssertRegisterKeepsBaseScalar('MaxI32x8', 'table.MaxI32x8 := @NEONMaxI32x8;');
-  AssertRegisterKeepsBaseScalar('MinI32x16', 'table.MinI32x16 := @NEONMinI32x16;');
-  AssertRegisterKeepsBaseScalar('MinI32x8', 'table.MinI32x8 := @NEONMinI32x8;');
-  AssertRegisterKeepsBaseScalar('MulI32x16', 'table.MulI32x16 := @NEONMulI32x16;');
-  AssertRegisterKeepsBaseScalar('MulU32x8', 'table.MulU32x8 := @NEONMulU32x8;');
-  AssertRegisterKeepsBaseScalar('NotI32x16', 'table.NotI32x16 := @NEONNotI32x16;');
-  AssertRegisterKeepsBaseScalar('NotI64x8', 'table.NotI64x8 := @NEONNotI64x8;');
-  AssertRegisterKeepsBaseScalar('OrI32x16', 'table.OrI32x16 := @NEONOrI32x16;');
-  AssertRegisterKeepsBaseScalar('OrI64x8', 'table.OrI64x8 := @NEONOrI64x8;');
-  AssertRegisterKeepsBaseScalar('SubI32x16', 'table.SubI32x16 := @NEONSubI32x16;');
-  AssertRegisterKeepsBaseScalar('SubI64x4', 'table.SubI64x4 := @NEONSubI64x4;');
-  AssertRegisterKeepsBaseScalar('SubI64x8', 'table.SubI64x8 := @NEONSubI64x8;');
-  AssertRegisterKeepsBaseScalar('XorI32x16', 'table.XorI32x16 := @NEONXorI32x16;');
-  AssertRegisterKeepsBaseScalar('XorI64x8', 'table.XorI64x8 := @NEONXorI64x8;');
+  AssertRegisterHasAsmOwnedSlot('AddI64x2', 'table.CoreVectors.AddI64x2 := @NEONAddI64x2;');
+  AssertRegisterHasAsmOwnedSlot('CmpEqI64x2', 'table.CoreVectors.CmpEqI64x2 := @NEONCmpEqI64x2;');
+  AssertRegisterHasAsmOwnedSlot('AddI32x4', 'table.CoreVectors.AddI32x4 := @NEONAddI32x4;');
+  AssertRegisterHasAsmOwnedSlot('AndI32x4', 'table.CoreVectors.AndI32x4 := @NEONAndI32x4;');
+  AssertRegisterHasAsmOwnedSlot('CmpEqI32x4', 'table.CoreVectors.CmpEqI32x4 := @NEONCmpEqI32x4;');
+  AssertRegisterHasAsmOwnedSlot('AddU32x4', 'table.CoreVectors.AddU32x4 := @NEONAddU32x4;');
+  AssertRegisterHasAsmOwnedSlot('CmpEqU32x4', 'table.CoreVectors.CmpEqU32x4 := @NEONCmpEqU32x4;');
+  AssertRegisterHasAsmOwnedSlot('AddI16x8', 'table.CoreVectors.AddI16x8 := @NEONAddI16x8;');
+  AssertRegisterHasAsmOwnedSlot('AddI8x16', 'table.CoreVectors.AddI8x16 := @NEONAddI8x16;');
+  AssertRegisterHasAsmOwnedSlot('AddU16x8', 'table.CoreVectors.AddU16x8 := @NEONAddU16x8;');
+  AssertRegisterHasAsmOwnedSlot('AddU8x16', 'table.CoreVectors.AddU8x16 := @NEONAddU8x16;');
+  AssertRegisterHasAsmOwnedSlot('AddI32x8', 'table.CoreVectors.AddI32x8 := @NEONAddI32x8;');
+  AssertRegisterHasAsmOwnedSlot('AddU32x8', 'table.CoreVectors.AddU32x8 := @NEONAddU32x8;');
+  AssertRegisterHasAsmOwnedSlot('AddU64x4', 'table.CoreVectors.AddU64x4 := @NEONAddU64x4;');
+  AssertRegisterHasAsmOwnedSlot('AndI32x8', 'table.CoreVectors.AndI32x8 := @NEONAndI32x8;');
+  AssertRegisterHasAsmOwnedSlot('AndI64x4', 'table.CoreVectors.AndI64x4 := @NEONAndI64x4;');
+  AssertRegisterHasAsmOwnedSlot('AndNotI32x8', 'table.CoreVectors.AndNotI32x8 := @NEONAndNotI32x8;');
+  AssertRegisterHasAsmOwnedSlot('AndNotI64x4', 'table.CoreVectors.AndNotI64x4 := @NEONAndNotI64x4;');
+  AssertRegisterHasAsmOwnedSlot('AndNotU32x8', 'table.CoreVectors.AndNotU32x8 := @NEONAndNotU32x8;');
+  AssertRegisterHasAsmOwnedSlot('AndU32x8', 'table.CoreVectors.AndU32x8 := @NEONAndU32x8;');
+  AssertRegisterHasAsmOwnedSlot('AndU64x4', 'table.CoreVectors.AndU64x4 := @NEONAndU64x4;');
+  AssertRegisterHasAsmOwnedSlot('MaxU32x8', 'table.CoreVectors.MaxU32x8 := @NEONMaxU32x8;');
+  AssertRegisterHasAsmOwnedSlot('MinU32x8', 'table.CoreVectors.MinU32x8 := @NEONMinU32x8;');
+  AssertRegisterHasAsmOwnedSlot('MulI32x8', 'table.CoreVectors.MulI32x8 := @NEONMulI32x8;');
+  AssertRegisterHasAsmOwnedSlot('NotI32x8', 'table.CoreVectors.NotI32x8 := @NEONNotI32x8;');
+  AssertRegisterHasAsmOwnedSlot('NotI64x4', 'table.CoreVectors.NotI64x4 := @NEONNotI64x4;');
+  AssertRegisterHasAsmOwnedSlot('NotU32x8', 'table.CoreVectors.NotU32x8 := @NEONNotU32x8;');
+  AssertRegisterHasAsmOwnedSlot('NotU64x4', 'table.CoreVectors.NotU64x4 := @NEONNotU64x4;');
+  AssertRegisterHasAsmOwnedSlot('OrI32x8', 'table.CoreVectors.OrI32x8 := @NEONOrI32x8;');
+  AssertRegisterHasAsmOwnedSlot('OrI64x4', 'table.CoreVectors.OrI64x4 := @NEONOrI64x4;');
+  AssertRegisterHasAsmOwnedSlot('OrU32x8', 'table.CoreVectors.OrU32x8 := @NEONOrU32x8;');
+  AssertRegisterHasAsmOwnedSlot('OrU64x4', 'table.CoreVectors.OrU64x4 := @NEONOrU64x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftLeftI32x16', 'table.CoreVectors.ShiftLeftI32x16 := @NEONShiftLeftI32x16;');
+  AssertRegisterHasAsmOwnedSlot('ShiftLeftI32x8', 'table.CoreVectors.ShiftLeftI32x8 := @NEONShiftLeftI32x8;');
+  AssertRegisterHasAsmOwnedSlot('ShiftLeftI64x4', 'table.CoreVectors.ShiftLeftI64x4 := @NEONShiftLeftI64x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftLeftU32x8', 'table.CoreVectors.ShiftLeftU32x8 := @NEONShiftLeftU32x8;');
+  AssertRegisterHasAsmOwnedSlot('ShiftLeftU64x4', 'table.CoreVectors.ShiftLeftU64x4 := @NEONShiftLeftU64x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightArithI32x16', 'table.CoreVectors.ShiftRightArithI32x16 := @NEONShiftRightArithI32x16;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightArithI32x8', 'table.CoreVectors.ShiftRightArithI32x8 := @NEONShiftRightArithI32x8;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightI32x16', 'table.CoreVectors.ShiftRightI32x16 := @NEONShiftRightI32x16;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightI32x8', 'table.CoreVectors.ShiftRightI32x8 := @NEONShiftRightI32x8;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightI64x4', 'table.CoreVectors.ShiftRightI64x4 := @NEONShiftRightI64x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightArithI64x4', 'table.CoreVectors.ShiftRightArithI64x4 := @NEONShiftRightArithI64x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightU32x8', 'table.CoreVectors.ShiftRightU32x8 := @NEONShiftRightU32x8;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightU64x4', 'table.CoreVectors.ShiftRightU64x4 := @NEONShiftRightU64x4;');
+  AssertRegisterHasAsmOwnedSlot('SubI32x8', 'table.CoreVectors.SubI32x8 := @NEONSubI32x8;');
+  AssertRegisterHasAsmOwnedSlot('SubU32x8', 'table.CoreVectors.SubU32x8 := @NEONSubU32x8;');
+  AssertRegisterHasAsmOwnedSlot('SubU64x4', 'table.CoreVectors.SubU64x4 := @NEONSubU64x4;');
+  AssertRegisterHasAsmOwnedSlot('XorI32x8', 'table.CoreVectors.XorI32x8 := @NEONXorI32x8;');
+  AssertRegisterHasAsmOwnedSlot('XorI64x4', 'table.CoreVectors.XorI64x4 := @NEONXorI64x4;');
+  AssertRegisterHasAsmOwnedSlot('XorU32x8', 'table.CoreVectors.XorU32x8 := @NEONXorU32x8;');
+  AssertRegisterHasAsmOwnedSlot('XorU64x4', 'table.CoreVectors.XorU64x4 := @NEONXorU64x4;');
+  AssertRegisterHasAsmOwnedSlot('LoadI64x4', 'table.CoreVectors.LoadI64x4 := @NEONLoadI64x4_ASM;');
+  AssertRegisterHasAsmOwnedSlot('SplatI64x4', 'table.CoreVectors.SplatI64x4 := @NEONSplatI64x4_ASM;');
+  AssertRegisterHasAsmOwnedSlot('StoreI64x4', 'table.CoreVectors.StoreI64x4 := @NEONStoreI64x4_ASM;');
+  AssertRegisterHasAsmOwnedSlot('ZeroI64x4', 'table.CoreVectors.ZeroI64x4 := @NEONZeroI64x4_ASM;');
+  AssertRegisterKeepsBaseScalar('AddU64x2', 'table.CoreVectors.AddU64x2 := @NEONAddU64x2;');
+  AssertRegisterKeepsBaseScalar('CmpEqU64x2', 'table.CoreVectors.CmpEqU64x2 := @NEONCmpEqU64x2;');
+  AssertRegisterKeepsBaseScalar('MinI32x4', 'table.CoreVectors.MinI32x4 := @NEONMinI32x4;');
+  AssertRegisterKeepsBaseScalar('MaxI32x4', 'table.CoreVectors.MaxI32x4 := @NEONMaxI32x4;');
+  AssertRegisterKeepsBaseScalar('MulU32x4', 'table.CoreVectors.MulU32x4 := @NEONMulU32x4;');
+  AssertRegisterKeepsBaseScalar('AddI32x16', 'table.CoreVectors.AddI32x16 := @NEONAddI32x16;');
+  AssertRegisterKeepsBaseScalar('AddI64x4', 'table.CoreVectors.AddI64x4 := @NEONAddI64x4;');
+  AssertRegisterKeepsBaseScalar('AddI64x8', 'table.CoreVectors.AddI64x8 := @NEONAddI64x8;');
+  AssertRegisterKeepsBaseScalar('AndI32x16', 'table.CoreVectors.AndI32x16 := @NEONAndI32x16;');
+  AssertRegisterKeepsBaseScalar('AndI64x8', 'table.CoreVectors.AndI64x8 := @NEONAndI64x8;');
+  AssertRegisterKeepsBaseScalar('AndNotI32x16', 'table.CoreVectors.AndNotI32x16 := @NEONAndNotI32x16;');
+  AssertRegisterKeepsBaseScalar('ExtractI32x16', 'table.CoreVectors.ExtractI32x16 := @NEONExtractI32x16;');
+  AssertRegisterKeepsBaseScalar('ExtractI32x8', 'table.CoreVectors.ExtractI32x8 := @NEONExtractI32x8;');
+  AssertRegisterKeepsBaseScalar('ExtractI64x4', 'table.CoreVectors.ExtractI64x4 := @NEONExtractI64x4;');
+  AssertRegisterKeepsBaseScalar('InsertI32x16', 'table.CoreVectors.InsertI32x16 := @NEONInsertI32x16;');
+  AssertRegisterKeepsBaseScalar('InsertI32x8', 'table.CoreVectors.InsertI32x8 := @NEONInsertI32x8;');
+  AssertRegisterKeepsBaseScalar('InsertI64x4', 'table.CoreVectors.InsertI64x4 := @NEONInsertI64x4;');
+  AssertRegisterKeepsBaseScalar('MaxI32x16', 'table.CoreVectors.MaxI32x16 := @NEONMaxI32x16;');
+  AssertRegisterKeepsBaseScalar('MaxI32x8', 'table.CoreVectors.MaxI32x8 := @NEONMaxI32x8;');
+  AssertRegisterKeepsBaseScalar('MinI32x16', 'table.CoreVectors.MinI32x16 := @NEONMinI32x16;');
+  AssertRegisterKeepsBaseScalar('MinI32x8', 'table.CoreVectors.MinI32x8 := @NEONMinI32x8;');
+  AssertRegisterKeepsBaseScalar('MulI32x16', 'table.CoreVectors.MulI32x16 := @NEONMulI32x16;');
+  AssertRegisterKeepsBaseScalar('MulU32x8', 'table.CoreVectors.MulU32x8 := @NEONMulU32x8;');
+  AssertRegisterKeepsBaseScalar('NotI32x16', 'table.CoreVectors.NotI32x16 := @NEONNotI32x16;');
+  AssertRegisterKeepsBaseScalar('NotI64x8', 'table.CoreVectors.NotI64x8 := @NEONNotI64x8;');
+  AssertRegisterKeepsBaseScalar('OrI32x16', 'table.CoreVectors.OrI32x16 := @NEONOrI32x16;');
+  AssertRegisterKeepsBaseScalar('OrI64x8', 'table.CoreVectors.OrI64x8 := @NEONOrI64x8;');
+  AssertRegisterKeepsBaseScalar('SubI32x16', 'table.CoreVectors.SubI32x16 := @NEONSubI32x16;');
+  AssertRegisterKeepsBaseScalar('SubI64x4', 'table.CoreVectors.SubI64x4 := @NEONSubI64x4;');
+  AssertRegisterKeepsBaseScalar('SubI64x8', 'table.CoreVectors.SubI64x8 := @NEONSubI64x8;');
+  AssertRegisterKeepsBaseScalar('XorI32x16', 'table.CoreVectors.XorI32x16 := @NEONXorI32x16;');
+  AssertRegisterKeepsBaseScalar('XorI64x8', 'table.CoreVectors.XorI64x8 := @NEONXorI64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -9446,99 +9446,99 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('MinI32x4', Pointer(LScalarTable.MinI32x4), Pointer(LNEONTable.MinI32x4));
-  AssertSlotReusesScalar('MaxI32x4', Pointer(LScalarTable.MaxI32x4), Pointer(LNEONTable.MaxI32x4));
-  AssertSlotReusesScalar('MulU32x4', Pointer(LScalarTable.MulU32x4), Pointer(LNEONTable.MulU32x4));
-  AssertSlotReusesScalar('AddU64x2', Pointer(LScalarTable.AddU64x2), Pointer(LNEONTable.AddU64x2));
-  AssertSlotReusesScalar('CmpEqU64x2', Pointer(LScalarTable.CmpEqU64x2), Pointer(LNEONTable.CmpEqU64x2));
-  AssertSlotReusesScalar('AddI32x16', Pointer(LScalarTable.AddI32x16), Pointer(LNEONTable.AddI32x16));
-  AssertSlotReusesScalar('AddI64x4', Pointer(LScalarTable.AddI64x4), Pointer(LNEONTable.AddI64x4));
-  AssertSlotReusesScalar('AddI64x8', Pointer(LScalarTable.AddI64x8), Pointer(LNEONTable.AddI64x8));
-  AssertSlotReusesScalar('AndI32x16', Pointer(LScalarTable.AndI32x16), Pointer(LNEONTable.AndI32x16));
-  AssertSlotReusesScalar('AndI64x8', Pointer(LScalarTable.AndI64x8), Pointer(LNEONTable.AndI64x8));
-  AssertSlotReusesScalar('AndNotI32x16', Pointer(LScalarTable.AndNotI32x16), Pointer(LNEONTable.AndNotI32x16));
-  AssertSlotReusesScalar('ExtractI32x16', Pointer(LScalarTable.ExtractI32x16), Pointer(LNEONTable.ExtractI32x16));
-  AssertSlotReusesScalar('ExtractI32x8', Pointer(LScalarTable.ExtractI32x8), Pointer(LNEONTable.ExtractI32x8));
-  AssertSlotReusesScalar('ExtractI64x4', Pointer(LScalarTable.ExtractI64x4), Pointer(LNEONTable.ExtractI64x4));
-  AssertSlotReusesScalar('InsertI32x16', Pointer(LScalarTable.InsertI32x16), Pointer(LNEONTable.InsertI32x16));
-  AssertSlotReusesScalar('InsertI32x8', Pointer(LScalarTable.InsertI32x8), Pointer(LNEONTable.InsertI32x8));
-  AssertSlotReusesScalar('InsertI64x4', Pointer(LScalarTable.InsertI64x4), Pointer(LNEONTable.InsertI64x4));
-  AssertSlotReusesScalar('MaxI32x16', Pointer(LScalarTable.MaxI32x16), Pointer(LNEONTable.MaxI32x16));
-  AssertSlotReusesScalar('MaxI32x8', Pointer(LScalarTable.MaxI32x8), Pointer(LNEONTable.MaxI32x8));
-  AssertSlotReusesScalar('MinI32x16', Pointer(LScalarTable.MinI32x16), Pointer(LNEONTable.MinI32x16));
-  AssertSlotReusesScalar('MinI32x8', Pointer(LScalarTable.MinI32x8), Pointer(LNEONTable.MinI32x8));
-  AssertSlotReusesScalar('MulI32x16', Pointer(LScalarTable.MulI32x16), Pointer(LNEONTable.MulI32x16));
-  AssertSlotReusesScalar('MulU32x8', Pointer(LScalarTable.MulU32x8), Pointer(LNEONTable.MulU32x8));
-  AssertSlotReusesScalar('NotI32x16', Pointer(LScalarTable.NotI32x16), Pointer(LNEONTable.NotI32x16));
-  AssertSlotReusesScalar('NotI64x8', Pointer(LScalarTable.NotI64x8), Pointer(LNEONTable.NotI64x8));
-  AssertSlotReusesScalar('OrI32x16', Pointer(LScalarTable.OrI32x16), Pointer(LNEONTable.OrI32x16));
-  AssertSlotReusesScalar('OrI64x8', Pointer(LScalarTable.OrI64x8), Pointer(LNEONTable.OrI64x8));
-  AssertSlotReusesScalar('SubI32x16', Pointer(LScalarTable.SubI32x16), Pointer(LNEONTable.SubI32x16));
-  AssertSlotReusesScalar('SubI64x4', Pointer(LScalarTable.SubI64x4), Pointer(LNEONTable.SubI64x4));
-  AssertSlotReusesScalar('SubI64x8', Pointer(LScalarTable.SubI64x8), Pointer(LNEONTable.SubI64x8));
-  AssertSlotReusesScalar('XorI32x16', Pointer(LScalarTable.XorI32x16), Pointer(LNEONTable.XorI32x16));
-  AssertSlotReusesScalar('XorI64x8', Pointer(LScalarTable.XorI64x8), Pointer(LNEONTable.XorI64x8));
+  AssertSlotReusesScalar('MinI32x4', Pointer(LScalarTable.CoreVectors.MinI32x4), Pointer(LNEONTable.CoreVectors.MinI32x4));
+  AssertSlotReusesScalar('MaxI32x4', Pointer(LScalarTable.CoreVectors.MaxI32x4), Pointer(LNEONTable.CoreVectors.MaxI32x4));
+  AssertSlotReusesScalar('MulU32x4', Pointer(LScalarTable.CoreVectors.MulU32x4), Pointer(LNEONTable.CoreVectors.MulU32x4));
+  AssertSlotReusesScalar('AddU64x2', Pointer(LScalarTable.CoreVectors.AddU64x2), Pointer(LNEONTable.CoreVectors.AddU64x2));
+  AssertSlotReusesScalar('CmpEqU64x2', Pointer(LScalarTable.CoreVectors.CmpEqU64x2), Pointer(LNEONTable.CoreVectors.CmpEqU64x2));
+  AssertSlotReusesScalar('AddI32x16', Pointer(LScalarTable.CoreVectors.AddI32x16), Pointer(LNEONTable.CoreVectors.AddI32x16));
+  AssertSlotReusesScalar('AddI64x4', Pointer(LScalarTable.CoreVectors.AddI64x4), Pointer(LNEONTable.CoreVectors.AddI64x4));
+  AssertSlotReusesScalar('AddI64x8', Pointer(LScalarTable.CoreVectors.AddI64x8), Pointer(LNEONTable.CoreVectors.AddI64x8));
+  AssertSlotReusesScalar('AndI32x16', Pointer(LScalarTable.CoreVectors.AndI32x16), Pointer(LNEONTable.CoreVectors.AndI32x16));
+  AssertSlotReusesScalar('AndI64x8', Pointer(LScalarTable.CoreVectors.AndI64x8), Pointer(LNEONTable.CoreVectors.AndI64x8));
+  AssertSlotReusesScalar('AndNotI32x16', Pointer(LScalarTable.CoreVectors.AndNotI32x16), Pointer(LNEONTable.CoreVectors.AndNotI32x16));
+  AssertSlotReusesScalar('ExtractI32x16', Pointer(LScalarTable.CoreVectors.ExtractI32x16), Pointer(LNEONTable.CoreVectors.ExtractI32x16));
+  AssertSlotReusesScalar('ExtractI32x8', Pointer(LScalarTable.CoreVectors.ExtractI32x8), Pointer(LNEONTable.CoreVectors.ExtractI32x8));
+  AssertSlotReusesScalar('ExtractI64x4', Pointer(LScalarTable.CoreVectors.ExtractI64x4), Pointer(LNEONTable.CoreVectors.ExtractI64x4));
+  AssertSlotReusesScalar('InsertI32x16', Pointer(LScalarTable.CoreVectors.InsertI32x16), Pointer(LNEONTable.CoreVectors.InsertI32x16));
+  AssertSlotReusesScalar('InsertI32x8', Pointer(LScalarTable.CoreVectors.InsertI32x8), Pointer(LNEONTable.CoreVectors.InsertI32x8));
+  AssertSlotReusesScalar('InsertI64x4', Pointer(LScalarTable.CoreVectors.InsertI64x4), Pointer(LNEONTable.CoreVectors.InsertI64x4));
+  AssertSlotReusesScalar('MaxI32x16', Pointer(LScalarTable.CoreVectors.MaxI32x16), Pointer(LNEONTable.CoreVectors.MaxI32x16));
+  AssertSlotReusesScalar('MaxI32x8', Pointer(LScalarTable.CoreVectors.MaxI32x8), Pointer(LNEONTable.CoreVectors.MaxI32x8));
+  AssertSlotReusesScalar('MinI32x16', Pointer(LScalarTable.CoreVectors.MinI32x16), Pointer(LNEONTable.CoreVectors.MinI32x16));
+  AssertSlotReusesScalar('MinI32x8', Pointer(LScalarTable.CoreVectors.MinI32x8), Pointer(LNEONTable.CoreVectors.MinI32x8));
+  AssertSlotReusesScalar('MulI32x16', Pointer(LScalarTable.CoreVectors.MulI32x16), Pointer(LNEONTable.CoreVectors.MulI32x16));
+  AssertSlotReusesScalar('MulU32x8', Pointer(LScalarTable.CoreVectors.MulU32x8), Pointer(LNEONTable.CoreVectors.MulU32x8));
+  AssertSlotReusesScalar('NotI32x16', Pointer(LScalarTable.CoreVectors.NotI32x16), Pointer(LNEONTable.CoreVectors.NotI32x16));
+  AssertSlotReusesScalar('NotI64x8', Pointer(LScalarTable.CoreVectors.NotI64x8), Pointer(LNEONTable.CoreVectors.NotI64x8));
+  AssertSlotReusesScalar('OrI32x16', Pointer(LScalarTable.CoreVectors.OrI32x16), Pointer(LNEONTable.CoreVectors.OrI32x16));
+  AssertSlotReusesScalar('OrI64x8', Pointer(LScalarTable.CoreVectors.OrI64x8), Pointer(LNEONTable.CoreVectors.OrI64x8));
+  AssertSlotReusesScalar('SubI32x16', Pointer(LScalarTable.CoreVectors.SubI32x16), Pointer(LNEONTable.CoreVectors.SubI32x16));
+  AssertSlotReusesScalar('SubI64x4', Pointer(LScalarTable.CoreVectors.SubI64x4), Pointer(LNEONTable.CoreVectors.SubI64x4));
+  AssertSlotReusesScalar('SubI64x8', Pointer(LScalarTable.CoreVectors.SubI64x8), Pointer(LNEONTable.CoreVectors.SubI64x8));
+  AssertSlotReusesScalar('XorI32x16', Pointer(LScalarTable.CoreVectors.XorI32x16), Pointer(LNEONTable.CoreVectors.XorI32x16));
+  AssertSlotReusesScalar('XorI64x8', Pointer(LScalarTable.CoreVectors.XorI64x8), Pointer(LNEONTable.CoreVectors.XorI64x8));
   {$IFNDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
-  AssertSlotReusesScalar('AddI32x4', Pointer(LScalarTable.AddI32x4), Pointer(LNEONTable.AddI32x4));
-  AssertSlotReusesScalar('AndI32x4', Pointer(LScalarTable.AndI32x4), Pointer(LNEONTable.AndI32x4));
-  AssertSlotReusesScalar('CmpEqI32x4', Pointer(LScalarTable.CmpEqI32x4), Pointer(LNEONTable.CmpEqI32x4));
-  AssertSlotReusesScalar('AddU32x4', Pointer(LScalarTable.AddU32x4), Pointer(LNEONTable.AddU32x4));
-  AssertSlotReusesScalar('CmpEqU32x4', Pointer(LScalarTable.CmpEqU32x4), Pointer(LNEONTable.CmpEqU32x4));
-  AssertSlotReusesScalar('AddI64x2', Pointer(LScalarTable.AddI64x2), Pointer(LNEONTable.AddI64x2));
-  AssertSlotReusesScalar('CmpEqI64x2', Pointer(LScalarTable.CmpEqI64x2), Pointer(LNEONTable.CmpEqI64x2));
-  AssertSlotReusesScalar('AddI16x8', Pointer(LScalarTable.AddI16x8), Pointer(LNEONTable.AddI16x8));
-  AssertSlotReusesScalar('AddI8x16', Pointer(LScalarTable.AddI8x16), Pointer(LNEONTable.AddI8x16));
-  AssertSlotReusesScalar('AddU16x8', Pointer(LScalarTable.AddU16x8), Pointer(LNEONTable.AddU16x8));
-  AssertSlotReusesScalar('AddU8x16', Pointer(LScalarTable.AddU8x16), Pointer(LNEONTable.AddU8x16));
-  AssertSlotReusesScalar('AddI32x8', Pointer(LScalarTable.AddI32x8), Pointer(LNEONTable.AddI32x8));
-  AssertSlotReusesScalar('AddU32x8', Pointer(LScalarTable.AddU32x8), Pointer(LNEONTable.AddU32x8));
-  AssertSlotReusesScalar('AddU64x4', Pointer(LScalarTable.AddU64x4), Pointer(LNEONTable.AddU64x4));
-  AssertSlotReusesScalar('AndI32x8', Pointer(LScalarTable.AndI32x8), Pointer(LNEONTable.AndI32x8));
-  AssertSlotReusesScalar('AndI64x4', Pointer(LScalarTable.AndI64x4), Pointer(LNEONTable.AndI64x4));
-  AssertSlotReusesScalar('AndNotI32x8', Pointer(LScalarTable.AndNotI32x8), Pointer(LNEONTable.AndNotI32x8));
-  AssertSlotReusesScalar('AndNotI64x4', Pointer(LScalarTable.AndNotI64x4), Pointer(LNEONTable.AndNotI64x4));
-  AssertSlotReusesScalar('AndNotU32x8', Pointer(LScalarTable.AndNotU32x8), Pointer(LNEONTable.AndNotU32x8));
-  AssertSlotReusesScalar('AndU32x8', Pointer(LScalarTable.AndU32x8), Pointer(LNEONTable.AndU32x8));
-  AssertSlotReusesScalar('AndU64x4', Pointer(LScalarTable.AndU64x4), Pointer(LNEONTable.AndU64x4));
-  AssertSlotReusesScalar('MaxU32x8', Pointer(LScalarTable.MaxU32x8), Pointer(LNEONTable.MaxU32x8));
-  AssertSlotReusesScalar('MinU32x8', Pointer(LScalarTable.MinU32x8), Pointer(LNEONTable.MinU32x8));
-  AssertSlotReusesScalar('MulI32x8', Pointer(LScalarTable.MulI32x8), Pointer(LNEONTable.MulI32x8));
-  AssertSlotReusesScalar('NotI32x8', Pointer(LScalarTable.NotI32x8), Pointer(LNEONTable.NotI32x8));
-  AssertSlotReusesScalar('NotI64x4', Pointer(LScalarTable.NotI64x4), Pointer(LNEONTable.NotI64x4));
-  AssertSlotReusesScalar('NotU32x8', Pointer(LScalarTable.NotU32x8), Pointer(LNEONTable.NotU32x8));
-  AssertSlotReusesScalar('NotU64x4', Pointer(LScalarTable.NotU64x4), Pointer(LNEONTable.NotU64x4));
-  AssertSlotReusesScalar('OrI32x8', Pointer(LScalarTable.OrI32x8), Pointer(LNEONTable.OrI32x8));
-  AssertSlotReusesScalar('OrI64x4', Pointer(LScalarTable.OrI64x4), Pointer(LNEONTable.OrI64x4));
-  AssertSlotReusesScalar('OrU32x8', Pointer(LScalarTable.OrU32x8), Pointer(LNEONTable.OrU32x8));
-  AssertSlotReusesScalar('OrU64x4', Pointer(LScalarTable.OrU64x4), Pointer(LNEONTable.OrU64x4));
-  AssertSlotReusesScalar('ShiftLeftI32x16', Pointer(LScalarTable.ShiftLeftI32x16), Pointer(LNEONTable.ShiftLeftI32x16));
-  AssertSlotReusesScalar('ShiftLeftI32x8', Pointer(LScalarTable.ShiftLeftI32x8), Pointer(LNEONTable.ShiftLeftI32x8));
-  AssertSlotReusesScalar('ShiftLeftI64x4', Pointer(LScalarTable.ShiftLeftI64x4), Pointer(LNEONTable.ShiftLeftI64x4));
-  AssertSlotReusesScalar('ShiftLeftU32x8', Pointer(LScalarTable.ShiftLeftU32x8), Pointer(LNEONTable.ShiftLeftU32x8));
-  AssertSlotReusesScalar('ShiftLeftU64x4', Pointer(LScalarTable.ShiftLeftU64x4), Pointer(LNEONTable.ShiftLeftU64x4));
-  AssertSlotReusesScalar('ShiftRightArithI32x16', Pointer(LScalarTable.ShiftRightArithI32x16), Pointer(LNEONTable.ShiftRightArithI32x16));
-  AssertSlotReusesScalar('ShiftRightArithI32x8', Pointer(LScalarTable.ShiftRightArithI32x8), Pointer(LNEONTable.ShiftRightArithI32x8));
-  AssertSlotReusesScalar('ShiftRightI32x16', Pointer(LScalarTable.ShiftRightI32x16), Pointer(LNEONTable.ShiftRightI32x16));
-  AssertSlotReusesScalar('ShiftRightI32x8', Pointer(LScalarTable.ShiftRightI32x8), Pointer(LNEONTable.ShiftRightI32x8));
-  AssertSlotReusesScalar('ShiftRightI64x4', Pointer(LScalarTable.ShiftRightI64x4), Pointer(LNEONTable.ShiftRightI64x4));
-  AssertSlotReusesScalar('ShiftRightArithI64x4', Pointer(LScalarTable.ShiftRightArithI64x4), Pointer(LNEONTable.ShiftRightArithI64x4));
-  AssertSlotReusesScalar('ShiftRightU32x8', Pointer(LScalarTable.ShiftRightU32x8), Pointer(LNEONTable.ShiftRightU32x8));
-  AssertSlotReusesScalar('ShiftRightU64x4', Pointer(LScalarTable.ShiftRightU64x4), Pointer(LNEONTable.ShiftRightU64x4));
-  AssertSlotReusesScalar('SubI32x8', Pointer(LScalarTable.SubI32x8), Pointer(LNEONTable.SubI32x8));
-  AssertSlotReusesScalar('SubU32x8', Pointer(LScalarTable.SubU32x8), Pointer(LNEONTable.SubU32x8));
-  AssertSlotReusesScalar('SubU64x4', Pointer(LScalarTable.SubU64x4), Pointer(LNEONTable.SubU64x4));
-  AssertSlotReusesScalar('XorI32x8', Pointer(LScalarTable.XorI32x8), Pointer(LNEONTable.XorI32x8));
-  AssertSlotReusesScalar('XorI64x4', Pointer(LScalarTable.XorI64x4), Pointer(LNEONTable.XorI64x4));
-  AssertSlotReusesScalar('XorU32x8', Pointer(LScalarTable.XorU32x8), Pointer(LNEONTable.XorU32x8));
-  AssertSlotReusesScalar('XorU64x4', Pointer(LScalarTable.XorU64x4), Pointer(LNEONTable.XorU64x4));
-  AssertSlotReusesScalar('LoadI64x4', Pointer(LScalarTable.LoadI64x4), Pointer(LNEONTable.LoadI64x4));
-  AssertSlotReusesScalar('SplatI64x4', Pointer(LScalarTable.SplatI64x4), Pointer(LNEONTable.SplatI64x4));
-  AssertSlotReusesScalar('StoreI64x4', Pointer(LScalarTable.StoreI64x4), Pointer(LNEONTable.StoreI64x4));
-  AssertSlotReusesScalar('ZeroI64x4', Pointer(LScalarTable.ZeroI64x4), Pointer(LNEONTable.ZeroI64x4));
-  AssertSlotReusesScalar('I8x16SatAdd', Pointer(LScalarTable.I8x16SatAdd), Pointer(LNEONTable.I8x16SatAdd));
-  AssertSlotReusesScalar('I16x8SatAdd', Pointer(LScalarTable.I16x8SatAdd), Pointer(LNEONTable.I16x8SatAdd));
-  AssertSlotReusesScalar('U8x16SatAdd', Pointer(LScalarTable.U8x16SatAdd), Pointer(LNEONTable.U8x16SatAdd));
-  AssertSlotReusesScalar('U16x8SatAdd', Pointer(LScalarTable.U16x8SatAdd), Pointer(LNEONTable.U16x8SatAdd));
+  AssertSlotReusesScalar('AddI32x4', Pointer(LScalarTable.CoreVectors.AddI32x4), Pointer(LNEONTable.CoreVectors.AddI32x4));
+  AssertSlotReusesScalar('AndI32x4', Pointer(LScalarTable.CoreVectors.AndI32x4), Pointer(LNEONTable.CoreVectors.AndI32x4));
+  AssertSlotReusesScalar('CmpEqI32x4', Pointer(LScalarTable.CoreVectors.CmpEqI32x4), Pointer(LNEONTable.CoreVectors.CmpEqI32x4));
+  AssertSlotReusesScalar('AddU32x4', Pointer(LScalarTable.CoreVectors.AddU32x4), Pointer(LNEONTable.CoreVectors.AddU32x4));
+  AssertSlotReusesScalar('CmpEqU32x4', Pointer(LScalarTable.CoreVectors.CmpEqU32x4), Pointer(LNEONTable.CoreVectors.CmpEqU32x4));
+  AssertSlotReusesScalar('AddI64x2', Pointer(LScalarTable.CoreVectors.AddI64x2), Pointer(LNEONTable.CoreVectors.AddI64x2));
+  AssertSlotReusesScalar('CmpEqI64x2', Pointer(LScalarTable.CoreVectors.CmpEqI64x2), Pointer(LNEONTable.CoreVectors.CmpEqI64x2));
+  AssertSlotReusesScalar('AddI16x8', Pointer(LScalarTable.CoreVectors.AddI16x8), Pointer(LNEONTable.CoreVectors.AddI16x8));
+  AssertSlotReusesScalar('AddI8x16', Pointer(LScalarTable.CoreVectors.AddI8x16), Pointer(LNEONTable.CoreVectors.AddI8x16));
+  AssertSlotReusesScalar('AddU16x8', Pointer(LScalarTable.CoreVectors.AddU16x8), Pointer(LNEONTable.CoreVectors.AddU16x8));
+  AssertSlotReusesScalar('AddU8x16', Pointer(LScalarTable.CoreVectors.AddU8x16), Pointer(LNEONTable.CoreVectors.AddU8x16));
+  AssertSlotReusesScalar('AddI32x8', Pointer(LScalarTable.CoreVectors.AddI32x8), Pointer(LNEONTable.CoreVectors.AddI32x8));
+  AssertSlotReusesScalar('AddU32x8', Pointer(LScalarTable.CoreVectors.AddU32x8), Pointer(LNEONTable.CoreVectors.AddU32x8));
+  AssertSlotReusesScalar('AddU64x4', Pointer(LScalarTable.CoreVectors.AddU64x4), Pointer(LNEONTable.CoreVectors.AddU64x4));
+  AssertSlotReusesScalar('AndI32x8', Pointer(LScalarTable.CoreVectors.AndI32x8), Pointer(LNEONTable.CoreVectors.AndI32x8));
+  AssertSlotReusesScalar('AndI64x4', Pointer(LScalarTable.CoreVectors.AndI64x4), Pointer(LNEONTable.CoreVectors.AndI64x4));
+  AssertSlotReusesScalar('AndNotI32x8', Pointer(LScalarTable.CoreVectors.AndNotI32x8), Pointer(LNEONTable.CoreVectors.AndNotI32x8));
+  AssertSlotReusesScalar('AndNotI64x4', Pointer(LScalarTable.CoreVectors.AndNotI64x4), Pointer(LNEONTable.CoreVectors.AndNotI64x4));
+  AssertSlotReusesScalar('AndNotU32x8', Pointer(LScalarTable.CoreVectors.AndNotU32x8), Pointer(LNEONTable.CoreVectors.AndNotU32x8));
+  AssertSlotReusesScalar('AndU32x8', Pointer(LScalarTable.CoreVectors.AndU32x8), Pointer(LNEONTable.CoreVectors.AndU32x8));
+  AssertSlotReusesScalar('AndU64x4', Pointer(LScalarTable.CoreVectors.AndU64x4), Pointer(LNEONTable.CoreVectors.AndU64x4));
+  AssertSlotReusesScalar('MaxU32x8', Pointer(LScalarTable.CoreVectors.MaxU32x8), Pointer(LNEONTable.CoreVectors.MaxU32x8));
+  AssertSlotReusesScalar('MinU32x8', Pointer(LScalarTable.CoreVectors.MinU32x8), Pointer(LNEONTable.CoreVectors.MinU32x8));
+  AssertSlotReusesScalar('MulI32x8', Pointer(LScalarTable.CoreVectors.MulI32x8), Pointer(LNEONTable.CoreVectors.MulI32x8));
+  AssertSlotReusesScalar('NotI32x8', Pointer(LScalarTable.CoreVectors.NotI32x8), Pointer(LNEONTable.CoreVectors.NotI32x8));
+  AssertSlotReusesScalar('NotI64x4', Pointer(LScalarTable.CoreVectors.NotI64x4), Pointer(LNEONTable.CoreVectors.NotI64x4));
+  AssertSlotReusesScalar('NotU32x8', Pointer(LScalarTable.CoreVectors.NotU32x8), Pointer(LNEONTable.CoreVectors.NotU32x8));
+  AssertSlotReusesScalar('NotU64x4', Pointer(LScalarTable.CoreVectors.NotU64x4), Pointer(LNEONTable.CoreVectors.NotU64x4));
+  AssertSlotReusesScalar('OrI32x8', Pointer(LScalarTable.CoreVectors.OrI32x8), Pointer(LNEONTable.CoreVectors.OrI32x8));
+  AssertSlotReusesScalar('OrI64x4', Pointer(LScalarTable.CoreVectors.OrI64x4), Pointer(LNEONTable.CoreVectors.OrI64x4));
+  AssertSlotReusesScalar('OrU32x8', Pointer(LScalarTable.CoreVectors.OrU32x8), Pointer(LNEONTable.CoreVectors.OrU32x8));
+  AssertSlotReusesScalar('OrU64x4', Pointer(LScalarTable.CoreVectors.OrU64x4), Pointer(LNEONTable.CoreVectors.OrU64x4));
+  AssertSlotReusesScalar('ShiftLeftI32x16', Pointer(LScalarTable.CoreVectors.ShiftLeftI32x16), Pointer(LNEONTable.CoreVectors.ShiftLeftI32x16));
+  AssertSlotReusesScalar('ShiftLeftI32x8', Pointer(LScalarTable.CoreVectors.ShiftLeftI32x8), Pointer(LNEONTable.CoreVectors.ShiftLeftI32x8));
+  AssertSlotReusesScalar('ShiftLeftI64x4', Pointer(LScalarTable.CoreVectors.ShiftLeftI64x4), Pointer(LNEONTable.CoreVectors.ShiftLeftI64x4));
+  AssertSlotReusesScalar('ShiftLeftU32x8', Pointer(LScalarTable.CoreVectors.ShiftLeftU32x8), Pointer(LNEONTable.CoreVectors.ShiftLeftU32x8));
+  AssertSlotReusesScalar('ShiftLeftU64x4', Pointer(LScalarTable.CoreVectors.ShiftLeftU64x4), Pointer(LNEONTable.CoreVectors.ShiftLeftU64x4));
+  AssertSlotReusesScalar('ShiftRightArithI32x16', Pointer(LScalarTable.CoreVectors.ShiftRightArithI32x16), Pointer(LNEONTable.CoreVectors.ShiftRightArithI32x16));
+  AssertSlotReusesScalar('ShiftRightArithI32x8', Pointer(LScalarTable.CoreVectors.ShiftRightArithI32x8), Pointer(LNEONTable.CoreVectors.ShiftRightArithI32x8));
+  AssertSlotReusesScalar('ShiftRightI32x16', Pointer(LScalarTable.CoreVectors.ShiftRightI32x16), Pointer(LNEONTable.CoreVectors.ShiftRightI32x16));
+  AssertSlotReusesScalar('ShiftRightI32x8', Pointer(LScalarTable.CoreVectors.ShiftRightI32x8), Pointer(LNEONTable.CoreVectors.ShiftRightI32x8));
+  AssertSlotReusesScalar('ShiftRightI64x4', Pointer(LScalarTable.CoreVectors.ShiftRightI64x4), Pointer(LNEONTable.CoreVectors.ShiftRightI64x4));
+  AssertSlotReusesScalar('ShiftRightArithI64x4', Pointer(LScalarTable.CoreVectors.ShiftRightArithI64x4), Pointer(LNEONTable.CoreVectors.ShiftRightArithI64x4));
+  AssertSlotReusesScalar('ShiftRightU32x8', Pointer(LScalarTable.CoreVectors.ShiftRightU32x8), Pointer(LNEONTable.CoreVectors.ShiftRightU32x8));
+  AssertSlotReusesScalar('ShiftRightU64x4', Pointer(LScalarTable.CoreVectors.ShiftRightU64x4), Pointer(LNEONTable.CoreVectors.ShiftRightU64x4));
+  AssertSlotReusesScalar('SubI32x8', Pointer(LScalarTable.CoreVectors.SubI32x8), Pointer(LNEONTable.CoreVectors.SubI32x8));
+  AssertSlotReusesScalar('SubU32x8', Pointer(LScalarTable.CoreVectors.SubU32x8), Pointer(LNEONTable.CoreVectors.SubU32x8));
+  AssertSlotReusesScalar('SubU64x4', Pointer(LScalarTable.CoreVectors.SubU64x4), Pointer(LNEONTable.CoreVectors.SubU64x4));
+  AssertSlotReusesScalar('XorI32x8', Pointer(LScalarTable.CoreVectors.XorI32x8), Pointer(LNEONTable.CoreVectors.XorI32x8));
+  AssertSlotReusesScalar('XorI64x4', Pointer(LScalarTable.CoreVectors.XorI64x4), Pointer(LNEONTable.CoreVectors.XorI64x4));
+  AssertSlotReusesScalar('XorU32x8', Pointer(LScalarTable.CoreVectors.XorU32x8), Pointer(LNEONTable.CoreVectors.XorU32x8));
+  AssertSlotReusesScalar('XorU64x4', Pointer(LScalarTable.CoreVectors.XorU64x4), Pointer(LNEONTable.CoreVectors.XorU64x4));
+  AssertSlotReusesScalar('LoadI64x4', Pointer(LScalarTable.CoreVectors.LoadI64x4), Pointer(LNEONTable.CoreVectors.LoadI64x4));
+  AssertSlotReusesScalar('SplatI64x4', Pointer(LScalarTable.CoreVectors.SplatI64x4), Pointer(LNEONTable.CoreVectors.SplatI64x4));
+  AssertSlotReusesScalar('StoreI64x4', Pointer(LScalarTable.CoreVectors.StoreI64x4), Pointer(LNEONTable.CoreVectors.StoreI64x4));
+  AssertSlotReusesScalar('ZeroI64x4', Pointer(LScalarTable.CoreVectors.ZeroI64x4), Pointer(LNEONTable.CoreVectors.ZeroI64x4));
+  AssertSlotReusesScalar('I8x16SatAdd', Pointer(LScalarTable.CoreVectors.I8x16SatAdd), Pointer(LNEONTable.CoreVectors.I8x16SatAdd));
+  AssertSlotReusesScalar('I16x8SatAdd', Pointer(LScalarTable.CoreVectors.I16x8SatAdd), Pointer(LNEONTable.CoreVectors.I16x8SatAdd));
+  AssertSlotReusesScalar('U8x16SatAdd', Pointer(LScalarTable.CoreVectors.U8x16SatAdd), Pointer(LNEONTable.CoreVectors.U8x16SatAdd));
+  AssertSlotReusesScalar('U16x8SatAdd', Pointer(LScalarTable.CoreVectors.U16x8SatAdd), Pointer(LNEONTable.CoreVectors.U16x8SatAdd));
   {$ENDIF}
 end;
 
@@ -9591,7 +9591,7 @@ begin
 
   CheckTrue(Pos('result := scalarselectf32x4(mask, a, b);', LNEONSource) = 0, 'asm-enabled NEONSelectF32x4 should not forward directly to ScalarSelectF32x4');
   AssertScalarCompanionStillPresent('NEONSelectF32x4', 'result := scalarselectf32x4(mask, a, b);');
-  AssertRegisterKeepsBaseScalar('SelectF32x4', 'table.SelectF32x4 := @NEONSelectF32x4;');
+  AssertRegisterKeepsBaseScalar('SelectF32x4', 'table.CoreVectors.SelectF32x4 := @NEONSelectF32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -9602,7 +9602,7 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('SelectF32x4', Pointer(LScalarTable.SelectF32x4), Pointer(LNEONTable.SelectF32x4));
+  AssertSlotReusesScalar('SelectF32x4', Pointer(LScalarTable.CoreVectors.SelectF32x4), Pointer(LNEONTable.CoreVectors.SelectF32x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_AndNotSlots_Keep_AsmOwnedCompositions_And_RuntimeOwnership;
@@ -9655,9 +9655,9 @@ begin
   AssertWrapperStillPresent('NEONAndNotU16x8', 'result := neonandu16x8(neonnotu16x8(a), b);');
   AssertWrapperStillPresent('NEONAndNotU8x16', 'result := neonandu8x16(neonnotu8x16(a), b);');
 
-  AssertRegisterHasAsmOwnedSlot('AndNotI8x16', 'table.AndNotI8x16 := @NEONAndNotI8x16;');
-  AssertRegisterHasAsmOwnedSlot('AndNotU16x8', 'table.AndNotU16x8 := @NEONAndNotU16x8;');
-  AssertRegisterHasAsmOwnedSlot('AndNotU8x16', 'table.AndNotU8x16 := @NEONAndNotU8x16;');
+  AssertRegisterHasAsmOwnedSlot('AndNotI8x16', 'table.CoreVectors.AndNotI8x16 := @NEONAndNotI8x16;');
+  AssertRegisterHasAsmOwnedSlot('AndNotU16x8', 'table.CoreVectors.AndNotU16x8 := @NEONAndNotU16x8;');
+  AssertRegisterHasAsmOwnedSlot('AndNotU8x16', 'table.CoreVectors.AndNotU8x16 := @NEONAndNotU8x16;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -9669,13 +9669,13 @@ begin
   {$ENDIF}
 
   {$IFDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
-  AssertSlotKeepsBackendOwnership('AndNotI8x16', Pointer(LScalarTable.AndNotI8x16), Pointer(LNEONTable.AndNotI8x16));
-  AssertSlotKeepsBackendOwnership('AndNotU16x8', Pointer(LScalarTable.AndNotU16x8), Pointer(LNEONTable.AndNotU16x8));
-  AssertSlotKeepsBackendOwnership('AndNotU8x16', Pointer(LScalarTable.AndNotU8x16), Pointer(LNEONTable.AndNotU8x16));
+  AssertSlotKeepsBackendOwnership('AndNotI8x16', Pointer(LScalarTable.CoreVectors.AndNotI8x16), Pointer(LNEONTable.CoreVectors.AndNotI8x16));
+  AssertSlotKeepsBackendOwnership('AndNotU16x8', Pointer(LScalarTable.CoreVectors.AndNotU16x8), Pointer(LNEONTable.CoreVectors.AndNotU16x8));
+  AssertSlotKeepsBackendOwnership('AndNotU8x16', Pointer(LScalarTable.CoreVectors.AndNotU8x16), Pointer(LNEONTable.CoreVectors.AndNotU8x16));
   {$ELSE}
-  AssertSlotReusesScalar('AndNotI8x16', Pointer(LScalarTable.AndNotI8x16), Pointer(LNEONTable.AndNotI8x16));
-  AssertSlotReusesScalar('AndNotU16x8', Pointer(LScalarTable.AndNotU16x8), Pointer(LNEONTable.AndNotU16x8));
-  AssertSlotReusesScalar('AndNotU8x16', Pointer(LScalarTable.AndNotU8x16), Pointer(LNEONTable.AndNotU8x16));
+  AssertSlotReusesScalar('AndNotI8x16', Pointer(LScalarTable.CoreVectors.AndNotI8x16), Pointer(LNEONTable.CoreVectors.AndNotI8x16));
+  AssertSlotReusesScalar('AndNotU16x8', Pointer(LScalarTable.CoreVectors.AndNotU16x8), Pointer(LNEONTable.CoreVectors.AndNotU16x8));
+  AssertSlotReusesScalar('AndNotU8x16', Pointer(LScalarTable.CoreVectors.AndNotU8x16), Pointer(LNEONTable.CoreVectors.AndNotU8x16));
   {$ENDIF}
 end;
 
@@ -9730,8 +9730,8 @@ begin
   AssertDeadWrapperRemoved('RISCVVDotF64x2', 'function RISCVVDotF64x2(');
   AssertDeadWrapperRemoved('RISCVVDotF64x4', 'function RISCVVDotF64x4(');
 
-  AssertRegisterKeepsBaseScalar('DotF64x2', 'table.DotF64x2 := @RISCVVDotF64x2;');
-  AssertRegisterKeepsBaseScalar('DotF64x4', 'table.DotF64x4 := @RISCVVDotF64x4;');
+  AssertRegisterKeepsBaseScalar('DotF64x2', 'table.CoreVectors.DotF64x2 := @RISCVVDotF64x2;');
+  AssertRegisterKeepsBaseScalar('DotF64x4', 'table.CoreVectors.DotF64x4 := @RISCVVDotF64x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -9742,8 +9742,8 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('DotF64x2', Pointer(LScalarTable.DotF64x2), Pointer(LRISCVVTable.DotF64x2));
-  AssertSlotReusesScalar('DotF64x4', Pointer(LScalarTable.DotF64x4), Pointer(LRISCVVTable.DotF64x4));
+  AssertSlotReusesScalar('DotF64x2', Pointer(LScalarTable.CoreVectors.DotF64x2), Pointer(LRISCVVTable.CoreVectors.DotF64x2));
+  AssertSlotReusesScalar('DotF64x4', Pointer(LScalarTable.CoreVectors.DotF64x4), Pointer(LRISCVVTable.CoreVectors.DotF64x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead;
@@ -9804,15 +9804,15 @@ begin
   AssertDeadWrapperRemoved('RISCVVMinU64x2', 'function RISCVVMinU64x2(');
   AssertDeadWrapperRemoved('RISCVVMaxU64x2', 'function RISCVVMaxU64x2(');
 
-  AssertRegisterKeepsBaseScalar('AndNotI64x2', 'table.AndNotI64x2 := @RISCVVAndNotI64x2;');
-  AssertRegisterKeepsBaseScalar('MinI64x2', 'table.MinI64x2 := @RISCVVMinI64x2;');
-  AssertRegisterKeepsBaseScalar('MaxI64x2', 'table.MaxI64x2 := @RISCVVMaxI64x2;');
-  AssertRegisterKeepsBaseScalar('AndNotU64x2', 'table.AndNotU64x2 := @RISCVVAndNotU64x2;');
-  AssertRegisterKeepsBaseScalar('CmpEqU64x2', 'table.CmpEqU64x2 := @RISCVVCmpEqU64x2;');
-  AssertRegisterKeepsBaseScalar('CmpLtU64x2', 'table.CmpLtU64x2 := @RISCVVCmpLtU64x2;');
-  AssertRegisterKeepsBaseScalar('CmpGtU64x2', 'table.CmpGtU64x2 := @RISCVVCmpGtU64x2;');
-  AssertRegisterKeepsBaseScalar('MinU64x2', 'table.MinU64x2 := @RISCVVMinU64x2;');
-  AssertRegisterKeepsBaseScalar('MaxU64x2', 'table.MaxU64x2 := @RISCVVMaxU64x2;');
+  AssertRegisterKeepsBaseScalar('AndNotI64x2', 'table.CoreVectors.AndNotI64x2 := @RISCVVAndNotI64x2;');
+  AssertRegisterKeepsBaseScalar('MinI64x2', 'table.CoreVectors.MinI64x2 := @RISCVVMinI64x2;');
+  AssertRegisterKeepsBaseScalar('MaxI64x2', 'table.CoreVectors.MaxI64x2 := @RISCVVMaxI64x2;');
+  AssertRegisterKeepsBaseScalar('AndNotU64x2', 'table.CoreVectors.AndNotU64x2 := @RISCVVAndNotU64x2;');
+  AssertRegisterKeepsBaseScalar('CmpEqU64x2', 'table.CoreVectors.CmpEqU64x2 := @RISCVVCmpEqU64x2;');
+  AssertRegisterKeepsBaseScalar('CmpLtU64x2', 'table.CoreVectors.CmpLtU64x2 := @RISCVVCmpLtU64x2;');
+  AssertRegisterKeepsBaseScalar('CmpGtU64x2', 'table.CoreVectors.CmpGtU64x2 := @RISCVVCmpGtU64x2;');
+  AssertRegisterKeepsBaseScalar('MinU64x2', 'table.CoreVectors.MinU64x2 := @RISCVVMinU64x2;');
+  AssertRegisterKeepsBaseScalar('MaxU64x2', 'table.CoreVectors.MaxU64x2 := @RISCVVMaxU64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -9823,15 +9823,15 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('AndNotI64x2', Pointer(LScalarTable.AndNotI64x2), Pointer(LRISCVVTable.AndNotI64x2));
-  AssertSlotReusesScalar('MinI64x2', Pointer(LScalarTable.MinI64x2), Pointer(LRISCVVTable.MinI64x2));
-  AssertSlotReusesScalar('MaxI64x2', Pointer(LScalarTable.MaxI64x2), Pointer(LRISCVVTable.MaxI64x2));
-  AssertSlotReusesScalar('AndNotU64x2', Pointer(LScalarTable.AndNotU64x2), Pointer(LRISCVVTable.AndNotU64x2));
-  AssertSlotReusesScalar('CmpEqU64x2', Pointer(LScalarTable.CmpEqU64x2), Pointer(LRISCVVTable.CmpEqU64x2));
-  AssertSlotReusesScalar('CmpLtU64x2', Pointer(LScalarTable.CmpLtU64x2), Pointer(LRISCVVTable.CmpLtU64x2));
-  AssertSlotReusesScalar('CmpGtU64x2', Pointer(LScalarTable.CmpGtU64x2), Pointer(LRISCVVTable.CmpGtU64x2));
-  AssertSlotReusesScalar('MinU64x2', Pointer(LScalarTable.MinU64x2), Pointer(LRISCVVTable.MinU64x2));
-  AssertSlotReusesScalar('MaxU64x2', Pointer(LScalarTable.MaxU64x2), Pointer(LRISCVVTable.MaxU64x2));
+  AssertSlotReusesScalar('AndNotI64x2', Pointer(LScalarTable.CoreVectors.AndNotI64x2), Pointer(LRISCVVTable.CoreVectors.AndNotI64x2));
+  AssertSlotReusesScalar('MinI64x2', Pointer(LScalarTable.CoreVectors.MinI64x2), Pointer(LRISCVVTable.CoreVectors.MinI64x2));
+  AssertSlotReusesScalar('MaxI64x2', Pointer(LScalarTable.CoreVectors.MaxI64x2), Pointer(LRISCVVTable.CoreVectors.MaxI64x2));
+  AssertSlotReusesScalar('AndNotU64x2', Pointer(LScalarTable.CoreVectors.AndNotU64x2), Pointer(LRISCVVTable.CoreVectors.AndNotU64x2));
+  AssertSlotReusesScalar('CmpEqU64x2', Pointer(LScalarTable.CoreVectors.CmpEqU64x2), Pointer(LRISCVVTable.CoreVectors.CmpEqU64x2));
+  AssertSlotReusesScalar('CmpLtU64x2', Pointer(LScalarTable.CoreVectors.CmpLtU64x2), Pointer(LRISCVVTable.CoreVectors.CmpLtU64x2));
+  AssertSlotReusesScalar('CmpGtU64x2', Pointer(LScalarTable.CoreVectors.CmpGtU64x2), Pointer(LRISCVVTable.CoreVectors.CmpGtU64x2));
+  AssertSlotReusesScalar('MinU64x2', Pointer(LScalarTable.CoreVectors.MinU64x2), Pointer(LRISCVVTable.CoreVectors.MinU64x2));
+  AssertSlotReusesScalar('MaxU64x2', Pointer(LScalarTable.CoreVectors.MaxU64x2), Pointer(LRISCVVTable.CoreVectors.MaxU64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_FacadeSlots_Reuse_BaseScalar_When_Wrappers_Are_ScalarPassThrough;
@@ -9936,26 +9936,26 @@ begin
   AssertRegisterKeepsBaseScalar('ToUpperAscii', 'table.Memory.ToUpperAscii := @ToUpperAscii_RISCVV;');
   AssertRegisterKeepsBaseScalar('BytesIndexOf', 'table.Memory.BytesIndexOf := @BytesIndexOf_RISCVV;');
   AssertRegisterKeepsBaseScalar('BitsetPopCount', 'table.Memory.BitsetPopCount := @BitsetPopCount_RISCVV;');
-  AssertRegisterKeepsBaseScalar('FloorF32x4 scalar override', 'table.FloorF32x4 := @ScalarFloorF32x4;');
-  AssertRegisterKeepsBaseScalar('CeilF32x4 scalar override', 'table.CeilF32x4 := @ScalarCeilF32x4;');
-  AssertRegisterKeepsBaseScalar('RoundF32x4 scalar override', 'table.RoundF32x4 := @ScalarRoundF32x4;');
-  AssertRegisterKeepsBaseScalar('TruncF32x4 scalar override', 'table.TruncF32x4 := @ScalarTruncF32x4;');
-  AssertRegisterKeepsBaseScalar('FloorF32x4 backend override', 'table.FloorF32x4 := @RISCVVFloorF32x4;');
-  AssertRegisterKeepsBaseScalar('CeilF32x4 backend override', 'table.CeilF32x4 := @RISCVVCeilF32x4;');
-  AssertRegisterKeepsBaseScalar('RoundF32x4 backend override', 'table.RoundF32x4 := @RISCVVRoundF32x4;');
-  AssertRegisterKeepsBaseScalar('TruncF32x4 backend override', 'table.TruncF32x4 := @RISCVVTruncF32x4;');
-  AssertRegisterKeepsBaseScalar('FloorF64x2 scalar override', 'table.FloorF64x2 := @ScalarFloorF64x2;');
-  AssertRegisterKeepsBaseScalar('CeilF64x2 scalar override', 'table.CeilF64x2 := @ScalarCeilF64x2;');
-  AssertRegisterKeepsBaseScalar('RoundF64x2 scalar override', 'table.RoundF64x2 := @ScalarRoundF64x2;');
-  AssertRegisterKeepsBaseScalar('TruncF64x2 scalar override', 'table.TruncF64x2 := @ScalarTruncF64x2;');
-  AssertRegisterKeepsBaseScalar('FloorF64x2 backend override', 'table.FloorF64x2 := @RISCVVFloorF64x2;');
-  AssertRegisterKeepsBaseScalar('CeilF64x2 backend override', 'table.CeilF64x2 := @RISCVVCeilF64x2;');
-  AssertRegisterKeepsBaseScalar('RoundF64x2 backend override', 'table.RoundF64x2 := @RISCVVRoundF64x2;');
-  AssertRegisterKeepsBaseScalar('TruncF64x2 backend override', 'table.TruncF64x2 := @RISCVVTruncF64x2;');
-  AssertRegisterKeepsBaseScalar('SelectF32x8', 'table.SelectF32x8 := @RISCVVSelectF32x8;');
-  AssertRegisterKeepsBaseScalar('SelectF64x4', 'table.SelectF64x4 := @RISCVVSelectF64x4;');
-  AssertRegisterKeepsBaseScalar('SelectI32x4', 'table.SelectI32x4 := @RISCVVSelectI32x4;');
-  AssertRegisterOwnsBackendSlot('AddF32x4', 'table.AddF32x4 := @RISCVVAddF32x4;');
+  AssertRegisterKeepsBaseScalar('FloorF32x4 scalar override', 'table.CoreVectors.FloorF32x4 := @ScalarFloorF32x4;');
+  AssertRegisterKeepsBaseScalar('CeilF32x4 scalar override', 'table.CoreVectors.CeilF32x4 := @ScalarCeilF32x4;');
+  AssertRegisterKeepsBaseScalar('RoundF32x4 scalar override', 'table.CoreVectors.RoundF32x4 := @ScalarRoundF32x4;');
+  AssertRegisterKeepsBaseScalar('TruncF32x4 scalar override', 'table.CoreVectors.TruncF32x4 := @ScalarTruncF32x4;');
+  AssertRegisterKeepsBaseScalar('FloorF32x4 backend override', 'table.CoreVectors.FloorF32x4 := @RISCVVFloorF32x4;');
+  AssertRegisterKeepsBaseScalar('CeilF32x4 backend override', 'table.CoreVectors.CeilF32x4 := @RISCVVCeilF32x4;');
+  AssertRegisterKeepsBaseScalar('RoundF32x4 backend override', 'table.CoreVectors.RoundF32x4 := @RISCVVRoundF32x4;');
+  AssertRegisterKeepsBaseScalar('TruncF32x4 backend override', 'table.CoreVectors.TruncF32x4 := @RISCVVTruncF32x4;');
+  AssertRegisterKeepsBaseScalar('FloorF64x2 scalar override', 'table.CoreVectors.FloorF64x2 := @ScalarFloorF64x2;');
+  AssertRegisterKeepsBaseScalar('CeilF64x2 scalar override', 'table.CoreVectors.CeilF64x2 := @ScalarCeilF64x2;');
+  AssertRegisterKeepsBaseScalar('RoundF64x2 scalar override', 'table.CoreVectors.RoundF64x2 := @ScalarRoundF64x2;');
+  AssertRegisterKeepsBaseScalar('TruncF64x2 scalar override', 'table.CoreVectors.TruncF64x2 := @ScalarTruncF64x2;');
+  AssertRegisterKeepsBaseScalar('FloorF64x2 backend override', 'table.CoreVectors.FloorF64x2 := @RISCVVFloorF64x2;');
+  AssertRegisterKeepsBaseScalar('CeilF64x2 backend override', 'table.CoreVectors.CeilF64x2 := @RISCVVCeilF64x2;');
+  AssertRegisterKeepsBaseScalar('RoundF64x2 backend override', 'table.CoreVectors.RoundF64x2 := @RISCVVRoundF64x2;');
+  AssertRegisterKeepsBaseScalar('TruncF64x2 backend override', 'table.CoreVectors.TruncF64x2 := @RISCVVTruncF64x2;');
+  AssertRegisterKeepsBaseScalar('SelectF32x8', 'table.CoreVectors.SelectF32x8 := @RISCVVSelectF32x8;');
+  AssertRegisterKeepsBaseScalar('SelectF64x4', 'table.CoreVectors.SelectF64x4 := @RISCVVSelectF64x4;');
+  AssertRegisterKeepsBaseScalar('SelectI32x4', 'table.CoreVectors.SelectI32x4 := @RISCVVSelectI32x4;');
+  AssertRegisterOwnsBackendSlot('AddF32x4', 'table.CoreVectors.AddF32x4 := @RISCVVAddF32x4;');
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
   {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND}
@@ -9980,21 +9980,21 @@ begin
   AssertSlotReusesScalar('ToUpperAscii', Pointer(LScalarTable.Memory.ToUpperAscii), Pointer(LRISCVVTable.Memory.ToUpperAscii));
   AssertSlotReusesScalar('BytesIndexOf', Pointer(LScalarTable.Memory.BytesIndexOf), Pointer(LRISCVVTable.Memory.BytesIndexOf));
   AssertSlotReusesScalar('BitsetPopCount', Pointer(LScalarTable.Memory.BitsetPopCount), Pointer(LRISCVVTable.Memory.BitsetPopCount));
-  AssertSlotReusesScalar('FloorF32x4', Pointer(LScalarTable.FloorF32x4), Pointer(LRISCVVTable.FloorF32x4));
-  AssertSlotReusesScalar('CeilF32x4', Pointer(LScalarTable.CeilF32x4), Pointer(LRISCVVTable.CeilF32x4));
-  AssertSlotReusesScalar('RoundF32x4', Pointer(LScalarTable.RoundF32x4), Pointer(LRISCVVTable.RoundF32x4));
-  AssertSlotReusesScalar('TruncF32x4', Pointer(LScalarTable.TruncF32x4), Pointer(LRISCVVTable.TruncF32x4));
-  AssertSlotReusesScalar('FloorF64x2', Pointer(LScalarTable.FloorF64x2), Pointer(LRISCVVTable.FloorF64x2));
-  AssertSlotReusesScalar('CeilF64x2', Pointer(LScalarTable.CeilF64x2), Pointer(LRISCVVTable.CeilF64x2));
-  AssertSlotReusesScalar('RoundF64x2', Pointer(LScalarTable.RoundF64x2), Pointer(LRISCVVTable.RoundF64x2));
-  AssertSlotReusesScalar('TruncF64x2', Pointer(LScalarTable.TruncF64x2), Pointer(LRISCVVTable.TruncF64x2));
-  AssertSlotReusesScalar('SelectF32x8', Pointer(LScalarTable.SelectF32x8), Pointer(LRISCVVTable.SelectF32x8));
-  AssertSlotReusesScalar('SelectF64x4', Pointer(LScalarTable.SelectF64x4), Pointer(LRISCVVTable.SelectF64x4));
-  AssertSlotReusesScalar('SelectI32x4', Pointer(LScalarTable.SelectI32x4), Pointer(LRISCVVTable.SelectI32x4));
+  AssertSlotReusesScalar('FloorF32x4', Pointer(LScalarTable.CoreVectors.FloorF32x4), Pointer(LRISCVVTable.CoreVectors.FloorF32x4));
+  AssertSlotReusesScalar('CeilF32x4', Pointer(LScalarTable.CoreVectors.CeilF32x4), Pointer(LRISCVVTable.CoreVectors.CeilF32x4));
+  AssertSlotReusesScalar('RoundF32x4', Pointer(LScalarTable.CoreVectors.RoundF32x4), Pointer(LRISCVVTable.CoreVectors.RoundF32x4));
+  AssertSlotReusesScalar('TruncF32x4', Pointer(LScalarTable.CoreVectors.TruncF32x4), Pointer(LRISCVVTable.CoreVectors.TruncF32x4));
+  AssertSlotReusesScalar('FloorF64x2', Pointer(LScalarTable.CoreVectors.FloorF64x2), Pointer(LRISCVVTable.CoreVectors.FloorF64x2));
+  AssertSlotReusesScalar('CeilF64x2', Pointer(LScalarTable.CoreVectors.CeilF64x2), Pointer(LRISCVVTable.CoreVectors.CeilF64x2));
+  AssertSlotReusesScalar('RoundF64x2', Pointer(LScalarTable.CoreVectors.RoundF64x2), Pointer(LRISCVVTable.CoreVectors.RoundF64x2));
+  AssertSlotReusesScalar('TruncF64x2', Pointer(LScalarTable.CoreVectors.TruncF64x2), Pointer(LRISCVVTable.CoreVectors.TruncF64x2));
+  AssertSlotReusesScalar('SelectF32x8', Pointer(LScalarTable.CoreVectors.SelectF32x8), Pointer(LRISCVVTable.CoreVectors.SelectF32x8));
+  AssertSlotReusesScalar('SelectF64x4', Pointer(LScalarTable.CoreVectors.SelectF64x4), Pointer(LRISCVVTable.CoreVectors.SelectF64x4));
+  AssertSlotReusesScalar('SelectI32x4', Pointer(LScalarTable.CoreVectors.SelectI32x4), Pointer(LRISCVVTable.CoreVectors.SelectI32x4));
   {$IFDEF NEXTPAS_SIMD_TEST_RISCVV_ASM_COMPILED}
-  AssertSlotKeepsBackendOwnership('AddF32x4', Pointer(LScalarTable.AddF32x4), Pointer(LRISCVVTable.AddF32x4));
+  AssertSlotKeepsBackendOwnership('AddF32x4', Pointer(LScalarTable.CoreVectors.AddF32x4), Pointer(LRISCVVTable.CoreVectors.AddF32x4));
   {$ELSE}
-  AssertSlotReusesScalar('AddF32x4', Pointer(LScalarTable.AddF32x4), Pointer(LRISCVVTable.AddF32x4));
+  AssertSlotReusesScalar('AddF32x4', Pointer(LScalarTable.CoreVectors.AddF32x4), Pointer(LRISCVVTable.CoreVectors.AddF32x4));
   {$ENDIF}
 end;
 
@@ -10110,77 +10110,77 @@ begin
   AssertDeadWrapperRemoved('RISCVVCmpGeU64x8', 'function RISCVVCmpGeU64x8(');
   AssertDeadWrapperRemoved('RISCVVCmpNeU64x8', 'function RISCVVCmpNeU64x8(');
 
-  AssertRegisterKeepsBaseScalar('DotF32x8', 'table.DotF32x8 := @RISCVVDotF32x8;');
-  AssertRegisterKeepsBaseScalar('AddI16x32', 'table.AddI16x32 := @RISCVVAddI16x32;');
-  AssertRegisterKeepsBaseScalar('SubI16x32', 'table.SubI16x32 := @RISCVVSubI16x32;');
-  AssertRegisterKeepsBaseScalar('AndI16x32', 'table.AndI16x32 := @RISCVVAndI16x32;');
-  AssertRegisterKeepsBaseScalar('OrI16x32', 'table.OrI16x32 := @RISCVVOrI16x32;');
-  AssertRegisterKeepsBaseScalar('XorI16x32', 'table.XorI16x32 := @RISCVVXorI16x32;');
-  AssertRegisterKeepsBaseScalar('NotI16x32', 'table.NotI16x32 := @RISCVVNotI16x32;');
-  AssertRegisterKeepsBaseScalar('AndNotI16x32', 'table.AndNotI16x32 := @RISCVVAndNotI16x32;');
-  AssertRegisterKeepsBaseScalar('CmpEqI16x32', 'table.CmpEqI16x32 := @RISCVVCmpEqI16x32;');
-  AssertRegisterKeepsBaseScalar('CmpLtI16x32', 'table.CmpLtI16x32 := @RISCVVCmpLtI16x32;');
-  AssertRegisterKeepsBaseScalar('CmpGtI16x32', 'table.CmpGtI16x32 := @RISCVVCmpGtI16x32;');
-  AssertRegisterKeepsBaseScalar('MinI16x32', 'table.MinI16x32 := @RISCVVMinI16x32;');
-  AssertRegisterKeepsBaseScalar('MaxI16x32', 'table.MaxI16x32 := @RISCVVMaxI16x32;');
-  AssertRegisterKeepsBaseScalar('ShiftLeftI16x32', 'table.ShiftLeftI16x32 := @RISCVVShiftLeftI16x32;');
-  AssertRegisterKeepsBaseScalar('ShiftRightI16x32', 'table.ShiftRightI16x32 := @RISCVVShiftRightI16x32;');
-  AssertRegisterKeepsBaseScalar('ShiftRightArithI16x32', 'table.ShiftRightArithI16x32 := @RISCVVShiftRightArithI16x32;');
-  AssertRegisterKeepsBaseScalar('AddI8x64', 'table.AddI8x64 := @RISCVVAddI8x64;');
-  AssertRegisterKeepsBaseScalar('SubI8x64', 'table.SubI8x64 := @RISCVVSubI8x64;');
-  AssertRegisterKeepsBaseScalar('AndI8x64', 'table.AndI8x64 := @RISCVVAndI8x64;');
-  AssertRegisterKeepsBaseScalar('OrI8x64', 'table.OrI8x64 := @RISCVVOrI8x64;');
-  AssertRegisterKeepsBaseScalar('XorI8x64', 'table.XorI8x64 := @RISCVVXorI8x64;');
-  AssertRegisterKeepsBaseScalar('NotI8x64', 'table.NotI8x64 := @RISCVVNotI8x64;');
-  AssertRegisterKeepsBaseScalar('AndNotI8x64', 'table.AndNotI8x64 := @RISCVVAndNotI8x64;');
-  AssertRegisterKeepsBaseScalar('CmpEqI8x64', 'table.CmpEqI8x64 := @RISCVVCmpEqI8x64;');
-  AssertRegisterKeepsBaseScalar('CmpLtI8x64', 'table.CmpLtI8x64 := @RISCVVCmpLtI8x64;');
-  AssertRegisterKeepsBaseScalar('CmpGtI8x64', 'table.CmpGtI8x64 := @RISCVVCmpGtI8x64;');
-  AssertRegisterKeepsBaseScalar('MinI8x64', 'table.MinI8x64 := @RISCVVMinI8x64;');
-  AssertRegisterKeepsBaseScalar('MaxI8x64', 'table.MaxI8x64 := @RISCVVMaxI8x64;');
-  AssertRegisterKeepsBaseScalar('AddU8x64', 'table.AddU8x64 := @RISCVVAddU8x64;');
-  AssertRegisterKeepsBaseScalar('SubU8x64', 'table.SubU8x64 := @RISCVVSubU8x64;');
-  AssertRegisterKeepsBaseScalar('AndU8x64', 'table.AndU8x64 := @RISCVVAndU8x64;');
-  AssertRegisterKeepsBaseScalar('OrU8x64', 'table.OrU8x64 := @RISCVVOrU8x64;');
-  AssertRegisterKeepsBaseScalar('XorU8x64', 'table.XorU8x64 := @RISCVVXorU8x64;');
-  AssertRegisterKeepsBaseScalar('NotU8x64', 'table.NotU8x64 := @RISCVVNotU8x64;');
-  AssertRegisterKeepsBaseScalar('CmpEqU8x64', 'table.CmpEqU8x64 := @RISCVVCmpEqU8x64;');
-  AssertRegisterKeepsBaseScalar('CmpLtU8x64', 'table.CmpLtU8x64 := @RISCVVCmpLtU8x64;');
-  AssertRegisterKeepsBaseScalar('CmpGtU8x64', 'table.CmpGtU8x64 := @RISCVVCmpGtU8x64;');
-  AssertRegisterKeepsBaseScalar('MinU8x64', 'table.MinU8x64 := @RISCVVMinU8x64;');
-  AssertRegisterKeepsBaseScalar('MaxU8x64', 'table.MaxU8x64 := @RISCVVMaxU8x64;');
-  AssertRegisterKeepsBaseScalar('AddU32x16', 'table.AddU32x16 := @RISCVVAddU32x16;');
-  AssertRegisterKeepsBaseScalar('SubU32x16', 'table.SubU32x16 := @RISCVVSubU32x16;');
-  AssertRegisterKeepsBaseScalar('MulU32x16', 'table.MulU32x16 := @RISCVVMulU32x16;');
-  AssertRegisterKeepsBaseScalar('AndU32x16', 'table.AndU32x16 := @RISCVVAndU32x16;');
-  AssertRegisterKeepsBaseScalar('OrU32x16', 'table.OrU32x16 := @RISCVVOrU32x16;');
-  AssertRegisterKeepsBaseScalar('XorU32x16', 'table.XorU32x16 := @RISCVVXorU32x16;');
-  AssertRegisterKeepsBaseScalar('NotU32x16', 'table.NotU32x16 := @RISCVVNotU32x16;');
-  AssertRegisterKeepsBaseScalar('AndNotU32x16', 'table.AndNotU32x16 := @RISCVVAndNotU32x16;');
-  AssertRegisterKeepsBaseScalar('ShiftLeftU32x16', 'table.ShiftLeftU32x16 := @RISCVVShiftLeftU32x16;');
-  AssertRegisterKeepsBaseScalar('ShiftRightU32x16', 'table.ShiftRightU32x16 := @RISCVVShiftRightU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpEqU32x16', 'table.CmpEqU32x16 := @RISCVVCmpEqU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpLtU32x16', 'table.CmpLtU32x16 := @RISCVVCmpLtU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpGtU32x16', 'table.CmpGtU32x16 := @RISCVVCmpGtU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpLeU32x16', 'table.CmpLeU32x16 := @RISCVVCmpLeU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpGeU32x16', 'table.CmpGeU32x16 := @RISCVVCmpGeU32x16;');
-  AssertRegisterKeepsBaseScalar('CmpNeU32x16', 'table.CmpNeU32x16 := @RISCVVCmpNeU32x16;');
-  AssertRegisterKeepsBaseScalar('MinU32x16', 'table.MinU32x16 := @RISCVVMinU32x16;');
-  AssertRegisterKeepsBaseScalar('MaxU32x16', 'table.MaxU32x16 := @RISCVVMaxU32x16;');
-  AssertRegisterKeepsBaseScalar('AddU64x8', 'table.AddU64x8 := @RISCVVAddU64x8;');
-  AssertRegisterKeepsBaseScalar('SubU64x8', 'table.SubU64x8 := @RISCVVSubU64x8;');
-  AssertRegisterKeepsBaseScalar('AndU64x8', 'table.AndU64x8 := @RISCVVAndU64x8;');
-  AssertRegisterKeepsBaseScalar('OrU64x8', 'table.OrU64x8 := @RISCVVOrU64x8;');
-  AssertRegisterKeepsBaseScalar('XorU64x8', 'table.XorU64x8 := @RISCVVXorU64x8;');
-  AssertRegisterKeepsBaseScalar('NotU64x8', 'table.NotU64x8 := @RISCVVNotU64x8;');
-  AssertRegisterKeepsBaseScalar('ShiftLeftU64x8', 'table.ShiftLeftU64x8 := @RISCVVShiftLeftU64x8;');
-  AssertRegisterKeepsBaseScalar('ShiftRightU64x8', 'table.ShiftRightU64x8 := @RISCVVShiftRightU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpEqU64x8', 'table.CmpEqU64x8 := @RISCVVCmpEqU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpLtU64x8', 'table.CmpLtU64x8 := @RISCVVCmpLtU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpGtU64x8', 'table.CmpGtU64x8 := @RISCVVCmpGtU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpLeU64x8', 'table.CmpLeU64x8 := @RISCVVCmpLeU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpGeU64x8', 'table.CmpGeU64x8 := @RISCVVCmpGeU64x8;');
-  AssertRegisterKeepsBaseScalar('CmpNeU64x8', 'table.CmpNeU64x8 := @RISCVVCmpNeU64x8;');
+  AssertRegisterKeepsBaseScalar('DotF32x8', 'table.CoreVectors.DotF32x8 := @RISCVVDotF32x8;');
+  AssertRegisterKeepsBaseScalar('AddI16x32', 'table.CoreVectors.AddI16x32 := @RISCVVAddI16x32;');
+  AssertRegisterKeepsBaseScalar('SubI16x32', 'table.CoreVectors.SubI16x32 := @RISCVVSubI16x32;');
+  AssertRegisterKeepsBaseScalar('AndI16x32', 'table.CoreVectors.AndI16x32 := @RISCVVAndI16x32;');
+  AssertRegisterKeepsBaseScalar('OrI16x32', 'table.CoreVectors.OrI16x32 := @RISCVVOrI16x32;');
+  AssertRegisterKeepsBaseScalar('XorI16x32', 'table.CoreVectors.XorI16x32 := @RISCVVXorI16x32;');
+  AssertRegisterKeepsBaseScalar('NotI16x32', 'table.CoreVectors.NotI16x32 := @RISCVVNotI16x32;');
+  AssertRegisterKeepsBaseScalar('AndNotI16x32', 'table.CoreVectors.AndNotI16x32 := @RISCVVAndNotI16x32;');
+  AssertRegisterKeepsBaseScalar('CmpEqI16x32', 'table.CoreVectors.CmpEqI16x32 := @RISCVVCmpEqI16x32;');
+  AssertRegisterKeepsBaseScalar('CmpLtI16x32', 'table.CoreVectors.CmpLtI16x32 := @RISCVVCmpLtI16x32;');
+  AssertRegisterKeepsBaseScalar('CmpGtI16x32', 'table.CoreVectors.CmpGtI16x32 := @RISCVVCmpGtI16x32;');
+  AssertRegisterKeepsBaseScalar('MinI16x32', 'table.CoreVectors.MinI16x32 := @RISCVVMinI16x32;');
+  AssertRegisterKeepsBaseScalar('MaxI16x32', 'table.CoreVectors.MaxI16x32 := @RISCVVMaxI16x32;');
+  AssertRegisterKeepsBaseScalar('ShiftLeftI16x32', 'table.CoreVectors.ShiftLeftI16x32 := @RISCVVShiftLeftI16x32;');
+  AssertRegisterKeepsBaseScalar('ShiftRightI16x32', 'table.CoreVectors.ShiftRightI16x32 := @RISCVVShiftRightI16x32;');
+  AssertRegisterKeepsBaseScalar('ShiftRightArithI16x32', 'table.CoreVectors.ShiftRightArithI16x32 := @RISCVVShiftRightArithI16x32;');
+  AssertRegisterKeepsBaseScalar('AddI8x64', 'table.CoreVectors.AddI8x64 := @RISCVVAddI8x64;');
+  AssertRegisterKeepsBaseScalar('SubI8x64', 'table.CoreVectors.SubI8x64 := @RISCVVSubI8x64;');
+  AssertRegisterKeepsBaseScalar('AndI8x64', 'table.CoreVectors.AndI8x64 := @RISCVVAndI8x64;');
+  AssertRegisterKeepsBaseScalar('OrI8x64', 'table.CoreVectors.OrI8x64 := @RISCVVOrI8x64;');
+  AssertRegisterKeepsBaseScalar('XorI8x64', 'table.CoreVectors.XorI8x64 := @RISCVVXorI8x64;');
+  AssertRegisterKeepsBaseScalar('NotI8x64', 'table.CoreVectors.NotI8x64 := @RISCVVNotI8x64;');
+  AssertRegisterKeepsBaseScalar('AndNotI8x64', 'table.CoreVectors.AndNotI8x64 := @RISCVVAndNotI8x64;');
+  AssertRegisterKeepsBaseScalar('CmpEqI8x64', 'table.CoreVectors.CmpEqI8x64 := @RISCVVCmpEqI8x64;');
+  AssertRegisterKeepsBaseScalar('CmpLtI8x64', 'table.CoreVectors.CmpLtI8x64 := @RISCVVCmpLtI8x64;');
+  AssertRegisterKeepsBaseScalar('CmpGtI8x64', 'table.CoreVectors.CmpGtI8x64 := @RISCVVCmpGtI8x64;');
+  AssertRegisterKeepsBaseScalar('MinI8x64', 'table.CoreVectors.MinI8x64 := @RISCVVMinI8x64;');
+  AssertRegisterKeepsBaseScalar('MaxI8x64', 'table.CoreVectors.MaxI8x64 := @RISCVVMaxI8x64;');
+  AssertRegisterKeepsBaseScalar('AddU8x64', 'table.CoreVectors.AddU8x64 := @RISCVVAddU8x64;');
+  AssertRegisterKeepsBaseScalar('SubU8x64', 'table.CoreVectors.SubU8x64 := @RISCVVSubU8x64;');
+  AssertRegisterKeepsBaseScalar('AndU8x64', 'table.CoreVectors.AndU8x64 := @RISCVVAndU8x64;');
+  AssertRegisterKeepsBaseScalar('OrU8x64', 'table.CoreVectors.OrU8x64 := @RISCVVOrU8x64;');
+  AssertRegisterKeepsBaseScalar('XorU8x64', 'table.CoreVectors.XorU8x64 := @RISCVVXorU8x64;');
+  AssertRegisterKeepsBaseScalar('NotU8x64', 'table.CoreVectors.NotU8x64 := @RISCVVNotU8x64;');
+  AssertRegisterKeepsBaseScalar('CmpEqU8x64', 'table.CoreVectors.CmpEqU8x64 := @RISCVVCmpEqU8x64;');
+  AssertRegisterKeepsBaseScalar('CmpLtU8x64', 'table.CoreVectors.CmpLtU8x64 := @RISCVVCmpLtU8x64;');
+  AssertRegisterKeepsBaseScalar('CmpGtU8x64', 'table.CoreVectors.CmpGtU8x64 := @RISCVVCmpGtU8x64;');
+  AssertRegisterKeepsBaseScalar('MinU8x64', 'table.CoreVectors.MinU8x64 := @RISCVVMinU8x64;');
+  AssertRegisterKeepsBaseScalar('MaxU8x64', 'table.CoreVectors.MaxU8x64 := @RISCVVMaxU8x64;');
+  AssertRegisterKeepsBaseScalar('AddU32x16', 'table.CoreVectors.AddU32x16 := @RISCVVAddU32x16;');
+  AssertRegisterKeepsBaseScalar('SubU32x16', 'table.CoreVectors.SubU32x16 := @RISCVVSubU32x16;');
+  AssertRegisterKeepsBaseScalar('MulU32x16', 'table.CoreVectors.MulU32x16 := @RISCVVMulU32x16;');
+  AssertRegisterKeepsBaseScalar('AndU32x16', 'table.CoreVectors.AndU32x16 := @RISCVVAndU32x16;');
+  AssertRegisterKeepsBaseScalar('OrU32x16', 'table.CoreVectors.OrU32x16 := @RISCVVOrU32x16;');
+  AssertRegisterKeepsBaseScalar('XorU32x16', 'table.CoreVectors.XorU32x16 := @RISCVVXorU32x16;');
+  AssertRegisterKeepsBaseScalar('NotU32x16', 'table.CoreVectors.NotU32x16 := @RISCVVNotU32x16;');
+  AssertRegisterKeepsBaseScalar('AndNotU32x16', 'table.CoreVectors.AndNotU32x16 := @RISCVVAndNotU32x16;');
+  AssertRegisterKeepsBaseScalar('ShiftLeftU32x16', 'table.CoreVectors.ShiftLeftU32x16 := @RISCVVShiftLeftU32x16;');
+  AssertRegisterKeepsBaseScalar('ShiftRightU32x16', 'table.CoreVectors.ShiftRightU32x16 := @RISCVVShiftRightU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpEqU32x16', 'table.CoreVectors.CmpEqU32x16 := @RISCVVCmpEqU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpLtU32x16', 'table.CoreVectors.CmpLtU32x16 := @RISCVVCmpLtU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpGtU32x16', 'table.CoreVectors.CmpGtU32x16 := @RISCVVCmpGtU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpLeU32x16', 'table.CoreVectors.CmpLeU32x16 := @RISCVVCmpLeU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpGeU32x16', 'table.CoreVectors.CmpGeU32x16 := @RISCVVCmpGeU32x16;');
+  AssertRegisterKeepsBaseScalar('CmpNeU32x16', 'table.CoreVectors.CmpNeU32x16 := @RISCVVCmpNeU32x16;');
+  AssertRegisterKeepsBaseScalar('MinU32x16', 'table.CoreVectors.MinU32x16 := @RISCVVMinU32x16;');
+  AssertRegisterKeepsBaseScalar('MaxU32x16', 'table.CoreVectors.MaxU32x16 := @RISCVVMaxU32x16;');
+  AssertRegisterKeepsBaseScalar('AddU64x8', 'table.CoreVectors.AddU64x8 := @RISCVVAddU64x8;');
+  AssertRegisterKeepsBaseScalar('SubU64x8', 'table.CoreVectors.SubU64x8 := @RISCVVSubU64x8;');
+  AssertRegisterKeepsBaseScalar('AndU64x8', 'table.CoreVectors.AndU64x8 := @RISCVVAndU64x8;');
+  AssertRegisterKeepsBaseScalar('OrU64x8', 'table.CoreVectors.OrU64x8 := @RISCVVOrU64x8;');
+  AssertRegisterKeepsBaseScalar('XorU64x8', 'table.CoreVectors.XorU64x8 := @RISCVVXorU64x8;');
+  AssertRegisterKeepsBaseScalar('NotU64x8', 'table.CoreVectors.NotU64x8 := @RISCVVNotU64x8;');
+  AssertRegisterKeepsBaseScalar('ShiftLeftU64x8', 'table.CoreVectors.ShiftLeftU64x8 := @RISCVVShiftLeftU64x8;');
+  AssertRegisterKeepsBaseScalar('ShiftRightU64x8', 'table.CoreVectors.ShiftRightU64x8 := @RISCVVShiftRightU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpEqU64x8', 'table.CoreVectors.CmpEqU64x8 := @RISCVVCmpEqU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpLtU64x8', 'table.CoreVectors.CmpLtU64x8 := @RISCVVCmpLtU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpGtU64x8', 'table.CoreVectors.CmpGtU64x8 := @RISCVVCmpGtU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpLeU64x8', 'table.CoreVectors.CmpLeU64x8 := @RISCVVCmpLeU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpGeU64x8', 'table.CoreVectors.CmpGeU64x8 := @RISCVVCmpGeU64x8;');
+  AssertRegisterKeepsBaseScalar('CmpNeU64x8', 'table.CoreVectors.CmpNeU64x8 := @RISCVVCmpNeU64x8;');
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
   {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND}
@@ -10190,77 +10190,77 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('DotF32x8', Pointer(LScalarTable.DotF32x8), Pointer(LRISCVVTable.DotF32x8));
-  AssertSlotReusesScalar('AddI16x32', Pointer(LScalarTable.AddI16x32), Pointer(LRISCVVTable.AddI16x32));
-  AssertSlotReusesScalar('SubI16x32', Pointer(LScalarTable.SubI16x32), Pointer(LRISCVVTable.SubI16x32));
-  AssertSlotReusesScalar('AndI16x32', Pointer(LScalarTable.AndI16x32), Pointer(LRISCVVTable.AndI16x32));
-  AssertSlotReusesScalar('OrI16x32', Pointer(LScalarTable.OrI16x32), Pointer(LRISCVVTable.OrI16x32));
-  AssertSlotReusesScalar('XorI16x32', Pointer(LScalarTable.XorI16x32), Pointer(LRISCVVTable.XorI16x32));
-  AssertSlotReusesScalar('NotI16x32', Pointer(LScalarTable.NotI16x32), Pointer(LRISCVVTable.NotI16x32));
-  AssertSlotReusesScalar('AndNotI16x32', Pointer(LScalarTable.AndNotI16x32), Pointer(LRISCVVTable.AndNotI16x32));
-  AssertSlotReusesScalar('CmpEqI16x32', Pointer(LScalarTable.CmpEqI16x32), Pointer(LRISCVVTable.CmpEqI16x32));
-  AssertSlotReusesScalar('CmpLtI16x32', Pointer(LScalarTable.CmpLtI16x32), Pointer(LRISCVVTable.CmpLtI16x32));
-  AssertSlotReusesScalar('CmpGtI16x32', Pointer(LScalarTable.CmpGtI16x32), Pointer(LRISCVVTable.CmpGtI16x32));
-  AssertSlotReusesScalar('MinI16x32', Pointer(LScalarTable.MinI16x32), Pointer(LRISCVVTable.MinI16x32));
-  AssertSlotReusesScalar('MaxI16x32', Pointer(LScalarTable.MaxI16x32), Pointer(LRISCVVTable.MaxI16x32));
-  AssertSlotReusesScalar('ShiftLeftI16x32', Pointer(LScalarTable.ShiftLeftI16x32), Pointer(LRISCVVTable.ShiftLeftI16x32));
-  AssertSlotReusesScalar('ShiftRightI16x32', Pointer(LScalarTable.ShiftRightI16x32), Pointer(LRISCVVTable.ShiftRightI16x32));
-  AssertSlotReusesScalar('ShiftRightArithI16x32', Pointer(LScalarTable.ShiftRightArithI16x32), Pointer(LRISCVVTable.ShiftRightArithI16x32));
-  AssertSlotReusesScalar('AddI8x64', Pointer(LScalarTable.AddI8x64), Pointer(LRISCVVTable.AddI8x64));
-  AssertSlotReusesScalar('SubI8x64', Pointer(LScalarTable.SubI8x64), Pointer(LRISCVVTable.SubI8x64));
-  AssertSlotReusesScalar('AndI8x64', Pointer(LScalarTable.AndI8x64), Pointer(LRISCVVTable.AndI8x64));
-  AssertSlotReusesScalar('OrI8x64', Pointer(LScalarTable.OrI8x64), Pointer(LRISCVVTable.OrI8x64));
-  AssertSlotReusesScalar('XorI8x64', Pointer(LScalarTable.XorI8x64), Pointer(LRISCVVTable.XorI8x64));
-  AssertSlotReusesScalar('NotI8x64', Pointer(LScalarTable.NotI8x64), Pointer(LRISCVVTable.NotI8x64));
-  AssertSlotReusesScalar('AndNotI8x64', Pointer(LScalarTable.AndNotI8x64), Pointer(LRISCVVTable.AndNotI8x64));
-  AssertSlotReusesScalar('CmpEqI8x64', Pointer(LScalarTable.CmpEqI8x64), Pointer(LRISCVVTable.CmpEqI8x64));
-  AssertSlotReusesScalar('CmpLtI8x64', Pointer(LScalarTable.CmpLtI8x64), Pointer(LRISCVVTable.CmpLtI8x64));
-  AssertSlotReusesScalar('CmpGtI8x64', Pointer(LScalarTable.CmpGtI8x64), Pointer(LRISCVVTable.CmpGtI8x64));
-  AssertSlotReusesScalar('MinI8x64', Pointer(LScalarTable.MinI8x64), Pointer(LRISCVVTable.MinI8x64));
-  AssertSlotReusesScalar('MaxI8x64', Pointer(LScalarTable.MaxI8x64), Pointer(LRISCVVTable.MaxI8x64));
-  AssertSlotReusesScalar('AddU8x64', Pointer(LScalarTable.AddU8x64), Pointer(LRISCVVTable.AddU8x64));
-  AssertSlotReusesScalar('SubU8x64', Pointer(LScalarTable.SubU8x64), Pointer(LRISCVVTable.SubU8x64));
-  AssertSlotReusesScalar('AndU8x64', Pointer(LScalarTable.AndU8x64), Pointer(LRISCVVTable.AndU8x64));
-  AssertSlotReusesScalar('OrU8x64', Pointer(LScalarTable.OrU8x64), Pointer(LRISCVVTable.OrU8x64));
-  AssertSlotReusesScalar('XorU8x64', Pointer(LScalarTable.XorU8x64), Pointer(LRISCVVTable.XorU8x64));
-  AssertSlotReusesScalar('NotU8x64', Pointer(LScalarTable.NotU8x64), Pointer(LRISCVVTable.NotU8x64));
-  AssertSlotReusesScalar('CmpEqU8x64', Pointer(LScalarTable.CmpEqU8x64), Pointer(LRISCVVTable.CmpEqU8x64));
-  AssertSlotReusesScalar('CmpLtU8x64', Pointer(LScalarTable.CmpLtU8x64), Pointer(LRISCVVTable.CmpLtU8x64));
-  AssertSlotReusesScalar('CmpGtU8x64', Pointer(LScalarTable.CmpGtU8x64), Pointer(LRISCVVTable.CmpGtU8x64));
-  AssertSlotReusesScalar('MinU8x64', Pointer(LScalarTable.MinU8x64), Pointer(LRISCVVTable.MinU8x64));
-  AssertSlotReusesScalar('MaxU8x64', Pointer(LScalarTable.MaxU8x64), Pointer(LRISCVVTable.MaxU8x64));
-  AssertSlotReusesScalar('AddU32x16', Pointer(LScalarTable.AddU32x16), Pointer(LRISCVVTable.AddU32x16));
-  AssertSlotReusesScalar('SubU32x16', Pointer(LScalarTable.SubU32x16), Pointer(LRISCVVTable.SubU32x16));
-  AssertSlotReusesScalar('MulU32x16', Pointer(LScalarTable.MulU32x16), Pointer(LRISCVVTable.MulU32x16));
-  AssertSlotReusesScalar('AndU32x16', Pointer(LScalarTable.AndU32x16), Pointer(LRISCVVTable.AndU32x16));
-  AssertSlotReusesScalar('OrU32x16', Pointer(LScalarTable.OrU32x16), Pointer(LRISCVVTable.OrU32x16));
-  AssertSlotReusesScalar('XorU32x16', Pointer(LScalarTable.XorU32x16), Pointer(LRISCVVTable.XorU32x16));
-  AssertSlotReusesScalar('NotU32x16', Pointer(LScalarTable.NotU32x16), Pointer(LRISCVVTable.NotU32x16));
-  AssertSlotReusesScalar('AndNotU32x16', Pointer(LScalarTable.AndNotU32x16), Pointer(LRISCVVTable.AndNotU32x16));
-  AssertSlotReusesScalar('ShiftLeftU32x16', Pointer(LScalarTable.ShiftLeftU32x16), Pointer(LRISCVVTable.ShiftLeftU32x16));
-  AssertSlotReusesScalar('ShiftRightU32x16', Pointer(LScalarTable.ShiftRightU32x16), Pointer(LRISCVVTable.ShiftRightU32x16));
-  AssertSlotReusesScalar('CmpEqU32x16', Pointer(LScalarTable.CmpEqU32x16), Pointer(LRISCVVTable.CmpEqU32x16));
-  AssertSlotReusesScalar('CmpLtU32x16', Pointer(LScalarTable.CmpLtU32x16), Pointer(LRISCVVTable.CmpLtU32x16));
-  AssertSlotReusesScalar('CmpGtU32x16', Pointer(LScalarTable.CmpGtU32x16), Pointer(LRISCVVTable.CmpGtU32x16));
-  AssertSlotReusesScalar('CmpLeU32x16', Pointer(LScalarTable.CmpLeU32x16), Pointer(LRISCVVTable.CmpLeU32x16));
-  AssertSlotReusesScalar('CmpGeU32x16', Pointer(LScalarTable.CmpGeU32x16), Pointer(LRISCVVTable.CmpGeU32x16));
-  AssertSlotReusesScalar('CmpNeU32x16', Pointer(LScalarTable.CmpNeU32x16), Pointer(LRISCVVTable.CmpNeU32x16));
-  AssertSlotReusesScalar('MinU32x16', Pointer(LScalarTable.MinU32x16), Pointer(LRISCVVTable.MinU32x16));
-  AssertSlotReusesScalar('MaxU32x16', Pointer(LScalarTable.MaxU32x16), Pointer(LRISCVVTable.MaxU32x16));
-  AssertSlotReusesScalar('AddU64x8', Pointer(LScalarTable.AddU64x8), Pointer(LRISCVVTable.AddU64x8));
-  AssertSlotReusesScalar('SubU64x8', Pointer(LScalarTable.SubU64x8), Pointer(LRISCVVTable.SubU64x8));
-  AssertSlotReusesScalar('AndU64x8', Pointer(LScalarTable.AndU64x8), Pointer(LRISCVVTable.AndU64x8));
-  AssertSlotReusesScalar('OrU64x8', Pointer(LScalarTable.OrU64x8), Pointer(LRISCVVTable.OrU64x8));
-  AssertSlotReusesScalar('XorU64x8', Pointer(LScalarTable.XorU64x8), Pointer(LRISCVVTable.XorU64x8));
-  AssertSlotReusesScalar('NotU64x8', Pointer(LScalarTable.NotU64x8), Pointer(LRISCVVTable.NotU64x8));
-  AssertSlotReusesScalar('ShiftLeftU64x8', Pointer(LScalarTable.ShiftLeftU64x8), Pointer(LRISCVVTable.ShiftLeftU64x8));
-  AssertSlotReusesScalar('ShiftRightU64x8', Pointer(LScalarTable.ShiftRightU64x8), Pointer(LRISCVVTable.ShiftRightU64x8));
-  AssertSlotReusesScalar('CmpEqU64x8', Pointer(LScalarTable.CmpEqU64x8), Pointer(LRISCVVTable.CmpEqU64x8));
-  AssertSlotReusesScalar('CmpLtU64x8', Pointer(LScalarTable.CmpLtU64x8), Pointer(LRISCVVTable.CmpLtU64x8));
-  AssertSlotReusesScalar('CmpGtU64x8', Pointer(LScalarTable.CmpGtU64x8), Pointer(LRISCVVTable.CmpGtU64x8));
-  AssertSlotReusesScalar('CmpLeU64x8', Pointer(LScalarTable.CmpLeU64x8), Pointer(LRISCVVTable.CmpLeU64x8));
-  AssertSlotReusesScalar('CmpGeU64x8', Pointer(LScalarTable.CmpGeU64x8), Pointer(LRISCVVTable.CmpGeU64x8));
-  AssertSlotReusesScalar('CmpNeU64x8', Pointer(LScalarTable.CmpNeU64x8), Pointer(LRISCVVTable.CmpNeU64x8));
+  AssertSlotReusesScalar('DotF32x8', Pointer(LScalarTable.CoreVectors.DotF32x8), Pointer(LRISCVVTable.CoreVectors.DotF32x8));
+  AssertSlotReusesScalar('AddI16x32', Pointer(LScalarTable.CoreVectors.AddI16x32), Pointer(LRISCVVTable.CoreVectors.AddI16x32));
+  AssertSlotReusesScalar('SubI16x32', Pointer(LScalarTable.CoreVectors.SubI16x32), Pointer(LRISCVVTable.CoreVectors.SubI16x32));
+  AssertSlotReusesScalar('AndI16x32', Pointer(LScalarTable.CoreVectors.AndI16x32), Pointer(LRISCVVTable.CoreVectors.AndI16x32));
+  AssertSlotReusesScalar('OrI16x32', Pointer(LScalarTable.CoreVectors.OrI16x32), Pointer(LRISCVVTable.CoreVectors.OrI16x32));
+  AssertSlotReusesScalar('XorI16x32', Pointer(LScalarTable.CoreVectors.XorI16x32), Pointer(LRISCVVTable.CoreVectors.XorI16x32));
+  AssertSlotReusesScalar('NotI16x32', Pointer(LScalarTable.CoreVectors.NotI16x32), Pointer(LRISCVVTable.CoreVectors.NotI16x32));
+  AssertSlotReusesScalar('AndNotI16x32', Pointer(LScalarTable.CoreVectors.AndNotI16x32), Pointer(LRISCVVTable.CoreVectors.AndNotI16x32));
+  AssertSlotReusesScalar('CmpEqI16x32', Pointer(LScalarTable.CoreVectors.CmpEqI16x32), Pointer(LRISCVVTable.CoreVectors.CmpEqI16x32));
+  AssertSlotReusesScalar('CmpLtI16x32', Pointer(LScalarTable.CoreVectors.CmpLtI16x32), Pointer(LRISCVVTable.CoreVectors.CmpLtI16x32));
+  AssertSlotReusesScalar('CmpGtI16x32', Pointer(LScalarTable.CoreVectors.CmpGtI16x32), Pointer(LRISCVVTable.CoreVectors.CmpGtI16x32));
+  AssertSlotReusesScalar('MinI16x32', Pointer(LScalarTable.CoreVectors.MinI16x32), Pointer(LRISCVVTable.CoreVectors.MinI16x32));
+  AssertSlotReusesScalar('MaxI16x32', Pointer(LScalarTable.CoreVectors.MaxI16x32), Pointer(LRISCVVTable.CoreVectors.MaxI16x32));
+  AssertSlotReusesScalar('ShiftLeftI16x32', Pointer(LScalarTable.CoreVectors.ShiftLeftI16x32), Pointer(LRISCVVTable.CoreVectors.ShiftLeftI16x32));
+  AssertSlotReusesScalar('ShiftRightI16x32', Pointer(LScalarTable.CoreVectors.ShiftRightI16x32), Pointer(LRISCVVTable.CoreVectors.ShiftRightI16x32));
+  AssertSlotReusesScalar('ShiftRightArithI16x32', Pointer(LScalarTable.CoreVectors.ShiftRightArithI16x32), Pointer(LRISCVVTable.CoreVectors.ShiftRightArithI16x32));
+  AssertSlotReusesScalar('AddI8x64', Pointer(LScalarTable.CoreVectors.AddI8x64), Pointer(LRISCVVTable.CoreVectors.AddI8x64));
+  AssertSlotReusesScalar('SubI8x64', Pointer(LScalarTable.CoreVectors.SubI8x64), Pointer(LRISCVVTable.CoreVectors.SubI8x64));
+  AssertSlotReusesScalar('AndI8x64', Pointer(LScalarTable.CoreVectors.AndI8x64), Pointer(LRISCVVTable.CoreVectors.AndI8x64));
+  AssertSlotReusesScalar('OrI8x64', Pointer(LScalarTable.CoreVectors.OrI8x64), Pointer(LRISCVVTable.CoreVectors.OrI8x64));
+  AssertSlotReusesScalar('XorI8x64', Pointer(LScalarTable.CoreVectors.XorI8x64), Pointer(LRISCVVTable.CoreVectors.XorI8x64));
+  AssertSlotReusesScalar('NotI8x64', Pointer(LScalarTable.CoreVectors.NotI8x64), Pointer(LRISCVVTable.CoreVectors.NotI8x64));
+  AssertSlotReusesScalar('AndNotI8x64', Pointer(LScalarTable.CoreVectors.AndNotI8x64), Pointer(LRISCVVTable.CoreVectors.AndNotI8x64));
+  AssertSlotReusesScalar('CmpEqI8x64', Pointer(LScalarTable.CoreVectors.CmpEqI8x64), Pointer(LRISCVVTable.CoreVectors.CmpEqI8x64));
+  AssertSlotReusesScalar('CmpLtI8x64', Pointer(LScalarTable.CoreVectors.CmpLtI8x64), Pointer(LRISCVVTable.CoreVectors.CmpLtI8x64));
+  AssertSlotReusesScalar('CmpGtI8x64', Pointer(LScalarTable.CoreVectors.CmpGtI8x64), Pointer(LRISCVVTable.CoreVectors.CmpGtI8x64));
+  AssertSlotReusesScalar('MinI8x64', Pointer(LScalarTable.CoreVectors.MinI8x64), Pointer(LRISCVVTable.CoreVectors.MinI8x64));
+  AssertSlotReusesScalar('MaxI8x64', Pointer(LScalarTable.CoreVectors.MaxI8x64), Pointer(LRISCVVTable.CoreVectors.MaxI8x64));
+  AssertSlotReusesScalar('AddU8x64', Pointer(LScalarTable.CoreVectors.AddU8x64), Pointer(LRISCVVTable.CoreVectors.AddU8x64));
+  AssertSlotReusesScalar('SubU8x64', Pointer(LScalarTable.CoreVectors.SubU8x64), Pointer(LRISCVVTable.CoreVectors.SubU8x64));
+  AssertSlotReusesScalar('AndU8x64', Pointer(LScalarTable.CoreVectors.AndU8x64), Pointer(LRISCVVTable.CoreVectors.AndU8x64));
+  AssertSlotReusesScalar('OrU8x64', Pointer(LScalarTable.CoreVectors.OrU8x64), Pointer(LRISCVVTable.CoreVectors.OrU8x64));
+  AssertSlotReusesScalar('XorU8x64', Pointer(LScalarTable.CoreVectors.XorU8x64), Pointer(LRISCVVTable.CoreVectors.XorU8x64));
+  AssertSlotReusesScalar('NotU8x64', Pointer(LScalarTable.CoreVectors.NotU8x64), Pointer(LRISCVVTable.CoreVectors.NotU8x64));
+  AssertSlotReusesScalar('CmpEqU8x64', Pointer(LScalarTable.CoreVectors.CmpEqU8x64), Pointer(LRISCVVTable.CoreVectors.CmpEqU8x64));
+  AssertSlotReusesScalar('CmpLtU8x64', Pointer(LScalarTable.CoreVectors.CmpLtU8x64), Pointer(LRISCVVTable.CoreVectors.CmpLtU8x64));
+  AssertSlotReusesScalar('CmpGtU8x64', Pointer(LScalarTable.CoreVectors.CmpGtU8x64), Pointer(LRISCVVTable.CoreVectors.CmpGtU8x64));
+  AssertSlotReusesScalar('MinU8x64', Pointer(LScalarTable.CoreVectors.MinU8x64), Pointer(LRISCVVTable.CoreVectors.MinU8x64));
+  AssertSlotReusesScalar('MaxU8x64', Pointer(LScalarTable.CoreVectors.MaxU8x64), Pointer(LRISCVVTable.CoreVectors.MaxU8x64));
+  AssertSlotReusesScalar('AddU32x16', Pointer(LScalarTable.CoreVectors.AddU32x16), Pointer(LRISCVVTable.CoreVectors.AddU32x16));
+  AssertSlotReusesScalar('SubU32x16', Pointer(LScalarTable.CoreVectors.SubU32x16), Pointer(LRISCVVTable.CoreVectors.SubU32x16));
+  AssertSlotReusesScalar('MulU32x16', Pointer(LScalarTable.CoreVectors.MulU32x16), Pointer(LRISCVVTable.CoreVectors.MulU32x16));
+  AssertSlotReusesScalar('AndU32x16', Pointer(LScalarTable.CoreVectors.AndU32x16), Pointer(LRISCVVTable.CoreVectors.AndU32x16));
+  AssertSlotReusesScalar('OrU32x16', Pointer(LScalarTable.CoreVectors.OrU32x16), Pointer(LRISCVVTable.CoreVectors.OrU32x16));
+  AssertSlotReusesScalar('XorU32x16', Pointer(LScalarTable.CoreVectors.XorU32x16), Pointer(LRISCVVTable.CoreVectors.XorU32x16));
+  AssertSlotReusesScalar('NotU32x16', Pointer(LScalarTable.CoreVectors.NotU32x16), Pointer(LRISCVVTable.CoreVectors.NotU32x16));
+  AssertSlotReusesScalar('AndNotU32x16', Pointer(LScalarTable.CoreVectors.AndNotU32x16), Pointer(LRISCVVTable.CoreVectors.AndNotU32x16));
+  AssertSlotReusesScalar('ShiftLeftU32x16', Pointer(LScalarTable.CoreVectors.ShiftLeftU32x16), Pointer(LRISCVVTable.CoreVectors.ShiftLeftU32x16));
+  AssertSlotReusesScalar('ShiftRightU32x16', Pointer(LScalarTable.CoreVectors.ShiftRightU32x16), Pointer(LRISCVVTable.CoreVectors.ShiftRightU32x16));
+  AssertSlotReusesScalar('CmpEqU32x16', Pointer(LScalarTable.CoreVectors.CmpEqU32x16), Pointer(LRISCVVTable.CoreVectors.CmpEqU32x16));
+  AssertSlotReusesScalar('CmpLtU32x16', Pointer(LScalarTable.CoreVectors.CmpLtU32x16), Pointer(LRISCVVTable.CoreVectors.CmpLtU32x16));
+  AssertSlotReusesScalar('CmpGtU32x16', Pointer(LScalarTable.CoreVectors.CmpGtU32x16), Pointer(LRISCVVTable.CoreVectors.CmpGtU32x16));
+  AssertSlotReusesScalar('CmpLeU32x16', Pointer(LScalarTable.CoreVectors.CmpLeU32x16), Pointer(LRISCVVTable.CoreVectors.CmpLeU32x16));
+  AssertSlotReusesScalar('CmpGeU32x16', Pointer(LScalarTable.CoreVectors.CmpGeU32x16), Pointer(LRISCVVTable.CoreVectors.CmpGeU32x16));
+  AssertSlotReusesScalar('CmpNeU32x16', Pointer(LScalarTable.CoreVectors.CmpNeU32x16), Pointer(LRISCVVTable.CoreVectors.CmpNeU32x16));
+  AssertSlotReusesScalar('MinU32x16', Pointer(LScalarTable.CoreVectors.MinU32x16), Pointer(LRISCVVTable.CoreVectors.MinU32x16));
+  AssertSlotReusesScalar('MaxU32x16', Pointer(LScalarTable.CoreVectors.MaxU32x16), Pointer(LRISCVVTable.CoreVectors.MaxU32x16));
+  AssertSlotReusesScalar('AddU64x8', Pointer(LScalarTable.CoreVectors.AddU64x8), Pointer(LRISCVVTable.CoreVectors.AddU64x8));
+  AssertSlotReusesScalar('SubU64x8', Pointer(LScalarTable.CoreVectors.SubU64x8), Pointer(LRISCVVTable.CoreVectors.SubU64x8));
+  AssertSlotReusesScalar('AndU64x8', Pointer(LScalarTable.CoreVectors.AndU64x8), Pointer(LRISCVVTable.CoreVectors.AndU64x8));
+  AssertSlotReusesScalar('OrU64x8', Pointer(LScalarTable.CoreVectors.OrU64x8), Pointer(LRISCVVTable.CoreVectors.OrU64x8));
+  AssertSlotReusesScalar('XorU64x8', Pointer(LScalarTable.CoreVectors.XorU64x8), Pointer(LRISCVVTable.CoreVectors.XorU64x8));
+  AssertSlotReusesScalar('NotU64x8', Pointer(LScalarTable.CoreVectors.NotU64x8), Pointer(LRISCVVTable.CoreVectors.NotU64x8));
+  AssertSlotReusesScalar('ShiftLeftU64x8', Pointer(LScalarTable.CoreVectors.ShiftLeftU64x8), Pointer(LRISCVVTable.CoreVectors.ShiftLeftU64x8));
+  AssertSlotReusesScalar('ShiftRightU64x8', Pointer(LScalarTable.CoreVectors.ShiftRightU64x8), Pointer(LRISCVVTable.CoreVectors.ShiftRightU64x8));
+  AssertSlotReusesScalar('CmpEqU64x8', Pointer(LScalarTable.CoreVectors.CmpEqU64x8), Pointer(LRISCVVTable.CoreVectors.CmpEqU64x8));
+  AssertSlotReusesScalar('CmpLtU64x8', Pointer(LScalarTable.CoreVectors.CmpLtU64x8), Pointer(LRISCVVTable.CoreVectors.CmpLtU64x8));
+  AssertSlotReusesScalar('CmpGtU64x8', Pointer(LScalarTable.CoreVectors.CmpGtU64x8), Pointer(LRISCVVTable.CoreVectors.CmpGtU64x8));
+  AssertSlotReusesScalar('CmpLeU64x8', Pointer(LScalarTable.CoreVectors.CmpLeU64x8), Pointer(LRISCVVTable.CoreVectors.CmpLeU64x8));
+  AssertSlotReusesScalar('CmpGeU64x8', Pointer(LScalarTable.CoreVectors.CmpGeU64x8), Pointer(LRISCVVTable.CoreVectors.CmpGeU64x8));
+  AssertSlotReusesScalar('CmpNeU64x8', Pointer(LScalarTable.CoreVectors.CmpNeU64x8), Pointer(LRISCVVTable.CoreVectors.CmpNeU64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_ClampF64x2_Drops_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -10311,8 +10311,8 @@ begin
     LSourceLines.Free;
   end;
 
-  CheckEqual(1, CountOccurrences(LRegisterSource, 'table.clampf64x2 := @riscvvclampf64x2;'), 'RegisterRISCVVBackend should keep exactly one ClampF64x2 source assignment site');
-  CheckTrue(Pos('table.clampf64x2 := @riscvvclampf64x2;', LRegisterSource) > 0, 'RegisterRISCVVBackend should keep a dedicated asm-gated ClampF64x2 source assignment');
+  CheckEqual(1, CountOccurrences(LRegisterSource, 'table.corevectors.clampf64x2 := @riscvvclampf64x2;'), 'RegisterRISCVVBackend should keep exactly one ClampF64x2 source assignment site');
+  CheckTrue(Pos('table.corevectors.clampf64x2 := @riscvvclampf64x2;', LRegisterSource) > 0, 'RegisterRISCVVBackend should keep a dedicated asm-gated ClampF64x2 source assignment');
   CheckTrue(Pos('function riscvvclampf64x2(const a, minval, maxval: tvecf64x2): tvecf64x2;', LFacadeSource) = 0, 'no-asm RISCVV facade should no longer define the dead ClampF64x2 witness');
   CheckTrue(Pos('procedure riscvvclampf64x2asm(const a, minval, maxval: tvecf64x2; var r: tvecf64x2);', LAsmSource) > 0, 'RVV asm source should still expose RISCVVClampF64x2Asm');
   CheckTrue((Pos('vfmax.vv v0, v0, v1', LAsmSource) > 0) and (Pos('vfmin.vv v0, v0, v2', LAsmSource) > 0), 'RVV asm source should still clamp ClampF64x2 via vfmax/vfmin');
@@ -10326,11 +10326,11 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Pointer(LRISCVVTable.ClampF64x2) <> nil, 'RISCVV ClampF64x2 should stay assigned in the backend dispatch table');
+  CheckTrue(Pointer(LRISCVVTable.CoreVectors.ClampF64x2) <> nil, 'RISCVV ClampF64x2 should stay assigned in the backend dispatch table');
   {$IFDEF NEXTPAS_SIMD_TEST_RISCVV_ASM_COMPILED}
-  CheckTrue(PtrUInt(LScalarTable.ClampF64x2) <> PtrUInt(LRISCVVTable.ClampF64x2), 'RISCVV ClampF64x2 should keep a backend-owned runtime slot when RVV asm is compiled');
+  CheckTrue(PtrUInt(LScalarTable.CoreVectors.ClampF64x2) <> PtrUInt(LRISCVVTable.CoreVectors.ClampF64x2), 'RISCVV ClampF64x2 should keep a backend-owned runtime slot when RVV asm is compiled');
   {$ELSE}
-  CheckEqual(PtrUInt(LScalarTable.ClampF64x2), PtrUInt(LRISCVVTable.ClampF64x2), 'RISCVV ClampF64x2 should reuse the base scalar runtime slot when RVV asm is not compiled on this host');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.ClampF64x2), PtrUInt(LRISCVVTable.CoreVectors.ClampF64x2), 'RISCVV ClampF64x2 should reuse the base scalar runtime slot when RVV asm is not compiled on this host');
   {$ENDIF}
 end;
 
@@ -10407,9 +10407,9 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('AbsF64x2', 'table.AbsF64x2 := @RISCVVAbsF64x2;');
-  AssertRegisterHasAsmOwnedSlot('SqrtF64x2', 'table.SqrtF64x2 := @RISCVVSqrtF64x2;');
-  AssertRegisterHasAsmOwnedSlot('FmaF64x2', 'table.FmaF64x2 := @RISCVVFmaF64x2;');
+  AssertRegisterHasAsmOwnedSlot('AbsF64x2', 'table.CoreVectors.AbsF64x2 := @RISCVVAbsF64x2;');
+  AssertRegisterHasAsmOwnedSlot('SqrtF64x2', 'table.CoreVectors.SqrtF64x2 := @RISCVVSqrtF64x2;');
+  AssertRegisterHasAsmOwnedSlot('FmaF64x2', 'table.CoreVectors.FmaF64x2 := @RISCVVFmaF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -10422,13 +10422,13 @@ begin
 
   AssertAsmConditionalExactF64x2Slot('AbsF64x2', 'function RISCVVAbsF64x2(const a: TVecF64x2): TVecF64x2;',
     'RISCVVAbsF64x2Asm(a, Result);', 'procedure RISCVVAbsF64x2Asm(const a: TVecF64x2; var r: TVecF64x2);',
-    'vfsgnjx.vv v0, v0, v0', Pointer(LScalarTable.AbsF64x2), Pointer(LRISCVVTable.AbsF64x2));
+    'vfsgnjx.vv v0, v0, v0', Pointer(LScalarTable.CoreVectors.AbsF64x2), Pointer(LRISCVVTable.CoreVectors.AbsF64x2));
   AssertAsmConditionalExactF64x2Slot('SqrtF64x2', 'function RISCVVSqrtF64x2(const a: TVecF64x2): TVecF64x2;',
     'RISCVVSqrtF64x2Asm(a, Result);', 'procedure RISCVVSqrtF64x2Asm(const a: TVecF64x2; var r: TVecF64x2);',
-    'vfsqrt.v v0, v0', Pointer(LScalarTable.SqrtF64x2), Pointer(LRISCVVTable.SqrtF64x2));
+    'vfsqrt.v v0, v0', Pointer(LScalarTable.CoreVectors.SqrtF64x2), Pointer(LRISCVVTable.CoreVectors.SqrtF64x2));
   AssertAsmConditionalExactF64x2Slot('FmaF64x2', 'function RISCVVFmaF64x2(const a, b, c: TVecF64x2): TVecF64x2;',
     'RISCVVFmaF64x2Asm(a, b, c, Result);', 'procedure RISCVVFmaF64x2Asm(const a, b, c: TVecF64x2; var r: TVecF64x2);',
-    'vfmacc.vv v2, v0, v1', Pointer(LScalarTable.FmaF64x2), Pointer(LRISCVVTable.FmaF64x2));
+    'vfmacc.vv v2, v0, v1', Pointer(LScalarTable.CoreVectors.FmaF64x2), Pointer(LRISCVVTable.CoreVectors.FmaF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_ArithmeticF64x2Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -10504,10 +10504,10 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('AddF64x2', 'table.AddF64x2 := @RISCVVAddF64x2;');
-  AssertRegisterHasAsmOwnedSlot('SubF64x2', 'table.SubF64x2 := @RISCVVSubF64x2;');
-  AssertRegisterHasAsmOwnedSlot('MulF64x2', 'table.MulF64x2 := @RISCVVMulF64x2;');
-  AssertRegisterHasAsmOwnedSlot('DivF64x2', 'table.DivF64x2 := @RISCVVDivF64x2;');
+  AssertRegisterHasAsmOwnedSlot('AddF64x2', 'table.CoreVectors.AddF64x2 := @RISCVVAddF64x2;');
+  AssertRegisterHasAsmOwnedSlot('SubF64x2', 'table.CoreVectors.SubF64x2 := @RISCVVSubF64x2;');
+  AssertRegisterHasAsmOwnedSlot('MulF64x2', 'table.CoreVectors.MulF64x2 := @RISCVVMulF64x2;');
+  AssertRegisterHasAsmOwnedSlot('DivF64x2', 'table.CoreVectors.DivF64x2 := @RISCVVDivF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -10520,16 +10520,16 @@ begin
 
   AssertAsmConditionalArithmeticF64x2Slot('AddF64x2', 'function RISCVVAddF64x2(const a, b: TVecF64x2): TVecF64x2;',
     'RISCVVAddF64x2Asm(a, b, Result);', 'procedure RISCVVAddF64x2Asm(const a, b: TVecF64x2; var r: TVecF64x2);',
-    'vfadd.vv v0, v0, v1', Pointer(LScalarTable.AddF64x2), Pointer(LRISCVVTable.AddF64x2));
+    'vfadd.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.AddF64x2), Pointer(LRISCVVTable.CoreVectors.AddF64x2));
   AssertAsmConditionalArithmeticF64x2Slot('SubF64x2', 'function RISCVVSubF64x2(const a, b: TVecF64x2): TVecF64x2;',
     'RISCVVSubF64x2Asm(a, b, Result);', 'procedure RISCVVSubF64x2Asm(const a, b: TVecF64x2; var r: TVecF64x2);',
-    'vfsub.vv v0, v0, v1', Pointer(LScalarTable.SubF64x2), Pointer(LRISCVVTable.SubF64x2));
+    'vfsub.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.SubF64x2), Pointer(LRISCVVTable.CoreVectors.SubF64x2));
   AssertAsmConditionalArithmeticF64x2Slot('MulF64x2', 'function RISCVVMulF64x2(const a, b: TVecF64x2): TVecF64x2;',
     'RISCVVMulF64x2Asm(a, b, Result);', 'procedure RISCVVMulF64x2Asm(const a, b: TVecF64x2; var r: TVecF64x2);',
-    'vfmul.vv v0, v0, v1', Pointer(LScalarTable.MulF64x2), Pointer(LRISCVVTable.MulF64x2));
+    'vfmul.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MulF64x2), Pointer(LRISCVVTable.CoreVectors.MulF64x2));
   AssertAsmConditionalArithmeticF64x2Slot('DivF64x2', 'function RISCVVDivF64x2(const a, b: TVecF64x2): TVecF64x2;',
     'RISCVVDivF64x2Asm(a, b, Result);', 'procedure RISCVVDivF64x2Asm(const a, b: TVecF64x2; var r: TVecF64x2);',
-    'vfdiv.vv v0, v0, v1', Pointer(LScalarTable.DivF64x2), Pointer(LRISCVVTable.DivF64x2));
+    'vfdiv.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.DivF64x2), Pointer(LRISCVVTable.CoreVectors.DivF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_ArithmeticF32x4Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -10605,10 +10605,10 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('AddF32x4', 'table.AddF32x4 := @RISCVVAddF32x4;');
-  AssertRegisterHasAsmOwnedSlot('SubF32x4', 'table.SubF32x4 := @RISCVVSubF32x4;');
-  AssertRegisterHasAsmOwnedSlot('MulF32x4', 'table.MulF32x4 := @RISCVVMulF32x4;');
-  AssertRegisterHasAsmOwnedSlot('DivF32x4', 'table.DivF32x4 := @RISCVVDivF32x4;');
+  AssertRegisterHasAsmOwnedSlot('AddF32x4', 'table.CoreVectors.AddF32x4 := @RISCVVAddF32x4;');
+  AssertRegisterHasAsmOwnedSlot('SubF32x4', 'table.CoreVectors.SubF32x4 := @RISCVVSubF32x4;');
+  AssertRegisterHasAsmOwnedSlot('MulF32x4', 'table.CoreVectors.MulF32x4 := @RISCVVMulF32x4;');
+  AssertRegisterHasAsmOwnedSlot('DivF32x4', 'table.CoreVectors.DivF32x4 := @RISCVVDivF32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -10621,16 +10621,16 @@ begin
 
   AssertAsmConditionalArithmeticF32x4Slot('AddF32x4', 'function RISCVVAddF32x4(const a, b: TVecF32x4): TVecF32x4;',
     'RISCVVAddF32x4Asm(a, b, Result);', 'procedure RISCVVAddF32x4Asm(const a, b: TVecF32x4; var r: TVecF32x4);',
-    'vfadd.vv v0, v0, v1', Pointer(LScalarTable.AddF32x4), Pointer(LRISCVVTable.AddF32x4));
+    'vfadd.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.AddF32x4), Pointer(LRISCVVTable.CoreVectors.AddF32x4));
   AssertAsmConditionalArithmeticF32x4Slot('SubF32x4', 'function RISCVVSubF32x4(const a, b: TVecF32x4): TVecF32x4;',
     'RISCVVSubF32x4Asm(a, b, Result);', 'procedure RISCVVSubF32x4Asm(const a, b: TVecF32x4; var r: TVecF32x4);',
-    'vfsub.vv v0, v0, v1', Pointer(LScalarTable.SubF32x4), Pointer(LRISCVVTable.SubF32x4));
+    'vfsub.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.SubF32x4), Pointer(LRISCVVTable.CoreVectors.SubF32x4));
   AssertAsmConditionalArithmeticF32x4Slot('MulF32x4', 'function RISCVVMulF32x4(const a, b: TVecF32x4): TVecF32x4;',
     'RISCVVMulF32x4Asm(a, b, Result);', 'procedure RISCVVMulF32x4Asm(const a, b: TVecF32x4; var r: TVecF32x4);',
-    'vfmul.vv v0, v0, v1', Pointer(LScalarTable.MulF32x4), Pointer(LRISCVVTable.MulF32x4));
+    'vfmul.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MulF32x4), Pointer(LRISCVVTable.CoreVectors.MulF32x4));
   AssertAsmConditionalArithmeticF32x4Slot('DivF32x4', 'function RISCVVDivF32x4(const a, b: TVecF32x4): TVecF32x4;',
     'RISCVVDivF32x4Asm(a, b, Result);', 'procedure RISCVVDivF32x4Asm(const a, b: TVecF32x4; var r: TVecF32x4);',
-    'vfdiv.vv v0, v0, v1', Pointer(LScalarTable.DivF32x4), Pointer(LRISCVVTable.DivF32x4));
+    'vfdiv.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.DivF32x4), Pointer(LRISCVVTable.CoreVectors.DivF32x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_I32x4ConditionalIntegerSlots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -10706,19 +10706,19 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('AddI32x4', 'table.AddI32x4 := @RISCVVAddI32x4;');
-  AssertRegisterHasAsmOwnedSlot('SubI32x4', 'table.SubI32x4 := @RISCVVSubI32x4;');
-  AssertRegisterHasAsmOwnedSlot('MulI32x4', 'table.MulI32x4 := @RISCVVMulI32x4;');
-  AssertRegisterHasAsmOwnedSlot('AndI32x4', 'table.AndI32x4 := @RISCVVAndI32x4;');
-  AssertRegisterHasAsmOwnedSlot('OrI32x4', 'table.OrI32x4 := @RISCVVOrI32x4;');
-  AssertRegisterHasAsmOwnedSlot('XorI32x4', 'table.XorI32x4 := @RISCVVXorI32x4;');
-  AssertRegisterHasAsmOwnedSlot('NotI32x4', 'table.NotI32x4 := @RISCVVNotI32x4;');
-  AssertRegisterHasAsmOwnedSlot('AndNotI32x4', 'table.AndNotI32x4 := @RISCVVAndNotI32x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftLeftI32x4', 'table.ShiftLeftI32x4 := @RISCVVShiftLeftI32x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightI32x4', 'table.ShiftRightI32x4 := @RISCVVShiftRightI32x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightArithI32x4', 'table.ShiftRightArithI32x4 := @RISCVVShiftRightArithI32x4;');
-  AssertRegisterHasAsmOwnedSlot('MinI32x4', 'table.MinI32x4 := @RISCVVMinI32x4;');
-  AssertRegisterHasAsmOwnedSlot('MaxI32x4', 'table.MaxI32x4 := @RISCVVMaxI32x4;');
+  AssertRegisterHasAsmOwnedSlot('AddI32x4', 'table.CoreVectors.AddI32x4 := @RISCVVAddI32x4;');
+  AssertRegisterHasAsmOwnedSlot('SubI32x4', 'table.CoreVectors.SubI32x4 := @RISCVVSubI32x4;');
+  AssertRegisterHasAsmOwnedSlot('MulI32x4', 'table.CoreVectors.MulI32x4 := @RISCVVMulI32x4;');
+  AssertRegisterHasAsmOwnedSlot('AndI32x4', 'table.CoreVectors.AndI32x4 := @RISCVVAndI32x4;');
+  AssertRegisterHasAsmOwnedSlot('OrI32x4', 'table.CoreVectors.OrI32x4 := @RISCVVOrI32x4;');
+  AssertRegisterHasAsmOwnedSlot('XorI32x4', 'table.CoreVectors.XorI32x4 := @RISCVVXorI32x4;');
+  AssertRegisterHasAsmOwnedSlot('NotI32x4', 'table.CoreVectors.NotI32x4 := @RISCVVNotI32x4;');
+  AssertRegisterHasAsmOwnedSlot('AndNotI32x4', 'table.CoreVectors.AndNotI32x4 := @RISCVVAndNotI32x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftLeftI32x4', 'table.CoreVectors.ShiftLeftI32x4 := @RISCVVShiftLeftI32x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightI32x4', 'table.CoreVectors.ShiftRightI32x4 := @RISCVVShiftRightI32x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightArithI32x4', 'table.CoreVectors.ShiftRightArithI32x4 := @RISCVVShiftRightArithI32x4;');
+  AssertRegisterHasAsmOwnedSlot('MinI32x4', 'table.CoreVectors.MinI32x4 := @RISCVVMinI32x4;');
+  AssertRegisterHasAsmOwnedSlot('MaxI32x4', 'table.CoreVectors.MaxI32x4 := @RISCVVMaxI32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -10731,43 +10731,43 @@ begin
 
   AssertAsmConditionalI32x4IntegerSlot('AddI32x4', 'function RISCVVAddI32x4(const a, b: TVecI32x4): TVecI32x4;',
     'RISCVVAddI32x4Asm(a, b, Result);', 'procedure RISCVVAddI32x4Asm(const a, b: TVecI32x4; var r: TVecI32x4);',
-    'vadd.vv v0, v0, v1', Pointer(LScalarTable.AddI32x4), Pointer(LRISCVVTable.AddI32x4));
+    'vadd.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.AddI32x4), Pointer(LRISCVVTable.CoreVectors.AddI32x4));
   AssertAsmConditionalI32x4IntegerSlot('SubI32x4', 'function RISCVVSubI32x4(const a, b: TVecI32x4): TVecI32x4;',
     'RISCVVSubI32x4Asm(a, b, Result);', 'procedure RISCVVSubI32x4Asm(const a, b: TVecI32x4; var r: TVecI32x4);',
-    'vsub.vv v0, v0, v1', Pointer(LScalarTable.SubI32x4), Pointer(LRISCVVTable.SubI32x4));
+    'vsub.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.SubI32x4), Pointer(LRISCVVTable.CoreVectors.SubI32x4));
   AssertAsmConditionalI32x4IntegerSlot('MulI32x4', 'function RISCVVMulI32x4(const a, b: TVecI32x4): TVecI32x4;',
     'RISCVVMulI32x4Asm(a, b, Result);', 'procedure RISCVVMulI32x4Asm(const a, b: TVecI32x4; var r: TVecI32x4);',
-    'vmul.vv v0, v0, v1', Pointer(LScalarTable.MulI32x4), Pointer(LRISCVVTable.MulI32x4));
+    'vmul.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MulI32x4), Pointer(LRISCVVTable.CoreVectors.MulI32x4));
   AssertAsmConditionalI32x4IntegerSlot('AndI32x4', 'function RISCVVAndI32x4(const a, b: TVecI32x4): TVecI32x4;',
     'RISCVVAndI32x4Asm(a, b, Result);', 'procedure RISCVVAndI32x4Asm(const a, b: TVecI32x4; var r: TVecI32x4);',
-    'vand.vv v0, v0, v1', Pointer(LScalarTable.AndI32x4), Pointer(LRISCVVTable.AndI32x4));
+    'vand.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.AndI32x4), Pointer(LRISCVVTable.CoreVectors.AndI32x4));
   AssertAsmConditionalI32x4IntegerSlot('OrI32x4', 'function RISCVVOrI32x4(const a, b: TVecI32x4): TVecI32x4;',
     'RISCVVOrI32x4Asm(a, b, Result);', 'procedure RISCVVOrI32x4Asm(const a, b: TVecI32x4; var r: TVecI32x4);',
-    'vor.vv v0, v0, v1', Pointer(LScalarTable.OrI32x4), Pointer(LRISCVVTable.OrI32x4));
+    'vor.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.OrI32x4), Pointer(LRISCVVTable.CoreVectors.OrI32x4));
   AssertAsmConditionalI32x4IntegerSlot('XorI32x4', 'function RISCVVXorI32x4(const a, b: TVecI32x4): TVecI32x4;',
     'RISCVVXorI32x4Asm(a, b, Result);', 'procedure RISCVVXorI32x4Asm(const a, b: TVecI32x4; var r: TVecI32x4);',
-    'vxor.vv v0, v0, v1', Pointer(LScalarTable.XorI32x4), Pointer(LRISCVVTable.XorI32x4));
+    'vxor.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.XorI32x4), Pointer(LRISCVVTable.CoreVectors.XorI32x4));
   AssertAsmConditionalI32x4IntegerSlot('NotI32x4', 'function RISCVVNotI32x4(const a: TVecI32x4): TVecI32x4;',
     'RISCVVNotI32x4Asm(a, Result);', 'procedure RISCVVNotI32x4Asm(const a: TVecI32x4; var r: TVecI32x4);',
-    'vxor.vi v0, v0, -1', Pointer(LScalarTable.NotI32x4), Pointer(LRISCVVTable.NotI32x4));
+    'vxor.vi v0, v0, -1', Pointer(LScalarTable.CoreVectors.NotI32x4), Pointer(LRISCVVTable.CoreVectors.NotI32x4));
   AssertAsmConditionalI32x4IntegerSlot('AndNotI32x4', 'function RISCVVAndNotI32x4(const a, b: TVecI32x4): TVecI32x4;',
     'RISCVVAndNotI32x4Asm(a, b, Result);', 'procedure RISCVVAndNotI32x4Asm(const a, b: TVecI32x4; var r: TVecI32x4);',
-    'vand.vv v0, v0, v1', Pointer(LScalarTable.AndNotI32x4), Pointer(LRISCVVTable.AndNotI32x4));
+    'vand.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.AndNotI32x4), Pointer(LRISCVVTable.CoreVectors.AndNotI32x4));
   AssertAsmConditionalI32x4IntegerSlot('ShiftLeftI32x4', 'function RISCVVShiftLeftI32x4(const a: TVecI32x4; count: Integer): TVecI32x4;',
     'RISCVVShiftLeftI32x4Asm(a, count, Result);', 'procedure RISCVVShiftLeftI32x4Asm(const a: TVecI32x4; count: Integer; var r: TVecI32x4);',
-    'vsll.vx v0, v0, a1', Pointer(LScalarTable.ShiftLeftI32x4), Pointer(LRISCVVTable.ShiftLeftI32x4));
+    'vsll.vx v0, v0, a1', Pointer(LScalarTable.CoreVectors.ShiftLeftI32x4), Pointer(LRISCVVTable.CoreVectors.ShiftLeftI32x4));
   AssertAsmConditionalI32x4IntegerSlot('ShiftRightI32x4', 'function RISCVVShiftRightI32x4(const a: TVecI32x4; count: Integer): TVecI32x4;',
     'RISCVVShiftRightI32x4Asm(a, count, Result);', 'procedure RISCVVShiftRightI32x4Asm(const a: TVecI32x4; count: Integer; var r: TVecI32x4);',
-    'vsrl.vx v0, v0, a1', Pointer(LScalarTable.ShiftRightI32x4), Pointer(LRISCVVTable.ShiftRightI32x4));
+    'vsrl.vx v0, v0, a1', Pointer(LScalarTable.CoreVectors.ShiftRightI32x4), Pointer(LRISCVVTable.CoreVectors.ShiftRightI32x4));
   AssertAsmConditionalI32x4IntegerSlot('ShiftRightArithI32x4', 'function RISCVVShiftRightArithI32x4(const a: TVecI32x4; count: Integer): TVecI32x4;',
     'RISCVVShiftRightArithI32x4Asm(a, count, Result);', 'procedure RISCVVShiftRightArithI32x4Asm(const a: TVecI32x4; count: Integer; var r: TVecI32x4);',
-    'vsra.vx v0, v0, a1', Pointer(LScalarTable.ShiftRightArithI32x4), Pointer(LRISCVVTable.ShiftRightArithI32x4));
+    'vsra.vx v0, v0, a1', Pointer(LScalarTable.CoreVectors.ShiftRightArithI32x4), Pointer(LRISCVVTable.CoreVectors.ShiftRightArithI32x4));
   AssertAsmConditionalI32x4IntegerSlot('MinI32x4', 'function RISCVVMinI32x4(const a, b: TVecI32x4): TVecI32x4;',
     'RISCVVMinI32x4Asm(a, b, Result);', 'procedure RISCVVMinI32x4Asm(const a, b: TVecI32x4; var r: TVecI32x4);',
-    'vmin.vv v0, v0, v1', Pointer(LScalarTable.MinI32x4), Pointer(LRISCVVTable.MinI32x4));
+    'vmin.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MinI32x4), Pointer(LRISCVVTable.CoreVectors.MinI32x4));
   AssertAsmConditionalI32x4IntegerSlot('MaxI32x4', 'function RISCVVMaxI32x4(const a, b: TVecI32x4): TVecI32x4;',
     'RISCVVMaxI32x4Asm(a, b, Result);', 'procedure RISCVVMaxI32x4Asm(const a, b: TVecI32x4; var r: TVecI32x4);',
-    'vmax.vv v0, v0, v1', Pointer(LScalarTable.MaxI32x4), Pointer(LRISCVVTable.MaxI32x4));
+    'vmax.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MaxI32x4), Pointer(LRISCVVTable.CoreVectors.MaxI32x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_I64x2ConditionalIntegerSlots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -10843,12 +10843,12 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('AddI64x2', 'table.AddI64x2 := @RISCVVAddI64x2;');
-  AssertRegisterHasAsmOwnedSlot('SubI64x2', 'table.SubI64x2 := @RISCVVSubI64x2;');
-  AssertRegisterHasAsmOwnedSlot('AndI64x2', 'table.AndI64x2 := @RISCVVAndI64x2;');
-  AssertRegisterHasAsmOwnedSlot('OrI64x2', 'table.OrI64x2 := @RISCVVOrI64x2;');
-  AssertRegisterHasAsmOwnedSlot('XorI64x2', 'table.XorI64x2 := @RISCVVXorI64x2;');
-  AssertRegisterHasAsmOwnedSlot('NotI64x2', 'table.NotI64x2 := @RISCVVNotI64x2;');
+  AssertRegisterHasAsmOwnedSlot('AddI64x2', 'table.CoreVectors.AddI64x2 := @RISCVVAddI64x2;');
+  AssertRegisterHasAsmOwnedSlot('SubI64x2', 'table.CoreVectors.SubI64x2 := @RISCVVSubI64x2;');
+  AssertRegisterHasAsmOwnedSlot('AndI64x2', 'table.CoreVectors.AndI64x2 := @RISCVVAndI64x2;');
+  AssertRegisterHasAsmOwnedSlot('OrI64x2', 'table.CoreVectors.OrI64x2 := @RISCVVOrI64x2;');
+  AssertRegisterHasAsmOwnedSlot('XorI64x2', 'table.CoreVectors.XorI64x2 := @RISCVVXorI64x2;');
+  AssertRegisterHasAsmOwnedSlot('NotI64x2', 'table.CoreVectors.NotI64x2 := @RISCVVNotI64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -10861,22 +10861,22 @@ begin
 
   AssertAsmConditionalI64x2IntegerSlot('AddI64x2', 'function RISCVVAddI64x2(const a, b: TVecI64x2): TVecI64x2;',
     'RISCVVAddI64x2Asm(a, b, Result);', 'procedure RISCVVAddI64x2Asm(const a, b: TVecI64x2; var r: TVecI64x2);',
-    'vadd.vv v0, v0, v1', Pointer(LScalarTable.AddI64x2), Pointer(LRISCVVTable.AddI64x2));
+    'vadd.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.AddI64x2), Pointer(LRISCVVTable.CoreVectors.AddI64x2));
   AssertAsmConditionalI64x2IntegerSlot('SubI64x2', 'function RISCVVSubI64x2(const a, b: TVecI64x2): TVecI64x2;',
     'RISCVVSubI64x2Asm(a, b, Result);', 'procedure RISCVVSubI64x2Asm(const a, b: TVecI64x2; var r: TVecI64x2);',
-    'vsub.vv v0, v0, v1', Pointer(LScalarTable.SubI64x2), Pointer(LRISCVVTable.SubI64x2));
+    'vsub.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.SubI64x2), Pointer(LRISCVVTable.CoreVectors.SubI64x2));
   AssertAsmConditionalI64x2IntegerSlot('AndI64x2', 'function RISCVVAndI64x2(const a, b: TVecI64x2): TVecI64x2;',
     'RISCVVAndI64x2Asm(a, b, Result);', 'procedure RISCVVAndI64x2Asm(const a, b: TVecI64x2; var r: TVecI64x2);',
-    'vand.vv v0, v0, v1', Pointer(LScalarTable.AndI64x2), Pointer(LRISCVVTable.AndI64x2));
+    'vand.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.AndI64x2), Pointer(LRISCVVTable.CoreVectors.AndI64x2));
   AssertAsmConditionalI64x2IntegerSlot('OrI64x2', 'function RISCVVOrI64x2(const a, b: TVecI64x2): TVecI64x2;',
     'RISCVVOrI64x2Asm(a, b, Result);', 'procedure RISCVVOrI64x2Asm(const a, b: TVecI64x2; var r: TVecI64x2);',
-    'vor.vv v0, v0, v1', Pointer(LScalarTable.OrI64x2), Pointer(LRISCVVTable.OrI64x2));
+    'vor.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.OrI64x2), Pointer(LRISCVVTable.CoreVectors.OrI64x2));
   AssertAsmConditionalI64x2IntegerSlot('XorI64x2', 'function RISCVVXorI64x2(const a, b: TVecI64x2): TVecI64x2;',
     'RISCVVXorI64x2Asm(a, b, Result);', 'procedure RISCVVXorI64x2Asm(const a, b: TVecI64x2; var r: TVecI64x2);',
-    'vxor.vv v0, v0, v1', Pointer(LScalarTable.XorI64x2), Pointer(LRISCVVTable.XorI64x2));
+    'vxor.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.XorI64x2), Pointer(LRISCVVTable.CoreVectors.XorI64x2));
   AssertAsmConditionalI64x2IntegerSlot('NotI64x2', 'function RISCVVNotI64x2(const a: TVecI64x2): TVecI64x2;',
     'RISCVVNotI64x2Asm(a, Result);', 'procedure RISCVVNotI64x2Asm(const a: TVecI64x2; var r: TVecI64x2);',
-    'vxor.vi v0, v0, -1', Pointer(LScalarTable.NotI64x2), Pointer(LRISCVVTable.NotI64x2));
+    'vxor.vi v0, v0, -1', Pointer(LScalarTable.CoreVectors.NotI64x2), Pointer(LRISCVVTable.CoreVectors.NotI64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_U32x4ConditionalIntegerSlots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -10952,17 +10952,17 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('AddU32x4', 'table.AddU32x4 := @RISCVVAddU32x4;');
-  AssertRegisterHasAsmOwnedSlot('SubU32x4', 'table.SubU32x4 := @RISCVVSubU32x4;');
-  AssertRegisterHasAsmOwnedSlot('MulU32x4', 'table.MulU32x4 := @RISCVVMulU32x4;');
-  AssertRegisterHasAsmOwnedSlot('AndU32x4', 'table.AndU32x4 := @RISCVVAndU32x4;');
-  AssertRegisterHasAsmOwnedSlot('OrU32x4', 'table.OrU32x4 := @RISCVVOrU32x4;');
-  AssertRegisterHasAsmOwnedSlot('XorU32x4', 'table.XorU32x4 := @RISCVVXorU32x4;');
-  AssertRegisterHasAsmOwnedSlot('NotU32x4', 'table.NotU32x4 := @RISCVVNotU32x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftLeftU32x4', 'table.ShiftLeftU32x4 := @RISCVVShiftLeftU32x4;');
-  AssertRegisterHasAsmOwnedSlot('ShiftRightU32x4', 'table.ShiftRightU32x4 := @RISCVVShiftRightU32x4;');
-  AssertRegisterHasAsmOwnedSlot('MinU32x4', 'table.MinU32x4 := @RISCVVMinU32x4;');
-  AssertRegisterHasAsmOwnedSlot('MaxU32x4', 'table.MaxU32x4 := @RISCVVMaxU32x4;');
+  AssertRegisterHasAsmOwnedSlot('AddU32x4', 'table.CoreVectors.AddU32x4 := @RISCVVAddU32x4;');
+  AssertRegisterHasAsmOwnedSlot('SubU32x4', 'table.CoreVectors.SubU32x4 := @RISCVVSubU32x4;');
+  AssertRegisterHasAsmOwnedSlot('MulU32x4', 'table.CoreVectors.MulU32x4 := @RISCVVMulU32x4;');
+  AssertRegisterHasAsmOwnedSlot('AndU32x4', 'table.CoreVectors.AndU32x4 := @RISCVVAndU32x4;');
+  AssertRegisterHasAsmOwnedSlot('OrU32x4', 'table.CoreVectors.OrU32x4 := @RISCVVOrU32x4;');
+  AssertRegisterHasAsmOwnedSlot('XorU32x4', 'table.CoreVectors.XorU32x4 := @RISCVVXorU32x4;');
+  AssertRegisterHasAsmOwnedSlot('NotU32x4', 'table.CoreVectors.NotU32x4 := @RISCVVNotU32x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftLeftU32x4', 'table.CoreVectors.ShiftLeftU32x4 := @RISCVVShiftLeftU32x4;');
+  AssertRegisterHasAsmOwnedSlot('ShiftRightU32x4', 'table.CoreVectors.ShiftRightU32x4 := @RISCVVShiftRightU32x4;');
+  AssertRegisterHasAsmOwnedSlot('MinU32x4', 'table.CoreVectors.MinU32x4 := @RISCVVMinU32x4;');
+  AssertRegisterHasAsmOwnedSlot('MaxU32x4', 'table.CoreVectors.MaxU32x4 := @RISCVVMaxU32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -10975,37 +10975,37 @@ begin
 
   AssertAsmConditionalU32x4IntegerSlot('AddU32x4', 'function RISCVVAddU32x4(const a, b: TVecU32x4): TVecU32x4;',
     'RISCVVAddU32x4Asm(a, b, Result);', 'procedure RISCVVAddU32x4Asm(const a, b: TVecU32x4; var r: TVecU32x4);',
-    'vadd.vv v0, v0, v1', Pointer(LScalarTable.AddU32x4), Pointer(LRISCVVTable.AddU32x4));
+    'vadd.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.AddU32x4), Pointer(LRISCVVTable.CoreVectors.AddU32x4));
   AssertAsmConditionalU32x4IntegerSlot('SubU32x4', 'function RISCVVSubU32x4(const a, b: TVecU32x4): TVecU32x4;',
     'RISCVVSubU32x4Asm(a, b, Result);', 'procedure RISCVVSubU32x4Asm(const a, b: TVecU32x4; var r: TVecU32x4);',
-    'vsub.vv v0, v0, v1', Pointer(LScalarTable.SubU32x4), Pointer(LRISCVVTable.SubU32x4));
+    'vsub.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.SubU32x4), Pointer(LRISCVVTable.CoreVectors.SubU32x4));
   AssertAsmConditionalU32x4IntegerSlot('MulU32x4', 'function RISCVVMulU32x4(const a, b: TVecU32x4): TVecU32x4;',
     'RISCVVMulU32x4Asm(a, b, Result);', 'procedure RISCVVMulU32x4Asm(const a, b: TVecU32x4; var r: TVecU32x4);',
-    'vmul.vv v0, v0, v1', Pointer(LScalarTable.MulU32x4), Pointer(LRISCVVTable.MulU32x4));
+    'vmul.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MulU32x4), Pointer(LRISCVVTable.CoreVectors.MulU32x4));
   AssertAsmConditionalU32x4IntegerSlot('AndU32x4', 'function RISCVVAndU32x4(const a, b: TVecU32x4): TVecU32x4;',
     'RISCVVAndU32x4Asm(a, b, Result);', 'procedure RISCVVAndU32x4Asm(const a, b: TVecU32x4; var r: TVecU32x4);',
-    'vand.vv v0, v0, v1', Pointer(LScalarTable.AndU32x4), Pointer(LRISCVVTable.AndU32x4));
+    'vand.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.AndU32x4), Pointer(LRISCVVTable.CoreVectors.AndU32x4));
   AssertAsmConditionalU32x4IntegerSlot('OrU32x4', 'function RISCVVOrU32x4(const a, b: TVecU32x4): TVecU32x4;',
     'RISCVVOrU32x4Asm(a, b, Result);', 'procedure RISCVVOrU32x4Asm(const a, b: TVecU32x4; var r: TVecU32x4);',
-    'vor.vv v0, v0, v1', Pointer(LScalarTable.OrU32x4), Pointer(LRISCVVTable.OrU32x4));
+    'vor.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.OrU32x4), Pointer(LRISCVVTable.CoreVectors.OrU32x4));
   AssertAsmConditionalU32x4IntegerSlot('XorU32x4', 'function RISCVVXorU32x4(const a, b: TVecU32x4): TVecU32x4;',
     'RISCVVXorU32x4Asm(a, b, Result);', 'procedure RISCVVXorU32x4Asm(const a, b: TVecU32x4; var r: TVecU32x4);',
-    'vxor.vv v0, v0, v1', Pointer(LScalarTable.XorU32x4), Pointer(LRISCVVTable.XorU32x4));
+    'vxor.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.XorU32x4), Pointer(LRISCVVTable.CoreVectors.XorU32x4));
   AssertAsmConditionalU32x4IntegerSlot('NotU32x4', 'function RISCVVNotU32x4(const a: TVecU32x4): TVecU32x4;',
     'RISCVVNotU32x4Asm(a, Result);', 'procedure RISCVVNotU32x4Asm(const a: TVecU32x4; var r: TVecU32x4);',
-    'vxor.vi v0, v0, -1', Pointer(LScalarTable.NotU32x4), Pointer(LRISCVVTable.NotU32x4));
+    'vxor.vi v0, v0, -1', Pointer(LScalarTable.CoreVectors.NotU32x4), Pointer(LRISCVVTable.CoreVectors.NotU32x4));
   AssertAsmConditionalU32x4IntegerSlot('ShiftLeftU32x4', 'function RISCVVShiftLeftU32x4(const a: TVecU32x4; count: Integer): TVecU32x4;',
     'RISCVVShiftLeftU32x4Asm(a, count, Result);', 'procedure RISCVVShiftLeftU32x4Asm(const a: TVecU32x4; count: Integer; var r: TVecU32x4);',
-    'vsll.vx v0, v0, a1', Pointer(LScalarTable.ShiftLeftU32x4), Pointer(LRISCVVTable.ShiftLeftU32x4));
+    'vsll.vx v0, v0, a1', Pointer(LScalarTable.CoreVectors.ShiftLeftU32x4), Pointer(LRISCVVTable.CoreVectors.ShiftLeftU32x4));
   AssertAsmConditionalU32x4IntegerSlot('ShiftRightU32x4', 'function RISCVVShiftRightU32x4(const a: TVecU32x4; count: Integer): TVecU32x4;',
     'RISCVVShiftRightU32x4Asm(a, count, Result);', 'procedure RISCVVShiftRightU32x4Asm(const a: TVecU32x4; count: Integer; var r: TVecU32x4);',
-    'vsrl.vx v0, v0, a1', Pointer(LScalarTable.ShiftRightU32x4), Pointer(LRISCVVTable.ShiftRightU32x4));
+    'vsrl.vx v0, v0, a1', Pointer(LScalarTable.CoreVectors.ShiftRightU32x4), Pointer(LRISCVVTable.CoreVectors.ShiftRightU32x4));
   AssertAsmConditionalU32x4IntegerSlot('MinU32x4', 'function RISCVVMinU32x4(const a, b: TVecU32x4): TVecU32x4;',
     'RISCVVMinU32x4Asm(a, b, Result);', 'procedure RISCVVMinU32x4Asm(const a, b: TVecU32x4; var r: TVecU32x4);',
-    'vminu.vv v0, v0, v1', Pointer(LScalarTable.MinU32x4), Pointer(LRISCVVTable.MinU32x4));
+    'vminu.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MinU32x4), Pointer(LRISCVVTable.CoreVectors.MinU32x4));
   AssertAsmConditionalU32x4IntegerSlot('MaxU32x4', 'function RISCVVMaxU32x4(const a, b: TVecU32x4): TVecU32x4;',
     'RISCVVMaxU32x4Asm(a, b, Result);', 'procedure RISCVVMaxU32x4Asm(const a, b: TVecU32x4; var r: TVecU32x4);',
-    'vmaxu.vv v0, v0, v1', Pointer(LScalarTable.MaxU32x4), Pointer(LRISCVVTable.MaxU32x4));
+    'vmaxu.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MaxU32x4), Pointer(LRISCVVTable.CoreVectors.MaxU32x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_I32x4CompareSlots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -11079,12 +11079,12 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('CmpEqI32x4', 'table.CmpEqI32x4 := @RISCVVCmpEqI32x4;');
-  AssertRegisterHasAsmOwnedSlot('CmpLtI32x4', 'table.CmpLtI32x4 := @RISCVVCmpLtI32x4;');
-  AssertRegisterHasAsmOwnedSlot('CmpGtI32x4', 'table.CmpGtI32x4 := @RISCVVCmpGtI32x4;');
-  AssertRegisterHasAsmOwnedSlot('CmpLeI32x4', 'table.CmpLeI32x4 := @RISCVVCmpLeI32x4;');
-  AssertRegisterHasAsmOwnedSlot('CmpGeI32x4', 'table.CmpGeI32x4 := @RISCVVCmpGeI32x4;');
-  AssertRegisterHasAsmOwnedSlot('CmpNeI32x4', 'table.CmpNeI32x4 := @RISCVVCmpNeI32x4;');
+  AssertRegisterHasAsmOwnedSlot('CmpEqI32x4', 'table.CoreVectors.CmpEqI32x4 := @RISCVVCmpEqI32x4;');
+  AssertRegisterHasAsmOwnedSlot('CmpLtI32x4', 'table.CoreVectors.CmpLtI32x4 := @RISCVVCmpLtI32x4;');
+  AssertRegisterHasAsmOwnedSlot('CmpGtI32x4', 'table.CoreVectors.CmpGtI32x4 := @RISCVVCmpGtI32x4;');
+  AssertRegisterHasAsmOwnedSlot('CmpLeI32x4', 'table.CoreVectors.CmpLeI32x4 := @RISCVVCmpLeI32x4;');
+  AssertRegisterHasAsmOwnedSlot('CmpGeI32x4', 'table.CoreVectors.CmpGeI32x4 := @RISCVVCmpGeI32x4;');
+  AssertRegisterHasAsmOwnedSlot('CmpNeI32x4', 'table.CoreVectors.CmpNeI32x4 := @RISCVVCmpNeI32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -11096,17 +11096,17 @@ begin
   {$ENDIF}
 
   AssertAsmConditionalI32x4CompareSlot('CmpEqI32x4', 'function RISCVVCmpEqI32x4(const a, b: TVecI32x4): TMask4;',
-    'vmseq.vv v0, v0, v1', Pointer(LScalarTable.CmpEqI32x4), Pointer(LRISCVVTable.CmpEqI32x4));
+    'vmseq.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.CmpEqI32x4), Pointer(LRISCVVTable.CoreVectors.CmpEqI32x4));
   AssertAsmConditionalI32x4CompareSlot('CmpLtI32x4', 'function RISCVVCmpLtI32x4(const a, b: TVecI32x4): TMask4;',
-    'vmslt.vv v0, v0, v1', Pointer(LScalarTable.CmpLtI32x4), Pointer(LRISCVVTable.CmpLtI32x4));
+    'vmslt.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.CmpLtI32x4), Pointer(LRISCVVTable.CoreVectors.CmpLtI32x4));
   AssertAsmConditionalI32x4CompareSlot('CmpGtI32x4', 'function RISCVVCmpGtI32x4(const a, b: TVecI32x4): TMask4;',
-    'vmslt.vv v0, v1, v0', Pointer(LScalarTable.CmpGtI32x4), Pointer(LRISCVVTable.CmpGtI32x4));
+    'vmslt.vv v0, v1, v0', Pointer(LScalarTable.CoreVectors.CmpGtI32x4), Pointer(LRISCVVTable.CoreVectors.CmpGtI32x4));
   AssertAsmConditionalI32x4CompareSlot('CmpLeI32x4', 'function RISCVVCmpLeI32x4(const a, b: TVecI32x4): TMask4;',
-    'vmsle.vv v0, v0, v1', Pointer(LScalarTable.CmpLeI32x4), Pointer(LRISCVVTable.CmpLeI32x4));
+    'vmsle.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.CmpLeI32x4), Pointer(LRISCVVTable.CoreVectors.CmpLeI32x4));
   AssertAsmConditionalI32x4CompareSlot('CmpGeI32x4', 'function RISCVVCmpGeI32x4(const a, b: TVecI32x4): TMask4;',
-    'vmnand.mm v0, v0, v0', Pointer(LScalarTable.CmpGeI32x4), Pointer(LRISCVVTable.CmpGeI32x4));
+    'vmnand.mm v0, v0, v0', Pointer(LScalarTable.CoreVectors.CmpGeI32x4), Pointer(LRISCVVTable.CoreVectors.CmpGeI32x4));
   AssertAsmConditionalI32x4CompareSlot('CmpNeI32x4', 'function RISCVVCmpNeI32x4(const a, b: TVecI32x4): TMask4;',
-    'vmsne.vv v0, v0, v1', Pointer(LScalarTable.CmpNeI32x4), Pointer(LRISCVVTable.CmpNeI32x4));
+    'vmsne.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.CmpNeI32x4), Pointer(LRISCVVTable.CoreVectors.CmpNeI32x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_I64x2CompareSlots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -11180,12 +11180,12 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('CmpEqI64x2', 'table.CmpEqI64x2 := @RISCVVCmpEqI64x2;');
-  AssertRegisterHasAsmOwnedSlot('CmpLtI64x2', 'table.CmpLtI64x2 := @RISCVVCmpLtI64x2;');
-  AssertRegisterHasAsmOwnedSlot('CmpGtI64x2', 'table.CmpGtI64x2 := @RISCVVCmpGtI64x2;');
-  AssertRegisterHasAsmOwnedSlot('CmpLeI64x2', 'table.CmpLeI64x2 := @RISCVVCmpLeI64x2;');
-  AssertRegisterHasAsmOwnedSlot('CmpGeI64x2', 'table.CmpGeI64x2 := @RISCVVCmpGeI64x2;');
-  AssertRegisterHasAsmOwnedSlot('CmpNeI64x2', 'table.CmpNeI64x2 := @RISCVVCmpNeI64x2;');
+  AssertRegisterHasAsmOwnedSlot('CmpEqI64x2', 'table.CoreVectors.CmpEqI64x2 := @RISCVVCmpEqI64x2;');
+  AssertRegisterHasAsmOwnedSlot('CmpLtI64x2', 'table.CoreVectors.CmpLtI64x2 := @RISCVVCmpLtI64x2;');
+  AssertRegisterHasAsmOwnedSlot('CmpGtI64x2', 'table.CoreVectors.CmpGtI64x2 := @RISCVVCmpGtI64x2;');
+  AssertRegisterHasAsmOwnedSlot('CmpLeI64x2', 'table.CoreVectors.CmpLeI64x2 := @RISCVVCmpLeI64x2;');
+  AssertRegisterHasAsmOwnedSlot('CmpGeI64x2', 'table.CoreVectors.CmpGeI64x2 := @RISCVVCmpGeI64x2;');
+  AssertRegisterHasAsmOwnedSlot('CmpNeI64x2', 'table.CoreVectors.CmpNeI64x2 := @RISCVVCmpNeI64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -11197,17 +11197,17 @@ begin
   {$ENDIF}
 
   AssertAsmConditionalI64x2CompareSlot('CmpEqI64x2', 'function RISCVVCmpEqI64x2(const a, b: TVecI64x2): TMask2;',
-    'vmseq.vv v0, v0, v1', Pointer(LScalarTable.CmpEqI64x2), Pointer(LRISCVVTable.CmpEqI64x2));
+    'vmseq.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.CmpEqI64x2), Pointer(LRISCVVTable.CoreVectors.CmpEqI64x2));
   AssertAsmConditionalI64x2CompareSlot('CmpLtI64x2', 'function RISCVVCmpLtI64x2(const a, b: TVecI64x2): TMask2;',
-    'vmslt.vv v0, v0, v1', Pointer(LScalarTable.CmpLtI64x2), Pointer(LRISCVVTable.CmpLtI64x2));
+    'vmslt.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.CmpLtI64x2), Pointer(LRISCVVTable.CoreVectors.CmpLtI64x2));
   AssertAsmConditionalI64x2CompareSlot('CmpGtI64x2', 'function RISCVVCmpGtI64x2(const a, b: TVecI64x2): TMask2;',
-    'vmslt.vv v0, v1, v0', Pointer(LScalarTable.CmpGtI64x2), Pointer(LRISCVVTable.CmpGtI64x2));
+    'vmslt.vv v0, v1, v0', Pointer(LScalarTable.CoreVectors.CmpGtI64x2), Pointer(LRISCVVTable.CoreVectors.CmpGtI64x2));
   AssertAsmConditionalI64x2CompareSlot('CmpLeI64x2', 'function RISCVVCmpLeI64x2(const a, b: TVecI64x2): TMask2;',
-    'vmsle.vv v0, v0, v1', Pointer(LScalarTable.CmpLeI64x2), Pointer(LRISCVVTable.CmpLeI64x2));
+    'vmsle.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.CmpLeI64x2), Pointer(LRISCVVTable.CoreVectors.CmpLeI64x2));
   AssertAsmConditionalI64x2CompareSlot('CmpGeI64x2', 'function RISCVVCmpGeI64x2(const a, b: TVecI64x2): TMask2;',
-    'vmsle.vv v0, v1, v0', Pointer(LScalarTable.CmpGeI64x2), Pointer(LRISCVVTable.CmpGeI64x2));
+    'vmsle.vv v0, v1, v0', Pointer(LScalarTable.CoreVectors.CmpGeI64x2), Pointer(LRISCVVTable.CoreVectors.CmpGeI64x2));
   AssertAsmConditionalI64x2CompareSlot('CmpNeI64x2', 'function RISCVVCmpNeI64x2(const a, b: TVecI64x2): TMask2;',
-    'vmsne.vv v0, v0, v1', Pointer(LScalarTable.CmpNeI64x2), Pointer(LRISCVVTable.CmpNeI64x2));
+    'vmsne.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.CmpNeI64x2), Pointer(LRISCVVTable.CoreVectors.CmpNeI64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_ExactF32x4Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -11283,12 +11283,12 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('AbsF32x4', 'table.AbsF32x4 := @RISCVVAbsF32x4;');
-  AssertRegisterHasAsmOwnedSlot('SqrtF32x4', 'table.SqrtF32x4 := @RISCVVSqrtF32x4;');
-  AssertRegisterHasAsmOwnedSlot('FmaF32x4', 'table.FmaF32x4 := @RISCVVFmaF32x4;');
-  AssertRegisterHasAsmOwnedSlot('RcpF32x4', 'table.RcpF32x4 := @RISCVVRcpF32x4;');
-  AssertRegisterHasAsmOwnedSlot('RsqrtF32x4', 'table.RsqrtF32x4 := @RISCVVRsqrtF32x4;');
-  AssertRegisterHasAsmOwnedSlot('ClampF32x4', 'table.ClampF32x4 := @RISCVVClampF32x4;');
+  AssertRegisterHasAsmOwnedSlot('AbsF32x4', 'table.CoreVectors.AbsF32x4 := @RISCVVAbsF32x4;');
+  AssertRegisterHasAsmOwnedSlot('SqrtF32x4', 'table.CoreVectors.SqrtF32x4 := @RISCVVSqrtF32x4;');
+  AssertRegisterHasAsmOwnedSlot('FmaF32x4', 'table.CoreVectors.FmaF32x4 := @RISCVVFmaF32x4;');
+  AssertRegisterHasAsmOwnedSlot('RcpF32x4', 'table.CoreVectors.RcpF32x4 := @RISCVVRcpF32x4;');
+  AssertRegisterHasAsmOwnedSlot('RsqrtF32x4', 'table.CoreVectors.RsqrtF32x4 := @RISCVVRsqrtF32x4;');
+  AssertRegisterHasAsmOwnedSlot('ClampF32x4', 'table.CoreVectors.ClampF32x4 := @RISCVVClampF32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -11301,22 +11301,22 @@ begin
 
   AssertAsmConditionalExactF32x4Slot('AbsF32x4', 'function RISCVVAbsF32x4(const a: TVecF32x4): TVecF32x4;',
     'RISCVVAbsF32x4Asm(a, Result);', 'procedure RISCVVAbsF32x4Asm(const a: TVecF32x4; var r: TVecF32x4);',
-    'vfsgnjx.vv v0, v0, v0', Pointer(LScalarTable.AbsF32x4), Pointer(LRISCVVTable.AbsF32x4));
+    'vfsgnjx.vv v0, v0, v0', Pointer(LScalarTable.CoreVectors.AbsF32x4), Pointer(LRISCVVTable.CoreVectors.AbsF32x4));
   AssertAsmConditionalExactF32x4Slot('SqrtF32x4', 'function RISCVVSqrtF32x4(const a: TVecF32x4): TVecF32x4;',
     'RISCVVSqrtF32x4Asm(a, Result);', 'procedure RISCVVSqrtF32x4Asm(const a: TVecF32x4; var r: TVecF32x4);',
-    'vfsqrt.v v0, v0', Pointer(LScalarTable.SqrtF32x4), Pointer(LRISCVVTable.SqrtF32x4));
+    'vfsqrt.v v0, v0', Pointer(LScalarTable.CoreVectors.SqrtF32x4), Pointer(LRISCVVTable.CoreVectors.SqrtF32x4));
   AssertAsmConditionalExactF32x4Slot('FmaF32x4', 'function RISCVVFmaF32x4(const a, b, c: TVecF32x4): TVecF32x4;',
     'RISCVVFmaF32x4Asm(a, b, c, Result);', 'procedure RISCVVFmaF32x4Asm(const a, b, c: TVecF32x4; var r: TVecF32x4);',
-    'vfmacc.vv v2, v0, v1', Pointer(LScalarTable.FmaF32x4), Pointer(LRISCVVTable.FmaF32x4));
+    'vfmacc.vv v2, v0, v1', Pointer(LScalarTable.CoreVectors.FmaF32x4), Pointer(LRISCVVTable.CoreVectors.FmaF32x4));
   AssertAsmConditionalExactF32x4Slot('RcpF32x4', 'function RISCVVRcpF32x4(const a: TVecF32x4): TVecF32x4;',
     'RISCVVRcpF32x4Asm(a, Result);', 'procedure RISCVVRcpF32x4Asm(const a: TVecF32x4; var r: TVecF32x4);',
-    'vfrec7.v v0, v0', Pointer(LScalarTable.RcpF32x4), Pointer(LRISCVVTable.RcpF32x4));
+    'vfrec7.v v0, v0', Pointer(LScalarTable.CoreVectors.RcpF32x4), Pointer(LRISCVVTable.CoreVectors.RcpF32x4));
   AssertAsmConditionalExactF32x4Slot('RsqrtF32x4', 'function RISCVVRsqrtF32x4(const a: TVecF32x4): TVecF32x4;',
     'RISCVVRsqrtF32x4Asm(a, Result);', 'procedure RISCVVRsqrtF32x4Asm(const a: TVecF32x4; var r: TVecF32x4);',
-    'vfrsqrt7.v v0, v0', Pointer(LScalarTable.RsqrtF32x4), Pointer(LRISCVVTable.RsqrtF32x4));
+    'vfrsqrt7.v v0, v0', Pointer(LScalarTable.CoreVectors.RsqrtF32x4), Pointer(LRISCVVTable.CoreVectors.RsqrtF32x4));
   AssertAsmConditionalExactF32x4Slot('ClampF32x4', 'function RISCVVClampF32x4(const a, minVal, maxVal: TVecF32x4): TVecF32x4;',
     'RISCVVClampF32x4Asm(a, minVal, maxVal, Result);', 'procedure RISCVVClampF32x4Asm(const a, minVal, maxVal: TVecF32x4; var r: TVecF32x4);',
-    'vfmin.vv v0, v0, v2', Pointer(LScalarTable.ClampF32x4), Pointer(LRISCVVTable.ClampF32x4));
+    'vfmin.vv v0, v0, v2', Pointer(LScalarTable.CoreVectors.ClampF32x4), Pointer(LRISCVVTable.CoreVectors.ClampF32x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_F32x4UtilitySlots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -11392,12 +11392,12 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('LoadF32x4', 'table.LoadF32x4 := @RISCVVLoadF32x4;');
-  AssertRegisterHasAsmOwnedSlot('LoadF32x4Aligned', 'table.LoadF32x4Aligned := @RISCVVLoadF32x4Aligned;');
-  AssertRegisterHasAsmOwnedSlot('SplatF32x4', 'table.SplatF32x4 := @RISCVVSplatF32x4;');
-  AssertRegisterHasAsmOwnedSlot('ZeroF32x4', 'table.ZeroF32x4 := @RISCVVZeroF32x4;');
-  AssertRegisterHasAsmOwnedSlot('SelectF32x4', 'table.SelectF32x4 := @RISCVVSelectF32x4;');
-  AssertRegisterHasAsmOwnedSlot('InsertF32x4', 'table.InsertF32x4 := @RISCVVInsertF32x4;');
+  AssertRegisterHasAsmOwnedSlot('LoadF32x4', 'table.CoreVectors.LoadF32x4 := @RISCVVLoadF32x4;');
+  AssertRegisterHasAsmOwnedSlot('LoadF32x4Aligned', 'table.CoreVectors.LoadF32x4Aligned := @RISCVVLoadF32x4Aligned;');
+  AssertRegisterHasAsmOwnedSlot('SplatF32x4', 'table.CoreVectors.SplatF32x4 := @RISCVVSplatF32x4;');
+  AssertRegisterHasAsmOwnedSlot('ZeroF32x4', 'table.CoreVectors.ZeroF32x4 := @RISCVVZeroF32x4;');
+  AssertRegisterHasAsmOwnedSlot('SelectF32x4', 'table.CoreVectors.SelectF32x4 := @RISCVVSelectF32x4;');
+  AssertRegisterHasAsmOwnedSlot('InsertF32x4', 'table.CoreVectors.InsertF32x4 := @RISCVVInsertF32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -11410,22 +11410,22 @@ begin
 
   AssertAsmConditionalUtilityF32x4Slot('LoadF32x4', 'function RISCVVLoadF32x4(p: PSingle): TVecF32x4;',
     'RISCVVLoadF32x4Asm(p, Result);', 'procedure RISCVVLoadF32x4Asm(p: PSingle; var r: TVecF32x4);',
-    'vle32.v v0, (a0)', Pointer(LScalarTable.LoadF32x4), Pointer(LRISCVVTable.LoadF32x4));
+    'vle32.v v0, (a0)', Pointer(LScalarTable.CoreVectors.LoadF32x4), Pointer(LRISCVVTable.CoreVectors.LoadF32x4));
   AssertAsmConditionalUtilityF32x4Slot('LoadF32x4Aligned', 'function RISCVVLoadF32x4Aligned(p: PSingle): TVecF32x4;',
     'RISCVVLoadF32x4AlignedAsm(p, Result);', 'procedure RISCVVLoadF32x4AlignedAsm(p: PSingle; var r: TVecF32x4);',
-    'vle32.v v0, (a0)', Pointer(LScalarTable.LoadF32x4Aligned), Pointer(LRISCVVTable.LoadF32x4Aligned));
+    'vle32.v v0, (a0)', Pointer(LScalarTable.CoreVectors.LoadF32x4Aligned), Pointer(LRISCVVTable.CoreVectors.LoadF32x4Aligned));
   AssertAsmConditionalUtilityF32x4Slot('SplatF32x4', 'function RISCVVSplatF32x4(value: Single): TVecF32x4;',
     'RISCVVSplatF32x4Asm(value, Result);', 'procedure RISCVVSplatF32x4Asm(value: Single; var r: TVecF32x4);',
-    'vfmv.v.f v0, f10', Pointer(LScalarTable.SplatF32x4), Pointer(LRISCVVTable.SplatF32x4));
+    'vfmv.v.f v0, f10', Pointer(LScalarTable.CoreVectors.SplatF32x4), Pointer(LRISCVVTable.CoreVectors.SplatF32x4));
   AssertAsmConditionalUtilityF32x4Slot('ZeroF32x4', 'function RISCVVZeroF32x4: TVecF32x4;',
     'RISCVVZeroF32x4Asm(Result);', 'procedure RISCVVZeroF32x4Asm(var r: TVecF32x4);',
-    'vmv.v.i v0, 0', Pointer(LScalarTable.ZeroF32x4), Pointer(LRISCVVTable.ZeroF32x4));
+    'vmv.v.i v0, 0', Pointer(LScalarTable.CoreVectors.ZeroF32x4), Pointer(LRISCVVTable.CoreVectors.ZeroF32x4));
   AssertAsmConditionalUtilityF32x4Slot('SelectF32x4', 'function RISCVVSelectF32x4(const mask: TMask4; const a, b: TVecF32x4): TVecF32x4;',
     'RISCVVSelectF32x4Asm(mask, a, b, Result);', 'procedure RISCVVSelectF32x4Asm(const mask: TMask4; const a, b: TVecF32x4; var r: TVecF32x4);',
-    'vmerge.vvm v1, v2, v1, v0', Pointer(LScalarTable.SelectF32x4), Pointer(LRISCVVTable.SelectF32x4));
+    'vmerge.vvm v1, v2, v1, v0', Pointer(LScalarTable.CoreVectors.SelectF32x4), Pointer(LRISCVVTable.CoreVectors.SelectF32x4));
   AssertAsmConditionalUtilityF32x4Slot('InsertF32x4', 'function RISCVVInsertF32x4(const a: TVecF32x4; value: Single; index: Integer): TVecF32x4;',
     'RISCVVInsertF32x4Asm(a, value, LIndex, Result);', 'procedure RISCVVInsertF32x4Asm(const a: TVecF32x4; value: Single; index: Integer; var r: TVecF32x4);',
-    'fsw f10, (t0)', Pointer(LScalarTable.InsertF32x4), Pointer(LRISCVVTable.InsertF32x4));
+    'fsw f10, (t0)', Pointer(LScalarTable.CoreVectors.InsertF32x4), Pointer(LRISCVVTable.CoreVectors.InsertF32x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_F64x2UtilitySlots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -11501,11 +11501,11 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('LoadF64x2', 'table.LoadF64x2 := @RISCVVLoadF64x2;');
-  AssertRegisterHasAsmOwnedSlot('SplatF64x2', 'table.SplatF64x2 := @RISCVVSplatF64x2;');
-  AssertRegisterHasAsmOwnedSlot('ZeroF64x2', 'table.ZeroF64x2 := @RISCVVZeroF64x2;');
-  AssertRegisterHasAsmOwnedSlot('InsertF64x2', 'table.InsertF64x2 := @RISCVVInsertF64x2;');
-  AssertRegisterHasAsmOwnedSlot('SelectF64x2', 'table.SelectF64x2 := @RISCVVSelectF64x2;');
+  AssertRegisterHasAsmOwnedSlot('LoadF64x2', 'table.CoreVectors.LoadF64x2 := @RISCVVLoadF64x2;');
+  AssertRegisterHasAsmOwnedSlot('SplatF64x2', 'table.CoreVectors.SplatF64x2 := @RISCVVSplatF64x2;');
+  AssertRegisterHasAsmOwnedSlot('ZeroF64x2', 'table.CoreVectors.ZeroF64x2 := @RISCVVZeroF64x2;');
+  AssertRegisterHasAsmOwnedSlot('InsertF64x2', 'table.CoreVectors.InsertF64x2 := @RISCVVInsertF64x2;');
+  AssertRegisterHasAsmOwnedSlot('SelectF64x2', 'table.CoreVectors.SelectF64x2 := @RISCVVSelectF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -11518,19 +11518,19 @@ begin
 
   AssertAsmConditionalUtilityF64x2Slot('LoadF64x2', 'function RISCVVLoadF64x2(p: PDouble): TVecF64x2;',
     'RISCVVLoadF64x2Asm(p, Result);', 'procedure RISCVVLoadF64x2Asm(p: PDouble; var r: TVecF64x2);',
-    'vle64.v v0, (a0)', Pointer(LScalarTable.LoadF64x2), Pointer(LRISCVVTable.LoadF64x2));
+    'vle64.v v0, (a0)', Pointer(LScalarTable.CoreVectors.LoadF64x2), Pointer(LRISCVVTable.CoreVectors.LoadF64x2));
   AssertAsmConditionalUtilityF64x2Slot('SplatF64x2', 'function RISCVVSplatF64x2(value: Double): TVecF64x2;',
     'RISCVVSplatF64x2Asm(value, Result);', 'procedure RISCVVSplatF64x2Asm(value: Double; var r: TVecF64x2);',
-    'vfmv.v.f v0, f10', Pointer(LScalarTable.SplatF64x2), Pointer(LRISCVVTable.SplatF64x2));
+    'vfmv.v.f v0, f10', Pointer(LScalarTable.CoreVectors.SplatF64x2), Pointer(LRISCVVTable.CoreVectors.SplatF64x2));
   AssertAsmConditionalUtilityF64x2Slot('ZeroF64x2', 'function RISCVVZeroF64x2: TVecF64x2;',
     'RISCVVZeroF64x2Asm(Result);', 'procedure RISCVVZeroF64x2Asm(var r: TVecF64x2);',
-    'vmv.v.i v0, 0', Pointer(LScalarTable.ZeroF64x2), Pointer(LRISCVVTable.ZeroF64x2));
+    'vmv.v.i v0, 0', Pointer(LScalarTable.CoreVectors.ZeroF64x2), Pointer(LRISCVVTable.CoreVectors.ZeroF64x2));
   AssertAsmConditionalUtilityF64x2Slot('InsertF64x2', 'function RISCVVInsertF64x2(const a: TVecF64x2; value: Double; index: Integer): TVecF64x2;',
     'RISCVVInsertF64x2Asm(a, value, LIndex, Result);', 'procedure RISCVVInsertF64x2Asm(const a: TVecF64x2; value: Double; index: Integer; var r: TVecF64x2);',
-    'fsd f10, (t0)', Pointer(LScalarTable.InsertF64x2), Pointer(LRISCVVTable.InsertF64x2));
+    'fsd f10, (t0)', Pointer(LScalarTable.CoreVectors.InsertF64x2), Pointer(LRISCVVTable.CoreVectors.InsertF64x2));
   AssertAsmConditionalUtilityF64x2Slot('SelectF64x2', 'function RISCVVSelectF64x2(const mask: TMask2; const a, b: TVecF64x2): TVecF64x2;',
     'RISCVVSelectF64x2Asm(mask, a, b, Result);', 'procedure RISCVVSelectF64x2Asm(const mask: TMask2; const a, b: TVecF64x2; var r: TVecF64x2);',
-    'vmerge.vvm v1, v2, v1, v0', Pointer(LScalarTable.SelectF64x2), Pointer(LRISCVVTable.SelectF64x2));
+    'vmerge.vvm v1, v2, v1, v0', Pointer(LScalarTable.CoreVectors.SelectF64x2), Pointer(LRISCVVTable.CoreVectors.SelectF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_WideFloatLoadSlots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -11606,10 +11606,10 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('LoadF32x8', 'table.LoadF32x8 := @RISCVVLoadF32x8;');
-  AssertRegisterHasAsmOwnedSlot('LoadF32x16', 'table.LoadF32x16 := @RISCVVLoadF32x16;');
-  AssertRegisterHasAsmOwnedSlot('LoadF64x4', 'table.LoadF64x4 := @RISCVVLoadF64x4;');
-  AssertRegisterHasAsmOwnedSlot('LoadF64x8', 'table.LoadF64x8 := @RISCVVLoadF64x8;');
+  AssertRegisterHasAsmOwnedSlot('LoadF32x8', 'table.CoreVectors.LoadF32x8 := @RISCVVLoadF32x8;');
+  AssertRegisterHasAsmOwnedSlot('LoadF32x16', 'table.CoreVectors.LoadF32x16 := @RISCVVLoadF32x16;');
+  AssertRegisterHasAsmOwnedSlot('LoadF64x4', 'table.CoreVectors.LoadF64x4 := @RISCVVLoadF64x4;');
+  AssertRegisterHasAsmOwnedSlot('LoadF64x8', 'table.CoreVectors.LoadF64x8 := @RISCVVLoadF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -11622,16 +11622,16 @@ begin
 
   AssertAsmConditionalWideLoadSlot('LoadF32x8', 'function RISCVVLoadF32x8(p: PSingle): TVecF32x8;',
     'RISCVVLoadF32x8Asm(p, Result);', 'procedure RISCVVLoadF32x8Asm(p: PSingle; var r: TVecF32x8);',
-    'vsetivli zero, 8, 0xd1', Pointer(LScalarTable.LoadF32x8), Pointer(LRISCVVTable.LoadF32x8));
+    'vsetivli zero, 8, 0xd1', Pointer(LScalarTable.CoreVectors.LoadF32x8), Pointer(LRISCVVTable.CoreVectors.LoadF32x8));
   AssertAsmConditionalWideLoadSlot('LoadF32x16', 'function RISCVVLoadF32x16(p: PSingle): TVecF32x16;',
     'RISCVVLoadF32x16Asm(p, Result);', 'procedure RISCVVLoadF32x16Asm(p: PSingle; var r: TVecF32x16);',
-    'vsetivli zero, 16, 0xd2', Pointer(LScalarTable.LoadF32x16), Pointer(LRISCVVTable.LoadF32x16));
+    'vsetivli zero, 16, 0xd2', Pointer(LScalarTable.CoreVectors.LoadF32x16), Pointer(LRISCVVTable.CoreVectors.LoadF32x16));
   AssertAsmConditionalWideLoadSlot('LoadF64x4', 'function RISCVVLoadF64x4(p: PDouble): TVecF64x4;',
     'RISCVVLoadF64x4Asm(p, Result);', 'procedure RISCVVLoadF64x4Asm(p: PDouble; var r: TVecF64x4);',
-    'vsetivli zero, 4, 0xd9', Pointer(LScalarTable.LoadF64x4), Pointer(LRISCVVTable.LoadF64x4));
+    'vsetivli zero, 4, 0xd9', Pointer(LScalarTable.CoreVectors.LoadF64x4), Pointer(LRISCVVTable.CoreVectors.LoadF64x4));
   AssertAsmConditionalWideLoadSlot('LoadF64x8', 'function RISCVVLoadF64x8(p: PDouble): TVecF64x8;',
     'RISCVVLoadF64x8Asm(p, Result);', 'procedure RISCVVLoadF64x8Asm(p: PDouble; var r: TVecF64x8);',
-    'vsetivli zero, 8, 0xda', Pointer(LScalarTable.LoadF64x8), Pointer(LRISCVVTable.LoadF64x8));
+    'vsetivli zero, 8, 0xda', Pointer(LScalarTable.CoreVectors.LoadF64x8), Pointer(LRISCVVTable.CoreVectors.LoadF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_FloatStoreSlots_Keep_BackendOwnership_And_Reuse_ScalarPreconditions_When_NoAsm;
@@ -11702,13 +11702,13 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterKeepsBackendOwnedSlot('StoreF32x4', 'table.StoreF32x4 := @RISCVVStoreF32x4;');
-  AssertRegisterKeepsBackendOwnedSlot('StoreF32x4Aligned', 'table.StoreF32x4Aligned := @RISCVVStoreF32x4Aligned;');
-  AssertRegisterKeepsBackendOwnedSlot('StoreF32x8', 'table.StoreF32x8 := @RISCVVStoreF32x8;');
-  AssertRegisterKeepsBackendOwnedSlot('StoreF32x16', 'table.StoreF32x16 := @RISCVVStoreF32x16;');
-  AssertRegisterKeepsBackendOwnedSlot('StoreF64x2', 'table.StoreF64x2 := @RISCVVStoreF64x2;');
-  AssertRegisterKeepsBackendOwnedSlot('StoreF64x4', 'table.StoreF64x4 := @RISCVVStoreF64x4;');
-  AssertRegisterKeepsBackendOwnedSlot('StoreF64x8', 'table.StoreF64x8 := @RISCVVStoreF64x8;');
+  AssertRegisterKeepsBackendOwnedSlot('StoreF32x4', 'table.CoreVectors.StoreF32x4 := @RISCVVStoreF32x4;');
+  AssertRegisterKeepsBackendOwnedSlot('StoreF32x4Aligned', 'table.CoreVectors.StoreF32x4Aligned := @RISCVVStoreF32x4Aligned;');
+  AssertRegisterKeepsBackendOwnedSlot('StoreF32x8', 'table.CoreVectors.StoreF32x8 := @RISCVVStoreF32x8;');
+  AssertRegisterKeepsBackendOwnedSlot('StoreF32x16', 'table.CoreVectors.StoreF32x16 := @RISCVVStoreF32x16;');
+  AssertRegisterKeepsBackendOwnedSlot('StoreF64x2', 'table.CoreVectors.StoreF64x2 := @RISCVVStoreF64x2;');
+  AssertRegisterKeepsBackendOwnedSlot('StoreF64x4', 'table.CoreVectors.StoreF64x4 := @RISCVVStoreF64x4;');
+  AssertRegisterKeepsBackendOwnedSlot('StoreF64x8', 'table.CoreVectors.StoreF64x8 := @RISCVVStoreF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -11721,25 +11721,25 @@ begin
 
   AssertScalarPreconditionForwardingStoreSlot('StoreF32x4', 'ScalarStoreF32x4(p, a);',
     'procedure RISCVVStoreF32x4(p: PSingle; const a: TVecF32x4); assembler; nostackframe;', 'vsetivli zero, 4, 0xd0',
-    Pointer(LScalarTable.StoreF32x4), Pointer(LRISCVVTable.StoreF32x4));
+    Pointer(LScalarTable.CoreVectors.StoreF32x4), Pointer(LRISCVVTable.CoreVectors.StoreF32x4));
   AssertScalarPreconditionForwardingStoreSlot('StoreF32x4Aligned', 'ScalarStoreF32x4Aligned(p, a);',
     'procedure RISCVVStoreF32x4Aligned(p: PSingle; const a: TVecF32x4); assembler; nostackframe;', 'vsetivli zero, 4, 0xd0',
-    Pointer(LScalarTable.StoreF32x4Aligned), Pointer(LRISCVVTable.StoreF32x4Aligned));
+    Pointer(LScalarTable.CoreVectors.StoreF32x4Aligned), Pointer(LRISCVVTable.CoreVectors.StoreF32x4Aligned));
   AssertScalarPreconditionForwardingStoreSlot('StoreF32x8', 'ScalarStoreF32x8(p, a);',
     'procedure RISCVVStoreF32x8(p: PSingle; const a: TVecF32x8); assembler; nostackframe;', 'vsetivli zero, 8, 0xd1',
-    Pointer(LScalarTable.StoreF32x8), Pointer(LRISCVVTable.StoreF32x8));
+    Pointer(LScalarTable.CoreVectors.StoreF32x8), Pointer(LRISCVVTable.CoreVectors.StoreF32x8));
   AssertScalarPreconditionForwardingStoreSlot('StoreF32x16', 'ScalarStoreF32x16(p, a);',
     'procedure RISCVVStoreF32x16(p: PSingle; const a: TVecF32x16); assembler; nostackframe;', 'vsetivli zero, 16, 0xd2',
-    Pointer(LScalarTable.StoreF32x16), Pointer(LRISCVVTable.StoreF32x16));
+    Pointer(LScalarTable.CoreVectors.StoreF32x16), Pointer(LRISCVVTable.CoreVectors.StoreF32x16));
   AssertScalarPreconditionForwardingStoreSlot('StoreF64x2', 'ScalarStoreF64x2(p, a);',
     'procedure RISCVVStoreF64x2(p: PDouble; const a: TVecF64x2); assembler; nostackframe;', 'vsetivli zero, 2, 0xd8',
-    Pointer(LScalarTable.StoreF64x2), Pointer(LRISCVVTable.StoreF64x2));
+    Pointer(LScalarTable.CoreVectors.StoreF64x2), Pointer(LRISCVVTable.CoreVectors.StoreF64x2));
   AssertScalarPreconditionForwardingStoreSlot('StoreF64x4', 'ScalarStoreF64x4(p, a);',
     'procedure RISCVVStoreF64x4(p: PDouble; const a: TVecF64x4); assembler; nostackframe;', 'vsetivli zero, 4, 0xd9',
-    Pointer(LScalarTable.StoreF64x4), Pointer(LRISCVVTable.StoreF64x4));
+    Pointer(LScalarTable.CoreVectors.StoreF64x4), Pointer(LRISCVVTable.CoreVectors.StoreF64x4));
   AssertScalarPreconditionForwardingStoreSlot('StoreF64x8', 'ScalarStoreF64x8(p, a);',
     'procedure RISCVVStoreF64x8(p: PDouble; const a: TVecF64x8); assembler; nostackframe;', 'vsetivli zero, 8, 0xda',
-    Pointer(LScalarTable.StoreF64x8), Pointer(LRISCVVTable.StoreF64x8));
+    Pointer(LScalarTable.CoreVectors.StoreF64x8), Pointer(LRISCVVTable.CoreVectors.StoreF64x8));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_LocalExtremaF64x2_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -11815,8 +11815,8 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('MinF64x2', 'table.MinF64x2 := @RISCVVMinF64x2;');
-  AssertRegisterHasAsmOwnedSlot('MaxF64x2', 'table.MaxF64x2 := @RISCVVMaxF64x2;');
+  AssertRegisterHasAsmOwnedSlot('MinF64x2', 'table.CoreVectors.MinF64x2 := @RISCVVMinF64x2;');
+  AssertRegisterHasAsmOwnedSlot('MaxF64x2', 'table.CoreVectors.MaxF64x2 := @RISCVVMaxF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -11829,10 +11829,10 @@ begin
 
   AssertAsmConditionalExtremaF64x2Slot('MinF64x2', 'function RISCVVMinF64x2(const a, b: TVecF64x2): TVecF64x2;',
     'RISCVVMinF64x2Asm(a, b, Result);', 'procedure RISCVVMinF64x2Asm(const a, b: TVecF64x2; var r: TVecF64x2);',
-    'vfmin.vv v0, v0, v1', Pointer(LScalarTable.MinF64x2), Pointer(LRISCVVTable.MinF64x2));
+    'vfmin.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MinF64x2), Pointer(LRISCVVTable.CoreVectors.MinF64x2));
   AssertAsmConditionalExtremaF64x2Slot('MaxF64x2', 'function RISCVVMaxF64x2(const a, b: TVecF64x2): TVecF64x2;',
     'RISCVVMaxF64x2Asm(a, b, Result);', 'procedure RISCVVMaxF64x2Asm(const a, b: TVecF64x2; var r: TVecF64x2);',
-    'vfmax.vv v0, v0, v1', Pointer(LScalarTable.MaxF64x2), Pointer(LRISCVVTable.MaxF64x2));
+    'vfmax.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MaxF64x2), Pointer(LRISCVVTable.CoreVectors.MaxF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_LocalExtremaF32x4_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -11908,8 +11908,8 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('MinF32x4', 'table.MinF32x4 := @RISCVVMinF32x4;');
-  AssertRegisterHasAsmOwnedSlot('MaxF32x4', 'table.MaxF32x4 := @RISCVVMaxF32x4;');
+  AssertRegisterHasAsmOwnedSlot('MinF32x4', 'table.CoreVectors.MinF32x4 := @RISCVVMinF32x4;');
+  AssertRegisterHasAsmOwnedSlot('MaxF32x4', 'table.CoreVectors.MaxF32x4 := @RISCVVMaxF32x4;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -11922,10 +11922,10 @@ begin
 
   AssertAsmConditionalExtremaF32x4Slot('MinF32x4', 'function RISCVVMinF32x4(const a, b: TVecF32x4): TVecF32x4;',
     'RISCVVMinF32x4Asm(a, b, Result);', 'procedure RISCVVMinF32x4Asm(const a, b: TVecF32x4; var r: TVecF32x4);',
-    'vfmin.vv v0, v0, v1', Pointer(LScalarTable.MinF32x4), Pointer(LRISCVVTable.MinF32x4));
+    'vfmin.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MinF32x4), Pointer(LRISCVVTable.CoreVectors.MinF32x4));
   AssertAsmConditionalExtremaF32x4Slot('MaxF32x4', 'function RISCVVMaxF32x4(const a, b: TVecF32x4): TVecF32x4;',
     'RISCVVMaxF32x4Asm(a, b, Result);', 'procedure RISCVVMaxF32x4Asm(const a, b: TVecF32x4; var r: TVecF32x4);',
-    'vfmax.vv v0, v0, v1', Pointer(LScalarTable.MaxF32x4), Pointer(LRISCVVTable.MaxF32x4));
+    'vfmax.vv v0, v0, v1', Pointer(LScalarTable.CoreVectors.MaxF32x4), Pointer(LRISCVVTable.CoreVectors.MaxF32x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_CrossF32x3_Drops_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -12002,7 +12002,7 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('CrossF32x3', 'table.CrossF32x3 := @RISCVVCrossF32x3;');
+  AssertRegisterHasAsmOwnedSlot('CrossF32x3', 'table.CoreVectors.CrossF32x3 := @RISCVVCrossF32x3;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -12016,7 +12016,7 @@ begin
   AssertAsmConditionalCrossF32x3Slot(
     'function RISCVVCrossF32x3(const a, b: TVecF32x4): TVecF32x4;', 'RISCVVCrossF32x3Asm(a, b, Result);',
     'procedure RISCVVCrossF32x3Asm(const a, b: TVecF32x4; var r: TVecF32x4);', 'fsub.s f6, f6, f7',
-    'sw zero, 12(a2)', Pointer(LScalarTable.CrossF32x3), Pointer(LRISCVVTable.CrossF32x3));
+    'sw zero, 12(a2)', Pointer(LScalarTable.CoreVectors.CrossF32x3), Pointer(LRISCVVTable.CoreVectors.CrossF32x3));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_NormalizeF32Slots_Drop_DeadNoAsmFacade_While_Keeping_AsmConditional_RuntimeBinding;
@@ -12093,8 +12093,8 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterHasAsmOwnedSlot('NormalizeF32x4', 'table.NormalizeF32x4 := @RISCVVNormalizeF32x4;');
-  AssertRegisterHasAsmOwnedSlot('NormalizeF32x3', 'table.NormalizeF32x3 := @RISCVVNormalizeF32x3;');
+  AssertRegisterHasAsmOwnedSlot('NormalizeF32x4', 'table.CoreVectors.NormalizeF32x4 := @RISCVVNormalizeF32x4;');
+  AssertRegisterHasAsmOwnedSlot('NormalizeF32x3', 'table.CoreVectors.NormalizeF32x3 := @RISCVVNormalizeF32x3;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -12108,11 +12108,11 @@ begin
   AssertAsmConditionalNormalizeF32Slot('NormalizeF32x4', 'function RISCVVNormalizeF32x4(const a: TVecF32x4): TVecF32x4;',
     'RISCVVNormalizeF32x4Asm(a, Result);', 'procedure RISCVVNormalizeF32x4Asm(const a: TVecF32x4; var r: TVecF32x4);',
     'bnez t1, .lzero_norm4', 'vfdiv.vv v0, v0, v1',
-    Pointer(LScalarTable.NormalizeF32x4), Pointer(LRISCVVTable.NormalizeF32x4));
+    Pointer(LScalarTable.CoreVectors.NormalizeF32x4), Pointer(LRISCVVTable.CoreVectors.NormalizeF32x4));
   AssertAsmConditionalNormalizeF32Slot('NormalizeF32x3', 'function RISCVVNormalizeF32x3(const a: TVecF32x4): TVecF32x4;',
     'RISCVVNormalizeF32x3Asm(a, Result);', 'procedure RISCVVNormalizeF32x3Asm(const a: TVecF32x4; var r: TVecF32x4);',
     'bnez t1, .lzero_norm3', 'vslideup.vi v0, v1, 3',
-    Pointer(LScalarTable.NormalizeF32x3), Pointer(LRISCVVTable.NormalizeF32x3));
+    Pointer(LScalarTable.CoreVectors.NormalizeF32x3), Pointer(LRISCVVTable.CoreVectors.NormalizeF32x3));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_ReduceF64x2_Stays_BackendOwned_With_ExactScalarNoAsmWitness;
@@ -12198,8 +12198,8 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterOwnsBackendSlot('ReduceMaxF64x2', 'table.ReduceMaxF64x2 := @RISCVVReduceMaxF64x2;');
-  AssertRegisterOwnsBackendSlot('ReduceMinF64x2', 'table.ReduceMinF64x2 := @RISCVVReduceMinF64x2;');
+  AssertRegisterOwnsBackendSlot('ReduceMaxF64x2', 'table.CoreVectors.ReduceMaxF64x2 := @RISCVVReduceMaxF64x2;');
+  AssertRegisterOwnsBackendSlot('ReduceMinF64x2', 'table.CoreVectors.ReduceMinF64x2 := @RISCVVReduceMinF64x2;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -12214,12 +12214,12 @@ begin
     'function RISCVVReduceMaxF64x2(const a: TVecF64x2): Double;', 'Result := a.d[0];',
     'for i := 1 to 1 do', 'if a.d[i] > Result then',
     'function RISCVVReduceMaxF64x2(const a: TVecF64x2): Double; assembler; nostackframe;', 'vfredmax.vs v1, v0, v0',
-    Pointer(LScalarTable.ReduceMaxF64x2), Pointer(LRISCVVTable.ReduceMaxF64x2));
+    Pointer(LScalarTable.CoreVectors.ReduceMaxF64x2), Pointer(LRISCVVTable.CoreVectors.ReduceMaxF64x2));
   AssertExactReductionF64x2Slot('ReduceMinF64x2', 'Result := ScalarReduceMinF64x2(a);',
     'function RISCVVReduceMinF64x2(const a: TVecF64x2): Double;', 'Result := a.d[0];',
     'for i := 1 to 1 do', 'if a.d[i] < Result then',
     'function RISCVVReduceMinF64x2(const a: TVecF64x2): Double; assembler; nostackframe;', 'vfredmin.vs v1, v0, v0',
-    Pointer(LScalarTable.ReduceMinF64x2), Pointer(LRISCVVTable.ReduceMinF64x2));
+    Pointer(LScalarTable.CoreVectors.ReduceMinF64x2), Pointer(LRISCVVTable.CoreVectors.ReduceMinF64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_KeyOwnedWideSlots_Stay_BackendOwned;
@@ -12262,17 +12262,17 @@ begin
     LSourceLines.Free;
   end;
 
-  AssertRegisterOwnsBackendSlot('AndI64x8', 'table.AndI64x8 := @RISCVVAndI64x8;');
-  AssertRegisterOwnsBackendSlot('NotI64x8', 'table.NotI64x8 := @RISCVVNotI64x8;');
-  AssertRegisterOwnsBackendSlot('ShiftLeftI32x16', 'table.ShiftLeftI32x16 := @RISCVVShiftLeftI32x16;');
-  AssertRegisterOwnsBackendSlot('ShiftRightArithI64x4', 'table.ShiftRightArithI64x4 := @RISCVVShiftRightArithI64x4;');
-  AssertRegisterOwnsBackendSlot('SubI32x8', 'table.SubI32x8 := @RISCVVSubI32x8;');
-  AssertRegisterOwnsBackendSlot('MinU32x8', 'table.MinU32x8 := @RISCVVMinU32x8;');
-  AssertRegisterOwnsBackendSlot('AddI64x4', 'table.AddI64x4 := @RISCVVAddI64x4;');
-  AssertRegisterOwnsBackendSlot('MulI32x16', 'table.MulI32x16 := @RISCVVMulI32x16;');
-  AssertRegisterOwnsBackendSlot('SubI64x8', 'table.SubI64x8 := @RISCVVSubI64x8;');
-  AssertRegisterOwnsBackendSlot('ClampF64x4', 'table.ClampF64x4 := @RISCVVClampF64x4;');
-  AssertRegisterOwnsBackendSlot('ClampF64x8', 'table.ClampF64x8 := @RISCVVClampF64x8;');
+  AssertRegisterOwnsBackendSlot('AndI64x8', 'table.CoreVectors.AndI64x8 := @RISCVVAndI64x8;');
+  AssertRegisterOwnsBackendSlot('NotI64x8', 'table.CoreVectors.NotI64x8 := @RISCVVNotI64x8;');
+  AssertRegisterOwnsBackendSlot('ShiftLeftI32x16', 'table.CoreVectors.ShiftLeftI32x16 := @RISCVVShiftLeftI32x16;');
+  AssertRegisterOwnsBackendSlot('ShiftRightArithI64x4', 'table.CoreVectors.ShiftRightArithI64x4 := @RISCVVShiftRightArithI64x4;');
+  AssertRegisterOwnsBackendSlot('SubI32x8', 'table.CoreVectors.SubI32x8 := @RISCVVSubI32x8;');
+  AssertRegisterOwnsBackendSlot('MinU32x8', 'table.CoreVectors.MinU32x8 := @RISCVVMinU32x8;');
+  AssertRegisterOwnsBackendSlot('AddI64x4', 'table.CoreVectors.AddI64x4 := @RISCVVAddI64x4;');
+  AssertRegisterOwnsBackendSlot('MulI32x16', 'table.CoreVectors.MulI32x16 := @RISCVVMulI32x16;');
+  AssertRegisterOwnsBackendSlot('SubI64x8', 'table.CoreVectors.SubI64x8 := @RISCVVSubI64x8;');
+  AssertRegisterOwnsBackendSlot('ClampF64x4', 'table.CoreVectors.ClampF64x4 := @RISCVVClampF64x4;');
+  AssertRegisterOwnsBackendSlot('ClampF64x8', 'table.CoreVectors.ClampF64x8 := @RISCVVClampF64x8;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -12283,17 +12283,17 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotKeepsBackendOwnership('AndI64x8', Pointer(LScalarTable.AndI64x8), Pointer(LRISCVVTable.AndI64x8));
-  AssertSlotKeepsBackendOwnership('NotI64x8', Pointer(LScalarTable.NotI64x8), Pointer(LRISCVVTable.NotI64x8));
-  AssertSlotKeepsBackendOwnership('ShiftLeftI32x16', Pointer(LScalarTable.ShiftLeftI32x16), Pointer(LRISCVVTable.ShiftLeftI32x16));
-  AssertSlotKeepsBackendOwnership('ShiftRightArithI64x4', Pointer(LScalarTable.ShiftRightArithI64x4), Pointer(LRISCVVTable.ShiftRightArithI64x4));
-  AssertSlotKeepsBackendOwnership('SubI32x8', Pointer(LScalarTable.SubI32x8), Pointer(LRISCVVTable.SubI32x8));
-  AssertSlotKeepsBackendOwnership('MinU32x8', Pointer(LScalarTable.MinU32x8), Pointer(LRISCVVTable.MinU32x8));
-  AssertSlotKeepsBackendOwnership('AddI64x4', Pointer(LScalarTable.AddI64x4), Pointer(LRISCVVTable.AddI64x4));
-  AssertSlotKeepsBackendOwnership('MulI32x16', Pointer(LScalarTable.MulI32x16), Pointer(LRISCVVTable.MulI32x16));
-  AssertSlotKeepsBackendOwnership('SubI64x8', Pointer(LScalarTable.SubI64x8), Pointer(LRISCVVTable.SubI64x8));
-  AssertSlotKeepsBackendOwnership('ClampF64x4', Pointer(LScalarTable.ClampF64x4), Pointer(LRISCVVTable.ClampF64x4));
-  AssertSlotKeepsBackendOwnership('ClampF64x8', Pointer(LScalarTable.ClampF64x8), Pointer(LRISCVVTable.ClampF64x8));
+  AssertSlotKeepsBackendOwnership('AndI64x8', Pointer(LScalarTable.CoreVectors.AndI64x8), Pointer(LRISCVVTable.CoreVectors.AndI64x8));
+  AssertSlotKeepsBackendOwnership('NotI64x8', Pointer(LScalarTable.CoreVectors.NotI64x8), Pointer(LRISCVVTable.CoreVectors.NotI64x8));
+  AssertSlotKeepsBackendOwnership('ShiftLeftI32x16', Pointer(LScalarTable.CoreVectors.ShiftLeftI32x16), Pointer(LRISCVVTable.CoreVectors.ShiftLeftI32x16));
+  AssertSlotKeepsBackendOwnership('ShiftRightArithI64x4', Pointer(LScalarTable.CoreVectors.ShiftRightArithI64x4), Pointer(LRISCVVTable.CoreVectors.ShiftRightArithI64x4));
+  AssertSlotKeepsBackendOwnership('SubI32x8', Pointer(LScalarTable.CoreVectors.SubI32x8), Pointer(LRISCVVTable.CoreVectors.SubI32x8));
+  AssertSlotKeepsBackendOwnership('MinU32x8', Pointer(LScalarTable.CoreVectors.MinU32x8), Pointer(LRISCVVTable.CoreVectors.MinU32x8));
+  AssertSlotKeepsBackendOwnership('AddI64x4', Pointer(LScalarTable.CoreVectors.AddI64x4), Pointer(LRISCVVTable.CoreVectors.AddI64x4));
+  AssertSlotKeepsBackendOwnership('MulI32x16', Pointer(LScalarTable.CoreVectors.MulI32x16), Pointer(LRISCVVTable.CoreVectors.MulI32x16));
+  AssertSlotKeepsBackendOwnership('SubI64x8', Pointer(LScalarTable.CoreVectors.SubI64x8), Pointer(LRISCVVTable.CoreVectors.SubI64x8));
+  AssertSlotKeepsBackendOwnership('ClampF64x4', Pointer(LScalarTable.CoreVectors.ClampF64x4), Pointer(LRISCVVTable.CoreVectors.ClampF64x4));
+  AssertSlotKeepsBackendOwnership('ClampF64x8', Pointer(LScalarTable.CoreVectors.ClampF64x8), Pointer(LRISCVVTable.CoreVectors.ClampF64x8));
 
   // RISCVV F64 clamp intentionally keeps the local NaN/signed-zero fallback
   // contract for now; do not silently collapse it to scalar semantics.
@@ -12326,10 +12326,10 @@ begin
   LSavedMask := GetExceptionMask;
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
   try
-    LF64x4ByScalar := LScalarTable.ClampF64x4(LF64x4A, LF64x4Min, LF64x4Max);
-    LF64x4ByRISCVV := LRISCVVTable.ClampF64x4(LF64x4A, LF64x4Min, LF64x4Max);
-    LF64x8ByScalar := LScalarTable.ClampF64x8(LF64x8A, LF64x8Min, LF64x8Max);
-    LF64x8ByRISCVV := LRISCVVTable.ClampF64x8(LF64x8A, LF64x8Min, LF64x8Max);
+    LF64x4ByScalar := LScalarTable.CoreVectors.ClampF64x4(LF64x4A, LF64x4Min, LF64x4Max);
+    LF64x4ByRISCVV := LRISCVVTable.CoreVectors.ClampF64x4(LF64x4A, LF64x4Min, LF64x4Max);
+    LF64x8ByScalar := LScalarTable.CoreVectors.ClampF64x8(LF64x8A, LF64x8Min, LF64x8Max);
+    LF64x8ByRISCVV := LRISCVVTable.CoreVectors.ClampF64x8(LF64x8A, LF64x8Min, LF64x8Max);
   finally
     SetExceptionMask(LSavedMask);
   end;
@@ -12421,13 +12421,13 @@ begin
   AssertNoAsmHelperRemoved('AndNotU16x8', 'Result := ScalarAndNotU16x8(a, b);');
   AssertNoAsmHelperRemoved('AndNotU8x16', 'Result := ScalarAndNotU8x16(a, b);');
 
-  AssertRegisterHasAsmOwnedSlot('AndNotI8x16', 'table.AndNotI8x16 := @RISCVVAndNotI8x16;');
-  AssertRegisterHasAsmOwnedSlot('AndNotU16x8', 'table.AndNotU16x8 := @RISCVVAndNotU16x8;');
-  AssertRegisterHasAsmOwnedSlot('AndNotU8x16', 'table.AndNotU8x16 := @RISCVVAndNotU8x16;');
+  AssertRegisterHasAsmOwnedSlot('AndNotI8x16', 'table.CoreVectors.AndNotI8x16 := @RISCVVAndNotI8x16;');
+  AssertRegisterHasAsmOwnedSlot('AndNotU16x8', 'table.CoreVectors.AndNotU16x8 := @RISCVVAndNotU16x8;');
+  AssertRegisterHasAsmOwnedSlot('AndNotU8x16', 'table.CoreVectors.AndNotU8x16 := @RISCVVAndNotU8x16;');
 
-  AssertRuntimeOwnership('AndNotI8x16', Pointer(LScalarTable.AndNotI8x16), Pointer(LRISCVVTable.AndNotI8x16));
-  AssertRuntimeOwnership('AndNotU16x8', Pointer(LScalarTable.AndNotU16x8), Pointer(LRISCVVTable.AndNotU16x8));
-  AssertRuntimeOwnership('AndNotU8x16', Pointer(LScalarTable.AndNotU8x16), Pointer(LRISCVVTable.AndNotU8x16));
+  AssertRuntimeOwnership('AndNotI8x16', Pointer(LScalarTable.CoreVectors.AndNotI8x16), Pointer(LRISCVVTable.CoreVectors.AndNotI8x16));
+  AssertRuntimeOwnership('AndNotU16x8', Pointer(LScalarTable.CoreVectors.AndNotU16x8), Pointer(LRISCVVTable.CoreVectors.AndNotU16x8));
+  AssertRuntimeOwnership('AndNotU8x16', Pointer(LScalarTable.CoreVectors.AndNotU8x16), Pointer(LRISCVVTable.CoreVectors.AndNotU8x16));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead;
@@ -12517,48 +12517,48 @@ begin
 
   AssertDeadWrapperRemoved('ExtractF32x8', 'function RISCVVExtractF32x8(');
   AssertAsmWrapperRetained('ExtractF32x8', 'Result := RISCVVExtractF32x8Asm(a, LIndex);');
-  AssertRegisterHasAsmOwnedSlot('ExtractF32x8', 'table.ExtractF32x8 := @RISCVVExtractF32x8;');
-  AssertSlotMatchesRuntimeAvailability('ExtractF32x8', Pointer(LScalarTable.ExtractF32x8), Pointer(LRISCVVTable.ExtractF32x8));
+  AssertRegisterHasAsmOwnedSlot('ExtractF32x8', 'table.CoreVectors.ExtractF32x8 := @RISCVVExtractF32x8;');
+  AssertSlotMatchesRuntimeAvailability('ExtractF32x8', Pointer(LScalarTable.CoreVectors.ExtractF32x8), Pointer(LRISCVVTable.CoreVectors.ExtractF32x8));
 
   AssertDeadWrapperRemoved('ExtractF32x16', 'function RISCVVExtractF32x16(');
   AssertAsmWrapperRetained('ExtractF32x16', 'Result := RISCVVExtractF32x16Asm(a, LIndex);');
-  AssertRegisterHasAsmOwnedSlot('ExtractF32x16', 'table.ExtractF32x16 := @RISCVVExtractF32x16;');
-  AssertSlotMatchesRuntimeAvailability('ExtractF32x16', Pointer(LScalarTable.ExtractF32x16), Pointer(LRISCVVTable.ExtractF32x16));
+  AssertRegisterHasAsmOwnedSlot('ExtractF32x16', 'table.CoreVectors.ExtractF32x16 := @RISCVVExtractF32x16;');
+  AssertSlotMatchesRuntimeAvailability('ExtractF32x16', Pointer(LScalarTable.CoreVectors.ExtractF32x16), Pointer(LRISCVVTable.CoreVectors.ExtractF32x16));
 
   AssertDeadWrapperRemoved('ExtractF64x2', 'function RISCVVExtractF64x2(');
   AssertAsmWrapperRetained('ExtractF64x2', 'Result := RISCVVExtractF64x2Asm(a, LIndex);');
-  AssertRegisterHasAsmOwnedSlot('ExtractF64x2', 'table.ExtractF64x2 := @RISCVVExtractF64x2;');
-  AssertSlotMatchesRuntimeAvailability('ExtractF64x2', Pointer(LScalarTable.ExtractF64x2), Pointer(LRISCVVTable.ExtractF64x2));
+  AssertRegisterHasAsmOwnedSlot('ExtractF64x2', 'table.CoreVectors.ExtractF64x2 := @RISCVVExtractF64x2;');
+  AssertSlotMatchesRuntimeAvailability('ExtractF64x2', Pointer(LScalarTable.CoreVectors.ExtractF64x2), Pointer(LRISCVVTable.CoreVectors.ExtractF64x2));
 
   AssertDeadWrapperRemoved('ExtractF64x4', 'function RISCVVExtractF64x4(');
   AssertAsmWrapperRetained('ExtractF64x4', 'Result := RISCVVExtractF64x4Asm(a, LIndex);');
-  AssertRegisterHasAsmOwnedSlot('ExtractF64x4', 'table.ExtractF64x4 := @RISCVVExtractF64x4;');
-  AssertSlotMatchesRuntimeAvailability('ExtractF64x4', Pointer(LScalarTable.ExtractF64x4), Pointer(LRISCVVTable.ExtractF64x4));
+  AssertRegisterHasAsmOwnedSlot('ExtractF64x4', 'table.CoreVectors.ExtractF64x4 := @RISCVVExtractF64x4;');
+  AssertSlotMatchesRuntimeAvailability('ExtractF64x4', Pointer(LScalarTable.CoreVectors.ExtractF64x4), Pointer(LRISCVVTable.CoreVectors.ExtractF64x4));
 
   AssertDeadWrapperRemoved('ExtractI32x4', 'function RISCVVExtractI32x4(');
   AssertAsmWrapperRetained('ExtractI32x4', 'Result := RISCVVExtractI32x4Asm(a, LIndex);');
-  AssertRegisterHasAsmOwnedSlot('ExtractI32x4', 'table.ExtractI32x4 := @RISCVVExtractI32x4;');
-  AssertSlotMatchesRuntimeAvailability('ExtractI32x4', Pointer(LScalarTable.ExtractI32x4), Pointer(LRISCVVTable.ExtractI32x4));
+  AssertRegisterHasAsmOwnedSlot('ExtractI32x4', 'table.CoreVectors.ExtractI32x4 := @RISCVVExtractI32x4;');
+  AssertSlotMatchesRuntimeAvailability('ExtractI32x4', Pointer(LScalarTable.CoreVectors.ExtractI32x4), Pointer(LRISCVVTable.CoreVectors.ExtractI32x4));
 
   AssertDeadWrapperRemoved('ExtractI32x8', 'function RISCVVExtractI32x8(');
   AssertAsmWrapperRetained('ExtractI32x8', 'Result := RISCVVExtractI32x8Asm(a, LIndex);');
-  AssertRegisterHasAsmOwnedSlot('ExtractI32x8', 'table.ExtractI32x8 := @RISCVVExtractI32x8;');
-  AssertSlotMatchesRuntimeAvailability('ExtractI32x8', Pointer(LScalarTable.ExtractI32x8), Pointer(LRISCVVTable.ExtractI32x8));
+  AssertRegisterHasAsmOwnedSlot('ExtractI32x8', 'table.CoreVectors.ExtractI32x8 := @RISCVVExtractI32x8;');
+  AssertSlotMatchesRuntimeAvailability('ExtractI32x8', Pointer(LScalarTable.CoreVectors.ExtractI32x8), Pointer(LRISCVVTable.CoreVectors.ExtractI32x8));
 
   AssertDeadWrapperRemoved('ExtractI32x16', 'function RISCVVExtractI32x16(');
   AssertAsmWrapperRetained('ExtractI32x16', 'Result := RISCVVExtractI32x16Asm(a, LIndex);');
-  AssertRegisterHasAsmOwnedSlot('ExtractI32x16', 'table.ExtractI32x16 := @RISCVVExtractI32x16;');
-  AssertSlotMatchesRuntimeAvailability('ExtractI32x16', Pointer(LScalarTable.ExtractI32x16), Pointer(LRISCVVTable.ExtractI32x16));
+  AssertRegisterHasAsmOwnedSlot('ExtractI32x16', 'table.CoreVectors.ExtractI32x16 := @RISCVVExtractI32x16;');
+  AssertSlotMatchesRuntimeAvailability('ExtractI32x16', Pointer(LScalarTable.CoreVectors.ExtractI32x16), Pointer(LRISCVVTable.CoreVectors.ExtractI32x16));
 
   AssertDeadWrapperRemoved('ExtractI64x2', 'function RISCVVExtractI64x2(');
   AssertAsmWrapperRetained('ExtractI64x2', 'Result := RISCVVExtractI64x2Asm(a, LIndex);');
-  AssertRegisterHasAsmOwnedSlot('ExtractI64x2', 'table.ExtractI64x2 := @RISCVVExtractI64x2;');
-  AssertSlotMatchesRuntimeAvailability('ExtractI64x2', Pointer(LScalarTable.ExtractI64x2), Pointer(LRISCVVTable.ExtractI64x2));
+  AssertRegisterHasAsmOwnedSlot('ExtractI64x2', 'table.CoreVectors.ExtractI64x2 := @RISCVVExtractI64x2;');
+  AssertSlotMatchesRuntimeAvailability('ExtractI64x2', Pointer(LScalarTable.CoreVectors.ExtractI64x2), Pointer(LRISCVVTable.CoreVectors.ExtractI64x2));
 
   AssertDeadWrapperRemoved('ExtractI64x4', 'function RISCVVExtractI64x4(');
   AssertAsmWrapperRetained('ExtractI64x4', 'Result := RISCVVExtractI64x4Asm(a, LIndex);');
-  AssertRegisterHasAsmOwnedSlot('ExtractI64x4', 'table.ExtractI64x4 := @RISCVVExtractI64x4;');
-  AssertSlotMatchesRuntimeAvailability('ExtractI64x4', Pointer(LScalarTable.ExtractI64x4), Pointer(LRISCVVTable.ExtractI64x4));
+  AssertRegisterHasAsmOwnedSlot('ExtractI64x4', 'table.CoreVectors.ExtractI64x4 := @RISCVVExtractI64x4;');
+  AssertSlotMatchesRuntimeAvailability('ExtractI64x4', Pointer(LScalarTable.CoreVectors.ExtractI64x4), Pointer(LRISCVVTable.CoreVectors.ExtractI64x4));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_WideRoundingAndF32ClampSlots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead;
@@ -12629,24 +12629,24 @@ begin
   AssertDeadWrapperRemoved('ClampF32x8', 'function RISCVVClampF32x8(');
   AssertDeadWrapperRemoved('ClampF32x16', 'function RISCVVClampF32x16(');
 
-  AssertRegisterKeepsBaseScalar('CeilF32x8', 'table.CeilF32x8 := @RISCVVCeilF32x8;');
-  AssertRegisterKeepsBaseScalar('CeilF64x4', 'table.CeilF64x4 := @RISCVVCeilF64x4;');
-  AssertRegisterKeepsBaseScalar('CeilF32x16', 'table.CeilF32x16 := @RISCVVCeilF32x16;');
-  AssertRegisterKeepsBaseScalar('CeilF64x8', 'table.CeilF64x8 := @RISCVVCeilF64x8;');
-  AssertRegisterKeepsBaseScalar('FloorF32x8', 'table.FloorF32x8 := @RISCVVFloorF32x8;');
-  AssertRegisterKeepsBaseScalar('FloorF64x4', 'table.FloorF64x4 := @RISCVVFloorF64x4;');
-  AssertRegisterKeepsBaseScalar('FloorF32x16', 'table.FloorF32x16 := @RISCVVFloorF32x16;');
-  AssertRegisterKeepsBaseScalar('FloorF64x8', 'table.FloorF64x8 := @RISCVVFloorF64x8;');
-  AssertRegisterKeepsBaseScalar('RoundF32x8', 'table.RoundF32x8 := @RISCVVRoundF32x8;');
-  AssertRegisterKeepsBaseScalar('RoundF64x4', 'table.RoundF64x4 := @RISCVVRoundF64x4;');
-  AssertRegisterKeepsBaseScalar('RoundF32x16', 'table.RoundF32x16 := @RISCVVRoundF32x16;');
-  AssertRegisterKeepsBaseScalar('RoundF64x8', 'table.RoundF64x8 := @RISCVVRoundF64x8;');
-  AssertRegisterKeepsBaseScalar('TruncF32x8', 'table.TruncF32x8 := @RISCVVTruncF32x8;');
-  AssertRegisterKeepsBaseScalar('TruncF64x4', 'table.TruncF64x4 := @RISCVVTruncF64x4;');
-  AssertRegisterKeepsBaseScalar('TruncF32x16', 'table.TruncF32x16 := @RISCVVTruncF32x16;');
-  AssertRegisterKeepsBaseScalar('TruncF64x8', 'table.TruncF64x8 := @RISCVVTruncF64x8;');
-  AssertRegisterKeepsBaseScalar('ClampF32x8', 'table.ClampF32x8 := @RISCVVClampF32x8;');
-  AssertRegisterKeepsBaseScalar('ClampF32x16', 'table.ClampF32x16 := @RISCVVClampF32x16;');
+  AssertRegisterKeepsBaseScalar('CeilF32x8', 'table.CoreVectors.CeilF32x8 := @RISCVVCeilF32x8;');
+  AssertRegisterKeepsBaseScalar('CeilF64x4', 'table.CoreVectors.CeilF64x4 := @RISCVVCeilF64x4;');
+  AssertRegisterKeepsBaseScalar('CeilF32x16', 'table.CoreVectors.CeilF32x16 := @RISCVVCeilF32x16;');
+  AssertRegisterKeepsBaseScalar('CeilF64x8', 'table.CoreVectors.CeilF64x8 := @RISCVVCeilF64x8;');
+  AssertRegisterKeepsBaseScalar('FloorF32x8', 'table.CoreVectors.FloorF32x8 := @RISCVVFloorF32x8;');
+  AssertRegisterKeepsBaseScalar('FloorF64x4', 'table.CoreVectors.FloorF64x4 := @RISCVVFloorF64x4;');
+  AssertRegisterKeepsBaseScalar('FloorF32x16', 'table.CoreVectors.FloorF32x16 := @RISCVVFloorF32x16;');
+  AssertRegisterKeepsBaseScalar('FloorF64x8', 'table.CoreVectors.FloorF64x8 := @RISCVVFloorF64x8;');
+  AssertRegisterKeepsBaseScalar('RoundF32x8', 'table.CoreVectors.RoundF32x8 := @RISCVVRoundF32x8;');
+  AssertRegisterKeepsBaseScalar('RoundF64x4', 'table.CoreVectors.RoundF64x4 := @RISCVVRoundF64x4;');
+  AssertRegisterKeepsBaseScalar('RoundF32x16', 'table.CoreVectors.RoundF32x16 := @RISCVVRoundF32x16;');
+  AssertRegisterKeepsBaseScalar('RoundF64x8', 'table.CoreVectors.RoundF64x8 := @RISCVVRoundF64x8;');
+  AssertRegisterKeepsBaseScalar('TruncF32x8', 'table.CoreVectors.TruncF32x8 := @RISCVVTruncF32x8;');
+  AssertRegisterKeepsBaseScalar('TruncF64x4', 'table.CoreVectors.TruncF64x4 := @RISCVVTruncF64x4;');
+  AssertRegisterKeepsBaseScalar('TruncF32x16', 'table.CoreVectors.TruncF32x16 := @RISCVVTruncF32x16;');
+  AssertRegisterKeepsBaseScalar('TruncF64x8', 'table.CoreVectors.TruncF64x8 := @RISCVVTruncF64x8;');
+  AssertRegisterKeepsBaseScalar('ClampF32x8', 'table.CoreVectors.ClampF32x8 := @RISCVVClampF32x8;');
+  AssertRegisterKeepsBaseScalar('ClampF32x16', 'table.CoreVectors.ClampF32x16 := @RISCVVClampF32x16;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -12657,24 +12657,24 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('CeilF32x8', Pointer(LScalarTable.CeilF32x8), Pointer(LRISCVVTable.CeilF32x8));
-  AssertSlotReusesScalar('CeilF64x4', Pointer(LScalarTable.CeilF64x4), Pointer(LRISCVVTable.CeilF64x4));
-  AssertSlotReusesScalar('CeilF32x16', Pointer(LScalarTable.CeilF32x16), Pointer(LRISCVVTable.CeilF32x16));
-  AssertSlotReusesScalar('CeilF64x8', Pointer(LScalarTable.CeilF64x8), Pointer(LRISCVVTable.CeilF64x8));
-  AssertSlotReusesScalar('FloorF32x8', Pointer(LScalarTable.FloorF32x8), Pointer(LRISCVVTable.FloorF32x8));
-  AssertSlotReusesScalar('FloorF64x4', Pointer(LScalarTable.FloorF64x4), Pointer(LRISCVVTable.FloorF64x4));
-  AssertSlotReusesScalar('FloorF32x16', Pointer(LScalarTable.FloorF32x16), Pointer(LRISCVVTable.FloorF32x16));
-  AssertSlotReusesScalar('FloorF64x8', Pointer(LScalarTable.FloorF64x8), Pointer(LRISCVVTable.FloorF64x8));
-  AssertSlotReusesScalar('RoundF32x8', Pointer(LScalarTable.RoundF32x8), Pointer(LRISCVVTable.RoundF32x8));
-  AssertSlotReusesScalar('RoundF64x4', Pointer(LScalarTable.RoundF64x4), Pointer(LRISCVVTable.RoundF64x4));
-  AssertSlotReusesScalar('RoundF32x16', Pointer(LScalarTable.RoundF32x16), Pointer(LRISCVVTable.RoundF32x16));
-  AssertSlotReusesScalar('RoundF64x8', Pointer(LScalarTable.RoundF64x8), Pointer(LRISCVVTable.RoundF64x8));
-  AssertSlotReusesScalar('TruncF32x8', Pointer(LScalarTable.TruncF32x8), Pointer(LRISCVVTable.TruncF32x8));
-  AssertSlotReusesScalar('TruncF64x4', Pointer(LScalarTable.TruncF64x4), Pointer(LRISCVVTable.TruncF64x4));
-  AssertSlotReusesScalar('TruncF32x16', Pointer(LScalarTable.TruncF32x16), Pointer(LRISCVVTable.TruncF32x16));
-  AssertSlotReusesScalar('TruncF64x8', Pointer(LScalarTable.TruncF64x8), Pointer(LRISCVVTable.TruncF64x8));
-  AssertSlotReusesScalar('ClampF32x8', Pointer(LScalarTable.ClampF32x8), Pointer(LRISCVVTable.ClampF32x8));
-  AssertSlotReusesScalar('ClampF32x16', Pointer(LScalarTable.ClampF32x16), Pointer(LRISCVVTable.ClampF32x16));
+  AssertSlotReusesScalar('CeilF32x8', Pointer(LScalarTable.CoreVectors.CeilF32x8), Pointer(LRISCVVTable.CoreVectors.CeilF32x8));
+  AssertSlotReusesScalar('CeilF64x4', Pointer(LScalarTable.CoreVectors.CeilF64x4), Pointer(LRISCVVTable.CoreVectors.CeilF64x4));
+  AssertSlotReusesScalar('CeilF32x16', Pointer(LScalarTable.CoreVectors.CeilF32x16), Pointer(LRISCVVTable.CoreVectors.CeilF32x16));
+  AssertSlotReusesScalar('CeilF64x8', Pointer(LScalarTable.CoreVectors.CeilF64x8), Pointer(LRISCVVTable.CoreVectors.CeilF64x8));
+  AssertSlotReusesScalar('FloorF32x8', Pointer(LScalarTable.CoreVectors.FloorF32x8), Pointer(LRISCVVTable.CoreVectors.FloorF32x8));
+  AssertSlotReusesScalar('FloorF64x4', Pointer(LScalarTable.CoreVectors.FloorF64x4), Pointer(LRISCVVTable.CoreVectors.FloorF64x4));
+  AssertSlotReusesScalar('FloorF32x16', Pointer(LScalarTable.CoreVectors.FloorF32x16), Pointer(LRISCVVTable.CoreVectors.FloorF32x16));
+  AssertSlotReusesScalar('FloorF64x8', Pointer(LScalarTable.CoreVectors.FloorF64x8), Pointer(LRISCVVTable.CoreVectors.FloorF64x8));
+  AssertSlotReusesScalar('RoundF32x8', Pointer(LScalarTable.CoreVectors.RoundF32x8), Pointer(LRISCVVTable.CoreVectors.RoundF32x8));
+  AssertSlotReusesScalar('RoundF64x4', Pointer(LScalarTable.CoreVectors.RoundF64x4), Pointer(LRISCVVTable.CoreVectors.RoundF64x4));
+  AssertSlotReusesScalar('RoundF32x16', Pointer(LScalarTable.CoreVectors.RoundF32x16), Pointer(LRISCVVTable.CoreVectors.RoundF32x16));
+  AssertSlotReusesScalar('RoundF64x8', Pointer(LScalarTable.CoreVectors.RoundF64x8), Pointer(LRISCVVTable.CoreVectors.RoundF64x8));
+  AssertSlotReusesScalar('TruncF32x8', Pointer(LScalarTable.CoreVectors.TruncF32x8), Pointer(LRISCVVTable.CoreVectors.TruncF32x8));
+  AssertSlotReusesScalar('TruncF64x4', Pointer(LScalarTable.CoreVectors.TruncF64x4), Pointer(LRISCVVTable.CoreVectors.TruncF64x4));
+  AssertSlotReusesScalar('TruncF32x16', Pointer(LScalarTable.CoreVectors.TruncF32x16), Pointer(LRISCVVTable.CoreVectors.TruncF32x16));
+  AssertSlotReusesScalar('TruncF64x8', Pointer(LScalarTable.CoreVectors.TruncF64x8), Pointer(LRISCVVTable.CoreVectors.TruncF64x8));
+  AssertSlotReusesScalar('ClampF32x8', Pointer(LScalarTable.CoreVectors.ClampF32x8), Pointer(LRISCVVTable.CoreVectors.ClampF32x8));
+  AssertSlotReusesScalar('ClampF32x16', Pointer(LScalarTable.CoreVectors.ClampF32x16), Pointer(LRISCVVTable.CoreVectors.ClampF32x16));
 end;
 
 procedure TTestCase_DispatchAPI.Test_BacklogParityAndSmoke_Batch3;
@@ -13074,25 +13074,25 @@ begin
 
     Inc(LRegisteredCount);
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU32x16', Pointer(LTable.AddU32x16));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU32x16', Pointer(LTable.CmpEqU32x16));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'MinU32x16', Pointer(LTable.MinU32x16));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU32x16', Pointer(LTable.CoreVectors.AddU32x16));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU32x16', Pointer(LTable.CoreVectors.CmpEqU32x16));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'MinU32x16', Pointer(LTable.CoreVectors.MinU32x16));
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU64x8', Pointer(LTable.AddU64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU64x8', Pointer(LTable.CmpEqU64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightU64x8', Pointer(LTable.ShiftRightU64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU64x8', Pointer(LTable.CoreVectors.AddU64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU64x8', Pointer(LTable.CoreVectors.CmpEqU64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightU64x8', Pointer(LTable.CoreVectors.ShiftRightU64x8));
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AddI16x32', Pointer(LTable.AddI16x32));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqI16x32', Pointer(LTable.CmpEqI16x32));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightArithI16x32', Pointer(LTable.ShiftRightArithI16x32));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AddI16x32', Pointer(LTable.CoreVectors.AddI16x32));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqI16x32', Pointer(LTable.CoreVectors.CmpEqI16x32));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightArithI16x32', Pointer(LTable.CoreVectors.ShiftRightArithI16x32));
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AddI8x64', Pointer(LTable.AddI8x64));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqI8x64', Pointer(LTable.CmpEqI8x64));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'MaxI8x64', Pointer(LTable.MaxI8x64));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AddI8x64', Pointer(LTable.CoreVectors.AddI8x64));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqI8x64', Pointer(LTable.CoreVectors.CmpEqI8x64));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'MaxI8x64', Pointer(LTable.CoreVectors.MaxI8x64));
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU8x64', Pointer(LTable.AddU8x64));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU8x64', Pointer(LTable.CmpEqU8x64));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'MaxU8x64', Pointer(LTable.MaxU8x64));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU8x64', Pointer(LTable.CoreVectors.AddU8x64));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU8x64', Pointer(LTable.CoreVectors.CmpEqU8x64));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'MaxU8x64', Pointer(LTable.CoreVectors.MaxU8x64));
   end;
 
   if LRegisteredCount = 0 then
@@ -13121,12 +13121,12 @@ begin
     Exit;
 
   // Mapping check: these slots must no longer point to scalar fallback.
-  CheckTrue(Pointer(LAVX512.AddU32x16) <> Pointer(LScalar.AddU32x16), 'AVX512 AddU32x16 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.CmpEqU32x16) <> Pointer(LScalar.CmpEqU32x16), 'AVX512 CmpEqU32x16 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.ShiftRightU32x16) <> Pointer(LScalar.ShiftRightU32x16), 'AVX512 ShiftRightU32x16 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.AddU64x8) <> Pointer(LScalar.AddU64x8), 'AVX512 AddU64x8 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.CmpEqU64x8) <> Pointer(LScalar.CmpEqU64x8), 'AVX512 CmpEqU64x8 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.ShiftRightU64x8) <> Pointer(LScalar.ShiftRightU64x8), 'AVX512 ShiftRightU64x8 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.AddU32x16) <> Pointer(LScalar.CoreVectors.AddU32x16), 'AVX512 AddU32x16 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.CmpEqU32x16) <> Pointer(LScalar.CoreVectors.CmpEqU32x16), 'AVX512 CmpEqU32x16 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.ShiftRightU32x16) <> Pointer(LScalar.CoreVectors.ShiftRightU32x16), 'AVX512 ShiftRightU32x16 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.AddU64x8) <> Pointer(LScalar.CoreVectors.AddU64x8), 'AVX512 AddU64x8 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.CmpEqU64x8) <> Pointer(LScalar.CoreVectors.CmpEqU64x8), 'AVX512 CmpEqU64x8 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.ShiftRightU64x8) <> Pointer(LScalar.CoreVectors.ShiftRightU64x8), 'AVX512 ShiftRightU64x8 should not be scalar slot');
 
   // Parity check only on hosts where AVX512 backend is dispatch-available.
   LCanRunAVX512 := LAVX512.BackendInfo.Available and TrySetActiveBackend(sbAVX512);
@@ -13145,49 +13145,49 @@ begin
     LU64B.u[LIndex] := QWord($00FF00FF00FF00FF) + QWord(LIndex) * QWord($0001000100010001);
   end;
 
-  LU32Result := LAVX512.AddU32x16(LU32A, LU32B);
+  LU32Result := LAVX512.CoreVectors.AddU32x16(LU32A, LU32B);
   LU32Expected := ScalarAddU32x16(LU32A, LU32B);
   for LIndex := 0 to 15 do
     CheckEqual(LU32Expected.u[LIndex], LU32Result.u[LIndex], 'AVX512 AddU32x16 lane ' + IntToStr(LIndex));
 
-  LU32Result := LAVX512.AndU32x16(LU32A, LU32B);
+  LU32Result := LAVX512.CoreVectors.AndU32x16(LU32A, LU32B);
   LU32Expected := ScalarAndU32x16(LU32A, LU32B);
   for LIndex := 0 to 15 do
     CheckEqual(LU32Expected.u[LIndex], LU32Result.u[LIndex], 'AVX512 AndU32x16 lane ' + IntToStr(LIndex));
 
-  LU32Result := LAVX512.ShiftRightU32x16(LU32A, 5);
+  LU32Result := LAVX512.CoreVectors.ShiftRightU32x16(LU32A, 5);
   LU32Expected := ScalarShiftRightU32x16(LU32A, 5);
   for LIndex := 0 to 15 do
     CheckEqual(LU32Expected.u[LIndex], LU32Result.u[LIndex], 'AVX512 ShiftRightU32x16 lane ' + IntToStr(LIndex));
 
-  LMask16Result := LAVX512.CmpEqU32x16(LU32A, LU32B);
+  LMask16Result := LAVX512.CoreVectors.CmpEqU32x16(LU32A, LU32B);
   LMask16Expected := ScalarCmpEqU32x16(LU32A, LU32B);
   CheckEqual(Integer(LMask16Expected), Integer(LMask16Result), 'AVX512 CmpEqU32x16 mask parity');
 
-  LMask16Result := LAVX512.CmpGtU32x16(LU32A, LU32B);
+  LMask16Result := LAVX512.CoreVectors.CmpGtU32x16(LU32A, LU32B);
   LMask16Expected := ScalarCmpGtU32x16(LU32A, LU32B);
   CheckEqual(Integer(LMask16Expected), Integer(LMask16Result), 'AVX512 CmpGtU32x16 mask parity');
 
-  LU64Result := LAVX512.AddU64x8(LU64A, LU64B);
+  LU64Result := LAVX512.CoreVectors.AddU64x8(LU64A, LU64B);
   LU64Expected := ScalarAddU64x8(LU64A, LU64B);
   for LIndex := 0 to 7 do
     CheckEqual(LU64Expected.u[LIndex], LU64Result.u[LIndex], 'AVX512 AddU64x8 lane ' + IntToStr(LIndex));
 
-  LU64Result := LAVX512.XorU64x8(LU64A, LU64B);
+  LU64Result := LAVX512.CoreVectors.XorU64x8(LU64A, LU64B);
   LU64Expected := ScalarXorU64x8(LU64A, LU64B);
   for LIndex := 0 to 7 do
     CheckEqual(LU64Expected.u[LIndex], LU64Result.u[LIndex], 'AVX512 XorU64x8 lane ' + IntToStr(LIndex));
 
-  LU64Result := LAVX512.ShiftRightU64x8(LU64A, 11);
+  LU64Result := LAVX512.CoreVectors.ShiftRightU64x8(LU64A, 11);
   LU64Expected := ScalarShiftRightU64x8(LU64A, 11);
   for LIndex := 0 to 7 do
     CheckEqual(LU64Expected.u[LIndex], LU64Result.u[LIndex], 'AVX512 ShiftRightU64x8 lane ' + IntToStr(LIndex));
 
-  LMask8Result := LAVX512.CmpEqU64x8(LU64A, LU64B);
+  LMask8Result := LAVX512.CoreVectors.CmpEqU64x8(LU64A, LU64B);
   LMask8Expected := ScalarCmpEqU64x8(LU64A, LU64B);
   CheckEqual(Integer(LMask8Expected), Integer(LMask8Result), 'AVX512 CmpEqU64x8 mask parity');
 
-  LMask8Result := LAVX512.CmpLtU64x8(LU64A, LU64B);
+  LMask8Result := LAVX512.CoreVectors.CmpLtU64x8(LU64A, LU64B);
   LMask8Expected := ScalarCmpLtU64x8(LU64A, LU64B);
   CheckEqual(Integer(LMask8Expected), Integer(LMask8Result), 'AVX512 CmpLtU64x8 mask parity');
 end;
@@ -13261,51 +13261,51 @@ begin
     LU64A.u[LIndex] := QWord($8000000000000000) xor (QWord(LIndex) * QWord($0101010101010101));
 
   LU32Expected := ScalarShiftLeftU32x16(LU32A, 0);
-  LU32Result := LAVX512.ShiftLeftU32x16(LU32A, 0);
+  LU32Result := LAVX512.CoreVectors.ShiftLeftU32x16(LU32A, 0);
   AssertVecU32x16Equal('AVX512 ShiftLeftU32x16 count=0', LU32Expected, LU32Result);
 
   LU32Expected := ScalarShiftLeftU32x16(LU32A, 31);
-  LU32Result := LAVX512.ShiftLeftU32x16(LU32A, 31);
+  LU32Result := LAVX512.CoreVectors.ShiftLeftU32x16(LU32A, 31);
   AssertVecU32x16Equal('AVX512 ShiftLeftU32x16 count=31', LU32Expected, LU32Result);
 
   LU32Expected := ScalarShiftLeftU32x16(LU32A, 32);
-  LU32Result := LAVX512.ShiftLeftU32x16(LU32A, 32);
+  LU32Result := LAVX512.CoreVectors.ShiftLeftU32x16(LU32A, 32);
   AssertVecU32x16Equal('AVX512 ShiftLeftU32x16 count=32', LU32Expected, LU32Result);
 
   LU32Expected := ScalarShiftRightU32x16(LU32A, 0);
-  LU32Result := LAVX512.ShiftRightU32x16(LU32A, 0);
+  LU32Result := LAVX512.CoreVectors.ShiftRightU32x16(LU32A, 0);
   AssertVecU32x16Equal('AVX512 ShiftRightU32x16 count=0', LU32Expected, LU32Result);
 
   LU32Expected := ScalarShiftRightU32x16(LU32A, 31);
-  LU32Result := LAVX512.ShiftRightU32x16(LU32A, 31);
+  LU32Result := LAVX512.CoreVectors.ShiftRightU32x16(LU32A, 31);
   AssertVecU32x16Equal('AVX512 ShiftRightU32x16 count=31', LU32Expected, LU32Result);
 
   LU32Expected := ScalarShiftRightU32x16(LU32A, 32);
-  LU32Result := LAVX512.ShiftRightU32x16(LU32A, 32);
+  LU32Result := LAVX512.CoreVectors.ShiftRightU32x16(LU32A, 32);
   AssertVecU32x16Equal('AVX512 ShiftRightU32x16 count=32', LU32Expected, LU32Result);
 
   LU64Expected := ScalarShiftLeftU64x8(LU64A, 0);
-  LU64Result := LAVX512.ShiftLeftU64x8(LU64A, 0);
+  LU64Result := LAVX512.CoreVectors.ShiftLeftU64x8(LU64A, 0);
   AssertVecU64x8Equal('AVX512 ShiftLeftU64x8 count=0', LU64Expected, LU64Result);
 
   LU64Expected := ScalarShiftLeftU64x8(LU64A, 63);
-  LU64Result := LAVX512.ShiftLeftU64x8(LU64A, 63);
+  LU64Result := LAVX512.CoreVectors.ShiftLeftU64x8(LU64A, 63);
   AssertVecU64x8Equal('AVX512 ShiftLeftU64x8 count=63', LU64Expected, LU64Result);
 
   LU64Expected := ScalarShiftLeftU64x8(LU64A, 64);
-  LU64Result := LAVX512.ShiftLeftU64x8(LU64A, 64);
+  LU64Result := LAVX512.CoreVectors.ShiftLeftU64x8(LU64A, 64);
   AssertVecU64x8Equal('AVX512 ShiftLeftU64x8 count=64', LU64Expected, LU64Result);
 
   LU64Expected := ScalarShiftRightU64x8(LU64A, 0);
-  LU64Result := LAVX512.ShiftRightU64x8(LU64A, 0);
+  LU64Result := LAVX512.CoreVectors.ShiftRightU64x8(LU64A, 0);
   AssertVecU64x8Equal('AVX512 ShiftRightU64x8 count=0', LU64Expected, LU64Result);
 
   LU64Expected := ScalarShiftRightU64x8(LU64A, 63);
-  LU64Result := LAVX512.ShiftRightU64x8(LU64A, 63);
+  LU64Result := LAVX512.CoreVectors.ShiftRightU64x8(LU64A, 63);
   AssertVecU64x8Equal('AVX512 ShiftRightU64x8 count=63', LU64Expected, LU64Result);
 
   LU64Expected := ScalarShiftRightU64x8(LU64A, 64);
-  LU64Result := LAVX512.ShiftRightU64x8(LU64A, 64);
+  LU64Result := LAVX512.CoreVectors.ShiftRightU64x8(LU64A, 64);
   AssertVecU64x8Equal('AVX512 ShiftRightU64x8 count=64', LU64Expected, LU64Result);
 end;
 
@@ -13368,15 +13368,15 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbAVX512, LAVX512) then
     Exit;
 
-  CheckTrue(Pointer(LAVX512.AddI16x32) <> Pointer(LScalar.AddI16x32), 'AVX512 AddI16x32 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.CmpEqI16x32) <> Pointer(LScalar.CmpEqI16x32), 'AVX512 CmpEqI16x32 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.ShiftRightArithI16x32) <> Pointer(LScalar.ShiftRightArithI16x32), 'AVX512 ShiftRightArithI16x32 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.AddI8x64) <> Pointer(LScalar.AddI8x64), 'AVX512 AddI8x64 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.CmpEqI8x64) <> Pointer(LScalar.CmpEqI8x64), 'AVX512 CmpEqI8x64 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.MaxI8x64) <> Pointer(LScalar.MaxI8x64), 'AVX512 MaxI8x64 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.AddU8x64) <> Pointer(LScalar.AddU8x64), 'AVX512 AddU8x64 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.CmpEqU8x64) <> Pointer(LScalar.CmpEqU8x64), 'AVX512 CmpEqU8x64 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.MaxU8x64) <> Pointer(LScalar.MaxU8x64), 'AVX512 MaxU8x64 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.AddI16x32) <> Pointer(LScalar.CoreVectors.AddI16x32), 'AVX512 AddI16x32 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.CmpEqI16x32) <> Pointer(LScalar.CoreVectors.CmpEqI16x32), 'AVX512 CmpEqI16x32 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.ShiftRightArithI16x32) <> Pointer(LScalar.CoreVectors.ShiftRightArithI16x32), 'AVX512 ShiftRightArithI16x32 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.AddI8x64) <> Pointer(LScalar.CoreVectors.AddI8x64), 'AVX512 AddI8x64 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.CmpEqI8x64) <> Pointer(LScalar.CoreVectors.CmpEqI8x64), 'AVX512 CmpEqI8x64 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.MaxI8x64) <> Pointer(LScalar.CoreVectors.MaxI8x64), 'AVX512 MaxI8x64 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.AddU8x64) <> Pointer(LScalar.CoreVectors.AddU8x64), 'AVX512 AddU8x64 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.CmpEqU8x64) <> Pointer(LScalar.CoreVectors.CmpEqU8x64), 'AVX512 CmpEqU8x64 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.MaxU8x64) <> Pointer(LScalar.CoreVectors.MaxU8x64), 'AVX512 MaxU8x64 should not be scalar slot');
 
   LCanRunAVX512 := LAVX512.BackendInfo.Available and TrySetActiveBackend(sbAVX512);
   if not LCanRunAVX512 then
@@ -13396,40 +13396,40 @@ begin
     LU8B.u[LIndex] := Byte((255 - LIndex * 9) and $FF);
   end;
 
-  LI16Result := LAVX512.AddI16x32(LI16A, LI16B);
+  LI16Result := LAVX512.CoreVectors.AddI16x32(LI16A, LI16B);
   LI16Expected := ScalarAddI16x32(LI16A, LI16B);
   for LIndex := 0 to 31 do
     CheckEqual(LI16Expected.i[LIndex], LI16Result.i[LIndex], 'AVX512 AddI16x32 lane ' + IntToStr(LIndex));
 
-  LI16Result := LAVX512.ShiftRightArithI16x32(LI16A, 3);
+  LI16Result := LAVX512.CoreVectors.ShiftRightArithI16x32(LI16A, 3);
   LI16Expected := ScalarShiftRightArithI16x32(LI16A, 3);
   for LIndex := 0 to 31 do
     CheckEqual(LI16Expected.i[LIndex], LI16Result.i[LIndex], 'AVX512 ShiftRightArithI16x32 lane ' + IntToStr(LIndex));
 
-  LMask32Result := LAVX512.CmpLtI16x32(LI16A, LI16B);
+  LMask32Result := LAVX512.CoreVectors.CmpLtI16x32(LI16A, LI16B);
   LMask32Expected := ScalarCmpLtI16x32(LI16A, LI16B);
   CheckEqual(Integer(LMask32Expected), Integer(LMask32Result), 'AVX512 CmpLtI16x32 mask parity');
 
-  LI8Result := LAVX512.AndNotI8x64(LI8A, LI8B);
+  LI8Result := LAVX512.CoreVectors.AndNotI8x64(LI8A, LI8B);
   LI8Expected := ScalarAndNotI8x64(LI8A, LI8B);
   for LIndex := 0 to 63 do
     CheckEqual(LI8Expected.i[LIndex], LI8Result.i[LIndex], 'AVX512 AndNotI8x64 lane ' + IntToStr(LIndex));
 
-  LMask64Result := LAVX512.CmpGtI8x64(LI8A, LI8B);
+  LMask64Result := LAVX512.CoreVectors.CmpGtI8x64(LI8A, LI8B);
   LMask64Expected := ScalarCmpGtI8x64(LI8A, LI8B);
   CheckEqual(Int64(LMask64Expected), Int64(LMask64Result), 'AVX512 CmpGtI8x64 mask parity');
 
-  LU8Result := LAVX512.AddU8x64(LU8A, LU8B);
+  LU8Result := LAVX512.CoreVectors.AddU8x64(LU8A, LU8B);
   LU8Expected := ScalarAddU8x64(LU8A, LU8B);
   for LIndex := 0 to 63 do
     CheckEqual(LU8Expected.u[LIndex], LU8Result.u[LIndex], 'AVX512 AddU8x64 lane ' + IntToStr(LIndex));
 
-  LU8Result := LAVX512.XorU8x64(LU8A, LU8B);
+  LU8Result := LAVX512.CoreVectors.XorU8x64(LU8A, LU8B);
   LU8Expected := ScalarXorU8x64(LU8A, LU8B);
   for LIndex := 0 to 63 do
     CheckEqual(LU8Expected.u[LIndex], LU8Result.u[LIndex], 'AVX512 XorU8x64 lane ' + IntToStr(LIndex));
 
-  LMask64Result := LAVX512.CmpLtU8x64(LU8A, LU8B);
+  LMask64Result := LAVX512.CoreVectors.CmpLtU8x64(LU8A, LU8B);
   LMask64Expected := ScalarCmpLtU8x64(LU8A, LU8B);
   CheckEqual(Int64(LMask64Expected), Int64(LMask64Result), 'AVX512 CmpLtU8x64 mask parity');
 end;
@@ -13487,27 +13487,27 @@ begin
 
   LHasAVX2 := TryGetRegisteredBackendDispatchTable(sbAVX2, LAVX2);
 
-  CheckTrue(Pointer(LAVX512.RoundF32x16) <> Pointer(LScalar.RoundF32x16), 'AVX512 RoundF32x16 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.TruncF32x16) <> Pointer(LScalar.TruncF32x16), 'AVX512 TruncF32x16 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.FloorF32x16) <> Pointer(LScalar.FloorF32x16), 'AVX512 FloorF32x16 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.CeilF32x16) <> Pointer(LScalar.CeilF32x16), 'AVX512 CeilF32x16 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.RoundF32x16) <> Pointer(LScalar.CoreVectors.RoundF32x16), 'AVX512 RoundF32x16 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.TruncF32x16) <> Pointer(LScalar.CoreVectors.TruncF32x16), 'AVX512 TruncF32x16 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.FloorF32x16) <> Pointer(LScalar.CoreVectors.FloorF32x16), 'AVX512 FloorF32x16 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.CeilF32x16) <> Pointer(LScalar.CoreVectors.CeilF32x16), 'AVX512 CeilF32x16 should not be scalar slot');
 
-  CheckTrue(Pointer(LAVX512.RoundF64x8) <> Pointer(LScalar.RoundF64x8), 'AVX512 RoundF64x8 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.TruncF64x8) <> Pointer(LScalar.TruncF64x8), 'AVX512 TruncF64x8 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.FloorF64x8) <> Pointer(LScalar.FloorF64x8), 'AVX512 FloorF64x8 should not be scalar slot');
-  CheckTrue(Pointer(LAVX512.CeilF64x8) <> Pointer(LScalar.CeilF64x8), 'AVX512 CeilF64x8 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.RoundF64x8) <> Pointer(LScalar.CoreVectors.RoundF64x8), 'AVX512 RoundF64x8 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.TruncF64x8) <> Pointer(LScalar.CoreVectors.TruncF64x8), 'AVX512 TruncF64x8 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.FloorF64x8) <> Pointer(LScalar.CoreVectors.FloorF64x8), 'AVX512 FloorF64x8 should not be scalar slot');
+  CheckTrue(Pointer(LAVX512.CoreVectors.CeilF64x8) <> Pointer(LScalar.CoreVectors.CeilF64x8), 'AVX512 CeilF64x8 should not be scalar slot');
 
   if LHasAVX2 then
   begin
-    CheckTrue(Pointer(LAVX512.RoundF32x16) <> Pointer(LAVX2.RoundF32x16), 'AVX512 RoundF32x16 should not reuse AVX2 slot');
-    CheckTrue(Pointer(LAVX512.TruncF32x16) <> Pointer(LAVX2.TruncF32x16), 'AVX512 TruncF32x16 should not reuse AVX2 slot');
-    CheckTrue(Pointer(LAVX512.FloorF32x16) <> Pointer(LAVX2.FloorF32x16), 'AVX512 FloorF32x16 should not reuse AVX2 slot');
-    CheckTrue(Pointer(LAVX512.CeilF32x16) <> Pointer(LAVX2.CeilF32x16), 'AVX512 CeilF32x16 should not reuse AVX2 slot');
+    CheckTrue(Pointer(LAVX512.CoreVectors.RoundF32x16) <> Pointer(LAVX2.CoreVectors.RoundF32x16), 'AVX512 RoundF32x16 should not reuse AVX2 slot');
+    CheckTrue(Pointer(LAVX512.CoreVectors.TruncF32x16) <> Pointer(LAVX2.CoreVectors.TruncF32x16), 'AVX512 TruncF32x16 should not reuse AVX2 slot');
+    CheckTrue(Pointer(LAVX512.CoreVectors.FloorF32x16) <> Pointer(LAVX2.CoreVectors.FloorF32x16), 'AVX512 FloorF32x16 should not reuse AVX2 slot');
+    CheckTrue(Pointer(LAVX512.CoreVectors.CeilF32x16) <> Pointer(LAVX2.CoreVectors.CeilF32x16), 'AVX512 CeilF32x16 should not reuse AVX2 slot');
 
-    CheckTrue(Pointer(LAVX512.RoundF64x8) <> Pointer(LAVX2.RoundF64x8), 'AVX512 RoundF64x8 should not reuse AVX2 slot');
-    CheckTrue(Pointer(LAVX512.TruncF64x8) <> Pointer(LAVX2.TruncF64x8), 'AVX512 TruncF64x8 should not reuse AVX2 slot');
-    CheckTrue(Pointer(LAVX512.FloorF64x8) <> Pointer(LAVX2.FloorF64x8), 'AVX512 FloorF64x8 should not reuse AVX2 slot');
-    CheckTrue(Pointer(LAVX512.CeilF64x8) <> Pointer(LAVX2.CeilF64x8), 'AVX512 CeilF64x8 should not reuse AVX2 slot');
+    CheckTrue(Pointer(LAVX512.CoreVectors.RoundF64x8) <> Pointer(LAVX2.CoreVectors.RoundF64x8), 'AVX512 RoundF64x8 should not reuse AVX2 slot');
+    CheckTrue(Pointer(LAVX512.CoreVectors.TruncF64x8) <> Pointer(LAVX2.CoreVectors.TruncF64x8), 'AVX512 TruncF64x8 should not reuse AVX2 slot');
+    CheckTrue(Pointer(LAVX512.CoreVectors.FloorF64x8) <> Pointer(LAVX2.CoreVectors.FloorF64x8), 'AVX512 FloorF64x8 should not reuse AVX2 slot');
+    CheckTrue(Pointer(LAVX512.CoreVectors.CeilF64x8) <> Pointer(LAVX2.CoreVectors.CeilF64x8), 'AVX512 CeilF64x8 should not reuse AVX2 slot');
   end;
 
   LCanRunAVX512 := LAVX512.BackendInfo.Available and TrySetActiveBackend(sbAVX512);
@@ -13540,14 +13540,14 @@ begin
       LReduceInF64x8.d[LIndex] := (LIndex - 3.0) * 1.5;
     end;
 
-    LRoundF32x16 := LAVX512.RoundF32x16(LInF32x16);
-    LTruncF32x16 := LAVX512.TruncF32x16(LInF32x16);
-    LFloorF32x16 := LAVX512.FloorF32x16(LInF32x16);
-    LCeilF32x16 := LAVX512.CeilF32x16(LInF32x16);
-    LRoundF64x8 := LAVX512.RoundF64x8(LInF64x8);
-    LTruncF64x8 := LAVX512.TruncF64x8(LInF64x8);
-    LFloorF64x8 := LAVX512.FloorF64x8(LInF64x8);
-    LCeilF64x8 := LAVX512.CeilF64x8(LInF64x8);
+    LRoundF32x16 := LAVX512.CoreVectors.RoundF32x16(LInF32x16);
+    LTruncF32x16 := LAVX512.CoreVectors.TruncF32x16(LInF32x16);
+    LFloorF32x16 := LAVX512.CoreVectors.FloorF32x16(LInF32x16);
+    LCeilF32x16 := LAVX512.CoreVectors.CeilF32x16(LInF32x16);
+    LRoundF64x8 := LAVX512.CoreVectors.RoundF64x8(LInF64x8);
+    LTruncF64x8 := LAVX512.CoreVectors.TruncF64x8(LInF64x8);
+    LFloorF64x8 := LAVX512.CoreVectors.FloorF64x8(LInF64x8);
+    LCeilF64x8 := LAVX512.CoreVectors.CeilF64x8(LInF64x8);
 
     LExpectedRoundF32x16 := ScalarRoundF32x16(LInF32x16);
     LExpectedTruncF32x16 := ScalarTruncF32x16(LInF32x16);
@@ -13583,14 +13583,14 @@ begin
     LExpectedReduceMinF64x8 := ScalarReduceMinF64x8(LReduceInF64x8);
     LExpectedReduceMaxF64x8 := ScalarReduceMaxF64x8(LReduceInF64x8);
 
-    LActualReduceAddF32x16 := LAVX512.ReduceAddF32x16(LReduceInF32x16);
-    LActualReduceMulF32x16 := LAVX512.ReduceMulF32x16(LReduceInF32x16);
-    LActualReduceMinF32x16 := LAVX512.ReduceMinF32x16(LReduceInF32x16);
-    LActualReduceMaxF32x16 := LAVX512.ReduceMaxF32x16(LReduceInF32x16);
-    LActualReduceAddF64x8 := LAVX512.ReduceAddF64x8(LReduceInF64x8);
-    LActualReduceMulF64x8 := LAVX512.ReduceMulF64x8(LReduceInF64x8);
-    LActualReduceMinF64x8 := LAVX512.ReduceMinF64x8(LReduceInF64x8);
-    LActualReduceMaxF64x8 := LAVX512.ReduceMaxF64x8(LReduceInF64x8);
+    LActualReduceAddF32x16 := LAVX512.CoreVectors.ReduceAddF32x16(LReduceInF32x16);
+    LActualReduceMulF32x16 := LAVX512.CoreVectors.ReduceMulF32x16(LReduceInF32x16);
+    LActualReduceMinF32x16 := LAVX512.CoreVectors.ReduceMinF32x16(LReduceInF32x16);
+    LActualReduceMaxF32x16 := LAVX512.CoreVectors.ReduceMaxF32x16(LReduceInF32x16);
+    LActualReduceAddF64x8 := LAVX512.CoreVectors.ReduceAddF64x8(LReduceInF64x8);
+    LActualReduceMulF64x8 := LAVX512.CoreVectors.ReduceMulF64x8(LReduceInF64x8);
+    LActualReduceMinF64x8 := LAVX512.CoreVectors.ReduceMinF64x8(LReduceInF64x8);
+    LActualReduceMaxF64x8 := LAVX512.CoreVectors.ReduceMaxF64x8(LReduceInF64x8);
 
     CheckNear(LExpectedReduceAddF32x16, LActualReduceAddF32x16, 1e-5, 'AVX512 ReduceAddF32x16 parity');
     CheckNear(LExpectedReduceMulF32x16, LActualReduceMulF32x16, 1e-4, 'AVX512 ReduceMulF32x16 parity');
@@ -13627,31 +13627,31 @@ begin
     if not LClaims512 then
       Continue;
 
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddU32x16', Pointer(LScalar.AddU32x16), Pointer(LTable.AddU32x16));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqU32x16', Pointer(LScalar.CmpEqU32x16), Pointer(LTable.CmpEqU32x16));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'ShiftRightU32x16', Pointer(LScalar.ShiftRightU32x16), Pointer(LTable.ShiftRightU32x16));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddU32x16', Pointer(LScalar.CoreVectors.AddU32x16), Pointer(LTable.CoreVectors.AddU32x16));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqU32x16', Pointer(LScalar.CoreVectors.CmpEqU32x16), Pointer(LTable.CoreVectors.CmpEqU32x16));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'ShiftRightU32x16', Pointer(LScalar.CoreVectors.ShiftRightU32x16), Pointer(LTable.CoreVectors.ShiftRightU32x16));
 
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddU64x8', Pointer(LScalar.AddU64x8), Pointer(LTable.AddU64x8));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqU64x8', Pointer(LScalar.CmpEqU64x8), Pointer(LTable.CmpEqU64x8));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'ShiftRightU64x8', Pointer(LScalar.ShiftRightU64x8), Pointer(LTable.ShiftRightU64x8));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddU64x8', Pointer(LScalar.CoreVectors.AddU64x8), Pointer(LTable.CoreVectors.AddU64x8));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqU64x8', Pointer(LScalar.CoreVectors.CmpEqU64x8), Pointer(LTable.CoreVectors.CmpEqU64x8));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'ShiftRightU64x8', Pointer(LScalar.CoreVectors.ShiftRightU64x8), Pointer(LTable.CoreVectors.ShiftRightU64x8));
 
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddI16x32', Pointer(LScalar.AddI16x32), Pointer(LTable.AddI16x32));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqI16x32', Pointer(LScalar.CmpEqI16x32), Pointer(LTable.CmpEqI16x32));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'ShiftRightArithI16x32', Pointer(LScalar.ShiftRightArithI16x32), Pointer(LTable.ShiftRightArithI16x32));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddI16x32', Pointer(LScalar.CoreVectors.AddI16x32), Pointer(LTable.CoreVectors.AddI16x32));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqI16x32', Pointer(LScalar.CoreVectors.CmpEqI16x32), Pointer(LTable.CoreVectors.CmpEqI16x32));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'ShiftRightArithI16x32', Pointer(LScalar.CoreVectors.ShiftRightArithI16x32), Pointer(LTable.CoreVectors.ShiftRightArithI16x32));
 
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddI8x64', Pointer(LScalar.AddI8x64), Pointer(LTable.AddI8x64));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqI8x64', Pointer(LScalar.CmpEqI8x64), Pointer(LTable.CmpEqI8x64));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'MaxI8x64', Pointer(LScalar.MaxI8x64), Pointer(LTable.MaxI8x64));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddI8x64', Pointer(LScalar.CoreVectors.AddI8x64), Pointer(LTable.CoreVectors.AddI8x64));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqI8x64', Pointer(LScalar.CoreVectors.CmpEqI8x64), Pointer(LTable.CoreVectors.CmpEqI8x64));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'MaxI8x64', Pointer(LScalar.CoreVectors.MaxI8x64), Pointer(LTable.CoreVectors.MaxI8x64));
 
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddU8x64', Pointer(LScalar.AddU8x64), Pointer(LTable.AddU8x64));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqU8x64', Pointer(LScalar.CmpEqU8x64), Pointer(LTable.CmpEqU8x64));
-    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'MaxU8x64', Pointer(LScalar.MaxU8x64), Pointer(LTable.MaxU8x64));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'AddU8x64', Pointer(LScalar.CoreVectors.AddU8x64), Pointer(LTable.CoreVectors.AddU8x64));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'CmpEqU8x64', Pointer(LScalar.CoreVectors.CmpEqU8x64), Pointer(LTable.CoreVectors.CmpEqU8x64));
+    AssertNonScalarSlot(DispatchApiBackendName(LBackend), 'MaxU8x64', Pointer(LScalar.CoreVectors.MaxU8x64), Pointer(LTable.CoreVectors.MaxU8x64));
   end;
 
   if TryGetRegisteredBackendDispatchTable(sbAVX512, LTable) then
-    if (Pointer(LTable.AddU32x16) <> Pointer(LScalar.AddU32x16)) and
-       (Pointer(LTable.AddI16x32) <> Pointer(LScalar.AddI16x32)) and
-       (Pointer(LTable.AddU8x64) <> Pointer(LScalar.AddU8x64)) then
+    if (Pointer(LTable.CoreVectors.AddU32x16) <> Pointer(LScalar.CoreVectors.AddU32x16)) and
+       (Pointer(LTable.CoreVectors.AddI16x32) <> Pointer(LScalar.CoreVectors.AddI16x32)) and
+       (Pointer(LTable.CoreVectors.AddU8x64) <> Pointer(LScalar.CoreVectors.AddU8x64)) then
       CheckTrue(sc512BitOps in LTable.BackendInfo.Capabilities, 'AVX512 should advertise sc512BitOps once wide integer matrix is non-scalar')
     else
       CheckFalse(sc512BitOps in LTable.BackendInfo.Capabilities, 'AVX512 should not advertise sc512BitOps when wide integer matrix is scalar fallback');
@@ -13684,11 +13684,11 @@ begin
       Continue;
 
     LHasNonScalarIntegerSlots := False;
-    ObserveRepresentativeSlot('AddI32x4', Pointer(LScalar.AddI32x4), Pointer(LTable.AddI32x4));
-    ObserveRepresentativeSlot('AndI32x4', Pointer(LScalar.AndI32x4), Pointer(LTable.AndI32x4));
-    ObserveRepresentativeSlot('CmpEqI32x4', Pointer(LScalar.CmpEqI32x4), Pointer(LTable.CmpEqI32x4));
-    ObserveRepresentativeSlot('AddU32x16', Pointer(LScalar.AddU32x16), Pointer(LTable.AddU32x16));
-    ObserveRepresentativeSlot('MaxI8x64', Pointer(LScalar.MaxI8x64), Pointer(LTable.MaxI8x64));
+    ObserveRepresentativeSlot('AddI32x4', Pointer(LScalar.CoreVectors.AddI32x4), Pointer(LTable.CoreVectors.AddI32x4));
+    ObserveRepresentativeSlot('AndI32x4', Pointer(LScalar.CoreVectors.AndI32x4), Pointer(LTable.CoreVectors.AndI32x4));
+    ObserveRepresentativeSlot('CmpEqI32x4', Pointer(LScalar.CoreVectors.CmpEqI32x4), Pointer(LTable.CoreVectors.CmpEqI32x4));
+    ObserveRepresentativeSlot('AddU32x16', Pointer(LScalar.CoreVectors.AddU32x16), Pointer(LTable.CoreVectors.AddU32x16));
+    ObserveRepresentativeSlot('MaxI8x64', Pointer(LScalar.CoreVectors.MaxI8x64), Pointer(LTable.CoreVectors.MaxI8x64));
 
     if not LHasNonScalarIntegerSlots then
       Continue;
@@ -13726,11 +13726,11 @@ begin
       Continue;
 
     LHasNonScalarShuffleSlots := False;
-    ObserveRepresentativeSlot('SelectF32x4', Pointer(LScalar.SelectF32x4), Pointer(LTable.SelectF32x4));
-    ObserveRepresentativeSlot('InsertF32x4', Pointer(LScalar.InsertF32x4), Pointer(LTable.InsertF32x4));
-    ObserveRepresentativeSlot('ExtractF32x4', Pointer(LScalar.ExtractF32x4), Pointer(LTable.ExtractF32x4));
-    ObserveRepresentativeSlot('SelectF32x8', Pointer(LScalar.SelectF32x8), Pointer(LTable.SelectF32x8));
-    ObserveRepresentativeSlot('SelectF64x4', Pointer(LScalar.SelectF64x4), Pointer(LTable.SelectF64x4));
+    ObserveRepresentativeSlot('SelectF32x4', Pointer(LScalar.CoreVectors.SelectF32x4), Pointer(LTable.CoreVectors.SelectF32x4));
+    ObserveRepresentativeSlot('InsertF32x4', Pointer(LScalar.CoreVectors.InsertF32x4), Pointer(LTable.CoreVectors.InsertF32x4));
+    ObserveRepresentativeSlot('ExtractF32x4', Pointer(LScalar.CoreVectors.ExtractF32x4), Pointer(LTable.CoreVectors.ExtractF32x4));
+    ObserveRepresentativeSlot('SelectF32x8', Pointer(LScalar.CoreVectors.SelectF32x8), Pointer(LTable.CoreVectors.SelectF32x8));
+    ObserveRepresentativeSlot('SelectF64x4', Pointer(LScalar.CoreVectors.SelectF64x4), Pointer(LTable.CoreVectors.SelectF64x4));
 
     if not LHasNonScalarShuffleSlots then
       Continue;
@@ -13830,11 +13830,11 @@ begin
       Continue;
 
     LHasNonScalarIntegerSlots := False;
-    ObserveRepresentativeSlot('AddI32x4', Pointer(LScalar.AddI32x4), Pointer(LTable.AddI32x4));
-    ObserveRepresentativeSlot('AndI32x4', Pointer(LScalar.AndI32x4), Pointer(LTable.AndI32x4));
-    ObserveRepresentativeSlot('CmpEqI32x4', Pointer(LScalar.CmpEqI32x4), Pointer(LTable.CmpEqI32x4));
-    ObserveRepresentativeSlot('AddU32x16', Pointer(LScalar.AddU32x16), Pointer(LTable.AddU32x16));
-    ObserveRepresentativeSlot('MaxI8x64', Pointer(LScalar.MaxI8x64), Pointer(LTable.MaxI8x64));
+    ObserveRepresentativeSlot('AddI32x4', Pointer(LScalar.CoreVectors.AddI32x4), Pointer(LTable.CoreVectors.AddI32x4));
+    ObserveRepresentativeSlot('AndI32x4', Pointer(LScalar.CoreVectors.AndI32x4), Pointer(LTable.CoreVectors.AndI32x4));
+    ObserveRepresentativeSlot('CmpEqI32x4', Pointer(LScalar.CoreVectors.CmpEqI32x4), Pointer(LTable.CoreVectors.CmpEqI32x4));
+    ObserveRepresentativeSlot('AddU32x16', Pointer(LScalar.CoreVectors.AddU32x16), Pointer(LTable.CoreVectors.AddU32x16));
+    ObserveRepresentativeSlot('MaxI8x64', Pointer(LScalar.CoreVectors.MaxI8x64), Pointer(LTable.CoreVectors.MaxI8x64));
 
     if LHasNonScalarIntegerSlots then
       Continue;
@@ -13881,11 +13881,11 @@ begin
       Continue;
 
     LHasNonScalarAlwaysOnIntegerSlots := False;
-    ObserveRepresentativeSlot(Pointer(LScalar.AddI16x8), Pointer(LTable.AddI16x8));
-    ObserveRepresentativeSlot(Pointer(LScalar.AndI16x8), Pointer(LTable.AndI16x8));
-    ObserveRepresentativeSlot(Pointer(LScalar.CmpEqI16x8), Pointer(LTable.CmpEqI16x8));
-    ObserveRepresentativeSlot(Pointer(LScalar.AddU8x16), Pointer(LTable.AddU8x16));
-    ObserveRepresentativeSlot(Pointer(LScalar.MaxU8x16), Pointer(LTable.MaxU8x16));
+    ObserveRepresentativeSlot(Pointer(LScalar.CoreVectors.AddI16x8), Pointer(LTable.CoreVectors.AddI16x8));
+    ObserveRepresentativeSlot(Pointer(LScalar.CoreVectors.AndI16x8), Pointer(LTable.CoreVectors.AndI16x8));
+    ObserveRepresentativeSlot(Pointer(LScalar.CoreVectors.CmpEqI16x8), Pointer(LTable.CoreVectors.CmpEqI16x8));
+    ObserveRepresentativeSlot(Pointer(LScalar.CoreVectors.AddU8x16), Pointer(LTable.CoreVectors.AddU8x16));
+    ObserveRepresentativeSlot(Pointer(LScalar.CoreVectors.MaxU8x16), Pointer(LTable.CoreVectors.MaxU8x16));
 
     if not LHasNonScalarAlwaysOnIntegerSlots then
       Continue;
@@ -13975,13 +13975,13 @@ begin
   if not LCanRunAVX2 then
     Exit;
 
-  CheckTrue(Assigned(LTable.FmaF32x4), 'AVX2 FmaF32x4 should be assigned');
+  CheckTrue(Assigned(LTable.CoreVectors.FmaF32x4), 'AVX2 FmaF32x4 should be assigned');
 
   // This input distinguishes fused FMA from separate mul+add.
   LA := VecF32x4Splat(SingleFromBitsLocal($3F800001));
   LB := LA;
   LC := VecF32x4Splat(SingleFromBitsLocal($BF800002));
-  LResult := LTable.FmaF32x4(LA, LB, LC);
+  LResult := LTable.CoreVectors.FmaF32x4(LA, LB, LC);
 
   for LLane := 0 to 3 do
     CheckNear(SingleFromBitsLocal($28800000), VecF32x4Extract(LResult, LLane), 0.0, 'AVX2 fused FMA witness lane ' + IntToStr(LLane));
@@ -14025,12 +14025,12 @@ begin
   if not (scFMA in LTable.BackendInfo.Capabilities) then
     Exit;
 
-  CheckTrue(Pointer(LTable.FmaF32x4) <> Pointer(LScalarTable.FmaF32x4), 'AVX2 FmaF32x4 should leave the scalar slot once scFMA is advertised');
-  CheckTrue(Pointer(LTable.FmaF64x2) <> Pointer(LScalarTable.FmaF64x2), 'AVX2 FmaF64x2 should leave the scalar slot once scFMA is advertised');
-  CheckTrue(Pointer(LTable.FmaF32x8) <> Pointer(LScalarTable.FmaF32x8), 'AVX2 FmaF32x8 should leave the scalar slot once scFMA is advertised');
-  CheckTrue(Pointer(LTable.FmaF64x4) <> Pointer(LScalarTable.FmaF64x4), 'AVX2 FmaF64x4 should leave the scalar slot once scFMA is advertised');
-  CheckTrue(Pointer(LTable.FmaF32x16) <> Pointer(LScalarTable.FmaF32x16), 'AVX2 FmaF32x16 should leave the scalar slot once scFMA is advertised');
-  CheckTrue(Pointer(LTable.FmaF64x8) <> Pointer(LScalarTable.FmaF64x8), 'AVX2 FmaF64x8 should leave the scalar slot once scFMA is advertised');
+  CheckTrue(Pointer(LTable.CoreVectors.FmaF32x4) <> Pointer(LScalarTable.CoreVectors.FmaF32x4), 'AVX2 FmaF32x4 should leave the scalar slot once scFMA is advertised');
+  CheckTrue(Pointer(LTable.CoreVectors.FmaF64x2) <> Pointer(LScalarTable.CoreVectors.FmaF64x2), 'AVX2 FmaF64x2 should leave the scalar slot once scFMA is advertised');
+  CheckTrue(Pointer(LTable.CoreVectors.FmaF32x8) <> Pointer(LScalarTable.CoreVectors.FmaF32x8), 'AVX2 FmaF32x8 should leave the scalar slot once scFMA is advertised');
+  CheckTrue(Pointer(LTable.CoreVectors.FmaF64x4) <> Pointer(LScalarTable.CoreVectors.FmaF64x4), 'AVX2 FmaF64x4 should leave the scalar slot once scFMA is advertised');
+  CheckTrue(Pointer(LTable.CoreVectors.FmaF32x16) <> Pointer(LScalarTable.CoreVectors.FmaF32x16), 'AVX2 FmaF32x16 should leave the scalar slot once scFMA is advertised');
+  CheckTrue(Pointer(LTable.CoreVectors.FmaF64x8) <> Pointer(LScalarTable.CoreVectors.FmaF64x8), 'AVX2 FmaF64x8 should leave the scalar slot once scFMA is advertised');
 
   CheckTrue(TryGetSimdBackendPodInfo(sbAVX2, LInfo), 'Public ABI pod info should be available for AVX2 FMA contract test');
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scFMA))) <> 0, 'Public ABI CapabilityBits should expose AVX2 scFMA once fused AVX2 FMA is contract-visible');
@@ -14063,8 +14063,8 @@ begin
     LSourceLines.Free;
   end;
 
-  CheckTrue(Pos('dispatchtable.fmaf32x16 := @avx2fmaf32x16;', LRegisterSource) > 0, 'AVX2 register should keep FmaF32x16 bound to AVX2 wide emulation when vector asm is enabled');
-  CheckTrue(Pos('dispatchtable.fmaf64x8 := @avx2fmaf64x8;', LRegisterSource) > 0, 'AVX2 register should keep FmaF64x8 bound to AVX2 wide emulation when vector asm is enabled');
+  CheckTrue(Pos('dispatchtable.corevectors.fmaf32x16 := @avx2fmaf32x16;', LRegisterSource) > 0, 'AVX2 register should keep FmaF32x16 bound to AVX2 wide emulation when vector asm is enabled');
+  CheckTrue(Pos('dispatchtable.corevectors.fmaf64x8 := @avx2fmaf64x8;', LRegisterSource) > 0, 'AVX2 register should keep FmaF64x8 bound to AVX2 wide emulation when vector asm is enabled');
   CheckTrue((Pos('function avx2fmaf32x16', LWideSource) > 0) and (Pos('result.lo := avx2fmaf32x8(a.lo, b.lo, c.lo);', LWideSource) > 0) and (Pos('result.hi := avx2fmaf32x8(a.hi, b.hi, c.hi);', LWideSource) > 0), 'AVX2 wide emulation should compose FmaF32x16 from two FmaF32x8 halves');
   CheckTrue((Pos('function avx2fmaf64x8', LWideSource) > 0) and (Pos('result.lo := avx2fmaf64x4(a.lo, b.lo, c.lo);', LWideSource) > 0) and (Pos('result.hi := avx2fmaf64x4(a.hi, b.hi, c.hi);', LWideSource) > 0), 'AVX2 wide emulation should compose FmaF64x8 from two FmaF64x4 halves');
 
@@ -14087,10 +14087,10 @@ begin
   if not LCanRunAVX2 then
     Exit;
 
-  CheckTrue(Pointer(LAVX2Table.FmaF32x8) <> Pointer(LScalarTable.FmaF32x8), 'AVX2 FmaF32x8 should leave the scalar slot when wide FMA half-composition is runtime-checkable');
-  CheckTrue(Pointer(LAVX2Table.FmaF32x16) <> Pointer(LScalarTable.FmaF32x16), 'AVX2 FmaF32x16 should leave the scalar slot when wide FMA half-composition is runtime-checkable');
-  CheckTrue(Pointer(LAVX2Table.FmaF64x4) <> Pointer(LScalarTable.FmaF64x4), 'AVX2 FmaF64x4 should leave the scalar slot when wide FMA half-composition is runtime-checkable');
-  CheckTrue(Pointer(LAVX2Table.FmaF64x8) <> Pointer(LScalarTable.FmaF64x8), 'AVX2 FmaF64x8 should leave the scalar slot when wide FMA half-composition is runtime-checkable');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.FmaF32x8) <> Pointer(LScalarTable.CoreVectors.FmaF32x8), 'AVX2 FmaF32x8 should leave the scalar slot when wide FMA half-composition is runtime-checkable');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.FmaF32x16) <> Pointer(LScalarTable.CoreVectors.FmaF32x16), 'AVX2 FmaF32x16 should leave the scalar slot when wide FMA half-composition is runtime-checkable');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.FmaF64x4) <> Pointer(LScalarTable.CoreVectors.FmaF64x4), 'AVX2 FmaF64x4 should leave the scalar slot when wide FMA half-composition is runtime-checkable');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.FmaF64x8) <> Pointer(LScalarTable.CoreVectors.FmaF64x8), 'AVX2 FmaF64x8 should leave the scalar slot when wide FMA half-composition is runtime-checkable');
 
   for LIndex := 0 to 15 do
   begin
@@ -14118,15 +14118,15 @@ begin
     LF64C.d[LIndex] := (1 - (LIndex and 1)) * 0.125;
   end;
 
-  LF32Actual := LAVX2Table.FmaF32x16(LF32A, LF32B, LF32C);
-  LF32Expected.lo := LAVX2Table.FmaF32x8(LF32A.lo, LF32B.lo, LF32C.lo);
-  LF32Expected.hi := LAVX2Table.FmaF32x8(LF32A.hi, LF32B.hi, LF32C.hi);
+  LF32Actual := LAVX2Table.CoreVectors.FmaF32x16(LF32A, LF32B, LF32C);
+  LF32Expected.lo := LAVX2Table.CoreVectors.FmaF32x8(LF32A.lo, LF32B.lo, LF32C.lo);
+  LF32Expected.hi := LAVX2Table.CoreVectors.FmaF32x8(LF32A.hi, LF32B.hi, LF32C.hi);
   for LIndex := 0 to 15 do
     CheckNear(LF32Expected.f[LIndex], LF32Actual.f[LIndex], 0.0, 'AVX2 FmaF32x16 should follow two FmaF32x8 halves on exact inputs lane ' + IntToStr(LIndex));
 
-  LF64Actual := LAVX2Table.FmaF64x8(LF64A, LF64B, LF64C);
-  LF64Expected.lo := LAVX2Table.FmaF64x4(LF64A.lo, LF64B.lo, LF64C.lo);
-  LF64Expected.hi := LAVX2Table.FmaF64x4(LF64A.hi, LF64B.hi, LF64C.hi);
+  LF64Actual := LAVX2Table.CoreVectors.FmaF64x8(LF64A, LF64B, LF64C);
+  LF64Expected.lo := LAVX2Table.CoreVectors.FmaF64x4(LF64A.lo, LF64B.lo, LF64C.lo);
+  LF64Expected.hi := LAVX2Table.CoreVectors.FmaF64x4(LF64A.hi, LF64B.hi, LF64C.hi);
   for LIndex := 0 to 7 do
     CheckNear(LF64Expected.d[LIndex], LF64Actual.d[LIndex], 0.0, 'AVX2 FmaF64x8 should follow two FmaF64x4 halves on exact inputs lane ' + IntToStr(LIndex));
 end;
@@ -14160,8 +14160,8 @@ begin
     LSourceLines.Free;
   end;
 
-  CheckTrue(Pos('dispatchtable.selectf32x16 := @avx2selectf32x16;', LRegisterSource) > 0, 'AVX2 register should keep SelectF32x16 bound to AVX2 wide emulation when vector asm is enabled');
-  CheckTrue(Pos('dispatchtable.selectf64x8 := @avx2selectf64x8;', LRegisterSource) > 0, 'AVX2 register should keep SelectF64x8 bound to AVX2 wide emulation when vector asm is enabled');
+  CheckTrue(Pos('dispatchtable.corevectors.selectf32x16 := @avx2selectf32x16;', LRegisterSource) > 0, 'AVX2 register should keep SelectF32x16 bound to AVX2 wide emulation when vector asm is enabled');
+  CheckTrue(Pos('dispatchtable.corevectors.selectf64x8 := @avx2selectf64x8;', LRegisterSource) > 0, 'AVX2 register should keep SelectF64x8 bound to AVX2 wide emulation when vector asm is enabled');
   CheckTrue(Pos('function avx2selectf32x16', LWideSource) > 0, 'AVX2 wide emulation source should still define SelectF32x16');
   CheckTrue(Pos('function avx2selectf64x8', LWideSource) > 0, 'AVX2 wide emulation source should still define SelectF64x8');
 
@@ -14179,8 +14179,8 @@ begin
   if not LCanRunAVX2 then
     Exit;
 
-  CheckTrue(Pointer(LAVX2Table.SelectF32x16) <> Pointer(LScalarTable.SelectF32x16), 'AVX2 SelectF32x16 should leave the scalar slot when wide select parity is runtime-checkable');
-  CheckTrue(Pointer(LAVX2Table.SelectF64x8) <> Pointer(LScalarTable.SelectF64x8), 'AVX2 SelectF64x8 should leave the scalar slot when wide select parity is runtime-checkable');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.SelectF32x16) <> Pointer(LScalarTable.CoreVectors.SelectF32x16), 'AVX2 SelectF32x16 should leave the scalar slot when wide select parity is runtime-checkable');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.SelectF64x8) <> Pointer(LScalarTable.CoreVectors.SelectF64x8), 'AVX2 SelectF64x8 should leave the scalar slot when wide select parity is runtime-checkable');
 
   LMask16 := TMask16($A55A);
   LMask8 := TMask8($A5);
@@ -14196,12 +14196,12 @@ begin
     LF64B.d[LIndex] := -100.0 - LIndex - 0.25;
   end;
 
-  LF32Actual := LAVX2Table.SelectF32x16(LMask16, LF32A, LF32B);
+  LF32Actual := LAVX2Table.CoreVectors.SelectF32x16(LMask16, LF32A, LF32B);
   LF32Expected := ScalarSelectF32x16(LMask16, LF32A, LF32B);
   for LIndex := 0 to 15 do
     CheckNear(LF32Expected.f[LIndex], LF32Actual.f[LIndex], 0.0, 'AVX2 SelectF32x16 scalar parity lane ' + IntToStr(LIndex));
 
-  LF64Actual := LAVX2Table.SelectF64x8(LMask8, LF64A, LF64B);
+  LF64Actual := LAVX2Table.CoreVectors.SelectF64x8(LMask8, LF64A, LF64B);
   LF64Expected := ScalarSelectF64x8(LMask8, LF64A, LF64B);
   for LIndex := 0 to 7 do
     CheckNear(LF64Expected.d[LIndex], LF64Actual.d[LIndex], 0.0, 'AVX2 SelectF64x8 scalar parity lane ' + IntToStr(LIndex));
@@ -14229,12 +14229,12 @@ begin
 
   CheckFalse(scFMA in LAVX2Table.BackendInfo.Capabilities, 'AVX2 should not advertise scFMA when hardware FMA is unavailable');
 
-  CheckEqual(PtrUInt(LScalarTable.FmaF32x4), PtrUInt(LAVX2Table.FmaF32x4), 'AVX2 FmaF32x4 slot should stay scalar when hardware FMA is unavailable');
-  CheckEqual(PtrUInt(LScalarTable.FmaF64x2), PtrUInt(LAVX2Table.FmaF64x2), 'AVX2 FmaF64x2 slot should stay scalar when hardware FMA is unavailable');
-  CheckEqual(PtrUInt(LScalarTable.FmaF32x8), PtrUInt(LAVX2Table.FmaF32x8), 'AVX2 FmaF32x8 slot should stay scalar when hardware FMA is unavailable');
-  CheckEqual(PtrUInt(LScalarTable.FmaF64x4), PtrUInt(LAVX2Table.FmaF64x4), 'AVX2 FmaF64x4 slot should stay scalar when hardware FMA is unavailable');
-  CheckEqual(PtrUInt(LScalarTable.FmaF32x16), PtrUInt(LAVX2Table.FmaF32x16), 'AVX2 FmaF32x16 slot should stay scalar when hardware FMA is unavailable');
-  CheckEqual(PtrUInt(LScalarTable.FmaF64x8), PtrUInt(LAVX2Table.FmaF64x8), 'AVX2 FmaF64x8 slot should stay scalar when hardware FMA is unavailable');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.FmaF32x4), PtrUInt(LAVX2Table.CoreVectors.FmaF32x4), 'AVX2 FmaF32x4 slot should stay scalar when hardware FMA is unavailable');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.FmaF64x2), PtrUInt(LAVX2Table.CoreVectors.FmaF64x2), 'AVX2 FmaF64x2 slot should stay scalar when hardware FMA is unavailable');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.FmaF32x8), PtrUInt(LAVX2Table.CoreVectors.FmaF32x8), 'AVX2 FmaF32x8 slot should stay scalar when hardware FMA is unavailable');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.FmaF64x4), PtrUInt(LAVX2Table.CoreVectors.FmaF64x4), 'AVX2 FmaF64x4 slot should stay scalar when hardware FMA is unavailable');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.FmaF32x16), PtrUInt(LAVX2Table.CoreVectors.FmaF32x16), 'AVX2 FmaF32x16 slot should stay scalar when hardware FMA is unavailable');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.FmaF64x8), PtrUInt(LAVX2Table.CoreVectors.FmaF64x8), 'AVX2 FmaF64x8 slot should stay scalar when hardware FMA is unavailable');
 
   CheckTrue(TryGetSimdBackendPodInfo(sbAVX2, LInfo), 'TryGetSimdBackendPodInfo should succeed for sbAVX2');
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scFMA))) = 0, 'Public ABI CapabilityBits should keep AVX2 scFMA clear when hardware FMA is unavailable');
@@ -14304,20 +14304,20 @@ begin
   {$ENDIF}
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar backend should remain registered in riscv fallback contract test');
-  CheckTrue(Assigned(LScalarTable.AndNotI64x2), 'Registered scalar AndNotI64x2 should be assigned');
-  CheckTrue(Assigned(LScalarTable.AddU64x2), 'Registered scalar AddU64x2 should be assigned');
-  CheckTrue(Assigned(LScalarTable.AddU32x8), 'Registered scalar AddU32x8 should be assigned');
-  CheckTrue(Assigned(LScalarTable.LoadF32x16), 'Registered scalar LoadF32x16 should be assigned');
-  CheckTrue(Assigned(LScalarTable.AddU64x8), 'Registered scalar AddU64x8 should be assigned');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.AndNotI64x2), 'Registered scalar AndNotI64x2 should be assigned');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.AddU64x2), 'Registered scalar AddU64x2 should be assigned');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.AddU32x8), 'Registered scalar AddU32x8 should be assigned');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.LoadF32x16), 'Registered scalar LoadF32x16 should be assigned');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.AddU64x8), 'Registered scalar AddU64x8 should be assigned');
 
   LCurrentDispatch := GetDispatchTable;
   CheckNotNil(LCurrentDispatch, 'Current dispatch should be available in riscv fallback contract test');
   CheckEqual(Ord(sbScalar), Ord(LCurrentDispatch^.Backend), 'Fallback current backend should stay Scalar in riscv fallback contract test');
-  CheckTrue(Assigned(LCurrentDispatch^.AndNotI64x2), 'Current dispatch AndNotI64x2 should be assigned');
-  CheckTrue(Assigned(LCurrentDispatch^.AddU64x2), 'Current dispatch AddU64x2 should be assigned');
-  CheckTrue(Assigned(LCurrentDispatch^.AddU32x8), 'Current dispatch AddU32x8 should be assigned');
-  CheckTrue(Assigned(LCurrentDispatch^.LoadF32x16), 'Current dispatch LoadF32x16 should be assigned');
-  CheckTrue(Assigned(LCurrentDispatch^.AddU64x8), 'Current dispatch AddU64x8 should be assigned');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.AndNotI64x2), 'Current dispatch AndNotI64x2 should be assigned');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.AddU64x2), 'Current dispatch AddU64x2 should be assigned');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.AddU32x8), 'Current dispatch AddU32x8 should be assigned');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.LoadF32x16), 'Current dispatch LoadF32x16 should be assigned');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.AddU64x8), 'Current dispatch AddU64x8 should be assigned');
 end;
 
 procedure TTestCase_RISCVFallbackDispatchContract.Test_RollbackRestoreSuccess_Keep_RepresentativeWideSlots_Assigned;
@@ -14340,7 +14340,7 @@ begin
   LCurrentDispatch := GetDispatchTable;
   CheckNotNil(LCurrentDispatch, 'Current dispatch should be available before rollback-restore success probe');
   CheckEqual(Ord(sbScalar), Ord(LCurrentDispatch^.Backend), 'Rollback-restore success probe expects current backend to start Scalar');
-  CheckTrue(Assigned(LCurrentDispatch^.AndNotI64x2), 'Current dispatch AndNotI64x2 should start assigned before rollback-restore success probe');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.AndNotI64x2), 'Current dispatch AndNotI64x2 should start assigned before rollback-restore success probe');
 
   LInnerSetupDone := False;
   LCase := TTestCase_DispatchAPI.Create;
@@ -14355,20 +14355,20 @@ begin
   end;
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar backend should remain registered after rollback-restore success probe');
-  CheckTrue(Assigned(LScalarTable.AndNotI64x2), 'Registered scalar AndNotI64x2 should remain assigned after rollback-restore success probe');
-  CheckTrue(Assigned(LScalarTable.AddU64x2), 'Registered scalar AddU64x2 should remain assigned after rollback-restore success probe');
-  CheckTrue(Assigned(LScalarTable.AddU32x8), 'Registered scalar AddU32x8 should remain assigned after rollback-restore success probe');
-  CheckTrue(Assigned(LScalarTable.LoadF32x16), 'Registered scalar LoadF32x16 should remain assigned after rollback-restore success probe');
-  CheckTrue(Assigned(LScalarTable.AddU64x8), 'Registered scalar AddU64x8 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.AndNotI64x2), 'Registered scalar AndNotI64x2 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.AddU64x2), 'Registered scalar AddU64x2 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.AddU32x8), 'Registered scalar AddU32x8 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.LoadF32x16), 'Registered scalar LoadF32x16 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LScalarTable.CoreVectors.AddU64x8), 'Registered scalar AddU64x8 should remain assigned after rollback-restore success probe');
 
   LCurrentDispatch := GetDispatchTable;
   CheckNotNil(LCurrentDispatch, 'Current dispatch should be available after rollback-restore success probe');
   CheckEqual(Ord(sbScalar), Ord(LCurrentDispatch^.Backend), 'Current dispatch backend should stay Scalar after rollback-restore success probe');
-  CheckTrue(Assigned(LCurrentDispatch^.AndNotI64x2), 'Current dispatch AndNotI64x2 should remain assigned after rollback-restore success probe');
-  CheckTrue(Assigned(LCurrentDispatch^.AddU64x2), 'Current dispatch AddU64x2 should remain assigned after rollback-restore success probe');
-  CheckTrue(Assigned(LCurrentDispatch^.AddU32x8), 'Current dispatch AddU32x8 should remain assigned after rollback-restore success probe');
-  CheckTrue(Assigned(LCurrentDispatch^.LoadF32x16), 'Current dispatch LoadF32x16 should remain assigned after rollback-restore success probe');
-  CheckTrue(Assigned(LCurrentDispatch^.AddU64x8), 'Current dispatch AddU64x8 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.AndNotI64x2), 'Current dispatch AndNotI64x2 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.AddU64x2), 'Current dispatch AddU64x2 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.AddU32x8), 'Current dispatch AddU32x8 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.LoadF32x16), 'Current dispatch LoadF32x16 should remain assigned after rollback-restore success probe');
+  CheckTrue(Assigned(LCurrentDispatch^.CoreVectors.AddU64x8), 'Current dispatch AddU64x8 should remain assigned after rollback-restore success probe');
 end;
 
 procedure TTestCase_DispatchAPI.Test_AVX512_BackendCapabilities_Expose_FMA_When_WideFmaSlots_AreNative;
@@ -14385,11 +14385,11 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbAVX512, LAVX512Table) then
     Exit;
 
-  CheckTrue(Assigned(LAVX512Table.FmaF32x16), 'AVX512 FmaF32x16 should be assigned');
-  CheckTrue(Assigned(LAVX512Table.FmaF64x8), 'AVX512 FmaF64x8 should be assigned');
+  CheckTrue(Assigned(LAVX512Table.CoreVectors.FmaF32x16), 'AVX512 FmaF32x16 should be assigned');
+  CheckTrue(Assigned(LAVX512Table.CoreVectors.FmaF64x8), 'AVX512 FmaF64x8 should be assigned');
 
-  if (Pointer(LAVX512Table.FmaF32x16) = Pointer(LScalarTable.FmaF32x16)) and
-     (Pointer(LAVX512Table.FmaF64x8) = Pointer(LScalarTable.FmaF64x8)) then
+  if (Pointer(LAVX512Table.CoreVectors.FmaF32x16) = Pointer(LScalarTable.CoreVectors.FmaF32x16)) and
+     (Pointer(LAVX512Table.CoreVectors.FmaF64x8) = Pointer(LScalarTable.CoreVectors.FmaF64x8)) then
     Exit;
 
   CheckTrue(scFMA in LAVX512Table.BackendInfo.Capabilities, 'AVX512 should advertise scFMA once wide FMA slots are non-scalar');
@@ -14409,11 +14409,11 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbAVX512, LAVX512Table) then
     Exit;
 
-  CheckTrue(Assigned(LAVX512Table.SelectF32x16), 'AVX512 SelectF32x16 should be assigned');
-  CheckTrue(Assigned(LAVX512Table.SelectF64x8), 'AVX512 SelectF64x8 should be assigned');
+  CheckTrue(Assigned(LAVX512Table.CoreVectors.SelectF32x16), 'AVX512 SelectF32x16 should be assigned');
+  CheckTrue(Assigned(LAVX512Table.CoreVectors.SelectF64x8), 'AVX512 SelectF64x8 should be assigned');
 
-  if (Pointer(LAVX512Table.SelectF32x16) = Pointer(LScalarTable.SelectF32x16)) and
-     (Pointer(LAVX512Table.SelectF64x8) = Pointer(LScalarTable.SelectF64x8)) then
+  if (Pointer(LAVX512Table.CoreVectors.SelectF32x16) = Pointer(LScalarTable.CoreVectors.SelectF32x16)) and
+     (Pointer(LAVX512Table.CoreVectors.SelectF64x8) = Pointer(LScalarTable.CoreVectors.SelectF64x8)) then
     Exit;
 
   CheckTrue(scShuffle in LAVX512Table.BackendInfo.Capabilities, 'AVX512 should advertise scShuffle once wide select slots are non-scalar');
@@ -14437,8 +14437,8 @@ begin
   CheckFalse(IsVectorAsmEnabled, 'Vector asm should be disabled for AVX512 capability rebuild test');
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbAVX512, LAVX512Table), 'AVX512 backend should remain registered after runtime rebuild');
 
-  CheckEqual(PtrUInt(LScalarTable.FmaF32x16), PtrUInt(LAVX512Table.FmaF32x16), 'AVX512 FmaF32x16 should fall back to scalar when vector asm is disabled');
-  CheckEqual(PtrUInt(LScalarTable.AddU32x16), PtrUInt(LAVX512Table.AddU32x16), 'AVX512 AddU32x16 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.FmaF32x16), PtrUInt(LAVX512Table.CoreVectors.FmaF32x16), 'AVX512 FmaF32x16 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.AddU32x16), PtrUInt(LAVX512Table.CoreVectors.AddU32x16), 'AVX512 AddU32x16 should fall back to scalar when vector asm is disabled');
 
   CheckFalse(scFMA in LAVX512Table.BackendInfo.Capabilities, 'AVX512 scFMA should clear when vector asm is disabled');
   CheckFalse(scShuffle in LAVX512Table.BackendInfo.Capabilities, 'AVX512 scShuffle should clear when vector asm is disabled');
@@ -14460,15 +14460,15 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LNEONTable.SelectF32x4), 'NEON SelectF32x4 should be assigned');
-  CheckTrue(Assigned(LNEONTable.InsertF32x4), 'NEON InsertF32x4 should be assigned');
-  CheckTrue(Assigned(LNEONTable.ExtractF32x4), 'NEON ExtractF32x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.SelectF32x4), 'NEON SelectF32x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.InsertF32x4), 'NEON InsertF32x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.ExtractF32x4), 'NEON ExtractF32x4 should be assigned');
 
-  if (Pointer(LNEONTable.SelectF32x4) = Pointer(LScalarTable.SelectF32x4)) and
-     (Pointer(LNEONTable.InsertF32x4) = Pointer(LScalarTable.InsertF32x4)) and
-     (Pointer(LNEONTable.ExtractF32x4) = Pointer(LScalarTable.ExtractF32x4)) and
-     (Pointer(LNEONTable.SelectF32x8) = Pointer(LScalarTable.SelectF32x8)) and
-     (Pointer(LNEONTable.SelectF64x4) = Pointer(LScalarTable.SelectF64x4)) then
+  if (Pointer(LNEONTable.CoreVectors.SelectF32x4) = Pointer(LScalarTable.CoreVectors.SelectF32x4)) and
+     (Pointer(LNEONTable.CoreVectors.InsertF32x4) = Pointer(LScalarTable.CoreVectors.InsertF32x4)) and
+     (Pointer(LNEONTable.CoreVectors.ExtractF32x4) = Pointer(LScalarTable.CoreVectors.ExtractF32x4)) and
+     (Pointer(LNEONTable.CoreVectors.SelectF32x8) = Pointer(LScalarTable.CoreVectors.SelectF32x8)) and
+     (Pointer(LNEONTable.CoreVectors.SelectF64x4) = Pointer(LScalarTable.CoreVectors.SelectF64x4)) then
     Exit;
 
   {$IFDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
@@ -14489,10 +14489,10 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LNEONTable.FmaF32x4), 'NEON FmaF32x4 should be assigned');
-  CheckTrue(Assigned(LNEONTable.FmaF32x8), 'NEON FmaF32x8 should be assigned');
-  CheckTrue(Assigned(LNEONTable.FmaF64x2), 'NEON FmaF64x2 should be assigned');
-  CheckTrue(Assigned(LNEONTable.FmaF64x4), 'NEON FmaF64x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.FmaF32x4), 'NEON FmaF32x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.FmaF32x8), 'NEON FmaF32x8 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.FmaF64x2), 'NEON FmaF64x2 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.FmaF64x4), 'NEON FmaF64x4 should be assigned');
 
   {$IFDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
   CheckTrue(scFMA in LNEONTable.BackendInfo.Capabilities, 'NEON should advertise scFMA when NEON asm-backed FMA slots are compiled');
@@ -14512,9 +14512,9 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LNEONTable.AddI32x4), 'NEON AddI32x4 should be assigned');
-  CheckTrue(Assigned(LNEONTable.AndI32x4), 'NEON AndI32x4 should be assigned');
-  CheckTrue(Assigned(LNEONTable.AddI16x8), 'NEON AddI16x8 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.AddI32x4), 'NEON AddI32x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.AndI32x4), 'NEON AndI32x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.AddI16x8), 'NEON AddI16x8 should be assigned');
 
   {$IFDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
   CheckTrue(scIntegerOps in LNEONTable.BackendInfo.Capabilities, 'NEON should advertise scIntegerOps when NEON asm-backed integer slots are compiled');
@@ -14533,8 +14533,8 @@ begin
   {$ENDIF}
 
   FillBaseDispatchTable(LExpectedBaseTable);
-  CheckTrue(Assigned(LExpectedBaseTable.FmaF32x4), 'Base fallback FmaF32x4 should be assigned');
-  CheckTrue(Assigned(LExpectedBaseTable.SelectF32x4), 'Base fallback SelectF32x4 should be assigned');
+  CheckTrue(Assigned(LExpectedBaseTable.CoreVectors.FmaF32x4), 'Base fallback FmaF32x4 should be assigned');
+  CheckTrue(Assigned(LExpectedBaseTable.CoreVectors.SelectF32x4), 'Base fallback SelectF32x4 should be assigned');
 
   GetDispatchTable;
   SetVectorAsmEnabled(True);
@@ -14542,10 +14542,10 @@ begin
   CheckFalse(IsVectorAsmEnabled, 'Vector asm should be disabled for NEON capability rebuild test');
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbNEON, LNEONTable), 'NEON backend should remain registered after runtime rebuild');
 
-  CheckEqual(PtrUInt(LExpectedBaseTable.FmaF32x4), PtrUInt(LNEONTable.FmaF32x4), 'NEON FmaF32x4 should fall back to the base scalar table when vector asm is disabled');
-  CheckEqual(PtrUInt(LExpectedBaseTable.SelectF32x4), PtrUInt(LNEONTable.SelectF32x4), 'NEON SelectF32x4 should fall back to the base scalar table when vector asm is disabled');
-  CheckEqual(PtrUInt(LExpectedBaseTable.InsertF32x4), PtrUInt(LNEONTable.InsertF32x4), 'NEON InsertF32x4 should fall back to the base scalar table when vector asm is disabled');
-  CheckEqual(PtrUInt(LExpectedBaseTable.ExtractF32x4), PtrUInt(LNEONTable.ExtractF32x4), 'NEON ExtractF32x4 should fall back to the base scalar table when vector asm is disabled');
+  CheckEqual(PtrUInt(LExpectedBaseTable.CoreVectors.FmaF32x4), PtrUInt(LNEONTable.CoreVectors.FmaF32x4), 'NEON FmaF32x4 should fall back to the base scalar table when vector asm is disabled');
+  CheckEqual(PtrUInt(LExpectedBaseTable.CoreVectors.SelectF32x4), PtrUInt(LNEONTable.CoreVectors.SelectF32x4), 'NEON SelectF32x4 should fall back to the base scalar table when vector asm is disabled');
+  CheckEqual(PtrUInt(LExpectedBaseTable.CoreVectors.InsertF32x4), PtrUInt(LNEONTable.CoreVectors.InsertF32x4), 'NEON InsertF32x4 should fall back to the base scalar table when vector asm is disabled');
+  CheckEqual(PtrUInt(LExpectedBaseTable.CoreVectors.ExtractF32x4), PtrUInt(LNEONTable.CoreVectors.ExtractF32x4), 'NEON ExtractF32x4 should fall back to the base scalar table when vector asm is disabled');
 
   CheckFalse(scFMA in LNEONTable.BackendInfo.Capabilities, 'NEON scFMA should clear when vector asm is disabled');
   CheckFalse(scIntegerOps in LNEONTable.BackendInfo.Capabilities, 'NEON scIntegerOps should clear when vector asm is disabled');
@@ -14568,9 +14568,9 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LRISCVVTable.AddI32x4), 'RISCVV AddI32x4 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.AndI32x4), 'RISCVV AndI32x4 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.AddI64x2), 'RISCVV AddI64x2 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.AddI32x4), 'RISCVV AddI32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.AndI32x4), 'RISCVV AndI32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.AddI64x2), 'RISCVV AddI64x2 should be assigned');
 
   {$IFDEF NEXTPAS_SIMD_TEST_RISCVV_ASM_COMPILED}
   CheckTrue(scIntegerOps in LRISCVVTable.BackendInfo.Capabilities, 'RISCVV should advertise scIntegerOps when RVV asm-backed integer slots are compiled');
@@ -14598,16 +14598,16 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LRISCVVTable.FmaF32x4), 'RISCVV FmaF32x4 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.FmaF32x8), 'RISCVV FmaF32x8 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.FmaF64x4), 'RISCVV FmaF64x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.FmaF32x4), 'RISCVV FmaF32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.FmaF32x8), 'RISCVV FmaF32x8 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.FmaF64x4), 'RISCVV FmaF64x4 should be assigned');
 
-  if (Pointer(LRISCVVTable.FmaF32x4) = Pointer(LScalarTable.FmaF32x4)) and
-     (Pointer(LRISCVVTable.FmaF32x8) = Pointer(LScalarTable.FmaF32x8)) and
-     (Pointer(LRISCVVTable.FmaF64x2) = Pointer(LScalarTable.FmaF64x2)) and
-     (Pointer(LRISCVVTable.FmaF64x4) = Pointer(LScalarTable.FmaF64x4)) and
-     (Pointer(LRISCVVTable.FmaF32x16) = Pointer(LScalarTable.FmaF32x16)) and
-     (Pointer(LRISCVVTable.FmaF64x8) = Pointer(LScalarTable.FmaF64x8)) then
+  if (Pointer(LRISCVVTable.CoreVectors.FmaF32x4) = Pointer(LScalarTable.CoreVectors.FmaF32x4)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF32x8) = Pointer(LScalarTable.CoreVectors.FmaF32x8)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF64x2) = Pointer(LScalarTable.CoreVectors.FmaF64x2)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF64x4) = Pointer(LScalarTable.CoreVectors.FmaF64x4)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF32x16) = Pointer(LScalarTable.CoreVectors.FmaF32x16)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF64x8) = Pointer(LScalarTable.CoreVectors.FmaF64x8)) then
     Exit;
 
   {$IFDEF NEXTPAS_SIMD_TEST_RISCVV_ASM_COMPILED}
@@ -14633,9 +14633,9 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LRISCVVTable.SelectF32x4), 'RISCVV SelectF32x4 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.InsertF32x4), 'RISCVV InsertF32x4 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.ExtractF32x4), 'RISCVV ExtractF32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.SelectF32x4), 'RISCVV SelectF32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.InsertF32x4), 'RISCVV InsertF32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.ExtractF32x4), 'RISCVV ExtractF32x4 should be assigned');
 
   {$IFDEF NEXTPAS_SIMD_TEST_RISCVV_ASM_COMPILED}
   CheckTrue(scShuffle in LRISCVVTable.BackendInfo.Capabilities, 'RISCVV should advertise scShuffle when RVV asm-backed representative shuffle slots are compiled');
@@ -14661,10 +14661,10 @@ begin
   CheckFalse(IsVectorAsmEnabled, 'Vector asm should be disabled for RISCVV capability rebuild test');
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable), 'RISCVV backend should remain registered after runtime rebuild');
 
-  CheckEqual(PtrUInt(LScalarTable.FmaF32x4), PtrUInt(LRISCVVTable.FmaF32x4), 'RISCVV FmaF32x4 should fall back to scalar when vector asm is disabled');
-  CheckEqual(PtrUInt(LScalarTable.SelectF32x4), PtrUInt(LRISCVVTable.SelectF32x4), 'RISCVV SelectF32x4 should fall back to scalar when vector asm is disabled');
-  CheckEqual(PtrUInt(LScalarTable.InsertF32x4), PtrUInt(LRISCVVTable.InsertF32x4), 'RISCVV InsertF32x4 should fall back to scalar when vector asm is disabled');
-  CheckEqual(PtrUInt(LScalarTable.ExtractF32x4), PtrUInt(LRISCVVTable.ExtractF32x4), 'RISCVV ExtractF32x4 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.FmaF32x4), PtrUInt(LRISCVVTable.CoreVectors.FmaF32x4), 'RISCVV FmaF32x4 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.SelectF32x4), PtrUInt(LRISCVVTable.CoreVectors.SelectF32x4), 'RISCVV SelectF32x4 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.InsertF32x4), PtrUInt(LRISCVVTable.CoreVectors.InsertF32x4), 'RISCVV InsertF32x4 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.ExtractF32x4), PtrUInt(LRISCVVTable.CoreVectors.ExtractF32x4), 'RISCVV ExtractF32x4 should fall back to scalar when vector asm is disabled');
 
   CheckFalse(scFMA in LRISCVVTable.BackendInfo.Capabilities, 'RISCVV scFMA should clear when vector asm is disabled');
   CheckFalse(scIntegerOps in LRISCVVTable.BackendInfo.Capabilities, 'RISCVV scIntegerOps should clear when vector asm is disabled');
@@ -14685,15 +14685,15 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbAVX2, LAVX2Table) then
     Exit;
 
-  CheckTrue(Assigned(LAVX2Table.SelectF32x4), 'AVX2 SelectF32x4 should be assigned');
-  CheckTrue(Assigned(LAVX2Table.InsertF32x4), 'AVX2 InsertF32x4 should be assigned');
-  CheckTrue(Assigned(LAVX2Table.ExtractF32x4), 'AVX2 ExtractF32x4 should be assigned');
+  CheckTrue(Assigned(LAVX2Table.CoreVectors.SelectF32x4), 'AVX2 SelectF32x4 should be assigned');
+  CheckTrue(Assigned(LAVX2Table.CoreVectors.InsertF32x4), 'AVX2 InsertF32x4 should be assigned');
+  CheckTrue(Assigned(LAVX2Table.CoreVectors.ExtractF32x4), 'AVX2 ExtractF32x4 should be assigned');
 
-  if (Pointer(LAVX2Table.SelectF32x4) = Pointer(LScalarTable.SelectF32x4)) and
-     (Pointer(LAVX2Table.InsertF32x4) = Pointer(LScalarTable.InsertF32x4)) and
-     (Pointer(LAVX2Table.ExtractF32x4) = Pointer(LScalarTable.ExtractF32x4)) and
-     (Pointer(LAVX2Table.SelectF32x8) = Pointer(LScalarTable.SelectF32x8)) and
-     (Pointer(LAVX2Table.SelectF64x4) = Pointer(LScalarTable.SelectF64x4)) then
+  if (Pointer(LAVX2Table.CoreVectors.SelectF32x4) = Pointer(LScalarTable.CoreVectors.SelectF32x4)) and
+     (Pointer(LAVX2Table.CoreVectors.InsertF32x4) = Pointer(LScalarTable.CoreVectors.InsertF32x4)) and
+     (Pointer(LAVX2Table.CoreVectors.ExtractF32x4) = Pointer(LScalarTable.CoreVectors.ExtractF32x4)) and
+     (Pointer(LAVX2Table.CoreVectors.SelectF32x8) = Pointer(LScalarTable.CoreVectors.SelectF32x8)) and
+     (Pointer(LAVX2Table.CoreVectors.SelectF64x4) = Pointer(LScalarTable.CoreVectors.SelectF64x4)) then
     Exit;
 
   CheckTrue(scShuffle in LAVX2Table.BackendInfo.Capabilities, 'AVX2 should advertise scShuffle once representative shuffle slots are non-scalar');
@@ -14716,11 +14716,11 @@ begin
   if not (scShuffle in LAVX2Table.BackendInfo.Capabilities) then
     Exit;
 
-  CheckTrue(Pointer(LAVX2Table.SelectF32x4) <> Pointer(LScalarTable.SelectF32x4), 'AVX2 SelectF32x4 should leave the scalar slot once scShuffle is advertised');
-  CheckTrue(Pointer(LAVX2Table.InsertF32x4) <> Pointer(LScalarTable.InsertF32x4), 'AVX2 InsertF32x4 should leave the scalar slot once scShuffle is advertised');
-  CheckTrue(Pointer(LAVX2Table.ExtractF32x4) <> Pointer(LScalarTable.ExtractF32x4), 'AVX2 ExtractF32x4 should leave the scalar slot once scShuffle is advertised');
-  CheckTrue(Pointer(LAVX2Table.SelectF32x8) <> Pointer(LScalarTable.SelectF32x8), 'AVX2 SelectF32x8 should leave the scalar slot once scShuffle is advertised');
-  CheckTrue(Pointer(LAVX2Table.SelectF64x4) <> Pointer(LScalarTable.SelectF64x4), 'AVX2 SelectF64x4 should leave the scalar slot once scShuffle is advertised');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.SelectF32x4) <> Pointer(LScalarTable.CoreVectors.SelectF32x4), 'AVX2 SelectF32x4 should leave the scalar slot once scShuffle is advertised');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.InsertF32x4) <> Pointer(LScalarTable.CoreVectors.InsertF32x4), 'AVX2 InsertF32x4 should leave the scalar slot once scShuffle is advertised');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.ExtractF32x4) <> Pointer(LScalarTable.CoreVectors.ExtractF32x4), 'AVX2 ExtractF32x4 should leave the scalar slot once scShuffle is advertised');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.SelectF32x8) <> Pointer(LScalarTable.CoreVectors.SelectF32x8), 'AVX2 SelectF32x8 should leave the scalar slot once scShuffle is advertised');
+  CheckTrue(Pointer(LAVX2Table.CoreVectors.SelectF64x4) <> Pointer(LScalarTable.CoreVectors.SelectF64x4), 'AVX2 SelectF64x4 should leave the scalar slot once scShuffle is advertised');
 
   CheckTrue(TryGetSimdBackendPodInfo(sbAVX2, LInfo), 'Public ABI pod info should be available for AVX2 shuffle contract test');
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scShuffle))) <> 0, 'Public ABI CapabilityBits should expose AVX2 scShuffle while native AVX2 shuffle slots are contract-visible');
@@ -14739,11 +14739,11 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbAVX2, LAVX2Table) then
     Exit;
 
-  CheckEqual(PtrUInt(LScalarTable.SelectF32x4), PtrUInt(LAVX2Table.SelectF32x4), 'AVX2 SelectF32x4 should fall back to scalar when vector asm is disabled');
-  CheckEqual(PtrUInt(LScalarTable.InsertF32x4), PtrUInt(LAVX2Table.InsertF32x4), 'AVX2 InsertF32x4 should fall back to scalar when vector asm is disabled');
-  CheckEqual(PtrUInt(LScalarTable.ExtractF32x4), PtrUInt(LAVX2Table.ExtractF32x4), 'AVX2 ExtractF32x4 should fall back to scalar when vector asm is disabled');
-  CheckEqual(PtrUInt(LScalarTable.SelectF32x8), PtrUInt(LAVX2Table.SelectF32x8), 'AVX2 SelectF32x8 should fall back to scalar when vector asm is disabled');
-  CheckEqual(PtrUInt(LScalarTable.SelectF64x4), PtrUInt(LAVX2Table.SelectF64x4), 'AVX2 SelectF64x4 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.SelectF32x4), PtrUInt(LAVX2Table.CoreVectors.SelectF32x4), 'AVX2 SelectF32x4 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.InsertF32x4), PtrUInt(LAVX2Table.CoreVectors.InsertF32x4), 'AVX2 InsertF32x4 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.ExtractF32x4), PtrUInt(LAVX2Table.CoreVectors.ExtractF32x4), 'AVX2 ExtractF32x4 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.SelectF32x8), PtrUInt(LAVX2Table.CoreVectors.SelectF32x8), 'AVX2 SelectF32x8 should fall back to scalar when vector asm is disabled');
+  CheckEqual(PtrUInt(LScalarTable.CoreVectors.SelectF64x4), PtrUInt(LAVX2Table.CoreVectors.SelectF64x4), 'AVX2 SelectF64x4 should fall back to scalar when vector asm is disabled');
 
   CheckFalse(scShuffle in LAVX2Table.BackendInfo.Capabilities, 'scShuffle should clear when AVX2 shuffle slots fall back to scalar after vector asm disable');
 end;
@@ -14880,11 +14880,11 @@ begin
   end;
 
   CheckTrue(Pos('clonedispatchtable(sbsse2, dispatchtable)', LRegisterSource) > 0, 'RegisterSSE3Backend should clone from SSE2 before applying SSE3-specific overrides');
-  AssertRegisterBinds('ReduceAddF32x4', 'dispatchTable.ReduceAddF32x4 := @SSE3ReduceAddF32x4;');
-  AssertRegisterBinds('DotF32x4', 'dispatchTable.DotF32x4 := @SSE3DotF32x4;');
-  AssertRegisterBinds('NormalizeF32x4', 'dispatchTable.NormalizeF32x4 := @SSE3NormalizeF32x4;');
-  AssertRegisterKeepsClonedSSE2('AddF32x4', 'dispatchTable.AddF32x4 := @SSE3');
-  AssertRegisterKeepsClonedSSE2('MulF32x4', 'dispatchTable.MulF32x4 := @SSE3');
+  AssertRegisterBinds('ReduceAddF32x4', 'dispatchTable.CoreVectors.ReduceAddF32x4 := @SSE3ReduceAddF32x4;');
+  AssertRegisterBinds('DotF32x4', 'dispatchTable.CoreVectors.DotF32x4 := @SSE3DotF32x4;');
+  AssertRegisterBinds('NormalizeF32x4', 'dispatchTable.CoreVectors.NormalizeF32x4 := @SSE3NormalizeF32x4;');
+  AssertRegisterKeepsClonedSSE2('AddF32x4', 'dispatchTable.CoreVectors.AddF32x4 := @SSE3');
+  AssertRegisterKeepsClonedSSE2('MulF32x4', 'dispatchTable.CoreVectors.MulF32x4 := @SSE3');
 
   GetDispatchTable;
   LOldVectorAsm := IsVectorAsmEnabled;
@@ -14897,11 +14897,11 @@ begin
     if not TryGetRegisteredBackendDispatchTable(sbSSE3, LSSE3Table) then
       Exit;
 
-    AssertSlotReusesSSE2('AddF32x4', Pointer(LSSE2Table.AddF32x4), Pointer(LSSE3Table.AddF32x4));
-    AssertSlotReusesSSE2('MulF32x4', Pointer(LSSE2Table.MulF32x4), Pointer(LSSE3Table.MulF32x4));
-    AssertSlotOwnsSSE3('ReduceAddF32x4', Pointer(LSSE2Table.ReduceAddF32x4), Pointer(LSSE3Table.ReduceAddF32x4));
-    AssertSlotOwnsSSE3('DotF32x4', Pointer(LSSE2Table.DotF32x4), Pointer(LSSE3Table.DotF32x4));
-    AssertSlotOwnsSSE3('NormalizeF32x4', Pointer(LSSE2Table.NormalizeF32x4), Pointer(LSSE3Table.NormalizeF32x4));
+    AssertSlotReusesSSE2('AddF32x4', Pointer(LSSE2Table.CoreVectors.AddF32x4), Pointer(LSSE3Table.CoreVectors.AddF32x4));
+    AssertSlotReusesSSE2('MulF32x4', Pointer(LSSE2Table.CoreVectors.MulF32x4), Pointer(LSSE3Table.CoreVectors.MulF32x4));
+    AssertSlotOwnsSSE3('ReduceAddF32x4', Pointer(LSSE2Table.CoreVectors.ReduceAddF32x4), Pointer(LSSE3Table.CoreVectors.ReduceAddF32x4));
+    AssertSlotOwnsSSE3('DotF32x4', Pointer(LSSE2Table.CoreVectors.DotF32x4), Pointer(LSSE3Table.CoreVectors.DotF32x4));
+    AssertSlotOwnsSSE3('NormalizeF32x4', Pointer(LSSE2Table.CoreVectors.NormalizeF32x4), Pointer(LSSE3Table.CoreVectors.NormalizeF32x4));
   finally
   end;
 end;
@@ -14936,10 +14936,10 @@ begin
   end;
 
   CheckTrue(Pos('clonedispatchtable(sbsse3, dispatchtable)', LRegisterSource) > 0, 'RegisterSSSE3Backend should clone from SSE3 before using SSSE3-specific direct helpers');
-  AssertRegisterKeepsClonedSSE3('MinI8x16', 'dispatchTable.MinI8x16 := @SSSE3MinI8x16;');
-  AssertRegisterKeepsClonedSSE3('MaxI8x16', 'dispatchTable.MaxI8x16 := @SSSE3MaxI8x16;');
-  AssertRegisterKeepsClonedSSE3('ReduceAddF32x4', 'dispatchTable.ReduceAddF32x4 := @SSSE3');
-  AssertRegisterKeepsClonedSSE3('DotF32x4', 'dispatchTable.DotF32x4 := @SSSE3');
+  AssertRegisterKeepsClonedSSE3('MinI8x16', 'dispatchTable.CoreVectors.MinI8x16 := @SSSE3MinI8x16;');
+  AssertRegisterKeepsClonedSSE3('MaxI8x16', 'dispatchTable.CoreVectors.MaxI8x16 := @SSSE3MaxI8x16;');
+  AssertRegisterKeepsClonedSSE3('ReduceAddF32x4', 'dispatchTable.CoreVectors.ReduceAddF32x4 := @SSSE3');
+  AssertRegisterKeepsClonedSSE3('DotF32x4', 'dispatchTable.CoreVectors.DotF32x4 := @SSSE3');
 
   GetDispatchTable;
   SetVectorAsmEnabled(True);
@@ -14950,10 +14950,10 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSSE3, LSSSE3Table) then
     Exit;
 
-  AssertSlotReusesSSE3('ReduceAddF32x4', Pointer(LSSE3Table.ReduceAddF32x4), Pointer(LSSSE3Table.ReduceAddF32x4));
-  AssertSlotReusesSSE3('DotF32x4', Pointer(LSSE3Table.DotF32x4), Pointer(LSSSE3Table.DotF32x4));
-  AssertSlotReusesSSE3('MinI8x16', Pointer(LSSE3Table.MinI8x16), Pointer(LSSSE3Table.MinI8x16));
-  AssertSlotReusesSSE3('MaxI8x16', Pointer(LSSE3Table.MaxI8x16), Pointer(LSSSE3Table.MaxI8x16));
+  AssertSlotReusesSSE3('ReduceAddF32x4', Pointer(LSSE3Table.CoreVectors.ReduceAddF32x4), Pointer(LSSSE3Table.CoreVectors.ReduceAddF32x4));
+  AssertSlotReusesSSE3('DotF32x4', Pointer(LSSE3Table.CoreVectors.DotF32x4), Pointer(LSSSE3Table.CoreVectors.DotF32x4));
+  AssertSlotReusesSSE3('MinI8x16', Pointer(LSSE3Table.CoreVectors.MinI8x16), Pointer(LSSSE3Table.CoreVectors.MinI8x16));
+  AssertSlotReusesSSE3('MaxI8x16', Pointer(LSSE3Table.CoreVectors.MaxI8x16), Pointer(LSSSE3Table.CoreVectors.MaxI8x16));
 end;
 
 procedure TTestCase_DispatchAPI.Test_SSE41_RepresentativeOverrides_Reuse_SSSE3_CoreSlots;
@@ -14995,12 +14995,12 @@ begin
   end;
 
   CheckTrue(Pos('clonedispatchtable(sbssse3, dispatchtable)', LRegisterSource) > 0, 'RegisterSSE41Backend should clone from SSSE3 before applying SSE4.1-specific overrides');
-  AssertRegisterBinds('MulI32x4', 'dispatchTable.MulI32x4 := @SSE41MulI32x4;');
-  AssertRegisterBinds('DotF32x4', 'dispatchTable.DotF32x4 := @SSE41DotF32x4;');
-  AssertRegisterBinds('RoundF32x4', 'dispatchTable.RoundF32x4 := @SSE41RoundF32x4;');
-  AssertRegisterBinds('SelectF32x4', 'dispatchTable.SelectF32x4 := @SSE41SelectF32x4;');
-  AssertRegisterBinds('CmpEqI64x2', 'dispatchTable.CmpEqI64x2 := @SSE41CmpEqI64x2;');
-  AssertRegisterKeepsClonedSSSE3('ReduceAddF32x4', 'dispatchTable.ReduceAddF32x4 := @SSE41');
+  AssertRegisterBinds('MulI32x4', 'dispatchTable.CoreVectors.MulI32x4 := @SSE41MulI32x4;');
+  AssertRegisterBinds('DotF32x4', 'dispatchTable.CoreVectors.DotF32x4 := @SSE41DotF32x4;');
+  AssertRegisterBinds('RoundF32x4', 'dispatchTable.CoreVectors.RoundF32x4 := @SSE41RoundF32x4;');
+  AssertRegisterBinds('SelectF32x4', 'dispatchTable.CoreVectors.SelectF32x4 := @SSE41SelectF32x4;');
+  AssertRegisterBinds('CmpEqI64x2', 'dispatchTable.CoreVectors.CmpEqI64x2 := @SSE41CmpEqI64x2;');
+  AssertRegisterKeepsClonedSSSE3('ReduceAddF32x4', 'dispatchTable.CoreVectors.ReduceAddF32x4 := @SSE41');
 
   GetDispatchTable;
   SetVectorAsmEnabled(True);
@@ -15011,12 +15011,12 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSE41, LSSE41Table) then
     Exit;
 
-  AssertSlotReusesSSSE3('ReduceAddF32x4', Pointer(LSSSE3Table.ReduceAddF32x4), Pointer(LSSE41Table.ReduceAddF32x4));
-  AssertSlotOwnsSSE41('MulI32x4', Pointer(LSSSE3Table.MulI32x4), Pointer(LSSE41Table.MulI32x4));
-  AssertSlotOwnsSSE41('DotF32x4', Pointer(LSSSE3Table.DotF32x4), Pointer(LSSE41Table.DotF32x4));
-  AssertSlotOwnsSSE41('RoundF32x4', Pointer(LSSSE3Table.RoundF32x4), Pointer(LSSE41Table.RoundF32x4));
-  AssertSlotOwnsSSE41('SelectF32x4', Pointer(LSSSE3Table.SelectF32x4), Pointer(LSSE41Table.SelectF32x4));
-  AssertSlotOwnsSSE41('CmpEqI64x2', Pointer(LSSSE3Table.CmpEqI64x2), Pointer(LSSE41Table.CmpEqI64x2));
+  AssertSlotReusesSSSE3('ReduceAddF32x4', Pointer(LSSSE3Table.CoreVectors.ReduceAddF32x4), Pointer(LSSE41Table.CoreVectors.ReduceAddF32x4));
+  AssertSlotOwnsSSE41('MulI32x4', Pointer(LSSSE3Table.CoreVectors.MulI32x4), Pointer(LSSE41Table.CoreVectors.MulI32x4));
+  AssertSlotOwnsSSE41('DotF32x4', Pointer(LSSSE3Table.CoreVectors.DotF32x4), Pointer(LSSE41Table.CoreVectors.DotF32x4));
+  AssertSlotOwnsSSE41('RoundF32x4', Pointer(LSSSE3Table.CoreVectors.RoundF32x4), Pointer(LSSE41Table.CoreVectors.RoundF32x4));
+  AssertSlotOwnsSSE41('SelectF32x4', Pointer(LSSSE3Table.CoreVectors.SelectF32x4), Pointer(LSSE41Table.CoreVectors.SelectF32x4));
+  AssertSlotOwnsSSE41('CmpEqI64x2', Pointer(LSSSE3Table.CoreVectors.CmpEqI64x2), Pointer(LSSE41Table.CoreVectors.CmpEqI64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_SSE42_RepresentativeOverride_Reuse_SSE41_CoreSlots;
@@ -15058,10 +15058,10 @@ begin
   end;
 
   CheckTrue(Pos('clonedispatchtable(sbsse41, dispatchtable)', LRegisterSource) > 0, 'RegisterSSE42Backend should clone from SSE4.1 before applying SSE4.2-specific overrides');
-  AssertRegisterBinds('CmpGtI64x2', 'dispatchTable.CmpGtI64x2 := @SSE42CmpGtI64x2;');
-  AssertRegisterKeepsClonedSSE41('ReduceAddF32x4', 'dispatchTable.ReduceAddF32x4 := @SSE42');
-  AssertRegisterKeepsClonedSSE41('SelectF32x4', 'dispatchTable.SelectF32x4 := @SSE42');
-  AssertRegisterKeepsClonedSSE41('CmpEqI64x2', 'dispatchTable.CmpEqI64x2 := @SSE42');
+  AssertRegisterBinds('CmpGtI64x2', 'dispatchTable.CoreVectors.CmpGtI64x2 := @SSE42CmpGtI64x2;');
+  AssertRegisterKeepsClonedSSE41('ReduceAddF32x4', 'dispatchTable.CoreVectors.ReduceAddF32x4 := @SSE42');
+  AssertRegisterKeepsClonedSSE41('SelectF32x4', 'dispatchTable.CoreVectors.SelectF32x4 := @SSE42');
+  AssertRegisterKeepsClonedSSE41('CmpEqI64x2', 'dispatchTable.CoreVectors.CmpEqI64x2 := @SSE42');
 
   GetDispatchTable;
   SetVectorAsmEnabled(True);
@@ -15072,10 +15072,10 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSE42, LSSE42Table) then
     Exit;
 
-  AssertSlotReusesSSE41('ReduceAddF32x4', Pointer(LSSE41Table.ReduceAddF32x4), Pointer(LSSE42Table.ReduceAddF32x4));
-  AssertSlotReusesSSE41('SelectF32x4', Pointer(LSSE41Table.SelectF32x4), Pointer(LSSE42Table.SelectF32x4));
-  AssertSlotReusesSSE41('CmpEqI64x2', Pointer(LSSE41Table.CmpEqI64x2), Pointer(LSSE42Table.CmpEqI64x2));
-  AssertSlotOwnsSSE42('CmpGtI64x2', Pointer(LSSE41Table.CmpGtI64x2), Pointer(LSSE42Table.CmpGtI64x2));
+  AssertSlotReusesSSE41('ReduceAddF32x4', Pointer(LSSE41Table.CoreVectors.ReduceAddF32x4), Pointer(LSSE42Table.CoreVectors.ReduceAddF32x4));
+  AssertSlotReusesSSE41('SelectF32x4', Pointer(LSSE41Table.CoreVectors.SelectF32x4), Pointer(LSSE42Table.CoreVectors.SelectF32x4));
+  AssertSlotReusesSSE41('CmpEqI64x2', Pointer(LSSE41Table.CoreVectors.CmpEqI64x2), Pointer(LSSE42Table.CoreVectors.CmpEqI64x2));
+  AssertSlotOwnsSSE42('CmpGtI64x2', Pointer(LSSE41Table.CoreVectors.CmpGtI64x2), Pointer(LSSE42Table.CoreVectors.CmpGtI64x2));
 end;
 
 procedure TTestCase_DispatchAPI.Test_SSE3_RepresentativeSemanticParity_WithScalar_IfDispatchable;
@@ -15108,9 +15108,9 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSE3, LSSE3Table) then
     Exit;
 
-  CheckTrue(Pointer(LSSE3Table.ReduceAddF32x4) <> Pointer(LScalarTable.ReduceAddF32x4), 'SSE3 ReduceAddF32x4 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE3Table.DotF32x4) <> Pointer(LScalarTable.DotF32x4), 'SSE3 DotF32x4 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE3Table.NormalizeF32x4) <> Pointer(LScalarTable.NormalizeF32x4), 'SSE3 NormalizeF32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE3Table.CoreVectors.ReduceAddF32x4) <> Pointer(LScalarTable.CoreVectors.ReduceAddF32x4), 'SSE3 ReduceAddF32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE3Table.CoreVectors.DotF32x4) <> Pointer(LScalarTable.CoreVectors.DotF32x4), 'SSE3 DotF32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE3Table.CoreVectors.NormalizeF32x4) <> Pointer(LScalarTable.CoreVectors.NormalizeF32x4), 'SSE3 NormalizeF32x4 should leave the scalar slot when runtime semantic parity is checkable');
 
   LCanRunSSE3 := LSSE3Table.BackendInfo.Available and TrySetActiveBackend(sbSSE3);
   if not LCanRunSSE3 then
@@ -15138,19 +15138,19 @@ begin
   LNormalizeZeroInput.f[3] := 0.0;
 
   LReduceExpected := ScalarReduceAddF32x4(LA);
-  LReduceActual := LCurrentDispatch^.ReduceAddF32x4(LA);
+  LReduceActual := LCurrentDispatch^.CoreVectors.ReduceAddF32x4(LA);
   CheckNear(LReduceExpected, LReduceActual, 0.0, 'SSE3 ReduceAddF32x4 scalar parity');
 
   LDotExpected := ScalarDotF32x4(LA, LB);
-  LDotActual := LCurrentDispatch^.DotF32x4(LA, LB);
+  LDotActual := LCurrentDispatch^.CoreVectors.DotF32x4(LA, LB);
   CheckNear(LDotExpected, LDotActual, 0.0, 'SSE3 DotF32x4 scalar parity');
 
   LNormalizeExpected := ScalarNormalizeF32x4(LNormalizeInput);
-  LNormalizeActual := LCurrentDispatch^.NormalizeF32x4(LNormalizeInput);
+  LNormalizeActual := LCurrentDispatch^.CoreVectors.NormalizeF32x4(LNormalizeInput);
   AssertVecF32x4Equal('SSE3 NormalizeF32x4 scalar parity', LNormalizeExpected, LNormalizeActual, 0.0);
 
   LNormalizeZeroExpected := ScalarNormalizeF32x4(LNormalizeZeroInput);
-  LNormalizeZeroActual := LCurrentDispatch^.NormalizeF32x4(LNormalizeZeroInput);
+  LNormalizeZeroActual := LCurrentDispatch^.CoreVectors.NormalizeF32x4(LNormalizeZeroInput);
   AssertVecF32x4Equal('SSE3 NormalizeF32x4 zero scalar parity', LNormalizeZeroExpected, LNormalizeZeroActual, 0.0);
 end;
 
@@ -15183,8 +15183,8 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSSE3, LSSSE3Table) then
     Exit;
 
-  CheckTrue(Pointer(LSSSE3Table.MinI8x16) <> Pointer(LScalarTable.MinI8x16), 'SSSE3 MinI8x16 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSSE3Table.MaxI8x16) <> Pointer(LScalarTable.MaxI8x16), 'SSSE3 MaxI8x16 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSSE3Table.CoreVectors.MinI8x16) <> Pointer(LScalarTable.CoreVectors.MinI8x16), 'SSSE3 MinI8x16 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSSE3Table.CoreVectors.MaxI8x16) <> Pointer(LScalarTable.CoreVectors.MaxI8x16), 'SSSE3 MaxI8x16 should leave the scalar slot when runtime semantic parity is checkable');
 
   LCanRunSSSE3 := LSSSE3Table.BackendInfo.Available and TrySetActiveBackend(sbSSSE3);
   if not LCanRunSSSE3 then
@@ -15204,11 +15204,11 @@ begin
   LB.i[12] := -36; LB.i[13] := -47; LB.i[14] := -58; LB.i[15] := -69;
 
   LMinExpected := ScalarMinI8x16(LA, LB);
-  LMinActual := LCurrentDispatch^.MinI8x16(LA, LB);
+  LMinActual := LCurrentDispatch^.CoreVectors.MinI8x16(LA, LB);
   AssertVecI8x16Equal('SSSE3 MinI8x16 scalar parity', LMinExpected, LMinActual);
 
   LMaxExpected := ScalarMaxI8x16(LA, LB);
-  LMaxActual := LCurrentDispatch^.MaxI8x16(LA, LB);
+  LMaxActual := LCurrentDispatch^.CoreVectors.MaxI8x16(LA, LB);
   AssertVecI8x16Equal('SSSE3 MaxI8x16 scalar parity', LMaxExpected, LMaxActual);
 end;
 
@@ -15264,15 +15264,15 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSE41, LSSE41Table) then
     Exit;
 
-  CheckTrue(Pointer(LSSE41Table.MulI32x4) <> Pointer(LScalarTable.MulI32x4), 'SSE4.1 MulI32x4 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE41Table.DotF32x4) <> Pointer(LScalarTable.DotF32x4), 'SSE4.1 DotF32x4 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE41Table.RoundF32x4) <> Pointer(LScalarTable.RoundF32x4), 'SSE4.1 RoundF32x4 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE41Table.SelectF32x4) <> Pointer(LScalarTable.SelectF32x4), 'SSE4.1 SelectF32x4 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE41Table.InsertF32x4) <> Pointer(LScalarTable.InsertF32x4), 'SSE4.1 InsertF32x4 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE41Table.ExtractF32x4) <> Pointer(LScalarTable.ExtractF32x4), 'SSE4.1 ExtractF32x4 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE41Table.NormalizeF32x4) <> Pointer(LScalarTable.NormalizeF32x4), 'SSE4.1 NormalizeF32x4 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE41Table.NormalizeF32x3) <> Pointer(LScalarTable.NormalizeF32x3), 'SSE4.1 NormalizeF32x3 should leave the scalar slot when runtime semantic parity is checkable');
-  CheckTrue(Pointer(LSSE41Table.CmpEqI64x2) <> Pointer(LScalarTable.CmpEqI64x2), 'SSE4.1 CmpEqI64x2 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE41Table.CoreVectors.MulI32x4) <> Pointer(LScalarTable.CoreVectors.MulI32x4), 'SSE4.1 MulI32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE41Table.CoreVectors.DotF32x4) <> Pointer(LScalarTable.CoreVectors.DotF32x4), 'SSE4.1 DotF32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE41Table.CoreVectors.RoundF32x4) <> Pointer(LScalarTable.CoreVectors.RoundF32x4), 'SSE4.1 RoundF32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE41Table.CoreVectors.SelectF32x4) <> Pointer(LScalarTable.CoreVectors.SelectF32x4), 'SSE4.1 SelectF32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE41Table.CoreVectors.InsertF32x4) <> Pointer(LScalarTable.CoreVectors.InsertF32x4), 'SSE4.1 InsertF32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE41Table.CoreVectors.ExtractF32x4) <> Pointer(LScalarTable.CoreVectors.ExtractF32x4), 'SSE4.1 ExtractF32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE41Table.CoreVectors.NormalizeF32x4) <> Pointer(LScalarTable.CoreVectors.NormalizeF32x4), 'SSE4.1 NormalizeF32x4 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE41Table.CoreVectors.NormalizeF32x3) <> Pointer(LScalarTable.CoreVectors.NormalizeF32x3), 'SSE4.1 NormalizeF32x3 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE41Table.CoreVectors.CmpEqI64x2) <> Pointer(LScalarTable.CoreVectors.CmpEqI64x2), 'SSE4.1 CmpEqI64x2 should leave the scalar slot when runtime semantic parity is checkable');
 
   LCanRunSSE41 := LSSE41Table.BackendInfo.Available and TrySetActiveBackend(sbSSE41);
   if not LCanRunSSE41 then
@@ -15336,55 +15336,55 @@ begin
     LI64CmpB.i[1] := 9000;
 
     LI32Expected := ScalarMulI32x4(LI32A, LI32B);
-    LI32Actual := LCurrentDispatch^.MulI32x4(LI32A, LI32B);
+    LI32Actual := LCurrentDispatch^.CoreVectors.MulI32x4(LI32A, LI32B);
     AssertVecI32x4Equal('SSE4.1 MulI32x4 scalar parity', LI32Expected, LI32Actual);
 
     LDotExpected := ScalarDotF32x4(LDotA, LDotB);
-    LDotActual := LCurrentDispatch^.DotF32x4(LDotA, LDotB);
+    LDotActual := LCurrentDispatch^.CoreVectors.DotF32x4(LDotA, LDotB);
     CheckNear(LDotExpected, LDotActual, 0.0, 'SSE4.1 DotF32x4 scalar parity');
 
     LF32RoundExpected := ScalarRoundF32x4(LF32RoundInput);
-    LF32RoundActual := LCurrentDispatch^.RoundF32x4(LF32RoundInput);
+    LF32RoundActual := LCurrentDispatch^.CoreVectors.RoundF32x4(LF32RoundInput);
     AssertVecF32x4Equal('SSE4.1 RoundF32x4 scalar parity', LF32RoundExpected, LF32RoundActual, 0.0);
 
     LF32SelectExpected := ScalarSelectF32x4(LMask4, LF32SelectA, LF32SelectB);
-    LF32SelectActual := LCurrentDispatch^.SelectF32x4(LMask4, LF32SelectA, LF32SelectB);
+    LF32SelectActual := LCurrentDispatch^.CoreVectors.SelectF32x4(LMask4, LF32SelectA, LF32SelectB);
     AssertVecF32x4Equal('SSE4.1 SelectF32x4 scalar parity', LF32SelectExpected, LF32SelectActual, 0.0);
 
     LF32InsertExpected := ScalarInsertF32x4(LF32SelectA, 99.5, -1);
-    LF32InsertActual := LCurrentDispatch^.InsertF32x4(LF32SelectA, 99.5, -1);
+    LF32InsertActual := LCurrentDispatch^.CoreVectors.InsertF32x4(LF32SelectA, 99.5, -1);
     AssertVecF32x4Equal('SSE4.1 InsertF32x4 low clamp scalar parity', LF32InsertExpected, LF32InsertActual, 0.0);
 
     LExtractExpected := ScalarExtractF32x4(LF32SelectA, -1);
-    LExtractActual := LCurrentDispatch^.ExtractF32x4(LF32SelectA, -1);
+    LExtractActual := LCurrentDispatch^.CoreVectors.ExtractF32x4(LF32SelectA, -1);
     CheckNear(LExtractExpected, LExtractActual, 0.0, 'SSE4.1 ExtractF32x4 low clamp scalar parity');
 
     LF32InsertExpected := ScalarInsertF32x4(LF32SelectB, -13.25, 7);
-    LF32InsertActual := LCurrentDispatch^.InsertF32x4(LF32SelectB, -13.25, 7);
+    LF32InsertActual := LCurrentDispatch^.CoreVectors.InsertF32x4(LF32SelectB, -13.25, 7);
     AssertVecF32x4Equal('SSE4.1 InsertF32x4 high clamp scalar parity', LF32InsertExpected, LF32InsertActual, 0.0);
 
     LExtractExpected := ScalarExtractF32x4(LF32InsertActual, 7);
-    LExtractActual := LCurrentDispatch^.ExtractF32x4(LF32InsertActual, 7);
+    LExtractActual := LCurrentDispatch^.CoreVectors.ExtractF32x4(LF32InsertActual, 7);
     CheckNear(LExtractExpected, LExtractActual, 0.0, 'SSE4.1 ExtractF32x4 high clamp scalar parity');
 
     LNormalize4Expected := ScalarNormalizeF32x4(LNormalize4Input);
-    LNormalize4Actual := LCurrentDispatch^.NormalizeF32x4(LNormalize4Input);
+    LNormalize4Actual := LCurrentDispatch^.CoreVectors.NormalizeF32x4(LNormalize4Input);
     AssertVecF32x4Equal('SSE4.1 NormalizeF32x4 scalar parity', LNormalize4Expected, LNormalize4Actual, 0.0);
 
     LNormalize4ZeroExpected := ScalarNormalizeF32x4(LNormalize4ZeroInput);
-    LNormalize4ZeroActual := LCurrentDispatch^.NormalizeF32x4(LNormalize4ZeroInput);
+    LNormalize4ZeroActual := LCurrentDispatch^.CoreVectors.NormalizeF32x4(LNormalize4ZeroInput);
     AssertVecF32x4Equal('SSE4.1 NormalizeF32x4 zero scalar parity', LNormalize4ZeroExpected, LNormalize4ZeroActual, 0.0);
 
     LNormalize3Expected := ScalarNormalizeF32x3(LNormalize3Input);
-    LNormalize3Actual := LCurrentDispatch^.NormalizeF32x3(LNormalize3Input);
+    LNormalize3Actual := LCurrentDispatch^.CoreVectors.NormalizeF32x3(LNormalize3Input);
     AssertVecF32x4Equal('SSE4.1 NormalizeF32x3 scalar parity', LNormalize3Expected, LNormalize3Actual, 0.0);
 
     LNormalize3ZeroExpected := ScalarNormalizeF32x3(LNormalize3ZeroInput);
-    LNormalize3ZeroActual := LCurrentDispatch^.NormalizeF32x3(LNormalize3ZeroInput);
+    LNormalize3ZeroActual := LCurrentDispatch^.CoreVectors.NormalizeF32x3(LNormalize3ZeroInput);
     AssertVecF32x4Equal('SSE4.1 NormalizeF32x3 zero scalar parity', LNormalize3ZeroExpected, LNormalize3ZeroActual, 0.0);
 
   LMask2Expected := ScalarCmpEqI64x2(LI64CmpA, LI64CmpB);
-  LMask2Actual := LCurrentDispatch^.CmpEqI64x2(LI64CmpA, LI64CmpB);
+  LMask2Actual := LCurrentDispatch^.CoreVectors.CmpEqI64x2(LI64CmpA, LI64CmpB);
   CheckEqual(Integer(LMask2Expected), Integer(LMask2Actual), 'SSE4.1 CmpEqI64x2 scalar parity');
 end;
 
@@ -15407,7 +15407,7 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbSSE42, LSSE42Table) then
     Exit;
 
-  CheckTrue(Pointer(LSSE42Table.CmpGtI64x2) <> Pointer(LScalarTable.CmpGtI64x2), 'SSE4.2 CmpGtI64x2 should leave the scalar slot when runtime semantic parity is checkable');
+  CheckTrue(Pointer(LSSE42Table.CoreVectors.CmpGtI64x2) <> Pointer(LScalarTable.CoreVectors.CmpGtI64x2), 'SSE4.2 CmpGtI64x2 should leave the scalar slot when runtime semantic parity is checkable');
 
   LCanRunSSE42 := LSSE42Table.BackendInfo.Available and TrySetActiveBackend(sbSSE42);
   if not LCanRunSSE42 then
@@ -15423,7 +15423,7 @@ begin
   LB.i[1] := 20;
 
   LMaskExpected := ScalarCmpGtI64x2(LA, LB);
-  LMaskActual := LCurrentDispatch^.CmpGtI64x2(LA, LB);
+  LMaskActual := LCurrentDispatch^.CoreVectors.CmpGtI64x2(LA, LB);
   CheckEqual(Integer(LMaskExpected), Integer(LMaskActual), 'SSE4.2 CmpGtI64x2 scalar parity');
 end;
 
@@ -15533,9 +15533,9 @@ begin
     if not TryGetRegisteredBackendDispatchTable(LBackend, LBackendTable) then
       Continue;
 
-    CheckEqual(PtrUInt(LScalarTable.SelectF32x4), PtrUInt(LBackendTable.SelectF32x4), DispatchApiBackendName(LBackend) + ' SelectF32x4 should fall back to scalar when vector asm is disabled');
-    CheckEqual(PtrUInt(LScalarTable.InsertF32x4), PtrUInt(LBackendTable.InsertF32x4), DispatchApiBackendName(LBackend) + ' InsertF32x4 should fall back to scalar when vector asm is disabled');
-    CheckEqual(PtrUInt(LScalarTable.ExtractF32x4), PtrUInt(LBackendTable.ExtractF32x4), DispatchApiBackendName(LBackend) + ' ExtractF32x4 should fall back to scalar when vector asm is disabled');
+    CheckEqual(PtrUInt(LScalarTable.CoreVectors.SelectF32x4), PtrUInt(LBackendTable.CoreVectors.SelectF32x4), DispatchApiBackendName(LBackend) + ' SelectF32x4 should fall back to scalar when vector asm is disabled');
+    CheckEqual(PtrUInt(LScalarTable.CoreVectors.InsertF32x4), PtrUInt(LBackendTable.CoreVectors.InsertF32x4), DispatchApiBackendName(LBackend) + ' InsertF32x4 should fall back to scalar when vector asm is disabled');
+    CheckEqual(PtrUInt(LScalarTable.CoreVectors.ExtractF32x4), PtrUInt(LBackendTable.CoreVectors.ExtractF32x4), DispatchApiBackendName(LBackend) + ' ExtractF32x4 should fall back to scalar when vector asm is disabled');
 
     CheckFalse(scShuffle in LBackendTable.BackendInfo.Capabilities, 'scShuffle should clear when representative shuffle slots are scalar after vector asm disable: ' + DispatchApiBackendName(LBackend));
   end;
@@ -15560,10 +15560,10 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbAVX2, LAVX2) then
     Exit;
 
-  AssertNonScalarSlot('AddI16x32', Pointer(LScalar.AddI16x32), Pointer(LAVX2.AddI16x32));
-  AssertNonScalarSlot('MulU32x16', Pointer(LScalar.MulU32x16), Pointer(LAVX2.MulU32x16));
-  AssertNonScalarSlot('AddU64x8', Pointer(LScalar.AddU64x8), Pointer(LAVX2.AddU64x8));
-  AssertNonScalarSlot('MaxU8x64', Pointer(LScalar.MaxU8x64), Pointer(LAVX2.MaxU8x64));
+  AssertNonScalarSlot('AddI16x32', Pointer(LScalar.CoreVectors.AddI16x32), Pointer(LAVX2.CoreVectors.AddI16x32));
+  AssertNonScalarSlot('MulU32x16', Pointer(LScalar.CoreVectors.MulU32x16), Pointer(LAVX2.CoreVectors.MulU32x16));
+  AssertNonScalarSlot('AddU64x8', Pointer(LScalar.CoreVectors.AddU64x8), Pointer(LAVX2.CoreVectors.AddU64x8));
+  AssertNonScalarSlot('MaxU8x64', Pointer(LScalar.CoreVectors.MaxU8x64), Pointer(LAVX2.CoreVectors.MaxU8x64));
 end;
 
 procedure TTestCase_DispatchAPI.Test_BenchmarkActivation_Rejects_CpuSupportedButNonDispatchable_Backend;
@@ -15615,24 +15615,24 @@ begin
   AssertSlotGroup(
     'WideI64AndU64', ['AndNotI64x2', 'ShiftLeftI64x2', 'ShiftRightI64x2', 'ShiftRightArithI64x2', 'MinI64x2', 'MaxI64x2',
      'AddU64x2', 'SubU64x2', 'AndU64x2', 'OrU64x2', 'XorU64x2', 'NotU64x2', 'AndNotU64x2', 'CmpEqU64x2', 'CmpLtU64x2', 'CmpGtU64x2', 'MinU64x2', 'MaxU64x2'],
-    [Pointer(aTable.AndNotI64x2), Pointer(aTable.ShiftLeftI64x2), Pointer(aTable.ShiftRightI64x2), Pointer(aTable.ShiftRightArithI64x2), Pointer(aTable.MinI64x2), Pointer(aTable.MaxI64x2), Pointer(aTable.AddU64x2), Pointer(aTable.SubU64x2),
-     Pointer(aTable.AndU64x2), Pointer(aTable.OrU64x2), Pointer(aTable.XorU64x2), Pointer(aTable.NotU64x2), Pointer(aTable.AndNotU64x2), Pointer(aTable.CmpEqU64x2), Pointer(aTable.CmpLtU64x2), Pointer(aTable.CmpGtU64x2),
-     Pointer(aTable.MinU64x2), Pointer(aTable.MaxU64x2)]
+    [Pointer(aTable.CoreVectors.AndNotI64x2), Pointer(aTable.CoreVectors.ShiftLeftI64x2), Pointer(aTable.CoreVectors.ShiftRightI64x2), Pointer(aTable.CoreVectors.ShiftRightArithI64x2), Pointer(aTable.CoreVectors.MinI64x2), Pointer(aTable.CoreVectors.MaxI64x2), Pointer(aTable.CoreVectors.AddU64x2), Pointer(aTable.CoreVectors.SubU64x2),
+     Pointer(aTable.CoreVectors.AndU64x2), Pointer(aTable.CoreVectors.OrU64x2), Pointer(aTable.CoreVectors.XorU64x2), Pointer(aTable.CoreVectors.NotU64x2), Pointer(aTable.CoreVectors.AndNotU64x2), Pointer(aTable.CoreVectors.CmpEqU64x2), Pointer(aTable.CoreVectors.CmpLtU64x2), Pointer(aTable.CoreVectors.CmpGtU64x2),
+     Pointer(aTable.CoreVectors.MinU64x2), Pointer(aTable.CoreVectors.MaxU64x2)]
   );
 
   AssertSlotGroup(
     'Wide256I64x4U64x4', ['AddI64x4', 'SubI64x4', 'AndI64x4', 'OrI64x4', 'XorI64x4', 'NotI64x4', 'AndNotI64x4',
      'ShiftLeftI64x4', 'ShiftRightI64x4', 'ShiftRightArithI64x4', 'CmpEqI64x4', 'CmpLtI64x4', 'CmpGtI64x4', 'CmpLeI64x4', 'CmpGeI64x4', 'CmpNeI64x4', 'AddU64x4', 'SubU64x4', 'AndU64x4', 'OrU64x4', 'XorU64x4', 'NotU64x4',
-     'ShiftLeftU64x4', 'ShiftRightU64x4', 'CmpEqU64x4', 'CmpLtU64x4', 'CmpGtU64x4', 'CmpLeU64x4', 'CmpGeU64x4', 'CmpNeU64x4'], [Pointer(aTable.AddI64x4), Pointer(aTable.SubI64x4), Pointer(aTable.AndI64x4), Pointer(aTable.OrI64x4), Pointer(aTable.XorI64x4),
-     Pointer(aTable.NotI64x4), Pointer(aTable.AndNotI64x4), Pointer(aTable.ShiftLeftI64x4), Pointer(aTable.ShiftRightI64x4), Pointer(aTable.ShiftRightArithI64x4), Pointer(aTable.CmpEqI64x4), Pointer(aTable.CmpLtI64x4), Pointer(aTable.CmpGtI64x4), Pointer(aTable.CmpLeI64x4), Pointer(aTable.CmpGeI64x4), Pointer(aTable.CmpNeI64x4),
-     Pointer(aTable.AddU64x4), Pointer(aTable.SubU64x4), Pointer(aTable.AndU64x4), Pointer(aTable.OrU64x4), Pointer(aTable.XorU64x4), Pointer(aTable.NotU64x4), Pointer(aTable.ShiftLeftU64x4), Pointer(aTable.ShiftRightU64x4), Pointer(aTable.CmpEqU64x4), Pointer(aTable.CmpLtU64x4), Pointer(aTable.CmpGtU64x4),
-     Pointer(aTable.CmpLeU64x4), Pointer(aTable.CmpGeU64x4), Pointer(aTable.CmpNeU64x4)]
+     'ShiftLeftU64x4', 'ShiftRightU64x4', 'CmpEqU64x4', 'CmpLtU64x4', 'CmpGtU64x4', 'CmpLeU64x4', 'CmpGeU64x4', 'CmpNeU64x4'], [Pointer(aTable.CoreVectors.AddI64x4), Pointer(aTable.CoreVectors.SubI64x4), Pointer(aTable.CoreVectors.AndI64x4), Pointer(aTable.CoreVectors.OrI64x4), Pointer(aTable.CoreVectors.XorI64x4),
+     Pointer(aTable.CoreVectors.NotI64x4), Pointer(aTable.CoreVectors.AndNotI64x4), Pointer(aTable.CoreVectors.ShiftLeftI64x4), Pointer(aTable.CoreVectors.ShiftRightI64x4), Pointer(aTable.CoreVectors.ShiftRightArithI64x4), Pointer(aTable.CoreVectors.CmpEqI64x4), Pointer(aTable.CoreVectors.CmpLtI64x4), Pointer(aTable.CoreVectors.CmpGtI64x4), Pointer(aTable.CoreVectors.CmpLeI64x4), Pointer(aTable.CoreVectors.CmpGeI64x4), Pointer(aTable.CoreVectors.CmpNeI64x4),
+     Pointer(aTable.CoreVectors.AddU64x4), Pointer(aTable.CoreVectors.SubU64x4), Pointer(aTable.CoreVectors.AndU64x4), Pointer(aTable.CoreVectors.OrU64x4), Pointer(aTable.CoreVectors.XorU64x4), Pointer(aTable.CoreVectors.NotU64x4), Pointer(aTable.CoreVectors.ShiftLeftU64x4), Pointer(aTable.CoreVectors.ShiftRightU64x4), Pointer(aTable.CoreVectors.CmpEqU64x4), Pointer(aTable.CoreVectors.CmpLtU64x4), Pointer(aTable.CoreVectors.CmpGtU64x4),
+     Pointer(aTable.CoreVectors.CmpLeU64x4), Pointer(aTable.CoreVectors.CmpGeU64x4), Pointer(aTable.CoreVectors.CmpNeU64x4)]
   );
 
   AssertSlotGroup(
     'Wide512I64x8', ['AddI64x8', 'SubI64x8', 'AndI64x8', 'OrI64x8', 'XorI64x8', 'NotI64x8',
-     'CmpEqI64x8', 'CmpLtI64x8', 'CmpGtI64x8', 'CmpLeI64x8', 'CmpGeI64x8', 'CmpNeI64x8'], [Pointer(aTable.AddI64x8), Pointer(aTable.SubI64x8), Pointer(aTable.AndI64x8), Pointer(aTable.OrI64x8),
-     Pointer(aTable.XorI64x8), Pointer(aTable.NotI64x8), Pointer(aTable.CmpEqI64x8), Pointer(aTable.CmpLtI64x8), Pointer(aTable.CmpGtI64x8), Pointer(aTable.CmpLeI64x8), Pointer(aTable.CmpGeI64x8), Pointer(aTable.CmpNeI64x8)]
+     'CmpEqI64x8', 'CmpLtI64x8', 'CmpGtI64x8', 'CmpLeI64x8', 'CmpGeI64x8', 'CmpNeI64x8'], [Pointer(aTable.CoreVectors.AddI64x8), Pointer(aTable.CoreVectors.SubI64x8), Pointer(aTable.CoreVectors.AndI64x8), Pointer(aTable.CoreVectors.OrI64x8),
+     Pointer(aTable.CoreVectors.XorI64x8), Pointer(aTable.CoreVectors.NotI64x8), Pointer(aTable.CoreVectors.CmpEqI64x8), Pointer(aTable.CoreVectors.CmpLtI64x8), Pointer(aTable.CoreVectors.CmpGtI64x8), Pointer(aTable.CoreVectors.CmpLeI64x8), Pointer(aTable.CoreVectors.CmpGeI64x8), Pointer(aTable.CoreVectors.CmpNeI64x8)]
   );
 end;
 
@@ -15684,70 +15684,70 @@ begin
 
     Inc(LRegisteredCount);
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AndNotI64x2', Pointer(LTable.AndNotI64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftLeftI64x2', Pointer(LTable.ShiftLeftI64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightI64x2', Pointer(LTable.ShiftRightI64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightArithI64x2', Pointer(LTable.ShiftRightArithI64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'MinI64x2', Pointer(LTable.MinI64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'MaxI64x2', Pointer(LTable.MaxI64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AndNotI64x2', Pointer(LTable.CoreVectors.AndNotI64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftLeftI64x2', Pointer(LTable.CoreVectors.ShiftLeftI64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightI64x2', Pointer(LTable.CoreVectors.ShiftRightI64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightArithI64x2', Pointer(LTable.CoreVectors.ShiftRightArithI64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'MinI64x2', Pointer(LTable.CoreVectors.MinI64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'MaxI64x2', Pointer(LTable.CoreVectors.MaxI64x2));
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU64x2', Pointer(LTable.AddU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'SubU64x2', Pointer(LTable.SubU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AndU64x2', Pointer(LTable.AndU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'OrU64x2', Pointer(LTable.OrU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'XorU64x2', Pointer(LTable.XorU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'NotU64x2', Pointer(LTable.NotU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AndNotU64x2', Pointer(LTable.AndNotU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU64x2', Pointer(LTable.CmpEqU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLtU64x2', Pointer(LTable.CmpLtU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGtU64x2', Pointer(LTable.CmpGtU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'MinU64x2', Pointer(LTable.MinU64x2));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'MaxU64x2', Pointer(LTable.MaxU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU64x2', Pointer(LTable.CoreVectors.AddU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'SubU64x2', Pointer(LTable.CoreVectors.SubU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AndU64x2', Pointer(LTable.CoreVectors.AndU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'OrU64x2', Pointer(LTable.CoreVectors.OrU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'XorU64x2', Pointer(LTable.CoreVectors.XorU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'NotU64x2', Pointer(LTable.CoreVectors.NotU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AndNotU64x2', Pointer(LTable.CoreVectors.AndNotU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU64x2', Pointer(LTable.CoreVectors.CmpEqU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLtU64x2', Pointer(LTable.CoreVectors.CmpLtU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGtU64x2', Pointer(LTable.CoreVectors.CmpGtU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'MinU64x2', Pointer(LTable.CoreVectors.MinU64x2));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'MaxU64x2', Pointer(LTable.CoreVectors.MaxU64x2));
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AddI64x4', Pointer(LTable.AddI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'SubI64x4', Pointer(LTable.SubI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AndI64x4', Pointer(LTable.AndI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'OrI64x4', Pointer(LTable.OrI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'XorI64x4', Pointer(LTable.XorI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'NotI64x4', Pointer(LTable.NotI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AndNotI64x4', Pointer(LTable.AndNotI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftLeftI64x4', Pointer(LTable.ShiftLeftI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightI64x4', Pointer(LTable.ShiftRightI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightArithI64x4', Pointer(LTable.ShiftRightArithI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqI64x4', Pointer(LTable.CmpEqI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLtI64x4', Pointer(LTable.CmpLtI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGtI64x4', Pointer(LTable.CmpGtI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLeI64x4', Pointer(LTable.CmpLeI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGeI64x4', Pointer(LTable.CmpGeI64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpNeI64x4', Pointer(LTable.CmpNeI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AddI64x4', Pointer(LTable.CoreVectors.AddI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'SubI64x4', Pointer(LTable.CoreVectors.SubI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AndI64x4', Pointer(LTable.CoreVectors.AndI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'OrI64x4', Pointer(LTable.CoreVectors.OrI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'XorI64x4', Pointer(LTable.CoreVectors.XorI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'NotI64x4', Pointer(LTable.CoreVectors.NotI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AndNotI64x4', Pointer(LTable.CoreVectors.AndNotI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftLeftI64x4', Pointer(LTable.CoreVectors.ShiftLeftI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightI64x4', Pointer(LTable.CoreVectors.ShiftRightI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightArithI64x4', Pointer(LTable.CoreVectors.ShiftRightArithI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqI64x4', Pointer(LTable.CoreVectors.CmpEqI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLtI64x4', Pointer(LTable.CoreVectors.CmpLtI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGtI64x4', Pointer(LTable.CoreVectors.CmpGtI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLeI64x4', Pointer(LTable.CoreVectors.CmpLeI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGeI64x4', Pointer(LTable.CoreVectors.CmpGeI64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpNeI64x4', Pointer(LTable.CoreVectors.CmpNeI64x4));
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU64x4', Pointer(LTable.AddU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'SubU64x4', Pointer(LTable.SubU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AndU64x4', Pointer(LTable.AndU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'OrU64x4', Pointer(LTable.OrU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'XorU64x4', Pointer(LTable.XorU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'NotU64x4', Pointer(LTable.NotU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftLeftU64x4', Pointer(LTable.ShiftLeftU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightU64x4', Pointer(LTable.ShiftRightU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU64x4', Pointer(LTable.CmpEqU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLtU64x4', Pointer(LTable.CmpLtU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGtU64x4', Pointer(LTable.CmpGtU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLeU64x4', Pointer(LTable.CmpLeU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGeU64x4', Pointer(LTable.CmpGeU64x4));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpNeU64x4', Pointer(LTable.CmpNeU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AddU64x4', Pointer(LTable.CoreVectors.AddU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'SubU64x4', Pointer(LTable.CoreVectors.SubU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AndU64x4', Pointer(LTable.CoreVectors.AndU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'OrU64x4', Pointer(LTable.CoreVectors.OrU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'XorU64x4', Pointer(LTable.CoreVectors.XorU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'NotU64x4', Pointer(LTable.CoreVectors.NotU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftLeftU64x4', Pointer(LTable.CoreVectors.ShiftLeftU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'ShiftRightU64x4', Pointer(LTable.CoreVectors.ShiftRightU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqU64x4', Pointer(LTable.CoreVectors.CmpEqU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLtU64x4', Pointer(LTable.CoreVectors.CmpLtU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGtU64x4', Pointer(LTable.CoreVectors.CmpGtU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLeU64x4', Pointer(LTable.CoreVectors.CmpLeU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGeU64x4', Pointer(LTable.CoreVectors.CmpGeU64x4));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpNeU64x4', Pointer(LTable.CoreVectors.CmpNeU64x4));
 
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AddI64x8', Pointer(LTable.AddI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'SubI64x8', Pointer(LTable.SubI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'AndI64x8', Pointer(LTable.AndI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'OrI64x8', Pointer(LTable.OrI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'XorI64x8', Pointer(LTable.XorI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'NotI64x8', Pointer(LTable.NotI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqI64x8', Pointer(LTable.CmpEqI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLtI64x8', Pointer(LTable.CmpLtI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGtI64x8', Pointer(LTable.CmpGtI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLeI64x8', Pointer(LTable.CmpLeI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGeI64x8', Pointer(LTable.CmpGeI64x8));
-    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpNeI64x8', Pointer(LTable.CmpNeI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AddI64x8', Pointer(LTable.CoreVectors.AddI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'SubI64x8', Pointer(LTable.CoreVectors.SubI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'AndI64x8', Pointer(LTable.CoreVectors.AndI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'OrI64x8', Pointer(LTable.CoreVectors.OrI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'XorI64x8', Pointer(LTable.CoreVectors.XorI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'NotI64x8', Pointer(LTable.CoreVectors.NotI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpEqI64x8', Pointer(LTable.CoreVectors.CmpEqI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLtI64x8', Pointer(LTable.CoreVectors.CmpLtI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGtI64x8', Pointer(LTable.CoreVectors.CmpGtI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpLeI64x8', Pointer(LTable.CoreVectors.CmpLeI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpGeI64x8', Pointer(LTable.CoreVectors.CmpGeI64x8));
+    AssertAssigned(DispatchApiBackendName(LBackend), 'CmpNeI64x8', Pointer(LTable.CoreVectors.CmpNeI64x8));
   end;
 
   if LRegisteredCount = 0 then
@@ -15879,66 +15879,66 @@ begin
   // Current ownership contract for non-x86 wide round/floor/ceil/trunc and the
   // F32 Clamp pair: reuse the base scalar slot where the backend-specific
   // wrapper is intentionally absent, otherwise keep a dedicated native slot.
-  AssertNeonReusesScalarOtherwiseNative('FloorF32x8', Pointer(LScalarTable.FloorF32x8), Pointer(LBackendTable.FloorF32x8));
-  AssertNeonReusesScalarOtherwiseNative('CeilF32x8', Pointer(LScalarTable.CeilF32x8), Pointer(LBackendTable.CeilF32x8));
-  AssertNeonReusesScalarOtherwiseNative('RoundF32x8', Pointer(LScalarTable.RoundF32x8), Pointer(LBackendTable.RoundF32x8));
-  AssertNeonReusesScalarOtherwiseNative('TruncF32x8', Pointer(LScalarTable.TruncF32x8), Pointer(LBackendTable.TruncF32x8));
-  AssertNeonReusesScalarOtherwiseNative('FloorF64x4', Pointer(LScalarTable.FloorF64x4), Pointer(LBackendTable.FloorF64x4));
-  AssertNeonReusesScalarOtherwiseNative('CeilF64x4', Pointer(LScalarTable.CeilF64x4), Pointer(LBackendTable.CeilF64x4));
-  AssertNeonReusesScalarOtherwiseNative('RoundF64x4', Pointer(LScalarTable.RoundF64x4), Pointer(LBackendTable.RoundF64x4));
-  AssertNeonReusesScalarOtherwiseNative('TruncF64x4', Pointer(LScalarTable.TruncF64x4), Pointer(LBackendTable.TruncF64x4));
-  AssertNeonReusesScalarOtherwiseNative('FloorF32x16', Pointer(LScalarTable.FloorF32x16), Pointer(LBackendTable.FloorF32x16));
-  AssertNeonReusesScalarOtherwiseNative('CeilF32x16', Pointer(LScalarTable.CeilF32x16), Pointer(LBackendTable.CeilF32x16));
-  AssertNeonReusesScalarOtherwiseNative('RoundF32x16', Pointer(LScalarTable.RoundF32x16), Pointer(LBackendTable.RoundF32x16));
-  AssertNeonReusesScalarOtherwiseNative('TruncF32x16', Pointer(LScalarTable.TruncF32x16), Pointer(LBackendTable.TruncF32x16));
-  AssertNeonReusesScalarOtherwiseNative('FloorF64x8', Pointer(LScalarTable.FloorF64x8), Pointer(LBackendTable.FloorF64x8));
-  AssertNeonReusesScalarOtherwiseNative('CeilF64x8', Pointer(LScalarTable.CeilF64x8), Pointer(LBackendTable.CeilF64x8));
-  AssertNeonReusesScalarOtherwiseNative('RoundF64x8', Pointer(LScalarTable.RoundF64x8), Pointer(LBackendTable.RoundF64x8));
-  AssertNeonReusesScalarOtherwiseNative('TruncF64x8', Pointer(LScalarTable.TruncF64x8), Pointer(LBackendTable.TruncF64x8));
+  AssertNeonReusesScalarOtherwiseNative('FloorF32x8', Pointer(LScalarTable.CoreVectors.FloorF32x8), Pointer(LBackendTable.CoreVectors.FloorF32x8));
+  AssertNeonReusesScalarOtherwiseNative('CeilF32x8', Pointer(LScalarTable.CoreVectors.CeilF32x8), Pointer(LBackendTable.CoreVectors.CeilF32x8));
+  AssertNeonReusesScalarOtherwiseNative('RoundF32x8', Pointer(LScalarTable.CoreVectors.RoundF32x8), Pointer(LBackendTable.CoreVectors.RoundF32x8));
+  AssertNeonReusesScalarOtherwiseNative('TruncF32x8', Pointer(LScalarTable.CoreVectors.TruncF32x8), Pointer(LBackendTable.CoreVectors.TruncF32x8));
+  AssertNeonReusesScalarOtherwiseNative('FloorF64x4', Pointer(LScalarTable.CoreVectors.FloorF64x4), Pointer(LBackendTable.CoreVectors.FloorF64x4));
+  AssertNeonReusesScalarOtherwiseNative('CeilF64x4', Pointer(LScalarTable.CoreVectors.CeilF64x4), Pointer(LBackendTable.CoreVectors.CeilF64x4));
+  AssertNeonReusesScalarOtherwiseNative('RoundF64x4', Pointer(LScalarTable.CoreVectors.RoundF64x4), Pointer(LBackendTable.CoreVectors.RoundF64x4));
+  AssertNeonReusesScalarOtherwiseNative('TruncF64x4', Pointer(LScalarTable.CoreVectors.TruncF64x4), Pointer(LBackendTable.CoreVectors.TruncF64x4));
+  AssertNeonReusesScalarOtherwiseNative('FloorF32x16', Pointer(LScalarTable.CoreVectors.FloorF32x16), Pointer(LBackendTable.CoreVectors.FloorF32x16));
+  AssertNeonReusesScalarOtherwiseNative('CeilF32x16', Pointer(LScalarTable.CoreVectors.CeilF32x16), Pointer(LBackendTable.CoreVectors.CeilF32x16));
+  AssertNeonReusesScalarOtherwiseNative('RoundF32x16', Pointer(LScalarTable.CoreVectors.RoundF32x16), Pointer(LBackendTable.CoreVectors.RoundF32x16));
+  AssertNeonReusesScalarOtherwiseNative('TruncF32x16', Pointer(LScalarTable.CoreVectors.TruncF32x16), Pointer(LBackendTable.CoreVectors.TruncF32x16));
+  AssertNeonReusesScalarOtherwiseNative('FloorF64x8', Pointer(LScalarTable.CoreVectors.FloorF64x8), Pointer(LBackendTable.CoreVectors.FloorF64x8));
+  AssertNeonReusesScalarOtherwiseNative('CeilF64x8', Pointer(LScalarTable.CoreVectors.CeilF64x8), Pointer(LBackendTable.CoreVectors.CeilF64x8));
+  AssertNeonReusesScalarOtherwiseNative('RoundF64x8', Pointer(LScalarTable.CoreVectors.RoundF64x8), Pointer(LBackendTable.CoreVectors.RoundF64x8));
+  AssertNeonReusesScalarOtherwiseNative('TruncF64x8', Pointer(LScalarTable.CoreVectors.TruncF64x8), Pointer(LBackendTable.CoreVectors.TruncF64x8));
 
-  AssertNeonReusesScalarOtherwiseNative('AddF32x8', Pointer(LScalarTable.AddF32x8), Pointer(LBackendTable.AddF32x8));
-  AssertNeonReusesScalarOtherwiseNative('SubF32x8', Pointer(LScalarTable.SubF32x8), Pointer(LBackendTable.SubF32x8));
-  AssertNeonReusesScalarOtherwiseNative('MulF32x8', Pointer(LScalarTable.MulF32x8), Pointer(LBackendTable.MulF32x8));
-  AssertNeonReusesScalarOtherwiseNative('DivF32x8', Pointer(LScalarTable.DivF32x8), Pointer(LBackendTable.DivF32x8));
-  AssertNeonReusesScalarOtherwiseNative('MinF32x8', Pointer(LScalarTable.MinF32x8), Pointer(LBackendTable.MinF32x8));
-  AssertNeonReusesScalarOtherwiseNative('MaxF32x8', Pointer(LScalarTable.MaxF32x8), Pointer(LBackendTable.MaxF32x8));
-  AssertNeonReusesScalarOtherwiseNative('AbsF32x8', Pointer(LScalarTable.AbsF32x8), Pointer(LBackendTable.AbsF32x8));
-  AssertNeonReusesScalarOtherwiseNative('SqrtF32x8', Pointer(LScalarTable.SqrtF32x8), Pointer(LBackendTable.SqrtF32x8));
-  AssertNativeSlotNotScalar(DispatchApiBackendName(LBackend), 'FmaF32x8', Pointer(LScalarTable.FmaF32x8), Pointer(LBackendTable.FmaF32x8));
-  AssertNeonReusesScalarOtherwiseNative('ClampF32x8', Pointer(LScalarTable.ClampF32x8), Pointer(LBackendTable.ClampF32x8));
+  AssertNeonReusesScalarOtherwiseNative('AddF32x8', Pointer(LScalarTable.CoreVectors.AddF32x8), Pointer(LBackendTable.CoreVectors.AddF32x8));
+  AssertNeonReusesScalarOtherwiseNative('SubF32x8', Pointer(LScalarTable.CoreVectors.SubF32x8), Pointer(LBackendTable.CoreVectors.SubF32x8));
+  AssertNeonReusesScalarOtherwiseNative('MulF32x8', Pointer(LScalarTable.CoreVectors.MulF32x8), Pointer(LBackendTable.CoreVectors.MulF32x8));
+  AssertNeonReusesScalarOtherwiseNative('DivF32x8', Pointer(LScalarTable.CoreVectors.DivF32x8), Pointer(LBackendTable.CoreVectors.DivF32x8));
+  AssertNeonReusesScalarOtherwiseNative('MinF32x8', Pointer(LScalarTable.CoreVectors.MinF32x8), Pointer(LBackendTable.CoreVectors.MinF32x8));
+  AssertNeonReusesScalarOtherwiseNative('MaxF32x8', Pointer(LScalarTable.CoreVectors.MaxF32x8), Pointer(LBackendTable.CoreVectors.MaxF32x8));
+  AssertNeonReusesScalarOtherwiseNative('AbsF32x8', Pointer(LScalarTable.CoreVectors.AbsF32x8), Pointer(LBackendTable.CoreVectors.AbsF32x8));
+  AssertNeonReusesScalarOtherwiseNative('SqrtF32x8', Pointer(LScalarTable.CoreVectors.SqrtF32x8), Pointer(LBackendTable.CoreVectors.SqrtF32x8));
+  AssertNativeSlotNotScalar(DispatchApiBackendName(LBackend), 'FmaF32x8', Pointer(LScalarTable.CoreVectors.FmaF32x8), Pointer(LBackendTable.CoreVectors.FmaF32x8));
+  AssertNeonReusesScalarOtherwiseNative('ClampF32x8', Pointer(LScalarTable.CoreVectors.ClampF32x8), Pointer(LBackendTable.CoreVectors.ClampF32x8));
 
-  AssertNeonReusesScalarOtherwiseNative('AddF64x4', Pointer(LScalarTable.AddF64x4), Pointer(LBackendTable.AddF64x4));
-  AssertNeonReusesScalarOtherwiseNative('SubF64x4', Pointer(LScalarTable.SubF64x4), Pointer(LBackendTable.SubF64x4));
-  AssertNeonReusesScalarOtherwiseNative('MulF64x4', Pointer(LScalarTable.MulF64x4), Pointer(LBackendTable.MulF64x4));
-  AssertNeonReusesScalarOtherwiseNative('DivF64x4', Pointer(LScalarTable.DivF64x4), Pointer(LBackendTable.DivF64x4));
-  AssertNeonReusesScalarOtherwiseNative('MinF64x4', Pointer(LScalarTable.MinF64x4), Pointer(LBackendTable.MinF64x4));
-  AssertNeonReusesScalarOtherwiseNative('MaxF64x4', Pointer(LScalarTable.MaxF64x4), Pointer(LBackendTable.MaxF64x4));
-  AssertNeonReusesScalarOtherwiseNative('AbsF64x4', Pointer(LScalarTable.AbsF64x4), Pointer(LBackendTable.AbsF64x4));
-  AssertNeonReusesScalarOtherwiseNative('SqrtF64x4', Pointer(LScalarTable.SqrtF64x4), Pointer(LBackendTable.SqrtF64x4));
-  AssertNativeSlotNotScalar(DispatchApiBackendName(LBackend), 'FmaF64x4', Pointer(LScalarTable.FmaF64x4), Pointer(LBackendTable.FmaF64x4));
-  AssertNeonReusesScalarOtherwiseNative('ClampF64x4', Pointer(LScalarTable.ClampF64x4), Pointer(LBackendTable.ClampF64x4));
+  AssertNeonReusesScalarOtherwiseNative('AddF64x4', Pointer(LScalarTable.CoreVectors.AddF64x4), Pointer(LBackendTable.CoreVectors.AddF64x4));
+  AssertNeonReusesScalarOtherwiseNative('SubF64x4', Pointer(LScalarTable.CoreVectors.SubF64x4), Pointer(LBackendTable.CoreVectors.SubF64x4));
+  AssertNeonReusesScalarOtherwiseNative('MulF64x4', Pointer(LScalarTable.CoreVectors.MulF64x4), Pointer(LBackendTable.CoreVectors.MulF64x4));
+  AssertNeonReusesScalarOtherwiseNative('DivF64x4', Pointer(LScalarTable.CoreVectors.DivF64x4), Pointer(LBackendTable.CoreVectors.DivF64x4));
+  AssertNeonReusesScalarOtherwiseNative('MinF64x4', Pointer(LScalarTable.CoreVectors.MinF64x4), Pointer(LBackendTable.CoreVectors.MinF64x4));
+  AssertNeonReusesScalarOtherwiseNative('MaxF64x4', Pointer(LScalarTable.CoreVectors.MaxF64x4), Pointer(LBackendTable.CoreVectors.MaxF64x4));
+  AssertNeonReusesScalarOtherwiseNative('AbsF64x4', Pointer(LScalarTable.CoreVectors.AbsF64x4), Pointer(LBackendTable.CoreVectors.AbsF64x4));
+  AssertNeonReusesScalarOtherwiseNative('SqrtF64x4', Pointer(LScalarTable.CoreVectors.SqrtF64x4), Pointer(LBackendTable.CoreVectors.SqrtF64x4));
+  AssertNativeSlotNotScalar(DispatchApiBackendName(LBackend), 'FmaF64x4', Pointer(LScalarTable.CoreVectors.FmaF64x4), Pointer(LBackendTable.CoreVectors.FmaF64x4));
+  AssertNeonReusesScalarOtherwiseNative('ClampF64x4', Pointer(LScalarTable.CoreVectors.ClampF64x4), Pointer(LBackendTable.CoreVectors.ClampF64x4));
 
-  AssertNeonReusesScalarOtherwiseNative('AddF32x16', Pointer(LScalarTable.AddF32x16), Pointer(LBackendTable.AddF32x16));
-  AssertNeonReusesScalarOtherwiseNative('SubF32x16', Pointer(LScalarTable.SubF32x16), Pointer(LBackendTable.SubF32x16));
-  AssertNeonReusesScalarOtherwiseNative('MulF32x16', Pointer(LScalarTable.MulF32x16), Pointer(LBackendTable.MulF32x16));
-  AssertNeonReusesScalarOtherwiseNative('DivF32x16', Pointer(LScalarTable.DivF32x16), Pointer(LBackendTable.DivF32x16));
-  AssertNeonReusesScalarOtherwiseNative('MinF32x16', Pointer(LScalarTable.MinF32x16), Pointer(LBackendTable.MinF32x16));
-  AssertNeonReusesScalarOtherwiseNative('MaxF32x16', Pointer(LScalarTable.MaxF32x16), Pointer(LBackendTable.MaxF32x16));
-  AssertNeonReusesScalarOtherwiseNative('AbsF32x16', Pointer(LScalarTable.AbsF32x16), Pointer(LBackendTable.AbsF32x16));
-  AssertNeonReusesScalarOtherwiseNative('SqrtF32x16', Pointer(LScalarTable.SqrtF32x16), Pointer(LBackendTable.SqrtF32x16));
-  AssertNativeSlotNotScalar(DispatchApiBackendName(LBackend), 'FmaF32x16', Pointer(LScalarTable.FmaF32x16), Pointer(LBackendTable.FmaF32x16));
-  AssertNeonReusesScalarOtherwiseNative('ClampF32x16', Pointer(LScalarTable.ClampF32x16), Pointer(LBackendTable.ClampF32x16));
+  AssertNeonReusesScalarOtherwiseNative('AddF32x16', Pointer(LScalarTable.CoreVectors.AddF32x16), Pointer(LBackendTable.CoreVectors.AddF32x16));
+  AssertNeonReusesScalarOtherwiseNative('SubF32x16', Pointer(LScalarTable.CoreVectors.SubF32x16), Pointer(LBackendTable.CoreVectors.SubF32x16));
+  AssertNeonReusesScalarOtherwiseNative('MulF32x16', Pointer(LScalarTable.CoreVectors.MulF32x16), Pointer(LBackendTable.CoreVectors.MulF32x16));
+  AssertNeonReusesScalarOtherwiseNative('DivF32x16', Pointer(LScalarTable.CoreVectors.DivF32x16), Pointer(LBackendTable.CoreVectors.DivF32x16));
+  AssertNeonReusesScalarOtherwiseNative('MinF32x16', Pointer(LScalarTable.CoreVectors.MinF32x16), Pointer(LBackendTable.CoreVectors.MinF32x16));
+  AssertNeonReusesScalarOtherwiseNative('MaxF32x16', Pointer(LScalarTable.CoreVectors.MaxF32x16), Pointer(LBackendTable.CoreVectors.MaxF32x16));
+  AssertNeonReusesScalarOtherwiseNative('AbsF32x16', Pointer(LScalarTable.CoreVectors.AbsF32x16), Pointer(LBackendTable.CoreVectors.AbsF32x16));
+  AssertNeonReusesScalarOtherwiseNative('SqrtF32x16', Pointer(LScalarTable.CoreVectors.SqrtF32x16), Pointer(LBackendTable.CoreVectors.SqrtF32x16));
+  AssertNativeSlotNotScalar(DispatchApiBackendName(LBackend), 'FmaF32x16', Pointer(LScalarTable.CoreVectors.FmaF32x16), Pointer(LBackendTable.CoreVectors.FmaF32x16));
+  AssertNeonReusesScalarOtherwiseNative('ClampF32x16', Pointer(LScalarTable.CoreVectors.ClampF32x16), Pointer(LBackendTable.CoreVectors.ClampF32x16));
 
-  AssertNeonReusesScalarOtherwiseNative('AddF64x8', Pointer(LScalarTable.AddF64x8), Pointer(LBackendTable.AddF64x8));
-  AssertNeonReusesScalarOtherwiseNative('SubF64x8', Pointer(LScalarTable.SubF64x8), Pointer(LBackendTable.SubF64x8));
-  AssertNeonReusesScalarOtherwiseNative('MulF64x8', Pointer(LScalarTable.MulF64x8), Pointer(LBackendTable.MulF64x8));
-  AssertNeonReusesScalarOtherwiseNative('DivF64x8', Pointer(LScalarTable.DivF64x8), Pointer(LBackendTable.DivF64x8));
-  AssertNeonReusesScalarOtherwiseNative('MinF64x8', Pointer(LScalarTable.MinF64x8), Pointer(LBackendTable.MinF64x8));
-  AssertNeonReusesScalarOtherwiseNative('MaxF64x8', Pointer(LScalarTable.MaxF64x8), Pointer(LBackendTable.MaxF64x8));
-  AssertNeonReusesScalarOtherwiseNative('AbsF64x8', Pointer(LScalarTable.AbsF64x8), Pointer(LBackendTable.AbsF64x8));
-  AssertNeonReusesScalarOtherwiseNative('SqrtF64x8', Pointer(LScalarTable.SqrtF64x8), Pointer(LBackendTable.SqrtF64x8));
-  AssertNativeSlotNotScalar(DispatchApiBackendName(LBackend), 'FmaF64x8', Pointer(LScalarTable.FmaF64x8), Pointer(LBackendTable.FmaF64x8));
-  AssertNeonReusesScalarOtherwiseNative('ClampF64x8', Pointer(LScalarTable.ClampF64x8), Pointer(LBackendTable.ClampF64x8));
+  AssertNeonReusesScalarOtherwiseNative('AddF64x8', Pointer(LScalarTable.CoreVectors.AddF64x8), Pointer(LBackendTable.CoreVectors.AddF64x8));
+  AssertNeonReusesScalarOtherwiseNative('SubF64x8', Pointer(LScalarTable.CoreVectors.SubF64x8), Pointer(LBackendTable.CoreVectors.SubF64x8));
+  AssertNeonReusesScalarOtherwiseNative('MulF64x8', Pointer(LScalarTable.CoreVectors.MulF64x8), Pointer(LBackendTable.CoreVectors.MulF64x8));
+  AssertNeonReusesScalarOtherwiseNative('DivF64x8', Pointer(LScalarTable.CoreVectors.DivF64x8), Pointer(LBackendTable.CoreVectors.DivF64x8));
+  AssertNeonReusesScalarOtherwiseNative('MinF64x8', Pointer(LScalarTable.CoreVectors.MinF64x8), Pointer(LBackendTable.CoreVectors.MinF64x8));
+  AssertNeonReusesScalarOtherwiseNative('MaxF64x8', Pointer(LScalarTable.CoreVectors.MaxF64x8), Pointer(LBackendTable.CoreVectors.MaxF64x8));
+  AssertNeonReusesScalarOtherwiseNative('AbsF64x8', Pointer(LScalarTable.CoreVectors.AbsF64x8), Pointer(LBackendTable.CoreVectors.AbsF64x8));
+  AssertNeonReusesScalarOtherwiseNative('SqrtF64x8', Pointer(LScalarTable.CoreVectors.SqrtF64x8), Pointer(LBackendTable.CoreVectors.SqrtF64x8));
+  AssertNativeSlotNotScalar(DispatchApiBackendName(LBackend), 'FmaF64x8', Pointer(LScalarTable.CoreVectors.FmaF64x8), Pointer(LBackendTable.CoreVectors.FmaF64x8));
+  AssertNeonReusesScalarOtherwiseNative('ClampF64x8', Pointer(LScalarTable.CoreVectors.ClampF64x8), Pointer(LBackendTable.CoreVectors.ClampF64x8));
   end;
 
   if LCheckedBackends = 0 then
@@ -16034,66 +16034,66 @@ begin
 
     Inc(LCheckedBackends);
 
-  AssertNeonReusesScalarOtherwiseNative('FloorF32x8', Pointer(LScalarTable.FloorF32x8), Pointer(LBackendTable.FloorF32x8));
-  AssertNeonReusesScalarOtherwiseNative('CeilF32x8', Pointer(LScalarTable.CeilF32x8), Pointer(LBackendTable.CeilF32x8));
-  AssertNeonReusesScalarOtherwiseNative('RoundF32x8', Pointer(LScalarTable.RoundF32x8), Pointer(LBackendTable.RoundF32x8));
-  AssertNeonReusesScalarOtherwiseNative('TruncF32x8', Pointer(LScalarTable.TruncF32x8), Pointer(LBackendTable.TruncF32x8));
-  AssertNeonReusesScalarOtherwiseNative('FloorF64x4', Pointer(LScalarTable.FloorF64x4), Pointer(LBackendTable.FloorF64x4));
-  AssertNeonReusesScalarOtherwiseNative('CeilF64x4', Pointer(LScalarTable.CeilF64x4), Pointer(LBackendTable.CeilF64x4));
-  AssertNeonReusesScalarOtherwiseNative('RoundF64x4', Pointer(LScalarTable.RoundF64x4), Pointer(LBackendTable.RoundF64x4));
-  AssertNeonReusesScalarOtherwiseNative('TruncF64x4', Pointer(LScalarTable.TruncF64x4), Pointer(LBackendTable.TruncF64x4));
-  AssertNeonReusesScalarOtherwiseNative('FloorF32x16', Pointer(LScalarTable.FloorF32x16), Pointer(LBackendTable.FloorF32x16));
-  AssertNeonReusesScalarOtherwiseNative('CeilF32x16', Pointer(LScalarTable.CeilF32x16), Pointer(LBackendTable.CeilF32x16));
-  AssertNeonReusesScalarOtherwiseNative('RoundF32x16', Pointer(LScalarTable.RoundF32x16), Pointer(LBackendTable.RoundF32x16));
-  AssertNeonReusesScalarOtherwiseNative('TruncF32x16', Pointer(LScalarTable.TruncF32x16), Pointer(LBackendTable.TruncF32x16));
-  AssertNeonReusesScalarOtherwiseNative('FloorF64x8', Pointer(LScalarTable.FloorF64x8), Pointer(LBackendTable.FloorF64x8));
-  AssertNeonReusesScalarOtherwiseNative('CeilF64x8', Pointer(LScalarTable.CeilF64x8), Pointer(LBackendTable.CeilF64x8));
-  AssertNeonReusesScalarOtherwiseNative('RoundF64x8', Pointer(LScalarTable.RoundF64x8), Pointer(LBackendTable.RoundF64x8));
-  AssertNeonReusesScalarOtherwiseNative('TruncF64x8', Pointer(LScalarTable.TruncF64x8), Pointer(LBackendTable.TruncF64x8));
+  AssertNeonReusesScalarOtherwiseNative('FloorF32x8', Pointer(LScalarTable.CoreVectors.FloorF32x8), Pointer(LBackendTable.CoreVectors.FloorF32x8));
+  AssertNeonReusesScalarOtherwiseNative('CeilF32x8', Pointer(LScalarTable.CoreVectors.CeilF32x8), Pointer(LBackendTable.CoreVectors.CeilF32x8));
+  AssertNeonReusesScalarOtherwiseNative('RoundF32x8', Pointer(LScalarTable.CoreVectors.RoundF32x8), Pointer(LBackendTable.CoreVectors.RoundF32x8));
+  AssertNeonReusesScalarOtherwiseNative('TruncF32x8', Pointer(LScalarTable.CoreVectors.TruncF32x8), Pointer(LBackendTable.CoreVectors.TruncF32x8));
+  AssertNeonReusesScalarOtherwiseNative('FloorF64x4', Pointer(LScalarTable.CoreVectors.FloorF64x4), Pointer(LBackendTable.CoreVectors.FloorF64x4));
+  AssertNeonReusesScalarOtherwiseNative('CeilF64x4', Pointer(LScalarTable.CoreVectors.CeilF64x4), Pointer(LBackendTable.CoreVectors.CeilF64x4));
+  AssertNeonReusesScalarOtherwiseNative('RoundF64x4', Pointer(LScalarTable.CoreVectors.RoundF64x4), Pointer(LBackendTable.CoreVectors.RoundF64x4));
+  AssertNeonReusesScalarOtherwiseNative('TruncF64x4', Pointer(LScalarTable.CoreVectors.TruncF64x4), Pointer(LBackendTable.CoreVectors.TruncF64x4));
+  AssertNeonReusesScalarOtherwiseNative('FloorF32x16', Pointer(LScalarTable.CoreVectors.FloorF32x16), Pointer(LBackendTable.CoreVectors.FloorF32x16));
+  AssertNeonReusesScalarOtherwiseNative('CeilF32x16', Pointer(LScalarTable.CoreVectors.CeilF32x16), Pointer(LBackendTable.CoreVectors.CeilF32x16));
+  AssertNeonReusesScalarOtherwiseNative('RoundF32x16', Pointer(LScalarTable.CoreVectors.RoundF32x16), Pointer(LBackendTable.CoreVectors.RoundF32x16));
+  AssertNeonReusesScalarOtherwiseNative('TruncF32x16', Pointer(LScalarTable.CoreVectors.TruncF32x16), Pointer(LBackendTable.CoreVectors.TruncF32x16));
+  AssertNeonReusesScalarOtherwiseNative('FloorF64x8', Pointer(LScalarTable.CoreVectors.FloorF64x8), Pointer(LBackendTable.CoreVectors.FloorF64x8));
+  AssertNeonReusesScalarOtherwiseNative('CeilF64x8', Pointer(LScalarTable.CoreVectors.CeilF64x8), Pointer(LBackendTable.CoreVectors.CeilF64x8));
+  AssertNeonReusesScalarOtherwiseNative('RoundF64x8', Pointer(LScalarTable.CoreVectors.RoundF64x8), Pointer(LBackendTable.CoreVectors.RoundF64x8));
+  AssertNeonReusesScalarOtherwiseNative('TruncF64x8', Pointer(LScalarTable.CoreVectors.TruncF64x8), Pointer(LBackendTable.CoreVectors.TruncF64x8));
 
-  AssertNeonReusesScalarOtherwiseNative('AddF32x8', Pointer(LScalarTable.AddF32x8), Pointer(LBackendTable.AddF32x8));
-  AssertNeonReusesScalarOtherwiseNative('SubF32x8', Pointer(LScalarTable.SubF32x8), Pointer(LBackendTable.SubF32x8));
-  AssertNeonReusesScalarOtherwiseNative('MulF32x8', Pointer(LScalarTable.MulF32x8), Pointer(LBackendTable.MulF32x8));
-  AssertNeonReusesScalarOtherwiseNative('DivF32x8', Pointer(LScalarTable.DivF32x8), Pointer(LBackendTable.DivF32x8));
-  AssertNeonReusesScalarOtherwiseNative('MinF32x8', Pointer(LScalarTable.MinF32x8), Pointer(LBackendTable.MinF32x8));
-  AssertNeonReusesScalarOtherwiseNative('MaxF32x8', Pointer(LScalarTable.MaxF32x8), Pointer(LBackendTable.MaxF32x8));
-  AssertNeonReusesScalarOtherwiseNative('AbsF32x8', Pointer(LScalarTable.AbsF32x8), Pointer(LBackendTable.AbsF32x8));
-  AssertNeonReusesScalarOtherwiseNative('SqrtF32x8', Pointer(LScalarTable.SqrtF32x8), Pointer(LBackendTable.SqrtF32x8));
-  AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF32x8', Pointer(LScalarTable.FmaF32x8), Pointer(LBackendTable.FmaF32x8));
-  AssertNeonReusesScalarOtherwiseNative('ClampF32x8', Pointer(LScalarTable.ClampF32x8), Pointer(LBackendTable.ClampF32x8));
+  AssertNeonReusesScalarOtherwiseNative('AddF32x8', Pointer(LScalarTable.CoreVectors.AddF32x8), Pointer(LBackendTable.CoreVectors.AddF32x8));
+  AssertNeonReusesScalarOtherwiseNative('SubF32x8', Pointer(LScalarTable.CoreVectors.SubF32x8), Pointer(LBackendTable.CoreVectors.SubF32x8));
+  AssertNeonReusesScalarOtherwiseNative('MulF32x8', Pointer(LScalarTable.CoreVectors.MulF32x8), Pointer(LBackendTable.CoreVectors.MulF32x8));
+  AssertNeonReusesScalarOtherwiseNative('DivF32x8', Pointer(LScalarTable.CoreVectors.DivF32x8), Pointer(LBackendTable.CoreVectors.DivF32x8));
+  AssertNeonReusesScalarOtherwiseNative('MinF32x8', Pointer(LScalarTable.CoreVectors.MinF32x8), Pointer(LBackendTable.CoreVectors.MinF32x8));
+  AssertNeonReusesScalarOtherwiseNative('MaxF32x8', Pointer(LScalarTable.CoreVectors.MaxF32x8), Pointer(LBackendTable.CoreVectors.MaxF32x8));
+  AssertNeonReusesScalarOtherwiseNative('AbsF32x8', Pointer(LScalarTable.CoreVectors.AbsF32x8), Pointer(LBackendTable.CoreVectors.AbsF32x8));
+  AssertNeonReusesScalarOtherwiseNative('SqrtF32x8', Pointer(LScalarTable.CoreVectors.SqrtF32x8), Pointer(LBackendTable.CoreVectors.SqrtF32x8));
+  AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF32x8', Pointer(LScalarTable.CoreVectors.FmaF32x8), Pointer(LBackendTable.CoreVectors.FmaF32x8));
+  AssertNeonReusesScalarOtherwiseNative('ClampF32x8', Pointer(LScalarTable.CoreVectors.ClampF32x8), Pointer(LBackendTable.CoreVectors.ClampF32x8));
 
-  AssertNeonReusesScalarOtherwiseNative('AddF64x4', Pointer(LScalarTable.AddF64x4), Pointer(LBackendTable.AddF64x4));
-  AssertNeonReusesScalarOtherwiseNative('SubF64x4', Pointer(LScalarTable.SubF64x4), Pointer(LBackendTable.SubF64x4));
-  AssertNeonReusesScalarOtherwiseNative('MulF64x4', Pointer(LScalarTable.MulF64x4), Pointer(LBackendTable.MulF64x4));
-  AssertNeonReusesScalarOtherwiseNative('DivF64x4', Pointer(LScalarTable.DivF64x4), Pointer(LBackendTable.DivF64x4));
-  AssertNeonReusesScalarOtherwiseNative('MinF64x4', Pointer(LScalarTable.MinF64x4), Pointer(LBackendTable.MinF64x4));
-  AssertNeonReusesScalarOtherwiseNative('MaxF64x4', Pointer(LScalarTable.MaxF64x4), Pointer(LBackendTable.MaxF64x4));
-  AssertNeonReusesScalarOtherwiseNative('AbsF64x4', Pointer(LScalarTable.AbsF64x4), Pointer(LBackendTable.AbsF64x4));
-  AssertNeonReusesScalarOtherwiseNative('SqrtF64x4', Pointer(LScalarTable.SqrtF64x4), Pointer(LBackendTable.SqrtF64x4));
-  AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF64x4', Pointer(LScalarTable.FmaF64x4), Pointer(LBackendTable.FmaF64x4));
-  AssertNeonReusesScalarOtherwiseNative('ClampF64x4', Pointer(LScalarTable.ClampF64x4), Pointer(LBackendTable.ClampF64x4));
+  AssertNeonReusesScalarOtherwiseNative('AddF64x4', Pointer(LScalarTable.CoreVectors.AddF64x4), Pointer(LBackendTable.CoreVectors.AddF64x4));
+  AssertNeonReusesScalarOtherwiseNative('SubF64x4', Pointer(LScalarTable.CoreVectors.SubF64x4), Pointer(LBackendTable.CoreVectors.SubF64x4));
+  AssertNeonReusesScalarOtherwiseNative('MulF64x4', Pointer(LScalarTable.CoreVectors.MulF64x4), Pointer(LBackendTable.CoreVectors.MulF64x4));
+  AssertNeonReusesScalarOtherwiseNative('DivF64x4', Pointer(LScalarTable.CoreVectors.DivF64x4), Pointer(LBackendTable.CoreVectors.DivF64x4));
+  AssertNeonReusesScalarOtherwiseNative('MinF64x4', Pointer(LScalarTable.CoreVectors.MinF64x4), Pointer(LBackendTable.CoreVectors.MinF64x4));
+  AssertNeonReusesScalarOtherwiseNative('MaxF64x4', Pointer(LScalarTable.CoreVectors.MaxF64x4), Pointer(LBackendTable.CoreVectors.MaxF64x4));
+  AssertNeonReusesScalarOtherwiseNative('AbsF64x4', Pointer(LScalarTable.CoreVectors.AbsF64x4), Pointer(LBackendTable.CoreVectors.AbsF64x4));
+  AssertNeonReusesScalarOtherwiseNative('SqrtF64x4', Pointer(LScalarTable.CoreVectors.SqrtF64x4), Pointer(LBackendTable.CoreVectors.SqrtF64x4));
+  AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF64x4', Pointer(LScalarTable.CoreVectors.FmaF64x4), Pointer(LBackendTable.CoreVectors.FmaF64x4));
+  AssertNeonReusesScalarOtherwiseNative('ClampF64x4', Pointer(LScalarTable.CoreVectors.ClampF64x4), Pointer(LBackendTable.CoreVectors.ClampF64x4));
 
-  AssertNeonReusesScalarOtherwiseNative('AddF32x16', Pointer(LScalarTable.AddF32x16), Pointer(LBackendTable.AddF32x16));
-  AssertNeonReusesScalarOtherwiseNative('SubF32x16', Pointer(LScalarTable.SubF32x16), Pointer(LBackendTable.SubF32x16));
-  AssertNeonReusesScalarOtherwiseNative('MulF32x16', Pointer(LScalarTable.MulF32x16), Pointer(LBackendTable.MulF32x16));
-  AssertNeonReusesScalarOtherwiseNative('DivF32x16', Pointer(LScalarTable.DivF32x16), Pointer(LBackendTable.DivF32x16));
-  AssertNeonReusesScalarOtherwiseNative('MinF32x16', Pointer(LScalarTable.MinF32x16), Pointer(LBackendTable.MinF32x16));
-  AssertNeonReusesScalarOtherwiseNative('MaxF32x16', Pointer(LScalarTable.MaxF32x16), Pointer(LBackendTable.MaxF32x16));
-  AssertNeonReusesScalarOtherwiseNative('AbsF32x16', Pointer(LScalarTable.AbsF32x16), Pointer(LBackendTable.AbsF32x16));
-  AssertNeonReusesScalarOtherwiseNative('SqrtF32x16', Pointer(LScalarTable.SqrtF32x16), Pointer(LBackendTable.SqrtF32x16));
-  AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF32x16', Pointer(LScalarTable.FmaF32x16), Pointer(LBackendTable.FmaF32x16));
-  AssertNeonReusesScalarOtherwiseNative('ClampF32x16', Pointer(LScalarTable.ClampF32x16), Pointer(LBackendTable.ClampF32x16));
+  AssertNeonReusesScalarOtherwiseNative('AddF32x16', Pointer(LScalarTable.CoreVectors.AddF32x16), Pointer(LBackendTable.CoreVectors.AddF32x16));
+  AssertNeonReusesScalarOtherwiseNative('SubF32x16', Pointer(LScalarTable.CoreVectors.SubF32x16), Pointer(LBackendTable.CoreVectors.SubF32x16));
+  AssertNeonReusesScalarOtherwiseNative('MulF32x16', Pointer(LScalarTable.CoreVectors.MulF32x16), Pointer(LBackendTable.CoreVectors.MulF32x16));
+  AssertNeonReusesScalarOtherwiseNative('DivF32x16', Pointer(LScalarTable.CoreVectors.DivF32x16), Pointer(LBackendTable.CoreVectors.DivF32x16));
+  AssertNeonReusesScalarOtherwiseNative('MinF32x16', Pointer(LScalarTable.CoreVectors.MinF32x16), Pointer(LBackendTable.CoreVectors.MinF32x16));
+  AssertNeonReusesScalarOtherwiseNative('MaxF32x16', Pointer(LScalarTable.CoreVectors.MaxF32x16), Pointer(LBackendTable.CoreVectors.MaxF32x16));
+  AssertNeonReusesScalarOtherwiseNative('AbsF32x16', Pointer(LScalarTable.CoreVectors.AbsF32x16), Pointer(LBackendTable.CoreVectors.AbsF32x16));
+  AssertNeonReusesScalarOtherwiseNative('SqrtF32x16', Pointer(LScalarTable.CoreVectors.SqrtF32x16), Pointer(LBackendTable.CoreVectors.SqrtF32x16));
+  AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF32x16', Pointer(LScalarTable.CoreVectors.FmaF32x16), Pointer(LBackendTable.CoreVectors.FmaF32x16));
+  AssertNeonReusesScalarOtherwiseNative('ClampF32x16', Pointer(LScalarTable.CoreVectors.ClampF32x16), Pointer(LBackendTable.CoreVectors.ClampF32x16));
 
-  AssertNeonReusesScalarOtherwiseNative('AddF64x8', Pointer(LScalarTable.AddF64x8), Pointer(LBackendTable.AddF64x8));
-  AssertNeonReusesScalarOtherwiseNative('SubF64x8', Pointer(LScalarTable.SubF64x8), Pointer(LBackendTable.SubF64x8));
-  AssertNeonReusesScalarOtherwiseNative('MulF64x8', Pointer(LScalarTable.MulF64x8), Pointer(LBackendTable.MulF64x8));
-  AssertNeonReusesScalarOtherwiseNative('DivF64x8', Pointer(LScalarTable.DivF64x8), Pointer(LBackendTable.DivF64x8));
-  AssertNeonReusesScalarOtherwiseNative('MinF64x8', Pointer(LScalarTable.MinF64x8), Pointer(LBackendTable.MinF64x8));
-  AssertNeonReusesScalarOtherwiseNative('MaxF64x8', Pointer(LScalarTable.MaxF64x8), Pointer(LBackendTable.MaxF64x8));
-  AssertNeonReusesScalarOtherwiseNative('AbsF64x8', Pointer(LScalarTable.AbsF64x8), Pointer(LBackendTable.AbsF64x8));
-  AssertNeonReusesScalarOtherwiseNative('SqrtF64x8', Pointer(LScalarTable.SqrtF64x8), Pointer(LBackendTable.SqrtF64x8));
-  AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF64x8', Pointer(LScalarTable.FmaF64x8), Pointer(LBackendTable.FmaF64x8));
-  AssertNeonReusesScalarOtherwiseNative('ClampF64x8', Pointer(LScalarTable.ClampF64x8), Pointer(LBackendTable.ClampF64x8));
+  AssertNeonReusesScalarOtherwiseNative('AddF64x8', Pointer(LScalarTable.CoreVectors.AddF64x8), Pointer(LBackendTable.CoreVectors.AddF64x8));
+  AssertNeonReusesScalarOtherwiseNative('SubF64x8', Pointer(LScalarTable.CoreVectors.SubF64x8), Pointer(LBackendTable.CoreVectors.SubF64x8));
+  AssertNeonReusesScalarOtherwiseNative('MulF64x8', Pointer(LScalarTable.CoreVectors.MulF64x8), Pointer(LBackendTable.CoreVectors.MulF64x8));
+  AssertNeonReusesScalarOtherwiseNative('DivF64x8', Pointer(LScalarTable.CoreVectors.DivF64x8), Pointer(LBackendTable.CoreVectors.DivF64x8));
+  AssertNeonReusesScalarOtherwiseNative('MinF64x8', Pointer(LScalarTable.CoreVectors.MinF64x8), Pointer(LBackendTable.CoreVectors.MinF64x8));
+  AssertNeonReusesScalarOtherwiseNative('MaxF64x8', Pointer(LScalarTable.CoreVectors.MaxF64x8), Pointer(LBackendTable.CoreVectors.MaxF64x8));
+  AssertNeonReusesScalarOtherwiseNative('AbsF64x8', Pointer(LScalarTable.CoreVectors.AbsF64x8), Pointer(LBackendTable.CoreVectors.AbsF64x8));
+  AssertNeonReusesScalarOtherwiseNative('SqrtF64x8', Pointer(LScalarTable.CoreVectors.SqrtF64x8), Pointer(LBackendTable.CoreVectors.SqrtF64x8));
+  AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF64x8', Pointer(LScalarTable.CoreVectors.FmaF64x8), Pointer(LBackendTable.CoreVectors.FmaF64x8));
+  AssertNeonReusesScalarOtherwiseNative('ClampF64x8', Pointer(LScalarTable.CoreVectors.ClampF64x8), Pointer(LBackendTable.CoreVectors.ClampF64x8));
   end;
 
   if LCheckedBackends = 0 then
@@ -16182,50 +16182,50 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddF32x4', Pointer(LScalarTable.AddF32x4), Pointer(LBackendTable.AddF32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AbsF32x4', Pointer(LScalarTable.AbsF32x4), Pointer(LBackendTable.AbsF32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF32x4', Pointer(LScalarTable.FmaF32x4), Pointer(LBackendTable.FmaF32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ClampF32x4', Pointer(LScalarTable.ClampF32x4), Pointer(LBackendTable.ClampF32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddF32x4', Pointer(LScalarTable.CoreVectors.AddF32x4), Pointer(LBackendTable.CoreVectors.AddF32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AbsF32x4', Pointer(LScalarTable.CoreVectors.AbsF32x4), Pointer(LBackendTable.CoreVectors.AbsF32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF32x4', Pointer(LScalarTable.CoreVectors.FmaF32x4), Pointer(LBackendTable.CoreVectors.FmaF32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ClampF32x4', Pointer(LScalarTable.CoreVectors.ClampF32x4), Pointer(LBackendTable.CoreVectors.ClampF32x4));
 
-    LF32x4ByBackend := LBackendTable.AddF32x4(LF32x4A, LF32x4B);
-    LF32x4ByScalar := LScalarTable.AddF32x4(LF32x4A, LF32x4B);
+    LF32x4ByBackend := LBackendTable.CoreVectors.AddF32x4(LF32x4A, LF32x4B);
+    LF32x4ByScalar := LScalarTable.CoreVectors.AddF32x4(LF32x4A, LF32x4B);
     AssertVecF32x4Equal('AddF32x4', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 1e-6);
 
-    LF32x4ByBackend := LBackendTable.AbsF32x4(LF32x4A);
-    LF32x4ByScalar := LScalarTable.AbsF32x4(LF32x4A);
+    LF32x4ByBackend := LBackendTable.CoreVectors.AbsF32x4(LF32x4A);
+    LF32x4ByScalar := LScalarTable.CoreVectors.AbsF32x4(LF32x4A);
     AssertVecF32x4Equal('AbsF32x4', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 0.0);
 
-    LF32x4ByBackend := LBackendTable.FmaF32x4(LF32x4A, LF32x4B, LF32x4C);
-    LF32x4ByScalar := LScalarTable.FmaF32x4(LF32x4A, LF32x4B, LF32x4C);
+    LF32x4ByBackend := LBackendTable.CoreVectors.FmaF32x4(LF32x4A, LF32x4B, LF32x4C);
+    LF32x4ByScalar := LScalarTable.CoreVectors.FmaF32x4(LF32x4A, LF32x4B, LF32x4C);
     AssertVecF32x4Equal('FmaF32x4', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 1e-5);
 
-    LF32x4ByBackend := LBackendTable.ClampF32x4(LF32x4A, LF32x4Min, LF32x4Max);
-    LF32x4ByScalar := LScalarTable.ClampF32x4(LF32x4A, LF32x4Min, LF32x4Max);
+    LF32x4ByBackend := LBackendTable.CoreVectors.ClampF32x4(LF32x4A, LF32x4Min, LF32x4Max);
+    LF32x4ByScalar := LScalarTable.CoreVectors.ClampF32x4(LF32x4A, LF32x4Min, LF32x4Max);
     AssertVecF32x4Equal('ClampF32x4', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 0.0);
 
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddF64x2', Pointer(LScalarTable.AddF64x2), Pointer(LBackendTable.AddF64x2));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AbsF64x2', Pointer(LScalarTable.AbsF64x2), Pointer(LBackendTable.AbsF64x2));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF64x2', Pointer(LScalarTable.FmaF64x2), Pointer(LBackendTable.FmaF64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddF64x2', Pointer(LScalarTable.CoreVectors.AddF64x2), Pointer(LBackendTable.CoreVectors.AddF64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AbsF64x2', Pointer(LScalarTable.CoreVectors.AbsF64x2), Pointer(LBackendTable.CoreVectors.AbsF64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'FmaF64x2', Pointer(LScalarTable.CoreVectors.FmaF64x2), Pointer(LBackendTable.CoreVectors.FmaF64x2));
     {$IFDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ClampF64x2', Pointer(LScalarTable.ClampF64x2), Pointer(LBackendTable.ClampF64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ClampF64x2', Pointer(LScalarTable.CoreVectors.ClampF64x2), Pointer(LBackendTable.CoreVectors.ClampF64x2));
     {$ELSE}
-    CheckEqual(PtrUInt(Pointer(LScalarTable.ClampF64x2)), PtrUInt(Pointer(LBackendTable.ClampF64x2)), 'ClampF64x2 should reuse the scalar slot when NEON asm is not compiled on this host');
+    CheckEqual(PtrUInt(Pointer(LScalarTable.CoreVectors.ClampF64x2)), PtrUInt(Pointer(LBackendTable.CoreVectors.ClampF64x2)), 'ClampF64x2 should reuse the scalar slot when NEON asm is not compiled on this host');
     {$ENDIF}
 
-    LF64x2ByBackend := LBackendTable.AddF64x2(LF64x2A, LF64x2B);
-    LF64x2ByScalar := LScalarTable.AddF64x2(LF64x2A, LF64x2B);
+    LF64x2ByBackend := LBackendTable.CoreVectors.AddF64x2(LF64x2A, LF64x2B);
+    LF64x2ByScalar := LScalarTable.CoreVectors.AddF64x2(LF64x2A, LF64x2B);
     AssertVecF64x2Equal('AddF64x2', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByBackend, 1e-12);
 
-    LF64x2ByBackend := LBackendTable.AbsF64x2(LF64x2A);
-    LF64x2ByScalar := LScalarTable.AbsF64x2(LF64x2A);
+    LF64x2ByBackend := LBackendTable.CoreVectors.AbsF64x2(LF64x2A);
+    LF64x2ByScalar := LScalarTable.CoreVectors.AbsF64x2(LF64x2A);
     AssertVecF64x2Equal('AbsF64x2', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByBackend, 0.0);
 
-    LF64x2ByBackend := LBackendTable.FmaF64x2(LF64x2A, LF64x2B, LF64x2C);
-    LF64x2ByScalar := LScalarTable.FmaF64x2(LF64x2A, LF64x2B, LF64x2C);
+    LF64x2ByBackend := LBackendTable.CoreVectors.FmaF64x2(LF64x2A, LF64x2B, LF64x2C);
+    LF64x2ByScalar := LScalarTable.CoreVectors.FmaF64x2(LF64x2A, LF64x2B, LF64x2C);
     AssertVecF64x2Equal('FmaF64x2', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByBackend, 1e-11);
 
-    LF64x2ByBackend := LBackendTable.ClampF64x2(LF64x2A, LF64x2Min, LF64x2Max);
-    LF64x2ByScalar := LScalarTable.ClampF64x2(LF64x2A, LF64x2Min, LF64x2Max);
+    LF64x2ByBackend := LBackendTable.CoreVectors.ClampF64x2(LF64x2A, LF64x2Min, LF64x2Max);
+    LF64x2ByScalar := LScalarTable.CoreVectors.ClampF64x2(LF64x2A, LF64x2Min, LF64x2Max);
     AssertVecF64x2Equal('ClampF64x2', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByBackend, 0.0);
   end;
 
@@ -16311,9 +16311,9 @@ begin
   LF64x2Src[0] := 11.25;
   LF64x2Src[1] := -22.5;
 
-  LF32x4A := LScalarTable.LoadF32x4(@LF32x4Src[0]);
+  LF32x4A := LScalarTable.CoreVectors.LoadF32x4(@LF32x4Src[0]);
   LF32x4B := VecF32x4Splat(9.0);
-  LF64x2A := LScalarTable.LoadF64x2(@LF64x2Src[0]);
+  LF64x2A := LScalarTable.CoreVectors.LoadF64x2(@LF64x2Src[0]);
   LF64x2B := VecF64x2Splat(-7.5);
   LI32x4A.i[0] := 101;
   LI32x4A.i[1] := -202;
@@ -16357,81 +16357,81 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF32x4', Pointer(LScalarTable.LoadF32x4), Pointer(LBackendTable.LoadF32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF32x4', Pointer(LScalarTable.SplatF32x4), Pointer(LBackendTable.SplatF32x4));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'SelectF32x4', Pointer(LScalarTable.SelectF32x4), Pointer(LBackendTable.SelectF32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ExtractF32x4', Pointer(LScalarTable.ExtractF32x4), Pointer(LBackendTable.ExtractF32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF32x4', Pointer(LScalarTable.CoreVectors.LoadF32x4), Pointer(LBackendTable.CoreVectors.LoadF32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF32x4', Pointer(LScalarTable.CoreVectors.SplatF32x4), Pointer(LBackendTable.CoreVectors.SplatF32x4));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'SelectF32x4', Pointer(LScalarTable.CoreVectors.SelectF32x4), Pointer(LBackendTable.CoreVectors.SelectF32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ExtractF32x4', Pointer(LScalarTable.CoreVectors.ExtractF32x4), Pointer(LBackendTable.CoreVectors.ExtractF32x4));
 
-    LF32x4ByBackend := LBackendTable.LoadF32x4(@LF32x4Src[0]);
-    LF32x4ByScalar := LScalarTable.LoadF32x4(@LF32x4Src[0]);
+    LF32x4ByBackend := LBackendTable.CoreVectors.LoadF32x4(@LF32x4Src[0]);
+    LF32x4ByScalar := LScalarTable.CoreVectors.LoadF32x4(@LF32x4Src[0]);
     AssertVecF32x4Equal('LoadF32x4 dispatch-table', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 1e-6);
 
     LF32x4ByFacade := VecF32x4Load(@LF32x4Src[0]);
     AssertVecF32x4Equal('LoadF32x4 facade', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByFacade, 1e-6);
 
-    LF32x4ByBackend := LBackendTable.SplatF32x4(6.25);
-    LF32x4ByScalar := LScalarTable.SplatF32x4(6.25);
+    LF32x4ByBackend := LBackendTable.CoreVectors.SplatF32x4(6.25);
+    LF32x4ByScalar := LScalarTable.CoreVectors.SplatF32x4(6.25);
     AssertVecF32x4Equal('SplatF32x4 dispatch-table', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 1e-6);
 
     LF32x4ByFacade := VecF32x4Splat(6.25);
     AssertVecF32x4Equal('SplatF32x4 facade', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByFacade, 1e-6);
 
-    LF32x4ByBackend := LBackendTable.SelectF32x4(LF32Mask, LF32x4A, LF32x4B);
-    LF32x4ByScalar := LScalarTable.SelectF32x4(LF32Mask, LF32x4A, LF32x4B);
+    LF32x4ByBackend := LBackendTable.CoreVectors.SelectF32x4(LF32Mask, LF32x4A, LF32x4B);
+    LF32x4ByScalar := LScalarTable.CoreVectors.SelectF32x4(LF32Mask, LF32x4A, LF32x4B);
     AssertVecF32x4Equal('SelectF32x4 dispatch-table', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 1e-6);
 
     LF32x4ByFacade := VecF32x4Select(LF32Mask, LF32x4A, LF32x4B);
     AssertVecF32x4Equal('SelectF32x4 facade', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByFacade, 1e-6);
 
-    CheckNear(LScalarTable.ExtractF32x4(LF32x4A, 2), VecF32x4Extract(LF32x4A, 2), 1e-6, 'ExtractF32x4 facade parity: ' + NonX86BackendName(LBackend));
-    CheckNear(LScalarTable.ExtractF32x4(LF32x4A, 2), LBackendTable.ExtractF32x4(LF32x4A, 2), 1e-6, 'ExtractF32x4 dispatch-table parity: ' + NonX86BackendName(LBackend));
+    CheckNear(LScalarTable.CoreVectors.ExtractF32x4(LF32x4A, 2), VecF32x4Extract(LF32x4A, 2), 1e-6, 'ExtractF32x4 facade parity: ' + NonX86BackendName(LBackend));
+    CheckNear(LScalarTable.CoreVectors.ExtractF32x4(LF32x4A, 2), LBackendTable.CoreVectors.ExtractF32x4(LF32x4A, 2), 1e-6, 'ExtractF32x4 dispatch-table parity: ' + NonX86BackendName(LBackend));
 
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'LoadF64x2', Pointer(LScalarTable.LoadF64x2), Pointer(LBackendTable.LoadF64x2));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'SplatF64x2', Pointer(LScalarTable.SplatF64x2), Pointer(LBackendTable.SplatF64x2));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SelectF64x2', Pointer(LScalarTable.SelectF64x2), Pointer(LBackendTable.SelectF64x2));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ExtractF64x2', Pointer(LScalarTable.ExtractF64x2), Pointer(LBackendTable.ExtractF64x2));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'LoadF64x2', Pointer(LScalarTable.CoreVectors.LoadF64x2), Pointer(LBackendTable.CoreVectors.LoadF64x2));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'SplatF64x2', Pointer(LScalarTable.CoreVectors.SplatF64x2), Pointer(LBackendTable.CoreVectors.SplatF64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SelectF64x2', Pointer(LScalarTable.CoreVectors.SelectF64x2), Pointer(LBackendTable.CoreVectors.SelectF64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ExtractF64x2', Pointer(LScalarTable.CoreVectors.ExtractF64x2), Pointer(LBackendTable.CoreVectors.ExtractF64x2));
 
-    LF64x2ByBackend := LBackendTable.LoadF64x2(@LF64x2Src[0]);
-    LF64x2ByScalar := LScalarTable.LoadF64x2(@LF64x2Src[0]);
+    LF64x2ByBackend := LBackendTable.CoreVectors.LoadF64x2(@LF64x2Src[0]);
+    LF64x2ByScalar := LScalarTable.CoreVectors.LoadF64x2(@LF64x2Src[0]);
     AssertVecF64x2Equal('LoadF64x2 dispatch-table', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByBackend, 1e-12);
 
     LF64x2ByFacade := VecF64x2Load(@LF64x2Src[0]);
     AssertVecF64x2Equal('LoadF64x2 facade', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByFacade, 1e-12);
 
-    LF64x2ByBackend := LBackendTable.SplatF64x2(3.5);
-    LF64x2ByScalar := LScalarTable.SplatF64x2(3.5);
+    LF64x2ByBackend := LBackendTable.CoreVectors.SplatF64x2(3.5);
+    LF64x2ByScalar := LScalarTable.CoreVectors.SplatF64x2(3.5);
     AssertVecF64x2Equal('SplatF64x2 dispatch-table', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByBackend, 1e-12);
 
     LF64x2ByFacade := VecF64x2Splat(3.5);
     AssertVecF64x2Equal('SplatF64x2 facade', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByFacade, 1e-12);
 
-    LF64x2ByBackend := LBackendTable.SelectF64x2(LF64Mask, LF64x2A, LF64x2B);
-    LF64x2ByScalar := LScalarTable.SelectF64x2(LF64Mask, LF64x2A, LF64x2B);
+    LF64x2ByBackend := LBackendTable.CoreVectors.SelectF64x2(LF64Mask, LF64x2A, LF64x2B);
+    LF64x2ByScalar := LScalarTable.CoreVectors.SelectF64x2(LF64Mask, LF64x2A, LF64x2B);
     AssertVecF64x2Equal('SelectF64x2 dispatch-table', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByBackend, 1e-12);
 
     LF64x2ByFacade := VecF64x2Select(LF64Mask, LF64x2A, LF64x2B);
     AssertVecF64x2Equal('SelectF64x2 facade', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByFacade, 1e-12);
 
-    CheckNear(LScalarTable.ExtractF64x2(LF64x2A, 1), VecF64x2Extract(LF64x2A, 1), 1e-12, 'ExtractF64x2 facade parity: ' + NonX86BackendName(LBackend));
-    CheckNear(LScalarTable.ExtractF64x2(LF64x2A, 1), LBackendTable.ExtractF64x2(LF64x2A, 1), 1e-12, 'ExtractF64x2 dispatch-table parity: ' + NonX86BackendName(LBackend));
+    CheckNear(LScalarTable.CoreVectors.ExtractF64x2(LF64x2A, 1), VecF64x2Extract(LF64x2A, 1), 1e-12, 'ExtractF64x2 facade parity: ' + NonX86BackendName(LBackend));
+    CheckNear(LScalarTable.CoreVectors.ExtractF64x2(LF64x2A, 1), LBackendTable.CoreVectors.ExtractF64x2(LF64x2A, 1), 1e-12, 'ExtractF64x2 dispatch-table parity: ' + NonX86BackendName(LBackend));
 
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'SelectI32x4', Pointer(LScalarTable.SelectI32x4), Pointer(LBackendTable.SelectI32x4));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI32x4', Pointer(LScalarTable.ExtractI32x4), Pointer(LBackendTable.ExtractI32x4));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'SelectI32x4', Pointer(LScalarTable.CoreVectors.SelectI32x4), Pointer(LBackendTable.CoreVectors.SelectI32x4));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI32x4', Pointer(LScalarTable.CoreVectors.ExtractI32x4), Pointer(LBackendTable.CoreVectors.ExtractI32x4));
 
-    LI32x4ByBackend := LBackendTable.SelectI32x4(LI32x4Mask, LI32x4A, LI32x4B);
-    LI32x4ByScalar := LScalarTable.SelectI32x4(LI32x4Mask, LI32x4A, LI32x4B);
+    LI32x4ByBackend := LBackendTable.CoreVectors.SelectI32x4(LI32x4Mask, LI32x4A, LI32x4B);
+    LI32x4ByScalar := LScalarTable.CoreVectors.SelectI32x4(LI32x4Mask, LI32x4A, LI32x4B);
     AssertVecI32x4Equal('SelectI32x4 dispatch-table', NonX86BackendName(LBackend), LI32x4ByScalar, LI32x4ByBackend);
 
     LI32x4ByFacade := VecI32x4Select(LI32x4Mask, LI32x4A, LI32x4B);
     AssertVecI32x4Equal('SelectI32x4 facade', NonX86BackendName(LBackend), LI32x4ByScalar, LI32x4ByFacade);
 
-    CheckEqual(LScalarTable.ExtractI32x4(LI32x4A, 3), VecI32x4Extract(LI32x4A, 3), 'ExtractI32x4 facade parity: ' + NonX86BackendName(LBackend));
-    CheckEqual(LScalarTable.ExtractI32x4(LI32x4A, 3), LBackendTable.ExtractI32x4(LI32x4A, 3), 'ExtractI32x4 dispatch-table parity: ' + NonX86BackendName(LBackend));
+    CheckEqual(LScalarTable.CoreVectors.ExtractI32x4(LI32x4A, 3), VecI32x4Extract(LI32x4A, 3), 'ExtractI32x4 facade parity: ' + NonX86BackendName(LBackend));
+    CheckEqual(LScalarTable.CoreVectors.ExtractI32x4(LI32x4A, 3), LBackendTable.CoreVectors.ExtractI32x4(LI32x4A, 3), 'ExtractI32x4 dispatch-table parity: ' + NonX86BackendName(LBackend));
 
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI64x2', Pointer(LScalarTable.ExtractI64x2), Pointer(LBackendTable.ExtractI64x2));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI64x2', Pointer(LScalarTable.CoreVectors.ExtractI64x2), Pointer(LBackendTable.CoreVectors.ExtractI64x2));
 
-    CheckEqual(LScalarTable.ExtractI64x2(LI64x2A, 0), VecI64x2Extract(LI64x2A, 0), 'ExtractI64x2 facade parity: ' + NonX86BackendName(LBackend));
-    CheckEqual(LScalarTable.ExtractI64x2(LI64x2A, 0), LBackendTable.ExtractI64x2(LI64x2A, 0), 'ExtractI64x2 dispatch-table parity: ' + NonX86BackendName(LBackend));
+    CheckEqual(LScalarTable.CoreVectors.ExtractI64x2(LI64x2A, 0), VecI64x2Extract(LI64x2A, 0), 'ExtractI64x2 facade parity: ' + NonX86BackendName(LBackend));
+    CheckEqual(LScalarTable.CoreVectors.ExtractI64x2(LI64x2A, 0), LBackendTable.CoreVectors.ExtractI64x2(LI64x2A, 0), 'ExtractI64x2 dispatch-table parity: ' + NonX86BackendName(LBackend));
   end;
 
   if LCheckedBackends = 0 then
@@ -16535,26 +16535,26 @@ begin
 
       Inc(LCheckedBackends);
 
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF32x4Aligned', Pointer(LScalarTable.LoadF32x4Aligned), Pointer(LBackendTable.LoadF32x4Aligned));
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF32x4', Pointer(LScalarTable.ZeroF32x4), Pointer(LBackendTable.ZeroF32x4));
-      AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ZeroF64x2', Pointer(LScalarTable.ZeroF64x2), Pointer(LBackendTable.ZeroF64x2));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF32x4Aligned', Pointer(LScalarTable.CoreVectors.LoadF32x4Aligned), Pointer(LBackendTable.CoreVectors.LoadF32x4Aligned));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF32x4', Pointer(LScalarTable.CoreVectors.ZeroF32x4), Pointer(LBackendTable.CoreVectors.ZeroF32x4));
+      AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ZeroF64x2', Pointer(LScalarTable.CoreVectors.ZeroF64x2), Pointer(LBackendTable.CoreVectors.ZeroF64x2));
 
-      LF32x4ByBackend := LBackendTable.LoadF32x4Aligned(LAlignedF32);
-      LF32x4ByScalar := LScalarTable.LoadF32x4Aligned(LAlignedF32);
+      LF32x4ByBackend := LBackendTable.CoreVectors.LoadF32x4Aligned(LAlignedF32);
+      LF32x4ByScalar := LScalarTable.CoreVectors.LoadF32x4Aligned(LAlignedF32);
       AssertVecF32x4Equal('LoadF32x4Aligned dispatch-table', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 1e-6);
 
       LF32x4ByFacade := VecF32x4LoadAligned(LAlignedF32);
       AssertVecF32x4Equal('LoadF32x4Aligned facade', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByFacade, 1e-6);
 
-      LF32x4ByBackend := LBackendTable.ZeroF32x4();
-      LF32x4ByScalar := LScalarTable.ZeroF32x4();
+      LF32x4ByBackend := LBackendTable.CoreVectors.ZeroF32x4();
+      LF32x4ByScalar := LScalarTable.CoreVectors.ZeroF32x4();
       AssertVecF32x4Equal('ZeroF32x4 dispatch-table', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 0.0);
 
       LF32x4ByFacade := VecF32x4Zero;
       AssertVecF32x4Equal('ZeroF32x4 facade', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByFacade, 0.0);
 
-      LF64x2ByBackend := LBackendTable.ZeroF64x2();
-      LF64x2ByScalar := LScalarTable.ZeroF64x2();
+      LF64x2ByBackend := LBackendTable.CoreVectors.ZeroF64x2();
+      LF64x2ByScalar := LScalarTable.CoreVectors.ZeroF64x2();
       AssertVecF64x2Equal('ZeroF64x2 dispatch-table', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByBackend, 0.0);
 
       LF64x2ByFacade := VecF64x2Zero;
@@ -16674,70 +16674,70 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF32x8', Pointer(LScalarTable.LoadF32x8), Pointer(LBackendTable.LoadF32x8));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF32x8', Pointer(LScalarTable.ZeroF32x8), Pointer(LBackendTable.ZeroF32x8));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF32x16', Pointer(LScalarTable.LoadF32x16), Pointer(LBackendTable.LoadF32x16));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF32x16', Pointer(LScalarTable.ZeroF32x16), Pointer(LBackendTable.ZeroF32x16));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF64x4', Pointer(LScalarTable.LoadF64x4), Pointer(LBackendTable.LoadF64x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF64x4', Pointer(LScalarTable.ZeroF64x4), Pointer(LBackendTable.ZeroF64x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF64x8', Pointer(LScalarTable.LoadF64x8), Pointer(LBackendTable.LoadF64x8));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF64x8', Pointer(LScalarTable.ZeroF64x8), Pointer(LBackendTable.ZeroF64x8));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadI64x4', Pointer(LScalarTable.LoadI64x4), Pointer(LBackendTable.LoadI64x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroI64x4', Pointer(LScalarTable.ZeroI64x4), Pointer(LBackendTable.ZeroI64x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF32x8', Pointer(LScalarTable.CoreVectors.LoadF32x8), Pointer(LBackendTable.CoreVectors.LoadF32x8));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF32x8', Pointer(LScalarTable.CoreVectors.ZeroF32x8), Pointer(LBackendTable.CoreVectors.ZeroF32x8));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF32x16', Pointer(LScalarTable.CoreVectors.LoadF32x16), Pointer(LBackendTable.CoreVectors.LoadF32x16));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF32x16', Pointer(LScalarTable.CoreVectors.ZeroF32x16), Pointer(LBackendTable.CoreVectors.ZeroF32x16));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF64x4', Pointer(LScalarTable.CoreVectors.LoadF64x4), Pointer(LBackendTable.CoreVectors.LoadF64x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF64x4', Pointer(LScalarTable.CoreVectors.ZeroF64x4), Pointer(LBackendTable.CoreVectors.ZeroF64x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadF64x8', Pointer(LScalarTable.CoreVectors.LoadF64x8), Pointer(LBackendTable.CoreVectors.LoadF64x8));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroF64x8', Pointer(LScalarTable.CoreVectors.ZeroF64x8), Pointer(LBackendTable.CoreVectors.ZeroF64x8));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadI64x4', Pointer(LScalarTable.CoreVectors.LoadI64x4), Pointer(LBackendTable.CoreVectors.LoadI64x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroI64x4', Pointer(LScalarTable.CoreVectors.ZeroI64x4), Pointer(LBackendTable.CoreVectors.ZeroI64x4));
 
-    LF32x8ByBackend := LBackendTable.LoadF32x8(@LF32Data[0]);
-    LF32x8ByScalar := LScalarTable.LoadF32x8(@LF32Data[0]);
+    LF32x8ByBackend := LBackendTable.CoreVectors.LoadF32x8(@LF32Data[0]);
+    LF32x8ByScalar := LScalarTable.CoreVectors.LoadF32x8(@LF32Data[0]);
     AssertVecF32x8Equal('LoadF32x8 dispatch-table', NonX86BackendName(LBackend), LF32x8ByScalar, LF32x8ByBackend, 1e-6);
 
-    LF32x8ByBackend := LBackendTable.ZeroF32x8();
-    LF32x8ByScalar := LScalarTable.ZeroF32x8();
+    LF32x8ByBackend := LBackendTable.CoreVectors.ZeroF32x8();
+    LF32x8ByScalar := LScalarTable.CoreVectors.ZeroF32x8();
     AssertVecF32x8Equal('ZeroF32x8 dispatch-table', NonX86BackendName(LBackend), LF32x8ByScalar, LF32x8ByBackend, 0.0);
 
-    LF32x16ByBackend := LBackendTable.LoadF32x16(@LF32Data[0]);
-    LF32x16ByScalar := LScalarTable.LoadF32x16(@LF32Data[0]);
+    LF32x16ByBackend := LBackendTable.CoreVectors.LoadF32x16(@LF32Data[0]);
+    LF32x16ByScalar := LScalarTable.CoreVectors.LoadF32x16(@LF32Data[0]);
     AssertVecF32x16Equal('LoadF32x16 dispatch-table', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 1e-6);
 
     LF32x16ByFacade := VecF32x16Load(@LF32Data[0]);
     AssertVecF32x16Equal('LoadF32x16 facade', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByFacade, 1e-6);
 
-    LF32x16ByBackend := LBackendTable.ZeroF32x16();
-    LF32x16ByScalar := LScalarTable.ZeroF32x16();
+    LF32x16ByBackend := LBackendTable.CoreVectors.ZeroF32x16();
+    LF32x16ByScalar := LScalarTable.CoreVectors.ZeroF32x16();
     AssertVecF32x16Equal('ZeroF32x16 dispatch-table', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 0.0);
 
     LF32x16ByFacade := VecF32x16Zero;
     AssertVecF32x16Equal('ZeroF32x16 facade', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByFacade, 0.0);
 
-    LF64x4ByBackend := LBackendTable.LoadF64x4(@LF64Data[0]);
-    LF64x4ByScalar := LScalarTable.LoadF64x4(@LF64Data[0]);
+    LF64x4ByBackend := LBackendTable.CoreVectors.LoadF64x4(@LF64Data[0]);
+    LF64x4ByScalar := LScalarTable.CoreVectors.LoadF64x4(@LF64Data[0]);
     AssertVecF64x4Equal('LoadF64x4 dispatch-table', NonX86BackendName(LBackend), LF64x4ByScalar, LF64x4ByBackend, 1e-12);
 
-    LF64x4ByBackend := LBackendTable.ZeroF64x4();
-    LF64x4ByScalar := LScalarTable.ZeroF64x4();
+    LF64x4ByBackend := LBackendTable.CoreVectors.ZeroF64x4();
+    LF64x4ByScalar := LScalarTable.CoreVectors.ZeroF64x4();
     AssertVecF64x4Equal('ZeroF64x4 dispatch-table', NonX86BackendName(LBackend), LF64x4ByScalar, LF64x4ByBackend, 0.0);
 
-    LF64x8ByBackend := LBackendTable.LoadF64x8(@LF64Data[0]);
-    LF64x8ByScalar := LScalarTable.LoadF64x8(@LF64Data[0]);
+    LF64x8ByBackend := LBackendTable.CoreVectors.LoadF64x8(@LF64Data[0]);
+    LF64x8ByScalar := LScalarTable.CoreVectors.LoadF64x8(@LF64Data[0]);
     AssertVecF64x8Equal('LoadF64x8 dispatch-table', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 1e-12);
 
     LF64x8ByFacade := VecF64x8Load(@LF64Data[0]);
     AssertVecF64x8Equal('LoadF64x8 facade', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByFacade, 1e-12);
 
-    LF64x8ByBackend := LBackendTable.ZeroF64x8();
-    LF64x8ByScalar := LScalarTable.ZeroF64x8();
+    LF64x8ByBackend := LBackendTable.CoreVectors.ZeroF64x8();
+    LF64x8ByScalar := LScalarTable.CoreVectors.ZeroF64x8();
     AssertVecF64x8Equal('ZeroF64x8 dispatch-table', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 0.0);
 
     LF64x8ByFacade := VecF64x8Zero;
     AssertVecF64x8Equal('ZeroF64x8 facade', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByFacade, 0.0);
 
-    LI64x4ByBackend := LBackendTable.LoadI64x4(@LI64Data[0]);
-    LI64x4ByScalar := LScalarTable.LoadI64x4(@LI64Data[0]);
+    LI64x4ByBackend := LBackendTable.CoreVectors.LoadI64x4(@LI64Data[0]);
+    LI64x4ByScalar := LScalarTable.CoreVectors.LoadI64x4(@LI64Data[0]);
     AssertVecI64x4Equal('LoadI64x4 dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
     LI64x4ByFacade := VecI64x4Load(@LI64Data[0]);
     AssertVecI64x4Equal('LoadI64x4 facade', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByFacade);
 
-    LI64x4ByBackend := LBackendTable.ZeroI64x4();
-    LI64x4ByScalar := LScalarTable.ZeroI64x4();
+    LI64x4ByBackend := LBackendTable.CoreVectors.ZeroI64x4();
+    LI64x4ByScalar := LScalarTable.CoreVectors.ZeroI64x4();
     AssertVecI64x4Equal('ZeroI64x4 dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
     LI64x4ByFacade := VecI64x4Zero;
@@ -16854,20 +16854,20 @@ begin
 
       Inc(LCheckedBackends);
 
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadI64x4', Pointer(LScalarTable.LoadI64x4), Pointer(LBackendTable.LoadI64x4));
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'StoreI64x4', Pointer(LScalarTable.StoreI64x4), Pointer(LBackendTable.StoreI64x4));
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatI64x4', Pointer(LScalarTable.SplatI64x4), Pointer(LBackendTable.SplatI64x4));
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroI64x4', Pointer(LScalarTable.ZeroI64x4), Pointer(LBackendTable.ZeroI64x4));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'LoadI64x4', Pointer(LScalarTable.CoreVectors.LoadI64x4), Pointer(LBackendTable.CoreVectors.LoadI64x4));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'StoreI64x4', Pointer(LScalarTable.CoreVectors.StoreI64x4), Pointer(LBackendTable.CoreVectors.StoreI64x4));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatI64x4', Pointer(LScalarTable.CoreVectors.SplatI64x4), Pointer(LBackendTable.CoreVectors.SplatI64x4));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ZeroI64x4', Pointer(LScalarTable.CoreVectors.ZeroI64x4), Pointer(LBackendTable.CoreVectors.ZeroI64x4));
 
-      LI64x4ByBackend := LBackendTable.LoadI64x4(LAlignedSrc);
-      LI64x4ByScalar := LScalarTable.LoadI64x4(LAlignedSrc);
+      LI64x4ByBackend := LBackendTable.CoreVectors.LoadI64x4(LAlignedSrc);
+      LI64x4ByScalar := LScalarTable.CoreVectors.LoadI64x4(LAlignedSrc);
       AssertVecI64x4Equal('LoadI64x4 aligned dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
       LI64x4ByFacade := VecI64x4Load(LAlignedSrc);
       AssertVecI64x4Equal('LoadI64x4 aligned facade', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByFacade);
 
-      LI64x4ByBackend := LBackendTable.LoadI64x4(LUnalignedSrc);
-      LI64x4ByScalar := LScalarTable.LoadI64x4(LUnalignedSrc);
+      LI64x4ByBackend := LBackendTable.CoreVectors.LoadI64x4(LUnalignedSrc);
+      LI64x4ByScalar := LScalarTable.CoreVectors.LoadI64x4(LUnalignedSrc);
       AssertVecI64x4Equal('LoadI64x4 unaligned dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
       LI64x4ByFacade := VecI64x4Load(LUnalignedSrc);
@@ -16883,41 +16883,41 @@ begin
         LUnalignedScalarDst[LLane] := Int64($6666666666666666);
       end;
 
-      LBackendTable.StoreI64x4(LAlignedBackendDst, LScalarTable.LoadI64x4(LAlignedSrc));
+      LBackendTable.CoreVectors.StoreI64x4(LAlignedBackendDst, LScalarTable.CoreVectors.LoadI64x4(LAlignedSrc));
       VecI64x4Store(LAlignedFacadeDst, VecI64x4Load(LAlignedSrc));
-      LScalarTable.StoreI64x4(LAlignedScalarDst, LScalarTable.LoadI64x4(LAlignedSrc));
+      LScalarTable.CoreVectors.StoreI64x4(LAlignedScalarDst, LScalarTable.CoreVectors.LoadI64x4(LAlignedSrc));
       AssertI64BufferEqual('StoreI64x4 aligned dispatch-table', NonX86BackendName(LBackend), LAlignedScalarDst, LAlignedBackendDst);
       AssertI64BufferEqual('StoreI64x4 aligned facade', NonX86BackendName(LBackend), LAlignedScalarDst, LAlignedFacadeDst);
 
-      LBackendTable.StoreI64x4(LUnalignedBackendDst, LScalarTable.LoadI64x4(LUnalignedSrc));
+      LBackendTable.CoreVectors.StoreI64x4(LUnalignedBackendDst, LScalarTable.CoreVectors.LoadI64x4(LUnalignedSrc));
       VecI64x4Store(LUnalignedFacadeDst, VecI64x4Load(LUnalignedSrc));
-      LScalarTable.StoreI64x4(LUnalignedScalarDst, LScalarTable.LoadI64x4(LUnalignedSrc));
+      LScalarTable.CoreVectors.StoreI64x4(LUnalignedScalarDst, LScalarTable.CoreVectors.LoadI64x4(LUnalignedSrc));
       AssertI64BufferEqual('StoreI64x4 unaligned dispatch-table', NonX86BackendName(LBackend), LUnalignedScalarDst, LUnalignedBackendDst);
       AssertI64BufferEqual('StoreI64x4 unaligned facade', NonX86BackendName(LBackend), LUnalignedScalarDst, LUnalignedFacadeDst);
 
-      LI64x4ByBackend := LBackendTable.SplatI64x4(0);
-      LI64x4ByScalar := LScalarTable.SplatI64x4(0);
+      LI64x4ByBackend := LBackendTable.CoreVectors.SplatI64x4(0);
+      LI64x4ByScalar := LScalarTable.CoreVectors.SplatI64x4(0);
       AssertVecI64x4Equal('SplatI64x4 zero dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
       LI64x4ByFacade := VecI64x4Splat(0);
       AssertVecI64x4Equal('SplatI64x4 zero facade', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByFacade);
 
-      LI64x4ByBackend := LBackendTable.SplatI64x4(High(Int64));
-      LI64x4ByScalar := LScalarTable.SplatI64x4(High(Int64));
+      LI64x4ByBackend := LBackendTable.CoreVectors.SplatI64x4(High(Int64));
+      LI64x4ByScalar := LScalarTable.CoreVectors.SplatI64x4(High(Int64));
       AssertVecI64x4Equal('SplatI64x4 high dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
       LI64x4ByFacade := VecI64x4Splat(High(Int64));
       AssertVecI64x4Equal('SplatI64x4 high facade', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByFacade);
 
-      LI64x4ByBackend := LBackendTable.SplatI64x4(Low(Int64));
-      LI64x4ByScalar := LScalarTable.SplatI64x4(Low(Int64));
+      LI64x4ByBackend := LBackendTable.CoreVectors.SplatI64x4(Low(Int64));
+      LI64x4ByScalar := LScalarTable.CoreVectors.SplatI64x4(Low(Int64));
       AssertVecI64x4Equal('SplatI64x4 low dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
       LI64x4ByFacade := VecI64x4Splat(Low(Int64));
       AssertVecI64x4Equal('SplatI64x4 low facade', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByFacade);
 
-      LI64x4ByBackend := LBackendTable.ZeroI64x4();
-      LI64x4ByScalar := LScalarTable.ZeroI64x4();
+      LI64x4ByBackend := LBackendTable.CoreVectors.ZeroI64x4();
+      LI64x4ByScalar := LScalarTable.CoreVectors.ZeroI64x4();
       AssertVecI64x4Equal('ZeroI64x4 dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
       LI64x4ByFacade := VecI64x4Zero;
@@ -17026,36 +17026,36 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF32x8', Pointer(LScalarTable.SplatF32x8), Pointer(LBackendTable.SplatF32x8));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF32x16', Pointer(LScalarTable.SplatF32x16), Pointer(LBackendTable.SplatF32x16));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF64x4', Pointer(LScalarTable.SplatF64x4), Pointer(LBackendTable.SplatF64x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF64x8', Pointer(LScalarTable.SplatF64x8), Pointer(LBackendTable.SplatF64x8));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatI64x4', Pointer(LScalarTable.SplatI64x4), Pointer(LBackendTable.SplatI64x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF32x8', Pointer(LScalarTable.CoreVectors.SplatF32x8), Pointer(LBackendTable.CoreVectors.SplatF32x8));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF32x16', Pointer(LScalarTable.CoreVectors.SplatF32x16), Pointer(LBackendTable.CoreVectors.SplatF32x16));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF64x4', Pointer(LScalarTable.CoreVectors.SplatF64x4), Pointer(LBackendTable.CoreVectors.SplatF64x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatF64x8', Pointer(LScalarTable.CoreVectors.SplatF64x8), Pointer(LBackendTable.CoreVectors.SplatF64x8));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'SplatI64x4', Pointer(LScalarTable.CoreVectors.SplatI64x4), Pointer(LBackendTable.CoreVectors.SplatI64x4));
 
-    LF32x8ByBackend := LBackendTable.SplatF32x8(-12.75);
-    LF32x8ByScalar := LScalarTable.SplatF32x8(-12.75);
+    LF32x8ByBackend := LBackendTable.CoreVectors.SplatF32x8(-12.75);
+    LF32x8ByScalar := LScalarTable.CoreVectors.SplatF32x8(-12.75);
     AssertVecF32x8Equal('SplatF32x8 dispatch-table', NonX86BackendName(LBackend), LF32x8ByScalar, LF32x8ByBackend, 1e-6);
 
-    LF32x16ByBackend := LBackendTable.SplatF32x16(88.25);
-    LF32x16ByScalar := LScalarTable.SplatF32x16(88.25);
+    LF32x16ByBackend := LBackendTable.CoreVectors.SplatF32x16(88.25);
+    LF32x16ByScalar := LScalarTable.CoreVectors.SplatF32x16(88.25);
     AssertVecF32x16Equal('SplatF32x16 dispatch-table', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 1e-6);
 
     LF32x16ByFacade := VecF32x16Splat(88.25);
     AssertVecF32x16Equal('SplatF32x16 facade', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByFacade, 1e-6);
 
-    LF64x4ByBackend := LBackendTable.SplatF64x4(-999.125);
-    LF64x4ByScalar := LScalarTable.SplatF64x4(-999.125);
+    LF64x4ByBackend := LBackendTable.CoreVectors.SplatF64x4(-999.125);
+    LF64x4ByScalar := LScalarTable.CoreVectors.SplatF64x4(-999.125);
     AssertVecF64x4Equal('SplatF64x4 dispatch-table', NonX86BackendName(LBackend), LF64x4ByScalar, LF64x4ByBackend, 1e-12);
 
-    LF64x8ByBackend := LBackendTable.SplatF64x8(12345.0625);
-    LF64x8ByScalar := LScalarTable.SplatF64x8(12345.0625);
+    LF64x8ByBackend := LBackendTable.CoreVectors.SplatF64x8(12345.0625);
+    LF64x8ByScalar := LScalarTable.CoreVectors.SplatF64x8(12345.0625);
     AssertVecF64x8Equal('SplatF64x8 dispatch-table', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 1e-12);
 
     LF64x8ByFacade := VecF64x8Splat(12345.0625);
     AssertVecF64x8Equal('SplatF64x8 facade', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByFacade, 1e-12);
 
-    LI64x4ByBackend := LBackendTable.SplatI64x4(Int64(-888888888));
-    LI64x4ByScalar := LScalarTable.SplatI64x4(Int64(-888888888));
+    LI64x4ByBackend := LBackendTable.CoreVectors.SplatI64x4(Int64(-888888888));
+    LI64x4ByScalar := LScalarTable.CoreVectors.SplatI64x4(Int64(-888888888));
     AssertVecI64x4Equal('SplatI64x4 dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
     LI64x4ByFacade := VecI64x4Splat(Int64(-888888888));
@@ -17142,26 +17142,26 @@ begin
 
       Inc(LCheckedBackends);
 
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'CrossF32x3', Pointer(LScalarTable.CrossF32x3), Pointer(LBackendTable.CrossF32x3));
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'NormalizeF32x3', Pointer(LScalarTable.NormalizeF32x3), Pointer(LBackendTable.NormalizeF32x3));
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'NormalizeF32x4', Pointer(LScalarTable.NormalizeF32x4), Pointer(LBackendTable.NormalizeF32x4));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'CrossF32x3', Pointer(LScalarTable.CoreVectors.CrossF32x3), Pointer(LBackendTable.CoreVectors.CrossF32x3));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'NormalizeF32x3', Pointer(LScalarTable.CoreVectors.NormalizeF32x3), Pointer(LBackendTable.CoreVectors.NormalizeF32x3));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'NormalizeF32x4', Pointer(LScalarTable.CoreVectors.NormalizeF32x4), Pointer(LBackendTable.CoreVectors.NormalizeF32x4));
 
-      LCrossByBackend := LBackendTable.CrossF32x3(LF32x4A, LF32x4B);
-      LCrossByScalar := LScalarTable.CrossF32x3(LF32x4A, LF32x4B);
+      LCrossByBackend := LBackendTable.CoreVectors.CrossF32x3(LF32x4A, LF32x4B);
+      LCrossByScalar := LScalarTable.CoreVectors.CrossF32x3(LF32x4A, LF32x4B);
       AssertVecF32x4Equal('CrossF32x3 dispatch-table', NonX86BackendName(LBackend), LCrossByScalar, LCrossByBackend, 1e-5);
 
       LCrossByFacade := VecF32x3Cross(LF32x4A, LF32x4B);
       AssertVecF32x4Equal('CrossF32x3 facade', NonX86BackendName(LBackend), LCrossByScalar, LCrossByFacade, 1e-5);
 
-      LNormalize3ByBackend := LBackendTable.NormalizeF32x3(LF32x4A);
-      LNormalize3ByScalar := LScalarTable.NormalizeF32x3(LF32x4A);
+      LNormalize3ByBackend := LBackendTable.CoreVectors.NormalizeF32x3(LF32x4A);
+      LNormalize3ByScalar := LScalarTable.CoreVectors.NormalizeF32x3(LF32x4A);
       AssertVecF32x4Equal('NormalizeF32x3 dispatch-table', NonX86BackendName(LBackend), LNormalize3ByScalar, LNormalize3ByBackend, 1e-5);
 
       LNormalize3ByFacade := VecF32x3Normalize(LF32x4A);
       AssertVecF32x4Equal('NormalizeF32x3 facade', NonX86BackendName(LBackend), LNormalize3ByScalar, LNormalize3ByFacade, 1e-5);
 
-      LNormalize4ByBackend := LBackendTable.NormalizeF32x4(LF32x4A);
-      LNormalize4ByScalar := LScalarTable.NormalizeF32x4(LF32x4A);
+      LNormalize4ByBackend := LBackendTable.CoreVectors.NormalizeF32x4(LF32x4A);
+      LNormalize4ByScalar := LScalarTable.CoreVectors.NormalizeF32x4(LF32x4A);
       AssertVecF32x4Equal('NormalizeF32x4 dispatch-table', NonX86BackendName(LBackend), LNormalize4ByScalar, LNormalize4ByBackend, 1e-5);
 
       LNormalize4ByFacade := VecF32x4Normalize(LF32x4A);
@@ -17245,18 +17245,18 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertSlotReusesScalar(NonX86BackendName(LBackend), 'DotF64x2', Pointer(LScalarTable.DotF64x2), Pointer(LBackendTable.DotF64x2));
-    AssertSlotReusesScalar(NonX86BackendName(LBackend), 'DotF64x4', Pointer(LScalarTable.DotF64x4), Pointer(LBackendTable.DotF64x4));
+    AssertSlotReusesScalar(NonX86BackendName(LBackend), 'DotF64x2', Pointer(LScalarTable.CoreVectors.DotF64x2), Pointer(LBackendTable.CoreVectors.DotF64x2));
+    AssertSlotReusesScalar(NonX86BackendName(LBackend), 'DotF64x4', Pointer(LScalarTable.CoreVectors.DotF64x4), Pointer(LBackendTable.CoreVectors.DotF64x4));
 
-    LDotF64x2ByBackend := LBackendTable.DotF64x2(LF64x2A, LF64x2B);
-    LDotF64x2ByScalar := LScalarTable.DotF64x2(LF64x2A, LF64x2B);
+    LDotF64x2ByBackend := LBackendTable.CoreVectors.DotF64x2(LF64x2A, LF64x2B);
+    LDotF64x2ByScalar := LScalarTable.CoreVectors.DotF64x2(LF64x2A, LF64x2B);
     CheckNear(LDotF64x2ByScalar, LDotF64x2ByBackend, 1e-12, 'DotF64x2 dispatch-table: ' + NonX86BackendName(LBackend));
 
     LDotF64x2ByFacade := VecF64x2Dot(LF64x2A, LF64x2B);
     CheckNear(LDotF64x2ByScalar, LDotF64x2ByFacade, 1e-12, 'DotF64x2 facade: ' + NonX86BackendName(LBackend));
 
-    LDotF64x4ByBackend := LBackendTable.DotF64x4(LF64x4A, LF64x4B);
-    LDotF64x4ByScalar := LScalarTable.DotF64x4(LF64x4A, LF64x4B);
+    LDotF64x4ByBackend := LBackendTable.CoreVectors.DotF64x4(LF64x4A, LF64x4B);
+    LDotF64x4ByScalar := LScalarTable.CoreVectors.DotF64x4(LF64x4A, LF64x4B);
     CheckNear(LDotF64x4ByScalar, LDotF64x4ByBackend, 1e-12, 'DotF64x4 dispatch-table: ' + NonX86BackendName(LBackend));
 
     LDotF64x4ByFacade := VecF64x4Dot(LF64x4A, LF64x4B);
@@ -17308,8 +17308,8 @@ begin
   LF64x8Poison.d[6] := 333.125;
   LF64x8Poison.d[7] := -222.5;
 
-  LReduceF64x4ByScalar := LScalarTable.ReduceAddF64x4(LF64x4Input);
-  LReduceF64x8ByScalar := LScalarTable.ReduceAddF64x8(LF64x8Input);
+  LReduceF64x4ByScalar := LScalarTable.CoreVectors.ReduceAddF64x4(LF64x4Input);
+  LReduceF64x8ByScalar := LScalarTable.CoreVectors.ReduceAddF64x8(LF64x8Input);
 
   GetDispatchTable;
   SetVectorAsmEnabled(True);
@@ -17343,32 +17343,32 @@ begin
 
     if LBackend = sbNEON then
     begin
-      CheckEqual(PtrUInt(Pointer(LScalarTable.ReduceAddF64x4)), PtrUInt(Pointer(LBackendTable.ReduceAddF64x4)), 'ReduceAddF64x4 should reuse the scalar slot when the NEON wide wrapper is only a scalar forwarder');
-      CheckEqual(PtrUInt(Pointer(LScalarTable.ReduceAddF64x8)), PtrUInt(Pointer(LBackendTable.ReduceAddF64x8)), 'ReduceAddF64x8 should reuse the scalar slot when the NEON wide wrapper is only a scalar forwarder');
+      CheckEqual(PtrUInt(Pointer(LScalarTable.CoreVectors.ReduceAddF64x4)), PtrUInt(Pointer(LBackendTable.CoreVectors.ReduceAddF64x4)), 'ReduceAddF64x4 should reuse the scalar slot when the NEON wide wrapper is only a scalar forwarder');
+      CheckEqual(PtrUInt(Pointer(LScalarTable.CoreVectors.ReduceAddF64x8)), PtrUInt(Pointer(LBackendTable.CoreVectors.ReduceAddF64x8)), 'ReduceAddF64x8 should reuse the scalar slot when the NEON wide wrapper is only a scalar forwarder');
     end
     else
     begin
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ReduceAddF64x4', Pointer(LScalarTable.ReduceAddF64x4), Pointer(LBackendTable.ReduceAddF64x4));
-      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ReduceAddF64x8', Pointer(LScalarTable.ReduceAddF64x8), Pointer(LBackendTable.ReduceAddF64x8));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ReduceAddF64x4', Pointer(LScalarTable.CoreVectors.ReduceAddF64x4), Pointer(LBackendTable.CoreVectors.ReduceAddF64x4));
+      AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ReduceAddF64x8', Pointer(LScalarTable.CoreVectors.ReduceAddF64x8), Pointer(LBackendTable.CoreVectors.ReduceAddF64x8));
     end;
 
-    CheckTrue(Assigned(LBackendTable.ReduceMaxF64x4), 'ReduceMaxF64x4 missing: ' + NonX86BackendName(LBackend));
-    LPoisonValue := LBackendTable.ReduceMaxF64x4(LF64x4Poison);
-    LExpectedPoison := LScalarTable.ReduceMaxF64x4(LF64x4Poison);
+    CheckTrue(Assigned(LBackendTable.CoreVectors.ReduceMaxF64x4), 'ReduceMaxF64x4 missing: ' + NonX86BackendName(LBackend));
+    LPoisonValue := LBackendTable.CoreVectors.ReduceMaxF64x4(LF64x4Poison);
+    LExpectedPoison := LScalarTable.CoreVectors.ReduceMaxF64x4(LF64x4Poison);
     CheckNear(LExpectedPoison, LPoisonValue, 1e-12, 'ReduceMaxF64x4 poison sanity: ' + NonX86BackendName(LBackend));
 
-    LReduceF64x4ByBackend := LBackendTable.ReduceAddF64x4(LF64x4Input);
+    LReduceF64x4ByBackend := LBackendTable.CoreVectors.ReduceAddF64x4(LF64x4Input);
     CheckNear(LReduceF64x4ByScalar, LReduceF64x4ByBackend, 1e-12, 'ReduceAddF64x4 dispatch-table: ' + NonX86BackendName(LBackend));
 
-    CheckTrue(Assigned(LBackendTable.ReduceMaxF64x8), 'ReduceMaxF64x8 missing: ' + NonX86BackendName(LBackend));
-    LPoisonValue := LBackendTable.ReduceMaxF64x8(LF64x8Poison);
-    LExpectedPoison := LScalarTable.ReduceMaxF64x8(LF64x8Poison);
+    CheckTrue(Assigned(LBackendTable.CoreVectors.ReduceMaxF64x8), 'ReduceMaxF64x8 missing: ' + NonX86BackendName(LBackend));
+    LPoisonValue := LBackendTable.CoreVectors.ReduceMaxF64x8(LF64x8Poison);
+    LExpectedPoison := LScalarTable.CoreVectors.ReduceMaxF64x8(LF64x8Poison);
     CheckNear(LExpectedPoison, LPoisonValue, 1e-12, 'ReduceMaxF64x8 poison sanity: ' + NonX86BackendName(LBackend));
 
-    LReduceF64x8ByBackend := LBackendTable.ReduceAddF64x8(LF64x8Input);
+    LReduceF64x8ByBackend := LBackendTable.CoreVectors.ReduceAddF64x8(LF64x8Input);
     CheckNear(LReduceF64x8ByScalar, LReduceF64x8ByBackend, 1e-12, 'ReduceAddF64x8 dispatch-table: ' + NonX86BackendName(LBackend));
 
-    LPoisonValue := LBackendTable.ReduceMaxF64x8(LF64x8Poison);
+    LPoisonValue := LBackendTable.CoreVectors.ReduceMaxF64x8(LF64x8Poison);
     CheckNear(LExpectedPoison, LPoisonValue, 1e-12, 'ReduceMaxF64x8 facade poison sanity: ' + NonX86BackendName(LBackend));
 
     LReduceF64x8ByFacade := VecF64x8ReduceAdd(LF64x8Input);
@@ -17461,32 +17461,32 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'NormalizeF32x3', Pointer(LScalarTable.NormalizeF32x3), Pointer(LBackendTable.NormalizeF32x3));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'NormalizeF32x4', Pointer(LScalarTable.NormalizeF32x4), Pointer(LBackendTable.NormalizeF32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'NormalizeF32x3', Pointer(LScalarTable.CoreVectors.NormalizeF32x3), Pointer(LBackendTable.CoreVectors.NormalizeF32x3));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'NormalizeF32x4', Pointer(LScalarTable.CoreVectors.NormalizeF32x4), Pointer(LBackendTable.CoreVectors.NormalizeF32x4));
 
-    LNormalize3ByBackend := LBackendTable.NormalizeF32x3(LZero3);
-    LNormalize3ByScalar := LScalarTable.NormalizeF32x3(LZero3);
+    LNormalize3ByBackend := LBackendTable.CoreVectors.NormalizeF32x3(LZero3);
+    LNormalize3ByScalar := LScalarTable.CoreVectors.NormalizeF32x3(LZero3);
     AssertVecF32x4Equal('NormalizeF32x3 zero dispatch-table', NonX86BackendName(LBackend), LNormalize3ByScalar, LNormalize3ByBackend, 0.0);
 
     LNormalize3ByFacade := VecF32x3Normalize(LZero3);
     AssertVecF32x4Equal('NormalizeF32x3 zero facade', NonX86BackendName(LBackend), LNormalize3ByScalar, LNormalize3ByFacade, 0.0);
 
-    LNormalize3ByBackend := LBackendTable.NormalizeF32x3(LTiny3);
-    LNormalize3ByScalar := LScalarTable.NormalizeF32x3(LTiny3);
+    LNormalize3ByBackend := LBackendTable.CoreVectors.NormalizeF32x3(LTiny3);
+    LNormalize3ByScalar := LScalarTable.CoreVectors.NormalizeF32x3(LTiny3);
     AssertVecF32x4Equal('NormalizeF32x3 tiny dispatch-table', NonX86BackendName(LBackend), LNormalize3ByScalar, LNormalize3ByBackend, 1e-5);
 
     LNormalize3ByFacade := VecF32x3Normalize(LTiny3);
     AssertVecF32x4Equal('NormalizeF32x3 tiny facade', NonX86BackendName(LBackend), LNormalize3ByScalar, LNormalize3ByFacade, 1e-5);
 
-    LNormalize4ByBackend := LBackendTable.NormalizeF32x4(LZero4);
-    LNormalize4ByScalar := LScalarTable.NormalizeF32x4(LZero4);
+    LNormalize4ByBackend := LBackendTable.CoreVectors.NormalizeF32x4(LZero4);
+    LNormalize4ByScalar := LScalarTable.CoreVectors.NormalizeF32x4(LZero4);
     AssertVecF32x4Equal('NormalizeF32x4 zero dispatch-table', NonX86BackendName(LBackend), LNormalize4ByScalar, LNormalize4ByBackend, 0.0);
 
     LNormalize4ByFacade := VecF32x4Normalize(LZero4);
     AssertVecF32x4Equal('NormalizeF32x4 zero facade', NonX86BackendName(LBackend), LNormalize4ByScalar, LNormalize4ByFacade, 0.0);
 
-    LNormalize4ByBackend := LBackendTable.NormalizeF32x4(LTiny4);
-    LNormalize4ByScalar := LScalarTable.NormalizeF32x4(LTiny4);
+    LNormalize4ByBackend := LBackendTable.CoreVectors.NormalizeF32x4(LTiny4);
+    LNormalize4ByScalar := LScalarTable.CoreVectors.NormalizeF32x4(LTiny4);
     AssertVecF32x4Equal('NormalizeF32x4 tiny dispatch-table', NonX86BackendName(LBackend), LNormalize4ByScalar, LNormalize4ByBackend, 1e-5);
 
     LNormalize4ByFacade := VecF32x4Normalize(LTiny4);
@@ -17655,32 +17655,32 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertF32x8', Pointer(LScalarTable.InsertF32x8), Pointer(LBackendTable.InsertF32x8));
-    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertF32x16', Pointer(LScalarTable.InsertF32x16), Pointer(LBackendTable.InsertF32x16));
-    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertF64x4', Pointer(LScalarTable.InsertF64x4), Pointer(LBackendTable.InsertF64x4));
-    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractF32x8', Pointer(LScalarTable.ExtractF32x8), Pointer(LBackendTable.ExtractF32x8));
-    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractF32x16', Pointer(LScalarTable.ExtractF32x16), Pointer(LBackendTable.ExtractF32x16));
-    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractF64x4', Pointer(LScalarTable.ExtractF64x4), Pointer(LBackendTable.ExtractF64x4));
-    AssertBackendOwnedIntegerSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x8', Pointer(LScalarTable.InsertI32x8), Pointer(LBackendTable.InsertI32x8));
-    AssertBackendOwnedIntegerSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x16', Pointer(LScalarTable.InsertI32x16), Pointer(LBackendTable.InsertI32x16));
-    AssertBackendOwnedIntegerSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI64x4', Pointer(LScalarTable.InsertI64x4), Pointer(LBackendTable.InsertI64x4));
+    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertF32x8', Pointer(LScalarTable.CoreVectors.InsertF32x8), Pointer(LBackendTable.CoreVectors.InsertF32x8));
+    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertF32x16', Pointer(LScalarTable.CoreVectors.InsertF32x16), Pointer(LBackendTable.CoreVectors.InsertF32x16));
+    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertF64x4', Pointer(LScalarTable.CoreVectors.InsertF64x4), Pointer(LBackendTable.CoreVectors.InsertF64x4));
+    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractF32x8', Pointer(LScalarTable.CoreVectors.ExtractF32x8), Pointer(LBackendTable.CoreVectors.ExtractF32x8));
+    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractF32x16', Pointer(LScalarTable.CoreVectors.ExtractF32x16), Pointer(LBackendTable.CoreVectors.ExtractF32x16));
+    AssertBackendOwnedFloatSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractF64x4', Pointer(LScalarTable.CoreVectors.ExtractF64x4), Pointer(LBackendTable.CoreVectors.ExtractF64x4));
+    AssertBackendOwnedIntegerSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x8', Pointer(LScalarTable.CoreVectors.InsertI32x8), Pointer(LBackendTable.CoreVectors.InsertI32x8));
+    AssertBackendOwnedIntegerSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x16', Pointer(LScalarTable.CoreVectors.InsertI32x16), Pointer(LBackendTable.CoreVectors.InsertI32x16));
+    AssertBackendOwnedIntegerSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI64x4', Pointer(LScalarTable.CoreVectors.InsertI64x4), Pointer(LBackendTable.CoreVectors.InsertI64x4));
 
-    LF32x8ByBackend := LBackendTable.InsertF32x8(LF32x8Base, -77.5, 4);
-    LF32x8ByScalar := LScalarTable.InsertF32x8(LF32x8Base, -77.5, 4);
+    LF32x8ByBackend := LBackendTable.CoreVectors.InsertF32x8(LF32x8Base, -77.5, 4);
+    LF32x8ByScalar := LScalarTable.CoreVectors.InsertF32x8(LF32x8Base, -77.5, 4);
     AssertVecF32x8Equal('InsertF32x8 dispatch-table', NonX86BackendName(LBackend), LF32x8ByScalar, LF32x8ByBackend, 1e-6);
 
     LF32x8ByFacade := VecF32x8Insert(LF32x8Base, -77.5, 4);
     AssertVecF32x8Equal('InsertF32x8 facade', NonX86BackendName(LBackend), LF32x8ByScalar, LF32x8ByFacade, 1e-6);
 
-    LF32x16ByBackend := LBackendTable.InsertF32x16(LF32x16Base, 88.25, 11);
-    LF32x16ByScalar := LScalarTable.InsertF32x16(LF32x16Base, 88.25, 11);
+    LF32x16ByBackend := LBackendTable.CoreVectors.InsertF32x16(LF32x16Base, 88.25, 11);
+    LF32x16ByScalar := LScalarTable.CoreVectors.InsertF32x16(LF32x16Base, 88.25, 11);
     AssertVecF32x16Equal('InsertF32x16 dispatch-table', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 1e-6);
 
     LF32x16ByFacade := VecF32x16Insert(LF32x16Base, 88.25, 11);
     AssertVecF32x16Equal('InsertF32x16 facade', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByFacade, 1e-6);
 
-    LF64x4ByBackend := LBackendTable.InsertF64x4(LF64x4Base, -999.125, 1);
-    LF64x4ByScalar := LScalarTable.InsertF64x4(LF64x4Base, -999.125, 1);
+    LF64x4ByBackend := LBackendTable.CoreVectors.InsertF64x4(LF64x4Base, -999.125, 1);
+    LF64x4ByScalar := LScalarTable.CoreVectors.InsertF64x4(LF64x4Base, -999.125, 1);
     AssertVecF64x4Equal('InsertF64x4 dispatch-table', NonX86BackendName(LBackend), LF64x4ByScalar, LF64x4ByBackend, 1e-12);
 
     LF64x4ByFacade := VecF64x4Insert(LF64x4Base, -999.125, 1);
@@ -17695,8 +17695,8 @@ begin
       else
         LExtractIndex := 99;
       end;
-      CheckNear(LScalarTable.ExtractF32x8(LF32x8Base, LExtractIndex), LBackendTable.ExtractF32x8(LF32x8Base, LExtractIndex), 1e-6, 'ExtractF32x8 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
-      CheckNear(LScalarTable.ExtractF32x8(LF32x8Base, LExtractIndex), VecF32x8Extract(LF32x8Base, LExtractIndex), 1e-6, 'ExtractF32x8 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF32x8(LF32x8Base, LExtractIndex), LBackendTable.CoreVectors.ExtractF32x8(LF32x8Base, LExtractIndex), 1e-6, 'ExtractF32x8 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF32x8(LF32x8Base, LExtractIndex), VecF32x8Extract(LF32x8Base, LExtractIndex), 1e-6, 'ExtractF32x8 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
     end;
 
     for LIndex := 0 to 3 do
@@ -17708,8 +17708,8 @@ begin
       else
         LExtractIndex := 99;
       end;
-      CheckNear(LScalarTable.ExtractF32x16(LF32x16Base, LExtractIndex), LBackendTable.ExtractF32x16(LF32x16Base, LExtractIndex), 1e-6, 'ExtractF32x16 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
-      CheckNear(LScalarTable.ExtractF32x16(LF32x16Base, LExtractIndex), VecF32x16Extract(LF32x16Base, LExtractIndex), 1e-6, 'ExtractF32x16 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF32x16(LF32x16Base, LExtractIndex), LBackendTable.CoreVectors.ExtractF32x16(LF32x16Base, LExtractIndex), 1e-6, 'ExtractF32x16 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF32x16(LF32x16Base, LExtractIndex), VecF32x16Extract(LF32x16Base, LExtractIndex), 1e-6, 'ExtractF32x16 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
     end;
 
     for LIndex := 0 to 3 do
@@ -17721,26 +17721,26 @@ begin
       else
         LExtractIndex := 99;
       end;
-      CheckNear(LScalarTable.ExtractF64x4(LF64x4Base, LExtractIndex), LBackendTable.ExtractF64x4(LF64x4Base, LExtractIndex), 1e-12, 'ExtractF64x4 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
-      CheckNear(LScalarTable.ExtractF64x4(LF64x4Base, LExtractIndex), VecF64x4Extract(LF64x4Base, LExtractIndex), 1e-12, 'ExtractF64x4 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF64x4(LF64x4Base, LExtractIndex), LBackendTable.CoreVectors.ExtractF64x4(LF64x4Base, LExtractIndex), 1e-12, 'ExtractF64x4 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF64x4(LF64x4Base, LExtractIndex), VecF64x4Extract(LF64x4Base, LExtractIndex), 1e-12, 'ExtractF64x4 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
     end;
 
-    LI32x8ByBackend := LBackendTable.InsertI32x8(LI32x8Base, -2026, 5);
-    LI32x8ByScalar := LScalarTable.InsertI32x8(LI32x8Base, -2026, 5);
+    LI32x8ByBackend := LBackendTable.CoreVectors.InsertI32x8(LI32x8Base, -2026, 5);
+    LI32x8ByScalar := LScalarTable.CoreVectors.InsertI32x8(LI32x8Base, -2026, 5);
     AssertVecI32x8Equal('InsertI32x8 dispatch-table', NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
     LI32x8ByFacade := VecI32x8Insert(LI32x8Base, -2026, 5);
     AssertVecI32x8Equal('InsertI32x8 facade', NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByFacade);
 
-    LI32x16ByBackend := LBackendTable.InsertI32x16(LI32x16Base, 314159, 9);
-    LI32x16ByScalar := LScalarTable.InsertI32x16(LI32x16Base, 314159, 9);
+    LI32x16ByBackend := LBackendTable.CoreVectors.InsertI32x16(LI32x16Base, 314159, 9);
+    LI32x16ByScalar := LScalarTable.CoreVectors.InsertI32x16(LI32x16Base, 314159, 9);
     AssertVecI32x16Equal('InsertI32x16 dispatch-table', NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
     LI32x16ByFacade := VecI32x16Insert(LI32x16Base, 314159, 9);
     AssertVecI32x16Equal('InsertI32x16 facade', NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByFacade);
 
-    LI64x4ByBackend := LBackendTable.InsertI64x4(LI64x4Base, Int64(-888888888), 1);
-    LI64x4ByScalar := LScalarTable.InsertI64x4(LI64x4Base, Int64(-888888888), 1);
+    LI64x4ByBackend := LBackendTable.CoreVectors.InsertI64x4(LI64x4Base, Int64(-888888888), 1);
+    LI64x4ByScalar := LScalarTable.CoreVectors.InsertI64x4(LI64x4Base, Int64(-888888888), 1);
     AssertVecI64x4Equal('InsertI64x4 dispatch-table', NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
     LI64x4ByFacade := VecI64x4Insert(LI64x4Base, Int64(-888888888), 1);
@@ -17872,12 +17872,12 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI32x8', Pointer(LScalarTable.ExtractI32x8), Pointer(LBackendTable.ExtractI32x8));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x8', Pointer(LScalarTable.InsertI32x8), Pointer(LBackendTable.InsertI32x8));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI32x16', Pointer(LScalarTable.ExtractI32x16), Pointer(LBackendTable.ExtractI32x16));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x16', Pointer(LScalarTable.InsertI32x16), Pointer(LBackendTable.InsertI32x16));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI64x4', Pointer(LScalarTable.ExtractI64x4), Pointer(LBackendTable.ExtractI64x4));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI64x4', Pointer(LScalarTable.InsertI64x4), Pointer(LBackendTable.InsertI64x4));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI32x8', Pointer(LScalarTable.CoreVectors.ExtractI32x8), Pointer(LBackendTable.CoreVectors.ExtractI32x8));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x8', Pointer(LScalarTable.CoreVectors.InsertI32x8), Pointer(LBackendTable.CoreVectors.InsertI32x8));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI32x16', Pointer(LScalarTable.CoreVectors.ExtractI32x16), Pointer(LBackendTable.CoreVectors.ExtractI32x16));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x16', Pointer(LScalarTable.CoreVectors.InsertI32x16), Pointer(LBackendTable.CoreVectors.InsertI32x16));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'ExtractI64x4', Pointer(LScalarTable.CoreVectors.ExtractI64x4), Pointer(LBackendTable.CoreVectors.ExtractI64x4));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI64x4', Pointer(LScalarTable.CoreVectors.InsertI64x4), Pointer(LBackendTable.CoreVectors.InsertI64x4));
 
     for LIndex := 0 to 3 do
     begin
@@ -17889,15 +17889,15 @@ begin
         LExtractIndex := 99;
       end;
 
-      LExpectedI32 := LScalarTable.ExtractI32x8(LI32x8Base, LExtractIndex);
-      LActualI32 := LBackendTable.ExtractI32x8(LI32x8Base, LExtractIndex);
+      LExpectedI32 := LScalarTable.CoreVectors.ExtractI32x8(LI32x8Base, LExtractIndex);
+      LActualI32 := LBackendTable.CoreVectors.ExtractI32x8(LI32x8Base, LExtractIndex);
       CheckEqual(LExpectedI32, LActualI32, 'ExtractI32x8 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
 
       LFacadeI32 := VecI32x8Extract(LI32x8Base, LExtractIndex);
       CheckEqual(LExpectedI32, LFacadeI32, 'ExtractI32x8 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
 
-      LI32x8ByBackend := LBackendTable.InsertI32x8(LI32x8Base, High(Int32) - LIndex, LExtractIndex);
-      LI32x8ByScalar := LScalarTable.InsertI32x8(LI32x8Base, High(Int32) - LIndex, LExtractIndex);
+      LI32x8ByBackend := LBackendTable.CoreVectors.InsertI32x8(LI32x8Base, High(Int32) - LIndex, LExtractIndex);
+      LI32x8ByScalar := LScalarTable.CoreVectors.InsertI32x8(LI32x8Base, High(Int32) - LIndex, LExtractIndex);
       AssertVecI32x8Equal('InsertI32x8 dispatch-table idx ' + IntToStr(LExtractIndex), NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
       LI32x8ByFacade := VecI32x8Insert(LI32x8Base, High(Int32) - LIndex, LExtractIndex);
@@ -17914,15 +17914,15 @@ begin
         LExtractIndex := 99;
       end;
 
-      LExpectedI32 := LScalarTable.ExtractI32x16(LI32x16Base, LExtractIndex);
-      LActualI32 := LBackendTable.ExtractI32x16(LI32x16Base, LExtractIndex);
+      LExpectedI32 := LScalarTable.CoreVectors.ExtractI32x16(LI32x16Base, LExtractIndex);
+      LActualI32 := LBackendTable.CoreVectors.ExtractI32x16(LI32x16Base, LExtractIndex);
       CheckEqual(LExpectedI32, LActualI32, 'ExtractI32x16 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
 
       LFacadeI32 := VecI32x16Extract(LI32x16Base, LExtractIndex);
       CheckEqual(LExpectedI32, LFacadeI32, 'ExtractI32x16 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
 
-      LI32x16ByBackend := LBackendTable.InsertI32x16(LI32x16Base, Low(Int32) + LIndex, LExtractIndex);
-      LI32x16ByScalar := LScalarTable.InsertI32x16(LI32x16Base, Low(Int32) + LIndex, LExtractIndex);
+      LI32x16ByBackend := LBackendTable.CoreVectors.InsertI32x16(LI32x16Base, Low(Int32) + LIndex, LExtractIndex);
+      LI32x16ByScalar := LScalarTable.CoreVectors.InsertI32x16(LI32x16Base, Low(Int32) + LIndex, LExtractIndex);
       AssertVecI32x16Equal('InsertI32x16 dispatch-table idx ' + IntToStr(LExtractIndex), NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
       LI32x16ByFacade := VecI32x16Insert(LI32x16Base, Low(Int32) + LIndex, LExtractIndex);
@@ -17939,15 +17939,15 @@ begin
         LExtractIndex := 99;
       end;
 
-      LExpectedI64 := LScalarTable.ExtractI64x4(LI64x4Base, LExtractIndex);
-      LActualI64 := LBackendTable.ExtractI64x4(LI64x4Base, LExtractIndex);
+      LExpectedI64 := LScalarTable.CoreVectors.ExtractI64x4(LI64x4Base, LExtractIndex);
+      LActualI64 := LBackendTable.CoreVectors.ExtractI64x4(LI64x4Base, LExtractIndex);
       CheckEqual(LExpectedI64, LActualI64, 'ExtractI64x4 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
 
       LFacadeI64 := VecI64x4Extract(LI64x4Base, LExtractIndex);
       CheckEqual(LExpectedI64, LFacadeI64, 'ExtractI64x4 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
 
-      LI64x4ByBackend := LBackendTable.InsertI64x4(LI64x4Base, Int64(Low(Int64) + LIndex), LExtractIndex);
-      LI64x4ByScalar := LScalarTable.InsertI64x4(LI64x4Base, Int64(Low(Int64) + LIndex), LExtractIndex);
+      LI64x4ByBackend := LBackendTable.CoreVectors.InsertI64x4(LI64x4Base, Int64(Low(Int64) + LIndex), LExtractIndex);
+      LI64x4ByScalar := LScalarTable.CoreVectors.InsertI64x4(LI64x4Base, Int64(Low(Int64) + LIndex), LExtractIndex);
       AssertVecI64x4Equal('InsertI64x4 dispatch-table idx ' + IntToStr(LExtractIndex), NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
       LI64x4ByFacade := VecI64x4Insert(LI64x4Base, Int64(Low(Int64) + LIndex), LExtractIndex);
@@ -18039,11 +18039,11 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'InsertF32x4', Pointer(LScalarTable.InsertF32x4), Pointer(LBackendTable.InsertF32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'InsertF64x2', Pointer(LScalarTable.InsertF64x2), Pointer(LBackendTable.InsertF64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'InsertF32x4', Pointer(LScalarTable.CoreVectors.InsertF32x4), Pointer(LBackendTable.CoreVectors.InsertF32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'InsertF64x2', Pointer(LScalarTable.CoreVectors.InsertF64x2), Pointer(LBackendTable.CoreVectors.InsertF64x2));
 
-    LF32x4ByBackend := LBackendTable.InsertF32x4(LF32x4Base, 42.5, 2);
-    LF32x4ByScalar := LScalarTable.InsertF32x4(LF32x4Base, 42.5, 2);
+    LF32x4ByBackend := LBackendTable.CoreVectors.InsertF32x4(LF32x4Base, 42.5, 2);
+    LF32x4ByScalar := LScalarTable.CoreVectors.InsertF32x4(LF32x4Base, 42.5, 2);
     AssertVecF32x4Equal('InsertF32x4 dispatch-table', NonX86BackendName(LBackend), LF32x4ByScalar, LF32x4ByBackend, 1e-6);
 
     LF32x4ByFacade := VecF32x4Insert(LF32x4Base, 42.5, 2);
@@ -18058,12 +18058,12 @@ begin
       else
         LExtractIndex := 99;
       end;
-      CheckNear(LScalarTable.ExtractF32x4(LF32x4Base, LExtractIndex), LBackendTable.ExtractF32x4(LF32x4Base, LExtractIndex), 1e-6, 'ExtractF32x4 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
-      CheckNear(LScalarTable.ExtractF32x4(LF32x4Base, LExtractIndex), VecF32x4Extract(LF32x4Base, LExtractIndex), 1e-6, 'ExtractF32x4 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF32x4(LF32x4Base, LExtractIndex), LBackendTable.CoreVectors.ExtractF32x4(LF32x4Base, LExtractIndex), 1e-6, 'ExtractF32x4 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF32x4(LF32x4Base, LExtractIndex), VecF32x4Extract(LF32x4Base, LExtractIndex), 1e-6, 'ExtractF32x4 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
     end;
 
-    LF64x2ByBackend := LBackendTable.InsertF64x2(LF64x2Base, 55.75, 0);
-    LF64x2ByScalar := LScalarTable.InsertF64x2(LF64x2Base, 55.75, 0);
+    LF64x2ByBackend := LBackendTable.CoreVectors.InsertF64x2(LF64x2Base, 55.75, 0);
+    LF64x2ByScalar := LScalarTable.CoreVectors.InsertF64x2(LF64x2Base, 55.75, 0);
     AssertVecF64x2Equal('InsertF64x2 dispatch-table', NonX86BackendName(LBackend), LF64x2ByScalar, LF64x2ByBackend, 1e-12);
 
     LF64x2ByFacade := VecF64x2Insert(LF64x2Base, 55.75, 0);
@@ -18078,8 +18078,8 @@ begin
       else
         LExtractIndex := 99;
       end;
-      CheckNear(LScalarTable.ExtractF64x2(LF64x2Base, LExtractIndex), LBackendTable.ExtractF64x2(LF64x2Base, LExtractIndex), 1e-12, 'ExtractF64x2 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
-      CheckNear(LScalarTable.ExtractF64x2(LF64x2Base, LExtractIndex), VecF64x2Extract(LF64x2Base, LExtractIndex), 1e-12, 'ExtractF64x2 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF64x2(LF64x2Base, LExtractIndex), LBackendTable.CoreVectors.ExtractF64x2(LF64x2Base, LExtractIndex), 1e-12, 'ExtractF64x2 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckNear(LScalarTable.CoreVectors.ExtractF64x2(LF64x2Base, LExtractIndex), VecF64x2Extract(LF64x2Base, LExtractIndex), 1e-12, 'ExtractF64x2 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
     end;
   end;
 
@@ -18218,45 +18218,45 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddI32x4', Pointer(LScalarTable.AddI32x4), Pointer(LBackendTable.AddI32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AndI32x4', Pointer(LScalarTable.AndI32x4), Pointer(LBackendTable.AndI32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ShiftLeftI32x4', Pointer(LScalarTable.ShiftLeftI32x4), Pointer(LBackendTable.ShiftLeftI32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ShiftRightArithI32x4', Pointer(LScalarTable.ShiftRightArithI32x4), Pointer(LBackendTable.ShiftRightArithI32x4));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddI64x2', Pointer(LScalarTable.AddI64x2), Pointer(LBackendTable.AddI64x2));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AndI64x2', Pointer(LScalarTable.AndI64x2), Pointer(LBackendTable.AndI64x2));
-    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddU32x4', Pointer(LScalarTable.AddU32x4), Pointer(LBackendTable.AddU32x4));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'AddU64x2', Pointer(LScalarTable.AddU64x2), Pointer(LBackendTable.AddU64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddI32x4', Pointer(LScalarTable.CoreVectors.AddI32x4), Pointer(LBackendTable.CoreVectors.AddI32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AndI32x4', Pointer(LScalarTable.CoreVectors.AndI32x4), Pointer(LBackendTable.CoreVectors.AndI32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ShiftLeftI32x4', Pointer(LScalarTable.CoreVectors.ShiftLeftI32x4), Pointer(LBackendTable.CoreVectors.ShiftLeftI32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'ShiftRightArithI32x4', Pointer(LScalarTable.CoreVectors.ShiftRightArithI32x4), Pointer(LBackendTable.CoreVectors.ShiftRightArithI32x4));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddI64x2', Pointer(LScalarTable.CoreVectors.AddI64x2), Pointer(LBackendTable.CoreVectors.AddI64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AndI64x2', Pointer(LScalarTable.CoreVectors.AndI64x2), Pointer(LBackendTable.CoreVectors.AndI64x2));
+    AssertNativeSlotNotScalar(NonX86BackendName(LBackend), 'AddU32x4', Pointer(LScalarTable.CoreVectors.AddU32x4), Pointer(LBackendTable.CoreVectors.AddU32x4));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'AddU64x2', Pointer(LScalarTable.CoreVectors.AddU64x2), Pointer(LBackendTable.CoreVectors.AddU64x2));
 
-    LI32x4ByBackend := LBackendTable.AddI32x4(LI32x4A, LI32x4B);
-    LI32x4ByScalar := LScalarTable.AddI32x4(LI32x4A, LI32x4B);
+    LI32x4ByBackend := LBackendTable.CoreVectors.AddI32x4(LI32x4A, LI32x4B);
+    LI32x4ByScalar := LScalarTable.CoreVectors.AddI32x4(LI32x4A, LI32x4B);
     AssertVecI32x4Equal('AddI32x4', NonX86BackendName(LBackend), LI32x4ByScalar, LI32x4ByBackend);
 
-    LI32x4ByBackend := LBackendTable.AndI32x4(LI32x4A, LI32x4B);
-    LI32x4ByScalar := LScalarTable.AndI32x4(LI32x4A, LI32x4B);
+    LI32x4ByBackend := LBackendTable.CoreVectors.AndI32x4(LI32x4A, LI32x4B);
+    LI32x4ByScalar := LScalarTable.CoreVectors.AndI32x4(LI32x4A, LI32x4B);
     AssertVecI32x4Equal('AndI32x4', NonX86BackendName(LBackend), LI32x4ByScalar, LI32x4ByBackend);
 
-    LI32x4ByBackend := LBackendTable.ShiftLeftI32x4(LI32x4A, 5);
-    LI32x4ByScalar := LScalarTable.ShiftLeftI32x4(LI32x4A, 5);
+    LI32x4ByBackend := LBackendTable.CoreVectors.ShiftLeftI32x4(LI32x4A, 5);
+    LI32x4ByScalar := LScalarTable.CoreVectors.ShiftLeftI32x4(LI32x4A, 5);
     AssertVecI32x4Equal('ShiftLeftI32x4', NonX86BackendName(LBackend), LI32x4ByScalar, LI32x4ByBackend);
 
-    LI32x4ByBackend := LBackendTable.ShiftRightArithI32x4(LI32x4A, 5);
-    LI32x4ByScalar := LScalarTable.ShiftRightArithI32x4(LI32x4A, 5);
+    LI32x4ByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x4(LI32x4A, 5);
+    LI32x4ByScalar := LScalarTable.CoreVectors.ShiftRightArithI32x4(LI32x4A, 5);
     AssertVecI32x4Equal('ShiftRightArithI32x4', NonX86BackendName(LBackend), LI32x4ByScalar, LI32x4ByBackend);
 
-    LI64x2ByBackend := LBackendTable.AddI64x2(LI64x2A, LI64x2B);
-    LI64x2ByScalar := LScalarTable.AddI64x2(LI64x2A, LI64x2B);
+    LI64x2ByBackend := LBackendTable.CoreVectors.AddI64x2(LI64x2A, LI64x2B);
+    LI64x2ByScalar := LScalarTable.CoreVectors.AddI64x2(LI64x2A, LI64x2B);
     AssertVecI64x2Equal('AddI64x2', NonX86BackendName(LBackend), LI64x2ByScalar, LI64x2ByBackend);
 
-    LI64x2ByBackend := LBackendTable.AndI64x2(LI64x2A, LI64x2B);
-    LI64x2ByScalar := LScalarTable.AndI64x2(LI64x2A, LI64x2B);
+    LI64x2ByBackend := LBackendTable.CoreVectors.AndI64x2(LI64x2A, LI64x2B);
+    LI64x2ByScalar := LScalarTable.CoreVectors.AndI64x2(LI64x2A, LI64x2B);
     AssertVecI64x2Equal('AndI64x2', NonX86BackendName(LBackend), LI64x2ByScalar, LI64x2ByBackend);
 
-    LU32x4ByBackend := LBackendTable.AddU32x4(LU32x4A, LU32x4B);
-    LU32x4ByScalar := LScalarTable.AddU32x4(LU32x4A, LU32x4B);
+    LU32x4ByBackend := LBackendTable.CoreVectors.AddU32x4(LU32x4A, LU32x4B);
+    LU32x4ByScalar := LScalarTable.CoreVectors.AddU32x4(LU32x4A, LU32x4B);
     AssertVecU32x4Equal('AddU32x4', NonX86BackendName(LBackend), LU32x4ByScalar, LU32x4ByBackend);
 
-    LU64x2ByBackend := LBackendTable.AddU64x2(LU64x2A, LU64x2B);
-    LU64x2ByScalar := LScalarTable.AddU64x2(LU64x2A, LU64x2B);
+    LU64x2ByBackend := LBackendTable.CoreVectors.AddU64x2(LU64x2A, LU64x2B);
+    LU64x2ByScalar := LScalarTable.CoreVectors.AddU64x2(LU64x2A, LU64x2B);
     AssertVecU64x2Equal('AddU64x2', NonX86BackendName(LBackend), LU64x2ByScalar, LU64x2ByBackend);
   end;
 
@@ -18359,11 +18359,11 @@ begin
 
     Inc(LCheckedBackends);
 
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x4', Pointer(LScalarTable.InsertI32x4), Pointer(LBackendTable.InsertI32x4));
-    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI64x2', Pointer(LScalarTable.InsertI64x2), Pointer(LBackendTable.InsertI64x2));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI32x4', Pointer(LScalarTable.CoreVectors.InsertI32x4), Pointer(LBackendTable.CoreVectors.InsertI32x4));
+    AssertBackendOwnedSlotIfExpected(LBackend, NonX86BackendName(LBackend), 'InsertI64x2', Pointer(LScalarTable.CoreVectors.InsertI64x2), Pointer(LBackendTable.CoreVectors.InsertI64x2));
 
-    LI32x4ByBackend := LBackendTable.InsertI32x4(LI32x4Base, -777, 2);
-    LI32x4ByScalar := LScalarTable.InsertI32x4(LI32x4Base, -777, 2);
+    LI32x4ByBackend := LBackendTable.CoreVectors.InsertI32x4(LI32x4Base, -777, 2);
+    LI32x4ByScalar := LScalarTable.CoreVectors.InsertI32x4(LI32x4Base, -777, 2);
     AssertVecI32x4Equal('InsertI32x4 dispatch-table', NonX86BackendName(LBackend), LI32x4ByScalar, LI32x4ByBackend);
 
     LI32x4ByFacade := VecI32x4Insert(LI32x4Base, -777, 2);
@@ -18378,12 +18378,12 @@ begin
       else
         LExtractIndex := 99;
       end;
-      CheckEqual(LScalarTable.ExtractI32x4(LI32x4Base, LExtractIndex), LBackendTable.ExtractI32x4(LI32x4Base, LExtractIndex), 'ExtractI32x4 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
-      CheckEqual(LScalarTable.ExtractI32x4(LI32x4Base, LExtractIndex), VecI32x4Extract(LI32x4Base, LExtractIndex), 'ExtractI32x4 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckEqual(LScalarTable.CoreVectors.ExtractI32x4(LI32x4Base, LExtractIndex), LBackendTable.CoreVectors.ExtractI32x4(LI32x4Base, LExtractIndex), 'ExtractI32x4 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckEqual(LScalarTable.CoreVectors.ExtractI32x4(LI32x4Base, LExtractIndex), VecI32x4Extract(LI32x4Base, LExtractIndex), 'ExtractI32x4 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
     end;
 
-    LI64x2ByBackend := LBackendTable.InsertI64x2(LI64x2Base, Int64(-998877665544332211), 1);
-    LI64x2ByScalar := LScalarTable.InsertI64x2(LI64x2Base, Int64(-998877665544332211), 1);
+    LI64x2ByBackend := LBackendTable.CoreVectors.InsertI64x2(LI64x2Base, Int64(-998877665544332211), 1);
+    LI64x2ByScalar := LScalarTable.CoreVectors.InsertI64x2(LI64x2Base, Int64(-998877665544332211), 1);
     AssertVecI64x2Equal('InsertI64x2 dispatch-table', NonX86BackendName(LBackend), LI64x2ByScalar, LI64x2ByBackend);
 
     LI64x2ByFacade := VecI64x2Insert(LI64x2Base, Int64(-998877665544332211), 1);
@@ -18398,8 +18398,8 @@ begin
       else
         LExtractIndex := 99;
       end;
-      CheckEqual(LScalarTable.ExtractI64x2(LI64x2Base, LExtractIndex), LBackendTable.ExtractI64x2(LI64x2Base, LExtractIndex), 'ExtractI64x2 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
-      CheckEqual(LScalarTable.ExtractI64x2(LI64x2Base, LExtractIndex), VecI64x2Extract(LI64x2Base, LExtractIndex), 'ExtractI64x2 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckEqual(LScalarTable.CoreVectors.ExtractI64x2(LI64x2Base, LExtractIndex), LBackendTable.CoreVectors.ExtractI64x2(LI64x2Base, LExtractIndex), 'ExtractI64x2 dispatch-table idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
+      CheckEqual(LScalarTable.CoreVectors.ExtractI64x2(LI64x2Base, LExtractIndex), VecI64x2Extract(LI64x2Base, LExtractIndex), 'ExtractI64x2 facade idx ' + IntToStr(LExtractIndex) + ': ' + NonX86BackendName(LBackend));
     end;
   end;
 
@@ -18439,26 +18439,26 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-    CheckTrue(Assigned(LBackendTable.AddF32x4), 'AddF32x4 missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.CmpLtF32x4), 'CmpLtF32x4 missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.ReduceAddF32x4), 'ReduceAddF32x4 missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.ReduceMulF32x4), 'ReduceMulF32x4 missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.AddF32x4), 'AddF32x4 missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtF32x4), 'CmpLtF32x4 missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.ReduceAddF32x4), 'ReduceAddF32x4 missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.ReduceMulF32x4), 'ReduceMulF32x4 missing: ' + NonX86BackendName(LBackend));
 
-    LVecByBackend := LBackendTable.AddF32x4(LA, LB);
-    LVecByScalar := LScalarTable.AddF32x4(LA, LB);
+    LVecByBackend := LBackendTable.CoreVectors.AddF32x4(LA, LB);
+    LVecByScalar := LScalarTable.CoreVectors.AddF32x4(LA, LB);
     for LIndex := 0 to 3 do
       CheckNear(LVecByScalar.f[LIndex], LVecByBackend.f[LIndex], 1e-6, 'AddF32x4 parity lane ' + IntToStr(LIndex) + ': ' + NonX86BackendName(LBackend));
 
-    LMaskByBackend := LBackendTable.CmpLtF32x4(LA, LB);
-    LMaskByScalar := LScalarTable.CmpLtF32x4(LA, LB);
+    LMaskByBackend := LBackendTable.CoreVectors.CmpLtF32x4(LA, LB);
+    LMaskByScalar := LScalarTable.CoreVectors.CmpLtF32x4(LA, LB);
     CheckEqual(Integer(LMaskByScalar), Integer(LMaskByBackend), 'CmpLtF32x4 parity: ' + NonX86BackendName(LBackend));
 
-    LReduceAddByBackend := LBackendTable.ReduceAddF32x4(LA);
-    LReduceAddByScalar := LScalarTable.ReduceAddF32x4(LA);
+    LReduceAddByBackend := LBackendTable.CoreVectors.ReduceAddF32x4(LA);
+    LReduceAddByScalar := LScalarTable.CoreVectors.ReduceAddF32x4(LA);
     CheckNear(LReduceAddByScalar, LReduceAddByBackend, 1e-6, 'ReduceAddF32x4 parity: ' + NonX86BackendName(LBackend));
 
-    LReduceMulByBackend := LBackendTable.ReduceMulF32x4(LA);
-    LReduceMulByScalar := LScalarTable.ReduceMulF32x4(LA);
+    LReduceMulByBackend := LBackendTable.CoreVectors.ReduceMulF32x4(LA);
+    LReduceMulByScalar := LScalarTable.CoreVectors.ReduceMulF32x4(LA);
     CheckNear(LReduceMulByScalar, LReduceMulByBackend, 1e-6, 'ReduceMulF32x4 parity: ' + NonX86BackendName(LBackend));
 
     Inc(LChecked);
@@ -18554,136 +18554,136 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.AddF64x2), 'AddF64x2 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtF64x2), 'CmpLtF64x2 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ReduceAddF64x2), 'ReduceAddF64x2 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ReduceMulF64x2), 'ReduceMulF64x2 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddF32x8), 'AddF32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtF32x8), 'CmpLtF32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ReduceAddF32x8), 'ReduceAddF32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ReduceMulF32x8), 'ReduceMulF32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddF32x16) and Assigned(LBackendTable.SubF32x16) and Assigned(LBackendTable.MulF32x16) and Assigned(LBackendTable.DivF32x16) and Assigned(LBackendTable.MinF32x16) and Assigned(LBackendTable.MaxF32x16) and Assigned(LBackendTable.AbsF32x16) and Assigned(LBackendTable.SqrtF32x16) and Assigned(LBackendTable.FmaF32x16) and Assigned(LBackendTable.ClampF32x16) and Assigned(LBackendTable.ReduceAddF32x16) and Assigned(LBackendTable.ReduceMulF32x16) and Assigned(LBackendTable.AddF64x8) and Assigned(LBackendTable.SubF64x8) and Assigned(LBackendTable.MulF64x8) and Assigned(LBackendTable.DivF64x8) and Assigned(LBackendTable.MinF64x8) and Assigned(LBackendTable.MaxF64x8) and Assigned(LBackendTable.AbsF64x8) and Assigned(LBackendTable.SqrtF64x8) and Assigned(LBackendTable.FmaF64x8) and Assigned(LBackendTable.ClampF64x8), 'Wide float math slots missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddF64x2), 'AddF64x2 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtF64x2), 'CmpLtF64x2 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ReduceAddF64x2), 'ReduceAddF64x2 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ReduceMulF64x2), 'ReduceMulF64x2 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddF32x8), 'AddF32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtF32x8), 'CmpLtF32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ReduceAddF32x8), 'ReduceAddF32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ReduceMulF32x8), 'ReduceMulF32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddF32x16) and Assigned(LBackendTable.CoreVectors.SubF32x16) and Assigned(LBackendTable.CoreVectors.MulF32x16) and Assigned(LBackendTable.CoreVectors.DivF32x16) and Assigned(LBackendTable.CoreVectors.MinF32x16) and Assigned(LBackendTable.CoreVectors.MaxF32x16) and Assigned(LBackendTable.CoreVectors.AbsF32x16) and Assigned(LBackendTable.CoreVectors.SqrtF32x16) and Assigned(LBackendTable.CoreVectors.FmaF32x16) and Assigned(LBackendTable.CoreVectors.ClampF32x16) and Assigned(LBackendTable.CoreVectors.ReduceAddF32x16) and Assigned(LBackendTable.CoreVectors.ReduceMulF32x16) and Assigned(LBackendTable.CoreVectors.AddF64x8) and Assigned(LBackendTable.CoreVectors.SubF64x8) and Assigned(LBackendTable.CoreVectors.MulF64x8) and Assigned(LBackendTable.CoreVectors.DivF64x8) and Assigned(LBackendTable.CoreVectors.MinF64x8) and Assigned(LBackendTable.CoreVectors.MaxF64x8) and Assigned(LBackendTable.CoreVectors.AbsF64x8) and Assigned(LBackendTable.CoreVectors.SqrtF64x8) and Assigned(LBackendTable.CoreVectors.FmaF64x8) and Assigned(LBackendTable.CoreVectors.ClampF64x8), 'Wide float math slots missing: ' + NonX86BackendName(LBackend));
 
-      LF64ByBackend := LBackendTable.AddF64x2(LF64A, LF64B);
-      LF64ByScalar := LScalarTable.AddF64x2(LF64A, LF64B);
+      LF64ByBackend := LBackendTable.CoreVectors.AddF64x2(LF64A, LF64B);
+      LF64ByScalar := LScalarTable.CoreVectors.AddF64x2(LF64A, LF64B);
       for LIndex := 0 to 1 do
         CheckNear(LF64ByScalar.d[LIndex], LF64ByBackend.d[LIndex], 1e-12, 'AddF64x2 parity lane ' + IntToStr(LIndex) + ': ' + NonX86BackendName(LBackend));
 
-      LMask2ByBackend := LBackendTable.CmpLtF64x2(LF64A, LF64B);
-      LMask2ByScalar := LScalarTable.CmpLtF64x2(LF64A, LF64B);
+      LMask2ByBackend := LBackendTable.CoreVectors.CmpLtF64x2(LF64A, LF64B);
+      LMask2ByScalar := LScalarTable.CoreVectors.CmpLtF64x2(LF64A, LF64B);
       CheckEqual(Integer(LMask2ByScalar), Integer(LMask2ByBackend), 'CmpLtF64x2 parity: ' + NonX86BackendName(LBackend));
 
-      LReduceAddF64ByBackend := LBackendTable.ReduceAddF64x2(LF64A);
-      LReduceAddF64ByScalar := LScalarTable.ReduceAddF64x2(LF64A);
+      LReduceAddF64ByBackend := LBackendTable.CoreVectors.ReduceAddF64x2(LF64A);
+      LReduceAddF64ByScalar := LScalarTable.CoreVectors.ReduceAddF64x2(LF64A);
       CheckNear(LReduceAddF64ByScalar, LReduceAddF64ByBackend, 1e-12, 'ReduceAddF64x2 parity: ' + NonX86BackendName(LBackend));
 
-      LReduceMulF64ByBackend := LBackendTable.ReduceMulF64x2(LF64A);
-      LReduceMulF64ByScalar := LScalarTable.ReduceMulF64x2(LF64A);
+      LReduceMulF64ByBackend := LBackendTable.CoreVectors.ReduceMulF64x2(LF64A);
+      LReduceMulF64ByScalar := LScalarTable.CoreVectors.ReduceMulF64x2(LF64A);
       CheckNear(LReduceMulF64ByScalar, LReduceMulF64ByBackend, 1e-12, 'ReduceMulF64x2 parity: ' + NonX86BackendName(LBackend));
 
-      LF32ByBackend := LBackendTable.AddF32x8(LF32A, LF32B);
-      LF32ByScalar := LScalarTable.AddF32x8(LF32A, LF32B);
+      LF32ByBackend := LBackendTable.CoreVectors.AddF32x8(LF32A, LF32B);
+      LF32ByScalar := LScalarTable.CoreVectors.AddF32x8(LF32A, LF32B);
       for LIndex := 0 to 7 do
         CheckNear(LF32ByScalar.f[LIndex], LF32ByBackend.f[LIndex], 1e-6, 'AddF32x8 parity lane ' + IntToStr(LIndex) + ': ' + NonX86BackendName(LBackend));
 
-      LMask8ByBackend := LBackendTable.CmpLtF32x8(LF32A, LF32B);
-      LMask8ByScalar := LScalarTable.CmpLtF32x8(LF32A, LF32B);
+      LMask8ByBackend := LBackendTable.CoreVectors.CmpLtF32x8(LF32A, LF32B);
+      LMask8ByScalar := LScalarTable.CoreVectors.CmpLtF32x8(LF32A, LF32B);
       CheckEqual(Integer(LMask8ByScalar), Integer(LMask8ByBackend), 'CmpLtF32x8 parity: ' + NonX86BackendName(LBackend));
 
-      LReduceAddF32x8ByBackend := LBackendTable.ReduceAddF32x8(LF32A);
-      LReduceAddF32x8ByScalar := LScalarTable.ReduceAddF32x8(LF32A);
+      LReduceAddF32x8ByBackend := LBackendTable.CoreVectors.ReduceAddF32x8(LF32A);
+      LReduceAddF32x8ByScalar := LScalarTable.CoreVectors.ReduceAddF32x8(LF32A);
       CheckNear(LReduceAddF32x8ByScalar, LReduceAddF32x8ByBackend, 1e-6, 'ReduceAddF32x8 parity: ' + NonX86BackendName(LBackend));
 
-      LReduceMulF32x8ByBackend := LBackendTable.ReduceMulF32x8(LF32A);
-      LReduceMulF32x8ByScalar := LScalarTable.ReduceMulF32x8(LF32A);
+      LReduceMulF32x8ByBackend := LBackendTable.CoreVectors.ReduceMulF32x8(LF32A);
+      LReduceMulF32x8ByScalar := LScalarTable.CoreVectors.ReduceMulF32x8(LF32A);
       CheckNear(LReduceMulF32x8ByScalar, LReduceMulF32x8ByBackend, 1e-4, 'ReduceMulF32x8 parity: ' + NonX86BackendName(LBackend));
 
-      LF32x16ByBackend := LBackendTable.AddF32x16(LF32x16A, LF32x16B);
-      LF32x16ByScalar := LScalarTable.AddF32x16(LF32x16A, LF32x16B);
+      LF32x16ByBackend := LBackendTable.CoreVectors.AddF32x16(LF32x16A, LF32x16B);
+      LF32x16ByScalar := LScalarTable.CoreVectors.AddF32x16(LF32x16A, LF32x16B);
       AssertVecF32x16Equal('AddF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 1e-6);
 
-      LF32x16ByBackend := LBackendTable.SubF32x16(LF32x16A, LF32x16B);
-      LF32x16ByScalar := LScalarTable.SubF32x16(LF32x16A, LF32x16B);
+      LF32x16ByBackend := LBackendTable.CoreVectors.SubF32x16(LF32x16A, LF32x16B);
+      LF32x16ByScalar := LScalarTable.CoreVectors.SubF32x16(LF32x16A, LF32x16B);
       AssertVecF32x16Equal('SubF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 1e-6);
 
-      LF32x16ByBackend := LBackendTable.MulF32x16(LF32x16A, LF32x16B);
-      LF32x16ByScalar := LScalarTable.MulF32x16(LF32x16A, LF32x16B);
+      LF32x16ByBackend := LBackendTable.CoreVectors.MulF32x16(LF32x16A, LF32x16B);
+      LF32x16ByScalar := LScalarTable.CoreVectors.MulF32x16(LF32x16A, LF32x16B);
       AssertVecF32x16Equal('MulF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 1e-5);
 
-      LF32x16ByBackend := LBackendTable.DivF32x16(LF32x16A, LF32x16B);
-      LF32x16ByScalar := LScalarTable.DivF32x16(LF32x16A, LF32x16B);
+      LF32x16ByBackend := LBackendTable.CoreVectors.DivF32x16(LF32x16A, LF32x16B);
+      LF32x16ByScalar := LScalarTable.CoreVectors.DivF32x16(LF32x16A, LF32x16B);
       AssertVecF32x16Equal('DivF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 1e-6);
 
-      LF32x16ByBackend := LBackendTable.MinF32x16(LF32x16A, LF32x16B);
-      LF32x16ByScalar := LScalarTable.MinF32x16(LF32x16A, LF32x16B);
+      LF32x16ByBackend := LBackendTable.CoreVectors.MinF32x16(LF32x16A, LF32x16B);
+      LF32x16ByScalar := LScalarTable.CoreVectors.MinF32x16(LF32x16A, LF32x16B);
       AssertVecF32x16Equal('MinF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 0.0);
 
-      LF32x16ByBackend := LBackendTable.MaxF32x16(LF32x16A, LF32x16B);
-      LF32x16ByScalar := LScalarTable.MaxF32x16(LF32x16A, LF32x16B);
+      LF32x16ByBackend := LBackendTable.CoreVectors.MaxF32x16(LF32x16A, LF32x16B);
+      LF32x16ByScalar := LScalarTable.CoreVectors.MaxF32x16(LF32x16A, LF32x16B);
       AssertVecF32x16Equal('MaxF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 0.0);
 
-      LF32x16ByBackend := LBackendTable.AbsF32x16(LF32x16A);
-      LF32x16ByScalar := LScalarTable.AbsF32x16(LF32x16A);
+      LF32x16ByBackend := LBackendTable.CoreVectors.AbsF32x16(LF32x16A);
+      LF32x16ByScalar := LScalarTable.CoreVectors.AbsF32x16(LF32x16A);
       AssertVecF32x16Equal('AbsF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 0.0);
 
-      LF32x16ByBackend := LBackendTable.SqrtF32x16(LF32x16B);
-      LF32x16ByScalar := LScalarTable.SqrtF32x16(LF32x16B);
+      LF32x16ByBackend := LBackendTable.CoreVectors.SqrtF32x16(LF32x16B);
+      LF32x16ByScalar := LScalarTable.CoreVectors.SqrtF32x16(LF32x16B);
       AssertVecF32x16Equal('SqrtF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 1e-6);
 
-      LF32x16ByBackend := LBackendTable.FmaF32x16(LF32x16A, LF32x16B, LF32x16C);
-      LF32x16ByScalar := LScalarTable.FmaF32x16(LF32x16A, LF32x16B, LF32x16C);
+      LF32x16ByBackend := LBackendTable.CoreVectors.FmaF32x16(LF32x16A, LF32x16B, LF32x16C);
+      LF32x16ByScalar := LScalarTable.CoreVectors.FmaF32x16(LF32x16A, LF32x16B, LF32x16C);
       AssertVecF32x16Equal('FmaF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 1e-5);
 
-      LF32x16ByBackend := LBackendTable.ClampF32x16(LF32x16A, LF32x16Min, LF32x16Max);
-      LF32x16ByScalar := LScalarTable.ClampF32x16(LF32x16A, LF32x16Min, LF32x16Max);
+      LF32x16ByBackend := LBackendTable.CoreVectors.ClampF32x16(LF32x16A, LF32x16Min, LF32x16Max);
+      LF32x16ByScalar := LScalarTable.CoreVectors.ClampF32x16(LF32x16A, LF32x16Min, LF32x16Max);
       AssertVecF32x16Equal('ClampF32x16', NonX86BackendName(LBackend), LF32x16ByScalar, LF32x16ByBackend, 0.0);
 
-      LReduceAddF32x16ByBackend := LBackendTable.ReduceAddF32x16(LF32x16A);
-      LReduceAddF32x16ByScalar := LScalarTable.ReduceAddF32x16(LF32x16A);
+      LReduceAddF32x16ByBackend := LBackendTable.CoreVectors.ReduceAddF32x16(LF32x16A);
+      LReduceAddF32x16ByScalar := LScalarTable.CoreVectors.ReduceAddF32x16(LF32x16A);
       CheckNear(LReduceAddF32x16ByScalar, LReduceAddF32x16ByBackend, 1e-5, 'ReduceAddF32x16 parity: ' + NonX86BackendName(LBackend));
 
-      LReduceMulF32x16ByBackend := LBackendTable.ReduceMulF32x16(LF32x16A);
-      LReduceMulF32x16ByScalar := LScalarTable.ReduceMulF32x16(LF32x16A);
+      LReduceMulF32x16ByBackend := LBackendTable.CoreVectors.ReduceMulF32x16(LF32x16A);
+      LReduceMulF32x16ByScalar := LScalarTable.CoreVectors.ReduceMulF32x16(LF32x16A);
       CheckNear(LReduceMulF32x16ByScalar, LReduceMulF32x16ByBackend, 1e-4, 'ReduceMulF32x16 parity: ' + NonX86BackendName(LBackend));
 
-      LF64x8ByBackend := LBackendTable.AddF64x8(LF64x8A, LF64x8B);
-      LF64x8ByScalar := LScalarTable.AddF64x8(LF64x8A, LF64x8B);
+      LF64x8ByBackend := LBackendTable.CoreVectors.AddF64x8(LF64x8A, LF64x8B);
+      LF64x8ByScalar := LScalarTable.CoreVectors.AddF64x8(LF64x8A, LF64x8B);
       AssertVecF64x8Equal('AddF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 1e-12);
 
-      LF64x8ByBackend := LBackendTable.SubF64x8(LF64x8A, LF64x8B);
-      LF64x8ByScalar := LScalarTable.SubF64x8(LF64x8A, LF64x8B);
+      LF64x8ByBackend := LBackendTable.CoreVectors.SubF64x8(LF64x8A, LF64x8B);
+      LF64x8ByScalar := LScalarTable.CoreVectors.SubF64x8(LF64x8A, LF64x8B);
       AssertVecF64x8Equal('SubF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 1e-12);
 
-      LF64x8ByBackend := LBackendTable.MulF64x8(LF64x8A, LF64x8B);
-      LF64x8ByScalar := LScalarTable.MulF64x8(LF64x8A, LF64x8B);
+      LF64x8ByBackend := LBackendTable.CoreVectors.MulF64x8(LF64x8A, LF64x8B);
+      LF64x8ByScalar := LScalarTable.CoreVectors.MulF64x8(LF64x8A, LF64x8B);
       AssertVecF64x8Equal('MulF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 1e-11);
 
-      LF64x8ByBackend := LBackendTable.DivF64x8(LF64x8A, LF64x8B);
-      LF64x8ByScalar := LScalarTable.DivF64x8(LF64x8A, LF64x8B);
+      LF64x8ByBackend := LBackendTable.CoreVectors.DivF64x8(LF64x8A, LF64x8B);
+      LF64x8ByScalar := LScalarTable.CoreVectors.DivF64x8(LF64x8A, LF64x8B);
       AssertVecF64x8Equal('DivF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 1e-12);
 
-      LF64x8ByBackend := LBackendTable.MinF64x8(LF64x8A, LF64x8B);
-      LF64x8ByScalar := LScalarTable.MinF64x8(LF64x8A, LF64x8B);
+      LF64x8ByBackend := LBackendTable.CoreVectors.MinF64x8(LF64x8A, LF64x8B);
+      LF64x8ByScalar := LScalarTable.CoreVectors.MinF64x8(LF64x8A, LF64x8B);
       AssertVecF64x8Equal('MinF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 0.0);
 
-      LF64x8ByBackend := LBackendTable.MaxF64x8(LF64x8A, LF64x8B);
-      LF64x8ByScalar := LScalarTable.MaxF64x8(LF64x8A, LF64x8B);
+      LF64x8ByBackend := LBackendTable.CoreVectors.MaxF64x8(LF64x8A, LF64x8B);
+      LF64x8ByScalar := LScalarTable.CoreVectors.MaxF64x8(LF64x8A, LF64x8B);
       AssertVecF64x8Equal('MaxF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 0.0);
 
-      LF64x8ByBackend := LBackendTable.AbsF64x8(LF64x8A);
-      LF64x8ByScalar := LScalarTable.AbsF64x8(LF64x8A);
+      LF64x8ByBackend := LBackendTable.CoreVectors.AbsF64x8(LF64x8A);
+      LF64x8ByScalar := LScalarTable.CoreVectors.AbsF64x8(LF64x8A);
       AssertVecF64x8Equal('AbsF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 0.0);
 
-      LF64x8ByBackend := LBackendTable.SqrtF64x8(LF64x8B);
-      LF64x8ByScalar := LScalarTable.SqrtF64x8(LF64x8B);
+      LF64x8ByBackend := LBackendTable.CoreVectors.SqrtF64x8(LF64x8B);
+      LF64x8ByScalar := LScalarTable.CoreVectors.SqrtF64x8(LF64x8B);
       AssertVecF64x8Equal('SqrtF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 1e-12);
 
-      LF64x8ByBackend := LBackendTable.FmaF64x8(LF64x8A, LF64x8B, LF64x8C);
-      LF64x8ByScalar := LScalarTable.FmaF64x8(LF64x8A, LF64x8B, LF64x8C);
+      LF64x8ByBackend := LBackendTable.CoreVectors.FmaF64x8(LF64x8A, LF64x8B, LF64x8C);
+      LF64x8ByScalar := LScalarTable.CoreVectors.FmaF64x8(LF64x8A, LF64x8B, LF64x8C);
       AssertVecF64x8Equal('FmaF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 1e-11);
 
-      LF64x8ByBackend := LBackendTable.ClampF64x8(LF64x8A, LF64x8Min, LF64x8Max);
-      LF64x8ByScalar := LScalarTable.ClampF64x8(LF64x8A, LF64x8Min, LF64x8Max);
+      LF64x8ByBackend := LBackendTable.CoreVectors.ClampF64x8(LF64x8A, LF64x8Min, LF64x8Max);
+      LF64x8ByScalar := LScalarTable.CoreVectors.ClampF64x8(LF64x8A, LF64x8Min, LF64x8Max);
       AssertVecF64x8Equal('ClampF64x8', NonX86BackendName(LBackend), LF64x8ByScalar, LF64x8ByBackend, 0.0);
 
     Inc(LChecked);
@@ -18764,22 +18764,22 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.AndNotI8x16), 'AndNotI8x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndNotU16x8), 'AndNotU16x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndNotU8x16), 'AndNotU8x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndNotI8x16), 'AndNotI8x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndNotU16x8), 'AndNotU16x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndNotU8x16), 'AndNotU8x16 missing: ' + NonX86BackendName(LBackend));
 
-      LI8ByBackend := LBackendTable.AndNotI8x16(LI8A, LI8B);
-      LI8ByScalar := LScalarTable.AndNotI8x16(LI8A, LI8B);
+      LI8ByBackend := LBackendTable.CoreVectors.AndNotI8x16(LI8A, LI8B);
+      LI8ByScalar := LScalarTable.CoreVectors.AndNotI8x16(LI8A, LI8B);
       for LIndex := 0 to 15 do
         CheckEqual(LI8ByScalar.i[LIndex], LI8ByBackend.i[LIndex], 'AndNotI8x16 lane ' + IntToStr(LIndex) + ': ' + NonX86BackendName(LBackend));
 
-      LU16ByBackend := LBackendTable.AndNotU16x8(LU16A, LU16B);
-      LU16ByScalar := LScalarTable.AndNotU16x8(LU16A, LU16B);
+      LU16ByBackend := LBackendTable.CoreVectors.AndNotU16x8(LU16A, LU16B);
+      LU16ByScalar := LScalarTable.CoreVectors.AndNotU16x8(LU16A, LU16B);
       for LIndex := 0 to 7 do
         CheckEqual(QWord(LU16ByScalar.u[LIndex]), QWord(LU16ByBackend.u[LIndex]), 'AndNotU16x8 lane ' + IntToStr(LIndex) + ': ' + NonX86BackendName(LBackend));
 
-      LU8ByBackend := LBackendTable.AndNotU8x16(LU8A, LU8B);
-      LU8ByScalar := LScalarTable.AndNotU8x16(LU8A, LU8B);
+      LU8ByBackend := LBackendTable.CoreVectors.AndNotU8x16(LU8A, LU8B);
+      LU8ByScalar := LScalarTable.CoreVectors.AndNotU8x16(LU8A, LU8B);
       for LIndex := 0 to 15 do
         CheckEqual(QWord(LU8ByScalar.u[LIndex]), QWord(LU8ByBackend.u[LIndex]), 'AndNotU8x16 lane ' + IntToStr(LIndex) + ': ' + NonX86BackendName(LBackend));
 
@@ -18835,20 +18835,20 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.DotF32x8), 'DotF32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.DotF64x2), 'DotF64x2 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.DotF64x4), 'DotF64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.DotF32x8), 'DotF32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.DotF64x2), 'DotF64x2 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.DotF64x4), 'DotF64x4 missing: ' + NonX86BackendName(LBackend));
 
-      LDotF32x8ByBackend := LBackendTable.DotF32x8(LF32x8A, LF32x8B);
-      LDotF32x8ByScalar := LScalarTable.DotF32x8(LF32x8A, LF32x8B);
+      LDotF32x8ByBackend := LBackendTable.CoreVectors.DotF32x8(LF32x8A, LF32x8B);
+      LDotF32x8ByScalar := LScalarTable.CoreVectors.DotF32x8(LF32x8A, LF32x8B);
       CheckNear(LDotF32x8ByScalar, LDotF32x8ByBackend, 1e-6, 'DotF32x8 parity: ' + NonX86BackendName(LBackend));
 
-      LDotF64x2ByBackend := LBackendTable.DotF64x2(LF64x2A, LF64x2B);
-      LDotF64x2ByScalar := LScalarTable.DotF64x2(LF64x2A, LF64x2B);
+      LDotF64x2ByBackend := LBackendTable.CoreVectors.DotF64x2(LF64x2A, LF64x2B);
+      LDotF64x2ByScalar := LScalarTable.CoreVectors.DotF64x2(LF64x2A, LF64x2B);
       CheckNear(LDotF64x2ByScalar, LDotF64x2ByBackend, 1e-12, 'DotF64x2 parity: ' + NonX86BackendName(LBackend));
 
-      LDotF64x4ByBackend := LBackendTable.DotF64x4(LF64x4A, LF64x4B);
-      LDotF64x4ByScalar := LScalarTable.DotF64x4(LF64x4A, LF64x4B);
+      LDotF64x4ByBackend := LBackendTable.CoreVectors.DotF64x4(LF64x4A, LF64x4B);
+      LDotF64x4ByScalar := LScalarTable.CoreVectors.DotF64x4(LF64x4A, LF64x4B);
       CheckNear(LDotF64x4ByScalar, LDotF64x4ByBackend, 1e-12, 'DotF64x4 parity: ' + NonX86BackendName(LBackend));
 
     Inc(LChecked);
@@ -18907,85 +18907,85 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.AddI16x32), 'AddI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubI16x32), 'SubI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndI16x32), 'AndI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrI16x32), 'OrI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorI16x32), 'XorI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.NotI16x32), 'NotI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndNotI16x32), 'AndNotI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftI16x32), 'ShiftLeftI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightI16x32), 'ShiftRightI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightArithI16x32), 'ShiftRightArithI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqI16x32), 'CmpEqI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtI16x32), 'CmpLtI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtI16x32), 'CmpGtI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MinI16x32), 'MinI16x32 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MaxI16x32), 'MaxI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddI16x32), 'AddI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubI16x32), 'SubI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndI16x32), 'AndI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrI16x32), 'OrI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorI16x32), 'XorI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.NotI16x32), 'NotI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndNotI16x32), 'AndNotI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftI16x32), 'ShiftLeftI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightI16x32), 'ShiftRightI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightArithI16x32), 'ShiftRightArithI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqI16x32), 'CmpEqI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtI16x32), 'CmpLtI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtI16x32), 'CmpGtI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MinI16x32), 'MinI16x32 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MaxI16x32), 'MaxI16x32 missing: ' + NonX86BackendName(LBackend));
 
-      LVecByBackend := LBackendTable.AddI16x32(LA, LB);
-      LVecByScalar := LScalarTable.AddI16x32(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.AddI16x32(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.AddI16x32(LA, LB);
       AssertVecI16x32Equal('AddI16x32 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.SubI16x32(LA, LB);
-      LVecByScalar := LScalarTable.SubI16x32(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.SubI16x32(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.SubI16x32(LA, LB);
       AssertVecI16x32Equal('SubI16x32 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.AndI16x32(LA, LB);
-      LVecByScalar := LScalarTable.AndI16x32(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.AndI16x32(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.AndI16x32(LA, LB);
       AssertVecI16x32Equal('AndI16x32 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.OrI16x32(LA, LB);
-      LVecByScalar := LScalarTable.OrI16x32(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.OrI16x32(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.OrI16x32(LA, LB);
       AssertVecI16x32Equal('OrI16x32 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.XorI16x32(LA, LB);
-      LVecByScalar := LScalarTable.XorI16x32(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.XorI16x32(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.XorI16x32(LA, LB);
       AssertVecI16x32Equal('XorI16x32 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.NotI16x32(LA);
-      LVecByScalar := LScalarTable.NotI16x32(LA);
+      LVecByBackend := LBackendTable.CoreVectors.NotI16x32(LA);
+      LVecByScalar := LScalarTable.CoreVectors.NotI16x32(LA);
       AssertVecI16x32Equal('NotI16x32 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.AndNotI16x32(LA, LB);
-      LVecByScalar := LScalarTable.AndNotI16x32(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.AndNotI16x32(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.AndNotI16x32(LA, LB);
       AssertVecI16x32Equal('AndNotI16x32 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
       for LIndex := 0 to High(LShiftCounts) do
       begin
         LShiftCount := LShiftCounts[LIndex];
 
-        LVecByBackend := LBackendTable.ShiftLeftI16x32(LA, LShiftCount);
-        LVecByScalar := LScalarTable.ShiftLeftI16x32(LA, LShiftCount);
+        LVecByBackend := LBackendTable.CoreVectors.ShiftLeftI16x32(LA, LShiftCount);
+        LVecByScalar := LScalarTable.CoreVectors.ShiftLeftI16x32(LA, LShiftCount);
         AssertVecI16x32Equal('ShiftLeftI16x32 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-        LVecByBackend := LBackendTable.ShiftRightI16x32(LA, LShiftCount);
-        LVecByScalar := LScalarTable.ShiftRightI16x32(LA, LShiftCount);
+        LVecByBackend := LBackendTable.CoreVectors.ShiftRightI16x32(LA, LShiftCount);
+        LVecByScalar := LScalarTable.CoreVectors.ShiftRightI16x32(LA, LShiftCount);
         AssertVecI16x32Equal('ShiftRightI16x32 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-        LVecByBackend := LBackendTable.ShiftRightArithI16x32(LA, LShiftCount);
-        LVecByScalar := LScalarTable.ShiftRightArithI16x32(LA, LShiftCount);
+        LVecByBackend := LBackendTable.CoreVectors.ShiftRightArithI16x32(LA, LShiftCount);
+        LVecByScalar := LScalarTable.CoreVectors.ShiftRightArithI16x32(LA, LShiftCount);
         AssertVecI16x32Equal('ShiftRightArithI16x32 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
       end;
 
-      LMaskByBackend := LBackendTable.CmpEqI16x32(LA, LB);
-      LMaskByScalar := LScalarTable.CmpEqI16x32(LA, LB);
+      LMaskByBackend := LBackendTable.CoreVectors.CmpEqI16x32(LA, LB);
+      LMaskByScalar := LScalarTable.CoreVectors.CmpEqI16x32(LA, LB);
       CheckEqual(QWord(LMaskByScalar), QWord(LMaskByBackend), 'CmpEqI16x32 parity: ' + NonX86BackendName(LBackend));
 
-      LMaskByBackend := LBackendTable.CmpLtI16x32(LA, LB);
-      LMaskByScalar := LScalarTable.CmpLtI16x32(LA, LB);
+      LMaskByBackend := LBackendTable.CoreVectors.CmpLtI16x32(LA, LB);
+      LMaskByScalar := LScalarTable.CoreVectors.CmpLtI16x32(LA, LB);
       CheckEqual(QWord(LMaskByScalar), QWord(LMaskByBackend), 'CmpLtI16x32 parity: ' + NonX86BackendName(LBackend));
 
-      LMaskByBackend := LBackendTable.CmpGtI16x32(LA, LB);
-      LMaskByScalar := LScalarTable.CmpGtI16x32(LA, LB);
+      LMaskByBackend := LBackendTable.CoreVectors.CmpGtI16x32(LA, LB);
+      LMaskByScalar := LScalarTable.CoreVectors.CmpGtI16x32(LA, LB);
       CheckEqual(QWord(LMaskByScalar), QWord(LMaskByBackend), 'CmpGtI16x32 parity: ' + NonX86BackendName(LBackend));
 
-      LVecByBackend := LBackendTable.MinI16x32(LA, LB);
-      LVecByScalar := LScalarTable.MinI16x32(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.MinI16x32(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.MinI16x32(LA, LB);
       AssertVecI16x32Equal('MinI16x32 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.MaxI16x32(LA, LB);
-      LVecByScalar := LScalarTable.MaxI16x32(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.MaxI16x32(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.MaxI16x32(LA, LB);
       AssertVecI16x32Equal('MaxI16x32 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
     Inc(LChecked);
@@ -19036,65 +19036,65 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.AddI8x64), 'AddI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubI8x64), 'SubI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndI8x64), 'AndI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrI8x64), 'OrI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorI8x64), 'XorI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.NotI8x64), 'NotI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndNotI8x64), 'AndNotI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqI8x64), 'CmpEqI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtI8x64), 'CmpLtI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtI8x64), 'CmpGtI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MinI8x64), 'MinI8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MaxI8x64), 'MaxI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddI8x64), 'AddI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubI8x64), 'SubI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndI8x64), 'AndI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrI8x64), 'OrI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorI8x64), 'XorI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.NotI8x64), 'NotI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndNotI8x64), 'AndNotI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqI8x64), 'CmpEqI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtI8x64), 'CmpLtI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtI8x64), 'CmpGtI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MinI8x64), 'MinI8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MaxI8x64), 'MaxI8x64 missing: ' + NonX86BackendName(LBackend));
 
-      LVecByBackend := LBackendTable.AddI8x64(LA, LB);
-      LVecByScalar := LScalarTable.AddI8x64(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.AddI8x64(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.AddI8x64(LA, LB);
       AssertVecI8x64Equal('AddI8x64 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.SubI8x64(LA, LB);
-      LVecByScalar := LScalarTable.SubI8x64(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.SubI8x64(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.SubI8x64(LA, LB);
       AssertVecI8x64Equal('SubI8x64 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.AndI8x64(LA, LB);
-      LVecByScalar := LScalarTable.AndI8x64(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.AndI8x64(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.AndI8x64(LA, LB);
       AssertVecI8x64Equal('AndI8x64 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.OrI8x64(LA, LB);
-      LVecByScalar := LScalarTable.OrI8x64(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.OrI8x64(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.OrI8x64(LA, LB);
       AssertVecI8x64Equal('OrI8x64 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.XorI8x64(LA, LB);
-      LVecByScalar := LScalarTable.XorI8x64(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.XorI8x64(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.XorI8x64(LA, LB);
       AssertVecI8x64Equal('XorI8x64 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.NotI8x64(LA);
-      LVecByScalar := LScalarTable.NotI8x64(LA);
+      LVecByBackend := LBackendTable.CoreVectors.NotI8x64(LA);
+      LVecByScalar := LScalarTable.CoreVectors.NotI8x64(LA);
       AssertVecI8x64Equal('NotI8x64 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.AndNotI8x64(LA, LB);
-      LVecByScalar := LScalarTable.AndNotI8x64(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.AndNotI8x64(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.AndNotI8x64(LA, LB);
       AssertVecI8x64Equal('AndNotI8x64 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LMaskByBackend := LBackendTable.CmpEqI8x64(LA, LB);
-      LMaskByScalar := LScalarTable.CmpEqI8x64(LA, LB);
+      LMaskByBackend := LBackendTable.CoreVectors.CmpEqI8x64(LA, LB);
+      LMaskByScalar := LScalarTable.CoreVectors.CmpEqI8x64(LA, LB);
       CheckEqual(QWord(LMaskByScalar), QWord(LMaskByBackend), 'CmpEqI8x64 parity: ' + NonX86BackendName(LBackend));
 
-      LMaskByBackend := LBackendTable.CmpLtI8x64(LA, LB);
-      LMaskByScalar := LScalarTable.CmpLtI8x64(LA, LB);
+      LMaskByBackend := LBackendTable.CoreVectors.CmpLtI8x64(LA, LB);
+      LMaskByScalar := LScalarTable.CoreVectors.CmpLtI8x64(LA, LB);
       CheckEqual(QWord(LMaskByScalar), QWord(LMaskByBackend), 'CmpLtI8x64 parity: ' + NonX86BackendName(LBackend));
 
-      LMaskByBackend := LBackendTable.CmpGtI8x64(LA, LB);
-      LMaskByScalar := LScalarTable.CmpGtI8x64(LA, LB);
+      LMaskByBackend := LBackendTable.CoreVectors.CmpGtI8x64(LA, LB);
+      LMaskByScalar := LScalarTable.CoreVectors.CmpGtI8x64(LA, LB);
       CheckEqual(QWord(LMaskByScalar), QWord(LMaskByBackend), 'CmpGtI8x64 parity: ' + NonX86BackendName(LBackend));
 
-      LVecByBackend := LBackendTable.MinI8x64(LA, LB);
-      LVecByScalar := LScalarTable.MinI8x64(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.MinI8x64(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.MinI8x64(LA, LB);
       AssertVecI8x64Equal('MinI8x64 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.MaxI8x64(LA, LB);
-      LVecByScalar := LScalarTable.MaxI8x64(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.MaxI8x64(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.MaxI8x64(LA, LB);
       AssertVecI8x64Equal('MaxI8x64 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
     Inc(LChecked);
@@ -19198,228 +19198,228 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.AddU32x16), 'AddU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubU32x16), 'SubU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MulU32x16), 'MulU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndU32x16), 'AndU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrU32x16), 'OrU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorU32x16), 'XorU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.NotU32x16), 'NotU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndNotU32x16), 'AndNotU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftU32x16), 'ShiftLeftU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightU32x16), 'ShiftRightU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqU32x16), 'CmpEqU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtU32x16), 'CmpLtU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtU32x16), 'CmpGtU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLeU32x16), 'CmpLeU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGeU32x16), 'CmpGeU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpNeU32x16), 'CmpNeU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MinU32x16), 'MinU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MaxU32x16), 'MaxU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddU64x8), 'AddU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubU64x8), 'SubU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndU64x8), 'AndU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrU64x8), 'OrU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorU64x8), 'XorU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.NotU64x8), 'NotU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftU64x8), 'ShiftLeftU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightU64x8), 'ShiftRightU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqU64x8), 'CmpEqU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtU64x8), 'CmpLtU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtU64x8), 'CmpGtU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLeU64x8), 'CmpLeU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGeU64x8), 'CmpGeU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpNeU64x8), 'CmpNeU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddU8x64), 'AddU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubU8x64), 'SubU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndU8x64), 'AndU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrU8x64), 'OrU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorU8x64), 'XorU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.NotU8x64), 'NotU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqU8x64), 'CmpEqU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtU8x64), 'CmpLtU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtU8x64), 'CmpGtU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MinU8x64), 'MinU8x64 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MaxU8x64), 'MaxU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddU32x16), 'AddU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubU32x16), 'SubU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MulU32x16), 'MulU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndU32x16), 'AndU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrU32x16), 'OrU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorU32x16), 'XorU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.NotU32x16), 'NotU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndNotU32x16), 'AndNotU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftU32x16), 'ShiftLeftU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightU32x16), 'ShiftRightU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqU32x16), 'CmpEqU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtU32x16), 'CmpLtU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtU32x16), 'CmpGtU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLeU32x16), 'CmpLeU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGeU32x16), 'CmpGeU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpNeU32x16), 'CmpNeU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MinU32x16), 'MinU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MaxU32x16), 'MaxU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddU64x8), 'AddU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubU64x8), 'SubU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndU64x8), 'AndU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrU64x8), 'OrU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorU64x8), 'XorU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.NotU64x8), 'NotU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftU64x8), 'ShiftLeftU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightU64x8), 'ShiftRightU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqU64x8), 'CmpEqU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtU64x8), 'CmpLtU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtU64x8), 'CmpGtU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLeU64x8), 'CmpLeU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGeU64x8), 'CmpGeU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpNeU64x8), 'CmpNeU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddU8x64), 'AddU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubU8x64), 'SubU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndU8x64), 'AndU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrU8x64), 'OrU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorU8x64), 'XorU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.NotU8x64), 'NotU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqU8x64), 'CmpEqU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtU8x64), 'CmpLtU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtU8x64), 'CmpGtU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MinU8x64), 'MinU8x64 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MaxU8x64), 'MaxU8x64 missing: ' + NonX86BackendName(LBackend));
 
-      LU32ByBackend := LBackendTable.AddU32x16(LU32A, LU32B);
-      LU32ByScalar := LScalarTable.AddU32x16(LU32A, LU32B);
+      LU32ByBackend := LBackendTable.CoreVectors.AddU32x16(LU32A, LU32B);
+      LU32ByScalar := LScalarTable.CoreVectors.AddU32x16(LU32A, LU32B);
       AssertVecU32x16Equal('AddU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-      LU32ByBackend := LBackendTable.SubU32x16(LU32A, LU32B);
-      LU32ByScalar := LScalarTable.SubU32x16(LU32A, LU32B);
+      LU32ByBackend := LBackendTable.CoreVectors.SubU32x16(LU32A, LU32B);
+      LU32ByScalar := LScalarTable.CoreVectors.SubU32x16(LU32A, LU32B);
       AssertVecU32x16Equal('SubU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-      LU32ByBackend := LBackendTable.MulU32x16(LU32A, LU32B);
-      LU32ByScalar := LScalarTable.MulU32x16(LU32A, LU32B);
+      LU32ByBackend := LBackendTable.CoreVectors.MulU32x16(LU32A, LU32B);
+      LU32ByScalar := LScalarTable.CoreVectors.MulU32x16(LU32A, LU32B);
       AssertVecU32x16Equal('MulU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-      LU32ByBackend := LBackendTable.AndU32x16(LU32A, LU32B);
-      LU32ByScalar := LScalarTable.AndU32x16(LU32A, LU32B);
+      LU32ByBackend := LBackendTable.CoreVectors.AndU32x16(LU32A, LU32B);
+      LU32ByScalar := LScalarTable.CoreVectors.AndU32x16(LU32A, LU32B);
       AssertVecU32x16Equal('AndU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-      LU32ByBackend := LBackendTable.OrU32x16(LU32A, LU32B);
-      LU32ByScalar := LScalarTable.OrU32x16(LU32A, LU32B);
+      LU32ByBackend := LBackendTable.CoreVectors.OrU32x16(LU32A, LU32B);
+      LU32ByScalar := LScalarTable.CoreVectors.OrU32x16(LU32A, LU32B);
       AssertVecU32x16Equal('OrU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-      LU32ByBackend := LBackendTable.XorU32x16(LU32A, LU32B);
-      LU32ByScalar := LScalarTable.XorU32x16(LU32A, LU32B);
+      LU32ByBackend := LBackendTable.CoreVectors.XorU32x16(LU32A, LU32B);
+      LU32ByScalar := LScalarTable.CoreVectors.XorU32x16(LU32A, LU32B);
       AssertVecU32x16Equal('XorU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-      LU32ByBackend := LBackendTable.NotU32x16(LU32A);
-      LU32ByScalar := LScalarTable.NotU32x16(LU32A);
+      LU32ByBackend := LBackendTable.CoreVectors.NotU32x16(LU32A);
+      LU32ByScalar := LScalarTable.CoreVectors.NotU32x16(LU32A);
       AssertVecU32x16Equal('NotU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-      LU32ByBackend := LBackendTable.AndNotU32x16(LU32A, LU32B);
-      LU32ByScalar := LScalarTable.AndNotU32x16(LU32A, LU32B);
+      LU32ByBackend := LBackendTable.CoreVectors.AndNotU32x16(LU32A, LU32B);
+      LU32ByScalar := LScalarTable.CoreVectors.AndNotU32x16(LU32A, LU32B);
       AssertVecU32x16Equal('AndNotU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
       for LIndex := 0 to High(LU32ShiftCounts) do
       begin
         LShiftCount := LU32ShiftCounts[LIndex];
-        LU32ByBackend := LBackendTable.ShiftLeftU32x16(LU32A, LShiftCount);
-        LU32ByScalar := LScalarTable.ShiftLeftU32x16(LU32A, LShiftCount);
+        LU32ByBackend := LBackendTable.CoreVectors.ShiftLeftU32x16(LU32A, LShiftCount);
+        LU32ByScalar := LScalarTable.CoreVectors.ShiftLeftU32x16(LU32A, LShiftCount);
         AssertVecU32x16Equal('ShiftLeftU32x16 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-        LU32ByBackend := LBackendTable.ShiftRightU32x16(LU32A, LShiftCount);
-        LU32ByScalar := LScalarTable.ShiftRightU32x16(LU32A, LShiftCount);
+        LU32ByBackend := LBackendTable.CoreVectors.ShiftRightU32x16(LU32A, LShiftCount);
+        LU32ByScalar := LScalarTable.CoreVectors.ShiftRightU32x16(LU32A, LShiftCount);
         AssertVecU32x16Equal('ShiftRightU32x16 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
       end;
 
-      LMask16ByBackend := LBackendTable.CmpEqU32x16(LU32A, LU32B);
-      LMask16ByScalar := LScalarTable.CmpEqU32x16(LU32A, LU32B);
+      LMask16ByBackend := LBackendTable.CoreVectors.CmpEqU32x16(LU32A, LU32B);
+      LMask16ByScalar := LScalarTable.CoreVectors.CmpEqU32x16(LU32A, LU32B);
       CheckEqual(QWord(LMask16ByScalar), QWord(LMask16ByBackend), 'CmpEqU32x16 parity: ' + NonX86BackendName(LBackend));
 
-      LMask16ByBackend := LBackendTable.CmpLtU32x16(LU32A, LU32B);
-      LMask16ByScalar := LScalarTable.CmpLtU32x16(LU32A, LU32B);
+      LMask16ByBackend := LBackendTable.CoreVectors.CmpLtU32x16(LU32A, LU32B);
+      LMask16ByScalar := LScalarTable.CoreVectors.CmpLtU32x16(LU32A, LU32B);
       CheckEqual(QWord(LMask16ByScalar), QWord(LMask16ByBackend), 'CmpLtU32x16 parity: ' + NonX86BackendName(LBackend));
 
-      LMask16ByBackend := LBackendTable.CmpGtU32x16(LU32A, LU32B);
-      LMask16ByScalar := LScalarTable.CmpGtU32x16(LU32A, LU32B);
+      LMask16ByBackend := LBackendTable.CoreVectors.CmpGtU32x16(LU32A, LU32B);
+      LMask16ByScalar := LScalarTable.CoreVectors.CmpGtU32x16(LU32A, LU32B);
       CheckEqual(QWord(LMask16ByScalar), QWord(LMask16ByBackend), 'CmpGtU32x16 parity: ' + NonX86BackendName(LBackend));
 
-      LMask16ByBackend := LBackendTable.CmpLeU32x16(LU32A, LU32B);
-      LMask16ByScalar := LScalarTable.CmpLeU32x16(LU32A, LU32B);
+      LMask16ByBackend := LBackendTable.CoreVectors.CmpLeU32x16(LU32A, LU32B);
+      LMask16ByScalar := LScalarTable.CoreVectors.CmpLeU32x16(LU32A, LU32B);
       CheckEqual(QWord(LMask16ByScalar), QWord(LMask16ByBackend), 'CmpLeU32x16 parity: ' + NonX86BackendName(LBackend));
 
-      LMask16ByBackend := LBackendTable.CmpGeU32x16(LU32A, LU32B);
-      LMask16ByScalar := LScalarTable.CmpGeU32x16(LU32A, LU32B);
+      LMask16ByBackend := LBackendTable.CoreVectors.CmpGeU32x16(LU32A, LU32B);
+      LMask16ByScalar := LScalarTable.CoreVectors.CmpGeU32x16(LU32A, LU32B);
       CheckEqual(QWord(LMask16ByScalar), QWord(LMask16ByBackend), 'CmpGeU32x16 parity: ' + NonX86BackendName(LBackend));
 
-      LMask16ByBackend := LBackendTable.CmpNeU32x16(LU32A, LU32B);
-      LMask16ByScalar := LScalarTable.CmpNeU32x16(LU32A, LU32B);
+      LMask16ByBackend := LBackendTable.CoreVectors.CmpNeU32x16(LU32A, LU32B);
+      LMask16ByScalar := LScalarTable.CoreVectors.CmpNeU32x16(LU32A, LU32B);
       CheckEqual(QWord(LMask16ByScalar), QWord(LMask16ByBackend), 'CmpNeU32x16 parity: ' + NonX86BackendName(LBackend));
 
-      LU32ByBackend := LBackendTable.MinU32x16(LU32A, LU32B);
-      LU32ByScalar := LScalarTable.MinU32x16(LU32A, LU32B);
+      LU32ByBackend := LBackendTable.CoreVectors.MinU32x16(LU32A, LU32B);
+      LU32ByScalar := LScalarTable.CoreVectors.MinU32x16(LU32A, LU32B);
       AssertVecU32x16Equal('MinU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-      LU32ByBackend := LBackendTable.MaxU32x16(LU32A, LU32B);
-      LU32ByScalar := LScalarTable.MaxU32x16(LU32A, LU32B);
+      LU32ByBackend := LBackendTable.CoreVectors.MaxU32x16(LU32A, LU32B);
+      LU32ByScalar := LScalarTable.CoreVectors.MaxU32x16(LU32A, LU32B);
       AssertVecU32x16Equal('MaxU32x16 parity: ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-      LU64ByBackend := LBackendTable.AddU64x8(LU64A, LU64B);
-      LU64ByScalar := LScalarTable.AddU64x8(LU64A, LU64B);
+      LU64ByBackend := LBackendTable.CoreVectors.AddU64x8(LU64A, LU64B);
+      LU64ByScalar := LScalarTable.CoreVectors.AddU64x8(LU64A, LU64B);
       AssertVecU64x8Equal('AddU64x8 parity: ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
 
-      LU64ByBackend := LBackendTable.SubU64x8(LU64A, LU64B);
-      LU64ByScalar := LScalarTable.SubU64x8(LU64A, LU64B);
+      LU64ByBackend := LBackendTable.CoreVectors.SubU64x8(LU64A, LU64B);
+      LU64ByScalar := LScalarTable.CoreVectors.SubU64x8(LU64A, LU64B);
       AssertVecU64x8Equal('SubU64x8 parity: ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
 
-      LU64ByBackend := LBackendTable.AndU64x8(LU64A, LU64B);
-      LU64ByScalar := LScalarTable.AndU64x8(LU64A, LU64B);
+      LU64ByBackend := LBackendTable.CoreVectors.AndU64x8(LU64A, LU64B);
+      LU64ByScalar := LScalarTable.CoreVectors.AndU64x8(LU64A, LU64B);
       AssertVecU64x8Equal('AndU64x8 parity: ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
 
-      LU64ByBackend := LBackendTable.OrU64x8(LU64A, LU64B);
-      LU64ByScalar := LScalarTable.OrU64x8(LU64A, LU64B);
+      LU64ByBackend := LBackendTable.CoreVectors.OrU64x8(LU64A, LU64B);
+      LU64ByScalar := LScalarTable.CoreVectors.OrU64x8(LU64A, LU64B);
       AssertVecU64x8Equal('OrU64x8 parity: ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
 
-      LU64ByBackend := LBackendTable.XorU64x8(LU64A, LU64B);
-      LU64ByScalar := LScalarTable.XorU64x8(LU64A, LU64B);
+      LU64ByBackend := LBackendTable.CoreVectors.XorU64x8(LU64A, LU64B);
+      LU64ByScalar := LScalarTable.CoreVectors.XorU64x8(LU64A, LU64B);
       AssertVecU64x8Equal('XorU64x8 parity: ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
 
-      LU64ByBackend := LBackendTable.NotU64x8(LU64A);
-      LU64ByScalar := LScalarTable.NotU64x8(LU64A);
+      LU64ByBackend := LBackendTable.CoreVectors.NotU64x8(LU64A);
+      LU64ByScalar := LScalarTable.CoreVectors.NotU64x8(LU64A);
       AssertVecU64x8Equal('NotU64x8 parity: ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
 
       for LIndex := 0 to High(LU64ShiftCounts) do
       begin
         LShiftCount := LU64ShiftCounts[LIndex];
-        LU64ByBackend := LBackendTable.ShiftLeftU64x8(LU64A, LShiftCount);
-        LU64ByScalar := LScalarTable.ShiftLeftU64x8(LU64A, LShiftCount);
+        LU64ByBackend := LBackendTable.CoreVectors.ShiftLeftU64x8(LU64A, LShiftCount);
+        LU64ByScalar := LScalarTable.CoreVectors.ShiftLeftU64x8(LU64A, LShiftCount);
         AssertVecU64x8Equal('ShiftLeftU64x8 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
 
-        LU64ByBackend := LBackendTable.ShiftRightU64x8(LU64A, LShiftCount);
-        LU64ByScalar := LScalarTable.ShiftRightU64x8(LU64A, LShiftCount);
+        LU64ByBackend := LBackendTable.CoreVectors.ShiftRightU64x8(LU64A, LShiftCount);
+        LU64ByScalar := LScalarTable.CoreVectors.ShiftRightU64x8(LU64A, LShiftCount);
         AssertVecU64x8Equal('ShiftRightU64x8 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
       end;
 
-      LMask8ByBackend := LBackendTable.CmpEqU64x8(LU64A, LU64B);
-      LMask8ByScalar := LScalarTable.CmpEqU64x8(LU64A, LU64B);
+      LMask8ByBackend := LBackendTable.CoreVectors.CmpEqU64x8(LU64A, LU64B);
+      LMask8ByScalar := LScalarTable.CoreVectors.CmpEqU64x8(LU64A, LU64B);
       CheckEqual(QWord(LMask8ByScalar), QWord(LMask8ByBackend), 'CmpEqU64x8 parity: ' + NonX86BackendName(LBackend));
 
-      LMask8ByBackend := LBackendTable.CmpLtU64x8(LU64A, LU64B);
-      LMask8ByScalar := LScalarTable.CmpLtU64x8(LU64A, LU64B);
+      LMask8ByBackend := LBackendTable.CoreVectors.CmpLtU64x8(LU64A, LU64B);
+      LMask8ByScalar := LScalarTable.CoreVectors.CmpLtU64x8(LU64A, LU64B);
       CheckEqual(QWord(LMask8ByScalar), QWord(LMask8ByBackend), 'CmpLtU64x8 parity: ' + NonX86BackendName(LBackend));
 
-      LMask8ByBackend := LBackendTable.CmpGtU64x8(LU64A, LU64B);
-      LMask8ByScalar := LScalarTable.CmpGtU64x8(LU64A, LU64B);
+      LMask8ByBackend := LBackendTable.CoreVectors.CmpGtU64x8(LU64A, LU64B);
+      LMask8ByScalar := LScalarTable.CoreVectors.CmpGtU64x8(LU64A, LU64B);
       CheckEqual(QWord(LMask8ByScalar), QWord(LMask8ByBackend), 'CmpGtU64x8 parity: ' + NonX86BackendName(LBackend));
 
-      LMask8ByBackend := LBackendTable.CmpLeU64x8(LU64A, LU64B);
-      LMask8ByScalar := LScalarTable.CmpLeU64x8(LU64A, LU64B);
+      LMask8ByBackend := LBackendTable.CoreVectors.CmpLeU64x8(LU64A, LU64B);
+      LMask8ByScalar := LScalarTable.CoreVectors.CmpLeU64x8(LU64A, LU64B);
       CheckEqual(QWord(LMask8ByScalar), QWord(LMask8ByBackend), 'CmpLeU64x8 parity: ' + NonX86BackendName(LBackend));
 
-      LMask8ByBackend := LBackendTable.CmpGeU64x8(LU64A, LU64B);
-      LMask8ByScalar := LScalarTable.CmpGeU64x8(LU64A, LU64B);
+      LMask8ByBackend := LBackendTable.CoreVectors.CmpGeU64x8(LU64A, LU64B);
+      LMask8ByScalar := LScalarTable.CoreVectors.CmpGeU64x8(LU64A, LU64B);
       CheckEqual(QWord(LMask8ByScalar), QWord(LMask8ByBackend), 'CmpGeU64x8 parity: ' + NonX86BackendName(LBackend));
 
-      LMask8ByBackend := LBackendTable.CmpNeU64x8(LU64A, LU64B);
-      LMask8ByScalar := LScalarTable.CmpNeU64x8(LU64A, LU64B);
+      LMask8ByBackend := LBackendTable.CoreVectors.CmpNeU64x8(LU64A, LU64B);
+      LMask8ByScalar := LScalarTable.CoreVectors.CmpNeU64x8(LU64A, LU64B);
       CheckEqual(QWord(LMask8ByScalar), QWord(LMask8ByBackend), 'CmpNeU64x8 parity: ' + NonX86BackendName(LBackend));
 
-      LU8ByBackend := LBackendTable.AddU8x64(LU8A, LU8B);
-      LU8ByScalar := LScalarTable.AddU8x64(LU8A, LU8B);
+      LU8ByBackend := LBackendTable.CoreVectors.AddU8x64(LU8A, LU8B);
+      LU8ByScalar := LScalarTable.CoreVectors.AddU8x64(LU8A, LU8B);
       AssertVecU8x64Equal('AddU8x64 parity: ' + NonX86BackendName(LBackend), LU8ByScalar, LU8ByBackend);
 
-      LU8ByBackend := LBackendTable.SubU8x64(LU8A, LU8B);
-      LU8ByScalar := LScalarTable.SubU8x64(LU8A, LU8B);
+      LU8ByBackend := LBackendTable.CoreVectors.SubU8x64(LU8A, LU8B);
+      LU8ByScalar := LScalarTable.CoreVectors.SubU8x64(LU8A, LU8B);
       AssertVecU8x64Equal('SubU8x64 parity: ' + NonX86BackendName(LBackend), LU8ByScalar, LU8ByBackend);
 
-      LU8ByBackend := LBackendTable.AndU8x64(LU8A, LU8B);
-      LU8ByScalar := LScalarTable.AndU8x64(LU8A, LU8B);
+      LU8ByBackend := LBackendTable.CoreVectors.AndU8x64(LU8A, LU8B);
+      LU8ByScalar := LScalarTable.CoreVectors.AndU8x64(LU8A, LU8B);
       AssertVecU8x64Equal('AndU8x64 parity: ' + NonX86BackendName(LBackend), LU8ByScalar, LU8ByBackend);
 
-      LU8ByBackend := LBackendTable.OrU8x64(LU8A, LU8B);
-      LU8ByScalar := LScalarTable.OrU8x64(LU8A, LU8B);
+      LU8ByBackend := LBackendTable.CoreVectors.OrU8x64(LU8A, LU8B);
+      LU8ByScalar := LScalarTable.CoreVectors.OrU8x64(LU8A, LU8B);
       AssertVecU8x64Equal('OrU8x64 parity: ' + NonX86BackendName(LBackend), LU8ByScalar, LU8ByBackend);
 
-      LU8ByBackend := LBackendTable.XorU8x64(LU8A, LU8B);
-      LU8ByScalar := LScalarTable.XorU8x64(LU8A, LU8B);
+      LU8ByBackend := LBackendTable.CoreVectors.XorU8x64(LU8A, LU8B);
+      LU8ByScalar := LScalarTable.CoreVectors.XorU8x64(LU8A, LU8B);
       AssertVecU8x64Equal('XorU8x64 parity: ' + NonX86BackendName(LBackend), LU8ByScalar, LU8ByBackend);
 
-      LU8ByBackend := LBackendTable.NotU8x64(LU8A);
-      LU8ByScalar := LScalarTable.NotU8x64(LU8A);
+      LU8ByBackend := LBackendTable.CoreVectors.NotU8x64(LU8A);
+      LU8ByScalar := LScalarTable.CoreVectors.NotU8x64(LU8A);
       AssertVecU8x64Equal('NotU8x64 parity: ' + NonX86BackendName(LBackend), LU8ByScalar, LU8ByBackend);
 
-      LMask64ByBackend := LBackendTable.CmpEqU8x64(LU8A, LU8B);
-      LMask64ByScalar := LScalarTable.CmpEqU8x64(LU8A, LU8B);
+      LMask64ByBackend := LBackendTable.CoreVectors.CmpEqU8x64(LU8A, LU8B);
+      LMask64ByScalar := LScalarTable.CoreVectors.CmpEqU8x64(LU8A, LU8B);
       CheckEqual(QWord(LMask64ByScalar), QWord(LMask64ByBackend), 'CmpEqU8x64 parity: ' + NonX86BackendName(LBackend));
 
-      LMask64ByBackend := LBackendTable.CmpLtU8x64(LU8A, LU8B);
-      LMask64ByScalar := LScalarTable.CmpLtU8x64(LU8A, LU8B);
+      LMask64ByBackend := LBackendTable.CoreVectors.CmpLtU8x64(LU8A, LU8B);
+      LMask64ByScalar := LScalarTable.CoreVectors.CmpLtU8x64(LU8A, LU8B);
       CheckEqual(QWord(LMask64ByScalar), QWord(LMask64ByBackend), 'CmpLtU8x64 parity: ' + NonX86BackendName(LBackend));
 
-      LMask64ByBackend := LBackendTable.CmpGtU8x64(LU8A, LU8B);
-      LMask64ByScalar := LScalarTable.CmpGtU8x64(LU8A, LU8B);
+      LMask64ByBackend := LBackendTable.CoreVectors.CmpGtU8x64(LU8A, LU8B);
+      LMask64ByScalar := LScalarTable.CoreVectors.CmpGtU8x64(LU8A, LU8B);
       CheckEqual(QWord(LMask64ByScalar), QWord(LMask64ByBackend), 'CmpGtU8x64 parity: ' + NonX86BackendName(LBackend));
 
-      LU8ByBackend := LBackendTable.MinU8x64(LU8A, LU8B);
-      LU8ByScalar := LScalarTable.MinU8x64(LU8A, LU8B);
+      LU8ByBackend := LBackendTable.CoreVectors.MinU8x64(LU8A, LU8B);
+      LU8ByScalar := LScalarTable.CoreVectors.MinU8x64(LU8A, LU8B);
       AssertVecU8x64Equal('MinU8x64 parity: ' + NonX86BackendName(LBackend), LU8ByScalar, LU8ByBackend);
 
-      LU8ByBackend := LBackendTable.MaxU8x64(LU8A, LU8B);
-      LU8ByScalar := LScalarTable.MaxU8x64(LU8A, LU8B);
+      LU8ByBackend := LBackendTable.CoreVectors.MaxU8x64(LU8A, LU8B);
+      LU8ByScalar := LScalarTable.CoreVectors.MaxU8x64(LU8A, LU8B);
       AssertVecU8x64Equal('MaxU8x64 parity: ' + NonX86BackendName(LBackend), LU8ByScalar, LU8ByBackend);
 
     Inc(LChecked);
@@ -19570,59 +19570,59 @@ begin
             LU64B.u[LIndex] := NextU64;
           end;
 
-          LI16ByBackend := LBackendTable.AddI16x32(LI16A, LI16B);
-          LI16ByScalar := LScalarTable.AddI16x32(LI16A, LI16B);
+          LI16ByBackend := LBackendTable.CoreVectors.AddI16x32(LI16A, LI16B);
+          LI16ByScalar := LScalarTable.CoreVectors.AddI16x32(LI16A, LI16B);
           AssertVecI16x32Equal('Fuzz AddI16x32 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend), LI16ByScalar, LI16ByBackend);
 
           LShiftCount := LI16ShiftChoices[Random(Length(LI16ShiftChoices))];
-          LI16ByBackend := LBackendTable.ShiftRightArithI16x32(LI16A, LShiftCount);
-          LI16ByScalar := LScalarTable.ShiftRightArithI16x32(LI16A, LShiftCount);
+          LI16ByBackend := LBackendTable.CoreVectors.ShiftRightArithI16x32(LI16A, LShiftCount);
+          LI16ByScalar := LScalarTable.CoreVectors.ShiftRightArithI16x32(LI16A, LShiftCount);
           AssertVecI16x32Equal('Fuzz ShiftRightArithI16x32 iter ' + IntToStr(LIter) + ' c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LI16ByScalar, LI16ByBackend);
 
-          LMask32ByBackend := LBackendTable.CmpLtI16x32(LI16A, LI16B);
-          LMask32ByScalar := LScalarTable.CmpLtI16x32(LI16A, LI16B);
+          LMask32ByBackend := LBackendTable.CoreVectors.CmpLtI16x32(LI16A, LI16B);
+          LMask32ByScalar := LScalarTable.CoreVectors.CmpLtI16x32(LI16A, LI16B);
           CheckEqual(QWord(LMask32ByScalar), QWord(LMask32ByBackend), 'Fuzz CmpLtI16x32 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend));
 
-          LI8ByBackend := LBackendTable.AndNotI8x64(LI8A, LI8B);
-          LI8ByScalar := LScalarTable.AndNotI8x64(LI8A, LI8B);
+          LI8ByBackend := LBackendTable.CoreVectors.AndNotI8x64(LI8A, LI8B);
+          LI8ByScalar := LScalarTable.CoreVectors.AndNotI8x64(LI8A, LI8B);
           AssertVecI8x64Equal('Fuzz AndNotI8x64 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend), LI8ByScalar, LI8ByBackend);
 
-          LMask64ByBackend := LBackendTable.CmpEqI8x64(LI8A, LI8B);
-          LMask64ByScalar := LScalarTable.CmpEqI8x64(LI8A, LI8B);
+          LMask64ByBackend := LBackendTable.CoreVectors.CmpEqI8x64(LI8A, LI8B);
+          LMask64ByScalar := LScalarTable.CoreVectors.CmpEqI8x64(LI8A, LI8B);
           CheckEqual(QWord(LMask64ByScalar), QWord(LMask64ByBackend), 'Fuzz CmpEqI8x64 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend));
 
-          LU32ByBackend := LBackendTable.MulU32x16(LU32A, LU32B);
-          LU32ByScalar := LScalarTable.MulU32x16(LU32A, LU32B);
+          LU32ByBackend := LBackendTable.CoreVectors.MulU32x16(LU32A, LU32B);
+          LU32ByScalar := LScalarTable.CoreVectors.MulU32x16(LU32A, LU32B);
           AssertVecU32x16Equal('Fuzz MulU32x16 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
           LShiftCount := LU32ShiftChoices[Random(Length(LU32ShiftChoices))];
-          LU32ByBackend := LBackendTable.ShiftRightU32x16(LU32A, LShiftCount);
-          LU32ByScalar := LScalarTable.ShiftRightU32x16(LU32A, LShiftCount);
+          LU32ByBackend := LBackendTable.CoreVectors.ShiftRightU32x16(LU32A, LShiftCount);
+          LU32ByScalar := LScalarTable.CoreVectors.ShiftRightU32x16(LU32A, LShiftCount);
           AssertVecU32x16Equal('Fuzz ShiftRightU32x16 iter ' + IntToStr(LIter) + ' c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU32ByScalar, LU32ByBackend);
 
-          LMask16ByBackend := LBackendTable.CmpLeU32x16(LU32A, LU32B);
-          LMask16ByScalar := LScalarTable.CmpLeU32x16(LU32A, LU32B);
+          LMask16ByBackend := LBackendTable.CoreVectors.CmpLeU32x16(LU32A, LU32B);
+          LMask16ByScalar := LScalarTable.CoreVectors.CmpLeU32x16(LU32A, LU32B);
           CheckEqual(QWord(LMask16ByScalar), QWord(LMask16ByBackend), 'Fuzz CmpLeU32x16 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend));
 
-          LU64ByBackend := LBackendTable.AddU64x8(LU64A, LU64B);
-          LU64ByScalar := LScalarTable.AddU64x8(LU64A, LU64B);
+          LU64ByBackend := LBackendTable.CoreVectors.AddU64x8(LU64A, LU64B);
+          LU64ByScalar := LScalarTable.CoreVectors.AddU64x8(LU64A, LU64B);
           AssertVecU64x8Equal('Fuzz AddU64x8 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
 
           LShiftCount := LU64ShiftChoices[Random(Length(LU64ShiftChoices))];
-          LU64ByBackend := LBackendTable.ShiftLeftU64x8(LU64A, LShiftCount);
-          LU64ByScalar := LScalarTable.ShiftLeftU64x8(LU64A, LShiftCount);
+          LU64ByBackend := LBackendTable.CoreVectors.ShiftLeftU64x8(LU64A, LShiftCount);
+          LU64ByScalar := LScalarTable.CoreVectors.ShiftLeftU64x8(LU64A, LShiftCount);
           AssertVecU64x8Equal('Fuzz ShiftLeftU64x8 iter ' + IntToStr(LIter) + ' c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU64ByScalar, LU64ByBackend);
 
-          LMask8ByBackend := LBackendTable.CmpNeU64x8(LU64A, LU64B);
-          LMask8ByScalar := LScalarTable.CmpNeU64x8(LU64A, LU64B);
+          LMask8ByBackend := LBackendTable.CoreVectors.CmpNeU64x8(LU64A, LU64B);
+          LMask8ByScalar := LScalarTable.CoreVectors.CmpNeU64x8(LU64A, LU64B);
           CheckEqual(QWord(LMask8ByScalar), QWord(LMask8ByBackend), 'Fuzz CmpNeU64x8 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend));
 
-          LU8ByBackend := LBackendTable.XorU8x64(LU8A, LU8B);
-          LU8ByScalar := LScalarTable.XorU8x64(LU8A, LU8B);
+          LU8ByBackend := LBackendTable.CoreVectors.XorU8x64(LU8A, LU8B);
+          LU8ByScalar := LScalarTable.CoreVectors.XorU8x64(LU8A, LU8B);
           AssertVecU8x64Equal('Fuzz XorU8x64 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend), LU8ByScalar, LU8ByBackend);
 
-          LMask64ByBackend := LBackendTable.CmpGtU8x64(LU8A, LU8B);
-          LMask64ByScalar := LScalarTable.CmpGtU8x64(LU8A, LU8B);
+          LMask64ByBackend := LBackendTable.CoreVectors.CmpGtU8x64(LU8A, LU8B);
+          LMask64ByScalar := LScalarTable.CoreVectors.CmpGtU8x64(LU8A, LU8B);
           CheckEqual(QWord(LMask64ByScalar), QWord(LMask64ByBackend), 'Fuzz CmpGtU8x64 iter ' + IntToStr(LIter) + ': ' + NonX86BackendName(LBackend));
         end;
 
@@ -19898,42 +19898,42 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.CmpEqI32x8), 'CmpEqI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtI32x8), 'CmpLtI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtI32x8), 'CmpGtI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLeI32x8), 'CmpLeI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGeI32x8), 'CmpGeI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpNeI32x8), 'CmpNeI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqU32x8), 'CmpEqU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtU32x8), 'CmpLtU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtU32x8), 'CmpGtU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLeU32x8), 'CmpLeU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGeU32x8), 'CmpGeU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpNeU32x8), 'CmpNeU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqI64x4), 'CmpEqI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtI64x4), 'CmpLtI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtI64x4), 'CmpGtI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLeI64x4), 'CmpLeI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGeI64x4), 'CmpGeI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpNeI64x4), 'CmpNeI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqU64x4), 'CmpEqU64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtU64x4), 'CmpLtU64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtU64x4), 'CmpGtU64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLeU64x4), 'CmpLeU64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGeU64x4), 'CmpGeU64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpNeU64x4), 'CmpNeU64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqI32x16), 'CmpEqI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtI32x16), 'CmpLtI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtI32x16), 'CmpGtI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLeI32x16), 'CmpLeI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGeI32x16), 'CmpGeI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpNeI32x16), 'CmpNeI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpEqI64x8), 'CmpEqI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLtI64x8), 'CmpLtI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGtI64x8), 'CmpGtI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpLeI64x8), 'CmpLeI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpGeI64x8), 'CmpGeI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.CmpNeI64x8), 'CmpNeI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqI32x8), 'CmpEqI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtI32x8), 'CmpLtI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtI32x8), 'CmpGtI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLeI32x8), 'CmpLeI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGeI32x8), 'CmpGeI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpNeI32x8), 'CmpNeI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqU32x8), 'CmpEqU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtU32x8), 'CmpLtU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtU32x8), 'CmpGtU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLeU32x8), 'CmpLeU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGeU32x8), 'CmpGeU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpNeU32x8), 'CmpNeU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqI64x4), 'CmpEqI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtI64x4), 'CmpLtI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtI64x4), 'CmpGtI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLeI64x4), 'CmpLeI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGeI64x4), 'CmpGeI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpNeI64x4), 'CmpNeI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqU64x4), 'CmpEqU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtU64x4), 'CmpLtU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtU64x4), 'CmpGtU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLeU64x4), 'CmpLeU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGeU64x4), 'CmpGeU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpNeU64x4), 'CmpNeU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqI32x16), 'CmpEqI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtI32x16), 'CmpLtI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtI32x16), 'CmpGtI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLeI32x16), 'CmpLeI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGeI32x16), 'CmpGeI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpNeI32x16), 'CmpNeI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpEqI64x8), 'CmpEqI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLtI64x8), 'CmpLtI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGtI64x8), 'CmpGtI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpLeI64x8), 'CmpLeI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpGeI64x8), 'CmpGeI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.CmpNeI64x8), 'CmpNeI64x8 missing: ' + NonX86BackendName(LBackend));
       CheckTrue(Assigned(LBackendTable.Mask.Mask4All), 'Mask4All missing: ' + NonX86BackendName(LBackend));
       CheckTrue(Assigned(LBackendTable.Mask.Mask4Any), 'Mask4Any missing: ' + NonX86BackendName(LBackend));
       CheckTrue(Assigned(LBackendTable.Mask.Mask4None), 'Mask4None missing: ' + NonX86BackendName(LBackend));
@@ -19970,116 +19970,116 @@ begin
           LI32x16B.i[LLane] := C_I32X16_CASES_B[LCaseIdx, LLane];
         end;
 
-        LMask8ByBackend := LBackendTable.CmpEqI32x8(LI32x8A, LI32x8B);
-        LMask8ByScalar := LScalarTable.CmpEqI32x8(LI32x8A, LI32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpEqI32x8(LI32x8A, LI32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpEqI32x8(LI32x8A, LI32x8B);
         AssertMask8Equal('CmpEqI32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpLtI32x8(LI32x8A, LI32x8B);
-        LMask8ByScalar := LScalarTable.CmpLtI32x8(LI32x8A, LI32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpLtI32x8(LI32x8A, LI32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpLtI32x8(LI32x8A, LI32x8B);
         AssertMask8Equal('CmpLtI32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
         AssertMask8HelperParity('I32x8 Lt case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar);
 
-        LMask8ByBackend := LBackendTable.CmpGtI32x8(LI32x8A, LI32x8B);
-        LMask8ByScalar := LScalarTable.CmpGtI32x8(LI32x8A, LI32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpGtI32x8(LI32x8A, LI32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpGtI32x8(LI32x8A, LI32x8B);
         AssertMask8Equal('CmpGtI32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpLeI32x8(LI32x8A, LI32x8B);
-        LMask8ByScalar := LScalarTable.CmpLeI32x8(LI32x8A, LI32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpLeI32x8(LI32x8A, LI32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpLeI32x8(LI32x8A, LI32x8B);
         AssertMask8Equal('CmpLeI32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpGeI32x8(LI32x8A, LI32x8B);
-        LMask8ByScalar := LScalarTable.CmpGeI32x8(LI32x8A, LI32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpGeI32x8(LI32x8A, LI32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpGeI32x8(LI32x8A, LI32x8B);
         AssertMask8Equal('CmpGeI32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpNeI32x8(LI32x8A, LI32x8B);
-        LMask8ByScalar := LScalarTable.CmpNeI32x8(LI32x8A, LI32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpNeI32x8(LI32x8A, LI32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpNeI32x8(LI32x8A, LI32x8B);
         AssertMask8Equal('CmpNeI32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpEqI64x4(LI64x4A, LI64x4B);
-        LMask4ByScalar := LScalarTable.CmpEqI64x4(LI64x4A, LI64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpEqI64x4(LI64x4A, LI64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpEqI64x4(LI64x4A, LI64x4B);
         AssertMask4Equal('CmpEqI64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpLtI64x4(LI64x4A, LI64x4B);
-        LMask4ByScalar := LScalarTable.CmpLtI64x4(LI64x4A, LI64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpLtI64x4(LI64x4A, LI64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpLtI64x4(LI64x4A, LI64x4B);
         AssertMask4Equal('CmpLtI64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
         AssertMask4HelperParity('I64x4 Lt case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar);
 
-        LMask4ByBackend := LBackendTable.CmpGtI64x4(LI64x4A, LI64x4B);
-        LMask4ByScalar := LScalarTable.CmpGtI64x4(LI64x4A, LI64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpGtI64x4(LI64x4A, LI64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpGtI64x4(LI64x4A, LI64x4B);
         AssertMask4Equal('CmpGtI64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpLeI64x4(LI64x4A, LI64x4B);
-        LMask4ByScalar := LScalarTable.CmpLeI64x4(LI64x4A, LI64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpLeI64x4(LI64x4A, LI64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpLeI64x4(LI64x4A, LI64x4B);
         AssertMask4Equal('CmpLeI64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpGeI64x4(LI64x4A, LI64x4B);
-        LMask4ByScalar := LScalarTable.CmpGeI64x4(LI64x4A, LI64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpGeI64x4(LI64x4A, LI64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpGeI64x4(LI64x4A, LI64x4B);
         AssertMask4Equal('CmpGeI64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpNeI64x4(LI64x4A, LI64x4B);
-        LMask4ByScalar := LScalarTable.CmpNeI64x4(LI64x4A, LI64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpNeI64x4(LI64x4A, LI64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpNeI64x4(LI64x4A, LI64x4B);
         AssertMask4Equal('CmpNeI64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
-        LMask16ByBackend := LBackendTable.CmpEqI32x16(LI32x16A, LI32x16B);
-        LMask16ByScalar := LScalarTable.CmpEqI32x16(LI32x16A, LI32x16B);
+        LMask16ByBackend := LBackendTable.CoreVectors.CmpEqI32x16(LI32x16A, LI32x16B);
+        LMask16ByScalar := LScalarTable.CoreVectors.CmpEqI32x16(LI32x16A, LI32x16B);
         AssertMask16Equal('CmpEqI32x16 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask16ByScalar, LMask16ByBackend);
 
-        LMask16ByBackend := LBackendTable.CmpLtI32x16(LI32x16A, LI32x16B);
-        LMask16ByScalar := LScalarTable.CmpLtI32x16(LI32x16A, LI32x16B);
+        LMask16ByBackend := LBackendTable.CoreVectors.CmpLtI32x16(LI32x16A, LI32x16B);
+        LMask16ByScalar := LScalarTable.CoreVectors.CmpLtI32x16(LI32x16A, LI32x16B);
         AssertMask16Equal('CmpLtI32x16 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask16ByScalar, LMask16ByBackend);
         AssertMask16HelperParity('I32x16 Lt case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask16ByScalar);
 
-        LMask16ByBackend := LBackendTable.CmpGtI32x16(LI32x16A, LI32x16B);
-        LMask16ByScalar := LScalarTable.CmpGtI32x16(LI32x16A, LI32x16B);
+        LMask16ByBackend := LBackendTable.CoreVectors.CmpGtI32x16(LI32x16A, LI32x16B);
+        LMask16ByScalar := LScalarTable.CoreVectors.CmpGtI32x16(LI32x16A, LI32x16B);
         AssertMask16Equal('CmpGtI32x16 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask16ByScalar, LMask16ByBackend);
 
-        LMask16ByBackend := LBackendTable.CmpLeI32x16(LI32x16A, LI32x16B);
-        LMask16ByScalar := LScalarTable.CmpLeI32x16(LI32x16A, LI32x16B);
+        LMask16ByBackend := LBackendTable.CoreVectors.CmpLeI32x16(LI32x16A, LI32x16B);
+        LMask16ByScalar := LScalarTable.CoreVectors.CmpLeI32x16(LI32x16A, LI32x16B);
         AssertMask16Equal('CmpLeI32x16 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask16ByScalar, LMask16ByBackend);
 
-        LMask16ByBackend := LBackendTable.CmpGeI32x16(LI32x16A, LI32x16B);
-        LMask16ByScalar := LScalarTable.CmpGeI32x16(LI32x16A, LI32x16B);
+        LMask16ByBackend := LBackendTable.CoreVectors.CmpGeI32x16(LI32x16A, LI32x16B);
+        LMask16ByScalar := LScalarTable.CoreVectors.CmpGeI32x16(LI32x16A, LI32x16B);
         AssertMask16Equal('CmpGeI32x16 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask16ByScalar, LMask16ByBackend);
 
-        LMask16ByBackend := LBackendTable.CmpNeI32x16(LI32x16A, LI32x16B);
-        LMask16ByScalar := LScalarTable.CmpNeI32x16(LI32x16A, LI32x16B);
+        LMask16ByBackend := LBackendTable.CoreVectors.CmpNeI32x16(LI32x16A, LI32x16B);
+        LMask16ByScalar := LScalarTable.CoreVectors.CmpNeI32x16(LI32x16A, LI32x16B);
         AssertMask16Equal('CmpNeI32x16 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask16ByScalar, LMask16ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpEqI64x8(LI64x8A, LI64x8B);
-        LMask8ByScalar := LScalarTable.CmpEqI64x8(LI64x8A, LI64x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpEqI64x8(LI64x8A, LI64x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpEqI64x8(LI64x8A, LI64x8B);
         AssertMask8Equal('CmpEqI64x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpLtI64x8(LI64x8A, LI64x8B);
-        LMask8ByScalar := LScalarTable.CmpLtI64x8(LI64x8A, LI64x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpLtI64x8(LI64x8A, LI64x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpLtI64x8(LI64x8A, LI64x8B);
         AssertMask8Equal('CmpLtI64x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
         AssertMask8HelperParity('I64x8 Lt case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar);
 
-        LMask8ByBackend := LBackendTable.CmpGtI64x8(LI64x8A, LI64x8B);
-        LMask8ByScalar := LScalarTable.CmpGtI64x8(LI64x8A, LI64x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpGtI64x8(LI64x8A, LI64x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpGtI64x8(LI64x8A, LI64x8B);
         AssertMask8Equal('CmpGtI64x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpLeI64x8(LI64x8A, LI64x8B);
-        LMask8ByScalar := LScalarTable.CmpLeI64x8(LI64x8A, LI64x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpLeI64x8(LI64x8A, LI64x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpLeI64x8(LI64x8A, LI64x8B);
         AssertMask8Equal('CmpLeI64x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpGeI64x8(LI64x8A, LI64x8B);
-        LMask8ByScalar := LScalarTable.CmpGeI64x8(LI64x8A, LI64x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpGeI64x8(LI64x8A, LI64x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpGeI64x8(LI64x8A, LI64x8B);
         AssertMask8Equal('CmpGeI64x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpNeI64x8(LI64x8A, LI64x8B);
-        LMask8ByScalar := LScalarTable.CmpNeI64x8(LI64x8A, LI64x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpNeI64x8(LI64x8A, LI64x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpNeI64x8(LI64x8A, LI64x8B);
         AssertMask8Equal('CmpNeI64x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
         LMask4ByFacade := TMask4(nextpas.core.simd.VecI64x4CmpLe(LI64x4A, LI64x4B));
-        LMask4ByScalar := LScalarTable.CmpLeI64x4(LI64x4A, LI64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpLeI64x4(LI64x4A, LI64x4B);
         AssertMask4Equal('Facade VecI64x4CmpLe case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByFacade);
 
         LMask16ByFacade := TMask16(nextpas.core.simd.VecI32x16CmpEq(LI32x16A, LI32x16B));
-        LMask16ByScalar := LScalarTable.CmpEqI32x16(LI32x16A, LI32x16B);
+        LMask16ByScalar := LScalarTable.CoreVectors.CmpEqI32x16(LI32x16A, LI32x16B);
         AssertMask16Equal('Facade VecI32x16CmpEq case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask16ByScalar, LMask16ByFacade);
 
         LMask8ByFacade := TMask8(nextpas.core.simd.VecI64x8CmpLt(LI64x8A, LI64x8B));
-        LMask8ByScalar := LScalarTable.CmpLtI64x8(LI64x8A, LI64x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpLtI64x8(LI64x8A, LI64x8B);
         AssertMask8Equal('Facade VecI64x8CmpLt case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByFacade);
       end;
 
@@ -20096,62 +20096,62 @@ begin
           LU64x4B.u[LLane] := C_U64_CASES_B[LCaseIdx, LLane];
         end;
 
-        LMask8ByBackend := LBackendTable.CmpEqU32x8(LU32x8A, LU32x8B);
-        LMask8ByScalar := LScalarTable.CmpEqU32x8(LU32x8A, LU32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpEqU32x8(LU32x8A, LU32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpEqU32x8(LU32x8A, LU32x8B);
         AssertMask8Equal('CmpEqU32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpLtU32x8(LU32x8A, LU32x8B);
-        LMask8ByScalar := LScalarTable.CmpLtU32x8(LU32x8A, LU32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpLtU32x8(LU32x8A, LU32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpLtU32x8(LU32x8A, LU32x8B);
         AssertMask8Equal('CmpLtU32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
         AssertMask8HelperParity('U32x8 Lt case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar);
 
-        LMask8ByBackend := LBackendTable.CmpGtU32x8(LU32x8A, LU32x8B);
-        LMask8ByScalar := LScalarTable.CmpGtU32x8(LU32x8A, LU32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpGtU32x8(LU32x8A, LU32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpGtU32x8(LU32x8A, LU32x8B);
         AssertMask8Equal('CmpGtU32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpLeU32x8(LU32x8A, LU32x8B);
-        LMask8ByScalar := LScalarTable.CmpLeU32x8(LU32x8A, LU32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpLeU32x8(LU32x8A, LU32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpLeU32x8(LU32x8A, LU32x8B);
         AssertMask8Equal('CmpLeU32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpGeU32x8(LU32x8A, LU32x8B);
-        LMask8ByScalar := LScalarTable.CmpGeU32x8(LU32x8A, LU32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpGeU32x8(LU32x8A, LU32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpGeU32x8(LU32x8A, LU32x8B);
         AssertMask8Equal('CmpGeU32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask8ByBackend := LBackendTable.CmpNeU32x8(LU32x8A, LU32x8B);
-        LMask8ByScalar := LScalarTable.CmpNeU32x8(LU32x8A, LU32x8B);
+        LMask8ByBackend := LBackendTable.CoreVectors.CmpNeU32x8(LU32x8A, LU32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpNeU32x8(LU32x8A, LU32x8B);
         AssertMask8Equal('CmpNeU32x8 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpEqU64x4(LU64x4A, LU64x4B);
-        LMask4ByScalar := LScalarTable.CmpEqU64x4(LU64x4A, LU64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpEqU64x4(LU64x4A, LU64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpEqU64x4(LU64x4A, LU64x4B);
         AssertMask4Equal('CmpEqU64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpLtU64x4(LU64x4A, LU64x4B);
-        LMask4ByScalar := LScalarTable.CmpLtU64x4(LU64x4A, LU64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpLtU64x4(LU64x4A, LU64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpLtU64x4(LU64x4A, LU64x4B);
         AssertMask4Equal('CmpLtU64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
         AssertMask4HelperParity('U64x4 Lt case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar);
 
-        LMask4ByBackend := LBackendTable.CmpGtU64x4(LU64x4A, LU64x4B);
-        LMask4ByScalar := LScalarTable.CmpGtU64x4(LU64x4A, LU64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpGtU64x4(LU64x4A, LU64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpGtU64x4(LU64x4A, LU64x4B);
         AssertMask4Equal('CmpGtU64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpLeU64x4(LU64x4A, LU64x4B);
-        LMask4ByScalar := LScalarTable.CmpLeU64x4(LU64x4A, LU64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpLeU64x4(LU64x4A, LU64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpLeU64x4(LU64x4A, LU64x4B);
         AssertMask4Equal('CmpLeU64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpGeU64x4(LU64x4A, LU64x4B);
-        LMask4ByScalar := LScalarTable.CmpGeU64x4(LU64x4A, LU64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpGeU64x4(LU64x4A, LU64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpGeU64x4(LU64x4A, LU64x4B);
         AssertMask4Equal('CmpGeU64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
-        LMask4ByBackend := LBackendTable.CmpNeU64x4(LU64x4A, LU64x4B);
-        LMask4ByScalar := LScalarTable.CmpNeU64x4(LU64x4A, LU64x4B);
+        LMask4ByBackend := LBackendTable.CoreVectors.CmpNeU64x4(LU64x4A, LU64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpNeU64x4(LU64x4A, LU64x4B);
         AssertMask4Equal('CmpNeU64x4 parity case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByBackend);
 
         LMask8ByFacade := TMask8(nextpas.core.simd.VecU32x8CmpEq(LU32x8A, LU32x8B));
-        LMask8ByScalar := LScalarTable.CmpEqU32x8(LU32x8A, LU32x8B);
+        LMask8ByScalar := LScalarTable.CoreVectors.CmpEqU32x8(LU32x8A, LU32x8B);
         AssertMask8Equal('Facade VecU32x8CmpEq case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask8ByScalar, LMask8ByFacade);
 
         LMask4ByFacade := TMask4(nextpas.core.simd.VecU64x4CmpGe(LU64x4A, LU64x4B));
-        LMask4ByScalar := LScalarTable.CmpGeU64x4(LU64x4A, LU64x4B);
+        LMask4ByScalar := LScalarTable.CoreVectors.CmpGeU64x4(LU64x4A, LU64x4B);
         AssertMask4Equal('Facade VecU64x4CmpGe case=' + IntToStr(LCaseIdx) + ': ' + NonX86BackendName(LBackend), LMask4ByScalar, LMask4ByFacade);
       end;
 
@@ -20170,57 +20170,57 @@ begin
         LExpectedMask8 := TMask8(1 shl LLane);
 
         LoadI32x8OneHotProbe(LLane, True);
-        AssertMask8Equal('CmpLtI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpLtI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpEqI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpEqI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpGtI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpGtI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpLeI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CmpLeI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpGeI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpGeI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpNeI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpNeI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpLtI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpLtI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpEqI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpEqI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpGtI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpGtI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpLeI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CoreVectors.CmpLeI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpGeI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpGeI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpNeI32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpNeI32x8(LI32x8A, LI32x8B));
         AssertMask8HelperParity('I32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8);
 
         LoadI32x8OneHotProbe(LLane, False);
-        AssertMask8Equal('CmpLtI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpLtI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpEqI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpEqI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpGtI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpGtI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpLeI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpLeI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpGeI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CmpGeI32x8(LI32x8A, LI32x8B));
-        AssertMask8Equal('CmpNeI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpNeI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpLtI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpLtI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpEqI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpEqI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpGtI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpGtI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpLeI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpLeI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpGeI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CoreVectors.CmpGeI32x8(LI32x8A, LI32x8B));
+        AssertMask8Equal('CmpNeI32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpNeI32x8(LI32x8A, LI32x8B));
         AssertMask8HelperParity('I32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8);
 
         LoadI64x8OneHotProbe(LLane, True);
-        AssertMask8Equal('CmpLtI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpLtI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpEqI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpEqI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpGtI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpGtI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpLeI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CmpLeI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpGeI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpGeI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpNeI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpNeI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpLtI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpLtI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpEqI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpEqI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpGtI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpGtI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpLeI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CoreVectors.CmpLeI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpGeI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpGeI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpNeI64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpNeI64x8(LI64x8A, LI64x8B));
         AssertMask8HelperParity('I64x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8);
 
         LoadI64x8OneHotProbe(LLane, False);
-        AssertMask8Equal('CmpLtI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpLtI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpEqI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpEqI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpGtI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpGtI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpLeI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpLeI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpGeI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CmpGeI64x8(LI64x8A, LI64x8B));
-        AssertMask8Equal('CmpNeI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpNeI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpLtI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpLtI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpEqI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpEqI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpGtI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpGtI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpLeI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpLeI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpGeI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CoreVectors.CmpGeI64x8(LI64x8A, LI64x8B));
+        AssertMask8Equal('CmpNeI64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpNeI64x8(LI64x8A, LI64x8B));
         AssertMask8HelperParity('I64x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8);
 
         LoadU32x8OneHotProbe(LLane, True);
-        AssertMask8Equal('CmpLtU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpLtU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpEqU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpEqU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpGtU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpGtU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpLeU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CmpLeU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpGeU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpGeU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpNeU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpNeU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpLtU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpLtU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpEqU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpEqU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpGtU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpGtU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpLeU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CoreVectors.CmpLeU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpGeU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpGeU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpNeU32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpNeU32x8(LU32x8A, LU32x8B));
         AssertMask8HelperParity('U32x8 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8);
 
         LoadU32x8OneHotProbe(LLane, False);
-        AssertMask8Equal('CmpLtU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpLtU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpEqU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpEqU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpGtU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpGtU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpLeU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CmpLeU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpGeU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CmpGeU32x8(LU32x8A, LU32x8B));
-        AssertMask8Equal('CmpNeU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CmpNeU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpLtU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpLtU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpEqU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpEqU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpGtU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpGtU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpLeU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF xor LExpectedMask8), LBackendTable.CoreVectors.CmpLeU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpGeU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask8($FF), LBackendTable.CoreVectors.CmpGeU32x8(LU32x8A, LU32x8B));
+        AssertMask8Equal('CmpNeU32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8, LBackendTable.CoreVectors.CmpNeU32x8(LU32x8A, LU32x8B));
         AssertMask8HelperParity('U32x8 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask8);
       end;
 
@@ -20229,39 +20229,39 @@ begin
         LExpectedMask4 := TMask4(1 shl LLane);
 
         LoadI64x4OneHotProbe(LLane, True);
-        AssertMask4Equal('CmpLtI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CmpLtI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpEqI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CmpEqI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpGtI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpGtI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpLeI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F), LBackendTable.CmpLeI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpGeI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CmpGeI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpNeI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CmpNeI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpLtI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CoreVectors.CmpLtI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpEqI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CoreVectors.CmpEqI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpGtI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpGtI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpLeI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F), LBackendTable.CoreVectors.CmpLeI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpGeI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CoreVectors.CmpGeI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpNeI64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CoreVectors.CmpNeI64x4(LI64x4A, LI64x4B));
         AssertMask4HelperParity('I64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4);
 
         LoadI64x4OneHotProbe(LLane, False);
-        AssertMask4Equal('CmpLtI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpLtI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpEqI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CmpEqI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpGtI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CmpGtI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpLeI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CmpLeI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpGeI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F), LBackendTable.CmpGeI64x4(LI64x4A, LI64x4B));
-        AssertMask4Equal('CmpNeI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CmpNeI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpLtI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpLtI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpEqI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CoreVectors.CmpEqI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpGtI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CoreVectors.CmpGtI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpLeI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CoreVectors.CmpLeI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpGeI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F), LBackendTable.CoreVectors.CmpGeI64x4(LI64x4A, LI64x4B));
+        AssertMask4Equal('CmpNeI64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CoreVectors.CmpNeI64x4(LI64x4A, LI64x4B));
         AssertMask4HelperParity('I64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4);
 
         LoadU64x4OneHotProbe(LLane, True);
-        AssertMask4Equal('CmpLtU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CmpLtU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpEqU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CmpEqU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpGtU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpGtU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpLeU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F), LBackendTable.CmpLeU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpGeU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CmpGeU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpNeU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CmpNeU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpLtU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CoreVectors.CmpLtU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpEqU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CoreVectors.CmpEqU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpGtU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpGtU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpLeU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F), LBackendTable.CoreVectors.CmpLeU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpGeU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CoreVectors.CmpGeU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpNeU64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CoreVectors.CmpNeU64x4(LU64x4A, LU64x4B));
         AssertMask4HelperParity('U64x4 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4);
 
         LoadU64x4OneHotProbe(LLane, False);
-        AssertMask4Equal('CmpLtU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpLtU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpEqU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CmpEqU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpGtU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CmpGtU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpLeU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CmpLeU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpGeU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F), LBackendTable.CmpGeU64x4(LU64x4A, LU64x4B));
-        AssertMask4Equal('CmpNeU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CmpNeU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpLtU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpLtU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpEqU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CoreVectors.CmpEqU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpGtU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CoreVectors.CmpGtU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpLeU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F xor LExpectedMask4), LBackendTable.CoreVectors.CmpLeU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpGeU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask4($0F), LBackendTable.CoreVectors.CmpGeU64x4(LU64x4A, LU64x4B));
+        AssertMask4Equal('CmpNeU64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4, LBackendTable.CoreVectors.CmpNeU64x4(LU64x4A, LU64x4B));
         AssertMask4HelperParity('U64x4 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask4);
       end;
 
@@ -20270,21 +20270,21 @@ begin
       LExpectedMask16 := TMask16(1 shl LLane);
 
       LoadI32x16OneHotProbe(LLane, True);
-      AssertMask16Equal('CmpLtI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16, LBackendTable.CmpLtI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpEqI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF xor LExpectedMask16), LBackendTable.CmpEqI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpGtI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpGtI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpLeI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF), LBackendTable.CmpLeI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpGeI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF xor LExpectedMask16), LBackendTable.CmpGeI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpNeI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16, LBackendTable.CmpNeI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpLtI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16, LBackendTable.CoreVectors.CmpLtI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpEqI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF xor LExpectedMask16), LBackendTable.CoreVectors.CmpEqI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpGtI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpGtI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpLeI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF), LBackendTable.CoreVectors.CmpLeI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpGeI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF xor LExpectedMask16), LBackendTable.CoreVectors.CmpGeI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpNeI32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16, LBackendTable.CoreVectors.CmpNeI32x16(LI32x16A, LI32x16B));
       AssertMask16HelperParity('I32x16 onehot-lt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16);
 
       LoadI32x16OneHotProbe(LLane, False);
-      AssertMask16Equal('CmpLtI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CmpLtI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpEqI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF xor LExpectedMask16), LBackendTable.CmpEqI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpGtI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16, LBackendTable.CmpGtI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpLeI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF xor LExpectedMask16), LBackendTable.CmpLeI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpGeI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF), LBackendTable.CmpGeI32x16(LI32x16A, LI32x16B));
-      AssertMask16Equal('CmpNeI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16, LBackendTable.CmpNeI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpLtI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), 0, LBackendTable.CoreVectors.CmpLtI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpEqI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF xor LExpectedMask16), LBackendTable.CoreVectors.CmpEqI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpGtI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16, LBackendTable.CoreVectors.CmpGtI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpLeI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF xor LExpectedMask16), LBackendTable.CoreVectors.CmpLeI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpGeI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), TMask16($FFFF), LBackendTable.CoreVectors.CmpGeI32x16(LI32x16A, LI32x16B));
+      AssertMask16Equal('CmpNeI32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16, LBackendTable.CoreVectors.CmpNeI32x16(LI32x16A, LI32x16B));
       AssertMask16HelperParity('I32x16 onehot-gt lane=' + IntToStr(LLane) + ': ' + NonX86BackendName(LBackend), LExpectedMask16);
     end;
 
@@ -20401,61 +20401,61 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.AndI32x4), 'AndI32x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrI32x4), 'OrI32x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorI32x4), 'XorI32x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftI32x4), 'ShiftLeftI32x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightI32x4), 'ShiftRightI32x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightArithI32x4), 'ShiftRightArithI32x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftI64x2), 'ShiftLeftI64x2 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightI64x2), 'ShiftRightI64x2 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightArithI64x2), 'ShiftRightArithI64x2 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftI64x4), 'ShiftLeftI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightI64x4), 'ShiftRightI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightArithI64x4), 'ShiftRightArithI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftU32x8), 'ShiftLeftU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightU32x8), 'ShiftRightU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftU64x4), 'ShiftLeftU64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightU64x4), 'ShiftRightU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndI32x4), 'AndI32x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrI32x4), 'OrI32x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorI32x4), 'XorI32x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftI32x4), 'ShiftLeftI32x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightI32x4), 'ShiftRightI32x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightArithI32x4), 'ShiftRightArithI32x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftI64x2), 'ShiftLeftI64x2 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightI64x2), 'ShiftRightI64x2 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightArithI64x2), 'ShiftRightArithI64x2 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftI64x4), 'ShiftLeftI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightI64x4), 'ShiftRightI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightArithI64x4), 'ShiftRightArithI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftU32x8), 'ShiftLeftU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightU32x8), 'ShiftRightU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftU64x4), 'ShiftLeftU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightU64x4), 'ShiftRightU64x4 missing: ' + NonX86BackendName(LBackend));
 
-      LVecByBackend := LBackendTable.AndI32x4(LA, LB);
-      LVecByScalar := LScalarTable.AndI32x4(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.AndI32x4(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.AndI32x4(LA, LB);
       AssertVecI32x4Equal('AndI32x4 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.OrI32x4(LA, LB);
-      LVecByScalar := LScalarTable.OrI32x4(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.OrI32x4(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.OrI32x4(LA, LB);
       AssertVecI32x4Equal('OrI32x4 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-      LVecByBackend := LBackendTable.XorI32x4(LA, LB);
-      LVecByScalar := LScalarTable.XorI32x4(LA, LB);
+      LVecByBackend := LBackendTable.CoreVectors.XorI32x4(LA, LB);
+      LVecByScalar := LScalarTable.CoreVectors.XorI32x4(LA, LB);
       AssertVecI32x4Equal('XorI32x4 parity: ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
       for LIndex := 0 to High(LShiftCounts) do
       begin
         LShiftCount := LShiftCounts[LIndex];
 
-        LVecByBackend := LBackendTable.ShiftLeftI32x4(LA, LShiftCount);
-        LVecByScalar := LScalarTable.ShiftLeftI32x4(LA, LShiftCount);
+        LVecByBackend := LBackendTable.CoreVectors.ShiftLeftI32x4(LA, LShiftCount);
+        LVecByScalar := LScalarTable.CoreVectors.ShiftLeftI32x4(LA, LShiftCount);
         AssertVecI32x4Equal('ShiftLeftI32x4 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-        LVecByBackend := LBackendTable.ShiftRightI32x4(LA, LShiftCount);
-        LVecByScalar := LScalarTable.ShiftRightI32x4(LA, LShiftCount);
+        LVecByBackend := LBackendTable.CoreVectors.ShiftRightI32x4(LA, LShiftCount);
+        LVecByScalar := LScalarTable.CoreVectors.ShiftRightI32x4(LA, LShiftCount);
         AssertVecI32x4Equal('ShiftRightI32x4 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-        LVecByBackend := LBackendTable.ShiftRightArithI32x4(LA, LShiftCount);
-        LVecByScalar := LScalarTable.ShiftRightArithI32x4(LA, LShiftCount);
+        LVecByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x4(LA, LShiftCount);
+        LVecByScalar := LScalarTable.CoreVectors.ShiftRightArithI32x4(LA, LShiftCount);
         AssertVecI32x4Equal('ShiftRightArithI32x4 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
         LVecByBackend := VecI32x4ShiftRightArith(LA, LShiftCount);
         LVecByScalar := ScalarShiftRightArithI32x4(LA, LShiftCount);
         AssertVecI32x4Equal('Facade ShiftRightArithI32x4 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LVecByScalar, LVecByBackend);
 
-        LU32x8ByBackend := LBackendTable.ShiftLeftU32x8(LU32x8A, LShiftCount);
-        LU32x8ByScalar := LScalarTable.ShiftLeftU32x8(LU32x8A, LShiftCount);
+        LU32x8ByBackend := LBackendTable.CoreVectors.ShiftLeftU32x8(LU32x8A, LShiftCount);
+        LU32x8ByScalar := LScalarTable.CoreVectors.ShiftLeftU32x8(LU32x8A, LShiftCount);
         AssertVecU32x8Equal('ShiftLeftU32x8 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU32x8ByScalar, LU32x8ByBackend);
 
-        LU32x8ByBackend := LBackendTable.ShiftRightU32x8(LU32x8A, LShiftCount);
-        LU32x8ByScalar := LScalarTable.ShiftRightU32x8(LU32x8A, LShiftCount);
+        LU32x8ByBackend := LBackendTable.CoreVectors.ShiftRightU32x8(LU32x8A, LShiftCount);
+        LU32x8ByScalar := LScalarTable.CoreVectors.ShiftRightU32x8(LU32x8A, LShiftCount);
         AssertVecU32x8Equal('ShiftRightU32x8 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU32x8ByScalar, LU32x8ByBackend);
       end;
 
@@ -20463,39 +20463,39 @@ begin
       begin
         LShiftCount := LShiftCounts64[LIndex];
 
-        LI64ByBackend := LBackendTable.ShiftLeftI64x2(LI64A, LShiftCount);
-        LI64ByScalar := LScalarTable.ShiftLeftI64x2(LI64A, LShiftCount);
+        LI64ByBackend := LBackendTable.CoreVectors.ShiftLeftI64x2(LI64A, LShiftCount);
+        LI64ByScalar := LScalarTable.CoreVectors.ShiftLeftI64x2(LI64A, LShiftCount);
         CheckEqual(LI64ByScalar.i[0], LI64ByBackend.i[0], 'ShiftLeftI64x2 parity c=' + IntToStr(LShiftCount) + ' lane 0: ' + NonX86BackendName(LBackend));
         CheckEqual(LI64ByScalar.i[1], LI64ByBackend.i[1], 'ShiftLeftI64x2 parity c=' + IntToStr(LShiftCount) + ' lane 1: ' + NonX86BackendName(LBackend));
 
-        LI64ByBackend := LBackendTable.ShiftRightI64x2(LI64A, LShiftCount);
-        LI64ByScalar := LScalarTable.ShiftRightI64x2(LI64A, LShiftCount);
+        LI64ByBackend := LBackendTable.CoreVectors.ShiftRightI64x2(LI64A, LShiftCount);
+        LI64ByScalar := LScalarTable.CoreVectors.ShiftRightI64x2(LI64A, LShiftCount);
         CheckEqual(LI64ByScalar.i[0], LI64ByBackend.i[0], 'ShiftRightI64x2 parity c=' + IntToStr(LShiftCount) + ' lane 0: ' + NonX86BackendName(LBackend));
         CheckEqual(LI64ByScalar.i[1], LI64ByBackend.i[1], 'ShiftRightI64x2 parity c=' + IntToStr(LShiftCount) + ' lane 1: ' + NonX86BackendName(LBackend));
 
-        LI64ByBackend := LBackendTable.ShiftRightArithI64x2(LI64A, LShiftCount);
-        LI64ByScalar := LScalarTable.ShiftRightArithI64x2(LI64A, LShiftCount);
+        LI64ByBackend := LBackendTable.CoreVectors.ShiftRightArithI64x2(LI64A, LShiftCount);
+        LI64ByScalar := LScalarTable.CoreVectors.ShiftRightArithI64x2(LI64A, LShiftCount);
         CheckEqual(LI64ByScalar.i[0], LI64ByBackend.i[0], 'ShiftRightArithI64x2 parity c=' + IntToStr(LShiftCount) + ' lane 0: ' + NonX86BackendName(LBackend));
         CheckEqual(LI64ByScalar.i[1], LI64ByBackend.i[1], 'ShiftRightArithI64x2 parity c=' + IntToStr(LShiftCount) + ' lane 1: ' + NonX86BackendName(LBackend));
 
-        LI64x4ByBackend := LBackendTable.ShiftLeftI64x4(LI64x4A, LShiftCount);
-        LI64x4ByScalar := LScalarTable.ShiftLeftI64x4(LI64x4A, LShiftCount);
+        LI64x4ByBackend := LBackendTable.CoreVectors.ShiftLeftI64x4(LI64x4A, LShiftCount);
+        LI64x4ByScalar := LScalarTable.CoreVectors.ShiftLeftI64x4(LI64x4A, LShiftCount);
         AssertVecI64x4Equal('ShiftLeftI64x4 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-        LI64x4ByBackend := LBackendTable.ShiftRightI64x4(LI64x4A, LShiftCount);
-        LI64x4ByScalar := LScalarTable.ShiftRightI64x4(LI64x4A, LShiftCount);
+        LI64x4ByBackend := LBackendTable.CoreVectors.ShiftRightI64x4(LI64x4A, LShiftCount);
+        LI64x4ByScalar := LScalarTable.CoreVectors.ShiftRightI64x4(LI64x4A, LShiftCount);
         AssertVecI64x4Equal('ShiftRightI64x4 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-        LI64x4ByBackend := LBackendTable.ShiftRightArithI64x4(LI64x4A, LShiftCount);
+        LI64x4ByBackend := LBackendTable.CoreVectors.ShiftRightArithI64x4(LI64x4A, LShiftCount);
         LI64x4ByScalar := ScalarShiftRightArithI64x4(LI64x4A, LShiftCount);
         AssertVecI64x4Equal('ShiftRightArithI64x4 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-        LU64x4ByBackend := LBackendTable.ShiftLeftU64x4(LU64x4A, LShiftCount);
-        LU64x4ByScalar := LScalarTable.ShiftLeftU64x4(LU64x4A, LShiftCount);
+        LU64x4ByBackend := LBackendTable.CoreVectors.ShiftLeftU64x4(LU64x4A, LShiftCount);
+        LU64x4ByScalar := LScalarTable.CoreVectors.ShiftLeftU64x4(LU64x4A, LShiftCount);
         AssertVecU64x4Equal('ShiftLeftU64x4 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU64x4ByScalar, LU64x4ByBackend);
 
-        LU64x4ByBackend := LBackendTable.ShiftRightU64x4(LU64x4A, LShiftCount);
-        LU64x4ByScalar := LScalarTable.ShiftRightU64x4(LU64x4A, LShiftCount);
+        LU64x4ByBackend := LBackendTable.CoreVectors.ShiftRightU64x4(LU64x4A, LShiftCount);
+        LU64x4ByScalar := LScalarTable.CoreVectors.ShiftRightU64x4(LU64x4A, LShiftCount);
         AssertVecU64x4Equal('ShiftRightU64x4 parity c=' + IntToStr(LShiftCount) + ': ' + NonX86BackendName(LBackend), LU64x4ByScalar, LU64x4ByBackend);
       end;
 
@@ -20679,231 +20679,231 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.AndI32x8), 'AndI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrI32x8), 'OrI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorI32x8), 'XorI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.NotI32x8), 'NotI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndNotI32x8), 'AndNotI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftI32x8), 'ShiftLeftI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightI32x8), 'ShiftRightI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightArithI32x8), 'ShiftRightArithI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndI32x16), 'AndI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrI32x16), 'OrI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorI32x16), 'XorI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.NotI32x16), 'NotI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndNotI32x16), 'AndNotI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftI32x16), 'ShiftLeftI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightI32x16), 'ShiftRightI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightArithI32x16), 'ShiftRightArithI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndI64x4), 'AndI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrI64x4), 'OrI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorI64x4), 'XorI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.NotI64x4), 'NotI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndNotI64x4), 'AndNotI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftLeftI64x4), 'ShiftLeftI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightI64x4), 'ShiftRightI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.ShiftRightArithI64x4), 'ShiftRightArithI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AndI64x8), 'AndI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.OrI64x8), 'OrI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.XorI64x8), 'XorI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.NotI64x8), 'NotI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndI32x8), 'AndI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrI32x8), 'OrI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorI32x8), 'XorI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.NotI32x8), 'NotI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndNotI32x8), 'AndNotI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftI32x8), 'ShiftLeftI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightI32x8), 'ShiftRightI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightArithI32x8), 'ShiftRightArithI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndI32x16), 'AndI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrI32x16), 'OrI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorI32x16), 'XorI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.NotI32x16), 'NotI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndNotI32x16), 'AndNotI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftI32x16), 'ShiftLeftI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightI32x16), 'ShiftRightI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightArithI32x16), 'ShiftRightArithI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndI64x4), 'AndI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrI64x4), 'OrI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorI64x4), 'XorI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.NotI64x4), 'NotI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndNotI64x4), 'AndNotI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftLeftI64x4), 'ShiftLeftI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightI64x4), 'ShiftRightI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.ShiftRightArithI64x4), 'ShiftRightArithI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AndI64x8), 'AndI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.OrI64x8), 'OrI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.XorI64x8), 'XorI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.NotI64x8), 'NotI64x8 missing: ' + NonX86BackendName(LBackend));
 
-      LI32x8ByBackend := LBackendTable.AndI32x8(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.AndI32x8(LI32x8A, LI32x8B);
+      LI32x8ByBackend := LBackendTable.CoreVectors.AndI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.AndI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('AndI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.OrI32x8(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.OrI32x8(LI32x8A, LI32x8B);
+      LI32x8ByBackend := LBackendTable.CoreVectors.OrI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.OrI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('OrI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.XorI32x8(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.XorI32x8(LI32x8A, LI32x8B);
+      LI32x8ByBackend := LBackendTable.CoreVectors.XorI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.XorI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('XorI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.NotI32x8(LI32x8A);
-      LI32x8ByScalar := LScalarTable.NotI32x8(LI32x8A);
+      LI32x8ByBackend := LBackendTable.CoreVectors.NotI32x8(LI32x8A);
+      LI32x8ByScalar := LScalarTable.CoreVectors.NotI32x8(LI32x8A);
       AssertVecI32x8Equal('NotI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.AndNotI32x8(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.AndNotI32x8(LI32x8A, LI32x8B);
+      LI32x8ByBackend := LBackendTable.CoreVectors.AndNotI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.AndNotI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('AndNotI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x16ByBackend := LBackendTable.AndI32x16(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.AndI32x16(LI32x16A, LI32x16B);
+      LI32x16ByBackend := LBackendTable.CoreVectors.AndI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.AndI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('AndI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.OrI32x16(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.OrI32x16(LI32x16A, LI32x16B);
+      LI32x16ByBackend := LBackendTable.CoreVectors.OrI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.OrI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('OrI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.XorI32x16(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.XorI32x16(LI32x16A, LI32x16B);
+      LI32x16ByBackend := LBackendTable.CoreVectors.XorI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.XorI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('XorI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.NotI32x16(LI32x16A);
-      LI32x16ByScalar := LScalarTable.NotI32x16(LI32x16A);
+      LI32x16ByBackend := LBackendTable.CoreVectors.NotI32x16(LI32x16A);
+      LI32x16ByScalar := LScalarTable.CoreVectors.NotI32x16(LI32x16A);
       AssertVecI32x16Equal('NotI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.AndNotI32x16(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.AndNotI32x16(LI32x16A, LI32x16B);
+      LI32x16ByBackend := LBackendTable.CoreVectors.AndNotI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.AndNotI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('AndNotI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI64x4ByBackend := LBackendTable.AndI64x4(LI64x4A, LI64x4B);
-      LI64x4ByScalar := LScalarTable.AndI64x4(LI64x4A, LI64x4B);
+      LI64x4ByBackend := LBackendTable.CoreVectors.AndI64x4(LI64x4A, LI64x4B);
+      LI64x4ByScalar := LScalarTable.CoreVectors.AndI64x4(LI64x4A, LI64x4B);
       AssertVecI64x4Equal('AndI64x4 parity: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x4ByBackend := LBackendTable.OrI64x4(LI64x4A, LI64x4B);
-      LI64x4ByScalar := LScalarTable.OrI64x4(LI64x4A, LI64x4B);
+      LI64x4ByBackend := LBackendTable.CoreVectors.OrI64x4(LI64x4A, LI64x4B);
+      LI64x4ByScalar := LScalarTable.CoreVectors.OrI64x4(LI64x4A, LI64x4B);
       AssertVecI64x4Equal('OrI64x4 parity: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x4ByBackend := LBackendTable.XorI64x4(LI64x4A, LI64x4B);
-      LI64x4ByScalar := LScalarTable.XorI64x4(LI64x4A, LI64x4B);
+      LI64x4ByBackend := LBackendTable.CoreVectors.XorI64x4(LI64x4A, LI64x4B);
+      LI64x4ByScalar := LScalarTable.CoreVectors.XorI64x4(LI64x4A, LI64x4B);
       AssertVecI64x4Equal('XorI64x4 parity: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x4ByBackend := LBackendTable.NotI64x4(LI64x4A);
-      LI64x4ByScalar := LScalarTable.NotI64x4(LI64x4A);
+      LI64x4ByBackend := LBackendTable.CoreVectors.NotI64x4(LI64x4A);
+      LI64x4ByScalar := LScalarTable.CoreVectors.NotI64x4(LI64x4A);
       AssertVecI64x4Equal('NotI64x4 parity: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x4ByBackend := LBackendTable.AndNotI64x4(LI64x4A, LI64x4B);
-      LI64x4ByScalar := LScalarTable.AndNotI64x4(LI64x4A, LI64x4B);
+      LI64x4ByBackend := LBackendTable.CoreVectors.AndNotI64x4(LI64x4A, LI64x4B);
+      LI64x4ByScalar := LScalarTable.CoreVectors.AndNotI64x4(LI64x4A, LI64x4B);
       AssertVecI64x4Equal('AndNotI64x4 parity: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x8ByBackend := LBackendTable.AndI64x8(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.AndI64x8(LI64x8A, LI64x8B);
+      LI64x8ByBackend := LBackendTable.CoreVectors.AndI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.AndI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('AndI64x8 parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
-      LI64x8ByBackend := LBackendTable.OrI64x8(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.OrI64x8(LI64x8A, LI64x8B);
+      LI64x8ByBackend := LBackendTable.CoreVectors.OrI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.OrI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('OrI64x8 parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
-      LI64x8ByBackend := LBackendTable.XorI64x8(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.XorI64x8(LI64x8A, LI64x8B);
+      LI64x8ByBackend := LBackendTable.CoreVectors.XorI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.XorI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('XorI64x8 parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
-      LI64x8ByBackend := LBackendTable.NotI64x8(LI64x8A);
-      LI64x8ByScalar := LScalarTable.NotI64x8(LI64x8A);
+      LI64x8ByBackend := LBackendTable.CoreVectors.NotI64x8(LI64x8A);
+      LI64x8ByScalar := LScalarTable.CoreVectors.NotI64x8(LI64x8A);
       AssertVecI64x8Equal('NotI64x8 parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
       LI64x8ByBackend := VecI64x8And(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.AndI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.AndI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('Facade VecI64x8And parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
       LI64x8ByBackend := VecI64x8Or(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.OrI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.OrI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('Facade VecI64x8Or parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
       LI64x8ByBackend := VecI64x8Xor(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.XorI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.XorI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('Facade VecI64x8Xor parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
       LI64x8ByBackend := VecI64x8Not(LI64x8A);
-      LI64x8ByScalar := LScalarTable.NotI64x8(LI64x8A);
+      LI64x8ByScalar := LScalarTable.CoreVectors.NotI64x8(LI64x8A);
       AssertVecI64x8Equal('Facade VecI64x8Not parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
       LoadI32x8FromArray(C_I32X8_SHIFT_PROBE, LI32x8A);
 
-      LI32x8ByBackend := LBackendTable.ShiftRightArithI32x8(LI32x8A, -1);
+      LI32x8ByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x8(LI32x8A, -1);
       LoadI32x8FromArray(C_I32X8_SHIFT_PROBE, LI32x8ByScalar);
       AssertVecI32x8Equal('ShiftRightArithI32x8 exact c=-1: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.ShiftLeftI32x8(LI32x8A, 31);
+      LI32x8ByBackend := LBackendTable.CoreVectors.ShiftLeftI32x8(LI32x8A, 31);
       LoadI32x8FromArray(C_I32X8_SHL31, LI32x8ByScalar);
       AssertVecI32x8Equal('ShiftLeftI32x8 exact c=31: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.ShiftRightI32x8(LI32x8A, 31);
+      LI32x8ByBackend := LBackendTable.CoreVectors.ShiftRightI32x8(LI32x8A, 31);
       LoadI32x8FromArray(C_I32X8_SHR31, LI32x8ByScalar);
       AssertVecI32x8Equal('ShiftRightI32x8 exact c=31: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.ShiftRightArithI32x8(LI32x8A, 31);
+      LI32x8ByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x8(LI32x8A, 31);
       LoadI32x8FromArray(C_I32X8_SAR31, LI32x8ByScalar);
       AssertVecI32x8Equal('ShiftRightArithI32x8 exact c=31: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.ShiftRightArithI32x8(LI32x8A, 64);
+      LI32x8ByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x8(LI32x8A, 64);
       LoadI32x8FromArray(C_I32X8_SAR31, LI32x8ByScalar);
       AssertVecI32x8Equal('ShiftRightArithI32x8 exact c=64: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.ShiftLeftI32x8(LI32x8A, 64);
+      LI32x8ByBackend := LBackendTable.CoreVectors.ShiftLeftI32x8(LI32x8A, 64);
       LoadI32x8FromArray(C_I32X8_ZERO, LI32x8ByScalar);
       AssertVecI32x8Equal('ShiftLeftI32x8 exact c=64: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
       LoadI32x16FromArray(C_I32X16_SHIFT_PROBE, LI32x16A);
 
-      LI32x16ByBackend := LBackendTable.ShiftRightArithI32x16(LI32x16A, -1);
+      LI32x16ByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x16(LI32x16A, -1);
       LoadI32x16FromArray(C_I32X16_SHIFT_PROBE, LI32x16ByScalar);
       AssertVecI32x16Equal('ShiftRightArithI32x16 exact c=-1: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.ShiftRightArithI32x16(LI32x16A, 32);
+      LI32x16ByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x16(LI32x16A, 32);
       LoadI32x16FromArray(C_I32X16_SAR32, LI32x16ByScalar);
       AssertVecI32x16Equal('ShiftRightArithI32x16 exact c=32: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.ShiftRightArithI32x16(LI32x16A, 64);
+      LI32x16ByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x16(LI32x16A, 64);
       LoadI32x16FromArray(C_I32X16_SAR32, LI32x16ByScalar);
       AssertVecI32x16Equal('ShiftRightArithI32x16 exact c=64: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.ShiftLeftI32x16(LI32x16A, 64);
+      LI32x16ByBackend := LBackendTable.CoreVectors.ShiftLeftI32x16(LI32x16A, 64);
       LoadI32x16FromArray(C_I32X16_ZERO, LI32x16ByScalar);
       AssertVecI32x16Equal('ShiftLeftI32x16 exact c=64: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
       LoadI64x4FromArray(C_I64X4_SHIFT_PROBE, LI64x4A);
 
-      LI64x4ByBackend := LBackendTable.ShiftLeftI64x4(LI64x4A, 63);
+      LI64x4ByBackend := LBackendTable.CoreVectors.ShiftLeftI64x4(LI64x4A, 63);
       LoadI64x4FromArray(C_I64X4_SHL63, LI64x4ByScalar);
       AssertVecI64x4Equal('ShiftLeftI64x4 exact c=63: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x4ByBackend := LBackendTable.ShiftRightI64x4(LI64x4A, 63);
+      LI64x4ByBackend := LBackendTable.CoreVectors.ShiftRightI64x4(LI64x4A, 63);
       LoadI64x4FromArray(C_I64X4_SHR63, LI64x4ByScalar);
       AssertVecI64x4Equal('ShiftRightI64x4 exact c=63: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x4ByBackend := LBackendTable.ShiftRightArithI64x4(LI64x4A, 63);
+      LI64x4ByBackend := LBackendTable.CoreVectors.ShiftRightArithI64x4(LI64x4A, 63);
       LoadI64x4FromArray(C_I64X4_SAR63, LI64x4ByScalar);
       AssertVecI64x4Equal('ShiftRightArithI64x4 exact c=63: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x4ByBackend := LBackendTable.ShiftRightArithI64x4(LI64x4A, 64);
+      LI64x4ByBackend := LBackendTable.CoreVectors.ShiftRightArithI64x4(LI64x4A, 64);
       LoadI64x4FromArray(C_I64X4_ZERO, LI64x4ByScalar);
       AssertVecI64x4Equal('ShiftRightArithI64x4 exact c=64: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x4ByBackend := LBackendTable.ShiftRightArithI64x4(LI64x4A, 95);
+      LI64x4ByBackend := LBackendTable.CoreVectors.ShiftRightArithI64x4(LI64x4A, 95);
       LoadI64x4FromArray(C_I64X4_ZERO, LI64x4ByScalar);
       AssertVecI64x4Equal('ShiftRightArithI64x4 exact c=95: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
       for LShiftIndex := 0 to High(C_SHIFT32) do
       begin
-        LI32x8ByBackend := LBackendTable.ShiftLeftI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
-        LI32x8ByScalar := LScalarTable.ShiftLeftI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
+        LI32x8ByBackend := LBackendTable.CoreVectors.ShiftLeftI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
+        LI32x8ByScalar := LScalarTable.CoreVectors.ShiftLeftI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
         AssertVecI32x8Equal('ShiftLeftI32x8 parity c=' + IntToStr(C_SHIFT32[LShiftIndex]) + ': ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-        LI32x8ByBackend := LBackendTable.ShiftRightI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
-        LI32x8ByScalar := LScalarTable.ShiftRightI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
+        LI32x8ByBackend := LBackendTable.CoreVectors.ShiftRightI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
+        LI32x8ByScalar := LScalarTable.CoreVectors.ShiftRightI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
         AssertVecI32x8Equal('ShiftRightI32x8 parity c=' + IntToStr(C_SHIFT32[LShiftIndex]) + ': ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-        LI32x8ByBackend := LBackendTable.ShiftRightArithI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
-        LI32x8ByScalar := LScalarTable.ShiftRightArithI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
+        LI32x8ByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
+        LI32x8ByScalar := LScalarTable.CoreVectors.ShiftRightArithI32x8(LI32x8A, C_SHIFT32[LShiftIndex]);
         AssertVecI32x8Equal('ShiftRightArithI32x8 parity c=' + IntToStr(C_SHIFT32[LShiftIndex]) + ': ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-        LI32x16ByBackend := LBackendTable.ShiftLeftI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
-        LI32x16ByScalar := LScalarTable.ShiftLeftI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
+        LI32x16ByBackend := LBackendTable.CoreVectors.ShiftLeftI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
+        LI32x16ByScalar := LScalarTable.CoreVectors.ShiftLeftI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
         AssertVecI32x16Equal('ShiftLeftI32x16 parity c=' + IntToStr(C_SHIFT32[LShiftIndex]) + ': ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-        LI32x16ByBackend := LBackendTable.ShiftRightI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
-        LI32x16ByScalar := LScalarTable.ShiftRightI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
+        LI32x16ByBackend := LBackendTable.CoreVectors.ShiftRightI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
+        LI32x16ByScalar := LScalarTable.CoreVectors.ShiftRightI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
         AssertVecI32x16Equal('ShiftRightI32x16 parity c=' + IntToStr(C_SHIFT32[LShiftIndex]) + ': ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-        LI32x16ByBackend := LBackendTable.ShiftRightArithI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
-        LI32x16ByScalar := LScalarTable.ShiftRightArithI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
+        LI32x16ByBackend := LBackendTable.CoreVectors.ShiftRightArithI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
+        LI32x16ByScalar := LScalarTable.CoreVectors.ShiftRightArithI32x16(LI32x16A, C_SHIFT32[LShiftIndex]);
         AssertVecI32x16Equal('ShiftRightArithI32x16 parity c=' + IntToStr(C_SHIFT32[LShiftIndex]) + ': ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
       end;
 
       for LShiftIndex := 0 to High(C_SHIFT64) do
       begin
-        LI64x4ByBackend := LBackendTable.ShiftLeftI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
-        LI64x4ByScalar := LScalarTable.ShiftLeftI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
+        LI64x4ByBackend := LBackendTable.CoreVectors.ShiftLeftI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
+        LI64x4ByScalar := LScalarTable.CoreVectors.ShiftLeftI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
         AssertVecI64x4Equal('ShiftLeftI64x4 parity c=' + IntToStr(C_SHIFT64[LShiftIndex]) + ': ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-        LI64x4ByBackend := LBackendTable.ShiftRightI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
-        LI64x4ByScalar := LScalarTable.ShiftRightI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
+        LI64x4ByBackend := LBackendTable.CoreVectors.ShiftRightI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
+        LI64x4ByScalar := LScalarTable.CoreVectors.ShiftRightI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
         AssertVecI64x4Equal('ShiftRightI64x4 parity c=' + IntToStr(C_SHIFT64[LShiftIndex]) + ': ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-        LI64x4ByBackend := LBackendTable.ShiftRightArithI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
+        LI64x4ByBackend := LBackendTable.CoreVectors.ShiftRightArithI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
         LI64x4ByScalar := ScalarShiftRightArithI64x4(LI64x4A, C_SHIFT64[LShiftIndex]);
         AssertVecI64x4Equal('ShiftRightArithI64x4 parity c=' + IntToStr(C_SHIFT64[LShiftIndex]) + ': ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
       end;
@@ -21215,202 +21215,202 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-      CheckTrue(Assigned(LBackendTable.AddI32x8), 'AddI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubI32x8), 'SubI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MulI32x8), 'MulI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MinI32x8), 'MinI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MaxI32x8), 'MaxI32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddU32x8), 'AddU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubU32x8), 'SubU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MulU32x8), 'MulU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MinU32x8), 'MinU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MaxU32x8), 'MaxU32x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddI64x4), 'AddI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubI64x4), 'SubI64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddU64x4), 'AddU64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubU64x4), 'SubU64x4 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddI32x16), 'AddI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubI32x16), 'SubI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MulI32x16), 'MulI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MinI32x16), 'MinI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MaxI32x16), 'MaxI32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddU32x16), 'AddU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubU32x16), 'SubU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MulU32x16), 'MulU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MinU32x16), 'MinU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.MaxU32x16), 'MaxU32x16 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddI64x8), 'AddI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubI64x8), 'SubI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.AddU64x8), 'AddU64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.SubU64x8), 'SubU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddI32x8), 'AddI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubI32x8), 'SubI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MulI32x8), 'MulI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MinI32x8), 'MinI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MaxI32x8), 'MaxI32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddU32x8), 'AddU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubU32x8), 'SubU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MulU32x8), 'MulU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MinU32x8), 'MinU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MaxU32x8), 'MaxU32x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddI64x4), 'AddI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubI64x4), 'SubI64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddU64x4), 'AddU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubU64x4), 'SubU64x4 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddI32x16), 'AddI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubI32x16), 'SubI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MulI32x16), 'MulI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MinI32x16), 'MinI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MaxI32x16), 'MaxI32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddU32x16), 'AddU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubU32x16), 'SubU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MulU32x16), 'MulU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MinU32x16), 'MinU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.MaxU32x16), 'MaxU32x16 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddI64x8), 'AddI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubI64x8), 'SubI64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.AddU64x8), 'AddU64x8 missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.CoreVectors.SubU64x8), 'SubU64x8 missing: ' + NonX86BackendName(LBackend));
 
-      LI32x8ByBackend := LBackendTable.AddI32x8(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.AddI32x8(LI32x8A, LI32x8B);
+      LI32x8ByBackend := LBackendTable.CoreVectors.AddI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.AddI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('AddI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.SubI32x8(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.SubI32x8(LI32x8A, LI32x8B);
+      LI32x8ByBackend := LBackendTable.CoreVectors.SubI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.SubI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('SubI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.MulI32x8(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.MulI32x8(LI32x8A, LI32x8B);
+      LI32x8ByBackend := LBackendTable.CoreVectors.MulI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.MulI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('MulI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.MulI32x8(LMulI32x8ProbeA, LMulI32x8ProbeB);
-      LI32x8ByScalar := LScalarTable.MulI32x8(LMulI32x8ProbeA, LMulI32x8ProbeB);
+      LI32x8ByBackend := LBackendTable.CoreVectors.MulI32x8(LMulI32x8ProbeA, LMulI32x8ProbeB);
+      LI32x8ByScalar := LScalarTable.CoreVectors.MulI32x8(LMulI32x8ProbeA, LMulI32x8ProbeB);
       AssertVecI32x8Equal('MulI32x8 truncation scalar contract: ' + NonX86BackendName(LBackend), LMulI32x8ProbeExpected, LI32x8ByScalar);
       AssertVecI32x8Equal('MulI32x8 truncation backend contract: ' + NonX86BackendName(LBackend), LMulI32x8ProbeExpected, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.MinI32x8(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.MinI32x8(LI32x8A, LI32x8B);
+      LI32x8ByBackend := LBackendTable.CoreVectors.MinI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.MinI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('MinI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LI32x8ByBackend := LBackendTable.MaxI32x8(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.MaxI32x8(LI32x8A, LI32x8B);
+      LI32x8ByBackend := LBackendTable.CoreVectors.MaxI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.MaxI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('MaxI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
-      LU32x8ByBackend := LBackendTable.AddU32x8(LU32x8A, LU32x8B);
-      LU32x8ByScalar := LScalarTable.AddU32x8(LU32x8A, LU32x8B);
+      LU32x8ByBackend := LBackendTable.CoreVectors.AddU32x8(LU32x8A, LU32x8B);
+      LU32x8ByScalar := LScalarTable.CoreVectors.AddU32x8(LU32x8A, LU32x8B);
       AssertVecU32x8Equal('AddU32x8 parity: ' + NonX86BackendName(LBackend), LU32x8ByScalar, LU32x8ByBackend);
 
-      LU32x8ByBackend := LBackendTable.SubU32x8(LU32x8A, LU32x8B);
-      LU32x8ByScalar := LScalarTable.SubU32x8(LU32x8A, LU32x8B);
+      LU32x8ByBackend := LBackendTable.CoreVectors.SubU32x8(LU32x8A, LU32x8B);
+      LU32x8ByScalar := LScalarTable.CoreVectors.SubU32x8(LU32x8A, LU32x8B);
       AssertVecU32x8Equal('SubU32x8 parity: ' + NonX86BackendName(LBackend), LU32x8ByScalar, LU32x8ByBackend);
 
-      LU32x8ByBackend := LBackendTable.MulU32x8(LU32x8A, LU32x8B);
-      LU32x8ByScalar := LScalarTable.MulU32x8(LU32x8A, LU32x8B);
+      LU32x8ByBackend := LBackendTable.CoreVectors.MulU32x8(LU32x8A, LU32x8B);
+      LU32x8ByScalar := LScalarTable.CoreVectors.MulU32x8(LU32x8A, LU32x8B);
       AssertVecU32x8Equal('MulU32x8 parity: ' + NonX86BackendName(LBackend), LU32x8ByScalar, LU32x8ByBackend);
 
-      LU32x8ByBackend := LBackendTable.MulU32x8(LMulU32x8ProbeA, LMulU32x8ProbeB);
-      LU32x8ByScalar := LScalarTable.MulU32x8(LMulU32x8ProbeA, LMulU32x8ProbeB);
+      LU32x8ByBackend := LBackendTable.CoreVectors.MulU32x8(LMulU32x8ProbeA, LMulU32x8ProbeB);
+      LU32x8ByScalar := LScalarTable.CoreVectors.MulU32x8(LMulU32x8ProbeA, LMulU32x8ProbeB);
       AssertVecU32x8Equal('MulU32x8 truncation scalar contract: ' + NonX86BackendName(LBackend), LMulU32x8ProbeExpected, LU32x8ByScalar);
       AssertVecU32x8Equal('MulU32x8 truncation backend contract: ' + NonX86BackendName(LBackend), LMulU32x8ProbeExpected, LU32x8ByBackend);
 
-      LU32x8ByBackend := LBackendTable.MinU32x8(LU32x8A, LU32x8B);
-      LU32x8ByScalar := LScalarTable.MinU32x8(LU32x8A, LU32x8B);
+      LU32x8ByBackend := LBackendTable.CoreVectors.MinU32x8(LU32x8A, LU32x8B);
+      LU32x8ByScalar := LScalarTable.CoreVectors.MinU32x8(LU32x8A, LU32x8B);
       AssertVecU32x8Equal('MinU32x8 parity: ' + NonX86BackendName(LBackend), LU32x8ByScalar, LU32x8ByBackend);
 
-      LU32x8ByBackend := LBackendTable.MaxU32x8(LU32x8A, LU32x8B);
-      LU32x8ByScalar := LScalarTable.MaxU32x8(LU32x8A, LU32x8B);
+      LU32x8ByBackend := LBackendTable.CoreVectors.MaxU32x8(LU32x8A, LU32x8B);
+      LU32x8ByScalar := LScalarTable.CoreVectors.MaxU32x8(LU32x8A, LU32x8B);
       AssertVecU32x8Equal('MaxU32x8 parity: ' + NonX86BackendName(LBackend), LU32x8ByScalar, LU32x8ByBackend);
 
-      LU32x8ByBackend := LBackendTable.AddU32x8(LU32x8LaneProbeA, LU32x8LaneProbeB);
-      LU32x8ByScalar := LScalarTable.AddU32x8(LU32x8LaneProbeA, LU32x8LaneProbeB);
+      LU32x8ByBackend := LBackendTable.CoreVectors.AddU32x8(LU32x8LaneProbeA, LU32x8LaneProbeB);
+      LU32x8ByScalar := LScalarTable.CoreVectors.AddU32x8(LU32x8LaneProbeA, LU32x8LaneProbeB);
       AssertVecU32x8Equal('AddU32x8 lane-tag scalar contract: ' + NonX86BackendName(LBackend), LU32x8LaneProbeExpected, LU32x8ByScalar);
       AssertVecU32x8Equal('AddU32x8 lane-tag backend contract: ' + NonX86BackendName(LBackend), LU32x8LaneProbeExpected, LU32x8ByBackend);
 
-      LI64x4ByBackend := LBackendTable.AddI64x4(LI64x4A, LI64x4B);
-      LI64x4ByScalar := LScalarTable.AddI64x4(LI64x4A, LI64x4B);
+      LI64x4ByBackend := LBackendTable.CoreVectors.AddI64x4(LI64x4A, LI64x4B);
+      LI64x4ByScalar := LScalarTable.CoreVectors.AddI64x4(LI64x4A, LI64x4B);
       AssertVecI64x4Equal('AddI64x4 parity: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LI64x4ByBackend := LBackendTable.SubI64x4(LI64x4A, LI64x4B);
-      LI64x4ByScalar := LScalarTable.SubI64x4(LI64x4A, LI64x4B);
+      LI64x4ByBackend := LBackendTable.CoreVectors.SubI64x4(LI64x4A, LI64x4B);
+      LI64x4ByScalar := LScalarTable.CoreVectors.SubI64x4(LI64x4A, LI64x4B);
       AssertVecI64x4Equal('SubI64x4 parity: ' + NonX86BackendName(LBackend), LI64x4ByScalar, LI64x4ByBackend);
 
-      LU64x4ByBackend := LBackendTable.AddU64x4(LU64x4A, LU64x4B);
-      LU64x4ByScalar := LScalarTable.AddU64x4(LU64x4A, LU64x4B);
+      LU64x4ByBackend := LBackendTable.CoreVectors.AddU64x4(LU64x4A, LU64x4B);
+      LU64x4ByScalar := LScalarTable.CoreVectors.AddU64x4(LU64x4A, LU64x4B);
       AssertVecU64x4Equal('AddU64x4 parity: ' + NonX86BackendName(LBackend), LU64x4ByScalar, LU64x4ByBackend);
 
-      LU64x4ByBackend := LBackendTable.SubU64x4(LU64x4A, LU64x4B);
-      LU64x4ByScalar := LScalarTable.SubU64x4(LU64x4A, LU64x4B);
+      LU64x4ByBackend := LBackendTable.CoreVectors.SubU64x4(LU64x4A, LU64x4B);
+      LU64x4ByScalar := LScalarTable.CoreVectors.SubU64x4(LU64x4A, LU64x4B);
       AssertVecU64x4Equal('SubU64x4 parity: ' + NonX86BackendName(LBackend), LU64x4ByScalar, LU64x4ByBackend);
 
-      LU64x4ByBackend := LBackendTable.AddU64x4(LU64x4LaneProbeA, LU64x4LaneProbeB);
-      LU64x4ByScalar := LScalarTable.AddU64x4(LU64x4LaneProbeA, LU64x4LaneProbeB);
+      LU64x4ByBackend := LBackendTable.CoreVectors.AddU64x4(LU64x4LaneProbeA, LU64x4LaneProbeB);
+      LU64x4ByScalar := LScalarTable.CoreVectors.AddU64x4(LU64x4LaneProbeA, LU64x4LaneProbeB);
       AssertVecU64x4Equal('AddU64x4 lane-tag scalar contract: ' + NonX86BackendName(LBackend), LU64x4AddProbeExpected, LU64x4ByScalar);
       AssertVecU64x4Equal('AddU64x4 lane-tag backend contract: ' + NonX86BackendName(LBackend), LU64x4AddProbeExpected, LU64x4ByBackend);
 
-      LU64x4ByBackend := LBackendTable.SubU64x4(LU64x4LaneProbeA, LU64x4LaneProbeB);
-      LU64x4ByScalar := LScalarTable.SubU64x4(LU64x4LaneProbeA, LU64x4LaneProbeB);
+      LU64x4ByBackend := LBackendTable.CoreVectors.SubU64x4(LU64x4LaneProbeA, LU64x4LaneProbeB);
+      LU64x4ByScalar := LScalarTable.CoreVectors.SubU64x4(LU64x4LaneProbeA, LU64x4LaneProbeB);
       AssertVecU64x4Equal('SubU64x4 lane-tag scalar contract: ' + NonX86BackendName(LBackend), LU64x4SubProbeExpected, LU64x4ByScalar);
       AssertVecU64x4Equal('SubU64x4 lane-tag backend contract: ' + NonX86BackendName(LBackend), LU64x4SubProbeExpected, LU64x4ByBackend);
 
-      LI32x16ByBackend := LBackendTable.AddI32x16(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.AddI32x16(LI32x16A, LI32x16B);
+      LI32x16ByBackend := LBackendTable.CoreVectors.AddI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.AddI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('AddI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.SubI32x16(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.SubI32x16(LI32x16A, LI32x16B);
+      LI32x16ByBackend := LBackendTable.CoreVectors.SubI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.SubI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('SubI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.MulI32x16(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.MulI32x16(LI32x16A, LI32x16B);
+      LI32x16ByBackend := LBackendTable.CoreVectors.MulI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.MulI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('MulI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.MinI32x16(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.MinI32x16(LI32x16A, LI32x16B);
+      LI32x16ByBackend := LBackendTable.CoreVectors.MinI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.MinI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('MinI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LI32x16ByBackend := LBackendTable.MaxI32x16(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.MaxI32x16(LI32x16A, LI32x16B);
+      LI32x16ByBackend := LBackendTable.CoreVectors.MaxI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.MaxI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('MaxI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
-      LU32x16ByBackend := LBackendTable.AddU32x16(LU32x16A, LU32x16B);
-      LU32x16ByScalar := LScalarTable.AddU32x16(LU32x16A, LU32x16B);
+      LU32x16ByBackend := LBackendTable.CoreVectors.AddU32x16(LU32x16A, LU32x16B);
+      LU32x16ByScalar := LScalarTable.CoreVectors.AddU32x16(LU32x16A, LU32x16B);
       AssertVecU32x16Equal('AddU32x16 parity: ' + NonX86BackendName(LBackend), LU32x16ByScalar, LU32x16ByBackend);
 
-      LU32x16ByBackend := LBackendTable.SubU32x16(LU32x16A, LU32x16B);
-      LU32x16ByScalar := LScalarTable.SubU32x16(LU32x16A, LU32x16B);
+      LU32x16ByBackend := LBackendTable.CoreVectors.SubU32x16(LU32x16A, LU32x16B);
+      LU32x16ByScalar := LScalarTable.CoreVectors.SubU32x16(LU32x16A, LU32x16B);
       AssertVecU32x16Equal('SubU32x16 parity: ' + NonX86BackendName(LBackend), LU32x16ByScalar, LU32x16ByBackend);
 
-      LU32x16ByBackend := LBackendTable.MulU32x16(LU32x16A, LU32x16B);
-      LU32x16ByScalar := LScalarTable.MulU32x16(LU32x16A, LU32x16B);
+      LU32x16ByBackend := LBackendTable.CoreVectors.MulU32x16(LU32x16A, LU32x16B);
+      LU32x16ByScalar := LScalarTable.CoreVectors.MulU32x16(LU32x16A, LU32x16B);
       AssertVecU32x16Equal('MulU32x16 parity: ' + NonX86BackendName(LBackend), LU32x16ByScalar, LU32x16ByBackend);
 
-      LU32x16ByBackend := LBackendTable.MinU32x16(LU32x16A, LU32x16B);
-      LU32x16ByScalar := LScalarTable.MinU32x16(LU32x16A, LU32x16B);
+      LU32x16ByBackend := LBackendTable.CoreVectors.MinU32x16(LU32x16A, LU32x16B);
+      LU32x16ByScalar := LScalarTable.CoreVectors.MinU32x16(LU32x16A, LU32x16B);
       AssertVecU32x16Equal('MinU32x16 parity: ' + NonX86BackendName(LBackend), LU32x16ByScalar, LU32x16ByBackend);
 
-      LU32x16ByBackend := LBackendTable.MaxU32x16(LU32x16A, LU32x16B);
-      LU32x16ByScalar := LScalarTable.MaxU32x16(LU32x16A, LU32x16B);
+      LU32x16ByBackend := LBackendTable.CoreVectors.MaxU32x16(LU32x16A, LU32x16B);
+      LU32x16ByScalar := LScalarTable.CoreVectors.MaxU32x16(LU32x16A, LU32x16B);
       AssertVecU32x16Equal('MaxU32x16 parity: ' + NonX86BackendName(LBackend), LU32x16ByScalar, LU32x16ByBackend);
 
-      LI64x8ByBackend := LBackendTable.AddI64x8(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.AddI64x8(LI64x8A, LI64x8B);
+      LI64x8ByBackend := LBackendTable.CoreVectors.AddI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.AddI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('AddI64x8 parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
-      LI64x8ByBackend := LBackendTable.SubI64x8(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.SubI64x8(LI64x8A, LI64x8B);
+      LI64x8ByBackend := LBackendTable.CoreVectors.SubI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.SubI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('SubI64x8 parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
-      LU64x8ByBackend := LBackendTable.AddU64x8(LU64x8A, LU64x8B);
-      LU64x8ByScalar := LScalarTable.AddU64x8(LU64x8A, LU64x8B);
+      LU64x8ByBackend := LBackendTable.CoreVectors.AddU64x8(LU64x8A, LU64x8B);
+      LU64x8ByScalar := LScalarTable.CoreVectors.AddU64x8(LU64x8A, LU64x8B);
       AssertVecU64x8Equal('AddU64x8 parity: ' + NonX86BackendName(LBackend), LU64x8ByScalar, LU64x8ByBackend);
 
-      LU64x8ByBackend := LBackendTable.SubU64x8(LU64x8A, LU64x8B);
-      LU64x8ByScalar := LScalarTable.SubU64x8(LU64x8A, LU64x8B);
+      LU64x8ByBackend := LBackendTable.CoreVectors.SubU64x8(LU64x8A, LU64x8B);
+      LU64x8ByScalar := LScalarTable.CoreVectors.SubU64x8(LU64x8A, LU64x8B);
       AssertVecU64x8Equal('SubU64x8 parity: ' + NonX86BackendName(LBackend), LU64x8ByScalar, LU64x8ByBackend);
 
       LI32x8ByBackend := VecI32x8Mul(LI32x8A, LI32x8B);
-      LI32x8ByScalar := LScalarTable.MulI32x8(LI32x8A, LI32x8B);
+      LI32x8ByScalar := LScalarTable.CoreVectors.MulI32x8(LI32x8A, LI32x8B);
       AssertVecI32x8Equal('Facade MulI32x8 parity: ' + NonX86BackendName(LBackend), LI32x8ByScalar, LI32x8ByBackend);
 
       LU32x8ByBackend := VecU32x8Min(LU32x8A, LU32x8B);
-      LU32x8ByScalar := LScalarTable.MinU32x8(LU32x8A, LU32x8B);
+      LU32x8ByScalar := LScalarTable.CoreVectors.MinU32x8(LU32x8A, LU32x8B);
       AssertVecU32x8Equal('Facade MinU32x8 parity: ' + NonX86BackendName(LBackend), LU32x8ByScalar, LU32x8ByBackend);
 
       LI32x16ByBackend := VecI32x16Mul(LI32x16A, LI32x16B);
-      LI32x16ByScalar := LScalarTable.MulI32x16(LI32x16A, LI32x16B);
+      LI32x16ByScalar := LScalarTable.CoreVectors.MulI32x16(LI32x16A, LI32x16B);
       AssertVecI32x16Equal('Facade MulI32x16 parity: ' + NonX86BackendName(LBackend), LI32x16ByScalar, LI32x16ByBackend);
 
       LU32x16ByBackend := VecU32x16Mul(LU32x16A, LU32x16B);
-      LU32x16ByScalar := LScalarTable.MulU32x16(LU32x16A, LU32x16B);
+      LU32x16ByScalar := LScalarTable.CoreVectors.MulU32x16(LU32x16A, LU32x16B);
       AssertVecU32x16Equal('Facade MulU32x16 parity: ' + NonX86BackendName(LBackend), LU32x16ByScalar, LU32x16ByBackend);
 
       LU32x16ByBackend := VecU32x16Max(LU32x16A, LU32x16B);
-      LU32x16ByScalar := LScalarTable.MaxU32x16(LU32x16A, LU32x16B);
+      LU32x16ByScalar := LScalarTable.CoreVectors.MaxU32x16(LU32x16A, LU32x16B);
       AssertVecU32x16Equal('Facade MaxU32x16 parity: ' + NonX86BackendName(LBackend), LU32x16ByScalar, LU32x16ByBackend);
 
       LI64x8ByBackend := VecI64x8Add(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.AddI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.AddI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('Facade AddI64x8 parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
       LI64x8ByBackend := VecI64x8Sub(LI64x8A, LI64x8B);
-      LI64x8ByScalar := LScalarTable.SubI64x8(LI64x8A, LI64x8B);
+      LI64x8ByScalar := LScalarTable.CoreVectors.SubI64x8(LI64x8A, LI64x8B);
       AssertVecI64x8Equal('Facade SubI64x8 parity: ' + NonX86BackendName(LBackend), LI64x8ByScalar, LI64x8ByBackend);
 
       LU64x8ByBackend := VecU64x8Add(LU64x8A, LU64x8B);
-      LU64x8ByScalar := LScalarTable.AddU64x8(LU64x8A, LU64x8B);
+      LU64x8ByScalar := LScalarTable.CoreVectors.AddU64x8(LU64x8A, LU64x8B);
       AssertVecU64x8Equal('Facade AddU64x8 parity: ' + NonX86BackendName(LBackend), LU64x8ByScalar, LU64x8ByBackend);
 
     Inc(LChecked);
@@ -21530,45 +21530,45 @@ begin
     if not TrySetActiveBackend(LBackend) then
       Continue;
 
-    CheckTrue(Assigned(LBackendTable.I8x16SatAdd), 'I8x16SatAdd missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.I8x16SatSub), 'I8x16SatSub missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.I16x8SatAdd), 'I16x8SatAdd missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.I16x8SatSub), 'I16x8SatSub missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.U8x16SatAdd), 'U8x16SatAdd missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.U8x16SatSub), 'U8x16SatSub missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.U16x8SatAdd), 'U16x8SatAdd missing: ' + NonX86BackendName(LBackend));
-    CheckTrue(Assigned(LBackendTable.U16x8SatSub), 'U16x8SatSub missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.I8x16SatAdd), 'I8x16SatAdd missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.I8x16SatSub), 'I8x16SatSub missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.I16x8SatAdd), 'I16x8SatAdd missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.I16x8SatSub), 'I16x8SatSub missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.U8x16SatAdd), 'U8x16SatAdd missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.U8x16SatSub), 'U8x16SatSub missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.U16x8SatAdd), 'U16x8SatAdd missing: ' + NonX86BackendName(LBackend));
+    CheckTrue(Assigned(LBackendTable.CoreVectors.U16x8SatSub), 'U16x8SatSub missing: ' + NonX86BackendName(LBackend));
 
-    LI8x16ByBackend := LBackendTable.I8x16SatAdd(LI8x16A, LI8x16B);
-    LI8x16ByScalar := LScalarTable.I8x16SatAdd(LI8x16A, LI8x16B);
+    LI8x16ByBackend := LBackendTable.CoreVectors.I8x16SatAdd(LI8x16A, LI8x16B);
+    LI8x16ByScalar := LScalarTable.CoreVectors.I8x16SatAdd(LI8x16A, LI8x16B);
     AssertVecI8x16Equal('I8x16SatAdd parity: ' + NonX86BackendName(LBackend), LI8x16ByScalar, LI8x16ByBackend);
 
-    LI8x16ByBackend := LBackendTable.I8x16SatSub(LI8x16A, LI8x16B);
-    LI8x16ByScalar := LScalarTable.I8x16SatSub(LI8x16A, LI8x16B);
+    LI8x16ByBackend := LBackendTable.CoreVectors.I8x16SatSub(LI8x16A, LI8x16B);
+    LI8x16ByScalar := LScalarTable.CoreVectors.I8x16SatSub(LI8x16A, LI8x16B);
     AssertVecI8x16Equal('I8x16SatSub parity: ' + NonX86BackendName(LBackend), LI8x16ByScalar, LI8x16ByBackend);
 
-    LI16x8ByBackend := LBackendTable.I16x8SatAdd(LI16x8A, LI16x8B);
-    LI16x8ByScalar := LScalarTable.I16x8SatAdd(LI16x8A, LI16x8B);
+    LI16x8ByBackend := LBackendTable.CoreVectors.I16x8SatAdd(LI16x8A, LI16x8B);
+    LI16x8ByScalar := LScalarTable.CoreVectors.I16x8SatAdd(LI16x8A, LI16x8B);
     AssertVecI16x8Equal('I16x8SatAdd parity: ' + NonX86BackendName(LBackend), LI16x8ByScalar, LI16x8ByBackend);
 
-    LI16x8ByBackend := LBackendTable.I16x8SatSub(LI16x8A, LI16x8B);
-    LI16x8ByScalar := LScalarTable.I16x8SatSub(LI16x8A, LI16x8B);
+    LI16x8ByBackend := LBackendTable.CoreVectors.I16x8SatSub(LI16x8A, LI16x8B);
+    LI16x8ByScalar := LScalarTable.CoreVectors.I16x8SatSub(LI16x8A, LI16x8B);
     AssertVecI16x8Equal('I16x8SatSub parity: ' + NonX86BackendName(LBackend), LI16x8ByScalar, LI16x8ByBackend);
 
-    LU8x16ByBackend := LBackendTable.U8x16SatAdd(LU8x16A, LU8x16B);
-    LU8x16ByScalar := LScalarTable.U8x16SatAdd(LU8x16A, LU8x16B);
+    LU8x16ByBackend := LBackendTable.CoreVectors.U8x16SatAdd(LU8x16A, LU8x16B);
+    LU8x16ByScalar := LScalarTable.CoreVectors.U8x16SatAdd(LU8x16A, LU8x16B);
     AssertVecU8x16Equal('U8x16SatAdd parity: ' + NonX86BackendName(LBackend), LU8x16ByScalar, LU8x16ByBackend);
 
-    LU8x16ByBackend := LBackendTable.U8x16SatSub(LU8x16A, LU8x16B);
-    LU8x16ByScalar := LScalarTable.U8x16SatSub(LU8x16A, LU8x16B);
+    LU8x16ByBackend := LBackendTable.CoreVectors.U8x16SatSub(LU8x16A, LU8x16B);
+    LU8x16ByScalar := LScalarTable.CoreVectors.U8x16SatSub(LU8x16A, LU8x16B);
     AssertVecU8x16Equal('U8x16SatSub parity: ' + NonX86BackendName(LBackend), LU8x16ByScalar, LU8x16ByBackend);
 
-    LU16x8ByBackend := LBackendTable.U16x8SatAdd(LU16x8A, LU16x8B);
-    LU16x8ByScalar := LScalarTable.U16x8SatAdd(LU16x8A, LU16x8B);
+    LU16x8ByBackend := LBackendTable.CoreVectors.U16x8SatAdd(LU16x8A, LU16x8B);
+    LU16x8ByScalar := LScalarTable.CoreVectors.U16x8SatAdd(LU16x8A, LU16x8B);
     AssertVecU16x8Equal('U16x8SatAdd parity: ' + NonX86BackendName(LBackend), LU16x8ByScalar, LU16x8ByBackend);
 
-    LU16x8ByBackend := LBackendTable.U16x8SatSub(LU16x8A, LU16x8B);
-    LU16x8ByScalar := LScalarTable.U16x8SatSub(LU16x8A, LU16x8B);
+    LU16x8ByBackend := LBackendTable.CoreVectors.U16x8SatSub(LU16x8A, LU16x8B);
+    LU16x8ByScalar := LScalarTable.CoreVectors.U16x8SatSub(LU16x8A, LU16x8B);
     AssertVecU16x8Equal('U16x8SatSub parity: ' + NonX86BackendName(LBackend), LU16x8ByScalar, LU16x8ByBackend);
 
     Inc(LChecked);

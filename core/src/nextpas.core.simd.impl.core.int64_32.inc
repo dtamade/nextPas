@@ -5,8 +5,8 @@ function VecI64x2Add(const a, b: TVecI64x2): TVecI64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AddI64x2) then
-    Result := dispatch^.AddI64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AddI64x2) then
+    Result := dispatch^.CoreVectors.AddI64x2(a, b)
   else
   begin
     Result.i[0] := a.i[0] + b.i[0];
@@ -18,8 +18,8 @@ function VecI64x2Sub(const a, b: TVecI64x2): TVecI64x2;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SubI64x2) then
-    Result := dispatch^.SubI64x2(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SubI64x2) then
+    Result := dispatch^.CoreVectors.SubI64x2(a, b)
   else
   begin
     Result.i[0] := a.i[0] - b.i[0];
@@ -32,8 +32,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.AndI64x2) then
-    Result := LDispatch^.AndI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.AndI64x2) then
+    Result := LDispatch^.CoreVectors.AndI64x2(a, b)
   else
   begin
     Result.i[0] := a.i[0] and b.i[0];
@@ -46,8 +46,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.OrI64x2) then
-    Result := LDispatch^.OrI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.OrI64x2) then
+    Result := LDispatch^.CoreVectors.OrI64x2(a, b)
   else
   begin
     Result.i[0] := a.i[0] or b.i[0];
@@ -60,8 +60,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.XorI64x2) then
-    Result := LDispatch^.XorI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.XorI64x2) then
+    Result := LDispatch^.CoreVectors.XorI64x2(a, b)
   else
   begin
     Result.i[0] := a.i[0] xor b.i[0];
@@ -74,8 +74,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.NotI64x2) then
-    Result := LDispatch^.NotI64x2(a)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.NotI64x2) then
+    Result := LDispatch^.CoreVectors.NotI64x2(a)
   else
   begin
     Result.i[0] := not a.i[0];
@@ -88,8 +88,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.AndNotI64x2) then
-    Result := LDispatch^.AndNotI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.AndNotI64x2) then
+    Result := LDispatch^.CoreVectors.AndNotI64x2(a, b)
   else
   begin
     // (~a) and b
@@ -115,8 +115,8 @@ begin
   end;
 
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.ShiftLeftI64x2) then
-    Result := LDispatch^.ShiftLeftI64x2(a, LCount)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.ShiftLeftI64x2) then
+    Result := LDispatch^.CoreVectors.ShiftLeftI64x2(a, LCount)
   else
   begin
     Result.i[0] := a.i[0] shl LCount;
@@ -139,8 +139,8 @@ begin
   end;
 
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.ShiftRightI64x2) then
-    Result := LDispatch^.ShiftRightI64x2(a, LCount)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.ShiftRightI64x2) then
+    Result := LDispatch^.CoreVectors.ShiftRightI64x2(a, LCount)
   else
   begin
     // 逻辑右移 (无符号)
@@ -164,8 +164,8 @@ begin
   end;
 
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.ShiftRightArithI64x2) then
-    Result := LDispatch^.ShiftRightArithI64x2(a, LCount)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.ShiftRightArithI64x2) then
+    Result := LDispatch^.CoreVectors.ShiftRightArithI64x2(a, LCount)
   else
   begin
     // 算术右移 (保留符号位)
@@ -179,8 +179,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.CmpEqI64x2) then
-    Result := LDispatch^.CmpEqI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.CmpEqI64x2) then
+    Result := LDispatch^.CoreVectors.CmpEqI64x2(a, b)
   else
   begin
     Result := 0;
@@ -194,8 +194,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.CmpLtI64x2) then
-    Result := LDispatch^.CmpLtI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.CmpLtI64x2) then
+    Result := LDispatch^.CoreVectors.CmpLtI64x2(a, b)
   else
   begin
     Result := 0;
@@ -209,8 +209,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.CmpGtI64x2) then
-    Result := LDispatch^.CmpGtI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.CmpGtI64x2) then
+    Result := LDispatch^.CoreVectors.CmpGtI64x2(a, b)
   else
   begin
     Result := 0;
@@ -225,8 +225,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.CmpLeI64x2) then
-    Result := LDispatch^.CmpLeI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.CmpLeI64x2) then
+    Result := LDispatch^.CoreVectors.CmpLeI64x2(a, b)
   else
   begin
     Result := 0;
@@ -240,8 +240,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.CmpGeI64x2) then
-    Result := LDispatch^.CmpGeI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.CmpGeI64x2) then
+    Result := LDispatch^.CoreVectors.CmpGeI64x2(a, b)
   else
   begin
     Result := 0;
@@ -255,8 +255,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.CmpNeI64x2) then
-    Result := LDispatch^.CmpNeI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.CmpNeI64x2) then
+    Result := LDispatch^.CoreVectors.CmpNeI64x2(a, b)
   else
   begin
     Result := 0;
@@ -270,8 +270,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.MinI64x2) then
-    Result := LDispatch^.MinI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.MinI64x2) then
+    Result := LDispatch^.CoreVectors.MinI64x2(a, b)
   else
   begin
     if a.i[0] < b.i[0] then Result.i[0] := a.i[0] else Result.i[0] := b.i[0];
@@ -284,8 +284,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.MaxI64x2) then
-    Result := LDispatch^.MaxI64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.MaxI64x2) then
+    Result := LDispatch^.CoreVectors.MaxI64x2(a, b)
   else
   begin
     if a.i[0] > b.i[0] then Result.i[0] := a.i[0] else Result.i[0] := b.i[0];
@@ -301,8 +301,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.AddU64x2) then
-    Result := LDispatch^.AddU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.AddU64x2) then
+    Result := LDispatch^.CoreVectors.AddU64x2(a, b)
   else
   begin
     Result.u[0] := a.u[0] + b.u[0];
@@ -315,8 +315,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.SubU64x2) then
-    Result := LDispatch^.SubU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.SubU64x2) then
+    Result := LDispatch^.CoreVectors.SubU64x2(a, b)
   else
   begin
     Result.u[0] := a.u[0] - b.u[0];
@@ -329,8 +329,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.AndU64x2) then
-    Result := LDispatch^.AndU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.AndU64x2) then
+    Result := LDispatch^.CoreVectors.AndU64x2(a, b)
   else
   begin
     Result.u[0] := a.u[0] and b.u[0];
@@ -343,8 +343,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.OrU64x2) then
-    Result := LDispatch^.OrU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.OrU64x2) then
+    Result := LDispatch^.CoreVectors.OrU64x2(a, b)
   else
   begin
     Result.u[0] := a.u[0] or b.u[0];
@@ -357,8 +357,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.XorU64x2) then
-    Result := LDispatch^.XorU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.XorU64x2) then
+    Result := LDispatch^.CoreVectors.XorU64x2(a, b)
   else
   begin
     Result.u[0] := a.u[0] xor b.u[0];
@@ -371,8 +371,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.NotU64x2) then
-    Result := LDispatch^.NotU64x2(a)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.NotU64x2) then
+    Result := LDispatch^.CoreVectors.NotU64x2(a)
   else
   begin
     Result.u[0] := not a.u[0];
@@ -385,8 +385,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.AndNotU64x2) then
-    Result := LDispatch^.AndNotU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.AndNotU64x2) then
+    Result := LDispatch^.CoreVectors.AndNotU64x2(a, b)
   else
   begin
     // (~a) and b
@@ -400,8 +400,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.CmpEqU64x2) then
-    Result := LDispatch^.CmpEqU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.CmpEqU64x2) then
+    Result := LDispatch^.CoreVectors.CmpEqU64x2(a, b)
   else
   begin
     Result := 0;
@@ -415,8 +415,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.CmpLtU64x2) then
-    Result := LDispatch^.CmpLtU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.CmpLtU64x2) then
+    Result := LDispatch^.CoreVectors.CmpLtU64x2(a, b)
   else
   begin
     Result := 0;
@@ -430,8 +430,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.CmpGtU64x2) then
-    Result := LDispatch^.CmpGtU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.CmpGtU64x2) then
+    Result := LDispatch^.CoreVectors.CmpGtU64x2(a, b)
   else
   begin
     Result := 0;
@@ -445,8 +445,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.MinU64x2) then
-    Result := LDispatch^.MinU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.MinU64x2) then
+    Result := LDispatch^.CoreVectors.MinU64x2(a, b)
   else
   begin
     if a.u[0] < b.u[0] then Result.u[0] := a.u[0] else Result.u[0] := b.u[0];
@@ -459,8 +459,8 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.MaxU64x2) then
-    Result := LDispatch^.MaxU64x2(a, b)
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.MaxU64x2) then
+    Result := LDispatch^.CoreVectors.MaxU64x2(a, b)
   else
   begin
     if a.u[0] > b.u[0] then Result.u[0] := a.u[0] else Result.u[0] := b.u[0];
@@ -478,8 +478,8 @@ function VecU32x4Add(const a, b: TVecU32x4): TVecU32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AddU32x4) then
-    Result := dispatch^.AddU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AddU32x4) then
+    Result := dispatch^.CoreVectors.AddU32x4(a, b)
   else
     Result := a + b;
 end;
@@ -489,8 +489,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SubU32x4) then
-    Result := dispatch^.SubU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SubU32x4) then
+    Result := dispatch^.CoreVectors.SubU32x4(a, b)
   else
     for i := 0 to 3 do
       Result.u[i] := a.u[i] - b.u[i];
@@ -501,8 +501,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.MulU32x4) then
-    Result := dispatch^.MulU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.MulU32x4) then
+    Result := dispatch^.CoreVectors.MulU32x4(a, b)
   else
     for i := 0 to 3 do
       Result.u[i] := a.u[i] * b.u[i];
@@ -513,8 +513,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AndU32x4) then
-    Result := dispatch^.AndU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AndU32x4) then
+    Result := dispatch^.CoreVectors.AndU32x4(a, b)
   else
     for i := 0 to 3 do
       Result.u[i] := a.u[i] and b.u[i];
@@ -525,8 +525,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.OrU32x4) then
-    Result := dispatch^.OrU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.OrU32x4) then
+    Result := dispatch^.CoreVectors.OrU32x4(a, b)
   else
     for i := 0 to 3 do
       Result.u[i] := a.u[i] or b.u[i];
@@ -537,8 +537,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.XorU32x4) then
-    Result := dispatch^.XorU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.XorU32x4) then
+    Result := dispatch^.CoreVectors.XorU32x4(a, b)
   else
     for i := 0 to 3 do
       Result.u[i] := a.u[i] xor b.u[i];
@@ -549,8 +549,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.NotU32x4) then
-    Result := dispatch^.NotU32x4(a)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.NotU32x4) then
+    Result := dispatch^.CoreVectors.NotU32x4(a)
   else
     for i := 0 to 3 do
       Result.u[i] := not a.u[i];
@@ -561,8 +561,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AndNotU32x4) then
-    Result := dispatch^.AndNotU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AndNotU32x4) then
+    Result := dispatch^.CoreVectors.AndNotU32x4(a, b)
   else
     for i := 0 to 3 do
       Result.u[i] := (not a.u[i]) and b.u[i];
@@ -583,8 +583,8 @@ begin
   end;
 
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ShiftLeftU32x4) then
-    Result := dispatch^.ShiftLeftU32x4(a, LCount)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ShiftLeftU32x4) then
+    Result := dispatch^.CoreVectors.ShiftLeftU32x4(a, LCount)
   else
     for i := 0 to 3 do
       Result.u[i] := a.u[i] shl LCount;
@@ -605,8 +605,8 @@ begin
   end;
 
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ShiftRightU32x4) then
-    Result := dispatch^.ShiftRightU32x4(a, LCount)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ShiftRightU32x4) then
+    Result := dispatch^.CoreVectors.ShiftRightU32x4(a, LCount)
   else
     for i := 0 to 3 do
       Result.u[i] := a.u[i] shr LCount;  // 逻辑右移 (无符号)
@@ -616,8 +616,8 @@ function VecU32x4CmpEq(const a, b: TVecU32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpEqU32x4) then
-    Result := dispatch^.CmpEqU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpEqU32x4) then
+    Result := dispatch^.CoreVectors.CmpEqU32x4(a, b)
   else
   begin
     Result := 0;
@@ -632,8 +632,8 @@ function VecU32x4CmpLt(const a, b: TVecU32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpLtU32x4) then
-    Result := dispatch^.CmpLtU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpLtU32x4) then
+    Result := dispatch^.CoreVectors.CmpLtU32x4(a, b)
   else
   begin
     Result := 0;
@@ -648,8 +648,8 @@ function VecU32x4CmpGt(const a, b: TVecU32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpGtU32x4) then
-    Result := dispatch^.CmpGtU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpGtU32x4) then
+    Result := dispatch^.CoreVectors.CmpGtU32x4(a, b)
   else
   begin
     Result := 0;
@@ -664,8 +664,8 @@ function VecU32x4CmpLe(const a, b: TVecU32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpLeU32x4) then
-    Result := dispatch^.CmpLeU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpLeU32x4) then
+    Result := dispatch^.CoreVectors.CmpLeU32x4(a, b)
   else
   begin
     Result := 0;
@@ -680,8 +680,8 @@ function VecU32x4CmpGe(const a, b: TVecU32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpGeU32x4) then
-    Result := dispatch^.CmpGeU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpGeU32x4) then
+    Result := dispatch^.CoreVectors.CmpGeU32x4(a, b)
   else
   begin
     Result := 0;
@@ -697,8 +697,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.MinU32x4) then
-    Result := dispatch^.MinU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.MinU32x4) then
+    Result := dispatch^.CoreVectors.MinU32x4(a, b)
   else
     for i := 0 to 3 do
       if a.u[i] < b.u[i] then
@@ -712,8 +712,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.MaxU32x4) then
-    Result := dispatch^.MaxU32x4(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.MaxU32x4) then
+    Result := dispatch^.CoreVectors.MaxU32x4(a, b)
   else
     for i := 0 to 3 do
       if a.u[i] > b.u[i] then

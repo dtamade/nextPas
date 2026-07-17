@@ -643,7 +643,7 @@ end;
 
 function BenchVecF32x4Add_RawActive: Int64;
 begin
-  g_VecR := g_VecDispatch^.AddF32x4(g_VecA, g_VecB);
+  g_VecR := g_VecDispatch^.CoreVectors.AddF32x4(g_VecA, g_VecB);
   Result := 1;
 end;
 
@@ -706,7 +706,7 @@ var
   LRepeat: Integer;
 begin
   for LRepeat := 1 to WIDE_VECTOR_INNER do
-    g_VecI16x32R := g_VecDispatch^.AddI16x32(g_VecI16x32A, g_VecI16x32B);
+    g_VecI16x32R := g_VecDispatch^.CoreVectors.AddI16x32(g_VecI16x32A, g_VecI16x32B);
   Result := WIDE_VECTOR_INNER;
 end;
 
@@ -811,7 +811,7 @@ var
   LRepeat: Integer;
 begin
   for LRepeat := 1 to WIDE_VECTOR_INNER do
-    g_VecU32x16R := g_VecDispatch^.MulU32x16(g_VecU32x16A, g_VecU32x16B);
+    g_VecU32x16R := g_VecDispatch^.CoreVectors.MulU32x16(g_VecU32x16A, g_VecU32x16B);
   Result := WIDE_VECTOR_INNER;
 end;
 
@@ -838,7 +838,7 @@ var
   LRepeat: Integer;
 begin
   for LRepeat := 1 to WIDE_VECTOR_INNER do
-    g_VecU64x8R := g_VecDispatch^.AddU64x8(g_VecU64x8A, g_VecU64x8B);
+    g_VecU64x8R := g_VecDispatch^.CoreVectors.AddU64x8(g_VecU64x8A, g_VecU64x8B);
   Result := WIDE_VECTOR_INNER;
 end;
 
@@ -865,7 +865,7 @@ var
   LRepeat: Integer;
 begin
   for LRepeat := 1 to WIDE_VECTOR_INNER do
-    g_VecU8x64R := g_VecDispatch^.MaxU8x64(g_VecU8x64A, g_VecU8x64B);
+    g_VecU8x64R := g_VecDispatch^.CoreVectors.MaxU8x64(g_VecU8x64A, g_VecU8x64B);
   Result := WIDE_VECTOR_INNER;
 end;
 

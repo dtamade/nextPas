@@ -335,8 +335,8 @@ begin
     Exit(0.0);
 
   LDispatch := GetDirectDispatchTable;
-  LHasLoadF64x4 := Assigned(LDispatch^.LoadF64x4);
-  LHasReduceAddF64x4 := Assigned(LDispatch^.ReduceAddF64x4);
+  LHasLoadF64x4 := Assigned(LDispatch^.CoreVectors.LoadF64x4);
+  LHasReduceAddF64x4 := Assigned(LDispatch^.CoreVectors.ReduceAddF64x4);
 
   LSum := 0.0;
   LC := 0.0;
@@ -344,7 +344,7 @@ begin
   while aCount >= 4 do
   begin
     if LHasLoadF64x4 then
-      LVec := LDispatch^.LoadF64x4(aSrc)
+      LVec := LDispatch^.CoreVectors.LoadF64x4(aSrc)
     else
     begin
       LVec.d[0] := aSrc[0];
@@ -354,7 +354,7 @@ begin
     end;
 
     if LHasReduceAddF64x4 then
-      LBlockSum := LDispatch^.ReduceAddF64x4(LVec)
+      LBlockSum := LDispatch^.CoreVectors.ReduceAddF64x4(LVec)
     else
       LBlockSum := LVec.d[0] + LVec.d[1] + LVec.d[2] + LVec.d[3];
 
@@ -431,16 +431,16 @@ begin
     Exit(0.0);
 
   LDispatch := GetDirectDispatchTable;
-  LCanVectorize := Assigned(LDispatch^.LoadF64x4)
-    and Assigned(LDispatch^.SubF64x4)
-    and Assigned(LDispatch^.MulF64x4);
-  LHasReduceAddF64x4 := Assigned(LDispatch^.ReduceAddF64x4);
+  LCanVectorize := Assigned(LDispatch^.CoreVectors.LoadF64x4)
+    and Assigned(LDispatch^.CoreVectors.SubF64x4)
+    and Assigned(LDispatch^.CoreVectors.MulF64x4);
+  LHasReduceAddF64x4 := Assigned(LDispatch^.CoreVectors.ReduceAddF64x4);
   Result := 0.0;
 
   if LCanVectorize then
   begin
-    if Assigned(LDispatch^.SplatF64x4) then
-      LMeanVec := LDispatch^.SplatF64x4(aMean)
+    if Assigned(LDispatch^.CoreVectors.SplatF64x4) then
+      LMeanVec := LDispatch^.CoreVectors.SplatF64x4(aMean)
     else
     begin
       LMeanVec.d[0] := aMean;
@@ -451,12 +451,12 @@ begin
 
     while aCount >= 4 do
     begin
-      LVec := LDispatch^.LoadF64x4(aSrc);
-      LDiff := LDispatch^.SubF64x4(LVec, LMeanVec);
-      LSquare := LDispatch^.MulF64x4(LDiff, LDiff);
+      LVec := LDispatch^.CoreVectors.LoadF64x4(aSrc);
+      LDiff := LDispatch^.CoreVectors.SubF64x4(LVec, LMeanVec);
+      LSquare := LDispatch^.CoreVectors.MulF64x4(LDiff, LDiff);
 
       if LHasReduceAddF64x4 then
-        Result := Result + LDispatch^.ReduceAddF64x4(LSquare)
+        Result := Result + LDispatch^.CoreVectors.ReduceAddF64x4(LSquare)
       else
         Result := Result + LSquare.d[0] + LSquare.d[1] + LSquare.d[2] + LSquare.d[3];
 
@@ -551,8 +551,8 @@ begin
     Exit(0.0);
 
   LDispatch := GetDirectDispatchTable;
-  LHasLoadF32x8 := Assigned(LDispatch^.LoadF32x8);
-  LHasReduceAddF32x8 := Assigned(LDispatch^.ReduceAddF32x8);
+  LHasLoadF32x8 := Assigned(LDispatch^.CoreVectors.LoadF32x8);
+  LHasReduceAddF32x8 := Assigned(LDispatch^.CoreVectors.ReduceAddF32x8);
 
   LSum := 0.0;
   LC := 0.0;
@@ -560,7 +560,7 @@ begin
   while aCount >= 8 do
   begin
     if LHasLoadF32x8 then
-      LVec := LDispatch^.LoadF32x8(aSrc)
+      LVec := LDispatch^.CoreVectors.LoadF32x8(aSrc)
     else
     begin
       for LIndex := 0 to 7 do
@@ -568,7 +568,7 @@ begin
     end;
 
     if LHasReduceAddF32x8 then
-      LBlockSum := LDispatch^.ReduceAddF32x8(LVec)
+      LBlockSum := LDispatch^.CoreVectors.ReduceAddF32x8(LVec)
     else
       LBlockSum :=
         LVec.f[0] + LVec.f[1] + LVec.f[2] + LVec.f[3]
@@ -647,28 +647,28 @@ begin
     Exit(0.0);
 
   LDispatch := GetDirectDispatchTable;
-  LCanVectorize := Assigned(LDispatch^.LoadF32x8)
-    and Assigned(LDispatch^.SubF32x8)
-    and Assigned(LDispatch^.MulF32x8);
-  LHasReduceAddF32x8 := Assigned(LDispatch^.ReduceAddF32x8);
+  LCanVectorize := Assigned(LDispatch^.CoreVectors.LoadF32x8)
+    and Assigned(LDispatch^.CoreVectors.SubF32x8)
+    and Assigned(LDispatch^.CoreVectors.MulF32x8);
+  LHasReduceAddF32x8 := Assigned(LDispatch^.CoreVectors.ReduceAddF32x8);
   Result := 0.0;
 
   if LCanVectorize then
   begin
-    if Assigned(LDispatch^.SplatF32x8) then
-      LMeanVec := LDispatch^.SplatF32x8(aMean)
+    if Assigned(LDispatch^.CoreVectors.SplatF32x8) then
+      LMeanVec := LDispatch^.CoreVectors.SplatF32x8(aMean)
     else
       for LIndex := 0 to 7 do
         LMeanVec.f[LIndex] := aMean;
 
     while aCount >= 8 do
     begin
-      LVec := LDispatch^.LoadF32x8(aSrc);
-      LDiff := LDispatch^.SubF32x8(LVec, LMeanVec);
-      LSquare := LDispatch^.MulF32x8(LDiff, LDiff);
+      LVec := LDispatch^.CoreVectors.LoadF32x8(aSrc);
+      LDiff := LDispatch^.CoreVectors.SubF32x8(LVec, LMeanVec);
+      LSquare := LDispatch^.CoreVectors.MulF32x8(LDiff, LDiff);
 
       if LHasReduceAddF32x8 then
-        Result := Result + LDispatch^.ReduceAddF32x8(LSquare)
+        Result := Result + LDispatch^.CoreVectors.ReduceAddF32x8(LSquare)
       else
         Result := Result
           + LSquare.f[0] + LSquare.f[1] + LSquare.f[2] + LSquare.f[3]
@@ -753,20 +753,20 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LCanVectorize := Assigned(LDispatch^.LoadF64x4)
-    and Assigned(LDispatch^.StoreF64x4)
-    and Assigned(LDispatch^.SplatF64x4)
-    and Assigned(LDispatch^.MulF64x4);
+  LCanVectorize := Assigned(LDispatch^.CoreVectors.LoadF64x4)
+    and Assigned(LDispatch^.CoreVectors.StoreF64x4)
+    and Assigned(LDispatch^.CoreVectors.SplatF64x4)
+    and Assigned(LDispatch^.CoreVectors.MulF64x4);
 
   if LCanVectorize then
   begin
-    LVecFactor := LDispatch^.SplatF64x4(aFactor);
+    LVecFactor := LDispatch^.CoreVectors.SplatF64x4(aFactor);
 
     while aCount >= 4 do
     begin
-      LVecSrc := LDispatch^.LoadF64x4(aSrc);
-      LVecDst := LDispatch^.MulF64x4(LVecSrc, LVecFactor);
-      LDispatch^.StoreF64x4(aDst, LVecDst);
+      LVecSrc := LDispatch^.CoreVectors.LoadF64x4(aSrc);
+      LVecDst := LDispatch^.CoreVectors.MulF64x4(LVecSrc, LVecFactor);
+      LDispatch^.CoreVectors.StoreF64x4(aDst, LVecDst);
       Inc(aSrc, 4);
       Inc(aDst, 4);
       Dec(aCount, 4);
@@ -798,20 +798,20 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LCanVectorize := Assigned(LDispatch^.LoadF64x4)
-    and Assigned(LDispatch^.StoreF64x4)
-    and Assigned(LDispatch^.SplatF64x4)
-    and Assigned(LDispatch^.AddF64x4);
+  LCanVectorize := Assigned(LDispatch^.CoreVectors.LoadF64x4)
+    and Assigned(LDispatch^.CoreVectors.StoreF64x4)
+    and Assigned(LDispatch^.CoreVectors.SplatF64x4)
+    and Assigned(LDispatch^.CoreVectors.AddF64x4);
 
   if LCanVectorize then
   begin
-    LVecValue := LDispatch^.SplatF64x4(aValue);
+    LVecValue := LDispatch^.CoreVectors.SplatF64x4(aValue);
 
     while aCount >= 4 do
     begin
-      LVecSrc := LDispatch^.LoadF64x4(aSrc);
-      LVecDst := LDispatch^.AddF64x4(LVecSrc, LVecValue);
-      LDispatch^.StoreF64x4(aDst, LVecDst);
+      LVecSrc := LDispatch^.CoreVectors.LoadF64x4(aSrc);
+      LVecDst := LDispatch^.CoreVectors.AddF64x4(LVecSrc, LVecValue);
+      LDispatch^.CoreVectors.StoreF64x4(aDst, LVecDst);
       Inc(aSrc, 4);
       Inc(aDst, 4);
       Dec(aCount, 4);

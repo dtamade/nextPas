@@ -388,7 +388,7 @@ var
   LRightSlots: PByte;
 begin
   {$PUSH}{$WARN 4055 OFF} // pointer-sized offset math over immutable dispatch snapshots
-  LOffset := PtrUInt(@aLeft.AddF32x4) - PtrUInt(@aLeft);
+  LOffset := PtrUInt(@aLeft.CoreVectors.AddF32x4) - PtrUInt(@aLeft);
   LLeftSlots := PByte(PtrUInt(@aLeft) + LOffset);
   LRightSlots := PByte(PtrUInt(@aRight) + LOffset);
   {$POP}
