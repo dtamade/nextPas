@@ -207,7 +207,9 @@ begin
   if FAllocator <> nil then
     FBuf := FAllocator.ReallocMem(FBuf, LNewCap)
   else
-    ReallocMem(FBuf, LNewCap);
+    { nextpas.core.mem.ReallocMem is a function (returns the new pointer),
+      not System.ReallocMem(var p). Discarding the result leaves FBuf stale. }
+    FBuf := ReallocMem(FBuf, FCap, LNewCap);
   if (LNewCap > 0) and (FBuf = nil) then
     raise EOutOfMemory.Create('string builder allocation failed');
   FCap := LNewCap;
