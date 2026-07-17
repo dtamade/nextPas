@@ -509,6 +509,17 @@ function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
 function ServeFileDownload(const APath: string): THttpHandlerFunc; overload; inline;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload; inline;
+{** @desc Strong ETag from size+mtime. }
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string; inline;
+{** @desc If-None-Match match helper (`*`, exact, comma list). }
+function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean; inline;
+{** @desc If-Modified-Since not-modified check. }
+function HttpNotModifiedSince(const AIfModifiedSince: string;
+  const AModTimeUnix: Int64): Boolean; inline;
+{** @desc Conditional GET: write 304 when not modified; True if 304 written. }
+function HttpTryWriteNotModified(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AETag, ALastModified: string;
+  const AModTimeUnix: Int64): Boolean; inline;
 
 { WebSocket helper }
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket; overload; inline;
@@ -1309,6 +1320,31 @@ end;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc;
 begin
   Result := nextpas.core.http.static.ServeFileDownload(APath, ADownloadName);
+end;
+
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
+begin
+  Result := nextpas.core.http.static.HttpMakeStrongETag(ASize, AModTime);
+end;
+
+function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
+begin
+  Result := nextpas.core.http.static.HttpIfNoneMatchMatches(AIfNoneMatch, AServerETag);
+end;
+
+function HttpNotModifiedSince(const AIfModifiedSince: string;
+  const AModTimeUnix: Int64): Boolean;
+begin
+  Result := nextpas.core.http.static.HttpNotModifiedSince(
+    AIfModifiedSince, AModTimeUnix);
+end;
+
+function HttpTryWriteNotModified(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AETag, ALastModified: string;
+  const AModTimeUnix: Int64): Boolean;
+begin
+  Result := nextpas.core.http.static.HttpTryWriteNotModified(
+    AReq, AW, AETag, ALastModified, AModTimeUnix);
 end;
 
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket;

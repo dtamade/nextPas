@@ -83,6 +83,17 @@ end;
 | 损坏 payload | 同上 | `hekBody` Op=`content_encoding` |
 | 非目标 | br / zstd / 浏览器完整 content 栈 / 默认自动 Accept-Encoding 协商 | 不在 C1；未支持编码诚实失败 |
 
+**条件请求 / 静态缓存元数据（Wave C2）**：
+
+| 能力 | 行为 |
+|------|------|
+| `ServeFile` / `ServeDir` / `ServeFileDownload` | 发布 strong `ETag`（`HttpMakeStrongETag(size, mtime_ns)`）、`Last-Modified`（**秒**精度）、`Cache-Control: public, max-age=0, must-revalidate` |
+| `If-None-Match` | 与当前 ETag 精确匹配、`*`、或逗号列表命中 → **304** + ETag/Last-Modified；**优先于** `If-Modified-Since` |
+| `If-Modified-Since` | 仅在无 `If-None-Match` 时生效；HTTP-date 可解析且资源 mtime_seconds ≤ 该时刻 → **304**；非法日期忽略（当 200） |
+| 公开辅助 | `HttpIfNoneMatchMatches` / `HttpNotModifiedSince` / `HttpTryWriteNotModified`（自定义 handler 可复用 304 路径） |
+| 304 体 | 无 body；helper 设 `Content-Length: 0` 便于 framing |
+| 非目标 | 完整缓存策略、`If-Match`/`If-Unmodified-Since` 写路径、启发式过期、CDN 语义 |
+
 ### 2.2 Request / Response
 
 - 公开类型是 **接口** `IHttpRequest` / `IHttpResponse`，不是裸 record wire 模型。
@@ -491,3 +502,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.8 | cycle-8 Wave C：`GetJson`/`HttpReadResponseJson` ensure+decode；`WithRetry` 支持 429 + delta-seconds Retry-After（cap 60s） |
 | 2026-07-17 | 3.9 | cycle-11 Wave F：HTTP-date Retry-After；`WithTLSContext`；`HttpPost/Put/PatchJsonDocument` ensure+decode |
 | 2026-07-17 | 3.10 | Wave C1：Content-Encoding 契约；client `HttpDecodeContentEncoding` / `HttpReadResponseBody*Decoded`；Op=`content_encoding`；server Compression/Decompress middleware 已落地 |
+| 2026-07-17 | 3.11 | Wave C2：条件请求 helper + ServeFile 304 契约表（If-None-Match / If-Modified-Since） |
