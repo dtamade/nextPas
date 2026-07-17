@@ -61,7 +61,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    procedure AppendReadData(const AData: AnsiString);
+    procedure SetCancelToken(const AToken: INetCancelToken);
+procedure AppendReadData(const AData: AnsiString);
     function WrittenData: AnsiString;
     property MaxWriteChunk: SizeUInt read FMaxWriteChunk write FMaxWriteChunk;
   end;
@@ -463,6 +464,10 @@ end;
 procedure TFakeTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   FWriteDeadline := ADeadline;
+end;
+
+procedure TFakeTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
 end;
 
 procedure TFakeTcpStream.AppendReadData(const AData: AnsiString);

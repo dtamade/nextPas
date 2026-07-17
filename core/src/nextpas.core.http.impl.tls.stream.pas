@@ -77,6 +77,7 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+    procedure SetCancelToken(const AToken: INetCancelToken);
     function SelectedALPN: string;
   end;
 
@@ -316,6 +317,13 @@ procedure TTlsTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   if FStream <> nil then
     FStream.SetWriteTimeout(TimeoutMsFromDeadline(ADeadline));
+end;
+
+procedure TTlsTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+  { TLS decrypt path still blocks on inner socket; forward cancel for mid-read. }
+  if FInner <> nil then
+    FInner.SetCancelToken(AToken);
 end;
 
 function TTlsTcpStream.SelectedALPN: string;

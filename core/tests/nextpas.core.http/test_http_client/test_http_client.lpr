@@ -2840,9 +2840,10 @@ begin
   if LReconnectPos > 0 then
   begin
     { Window covers ConnectTimeout re-arm, cancel checkpoints, timeout-wrap,
-      and bare re-raise on the fresh-connection path. }
-    LReconnectBlock := Copy(LSource, LReconnectPos, 1400);
-    Check((Pos('LConn := TcpConnect(LConnectHost, LConnectPort);', LReconnectBlock) > 0) or
+      dial helper, cancel token wire, and bare re-raise on the fresh path. }
+    LReconnectBlock := Copy(LSource, LReconnectPos, 2200);
+    Check((Pos('LConn := H1ClientDial(LConnectHost, LConnectPort,', LReconnectBlock) > 0) or
+          (Pos('LConn := TcpConnect(LConnectHost, LConnectPort);', LReconnectBlock) > 0) or
           (Pos('LConn := TcpConnect(LHost, LPort);', LReconnectBlock) > 0),
       'h1 client pooled retry opens a fresh connection after body rewind');
     Check(Pos('try', LReconnectBlock) > 0,

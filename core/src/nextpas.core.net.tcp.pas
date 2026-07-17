@@ -14,6 +14,10 @@ uses
 
 function NetTcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
 function NetTcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
+{ ATimeoutMs > 0 bounds the OS connect() wait (nonblocking connect + poll).
+  ATimeoutMs <= 0 keeps unbounded blocking connect (legacy). }
+function NetTcpConnect(const AAddr: string; const APort: UInt16;
+  const ATimeoutMs: Int64): ITcpStream;
 
 implementation
 
@@ -40,7 +44,9 @@ type
     FWriteDeadline: TDeadline;
     FLastReadTimeoutMs: UInt32;
     FLastWriteTimeoutMs: UInt32;
+    FCancelToken: INetCancelToken;
     procedure EnsureOpen(const AOperation: string);
+    procedure ThrowIfCanceled;
     procedure ApplyReadTimeout;
     procedure ApplyWriteTimeout;
   public
@@ -57,6 +63,7 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+    procedure SetCancelToken(const AToken: INetCancelToken);
     function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
@@ -136,10 +143,20 @@ begin
   inherited;
 end;
 
+const
+  { Slice length when a cancel token is attached so mid-IO cancel is observed. }
+  NET_IO_CANCEL_SLICE_MS = 50;
+
 procedure TTcpStream.EnsureOpen(const AOperation: string);
 begin
   if FClosed then
     raise ENetworkError.Create('tcp stream ' + AOperation + ' after close');
+end;
+
+procedure TTcpStream.ThrowIfCanceled;
+begin
+  if (FCancelToken <> nil) and FCancelToken.IsCanceled then
+    raise ECancelledError.Create('tcp operation canceled');
 end;
 
 function TTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -149,16 +166,32 @@ var
 begin
   EnsureOpen('read');
   if ACount = 0 then Exit(0);
-  ApplyReadTimeout;
-  LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
-  if LResult <> 0 then
+  while True do
   begin
-    if (not FReadDeadline.IsInfinite) and
-       platform_socket_error_would_block(LResult) then
-      raise ETimeoutError.Create('read deadline exceeded');
+    ThrowIfCanceled;
+    ApplyReadTimeout;
+    LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
+    if LResult = 0 then
+      Exit(SizeUInt(LRecvd));
+    if platform_socket_error_would_block(LResult) or
+       platform_socket_error_timed_out(LResult) then
+    begin
+      ThrowIfCanceled;
+      if not FReadDeadline.IsInfinite then
+      begin
+        if FReadDeadline.IsExpired then
+          raise ETimeoutError.Create('read deadline exceeded');
+        { Short cancel slice expired before the real deadline — retry. }
+        if FCancelToken <> nil then
+          Continue;
+        raise ETimeoutError.Create('read deadline exceeded');
+      end;
+      { Infinite deadline + cancel token: short slice; retry until cancel. }
+      if FCancelToken <> nil then
+        Continue;
+    end;
     raise ENetworkError.Create('tcp read failed (' + IntToStr(LResult) + ')');
   end;
-  Result := SizeUInt(LRecvd);
 end;
 
 function TTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -170,18 +203,31 @@ var
 begin
   EnsureOpen('write');
   if ACount = 0 then Exit(0);
-  ApplyWriteTimeout;
   LPtr := @ABuf;
   LRemaining := ACount;
   Result := 0;
   while LRemaining > 0 do
   begin
+    ThrowIfCanceled;
+    ApplyWriteTimeout;
     LResult := platform_socket_send(FSocket, LPtr, Int32(LRemaining), PLATFORM_MSG_NOSIGNAL, LSent);
     if LResult <> 0 then
     begin
-      if (not FWriteDeadline.IsInfinite) and
-         platform_socket_error_would_block(LResult) then
-        raise ETimeoutError.Create('write deadline exceeded');
+      if platform_socket_error_would_block(LResult) or
+         platform_socket_error_timed_out(LResult) then
+      begin
+        ThrowIfCanceled;
+        if not FWriteDeadline.IsInfinite then
+        begin
+          if FWriteDeadline.IsExpired then
+            raise ETimeoutError.Create('write deadline exceeded');
+          if FCancelToken <> nil then
+            Continue;
+          raise ETimeoutError.Create('write deadline exceeded');
+        end;
+        if FCancelToken <> nil then
+          Continue;
+      end;
       raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
     end;
     if LSent = 0 then
@@ -189,8 +235,6 @@ begin
     Inc(LPtr, LSent);
     Dec(LRemaining, SizeUInt(LSent));
     Inc(Result, SizeUInt(LSent));
-    if (LRemaining > 0) and (not FWriteDeadline.IsInfinite) then
-      ApplyWriteTimeout;
   end;
 end;
 
@@ -246,6 +290,11 @@ end;
 procedure TTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   FWriteDeadline := ADeadline;
+end;
+
+procedure TTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+  FCancelToken := AToken;
 end;
 
 function TTcpStream.NativeSocketHandle: PtrUInt;
@@ -322,6 +371,16 @@ var
 begin
   if FReadDeadline.IsInfinite then
   begin
+    if FCancelToken <> nil then
+    begin
+      LMs := NET_IO_CANCEL_SLICE_MS;
+      if LMs <> FLastReadTimeoutMs then
+      begin
+        platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, LMs);
+        FLastReadTimeoutMs := LMs;
+      end;
+      Exit;
+    end;
     if FLastReadTimeoutMs <> 0 then
     begin
       platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, 0);
@@ -334,6 +393,8 @@ begin
   LRemaining := FReadDeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
+  if (FCancelToken <> nil) and (LMs > NET_IO_CANCEL_SLICE_MS) then
+    LMs := NET_IO_CANCEL_SLICE_MS;
   if LMs <> FLastReadTimeoutMs then
   begin
     platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, LMs);
@@ -348,6 +409,16 @@ var
 begin
   if FWriteDeadline.IsInfinite then
   begin
+    if FCancelToken <> nil then
+    begin
+      LMs := NET_IO_CANCEL_SLICE_MS;
+      if LMs <> FLastWriteTimeoutMs then
+      begin
+        platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, LMs);
+        FLastWriteTimeoutMs := LMs;
+      end;
+      Exit;
+    end;
     if FLastWriteTimeoutMs <> 0 then
     begin
       platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, 0);
@@ -360,6 +431,8 @@ begin
   LRemaining := FWriteDeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
+  if (FCancelToken <> nil) and (LMs > NET_IO_CANCEL_SLICE_MS) then
+    LMs := NET_IO_CANCEL_SLICE_MS;
   if LMs <> FLastWriteTimeoutMs then
   begin
     platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, LMs);
@@ -504,12 +577,22 @@ begin
 end;
 
 function NetTcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
+begin
+  Result := NetTcpConnect(AAddr, APort, 0);
+end;
+
+function NetTcpConnect(const AAddr: string; const APort: UInt16;
+  const ATimeoutMs: Int64): ITcpStream;
 var
   LSock: TPlatformSocket;
   LSa: sockaddr_in;
   LSaLen: Int32;
   LResult: Int32;
+  LPoll: Int32;
+  LRevents: Int32;
+  LSockErr: Int32;
   LRemote, LResolved: TNetAddress;
+  LTimed: Boolean;
 begin
   LResolved := NetResolve(AAddr);
   LRemote := TNetAddress.Create(LResolved.IP, APort);
@@ -517,8 +600,58 @@ begin
   if LResult <> 0 then
     raise ENetworkError.Create('tcp connect: socket create failed (' + IntToStr(LResult) + ')');
   FillSockAddr(LRemote, LSa, LSaLen);
+  LTimed := ATimeoutMs > 0;
+  if LTimed then
+  begin
+    if platform_socket_set_nonblocking(LSock, True) <> 0 then
+    begin
+      platform_socket_close(LSock);
+      raise ENetworkError.Create('tcp connect: set nonblocking failed');
+    end;
+  end;
   LResult := platform_socket_connect(LSock, @LSa, LSaLen);
-  if LResult <> 0 then
+  if LTimed then
+  begin
+    if (LResult <> 0) and (not platform_socket_error_in_progress(LResult)) then
+    begin
+      platform_socket_close(LSock);
+      raise ENetworkError.Create('tcp connect failed (' + IntToStr(LResult) + ')');
+    end;
+    if LResult <> 0 then
+    begin
+      LPoll := platform_socket_poll(LSock, PLATFORM_POLL_OUT,
+        Int32(ATimeoutMs), LRevents);
+      if LPoll = 0 then
+      begin
+        platform_socket_close(LSock);
+        raise ETimeoutError.Create('tcp connect deadline exceeded');
+      end;
+      if LPoll < 0 then
+      begin
+        platform_socket_close(LSock);
+        raise ENetworkError.Create('tcp connect poll failed (' +
+          IntToStr(-LPoll) + ')');
+      end;
+      LSockErr := 0;
+      if platform_socket_get_error(LSock, LSockErr) <> 0 then
+      begin
+        platform_socket_close(LSock);
+        raise ENetworkError.Create('tcp connect: get SO_ERROR failed');
+      end;
+      if LSockErr <> 0 then
+      begin
+        platform_socket_close(LSock);
+        raise ENetworkError.Create('tcp connect failed (' +
+          IntToStr(LSockErr) + ')');
+      end;
+    end;
+    if platform_socket_set_nonblocking(LSock, False) <> 0 then
+    begin
+      platform_socket_close(LSock);
+      raise ENetworkError.Create('tcp connect: restore blocking failed');
+    end;
+  end
+  else if LResult <> 0 then
   begin
     platform_socket_close(LSock);
     raise ENetworkError.Create('tcp connect failed (' + IntToStr(LResult) + ')');

@@ -145,7 +145,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    function NativeSocketHandle: PtrUInt;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
       out ARead: SizeUInt): TTcpStreamIOResult;
@@ -187,7 +188,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    function NativeSocketHandle: PtrUInt;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
       out ARead: SizeUInt): TTcpStreamIOResult;
@@ -233,7 +235,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    function NativeSocketHandle: PtrUInt;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
       out ARead: SizeUInt): TTcpStreamIOResult;
@@ -274,7 +277,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    function NativeSocketHandle: PtrUInt;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
       out ARead: SizeUInt): TTcpStreamIOResult;
@@ -312,7 +316,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    property Output: string read FOutput;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+property Output: string read FOutput;
     property ReadCalls: Int32 read FReadCalls;
     property WriteCalls: Int32 read FWriteCalls;
     property ReadDeadlineCalls: Int32 read FReadDeadlineCalls;
@@ -349,7 +354,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    property Output: string read FOutput;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+property Output: string read FOutput;
     property ReadCalls: Int32 read FReadCalls;
     property WriteCalls: Int32 read FWriteCalls;
     property ReadDeadlineCalls: Int32 read FReadDeadlineCalls;
@@ -504,6 +510,10 @@ procedure TInlineRuntimeTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
 end;
 
+procedure TInlineRuntimeTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+end;
+
 function TInlineRuntimeTcpStream.NativeSocketHandle: PtrUInt;
 begin
   Result := 42;
@@ -626,6 +636,11 @@ procedure TWritableDrainRuntimeTcpStream.SetWriteDeadline(
 begin
   Inc(FWriteDeadlineCalls);
   FLastWriteDeadline := ADeadline;
+end;
+
+procedure TWritableDrainRuntimeTcpStream.SetCancelToken(
+  const AToken: INetCancelToken);
+begin
 end;
 
 function TWritableDrainRuntimeTcpStream.NativeSocketHandle: PtrUInt;
@@ -769,6 +784,11 @@ begin
   FLastWriteDeadline := ADeadline;
 end;
 
+procedure TTimedDrainRuntimeTcpStream.SetCancelToken(
+  const AToken: INetCancelToken);
+begin
+end;
+
 function TTimedDrainRuntimeTcpStream.NativeSocketHandle: PtrUInt;
 begin
   Result := 44;
@@ -909,6 +929,10 @@ procedure TIdleReadRuntimeTcpStream.SetWriteDeadline(const ADeadline: TDeadline)
 begin
 end;
 
+procedure TIdleReadRuntimeTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+end;
+
 function TIdleReadRuntimeTcpStream.NativeSocketHandle: PtrUInt;
 begin
   Result := 45;
@@ -1024,6 +1048,10 @@ end;
 procedure TZeroProgressTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   Inc(FWriteDeadlineCalls);
+end;
+
+procedure TZeroProgressTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
 end;
 
 constructor TTimeoutWriteTcpStream.Create(const AInput: string;
@@ -1150,6 +1178,10 @@ end;
 procedure TTimeoutWriteTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   Inc(FWriteDeadlineCalls);
+end;
+
+procedure TTimeoutWriteTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
 end;
 
 constructor TSocketTuningServerTransport.Create(const AInner: IHttpServerTransport;

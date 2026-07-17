@@ -352,9 +352,13 @@ begin
   AConn.SetWriteDeadline(ADeadline);
 end;
 
-function DefaultH2ClientDial(const AHost: string; const APort: UInt16): ITcpStream;
+function DefaultH2ClientDial(const AHost: string; const APort: UInt16;
+  const ATimeoutMs: Int64): ITcpStream;
 begin
-  Result := TcpConnect(AHost, APort);
+  if ATimeoutMs > 0 then
+    Result := TcpConnect(AHost, APort, ATimeoutMs)
+  else
+    Result := TcpConnect(AHost, APort);
 end;
 
 procedure SetH2ClientDialFuncForTests(const ADial: TH2ClientDialFunc);
@@ -367,12 +371,13 @@ begin
   GH2ClientDialFunc := nil;
 end;
 
-function H2ClientDial(const AHost: string; const APort: UInt16): ITcpStream;
+function H2ClientDial(const AHost: string; const APort: UInt16;
+  const ATimeoutMs: Int64): ITcpStream;
 begin
   if Assigned(GH2ClientDialFunc) then
     Result := GH2ClientDialFunc(AHost, APort)
   else
-    Result := DefaultH2ClientDial(AHost, APort);
+    Result := DefaultH2ClientDial(AHost, APort, ATimeoutMs);
 end;
 
 { TH2ClientConnection.TH2ResponseState }
@@ -1583,7 +1588,7 @@ begin
   LPooled := LConn <> nil;
   if not LPooled then
   begin
-    LRawConn := H2ClientDial(LHost, LPort);
+    LRawConn := H2ClientDial(LHost, LPort, FOptions.Timeout);
     if LSecure then
     begin
       LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,
@@ -1615,7 +1620,7 @@ begin
           raise;
         end;
         RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
-        LRawConn := H2ClientDial(LHost, LPort);
+        LRawConn := H2ClientDial(LHost, LPort, FOptions.Timeout);
         if LSecure then
         begin
           LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,

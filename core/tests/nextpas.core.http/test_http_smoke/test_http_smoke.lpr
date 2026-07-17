@@ -157,7 +157,7 @@ begin
     LResp := LClient.Post(
       MakeUrl(LPort, '/api/data'),
       'application/json',
-      IReader(nil));
+      '');
     CheckEqual(Int64(201), Int64(LResp.StatusCode), 'status 201');
     CheckEqual('application/json', LGotCT, 'content-type received');
   finally
