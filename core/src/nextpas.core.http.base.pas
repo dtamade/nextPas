@@ -118,7 +118,9 @@ type
     Version: THttpVersion;
     UseRegistryVersion: Boolean;
     TLSContext: ISSLContext;
-    { Plain HTTP forward proxy (http://host:port). Empty = direct connect. }
+    { Plain HTTP forward proxy (http://host:port). Empty = direct connect.
+      https targets use CONNECT then TLS over the tunnel; http targets use
+      absolute-form request-line. Proxy auth is not implemented. }
     ProxyUrl: string;
     class function Default: THttpClientOptions; static;
     function WithTimeout(const ATimeoutMs: Int64): THttpClientOptions;

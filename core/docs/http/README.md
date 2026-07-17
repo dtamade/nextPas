@@ -179,7 +179,10 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite
   store/send (default Lax; None requires Secure; SiteKey approx, no PSL).
 - `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
-  (`http://host:port`); no HTTPS CONNECT in this slice.
+  (`http://host:port`). Target `http://` uses absolute-form; target `https://`
+  uses CONNECT then TLS over the tunnel (origin-form). Optional
+  `TLSContext` for verify-none / custom trust. No proxy auth yet; H1 direct
+  https without proxy still unsupported.
 - `IHttpClient.GetString` / `GetBytes` and free `HttpGetString` / `HttpGetBytes`.
 - `IHttpClient.GetJson` and free `HttpGetJson` / `HttpReadResponseJson`
   (ensure 2xx + JSON document; invalid body → `hekProtocol` Op=`json`).

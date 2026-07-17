@@ -11,20 +11,33 @@
 
 ## 当前结论
 
-- **2026-07-17 cycle-8 usability Wave C（现行评估/修复入口）**：
+- **2026-07-17 cycle-9 usability Wave D（现行评估/修复入口）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle9.md`、
+    `2026-07-17-usability-cycle9-research.md`、
+    `2026-07-17-usability-cycle9-fix-plan.md`
+    （Wave D = HTTPS CONNECT via plain HTTP proxy）。
+  - **Wave D（本切片）**：
+    - H1：`https` 目标 + `ProxyUrl=http://…` → `CONNECT host:port` →
+      TLS wrap（`TLSContext` 或 SecureClient，SNI=origin，ALPN=`http/1.1`）→
+      origin-form request。
+    - 目标 `http` + proxy：保持 absolute-form。
+    - 非 2xx CONNECT → `hekConnect`；无 proxy 的 H1 直连 https 仍拒绝。
+    - 测试：CONNECT tunnel success + denied（`test_http_client`）。
+  - **Deferred** 仍真：proxy auth / H1 direct https / full PSL /
+    Response metadata / Op-everywhere / H3。
+- **2026-07-17 cycle-8 usability Wave C（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle8.md`、
     `2026-07-17-usability-cycle8-research.md`、
     `2026-07-17-usability-cycle8-fix-plan.md`（pre **97/100**；
     Wave C = GetJson ensure+decode + Retry-After/429）。
-  - **Wave C（本切片）**：
+  - **Wave C（landed）**：
     - `HttpGetJson` / `HttpReadResponseJson` / `IHttpClient.GetJson`：
       ensure-2xx + `JsonParse` → `IJsonDocument`；非法 JSON →
       `hekProtocol` Op=`json`。
     - `WithRetry`：429 + 5xx 可重试；优先 delta-seconds `Retry-After`
       （硬顶 60s），否则指数退避；HTTP-date 形式诚实忽略。
     - inventory / CONTRACT / GOAL_TREE 对齐。
-  - **Deferred** 仍真：CONNECT / full PSL / Response metadata /
-    Op-everywhere / H3（GetJson decode 与 Retry-After **已 Closed**）。
+  - 历史 Deferred 中 CONNECT 由 **cycle-9 Wave D Closed**（proxy auth 仍开）。
 - **2026-07-17 cycle-7 usability inventory + Wave B fix（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle7.md`、
     `2026-07-17-usability-cycle7-research.md`、
