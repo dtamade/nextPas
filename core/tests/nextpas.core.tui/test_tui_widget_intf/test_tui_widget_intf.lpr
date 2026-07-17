@@ -4,6 +4,7 @@ program test_tui_widget_intf;
 
 uses
   SysUtils,
+  nextpas.core.errors,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.style,
@@ -111,7 +112,7 @@ begin
   try
     TWidgetAdapter.Create(nil);
   except
-    on E: EArgumentException do
+    on E: EArgumentError do
     begin
       LCaught := True;
       Check(Pos('render function', E.Message) > 0, 'adapter error message names render function');
