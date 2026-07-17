@@ -1033,7 +1033,8 @@ end;
 procedure HttpUseRequestArena(const ARouter: IHttpRouter; ACapacity: SizeUInt);
 begin
   if ARouter = nil then
-    raise EHttpError.Create('HttpUseRequestArena: router must not be nil');
+    raise EHttpError.Create(hekArgument,
+      'HttpUseRequestArena: router must not be nil');
   if ACapacity = 0 then
     ARouter.Use(RequestArenaMiddleware)
   else

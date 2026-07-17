@@ -187,16 +187,32 @@ end;
 | H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
 | Proxy authentication | `ProxyUrl` UserInfo → `Proxy-Authorization: Basic` only | http H1 | **Landed** (Wave E Basic + Wave I freeze) |
 
-### 2.2.1 EHttpError.Kind
+### 2.2.1 EHttpError taxonomy（Wave E1 + Wave J Op）
 
-- `EHttpError` 保留单一异常类型；`THttpErrorKind` 含 Argument/Timeout/Connect/
-  Protocol/Parse/Redirect/Body/Upgrade/Registry/Status/**Canceled**/… 与
-  `Kind` / 可选 `Status` / `Op`。
-- `Create(string)` 保持兼容（`Kind = hekUnknown`，Category 仍默认 network）。
-- 新代码优先 `Create(Kind, Message)`；调用方可 `except on E: EHttpError` 后匹配 Kind。
-- **热点失败路径**（Wave J）用 `CreateOp` 填稳定 `Op`（metrics/日志友好）。
-  `CreateOp(Kind, Op, Message, Status)` 在 `hekStatus` 路径同时保留 Status。
-  **不**要求全模块 Op-everywhere；`hekArgument` 前置条件通常不填 Op。
+- `EHttpError` 保留**单一**异常类型；字段：`Kind` / 可选 `Status` / 可选 `Op`。
+- `Create(string)` 仅兼容路径（`Kind = hekUnknown`，Category 默认 network）。
+- 新代码优先 `Create(Kind, Message)`；热点失败路径用 `CreateOp` 填稳定 `Op`
+  （metrics/日志友好）。`CreateOp(..., Status)` 在 `hekStatus` 保留 Status。
+- **不**要求 Op-everywhere；`hekArgument` 前置条件通常不填 Op。
+
+#### Kind 分类表
+
+| Kind | Category | 含义 | 典型 Op / 备注 |
+|------|----------|------|----------------|
+| `hekUnknown` | ecNetwork | 仅 `Create(string)` 兼容 | 新代码禁止用 |
+| `hekArgument` | ecInvalidArgument | 调用方前置条件、配置、消息形状 | 通常无 Op |
+| `hekTimeout` | ecTimeout | 读/写/连接 deadline | `transport` |
+| `hekConnect` | ecNetwork | dial / CONNECT / nil response / 传输连通 | `connect` `round_trip` `transport` `download` `websocket` |
+| `hekProtocol` | ecNetwork | HTTP/应用层协议违规 | `transport` `content_encoding` `json` |
+| `hekParse` | ecParse | 方法/URL/响应行等解析失败 | `transport` |
+| `hekRedirect` | ecNetwork | 重定向策略失败 | `redirect` |
+| `hekBody` | ecNetwork | body 读写/解码失败 | `redirect` `download` `content_encoding` `transport` |
+| `hekUpgrade` | ecNetwork | WebSocket 升级协商失败 | 通常无 Op |
+| `hekRegistry` | ecNetwork | transport registry | 通常无 Op |
+| `hekStatus` | ecNetwork | ensure-2xx 非 2xx | `ensure` `download`（Status 保留） |
+| `hekCanceled` | ecCancelled | 协作取消 | `cancel` `transport` |
+
+#### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）
 
 | Op | 典型 Kind | 边界 |
 |----|-----------|------|
@@ -211,23 +227,28 @@ end;
 | `content_encoding` | hekProtocol / hekBody | 客户端 Content-Encoding：不支持编码 → hekProtocol；损坏 payload → hekBody |
 | `websocket` | hekConnect | WS 升级/传输失败 |
 
+#### 公开面纪律
+
 - **消息形状错误**（非法/冲突 Content-Length、不支持 Transfer-Encoding、
   builder 非法 CL）→ `hekArgument`。
-- **配置/nil 前置条件**（nil writer/client、负超时/负 max redirects、
-  server/websocket/**SSE**/middleware 构造与公开前置条件等）→ 也归
-  `hekArgument`（不再裸 `EArgumentError`，便于统一 `HttpErrorIsUserError`）。
+- **配置/nil 前置条件**（nil writer/client/router、负超时/负 max redirects、
+  server/websocket/**SSE**/middleware 构造等）→ `hekArgument`。
+- **禁止** `nextpas.core.http*` 公开路径 `raise EArgumentError` / 裸漏出
+  `EArgumentError`；跨模块（如 compress）若抛 `EArgumentError`，边界包装为
+  `EHttpError(hekArgument)`（middleware decompress 已包）。
+- `HttpErrorIsUserError` 仍对**外来**裸 `EArgumentError` 返回 true（兼容），
+  但 http 自身不制造该路径。
 - **ensure-2xx / download / redirect 客户端错误消息**：在已知 method/URL 时
-  前缀为 `METHOD url: detail`（如 `GET http://example/path: HTTP request failed
-  with status 404 Not Found`）。`HttpEnsureSuccess` 提供无上下文与
+  前缀为 `METHOD url: detail`。`HttpEnsureSuccess` 无上下文与
   `(Resp, Method, Url)` 两形态；非 2xx → `Op=ensure`。
 - Transport 边界：裸 `ETimeoutError` → `hekTimeout` + `Op=transport`；
   裸 `ECancelledError` → `hekCanceled` + `Op=transport`；
-  裸 `ENetworkError`（含 connect 失败）→ `hekConnect` + `Op=transport`
-  （H1/H2 client RoundTrip 经 `HttpWrapTransportException`）。
+  裸 `ENetworkError` → `hekConnect` + `Op=transport`
+  （H1/H2 RoundTrip 经 `HttpWrapTransportException`）。
   检查点 `HttpThrowIfCanceled` → `hekCanceled` + `Op=cancel`。
 - 门面 helper：
   - `HttpErrorIsTimeout` / `HttpErrorIsRetryable`
-  - `HttpErrorIsUserError` — `hekArgument` / `hekCanceled`（调用方错误，非服务端故障）
+  - `HttpErrorIsUserError` — `hekArgument` / `hekCanceled`（及兼容裸 `EArgumentError`）
   - `HttpIsRetrySafeRequest` / `HttpIsRetryableMethod` — 与 WithRetry / pool 共用
 - Request body framing：known Content-Length **或** H1 chunked request body
   （未知长度）。`ContentLength < 0` 的非法值 fail-fast。

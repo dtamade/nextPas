@@ -1069,6 +1069,101 @@ begin
     'message has no deprecated markers');
 end;
 
+procedure TestHttpErrorTaxonomyNoBareArgumentErrorSourceContract;
+{ Wave E1: public http surface must not raise bare EArgumentError. }
+var
+  LPaths: array[0..11] of string;
+  LSource: string;
+  I: Integer;
+begin
+  LPaths[0] := '../../../src/nextpas.core.http.pas';
+  LPaths[1] := '../../../src/nextpas.core.http.base.pas';
+  LPaths[2] := '../../../src/nextpas.core.http.client.pas';
+  LPaths[3] := '../../../src/nextpas.core.http.message.pas';
+  LPaths[4] := '../../../src/nextpas.core.http.server.pas';
+  LPaths[5] := '../../../src/nextpas.core.http.websocket.pas';
+  LPaths[6] := '../../../src/nextpas.core.http.static.pas';
+  LPaths[7] := '../../../src/nextpas.core.http.sse.pas';
+  LPaths[8] := '../../../src/nextpas.core.http.stream.pas';
+  LPaths[9] := '../../../src/nextpas.core.http.middleware.decompress.pas';
+  LPaths[10] := '../../../src/nextpas.core.http.middleware.compression.pas';
+  LPaths[11] := '../../../src/nextpas.core.http.middleware.bodylimit.pas';
+
+  for I := Low(LPaths) to High(LPaths) do
+  begin
+    LSource := ReadTextFile(LPaths[I]);
+    Check(Pos('raise EArgumentError', LSource) = 0,
+      LPaths[I] + ' must not raise bare EArgumentError');
+    Check(Pos('EArgumentError.Create', LSource) = 0,
+      LPaths[I] + ' must not construct bare EArgumentError');
+  end;
+
+  LSource := ReadTextFile('../../../src/nextpas.core.http.pas');
+  Check(SourceHas(LSource,
+    'raise EHttpError.Create(hekArgument,'#10 +
+    '      ''HttpUseRequestArena: router must not be nil'')'),
+    'HttpUseRequestArena nil router uses hekArgument');
+
+  LSource := ReadTextFile(
+    '../../../src/nextpas.core.http.middleware.decompress.pas');
+  Check(SourceHas(LSource,
+    'raise EHttpError.Create(hekArgument, E.Message)'),
+    'decompress wraps foreign EArgumentError as hekArgument');
+  Check(not SourceHas(LSource, 'on E: EArgumentError do'#10 +
+    '          raise;'),
+    'decompress must not bare-re-raise EArgumentError');
+end;
+
+procedure TestHttpErrorStableOpSetSourceContract;
+{ Wave E1 aligns Wave J Op names; lock the stable Op string set. }
+var
+  LClient: string;
+  LBase: string;
+  LH1: string;
+  LWs: string;
+begin
+  LClient := ReadTextFile('../../../src/nextpas.core.http.client.pas');
+  LBase := ReadTextFile('../../../src/nextpas.core.http.base.pas');
+  LH1 := ReadTextFile('../../../src/nextpas.core.http.impl.h1.pas');
+  LWs := ReadTextFile('../../../src/nextpas.core.http.websocket.pas');
+
+  Check(SourceHas(LClient, '''redirect'''),
+    'client uses Op=redirect');
+  Check(SourceHas(LClient, '''round_trip'''),
+    'client uses Op=round_trip');
+  Check(SourceHas(LClient, '''ensure'''),
+    'client uses Op=ensure');
+  Check(SourceHas(LClient, '''download'''),
+    'client uses Op=download');
+  Check(SourceHas(LClient, '''json'''),
+    'client uses Op=json');
+  Check(SourceHas(LClient, '''content_encoding'''),
+    'client uses Op=content_encoding');
+  Check(SourceHas(LBase, '''cancel'''),
+    'base uses Op=cancel');
+  Check(SourceHas(LBase, '''transport'''),
+    'base uses Op=transport');
+  Check(SourceHas(LH1, '''connect'''),
+    'H1 uses Op=connect');
+  Check(SourceHas(LWs, '''websocket'''),
+    'websocket uses Op=websocket');
+
+  Check(SourceHas(LBase,
+    'hekUnknown,'#10 +
+    '    hekArgument,'#10 +
+    '    hekTimeout,'#10 +
+    '    hekConnect,'#10 +
+    '    hekProtocol,'#10 +
+    '    hekParse,'#10 +
+    '    hekRedirect,'#10 +
+    '    hekBody,'#10 +
+    '    hekUpgrade,'#10 +
+    '    hekRegistry,'#10 +
+    '    hekStatus,'#10 +
+    '    hekCanceled'),
+    'THttpErrorKind order stays the Wave E1 taxonomy set');
+end;
+
 procedure TestChunkedRequestTrailerContract;
 var
   LRouter: IHttpRouter;
@@ -1279,6 +1374,10 @@ begin
     @TestHttpServerFacadeOwnerBoundarySourceContract);
   T.Test('NewRequest facade deprecation parity source contract',
     @TestNewRequestFacadeDeprecationParitySourceContract);
+  T.Test('Error taxonomy: no bare EArgumentError source contract',
+    @TestHttpErrorTaxonomyNoBareArgumentErrorSourceContract);
+  T.Test('Error taxonomy: stable Op set source contract',
+    @TestHttpErrorStableOpSetSourceContract);
   T.Test('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
   T.Test('Chunked request multiple trailer declaration contract',

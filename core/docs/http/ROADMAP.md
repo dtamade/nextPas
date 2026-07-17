@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave C3 Range + static depth；NEXT=E1）
+**Updated**: 2026-07-17（Wave E1 Error taxonomy；NEXT=E2）
 
 ---
 
@@ -76,12 +76,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave C1 Content-Encoding | 完成（client decode helper + server middleware 契约 + Op=`content_encoding`） |
 | Wave C2 Conditional | 完成（If-None-Match/If-Modified-Since helper + ServeFile 304；ParseHttpDate/mtime 秒修复） |
 | Wave C3 Range + static | 完成（单段 Range/206/416、`Accept-Ranges`、流式 source-contract） |
-| **下一执行点** | **Era 2 / Wave E1 — Error taxonomy** |
+| Wave E1 Error taxonomy | 完成（Kind 分类表 + Op 对齐；公开面无裸 EArgumentError；source-contract） |
+| **下一执行点** | **Era 2 / Wave E2 — Options / decorator 一致** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~88%   高级 ~63%   优雅 ~72%   性能 ~50%
+完整 ~88%   高级 ~63%   优雅 ~78%   性能 ~50%
 ```
 
 ---
@@ -233,18 +234,19 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | `hek*` + Op 命名表写入 CONTRACT；公开面禁止裸 `EArgumentError` 漏出；与 Wave J Op 对齐 |
 | **Don't** | 无证据大翻异常层次 |
 | **Done when** | CONTRACT 有分类表；source-contract 或 focused 锁关键公开路径 |
 | **Gates** | contract + client + 本波触及 suite |
 | **Next** | Wave E2 |
+| **Evidence** | CONTRACT Kind 分类表 + Op 表；`HttpUseRequestArena`→hekArgument；decompress 包装裸 EArgumentError；contract/client source-contract；`test_http_base` CreateOp taxonomy |
 
 ### Wave E2 — Options / decorator 一致
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | `With*` 链语义表（覆盖、组合、生产默认 vs 测试默认）；钉死 `Timeout`/`ConnectTimeout`/`Production` 分界 |
 | **Don't** | 新 decorator 家族「凑齐对称」 |
 | **Done when** | CONTRACT/README 一张表；测试覆盖组合边角至少一组 |
@@ -396,14 +398,14 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave E1 仍是 NEXT
-2. hek* + Op 表写入 CONTRACT；公开面禁止裸 EArgumentError
-3. source-contract / focused 锁关键路径；path-limited land
-4. 本文件：Wave E1 → landed；Wave E2 → NEXT；changelog 一行
+1. 打开本文件确认 Wave E2 仍是 NEXT
+2. With* 链语义表（覆盖、组合、Timeout/ConnectTimeout/Production 分界）
+3. CONTRACT/README 表 + client/contract focused；path-limited land
+4. 本文件：Wave E2 → landed；Wave A1 → NEXT；changelog 一行
 5. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave E1，然后自动续波。**
+**没有用户指令时：默认执行 Wave E2，然后自动续波。**
 
 ---
 
@@ -436,3 +438,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave C1 landed：client Content-Encoding decode + CONTRACT；Wave C2 = NEXT |
 | 2026-07-17 | Wave C2 landed：条件请求 helper + IMS/ParseHttpDate 修复；Wave C3 = NEXT |
 | 2026-07-17 | Wave C3 landed：Range/`Accept-Ranges`/流式契约；Era 1 完成；Wave E1 = NEXT |
+| 2026-07-17 | Wave E1 landed：Kind 分类表 + 公开面无裸 EArgumentError + Op source-contract；Wave E2 = NEXT |

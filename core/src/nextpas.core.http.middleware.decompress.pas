@@ -123,7 +123,7 @@ begin
             Exit;
           end;
         on E: EArgumentError do
-          raise;
+          raise EHttpError.Create(hekArgument, E.Message);
         on E: Exception do
         begin
           HttpWriteErrorResponse(AW, HTTP_STATUS_BAD_REQUEST,
