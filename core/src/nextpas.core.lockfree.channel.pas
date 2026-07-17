@@ -89,6 +89,8 @@ type
     {** @desc 非阻塞发送，无空间或已关闭时立即返回 False
       @note 关闭时返回 False 而非抛异常——与 Go 的 `ch <- v` (panic) vs `select { case ch <- v: }` (ok=false) 语义对齐 }
     function TrySend(const AValue: T): Boolean;
+    {** @desc 非阻塞发送并返回失败原因（full vs closed）；成功 AError=lfteNone }
+    function TrySendEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 带超时发送，超时或已关闭返回 False }
     function SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
 
@@ -96,6 +98,8 @@ type
     function Receive(out AValue: T): Boolean;
     {** @desc 非阻塞接收；无数据时返回 False }
     function TryReceive(out AValue: T): Boolean;
+    {** @desc 非阻塞接收并返回失败原因（empty vs closed-empty） }
+    function TryReceiveEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 带超时接收；超时返回 False }
     function ReceiveTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
 
@@ -364,6 +368,20 @@ begin
   end;
 end;
 
+function TLockFreeChannelImpl.TrySendEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TrySend(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 procedure TLockFreeChannelImpl.Send(const AValue: T);
 var
   LEpoch: Int32;
@@ -454,6 +472,21 @@ begin
   finally
     LeaveOperation;
   end;
+end;
+
+function TLockFreeChannelImpl.TryReceiveEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryReceive(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  { Plain TryReceive conflates empty and closed-empty as False; Ex splits them. }
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TLockFreeChannelImpl.Receive(out AValue: T): Boolean;

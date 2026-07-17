@@ -174,12 +174,14 @@ function pthread_setspecific(AKey: QWord; AValue: Pointer): Integer; cdecl; exte
 {$IFDEF MSWINDOWS}
 type
   TFlsCallback = procedure(lpFlsData: Pointer); stdcall;
+  TFlsDWord = UInt32;
+  TFlsBool = LongBool;
 var
-  GThreadArenaCleanupIndex: DWORD;
+  GThreadArenaCleanupIndex: TFlsDWord;
 
-function FlsAlloc(lpCallback: TFlsCallback): DWORD; stdcall; external 'kernel32.dll' name 'FlsAlloc';
-function FlsFree(dwFlsIndex: DWORD): BOOL; stdcall; external 'kernel32.dll' name 'FlsFree';
-function FlsSetValue(dwFlsIndex: DWORD; lpFlsData: Pointer): BOOL; stdcall; external 'kernel32.dll' name 'FlsSetValue';
+function FlsAlloc(lpCallback: TFlsCallback): TFlsDWord; stdcall; external 'kernel32.dll' name 'FlsAlloc';
+function FlsFree(dwFlsIndex: TFlsDWord): TFlsBool; stdcall; external 'kernel32.dll' name 'FlsFree';
+function FlsSetValue(dwFlsIndex: TFlsDWord; lpFlsData: Pointer): TFlsBool; stdcall; external 'kernel32.dll' name 'FlsSetValue';
 {$ENDIF}
 
 { Global manager pointer for the cleanup callback to find the owning manager.

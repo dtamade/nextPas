@@ -53,6 +53,9 @@ uses
   nextpas.core.text.conv,
   {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files,
   nextpas.core.platform.process,
   nextpas.core.platform.signal
   {$ENDIF}
@@ -100,7 +103,92 @@ end;
 {$IFDEF NEXTPAS_UNIX}
 function PipeSyscallError(const AOperation: string): EIOError;
 begin
-  Result := PipeSystemError(AOperation, platform_get_errno);
+  Result := PipeSystemError(AOperation, platform_get_last_error);
+end;
+
+function PipeFdAsFileHandle(const AFd: PtrInt): TPlatformFileHandle; inline;
+begin
+  Result.Value := cint(AFd);
+end;
+
+{ platform_file_read/write do not retry EINTR; pipe I/O matches former
+  platform_io_* EINTR loop + partial-write accumulation. }
+function PipeFileRead(const AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt;
+  out ABytesRead: PtrUInt): Int32;
+var
+  LHandle: TPlatformFileHandle;
+begin
+  ABytesRead := 0;
+  if (AFd < 0) or (ABuf = nil) then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
+  LHandle := PipeFdAsFileHandle(AFd);
+  repeat
+    Result := platform_file_read(LHandle, ABuf, PtrUInt(ACount), ABytesRead);
+    if Result <> PLATFORM_ERR_INTR then
+      Exit;
+  until False;
+end;
+
+function PipeFileWrite(const AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt;
+  out ABytesWritten: PtrUInt): Int32;
+var
+  LHandle: TPlatformFileHandle;
+  LTotal: SizeUInt;
+  LChunk: PtrUInt;
+  LErr: Int32;
+begin
+  ABytesWritten := 0;
+  if (AFd < 0) or (ABuf = nil) then
+    Exit(PLATFORM_ERR_INVALID);
+  if ACount = 0 then
+    Exit(0);
+  LHandle := PipeFdAsFileHandle(AFd);
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LErr := platform_file_write(LHandle,
+      Pointer(PtrUInt(ABuf) + LTotal), PtrUInt(ACount - LTotal), LChunk);
+    if LErr = PLATFORM_ERR_INTR then
+      Continue;
+    if LErr <> 0 then
+      Exit(LErr);
+    if LChunk = 0 then
+      Exit(PLATFORM_ERR_IO);
+    Inc(LTotal, LChunk);
+  end;
+  ABytesWritten := LTotal;
+  Result := 0;
+end;
+
+function PipeFileClose(const AFd: PtrInt): Int32;
+var
+  LHandle: TPlatformFileHandle;
+begin
+  { Invalid sentinel fds fail closed (platform.files BADF), not silent success. }
+  if AFd < 0 then
+    Exit(PLATFORM_ERR_BADF);
+  LHandle := PipeFdAsFileHandle(AFd);
+  Result := platform_file_close(LHandle);
+end;
+
+{ Multi-fd drain poll: host poll via platform.posix.ffi with EINTR retry.
+  Avoids transitional platform_io_poll dual-API (F5 complete). }
+function PipePoll(AFds: Pointer; ACount: Int32; ATimeoutMs: Int32): Int32;
+var
+  LPollResult: Int32;
+begin
+  if (AFds = nil) or (ACount <= 0) then
+    Exit(-1);
+  repeat
+    LPollResult := poll(AFds, cuint(ACount), ATimeoutMs);
+    if LPollResult >= 0 then
+      Exit(LPollResult);
+    if platform_get_errno = PLATFORM_ERR_INTR then
+      Continue;
+    Exit(-1);
+  until False;
 end;
 
 procedure EnsureSigPipeIgnored;
@@ -144,19 +232,20 @@ end;
 
 function TPipeReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
-  {$IFDEF NEXTPAS_UNIX}LRead: PtrInt;{$ENDIF}
+  {$IFDEF NEXTPAS_UNIX}
+  LRead: PtrUInt;
+  LErr: Int32;
+  {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}LRead: DWORD;{$ENDIF}
 begin
   if FClosed then
     raise PipeClosedError('TPipeReader.Read');
   if ACount = 0 then Exit(0);
   {$IFDEF NEXTPAS_UNIX}
-  LRead := platform_io_read(FFd, @ABuf, ACount);
-  if LRead > 0 then
-    Exit(SizeUInt(LRead));
-  if LRead = 0 then
-    Exit(0);
-  raise PipeSyscallError('TPipeReader.Read');
+  LErr := PipeFileRead(FFd, @ABuf, ACount, LRead);
+  if LErr = 0 then
+    Exit(LRead);
+  raise PipeSystemError('TPipeReader.Read', LErr);
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
   LRead := 0;
@@ -174,12 +263,14 @@ end;
 procedure TPipeReader.Close;
 var
   LCloseError: EIOError;
+  {$IFDEF NEXTPAS_UNIX}LErr: Int32;{$ENDIF}
 begin
   if FClosed then Exit;
   LCloseError := nil;
   {$IFDEF NEXTPAS_UNIX}
-  if platform_io_close(FFd) <> 0 then
-    LCloseError := PipeSyscallError('TPipeReader.Close');
+  LErr := PipeFileClose(FFd);
+  if LErr <> 0 then
+    LCloseError := PipeSystemError('TPipeReader.Close', LErr);
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
   if not CloseHandle(HANDLE(FFd)) then
@@ -219,7 +310,10 @@ end;
 
 function TPipeWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
-  {$IFDEF NEXTPAS_UNIX}LWritten: PtrInt;{$ENDIF}
+  {$IFDEF NEXTPAS_UNIX}
+  LWritten: PtrUInt;
+  LErr: Int32;
+  {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}LWritten: DWORD;{$ENDIF}
 begin
   if FClosed then
@@ -227,10 +321,10 @@ begin
   if ACount = 0 then Exit(0);
   {$IFDEF NEXTPAS_UNIX}
   EnsureSigPipeIgnored;
-  LWritten := platform_io_write(FFd, @ABuf, ACount);
-  if LWritten < 0 then
-    raise PipeSyscallError('TPipeWriter.Write');
-  Result := SizeUInt(LWritten);
+  LErr := PipeFileWrite(FFd, @ABuf, ACount, LWritten);
+  if LErr <> 0 then
+    raise PipeSystemError('TPipeWriter.Write', LErr);
+  Result := LWritten;
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
   LWritten := 0;
@@ -243,12 +337,14 @@ end;
 procedure TPipeWriter.Close;
 var
   LCloseError: EIOError;
+  {$IFDEF NEXTPAS_UNIX}LErr: Int32;{$ENDIF}
 begin
   if FClosed then Exit;
   LCloseError := nil;
   {$IFDEF NEXTPAS_UNIX}
-  if platform_io_close(FFd) <> 0 then
-    LCloseError := PipeSyscallError('TPipeWriter.Close');
+  LErr := PipeFileClose(FFd);
+  if LErr <> 0 then
+    LCloseError := PipeSystemError('TPipeWriter.Close', LErr);
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
   if not CloseHandle(HANDLE(FFd)) then
@@ -275,18 +371,19 @@ function DrainReadHandle(const AHandle: PtrInt; var ATarget: string;
   var ACount: Integer): Boolean;
 var
   LBuf: array[0..PIPE_DRAIN_BUF_SIZE - 1] of Byte;
-  LRead: PtrInt;
+  LRead: PtrUInt;
+  LErr: Int32;
 begin
   { Parent pipe ends are blocking. After poll reports readability, one
     read is safe; looping until EAGAIN hangs while the child still holds
     the write end open. Callers re-enter via poll for remaining data. }
-  LRead := platform_io_read(AHandle, @LBuf[0], SizeOf(LBuf));
-  if LRead > 0 then
+  LErr := PipeFileRead(AHandle, @LBuf[0], SizeOf(LBuf), LRead);
+  if (LErr = 0) and (LRead > 0) then
   begin
-    AppendPipeChunk(ATarget, ACount, LBuf[0], LRead);
+    AppendPipeChunk(ATarget, ACount, LBuf[0], SizeInt(LRead));
     Exit(False);
   end;
-  if LRead = 0 then
+  if (LErr = 0) and (LRead = 0) then
     Exit(True); { EOF / peer closed write end }
   Exit(False); { error or transient; caller may retry }
 end;
@@ -321,7 +418,7 @@ begin
   if LPollCount = 0 then
     Exit;
 
-  LPollResult := platform_io_poll(@LPollFds[0], LPollCount, ATimeout);
+  LPollResult := PipePoll(@LPollFds[0], LPollCount, ATimeout);
   if LPollResult < 0 then
     raise PipeSyscallError('DrainPipePair.poll');
 

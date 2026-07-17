@@ -98,6 +98,12 @@ procedure platform_fatal_code(const AMsg: PAnsiChar; ACode: Int32);
     @return PLATFORM_ERR_* 错误码，无错误时返回 0 *}
 function platform_get_last_error: Int32;
 
+{** @desc 获取最后一次宿主原生错误码（未映射）
+    POSIX: errno；Windows: GetLastError。
+    不替代 platform_get_last_error 的可移植映射；用于诊断日志。
+    @return 宿主原生错误码，无错误时通常为 0 *}
+function platform_get_last_os_error: Int32;
+
 
 {$IFDEF NEXTPAS_WINDOWS}
 {** @desc 将 Windows 原生错误码映射为 PLATFORM_ERR_* 可移植错误码 *}
@@ -125,6 +131,11 @@ uses
   ;
 
 function platform_get_last_error: Int32;
+begin
+  Result := platform_get_errno;
+end;
+
+function platform_get_last_os_error: Int32;
 begin
   Result := platform_get_errno;
 end;
@@ -176,6 +187,11 @@ var
 begin
   LErr := GetLastError;
   Result := platform_map_windows_error_code(LErr);
+end;
+
+function platform_get_last_os_error: Int32;
+begin
+  Result := Int32(GetLastError);
 end;
 
 

@@ -141,6 +141,8 @@ end;
 
 constructor TConcurrentTrieImpl.Create;
 begin
+  if IsManagedType(TValue) then
+    raise EArgumentError.Create('TConcurrentTrie: TValue must be unmanaged');
   inherited Create;
   FRoot := AllocNode;
   SetLength(FValues, 16);

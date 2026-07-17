@@ -1,8 +1,8 @@
 {% ok %} -*- mode: conf -*-
 # mem 模块 ROADMAP（历史 — 时代 A）
 
-> **SUPERSEDED（2026-07-17）**: 本文件已归档。  
-> **活路线图**: [../ROADMAP.md](../ROADMAP.md)。  
+> **SUPERSEDED（2026-07-17）**: 本文件已归档。
+> **活路线图**: [../ROADMAP.md](../ROADMAP.md)。
 > 下文 Phase 清单全部 **CLOSED**，勿当作新待办。
 
 ## Phase 12 — 实用分配器 ✅

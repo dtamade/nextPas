@@ -18,10 +18,10 @@
 |------|------|----------|
 | platform.pas | 门面 re-export | — |
 | platform.base.pas | TOSKind, TCPUArch, TEndianness | — |
-| platform.error.pas | 错误码常量 + 消息映射 | PLATFORM_ERR_*, platform_error_message |
+| platform.error.pas | 错误码常量 + 消息映射 + last-error | PLATFORM_ERR_*, platform_error_message, platform_get_last_error, platform_get_last_os_error |
 | platform.info.pas | OS/架构/字节序检测 | CurrentOS, CurrentCPU, OSName, CPUName |
 | platform.time.pas | 时间 API | platform_monotonic_ns, platform_realtime_ns |
-| platform.process.pas (`platform_io_*`) | 过渡 fd I/O（process.pipe；value/sentinel） | platform_io_read, platform_io_write, platform_io_poll; close 为 error-code |
+| platform.process.pas (`platform_io_*`) | 过渡 fd I/O 定义（无生产外呼；value/sentinel） | platform_io_read/write/poll 定义；close 为 error-code；pipe 走 files + PipePoll |
 | platform.files.pas | 文件操作 | platform_file_open, platform_file_stat, platform_dir_open |
 | platform.fs.pas | 文件系统高级操作 | platform_fs_mkdir_p, platform_fs_copy_file, platform_fs_walk |
 | platform.path.pas | 路径操作 | platform_path_join, platform_path_dirname |

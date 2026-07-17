@@ -141,8 +141,15 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 constructor TConcurrentBTreeImpl.Create;
 begin
+  if IsManagedType(TKey) then
+    raise EArgumentError.Create('TConcurrentBTree: TKey must be unmanaged');
+  if IsManagedType(TValue) then
+    raise EArgumentError.Create('TConcurrentBTree: TValue must be unmanaged');
   inherited Create;
 
   FRoot := CreateNode(True);

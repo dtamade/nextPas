@@ -12,6 +12,7 @@ uses
   nextpas.core.process.pipe
   {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.base,
+    nextpas.core.platform.posix.errno,
     nextpas.core.platform.posix.ffi,
     nextpas.core.platform.posix.math
     {$IFDEF NEXTPAS_LINUX}

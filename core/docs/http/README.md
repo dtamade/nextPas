@@ -5,10 +5,15 @@ middleware chaining, and a centralized internal transport registry.
 
 ## Module Docs
 
-- `GOAL_TREE.md` — north star, route map, done criteria, and current highest-value slices
-- `ARCHITECTURE.md` — stable architecture facts, runtime ownership, and protocol seams
-- `API_COVERAGE.md` — public API proof and parity decisions
-- `BENCHMARKS.md` — benchmark truth, microbenchmark evidence, and comparator caveats
+| Doc | Role |
+|-----|------|
+| **[`ROADMAP.md`](ROADMAP.md)** | **Forward work only** — start here before coding |
+| [`GOAL_TREE.md`](GOAL_TREE.md) | North star, stage definition, do-not-drift rules |
+| [`CONTRACT.md`](CONTRACT.md) | Public behavior contract |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable architecture facts, runtime ownership, protocol seams |
+| [`API_COVERAGE.md`](API_COVERAGE.md) | Public API evidence matrix |
+| [`BENCHMARKS.md`](BENCHMARKS.md) | Benchmark truth and comparator caveats |
+| [`archive/`](archive/README.md) | Historical waves only — **not** a backlog |
 
 ## Architecture
 
@@ -28,11 +33,11 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 
 | Scenario | Start here |
 | --- | --- |
-| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse`; ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `GetJson` / `HttpReadResponseJson` |
+| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse`; ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `HttpPostJsonDocument` / `GetJson` / `HttpReadResponseJson` |
 | Fluent request | `THttpRequestBuilder` → `Send` |
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
-| Auth / retry / jar / proxy | `WithBearerAuth`, `WithRetry`, `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → Basic) |
-| Direct HTTPS client | `NewHttpClient` + optional `TLSContext` → `Get('https://…')` (H1 TLS wrap) |
+| Auth / retry / jar / proxy / TLS | `WithBearerAuth`, `WithRetry` (delta + HTTP-date Retry-After), `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → Basic), `WithTLSContext` |
+| Direct HTTPS client | `NewHttpClient` + `WithTLSContext` / options `TLSContext` → `Get('https://…')` (H1 TLS wrap) |
 | Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, `WithConnectTimeout` / options `ConnectTimeout` |
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |

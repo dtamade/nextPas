@@ -269,6 +269,7 @@
 
 生命周期：**Close → join producers/waiters → Free**。Destroy 的 Close+drain 不替代 join。
 T1 元素类型必须 unmanaged（构造时 `EArgumentError`）。
+需要区分 full/empty/closed 时用可选 `Try*Ex`（`TLockFreeTryError`；Boolean `Try*` 热路径不变）。
 
 | 数据结构 | 生产者 | 消费者 | Close 安全 |
 |----------|--------|--------|-----------|

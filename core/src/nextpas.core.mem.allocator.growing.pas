@@ -246,12 +246,15 @@ function pthread_setspecific(AKey: QWord; AValue: Pointer): Integer; cdecl; exte
 {$IFDEF MSWINDOWS}
 type
   TFlsCallback = procedure(lpFlsData: Pointer); stdcall;
+  { Local Win32 ABI aliases — avoid FPC Windows unit and platform.windows.base. }
+  TFlsDWord = UInt32;
+  TFlsBool = LongBool;
 var
-  GCacheCleanupIndex: DWORD;
+  GCacheCleanupIndex: TFlsDWord;
 
-function FlsAlloc(lpCallback: TFlsCallback): DWORD; stdcall; external 'kernel32.dll' name 'FlsAlloc';
-function FlsFree(dwFlsIndex: DWORD): BOOL; stdcall; external 'kernel32.dll' name 'FlsFree';
-function FlsSetValue(dwFlsIndex: DWORD; lpFlsData: Pointer): BOOL; stdcall; external 'kernel32.dll' name 'FlsSetValue';
+function FlsAlloc(lpCallback: TFlsCallback): TFlsDWord; stdcall; external 'kernel32.dll' name 'FlsAlloc';
+function FlsFree(dwFlsIndex: TFlsDWord): TFlsBool; stdcall; external 'kernel32.dll' name 'FlsFree';
+function FlsSetValue(dwFlsIndex: TFlsDWord; lpFlsData: Pointer): TFlsBool; stdcall; external 'kernel32.dll' name 'FlsSetValue';
 {$ENDIF}
 
 procedure ThreadExitFlush(AData: Pointer); cdecl;

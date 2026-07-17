@@ -146,8 +146,22 @@ jobs:
       - name: Run Windows runtime smoke
         shell: pwsh
         run: |
-          Write-Output "truth=real-windows-runtime-ci"
-          make -C tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke clean test
+          # Real Windows host evidence (not Wine). Keep LT4 honest:
+          # this is focused-runtime CI signal, not a full ci-matrix promotion.
+          Write-Output "truth=real-windows-runtime-ci; focused gates only"
+          $gates = @(
+            'tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke',
+            'tests/nextpas.core.platform/test_platform_io_windows_real',
+            'tests/nextpas.core.platform.socket/test_platform_socket_windows_real'
+          )
+          foreach ($gate in $gates) {
+            Write-Output "=== real-windows: $gate ==="
+            make -C $gate clean test
+            if ($LASTEXITCODE -ne 0) {
+              throw "Windows runtime gate failed: $gate (exit $LASTEXITCODE)"
+            }
+          }
+          Write-Output "truth=real-windows-runtime-ci; gates_passed=$($gates.Count)"
 
   test-freebsd:
     runs-on: ubuntu-latest

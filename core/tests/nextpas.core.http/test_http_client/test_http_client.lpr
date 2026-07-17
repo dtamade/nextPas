@@ -458,6 +458,7 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
     property SeenUrl: string read FSeenUrl;
   end;
 
@@ -2344,6 +2345,11 @@ begin
 end;
 
 function TDownloadClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
 begin
   Result := Self;
 end;
@@ -8801,6 +8807,22 @@ begin
   CheckEqual(2, LTransport.Calls, '429: 1 fail + 1 success');
 end;
 
+procedure TestWithRetryRetries429WithHttpDateRetryAfterPast;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  { Past IMF-fix → delay 0 (same as Retry-After:0); avoids multi-second sleep. }
+  LTransport := TRetryTestTransport.Create(1, HTTP_STATUS_TOO_MANY_REQUESTS);
+  LTransport.RetryAfter := 'Sun, 06 Nov 1994 08:49:37 GMT';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(2).Get('http://localhost/test');
+  Check(LResp <> nil, '429 HTTP-date retry returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), 'past HTTP-date Retry-After succeeds quickly');
+  CheckEqual(2, LTransport.Calls, 'HTTP-date: 1 fail + 1 success');
+end;
+
 procedure TestWithRetryRetries503WithInvalidRetryAfter;
 var
   LTransport: TRetryTestTransport;
@@ -8907,6 +8929,91 @@ begin
   Check(LCaught, 'GetJson raises on invalid JSON');
   Check(LKind = hekProtocol, 'invalid JSON is hekProtocol');
   CheckEqual('json', LOp, 'invalid JSON Op=json');
+end;
+
+procedure TestHttpPostJsonDocumentSuccess;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LBody, LDoc: IJsonDocument;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, '{"id":7}');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := JsonParse('{"name":"x"}');
+  LDoc := HttpPostJsonDocument(LClient, 'http://localhost/api', LBody);
+  Check(LDoc <> nil, 'PostJsonDocument returns document');
+  CheckEqual(Int64(7), LDoc.Root.ObjectGet('id').AsInt, 'PostJsonDocument field id');
+end;
+
+procedure TestHttpPostJsonDocumentRaisesOn404;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LBody: IJsonDocument;
+  LCaught: Boolean;
+  LKind: THttpErrorKind;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_NOT_FOUND, '{"err":1}');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := JsonParse('{"name":"x"}');
+  LCaught := False;
+  LKind := hekUnknown;
+  try
+    HttpPostJsonDocument(LClient, 'http://localhost/missing', LBody);
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LKind := E.Kind;
+    end;
+  end;
+  Check(LCaught, 'PostJsonDocument raises on 404');
+  Check(LKind = hekStatus, 'PostJsonDocument 404 is hekStatus');
+end;
+
+procedure TestHttpPostJsonDocumentRaisesOnInvalidJson;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LBody: IJsonDocument;
+  LCaught: Boolean;
+  LKind: THttpErrorKind;
+  LOp: string;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, 'not-json');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := JsonParse('{"name":"x"}');
+  LCaught := False;
+  LKind := hekUnknown;
+  LOp := '';
+  try
+    HttpPostJsonDocument(LClient, 'http://localhost/bad', LBody);
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LKind := E.Kind;
+      LOp := E.Op;
+    end;
+  end;
+  Check(LCaught, 'PostJsonDocument raises on invalid JSON');
+  Check(LKind = hekProtocol, 'PostJsonDocument invalid JSON is hekProtocol');
+  CheckEqual('json', LOp, 'PostJsonDocument Op=json');
+end;
+
+procedure TestHttpPutPatchJsonDocumentSuccess;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LBody, LDoc: IJsonDocument;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, '{"ok":true}');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LBody := JsonParse('{"v":1}');
+  LDoc := HttpPutJsonDocument(LClient, 'http://localhost/api', LBody);
+  Check(LDoc.Root.ObjectGet('ok').AsBool, 'PutJsonDocument ok');
+  LDoc := HttpPatchJsonDocument(LClient, 'http://localhost/api', LBody);
+  Check(LDoc.Root.ObjectGet('ok').AsBool, 'PatchJsonDocument ok');
 end;
 
 procedure TestHttpReadResponseJsonSuccess;
@@ -9337,6 +9444,51 @@ begin
       'direct https uses origin-form request-target');
     Check(Pos('GET https://', GDirectHttpsRequest) = 0,
       'direct https does not use absolute-form');
+  finally
+    GDirectHttpsListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GDirectHttpsListener := nil;
+    GDirectHttpsServerCtx := nil;
+    GDirectHttpsRequest := '';
+    GDirectHttpsReply := '';
+  end;
+end;
+
+procedure TestClientWithTLSContextFluentDirectHttps;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReqLine: string;
+  LLineEnd: SizeInt;
+begin
+  { Single accept server: prove fluent WithTLSContext rebuilds transport
+    (options.WithTLSContext covered by test_http_base). }
+  GDirectHttpsRequest := '';
+  GDirectHttpsReply :=
+    'HTTP/1.1 200 OK'#13#10 +
+    'Content-Length: 6'#13#10 +
+    #13#10 +
+    'fluent';
+  GDirectHttpsServerCtx := NewConnectTestServerCtx('127.0.0.1');
+  GDirectHttpsListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GDirectHttpsListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @DirectHttpsThread, nil);
+  try
+    LClient := NewHttpClient(
+      THttpClientOptions.Default.WithTimeout(10000).WithConnectTimeout(5000))
+      .WithTLSContext(NewConnectTestClientCtx);
+    LResp := LClient.Get('https://127.0.0.1:' + IntToStr(Int64(LPort)) +
+      '/tls-fluent');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'fluent WithTLSContext https 200');
+    CheckEqual('fluent', ReadBodyStr(LResp), 'fluent WithTLSContext body');
+    LLineEnd := Pos(#13#10, GDirectHttpsRequest);
+    Check(LLineEnd > 0, 'fluent TLS server received request');
+    LReqLine := System.Copy(GDirectHttpsRequest, 1, LLineEnd - 1);
+    Check(Pos('GET /tls-fluent HTTP/1.1', LReqLine) > 0,
+      'fluent TLS uses origin-form');
   finally
     GDirectHttpsListener.Close;
     platform_thread_join(LHandle, LRet);
@@ -10465,12 +10617,21 @@ begin
   T.Test('WithRetry retries POST with Idempotency-Key', @TestWithRetryRetriesPostWithIdempotencyKey);
   T.Test('HttpIsRetrySafeRequest helpers', @TestHttpIsRetrySafeRequestHelpers);
   T.Test('WithRetry retries 429 with Retry-After:0', @TestWithRetryRetries429WithRetryAfterZero);
+  T.Test('WithRetry retries 429 with past HTTP-date Retry-After',
+    @TestWithRetryRetries429WithHttpDateRetryAfterPast);
   T.Test('WithRetry 503 invalid Retry-After still retries', @TestWithRetryRetries503WithInvalidRetryAfter);
   T.Test('WithRetry does not retry other 4xx', @TestWithRetryDoesNotRetryOther4xx);
   T.Test('HttpGetJson parses object on 200', @TestHttpGetJsonSuccess);
   T.Test('IHttpClient.GetJson parses object on 200', @TestHttpGetJsonMethodSuccess);
   T.Test('HttpGetJson raises hekStatus on 404', @TestHttpGetJsonRaisesOn404);
   T.Test('HttpGetJson raises hekProtocol Op=json on invalid body', @TestHttpGetJsonRaisesOnInvalidJson);
+  T.Test('HttpPostJsonDocument parses object on 200', @TestHttpPostJsonDocumentSuccess);
+  T.Test('HttpPostJsonDocument raises hekStatus on 404',
+    @TestHttpPostJsonDocumentRaisesOn404);
+  T.Test('HttpPostJsonDocument raises hekProtocol Op=json on invalid body',
+    @TestHttpPostJsonDocumentRaisesOnInvalidJson);
+  T.Test('HttpPut/PatchJsonDocument parse object on 200',
+    @TestHttpPutPatchJsonDocumentSuccess);
   T.Test('HttpReadResponseJson parses object', @TestHttpReadResponseJsonSuccess);
   T.Test('CancelToken raises hekCanceled at Send', @TestCancelTokenRaisesHekCanceledAtSend);
   T.Test('CancelToken allows send when not canceled', @TestCancelTokenNotCanceledAllowsSend);
@@ -10486,6 +10647,8 @@ begin
     @TestClientHttpsProxyConnectDenied);
   T.Test('Client direct HTTPS round-trip',
     @TestClientDirectHttpsRoundTrip);
+  T.Test('Client WithTLSContext fluent direct HTTPS',
+    @TestClientWithTLSContextFluentDirectHttps);
   T.Test('Client HTTPS proxy CONNECT Basic auth',
     @TestClientHttpsProxyConnectWithBasicAuth);
   T.Test('Client HTTP proxy absolute-form Basic auth',

@@ -1,15 +1,15 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: Active（Era D 规划中；A–C 已闭合）  
-**Owner**: mem lane（`.worktrees/mem`）  
-**更新**: 2026-07-17  
+**状态**: Active（Era D 规划中；A–C 已闭合）
+**Owner**: mem lane（`.worktrees/mem`）
+**更新**: 2026-07-17
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
 
 ---
 
 ## 1. 一句话
 
-`nextpas.core.mem` 已从「分配器博物馆」收敛为 **stdlib 级默认堆 + 契约 + 诊断 + 上层集成**。  
+`nextpas.core.mem` 已从「分配器博物馆」收敛为 **stdlib 级默认堆 + 契约 + 诊断 + 上层集成**。
 **下一代工作只跟真实 consumer / 回归 / 可证明性能走**，禁止无消费方的新 allocator Phase。
 
 ---
@@ -63,7 +63,7 @@
 
 ## 4. 时代 D — 平台 Steward（新路线图）
 
-**目标**: 在不膨胀表面的前提下，让 mem **难回退、易接入、数字可信**。  
+**目标**: 在不膨胀表面的前提下，让 mem **难回退、易接入、数字可信**。
 **节奏**: 小 slice；默认只改 mem 测试/文档/门面契约；跨模块仅在有命名 consumer 与额外 gate 时做。
 
 ### 4.1 主题（按优先级）
@@ -94,10 +94,10 @@
 
 同时满足即可把时代 D 标为 **Steady**（维护模式，不必再开大里程碑）：
 
-1. D1 门禁在 `origin/main`  
-2. 连续两次 mem landing 无可用性/契约回归  
-3. SCORECARD RELEASE 基线有日期戳且与文档一致  
-4. 无命名 consumer 的开放 P0/P1 需求单  
+1. D1 门禁在 `origin/main`
+2. 连续两次 mem landing 无可用性/契约回归
+3. SCORECARD RELEASE 基线有日期戳且与文档一致
+4. 无命名 consumer 的开放 P0/P1 需求单
 
 Steady 之后默认：**只做 D3 顺手升级 + 修回归**，新里程碑需总控或 consumer 发起。
 
@@ -105,12 +105,12 @@ Steady 之后默认：**只做 D3 顺手升级 + 修回归**，新里程碑需�
 
 ## 5. 明确不做（时代 D 有效期内）
 
-1. 新开「Phase 29：再加一打 allocator」  
-2. 全仓库 unsized `FreeMem` 机械替换  
-3. 倒逼 L0 platform `uses nextpas.core.mem`  
-4. 在 mem worktree 上冲 package DTO / HIR Operands 等 **非 mem owner** 产品表  
-5. raw merge 整条 `mem` 分支进 main  
-6. 把 Tier-3 实验类型重新塞回门面  
+1. 新开「Phase 29：再加一打 allocator」
+2. 全仓库 unsized `FreeMem` 机械替换
+3. 倒逼 L0 platform `uses nextpas.core.mem`
+4. 在 mem worktree 上冲 package DTO / HIR Operands 等 **非 mem owner** 产品表
+5. raw merge 整条 `mem` 分支进 main
+6. 把 Tier-3 实验类型重新塞回门面
 
 跨模块真正需要动别人生产代码时：先 `Needs Review`，path-limited land，验证双方 gate。
 
@@ -137,12 +137,12 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 
 ## 7. 文档权威层级
 
-1. **方向 / 做什么不做**: 本 `ROADMAP.md`  
-2. **可用性分数**: [USABILITY-SCORE.md](USABILITY-SCORE.md)  
-3. **Tier / 门面规则**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3 + [FACADES-SURFACE.md](FACADES-SURFACE.md)  
-4. **怎么用**: [README.md](README.md) + [API-GUIDE.md](API-GUIDE.md) + [ERROR-POLICY.md](ERROR-POLICY.md)  
-5. **契约正文**: [CONTRACT.md](CONTRACT.md)  
-6. **架构边界**: [ARCHITECTURE.md](ARCHITECTURE.md)  
+1. **方向 / 做什么不做**: 本 `ROADMAP.md`
+2. **可用性分数**: [USABILITY-SCORE.md](USABILITY-SCORE.md)
+3. **Tier / 门面规则**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3 + [FACADES-SURFACE.md](FACADES-SURFACE.md)
+4. **怎么用**: [README.md](README.md) + [API-GUIDE.md](API-GUIDE.md) + [ERROR-POLICY.md](ERROR-POLICY.md)
+5. **契约正文**: [CONTRACT.md](CONTRACT.md)
+6. **架构边界**: [ARCHITECTURE.md](ARCHITECTURE.md)
 
 冲突时：以编号更小者为准；过时数字以带日期的 SCORE / SCORECARD 刷新为准。
 

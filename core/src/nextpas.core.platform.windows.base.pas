@@ -44,8 +44,9 @@ type
   LPDWORD = ^DWORD;
   {** @desc LONG 指针类型 *}
   PLONG = ^LONG;
-  {** @desc 64 位整数指针类型 *}
-  PINT64 = ^Int64;
+  {** @desc 64 位整数指针类型（alias System.PInt64; do not redeclare ^Int64
+      or case-insensitive PInt64 shadows break public APIs that use PInt64) *}
+  PINT64 = System.PInt64;
   {** @desc BYTE 指针类型 *}
   LPBYTE = ^BYTE;
   {** @desc LPSTR 指针类型 *}

@@ -9,6 +9,7 @@ uses
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree,
+  nextpas.core.lockfree.base,
   nextpas.core.lockfree.wait,
   nextpas.core.lockfree.ebr,
   nextpas.core.lockfree.channel.spsc,
@@ -1716,7 +1717,7 @@ end;
 procedure TestT1DestroyCallsCloseSourceContract;
 var
   LMpscSource, LSpscSource, LMpmcSource, LSpmcSource, LChannelSource, LChannelSpscSource,
-  LMsQueueSource: string;
+  LMsQueueSource, LSegQueueSource: string;
 begin
   { Safe lifecycle remains Close → join waiters → Free. Destroy must still call Close
     so unblocked teardown paths wake waiters and drain fixed/owned storage. }
@@ -1727,6 +1728,7 @@ begin
   LChannelSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.channel.pas');
   LChannelSpscSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.channel.spsc.pas');
   LMsQueueSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.msqueue.pas');
+  LSegQueueSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.segqueue.pas');
   CheckContains(LMpscSource, 'destructor TMpscQueueImpl.Destroy;',
     'MPSC must keep Destroy override');
   CheckContains(ExtractSection(LMpscSource,
@@ -1757,6 +1759,10 @@ begin
     'destructor TLockFreeMsQueueImpl.Destroy;',
     'function TLockFreeMsQueueImpl.TryEnqueue',
     'MSQueue Destroy body'), 'Close;', 'MSQueue Destroy must call Close');
+  CheckContains(ExtractSection(LSegQueueSource,
+    'destructor TSegQueueImpl.Destroy;',
+    'class procedure TSegQueueImpl.SegQueueReclaimSegment',
+    'SegQueue Destroy body'), 'Close;', 'SegQueue Destroy must call Close');
 end;
 
 procedure AssertNoForbiddenRtlUses(const APath, ALabel: string);
@@ -1939,6 +1945,10 @@ begin
     'test_lockfree_stress.lpr');
   AssertNoForbiddenRtlUses('../../nextpas.core.atomic/test_atomic/test_atomic.lpr',
     'test_atomic.lpr');
+  AssertNoForbiddenRtlUses('../bench_hashmap_read/bench_hashmap_read.lpr',
+    'bench_hashmap_read.lpr');
+  AssertNoForbiddenRtlUses('../bench_hashmap_read/bench_hashmap_comparison.lpr',
+    'bench_hashmap_comparison.lpr');
 
   LMakefile := ReadUtf8TextFile('Makefile');
   CheckContains(LMakefile, 'T2_ISOLATION_COMPILE_SOURCE := test_lockfree_t2_isolation_compile.lpr',
@@ -5619,6 +5629,91 @@ begin
   end;
 end;
 
+procedure TestSegQueueTryExDiagnostics;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(LQ.TryEnqueueEx(11, LErr), 'SegQueue TryEnqueueEx success');
+    Check(LErr = lfteNone, 'SegQueue success error is lfteNone');
+    Check(LQ.TryDequeueEx(LV, LErr), 'SegQueue TryDequeueEx success');
+    CheckEqual(11, LV, 'SegQueue TryDequeueEx value');
+    Check(LErr = lfteNone, 'SegQueue dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SegQueue empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'SegQueue empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(12, LErr), 'SegQueue closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'SegQueue closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SegQueue closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'SegQueue closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestChannelTryExDiagnostics;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  { MPMC channel sequence protocol needs capacity>=2 to observe full (same as capacity-enforce tests). }
+  LCh := TIntChannel.Create(2);
+  try
+    Check(LCh.TrySendEx(21, LErr), 'Channel TrySendEx success');
+    Check(LErr = lfteNone, 'Channel success error is lfteNone');
+    Check(LCh.TrySendEx(20, LErr), 'Channel second TrySendEx success');
+    Check(LErr = lfteNone, 'Channel second success error is lfteNone');
+    Check(not LCh.TrySendEx(22, LErr), 'Channel full TrySendEx fails');
+    Check(LErr = lfteFull, 'Channel full is lfteFull');
+    Check(LCh.TryReceiveEx(LV, LErr), 'Channel TryReceiveEx success');
+    CheckEqual(21, LV, 'Channel TryReceiveEx value');
+    Check(LErr = lfteNone, 'Channel receive success error is lfteNone');
+    Check(LCh.TryReceiveEx(LV, LErr), 'Channel second TryReceiveEx success');
+    CheckEqual(20, LV, 'Channel second TryReceiveEx value');
+    Check(LErr = lfteNone, 'Channel second receive success error is lfteNone');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'Channel empty TryReceiveEx fails');
+    Check(LErr = lfteEmpty, 'Channel empty not closed is lfteEmpty');
+    LCh.Close;
+    Check(not LCh.TrySendEx(23, LErr), 'Channel closed TrySendEx fails');
+    Check(LErr = lfteClosed, 'Channel closed publish is lfteClosed');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'Channel closed empty TryReceiveEx fails');
+    Check(LErr = lfteClosed, 'Channel closed empty is lfteClosed');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscTryExDiagnostics;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LCh := TIntChannelSpsc.Create(1);
+  try
+    Check(LCh.TrySendEx(31, LErr), 'SPSC Channel TrySendEx success');
+    Check(LErr = lfteNone, 'SPSC Channel success error is lfteNone');
+    Check(not LCh.TrySendEx(32, LErr), 'SPSC Channel full TrySendEx fails');
+    Check(LErr = lfteFull, 'SPSC Channel full is lfteFull');
+    Check(LCh.TryReceiveEx(LV, LErr), 'SPSC Channel TryReceiveEx success');
+    CheckEqual(31, LV, 'SPSC Channel TryReceiveEx value');
+    Check(LErr = lfteNone, 'SPSC Channel receive success error is lfteNone');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'SPSC Channel empty TryReceiveEx fails');
+    Check(LErr = lfteEmpty, 'SPSC Channel empty not closed is lfteEmpty');
+    LCh.Close;
+    Check(not LCh.TrySendEx(33, LErr), 'SPSC Channel closed TrySendEx fails');
+    Check(LErr = lfteClosed, 'SPSC Channel closed publish is lfteClosed');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'SPSC Channel closed empty TryReceiveEx fails');
+    Check(LErr = lfteClosed, 'SPSC Channel closed empty is lfteClosed');
+  finally
+    LCh.Free;
+  end;
+end;
+
 procedure TestMsQueueDestroyCloseAndDrain;
 var
   LQ: specialize TLockFreeMsQueue<Integer>;
@@ -5669,6 +5764,9 @@ const
   ForkJoinSourcePath = '../../../src/nextpas.core.lockfree.forkjoin.pas';
   ChannelSourcePath = '../../../src/nextpas.core.lockfree.channel.pas';
   HashMapSourcePath = '../../../src/nextpas.core.lockfree.hashmap.pas';
+  BTreeSourcePath = '../../../src/nextpas.core.lockfree.btree.pas';
+  TrieSourcePath = '../../../src/nextpas.core.lockfree.trie.pas';
+  SelectorImplSourcePath = '../../../src/nextpas.core.lockfree.selector.impl.pas';
   HazardSourcePath = '../../../src/nextpas.core.lockfree.hazard.pas';
   LeftRightSourcePath = '../../../src/nextpas.core.lockfree.leftright.pas';
   BenchMakefilePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/Makefile';
@@ -5701,6 +5799,9 @@ var
   LForkJoinSource: string;
   LChannelSource: string;
   LHashMapSource: string;
+  LBTreeSource: string;
+  LTrieSource: string;
+  LSelectorImplSource: string;
   LHazardSource: string;
   LLeftRightSource: string;
   LBenchMakefile: string;
@@ -5794,6 +5895,9 @@ begin
   LForkJoinSource := ReadUtf8TextFile(ForkJoinSourcePath);
   LChannelSource := ReadUtf8TextFile(ChannelSourcePath);
   LHashMapSource := ReadUtf8TextFile(HashMapSourcePath);
+  LBTreeSource := ReadUtf8TextFile(BTreeSourcePath);
+  LTrieSource := ReadUtf8TextFile(TrieSourcePath);
+  LSelectorImplSource := ReadUtf8TextFile(SelectorImplSourcePath);
   LHazardSource := ReadUtf8TextFile(HazardSourcePath);
   LLeftRightSource := ReadUtf8TextFile(LeftRightSourcePath);
   LBenchMakefile := ReadUtf8TextFile(BenchMakefilePath);
@@ -6298,6 +6402,14 @@ begin
     'sharded hashmap must reject managed keys');
   CheckContains(LHashMapSource, 'if IsManagedType(TValue) then',
     'sharded hashmap must reject managed values');
+  CheckContains(LBTreeSource, 'if IsManagedType(TKey) then',
+    'btree must reject managed keys');
+  CheckContains(LBTreeSource, 'if IsManagedType(TValue) then',
+    'btree must reject managed values');
+  CheckContains(LTrieSource, 'if IsManagedType(TValue) then',
+    'trie must reject managed values');
+  CheckContains(LSelectorImplSource, 'if IsManagedType(T) then',
+    'selector must reject managed element types');
   CheckContains(LSpscSource, 'LockFreeNotifyData(@FDataEpoch, @FDataWaiters)',
     'SPSC queue must notify data waiters after publish');
   CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
@@ -7229,6 +7341,9 @@ begin
   T.Test('SegQueue TryDequeue closed', @TestSegQueueTryDequeueClosed);
   T.Test('SegQueue TryEnqueue closed', @TestSegQueueTryEnqueueClosed);
   T.Test('SegQueue Enqueue raises when closed', @TestSegQueueEnqueueRaisesWhenClosed);
+  T.Test('SegQueue Try*Ex diagnostics', @TestSegQueueTryExDiagnostics);
+  T.Test('Channel Try*Ex diagnostics', @TestChannelTryExDiagnostics);
+  T.Test('Channel SPSC Try*Ex diagnostics', @TestChannelSpscTryExDiagnostics);
   T.Test('MSQueue Destroy Close and drain', @TestMsQueueDestroyCloseAndDrain);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);

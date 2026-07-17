@@ -80,8 +80,12 @@ type
     procedure Enqueue(const AValue: T);
     {** @desc 非阻塞入队；已关闭时返回 False }
     function TryEnqueue(const AValue: T): Boolean;
+    {** @desc 非阻塞入队并返回失败原因；成功 AError=lfteNone }
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 非阻塞出队；队列空时返回 False }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 非阻塞出队并返回失败原因；empty vs closed-empty }
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     {** @desc 关闭队列（已入队数据仍可读出） }
     procedure Close;
@@ -182,6 +186,9 @@ var
   LSeg: PSegment;
   LNext: PSegment;
 begin
+  { Close rejects new publishes; callers must still join concurrent
+    producers/consumers before Free. }
+  Close;
   { Release EBR first: its destructor calls SegQueueReclaimSegment for
     retired segments, which pushes them back into FFreePool. }
   FEbr.Free;
@@ -262,6 +269,21 @@ begin
     Exit(False);
   Publish(AValue);
   Result := True;
+end;
+
+function TSegQueueImpl.TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryEnqueue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  { Unbounded: False is closed under ClosedPublishPolicy. }
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
 end;
 
 function TSegQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
@@ -354,6 +376,20 @@ begin
     end;
     CpuPause;
   end;
+end;
+
+function TSegQueueImpl.TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryDequeue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TSegQueueImpl.IsEmpty: Boolean;

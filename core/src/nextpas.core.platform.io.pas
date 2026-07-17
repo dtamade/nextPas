@@ -661,7 +661,8 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.error;
 
 const
   WINDOWS_INVALID_POLL_SOCKET = PtrUInt(not PtrUInt(0));
@@ -750,7 +751,7 @@ begin
     Move(APoller.Entries^, LNewEntries^,
       SizeUInt(APoller.Count) * SizeOf(TPlatformPollEntry));
   if APoller.Entries <> nil then
-    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(PPlatformPollRegistration));
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(TPlatformPollEntry));
   APoller.Entries := LNewEntries;
   APoller.Capacity := LNewCapacity;
   Result := 0;
@@ -857,7 +858,7 @@ begin
   WindowsCloseSocketValue(APoller.WakeWriteSocket);
   if APoller.Entries <> nil then
   begin
-    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(PPlatformPollRegistration));
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(TPlatformPollEntry));
     APoller.Entries := nil;
   end;
   APoller.Count := 0;

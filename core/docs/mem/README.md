@@ -2,7 +2,7 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-**Lane 状态（2026-07-17）**: 时代 A–C **CLOSED**；当前 **时代 D（Steward）** — 见 **[ROADMAP.md](ROADMAP.md)**。  
+**Lane 状态（2026-07-17）**: 时代 A–C **CLOSED**；当前 **时代 D（Steward）** — 见 **[ROADMAP.md](ROADMAP.md)**。
 可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
 
 ```bash

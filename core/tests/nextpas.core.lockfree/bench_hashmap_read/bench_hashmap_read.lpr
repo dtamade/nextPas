@@ -8,8 +8,8 @@ uses
   nextpas.core.atomic,
   nextpas.core.lockfree,
   nextpas.core.platform.thread,
-  nextpas.core.text.conv,
-  nextpas.core.time;
+  nextpas.core.platform.time,
+  nextpas.core.text.conv;
 
 type
   TIntIntMap = specialize TShardedHashMap<Integer, Integer>;
@@ -43,7 +43,7 @@ begin
     GMap.Find(LOps mod NUM_KEYS, LValue);
     Inc(LOps);
   end;
-  GResults[LIdx] := GetTickCount64 - GStart;
+  GResults[LIdx] := (platform_monotonic_ns - GStart) div 1000000;
   Result := nil;
 end;
 
@@ -73,7 +73,7 @@ begin
       end;
     end;
     { 记录开始时间 }
-    GStart := GetTickCount64;
+    GStart := platform_monotonic_ns;
     { 等待所有线程完成 }
     for LI := 0 to NUM_READERS - 1 do
       platform_thread_join(LHandles[LI], LRetVal);
