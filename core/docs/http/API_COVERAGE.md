@@ -12,11 +12,13 @@
 ## 当前结论
 
 - **向前开发入口**：**仅** [`ROADMAP.md`](ROADMAP.md)（多时代 + Goal Loop；本文件不维护 NEXT Wave 名）。
-- **Stage**：non-H3 stage-complete；H3 诚实 blocked on QUIC。
+- **Stage**：framework-complete (non-H3)；H3 诚实 blocked / 无产品需求。
+- **Excellence**：Era 6（ROADMAP X1–X5）— H1/H2/WS 精品；net/tls 可受控反哺。
 - **可用性 A–I + J/K**：主路径齐；Op hygiene；工厂白名单已冻。
 - **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
 - **前置条件错误**：公开面 nil/非法参数 → `EHttpError(hekArgument)`。
-- **Residual-honest**：cancel ~50ms；server `Default` RW=0；OpenSSL factory unfreed 跨模块。
+- **Residual-honest（可被 Era 6 收敛）**：cancel waitable landed（X2；Windows socketpair residual / probe-only ~10ms）；OpenSSL factory unfreed（X4/tls）；pool 无 idle TTL（X3）；server `Default` RW=0 keep。
+- **WebSocket**：production-helper lifecycle 契约见 CONTRACT §2.2.3c；证据 `test_http_websocket` + `test_http_websocket_client`（含 close lifecycle / cancel Op）。
 - **历史档案**：[`archive/`](archive/README.md)。与 ROADMAP 冲突时以 ROADMAP + 源码为准。
 
 下列 **Public Surface Matrix** 是本文件的主内容：公开契约 ↔ 测试证据。

@@ -312,6 +312,17 @@ const
 function platform_socket_poll(const ASocket: TPlatformSocket;
   const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
 
+{** @desc 等待 ASocket 就绪或 AWake 可读（cancel wake）
+    @param ASocket 业务套接字
+    @param AEvents ASocket 关注事件
+    @param AWake cancel wake 读端（必须有效）
+    @param ATimeoutMs 超时毫秒；&lt;0 无限，0 非阻塞
+    @param ARevents 当返回 1 时为 ASocket 的 revents
+    @return 0 超时，1 ASocket 就绪，2 AWake 可读，&lt;0 错误码 *}
+function platform_socket_poll_or_wake(const ASocket: TPlatformSocket;
+  const AEvents: Int32; const AWake: TPlatformSocket;
+  const ATimeoutMs: Int32; out ARevents: Int32): Int32;
+
 { Sockaddr helpers (from net layer merge) }
 
 {** @desc 构造 IPv4 sockaddr_in 结构
@@ -730,6 +741,43 @@ begin
         Exit(0);
       ARevents := Int32(LPfd.revents);
       Exit(1);
+    end;
+    if platform_get_errno = ESysEINTR then
+      Continue;
+    Exit(-platform_get_errno);
+  until False;
+end;
+
+function platform_socket_poll_or_wake(const ASocket: TPlatformSocket;
+  const AEvents: Int32; const AWake: TPlatformSocket;
+  const ATimeoutMs: Int32; out ARevents: Int32): Int32;
+var
+  LPfds: array[0..1] of TPollFd;
+  LNready: Int32;
+begin
+  ARevents := 0;
+  FillChar(LPfds[0], SizeOf(LPfds), 0);
+  LPfds[0].fd := Int32(ASocket.Value);
+  LPfds[0].events := Int16(AEvents);
+  LPfds[1].fd := Int32(AWake.Value);
+  LPfds[1].events := Int16(PLATFORM_POLL_IN);
+  repeat
+    LNready := poll(@LPfds[0], 2, ATimeoutMs);
+    if LNready >= 0 then
+    begin
+      if LNready = 0 then
+        Exit(0);
+      { Prefer wake so cancel wins races with concurrent peer data. }
+      if (LPfds[1].revents and Int16(PLATFORM_POLL_IN or PLATFORM_POLL_HUP or
+        PLATFORM_POLL_ERR)) <> 0 then
+        Exit(2);
+      if (LPfds[0].revents and Int16(AEvents or PLATFORM_POLL_HUP or
+        PLATFORM_POLL_ERR)) <> 0 then
+      begin
+        ARevents := Int32(LPfds[0].revents);
+        Exit(1);
+      end;
+      Exit(0);
     end;
     if platform_get_errno = ESysEINTR then
       Continue;
@@ -1354,6 +1402,36 @@ begin
   Result := 1;
 end;
 
+function platform_socket_poll_or_wake(const ASocket: TPlatformSocket;
+  const AEvents: Int32; const AWake: TPlatformSocket;
+  const ATimeoutMs: Int32; out ARevents: Int32): Int32;
+var
+  LPfds: array[0..1] of TWSAPollFd;
+  LNready: LongInt;
+begin
+  ARevents := 0;
+  FillChar(LPfds[0], SizeOf(LPfds), 0);
+  LPfds[0].fd := TSocket(ASocket.Value);
+  LPfds[0].events := SmallInt(AEvents);
+  LPfds[1].fd := TSocket(AWake.Value);
+  LPfds[1].events := SmallInt(PLATFORM_POLL_IN);
+  LNready := WSAPoll(@LPfds[0], 2, ATimeoutMs);
+  if LNready < 0 then
+    Exit(-platform_get_last_error);
+  if LNready = 0 then
+    Exit(0);
+  if (LPfds[1].revents and SmallInt(PLATFORM_POLL_IN or PLATFORM_POLL_HUP or
+    PLATFORM_POLL_ERR)) <> 0 then
+    Exit(2);
+  if (LPfds[0].revents and SmallInt(AEvents or PLATFORM_POLL_HUP or
+    PLATFORM_POLL_ERR)) <> 0 then
+  begin
+    ARevents := Int32(LPfds[0].revents);
+    Exit(1);
+  end;
+  Result := 0;
+end;
+
 { --- sockaddr helpers (byte-order + ipv4 forwarding from socket.base) --- }
 
 function platform_htons(AHost: UInt16): UInt16; inline;
@@ -1651,6 +1729,7 @@ function platform_socket_error_would_block(const AError: Int32): Boolean; begin 
 function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_in_progress(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_poll(const ASocket: TPlatformSocket; const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_poll_or_wake(const ASocket: TPlatformSocket; const AEvents: Int32; const AWake: TPlatformSocket; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_pair(ADomain, AType, AProtocol: Int32; out ASocket1, ASocket2: TPlatformSocket): Int32; begin ASocket1.Value := -1; ASocket2.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_getsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;

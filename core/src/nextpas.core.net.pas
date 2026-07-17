@@ -11,6 +11,7 @@ interface
 uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
+  nextpas.core.net.cancel,
   nextpas.core.net.tcp,
   nextpas.core.net.udp,
   nextpas.core.net.resolve;
@@ -20,6 +21,8 @@ type
   TTcpStreamIOResult = nextpas.core.net.intf.TTcpStreamIOResult;
   TTcpAcceptResult = nextpas.core.net.intf.TTcpAcceptResult;
   INetCancelToken = nextpas.core.net.intf.INetCancelToken;
+  INetCancelController = nextpas.core.net.intf.INetCancelController;
+  INetCancelWaitable = nextpas.core.net.intf.INetCancelWaitable;
   ITcpSocketRuntime = nextpas.core.net.intf.ITcpSocketRuntime;
   ITcpStreamRuntime = nextpas.core.net.intf.ITcpStreamRuntime;
   ITcpListenerRuntime = nextpas.core.net.intf.ITcpListenerRuntime;
@@ -34,6 +37,7 @@ function TcpConnect(const AAddr: string; const APort: UInt16;
   const ATimeoutMs: Int64): ITcpStream; inline;
 function UdpBind(const AAddr: string; const APort: UInt16): IUdpSocket; inline;
 function Resolve(const AHost: string): TNetAddress; inline;
+function NewNetCancelToken: INetCancelController; inline;
 
 implementation
 
@@ -61,6 +65,11 @@ end;
 function Resolve(const AHost: string): TNetAddress;
 begin
   Result := nextpas.core.net.resolve.NetResolve(AHost);
+end;
+
+function NewNetCancelToken: INetCancelController;
+begin
+  Result := nextpas.core.net.cancel.NewNetCancelToken;
 end;
 
 end.
