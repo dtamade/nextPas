@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-17 (usability cycle-5: WS dial budget + live e2e + CONTRACT truth)
+> Last updated: 2026-07-17 (usability cycle-8 Wave C: GetJson ensure+decode + Retry-After/429)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -19,9 +19,13 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 
 This lane is **non-H3 stage-complete** on protocol surface. Usability-fix
 waves **1–3 are closed**; **cycle-4** landed H1/H2 OS dial timeout + mid-read
-cancel parity + fluent `WithConnectTimeout`; **cycle-5** lands WebSocket dial
-budgets (Default 30s), CONTRACT §2.1 truth, live H1 dial/cancel e2e, and
-redirect CreateOp polish (see `2026-07-17-usability-cycle5-fix-plan.md`).
+cancel parity + fluent `WithConnectTimeout`; **cycle-5** landed WebSocket dial
+budgets (Default 30s), CONTRACT §2.1 truth, live H1 dial/cancel e2e;
+**cycle-7 Wave B** lands WS mid-frame cancel (`WithCancelToken`), H2 live dial
+e2e, client redirect CreateOp polish, and inventory docs truth;
+**cycle-8 Wave C** lands ensure+decode JSON (`HttpGetJson` / `GetJson` /
+`HttpReadResponseJson`) and `WithRetry` **429 + Retry-After** (delta-seconds,
+cap 60s) (see `2026-07-17-usability-cycle8-fix-plan.md`).
 Prior waves (D1–D8):
 
 - G0–G5 and H3 honesty remain as previously closed (see below / Recent Fixes).

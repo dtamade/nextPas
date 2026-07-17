@@ -4,6 +4,7 @@ program test_platform_dl;
 
 uses
   nextpas.core.platform.dl,
+  nextpas.core.platform.error,
   nextpas.core.test;
 
 var
@@ -141,7 +142,7 @@ var
   R: Int32;
 begin
   R := platform_dl_error(nil, 256);
-  Check(R < 0, 'nil buffer returns error');
+  Check(R = PLATFORM_ERR_INVALID, 'nil buffer returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestErrorZeroLength;
@@ -150,7 +151,7 @@ var
   R: Int32;
 begin
   R := platform_dl_error(@Buf[0], 0);
-  Check(R < 0, 'zero length returns error');
+  Check(R = PLATFORM_ERR_INVALID, 'zero length returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestResolveMultiple;

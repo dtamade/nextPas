@@ -37,6 +37,7 @@ type
     function Get(const AUrl: string): IHttpResponse;
     function GetString(const AUrl: string): string;
     function GetBytes(const AUrl: string): TBytes;
+    function GetJson(const AUrl: string): IJsonDocument;
     function PostString(const AUrl, AContentType, ABody: string): string;
     function PutString(const AUrl, AContentType, ABody: string): string;
     function PatchString(const AUrl, AContentType, ABody: string): string;
@@ -87,6 +88,7 @@ type
     function Get(const AUrl: string): IHttpResponse; virtual;
     function GetString(const AUrl: string): string; virtual;
     function GetBytes(const AUrl: string): TBytes; virtual;
+    function GetJson(const AUrl: string): IJsonDocument; virtual;
     function PostString(const AUrl, AContentType, ABody: string): string; virtual;
     function PutString(const AUrl, AContentType, ABody: string): string; virtual;
     function PatchString(const AUrl, AContentType, ABody: string): string; virtual;
@@ -198,6 +200,14 @@ function HttpEnsureSuccess(const AResp: IHttpResponse;
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
 {** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
+{** @desc Ensure 2xx and parse response body as JSON document.
+   Invalid JSON raises EHttpError(hekProtocol, Op=json). }
+function HttpReadResponseJson(const AResp: IHttpResponse): IJsonDocument; overload;
+{** @desc Same as HttpReadResponseJson, with method/URL prefix in error messages. }
+function HttpReadResponseJson(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IJsonDocument; overload;
+{** @desc GET url, ensure 2xx, parse body as JSON document. Raises on non-2xx or invalid JSON. }
+function HttpGetJson(const AClient: IHttpClient; const AUrl: string): IJsonDocument;
 {** @desc POST with body, ensure 2xx, return response body as string. Raises on non-2xx. }
 function HttpPostString(const AClient: IHttpClient;
   const AUrl, AContentType, ABody: string): string;
@@ -486,9 +496,11 @@ begin
   Result := TUrl.Parse(AUrl);
   Result.Scheme := AScheme;
   if Result.Host = '' then
-    raise EHttpError.Create(hekRedirect, 'redirect URL host is empty');
+    raise EHttpError.CreateOp(hekRedirect, 'redirect',
+      'redirect URL host is empty');
   if not RedirectAuthorityPortIsValid(AUrl) then
-    raise EHttpError.Create(hekRedirect, 'redirect URL port is invalid');
+    raise EHttpError.CreateOp(hekRedirect, 'redirect',
+      'redirect URL port is invalid');
 end;
 
 function DefaultPortForScheme(const AScheme: string): UInt16;
@@ -599,7 +611,8 @@ begin
   if (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit;
   if ABodyStream = nil then
-    raise EHttpError.Create(hekBody, 'redirect request body is not replayable');
+    raise EHttpError.CreateOp(hekBody, 'redirect',
+      'redirect request body is not replayable');
   ABodyStream.Position := AStartPosition;
 end;
 
@@ -707,13 +720,15 @@ begin
   if LScheme <> '' then
   begin
     if (LScheme <> 'http') and (LScheme <> 'https') then
-      raise EHttpError.Create(hekRedirect, 'unsupported redirect URL scheme: ' + LScheme);
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
+        'unsupported redirect URL scheme: ' + LScheme);
     Exit(ParseRedirectAuthorityUrl(ALocation, LScheme));
   end;
   if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
   begin
     if ABaseUrl.Scheme = '' then
-      raise EHttpError.Create(hekRedirect, 'network-path redirect requires base URL scheme');
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
+        'network-path redirect requires base URL scheme');
     Exit(ParseRedirectAuthorityUrl(ABaseUrl.Scheme + ':' + ALocation,
       ABaseUrl.Scheme));
   end;
@@ -965,6 +980,11 @@ end;
 function THttpClient.GetBytes(const AUrl: string): TBytes;
 begin
   Result := HttpGetBytes(Self, AUrl);
+end;
+
+function THttpClient.GetJson(const AUrl: string): IJsonDocument;
+begin
+  Result := HttpGetJson(Self, AUrl);
 end;
 
 function THttpClient.PostString(const AUrl, AContentType, ABody: string): string;
@@ -1222,6 +1242,11 @@ end;
 function THttpClientForwarder.GetBytes(const AUrl: string): TBytes;
 begin
   Result := HttpGetBytes(Self, AUrl);
+end;
+
+function THttpClientForwarder.GetJson(const AUrl: string): IJsonDocument;
+begin
+  Result := HttpGetJson(Self, AUrl);
 end;
 
 function THttpClientForwarder.PostString(const AUrl, AContentType,
@@ -1614,6 +1639,68 @@ begin
     (Result as IHttpRequestWithOptions).SetRequestOptions(LOpts.RequestOptions);
 end;
 
+function HttpStatusIsRetryable(const AStatus: THttpStatus): Boolean;
+begin
+  { 429 Too Many Requests + entire 5xx class. Other 4xx stay terminal. }
+  Result := (AStatus = HTTP_STATUS_TOO_MANY_REQUESTS) or
+    ((AStatus >= THttpStatus(500)) and (AStatus <= THttpStatus(599)));
+end;
+
+function TryHttpParseRetryAfterMs(const AHeaders: IHttpHeaders;
+  out ADelayMs: Int64): Boolean;
+var
+  LRaw: string;
+  LSec: Int64;
+begin
+  Result := False;
+  ADelayMs := 0;
+  if AHeaders = nil then
+    Exit;
+  LRaw := Trim(AHeaders.Get('retry-after'));
+  if LRaw = '' then
+    Exit;
+  { Delta-seconds only this slice; HTTP-date forms are ignored (honest Deferred). }
+  if not TryStrToInt64(LRaw, LSec) then
+    Exit;
+  if LSec < 0 then
+    Exit;
+  if LSec > 60 then
+    LSec := 60;
+  ADelayMs := LSec * 1000;
+  Result := True;
+end;
+
+function HttpRetryBackoffMs(const AAttempt: Int32): Int64;
+begin
+  { AAttempt is 1-based after first failure: 100, 200, 400, ... cap 5s. }
+  if AAttempt <= 0 then
+    Exit(100);
+  Result := Int64(100) shl (AAttempt - 1);
+  if Result > 5000 then
+    Result := 5000;
+end;
+
+procedure HttpRetrySleepMs(const ADelayMs: Int64;
+  const ACancel: IHttpCancelToken);
+var
+  LRemaining: Int64;
+  LSlice: Int64;
+begin
+  if ADelayMs <= 0 then
+    Exit;
+  LRemaining := ADelayMs;
+  while LRemaining > 0 do
+  begin
+    HttpThrowIfCanceled(ACancel);
+    LSlice := LRemaining;
+    if LSlice > 100 then
+      LSlice := 100;
+    platform_thread_sleep_ns(UInt64(LSlice) * 1000000);
+    Dec(LRemaining, LSlice);
+  end;
+  HttpThrowIfCanceled(ACancel);
+end;
+
 function TRetryClient.Send(const AReq: IHttpRequest): IHttpResponse;
 var
   LAttempt: Int32;
@@ -1622,6 +1709,7 @@ var
   LHasBody: Boolean;
   LReq: IHttpRequest;
   LBodyStream: IStream;
+  LRetryAfterMs: Int64;
 begin
   { Non-idempotent requests never enter the retry loop (matches H1/H2 pool). }
   if (AReq = nil) or (not HttpIsRetrySafeRequest(AReq)) or (FMaxRetries <= 0) then
@@ -1655,25 +1743,25 @@ begin
       LReq := AReq;
     try
       Result := inherited Send(LReq);
-      if (Result = nil) or (Result.StatusCode < 500) or
-         (Result.StatusCode > 599) then
+      if (Result = nil) or (not HttpStatusIsRetryable(Result.StatusCode)) then
         Exit;
       if LAttempt >= FMaxRetries then
         Exit;
+      if TryHttpParseRetryAfterMs(Result.Headers, LRetryAfterMs) then
+        LBackoffMs := LRetryAfterMs
+      else
+        LBackoffMs := HttpRetryBackoffMs(LAttempt + 1);
       HttpReleaseResponseBody(Result);
     except
       on E: Exception do
       begin
         if (not HttpErrorIsRetryable(E)) or (LAttempt >= FMaxRetries) then
           raise;
+        LBackoffMs := HttpRetryBackoffMs(LAttempt + 1);
       end;
     end;
     Inc(LAttempt);
-    HttpThrowIfCanceled(RequestCancelToken(AReq));
-    LBackoffMs := 100 shl (LAttempt - 1); // 100, 200, 400, ...
-    if LBackoffMs > 5000 then
-      LBackoffMs := 5000;
-    platform_thread_sleep_ns(UInt64(LBackoffMs) * 1000000);
+    HttpRetrySleepMs(LBackoffMs, RequestCancelToken(AReq));
   end;
 end;
 
@@ -1936,6 +2024,39 @@ begin
   try
     HttpEnsureSuccess(LResp, 'GET', AUrl);
     Result := HttpReadResponseBodyBytes(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpReadResponseJson(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IJsonDocument;
+var
+  LBody: string;
+begin
+  HttpEnsureSuccess(AResp, AMethod, AUrl);
+  LBody := HttpReadResponseBodyString(AResp);
+  Result := JsonParse(LBody);
+  if (Result <> nil) and Result.HasError then
+    raise EHttpError.CreateOp(hekProtocol, 'json',
+      FormatHttpClientError(AMethod, AUrl, 'HTTP response body contains invalid JSON'));
+end;
+
+function HttpReadResponseJson(const AResp: IHttpResponse): IJsonDocument;
+begin
+  Result := HttpReadResponseJson(AResp, '', '');
+end;
+
+function HttpGetJson(const AClient: IHttpClient; const AUrl: string): IJsonDocument;
+var
+  LResp: IHttpResponse;
+begin
+  if AClient = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP client is nil');
+  LResp := AClient.Get(AUrl);
+  try
+    Result := HttpReadResponseJson(LResp, 'GET', AUrl);
   except
     HttpReleaseResponseBody(LResp);
     raise;

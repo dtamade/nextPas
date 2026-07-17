@@ -363,6 +363,7 @@ function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
 var
   LWhence: Int32;
 begin
+  ANewPos := -1;
   case AOrigin of
     fsoBegin:   LWhence := 0;
     fsoCurrent: LWhence := 1;
@@ -487,11 +488,9 @@ var
          {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
          {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
+  FillChar(AStat, SizeOf(AStat), 0);
   if APath = nil then
-  begin
-    FillChar(AStat, SizeOf(AStat), 0);
     Exit(PLATFORM_ERR_INVALID);
-  end;
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, 0) <> 0 then
     Exit(platform_get_errno);
@@ -514,11 +513,9 @@ var
          {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
          {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
+  FillChar(AStat, SizeOf(AStat), 0);
   if APath = nil then
-  begin
-    FillChar(AStat, SizeOf(AStat), 0);
     Exit(PLATFORM_ERR_INVALID);
-  end;
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, AT_SYMLINK_NOFOLLOW) <> 0 then
     Exit(platform_get_errno);
@@ -1054,6 +1051,7 @@ function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
 var
   LMethod: DWORD;
 begin
+  ANewPos := -1;
   case AOrigin of
     fsoBegin:   LMethod := FILE_BEGIN;
     fsoCurrent: LMethod := FILE_CURRENT;
@@ -1450,8 +1448,8 @@ end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean; APerm: UInt32; out AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32; begin AHandle.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean; APerm: UInt32; out AHandle: TPlatformFileHandle): Int32; begin AHandle.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; out ABytesRead: PtrUInt): Int32; begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;

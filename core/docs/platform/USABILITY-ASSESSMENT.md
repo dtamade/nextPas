@@ -1,8 +1,11 @@
 # nextpas.core.platform 可用性评估报告
 
-> **HISTORICAL (2026-07-06).** Scores below are **not** current authority.
-> Live contract: [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md), [ERROR-HANDLING.md](ERROR-HANDLING.md),
-> [CONTRACT.md](CONTRACT.md). Re-assessed 2026-07-17 at ~6.9/10 before remediation.
+> **HISTORICAL (2026-07-06). Do not cite scores below as current.**
+>
+> **Current wave-4 baseline (2026-07-17, post wave-3 land): 8.21/10 LOW-MEDIUM**
+> Prior pre-fix wave-3 assessment was 7.91. Body below is historical 2026-07-06 detail.
+> Live contracts: [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md), [ERROR-HANDLING.md](ERROR-HANDLING.md),
+> [CONTRACT.md](CONTRACT.md), [EXAMPLES.md](EXAMPLES.md), [API-REFERENCE.md](API-REFERENCE.md).
 
 **日期**: 2026-07-06
 **评估人**: Claude (AI)

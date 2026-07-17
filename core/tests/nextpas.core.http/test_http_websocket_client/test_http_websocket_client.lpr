@@ -211,15 +211,23 @@ end;
 procedure TestWebSocketOptionsDefaultTimeouts;
 var
   LOpts: TWebSocketOptions;
+  LToken: IHttpCancelToken;
 begin
   LOpts := TWebSocketOptions.Default;
   CheckEqual(Int64(30000), LOpts.ConnectTimeout,
     'Default ConnectTimeout is 30000 (production discipline)');
   CheckEqual(Int64(30000), LOpts.Timeout,
     'Default Timeout is 30000 for handshake I/O');
+  CheckEqual(False, LOpts.HasCancelToken,
+    'Default has no cancel token');
+  Check(LOpts.EffectiveCancelToken = nil, 'Default EffectiveCancelToken is nil');
   LOpts := LOpts.WithConnectTimeout(1500).WithTimeout(5000);
   CheckEqual(Int64(1500), LOpts.ConnectTimeout, 'WithConnectTimeout sets field');
   CheckEqual(Int64(5000), LOpts.Timeout, 'WithTimeout sets field');
+  LToken := NewHttpCancelToken;
+  LOpts := LOpts.WithCancelToken(LToken);
+  CheckEqual(True, LOpts.HasCancelToken, 'WithCancelToken sets HasCancelToken');
+  Check(LOpts.EffectiveCancelToken = LToken, 'EffectiveCancelToken returns token');
 end;
 
 procedure TestWebSocketConnectTimeoutSourceContract;
@@ -237,6 +245,68 @@ begin
     'deadlines cleared after successful upgrade');
   Check(Pos('Result.ConnectTimeout := 30000;', LSource) > 0,
     'Default ConnectTimeout is 30000');
+  Check(Pos('ApplyWebSocketCancelToken(LActive, AOptions.EffectiveCancelToken);',
+    LSource) > 0, 'cancel token applied on active stream after dial');
+  Check(Pos('procedure TWebSocketImpl.ThrowIfCanceled;', LSource) > 0,
+    'mid-frame paths have ThrowIfCanceled helper');
+  Check(Pos('function WithCancelToken(const AToken: IHttpCancelToken)',
+    LSource) > 0, 'TWebSocketOptions exposes WithCancelToken');
+end;
+
+procedure TestWebSocketCanceledBeforeReadRaises;
+var
+  LToken: IHttpCancelToken;
+  LOpts: TWebSocketOptions;
+  LWs: IWebSocket;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LHandle: TPlatformThreadHandle;
+  LPort: UInt16;
+  LGot: Boolean;
+  LKind: THttpErrorKind;
+begin
+  { Entry-point cancel is deterministic without multi-thread hold. }
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LServerWs: IWebSocket;
+  begin
+    LServerWs := UpgradeWebSocket(AReq, AW);
+    { Hold open without writing frames so client ReadFrame can observe cancel. }
+    try
+      LServerWs.ReadFrame;
+    except
+      on E: Exception do ;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LToken := NewHttpCancelToken;
+    LOpts := TWebSocketOptions.Default.WithCancelToken(LToken);
+    LWs := ConnectWebSocket('ws://127.0.0.1:' + IntToStr(LPort) + '/ws', LOpts);
+    LToken.Cancel;
+    LGot := False;
+    LKind := hekUnknown;
+    try
+      LWs.ReadFrame;
+    except
+      on E: EHttpError do
+      begin
+        LKind := E.Kind;
+        LGot := E.Kind = hekCanceled;
+      end;
+    end;
+    Check(LGot, 'pre-canceled ReadFrame raises hekCanceled (kind=' +
+      IntToStr(Ord(LKind)) + ')');
+    try
+      LWs.Close(1000, 'bye');
+    except
+      on E: Exception do ;
+    end;
+    LWs := nil;
+  finally
+    StopServer(LServer, LHandle);
+  end;
 end;
 
 { Live WS dial timeout via backlog-full peer (same technique as test_net). }
@@ -312,6 +382,8 @@ begin
   T.Test('WebSocket options default timeouts', @TestWebSocketOptionsDefaultTimeouts);
   T.Test('WebSocket ConnectTimeout source contract',
     @TestWebSocketConnectTimeoutSourceContract);
+  T.Test('WebSocket canceled before ReadFrame raises hekCanceled',
+    @TestWebSocketCanceledBeforeReadRaises);
   T.Test('WebSocket live ConnectTimeout via backlog-full peer',
     @TestWebSocketLiveConnectTimeout);
 
