@@ -121,6 +121,10 @@ type
     { Max idle connections retained per pool authority (host/port/scheme key).
       Default 64. Not a global cap across authorities. }
     MaxPoolSize: Int32;
+    { Max wall-clock idle time (ms) for a pooled connection before PoolGet
+      discards it. Default 90000. 0 = no TTL (only CloseIdleConnections /
+      destroy / MaxPoolSize). }
+    IdleTTL: Int64;
     FollowRedirects: Boolean;
     Version: THttpVersion;
     UseRegistryVersion: Boolean;
@@ -135,6 +139,7 @@ type
     function WithMaxRedirects(const AMaxRedirects: Int32): THttpClientOptions;
     function WithFollowRedirects(const AFollow: Boolean): THttpClientOptions;
     function WithMaxPoolSize(const AMaxPoolSize: Int32): THttpClientOptions;
+    function WithIdleTTL(const AIdleTTLMs: Int64): THttpClientOptions;
     function WithVersion(const AVersion: THttpVersion): THttpClientOptions;
     function WithProxyUrl(const AProxyUrl: string): THttpClientOptions;
     function WithTLSContext(const ATLSContext: ISSLContext): THttpClientOptions;
@@ -963,6 +968,7 @@ begin
   Result.ConnectTimeout := 0;
   Result.MaxRedirects := 10;
   Result.MaxPoolSize := 64;
+  Result.IdleTTL := 90000;
   Result.FollowRedirects := True;
   Result.Version := hvHttp11;
   Result.UseRegistryVersion := True;
@@ -1007,6 +1013,12 @@ function THttpClientOptions.WithMaxPoolSize(const AMaxPoolSize: Int32): THttpCli
 begin
   Result := Self;
   Result.MaxPoolSize := AMaxPoolSize;
+end;
+
+function THttpClientOptions.WithIdleTTL(const AIdleTTLMs: Int64): THttpClientOptions;
+begin
+  Result := Self;
+  Result.IdleTTL := AIdleTTLMs;
 end;
 
 function THttpClientOptions.WithVersion(

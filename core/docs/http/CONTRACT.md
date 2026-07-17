@@ -571,7 +571,7 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 | `MaxPoolSize` | **每 authority 最大空闲连接数**（默认 64）；**不是**跨 host 全局上限 | `test_http_client` / `test_http_h2_client` per-authority |
 | Idle put | 仅 keep-alive / `IsReusable` 连接入池；超 per-authority 上限则关闭新归还连接 | pool max / non-reusable tests |
 | Idle clear | `IHttpClient.CloseIdleConnections` → transport `IHttpTransportIdleConnections.CloseIdleConnections` 清空全部 authority 的空闲项；destroy 亦 `PoolClear` | CloseIdle + destroy source-contract |
-| 无 idle TTL | 当前**无**按墙钟自动淘汰空闲连接；调用方用 `CloseIdleConnections` 或进程结束 | residual（诚实）；**Era 6 Wave X3** 计划消除 |
+| `IdleTTL` | 墙钟空闲淘汰（默认 **90000** ms）；`WithIdleTTL` 外层胜；**0** = 关闭墙钟淘汰；负值 `hekArgument`；借出/归还路径淘汰过期项（`IdleAtMs` 在 put 时打戳） | `test_http_client` IdleTTL expires / IdleTTL=0 keep；H1/H2 同源实现 |
 | 并发模型 | 同步 `RoundTrip` 串行一流；同 transport 可多线程各自 RoundTrip（池 mutex）；**无**同连接多路 API | A1 residual |
 
 #### H1 / H2 选择策略（Wave A2）
