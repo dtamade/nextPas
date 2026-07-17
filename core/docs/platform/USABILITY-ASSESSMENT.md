@@ -1,8 +1,11 @@
 # nextpas.core.platform 可用性评估报告
 
-> **HISTORICAL (2026-07-06).** Scores below are **not** current authority.
-> Live contract: [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md), [ERROR-HANDLING.md](ERROR-HANDLING.md),
-> [CONTRACT.md](CONTRACT.md). Re-assessed 2026-07-17 at ~6.9/10 before remediation.
+> **HISTORICAL (2026-07-06). Do not cite scores below as current.**
+>
+> **Current wave-3 baseline (2026-07-17): 7.91/10 MEDIUM-LOW**
+> Scratch report: `/tmp/grok-goal-platform-usability-wave3-20260717/USABILITY-ASSESSMENT.md`
+> Live contracts: [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md), [ERROR-HANDLING.md](ERROR-HANDLING.md),
+> [CONTRACT.md](CONTRACT.md), [EXAMPLES.md](EXAMPLES.md).
 
 **日期**: 2026-07-06
 **评估人**: Claude (AI)

@@ -38,6 +38,14 @@ Wine matrix promotion). Wine compile remains environment-dependent
 - Full production RTL uses scan + expanded out-init contracts in return_semantics gate
 - Windows/macOS/Android truth tiers **unchanged** (no fake promotion)
 
+### 2026-07-17 usability residual wave-3 (assessment 7.91)
+
+- BEST-PRACTICES rewritten to live APIs; `api-reference.md` redirect-only; historical USABILITY banner points to wave-3 score
+- `platform_dl_error` length failure → `PLATFORM_ERR_INVALID`; RETURN length/out-init/stub rules expanded
+- files seek/stat out-init strengthened; return_semantics contracts for dl_error / seek / stat / BEST-PRACTICES ghosts
+- F6 raw OS side-channel **Won't this wave**; F7 POSIX/Windows asymmetry **documented**; F10 diagnostics deferred
+- Host truth tiers **unchanged** (no fake promotion)
+
 ## Host Status
 
 | Host | Current truth | Required next proof |

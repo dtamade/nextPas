@@ -23,6 +23,9 @@ Authority companion to [CONTRACT.md](CONTRACT.md). Live constants: `nextpas.core
 9. `PLATFORM_ERR_PATH_TOO_LONG` stays **-7** (domain path clamp); not OS `ENAMETOOLONG` (36).
 10. `PLATFORM_FS_SHORT_*_ERROR` aliases `PLATFORM_ERR_IO` (5) — no parallel `-5`/`-6` public values.
 11. `platform_parse_*` is **error-code**: success `0`, failure `PLATFORM_ERR_INVALID` (not bare `-1`). Index find APIs remain value/sentinel (`-1` = not found).
+12. **Length APIs** (`platform_fmt_*`, `platform_str_lower/upper/trim`, `platform_dl_error`, `platform_error_message`, …): success returns `>= 0` written length; **failure returns `PLATFORM_ERR_*`** (callers may use `if L < 0`). Never bare `-1` for portable buffer/arg failure on non-deprecated length APIs.
+13. **Out-init**: for error-code APIs with `out` handles/positions/stats, initialize sentinels **before** host work (`AHandle.Value := -1`, `ANewPos := -1`, `FillChar(AStat, …)`, …) so failure paths never leave out-params undefined.
+14. **Error-code stubs** on unsupported hosts must return `PLATFORM_ERR_UNSUPPORTED` (or another `PLATFORM_ERR_*`), not bare `Result := -1` (value/sentinel APIs may still use domain `-1`).
 
 ## files / fs / io stance
 

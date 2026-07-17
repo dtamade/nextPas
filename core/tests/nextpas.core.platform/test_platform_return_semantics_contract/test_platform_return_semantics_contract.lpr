@@ -15,6 +15,7 @@ uses
   nextpas.core.exception,
   nextpas.core.platform.error,
   nextpas.core.platform.fmt,
+  nextpas.core.platform.dl,
   nextpas.core.platform.args,
   nextpas.core.platform.resource,
   nextpas.core.platform.resource.base,
@@ -443,6 +444,17 @@ begin
   Check(Pos('fileio', LEx) = 0, 'EXAMPLES.md must not reference ghost unit fileio');
   Check(Pos('platform_net_', LEx) = 0, 'EXAMPLES.md must not use ghost platform_net_*');
   Check(Pos('platform.files', LEx) > 0, 'EXAMPLES.md uses live platform.files');
+
+  { BEST-PRACTICES must not reintroduce ghosts; point to live files/socket }
+  LEx := LowerCase(FsReadFileText(ResolveDocs('BEST-PRACTICES.md')));
+  Check(Pos('platform_net_', LEx) = 0, 'BEST-PRACTICES no platform_net_*');
+  { ghost type was TPlatformFile alone; live types are TPlatformFileHandle/Stat/... }
+  Check(Pos('tplatformfile;', LEx) = 0, 'BEST-PRACTICES no bare TPlatformFile ghost type');
+  Check(Pos('platform_invalid_handle', LEx) = 0, 'BEST-PRACTICES no PLATFORM_INVALID_HANDLE ghost');
+  Check(Pos('platform_file_open', LEx) > 0, 'BEST-PRACTICES uses live platform_file_open');
+  Check(Pos('fomreadonly', LEx) > 0, 'BEST-PRACTICES uses fomReadOnly mode enum');
+  Check(Pos('tplatformfilehandle', LEx) > 0, 'BEST-PRACTICES uses live TPlatformFileHandle');
+  Check(Pos('platform_socket_create', LEx) > 0, 'BEST-PRACTICES uses live socket create');
 end;
 
 procedure TestOutInitOnSpawnSource;
@@ -468,10 +480,48 @@ begin
     'files open_ex initializes AHandle to invalid before work');
   Check(Pos('ABytesRead := 0', LFiles) > 0,
     'files read initializes ABytesRead out-param');
+  Check(Pos('ANewPos := -1', LFiles) > 0,
+    'files seek initializes ANewPos sentinel before work');
+  Check(Pos('FillChar(AStat, SizeOf(AStat), 0)', LFiles) > 0,
+    'files stat zero-initializes AStat out-param');
 
   LSock := ReadRaw(ResolveSrc('nextpas.core.platform.socket.pas'));
   Check(Pos('ASocket.Value := -1', LSock) > 0,
     'socket create unsupported/failure sets socket sentinel');
+end;
+
+procedure TestDlErrorAndLengthContracts;
+var
+  LDl, LRet: string;
+  LBuf: array[0..7] of AnsiChar;
+  R: Int32;
+begin
+  LDl := ReadRaw(ResolveSrc('nextpas.core.platform.dl.pas'));
+  Check(Pos('Exit(PLATFORM_ERR_INVALID)', LDl) > 0,
+    'dl_error uses PLATFORM_ERR_INVALID for bad buffer');
+  Check(Pos('Exit(-1)', LDl) = 0, 'dl.pas has no bare Exit(-1)');
+
+  R := platform_dl_error(nil, 256);
+  Check(R = PLATFORM_ERR_INVALID, 'dl_error nil buffer is PLATFORM_ERR_INVALID');
+  R := platform_dl_error(@LBuf[0], 0);
+  Check(R = PLATFORM_ERR_INVALID, 'dl_error zero size is PLATFORM_ERR_INVALID');
+
+  LRet := LowerCase(FsReadFileText(ResolveDocs('RETURN-SEMANTICS.md')));
+  Check(Pos('platform_dl_error', LRet) > 0, 'RETURN documents dl_error length tier');
+  Check(Pos('out-init', LRet) > 0, 'RETURN documents out-init rule');
+end;
+
+procedure TestErrorCodeApisNoBareMinusOneStub;
+var
+  LFiles, LSock, LErr: string;
+begin
+  { focused error-code modules: no Result := -1 stubs }
+  LFiles := ReadRaw(ResolveSrc('nextpas.core.platform.files.pas'));
+  Check(Pos('Result := -1', LFiles) = 0, 'files.pas no Result := -1');
+  LSock := ReadRaw(ResolveSrc('nextpas.core.platform.socket.pas'));
+  Check(Pos('Result := -1', LSock) = 0, 'socket.pas no Result := -1');
+  LErr := ReadRaw(ResolveSrc('nextpas.core.platform.error.pas'));
+  Check(Pos('Result := -1', LErr) = 0, 'error.pas no Result := -1');
 end;
 
 procedure TestShortAliasAndParseContracts;
@@ -523,6 +573,8 @@ begin
   T.Test('dual-API deprecation signals + EXAMPLES no SysUtils', @TestDualApiDeprecationSignals);
   T.Test('out-init on spawn/pipe source contracts', @TestOutInitOnSpawnSource);
   T.Test('out-init files open + socket create', @TestOutInitFilesAndSocket);
+  T.Test('dl_error INVALID + length contracts', @TestDlErrorAndLengthContracts);
+  T.Test('error-code modules no bare Result := -1', @TestErrorCodeApisNoBareMinusOneStub);
   T.Test('SHORT alias IO + parse INVALID contracts', @TestShortAliasAndParseContracts);
   T.Test('windows io_close is error-code API', @TestIoCloseIsErrorCodeApi);
   T.Test('resource uses PLATFORM_ERR_* family', @TestResourceUsesPlatformErr);

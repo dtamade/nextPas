@@ -155,6 +155,10 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 - **单一错误族**: 资源限制等 API 同样返回 `PLATFORM_ERR_*`，无独立 `PLATFORM_RESOURCE_ERROR_*` 公共语言
 - **RTL 隔离**: 生产/测试/示例 platform 不得 `uses` FPC RTL；`platform.args` 不得依赖 `ParamCount`/`ParamStr`
 - **parse 失败**: `platform_parse_*` 返回 `PLATFORM_ERR_INVALID`，禁止 bare `-1` 作为错误码
+- **length 失败**: `platform_fmt_*` / `platform_dl_error` / `platform_error_message` 等 length API 失败返回 `PLATFORM_ERR_*`（禁止 bare `-1`，deprecated 包装除外）
+- **out-init**: error-code + `out` 参数在宿主调用前写 sentinel（见 RETURN-SEMANTICS §13）
+- **convenience managed API**: `platform_env_get_str` 等返回 `AnsiString` 的接口为 **FPC 便捷面**，非稳定 C ABI；可移植核心路径优先 `PAnsiChar` buffer API
+- **文档权威**: API 目录以 `API-REFERENCE.md` 为准；`api-reference.md` 仅为 redirect；示例以 `EXAMPLES.md` / `BEST-PRACTICES.md`（live）为准
 
 ### 3.1 files / fs / io 边界
 
