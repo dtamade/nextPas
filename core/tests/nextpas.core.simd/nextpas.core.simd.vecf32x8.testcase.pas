@@ -335,7 +335,7 @@ var
 begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should not be nil');
-  CheckTrue(Assigned(dt^.ClampF32x8), 'Dispatch.ClampF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ClampF32x8), 'Dispatch.CoreVectors.ClampF32x8 should be assigned');
 
   a.f[0] := -10.0;  // 低于下界
   a.f[1] := 0.0;    // 等于下界
@@ -349,7 +349,7 @@ begin
   minV := ScalarSplatF32x8(0.0);
   maxV := ScalarSplatF32x8(10.0);
 
-  c := dt^.ClampF32x8(a, minV, maxV);
+  c := dt^.CoreVectors.ClampF32x8(a, minV, maxV);
 
   CheckNear(0.0, c.f[0], F32x8_TOLERANCE, 'F32x8 Clamp [-10] -> 0');
   CheckNear(0.0, c.f[1], F32x8_TOLERANCE, 'F32x8 Clamp [0] -> 0');
@@ -368,7 +368,7 @@ var
 begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should not be nil');
-  CheckTrue(Assigned(dt^.FloorF32x8), 'Dispatch.FloorF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.FloorF32x8), 'Dispatch.CoreVectors.FloorF32x8 should be assigned');
 
   a.f[0] := 2.7;
   a.f[1] := 2.3;
@@ -379,7 +379,7 @@ begin
   a.f[6] := -3.0;
   a.f[7] := 0.999;
 
-  c := dt^.FloorF32x8(a);
+  c := dt^.CoreVectors.FloorF32x8(a);
 
   CheckNear(2.0, c.f[0], F32x8_TOLERANCE, 'F32x8 Floor(2.7)');
   CheckNear(2.0, c.f[1], F32x8_TOLERANCE, 'F32x8 Floor(2.3)');
@@ -398,7 +398,7 @@ var
 begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should not be nil');
-  CheckTrue(Assigned(dt^.CeilF32x8), 'Dispatch.CeilF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CeilF32x8), 'Dispatch.CoreVectors.CeilF32x8 should be assigned');
 
   a.f[0] := 2.1;
   a.f[1] := 2.9;
@@ -409,7 +409,7 @@ begin
   a.f[6] := -3.0;
   a.f[7] := -0.001;
 
-  c := dt^.CeilF32x8(a);
+  c := dt^.CoreVectors.CeilF32x8(a);
 
   CheckNear(3.0, c.f[0], F32x8_TOLERANCE, 'F32x8 Ceil(2.1)');
   CheckNear(3.0, c.f[1], F32x8_TOLERANCE, 'F32x8 Ceil(2.9)');
@@ -428,7 +428,7 @@ var
 begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should not be nil');
-  CheckTrue(Assigned(dt^.RoundF32x8), 'Dispatch.RoundF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.RoundF32x8), 'Dispatch.CoreVectors.RoundF32x8 should be assigned');
 
   a.f[0] := 2.4;
   a.f[1] := 2.6;
@@ -439,7 +439,7 @@ begin
   a.f[6] := -2.5;
   a.f[7] := -3.5;
 
-  c := dt^.RoundF32x8(a);
+  c := dt^.CoreVectors.RoundF32x8(a);
 
   CheckNear(2.0, c.f[0], F32x8_TOLERANCE, 'F32x8 Round(2.4)');
   CheckNear(3.0, c.f[1], F32x8_TOLERANCE, 'F32x8 Round(2.6)');
@@ -457,7 +457,7 @@ var
 begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should not be nil');
-  CheckTrue(Assigned(dt^.TruncF32x8), 'Dispatch.TruncF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.TruncF32x8), 'Dispatch.CoreVectors.TruncF32x8 should be assigned');
 
   a.f[0] := 2.9;
   a.f[1] := 2.1;
@@ -468,7 +468,7 @@ begin
   a.f[6] := -5.0;
   a.f[7] := 99.99;
 
-  c := dt^.TruncF32x8(a);
+  c := dt^.CoreVectors.TruncF32x8(a);
 
   CheckNear(2.0, c.f[0], F32x8_TOLERANCE, 'F32x8 Trunc(2.9)');
   CheckNear(2.0, c.f[1], F32x8_TOLERANCE, 'F32x8 Trunc(2.1)');
@@ -488,7 +488,7 @@ var
 begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should not be nil');
-  CheckTrue(Assigned(dt^.FmaF32x8), 'Dispatch.FmaF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.FmaF32x8), 'Dispatch.CoreVectors.FmaF32x8 should be assigned');
 
   // FMA: a * b + c
   for i := 0 to 7 do
@@ -498,7 +498,7 @@ begin
     c.f[i] := i * 0.5;      // 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5
   end;
 
-  r := dt^.FmaF32x8(a, b, c);
+  r := dt^.CoreVectors.FmaF32x8(a, b, c);
 
   for i := 0 to 7 do
     CheckNear(a.f[i] * b.f[i] + c.f[i], r.f[i], F32x8_TOLERANCE, 'F32x8 FMA [' + IntToStr(i) + ']');
@@ -818,9 +818,9 @@ var
 begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should not be nil');
-  CheckTrue(Assigned(dt^.SplatF32x8), 'Dispatch.SplatF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SplatF32x8), 'Dispatch.CoreVectors.SplatF32x8 should be assigned');
 
-  a := dt^.SplatF32x8(42.5);
+  a := dt^.CoreVectors.SplatF32x8(42.5);
 
   for i := 0 to 7 do
     CheckNear(42.5, a.f[i], F32x8_TOLERANCE, 'F32x8 Splat [' + IntToStr(i) + ']');
@@ -834,9 +834,9 @@ var
 begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should not be nil');
-  CheckTrue(Assigned(dt^.ZeroF32x8), 'Dispatch.ZeroF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ZeroF32x8), 'Dispatch.CoreVectors.ZeroF32x8 should be assigned');
 
-  a := dt^.ZeroF32x8();
+  a := dt^.CoreVectors.ZeroF32x8();
 
   for i := 0 to 7 do
     CheckNear(0.0, a.f[i], F32x8_TOLERANCE, 'F32x8 Zero [' + IntToStr(i) + ']');
@@ -851,22 +851,22 @@ var
 begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should not be nil');
-  CheckTrue(Assigned(dt^.LoadF32x8), 'Dispatch.LoadF32x8 should be assigned');
-  CheckTrue(Assigned(dt^.StoreF32x8), 'Dispatch.StoreF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LoadF32x8), 'Dispatch.CoreVectors.LoadF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.StoreF32x8), 'Dispatch.CoreVectors.StoreF32x8 should be assigned');
 
   // 初始化源数据
   for i := 0 to 7 do
     src[i] := (i + 1) * 1.5;
 
   // Load
-  a := dt^.LoadF32x8(@src[0]);
+  a := dt^.CoreVectors.LoadF32x8(@src[0]);
 
   // 验证 Load 结果
   for i := 0 to 7 do
     CheckNear(src[i], a.f[i], F32x8_TOLERANCE, 'F32x8 Load [' + IntToStr(i) + ']');
 
   // Store
-  dt^.StoreF32x8(@dst[0], a);
+  dt^.CoreVectors.StoreF32x8(@dst[0], a);
 
   // 验证 Store 结果
   for i := 0 to 7 do

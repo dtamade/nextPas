@@ -318,7 +318,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(0.0);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceSumF64(aSrc, aCount);
+  Result := LDispatch^.BatchF64.ReduceSum(aSrc, aCount);
 end;
 
 function SimdArraySumKahanF64(aSrc: PDouble; aCount: SizeUInt): Double;
@@ -335,8 +335,8 @@ begin
     Exit(0.0);
 
   LDispatch := GetDirectDispatchTable;
-  LHasLoadF64x4 := Assigned(LDispatch^.LoadF64x4);
-  LHasReduceAddF64x4 := Assigned(LDispatch^.ReduceAddF64x4);
+  LHasLoadF64x4 := Assigned(LDispatch^.CoreVectors.LoadF64x4);
+  LHasReduceAddF64x4 := Assigned(LDispatch^.CoreVectors.ReduceAddF64x4);
 
   LSum := 0.0;
   LC := 0.0;
@@ -344,7 +344,7 @@ begin
   while aCount >= 4 do
   begin
     if LHasLoadF64x4 then
-      LVec := LDispatch^.LoadF64x4(aSrc)
+      LVec := LDispatch^.CoreVectors.LoadF64x4(aSrc)
     else
     begin
       LVec.d[0] := aSrc[0];
@@ -354,7 +354,7 @@ begin
     end;
 
     if LHasReduceAddF64x4 then
-      LBlockSum := LDispatch^.ReduceAddF64x4(LVec)
+      LBlockSum := LDispatch^.CoreVectors.ReduceAddF64x4(LVec)
     else
       LBlockSum := LVec.d[0] + LVec.d[1] + LVec.d[2] + LVec.d[3];
 
@@ -385,7 +385,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(PosInfinityF64);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceMinF64(aSrc, aCount);
+  Result := LDispatch^.BatchF64.ReduceMin(aSrc, aCount);
 end;
 
 function SimdArrayMaxF64(aSrc: PDouble; aCount: SizeUInt): Double;
@@ -394,7 +394,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(NegInfinityF64);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceMaxF64(aSrc, aCount);
+  Result := LDispatch^.BatchF64.ReduceMax(aSrc, aCount);
 end;
 
 procedure SimdArrayMinMaxF64(aSrc: PDouble; aCount: SizeUInt; out aMin, aMax: Double);
@@ -407,8 +407,8 @@ begin
     Exit;
   end;
   LDispatch := GetDirectDispatchTable;
-  aMin := LDispatch^.ReduceMinF64(aSrc, aCount);
-  aMax := LDispatch^.ReduceMaxF64(aSrc, aCount);
+  aMin := LDispatch^.BatchF64.ReduceMin(aSrc, aCount);
+  aMax := LDispatch^.BatchF64.ReduceMax(aSrc, aCount);
 end;
 
 function SimdArrayMeanF64(aSrc: PDouble; aCount: SizeUInt): Double;
@@ -431,16 +431,16 @@ begin
     Exit(0.0);
 
   LDispatch := GetDirectDispatchTable;
-  LCanVectorize := Assigned(LDispatch^.LoadF64x4)
-    and Assigned(LDispatch^.SubF64x4)
-    and Assigned(LDispatch^.MulF64x4);
-  LHasReduceAddF64x4 := Assigned(LDispatch^.ReduceAddF64x4);
+  LCanVectorize := Assigned(LDispatch^.CoreVectors.LoadF64x4)
+    and Assigned(LDispatch^.CoreVectors.SubF64x4)
+    and Assigned(LDispatch^.CoreVectors.MulF64x4);
+  LHasReduceAddF64x4 := Assigned(LDispatch^.CoreVectors.ReduceAddF64x4);
   Result := 0.0;
 
   if LCanVectorize then
   begin
-    if Assigned(LDispatch^.SplatF64x4) then
-      LMeanVec := LDispatch^.SplatF64x4(aMean)
+    if Assigned(LDispatch^.CoreVectors.SplatF64x4) then
+      LMeanVec := LDispatch^.CoreVectors.SplatF64x4(aMean)
     else
     begin
       LMeanVec.d[0] := aMean;
@@ -451,12 +451,12 @@ begin
 
     while aCount >= 4 do
     begin
-      LVec := LDispatch^.LoadF64x4(aSrc);
-      LDiff := LDispatch^.SubF64x4(LVec, LMeanVec);
-      LSquare := LDispatch^.MulF64x4(LDiff, LDiff);
+      LVec := LDispatch^.CoreVectors.LoadF64x4(aSrc);
+      LDiff := LDispatch^.CoreVectors.SubF64x4(LVec, LMeanVec);
+      LSquare := LDispatch^.CoreVectors.MulF64x4(LDiff, LDiff);
 
       if LHasReduceAddF64x4 then
-        Result := Result + LDispatch^.ReduceAddF64x4(LSquare)
+        Result := Result + LDispatch^.CoreVectors.ReduceAddF64x4(LSquare)
       else
         Result := Result + LSquare.d[0] + LSquare.d[1] + LSquare.d[2] + LSquare.d[3];
 
@@ -516,7 +516,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aCount = 0) then
     Exit(0.0);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceDotF64(aSrc1, aSrc2, aCount);
+  Result := LDispatch^.BatchF64.ReduceDot(aSrc1, aSrc2, aCount);
 end;
 
 function SimdArrayL2NormF64(aSrc: PDouble; aCount: SizeUInt): Double;
@@ -534,7 +534,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(0.0);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceSumF32(aSrc, aCount);
+  Result := LDispatch^.BatchF32.ReduceSum(aSrc, aCount);
 end;
 
 function SimdArraySumKahanF32(aSrc: PSingle; aCount: SizeUInt): Single;
@@ -551,8 +551,8 @@ begin
     Exit(0.0);
 
   LDispatch := GetDirectDispatchTable;
-  LHasLoadF32x8 := Assigned(LDispatch^.LoadF32x8);
-  LHasReduceAddF32x8 := Assigned(LDispatch^.ReduceAddF32x8);
+  LHasLoadF32x8 := Assigned(LDispatch^.CoreVectors.LoadF32x8);
+  LHasReduceAddF32x8 := Assigned(LDispatch^.CoreVectors.ReduceAddF32x8);
 
   LSum := 0.0;
   LC := 0.0;
@@ -560,7 +560,7 @@ begin
   while aCount >= 8 do
   begin
     if LHasLoadF32x8 then
-      LVec := LDispatch^.LoadF32x8(aSrc)
+      LVec := LDispatch^.CoreVectors.LoadF32x8(aSrc)
     else
     begin
       for LIndex := 0 to 7 do
@@ -568,7 +568,7 @@ begin
     end;
 
     if LHasReduceAddF32x8 then
-      LBlockSum := LDispatch^.ReduceAddF32x8(LVec)
+      LBlockSum := LDispatch^.CoreVectors.ReduceAddF32x8(LVec)
     else
       LBlockSum :=
         LVec.f[0] + LVec.f[1] + LVec.f[2] + LVec.f[3]
@@ -601,7 +601,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(PosInfinityF32);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceMinF32(aSrc, aCount);
+  Result := LDispatch^.BatchF32.ReduceMin(aSrc, aCount);
 end;
 
 function SimdArrayMaxF32(aSrc: PSingle; aCount: SizeUInt): Single;
@@ -610,7 +610,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(NegInfinityF32);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceMaxF32(aSrc, aCount);
+  Result := LDispatch^.BatchF32.ReduceMax(aSrc, aCount);
 end;
 
 procedure SimdArrayMinMaxF32(aSrc: PSingle; aCount: SizeUInt; out aMin, aMax: Single);
@@ -623,8 +623,8 @@ begin
     Exit;
   end;
   LDispatch := GetDirectDispatchTable;
-  aMin := LDispatch^.ReduceMinF32(aSrc, aCount);
-  aMax := LDispatch^.ReduceMaxF32(aSrc, aCount);
+  aMin := LDispatch^.BatchF32.ReduceMin(aSrc, aCount);
+  aMax := LDispatch^.BatchF32.ReduceMax(aSrc, aCount);
 end;
 
 function SimdArrayMeanF32(aSrc: PSingle; aCount: SizeUInt): Single;
@@ -647,28 +647,28 @@ begin
     Exit(0.0);
 
   LDispatch := GetDirectDispatchTable;
-  LCanVectorize := Assigned(LDispatch^.LoadF32x8)
-    and Assigned(LDispatch^.SubF32x8)
-    and Assigned(LDispatch^.MulF32x8);
-  LHasReduceAddF32x8 := Assigned(LDispatch^.ReduceAddF32x8);
+  LCanVectorize := Assigned(LDispatch^.CoreVectors.LoadF32x8)
+    and Assigned(LDispatch^.CoreVectors.SubF32x8)
+    and Assigned(LDispatch^.CoreVectors.MulF32x8);
+  LHasReduceAddF32x8 := Assigned(LDispatch^.CoreVectors.ReduceAddF32x8);
   Result := 0.0;
 
   if LCanVectorize then
   begin
-    if Assigned(LDispatch^.SplatF32x8) then
-      LMeanVec := LDispatch^.SplatF32x8(aMean)
+    if Assigned(LDispatch^.CoreVectors.SplatF32x8) then
+      LMeanVec := LDispatch^.CoreVectors.SplatF32x8(aMean)
     else
       for LIndex := 0 to 7 do
         LMeanVec.f[LIndex] := aMean;
 
     while aCount >= 8 do
     begin
-      LVec := LDispatch^.LoadF32x8(aSrc);
-      LDiff := LDispatch^.SubF32x8(LVec, LMeanVec);
-      LSquare := LDispatch^.MulF32x8(LDiff, LDiff);
+      LVec := LDispatch^.CoreVectors.LoadF32x8(aSrc);
+      LDiff := LDispatch^.CoreVectors.SubF32x8(LVec, LMeanVec);
+      LSquare := LDispatch^.CoreVectors.MulF32x8(LDiff, LDiff);
 
       if LHasReduceAddF32x8 then
-        Result := Result + LDispatch^.ReduceAddF32x8(LSquare)
+        Result := Result + LDispatch^.CoreVectors.ReduceAddF32x8(LSquare)
       else
         Result := Result
           + LSquare.f[0] + LSquare.f[1] + LSquare.f[2] + LSquare.f[3]
@@ -730,7 +730,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aCount = 0) then
     Exit(0.0);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceDotF32(aSrc1, aSrc2, aCount);
+  Result := LDispatch^.BatchF32.ReduceDot(aSrc1, aSrc2, aCount);
 end;
 
 function SimdArrayL2NormF32(aSrc: PSingle; aCount: SizeUInt): Single;
@@ -753,20 +753,20 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LCanVectorize := Assigned(LDispatch^.LoadF64x4)
-    and Assigned(LDispatch^.StoreF64x4)
-    and Assigned(LDispatch^.SplatF64x4)
-    and Assigned(LDispatch^.MulF64x4);
+  LCanVectorize := Assigned(LDispatch^.CoreVectors.LoadF64x4)
+    and Assigned(LDispatch^.CoreVectors.StoreF64x4)
+    and Assigned(LDispatch^.CoreVectors.SplatF64x4)
+    and Assigned(LDispatch^.CoreVectors.MulF64x4);
 
   if LCanVectorize then
   begin
-    LVecFactor := LDispatch^.SplatF64x4(aFactor);
+    LVecFactor := LDispatch^.CoreVectors.SplatF64x4(aFactor);
 
     while aCount >= 4 do
     begin
-      LVecSrc := LDispatch^.LoadF64x4(aSrc);
-      LVecDst := LDispatch^.MulF64x4(LVecSrc, LVecFactor);
-      LDispatch^.StoreF64x4(aDst, LVecDst);
+      LVecSrc := LDispatch^.CoreVectors.LoadF64x4(aSrc);
+      LVecDst := LDispatch^.CoreVectors.MulF64x4(LVecSrc, LVecFactor);
+      LDispatch^.CoreVectors.StoreF64x4(aDst, LVecDst);
       Inc(aSrc, 4);
       Inc(aDst, 4);
       Dec(aCount, 4);
@@ -784,7 +784,7 @@ begin
   if (aSrc = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAbsF64(aSrc, aDst, aCount);
+  LDispatch^.BatchF64.ArrayAbs(aSrc, aDst, aCount);
 end;
 
 procedure SimdArrayAddF64(aSrc, aDst: PDouble; aCount: SizeUInt; aValue: Double);
@@ -798,20 +798,20 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LCanVectorize := Assigned(LDispatch^.LoadF64x4)
-    and Assigned(LDispatch^.StoreF64x4)
-    and Assigned(LDispatch^.SplatF64x4)
-    and Assigned(LDispatch^.AddF64x4);
+  LCanVectorize := Assigned(LDispatch^.CoreVectors.LoadF64x4)
+    and Assigned(LDispatch^.CoreVectors.StoreF64x4)
+    and Assigned(LDispatch^.CoreVectors.SplatF64x4)
+    and Assigned(LDispatch^.CoreVectors.AddF64x4);
 
   if LCanVectorize then
   begin
-    LVecValue := LDispatch^.SplatF64x4(aValue);
+    LVecValue := LDispatch^.CoreVectors.SplatF64x4(aValue);
 
     while aCount >= 4 do
     begin
-      LVecSrc := LDispatch^.LoadF64x4(aSrc);
-      LVecDst := LDispatch^.AddF64x4(LVecSrc, LVecValue);
-      LDispatch^.StoreF64x4(aDst, LVecDst);
+      LVecSrc := LDispatch^.CoreVectors.LoadF64x4(aSrc);
+      LVecDst := LDispatch^.CoreVectors.AddF64x4(LVecSrc, LVecValue);
+      LDispatch^.CoreVectors.StoreF64x4(aDst, LVecDst);
       Inc(aSrc, 4);
       Inc(aDst, 4);
       Dec(aCount, 4);
@@ -829,7 +829,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAddF64(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF64.ArrayAdd(aSrc1, aSrc2, aDst, aCount);
 end;
 
 // ============================================================================
@@ -842,7 +842,7 @@ begin
   if (aSrc = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayMulScalarF32(aSrc, aDst, aCount, aFactor);
+  LDispatch^.BatchF32.ArrayMulScalar(aSrc, aDst, aCount, aFactor);
 end;
 
 procedure SimdArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt);
@@ -853,7 +853,7 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAbsF32(aSrc, aDst, aCount);
+  LDispatch^.BatchF32.ArrayAbs(aSrc, aDst, aCount);
 end;
 
 procedure SimdArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt);
@@ -864,7 +864,7 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayNegF32(aSrc, aDst, aCount);
+  LDispatch^.BatchF32.ArrayNeg(aSrc, aDst, aCount);
 end;
 
 procedure SimdArraySqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt);
@@ -875,7 +875,7 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArraySqrtF32(aSrc, aDst, aCount);
+  LDispatch^.BatchF32.ArraySqrt(aSrc, aDst, aCount);
 end;
 
 procedure SimdArrayAddF32(aSrc, aDst: PSingle; aCount: SizeUInt; aValue: Single);
@@ -884,7 +884,7 @@ begin
   if (aSrc = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAddScalarF32(aSrc, aDst, aCount, aValue);
+  LDispatch^.BatchF32.ArrayAddScalar(aSrc, aDst, aCount, aValue);
 end;
 
 procedure SimdArrayAddArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -893,7 +893,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAddF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayAdd(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArraySubArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -902,7 +902,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArraySubF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArraySub(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayMulArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -911,7 +911,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayMulF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayMul(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayDivArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -920,7 +920,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayDivF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayDiv(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayMinArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -929,7 +929,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayMinF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayMin(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayMaxArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -938,7 +938,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayMaxF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayMax(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayClampF32(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: Single);
@@ -947,7 +947,7 @@ begin
   if (aSrc = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayClampF32(aSrc, aDst, aCount, aMin, aMax);
+  LDispatch^.BatchF32.ArrayClamp(aSrc, aDst, aCount, aMin, aMax);
 end;
 
 end.

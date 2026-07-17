@@ -78,15 +78,15 @@ REQUIRED_CONTROL_DOC_MARKERS = (
     ),
     (
         "docs/math/README.md",
-        "M8 remains partial until host trig link evidence and SIMD cutover decisions are resolved.",
+        "M8 is complete on Linux+Windows; macOS host trig proof is deferred.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "Current roadmap position: M8 nearly complete, M7 complete, M9 not started.",
+        "Current roadmap position: M8 complete on Linux+Windows with macOS deferred, M7 complete, M9 not started.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "M8 cannot be marked complete without source-contract, focused runtime, heaptrc, and CI matrix evidence.",
+        "M8 complete for available host matrix; macOS trig host proof remains deferred until a mac runner exists.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",

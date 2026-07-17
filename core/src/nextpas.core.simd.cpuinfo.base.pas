@@ -205,10 +205,12 @@ end;
 
 function X86HasAVX512BackendRequiredFeatures(const aX86: TX86Features): Boolean; inline;
 begin
-  // AVX2 is a superset of AVX, so HasAVX2 implies HasAVX.
-  // AVX-512 requires AVX2 + AVX512F + AVX512BW + POPCNT + FMA.
-  Result := aX86.HasAVX2 and aX86.HasAVX512F and aX86.HasAVX512BW and
-            aX86.HasPOPCNT and aX86.HasFMA;
+  // Real silicon with AVX2 always advertises AVX, but CPUID can be malformed.
+  // Explicit HasAVX is required so backend selection fail-closes when the AVX
+  // prerequisite bit is missing (AVX2/AVX512F alone is not enough).
+  // Full required set: AVX + AVX2 + AVX512F + AVX512BW + POPCNT + FMA.
+  Result := aX86.HasAVX and aX86.HasAVX2 and aX86.HasAVX512F and
+            aX86.HasAVX512BW and aX86.HasPOPCNT and aX86.HasFMA;
 end;
 
 function X86SupportsAVX512BackendOnCPU(const aX86: TX86Features; const aHasUsableAVX512: Boolean): Boolean; inline;

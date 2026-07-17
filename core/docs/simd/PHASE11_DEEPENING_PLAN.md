@@ -1,6 +1,7 @@
 # SIMD 模块深化计划 (Phase 11)
 
 > 日期: 2026-07-08
+> 状态: **ARCHIVED（已完成）** — 勿当主线；现行路线见 [roadmap.md](roadmap.md)
 > 工作树: simd-next
 > 测试基线: 1696 tests, 0 failed
 > 最终测试: 1730 tests, 0 failed

@@ -7,6 +7,7 @@ interface
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.text.format,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
@@ -354,7 +355,7 @@ end;
 
 function BenchArrayAddF32_Active: Int64;
 begin
-  g_ArrayF32Dispatch^.ArrayAddF32(@g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
+  g_ArrayF32Dispatch^.BatchF32.ArrayAdd(@g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
   g_ArrayF32Dummy := g_ArrayF32Dst[ARRAY_F32_COUNT - 1];
   Result := ARRAY_F32_COUNT;
 end;
@@ -368,7 +369,7 @@ end;
 
 function BenchArrayMulF32_Active: Int64;
 begin
-  g_ArrayF32Dispatch^.ArrayMulF32(@g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
+  g_ArrayF32Dispatch^.BatchF32.ArrayMul(@g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
   g_ArrayF32Dummy := g_ArrayF32Dst[ARRAY_F32_COUNT - 1];
   Result := ARRAY_F32_COUNT;
 end;
@@ -382,7 +383,7 @@ end;
 
 function BenchArrayMulScalarF32_Active: Int64;
 begin
-  g_ArrayF32Dispatch^.ArrayMulScalarF32(@g_ArrayF32A[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT, -1.25);
+  g_ArrayF32Dispatch^.BatchF32.ArrayMulScalar(@g_ArrayF32A[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT, -1.25);
   g_ArrayF32Dummy := g_ArrayF32Dst[ARRAY_F32_COUNT - 1];
   Result := ARRAY_F32_COUNT;
 end;
@@ -396,7 +397,7 @@ end;
 
 function BenchArrayAxpyF32_Active: Int64;
 begin
-  g_ArrayF32Dispatch^.ArrayAxpyF32(1.75, @g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
+  g_ArrayF32Dispatch^.BatchF32.ArrayAxpy(1.75, @g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
   g_ArrayF32Dummy := g_ArrayF32Dst[ARRAY_F32_COUNT - 1];
   Result := ARRAY_F32_COUNT;
 end;
@@ -545,7 +546,7 @@ var
   LIndex: Integer;
 begin
   for LIndex := 1 to PUBLIC_ABI_HOT_INNER do
-    g_PublicAbiDummyEq := GetDispatchTable^.MemEqual(@g_PublicAbiBuf1[0], @g_PublicAbiBuf2[0], PUBLIC_ABI_HOT_SIZE);
+    g_PublicAbiDummyEq := GetDispatchTable^.Memory.Equal(@g_PublicAbiBuf1[0], @g_PublicAbiBuf2[0], PUBLIC_ABI_HOT_SIZE);
   Result := PUBLIC_ABI_HOT_INNER;
 end;
 
@@ -583,7 +584,7 @@ var
   LIndex: Integer;
 begin
   for LIndex := 1 to PUBLIC_ABI_HOT_INNER do
-    g_PublicAbiDummySum := GetDispatchTable^.SumBytes(@g_PublicAbiBuf1[0], PUBLIC_ABI_HOT_SIZE);
+    g_PublicAbiDummySum := GetDispatchTable^.Memory.SumBytes(@g_PublicAbiBuf1[0], PUBLIC_ABI_HOT_SIZE);
   Result := PUBLIC_ABI_HOT_INNER;
 end;
 
@@ -642,7 +643,7 @@ end;
 
 function BenchVecF32x4Add_RawActive: Int64;
 begin
-  g_VecR := g_VecDispatch^.AddF32x4(g_VecA, g_VecB);
+  g_VecR := g_VecDispatch^.CoreVectors.AddF32x4(g_VecA, g_VecB);
   Result := 1;
 end;
 
@@ -705,7 +706,7 @@ var
   LRepeat: Integer;
 begin
   for LRepeat := 1 to WIDE_VECTOR_INNER do
-    g_VecI16x32R := g_VecDispatch^.AddI16x32(g_VecI16x32A, g_VecI16x32B);
+    g_VecI16x32R := g_VecDispatch^.CoreVectors.AddI16x32(g_VecI16x32A, g_VecI16x32B);
   Result := WIDE_VECTOR_INNER;
 end;
 
@@ -810,7 +811,7 @@ var
   LRepeat: Integer;
 begin
   for LRepeat := 1 to WIDE_VECTOR_INNER do
-    g_VecU32x16R := g_VecDispatch^.MulU32x16(g_VecU32x16A, g_VecU32x16B);
+    g_VecU32x16R := g_VecDispatch^.CoreVectors.MulU32x16(g_VecU32x16A, g_VecU32x16B);
   Result := WIDE_VECTOR_INNER;
 end;
 
@@ -837,7 +838,7 @@ var
   LRepeat: Integer;
 begin
   for LRepeat := 1 to WIDE_VECTOR_INNER do
-    g_VecU64x8R := g_VecDispatch^.AddU64x8(g_VecU64x8A, g_VecU64x8B);
+    g_VecU64x8R := g_VecDispatch^.CoreVectors.AddU64x8(g_VecU64x8A, g_VecU64x8B);
   Result := WIDE_VECTOR_INNER;
 end;
 
@@ -864,7 +865,7 @@ var
   LRepeat: Integer;
 begin
   for LRepeat := 1 to WIDE_VECTOR_INNER do
-    g_VecU8x64R := g_VecDispatch^.MaxU8x64(g_VecU8x64A, g_VecU8x64B);
+    g_VecU8x64R := g_VecDispatch^.CoreVectors.MaxU8x64(g_VecU8x64A, g_VecU8x64B);
   Result := WIDE_VECTOR_INNER;
 end;
 
@@ -1083,13 +1084,13 @@ end;
 function FormatOps(Ops: Double): string;
 begin
   if Ops >= 1e9 then
-    Result := Format('%.2f G', [Ops / 1e9])
+    Result := TextFormat('%.2f G', [Ops / 1e9])
   else if Ops >= 1e6 then
-    Result := Format('%.2f M', [Ops / 1e6])
+    Result := TextFormat('%.2f M', [Ops / 1e6])
   else if Ops >= 1e3 then
-    Result := Format('%.2f K', [Ops / 1e3])
+    Result := TextFormat('%.2f K', [Ops / 1e3])
   else
-    Result := Format('%.0f  ', [Ops]);
+    Result := TextFormat('%.0f  ', [Ops]);
 end;
 
 function GetArchName: string;
@@ -1126,7 +1127,7 @@ begin
   for LIndex := 0 to High(Results) do
   begin
     if Results[LIndex].Size > 0 then
-      LSizeStr := Format('%4d B', [Results[LIndex].Size])
+      LSizeStr := TextFormat('%4d B', [Results[LIndex].Size])
     else
       LSizeStr := '     -';
 
@@ -1138,7 +1139,7 @@ begin
       LCandidateLabel := 'Active';
     LCompareStr := LBaselineLabel + '->' + LCandidateLabel;
     
-    WriteLn(Format('%-21s  %s  %-16s  %12s  %15s  %6.2fx', [
+    WriteLn(TextFormat('%-21s  %s  %-16s  %12s  %15s  %6.2fx', [
       Results[LIndex].Name,
       LSizeStr,
       LCompareStr,

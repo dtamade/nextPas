@@ -7,8 +7,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AddI16x8) then
-    Result := dispatch^.AddI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AddI16x8) then
+    Result := dispatch^.CoreVectors.AddI16x8(a, b)
   else
     for i := 0 to 7 do
       Result.i[i] := a.i[i] + b.i[i];
@@ -19,8 +19,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SubI16x8) then
-    Result := dispatch^.SubI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SubI16x8) then
+    Result := dispatch^.CoreVectors.SubI16x8(a, b)
   else
     for i := 0 to 7 do
       Result.i[i] := a.i[i] - b.i[i];
@@ -31,8 +31,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.MulI16x8) then
-    Result := dispatch^.MulI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.MulI16x8) then
+    Result := dispatch^.CoreVectors.MulI16x8(a, b)
   else
     for i := 0 to 7 do
       Result.i[i] := a.i[i] * b.i[i];
@@ -43,8 +43,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AndI16x8) then
-    Result := dispatch^.AndI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AndI16x8) then
+    Result := dispatch^.CoreVectors.AndI16x8(a, b)
   else
     for i := 0 to 7 do
       Result.i[i] := a.i[i] and b.i[i];
@@ -55,8 +55,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.OrI16x8) then
-    Result := dispatch^.OrI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.OrI16x8) then
+    Result := dispatch^.CoreVectors.OrI16x8(a, b)
   else
     for i := 0 to 7 do
       Result.i[i] := a.i[i] or b.i[i];
@@ -67,8 +67,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.XorI16x8) then
-    Result := dispatch^.XorI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.XorI16x8) then
+    Result := dispatch^.CoreVectors.XorI16x8(a, b)
   else
     for i := 0 to 7 do
       Result.i[i] := a.i[i] xor b.i[i];
@@ -79,8 +79,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.NotI16x8) then
-    Result := dispatch^.NotI16x8(a)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.NotI16x8) then
+    Result := dispatch^.CoreVectors.NotI16x8(a)
   else
     for i := 0 to 7 do
       Result.i[i] := not a.i[i];
@@ -91,8 +91,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AndNotI16x8) then
-    Result := dispatch^.AndNotI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AndNotI16x8) then
+    Result := dispatch^.CoreVectors.AndNotI16x8(a, b)
   else
     for i := 0 to 7 do
       Result.i[i] := (not a.i[i]) and b.i[i];
@@ -105,8 +105,8 @@ begin
   if count <= 0 then begin Result := a; Exit; end;
   if count >= 16 then begin FillChar(Result, SizeOf(Result), 0); Exit; end;
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ShiftLeftI16x8) then
-    Result := dispatch^.ShiftLeftI16x8(a, count)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ShiftLeftI16x8) then
+    Result := dispatch^.CoreVectors.ShiftLeftI16x8(a, count)
   else
     for i := 0 to 7 do
       Result.i[i] := a.i[i] shl count;
@@ -119,8 +119,8 @@ begin
   if count <= 0 then begin Result := a; Exit; end;
   if count >= 16 then begin FillChar(Result, SizeOf(Result), 0); Exit; end;
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ShiftRightI16x8) then
-    Result := dispatch^.ShiftRightI16x8(a, count)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ShiftRightI16x8) then
+    Result := dispatch^.CoreVectors.ShiftRightI16x8(a, count)
   else
     for i := 0 to 7 do
       Result.i[i] := Int16(UInt16(a.i[i]) shr count);
@@ -138,8 +138,8 @@ begin
     Exit;
   end;
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ShiftRightArithI16x8) then
-    Result := dispatch^.ShiftRightArithI16x8(a, count)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ShiftRightArithI16x8) then
+    Result := dispatch^.CoreVectors.ShiftRightArithI16x8(a, count)
   else
     for i := 0 to 7 do
       Result.i[i] := SarSmallint(a.i[i], count);
@@ -150,8 +150,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpEqI16x8) then
-    Result := dispatch^.CmpEqI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpEqI16x8) then
+    Result := dispatch^.CoreVectors.CmpEqI16x8(a, b)
   else
   begin
     Result := 0;
@@ -165,8 +165,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpLtI16x8) then
-    Result := dispatch^.CmpLtI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpLtI16x8) then
+    Result := dispatch^.CoreVectors.CmpLtI16x8(a, b)
   else
   begin
     Result := 0;
@@ -180,8 +180,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpGtI16x8) then
-    Result := dispatch^.CmpGtI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpGtI16x8) then
+    Result := dispatch^.CoreVectors.CmpGtI16x8(a, b)
   else
   begin
     Result := 0;
@@ -195,8 +195,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpLeI16x8) then
-    Result := dispatch^.CmpLeI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpLeI16x8) then
+    Result := dispatch^.CoreVectors.CmpLeI16x8(a, b)
   else
   begin
     Result := 0;
@@ -210,8 +210,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpGeI16x8) then
-    Result := dispatch^.CmpGeI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpGeI16x8) then
+    Result := dispatch^.CoreVectors.CmpGeI16x8(a, b)
   else
   begin
     Result := 0;
@@ -225,8 +225,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpNeI16x8) then
-    Result := dispatch^.CmpNeI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpNeI16x8) then
+    Result := dispatch^.CoreVectors.CmpNeI16x8(a, b)
   else
   begin
     Result := 0;
@@ -240,8 +240,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.MinI16x8) then
-    Result := dispatch^.MinI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.MinI16x8) then
+    Result := dispatch^.CoreVectors.MinI16x8(a, b)
   else
     for i := 0 to 7 do
       if a.i[i] < b.i[i] then
@@ -255,8 +255,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.MaxI16x8) then
-    Result := dispatch^.MaxI16x8(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.MaxI16x8) then
+    Result := dispatch^.CoreVectors.MaxI16x8(a, b)
   else
     for i := 0 to 7 do
       if a.i[i] > b.i[i] then
@@ -274,8 +274,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AddI8x16) then
-    Result := dispatch^.AddI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AddI8x16) then
+    Result := dispatch^.CoreVectors.AddI8x16(a, b)
   else
     for i := 0 to 15 do
       Result.i[i] := a.i[i] + b.i[i];
@@ -286,8 +286,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.SubI8x16) then
-    Result := dispatch^.SubI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.SubI8x16) then
+    Result := dispatch^.CoreVectors.SubI8x16(a, b)
   else
     for i := 0 to 15 do
       Result.i[i] := a.i[i] - b.i[i];
@@ -298,8 +298,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.AndI8x16) then
-    Result := dispatch^.AndI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.AndI8x16) then
+    Result := dispatch^.CoreVectors.AndI8x16(a, b)
   else
     for i := 0 to 15 do
       Result.i[i] := a.i[i] and b.i[i];
@@ -310,8 +310,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.OrI8x16) then
-    Result := dispatch^.OrI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.OrI8x16) then
+    Result := dispatch^.CoreVectors.OrI8x16(a, b)
   else
     for i := 0 to 15 do
       Result.i[i] := a.i[i] or b.i[i];
@@ -322,8 +322,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.XorI8x16) then
-    Result := dispatch^.XorI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.XorI8x16) then
+    Result := dispatch^.CoreVectors.XorI8x16(a, b)
   else
     for i := 0 to 15 do
       Result.i[i] := a.i[i] xor b.i[i];
@@ -334,8 +334,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.NotI8x16) then
-    Result := dispatch^.NotI8x16(a)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.NotI8x16) then
+    Result := dispatch^.CoreVectors.NotI8x16(a)
   else
     for i := 0 to 15 do
       Result.i[i] := not a.i[i];
@@ -347,11 +347,11 @@ var
   LIndex: Integer;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  if (LDispatch <> nil) and Assigned(LDispatch^.AndNotI8x16) then
-    Result := LDispatch^.AndNotI8x16(a, b)
-  else if (LDispatch <> nil) and Assigned(LDispatch^.NotI8x16) and Assigned(LDispatch^.AndI8x16) then
+  if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.AndNotI8x16) then
+    Result := LDispatch^.CoreVectors.AndNotI8x16(a, b)
+  else if (LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.NotI8x16) and Assigned(LDispatch^.CoreVectors.AndI8x16) then
   begin
-    Result := LDispatch^.AndI8x16(LDispatch^.NotI8x16(a), b);
+    Result := LDispatch^.CoreVectors.AndI8x16(LDispatch^.CoreVectors.NotI8x16(a), b);
   end
   else
     for LIndex := 0 to 15 do
@@ -363,8 +363,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpEqI8x16) then
-    Result := dispatch^.CmpEqI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpEqI8x16) then
+    Result := dispatch^.CoreVectors.CmpEqI8x16(a, b)
   else
   begin
     Result := 0;
@@ -378,8 +378,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpLtI8x16) then
-    Result := dispatch^.CmpLtI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpLtI8x16) then
+    Result := dispatch^.CoreVectors.CmpLtI8x16(a, b)
   else
   begin
     Result := 0;
@@ -393,8 +393,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpGtI8x16) then
-    Result := dispatch^.CmpGtI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpGtI8x16) then
+    Result := dispatch^.CoreVectors.CmpGtI8x16(a, b)
   else
   begin
     Result := 0;
@@ -408,8 +408,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpLeI8x16) then
-    Result := dispatch^.CmpLeI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpLeI8x16) then
+    Result := dispatch^.CoreVectors.CmpLeI8x16(a, b)
   else
   begin
     Result := 0;
@@ -423,8 +423,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpGeI8x16) then
-    Result := dispatch^.CmpGeI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpGeI8x16) then
+    Result := dispatch^.CoreVectors.CmpGeI8x16(a, b)
   else
   begin
     Result := 0;
@@ -438,8 +438,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.CmpNeI8x16) then
-    Result := dispatch^.CmpNeI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.CmpNeI8x16) then
+    Result := dispatch^.CoreVectors.CmpNeI8x16(a, b)
   else
   begin
     Result := 0;
@@ -453,8 +453,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.MinI8x16) then
-    Result := dispatch^.MinI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.MinI8x16) then
+    Result := dispatch^.CoreVectors.MinI8x16(a, b)
   else
     for i := 0 to 15 do
       if a.i[i] < b.i[i] then
@@ -468,8 +468,8 @@ var dispatch: PSimdDispatchTable;
     i: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.MaxI8x16) then
-    Result := dispatch^.MaxI8x16(a, b)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.MaxI8x16) then
+    Result := dispatch^.CoreVectors.MaxI8x16(a, b)
   else
     for i := 0 to 15 do
       if a.i[i] > b.i[i] then

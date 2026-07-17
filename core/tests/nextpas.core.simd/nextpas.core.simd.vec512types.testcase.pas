@@ -216,7 +216,9 @@ var
   m: TMask64;
 begin
   m := High(QWord);
-  CheckEqual(High(QWord), m, 'TMask64 all set');
+  {$PUSH}{$WARNINGS OFF}
+  CheckEqual(not QWord(0), m, 'TMask64 all set');
+  {$POP}
 end;
 
 procedure TTestCase_Vec512Types.Test_Mask64_NoneSet;

@@ -95,6 +95,35 @@ function BatchClamp(const AVectors: array of TVec3f;
                     const AMin, AMax: TVec3f;
                     var ADest: array of TVec3f): SizeInt; overload;
 
+{ Vector batch Double (M-V1 minimal parity with F32 core set) }
+function BatchDot(const ALeft, ARight: array of TVec2d;
+                  var AResults: array of Double): SizeInt; overload;
+function BatchDot(const ALeft, ARight: array of TVec3d;
+                  var AResults: array of Double): SizeInt; overload;
+function BatchDot(const ALeft, ARight: array of TVec4d;
+                  var AResults: array of Double): SizeInt; overload;
+
+function BatchNormalize(var AVectors: array of TVec2d): SizeInt; overload;
+function BatchNormalize(var AVectors: array of TVec3d): SizeInt; overload;
+function BatchNormalize(var AVectors: array of TVec4d): SizeInt; overload;
+function BatchNormalize(const ASource: array of TVec3d;
+                        var ADest: array of TVec3d): SizeInt; overload;
+
+function BatchTransform(const AMatrix: TMat3d;
+                        const ASource: array of TVec2d;
+                        var ADest: array of TVec2d): SizeInt; overload;
+function BatchTransform(const AMatrix: TMat4d;
+                        const ASource: array of TVec3d;
+                        var ADest: array of TVec3d): SizeInt; overload;
+
+function BatchLerp(const AStart, AEnd: array of TVec3d;
+                   const AT: Double;
+                   var ADest: array of TVec3d): SizeInt; overload;
+
+function BatchClamp(const AVectors: array of TVec3d;
+                    const AMin, AMax: TVec3d;
+                    var ADest: array of TVec3d): SizeInt; overload;
+
 { Batch scalar operations }
 function BatchSinF32(const AInput: array of Single;
                      var AOutput: array of Single): SizeInt;
@@ -135,6 +164,46 @@ function BatchClampF32(const AInput: array of Single;
 function BatchScaleOffsetF32(const AInput: array of Single;
                              const AScale, AOffset: Single;
                              var AOutput: array of Single): SizeInt;
+
+function BatchSinF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchCosF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchSinCosF64(const AInput: array of Double;
+                        var ASinOutput, ACosOutput: array of Double): SizeInt;
+function BatchTanF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchExpF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchLnF64(const AInput: array of Double;
+                    var AOutput: array of Double): SizeInt;
+function BatchLog10F64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchLog2F64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchSqrtF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchAbsF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchNegF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+function BatchCeilF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchFloorF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchRoundF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchTruncF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchLerpF64(const AStart, AEnd: array of Double;
+                      const AT: Double;
+                      var AOutput: array of Double): SizeInt;
+function BatchClampF64(const AInput: array of Double;
+                       const AMin, AMax: Double;
+                       var AOutput: array of Double): SizeInt;
+function BatchScaleOffsetF64(const AInput: array of Double;
+                             const AScale, AOffset: Double;
+                             var AOutput: array of Double): SizeInt;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
@@ -403,6 +472,73 @@ begin
   Result := nextpas.core.math.vec.batch.BatchClamp(AVectors, AMin, AMax, ADest);
 end;
 
+function BatchDot(const ALeft, ARight: array of TVec2d;
+                  var AResults: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchDot(ALeft, ARight, AResults);
+end;
+
+function BatchDot(const ALeft, ARight: array of TVec3d;
+                  var AResults: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchDot(ALeft, ARight, AResults);
+end;
+
+function BatchDot(const ALeft, ARight: array of TVec4d;
+                  var AResults: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchDot(ALeft, ARight, AResults);
+end;
+
+function BatchNormalize(var AVectors: array of TVec2d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchNormalize(var AVectors: array of TVec3d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchNormalize(var AVectors: array of TVec4d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(AVectors);
+end;
+
+function BatchNormalize(const ASource: array of TVec3d;
+                        var ADest: array of TVec3d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchNormalize(ASource, ADest);
+end;
+
+function BatchTransform(const AMatrix: TMat3d;
+                        const ASource: array of TVec2d;
+                        var ADest: array of TVec2d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchTransform(AMatrix, ASource, ADest);
+end;
+
+function BatchTransform(const AMatrix: TMat4d;
+                        const ASource: array of TVec3d;
+                        var ADest: array of TVec3d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchTransform(AMatrix, ASource, ADest);
+end;
+
+function BatchLerp(const AStart, AEnd: array of TVec3d;
+                   const AT: Double;
+                   var ADest: array of TVec3d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchLerp(AStart, AEnd, AT, ADest);
+end;
+
+function BatchClamp(const AVectors: array of TVec3d;
+                    const AMin, AMax: TVec3d;
+                    var ADest: array of TVec3d): SizeInt;
+begin
+  Result := nextpas.core.math.vec.batch.BatchClamp(AVectors, AMin, AMax, ADest);
+end;
+
 { Batch scalar operations }
 
 function BatchSinF32(const AInput: array of Single;
@@ -514,6 +650,117 @@ function BatchScaleOffsetF32(const AInput: array of Single;
                              var AOutput: array of Single): SizeInt;
 begin
   Result := nextpas.core.math.batch.BatchScaleOffsetF32(AInput, AScale, AOffset, AOutput);
+end;
+
+function BatchSinF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchSinF64(AInput, AOutput);
+end;
+
+function BatchCosF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchCosF64(AInput, AOutput);
+end;
+
+function BatchSinCosF64(const AInput: array of Double;
+                        var ASinOutput, ACosOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchSinCosF64(AInput, ASinOutput, ACosOutput);
+end;
+
+function BatchTanF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchTanF64(AInput, AOutput);
+end;
+
+function BatchExpF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchExpF64(AInput, AOutput);
+end;
+
+function BatchLnF64(const AInput: array of Double;
+                    var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLnF64(AInput, AOutput);
+end;
+
+function BatchLog10F64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLog10F64(AInput, AOutput);
+end;
+
+function BatchLog2F64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLog2F64(AInput, AOutput);
+end;
+
+function BatchSqrtF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchSqrtF64(AInput, AOutput);
+end;
+
+function BatchAbsF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchAbsF64(AInput, AOutput);
+end;
+
+function BatchNegF64(const AInput: array of Double;
+                     var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchNegF64(AInput, AOutput);
+end;
+
+function BatchCeilF64(const AInput: array of Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchCeilF64(AInput, AOutput);
+end;
+
+function BatchFloorF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchFloorF64(AInput, AOutput);
+end;
+
+function BatchRoundF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchRoundF64(AInput, AOutput);
+end;
+
+function BatchTruncF64(const AInput: array of Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchTruncF64(AInput, AOutput);
+end;
+
+function BatchLerpF64(const AStart, AEnd: array of Double;
+                      const AT: Double;
+                      var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchLerpF64(AStart, AEnd, AT, AOutput);
+end;
+
+function BatchClampF64(const AInput: array of Double;
+                       const AMin, AMax: Double;
+                       var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchClampF64(AInput, AMin, AMax, AOutput);
+end;
+
+function BatchScaleOffsetF64(const AInput: array of Double;
+                             const AScale, AOffset: Double;
+                             var AOutput: array of Double): SizeInt;
+begin
+  Result := nextpas.core.math.batch.BatchScaleOffsetF64(AInput, AScale, AOffset, AOutput);
 end;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean;

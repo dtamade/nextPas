@@ -10,8 +10,8 @@ function Utf8Validate(p: Pointer; len: SizeUInt): Boolean;
 var dt: PSimdDispatchTable;
 begin
   dt := GetDispatchTable;
-  if (dt <> nil) and Assigned(dt^.Utf8Validate) then
-    Result := dt^.Utf8Validate(p, len)
+  if (dt <> nil) and Assigned(dt^.Memory.Utf8Validate) then
+    Result := dt^.Memory.Utf8Validate(p, len)
   else
     Result := True;
 end;
