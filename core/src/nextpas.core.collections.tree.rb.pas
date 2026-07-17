@@ -13,6 +13,10 @@ uses
 // This unit provides a reusable RB-tree implementation without exposing
 // container semantics. It is designed to be adapted by orderedset/orderedmap.
 
+const
+  // Pool block size shared by NewNode allocation and Clear free path.
+  RB_TREE_POOL_BLOCK_SIZE = 256;
+
 type
   generic TRBTreeCore<T> = class
   public
@@ -124,20 +128,18 @@ begin
 end;
 
 function TRBTreeCore.NewNode(const AValue: T): PNode;
-const
-  BLOCK_SIZE = 256;
 var
   LBlock: Pointer;
 begin
   if FPoolNext >= FPoolEnd then
   begin
-    LBlock := GetMem(BLOCK_SIZE * SizeOf(TNode));
-    FillChar(LBlock^, BLOCK_SIZE * SizeOf(TNode), 0);
+    LBlock := GetMem(RB_TREE_POOL_BLOCK_SIZE * SizeOf(TNode));
+    FillChar(LBlock^, RB_TREE_POOL_BLOCK_SIZE * SizeOf(TNode), 0);
     Inc(FPoolBlockCount);
     SetLength(FPoolBlocks, FPoolBlockCount);
     FPoolBlocks[FPoolBlockCount - 1] := LBlock;
     FPoolNext := PNode(LBlock);
-    FPoolEnd := PNode(LBlock) + BLOCK_SIZE;
+    FPoolEnd := PNode(LBlock) + RB_TREE_POOL_BLOCK_SIZE;
   end;
   Result := FPoolNext;
   Inc(FPoolNext);
@@ -376,7 +378,7 @@ begin
   FCount := 0;
   if FPoolBlockCount > 0 then
     for i := 0 to FPoolBlockCount - 1 do
-      FreeMem(FPoolBlocks[i], BLOCK_SIZE * SizeOf(TNode));
+      FreeMem(FPoolBlocks[i], RB_TREE_POOL_BLOCK_SIZE * SizeOf(TNode));
   SetLength(FPoolBlocks, 0);
   FPoolBlockCount := 0;
   FPoolNext := nil;
