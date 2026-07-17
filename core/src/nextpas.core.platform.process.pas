@@ -262,6 +262,14 @@ uses
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
 {$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  , nextpas.core.platform.darwin.base
+  , nextpas.core.platform.darwin.ffi
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+  , nextpas.core.platform.freebsd.base
+  , nextpas.core.platform.freebsd.ffi
+{$ENDIF}
 {$IFDEF NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
   , nextpas.core.platform.linux.modern
 {$ENDIF}
@@ -816,7 +824,7 @@ function ReadTwoPipes(AStdoutFd, AStderrFd: Int32;
   AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
   AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32): Int32;
 var
-  LPollFds: array[0..1] of pollfd;
+  LPollFds: array[0..1] of TPollFd;
   LRet, LN: PtrInt;
   LAnyOpen: Boolean;
   LStdoutEOF, LStderrEOF: Boolean;

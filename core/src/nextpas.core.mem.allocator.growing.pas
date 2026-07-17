@@ -163,7 +163,7 @@ var
   LSlot: SizeUInt;
   LThreadId: QWord;
 begin
-  LThreadId := GetCurrentThreadId;
+  LThreadId := QWord(PtrUInt(GetCurrentThreadId));
   LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
   RegistryLock;
   try
@@ -184,7 +184,7 @@ var
   LSlot: SizeUInt;
   LThreadId: QWord;
 begin
-  LThreadId := GetCurrentThreadId;
+  LThreadId := QWord(PtrUInt(GetCurrentThreadId));
   LSlot := SizeUInt(LThreadId) and (MAX_THREAD_SLOTS - 1);
   RegistryLock;
   try
@@ -463,7 +463,7 @@ begin
     making its threadvar cache a dangling pointer (use-after-free).
     Central pool free is always safe and correct. }
   LOwnerThreadId := FindSpanOwnerThreadId(FCentrals[LIndex], APtr);
-  if (LOwnerThreadId <> 0) and (LOwnerThreadId <> GetCurrentThreadId) then
+  if (LOwnerThreadId <> 0) and (LOwnerThreadId <> QWord(PtrUInt(GetCurrentThreadId))) then
   begin
     CentralPoolFree(FCentrals[LIndex], 1, @APtr, GThreadCache.FOpCount);
     Exit;
