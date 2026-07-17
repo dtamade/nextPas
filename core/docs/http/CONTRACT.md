@@ -94,6 +94,17 @@ end;
 | 304 体 | 无 body；helper 设 `Content-Length: 0` 便于 framing |
 | 非目标 | 完整缓存策略、`If-Match`/`If-Unmodified-Since` 写路径、启发式过期、CDN 语义 |
 
+**Range / 静态流式（Wave C3）**：
+
+| 能力 | 行为 |
+|------|------|
+| `Accept-Ranges` | 200/206 成功静态响应发布 `Accept-Ranges: bytes` |
+| 单段 `Range: bytes=start-end` / `start-` / `-suffix` | **206** + `Content-Range` + 精确 `Content-Length`；body 经 `CopyFileRange` 流式写出 |
+| 越界 / 非法 / multi-range（含逗号） | **416** + `Content-Range: bytes */size` |
+| 整文件路径 | `IFile` + `io.Copy`；**禁止** `ReadFile`/`ReadAll` 整文件进内存（source-contract 锁定） |
+| 与条件请求 | 先评估 304；命中则不进入 Range |
+| 非目标 | multipart ranges、`If-Range`、目录列表产品化、CDN 语义 |
+
 ### 2.2 Request / Response
 
 - 公开类型是 **接口** `IHttpRequest` / `IHttpResponse`，不是裸 record wire 模型。
@@ -503,3 +514,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.9 | cycle-11 Wave F：HTTP-date Retry-After；`WithTLSContext`；`HttpPost/Put/PatchJsonDocument` ensure+decode |
 | 2026-07-17 | 3.10 | Wave C1：Content-Encoding 契约；client `HttpDecodeContentEncoding` / `HttpReadResponseBody*Decoded`；Op=`content_encoding`；server Compression/Decompress middleware 已落地 |
 | 2026-07-17 | 3.11 | Wave C2：条件请求 helper + ServeFile 304 契约表（If-None-Match / If-Modified-Since） |
+| 2026-07-17 | 3.12 | Wave C3：Range 单段/416/`Accept-Ranges` + 流式契约 |
