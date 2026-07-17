@@ -68,7 +68,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Gap | Severity | Notes |
 |-----|----------|--------|
 | Windows beyond documented 17-gate set | **P1** | signal / secure-zero native / full AcceptEx-ConnectEx suite not in matrix |
-| macOS focused-runtime partial | **P0** | D2.b matrix wired (8 gates); promote goal-tree after green (D2.c) |
+| macOS beyond documented 8-gate set | **P1** | D2.c done for listed modules only; full-host parity not claimed |
 | `platform.signal` Win64 wine path | **P1** | Missing error/FFI uses; not in 14-module matrix |
 | Windows secure-zero native path | **P1** | Documented deferred; still fallback |
 | dual-IO symbols on `platform.process` | **P2** | Owner-only; long-term deprecation not scheduled |
@@ -82,7 +82,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
 | Windows x86_64 | **`ci-matrix` for documented 17-gate set** + wine-runtime-smoke secondary | expand matrix modules; keep wine green |
-| macOS | D2.b matrix (8 gates) fail-closed on GHA; inventory via best-effort | D2.c promote listed modules after green |
+| macOS | **`focused-runtime` for documented 8-gate set** (D2.c); inventory via best-effort | keep matrix green; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
 | Linux aarch64/arm32/riscv64 | forced-compile | runtime only with hardware/CI |
@@ -180,6 +180,18 @@ Do not start a later phase’s promotion claims until earlier phase exit criteri
 
 **macOS promotion criteria (D2.c):** durable Actions green on the 8-gate matrix + truth-matrix/goal-tree rows updated. Not full-host parity.
 
+**D2.c status (2026-07-17): Done** for the documented 8-gate set only.
+
+| Check | Evidence |
+|-------|----------|
+| 1 real macOS | GHA `test-macos` on `macos-14` aarch64 via native `make clean test` |
+| 2 documented 8-gate set | `platform-macos-ci-matrix.sh` lists time/sync/thread/files/path/env/error/socket |
+| 3 fail-closed matrix green | step `Run platform macOS focused matrix (fail-closed)` success on run 29578542275 (~2 min wall; no gate timeout) after Darwin varargs/detach/errno fixes (25c843edb) |
+| 4 docs | runtime-truth-matrix + goal-tree + master-spec + this ROADMAP updated in D2.c land |
+| 5 scope honesty | not full-host macOS parity; best-effort inventory still non-evidence |
+
+**Not claimed by D2.c:** full-host macOS parity; modules outside the 8-gate list; FreeBSD promotion.
+
 ### D3 — Contract & debt cleanup (maintenance)
 
 | Field | Content |
@@ -247,8 +259,8 @@ Optional readiness inventory (not a promotion):
 
 1. **D0** done.
 2. **D1.a–D1.d** done for documented 17-gate Windows `ci-matrix` set; keep wine + GHA green.
-3. **D2.a/b** in progress: FPC cfg fix + 8-gate macOS matrix fail-closed; **D2.c** after green.
-4. **D3** debt in severity order when not blocking D2.
+3. **D2.a–D2.c** done for documented 8-gate macOS `focused-runtime` set; keep GHA matrix green.
+4. **D3** debt in severity order.
 5. **D4/D5** opportunistic / owner-gated.
 
 ---
@@ -268,6 +280,8 @@ Optional readiness inventory (not a promotion):
 | 2026-07-17 | D1.c closed: real-Windows matrix **pass=17 fail=0** (run 29569033144). Mapped PLATFORM_ERR_AGAIN treated as Winsock would-block in wake drain + socket classifiers. D1.d promotion still pending criteria checklist |
 | 2026-07-17 | **D1.d done**: promote documented 17-gate set to `truth=ci-matrix` after criteria 1–4 met (GHA 17/17 durable; wine 14/14; fail-closed). Not full-host Windows parity. Next: D2 macOS. |
 | 2026-07-17 | **D2.a**: macOS best-effort is non-evidence (~5/812); FPC trunk missing System unit without compiler-local fpc.cfg. **D2.b**: add fail-closed 8-gate `platform-macos-ci-matrix.sh` + FPC verify; best-effort demoted to inventory-only. |
+| 2026-07-17 | Darwin residual: aarch64 varargs `open`/`fcntl`, thread detach RefCount (trampoline UAF), host `ESysE*` error tests; land 25c843edb |
+| 2026-07-17 | **D2.c done**: promote documented 8-gate set to `focused-runtime` after GHA matrix fail-closed success (run 29578542275 step 8). Not full-host macOS parity. Next: D3 debt. |
 
 ---
 
