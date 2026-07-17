@@ -50,7 +50,7 @@ if not TryFreeMem(P) then
 | Arena→`IAllocator` 适配器 | `GetMem` 满 → **nil** | 默认 `FreeMem` **no-op**；`NEXTPAS_MEM_ARENA_STRICT=1` 时 non-nil → **raise** `aeInvalidPointer` | 生命周期属 Arena |
 | 固定池 `Acquire`/`Release` | 池满 → **nil** / **False** | 双 free / 非本池指针 → **raise** | |
 | `IMemoryPool` / Slab `GetMem` | OOM/满 → **nil** | 非法 free → **raise** | |
-| 构造 / 配置 | — | 溢出、非法 capacity → **raise** | 如 `AllocArray` 乘法溢出 |
+| 构造 / 配置 | — | 溢出、非法 capacity → **raise** `EAllocError`（`aeInvalidLayout` 等） | 如 `AllocArray` 乘法溢出（**不是** `EOutOfMemory`） |
 
 ### 2.1 统一 catch 面
 

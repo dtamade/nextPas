@@ -108,6 +108,18 @@ need_grep "$ROOT/core/src/nextpas.core.mem.error.pas" \
 need_grep "$ROOT/core/src/nextpas.core.mem.error.pas" \
   "FormatAllocErrorMsg\\('SanitizeConfigAlignment'" \
   'error.pas config alignment raises must use FormatAllocErrorMsg (S2)'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" \
+  'aeInvalidLayout' \
+  'AllocArray overflow must use aeInvalidLayout (T2)'
+need_grep "$ROOT/core/src/nextpas.core.mem.pas" \
+  'ResolveAllocator\(AAllocator\)' \
+  'AllocZeroed/AllocArray must ResolveAllocator nil (T3)'
+need_grep "$ROOT/core/src/nextpas.core.mem.allocator.arena.pas" \
+  "FormatAllocErrorMsg\\('TLocalArenaAllocator', 'ReallocMem'" \
+  'arena ReallocMem must use FormatAllocErrorMsg (T1)'
+need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
+  'TestAllocArrayOverflowIsInvalidLayout|TestAllocZeroedAllocArrayNilAllocator' \
+  'usability guardrails must lock T2/T3'
 need_grep "$ROOT/core/tests/nextpas.core.mem/test_usability_guardrails/test_usability_guardrails.lpr" \
   'heap_safety=y|TestFormatMemStatsSafety' \
   'usability guardrails must lock heap_safety in FormatMemStats'
@@ -142,6 +154,9 @@ need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'GetGrowingIAllocator|Growing IAllocato
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'HEAP_DEBUG|NEXTPAS_MEM_HEAP_DEBUG' 'USABILITY-SCORE must cover HEAP_DEBUG opt-in'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'TryBlockSize|SC8' 'USABILITY-SCORE must cover TryBlockSize/SC8'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'SC9' 'USABILITY-SCORE must cover SC9 dual-track'
+need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'TryFreeMemOf|U1' 'USABILITY-SCORE must cover TryFreeMemOf/U1 residual'
+need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'CLOSED' 'USABILITY-SCORE must mark usability mainline CLOSED'
+need_grep "$MEM_DOCS/API-GUIDE.md" 'TryFreeMemOf\(nil' 'API-GUIDE must document TryFreeMemOf nil+owned'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'WithRequestArena|HttpRequestAllocatorOf|HttpFormatProcessMemStats' \
   'USABILITY-SCORE must cover product wires'
 need_grep "$MEM_DOCS/README.md" 'SC9' 'README must cite SC9 dual-track evidence'

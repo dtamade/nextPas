@@ -1,10 +1,10 @@
 # nextpas.core.mem 高标准可用性评估（本轮权威）
 
 **日期**: 2026-07-17
-**模式**: 只读审查 → 本文件；修复见 research / fix-plan / 实现
-**范围**: 默认双轨产品路径（DefaultHeap / DefaultAllocator）、过程式 API、诊断 env、错误模型、门面、focused gates
-**对标**: Go `runtime` 分配默认 + `ReadMemStats`/`GODEBUG`；Rust `GlobalAlloc`/`Layout` + debug/sanitizer 工程习惯
-**前序**: F1–F7 已落地（9.1）；本轮查**残留**与回归风险，不 reopen dual-track 热路径
+**模式**: 只读审查 → 调研/计划 → 统一实施（本文件跟踪全周期）
+**范围**: 默认双轨产品路径（DefaultHeap / DefaultAllocator）、过程式 API、插件助手、诊断 env、错误模型、门面、focused gates
+**对标**: Go `runtime` + `GODEBUG` / `ReadMemStats`；Rust `GlobalAlloc`/`Layout` + debug/sanitizer 工程习惯
+**前序基线**: F1–F7 / R1–R5 / S1–S3 / T1–T4 **fixed**；落地后残留 **U1 fixed**；主线 **CLOSED**
 
 ---
 
@@ -12,55 +12,45 @@
 
 | 项 | 值 |
 |----|-----|
-| **综合分（二轮审查时）** | **8.9 / 10** |
-| **综合分（R1–R5 修复后）** | **9.3 / 10** |
-| **综合分（三轮审查时）** | **9.15 / 10** |
-| **综合分（S1–S3 修复后）** | **9.3 / 10**（见 [USABILITY-SCORE.md](USABILITY-SCORE.md)） |
+| **综合分（T 轮审查时）** | **9.05 / 10** |
+| **综合分（T1–T4 后）** | **9.35 / 10** |
+| **综合分（U1 后，权威）** | **9.4 / 10**（见 [USABILITY-SCORE.md](USABILITY-SCORE.md)） |
 | **等级** | **HIGH** |
-| **风险总评** | **LOW–MEDIUM**（热路径 UB 仍为设计选择；S1–S3 已关） |
-| **F1–F7 / R1–R5** | 已修复，视为基线 |
-| **三轮新发现** | **S1–S3** — **全部 fixed** |
+| **风险总评** | **LOW–MEDIUM** |
+| **基线** | F/R/S/T **closed** |
+| **落地后残留** | **U1** — **fixed** |
+| **主线状态** | **CLOSED**（无未关闭 P0/P1） |
 
-**一句话**: 双轨零税与观测/助手已达标；三轮必修是 **TryReallocMemOf 与 ReallocMemOf 成功语义不对称**，已修。
+**一句话**: 默认双轨可用性已高标收口；U1 补齐 `TryFreeMemOf(nil, owned)` 与 process free / HEAP_DEBUG 对称，foreign 仍 fail-closed。
 
-故意不降分项：默认双 free=UB（与 Go 非 GC 手写 free / 零税一致，靠 opt-in SAFETY）；门面 Tier-1/2 兼容面（冻结不收缩）。
+故意不降分：默认双 free=UB（opt-in SAFETY）；双轨不合并；门面 Tier-2 冻结；全库 pool 历史 raise 大扫除；`FreeMemOf(nil, foreign)` 过程式 UB 面保持文档化。
 
 ---
 
 ## Findings
 
-| ID | 维度 | 摘要 | 现状证据 | 风险 | 优先级 |
-|----|------|------|----------|------|--------|
-| R1 | 诊断可用性 | `TMemStats.HeapSafetyEnabled` 已有，但 `FormatMemStats` **不打印** `heap_safety=` | `default.pas` FormatMemStats 行无 safety | MEDIUM | **P1** |
-| R2 | 诊断可用性 | `IsMemArenaStrictEnabled` 存在，**未进** `TMemStats` / FormatMemStats | 无 ArenaStrict 字段 | MEDIUM | **P1** |
-| R3 | API 一致性 | 有 `FreeMemOf`/`TryFreeMemOf`，**无** `ReallocMemOf`/`TryReallocMemOf` | 门面仅 sized free 助手 | MEDIUM | **P1** |
-| R4 | API 可发现性 | 四枚 env（DEBUG / HEAP_DEBUG / SAFETY / ARENA_STRICT）无**单行 profile**字符串 | doctor/日志需拼多个 Is* | LOW–MED | **P2** |
-| R5 | 契约/门禁 | guardrails / `check_usability_docs` **未锁** R1–R4 | 源契约可回归 | LOW | **P0**（与实现同批） |
+### 落地后 U1
 
-### 三轮发现 S1–S3（已 fixed）
+| ID | 维度 | 摘要 | 证据 | 风险 | 优先级 |
+|----|------|------|------|------|--------|
+| U1 | 调用一致性 | `TryFreeMemOf(nil, …)` 在 sized 门关闭时 False 且不释放；owned 在 HEAP_DEBUG 下漏 free | `mem.pas` TryFreeMemOf | MED | **P1** |
 
-| ID | 维度 | 摘要 | 风险 | 优先级 | 状态 |
-|----|------|------|------|--------|------|
-| S1 | 调用一致性 | `TryReallocMemOf(nil,nil,…)` 错误拒绝对 `ReallocMemOf` 合法 GetMem 回落 | MED | **P1** | **fixed** |
-| S2 | 错误提示 | `error.pas` 对齐 raise 未用 FormatAllocErrorMsg | LOW–MED | **P2** | **fixed**（仅 error 共享入口） |
-| S3 | 门禁 | 无 S1 契约测试 | LOW | **P0** | **fixed** |
+### 已关闭基线（不 reopen）
 
-### 分维评分（二轮审查时 / 1–10）
+F1–F7、R1–R5、S1–S3、T1–T4 — 见 [USABILITY-SCORE.md](USABILITY-SCORE.md)。
+
+### 分维评分（权威）
 
 | 维度 | 分 | 依据 |
-|------|----|------|
-| 接口设计 | 9.0 | 双轨清晰；门面宽但 FACADES 冻结；缺 sized realloc 助手 |
-| API 易用性 | 8.8 | FreeMemOf/Try* 好；env 面需多开关；stats 一行不全 |
-| 调用一致性 | 8.7 | 过程式 sized free/realloc 对称；插件面 free/realloc 不对称 |
-| 错误提示质量 | 9.0 | FormatAllocErrorMsg + ERROR-POLICY；历史异常类未全迁（已知） |
-| 边界条件 | 9.2 | contract_matrix + nil/0/OOM；Arena strict dual-mode |
-| 测试覆盖 | 9.0 | guardrails 18 用例；R1–R4 未覆盖 |
-| 性能与内存安全 | 9.3 | 默认零税；SAFETY/DEBUG opt-in；热路径 UB 文档化 |
-| **加权综合** | **8.9** | — |
-
-### 已关闭（F1–F7，基线）
-
-见 [USABILITY-SCORE.md](USABILITY-SCORE.md) F1–F7 表；本轮不重复开单。
+|------|-----|------|
+| 接口设计 | 9.2 | 双轨清晰；门面冻结 |
+| API 易用性 | 9.3 | T3 nil→ResolveAllocator |
+| 调用一致性 | 9.5 | S1 + U1 Try 对称 |
+| 错误提示质量 | 9.2 | FormatAllocErrorMsg 路径 |
+| 边界条件 | 9.3 | T2/T3；U1 foreign fail-closed |
+| 测试覆盖 | 9.5 | guardrails 含 U1 |
+| 性能与内存安全 | 9.3 | 默认零税不变 |
+| **加权综合** | **9.4** | — |
 
 ---
 
@@ -68,42 +58,35 @@
 
 | 风险 | 等级 | 说明 | 缓解 |
 |------|------|------|------|
-| 误读 SAFETY 是否生效 | MED | FormatMemStats 无 `heap_safety`，运维以为未开 | R1 |
-| Arena strict 静默 | MED | 设了 env 但 stats 不可见 | R2 |
-| 插件路径 sized realloc 丢 size | MED | 只能 unsized `IAllocator.ReallocMem` 或绕过 tracking | R3 |
-| 多 env 配方错误 | LOW–MED | 假阴性 + 税组合 | R4 + 既有 coverage_gap |
-| 门禁漂移 | LOW | 无 source lock 则文档/格式回退 | R5 |
-| 默认双 free UB | MED（接受） | 设计选择；非本轮“必改默认” | HEAP_SAFETY 文档 + CI recipe |
+| TryFreeMemOf nil 漏 free | MED | HEAP_DEBUG 下 sized 门关 | U1 |
+| FreeMemOf(nil, foreign) UB | MED（接受） | 与过程式 FreeMem 同面 | 文档；Try fail-closed |
+| 默认双 free UB | MED（接受） | 热路径零税 | HEAP_SAFETY opt-in |
 
 ---
 
 ## Priority
 
-实施顺序（依赖优先）：
+1. **P1 U1** TryFreeMemOf nil+owned
+2. 复评 SCORE → **9.4**，主线 **CLOSED**
 
-1. **P0/P1 R1+R2+R5 stats** — 扩展 TMemStats + FormatMemStats + 文档/契约
-2. **P1 R3** — ReallocMemOf 与 FreeMemOf 同门控（wrap 关才 sized 短路）
-3. **P2 R4** — `FormatMemDebugProfile`（或等价并入 FormatMemStats 后仍保留薄封装）
-4. 重评 USABILITY-SCORE → **9.3** 目标
-
-禁止：默认开 SAFETY；合并双轨；大改异常继承树。
+禁止：默认开 SAFETY；合并双轨；全库 pool raise 扫改；以 keepers 为可用性阻塞。
 
 ---
 
 ## Next Steps
 
-1. 专题调研：[USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md) § R1–R5（根因 + Go/Rust）
-2. 实施规划：[USABILITY-FIX-PLAN.md](USABILITY-FIX-PLAN.md) 里程碑 M8–M11
-3. 批量实现 + guardrails/contract/debug_wrap + hygiene
-4. 更新权威 [USABILITY-SCORE.md](USABILITY-SCORE.md)
+1. ~~实现 U1 + guardrails~~ **done**
+2. path-limited landing → main
+3. **停止** mem 可用性满分迭代；新 slice 需产品压力
 
 ---
 
-## Rust / Go 对标（摘要）
+## Rust / Go 对标
 
-| 主题 | Go | Rust | nextPas 现状 | 差距 → 路径 |
-|------|----|------|--------------|-------------|
-| 进程 stats 可读性 | `ReadMemStats` 字段齐全 | allocator stats crate 不一 | FormatMemStats 缺 safety/strict | R1/R2 |
-| free/realloc 对称 | 用户不 free | `dealloc`/`realloc` 均带 Layout | 过程式对称；插件 free 有助手、realloc 无 | R3 |
-| debug 配方 | `GODEBUG` 集中 | RUST_BACKTRACE / sanitizer 独立 | 4 env 分散 | R4 单行 profile |
-| 默认安全税 | GC 掩盖 use-after-free | 默认安全，unsafe 显式 | 零税 + opt-in | 保持；不默认开税 |
+| 主题 | Go | Rust | nextPas | 状态 |
+|------|----|------|---------|------|
+| free 有效指针 | 必须生效 | 正确 allocator | TryFreeMemOf owned 必 free | U1 |
+| 错误指针 | panic | 逻辑错误 | Try fail-closed / FreeMemOf UB 文档 | 接受 |
+| 溢出 / 非法 size | 分型 | Layout | aeInvalidLayout | T2 |
+| nil 分配器 | N/A | 类型系统 | ResolveAllocator | T3 |
+| 默认安全税 | GC | 所有权 | 零税 + opt-in | 保持 |

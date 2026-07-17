@@ -1,9 +1,9 @@
 # mem 可用性评估发现 — 专题调研报告
 
-**状态**: Research complete (F1–F7 + R1–R5 fixed; **S1–S3 residual** researched + implemented 2026-07-17)
-**日期**: 2026-07-16 / 修订 2026-07-17（三轮残留 S1–S3）
-**范围**: F1–F7 + R1–R5 + S1–S3（见 [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md)）
-**权威评估**: … → R1–R5 **9.3** → 三轮审查 **9.15** → S1–S3 **9.3**
+**状态**: Research complete — F1–F7 / R / S / T **fixed**; **U1 residual fixed**; 主线 **CLOSED**
+**日期**: 2026-07-16 / 修订 2026-07-17（四轮 T1–T4 + 落地后 U1）
+**范围**: F1–F7 + R1–R5 + S1–S3 + T1–T4（见 [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md)）
+**权威评估**: … → S1–S3 **9.3** → 四轮审查 **9.05** → T1–T4 目标 **9.35**
 **非目标**: 合并双轨热路径、默认开启生产安全税、新增 allocator 种类、reopen product-table dual-track、全库 pool raise 扫改
 
 ---
@@ -234,3 +234,76 @@ R3 ─────► ReallocMemOf（复用 FreeMemOfAllowsSizedHeapFree）
 |----|------|
 | **策略** | `TestTryReallocMemOfNilAllocatorGetMem` + check_usability_docs。 |
 | **风险** | 极低。 |
+
+---
+
+## 7. 四轮残留 T1–T4（2026-07-17）
+
+| ID | 分类 | 摘要 | 影响面 | 风险 | 优先级 |
+|----|------|------|--------|------|--------|
+| T1 | 错误消息 | Arena ReallocMem 裸字符串 | 机读 / 一致性 | LOW–MED | P2 |
+| T2 | 错误模型 | AllocArray 溢出 → EOutOfMemory + 非 stem 消息 | except 面 | MED | P1 |
+| T3 | 边界/易用 | AllocZeroed/AllocArray(nil) 崩溃 | 插件注入 | MED | P1 |
+| T4 | 门禁 | T1–T3 无锁 | 回归 | LOW | P0 |
+
+### T1 — Arena Realloc FormatAllocErrorMsg
+
+| 项 | 内容 |
+|----|------|
+| **根因** | FreeMem 路径在 F4/S2 已迁助手；Realloc 仍历史字面量（虽已像 Type.Method）。 |
+| **策略** | `FormatAllocErrorMsg('TLocalArenaAllocator','ReallocMem', reason)` 等同 Virtual。 |
+| **风险** | 极低。 |
+
+### T2 — AllocArray 溢出类型与消息
+
+| 项 | 内容 |
+|----|------|
+| **根因** | 早期把溢出当 OOM；ERROR-POLICY 明确 size 溢出为编程错误 → raise，码表有 `aeInvalidLayout`。 |
+| **影响** | `except on EAllocError` 漏捕；OOM 处理器误伤。 |
+| **Go** | 参数错误 vs 资源错误分型。 |
+| **Rust** | `Layout::from_size_align` / capacity overflow ≠ OOM panic 语义。 |
+| **策略** | `raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('AllocArray','AllocArray','count*elemSize overflow'))`。 |
+| **风险** | 低：若外部只捕 EOutOfMemory 会变；正确性优先。 |
+
+### T3 — nil IAllocator
+
+| 项 | 内容 |
+|----|------|
+| **根因** | 助手未走 `ResolveAllocator`；S5 契约 nil=过程默认堆。 |
+| **策略** | `AllocZeroed`/`AllocArray` 用 `ResolveAllocator(AAllocator)` 再 AllocMem。 |
+| **风险** | 低：行为从崩溃变成功（与 S5 一致）。 |
+
+### T4 — 门禁
+
+| 项 | 内容 |
+|----|------|
+| **策略** | guardrails：nil AllocZeroed/AllocArray；AllocArray 溢出 EAllocError+well-formed；arena Realloc FormatAllocErrorMsg 源锁。 |
+| **风险** | 极低。 |
+
+### 依赖
+
+```text
+T4 ────────────────► 与实现同批
+T2 + T3 ──► mem.pas
+T1 ───────► allocator.arena.pas
+```
+
+---
+
+## 8. 落地后残留 U1（2026-07-17）
+
+| ID | 分类 | 摘要 | 影响面 | 风险 | 优先级 |
+|----|------|------|--------|------|--------|
+| U1 | API 对称 | `TryFreeMemOf(nil, ptr)` 在 sized 门关闭时直接 False 且不释放；owned 块在 HEAP_DEBUG 下漏 free | 插件助手 / DEBUG 诊断 | MED | **P1** |
+
+### U1 — TryFreeMemOf nil + owned
+
+| 项 | 内容 |
+|----|------|
+| **根因** | 历史 fail-closed：`AAllocator=nil` 一律 False，未区分 DefaultHeap 自有 vs foreign；与 `FreeMemOf(nil, …)` / S1 TryRealloc 对称哲学冲突。 |
+| **影响** | `HEAP_DEBUG` 开时 sized 门关，`TryFreeMemOf(nil, process_ptr)` 返回 False 且不 free → 泄漏或调用方误判仍存活。 |
+| **Go** | free 对有效指针必须生效；错误指针才 panic。 |
+| **Rust** | dealloc 需正确 Layout/allocator；错误 allocator 是逻辑错误。 |
+| **策略** | sized 快路径保留；否则非 nil 插件 `FreeMem`；nil 时仅当 `TryBlockSize` 证自有 → process `FreeMem`（尊重 HEAP_DEBUG）；foreign → False。 |
+| **风险** | 低：foreign 仍 fail-closed；不改变 `FreeMemOf(nil, foreign)` 的 UB 面。 |
+| **非目标** | 不让 Try 对 foreign 调 process FreeMem；不合并双轨。 |

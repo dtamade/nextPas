@@ -1,71 +1,64 @@
-# mem 可用性实施规划（F1–F7 + R1–R5 + S1–S3）
+# mem 可用性实施规划（含 U1 收口）
 
-**状态**: S1–S3 implemented
+**状态**: F1–F7 / R / S / T / **U1 implemented** — 默认双轨可用性主线 **CLOSED**
 **前置**: [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md) · [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md)
 **日期**: 2026-07-17
-**确认门**: 评估 + 调研 + 本计划落盘后 **统一实施**（禁止边调边改设计）
 
 ### 实施检查清单
 
-- [x] M0–M7 F1–F7（已落地）
-- [x] M8–M11 R1–R5（已落地）
-- [x] M12 S1 TryReallocMemOf 与 ReallocMemOf 成功语义对称
-- [x] M13 S3 guardrails + check_usability_docs
-- [x] M14 S2 error.pas 对齐 raise 用 FormatAllocErrorMsg
-- [x] M15 文档复评 USABILITY-SCORE **9.3**
+- [x] M0–M15 F1–F7 / R1–R5 / S1–S3
+- [x] M16 T2 AllocArray overflow → EAllocError + FormatAllocErrorMsg
+- [x] M17 T3 AllocZeroed/AllocArray ResolveAllocator
+- [x] M18 T1 Arena Realloc FormatAllocErrorMsg
+- [x] M19 T4 guardrails + SCORE 9.35
+- [x] M20 U1 TryFreeMemOf nil+owned free
+- [x] M21 U1 guardrails + SCORE 9.4 + 主线 CLOSED
 
 ---
 
-## 1. 里程碑（三轮 S1–S3）
+## 1. 里程碑（本轮 U1）
 
 | M | 名称 | 交付 | 依赖 | 优先级 |
 |---|------|------|------|--------|
-| **M12** | Try 对称 | S1：删 `TryReallocMemOf` 错误早退 | 无 | **P1** |
-| **M13** | 门禁 | S3：`TestTryReallocMemOfNilAllocatorGetMem` + docs 锁 | M12 | **P0** |
-| **M14** | 错误助手 | S2：`SanitizeRuntimeAlignment` / `SanitizeConfigAlignment` | 无 | **P2** |
-| **M15** | 复评 | SCORE/EVAL/RESEARCH/FIX-PLAN | M12–M14 | **P2** |
+| **M20** | TryFreeMemOf 对称 | U1 | 无 | **P1** |
+| **M21** | 门禁与收口 | guardrails + docs + CLOSED | M20 | **P0** |
 
 ### 依赖图
 
 ```text
-M12 TryReallocMemOf ──► M13 guardrails
-M14 error.pas ─────────► M15 docs
-M12 / M13 ─────────────► M15 docs
+M20 ──► M21 guardrails + score CLOSED
 ```
 
 ---
 
-## 2. 实现要点（冻结设计）
+## 2. 实现要点（冻结）
 
-1. **删除** `TryReallocMemOf` 中 `(AAllocator=nil) and (APtr=nil) and (ANewSize>0)` 早退。
-2. 保留：`Result := (ANewPtr <> nil) or (ANewSize = 0)`；权威语义在 `ReallocMemOf`。
-3. S2 **仅** `error.pas` 对齐校验；不扫 pool/blockpool 历史 raise。
-4. **不**默认开 HEAP_SAFETY / ARENA_STRICT / DEBUG。
+1. `TryFreeMemOf`：sized 快路径不变；非 nil 插件 `FreeMem`；nil 时仅 `TryBlockSize` 自有 → process `FreeMem`；foreign → False。
+2. 不改变 `FreeMemOf(nil, foreign)` 过程式回落（UB 面文档已知）。
+3. 不默认开 SAFETY/DEBUG；不合并双轨。
 
 ---
 
-## 3. 验证（M15）
+## 3. 验证
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails
 make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
-make focused FOCUS=core/tests/nextpas.core.mem/test_error
-make focused FOCUS=core/tests/nextpas.core.mem/test_debug_wrap
 make hygiene
 ```
 
 | 发现 | 验收 |
 |------|------|
-| S1 | `TryReallocMemOf(nil,nil,0,N,P)` → True + non-nil；可 FreeMem |
-| S2 | 非法对齐 raise 消息含 `Type.Method:` stem |
-| S3 | guardrails + check_usability_docs 锁 S1/S2 |
+| U1 | TryFreeMemOf(nil, owned) True 且 free；foreign False；HEAP_DEBUG 下仍 free |
 
 ---
 
-## 4. 回滚
+## 4. 非目标
 
-恢复 `TryReallocMemOf` 早退；对齐消息回裸字符串；删对应测试。
+双轨合并、默认安全税、全库 pool raise 扫改、HIR Operands / package DTO 整树、EOutOfMemory 继承树改造。
 
-## 5. 非目标
+---
 
-双轨合并、默认安全税、EOutOfMemory 继承树大迁移、门面大规模删 Tier-2、全库 pool raise 格式扫改。
+## 5. 主线 CLOSED 后
+
+无新 P0/P1 不得在 mem lane 上为「可用性满分」再开 slice。独立 lane：package DTO→TVec；Scorecard host 扩展。

@@ -508,9 +508,18 @@ begin
     DefaultHeap.FreeMem(APtr, LClassSize);
     Exit(True);
   end;
-  if AAllocator = nil then
+  if AAllocator <> nil then
+  begin
+    AAllocator.FreeMem(APtr);
+    Exit(True);
+  end;
+  { U1: nil allocator — free only when DefaultHeap owns the block (safe),
+    via process FreeMem so HEAP_DEBUG still tracks. Foreign → False (no UB).
+    FreeMemOf(nil, foreign) still falls through to process FreeMem (UB);
+    Try stays the fail-closed form. }
+  if not TryBlockSize(APtr, LClassSize) then
     Exit(False);
-  AAllocator.FreeMem(APtr);
+  FreeMem(APtr);
   Result := True;
 end;
 
@@ -594,7 +603,8 @@ end;
 
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 begin
-  Result := AAllocator.AllocMem(ASize);
+  { T3: nil → process default heap (S5 ResolveAllocator), never AV. }
+  Result := ResolveAllocator(AAllocator).AllocMem(ASize);
 end;
 
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
@@ -602,11 +612,13 @@ var
   LTotal: SizeUInt;
 begin
   if (ACount = 0) or (AElemSize = 0) then Exit(nil);
-  { 乘法前溢出检查：ACount * AElemSize > High(SizeUInt) 时拒绝 }
+  { T2: count*elemSize overflow is a programming error (ERROR-POLICY), not OOM. }
   if ACount > (High(SizeUInt) div AElemSize) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
+    raise EAllocError.Create(aeInvalidLayout,
+      FormatAllocErrorMsg('AllocArray', 'AllocArray', 'count*elemSize overflow'));
   LTotal := ACount * AElemSize;
-  Result := AAllocator.AllocMem(LTotal);
+  { T3: nil allocator → process default heap. }
+  Result := ResolveAllocator(AAllocator).AllocMem(LTotal);
 end;
 
 function CreateFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool;
