@@ -1,6 +1,6 @@
 # Usability Fix Plan: nextpas.core.http cycle-11 Wave F
 
-**Status**: verified (pending path-limited land)
+**Status**: landed
 **Assessment**: `2026-07-17-usability-assessment-cycle11.md`
 **Research**: `2026-07-17-usability-cycle11-research.md`
 
