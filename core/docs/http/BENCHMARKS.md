@@ -56,6 +56,33 @@ shapes differ. Durable conclusion: socket/runtime floor is a first-order share
 of fullchain cost; further wins need L1 micros or profiled hotspots, not more
 ranking tables.
 
+### Wave P1 hotspot: header Get/Has fuse (2026-07-17)
+
+**Hotspot**: L1 `THttpHeaders.Get` / `Has` — public path ran
+`ValidateNameAndNeedsNormalize` then `FindFirst` (second case-fold scan; mixed-case
+names normalized twice).
+
+**Change**: one validate+normalize pass, then scan on the normalized name
+(`FindFirstNormalized`). No API surface change.
+
+**Command** (repo `core/`):
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+**Local before/after** (Linux 6.12 amd64, FPC 3.3.1, same machine, mean ns/op):
+
+| row | before | after | note |
+| --- | -----: | ----: | ---- |
+| Get miss (3 headers) | 98.5 | **81.5** | ~17% faster; primary lookup residual |
+| Set+Get 5 headers (filtered mean) | 867.8 | 852.3 | small; dominated by create/set |
+| Set+Get 15 headers (filtered mean) | 2.74µs | 2.71µs | noise / create-bound |
+| GetAll miss (5 headers) | 69.9 | 71.0 | already single-normalize; noise |
+
+Caveat: single-host micro only; not fullchain ranking. Correctness:
+`make focused FOCUS=core/tests/nextpas.core.http/test_http_headers` (28 pass).
+
 SysUtils isolation note (2026-07-16): HTTP benches no longer rely on implicit
 `SysUtils` symbols. `bench_fullchain` / `bench_server` use
 `nextpas.core.os.env` + `nextpas.core.errors`; `bench_h1parser` uses
