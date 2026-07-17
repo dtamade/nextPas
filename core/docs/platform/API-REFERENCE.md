@@ -204,6 +204,18 @@
 | `platform_pipe_close(var APipe): Int32` | 关闭管道 |
 | `platform_dup2(AOldFd, ANewFd): Int32` | 复制文件描述符 |
 
+## 14b. process — 进程（节选）
+
+| 函数 | 说明 |
+|------|------|
+| `platform_process_spawn(...)` | 启动进程 |
+| `platform_process_wait` / `try_wait` | 等待退出 |
+| `platform_process_create_piped(...)` | 带 stdin/stdout/stderr 管道启动 |
+| `platform_process_write_stdin_ex(fd, data, len, out n): Int32` | **规范** stdin 写：`0` 成功 |
+| `platform_process_read_stdout_ex(fd, buf, len, out n): Int32` | **规范** stdout 读：`0` 成功；EAGAIN/EOF → n=0 |
+| `platform_process_read_stderr_ex(fd, buf, len, out n): Int32` | **规范** stderr 读：同上 |
+| `platform_process_write_stdin` / `read_stdout` / `read_stderr` | **deprecated** 兼容包装（字节数/-1） |
+
 ## 15. pty — 伪终端
 
 | 函数 | 说明 |

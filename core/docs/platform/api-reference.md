@@ -1,5 +1,7 @@
 # Platform Module API Reference
 
+> **Superseded by [API-REFERENCE.md](API-REFERENCE.md).** Keep this file only as a historical snapshot.
+
 > Generated: 2026-06-16
 > Module: `nextpas.core.platform.*`
 
