@@ -49,6 +49,8 @@ type
       const AStatus: THttpStatus); overload;
     constructor CreateOp(const AKind: THttpErrorKind; const AOp,
       AMessage: string); overload;
+    constructor CreateOp(const AKind: THttpErrorKind; const AOp,
+      AMessage: string; const AStatus: THttpStatus); overload;
     property Kind: THttpErrorKind read FKind;
     property Status: THttpStatus read FStatus;
     property Op: string read FOp;
@@ -321,6 +323,15 @@ begin
   FOp := AOp;
 end;
 
+constructor EHttpError.CreateOp(const AKind: THttpErrorKind; const AOp,
+  AMessage: string; const AStatus: THttpStatus);
+begin
+  inherited Create(AMessage, HttpErrorKindToCategory(AKind));
+  FKind := AKind;
+  FStatus := AStatus;
+  FOp := AOp;
+end;
+
 function HttpErrorIsTimeout(const E: Exception): Boolean;
 begin
   if E = nil then
@@ -386,7 +397,7 @@ end;
 procedure THttpCancelToken.ThrowIfCanceled;
 begin
   if FCanceled then
-    raise EHttpError.Create(hekCanceled, 'HTTP request canceled');
+    raise EHttpError.CreateOp(hekCanceled, 'cancel', 'HTTP request canceled');
 end;
 
 function NewHttpCancelToken: IHttpCancelToken;

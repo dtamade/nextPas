@@ -1,9 +1,9 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-17 (post Wave F; forward work owned by `ROADMAP.md`)
+> Last updated: 2026-07-17 (multi-era ROADMAP + Goal Loop)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 >
-> **Forward execution**: see [`ROADMAP.md`](ROADMAP.md) (ordered phases / next wave). This file is north star + stage truth, not the day-to-day backlog.
+> **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — ordered Eras/Waves, Goal Loop, Inbox. This file is north star + stage truth, **not** a day-to-day backlog.
 
 ## North Star And Scope
 
@@ -22,15 +22,12 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | 项 | 状态 |
 |----|------|
 | G0–G5 骨架 | 完成 |
-| non-H3 stage-complete | 完成（INV-12 keep-alive；H2 facade live；API 审计；bench 诚实；H3 无假 facade） |
-| Usability Wave A–F | 完成并 landed main |
-| Wave G Cookie site | 完成（eTLD+1 + PSL 子集） |
-| Wave H Response metadata | 完成（FinalUrl + Version） |
-| Wave I Proxy auth | 完成（Basic only freeze；Digest Park） |
-| 主 Makefile gate | 35 focused suites |
-| **下一执行点** | **[`ROADMAP.md`](ROADMAP.md) Wave J — Error Op hygiene** |
+| non-H3 stage-complete | 完成（H3 诚实 blocked on QUIC） |
+| Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
+| 主 Makefile gate | ~35 focused suites |
+| **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（满自治 Goal Loop；本文件不写具体 Wave 名） |
 
-日常客户端主路径已齐。剩下是 product depth（Op hygiene）与协议演进（H2 边角、H3/QUIC）。
+四支柱、推荐路径、Done when、Gates、Inbox 均只在 ROADMAP 维护。
 
 ### Stage completion definition (non-H3)
 
@@ -260,17 +257,11 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 
 ## Current Highest-Value Slices
 
-**Do not use this section as a live backlog.** Ordered forward work lives in
-[`ROADMAP.md`](ROADMAP.md). Summary:
+**Not a live backlog.** Ordered work + Goal Loop: [`ROADMAP.md`](ROADMAP.md).
 
-| Era | Outcome |
-|-----|---------|
-| Stage P1–P5 (2026-07-16) | keep-alive INV-12 · H2 facade · API audit · bench honesty · H3 blocked-honest — **closed** |
-| Usability Wave A–F (2026-07-17) | dial/cancel · GetJson/Retry-After · CONNECT · direct HTTPS · proxy Basic · HTTP-date · WithTLSContext · *JsonDocument — **landed main** |
-| Wave G (2026-07-17) | Cookie eTLD+1 SiteKey · multi-label PSL subset · reject Domain=public-suffix — **landed** |
-| **Next** | **ROADMAP Phase P / Wave J — Error Op hygiene** |
+Closed eras (detail only in ROADMAP / archive): stage P1–P5, usability A–I, and any wave already marked landed on ROADMAP.
 
-If ROADMAP and any cycle assessment disagree, **ROADMAP wins** until explicitly revised.
+**Live ordered path and current NEXT**: only [`ROADMAP.md`](ROADMAP.md). If archive notes disagree, **ROADMAP wins**.
 
 ## Immediate Do-Not-Drift Rules
 

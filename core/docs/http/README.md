@@ -7,8 +7,8 @@ middleware chaining, and a centralized internal transport registry.
 
 | Doc | Role |
 |-----|------|
-| **[`ROADMAP.md`](ROADMAP.md)** | **Forward work only** — start here before coding |
-| [`GOAL_TREE.md`](GOAL_TREE.md) | North star, stage definition, do-not-drift rules |
+| **[`ROADMAP.md`](ROADMAP.md)** | **Sole forward NEXT** — Eras/Waves, Goal Loop, Inbox |
+| [`GOAL_TREE.md`](GOAL_TREE.md) | North star + do-not-drift only (no live Wave name) |
 | [`CONTRACT.md`](CONTRACT.md) | Public behavior contract |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable architecture facts, runtime ownership, protocol seams |
 | [`API_COVERAGE.md`](API_COVERAGE.md) | Public API evidence matrix |
