@@ -179,29 +179,65 @@ function platform_process_create_piped(const APath: PAnsiChar; AArgv: PPAnsiChar
   const ACwd: PAnsiChar; AOptions: TPlatformProcessOptions;
   out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
 
+{** @desc 向进程 stdin 写入数据（规范错误码版本）
+    @param AStdinWrite stdin 写端文件描述符
+    @param AData 写入数据
+    @param ALen 数据长度
+    @param ABytesWritten 输出实际写入字节数
+    @return 0 成功，否则返回错误码 *}
+function platform_process_write_stdin_ex(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32; out ABytesWritten: Int32): Int32;
+
+{** @desc 从进程 stdout 读取数据（规范错误码版本）
+    @param AStdoutRead stdout 读端文件描述符
+    @param ABuf 输出缓冲区
+    @param ABufLen 缓冲区长度
+    @param ABytesRead 输出实际读取字节数；EOF 或非阻塞无数据时为 0
+    @return 0 成功，否则返回错误码 *}
+function platform_process_read_stdout_ex(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+
+{** @desc 从进程 stderr 读取数据（规范错误码版本）
+    @param AStderrRead stderr 读端文件描述符
+    @param ABuf 输出缓冲区
+    @param ABufLen 缓冲区长度
+    @param ABytesRead 输出实际读取字节数；EOF 或非阻塞无数据时为 0
+    @return 0 成功，否则返回错误码 *}
+function platform_process_read_stderr_ex(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+
 {** @desc 向进程 stdin 写入数据
+    @note 兼容接口：成功返回写入字节数；普通失败返回 -1；
+          unsupported 平台返回 PLATFORM_ERR_UNSUPPORTED。
     @param AStdinWrite stdin 写端文件描述符
     @param AData 写入数据
     @param ALen 数据长度
     @return 写入字节数，-1 失败 *}
 function platform_process_write_stdin(AStdinWrite: PtrInt;
   AData: PAnsiChar; ALen: Int32): Int32;
+  deprecated 'Use platform_process_write_stdin_ex';
 
 {** @desc 从进程 stdout 读取数据
+    @note 兼容接口：成功返回读取字节数；EOF 返回 0；普通失败返回 -1；
+          unsupported 平台返回 PLATFORM_ERR_UNSUPPORTED。
     @param AStdoutRead stdout 读端文件描述符
     @param ABuf 输出缓冲区
     @param ABufLen 缓冲区长度
     @return 读取字节数，0 表示 EOF，-1 失败 *}
 function platform_process_read_stdout(AStdoutRead: PtrInt;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  deprecated 'Use platform_process_read_stdout_ex';
 
 {** @desc 从进程 stderr 读取数据
+    @note 兼容接口：成功返回读取字节数；EOF 返回 0；普通失败返回 -1；
+          unsupported 平台返回 PLATFORM_ERR_UNSUPPORTED。
     @param AStderrRead stderr 读端文件描述符
     @param ABuf 输出缓冲区
     @param ABufLen 缓冲区长度
     @return 读取字节数，0 表示 EOF，-1 失败 *}
 function platform_process_read_stderr(AStderrRead: PtrInt;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  deprecated 'Use platform_process_read_stderr_ex';
 
 implementation
 
@@ -1089,56 +1125,111 @@ begin
     APipes.StderrRead := PtrInt(LStderrPipe[0]);
 end;
 
-function platform_process_write_stdin(AStdinWrite: PtrInt;
-  AData: PAnsiChar; ALen: Int32): Int32;
+function platform_process_write_stdin_ex(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32; out ABytesWritten: Int32): Int32;
 var
   LN: PtrInt;
 begin
-  if (AStdinWrite < 0) or (AData = nil) or (ALen <= 0) then
-    Exit(-1);
+  ABytesWritten := 0;
+  if (AStdinWrite < 0) or (ALen < 0) or ((AData = nil) and (ALen > 0)) then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
   LN := write(cint(AStdinWrite), AData, ALen);
   if LN < 0 then
-    Result := -1
-  else
-    Result := Int32(LN);
+    Exit(platform_get_errno);
+  ABytesWritten := Int32(LN);
+  Result := 0;
 end;
 
-function platform_process_read_stdout(AStdoutRead: PtrInt;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_process_read_stdout_ex(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
 var
   LN: PtrInt;
 begin
-  if (AStdoutRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  ABytesRead := 0;
+  if (AStdoutRead < 0) or (ABufLen < 0) or ((ABuf = nil) and (ABufLen > 0)) then
+    Exit(PLATFORM_ERR_INVALID);
+  if ABufLen = 0 then
+    Exit(0);
   LN := read(cint(AStdoutRead), ABuf, ABufLen);
   if LN < 0 then
   begin
     if platform_get_errno = ESysEAGAIN then
-      Result := 0
-    else
-      Result := -1;
-  end
-  else
-    Result := Int32(LN);
+      Exit(0);
+    Exit(platform_get_errno);
+  end;
+  ABytesRead := Int32(LN);
+  Result := 0;
 end;
 
-function platform_process_read_stderr(AStderrRead: PtrInt;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+function platform_process_read_stderr_ex(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
 var
   LN: PtrInt;
 begin
-  if (AStderrRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
-    Exit(-1);
+  ABytesRead := 0;
+  if (AStderrRead < 0) or (ABufLen < 0) or ((ABuf = nil) and (ABufLen > 0)) then
+    Exit(PLATFORM_ERR_INVALID);
+  if ABufLen = 0 then
+    Exit(0);
   LN := read(cint(AStderrRead), ABuf, ABufLen);
   if LN < 0 then
   begin
     if platform_get_errno = ESysEAGAIN then
-      Result := 0
-    else
-      Result := -1;
-  end
-  else
-    Result := Int32(LN);
+      Exit(0);
+    Exit(platform_get_errno);
+  end;
+  ABytesRead := Int32(LN);
+  Result := 0;
+end;
+
+function LegacyProcessPipeIoResult(AError, ABytes: Int32): Int32; inline;
+begin
+  if AError = 0 then
+    Exit(ABytes);
+  if AError = PLATFORM_ERR_UNSUPPORTED then
+    Exit(AError);
+  Result := -1;
+end;
+
+function platform_process_write_stdin(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32): Int32; deprecated 'Use platform_process_write_stdin_ex';
+var
+  LError: Int32;
+  LBytesWritten: Int32;
+begin
+  if (AStdinWrite < 0) or (AData = nil) or (ALen <= 0) then
+    Exit(-1);
+  LError := platform_process_write_stdin_ex(AStdinWrite, AData, ALen,
+    LBytesWritten);
+  Result := LegacyProcessPipeIoResult(LError, LBytesWritten);
+end;
+
+function platform_process_read_stdout(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated 'Use platform_process_read_stdout_ex';
+var
+  LError: Int32;
+  LBytesRead: Int32;
+begin
+  if (AStdoutRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  LError := platform_process_read_stdout_ex(AStdoutRead, ABuf, ABufLen,
+    LBytesRead);
+  Result := LegacyProcessPipeIoResult(LError, LBytesRead);
+end;
+
+function platform_process_read_stderr(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated 'Use platform_process_read_stderr_ex';
+var
+  LError: Int32;
+  LBytesRead: Int32;
+begin
+  if (AStderrRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
+    Exit(-1);
+  LError := platform_process_read_stderr_ex(AStderrRead, ABuf, ABufLen,
+    LBytesRead);
+  Result := LegacyProcessPipeIoResult(LError, LBytesRead);
 end;
 {$ENDIF}
 
@@ -1646,43 +1737,115 @@ begin
     APipes.StderrRead := LStderrPipe[0];
 end;
 
-function platform_process_write_stdin(AStdinWrite: PtrInt;
-  AData: PAnsiChar; ALen: Int32): Int32;
+function platform_process_write_stdin_ex(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32; out ABytesWritten: Int32): Int32;
 var
   LWritten: DWORD;
 begin
+  ABytesWritten := 0;
+  if (AStdinWrite < 0) or (ALen < 0) or ((AData = nil) and (ALen > 0)) then
+    Exit(PLATFORM_ERR_INVALID);
+  if ALen = 0 then
+    Exit(0);
+  LWritten := 0;
+  if not WriteFile(HANDLE(PtrUInt(AStdinWrite)), AData, DWORD(ALen), @LWritten, nil) then
+    Exit(platform_get_last_error);
+  ABytesWritten := Int32(LWritten);
+  Result := 0;
+end;
+
+function platform_process_read_stdout_ex(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+var
+  LRead: DWORD;
+  LError: DWORD;
+begin
+  ABytesRead := 0;
+  if (AStdoutRead < 0) or (ABufLen < 0) or ((ABuf = nil) and (ABufLen > 0)) then
+    Exit(PLATFORM_ERR_INVALID);
+  if ABufLen = 0 then
+    Exit(0);
+  LRead := 0;
+  if not ReadFile(HANDLE(PtrUInt(AStdoutRead)), ABuf, DWORD(ABufLen), @LRead, nil) then
+  begin
+    LError := GetLastError;
+    if (LError = ERROR_BROKEN_PIPE) or (LError = ERROR_HANDLE_EOF) then
+      Exit(0);
+    Exit(platform_map_windows_error_code(LError));
+  end;
+  ABytesRead := Int32(LRead);
+  Result := 0;
+end;
+
+function platform_process_read_stderr_ex(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+var
+  LRead: DWORD;
+  LError: DWORD;
+begin
+  ABytesRead := 0;
+  if (AStderrRead < 0) or (ABufLen < 0) or ((ABuf = nil) and (ABufLen > 0)) then
+    Exit(PLATFORM_ERR_INVALID);
+  if ABufLen = 0 then
+    Exit(0);
+  LRead := 0;
+  if not ReadFile(HANDLE(PtrUInt(AStderrRead)), ABuf, DWORD(ABufLen), @LRead, nil) then
+  begin
+    LError := GetLastError;
+    if (LError = ERROR_BROKEN_PIPE) or (LError = ERROR_HANDLE_EOF) then
+      Exit(0);
+    Exit(platform_map_windows_error_code(LError));
+  end;
+  ABytesRead := Int32(LRead);
+  Result := 0;
+end;
+
+function LegacyProcessPipeIoResult(AError, ABytes: Int32): Int32; inline;
+begin
+  if AError = 0 then
+    Exit(ABytes);
+  if AError = PLATFORM_ERR_UNSUPPORTED then
+    Exit(AError);
+  Result := -1;
+end;
+
+function platform_process_write_stdin(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32): Int32; deprecated 'Use platform_process_write_stdin_ex';
+var
+  LError: Int32;
+  LBytesWritten: Int32;
+begin
   if (AStdinWrite < 0) or (AData = nil) or (ALen <= 0) then
     Exit(-1);
-  if not WriteFile(HANDLE(PtrUInt(AStdinWrite)), AData, DWORD(ALen), @LWritten, nil) then
-    Result := -1
-  else
-    Result := Int32(LWritten);
+  LError := platform_process_write_stdin_ex(AStdinWrite, AData, ALen,
+    LBytesWritten);
+  Result := LegacyProcessPipeIoResult(LError, LBytesWritten);
 end;
 
 function platform_process_read_stdout(AStdoutRead: PtrInt;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated 'Use platform_process_read_stdout_ex';
 var
-  LRead: DWORD;
+  LError: Int32;
+  LBytesRead: Int32;
 begin
   if (AStdoutRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
-  if not ReadFile(HANDLE(PtrUInt(AStdoutRead)), ABuf, DWORD(ABufLen), @LRead, nil) then
-    Result := -1
-  else
-    Result := Int32(LRead);
+  LError := platform_process_read_stdout_ex(AStdoutRead, ABuf, ABufLen,
+    LBytesRead);
+  Result := LegacyProcessPipeIoResult(LError, LBytesRead);
 end;
 
 function platform_process_read_stderr(AStderrRead: PtrInt;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated 'Use platform_process_read_stderr_ex';
 var
-  LRead: DWORD;
+  LError: Int32;
+  LBytesRead: Int32;
 begin
   if (AStderrRead < 0) or (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
-  if not ReadFile(HANDLE(PtrUInt(AStderrRead)), ABuf, DWORD(ABufLen), @LRead, nil) then
-    Result := -1
-  else
-    Result := Int32(LRead);
+  LError := platform_process_read_stderr_ex(AStderrRead, ABuf, ABufLen,
+    LBytesRead);
+  Result := LegacyProcessPipeIoResult(LError, LBytesRead);
 end;
 
 function platform_getpid: Int32;
@@ -1767,15 +1930,24 @@ function platform_process_create_piped(const APath: PAnsiChar; AArgv: PPAnsiChar
   const ACwd: PAnsiChar; AOptions: TPlatformProcessOptions;
   out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
 begin FillChar(AProc, SizeOf(AProc), 0); FillChar(APipes, SizeOf(APipes), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_write_stdin_ex(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32; out ABytesWritten: Int32): Int32;
+begin ABytesWritten := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_read_stdout_ex(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_read_stderr_ex(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_write_stdin(AStdinWrite: PtrInt;
-  AData: PAnsiChar; ALen: Int32): Int32;
-begin Result := -1; end;
+  AData: PAnsiChar; ALen: Int32): Int32; deprecated 'Use platform_process_write_stdin_ex';
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_read_stdout(AStdoutRead: PtrInt;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
-begin Result := -1; end;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated 'Use platform_process_read_stdout_ex';
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_read_stderr(AStderrRead: PtrInt;
-  ABuf: PAnsiChar; ABufLen: Int32): Int32;
-begin Result := -1; end;
+  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated 'Use platform_process_read_stderr_ex';
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_getpid: Int32;
 begin Result := -1; end;
 function platform_io_read(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
