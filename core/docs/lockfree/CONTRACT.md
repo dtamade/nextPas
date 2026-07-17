@@ -4,7 +4,7 @@
 **层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-17
-**版本**：2.6
+**版本**：2.7
 
 ---
 
@@ -85,6 +85,53 @@ T1 成熟度不在本表：T1 为 **Ready-for-consumer**（见 READY）。T3 = E
 R8 轴 **不** 因文档收口而升入 T1 / 默认门面；生产化属重大变更。
 
 **不做（H2-2）**：把任一 T2 档升入默认门面；统一重写 T2 算法；改变 Closed 语义。
+
+### 0.3 H3-2 — T2 Guarded 生产契约子集（bag + multimap）
+
+**授权状态**：H3-2（用户/总控显式授权）。**不**将 T2 升入默认 `uses nextpas.core.lockfree` 门面。
+**范围**：仅下列 2 个 Guarded 类型获得**统一生产向** Close / managed / progress 契约；其余 T2 仍按 §0.2 分档与各单元文档。
+
+| 类型 | 单元 | Import | 默认门面 |
+|------|------|--------|----------|
+| `TLockFreeBag<T>` / `TLockFreeBagImpl<T>` | `nextpas.core.lockfree.bag` | **直接** `uses` | **否** |
+| `TLockFreeMultiMap<TKey,TValue>` / `…Impl` | `nextpas.core.lockfree.multimap` | **直接** `uses` | **否** |
+
+#### Progress（诚实）
+
+| 类型 | Progress | 说明 |
+|------|----------|------|
+| **Bag** | **lock-free ring（MPMC 序列号槽）** + wait-address 阻塞路径 | `TryAdd`/`TryTake` 热路径为 CAS/序列号；`AddWait`/`TakeWait` 可阻塞。**不是**“集合语义上的完全无锁算法重写”，是有界 ring bag。 |
+| **MultiMap** | **lock-based concurrent**（**单 map 自旋锁** `FLock`） | 所有突变与多数读在锁内。**不是**分片锁、**不是** lock-free map。名称在 `lockfree.*` 仅表示并发容器命名空间。 |
+
+#### Managed 元素
+
+| 类型 | 规则 |
+|------|------|
+| **Bag** | `Create`：`IsManagedType(T)` → `EArgumentError`。T 必须 unmanaged。 |
+| **MultiMap** | `Create`：`IsManagedType(TKey)` 或 `IsManagedType(TValue)` → `EArgumentError`。键值均须 unmanaged。 |
+| **例外** | 二者**不**在 §0.1 AnsiString 例外表；禁止用 AnsiString 特化绕过。 |
+
+#### Close / 生命周期
+
+| 类型 | Close 后行为 | 生命周期 |
+|------|----------------|----------|
+| **Bag** | `IsClosed`；`TryAdd` → `arClosed`；已入队元素仍可 `TryTake`/`TakeWait`（空且 closed 时 take 失败）；`Close` 唤醒 data/space waiters；`Destroy` **先** `Close` | 生产推荐：`Close` → drain（按需）→ join producers/consumers → `Free` |
+| **MultiMap** | `IsClosed`；`Add` → `mmClosed`；**已有**键值仍可 `Find`/`Contains`/`Remove*`（读/删不因 Close 单独禁止）；`Clear` 在 Close 后仍清空已有数据（调用方须知）；`Destroy` **先** `Close` 再释放桶 | 生产推荐：`Close` → 停止新写入方 → 读完/清理 → `Free` |
+
+**Closed 语义边界（H3-2 不改动）**：
+
+- 不改变 T1 Channel/SegQueue 等 ClosedPublishPolicy（§1.3）。
+- Bag/MultiMap 的 closed 返回值（`arClosed` / `mmClosed`）保持现有枚举语义；H3-2 **不**改为抛异常。
+
+#### 测试与门禁
+
+| 证据 | 路径 |
+|------|------|
+| Bag 行为 + Close + source-contract | `core/tests/nextpas.core.lockfree/test_lockfree_bag` |
+| MultiMap 行为 + Close + source-contract | `core/tests/nextpas.core.lockfree/test_lockfree_multimap` |
+| 门面不含 bag/multimap | `nextpas.core.lockfree.pas` 无 re-export（source-contract 钉住） |
+
+**H3-2 非目标**：全量 T2 契约化；T2 进默认门面；算法重写；R8 生产化；删 legacy CAS。
 
 ---
 
