@@ -157,7 +157,12 @@ end;
   接到 `ITcpStream.SetCancelToken`：`NewHttpCancelToken` 为 waitable
   （socketpair wake + `platform_socket_poll_or_wake`，Unix）；probe-only
   token 退回 ~10ms `SO_*TIMEO` 切片。中途取消抛 `hekCanceled`（经
-  `ECancelledError` 包装）。Windows 无 socketpair 时 wake residual。
+  `ECancelledError` 包装）。
+  **Windows residual（Wave R3）**：`platform_socket_pair` 在 Windows 路径
+  固定返回 `PLATFORM_ERR_UNSUPPORTED`（无原生 socketpair；loopback 方案未
+  落地）。`TNetCancelToken` 因此 `FHasWake=False`，`WakeHandle=0`，全程
+  **probe-only**（~10ms `NET_IO_CANCEL_SLICE_MS`），**不**声称近即时唤醒。
+  Linux/macOS/FreeBSD waitable 证据不变（X2）。
   **仍建议**与 `Timeout` / `WithTimeout` 配对，避免无 cancel 时无限等待。
   超时仍为 `hekTimeout`（`WithTimeout` / client options）。
 - Client 超时拆分（`THttpClientOptions`）：
@@ -212,7 +217,7 @@ end;
 | Capability | HTTP surface today | Owner | Status |
 |------------|-------------------|-------|--------|
 | OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** (H1/H2) |
-| Interruptible blocked socket read on cancel | waitable `NewNetCancelToken` / `NewHttpCancelToken` + poll-or-wake; probe-only ~10ms slice | net + H1/H2/WS client wire | **Landed** (X2); Windows socketpair residual |
+| Interruptible blocked socket read on cancel | waitable `NewNetCancelToken` / `NewHttpCancelToken` + poll-or-wake; probe-only ~10ms slice | net + H1/H2/WS client wire | **Landed** (X2); **Windows = probe-only only**（R3；`platform_socket_pair` → UNSUPPORTED） |
 | WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
 | HTTPS CONNECT (plain HTTP proxy) | CONNECT + TLS over tunnel; origin-form | http H1 + TLS stream | **Landed** (cycle-9 Wave D) |
 | H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
@@ -560,7 +565,17 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 **诚实 residual（非缺口伪装）**：
 
 - 公开 `IHttpClient` 不暴露“单连接并发多请求”多路 API；多请求并发依赖多连接或上层调度。
-- OpenSSL backend heaptrc：**Wave X4** 修 `FPinValidator` 未释放（每 `CreateContext` ~32B）；client HTTPS 路径现余 **1×41B process-lifetime** residual（与请求次数无关；非 HTTPS 0 unfreed）。http 不宣称绝对 0。
+- OpenSSL backend heaptrc（**Wave X4 + R2 dig**）：
+  - X4 修 `FPinValidator` 未释放（每 `CreateContext` ~32B → FreeAndNil）。
+  - client `test_http_client` 在含 HTTPS 全量路径后仍余 **1×41B process-lifetime**
+    （分配/释放差恒为 1；与 HTTPS 请求次数无关；非 HTTPS 路径 0 unfreed）。
+  - **R2 dig**：heaptrc 报告 `Call trace for block … size 41` 但 **无帧**
+    （无可靠 owner 栈；无法归因到单一 http 对象）。owner 优先仍为 **tls/OpenSSL
+    初始化侧效应**，**不是** per-request 泄漏。http **不**宣称绝对 0 unfreed。
+  - 未换 TLS 后端；未在 http 层吞泄漏。
+- Cancel 平台分叉（**Wave R3**）：Unix waitable（socketpair+poll）；Windows
+  `platform_socket_pair` = UNSUPPORTED → **仅 probe-only ~10ms**。见 §2.2.0 /
+  §2.2.0a。
 - H3 / QUIC：无产品需求 + Blocked on QUIC；禁止空 facade。h2c Upgrade、CONNECT/WS-over-H2：Park（见 ROADMAP）。
 
 #### Client connection pool（Wave A2）
@@ -633,3 +648,6 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.13 | Era 6 Excellence：cancel/OpenSSL/idle-TTL residual 标明 X2/X4/X3 可主动收敛；H3 无产品需求 |
 | 2026-07-17 | 3.14 | Wave X1：WebSocket lifecycle 表（Close/`IsOpen`/关闭后读写/cancel Op） |
 | 2026-07-17 | 3.15 | Wave X2：waitable cancel 唤醒（socketpair+poll）；probe-only ~10ms residual |
+| 2026-07-17 | 3.16 | Wave R1：H1/H2 pool Close 锁外，IdleTTL suite 稳定 |
+| 2026-07-17 | 3.17 | Wave R2：HTTPS 1×41B dig → 无可靠 call stack，诚实 process-lifetime residual |
+| 2026-07-17 | 3.18 | Wave R3：Windows cancel = probe-only only（socket_pair UNSUPPORTED） |
