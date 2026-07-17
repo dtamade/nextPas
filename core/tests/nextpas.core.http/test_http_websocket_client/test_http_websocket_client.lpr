@@ -264,6 +264,7 @@ var
   LPort: UInt16;
   LGot: Boolean;
   LKind: THttpErrorKind;
+  LOp: string;
 begin
   { Entry-point cancel is deterministic without multi-thread hold. }
   LRouter := THttpRouter.Create;
@@ -287,22 +288,89 @@ begin
     LToken.Cancel;
     LGot := False;
     LKind := hekUnknown;
+    LOp := '';
     try
       LWs.ReadFrame;
     except
       on E: EHttpError do
       begin
         LKind := E.Kind;
+        LOp := E.Op;
         LGot := E.Kind = hekCanceled;
       end;
     end;
     Check(LGot, 'pre-canceled ReadFrame raises hekCanceled (kind=' +
       IntToStr(Ord(LKind)) + ')');
+    CheckEqual('cancel', LOp,
+      'entry cancel Op is cancel (shared token; not websocket)');
     try
       LWs.Close(1000, 'bye');
     except
       on E: Exception do ;
     end;
+    LWs := nil;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Wave X1: local Close is idempotent; IsOpen false; post-close Read/Write hekProtocol. }
+procedure TestWebSocketCloseLifecycle;
+var
+  LWs: IWebSocket;
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LHandle: TPlatformThreadHandle;
+  LPort: UInt16;
+  LWriteKind, LReadKind: THttpErrorKind;
+  LWriteMsg, LReadMsg: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LServerWs: IWebSocket;
+  begin
+    LServerWs := UpgradeWebSocket(AReq, AW);
+    try
+      LServerWs.ReadFrame;
+    except
+      on E: Exception do ;
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LWs := ConnectWebSocket('ws://127.0.0.1:' + IntToStr(LPort) + '/ws');
+    CheckTrue(LWs.IsOpen, 'open after ConnectWebSocket');
+    LWs.Close(1000, 'done');
+    CheckEqual(False, LWs.IsOpen, 'IsOpen false after local Close');
+    LWs.Close(1000, 'again');
+    CheckEqual(False, LWs.IsOpen, 'double Close still not open');
+    LWriteKind := hekUnknown;
+    LWriteMsg := '';
+    try
+      LWs.WriteText('after-close');
+    except
+      on E: EHttpError do
+      begin
+        LWriteKind := E.Kind;
+        LWriteMsg := E.Message;
+      end;
+    end;
+    CheckEqual(Ord(hekProtocol), Ord(LWriteKind), 'WriteText after Close is hekProtocol');
+    Check(Pos('closed', LWriteMsg) > 0, 'WriteText after Close mentions closed');
+    LReadKind := hekUnknown;
+    LReadMsg := '';
+    try
+      LWs.ReadFrame;
+    except
+      on E: EHttpError do
+      begin
+        LReadKind := E.Kind;
+        LReadMsg := E.Message;
+      end;
+    end;
+    CheckEqual(Ord(hekProtocol), Ord(LReadKind), 'ReadFrame after Close is hekProtocol');
+    Check(Pos('closed', LReadMsg) > 0, 'ReadFrame after Close mentions closed');
     LWs := nil;
   finally
     StopServer(LServer, LHandle);
@@ -384,6 +452,8 @@ begin
     @TestWebSocketConnectTimeoutSourceContract);
   T.Test('WebSocket canceled before ReadFrame raises hekCanceled',
     @TestWebSocketCanceledBeforeReadRaises);
+  T.Test('WebSocket close lifecycle IsOpen and post-close IO',
+    @TestWebSocketCloseLifecycle);
   T.Test('WebSocket live ConnectTimeout via backlog-full peer',
     @TestWebSocketLiveConnectTimeout);
 

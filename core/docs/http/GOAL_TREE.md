@@ -58,7 +58,7 @@ nextpas.core.http
 ├── G2: Correctness, safety, lifecycle, and ownership proof      [INV-12 final]
 ├── G3: API ergonomics and performance isolation                 [stage-closed]
 ├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [H2 facade-proven; H3 blocked]
-├── G5: Static/WebSocket graduation gates                        [helper-level stable; WS Excellence in ROADMAP Era 6]
+├── G5: Static/WebSocket graduation gates                        [static helper; WS production-helper contract in Era 6 X1]
 └── G6: Cross-language benchmark truth and long-run positioning  [stage-closed; further wins optional via Era 6 X5]
 ```
 
