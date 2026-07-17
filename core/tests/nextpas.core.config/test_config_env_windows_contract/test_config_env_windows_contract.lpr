@@ -32,6 +32,11 @@ begin
 end;
 
 begin
+  {$IFNDEF MSWINDOWS}
+  WriteLn('SKIP: config env windows contract is not Windows runtime evidence on this host');
+  Halt(0);
+  {$ENDIF}
+
   T := TTestSuite.Create('nextpas.core.config.env.windows_contract');
   T.Test('EnvNameToKey.MatchesPrefixCaseInsensitivelyOnWindows',
     @TestTryConfigEnvNameToKeyMatchesPrefixCaseInsensitivelyOnWindows);
