@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-17 (usability cycle-4: H2 dial/cancel parity + WithConnectTimeout)
+> Last updated: 2026-07-17 (usability cycle-5: WS dial budget + live e2e + CONTRACT truth)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -18,9 +18,11 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 ## Current Position
 
 This lane is **non-H3 stage-complete** on protocol surface. Usability-fix
-waves **1–3 are closed**; **cycle-4** lands H1/H2 OS dial timeout + mid-read
-cancel parity, fluent `WithConnectTimeout`, and docs truth (see
-`2026-07-17-usability-cycle4-fix-plan.md`). Prior waves (D1–D8):
+waves **1–3 are closed**; **cycle-4** landed H1/H2 OS dial timeout + mid-read
+cancel parity + fluent `WithConnectTimeout`; **cycle-5** lands WebSocket dial
+budgets (Default 30s), CONTRACT §2.1 truth, live H1 dial/cancel e2e, and
+redirect CreateOp polish (see `2026-07-17-usability-cycle5-fix-plan.md`).
+Prior waves (D1–D8):
 
 - G0–G5 and H3 honesty remain as previously closed (see below / Recent Fixes).
 - Wave-1 (M0–M7): builder `ContentLength` + fail-fast; `EHttpError.Kind`;

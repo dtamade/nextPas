@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（约 58 个源文件）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-16
-**版本**：3.0
+**最后更新**：2026-07-17
+**版本**：3.1
 
 ---
 
@@ -49,13 +49,25 @@ IHttpClient = interface
   function Send(const AReq: IHttpRequest): IHttpResponse;
   procedure CloseIdleConnections;
   function Get/Post/Put/Delete/Patch/Head/Options(...): IHttpResponse;
-  function PostForm / PostJson / PutJson / PatchJson / DeleteJson(...): IHttpResponse;
+  function GetString / GetBytes / PostString / PutString /
+           PatchString / DeleteString(...): string or TBytes;  { ensure-2xx }
+  function PostForm / PostMultipart(...): IHttpResponse;
+  function PostJson / PutJson / PatchJson / DeleteJson(...): IHttpResponse;  { raw }
   function SendStreaming(...): IHttpResponse;
   function WithBasicAuth / WithBearerAuth / WithHeader /
-           WithTimeout / WithMaxRedirects / WithFollowRedirects /
-           WithRetry(...): IHttpClient;
+           WithTimeout / WithConnectTimeout /
+           WithMaxRedirects / WithFollowRedirects /
+           WithRetry / WithCookieJar / WithProxyUrl(...): IHttpClient;
 end;
 ```
+
+**JSON 双层（raw vs ensure）**：
+
+| 形态 | API | 行为 |
+|------|-----|------|
+| raw | `IHttpClient.PostJson/PutJson/PatchJson/DeleteJson` | 返回 `IHttpResponse`，**不** ensure-2xx |
+| ensure string | free-fn `HttpPostJson` / `HttpGetString` / 方法 `GetString`/`PostString`/… | ensure 2xx + body string（或 TBytes） |
+| decode product | `GetJson` / ensure+parse 到 `TJsonValue` | **Deferred**（本版本不提供） |
 
 ### 2.2 Request / Response
 
@@ -128,8 +140,9 @@ end;
 
 | Capability | HTTP surface today | Owner | Status |
 |------------|-------------------|-------|--------|
-| OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** |
-| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1 client wire | **Landed** (slice latency) |
+| OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** (H1/H2) |
+| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1/H2 client wire | **Landed** (slice latency) |
+| WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
 | HTTPS CONNECT / proxy auth | plain HTTP absolute-form proxy only | http + TLS tunnel design | **Deferred** (separate milestone) |
 
 ### 2.2.1 EHttpError.Kind
@@ -190,6 +203,18 @@ end;
 - `IHttpClient.GetString` / `GetBytes`：与 free function `HttpGetString` /
   `HttpGetBytes` 等价（ensure 2xx + body）。
 - H1 默认 `User-Agent: nextpas-http/1.0`（请求未设置 `User-Agent` 时注入）。
+
+### 2.2.3b WebSocket client connect budgets（cycle-5）
+
+- `TWebSocketOptions.Default`：`ConnectTimeout = 30000`，`Timeout = 30000`
+  （与 HTTP client production discipline 对齐）。
+- `ConnectTimeout`：OS dial budget → `TcpConnect(host, port, ms)` when >0。
+  `=0` 时 dial 回退到 `Timeout`（仍为 0 则无界 dial）。
+- `Timeout`：upgrade handshake 读/写 deadline；成功 101 后清除，便于长连接帧 I/O。
+- fluent：`WithConnectTimeout` / `WithTimeout` on options record。
+- 传输错误经 `HttpWrapTransportException` → `hekTimeout` / `hekConnect` /
+  `hekCanceled`，Op=`websocket` 或 transport。
+- 显式 `ConnectTimeout=0` + `Timeout=0` 才恢复无界 dial（测试/特殊工具）。
 
 ### 2.2.4 IHttpResponse.Close
 
