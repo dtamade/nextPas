@@ -34,15 +34,21 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, and Wine runtime smoke + real Windows focused-runtime
-for send/recv/AcceptEx/ConnectEx on Wine 10.0 and Windows 10 VM. It does not
-have a real Windows CI runner.
+Windows compile gates, Wine runtime smoke (14-module matrix), real Windows
+focused-runtime (VM + GHA focused gates for poller/io/socket and broader VM
+module sets), and IOCP send/recv/AcceptEx/ConnectEx evidence on Wine and VM.
+
+It does **not** yet claim full-host **`ci-matrix`**: GHA runs
+`platform-windows-ci-matrix.ps1` (14 suite dirs + 3 dedicated real gates) as
+`truth=real-windows-runtime-ci`. Full promotion is ROADMAP D1.d.
 
 Allowed wording:
 
 - `source-contract covered`
 - `forced Windows compile covered`
-- `wine runtime smoke (not runtime ready)`
+- `wine-runtime-smoke (not real Windows ci-matrix)`
+- `focused-runtime` only for modules with real Windows host logs
+- `ci-matrix` only after ROADMAP D1.d criteria
 
 ### IOCP completion operations
 

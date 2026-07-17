@@ -143,25 +143,13 @@ jobs:
           fpc -iV
           make --version
 
-      - name: Run Windows runtime smoke
+      - name: Run Windows runtime matrix
         shell: pwsh
         run: |
-          # Real Windows host evidence (not Wine). Keep LT4 honest:
-          # this is focused-runtime CI signal, not a full ci-matrix promotion.
-          Write-Output "truth=real-windows-runtime-ci; focused gates only"
-          $gates = @(
-            'tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke',
-            'tests/nextpas.core.platform/test_platform_io_windows_real',
-            'tests/nextpas.core.platform.socket/test_platform_socket_windows_real'
-          )
-          foreach ($gate in $gates) {
-            Write-Output "=== real-windows: $gate ==="
-            make -C $gate clean test
-            if ($LASTEXITCODE -ne 0) {
-              throw "Windows runtime gate failed: $gate (exit $LASTEXITCODE)"
-            }
-          }
-          Write-Output "truth=real-windows-runtime-ci; gates_passed=$($gates.Count)"
+          # Real Windows host evidence (not Wine).
+          # 14 module suites (same dirs as wine matrix) + 3 dedicated real gates.
+          # truth=real-windows-runtime-ci only — not full ci-matrix until ROADMAP D1.d.
+          pwsh -File scripts/platform-windows-ci-matrix.ps1
 
   test-freebsd:
     runs-on: ubuntu-latest
