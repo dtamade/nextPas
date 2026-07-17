@@ -519,6 +519,24 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 - cleartext：prior knowledge only（无 h2c Upgrade）
 - 设计排除：server push、CONNECT/WS-over-H2、PRIORITY 调度
 
+#### H2 production edges（Wave A1）
+
+| 边角 | 行为 | 证据 / residual |
+|------|------|-----------------|
+| Client GOAWAY 消费 | 响应完成后再见 GOAWAY → 连接 `IsReusable=false` 不入池；**响应未完成**时收到 GOAWAY → `hekProtocol`（`HTTP/2 GOAWAY received during response`） | `test_http_h2_client` GOAWAY / mid-response |
+| Server GOAWAY | 停止新流；split last-stream tracking；peer GOAWAY 不覆盖 last seen peer id | `test_http_h2_session` GOAWAY 套件 |
+| 流控 | 双向 WINDOW_UPDATE；发送窗耗尽等 peer update；连接级 flush pending update | client/session window tests |
+| MaxConcurrentStreams | server 超限 → `REFUSED_STREAM` RST | session enforcement tests |
+| 池 / 多路表征 | client **同步** `RoundTrip`：单连接上**串行**一流；池按 authority/`MaxPoolSize` 复用连接；**不**提供同连接并发多 `RoundTrip` 多路 API | pool tests + 本表 residual |
+| Server push | `ENABLE_PUSH=0`；`PUSH_PROMISE` → GOAWAY `PROTOCOL_ERROR` | client SETTINGS + PUSH tests |
+| TLS H2 | ALPN `h2`；`http://` prior knowledge；无 h2c Upgrade | facade / tls_real |
+
+**诚实 residual（非缺口伪装）**：
+
+- 公开 `IHttpClient` 不暴露“单连接并发多请求”多路 API；多请求并发依赖多连接或上层调度。
+- OpenSSL backend heaptrc residual 属 tls 层，不在 http 内清零。
+- H3 / QUIC、h2c Upgrade、CONNECT/WS-over-H2：排除或 Blocked（见下节 / ROADMAP）。
+
 ### H3
 
 - **未实现**；仅版本枚举 + registry seam（`hvHttp3` / `HttpVersionToStr`）

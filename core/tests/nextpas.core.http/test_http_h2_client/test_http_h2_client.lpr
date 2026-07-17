@@ -2789,6 +2789,71 @@ begin
   end;
 end;
 
+procedure TestGoawayMidResponseRaisesProtocol;
+{ Wave A1: incomplete response + GOAWAY aborts with hekProtocol. }
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LKind: THttpErrorKind;
+  LMsg: string;
+  LCaught: Boolean;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 1,
+      ComposeResponseHeaders('200', [])) +
+    H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0,
+      H2EncodeGoaway(0, H2_ERR_NO_ERROR, '')));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LCaught := False;
+    LKind := hekUnknown;
+    LMsg := '';
+    try
+      LResp := LConn.RoundTrip(
+        NewRequest(hmGet, 'http://example.com/mid-goaway'));
+      LResp := nil;
+    except
+      on E: EHttpError do
+      begin
+        LCaught := True;
+        LKind := E.Kind;
+        LMsg := E.Message;
+      end;
+    end;
+    Check(LCaught, 'mid-response GOAWAY raises EHttpError');
+    Check(LKind = hekProtocol, 'mid-response GOAWAY is hekProtocol');
+    Check(Pos('GOAWAY received during response', LMsg) > 0,
+      'mid-response GOAWAY message names the edge');
+    CheckEqual(False, LConn.IsReusable,
+      'mid-response GOAWAY leaves connection non-reusable');
+  finally
+    LConn.Free;
+    LStream := nil;
+  end;
+end;
+
+procedure TestH2ProductionEdgesSourceContract;
+{ Wave A1: lock GOAWAY/pool/push honesty seams. }
+var
+  LSource: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(H2_CLIENT_SOURCE_PATH_FROM_TEST,
+    H2_CLIENT_SOURCE_PATH_FROM_ROOT));
+  Check(Pos(
+    'raise EHttpError.Create(hekProtocol, ''HTTP/2 GOAWAY received during response'')',
+    LSource) > 0,
+    'client aborts incomplete RoundTrip on GOAWAY');
+  Check(Pos('(not FGoawayReceived) and (not FGoawaySent)', LSource) > 0,
+    'IsReusable requires no GOAWAY sent/received');
+  Check(Pos('H2_SETTINGS_ENABLE_PUSH', LSource) > 0,
+    'client advertises ENABLE_PUSH setting');
+  Check(Pos('Result := TRetryClient.Create', LSource) = 0,
+    'H2 client unit is transport-only (retry stays http.client decorator)');
+end;
+
 procedure TestHandshakeGoawayCausesFailure;
 var
   LConn: TH2ClientConnection;
@@ -3355,6 +3420,10 @@ begin
   T.Test('Stream WINDOW_UPDATE resumes after exhaustion', @TestStreamWindowUpdateResumesAfterExhaustion);
   T.Test('SETTINGS ACK does not update remote settings', @TestSettingsAckDoesNotUpdateRemoteSettings);
   T.Test('GOAWAY preserves earlier streams', @TestGoawayPreservesEarlierStreams);
+  T.Test('GOAWAY mid-response raises hekProtocol',
+    @TestGoawayMidResponseRaisesProtocol);
+  T.Test('H2 production edges source contract',
+    @TestH2ProductionEdgesSourceContract);
   T.Test('Handshake GOAWAY causes failure', @TestHandshakeGoawayCausesFailure);
   T.Test('Multiple SETTINGS before handshake', @TestMultipleSettingsBeforeHandshake);
   T.Test('CONTINUATION frame assembles headers', @TestContinuationFrameAssemblesHeaders);
