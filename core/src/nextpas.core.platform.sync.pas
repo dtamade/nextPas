@@ -1347,7 +1347,8 @@ end;
 
 function platform_sync_windows_mutex_trylock(AMutex: Pointer): Int32; inline;
 begin
-  if TryAcquireSRWLockExclusive(AMutex) then
+  { TryAcquireSRWLock* returns Win32 BOOLEAN (1-byte). Compare explicitly. }
+  if TryAcquireSRWLockExclusive(AMutex) <> 0 then
     Result := 0
   else
     Result := PLATFORM_ERR_BUSY;
@@ -1378,7 +1379,7 @@ end;
 
 function platform_sync_windows_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
 begin
-  if TryAcquireSRWLockShared(ARwLock) then
+  if TryAcquireSRWLockShared(ARwLock) <> 0 then
     Result := 0
   else
     Result := PLATFORM_ERR_BUSY;
@@ -1398,7 +1399,7 @@ end;
 
 function platform_sync_windows_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
 begin
-  if TryAcquireSRWLockExclusive(ARwLock) then
+  if TryAcquireSRWLockExclusive(ARwLock) <> 0 then
     Result := 0
   else
     Result := PLATFORM_ERR_BUSY;
