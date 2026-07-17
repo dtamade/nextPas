@@ -12,6 +12,7 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net.intf,
+  nextpas.core.tls.base,
   nextpas.core.http.base,
   nextpas.core.http.form.base,
   nextpas.core.json.value,
@@ -73,13 +74,14 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
   end;
 
   { Decorator base: all convenience methods go through virtual Send. }
   THttpClientForwarder = class(TInterfacedObject, IHttpClient)
   protected
     FInner: IHttpClient;
-    { Rebuild this decorator around a new base (used by WithProxyUrl). }
+    { Rebuild this decorator around a new base (used by WithProxyUrl / WithTLSContext). }
     function RebindInner(const AInner: IHttpClient): IHttpClient; virtual;
   public
     constructor Create(const AInner: IHttpClient);
@@ -124,6 +126,7 @@ type
     function WithRetry(const AMaxRetries: Int32): IHttpClient; virtual;
     function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient; virtual;
     function WithProxyUrl(const AProxyUrl: string): IHttpClient; virtual;
+    function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient; virtual;
   end;
 
   TCookieJarClient = class(THttpClientForwarder)
@@ -238,6 +241,16 @@ function HttpPatchJson(const AClient: IHttpClient;
 {** @desc DELETE with JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
 function HttpDeleteJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string;
+{** @desc POST JSON body, ensure 2xx, parse response as JSON document.
+   Invalid JSON raises EHttpError(hekProtocol, Op=json). }
+function HttpPostJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+{** @desc PUT JSON body, ensure 2xx, parse response as JSON document. }
+function HttpPutJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+{** @desc PATCH JSON body, ensure 2xx, parse response as JSON document. }
+function HttpPatchJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
 function ExtractCharsetFromContentType(const AContentType: string): string;
 
 implementation
@@ -254,7 +267,11 @@ uses
   nextpas.core.http.message,
   nextpas.core.http.form,
   nextpas.core.http.impl.registry,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.time,
+  nextpas.core.time.datetime,
+  nextpas.core.time.offsetdatetime,
+  nextpas.core.time.timezone;
 
 { Prefix client failure messages with "METHOD url: detail" when context is known. }
 function FormatHttpClientContext(const AMethod, AUrl: string): string;
@@ -1193,6 +1210,11 @@ begin
   Result := NewHttpClient(FOptions.WithProxyUrl(AProxyUrl));
 end;
 
+function THttpClient.WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
+begin
+  Result := NewHttpClient(FOptions.WithTLSContext(ATLSContext));
+end;
+
 function THttpClientForwarder.WithConnectTimeout(
   const ATimeoutMs: Int64): IHttpClient;
 begin
@@ -1463,6 +1485,12 @@ begin
   Result := RebindInner(FInner.WithProxyUrl(AProxyUrl));
 end;
 
+function THttpClientForwarder.WithTLSContext(
+  const ATLSContext: ISSLContext): IHttpClient;
+begin
+  Result := RebindInner(FInner.WithTLSContext(ATLSContext));
+end;
+
 { TCookieJarClient }
 
 constructor TCookieJarClient.Create(const AInner: IHttpClient;
@@ -1646,11 +1674,81 @@ begin
     ((AStatus >= THttpStatus(500)) and (AStatus <= THttpStatus(599)));
 end;
 
+function TryParseHttpDateUnix(const ADate: string; out AUnix: Int64): Boolean;
+{ IMF-fix preferred: "Sun, 06 Nov 1994 08:49:37 GMT". Private to client;
+  do not depend on static. Boolean distinguishes parse failure from epoch 0. }
+const
+  MONTH_NAMES: array[1..12] of string = (
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec');
+var
+  LLen, LPos, LMonth, LI: Integer;
+  LDay, LYear, LHour, LMinute, LSecond: Integer;
+  LMonthStr: string;
+  LDT: TOffsetDateTime;
+begin
+  Result := False;
+  AUnix := 0;
+  LLen := Length(ADate);
+  if LLen < 29 then
+    Exit;
+  LPos := 6; { first digit of DD }
+  if (LPos + 1 > LLen) then
+    Exit;
+  if (ADate[LPos] < '0') or (ADate[LPos] > '9') or
+     (ADate[LPos + 1] < '0') or (ADate[LPos + 1] > '9') then
+    Exit;
+  LDay := (Ord(ADate[LPos]) - Ord('0')) * 10 +
+    (Ord(ADate[LPos + 1]) - Ord('0'));
+  Inc(LPos, 3); { skip DD and following SP -> Mon }
+  if (LPos + 2 > LLen) then
+    Exit;
+  LMonthStr := System.Copy(ADate, LPos, 3);
+  LMonth := 0;
+  for LI := 1 to 12 do
+    if LMonthStr = MONTH_NAMES[LI] then
+    begin
+      LMonth := LI;
+      Break;
+    end;
+  if LMonth = 0 then
+    Exit;
+  Inc(LPos, 4); { Mon + SP -> YYYY }
+  if (LPos + 3 > LLen) then
+    Exit;
+  LYear := (Ord(ADate[LPos]) - Ord('0')) * 1000
+    + (Ord(ADate[LPos + 1]) - Ord('0')) * 100
+    + (Ord(ADate[LPos + 2]) - Ord('0')) * 10
+    + (Ord(ADate[LPos + 3]) - Ord('0'));
+  Inc(LPos, 5); { YYYY + SP -> HH }
+  if (LPos + 7 > LLen) then
+    Exit;
+  LHour := (Ord(ADate[LPos]) - Ord('0')) * 10 +
+    (Ord(ADate[LPos + 1]) - Ord('0'));
+  LMinute := (Ord(ADate[LPos + 3]) - Ord('0')) * 10 +
+    (Ord(ADate[LPos + 4]) - Ord('0'));
+  LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 +
+    (Ord(ADate[LPos + 7]) - Ord('0'));
+  try
+    LDT := TOffsetDateTime.Create(
+      TNaiveDateTime.Create(LYear, LMonth, LDay, LHour, LMinute, LSecond),
+      TUtcOffset.UTC);
+    AUnix := LDT.ToUnixSeconds;
+    Result := True;
+  except
+    Result := False;
+    AUnix := 0;
+  end;
+end;
+
 function TryHttpParseRetryAfterMs(const AHeaders: IHttpHeaders;
   out ADelayMs: Int64): Boolean;
 var
   LRaw: string;
   LSec: Int64;
+  LUnix: Int64;
+  LNow: Int64;
+  LDelaySec: Int64;
 begin
   Result := False;
   ADelayMs := 0;
@@ -1659,14 +1757,26 @@ begin
   LRaw := Trim(AHeaders.Get('retry-after'));
   if LRaw = '' then
     Exit;
-  { Delta-seconds only this slice; HTTP-date forms are ignored (honest Deferred). }
-  if not TryStrToInt64(LRaw, LSec) then
+  { Prefer delta-seconds; else IMF-fix HTTP-date. Both capped at 60s. }
+  if TryStrToInt64(LRaw, LSec) then
+  begin
+    if LSec < 0 then
+      Exit;
+    if LSec > 60 then
+      LSec := 60;
+    ADelayMs := LSec * 1000;
+    Result := True;
     Exit;
-  if LSec < 0 then
+  end;
+  if not TryParseHttpDateUnix(LRaw, LUnix) then
     Exit;
-  if LSec > 60 then
-    LSec := 60;
-  ADelayMs := LSec * 1000;
+  LNow := DateTimeToUnix(DateTimeUtcNow);
+  LDelaySec := LUnix - LNow;
+  if LDelaySec < 0 then
+    LDelaySec := 0;
+  if LDelaySec > 60 then
+    LDelaySec := 60;
+  ADelayMs := LDelaySec * 1000;
   Result := True;
 end;
 
@@ -2189,6 +2299,60 @@ begin
   try
     HttpEnsureSuccess(LResp, 'DELETE', AUrl);
     Result := HttpReadResponseBodyString(LResp);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPostJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+var
+  LResp: IHttpResponse;
+begin
+  if AClient = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP client is nil');
+  if ABody = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP JSON body is nil');
+  LResp := AClient.Post(AUrl, 'application/json', ABody.Stringify);
+  try
+    Result := HttpReadResponseJson(LResp, 'POST', AUrl);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPutJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+var
+  LResp: IHttpResponse;
+begin
+  if AClient = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP client is nil');
+  if ABody = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP JSON body is nil');
+  LResp := AClient.Put(AUrl, 'application/json', ABody.Stringify);
+  try
+    Result := HttpReadResponseJson(LResp, 'PUT', AUrl);
+  except
+    HttpReleaseResponseBody(LResp);
+    raise;
+  end;
+end;
+
+function HttpPatchJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+var
+  LResp: IHttpResponse;
+begin
+  if AClient = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP client is nil');
+  if ABody = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP JSON body is nil');
+  LResp := AClient.Patch(AUrl, 'application/json', ABody.Stringify);
+  try
+    Result := HttpReadResponseJson(LResp, 'PATCH', AUrl);
   except
     HttpReleaseResponseBody(LResp);
     raise;

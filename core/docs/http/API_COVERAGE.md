@@ -11,20 +11,34 @@
 
 ## 当前结论
 
-- **2026-07-17 cycle-10 usability Wave E（现行评估/修复入口）**：
+- **2026-07-17 cycle-11 usability Wave F（现行评估/修复入口）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle11.md`、
+    `2026-07-17-usability-cycle11-research.md`、
+    `2026-07-17-usability-cycle11-fix-plan.md`
+    （Wave F = HTTP-date Retry-After + WithTLSContext + *JsonDocument）。
+  - **Wave F（本切片）**：
+    - `WithRetry`：`Retry-After` 支持 delta-seconds **与** IMF-fix HTTP-date
+      （硬顶 60s；过去 → 0；非法 → 指数退避）。
+    - `THttpClientOptions.WithTLSContext` / `IHttpClient.WithTLSContext`
+      （重建 transport，对齐 `WithProxyUrl`）。
+    - `HttpPostJsonDocument` / `HttpPutJsonDocument` / `HttpPatchJsonDocument`：
+      ensure-2xx + decode；`HttpPostJson` string API 不变。
+    - 测试：past HTTP-date retry、fluent TLS direct https、PostJsonDocument
+      200/404/invalid（`test_http_client`）。
+  - **Deferred** 仍真：full PSL / Response metadata / Op-everywhere / H3 /
+    Digest / SOCKS。
+- **2026-07-17 cycle-10 usability Wave E（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle10.md`、
     `2026-07-17-usability-cycle10-research.md`、
     `2026-07-17-usability-cycle10-fix-plan.md`
     （Wave E = H1 direct HTTPS + proxy Basic auth）。
-  - **Wave E（本切片）**：
+  - **Wave E（landed）**：
     - H1 直连 `https://`：dial → TLS wrap（`TLSContext` 或 SecureClient）→
       origin-form；pool key `https|host`。
     - `ProxyUrl` UserInfo → `Proxy-Authorization: Basic`（CONNECT + absolute-form；
       absolute-form 不覆盖请求已有头）。
     - 测试：direct HTTPS e2e、CONNECT Basic、absolute-form Basic、keep explicit
       （`test_http_client`）。
-  - **Deferred** 仍真：full PSL / Response metadata / Op-everywhere / H3 /
-    Digest / SOCKS。
 - **2026-07-17 cycle-9 usability Wave D（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle9.md`、
     `2026-07-17-usability-cycle9-research.md`、
@@ -48,7 +62,7 @@
       ensure-2xx + `JsonParse` → `IJsonDocument`；非法 JSON →
       `hekProtocol` Op=`json`。
     - `WithRetry`：429 + 5xx 可重试；优先 delta-seconds `Retry-After`
-      （硬顶 60s），否则指数退避；HTTP-date 形式诚实忽略。
+      （硬顶 60s），否则指数退避；HTTP-date 由 **cycle-11 Wave F Closed**。
     - inventory / CONTRACT / GOAL_TREE 对齐。
   - 历史 Deferred 中 CONNECT 由 **cycle-9 Wave D Closed**。
 - **2026-07-17 cycle-7 usability inventory + Wave B fix（已吸收）**：

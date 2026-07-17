@@ -118,9 +118,9 @@ type
     Version: THttpVersion;
     UseRegistryVersion: Boolean;
     TLSContext: ISSLContext;
-    { Plain HTTP forward proxy (http://host:port). Empty = direct connect.
+    { Plain HTTP forward proxy (http://[user:pass@]host:port). Empty = direct.
       https targets use CONNECT then TLS over the tunnel; http targets use
-      absolute-form request-line. Proxy auth is not implemented. }
+      absolute-form request-line. UserInfo injects Proxy-Authorization Basic. }
     ProxyUrl: string;
     class function Default: THttpClientOptions; static;
     function WithTimeout(const ATimeoutMs: Int64): THttpClientOptions;
@@ -130,6 +130,7 @@ type
     function WithMaxPoolSize(const AMaxPoolSize: Int32): THttpClientOptions;
     function WithVersion(const AVersion: THttpVersion): THttpClientOptions;
     function WithProxyUrl(const AProxyUrl: string): THttpClientOptions;
+    function WithTLSContext(const ATLSContext: ISSLContext): THttpClientOptions;
     function EffectiveVersion(
       const ADefaultVersion: THttpVersion): THttpVersion;
     function EffectiveConnectTimeout: Int64;
@@ -970,6 +971,13 @@ function THttpClientOptions.WithProxyUrl(
 begin
   Result := Self;
   Result.ProxyUrl := AProxyUrl;
+end;
+
+function THttpClientOptions.WithTLSContext(
+  const ATLSContext: ISSLContext): THttpClientOptions;
+begin
+  Result := Self;
+  Result.TLSContext := ATLSContext;
 end;
 
 function THttpClientOptions.EffectiveVersion(
