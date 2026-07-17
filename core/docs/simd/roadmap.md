@@ -260,7 +260,7 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 
 ## 9. 当前指针
 
-- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=S23a**）
+- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=S23b**）
 - **活动阶段**: Phase 23b — NEON BatchF32 Min/Max/Abs/Neg（23a 已收 ArrayAdd/Sub/Mul；Memory 15/15 已由 Phase 22 收口）
 - **已收口**: Phase 20–22；G0 goal 队列
 - **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等
