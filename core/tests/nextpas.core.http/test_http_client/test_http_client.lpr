@@ -23,6 +23,7 @@ uses
   nextpas.core.http.router,
   nextpas.core.http.server,
   nextpas.core.http.impl.h1,
+  nextpas.core.http.impl.tls.stream,
   nextpas.core.http.client,
   nextpas.core.http.form.base,
   nextpas.core.json,
@@ -30,6 +31,10 @@ uses
   nextpas.core.http,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
+  nextpas.core.tls.base,
+  nextpas.core.tls.cert.builder,
+  nextpas.core.tls.context.builder,
+  nextpas.core.tls.openssl.backed,
   nextpas.core.platform.thread;
 
 var
@@ -62,6 +67,12 @@ var
   GWriteFailureListener: ITcpListener;
   GWriteFailureAcceptCount: Int32;
   GWriteFailureFirstBody: string;
+  GConnectProxyListener: ITcpListener;
+  GConnectProxyServerCtx: ISSLContext;
+  GConnectProxyMode: string;
+  GConnectProxyConnectRequest: string;
+  GConnectProxyHttpRequest: string;
+  GConnectProxyHttpReply: string;
 
 type
   TTrackedRequestBody = class;
@@ -514,6 +525,74 @@ begin
     end;
     LConn.Close;
   end;
+end;
+
+function ConnectProxyThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LTlsConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LReply: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  try
+    LConn := GConnectProxyListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+  try
+    LAccum := '';
+    repeat
+      LN := LConn.Read(LBuf[0], 4096);
+      if LN = 0 then
+        Break;
+      SetLength(LAccum, Length(LAccum) + Int32(LN));
+      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+      LP := Pos(#13#10#13#10, LAccum);
+    until LP > 0;
+    GConnectProxyConnectRequest := LAccum;
+
+    if GConnectProxyMode = 'deny' then
+    begin
+      LReply := 'HTTP/1.1 403 Forbidden'#13#10 +
+                'Content-Length: 0'#13#10 +
+                #13#10;
+      LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+      Exit;
+    end;
+
+    LReply := 'HTTP/1.1 200 Connection Established'#13#10 +
+              #13#10;
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+
+    if GConnectProxyServerCtx = nil then
+      Exit;
+    LTlsConn := NewTlsServerTcpStream(LConn, GConnectProxyServerCtx);
+    try
+      LAccum := '';
+      repeat
+        LN := LTlsConn.Read(LBuf[0], 4096);
+        if LN = 0 then
+          Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+        LP := Pos(#13#10#13#10, LAccum);
+      until LP > 0;
+      GConnectProxyHttpRequest := LAccum;
+      if GConnectProxyHttpReply <> '' then
+        LTlsConn.Write(GConnectProxyHttpReply[1],
+          SizeUInt(Length(GConnectProxyHttpReply)));
+    finally
+      LTlsConn.Close;
+    end;
+  except
+  end;
+  LConn.Close;
 end;
 
 function RetryRequestMethod(const ARawRequest: string): string;
@@ -2909,7 +2988,8 @@ begin
     { Window covers ConnectTimeout re-arm, cancel checkpoints, timeout-wrap,
       dial helper, cancel token wire, and bare re-raise on the fresh path. }
     LReconnectBlock := Copy(LSource, LReconnectPos, 2200);
-    Check((Pos('LConn := H1ClientDial(LConnectHost, LConnectPort,', LReconnectBlock) > 0) or
+    Check((Pos('PrepareFreshConnection;', LReconnectBlock) > 0) or
+          (Pos('LConn := H1ClientDial(LConnectHost, LConnectPort,', LReconnectBlock) > 0) or
           (Pos('LConn := TcpConnect(LConnectHost, LConnectPort);', LReconnectBlock) > 0) or
           (Pos('LConn := TcpConnect(LHost, LPort);', LReconnectBlock) > 0),
       'h1 client pooled retry opens a fresh connection after body rewind');
@@ -9034,6 +9114,143 @@ begin
   end;
 end;
 
+function NewConnectTestClientCtx: ISSLContext;
+begin
+  Result := TSSLContextBuilder.Create
+    .WithTLS12And13
+    .WithVerifyNone
+    .BuildClient;
+end;
+
+function NewConnectTestServerCtx(const ACommonName: string): ISSLContext;
+var
+  LKeyPair: IKeyPairWithCertificate;
+  LCertPEM, LKeyPEM: string;
+begin
+  LKeyPair := TCertificateBuilder.Create
+    .WithCommonName(ACommonName)
+    .WithOrganization('nextpas-http-connect-test')
+    .SelfSigned;
+  LKeyPair.SaveToPEM(LCertPEM, LKeyPEM);
+  Result := TSSLContextBuilder.Create
+    .WithTLS12And13
+    .WithCertificatePEM(LCertPEM)
+    .WithPrivateKeyPEM(LKeyPEM)
+    .WithVerifyNone
+    .BuildServer;
+end;
+
+procedure TestClientHttpsProxyConnectTunnel;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LResp: IHttpResponse;
+  LReqLine: string;
+  LLineEnd: SizeInt;
+begin
+  GConnectProxyMode := 'ok';
+  GConnectProxyConnectRequest := '';
+  GConnectProxyHttpRequest := '';
+  GConnectProxyHttpReply :=
+    'HTTP/1.1 200 OK'#13#10 +
+    'Content-Length: 8'#13#10 +
+    #13#10 +
+    'tunneled';
+  GConnectProxyServerCtx := NewConnectTestServerCtx('example.test');
+  GConnectProxyListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GConnectProxyListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @ConnectProxyThread, nil);
+  try
+    LOpts := THttpClientOptions.Default
+      .WithProxyUrl('http://127.0.0.1:' + IntToStr(Int64(LPort)))
+      .WithTimeout(10000)
+      .WithConnectTimeout(5000);
+    LOpts.TLSContext := NewConnectTestClientCtx;
+    LClient := NewHttpClient(LOpts);
+    LResp := LClient.Get('https://example.test/via-connect?q=1');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'CONNECT tunnel returns 200');
+    CheckEqual('tunneled', ReadBodyStr(LResp), 'CONNECT tunnel response body');
+
+    LLineEnd := Pos(#13#10, GConnectProxyConnectRequest);
+    Check(LLineEnd > 0, 'proxy received CONNECT request-line');
+    LReqLine := System.Copy(GConnectProxyConnectRequest, 1, LLineEnd - 1);
+    Check(Pos('CONNECT example.test:443 HTTP/1.1', LReqLine) > 0,
+      'proxy receives CONNECT authority-form target');
+
+    LLineEnd := Pos(#13#10, GConnectProxyHttpRequest);
+    Check(LLineEnd > 0, 'origin received request-line over TLS tunnel');
+    LReqLine := System.Copy(GConnectProxyHttpRequest, 1, LLineEnd - 1);
+    Check(Pos('GET /via-connect?q=1 HTTP/1.1', LReqLine) > 0,
+      'tunneled request uses origin-form (not absolute-form)');
+    Check(Pos('GET https://', GConnectProxyHttpRequest) = 0,
+      'tunneled request does not use absolute-form');
+  finally
+    GConnectProxyListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GConnectProxyListener := nil;
+    GConnectProxyServerCtx := nil;
+    GConnectProxyConnectRequest := '';
+    GConnectProxyHttpRequest := '';
+    GConnectProxyHttpReply := '';
+    GConnectProxyMode := '';
+  end;
+end;
+
+procedure TestClientHttpsProxyConnectDenied;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LRaised: Boolean;
+  LConnectKind: Boolean;
+begin
+  GConnectProxyMode := 'deny';
+  GConnectProxyConnectRequest := '';
+  GConnectProxyHttpRequest := '';
+  GConnectProxyHttpReply := '';
+  GConnectProxyServerCtx := nil;
+  GConnectProxyListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GConnectProxyListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @ConnectProxyThread, nil);
+  try
+    LOpts := THttpClientOptions.Default
+      .WithProxyUrl('http://127.0.0.1:' + IntToStr(Int64(LPort)))
+      .WithTimeout(5000)
+      .WithConnectTimeout(3000);
+    LOpts.TLSContext := NewConnectTestClientCtx;
+    LClient := NewHttpClient(LOpts);
+    LRaised := False;
+    LConnectKind := False;
+    try
+      LClient.Get('https://example.test/denied');
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LConnectKind := (E.Kind = hekConnect) or
+          (Pos('CONNECT', UpperCase(E.Message)) > 0);
+      end;
+    end;
+    Check(LRaised, 'denied CONNECT raises EHttpError');
+    Check(LConnectKind, 'denied CONNECT reports connect/tunnel failure');
+    Check(Pos('CONNECT example.test:443', GConnectProxyConnectRequest) > 0,
+      'denied path still sent CONNECT request');
+  finally
+    GConnectProxyListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GConnectProxyListener := nil;
+    GConnectProxyServerCtx := nil;
+    GConnectProxyConnectRequest := '';
+    GConnectProxyHttpRequest := '';
+    GConnectProxyMode := '';
+  end;
+end;
+
 procedure TestClientCookieJarExpiresMaxAge;
 var
   LJar: IHttpCookieJar;
@@ -10025,6 +10242,10 @@ begin
   T.Test('Client HTTP proxy absolute-form', @TestClientHttpProxyAbsoluteForm);
   T.Test('Client WithProxyUrl fluent absolute-form',
     @TestClientWithProxyUrlFluentAbsoluteForm);
+  T.Test('Client HTTPS proxy CONNECT tunnel',
+    @TestClientHttpsProxyConnectTunnel);
+  T.Test('Client HTTPS proxy CONNECT denied',
+    @TestClientHttpsProxyConnectDenied);
   T.Test('Client WithConnectTimeout fluent rebuilds',
     @TestClientWithConnectTimeoutFluent);
   T.Test('Client WithConnectTimeout source contract',
