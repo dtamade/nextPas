@@ -150,8 +150,8 @@ procedure AcquireSRWLockExclusive(SRWLock: Pointer); stdcall; external 'kernel32
 
 {** @desc 尝试获取 SRW 排他锁
     @param SRWLock SRW 锁指针
-    @return TRUE 成功 *}
-function TryAcquireSRWLockExclusive(SRWLock: Pointer): BOOL; stdcall; external 'kernel32' name 'TryAcquireSRWLockExclusive';
+    @return non-zero on success (Win32 BOOLEAN, 1-byte — not BOOL/LongBool) *}
+function TryAcquireSRWLockExclusive(SRWLock: Pointer): WINDOWS_BOOLEAN; stdcall; external 'kernel32' name 'TryAcquireSRWLockExclusive';
 
 {** @desc 释放 SRW 排他锁
     @param SRWLock SRW 锁指针 *}
@@ -163,8 +163,8 @@ procedure AcquireSRWLockShared(SRWLock: Pointer); stdcall; external 'kernel32' n
 
 {** @desc 尝试获取 SRW 共享锁
     @param SRWLock SRW 锁指针
-    @return TRUE 成功 *}
-function TryAcquireSRWLockShared(SRWLock: Pointer): BOOL; stdcall; external 'kernel32' name 'TryAcquireSRWLockShared';
+    @return non-zero on success (Win32 BOOLEAN, 1-byte — not BOOL/LongBool) *}
+function TryAcquireSRWLockShared(SRWLock: Pointer): WINDOWS_BOOLEAN; stdcall; external 'kernel32' name 'TryAcquireSRWLockShared';
 
 {** @desc 释放 SRW 共享锁
     @param SRWLock SRW 锁指针 *}

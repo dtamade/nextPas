@@ -40,20 +40,24 @@ begin
     'Two consecutive platform_random_bytes calls should produce different values');
 end;
 
-{ 3. Buffer is actually written (not all zeros after call) }
+{ 3. Buffer is actually written (not all zeros after call).
+   Require at least one non-zero byte — requiring every byte non-zero is flaky. }
 procedure TestBufferIsWritten;
 var
   LBuf: array[0..15] of Byte;
+  LIdx: Integer;
+  LHasNonZero: Boolean;
 begin
   FillChar(LBuf, SizeOf(LBuf), 0);
   platform_random_bytes(@LBuf, SizeOf(LBuf));
-  Check(not (LBuf[0] = 0) and not (LBuf[1] = 0) and not (LBuf[2] = 0) and
-    not (LBuf[3] = 0) and not (LBuf[4] = 0) and not (LBuf[5] = 0) and
-    not (LBuf[6] = 0) and not (LBuf[7] = 0) and not (LBuf[8] = 0) and
-    not (LBuf[9] = 0) and not (LBuf[10] = 0) and not (LBuf[11] = 0) and
-    not (LBuf[12] = 0) and not (LBuf[13] = 0) and not (LBuf[14] = 0) and
-    not (LBuf[15] = 0),
-    'Buffer should not be all zeros after platform_random_bytes');
+  LHasNonZero := False;
+  for LIdx := 0 to High(LBuf) do
+    if LBuf[LIdx] <> 0 then
+    begin
+      LHasNonZero := True;
+      Break;
+    end;
+  Check(LHasNonZero, 'Buffer should not be all zeros after platform_random_bytes');
 end;
 
 { 4. Large buffer (4096 bytes) is filled normally }

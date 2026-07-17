@@ -149,6 +149,8 @@ uses
 
 function platform_map_windows_error_code(const AErr: DWORD): Int32;
 begin
+  if AErr = 0 then
+    Exit(0);
   case AErr of
     ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND: Result := PLATFORM_ERR_NOENT;
     ERROR_ACCESS_DENIED:                        Result := PLATFORM_ERR_PERM;
