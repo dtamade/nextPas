@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave A2 Client pool；NEXT=P1）
+**Updated**: 2026-07-17（Wave P1 headers Get fuse；NEXT=P3）
 
 ---
 
@@ -80,12 +80,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave E2 Options/decorator | 完成（With* 链语义表；外层胜；Timeout/ConnectTimeout/Production 分界） |
 | Wave A1 H2 production edges | 完成（GOAWAY mid-response + 池/多路/流控边角表 + residual 诚实） |
 | Wave A2 Client pool | 完成（per-authority MaxPoolSize + idle clear + H1/H2 选择策略 CONTRACT） |
-| **下一执行点** | **Era 4 / Wave P1 — Profile one hotspot** |
+| Wave P1 Profile hotspot | 完成（headers Get/Has fuse；Get miss ~17% 本机 micro） |
+| **下一执行点** | **Era 4 / Wave P3 — epoll vs threaded 表征** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~90%   高级 ~78%   优雅 ~86%   性能 ~50%
+完整 ~90%   高级 ~78%   优雅 ~86%   性能 ~55%
 ```
 
 ---
@@ -318,18 +319,19 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 只动一个 L1/L2 热点（parser materialize / header / writer / drain 择一）；前后有 bench 或 micro 证据 |
 | **Don't** | 同时改多个热点；为数字加假 API |
 | **Done when** | 单热点有前后数据 + 相关 correctness gate 绿 |
 | **Gates** | 相关 micro/fullchain + 正确性 suite |
 | **Next** | Wave P3 |
+| **Evidence** | headers Get/Has 单次 validate+normalize；Get miss 98.5→81.5 ns；`bench_headers` + `test_http_headers` 28；BENCHMARKS P1 节 |
 
 ### Wave P3 — epoll vs threaded 表征
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | 同 workload 对照；诚实 caveat 写入 `BENCHMARKS.md` |
 | **Don't** | 宣称跨机器排名 |
 | **Done when** | BENCHMARKS 有可复现命令 + 一次本地 snapshot 表 |
@@ -404,14 +406,14 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave P1 仍是 NEXT
-2. 只动一个 L1/L2 热点；前后有 bench/micro 证据
-3. 相关 correctness gate + path-limited land
-4. 本文件：Wave P1 → landed；Wave P3 → NEXT；changelog 一行
+1. 打开本文件确认 Wave P3 仍是 NEXT
+2. 同 workload epoll vs threaded 对照；诚实 caveat 写 BENCHMARKS
+3. 可复现命令 + 本地 snapshot 表；path-limited land
+4. 本文件：Wave P3 → landed；Wave P5 → NEXT；changelog 一行
 5. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave P1，然后自动续波。**
+**没有用户指令时：默认执行 Wave P3，然后自动续波。**
 
 ---
 
@@ -448,3 +450,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave E2 landed：With* 链语义表 + 外层胜 + Timeout/ConnectTimeout/Production；Era 2 完成；Wave A1 = NEXT |
 | 2026-07-17 | Wave A1 landed：H2 production edges 表 + mid-response GOAWAY focused；Wave A2 = NEXT |
 | 2026-07-17 | Wave A2 landed：per-authority MaxPoolSize + idle clear + H1/H2 选择策略；Era 3 完成；Wave P1 = NEXT |
+| 2026-07-17 | Wave P1 landed：headers Get/Has fuse（Get miss ~17% 本机）；BENCHMARKS 前后表；Wave P3 = NEXT |

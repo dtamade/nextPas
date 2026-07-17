@@ -22,6 +22,7 @@ type
     procedure ClearEntries(const AFrom, AToExclusive: Int32);
     procedure EnsureCapacity(const ARequired: Int32);
     function FindFirst(const AName: string): Int32; inline;
+    function FindFirstNormalized(const ANorm: string): Int32; inline;
     class function NeedsNormalize(const AName: string): Boolean; static; inline;
     class function Normalize(const AName: string): string; static;
     class function NormalizeIfNeeded(const AName: string): string; static; inline;
@@ -205,12 +206,25 @@ var
   LNorm: string;
   LI: Int32;
 begin
+  { Prefer ValidateNameAndNeedsNormalize at the public boundary so name syntax
+    and case-fold happen in one pass; FindFirst still normalizes for callers
+    that already validated (Has/Get use the fused path below). }
   if NeedsNormalize(AName) then
     LNorm := Normalize(AName)
   else
     LNorm := AName;
   for LI := 0 to FCount - 1 do
     if FEntries[LI].Name = LNorm then
+      Exit(LI);
+  Result := -1;
+end;
+
+function THttpHeaders.FindFirstNormalized(const ANorm: string): Int32; inline;
+var
+  LI: Int32;
+begin
+  for LI := 0 to FCount - 1 do
+    if FEntries[LI].Name = ANorm then
       Exit(LI);
   Result := -1;
 end;
@@ -321,10 +335,17 @@ end;
 
 function THttpHeaders.Get(const AName: string): string;
 var
+  LNorm: string;
   LIdx: Int32;
 begin
-  ValidateNameAndNeedsNormalize(AName);
-  LIdx := FindFirst(AName);
+  { Single pass: validate token chars + detect uppercase, then at most one
+    Normalize allocation. Avoids Validate + FindFirst double-scan (and double
+    Normalize on mixed-case names). }
+  if ValidateNameAndNeedsNormalize(AName) then
+    LNorm := Normalize(AName)
+  else
+    LNorm := AName;
+  LIdx := FindFirstNormalized(LNorm);
   if LIdx >= 0 then
     Result := FEntries[LIdx].Value
   else
@@ -361,9 +382,14 @@ begin
 end;
 
 function THttpHeaders.Has(const AName: string): Boolean;
+var
+  LNorm: string;
 begin
-  ValidateNameAndNeedsNormalize(AName);
-  Result := FindFirst(AName) >= 0;
+  if ValidateNameAndNeedsNormalize(AName) then
+    LNorm := Normalize(AName)
+  else
+    LNorm := AName;
+  Result := FindFirstNormalized(LNorm) >= 0;
 end;
 
 procedure THttpHeaders.Remove(const AName: string);
