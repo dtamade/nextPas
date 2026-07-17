@@ -81,15 +81,15 @@ end;
 
 function AlignUp(const AValue, AAlignment: SizeUInt): SizeUInt;
 var
-  LPad: SizeUInt;
+  LMask: SizeUInt;
 begin
-  // AAlignment 必须是 2 的幂（调用方保证）
-  // 用 (-AValue) and mask 计算补齐量
-  LPad := (not AValue + 1) and (AAlignment - 1);
-  // 溢出检查：AValue + LPad 不能回绕
-  if AValue > High(SizeUInt) - LPad then
-    Exit(0); // 溢出，返回 0 让调用方处理
-  Result := AValue + LPad;
+  { AAlignment must be power of two (caller-guaranteed).
+    Classic (value+mask)&~mask avoids (not value)+1, which overflows under {$Q+}
+    for value=0 (and breaks simd memutils / compile-time inlines). }
+  LMask := AAlignment - 1;
+  if AValue > High(SizeUInt) - LMask then
+    Exit(0); // overflow → 0 for caller
+  Result := (AValue + LMask) and not LMask;
 end;
 
 function NormalizeAlignment(const AAlignment: SizeUInt): SizeUInt;

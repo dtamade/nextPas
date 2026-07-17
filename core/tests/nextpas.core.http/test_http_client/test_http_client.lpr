@@ -3062,13 +3062,17 @@ begin
   Check(LPutPos > 0, 'h1 PoolPut is present');
   if LPutPos > 0 then
   begin
-    LPutBlock := Copy(LSource, LPutPos, 900);
+    LPutBlock := Copy(LSource, LPutPos, 1400);
     Check(Pos('LAuthorityIdle', LPutBlock) > 0,
       'h1 PoolPut counts idle connections per authority');
     Check(Pos('FPoolCount >= FOptions.MaxPoolSize', LPutBlock) = 0,
       'h1 PoolPut does not use global FPoolCount as MaxPoolSize cap');
     Check(Pos('LAuthorityIdle >= FOptions.MaxPoolSize', LPutBlock) > 0,
       'h1 PoolPut enforces MaxPoolSize against per-authority idle count');
+    Check(Pos('IdleAtMs', LPutBlock) > 0,
+      'h1 PoolPut stamps IdleAtMs for IdleTTL');
+    Check(Pos('PoolEntryExpired', LPutBlock) > 0,
+      'h1 PoolPut evicts expired idle peers before MaxPoolSize count');
   end;
 end;
 
@@ -3103,6 +3107,25 @@ begin
       'h1 client pooled retry preserves the original fresh failure');
     Check(Pos('HttpWrapTransportException', LReconnectBlock) > 0,
       'h1 client pooled retry wraps bare transport timeout/connect errors');
+  end;
+end;
+
+procedure TestOpenSSLContextFreesPinValidatorSourceContract;
+var
+  LSource: string;
+  LDestroyPos: SizeInt;
+  LDestroyBlock: string;
+begin
+  { Wave X4: TPinValidator is a owned TObject on SSL context; must FreeAndNil
+    in Destroy or each CreateContext leaves a ~32-byte residual. }
+  LSource := ReadFileText('../../../src/nextpas.core.tls.openssl.context.pas');
+  LDestroyPos := Pos('destructor TOpenSSLContext.Destroy;', LSource);
+  Check(LDestroyPos > 0, 'OpenSSL context destructor is present');
+  if LDestroyPos > 0 then
+  begin
+    LDestroyBlock := Copy(LSource, LDestroyPos, 500);
+    Check(Pos('FreeAndNil(FPinValidator)', LDestroyBlock) > 0,
+      'OpenSSL context Destroy frees owned FPinValidator');
   end;
 end;
 
@@ -6799,6 +6822,81 @@ begin
     GPoolListener.Close;
     platform_thread_join(LHandle, LRet);
     GPoolListener := nil;
+  end;
+end;
+
+procedure TestClientPoolIdleTTLExpiresIdleConnections;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+  LUrl: string;
+begin
+  { IdleTTL=40ms: first request pools; after sleep, second request redials. }
+  GAcceptCount := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoolListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PoolAcceptThread, nil);
+  try
+    LOptions := THttpClientOptions.Default.WithIdleTTL(40);
+    LClient := NewHttpClient(LOptions);
+    LUrl := 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ttl';
+    LResp := LClient.Get(LUrl);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'idle TTL first status');
+    HttpReleaseResponseBody(LResp);
+    CheckEqual(Int64(1), Int64(GAcceptCount), 'idle TTL first accept');
+    platform_thread_sleep_ns(80000000); { 80ms > IdleTTL }
+    LResp := LClient.Get(LUrl);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'idle TTL second status');
+    HttpReleaseResponseBody(LResp);
+    CheckEqual(Int64(2), Int64(GAcceptCount),
+      'expired idle connection is not reused after IdleTTL');
+    LClient := nil;
+  finally
+    GPoolListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoolListener := nil;
+    GAcceptCount := 0;
+  end;
+end;
+
+procedure TestClientPoolIdleTTLZeroKeepsReuse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+  LUrl: string;
+begin
+  { IdleTTL=0: no wall-clock eviction; short sleep still reuses. }
+  GAcceptCount := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoolListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PoolAcceptThread, nil);
+  try
+    LOptions := THttpClientOptions.Default.WithIdleTTL(0);
+    LClient := NewHttpClient(LOptions);
+    LUrl := 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ttl0';
+    LResp := LClient.Get(LUrl);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'idle TTL0 first status');
+    HttpReleaseResponseBody(LResp);
+    platform_thread_sleep_ns(50000000); { 50ms }
+    LResp := LClient.Get(LUrl);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'idle TTL0 second status');
+    HttpReleaseResponseBody(LResp);
+    CheckEqual(Int64(1), Int64(GAcceptCount),
+      'IdleTTL=0 keeps reuse after short idle');
+    LClient := nil;
+  finally
+    GPoolListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoolListener := nil;
+    GAcceptCount := 0;
   end;
 end;
 
@@ -10942,6 +11040,8 @@ begin
     @TestH1ClientPoolMaxSizePerAuthoritySourceContract);
   T.Test('H1 client pooled retry fresh failure closes connection source contract',
     @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
+  T.Test('OpenSSL context frees PinValidator source contract',
+    @TestOpenSSLContextFreesPinValidatorSourceContract);
   T.Test('Client POST string body overload',
     @TestClientPostStringBodyOverload);
   T.Test('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
@@ -11140,6 +11240,10 @@ begin
   T.Test('Client respects max redirects', @TestClientMaxRedirects);
   T.Test('Client CloseIdleConnections drops pooled connections',
     @TestClientCloseIdleConnectionsDropsPooledConnections);
+  T.Test('Client pool IdleTTL expires idle connections',
+    @TestClientPoolIdleTTLExpiresIdleConnections);
+  T.Test('Client pool IdleTTL=0 keeps reuse',
+    @TestClientPoolIdleTTLZeroKeepsReuse);
   T.Test('Client MaxPoolSize is per authority',
     @TestClientMaxPoolSizeIsPerAuthority);
   T.Test('Client timeout does not poison idle connection reuse',

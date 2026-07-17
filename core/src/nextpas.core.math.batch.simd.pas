@@ -122,6 +122,62 @@ function BatchStepSimdF32(const AEdge, AInput: array of Single;
 function BatchSmoothstepSimdF32(const AEdge0, AEdge1, AInput: array of Single;
                                 var AOutput: array of Single): SizeInt;
 
+{ F64 batch surface — mirrors F32, dispatching to Array*F64. }
+function BatchSinSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+function BatchCosSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+function BatchTanSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+function BatchSinCosSimdF64(const AInput: array of Double;
+                            var ASinOutput, ACosOutput: array of Double): SizeInt;
+function BatchExpSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+function BatchLnSimdF64(const AInput: array of Double;
+                        var AOutput: array of Double): SizeInt;
+function BatchLog2SimdF64(const AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+function BatchLog10SimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+function BatchSqrtSimdF64(const AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+function BatchAbsSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+function BatchNegSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+function BatchCeilSimdF64(const AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+function BatchFloorSimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+function BatchRoundSimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+function BatchTruncSimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+function BatchLerpSimdF64(const AStart, AEnd: array of Double;
+                          const AT: Double;
+                          var AOutput: array of Double): SizeInt;
+function BatchClampSimdF64(const AInput: array of Double;
+                           const AMin, AMax: Double;
+                           var AOutput: array of Double): SizeInt;
+function BatchScaleOffsetSimdF64(const AInput: array of Double;
+                                 const AScale, AOffset: Double;
+                                 var AOutput: array of Double): SizeInt;
+function BatchAtan2SimdF64(const AY, AX: array of Double;
+                           var AOutput: array of Double): SizeInt;
+function BatchHypotSimdF64(const AX, AY: array of Double;
+                           var AOutput: array of Double): SizeInt;
+function BatchFractSimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+function BatchModSimdF64(const AInput: array of Double;
+                         const ADivisor: Double;
+                         var AOutput: array of Double): SizeInt;
+function BatchSignSimdF64(const AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+function BatchStepSimdF64(const AEdge, AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+function BatchSmoothstepSimdF64(const AEdge0, AEdge1, AInput: array of Double;
+                                var AOutput: array of Double): SizeInt;
+
 implementation
 
 uses
@@ -131,7 +187,20 @@ uses
 
 { Helper: compute min count from input/output arrays }
 function MinArrayCount(const AInput: array of Single;
-                      const AOutput: array of Single): SizeInt; inline;
+                      const AOutput: array of Single): SizeInt; inline; overload;
+var
+  LInCount, LOutCount: SizeInt;
+begin
+  LInCount := Length(AInput);
+  LOutCount := Length(AOutput);
+  if LInCount < LOutCount then
+    Result := LInCount
+  else
+    Result := LOutCount;
+end;
+
+function MinArrayCount(const AInput: array of Double;
+                      const AOutput: array of Double): SizeInt; inline; overload;
 var
   LInCount, LOutCount: SizeInt;
 begin
@@ -144,7 +213,21 @@ begin
 end;
 
 { Helper: compute min count from two input arrays and one output array }
-function MinArrayCount3(const A1, A2, AOutput: array of Single): SizeInt; inline;
+function MinArrayCount3(const A1, A2, AOutput: array of Single): SizeInt; inline; overload;
+var
+  L1, L2, LOut: SizeInt;
+begin
+  L1 := Length(A1);
+  L2 := Length(A2);
+  LOut := Length(AOutput);
+  Result := L1;
+  if L2 < Result then
+    Result := L2;
+  if LOut < Result then
+    Result := LOut;
+end;
+
+function MinArrayCount3(const A1, A2, AOutput: array of Double): SizeInt; inline; overload;
 var
   L1, L2, LOut: SizeInt;
 begin
@@ -159,7 +242,24 @@ begin
 end;
 
 { Helper: compute min count from three input arrays and one output array }
-function MinArrayCount4(const A1, A2, A3, AOutput: array of Single): SizeInt; inline;
+function MinArrayCount4(const A1, A2, A3, AOutput: array of Single): SizeInt; inline; overload;
+var
+  L1, L2, L3, LOut: SizeInt;
+begin
+  L1 := Length(A1);
+  L2 := Length(A2);
+  L3 := Length(A3);
+  LOut := Length(AOutput);
+  Result := L1;
+  if L2 < Result then
+    Result := L2;
+  if L3 < Result then
+    Result := L3;
+  if LOut < Result then
+    Result := LOut;
+end;
+
+function MinArrayCount4(const A1, A2, A3, AOutput: array of Double): SizeInt; inline; overload;
 var
   L1, L2, L3, LOut: SizeInt;
 begin
@@ -482,6 +582,289 @@ begin
   LCount := MinArrayCount4(AEdge0, AEdge1, AInput, AOutput);
   if LCount > 0 then
     ArraySmoothstepF32(@AEdge0[0], @AEdge1[0], @AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+{ ============================================================================
+  F64 batch operations using Array*F64
+  ============================================================================ }
+
+function BatchSinSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArraySinF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchCosSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayCosF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchTanSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayTanF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchSinCosSimdF64(const AInput: array of Double;
+                            var ASinOutput, ACosOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount3(AInput, ASinOutput, ACosOutput);
+  if LCount > 0 then
+    ArraySinCosF64(@AInput[0], @ASinOutput[0], @ACosOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchExpSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayExpF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchLnSimdF64(const AInput: array of Double;
+                        var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayLogF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchLog2SimdF64(const AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayLog2F64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchLog10SimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayLog10F64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchSqrtSimdF64(const AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArraySqrtF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchAbsSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayAbsF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchNegSimdF64(const AInput: array of Double;
+                         var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayNegF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchCeilSimdF64(const AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayCeilF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchFloorSimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayFloorF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchRoundSimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayRoundF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchTruncSimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayTruncF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchLerpSimdF64(const AStart, AEnd: array of Double;
+                          const AT: Double;
+                          var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount3(AStart, AEnd, AOutput);
+  if LCount > 0 then
+    ArrayLerpF64(@AStart[0], @AEnd[0], @AOutput[0], LCount, AT);
+  Result := LCount;
+end;
+
+function BatchClampSimdF64(const AInput: array of Double;
+                           const AMin, AMax: Double;
+                           var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayClampF64(@AInput[0], @AOutput[0], LCount, AMin, AMax);
+  Result := LCount;
+end;
+
+function BatchScaleOffsetSimdF64(const AInput: array of Double;
+                                 const AScale, AOffset: Double;
+                                 var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayLinearF64(@AInput[0], @AOutput[0], LCount, AScale, AOffset);
+  Result := LCount;
+end;
+
+function BatchAtan2SimdF64(const AY, AX: array of Double;
+                           var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount3(AY, AX, AOutput);
+  if LCount > 0 then
+    ArrayAtan2F64(@AY[0], @AX[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchHypotSimdF64(const AX, AY: array of Double;
+                           var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount3(AX, AY, AOutput);
+  if LCount > 0 then
+    ArrayHypotF64(@AX[0], @AY[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchFractSimdF64(const AInput: array of Double;
+                           var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayFractF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchModSimdF64(const AInput: array of Double;
+                         const ADivisor: Double;
+                         var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArrayModF64(@AInput[0], @AOutput[0], LCount, ADivisor);
+  Result := LCount;
+end;
+
+function BatchSignSimdF64(const AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount(AInput, AOutput);
+  if LCount > 0 then
+    ArraySignF64(@AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchStepSimdF64(const AEdge, AInput: array of Double;
+                          var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount3(AEdge, AInput, AOutput);
+  if LCount > 0 then
+    ArrayStepF64(@AEdge[0], @AInput[0], @AOutput[0], LCount);
+  Result := LCount;
+end;
+
+function BatchSmoothstepSimdF64(const AEdge0, AEdge1, AInput: array of Double;
+                                var AOutput: array of Double): SizeInt;
+var
+  LCount: SizeInt;
+begin
+  LCount := MinArrayCount4(AEdge0, AEdge1, AInput, AOutput);
+  if LCount > 0 then
+    ArraySmoothstepF64(@AEdge0[0], @AEdge1[0], @AInput[0], @AOutput[0], LCount);
   Result := LCount;
 end;
 

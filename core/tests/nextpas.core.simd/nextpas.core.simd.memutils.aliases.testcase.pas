@@ -408,10 +408,14 @@ begin
 end;
 
 procedure TTestCase_Memutils.Test_AlignUp_Overflow_FailClose;
+var
+  LAddr: NativeUInt;
 begin
+  { Runtime High — compile-time Pointer(High(NativeUInt)) overflows under O3+inline. }
+  LAddr := High(NativeUInt);
   ExpectOutOfMemory('AlignUp pointer overflow', procedure
     begin
-      AlignUp(Pointer(High(NativeUInt)), SIMD_ALIGN_16);
+      AlignUp(Pointer(LAddr), SIMD_ALIGN_16);
     end);
 end;
 

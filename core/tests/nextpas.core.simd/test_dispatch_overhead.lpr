@@ -50,10 +50,10 @@ begin
   WriteLn('  Time: ', time2, ' ms');
 
   // 测试 3: Direct dispatch
-  WriteLn('Direct dispatch (dispatch^.AddF32x4):');
+  WriteLn('Direct dispatch (dispatch^.CoreVectors.AddF32x4):');
   sw := TStopwatch.StartNew;
   for i := 1 to ITERATIONS do
-    r3 := dispatch^.AddF32x4(a, b);
+    r3 := dispatch^.CoreVectors.AddF32x4(a, b);
   time3 := sw.ElapsedMilliseconds;
   WriteLn('  Time: ', time3, ' ms');
 

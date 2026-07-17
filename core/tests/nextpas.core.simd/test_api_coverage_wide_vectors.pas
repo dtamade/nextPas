@@ -362,6 +362,119 @@ begin
   Check((mask16 and $0400) <> 0, 'U8x16CmpNe sample2[10]');
 end;
 
+procedure TestWide512CmpLeGeNe;
+var
+  a16: TVecI16x32;
+  b16: TVecI16x32;
+  a8: TVecI8x64;
+  b8: TVecI8x64;
+  au8: TVecU8x64;
+  bu8: TVecU8x64;
+  m32: TMask32;
+  m64: TMask64;
+  i: Integer;
+begin
+  for i := 0 to 31 do
+  begin
+    a16.i[i] := Int16(i);
+    b16.i[i] := Int16(16);
+  end;
+  m32 := VecI16x32CmpLe(a16, b16);
+  Check((m32 and $1FFFF) = $1FFFF, 'I16x32CmpLe 0..16<=16');
+  Check((m32 and (LongWord(1) shl 17)) = 0, 'I16x32CmpLe 17>16');
+  m32 := VecI16x32CmpGe(a16, b16);
+  Check((m32 and (LongWord(1) shl 16)) <> 0, 'I16x32CmpGe 16>=16');
+  Check((m32 and $0001) = 0, 'I16x32CmpGe 0<16');
+  m32 := VecI16x32CmpNe(a16, b16);
+  Check((m32 and (LongWord(1) shl 16)) = 0, 'I16x32CmpNe 16=16');
+  Check((m32 and $0001) <> 0, 'I16x32CmpNe 0<>16');
+
+  for i := 0 to 63 do
+  begin
+    a8.i[i] := Int8(i - 32);
+    b8.i[i] := Int8(0);
+  end;
+  m64 := VecI8x64CmpLe(a8, b8);
+  Check((m64 and (QWord(1) shl 32)) <> 0, 'I8x64CmpLe 0<=0');
+  Check((m64 and (QWord(1) shl 33)) = 0, 'I8x64CmpLe 1>0');
+  m64 := VecI8x64CmpGe(a8, b8);
+  Check((m64 and (QWord(1) shl 32)) <> 0, 'I8x64CmpGe 0>=0');
+  Check((m64 and (QWord(1) shl 0)) = 0, 'I8x64CmpGe -32<0');
+  m64 := VecI8x64CmpNe(a8, b8);
+  Check((m64 and (QWord(1) shl 32)) = 0, 'I8x64CmpNe 0=0');
+  Check((m64 and (QWord(1) shl 0)) <> 0, 'I8x64CmpNe -32<>0');
+
+  for i := 0 to 63 do
+  begin
+    au8.u[i] := Byte(i);
+    bu8.u[i] := Byte(32);
+  end;
+  m64 := VecU8x64CmpLe(au8, bu8);
+  Check((m64 and (QWord(1) shl 32)) <> 0, 'U8x64CmpLe 32<=32');
+  Check((m64 and (QWord(1) shl 33)) = 0, 'U8x64CmpLe 33>32');
+  m64 := VecU8x64CmpGe(au8, bu8);
+  Check((m64 and (QWord(1) shl 32)) <> 0, 'U8x64CmpGe 32>=32');
+  Check((m64 and (QWord(1) shl 0)) = 0, 'U8x64CmpGe 0<32');
+  m64 := VecU8x64CmpNe(au8, bu8);
+  Check((m64 and (QWord(1) shl 32)) = 0, 'U8x64CmpNe 32=32');
+  Check((m64 and (QWord(1) shl 0)) <> 0, 'U8x64CmpNe 0<>32');
+end;
+
+procedure TestWide512CmpLeGeNeSecondSample;
+var
+  a16: TVecI16x32;
+  b16: TVecI16x32;
+  a8: TVecI8x64;
+  b8: TVecI8x64;
+  au8: TVecU8x64;
+  bu8: TVecU8x64;
+  m32: TMask32;
+  m64: TMask64;
+  i: Integer;
+begin
+  for i := 0 to 31 do
+  begin
+    a16.i[i] := Int16(i * 2 - 8);
+    b16.i[i] := Int16(0);
+  end;
+  m32 := VecI16x32CmpLe(a16, b16);
+  Check((m32 and $0010) <> 0, 'I16x32CmpLe sample2 lane4 (=0)');
+  Check((m32 and $0020) = 0, 'I16x32CmpLe sample2 lane5 (>0)');
+  m32 := VecI16x32CmpGe(a16, b16);
+  Check((m32 and $0010) <> 0, 'I16x32CmpGe sample2 lane4');
+  Check((m32 and $0001) = 0, 'I16x32CmpGe sample2 lane0');
+  m32 := VecI16x32CmpNe(a16, b16);
+  Check((m32 and $0010) = 0, 'I16x32CmpNe sample2 lane4 equal');
+  Check((m32 and $0008) <> 0, 'I16x32CmpNe sample2 lane3');
+
+  for i := 0 to 63 do
+  begin
+    a8.i[i] := Int8((i mod 7) - 3);
+    b8.i[i] := Int8(0);
+  end;
+  m64 := VecI8x64CmpLe(a8, b8);
+  Check((m64 and (QWord(1) shl 3)) <> 0, 'I8x64CmpLe sample2 lane3 (=0)');
+  Check((m64 and (QWord(1) shl 4)) = 0, 'I8x64CmpLe sample2 lane4 (>0)');
+  m64 := VecI8x64CmpGe(a8, b8);
+  Check((m64 and (QWord(1) shl 3)) <> 0, 'I8x64CmpGe sample2 lane3');
+  Check((m64 and (QWord(1) shl 0)) = 0, 'I8x64CmpGe sample2 lane0');
+  m64 := VecI8x64CmpNe(a8, b8);
+  Check((m64 and (QWord(1) shl 3)) = 0, 'I8x64CmpNe sample2 lane3 equal');
+  Check((m64 and (QWord(1) shl 1)) <> 0, 'I8x64CmpNe sample2 lane1');
+
+  for i := 0 to 63 do
+  begin
+    au8.u[i] := Byte((i * 3) mod 64);
+    bu8.u[i] := Byte(20);
+  end;
+  m64 := VecU8x64CmpLe(au8, bu8);
+  Check((m64 and (QWord(1) shl 0)) <> 0, 'U8x64CmpLe sample2 lane0');
+  m64 := VecU8x64CmpGe(au8, bu8);
+  Check((m64 and (QWord(1) shl 0)) = 0, 'U8x64CmpGe sample2 lane0 (<20)');
+  m64 := VecU8x64CmpNe(au8, bu8);
+  Check((m64 and (QWord(1) shl 0)) <> 0, 'U8x64CmpNe sample2 lane0');
+end;
+
 begin
   StartApiCoverageSuite('API Coverage Wide Vectors');
   TestF32x8ExtMath;
@@ -370,5 +483,7 @@ begin
   TestNarrowCmpLeGeNe;
   TestWideFloatVectorSecondSample;
   TestWideIntegerVectorSecondSample;
+  TestWide512CmpLeGeNe;
+  TestWide512CmpLeGeNeSecondSample;
   PrintApiCoverageSummary;
 end.
