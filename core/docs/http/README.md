@@ -5,7 +5,9 @@ middleware chaining, and a centralized internal transport registry.
 
 ## Module Docs
 
-- `GOAL_TREE.md` — north star, route map, done criteria, and current highest-value slices
+- **`ROADMAP.md`** — **forward work only** (phases, next wave, non-goals); start here before coding
+- `GOAL_TREE.md` — north star, stage definition, do-not-drift rules
+- `CONTRACT.md` — public behavior contract
 - `ARCHITECTURE.md` — stable architecture facts, runtime ownership, and protocol seams
 - `API_COVERAGE.md` — public API proof and parity decisions
 - `BENCHMARKS.md` — benchmark truth, microbenchmark evidence, and comparator caveats
