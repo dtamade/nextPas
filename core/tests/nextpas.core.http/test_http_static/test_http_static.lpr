@@ -428,6 +428,10 @@ begin
     'static file body path opens a file stream');
   Check(Pos('nextpas.core.io.Copy(', LSource) > 0,
     'static file body path streams through io.Copy');
+  Check(Pos('CopyFileRange(', LSource) > 0,
+    'range body path streams via CopyFileRange');
+  Check(Pos('accept-ranges', LowerCase(LSource)) > 0,
+    'static responses advertise Accept-Ranges');
 end;
 
 procedure TestServeFilePreservesBinaryBodyBytes;
@@ -479,6 +483,7 @@ begin
     Check(Pos('etag: "', LResp) > 0, 'ETag header present');
     Check(Pos('last-modified: ', LResp) > 0, 'Last-Modified header present');
     Check(Pos('cache-control: ', LResp) > 0, 'Cache-Control header present');
+    Check(Pos('accept-ranges: bytes', LResp) > 0, 'Accept-Ranges: bytes on 200');
   finally
     StopTestServer(LServer, LHandle);
   end;
@@ -649,6 +654,7 @@ begin
     Check(Pos('HTTP/1.1 206', LResp) > 0, '206 Partial Content');
     Check(Pos('content-range: bytes 0-2/6', LResp) > 0, 'Content-Range header');
     Check(Pos('content-length: 3', LResp) > 0, 'Content-Length for range');
+    Check(Pos('accept-ranges: bytes', LResp) > 0, 'Accept-Ranges on 206');
     LBodyPos := Pos(#13#10#13#10, LResp);
     Check(LBodyPos > 0, 'header-body separator');
     Inc(LBodyPos, 4);
@@ -656,6 +662,57 @@ begin
     Check(LResp[LBodyPos] = 'b', 'byte 0 is b');
     Check(LResp[LBodyPos + 1] = 'o', 'byte 1 is o');
     Check(LResp[LBodyPos + 2] = 'd', 'byte 2 is d');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeFileRangeOpenEnded;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBodyPos: SizeInt;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFile(CTmpDir + '/style.txt'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=3-'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 206', LResp) > 0, '206 for open-ended range');
+    Check(Pos('content-range: bytes 3-5/6', LResp) > 0, 'open-ended Content-Range');
+    LBodyPos := Pos(#13#10#13#10, LResp);
+    Inc(LBodyPos, 4);
+    CheckEqual('y{}', System.Copy(LResp, LBodyPos, 3), 'open-ended body');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestServeFileMultiRangeRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', ServeFile(CTmpDir + '/style.txt'));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Range: bytes=0-1,3-4'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 416', LResp) > 0, 'multi-range returns 416');
   finally
     StopTestServer(LServer, LHandle);
   end;
@@ -805,6 +862,10 @@ begin
       @TestHttpIfNoneMatchMatchesHelper);
     T.Test('ServeFile range request returns 206',
       @TestServeFileRangeRequest);
+    T.Test('ServeFile range open-ended bytes=N-',
+      @TestServeFileRangeOpenEnded);
+    T.Test('ServeFile multi-range rejected 416',
+      @TestServeFileMultiRangeRejected);
     T.Test('ServeFile range suffix request',
       @TestServeFileRangeSuffix);
     T.Test('ServeFile range not satisfiable returns 416',

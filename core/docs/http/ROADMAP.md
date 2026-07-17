@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave C2 Conditional helpers；NEXT=C3）
+**Updated**: 2026-07-17（Wave C3 Range + static depth；NEXT=E1）
 
 ---
 
@@ -75,12 +75,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave L′ Doc dual-status | 完成（GOAL_TREE/API_COVERAGE/README 无 NEXT Wave 双写） |
 | Wave C1 Content-Encoding | 完成（client decode helper + server middleware 契约 + Op=`content_encoding`） |
 | Wave C2 Conditional | 完成（If-None-Match/If-Modified-Since helper + ServeFile 304；ParseHttpDate/mtime 秒修复） |
-| **下一执行点** | **Era 1 / Wave C3 — Range + static depth** |
+| Wave C3 Range + static | 完成（单段 Range/206/416、`Accept-Ranges`、流式 source-contract） |
+| **下一执行点** | **Era 2 / Wave E1 — Error taxonomy** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~85%   高级 ~62%   优雅 ~72%   性能 ~50%
+完整 ~88%   高级 ~63%   优雅 ~72%   性能 ~50%
 ```
 
 ---
@@ -196,12 +197,13 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | `ServeFile`/`ServeDir`：`Range` / `Accept-Ranges`、大文件流式、越界 416 |
 | **Don't** | 变成 CDN/静态站框架；目录列表产品化 |
 | **Done when** | Range 单段 focused；大文件不整文件进内存（契约写明） |
 | **Gates** | `test_http_static` 扩展 |
 | **Next** | Wave E1（推荐路径跳过 C4/C5，除非 Inbox 升格） |
+| **Evidence** | 单段/open-ended/suffix 206；越界+multi 416；`Accept-Ranges: bytes`；`CopyFileRange`/`io.Copy` source-contract；CONTRACT 表 |
 
 ### Wave C4 — Multipart / stream 收口（非默认；Inbox 升格）
 
@@ -219,7 +221,7 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 | **Do** | SSE 写端 + 超时/cancel 检查点；文档化限制 |
 | **Don't** | 伪 realtime 总线 |
 
-**Era 1 Done when**：C1–C3 landed；C4/C5 要么 landed 要么仍明确 parked。
+**Era 1 Done when**：C1–C3 landed；C4/C5 要么 landed 要么仍明确 parked。 **Met**（C4/C5 parked）。
 
 ---
 
@@ -231,7 +233,7 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | `hek*` + Op 命名表写入 CONTRACT；公开面禁止裸 `EArgumentError` 漏出；与 Wave J Op 对齐 |
 | **Don't** | 无证据大翻异常层次 |
 | **Done when** | CONTRACT 有分类表；source-contract 或 focused 锁关键公开路径 |
@@ -394,14 +396,14 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave C3 仍是 NEXT
-2. ServeFile/ServeDir Range / Accept-Ranges / 416 + 大文件流式契约
-3. focused + CONTRACT；path-limited land main
-4. 本文件：Wave C3 → landed；Wave E1 → NEXT；changelog 一行
+1. 打开本文件确认 Wave E1 仍是 NEXT
+2. hek* + Op 表写入 CONTRACT；公开面禁止裸 EArgumentError
+3. source-contract / focused 锁关键路径；path-limited land
+4. 本文件：Wave E1 → landed；Wave E2 → NEXT；changelog 一行
 5. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave C3，然后自动续波。**
+**没有用户指令时：默认执行 Wave E1，然后自动续波。**
 
 ---
 
@@ -432,3 +434,5 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave K landed：surface freeze 审计 + ARCHITECTURE 对齐 + contract 锁无 deprecated |
 | 2026-07-17 | Wave L′ landed：doc dual-status kill；Era 0 完成；Wave C1 = NEXT |
 | 2026-07-17 | Wave C1 landed：client Content-Encoding decode + CONTRACT；Wave C2 = NEXT |
+| 2026-07-17 | Wave C2 landed：条件请求 helper + IMS/ParseHttpDate 修复；Wave C3 = NEXT |
+| 2026-07-17 | Wave C3 landed：Range/`Accept-Ranges`/流式契约；Era 1 完成；Wave E1 = NEXT |
