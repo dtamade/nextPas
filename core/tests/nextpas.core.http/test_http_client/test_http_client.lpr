@@ -3110,6 +3110,25 @@ begin
   end;
 end;
 
+procedure TestOpenSSLContextFreesPinValidatorSourceContract;
+var
+  LSource: string;
+  LDestroyPos: SizeInt;
+  LDestroyBlock: string;
+begin
+  { Wave X4: TPinValidator is a owned TObject on SSL context; must FreeAndNil
+    in Destroy or each CreateContext leaves a ~32-byte residual. }
+  LSource := ReadFileText('../../../src/nextpas.core.tls.openssl.context.pas');
+  LDestroyPos := Pos('destructor TOpenSSLContext.Destroy;', LSource);
+  Check(LDestroyPos > 0, 'OpenSSL context destructor is present');
+  if LDestroyPos > 0 then
+  begin
+    LDestroyBlock := Copy(LSource, LDestroyPos, 500);
+    Check(Pos('FreeAndNil(FPinValidator)', LDestroyBlock) > 0,
+      'OpenSSL context Destroy frees owned FPinValidator');
+  end;
+end;
+
 procedure TestClientPostStringBodyOverload;
 var
   LRouter: THttpRouter;
@@ -11021,6 +11040,8 @@ begin
     @TestH1ClientPoolMaxSizePerAuthoritySourceContract);
   T.Test('H1 client pooled retry fresh failure closes connection source contract',
     @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
+  T.Test('OpenSSL context frees PinValidator source contract',
+    @TestOpenSSLContextFreesPinValidatorSourceContract);
   T.Test('Client POST string body overload',
     @TestClientPostStringBodyOverload);
   T.Test('Client PUT sends body and content type', @TestClientPutBodyAndContentType);

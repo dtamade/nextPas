@@ -1066,8 +1066,9 @@ begin
     FSSLContext := nil;
   end;
   
-  // 清理证书固定
-  
+  { Pin validator is owned by this context (non-interface TObject). }
+  FreeAndNil(FPinValidator);
+
   inherited Destroy;
 end;
 
