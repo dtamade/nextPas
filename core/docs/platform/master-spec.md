@@ -51,6 +51,21 @@ Allowed wording:
 - `focused-runtime` for modules with real Windows host logs outside CI matrix
 - `ci-matrix` for the documented 17-gate set only (ROADMAP D1.d)
 
+## Current macOS truth
+
+macOS aarch64 (`macos-14`) has durable GHA **`focused-runtime`** for the
+**documented 8-gate set** in `platform-macos-ci-matrix.sh` under job
+`test-macos` (fail-closed step; ROADMAP D2.c):
+`platform.{time,sync,thread,files,path,env,error,socket}`.
+
+D2.c promotion is **scoped**: it does **not** claim full-host macOS parity or
+treat best-effort whole-suite inventory as evidence.
+
+Allowed wording:
+
+- `focused-runtime` for the documented 8-gate set only (ROADMAP D2.c)
+- best-effort inventory remains non-promotional non-evidence
+
 ### IOCP completion operations
 
 IOCP socket completion operations are structurally implemented in
