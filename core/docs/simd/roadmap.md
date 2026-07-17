@@ -186,7 +186,8 @@ P20 文档真相面 ──► P21 api-coverage 绿
    P26 编译器（阻塞） / P27 新 ISA（阻塞）
 ```
 
-**默认下一刀**：Phase 23 — NEON Batch 最小代表面（`BatchF32` 高频路径）。
+**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **S23a** — NEON `BatchF32` ArrayAdd/Sub/Mul）。  
+不要用聊天「继续」驱动；按队列卡执行并翻 `CURRENT`。
 
 ---
 
@@ -257,13 +258,15 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 
 ## 9. 当前指针
 
-- **活动阶段**: Phase 22b — 剩余 Memory 缺口 / 或 Phase 23 NEON Batch 最小面  
-- **已收口**: Phase 20 文档；Phase 21 api-coverage；Phase 22a Memory Copy/Fill/DiffRange  
-- **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等  
+- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=S23a**）
+- **活动阶段**: Phase 23 — NEON BatchF32 最小代表面（Memory 15/15 已由 Phase 22 收口）
+- **已收口**: Phase 20–22；G0 goal 队列
+- **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等
 
 ---
 
 *修订记录*  
 - 2026-07-17: 重写为 forward-looking 主线；归档 Phase 1–19 / Wave B；建立 Phase 20–27。  
 - 2026-07-17: Phase 20 提交；Phase 21 补 facade 覆盖测试并变绿；指针切到 Phase 22。  
-- 2026-07-17: Phase 22a NEON MemCopy/MemSet/MemDiffRange asm 叶与契约翻转。
+- 2026-07-17: Phase 22a NEON MemCopy/MemSet/MemDiffRange asm 叶与契约翻转。  
+- 2026-07-17: Phase 22b Memory 15/15；G0 `GOAL_QUEUE.md`；默认下一刀 S23a。

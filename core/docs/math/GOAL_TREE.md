@@ -93,15 +93,29 @@ nextpas.core.math final migration
 
 - Status: not started. Requires cross-product coordination.
 
-## Active Backlog
+## Lane mode
 
-1. **macOS trig host proof** — deferred until mac host/CI exists.
-2. **Public `Batch*F64` family** — **done** on this lane: facade +
-   `math.batch` / `math.batch.simd` open-array wrappers over `Array*F64`,
-   covered by `test_batch_scalar` / `test_batch_simd`.
-3. **Vec batch Double parity** — current `vec.batch` is primarily Single-oriented.
-4. **M9 fafafa.game cutover** — out of this module lane until authorized.
-5. **Value-type SIMD cutover** — forbidden without profiled evidence and explicit
+**residual + consumer-of-simd** — M0–M8 are done on available hosts.
+Executable work is queued in [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)
+(`M-C1`, `M-V1`, `M-V2`). Do not invent new milestones in chat.
+
+## Active Backlog (classified)
+
+### In-lane residual (goal-queue)
+
+1. **M-C1** — math consumer smoke after NEON Batch leaves land (usually run-only).
+2. **M-V1** — `vec.batch` Double minimal parity (F32-first gap).
+3. **M-V2** — residual docs / lane-complete checklist cleanup.
+
+### Done (archive; not active work)
+
+- Public `Batch*F64` family (facade + simd wrappers + tests).
+
+### Deferred / blocked
+
+1. **macOS trig host proof** — blocked until mac host/CI exists.
+2. **M9 fafafa.game cutover** — blocked until product authorization (out of lane).
+3. **Value-type SIMD cutover** — forbidden without profiled evidence and explicit
    public contract design.
 
 ## Explicit Non-Goals (current lane)
@@ -109,3 +123,9 @@ nextpas.core.math final migration
 - Do not reintroduce `math.ffi` or naked `external 'm'`.
 - Do not import private simd backend units from math.
 - Do not raw-merge this long-lived lane into `main`; use path-limited landing.
+- Do not start M9 or macOS goals from this queue without lifting BLOCKED_UNTIL.
+
+## Goal entry
+
+Open [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) and execute **CURRENT** only.
+Default simd-first order: `S23a → S23b → M-C1 → …`.

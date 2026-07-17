@@ -25,7 +25,7 @@
 - **NEON Memory**: ✅ **15/15** 自有（Phase 22：Copy/Fill/DiffRange + Reverse/BytesIndexOf/Utf8Validate 真 asm 叶，仅 ASM opt-in 绑定）
 - **NEON Batch\***: ⚠️ 全继承 scalar → Phase 23
 - **cpuinfo**: ✅ 主路径稳定
-- **活动阶段**: Phase 20–22 已收口；**下一刀 Phase 23 Batch 最小面**
+- **活动阶段**: Phase 20–22 已收口；**Goal CURRENT=S23a**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
 - **验证基线 (2026-07-17)**:
   - `make focused FOCUS=core/tests/nextpas.core.simd` → **1740+ passed**
   - `neon-optin-focused` → **1740+ passed**
