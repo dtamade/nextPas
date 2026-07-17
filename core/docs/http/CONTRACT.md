@@ -3,7 +3,7 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（约 58 个源文件）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-17（Wave A2 pool + protocol select）
+**最后更新**：2026-07-18（Wave I1 pool active health probe）
 **版本**：3.15
 
 ---
@@ -587,6 +587,7 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 | Idle put | 仅 keep-alive / `IsReusable` 连接入池；超 per-authority 上限则关闭新归还连接 | pool max / non-reusable tests |
 | Idle clear | `IHttpClient.CloseIdleConnections` → transport `IHttpTransportIdleConnections.CloseIdleConnections` 清空全部 authority 的空闲项；destroy 亦 `PoolClear` | CloseIdle + destroy source-contract |
 | `IdleTTL` | 墙钟空闲淘汰（默认 **90000** ms）；`WithIdleTTL` 外层胜；**0** = 关闭墙钟淘汰；负值 `hekArgument`；借出/归还路径淘汰过期项（`IdleAtMs` 在 put 时打戳） | `test_http_client` IdleTTL expires / IdleTTL=0 keep；H1/H2 同源实现 |
+| 主动健康探测（Wave I1） | **借出路径**（`PoolGet`，锁外）：H1 非阻塞 `TryRead` 探针（WouldBlock=活；数据/EOF/错误=丢弃）；H2 在读缓冲空时发 PING，等 ACK（`PingTimeout` 默认 5000ms；**0**=关闭 PING 探针，仅状态位）；失败连接 Close 后继续取池或 dial | `test_http_client` H1 probe source-contract；`test_http_h2_client` PING on borrow / discard closed / PingTimeout=0 |
 | 并发模型 | 同步 `RoundTrip` 串行一流；同 transport 可多线程各自 RoundTrip（池 mutex）；**无**同连接多路 API | A1 residual |
 
 #### H1 / H2 选择策略（Wave A2）

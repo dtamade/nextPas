@@ -158,6 +158,9 @@ type
     function Handshake: Boolean;
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     function IsReusable: Boolean;
+    { Active liveness probe for pool borrow: PING/ACK when PingTimeout > 0.
+      Must not be called while holding the transport pool lock. }
+    function ProbeHealth: Boolean;
     { Wire/clear IHttpCancelToken for mid-read/write cancel slices on FConn. }
     procedure ApplyCancelToken(const AToken: IHttpCancelToken);
     procedure ClearCancelToken;
@@ -1502,6 +1505,80 @@ begin
     (not FGoawayReceived) and (not FGoawaySent);
 end;
 
+function TH2ClientConnection.ProbeHealth: Boolean;
+var
+  LOpaque: UInt64;
+  LFrame: TH2Frame;
+  LStreamFlow: TH2StreamFlowControl;
+begin
+  { Borrow-time active probe (Wave I1). PingTimeout=0 disables wire PING. }
+  Result := False;
+  if not IsReusable then
+    Exit;
+  if FOptions.PingTimeout <= 0 then
+    Exit(True);
+  { Residual buffered frames mean the peer has already written on this
+    connection (live). Serial RoundTrip fixtures may also pre-queue the next
+    response; do not fail the probe on that data. }
+  if FReadBuffer <> '' then
+    Exit(True);
+
+  try
+    ApplyClientDeadline(FConn, ClientRequestDeadline(FOptions.PingTimeout));
+    try
+      LOpaque := GetTickCount64;
+      if LOpaque = 0 then
+        LOpaque := 1;
+      FLastPingData := not LOpaque;
+      SendFrame(H2_FRAME_PING, 0, 0, H2EncodePing(LOpaque));
+      { Dummy stream flow only for connection-level WINDOW_UPDATE dispatch. }
+      LStreamFlow.Init(1, FRemoteSettings.InitialWindowSize);
+      while True do
+      begin
+        if not IsReusable then
+          Exit(False);
+        if not ReadFrame(LFrame) then
+          Exit(False);
+        case LFrame.Header.FrameType of
+          H2_FRAME_PING:
+            begin
+              HandlePing(LFrame);
+              if ((LFrame.Header.Flags and H2_FLAG_PING_ACK) <> 0) and
+                 (FLastPingData = LOpaque) then
+                Exit(IsReusable);
+            end;
+          H2_FRAME_GOAWAY:
+            begin
+              HandleGoaway(LFrame);
+              Exit(False);
+            end;
+          H2_FRAME_SETTINGS:
+            HandleSettings(LFrame);
+          H2_FRAME_WINDOW_UPDATE:
+            begin
+              if LFrame.Header.StreamID <> 0 then
+                Exit(False);
+              HandleWindowUpdate(LFrame, 0, LStreamFlow);
+            end;
+          H2_FRAME_PUSH_PROMISE:
+            begin
+              FailConnection(H2_ERR_PROTOCOL_ERROR, 'PUSH_PROMISE',
+                'HTTP/2 PUSH_PROMISE received while server push is disabled');
+              Exit(False);
+            end;
+        else
+          { Unexpected stream-level traffic while idle → not healthy for reuse. }
+          Exit(False);
+        end;
+      end;
+    finally
+      ApplyClientDeadline(FConn, TDeadline.Infinite);
+    end;
+  except
+    Result := False;
+  end;
+end;
+
 procedure TH2ClientConnection.Close;
 begin
   if FConn = nil then
@@ -1614,7 +1691,8 @@ begin
     if LCandidate = nil then
       Break;
 
-    if LCandidate.IsReusable then
+    { Probe outside the pool lock: PING/Read can block (same hang class as Close). }
+    if LCandidate.IsReusable and LCandidate.ProbeHealth then
     begin
       Result := LCandidate;
       Break;

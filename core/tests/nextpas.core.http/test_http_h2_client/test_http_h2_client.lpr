@@ -65,6 +65,12 @@ type
     FLastReadDeadlineMs: Int64;
     FLastWriteDeadlineMs: Int64;
     FMinFiniteReadDeadlineMs: Int64;
+    { Scan cursor for auto-ACK of client PING frames (pool health probe). }
+    FWriteFrameScanPos: SizeInt;
+    FAutoAckClientPings: Boolean;
+    FClientPingAckCount: Int32;
+    procedure MaybeAutoAckClientPings;
+    procedure InsertReadDataAtCursor(const AData: AnsiString);
   public
     constructor Create(const AReadData: AnsiString);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -85,6 +91,9 @@ type
     procedure AppendReadData(const AData: AnsiString);
     function WrittenData: AnsiString;
     function HasCancelToken: Boolean;
+    property AutoAckClientPings: Boolean read FAutoAckClientPings
+      write FAutoAckClientPings;
+    property ClientPingAckCount: Int32 read FClientPingAckCount;
     property CancelSetCount: Int32 read FCancelSetCount;
     property CancelClearCount: Int32 read FCancelClearCount;
     property ReadDeadlineSetCount: Int32 read FReadDeadlineSetCount;
@@ -508,6 +517,9 @@ begin
   FLastReadDeadlineMs := -1;
   FLastWriteDeadlineMs := -1;
   FMinFiniteReadDeadlineMs := High(Int64);
+  FWriteFrameScanPos := 1;
+  FAutoAckClientPings := True;
+  FClientPingAckCount := 0;
 end;
 
 function TFakeTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -523,6 +535,54 @@ begin
     Result := LAvailable;
   Move(FReadData[FReadPos], ABuf, Result);
   Inc(FReadPos, SizeInt(Result));
+end;
+
+procedure TFakeTcpStream.MaybeAutoAckClientPings;
+var
+  LScan: SizeInt;
+  LAvail: SizeInt;
+  LPayloadLen: UInt32;
+  LType: Byte;
+  LFlags: Byte;
+  LFrameTotal: SizeInt;
+  LPayload: AnsiString;
+  LPrefaceLen: SizeInt;
+begin
+  if not FAutoAckClientPings then
+    Exit;
+  LPrefaceLen := Length(H2_CLIENT_PREFACE);
+  if (FWriteFrameScanPos <= 1) and (Length(FWrittenData) >= LPrefaceLen) and
+     (Copy(FWrittenData, 1, LPrefaceLen) = H2_CLIENT_PREFACE) then
+    FWriteFrameScanPos := LPrefaceLen + 1;
+  LScan := FWriteFrameScanPos;
+  if LScan < 1 then
+    LScan := 1;
+  while True do
+  begin
+    LAvail := Length(FWrittenData) - LScan + 1;
+    if LAvail < H2_FRAME_HEADER_SIZE then
+      Break;
+    LPayloadLen := (UInt32(Byte(FWrittenData[LScan])) shl 16) or
+      (UInt32(Byte(FWrittenData[LScan + 1])) shl 8) or
+      UInt32(Byte(FWrittenData[LScan + 2]));
+    LFrameTotal := H2_FRAME_HEADER_SIZE + SizeInt(LPayloadLen);
+    if LAvail < LFrameTotal then
+      Break;
+    LType := Byte(FWrittenData[LScan + 3]);
+    LFlags := Byte(FWrittenData[LScan + 4]);
+    if (LType = H2_FRAME_PING) and ((LFlags and H2_FLAG_PING_ACK) = 0) and
+       (LPayloadLen = 8) then
+    begin
+      LPayload := Copy(FWrittenData, LScan + H2_FRAME_HEADER_SIZE, 8);
+      { Insert ACK at current read cursor so it is consumed before any
+        residual response frames already queued for a later RoundTrip. }
+      InsertReadDataAtCursor(
+        H2EncodeFrame(H2_FRAME_PING, H2_FLAG_PING_ACK, 0, LPayload));
+      Inc(FClientPingAckCount);
+    end;
+    Inc(LScan, LFrameTotal);
+  end;
+  FWriteFrameScanPos := LScan;
 end;
 
 function TFakeTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -541,6 +601,7 @@ begin
   SetLength(FWrittenData, LOldLen + SizeInt(LWriteCount));
   Move(ABuf, FWrittenData[LOldLen + 1], LWriteCount);
   Result := LWriteCount;
+  MaybeAutoAckClientPings;
 end;
 
 function TFakeTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -635,9 +696,45 @@ procedure TFakeTcpStream.AppendReadData(const AData: AnsiString);
 var
   LOldLen: SizeInt;
 begin
+  if AData = '' then
+    Exit;
   LOldLen := Length(FReadData);
   SetLength(FReadData, LOldLen + Length(AData));
   Move(AData[1], FReadData[LOldLen + 1], Length(AData));
+end;
+
+procedure TFakeTcpStream.InsertReadDataAtCursor(const AData: AnsiString);
+var
+  LRemain: AnsiString;
+  LPrefixLen: SizeInt;
+begin
+  if AData = '' then
+    Exit;
+  if (FReadPos <= 1) or (FReadPos > Length(FReadData)) then
+  begin
+    if FReadPos > Length(FReadData) then
+    begin
+      { All prior data consumed: append is equivalent to insert-at-end. }
+      AppendReadData(AData);
+      if FReadPos > Length(FReadData) - Length(AData) + 1 then
+        FReadPos := Length(FReadData) - Length(AData) + 1;
+      if FReadPos < 1 then
+        FReadPos := 1;
+    end
+    else
+    begin
+      LRemain := FReadData;
+      FReadData := AData + LRemain;
+      FReadPos := 1;
+    end;
+    Exit;
+  end;
+  LPrefixLen := FReadPos - 1;
+  LRemain := Copy(FReadData, FReadPos, MaxInt);
+  SetLength(FReadData, LPrefixLen + Length(AData) + Length(LRemain));
+  Move(AData[1], FReadData[FReadPos], Length(AData));
+  if LRemain <> '' then
+    Move(LRemain[1], FReadData[FReadPos + Length(AData)], Length(LRemain));
 end;
 
 function TFakeTcpStream.WrittenData: AnsiString;
@@ -1655,6 +1752,123 @@ begin
     ResetDialQueue;
     LTransport := nil;
     LIdle := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestTransportPoolHealthProbePingsOnBorrow;
+var
+  LTransport: IHttpTransport;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LFrames: array[0..63] of TH2Frame;
+  LCount: SizeInt;
+  LClientPingCount: Int32;
+  LI: SizeInt;
+begin
+  { Empty connection buffer on second borrow → PING health probe (Wave I1). }
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake + ComposeResponse(1, '200', '', []));
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LTransport := NewH2ClientTransport(TH2ClientTransportOptions.Default);
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/one'));
+    LResp := nil;
+    LStream.AppendReadData(ComposeResponse(3, '200', '', []));
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/two'));
+    LResp := nil;
+    CheckEqual(Int64(1), Int64(GDialIndex), 'health probe reuses pooled conn');
+    Check(LStream.ClientPingAckCount >= 1,
+      'fake peer auto-acked at least one client PING on borrow');
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    LClientPingCount := 0;
+    for LI := 0 to LCount - 1 do
+      if (LFrames[LI].Header.FrameType = H2_FRAME_PING) and
+         ((LFrames[LI].Header.Flags and H2_FLAG_PING_ACK) = 0) then
+        Inc(LClientPingCount);
+    Check(LClientPingCount >= 1, 'client wrote PING on pool borrow probe');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LTransport := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestTransportPoolHealthProbeDiscardsClosedConn;
+var
+  LTransport: IHttpTransport;
+  LStream1, LStream2: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  ResetDialQueue;
+  LStream1 := TFakeTcpStream.Create(
+    ComposeServerHandshake + ComposeResponse(1, '200', '', []));
+  LStream2 := TFakeTcpStream.Create(
+    ComposeServerHandshake + ComposeResponse(1, '200', '', []));
+  QueueDialConn(LStream1 as ITcpStream);
+  QueueDialConn(LStream2 as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LTransport := NewH2ClientTransport(TH2ClientTransportOptions.Default);
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/one'));
+    LResp := nil;
+    LStream1.Close;
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/two'));
+    LResp := nil;
+    CheckEqual(Int64(2), Int64(GDialIndex),
+      'closed pooled conn fails health probe and redials');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LTransport := nil;
+    LStream1 := nil;
+    LStream2 := nil;
+  end;
+end;
+
+procedure TestTransportPoolHealthProbeDisabledWhenPingTimeoutZero;
+var
+  LTransport: IHttpTransport;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LOptions: TH2ClientTransportOptions;
+  LFrames: array[0..63] of TH2Frame;
+  LCount: SizeInt;
+  LClientPingCount: Int32;
+  LI: SizeInt;
+begin
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake + ComposeResponse(1, '200', '', []));
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LOptions := TH2ClientTransportOptions.Default;
+    LOptions.PingTimeout := 0;
+    LTransport := NewH2ClientTransport(LOptions);
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/one'));
+    LResp := nil;
+    LStream.AppendReadData(ComposeResponse(3, '200', '', []));
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/two'));
+    LResp := nil;
+    CheckEqual(Int64(1), Int64(GDialIndex), 'PingTimeout=0 still reuses');
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    LClientPingCount := 0;
+    for LI := 0 to LCount - 1 do
+      if (LFrames[LI].Header.FrameType = H2_FRAME_PING) and
+         ((LFrames[LI].Header.Flags and H2_FLAG_PING_ACK) = 0) then
+        Inc(LClientPingCount);
+    CheckEqual(Int64(0), Int64(LClientPingCount),
+      'PingTimeout=0 skips borrow PING probe');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LTransport := nil;
     LStream := nil;
   end;
 end;
@@ -3372,6 +3586,12 @@ begin
     @TestPingGetsAcked);
   T.Test('Transport reuses pooled connection',
     @TestTransportReusesPooledConnection);
+  T.Test('Transport pool health probe PINGs on borrow',
+    @TestTransportPoolHealthProbePingsOnBorrow);
+  T.Test('Transport pool health probe discards closed conn',
+    @TestTransportPoolHealthProbeDiscardsClosedConn);
+  T.Test('Transport pool health probe disabled when PingTimeout=0',
+    @TestTransportPoolHealthProbeDisabledWhenPingTimeoutZero);
   T.Test('Transport ConnectTimeout used as dial budget',
     @TestTransportConnectTimeoutUsedAsDialBudget);
   T.Test('Transport dial falls back to Timeout when ConnectTimeout=0',

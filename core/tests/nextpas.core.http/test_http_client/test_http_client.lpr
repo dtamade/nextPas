@@ -6957,6 +6957,40 @@ begin
   end;
 end;
 
+procedure TestH1PoolHealthProbeSourceContract;
+var
+  LSource: string;
+  LGetPos: SizeInt;
+  LReusablePos: SizeInt;
+  LGetBlock: string;
+  LReusableBlock: string;
+  LEndPos: SizeInt;
+begin
+  { Wave I1: borrow-time TryRead probe is the H1 active health check.
+    Live peer-close races are covered by stale-retry suites; this contract
+    locks the probe into PoolGet outside the pool lock. }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  LReusablePos := Pos(
+    'function TH1ClientTransport.PooledConnectionIsReusable', LSource);
+  Check(LReusablePos > 0, 'PooledConnectionIsReusable exists');
+  LGetPos := Pos('function TH1ClientTransport.PoolGet', LSource);
+  Check(LGetPos > LReusablePos, 'PoolGet follows reusable helper');
+  LReusableBlock := Copy(LSource, LReusablePos, LGetPos - LReusablePos);
+  Check(Pos('Active health probe on borrow', LReusableBlock) > 0,
+    'H1 probe documents Wave I1 health check');
+  Check(Pos('TryRead', LReusableBlock) > 0,
+    'H1 probe uses non-blocking TryRead');
+  Check(Pos('tsiorWouldBlock', LReusableBlock) > 0,
+    'H1 probe treats WouldBlock as live idle');
+  LEndPos := Pos('procedure TH1ClientTransport.PoolPut', LSource);
+  Check(LEndPos > LGetPos, 'PoolPut follows PoolGet');
+  LGetBlock := Copy(LSource, LGetPos, LEndPos - LGetPos);
+  Check(Pos('PooledConnectionIsReusable(LCandidate)', LGetBlock) > 0,
+    'PoolGet invokes health probe on candidate');
+  Check(Pos('Never Close or probe sockets while holding FPoolLock', LGetBlock) > 0,
+    'PoolGet probes outside pool lock');
+end;
+
 procedure TestClientMaxPoolSizeIsPerAuthority;
 var
   LPortA, LPortB: UInt16;
@@ -11327,6 +11361,8 @@ begin
     @TestClientPoolIdleTTLExpiresIdleConnections);
   T.Test('Client pool IdleTTL=0 keeps reuse',
     @TestClientPoolIdleTTLZeroKeepsReuse);
+  T.Test('H1 pool health probe source contract',
+    @TestH1PoolHealthProbeSourceContract);
   T.Test('Client MaxPoolSize is per authority',
     @TestClientMaxPoolSizeIsPerAuthority);
   T.Test('Client timeout does not poison idle connection reuse',
