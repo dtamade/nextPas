@@ -55,6 +55,20 @@
 
 ---
 
+## T2 maturity tiers（H2-2）
+
+T2 **不进默认门面**。选型时先看档位（细节 [`CONTRACT.md`](CONTRACT.md) §0.2）：
+
+| 档位 | 何时选 |
+|------|--------|
+| **Guarded** | 需要较稳的并发辅助结构，且能遵守 managed/Close 文档 |
+| **Available** | 可接受 lock-based progress 与较少统一契约 |
+| **Experimental** | 研究/特化硬件路径（RTM/NUMA）；不默认生产 |
+
+**禁止**：把 T2 当 T1 默认门面；因名字含 LockFree 就假定 lock-free progress。
+
+---
+
 以下为 **T2（直接 `uses nextpas.core.lockfree.<unit>`，默认 facade 不拉入）**：
 多数为 **lock-based concurrent** 或专用结构，名称中的 Concurrent/LockFree 以单元 `@concurrency` 与矩阵为准。
 命名诚实总表见 [`CONTRACT.md`](CONTRACT.md) §0 / [`README.md`](README.md) Progress-guarantee 脚注；**勿**因单元落在 `lockfree.*` 就假定 lock-free progress（典型例外：`deque_lf` 为 spin-lock）。
@@ -270,7 +284,8 @@
 
 生命周期：**Close → join producers/waiters → Free**。Destroy 的 Close+drain 不替代 join。
 T1 元素类型必须 unmanaged（构造时 `EArgumentError`）。
-需要区分 full/empty/closed 时用可选 `Try*Ex`（`TLockFreeTryError`；Boolean `Try*` 热路径不变；覆盖 Channel/SegQueue/SPSC/MPMC/SPMC/MPSC/Stack）。
+需要区分 full/empty/closed 时用可选 `Try*Ex`（`TLockFreeTryError`；Boolean `Try*` 热路径不变；覆盖 Channel/SegQueue/SPSC/MPMC/SPMC/MPSC/Stack/WorkStealingDeque）。
+`deque_lf` 是 spin-lock + `TDequeResult`，不提供 `TLockFreeTryError` 面。
 
 | 数据结构 | 生产者 | 消费者 | Close 安全 |
 |----------|--------|--------|-----------|

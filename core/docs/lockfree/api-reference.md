@@ -63,9 +63,11 @@ type
   generic TSpscQueue<T> = class
     constructor Create(const ACapacity: PtrUInt);
     function TryEnqueue(const AValue: T): Boolean;
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     function EnqueueWait(const AValue: T): Boolean;
     function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
     function TryDequeue(out AValue: T): Boolean;
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function DequeueWait(out AValue: T): Boolean;
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     function EnqueueBatch(const AItems: array of T): PtrUInt;
@@ -167,7 +169,9 @@ type
     destructor Destroy; override;
     procedure Enqueue(const AValue: T);
     function TryEnqueue(const AValue: T): Boolean;
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     function TryDequeue(out AValue: T): Boolean;
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function DequeueWait(out AValue: T): Boolean;
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     procedure Close;
@@ -183,6 +187,58 @@ type
 - TryEnqueue 在 Close 后返回 False
 - Close 后 DequeueWait/DequeueTimeout 实现 drain-on-close
 - ApproxCount 使用原子计数器（近似值）
+- 可选 `Try*Ex`：无界 publish 失败正常路径为 `lfteClosed`（无 `lfteFull`）
+
+---
+
+## Stack (nextpas.core.lockfree.stack)
+
+```pascal
+type
+  generic TLockFreeStack<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function TryPush(const AValue: T): Boolean;
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+    function TryPop(out AValue: T): Boolean;
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function ApproxCount: PtrUInt;
+  end;
+```
+
+**Try\*Ex**: success→`lfteNone`；full→`lfteFull`；empty→`lfteEmpty`；closed→`lfteClosed`。
+
+---
+
+## WorkStealingDeque (nextpas.core.lockfree.deque) — T1
+
+```pascal
+type
+  generic TWorkStealingDeque<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function TryPush(const AValue: T): Boolean;
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+    function TryPop(out AValue: T): Boolean;
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    function TrySteal(out AValue: T): Boolean;
+    function TryStealEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function ApproxCount: PtrUInt;
+    function Capacity: PtrUInt;
+  end;
+```
+
+**特点**:
+- Owner 线程：`TryPush` / `TryPop`（LIFO 端）；thief：`TrySteal`（FIFO 端）
+- 有界 power-of-two；Close 后 publish 失败，已入队仍可 pop/steal
+- 可选 `Try*Ex`（H2-1）：full→`lfteFull`，empty→`lfteEmpty`，closed→`lfteClosed`
+- Boolean 热路径不变
+
+**非此类型**: `lockfree.deque_lf` / `TLockFreeDeque` 为 **spin-lock** + `TDequeResult`，非 lock-free / 非 wait-free，无 `TLockFreeTryError` 面。
 
 ---
 

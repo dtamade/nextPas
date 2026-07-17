@@ -182,14 +182,14 @@ Landing：path-limited candidate + `make landing-check` + ff-only main + push（
 
 | 阶段 | 状态 | 证据 / 备注 |
 |------|------|-------------|
-| H2-0 | **in progress** | 本文件 + READY/roadmap 切换 |
-| H2-1 | pending | |
-| H2-2 | pending | |
-| H2-3 | pending | |
-| H2-4 | pending | |
-| H2-5 | pending | |
-| H2-6 | pending | |
-| H2 close-out | pending | |
+| H2-0 | **done** | `archive/atomic-lockfree-h2-0-landed-20260717` |
+| H2-1 | **implemented** | Try\*Ex + tests + CONTRACT；待 verify-t1 + land |
+| H2-2 | **implemented** | T2 maturity tiers 文档 |
+| H2-3 | **implemented** | atomic preferred path 文档 |
+| H2-4 | **implemented** | bench-envelope.md + print script + Makefile |
+| H2-5 | **implemented** | stress Channel Close-join-Free + formal 表 |
+| H2-6 | **implemented** | `t1_close_join_free` 示例 + consumer-audit |
+| H2 close-out | pending | 待 verify + path-limited land 全绿后 |
 
 ---
 
