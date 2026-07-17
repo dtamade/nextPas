@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
 **最后更新**：2026-07-17（Wave A2 pool + protocol select）
-**版本**：3.13
+**版本**：3.14
 
 ---
 
@@ -363,8 +363,31 @@ end;
   - 成功 101 后 **保留** cancel、**清除** handshake deadline。
   - Close/Destroy 清除 stream cancel token。
 - 传输错误经 `HttpWrapTransportException` → `hekTimeout` / `hekConnect` /
-  `hekCanceled`，Op=`websocket` 或 transport。
+  `hekCanceled`，Op=`transport`（wrap）或 `websocket`（连接/升级失败 CreateOp）。
+- 入口 `HttpThrowIfCanceled`：`hekCanceled` Op=**`cancel`**（与 HTTP client 共用 token 语义；非 `websocket`）。
 - 显式 `ConnectTimeout=0` + `Timeout=0` 才恢复无界 dial（测试/特殊工具）。
+
+### 2.2.3c WebSocket lifecycle（Era 6 Wave X1）
+
+公开面：`UpgradeWebSocket` / `ConnectWebSocket` → `IWebSocket`。不扩扩展协商（无 permessage-deflate / 子协议 API）。
+
+| 阶段 | 行为 | 错误 / 证据 |
+|------|------|-------------|
+| Open | 101 后 `IsOpen=True`；成功握手清除 handshake deadline，**保留** cancel token | upgrade/client focused |
+| Read | `ReadFrame` / `ReadMessage`；Ping 自动 Pong；分片聚合 | RFC 边角 suite |
+| Write | `WriteText` / `WriteBinary` / `Ping` / `Pong`；控制帧 payload ≤125 | outgoing reject tests |
+| Local `Close(code, reason)` | 幂等：已 `FCloseSent` 则 no-op；校验 code/reason UTF-8；发送 close 帧；`FOpen=False`；清 stream cancel | X1 lifecycle + CloseFrame |
+| Peer close 帧 | `FCloseReceived=True` → `IsOpen=False`；仍可用 `Close`（`WriteFrameRaw`）回 close | CloseFrame echo |
+| `IsOpen` | `FOpen and not FCloseSent and not FCloseReceived` | X1 lifecycle |
+| 关闭后 Read | `hekProtocol`（`connection closed`） | X1 lifecycle |
+| 关闭后 Write\* | `hekProtocol`（`connection closed`）；**不**经 `WriteFrame` 的 final `Close` 除外 | X1 lifecycle |
+| Cancel | token 已 cancel → 入口/mid-frame `hekCanceled`；Close/Destroy 清 stream cancel | client cancel test |
+| Upgrade 失败 | `hekUpgrade` / `hekArgument` / `hekConnect` 等；**不**写 500 到已 hijack 连接 | UpgradeException ownership test |
+| 所有权 | `IWebSocket` 持有 hijack 后的 stream；server handler 异常不得再写 HTTP 500 到已升级连接 | ownership focused |
+
+**毕业判定（production-helper）**：上表 + focused 全绿 + WS 路径 heaptrc 0 unfreed；**不是**子系统拆分，也不是扩展族 API。
+
+**仍 Park**：WS-over-H2；扩展协商；新 Options 家族。
 
 ### 2.2.4 IHttpResponse metadata + Close
 
@@ -607,3 +630,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.11 | Wave C2：条件请求 helper + ServeFile 304 契约表（If-None-Match / If-Modified-Since） |
 | 2026-07-17 | 3.12 | Wave C3：Range 单段/416/`Accept-Ranges` + 流式契约 |
 | 2026-07-17 | 3.13 | Era 6 Excellence：cancel/OpenSSL/idle-TTL residual 标明 X2/X4/X3 可主动收敛；H3 无产品需求 |
+| 2026-07-17 | 3.14 | Wave X1：WebSocket lifecycle 表（Close/`IsOpen`/关闭后读写/cancel Op） |

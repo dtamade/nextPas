@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Era 6 Excellence 开启；X0 landed → **NEXT = X1**）
+**Updated**: 2026-07-17（Wave X1 landed → **NEXT = X2**）
 
 ---
 
@@ -86,7 +86,8 @@ CHECKPOINT（不阻塞续波）:
 | Wave P5 G6 closure | 完成（stage performance complete 标准 + GOAL_TREE/BENCHMARKS 对齐） |
 | framework-complete (non-H3) | **yes**（Era 0–4）；H3 仍 Blocked / 无产品需求 |
 | Wave X0 Excellence open | 完成（Era 6 表 + 推荐路径 + residual 可主动消除声明） |
-| **下一执行点** | **Wave X1** — WebSocket 生产契约收口 |
+| Wave X1 WS production contract | 完成（lifecycle 表 + close/cancel Op focused；heaptrc 0） |
+| **下一执行点** | **Wave X2** — net cancel 地板（跨模块） |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
@@ -402,20 +403,20 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | CONTRACT WS 生命周期表（Open/Read-Write/Ping/Close/`IsOpen`/重复 Close/错误 Kind-Op）；生产边角 focused（双向 Close 后读写、cancel→`hekCanceled`、upgrade 所有权）；GOAL_TREE G5 / API_COVERAGE 毕业证据（不扩扩展族） |
 | **Don't** | WS-over-H2；permessage-deflate / 子协议全家桶；新 Options 家族 |
 | **Done when** | CONTRACT 有生命周期表；`test_http_websocket` + `test_http_websocket_client` 全绿；WS 路径 heaptrc 0 unfreed；文档不再仅写「未证明 helper」 |
 | **Gates** | `make focused FOCUS=core/tests/nextpas.core.http/test_http_websocket`；`…/test_http_websocket_client`；`git diff --check`；`make hygiene` |
 | **Land paths** | `core/src/nextpas.core.http.websocket.pas`；facade 若触及；`core/tests/nextpas.core.http/test_http_websocket*/**`；`core/docs/http/**` |
 | **Next** | Wave X2 |
-| **Evidence** | （land 后填） |
+| **Evidence** | CONTRACT §2.2.3c lifecycle；client 8 pass（含 close lifecycle + cancel Op=`cancel`）；server 38 pass；两边 heaptrc 0 unfreed |
 
 ### Wave X2 — net cancel 地板（跨模块）
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued after X1 |
+| **Status** | **NEXT** |
 | **Do** | 降低/替代 `NET_IO_CANCEL_SLICE_MS=50` 轮询；Linux 优先可唤醒阻塞读（poll+eventfd/pipe 或等价）；保持 `INetCancelToken`/`ECancelledError` 语义；CONTRACT 更新；http client + WS cancel 回归 |
 | **Don't** | 重写 async runtime；无证据改 epoll server 模型；为 Windows 完美对等拖死主路径（可 Linux 证明 + 其它 OS residual） |
 | **Done when** | cancel 唤醒 SLA 有 focused 证据（显著优于 50ms 切片模型或诚实新 residual）；client/WS cancel 绿 |
@@ -506,11 +507,11 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ```text
 1. Era 0–4 landed；framework-complete (non-H3) 已立住
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
-3. Era 6 NEXT = Wave X1（WS 生产契约）；之后 X2→X3→X4→X5
+3. Era 6 NEXT = Wave X2（net cancel 地板）；之后 X3→X4→X5
 4. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：执行 Era 6 推荐路径（X1…），不要空转 H3。**
+**没有用户指令时：执行 Era 6 推荐路径（X2…），不要空转 H3。**
 
 ---
 
@@ -551,3 +552,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave P3 landed：fullchain Direct/Router × threaded/epoll 本机 snapshot + caveats；Wave P5 = NEXT |
 | 2026-07-17 | Wave P5 landed：G6 stage performance complete；**framework-complete (non-H3)**；H3 Blocked STOP |
 | 2026-07-17 | **Era 6 Excellence** 开启（X0）：H1/H2/WS 精品路径 X1→X5；跨模块 net/tls 受控授权；H3 仍无需求；Wave X1 = NEXT |
+| 2026-07-17 | Wave X1 landed：WS lifecycle 表 + close/cancel Op focused；Wave X2 = NEXT |
