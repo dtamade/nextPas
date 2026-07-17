@@ -55,7 +55,7 @@
 
 ---
 
-## T2 maturity tiers（H2-2）
+## T2 maturity tiers（H2-2）+ H3-2 生产子集
 
 T2 **不进默认门面**。选型时先看档位（细节 [`CONTRACT.md`](CONTRACT.md) §0.2）：
 
@@ -65,6 +65,8 @@ T2 **不进默认门面**。选型时先看档位（细节 [`CONTRACT.md`](CONTR
 | **Available** | 可接受 lock-based progress 与较少统一契约 |
 | **Experimental** | 研究/特化硬件路径（RTM/NUMA）；不默认生产 |
 
+**H3-2（已授权）**：`bag` + `multimap` 另有 **统一生产契约**（Close / managed / progress）— [`CONTRACT.md`](CONTRACT.md) §0.3。仍须 **直接 import**，不进 T1 门面。
+
 **禁止**：把 T2 当 T1 默认门面；因名字含 LockFree 就假定 lock-free progress。
 
 ---
@@ -73,17 +75,17 @@ T2 **不进默认门面**。选型时先看档位（细节 [`CONTRACT.md`](CONTR
 多数为 **lock-based concurrent** 或专用结构，名称中的 Concurrent/LockFree 以单元 `@concurrency` 与矩阵为准。
 命名诚实总表见 [`CONTRACT.md`](CONTRACT.md) §0 / [`README.md`](README.md) Progress-guarantee 脚注；**勿**因单元落在 `lockfree.*` 就假定 lock-free progress（典型例外：`deque_lf` 为 spin-lock）。
 
-需要 Bag（允许重复元素的并发集合）？
+需要 Bag（允许重复元素的并发集合）？ **H3-2 生产子集**
 └── `uses nextpas.core.lockfree.bag` → TLockFreeBag<T>
-    - 基于 MPMC 队列，允许重复元素
-    - FIFO 顺序
+    - MPMC 序列号 ring（try 路径 lock-free）；允许重复；FIFO
+    - unmanaged T；Close → `arClosed`；Destroy 先 Close
     - 阻塞/非阻塞/超时
     - 适用: 任务队列、工作池
 
-需要 MultiMap（一个键多个值）？
+需要 MultiMap（一个键多个值）？ **H3-2 生产子集**
 └── `uses nextpas.core.lockfree.multimap` → TLockFreeMultiMap
-    - **分片锁** HashMap 后端（lock-based concurrent）
-    - 一个键可以有多个值
+    - **单 map 自旋锁**（lock-based；非分片、非 lock-free）
+    - unmanaged Key/Value；Close → `mmClosed`；已有数据可读可删
     - 适用于索引、标签系统
 
 需要 Bloom Filter（快速成员检查）？

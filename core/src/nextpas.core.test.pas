@@ -420,6 +420,7 @@ type
   TMockValue = nextpas.core.test.mock.TMockValue;
   TMockCalls = nextpas.core.test.mock.TMockCalls;
   TMockValues = nextpas.core.test.mock.TMockValues;
+  TMockCaptor = nextpas.core.test.mock.TMockCaptor;
   IMockSetup = nextpas.core.test.mock.IMockSetup;
   IMockWhen = nextpas.core.test.mock.IMockWhen;
   IMockVerify = nextpas.core.test.mock.IMockVerify;

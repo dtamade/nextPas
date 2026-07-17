@@ -66,7 +66,9 @@ Within T2, containers are **documented** (not re-ranked into T1) as:
 | **Available** | Usable concurrent structure; progress often lock-based | trees/skiplist, sketches, `deque_lf` (spin-lock) |
 | **Experimental** | Research / unstable surface | `hashmap.rtm`, `hashmap.numa` |
 
-Full table: [`CONTRACT.md`](CONTRACT.md) §0.2. Selection: [`selection-guide.md`](selection-guide.md).
+**H3-2 production subset** (authorized): `bag` + `multimap` have a **unified** Close / managed / progress contract in [`CONTRACT.md`](CONTRACT.md) §0.3. Still **direct import only** — not default facade. Other Guarded types remain H2-2 tier docs only.
+
+Full table: [`CONTRACT.md`](CONTRACT.md) §0.2–§0.3. Selection: [`selection-guide.md`](selection-guide.md).
 
 ## 模块分层（T1 live set）
 
@@ -154,8 +156,8 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
 `TSpmcQueue<T>` permits exactly one producer and multiple concurrent consumers; CAS-protected dequeue positions ensure exactly-once delivery under contention.
-`TLockFreeBag<T>` permits multiple concurrent producers and consumers; based on MPMC queue, allows duplicate elements. FIFO order is preserved. `Close` prevents new additions but existing elements can still be retrieved.
-`TLockFreeMultiMap<TKey, TValue>` permits multiple concurrent producers and consumers; based on sharded HashMap, each key can have multiple values. `Close` prevents new additions but existing data can still be read and removed.
+`TLockFreeBag<T>` (H3-2 Guarded subset): multiple concurrent producers/consumers; **MPMC sequence ring** (lock-free try path); allows duplicates; FIFO. `Close` blocks new adds (`arClosed`); existing elements still takeable. Unmanaged `T` only. Direct `uses nextpas.core.lockfree.bag`.
+`TLockFreeMultiMap<TKey, TValue>` (H3-2 Guarded subset): concurrent multi-value map under **one map spin lock** (lock-based, **not** sharded, **not** lock-free). `Close` blocks new adds (`mmClosed`); existing keys readable/removable. Unmanaged key/value. Direct `uses nextpas.core.lockfree.multimap`.
 `TConcurrentBloomFilter<T>` permits multiple concurrent producers and consumers; based on multiple hash functions. `Add` and `Contains` are lock-free. `Close` prevents new additions but existing data can still be queried. May have false positives but no false negatives.
 
 ## Linearization points
