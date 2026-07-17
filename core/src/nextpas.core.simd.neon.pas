@@ -69,6 +69,9 @@ function MemFindByte_NEON(p: Pointer; len: SizeUInt; value: Byte): PtrInt;
 function MemDiffRange_NEON(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean;
 procedure MemCopy_NEON(src, dst: Pointer; len: SizeUInt);
 procedure MemSet_NEON(dst: Pointer; len: SizeUInt; value: Byte);
+procedure MemReverse_NEON(p: Pointer; len: SizeUInt);
+function BytesIndexOf_NEON(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt;
+function Utf8Validate_NEON(p: Pointer; len: SizeUInt): Boolean;
 
 // Statistics functions
 function SumBytes_NEON(p: Pointer; len: SizeUInt): UInt64;

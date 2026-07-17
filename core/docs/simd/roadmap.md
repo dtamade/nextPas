@@ -47,13 +47,13 @@ Facade (flat public API)
 | Scalar | 全 baseline | 全 | 全 | 全 | 参考实现 |
 | SSE2/AVX2 链 | 深 | 深 | SharedMask + 本地 PopCount | 深 | MaskedOps 常开 |
 | AVX512 | 宽向量深 | 部分/继承 | 部分 SharedMask | 宽批 | FMA/Shuffle 等按可用性 |
-| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **12/15**（22a：Copy/Fill/DiffRange；余 3 槽 scalar） | **20/20 SharedMask** | **0（全继承 scalar）** | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
+| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **15/15**（22a+22b 全 Memory 真叶） | **20/20 SharedMask** | **0（全继承 scalar）** | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
 | **RVV** | 大量（~412） | **0（全 scalar）** | **20/20 本地** | **0（全 scalar）** | MaskedOps 跟 vector-asm；实验性 |
 | LASX/WASM/VSX/MSA | — | — | — | — | 🔒 FPC/编译器阻塞 |
 
-**NEON Memory 剩余缺口（契约锁定，禁止假 wrapper）**  
-`Reverse` / `BytesIndexOf` / `Utf8Validate`  
-（Phase 22a 已关闭：`Copy` / `Fill` / `DiffRange`，asm 叶 + register 绑定，仅 `NEXTPAS_SIMD_NEON_ASM_ENABLED` 下接管）
+**NEON Memory**：Phase 22 已关闭全部 15 槽（asm 叶 + register，仅 `NEXTPAS_SIMD_NEON_ASM_ENABLED` 下接管；非 asm 编译保留 scalar fallback 符号）。
+
+**NEON 剩余缺口（契约锁定）**：`BatchF32` / `BatchF64` / `BatchInteger` 全继承 scalar → Phase 23。
 
 ### 1.4 验证真相
 
@@ -112,15 +112,15 @@ Facade (flat public API)
 | **非目标** | 不为刷绿删除公共 API；不降低 strict 标准 |
 | **状态** | ✅ 源码 token 扫描 + 运行时断言双过 |
 
-### Phase 22 — NEON Memory 真叶  【P1 · 22a 已完成 / 22b 待做】
+### Phase 22 — NEON Memory 真叶  【P1 · 已完成】
 
 | 项 | 内容 |
 |----|------|
 | **目标** | 关闭 Memory 缺口中 **有真实 NEON 收益** 的槽；禁止标量 forwarder |
 | **22a（✅）** | `Copy` / `Fill` / `DiffRange`：AArch64 asm + register（`NEXTPAS_SIMD_NEON_ASM_ENABLED`）+ scalar fallback 仅用于非 asm 编译单元；契约从 KeepBaseScalar 翻到 FacadeFastSlots |
-| **22b（当前）** | `Reverse` / `BytesIndexOf` / `Utf8Validate`（按实现成本与收益排序） |
+| **22b（✅）** | `Reverse`（rev64+ext / rev）/ `BytesIndexOf`（首字节 NEON + 全匹配校验）/ `Utf8Validate`（ASCII NEON 快路径 + scalar-parity 多字节） |
 | **依赖** | Phase 21 已完成；NEON asm 仍受 FPC trunk / AArch64 opt-in 约束 |
-| **验收 22a** | focused + neon-optin + hygiene 绿；源契约要求 asm/register 绑定；x86 上 runtime 仍继承 scalar（无 asm） |
+| **验收** | focused + neon-optin + hygiene 绿；Memory 15/15 源契约 asm/register；x86 runtime 仍 scalar（无 asm）；PlatformFacadeSlots 锁定 Batch* 继承 |
 | **非目标** | 不为覆盖率写永久 `NEONMemX := ScalarMemX` 死包装注册 |
 
 ### Phase 23 — NEON Batch* 最小可用面  【P1】
@@ -186,7 +186,7 @@ P20 文档真相面 ──► P21 api-coverage 绿
    P26 编译器（阻塞） / P27 新 ISA（阻塞）
 ```
 
-**默认下一刀**：Phase 22b — NEON `Reverse` / `BytesIndexOf` / `Utf8Validate`（或 Phase 23 Batch 最小面，按收益择一）。
+**默认下一刀**：Phase 23 — NEON Batch 最小代表面（`BatchF32` 高频路径）。
 
 ---
 

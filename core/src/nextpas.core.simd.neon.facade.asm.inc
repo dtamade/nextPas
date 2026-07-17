@@ -725,3 +725,381 @@ asm
   mov   w0, #0
   ret
 end;
+
+// === Phase 22b: NEON Memory Reverse / BytesIndexOf / Utf8Validate ===
+
+procedure MemReverse_NEON(p: Pointer; len: SizeUInt); assembler; nostackframe;
+asm
+  // x0 = p, x1 = len
+  cbz   x0, .Lrev_done
+  cmp   x1, #1
+  b.ls  .Lrev_done
+
+  // x2 = left, x3 = right (last byte)
+  mov   x2, x0
+  add   x3, x0, x1
+  sub   x3, x3, #1
+
+  // ---- 16-byte block reverse from both ends ----
+.Lrev_loop16:
+  // need left+30 < right  (two non-overlapping 16B windows)
+  add   x4, x2, #30
+  cmp   x4, x3
+  b.hs  .Lrev_loop8
+  // load left 16
+  ldp   x5, x6, [x2]
+  fmov  d0, x5
+  fmov  d2, x6
+  ins   v0.d[1], v2.d[0]
+  // load right-15 16
+  sub   x7, x3, #15
+  ldp   x5, x6, [x7]
+  fmov  d1, x5
+  fmov  d2, x6
+  ins   v1.d[1], v2.d[0]
+  // reverse each 16B vector: rev64 within halves, then swap halves
+  rev64 v0.16b, v0.16b
+  ext   v0.16b, v0.16b, v0.16b, #8
+  rev64 v1.16b, v1.16b
+  ext   v1.16b, v1.16b, v1.16b, #8
+  // store left-reversed to right window, right-reversed to left
+  umov  x5, v0.d[0]
+  umov  x6, v0.d[1]
+  stp   x5, x6, [x7]
+  umov  x5, v1.d[0]
+  umov  x6, v1.d[1]
+  stp   x5, x6, [x2]
+  add   x2, x2, #16
+  sub   x3, x3, #16
+  b     .Lrev_loop16
+
+  // ---- 8-byte reverse via rev ----
+.Lrev_loop8:
+  add   x4, x2, #14
+  cmp   x4, x3
+  b.hs  .Lrev_loop1
+  ldr   x5, [x2]
+  sub   x7, x3, #7
+  ldr   x6, [x7]
+  rev   x5, x5
+  rev   x6, x6
+  str   x6, [x2]
+  str   x5, [x7]
+  add   x2, x2, #8
+  sub   x3, x3, #8
+  b     .Lrev_loop8
+
+  // ---- byte tail ----
+.Lrev_loop1:
+  cmp   x2, x3
+  b.hs  .Lrev_done
+  ldrb  w5, [x2]
+  ldrb  w6, [x3]
+  strb  w6, [x2]
+  strb  w5, [x3]
+  add   x2, x2, #1
+  sub   x3, x3, #1
+  b     .Lrev_loop1
+
+.Lrev_done:
+  ret
+end;
+
+function BytesIndexOf_NEON(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt; assembler; nostackframe;
+asm
+  // x0 = haystack, x1 = haystackLen, x2 = needle, x3 = needleLen
+  // return: x0 = PtrInt index or -1
+  // Match scalar edge semantics.
+  cbz   x1, .Lbix_miss
+  cbz   x3, .Lbix_miss
+  cbz   x0, .Lbix_miss
+  cbz   x2, .Lbix_miss
+  cmp   x3, x1
+  b.hi  .Lbix_miss
+
+  // search window length = haystackLen - needleLen + 1
+  sub   x4, x1, x3
+  add   x4, x4, #1          // x4 = searchLen
+  mov   x5, x0              // x5 = hay base
+  mov   x6, #0              // x6 = offset
+  ldrb  w7, [x2]            // first needle byte
+  dup   v0.16b, w7
+
+  // single-byte needle: pure NEON first-byte search (same shape as MemFindByte)
+  cmp   x3, #1
+  b.eq  .Lbix_one
+
+.Lbix_loop16:
+  cmp   x4, #16
+  b.lo  .Lbix_tail
+  ldp   x8, x9, [x5, x6]
+  fmov  d1, x8
+  fmov  d2, x9
+  ins   v1.d[1], v2.d[0]
+  cmeq  v1.16b, v1.16b, v0.16b
+  umaxv b2, v1.16b
+  umov  w8, v2.b[0]
+  cbnz  w8, .Lbix_scan16
+  add   x6, x6, #16
+  sub   x4, x4, #16
+  cbnz  x4, .Lbix_loop16
+  b     .Lbix_miss
+
+.Lbix_scan16:
+  mov   w9, #0              // lane
+.Lbix_scan_lane:
+  umov  w8, v1.b[0]
+  cbz   w8, .Lbix_next_lane
+  // candidate at offset x6 + w9; verify full needle
+  add   x10, x6, x9         // candidate index
+  mov   x11, #0             // j
+.Lbix_verify:
+  cmp   x11, x3
+  b.eq  .Lbix_hit
+  add   x12, x5, x10
+  ldrb  w8, [x12, x11]
+  ldrb  w13, [x2, x11]
+  cmp   w8, w13
+  b.ne  .Lbix_next_lane
+  add   x11, x11, #1
+  b     .Lbix_verify
+
+.Lbix_next_lane:
+  ext   v1.16b, v1.16b, v1.16b, #1
+  add   w9, w9, #1
+  cmp   w9, #16
+  b.lo  .Lbix_scan_lane
+  // no verified hit in this block
+  add   x6, x6, #16
+  sub   x4, x4, #16
+  cbnz  x4, .Lbix_loop16
+  b     .Lbix_miss
+
+.Lbix_one:
+  // reuse searchLen in x4, first byte already in v0
+.Lbix_one_loop16:
+  cmp   x4, #16
+  b.lo  .Lbix_one_tail
+  ldp   x8, x9, [x5, x6]
+  fmov  d1, x8
+  fmov  d2, x9
+  ins   v1.d[1], v2.d[0]
+  cmeq  v1.16b, v1.16b, v0.16b
+  umaxv b2, v1.16b
+  umov  w8, v2.b[0]
+  cbnz  w8, .Lbix_one_found16
+  add   x6, x6, #16
+  sub   x4, x4, #16
+  cbnz  x4, .Lbix_one_loop16
+  b     .Lbix_miss
+
+.Lbix_one_found16:
+  mov   w9, #0
+.Lbix_one_scan:
+  umov  w8, v1.b[0]
+  cbnz  w8, .Lbix_one_hit
+  ext   v1.16b, v1.16b, v1.16b, #1
+  add   w9, w9, #1
+  cmp   w9, #16
+  b.lo  .Lbix_one_scan
+  add   x6, x6, #16
+  sub   x4, x4, #16
+  cbnz  x4, .Lbix_one_loop16
+  b     .Lbix_miss
+
+.Lbix_one_hit:
+  add   x0, x6, x9
+  ret
+
+.Lbix_one_tail:
+  cbz   x4, .Lbix_miss
+.Lbix_one_tail_loop:
+  ldrb  w8, [x5, x6]
+  cmp   w8, w7
+  b.eq  .Lbix_hit_idx
+  add   x6, x6, #1
+  subs  x4, x4, #1
+  b.ne  .Lbix_one_tail_loop
+  b     .Lbix_miss
+
+.Lbix_tail:
+  cbz   x4, .Lbix_miss
+.Lbix_tail_loop:
+  // scalar first-byte filter then full verify
+  ldrb  w8, [x5, x6]
+  cmp   w8, w7
+  b.ne  .Lbix_tail_next
+  mov   x11, #0
+.Lbix_tail_verify:
+  cmp   x11, x3
+  b.eq  .Lbix_hit_idx
+  add   x12, x5, x6
+  ldrb  w8, [x12, x11]
+  ldrb  w13, [x2, x11]
+  cmp   w8, w13
+  b.ne  .Lbix_tail_next
+  add   x11, x11, #1
+  b     .Lbix_tail_verify
+.Lbix_tail_next:
+  add   x6, x6, #1
+  subs  x4, x4, #1
+  b.ne  .Lbix_tail_loop
+  b     .Lbix_miss
+
+.Lbix_hit:
+  add   x0, x6, x9
+  ret
+
+.Lbix_hit_idx:
+  mov   x0, x6
+  ret
+
+.Lbix_miss:
+  mov   x0, #-1
+  ret
+end;
+
+function Utf8Validate_NEON(p: Pointer; len: SizeUInt): Boolean; assembler; nostackframe;
+asm
+  // x0 = p, x1 = len
+  // Return: w0 = Boolean
+  // NEON ASCII fast path + scalar-parity multi-byte checks.
+  cbz   x1, .Lutf8_true
+  cbz   x0, .Lutf8_false
+
+  mov   x2, x0              // base
+  mov   x3, x1              // remaining
+  mov   x4, #0              // offset
+
+  // ---- 16-byte ASCII scan ----
+.Lutf8_ascii16:
+  cmp   x3, #16
+  b.lo  .Lutf8_scalar
+  ldp   x5, x6, [x2, x4]
+  fmov  d0, x5
+  fmov  d2, x6
+  ins   v0.d[1], v2.d[0]
+  // any high bit? max byte >= 0x80
+  umaxv b1, v0.16b
+  umov  w5, v1.b[0]
+  tbnz  w5, #7, .Lutf8_scalar
+  add   x4, x4, #16
+  sub   x3, x3, #16
+  cbnz  x3, .Lutf8_ascii16
+  b     .Lutf8_true
+
+  // ---- scalar-parity validation from offset x4 ----
+.Lutf8_scalar:
+  // x2=base, x1=original len, x4=i
+.Lutf8_loop:
+  cmp   x4, x1
+  b.hs  .Lutf8_true
+  ldrb  w5, [x2, x4]        // b
+  // ASCII?
+  tbz   w5, #7, .Lutf8_ascii1
+
+  // 2-byte: C2..DF
+  cmp   w5, #0xC2
+  b.lo  .Lutf8_false
+  cmp   w5, #0xDF
+  b.ls  .Lutf8_seq2
+  // 3-byte: E0..EF  (top nibble E)
+  and   w6, w5, #0xF0
+  cmp   w6, #0xE0
+  b.eq  .Lutf8_seq3
+  // 4-byte: F0..F4
+  cmp   w5, #0xF0
+  b.lo  .Lutf8_false
+  cmp   w5, #0xF4
+  b.hi  .Lutf8_false
+  b     .Lutf8_seq4
+
+.Lutf8_ascii1:
+  add   x4, x4, #1
+  b     .Lutf8_loop
+
+.Lutf8_seq2:
+  // need 1 continuation
+  add   x6, x4, #1
+  cmp   x6, x1
+  b.hs  .Lutf8_false
+  ldrb  w7, [x2, x6]
+  and   w8, w7, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  add   x4, x4, #2
+  b     .Lutf8_loop
+
+.Lutf8_seq3:
+  // need 2 continuations + overlong/surrogate checks
+  add   x6, x4, #2
+  cmp   x6, x1
+  b.hs  .Lutf8_false
+  add   x6, x4, #1
+  ldrb  w7, [x2, x6]        // b2
+  and   w8, w7, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  add   x6, x4, #2
+  ldrb  w9, [x2, x6]        // b3
+  and   w8, w9, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  // (b==E0 && b2<A0) invalid overlong
+  cmp   w5, #0xE0
+  b.ne  .Lutf8_seq3_sur
+  cmp   w7, #0xA0
+  b.lo  .Lutf8_false
+.Lutf8_seq3_sur:
+  // (b==ED && b2>=A0) invalid surrogate
+  cmp   w5, #0xED
+  b.ne  .Lutf8_seq3_ok
+  cmp   w7, #0xA0
+  b.hs  .Lutf8_false
+.Lutf8_seq3_ok:
+  add   x4, x4, #3
+  b     .Lutf8_loop
+
+.Lutf8_seq4:
+  // need 3 continuations + range checks
+  add   x6, x4, #3
+  cmp   x6, x1
+  b.hs  .Lutf8_false
+  add   x6, x4, #1
+  ldrb  w7, [x2, x6]        // b2
+  and   w8, w7, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  add   x6, x4, #2
+  ldrb  w9, [x2, x6]
+  and   w8, w9, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  add   x6, x4, #3
+  ldrb  w9, [x2, x6]
+  and   w8, w9, #0xC0
+  cmp   w8, #0x80
+  b.ne  .Lutf8_false
+  // (b==F0 && b2<90) overlong
+  cmp   w5, #0xF0
+  b.ne  .Lutf8_seq4_max
+  cmp   w7, #0x90
+  b.lo  .Lutf8_false
+.Lutf8_seq4_max:
+  // (b==F4 && b2>=90) too large
+  cmp   w5, #0xF4
+  b.ne  .Lutf8_seq4_ok
+  cmp   w7, #0x90
+  b.hs  .Lutf8_false
+.Lutf8_seq4_ok:
+  add   x4, x4, #4
+  b     .Lutf8_loop
+
+.Lutf8_true:
+  mov   w0, #1
+  ret
+
+.Lutf8_false:
+  mov   w0, #0
+  ret
+end;

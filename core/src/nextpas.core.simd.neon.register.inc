@@ -151,6 +151,9 @@ begin
   table.Memory.DiffRange := @MemDiffRange_NEON;
   table.Memory.Copy := @MemCopy_NEON;
   table.Memory.Fill := @MemSet_NEON;
+  table.Memory.Reverse := @MemReverse_NEON;
+  table.Memory.BytesIndexOf := @BytesIndexOf_NEON;
+  table.Memory.Utf8Validate := @Utf8Validate_NEON;
   table.Memory.SumBytes := @SumBytes_NEON;
   table.Memory.MinMaxBytes := @MinMaxBytes_NEON;
   table.Memory.CountByte := @CountByte_NEON;
@@ -163,8 +166,7 @@ begin
   // Keep permanently-scalar platform facade helpers on the base scalar slots.
   // Backend-local wrappers add no runtime value and make slot ownership harder to audit.
   // Wide dot fallback-only helpers follow the same rule until NEON owns a real implementation.
-  // Memory gaps still inherited from FillBase (no NEON leaf yet):
-  // Reverse / BytesIndexOf / Utf8Validate.
+  // Phase 22b closed Memory (15/15 under ASM). Remaining platform gaps: Batch*.
 
   // Saturating arithmetic is backend-owned only when NEON asm is compiled.
   {$IFDEF NEXTPAS_SIMD_NEON_ASM_ENABLED}

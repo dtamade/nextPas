@@ -25,6 +25,21 @@ begin
   MemSet_Scalar(dst, len, value);
 end;
 
+procedure MemReverse_NEON(p: Pointer; len: SizeUInt);
+begin
+  MemReverse_Scalar(p, len);
+end;
+
+function BytesIndexOf_NEON(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt;
+begin
+  Result := BytesIndexOf_Scalar(haystack, haystackLen, needle, needleLen);
+end;
+
+function Utf8Validate_NEON(p: Pointer; len: SizeUInt): Boolean;
+begin
+  Result := Utf8Validate_Scalar(p, len);
+end;
+
 function SumBytes_NEON(p: Pointer; len: SizeUInt): UInt64;
 begin
   Result := SumBytes_Scalar(p, len);
