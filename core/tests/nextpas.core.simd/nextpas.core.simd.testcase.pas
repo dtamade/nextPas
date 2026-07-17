@@ -2283,6 +2283,8 @@ begin
   FillChar(F, SizeOf(F), 0);
 
   // NOTE: 本测试只验证“需求判定逻辑”，不触发任何 AVX-512 指令执行。
+  // HasAVX is an explicit fail-close prerequisite for malformed CPUID.
+  F.HasAVX := True;
   F.HasAVX2 := True;
   F.HasAVX512F := True;
 
@@ -2297,7 +2299,10 @@ begin
   CheckFalse(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should still require FMA after AVX2 + AVX512F + AVX512BW + POPCNT are present');
 
   F.HasFMA := True;
-  CheckTrue(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should be usable with AVX2 + AVX512F + AVX512BW + POPCNT + FMA');
+  CheckTrue(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should be usable with AVX + AVX2 + AVX512F + AVX512BW + POPCNT + FMA');
+
+  F.HasAVX := False;
+  CheckFalse(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should fail-close when raw AVX prerequisite is missing');
 end;
 
 procedure TTestCase_X86BackendPredicates.Test_X86HasAVX512BackendRequiredFeatures_RequiresFMA;
@@ -2307,6 +2312,7 @@ begin
   FillChar(LF, SizeOf(LF), 0);
 
   // NOTE: 本测试只验证“需求判定逻辑”，不触发任何 AVX-512 指令执行。
+  LF.HasAVX := True;
   LF.HasAVX2 := True;
   LF.HasAVX512F := True;
   LF.HasAVX512BW := True;
@@ -2324,6 +2330,7 @@ var
 begin
   FillChar(LF, SizeOf(LF), 0);
 
+  LF.HasAVX := True;
   LF.HasAVX2 := True;
   LF.HasAVX512F := True;
   LF.HasAVX512BW := True;
@@ -2348,6 +2355,9 @@ begin
 
   LF.HasFMA := True;
   CheckTrue(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should become supported once FMA is present and 512-bit state is usable');
+
+  LF.HasAVX := False;
+  CheckFalse(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should fail-close when raw AVX prerequisite is missing');
 end;
 
 procedure TTestCase_X86BackendPredicates.Test_X86DirectAVX512ExecutionGate_RequiresBackendSupportedPredicate;
@@ -2360,6 +2370,7 @@ begin
 
   CheckFalse(X86AllowsDirectAVX512Execution(LF, True), 'Direct AVX-512 execution gates must require backend-supported feature set, not just raw usable AVX512F');
 
+  LF.HasAVX := True;
   LF.HasAVX2 := True;
   LF.HasAVX512BW := True;
   LF.HasPOPCNT := True;

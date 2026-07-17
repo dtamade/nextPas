@@ -1023,8 +1023,16 @@ begin
   end;
 end;
 
+function IsValidSimdBackendOrdinal(const aBackend: TSimdBackend): Boolean; inline;
+begin
+  Result := (Ord(aBackend) >= Ord(Low(TSimdBackend))) and
+            (Ord(aBackend) <= Ord(High(TSimdBackend)));
+end;
+
 function IsBackendRegistered(backend: TSimdBackend): Boolean;
 begin
+  if not IsValidSimdBackendOrdinal(backend) then
+    Exit(False);
   ReadBarrier;
   Result := g_BackendRegistered[backend];
 end;
@@ -1034,6 +1042,16 @@ var
   LDispatchTable: PSimdDispatchTable;
 begin
   Result := Default(TSimdBackendInfo);
+
+  // Out-of-range enum casts must fail-close without indexing the registration
+  // table (otherwise this becomes an access violation instead of Available=False).
+  if not IsValidSimdBackendOrdinal(backend) then
+  begin
+    Result.Available := False;
+    Result.Name := 'Invalid';
+    Result.Description := 'Invalid backend';
+    Exit;
+  end;
 
   // Ensure consistent view of registration flag and published table contents.
   ReadBarrier;
