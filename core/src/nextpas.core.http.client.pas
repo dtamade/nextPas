@@ -839,8 +839,21 @@ begin
     try
       LNewUrl := ResolveRedirectUrl(LUrl, LLocation);
     except
-      ReleaseResponseBodyIgnoringErrors(LResp);
-      raise;
+      on E: EHttpError do
+      begin
+        ReleaseResponseBodyIgnoringErrors(LResp);
+        if E.Kind = hekRedirect then
+          raise EHttpError.Create(hekRedirect,
+            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+              E.Message))
+        else
+          raise;
+      end;
+      else
+      begin
+        ReleaseResponseBodyIgnoringErrors(LResp);
+        raise;
+      end;
     end;
     ReleaseResponseBody(LResp);
 
@@ -857,7 +870,16 @@ begin
     end
     else
     begin
-      RewindRedirectBody(AReq, LBodyStream, LBodyStartPosition);
+      try
+        RewindRedirectBody(AReq, LBodyStream, LBodyStartPosition);
+      except
+        on E: EHttpError do
+          raise EHttpError.Create(E.Kind,
+            FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
+              E.Message), E.Status);
+        else
+          raise;
+      end;
       LNewHeaders := RedirectHeadersFor(AReq, LUrl, LNewUrl, True);
       LNewReq := THttpRequest.Create(AReq.Method, LNewUrl, hvHttp11,
         LNewHeaders, AReq.Body, AReq.ContentLength);
@@ -1706,7 +1728,8 @@ begin
     LDestDir := nextpas.core.fs.PathDir(ADestPath);
     if not nextpas.core.fs.MkdirAll(LDestDir) then
       raise EHttpError.CreateOp(hekBody, 'download',
-        'HTTP download could not create directory: ' + LDestDir);
+        FormatHttpClientError('GET', AUrl,
+          'HTTP download could not create directory: ' + LDestDir));
 
     LTempFile := nextpas.core.fs.TempFile(LDestDir,
       '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
@@ -1723,7 +1746,8 @@ begin
 
       if not nextpas.core.fs.Rename(LTempPath, ADestPath) then
         raise EHttpError.CreateOp(hekBody, 'download',
-          'HTTP download could not publish file: ' + ADestPath);
+          FormatHttpClientError('GET', AUrl,
+            'HTTP download could not publish file: ' + ADestPath));
       LCommitted := True;
     finally
       if LTempFile <> nil then

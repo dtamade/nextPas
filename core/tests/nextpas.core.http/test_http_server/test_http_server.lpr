@@ -396,7 +396,7 @@ type
     function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
 
-procedure CheckRaisesEArgumentError(const ALabel: string; const AProbe: TProc);
+procedure CheckRaisesHekArgument(const ALabel: string; const AProbe: TProc);
 var
   LRaised: Boolean;
   LWrongException: string;
@@ -406,12 +406,12 @@ begin
   try
     AProbe();
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
     on E: Exception do
       LWrongException := E.ClassName + ': ' + E.Message;
   end;
-  Check(LRaised, ALabel + ' raises EArgumentError, got ' + LWrongException);
+  Check(LRaised, ALabel + ' raises EHttpError(hekArgument), got ' + LWrongException);
 end;
 
 constructor TInlineRuntimeTcpStream.Create(const AInput: string);
@@ -1869,27 +1869,27 @@ begin
   LHandoff := TMockWorkerHandoff.Create;
   LContext := TMockSessionContext.Create(LHandoff);
 
-  CheckRaisesEArgumentError('ServeConn nil connection', procedure
+  CheckRaisesHekArgument('ServeConn nil connection', procedure
     begin
       LTransport.ServeConn(nil, LHandler);
     end);
-  CheckRaisesEArgumentError('ServeConn nil handler', procedure
+  CheckRaisesHekArgument('ServeConn nil handler', procedure
     begin
       LTransport.ServeConn(LStream, nil);
     end);
-  CheckRaisesEArgumentError('NewSession nil connection', procedure
+  CheckRaisesHekArgument('NewSession nil connection', procedure
     begin
       LFactory.NewSession(nil, LHandler);
     end);
-  CheckRaisesEArgumentError('NewSession nil handler', procedure
+  CheckRaisesHekArgument('NewSession nil handler', procedure
     begin
       LFactory.NewSession(LStream, nil);
     end);
-  CheckRaisesEArgumentError('context NewSession nil connection', procedure
+  CheckRaisesHekArgument('context NewSession nil connection', procedure
     begin
       LContextFactory.NewSession(nil, LHandler, LContext);
     end);
-  CheckRaisesEArgumentError('context NewSession nil handler', procedure
+  CheckRaisesHekArgument('context NewSession nil handler', procedure
     begin
       LContextFactory.NewSession(LStream, nil, LContext);
     end);

@@ -605,9 +605,9 @@ constructor TH2ServerSession.Create(const AConn: ITcpStream;
 begin
   inherited Create;
   if AConn = nil then
-    raise EArgumentError.Create('h2 server session requires connection');
+    raise EHttpError.Create(hekArgument, 'h2 server session requires connection');
   if AHandler = nil then
-    raise EArgumentError.Create('h2 server session requires handler');
+    raise EHttpError.Create(hekArgument, 'h2 server session requires handler');
   AOptions.Validate;
   FConn := AConn;
   FHandler := AHandler;

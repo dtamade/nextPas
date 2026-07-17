@@ -304,9 +304,11 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 
 ## 4. 错误与生命周期
 
-- 模块错误类型：公开前置条件与协议故障以 **`EHttpError`** 为主
-  （`hekArgument` / `hekTimeout` / …）。内部 transport 实现仍可能抛
-  框架 `EArgumentError`；`HttpErrorIsUserError` 对两者都视为 user-side。
+- 模块错误类型：公开前置条件、transport 构造/入口前置条件与协议故障以
+  **`EHttpError`** 为主（`hekArgument` / `hekTimeout` / …）。H1/H2/TLS stream
+  的 nil conn/req/handler 等前置条件亦为 `hekArgument`（不再裸
+  `EArgumentError`）。`HttpErrorIsUserError` 仍兼容框架 `EArgumentError` 与
+  `hekArgument` / `hekCanceled`。
 - Server runtime ownership：`nextpas.core.net.server`；HTTP 只拥有协议状态机。
 - Client：idle pool 经 `CloseIdleConnections`；`Send` 拥有 close-capable request body。
 - Redirect：`301/302/303` → GET 无 body；`307/308` 保方法；跨 authority 剥离敏感头。

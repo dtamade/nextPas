@@ -2235,20 +2235,20 @@ begin
   try
     LTransport.RoundTrip(nil);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'H1 transport RoundTrip rejects nil request');
+  Check(LRaised, 'H1 transport RoundTrip rejects nil request as hekArgument');
 
   LReq := TNilHeadersRequest.Create('http://127.0.0.1:1/no-connect') as IHttpRequest;
   LRaised := False;
   try
     LTransport.RoundTrip(LReq);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'H1 transport RoundTrip rejects nil request headers');
+  Check(LRaised, 'H1 transport RoundTrip rejects nil request headers as hekArgument');
 end;
 
 procedure TestClientSendRejectsNilTransportResponse;

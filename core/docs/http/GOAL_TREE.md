@@ -63,8 +63,9 @@ HTTP can be called stage-complete only when all of these hold:
 **Usability-fix wave-2 M1–M5 (2026-07-16)**
 
 - Transport: H1/H2 client wrap bare `ETimeoutError` → `hekTimeout` + `Op=transport`.
-- Taxonomy: message-shape validation uses `hekArgument`; config/nil stays
-  `EArgumentError`.
+- Taxonomy: message-shape validation uses `hekArgument`；config/nil 前置条件在
+  后续 residual/cycle-3 亦迁移为 `hekArgument`（历史曾短暂保留框架
+  `EArgumentError`，**不是 live 行为**）。
 - Helpers: `HttpErrorIsTimeout` / `HttpErrorIsRetryable` on base + facade.
 - Middleware: `THttpRequestWrapper` forwards context/options; bodycache/decompress
   inherit it.

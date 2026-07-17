@@ -2404,9 +2404,9 @@ var
   LWrapped: Exception;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('h1 client transport requires request');
+    raise EHttpError.Create(hekArgument, 'h1 client transport requires request');
   if AReq.Headers = nil then
-    raise EArgumentError.Create('h1 client transport requires request headers');
+    raise EHttpError.Create(hekArgument, 'h1 client transport requires request headers');
 
   // Per-request timeout override: check request options first, fall back to transport default
   LTimeoutMs := FOptions.Timeout;
@@ -2563,9 +2563,9 @@ procedure TH1ServerTransport.ValidateInputs(const AConn: ITcpStream;
   const AHandler: IHttpHandler);
 begin
   if AConn = nil then
-    raise EArgumentError.Create('h1 server transport requires connection');
+    raise EHttpError.Create(hekArgument, 'h1 server transport requires connection');
   if AHandler = nil then
-    raise EArgumentError.Create('h1 server transport requires handler');
+    raise EHttpError.Create(hekArgument, 'h1 server transport requires handler');
 end;
 
 function TH1ServerTransport.HandleConnection(const AConn: ITcpStream;
