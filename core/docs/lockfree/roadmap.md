@@ -47,6 +47,7 @@
 | **R3** 诊断 API 试点 | `TLockFreeTryError` + Channel/ChannelSPSC/SegQueue `Try*Ex` | `373f86896`；lockfree **171** |
 | **R4** Try\*Ex 扩面 | SPSC/MPMC/SPMC/MPSC/Stack `Try*Ex`；CONTRACT §1.4 | 已完成；lockfree **176** |
 | **R5** Channel cap=1 | MPMC Channel empty/full sequence 编码（方案 A）；`TestChannelCapacityOneFullEmpty`；CONTRACT §1.5 | 见本轮 landing |
+| **R6** 工程卫生 | 模块 `verify-t1` Makefile；CONTRACT §3.1 managed 文案模板；api-ref EN `moSeqCst` 对齐 | 见本轮 landing |
 
 ### 1.3 成熟度（诚实）
 
@@ -62,15 +63,22 @@
 
 | 优先级 | 缺口 | 对应阶段 |
 |--------|------|----------|
-| P2 | 验证证据未固化为可复用 gate 脚本/artifact 约定 | **R6** |
-| P2 | managed 拒绝文案不统一 | **R6** |
-| P2 | `api-reference` 与 live 仍可能局部漂移 | **R6** |
 | P3 | atomic legacy CAS 返回值语义弃用日程 | **R7** |
 | P3 | T2 命名噪声（`deque_lf` 等 lock-based） | **R7** |
 | P3 | 消费者扫一遍（core 内误用 Close/Destroy） | **R7** |
 | 研究 | NUMA 亲和 / TSX 扩展 / TLA+ 扩模型 | **R8**（非默认） |
 
 ### 1.5 标准验证门（所有 R* 验收默认集）
+
+一键 T1（推荐）：
+
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/tests/nextpas.core.lockfree verify-t1
+# 日志默认: core/build/verify-lockfree/verify-t1.log
+```
+
+等价分步：
 
 ```bash
 export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
@@ -139,16 +147,16 @@ R8  研究线（NUMA/TSX/TLA）              可选，重大变更需讨论
 | **验收** | cap=1 下 `TrySendEx`/`TryReceiveEx` 语义与 CONTRACT 一致；主门绿 |
 | **决策** | **A**（实现修复）：`EmptySequence(pos)=pos*2` / `FullSequence(pos)=pos*2+1`；非 B |
 
-### R6 — 工程卫生与证据
+### R6 — 工程卫生与证据 — **DONE**
 
 **目标**：可复现验证与文档零关键漂移。
 
 | 项 | 内容 |
 |----|------|
-| **交付物** | （1）可选 `make`/script 一键跑 atomic+lockfree+stress 并落日志路径约定；（2）managed 文案统一模板；（3）api-reference 抽检与 live 对齐 |
+| **交付物** | （1）`core/tests/nextpas.core.lockfree/Makefile` 的 `verify-t1`（atomic+lockfree+stress，日志 `core/build/verify-lockfree/verify-t1.log`）；（2）CONTRACT §3.1 managed 拒绝文案推荐模板（不强制全量改名）；（3）api-reference EN 清除 `moSequentiallyConsistent` → `moSeqCst`；日期对齐 |
 | **依赖** | 无硬依赖；建议在 R4 后或穿插 |
 | **优先级** | P2 |
-| **验收** | 新人按文档一条命令可复现绿；grep 无 `moSequentiallyConsistent` 类陈旧主名；CONTRACT/README/roadmap 日期一致 |
+| **验收** | 新人 `make -C core/tests/nextpas.core.lockfree verify-t1` 可复现绿；grep 无 `moSequentiallyConsistent` 陈旧主名；CONTRACT/README/roadmap 日期一致 |
 
 ### R7 — 消费者审计与长期清理
 
@@ -200,7 +208,7 @@ R8  研究线（NUMA/TSX/TLA）              可选，重大变更需讨论
 | Q4 | R6：优先模块 Makefile 目标 | **确认** |
 | Q5 | 旧 phase 归档横幅保留 | **确认** |
 
-**当前执行**: **R6**（R5 已交付，方案 A）。
+**当前执行**: **R7**（R6 已交付：verify-t1 + managed 模板 + api-ref 抽检）。
 
 ---
 

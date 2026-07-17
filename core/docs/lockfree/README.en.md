@@ -350,6 +350,13 @@ the helper returns instead of sleeping on the new epoch.
 
 ## Verification
 
+**One-shot T1 gate (R6)**: atomic + lockfree main suite + stress; log defaults to `core/build/verify-lockfree/verify-t1.log`:
+
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/tests/nextpas.core.lockfree verify-t1
+```
+
 Normal lockfree slice at minimum runs:
 
 ```bash

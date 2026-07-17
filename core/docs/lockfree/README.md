@@ -383,6 +383,13 @@ the helper returns instead of sleeping on the new epoch.
 
 ## 验证
 
+**一键 T1 门（R6）**：atomic + lockfree 主套 + stress，日志默认写到 `core/build/verify-lockfree/verify-t1.log`：
+
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/tests/nextpas.core.lockfree verify-t1
+```
+
 普通 lockfree 切片至少运行：
 
 ```bash
