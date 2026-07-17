@@ -12,9 +12,10 @@ uses
   nextpas.core.tui.app,
   nextpas.core.tui.error,
   nextpas.core.tui.terminal,
-  nextpas.core.tui.task,
   nextpas.core.tui.app.screen,
-  nextpas.core.test;
+  nextpas.core.test,
+  { after test: bare tsFailed must bind TTaskStatus, not TTestStatus }
+  nextpas.core.tui.task;
 
 type
   TSharedStateBox = class
