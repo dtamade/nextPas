@@ -17,6 +17,7 @@ function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt; inline;
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors;
 
 const
@@ -87,7 +88,7 @@ begin
   if LLen > LZ4_MAX_INPUT_SIZE then
     raise EIOError.Create('lz4: input size exceeds limit');
 
-  GetMem(LHashTable, SizeOf(THashArray));
+  LHashTable := GetMem(SizeOf(THashArray));
   try
     FillChar(LHashTable^[0], SizeOf(THashArray), $FF);
 
@@ -179,7 +180,7 @@ begin
 
     SetLength(Result, LDst);
   finally
-    FreeMem(LHashTable);
+    FreeMem(LHashTable, SizeOf(THashArray));
   end;
 end;
 

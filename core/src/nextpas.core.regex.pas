@@ -5,6 +5,7 @@ unit nextpas.core.regex;
 interface
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.regex.base,
   nextpas.core.regex.charclass,
@@ -611,7 +612,7 @@ begin
       TDfaCache contains dynamic arrays (Seen, CloseList, NextPCs, Stack)
       and TDfaState.PCs which must be released. }
     Finalize(PDfaCache(FDfaCache)^);
-    FreeMem(FDfaCache);
+    FreeMem(FDfaCache, SizeOf(TDfaCache));
     FDfaCache := nil;
   end;
 end;

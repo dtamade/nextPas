@@ -47,6 +47,7 @@ procedure BrightnessContrast(const aSrc: TSimdImage; var aDst: TSimdImage; aBrig
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.simd.alloc;
 
 {$ifdef CPUX86_64}
@@ -534,7 +535,7 @@ var
 begin
   if aImg.Height <= 1 then Exit;
   LRowSize := aImg.Width * PixelSize(aImg.Format);
-  GetMem(LTmp, LRowSize);
+  LTmp := GetMem(LRowSize);
   for y := 0 to (aImg.Height div 2) - 1 do
   begin
     Move(aImg.RowPtr(y)^, LTmp^, LRowSize);

@@ -72,7 +72,8 @@ uses
   nextpas.core.numa.windows,
   {$ENDIF}
   SysUtils,
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.mem;
 
 var
   GPlatform: TNumaPlatform = nil;

@@ -18,6 +18,7 @@ function SimdAllocAlignment: NativeUInt;
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch;
@@ -75,7 +76,7 @@ begin
 
   LAlign := ResolveAlignment(aAlignment);
   LRawSize := ComputeRawAllocationSize(aSize, LAlign);
-  GetMem(LRaw, LRawSize);
+  LRaw := GetMem(LRawSize);
 
   LAligned := Pointer((PtrUInt(LRaw) + SizeOf(TAllocHeader) + LAlign - 1) and not (PtrUInt(LAlign) - 1));
 

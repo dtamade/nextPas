@@ -71,6 +71,8 @@ function platform_poller_wait(var APoller: TPlatformPoller;
 
 implementation
 
+{ L0: uses System GetMem/FreeMem (must not uses nextpas.core.mem; mem depends on platform). }
+
 {$IFDEF NEXTPAS_LINUX}
 uses
   nextpas.core.platform.posix.base,
@@ -146,7 +148,7 @@ begin
     Move(APoller.Entries^, LNewEntries^,
       SizeUInt(APoller.Count) * SizeOf(PPlatformPollRegistration));
   if APoller.Entries <> nil then
-    FreeMem(APoller.Entries);
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(PPlatformPollRegistration));
   APoller.Entries := LNewEntries;
   APoller.Capacity := LNewCapacity;
   Result := 0;
@@ -174,8 +176,8 @@ begin
     LEntries := LinuxPollEntries(APoller);
     for LI := 0 to APoller.Count - 1 do
       if LEntries^[LI] <> nil then
-        FreeMem(LEntries^[LI]);
-    FreeMem(APoller.Entries);
+        FreeMem(LEntries^[LI], SizeOf(TPlatformPollRegistration));
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(PPlatformPollRegistration));
     APoller.Entries := nil;
   end;
   APoller.Count := 0;
@@ -225,7 +227,7 @@ begin
     Exit(0);
   end;
   Result := platform_get_errno;
-  FreeMem(LRegistration);
+  FreeMem(LRegistration, SizeOf(TPlatformPollRegistration));
 end;
 
 function platform_poller_modify(var APoller: TPlatformPoller; AFd: PtrUInt;
@@ -268,7 +270,7 @@ begin
   if epoll_ctl(APoller.EpollFd, EPOLL_CTL_DEL, Int32(AFd), nil) <> 0 then
     Exit(platform_get_errno);
   LEntries := LinuxPollEntries(APoller);
-  FreeMem(LEntries^[LIndex]);
+  FreeMem(LEntries^[LIndex], SizeOf(TPlatformPollRegistration));
   LMoveCount := APoller.Count - LIndex - 1;
   if LMoveCount > 0 then
     Move(LEntries^[LIndex + 1], LEntries^[LIndex],
@@ -356,7 +358,7 @@ begin
     ACount := LN;
     Result := 0;
   finally
-    FreeMem(LEvents);
+    FreeMem(LEvents, SizeUInt(AMaxEntries) * SizeOf(epoll_event));
   end;
 end;
 {$ENDIF}
@@ -535,7 +537,7 @@ begin
     ACount := LN;
     Result := 0;
   finally
-    FreeMem(LEvents);
+    FreeMem(LEvents, SizeUInt(AMaxEntries) * SizeOf(TKEvent));
   end;
 end;
 
@@ -747,7 +749,7 @@ begin
     Move(APoller.Entries^, LNewEntries^,
       SizeUInt(APoller.Count) * SizeOf(TPlatformPollEntry));
   if APoller.Entries <> nil then
-    FreeMem(APoller.Entries);
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(PPlatformPollRegistration));
   APoller.Entries := LNewEntries;
   APoller.Capacity := LNewCapacity;
   Result := 0;
@@ -854,7 +856,7 @@ begin
   WindowsCloseSocketValue(APoller.WakeWriteSocket);
   if APoller.Entries <> nil then
   begin
-    FreeMem(APoller.Entries);
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(PPlatformPollRegistration));
     APoller.Entries := nil;
   end;
   APoller.Count := 0;
@@ -1036,7 +1038,7 @@ begin
     end;
     Result := 0;
   finally
-    FreeMem(LPollFds);
+    FreeMem(LPollFds, SizeUInt(APoller.Count) * SizeOf(TWSAPollFd));
   end;
 end;
 {$ENDIF}

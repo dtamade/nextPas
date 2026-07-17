@@ -87,6 +87,10 @@ function StringCompare(const A, B: TString): SizeInt;
 
 implementation
 
+uses
+  nextpas.core.mem;
+
+
 {$ASSERTIONS ON}
 
 { ===== 内部分配辅助 ===== }
@@ -106,7 +110,8 @@ end;
 
 procedure HeapFree(AHeader: PStringHeader);
 begin
-  FreeMem(AHeader);
+  if AHeader = nil then Exit;
+  FreeMem(AHeader, SizeOf(TStringHeader) + AHeader^.Capacity + 1);
 end;
 
 function HeapPayloadPtr(AHeader: PStringHeader): PByte; inline;

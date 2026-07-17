@@ -4,6 +4,7 @@ unit nextpas.core.sse.parser;
 interface
 
 uses
+  nextpas.core.mem,
   nextpas.core.sse.base;
 
 type
@@ -48,7 +49,7 @@ class function TSseParser.Create: TSseParser;
 begin
   Result := Default(TSseParser);
   Result.FBufCap := SSE_INITIAL_BUF;
-  GetMem(Result.FBuf, SSE_INITIAL_BUF);
+  Result.FBuf := GetMem(SSE_INITIAL_BUF);
   Result.FBufLen := 0;
   Result.FEventCount := 0;
   Result.FEventHead := 0;
@@ -61,7 +62,7 @@ procedure TSseParser.Free;
 begin
   if FBuf <> nil then
   begin
-    FreeMem(FBuf);
+    FreeMem(FBuf, FBufCap);
     FBuf := nil;
   end;
   FBufLen := 0;

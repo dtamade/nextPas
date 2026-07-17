@@ -302,6 +302,7 @@ end;
  *
  * Eliminates TOCTOU race: no stat() before read(), buffer grows as needed.
  * Caller must FreeMem the returned buffer on success.
+ * L0: uses System GetMem/FreeMem (must not uses nextpas.core.mem; mem depends on platform).
  *
  * @param AHandle  Open file handle (read-only)
  * @param AData    Receives allocated buffer (nil on error)
@@ -333,17 +334,17 @@ begin
       LNewSize := LBufSize * 2;
       if LNewSize < LBufSize then { overflow check }
       begin
-        FreeMem(LBuf);
+        FreeMem(LBuf, LBufSize);
         Exit(PLATFORM_ERR_INVALID);
       end;
       GetMem(LNewBuf, LNewSize);
       if LNewBuf = nil then
       begin
-        FreeMem(LBuf);
+        FreeMem(LBuf, LBufSize);
         Exit(PLATFORM_ERR_INVALID);
       end;
       Move(LBuf^, LNewBuf^, LTotal);
-      FreeMem(LBuf);
+      FreeMem(LBuf, LBufSize);
       LBuf := LNewBuf;
       LBufSize := LNewSize;
     end;
@@ -353,7 +354,7 @@ begin
       Pointer(PtrUInt(LBuf) + LTotal), LBufSize - LTotal - 1, LChunk);
     if Result <> 0 then
     begin
-      FreeMem(LBuf);
+      FreeMem(LBuf, LBufSize);
       Exit;
     end;
     if LChunk = 0 then
@@ -786,7 +787,7 @@ begin
   if LR <> 0 then
   begin
     if AData <> nil then
-      FreeMem(AData);
+      FreeMem(AData); { size unknown at free site }
     AData := nil;
     ALen := 0;
   end;

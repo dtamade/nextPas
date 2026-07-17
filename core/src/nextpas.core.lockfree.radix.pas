@@ -79,6 +79,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic;
 
@@ -135,7 +136,7 @@ begin
   begin
     ANode^.Prefix := '';
     ANode^.Children := nil;
-    FreeMem(ANode);
+    FreeMem(ANode, SizeOf(TRadixNode));
   end;
 end;
 

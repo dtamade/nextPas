@@ -77,6 +77,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors;
 
 function TLockFreeMsQueueImpl.Pack(AIdx, ATag: Int32): Int64;
@@ -168,7 +169,7 @@ begin
     if (LOldCap > High(Int32) div 2) or
        (LOldCap > (MaxInt div SizeOf(TNode)) div 2) or
        (LOldCap > (MaxInt div SizeOf(TFreeNode)) div 2) then
-      raise EOutOfMemoryError.Create('TLockFreeMsQueue.Grow: capacity overflow');
+      raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TLockFreeMsQueue.Grow: capacity overflow'));
     LNewCap := LOldCap * 2;
 
     SetLength(LNewNodes, LNewCap);
@@ -217,7 +218,7 @@ begin
   FActiveOperations := 0;
   FResizing := 0;
   if not TryAllocNodeIdx(LSentinel) then
-    raise EOutOfMemoryError.Create('TLockFreeMsQueue: sentinel allocation failed');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TLockFreeMsQueue: sentinel allocation failed'));
   FNodes[LSentinel].FHasValue := False;
   FNodes[LSentinel].FNext := Pack(-1, 0);
   FHead := Pack(LSentinel, 0);
