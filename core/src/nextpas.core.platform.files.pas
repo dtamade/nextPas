@@ -218,10 +218,9 @@ function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHand
     @param AEntry 输出目录条目
     @return 0 成功，1 无更多条目，否则返回错误码 *}
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
-{ POSIX dir_read uses getdents64 (Linux/Android) or readdir_r (macOS/FreeBSD)
-  to enumerate directory entries. Dot and dot-dot entries are filtered.
-  Thread safety: uses per-handle buffer; multiple handles on the same
-  directory are safe, but concurrent reads on the same handle are not. }
+{ POSIX dir_read uses getdents64 (Linux/Android), readdir (macOS), or
+  getdents (FreeBSD). Dot and dot-dot entries are filtered.
+  Thread safety: per-handle state; concurrent reads on the same handle are not. }
 
 {** @desc 关闭目录
     @param AHandle 目录句柄（置为无效）
@@ -694,6 +693,11 @@ begin
 end;
 
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
+{$IFDEF NEXTPAS_MACOS}
+var
+  LFd: cint;
+  LErr: Int32;
+{$ENDIF}
 begin
   { Thread safety: Windows FindFirstFile/FindNextFile use per-handle search
     state. Concurrent reads on the same handle are NOT safe. Each thread
@@ -701,14 +705,34 @@ begin
   FillChar(AHandle, SizeOf(AHandle), 0);
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
+{$IFDEF NEXTPAS_MACOS}
+  { Darwin: public DIR* API. getdirentries64 does not link on modern macOS. }
+  AHandle.Fd := -1;
+  AHandle.Dir := nil;
+  LFd := open(APath, O_RDONLY or O_DIRECTORY, 0);
+  if LFd < 0 then
+    Exit(platform_get_errno);
+  AHandle.Dir := fdopendir(LFd);
+  if AHandle.Dir = nil then
+  begin
+    LErr := platform_get_errno;
+    close(LFd);
+    Exit(LErr);
+  end;
+  { closedir owns LFd; keep Fd for IsValid. }
+  AHandle.Fd := LFd;
+  Result := 0;
+{$ELSE}
   Result := PosixFdToHandle(open(APath, O_RDONLY or O_DIRECTORY, 0), AHandle.Fd);
+{$ENDIF}
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
-{ POSIX dir_read uses getdents64 (Linux/Android) or readdir_r (macOS/FreeBSD)
-  to enumerate directory entries. Dot and dot-dot entries are filtered.
-  Thread safety: uses per-handle buffer; multiple handles on the same
-  directory are safe, but concurrent reads on the same handle are not. }
+{ POSIX dir_read uses getdents64 (Linux/Android), readdir (macOS), or
+  getdents (FreeBSD) to enumerate directory entries. Dot and dot-dot
+  entries are filtered. Thread safety: uses per-handle state; multiple
+  handles on the same directory are safe, but concurrent reads on the
+  same handle are not. }
 {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
 type
   PDirent64 = ^TDirent64;
@@ -739,7 +763,6 @@ var
   LDent: PDarwinDirent;
   LNameLen: Int32;
   LNamePtr: PAnsiChar;
-  LBase: Int64;
 {$ENDIF}
 {$IFDEF NEXTPAS_FREEBSD}
 type
@@ -805,32 +828,21 @@ begin
   end;
 {$ENDIF}
 {$IFDEF NEXTPAS_MACOS}
-  LBase := 0;
+  if AHandle.Dir = nil then
+    Exit(PLATFORM_ERR_BADF);
   while True do
   begin
-    if AHandle.Pos >= AHandle.Len then
+    { readdir returns nil for both EOF and error; clear errno to distinguish. }
+    __error^ := 0;
+    LDent := PDarwinDirent(readdir(AHandle.Dir));
+    if LDent = nil then
     begin
-      AHandle.Len := Int32(getdirentries64(AHandle.Fd, @AHandle.Buf[0],
-        PtrUInt(SizeOf(AHandle.Buf)), @LBase));
-      if AHandle.Len <= 0 then
-      begin
-        if AHandle.Len = 0 then
-          Result := 1
-        else
-          Result := platform_get_errno;
-        Exit;
-      end;
-      AHandle.Pos := 0;
-    end;
-    LDent := PDarwinDirent(@AHandle.Buf[AHandle.Pos]);
-    { d_reclen=0 would spin forever; treat as corrupt stream. }
-    if (LDent^.d_reclen = 0) or
-       (Int32(AHandle.Pos) + Int32(LDent^.d_reclen) > AHandle.Len) then
-    begin
-      Result := PLATFORM_ERR_IO;
+      if platform_get_errno = 0 then
+        Result := 1
+      else
+        Result := platform_get_errno;
       Exit;
     end;
-    Inc(AHandle.Pos, LDent^.d_reclen);
     LNamePtr := @LDent^.d_name[0];
     if (LNamePtr[0] = '.') and (LNamePtr[1] = #0) then
       Continue;
@@ -887,6 +899,16 @@ end;
 
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
 begin
+{$IFDEF NEXTPAS_MACOS}
+  if AHandle.Dir <> nil then
+  begin
+    Result := PosixCheck(closedir(AHandle.Dir));
+    AHandle.Dir := nil;
+    AHandle.Fd := -1;
+  end
+  else
+    Result := PLATFORM_ERR_BADF;
+{$ELSE}
   if AHandle.Fd >= 0 then
   begin
     Result := PosixCheck(close(AHandle.Fd));
@@ -894,6 +916,7 @@ begin
   end
   else
     Result := PLATFORM_ERR_BADF;
+{$ENDIF}
 end;
 {$ENDIF}
 
@@ -1390,10 +1413,7 @@ begin
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
-{ POSIX dir_read uses getdents64 (Linux/Android) or readdir_r (macOS/FreeBSD)
-  to enumerate directory entries. Dot and dot-dot entries are filtered.
-  Thread safety: uses per-handle buffer; multiple handles on the same
-  directory are safe, but concurrent reads on the same handle are not. }
+{ Windows FindNextFile path. }
 var
   LNamePtr: PWideChar;
   LNameUtf8: AnsiString;

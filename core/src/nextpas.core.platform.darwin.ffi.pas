@@ -238,9 +238,12 @@ function getnameinfo(sa: Pointer; salen: UInt32; host: PAnsiChar; hostlen: PtrUI
 { Random }
 procedure arc4random_buf(buf: Pointer; nbytes: PtrUInt); cdecl; external 'c' name 'arc4random_buf';
 
-{ Directory reading — 64-bit inode path (getdirentries is legacy/32-bit).
-  ssize_t getdirentries64(int fd, void *buf, size_t bufsize, off_t *basep); }
-function getdirentries64(fd: Int32; buf: Pointer; bufsize: PtrUInt; basep: Pointer): PtrInt; cdecl; external 'c' name 'getdirentries64';
+{ Directory reading — public libc DIR* path.
+  getdirentries64 is not a public linkable symbol on modern Darwin (GHA
+  macOS arm64 reports Undefined symbols: _getdirentries64). }
+function fdopendir(fd: cint): Pointer; cdecl; external 'c' name 'fdopendir';
+function readdir(dirp: Pointer): Pointer; cdecl; external 'c' name 'readdir';
+function closedir(dirp: Pointer): cint; cdecl; external 'c' name 'closedir';
 
 { PTY — in libc on macOS }
 function openpty(amaster: pcint; aslave: pcint; name: PAnsiChar; termp: Pointer; winp: Pointer): cint; cdecl; external 'c' name 'openpty';
