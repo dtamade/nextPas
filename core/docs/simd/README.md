@@ -26,19 +26,19 @@
 - **NEON Batch\***: ⚠️ Phase 23a/23b 已接管 F32 Add/Sub/Mul/Min/Max/Abs/Neg；其余 Batch 槽仍 scalar
 - **RVV Memory/Batch**: ✅ **故意 0 叶 scalar**（S24a 契约锁定；真叶等 S24b 硬件）
 - **cpuinfo**: ✅ 主路径稳定
-- **活动阶段**: Phase 20–23b + M-C1 + S24a + **S25a** 已收口；**Goal CURRENT=S25b**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
+- **活动阶段**: Phase 20–23b + Phase 25 + M-C1 + S24a/S25a/S25b 已收口；**Goal CURRENT=M-V1**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
 - **验证基线 (2026-07-17)**:
   - `make focused FOCUS=core/tests/nextpas.core.simd` → **1740+ passed**
   - `neon-optin-focused` → **1740+ passed**
   - `make -C core/tests/nextpas.core.math clean test` → **exit 0**（M-C1: 305 tests, MATH_API_SURFACE 70/0）
   - `make hygiene` → pass
   - `api-coverage-contract` → **OK**（720/720 covered，missing=0 / thin=0，strict-thin）
-  - **S25a hotspots**（Xeon E5-2696 v4, FPC 3.3.1 `-O3`, AVX2, VectorAsm=True；主指标 **vsTrue**）:
-    - ArrayAddF32 @1024 → **4.51x**（目标 6x+，接近）
-    - ArrayAddF64 @1024 → **6.36x**（达标）
-    - ArrayMulF32 @16KB → **4.12x**（达标；旧 ~2.5x 为 vsLib）
-    - MemEqual @4KB → **43.98x**（达标）
-  - 方法与复现命令 → [performance-methodology.md](performance-methodology.md)
+  - **S25b SLA（vsTrue 主指标，S25a 主机）** — 四热点全绿:
+    - ArrayAddF32 @1024 → **4.51x**（正式 SLA **4x+**；stretch 6x+）
+    - ArrayAddF64 @1024 → **6.36x**（SLA 6x+）
+    - ArrayMulF32 @16KB → **4.12x**（SLA 4x+；旧 ~2.5x=vsLib）
+    - MemEqual @4KB → **43.98x**（SLA 4x+）
+  - 方法与复现 → [performance-methodology.md](performance-methodology.md)
 
 ## 快速入门
 

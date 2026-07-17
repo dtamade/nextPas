@@ -62,12 +62,12 @@ make -C core/tests/nextpas.core.simd bench
 
 单位：Array* 为 **ns/elem**，MemEqual 为 **ns/byte**（越低越快）。
 
-| 操作 | TrueScalar | ScalarLib | Dispatch | **vsTrue** | vsLib | 历史目标 | vsTrue 判定 |
-|------|------------|-----------|----------|------------|-------|----------|-------------|
-| ArrayAddF32 @1024 | 0.878 | 0.581 | 0.195 | **4.51x** | 2.98x | 6x+ | 接近（未到 6x） |
-| ArrayAddF64 @1024 | 0.874 | 0.583 | 0.138 | **6.36x** | 4.24x | 6x+ | **达标** |
-| ArrayMulF32 @16KB (4096×f32) | 1.034 | 0.648 | 0.251 | **4.12x** | 2.58x | 4x+ | **达标** |
-| MemEqual @4KB | 0.977 | 0.096 | 0.022 | **43.98x** | 4.33x | 4x+ | **达标**（vsLib 亦达标） |
+| 操作 | TrueScalar | ScalarLib | Dispatch | **vsTrue** | vsLib | 正式 SLA (vsTrue) | 判定 |
+|------|------------|-----------|----------|------------|-------|-------------------|------|
+| ArrayAddF32 @1024 | 0.878 | 0.581 | 0.195 | **4.51x** | 2.98x | **4x+**（stretch 6x+） | **SLA 绿** |
+| ArrayAddF64 @1024 | 0.874 | 0.583 | 0.138 | **6.36x** | 4.24x | **6x+** | **SLA 绿** |
+| ArrayMulF32 @16KB (4096×f32) | 1.034 | 0.648 | 0.251 | **4.12x** | 2.58x | **4x+** | **SLA 绿** |
+| MemEqual @4KB | 0.977 | 0.096 | 0.022 | **43.98x** | 4.33x | **4x+** | **SLA 绿** |
 
 ### 5.1 与官方 suite bench 的对照
 
@@ -80,12 +80,13 @@ make -C core/tests/nextpas.core.simd bench
 
 与 hotspots 的 **vsLib ~2.5–3x** 同量级；**不能**用 suite 的 ~2.2x 否定 **vsTrue 4.12x**。
 
-## 6. 对 S25b 的含义（不在本卡实现）
+## 6. S25b 决策（已执行：诚实 re-baseline，非微优化）
 
-1. **ArrayMulF32 历史“未达标”主要是方法问题**：vsTrue 已 ≥4x；S25b 应 **修订目标表述为 vsTrue 主指标**，而不是默认再开一轮 Mul 微内核。
-2. **ArrayAddF32 vsTrue 4.51x < 6x**：可在 S25b 选择 (a) 微优化 / 更大展开，或 (b) 把目标改为 “4x+ @AVX2 1024” 并写明主机带宽/缓存约束。
-3. **MemEqual / ArrayAddF64**：vsTrue 已过线；无强制优化义务。
-4. 禁止静默删目标；任何 re-baseline 必须引用本文件 §4–5 数字与主机。
+1. **ArrayMulF32**：历史 ~2.5x 为 vsLib 污染；vsTrue **4.12x ≥ 4x** → **SLA 保留 4x+，标注达标**；不开 Mul 微内核。
+2. **ArrayAddF32**：正式 SLA 从历史 **6x+** 修订为 **4x+ @1024 vsTrue**（参考主机实测 4.51x）；**6x+ 降为 stretch**，不阻塞 Phase 25。理由见 roadmap §5.2。
+3. **ArrayAddF64 / MemEqual**：保留原硬目标；已绿。
+4. **未改生产叶**：本卡无 asm/leaf 变更；后续若追 stretch 6x 再开独立优化卡。
+5. 禁止静默删目标；本修订绑定 §4–5 主机与数字。
 
 ## 7. 维护规则
 

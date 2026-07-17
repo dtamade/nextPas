@@ -35,7 +35,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=S25b
+CURRENT=M-V1
 ```
 
 ---
@@ -143,18 +143,19 @@ CURRENT=S25b
 | **DoD** | Numbers in roadmap/README with method; CURRENT→S25b |
 | **EVIDENCE** | `bench_hotspots` + `performance-methodology.md`; vsTrue AddF32 4.51x / AddF64 6.36x / MulF32 4.12x / MemEqual 43.98x @ AVX2 Xeon E5-2696 v4 |
 
-### S25b — Optimize or revise targets  【CURRENT】
+### S25b — Optimize or revise targets  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
+| **STATUS** | done (2026-07-17) — **re-baseline**, no leaf opt |
 | **NEXT** | M-V1 |
 | **WHY** | Close or honestly re-baseline underperforming targets under **vsTrue** primary metric |
 | **IN_SCOPE_PATHS** | Hot leaf impls + docs；可引用 `performance-methodology.md` |
 | **OUT_OF_SCOPE** | Silent target deletion without reason；把 vsLib 当主指标 |
-| **DELIVERABLES** | Opt commit and/or revised targets with rationale（建议：Mul 目标保留 4x@vsTrue 并标注达标；AddF32 选优化或改 4x+ 目标） |
-| **GATES** | focused + `bench_hotspots`（若改叶）+ hygiene |
+| **DELIVERABLES** | Revised vsTrue SLA + rationale（Mul 4x 达标保留；AddF32 正式 4x+ / stretch 6x+） |
+| **GATES** | focused + hygiene（无叶改动 → 不强制 bench_hotspots 重跑） |
 | **DoD** | CURRENT→M-V1 |
+| **EVIDENCE** | roadmap §5 SLA 表；performance-methodology §6；四热点 vsTrue 相对正式 SLA 全绿 |
 
 ---
 
@@ -175,7 +176,7 @@ CURRENT=S25b
 | **STOP** | Failures requiring private simd coupling |
 | **EVIDENCE** | `make -C core/tests/nextpas.core.math clean test` → exit 0; `MATH_API_SURFACE OK: scanned=70 findings=0`; 16 Pascal suites / 305 tests, 0 failed; heaptrc 0 unfreed on all suites |
 
-### M-V1 — vec.batch Double minimal parity
+### M-V1 — vec.batch Double minimal parity  【CURRENT】
 
 | Field | Content |
 |-------|---------|
@@ -267,7 +268,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 - [x] NEON BatchF32 high-frequency representative set (S23a/S23b; Div deferred)
 - [x] RVV honesty (S24a)
 - [x] Perf method + hotspot remeasure (S25a)
-- [ ] Hotspot close-or-revise (S25b)
+- [x] Hotspot close-or-revise (S25b re-baseline)
 - [ ] Docs CURRENT coherent
 
 ### math lane-complete
@@ -292,7 +293,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 ## Default order (happy path)
 
 ```text
-G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b → M-V1 → M-V2 → Q1 → Q2 → IDLE
+G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b ✅ → M-V1 → M-V2 → Q1 → Q2 → IDLE
          (S23c optional)                       (S24b only if hardware)
 ```
 
