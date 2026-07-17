@@ -383,8 +383,8 @@ begin
     Exit;
   if (LScheme = 'http') or (LScheme = 'https') then
     Exit;
-  raise EHttpError.Create(hekProtocol, 'unsupported HTTP client URL scheme: ' +
-    AUrl.Scheme);
+  raise EHttpError.CreateOp(hekProtocol, 'transport',
+    'unsupported HTTP client URL scheme: ' + AUrl.Scheme);
 end;
 
 function ProxyBasicAuthorizationValue(const AUserInfo: string): string;
@@ -492,7 +492,8 @@ begin
   if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit;
   if ABodyStream = nil then
-    raise EHttpError.Create(hekProtocol, 'pooled retry request body is not replayable');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'pooled retry request body is not replayable');
   ABodyStream.Position := AStartPosition;
 end;
 
@@ -2196,11 +2197,11 @@ begin
     { 407 is not auto-retried with Digest/NTLM. Supported path is preemptive
       Basic from ProxyUrl UserInfo only (Wave I freeze). }
     if LResp.StatusCode = HTTP_STATUS_PROXY_AUTH_REQUIRED then
-      raise EHttpError.Create(hekConnect,
+      raise EHttpError.CreateOp(hekConnect, 'connect',
         'proxy CONNECT failed: HTTP 407 Proxy Authentication Required ' +
         '(supported: ProxyUrl UserInfo → Proxy-Authorization Basic only)')
     else
-      raise EHttpError.Create(hekConnect,
+      raise EHttpError.CreateOp(hekConnect, 'connect',
         'proxy CONNECT failed: HTTP ' + IntToStr(Int64(LResp.StatusCode)));
   end;
 
@@ -2328,7 +2329,8 @@ var
 begin
   Result := True;
   if not (AReq.Version in [hvHttp10, hvHttp11]) then
-    raise EHttpError.Create(hekProtocol, 'h1 transport only supports HTTP/1.x requests');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'h1 transport only supports HTTP/1.x requests');
 
   LUrl := AReq.Url;
   if AAbsoluteForm then
@@ -2435,7 +2437,7 @@ begin
               'HTTP request body read failed: ' + E.Message);
           if E is EHttpError then
             raise;
-          raise EHttpError.Create(hekProtocol,
+          raise EHttpError.CreateOp(hekProtocol, 'transport',
             'HTTP request body read failed: ' + E.Message);
         end;
       end;
@@ -2450,7 +2452,7 @@ begin
       begin
         if Supports(LBuf, IFlusher, LFlusher) then
           LFlusher.Flush;
-        raise EHttpError.Create(hekBody,
+        raise EHttpError.CreateOp(hekBody, 'transport',
           'HTTP request body shorter than declared content-length');
       end;
     end;
@@ -2470,7 +2472,7 @@ begin
               'HTTP request body read failed: ' + E.Message);
           if E is EHttpError then
             raise;
-          raise EHttpError.Create(hekProtocol,
+          raise EHttpError.CreateOp(hekProtocol, 'transport',
             'HTTP request body read failed: ' + E.Message);
         end;
       end;
@@ -2549,15 +2551,19 @@ begin
 
   if LParser.IsComplete and
     IsSkippableInformationalResponse(LParser.GetStatusCode) then
-    raise EHttpError.Create(hekProtocol, 'HTTP response incomplete: missing final response');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'HTTP response incomplete: missing final response');
 
   if LSkippedInformational and (not LCurrentResponseStarted) then
-    raise EHttpError.Create(hekProtocol, 'HTTP response incomplete: missing final response');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'HTTP response incomplete: missing final response');
 
   if LParser.HasError then
-    raise EHttpError.Create(hekParse, 'HTTP parse error: ' + LParser.ErrorMessage);
+    raise EHttpError.CreateOp(hekParse, 'transport',
+      'HTTP parse error: ' + LParser.ErrorMessage);
   if not LParser.IsComplete then
-    raise EHttpError.Create(hekConnect, 'HTTP response incomplete: connection closed');
+    raise EHttpError.CreateOp(hekConnect, 'transport',
+      'HTTP response incomplete: connection closed');
 
   FPending := LPending;
   LHasResponseTail := FPending <> '';

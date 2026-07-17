@@ -320,7 +320,7 @@ begin
     raise EHttpError.CreateOp(hekConnect, 'download',
       FormatHttpClientError('GET', AUrl, 'HTTP download returned no response'));
   if (AResp.StatusCode < 200) or (AResp.StatusCode >= 300) then
-    raise EHttpError.Create(hekStatus,
+    raise EHttpError.CreateOp(hekStatus, 'download',
       FormatHttpClientError('GET', AUrl,
         'HTTP download failed with status ' +
         IntToStr(Int64(AResp.StatusCode)) + ' ' +
@@ -2108,7 +2108,7 @@ begin
     raise EHttpError.Create(hekArgument,
       FormatHttpClientError(AMethod, AUrl, 'HTTP response is nil'));
   if not nextpas.core.http.base.HttpStatusIsSuccess(AResp.StatusCode) then
-    raise EHttpError.Create(hekStatus,
+    raise EHttpError.CreateOp(hekStatus, 'ensure',
       FormatHttpStatusFailure(AMethod, AUrl, AResp.StatusCode),
       AResp.StatusCode);
   Result := AResp;

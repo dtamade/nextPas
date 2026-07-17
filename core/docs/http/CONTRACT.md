@@ -160,6 +160,22 @@ end;
   `Kind` / 可选 `Status` / `Op`。
 - `Create(string)` 保持兼容（`Kind = hekUnknown`，Category 仍默认 network）。
 - 新代码优先 `Create(Kind, Message)`；调用方可 `except on E: EHttpError` 后匹配 Kind。
+- **热点失败路径**（Wave J）用 `CreateOp` 填稳定 `Op`（metrics/日志友好）。
+  `CreateOp(Kind, Op, Message, Status)` 在 `hekStatus` 路径同时保留 Status。
+  **不**要求全模块 Op-everywhere；`hekArgument` 前置条件通常不填 Op。
+
+| Op | 典型 Kind | 边界 |
+|----|-----------|------|
+| `redirect` | hekRedirect / hekBody | client 重定向解析/回放 |
+| `round_trip` | hekConnect | transport 返回 nil response |
+| `transport` | hekTimeout / hekConnect / hekParse / hekProtocol / hekBody / hekCanceled | H1 RoundTrip 写读、wrap 裸 timeout/network/cancel |
+| `connect` | hekConnect | proxy CONNECT 非 2xx（含 407） |
+| `cancel` | hekCanceled | `IHttpCancelToken.ThrowIfCanceled` 检查点 |
+| `ensure` | hekStatus | `HttpEnsureSuccess` 非 2xx（Status 保留） |
+| `download` | hekConnect / hekStatus / hekBody | GetToWriter/File 路径 |
+| `json` | hekProtocol | ensure+decode JSON 非法 body |
+| `websocket` | hekConnect | WS 升级/传输失败 |
+
 - **消息形状错误**（非法/冲突 Content-Length、不支持 Transfer-Encoding、
   builder 非法 CL）→ `hekArgument`。
 - **配置/nil 前置条件**（nil writer/client、负超时/负 max redirects、
@@ -168,10 +184,12 @@ end;
 - **ensure-2xx / download / redirect 客户端错误消息**：在已知 method/URL 时
   前缀为 `METHOD url: detail`（如 `GET http://example/path: HTTP request failed
   with status 404 Not Found`）。`HttpEnsureSuccess` 提供无上下文与
-  `(Resp, Method, Url)` 两形态。
+  `(Resp, Method, Url)` 两形态；非 2xx → `Op=ensure`。
 - Transport 边界：裸 `ETimeoutError` → `hekTimeout` + `Op=transport`；
+  裸 `ECancelledError` → `hekCanceled` + `Op=transport`；
   裸 `ENetworkError`（含 connect 失败）→ `hekConnect` + `Op=transport`
   （H1/H2 client RoundTrip 经 `HttpWrapTransportException`）。
+  检查点 `HttpThrowIfCanceled` → `hekCanceled` + `Op=cancel`。
 - 门面 helper：
   - `HttpErrorIsTimeout` / `HttpErrorIsRetryable`
   - `HttpErrorIsUserError` — `hekArgument` / `hekCanceled`（调用方错误，非服务端故障）
