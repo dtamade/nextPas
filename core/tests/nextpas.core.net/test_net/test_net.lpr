@@ -383,6 +383,64 @@ begin
   GCancelToken := nil;
 end;
 
+{ Wave X2: waitable cancel must wake blocked Read far faster than old 50ms slices. }
+var
+  GWakeCancel: INetCancelController = nil;
+
+function WakeCancelSignalThread(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  platform_thread_sleep_ns(20000000); { 20ms hold then cancel }
+  if GWakeCancel <> nil then
+    GWakeCancel.Cancel;
+end;
+
+procedure TestReadCancelWakeSLA;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LGot: Boolean;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LToken: INetCancelController;
+  LWaitable: INetCancelWaitable;
+  LStart: QWord;
+  LElapsedMs: QWord;
+begin
+  LToken := NewNetCancelToken;
+  Check(LToken.QueryInterface(INetCancelWaitable, LWaitable) = 0,
+    'NewNetCancelToken is waitable');
+  if LWaitable.WakeHandle = 0 then
+  begin
+    { Windows residual: socketpair may be unsupported; skip SLA. }
+    Exit;
+  end;
+
+  LListener := TcpListen('127.0.0.1', 0);
+  LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  GWakeCancel := LToken;
+  LClient.SetCancelToken(LToken);
+  platform_thread_create(LHandle, @WakeCancelSignalThread, nil);
+  LGot := False;
+  LStart := GetTickCount64;
+  try
+    LClient.Read(LBuf[0], 32);
+  except
+    on E: ECancelledError do
+      LGot := True;
+  end;
+  LElapsedMs := GetTickCount64 - LStart;
+  platform_thread_join(LHandle, LRetVal);
+  Check(LGot, 'waitable cancel raises ECancelledError');
+  { 20ms sleep + wake; old slice model needed ~50ms after cancel → ~70ms+.
+    Bound total wait under 45ms so we prove sub-slice wake. }
+  Check(LElapsedMs < 45, 'waitable cancel wake SLA ms=' + IntToStr(LElapsedMs));
+  LClient.Close;
+  LListener.Close;
+  GWakeCancel := nil;
+end;
+
 { ITcpStream as IReader/IWriter }
 
 var
@@ -871,6 +929,7 @@ begin
   T.Test('Connect refused', @TestConnectRefused);
   T.Test('Connect timeout', @TestConnectTimeout);
   T.Test('Read cancel token', @TestReadCancelToken);
+  T.Test('Read cancel waitable wake SLA', @TestReadCancelWakeSLA);
   T.Test('IO integration', @TestIoIntegration);
   T.Test('Read deadline', @TestReadDeadline);
   T.Test('Expired deadline', @TestExpiredDeadline);

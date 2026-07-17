@@ -17,7 +17,7 @@
 - **可用性 A–I + J/K**：主路径齐；Op hygiene；工厂白名单已冻。
 - **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
 - **前置条件错误**：公开面 nil/非法参数 → `EHttpError(hekArgument)`。
-- **Residual-honest（可被 Era 6 收敛）**：cancel ~50ms（X2/net）；OpenSSL factory unfreed（X4/tls）；pool 无 idle TTL（X3）；server `Default` RW=0 keep。
+- **Residual-honest（可被 Era 6 收敛）**：cancel waitable landed（X2；Windows socketpair residual / probe-only ~10ms）；OpenSSL factory unfreed（X4/tls）；pool 无 idle TTL（X3）；server `Default` RW=0 keep。
 - **WebSocket**：production-helper lifecycle 契约见 CONTRACT §2.2.3c；证据 `test_http_websocket` + `test_http_websocket_client`（含 close lifecycle / cancel Op）。
 - **历史档案**：[`archive/`](archive/README.md)。与 ROADMAP 冲突时以 ROADMAP + 源码为准。
 

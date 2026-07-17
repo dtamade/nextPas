@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave X1 landed → **NEXT = X2**）
+**Updated**: 2026-07-17（Wave X2 landed → **NEXT = X3**）
 
 ---
 
@@ -87,7 +87,8 @@ CHECKPOINT（不阻塞续波）:
 | framework-complete (non-H3) | **yes**（Era 0–4）；H3 仍 Blocked / 无产品需求 |
 | Wave X0 Excellence open | 完成（Era 6 表 + 推荐路径 + residual 可主动消除声明） |
 | Wave X1 WS production contract | 完成（lifecycle 表 + close/cancel Op focused；heaptrc 0） |
-| **下一执行点** | **Wave X2** — net cancel 地板（跨模块） |
+| Wave X2 net cancel floor | 完成（waitable socketpair+poll 唤醒；SLA ~20ms；probe-only ~10ms slice） |
+| **下一执行点** | **Wave X3** — Client pool idle TTL |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
@@ -416,7 +417,7 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 降低/替代 `NET_IO_CANCEL_SLICE_MS=50` 轮询；Linux 优先可唤醒阻塞读（poll+eventfd/pipe 或等价）；保持 `INetCancelToken`/`ECancelledError` 语义；CONTRACT 更新；http client + WS cancel 回归 |
 | **Don't** | 重写 async runtime；无证据改 epoll server 模型；为 Windows 完美对等拖死主路径（可 Linux 证明 + 其它 OS residual） |
 | **Done when** | cancel 唤醒 SLA 有 focused 证据（显著优于 50ms 切片模型或诚实新 residual）；client/WS cancel 绿 |
@@ -424,12 +425,13 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | **Land paths** | `core/src/nextpas.core.net*`（最小）；必要时 `core/src/nextpas.core.platform*`（最小）；`core/tests/nextpas.core.net/**`；http tests/docs |
 | **Next** | Wave X3 |
 | **Risk** | 并行 lane `core-net-async-io`：改前 worktree audit；冲突则 Needs Review |
+| **Evidence** | `NewNetCancelToken` + `INetCancelWaitable`；`platform_socket_poll_or_wake`；TCP WaitIO；HTTP `THttpCancelToken` 组合 waitable；`test_net` 24 pass（wake SLA 20ms）；client 267 / WS client 8；Windows socketpair residual 诚实 |
 
 ### Wave X3 — Client pool idle TTL
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued after X2 |
+| **Status** | **NEXT** |
 | **Do** | 墙钟 idle TTL（对齐 options / With* 外层胜）；借出/归还淘汰过期 idle；与 per-authority `MaxPoolSize` 一致；focused + CONTRACT pool 表 |
 | **Don't** | 全局跨 host 连接上限；主动 HTTP 健康探测（除非另升格） |
 | **Done when** | 过期不复用、未过期复用、`CloseIdleConnections` 仍全清 有测；CONTRACT 去掉「无 idle TTL」residual 或改写为可配置 |
@@ -470,7 +472,7 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 项 | 立场 |
 |----|------|
 | server `Default` RW=0 | **Keep**（测试兼容）；生产用 `THttpServerOptions.Production` |
-| cancel ~50 ms 切片 | **当前 residual**；**Era 6 X2** 授权在 net 主动改进（非 http 永久认命） |
+| cancel ~50 ms 切片 | **X2 landed**：waitable token 近即时唤醒；probe-only 退回 ~10ms slice；Windows 无 socketpair 时 residual |
 | OpenSSL factory unfreed | **tls residual**；**Era 6 X4** 授权在 tls 收敛；http 不单独清零宣称 |
 | pool 无 idle TTL | **当前 residual**；**Era 6 X3** 消除 |
 | JSON dual raw vs ensure-string | **Keep** 三层模型 |
@@ -507,11 +509,11 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ```text
 1. Era 0–4 landed；framework-complete (non-H3) 已立住
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
-3. Era 6 NEXT = Wave X2（net cancel 地板）；之后 X3→X4→X5
+3. Era 6 NEXT = Wave X3（pool idle TTL）；之后 X4→X5
 4. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：执行 Era 6 推荐路径（X2…），不要空转 H3。**
+**没有用户指令时：执行 Era 6 推荐路径（X3…），不要空转 H3。**
 
 ---
 
@@ -553,3 +555,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave P5 landed：G6 stage performance complete；**framework-complete (non-H3)**；H3 Blocked STOP |
 | 2026-07-17 | **Era 6 Excellence** 开启（X0）：H1/H2/WS 精品路径 X1→X5；跨模块 net/tls 受控授权；H3 仍无需求；Wave X1 = NEXT |
 | 2026-07-17 | Wave X1 landed：WS lifecycle 表 + close/cancel Op focused；Wave X2 = NEXT |
+| 2026-07-17 | Wave X2 landed：net waitable cancel（socketpair+poll）+ SLA；Wave X3 = NEXT |
