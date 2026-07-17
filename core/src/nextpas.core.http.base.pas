@@ -208,6 +208,7 @@ const
   HTTP_STATUS_NOT_FOUND             = THttpStatus(404);
   HTTP_STATUS_METHOD_NOT_ALLOWED    = THttpStatus(405);
   HTTP_STATUS_NOT_ACCEPTABLE        = THttpStatus(406);
+  HTTP_STATUS_PROXY_AUTH_REQUIRED   = THttpStatus(407);
   HTTP_STATUS_REQUEST_TIMEOUT       = THttpStatus(408);
   HTTP_STATUS_CONFLICT              = THttpStatus(409);
   HTTP_STATUS_GONE                  = THttpStatus(410);
@@ -462,6 +463,7 @@ begin
     404: Result := 'Not Found';
     405: Result := 'Method Not Allowed';
     406: Result := 'Not Acceptable';
+    407: Result := 'Proxy Authentication Required';
     408: Result := 'Request Timeout';
     409: Result := 'Conflict';
     410: Result := 'Gone';

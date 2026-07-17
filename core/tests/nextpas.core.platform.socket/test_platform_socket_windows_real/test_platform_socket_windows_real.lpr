@@ -7,6 +7,7 @@ program test_platform_socket_windows_real;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.system,
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.platform.socket;

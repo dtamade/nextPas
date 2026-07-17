@@ -151,7 +151,7 @@ end;
 | WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
 | HTTPS CONNECT (plain HTTP proxy) | CONNECT + TLS over tunnel; origin-form | http H1 + TLS stream | **Landed** (cycle-9 Wave D) |
 | H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
-| Proxy authentication | `ProxyUrl` UserInfo → `Proxy-Authorization: Basic` | http H1 | **Landed** (cycle-10 Wave E; Basic only) |
+| Proxy authentication | `ProxyUrl` UserInfo → `Proxy-Authorization: Basic` only | http H1 | **Landed** (Wave E Basic + Wave I freeze) |
 
 ### 2.2.1 EHttpError.Kind
 
@@ -214,13 +214,20 @@ end;
   - 目标 `https://`：对 proxy 发 `CONNECT host:port`，2xx 后对隧道
     `NewTlsClientTcpStream`（SNI=origin host，ALPN=`http/1.1`），再发
     origin-form 请求。非 2xx CONNECT → `hekConnect`。
-  - `ProxyUrl` 含 UserInfo 时注入 `Proxy-Authorization: Basic`
-    （`Base64(UTF-8(raw UserInfo))`，不做 percent-decode）：
-    CONNECT 必带；absolute-form 仅在请求未设置该头时注入。
+  - **Proxy auth 产品冻结（Wave I）——仅 Basic**：
+    - `ProxyUrl` 含 UserInfo 时注入 `Proxy-Authorization: Basic`
+      （`Base64(UTF-8(raw UserInfo))`，不做 percent-decode）：
+      CONNECT 必带；absolute-form 仅在请求未设置该头时注入。
+    - **不**实现 Digest / NTLM / Negotiate challenge-response；**不**对
+      `Proxy-Authenticate` 做 407 自动重试。
+    - CONNECT 返回 **407** → `hekConnect`，消息明确「Basic only」。
+    - absolute-form 返回 407 时作为普通响应 `StatusCode` 交给调用方（不自动重试）。
+    - 需要非 Basic 方案：调用方自设 `Proxy-Authorization` 头（absolute-form）
+      或改基础设施；不要期待 client 静默升级鉴权协议。
   - 可选 `THttpClientOptions.TLSContext`（nil → `TSSLQuick.SecureClient`），
     或 fluent `WithTLSContext` / `THttpClientOptions.WithTLSContext`（重建
     transport；nil 清除回 SecureClient 默认路径）。
-  - Digest/NTLM/SOCKS **仍 Deferred**。
+  - Digest / NTLM / Negotiate / SOCKS：**Park**（见 ROADMAP Phase X）。
 - H1 **直连 https**（无 proxy）：dial origin → `NewTlsClientTcpStream`
   （同 TLSContext/SecureClient，SNI=host，ALPN=`http/1.1`）→ origin-form；
   连接池键前缀 `https|` 与明文隔离。
