@@ -15,12 +15,26 @@ uses
 {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.base
 {$ENDIF}
+{$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.base
+{$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  , nextpas.core.platform.darwin.base
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+  , nextpas.core.platform.freebsd.base
+{$ENDIF}
   ;
 
 type
-  { Test-local sockaddr_in for AF_INET addr manipulation }
+  { Test-local sockaddr_in matching host layout (BSD has sin_len + 8-bit family). }
   TTestSockAddrIn = packed record
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    Len: Byte;
+    Family: Byte;
+{$ELSE}
     Family: Word;
+{$ENDIF}
     Port: Word;
     Addr: UInt32;
     Zero: array[0..7] of Byte;
@@ -43,6 +57,18 @@ end;
 function SockIsValid(const ASock: TPlatformSocket): Boolean;
 begin
   Result := ASock.Value <> PLATFORM_INVALID_SOCKET.Value;
+end;
+
+{ Fill IPv4 sockaddr with host-correct len/family layout. }
+procedure FillTestIpv4(var AAddr: TTestSockAddrIn; APortNet: Word; AAddrNet: UInt32);
+begin
+  FillChar(AAddr, SizeOf(AAddr), 0);
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  AAddr.Len := SizeOf(AAddr);
+{$ENDIF}
+  AAddr.Family := PLATFORM_AF_INET;
+  AAddr.Port := APortNet;
+  AAddr.Addr := AAddrNet;
 end;
 
 { Helpers: byte-order conversion (platform-provided via socket base) }
@@ -108,10 +134,7 @@ begin
     PLATFORM_IPPROTO_TCP, LServer);
   Check(LRet = 0, 'create server socket');
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.Family := PLATFORM_AF_INET;
-  LAddr.Port := 0;  { OS assigns port }
-  LAddr.Addr := 0;  { INADDR_ANY }
+  FillTestIpv4(LAddr, 0, 0);  { port 0 = OS assigns; INADDR_ANY }
   LRet := platform_socket_bind(LServer, @LAddr, SizeOf(LAddr));
   Check(LRet = 0, 'bind server');
 
@@ -130,10 +153,7 @@ begin
     PLATFORM_IPPROTO_TCP, LClient);
   Check(LRet = 0, 'create client socket');
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.Family := PLATFORM_AF_INET;
-  LAddr.Port := TestHTONS(Word(LPort));
-  LAddr.Addr := TestHTONL($7F000001);  { 127.0.0.1 }
+  FillTestIpv4(LAddr, TestHTONS(Word(LPort)), TestHTONL($7F000001));  { 127.0.0.1 }
   LRet := platform_socket_connect(LClient, @LAddr, SizeOf(LAddr));
   Check(LRet = 0, 'connect client to server, err=' + IntToStr(LRet));
 
@@ -212,10 +232,7 @@ begin
   Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
     PLATFORM_IPPROTO_TCP, S) = 0, 'create');
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.Family := PLATFORM_AF_INET;
-  LAddr.Port := TestHTONS(1);  { port 1 is privileged / will be refused }
-  LAddr.Addr := TestHTONL($7F000001);
+  FillTestIpv4(LAddr, TestHTONS(1), TestHTONL($7F000001));  { port 1 refused }
   Check(platform_socket_connect(S, @LAddr, SizeOf(LAddr)) <> 0,
     'connect to port 1 on localhost fails');
 
@@ -240,10 +257,7 @@ begin
   Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
     PLATFORM_IPPROTO_UDP, LRcv) = 0, 'create receiver');
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.Family := PLATFORM_AF_INET;
-  LAddr.Port := 0;
-  LAddr.Addr := 0;
+  FillTestIpv4(LAddr, 0, 0);
   Check(platform_socket_bind(LRcv, @LAddr, SizeOf(LAddr)) = 0, 'bind receiver');
 
   LAddrLen := SizeOf(LAddr);
@@ -254,10 +268,7 @@ begin
   Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_DGRAM,
     PLATFORM_IPPROTO_UDP, LSnd) = 0, 'create sender');
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.Family := PLATFORM_AF_INET;
-  LAddr.Port := TestHTONS(Word(LPort));
-  LAddr.Addr := TestHTONL($7F000001);
+  FillTestIpv4(LAddr, TestHTONS(Word(LPort)), TestHTONL($7F000001));
   LRet := platform_socket_sendto(LSnd, PAnsiChar('hello_udp'), 9, 0,
     @LAddr, SizeOf(LAddr), LSent);
   Check(LRet = 0, 'sendto, err=' + IntToStr(LRet));
@@ -362,10 +373,7 @@ begin
   Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
     PLATFORM_IPPROTO_TCP, S) = 0, 'create');
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.Family := PLATFORM_AF_INET;
-  LAddr.Port := 0;
-  LAddr.Addr := 0;
+  FillTestIpv4(LAddr, 0, 0);
   Check(platform_socket_bind(S, @LAddr, SizeOf(LAddr)) = 0, 'bind');
   Check(platform_socket_listen(S, 1) = 0, 'listen');
   Check(platform_socket_set_nonblocking(S, True) = 0, 'set nonblocking');
@@ -503,10 +511,7 @@ begin
 
   Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
     PLATFORM_IPPROTO_TCP, LServer) = 0, 'create server');
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.Family := PLATFORM_AF_INET;
-  LAddr.Port := 0;
-  LAddr.Addr := 0;
+  FillTestIpv4(LAddr, 0, 0);
   Check(platform_socket_bind(LServer, @LAddr, SizeOf(LAddr)) = 0, 'bind');
   Check(platform_socket_listen(LServer, 1) = 0, 'listen');
 
@@ -516,10 +521,7 @@ begin
 
   Check(platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM,
     PLATFORM_IPPROTO_TCP, LClient) = 0, 'create client');
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.Family := PLATFORM_AF_INET;
-  LAddr.Port := TestHTONS(Word(LPort));
-  LAddr.Addr := TestHTONL($7F000001);
+  FillTestIpv4(LAddr, TestHTONS(Word(LPort)), TestHTONL($7F000001));
   Check(platform_socket_connect(LClient, @LAddr, SizeOf(LAddr)) = 0, 'connect');
 
   LAddrLen := SizeOf(LAddr);
@@ -540,8 +542,8 @@ end;
 { 21. error_timed_out classification }
 procedure TestErrorTimedOut;
 begin
-  { ETIMEDOUT is typically 110 on Linux }
-  Check(platform_socket_error_timed_out(110), 'errno 110 is timed_out');
+  { ETIMEDOUT is host-specific (Linux 110, Darwin 60). }
+  Check(platform_socket_error_timed_out(ESysETIMEDOUT), 'ESysETIMEDOUT is timed_out');
   Check(not platform_socket_error_timed_out(0), 'errno 0 is not timed_out');
 end;
 

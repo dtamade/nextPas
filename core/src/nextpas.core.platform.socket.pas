@@ -92,13 +92,9 @@ const
   PLATFORM_SO_LINGER   = 13;
 {$ENDIF}
   PLATFORM_SO_KEEPALIVE = SO_KEEPALIVE;
-  PLATFORM_SO_RCVTIMEO = 20;
-  PLATFORM_SO_SNDTIMEO = 21;
-{$IFDEF NEXTPAS_MACOS}
-  PLATFORM_SO_RCVBUF   = $1002;
-  PLATFORM_SO_SNDBUF   = $1001;
-  PLATFORM_SO_ERROR    = $1007;
-{$ELSEIF defined(NEXTPAS_FREEBSD)}
+  PLATFORM_SO_RCVTIMEO = SO_RCVTIMEO;
+  PLATFORM_SO_SNDTIMEO = SO_SNDTIMEO;
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   PLATFORM_SO_RCVBUF   = $1002;
   PLATFORM_SO_SNDBUF   = $1001;
   PLATFORM_SO_ERROR    = $1007;
@@ -498,7 +494,8 @@ uses
   ;
 
 const
-  SOCK_CLOEXEC_LOCAL = $02000000;
+  { Linux SOCK_CLOEXEC is octal 02000000 = 0x80000. Darwin has no SOCK_CLOEXEC. }
+  SOCK_CLOEXEC_LOCAL = $00080000;
 
 { 套接字描述符转换辅助函数 }
 function FdToSocket(AFd: cint; out ASocket: TPlatformSocket): Int32; inline;
@@ -511,6 +508,12 @@ function platform_socket_create(const ADomain, AType, AProtocol: Int32;
 var
   LFd: cint;
 begin
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  { BSD: no SOCK_CLOEXEC type flag; set FD_CLOEXEC after create. }
+  LFd := socket(ADomain, AType, AProtocol);
+  if LFd >= 0 then
+    fcntl(LFd, F_SETFD, FD_CLOEXEC);
+{$ELSE}
   LFd := socket(ADomain, AType or SOCK_CLOEXEC_LOCAL, AProtocol);
   if (LFd < 0) and (platform_get_errno = ESysEINVAL) then
   begin
@@ -518,6 +521,7 @@ begin
     if LFd >= 0 then
       fcntl(LFd, F_SETFD, FD_CLOEXEC);
   end;
+{$ENDIF}
   Result := FdToSocket(LFd, ASocket);
 end;
 
@@ -769,6 +773,9 @@ function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
   out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
 begin
   FillChar(ASockAddr, SizeOf(ASockAddr), 0);
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  ASockAddr.sin_len := SizeOf(sockaddr_in);
+{$ENDIF}
   ASockAddr.sin_family := AF_INET;
   ASockAddr.sin_port := platform_htons(APort);
   ASockAddr.sin_addr.s_addr := platform_htonl(AIP);
@@ -790,6 +797,9 @@ var
 begin
   FillChar(AResult, SizeOf(AResult), 0);
   LAddr := @AResult.Storage;
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  LAddr^.sin_len := SizeOf(sockaddr_in);
+{$ENDIF}
   LAddr^.sin_family := AF_INET;
   LAddr^.sin_port := platform_htons(APort);
   LAddr^.sin_addr.s_addr := platform_htonl(AAddr);
@@ -810,6 +820,9 @@ var
 begin
   FillChar(AResult, SizeOf(AResult), 0);
   LAddr := @AResult.Storage;
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  LAddr^.sin6_len := SizeOf(sockaddr_in6);
+{$ENDIF}
   LAddr^.sin6_family := AF_INET6;
   LAddr^.sin6_port := platform_htons(APort);
   LAddr^.sin6_flowinfo := 0;
@@ -864,6 +877,16 @@ function platform_socket_pair(ADomain, AType, AProtocol: Int32;
 var
   LSv: array[0..1] of cint;
 begin
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  if socketpair(ADomain, AType, AProtocol, @LSv[0]) <> 0 then
+  begin
+    ASocket1.Value := -1;
+    ASocket2.Value := -1;
+    Exit(platform_get_errno);
+  end;
+  fcntl(LSv[0], F_SETFD, FD_CLOEXEC);
+  fcntl(LSv[1], F_SETFD, FD_CLOEXEC);
+{$ELSE}
   if socketpair(ADomain, AType or SOCK_CLOEXEC_LOCAL, AProtocol, @LSv[0]) <> 0 then
   begin
     if platform_get_errno = ESysEINVAL then
@@ -887,6 +910,7 @@ begin
       Exit(platform_get_errno);
     end;
   end;
+{$ENDIF}
   ASocket1.Value := LSv[0];
   ASocket2.Value := LSv[1];
   Result := 0;

@@ -223,7 +223,8 @@ begin
   APool.FEntries[LIdx].FMemory := LMem;
   APool.FEntries[LIdx].FMemorySize := LMemSize;
   APool.FEntries[LIdx].FLastFreeTick := 0;
-  APool.FEntries[LIdx].FOwnerThreadId := GetCurrentThreadId;
+  { Darwin aarch64 TThreadID is not assignment-compatible with QWord without cast. }
+  APool.FEntries[LIdx].FOwnerThreadId := QWord(PtrUInt(GetCurrentThreadId));
   APool.FEntries[LIdx].FDecommitted := False;
   { Add to partial list. }
   APool.FPartialNext[LIdx] := APool.FPartialHead;

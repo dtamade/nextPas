@@ -3,6 +3,10 @@
 > 创建: 2026-07-08 | 更新: 2026-07-17
 > **状态**: 研究线（= 主路线图 **R8**）· **非默认推进**
 > **主线请看** [`roadmap.md`](roadmap.md)。本文仅 NUMA / TSX / TLA+ 研究扩展。
+>
+> **当前诚实状态（优先读）**：[`r8-research-status.md`](r8-research-status.md)
+> — Phase 1–2（NUMA / RTM / TLA 基线）已落地；**NUMA Phase 3 线程亲和 residual / 未完成**；
+> R8 **不进**默认门面；不污染 `verify-t1`。本文保留历史计划细节，冲突时以 r8-research-status + CONTRACT 为准。
 
 ## 1. 概述
 

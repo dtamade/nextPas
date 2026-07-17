@@ -120,6 +120,11 @@ uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.linux.base;
+  {$ELSEIF defined(NEXTPAS_MACOS)}
+uses
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.darwin.ffi;
   {$ELSE}
 uses
   nextpas.core.platform.posix.base,
@@ -206,7 +211,10 @@ end;
 
 function platform_secure_zero_memory_backend: TPlatformSecureZeroBackend;
 begin
-{$IFDEF NEXTPAS_UNIX}
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_FREEBSD)}
+  Result := pszbPosixExplicitBZero;
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  { macOS uses memset_s (C11); still counts as native secure-zero. }
   Result := pszbPosixExplicitBZero;
 {$ELSE}
   Result := pszbFallbackFillCharBarrier;
@@ -226,7 +234,7 @@ end;
 {
   secure-zero-backend=fallback-fillchar-readwritebarrier
   windows-native-secure-zero=deferred
-  posix-native-secure-zero=explicit_bzero
+  posix-native-secure-zero=explicit_bzero (Linux/FreeBSD) or memset_s (macOS)
   native-secure-zero-promotion-requires=host-owned-ffi-or-dynamic-loading-seam
   secure-zero-forced-compile-truth=source-contract
   windows-runtime-ready=false
@@ -242,8 +250,16 @@ begin
   if (APtr = nil) or (ASize = 0) then
     Exit;
 
-{$IFDEF NEXTPAS_UNIX}
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_FREEBSD)}
   nextpas.core.platform.posix.ffi.explicit_bzero(APtr, size_t(ASize));
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  { explicit_bzero is not exported on Darwin; memset_s is the native API. }
+  if nextpas.core.platform.darwin.ffi.memset_s(APtr, size_t(ASize), 0,
+    size_t(ASize)) <> 0 then
+  begin
+    FillChar(APtr^, ASize, 0);
+    platform_secure_zero_memory_barrier;
+  end;
 {$ELSE}
   FillChar(APtr^, ASize, 0);
   platform_secure_zero_memory_barrier;

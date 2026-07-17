@@ -26,12 +26,14 @@ uses
 
 {$IFDEF NEXTPAS_MACOS}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.darwin.ffi,
   nextpas.core.platform.posix.errno;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_FREEBSD}
 uses
+  nextpas.core.platform.error,
   nextpas.core.platform.freebsd.ffi,
   nextpas.core.platform.posix.errno;
 {$ENDIF}

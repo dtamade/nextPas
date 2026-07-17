@@ -129,11 +129,19 @@ begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
 
+{$IFDEF NEXTPAS_LINUX}
   if pipe2(@LErrPipe[0], O_CLOEXEC) <> 0 then
+{$ELSE}
+  if pipe(@LErrPipe[0]) <> 0 then
+{$ENDIF}
   begin
     AFailStage := ptssPipe;
     Exit(platform_get_errno);
   end;
+{$IFNDEF NEXTPAS_LINUX}
+  fcntl(LErrPipe[0], F_SETFD, FD_CLOEXEC);
+  fcntl(LErrPipe[1], F_SETFD, FD_CLOEXEC);
+{$ENDIF}
 
   LPid := fork;
   if LPid < 0 then

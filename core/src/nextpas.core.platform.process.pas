@@ -262,6 +262,14 @@ uses
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
 {$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  , nextpas.core.platform.darwin.base
+  , nextpas.core.platform.darwin.ffi
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+  , nextpas.core.platform.freebsd.base
+  , nextpas.core.platform.freebsd.ffi
+{$ENDIF}
 {$IFDEF NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
   , nextpas.core.platform.linux.modern
 {$ENDIF}
@@ -488,11 +496,19 @@ begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
 
+{$IFDEF NEXTPAS_LINUX}
   if pipe2(@LErrPipe[0], O_CLOEXEC) <> 0 then
+{$ELSE}
+  if pipe(@LErrPipe[0]) <> 0 then
+{$ENDIF}
   begin
     AFailStage := pssPipe;
     Exit(platform_get_errno);
   end;
+{$IFNDEF NEXTPAS_LINUX}
+  fcntl(LErrPipe[0], F_SETFD, FD_CLOEXEC);
+  fcntl(LErrPipe[1], F_SETFD, FD_CLOEXEC);
+{$ENDIF}
 
   LPid := fork;
   if LPid < 0 then
@@ -816,7 +832,7 @@ function ReadTwoPipes(AStdoutFd, AStderrFd: Int32;
   AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
   AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32): Int32;
 var
-  LPollFds: array[0..1] of pollfd;
+  LPollFds: array[0..1] of TPollFd;
   LRet, LN: PtrInt;
   LAnyOpen: Boolean;
   LStdoutEOF, LStderrEOF: Boolean;

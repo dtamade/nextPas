@@ -303,12 +303,19 @@ const
   SOCK_DGRAM  = cint(2);
   IPPROTO_TCP = cint(6);
   IPPROTO_UDP = cint(17);
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  { BSD: SOL_SOCKET is 0xffff, not Linux's 1. }
+  SOL_SOCKET  = cint($FFFF);
+  SO_REUSEADDR = cint($0004);
+  SO_KEEPALIVE = cint($0008);
+  SO_RCVTIMEO  = cint($1006);
+  SO_SNDTIMEO  = cint($1005);
+{$ELSE}
   SOL_SOCKET  = cint(1);
   SO_REUSEADDR = cint(2);
-{$IFDEF NEXTPAS_LINUX}
   SO_KEEPALIVE = cint(9);
-{$ELSE}
-  SO_KEEPALIVE = cint(8);
+  SO_RCVTIMEO  = cint(20);
+  SO_SNDTIMEO  = cint(21);
 {$ENDIF}
   TCP_NODELAY  = cint(1);
   SHUT_RD     = cint(0);
@@ -371,8 +378,10 @@ const
   POLLHUP = Int16($0010);
   POLLNVAL = Int16($0020);
 
+{ O_CLOEXEC / FD_* live in per-host base units (Linux/Darwin/FreeBSD/Android).
+  Do not put a Linux-only O_CLOEXEC here — Darwin is 0x1000000, FreeBSD
+  0x100000, Linux 0x80000. Host base must appear in uses after this unit. }
 const
-  O_CLOEXEC  = $80000;
   F_SETFD    = 2;
   FD_CLOEXEC = 1;
   F_GETFD    = 1;
