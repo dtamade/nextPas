@@ -17,13 +17,14 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 |------|------|
 | [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
 | [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
-| [`READY.md`](READY.md) | **Ready / Maintenance 声明**（R0–R7 验收清单、维护策略） |
+| [`READY.md`](READY.md) | **状态入口**（R0–R7 基线 + **H2 in progress**） |
+| [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6） |
 | [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
 
-历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap 为准。主线 **R0–R7 已完成**，当前 **Ready / Maintenance**（详见 READY）。
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap-h2 + roadmap 为准。主线 **R0–R7 + RC Ready 已完成**，当前 **H2 in progress**（详见 [`READY.md`](READY.md) / [`roadmap-h2.md`](roadmap-h2.md)）。
 
 ## Progress-guarantee matrix
 
