@@ -1,21 +1,21 @@
-# Atomic & Lockfree — Ready / Horizon-2 / Horizon-3 Wave-1 状态
+# Atomic & Lockfree — Ready / Horizon-2 / Horizon-3 状态
 
-> **Status**: **Maintenance**（base: R0–R7 + RC Ready + H2 complete + **H3 Wave-1 done**）
+> **Status**: **H3-2 done** → **Maintenance**（R0–R7 + H2 + H3 Wave-1 + **H3-2 Guarded subset**）
 > **Date**: 2026-07-17
 > **Owner**: atomic-lockfree lane
-> **Scope**: `nextpas.core.atomic` (L0) + `nextpas.core.lockfree` (L1) + consumer `async.loop` (H3-1)
+> **Scope**: `nextpas.core.atomic` (L0) + `nextpas.core.lockfree` (L1) + consumer `async.loop` (H3-1) + T2 bag/multimap (H3-2)
 
 Mainline stages **R0–R7 and RC Ready close-out are complete**.
 **Horizon-2 (H2-0…H2-6) is complete** — see [`roadmap-h2.md`](roadmap-h2.md).
 **Horizon-3 Wave-1 (H3-0e + H3-1) is complete** — async `Post` path uses T1 MPSC; see [`roadmap-h3.md`](roadmap-h3.md).
-**Current execution line**: **Maintenance** (default). H3-2…H3-4 remain **not authorized**.
+**Horizon-3 H3-2 is complete** — T2 Guarded production subset for **bag + multimap** (CONTRACT §0.3); **not** default facade.
+**Current execution line**: **Maintenance**. H3-3…H3-4 remain **not authorized**.
 **R8** research pack close-out (docs + optional `verify-r8`): see [`r8-research-status.md`](r8-research-status.md).
 R8 remains **opt-in research** and is **not** a default production item.
 Do **not** invent an R9.
 
 H3-1 land HEAD on main: `710ddd7ab` (feat `8d99b07ab` + Wave-1 status docs).
-Path-limited land: `landing/atomic-lockfree-h3-1-20260717`.
-Archive tag (if created): `archive/atomic-lockfree-h3-1-20260717`.
+H3-2 evidence: CONTRACT §0.3; `test_lockfree_bag` / `test_lockfree_multimap` H3-2 pins; multimap `Destroy` closes first.
 
 Archive: `archive/atomic-lockfree-h2-complete-20260717` (H2-1…H2-6 land HEAD `d93780c27`);
 close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
@@ -28,7 +28,7 @@ close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
 |---------|----------|-------|
 | **T1 runtime core** (lockfree facade) | **Ready-for-consumer** | Unmanaged elements; `Close → join → Free`; contract + tests aligned; H2-1 Deque `Try*Ex` parity landed |
 | **atomic** | **Ready-for-consumer** | Canonical `atomic_*` / `TAtomic*`; legacy CAS documented, not preferred (H2-3) |
-| **T2 concurrent containers** | **Available, not a unified production contract** | H2-2 maturity tiers documented; **not** default facade |
+| **T2 concurrent containers** | **Guarded tiers + H3-2 subset** | H2-2 tiers; **bag/multimap** have H3-2 production contract (§0.3); **not** default facade |
 | **T3 / research** | Experimental | RTM / NUMA / formal models — direct import only; R8 status in [`r8-research-status.md`](r8-research-status.md) |
 | **Cross-module T1 consumer** | **H3-1 done** | `nextpas.core.async.loop` → `lockfree.mpsc` for `Post` pending queue |
 
@@ -55,17 +55,19 @@ Details, deliverables, non-goals, and acceptance: [`roadmap-h2.md`](roadmap-h2.m
 
 ---
 
-## Horizon-3 — **Wave-1 COMPLETE** (H3-2… not authorized)
+## Horizon-3
 
 | Item | Status | Evidence |
 |------|--------|----------|
 | H3 charter | **done** | [`roadmap-h3.md`](roadmap-h3.md) · `archive/atomic-lockfree-h3-charter-20260717` |
 | **H3-0e** status switch | **done** | Wave-1 opened then closed on this document |
 | **H3-1** async T1 MPSC on `TAsyncLoop.Post` | **done** | feat `8d99b07ab`; land tip `710ddd7ab`; `async.loop` + `test_async` source-contract |
-| H3-2…H3-4 | **not authorized** | See [`roadmap-h3.md`](roadmap-h3.md) |
+| **H3-2** T2 Guarded subset (bag + multimap) | **done** | CONTRACT §0.3; unit headers; bag/multimap tests H3-2 pins; multimap Destroy→Close |
+| H3-3…H3-4 | **not authorized** | See [`roadmap-h3.md`](roadmap-h3.md) |
 
-Cross-module: `nextpas.core.async.loop` → `nextpas.core.lockfree.mpsc` (L1→L1; lockfree must not depend on async).
-Lifecycle: `Close → discard remaining (no fire) → Free`; join Post producers **outside** the loop before Close/Free.
+Cross-module (H3-1): `nextpas.core.async.loop` → `nextpas.core.lockfree.mpsc` (L1→L1; lockfree must not depend on async).
+Lifecycle async: `Close → discard remaining (no fire) → Free`; join Post producers **outside** the loop before Close/Free.
+H3-2: direct import bag/multimap only; Close/managed/progress per CONTRACT §0.3.
 
 ---
 
@@ -95,37 +97,38 @@ Related earlier landings:
 
 ---
 
-## Policy during Maintenance (post-H2 / post-H3 Wave-1)
+## Policy during Maintenance (post-H2 / post-H3-1 / post-H3-2)
 
-1. **Default**: fix T1/atomic production bugs; amend CONTRACT when semantics change; keep `verify-t1` green.
+1. **Default**: fix T1/atomic/H3-2 bag·multimap production bugs; amend CONTRACT when semantics change; keep `verify-t1` green.
 2. **Do not open R9**. H2 is complete; R8 stays research / opt-in.
 3. **Major changes** (Closed semantics, expand default facade to T2, promote R8 to production, delete legacy CAS): stop, revise roadmap, ask.
 4. Prefer path-limited landings; do not raw-merge long-lived lane history into `main`.
 5. Keep artifact hygiene: no `.o`/`.ppu`/build noise in the source tree; `make hygiene` before land.
-6. New feature waves need an explicit charter (do not silently extend H2 numbering). Further H3 stages (H3-2…) need **separate authorization**.
+6. New feature waves need an explicit charter. Further H3 stages (**H3-3…**) need **separate authorization**.
 
 ---
 
-## Post-H2 / post-Wave-1 maintenance checklist
+## Post-H3-2 maintenance checklist
 
 ### Allowed without new charter
 
 - T1 / atomic **bugfix**
+- H3-2 bag/multimap **regression** (Close / managed / facade isolation)
 - **CONTRACT** amendments for **clarity** (no silent semantic flip)
 - **`verify-t1` hygiene** (green gate, isolation, hygiene)
 - **Docs sync** (README / api-ref / selection-guide / READY / roadmap pointers)
 - Async H3-1 consumer **regression** fixes (keep MPSC pending path green)
 
-### Requires new charter stage (H3-2… or explicit opt-in)
+### Requires new charter stage (H3-3… or explicit opt-in)
 
-- New **production features** beyond H3-1 scope
+- New **production features** beyond H3-2 scope
 - Additional **cross-module consumer wiring** (http / thread / net, etc.)
-- **T2 production contract subsets** (Guarded Close/managed/progress for 1–2 types) — **H3-2**
+- Expanding H3-2 subset to **more T2 types** (new stage or explicit charter)
 - **Consumer regression gate** formalization — **H3-3**
 - Bench / api-ref evidence hygiene wave — **H3-4**
 - **R8 production promotion**
 
-Charter: [`roadmap-h3.md`](roadmap-h3.md). **H3-2… not authorized.**
+Charter: [`roadmap-h3.md`](roadmap-h3.md). **H3-3… not authorized.**
 
 ### Still forbidden without major-change discussion
 
@@ -147,12 +150,14 @@ Charter: [`roadmap-h3.md`](roadmap-h3.md). **H3-2… not authorized.**
 ```bash
 export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
 make -C core/tests/nextpas.core.lockfree verify-t1
+make -C core/tests/nextpas.core.lockfree/test_lockfree_bag clean test
+make -C core/tests/nextpas.core.lockfree/test_lockfree_multimap clean test
 make -C core/tests/nextpas.core.async/test_async clean test
 make hygiene
 git diff --check
 ```
 
-Expected: atomic + lockfree main suite + stress green; async source-contract for MPSC pending; log default `core/build/verify-lockfree/verify-t1.log`.
+Expected: atomic + lockfree main suite + stress green; bag/multimap H3-2 pins green; async source-contract for MPSC pending; log default `core/build/verify-lockfree/verify-t1.log`.
 
 Current main-suite size: **lockfree ~178** tests (includes `TestDequeTryExDiagnostics` from H2-1).
 

@@ -1,8 +1,8 @@
 # Atomic & Lockfree — Horizon-3 章程
 
-> **状态**: **H3 Wave-1 COMPLETE**（2026-07-17）— H3-0e + **H3-1 done**；H3-2…H3-4 **未授权**
+> **状态**: **H3-2 COMPLETE**（2026-07-17）— H3-0e + H3-1 + **H3-2 done**；H3-3…H3-4 **未授权**
 > **Owner**: atomic-lockfree lane（`.worktrees/atomic-lockfree`）
-> **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）+ 受控 consumer `async.loop`
+> **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）+ consumer `async.loop` + T2 bag/multimap
 > 冲突时以 **CONTRACT + [`roadmap.md`](roadmap.md) + 本文件** 为准；状态入口见 [`READY.md`](READY.md)。
 
 ---
@@ -18,7 +18,8 @@
 | **H2-0…H2-6** | 一致性 / 证据 / 消费者 | DONE — [`roadmap-h2.md`](roadmap-h2.md) |
 | **R8** | NUMA / TSX / TLA+ **研究** | opt-in；诚实状态见 [`r8-research-status.md`](r8-research-status.md) |
 | **H3 Wave-1** | H3-0e + H3-1（async Post → T1 MPSC） | **DONE** — main `710ddd7ab` |
-| **H3-2…H3-4** | T2 Guarded / consumer 门 / 证据卫生 | **未授权** |
+| **H3-2** | T2 Guarded 生产子集（bag + multimap） | **DONE** — CONTRACT §0.3 |
+| **H3-3…H3-4** | consumer 门 / 证据卫生 | **未授权** |
 
 **R8 保持研究线**，不因 H3 章程而自动生产化。
 
@@ -31,7 +32,7 @@
 | **H3-0** | 章程与状态 | 本文件 + READY 指针 | **done** |
 | **H3-0e** | Wave-1 状态切换 | READY → H3 in progress → Maintenance | **done** |
 | **H3-1** | 跨模块真实接入 | **async.loop Post → T1 MPSC**；`Close → discard → Free`；loop 外 join producers | **done** (`8d99b07ab` / land `710ddd7ab`) |
-| **H3-2** | T2 Guarded 生产契约子集 | 1–2 个类型：Close / managed / progress 文档与契约；**不进**默认门面 | **未授权** |
+| **H3-2** | T2 Guarded 生产契约子集 | **bag + multimap**：Close / managed / progress；**不进**默认门面 | **done** |
 | **H3-3** | Consumer regression 门 | focused gate 或 source-contract，覆盖跨模块消费者 | **未授权** |
 | **H3-4** | 证据与文档卫生 | bench envelope 同步；api-ref 与契约对齐 | **未授权** |
 
@@ -45,10 +46,13 @@ H3-0  章程 landed
 H3-0e + H3-1  Wave-1  ── DONE（async.loop → lockfree.mpsc）
          │
          ▼
+H3-2  T2 Guarded subset  ── DONE（bag + multimap, CONTRACT §0.3）
+         │
+         ▼
 Maintenance  ── 当前默认
          │
          ▼
-H3-2 … H3-4  ── 未授权
+H3-3 … H3-4  ── 未授权
 ```
 
 ### H3-1 选型（Wave-1 锁定 / 已交付）
@@ -86,10 +90,10 @@ H3-2 … H3-4  ── 未授权
 
 ## 3. 执行策略（硬规则）
 
-1. **Wave-1（H3-1）已交付**。后续 H3-2…H3-4 **仍须单独授权**，不因 Wave-1 完成而自动推进。
-2. 启动 H3-2+ 必须有 **单独授权**（总控或用户显式指令），并建议：
+1. **H3-1 与 H3-2 已交付**。后续 H3-3…H3-4 **仍须单独授权**，不因 H3-2 完成而自动推进。
+2. 启动 H3-3+ 必须有 **单独授权**（总控或用户显式指令），并建议：
    - path-limited land；`verify-t1` 保绿；跨模块须额外 consumer 验证
-3. 在未授权前，默认继续 **Maintenance**（见 [`READY.md`](READY.md) Post-Wave-1 checklist）。
+3. 在未授权前，默认继续 **Maintenance**（见 [`READY.md`](READY.md) post-H3-2 checklist）。
 4. 重大变更（Closed、默认门面 T2、R8 生产化、删 legacy）仍属 stop-and-ask，不因 H3 编号自动放行。
 
 ---
@@ -98,11 +102,11 @@ H3-2 … H3-4  ── 未授权
 
 | 文档 | 角色 |
 |------|------|
-| [`READY.md`](READY.md) | 状态入口；**Maintenance**；H3 Wave-1 done |
-| [`roadmap.md`](roadmap.md) | R 线记录 + Maintenance；指向 H3 Wave-1 complete |
+| [`READY.md`](READY.md) | 状态入口；**Maintenance**；H3-1 + H3-2 done |
+| [`roadmap.md`](roadmap.md) | R 线记录 + Maintenance；指向 H3 |
 | [`roadmap-h2.md`](roadmap-h2.md) | H2 完成记录；successor 指针 → 本文件 |
 | [`r8-research-status.md`](r8-research-status.md) | R8 诚实研究状态（非 H3 交付） |
-| [`CONTRACT.md`](CONTRACT.md) | 契约真相；H3-2 若开工须先改此处 |
+| [`CONTRACT.md`](CONTRACT.md) | 契约真相；**§0.3 = H3-2 bag/multimap** |
 | [`consumer-audit.md`](consumer-audit.md) | H3-1 async.loop 消费者已登记 |
 
 ---
@@ -123,3 +127,11 @@ H3-2 … H3-4  ── 未授权
 | **交付** | `async.loop` Post 队列 = T1 MPSC；Close discard；source-contract 测试；consumer-audit |
 | **不做** | poller/timer 替换；T2 升门面；R8 生产化 |
 | **通过标准** | path-limited land 到 main；`verify-t1` + async focused gate 绿（land 时证据）；文档一致写 **Wave-1 complete / Maintenance** |
+
+### H3-2 / T2 Guarded 子集 — **done**
+
+| 项 | 内容 |
+|----|------|
+| **交付** | **bag + multimap** 统一生产契约：progress 诚实、managed 守卫、Close 生命周期；CONTRACT §0.3；单元头注释；测试 H3-2 source-contract pins；multimap `Destroy` 先 `Close` |
+| **不做** | T2 进默认门面；全量 T2 契约化；算法重写；改 T1 Closed 语义；R8 生产化 |
+| **通过标准** | bag/multimap focused tests 绿；门面无 bag/multimap re-export；READY/roadmap 写 **H3-2 done / Maintenance**；H3-3… 仍未授权 |
