@@ -41,6 +41,11 @@ Detailed behavior contracts live in `API.md`; this README stays compact.
 - Batch/impl SIMD units consume only the public `nextpas.core.simd` facade.
 - Private SIMD backend/dispatch/cpuinfo/dataplane units must not appear in math
   production sources.
+- **math↔simd linkage (edit-where)**: authoritative table in
+  [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) §「math↔simd linkage (Q2)」.
+  Summary: public batch lives in math (`math.batch` / `math.vec.batch`); leaves
+  (`Array*` / `VecF32x*`) live in simd; no reverse simd→math dependency; after
+  simd Batch leaf changes, re-run math focused consumer smoke.
 
 ## Verification Entry Points
 
@@ -69,13 +74,13 @@ git status --short --branch
 
 - `API.md` is the public behavior contract and command reference.
 - `GOAL_TREE.md` is the roadmap/status control map.
-- Executable goals for this lane: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) (shared math+simd queue; **CURRENT=Q2** after Q1 pointer pass — quality wave, not new math features).
+- Executable goals for this lane: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) (shared math+simd queue; **CURRENT=IDLE** — in-lane residual + quality wave closed).
 - `FINAL_API_MIGRATION_DESIGN.md` records stable design decisions only.
 - Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those base constants.
 - Public value-type methods remain scalar. SIMD acceleration is exposed through public batch APIs (`math.batch` / `math.vec.batch`), not through value-type methods.
 - `math.impl.simd` is an internal seam only and is not public API.
 - Public batch surface covers F32 and F64 scalar arrays plus `vec.batch` F32 core and Double minimal parity (Dot/Normalize/Transform/Lerp/Clamp). `Batch*F64` is a thin open-array facade over simd `Array*F64` (same core set as public F32: sin/cos/exp/ln/sqrt/abs/neg/ceil/floor/round/trunc/lerp/clamp/scale-offset).
-- Math in-lane residual (M-C1 / M-V1 / M-V2) is closed; quality wave: Q1 pointer freshness **done**, **CURRENT=Q2** (math↔simd linkage table).
+- Math residual (M-C1 / M-V1 / M-V2) and quality wave (Q1 / Q2) are closed; Wave 4 walls (M9 / macOS) stay blocked.
 - Linux local focused suite is green with heaptrc zero evidence.
 - Windows trig host link/runtime proof exists via Wine.
 - M8 is complete on Linux+Windows; macOS host trig proof is deferred.

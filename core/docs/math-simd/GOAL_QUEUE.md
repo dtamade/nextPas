@@ -35,8 +35,62 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=Q2
+CURRENT=IDLE
 ```
+
+---
+
+## math↔simd linkage (Q2)
+
+Authoritative **edit-where** map for this shared lane. Prevents wrong-module goals.
+
+### Ownership
+
+| Concern | Owner | Touch paths | Do not |
+|---------|-------|-------------|--------|
+| Scalar types, value-type methods, constants | **math** | `core/src/nextpas.core.math.{base,scalar,trig,vec,mat,quat,transform,easing,random}*` | Put public math types in simd |
+| Public batch API (F32/F64 open-array + vec.batch) | **math** | `math.batch*`, `math.vec.batch*`, facade re-export, `docs/math/API.md` | Expose `Array*` names as math public API |
+| Internal single-value SIMD helpers | **math** (private) | `math.impl.simd` only | Public facade; value-type default path without profile |
+| Array* F32/F64 batch + transcendentals | **simd** | `nextpas.core.simd` public + `BatchF32`/`BatchF64` dispatch leaves | Reimplement Array* inside math |
+| VecF32x* / CoreVectors / Memory / Mask | **simd** | simd public facade + backends | math imports private backend/dispatch units |
+| NEON / RVV / x86 asm leaves & honesty | **simd** | simd backends, contracts, roadmap | math-side ISA `#ifdef` or dead wrappers |
+
+### Allowed dependency edges
+
+```text
+consumer ──uses──► nextpas.core.math          (public math)
+consumer ──uses──► nextpas.core.simd          (public simd; optional)
+
+math.batch ────────► math.batch.simd ──uses──► nextpas.core.simd   (Array*F32/F64)
+math.vec.batch ────► math.vec.batch.simd ─uses─► nextpas.core.simd (VecF32x*)
+math.impl.simd ────uses──► nextpas.core.simd   (VecF32x*; not public)
+
+simd ──//──► math   (FORBIDDEN: no reverse dependency)
+math ──//──► nextpas.core.simd.{dispatch,backend*,cpuinfo,dataplane,*}  (FORBIDDEN: public facade only)
+```
+
+### Public surface mapping (math → simd)
+
+| Math public | Math impl unit | simd symbol family | Notes |
+|-------------|----------------|--------------------|-------|
+| `Batch*F32` / `Batch*F64` (sin/cos/exp/…/lerp/clamp/scale-offset) | `math.batch` → `math.batch.simd` | `Array*F32` / `Array*F64` | Thin open-array facade; counts/bounds owned by math |
+| `BatchDot/Normalize/Transform/Lerp/Clamp` (F32 + Double minimal) | `math.vec.batch` → `math.vec.batch.simd` | `VecF32x*` (F32 path); Double primarily scalar/math loops | Double set is M-V1 minimal parity, not full Array*F64 |
+| Value-type `TVec*` / `TMat*` methods | `math.vec` / `math.mat` / … | **none by default** | Stay scalar; SIMD only via batch or `impl.simd` under design review |
+
+### Edit decision (future goals)
+
+| You want to… | Edit module | Typical gate |
+|--------------|-------------|--------------|
+| New/change public math batch signature or docs | **math** | `core-math-api-surface-smoke`, math focused |
+| Faster ArraySin/Add/… leaf or NEON Batch slot | **simd** | simd focused / neon-optin / contracts |
+| After simd Batch leaf change that math calls | **math smoke only** | M-C1 style: `make -C core/tests/nextpas.core.math clean test` |
+| Wire value-type method → SIMD | **STOP** | Needs profile + design review (lane non-goal) |
+| Import simd private unit from math | **STOP** | Source-contract / non-goal violation |
+
+### Cross-README pointers
+
+- math: [`../math/README.md`](../math/README.md) Layer And Ownership
+- simd: [`../simd/README.md`](../simd/README.md) math consumer note
 
 ---
 
@@ -236,18 +290,22 @@ CURRENT=Q2
 | **DoD** | CURRENT→Q2 or IDLE |
 | **EVIDENCE** | README/roadmap 验证 **1741**；math Remaining Gaps 去掉已完成 Double 伪缺口；指针统一 CURRENT=Q2 |
 
-### Q2 — math↔simd linkage table  【CURRENT】
+### Q2 — math↔simd linkage table  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
-| **NEXT** | IDLE (or S26 blocked note) |
+| **STATUS** | done (2026-07-17) |
+| **NEXT** | IDLE |
 | **WHY** | Prevent wrong-module edits in future goals |
 | **DELIVERABLES** | Short table in this file or both READMEs |
+| **GATES** | diff-check; hygiene |
+| **DoD** | CURRENT→IDLE; table live above |
+| **EVIDENCE** | §「math↔simd linkage (Q2)」in this file; short pointers in math/simd README |
 
-### IDLE
+### IDLE  【CURRENT】
 
 When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates or stops.
+Wave 4 walls (S26/S27/S24b/M9) stay blocked — never auto-start.
 
 ---
 
@@ -273,6 +331,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 - [x] Perf method + hotspot remeasure (S25a)
 - [x] Hotspot close-or-revise (S25b re-baseline)
 - [x] Docs CURRENT coherent (Q1)
+- [x] math↔simd linkage table (Q2)
 
 ### math lane-complete
 
@@ -282,6 +341,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 - [x] Residual backlog clean (M-V2)
 - [x] Consumer smoke after Batch leaves (M-C1)
 - [x] M9/macOS explicitly blocked (not silent)
+- [x] math↔simd linkage table (Q2)
 
 ### Non-goals (always)
 
@@ -296,7 +356,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 ## Default order (happy path)
 
 ```text
-G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b ✅ → M-V1 ✅ → M-V2 ✅ → Q1 ✅ → Q2 → IDLE
+G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b ✅ → M-V1 ✅ → M-V2 ✅ → Q1 ✅ → Q2 ✅ → IDLE
          (S23c optional)                       (S24b only if hardware)
 ```
 
