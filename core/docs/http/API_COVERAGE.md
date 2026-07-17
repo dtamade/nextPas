@@ -11,9 +11,9 @@
 
 ## 当前结论
 
-- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（多时代 + Goal Loop；**NEXT = Wave L′**，之后 L′→C1…）。
+- **向前开发入口**：**仅** [`ROADMAP.md`](ROADMAP.md)（多时代 + Goal Loop；本文件不维护 NEXT Wave 名）。
 - **Stage**：non-H3 stage-complete；H3 诚实 blocked on QUIC。
-- **可用性 A–I**：主路径齐；Cookie eTLD+1；`FinalUrl`/`Version`；proxy **Basic only**。
+- **可用性 A–I + J/K**：主路径齐；Op hygiene；工厂白名单已冻。
 - **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
 - **前置条件错误**：公开面 nil/非法参数 → `EHttpError(hekArgument)`。
 - **Residual-honest**：cancel ~50ms；server `Default` RW=0；OpenSSL factory unfreed 跨模块。
@@ -51,6 +51,4 @@
 
 ## Highest-Priority Remaining Work
 
-**不在此维护有序列表。** 见 [`ROADMAP.md`](ROADMAP.md) Era 0–5 + Goal Loop。
-
-摘要：Wave K surface freeze landed → NEXT = Wave L′；满自治按推荐路径续波；H3 Blocked on QUIC。
+**不在此维护有序列表或 NEXT Wave 名。** 见 [`ROADMAP.md`](ROADMAP.md)（唯一执行入口）。
