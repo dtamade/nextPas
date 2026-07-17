@@ -241,8 +241,8 @@ jobs:
           "${FPC}" -iTP
           "${FPC}" -iTO
           # Real Windows host evidence (not Wine).
-          # 14 suite dirs + 3 dedicated real gates.
-          # truth=real-windows-runtime-ci only — not full ci-matrix until ROADMAP D1.d.
+          # Documented 17-gate set: 14 suite dirs + poller/io/socket real gates.
+          # truth=ci-matrix for that set only (ROADMAP D1.d); not full-host parity.
           bash scripts/platform-windows-ci-matrix.sh
 
   test-freebsd:

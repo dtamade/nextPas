@@ -6,10 +6,11 @@ phase state and evidence only. **Forward execution queue**: [ROADMAP.md](ROADMAP
 ## Current position
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
-Windows has focused-runtime evidence for 14 modules on real Windows VM via SSH,
-plus Wine runtime smoke (matrix 14 modules green; broader discovery ~20), plus
-GHA real-Windows focused gates (poller/io/socket). macOS, FreeBSD, and Android remain
-source-contract, forced-compile, or best-effort CI only.
+Windows x86_64 has durable **`ci-matrix`** for the documented 17-gate set on GHA
+`test-windows-runtime` (14 wine-suite dirs + poller/io/socket real), plus secondary
+Wine runtime smoke (matrix 14 green). Remaining real-Windows runtime gaps sit
+outside that matrix (signal, secure-zero native, deeper AcceptEx/ConnectEx).
+macOS, FreeBSD, and Android remain source-contract, forced-compile, or best-effort CI only.
 
 ### 2026-07-17 process/console/pty contract slice
 
@@ -64,7 +65,7 @@ Usability is **maintenance baseline 8.21** — no open wave-5. Authority: [resid
 | LT1 | QUICKSTART live-name gate + `test_platform_docs_live_patterns` smoke (F8) |
 | LT2 | `process.pipe` off all `platform_io_*` call sites; dual-IO owner-only (F5) |
 | LT3 | `platform_get_last_os_error` raw host side-channel (F6) |
-| LT4 | Windows/macOS host truth — **ROADMAP D1/D2** (wine 14/14; GHA windows matrix 14+3 gates; not ci-matrix) |
+| LT4 | Windows/macOS host truth — **ROADMAP D1 done** (Windows documented 17-gate `ci-matrix`); **D2** macOS still open |
 | Deferred | F7 mapping symmetry, F9 rename, F10 diagnostics, F14 freetype move-out |
 
 ### 2026-07-17 forward roadmap authority
@@ -77,8 +78,8 @@ residual-roadmap remains the closed LT0–LT3 + dual-IO/F6 freeze record.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across all facade modules | keep gates green |
-| Windows x86_64 | focused-runtime 14 modules; wine-runtime-smoke 20 modules; real-Windows runtime gap remains | promote to ci-matrix |
-| macOS / FreeBSD | source-contract and selected compile fragments | runtime evidence |
+| Windows x86_64 | **ci-matrix** documented 17-gate set; wine-runtime-smoke secondary; real-Windows runtime gaps remain outside matrix | expand matrix; keep GHA+wine green |
+| macOS / FreeBSD | source-contract and selected compile fragments | macOS named focused-runtime (D2) |
 | Android | forced-compile fragments | runtime evidence |
 
 ## Evidence Gates
@@ -133,16 +134,24 @@ args (FPC RTL ParamStr cross-platform), freetype/net (extra deps), pty (Unix-onl
 | platform.socket (real) | 16 | AcceptEx/ConnectEx/TransmitFile not tested; GHA `test-windows-runtime` |
 | io.poller / IOCP smoke | 2 | file AsyncRead/Write only; GHA `test-windows-runtime` |
 
-GHA expands real-Windows focused gates but does **not** promote the host to full `ci-matrix`.
+GHA `test-windows-runtime` is **`ci-matrix`** for the documented 17-gate set
+(ROADMAP D1.d). That is not a full-host Windows parity claim; real-Windows runtime
+gaps remain for modules and IOCP depth outside the matrix.
+
+### Documented Windows ci-matrix gate set (17)
+
+time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
+socket, io.reactor.iocp, poller.windows_runtime_smoke, platform.io.windows_real,
+platform.socket.windows_real — via `core/scripts/platform-windows-ci-matrix.sh`.
 
 ## Milestones
 
 | Milestone | Goal | Current truth | Next proof |
 | --- | --- | --- | --- |
 | P1 Host ABI inventory | Host constants, records, handles | done | keep gap matrix current |
-| P2 Feature facades | 14 portable APIs | focused-runtime on Windows | expand consumer coverage |
-| P3 Readiness lane | platform_poller_*, wake, userdata | Linux runtime; Wine CI matrix; Windows readiness poller | real-Windows CI runner |
-| P4 Completion lane | IOCP/proactor | focused-runtime | promote to ci-matrix |
+| P2 Feature facades | 14 portable APIs | focused-runtime / ci-matrix on Windows | expand consumer coverage |
+| P3 Readiness lane | platform_poller_*, wake, userdata | Linux runtime; Wine smoke; Windows readiness poller in ci-matrix | keep GHA green |
+| P4 Completion lane | IOCP/proactor | ci-matrix poller/iocp gates + focused-runtime | deepen AcceptEx/ConnectEx |
 | P5 Tier 2 targets | aarch64/riscv64/arm32 | 13-module forced-compile | FreeBSD/Android compile gate |
 | P6 Benchmarks | Performance baseline | 14-operation baseline | cross-platform comparison |
 
