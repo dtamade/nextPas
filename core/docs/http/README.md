@@ -33,10 +33,10 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 
 | Scenario | Start here |
 | --- | --- |
-| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse`; ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `HttpPostJsonDocument` / `GetJson` / `HttpReadResponseJson` |
+| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse` (`FinalUrl` / `Version` metadata); ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `HttpPostJsonDocument` / `GetJson` / `HttpReadResponseJson` |
 | Fluent request | `THttpRequestBuilder` → `Send` |
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
-| Auth / retry / jar / proxy / TLS | `WithBearerAuth`, `WithRetry` (delta + HTTP-date Retry-After), `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → Basic), `WithTLSContext` |
+| Auth / retry / jar / proxy / TLS | `WithBearerAuth`, `WithRetry` (delta + HTTP-date Retry-After), `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → **Basic only**), `WithTLSContext` |
 | Direct HTTPS client | `NewHttpClient` + `WithTLSContext` / options `TLSContext` → `Get('https://…')` (H1 TLS wrap) |
 | Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, `WithConnectTimeout` / options `ConnectTimeout` |
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
@@ -187,10 +187,11 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `Domain=public-suffix`)
   store/send (default Lax; None requires Secure; SiteKey approx, no PSL).
 - `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
-  (`http://host:port`). Target `http://` uses absolute-form; target `https://`
-  uses CONNECT then TLS over the tunnel (origin-form). Optional
-  `TLSContext` for verify-none / custom trust. No proxy auth yet; H1 direct
-  https without proxy still unsupported.
+  (`http://[user:pass@]host:port`). Target `http://` uses absolute-form; target
+  `https://` uses CONNECT then TLS over the tunnel (origin-form). UserInfo →
+  preemptive `Proxy-Authorization: Basic` only (no Digest/NTLM/407 challenge
+  retry). Optional `TLSContext` / `WithTLSContext` for verify-none / custom trust;
+  H1 direct https is supported without proxy.
 - `IHttpClient.GetString` / `GetBytes` and free `HttpGetString` / `HttpGetBytes`.
 - `IHttpClient.GetJson` and free `HttpGetJson` / `HttpReadResponseJson`
   (ensure 2xx + JSON document; invalid body → `hekProtocol` Op=`json`).

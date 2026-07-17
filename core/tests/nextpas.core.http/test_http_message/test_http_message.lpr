@@ -816,6 +816,30 @@ begin
   CheckEqual(Int64(404), Int64(LResp.StatusCode), 'status 404');
 end;
 
+procedure TestNewResponseMetadataDefaults;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := NewResponse(HTTP_STATUS_OK, nil, 'body');
+  CheckEqual('', LResp.FinalUrl,
+    'synthetic NewResponse leaves FinalUrl empty');
+  CheckEqual(Int64(Ord(hvHttp11)), Int64(Ord(LResp.Version)),
+    'synthetic NewResponse defaults Version to HTTP/1.1');
+end;
+
+procedure TestTHttpResponseVersionOverride;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := THttpResponse.Create(HTTP_STATUS_OK, nil, nil, hvHttp2);
+  CheckEqual(Int64(Ord(hvHttp2)), Int64(Ord(LResp.Version)),
+    'THttpResponse constructor accepts Version');
+  CheckEqual('', LResp.FinalUrl, 'constructor FinalUrl starts empty');
+  (LResp as THttpResponse).SetFinalUrl('https://example.test/path');
+  CheckEqual('https://example.test/path', LResp.FinalUrl,
+    'SetFinalUrl is visible on IHttpResponse');
+end;
+
 procedure TestNewResponseWithNilHeadersCreatesHeaders;
 var
   LResp: IHttpResponse;
@@ -2107,6 +2131,8 @@ begin
   T.Test('RemoteAddr from TNetAddress', @TestRemoteAddrFromNetAddress);
   T.Test('NewGetRequest convenience', @TestNewGetRequestConvenience);
   T.Test('NewResponse creates with status', @TestNewResponseCreatesWithStatus);
+  T.Test('NewResponse metadata defaults', @TestNewResponseMetadataDefaults);
+  T.Test('THttpResponse Version and FinalUrl', @TestTHttpResponseVersionOverride);
   T.Test('NewResponse with nil headers creates headers',
     @TestNewResponseWithNilHeadersCreatesHeaders);
   T.Test('Response headers accessible', @TestResponseHeadersAccessible);

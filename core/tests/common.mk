@@ -22,7 +22,8 @@ SOURCE  ?= $(PROGRAM).lpr
 BUILD_DIR ?= $(CORE_ROOT)/build/projects/$(MODULE_NAME)/$(TEST_NAME)
 WINE_BUILD_DIR ?= $(BUILD_DIR)_wine_win64
 
-BASE_FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh -dHEAPTRC_ACTIVE
+# -Sg: LABEL/GOTO used by mem/http/json ports; do not rely on host fpc.cfg.
+BASE_FPC_FLAGS ?= -MObjFPC -Sh -Sg -O2 -gl -gh -dHEAPTRC_ACTIVE
 FPC_FLAGS = $(BASE_FPC_FLAGS) -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 WINE_FPC_FLAGS ?= $(BASE_FPC_FLAGS) -Twin64 -Px86_64
 WINE_FPC_FLAGS += -FU$(WINE_BUILD_DIR) -FE$(WINE_BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src

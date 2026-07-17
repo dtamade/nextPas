@@ -87,13 +87,20 @@ type
     FHeaders: IHttpHeaders;
     FBody: IReader;
     FBodyClosed: Boolean;
+    FFinalUrl: string;
+    FVersion: THttpVersion;
   public
     constructor Create(const AStatusCode: THttpStatus;
-      const AHeaders: IHttpHeaders; const ABody: IReader);
+      const AHeaders: IHttpHeaders; const ABody: IReader;
+      const AVersion: THttpVersion = hvHttp11);
     destructor Destroy; override;
     function GetStatusCode: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
+    function GetFinalUrl: string;
+    function GetVersion: THttpVersion;
+    { Client stamps the request URL that produced this response. }
+    procedure SetFinalUrl(const AUrl: string);
     procedure Close;
   end;
 
@@ -714,13 +721,16 @@ end;
 { THttpResponse }
 
 constructor THttpResponse.Create(const AStatusCode: THttpStatus;
-  const AHeaders: IHttpHeaders; const ABody: IReader);
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AVersion: THttpVersion);
 begin
   inherited Create;
   FStatusCode := AStatusCode;
   FHeaders := HeadersOrNew(AHeaders);
   FBody := ABody;
   FBodyClosed := False;
+  FFinalUrl := '';
+  FVersion := AVersion;
 end;
 
 destructor THttpResponse.Destroy;
@@ -746,6 +756,21 @@ end;
 function THttpResponse.GetBody: IReader;
 begin
   Result := FBody;
+end;
+
+function THttpResponse.GetFinalUrl: string;
+begin
+  Result := FFinalUrl;
+end;
+
+function THttpResponse.GetVersion: THttpVersion;
+begin
+  Result := FVersion;
+end;
+
+procedure THttpResponse.SetFinalUrl(const AUrl: string);
+begin
+  FFinalUrl := AUrl;
 end;
 
 procedure THttpResponse.Close;

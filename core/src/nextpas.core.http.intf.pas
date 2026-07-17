@@ -106,12 +106,22 @@ type
     function GetStatusCode: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
+    { URL of the request that produced this response (after redirects when
+      FollowRedirects is on). Empty for synthetic/factory responses that never
+      went through the client. Does not expose transport handles. }
+    function GetFinalUrl: string;
+    { Protocol version of the final hop that produced this response.
+      H1 from the status-line; H2 is always hvHttp2. Default hvHttp11 for
+      synthetic NewResponse helpers. }
+    function GetVersion: THttpVersion;
     { Release/drain body ownership. Idempotent. Preferred over relying only on
       helpers; destructor also closes if not already closed. }
     procedure Close;
     property StatusCode: THttpStatus read GetStatusCode;
     property Headers: IHttpHeaders read GetHeaders;
     property Body: IReader read GetBody;
+    property FinalUrl: string read GetFinalUrl;
+    property Version: THttpVersion read GetVersion;
   end;
 
   IHttpResponseWriter = interface

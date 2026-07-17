@@ -117,39 +117,133 @@ jobs:
 
   test-windows-runtime:
     runs-on: windows-latest
+    # nextpas.core needs FPC 3.3.1+ (functionreferences). Chocolatey freepascal is
+    # i386 3.0.4; MSYS2 has no fpc package. Use official trunk x86_64-win64 snapshot
+    # plus MSYS2 only for GNU make/bash.
+    defaults:
+      run:
+        shell: msys2 {0}
+        working-directory: core
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install FPC and make
-        shell: pwsh
-        run: |
-          choco install -y freepascal make
-          $ChocolateyProfile = Join-Path $env:ChocolateyInstall 'helpers\chocolateyProfile.psm1'
-          if (Test-Path $ChocolateyProfile) {
-            Import-Module $ChocolateyProfile
-            Update-SessionEnvironment
-          }
-          foreach ($Tool in @('fpc', 'make')) {
-            $Command = Get-Command $Tool -ErrorAction SilentlyContinue
-            if (-not $Command) {
-              throw "$Tool was not installed into PATH"
-            }
-            Add-Content -Path $env:GITHUB_PATH -Value (Split-Path $Command.Source)
-          }
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            make
+            git
+            tar
+            curl
 
-      - name: Verify FPC
-        shell: pwsh
+      - name: Cache FPC 3.3.1 x86_64-win64 snapshot
+        id: cache-fpc-win64
+        uses: actions/cache@v4
+        with:
+          path: ~/fpc-trunk
+          # Bump when snapshot URL/filename changes.
+          key: fpc-3.3.1-x86_64-win64-linuxbuilt-20260716
+
+      - name: Install FPC 3.3.1 x86_64-win64 trunk snapshot
         run: |
+          set -euo pipefail
+          FPC_ROOT="${HOME}/fpc-trunk"
+          BIN_DIR="${FPC_ROOT}/bin/x86_64-win64"
+          UNITS_DIR="${FPC_ROOT}/units/x86_64-win64"
+          # Official daily trunk snapshot (BUILDFULLNATIVE) with native fpc.exe/ppcx64.exe.
+          FPC_URL='https://downloads.freepascal.org/fpc/snapshot/trunk/x86_64-win64/fpc-3.3.1.x86_64-win64.built.on.x86_64-linux.tar.gz'
+
+          if [[ ! -f "${BIN_DIR}/fpc.exe" || ! -f "${UNITS_DIR}/rtl/system.ppu" ]]; then
+            echo "Downloading FPC trunk win64 snapshot..."
+            rm -rf "${FPC_ROOT}"
+            mkdir -p "${FPC_ROOT}"
+            curl -fL --retry 5 --retry-delay 5 -o /tmp/fpc-win64.tgz "${FPC_URL}"
+            tar -xzf /tmp/fpc-win64.tgz -C "${FPC_ROOT}"
+          else
+            echo "Using cached FPC at ${FPC_ROOT}"
+          fi
+
+          test -f "${BIN_DIR}/fpc.exe"
+          test -f "${BIN_DIR}/ppcx64.exe"
+          test -f "${UNITS_DIR}/rtl/system.ppu"
+
+          # fpc.exe resolves units via fpc.cfg beside itself.
+          if command -v cygpath >/dev/null 2>&1; then
+            UNITS_CFG="$(cygpath -m "${UNITS_DIR}")"
+            BIN_CFG="$(cygpath -m "${BIN_DIR}")"
+          else
+            UNITS_CFG="${UNITS_DIR}"
+            BIN_CFG="${BIN_DIR}"
+          fi
+          # -Sg: allow LABEL/GOTO (used by mem/http/json ports). Local Linux
+          # developer fpc.cfg often has -Sgic; trunk snapshot defaults do not.
+          printf '%s\n' \
+            "-Fu${UNITS_CFG}" \
+            "-Fu${UNITS_CFG}/*" \
+            "-FD${BIN_CFG}" \
+            "-Sg" \
+            > "${BIN_DIR}/fpc.cfg"
+          echo "--- fpc.cfg ---"
+          cat "${BIN_DIR}/fpc.cfg"
+
+          # Prefer snapshot bin over any leftover chocolatey/system fpc.
+          export PATH="${BIN_DIR}:${FPC_ROOT}/bin:${PATH}"
+          echo "PATH=${BIN_DIR}:${FPC_ROOT}/bin:${PATH}" >> "${GITHUB_ENV}"
+
+          command -v fpc
           fpc -iV
-          make --version
+          fpc -iTP
+          fpc -iTO
+          cpu="$(fpc -iTP)"
+          os="$(fpc -iTO)"
+          echo "fpc target cpu=${cpu} os=${os}"
+          case "${cpu}" in
+            x86_64|X86_64) ;;
+            *) echo "error: need x86_64 FPC, got ${cpu}" >&2; exit 1 ;;
+          esac
+          case "${os}" in
+            Win64|win64|Windows|windows) ;;
+            *) echo "error: need Windows target, got ${os}" >&2; exit 1 ;;
+          esac
+          # Smoke-compile: prove units resolve and functionreferences work (3.3.1+).
+          # Compile inside the smoke dir. Avoid -FE with mixed drive paths:
+          # fpc.exe can mangle D:/a/... into D:A:\... under MSYS.
+          SMOKE_DIR="${FPC_ROOT}/smoke"
+          mkdir -p "${SMOKE_DIR}"
+          printf '%s\n' \
+            'program t;' \
+            '{$mode objfpc}{$H+}' \
+            '{$modeswitch functionreferences}' \
+            'type P = reference to procedure;' \
+            'begin' \
+            'end.' \
+            > "${SMOKE_DIR}/fpc_ref_smoke.pas"
+          ( cd "${SMOKE_DIR}" && fpc fpc_ref_smoke.pas )
+          make --version | head -n 1
 
       - name: Run Windows runtime matrix
-        shell: pwsh
         run: |
+          set -euo pipefail
+          # Re-export toolchain for this step. GITHUB_ENV PATH is unreliable for
+          # make's fpc lookup across MSYS2 steps on windows-latest.
+          FPC_ROOT="${HOME}/fpc-trunk"
+          BIN_DIR="${FPC_ROOT}/bin/x86_64-win64"
+          export PATH="${BIN_DIR}:${FPC_ROOT}/bin:${PATH}"
+          # common.mk uses $(FPC); pin absolute path so make does not depend on PATH.
+          if [[ -f "${BIN_DIR}/fpc.exe" ]]; then
+            export FPC="${BIN_DIR}/fpc.exe"
+          else
+            export FPC="${BIN_DIR}/fpc"
+          fi
+          command -v fpc || true
+          "${FPC}" -iV
+          "${FPC}" -iTP
+          "${FPC}" -iTO
           # Real Windows host evidence (not Wine).
-          # 14 module suites (same dirs as wine matrix) + 3 dedicated real gates.
+          # 14 suite dirs + 3 dedicated real gates.
           # truth=real-windows-runtime-ci only — not full ci-matrix until ROADMAP D1.d.
-          pwsh -File scripts/platform-windows-ci-matrix.ps1
+          bash scripts/platform-windows-ci-matrix.sh
 
   test-freebsd:
     runs-on: ubuntu-latest

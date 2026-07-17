@@ -23,7 +23,8 @@ type
       TLS-wraps the tunneled stream (SNI = origin host). Plain http targets
       keep absolute-form forwarding (no CONNECT). When UserInfo is present,
       injects Proxy-Authorization: Basic (raw userinfo, no percent-decode)
-      on CONNECT and on absolute-form when the request lacks that header. }
+      on CONNECT and on absolute-form when the request lacks that header.
+      Wave I freeze: Basic only — no Digest/NTLM/Negotiate challenge retry. }
     ProxyUrl: string;
     { Optional client TLS context for direct H1 https and https-over-CONNECT.
       Nil uses TSSLQuick.SecureClient. }
@@ -390,8 +391,10 @@ function ProxyBasicAuthorizationValue(const AUserInfo: string): string;
 begin
   if AUserInfo = '' then
     Exit('');
-  { Raw UserInfo from TUrl.Parse (no percent-decode). Same encoding path as
-    THttpRequestBuilder.BasicAuth. }
+  { Wave I product freeze: proxy authentication is Basic only.
+    Raw UserInfo from TUrl.Parse (no percent-decode). Same encoding path as
+    THttpRequestBuilder.BasicAuth. Digest / NTLM / Negotiate are not
+    implemented and must not be added as silent half-implementations. }
   Result := 'Basic ' + Base64Encode(StringToUTF8Bytes(AUserInfo));
 end;
 
@@ -2189,8 +2192,17 @@ begin
   FPending := '';
   LResp := ReadResponse(AConn as IReader, hmHead, LKeepAlive, LResponseStarted);
   if (LResp.StatusCode < 200) or (LResp.StatusCode > 299) then
-    raise EHttpError.Create(hekConnect,
-      'proxy CONNECT failed: HTTP ' + IntToStr(Int64(LResp.StatusCode)));
+  begin
+    { 407 is not auto-retried with Digest/NTLM. Supported path is preemptive
+      Basic from ProxyUrl UserInfo only (Wave I freeze). }
+    if LResp.StatusCode = HTTP_STATUS_PROXY_AUTH_REQUIRED then
+      raise EHttpError.Create(hekConnect,
+        'proxy CONNECT failed: HTTP 407 Proxy Authentication Required ' +
+        '(supported: ProxyUrl UserInfo → Proxy-Authorization Basic only)')
+    else
+      raise EHttpError.Create(hekConnect,
+        'proxy CONNECT failed: HTTP ' + IntToStr(Int64(LResp.StatusCode)));
+  end;
 
   LBody := LResp.Body;
   if LBody <> nil then
@@ -2556,10 +2568,11 @@ begin
   if LBodyReader <> nil then
   begin
     Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders,
-      LBodyReader);
+      LBodyReader, LParser.GetHttpVersion);
   end
   else
-    Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil);
+    Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil,
+      LParser.GetHttpVersion);
 end;
 
 function TH1ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
