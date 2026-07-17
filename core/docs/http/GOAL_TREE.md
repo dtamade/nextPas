@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-17 (usability cycle-10 Wave E: H1 direct HTTPS + proxy Basic)
+> Last updated: 2026-07-17 (usability cycle-11 Wave F: HTTP-date Retry-After + WithTLSContext + JsonDocument)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -28,7 +28,10 @@ e2e, client redirect CreateOp polish, and inventory docs truth;
 cap 60s) (see `2026-07-17-usability-cycle8-fix-plan.md`);
 **cycle-9 Wave D** lands HTTPS CONNECT via plain HTTP proxy;
 **cycle-10 Wave E** lands H1 direct HTTPS + proxy Basic from `ProxyUrl` UserInfo
-(see `2026-07-17-usability-cycle10-fix-plan.md`).
+(see `2026-07-17-usability-cycle10-fix-plan.md`);
+**cycle-11 Wave F** lands HTTP-date `Retry-After`, fluent `WithTLSContext`, and
+`HttpPost/Put/PatchJsonDocument` ensure+decode
+(see `2026-07-17-usability-cycle11-fix-plan.md`).
 Prior waves (D1–D8):
 
 - G0–G5 and H3 honesty remain as previously closed (see below / Recent Fixes).

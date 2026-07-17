@@ -622,6 +622,15 @@ function HttpPatchJson(const AClient: IHttpClient;
 {** @desc DELETE with JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
 function HttpDeleteJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc POST JSON body, ensure 2xx, parse response as JSON document. }
+function HttpPostJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument; inline;
+{** @desc PUT JSON body, ensure 2xx, parse response as JSON document. }
+function HttpPutJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument; inline;
+{** @desc PATCH JSON body, ensure 2xx, parse response as JSON document. }
+function HttpPatchJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
 function NewMultipartBoundary: string; inline;
@@ -1584,6 +1593,24 @@ function HttpDeleteJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string;
 begin
   Result := nextpas.core.http.client.HttpDeleteJson(AClient, AUrl, ABody);
+end;
+
+function HttpPostJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpPostJsonDocument(AClient, AUrl, ABody);
+end;
+
+function HttpPutJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpPutJsonDocument(AClient, AUrl, ABody);
+end;
+
+function HttpPatchJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpPatchJsonDocument(AClient, AUrl, ABody);
 end;
 
 function ExtractCharsetFromContentType(const AContentType: string): string;

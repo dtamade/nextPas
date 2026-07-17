@@ -58,17 +58,18 @@ IHttpClient = interface
   function WithBasicAuth / WithBearerAuth / WithHeader /
            WithTimeout / WithConnectTimeout /
            WithMaxRedirects / WithFollowRedirects /
-           WithRetry / WithCookieJar / WithProxyUrl(...): IHttpClient;
+           WithRetry / WithCookieJar / WithProxyUrl /
+           WithTLSContext(...): IHttpClient;
 end;
 ```
 
-**JSON 双层（raw vs ensure）**：
+**JSON 三层（raw vs ensure string vs ensure+decode）**：
 
 | 形态 | API | 行为 |
 |------|-----|------|
 | raw | `IHttpClient.PostJson/PutJson/PatchJson/DeleteJson` | 返回 `IHttpResponse`，**不** ensure-2xx |
 | ensure string | free-fn `HttpPostJson` / `HttpGetString` / 方法 `GetString`/`PostString`/… | ensure 2xx + body string（或 TBytes） |
-| ensure+decode | free-fn `HttpGetJson` / `HttpReadResponseJson` / 方法 `GetJson` | ensure 2xx + `JsonParse` → `IJsonDocument`；非法 JSON → `hekProtocol` Op=`json` |
+| ensure+decode | free-fn `HttpGetJson` / `HttpPostJsonDocument` / `HttpPutJsonDocument` / `HttpPatchJsonDocument` / `HttpReadResponseJson` / 方法 `GetJson` | ensure 2xx + `JsonParse` → `IJsonDocument`；非法 JSON → `hekProtocol` Op=`json` |
 
 ### 2.2 Request / Response
 
@@ -101,10 +102,10 @@ end;
 - `WithRetry(N)`：对 **429**、**5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
   （`hekTimeout` / `hekConnect` / 裸 `ETimeoutError` / `ENetworkError`）在
   最多 N 次额外尝试内重试。**不**重试其他 4xx。
-  **退避**（cycle-8）：若响应带可解析的 **delta-seconds** `Retry-After`，
-  优先使用该延迟（**硬顶 60s**）；否则指数退避（100ms 基、封顶 5s）。
-  HTTP-date 形式的 `Retry-After` 本 slice **忽略**（回退指数退避）。
-  长 sleep 以 ~100ms 切片轮询 cancel。
+  **退避**（cycle-8 + cycle-11）：若响应带可解析的 **delta-seconds** 或
+  **IMF-fix HTTP-date** `Retry-After`，优先使用该延迟（**硬顶 60s**；
+  过去日期 → 0ms）；否则指数退避（100ms 基、封顶 5s）。
+  非法 `Retry-After` 回退指数退避。长 sleep 以 ~100ms 切片轮询 cancel。
   **幂等门闩**（与 H1/H2 pool retry 同一规则）：仅当
   `HttpIsRetrySafeRequest(Req)` 为真时才进入重试环——即 method ∈
   {GET, HEAD, OPTIONS, TRACE} **或** 请求带 `Idempotency-Key` /
@@ -210,7 +211,9 @@ end;
   - `ProxyUrl` 含 UserInfo 时注入 `Proxy-Authorization: Basic`
     （`Base64(UTF-8(raw UserInfo))`，不做 percent-decode）：
     CONNECT 必带；absolute-form 仅在请求未设置该头时注入。
-  - 可选 `THttpClientOptions.TLSContext`（nil → `TSSLQuick.SecureClient`）。
+  - 可选 `THttpClientOptions.TLSContext`（nil → `TSSLQuick.SecureClient`），
+    或 fluent `WithTLSContext` / `THttpClientOptions.WithTLSContext`（重建
+    transport；nil 清除回 SecureClient 默认路径）。
   - Digest/NTLM/SOCKS **仍 Deferred**。
 - H1 **直连 https**（无 proxy）：dial origin → `NewTlsClientTcpStream`
   （同 TLSContext/SecureClient，SNI=host，ALPN=`http/1.1`）→ origin-form；
@@ -221,7 +224,10 @@ end;
   `HttpGetBytes` 等价（ensure 2xx + body）。
 - `IHttpClient.GetJson`：与 free function `HttpGetJson` 等价（ensure 2xx +
   `JsonParse` → `IJsonDocument`）。另提供 `HttpReadResponseJson` 从已有
-  `IHttpResponse` ensure+decode。非法 JSON：`EHttpError(hekProtocol, Op=json)`。
+  `IHttpResponse` ensure+decode。写路径 ensure+decode：
+  `HttpPostJsonDocument` / `HttpPutJsonDocument` / `HttpPatchJsonDocument`
+  （string 形态 `HttpPostJson` 等不变）。非法 JSON：
+  `EHttpError(hekProtocol, Op=json)`。
 - H1 默认 `User-Agent: nextpas-http/1.0`（请求未设置 `User-Agent` 时注入）。
 
 ### 2.2.3b WebSocket client connect budgets（cycle-5）+ cancel（cycle-7）
@@ -425,3 +431,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.6 | Usability wave-2：hekTimeout wrap、hekArgument 消息形状、IReader fail-fast、THttpRequestWrapper、RTL isolation |
 | 2026-07-16 | 3.7 | Usability wave-3：WithRetry=5xx+IsRetryable；connect wrap；删 IReader client overload；known-CL only；删 NewStreamingRequest；多参 NewRequest 仍 deprecated；decorator forwarder |
 | 2026-07-17 | 3.8 | cycle-8 Wave C：`GetJson`/`HttpReadResponseJson` ensure+decode；`WithRetry` 支持 429 + delta-seconds Retry-After（cap 60s） |
+| 2026-07-17 | 3.9 | cycle-11 Wave F：HTTP-date Retry-After；`WithTLSContext`；`HttpPost/Put/PatchJsonDocument` ensure+decode |

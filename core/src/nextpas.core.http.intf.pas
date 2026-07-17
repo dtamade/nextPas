@@ -11,6 +11,7 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.server.base,
   nextpas.core.net.server.intf,
+  nextpas.core.tls.base,
   nextpas.core.http.base,
   nextpas.core.http.form.base,
   nextpas.core.json.value,
@@ -251,9 +252,9 @@ type
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     {** @desc Returns a decorator that retries failed requests up to AMaxRetries
        extra attempts. Retries on 429, 5xx responses, and HttpErrorIsRetryable
-       exceptions (timeout/connect). Delay prefers delta-seconds Retry-After
-       (capped at 60s); otherwise exponential backoff (100ms base, max 5s).
-       Does NOT retry other 4xx client errors. HTTP-date Retry-After is ignored. }
+       exceptions (timeout/connect). Delay prefers Retry-After: delta-seconds
+       or IMF-fix HTTP-date (both capped at 60s); otherwise exponential backoff
+       (100ms base, max 5s). Does NOT retry other 4xx client errors. }
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     {** Optional cookie jar decorator. Injects Cookie before Send and absorbs
        Set-Cookie after a successful response. }
@@ -261,6 +262,9 @@ type
     {** Rebuild transport with plain HTTP forward proxy (http://host:port).
        Decorators re-stack around the new base client. }
     function WithProxyUrl(const AProxyUrl: string): IHttpClient;
+    {** Rebuild transport with client TLS context (direct https / CONNECT).
+       Nil clears to transport default (SecureClient). }
+    function WithTLSContext(const ATLSContext: ISSLContext): IHttpClient;
   end;
 
   { Transport layer — protocol implementations register these }
