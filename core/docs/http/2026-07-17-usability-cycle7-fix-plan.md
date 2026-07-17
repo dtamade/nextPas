@@ -1,7 +1,7 @@
 # Usability Fix Plan: nextpas.core.http cycle-7 Wave B
 
-**Status**: implementing  
-**Assessment**: `2026-07-17-usability-assessment-cycle7.md` (97/100)  
+**Status**: implementing
+**Assessment**: `2026-07-17-usability-assessment-cycle7.md` (97/100)
 **Research**: `2026-07-17-usability-cycle7-research.md`
 
 ## Milestones
