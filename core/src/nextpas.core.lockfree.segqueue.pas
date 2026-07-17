@@ -181,6 +181,9 @@ var
   LSeg: PSegment;
   LNext: PSegment;
 begin
+  { Close rejects new publishes; callers must still join concurrent
+    producers/consumers before Free. }
+  Close;
   { Release EBR first: its destructor calls SegQueueReclaimSegment for
     retired segments, which pushes them back into FFreePool. }
   FEbr.Free;
