@@ -14,6 +14,7 @@
 | [`CONTRACT.md`](CONTRACT.md) | 运行时/API 契约（Closed、managed、RTL isolation、Try\*Ex） | **契约真相** |
 | [`README.md`](README.md) | 模块入口、T1 矩阵、生命周期、如何用 | **产品真相** |
 | **`roadmap.md`（本文件）** | 分阶段目标、交付、依赖、优先级、验收 | **推进主线** |
+| [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 | 证据 / 维护参考 |
 | [`selection-guide.md`](selection-guide.md) | 选型决策树 | 用户向 |
 | [`api-reference.md`](api-reference.md) | API 摘要（易漂移，改 API 必须同步） | 参考，次于 CONTRACT |
 | [`../atomic/CONTRACT.md`](../atomic/CONTRACT.md) / [`../atomic/README.md`](../atomic/README.md) | atomic 契约与入口 | 契约/入口 |
@@ -48,6 +49,7 @@
 | **R4** Try\*Ex 扩面 | SPSC/MPMC/SPMC/MPSC/Stack `Try*Ex`；CONTRACT §1.4 | 已完成；lockfree **176** |
 | **R5** Channel cap=1 | MPMC Channel empty/full sequence 编码（方案 A）；`TestChannelCapacityOneFullEmpty`；CONTRACT §1.5 | 见本轮 landing |
 | **R6** 工程卫生 | 模块 `verify-t1` Makefile；CONTRACT §3.1 managed 文案模板；api-ref EN `moSeqCst` 对齐 | 见本轮 landing |
+| **R7** 消费者 + legacy | [`consumer-audit.md`](consumer-audit.md)；atomic CONTRACT §1.4 legacy CAS 偏好；T2 命名诚实脚注扩充 | 见本轮 landing |
 
 ### 1.3 成熟度（诚实）
 
@@ -63,9 +65,7 @@
 
 | 优先级 | 缺口 | 对应阶段 |
 |--------|------|----------|
-| P3 | atomic legacy CAS 返回值语义弃用日程 | **R7** |
-| P3 | T2 命名噪声（`deque_lf` 等 lock-based） | **R7** |
-| P3 | 消费者扫一遍（core 内误用 Close/Destroy） | **R7** |
+| — | R7 交付：消费者审计 + legacy CAS 文档 + T2 命名脚注 | **DONE** |
 | 研究 | NUMA 亲和 / TSX 扩展 / TLA+ 扩模型 | **R8**（非默认） |
 
 ### 1.5 标准验证门（所有 R* 验收默认集）
@@ -116,7 +116,7 @@ R8  研究线（NUMA/TSX/TLA）              可选，重大变更需讨论
 | **R4** | Try\*Ex 扩至 T1 rings | **P1** | R3 | **是**（确认路线图后） |
 | **R5** | Channel cap=1 语义 | **P1** | R3；可与 R4 并行评估 | **是**（若 R4 发现阻塞则先 R5） |
 | **R6** | 证据与文档卫生 | **P2** | R4 或并行小切片 | **是** |
-| **R7** | 消费者 + legacy | **P3** | R6 建议先做 | 默认做，可插队 |
+| **R7** | 消费者 + legacy | **P3** | R6 | **已完成** |
 | **R8** | 研究扩展 | 研究 | 独立 | **否**，重大变更先讨论 |
 
 ---
@@ -158,16 +158,17 @@ R8  研究线（NUMA/TSX/TLA）              可选，重大变更需讨论
 | **优先级** | P2 |
 | **验收** | 新人 `make -C core/tests/nextpas.core.lockfree verify-t1` 可复现绿；grep 无 `moSequentiallyConsistent` 陈旧主名；CONTRACT/README/roadmap 日期一致 |
 
-### R7 — 消费者审计与长期清理
+### R7 — 消费者审计与长期清理 — **DONE**
 
 **目标**：降低误用与 API 学习成本。
 
 | 项 | 内容 |
 |----|------|
-| **交付物** | core 内 lockfree 消费者清单 + 必要最小修复；atomic legacy CAS 弃用说明（文档日程，非强制删码）；T2 命名诚实脚注扩充 |
-| **依赖** | R6 文档稳定更佳 |
+| **交付物** | [`consumer-audit.md`](consumer-audit.md)；atomic [`CONTRACT.md`](../atomic/CONTRACT.md) §1.4 legacy CAS 偏好（**不删 API**）；CONTRACT/README T2 命名诚实脚注扩充 |
+| **代码修复** | 无（扫描未发现需一刀切的 Close/Destroy 跨模块误用；lockfree 无生产跨模块容器消费者） |
+| **依赖** | R6 |
 | **优先级** | P3 |
-| **验收** | 审计报告进 docs 或 lane 记录；无未说明的 Close/Destroy 误用；legacy 有明确「勿用」路径 |
+| **验收** | 审计文档入仓；legacy 有明确首选路径；roadmap 标记完成 |
 
 ### R8 — 研究线（非默认）
 
@@ -208,7 +209,7 @@ R8  研究线（NUMA/TSX/TLA）              可选，重大变更需讨论
 | Q4 | R6：优先模块 Makefile 目标 | **确认** |
 | Q5 | 旧 phase 归档横幅保留 | **确认** |
 
-**当前执行**: **R7**（R6 已交付：verify-t1 + managed 模板 + api-ref 抽检）。
+**当前执行**: **none**（主线 R0–R7 完成；**R8 仅研究 opt-in**，默认不推进）。
 
 ---
 

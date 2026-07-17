@@ -228,7 +228,9 @@ Optional readiness inventory (not a promotion):
 | 2026-07-17 | Usability freeze 8.21; residual LT0–LT3 done; LT4 split into D1/D2 |
 | 2026-07-17 | Wine matrix 14/14 green; real-Windows GHA has 3 gates; not ci-matrix |
 | 2026-07-17 | Owner accepted recommended plan: D0 land → expand real-Windows GHA → keep wine secondary |
-| 2026-07-17 | Repo public; GHA can run. D1.b uses `platform-windows-ci-matrix.ps1` (14 wine-suite dirs natively + 3 real gates) |
+| 2026-07-17 | Repo public; GHA can run. D1.b uses `platform-windows-ci-matrix.sh` under MSYS2 x86_64 FPC (not Chocolatey i386) |
+| 2026-07-17 | First Windows matrix CI failed on `ppc386` + `reference to`; toolchain switched to MSYS2 MINGW64 FPC |
+| 2026-07-17 | MSYS2 has no `mingw-w64-x86_64-fpc` package; Windows CI installs official FPC 3.3.1 x86_64-win64 trunk snapshot + MSYS2 make/bash |
 
 ---
 
