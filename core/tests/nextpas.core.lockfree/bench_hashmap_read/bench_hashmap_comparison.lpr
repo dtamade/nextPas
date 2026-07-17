@@ -12,8 +12,8 @@ uses
   nextpas.core.lockfree.hashmap.rtm,
   nextpas.core.platform.thread,
   nextpas.core.platform.thread.base,
-  nextpas.core.text.conv,
-  nextpas.core.time;
+  nextpas.core.platform.time,
+  nextpas.core.text.conv;
 
 type
   TStandardMap = specialize TShardedHashMap<Integer, Integer>;
@@ -47,7 +47,7 @@ begin
     GStandardMap.Find(LOps mod NUM_KEYS, LValue);
     Inc(LOps);
   end;
-  GResults[LIdx] := GetTickCount64 - GStart;
+  GResults[LIdx] := (platform_monotonic_ns - GStart) div 1000000;
   Result := nil;
 end;
 
@@ -67,7 +67,7 @@ begin
     GNumaMap.Find(LOps mod NUM_KEYS, LValue);
     Inc(LOps);
   end;
-  GResults[LIdx] := GetTickCount64 - GStart;
+  GResults[LIdx] := (platform_monotonic_ns - GStart) div 1000000;
   Result := nil;
 end;
 
@@ -87,7 +87,7 @@ begin
     GRtmMap.Find(LOps mod NUM_KEYS, LValue);
     Inc(LOps);
   end;
-  GResults[LIdx] := GetTickCount64 - GStart;
+  GResults[LIdx] := (platform_monotonic_ns - GStart) div 1000000;
   Result := nil;
 end;
 
@@ -109,7 +109,7 @@ begin
       Exit;
     end;
   end;
-  GStart := GetTickCount64;
+  GStart := platform_monotonic_ns;
   for LI := 0 to NUM_READERS - 1 do
     platform_thread_join(LHandles[LI], LRetVal);
   LTotalOps := Int64(NUM_READERS) * OPS_PER_READER;

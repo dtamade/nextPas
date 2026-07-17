@@ -21,6 +21,33 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 - `nextpas.core.lockfree.deque_lf` 名称含 “lf”，实现为 **lock-based** concurrent deque（非 lock-free）。
 - `nextpas.core.lockfree.lru_cache` / 部分 AnsiString 特化单元允许 managed `AnsiString` 载荷；不要求 `IsManagedType` 泛型守卫。
 
+### 0.1 AnsiString-specialized exceptions（`IsManagedType` 守卫例外）
+
+下列单元以 `AnsiString`（或等价 managed string 载荷）特化实现，**有意不**对 payload 做 `IsManagedType` 拒绝。泛型 T1/T2 容器仍必须在 `Create` 拒绝 managed 元素。
+
+| 单元 | managed 载荷 |
+|------|----------------|
+| `actor` | AnsiString message `Data` |
+| `consistent_hashring` | AnsiString node names |
+| `crdt` | AnsiString LWW/OR-Set payloads |
+| `cuckooset` | AnsiString keys |
+| `deque_lf` | AnsiString values（且为 lock-based） |
+| `intervaltree` | optional AnsiString `Id` |
+| `lru_cache` | AnsiString key/value |
+| `merkle_tree` | AnsiString leaf data |
+| `persistent_vector` | AnsiString items |
+| `radix` | AnsiString keys |
+| `rope` | AnsiString text |
+| `skiplist_map` | AnsiString key/value |
+| `snapshot` | AnsiString key/value |
+| `suffixarray` | AnsiString text |
+| `timeseries_ringbuffer` | AnsiString values |
+| `trie_hmt` | AnsiString key/value |
+| `trie_map` | AnsiString key/value |
+| `ttl_cache` | AnsiString key/value |
+
+> 注：hash-only sketch（`counting_bloom` / `countminsketch` / `hyperloglog`）仅用 AnsiString 作瞬时哈希输入，不存储 managed 元素，归为 n/a 而非 exception。
+
 ## 1. 接口契约
 
 ### 1.1 子模块（完整源树；默认门面仅 T1）
@@ -131,7 +158,7 @@ generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<
 | consume / drain | 仍可读已入队数据；closed+empty 时返回 False |
 
 具体对齐：
-- **SegQueue**：`Close` 后 `TryEnqueue=False`，plain `Enqueue` 抛 `EInvalidOperationError`；已入队仍可 `TryDequeue`。
+- **SegQueue**：`Close` 后 `TryEnqueue=False`，plain `Enqueue` 抛 `EInvalidOperationError`；已入队仍可 `TryDequeue`。`Destroy` 会先 **`Close`**（拒绝新 publish）再释放 EBR/segment；调用方仍须 join 活跃 producer/consumer。`Close → join → Free` 是安全生命周期；Destroy 的 Close **不替代** join。
 - **MPSC**：同 SegQueue publish 策略；生命周期 **Close → join producers/waiters → Free**。
 - **MSQueue**：`Destroy` 执行 **Close + drain**；调用方仍须 join 活跃 producer/consumer。`Close → join → Free` 是安全生命周期；Destroy 的 Close+drain **不替代** join。
 - **Channel**：`Send` closed 抛异常；`TrySend` 返回 False。
@@ -193,6 +220,7 @@ generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<
 - EBR 管理延迟回收，避免 ABA 问题
 - Hazard Pointer 提供精确内存回收
 - MSQueue Destroy：Close + drain 内部节点/值
+- SegQueue Destroy：Close 拒绝新 publish，再释放 EBR 与 segment；调用方仍须 join 后 Free
 
 ---
 
