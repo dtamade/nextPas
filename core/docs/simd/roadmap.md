@@ -47,13 +47,22 @@ Facade (flat public API)
 | Scalar | 全 baseline | 全 | 全 | 全 | 参考实现 |
 | SSE2/AVX2 链 | 深 | 深 | SharedMask + 本地 PopCount | 深 | MaskedOps 常开 |
 | AVX512 | 宽向量深 | 部分/继承 | 部分 SharedMask | 宽批 | FMA/Shuffle 等按可用性 |
-| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **15/15**（22a+22b 全 Memory 真叶） | **20/20 SharedMask** | **0（全继承 scalar）** | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
-| **RVV** | 大量（~412） | **0（全 scalar）** | **20/20 本地** | **0（全 scalar）** | MaskedOps 跟 vector-asm；实验性 |
+| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **15/15**（22a+22b 全 Memory 真叶） | **20/20 SharedMask** | **BatchF32 7 叶**（23a/23b）；其余 Batch 继承 scalar | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
+| **RVV** | 大量（~412） | **0/15 故意 scalar**（S24a） | **20/20 本地** | **0 故意 scalar**（S24a） | MaskedOps 跟 vector-asm；实验性；真叶等 S24b |
 | LASX/WASM/VSX/MSA | — | — | — | — | 🔒 FPC/编译器阻塞 |
 
 **NEON Memory**：Phase 22 已关闭全部 15 槽（asm 叶 + register，仅 `NEXTPAS_SIMD_NEON_ASM_ENABLED` 下接管；非 asm 编译保留 scalar fallback 符号）。
 
 **NEON Batch 进度**：Phase 23a/23b 已接管 `BatchF32` Add/Sub/Mul/Min/Max/Abs/Neg（ASM opt-in；Div 未接）；其余 `BatchF32` 槽 + 全部 `BatchF64` / `BatchInteger` 仍继承 scalar。
+
+**RVV Memory/Batch 诚实矩阵（S24a）**：
+
+| 组 | 槽所有权 | 证据 |
+|----|----------|------|
+| Memory（15） | 全继承 `FillBaseDispatchTable` scalar | register 无 `table.Memory.*`；无 `Mem*_RISCVV` 死包装；DispatchAPI 运行时指针 == scalar |
+| BatchF32 / F64 / Integer | 全继承 scalar | register 无 `table.Batch*`；无 `RISCVVArray*` 死包装；代表槽运行时 == scalar |
+| CoreVectors / Mask | 既有 RVV 绑定（asm 条件 / 本地 Mask） | 不在 S24a 范围内改动 |
+| 真机 Phase 3 / S24b 真叶 | ⏸ blocked | 需 RISC-V 硬件或批准的 QEMU 证据路径 |
 
 ### 1.4 验证真相
 
@@ -135,14 +144,16 @@ Facade (flat public API)
 | **验收** | neon-optin 契约 + 语义 smoke；未实现槽继续 scalar 继承并有注释/契约 |
 | **非目标** | 一次填满全部 BatchF64/BatchInteger |
 
-### Phase 24 — RVV 覆盖诚实化  【P2】
+### Phase 24 — RVV 覆盖诚实化  【P2 · 24a 已完成】
 
 | 项 | 内容 |
 |----|------|
 | **目标** | RVV Memory/Batch 要么真实现，要么文档+契约明确「故意 scalar」；Phase 3 真机证据单独 gate |
-| **交付物** | 24a 文档/契约矩阵对齐现状；24b（可选）1–N 个 Memory 或 Batch 真叶；24c 真机证据包（硬件可用时） |
+| **24a（✅）** | 诚实矩阵 + `Test_RISCVV_MemoryBatch_Intentionally_Scalar_Until_RealLeaf` 源/运行时契约；roadmap/README/register 注释对齐；**不**造假 RVV Memory/Batch 叶 |
+| **24b** | （可选，blocked）1–N 个 Memory 或 Batch 真叶；需硬件/QEMU |
+| **24c** | 真机证据包（硬件可用时） |
 | **依赖** | 真机证据依赖硬件；软件契约不依赖 |
-| **验收** | opt-in/compile smoke 不谎报 native；有硬件时补充性能/正确性日志路径 |
+| **验收** | focused 绿；契约禁止 `table.Memory.` / `table.Batch*` 假绑定；文档不谎报 native |
 | **非目标** | 无硬件时假装 G16 完成 |
 
 ### Phase 25 — 性能与分派开销  【P2】
@@ -188,7 +199,7 @@ P20 文档真相面 ──► P21 api-coverage 绿
    P26 编译器（阻塞） / P27 新 ISA（阻塞）
 ```
 
-**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **S24a** — RVV Memory/Batch honesty）。
+**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **S25a** — benchmark methodology）。
 不要用聊天「继续」驱动；按队列卡执行并翻 `CURRENT`。
 
 ---
@@ -260,9 +271,9 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 
 ## 9. 当前指针
 
-- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=S24a**）
-- **活动阶段**: Goal CURRENT=S24a（Phase 23a/23b BatchF32 代表集 + M-C1 consumer smoke 已收；Memory 15/15 已由 Phase 22 收口）
-- **已收口**: Phase 20–23b；G0；M-C1
+- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=S25a**）
+- **活动阶段**: Goal CURRENT=S25a（S24a RVV Memory/Batch 诚实化已收；Phase 23a/23b + M-C1 已收）
+- **已收口**: Phase 20–23b；G0；M-C1；S24a
 - **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等
 
 ---
@@ -275,3 +286,4 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 - 2026-07-17: Phase 23a NEON BatchF32 ArrayAdd/Sub/Mul 真叶；CURRENT→S23b。
 - 2026-07-17: Phase 23b NEON BatchF32 Min/Max/Abs/Neg 真叶（Div 推迟）；CURRENT→M-C1。
 - 2026-07-17: M-C1 math consumer smoke 全绿（305 tests / API surface 70/0）；CURRENT→S24a。
+- 2026-07-17: S24a RVV Memory/Batch 故意 scalar 诚实矩阵 + DispatchAPI 契约；CURRENT→S25a。

@@ -686,6 +686,13 @@ begin
   // Keep scalar-pass-through facade helpers on the base scalar slots.
   // Backend-local wrappers add no runtime value and hide the actual slot ownership.
 
+  // === Memory / Batch honesty (Phase 24a / S24a) ===
+  // Intentionally leave table.Memory and table.BatchF32/F64/Integer on the
+  // FillBaseDispatchTable scalar baseline. Do not bind Mem*_RISCVV or
+  // RISCVVArray* dead wrappers. Real RVV Memory/Batch leaves require S24b
+  // (hardware or approved QEMU evidence). Source+runtime contracts lock this
+  // in Test_RISCVV_MemoryBatch_Intentionally_Scalar_Until_RealLeaf.
+
   // Register the backend
   RegisterBackend(sbRISCVV, table);
 end;

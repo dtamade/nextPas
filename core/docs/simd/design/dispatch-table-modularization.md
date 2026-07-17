@@ -165,7 +165,7 @@ end;
    - NEON / RVV 与 x86 使用**同一嵌套组名**（`table.CoreVectors.*` / `Memory.*` / `Mask.*`…），均 `FillBaseDispatchTable` 播种后按需 override
    - **槽级覆盖差距是刻意的**（非路径错位）：靠 baseline 继承，不在本 phase 补全 native 实现
      - NEON：有 `CoreVectors`（~332）+ 完整 `Memory`（15/15，Phase 22）+ 完整 `Mask`（20，绑定 portable `SharedMask*`，非 `NEONMask*` 死包装）；`BatchF32` 已有 Add/Sub/Mul/Min/Max/Abs/Neg（Phase 23a/23b，ASM opt-in）；其余 Batch* 仍继承 scalar
-     - RVV：有 `CoreVectors`（~412）+ 完整 `Mask`（20）；**无** Memory/Batch* override
+     - RVV：有 `CoreVectors`（~412）+ 完整 `Mask`（20）；**Memory/Batch* 故意 0 叶 scalar**（S24a 契约；真叶等 S24b）
      - x86 SSE2/AVX2：Batch/Memory/Mask 覆盖最全，供 clone 链（如 AVX2←SSE2）复用
 4. 文档与 roadmap 记为 Phase 19 完成
 

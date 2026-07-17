@@ -7,12 +7,12 @@
 ## 当前 Goal
 
 ```text
-CURRENT = S24a  (见 GOAL_QUEUE.md)
+CURRENT = S25a  (见 GOAL_QUEUE.md)
 ```
 
 | 字段 | 值 |
 |------|-----|
-| 阶段 | S24a — RVV Memory/Batch honesty |
+| 阶段 | S25a — Benchmark methodology + remeasure hotspots |
 | 优先级 | P1 |
 | 验收 | GOAL_QUEUE 卡内 GATES + roadmap §6 |
 
@@ -27,11 +27,12 @@ CURRENT = S24a  (见 GOAL_QUEUE.md)
 - [x] **S23a** NEON `ArrayAdd/Sub/Mul` F32
 - [x] **S23b** NEON `Min/Max/Abs/Neg` F32（Div 推迟）
 - [x] **M-C1** math consumer smoke（full math clean test green）
+- [x] **S24a** RVV Memory/Batch 故意 scalar 诚实矩阵 + 契约
 
 ### 队列摘要
 
-- [ ] **S24a** RVV 诚实化（CURRENT）
-- [ ] S25 性能方法与热点
+- [ ] **S25a** 性能方法与热点复测（CURRENT）
+- [ ] S25b 优化或修订目标
 - [ ] M-V1/M-V2 math residual
 
 入口命令（与卡一致）:

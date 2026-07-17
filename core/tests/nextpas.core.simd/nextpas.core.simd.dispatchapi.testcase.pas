@@ -182,6 +182,7 @@ type
     procedure Test_RISCVV_DotF64Slots_Reuse_BaseScalar_When_ScalarForwarders_Are_Dead;
     procedure Test_RISCVV_ExactScalarHelperSlots_Reuse_BaseScalar_When_Owners_Are_Dead;
     procedure Test_RISCVV_FacadeSlots_Reuse_BaseScalar_When_Wrappers_Are_ScalarPassThrough;
+    procedure Test_RISCVV_MemoryBatch_Intentionally_Scalar_Until_RealLeaf;
     procedure Test_RISCVV_WideFallbackOnlySlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
     procedure Test_RISCVV_ExtractSlots_Reuse_BaseScalar_When_NoAsmWrappers_Are_Dead;
     procedure Test_RISCVV_AndNotSlots_Keep_AsmOwnedCompositions_And_Reuse_BaseScalar_When_NoAsm;
@@ -10092,6 +10093,130 @@ begin
   {$ELSE}
   AssertSlotReusesScalar('AddF32x4', Pointer(LScalarTable.CoreVectors.AddF32x4), Pointer(LRISCVVTable.CoreVectors.AddF32x4));
   {$ENDIF}
+end;
+
+procedure TTestCase_DispatchAPI.Test_RISCVV_MemoryBatch_Intentionally_Scalar_Until_RealLeaf;
+var
+  LScalarTable: TSimdDispatchTable;
+  LRISCVVTable: TSimdDispatchTable;
+  LSourceLines: TStringList;
+  LRegisterSourcePath: string;
+  LUnitSourcePath: string;
+  LFacadeSourcePath: string;
+  LHelperSourcePath: string;
+  LRegisterSource: string;
+  LUnitSource: string;
+  LFacadeSource: string;
+  LHelperSource: string;
+
+  procedure AssertNoGroupOverride(const aLabel, aSnippet: string);
+  begin
+    CheckTrue(Pos(LowerCase(aSnippet), LRegisterSource) = 0,
+      'RegisterRISCVVBackend must not override ' + aLabel +
+      ' until a real RVV Memory/Batch leaf exists (Phase 24a honesty)');
+  end;
+
+  procedure AssertDeadBatchOrMemoryWrapperRemoved(const aLabel, aSnippet: string);
+  begin
+    CheckTrue(Pos(LowerCase(aSnippet), LUnitSource) = 0,
+      aLabel + ' must not exist in riscvv.pas (no dead Memory/Batch native claim)');
+    CheckTrue(Pos(LowerCase(aSnippet), LFacadeSource) = 0,
+      aLabel + ' must not exist in riscvv.facade.inc (no dead Memory/Batch native claim)');
+    CheckTrue(Pos(LowerCase(aSnippet), LHelperSource) = 0,
+      aLabel + ' must not exist in riscvv.helpers.inc (no dead Memory/Batch native claim)');
+  end;
+
+  procedure AssertSlotReusesScalar(const aLabel: string; const aScalarSlot, aBackendSlot: Pointer);
+  begin
+    CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot),
+      'RISCVV ' + aLabel + ' must reuse the base scalar slot until a real RVV leaf owns it');
+  end;
+begin
+  // Phase 24a honesty matrix (software-only):
+  // RVV Memory (15) and all Batch* groups intentionally inherit FillBaseDispatchTable
+  // scalar baseline. No Mem*_RISCVV / RISCVVArray* dead wrappers, no register overrides.
+  // Real leaves require S24b (hardware/QEMU evidence).
+  LSourceLines := TStringList.Create;
+  try
+    LRegisterSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
+    CheckTrue(FileExists(LRegisterSourcePath), 'RISCVV register source should exist for Memory/Batch honesty audit: ' + LRegisterSourcePath);
+    LSourceLines.LoadFromFile(LRegisterSourcePath);
+    LRegisterSource := LowerCase(LSourceLines.Text);
+
+    LUnitSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.pas');
+    CheckTrue(FileExists(LUnitSourcePath), 'RISCVV unit source should exist for Memory/Batch honesty audit: ' + LUnitSourcePath);
+    LSourceLines.LoadFromFile(LUnitSourcePath);
+    LUnitSource := LowerCase(LSourceLines.Text);
+
+    LFacadeSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.facade.inc');
+    CheckTrue(FileExists(LFacadeSourcePath), 'RISCVV facade source should exist for Memory/Batch honesty audit: ' + LFacadeSourcePath);
+    LSourceLines.LoadFromFile(LFacadeSourcePath);
+    LFacadeSource := LowerCase(LSourceLines.Text);
+
+    LHelperSourcePath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.helpers.inc');
+    CheckTrue(FileExists(LHelperSourcePath), 'RISCVV helper source should exist for Memory/Batch honesty audit: ' + LHelperSourcePath);
+    LSourceLines.LoadFromFile(LHelperSourcePath);
+    LHelperSource := LowerCase(LSourceLines.Text);
+  finally
+    LSourceLines.Free;
+  end;
+
+  AssertNoGroupOverride('Memory group', 'table.memory.');
+  AssertNoGroupOverride('BatchF32 group', 'table.batchf32.');
+  AssertNoGroupOverride('BatchF64 group', 'table.batchf64.');
+  AssertNoGroupOverride('BatchInteger group', 'table.batchinteger.');
+
+  AssertDeadBatchOrMemoryWrapperRemoved('MemEqual_RISCVV', 'function MemEqual_RISCVV(');
+  AssertDeadBatchOrMemoryWrapperRemoved('MemCopy_RISCVV', 'procedure MemCopy_RISCVV(');
+  AssertDeadBatchOrMemoryWrapperRemoved('MemSet_RISCVV', 'procedure MemSet_RISCVV(');
+  AssertDeadBatchOrMemoryWrapperRemoved('RISCVVArrayAddF32', 'procedure RISCVVArrayAddF32(');
+  AssertDeadBatchOrMemoryWrapperRemoved('RISCVVArrayMulF32', 'procedure RISCVVArrayMulF32(');
+  AssertDeadBatchOrMemoryWrapperRemoved('RISCVVArrayAddF64', 'procedure RISCVVArrayAddF64(');
+  AssertDeadBatchOrMemoryWrapperRemoved('RISCVVArrayAddI32', 'procedure RISCVVArrayAddI32(');
+
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
+
+  {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_RISCVV_BACKEND}
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable), 'RISCVV opt-in test registration should be present');
+  {$ELSE}
+  if not TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable) then
+    Exit;
+  {$ENDIF}
+
+  // Memory 15/15 intentionally scalar
+  AssertSlotReusesScalar('Memory.Equal', Pointer(LScalarTable.Memory.Equal), Pointer(LRISCVVTable.Memory.Equal));
+  AssertSlotReusesScalar('Memory.FindByte', Pointer(LScalarTable.Memory.FindByte), Pointer(LRISCVVTable.Memory.FindByte));
+  AssertSlotReusesScalar('Memory.DiffRange', Pointer(LScalarTable.Memory.DiffRange), Pointer(LRISCVVTable.Memory.DiffRange));
+  AssertSlotReusesScalar('Memory.Copy', Pointer(LScalarTable.Memory.Copy), Pointer(LRISCVVTable.Memory.Copy));
+  AssertSlotReusesScalar('Memory.Fill', Pointer(LScalarTable.Memory.Fill), Pointer(LRISCVVTable.Memory.Fill));
+  AssertSlotReusesScalar('Memory.Reverse', Pointer(LScalarTable.Memory.Reverse), Pointer(LRISCVVTable.Memory.Reverse));
+  AssertSlotReusesScalar('Memory.SumBytes', Pointer(LScalarTable.Memory.SumBytes), Pointer(LRISCVVTable.Memory.SumBytes));
+  AssertSlotReusesScalar('Memory.MinMaxBytes', Pointer(LScalarTable.Memory.MinMaxBytes), Pointer(LRISCVVTable.Memory.MinMaxBytes));
+  AssertSlotReusesScalar('Memory.CountByte', Pointer(LScalarTable.Memory.CountByte), Pointer(LRISCVVTable.Memory.CountByte));
+  AssertSlotReusesScalar('Memory.Utf8Validate', Pointer(LScalarTable.Memory.Utf8Validate), Pointer(LRISCVVTable.Memory.Utf8Validate));
+  AssertSlotReusesScalar('Memory.AsciiIEqual', Pointer(LScalarTable.Memory.AsciiIEqual), Pointer(LRISCVVTable.Memory.AsciiIEqual));
+  AssertSlotReusesScalar('Memory.ToLowerAscii', Pointer(LScalarTable.Memory.ToLowerAscii), Pointer(LRISCVVTable.Memory.ToLowerAscii));
+  AssertSlotReusesScalar('Memory.ToUpperAscii', Pointer(LScalarTable.Memory.ToUpperAscii), Pointer(LRISCVVTable.Memory.ToUpperAscii));
+  AssertSlotReusesScalar('Memory.BytesIndexOf', Pointer(LScalarTable.Memory.BytesIndexOf), Pointer(LRISCVVTable.Memory.BytesIndexOf));
+  AssertSlotReusesScalar('Memory.BitsetPopCount', Pointer(LScalarTable.Memory.BitsetPopCount), Pointer(LRISCVVTable.Memory.BitsetPopCount));
+
+  // Batch representative set intentionally scalar (full groups inherit baseline)
+  AssertSlotReusesScalar('BatchF32.ArrayAdd', Pointer(LScalarTable.BatchF32.ArrayAdd), Pointer(LRISCVVTable.BatchF32.ArrayAdd));
+  AssertSlotReusesScalar('BatchF32.ArraySub', Pointer(LScalarTable.BatchF32.ArraySub), Pointer(LRISCVVTable.BatchF32.ArraySub));
+  AssertSlotReusesScalar('BatchF32.ArrayMul', Pointer(LScalarTable.BatchF32.ArrayMul), Pointer(LRISCVVTable.BatchF32.ArrayMul));
+  AssertSlotReusesScalar('BatchF32.ArrayMin', Pointer(LScalarTable.BatchF32.ArrayMin), Pointer(LRISCVVTable.BatchF32.ArrayMin));
+  AssertSlotReusesScalar('BatchF32.ArrayMax', Pointer(LScalarTable.BatchF32.ArrayMax), Pointer(LRISCVVTable.BatchF32.ArrayMax));
+  AssertSlotReusesScalar('BatchF32.ArrayAbs', Pointer(LScalarTable.BatchF32.ArrayAbs), Pointer(LRISCVVTable.BatchF32.ArrayAbs));
+  AssertSlotReusesScalar('BatchF32.ArrayNeg', Pointer(LScalarTable.BatchF32.ArrayNeg), Pointer(LRISCVVTable.BatchF32.ArrayNeg));
+  AssertSlotReusesScalar('BatchF32.ArrayDiv', Pointer(LScalarTable.BatchF32.ArrayDiv), Pointer(LRISCVVTable.BatchF32.ArrayDiv));
+  AssertSlotReusesScalar('BatchF32.ArraySqrt', Pointer(LScalarTable.BatchF32.ArraySqrt), Pointer(LRISCVVTable.BatchF32.ArraySqrt));
+  AssertSlotReusesScalar('BatchF32.ArraySin', Pointer(LScalarTable.BatchF32.ArraySin), Pointer(LRISCVVTable.BatchF32.ArraySin));
+  AssertSlotReusesScalar('BatchF32.ReduceSum', Pointer(LScalarTable.BatchF32.ReduceSum), Pointer(LRISCVVTable.BatchF32.ReduceSum));
+  AssertSlotReusesScalar('BatchF64.ArrayAdd', Pointer(LScalarTable.BatchF64.ArrayAdd), Pointer(LRISCVVTable.BatchF64.ArrayAdd));
+  AssertSlotReusesScalar('BatchF64.ArrayMul', Pointer(LScalarTable.BatchF64.ArrayMul), Pointer(LRISCVVTable.BatchF64.ArrayMul));
+  AssertSlotReusesScalar('BatchF64.ArraySin', Pointer(LScalarTable.BatchF64.ArraySin), Pointer(LRISCVVTable.BatchF64.ArraySin));
+  AssertSlotReusesScalar('BatchInteger.ArrayAddI32', Pointer(LScalarTable.BatchInteger.ArrayAddI32), Pointer(LRISCVVTable.BatchInteger.ArrayAddI32));
+  AssertSlotReusesScalar('BatchInteger.ArrayMulI16', Pointer(LScalarTable.BatchInteger.ArrayMulI16), Pointer(LRISCVVTable.BatchInteger.ArrayMulI16));
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_WideFallbackOnlySlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;

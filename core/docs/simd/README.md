@@ -18,14 +18,15 @@
 ### 当前状态
 
 - **Backend Adapters**: ✅ x86 SSE2…AVX-512 与 NEON 真 SIMD 汇编；RVV 实验；scalar 全覆盖回退
-- **批量 / 超越函数**: ✅ x86 上 F32/F64 `Array*` 批量与超越函数深覆盖（Phase 13–18）；NEON/RVV **Batch* 仍继承 scalar**
+- **批量 / 超越函数**: ✅ x86 上 F32/F64 `Array*` 批量与超越函数深覆盖（Phase 13–18）；NEON BatchF32 代表 7 叶；RVV Batch* **故意 scalar**（S24a）
 - **Intrinsics 层**: ✅ 主路径真实 ISA；实验性 ISA 可能 stub
 - **分派器层**: ✅ 嵌套表 `CoreVectors` / `Batch*` / `Memory` / `Mask`（Phase 19）；Public ABI 字段名保持 flat
 - **Mask**: ✅ NEON 绑定 portable `SharedMask*` + `scMaskedOps`（Wave B）
 - **NEON Memory**: ✅ **15/15** 自有（Phase 22：Copy/Fill/DiffRange + Reverse/BytesIndexOf/Utf8Validate 真 asm 叶，仅 ASM opt-in 绑定）
 - **NEON Batch\***: ⚠️ Phase 23a/23b 已接管 F32 Add/Sub/Mul/Min/Max/Abs/Neg；其余 Batch 槽仍 scalar
+- **RVV Memory/Batch**: ✅ **故意 0 叶 scalar**（S24a 契约锁定；真叶等 S24b 硬件）
 - **cpuinfo**: ✅ 主路径稳定
-- **活动阶段**: Phase 20–23b + M-C1 已收口；**Goal CURRENT=S24a**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
+- **活动阶段**: Phase 20–23b + M-C1 + S24a 已收口；**Goal CURRENT=S25a**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
 - **验证基线 (2026-07-17)**:
   - `make focused FOCUS=core/tests/nextpas.core.simd` → **1740+ passed**
   - `neon-optin-focused` → **1740+ passed**

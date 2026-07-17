@@ -35,7 +35,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=S24a
+CURRENT=S25a
 ```
 
 ---
@@ -105,12 +105,12 @@ CURRENT=S24a
 | **GATES** | Same focused set |
 | **DoD** | Or mark skipped in CURRENT notes |
 
-### S24a — RVV Memory/Batch honesty  【CURRENT】
+### S24a — RVV Memory/Batch honesty  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
-| **NEXT** | S25a (or S24b if hardware) |
+| **STATUS** | done (2026-07-17) |
+| **NEXT** | S25a |
 | **WHY** | No silent “native” claims without leaves |
 | **IN_SCOPE_PATHS** | RVV register/docs/tests source-contracts; roadmap |
 | **OUT_OF_SCOPE** | Fake RVV wrappers; claiming Phase-3 hardware without evidence |
@@ -118,6 +118,7 @@ CURRENT=S24a
 | **GATES** | focused (or RVV opt-in smoke if exists); hygiene; diff-check |
 | **DoD** | Honesty matrix green; CURRENT advanced |
 | **BLOCKED_UNTIL** | — (software-only) |
+| **EVIDENCE** | `Test_RISCVV_MemoryBatch_Intentionally_Scalar_Until_RealLeaf` locks no `table.Memory.` / `table.Batch*` register overrides, no `Mem*_RISCVV` / `RISCVVArray*` dead wrappers, runtime Memory 15 + Batch representative slots == scalar; register.inc honesty comment; roadmap matrix updated |
 
 ### S24b — RVV real leaves  【blocked】
 
@@ -128,7 +129,7 @@ CURRENT=S24a
 | **NEXT** | S25a |
 | **WHY** | Optional 1–N Memory/Batch leaves with real evidence |
 
-### S25a — Benchmark methodology + remeasure hotspots
+### S25a — Benchmark methodology + remeasure hotspots  【CURRENT】
 
 | Field | Content |
 |-------|---------|
@@ -263,7 +264,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 - [x] Nested dispatch + honest ownership discipline
 - [x] NEON Memory 15/15 + SharedMask
 - [x] NEON BatchF32 high-frequency representative set (S23a/S23b; Div deferred)
-- [ ] RVV honesty (S24a)
+- [x] RVV honesty (S24a)
 - [ ] Perf method + hotspot close-or-revise (S25a/b)
 - [ ] Docs CURRENT coherent
 
@@ -289,8 +290,8 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 ## Default order (happy path)
 
 ```text
-G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a → S25a → S25b → M-V1 → M-V2 → Q1 → Q2 → IDLE
-         (S23c optional)              (S24b only if hardware)
+G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a → S25b → M-V1 → M-V2 → Q1 → Q2 → IDLE
+         (S23c optional)                       (S24b only if hardware)
 ```
 
 ## Agent session prompt (paste)
