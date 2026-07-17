@@ -23,6 +23,7 @@ unit nextpas.core.lockfree.segqueue;
 interface
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree.base,
@@ -151,7 +152,7 @@ begin
         LNext := LNewSegment
       else
       begin
-        FreeMem(LNewSegment);
+        FreeMem(LNewSegment, SizeOf(TSegment));
         LNext := PSegment(AtomicLoadPtr(Pointer(Result^.Next), moAcquire));
       end;
     end;
@@ -181,6 +182,9 @@ var
   LSeg: PSegment;
   LNext: PSegment;
 begin
+  { Close rejects new publishes; callers must still join concurrent
+    producers/consumers before Free. }
+  Close;
   { Release EBR first: its destructor calls SegQueueReclaimSegment for
     retired segments, which pushes them back into FFreePool. }
   FEbr.Free;
@@ -188,14 +192,14 @@ begin
   while LSeg <> nil do
   begin
     LNext := LSeg^.Next;
-    FreeMem(LSeg);
+    FreeMem(LSeg, SizeOf(TSegment));
     LSeg := LNext;
   end;
   LSeg := FFreePool;
   while LSeg <> nil do
   begin
     LNext := LSeg^.Next;
-    FreeMem(LSeg);
+    FreeMem(LSeg, SizeOf(TSegment));
     LSeg := LNext;
   end;
   inherited;
@@ -220,7 +224,7 @@ begin
     AtomicFetchAdd32(LQueue.FFreePoolCount, 1, moRelaxed);
   end
   else
-    FreeMem(AData);
+    FreeMem(AData, SizeOf(TSegment));
 end;
 
 procedure TSegQueueImpl.Publish(const AValue: T);

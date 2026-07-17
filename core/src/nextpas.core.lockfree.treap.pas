@@ -83,6 +83,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic;
 
@@ -146,7 +147,7 @@ end;
 procedure TConcurrentTreap.FreeNode(ANode: PTreapNode);
 begin
   if ANode <> nil then
-    FreeMem(ANode);
+    FreeMem(ANode, SizeOf(TTreapNode));
 end;
 
 procedure TConcurrentTreap.UpdateSize(ANode: PTreapNode);

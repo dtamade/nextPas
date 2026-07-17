@@ -4,7 +4,7 @@ unit nextpas.core.tls.openssl.api.stack;
 
 interface
 
-uses nextpas.core.tls.exceptions, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
+uses nextpas.core.mem, nextpas.core.tls.exceptions, nextpas.core.tls.openssl.base, nextpas.core.tls.openssl.loader,
   nextpas.core.platform.dl;
 
 type
@@ -329,7 +329,7 @@ begin
   try
     for i := Low(Strings) to High(Strings) do
     begin
-      GetMem(str, Length(Strings[i]) + 1);
+      str := GetMem(Length(Strings[i]) + 1);
       LValue := AnsiString(Strings[i]);
       if Length(LValue) > 0 then
         Move(LValue[1], str^, Length(LValue));

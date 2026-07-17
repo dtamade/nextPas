@@ -181,6 +181,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
@@ -277,7 +278,7 @@ begin
     FreeConfig;
 
   // 分配 SSL 配置
-  GetMem(FSSLConfig, MBEDTLS_SSL_CONFIG_SIZE);
+  FSSLConfig := GetMem(MBEDTLS_SSL_CONFIG_SIZE);
   FillChar(FSSLConfig^, MBEDTLS_SSL_CONFIG_SIZE, 0);
 
   if Assigned(mbedtls_ssl_config_init) then
@@ -319,7 +320,7 @@ begin
   begin
     if Assigned(mbedtls_x509_crt_free) then
       mbedtls_x509_crt_free(FCertChain);
-    FreeMem(FCertChain);
+    FreeMem(FCertChain, MBEDTLS_X509_CRT_SIZE);
     FCertChain := nil;
   end;
 
@@ -328,7 +329,8 @@ begin
   begin
     if Assigned(mbedtls_pk_free) then
       mbedtls_pk_free(FPrivateKey);
-    FreeMem(FPrivateKey);
+    SecureZeroMemory(FPrivateKey, MBEDTLS_PK_CONTEXT_SIZE);
+    FreeMem(FPrivateKey, MBEDTLS_PK_CONTEXT_SIZE);
     FPrivateKey := nil;
   end;
 
@@ -337,7 +339,7 @@ begin
   begin
     if Assigned(mbedtls_x509_crt_free) then
       mbedtls_x509_crt_free(FCACerts);
-    FreeMem(FCACerts);
+    FreeMem(FCACerts, MBEDTLS_X509_CRT_SIZE);
     FCACerts := nil;
   end;
 
@@ -346,7 +348,7 @@ begin
   begin
     if Assigned(mbedtls_ssl_config_free) then
       mbedtls_ssl_config_free(FSSLConfig);
-    FreeMem(FSSLConfig);
+    FreeMem(FSSLConfig, MBEDTLS_SSL_CONFIG_SIZE);
     FSSLConfig := nil;
   end;
 end;
@@ -455,7 +457,7 @@ begin
   // 分配证书链
   if FCertChain = nil then
   begin
-    GetMem(FCertChain, MBEDTLS_X509_CRT_SIZE);
+    FCertChain := GetMem(MBEDTLS_X509_CRT_SIZE);
     FillChar(FCertChain^, MBEDTLS_X509_CRT_SIZE, 0);
     if Assigned(mbedtls_x509_crt_init) then
       mbedtls_x509_crt_init(FCertChain);
@@ -490,7 +492,7 @@ begin
   // 分配证书链
   if FCertChain = nil then
   begin
-    GetMem(FCertChain, MBEDTLS_X509_CRT_SIZE);
+    FCertChain := GetMem(MBEDTLS_X509_CRT_SIZE);
     FillChar(FCertChain^, MBEDTLS_X509_CRT_SIZE, 0);
     if Assigned(mbedtls_x509_crt_init) then
       mbedtls_x509_crt_init(FCertChain);
@@ -523,7 +525,7 @@ begin
   // 分配证书链
   if FCertChain = nil then
   begin
-    GetMem(FCertChain, MBEDTLS_X509_CRT_SIZE);
+    FCertChain := GetMem(MBEDTLS_X509_CRT_SIZE);
     FillChar(FCertChain^, MBEDTLS_X509_CRT_SIZE, 0);
     if Assigned(mbedtls_x509_crt_init) then
       mbedtls_x509_crt_init(FCertChain);
@@ -557,7 +559,7 @@ begin
   // 分配私钥上下文
   if FPrivateKey = nil then
   begin
-    GetMem(FPrivateKey, MBEDTLS_PK_CONTEXT_SIZE);
+    FPrivateKey := GetMem(MBEDTLS_PK_CONTEXT_SIZE);
     FillChar(FPrivateKey^, MBEDTLS_PK_CONTEXT_SIZE, 0);
     if Assigned(mbedtls_pk_init) then
       mbedtls_pk_init(FPrivateKey);
@@ -595,7 +597,7 @@ begin
   // 分配私钥上下文
   if FPrivateKey = nil then
   begin
-    GetMem(FPrivateKey, MBEDTLS_PK_CONTEXT_SIZE);
+    FPrivateKey := GetMem(MBEDTLS_PK_CONTEXT_SIZE);
     FillChar(FPrivateKey^, MBEDTLS_PK_CONTEXT_SIZE, 0);
     if Assigned(mbedtls_pk_init) then
       mbedtls_pk_init(FPrivateKey);
@@ -635,7 +637,7 @@ begin
   // 分配证书链
   if FCertChain = nil then
   begin
-    GetMem(FCertChain, MBEDTLS_X509_CRT_SIZE);
+    FCertChain := GetMem(MBEDTLS_X509_CRT_SIZE);
     FillChar(FCertChain^, MBEDTLS_X509_CRT_SIZE, 0);
     if Assigned(mbedtls_x509_crt_init) then
       mbedtls_x509_crt_init(FCertChain);
@@ -665,7 +667,7 @@ begin
   // 分配私钥上下文
   if FPrivateKey = nil then
   begin
-    GetMem(FPrivateKey, MBEDTLS_PK_CONTEXT_SIZE);
+    FPrivateKey := GetMem(MBEDTLS_PK_CONTEXT_SIZE);
     FillChar(FPrivateKey^, MBEDTLS_PK_CONTEXT_SIZE, 0);
     if Assigned(mbedtls_pk_init) then
       mbedtls_pk_init(FPrivateKey);
@@ -713,7 +715,7 @@ begin
   // 分配 CA 证书
   if FCACerts = nil then
   begin
-    GetMem(FCACerts, MBEDTLS_X509_CRT_SIZE);
+    FCACerts := GetMem(MBEDTLS_X509_CRT_SIZE);
     FillChar(FCACerts^, MBEDTLS_X509_CRT_SIZE, 0);
     if Assigned(mbedtls_x509_crt_init) then
       mbedtls_x509_crt_init(FCACerts);
@@ -740,7 +742,7 @@ begin
   // 分配 CA 证书
   if FCACerts = nil then
   begin
-    GetMem(FCACerts, MBEDTLS_X509_CRT_SIZE);
+    FCACerts := GetMem(MBEDTLS_X509_CRT_SIZE);
     FillChar(FCACerts^, MBEDTLS_X509_CRT_SIZE, 0);
     if Assigned(mbedtls_x509_crt_init) then
       mbedtls_x509_crt_init(FCACerts);

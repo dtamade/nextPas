@@ -51,6 +51,8 @@ function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
 
 implementation
 
+{ L0: uses System GetMem/FreeMem (must not uses nextpas.core.mem; mem depends on platform). }
+
 {$IFDEF NEXTPAS_UNIX}
 uses
   nextpas.core.platform.posix.base,
@@ -335,7 +337,7 @@ begin
 
   if not InitializeProcThreadAttributeList(LAttrList, 1, 0, LAttrSize) then
   begin
-    FreeMem(LAttrList);
+    FreeMem(LAttrList, LAttrSize);
     AFailStage := ptssPipe;
     Exit(platform_get_last_error);
   end;
@@ -345,7 +347,7 @@ begin
     SizeOf(HPCON), nil, nil) then
   begin
     DeleteProcThreadAttributeList(LAttrList);
-    FreeMem(LAttrList);
+    FreeMem(LAttrList, LAttrSize);
     AFailStage := ptssTiocsctty;
     Exit(platform_get_last_error);
   end;
@@ -355,7 +357,7 @@ begin
   if not platform_windows_argv_to_command_line(APath, AArgv, LCmd) then
   begin
     DeleteProcThreadAttributeList(LAttrList);
-    FreeMem(LAttrList);
+    FreeMem(LAttrList, LAttrSize);
     AFailStage := ptssExec;
     Exit(PLATFORM_ERR_INVALID);
   end;
@@ -366,7 +368,7 @@ begin
     if not platform_windows_utf8_to_wide_checked(ACwd, LCwd) then
     begin
       DeleteProcThreadAttributeList(LAttrList);
-      FreeMem(LAttrList);
+      FreeMem(LAttrList, LAttrSize);
       AFailStage := ptssChdir;
       Exit(PLATFORM_ERR_INVALID);
     end;
@@ -380,7 +382,7 @@ begin
     if not platform_windows_envp_to_wide_block(AEnvp, LEnvBlock) then
     begin
       DeleteProcThreadAttributeList(LAttrList);
-      FreeMem(LAttrList);
+      FreeMem(LAttrList, LAttrSize);
       AFailStage := ptssExec;
       Exit(PLATFORM_ERR_INVALID);
     end;
@@ -392,13 +394,13 @@ begin
     LCreationFlags, LEnvPtr, LCwdPtr, @LSiEx.StartupInfo, @LPi) then
   begin
     DeleteProcThreadAttributeList(LAttrList);
-    FreeMem(LAttrList);
+    FreeMem(LAttrList, LAttrSize);
     AFailStage := ptssExec;
     Exit(platform_get_last_error);
   end;
 
   DeleteProcThreadAttributeList(LAttrList);
-  FreeMem(LAttrList);
+  FreeMem(LAttrList, LAttrSize);
   CloseHandle(LPi.hThread);
   APid := Int32(LPi.dwProcessId);
   CloseHandle(LPi.hProcess);

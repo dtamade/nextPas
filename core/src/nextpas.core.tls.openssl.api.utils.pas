@@ -23,7 +23,7 @@ function GetLastOpenSSLError: string;
 
 implementation
 
-uses nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.err;
+uses nextpas.core.mem, nextpas.core.tls.openssl.api.core, nextpas.core.tls.openssl.api.err;
 
 var
   GLibHandle: HMODULE = 0;

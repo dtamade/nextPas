@@ -10,6 +10,8 @@ uses
   nextpas.core.errors,
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.default,
+  nextpas.core.mem,
   nextpas.core.collections.hashmap.base,
   nextpas.core.simd.base,
   {$IFDEF HAS_AVX2}
@@ -295,27 +297,26 @@ begin
   LCtrlSize := ACapacity + GROUP_SIZE;
   LSlotSize := ACapacity * SizeOf(TSlot);
 
-  if FAllocator <> nil then
-  begin
-    ABuffers.Ctrl := PByte(FAllocator.GetMem(LCtrlSize));
-    try
-      ABuffers.Slots := PSlot(FAllocator.GetMem(LSlotSize));
-    except
-      FAllocator.FreeMem(ABuffers.Ctrl);
+  if FAllocator = nil then
+    FAllocator := DefaultAllocator;
+  ABuffers.Ctrl := PByte(FAllocator.GetMem(LCtrlSize));
+  if ABuffers.Ctrl = nil then
+    raise Exception.Create('TSwissTable.AllocBuffers: ctrl allocation failed');
+  try
+    ABuffers.Slots := PSlot(FAllocator.GetMem(LSlotSize));
+    if ABuffers.Slots = nil then
+    begin
+      FreeMemOf(FAllocator, ABuffers.Ctrl, LCtrlSize);
       ABuffers.Ctrl := nil;
-      raise;
+      raise Exception.Create('TSwissTable.AllocBuffers: slots allocation failed');
     end;
-  end
-  else
-  begin
-    GetMem(ABuffers.Ctrl, LCtrlSize);
-    try
-      GetMem(ABuffers.Slots, LSlotSize);
-    except
-      FreeMem(ABuffers.Ctrl);
+  except
+    if ABuffers.Ctrl <> nil then
+    begin
+      FreeMemOf(FAllocator, ABuffers.Ctrl, LCtrlSize);
       ABuffers.Ctrl := nil;
-      raise;
     end;
+    raise;
   end;
 
   FillChar(ABuffers.Ctrl^, LCtrlSize, CTRL_EMPTY);
@@ -328,16 +329,10 @@ begin
   if ABuffers.Ctrl = nil then
     Exit;
 
-  if FAllocator <> nil then
-  begin
-    FAllocator.FreeMem(ABuffers.Slots);
-    FAllocator.FreeMem(ABuffers.Ctrl);
-  end
-  else
-  begin
-    FreeMem(ABuffers.Slots);
-    FreeMem(ABuffers.Ctrl);
-  end;
+  if FAllocator = nil then
+    FAllocator := DefaultAllocator;
+  FreeMemOf(FAllocator, ABuffers.Slots, ABuffers.Capacity * SizeOf(TSlot));
+  FreeMemOf(FAllocator, ABuffers.Ctrl, ABuffers.Capacity + GROUP_SIZE);
 
   ABuffers.Ctrl := nil;
   ABuffers.Slots := nil;
@@ -369,16 +364,10 @@ begin
       if FCtrl[i] < $80 then
         ClearSlot(i);
   end;
-  if FAllocator <> nil then
-  begin
-    FAllocator.FreeMem(FSlots);
-    FAllocator.FreeMem(FCtrl);
-  end
-  else
-  begin
-    FreeMem(FSlots);
-    FreeMem(FCtrl);
-  end;
+  if FAllocator = nil then
+    FAllocator := DefaultAllocator;
+  FreeMemOf(FAllocator, FSlots, FCapacity * SizeOf(TSlot));
+  FreeMemOf(FAllocator, FCtrl, FCapacity + GROUP_SIZE);
   FCtrl := nil;
   FSlots := nil;
 end;
@@ -578,16 +567,10 @@ begin
 
   if LOldCtrl <> nil then
   begin
-    if FAllocator <> nil then
-    begin
-      FAllocator.FreeMem(LOldSlots);
-      FAllocator.FreeMem(LOldCtrl);
-    end
-    else
-    begin
-      FreeMem(LOldSlots);
-      FreeMem(LOldCtrl);
-    end;
+    if FAllocator = nil then
+      FAllocator := DefaultAllocator;
+    FreeMemOf(FAllocator, LOldSlots, LOldCap * SizeOf(TSlot));
+    FreeMemOf(FAllocator, LOldCtrl, LOldCap + GROUP_SIZE);
   end;
 end;
 
@@ -612,7 +595,10 @@ begin
     raise EArgumentError.Create('TSwissTable: hash/equality callbacks must be provided together');
   FHash := aHash;
   FEquals := aEquals;
-  FAllocator := aAllocator;
+  if aAllocator <> nil then
+    FAllocator := aAllocator
+  else
+    FAllocator := DefaultAllocator;
   FCtrl := nil;
   FSlots := nil;
   FCapacity := 0;

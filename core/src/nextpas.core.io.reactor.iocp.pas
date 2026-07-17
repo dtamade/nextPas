@@ -66,6 +66,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.atomic,
   nextpas.core.platform.windows.ffi;
 
@@ -652,7 +653,7 @@ begin
   end;
 
   { Allocate address buffer }
-  GetMem(LAddrBuf, ADDR_BUF_SIZE);
+  LAddrBuf := GetMem(ADDR_BUF_SIZE);
   if LAddrBuf = nil then
   begin
     closesocket(LAcceptSock);

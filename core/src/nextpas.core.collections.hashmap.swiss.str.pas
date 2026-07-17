@@ -7,6 +7,8 @@ interface
 uses
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.default,
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
@@ -78,29 +80,29 @@ begin
 end;
 
 procedure TSwissTableStr.AllocTable(ACapacity: SizeUInt);
+var
+  LCtrlSize, LSlotSize: SizeUInt;
 begin
   FCapacity := ACapacity;
   FGroupCount := ACapacity div GROUP_SIZE;
+  LCtrlSize := ACapacity + GROUP_SIZE;
+  LSlotSize := ACapacity * SizeOf(TSlot);
   FCtrl := nil;
   FSlots := nil;
-  if FAllocator <> nil then
+  if FAllocator = nil then
+    FAllocator := DefaultAllocator;
+  FCtrl := FAllocator.GetMem(LCtrlSize);
+  if FCtrl = nil then
+    raise Exception.Create('TSwissTableStr.AllocTable: ctrl allocation failed');
+  FSlots := FAllocator.GetMem(LSlotSize);
+  if FSlots = nil then
   begin
-    FCtrl := FAllocator.GetMem(ACapacity + GROUP_SIZE);
-    FSlots := FAllocator.GetMem(ACapacity * SizeOf(TSlot));
-  end
-  else
-  begin
-    GetMem(FCtrl, ACapacity + GROUP_SIZE);
-    try
-      GetMem(FSlots, ACapacity * SizeOf(TSlot));
-    except
-      FreeMem(FCtrl);
-      FCtrl := nil;
-      raise;
-    end;
+    FreeMemOf(FAllocator, FCtrl, LCtrlSize);
+    FCtrl := nil;
+    raise Exception.Create('TSwissTableStr.AllocTable: slots allocation failed');
   end;
-  FillChar(FCtrl^, ACapacity + GROUP_SIZE, CTRL_EMPTY);
-  FillChar(FSlots^, ACapacity * SizeOf(TSlot), 0);
+  FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);
+  FillChar(FSlots^, LSlotSize, 0);
   FGrowthLeft := ACapacity - ACapacity div 8;
 end;
 
@@ -115,8 +117,10 @@ begin
       if System.IsManagedType(V) then
         Finalize(FSlots[i].Value);
     end;
-  if FAllocator <> nil then FAllocator.FreeMem(FSlots) else FreeMem(FSlots);
-  if FAllocator <> nil then FAllocator.FreeMem(FCtrl) else FreeMem(FCtrl);
+  if FAllocator = nil then
+    FAllocator := DefaultAllocator;
+  FreeMemOf(FAllocator, FSlots, FCapacity * SizeOf(TSlot));
+  FreeMemOf(FAllocator, FCtrl, FCapacity + GROUP_SIZE);
   FCtrl := nil; FSlots := nil;
 end;
 
@@ -169,14 +173,17 @@ begin
         if LWasEmpty then
           Dec(FGrowthLeft);
       end;
-    if FAllocator <> nil then FAllocator.FreeMem(LOldSlots) else FreeMem(LOldSlots); if FAllocator <> nil then FAllocator.FreeMem(LOldCtrl) else FreeMem(LOldCtrl);
+    if FAllocator = nil then
+      FAllocator := DefaultAllocator;
+    FreeMemOf(FAllocator, LOldSlots, LOldCap * SizeOf(TSlot));
+    FreeMemOf(FAllocator, LOldCtrl, LOldCap + GROUP_SIZE);
   end;
 end;
 
 constructor TSwissTableStr.Create(aCapacity: SizeUInt);
 begin
   inherited Create;
-  FCtrl := nil; FSlots := nil; FAllocator := nil;
+  FCtrl := nil; FSlots := nil; FAllocator := DefaultAllocator;
   FCapacity := 0; FGroupCount := 0; FCount := 0; FGrowthLeft := 0;
   if aCapacity > 0 then
   begin
@@ -195,7 +202,11 @@ end;
 constructor TSwissTableStr.CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
 begin
   inherited Create;
-  FCtrl := nil; FSlots := nil; FAllocator := aAllocator;
+  FCtrl := nil; FSlots := nil;
+  if aAllocator <> nil then
+    FAllocator := aAllocator
+  else
+    FAllocator := DefaultAllocator;
   FCapacity := 0; FGroupCount := 0; FCount := 0; FGrowthLeft := 0;
   if aCapacity > 0 then
   begin

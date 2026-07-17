@@ -27,7 +27,7 @@ unit nextpas.core.tls.buffer.pool;
 
 interface
 
-uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.sync;
+uses nextpas.core.mem, nextpas.core.base, nextpas.core.base.utils, nextpas.core.sync;
 
 const
   { 缓冲区大小级别 }
@@ -292,7 +292,7 @@ begin
   SetLength(FBuffers, APoolSize);
   for I := 0 to APoolSize - 1 do
   begin
-    GetMem(FBuffers[I].FData, ABufferSize);
+    FBuffers[I].FData := GetMem(ABufferSize);
     FBuffers[I].FCapacity := ABufferSize;
     FBuffers[I].FLength := 0;
     FBuffers[I].FRefCount := 0;
@@ -521,7 +521,7 @@ end;
 function TBufferPool.AllocateDirect(ASize: Integer): PPooledBuffer;
 begin
   New(Result);
-  GetMem(Result^.FData, ASize);
+  Result^.FData := GetMem(ASize);
   Result^.FCapacity := ASize;
   Result^.FLength := 0;
   Result^.FRefCount := 1;

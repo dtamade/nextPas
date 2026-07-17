@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.text.view,
   nextpas.core.errors,
+  nextpas.core.mem,
   nextpas.core.yaml.types,
   nextpas.core.yaml.parser,
   nextpas.core.yaml.writer;
@@ -62,7 +63,7 @@ begin
   if FOwnedStrings = nil then
   begin
     FDoc.Done;
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   end;
   FillChar(FOwnedStrings^, FOwnedCap * SizeOf(string), 0);
   FOwnedCount := 0;
@@ -199,7 +200,7 @@ begin
     LNewPtr := FDoc.Allocator.ReallocMem(Pointer(FOwnedStrings),
       FOwnedCap * SizeOf(string));
     if LNewPtr = nil then
-      raise EOutOfMemoryError.Create('out of memory');
+      raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
     FOwnedStrings := PString(LNewPtr);
     FillChar(FOwnedStrings[LOldCap], (FOwnedCap - LOldCap) * SizeOf(string), 0);
   end;
@@ -214,7 +215,7 @@ begin
   RequireCanAppendValue;
   LIdx := FDoc.AddNode;
   if LIdx = YAML_NODE_NONE then
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   FDoc.Node(LIdx)^.Kind := ynkNull;
   AppendToContainer(LIdx);
   LCont := CurrentContainer;
@@ -227,7 +228,7 @@ begin
   RequireCanAppendValue;
   LIdx := FDoc.AddNode;
   if LIdx = YAML_NODE_NONE then
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   FDoc.Node(LIdx)^.Kind := ynkBool;
   FDoc.Node(LIdx)^.BoolVal := AValue;
   AppendToContainer(LIdx);
@@ -241,7 +242,7 @@ begin
   RequireCanAppendValue;
   LIdx := FDoc.AddNode;
   if LIdx = YAML_NODE_NONE then
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   FDoc.Node(LIdx)^.Kind := ynkInt;
   FDoc.Node(LIdx)^.IntVal := AValue;
   AppendToContainer(LIdx);
@@ -255,7 +256,7 @@ begin
   RequireCanAppendValue;
   LIdx := FDoc.AddNode;
   if LIdx = YAML_NODE_NONE then
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   FDoc.Node(LIdx)^.Kind := ynkFloat;
   FDoc.Node(LIdx)^.RealVal := AValue;
   AppendToContainer(LIdx);
@@ -269,7 +270,7 @@ begin
   RequireCanAppendValue;
   LIdx := FDoc.AddNode;
   if LIdx = YAML_NODE_NONE then
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   FDoc.Node(LIdx)^.Kind := ynkString;
   FDoc.Node(LIdx)^.Str := RetainString(AValue);
   AppendToContainer(LIdx);
@@ -283,7 +284,7 @@ begin
   RequireCanAppendValue;
   LIdx := FDoc.AddNode;
   if LIdx = YAML_NODE_NONE then
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   FDoc.Node(LIdx)^.Kind := ynkString;
   FDoc.Node(LIdx)^.Str := RetainString(AValue.ToString);
   AppendToContainer(LIdx);
@@ -299,7 +300,7 @@ begin
   LCont := CurrentContainer;
   LIdx := FDoc.AddNode;
   if LIdx = YAML_NODE_NONE then
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   FDoc.Node(LIdx)^.Kind := ynkSequence;
   FDoc.Node(LIdx)^.Container.FirstChild := YAML_NODE_NONE;
   FDoc.Node(LIdx)^.Container.Count := 0;
@@ -323,7 +324,7 @@ begin
   LCont := CurrentContainer;
   LIdx := FDoc.AddNode;
   if LIdx = YAML_NODE_NONE then
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   FDoc.Node(LIdx)^.Kind := ynkMapping;
   FDoc.Node(LIdx)^.Container.FirstChild := YAML_NODE_NONE;
   FDoc.Node(LIdx)^.Container.Count := 0;
@@ -346,7 +347,7 @@ begin
   RequireNoPendingMappingKey;
   LIdx := FDoc.AddNode;
   if LIdx = YAML_NODE_NONE then
-    raise EOutOfMemoryError.Create('out of memory');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('TYamlBuilder', 'Alloc', 'out of memory'));
   FDoc.Node(LIdx)^.Kind := ynkString;
   FDoc.Node(LIdx)^.Str := RetainString(AKey);
   AppendToContainer(LIdx);

@@ -218,6 +218,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.exception,
   nextpas.core.tls.wolfssl.connection;
 
@@ -245,7 +246,7 @@ begin
     if Length(LResponse) = 0 then
       Exit;
 
-    GetMem(LResponseCopy, Length(LResponse));
+    LResponseCopy := GetMem(Length(LResponse));
     Move(LResponse[0], LResponseCopy^, Length(LResponse));
 
     if Assigned(wolfSSL_set_tlsext_status_ocsp_resp) and

@@ -100,6 +100,8 @@ const
 implementation
 
 uses
+  nextpas.core.mem,
+  nextpas.core.mem.base,
   nextpas.core.errors;
 
 function IsPowerOfTwo(const AValue: NativeUInt): Boolean; inline;
@@ -292,25 +294,27 @@ end;
 function AlignUp(ptr: Pointer; alignment: NativeUInt): Pointer;
 var
   addr: NativeUInt;
+  aligned: SizeUInt;
 begin
   RequireValidAlignment(alignment);
   {$PUSH}{$WARN 4055 OFF}
   addr := NativeUInt(ptr);
-  if addr > High(NativeUInt) - (alignment - 1) then
+  aligned := nextpas.core.mem.base.AlignUp(SizeUInt(addr), SizeUInt(alignment));
+  if (addr > 0) and (aligned = 0) then
     raise EOutOfMemory.CreateFmt(
       'Aligned pointer overflow: addr=%d, alignment=%d', [addr, alignment]);
-  addr := (addr + alignment - 1) and not (alignment - 1);
-  Result := Pointer(addr);
+  Result := Pointer(aligned);
   {$POP}
 end;
 
 function AlignUpSize(size: NativeUInt; alignment: NativeUInt): NativeUInt;
 begin
   RequireValidAlignment(alignment);
-  if size > High(NativeUInt) - (alignment - 1) then
+  { Reuse mem.base.AlignUp (overflow → 0); keep SIMD overflow raise contract. }
+  Result := nextpas.core.mem.base.AlignUp(SizeUInt(size), SizeUInt(alignment));
+  if (size > 0) and (Result = 0) then
     raise EOutOfMemory.CreateFmt(
       'Aligned size overflow: size=%d, alignment=%d', [size, alignment]);
-  Result := (size + alignment - 1) and not (alignment - 1);
 end;
 
 function GetAlignment(ptr: Pointer): NativeUInt;

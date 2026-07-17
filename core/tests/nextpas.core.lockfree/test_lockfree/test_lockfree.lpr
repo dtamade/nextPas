@@ -1716,7 +1716,7 @@ end;
 procedure TestT1DestroyCallsCloseSourceContract;
 var
   LMpscSource, LSpscSource, LMpmcSource, LSpmcSource, LChannelSource, LChannelSpscSource,
-  LMsQueueSource: string;
+  LMsQueueSource, LSegQueueSource: string;
 begin
   { Safe lifecycle remains Close → join waiters → Free. Destroy must still call Close
     so unblocked teardown paths wake waiters and drain fixed/owned storage. }
@@ -1727,6 +1727,7 @@ begin
   LChannelSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.channel.pas');
   LChannelSpscSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.channel.spsc.pas');
   LMsQueueSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.msqueue.pas');
+  LSegQueueSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.segqueue.pas');
   CheckContains(LMpscSource, 'destructor TMpscQueueImpl.Destroy;',
     'MPSC must keep Destroy override');
   CheckContains(ExtractSection(LMpscSource,
@@ -1757,6 +1758,10 @@ begin
     'destructor TLockFreeMsQueueImpl.Destroy;',
     'function TLockFreeMsQueueImpl.TryEnqueue',
     'MSQueue Destroy body'), 'Close;', 'MSQueue Destroy must call Close');
+  CheckContains(ExtractSection(LSegQueueSource,
+    'destructor TSegQueueImpl.Destroy;',
+    'class procedure TSegQueueImpl.SegQueueReclaimSegment',
+    'SegQueue Destroy body'), 'Close;', 'SegQueue Destroy must call Close');
 end;
 
 procedure AssertNoForbiddenRtlUses(const APath, ALabel: string);
@@ -1939,6 +1944,10 @@ begin
     'test_lockfree_stress.lpr');
   AssertNoForbiddenRtlUses('../../nextpas.core.atomic/test_atomic/test_atomic.lpr',
     'test_atomic.lpr');
+  AssertNoForbiddenRtlUses('../bench_hashmap_read/bench_hashmap_read.lpr',
+    'bench_hashmap_read.lpr');
+  AssertNoForbiddenRtlUses('../bench_hashmap_read/bench_hashmap_comparison.lpr',
+    'bench_hashmap_comparison.lpr');
 
   LMakefile := ReadUtf8TextFile('Makefile');
   CheckContains(LMakefile, 'T2_ISOLATION_COMPILE_SOURCE := test_lockfree_t2_isolation_compile.lpr',
@@ -5669,6 +5678,9 @@ const
   ForkJoinSourcePath = '../../../src/nextpas.core.lockfree.forkjoin.pas';
   ChannelSourcePath = '../../../src/nextpas.core.lockfree.channel.pas';
   HashMapSourcePath = '../../../src/nextpas.core.lockfree.hashmap.pas';
+  BTreeSourcePath = '../../../src/nextpas.core.lockfree.btree.pas';
+  TrieSourcePath = '../../../src/nextpas.core.lockfree.trie.pas';
+  SelectorImplSourcePath = '../../../src/nextpas.core.lockfree.selector.impl.pas';
   HazardSourcePath = '../../../src/nextpas.core.lockfree.hazard.pas';
   LeftRightSourcePath = '../../../src/nextpas.core.lockfree.leftright.pas';
   BenchMakefilePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/Makefile';
@@ -5701,6 +5713,9 @@ var
   LForkJoinSource: string;
   LChannelSource: string;
   LHashMapSource: string;
+  LBTreeSource: string;
+  LTrieSource: string;
+  LSelectorImplSource: string;
   LHazardSource: string;
   LLeftRightSource: string;
   LBenchMakefile: string;
@@ -5794,6 +5809,9 @@ begin
   LForkJoinSource := ReadUtf8TextFile(ForkJoinSourcePath);
   LChannelSource := ReadUtf8TextFile(ChannelSourcePath);
   LHashMapSource := ReadUtf8TextFile(HashMapSourcePath);
+  LBTreeSource := ReadUtf8TextFile(BTreeSourcePath);
+  LTrieSource := ReadUtf8TextFile(TrieSourcePath);
+  LSelectorImplSource := ReadUtf8TextFile(SelectorImplSourcePath);
   LHazardSource := ReadUtf8TextFile(HazardSourcePath);
   LLeftRightSource := ReadUtf8TextFile(LeftRightSourcePath);
   LBenchMakefile := ReadUtf8TextFile(BenchMakefilePath);
@@ -6298,6 +6316,14 @@ begin
     'sharded hashmap must reject managed keys');
   CheckContains(LHashMapSource, 'if IsManagedType(TValue) then',
     'sharded hashmap must reject managed values');
+  CheckContains(LBTreeSource, 'if IsManagedType(TKey) then',
+    'btree must reject managed keys');
+  CheckContains(LBTreeSource, 'if IsManagedType(TValue) then',
+    'btree must reject managed values');
+  CheckContains(LTrieSource, 'if IsManagedType(TValue) then',
+    'trie must reject managed values');
+  CheckContains(LSelectorImplSource, 'if IsManagedType(T) then',
+    'selector must reject managed element types');
   CheckContains(LSpscSource, 'LockFreeNotifyData(@FDataEpoch, @FDataWaiters)',
     'SPSC queue must notify data waiters after publish');
   CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
