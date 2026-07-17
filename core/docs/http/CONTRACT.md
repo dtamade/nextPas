@@ -565,14 +565,14 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 **诚实 residual（非缺口伪装）**：
 
 - 公开 `IHttpClient` 不暴露“单连接并发多请求”多路 API；多请求并发依赖多连接或上层调度。
-- OpenSSL backend heaptrc（**Wave X4 + R2 dig**）：
+- OpenSSL backend heaptrc（**Wave X4 + R2 dig + R4 fix**）：
   - X4 修 `FPinValidator` 未释放（每 `CreateContext` ~32B → FreeAndNil）。
-  - client `test_http_client` 在含 HTTPS 全量路径后仍余 **1×41B process-lifetime**
-    （分配/释放差恒为 1；与 HTTPS 请求次数无关；非 HTTPS 路径 0 unfreed）。
-  - **R2 dig**：heaptrc 报告 `Call trace for block … size 41` 但 **无帧**
-    （无可靠 owner 栈；无法归因到单一 http 对象）。owner 优先仍为 **tls/OpenSSL
-    初始化侧效应**，**不是** per-request 泄漏。http **不**宣称绝对 0 unfreed。
-  - 未换 TLS 后端；未在 http 层吞泄漏。
+  - R2 曾诚实 Park **1×41B**（heaptrc size 41、无帧；process-lifetime）。
+  - **R4**：根因 = `TOpenSSLLibrary.InvalidateCapabilitiesCache` 对含
+    `BackendVersion: string` 的 `TSSLBackendCapabilities` 使用 `FillChar`，
+    在 library `Finalize` 时 orphan 版本串（内容 `OpenSSL x.y.z …`）。
+    修为 `FCapabilitiesCache := Default(TSSLBackendCapabilities)`（及同模式
+    其它 backend）。`test_http_client` HTTPS 全量路径 **0 unfreed**。
 - Cancel 平台分叉（**Wave R3**）：Unix waitable（socketpair+poll）；Windows
   `platform_socket_pair` = UNSUPPORTED → **仅 probe-only ~10ms**。见 §2.2.0 /
   §2.2.0a。
@@ -651,3 +651,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.16 | Wave R1：H1/H2 pool Close 锁外，IdleTTL suite 稳定 |
 | 2026-07-17 | 3.17 | Wave R2：HTTPS 1×41B dig → 无可靠 call stack，诚实 process-lifetime residual |
 | 2026-07-17 | 3.18 | Wave R3：Windows cancel = probe-only only（socket_pair UNSUPPORTED） |
+| 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |

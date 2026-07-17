@@ -363,7 +363,9 @@ end;
 procedure TOpenSSLLibrary.InvalidateCapabilitiesCache;
 begin
   FCapabilitiesCached := False;
-  FillChar(FCapabilitiesCache, SizeOf(FCapabilitiesCache), 0);
+  { Managed fields (BackendVersion/KnownIssues): assign Default so string
+    refcounts drop. FillChar alone orphans ~41B OpenSSL version string. }
+  FCapabilitiesCache := Default(TSSLBackendCapabilities);
 end;
 
 function OpenSSLEarlyDataSurfaceReady: Boolean;
