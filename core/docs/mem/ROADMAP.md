@@ -1,10 +1,10 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: Active（Era D Steward；A–C 已闭合；D0/D1 已进 main）
+**状态**: **Steady**（Era D Steward 维护姿态；A–C 已闭合；D0/D1/D4 已交付）
 **Owner**: mem lane（`.worktrees/mem`）
 **更新**: 2026-07-17
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
-**最近 land**: `d2b704ffe`（path-limited → `origin/main`）
+**最近 land**: `d2b704ffe`（D0/D1）· 本 slice D4 Scorecard 刷新
 
 ---
 
@@ -22,7 +22,7 @@
 | **A** | 分配器能力扩张（Phase 12–28、内联重构） | **CLOSED** | [archive/ROADMAP-ALLOCATOR-PHASES.md](archive/ROADMAP-ALLOCATOR-PHASES.md) 等 |
 | **B** | 标准库质量（门面 Tier、契约矩阵、Default 双轨、Scorecard、DEBUG） | **CLOSED** | [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md)（90 天 M1–M3 全勾） |
 | **C** | 可用性 + 产品表 dual-track + consumer-audit 全修 | **CLOSED** | [USABILITY-SCORE.md](USABILITY-SCORE.md) · [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) |
-| **D** | **平台 steward**：回归锁、按需集成、性能可信、治理卫生 | **Active** | 下文 §4 |
+| **D** | **平台 steward**：回归锁、按需集成、性能可信、治理卫生 | **Steady** | 下文 §4 |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -75,7 +75,7 @@
 | **D1** | 回归锁进主线 | consumer-audit 源契约在 `main` 可跑 | path-limited land `check_consumer_audit_contracts` + guardrails | **DONE** `d2b704ffe` |
 | **D2** | 契约不漂移 | Tier-0/1 行为与文档一致 | `test_contract_matrix` + `test_usability_guardrails` 常绿 | P0 持续 |
 | **D3** | Consumer 按触达升级 | 已知 size → sized free / `FreeMemOf`；OOM → `FormatAllocErrorMsg` | **谁改谁顺手**；禁止全仓机械扫 | P1 持续 |
-| **D4** | Scorecard 可信 | RELEASE 基线可复现；对外说数字有出处 | `make -C …/scorecard clean test RELEASE=1` + [SCORECARD.md](SCORECARD.md) 刷新 | P1 |
+| **D4** | Scorecard 可信 | RELEASE 基线可复现；对外说数字有出处 | `make -C …/scorecard clean test RELEASE=1` + [SCORECARD.md](SCORECARD.md) 刷新 | **DONE** 2026-07-17 |
 | **D5** | 多 host 契约 | Linux 行为在 Windows/FreeBSD 编译门禁不退 | 既有 cross-OS compile gate 维持；有红点再开 | P1 |
 | **D6** | 接入可发现 | API-GUIDE 保持「30 秒 + 反例」；新助手必有门禁 | guardrails / docs contract | P1 |
 | **D7** | 错误面收敛（可选） | 评估统一 `EAllocError` 爆炸半径 | **先设计备忘，默认不做代码** | P2 按需 |
@@ -88,7 +88,7 @@
 | D0-a | 归档时代 A ROADMAP\*；本文件成为权威 | — | **landed** `d2b704ffe` |
 | D1-a | consumer-audit 门禁 path-limited → main | main 安静窗口 | **landed** `d2b704ffe` |
 | D2-a | 默认 lane gate 不变：`lane-focused LANE=mem` | — | 已落地 |
-| D4-a | 刷新 SCORECARD 发布数字注释（有机器时跑 RELEASE） | 安静环境 | pending |
+| D4-a | 刷新 SCORECARD 发布数字（`RELEASE=1` SC1–SC9 全 PASS） | 本机安静跑 | **done** 2026-07-17 |
 | D3-a | 不主动扫仓；其它 lane 触达堆路径时提供 review 清单 | 其它模块 owner | 持续 |
 
 ### 4.3 退出条件（时代 D 何时算「够稳」）
@@ -96,11 +96,12 @@
 同时满足即可把时代 D 标为 **Steady**（维护模式，不必再开大里程碑）：
 
 1. D1 门禁在 `origin/main` — **已满足**（`d2b704ffe`）
-2. 连续两次 mem landing 无可用性/契约回归 — **1/2**（本批为第 1 次干净 docs/test land）
-3. SCORECARD RELEASE 基线有日期戳且与文档一致 — pending（D4-a）
+2. 连续两次 mem landing 无可用性/契约回归 — **2/2**（`d2b704ffe` + 本 D4 docs land）
+3. SCORECARD RELEASE 基线有日期戳且与文档一致 — **已满足**（SCORECARD 2026-07-17）
 4. 无命名 consumer 的开放 P0/P1 需求单 — 当前无
 
-Steady 之后默认：**只做 D3 顺手升级 + 修回归**，新里程碑需总控或 consumer 发起。
+**Steady 判定（2026-07-17）**: 上述 1–4 均满足 → 时代 D 进入 **Steady** 维护姿态。
+Steady 之后默认：**只做 D3 顺手升级 + 修回归**；新里程碑需总控或命名 consumer 发起。
 
 ---
 
@@ -155,3 +156,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 |------|------|
 | 2026-07-17 | 初版权威路线图：归档时代 A 多文件 ROADMAP；标注 A–C 闭合；开启时代 D（Steward） |
 | 2026-07-17 | D0/D1 path-limited land → `origin/main` `d2b704ffe`；切片状态与退出条件同步 |
+| 2026-07-17 | D4-a Scorecard RELEASE=1 基线刷新；时代 D → **Steady** |
