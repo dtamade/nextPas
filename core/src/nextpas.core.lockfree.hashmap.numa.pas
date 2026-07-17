@@ -92,7 +92,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 function TNumaShardedHashMapImpl.GetNodeForKey(const AKey: TKey): Integer;
 var
@@ -136,7 +136,10 @@ var
   I: Integer;
 begin
   for I := 0 to FNodeCount - 1 do
-    FreeAndNil(FNodeShards[I].HashMap);
+  begin
+    FNodeShards[I].HashMap.Free;
+    FNodeShards[I].HashMap := nil;
+  end;
   SetLength(FNodeShards, 0);
   inherited;
 end;

@@ -396,9 +396,12 @@ begin
   LIdx := Integer(PtrUInt(AArg));
   LCount := 0;
   AtomicFetchAdd32(GMpscCloseStarted, 1, moRelease);
-  while (LCount < MPSC_CLOSE_MAX_PER_PRODUCER) and (not GMpscCloseQ.IsClosed) do
+  while LCount < MPSC_CLOSE_MAX_PER_PRODUCER do
   begin
-    GMpscCloseQ.Enqueue(MpscCloseToken(LIdx, LCount));
+    { TryEnqueue returns False once Close is observed; never use Enqueue here
+      because Close raises EInvalidOperationError after the queue is closed. }
+    if not GMpscCloseQ.TryEnqueue(MpscCloseToken(LIdx, LCount)) then
+      Break;
     AtomicFetchAdd64(GMpscClosePublished, 1, moRelaxed);
     Inc(LCount);
     if LCount and $FF = 0 then

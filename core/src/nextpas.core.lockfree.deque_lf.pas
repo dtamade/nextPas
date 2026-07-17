@@ -20,7 +20,7 @@ unit nextpas.core.lockfree.deque_lf;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   DEQUE_DEFAULT_CAPACITY = 64;

@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.skiplist_map;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   SL_MAP_MAX_LEVEL = 16;

@@ -7,7 +7,7 @@
 Go std 或 C++ std 的并发容器；**lock-free progress claim 只适用于下表标为 lock-free 的类型，
 且底层 atomic 在目标平台也是 lock-free 的路径**。
 所有结构只接受 unmanaged element type；`string`、interface、dynamic array 等 managed 类型会被拒绝。
-`TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.
+All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TSpmcQueue`, `TSegQueue`, `TLockFreeMsQueue`, `TLockFreeStack`, `TWorkStealingDeque`, `TLockFreeChannel`, `TLockFreeChannelSpsc`, `TShardedHashMap` keys/values) reject managed types at construction with `EArgumentError`.
 
 **层级**：L1（依赖 L0 `base` + `atomic`；见 `core/docs/core-module-registry.md`）。
 
@@ -78,9 +78,10 @@ closed、当前为空且没有 admitted producer 仍可能发布时才把 closed
 `TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
 `TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
 
-`TMpscQueue<T>` 是多 producer、单 consumer 队列。`Enqueue` 是过程，不返回 close 结果；`TryEnqueue`
-在 Close 后返回 False；`Close` 只作为 consumer 等待唤醒和终止信号。调用方必须让 producer 协作停止、
-join producer，并 drain 队列后再销毁对象。`ApproxCount` 是原子计数器快照。
+`TMpscQueue<T>` 是多 producer、单 consumer 队列。`Close` 后 `TryEnqueue` 返回 False，`Enqueue`
+抛出 `EInvalidOperationError`（与 `TLockFreeChannel.Send` 对齐）。`Close` 唤醒 blocked consumer。
+**生命周期：Close → join producers/waiters → Free**。`Destroy` 会 Close+drain，但不能替代 join
+活跃 producer。`ApproxCount` 是原子计数器快照。
 
 `TSegQueue<T>` 是基于 segmented linked ring 的无界 MPMC queue。`Enqueue` 在当前 tail segment
 没有后继时按 segment 粒度扩展存储；`TryEnqueue` 在 Close 后返回 False；`TryDequeue` 只在对应 slot
@@ -109,7 +110,7 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 
 `TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.
 `TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers. Enqueue calls admitted before observing the closed flag may still publish at their normal per-item linearization point; calls that observe `Close` fail, and consumers only treat closed-empty as terminal after no admitted producer can still publish.
-`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False, while plain `Enqueue` does not; callers must stop and join producers before destroy.
+`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False; plain `Enqueue` raises `EInvalidOperationError` after `Close`; callers must Close → join producers/waiters → Free.
 `TSegQueue<T>` permits multiple concurrent producers and consumers; segment retirement is internal and readers observe only FIFO dequeue success/failure.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
@@ -337,17 +338,18 @@ producer 侧等待操作应返回失败，consumer 侧可继续 drain 已发布�
 `TMpmcQueue<T>.Close` wakes already-blocked `EnqueueWait` / `DequeueWait` calls so blocked producers and consumers stop waiting even without a timeout.
 `TMpmcQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so blocked producers and consumers stop waiting promptly instead of sleeping until the full timeout.
 
-`TMpscQueue<T>` 的 `Close` 不会让 `Enqueue` 自动失败。它只唤醒等待中的 consumer，并让
-`DequeueWait` / `DequeueTimeout` 在当前无元素时返回失败。销毁前必须满足：
+`TMpscQueue<T>` 的 `Close` 后：`TryEnqueue` 返回 False，`Enqueue` 抛出 `EInvalidOperationError`
+（与 `TLockFreeChannel.Send` 对齐）；`DequeueWait` / `DequeueTimeout` 在当前无元素时返回失败；
+`Close` 唤醒 blocked consumer。销毁前必须满足：
 `TMpscQueue<T>.Close` wakes already-blocked `DequeueWait` consumers so a closed-empty queue stops waiting even without a timeout.
 `TMpscQueue<T>.Close` wakes already-blocked `DequeueTimeout` consumers so a closed-empty queue stops waiting promptly.
 
 1. 已调用 `Close`。
-2. producer 已停止并 join。
-3. consumer 已 drain 队列。
+2. producer 已停止并 join（Close 不是 join barrier）。
+3. consumer 已 drain 队列（或依赖 Destroy 的 Close+drain）。
 
 `TMpscQueue.Destroy` 会调用 `Close` 以唤醒阻塞中的单消费者，然后 drain 剩余节点。
-调用方仍必须在 `Free` 前停止并 join 所有 producer（`Enqueue` 不观察 Close）。
+调用方仍必须在 `Free` 前停止并 join 所有 producer/waiter（`Close` / `Destroy` 不能替代 join）。
 
 ## Atomic dependency
 

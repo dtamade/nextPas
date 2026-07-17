@@ -184,20 +184,29 @@ end;
 - SPSC 队列：单生产者单消费者，无锁
 - MPMC 队列：多生产者多消费者，无锁
 - 分片 HashMap：每个分片独立锁，减少竞争
-- 所有泛型容器要求 T 为非托管类型（无 string/interface/dynarray）
+- 所有 T1 泛型容器要求 T（及 HashMap 的 TKey/TValue）为非托管类型；构造时 `IsManagedType` 拒绝
+- MPSC：`Close` 后 `TryEnqueue` 返回 False，`Enqueue` 抛 `EInvalidOperationError`
+- 生命周期：Close → join producers/waiters → Free；Destroy 的 Close+drain 不替代 join
+
+### 2.1 FPC RTL isolation
+
+- 生产单元 `nextpas.core.atomic*` / `nextpas.core.lockfree*` 与 `core/examples/lockfree_example.lpr` 不得直接 `uses` FPC RTL（`SysUtils`/`Classes`/`Math`/`Windows`/`BaseUnix`/`Unix`）
+- 异常走 `nextpas.core.errors`；数学走 `nextpas.core.math`
 
 ---
 
 ## 3. 错误处理
 
 - `TryPop`/`TrySteal` 空时返回 False
-- 不抛异常
+- managed 元素构造抛 `EArgumentError`
+- 已关闭后的阻塞式 publish（Channel.Send / MPSC.Enqueue）抛 `EInvalidOperationError`
 
 ---
 
 ## 4. 线程安全
 
-- 所有操作使用 CAS/原子指令，无锁
+- T1 队列/栈/channel 热路径使用 CAS/原子指令
+- `TShardedHashMap` 为分片自旋锁（非 lock-free）
 - EBR 使用 TLS 线程本地状态
 
 ---

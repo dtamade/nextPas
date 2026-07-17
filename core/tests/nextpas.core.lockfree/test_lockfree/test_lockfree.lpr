@@ -1547,13 +1547,21 @@ procedure TestMpscCloseProducerContract;
 var
   LQ: TIntMpsc;
   LV: Integer;
+  LGot: Boolean;
 begin
   LQ := TIntMpsc.Create;
   LQ.Close;
   Check(LQ.IsClosed, 'closed');
-  LQ.Enqueue(42);
-  Check(LQ.TryDequeue(LV), 'MPSC enqueue after close still drains');
-  CheckEqual(Int64(42), Int64(LV));
+  Check(not LQ.TryEnqueue(42), 'TryEnqueue after close rejected');
+  LGot := False;
+  try
+    LQ.Enqueue(42);
+  except
+    on E: EInvalidOperationError do
+      LGot := True;
+  end;
+  Check(LGot, 'Enqueue after close raises EInvalidOperationError');
+  Check(not LQ.TryDequeue(LV), 'closed empty MPSC stays empty after rejected enqueue');
   Check(not LQ.DequeueWait(LV), 'dequeue wait false on closed empty MPSC');
   Check(not LQ.DequeueTimeout(LV, 1000000), 'dequeue timeout false on closed empty MPSC');
   LQ.Free;
@@ -1715,7 +1723,7 @@ begin
     'MPSC must keep Destroy override');
   CheckContains(ExtractSection(LMpscSource,
     'destructor TMpscQueueImpl.Destroy;',
-    'procedure TMpscQueueImpl.Enqueue',
+    'procedure TMpscQueueImpl.PublishNode',
     'MPSC Destroy body'), 'Close;', 'MPSC Destroy must call Close');
   CheckContains(ExtractSection(LSpscSource,
     'destructor TSpscQueueImpl.Destroy;',
@@ -1737,6 +1745,125 @@ begin
     'destructor TLockFreeChannelSpscImpl.Destroy;',
     'function TLockFreeChannelSpscImpl.TrySend',
     'ChannelSpsc Destroy body'), 'Close;', 'ChannelSpsc Destroy must call Close');
+end;
+
+procedure AssertNoForbiddenRtlUses(const APath, ALabel: string);
+var
+  LText: string;
+  LCompact: string;
+begin
+  Check(FileExists(APath), ALabel + ' must exist for RTL isolation contract');
+  LText := ReadUtf8TextFile(APath);
+  LCompact := RemoveWhitespace(LText);
+  { Match unit names only inside uses clauses (comma/semicolon delimited), not prose. }
+  CheckNotContains(LCompact, 'usesSysUtils,', ALabel + ': must not uses SysUtils');
+  CheckNotContains(LCompact, 'usesSysUtils;', ALabel + ': must not uses SysUtils');
+  CheckNotContains(LCompact, ',SysUtils,', ALabel + ': must not uses SysUtils');
+  CheckNotContains(LCompact, ',SysUtils;', ALabel + ': must not uses SysUtils');
+  CheckNotContains(LCompact, 'usesClasses,', ALabel + ': must not uses Classes');
+  CheckNotContains(LCompact, 'usesClasses;', ALabel + ': must not uses Classes');
+  CheckNotContains(LCompact, ',Classes,', ALabel + ': must not uses Classes');
+  CheckNotContains(LCompact, ',Classes;', ALabel + ': must not uses Classes');
+  CheckNotContains(LCompact, 'usesMath,', ALabel + ': must not uses Math');
+  CheckNotContains(LCompact, 'usesMath;', ALabel + ': must not uses Math');
+  CheckNotContains(LCompact, ',Math,', ALabel + ': must not uses Math');
+  CheckNotContains(LCompact, ',Math;', ALabel + ': must not uses Math');
+  CheckNotContains(LCompact, 'usesWindows,', ALabel + ': must not uses Windows');
+  CheckNotContains(LCompact, ',Windows;', ALabel + ': must not uses Windows');
+  CheckNotContains(LCompact, 'usesBaseUnix,', ALabel + ': must not uses BaseUnix');
+  CheckNotContains(LCompact, ',BaseUnix;', ALabel + ': must not uses BaseUnix');
+  CheckNotContains(LCompact, 'usesUnix,', ALabel + ': must not uses Unix');
+  CheckNotContains(LCompact, ',Unix;', ALabel + ': must not uses Unix');
+  { Symbol-aware: bare SysUtils helpers that remain after uses-clause stripping. }
+  CheckNotContains(LText, 'GetTickCount64',
+    ALabel + ': must not call GetTickCount64 (use platform_monotonic_ns)');
+  CheckNotContains(LCompact, 'Sleep(0)',
+    ALabel + ': must not call Sleep(0) (use ThreadSwitch)');
+  CheckNotContains(LCompact, 'FreeAndNil(',
+    ALabel + ': must not call FreeAndNil (use Obj.Free; Obj:=nil or base.utils)');
+  if Pos('IntToStr', LText) > 0 then
+    Check(Pos('nextpas.core.text.conv', LText) > 0,
+      ALabel + ': IntToStr requires nextpas.core.text.conv');
+end;
+
+procedure TestFpcRtlIsolationSourceContract;
+const
+  Src = '../../../src/';
+  Paths: array[0..40] of string = (
+    'nextpas.core.atomic.pas',
+    'nextpas.core.atomic.core.pas',
+    'nextpas.core.atomic.types.pas',
+    'nextpas.core.atomic.compat.pas',
+    'nextpas.core.lockfree.pas',
+    'nextpas.core.lockfree.spsc.pas',
+    'nextpas.core.lockfree.mpmc.pas',
+    'nextpas.core.lockfree.mpsc.pas',
+    'nextpas.core.lockfree.spmc.pas',
+    'nextpas.core.lockfree.stack.pas',
+    'nextpas.core.lockfree.deque.pas',
+    'nextpas.core.lockfree.channel.pas',
+    'nextpas.core.lockfree.channel.spsc.pas',
+    'nextpas.core.lockfree.hashmap.pas',
+    'nextpas.core.lockfree.segqueue.pas',
+    'nextpas.core.lockfree.msqueue.pas',
+    'nextpas.core.lockfree.lru_cache.pas',
+    'nextpas.core.lockfree.deque_lf.pas',
+    'nextpas.core.lockfree.timeseries_ringbuffer.pas',
+    'nextpas.core.lockfree.intervaltree.pas',
+    'nextpas.core.lockfree.scalable_bloom.pas',
+    'nextpas.core.lockfree.tdigest.pas',
+    'nextpas.core.lockfree.leakybucket.pas',
+    'nextpas.core.lockfree.ratelimit.pas',
+    'nextpas.core.lockfree.persistent_vector.pas',
+    'nextpas.core.lockfree.cuckooset.pas',
+    'nextpas.core.lockfree.counting_bloom.pas',
+    'nextpas.core.lockfree.hashmap.rtm.pas',
+    'nextpas.core.lockfree.hashmap.numa.pas',
+    'nextpas.core.lockfree.ttl_cache.pas',
+    'nextpas.core.lockfree.consistent_hashring.pas',
+    'nextpas.core.lockfree.trie_hmt.pas',
+    'nextpas.core.lockfree.trie_map.pas',
+    'nextpas.core.lockfree.suffixarray.pas',
+    'nextpas.core.lockfree.skiplist_map.pas',
+    'nextpas.core.lockfree.fibheap.pas',
+    'nextpas.core.lockfree.hyperloglog.pas',
+    'nextpas.core.lockfree.roaring_bitmap.pas',
+    'nextpas.core.lockfree.countminsketch.pas',
+    'nextpas.core.lockfree.mpmc.pas',
+    'nextpas.core.lockfree.spmc.pas'
+  );
+var
+  LI: Integer;
+  LMakefile: string;
+  LTtwoCompile: string;
+begin
+  for LI := Low(Paths) to High(Paths) do
+    AssertNoForbiddenRtlUses(Src + Paths[LI], Paths[LI]);
+  AssertNoForbiddenRtlUses('../../../examples/lockfree_example.lpr', 'lockfree_example');
+
+  LMakefile := ReadUtf8TextFile('Makefile');
+  CheckContains(LMakefile, 'T2_ISOLATION_COMPILE_SOURCE := test_lockfree_t2_isolation_compile.lpr',
+    'lockfree Makefile must name T2 isolation compile fixture');
+  CheckContains(LMakefile, 'compile-t2-isolation-host:',
+    'lockfree Makefile must provide T2 isolation compile target');
+  CheckContains(LMakefile, 'lockfree-t2-isolation-compile-status=pass',
+    'T2 isolation compile target must print pass evidence');
+  CheckContains(LMakefile, 'test: compile-t2-isolation-host run',
+    'lockfree main test gate must compile T2 isolation smoke first');
+
+  LTtwoCompile := ReadUtf8TextFile('test_lockfree_t2_isolation_compile.lpr');
+  CheckContains(LTtwoCompile, 'nextpas.core.lockfree.ttl_cache',
+    'T2 isolation compile must touch ttl_cache');
+  CheckContains(LTtwoCompile, 'nextpas.core.lockfree.timeseries_ringbuffer',
+    'T2 isolation compile must touch timeseries_ringbuffer');
+  CheckContains(LTtwoCompile, 'nextpas.core.lockfree.hashmap.rtm',
+    'T2 isolation compile must touch hashmap.rtm');
+  CheckContains(LTtwoCompile, 'nextpas.core.lockfree.hashmap.numa',
+    'T2 isolation compile must touch hashmap.numa');
+  CheckContains(LTtwoCompile, 'nextpas.core.lockfree.consistent_hashring',
+    'T2 isolation compile must touch consistent_hashring');
+  CheckContains(LTtwoCompile, 'nextpas.core.lockfree.trie_hmt',
+    'T2 isolation compile must touch trie_hmt');
 end;
 
 procedure TestMpscMultiProducer;
@@ -2437,16 +2564,25 @@ begin
 end;
 
 procedure TestManagedTypeReject;
-type
-  TStrSpsc = specialize TSpscQueue<AnsiString>;
-  TStrMpsc = specialize TMpscQueue<AnsiString>;
-  TStrSegQueue = specialize TSegQueue<AnsiString>;
 var
   LGot: Boolean;
+  LSpsc: specialize TSpscQueue<AnsiString>;
+  LMpmc: specialize TMpmcQueue<AnsiString>;
+  LMpsc: specialize TMpscQueue<AnsiString>;
+  LSpmc: specialize TSpmcQueue<AnsiString>;
+  LStack: specialize TLockFreeStack<AnsiString>;
+  LDeque: specialize TWorkStealingDeque<AnsiString>;
+  LSeg: specialize TSegQueue<AnsiString>;
+  LMsQueue: specialize TLockFreeMsQueue<AnsiString>;
+  LChannel: specialize TLockFreeChannel<AnsiString>;
+  LChannelSpsc: specialize TLockFreeChannelSpsc<AnsiString>;
+  LStrMap: specialize TShardedHashMap<AnsiString, Integer>;
+  LIntStrMap: specialize TShardedHashMap<Integer, AnsiString>;
 begin
   LGot := False;
   try
-    TStrSpsc.Create(4);
+    LSpsc := specialize TSpscQueue<AnsiString>.Create(4);
+    LSpsc.Free;
   except
     on E: EArgumentError do
       LGot := True;
@@ -2455,7 +2591,18 @@ begin
 
   LGot := False;
   try
-    TStrMpsc.Create;
+    LMpmc := specialize TMpmcQueue<AnsiString>.Create(4);
+    LMpmc.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'MPMC managed type rejected');
+
+  LGot := False;
+  try
+    LMpsc := specialize TMpscQueue<AnsiString>.Create;
+    LMpsc.Free;
   except
     on E: EArgumentError do
       LGot := True;
@@ -2464,12 +2611,93 @@ begin
 
   LGot := False;
   try
-    TStrSegQueue.Create;
+    LSpmc := specialize TSpmcQueue<AnsiString>.Create(4);
+    LSpmc.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'SPMC managed type rejected');
+
+  LGot := False;
+  try
+    LStack := specialize TLockFreeStack<AnsiString>.Create(4);
+    LStack.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'Stack managed type rejected');
+
+  LGot := False;
+  try
+    LDeque := specialize TWorkStealingDeque<AnsiString>.Create(4);
+    LDeque.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'Deque managed type rejected');
+
+  LGot := False;
+  try
+    LSeg := specialize TSegQueue<AnsiString>.Create;
+    LSeg.Free;
   except
     on E: EArgumentError do
       LGot := True;
   end;
   Check(LGot, 'SegQueue managed type rejected');
+
+  LGot := False;
+  try
+    LMsQueue := specialize TLockFreeMsQueue<AnsiString>.Create;
+    LMsQueue.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'MsQueue managed type rejected');
+
+  LGot := False;
+  try
+    LChannel := specialize TLockFreeChannel<AnsiString>.Create(4);
+    LChannel.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'Channel managed type rejected');
+
+  LGot := False;
+  try
+    LChannelSpsc := specialize TLockFreeChannelSpsc<AnsiString>.Create(4);
+    LChannelSpsc.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'ChannelSpsc managed type rejected');
+
+  LGot := False;
+  try
+    LStrMap := specialize TShardedHashMap<AnsiString, Integer>.Create(4);
+    LStrMap.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'ShardedHashMap managed key rejected');
+
+  LGot := False;
+  try
+    LIntStrMap := specialize TShardedHashMap<Integer, AnsiString>.Create(4);
+    LIntStrMap.Free;
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'ShardedHashMap managed value rejected');
 end;
 
 { LockFree Channel tests }
@@ -5549,7 +5777,7 @@ begin
     'function TLockFreeStackImpl.TryPop',
     'stack TryPush source section');
   LMpscEnqueueSourceSection := ExtractSection(LMpscSource,
-    'procedure TMpscQueueImpl.Enqueue',
+    'procedure TMpscQueueImpl.PublishNode',
     'function TMpscQueueImpl.TryDequeue',
     'MPSC Enqueue source section');
   LDequeTryPushSourceSection := ExtractSection(LDequeSource,
@@ -5753,7 +5981,7 @@ begin
     '`TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.',
     'lockfree README must document single-slot MPMC support');
   CheckContains(LDocsReadme,
-    '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False, while plain `Enqueue` does not; callers must stop and join producers before destroy.',
+    '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False; plain `Enqueue` raises `EInvalidOperationError` after `Close`; callers must Close → join producers/waiters → Free.',
     'lockfree README must document the MPSC caller-role and destroy contract');
   CheckContains(LDocsReadme,
     '`TSpscQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so a closed queue stops waiting promptly instead of sleeping until the full timeout.',
@@ -5777,7 +6005,7 @@ begin
     '`TMpscQueue<T>.Close` wakes already-blocked `DequeueWait` consumers so a closed-empty queue stops waiting even without a timeout.',
     'lockfree README must document the MPSC close wake contract for blocked wait calls');
   CheckContains(LDocsReadme,
-    '`TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.',
+    'All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TSpmcQueue`, `TSegQueue`, `TLockFreeMsQueue`, `TLockFreeStack`, `TWorkStealingDeque`, `TLockFreeChannel`, `TLockFreeChannelSpsc`, `TShardedHashMap` keys/values) reject managed types at construction with `EArgumentError`.',
     'lockfree README must document constructor-time managed-type rejection for every public structure');
   CheckContains(LDocsReadme,
     '`TMpscQueue.Destroy` 会调用 `Close` 以唤醒阻塞中的单消费者，然后 drain 剩余节点。',
@@ -5903,6 +6131,20 @@ begin
 
   CheckContains(LSpscSource, 'if IsManagedType(T) then',
     'SPSC queue must reject managed element types');
+  CheckContains(LMpmcSource, 'if IsManagedType(T) then',
+    'MPMC queue must reject managed element types');
+  CheckContains(LMpscSource, 'if IsManagedType(T) then',
+    'MPSC queue must reject managed element types');
+  CheckContains(LStackSource, 'if IsManagedType(T) then',
+    'stack must reject managed element types');
+  CheckContains(LDequeSource, 'if IsManagedType(T) then',
+    'deque must reject managed element types');
+  CheckContains(LChannelSource, 'if IsManagedType(T) then',
+    'channel must reject managed element types');
+  CheckContains(LHashMapSource, 'if IsManagedType(TKey) then',
+    'sharded hashmap must reject managed keys');
+  CheckContains(LHashMapSource, 'if IsManagedType(TValue) then',
+    'sharded hashmap must reject managed values');
   CheckContains(LSpscSource, 'LockFreeNotifyData(@FDataEpoch, @FDataWaiters)',
     'SPSC queue must notify data waiters after publish');
   CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
@@ -6350,11 +6592,15 @@ begin
   CheckContains(LMpscCloseProducerTestSection,
     'Check(LQ.IsClosed, ''closed'');',
     'MPSC close producer contract test must assert closed state first');
-  CheckContains(LMpscCloseProducerTestSection, 'LQ.Enqueue(42);',
-    'MPSC close producer contract test must enqueue after close');
   CheckContains(LMpscCloseProducerTestSection,
-    'Check(LQ.TryDequeue(LV), ''MPSC enqueue after close still drains'');',
-    'MPSC close producer contract test must drain the close-published item');
+    'Check(not LQ.TryEnqueue(42), ''TryEnqueue after close rejected'');',
+    'MPSC close producer contract test must reject TryEnqueue after close');
+  CheckContains(LMpscCloseProducerTestSection,
+    'Check(LGot, ''Enqueue after close raises EInvalidOperationError'');',
+    'MPSC close producer contract test must raise on Enqueue after close');
+  CheckContains(LMpscSource,
+    'raise EInvalidOperationError.Create(''TMpscQueue: Enqueue on closed queue'');',
+    'MPSC Enqueue must raise on closed queue');
   CheckContains(LMpscCloseProducerTestSection,
     'Check(not LQ.DequeueWait(LV), ''dequeue wait false on closed empty MPSC'');',
     'MPSC close producer contract test must freeze closed-empty wait termination');
@@ -6438,8 +6684,8 @@ begin
     'lockfree test runner must register the MPSC publish wake runtime test');
   CheckContains(LMpscTimeoutTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
     'MPSC timeout test must close before freeing the queue');
-  CheckContains(LTestMakefile, '.PHONY: build run test compile-facade-host test-forced-compile test-debug clean',
-    'lockfree test Makefile must expose focused, forced compile, and DEBUG verification targets');
+  CheckContains(LTestMakefile, '.PHONY: build run test compile-facade-host compile-t2-isolation-host test-forced-compile test-t2-isolation-compile test-debug clean',
+    'lockfree test Makefile must expose focused, forced compile, T2 isolation, and DEBUG verification targets');
   CheckContains(LTestMakefile, '-dDEBUG',
     'lockfree test DEBUG target must compile with DEBUG defined');
   CheckContains(LTestMakefile, 'test-debug: run-debug',
@@ -6730,6 +6976,7 @@ begin
   T.Test('MPSC close wake wait', @TestMpscCloseWakeWait);
   T.Test('MPSC destroy auto-close and drain', @TestMpscDestroyAutoCloseAndDrain);
   T.Test('T1 Destroy calls Close (source-contract)', @TestT1DestroyCallsCloseSourceContract);
+  T.Test('FPC RTL isolation (source-contract)', @TestFpcRtlIsolationSourceContract);
   T.Test('MPSC multi-producer', @TestMpscMultiProducer);
   T.Test('Deque basic', @TestDequeBasic);
   T.Test('Deque query contract', @TestDequeQueryContract);
