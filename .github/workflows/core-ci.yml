@@ -117,39 +117,48 @@ jobs:
 
   test-windows-runtime:
     runs-on: windows-latest
+    # Chocolatey freepascal is i386-only and too weak for nextpas.core (reference to).
+    # MSYS2 delivers x86_64 FPC + GNU make/find used by common.mk.
+    defaults:
+      run:
+        shell: msys2 {0}
+        working-directory: core
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install FPC and make
-        shell: pwsh
-        run: |
-          choco install -y freepascal make
-          $ChocolateyProfile = Join-Path $env:ChocolateyInstall 'helpers\chocolateyProfile.psm1'
-          if (Test-Path $ChocolateyProfile) {
-            Import-Module $ChocolateyProfile
-            Update-SessionEnvironment
-          }
-          foreach ($Tool in @('fpc', 'make')) {
-            $Command = Get-Command $Tool -ErrorAction SilentlyContinue
-            if (-not $Command) {
-              throw "$Tool was not installed into PATH"
-            }
-            Add-Content -Path $env:GITHUB_PATH -Value (Split-Path $Command.Source)
-          }
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-fpc
+            make
+            git
 
-      - name: Verify FPC
-        shell: pwsh
+      - name: Verify FPC (x86_64 Windows)
         run: |
+          set -euo pipefail
+          command -v fpc
           fpc -iV
-          make --version
+          fpc -iTP
+          fpc -iTO
+          # Require 64-bit Windows target; refuse i386 chocolatey leftovers.
+          cpu="$(fpc -iTP)"
+          os="$(fpc -iTO)"
+          echo "fpc target cpu=$cpu os=$os"
+          case "$cpu" in
+            x86_64|X86_64) ;;
+            *) echo "error: need x86_64 FPC, got $cpu" >&2; exit 1 ;;
+          esac
+          make --version | head -n 1
 
       - name: Run Windows runtime matrix
-        shell: pwsh
         run: |
+          set -euo pipefail
           # Real Windows host evidence (not Wine).
-          # 14 module suites (same dirs as wine matrix) + 3 dedicated real gates.
+          # 14 suite dirs + 3 dedicated real gates.
           # truth=real-windows-runtime-ci only — not full ci-matrix until ROADMAP D1.d.
-          pwsh -File scripts/platform-windows-ci-matrix.ps1
+          bash scripts/platform-windows-ci-matrix.sh
 
   test-freebsd:
     runs-on: ubuntu-latest
