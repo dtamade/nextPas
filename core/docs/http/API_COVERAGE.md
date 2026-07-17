@@ -17,7 +17,7 @@
 - **可用性 A–I + J/K**：主路径齐；Op hygiene；工厂白名单已冻。
 - **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
 - **前置条件错误**：公开面 nil/非法参数 → `EHttpError(hekArgument)`。
-- **Residual-honest（Era 6 后）**：cancel waitable landed（X2；Windows socketpair residual / probe-only ~10ms）；pool IdleTTL landed（X3；默认 90s / 0=off）；OpenSSL PinValidator free landed（X4；HTTPS 余 1×41B process-lifetime）；headers equal-fold Get/Has landed（X5）；server `Default` RW=0 keep。
+- **Residual-honest（Era 6–7）**：cancel waitable Unix（X2）；**Windows probe-only only**（R3）；pool IdleTTL（X3）+ suite hang 修（R1 close-outside-lock）；OpenSSL PinValidator free（X4）；HTTPS **1×41B process-lifetime** 无可靠 call stack（R2 Park）；headers equal-fold Get/Has（X5）；server `Default` RW=0 keep。
 - **WebSocket**：production-helper lifecycle 契约见 CONTRACT §2.2.3c；证据 `test_http_websocket` + `test_http_websocket_client`（含 close lifecycle / cancel Op）。
 - **历史档案**：[`archive/`](archive/README.md)。与 ROADMAP 冲突时以 ROADMAP + 源码为准。
 
