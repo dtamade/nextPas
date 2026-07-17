@@ -4,7 +4,8 @@
 **Owner**: mem lane（`.worktrees/mem`）
 **更新**: 2026-07-17
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
-**最近 land**: `d2b704ffe`（D0/D1）· 本 slice D4 Scorecard 刷新
+**最近 land（main）**: `d2b704ffe`（D0/D1）· `a0a374f19`（D4 Scorecard）· `c87ac8f60`（README Steady）
+**Steward 观测（docs only）**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [CONSUMER-OBSERVATION-2026-07-17.md](CONSUMER-OBSERVATION-2026-07-17.md)
 
 ---
 
@@ -80,6 +81,7 @@
 | **D6** | 接入可发现 | API-GUIDE 保持「30 秒 + 反例」；新助手必有门禁 | guardrails / docs contract | P1 |
 | **D7** | 错误面收敛（可选） | 评估统一 `EAllocError` 爆炸半径 | **先设计备忘，默认不做代码** | P2 按需 |
 | **D8** | 新 API | 仅当 **命名上层模块** 提交需求 + 测试用例 | 新类型默认 Tier-3；进门面需 STDLIB 规则 | P2 按需 |
+| **D9** | Steward 观测 | inventory 可删清单 + consumer 只读 findings | **文档 only**；不删代码、不强制改 consumer | **done** 2026-07-17 |
 
 ### 4.2 近期切片（可执行）
 
@@ -88,8 +90,10 @@
 | D0-a | 归档时代 A ROADMAP\*；本文件成为权威 | — | **landed** `d2b704ffe` |
 | D1-a | consumer-audit 门禁 path-limited → main | main 安静窗口 | **landed** `d2b704ffe` |
 | D2-a | 默认 lane gate 不变：`lane-focused LANE=mem` | — | 已落地 |
-| D4-a | 刷新 SCORECARD 发布数字（`RELEASE=1` SC1–SC9 全 PASS） | 本机安静跑 | **done** 2026-07-17 |
+| D4-a | 刷新 SCORECARD 发布数字（`RELEASE=1` SC1–SC9 全 PASS） | 本机安静跑 | **landed** `a0a374f19` |
 | D3-a | 不主动扫仓；其它 lane 触达堆路径时提供 review 清单 | 其它模块 owner | 持续 |
+| D9-a | inventory 可删/可归档清单（不删代码） | — | **done** 见 [INVENTORY-AUDIT](INVENTORY-AUDIT-2026-07-17.md) |
+| D9-b | consumer unsized free / 热路径 IAllocator 只读 findings | — | **done** 见 [CONSUMER-OBSERVATION](CONSUMER-OBSERVATION-2026-07-17.md) |
 
 ### 4.3 退出条件（时代 D 何时算「够稳」）
 
@@ -102,6 +106,7 @@
 
 **Steady 判定（2026-07-17）**: 上述 1–4 均满足 → 时代 D 进入 **Steady** 维护姿态。
 Steady 之后默认：**只做 D3 顺手升级 + 修回归**；新里程碑需总控或命名 consumer 发起。
+D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consumer 须各自 owner + 总控批准。
 
 ---
 

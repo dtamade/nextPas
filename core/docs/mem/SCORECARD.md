@@ -1,8 +1,8 @@
 # mem Scorecard
 
-**状态**: Active（SC1–SC9 脚手架已落地）
+**状态**: Steady 基线（SC1–SC9 脚手架绿；RELEASE 数字 2026-07-17）
 **权威入口**: `core/tests/nextpas.core.mem/scorecard/`
-**计划引用**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §7
+**计划引用**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §7 · [ROADMAP.md](ROADMAP.md) D4
 
 Ready 报告的性能证据以本 Scorecard 为准；历史微基准博物馆数据见 [BENCHMARKS.md](BENCHMARKS.md)。
 
