@@ -438,6 +438,20 @@ begin
   Check(LOptions.TLSContext = nil, 'default client TLS context is nil');
 end;
 
+procedure TestHttpClientOptionsWithTLSContextFluent;
+var
+  LOptions: THttpClientOptions;
+begin
+  { Nil clear path: WithTLSContext(nil) keeps/clears field without crash. }
+  LOptions := THttpClientOptions.Default
+    .WithTimeout(15000)
+    .WithTLSContext(nil)
+    .WithProxyUrl('http://127.0.0.1:8080');
+  CheckEqual(Int64(15000), LOptions.Timeout, 'fluent chain keeps timeout');
+  Check(LOptions.TLSContext = nil, 'WithTLSContext(nil) is nil');
+  CheckEqual('http://127.0.0.1:8080', LOptions.ProxyUrl, 'fluent chain keeps proxy');
+end;
+
 procedure TestHttpServerOptionsDefault;
 var
   LOptions: THttpServerOptions;
@@ -553,6 +567,8 @@ begin
   T.Test('TUrl.ParseRequestTarget scheme-like origin-form', @TestUrlParseRequestTargetOriginFormWithSchemeLikePath);
   T.Test('TUrl.ParseRequestTarget empty raises', @TestUrlParseRequestTargetEmptyRaises);
   T.Test('THttpClientOptions.Default', @TestHttpClientOptionsDefault);
+  T.Test('THttpClientOptions.WithTLSContext fluent',
+    @TestHttpClientOptionsWithTLSContextFluent);
   T.Test('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
   T.Test('HTTP options WithVersion', @TestHttpOptionsWithVersion);
   T.Test('HTTP options WithTimeout', @TestHttpOptionsWithTimeout);

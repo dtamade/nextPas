@@ -434,8 +434,8 @@ begin
   Check(Pos('transitional', LRet) > 0, 'RETURN-SEMANTICS documents transitional io helpers');
   Check(Pos('platform_io_read', LRet) > 0, 'RETURN-SEMANTICS names platform_io_read');
   Check(Pos('dual api', LRet) > 0, 'RETURN-SEMANTICS has Dual API section');
-  Check(Pos('whitelist', LRet) > 0, 'RETURN-SEMANTICS documents dual-IO whitelist');
-  Check(Pos('platform_io_poll', LRet) > 0, 'RETURN-SEMANTICS allows process.pipe poll');
+  Check(Pos('no other production call sites', LRet) > 0,
+    'RETURN-SEMANTICS dual-IO has no other production call sites');
 
   LEx := LowerCase(FsReadFileText(ResolveDocs('EXAMPLES.md')));
   { ban uses-clause style SysUtils, allow the ban rule text itself }
@@ -646,7 +646,7 @@ var
   LFiles: TStringArray;
   I: Int32;
   LName, LSrc: string;
-  LPipe: string;
+  LRoad: string;
 begin
   LRoot := ResolveSrcRoot;
   LFiles := FsGlob(LRoot, 'nextpas.core.*.pas');
@@ -654,36 +654,31 @@ begin
   for I := 0 to High(LFiles) do
   begin
     LName := ExtractFileName(LFiles[I]);
-    { dual-IO owner may define and use all symbols }
+    { dual-IO owner may define symbols }
     if LName = 'nextpas.core.platform.process.pas' then
       Continue;
     LSrc := LowerCase(FsReadFileText(LFiles[I]));
-    if LName = 'nextpas.core.process.pipe.pas' then
-    begin
-      Check(Pos('platform_io_read(', LSrc) = 0,
-        'process.pipe must not call platform_io_read');
-      Check(Pos('platform_io_write(', LSrc) = 0,
-        'process.pipe must not call platform_io_write');
-      Check(Pos('platform_io_close(', LSrc) = 0,
-        'process.pipe must not call platform_io_close');
-      Check(Pos('platform_io_poll(', LSrc) > 0,
-        'process.pipe may still call platform_io_poll for drain');
-      Check(Pos('platform_file_read', LSrc) > 0,
-        'process.pipe routes read via platform.files');
-      Continue;
-    end;
     Check(Pos('platform_io_read(', LSrc) = 0,
       LName + ' must not call platform_io_read');
     Check(Pos('platform_io_write(', LSrc) = 0,
       LName + ' must not call platform_io_write');
     Check(Pos('platform_io_poll(', LSrc) = 0,
       LName + ' must not call platform_io_poll');
+    Check(Pos('platform_io_close(', LSrc) = 0,
+      LName + ' must not call platform_io_close');
+    if LName = 'nextpas.core.process.pipe.pas' then
+    begin
+      Check(Pos('platform_file_read', LSrc) > 0,
+        'process.pipe routes read via platform.files');
+      Check(Pos('function pipepoll', LSrc) > 0,
+        'process.pipe has local PipePoll (no platform_io_poll)');
+    end;
   end;
 
-  LPipe := LowerCase(FsReadFileText(ResolveDocs('residual-roadmap.md')));
-  Check(Pos('platform_io_poll', LPipe) > 0,
+  LRoad := LowerCase(FsReadFileText(ResolveDocs('residual-roadmap.md')));
+  Check(Pos('dual-io', LRoad) > 0,
     'residual-roadmap documents dual-IO whitelist');
-  Check(Pos('lt4', LPipe) > 0, 'residual-roadmap registers LT4');
+  Check(Pos('lt4', LRoad) > 0, 'residual-roadmap registers LT4');
 end;
 
 procedure TestResidualRoadmapFreeze;
