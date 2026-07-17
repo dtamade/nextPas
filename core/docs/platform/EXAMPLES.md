@@ -4,6 +4,8 @@
 
 本文档提供常见跨平台场景的代码示例，帮助快速上手 platform 模块。
 
+**规则**: 示例 `uses` 只允许 `nextpas.core.platform.*`（及本模块文档已引用的 core 类型）。禁止 `SysUtils` / `BaseUnix` / `Windows` / `Classes`。
+
 ## 1. 文件操作示例
 
 ### 基本文件读写
@@ -364,25 +366,25 @@ program EnvVars;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.platform.process,
-  SysUtils;
+  nextpas.core.platform.env;
 
 var
-  LValue: String;
+  LValue: AnsiString;
 begin
-  // 获取环境变量
-  LValue := platform_process_get_env('PATH');
+  // 获取环境变量（不存在与空值都返回 ''；需区分时先 platform_env_exists）
+  LValue := platform_env_get_str('PATH');
   WriteLn('PATH = ', LValue);
 
   // 设置环境变量
-  platform_process_set_env('MY_VAR', 'Hello World');
-  LValue := platform_process_get_env('MY_VAR');
-  WriteLn('MY_VAR = ', LValue);
+  if platform_env_set(PAnsiChar('MY_VAR'), PAnsiChar('Hello World')) = 0 then
+  begin
+    LValue := platform_env_get_str('MY_VAR');
+    WriteLn('MY_VAR = ', LValue);
+  end;
 
   // 删除环境变量
-  platform_process_del_env('MY_VAR');
-  LValue := platform_process_get_env('MY_VAR');
-  if LValue = '' then
+  platform_env_unset(PAnsiChar('MY_VAR'));
+  if not platform_env_exists(PAnsiChar('MY_VAR')) then
     WriteLn('MY_VAR 已删除');
 end.
 ```
@@ -628,16 +630,14 @@ program TimeDemo;
 {$mode ObjFPC}{$H+}
 
 uses
-  nextpas.core.platform.time,
-  SysUtils;
+  nextpas.core.platform.time;
 
 var
   LNow, LMono: Int64;
 begin
-  // 获取当前时间戳（秒）
+  // 获取当前时间戳（秒，Unix epoch）
   LNow := platform_time_now;
-  WriteLn('当前时间戳: ', LNow);
-  WriteLn('格式化时间: ', DateTimeToStr(UnixToDateTime(LNow)));
+  WriteLn('当前时间戳: ', LNow, ' s');
 
   // 获取单调时钟（纳秒）
   LMono := platform_time_monotonic;
@@ -818,8 +818,7 @@ program MiniWebServer;
 uses
   nextpas.core.platform.net,
   nextpas.core.platform.sync,
-  nextpas.core.platform.process,
-  SysUtils;
+  nextpas.core.platform.process;
 
 const
   PORT = 8080;
@@ -1025,8 +1024,7 @@ program PipeDemo;
 
 uses
   nextpas.core.platform.pipe,
-  nextpas.core.platform.process,
-  SysUtils;
+  nextpas.core.platform.process;
 
 const
   PIPE_NAME = '/tmp/test_pipe';

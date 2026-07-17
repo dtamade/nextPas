@@ -10,6 +10,26 @@ Windows has focused-runtime evidence for 14 modules on real Windows VM via SSH,
 plus Wine runtime smoke for 20 modules. macOS, FreeBSD, and Android remain
 source-contract or forced-compile only.
 
+### 2026-07-17 process/console/pty contract slice
+
+Linux focused-runtime evidence added/refreshed for:
+
+- `platform_process_*_ex` pipe IO error-code APIs + deprecated legacy wrappers
+- console unsupported write stubs (`PLATFORM_ERR_UNSUPPORTED`, no raw `-1`)
+- pty `IsEmpty` / Windows validity / unsupported close clearing
+
+Windows truth tiers are **unchanged** by this slice (no new real-Windows or
+Wine matrix promotion). Wine compile remains environment-dependent
+(`ppcrossx64` required).
+
+### 2026-07-17 usability residual (M0–M7)
+
+- `PLATFORM_ERR_UNKNOWN` (-8): Windows unmapped host errors never passthrough raw `ERROR_*`
+- `PLATFORM_ERR_PATH_TOO_LONG` stays -7 (domain path clamp; not OS ENAMETOOLONG)
+- `platform_io_*` dual-API documented as transitional for process.pipe
+- EXAMPLES.md: no SysUtils in sample code
+- Authority: ERROR-HANDLING / RETURN-SEMANTICS / API-REFERENCE aligned
+
 ## Host Status
 
 | Host | Current truth | Required next proof |

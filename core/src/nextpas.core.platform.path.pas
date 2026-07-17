@@ -4,6 +4,9 @@ unit nextpas.core.platform.path;
 
 interface
 
+uses
+  nextpas.core.platform.posix.errno;
+
 const
 {$IFDEF NEXTPAS_WINDOWS}
   {** @desc 路径分隔符（Windows: \） *}

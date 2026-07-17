@@ -20,17 +20,20 @@ implementation
 uses
   nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.errno,
   nextpas.core.platform.linux.ffi;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_MACOS}
 uses
-  nextpas.core.platform.darwin.ffi;
+  nextpas.core.platform.darwin.ffi,
+  nextpas.core.platform.posix.errno;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_FREEBSD}
 uses
-  nextpas.core.platform.freebsd.ffi;
+  nextpas.core.platform.freebsd.ffi,
+  nextpas.core.platform.posix.errno;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}

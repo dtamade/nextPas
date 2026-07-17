@@ -66,6 +66,7 @@ type
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
@@ -115,6 +116,7 @@ type
     function WithBearerAuth(const AToken: string): IHttpClient; virtual;
     function WithHeader(const AName, AValue: string): IHttpClient; virtual;
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient; virtual;
+    function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient; virtual;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient; virtual;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient; virtual;
     function WithRetry(const AMaxRetries: Int32): IHttpClient; virtual;
@@ -801,7 +803,7 @@ begin
     if ARedirectsLeft <= 0 then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect,
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
         FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
           'too many redirects'));
     end;
@@ -810,7 +812,7 @@ begin
     if LRespHeaders = nil then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect,
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
         FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
           'redirect with no response headers'));
     end;
@@ -819,7 +821,7 @@ begin
     if Length(LLocations) > 1 then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect,
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
         FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
           'redirect with duplicate Location headers'));
     end;
@@ -831,7 +833,7 @@ begin
     if LLocation = '' then
     begin
       ReleaseResponseBodyIgnoringErrors(LResp);
-      raise EHttpError.Create(hekRedirect,
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
         FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
           'redirect with no Location header'));
     end;
@@ -843,7 +845,7 @@ begin
       begin
         ReleaseResponseBodyIgnoringErrors(LResp);
         if E.Kind = hekRedirect then
-          raise EHttpError.Create(hekRedirect,
+          raise EHttpError.CreateOp(hekRedirect, 'redirect',
             FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
               E.Message))
         else
@@ -874,9 +876,9 @@ begin
         RewindRedirectBody(AReq, LBodyStream, LBodyStartPosition);
       except
         on E: EHttpError do
-          raise EHttpError.Create(E.Kind,
+          raise EHttpError.CreateOp(E.Kind, 'redirect',
             FormatHttpClientError(HttpMethodToStr(AReq.Method), LUrl.ToString,
-              E.Message), E.Status);
+              E.Message));
         else
           raise;
       end;
@@ -1136,6 +1138,12 @@ begin
     Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
 end;
 
+function THttpClient.WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  { Rebuild transport so ConnectTimeout is plumbed to H1/H2 dial options. }
+  Result := NewHttpClient(FOptions.WithConnectTimeout(ATimeoutMs));
+end;
+
 function THttpClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
 begin
   Result := TOptionsOverrideClient.Create(Self,
@@ -1163,6 +1171,12 @@ end;
 function THttpClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
 begin
   Result := NewHttpClient(FOptions.WithProxyUrl(AProxyUrl));
+end;
+
+function THttpClientForwarder.WithConnectTimeout(
+  const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := RebindInner(FInner.WithConnectTimeout(ATimeoutMs));
 end;
 
 { THttpClientForwarder }

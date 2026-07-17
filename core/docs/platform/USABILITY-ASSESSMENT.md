@@ -1,10 +1,14 @@
 # nextpas.core.platform 可用性评估报告
 
+> **HISTORICAL (2026-07-06).** Scores below are **not** current authority.
+> Live contract: [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md), [ERROR-HANDLING.md](ERROR-HANDLING.md),
+> [CONTRACT.md](CONTRACT.md). Re-assessed 2026-07-17 at ~6.9/10 before remediation.
+
 **日期**: 2026-07-06
 **评估人**: Claude (AI)
 **评估范围**: 全部 89 个源文件、93 个测试文件、489 个公开 API
 **对标标准**: Rust std::os / Go os+syscall 工程标准
-**当前版本**: platform-usability-v6
+**当前版本**: platform-usability-v6 (historical)
 
 ---
 

@@ -5,6 +5,7 @@ unit nextpas.core.platform.socket;
 interface
 
 uses
+  nextpas.core.platform.posix.errno,
   nextpas.core.platform.socket.base,
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
@@ -1202,6 +1203,8 @@ var
 begin
   ARecvd := 0;
   if ABuf = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  if AAddrLen = nil then
     Exit(PLATFORM_ERR_INVALID);
   if ALen <= 0 then
     Exit(0);

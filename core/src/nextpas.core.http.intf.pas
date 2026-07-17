@@ -240,6 +240,8 @@ type
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    {** Rebuild transport with ConnectTimeout (OS dial + post-dial first-write budget). }
+    function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     {** @desc Returns a decorator that retries failed requests up to AMaxRetries

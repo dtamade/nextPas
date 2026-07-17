@@ -4,6 +4,9 @@ unit nextpas.core.platform.dl;
 
 interface
 
+uses
+  nextpas.core.platform.posix.errno;
+
 type
   {** @desc 动态库句柄，封装平台相关的库引用 *}
   TPlatformLibrary = record

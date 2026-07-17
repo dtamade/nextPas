@@ -3,7 +3,6 @@ program test_platform_signal_wine;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.platform.signal;
 
 var

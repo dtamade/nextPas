@@ -4,6 +4,9 @@ unit nextpas.core.platform.mmap;
 
 interface
 
+uses
+  nextpas.core.platform.posix.errno;
+
 type
   {** @desc 内存映射访问模式 *}
   TPlatformMapAccess = (

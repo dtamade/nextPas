@@ -1,10 +1,10 @@
 # nextpas.core.platform 代码契约
 
-**模块路径**：`core/src/nextpas.core.platform*.pas`（60 个源文件）
+**模块路径**：`core/src/nextpas.core.platform*.pas`（60+ 个源文件）
 **层级**：L0（仅依赖 FPC RTL）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-05
-**版本**：2.0
+**Owner**：platform lane（`.worktrees/platform`）
+**最后更新**：2026-07-17
+**版本**：2.1
 
 ---
 
@@ -19,7 +19,7 @@
 | platform.error.pas | 错误码常量 + 消息映射 | PLATFORM_ERR_*, platform_error_message |
 | platform.info.pas | OS/架构/字节序检测 | platform_info_os, platform_info_arch |
 | platform.time.pas | 时间 API | platform_monotonic_ns, platform_wallclock_ns |
-| platform.io.pas | 文件 I/O (deprecated) | platform_io_read, platform_io_write |
+| platform.process.pas (`platform_io_*`) | 过渡 fd I/O（process.pipe；value/sentinel） | platform_io_read, platform_io_write, platform_io_poll; close 为 error-code |
 | platform.files.pas | 文件操作 | platform_file_open, platform_file_stat, platform_dir_open |
 | platform.fs.pas | 文件系统高级操作 | platform_fs_mkdir_p, platform_fs_copy, platform_fs_glob |
 | platform.path.pas | 路径操作 | platform_path_join, platform_path_dirname |
@@ -77,6 +77,17 @@ function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
 function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
 
+// 进程管道 IO（规范错误码 API；0 = 成功）
+function platform_process_write_stdin_ex(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32; out ABytesWritten: Int32): Int32;
+function platform_process_read_stdout_ex(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+function platform_process_read_stderr_ex(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+// 兼容旧 API（deprecated）：成功返回字节数；失败返回 -1；
+// unsupported 平台返回 PLATFORM_ERR_UNSUPPORTED。
+// 新代码必须使用 *_ex。
+
 // 线程
 function platform_thread_create(out AHandle: TPlatformThreadHandle;
   AProc: TPlatformThreadProc; AArg: Pointer): Int32;
@@ -98,12 +109,26 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 
 ## 2. 不变量
 
-- **返回值约定**: 所有函数返回 `Int32`，0 = 成功，正数 = errno/GetLastError，`PLATFORM_ERR_UNSUPPORTED` (95) = 不支持的平台
+### 2.1 三类返回语义（必须区分）
+
+完整表见 [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md)。
+
+| 类别 | 约定 | 示例 |
+|------|------|------|
+| **Error-code APIs** | `Int32`：`0` = 成功；`PLATFORM_ERR_*` = 失败；禁止 bare `-1` 作为错误码 | `platform_file_open`, `platform_process_write_stdin_ex`, `platform_resource_get_limit` |
+| **Length / size APIs** | `>= 0` = 长度；失败返回 `PLATFORM_ERR_*` | `platform_args_get`, `platform_error_message`, `platform_fs_temp_dir` |
+| **Value / sentinel APIs** | 业务值；无效用 sentinel（`-1`/`nil`） | `platform_pty_master_fd`、`platform_io_read` 字节数、`platform_aligned_alloc` |
+
+禁止在 **Error-code API** 失败路径返回无语义 `-1`。Legacy 长度包装可以保留 `-1`，但必须 `deprecated` 并指向 `*_ex`。
+
+### 2.2 其它不变量
+
 - **句柄无效值**: `TPlatformFileHandle.Value = -1`（Unix）/ `INVALID_HANDLE_VALUE`（Windows）
 - **Socket 句柄**: >= 0（Unix）/ > 0（Windows）
 - **文件描述符**: 0/1/2 保留给 stdin/stdout/stderr
 - **内存分配**: 返回 `Pointer`，`nil` 表示失败
-- **字符串参数**: 所有 `PAnsiChar` 参数接受 nil（返回 `PLATFORM_ERR_INVALID`）
+- **字符串参数**: 所有 `PAnsiChar` 参数接受 nil（返回 `PLATFORM_ERR_INVALID`，除非语义允许空/零长度）
+- **out 参数**: Error-code API 在 early-exit 前必须初始化 out 结果（字节数/句柄等）
 
 ---
 
@@ -121,8 +146,16 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
   - `PLATFORM_ERR_AGAIN` (11) — 资源暂时不可用
   - `PLATFORM_ERR_UNSUPPORTED` (95) — 不支持的操作
   - `PLATFORM_ERR_PATH_TOO_LONG` (-7) — 路径超过 PLATFORM_FS_MAX_PATH
-- **错误消息**: `platform_error_message(ACode, ABuf, ABufSize)` 返回人类可读消息
-- **错误分类**: `platform_error_category(ACode)` 返回 `TPlatformErrorCategory`
+- **错误消息**: `platform_error_message` 是 length API：成功返回写入字节数，失败返回 `PLATFORM_ERR_*`
+- **错误分类**: `platform_error_category(ACode)` 返回 `TErrorCategory`（`nextpas.core.exception`）
+- **单一错误族**: 资源限制等 API 同样返回 `PLATFORM_ERR_*`，无独立 `PLATFORM_RESOURCE_ERROR_*` 公共语言
+- **RTL 隔离**: 生产 platform 不得 `uses SysUtils`/`BaseUnix`/`Windows`/`Classes`；`platform.args` 不得依赖 `ParamCount`/`ParamStr`
+
+### 3.1 files / fs / io 边界
+
+- **files**: 句柄与目录原语
+- **fs**: 路径级组合（可调用 files）
+- **io**: poller；`process` 内 `platform_io_*` 为 value/sentinel 过渡 API
 
 ---
 
@@ -144,19 +177,18 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 
 ---
 
-## 6. 平台支持
+## 6. 平台支持（证据语言，对齐 goal-tree）
 
-| 平台 | 状态 | 测试方式 |
-|------|------|----------|
-| Linux x86_64 | ✅ 完成 | 本地 + CI |
-| Linux aarch64 | ✅ 完成 | 交叉编译 + QEMU |
-| Linux arm32 | ✅ 完成 | 交叉编译 |
-| Linux riscv64 | ✅ 完成 | 交叉编译 |
-| macOS x86_64 | ✅ 完成 | CI |
-| Windows x86_64 | ✅ 完成 | Wine + CI |
-| FreeBSD | ✅ 完成 | 交叉编译 |
-| Android | ✅ 完成 | 交叉编译 |
-| Fallback stub | ✅ 完成 | 返回 PLATFORM_ERR_UNSUPPORTED |
+| 平台 | Truth tier | 证据 |
+|------|------------|------|
+| Linux x86_64 | focused-runtime | 本地 focused gates + heaptrc |
+| Linux aarch64 / arm32 / riscv64 | forced-compile | cross-compile gates；runtime 非全覆盖 |
+| Windows x86_64 | wine-runtime-smoke + 部分 focused-runtime | Wine smoke；真机 runtime 偏 io/socket |
+| macOS / FreeBSD | source-contract / selected compile | 无完整 runtime ready 声称 |
+| Android | forced-compile / source-contract | files/mmap 等片段 |
+| Fallback stub | compile-coherent | 返回 `PLATFORM_ERR_UNSUPPORTED` |
+
+详细矩阵见 `goal-tree.md` 与 `runtime-truth-matrix.md`。
 
 ---
 

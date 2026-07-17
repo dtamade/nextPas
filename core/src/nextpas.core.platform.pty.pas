@@ -8,7 +8,8 @@ unit nextpas.core.platform.pty;
 interface
 
 uses
-  nextpas.core.platform.pty.base;
+  nextpas.core.platform.pty.base,
+  nextpas.core.platform.posix.errno;
 
 {** @desc 打开伪终端对
     @param ASize 终端尺寸
@@ -436,6 +437,8 @@ end;
 
 function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
 begin
+  if APty.PipeOut = 0 then
+    Exit(-1);
   Result := PtrInt(APty.PipeOut);
 end;
 {$ENDIF}
@@ -448,7 +451,7 @@ begin APid := -1; AFailStage := ptssNone; Result := PLATFORM_ERR_UNSUPPORTED; en
 function platform_pty_resize(var APty: TPlatformPty; const ASize: TPlatformPtySize): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pty_close(var APty: TPlatformPty): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+begin FillChar(APty, SizeOf(APty), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
 begin Result := -1; end;
 {$ENDIF}

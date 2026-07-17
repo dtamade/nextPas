@@ -45,7 +45,7 @@ type
   {** @desc LONG 指针类型 *}
   PLONG = ^LONG;
   {** @desc 64 位整数指针类型 *}
-  PINT64 = System.PInt64;
+  PINT64 = ^Int64;
   {** @desc BYTE 指针类型 *}
   LPBYTE = ^BYTE;
   {** @desc LPSTR 指针类型 *}

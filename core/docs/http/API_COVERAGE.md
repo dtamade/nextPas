@@ -11,18 +11,55 @@
 
 ## 当前结论
 
-- **2026-07-17 cycle-3 usability fix（现行真相；以本条为准）**：
+- **2026-07-17 cycle-6 usability inventory（只读；现行评估入口）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle6.md`、
+    `2026-07-17-usability-cycle6-research.md`、
+    `2026-07-17-usability-cycle6-fix-plan.md`（score **96/100**；Wave A = land cycle-5）。
+  - Open residual：cycle-5 uncommitted→land；WS mid-frame cancel P2；H2 live dial optional；
+    Deferred product list unchanged.
+- **2026-07-17 cycle-5 usability fix（已吸收 / Wave A land）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle5.md`、
+    `2026-07-17-usability-cycle5-research.md`、
+    `2026-07-17-usability-cycle5-fix-plan.md`（baseline `fb0bbeae0`，score 94→fix）。
+  - **Landed**：
+    - CONTRACT §2.1 `IHttpClient` 片段与 live 接口对齐（含 `WithConnectTimeout` /
+      `WithProxyUrl` / ensure-*String / JSON 双层表）。
+    - WebSocket client：`TWebSocketOptions.ConnectTimeout`/`Timeout` Default=30000；
+      timed `TcpConnect` + handshake deadline + clear after 101。
+    - Live http e2e：`test_http_client` backlog-full dial timeout + mid-read cancel hold server。
+    - Live WS e2e：`test_http_websocket_client` backlog-full dial timeout。
+    - Client redirect hot-path `CreateOp(Op=redirect)`。
+  - **Residual honesty**：cancel 切片 ~50ms；server Default RW=0 仍兼容测试。
+  - **Deferred** 仍真：CONNECT / Retry-After / full PSL / Response metadata /
+    ensure-2xx JSON **decode** / Op-everywhere / H3。
+- **2026-07-17 cycle-4 usability fix（已吸收）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle4.md`、
+    `2026-07-17-usability-cycle4-research.md`、
+    `2026-07-17-usability-cycle4-fix-plan.md`（baseline `a12f8dd9b`，score 91→fix）。
+  - **Landed**（H1 + H2 对称）：
+    - OS dial timeout：`ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)`（H1/H2）。
+    - mid-read/write cancel：`SetCancelToken` + ~50ms SO_RCVTIMEO 切片；
+      cancel → `EHttpError(hekCanceled)`（经 `ECancelledError` 包装）。
+    - fluent：`IHttpClient.WithConnectTimeout`（重建 transport，与 `WithProxyUrl` 同模式）。
+    - HTTPS H2：ConnectTimeout 在 raw TCP（TLS handshake）与 TLS wrap 后最终流
+      各 apply 一次；握手后 `ApplyDeadline(Timeout)` 经 `TTlsTcpStream` **转发到 FInner**，
+      不让短 ConnectTimeout 泄漏到 post-handshake 请求 I/O。
+  - **Residual honesty**：cancel 切片延迟约 ~50ms；无 OS 级 interrupt；须与 Timeout 配对。
+  - **Deferred** 仍真：CONNECT / Retry-After / full PSL / Response metadata /
+    ensure-2xx JSON **decode product** / Op-everywhere / H3。
+  - JSON 双层语义：
+    - raw：`IHttpClient.PostJson` / `PutJson` / … → `IHttpResponse`（不 ensure-2xx）。
+    - ensure：free-fn `HttpPostJson` / `HttpGetString` / 方法 `GetString`/`PostString` 等。
+- **2026-07-17 cycle-3 usability fix（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle3.md`、
     `2026-07-17-usability-cycle3-research.md`、
-    `2026-07-17-usability-cycle3-fix-plan.md`（baseline `82ecf1f3e`，score 93→fix）。
+    `2026-07-17-usability-cycle3-fix-plan.md`（baseline `82ecf1f3e`）。
   - Transport 前置条件（H1/H2/TLS stream nil conn/req/handler 等）→
     **`EHttpError(hekArgument)`**（不再裸 `EArgumentError`）。
   - `NewHttpServerWithRequestArena` 无参重载基于 **Production** + RequestArena。
   - Redirect resolve / body rewind / download mkdir-publish 错误消息在已知 method/URL
     时带 `METHOD url:` 前缀。
-  - **Blocked** 仍真：OS dial timeout、mid-read cancel（net）。
-  - **Deferred** 仍真：CONNECT / Retry-After / full PSL / Response metadata /
-    ensure-2xx JSON decode / Op-everywhere。
+  - 历史文中 “OS dial / mid-read cancel = Blocked” 已被 cycle-4 **Landed** 覆盖。
 - **2026-07-17 post-residual usability fix（已吸收）**：
   - Research/plan：`2026-07-17-usability-post-residual-research.md`、
     `2026-07-17-usability-post-residual-fix-plan.md`（含 post-`feec31b45`
@@ -35,8 +72,8 @@
     - client：`THttpClientOptions.Default.Timeout` = 30000；cancel 须与 Timeout 配对。
     - server：`Default` Read/Write = 0（测试/兼容）；生产用
       **`THttpServerOptions.Production`**（RW=30000）或显式 WithRead/WriteTimeout。
-  - `ConnectTimeout` = **post-dial first-write only**（非 OS dial）；OS dial timeout /
-    mid-read cancel = **Blocked** on net（CONTRACT §2.2.0a）。
+  - `ConnectTimeout`：**OS dial + post-dial first-write** budget（cycle-4 已与 H1/H2 对齐；
+    见 CONTRACT §2.2.0a）。历史 “post-dial only / Blocked OS dial” 已过时。
   - Public construction preconditions（message/form/headers/stream/**server/**
     **websocket/middleware/SSE**/client Send(nil)/body helpers/auth helpers）：
     **`EHttpError(hekArgument)`**。Historical 段落里若仍写裸 `EArgumentError`，
