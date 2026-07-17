@@ -73,7 +73,7 @@ git status --short --branch
 - Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those base constants.
 - Public value-type methods remain scalar. SIMD acceleration is exposed through public batch APIs (`math.batch` / `math.vec.batch`), not through value-type methods.
 - `math.impl.simd` is an internal seam only and is not public API.
-- Public batch surface is currently F32 scalar arrays + selected vec batch. simd already provides F64 `Array*F64` kernels; math has not re-exported a public `Batch*F64` family yet (tracked backlog).
+- Public batch surface covers F32 and F64 scalar arrays plus selected vec batch. `Batch*F64` is a thin open-array facade over simd `Array*F64` (same core set as public F32: sin/cos/exp/ln/sqrt/abs/neg/ceil/floor/round/trunc/lerp/clamp/scale-offset).
 - Linux local focused suite is green with heaptrc zero evidence.
 - Windows trig host link/runtime proof exists via Wine.
 - M8 is complete on Linux+Windows; macOS host trig proof is deferred.
@@ -81,6 +81,6 @@ git status --short --branch
 ## Remaining Gaps
 
 - macOS host trig link/runtime smoke evidence (deferred; blocks full host matrix).
-- Public `Batch*F64` parity with existing F32 batch / simd `Array*F64`.
+- Vec batch Double parity (`vec.batch` remains primarily Single-oriented).
 - `fafafa.game` cutover to final `nextpas.core.math.*` names (M9).
 - Do not wire public value-type methods through SIMD without profiled evidence.

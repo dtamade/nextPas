@@ -152,13 +152,15 @@ Scalar helpers:
 
 Statistical helpers: `Sum`, `SumToDouble`, `SumInt`, `Mean`, `Variance`, `PopnVariance`, `StdDev`, `PopnStdDev`, `TotalVariance`, `SumSquaredDeviations`.
 
-Batch operations: `BatchDot`, `BatchNormalize`, `BatchTransform`, `BatchLerp`, `BatchClamp` (vector batches); `BatchSinF32`, `BatchCosF32`, `BatchSinCosF32`, `BatchTanF32`, `BatchExpF32`, `BatchLnF32`, `BatchLog10F32`, `BatchLog2F32`, `BatchSqrtF32`, `BatchAbsF32`, `BatchNegF32`, `BatchCeilF32`, `BatchFloorF32`, `BatchRoundF32`, `BatchTruncF32`, `BatchLerpF32`, `BatchClampF32`, `BatchScaleOffsetF32` (scalar batches).
+Batch operations: `BatchDot`, `BatchNormalize`, `BatchTransform`, `BatchLerp`, `BatchClamp` (vector batches); `BatchSinF32`, `BatchCosF32`, `BatchSinCosF32`, `BatchTanF32`, `BatchExpF32`, `BatchLnF32`, `BatchLog10F32`, `BatchLog2F32`, `BatchSqrtF32`, `BatchAbsF32`, `BatchNegF32`, `BatchCeilF32`, `BatchFloorF32`, `BatchRoundF32`, `BatchTruncF32`, `BatchLerpF32`, `BatchClampF32`, `BatchScaleOffsetF32` (F32 scalar batches); `BatchSinF64`, `BatchCosF64`, `BatchSinCosF64`, `BatchTanF64`, `BatchExpF64`, `BatchLnF64`, `BatchLog10F64`, `BatchLog2F64`, `BatchSqrtF64`, `BatchAbsF64`, `BatchNegF64`, `BatchCeilF64`, `BatchFloorF64`, `BatchRoundF64`, `BatchTruncF64`, `BatchLerpF64`, `BatchClampF64`, `BatchScaleOffsetF64` (F64 scalar batches, same core set).
+
+Public `Batch*F64` is a thin open-array facade: length is `min(input, output)` (and multi-array mins for multi-input ops), empty inputs return `0`, and work dispatches to simd `Array*F64`. Extra batch helpers such as `BatchAtan2F64` / `BatchHypotF64` live on `nextpas.core.math.batch` but are not re-exported from the root facade (same policy as the F32 extended set).
 
 ### SIMD Batch Operations
 
 `nextpas.core.math.batch.simd` provides SIMD-optimized variants of scalar batch operations.
-These use SSE/AVX intrinsics via `nextpas.core.simd` for 4-wide F32 processing, with scalar
-fallback for remaining elements when the count is not a multiple of 4.
+These use SSE/AVX intrinsics via `nextpas.core.simd` for 4-wide F32 and 2-wide F64 processing, with scalar
+fallback for remaining elements when the count is not a multiple of the lane width.
 
 SIMD batch functions mirror the scalar batch signatures exactly:
 
@@ -172,6 +174,7 @@ SIMD batch functions mirror the scalar batch signatures exactly:
 - `BatchLerpSimdF32` — uses FMA where available (`fma(t, b-a, a)`)
 - `BatchClampSimdF32` — uses `MINPS`+`MAXPS`
 - `BatchScaleOffsetSimdF32` — uses FMA (`fma(input, scale, offset)`)
+- Matching `Batch*SimdF64` family over simd `Array*F64` (same core set as public F64)
 
 The SIMD suffix signals the dispatch path; the public facade `nextpas.core.math` does not re-export
 these functions. They are available through direct import of `nextpas.core.math.batch.simd`.

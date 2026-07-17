@@ -96,8 +96,9 @@ nextpas.core.math final migration
 ## Active Backlog
 
 1. **macOS trig host proof** — deferred until mac host/CI exists.
-2. **Public `Batch*F64` family** — simd already has `Array*F64`; math public
-   batch surface still F32-only. Next implementation slice when consumers need it.
+2. **Public `Batch*F64` family** — **done** on this lane: facade +
+   `math.batch` / `math.batch.simd` open-array wrappers over `Array*F64`,
+   covered by `test_batch_scalar` / `test_batch_simd`.
 3. **Vec batch Double parity** — current `vec.batch` is primarily Single-oriented.
 4. **M9 fafafa.game cutover** — out of this module lane until authorized.
 5. **Value-type SIMD cutover** — forbidden without profiled evidence and explicit
