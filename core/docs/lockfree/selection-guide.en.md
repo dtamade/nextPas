@@ -64,10 +64,11 @@ Need memory reclamation?
     - Suitable for: Latency-sensitive, memory-constrained scenarios
 
 Need concurrent HashMap?
-└── Use TShardedHashMap<TKey,TValue>
-    - Sharded-lock HashMap (16 shards)
+└── Use TShardedHashMap / TConcurrentHashMap (T1 facade)
+    - Sharded **spin-lock** HashMap (16 shards) — NOT lock-free
     - Insert/Find/Remove/Contains/Count
     - Auto resize + Reserve pre-allocation
+    - T2/T3 structures: import their units directly; default facade is T1-only
 
 Need Channel (producer-consumer communication)?
 ├── Single direction communication

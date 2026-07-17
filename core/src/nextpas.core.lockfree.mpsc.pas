@@ -112,10 +112,9 @@ begin
     inherited;
     Exit;
   end;
-  {$IFDEF DEBUG}
-  Assert(FClosed <> 0, 'TMpscQueue.Destroy: Close must be called before Destroy to ensure all producers have stopped');
-  Assert(IsEmpty, 'TMpscQueue.Destroy: queue must be drained before Destroy after Close');
-  {$ENDIF}
+  { Wake any blocked single-consumer DequeueWait/Timeout, then drain remaining nodes.
+    Callers must still stop and join producers before Free; Enqueue does not observe Close. }
+  Close;
   while TryDequeue(LV) do;
   inherited;
 end;

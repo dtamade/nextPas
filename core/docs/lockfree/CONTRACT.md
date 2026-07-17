@@ -1,16 +1,25 @@
 # nextpas.core.lockfree 代码契约
 
 **模块路径**：`core/src/nextpas.core.lockfree*.pas`（103 个源文件）
-**层级**：L0（依赖 base, atomic）
+**层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-06
-**版本**：2.0
+**最后更新**：2026-07-17
+**版本**：2.1
 
 ---
 
+## 0. 默认门面（T1）
+
+`uses nextpas.core.lockfree` 仅 re-export **T1 runtime core**：
+SPSC/MPMC/MPSC/SPMC/SegQueue/MSQueue、Stack、WorkStealingDeque、EBR/Hazard、Channel、Selector、ShardedHashMap（及 `TConcurrentHashMap` 别名）。
+
+T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nextpas.core.lockfree.<unit>`，不会被默认门面拉入。
+
+进度保证（lock-free vs lock-based）见 `README.md` 的 Progress-guarantee matrix；`TShardedHashMap` 为分片自旋锁，**不是** lock-free。
+
 ## 1. 接口契约
 
-### 1.1 子模块（103 个源文件）
+### 1.1 子模块（103 个源文件；默认门面仅 T1）
 
 | 类别 | 文件 | 职责 |
 |------|------|------|

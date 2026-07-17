@@ -16,7 +16,8 @@ program lockfree_example;
 uses
   SysUtils,
   nextpas.core.atomic,
-  nextpas.core.lockfree;
+  nextpas.core.lockfree,
+  nextpas.core.lockfree.priority_queue;
 
 { 示例 1: SPSC Queue - 单生产者单消费者 }
 procedure ExampleSpscQueue;

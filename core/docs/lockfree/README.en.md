@@ -2,14 +2,36 @@
 
 [中文版](README.md)
 
-`nextpas.core.lockfree` provides reusable lock-free-oriented / non-blocking fast-path data structures for nextpas.core internals. This module primarily serves runtime/framework internal hot paths rather than claiming to be a complete replacement for Rust std, Go std, or C++ std concurrent containers; lock-free progress claims only apply to paths where the underlying platform atomic operations are themselves lock-free.
+`nextpas.core.lockfree` provides reusable lock-free-oriented / concurrent data structures for nextpas.core internals. This module primarily serves runtime/framework internal hot paths rather than claiming to be a complete replacement for Rust std, Go std, or C++ std concurrent containers; **lock-free progress claims only apply to types listed as lock-free in the matrix**, and only where underlying platform atomics are themselves lock-free.
 
 All structures only accept unmanaged element types; `string`, interface, dynamic array and other managed types are rejected.
 `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.
 
-## Module Layers
+**Layer**: L1 (depends on L0 `base` + `atomic`; see `core/docs/core-module-registry.md`).
 
-The current live source set consists of these units:
+## Progress-guarantee matrix
+
+| Class | Progress model | Sync mechanism | Default facade (T1) |
+| --- | --- | --- | --- |
+| SPSC/MPMC/SPMC/SegQueue/MSQueue/Stack/Channel | lock-free | atomics | yes |
+| MPSC | lock-free producers + single-owner consumer | atomics | yes |
+| WorkStealingDeque | lock-free + single-owner push/pop | atomics | yes |
+| EBR/Hazard | reclamation domains | atomics + TLS/HP | yes |
+| Selector | concurrent multiplexer | poll/backoff | yes |
+| ShardedHashMap / ConcurrentHashMap | **lock-based concurrent** | per-shard spin lock | yes |
+| Trees/caches/CRDT/RTM/NUMA/most lockfree.* extras | lock-based concurrent or specialized | see unit docs | **no** — direct unit import |
+
+## Tiered surface
+
+| Tier | Contents | How to use |
+| --- | --- | --- |
+| **T1 runtime core** | queues, stack, deque, EBR/Hazard, channel, selector, sharded hashmap | `uses nextpas.core.lockfree;` |
+| **T2 concurrent containers** | skiplist, btree, caches, bloom, bag, multimap, … | `uses nextpas.core.lockfree.<unit>;` |
+| **T3 research** | RTM/NUMA maps, experimental | direct unit only |
+
+## Module Layers (T1 live set)
+
+The current T1 live source set consists of these units:
 
 | Unit | Responsibility |
 |------|---------------|
@@ -21,19 +43,16 @@ The current live source set consists of these units:
 | `nextpas.core.lockfree.stack` | `TLockFreeStack<T>`, bounded stack using tagged index to constrain ABA-sensitive top/free-list reuse risk. |
 | `nextpas.core.lockfree.deque` | `TWorkStealingDeque<T>`, bounded single-owner push/pop + multi-thief steal deque. |
 | `nextpas.core.lockfree.ebr` | `TEbrDomain` + `TEbrGuard`, conservative epoch-based reclamation domain. |
-| `nextpas.core.lockfree.hazard` | `THazardDomain` + `THazardThread`, Hazard Pointer memory reclamation domain. |
+| `nextpas.core.lockfree.hazard` | `THazardDomain` + `THazardGuard`, Hazard Pointer memory reclamation domain. |
 | `nextpas.core.lockfree.segqueue` | `TSegQueue<T>`, unbounded multi-producer/multi-consumer segment queue, recycling old segments via EBR. |
 | `nextpas.core.lockfree.spmc` | `TSpmcQueue<T>`, bounded single-producer/multi-consumer ring queue. |
-| `nextpas.core.lockfree.hashmap` | `TShardedHashMap<TKey, TValue>`, sharded-lock concurrent HashMap. |
+| `nextpas.core.lockfree.msqueue` | `TLockFreeMsQueue<T>`, Michael-Scott unbounded MPMC queue. |
+| `nextpas.core.lockfree.hashmap` | `TShardedHashMap<TKey, TValue>`, **sharded-lock** concurrent HashMap (not lock-free). |
 | `nextpas.core.lockfree.channel` | `TLockFreeChannel<T>`, bounded lock-free Channel, sequence-number driven MPMC channel. |
-| `nextpas.core.lockfree.channel.spsc` | `TLockFreeChannelSpsc<T>`, single-producer single-consumer bounded Channel, optimized for 1P1C. |
-| `nextpas.core.lockfree` | Aggregate facade. |
+| `nextpas.core.lockfree.selector` | `TLockFreeSelector<T>`, multi-channel multiplexer. |
+| `nextpas.core.lockfree` | **T1-only** default facade. |
 
-`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,
-`TLockFreeStack<T>`, `TWorkStealingDeque<T>`, `TSegQueue<T>`, `TSpmcQueue<T>`, `TShardedHashMap<TKey, TValue>`,
-`THazardDomain`, `TEbrDomain`, `TEbrGuard`, `TLockFreeChannel<T>`, `TLockFreeChannelSpsc<T>`,
-`TLockFreeSelector<T>` so consumers can use the public lockfree surface without
-importing implementation submodules directly.
+Default facade exposes only T1 types. `TLockFreeChannelSpsc` remains on `nextpas.core.lockfree.channel.spsc`.
 
 The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation
 bases. Keep variables and parameters on one public boundary; the wrappers are source-compatible

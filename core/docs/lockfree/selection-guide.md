@@ -69,57 +69,63 @@
     - 适用: 延迟敏感、内存受限场景
 
 需要并发 HashMap？
-└── 使用 TLockFreeHashMap<TKey,TValue>
-    - 分片锁 HashMap (16 shards)
+└── 使用 TShardedHashMap / TConcurrentHashMap（T1 facade）
+    - **分片自旋锁**并发 HashMap（16 shards）— NOT lock-free
     - Insert/Find/Remove/Contains/Count
     - 自动 resize
+    - 需要真正无锁映射时，评估 MSQueue/SegQueue 组合或专用算法，勿把分片锁当 lock-free
+
+---
+
+以下为 **T2（直接 `uses nextpas.core.lockfree.<unit>`，默认 facade 不拉入）**：
+多数为 **lock-based concurrent** 或专用结构，名称中的 Concurrent/LockFree 以单元 `@concurrency` 与矩阵为准。
 
 需要 Bag（允许重复元素的并发集合）？
-└── 使用 TLockFreeBag<T>
+└── `uses nextpas.core.lockfree.bag` → TLockFreeBag<T>
     - 基于 MPMC 队列，允许重复元素
     - FIFO 顺序
     - 阻塞/非阻塞/超时
     - 适用: 任务队列、工作池
 
 需要 MultiMap（一个键多个值）？
-└── 使用 TLockFreeMultiMap<TKey,TValue>
-    - 基于分片锁 HashMap
+└── `uses nextpas.core.lockfree.multimap` → TLockFreeMultiMap
+    - **分片锁** HashMap 后端（lock-based concurrent）
     - 一个键可以有多个值
     - 适用于索引、标签系统
 
 需要 Bloom Filter（快速成员检查）？
-└── 使用 TConcurrentBloomFilter<T>
+└── `uses nextpas.core.lockfree.bloom` → TConcurrentBloomFilter<T>
     - 概率数据结构，可能存在假阳性
     - 空间效率高
     - 适用于缓存、去重、快速成员检查
 
 需要 LRU Cache（最近最少使用缓存）？
-└── 使用 TConcurrentLruCache<TKey,TValue>
-    - 分片锁 HashMap + 访问计数
+└── `uses nextpas.core.lockfree.lru` → TConcurrentLruCache
+    - **分片锁** + 访问计数（lock-based concurrent）
     - 自动淘汰最久未访问的条目
     - 适用于缓存、淘汰场景
 
 需要并发计数器？
-└── 使用 TConcurrentCounter
-    - 原子操作，无锁
+└── `uses nextpas.core.lockfree.counter` → TConcurrentCounter
+    - 原子操作
     - Increment/Decrement/Add/Sub/Load/Store
     - 适用于统计、计数
 
 需要信号量（资源池限流）？
-└── 使用 TConcurrentSemaphore
-    - 原子 CAS 操作
+└── `uses nextpas.core.lockfree.semaphore` → TConcurrentSemaphore
+    - 原子 CAS 自旋/等待（非容器 lock-free 声明）
     - TryAcquire/Acquire/AcquireTimeout/Release
     - 适用于资源池、限流
 
 需要互斥锁？
-└── 使用 TConcurrentMutex
-    - 原子 CAS 操作
+└── `uses nextpas.core.lockfree.mutex` → TConcurrentMutex
+    - 原子 CAS 互斥（lock-based）
     - TryLock/Lock/LockTimeout/Unlock
-    - 适用于互斥访问
+    - 适用于互斥访问；长期边界见 sync 模块（ownership 迁移未在本 lane 执行）
 
 需要读写锁？
-└── 使用 TConcurrentRwLock
-    - 单 Int32 状态编码 (0/-1/>0)
+└── `uses nextpas.core.lockfree.rwlock` → TConcurrentRwLock
+    - 单 Int32 状态编码 (0/-1/>0)（lock-based）
     - 多读者并发，写者独占
     - 适用于读多写少场景
 

@@ -1,10 +1,10 @@
 # nextpas.core.atomic 代码契约
 
 **模块路径**：`core/src/nextpas.core.atomic*.pas`（4 个源文件）
-**层级**：L1（依赖 L0: base）
+**层级**：L0（依赖 base；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-07-17
+**版本**：1.1
 
 ---
 
