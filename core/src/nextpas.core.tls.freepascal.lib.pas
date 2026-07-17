@@ -1488,7 +1488,7 @@ end;
 procedure TFreePascalSSLLibrary.InvalidateCapabilitiesCache;
 begin
   FCapabilitiesCached := False;
-  FillChar(FCapabilitiesCache, SizeOf(FCapabilitiesCache), 0);
+  FCapabilitiesCache := Default(TSSLBackendCapabilities);
 end;
 
 function TFreePascalSSLLibrary.Initialize: Boolean;

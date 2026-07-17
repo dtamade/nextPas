@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Era 7 Residual Hardening → **Done / STOP**）
+**Updated**: 2026-07-18（R4 HTTPS 1×41B zero → **Done / STOP**）
 
 ---
 
@@ -93,9 +93,10 @@ CHECKPOINT（不阻塞续波）:
 | Wave X5 Comparator + profiled win | 完成（equal-fold Get/Has；fullchain 刷新；无假 H3） |
 | Wave R0 Residual era open | 完成（Era 7 表 + 推荐路径 R1→R3） |
 | Wave R1 Client IdleTTL hang | 完成（pool Close 锁外 + accept 测试 deadline + CloseIdle teardown） |
-| Wave R2 HTTPS 1×41B dig | 完成（无可靠 call stack → 诚实 process-lifetime residual） |
+| Wave R2 HTTPS 1×41B dig | 完成（当时无栈 → Park；R4 已清零） |
 | Wave R3 Windows cancel honesty | 完成（probe-only only + source-contract） |
-| **下一执行点** | **STOP**（Era 7 Done；H3 仍 Blocked；无 Inbox 升格） |
+| Wave R4 HTTPS 1×41B zero | 完成（capabilities cache FillChar → Default；client 0 unfreed） |
+| **下一执行点** | **STOP**（R4 清零后；H3 仍 Blocked；无 Inbox 升格） |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
@@ -582,11 +583,11 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 1. Era 0–4 landed；framework-complete (non-H3) 已立住
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
 3. Era 6 X0–X5 landed — Excellence Done
-4. Era 7 **Done / STOP**（R0–R3 landed）；H3 仍 Blocked；Inbox 仅升格后开工
+4. Era 7 + R4 **Done / STOP**（R0–R4；HTTPS client 0 unfreed）；H3 仍 Blocked；Inbox 仅升格后开工
 5. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：STOP（Era 7 完成）；不要空转 H3；Inbox 仅升格后开工。**
+**没有用户指令时：STOP；不要空转 H3；Inbox 仅升格后开工。**
 
 ---
 
@@ -607,6 +608,7 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-18 | Wave R4：HTTPS 1×41B 清零（tls capabilities cache FillChar→Default）；client×2 / h2 0 unfreed |
 | 2026-07-17 | 初版：合并 stage + Wave A–F；Phase P/Q/R/X；Wave G = NEXT |
 | 2026-07-17 | Wave L：历史 docs → `archive/` |
 | 2026-07-17 | Wave G landed；Wave H = NEXT |
