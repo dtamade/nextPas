@@ -1,300 +1,384 @@
-# nextpas.core.mem - 内存管理模块
+# nextpas.core.mem
 
-## 概述
+标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-`nextpas.core.mem` 是 nextPas 框架的内存管理模块，提供高性能的内存分配器抽象和实现。
+**Lane 状态（2026-07-16）**: 产品表 dual-track **CLOSED**；可用性权威见 [USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
 
-## 设计目标
-
-- **高性能**：超越 Go/Rust 标准库的内存分配性能
-- **零碎片**：Arena 分配器消除内存碎片
-- **零泄漏**：完善的内存泄漏检测机制
-- **接口优雅**：遵循 Rust trait / Go interface 风格的接口设计
-- **生产级质量**：完整的测试覆盖和基准对照
-
-## 接口与 owner 关系
-
-```mermaid
-flowchart LR
-  subgraph contracts[公共契约]
-    IArena
-    IAllocator
-    IPool
-    IMemoryPool
-    IBlockPool
-    IBlockPoolBatch
-  end
-
-  IMemoryPool -->|继承| IPool
-  IBlockPoolBatch -->|继承| IBlockPool
-
-  subgraph implementations[mem 实现与包装器]
-    TLocalArena
-    TChunkedArena
-    TArenaConcurrent
-    TSlabPool
-    TPoolAllocator
-    TAllocStatsAllocator
-  end
-
-  TLocalArena -.实现.-> IArena
-  TChunkedArena -.实现.-> IArena
-  TArenaConcurrent -.实现.-> IArena
-  TSlabPool -.实现.-> IMemoryPool
-  TSlabPool -.实现.-> IAllocator
-  TPoolAllocator -.实现.-> IAllocator
-  TAllocStatsAllocator -.实现并包装.-> IAllocator
-
-  subgraph mappedOwners[映射内存 owner]
-    PlatformMmap[platform.mmap<br/>宿主映射原语]
-    MemMemoryMap[mem.memory_map<br/>内存映射载体]
-    MemMappedSlab[mem.mapped_slab_pool<br/>匿名映射分配器]
-    IoMappedRing[io.mapped.ring_buffer<br/>文件与共享 ring]
-    IoMappedSlab[io.mapped.slab_pool<br/>文件与共享 slab]
-  end
-
-  PlatformMmap --> MemMemoryMap
-  MemMemoryMap --> MemMappedSlab
-  MemMemoryMap --> IoMappedRing
-  MemMemoryMap --> IoMappedSlab
+```bash
+make lane-focused LANE=mem
+# make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails
 ```
 
-实线表示接口继承或 owner 依赖，虚线表示实现或包装关系。文件与共享映射数据结构归 `io`；
-`mem` 只保留内存原语和匿名映射分配器，不再提供 mapped ring compatibility wrapper。
+权威计划：[STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) · 决策树：[API-GUIDE.md](API-GUIDE.md) · 性能：[SCORECARD.md](SCORECARD.md)
 
-## Arena 选择指南
+---
 
-| 场景            | 推荐                           | 原因                        |
-| --------------- | ------------------------------ | --------------------------- |
-| 编译器热路径    | TVirtualArena + AllocFast    | 2ns, 476M ops/s             |
-| 请求/帧生命周期 | TLocalArena                    | 固定容量, 3ns, 307M ops/s   |
-| 动态增长批量    | TChunkedArena                  | Go-style chunk cache, 15ns  |
-| 多线程共享      | TArenaConcurrent               | mutex-protected IArena 包装 |
-| 单线程固定块池  | TLocalBlockPool                | class-only, 最小 surface    |
-| 固定大小块分配  | TBlockPool / TShardedBlockPool | O(1) acquire/release        |
-| Slab 分配       | TSlabPool / TSlabPoolSharded   | 页级 slab, IMemoryPool      |
-
-## 核心类型
-
-### IArena 接口
-
-线性分配器接口：
-
-- `Alloc` / `AllocAligned` / `AllocZeroed` — 分配
-- `SaveMark` / `RestoreToMark` — 保存/恢复分配位置
-- `Reset` — 重置 Arena（保留已提交页面）
-- `UsedSize` / `RemainingSize` / `Stats` — 查询
-
-### IAllocator 接口
-
-通用分配器接口（40+ 模块引用）：
-
-- `GetMem` / `AllocMem` / `ReallocMem` / `FreeMem` — 标准分配（5 方法契约）
-- `Traits` — 分配器特性（ZeroInitialized / ThreadSafe / SupportsRealloc）
-
-对齐分配见 `IArena.AllocAligned`，分配大小查询见 `IMemoryPool`。
-
-### TVirtualArena (record)
-
-基于 mmap 的零虚分发 Arena：
-
-- 预留 256MB 虚拟地址空间
-- 双向 bump pointer（指针对象从前往后，无指针从后往前）
-- 大对象（>=64KB）独立 mmap
-- `AllocFast`: 纯 bump pointer, 2ns（前提：页面已提交）
-
-### TLocalArena (class, IArena)
-
-基于 GetMem 的固定容量 Arena：
-
-- 预分配 buffer, 分配只前进
-- `AllocFast` / `AllocAlignedFast`: DEBUG Assert 保护, Release 零额外分支
-- 适用于请求/帧/文档等有限生命周期场景
-
-### TChunkedArena (class, IArena)
-
-分段可增长 Arena：
-
-- Go-style chunk cache（Reset 缓存 freed segments, 最多 8 个）
-- FSegments 几何扩容
-- 支持几何/线性增长策略
-
-## BlockPool 选择指南
-
-- `TLocalBlockPool`：单线程、单 owner、调用点就在本模块内时选它。它是 class-only 固定块池，surface 最小，只保留 `Acquire/Release/Reset` 和基础容量查询。
-- `TBlockPool`：需要把固定块池作为公共 contract 暴露出去，或者需要 `IBlockPool` / `IBlockPoolBatch`、显式对齐、批量 `AcquireN/ReleaseN`、`Owns/GetRange` 之类诊断能力时选它。
-- 如果后续已经确定会走 shard/concurrent 变体，优先从 `TBlockPool` 这条接口面进入，避免先写一套 `TLocalBlockPool` 局部调用再补一层适配。
-
-## 性能基准 (2026-06-22)
-
-64B alloc, Reset+Reuse:
-| 分配器 | ns/op | ops/s |
-|--------|-------|-------|
-| VirtualArena AllocFast | 2 | 476M |
-| LocalArena | 3 | 307M |
-| ChunkedArena | 15 | 68M |
-| VirtualArena Alloc | 37 | 27M |
-| RTL GetMem+FreeMem | 64 | 15M |
-
-## 使用示例
-
-### 基本 Arena 使用
+## 30 秒上手
 
 ```pascal
 uses nextpas.core.mem;
 
 var
-  LArena: TLocalArena;
-  LP: Pointer;
+  P: Pointer;
+  Arena: IArena;
+  S: TMemStats;
+  Sz: SizeUInt;
 begin
-  LArena := TLocalArena.Create(1024);
-  try
-    LP := LArena.Alloc(64);
-    // 使用 LP...
-    LArena.Reset;  // 一次性释放全部
-  finally
-    LArena.Free;
-  end;
-end;
-```
+  { 1. 通用堆热路径 — Growing，无 interface 间接调用 }
+  P := GetMem(64);
+  FreeMem(P, 64);   // 已知 size 的热 free（优选）
 
-### VirtualArena + AllocFast
-
-```pascal
-uses nextpas.core.mem.arena.virtual;
-
-var
-  LArena: TVirtualArena;
-  LP: Pointer;
-begin
-  TVirtualArena_Init(LArena);
-  try
-    LP := LArena.Alloc(4096);   // 首次分配提交页面
-    LArena.Reset;                // Reset 不释放页面
-    LP := LArena.AllocFast(64); // 纯 bump, 2ns
-  finally
-    TVirtualArena_Release(LArena);
-  end;
-end;
-```
-
-### IAllocator 接口
-
-```pascal
-var
-  LAllocator: IAllocator;
-begin
-  LAllocator := DefaultAllocator;  // 全局默认分配器
-  LP := LAllocator.GetMem(256);
-  // ...
-end;
-```
-
-### 泄漏检测
-
-```pascal
-var
-  LResult: TLeakCheckResult;
-begin
-  LResult := RunTestWithLeakCheck(procedure(AAllocator: IAllocator)
+  { 1a. ERROR-POLICY 可操作形态：资源不足 = False，不抛 }
+  if TryGetMem(128, P) then
   begin
-    // 测试代码...
-  end);
-  if LResult.LeakCount > 0 then
-    WriteLn('Memory leaks detected!');
+    // ...
+    if not TryFreeMem(P) then  // size-class 恢复 + sized free
+      FreeMem(P);              // 兜底
+  end;
+
+  { 1b. 丢了 size 时：先 TryBlockSize 再 sized free（仍优于裸 FreeMem(P)） }
+  P := GetMem(128);
+  if TryBlockSize(P, Sz) then
+    FreeMem(P, Sz)
+  else
+    FreeMem(P);     // 兼容：内部同样会扫描
+
+  { 2. 请求/帧生命周期 — Arena，Reset 一次放完 }
+  Arena := CreateDefaultArena(64 * 1024);
+  P := Arena.Alloc(128);
+  Arena.Reset;
+
+  { 3. 进程堆快照（运维 / 测试，非热路径） }
+  GetMemStats(S);
+  // S.LiveBytes, S.ReleasedBytes, ...
 end;
 ```
 
-## 关键约定
+| 你要做什么 | 用什么 | 不要用 |
+|------------|--------|--------|
+| malloc 替代 / 通用对象 | `GetMem` / `DefaultHeap` | 热循环里的 `DefaultAllocator` |
+| 请求结束一起释放 | `CreateDefaultArena` / `TLocalArena` | 对 Arena 指针 `FreeMem` |
+| 请求 inject（有界） | `CreateArenaAllocator(cap)` | 把 cap 当 alignment 的 Virtual 路径 |
+| 编译单元 / 大 AST | `CreateVirtualArenaAllocator` / `compiler.mem` | 有界 LocalArena 塞超大 AST |
+| 固定大小高频 | `TLocalBlockPool` / `TFixedSlabPool` | 可变大小塞进 IPool |
+| 注入/组合/测泄漏 | `DefaultAllocator` + 包装器 | 当默认热路径 |
+| 一键诊断 | 见下表 DEBUG | 改业务调用点 |
+| HTTP 请求 scratch | `HttpCreateRequestArena` / **`RequestArenaMiddleware`** | 对 Arena 块 `FreeMem` |
 
-- **Arena 不支持单个释放**：需要 `Reset` 一次性释放全部
-- **AllocFast 前提**：调用方确保页面已提交, 不更新统计, 不保证对齐
-- **大对象生命周期**：不受 mark/reset 影响；`FLargeBlocks` metadata 与对象映射同生命周期，只在 `Release` 时统一释放/关闭
-- **非线程安全**：Arena 默认非线程安全, 多线程请用 TArenaConcurrent
-- **工具函数名称**：`nextpas.core.mem.utils.Copy`、`Zero`、`Compare` 保留现有公共名称；
-  同时导入同名符号时必须使用完整单元名调用，避免与 `System` 或其他单元的符号产生歧义
-- `nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.
-- `nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.
-- mem 侧 mapped slab API must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.
+---
 
-## 测试覆盖
+## 默认双轨（必读）
 
-- 44 test suites with 639 tests (migrated to `nextpas.core.test` v3.x)
-- 0 memory leaks, 0 unfreed blocks
-- 完整接口覆盖：Arena / Pool / Allocator / Concurrent / Sharded / Contract / OOM / Facade
+**一句话**：一个进程堆，两种调用面——热路径要零 vtable，插件面要 `IAllocator`。
 
-## 相关文档
+| API | 实现 | 角色 |
+|-----|------|------|
+| **`DefaultHeap` / 过程式 `GetMem`·`FreeMem`·`AllocMem`·`ReallocMem`** | `TGrowingAllocator` 原生 | **热路径** |
+| **`DefaultAllocator: IAllocator`** | Growing IAllocator 根，可叠 `NEXTPAS_MEM_DEBUG` | 插件/诊断/注入，**非热路径**（同堆，有 vtable） |
 
-- [架构设计](ARCHITECTURE.md)
-- [API 参考](API.md)
-- [API 选择指南](API-GUIDE.md)
-- [代码契约](CONTRACT.md)
-- [基准测试](BENCHMARKS.md)
-- [可用性审计](USABILITY-AUDIT.md)
-- [审查报告](mem-findings.md) — 61项全部关闭
-- [归档文档](archive/) — 已完成的研究和计划文档
+硬规则：框架与业务热循环走 `DefaultHeap`；不要为“接口统一”把热路径改回 `IAllocator` 虚调用。
+S5：`DefaultAllocator` 与 `DefaultHeap` **同一进程堆**（互释合法，见 SC9 `same_heap`）；collections 等注入路径自动吃 Growing。显式 RTL 仍可用 `GetRtlAllocator`。
 
-## 版本历史
+性能证据：Scorecard **SC9** — `hot_heap` vs `plugin_ia`（vtable + 单参 free 扫描税）。
 
-- v8.0 (2026-07-08): 演化路线图 Phase 1-4 全部完成 — 生产级内存管理平台
-  - P1-4: TLeakReportAllocator 增强泄漏报告（调用栈+时间戳+标签聚合）
-  - P2-3: TSentinelAllocator 哨兵守卫分配器（双端哨兵+延迟释放+校验和）
-  - P4-2: IBatchAllocator 批量分配接口
-  - P4-3: TNumaAllocator NUMA 感知分配器（拓扑检测+节点路由）
-  - P4-4: TPredictionAllocator 分配预测器（频率跟踪+预分配）
-  - 修复: L0 边界违规（stats/oom/scoped 改用 TMemMutex）
-  - 66 源文件 / 58 测试目录 / 688 测试 / 0 失败 / 0 泄漏
-- v7.2 (2026-06-27): Phase F 基准测试 + Go 对照
-  - 新增: `bench_pool_family` 9 基准覆盖 TBlockPool/TFixedPool/TStackPool/TRingBuffer
-  - Go 对照: TBlockPool (15.6ns) 快于 sync.Pool (18.0ns)，TRingBuffer (31.8ns) 2x 快于 chan (63.7ns)
-  - 修复: bench_arena_vs_rtl Makefile build dir 创建
-  - Phase F 完成
-- v7.1 (2026-06-27): Round 15 — test_ring_buffer + 并发池恢复 + 测试修复
-  - 新增: `test_ring_buffer` 30 tests — TRingBuffer 全公共 API 覆盖
-  - 恢复: `test_sharded_pools` 9 tests — CS-001 修复后编译通过
-  - 恢复: `test_oom` 8 tests — CS-001 修复后编译通过
-  - 修复: NormalizeAlignment 实现与文档不一致（缺少 >= DEFAULT_ALIGNMENT 检查）
-  - 修复: test_mem_secure CheckContains 大小写 + compile gate 测试更新
-  - 重构: test_platform_virtual 迁移到 nextpas.core.test 框架
-  - 文档: RestoreState @note + RingBuffer.Clear 安全说明 (CS-010/CS-013)
-  - 34 suites / 465 tests / 0 leaks / 0 failures
-- v7.0 (2026-06-27): Phase E 文档注释 + Round 14 打磨
-  - Phase E: 9 文件 150+ 处方法级 `{** @desc *}` 文档注释
-  - E-2: 6 类型级文档补全 (TSlabPerfCounters/TSlabPoolStats/TSlabConfig/TFixedPoolConfig/TStackPoolConfig/TStackMemoryMapEntry)
-  - 修复: test_object_pool 48 bytes 泄漏 (TestPoolExhaustion 未归还对象)
-  - 修复: deprecation warning (platform_secure_zero → platform_secure_zero_memory)
-  - 修复: doc-extras 代理文档注释格式错误 ({** ... * → {** ... *})
-  - 34 suites / 465 tests / 0 leaks
-- v6.0 (2026-06-27): Phase D 测试覆盖 100% — 3 新测试套件 + 4 补充
-  - D-1a: `test_growing_fixed_pool` 12 tests — TGrowingFixedPool 全路径覆盖
-  - D-1b: `test_growing_block_pool` 12 tests — TGrowingBlockPool 全路径覆盖
-  - D-1c: `test_shared_memory` 8 tests — TSharedMemory 全 API 覆盖
-  - D-2a: TryGetRtlAllocator 测试 (test_allocator_foundation)
-  - D-2c: NextPowerOfTwo + NormalizeAlignment 边界测试 (test_mem_utils)
-  - D-2d: rwlock 写锁竞争 8 线程压力测试 (test_concurrent_wrappers)
-  - 31 suites / 465 tests / 0 leaks / 0 new failures
-- v5.0 (2026-06-27): I-04 FallbackArena 提取 + T-04/T-05 边界测试 + capacity=1 修复
-  - 修复: `TBlockPool.RebuildFreeList` capacity=1 时 `SizeUInt` 下溢导致 A/V
-  - I-04: `TFallbackArena` 3 处重复跟踪代码提取为 `TrackFallback` 私有方法
-  - T-04: mutex 递归获取检测 + mutex 无锁释放 + rwlock 并发读者 (3 tests)
-  - T-05: blockpool capacity=1 / block_size=1 / alignment=1 / minimal 边界 (4 tests)
-  - 31 suites / 430 tests / 0 leaks / 0 failures
-- v4.0 (2026-06-27): E1 Facade 完整性 — 35→57 类型 re-export
-  - 补全 14 个缺失 uses 导入，新增 22 个类型 re-export
-  - Facade 类型覆盖率：15% → 26%（57/219 公共类型）
-  - 新增 SecureZeroMemory/Bytes/String facade 转发
-  - test_mem 迁移到 nextpas.core.test + 12 facade 可访问性测试
-  - 31 suites / 423 tests / 0 leaks / 0 failures
-- v3.0 (2026-06-26): 自举修复 + 并发测试修复 + B4 并发测试补全 + D1 框架迁移
-  - 修复 `TChunkedArena.FSegmentCount` signed/unsigned 类型不匹配（自举阻塞）
-  - 修复并发测试 TMemMutex/TMemRwLock 未初始化导致无限循环（record 栈变量 FillChar）
-  - 补全 B4 并发测试：Reset/Alloc 竞争、Mark/Alloc 竞争、多次 Mark/Restore 循环
-  - 迁移 test_allocator_foundation 到新测试框架
-  - 30 suites / 398 tests / 0 leaks / 0 failures
-- v2.5 (2026-06-25): TObjectPool 双重释放检测 + Arena AllocAligned(0) 统一归一化
-- v2.4 (2026-06-25): 4 项深审修复 — TArenaMark AllocCount、ChunkedArena Reset 偏移、SlabSharded 清零、Fallback ReallocMem
-- v2.3 (2026-06-25): 4 项深审修复 — AcquireUnchecked 统计、TObjectPool 边界、FixedPool DEBUG 指针、Slab SupportsAligned
-- v2.2 (2026-06-25): 9 项打磨 — nil 安全、TLS 多实例隔离、AllocMem 路径、DEBUG 防护、门面补全
-- v2.1 (2026-06-23): TLA + SizeClass Slab + Fallback Chain + FPC FillChar/Move 清理
-- v2.0 (2026-06-22): 架构清理 + 性能优化 + 安全防护 + 并发语义补强
-- v1.0 (2026-06-22): 初始 Arena 实现
+```pascal
+{ 热路径 — 已知 old size }
+P := GetMem(32);
+P := ReallocMem(P, 32, 128);
+FreeMem(P, 128);
+
+{ 插件面 — 组合器 / collections 注入（同堆，虚调用） }
+LAlloc := DefaultAllocator;
+LWrap := TTrackingAllocator.Create(LAlloc);
+
+{ 同堆互释（合法，但热循环仍应走过程式/DefaultHeap） }
+P := DefaultAllocator.GetMem(64);
+if TryBlockSize(P, Sz) then
+  FreeMem(P, Sz);
+```
+
+### 错误用法（必读）
+
+| 错误 | 为什么错 | 正确 |
+|------|----------|------|
+| 热循环 `DefaultAllocator.GetMem` | 虚调用 + 单参 free 扫描，不是零 vtable 热路径 | `GetMem` / `DefaultHeap` |
+| `NEXTPAS_MEM_DEBUG=leak` 查 `GetMem` 泄漏 | 默认 DEBUG **只**叠插件面 | 再开 `NEXTPAS_MEM_HEAP_DEBUG=1`（慢）；或 `GetMemStats` / 注入面 DEBUG |
+| 对 Arena 指针 `FreeMem` | 生命周期属 Arena | `Arena.Reset` / `RestoreToMark` |
+| `FreeMem(P)` 当热路径默认 | 未知 size 要扫 span，更慢（SC8 可证） | `FreeMem(P, Size)`；丢 size 时 `TryBlockSize` 再 sized free |
+| 把 `DefaultAllocator` 当“零成本默认堆” | 它是注入/诊断面（虽同堆） | 热路径 = `DefaultHeap` / 过程式 `GetMem` |
+
+防呆门禁：`make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails`
+
+---
+
+## 选择决策树
+
+```text
+有限生命周期（请求/帧/文档）？
+  是 → Arena
+       容量可知     → CreateDefaultArena / TLocalArena
+       需要增长     → TChunkedArena
+       超大/编译器  → TVirtualArena (+ AllocFast)
+       多线程共享   → TArenaConcurrent（显式）
+  否 → 固定大小高频？
+         是 → TLocalBlockPool / FixedSlab / BlockPool
+         否 → DefaultHeap / GetMem
+诊断 / 故障注入 → 包装器或 NEXTPAS_MEM_DEBUG（只叠 DefaultAllocator）
+预算 / OOM 降级 → Bounded / Fallback / Budget / OomHandler
+```
+
+细节与误区见 [API-GUIDE.md](API-GUIDE.md)。
+
+---
+
+## 契约（摘要）
+
+全 Tier-0/1 必须遵守；完整矩阵：
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
+```
+
+| 操作 | 行为 |
+|------|------|
+| `GetMem(0)` / `Alloc(0)` | nil |
+| `FreeMem(nil)` / `Release(nil)` | 无操作 |
+| `ReallocMem(nil, n)` | ≡ `GetMem(n)` |
+| `ReallocMem(p, 0)` | ≡ `FreeMem(p)` |
+| OOM / 容量不足 | **返回 nil 或 False**（不抛） |
+| 编程错误（双 free / 坏指针 / 非法参数） | **抛 `EAllocError`**（池与诊断器；基堆双 free 为 UB 除非开 DEBUG 包装） |
+
+Growing 热路径：`FreeMem(ptr, size)` 优于 `FreeMem(ptr)`（Scorecard **SC8**）；`ReallocMem(ptr, old, new)` 优于未知 old size。丢 size 时门面 `TryBlockSize(ptr, out size)` 可恢复 size-class 容量。
+
+错误模型冻结全文：[ERROR-POLICY.md](ERROR-POLICY.md)。
+
+---
+
+## 可观测性
+
+```pascal
+var S: TMemStats;
+GetMemStats(S);
+```
+
+| 字段族 | 来源 | 含义 |
+|--------|------|------|
+| `LiveBytes` / `LiveSpans` / `IdleSpans` | DefaultHeap | 当前保留 |
+| `Released*` / `Decommit*` | DefaultHeap scavenge | 归还 OS 寿命计数 |
+| `heap_debug` / `HeapDebugEnabled` | HEAP_DEBUG 或 HEAP_SAFETY | 过程式路径是否走插件链 |
+| `heap_safety` / `HeapSafetyEnabled` | `NEXTPAS_MEM_HEAP_SAFETY` | dev 双 free profile |
+| `arena_strict` / `ArenaStrictEnabled` | `NEXTPAS_MEM_ARENA_STRICT` | Arena FreeMem raise |
+| `debug` / `DebugEnabled` | `NEXTPAS_MEM_DEBUG`（或 SAFETY 注入） | wrap 是否建成 |
+| `debug_process` / `DebugObservesProcess` | debug ∧ heap_debug | wrap 是否观察过程式 GetMem |
+| `debug_coverage_gap` | debug ∧ ¬heap_debug | **假阴性风险**（只 DEBUG 不看热路径） |
+| `DebugActiveAllocs` / `DebugAllocCount` | 仅 wrap 建成时 | 插件面诊断计数 |
+
+`FormatMemStats` 一行始终含 `heap_safety=` / `arena_strict=` / `debug_process=` / `debug_coverage_gap=`。
+仅要开关快照时用 `FormatMemDebugProfile`（无 live_bytes 等保留计数）。
+
+Gate：`make focused FOCUS=core/tests/nextpas.core.mem/test_get_mem_stats`
+
+强制 scavenge：`DefaultHeap.Scavenge`（先 flush TLS）。字段与 SC5 对齐，见 [SCORECARD.md](SCORECARD.md)。
+
+---
+
+## DEBUG 一键包装
+
+| 你在查什么 | 开什么 | 别指望 |
+|------------|--------|--------|
+| 注入面 / collections 泄漏 | `NEXTPAS_MEM_DEBUG=leak`（或 `sentinel,leak,stats`） | 过程式 `GetMem`（见 `debug_coverage_gap=y`） |
+| 过程式 `GetMem` 泄漏 | **再加** `NEXTPAS_MEM_HEAP_DEBUG=1`（慢） | 热路径零税 |
+| dev 双 free profile | `NEXTPAS_MEM_HEAP_SAFETY=1`（自动 tracking+sentinel） | 生产默认开 |
+| Arena FreeMem 混用 | `NEXTPAS_MEM_ARENA_STRICT=1` | 默认 no-op 兼容 |
+| 进程堆快照 | `GetMemStats` / `FormatMemStats`（无需 DEBUG） | `DebugActive*` 仅 wrap 建成 |
+| doctor 一行进程诊断 | `nextpas doctor` → `mem-process-stats=` | session arena（用 build `mem-session-stats`） |
+
+```bash
+NEXTPAS_MEM_DEBUG=sentinel,leak,stats
+NEXTPAS_MEM_HEAP_DEBUG=1   # 仅当必须覆盖过程式 GetMem；DefaultHeap 仍裸
+# 或：NEXTPAS_MEM_HEAP_SAFETY=1
+# FormatMemStats / doctor：
+#   heap_debug=y debug=y debug_process=y debug_coverage_gap=n
+#   debug_active_allocs=… debug_allocs=… debug_frees=…
+# 仅 DEBUG=stats → heap_debug=n debug=y debug_coverage_gap=y（假阴性可见）
+# 仅 HEAP_DEBUG=1、无 NEXTPAS_MEM_DEBUG → heap_debug=y debug=n（无 plugin 计数）
+```
+
+- **只**包装 `DefaultAllocator`（fail → stats → tracking → sentinel → Growing IAllocator）
+- 默认 **不**包装 `DefaultHeap` / 过程式 `GetMem`（热路径零税）
+- 门面：`IsMemHeapDebugEnabled` / `IsMemHeapSafetyEnabled` / `IsMemArenaStrictEnabled`、`FormatMemStats`（含 `heap_safety`/`arena_strict`）、`FormatMemDebugProfile`、`FreeMemOf`/`ReallocMemOf`、`FormatAllocErrorMsg`
+- Token：`fail`/`oom`、`stats`、`tracking`/`leak`、`sentinel`
+- Gate：`make focused FOCUS=core/tests/nextpas.core.mem/test_debug_wrap`；体验锁：`test_usability_guardrails`
+- CI / verify：`make stage0-heap-debug-recipe`（`scripts/stage0-heap-debug-env-recipe.sh`；doctor 双轨投影）
+- 设计：[DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md)
+
+### HTTP / compiler 产品路径
+
+```pascal
+uses nextpas.core.http;  // re-exports http.mem + RequestArenaMiddleware
+
+{ 手动：handler 自己持有 }
+LArena := HttpCreateRequestArena;           // 请求 scratch，结束即丢
+LAlloc := HttpCreateRequestAllocator;       // LocalArena IAllocator，FreeMem no-op
+LHeap  := HttpProcessHeap;                  // = DefaultHeap
+
+{ 推荐：options carrier 内核接线（hello 示例） }
+LOptions := THttpServerOptions.Default.WithRequestArena;
+LServer := NewHttpServer(LRouter, LOptions);
+// H1/H2 默认：连接级 LocalArena，每请求/stream Reset + HttpAttach（无 middleware 双层）
+// 工厂：NewHttpServerWithRequestArena(LRouter, LOptions);
+// 任意 handler：HttpWithRequestArena(LInner);
+// Router：HttpUseRequestArena(LRouter);
+// handler: HttpRequestArenaOf / HttpRequestAllocatorOf
+// 运维：HttpFormatProcessMemStats  // live_bytes=… heap_debug=…
+```
+
+```pascal
+uses nextpas.core.compiler.mem;
+
+{ 推荐（多单元会话）：TCompilerSessionScope }
+var LSession: TCompilerSessionScope;
+FillChar(LSession, SizeOf(LSession), 0);
+LSession.BeginSession;
+try
+  LSession.UnitBegin;
+  LNode := LSession.Alloc(SizeOf(TAstNode));
+  LSession.UnitEnd;   // 记录 peak；下个 UnitBegin 会 Reset
+  // 诊断一行：LSession.FormatStats / CompilerFormatSessionStats(LSession)
+finally
+  LSession.EndSession;
+end;
+
+{ 单单元：TCompilerUnitScope（BeginScope/EndScope 配对） }
+var LScope: TCompilerUnitScope;
+FillChar(LScope, SizeOf(LScope), 0);
+LScope.BeginScope;
+try
+  LNode := LScope.Alloc(SizeOf(TAstNode));  // VirtualArena AST/IR
+  LScope.Reset;                             // 单元边界 bulk reclaim
+finally
+  LScope.EndScope;
+end;
+
+{ 或裸 API }
+CompilerInitUnitArena(LUnitArena);
+// ...
+CompilerReleaseUnitArena(LUnitArena);
+LPlugin := CompilerCreateUnitAllocator;     // IAllocator inject
+```
+
+进程堆一行快照（运维/测试，非热路径）：
+
+```pascal
+WriteLn(FormatMemStats);  // live_bytes=… free_slots=… heap_debug=n …
+```
+
+#### Arena IAllocator 工厂分流（契约）
+
+| 工厂 | 后端 | 容量语义 |
+|------|------|----------|
+| `CreateArenaAllocator(cap)` | **TLocalArena** | **有界**：满返回 nil |
+| `CreateVirtualArenaAllocator` | **TVirtualArena** | **可增长**（mmap）；编译/大 AST |
+| `HttpCreateRequestAllocator` | LocalArena | 同 CreateArenaAllocator |
+| `CompilerCreateUnitAllocator` | VirtualArena | 同 CreateVirtualArenaAllocator |
+
+Gate：
+- `make focused FOCUS=core/tests/nextpas.core.http/test_http_mem`
+- `make focused FOCUS=core/tests/nextpas.core.compiler/test_compiler_mem`
+
+---
+
+## 性能（Scorecard）
+
+权威入口是 Scorecard，不是历史微基准博物馆。
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.mem/scorecard
+make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
+```
+
+| ID | 场景 | 要证明的事 |
+|----|------|------------|
+| SC1 | 64B alloc+free | 默认堆吞吐 |
+| SC2 | mixed 16B–4KB | 多 size-class + p99 |
+| SC3 | cross-thread free | 正确性 + 并发代价 |
+| SC4 | arena reset+reuse | 确定性生命周期 |
+| SC5 | long-run scavenge | LiveBytes / Released* |
+
+最新数字与环境见 [SCORECARD.md](SCORECARD.md)。改 Growing/DefaultHeap 必跑：
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
+make focused FOCUS=core/tests/nextpas.core.mem/test_stability
+make focused FOCUS=core/tests/nextpas.core.mem/test_concurrent
+make focused FOCUS=core/tests/nextpas.core.mem/scorecard
+```
+
+---
+
+## Arena / Pool 速查
+
+| 场景 | 推荐 |
+|------|------|
+| 请求/帧固定容量 | `TLocalArena` / `CreateDefaultArena` |
+| 可增长批量 | `TChunkedArena` |
+| 编译器热路径 | `TVirtualArena` + `AllocFast` |
+| 多线程共享 arena | `TArenaConcurrent`（显式） |
+| 单线程固定块 | `TLocalBlockPool` |
+| 公共 IBlockPool 契约 | `TBlockPool` / concurrent / sharded |
+| 可变 size-class slab | `TSlabPool` |
+
+```pascal
+var Arena: TLocalArena;
+Arena := TLocalArena.Create(64 * 1024);
+try
+  P := Arena.Alloc(64);
+  Arena.Reset;
+finally
+  Arena.Free;
+end;
+```
+
+---
+
+## 门面与 Tier
+
+- **门面** `nextpas.core.mem`：Tier-0 + 精选 Tier-1/2（**冻结**：禁止新增 Tier-3）
+- **Experimental (Tier-3)**：直接 `uses` 子单元，无兼容承诺
+- 门面白名单 / Tier-3 黑名单：[FACADES-SURFACE.md](FACADES-SURFACE.md)
+- 分层规则与符号表：[STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3
+- 架构 / owner：[ARCHITECTURE.md](ARCHITECTURE.md)
+- 运行时契约全文：[CONTRACT.md](CONTRACT.md)
+- 参考 API 百科（长）：[API.md](API.md) — **以本 README + API-GUIDE 为准**；API.md 中 “Default=RTL 热路径” 为历史表述
+
+---
+
+## 成功标准（进度）
+
+| # | 标准 | 状态 |
+|---|------|------|
+| S1 | 默认路径无聊且正确 | ✅ 双轨文档 + 决策树 + 反例 + guardrails |
+| S2 | 契约矩阵 | ✅ `test_contract_matrix`（RTL/Growing/DefaultHeap/Arena/Pool） |
+| S3 | Scorecard 可信 | ✅ SC1–SC7 脚手架 + RELEASE 基线 |
+| S4 | 诊断零成本默认 | ✅ `NEXTPAS_MEM_DEBUG`（仅插件面） |
+| S5 | 上层注入吃 DefaultHeap | ✅ Growing IAllocator 根；**HTTP + compiler 产品面**；compiler 源改用另 lane |
+| S6 | Arena/Pool 延迟优势 | ✅ SC4；对照扩展中 |
+| S7 | 小门面 | ✅ Tier-3 已出门面 |
+
+---
+
+## 文档索引
+
+| 文档 | 用途 |
+|------|------|
+| [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) | 90 天质量计划与 changelog |
+| [API-GUIDE.md](API-GUIDE.md) | 选择决策树与误区 |
+| [ERROR-POLICY.md](ERROR-POLICY.md) | **错误模型冻结**（nil vs raise） |
+| [SCORECARD.md](SCORECARD.md) | SC1–SC7 权威性能 |
+| [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md) | DEBUG 链设计 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 分层与 owner |
+| [CONTRACT.md](CONTRACT.md) | 运行时契约 |
+| [BENCHMARKS.md](BENCHMARKS.md) | 历史微基准（非 Ready 权威） |
+| [API.md](API.md) | 长参考；冲突时以 README/GUIDE 为准 |
+| [USABILITY-SCORE.md](USABILITY-SCORE.md) | **权威**可用性评分（**10.0 / HIGH**） |
+| [USABILITY-AUDIT.md](USABILITY-AUDIT.md) | **历史**可用性长报告（SUPERSEDED） |

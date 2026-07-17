@@ -4,12 +4,14 @@ unit np_toolchain_plan;
 {$UNITPATH ../backend}
 {$UNITPATH ../targets}
 {$UNITPATH ../diagnostics}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
   nextpas.core.fs.util, nextpas.core.os.env,
+  nextpas.core.collections.vec,
   np_backend_plan, np_target_facts, np_toolchain_profiles,
   nextpas_json_helpers;
 
@@ -32,6 +34,18 @@ type
     Value: string;
   end;
 
+  TLogicalLibraryRequest = record
+    LogicalId: string;
+    LinkageKind: string;
+    Strength: string;
+  end;
+
+  TToolArtifactRefVec = specialize TVec<TToolArtifactRef>;
+  TToolSidecarRefVec = specialize TVec<TToolSidecarRef>;
+  TToolEnvDeltaVec = specialize TVec<TToolEnvDelta>;
+  TToolchainStringVec = specialize TVec<string>;
+  TLogicalLibraryRequestVec = specialize TVec<TLogicalLibraryRequest>;
+
   TToolInvocationStep = record
     StepId: string;
     ToolRole: string;
@@ -41,18 +55,14 @@ type
     ExecutableRef: string;
     WorkingDirectory: string;
     FailureMapping: string;
-    Argv: array of string;
-    EnvDelta: array of TToolEnvDelta;
-    Inputs: array of TToolArtifactRef;
-    Outputs: array of TToolArtifactRef;
-    Sidecars: array of TToolSidecarRef;
+    Argv: TToolchainStringVec;
+    EnvDelta: TToolEnvDeltaVec;
+    Inputs: TToolArtifactRefVec;
+    Outputs: TToolArtifactRefVec;
+    Sidecars: TToolSidecarRefVec;
   end;
-
-  TLogicalLibraryRequest = record
-    LogicalId: string;
-    LinkageKind: string;
-    Strength: string;
-  end;
+  PToolInvocationStep = ^TToolInvocationStep;
+  TToolInvocationStepVec = specialize TVec<TToolInvocationStep>;
 
   TLogicalLinkRequest = record
     RequestKind: string;
@@ -62,9 +72,9 @@ type
     LinkerProfileId: string;
     OutputKind: string;
     PrimaryArtifactPath: string;
-    ObjectInputs: array of TToolArtifactRef;
-    LibraryRequests: array of TLogicalLibraryRequest;
-    OrderedSymbols: TStringArray;
+    ObjectInputs: TToolArtifactRefVec;
+    LibraryRequests: TLogicalLibraryRequestVec;
+    OrderedSymbols: TToolchainStringVec;
   end;
 
   TLlvmExecutableContract = record
@@ -95,11 +105,12 @@ type
     FHostId: string;
     FTargetId: string;
     FSysrootRef: string;
-    FSteps: array of TToolInvocationStep;
+    FSteps: TToolInvocationStepVec;
     FLogicalLinkRequest: TLogicalLinkRequest;
     FLlvmExecutableContract: TLlvmExecutableContract;
   public
     constructor Create;
+    destructor Destroy; override;
     procedure SetPlanFamily(const AValue: string);
     procedure SetToolProfileRoot(const AValue: string);
     procedure SetContext(
@@ -199,9 +210,9 @@ type
     FPlan: TToolchainPlan;
     FSourcePath: string;
     FArtifactRootPath: string;
-    FProjectUnitRoots: TStringArray;
-    FExplicitUnitRoots: TStringArray;
-    FAdditionalAssemblyBaseNames: TStringArray;
+    FProjectUnitRoots: TToolchainStringVec;
+    FExplicitUnitRoots: TToolchainStringVec;
+    FAdditionalAssemblyBaseNames: TToolchainStringVec;
     FTargetFacts: TTargetFactsView;
     function BuildSysrootRef: string;
     function PrimaryArtifactPathOrDefault: string;
@@ -262,6 +273,10 @@ type
     );
     function DetachPlan: TToolchainPlan;
   end;
+
+procedure ClearToolInvocationStepView(out AStep: TToolInvocationStep);
+function ToolchainArgvAsArray(const AArgv: TToolchainStringVec): TStringArray;
+function BuildToolArtifactVecJson(const AValues: TToolArtifactRefVec): string;
 
 implementation
 

@@ -99,13 +99,13 @@ var
   LNeedsNormalize: Boolean;
 begin
   if AName = '' then
-    raise EHttpError.Create('empty header name');
+    raise EHttpError.Create(hekParse, 'empty header name');
   Result := AName;
   LNeedsNormalize := False;
   for LI := 1 to Length(AName) do
   begin
     if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
-      raise EHttpError.Create('invalid header name character');
+      raise EHttpError.Create(hekParse, 'invalid header name character');
     if (AName[LI] >= 'A') and (AName[LI] <= 'Z') then
       LNeedsNormalize := True;
   end;

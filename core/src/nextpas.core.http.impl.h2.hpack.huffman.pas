@@ -163,7 +163,7 @@ begin
     LEntry := @FNibbleTable[LNode, LNibble];
     if LEntry^.Symbol >= 0 then
     begin
-      if LEntry^.Symbol >= HUFF_EOS_SYM then raise EHttpError.Create('HPACK Huffman: invalid padding');
+      if LEntry^.Symbol >= HUFF_EOS_SYM then raise EHttpError.Create(hekParse, 'HPACK Huffman: invalid padding');
       Inc(LOutputPos);
       if (ALimit >= 0) and (LOutputPos > ALimit) then begin ATruncated := True; Exit(''); end;
       if LOutputPos <= STACK_BUF_SIZE then
@@ -185,7 +185,7 @@ begin
     LEntry := @FNibbleTable[LNode, LNibble];
     if LEntry^.Symbol >= 0 then
     begin
-      if LEntry^.Symbol >= HUFF_EOS_SYM then raise EHttpError.Create('HPACK Huffman: invalid padding');
+      if LEntry^.Symbol >= HUFF_EOS_SYM then raise EHttpError.Create(hekParse, 'HPACK Huffman: invalid padding');
       Inc(LOutputPos);
       if (ALimit >= 0) and (LOutputPos > ALimit) then begin ATruncated := True; Exit(''); end;
       if LOutputPos <= STACK_BUF_SIZE then
@@ -206,7 +206,7 @@ begin
     Inc(I);
   end;
   if not IsValidFinalNode(LNode) then
-    raise EHttpError.Create('HPACK Huffman: invalid padding');
+    raise EHttpError.Create(hekParse, 'HPACK Huffman: invalid padding');
   if LHeapStr <> '' then
   begin
     SetLength(LHeapStr, LOutputPos);

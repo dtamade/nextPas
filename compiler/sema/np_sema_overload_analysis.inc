@@ -15,41 +15,39 @@ procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
   const AOwnerUnitId: string);
 var
   Index: LongInt;
-  NextIndex: SizeInt;
   Sig, ExistingSig, CleanName: string;
+  Entry: TProcedureBodyEntry;
 begin
   if Pos(';compilerproc', AName) > 0 then
   begin
     CleanName := Copy(AName, 1, Pos(';', AName) - 1);
-    if FCompilerProcCount >= Length(FCompilerProcNames) then
-      SetLength(FCompilerProcNames, FCompilerProcCount + 16);
-    FCompilerProcNames[FCompilerProcCount] := CleanName;
-    Inc(FCompilerProcCount);
+    FCompilerProcNames.Push(CleanName);
   end
   else
     CleanName := AName;
   Sig := GetParamIdentitySignature(ADecl);
-  for Index := 0 to Length(FProcedureBodies) - 1 do
+  for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
     if SameText(FProcedureBodies[Index].Name, CleanName) and
       SameText(FProcedureBodies[Index].OwnerUnitId, AOwnerUnitId) then
     begin
       ExistingSig := GetParamIdentitySignature(FProcedureBodies[Index].Decl);
       if ExistingSig = Sig then
       begin
-        FProcedureBodies[Index].Body := ABody;
-        FProcedureBodies[Index].Decl := ADecl;
-        FProcedureBodies[Index].OwnerUnitId := AOwnerUnitId;
-        FProcedureBodies[Index].ScopeId := FCurrentScopeId;
+        Entry := FProcedureBodies[Index];
+        Entry.Body := ABody;
+        Entry.Decl := ADecl;
+        Entry.OwnerUnitId := AOwnerUnitId;
+        Entry.ScopeId := FCurrentScopeId;
+        FProcedureBodies[Index] := Entry;
         Exit;
       end;
     end;
-  NextIndex := Length(FProcedureBodies);
-  SetLength(FProcedureBodies, NextIndex + 1);
-  FProcedureBodies[NextIndex].Name := CleanName;
-  FProcedureBodies[NextIndex].Body := ABody;
-  FProcedureBodies[NextIndex].Decl := ADecl;
-  FProcedureBodies[NextIndex].OwnerUnitId := AOwnerUnitId;
-  FProcedureBodies[NextIndex].ScopeId := FCurrentScopeId;
+  Entry.Name := CleanName;
+  Entry.Body := ABody;
+  Entry.Decl := ADecl;
+  Entry.OwnerUnitId := AOwnerUnitId;
+  Entry.ScopeId := FCurrentScopeId;
+  FProcedureBodies.Push(Entry);
 end;
 
 function TSemanticAnalyzer.ProcedureBodyScopeIdForDecl(
@@ -64,7 +62,7 @@ begin
     Exit;
   DeclName := ADecl.Text;
   { Try exact pointer match first }
-  for Index := 0 to Length(FProcedureBodies) - 1 do
+  for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
     if FProcedureBodies[Index].Decl = ADecl then
       Exit(FProcedureBodies[Index].ScopeId);
   { Fallback: name match for overloaded declarations sharing same body entry.
@@ -73,7 +71,7 @@ begin
   begin
     NameMatchCount := 0;
     NameMatchScopeId := 0;
-    for Index := 0 to Length(FProcedureBodies) - 1 do
+    for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
       if SameText(FProcedureBodies[Index].Name, DeclName) then
       begin
         Inc(NameMatchCount);
@@ -107,7 +105,7 @@ var
 begin
   ABody := nil;
   ADecl := nil;
-  for Index := 0 to Length(FProcedureBodies) - 1 do
+  for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
     if SameText(FProcedureBodies[Index].Name, AName) then
     begin
       ABody := FProcedureBodies[Index].Body;

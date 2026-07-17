@@ -63,6 +63,8 @@ UTF-8 字符串处理、Unicode 支持、数值/格式化转换、只读视图�
 | 单元                        | 职责                                      | 关键 API                                                                                | 适合场景                                     |
 | --------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------- |
 | `nextpas.core.text.unicode` | 聚合 property/case/normalize 高频 surface | `UTF8ToUpper`, `UTF8CaseFold`, `NFC`, `HasBinaryProperty`                               | 只关心 Unicode 能力，不想分别引入 3 个子模块 |
+
+> Unicode 子模块族的完整架构、API、数据生成管线和使用指南见 [`text/unicode/README.md`](unicode/README.md)。
 | `nextpas.core.text`         | 聚合高频文本 surface                      | `TextTrim`, `TStringView`, `IStringBuilder`, `MakeStringBuilder`, `TextEqualCanonical` | 大多数上层代码的默认入口                     |
 
 ## 依赖规则要守住

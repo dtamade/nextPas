@@ -1,10 +1,30 @@
-procedure AppendString(var AItems: TStringArray; const AValue: string);
-var
-  NextIndex: SizeInt;
+procedure FreeSearchIndexEntryNested(var AEntry: TSearchIndexEntry);
 begin
-  NextIndex := Length(AItems);
-  SetLength(AItems, NextIndex + 1);
-  AItems[NextIndex] := AValue;
+  AEntry.CandidatePaths.Free;
+  AEntry.CandidatePaths := nil;
+end;
+
+procedure FreeSearchIndexEntriesNested(AEntries: TSearchIndexEntryVec);
+var
+  Index: LongInt;
+  Entry: PSearchIndexEntry;
+begin
+  if AEntries = nil then
+    Exit;
+  { Count is SizeUInt — cast before -1 so empty vec does not underflow. }
+  for Index := 0 to LongInt(AEntries.Count) - 1 do
+  begin
+    Entry := AEntries.GetPtr(SizeUInt(Index));
+    FreeSearchIndexEntryNested(Entry^);
+  end;
+end;
+
+function CreateCandidatePathVec(AAllocator: IAllocator): TUnitResolverStringVec;
+begin
+  if AAllocator <> nil then
+    Result := TUnitResolverStringVec.Create(0, AAllocator)
+  else
+    Result := TUnitResolverStringVec.Create;
 end;
 
 constructor TUnitResolver.Create(
@@ -13,27 +33,74 @@ constructor TUnitResolver.Create(
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId;
   const AProjectUnitRootInfos: TProjectUnitRootInfoArray;
-  const AExplicitUnitRoots: TStringArray
+  const AExplicitUnitRoots: TStringArray;
+  const ANodeAllocator: IAllocator
 );
+var
+  Index: LongInt;
 begin
   inherited Create;
   FSourceDatabase := ASourceDatabase;
   FDiagnostics := ADiagnostics;
   FTargetFacts := ATargetFacts;
   FRootFileId := ARootFileId;
-  FProjectUnitRootInfos := AProjectUnitRootInfos;
-  FExplicitUnitRoots := AExplicitUnitRoots;
+  FNodeAllocator := ANodeAllocator;
+  { Session-long root tables (survive into BuildSearchPaths ownership on
+    FSearchPaths / Detach products). Dynarray ctor args are copied onto
+    default-heap TVec — not phase scratch. }
+  FProjectUnitRootInfos := TProjectUnitRootInfoVec.Create;
+  for Index := 0 to Length(AProjectUnitRootInfos) - 1 do
+    FProjectUnitRootInfos.Push(AProjectUnitRootInfos[Index]);
+  FExplicitUnitRoots := TUnitResolverStringVec.Create;
+  for Index := 0 to Length(AExplicitUnitRoots) - 1 do
+    FExplicitUnitRoots.Push(AExplicitUnitRoots[Index]);
+  { Detached into session (FUnitGraph / FSearchPathSet) and used after
+    ResolveUnits ResetScratchAllocator — must be default-heap, not phase scratch. }
   FSearchPaths := TSearchPathSet.Create;
   FUnitGraph := TUnitGraph.Create;
   FResolutionStatus := 'deferred';
-  SetLength(FResolutionStack, 0);
+  { Phase-local only: destroyed with resolver before ResetScratchAllocator. }
+  if FNodeAllocator <> nil then
+  begin
+    FResolutionStack := TResolutionStackVec.Create(0, FNodeAllocator);
+    FRootIndexes := TRootSearchIndexVec.Create(0, FNodeAllocator);
+  end
+  else
+  begin
+    FResolutionStack := TResolutionStackVec.Create;
+    FRootIndexes := TRootSearchIndexVec.Create;
+  end;
   BuildSearchPaths;
+end;
+
+procedure TUnitResolver.FreeRootIndexEntries;
+var
+  Index: LongInt;
+  Root: TRootSearchIndex;
+begin
+  if FRootIndexes = nil then
+    Exit;
+  for Index := 0 to LongInt(FRootIndexes.Count) - 1 do
+  begin
+    Root := FRootIndexes[Index];
+    FreeSearchIndexEntriesNested(Root.Entries);
+    Root.Entries.Free;
+    Root.Entries := nil;
+    FRootIndexes[Index] := Root;
+  end;
 end;
 
 destructor TUnitResolver.Destroy;
 begin
+  FreeRootIndexEntries;
+  FRootIndexes.Free;
+  FResolutionStack.Free;
   FUnitGraph.Free;
   FSearchPaths.Free;
+  FProjectUnitRootInfos.Free;
+  FProjectUnitRootInfos := nil;
+  FExplicitUnitRoots.Free;
+  FExplicitUnitRoots := nil;
   inherited Destroy;
 end;
 
@@ -53,27 +120,28 @@ procedure TUnitResolver.PushResolutionStack(
   const AEnteredBy: TUnitGraphEdgeKind
 );
 var
-  NextIndex: SizeInt;
+  Entry: TResolutionStackEntry;
 begin
-  NextIndex := Length(FResolutionStack);
-  SetLength(FResolutionStack, NextIndex + 1);
-  FResolutionStack[NextIndex].UnitId := AUnitId;
-  FResolutionStack[NextIndex].EnteredBy := AEnteredBy;
+  Entry.UnitId := AUnitId;
+  Entry.EnteredBy := AEnteredBy;
+  FResolutionStack.Push(Entry);
 end;
 
 procedure TUnitResolver.PopResolutionStack;
+var
+  Entry: TResolutionStackEntry;
 begin
-  if Length(FResolutionStack) = 0 then
+  if FResolutionStack.Count = 0 then
     Exit;
-
-  SetLength(FResolutionStack, Length(FResolutionStack) - 1);
+  if not FResolutionStack.TryPop(Entry) then
+    ;
 end;
 
 function TUnitResolver.StackIndexOf(const AUnitId: string): LongInt;
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FResolutionStack) - 1 do
+  for Index := 0 to LongInt(FResolutionStack.Count) - 1 do
     if FResolutionStack[Index].UnitId = AUnitId then
       Exit(Index);
 
@@ -86,7 +154,7 @@ function TUnitResolver.StackPathHasImplementationBoundary(
 var
   Index: LongInt;
 begin
-  for Index := AStartIndex + 1 to Length(FResolutionStack) - 1 do
+  for Index := AStartIndex + 1 to LongInt(FResolutionStack.Count) - 1 do
     if FResolutionStack[Index].EnteredBy = ugeImplementationUse then
       Exit(True);
 
@@ -103,7 +171,7 @@ begin
     StartIndex := 0;
 
   Result := '';
-  for Index := StartIndex to Length(FResolutionStack) - 1 do
+  for Index := StartIndex to LongInt(FResolutionStack.Count) - 1 do
   begin
     if Result <> '' then
       Result := Result + ' -> ';
@@ -150,7 +218,7 @@ begin
   AEntry.ManifestPath := '';
   AEntry.WorkspaceMemberPath := '';
 
-  for Index := 0 to FSearchPaths.Count - 1 do
+  for Index := 0 to LongInt(FSearchPaths.Count) - 1 do
   begin
     Entry := FSearchPaths.EntryAt(Index);
     if not CorePathStartsWith(APath, Entry.RootPath) then
@@ -172,7 +240,7 @@ var
   Index: LongInt;
 begin
   Result := '';
-  for Index := 0 to FSearchPaths.Count - 1 do
+  for Index := 0 to LongInt(FSearchPaths.Count) - 1 do
   begin
     if Result <> '' then
       Result := Result + ', ';
@@ -255,12 +323,16 @@ function TUnitResolver.FindIndexedEntry(
 ): LongInt;
 var
   Index: LongInt;
+  Root: TRootSearchIndex;
 begin
-  if (ARootIndex < 0) or (ARootIndex >= Length(FRootIndexes)) then
+  if (ARootIndex < 0) or (ARootIndex >= LongInt(FRootIndexes.Count)) then
     Exit(-1);
 
-  for Index := 0 to Length(FRootIndexes[ARootIndex].Entries) - 1 do
-    if FRootIndexes[ARootIndex].Entries[Index].UnitId = AUnitId then
+  Root := FRootIndexes[ARootIndex];
+  if Root.Entries = nil then
+    Exit(-1);
+  for Index := 0 to LongInt(Root.Entries.Count) - 1 do
+    if Root.Entries[Index].UnitId = AUnitId then
       Exit(Index);
 
   Result := -1;
@@ -269,15 +341,23 @@ end;
 procedure TUnitResolver.InitializeRootIndexes;
 var
   Index: LongInt;
+  Root: TRootSearchIndex;
 begin
-  SetLength(FRootIndexes, FSearchPaths.Count);
-  for Index := 0 to FSearchPaths.Count - 1 do
+  FreeRootIndexEntries;
+  FRootIndexes.Clear;
+  { Capacity only — Ensure() raises Count and would double after Push. }
+  FRootIndexes.EnsureCapacity(SizeUInt(FSearchPaths.Count));
+  for Index := 0 to LongInt(FSearchPaths.Count) - 1 do
   begin
-    FRootIndexes[Index].RootPath := FSearchPaths.RootPathAt(Index);
-    FRootIndexes[Index].Status := 'deferred';
-    SetLength(FRootIndexes[Index].Entries, 0);
-    FRootIndexes[Index].ScanCount := 0;
-    FRootIndexes[Index].LastScanTimestamp := 0;
+    Root.RootPath := FSearchPaths.RootPathAt(Index);
+    Root.Status := 'deferred';
+    if FNodeAllocator <> nil then
+      Root.Entries := TSearchIndexEntryVec.Create(0, FNodeAllocator)
+    else
+      Root.Entries := TSearchIndexEntryVec.Create;
+    Root.ScanCount := 0;
+    Root.LastScanTimestamp := 0;
+    FRootIndexes.Push(Root);
   end;
 end;
 
@@ -285,57 +365,69 @@ procedure TUnitResolver.EnsureRootIndex(const ARootIndex: LongInt);
 var
   CandidatePath: string;
   EntryIndex: LongInt;
-  Index: LongInt;
   UnitId: string;
   RootDir: string;
-  Entries: TDirEntryArray;
+  DirEntries: TDirEntryArray;
   I: LongInt;
   Ext: string;
+  Root: TRootSearchIndex;
+  Entry: TSearchIndexEntry;
 begin
-  if (ARootIndex < 0) or (ARootIndex >= Length(FRootIndexes)) then
+  if (ARootIndex < 0) or (ARootIndex >= LongInt(FRootIndexes.Count)) then
     Exit;
-  if FRootIndexes[ARootIndex].Status = 'ready' then
+  Root := FRootIndexes[ARootIndex];
+  if Root.Status = 'ready' then
     Exit;
 
-  FRootIndexes[ARootIndex].RootPath := FSearchPaths.RootPathAt(ARootIndex);
-  SetLength(FRootIndexes[ARootIndex].Entries, 0);
-  Inc(FRootIndexes[ARootIndex].ScanCount);
-
-  RootDir := FRootIndexes[ARootIndex].RootPath;
-  Entries := FsReadDir(RootDir);
-  for I := 0 to High(Entries) do
+  Root.RootPath := FSearchPaths.RootPathAt(ARootIndex);
+  if Root.Entries <> nil then
   begin
-    if Entries[I].IsDir then
+    FreeSearchIndexEntriesNested(Root.Entries);
+    Root.Entries.Clear;
+  end;
+  Inc(Root.ScanCount);
+  FRootIndexes[ARootIndex] := Root;
+
+  RootDir := Root.RootPath;
+  DirEntries := FsReadDir(RootDir);
+  for I := 0 to High(DirEntries) do
+  begin
+    if DirEntries[I].IsDir then
       Continue;
 
-    Ext := LowerCase(PathExt(Entries[I].Name));
+    Ext := LowerCase(PathExt(DirEntries[I].Name));
     if (Ext <> '.pas') and (Ext <> '.pp') then
       Continue;
 
-    UnitId := NormalizeUnitIdentity(ChangeFileExt(Entries[I].Name, ''));
+    UnitId := NormalizeUnitIdentity(ChangeFileExt(DirEntries[I].Name, ''));
     if UnitId = '' then
       Continue;
 
     CandidatePath := NormalizeCorePath(
-      IncludeTrailingPathDelimiter(RootDir) + Entries[I].Name
+      IncludeTrailingPathDelimiter(RootDir) + DirEntries[I].Name
     );
     EntryIndex := FindIndexedEntry(ARootIndex, UnitId);
+    Root := FRootIndexes[ARootIndex];
     if EntryIndex < 0 then
     begin
-      Index := Length(FRootIndexes[ARootIndex].Entries);
-      SetLength(FRootIndexes[ARootIndex].Entries, Index + 1);
-      FRootIndexes[ARootIndex].Entries[Index].UnitId := UnitId;
-      SetLength(FRootIndexes[ARootIndex].Entries[Index].CandidatePaths, 0);
-      EntryIndex := Index;
+      Entry := Default(TSearchIndexEntry);
+      Entry.UnitId := UnitId;
+      Entry.CandidatePaths := CreateCandidatePathVec(FNodeAllocator);
+      Root.Entries.Push(Entry);
+      EntryIndex := LongInt(Root.Entries.Count) - 1;
     end;
-    AppendString(
-      FRootIndexes[ARootIndex].Entries[EntryIndex].CandidatePaths,
-      CandidatePath
-    );
+    Entry := Root.Entries[EntryIndex];
+    if Entry.CandidatePaths = nil then
+      Entry.CandidatePaths := CreateCandidatePathVec(FNodeAllocator);
+    Entry.CandidatePaths.Push(CandidatePath);
+    Root.Entries[EntryIndex] := Entry;
+    FRootIndexes[ARootIndex] := Root;
   end;
 
-  FRootIndexes[ARootIndex].Status := 'ready';
-  FRootIndexes[ARootIndex].LastScanTimestamp := Round(DateTimeNow * 86400);
+  Root := FRootIndexes[ARootIndex];
+  Root.Status := 'ready';
+  Root.LastScanTimestamp := Round(DateTimeNow * 86400);
+  FRootIndexes[ARootIndex] := Root;
 end;
 
 function TUnitResolver.FindCandidatePathsInRoot(
@@ -344,6 +436,7 @@ function TUnitResolver.FindCandidatePathsInRoot(
 ): TStringArray;
 var
   EntryIndex: LongInt;
+  Paths: TUnitResolverStringVec;
 begin
   Result := nil;
   EnsureRootIndex(ARootIndex);
@@ -351,7 +444,10 @@ begin
   if EntryIndex < 0 then
     Exit;
 
-  Result := FRootIndexes[ARootIndex].Entries[EntryIndex].CandidatePaths;
+  Paths := FRootIndexes[ARootIndex].Entries[EntryIndex].CandidatePaths;
+  if Paths = nil then
+    Exit;
+  Result := Paths.ToArray;
 end;
 
 function TUnitResolver.FindCandidatePaths(
@@ -367,7 +463,7 @@ begin
   if BaseIdentity = '' then
     Exit;
 
-  for Index := 0 to FSearchPaths.Count - 1 do
+  for Index := 0 to LongInt(FSearchPaths.Count) - 1 do
   begin
     RootCandidates := FindCandidatePathsInRoot(Index, BaseIdentity);
     if Length(RootCandidates) > 0 then

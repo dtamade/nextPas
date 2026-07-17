@@ -100,26 +100,26 @@ var
 begin
   LLen := Length(AData);
   if LLen < 2 then
-    raise EHttpError.Create('WebSocket: frame too short');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: frame too short');
 
   LHdr0 := AData[0];
   LHdr1 := AData[1];
 
   { Validate reserved bits }
   if (LHdr0 and $70) <> 0 then
-    raise EHttpError.Create('WebSocket: reserved bits set');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: reserved bits set');
 
   { Validate opcode }
   LOpcode := LHdr0 and $0F;
   case LOpcode of
     $0, $1, $2, $8, $9, $A: ; { Valid opcodes }
   else
-    raise EHttpError.Create('WebSocket: reserved or invalid opcode');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: reserved or invalid opcode');
   end;
 
   { Control frames must not be fragmented }
   if (LOpcode >= $08) and ((LHdr0 and $80) = 0) then
-    raise EHttpError.Create('WebSocket: control frames must not be fragmented');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: control frames must not be fragmented');
 
   { Parse payload length }
   LMasked := (LHdr1 and $80) <> 0;
@@ -128,27 +128,27 @@ begin
   if LPayloadLen = 126 then
   begin
     if LLen < 4 then
-      raise EHttpError.Create('WebSocket: frame too short for 16-bit length');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: frame too short for 16-bit length');
     LPayloadLen := (UInt64(AData[2]) shl 8) or UInt64(AData[3]);
     if LPayloadLen < 126 then
-      raise EHttpError.Create('WebSocket: non-canonical payload length');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: non-canonical payload length');
   end
   else if LPayloadLen = 127 then
   begin
     if LLen < 10 then
-      raise EHttpError.Create('WebSocket: frame too short for 64-bit length');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: frame too short for 64-bit length');
     if (AData[2] and $80) <> 0 then
-      raise EHttpError.Create('WebSocket: invalid 64-bit payload length');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: invalid 64-bit payload length');
     LPayloadLen := 0;
     for I := 2 to 9 do
       LPayloadLen := (LPayloadLen shl 8) or UInt64(AData[I]);
     if LPayloadLen < 65536 then
-      raise EHttpError.Create('WebSocket: non-canonical payload length');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: non-canonical payload length');
   end;
 
   { Control frame payload size limit }
   if (LOpcode >= $08) and (LPayloadLen > 125) then
-    raise EHttpError.Create('WebSocket: control frame payload too large');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: control frame payload too large');
 end;
 
 { TFuzzMutator }

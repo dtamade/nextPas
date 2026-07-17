@@ -7,19 +7,22 @@ unit np_hir_builder;
 interface
 
 uses
-  np_semantic_model, np_hir_types, np_hir_model, np_source_database;
+  np_semantic_model, np_hir_types, np_hir_model, np_source_database,
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec;
 
 type
   TExprStack = record
-    Values: array of THIRValueId;
-    Types: array of THIRTypeId;
-    Count: LongInt;
-    procedure Init;
+    Values: specialize TVec<THIRValueId>;
+    Types: specialize TVec<THIRTypeId>;
+    procedure Init(AAllocator: IAllocator = nil);
+    procedure Done;
     procedure Push(AVal: THIRValueId);
     procedure PushTyped(AVal: THIRValueId; AType: THIRTypeId);
     function Pop: THIRValueId;
     function PopTyped(out AType: THIRTypeId): THIRValueId;
     function PeekType: THIRTypeId;
+    function Count: LongInt;
   end;
 
   TAllocaEntry = record
@@ -37,20 +40,28 @@ type
     AddressValueId: THIRValueId;
   end;
 
+  TTypedHirNodeVec = specialize TVec<TTypedHirNode>;
+  THirNameVec = specialize TVec<string>;
+  THirBlockNameVec = THirNameVec;
+  THirBlockIdVec = specialize TVec<THIRBlockId>;
+  THirAllocaVec = specialize TVec<TAllocaEntry>;
+  THirTypeIdVec = specialize TVec<THIRTypeId>;
+  THirValueIdVec = specialize TVec<THIRValueId>;
+
   THIRBuilder = class
   private
     FSemaModel: TSemanticModel;
     FModule: THIRModule;
+    { Optional phase scratch for working TVecs (cleanup/blocks/allocas/globals). }
+    FAllocator: IAllocator;
     FCurrentFuncId: THIRFuncId;
     FCurrentBlockId: THIRBlockId;
     FBlockTerminated: Boolean;
     FSavedFuncId: THIRFuncId;
     FSavedBlockId: THIRBlockId;
-    FSavedAllocas: array of TAllocaEntry;
-    FSavedAllocaCount: LongInt;
-    FSavedBlockNames: array of string;
-    FSavedBlockIds: array of THIRBlockId;
-    FSavedBlockCount: LongInt;
+    FSavedAllocas: THirAllocaVec;
+    FSavedBlockNames: THirNameVec;
+    FSavedBlockIds: THirBlockIdVec;
     FSavedEntryBlockId: THIRBlockId;
     FPendingParamCount: LongInt;
     FPendingParamLlvmIdx: LongInt;
@@ -59,32 +70,25 @@ type
     FPendingObjectFreeReceiverValue: THIRValueId;
     FPendingObjectFreeCleanupClass: string;
     FPendingObjectFreeHeapRelease: Boolean;
-    FPendingCleanupNodes: array of TTypedHirNode;
-    FPendingCleanupCount: LongInt;
+    FPendingCleanupNodes: TTypedHirNodeVec;
     FSretValueId: THIRValueId;
 
-    FAllocas: array of TAllocaEntry;
-    FAllocaCount: LongInt;
+    FAllocas: THirAllocaVec;
 
-    FIntfVarNames: array of string;
-    FIntfVarCount: LongInt;
+    FIntfVarNames: THirNameVec;
 
-    FGlobalNames: array of string;
-    FGlobalTypes: array of THIRTypeId;
-    FGlobalCount: LongInt;
-    FGlobalRefCache: array of string;
-    FGlobalRefValues: array of THIRValueId;
-    FGlobalRefCount: LongInt;
+    FGlobalNames: THirNameVec;
+    FGlobalTypes: THirTypeIdVec;
+    FGlobalRefCache: THirNameVec;
+    FGlobalRefValues: THirValueIdVec;
     FInStartFunc: Boolean;
     FEntryBlockId: THIRBlockId;
 
-    FBlockNames: array of string;
-    FBlockIds: array of THIRBlockId;
-    FBlockCount: LongInt;
+    FBlockNames: THirBlockNameVec;
+    FBlockIds: THirBlockIdVec;
 
-    FFwdFuncNames: array of string;
-    FFwdFuncRetTypes: array of THIRTypeId;
-    FFwdFuncCount: LongInt;
+    FFwdFuncNames: THirNameVec;
+    FFwdFuncRetTypes: THirTypeIdVec;
     FLegacyIntType: THIRTypeId;
     FBoolType: THIRTypeId;
     FStringType: THIRTypeId;
@@ -99,6 +103,17 @@ type
     FCurrentSourceLine: LongInt;
     FCurrentSourceCol: LongInt;
 
+    procedure ClearWorkBlocks;
+    procedure SnapshotWorkTables(AAllocas: THirAllocaVec;
+      ANames: THirNameVec; AIds: THirBlockIdVec);
+    procedure RestoreWorkBlocks(ANames: THirNameVec; AIds: THirBlockIdVec);
+    procedure ClearWorkAllocas;
+    procedure RestoreWorkAllocas(AEntries: THirAllocaVec);
+    function CreateAllocaVec: THirAllocaVec;
+    function CreateNameVec: THirNameVec;
+    function CreateBlockIdVec: THirBlockIdVec;
+    procedure ClearGlobalRefs;
+    procedure RegisterGlobal(const AName: string; AType: THIRTypeId);
     function EnsureBlock(const AName: string): THIRBlockId;
     function FindBlock(const AName: string): THIRBlockId;
     procedure EnsureAlloca(const AName: string; AType: THIRTypeId);
@@ -303,7 +318,8 @@ type
   public
     constructor Create(ASemaModel: TSemanticModel;
       ASourceDatabase: TSourceDatabase = nil;
-      ASourceFileId: TSourceFileId = 0);
+      ASourceFileId: TSourceFileId = 0;
+      const AAllocator: IAllocator = nil);
     destructor Destroy; override;
     function LowerExpr(const AExprId: LongInt;
       out AResult: THIRExprResult): Boolean;
@@ -314,58 +330,75 @@ type
 implementation
 
 uses
-  nextpas.core.text.conv, nextpas.core.system.contracts;
+  nextpas.core.text.conv, np_system_contracts;
 
-procedure TExprStack.Init;
+procedure TExprStack.Init(AAllocator: IAllocator);
 begin
-  Count := 0;
-  SetLength(Values, 0);
-  SetLength(Types, 0);
+  if AAllocator <> nil then
+  begin
+    Values := specialize TVec<THIRValueId>.Create(0, AAllocator);
+    Types := specialize TVec<THIRTypeId>.Create(0, AAllocator);
+  end
+  else
+  begin
+    Values := specialize TVec<THIRValueId>.Create;
+    Types := specialize TVec<THIRTypeId>.Create;
+  end;
+end;
+
+procedure TExprStack.Done;
+begin
+  Types.Free;
+  Values.Free;
+  Types := nil;
+  Values := nil;
 end;
 
 procedure TExprStack.Push(AVal: THIRValueId);
 begin
-  if Count >= Length(Values) then
-  begin
-    SetLength(Values, Count + 16);
-    SetLength(Types, Count + 16);
-  end;
-  Values[Count] := AVal;
-  Types[Count] := 0;
-  Inc(Count);
+  Values.Push(AVal);
+  Types.Push(0);
 end;
 
 procedure TExprStack.PushTyped(AVal: THIRValueId; AType: THIRTypeId);
 begin
-  if Count >= Length(Values) then
-  begin
-    SetLength(Values, Count + 16);
-    SetLength(Types, Count + 16);
-  end;
-  Values[Count] := AVal;
-  Types[Count] := AType;
-  Inc(Count);
+  Values.Push(AVal);
+  Types.Push(AType);
 end;
 
 function TExprStack.Pop: THIRValueId;
+var
+  Dummy: THIRTypeId;
 begin
-  if Count = 0 then Exit(0);
-  Dec(Count);
-  Result := Values[Count];
+  if Values.Count = 0 then
+    Exit(0);
+  if not Values.TryPop(Result) then
+    Exit(0);
+  if not Types.TryPop(Dummy) then
+    ; { keep Values/Types lengths aligned }
 end;
 
 function TExprStack.PopTyped(out AType: THIRTypeId): THIRValueId;
 begin
-  if Count = 0 then begin AType := 0; Exit(0); end;
-  Dec(Count);
-  Result := Values[Count];
-  AType := Types[Count];
+  AType := 0;
+  if Values.Count = 0 then
+    Exit(0);
+  if not Values.TryPop(Result) then
+    Exit(0);
+  if not Types.TryPop(AType) then
+    AType := 0;
 end;
 
 function TExprStack.PeekType: THIRTypeId;
 begin
-  if Count = 0 then Exit(0);
-  Result := Types[Count - 1];
+  if Types.Count = 0 then
+    Exit(0);
+  Result := Types[Types.Count - 1];
+end;
+
+function TExprStack.Count: LongInt;
+begin
+  Result := LongInt(Values.Count);
 end;
 
 function ExtractVarOperandName(const AExprArg: string): string;
@@ -394,7 +427,8 @@ begin
 end;
 
 constructor THIRBuilder.Create(ASemaModel: TSemanticModel;
-  ASourceDatabase: TSourceDatabase; ASourceFileId: TSourceFileId);
+  ASourceDatabase: TSourceDatabase; ASourceFileId: TSourceFileId;
+  const AAllocator: IAllocator);
 var
   I, J: LongInt;
 begin
@@ -402,17 +436,13 @@ begin
   FSemaModel := ASemaModel;
   FSourceDatabase := ASourceDatabase;
   FCurrentSourceFileId := ASourceFileId;
+  FAllocator := AAllocator;
   FCurrentSourceLine := 0;
   FCurrentSourceCol := 0;
   FModule := THIRModule.Create('main');
   FCurrentFuncId := 0;
   FCurrentBlockId := 0;
   FBlockTerminated := False;
-  FAllocaCount := 0;
-  FIntfVarCount := 0;
-  FBlockCount := 0;
-  FGlobalCount := 0;
-  FGlobalRefCount := 0;
   FInStartFunc := True;
   FEntryBlockId := 0;
   FPendingParamCount := 0;
@@ -422,8 +452,40 @@ begin
   FPendingObjectFreeReceiverValue := 0;
   FPendingObjectFreeCleanupClass := '';
   FPendingObjectFreeHeapRelease := False;
-  SetLength(FPendingCleanupNodes, 0);
-  FPendingCleanupCount := 0;
+  if FAllocator <> nil then
+  begin
+    FPendingCleanupNodes := TTypedHirNodeVec.Create(0, FAllocator);
+    FBlockNames := THirBlockNameVec.Create(0, FAllocator);
+    FBlockIds := THirBlockIdVec.Create(0, FAllocator);
+    FAllocas := THirAllocaVec.Create(0, FAllocator);
+    FSavedAllocas := THirAllocaVec.Create(0, FAllocator);
+    FSavedBlockNames := THirNameVec.Create(0, FAllocator);
+    FSavedBlockIds := THirBlockIdVec.Create(0, FAllocator);
+    FIntfVarNames := THirNameVec.Create(0, FAllocator);
+    FGlobalNames := THirNameVec.Create(0, FAllocator);
+    FGlobalTypes := THirTypeIdVec.Create(0, FAllocator);
+    FGlobalRefCache := THirNameVec.Create(0, FAllocator);
+    FGlobalRefValues := THirValueIdVec.Create(0, FAllocator);
+    FFwdFuncNames := THirNameVec.Create(0, FAllocator);
+    FFwdFuncRetTypes := THirTypeIdVec.Create(0, FAllocator);
+  end
+  else
+  begin
+    FPendingCleanupNodes := TTypedHirNodeVec.Create;
+    FBlockNames := THirBlockNameVec.Create;
+    FBlockIds := THirBlockIdVec.Create;
+    FAllocas := THirAllocaVec.Create;
+    FSavedAllocas := THirAllocaVec.Create;
+    FSavedBlockNames := THirNameVec.Create;
+    FSavedBlockIds := THirBlockIdVec.Create;
+    FIntfVarNames := THirNameVec.Create;
+    FGlobalNames := THirNameVec.Create;
+    FGlobalTypes := THirTypeIdVec.Create;
+    FGlobalRefCache := THirNameVec.Create;
+    FGlobalRefValues := THirValueIdVec.Create;
+    FFwdFuncNames := THirNameVec.Create;
+    FFwdFuncRetTypes := THirTypeIdVec.Create;
+  end;
   FLegacyIntType := 0;
   FBoolType := 0;
   FStringType := 0;
@@ -433,26 +495,123 @@ begin
   for I := Low(FIntTypeCache) to High(FIntTypeCache) do
     for J := Low(FIntTypeCache[I]) to High(FIntTypeCache[I]) do
       FIntTypeCache[I, J] := 0;
-  SetLength(FAllocas, 0);
-  SetLength(FGlobalNames, 0);
-  SetLength(FGlobalTypes, 0);
-  SetLength(FBlockNames, 0);
-  SetLength(FBlockIds, 0);
-  FFwdFuncCount := 0;
 end;
 
 destructor THIRBuilder.Destroy;
 begin
+  FFwdFuncRetTypes.Free;
+  FFwdFuncNames.Free;
+  FGlobalRefValues.Free;
+  FGlobalRefCache.Free;
+  FGlobalTypes.Free;
+  FGlobalNames.Free;
+  FIntfVarNames.Free;
+  FSavedBlockIds.Free;
+  FSavedBlockNames.Free;
+  FSavedAllocas.Free;
+  FAllocas.Free;
+  FBlockIds.Free;
+  FBlockNames.Free;
+  FPendingCleanupNodes.Free;
   inherited Destroy;
+end;
+
+function THIRBuilder.CreateAllocaVec: THirAllocaVec;
+begin
+  if FAllocator <> nil then
+    Result := THirAllocaVec.Create(0, FAllocator)
+  else
+    Result := THirAllocaVec.Create;
+end;
+
+function THIRBuilder.CreateNameVec: THirNameVec;
+begin
+  if FAllocator <> nil then
+    Result := THirNameVec.Create(0, FAllocator)
+  else
+    Result := THirNameVec.Create;
+end;
+
+function THIRBuilder.CreateBlockIdVec: THirBlockIdVec;
+begin
+  if FAllocator <> nil then
+    Result := THirBlockIdVec.Create(0, FAllocator)
+  else
+    Result := THirBlockIdVec.Create;
+end;
+
+procedure THIRBuilder.ClearWorkBlocks;
+begin
+  FBlockNames.Clear;
+  FBlockIds.Clear;
+end;
+
+procedure THIRBuilder.SnapshotWorkTables(AAllocas: THirAllocaVec;
+  ANames: THirNameVec; AIds: THirBlockIdVec);
+var
+  I: LongInt;
+begin
+  AAllocas.Clear;
+  for I := 0 to LongInt(FAllocas.Count) - 1 do
+    AAllocas.Push(FAllocas[I]);
+  ANames.Clear;
+  AIds.Clear;
+  for I := 0 to LongInt(FBlockNames.Count) - 1 do
+  begin
+    ANames.Push(FBlockNames[I]);
+    AIds.Push(FBlockIds[I]);
+  end;
+end;
+
+procedure THIRBuilder.RestoreWorkBlocks(ANames: THirNameVec; AIds: THirBlockIdVec);
+var
+  I: LongInt;
+begin
+  ClearWorkBlocks;
+  for I := 0 to LongInt(ANames.Count) - 1 do
+  begin
+    FBlockNames.Push(ANames[I]);
+    if I < LongInt(AIds.Count) then
+      FBlockIds.Push(AIds[I])
+    else
+      FBlockIds.Push(0);
+  end;
+end;
+
+procedure THIRBuilder.ClearWorkAllocas;
+begin
+  FAllocas.Clear;
+end;
+
+procedure THIRBuilder.RestoreWorkAllocas(AEntries: THirAllocaVec);
+var
+  I: LongInt;
+begin
+  ClearWorkAllocas;
+  for I := 0 to LongInt(AEntries.Count) - 1 do
+    FAllocas.Push(AEntries[I]);
+end;
+
+procedure THIRBuilder.ClearGlobalRefs;
+begin
+  FGlobalRefCache.Clear;
+  FGlobalRefValues.Clear;
+end;
+
+procedure THIRBuilder.RegisterGlobal(const AName: string; AType: THIRTypeId);
+begin
+  FGlobalNames.Push(AName);
+  FGlobalTypes.Push(AType);
 end;
 
 function THIRBuilder.FindBlock(const AName: string): THIRBlockId;
 var
-  I: LongInt;
+  I: SizeUInt;
 begin
-  for I := 0 to FBlockCount - 1 do
-    if FBlockNames[I] = AName then
-      Exit(FBlockIds[I]);
+  if FBlockNames.Count > 0 then
+    for I := 0 to FBlockNames.Count - 1 do
+      if FBlockNames[I] = AName then
+        Exit(FBlockIds[I]);
   Result := 0;
 end;
 
@@ -463,14 +622,8 @@ begin
   if FCurrentFuncId = 0 then Exit(0);
 
   Result := FModule.AddBlock(FCurrentFuncId, AName);
-  if FBlockCount >= Length(FBlockNames) then
-  begin
-    SetLength(FBlockNames, FBlockCount + 32);
-    SetLength(FBlockIds, FBlockCount + 32);
-  end;
-  FBlockNames[FBlockCount] := AName;
-  FBlockIds[FBlockCount] := Result;
-  Inc(FBlockCount);
+  FBlockNames.Push(AName);
+  FBlockIds.Push(Result);
 end;
 
 function THIRBuilder.Module: THIRModule;

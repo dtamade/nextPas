@@ -18,6 +18,7 @@ uses
 type
   TStringArray = nextpas.core.base.TStringArray;
   TFormFieldArray = nextpas.core.http.form.base.TFormFieldArray;
+  THttpFileArray = nextpas.core.http.form.base.THttpFileArray;
   TJsonValue = nextpas.core.json.value.TJsonValue;
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
@@ -28,12 +29,14 @@ type
   THeaderIterator = reference to procedure(const AName, AValue: string);
 
   {** Per-request context for middleware-to-handler data propagation.
-     Thread-safe key-value store attached to a request by context middleware.
-     Values are TObject descendants; nil means "not set".
+     Attached to the request via IHttpRequestWithContext (not a process-global map).
+     SetValue is non-owning (caller frees). SetOwnedValue is owned by context
+     (freed on overwrite/Remove/Destroy). Has reports key existence (nil values ok).
      Typical keys: 'auth_user', 'request_id', 'trace_id', 'session'. }
   IHttpContext = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000011}']
     procedure SetValue(const AKey: string; const AValue: TObject);
+    procedure SetOwnedValue(const AKey: string; const AValue: TObject);
     function GetValue(const AKey: string): TObject;
     function Has(const AKey: string): Boolean;
     procedure Remove(const AKey: string);
@@ -87,11 +90,22 @@ type
     property RequestOptions: THttpRequestOptions read GetRequestOptions;
   end;
 
+  { Optional request-scoped context bag (set by ContextMiddleware). }
+  IHttpRequestWithContext = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000010012}']
+    function GetContext: IHttpContext;
+    procedure SetContext(const ACtx: IHttpContext);
+    property Context: IHttpContext read GetContext;
+  end;
+
   IHttpResponse = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000003}']
     function GetStatusCode: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
+    { Release/drain body ownership. Idempotent. Preferred over relying only on
+      helpers; destructor also closes if not already closed. }
+    procedure Close;
     property StatusCode: THttpStatus read GetStatusCode;
     property Headers: IHttpHeaders read GetHeaders;
     property Body: IReader read GetBody;
@@ -152,6 +166,13 @@ type
     procedure Options(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Connect(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Trace(const APattern: string; const AHandler: THttpHandlerFunc);
+    { Regex routes — secondary table, consulted when radix tree misses }
+    procedure HandleRegex(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure GetRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure PostRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure PutRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure DeleteRegex(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure PatchRegex(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Use(const AMiddleware: IHttpMiddleware);
   end;
 
@@ -163,27 +184,46 @@ type
     function IsRunning: Boolean;
   end;
 
+  { Minimal RFC 6265 client cookie store. }
+  IHttpCookieJar = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-4000000000C2}']
+    procedure StoreFromResponse(const AUrl: TUrl; const AHeaders: IHttpHeaders);
+    function CookieHeaderFor(const AUrl: TUrl): string;
+    procedure Clear;
+  end;
+
   IHttpClient = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000009}']
     function Send(const AReq: IHttpRequest): IHttpResponse;
     procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    {** GET + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function GetString(const AUrl: string): string;
+    {** GET + ensure 2xx + body as TBytes. Raises EHttpError on non-2xx. }
+    function GetBytes(const AUrl: string): TBytes;
+    {** POST + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function PostString(const AUrl, AContentType, ABody: string): string;
+    {** PUT + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function PutString(const AUrl, AContentType, ABody: string): string;
+    {** PATCH + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function PatchString(const AUrl, AContentType, ABody: string): string;
+    {** DELETE + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
+    function DeleteString(const AUrl: string): string;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Delete(const AUrl: string): IHttpResponse; overload;
-    function Delete(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Delete(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Delete(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
     function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
     function Options(const AUrl: string): IHttpResponse;
     function PostForm(const AUrl: string; const AFields: TFormFieldArray): IHttpResponse;
+    {** multipart/form-data POST (fields + optional files). Boundary is generated. }
+    function PostMultipart(const AUrl: string; const AFields: TFormFieldArray;
+      const AFiles: THttpFileArray): IHttpResponse;
     function PostJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PutJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
     function PatchJson(const AUrl: string; const ABody: TJsonValue): IHttpResponse;
@@ -191,7 +231,8 @@ type
     {** Send a streaming request whose body is NOT buffered into memory.
        The body reader is passed directly to the transport. Send takes ownership
        of the body and closes it after the round trip (success or error).
-       Content-Length must be known and declared. }
+       AContentLength >= 0 publishes Content-Length; AContentLength < 0 selects
+       H1 Transfer-Encoding: chunked (H2 rejects unknown-length bodies). }
     function SendStreaming(const AMethod: THttpMethod; const AUrl: string;
       const AContentType: string; const ABody: IReader;
       const AContentLength: Int64): IHttpResponse;
@@ -201,10 +242,17 @@ type
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
-    {** @desc Returns a decorator that retries failed requests up to AMaxRetries times.
-       Retries on 5xx server errors with exponential backoff (100ms base, max 5s).
+    {** @desc Returns a decorator that retries failed requests up to AMaxRetries
+       extra attempts. Retries on 5xx responses and HttpErrorIsRetryable
+       exceptions (timeout/connect) with exponential backoff (100ms base, max 5s).
        Does NOT retry on 4xx client errors. }
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
+    {** Optional cookie jar decorator. Injects Cookie before Send and absorbs
+       Set-Cookie after a successful response. }
+    function WithCookieJar(const AJar: IHttpCookieJar): IHttpClient;
+    {** Rebuild transport with plain HTTP forward proxy (http://host:port).
+       Decorators re-stack around the new base client. }
+    function WithProxyUrl(const AProxyUrl: string): IHttpClient;
   end;
 
   { Transport layer — protocol implementations register these }

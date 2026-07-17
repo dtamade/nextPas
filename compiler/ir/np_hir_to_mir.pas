@@ -7,18 +7,31 @@
  * 完整实现：逐条翻译 HIR 指令 → MIR 语句，保留操作语义。
  *
  * 对标 rustc_mir_build::build。
+ *
+ * Optional IAllocator: session phase scratch for FValueMap growth.
+ * MIR module itself stays on the default heap (lives past scratch Reset).
  *}
 
 unit np_hir_to_mir;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
-  np_hir_model, np_hir_types, np_mir_model;
+  np_hir_model, np_hir_types, np_mir_model,
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec;
 
 type
+  THirMirValueMapEntry = record
+    HirId: THIRValueId;
+    MirId: TMirValueId;
+  end;
+
+  THirMirValueMap = specialize TVec<THirMirValueMapEntry>;
+
   {**
    * THirToMirLowering — HIR → MIR 降级器
    *
@@ -29,11 +42,9 @@ type
   private
     FHirModule: THIRModule;
     FMirModule: TMirModule;
-    { HIR ValueId → MIR ValueId 映射 }
-    FValueMap: array of record
-      HirId: THIRValueId;
-      MirId: TMirValueId;
-    end;
+    FAllocator: IAllocator;
+    { HIR ValueId → MIR ValueId 映射 (arena-backed when AAllocator set) }
+    FValueMap: THirMirValueMap;
     function HirTypeWidth(ATypeId: THIRTypeId): LongInt;
     function HirTypeSigned(ATypeId: THIRTypeId): Boolean;
     function MapValue(AHirValueId: THIRValueId): TMirValueId;
@@ -46,7 +57,8 @@ type
     procedure LowerTerminator(const AHirTerm: THIRTerminator;
       AMirFuncId, AMirBlockId: TMirBlockId);
   public
-    constructor Create(const AHirModule: THIRModule);
+    constructor Create(const AHirModule: THIRModule;
+      const AAllocator: IAllocator = nil);
     destructor Destroy; override;
     function Lower: TMirModule;
     { 取出 MIR module 所有权（调用者负责释放） }
@@ -55,16 +67,22 @@ type
 
 implementation
 
-constructor THirToMirLowering.Create(const AHirModule: THIRModule);
+constructor THirToMirLowering.Create(const AHirModule: THIRModule;
+  const AAllocator: IAllocator);
 begin
   inherited Create;
   FHirModule := AHirModule;
   FMirModule := nil;
-  SetLength(FValueMap, 0);
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+    FValueMap := THirMirValueMap.Create(0, FAllocator)
+  else
+    FValueMap := THirMirValueMap.Create;
 end;
 
 destructor THirToMirLowering.Destroy;
 begin
+  FValueMap.Free;
   FMirModule.Free;
   inherited Destroy;
 end;
@@ -87,16 +105,17 @@ end;
 
 function THirToMirLowering.MapValue(AHirValueId: THIRValueId): TMirValueId;
 var
-  I: LongInt;
+  I: SizeUInt;
+  Entry: THirMirValueMapEntry;
 begin
-  for I := 0 to High(FValueMap) do
-    if FValueMap[I].HirId = AHirValueId then
-      Exit(FValueMap[I].MirId);
+  if FValueMap.Count > 0 then
+    for I := 0 to FValueMap.Count - 1 do
+      if FValueMap[I].HirId = AHirValueId then
+        Exit(FValueMap[I].MirId);
   Result := FMirModule.NewValue;
-  I := Length(FValueMap);
-  SetLength(FValueMap, I + 1);
-  FValueMap[I].HirId := AHirValueId;
-  FValueMap[I].MirId := Result;
+  Entry.HirId := AHirValueId;
+  Entry.MirId := Result;
+  FValueMap.Push(Entry);
 end;
 
 function THirToMirLowering.MapOperand(const AOp: THIROperand): TMirOperand;
@@ -165,19 +184,21 @@ begin
     HirTypeWidth(AHirFunc.ReturnTypeId),
     HirTypeSigned(AHirFunc.ReturnTypeId));
 
-  for I := 0 to High(AHirFunc.Params) do
-    FMirModule.AddParam(MirFuncId, AHirFunc.Params[I].Name,
-      HirTypeWidth(AHirFunc.Params[I].TypeId),
-      HirTypeSigned(AHirFunc.Params[I].TypeId));
+  if AHirFunc.Params <> nil then
+    for I := 0 to LongInt(AHirFunc.Params.Count) - 1 do
+      FMirModule.AddParam(MirFuncId, AHirFunc.Params[SizeUInt(I)].Name,
+        HirTypeWidth(AHirFunc.Params[SizeUInt(I)].TypeId),
+        HirTypeSigned(AHirFunc.Params[SizeUInt(I)].TypeId));
 
   if AHirFunc.IsExternal then
     FMirModule.SetExternal(MirFuncId,
       AHirFunc.ExternalLib, AHirFunc.ExternalName);
 
-  SetLength(FValueMap, 0);
+  FValueMap.Clear;
 
-  for I := 0 to High(AHirFunc.Blocks) do
-    LowerBlock(AHirFunc, AHirFunc.Blocks[I], MirFuncId);
+  if AHirFunc.Blocks <> nil then
+    for I := 0 to LongInt(AHirFunc.Blocks.Count) - 1 do
+      LowerBlock(AHirFunc, AHirFunc.Blocks[SizeUInt(I)], MirFuncId);
 
   if AHirFunc.EntryBlockId <> 0 then
     FMirModule.SetEntryBlock(MirFuncId, AHirFunc.EntryBlockId);
@@ -194,102 +215,120 @@ var
 begin
   MirBlockId := FMirModule.AddBlock(AMirFuncId, AHirBlock.Name);
 
-  for I := 0 to High(AHirBlock.Instrs) do
-  begin
-    FillChar(MirStmt, SizeOf(MirStmt), 0);
-
-    if not TranslateInstrKind(AHirBlock.Instrs[I].Kind, MirOp, MirStmtKind) then
+  if AHirBlock.Instrs <> nil then
+    for I := 0 to LongInt(AHirBlock.Instrs.Count) - 1 do
     begin
-      MirStmt.Kind := mskAssign;
-      MirStmt.Dst := MapValue(AHirBlock.Instrs[I].ResultId);
-      FMirModule.AddStmt(AMirFuncId, MirBlockId, MirStmt);
-      Continue;
-    end;
+      FillChar(MirStmt, SizeOf(MirStmt), 0);
 
-    MirStmt.Kind := MirStmtKind;
-    MirStmt.Dst := MapValue(AHirBlock.Instrs[I].ResultId);
-    MirStmt.Op := MirOp;
-    OpCount := Length(AHirBlock.Instrs[I].Operands);
+      if not TranslateInstrKind(AHirBlock.Instrs[SizeUInt(I)].Kind, MirOp,
+        MirStmtKind) then
+      begin
+        MirStmt.Kind := mskAssign;
+        MirStmt.Dst := MapValue(AHirBlock.Instrs[SizeUInt(I)].ResultId);
+        FMirModule.AddStmt(AMirFuncId, MirBlockId, MirStmt);
+        Continue;
+      end;
 
-    case MirStmtKind of
-      mskAssign:
-        if OpCount >= 1 then
-          MirStmt.Src := MapOperand(AHirBlock.Instrs[I].Operands[0]);
+      MirStmt.Kind := MirStmtKind;
+      MirStmt.Dst := MapValue(AHirBlock.Instrs[SizeUInt(I)].ResultId);
+      MirStmt.Op := MirOp;
+      OpCount := Length(AHirBlock.Instrs[SizeUInt(I)].Operands);
 
-      mskUnary:
-        if OpCount >= 1 then
-          MirStmt.Src := MapOperand(AHirBlock.Instrs[I].Operands[0]);
+      case MirStmtKind of
+        mskAssign:
+          if OpCount >= 1 then
+            MirStmt.Src := MapOperand(AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
 
-      mskBinary:
-        begin
-          if AHirBlock.Instrs[I].Kind in [hikCmpGt, hikCmpGe] then
+        mskUnary:
+          if OpCount >= 1 then
+            MirStmt.Src := MapOperand(AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+
+        mskBinary:
           begin
-            { Swap operands: CmpGt(a,b) → SLt(b,a), CmpGe(a,b) → SLe(b,a) }
-            if OpCount >= 2 then
+            if AHirBlock.Instrs[SizeUInt(I)].Kind in [hikCmpGt, hikCmpGe] then
             begin
-              MirStmt.Lhs := MapOperand(AHirBlock.Instrs[I].Operands[1]);
-              MirStmt.Rhs := MapOperand(AHirBlock.Instrs[I].Operands[0]);
+              { Swap operands: CmpGt(a,b) → SLt(b,a), CmpGe(a,b) → SLe(b,a) }
+              if OpCount >= 2 then
+              begin
+                MirStmt.Lhs := MapOperand(
+                  AHirBlock.Instrs[SizeUInt(I)].Operands[1]);
+                MirStmt.Rhs := MapOperand(
+                  AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+              end;
+            end
+            else
+            begin
+              if OpCount >= 1 then
+                MirStmt.Lhs := MapOperand(
+                  AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+              if OpCount >= 2 then
+                MirStmt.Rhs := MapOperand(
+                  AHirBlock.Instrs[SizeUInt(I)].Operands[1]);
             end;
-          end
-          else
+          end;
+
+        mskCall:
+          begin
+            MirStmt.FuncName := AHirBlock.Instrs[SizeUInt(I)].CallTarget;
+            if AHirBlock.Instrs[SizeUInt(I)].Kind = hikIntrinsic then
+              MirStmt.FuncName := AHirBlock.Instrs[SizeUInt(I)].IntrinsicName;
+            if OpCount > 0 then
+            begin
+              MirStmt.Args := TMirOperandVec.Create(SizeUInt(OpCount));
+              for OpCount := 0 to OpCount - 1 do
+                MirStmt.Args.Push(MapOperand(
+                  AHirBlock.Instrs[SizeUInt(I)].Operands[OpCount]));
+            end;
+          end;
+
+        mskAlloca:
+          begin
+            MirStmt.BitWidth := HirTypeWidth(
+              AHirBlock.Instrs[SizeUInt(I)].TypeId);
+            MirStmt.StructTypeName :=
+              AHirBlock.Instrs[SizeUInt(I)].StructTypeName;
+          end;
+
+        mskLoad, mskStore:
+          if OpCount >= 1 then
+            MirStmt.Src := MapOperand(AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+
+        mskGetFieldPtr:
           begin
             if OpCount >= 1 then
-              MirStmt.Lhs := MapOperand(AHirBlock.Instrs[I].Operands[0]);
-            if OpCount >= 2 then
-              MirStmt.Rhs := MapOperand(AHirBlock.Instrs[I].Operands[1]);
+              MirStmt.Src := MapOperand(
+                AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+            MirStmt.FieldIndex := AHirBlock.Instrs[SizeUInt(I)].FieldIndex;
+            MirStmt.Src.StructTypeName :=
+              AHirBlock.Instrs[SizeUInt(I)].StructTypeName;
           end;
-        end;
 
-      mskCall:
-        begin
-          MirStmt.FuncName := AHirBlock.Instrs[I].CallTarget;
-          if AHirBlock.Instrs[I].Kind = hikIntrinsic then
-            MirStmt.FuncName := AHirBlock.Instrs[I].IntrinsicName;
-          SetLength(MirStmt.Args, OpCount);
-          for OpCount := 0 to OpCount - 1 do
-            MirStmt.Args[OpCount] := MapOperand(
-              AHirBlock.Instrs[I].Operands[OpCount]);
-        end;
+        mskExtractField:
+          begin
+            if OpCount >= 1 then
+              MirStmt.Src := MapOperand(
+                AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+            MirStmt.FieldIndex := AHirBlock.Instrs[SizeUInt(I)].FieldIndex;
+            MirStmt.Src.StructTypeName :=
+              AHirBlock.Instrs[SizeUInt(I)].StructTypeName;
+          end;
 
-      mskAlloca:
-        begin
-        MirStmt.BitWidth := HirTypeWidth(AHirBlock.Instrs[I].TypeId);
-        MirStmt.StructTypeName := AHirBlock.Instrs[I].StructTypeName;
-        end;
+        mskInsertField:
+          begin
+            if OpCount >= 1 then
+              MirStmt.Src := MapOperand(
+                AHirBlock.Instrs[SizeUInt(I)].Operands[0]);
+            if OpCount >= 2 then
+              MirStmt.Rhs := MapOperand(
+                AHirBlock.Instrs[SizeUInt(I)].Operands[1]);
+            MirStmt.FieldIndex := AHirBlock.Instrs[SizeUInt(I)].FieldIndex;
+            MirStmt.Src.StructTypeName :=
+              AHirBlock.Instrs[SizeUInt(I)].StructTypeName;
+          end;
+      end;
 
-      mskLoad, mskStore:
-        if OpCount >= 1 then
-          MirStmt.Src := MapOperand(AHirBlock.Instrs[I].Operands[0]);
-
-      mskGetFieldPtr:
-        begin
-          if OpCount >= 1 then
-            MirStmt.Src := MapOperand(AHirBlock.Instrs[I].Operands[0]);
-          MirStmt.FieldIndex := AHirBlock.Instrs[I].FieldIndex;
-          MirStmt.Src.StructTypeName := AHirBlock.Instrs[I].StructTypeName;
-        end;
-
-      mskExtractField:
-        begin
-          if OpCount >= 1 then
-            MirStmt.Src := MapOperand(AHirBlock.Instrs[I].Operands[0]);
-          MirStmt.FieldIndex := AHirBlock.Instrs[I].FieldIndex;
-          MirStmt.Src.StructTypeName := AHirBlock.Instrs[I].StructTypeName;
-        end;
-
-      mskInsertField:
-        begin
-          if OpCount >= 1 then
-            MirStmt.Src := MapOperand(AHirBlock.Instrs[I].Operands[0]);
-          if OpCount >= 2 then
-            MirStmt.Rhs := MapOperand(AHirBlock.Instrs[I].Operands[1]);
-          MirStmt.FieldIndex := AHirBlock.Instrs[I].FieldIndex;
-          MirStmt.Src.StructTypeName := AHirBlock.Instrs[I].StructTypeName;
-        end;
+      FMirModule.AddStmt(AMirFuncId, MirBlockId, MirStmt);
     end;
-
-    FMirModule.AddStmt(AMirFuncId, MirBlockId, MirStmt);
-  end;
 
   LowerTerminator(AHirBlock.Terminator, AMirFuncId, MirBlockId);
 end;
@@ -299,6 +338,7 @@ procedure THirToMirLowering.LowerTerminator(
   AMirFuncId, AMirBlockId: TMirBlockId);
 var
   MirTerm: TMirTerminator;
+  CaseEntry: TMirSwitchCase;
   I: LongInt;
 begin
   FillChar(MirTerm, SizeOf(MirTerm), 0);
@@ -326,11 +366,17 @@ begin
       begin
         MirTerm.Kind := mtkSwitch;
         MirTerm.DefaultBlock := AHirTerm.DefaultBlock;
-        SetLength(MirTerm.SwitchCases, Length(AHirTerm.SwitchCases));
-        for I := 0 to High(AHirTerm.SwitchCases) do
+        if (AHirTerm.SwitchCases <> nil) and
+          (AHirTerm.SwitchCases.Count > 0) then
         begin
-          MirTerm.SwitchCases[I].Value := AHirTerm.SwitchCases[I].Value;
-          MirTerm.SwitchCases[I].Target := AHirTerm.SwitchCases[I].TargetBlock;
+          MirTerm.SwitchCases :=
+            TMirSwitchCaseVec.Create(AHirTerm.SwitchCases.Count);
+          for I := 0 to LongInt(AHirTerm.SwitchCases.Count) - 1 do
+          begin
+            CaseEntry.Value := AHirTerm.SwitchCases[SizeUInt(I)].Value;
+            CaseEntry.Target := AHirTerm.SwitchCases[SizeUInt(I)].TargetBlock;
+            MirTerm.SwitchCases.Push(CaseEntry);
+          end;
         end;
       end;
     htkUnreachable:

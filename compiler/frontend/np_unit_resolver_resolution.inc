@@ -38,17 +38,22 @@ begin
   RootSourcePath := FSourceDatabase.RootSourceCanonicalPath;
   if RootSourcePath <> '' then
     FSearchPaths.AddRoot(ExtractFileDir(RootSourcePath), 'root-source');
-  for Index := 0 to Length(FProjectUnitRootInfos) - 1 do
-    FSearchPaths.AddRoot(
-      FProjectUnitRootInfos[Index].RootPath,
-      FProjectUnitRootInfos[Index].ScopeName,
-      FProjectUnitRootInfos[Index].ProvenanceKind,
-      FProjectUnitRootInfos[Index].PackageName,
-      FProjectUnitRootInfos[Index].ManifestPath,
-      FProjectUnitRootInfos[Index].WorkspaceMemberPath
-    );
-  for Index := 0 to Length(FExplicitUnitRoots) - 1 do
-    FSearchPaths.AddRoot(FExplicitUnitRoots[Index], 'explicit-unit-root');
+  if FProjectUnitRootInfos <> nil then
+    for Index := 0 to LongInt(FProjectUnitRootInfos.Count) - 1 do
+      FSearchPaths.AddRoot(
+        FProjectUnitRootInfos[SizeUInt(Index)].RootPath,
+        FProjectUnitRootInfos[SizeUInt(Index)].ScopeName,
+        FProjectUnitRootInfos[SizeUInt(Index)].ProvenanceKind,
+        FProjectUnitRootInfos[SizeUInt(Index)].PackageName,
+        FProjectUnitRootInfos[SizeUInt(Index)].ManifestPath,
+        FProjectUnitRootInfos[SizeUInt(Index)].WorkspaceMemberPath
+      );
+  if FExplicitUnitRoots <> nil then
+    for Index := 0 to LongInt(FExplicitUnitRoots.Count) - 1 do
+      FSearchPaths.AddRoot(
+        FExplicitUnitRoots[SizeUInt(Index)],
+        'explicit-unit-root'
+      );
   if FTargetFacts.UnitsDir <> '' then
     FSearchPaths.AddRoot(FTargetFacts.UnitsDir, 'target-installed');
   InitializeRootIndexes;
@@ -64,7 +69,7 @@ var
   Index: LongInt;
 begin
   Result := 0;
-  for Index := 0 to Length(FRootIndexes) - 1 do
+  for Index := 0 to LongInt(FRootIndexes.Count) - 1 do
     if FRootIndexes[Index].Status = 'ready' then
       Inc(Result);
 end;
@@ -74,17 +79,17 @@ var
   Index: LongInt;
 begin
   Result := 0;
-  for Index := 0 to Length(FRootIndexes) - 1 do
+  for Index := 0 to LongInt(FRootIndexes.Count) - 1 do
     Inc(Result, FRootIndexes[Index].ScanCount);
 end;
 
 function TUnitResolver.SearchIndexStatus: string;
 begin
-  if Length(FRootIndexes) = 0 then
+  if FRootIndexes.Count = 0 then
     Exit('empty');
   if IndexedRootCount = 0 then
     Exit('deferred');
-  if IndexedRootCount = Length(FRootIndexes) then
+  if IndexedRootCount = LongInt(FRootIndexes.Count) then
     Exit('ready');
 
   Result := 'partial';
@@ -95,7 +100,7 @@ var
   Index: LongInt;
 begin
   Result := 0;
-  for Index := 0 to Length(FRootIndexes) - 1 do
+  for Index := 0 to LongInt(FRootIndexes.Count) - 1 do
     if FRootIndexes[Index].LastScanTimestamp > Result then
       Result := FRootIndexes[Index].LastScanTimestamp;
 end;

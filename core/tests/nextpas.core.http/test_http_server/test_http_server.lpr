@@ -5,6 +5,7 @@ program test_http_server;
 uses
   nextpas.core.thread.init,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.errors,
@@ -60,6 +61,29 @@ begin
   { Builder preserves other fields }
   CheckEqual(5000, LOpts.ReadTimeout, 'builder preserves ReadTimeout');
   CheckEqual(10000, LOpts.WriteTimeout, 'builder preserves WriteTimeout');
+end;
+
+procedure TestServerOptionsDefaultAndProductionTimeouts;
+var
+  LDefault, LProd: THttpServerOptions;
+begin
+  LDefault := THttpServerOptions.Default;
+  CheckEqual(0, LDefault.ReadTimeout,
+    'Default ReadTimeout stays 0 (unbounded) for tests/compat');
+  CheckEqual(0, LDefault.WriteTimeout,
+    'Default WriteTimeout stays 0 (unbounded) for tests/compat');
+  CheckEqual(30000, LDefault.IdleTimeout, 'Default IdleTimeout');
+
+  LProd := THttpServerOptions.Production;
+  CheckEqual(30000, LProd.ReadTimeout, 'Production ReadTimeout is 30s');
+  CheckEqual(30000, LProd.WriteTimeout, 'Production WriteTimeout is 30s');
+  CheckEqual(30000, LProd.IdleTimeout, 'Production keeps IdleTimeout');
+  CheckEqual(8192, LProd.MaxHeaderSize, 'Production keeps MaxHeaderSize');
+  CheckEqual(4194304, LProd.MaxBodySize, 'Production keeps MaxBodySize');
+  { Production must not mutate Default semantics for subsequent Default calls }
+  LDefault := THttpServerOptions.Default;
+  CheckEqual(0, LDefault.ReadTimeout, 'Default still 0 after Production');
+  CheckEqual(0, LDefault.WriteTimeout, 'Default Write still 0 after Production');
 end;
 
 var
@@ -121,7 +145,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    function NativeSocketHandle: PtrUInt;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
       out ARead: SizeUInt): TTcpStreamIOResult;
@@ -163,7 +188,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    function NativeSocketHandle: PtrUInt;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
       out ARead: SizeUInt): TTcpStreamIOResult;
@@ -209,7 +235,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    function NativeSocketHandle: PtrUInt;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
       out ARead: SizeUInt): TTcpStreamIOResult;
@@ -250,7 +277,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    function NativeSocketHandle: PtrUInt;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
     function TryRead(var ABuf; const ACount: SizeUInt;
       out ARead: SizeUInt): TTcpStreamIOResult;
@@ -288,7 +316,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    property Output: string read FOutput;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+property Output: string read FOutput;
     property ReadCalls: Int32 read FReadCalls;
     property WriteCalls: Int32 read FWriteCalls;
     property ReadDeadlineCalls: Int32 read FReadDeadlineCalls;
@@ -325,7 +354,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-    property Output: string read FOutput;
+    procedure SetCancelToken(const AToken: INetCancelToken);
+property Output: string read FOutput;
     property ReadCalls: Int32 read FReadCalls;
     property WriteCalls: Int32 read FWriteCalls;
     property ReadDeadlineCalls: Int32 read FReadDeadlineCalls;
@@ -372,7 +402,7 @@ type
     function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
 
-procedure CheckRaisesEArgumentError(const ALabel: string; const AProbe: TProc);
+procedure CheckRaisesHekArgument(const ALabel: string; const AProbe: TProc);
 var
   LRaised: Boolean;
   LWrongException: string;
@@ -382,12 +412,12 @@ begin
   try
     AProbe();
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
     on E: Exception do
       LWrongException := E.ClassName + ': ' + E.Message;
   end;
-  Check(LRaised, ALabel + ' raises EArgumentError, got ' + LWrongException);
+  Check(LRaised, ALabel + ' raises EHttpError(hekArgument), got ' + LWrongException);
 end;
 
 constructor TInlineRuntimeTcpStream.Create(const AInput: string);
@@ -477,6 +507,10 @@ begin
 end;
 
 procedure TInlineRuntimeTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+end;
+
+procedure TInlineRuntimeTcpStream.SetCancelToken(const AToken: INetCancelToken);
 begin
 end;
 
@@ -602,6 +636,11 @@ procedure TWritableDrainRuntimeTcpStream.SetWriteDeadline(
 begin
   Inc(FWriteDeadlineCalls);
   FLastWriteDeadline := ADeadline;
+end;
+
+procedure TWritableDrainRuntimeTcpStream.SetCancelToken(
+  const AToken: INetCancelToken);
+begin
 end;
 
 function TWritableDrainRuntimeTcpStream.NativeSocketHandle: PtrUInt;
@@ -745,6 +784,11 @@ begin
   FLastWriteDeadline := ADeadline;
 end;
 
+procedure TTimedDrainRuntimeTcpStream.SetCancelToken(
+  const AToken: INetCancelToken);
+begin
+end;
+
 function TTimedDrainRuntimeTcpStream.NativeSocketHandle: PtrUInt;
 begin
   Result := 44;
@@ -885,6 +929,10 @@ procedure TIdleReadRuntimeTcpStream.SetWriteDeadline(const ADeadline: TDeadline)
 begin
 end;
 
+procedure TIdleReadRuntimeTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+end;
+
 function TIdleReadRuntimeTcpStream.NativeSocketHandle: PtrUInt;
 begin
   Result := 45;
@@ -1000,6 +1048,10 @@ end;
 procedure TZeroProgressTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   Inc(FWriteDeadlineCalls);
+end;
+
+procedure TZeroProgressTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
 end;
 
 constructor TTimeoutWriteTcpStream.Create(const AInput: string;
@@ -1128,6 +1180,10 @@ begin
   Inc(FWriteDeadlineCalls);
 end;
 
+procedure TTimeoutWriteTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+end;
+
 constructor TSocketTuningServerTransport.Create(const AInner: IHttpServerTransport;
   const ASendBufferBytes: Int32);
 begin
@@ -1222,6 +1278,9 @@ begin
   Result.IdleTimeout := AHttpOptions.IdleTimeout;
   Result.MaxHeaderSize := AHttpOptions.MaxHeaderSize;
   Result.MaxBodySize := AHttpOptions.MaxBodySize;
+  Result.MaxRequestsPerConnection := AHttpOptions.MaxRequestsPerConnection;
+  Result.RequestArena := AHttpOptions.RequestArena;
+  Result.RequestArenaCapacity := AHttpOptions.RequestArenaCapacity;
 end;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
@@ -1842,27 +1901,27 @@ begin
   LHandoff := TMockWorkerHandoff.Create;
   LContext := TMockSessionContext.Create(LHandoff);
 
-  CheckRaisesEArgumentError('ServeConn nil connection', procedure
+  CheckRaisesHekArgument('ServeConn nil connection', procedure
     begin
       LTransport.ServeConn(nil, LHandler);
     end);
-  CheckRaisesEArgumentError('ServeConn nil handler', procedure
+  CheckRaisesHekArgument('ServeConn nil handler', procedure
     begin
       LTransport.ServeConn(LStream, nil);
     end);
-  CheckRaisesEArgumentError('NewSession nil connection', procedure
+  CheckRaisesHekArgument('NewSession nil connection', procedure
     begin
       LFactory.NewSession(nil, LHandler);
     end);
-  CheckRaisesEArgumentError('NewSession nil handler', procedure
+  CheckRaisesHekArgument('NewSession nil handler', procedure
     begin
       LFactory.NewSession(LStream, nil);
     end);
-  CheckRaisesEArgumentError('context NewSession nil connection', procedure
+  CheckRaisesHekArgument('context NewSession nil connection', procedure
     begin
       LContextFactory.NewSession(nil, LHandler, LContext);
     end);
-  CheckRaisesEArgumentError('context NewSession nil handler', procedure
+  CheckRaisesHekArgument('context NewSession nil handler', procedure
     begin
       LContextFactory.NewSession(LStream, nil, LContext);
     end);
@@ -12754,6 +12813,8 @@ begin
   T.Test('Hijack exception does not write 500 or close handler connection',
     @TestHijackExceptionDoesNotWrite500OrCloseHandlerConnection);
   T.Test('Server options builder', @TestServerOptionsBuilder);
+  T.Test('Server options Default vs Production timeouts',
+    @TestServerOptionsDefaultAndProductionTimeouts);
   T.Test('Max requests per connection', @TestMaxRequestsPerConnection);
   if not T.Run then Halt(1);
 end.

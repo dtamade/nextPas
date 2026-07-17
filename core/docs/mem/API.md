@@ -1,13 +1,19 @@
 # nextpas.core.mem API 参考
 
+> **权威入口**：短路径与决策树以 [README.md](README.md) / [API-GUIDE.md](API-GUIDE.md) 为准。
+> 热路径默认堆是 **`DefaultHeap` / `GetMem`（Growing）**，不是 `DefaultAllocator`。
+> S5：`DefaultAllocator` / `ResolveAllocator(nil)` = Growing IAllocator 根（**同进程堆**，有 vtable）；显式 RTL 用 `GetRtlAllocator`。
+> 本文保留长参考与历史示例；冲突时以 README/GUIDE/Scorecard 为准。
+
 ## 分配器选择指南
 
 ### 决策树
 
 ```
 需要分配内存？
-├─ 通用场景 (malloc 替代) → DefaultAllocator (IAllocator)
-│  └─ 需要跟踪/泄漏检测 → TTrackingAllocator 包装
+├─ 通用场景 (malloc 替代) → DefaultHeap / GetMem（热路径）
+│  └─ 需要 IAllocator 注入（collections/组合器） → DefaultAllocator（同堆，非热路径）
+│  └─ 需要跟踪/泄漏检测 → TTrackingAllocator 包装（或 NEXTPAS_MEM_DEBUG）
 │  └─ 需要增强泄漏报告 → TLeakReportAllocator（调用栈+时间戳+标签聚合）
 │  └─ 需要哨兵守卫 → TSentinelAllocator（双端哨兵+延迟释放+校验和）
 │
@@ -27,6 +33,7 @@
 └─ 特殊场景
    ├─ 需要 IAllocator 接口的 Arena → CreateArenaAllocator
    ├─ 需要 fallback 链 → TFallbackAllocator
+   ├─ 显式 FPC RTL 后端 → GetRtlAllocator
    ├─ 需要 mmap 匿名映射 → TMemoryMapAllocator
    ├─ 需要 mimalloc → TMimallocAllocator (动态库)
    ├─ 需要 NUMA 感知 → TNumaAllocator（拓扑检测+节点路由）
@@ -38,7 +45,8 @@
 
 | 分配器 | 64B ns/op | 线程安全 | 适用场景 |
 |--------|-----------|----------|----------|
-| DefaultAllocator | 16 | ✅ | 通用 |
+| DefaultHeap / GetMem | 16 | ✅ | 通用热路径（Growing，零 vtable） |
+| DefaultAllocator | — | ✅ | 注入/诊断（Growing 根，同堆，有 vtable） |
 | TLocalArena | 5 | ❌ | 帧分配 |
 | TChunkedArena | 26 | ❌ | 可增长帧分配 |
 | TVirtualArena | 44 | ❌ | 编译器热路径 |
@@ -49,18 +57,18 @@
 
 ### 常见场景示例
 
-**场景 1: 通用分配**
+**场景 1: 通用分配（热路径）**
 ```pascal
 uses nextpas.core.mem;
 
 var
   LPtr: Pointer;
 begin
-  LPtr := DefaultAllocator.GetMem(1024);
+  LPtr := GetMem(1024);  // DefaultHeap / Growing
   try
     // 使用内存...
   finally
-    DefaultAllocator.FreeMem(LPtr);
+    FreeMem(LPtr, 1024);
   end;
 end;
 ```
@@ -521,7 +529,11 @@ end;
 门面 `nextpas.core.mem` 提供这几个常用 helper：
 
 ```pascal
-function DefaultAllocator: IAllocator;
+function DefaultHeap: TGrowingAllocator;
+function DefaultAllocator: IAllocator;       // Growing IAllocator 根 ± DEBUG
+function GetGrowingIAllocator: IAllocator;
+function GetRtlAllocator: IAllocator;          // 显式 RTL
+function ResolveAllocator(const A: IAllocator): IAllocator; // nil → Growing 根
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
 
@@ -887,12 +899,21 @@ constructor Create(AInner: IAllocator; ABlockSize: SizeUInt; ACapacity: Integer)
 constructor Create(AInner: IAllocator; ABlockSize: SizeUInt);
 ```
 
-### `TRtlAllocator`
+### `TRtlAllocator` / `GetRtlAllocator`
 
-RTL 分配器，使用 Free Pascal 运行时库的 System.GetMem。
+FPC RTL 后端（`System.GetMem`）。**不是** `DefaultAllocator` 默认根（S5 起默认是 Growing IAllocator）。
+bootstrap / 显式对比 / 特殊 fallback 时用 `GetRtlAllocator`。
 
 ```pascal
-constructor Create;
+function GetRtlAllocator: IAllocator;
+```
+
+### `TGrowingIAllocator` / `GetGrowingIAllocator`
+
+`DefaultHeap` 的 `IAllocator` 适配（S5）。`DefaultAllocator` 无 DEBUG 时的身份即此单例。
+
+```pascal
+function GetGrowingIAllocator: IAllocator;
 ```
 
 ### `TScopedAllocator`

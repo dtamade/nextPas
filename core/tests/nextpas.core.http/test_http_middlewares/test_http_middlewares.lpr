@@ -74,13 +74,14 @@ type
     destructor Destroy; override;
   end;
 
-  TMockRequest = class(TInterfacedObject, IHttpRequest)
+  TMockRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithContext)
   private
     FMethod: THttpMethod;
     FUrl: TUrl;
     FHeaders: IHttpHeaders;
     FContentLength: Int64;
     FBodyReader: IReader;
+    FContext: IHttpContext;
   public
     constructor Create(const AMethod: THttpMethod; const APath: string);
     procedure SetContentLength(const AValue: Int64);
@@ -99,6 +100,8 @@ type
     function GetRemoteAddr: string;
     function PathParam(const AName: string): string;
     function QueryParam(const AName: string): string;
+    function GetContext: IHttpContext;
+    procedure SetContext(const ACtx: IHttpContext);
   end;
 
 { TMockResponseWriter }
@@ -255,6 +258,12 @@ begin Result := ''; end;
 
 function TMockRequest.QueryParam(const AName: string): string;
 begin Result := ''; end;
+
+function TMockRequest.GetContext: IHttpContext;
+begin Result := FContext; end;
+
+procedure TMockRequest.SetContext(const ACtx: IHttpContext);
+begin FContext := ACtx; end;
 
 { === Recovery Tests === }
 
@@ -1463,10 +1472,10 @@ begin
   try
     MaxAgeMiddleware(-1);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  CheckTrue(LRaised, 'raises on negative max-age');
+  CheckTrue(LRaised, 'raises hekArgument on negative max-age');
 end;
 
 procedure TestCacheControlHandlerStillCalled;
@@ -1610,10 +1619,10 @@ begin
   try
     RateLimitMiddlewareWith(MakeRateLimitOpts(-1, 60));
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on negative max requests');
+  Check(LRaised, 'raises hekArgument on negative max requests');
 end;
 
 procedure TestRateLimitZeroWindowRaises;
@@ -1624,10 +1633,10 @@ begin
   try
     RateLimitMiddlewareWith(MakeRateLimitOpts(10, 0));
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on zero window');
+  Check(LRaised, 'raises hekArgument on zero window');
 end;
 
 { WhenMiddleware tests }
@@ -2095,10 +2104,10 @@ begin
   try
     MetricsMiddleware(nil);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on nil collector');
+  Check(LRaised, 'raises hekArgument on nil collector');
 end;
 
 procedure TestMetricsWithCallbackInvoked;
@@ -2201,10 +2210,10 @@ begin
   try
     MetricsMiddlewareWith(nil);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on nil callback');
+  Check(LRaised, 'raises hekArgument on nil callback');
 end;
 
 procedure TestMethodGuardAllowsGetMethod;
@@ -2446,10 +2455,10 @@ begin
   try
     MetricsMiddlewareWithFields(nil);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'raises on nil callback');
+  Check(LRaised, 'raises hekArgument on nil callback');
 end;
 
 procedure TestMetricsTracksRequestBytes;
@@ -2645,8 +2654,8 @@ begin
     DecompressMiddleware(-1);
     Check(False, 'negative decompression limit must raise');
   except
-    on E: EArgumentError do
-      Check(True, 'negative decompression limit rejected');
+    on E: EHttpError do
+      Check(E.Kind = hekArgument, 'negative decompression limit rejected as hekArgument');
   end;
 end;
 
@@ -2793,6 +2802,46 @@ begin
   Check(LGotHas, 'set/has/remove works');
 end;
 
+procedure TestContextMiddlewareSetOwnedValue;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: IHttpRequest;
+  LOwnedSeen: Boolean;
+  LOwned: TObject;
+begin
+  LOwnedSeen := False;
+  LOwned := TObject.Create;
+  try
+    LHandler := Chain(
+      HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+      var
+        LCtx: IHttpContext;
+      begin
+        LCtx := HttpContextOf(AReq);
+        if LCtx <> nil then
+        begin
+          LCtx.SetOwnedValue('owned', LOwned);
+          LOwnedSeen := LCtx.Has('owned') and (LCtx.GetValue('owned') = LOwned);
+          LCtx.Remove('owned');
+          LOwnedSeen := LOwnedSeen and (not LCtx.Has('owned'));
+          LOwned := nil; { ownership transferred then freed by Remove }
+        end;
+        AW.WriteHeader(HTTP_STATUS_OK);
+      end),
+      [ContextMiddleware]
+    );
+    LReq := TMockRequest.Create(hmGet, '/test');
+    LWObj := TMockResponseWriter.Create;
+    LW := LWObj;
+    LHandler.ServeHTTP(LReq, LW);
+    Check(LOwnedSeen, 'SetOwnedValue has/remove frees owned object');
+  finally
+    LOwned.Free;
+  end;
+end;
+
 procedure TestContextMiddlewareNilWithoutContext;
 var
   LReq: IHttpRequest;
@@ -2896,8 +2945,9 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReqIntf, LW);
   CheckEqual(Int64(413), Int64(LWObj.Status), 'returns 413');
-  Check(Pos('"error"', LWObj.Body) > 0, 'response is JSON');
-  Check(Pos('payload_too_large', LWObj.Body) > 0, 'has error code');
+  CheckEqual('application/problem+json', LWObj.GetHeaders.Get('content-type'),
+    'content-type is RFC 7807 problem+json');
+  Check(Pos('"title":"payload_too_large"', LWObj.Body) > 0, 'has problem title');
 end;
 
 { Compression middleware tests }
@@ -3236,8 +3286,9 @@ begin
   LW := LWObj;
   LHandler.ServeHTTP(LReqIntf, LW);
   CheckEqual(Int64(415), Int64(LWObj.Status), 'returns 415');
-  Check(Pos('"error"', LWObj.Body) > 0, 'response is JSON');
-  Check(Pos('unsupported_media_type', LWObj.Body) > 0, 'has error code');
+  CheckEqual('application/problem+json', LWObj.GetHeaders.Get('content-type'),
+    'content-type is RFC 7807 problem+json');
+  Check(Pos('"title":"unsupported_media_type"', LWObj.Body) > 0, 'has problem title');
 end;
 
 { Deadline middleware tests }
@@ -3279,7 +3330,7 @@ begin
     HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       { Simulate slow handler }
-      Sleep(200);
+      TSleep.ForDuration(TDuration.FromMilliseconds(200));
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(PAnsiChar('slow response')^, 13);
     end),
@@ -3302,10 +3353,10 @@ begin
   try
     DeadlineMiddleware(0);
   except
-    on E: EArgumentError do
-      LCaught := True;
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
   end;
-  Check(LCaught, 'zero timeout raises EArgumentError');
+  Check(LCaught, 'zero timeout raises hekArgument');
 end;
 
 procedure TestDeadlineReleasesBufferedWriter;
@@ -3482,7 +3533,7 @@ begin
     HttpWriteStream(LW, LReader as IReader, 0);
     Check(False, 'HttpWriteStream zero buffer must raise');
   except
-    on E: EArgumentError do Check(True, 'HttpWriteStream zero buffer rejected');
+    on E: EHttpError do Check(True, 'HttpWriteStream zero buffer rejected');
   end;
 
   LReader := TMockReader.Create(LData);
@@ -3490,7 +3541,7 @@ begin
     HttpWriteStreamWithLength(LW, 1, LReader as IReader, 0);
     Check(False, 'HttpWriteStreamWithLength zero buffer must raise');
   except
-    on E: EArgumentError do Check(True,
+    on E: EHttpError do Check(True,
       'HttpWriteStreamWithLength zero buffer rejected');
   end;
 
@@ -3502,7 +3553,7 @@ begin
       end);
     Check(False, 'HttpRequestReadChunks zero buffer must raise');
   except
-    on E: EArgumentError do Check(True,
+    on E: EHttpError do Check(True,
       'HttpRequestReadChunks zero buffer rejected');
   end;
 
@@ -3511,7 +3562,7 @@ begin
     HttpRequestReadBody(LReader as IReader, 1, 0);
     Check(False, 'HttpRequestReadBody zero buffer must raise');
   except
-    on E: EArgumentError do Check(True,
+    on E: EHttpError do Check(True,
       'HttpRequestReadBody zero buffer rejected');
   end;
 end;
@@ -3691,22 +3742,77 @@ var
   LWObj: TMockResponseWriter;
   LW: IHttpResponseWriter;
   LWriter: ISSEEventWriter;
+  LCaught: Boolean;
 begin
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
   LWriter := StartSSE(LW);
+  LCaught := False;
   try
     LWriter.WriteEventSimple('message'#10'id: injected', 'body', '');
     Check(False, 'SSE event name newline must raise');
   except
-    on E: EArgumentError do Check(True, 'SSE event name injection rejected');
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
   end;
+  Check(LCaught, 'SSE event name injection rejected as hekArgument');
+  LCaught := False;
   try
     LWriter.WriteEventSimple('message', 'body', 'ok'#13#10'retry: 1');
     Check(False, 'SSE id newline must raise');
   except
-    on E: EArgumentError do Check(True, 'SSE id injection rejected');
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
   end;
+  Check(LCaught, 'SSE id injection rejected as hekArgument');
+end;
+
+procedure TestSSEStartNilWriterRaisesHekArgument;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    StartSSE(nil);
+    Check(False, 'StartSSE(nil) must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (Pos('nil', E.Message) > 0);
+  end;
+  Check(LCaught, 'StartSSE(nil) raises hekArgument');
+end;
+
+procedure TestSSEWriteRetryNegativeRaisesHekArgument;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+  LEvt: TSSEvent;
+  LCaught: Boolean;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LCaught := False;
+  try
+    LWriter.WriteRetry(-1);
+    Check(False, 'WriteRetry(-1) must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (Pos('negative', E.Message) > 0);
+  end;
+  Check(LCaught, 'WriteRetry(-1) raises hekArgument');
+  LEvt := MakeSSEvent('message', 'body', '');
+  LEvt.Retry := -5;
+  LCaught := False;
+  try
+    LWriter.WriteEvent(LEvt);
+    Check(False, 'WriteEvent negative retry must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (Pos('negative', E.Message) > 0);
+  end;
+  Check(LCaught, 'WriteEvent negative retry raises hekArgument');
 end;
 
 var
@@ -3825,6 +3931,7 @@ begin
   { Context }
   T.Test('Context: creates context', @TestContextMiddlewareCreatesContext);
   T.Test('Context: set and get value', @TestContextMiddlewareSetGetValue);
+  T.Test('Context: SetOwnedValue', @TestContextMiddlewareSetOwnedValue);
   T.Test('Context: nil without middleware', @TestContextMiddlewareNilWithoutContext);
   T.Test('Context: cleans up after handler', @TestContextMiddlewareCleansUp);
   { RateLimit Retry-After }
@@ -3870,6 +3977,8 @@ begin
   T.Test('SSE: handles short writes', @TestSSEEventWriterHandlesShortWrites);
   T.Test('SSE: splits CR data lines', @TestSSEEventWriterSplitsCarriageReturnData);
   T.Test('SSE: rejects field injection', @TestSSEEventWriterRejectsFieldInjection);
+  T.Test('SSE: StartSSE(nil) is hekArgument', @TestSSEStartNilWriterRaisesHekArgument);
+  T.Test('SSE: negative retry is hekArgument', @TestSSEWriteRetryNegativeRaisesHekArgument);
   if not T.Run then Halt(1);
   GTestSentinel.Free;
 end.

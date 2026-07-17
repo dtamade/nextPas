@@ -30,6 +30,7 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.exception,
+  nextpas.core.http.base,
   nextpas.core.time.base,
   nextpas.core.tls.quick,
   nextpas.core.tls.tls;
@@ -76,6 +77,7 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+    procedure SetCancelToken(const AToken: INetCancelToken);
     function SelectedALPN: string;
   end;
 
@@ -95,7 +97,7 @@ var
   LTlsStream: IStream;
 begin
   if AConn = nil then
-    raise EArgumentError.Create('TLS client stream requires connection');
+    raise EHttpError.Create(hekArgument, 'TLS client stream requires connection');
   LContext := RequireTlsContext(AContext);
   LTransport := TTlsTransportStream.Create(AConn);
   LConnector := TSSLConnector.FromContext(LContext);
@@ -113,9 +115,9 @@ var
   LTlsStream: IStream;
 begin
   if AConn = nil then
-    raise EArgumentError.Create('TLS server stream requires connection');
+    raise EHttpError.Create(hekArgument, 'TLS server stream requires connection');
   if AContext = nil then
-    raise EArgumentError.Create('TLS server stream requires context');
+    raise EHttpError.Create(hekArgument, 'TLS server stream requires context');
   LTransport := TTlsTransportStream.Create(AConn);
   LAcceptor := TSSLAcceptor.FromContext(AContext);
   LTlsStream := LAcceptor.AcceptStream(LTransport);
@@ -137,7 +139,7 @@ constructor TTlsTransportStream.Create(const AConn: ITcpStream);
 begin
   inherited Create;
   if AConn = nil then
-    raise EArgumentError.Create('TLS transport stream requires connection');
+    raise EHttpError.Create(hekArgument, 'TLS transport stream requires connection');
   FConn := AConn;
 end;
 
@@ -159,7 +161,7 @@ function TTlsTransportStream.Seek(const AOffset: Int64;
   const AOrigin: nextpas.core.io.base.TSeekOrigin): Int64;
 begin
   Result := 0;
-  raise EArgumentError.Create('TLS transport stream is not seekable');
+  raise EHttpError.Create(hekArgument, 'TLS transport stream is not seekable');
 end;
 
 procedure TTlsTransportStream.Close;
@@ -179,7 +181,7 @@ end;
 
 procedure TTlsTransportStream.SetPosition(const AValue: Int64);
 begin
-  raise EArgumentError.Create('TLS transport stream is not seekable');
+  raise EHttpError.Create(hekArgument, 'TLS transport stream is not seekable');
 end;
 
 { TTlsTcpStream }
@@ -189,9 +191,9 @@ constructor TTlsTcpStream.Create(const AInner: ITcpStream;
 begin
   inherited Create;
   if AInner = nil then
-    raise EArgumentError.Create('TLS stream requires inner connection');
+    raise EHttpError.Create(hekArgument, 'TLS stream requires inner connection');
   if AStream = nil then
-    raise EArgumentError.Create('TLS stream requires TLS transport');
+    raise EHttpError.Create(hekArgument, 'TLS stream requires TLS transport');
   FInner := AInner;
   FIStream := AStream;
   FStream := AStream as TSSLStream;
@@ -269,7 +271,7 @@ end;
 
 procedure TTlsTcpStream.SetPosition(const AValue: Int64);
 begin
-  raise EArgumentError.Create('TLS stream is not seekable');
+  raise EHttpError.Create(hekArgument, 'TLS stream is not seekable');
 end;
 
 function TTlsTcpStream.LocalAddr: TNetAddress;
@@ -315,6 +317,13 @@ procedure TTlsTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   if FStream <> nil then
     FStream.SetWriteTimeout(TimeoutMsFromDeadline(ADeadline));
+end;
+
+procedure TTlsTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+  { TLS decrypt path still blocks on inner socket; forward cancel for mid-read. }
+  if FInner <> nil then
+    FInner.SetCancelToken(AToken);
 end;
 
 function TTlsTcpStream.SelectedALPN: string;

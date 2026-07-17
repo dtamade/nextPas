@@ -1030,27 +1030,32 @@ end;
 function TVec.GetItem(aIndex: SizeUInt): T;
 begin
   if aIndex >= FCount then
-    raise EOutOfRange.Create('TVec.Items: aIndex out of bounds');
-  Result := FData[aIndex];
+    raise EOutOfRange.CreateFmt(
+      'TVec.Items: aIndex out of bounds (index=%d count=%d)',
+      [aIndex, FCount]);
+  { Always read via FBuf so a stale FData cache cannot corrupt managed copies. }
+  Result := GetPtrUnchecked(aIndex)^;
 end;
 
 procedure TVec.PutItem(aIndex: SizeUInt; const aValue: T);
 begin
   if aIndex >= FCount then
-    raise EOutOfRange.Create('TVec.Items: aIndex out of bounds');
-  FData[aIndex] := aValue;
+    raise EOutOfRange.CreateFmt(
+      'TVec.Items: aIndex out of bounds (index=%d count=%d)',
+      [aIndex, FCount]);
+  GetPtrUnchecked(aIndex)^ := aValue;
 end;
 
 function TVec.Get(aIndex: SizeUInt): T;
 begin
   if aIndex >= FCount then
     raise EOutOfRange.Create('TVec.Get: aIndex out of bounds');
-  Result := FData[aIndex];
+  Result := GetPtrUnchecked(aIndex)^;
 end;
 
 function TVec.GetUnchecked(aIndex: SizeUInt): T;
 begin
-  Result := FData[aIndex];
+  Result := GetPtrUnchecked(aIndex)^;
 end;
 
 procedure TVec.Put(aIndex: SizeUInt; const aValue: T);
@@ -1313,7 +1318,8 @@ procedure TVec.Push(const aElement: T);
 begin
   if FCount < FCapacity then
   begin
-    FData[FCount] := aElement;
+    { Use FBuf pointer path; FData can lag after buffer moves. }
+    GetPtrUnchecked(FCount)^ := aElement;
     Inc(FCount);
   end
   else
@@ -1453,13 +1459,16 @@ end;
 
 
 function TVec.Pop: T;
+var
+  Slot: PElement;
 begin
   if FCount = 0 then
     raise EEmptyCollection.Create('TVec.Pop: failed to pop (empty)');
   Dec(FCount);
-  Result := FData[FCount];
+  Slot := GetPtrUnchecked(FCount);
+  Result := Slot^;
   if System.IsManagedType(T) then
-    GetElementManager.FinalizeManagedElementsUnchecked(FData + FCount, 1);
+    GetElementManager.FinalizeManagedElementsUnchecked(Slot, 1);
 end;
 
 function TVec.TryPeek(out aElement: T): Boolean;

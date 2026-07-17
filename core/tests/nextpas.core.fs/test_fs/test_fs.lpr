@@ -12,6 +12,7 @@ uses
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.ffi,
 {$ENDIF}
+  nextpas.core.platform.process,
 {$IFDEF NEXTPAS_LINUX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.base,
@@ -116,7 +117,7 @@ end;
 
 procedure SetupTmpDir;
 begin
-  GTmpDir := '/tmp/nextpas_fs_test_' + IntToStr(getpid);
+  GTmpDir := '/tmp/nextpas_fs_test_' + IntToStr(platform_getpid);
   nextpas.core.fs.MkdirAll(GTmpDir);
 end;
 
@@ -306,13 +307,15 @@ end;
 
 {$IFDEF NEXTPAS_LINUX}
 type
+  { 内核 ABI 布局：handler(8) + mask(128) + flags(8) + restorer(8) = 152 字节。
+    注意：平台 TSigAction 字段顺序不同，不可直接用于 sigaction 裸调用。 }
   TLibcSigSet = record
     Bits: array[0..15] of QWord;
   end;
   TLibcSigAction = record
     sa_handler: Pointer;
     sa_mask: TLibcSigSet;
-    sa_flags: Int32;
+    sa_flags: culong;
     sa_restorer: Pointer;
   end;
 
@@ -323,18 +326,20 @@ var
   LNewLimit: TRLimit;
 begin
   Result := False;
-  if getrlimit(RLIMIT_FSIZE, @AOldLimit) <> 0 then
+  if nextpas.core.platform.posix.ffi.getrlimit(RLIMIT_FSIZE, @AOldLimit) <> 0 then
     Exit;
   if AOldLimit.rlim_max < 4 then
     Exit;
 
   FillChar(LIgnoreAct, SizeOf(LIgnoreAct), 0);
   LIgnoreAct.sa_handler := Pointer(SIG_IGN);
-  Check(sigaction(SIGXFSZ, @LIgnoreAct, @AOldAct) = 0,
+  Check(nextpas.core.platform.linux.ffi.sigaction(SIGXFSZ,
+    @LIgnoreAct, @AOldAct) = 0,
     'ignore SIGXFSZ during short-write regression');
   LNewLimit := AOldLimit;
   LNewLimit.rlim_cur := 4;
-  Check(setrlimit(RLIMIT_FSIZE, @LNewLimit) = 0,
+  Check(nextpas.core.platform.posix.ffi.setrlimit(RLIMIT_FSIZE,
+    @LNewLimit) = 0,
     'lower file-size limit for short-write regression');
   Result := True;
 end;
@@ -342,9 +347,11 @@ end;
 procedure EndShortWriteRegression(const AOldLimit: TRLimit;
   const AOldAct: TLibcSigAction);
 begin
-  Check(setrlimit(RLIMIT_FSIZE, @AOldLimit) = 0,
+  Check(nextpas.core.platform.posix.ffi.setrlimit(RLIMIT_FSIZE,
+    @AOldLimit) = 0,
     'restore file-size limit');
-  Check(sigaction(SIGXFSZ, @AOldAct, nil) = 0,
+  Check(nextpas.core.platform.linux.ffi.sigaction(SIGXFSZ,
+    @AOldAct, nil) = 0,
     'restore SIGXFSZ handler');
 end;
 

@@ -1,6 +1,7 @@
 unit np_toolchain_runner;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
@@ -9,6 +10,7 @@ uses
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs, nextpas.core.fs.util,
   nextpas.core.fs.dir, nextpas.core.fs.base,
   nextpas.core.exception,
+  nextpas.core.collections.vec,
   np_toolchain_plan;
 
 type
@@ -37,14 +39,17 @@ type
     Sidecars: TToolchainExecutedSidecarArray;
   end;
 
+  TToolchainExecutedStepVec = specialize TVec<TToolchainExecutedStep>;
+
   TToolchainRunResult = class
   private
     FStatus: string;
     FFailureMapping: string;
     FFailureMessage: string;
-    FSteps: array of TToolchainExecutedStep;
+    FSteps: TToolchainExecutedStepVec;
   public
     constructor Create;
+    destructor Destroy; override;
     procedure AppendStep(
       const AStepId: string;
       const ALogicalExecutable: string;
@@ -95,17 +100,19 @@ begin
       'toolchain.invalid-working-directory'
     );
 
-  for OutputIndex := 0 to Length(AStep.Outputs) - 1 do
-    EnsureParentDirectory(
-      AStep.Outputs[OutputIndex].Path,
-      'toolchain.invalid-output-directory'
-    );
+  if AStep.Outputs <> nil then
+    for OutputIndex := 0 to LongInt(AStep.Outputs.Count) - 1 do
+      EnsureParentDirectory(
+        AStep.Outputs[SizeUInt(OutputIndex)].Path,
+        'toolchain.invalid-output-directory'
+      );
 
-  for SidecarIndex := 0 to Length(AStep.Sidecars) - 1 do
-    EnsureParentDirectory(
-      AStep.Sidecars[SidecarIndex].Path,
-      'toolchain.invalid-sidecar-directory'
-    );
+  if AStep.Sidecars <> nil then
+    for SidecarIndex := 0 to LongInt(AStep.Sidecars.Count) - 1 do
+      EnsureParentDirectory(
+        AStep.Sidecars[SizeUInt(SidecarIndex)].Path,
+        'toolchain.invalid-sidecar-directory'
+      );
 end;
 
 procedure FsRemovesMatching(
@@ -168,10 +175,11 @@ begin
   // Allow native-assemble to be skipped when input .s is missing
   // (e.g. facade units with empty implementation)
 
-  for InputIndex := 0 to Length(AStep.Inputs) - 1 do
-    if SameText(AStep.Inputs[InputIndex].Kind, 'assembly-text') and
-      (not FsExists(ExpandFileName(AStep.Inputs[InputIndex].Path))) then
-      Exit(True);
+  if AStep.Inputs <> nil then
+    for InputIndex := 0 to LongInt(AStep.Inputs.Count) - 1 do
+      if SameText(AStep.Inputs[SizeUInt(InputIndex)].Kind, 'assembly-text') and
+        (not FsExists(ExpandFileName(AStep.Inputs[SizeUInt(InputIndex)].Path))) then
+        Exit(True);
 end;
 
 function ExecuteStep(
@@ -179,12 +187,14 @@ function ExecuteStep(
   const AResolvedPath: string
 ): LongInt;
 var
+  Args: array of string;
   LOutput: TProcessOutput;
 begin
+  Args := ToolchainArgvAsArray(AStep.Argv);
   if AStep.WorkingDirectory <> '' then
-    LOutput := RunIn(AResolvedPath, AStep.Argv, ExpandFileName(AStep.WorkingDirectory))
+    LOutput := RunIn(AResolvedPath, Args, ExpandFileName(AStep.WorkingDirectory))
   else
-    LOutput := Run(AResolvedPath, AStep.Argv);
+    LOutput := Run(AResolvedPath, Args);
   Result := LOutput.ExitCode;
 end;
 
@@ -194,7 +204,14 @@ begin
   FStatus := 'deferred';
   FFailureMapping := '';
   FFailureMessage := '';
-  SetLength(FSteps, 0);
+  FSteps := TToolchainExecutedStepVec.Create;
+end;
+
+destructor TToolchainRunResult.Destroy;
+begin
+  FSteps.Free;
+  FSteps := nil;
+  inherited Destroy;
 end;
 
 procedure TToolchainRunResult.AppendStep(
@@ -207,17 +224,19 @@ procedure TToolchainRunResult.AppendStep(
   const ASidecars: TToolchainExecutedSidecarArray
 );
 var
-  NextIndex: SizeInt;
+  Step: TToolchainExecutedStep;
 begin
-  NextIndex := Length(FSteps);
-  SetLength(FSteps, NextIndex + 1);
-  FSteps[NextIndex].StepId := AStepId;
-  FSteps[NextIndex].LogicalExecutable := ALogicalExecutable;
-  FSteps[NextIndex].ResolvedPath := AResolvedPath;
-  FSteps[NextIndex].Status := AStatus;
-  FSteps[NextIndex].HasExitCode := AHasExitCode;
-  FSteps[NextIndex].ExitCode := AExitCode;
-  FSteps[NextIndex].Sidecars := ASidecars;
+  if FSteps = nil then
+    FSteps := TToolchainExecutedStepVec.Create;
+  Step := Default(TToolchainExecutedStep);
+  Step.StepId := AStepId;
+  Step.LogicalExecutable := ALogicalExecutable;
+  Step.ResolvedPath := AResolvedPath;
+  Step.Status := AStatus;
+  Step.HasExitCode := AHasExitCode;
+  Step.ExitCode := AExitCode;
+  Step.Sidecars := ASidecars;
+  FSteps.Push(Step);
 end;
 
 procedure TToolchainRunResult.MarkSuccess;
@@ -252,14 +271,16 @@ end;
 
 function TToolchainRunResult.StepCount: LongInt;
 begin
-  Result := Length(FSteps);
+  if FSteps = nil then
+    Exit(0);
+  Result := LongInt(FSteps.Count);
 end;
 
 function TToolchainRunResult.StepAt(
   const AIndex: LongInt
 ): TToolchainExecutedStep;
 begin
-  if (AIndex < 0) or (AIndex > High(FSteps)) then
+  if (FSteps = nil) or (AIndex < 0) or (AIndex >= LongInt(FSteps.Count)) then
   begin
     Result.StepId := '';
     Result.LogicalExecutable := '';
@@ -271,7 +292,7 @@ begin
     Exit;
   end;
 
-  Result := FSteps[AIndex];
+  Result := FSteps[SizeUInt(AIndex)];
 end;
 
 function ExecuteToolchainPlan(

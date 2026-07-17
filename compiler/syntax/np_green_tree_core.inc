@@ -8,32 +8,20 @@ begin
   FFrozen := True;
 end;
 procedure TGreenTree.AppendInterfaceUse(const AUseName: string);
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FInterfaceUses);
-  SetLength(FInterfaceUses, NextIndex + 1);
-  FInterfaceUses[NextIndex] := AUseName;
+  FInterfaceUses.Push(AUseName);
 end;
 
 procedure TGreenTree.AppendImplementationUse(const AUseName: string);
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FImplementationUses);
-  SetLength(FImplementationUses, NextIndex + 1);
-  FImplementationUses[NextIndex] := AUseName;
+  FImplementationUses.Push(AUseName);
 end;
 
 procedure TGreenTree.AppendForeignProcedureDecl(
   const AForeignProcedureDecl: TForeignProcedureDecl
 );
-var
-  NextIndex: SizeInt;
 begin
-  NextIndex := Length(FForeignProcedureDecls);
-  SetLength(FForeignProcedureDecls, NextIndex + 1);
-  FForeignProcedureDecls[NextIndex] := AForeignProcedureDecl;
+  FForeignProcedureDecls.Push(AForeignProcedureDecl);
 end;
 
 function TGreenTree.RootKindName: string;
@@ -43,12 +31,12 @@ end;
 
 function TGreenTree.InterfaceUseCount: LongInt;
 begin
-  Result := Length(FInterfaceUses);
+  Result := LongInt(FInterfaceUses.Count);
 end;
 
 function TGreenTree.InterfaceUseAt(const AIndex: LongInt): string;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FInterfaceUses)) then
+  if (AIndex < 0) or (AIndex >= LongInt(FInterfaceUses.Count)) then
     Exit('');
 
   Result := FInterfaceUses[AIndex];
@@ -56,12 +44,12 @@ end;
 
 function TGreenTree.ImplementationUseCount: LongInt;
 begin
-  Result := Length(FImplementationUses);
+  Result := LongInt(FImplementationUses.Count);
 end;
 
 function TGreenTree.ImplementationUseAt(const AIndex: LongInt): string;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FImplementationUses)) then
+  if (AIndex < 0) or (AIndex >= LongInt(FImplementationUses.Count)) then
     Exit('');
 
   Result := FImplementationUses[AIndex];
@@ -69,14 +57,14 @@ end;
 
 function TGreenTree.ForeignProcedureDeclCount: LongInt;
 begin
-  Result := Length(FForeignProcedureDecls);
+  Result := LongInt(FForeignProcedureDecls.Count);
 end;
 
 function TGreenTree.ForeignProcedureDeclAt(
   const AIndex: LongInt
 ): TForeignProcedureDecl;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FForeignProcedureDecls)) then
+  if (AIndex < 0) or (AIndex >= LongInt(FForeignProcedureDecls.Count)) then
   begin
     Result.ProcedureName := '';
     Result.CallingConvention := '';
@@ -112,6 +100,16 @@ function ParseGreenTree(
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId
 ): TGreenTree;
+begin
+  Result := ParseGreenTree(ALexer, ADiagnostics, ARootFileId, nil);
+end;
+
+function ParseGreenTree(
+  const ALexer: TLexerResult;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId;
+  const AAllocator: IAllocator
+): TGreenTree;
 var
   Cursor: LongInt;
   Current: TToken;
@@ -120,7 +118,10 @@ var
   DeclaredNameOffset: LongInt;
   PreviousExpressionTree: TGreenTree;
 begin
-  Result := TGreenTree.Create;
+  if AAllocator <> nil then
+    Result := TGreenTree.Create(AAllocator)
+  else
+    Result := TGreenTree.Create;
   PreviousExpressionTree := ActiveExpressionTree;
   ActiveExpressionTree := Result;
   try
@@ -282,6 +283,7 @@ begin
     Data.TextLen := Length(AText);
     Data.ChildStart := -1;
     Data.ChildCount := 0;
+    Data.ChildCapacity := 0;
 
     FOwner.FNodeText := FOwner.FNodeText + AText;
     Idx := FOwner.FNodes.Count;
@@ -312,6 +314,10 @@ end;
 procedure TGreenNode.AppendChild(const AChild: TGreenNode);
 var
   D: TGreenNodeData;
+  ExistingChildIndex: LongInt;
+  NewChildCapacity: LongInt;
+  NewChildStart: LongInt;
+  OldChildStart: LongInt;
 begin
   if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count)
     or (AChild = nil) then
@@ -321,13 +327,24 @@ begin
     Exit;
   FOwner.CheckMutable;
   D := FOwner.FNodes[FIndex];
-  if D.ChildStart < 0 then
+  if D.ChildCount >= D.ChildCapacity then
   begin
-    D.ChildStart := AChild.FIndex;
-    D.ChildCount := 1;
-  end
-  else
-    Inc(D.ChildCount);
+    OldChildStart := D.ChildStart;
+    if D.ChildCapacity = 0 then
+      NewChildCapacity := 1
+    else
+      NewChildCapacity := D.ChildCapacity * 2;
+    NewChildStart := FOwner.FChildIndices.Count;
+    for ExistingChildIndex := 0 to NewChildCapacity - 1 do
+      FOwner.FChildIndices.Push(-1);
+    for ExistingChildIndex := 0 to D.ChildCount - 1 do
+      FOwner.FChildIndices[NewChildStart + ExistingChildIndex] :=
+        FOwner.FChildIndices[OldChildStart + ExistingChildIndex];
+    D.ChildStart := NewChildStart;
+    D.ChildCapacity := NewChildCapacity;
+  end;
+  FOwner.FChildIndices[D.ChildStart + D.ChildCount] := AChild.FIndex;
+  Inc(D.ChildCount);
   FOwner.FNodes[FIndex] := D;
 end;
 
@@ -407,17 +424,22 @@ end;
 function TGreenNode.ChildAt(const AIndex: LongInt): TGreenNode;
 var
   D: TGreenNodeData;
-  ChildIdx: LongInt;
+  ChildLinkIndex: LongInt;
+  ChildNodeIndex: LongInt;
 begin
   if (FOwner = nil) or (FIndex < 0) or (FIndex >= FOwner.FNodes.Count) then
     Exit(nil);
   D := FOwner.FNodes[FIndex];
   if (AIndex < 0) or (AIndex >= D.ChildCount) or (D.ChildStart < 0) then
     Exit(nil);
-  ChildIdx := D.ChildStart + AIndex;
-  if (ChildIdx >= 0) and (ChildIdx < FOwner.FFacades.Count) then
+  ChildLinkIndex := D.ChildStart + AIndex;
+  if (ChildLinkIndex >= 0) and
+    (ChildLinkIndex < FOwner.FChildIndices.Count) then
   begin
-    Result := FOwner.FFacades[ChildIdx];
+    ChildNodeIndex := FOwner.FChildIndices[ChildLinkIndex];
+    if (ChildNodeIndex < 0) or (ChildNodeIndex >= FOwner.FFacades.Count) then
+      Exit(nil);
+    Result := FOwner.FFacades[ChildNodeIndex];
     { Guard against cyclic AST: if child is self, return nil to break recursion }
     if (Result <> nil) and (Result.FOwner = FOwner) and (Result.FIndex = FIndex) then
       Result := nil;
@@ -425,4 +447,3 @@ begin
   else
     Result := nil;
 end;
-

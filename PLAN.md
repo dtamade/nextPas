@@ -1,90 +1,90 @@
 # nextPas 项目总控计划
 
-> 最后更新：2026-07-05
-> 架构成熟度：[AL1 骨架期] → [AL2 收敛期] | 等级定义：`docs/architecture/architecture-maturity-levels.md`
-> 目标树：`docs/plans/goal-tree.md` | 编译器架构计划：`docs/plans/compiler-architecture-plan.md` | 编译器审计：`docs/plans/compiler-audit.md`
+> 最后更新：2026-07-14
+> 当前可证明成熟度：AL1 骨架期；历史 AL2 声明正在按 production gate 复核
+> 当前编译器执行计划：`docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`
+> 成熟度定义：`docs/architecture/architecture-maturity-levels.md`
+> 目标树：`docs/plans/goal-tree.md`
 
 ## 北极星
 
-打造 FreePascal 领域最优秀的编译器+标准库生态系统。
+打造 FreePascal 领域最优秀的编译器与标准库生态：内部严谨性对齐 Rust，构建反馈、
+所有权和操作复杂度对齐 Go，同时保留 Pascal 的 unit、`System`、托管类型、ABI 和对象
+模型语义。
 
-## 当前状态 (2026-07-05)
+## 当前事实
 
-### ✅ 已完成 — 阶段 0: 编译器自举 (C0-C7)
+以下状态是 2026-07-13 可引用的起点，不得用更早的完成标记覆盖：
 
-| 里程碑 | 内容 | 日期 |
-|--------|------|------|
-| C0-C4 | 编译器基础架构 | 2026-06-02 |
-| C5 | `{$IFDEF}` 预处理器支持 | 2026-07-03 |
-| C6-H4 | owned string return 改进 | 2026-07-03 |
-| C7 | 自举验证 | 2026-07-03 |
-| L0-L3 | 框架层模块契约 (57/57) | 2026-07-04 |
-| - | mem 审计 R4+R5 清零 | 2026-07-05 |
-| - | bench 审计 14/17 修复 | 2026-07-05 |
-| - | 编译器审计 + 架构计划 + 目标树 v2 | 2026-07-05 |
+- `compiler-pass` fresh command invocation 53/53，紧接的 immediate repeat 53/53；
+  `compiler-fail` 16/16。harness 仍复用 workspace `.nextpas` artifact roots，因此这两次运行
+  不能写成受控 cold/warm 证明。
+- canonical `make rebuild-compiler` 已返回 `rebuild-compiler=pass`。
+- C0-C7 和 22/22 stage2 记录证明 module/source-level probe，不证明可执行 B/C 两代编译器。
+- NPC V2 framing 与 path-safe entry identity 已落地；framing 14/14 和五阶段 fail-closed
+  incremental gate fresh 通过。root 调用仍传入空依赖，compiler test/build cache-root owner
+  也未冻结，因此不能宣称 production incremental compilation。
+- query database、parallel scheduler 和 MIR 均已有骨架，但尚未成为 typed、deterministic、
+  verified 的默认生产路径。
+- System TypeId、type-parent graph、canonical source-backed cache 和 projection 已进入当前 main
+  基线。object-free root/destroy/cleanup/release 是首个由 `TSystemContractKind` 控制 HIR
+  validation 与 LLVM dispatch 的 production family；M1 其余 contract families 仍未迁移。
 
-### 🔢 关键指标
+因此当前等级保持 AL1。任何 AL2、self-host、incremental、parallel、MIR 或性能晋级都必须
+由 active roadmap 中的 fresh promotion gate 证明。
 
-- compiler-pass: 34/34 ✅
-- self-compile: 19/19 ✅
-- core/ 覆盖率: 963/972 (99.1%)
-- 契约体系: 57 模块全覆盖 ✅
+## 当前执行顺序
 
-### 🏗️ 当前阶段 — 阶段 1: 编译器架构升级
+| Milestone | 目标 | 晋级结果 |
+| --- | --- | --- |
+| M0 | 恢复 compiler/System gate、NPC cache、rebuild 和基准真相 | 建立可信开发基线 |
+| M1 | 冻结 compiler 与 L0 System 四层 bootstrap contract | 消除语义漂移 |
+| M2 | 证明真实 A→B→C 两跳可执行性；FPC 只构建 A | 大迁移前的自举可行性 |
+| M3 | 冻结 session/workspace owner、typed IDs 和 immutable snapshots | 建立 compiler kernel |
+| M4 | 建立 typed query、依赖图和正确增量失效 | 查询化生产晋级 |
+| M5 | 建立 dependency-ready、deterministic parallel build | AL2 重新判定 |
+| M6 | 收敛为单一 verified MIR/codegen path | 自有 codegen 晋级 |
+| M7 | 建立可复现、可发布、可回退的 production self-host | AL3 self-host gate |
+| M8 | 建立 shared language service、formatter core 和 `nextpas test` truth | AL3 internal tooling core |
+| M9 | 在正确性不回退前提下实现编译吞吐领先 | AL5 leadership gate |
 
-**详细计划**: `docs/plans/compiler-architecture-plan.md`（15周 5阶段，对标 rustc/go）
-**审计基线**: `docs/plans/compiler-audit.md`（36条量化发现）
+公开 LSP server、`fmt` 产品 workflow 和 IDE protocol adapter 属于 AL4。它们必须复用 M8
+内部 truth，不能创建第二套 parser、resolver、semantic model 或 workspace graph。
 
-| 阶段 | 内容 | 周期 | 状态 |
-|------|------|------|------|
-| P0 | 基础设施 — 编译器接入标准库 (THashMap/TVec/Arena) | 2周 | 🔲 |
-| P1 | 架构重构 — God Class 拆分 + Pipeline + MIR | 4周 | 🔲 |
-| P2 | 查询化编译 — 增量编译 + 并行编译 | 3周 | 🔲 |
-| P3 | 能力补全 — MIR 优化 + 错误恢复 + 结构化诊断 | 4周 | 🔲 |
-| P4 | 清理打磨 — Permissive 清零 + Blob 清理 + 测试 | 2周 | 🔲 |
+## 当前执行窗口
 
-### 🏗️ 其他进行中
+1. [x] 落地 System identity、parent graph、source-backed cache 和 canonical projection 修复。
+2. [x] 版本化 NPC cache framing，补 round-trip、corruption 和 mandatory incremental gate。
+3. [ ] 建立显式 compiler test/build cache-root owner/override，再跑受控 cold/warm full suite。
+4. [x] 恢复 compiler correctness baseline：compiler-pass 53/53 两次 invocation、
+   compiler-fail 16/16。
+5. [x] 恢复 canonical `make rebuild-compiler`。
+6. [ ] 建立 fail-closed B0 benchmark 和完整进程树 RSS。
+7. [ ] 继续 System typed contract migration；object-free 是首个 production family，M1 未完成。
+8. [ ] 完成 M1 exit gate 后进入 FPC-only-A 的 M2 A→B→C 证明。
 
-- **c2p_win32_compat**: 平台排除（C8 最后残留）
-- **test 框架**: M1 安全加固 ✅, M2 API 统一 🔄, M3 功能增强 🔲, M4 质量加固 🔲
-- **bench 审计收尾**: 14/17 findings 修复，3 个文档化跳过
+## 权威文档
 
-## 三阶段路线图
+| 文档 | 权威范围 |
+| --- | --- |
+| `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md` | 当前 compiler correctness、self-host、query、MIR、tooling 与性能执行顺序 |
+| `docs/architecture/architecture-maturity-levels.md` | AL0-AL5 晋级边界 |
+| `docs/plans/goal-tree.md` | 项目阶段与完成证据索引 |
+| `docs/architecture/compiler-pipeline-specification.md` | 稳定 compiler pipeline 与 owner boundary |
+| `docs/architecture/runtime-bootstrap-specification.md` | compiler、System、RTL/CRT bootstrap 边界 |
+| `docs/plans/compiler-audit.md` | 历史量化审计输入，不单独构成当前完成证明 |
+| `docs/plans/compiler-architecture-plan.md` | v2.2 历史规划和测量快照 |
+| `docs/plans/debt-roadmap.md` | 2026-07-06 债务历史快照 |
+| `docs/plans/selfhost-roadmap.md` | v3.0 自举顺序历史快照 |
 
-### 阶段 1: 编译器架构升级（当前）
-- [ ] P0: 编译器接入标准库（THashMap 替换 647 处 SameText，TVec 替换 145 处 SetLength+1，Arena 管理 AST 节点）
-- [ ] P1: 架构重构（Pipeline 接口化、sema God Class 拆分为 6 模块、引入 MIR 层）
-- [ ] P2: 查询化编译（增量编译 <1s，并行编译可用）
-- [ ] P3: 能力补全（6 个 MIR 优化 pass、错误恢复、JSON 诊断）
-- [ ] P4: 清理打磨（permissive overload 清零、Blob 清理、sema 单元测试）
-- [ ] c2p_win32_compat 平台排除
+稳定事实以 `docs/architecture/` 和 `docs/adr/` 为准。active roadmap 只决定当前执行顺序和
+promotion evidence，不得改写已接受的 owner boundary。
 
-### 阶段 2: 框架深度完善
-- [ ] mem 模块编译器集成（HIR builder Arena, LLVM emitter buffer）
-- [ ] test 框架 M2-M4 完成
-- [ ] 泛型构造器传播（collections, crypto.*）
-- [ ] Class helper 完整支持（thread.future, text.format）
+## Landing 纪律
 
-### 阶段 3: 生态建设
-- [ ] 架构文档、API 文档完善
-- [ ] 贡献指南、示例项目
-- [ ] IDE 支持、调试工具链
-
-## 治理文档索引
-
-| 文档 | 用途 |
-|------|------|
-| `docs/plans/goal-tree.md` | 项目总控地图，每轮工作前后查阅同步 |
-| `docs/plans/compiler-architecture-plan.md` | 编译器架构升级 15 周计划（对 AI 友好，可持续更新） |
-| `docs/plans/compiler-audit.md` | 编译器 36 条量化审计发现（单一真相来源） |
-| `docs/plans/debt-roadmap.md` | 技术债看板 |
-| `docs/plans/selfhost-roadmap.md` | 自举路线图 |
-| `compiler/CLAUDE.md` | 编译器工程治理：模块结构、质量门禁、技术债 |
-| `core/docs/design-conventions.md` | Core 模块设计规范 |
-| `docs/contracts/` | 57 模块代码契约 |
-
-## 工作纪律
-- 每轮开始前查阅 `goal-tree.md` 对齐方向
-- 每轮结束后同步 goal-tree 状态
-- 代码变更通过质量门禁后提交，commit message 有明确语义
-- 重大设计决策写入 `docs/adr/`
+- 普通开发只在 `.worktrees/compiler-system` / `codex/compiler-system` lane 进行。
+- 长期 lane 不 raw merge 到 `main`；每个可审查 slice 都在 latest-main candidate 上做
+  path-limited replay。
+- landing 前必须证明 candidate 相对 `main` behind 0、路径范围正确、focused gate、
+  `git diff --check` 和 `make hygiene` 全部通过。
+- `task_plan.md`、`findings.md`、`progress.md` 和构建产物不得进入主线。

@@ -5,6 +5,8 @@ program bench_h1parser;
 uses
   nextpas.core.base,
   nextpas.core.bench,
+  nextpas.core.os.env,
+  nextpas.core.text.conv,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
@@ -202,7 +204,7 @@ begin
     while LPos < SizeUInt(Length(GPipeline)) do
     begin
       llhttp_reset(@LParser);
-      LErr := llhttp_execute(@LParser, PAnsiChar(GPipeline) + LPos
+      LErr := llhttp_execute(@LParser, PAnsiChar(GPipeline) + LPos,
         SizeUInt(Length(GPipeline)) - LPos);
       if LErr <> HPE_PAUSED then
       begin
@@ -388,7 +390,7 @@ end;
 procedure AddBenchParsedHeaderSpan(const AHeaders: THttpHeaders;
   const AName, AHeaderValue: AnsiString);
 begin
-  AHeaders.AddParsedSpans(PAnsiChar(AName), Length(AName)
+  AHeaders.AddParsedSpans(PAnsiChar(AName), Length(AName),
     PAnsiChar(AHeaderValue), Length(AHeaderValue));
 end;
 
@@ -512,7 +514,7 @@ begin
   LScore := 0;
   for LIt := 1 to aIters do
   begin
-    LReq := THttpRequest.CreateFromRequestTarget(hmGet
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
       '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
     LScore := LScore + SizeUInt(Ord(LReq.Method)) +
       SizeUInt(LReq.ContentLength);
@@ -531,7 +533,7 @@ begin
   LScore := 0;
   for LIt := 1 to aIters do
   begin
-    LReq := THttpRequest.CreateFromRequestTarget(hmGet
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
       '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
     LScore := LScore + SizeUInt(Length(LReq.Url.Path));
   end;
@@ -549,7 +551,7 @@ begin
   LScore := 0;
   for LIt := 1 to aIters do
   begin
-    LReq := THttpRequest.CreateFromRequestTarget(hmGet
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
       '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
     LScore := LScore + SizeUInt(Length(LReq.Path));
   end;
@@ -567,7 +569,7 @@ begin
   LScore := 0;
   for LIt := 1 to aIters do
   begin
-    LReq := THttpRequest.CreateFromRequestTarget(hmGet
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
       '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
     LScore := LScore + SizeUInt(Length(LReq.RawQuery));
   end;
@@ -585,7 +587,7 @@ begin
   LScore := 0;
   for LIt := 1 to aIters do
   begin
-    LReq := THttpRequest.CreateFromRequestTarget(hmGet
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
       '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
     LScore := LScore + SizeUInt(Length(LReq.Path)) +
       SizeUInt(Length(LReq.RawQuery));
@@ -804,7 +806,7 @@ begin
   LScore := 0;
   for LIt := 1 to aIters do
   begin
-    LResult := FastParseRequest(PAnsiChar(REQ_ADAPTER_NO_URL)
+    LResult := FastParseRequest(PAnsiChar(REQ_ADAPTER_NO_URL),
       Length(REQ_ADAPTER_NO_URL));
     if LResult.Success then
       LScore := LScore + LResult.Consumed;
@@ -915,7 +917,7 @@ begin
   for LIt := 1 to aIters do
   begin
     LP.Reset;
-    LScore := LScore + LP.Execute(PAnsiChar(REQ_ADAPTER_NO_URL)
+    LScore := LScore + LP.Execute(PAnsiChar(REQ_ADAPTER_NO_URL),
       Length(REQ_ADAPTER_NO_URL));
   end;
   GSink := GSink + LScore;
@@ -932,13 +934,13 @@ begin
   LScore := 0;
   for LIt := 1 to aIters do
   begin
-    LFast := FastParseRequest(PAnsiChar(REQ_ADAPTER_NO_URL)
+    LFast := FastParseRequest(PAnsiChar(REQ_ADAPTER_NO_URL),
       Length(REQ_ADAPTER_NO_URL));
     if LFast.Success and LFast.HasConnection then
     begin
       Inc(LScore);
       LP.Reset;
-      LScore := LScore + LP.Execute(PAnsiChar(REQ_ADAPTER_NO_URL)
+      LScore := LScore + LP.Execute(PAnsiChar(REQ_ADAPTER_NO_URL),
         Length(REQ_ADAPTER_NO_URL));
     end
     else if LFast.Success then

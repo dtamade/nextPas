@@ -10,6 +10,7 @@ interface
 
 uses
   np_diagnostics_sink, np_lexer, np_source_database,
+  nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 
 type
@@ -73,9 +74,9 @@ type
   {**
    * TGreenNodeData — Compact rowan-style node storage
    *
-   * 28 bytes per node, stored contiguously in TVec.
+   * 32 bytes per node, stored contiguously in TVec.
    * Text is centralized in TGreenTreeData.Text.
-   * Children referenced by (ChildStart, ChildCount) — contiguous in FFacades.
+   * Children referenced by a range in TGreenTree.FChildIndices.
    *}
   TGreenNodeData = packed record
     Kind: TGreenNodeKind;
@@ -85,6 +86,7 @@ type
     TextLen: LongInt;
     ChildStart: LongInt;
     ChildCount: LongInt;
+    ChildCapacity: LongInt;
   end;
 
   {**
@@ -142,6 +144,9 @@ type
     property Index: LongInt read FIndex;
   end;
 
+  TGreenStringVec = specialize TVec<string>;
+  TGreenForeignProcVec = specialize TVec<TForeignProcedureDecl>;
+
  TGreenTree = class
  private
    FRootKind: TGreenRootKind;
@@ -149,14 +154,15 @@ type
    FNodeCount: LongInt;
    FIsValid: Boolean;
    FFrozen: Boolean;
-   FInterfaceUses: array of string;
-   FImplementationUses: array of string;
-   FForeignProcedureDecls: array of TForeignProcedureDecl;
+   FInterfaceUses: TGreenStringVec;
+   FImplementationUses: TGreenStringVec;
+   FForeignProcedureDecls: TGreenForeignProcVec;
    FRootNode: TGreenNode;
-   { Rowan-style compact storage: FNodes[i] <-> FFacades[i] strictly 1:1 }
+   { Rowan-style compact storage: FNodes[i] <-> FFacades[i] strictly 1:1. }
    FNodes: specialize TVec<TGreenNodeData>;
    FNodeText: string;
    FFacades: specialize TVec<TGreenNode>;
+   FChildIndices: specialize TVec<LongInt>;
    { Allocate node data and facade in the tree. Returns facade. }
    procedure AppendInterfaceUse(const AUseName: string);
    procedure AppendImplementationUse(const AUseName: string);
@@ -165,7 +171,9 @@ type
    );
    procedure CheckMutable; inline;
  public
-   constructor Create;
+   constructor Create; overload;
+   {** Node + uses/foreign metadata via IAllocator (e.g. session FAstAllocator). }
+   constructor Create(const AAllocator: IAllocator); overload;
    destructor Destroy; override;
    procedure Freeze;
    function RootKindName: string;
@@ -190,7 +198,15 @@ function ParseGreenTree(
   const ALexer: TLexerResult;
   const ADiagnostics: TDiagnosticsSink;
   const ARootFileId: TSourceFileId
-): TGreenTree;
+): TGreenTree; overload;
+
+{** Parse with IAllocator-backed node vectors (session AST arena product path). }
+function ParseGreenTree(
+  const ALexer: TLexerResult;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId;
+  const AAllocator: IAllocator
+): TGreenTree; overload;
 
 function GreenNodeKindLabel(const AKind: TGreenNodeKind): string;
 function GreenNodeIsNil(const ANode: TGreenNode): Boolean;
@@ -407,6 +423,11 @@ function ParseAnonymousRoutineExpression(
 
 constructor TGreenTree.Create;
 begin
+  Create(nil);
+end;
+
+constructor TGreenTree.Create(const AAllocator: IAllocator);
+begin
   inherited Create;
   FRootKind := grkUnknown;
   FDeclaredName := '';
@@ -414,18 +435,35 @@ begin
   FIsValid := False;
   FFrozen := False;
   FRootNode := nil;
-  SetLength(FInterfaceUses, 0);
-  SetLength(FImplementationUses, 0);
-  SetLength(FForeignProcedureDecls, 0);
-  FNodes := specialize TVec<TGreenNodeData>.Create;
-  FFacades := specialize TVec<TGreenNode>.Create;
+  if AAllocator <> nil then
+  begin
+    FInterfaceUses := TGreenStringVec.Create(0, AAllocator);
+    FImplementationUses := TGreenStringVec.Create(0, AAllocator);
+    FForeignProcedureDecls := TGreenForeignProcVec.Create(0, AAllocator);
+    FNodes := specialize TVec<TGreenNodeData>.Create(0, AAllocator);
+    FFacades := specialize TVec<TGreenNode>.Create(0, AAllocator);
+    FChildIndices := specialize TVec<LongInt>.Create(0, AAllocator);
+  end
+  else
+  begin
+    FInterfaceUses := TGreenStringVec.Create;
+    FImplementationUses := TGreenStringVec.Create;
+    FForeignProcedureDecls := TGreenForeignProcVec.Create;
+    FNodes := specialize TVec<TGreenNodeData>.Create;
+    FFacades := specialize TVec<TGreenNode>.Create;
+    FChildIndices := specialize TVec<LongInt>.Create;
+  end;
   FNodeText := '';
 end;
 
 destructor TGreenTree.Destroy;
 begin
+  FChildIndices.Free;
   FFacades.Free;
   FNodes.Free;
+  FForeignProcedureDecls.Free;
+  FImplementationUses.Free;
+  FInterfaceUses.Free;
   inherited Destroy;
 end;
 

@@ -1,5 +1,11 @@
 # nextpas.core.mem 可用性评估报告
 
+> **SUPERSEDED（2026-07-15）**
+> 本文综合分 8.7 / “生产就绪” **不再作为对外宣称**。
+> **当前权威可用性分**：[USABILITY-SCORE.md](USABILITY-SCORE.md)（post-S5 **8.2 / HIGH**）。
+> 另见 [README.md](README.md) / [ERROR-POLICY.md](ERROR-POLICY.md) / `test_usability_guardrails`。
+> 下文仅作历史修复记录保留。
+
 **评估日期**: 2026-07-02 (R1), 2026-07-02 (R2), 2026-07-04 (R4), 2026-07-05 (R5), 2026-07-05 (R6)
 **评估范围**: 58 个源文件 / 47 测试套件 / 545 tests / 0 failures / 0 leaks
 **评估维度**: 接口设计、API 易用性、调用一致性、错误提示、边界条件、测试覆盖、性能与内存安全

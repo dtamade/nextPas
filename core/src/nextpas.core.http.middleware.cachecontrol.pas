@@ -27,6 +27,7 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.text.conv;
 
@@ -53,7 +54,7 @@ end;
 function MaxAgeMiddleware(const ASeconds: Int64): IHttpMiddleware;
 begin
   if ASeconds < 0 then
-    raise EArgumentError.Create('max-age must not be negative');
+    raise EHttpError.Create(hekArgument, 'max-age must not be negative');
   Result := CacheControlMiddleware('public, max-age=' + IntToStr(ASeconds));
 end;
 

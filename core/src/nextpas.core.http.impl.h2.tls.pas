@@ -66,13 +66,13 @@ constructor TH2TlsServerSession.Create(const ARawConn: ITcpStream;
 begin
   inherited Create;
   if ARawConn = nil then
-    raise EArgumentError.Create('h2 TLS server session requires connection');
+    raise EHttpError.Create(hekArgument, 'h2 TLS server session requires connection');
   if AHandler = nil then
-    raise EArgumentError.Create('h2 TLS server session requires handler');
+    raise EHttpError.Create(hekArgument, 'h2 TLS server session requires handler');
   if AContext = nil then
-    raise EArgumentError.Create('h2 TLS server session requires context');
+    raise EHttpError.Create(hekArgument, 'h2 TLS server session requires context');
   if AInnerTransport = nil then
-    raise EArgumentError.Create('h2 TLS server session requires transport');
+    raise EHttpError.Create(hekArgument, 'h2 TLS server session requires transport');
   FRawConn := ARawConn;
   FHandler := AHandler;
   FContext := AContext;
@@ -103,7 +103,7 @@ begin
   LTlsConn := NewTlsServerTcpStream(FRawConn, FContext);
   LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LTlsConn)));
   if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
-    raise EHttpError.Create('h2 TLS server requires negotiated ALPN "h2"');
+    raise EHttpError.Create(hekProtocol, 'h2 TLS server requires negotiated ALPN "h2"');
 
   LSession := CreateInnerSession(LTlsConn);
   if LSession <> nil then
@@ -116,9 +116,9 @@ constructor TH2TlsServerTransport.Create(const AContext: ISSLContext;
 begin
   inherited Create;
   if AContext = nil then
-    raise EArgumentError.Create('h2 TLS server transport requires context');
+    raise EHttpError.Create(hekArgument, 'h2 TLS server transport requires context');
   if AInnerTransport = nil then
-    raise EArgumentError.Create('h2 TLS server transport requires inner transport');
+    raise EHttpError.Create(hekArgument, 'h2 TLS server transport requires inner transport');
   AContext.SetALPNProtocols(HTTP2_ALPN_PROTOCOL);
   FContext := AContext;
   FInnerTransport := AInnerTransport;

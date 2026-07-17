@@ -12,29 +12,42 @@ interface
 uses
   nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
   nextpas.core.fs.util, nextpas.core.fs.dir, nextpas.core.fs.base,
-  nextpas.core.time,
+  nextpas.core.time, nextpas.core.mem.intf,
+  nextpas.core.collections.vec,
   np_ast_facade, np_diagnostics_sink, np_green_tree, np_lexer,
   np_package_manifest, np_preprocessor, np_source_database,
   np_target_facts, np_text_primitives, np_toolchain_profiles, np_unit_graph;
 
 type
+  TUnitResolverStringVec = specialize TVec<string>;
+  TProjectUnitRootInfoVec = specialize TVec<TProjectUnitRootInfo>;
+
   TSearchIndexEntry = record
     UnitId: string;
-    CandidatePaths: TStringArray;
+    { Nested product table owned by the search-index entry (phase FNodeAllocator
+      when provided, else default heap). Free in FreeRootIndexEntries / Clear. }
+    CandidatePaths: TUnitResolverStringVec;
   end;
+  PSearchIndexEntry = ^TSearchIndexEntry;
+
+  TSearchIndexEntryVec = specialize TVec<TSearchIndexEntry>;
 
   TResolutionStackEntry = record
     UnitId: string;
     EnteredBy: TUnitGraphEdgeKind;
   end;
 
+  TResolutionStackVec = specialize TVec<TResolutionStackEntry>;
+
   TRootSearchIndex = record
     RootPath: string;
     Status: string;
-    Entries: array of TSearchIndexEntry;
+    Entries: TSearchIndexEntryVec;
     ScanCount: LongInt;
     LastScanTimestamp: Int64;
   end;
+
+  TRootSearchIndexVec = specialize TVec<TRootSearchIndex>;
 
   TUnitResolver = class
   private
@@ -45,10 +58,13 @@ type
     FUnitGraph: TUnitGraph;
     FRootFileId: TSourceFileId;
     FResolutionStatus: string;
-    FResolutionStack: array of TResolutionStackEntry;
-    FProjectUnitRootInfos: TProjectUnitRootInfoArray;
-    FExplicitUnitRoots: TStringArray;
-    FRootIndexes: array of TRootSearchIndex;
+    FResolutionStack: TResolutionStackVec;
+    FProjectUnitRootInfos: TProjectUnitRootInfoVec;
+    FExplicitUnitRoots: TUnitResolverStringVec;
+    FRootIndexes: TRootSearchIndexVec;
+    { Optional node storage for dependency ParseGreenTree (session scratch). }
+    FNodeAllocator: IAllocator;
+    procedure FreeRootIndexEntries;
     procedure EmitResolutionError(
       const ACode: string;
       const AFileId: TSourceFileId;
@@ -105,7 +121,8 @@ type
       const ADiagnostics: TDiagnosticsSink;
       const ARootFileId: TSourceFileId;
       const AProjectUnitRootInfos: TProjectUnitRootInfoArray;
-      const AExplicitUnitRoots: TStringArray
+      const AExplicitUnitRoots: TStringArray;
+      const ANodeAllocator: IAllocator = nil
     );
     destructor Destroy; override;
     function CandidateCountFor(const ARequestedName: string): LongInt;
@@ -213,10 +230,10 @@ begin
     DependencyDiag,
     DependencyFileId
   );
-  DependencyDefines := TDefineTable.Create;
+  DependencyDefines := TDefineTable.Create(FNodeAllocator);
   DependencyDefines.SeedFPCDefines;
   DependencyIncResolver := TFileIncludeResolver.Create(
-    ExtractFileDir(Candidates[0]));
+    ExtractFileDir(Candidates[0]), FNodeAllocator);
   DependencyIncResolver.AddSearchPath(ExtractFileDir(Candidates[0]));
   DependencyIncResolver.AddSearchPath(
     ExtractFileDir(ExtractFileDir(Candidates[0])) + DirectorySeparator + 'objpas');
@@ -225,7 +242,8 @@ begin
     DirectorySeparator + 'sysutils');
   DependencyIncResolver.AddSearchPath(
     ExtractFileDir(ExtractFileDir(Candidates[0])) + DirectorySeparator + 'inc');
-  DependencyPP := TPreprocessor.Create(DependencyDefines, True, DependencyIncResolver);
+  DependencyPP := TPreprocessor.Create(DependencyDefines, True, DependencyIncResolver,
+    FNodeAllocator);
   try
     DependencyPP.Process(DependencyLexer);
     DependencyLexer.Free;
@@ -236,7 +254,8 @@ begin
   DependencyGreenTree := ParseGreenTree(
     DependencyLexer,
     DependencyDiag,
-    DependencyFileId
+    DependencyFileId,
+    FNodeAllocator
   );
   DependencyAst := TAstFacade.Create(DependencyGreenTree);
   try

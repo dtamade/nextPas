@@ -66,12 +66,13 @@ begin
       end
       else if SameText(ResolutionFailureKind, 'wrong-argument-count') then
       begin
+        Payload := Default(TDiagnosticPayload);
         Payload.Kind := dpkWrongArgumentCount;
         Payload.ActualCount := MemberActualArgCount;
         Payload.ExpectedCount := 0;
         if Length(MemberCandidates) > 0 then
           Payload.ExpectedCount := MemberCandidates[0].ParamCount;
-        Payload.Candidates := MemberCandidates;
+        Payload.Candidates := CloneOverloadCandidatesFromArray(MemberCandidates);
         FDiagnostics.EmitErrorWithPayload(
           'sema.wrong-argument-count', 'sema',
           BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
@@ -87,8 +88,9 @@ begin
         )
       else if SameText(ResolutionFailureKind, 'no-matching-overload') then
       begin
+        Payload := Default(TDiagnosticPayload);
         Payload.Kind := dpkOverloadCandidates;
-        Payload.Candidates := MemberCandidates;
+        Payload.Candidates := CloneOverloadCandidatesFromArray(MemberCandidates);
         FDiagnostics.EmitErrorWithPayload(
           'sema.no-matching-overload', 'sema',
           BuildCoreSourceSpan(FRootFileId, MemberFailureOffset, 0),
@@ -255,7 +257,7 @@ begin
   RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
   FCurrentProcessingUnitId := RootOwnerUnitId;
   SeedCallBindingsInNode(FRootAst.RootNode, '', RootOwnerUnitId);
-  for Index := 0 to Length(FProcedureBodies) - 1 do
+  for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
     if (Pos('.', FProcedureBodies[Index].Name) > 0) and
       OwnerUnitAllowsProjectSourceDiagnostic(
         FProcedureBodies[Index].OwnerUnitId
@@ -671,23 +673,20 @@ begin
           LDotPos := Pos('.', ANode.Text);
           LReceiverName := Copy(ANode.Text, 1, LDotPos - 1);
           LMemberName := Copy(ANode.Text, LDotPos + 1, Length(ANode.Text));
-          LReceiverTypeId := 0;
-          if SameText(LReceiverName, 'Self') and (FCurrentMethodClass <> '') then
-            LReceiverTypeId := FModel.FindTypeByName(FCurrentMethodClass)
-          else
-          begin
-            SymId := FModel.LookupSymbol(LReceiverName, FCurrentScopeId);
-            if SymId > 0 then
-            begin
-              Sym := FModel.SymbolAt(SymId - 1);
-              LReceiverTypeId := Sym.TypeId;
-            end;
-          end;
+          LReceiverTypeId := TypeIdForMemberReceiver(
+            LReceiverName,
+            FCurrentMethodClass,
+            FCurrentProcessingUnitId
+          );
           if LReceiverTypeId > 0 then
           begin
+            if SameText(LMemberName, 'Create') or
+              SameText(LMemberName, 'CreateFmt') or
+              SameText(LMemberName, 'CreateRes') then
+              Exit(LReceiverTypeId);
             LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
             LQualifiedName := LTypeName + '.' + LMemberName;
-            for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+            for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
               if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
               begin
                 Result := DeclReturnTypeId(
@@ -747,13 +746,17 @@ begin
           LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
         if LTypeName <> '' then
         begin
+          if SameText(ANode.ChildAt(1).Text, 'Create') or
+            SameText(ANode.ChildAt(1).Text, 'CreateFmt') or
+            SameText(ANode.ChildAt(1).Text, 'CreateRes') then
+            Exit(LReceiverTypeId);
           if FModel.GetFieldMetaByName(LReceiverTypeId, ANode.ChildAt(1).Text,
             LFieldMeta) then
             Result := LFieldMeta.TypeId
           else
           begin
             LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-            for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+            for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
               if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
               begin
                 Result := DeclReturnTypeId(
@@ -769,7 +772,7 @@ begin
                 LReceiverTypeId := FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom;
                 LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
                 LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-                for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+                for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
                   if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
                   begin
                     Result := DeclReturnTypeId(
@@ -789,7 +792,7 @@ begin
                   LReceiverTypeId := FModel.TypeAt(LReceiverTypeId - 1).InstantiatedFrom;
                 LTypeName := FModel.TypeAt(LReceiverTypeId - 1).Name;
                 LQualifiedName := LTypeName + '.' + ANode.ChildAt(1).Text;
-                for LBodyIdx := 0 to Length(FProcedureBodies) - 1 do
+                for LBodyIdx := 0 to LongInt(FProcedureBodies.Count) - 1 do
                   if SameText(FProcedureBodies[LBodyIdx].Name, LQualifiedName) then
                   begin
                     Result := DeclReturnTypeId(
@@ -863,4 +866,3 @@ begin
   Ctx.BuiltinRegistry := FBuiltinRegistry;
   Result := np_sema_overload.AreTypesCompatible(Ctx, ALhsTypeId, ARhsTypeId);
 end;
-

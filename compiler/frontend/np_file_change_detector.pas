@@ -10,12 +10,14 @@
 unit np_file_change_detector;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   SysUtils,
-  nextpas.core.text.strings;
+  nextpas.core.text.strings,
+  nextpas.core.collections.vec;
 
 type
   TFileSnapshot = record
@@ -24,12 +26,14 @@ type
     FileSize: Int64;
   end;
 
+  TStringArray = array of string;
+  TFileSnapshotVec = specialize TVec<TFileSnapshot>;
+  TChangedFileVec = specialize TVec<string>;
+
   TFileChangeDetector = class
   private
-    FSnapshots: array of TFileSnapshot;
-    FSnapshotCount: LongInt;
-    FChangedFiles: TStringArray;
-    FChangedCount: LongInt;
+    FSnapshots: TFileSnapshotVec;
+    FChangedFiles: TChangedFileVec;
     function FindSnapshotIndex(const APath: string): LongInt;
     function GetFileSnapshot(const APath: string): TFileSnapshot;
   public
@@ -49,16 +53,16 @@ implementation
 constructor TFileChangeDetector.Create;
 begin
   inherited Create;
-  SetLength(FSnapshots, 64);
-  FSnapshotCount := 0;
-  SetLength(FChangedFiles, 16);
-  FChangedCount := 0;
+  FSnapshots := TFileSnapshotVec.Create;
+  FChangedFiles := TChangedFileVec.Create;
+  FSnapshots.EnsureCapacity(64);
+  FChangedFiles.EnsureCapacity(16);
 end;
 
 destructor TFileChangeDetector.Destroy;
 begin
-  SetLength(FSnapshots, 0);
-  SetLength(FChangedFiles, 0);
+  FChangedFiles.Free;
+  FSnapshots.Free;
   inherited Destroy;
 end;
 
@@ -66,7 +70,7 @@ function TFileChangeDetector.FindSnapshotIndex(const APath: string): LongInt;
 var
   I: LongInt;
 begin
-  for I := 0 to FSnapshotCount - 1 do
+  for I := 0 to LongInt(FSnapshots.Count) - 1 do
     if SameText(FSnapshots[I].Path, APath) then
       Exit(I);
   Result := -1;
@@ -92,31 +96,30 @@ end;
 
 function TFileChangeDetector.SnapshotCount: LongInt;
 begin
-  Result := FSnapshotCount;
+  Result := LongInt(FSnapshots.Count);
 end;
 
 function TFileChangeDetector.AnyChanged: Boolean;
 begin
-  Result := FChangedCount > 0;
+  Result := FChangedFiles.Count > 0;
 end;
 
 function TFileChangeDetector.ChangedFiles: TStringArray;
+var
+  I: LongInt;
 begin
-  SetLength(Result, FChangedCount);
-  if FChangedCount > 0 then
-    Move(FChangedFiles[0], Result[0], FChangedCount * SizeOf(string));
+  SetLength(Result, LongInt(FChangedFiles.Count));
+  for I := 0 to LongInt(FChangedFiles.Count) - 1 do
+    Result[I] := FChangedFiles[I];
 end;
 
 procedure TFileChangeDetector.InvalidatePrefix(const APrefix: string);
 var
   I: LongInt;
 begin
-  for I := FSnapshotCount - 1 downto 0 do
+  for I := LongInt(FSnapshots.Count) - 1 downto 0 do
     if Pos(APrefix, FSnapshots[I].Path) = 1 then
-    begin
-      FSnapshots[I] := FSnapshots[FSnapshotCount - 1];
-      Dec(FSnapshotCount);
-    end;
+      FSnapshots.DeleteSwap(SizeUInt(I));
 end;
 
 procedure TFileChangeDetector.TakeSnapshot(const ARootPath: string; const AExtensions: TStringArray);
@@ -129,7 +132,7 @@ var
   IsMatch: Boolean;
   I: LongInt;
 begin
-  FChangedCount := 0;
+  FChangedFiles.Clear;
 
   { Scan directory for matching files }
   if FindFirst(ARootPath + '/*', faAnyFile, SR) = 0 then
@@ -166,22 +169,12 @@ begin
         if (FSnapshots[Idx].ModifiedTime <> Snapshot.ModifiedTime) or
            (FSnapshots[Idx].FileSize <> Snapshot.FileSize) then
         begin
-          { File changed }
-          if FChangedCount >= Length(FChangedFiles) then
-            SetLength(FChangedFiles, FChangedCount + 16);
-          FChangedFiles[FChangedCount] := FilePath;
-          Inc(FChangedCount);
+          FChangedFiles.Push(FilePath);
           FSnapshots[Idx] := Snapshot;
         end;
       end
       else
-      begin
-        { New file }
-        if FSnapshotCount >= Length(FSnapshots) then
-          SetLength(FSnapshots, FSnapshotCount + 64);
-        FSnapshots[FSnapshotCount] := Snapshot;
-        Inc(FSnapshotCount);
-      end;
+        FSnapshots.Push(Snapshot);
     until FindNext(SR) <> 0;
     FindClose(SR);
   end;
@@ -197,12 +190,7 @@ begin
   if Idx >= 0 then
     FSnapshots[Idx] := Snapshot
   else
-  begin
-    if FSnapshotCount >= Length(FSnapshots) then
-      SetLength(FSnapshots, FSnapshotCount + 64);
-    FSnapshots[FSnapshotCount] := Snapshot;
-    Inc(FSnapshotCount);
-  end;
+    FSnapshots.Push(Snapshot);
 end;
 
 function TFileChangeDetector.IsFileChanged(const APath: string): Boolean;

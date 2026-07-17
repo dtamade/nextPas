@@ -73,8 +73,8 @@ require_output_line "$TMP_ROOT/platform.out" '^focus=core/tests/nextpas[.]core[.
 require_output_line "$TMP_ROOT/platform.out" '^command=make focused FOCUS=core/tests/nextpas[.]core[.]platform/test_platform_simulated_host_compile_matrix$' 'platform command'
 
 "$SCRIPT_UNDER_TEST" --lane mem --print-command >"$TMP_ROOT/mem.out"
-require_output_line "$TMP_ROOT/mem.out" '^truth=forced-compile$' 'mem truth'
-require_output_line "$TMP_ROOT/mem.out" '^focus=core/tests/nextpas[.]core[.]mem/test_memory_map_compile_gate$' 'mem focus'
+require_output_line "$TMP_ROOT/mem.out" '^truth=runtime$' 'mem truth'
+require_output_line "$TMP_ROOT/mem.out" '^focus=core/tests/nextpas[.]core[.]mem/test_usability_guardrails$' 'mem focus'
 
 "$SCRIPT_UNDER_TEST" --lane system --print-command >"$TMP_ROOT/system.out"
 require_output_line "$TMP_ROOT/system.out" '^truth=source-contract$' 'system truth'

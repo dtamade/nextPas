@@ -5,10 +5,12 @@ unit nextpas.core.http.middleware;
 interface
 
 uses
+  nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.sync.intf,
-  nextpas.core.sync.spinlock;
+  nextpas.core.sync.spinlock,
+  nextpas.core.thread.intf;
 
 type
   { Function type for creating middleware from a closure }
@@ -16,6 +18,34 @@ type
 
   { Predicate for conditional middleware — returns True to apply, False to skip }
   TRequestPredicate = reference to function(const AReq: IHttpRequest): Boolean;
+
+  {** Request decorator base. Forwards IHttpRequest and optional extension
+     interfaces (context/options) to FInner so middleware wrappers do not drop
+     Supports(IHttpRequestWithContext/Options). Override GetBody/GetHeaders/
+     GetContentLength as needed. }
+  THttpRequestWrapper = class(TInterfacedObject, IHttpRequest,
+    IHttpRequestWithOptions, IHttpRequestWithContext)
+  protected
+    FInner: IHttpRequest;
+    function GetMethod: THttpMethod; virtual;
+    function GetUrl: TUrl; virtual;
+    function GetPath: string; virtual;
+    function GetRawQuery: string; virtual;
+    function GetVersion: THttpVersion; virtual;
+    function GetHeaders: IHttpHeaders; virtual;
+    function GetTrailers: IHttpHeaders; virtual;
+    function GetBody: IReader; virtual;
+    function GetContentLength: Int64; virtual;
+    function GetRemoteAddr: string; virtual;
+    function PathParam(const AName: string): string; virtual;
+    function QueryParam(const AName: string): string; virtual;
+    function GetRequestOptions: THttpRequestOptions; virtual;
+    procedure SetRequestOptions(const AOptions: THttpRequestOptions); virtual;
+    function GetContext: IHttpContext; virtual;
+    procedure SetContext(const ACtx: IHttpContext); virtual;
+  public
+    constructor Create(const AInner: IHttpRequest);
+  end;
 
   { Wraps a THttpHandlerFunc into IHttpHandler }
   TFuncHandler = class(TInterfacedObject, IHttpHandler)
@@ -73,7 +103,121 @@ function WhenMiddleware(
   const APredicate: TRequestPredicate;
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
 
+{** @desc Async middleware: dispatches handler execution to a thread pool.
+   Each request is submitted to APool, freeing the acceptor thread.
+   The handler runs on a pool thread and writes the response directly.
+
+   Example:
+     Server.Use(AsyncMiddleware(MyThreadPool)); }
+function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware;
+
 implementation
+
+uses
+  nextpas.core.base.utils;
+
+{ THttpRequestWrapper }
+
+constructor THttpRequestWrapper.Create(const AInner: IHttpRequest);
+begin
+  inherited Create;
+  FInner := AInner;
+end;
+
+function THttpRequestWrapper.GetMethod: THttpMethod;
+begin
+  Result := FInner.GetMethod;
+end;
+
+function THttpRequestWrapper.GetUrl: TUrl;
+begin
+  Result := FInner.GetUrl;
+end;
+
+function THttpRequestWrapper.GetPath: string;
+begin
+  Result := FInner.GetPath;
+end;
+
+function THttpRequestWrapper.GetRawQuery: string;
+begin
+  Result := FInner.GetRawQuery;
+end;
+
+function THttpRequestWrapper.GetVersion: THttpVersion;
+begin
+  Result := FInner.GetVersion;
+end;
+
+function THttpRequestWrapper.GetHeaders: IHttpHeaders;
+begin
+  Result := FInner.GetHeaders;
+end;
+
+function THttpRequestWrapper.GetTrailers: IHttpHeaders;
+begin
+  Result := FInner.GetTrailers;
+end;
+
+function THttpRequestWrapper.GetBody: IReader;
+begin
+  Result := FInner.GetBody;
+end;
+
+function THttpRequestWrapper.GetContentLength: Int64;
+begin
+  Result := FInner.GetContentLength;
+end;
+
+function THttpRequestWrapper.GetRemoteAddr: string;
+begin
+  Result := FInner.GetRemoteAddr;
+end;
+
+function THttpRequestWrapper.PathParam(const AName: string): string;
+begin
+  Result := FInner.PathParam(AName);
+end;
+
+function THttpRequestWrapper.QueryParam(const AName: string): string;
+begin
+  Result := FInner.QueryParam(AName);
+end;
+
+function THttpRequestWrapper.GetRequestOptions: THttpRequestOptions;
+var
+  LOpts: IHttpRequestWithOptions;
+begin
+  if Supports(FInner, IHttpRequestWithOptions, LOpts) then
+    Exit(LOpts.GetRequestOptions);
+  Result := Default(THttpRequestOptions);
+end;
+
+procedure THttpRequestWrapper.SetRequestOptions(
+  const AOptions: THttpRequestOptions);
+var
+  LOpts: IHttpRequestWithOptions;
+begin
+  if Supports(FInner, IHttpRequestWithOptions, LOpts) then
+    LOpts.SetRequestOptions(AOptions);
+end;
+
+function THttpRequestWrapper.GetContext: IHttpContext;
+var
+  LCtx: IHttpRequestWithContext;
+begin
+  if Supports(FInner, IHttpRequestWithContext, LCtx) then
+    Exit(LCtx.GetContext);
+  Result := nil;
+end;
+
+procedure THttpRequestWrapper.SetContext(const ACtx: IHttpContext);
+var
+  LCtx: IHttpRequestWithContext;
+begin
+  if Supports(FInner, IHttpRequestWithContext, LCtx) then
+    LCtx.SetContext(ACtx);
+end;
 
 { TFuncHandler }
 
@@ -93,7 +237,7 @@ end;
 constructor TMiddlewareChain.Create(const AHandler: IHttpHandler);
 begin
   if AHandler = nil then
-    raise EHttpError.Create('HTTP middleware chain root handler must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP middleware chain root handler must not be nil');
   inherited Create;
   FHandler := AHandler;
   FBuilt := nil;
@@ -116,7 +260,7 @@ end;
 procedure TMiddlewareChain.Use(const AMiddleware: IHttpMiddleware);
 begin
   if AMiddleware = nil then
-    raise EHttpError.Create('HTTP middleware must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP middleware must not be nil');
   SetLength(FMiddlewares, Length(FMiddlewares) + 1);
   FMiddlewares[High(FMiddlewares)] := AMiddleware;
   FBuilt := nil; // invalidate cached build
@@ -167,14 +311,14 @@ end;
 function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler;
 begin
   if not Assigned(AFunc) then
-    raise EHttpError.Create('HTTP handler callback must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP handler callback must not be nil');
   Result := TFuncHandler.Create(AFunc);
 end;
 
 function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler;
 begin
   if not Assigned(AMethod) then
-    raise EHttpError.Create('HTTP handler method must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP handler method must not be nil');
   Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
     AMethod(AReq, AW);
@@ -184,7 +328,7 @@ end;
 function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler;
 begin
   if not Assigned(AProc) then
-    raise EHttpError.Create('HTTP handler procedure must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP handler procedure must not be nil');
   Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
     AProc(AReq, AW);
@@ -194,7 +338,7 @@ end;
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;
 begin
   if not Assigned(AWrapFunc) then
-    raise EHttpError.Create('HTTP middleware callback must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP middleware callback must not be nil');
   Result := TFuncMiddleware.Create(AWrapFunc);
 end;
 
@@ -220,9 +364,9 @@ function WhenMiddleware(
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
 begin
   if not Assigned(APredicate) then
-    raise EHttpError.Create('HTTP conditional middleware predicate must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP conditional middleware predicate must not be nil');
   if AMiddleware = nil then
-    raise EHttpError.Create('HTTP conditional middleware must not be nil');
+    raise EHttpError.Create(hekArgument, 'HTTP conditional middleware must not be nil');
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   var
     LWrapped: IHttpHandler;
@@ -234,6 +378,22 @@ begin
         LWrapped.ServeHTTP(AReq, AW)
       else
         ANext.ServeHTTP(AReq, AW);
+    end);
+  end);
+end;
+
+function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware;
+begin
+  if APool = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP async middleware thread pool must not be nil');
+  Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
+  begin
+    Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      APool.Submit(procedure
+      begin
+        ANext.ServeHTTP(AReq, AW);
+      end);
     end);
   end);
 end;

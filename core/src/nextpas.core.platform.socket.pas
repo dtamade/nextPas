@@ -287,6 +287,34 @@ function platform_socket_error_would_block(const AError: Int32): Boolean;
     @return True 表示超时 *}
 function platform_socket_error_timed_out(const AError: Int32): Boolean;
 
+{** @desc 判断错误是否为非阻塞 connect 进行中（EINPROGRESS / WSAEWOULDBLOCK）
+    @param AError 错误码
+    @return True 表示 connect 仍在进行 *}
+function platform_socket_error_in_progress(const AError: Int32): Boolean;
+
+const
+  { poll event bits for platform_socket_poll }
+{$IFDEF NEXTPAS_WINDOWS}
+  PLATFORM_POLL_IN  = $0300; { POLLRDNORM | POLLRDBAND }
+  PLATFORM_POLL_OUT = $0010; { POLLWRNORM }
+  PLATFORM_POLL_ERR = $0001;
+  PLATFORM_POLL_HUP = $0002;
+{$ELSE}
+  PLATFORM_POLL_IN  = $0001;
+  PLATFORM_POLL_OUT = $0004;
+  PLATFORM_POLL_ERR = $0008;
+  PLATFORM_POLL_HUP = $0010;
+{$ENDIF}
+
+{** @desc 等待单个套接字就绪（poll / WSAPoll）
+    @param ASocket 套接字句柄
+    @param AEvents 关注事件（PLATFORM_POLL_IN / PLATFORM_POLL_OUT 等按位或）
+    @param ATimeoutMs 超时毫秒；&lt;0 无限，0 非阻塞
+    @param ARevents 输出就绪事件位
+    @return 0 超时/无事件，1 就绪，&lt;0 错误码 *}
+function platform_socket_poll(const ASocket: TPlatformSocket;
+  const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
+
 { Sockaddr helpers (from net layer merge) }
 
 {** @desc 构造 IPv4 sockaddr_in 结构
@@ -670,6 +698,38 @@ end;
 function platform_socket_error_timed_out(const AError: Int32): Boolean;
 begin
   Result := AError = ESysETIMEDOUT;
+end;
+
+function platform_socket_error_in_progress(const AError: Int32): Boolean;
+begin
+  { Nonblocking connect reports EINPROGRESS; some stacks also use EWOULDBLOCK. }
+  Result := (AError = ESysEINPROGRESS) or
+    platform_socket_error_would_block(AError);
+end;
+
+function platform_socket_poll(const ASocket: TPlatformSocket;
+  const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
+var
+  LPfd: TPollFd;
+  LNready: Int32;
+begin
+  ARevents := 0;
+  FillChar(LPfd, SizeOf(LPfd), 0);
+  LPfd.fd := Int32(ASocket.Value);
+  LPfd.events := Int16(AEvents);
+  repeat
+    LNready := poll(@LPfd, 1, ATimeoutMs);
+    if LNready >= 0 then
+    begin
+      if LNready = 0 then
+        Exit(0);
+      ARevents := Int32(LPfd.revents);
+      Exit(1);
+    end;
+    if platform_get_errno = ESysEINTR then
+      Continue;
+    Exit(-platform_get_errno);
+  until False;
 end;
 
 { --- sockaddr helpers (byte-order + ipv4 forwarding from socket.base) --- }
@@ -1240,6 +1300,31 @@ begin
   Result := AError = WSAETIMEDOUT;
 end;
 
+function platform_socket_error_in_progress(const AError: Int32): Boolean;
+begin
+  { Winsock nonblocking connect typically returns WSAEWOULDBLOCK. }
+  Result := (AError = WSAEINPROGRESS) or (AError = WSAEWOULDBLOCK);
+end;
+
+function platform_socket_poll(const ASocket: TPlatformSocket;
+  const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
+var
+  LPfd: TWSAPollFd;
+  LNready: LongInt;
+begin
+  ARevents := 0;
+  FillChar(LPfd, SizeOf(LPfd), 0);
+  LPfd.fd := TSocket(ASocket.Value);
+  LPfd.events := SmallInt(AEvents);
+  LNready := WSAPoll(@LPfd, 1, ATimeoutMs);
+  if LNready < 0 then
+    Exit(-platform_get_last_error);
+  if LNready = 0 then
+    Exit(0);
+  ARevents := Int32(LPfd.revents);
+  Result := 1;
+end;
+
 { --- sockaddr helpers (byte-order + ipv4 forwarding from socket.base) --- }
 
 function platform_htons(AHost: UInt16): UInt16; inline;
@@ -1533,6 +1618,8 @@ function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const A
 function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const ATimeoutMs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_error_would_block(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
+function platform_socket_error_in_progress(const AError: Int32): Boolean; begin Result := False; end;
+function platform_socket_poll(const ASocket: TPlatformSocket; const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_pair(ADomain, AType, AProtocol: Int32; out ASocket1, ASocket2: TPlatformSocket): Int32; begin ASocket1.Value := -1; ASocket2.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_getsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;

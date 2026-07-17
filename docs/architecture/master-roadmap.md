@@ -220,17 +220,35 @@ Bootstrap ownership:
 - `pkg`、`env`、`fmt`、`doc`、`doctor`、`query` 这类工具是 thin entrypoint + shared core
 - language service、CLI、package workflow 和 future IDE 都消费同一份 workspace truth
 
+Rust / Go 风格的现代工具链在 nextPas 中固定为共享核心上的三条能力线：
+
+| 能力线                             | 核心 owner / truth / result                                                                   | 当前段最小晋级证据                                                                                                |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| LSP server / protocol adapter      | `LanguageServiceSession` 拥有 analysis revision；adapter 只投影协议                           | 先以内嵌 API 验证磁盘/overlay revision、增量失效和 stale cancellation；公开 server 与启动命令留到 GUI/IDE 段      |
+| formatter（`fmt` family）          | formatter core 消费 source snapshot + lossless token/trivia view，产出 edit set + diagnostics | 先冻结 owner/result contract，再证明输出确定、幂等、AST 语义保持，且评论/编译指令等非空白 trivia 无损且绑定稳定   |
+| test（现有 `nextpas test` 为基线） | `WorkspaceModel` 选择测试目标，test harness 拥有执行、snapshot 与 evidence                    | 在现有真实执行之上补齐 workspace/package test discovery、确定的 list/filter plan、target attribution 和结果可回放 |
+
+这三条能力线可以由同一个 `nextpas` 产品壳分发，但不能因此共享一团实现：compiler kernel 继续拥有
+syntax / semantic truth，language service 拥有增量 analysis session，formatter core 拥有排版策略，
+test harness 拥有 fixture execution 与 evidence。具体公开 verb 由
+`developer-tooling-specification.md` 冻结；本路线图不提前替它决定 LSP server 的启动形态。
+
 进入下一段前，这一段的 promotion gate 至少包括：
 
 - package/workspace tools 不需要再各自重写 root discovery、target selection 或 install placement
 - install root、cache root、build root 和 source root 已能被明确区分
 - workspace truth 能解释 CLI、language service 和 package actions 为什么看到同一套项目状态
+- 内部 language-service contract 不重新解析或重新绑定语义，overlay revision 过期后不会倒灌 diagnostics / query result
+- formatter core 的 owner、source truth、edit result 和 malformed-input failure contract 已冻结；确定性、幂等性、AST 语义以及评论/编译指令等非空白 trivia 的内容、顺序和绑定稳定性都有 gate
+- test 的 workspace discovery / list / filter / execution / failure 结果与公开 harness group、snapshot 和 evidence 语义一致
 
 出现这些情况时必须回退：
 
 - IDE、CLI、package tool 或 language service 各自维护私有 project model
 - package/install 结果不能对齐 `units/<target>/`、`lib/`、`share/`
 - 新工具必须复制一套 target/toolchain/workspace 推导逻辑才能工作
+- language-service/LSP adapter、formatter 或 test command 开始各自复制 parser、semantic model、fixture discovery 或 result envelope
+- formatter 只能靠原始文本正则改写源码，无法证明幂等与语义保持
 
 ## 7. GUI Framework and IDE
 

@@ -1,198 +1,116 @@
 
 procedure TSemaRuntimeVarRegistry.RegisterRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
-    if SameText(FRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FRuntimeStrVarNames);
-  SetLength(FRuntimeStrVarNames, NextIndex + 1);
-  FRuntimeStrVarNames[NextIndex] := AName;
+  RegisterUniqueName(FRuntimeStrVarNames, AName);
 end;
 
 procedure TSemaRuntimeVarRegistry.RegisterOwnedRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
   if AName = '' then
     Exit;
-  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
-    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FOwnedRuntimeStrVarNames);
-  SetLength(FOwnedRuntimeStrVarNames, NextIndex + 1);
-  FOwnedRuntimeStrVarNames[NextIndex] := AName;
+  RegisterUniqueName(FOwnedRuntimeStrVarNames, AName);
 end;
 
 procedure TSemaRuntimeVarRegistry.RegisterBorrowedRuntimeStrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
   if AName = '' then
     Exit;
-  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FBorrowedRuntimeStrVarNames);
-  SetLength(FBorrowedRuntimeStrVarNames, NextIndex + 1);
-  FBorrowedRuntimeStrVarNames[NextIndex] := AName;
+  RegisterUniqueName(FBorrowedRuntimeStrVarNames, AName);
 end;
 
 function TSemaRuntimeVarRegistry.IsRuntimeStrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRuntimeStrVarNames) - 1 do
-    if SameText(FRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := ContainsName(FRuntimeStrVarNames, AName);
 end;
 
 function TSemaRuntimeVarRegistry.IsOwnedRuntimeStrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FOwnedRuntimeStrVarNames) - 1 do
-    if SameText(FOwnedRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := ContainsName(FOwnedRuntimeStrVarNames, AName);
 end;
 
 function TSemaRuntimeVarRegistry.IsBorrowedRuntimeStrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FBorrowedRuntimeStrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeStrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := ContainsName(FBorrowedRuntimeStrVarNames, AName);
 end;
 
 function TSemaRuntimeVarRegistry.GetOwnedRuntimeStrVarNames: TStringArray;
 begin
-  Result := FOwnedRuntimeStrVarNames;
+  Result := StringVecToArray(FOwnedRuntimeStrVarNames);
 end;
 
 function TSemaRuntimeVarRegistry.GetOwnedRuntimeStrVarCount: SizeInt;
 begin
-  Result := Length(FOwnedRuntimeStrVarNames);
+  Result := FOwnedRuntimeStrVarNames.Count;
 end;
 
 procedure TSemaRuntimeVarRegistry.RegisterOwnedStringReturnFunc(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
   if AName = '' then
     Exit;
-  for Idx := 0 to Length(FOwnedStringReturnFuncNames) - 1 do
-    if SameText(FOwnedStringReturnFuncNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FOwnedStringReturnFuncNames);
-  SetLength(FOwnedStringReturnFuncNames, NextIndex + 1);
-  FOwnedStringReturnFuncNames[NextIndex] := AName;
+  RegisterUniqueName(FOwnedStringReturnFuncNames, AName);
 end;
 
 function TSemaRuntimeVarRegistry.IsOwnedStringReturnFunc(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FOwnedStringReturnFuncNames) - 1 do
-    if SameText(FOwnedStringReturnFuncNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := ContainsName(FOwnedStringReturnFuncNames, AName);
 end;
 
 procedure TSemaRuntimeVarRegistry.ClearPendingStringTempReleases;
 begin
-  SetLength(FPendingStringTempNames, 0);
-  SetLength(FPendingStringTempSources, 0);
+  FPendingStringTempNames.Clear;
+  FPendingStringTempSources.Clear;
 end;
 
 procedure TSemaRuntimeVarRegistry.QueuePendingStringTempRelease(
   const ATempName, ASourceName: string);
-var
-  NextIndex: SizeInt;
 begin
   if (ATempName = '') or (ASourceName = '') then
     Exit;
-  NextIndex := Length(FPendingStringTempNames);
-  SetLength(FPendingStringTempNames, NextIndex + 1);
-  SetLength(FPendingStringTempSources, NextIndex + 1);
-  FPendingStringTempNames[NextIndex] := ATempName;
-  FPendingStringTempSources[NextIndex] := ASourceName;
+  FPendingStringTempNames.Push(ATempName);
+  FPendingStringTempSources.Push(ASourceName);
 end;
 
 function TSemaRuntimeVarRegistry.GetPendingStringTempNames: TStringArray;
 begin
-  Result := FPendingStringTempNames;
+  Result := StringVecToArray(FPendingStringTempNames);
 end;
 
 function TSemaRuntimeVarRegistry.GetPendingStringTempSources: TStringArray;
 begin
-  Result := FPendingStringTempSources;
+  Result := StringVecToArray(FPendingStringTempSources);
 end;
 
 function TSemaRuntimeVarRegistry.GetPendingStringTempCount: SizeInt;
 begin
-  Result := Length(FPendingStringTempNames);
+  Result := FPendingStringTempNames.Count;
 end;
 
 procedure TSemaRuntimeVarRegistry.RegisterRuntimeArrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FRuntimeArrVarNames) - 1 do
-    if SameText(FRuntimeArrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FRuntimeArrVarNames);
-  SetLength(FRuntimeArrVarNames, NextIndex + 1);
-  FRuntimeArrVarNames[NextIndex] := AName;
+  RegisterUniqueName(FRuntimeArrVarNames, AName);
 end;
 
 procedure TSemaRuntimeVarRegistry.RegisterBorrowedRuntimeArrVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FBorrowedRuntimeArrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeArrVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FBorrowedRuntimeArrVarNames);
-  SetLength(FBorrowedRuntimeArrVarNames, NextIndex + 1);
-  FBorrowedRuntimeArrVarNames[NextIndex] := AName;
+  RegisterUniqueName(FBorrowedRuntimeArrVarNames, AName);
 end;
 
 function TSemaRuntimeVarRegistry.IsRuntimeArrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRuntimeArrVarNames) - 1 do
-    if SameText(FRuntimeArrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := ContainsName(FRuntimeArrVarNames, AName);
 end;
 
 function TSemaRuntimeVarRegistry.IsBorrowedRuntimeArrVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FBorrowedRuntimeArrVarNames) - 1 do
-    if SameText(FBorrowedRuntimeArrVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := ContainsName(FBorrowedRuntimeArrVarNames, AName);
 end;
 
 function TSemaRuntimeVarRegistry.GetRuntimeArrVarNames: TStringArray;
 begin
-  Result := FRuntimeArrVarNames;
+  Result := StringVecToArray(FRuntimeArrVarNames);
 end;
 
 function TSemaRuntimeVarRegistry.GetBorrowedRuntimeArrVarNames: TStringArray;
 begin
-  Result := FBorrowedRuntimeArrVarNames;
+  Result := StringVecToArray(FBorrowedRuntimeArrVarNames);
+end;

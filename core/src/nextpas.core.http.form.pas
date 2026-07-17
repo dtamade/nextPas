@@ -32,12 +32,15 @@ function TryParseMultipartFormData(const ABody, ABoundary: string;
 { Encode multipart/form-data body. ABoundary is generated if empty. }
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string = ''): string;
+{ Generate a fresh multipart boundary token (safe for Content-Type). }
+function NewMultipartBoundary: string;
 
 implementation
 
 uses
   nextpas.core.exception,
   nextpas.core.text.conv,
+  nextpas.core.http.base,
   nextpas.core.http.url;
 
 { URL-decode a string, converting + to space }
@@ -399,7 +402,7 @@ begin
 end;
 
 { Generate a random boundary string }
-function GenerateBoundary: string;
+function NewMultipartBoundary: string;
 const
   CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 var
@@ -410,6 +413,11 @@ begin
     Result[LI] := CHARS[1 + Random(Length(CHARS))];
 end;
 
+function GenerateBoundary: string; inline;
+begin
+  Result := NewMultipartBoundary;
+end;
+
 { Validate that a string contains no CR/LF/NUL characters (injection prevention) }
 function RejectCRLF(const AValue, AFieldName: string): string;
 var
@@ -417,7 +425,7 @@ var
 begin
   for LI := 1 to Length(AValue) do
     if AValue[LI] in [#13, #10, #0] then
-      raise EArgumentError.Create(
+      raise EHttpError.Create(hekArgument,
         AFieldName + ' must not contain CR/LF/NUL characters');
   Result := AValue;
 end;

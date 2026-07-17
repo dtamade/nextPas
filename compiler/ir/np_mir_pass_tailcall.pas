@@ -69,12 +69,14 @@ end;
 
 function TMirTailCallPass.Run(var AModule: TMirModule): Boolean;
 var
-  FuncIdx, BlkIdx, StmtIdx, I: LongInt;
+  FuncIdx, BlkIdx, StmtIdx, I, ArgCount: LongInt;
   Fn: TMirFunction;
   Stmt: TMirStmt;
+  Term: TMirTerminator;
   IsTail: Boolean;
   TailCount: LongInt;
   AssignStmt: TMirStmt;
+  SavedArgs: array of TMirOperand;
 begin
   Result := True;
   TailCount := 0;
@@ -84,42 +86,53 @@ begin
     Fn := AModule.FunctionAt(FuncIdx);
     if Fn.IsExternal then
       Continue;
-    if Length(Fn.Blocks) = 0 then
+    if (Fn.Blocks = nil) or (Fn.Blocks.Count = 0) then
       Continue;
 
-    for BlkIdx := 0 to High(Fn.Blocks) do
+    if Fn.Blocks <> nil then
+      for BlkIdx := 0 to LongInt(Fn.Blocks.Count) - 1 do
     begin
-      if Length(Fn.Blocks[BlkIdx].Stmts) = 0 then
+      if (Fn.Blocks[SizeUInt(BlkIdx)].Stmts = nil) or (Fn.Blocks[SizeUInt(BlkIdx)].Stmts.Count = 0) then
         Continue;
 
       { Check the last statement in the block }
-      StmtIdx := High(Fn.Blocks[BlkIdx].Stmts);
-      Stmt := Fn.Blocks[BlkIdx].Stmts[StmtIdx];
+      StmtIdx := LongInt(Fn.Blocks[SizeUInt(BlkIdx)].Stmts.Count) - 1;
+      Stmt := Fn.Blocks[SizeUInt(BlkIdx)].Stmts[SizeUInt(StmtIdx)];
 
-      if not IsTailRecursiveCall(Fn, Fn.Blocks[BlkIdx], Stmt, IsTail) then
+      if not IsTailRecursiveCall(Fn, Fn.Blocks[SizeUInt(BlkIdx)], Stmt, IsTail) then
         Continue;
       if not IsTail then
         Continue;
 
+      { Snapshot args before SetStmt frees the call's Args TVec. }
+      ArgCount := 0;
+      if Stmt.Args <> nil then
+        ArgCount := LongInt(Stmt.Args.Count);
+      SetLength(SavedArgs, ArgCount);
+      for I := 0 to ArgCount - 1 do
+        SavedArgs[I] := Stmt.Args[SizeUInt(I)];
+
       { Transform: replace call with param assignments + goto entry }
-      for I := 0 to High(Stmt.Args) do
+      for I := 0 to ArgCount - 1 do
       begin
-        if I <= High(Fn.Params) then
+        if (Fn.Params <> nil) and (I < LongInt(Fn.Params.Count)) then
         begin
+          FillChar(AssignStmt, SizeOf(AssignStmt), 0);
           AssignStmt.Kind := mskAssign;
-          AssignStmt.Dst := Fn.Params[I].ValueId;
-          AssignStmt.Src := Stmt.Args[I];
+          AssignStmt.Dst := Fn.Params[SizeUInt(I)].ValueId;
+          AssignStmt.Src := SavedArgs[I];
           AssignStmt.Lhs.Kind := mokConst;
           AssignStmt.Rhs.Kind := mokConst;
           AssignStmt.Op := moAdd;
-          AModule.SetStmt(FuncIdx, Fn.Blocks[BlkIdx].Id, StmtIdx - I, AssignStmt);
+          AModule.SetStmt(FuncIdx, Fn.Blocks[SizeUInt(BlkIdx)].Id, StmtIdx - I, AssignStmt);
         end;
       end;
 
-      { Change terminator to goto entry block }
-      Fn.Blocks[BlkIdx].Terminator.Kind := mtkGoto;
-      Fn.Blocks[BlkIdx].Terminator.Target := Fn.EntryBlockId;
-      AModule.SetTerminator(FuncIdx, Fn.Blocks[BlkIdx].Id, Fn.Blocks[BlkIdx].Terminator);
+      { Change terminator to goto entry block (local copy — TVec is value-indexed) }
+      Term := Fn.Blocks[SizeUInt(BlkIdx)].Terminator;
+      Term.Kind := mtkGoto;
+      Term.Target := Fn.EntryBlockId;
+      AModule.SetTerminator(FuncIdx, Fn.Blocks[SizeUInt(BlkIdx)].Id, Term);
 
       Inc(TailCount);
     end;

@@ -281,6 +281,8 @@ begin
 end;
 
 function TElementManager.ReallocElements(aDst: Pointer; aElementCount, aNewElementCount: SizeUInt): PElement;
+var
+  LCopyCount: SizeUInt;
 begin
   { 分配 }
   if aDst = nil then
@@ -312,6 +314,24 @@ begin
   { 托管元素缩小前,反初始化因缩小而放弃的内存 }
   if FIsManagedType and (aNewElementCount < aElementCount) then
     FinalizeManagedElements(Pointer(aDst + (aNewElementCount * FElementSize)), aElementCount - aNewElementCount);
+
+  { Arena / bump IAllocator: no ReallocMem — alloc+copy+free (old free may no-op).
+    Bit-move preserves managed refs; FreeMem must not finalize moved elements. }
+  if not FAllocator.Traits.SupportsRealloc then
+  begin
+    Result := FAllocator.GetMem(aNewElementCount * FElementSize);
+    if Result = nil then
+      Exit; { OOM: keep aDst valid }
+    LCopyCount := aElementCount;
+    if aNewElementCount < LCopyCount then
+      LCopyCount := aNewElementCount;
+    if LCopyCount > 0 then
+      Move(aDst^, Result^, LCopyCount * FElementSize);
+    FAllocator.FreeMem(aDst);
+    if FIsManagedType and (aNewElementCount > aElementCount) then
+      InitializeElements(Pointer(Result + aElementCount), aNewElementCount - aElementCount);
+    Exit;
+  end;
 
   { 调整内存 }
   Result := FAllocator.ReallocMem(aDst, aNewElementCount * FElementSize);

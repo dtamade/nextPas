@@ -69,11 +69,15 @@ end;
 procedure TestResolveAllocator;
 var
   LResolved: IAllocator;
+  LRtl: IAllocator;
 begin
   LResolved := ResolveAllocator(nil);
   Check(LResolved <> nil, 'ResolveAllocator(nil) returned nil');
-  LResolved := ResolveAllocator(GetRtlAllocator);
-  Check(LResolved <> nil, 'ResolveAllocator(non-nil) returned nil');
+  { S5: nil defaults to process Growing heap, not RTL. }
+  Check(LResolved = GetGrowingIAllocator, 'ResolveAllocator(nil) → Growing root');
+  LRtl := GetRtlAllocator;
+  LResolved := ResolveAllocator(LRtl);
+  Check(LResolved = LRtl, 'ResolveAllocator preserves explicit RTL');
 end;
 
 procedure TestTryGetRtlAllocator;

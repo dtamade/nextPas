@@ -4,7 +4,27 @@ This goal tree is scoped to `nextpas.core.system` as a core framework module fam
 the repository-level `rtl/core/system/` architecture docs; it gives this lane a staged path with focused
 verification.
 
-## S0 Mapping / Spec / Source Contracts
+## M0 System Truth Convergence (current authority)
+
+- [x] Make `rtl/core/system/System.pas` the canonical compiler-root source.
+- [x] Make `units/linux-x86_64/System.pas` a checked projection; canonical projection parity is
+  enforced by `make system-projection-check`.
+- [x] Add the typed `TSystemContractKind` ledger for the current `np.system.*` vocabulary.
+- [x] Make source contracts follow logical compiler owner families rather than one physical include file.
+- [ ] Move semantic/HIR/backend dispatch from strings to typed contract identity.
+- [ ] Add `SystemContractFingerprint` and the immutable semantic snapshot.
+- [ ] Execute the complete A -> B -> C compiler-system bootstrap chain.
+
+Current M0 evidence is source-contract, projection, and typed-inventory evidence. It does not prove
+runtime completeness, ABI stability, or self-host readiness.
+
+## Historical S-stage capability inventory
+
+The S0-S12 sections below preserve earlier facade and kernel assessments. Their checked boxes and
+completion labels are not current readiness authority; current bootstrap status is defined by the M0
+section above and `docs/architecture/runtime-bootstrap-specification.md`.
+
+## Historical S0 Mapping / Spec / Source Contracts
 
 - [x] Create `core/docs/system/README.md` with position, owner boundary and non-goals.
 - [x] Create `core/docs/system/rtl-mapping.md` with FPC `System`, `SysUtils`, `TypInfo`, `Classes` and `ObjPas` mapping.
@@ -17,7 +37,7 @@ Exit evidence:
 - `git diff --check`
 - `make hygiene`
 
-## S1 Minimal Facade And Base Compatibility
+## Historical S1 Minimal Facade And Base Compatibility
 
 - [x] Add `nextpas.core.system` facade skeleton.
 - [x] Re-export only low-risk base and exception aliases needed by early consumers.
@@ -31,21 +51,21 @@ Exit evidence:
 - Base focused tests if `base` or `base.utils` is touched.
 - Exception focused tests if `exception` or `errors` is touched.
 
-## S2 Memory / Managed / Dynarray / String Runtime Contracts
+## Historical S2 Memory / Managed / Dynarray / String Runtime Contracts
 
 - [x] Document managed string, dynamic array, interface and managed record lifetime contracts.
 - [x] Map heap-manager responsibilities onto `nextpas.core.mem` without moving allocator ownership.
 - [x] Add source-contract tests for runtime helper names and owner boundaries.
 - [x] Record leak-sensitive test requirements before any runtime-owned implementation appears.
 
-## S3 Exception / RTTI / Unit Lifecycle Contracts
+## Historical S3 Exception / RTTI / Unit Lifecycle Contracts
 
 - [x] Document exception raise/unwind boundary between compiler, runtime and exception taxonomy owner.
 - [x] Document RTTI / TypeInfo minimum truth and what remains compiler-owned.
 - [x] Document unit initialization/finalization ordering and failure behavior.
 - [x] Add source-contract tests for `np.system.unit_init`, `np.system.unit_fini` and runtime-fault classification.
 
-## S4 SysUtils / TypInfo / Classes Compatibility Facades
+## Historical S4 SysUtils / TypInfo / Classes Compatibility Facades
 
 - [x] Record that broad SysUtils and Classes remain deferred and are not a current phase gate.
 - [x] Record that `system.classes` now exists as a Classes compatibility shim re-exporting TStream, TFileStream, TList, TInterfaceList, TStringList, TDuplicates, TThread, TSeekOrigin, and file mode constants. Broader Classes surface (THandleStream, TMemoryStream, TStringStream, TInterfacedObject) remains outside system scope.
@@ -65,9 +85,8 @@ Exit evidence:
 - [x] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules. **Decision: Confirmed. System only provides thin facades, never owns implementation.**
 - [x] Report `Needs Review` before exposing compatibility API with wide consumer impact.
 
-Current phase note:
-
-- S4 is complete: TypInfo facade covers PTypeInfo/TTypeKind/PTypeData/TTypeData/GetPropInfo/GetEnumName/GetEnumValue; SysUtils facade covers 40+ functions; Classes remains deferred.
+Historical S4 closeout record: TypInfo facade coverage, SysUtils facade coverage, and the Classes
+deferral were reported at that time. They are not current compiler-root or readiness evidence.
 - SysUtils path, file, environment, time, parsing, case-conversion, and broad string-helper compatibility are now live via delegation to owner modules (text.conv, path, fs, platform).
 - TypInfo minimal unlock was preceded by a dedicated `Needs Review` packet and is limited to
   `PTypeInfo`, `TTypeKind`, `PTypeData`, `TTypeData`, `GetPropInfo`, `GetEnumName`, `GetEnumValue`.
@@ -80,7 +99,7 @@ Current phase note:
 - If real consumer pressure appears, reopen as `Needs Review` with focused evidence instead of creating
   broad placeholders.
 
-## S5 Compiler / Runtime Integration Readiness
+## Historical S5 Compiler / Runtime Integration Readiness
 
 ### S5.1 Contract Vocabulary Lock
 
@@ -140,7 +159,7 @@ Evidence: `build/verify_local.sh:1740-1769` (llvm-empty-program), `1771-1800` (l
 - [x] Create helper mapping appendix: HIR intrinsic → LLVM helper → test coverage. ✅ Done (contract-coverage-table.md Backend-Private Helper Names section)
 - [x] Document remaining open risks (TypInfo drift, managed array leak gap, lifecycle execution gap). ✅ Done (contract-coverage-table.md S5.4 Remaining Open Risks)
 
-**S5 is now complete**. All four sub-stages (S5.1-S5.4) have been addressed.
+**Historical S5 closeout record**: all four sub-stages (S5.1-S5.4) were reported as addressed.
 
 **Summary of S5 Deliverables**:
 
@@ -156,7 +175,7 @@ documentation (goal-tree, contract-coverage-table, runtime-contracts, lifecycle-
 is synchronized with source-contract checks and focused tests. The remaining risks are
 explicitly documented and scoped for future work.
 
-## S6 Contract-to-Implementation Bridge
+## Historical S6 Contract-to-Implementation Bridge
 
 S6 prepares the contract vocabulary for self-hosting readiness without implementing runtime
 behavior. Focus: close documentation gaps, fill test coverage, define self-hosting gates.
@@ -191,7 +210,7 @@ behavior. Focus: close documentation gaps, fill test coverage, define self-hosti
 - [x] Acceptance criteria defined for each gate.
 - [x] Update `goal-tree.md` with S6 completion status.
 
-**S6 is now complete**. Main deliverables:
+**Historical S6 closeout record**: main deliverables were reported as:
 
 1. **Exception contracts**: 5 `np.system.exception_*` names documented, source-contract checked, coverage table updated.
 2. **Leak-sensitive gap documented**: Managed interface array has HIR contract coverage, heaptrc evidence still needed.
@@ -214,11 +233,12 @@ behavior. Focus: close documentation gaps, fill test coverage, define self-hosti
 
 Future migration slices should reduce counts in `fpc_rtl_file_allowlist.txt`, not add new entries.
 
-## S7 System Kernel Implementation
+## Historical S7 System Kernel Implementation
 
-S7 implements the system kernel as the single source of truth for compiler root types.
-The kernel uses dual-compiler architecture: FPC uses `fpc.inc` (re-export FPC types),
-nextPas uses `kernel.inc` (full kernel definition).
+The historical S7 plan treated the system kernel as the compiler-root source of truth. M0 now assigns
+that authority only to `rtl/core/system/System.pas`; the facade/kernel inventory below is retained for
+traceability. The historical plan used a dual-compiler architecture: FPC uses `fpc.inc` (re-export FPC
+types), and nextPas uses `kernel.inc` (full kernel definition).
 
 ### S7.1 Dual-Compiler Fork Structure
 
@@ -256,7 +276,7 @@ nextPas uses `kernel.inc` (full kernel definition).
 - [x] Implement stubs for all compiler internal functions.
 - [x] Document that real implementations provided by runtime.
 
-**S7 is now complete**. Main deliverables:
+**Historical S7 closeout record**: main deliverables were reported as:
 
 1. **Dual-compiler fork**: `fpc.inc` re-exports FPC types, `kernel.inc` defines nextPas kernel.
 2. **8 kernel sub-modules**: base, str, intf, cls, rtti, except, mem, comp.
@@ -269,11 +289,11 @@ nextPas uses `kernel.inc` (full kernel definition).
 for the compiler to recognize `{$compiler_root}` and `{$compiler_type_kind}` directives
 and read type information from the kernel.
 
-## S8 Kernel Surface Completeness Audit
+## Historical S8 Kernel Surface Completeness Audit
 
-S8 performs a comprehensive gap analysis between our kernel surface and FPC's System unit.
-The goal is to ensure the kernel is NOT minimal — it must be a complete, production-quality
-definition of all types, constants, and function signatures that the compiler and runtime need.
+The historical S8 plan performed a broad gap analysis between its kernel surface and FPC's System unit.
+That broad-surface goal is not the active M0 direction: the canonical System kernel remains limited to
+compiler-facing declarations and does not claim production-quality FPC coverage.
 
 ### S8.1 FPC System Surface Audit
 
@@ -408,10 +428,10 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 - All fpc_* stubs in comp.inc have correct signatures
 - TypInfo facade covers all RTTI types used by core modules
 - SysUtils facade covers all functions used by core modules
-- `make -C core/tests/nextpas.core.system clean test` passes (126 tests, 0 leaks)
+- Historical report: `make -C core/tests/nextpas.core.system clean test` passed with 126 tests and 0 leaks
 - `fpc -Mobjfpc core/src/nextpas.core.system.pas` compiles cleanly
 
-**S8 Completion** (S8.2-S8.12 all done):
+**Historical S8 completion record** (S8.2-S8.12 were reported as done):
 
 1. **Variant type**: TVarType, TVarData, varEmpty..varUString constants defined in base.inc
 2. **Dynamic array types**: TBytes, TCharArray defined in base.inc
@@ -425,13 +445,14 @@ Compare our kernel against FPC's System unit (`rtl/inc/systemh.inc`, ~206 functi
 10. **TypInfo facade**: PTypeData/TTypeData + GetPropInfo/GetEnumName/GetEnumValue
 11. **SysUtils facade**: 40+ functions (StrToInt/FloatToStr/FileExists/ExtractFilePath/Now/Sleep etc.)
 
-**S8 is now complete**. All kernel surface items addressed. 126 tests (kernel 92 + source 19 + typinfo 9 + sysutils 6), 0 leaks.
+**Historical S8 closeout record**: all kernel surface items were reported as addressed, with 126 tests
+(kernel 92 + source 19 + typinfo 9 + sysutils 6) and 0 leaks. This is not fresh readiness evidence.
 
 **Next Phase**: S8 completion clears the way for compiler integration. The kernel is ready
 for the compiler to recognize `{$compiler_root}` and `{$compiler_type_kind}` directives
 and read type information from the kernel.
 
-## S9 Compiler Integration
+## Historical S9 Compiler Integration
 
 S9 让编译器从"不知道 system 内核存在"到"从内核读取所有根类型"。
 
@@ -469,7 +490,7 @@ S9 让编译器从"不知道 system 内核存在"到"从内核读取所有根类
 - self-compile 19/19 通过 ✅
 - compiler-pass 49/49 通过 ✅
 
-## S10 Runtime Implementation
+## Historical S10 Runtime Implementation
 
 S10 将内核从"签名桩"转变为"真实实现"。
 
@@ -528,7 +549,7 @@ S10 将内核从"签名桩"转变为"真实实现"。
 - ✅ 程序生命周期完整 (process_init → unit_init → main → unit_fini → process_fini)
 - ✅ 所有测试通过 (smoke + compiler-pass 49/49)
 
-## S11 Self-Hosting Readiness
+## Historical S11 Self-Hosting Readiness
 
 S11 让编译器能用 nextPas 编译自己，不依赖 FPC System。
 
@@ -566,13 +587,13 @@ S11 让编译器能用 nextPas 编译自己，不依赖 FPC System。
 - ✅ 异常展开正确恢复栈（control_flow_pass.pas 验证）
 - ✅ 验证异常测试通过（compiler-pass 49/49，含 try/except）
 
-**S11 Exit Criteria** (全部满足 ✅):
+**Historical S11 exit-criteria record** (reported as satisfied):
 - ✅ nextPas 编译器能编译 nextPas 编译器（self-compile 19/19）
 - ✅ 不 uses FPC System（双编译器架构）
 - ✅ 所有 19 个自举测试通过
 - ✅ 5 个自举就绪门全部通过 (S11.1 ✅, S11.2 ✅, S11.3 ✅, S11.4 ✅, S11.5 ✅)
 
-## S12 Production Readiness
+## Historical S12 Production Readiness
 
 S12 从"能跑"到"好用"。
 
@@ -581,7 +602,7 @@ S12 从"能跑"到"好用"。
 - ✅ VMT 布局常量冻结（28 个槽位，偏移 0-216）
 - ✅ np_* 函数签名冻结（48 个函数）
 - ✅ 内存管理器接口冻结（TMemoryManager 回调）
-- ✅ 文档化 ABI 稳定性承诺（abi-specification.md v1.0.0-frozen）
+- Historical report: ABI-stability proposal documented in `abi-specification.md` as `v1.0.0-frozen`
 
 ### S12.2 Performance Optimization ✅
 
@@ -612,27 +633,26 @@ S12 从"能跑"到"好用"。
 - ✅ 兼容性矩阵覆盖 29 个能力点
 - ✅ 回归测试套件完善（source-contracts 测试 + TTypeKind drift detection）
 
-**S12 Exit Criteria** (部分满足):
-- ✅ ABI 稳定，向后兼容承诺（v1.0.0-frozen）
+**Historical S12 exit-criteria record** (reported as partially satisfied):
+- Historical claim: ABI stability and backward-compatibility commitment (`v1.0.0-frozen`)
 - ✅ 性能优化（brk+mmap 分配器 + setjmp/longjmp 异常 + SSO/CoW 字符串）
 - ✅ 文档完善（API 参考 + 使用指南 + 兼容性矩阵 + 设计决策）
 - ✅ 兼容性测试通过（49 compiler-pass + 29 能力点矩阵）
 - [ ] 跨平台全覆盖（Linux x86_64 ✅, macOS/Windows runtime 适配待做）
 
-## 完整路线图总览
+## Current direction
 
-```
-S0-S8  基础建设          ✅ 完成（3391 行内核 + 4 门面 + 测试 + 文档）
-S9    编译器集成          ✅ 完成（126 tests, compiler_root/compiler_type_kind 指令）
-S10   运行时实现          ✅ 完成（48 np_* 函数 + 生命周期 + 分配器）
-S11   自举就绪            ✅ 完成（5/5 门全部通过, 49 compiler-pass, self-compile 19/19）
-S12   生产就绪            ✅ 基本完成（ABI 冻结 + 性能 + 文档 + 兼容性, 跨平台待扩展）
+The archived S-stage material above is useful for locating old proposals and capability claims, but it
+does not establish current runtime, ABI, self-hosting, or production readiness. The active sequence is:
+
+```text
+M0 truth convergence
+  -> M1 minimum bootstrap kernel
+  -> M2 typed dispatch and System identity
+  -> M3 executable runtime behavior
+  -> M4 actual A -> B -> C bootstrap
+  -> M5 determinism and performance evidence
 ```
 
-**关键依赖链**:
-```
-S9 编译器集成 ✅ → S10 运行时实现 ✅ → S11 自举就绪 ✅ → S12 生产就绪 ✅
-```
-
-**System 内核状态**: S0-S12 全部完成。
-**唯一剩余**: macOS/Windows runtime 适配（跨平台扩展）。
+The current M0 gate is canonical projection parity plus source-backed contract evidence. Platform
+expansion follows only after the executable bootstrap path is proven.

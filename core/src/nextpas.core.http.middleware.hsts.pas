@@ -71,7 +71,7 @@ var
   LHeader: string;
 begin
   if AOptions.MaxAge < 0 then
-    raise EArgumentError.Create('HSTS max-age must not be negative');
+    raise EHttpError.Create(hekArgument, 'HSTS max-age must not be negative');
   LHeader := BuildHstsHeader(AOptions);
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler

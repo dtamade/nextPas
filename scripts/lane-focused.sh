@@ -40,8 +40,8 @@ set_lane_defaults() {
       FOCUS_PATH="core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix"
       ;;
     mem)
-      TRUTH_KIND="forced-compile"
-      FOCUS_PATH="core/tests/nextpas.core.mem/test_memory_map_compile_gate"
+      TRUTH_KIND="runtime"
+      FOCUS_PATH="core/tests/nextpas.core.mem/test_usability_guardrails"
       ;;
     system)
       TRUTH_KIND="source-contract"

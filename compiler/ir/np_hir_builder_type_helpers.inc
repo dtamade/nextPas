@@ -242,31 +242,30 @@ begin
   else
     EmitInstr(Instr);
 
-  if FAllocaCount >= Length(FAllocas) then
-    SetLength(FAllocas, FAllocaCount + 32);
   RegisterAllocaEntry(AName, Instr.ResultId, AType, False);
 end;
 
 procedure THIRBuilder.RegisterAllocaEntry(const AName: string;
   AValue: THIRValueId; AType: THIRTypeId; AIsVarParam: Boolean);
+var
+  Entry: TAllocaEntry;
 begin
-  if FAllocaCount >= Length(FAllocas) then
-    SetLength(FAllocas, FAllocaCount + 32);
-  FAllocas[FAllocaCount].Name := AName;
-  FAllocas[FAllocaCount].Value := AValue;
-  FAllocas[FAllocaCount].TypeId := AType;
-  FAllocas[FAllocaCount].RecordSlots := 0;
-  FAllocas[FAllocaCount].IsVarParam := AIsVarParam;
-  Inc(FAllocaCount);
+  Entry.Name := AName;
+  Entry.Value := AValue;
+  Entry.TypeId := AType;
+  Entry.RecordSlots := 0;
+  Entry.IsVarParam := AIsVarParam;
+  FAllocas.Push(Entry);
 end;
 
 function THIRBuilder.FindLocalAlloca(const AName: string): THIRValueId;
 var
-  I: LongInt;
+  I: SizeUInt;
 begin
-  for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocas[I].Name, AName) then
-      Exit(FAllocas[I].Value);
+  if FAllocas.Count > 0 then
+    for I := 0 to FAllocas.Count - 1 do
+      if SameText(FAllocas[I].Name, AName) then
+        Exit(FAllocas[I].Value);
   Result := 0;
 end;
 
@@ -275,52 +274,51 @@ var
   I: LongInt;
   Instr: THIRInstr;
 begin
-  for I := FAllocaCount - 1 downto 0 do
-    if SameText(FAllocas[I].Name, AName) then
-      Exit(FAllocas[I].Value);
-  for I := 0 to FGlobalRefCount - 1 do
-    if SameText(FGlobalRefCache[I], AName) then
-      Exit(FGlobalRefValues[I]);
-  for I := 0 to FGlobalCount - 1 do
-    if SameText(FGlobalNames[I], AName) then
-    begin
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetPtrType;
-      Instr.IntrinsicName := 'global_ref';
-      Instr.CallTarget := AName;
-      EmitInstr(Instr);
-      if FGlobalRefCount >= Length(FGlobalRefCache) then
+  if FAllocas.Count > 0 then
+    for I := LongInt(FAllocas.Count) - 1 downto 0 do
+      if SameText(FAllocas[I].Name, AName) then
+        Exit(FAllocas[I].Value);
+  if FGlobalRefCache.Count > 0 then
+    for I := 0 to LongInt(FGlobalRefCache.Count) - 1 do
+      if SameText(FGlobalRefCache[I], AName) then
+        Exit(FGlobalRefValues[I]);
+  if FGlobalNames.Count > 0 then
+    for I := 0 to LongInt(FGlobalNames.Count) - 1 do
+      if SameText(FGlobalNames[I], AName) then
       begin
-        SetLength(FGlobalRefCache, FGlobalRefCount + 16);
-        SetLength(FGlobalRefValues, FGlobalRefCount + 16);
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikIntrinsic;
+        Instr.TypeId := GetPtrType;
+        Instr.IntrinsicName := 'global_ref';
+        Instr.CallTarget := AName;
+        EmitInstr(Instr);
+        FGlobalRefCache.Push(AName);
+        FGlobalRefValues.Push(Instr.ResultId);
+        Exit(Instr.ResultId);
       end;
-      FGlobalRefCache[FGlobalRefCount] := AName;
-      FGlobalRefValues[FGlobalRefCount] := Instr.ResultId;
-      Inc(FGlobalRefCount);
-      Exit(Instr.ResultId);
-    end;
   Result := 0;
 end;
 
 function THIRBuilder.FindAllocaType(const AName: string): THIRTypeId;
 var
-  I: LongInt;
+  I: SizeUInt;
 begin
-  for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocas[I].Name, AName) then
-      Exit(FAllocas[I].TypeId);
+  if FAllocas.Count > 0 then
+    for I := 0 to FAllocas.Count - 1 do
+      if SameText(FAllocas[I].Name, AName) then
+        Exit(FAllocas[I].TypeId);
   Result := 0;
 end;
 
 function THIRBuilder.IsVarParamAlloca(const AName: string): Boolean;
 var
-  I: LongInt;
+  I: SizeUInt;
 begin
-  for I := 0 to FAllocaCount - 1 do
-    if SameText(FAllocas[I].Name, AName) then
-      Exit(FAllocas[I].IsVarParam);
+  if FAllocas.Count > 0 then
+    for I := 0 to FAllocas.Count - 1 do
+      if SameText(FAllocas[I].Name, AName) then
+        Exit(FAllocas[I].IsVarParam);
   Result := False;
 end;
 

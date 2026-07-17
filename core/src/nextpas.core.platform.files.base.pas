@@ -318,7 +318,7 @@ end;
 function TPlatformDirHandle.IsValid: Boolean;
 begin
 {$IFDEF NEXTPAS_WINDOWS}
-  Result := FindHandle <> INVALID_HANDLE_VALUE;
+  Result := FindHandle <> HANDLE(INVALID_HANDLE_VALUE);
 {$ELSE}
   Result := Fd >= 0;
 {$ENDIF}
@@ -327,7 +327,7 @@ end;
 function TPlatformDirHandle.IsInvalid: Boolean;
 begin
 {$IFDEF NEXTPAS_WINDOWS}
-  Result := FindHandle = INVALID_HANDLE_VALUE;
+  Result := FindHandle = HANDLE(INVALID_HANDLE_VALUE);
 {$ELSE}
   Result := Fd < 0;
 {$ENDIF}

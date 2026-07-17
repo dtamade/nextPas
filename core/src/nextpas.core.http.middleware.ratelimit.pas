@@ -49,7 +49,8 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.middleware,
   nextpas.core.http.message,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.sync;
 
 type
   TLimitEntry = record
@@ -63,7 +64,7 @@ type
   TRateLimitState = class
   private
     FEntries: array of TLimitEntry;
-    FLock: TRTLCriticalSection;
+    FLock: IMutex;
     FCleanupCounter: Int32;
     FMaxRequests: Int32;
     FWindowSeconds: Int32;
@@ -106,12 +107,12 @@ begin
   FWindowSeconds := AOptions.WindowSeconds;
   FTrustProxyHeaders := AOptions.TrustProxyHeaders;
   FCleanupCounter := 0;
-  InitCriticalSection(FLock);
+  FLock := Mutex;
 end;
 
 destructor TRateLimitState.Destroy;
 begin
-  DoneCriticalSection(FLock);
+  FLock := nil;
   inherited Destroy;
 end;
 
@@ -199,7 +200,7 @@ begin
   LIP := ExtractClientIP(AReq, FTrustProxyHeaders);
   LNow := NowEpoch;
 
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     LIdx := FindOrCreateEntry(LIP, LNow);
     Inc(FEntries[LIdx].Count);
@@ -230,7 +231,7 @@ begin
       CleanupExpiredEntries(LNow);
     end;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -248,9 +249,9 @@ end;
 function RateLimitMiddlewareWith(const AOptions: TRateLimitOptions): IHttpMiddleware;
 begin
   if AOptions.MaxRequests <= 0 then
-    raise EArgumentError.Create('rate limit max requests must be positive');
+    raise EHttpError.Create(hekArgument, 'rate limit max requests must be positive');
   if AOptions.WindowSeconds <= 0 then
-    raise EArgumentError.Create('rate limit window seconds must be positive');
+    raise EHttpError.Create(hekArgument, 'rate limit window seconds must be positive');
   Result := TRateLimitMiddleware.Create(AOptions);
 end;
 

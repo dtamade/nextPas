@@ -812,7 +812,6 @@ begin
     end);
     LUrl := TUrl.Parse('/resource');
     LReq := THttpRequest.Create(hmPut, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-    { Use a mock response writer that captures headers }
     LMock := TMockResponseWriter.Create;
     LWriter := LMock;
     LRouter.ServeHTTP(LReq, LWriter);
@@ -821,10 +820,15 @@ begin
     Check(Pos('GET', LAllow) > 0, '405 Allow contains GET');
     Check(Pos('HEAD', LAllow) > 0, '405 Allow contains implicit HEAD');
     Check(Pos('POST', LAllow) > 0, '405 Allow contains POST');
-    { Verify JSON error body }
-    Check(Pos('"error"', LMock.Body) > 0, '405 response is JSON');
-    Check(Pos('method_not_allowed', LMock.Body) > 0, '405 has error code');
+    { RFC 7807 Problem Details body from HttpWriteErrorResponse }
+    CheckEqual('application/problem+json',
+      LWriter.GetHeaders.Get('content-type'), '405 content-type');
+    Check(Pos('"title":"method_not_allowed"', LMock.Body) > 0,
+      '405 has problem title code');
+    Check(Pos('"status":405', LMock.Body) > 0, '405 body carries status');
   finally
+    LWriter := nil;
+    LReq := nil;
     LRouter.Free;
   end;
 end;
@@ -848,9 +852,14 @@ begin
     LWriter := LMock;
     LRouter.ServeHTTP(LReq, LWriter);
     CheckEqual(Int64(404), Int64(LWriter.GetStatus), '404 status');
-    Check(Pos('"error"', LMock.Body) > 0, '404 response is JSON');
-    Check(Pos('not_found', LMock.Body) > 0, '404 has error code');
+    CheckEqual('application/problem+json',
+      LWriter.GetHeaders.Get('content-type'), '404 content-type');
+    Check(Pos('"title":"not_found"', LMock.Body) > 0,
+      '404 has problem title code');
+    Check(Pos('"status":404', LMock.Body) > 0, '404 body carries status');
   finally
+    LWriter := nil;
+    LReq := nil;
     LRouter.Free;
   end;
 end;
@@ -861,20 +870,28 @@ procedure TestRouterGroupPrefix;
 var
   LRouter: IHttpRouter;
   LGroup: THttpRouterGroup;
+  LReq: IHttpRequest;
+  LWriter: IHttpResponseWriter;
 begin
   LRouter := NewRouter;
   LGroup := THttpRouterGroup.Create(LRouter, '/api/v1', []);
-  LGroup.Get('/users', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    GHandlerCalled := 'users';
-  end);
-  GHandlerCalled := '';
-  LRouter.ServeHTTP(
-    THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/v1/users'),
-      hvHttp11, NewHttpHeaders, nil, 0),
-    TMockResponseWriter.Create
-  );
-  CheckEqual('users', GHandlerCalled, 'group route matched at full path');
+  try
+    LGroup.Get('/users', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'users';
+    end);
+    GHandlerCalled := '';
+    LReq := THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/v1/users'),
+      hvHttp11, NewHttpHeaders, nil, 0);
+    LWriter := TMockResponseWriter.Create;
+    LRouter.ServeHTTP(LReq, LWriter);
+    CheckEqual('users', GHandlerCalled, 'group route matched at full path');
+  finally
+    LWriter := nil;
+    LReq := nil;
+    LGroup := Default(THttpRouterGroup);
+    LRouter := nil;
+  end;
 end;
 
 procedure TestRouterGroupWithMiddleware;
@@ -882,6 +899,8 @@ var
   LRouter: IHttpRouter;
   LGroup: THttpRouterGroup;
   LMwApplied: Boolean;
+  LReq: IHttpRequest;
+  LWriter: IHttpResponseWriter;
 begin
   LRouter := NewRouter;
   LMwApplied := False;
@@ -895,18 +914,24 @@ begin
       end);
     end)
   ]);
-  LGroup.Get('/test', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    GHandlerCalled := 'test';
-  end);
-  GHandlerCalled := '';
-  LRouter.ServeHTTP(
-    THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/test'),
-      hvHttp11, NewHttpHeaders, nil, 0),
-    TMockResponseWriter.Create
-  );
-  Check(LMwApplied, 'group middleware was applied');
-  CheckEqual('test', GHandlerCalled, 'handler was called');
+  try
+    LGroup.Get('/test', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'test';
+    end);
+    GHandlerCalled := '';
+    LReq := THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/test'),
+      hvHttp11, NewHttpHeaders, nil, 0);
+    LWriter := TMockResponseWriter.Create;
+    LRouter.ServeHTTP(LReq, LWriter);
+    Check(LMwApplied, 'group middleware was applied');
+    CheckEqual('test', GHandlerCalled, 'handler was called');
+  finally
+    LWriter := nil;
+    LReq := nil;
+    LGroup := Default(THttpRouterGroup);
+    LRouter := nil;
+  end;
 end;
 
 procedure TestRouterGroupNested;
@@ -914,27 +939,36 @@ var
   LRouter: IHttpRouter;
   LApi: THttpRouterGroup;
   LV1: THttpRouterGroup;
+  LReq: IHttpRequest;
+  LWriter: IHttpResponseWriter;
 begin
   LRouter := NewRouter;
   LApi := THttpRouterGroup.Create(LRouter, '/api', []);
   LV1 := LApi.Group('/v1', []);
-  LV1.Get('/items', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  begin
-    GHandlerCalled := 'items';
-  end);
-  GHandlerCalled := '';
-  LRouter.ServeHTTP(
-    THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/v1/items'),
-      hvHttp11, NewHttpHeaders, nil, 0),
-    TMockResponseWriter.Create
-  );
-  CheckEqual('items', GHandlerCalled, 'nested group route matched');
+  try
+    LV1.Get('/items', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'items';
+    end);
+    GHandlerCalled := '';
+    LReq := THttpRequest.Create(hmGet, TUrl.ParseRequestTarget('/api/v1/items'),
+      hvHttp11, NewHttpHeaders, nil, 0);
+    LWriter := TMockResponseWriter.Create;
+    LRouter.ServeHTTP(LReq, LWriter);
+    CheckEqual('items', GHandlerCalled, 'nested group route matched');
+  finally
+    LWriter := nil;
+    LReq := nil;
+    LV1 := Default(THttpRouterGroup);
+    LApi := Default(THttpRouterGroup);
+    LRouter := nil;
+  end;
 end;
 
 procedure TestServeHTTPTrailingSlashNormalized;
 var
   LRouter: IHttpRouter;
-  LW: TMockResponseWriter;
+  LW: IHttpResponseWriter;
   LReq: IHttpRequest;
 begin
   LRouter := NewRouter;

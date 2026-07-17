@@ -3,15 +3,19 @@ unit np_source_database;
 {$mode objfpc}{$H+}
 {$UNITPATH ../../rtl/core/base}
 {$UNITPATH ../../rtl/core/text}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   nextpas.core.text.conv, nextpas.core.exception,
+  nextpas.core.collections.vec,
   np_base_types, np_text_primitives;
 
 type
   TSourceFileId = TCoreId;
+
+  TSourceLineOffsetVec = specialize TVec<LongInt>;
 
   TSourceFileEntry = record
     FileId: TSourceFileId;
@@ -19,10 +23,14 @@ type
     CanonicalPath: string;
     SourceText: string;
     { Line offset table: LineOffsets[I] = byte offset of line I+1 start.
-      Built lazily on first ByteOffsetToLineCol call. }
-    LineOffsets: array of LongInt;
+      Built lazily on first ByteOffsetToLineCol call.
+      Session-long entry ownership on the default heap. }
+    LineOffsets: TSourceLineOffsetVec;
     LineIndexBuilt: Boolean;
   end;
+  PSourceFileEntry = ^TSourceFileEntry;
+
+  TSourceFileEntryVec = specialize TVec<TSourceFileEntry>;
 
   TLineCol = record
     Line: LongInt;
@@ -31,7 +39,7 @@ type
 
   TSourceDatabase = class
   private
-    FFiles: array of TSourceFileEntry;
+    FFiles: TSourceFileEntryVec;
     FLineIndexState: string;
     function FindFileIndexByCanonicalPath(
       const ACanonicalPath: string
@@ -39,6 +47,7 @@ type
     procedure BuildLineIndexForFile(AIndex: LongInt);
   public
     constructor Create;
+    destructor Destroy; override;
     function RegisterRootSource(const SourcePath: string): TSourceFileId;
     function RegisterSource(const SourcePath: string): TSourceFileId;
     function FileCount: LongInt;
@@ -63,8 +72,27 @@ implementation
 constructor TSourceDatabase.Create;
 begin
   inherited Create;
-  SetLength(FFiles, 0);
+  FFiles := TSourceFileEntryVec.Create;
   FLineIndexState := 'available';
+end;
+
+destructor TSourceDatabase.Destroy;
+var
+  Index: LongInt;
+  Entry: PSourceFileEntry;
+begin
+  if FFiles <> nil then
+  begin
+    for Index := 0 to LongInt(FFiles.Count) - 1 do
+    begin
+      Entry := FFiles.GetPtr(SizeUInt(Index));
+      Entry^.LineOffsets.Free;
+      Entry^.LineOffsets := nil;
+    end;
+  end;
+  FFiles.Free;
+  FFiles := nil;
+  inherited Destroy;
 end;
 
 function TSourceDatabase.RegisterRootSource(const SourcePath: string): TSourceFileId;
@@ -78,8 +106,10 @@ function TSourceDatabase.FindFileIndexByCanonicalPath(
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FFiles) - 1 do
-    if FFiles[Index].CanonicalPath = ACanonicalPath then
+  if FFiles = nil then
+    Exit(-1);
+  for Index := 0 to LongInt(FFiles.Count) - 1 do
+    if FFiles[SizeUInt(Index)].CanonicalPath = ACanonicalPath then
       Exit(Index);
 
   Result := -1;
@@ -90,14 +120,16 @@ var
   CanonicalPath: string;
   LoadedCanonicalPath: string;
   SourceText: string;
-  EntryIndex: SizeInt;
+  Entry: TSourceFileEntry;
   ExistingIndex: LongInt;
   ReadResult: TCoreResult;
 begin
+  if FFiles = nil then
+    FFiles := TSourceFileEntryVec.Create;
   CanonicalPath := NormalizeCorePath(SourcePath);
   ExistingIndex := FindFileIndexByCanonicalPath(CanonicalPath);
   if ExistingIndex >= 0 then
-    Exit(FFiles[ExistingIndex].FileId);
+    Exit(FFiles[SizeUInt(ExistingIndex)].FileId);
 
   ReadResult := TryReadCoreTextFile(CanonicalPath, LoadedCanonicalPath, SourceText);
   if not CoreResultIsOk(ReadResult) then
@@ -107,19 +139,21 @@ begin
     );
   CanonicalPath := LoadedCanonicalPath;
 
-  EntryIndex := Length(FFiles);
-  SetLength(FFiles, EntryIndex + 1);
-  FFiles[EntryIndex].FileId := EntryIndex + 1;
-  FFiles[EntryIndex].DisplayPath := SourcePath;
-  FFiles[EntryIndex].CanonicalPath := CanonicalPath;
-  FFiles[EntryIndex].SourceText := SourceText;
-  FFiles[EntryIndex].LineIndexBuilt := False;
-  Result := FFiles[EntryIndex].FileId;
+  Entry := Default(TSourceFileEntry);
+  Entry.FileId := TSourceFileId(LongInt(FFiles.Count) + 1);
+  Entry.DisplayPath := SourcePath;
+  Entry.CanonicalPath := CanonicalPath;
+  Entry.SourceText := SourceText;
+  Entry.LineIndexBuilt := False;
+  FFiles.Push(Entry);
+  Result := Entry.FileId;
 end;
 
 function TSourceDatabase.FileCount: LongInt;
 begin
-  Result := Length(FFiles);
+  if FFiles = nil then
+    Exit(0);
+  Result := LongInt(FFiles.Count);
 end;
 
 function TSourceDatabase.LineIndexState: string;
@@ -129,7 +163,7 @@ end;
 
 function TSourceDatabase.RootFileId: TSourceFileId;
 begin
-  if Length(FFiles) = 0 then
+  if (FFiles = nil) or (FFiles.Count = 0) then
     Exit(0);
 
   Result := FFiles[0].FileId;
@@ -137,7 +171,7 @@ end;
 
 function TSourceDatabase.RootSourceText: string;
 begin
-  if Length(FFiles) = 0 then
+  if (FFiles = nil) or (FFiles.Count = 0) then
     Exit('');
 
   Result := FFiles[0].SourceText;
@@ -145,7 +179,7 @@ end;
 
 function TSourceDatabase.RootSourceCanonicalPath: string;
 begin
-  if Length(FFiles) = 0 then
+  if (FFiles = nil) or (FFiles.Count = 0) then
     Exit('');
 
   Result := FFiles[0].CanonicalPath;
@@ -157,9 +191,11 @@ function TSourceDatabase.CanonicalPathForFileId(
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FFiles) - 1 do
-    if FFiles[Index].FileId = AFileId then
-      Exit(FFiles[Index].CanonicalPath);
+  if FFiles = nil then
+    Exit('');
+  for Index := 0 to LongInt(FFiles.Count) - 1 do
+    if FFiles[SizeUInt(Index)].FileId = AFileId then
+      Exit(FFiles[SizeUInt(Index)].CanonicalPath);
 
   Result := '';
 end;
@@ -170,58 +206,57 @@ function TSourceDatabase.SourceTextForFileId(
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FFiles) - 1 do
-    if FFiles[Index].FileId = AFileId then
-      Exit(FFiles[Index].SourceText);
+  if FFiles = nil then
+    Exit('');
+  for Index := 0 to LongInt(FFiles.Count) - 1 do
+    if FFiles[SizeUInt(Index)].FileId = AFileId then
+      Exit(FFiles[SizeUInt(Index)].SourceText);
 
   Result := '';
 end;
 
 procedure TSourceDatabase.BuildLineIndexForFile(AIndex: LongInt);
 var
+  Entry: PSourceFileEntry;
   Src: string;
-  I, Len, LineCount: LongInt;
+  I, Len: LongInt;
 begin
-  if FFiles[AIndex].LineIndexBuilt then
+  Entry := FFiles.GetPtr(SizeUInt(AIndex));
+  if Entry^.LineIndexBuilt then
     Exit;
-  Src := FFiles[AIndex].SourceText;
+  Src := Entry^.SourceText;
   Len := Length(Src);
   { Worst case: every char is a newline → Len+1 entries }
-  SetLength(FFiles[AIndex].LineOffsets, Len + 1);
-  FFiles[AIndex].LineOffsets[0] := 0;  { Line 1 starts at offset 0 }
-  LineCount := 1;
+  if Entry^.LineOffsets = nil then
+    Entry^.LineOffsets := TSourceLineOffsetVec.Create(SizeUInt(Len + 1))
+  else
+  begin
+    Entry^.LineOffsets.Clear;
+    Entry^.LineOffsets.EnsureCapacity(SizeUInt(Len + 1));
+  end;
+  Entry^.LineOffsets.Push(0);  { Line 1 starts at offset 0 }
   I := 1;
   while I <= Len do
   begin
     if Src[I] = #10 then
     begin
-      if LineCount >= Length(FFiles[AIndex].LineOffsets) then
-        SetLength(FFiles[AIndex].LineOffsets, LineCount + 256);
-      FFiles[AIndex].LineOffsets[LineCount] := I;  { next line starts after \n }
-      Inc(LineCount);
+      Entry^.LineOffsets.Push(I);  { next line starts after \n }
       { Handle \r\n: skip the \r if it's before the \n }
     end
     else if (Src[I] = #13) and (I < Len) and (Src[I + 1] = #10) then
     begin
       { \r\n pair: line ends at \n, which is I+1 }
-      if LineCount >= Length(FFiles[AIndex].LineOffsets) then
-        SetLength(FFiles[AIndex].LineOffsets, LineCount + 256);
-      FFiles[AIndex].LineOffsets[LineCount] := I + 1;
-      Inc(LineCount);
+      Entry^.LineOffsets.Push(I + 1);
       Inc(I);  { skip the \n }
     end
     else if (Src[I] = #13) then
     begin
       { Bare \r (old Mac style) }
-      if LineCount >= Length(FFiles[AIndex].LineOffsets) then
-        SetLength(FFiles[AIndex].LineOffsets, LineCount + 256);
-      FFiles[AIndex].LineOffsets[LineCount] := I;
-      Inc(LineCount);
+      Entry^.LineOffsets.Push(I);
     end;
     Inc(I);
   end;
-  SetLength(FFiles[AIndex].LineOffsets, LineCount);
-  FFiles[AIndex].LineIndexBuilt := True;
+  Entry^.LineIndexBuilt := True;
 end;
 
 function TSourceDatabase.ByteOffsetToLineCol(
@@ -230,21 +265,25 @@ function TSourceDatabase.ByteOffsetToLineCol(
 ): TLineCol;
 var
   FileIdx, Lo, Hi, Mid: LongInt;
+  Entry: PSourceFileEntry;
 begin
   Result.Line := 1;
   Result.Column := 1;
   FileIdx := AFileId - 1;  { FileId is 1-based }
-  if (FileIdx < 0) or (FileIdx >= Length(FFiles)) then
+  if (FFiles = nil) or (FileIdx < 0) or (FileIdx >= LongInt(FFiles.Count)) then
     Exit;
   BuildLineIndexForFile(FileIdx);
+  Entry := FFiles.GetPtr(SizeUInt(FileIdx));
+  if (Entry^.LineOffsets = nil) or (Entry^.LineOffsets.Count = 0) then
+    Exit;
   { Binary search: find last line whose offset <= AByteOffset }
   Lo := 0;
-  Hi := Length(FFiles[FileIdx].LineOffsets) - 1;
+  Hi := LongInt(Entry^.LineOffsets.Count) - 1;
   Mid := 0;
   while Lo <= Hi do
   begin
     Mid := (Lo + Hi) div 2;
-    if FFiles[FileIdx].LineOffsets[Mid] <= AByteOffset then
+    if Entry^.LineOffsets[SizeUInt(Mid)] <= AByteOffset then
     begin
       Lo := Mid + 1;
     end
@@ -255,7 +294,7 @@ begin
   if Hi < 0 then
     Hi := 0;
   Result.Line := Hi + 1;  { 1-based line number }
-  Result.Column := AByteOffset - FFiles[FileIdx].LineOffsets[Hi] + 1;  { 1-based column }
+  Result.Column := AByteOffset - Entry^.LineOffsets[SizeUInt(Hi)] + 1;  { 1-based column }
 end;
 
 function TSourceDatabase.DisplayPathForFileId(
@@ -264,9 +303,11 @@ function TSourceDatabase.DisplayPathForFileId(
 var
   Index: LongInt;
 begin
-  for Index := 0 to Length(FFiles) - 1 do
-    if FFiles[Index].FileId = AFileId then
-      Exit(FFiles[Index].DisplayPath);
+  if FFiles = nil then
+    Exit('');
+  for Index := 0 to LongInt(FFiles.Count) - 1 do
+    if FFiles[SizeUInt(Index)].FileId = AFileId then
+      Exit(FFiles[SizeUInt(Index)].DisplayPath);
   Result := '';
 end;
 

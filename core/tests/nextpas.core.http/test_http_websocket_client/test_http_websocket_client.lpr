@@ -98,7 +98,7 @@ begin
     LWs := UpgradeWebSocket(AReq, AW);
     LF := LWs.ReadFrame;
     if LF.Opcode = wsOpText then
-      LWs.WriteText(LF.Payload);
+      LWs.WriteText(UTF8BytesToString(LF.Payload));
     LWs.Close(1000, '');
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
@@ -111,7 +111,7 @@ begin
       LWs.WriteText('hello');
       LFrame := LWs.ReadFrame;
       CheckEqual(Ord(wsOpText), Ord(LFrame.Opcode), 'opcode text');
-      CheckEqual('hello', LFrame.Payload, 'payload hello');
+      CheckEqual('hello', UTF8BytesToString(LFrame.Payload), 'payload hello');
 
       { Close }
       LWs.Close(1000, 'done');
@@ -140,7 +140,7 @@ begin
     LF: TWebSocketFrame;
   begin
     LWs := UpgradeWebSocket(AReq, AW);
-    LWs.Ping('server-ping');
+    LWs.Ping(StringToUTF8Bytes('server-ping'));
     LF := LWs.ReadFrame;
     if LF.Opcode = wsOpPong then
       LWs.WriteText('pong-received');
@@ -155,15 +155,15 @@ begin
       { Server sends ping, client receives it }
       LFrame := LWs.ReadFrame;
       CheckEqual(Ord(wsOpPing), Ord(LFrame.Opcode), 'opcode ping');
-      CheckEqual('server-ping', LFrame.Payload, 'ping payload');
+      CheckEqual('server-ping', UTF8BytesToString(LFrame.Payload), 'ping payload');
 
       { Client sends pong }
-      LWs.Pong('server-ping');
+      LWs.Pong(StringToUTF8Bytes('server-ping'));
 
       { Server sends confirmation }
       LFrame := LWs.ReadFrame;
       CheckEqual(Ord(wsOpText), Ord(LFrame.Opcode), 'opcode text');
-      CheckEqual('pong-received', LFrame.Payload, 'confirmation');
+      CheckEqual('pong-received', UTF8BytesToString(LFrame.Payload), 'confirmation');
 
       { Server closes }
       LFrame := LWs.ReadFrame;

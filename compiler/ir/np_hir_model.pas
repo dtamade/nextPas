@@ -1,11 +1,13 @@
 unit np_hir_model;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
-  np_hir_types;
+  nextpas.core.collections.vec,
+  np_hir_types, np_system_contracts;
 
 type
   THIRValueId = LongInt;
@@ -84,6 +86,8 @@ type
     FieldIndex: LongInt;
     CallTarget: string;
     IntrinsicName: string;
+    HasSystemContract: Boolean;
+    SystemContractKind: TSystemContractKind;
     FloatValue: Double;
     SourceLine: LongInt;
     SourceCol: LongInt;
@@ -95,6 +99,8 @@ type
     TargetBlock: THIRBlockId;
   end;
 
+  THirSwitchCaseVec = specialize TVec<THIRSwitchCase>;
+
   THIRTerminator = record
     Kind: THIRTermKind;
     ReturnValue: THIRValueId;
@@ -102,17 +108,22 @@ type
     TrueBlock: THIRBlockId;
     FalseBlock: THIRBlockId;
     TargetBlock: THIRBlockId;
-    SwitchCases: array of THIRSwitchCase;
+    { Nested product table owned by block terminator (default heap). }
+    SwitchCases: THirSwitchCaseVec;
     DefaultBlock: THIRBlockId;
   end;
+
+  THirInstrVec = specialize TVec<THIRInstr>;
+  THirBlockIdVec = specialize TVec<THIRBlockId>;
 
   THIRBlock = record
     Id: THIRBlockId;
     Name: string;
-    Instrs: array of THIRInstr;
+    { Nested product tables owned by module block entry (default heap). }
+    Instrs: THirInstrVec;
     Terminator: THIRTerminator;
-    Preds: array of THIRBlockId;
-    Succs: array of THIRBlockId;
+    Preds: THirBlockIdVec;
+    Succs: THirBlockIdVec;
   end;
 
   THIRParam = record
@@ -123,12 +134,16 @@ type
     IsConst: Boolean;
   end;
 
+  THirParamVec = specialize TVec<THIRParam>;
+  THirBlockVec = specialize TVec<THIRBlock>;
+
   THIRFunction = record
     Id: THIRFuncId;
     Name: string;
     ReturnTypeId: THIRTypeId;
-    Params: array of THIRParam;
-    Blocks: array of THIRBlock;
+    { Nested product tables owned by module function entry (default heap). }
+    Params: THirParamVec;
+    Blocks: THirBlockVec;
     EntryBlockId: THIRBlockId;
     IsExternal: Boolean;
     ExternalLib: string;
@@ -137,16 +152,21 @@ type
     IsTStringReturnAbi: Boolean;        { 新 TString 24B sret path }
   end;
 
+  THirStringVec = specialize TVec<string>;
+  THirLongIntVec = specialize TVec<LongInt>;
+
   THIRVmtGlobal = record
     ClassName: string;
-    Funcs: array of string;
+    { Nested product table owned by module VMT entry (default heap). }
+    Funcs: THirStringVec;
   end;
 
   THIRImtGlobal = record
     ClassName: string;
     InterfaceName: string;
-    ThunkNames: array of string;
-    ThunkParamCounts: array of LongInt;
+    { Nested product tables owned by module IMT entry (default heap). }
+    ThunkNames: THirStringVec;
+    ThunkParamCounts: THirLongIntVec;
     SlotOffset: LongInt;
   end;
 
@@ -160,18 +180,27 @@ type
     IsThreadVar: Boolean;
   end;
 
+  PHirFunction = ^THIRFunction;
+  PHirBlock = ^THIRBlock;
+  PHirVmtGlobal = ^THIRVmtGlobal;
+  PHirImtGlobal = ^THIRImtGlobal;
+  THirFunctionVec = specialize TVec<THIRFunction>;
+  THirGlobalVec = specialize TVec<THIRGlobal>;
+  THirVmtGlobalVec = specialize TVec<THIRVmtGlobal>;
+  THirImtGlobalVec = specialize TVec<THIRImtGlobal>;
+
   THIRModule = class
   private
     FTypes: THIRTypeTable;
-    FFunctions: array of THIRFunction;
-    FGlobals: array of THIRGlobal;
-    FVmtGlobals: array of THIRVmtGlobal;
-    FImtGlobals: array of THIRImtGlobal;
+    FFunctions: THirFunctionVec;
+    FGlobals: THirGlobalVec;
+    FVmtGlobals: THirVmtGlobalVec;
+    FImtGlobals: THirImtGlobalVec;
     FNextValueId: THIRValueId;
     FNextBlockId: THIRBlockId;
     FNextFuncId: THIRFuncId;
     FModuleName: string;
-    FUnitInitOrder: array of string;
+    FUnitInitOrder: THirStringVec;
   public
     constructor Create(const AName: string);
     destructor Destroy; override;
@@ -226,11 +255,21 @@ type
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
 function MakeTypedOperand(AValueId: THIRValueId; ATypeId: THIRTypeId): THIROperand;
+procedure AssignSystemContract(var AInstr: THIRInstr;
+  AKind: TSystemContractKind);
+function IsSystemContract(const AInstr: THIRInstr;
+  AKind: TSystemContractKind): Boolean;
+function ValidateSystemContractInstr(const AInstr: THIRInstr;
+  ATypes: THIRTypeTable; out AError: string): Boolean;
+function ValidateObjectFreeSequenceContinuation(
+  ARootReceiverValueId, AContinuationReceiverValueId: THIRValueId;
+  const ARootDestroyTarget, AContinuationTarget: string;
+  AContinuationKind: TSystemContractKind; out AError: string): Boolean;
 
 implementation
 
 uses
-  nextpas.core.text.conv;
+  SysUtils, nextpas.core.text.conv;
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
 begin
@@ -244,22 +283,198 @@ begin
   Result.TypeId := ATypeId;
 end;
 
+procedure AssignSystemContract(var AInstr: THIRInstr;
+  AKind: TSystemContractKind);
+var
+  ContractDefinition: TSystemContractDefinition;
+begin
+  ContractDefinition := SystemContractAt(AKind);
+  if ContractDefinition.SemanticName = '' then
+    raise ERangeError.Create('Unknown System contract kind: ' +
+      IntToStr(Ord(AKind)));
+  AInstr.HasSystemContract := True;
+  AInstr.SystemContractKind := AKind;
+  AInstr.IntrinsicName := ContractDefinition.SemanticName;
+end;
+
+function IsSystemContract(const AInstr: THIRInstr;
+  AKind: TSystemContractKind): Boolean;
+begin
+  Result := AInstr.HasSystemContract and
+    (AInstr.SystemContractKind = AKind);
+end;
+
+function ValidateSystemContractInstr(const AInstr: THIRInstr;
+  ATypes: THIRTypeTable; out AError: string): Boolean;
+var
+  ContractDefinition: TSystemContractDefinition;
+  ContractOrdinal: LongInt;
+  OperandType: THIRTypeRec;
+begin
+  AError := '';
+  if not AInstr.HasSystemContract then
+    Exit(True);
+
+  ContractOrdinal := Ord(AInstr.SystemContractKind);
+  if AInstr.Kind <> hikIntrinsic then
+  begin
+    AError := 'system-contract-kind-must-be-intrinsic:' +
+      IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+
+  case AInstr.SystemContractKind of
+    sckObjectFree,
+    sckObjectFreeDestroy,
+    sckObjectFreeCleanup,
+    sckObjectFreeRelease:
+      ;
+  else
+    AError := 'system-contract-kind-unsupported:' +
+      IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+
+  ContractDefinition := SystemContractAt(AInstr.SystemContractKind);
+  if AInstr.IntrinsicName <> ContractDefinition.SemanticName then
+  begin
+    AError := 'system-contract-name-mismatch:' + IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+
+  if Length(AInstr.Operands) <> 1 then
+  begin
+    AError := 'system-contract-operand-count:' + IntToStr(ContractOrdinal) +
+      ':' + IntToStr(Length(AInstr.Operands));
+    Exit(False);
+  end;
+
+  if ATypes = nil then
+  begin
+    AError := 'system-contract-type-table-missing:' +
+      IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+  OperandType := ATypes.GetType(AInstr.Operands[0].TypeId);
+  if OperandType.Kind <> htkPointer then
+  begin
+    AError := 'system-contract-operand-not-pointer:' +
+      IntToStr(ContractOrdinal) + ':' +
+      IntToStr(AInstr.Operands[0].TypeId);
+    Exit(False);
+  end;
+
+  if ((AInstr.SystemContractKind = sckObjectFree) or
+    (AInstr.SystemContractKind = sckObjectFreeDestroy) or
+    (AInstr.SystemContractKind = sckObjectFreeCleanup)) and
+    (AInstr.CallTarget = '') then
+  begin
+    AError := 'system-contract-target-missing:' +
+      IntToStr(ContractOrdinal);
+    Exit(False);
+  end;
+  Result := True;
+end;
+
+function ValidateObjectFreeSequenceContinuation(
+  ARootReceiverValueId, AContinuationReceiverValueId: THIRValueId;
+  const ARootDestroyTarget, AContinuationTarget: string;
+  AContinuationKind: TSystemContractKind; out AError: string): Boolean;
+begin
+  AError := '';
+  if AContinuationReceiverValueId <> ARootReceiverValueId then
+  begin
+    AError := 'system-contract-sequence-receiver-mismatch';
+    Exit(False);
+  end;
+  if (AContinuationKind = sckObjectFreeDestroy) and
+    (not SameText(AContinuationTarget, ARootDestroyTarget)) then
+  begin
+    AError := 'system-contract-sequence-destroy-target-mismatch';
+    Exit(False);
+  end;
+  Result := True;
+end;
+
 constructor THIRModule.Create(const AName: string);
 begin
   inherited Create;
   FModuleName := AName;
   FTypes := THIRTypeTable.Create;
-  SetLength(FFunctions, 0);
-  SetLength(FGlobals, 0);
-  SetLength(FVmtGlobals, 0);
-  SetLength(FImtGlobals, 0);
+  FFunctions := THirFunctionVec.Create;
+  FGlobals := THirGlobalVec.Create;
+  FVmtGlobals := THirVmtGlobalVec.Create;
+  FImtGlobals := THirImtGlobalVec.Create;
+  FUnitInitOrder := THirStringVec.Create;
   FNextValueId := 1;
   FNextBlockId := 1;
   FNextFuncId := 1;
 end;
 
 destructor THIRModule.Destroy;
+var
+  I, BI: SizeInt;
+  Vmt: PHirVmtGlobal;
+  Imt: PHirImtGlobal;
+  Func: PHirFunction;
+  Block: PHirBlock;
 begin
+  FUnitInitOrder.Free;
+  FUnitInitOrder := nil;
+  if FImtGlobals <> nil then
+  begin
+    for I := 0 to SizeInt(FImtGlobals.Count) - 1 do
+    begin
+      Imt := FImtGlobals.GetPtr(SizeUInt(I));
+      Imt^.ThunkNames.Free;
+      Imt^.ThunkNames := nil;
+      Imt^.ThunkParamCounts.Free;
+      Imt^.ThunkParamCounts := nil;
+    end;
+  end;
+  FImtGlobals.Free;
+  FImtGlobals := nil;
+  if FVmtGlobals <> nil then
+  begin
+    for I := 0 to SizeInt(FVmtGlobals.Count) - 1 do
+    begin
+      Vmt := FVmtGlobals.GetPtr(SizeUInt(I));
+      Vmt^.Funcs.Free;
+      Vmt^.Funcs := nil;
+    end;
+  end;
+  FVmtGlobals.Free;
+  FVmtGlobals := nil;
+  FGlobals.Free;
+  FGlobals := nil;
+  if FFunctions <> nil then
+  begin
+    for I := 0 to SizeInt(FFunctions.Count) - 1 do
+    begin
+      Func := FFunctions.GetPtr(SizeUInt(I));
+      Func^.Params.Free;
+      Func^.Params := nil;
+      if Func^.Blocks <> nil then
+      begin
+        for BI := 0 to SizeInt(Func^.Blocks.Count) - 1 do
+        begin
+          Block := Func^.Blocks.GetPtr(SizeUInt(BI));
+          Block^.Instrs.Free;
+          Block^.Instrs := nil;
+          Block^.Preds.Free;
+          Block^.Preds := nil;
+          Block^.Succs.Free;
+          Block^.Succs := nil;
+          Block^.Terminator.SwitchCases.Free;
+          Block^.Terminator.SwitchCases := nil;
+        end;
+      end;
+      Func^.Blocks.Free;
+      Func^.Blocks := nil;
+    end;
+  end;
+  FFunctions.Free;
+  FFunctions := nil;
   FTypes.Free;
   inherited Destroy;
 end;
@@ -289,19 +504,17 @@ end;
 function THIRModule.AddFunction(const AName: string;
   ARetType: THIRTypeId): THIRFuncId;
 var
-  Idx: SizeInt;
+  Func: THIRFunction;
 begin
-  Idx := Length(FFunctions);
-  SetLength(FFunctions, Idx + 1);
-  FFunctions[Idx].Id := FNextFuncId;
-  FFunctions[Idx].Name := AName;
-  FFunctions[Idx].ReturnTypeId := ARetType;
-  FFunctions[Idx].EntryBlockId := 0;
-  FFunctions[Idx].IsExternal := False;
-  FFunctions[Idx].UsesOwnedStringReturnAbi := False;
-  FFunctions[Idx].IsTStringReturnAbi := False;
-  SetLength(FFunctions[Idx].Params, 0);
-  SetLength(FFunctions[Idx].Blocks, 0);
+  Func := Default(THIRFunction);
+  Func.Id := FNextFuncId;
+  Func.Name := AName;
+  Func.ReturnTypeId := ARetType;
+  Func.EntryBlockId := 0;
+  Func.IsExternal := False;
+  Func.UsesOwnedStringReturnAbi := False;
+  Func.IsTStringReturnAbi := False;
+  FFunctions.Push(Func);
   Result := FNextFuncId;
   Inc(FNextFuncId);
 end;
@@ -310,26 +523,34 @@ procedure THIRModule.SetFunctionOwnedStringReturnAbi(AFuncId: THIRFuncId;
   AValue: Boolean);
 var
   I: SizeInt;
+  Func: PHirFunction;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      FFunctions[I].UsesOwnedStringReturnAbi := AValue;
+      Func^.UsesOwnedStringReturnAbi := AValue;
       Exit;
     end;
+  end;
 end;
 
 procedure THIRModule.SetFunctionTStringReturnAbi(AFuncId: THIRFuncId;
   AValue: Boolean);
 var
   I: SizeInt;
+  Func: PHirFunction;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      FFunctions[I].IsTStringReturnAbi := AValue;
+      Func^.IsTStringReturnAbi := AValue;
       Exit;
     end;
+  end;
 end;
 
 procedure THIRModule.SetFunctionExternal(AFuncId: THIRFuncId;
@@ -337,175 +558,228 @@ procedure THIRModule.SetFunctionExternal(AFuncId: THIRFuncId;
   const AExternalName: string);
 var
   I: SizeInt;
+  Func: PHirFunction;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      FFunctions[I].IsExternal := AIsExternal;
-      FFunctions[I].ExternalLib := AExternalLib;
-      FFunctions[I].ExternalName := AExternalName;
+      Func^.IsExternal := AIsExternal;
+      Func^.ExternalLib := AExternalLib;
+      Func^.ExternalName := AExternalName;
       Exit;
     end;
+  end;
 end;
 
 procedure THIRModule.AddFunctionParam(AFuncId: THIRFuncId;
   const AName: string; ATypeId: THIRTypeId;
   AIsVar: Boolean; AIsConst: Boolean);
 var
-  I, Idx: SizeInt;
+  I: SizeInt;
+  Func: PHirFunction;
+  Param: THIRParam;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      Idx := Length(FFunctions[I].Params);
-      SetLength(FFunctions[I].Params, Idx + 1);
-      FFunctions[I].Params[Idx].Name := AName;
-      FFunctions[I].Params[Idx].TypeId := ATypeId;
-      FFunctions[I].Params[Idx].ValueId := NewValue;
-      FFunctions[I].Params[Idx].IsVar := AIsVar;
-      FFunctions[I].Params[Idx].IsConst := AIsConst;
+      if Func^.Params = nil then
+        Func^.Params := THirParamVec.Create;
+      Param.Name := AName;
+      Param.TypeId := ATypeId;
+      Param.ValueId := NewValue;
+      Param.IsVar := AIsVar;
+      Param.IsConst := AIsConst;
+      Func^.Params.Push(Param);
       Exit;
     end;
+  end;
 end;
 
 function THIRModule.AddBlock(AFuncId: THIRFuncId;
   const AName: string): THIRBlockId;
 var
-  I, Idx: SizeInt;
+  I: SizeInt;
+  Func: PHirFunction;
+  Block: THIRBlock;
 begin
   Result := NewBlockId;
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      Idx := Length(FFunctions[I].Blocks);
-      SetLength(FFunctions[I].Blocks, Idx + 1);
-      FFunctions[I].Blocks[Idx].Id := Result;
-      FFunctions[I].Blocks[Idx].Name := AName;
-      SetLength(FFunctions[I].Blocks[Idx].Instrs, 0);
-      SetLength(FFunctions[I].Blocks[Idx].Preds, 0);
-      SetLength(FFunctions[I].Blocks[Idx].Succs, 0);
-      FFunctions[I].Blocks[Idx].Terminator.Kind := htkUnreachable;
+      if Func^.Blocks = nil then
+        Func^.Blocks := THirBlockVec.Create;
+      Block := Default(THIRBlock);
+      Block.Id := Result;
+      Block.Name := AName;
+      Block.Terminator.Kind := htkUnreachable;
+      Func^.Blocks.Push(Block);
       Exit;
     end;
+  end;
 end;
 
 procedure THIRModule.SetEntryBlock(AFuncId: THIRFuncId;
   ABlockId: THIRBlockId);
 var
   I: SizeInt;
+  Func: PHirFunction;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      FFunctions[I].EntryBlockId := ABlockId;
+      Func^.EntryBlockId := ABlockId;
       Exit;
     end;
+  end;
 end;
 
 procedure THIRModule.AddInstr(AFuncId: THIRFuncId; ABlockId: THIRBlockId;
   const AInstr: THIRInstr);
 var
-  FI, BI, Idx: SizeInt;
+  FI, BI: SizeInt;
+  Func: PHirFunction;
+  Block: PHirBlock;
 begin
-  for FI := 0 to High(FFunctions) do
-    if FFunctions[FI].Id = AFuncId then
+  for FI := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(FI));
+    if Func^.Id = AFuncId then
     begin
-      for BI := 0 to High(FFunctions[FI].Blocks) do
-        if FFunctions[FI].Blocks[BI].Id = ABlockId then
+      if Func^.Blocks = nil then
+        Exit;
+      for BI := 0 to SizeInt(Func^.Blocks.Count) - 1 do
+      begin
+        Block := Func^.Blocks.GetPtr(SizeUInt(BI));
+        if Block^.Id = ABlockId then
         begin
-          Idx := Length(FFunctions[FI].Blocks[BI].Instrs);
-          SetLength(FFunctions[FI].Blocks[BI].Instrs, Idx + 1);
-          FFunctions[FI].Blocks[BI].Instrs[Idx] := AInstr;
+          if Block^.Instrs = nil then
+            Block^.Instrs := THirInstrVec.Create;
+          Block^.Instrs.Push(AInstr);
           Exit;
         end;
+      end;
       Exit;
     end;
+  end;
 end;
 
 procedure THIRModule.SetTerminator(AFuncId: THIRFuncId;
   ABlockId: THIRBlockId; const ATerm: THIRTerminator);
 var
   FI, BI: SizeInt;
+  Func: PHirFunction;
+  Block: PHirBlock;
 begin
-  for FI := 0 to High(FFunctions) do
-    if FFunctions[FI].Id = AFuncId then
+  for FI := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(FI));
+    if Func^.Id = AFuncId then
     begin
-      for BI := 0 to High(FFunctions[FI].Blocks) do
-        if FFunctions[FI].Blocks[BI].Id = ABlockId then
+      if Func^.Blocks = nil then
+        Exit;
+      for BI := 0 to SizeInt(Func^.Blocks.Count) - 1 do
+      begin
+        Block := Func^.Blocks.GetPtr(SizeUInt(BI));
+        if Block^.Id = ABlockId then
         begin
-          FFunctions[FI].Blocks[BI].Terminator := ATerm;
+          if Block^.Terminator.SwitchCases <> ATerm.SwitchCases then
+          begin
+            Block^.Terminator.SwitchCases.Free;
+            Block^.Terminator.SwitchCases := nil;
+          end;
+          Block^.Terminator := ATerm;
           Exit;
         end;
+      end;
       Exit;
     end;
+  end;
 end;
 
 procedure THIRModule.AddGlobal(const AName: string; ATypeId: THIRTypeId;
   AIsThreadVar: Boolean);
 var
-  Idx: SizeInt;
+  Global: THIRGlobal;
 begin
-  Idx := Length(FGlobals);
-  SetLength(FGlobals, Idx + 1);
-  FGlobals[Idx].Name := AName;
-  FGlobals[Idx].TypeId := ATypeId;
-  FGlobals[Idx].ValueId := NewValue;
-  FGlobals[Idx].HasInit := False;
-  FGlobals[Idx].IsThreadVar := AIsThreadVar;
+  Global := Default(THIRGlobal);
+  Global.Name := AName;
+  Global.TypeId := ATypeId;
+  Global.ValueId := NewValue;
+  Global.HasInit := False;
+  Global.IsThreadVar := AIsThreadVar;
+  FGlobals.Push(Global);
 end;
 
 function THIRModule.FunctionCount: LongInt;
 begin
-  Result := Length(FFunctions);
+  if FFunctions = nil then
+    Exit(0);
+  Result := LongInt(FFunctions.Count);
 end;
 
 function THIRModule.FunctionAt(AIndex: LongInt): THIRFunction;
 begin
-  Result := FFunctions[AIndex];
+  Result := FFunctions[SizeUInt(AIndex)];
 end;
 
 function THIRModule.FindFunctionReturnType(const AName: string): THIRTypeId;
 var
   I: LongInt;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Name = AName then
-      Exit(FFunctions[I].ReturnTypeId);
+  for I := 0 to LongInt(FFunctions.Count) - 1 do
+    if FFunctions[SizeUInt(I)].Name = AName then
+      Exit(FFunctions[SizeUInt(I)].ReturnTypeId);
   Result := 0;
 end;
 
 function THIRModule.GlobalCount: LongInt;
 begin
-  Result := Length(FGlobals);
+  if FGlobals = nil then
+    Exit(0);
+  Result := LongInt(FGlobals.Count);
 end;
 
 function THIRModule.GlobalAt(AIndex: LongInt): THIRGlobal;
 begin
-  Result := FGlobals[AIndex];
+  Result := FGlobals[SizeUInt(AIndex)];
 end;
 
 procedure THIRModule.AddVmtGlobal(const AClassName: string; const AFuncs: array of string);
 var
   Idx, I: LongInt;
+  Entry: THIRVmtGlobal;
 begin
-  for Idx := 0 to Length(FVmtGlobals) - 1 do
-    if FVmtGlobals[Idx].ClassName = AClassName then Exit;
-  Idx := Length(FVmtGlobals);
-  SetLength(FVmtGlobals, Idx + 1);
-  FVmtGlobals[Idx].ClassName := AClassName;
-  SetLength(FVmtGlobals[Idx].Funcs, Length(AFuncs));
+  for Idx := 0 to LongInt(FVmtGlobals.Count) - 1 do
+    if FVmtGlobals[SizeUInt(Idx)].ClassName = AClassName then Exit;
+  Entry := Default(THIRVmtGlobal);
+  Entry.ClassName := AClassName;
+  if Length(AFuncs) > 0 then
+    Entry.Funcs := THirStringVec.Create(SizeUInt(Length(AFuncs)))
+  else
+    Entry.Funcs := THirStringVec.Create;
   for I := 0 to High(AFuncs) do
-    FVmtGlobals[Idx].Funcs[I] := AFuncs[I];
+    Entry.Funcs.Push(AFuncs[I]);
+  FVmtGlobals.Push(Entry);
 end;
 
 function THIRModule.VmtGlobalCount: LongInt;
 begin
-  Result := Length(FVmtGlobals);
+  if FVmtGlobals = nil then
+    Exit(0);
+  Result := LongInt(FVmtGlobals.Count);
 end;
 
 function THIRModule.VmtGlobalAt(AIndex: LongInt): THIRVmtGlobal;
 begin
-  Result := FVmtGlobals[AIndex];
+  Result := FVmtGlobals[SizeUInt(AIndex)];
 end;
 
 procedure THIRModule.AddImtGlobal(const AClassName, AInterfaceName: string;
@@ -513,52 +787,66 @@ procedure THIRModule.AddImtGlobal(const AClassName, AInterfaceName: string;
   const AParamCounts: array of LongInt; ASlotOffset: LongInt);
 var
   Idx, I: LongInt;
+  Entry: THIRImtGlobal;
 begin
-  for Idx := 0 to Length(FImtGlobals) - 1 do
-    if (FImtGlobals[Idx].ClassName = AClassName) and
-      (FImtGlobals[Idx].InterfaceName = AInterfaceName) then Exit;
-  Idx := Length(FImtGlobals);
-  SetLength(FImtGlobals, Idx + 1);
-  FImtGlobals[Idx].ClassName := AClassName;
-  FImtGlobals[Idx].InterfaceName := AInterfaceName;
-  FImtGlobals[Idx].SlotOffset := ASlotOffset;
-  SetLength(FImtGlobals[Idx].ThunkNames, Length(AThunkNames));
-  SetLength(FImtGlobals[Idx].ThunkParamCounts, Length(AParamCounts));
+  for Idx := 0 to LongInt(FImtGlobals.Count) - 1 do
+    if (FImtGlobals[SizeUInt(Idx)].ClassName = AClassName) and
+      (FImtGlobals[SizeUInt(Idx)].InterfaceName = AInterfaceName) then Exit;
+  Entry := Default(THIRImtGlobal);
+  Entry.ClassName := AClassName;
+  Entry.InterfaceName := AInterfaceName;
+  Entry.SlotOffset := ASlotOffset;
+  if Length(AThunkNames) > 0 then
+    Entry.ThunkNames := THirStringVec.Create(SizeUInt(Length(AThunkNames)))
+  else
+    Entry.ThunkNames := THirStringVec.Create;
+  if Length(AParamCounts) > 0 then
+    Entry.ThunkParamCounts := THirLongIntVec.Create(SizeUInt(Length(AParamCounts)))
+  else
+    Entry.ThunkParamCounts := THirLongIntVec.Create;
   for I := 0 to High(AThunkNames) do
-    FImtGlobals[Idx].ThunkNames[I] := AThunkNames[I];
+    Entry.ThunkNames.Push(AThunkNames[I]);
   for I := 0 to High(AParamCounts) do
-    FImtGlobals[Idx].ThunkParamCounts[I] := AParamCounts[I];
+    Entry.ThunkParamCounts.Push(AParamCounts[I]);
+  FImtGlobals.Push(Entry);
 end;
 
 function THIRModule.ImtGlobalCount: LongInt;
 begin
-  Result := Length(FImtGlobals);
+  if FImtGlobals = nil then
+    Exit(0);
+  Result := LongInt(FImtGlobals.Count);
 end;
 
 function THIRModule.ImtGlobalAt(AIndex: LongInt): THIRImtGlobal;
 begin
-  Result := FImtGlobals[AIndex];
+  Result := FImtGlobals[SizeUInt(AIndex)];
 end;
 
 procedure THIRModule.SetUnitInitOrder(const AOrder: array of string);
 var
   I: LongInt;
 begin
-  SetLength(FUnitInitOrder, Length(AOrder));
+  if FUnitInitOrder = nil then
+    FUnitInitOrder := THirStringVec.Create;
+  FUnitInitOrder.Clear;
   for I := 0 to High(AOrder) do
-    FUnitInitOrder[I] := AOrder[I];
+    FUnitInitOrder.Push(AOrder[I]);
 end;
 
 function THIRModule.UnitInitOrderCount: LongInt;
 begin
-  Result := Length(FUnitInitOrder);
+  if FUnitInitOrder = nil then
+    Exit(0);
+  Result := LongInt(FUnitInitOrder.Count);
 end;
 
 function THIRModule.UnitInitOrderAt(const AIndex: LongInt): string;
 begin
-  if (AIndex < 0) or (AIndex >= Length(FUnitInitOrder)) then
+  if (FUnitInitOrder = nil) or (AIndex < 0) or
+    (AIndex >= LongInt(FUnitInitOrder.Count)) then
     Exit('');
-  Result := FUnitInitOrder[AIndex];
+  Result := FUnitInitOrder[SizeUInt(AIndex)];
 end;
 
 end.

@@ -52,16 +52,29 @@ uses
   nextpas.core.text.unicode.casefold,
   nextpas.core.text.unicode.normalize,
   nextpas.core.text.unicode.script,
-  nextpas.core.text.unicode.block;
+  nextpas.core.text.unicode.block,
+  nextpas.core.sync;
 
 var
   FUnicodeData: IUnicodeDataManager;
+  FCritSection: TRTLCriticalSection;
+  FInitialized: Boolean = False;
 
 function UnicodeData: IUnicodeDataManager;
 begin
-  if FUnicodeData = nil then
-    FUnicodeData := TUnicodeDataManager.Create;
-  Result := FUnicodeData;
+  if not FInitialized then
+  begin
+    System.InitCriticalSection(FCritSection);
+    FInitialized := True;
+  end;
+  System.EnterCriticalSection(FCritSection);
+  try
+    if FUnicodeData = nil then
+      FUnicodeData := TUnicodeDataManager.Create;
+    Result := FUnicodeData;
+  finally
+    System.LeaveCriticalSection(FCritSection);
+  end;
 end;
 
 { TUnicodeDataManager }
@@ -112,26 +125,35 @@ begin
 end;
 
 function TUnicodeDataManager.GetDecompositionMapping(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap; out AIsCompatibility: Boolean): Byte;
+var
+  LBuf: array[0..17] of TUnicodeCodepoint;
+  LLen: Byte;
+  LI: Byte;
 begin
-  // 未实现：normalize.pas 使用独立的数据表，不依赖此接口
-  Assert(False, 'GetDecompositionMapping not implemented — use normalize.pas directly');
-  AIsCompatibility := False;
-  ADst[0] := ACp;
-  Result := 1;
+  if nextpas.core.text.unicode.normalize.GetDecompositionMapping(ACp, LBuf, LLen, AIsCompatibility) then
+  begin
+    // TCaseFoldMap 最多 8 个码点，足够覆盖绝大多数分解
+    if LLen > 8 then
+      LLen := 8;
+    for LI := 0 to LLen - 1 do
+      ADst[LI] := LBuf[LI];
+    Result := LLen;
+  end
+  else
+  begin
+    AIsCompatibility := False;
+    Result := 0;
+  end;
 end;
 
 function TUnicodeDataManager.GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte;
 begin
-  // 未实现：normalize.pas 使用独立的数据表，不依赖此接口
-  Assert(False, 'GetCanonicalCombiningClass not implemented — use normalize.pas directly');
-  Result := 0;
+  Result := nextpas.core.text.unicode.normalize.GetCanonicalCombiningClass(ACp);
 end;
 
 function TUnicodeDataManager.GetCompositionExclusion(const ACp: TUnicodeCodepoint): Boolean;
 begin
-  // 未实现：normalize.pas 使用独立的数据表，不依赖此接口
-  Assert(False, 'GetCompositionExclusion not implemented — use normalize.pas directly');
-  Result := False;
+  Result := nextpas.core.text.unicode.normalize.IsCompositionExcluded(ACp);
 end;
 
 end.

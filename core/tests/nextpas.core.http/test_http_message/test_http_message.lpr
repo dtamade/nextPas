@@ -103,7 +103,7 @@ begin
   Move('hello-world'[1], LData[0], 11);
   LBody := CreateBytesStreamFrom(LData);
 
-  LReq := NewRequest(hmPost, LUrl, LHeaders, LBody as IReader, 11);
+  LReq := THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Body(LBody).ContentLength(11).Build;
 
   CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
     'request helper method');
@@ -133,8 +133,7 @@ begin
   Move('hello'[1], LData[0], 5);
   LBody := CreateBytesStreamFrom(LData);
 
-  LReq := NewRequest(hmPost, 'http://example.com/api/users',
-    LHeaders, LBody as IReader, 5);
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.com/api/users').Headers(LHeaders).Body(LBody).ContentLength(5).Build;
 
   CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
     'string URL request helper with body method');
@@ -158,7 +157,7 @@ begin
   LHeaders := NewHttpHeaders;
   LHeaders.SetHeader('x-client', 'header-only');
 
-  LReq := NewRequest(hmGet, LUrl, LHeaders);
+  LReq := THttpRequestBuilder.Create(hmGet, LUrl.ToString).Headers(LHeaders).Build;
 
   CheckEqual(Int64(Ord(hmGet)), Int64(Ord(LReq.Method)),
     'headers-only request helper method');
@@ -180,7 +179,7 @@ begin
   LHeaders := NewHttpHeaders;
   LHeaders.SetHeader('x-client', 'header-only-url');
 
-  LReq := NewRequest(hmHead, 'http://example.com/ping?x=1', LHeaders);
+  LReq := THttpRequestBuilder.Create(hmHead, 'http://example.com/ping?x=1').Headers(LHeaders).Build;
 
   CheckEqual(Int64(Ord(hmHead)), Int64(Ord(LReq.Method)),
     'string URL headers-only helper method');
@@ -202,7 +201,7 @@ var
 begin
   LUrl := TUrl.Parse('http://example.com/api/users');
 
-  LReq := NewRequest(hmPost, LUrl, nil);
+  LReq := THttpRequestBuilder.Create(hmPost, LUrl.ToString).Body('').Build;
 
   CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
     'nil third argument helper method');
@@ -213,7 +212,7 @@ begin
     'nil third argument helper stores zero content-length');
   Check(LReq.Body <> nil, 'nil third argument helper preserves bytes helper body');
 
-  LReq := NewRequest(hmPut, 'http://example.com/upload?x=1', nil);
+  LReq := THttpRequestBuilder.Create(hmPut, 'http://example.com/upload?x=1').Body('').Build;
 
   CheckEqual(Int64(Ord(hmPut)), Int64(Ord(LReq.Method)),
     'string URL nil third argument helper method');
@@ -240,7 +239,7 @@ begin
   LHeaders := NewHttpHeaders;
   LHeaders.SetHeader('x-client', 'string-body');
 
-  LReq := NewRequest(hmPost, LUrl, LHeaders, 'hello');
+  LReq := THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Body('hello').Build;
 
   CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
     'string body request helper method');
@@ -275,7 +274,7 @@ begin
   LBody[3] := 0;
   LBody[4] := 255;
 
-  LReq := NewRequest(hmPost, LUrl, LHeaders, LBody);
+  LReq := THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Body(LBody).Build;
 
   CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
     'bytes body request helper method');
@@ -304,7 +303,7 @@ begin
   LBody[0] := Ord('o');
   LBody[1] := Ord('k');
 
-  LReq := NewRequest(hmPut, 'http://example.com/upload?x=1', LHeaders, LBody);
+  LReq := THttpRequestBuilder.Create(hmPut, 'http://example.com/upload?x=1').Headers(LHeaders).Body(LBody).Build;
 
   CheckEqual(Int64(Ord(hmPut)), Int64(Ord(LReq.Method)),
     'string URL bytes body helper method');
@@ -327,7 +326,7 @@ var
 begin
   LUrl := TUrl.Parse('http://example.com/api/users');
 
-  LReq := NewRequest(hmPost, LUrl, 'hello');
+  LReq := THttpRequestBuilder.Create(hmPost, LUrl.ToString).Body('hello').Build;
 
   CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
     'string body without headers helper method');
@@ -360,7 +359,7 @@ begin
   LBody[1] := 0;
   LBody[2] := 255;
 
-  LReq := NewRequest(hmPatch, LUrl, LBody);
+  LReq := THttpRequestBuilder.Create(hmPatch, LUrl.ToString).Body(LBody).ContentLength(0).Build;
 
   CheckEqual(Int64(Ord(hmPatch)), Int64(Ord(LReq.Method)),
     'bytes body without headers helper method');
@@ -393,7 +392,7 @@ begin
   Move('data'[1], LData[0], 4);
   LBody := CreateBytesStreamFrom(LData);
 
-  LReq := NewRequest(hmPut, LUrl, LBody as IReader, 4);
+  LReq := THttpRequestBuilder.Create(hmPut, LUrl.ToString).Body(LBody).ContentLength(4).Build;
 
   CheckEqual(Int64(Ord(hmPut)), Int64(Ord(LReq.Method)),
     'reader body without headers helper method');
@@ -416,7 +415,7 @@ var
 begin
   LUrl := TUrl.Parse('http://example.com/submit');
 
-  LReq := NewRequest(hmPost, LUrl, 'text/plain; charset=utf-8', 'hello');
+  LReq := THttpRequestBuilder.Create(hmPost, LUrl.ToString).ContentType('text/plain; charset=utf-8').Body('hello').Build;
 
   CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
     'string body with content-type helper method');
@@ -449,8 +448,7 @@ begin
   LBody[1] := 0;
   LBody[2] := 255;
 
-  LReq := NewRequest(hmPatch, 'http://example.com/upload',
-    'application/octet-stream', LBody);
+  LReq := THttpRequestBuilder.Create(hmPatch, 'http://example.com/upload').ContentType('application/octet-stream').Body(LBody).Build;
 
   CheckEqual(Int64(Ord(hmPatch)), Int64(Ord(LReq.Method)),
     'bytes body with content-type helper method');
@@ -485,8 +483,7 @@ begin
   Move('data'[1], LData[0], 4);
   LBody := CreateBytesStreamFrom(LData);
 
-  LReq := NewRequest(hmPut, LUrl, 'application/custom',
-    LBody as IReader, 4);
+  LReq := THttpRequestBuilder.Create(hmPut, LUrl.ToString).ContentType('application/custom').Body(LBody).ContentLength(4).Build;
 
   CheckEqual(Int64(Ord(hmPut)), Int64(Ord(LReq.Method)),
     'reader body with content-type helper method');
@@ -508,7 +505,7 @@ var
   LReq: IHttpRequest;
 begin
   LUrl := TUrl.Parse('http://example.com/health');
-  LReq := NewRequest(hmGet, LUrl, nil, nil, 0);
+  LReq := THttpRequestBuilder.Create(hmGet, LUrl.ToString).Build;
 
   Check(LReq.Headers <> nil, 'request helper creates headers when nil');
   CheckEqual(Int64(0), Int64(LReq.Headers.Count),
@@ -546,9 +543,9 @@ begin
   LUrl := TUrl.Parse('http://example.com/upload');
   LRaised := False;
   try
-    NewRequest(hmPost, LUrl, NewHttpHeaders, nil, -1);
+    THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(NewHttpHeaders).Body(IReader(nil)).ContentLength(-1).Build;
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'request helper rejects negative content-length');
@@ -566,9 +563,9 @@ begin
 
   LRaised := False;
   try
-    NewRequest(hmPost, LUrl, LHeaders, 'hello');
+    THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Body('hello').Build;
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -585,7 +582,7 @@ begin
   LHeaders := NewHttpHeaders;
   LHeaders.SetHeader('content-length', '5');
 
-  LReq := NewRequest(hmPost, LUrl, LHeaders, 'hello');
+  LReq := THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Body('hello').Build;
 
   CheckEqual('5', LReq.Headers.Get('content-length'),
     'request helper preserves matching content-length');
@@ -606,9 +603,9 @@ begin
 
   LRaised := False;
   try
-    NewRequest(hmPost, LUrl, LHeaders, 'hello');
+    THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Body('hello').Build;
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'request helper rejects duplicate content-length headers');
@@ -626,9 +623,9 @@ begin
 
   LRaised := False;
   try
-    NewRequest(hmPost, LUrl, LHeaders, 'hello');
+    THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Body('hello').Build;
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'request helper rejects invalid content-length header');
@@ -646,9 +643,9 @@ begin
 
   LRaised := False;
   try
-    NewRequest(hmPost, LUrl, LHeaders);
+    THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Build;
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -665,7 +662,7 @@ begin
   LHeaders := NewHttpHeaders;
   LHeaders.SetHeader('content-length', '0');
 
-  LReq := NewRequest(hmPost, LUrl, LHeaders);
+  LReq := THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Build;
 
   CheckEqual('0', LReq.Headers.Get('content-length'),
     'headers-only request helper preserves zero content-length');
@@ -685,9 +682,9 @@ begin
 
   LRaised := False;
   try
-    NewRequest(hmPost, LUrl, LHeaders, nil, 5);
+    THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Body(IReader(nil)).ContentLength(5).Build;
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -706,9 +703,9 @@ begin
 
   LRaised := False;
   try
-    NewRequest(hmPost, LUrl, LHeaders, 'hello');
+    THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Body('hello').Build;
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -727,9 +724,9 @@ begin
 
   LRaised := False;
   try
-    NewRequest(hmPost, LUrl, LHeaders);
+    THttpRequestBuilder.Create(hmPost, LUrl.ToString).Headers(LHeaders).Build;
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised,
@@ -970,7 +967,7 @@ begin
   try
     NewResponse(HTTP_STATUS_OK, LHeaders, 'hello');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
 
@@ -990,7 +987,7 @@ begin
   try
     NewResponse(HTTP_STATUS_OK, LHeaders, 'hello');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
 
@@ -1376,7 +1373,7 @@ begin
   try
     HttpWriteResponseBytes(nil, HTTP_STATUS_OK, 'application/octet-stream', LData);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   CheckTrue(LRaised, 'raises on nil writer');
@@ -1392,8 +1389,7 @@ var
 begin
   SetLength(LData, 5);
   Move('hello'[1], LData[0], 5);
-  LReq := NewRequest(hmPost, 'http://example.com/api',
-    'application/octet-stream', LData);
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.com/api').ContentType('application/octet-stream').Body(LData).Build;
   LBody := HttpReadRequestBodyBytes(LReq);
   CheckEqual(Int64(5), Int64(Length(LBody)), 'ReadRequestBodyBytes length');
   CheckEqual(Byte(Ord('h')), LBody[0], 'ReadRequestBodyBytes first byte');
@@ -1405,8 +1401,7 @@ var
   LReq: IHttpRequest;
   LBody: string;
 begin
-  LReq := NewRequest(hmPost, 'http://example.com/api',
-    'text/plain', 'hello world');
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.com/api').ContentType('text/plain').Body('hello world').Build;
   LBody := HttpReadRequestBodyString(LReq);
   CheckEqual('hello world', LBody, 'ReadRequestBodyString content');
 end;
@@ -1416,8 +1411,7 @@ var
   LReq: IHttpRequest;
   LDoc: IJsonDocument;
 begin
-  LReq := NewRequest(hmPost, 'http://example.com/api',
-    'application/json', '{"key":"value"}');
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.com/api').ContentType('application/json').Body('{"key":"value"}').Build;
   LDoc := HttpReadRequestBodyJson(LReq);
   Check(LDoc <> nil, 'ReadRequestBodyJson returns document');
   Check(LDoc.Root.IsValid, 'ReadRequestBodyJson returns valid root');
@@ -1430,8 +1424,7 @@ var
   LReq: IHttpRequest;
   LDoc: IJsonDocument;
 begin
-  LReq := NewRequest(hmPost, 'http://example.com/api',
-    'application/json', '[1,2,3]');
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.com/api').ContentType('application/json').Body('[1,2,3]').Build;
   LDoc := HttpReadRequestBodyJson(LReq);
   Check(LDoc <> nil, 'ReadRequestBodyJson array returns document');
   Check(LDoc.Root.IsArray, 'ReadRequestBodyJson root is array');
@@ -1466,7 +1459,7 @@ begin
   try
     HttpReadRequestBodyBytes(nil);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'ReadRequestBodyBytes nil request raises');
@@ -1480,7 +1473,7 @@ begin
   try
     HttpReadRequestBodyString(nil);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'ReadRequestBodyString nil request raises');
@@ -1491,8 +1484,7 @@ var
   LReq: IHttpRequest;
   LRaised: Boolean;
 begin
-  LReq := NewRequest(hmPost, 'http://example.com/api',
-    'application/json', '{invalid');
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.com/api').ContentType('application/json').Body('{invalid').Build;
   LRaised := False;
   try
     HttpReadRequestBodyJson(LReq);
@@ -1508,8 +1500,7 @@ var
   LReq: IHttpRequest;
   LBody: TBytes;
 begin
-  LReq := NewRequest(hmPost, 'http://example.com/api',
-    'application/octet-stream', '');
+  LReq := THttpRequestBuilder.Create(hmPost, 'http://example.com/api').ContentType('application/octet-stream').Body('').Build;
   LBody := HttpReadRequestBodyBytes(LReq);
   Check(LBody = nil, 'ReadRequestBodyBytes empty body returns nil');
 end;
@@ -1571,7 +1562,7 @@ begin
   try
     HttpRedirect(LW, HTTP_STATUS_FOUND, '');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   CheckTrue(LRaised, 'raises on empty location');
@@ -1585,7 +1576,7 @@ begin
   try
     HttpRedirect(nil, HTTP_STATUS_FOUND, '/page');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   CheckTrue(LRaised, 'raises on nil writer');
@@ -1675,7 +1666,7 @@ begin
   try
     HttpRedirect(nil, HTTP_STATUS_FOUND, '//evil.com/steal');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'Protocol-relative URL must be rejected to prevent open redirect');
@@ -1691,7 +1682,8 @@ begin
   LM := TMockResponseWriter.Create;
   LW := LM;
   HttpWriteErrorResponse(LW, HTTP_STATUS_BAD_REQUEST, 'invalid_input', 'Missing field');
-  CheckEqual('application/json', LM.GetHeaders.Get('content-type'), 'content-type');
+  CheckEqual('application/problem+json', LM.GetHeaders.Get('content-type'),
+    'content-type is RFC 7807 problem+json');
   CheckEqual(Int64(400), Int64(LM.Status), 'status 400');
 end;
 
@@ -1703,8 +1695,9 @@ begin
   LM := TMockResponseWriter.Create;
   LW := LM;
   HttpWriteErrorResponse(LW, HTTP_STATUS_NOT_FOUND, 'not_found', 'Item not found');
-  Check(Pos('"code":"not_found"', LM.Body) > 0, 'body contains code');
-  Check(Pos('"message":"Item not found"', LM.Body) > 0, 'body contains message');
+  Check(Pos('"title":"not_found"', LM.Body) > 0, 'body contains title');
+  Check(Pos('"detail":"Item not found"', LM.Body) > 0, 'body contains detail');
+  Check(Pos('"status":404', LM.Body) > 0, 'body contains status');
 end;
 
 procedure TestErrorBadRequest;
@@ -1716,7 +1709,7 @@ begin
   LW := LM;
   HttpWriteErrorBadRequest(LW, 'Invalid JSON');
   CheckEqual(Int64(400), Int64(LM.Status), 'status 400');
-  Check(Pos('"code":"bad_request"', LM.Body) > 0, 'code is bad_request');
+  Check(Pos('"title":"bad_request"', LM.Body) > 0, 'title is bad_request');
 end;
 
 procedure TestErrorUnauthorized;
@@ -1728,7 +1721,7 @@ begin
   LW := LM;
   HttpWriteErrorUnauthorized(LW, 'Token expired');
   CheckEqual(Int64(401), Int64(LM.Status), 'status 401');
-  Check(Pos('"code":"unauthorized"', LM.Body) > 0, 'code is unauthorized');
+  Check(Pos('"title":"unauthorized"', LM.Body) > 0, 'title is unauthorized');
 end;
 
 procedure TestErrorForbidden;
@@ -1740,7 +1733,7 @@ begin
   LW := LM;
   HttpWriteErrorForbidden(LW, 'Access denied');
   CheckEqual(Int64(403), Int64(LM.Status), 'status 403');
-  Check(Pos('"code":"forbidden"', LM.Body) > 0, 'code is forbidden');
+  Check(Pos('"title":"forbidden"', LM.Body) > 0, 'title is forbidden');
 end;
 
 procedure TestErrorNotFound;
@@ -1752,7 +1745,7 @@ begin
   LW := LM;
   HttpWriteErrorNotFound(LW, 'User not found');
   CheckEqual(Int64(404), Int64(LM.Status), 'status 404');
-  Check(Pos('"code":"not_found"', LM.Body) > 0, 'code is not_found');
+  Check(Pos('"title":"not_found"', LM.Body) > 0, 'title is not_found');
 end;
 
 procedure TestErrorInternal;
@@ -1764,7 +1757,7 @@ begin
   LW := LM;
   HttpWriteErrorInternal(LW, 'Something broke');
   CheckEqual(Int64(500), Int64(LM.Status), 'status 500');
-  Check(Pos('"code":"internal_error"', LM.Body) > 0, 'code is internal_error');
+  Check(Pos('"title":"internal_error"', LM.Body) > 0, 'title is internal_error');
 end;
 
 procedure TestNoContentSets204;
@@ -1788,7 +1781,7 @@ begin
   try
     HttpWriteResponseNoContent(nil);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'raises on nil writer');
@@ -1870,8 +1863,8 @@ begin
   LW := LM;
   HttpWriteErrorTooManyRequests(LW, 'Slow down');
   CheckEqual(Int64(429), Int64(LM.Status), 'status 429');
-  Check(Pos('"code":"too_many_requests"', LM.Body) > 0, 'code is too_many_requests');
-  Check(Pos('Slow down', LM.Body) > 0, 'message preserved');
+  Check(Pos('"title":"too_many_requests"', LM.Body) > 0, 'title is too_many_requests');
+  Check(Pos('Slow down', LM.Body) > 0, 'detail preserved');
 end;
 
 procedure TestErrorConflict;
@@ -1883,8 +1876,8 @@ begin
   LW := LM;
   HttpWriteErrorConflict(LW, 'Resource already exists');
   CheckEqual(Int64(409), Int64(LM.Status), 'status 409');
-  Check(Pos('"code":"conflict"', LM.Body) > 0, 'code is conflict');
-  Check(Pos('Resource already exists', LM.Body) > 0, 'message preserved');
+  Check(Pos('"title":"conflict"', LM.Body) > 0, 'title is conflict');
+  Check(Pos('Resource already exists', LM.Body) > 0, 'detail preserved');
 end;
 
 procedure TestErrorUnprocessableEntity;
@@ -1896,8 +1889,8 @@ begin
   LW := LM;
   HttpWriteErrorUnprocessableEntity(LW, 'Validation failed');
   CheckEqual(Int64(422), Int64(LM.Status), 'status 422');
-  Check(Pos('"code":"unprocessable_entity"', LM.Body) > 0, 'code is unprocessable_entity');
-  Check(Pos('Validation failed', LM.Body) > 0, 'message preserved');
+  Check(Pos('"title":"unprocessable_entity"', LM.Body) > 0, 'title is unprocessable_entity');
+  Check(Pos('Validation failed', LM.Body) > 0, 'detail preserved');
 end;
 
 procedure TestOkSets200;

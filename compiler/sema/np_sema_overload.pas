@@ -9,6 +9,7 @@
 unit np_sema_overload;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
@@ -19,7 +20,8 @@ uses
   np_ast_facade,
   np_semantic_model,
   np_sema_builtins,
-  np_sema_type_check;
+  np_sema_type_check,
+  nextpas.core.collections.vec;
 
 type
   TProcedureBodyEntry = record
@@ -29,9 +31,13 @@ type
     OwnerUnitId: string;
     ScopeId: LongInt;
   end;
-  TProcedureBodyArray = array of TProcedureBodyEntry;
+  { Analyzer owns; overload/ownership/HIR contexts borrow the same TVec. }
+  TProcedureBodyVec = specialize TVec<TProcedureBodyEntry>;
   TTypeIdArray = array of LongInt;
   TStringArray = array of string;
+  { Shared scratch vectors for imported unit tables (analyzer owns, contexts borrow). }
+  TSemaImportedOwnerVec = specialize TVec<string>;
+  TSemaImportedTreeVec = specialize TVec<TGreenTree>;
   TParamSignatureResult = record
     Signature: string;
     ParamCount: LongInt;
@@ -45,9 +51,9 @@ type
     RootAst: TAstFacade;
     CurrentProcessingUnitId: string;
     CurrentScopeId: LongInt;
-    ProcedureBodies: TProcedureBodyArray;
-    ImportedUnitOwners: array of string;
-    ImportedUnitTrees: array of TGreenTree;
+    ProcedureBodies: TProcedureBodyVec;
+    ImportedUnitOwners: TSemaImportedOwnerVec;
+    ImportedUnitTrees: TSemaImportedTreeVec;
     BuiltinRegistry: TBuiltinRegistry;
     PC: LongInt;
   end;
@@ -56,8 +62,8 @@ type
   TSemaImportContext = record
     UnitGraph: TUnitGraph;
     RootAst: TAstFacade;
-    ImportedUnitOwners: array of string;
-    ImportedUnitTrees: array of TGreenTree;
+    ImportedUnitOwners: TSemaImportedOwnerVec;
+    ImportedUnitTrees: TSemaImportedTreeVec;
   end;
 
 function CountDeclParams(const ADecl: TGreenNode): LongInt;
@@ -66,9 +72,9 @@ function DeclAcceptsArgCount(const ADecl: TGreenNode; const AArgCount: LongInt):
 function MangledName(const AName: string; AParamCount: LongInt): string;
 function MangledNameSig(const AName, ASig: string): string;
 function HasOverload(const AName: string;
-  const AProcedureBodies: TProcedureBodyArray): Boolean;
+  const AProcedureBodies: TProcedureBodyVec): Boolean;
 function LookupOverload(const AName: string; AArgCount: LongInt;
-  const AProcedureBodies: TProcedureBodyArray;
+  const AProcedureBodies: TProcedureBodyVec;
   out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
 function TypeIdArrayHasKnownTypes(const ATypeIds: TTypeIdArray): Boolean;
 function GetParamIdentitySignature(const ADecl: TGreenNode): string;

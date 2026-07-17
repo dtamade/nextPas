@@ -8,26 +8,42 @@
  *   2. 对每条语句检查操作数是否在循环外定义
  *   3. 如果所有操作数都是循环不变量 → 提升到 pre-header
  *
+ * LoopBlocks 可挂 phase-scratch IAllocator。
+ *
  * 对标：LLVM LICM, rustc mir::transform::licm
  *}
 
 unit np_mir_pass_licm;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
-  np_mir_model, np_mir_optimize;
+  np_mir_model, np_mir_optimize,
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec;
 
 type
+  TMirBlockIdVec = specialize TVec<TMirBlockId>;
+
   TMirLicmPass = class(TInterfacedObject, IMirOptimizationPass)
+  private
+    FAllocator: IAllocator;
   public
+    constructor Create(AAllocator: IAllocator = nil);
     function Name: string;
     function Run(var AModule: TMirModule): Boolean;
   end;
 
 implementation
+
+constructor TMirLicmPass.Create(AAllocator: IAllocator);
+begin
+  inherited Create;
+  FAllocator := AAllocator;
+end;
 
 function TMirLicmPass.Name: string;
 begin
@@ -38,12 +54,11 @@ end;
 function IsLoopInvariant(
   const AModule: TMirModule;
   const AFunc: TMirFunction;
-  const ALoopBlocks: array of TMirBlockId;
+  ALoopBlocks: TMirBlockIdVec;
   const AValueId: TMirValueId
 ): Boolean;
 var
   BI, SI: LongInt;
-  Blk: TMirBlock;
   InLoop: Boolean;
 begin
   { Value 0 is always invariant (represents void/none) }
@@ -51,12 +66,13 @@ begin
     Exit(True);
 
   { Check if value is defined in any loop block }
-  for BI := 0 to High(AFunc.Blocks) do
+  if AFunc.Blocks <> nil then
+      for BI := 0 to LongInt(AFunc.Blocks.Count) - 1 do
   begin
     { Skip blocks not in the loop }
     InLoop := False;
-    for SI := 0 to High(ALoopBlocks) do
-      if AFunc.Blocks[BI].Id = ALoopBlocks[SI] then
+    for SI := 0 to LongInt(ALoopBlocks.Count) - 1 do
+      if AFunc.Blocks[SizeUInt(BI)].Id = ALoopBlocks[SI] then
       begin
         InLoop := True;
         Break;
@@ -64,8 +80,9 @@ begin
     if not InLoop then
       Continue;
 
-    for SI := 0 to High(AFunc.Blocks[BI].Stmts) do
-      if AFunc.Blocks[BI].Stmts[SI].Dst = AValueId then
+    if AFunc.Blocks[SizeUInt(BI)].Stmts <> nil then
+          for SI := 0 to LongInt(AFunc.Blocks[SizeUInt(BI)].Stmts.Count) - 1 do
+      if AFunc.Blocks[SizeUInt(BI)].Stmts[SizeUInt(SI)].Dst = AValueId then
         Exit(False);  { Defined inside loop → not invariant }
   end;
 
@@ -76,11 +93,9 @@ end;
 function StmtIsLoopInvariant(
   const AModule: TMirModule;
   const AFunc: TMirFunction;
-  const ALoopBlocks: array of TMirBlockId;
+  ALoopBlocks: TMirBlockIdVec;
   const AStmt: TMirStmt
 ): Boolean;
-var
-  I: LongInt;
 begin
   case AStmt.Kind of
     mskAssign:
@@ -101,20 +116,21 @@ end;
 function DetectLoopBlocks(
   const AFunc: TMirFunction;
   const AHeaderBlockId: TMirBlockId;
-  var ALoopBlocks: TMirBlockIdArray
+  ALoopBlocks: TMirBlockIdVec
 ): Boolean;
 var
-  BI, Idx: LongInt;
+  BI: LongInt;
   HeaderIdx: LongInt;
   TargetId: TMirBlockId;
 begin
   Result := False;
-  SetLength(ALoopBlocks, 0);
+  ALoopBlocks.Clear;
 
   { Find the header block index }
   HeaderIdx := -1;
-  for BI := 0 to High(AFunc.Blocks) do
-    if AFunc.Blocks[BI].Id = AHeaderBlockId then
+  if AFunc.Blocks <> nil then
+      for BI := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BI)].Id = AHeaderBlockId then
     begin
       HeaderIdx := BI;
       Break;
@@ -123,20 +139,19 @@ begin
     Exit;
 
   { Simple loop detection: collect all blocks between header and back-edge }
-  Idx := 0;
-  SetLength(ALoopBlocks, 1);
-  ALoopBlocks[0] := AHeaderBlockId;
+  ALoopBlocks.Push(AHeaderBlockId);
 
-  for BI := HeaderIdx + 1 to High(AFunc.Blocks) do
+  if AFunc.Blocks <> nil then
+    for BI := HeaderIdx + 1 to LongInt(AFunc.Blocks.Count) - 1 do
   begin
     TargetId := 0;
-    case AFunc.Blocks[BI].Terminator.Kind of
-      mtkGoto: TargetId := AFunc.Blocks[BI].Terminator.Target;
+    case AFunc.Blocks[SizeUInt(BI)].Terminator.Kind of
+      mtkGoto: TargetId := AFunc.Blocks[SizeUInt(BI)].Terminator.Target;
       mtkIf:
         begin
-          if AFunc.Blocks[BI].Terminator.TrueBlock = AHeaderBlockId then
+          if AFunc.Blocks[SizeUInt(BI)].Terminator.TrueBlock = AHeaderBlockId then
             TargetId := AHeaderBlockId
-          else if AFunc.Blocks[BI].Terminator.FalseBlock = AHeaderBlockId then
+          else if AFunc.Blocks[SizeUInt(BI)].Terminator.FalseBlock = AHeaderBlockId then
             TargetId := AHeaderBlockId;
         end;
     end;
@@ -149,9 +164,7 @@ begin
     end;
 
     { Add block to loop body }
-    Inc(Idx);
-    SetLength(ALoopBlocks, Idx + 1);
-    ALoopBlocks[Idx] := AFunc.Blocks[BI].Id;
+    ALoopBlocks.Push(AFunc.Blocks[SizeUInt(BI)].Id);
   end;
 end;
 
@@ -159,58 +172,70 @@ function TMirLicmPass.Run(var AModule: TMirModule): Boolean;
 var
   FuncIdx, BlkIdx, StmtIdx, LoopBlkIdx: LongInt;
   Fn: TMirFunction;
-  Stmt: TMirStmt;
-  LoopBlocks: TMirBlockIdArray;
+  Stmt, HoistedStmt: TMirStmt;
+  LoopBlocks: TMirBlockIdVec;
   HoistedCount: LongInt;
   Hoisted: Boolean;
 begin
   Result := True;
   HoistedCount := 0;
 
-  for FuncIdx := 0 to AModule.FunctionCount - 1 do
-  begin
-    Fn := AModule.FunctionAt(FuncIdx);
-
-    for BlkIdx := 0 to High(Fn.Blocks) do
+  if FAllocator <> nil then
+    LoopBlocks := TMirBlockIdVec.Create(0, FAllocator)
+  else
+    LoopBlocks := TMirBlockIdVec.Create;
+  try
+    for FuncIdx := 0 to AModule.FunctionCount - 1 do
     begin
-      { Try to detect loop starting at this block }
-      if not DetectLoopBlocks(Fn, Fn.Blocks[BlkIdx].Id, LoopBlocks) then
-        Continue;
-      if Length(LoopBlocks) = 0 then
-        Continue;
+      Fn := AModule.FunctionAt(FuncIdx);
 
-      { For each loop block, check if statements can be hoisted }
-      Hoisted := False;
-      for LoopBlkIdx := 0 to High(LoopBlocks) do
+      if Fn.Blocks <> nil then
+      for BlkIdx := 0 to LongInt(Fn.Blocks.Count) - 1 do
       begin
-        StmtIdx := 0;
-        while StmtIdx < Length(Fn.Blocks[LoopBlkIdx].Stmts) do
+        { Try to detect loop starting at this block }
+        if not DetectLoopBlocks(Fn, Fn.Blocks[SizeUInt(BlkIdx)].Id, LoopBlocks) then
+          Continue;
+        if LoopBlocks.Count = 0 then
+          Continue;
+
+        { For each loop block, check if statements can be hoisted }
+        Hoisted := False;
+        for LoopBlkIdx := 0 to LongInt(LoopBlocks.Count) - 1 do
         begin
-          if not AModule.GetStmt(FuncIdx, LoopBlocks[LoopBlkIdx], StmtIdx, Stmt) then
+          StmtIdx := 0;
+          while (Fn.Blocks[SizeUInt(LoopBlkIdx)].Stmts <> nil) and (StmtIdx < LongInt(Fn.Blocks[SizeUInt(LoopBlkIdx)].Stmts.Count)) do
           begin
+            if not AModule.GetStmt(FuncIdx, LoopBlocks[LoopBlkIdx], StmtIdx, Stmt) then
+            begin
+              Inc(StmtIdx);
+              Continue;
+            end;
+
+            if StmtIsLoopInvariant(AModule, Fn, LoopBlocks, Stmt) then
+            begin
+              { Hoist with cloned Args so both entries own independent TVecs. }
+              HoistedStmt := Stmt;
+              HoistedStmt.Args := CloneMirOperandVec(Stmt.Args);
+              AModule.AddStmt(FuncIdx, LoopBlocks[0], HoistedStmt);
+
+              { Nop original; SetStmt frees previous Args (differs from nil). }
+              FillChar(Stmt, SizeOf(Stmt), 0);
+              Stmt.Kind := mskAssign;
+              Stmt.Src := MirIntConst(0, 32);
+              Stmt.Dst := 0;
+              AModule.SetStmt(FuncIdx, LoopBlocks[LoopBlkIdx], StmtIdx, Stmt);
+
+              Hoisted := True;
+              Inc(HoistedCount);
+            end;
+
             Inc(StmtIdx);
-            Continue;
           end;
-
-          if StmtIsLoopInvariant(AModule, Fn, LoopBlocks, Stmt) then
-          begin
-            { Hoist: move to header block (insert before loop statements) }
-            AModule.AddStmt(FuncIdx, LoopBlocks[0], Stmt);
-
-            { Remove from current position by replacing with nop-style assign }
-            Stmt.Kind := mskAssign;
-            Stmt.Src := MirIntConst(0, 32);
-            Stmt.Dst := 0;
-            AModule.SetStmt(FuncIdx, LoopBlocks[LoopBlkIdx], StmtIdx, Stmt);
-
-            Hoisted := True;
-            Inc(HoistedCount);
-          end;
-
-          Inc(StmtIdx);
         end;
       end;
     end;
+  finally
+    LoopBlocks.Free;
   end;
 
   Result := True;

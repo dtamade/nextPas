@@ -1,6 +1,6 @@
 # nextpas.core.http API Coverage Matrix
 
-最近更新：2026-07-06
+最近更新：2026-07-17
 
 这份矩阵只记录公开 API 的覆盖状态，不替代测试输出。状态含义：
 
@@ -11,141 +11,95 @@
 
 ## 当前结论
 
-- 2026-07-06 API 对标结论：
-  - 已够稳：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` / `IsRunning`
-    的生命周期形状足够清晰，保持同步 facade，不把 Go `net/http` 或 Rust
-    async runtime 细节泄漏到 public contract；handler / middleware / router
-    组合也已符合小接口、可组合、可测试的稳定面。
-  - 已够稳：static serving 与 WebSocket 仍停在 helper/facade 层更合适。当前
-    helper 已有 focused coverage；没有 range、streaming static file、WebSocket
-    extension negotiation 等稳定 contract 前，不扩大成独立 builder 或 service
-    family。
-  - 已够稳：H2/H3 public surface 仍只保留 registry / transport seam 和规划文档。
-    当前 H2 已完整落地为 production-transport-ready 实现，包括：
-    - Frame codec (RFC 9113): 10 种帧类型、13 种错误码、帧验证、padded payload 处理
-    - HPACK (RFC 7541): 编码器/解码器、动态表 MRU 缓存、Huffman 编解码
-    - Stream 状态机: 7 状态、HEADERS/CONTINUATION 组装、trailer 处理
-    - Server session: 客户端 preface 验证、SETTINGS 握手、帧分发、MaxConcurrentStreams 强制、GOAWAY 分裂 last-stream 跟踪
-    - Client transport: 同步 RoundTrip、连接池 (MaxPoolSize-governed)、stale 连接重试、server push 拒绝、PING/GOAWAY 处理
-    - TLS 集成: ALPN `h2` 协商、SNI、session factory seam
-    - 测试: 207 个 focused tests 跨 7 个 suites，所有覆盖缺口已关闭
-    H3 仍被 QUIC 模块阻塞。不创建伪 H3 public API，不用空实现制造”支持”假象。
-  - 继续补齐：landed internal registry 现在也有 future-version positive proof。
-    `test_http_registry` 直接锁住“调用方可注册 custom `hvHttp2` client transport /
-    custom `hvHttp3` server transport，并把它们设为 default version 供 concrete
-    constructor 消费”的 seam contract；`test_http_contract` 又进一步锁住
-    `nextpas.core.http.NewHttpClient(Options)` / `NewHttpServer(Handler, Options)`
-    这两条 facade consumer path 也会吃到同一套 future default 解析。以上都只证明
-    registry readiness，不声明任何内建 H2/H3 protocol implementation 已存在。
-  - 已补齐：client 侧核心 custom request construction gap 已实质收口。当前
-    `NewRequest` public surface 已覆盖 `TUrl` / URL string、headers-only、
-    nil-literal compatibility shim、`IReader + ContentLength`、Pascal `string`
-    body、`TBytes` body、显式 `Content-Type` body helper、以及“不先手造 headers”
-    的 convenience overload；调用方不必再直接构造 concrete `THttpRequest`，
-    就能清晰表达 method、headers、body 与 body length / ownership 形状。
-  - 暂不做：完整 fluent `IHttpRequestBuilder`、per-request timeout / redirect
-    override、form/json helper family、streaming/chunked request body ownership、
-    response charset decoding / sniffing 等扩展仍属于刻意未认领范围；这些能力
-    只有在 contract 足够清晰、能稳定公开时才继续扩面。
-  - 本轮补齐：新增 `NewRequest(Method, Url, Headers, Body, ContentLength)` public
-    helper，经 `nextpas.core.http` facade 转发。nil headers 会创建空 header set；
-    body/positive length 会写入 `content-length`；negative content length 会抛
-    `EArgumentError`。caller-supplied `content-length` 现在必须是单个 numeric
-    value 且匹配 helper body length；duplicate、invalid、overflowing 或
-    conflicting value 都会 fail-fast。caller-supplied `transfer-encoding` 当前也
-    直接拒绝，避免在尚无 streaming/chunked request body ownership API 时构造 H1
-    writer 无法合法发送的请求。传入的 headers 视为 request-owned，helper 可能写入
-    `content-length`，调用方不应把同一 headers 对象复用到不同 request shape。
-    `test_http_message`、`test_http_contract` 和 `test_http_client` 分别锁住
-    helper contract、facade 可见性和 `IHttpClient.Send` live header/body 发送路径。
-  - 本轮补齐：新增 `NewRequest(Method, Url, Headers)` public helper。它只表达
-    method/url/custom headers，保持 nil body、`ContentLength = 0` 且不自动写入
-    `content-length`；调用方不必再为常见 headers-only request 手写
-    `Headers, nil, 0`。`test_http_message`、`test_http_contract` 和
-    `test_http_client` 分别锁住 helper contract、facade 可见性，以及 live
-    round-trip header/path/query 语义与“不自动发布 `content-length` header”这一条
-    client/server contract；显式单个 numeric `content-length: 0` 可保留，positive /
-    invalid / duplicate `content-length` 与任何 `transfer-encoding` 都会被拒绝。
-  - 同步收紧：为避免新增 `Headers` overload 破坏旧的 `NewRequest(Method, Url, nil)`
-    源兼容性，public surface 保留了 nil-literal compatibility shim。`nil` 第三参
-    仍解析成历史 empty-`TBytes` helper 语义，也就是 zero-length body +
-    `content-length: 0`，不会静默落到新的 headers-only contract。对应
-    compile/runtime proof 已加到 `test_http_message` 和 `test_http_contract`。
-  - 继续补齐：`NewRequest(Method, Url)` 与
-    `NewRequest(Method, Url, Headers, Body, ContentLength)` 现在都接受 URL string
-    overload。调用方可以直接用 `NewRequest(hmPost, 'http://...')` 构造
-    `IHttpClient.Send` 请求，不必先手写 `TUrl.Parse`；解析、nil headers、
-    `content-length` 与 negative length 语义沿用同一 helper contract。
-  - 继续补齐：新增 `NewRequest(Method, Url, Headers, BodyText)` public helper。
-    调用方可以用 Pascal string 构造 request body；helper 会复制 string 到
-    in-memory reader 并发布 `Content-Length`，但不自动设置 `Content-Type`。
-    `test_http_message`、`test_http_contract` 与 `test_http_client` 分别锁住
-    helper contract、facade 可见性和 live `IHttpClient.Send` 发送路径。
-  - 继续补齐：新增 `NewRequest(Method, Url, Headers, BodyBytes)` public helper。
-    调用方可以用 `TBytes` 构造 binary request body；helper 会复制 bytes 到
-    in-memory reader 并发布 `Content-Length`，但同样不自动设置 `Content-Type`。
-    `test_http_message` 锁住 `TUrl` 与 URL string overload，`test_http_contract`
-    锁住 facade 可见性，`test_http_client` 锁住 live `IHttpClient.Send` 发送零字节
-    与高字节 payload 的路径。这补齐 Go/Rust 常见 binary body ergonomics，但仍不
-    引入完整 request builder 或 streaming/chunked request body ownership API。
-  - 继续补齐：`NewRequest(Method, Url, Body, ContentLength)`、
-    `NewRequest(Method, Url, BodyText)` 与 `NewRequest(Method, Url, BodyBytes)`
-    现在也直接支持“不先手造 headers”的 public overload。它们复用现有
-    `Headers=nil` contract：自动创建空 header set，只发布 `Content-Length`，
-    但不猜测 `Content-Type`。`test_http_message`、`test_http_contract` 与
-    `test_http_client` 分别锁住 helper contract、facade 可见性和 live
-    `IHttpClient.Send` 发送路径。这样调用方可以像 Go `NewRequest(...)` /
-    Rust 常见 request body helper 那样先表达 method/url/body，再按需决定是否
-    追加 custom headers，而不必为了“无自定义头”也先分配一个 header 容器。
-  - 继续补齐：新增 `NewRequest(Method, Url, ContentType, BodyText)`、
-    `NewRequest(Method, Url, ContentType, BodyBytes)` 与
-    `NewRequest(Method, Url, ContentType, Body, ContentLength)` public helper。
-    这组 overload 解决了“调用方只想声明 request body 的 `Content-Type`，却仍得先
-    手造一个 headers 容器”的剩余 ergonomics 缺口。helper 只发布调用方显式提供的
-    `content-type` 与既有 `content-length`，不再额外猜测其他 header，也不上完整
-    builder family。`test_http_message`、`test_http_contract` 与
-    `test_http_client` 分别锁住 helper contract、facade 可见性和 live
-    `IHttpClient.Send` 发送路径。
-  - 继续收紧：`IHttpClient.Post` / `Put` / `Patch` shortcut 现在共享内部
-    bytes-buffer request helper。它们仍会读取 `IReader` 以发布 `Content-Length`，
-    但不再先 materialize 到 Pascal string 再转回 bytes；`test_http_client` 用
-    source-contract 锁住 single helper 与 no-string-buffer 实现形状，并继续保留
-    live POST / PUT / PATCH 行为覆盖。
-  - 本轮补齐：`IHttpClient.Post` / `Put` / `Patch` 现在也直接接受 Pascal
-    `string` 与 `TBytes` body overload。三种 shortcut body 形状都会发布
-    `Content-Length`，并转发调用方显式提供的非空 `Content-Type`；空
-    content type 会省略该 header 而不是发送空 header value。`string` /
-    `TBytes` overload 复用现有 `NewRequest(..., BodyText)` /
-    `NewRequest(..., BodyBytes)` contract，而不是再扩一层新的 free-function
-    facade。`test_http_client` 锁住 live string / bytes body wire 语义，
-    `test_http_contract` 锁住 facade surface 可见性。
-  - 继续补齐：新增 `HttpReadResponseBodyString(Resp)` public helper。它直接消费
-    `IHttpResponse.Body` reader 并返回 Pascal string；nil body 返回 `''`，nil
-    response 抛 `EArgumentError`。`test_http_client` 锁住 live response、消费
-    reader、nil body 和 nil response 语义，`test_http_contract` 锁住 facade
-    可见性，`http_get_client` example 也已改用该 helper。
-  - 继续补齐：新增 `HttpReadResponseBodyBytes(Resp)` public helper。它直接消费
-    `IHttpResponse.Body` reader 并返回 `TBytes`；nil body 返回空 bytes，nil
-    response 抛 `EArgumentError`。`test_http_client` 锁住 live binary body、
-    reader 消费、nil body 和 nil response 语义，`test_http_contract` 锁住
-    facade 可见性。这个 helper 对齐 Go `io.ReadAll(resp.Body)` / Rust bytes
-    取用的基础 ergonomics，但不声明 response streaming、charset decoding 或
-    content-type sniffing。
-  - 继续收紧：`HttpGetToWriter` / `HttpGetToFile` 现在把被 helper 消费或丢弃的
-    response body 纳入 helper ownership。成功 copy、copy 失败、非 2xx rejection
-    都会释放 close-capable body；plain `IReader` body 仍走 drain fallback。
-    `test_http_client` 用 injected client/closable body 锁住 success、writer
-    failure 和 non-2xx 三条路径。这对齐 Go/Rust 中“helper 代替调用方消费 body
-    时也负责释放”的资源语义，但不新增 response streaming public API。
-  - 继续补齐：新增 `HttpReleaseResponseBody(Resp)` public helper。调用方拿到
-    `IHttpResponse` 后如果决定不读取 body，可以显式释放 body ownership：
-    close-capable body 会被关闭，plain `IReader` body 会被 drain 到 EOF，nil body
-    是 no-op，nil response 抛 `EArgumentError`。`test_http_client` 锁住 close /
-    drain / nil body / nil response 语义，`test_http_contract` 锁住 facade
-    可见性。这对齐 Go/Rust 常见“未消费响应体也要显式释放/丢弃”的使用面。
-    `HttpReadResponseBodyString` / `HttpReadResponseBodyBytes` 会消费并释放 body；
-    `HttpReleaseResponseBody` 只用于调用方决定不读取 body 时显式释放。
-    当前仍不新增 streaming response API。
+- **2026-07-17 cycle-3 usability fix（现行真相；以本条为准）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle3.md`、
+    `2026-07-17-usability-cycle3-research.md`、
+    `2026-07-17-usability-cycle3-fix-plan.md`（baseline `82ecf1f3e`，score 93→fix）。
+  - Transport 前置条件（H1/H2/TLS stream nil conn/req/handler 等）→
+    **`EHttpError(hekArgument)`**（不再裸 `EArgumentError`）。
+  - `NewHttpServerWithRequestArena` 无参重载基于 **Production** + RequestArena。
+  - Redirect resolve / body rewind / download mkdir-publish 错误消息在已知 method/URL
+    时带 `METHOD url:` 前缀。
+  - **Blocked** 仍真：OS dial timeout、mid-read cancel（net）。
+  - **Deferred** 仍真：CONNECT / Retry-After / full PSL / Response metadata /
+    ensure-2xx JSON decode / Op-everywhere。
+- **2026-07-17 post-residual usability fix（已吸收）**：
+  - Research/plan：`2026-07-17-usability-post-residual-research.md`、
+    `2026-07-17-usability-post-residual-fix-plan.md`（含 post-`feec31b45`
+    assessment 92/100 inventory）。更早 residual/wave-6 文档已吸收。
+  - Request 工厂白名单：`NewRequest(Method, TUrl|string)` + `NewGetRequest`；
+    推荐 `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` **已删除**。
+    **下列 2026-07-06 长段落中的多参 “本轮补齐 / 现在都接受” 为 Historical archive，
+    不是 live API**——勿按那些 overload 写新代码。
+  - Production discipline：
+    - client：`THttpClientOptions.Default.Timeout` = 30000；cancel 须与 Timeout 配对。
+    - server：`Default` Read/Write = 0（测试/兼容）；生产用
+      **`THttpServerOptions.Production`**（RW=30000）或显式 WithRead/WriteTimeout。
+  - `ConnectTimeout` = **post-dial first-write only**（非 OS dial）；OS dial timeout /
+    mid-read cancel = **Blocked** on net（CONTRACT §2.2.0a）。
+  - Public construction preconditions（message/form/headers/stream/**server/**
+    **websocket/middleware/SSE**/client Send(nil)/body helpers/auth helpers）：
+    **`EHttpError(hekArgument)`**。Historical 段落里若仍写裸 `EArgumentError`，
+    **不是 live 行为**。
+  - CookieJar：Max-Age/Expires + SameSite（default Lax；None 需 Secure；SiteKey 近似；
+    full PSL deferred）。
+  - ensure-2xx：free-fn `HttpGet/Post/Put/Patch/DeleteString` + 方法对称
+    `IHttpClient.GetString` / `GetBytes` / `PostString` / `PutString` /
+    `PatchString` / `DeleteString`。非 2xx 错误消息含 `METHOD url` 前缀
+    （`HttpEnsureSuccess(Resp, Method, Url)` overload）。
+  - H1 默认 `User-Agent: nextpas-http/1.0`。
+  - Proxy：明文 HTTP absolute-form only。
+  - **Deferred**（本 cycle 不实现）：HTTPS CONNECT、Retry-After 策略、full PSL、
+    Response metadata expand、ensure-2xx JSON decode、全路径结构化 Op/URL。
+  - **Non-goal**：H3/QUIC。
+- **2026-07-17 residual usability fix（已吸收）**：hekArgument client/server/ws/
+  middleware 主路径、ensure-2xx 对称、error METHOD url、docs honesty。
+- **2026-07-17 usability findings fix（wave-6，已吸收）**：
+  - 同上子集（hekArgument message 层、GetString、SameSite、docs honesty）。
+- **2026-07-16 wave-5 可用性抛光（已吸收）**：
+  - H1 chunked request body：`Body(IReader)` 无 CL / `SendStreaming(..., CL<0)`。
+  - Cancel：协作检查点（非 OS 中断）；见 CONTRACT §2.2。
+  - CookieJar Max-Age/Expires；`WithCookieJar`；`WithProxyUrl`；`PostMultipart`。
+- 2026-07-16 控制面更新：
+  - 主门禁 35 suites（见 `CONTRACT.md` / Makefile）；router/static/base/url/middleware 已纳入。
+  - 推荐 request 构造入口：`THttpRequestBuilder`。
+  - 已落地且有 focused 证据：per-request options decorator、form/json helpers、
+    streaming body ownership（`SendStreaming`）、response charset auto helper、
+    WebSocket client（`ConnectWebSocket`）、RFC 7807 error helpers。
+  - H2 transport 已内建并注册；H3 仍仅 seam + blocked on QUIC。
+  - keep-alive request-tail 已定稿为 **INV-12 final public contract**（见 `CONTRACT.md` §3.1）。
+  - H2 facade E2E 已闭合：`test_http_h2_facade` 证明 live
+    `NewHttpClient`/`NewHttpServer` + `WithVersion(hvHttp2)` cleartext
+    prior-knowledge（GET/POST/sequential/404）；顺带修了 session
+    write-before-read drain 死锁与 IdleTimeout read-wait 回退。
+  - API surface 审计已闭合（默认停扩面）：`THttpRequestBuilder` 为推荐入口；
+    仅 `NewRequest(Method, TUrl|string)` + `NewGetRequest` 非 deprecated；
+    `test_http_contract` source-contract 锁住 parity。
+  - runtime/socket 成本隔离已闭合：成本阶梯见 `BENCHMARKS.md`；
+    fullchain/server/h1parser 编译回归已修；`test_http_stress` 绿。
+  - H3 honesty 已闭合：无内建 factory；`test_http_registry` 锁住未注册
+    `hvHttp3` resolve 失败；解阻依赖独立 QUIC 模块。
+  当前 HTTP lane 队列 P1–P5 已收口（H3 为诚实阻塞）。
+- **Historical archive (NOT live API)** — 2026-07-06 API 对标时间线。
+  多参 `NewRequest` / `NewStreamingRequest` 等 overload **已物理删除**。
+  现行工厂仅：`NewRequest(Method, TUrl|string)` + `NewGetRequest` +
+  `THttpRequestBuilder`。下列 “本轮补齐 / 现在都接受” 叙述只作历史，
+  **不要**当作当前 public surface。
+  **Superseded exception wording**: 历史段若写 `Send(nil)` / 负超时 / nil body
+  helpers 抛裸 `EArgumentError`，现行一律为 `EHttpError(hekArgument)`
+  （见上「当前结论」与 CONTRACT §2.2.1）。
+  - 已够稳（仍真）：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` /
+    `IsRunning` 同步 facade；handler / middleware / router 组合面；static +
+    WebSocket helper 层；H2 production-transport-ready；H3 仍被 QUIC 阻塞。
+  - ~~已删除~~ 多参 `NewRequest(Method, Url, Headers, Body, ContentLength)` 及
+    BodyText / BodyBytes / ContentType 等 overload 时间线（曾短暂存在；
+    现由 `THttpRequestBuilder` 覆盖）。
+  - ~~措辞纠正~~ 旧文“现在都接受 URL string overload”仅指**当时**多参 helper；
+    当前不存在那些 overload。
+  - 仍真且 live：`IHttpClient.Post` / `Put` / `Patch` 的 string/`TBytes`
+    body shortcut；`HttpReadResponseBodyString` / `Bytes` / `HttpReleaseResponseBody` /
+    `HttpGetToWriter` / `HttpGetToFile` body ownership（nil response 现为
+    `EHttpError(hekArgument)`，非历史 `EArgumentError`）。
   - 继续收紧：`NewResponse(Status, nil, Body)` 现在与 request helper 的 nil
     headers 语义对齐，会创建空 `IHttpHeaders`，调用方可以安全读取或追加
     response headers。`test_http_message` 锁住 helper contract，`test_http_contract`
@@ -325,7 +279,27 @@
 - `IHttpServer` 现在也有 Linux `epoll` backend focused differential proof：`THttpServerOptions.Backend := TCP_SERVER_BACKEND_EPOLL` 时，simple GET、keep-alive 复用、fixed/chunked same-write pipelining、keep-alive `Content-Length` garbage tail / truncated follow-up line / truncated follow-up headers 的 follow-up `400` 语义、keep-alive `Content-Length` partial follow-up line / partial follow-up headers 后续可补全为合法第二请求、keep-alive plain chunked garbage tail / truncated follow-up line / truncated follow-up headers 的 follow-up `400` 语义、keep-alive plain chunked partial follow-up line / partial follow-up headers 后续可补全为合法第二请求、chunked trailer-complete keep-alive garbage tail / truncated follow-up line / truncated follow-up headers 的 follow-up `400` 语义、chunked trailer-complete same-write pipelining、chunked trailer-complete partial follow-up line / partial follow-up headers 后续可补全为合法第二请求、hijack ownership、hijack 后异常不补写 `500`、committed response 后异常不补写 `500`、real-socket write-timeout backpressure safe-close / no-follow-up-consume、以及 real-socket queued follow-up `400/413/431/417/501` 在 backpressure 下仍保持 `200 -> error` wire order 的 live 语义都与 threaded 路径或 poll seam 契约保持一致；同一组 queued follow-up `400/413/431/417/501` real-socket wire-order proof 现在也已在默认 threaded backend 直接锁定。fixed-length request body 的 `MaxBodySize` 契约也已直接收口成 explicit `413 Payload Too Large`，并且 threaded / epoll 两条路径都会在拒绝前阻止 handler 进入；chunked ingress 跨 chunk 越限、且 terminal chunk 尚未到达时，`test_http_security` 现在也直接锁住 threaded / epoll 两条 raw-wire 路径都会提前返回 explicit `413`。`test_http_security` 还新增了代表性 request-validation / malformed-framing live parity：`Content-Length + Transfer-Encoding: chunked` 两种 header 顺序都会返回 `400`，duplicate `Content-Length` 与 negative `Content-Length`、generic malformed request、`HTTP/1.1 missing Host`、`HTTP/0.9 / no-version`、`CRLF injection / request-line splitting`、`null-byte header`、very long method、`Content-Length + Connection: close + extra bytes after body`、fixed-length request body EOF truncation、request-line EOF truncation 与 headers EOF truncation 现在也都已在 threaded / epoll raw-wire ingress 路径锁到 explicit `400`，unsupported transfer-coding before chunked -> `501`、`chunked`-must-be-final transfer-coding -> `400`、invalid chunk size -> `400`、malformed chunk extension -> `400`、missing chunk-data CRLF -> `400`、`chunked + Connection: close + extra bytes after terminal chunk` -> `400`、malformed trailer field -> `400`、oversize trailer -> `431`、header field over `MaxHeaderSize` -> `431`、request-target over `MaxHeaderSize` -> `431`；chunk truncation 的 epoll live parity 现在已经覆盖 chunk-extension / chunk-size-line / terminal-chunk-ending / terminal-chunk-extension / terminal-chunk-ending-after-extension / chunk-data EOF 等一整族边界，trailer truncation 的 epoll live parity 也已经覆盖 section / field-name / separator / empty-value / whitespace / field-line / field-CR / section-CR 等 EOF 边界；此外 request-side `IdleTimeout` 现在也已有 live-socket truth：slowloris partial request、partial fixed-length body stall、partial chunk-size-line stall、partial chunked body stall、partial chunked trailer stall 都会最终安全关闭，且不会误进入成功 handler 响应；standalone direct-error 在 backpressure 尝试下现在也已有代表性 live truth：malformed `400`、payload-too-large `413`、header field over `MaxHeaderSize` 的 `431`、request-target over `MaxHeaderSize` 的 `431`、`chunked`-must-be-final malformed `400`、invalid chunk-size malformed `400`、missing chunk-data CRLF malformed `400`、malformed trailer field `400`、truncated trailer field line EOF `400`、oversize trailer `431`、unsupported `Expect` `417` 与 unsupported transfer-coding `501` 在 threaded / epoll 两条路径上都会安全关闭，wire 上至多暴露一条原始 status-line 前缀，不会追加 synthetic `500`；同时 `Content-Length` keep-alive garbage tail / truncated follow-up request line / truncated follow-up headers、plain chunked keep-alive garbage tail / truncated follow-up request line / truncated follow-up headers、以及 chunked trailer-complete keep-alive garbage tail / truncated follow-up request line / truncated follow-up headers 现在也都有 epoll raw-wire proof，锁定首个 `200 / echo:5` 之后 follow-up malformed request 仍返回 `400`，queued follow-up unsupported transfer-coding 会保持首个响应 body 在前、follow-up `501` 在后，queued follow-up unsupported `Expect` 会保持首个响应 body 在前、follow-up `417` 在后，queued follow-up header-too-large `431` 会保持首个响应 body 在前、follow-up `431` 在后，而 queued follow-up payload-too-large `413` 也会保持首个响应 body 在前、follow-up `413` 在后。
 - `IHttpServer` 现在还有 `Expect` request-side live contract：默认 threaded 与 Linux `epoll` backend 都会在 headers 完整且请求确实还声明有 body 时先返回单条 `HTTP/1.1 100 Continue`，随后继续读取 body，并把最终 body 原样交给 handler；`test_http_security` 现在也已直接锁住 fixed-length 正向 raw-wire 顺序：先收到 interim `100 Continue`，body 到达前不会误进 handler，也不会提前返回 final `200`，而 body 送达后才返回 final `200`；这条契约现在不仅覆盖 fixed-length body，也直接覆盖 chunked ingress：`Expect + Transfer-Encoding: chunked` 在 security 层现在也已有 direct raw-wire proof，先收到 interim `100 Continue`，chunked body 到达前不会误进 handler，也不会提前返回 final `200`，完整 chunked body 送达后才返回 final `200`，且 handler 能读到解码后的 chunked body；如果 chunked ingress 在收到 `100` 之后跨 chunk 越过 `MaxBodySize`，security 层同样直接锁住最终会返回 `413 Payload Too Large` 且不会进入 handler；如果 interim `100` 已发出后随即收到 invalid chunk-size，security 与 server 两层 focused proof 现在也直接锁住最终会返回 `400 Bad Request`、不会重复发 `100`、不会误回 `200`，且 handler 不会进入；后续又把相邻 chunk framing malformed 补成了 direct truth：如果 interim `100` 已发出后收到 malformed chunk extension 或 missing chunk-data CRLF，security 与 server 两层 focused proof 现在同样直接锁住最终会返回 `400 Bad Request`、不会重复发 `100`、不会误回 `200`，且 handler 不会进入；如果 interim `100` 已发出后收到 malformed trailer field、truncated trailer field-name EOF、truncated trailer separator EOF、truncated trailer empty-value CR EOF、truncated trailer empty-value EOF、truncated trailer empty-value section CR EOF、truncated trailer whitespace CR EOF、truncated trailer whitespace EOF、truncated trailer whitespace section EOF、truncated trailer whitespace section CR EOF、truncated trailer field line EOF、truncated trailer field CR EOF、truncated trailer section EOF、truncated trailer section CR EOF、或 oversize trailer，security 与 server 两层 focused proof 现在也分别直接锁住最终会返回 `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `400 Bad Request` / `431 Request Header Fields Too Large`、不会重复发 `100`、不会误回 `200`，且 handler 不会进入；而如果 interim `100` 已发出后 body 只到达一部分就 stall，或者 body 一个字节都不再到达，threaded / epoll 两条 live path 现在也都直接锁住会按 request-side `IdleTimeout` 安全关闭，不追加 final status-line，更不会误补 synthetic `500`；`test_http_server` 现在也把同一条 truth 直接收口成 public-contract focused proof：fixed-length / chunked partial-body stall、zero-progress stall、after-interim invalid chunk-size final `400`、after-interim malformed chunk extension / missing chunk-data CRLF final `400`、以及 after-interim malformed trailer field / truncated trailer field-name EOF / truncated trailer separator EOF / truncated trailer empty-value CR EOF / truncated trailer empty-value EOF / truncated trailer empty-value section CR EOF / truncated trailer whitespace CR EOF / truncated trailer whitespace EOF / truncated trailer whitespace section EOF / truncated trailer whitespace section CR EOF / truncated trailer field line EOF / truncated trailer field CR EOF / truncated trailer section EOF / truncated trailer section CR EOF / oversize trailer `400/400/400/400/400/400/400/400/400/400/400/400/400/400/431` 在 threaded / epoll 两条路径都会阻止 handler 进入，并保持正确的 wire 语义；反过来，如果请求根本没有声明 body，目前也已有 direct live proof，且最小分支已覆盖到一般 no-body request、HEAD method、以及 transfer-coding error 交互：`Content-Length: 0 + Expect: 100-continue`、普通 no-length `POST + Expect: 100-continue`、no-length `HEAD + Expect: 100-continue`、`Expect + Transfer-Encoding: gzip, chunked`、以及 `Expect + Transfer-Encoding: chunked, gzip` 都已直接锁住不会误发 interim `100 Continue`；其中 transfer-coding error 两条路径会分别直接落到 final `501 Not Implemented` 与 final `400 Bad Request`，HEAD case 则同时锁住 response 仍保持 bodyless wire contract；只要 `Expect` header value 的 comma-separated member 里包含 `100-continue`（包括 duplicate-member case），就仍会按同一契约发出 interim `100 Continue`；如果 `Expect` 重复出现在多条 header-line 上，server 现在也会聚合所有 `Expect` values 判定，因此后续 header-line 里的 unsupported member 仍会把请求直接提升成 final `417 Expectation Failed`，不会因为第一条 `100-continue` 就误发 interim `100`；如果 `Content-Length` 已经在 headers 阶段明确超过 `MaxBodySize`，两条路径都会直接返回 final `413 Payload Too Large`，不会误发 `100 Continue` 再白收 body；如果 `Expect` 含有 unsupported member，两条路径都会在 headers-stage 直接返回 final `417 Expectation Failed`，不会进 handler，也不会先发 `100 Continue`。
 - `test_http_security` 现在也把 `Expect` duplicate-member 与 bodyless/no-length 变体补成了 direct raw-wire proof：duplicate `100-continue` member 仍会先返回单条 interim `100 Continue`，而 `Content-Length: 0`、普通 no-length `POST`、以及 no-length `HEAD` 都不会误发 interim `100 Continue`；`HEAD` 变体同时继续保持 bodyless wire contract。
-- `Expect` after-interim trailer EOF 邻接链已完成审计并闭合：malformed trailer field、field-name EOF、separator EOF、empty-value 系列、whitespace 系列、field-line EOF、field-CR EOF、section EOF、section-CR EOF 与 oversize trailer 都已经在 `test_http_security` / `test_http_server` 的 threaded 与 Linux `epoll` 两条路径上有 focused proof；下一步不再继续铺同型 trailer EOF parity，而应转向 keep-alive request-tail contract 决策。
+- `Expect` after-interim trailer EOF 邻接链已完成审计并闭合：malformed trailer field、field-name EOF、separator EOF、empty-value 系列、whitespace 系列、field-line EOF、field-CR EOF、section EOF、section-CR EOF 与 oversize trailer 都已经在 `test_http_security` / `test_http_server` 的 threaded 与 Linux `epoll` 两条路径上有 focused proof；trailer EOF 邻接链与 keep-alive request-tail（INV-12）均已闭合。
+- H2 facade 公开路径现在有 live E2E focused proof：`test_http_h2_facade` 用
+  `NewHttpServer(..., Options.WithVersion(hvHttp2))` +
+  `NewHttpClient(Options.WithVersion(hvHttp2))` 走 cleartext prior-knowledge，
+  覆盖 GET 200 body、POST body round-trip、sequential GET、router 404；
+  主门禁已纳入该 suite。TLS-ALPN H2 仍由下层 h2 client/session 覆盖；
+  h2c Upgrade / push / WS-over-H2 仍明确排除。
+- Request construction 面已审计：`THttpRequestBuilder` 为推荐路径；
+  非 deprecated 工厂仅 `NewRequest(Method, TUrl)` 与 `NewGetRequest`；
+  多参 `NewRequest` 在 facade 与 `message.pas` 同标记 deprecated；
+  `NewStreamingRequest` 已物理删除（builder / `SendStreaming`）；
+  `test_http_contract` 用 source-contract 锁 deprecation 与删除。
+  Builder `Body(IReader)` 要求 `ContentLength(N)`，缺长度 fail-fast。
+- runtime/socket 成本隔离已闭合：L0–L4 阶梯见 `BENCHMARKS.md`；
+  `bench_fullchain` 输出 `cost_isolation_ladder` / `dispatch_split`，
+  并通过 `NEXTPAS_BENCH_FILTER` / `NEXTPAS_BENCH_MAX_ITERS` 驱动
+  `TBenchSuite`。
+- H3 公开面保持诚实：builtins 不注册 `hvHttp3` transport；
+  `test_http_registry` 直接锁住 client/server resolve 在未注册时抛
+  `EHttpError`。custom registry 注入仍可作为 future-version seam 证明。
+  实现 H3 前必须先有独立 QUIC 模块。
 - `bench_http_server` benchmark evidence summary: `test_http_benchmarks` 覆盖
   nextPas、Go `net/http`、Rust std-only 与可选 Hyper/Tokio comparator smoke，
   并锁住 runner / snapshot / H1 parser flag-matrix 的核心 truth markers；详细
@@ -462,7 +436,7 @@
 - `IHttpServer` 现在也有 keep-alive chunked partial follow-up request-line current-truth proof：首个合法 chunked request 会先完成并进入 handler，半截下一请求行在 peer half-close 后作为 follow-up malformed request 返回 `400`。
 - `IHttpServer` 现在也有 keep-alive chunked partial follow-up request-line bridge proof：首个请求的 `200` 会先正常返回，后续若把半截下一请求补全，第二个请求也会继续合法完成。
 - `IHttpServer` 现在也有 keep-alive chunked partial follow-up headers bridge proof：首个合法 chunked request 会先完成并进入 handler，半截下一请求头在后续字节补齐后仍可继续完成为合法第二请求，因此不会被过早判成 malformed follow-up。
-- `IHttpServer` 现在也有 keep-alive chunked trailer-complete garbage tail current-truth proof：完整 trailer section 结束后的尾巴不会污染首个请求，trailer 声明头仍保留、实际 trailer field 仍不暴露为普通 header，尾巴随后作为 follow-up malformed request 返回 `400`。
+- `IHttpServer` 现在也有 keep-alive chunked trailer-complete garbage tail **INV-12 contract** proof：完整 trailer section 结束后的尾巴不会污染首个请求，trailer 声明头仍保留、实际 trailer field 仍不暴露为普通 header，尾巴随后作为 follow-up malformed request 返回 `400`。
 - `IHttpServer` 现在也有 keep-alive chunked trailer-complete valid pipelined next-request focused proof：同一连接中的第二个合法请求会继续完成，且首请求 handler/response/body/trailer contract 不会被污染。
 - `IHttpServer` 现在也有 keep-alive chunked trailer-complete partial follow-up request-line bridge proof：首个请求的 `200` 会先正常返回，后续若把半截下一请求补全，第二个请求也会继续合法完成。
 - `IHttpServer` 现在也有 keep-alive chunked trailer-complete partial follow-up headers bridge proof：首个 trailer-complete chunked request 的 `200` 会先正常返回，后续若把半截下一请求头补全，第二个请求也会继续合法完成，同时首请求的 trailer declaration / trailer isolation 契约保持不变。

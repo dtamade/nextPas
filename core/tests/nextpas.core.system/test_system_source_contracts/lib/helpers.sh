@@ -28,6 +28,52 @@ require_repo_token() {
   rg -F --quiet -- "$token" "$REPO_ROOT/$path" || fail "$path missing token: $token"
 }
 
+require_repo_owner_family_token() {
+  local relative_root="$1"
+  local owner_base="$2"
+  local token="$3"
+  local owner_root="$REPO_ROOT/$relative_root"
+  local owner_path="$owner_root/${owner_base}.pas"
+  local current_path include_name include_path
+  local index=0
+  local -a owner_files
+  local -A seen_files
+
+  [[ -s "$owner_path" ]] || fail "$relative_root/$owner_base owner source missing"
+  owner_files=("$owner_path")
+  seen_files["$owner_path"]=1
+
+  while (( index < ${#owner_files[@]} )); do
+    current_path="${owner_files[$index]}"
+    index=$((index + 1))
+    while IFS= read -r include_name; do
+      case "$include_name" in
+        /*|*/*|*..*)
+          fail "${current_path#$REPO_ROOT/} has out-of-family include: $include_name"
+          ;;
+      esac
+      include_path="$owner_root/$include_name"
+      [[ -s "$include_path" ]] ||
+        fail "${current_path#$REPO_ROOT/} includes missing file: $include_name"
+      if [[ -z "${seen_files[$include_path]+present}" ]]; then
+        owner_files+=("$include_path")
+        seen_files["$include_path"]=1
+      fi
+    done < <(
+      awk '
+        BEGIN { IGNORECASE = 1 }
+        match($0, /\{\$(i|include)[ \t]+([^} \t]+)/, parts) {
+          print parts[2]
+        }
+      ' "$current_path"
+    )
+  done
+
+  if ! rg -F --quiet -- "$token" "${owner_files[@]}"; then
+    fail "$relative_root/$owner_base owner family missing token: $token"
+  fi
+}
+
 reject_token() {
   local path="$1"
   local token="$2"

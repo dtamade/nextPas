@@ -29,9 +29,13 @@ Listener.Close;
 ```pascal
 var Conn: ITcpStream;
 Conn := TcpConnect('example.com', 443);
+{ Optional OS dial timeout (ms). 0 / two-arg form = unbounded connect. }
+Conn := TcpConnect('example.com', 443, 5000);
 Conn.Write(Buf, Len);
 BytesRead := Conn.Read(Buf, BufSize);
 Conn.Shutdown;
+{ Optional mid-read/write cancel: SetCancelToken + INetCancelToken.
+  Read/Write poll in ~50ms slices and raise ECancelledError when canceled. }
 ```
 
 ### UDP
@@ -54,7 +58,8 @@ Addr := Resolve('example.com');
 
 ## Interfaces
 
-- `ITcpStream` — extends IStream with LocalAddr, RemoteAddr, Shutdown, SetNoDelay, SetKeepAlive, SetReadDeadline, SetWriteDeadline
+- `ITcpStream` — extends IStream with LocalAddr, RemoteAddr, Shutdown, SetNoDelay, SetKeepAlive, SetReadDeadline, SetWriteDeadline, SetCancelToken
+- `INetCancelToken` — cooperative cancel probe (`IsCanceled`) for mid-IO interrupt
 - `ITcpListener` — Accept, LocalAddr, Close
 - `IUdpSocket` — SendTo, RecvFrom, LocalAddr, Close
 - `ITcpSocketRuntime` — optional advanced-runtime seam that exposes a native socket handle plus blocking/nonblocking control for server backends; ordinary application code usually does not need it

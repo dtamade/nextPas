@@ -29,7 +29,8 @@ function ResolveAllocator(const AAllocator: IAllocator): IAllocator;
 implementation
 
 uses
-  nextpas.core.platform.sync;
+  nextpas.core.platform.sync,
+  nextpas.core.mem.allocator.growing_ia;
 
 var
   _RTLAllocatorObj: TInterfacedObject = nil;
@@ -110,10 +111,12 @@ end;
 
 function ResolveAllocator(const AAllocator: IAllocator): IAllocator;
 begin
+  { S5: nil means process default heap (Growing IAllocator), not RTL.
+    Explicit RTL remains available via GetRtlAllocator. }
   if AAllocator <> nil then
     Result := AAllocator
   else
-    Result := GetRtlAllocator;
+    Result := nextpas.core.mem.allocator.growing_ia.GetGrowingIAllocator;
 end;
 
 finalization

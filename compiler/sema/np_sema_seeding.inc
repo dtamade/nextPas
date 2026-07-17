@@ -366,7 +366,7 @@ var
   Child: TGreenNode;
   Folded: Int64;
 begin
-  for I := 0 to Length(FProcedureBodies) - 1 do
+  for I := 0 to LongInt(FProcedureBodies.Count) - 1 do
   begin
     Entry := FProcedureBodies[I];
     if (Entry.Decl = nil) or (Entry.Body = nil) then

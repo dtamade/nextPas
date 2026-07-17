@@ -95,10 +95,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = AKind) and
         TypeIsIntWidth(AModule, Instr.TypeId, AResultBitWidth, AResultSigned) and
         (Length(Instr.Operands) >= 1) and

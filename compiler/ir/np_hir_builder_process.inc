@@ -11,8 +11,8 @@ function THIRBuilder.ParseIntExprArgTyped(const AExprArg: string;
   out ATypeId: THIRTypeId): THIRValueId;
 var
   S: TExprStack;
-  Lines: array of string;
-  LineCount, I, SpacePos: LongInt;
+  Lines: THirNameVec;
+  I, SpacePos: LongInt;
   Line, Token, Arg: string;
   V: THIRValueId;
   Instr: THIRInstr;
@@ -22,156 +22,149 @@ var
 begin
   Result := 0;
   ATypeId := 0;
-  S.Init;
-
-  SetLength(Lines, 0);
-  LineCount := 0;
-  Line := '';
-  for I := 1 to Length(AExprArg) do
-  begin
-    if AExprArg[I] = #10 then
+  S.Init(FAllocator);
+  Lines := CreateNameVec;
+  try
+    Line := '';
+    for I := 1 to Length(AExprArg) do
     begin
-      if Line <> '' then
+      if AExprArg[I] = #10 then
       begin
-        if LineCount >= Length(Lines) then
-          SetLength(Lines, LineCount + 16);
-        Lines[LineCount] := Line;
-        Inc(LineCount);
-      end;
-      Line := '';
-    end
-    else
-      Line := Line + AExprArg[I];
-  end;
-  if Line <> '' then
-  begin
-    if LineCount >= Length(Lines) then
-      SetLength(Lines, LineCount + 16);
-    Lines[LineCount] := Line;
-    Inc(LineCount);
-  end;
-
-  for I := 0 to LineCount - 1 do
-  begin
-    Line := Lines[I];
-    
-    { 检查是否是结构化表达式 }
-    if Copy(Line, 1, 5) = 'expr ' then
-    begin
-      { 提取 ExprId }
-      ExprId := StrToIntDef(Copy(Line, 6, Length(Line)), 0);
-      if ExprId > 0 then
-      begin
-        { 调用 LowerExpr 处理结构化表达式 }
-        if LowerExpr(ExprId, ExprResult) then
-        begin
-          Result := ExprResult.ValueId;
-          ATypeId := ExprResult.TypeId;
-          Exit;
-        end;
-      end;
-      { 如果 LowerExpr 失败，继续处理下一行 }
-      Continue;
-    end;
-
-    Line := Lines[I];
-    SpacePos := Pos(' ', Line);
-    if SpacePos > 0 then
-    begin
-      Token := Copy(Line, 1, SpacePos - 1);
-      Arg := Copy(Line, SpacePos + 1, Length(Line));
-    end
-    else
-    begin
-      Token := Line;
-      Arg := '';
-    end;
-
-    if Token = 'int' then EmitExprInt(S, Arg)
-    else if Token = 'null' then EmitExprNull(S)
-    else if Token = 'assigned' then
-    begin
-      V := FindAlloca(Arg);
-      if V <> 0 then
-      begin
-        V := EmitLoad(GetPtrType, V);
-        S.Push(EmitCmpOp(hikCmpNe, GetBoolType, V, EmitNullPtrValue,
-          GetPtrType, GetPtrType));
+        if Line <> '' then
+          Lines.Push(Line);
+        Line := '';
       end
       else
-        S.Push(EmitConstIntOfType(0, GetBoolType));
-    end
-    else if Token = 'exc_load' then
+        Line := Line + AExprArg[I];
+    end;
+    if Line <> '' then
+      Lines.Push(Line);
+
+    for I := 0 to LongInt(Lines.Count) - 1 do
     begin
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := GetPtrType;
-      Instr.IntrinsicName := 'exc_load';
-      EmitInstr(Instr);
-      S.PushTyped(Instr.ResultId, GetPtrType);
-    end
-    else if Token = 'strvar' then EmitExprStrVar(S, Arg)
-    else if Token = 'strlit' then EmitExprStrLit(S, Arg)
-    else if Token = 'var' then EmitExprVar(S, Arg)
-    else if Token = 'varref' then EmitExprVarRef(S, Arg)
-    else if Token = 'deref' then
-    begin
-      V := S.PopTyped(OperandType);
-      if OperandType <> 0 then
-        S.PushTyped(EmitLoad(OperandType, V), OperandType)
-      else
-        S.Push(EmitLoad(GetIntType, V));
-    end
-    else if Token = 'recvar' then EmitExprRecVar(S, Arg)
-    else if Token = 'is' then EmitExprIs(S, Arg)
-    else if Token = 'arr_load' then EmitExprArrLoad(S)
-    else if Token = 'arr_load_ptr' then EmitExprArrLoadPtr(S)
-    else if Token = 'arr_elem_ref' then EmitExprArrElemRef(S, Arg)
-    else if Token = 'field_ref' then EmitExprFieldRef(S, Arg)
-    else if Token = 'rload' then EmitExprRLoad(S, Arg)
-    else if Token = 'add' then EmitExprBinOp(S, hikAdd)
-    else if Token = 'sub' then EmitExprBinOp(S, hikSub)
-    else if Token = 'mul' then EmitExprBinOp(S, hikMul)
-    else if Token = 'div' then EmitExprBinOp(S, hikDiv)
-    else if Token = 'mod' then EmitExprBinOp(S, hikMod)
-    else if Token = 'neg' then EmitExprUnaryOp(S, hikNeg, '')
-    else if Token = 'abs' then EmitExprUnaryOp(S, hikIntrinsic, 'abs')
-    else if Token = 'cmp' then EmitExprCmp(S, Arg)
-    else if Token = 'strcmp' then EmitExprStrCmp(S, Arg)
-    else if Token = 'zext' then EmitExprZext(S)
-    else if Token = 'call' then EmitExprCall(S, Arg)
-    else if Token = 'arrvar' then
-    begin
-      V := FindAlloca(Arg + '$ptr');
-      if V <> 0 then
-        S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+      Line := Lines[I];
+
+      { 检查是否是结构化表达式 }
+      if Copy(Line, 1, 5) = 'expr ' then
+      begin
+        { 提取 ExprId }
+        ExprId := StrToIntDef(Copy(Line, 6, Length(Line)), 0);
+        if ExprId > 0 then
+        begin
+          { 调用 LowerExpr 处理结构化表达式 }
+          if LowerExpr(ExprId, ExprResult) then
+          begin
+            Result := ExprResult.ValueId;
+            ATypeId := ExprResult.TypeId;
+            Exit;
+          end;
+        end;
+        { 如果 LowerExpr 失败，继续处理下一行 }
+        Continue;
+      end;
+
+      Line := Lines[I];
+      SpacePos := Pos(' ', Line);
+      if SpacePos > 0 then
+      begin
+        Token := Copy(Line, 1, SpacePos - 1);
+        Arg := Copy(Line, SpacePos + 1, Length(Line));
+      end
       else
       begin
-        EnsureAlloca(Arg + '$ptr', GetPtrType);
+        Token := Line;
+        Arg := '';
+      end;
+
+      if Token = 'int' then EmitExprInt(S, Arg)
+      else if Token = 'null' then EmitExprNull(S)
+      else if Token = 'assigned' then
+      begin
+        V := FindAlloca(Arg);
+        if V <> 0 then
+        begin
+          V := EmitLoad(GetPtrType, V);
+          S.Push(EmitCmpOp(hikCmpNe, GetBoolType, V, EmitNullPtrValue,
+            GetPtrType, GetPtrType));
+        end
+        else
+          S.Push(EmitConstIntOfType(0, GetBoolType));
+      end
+      else if Token = 'exc_load' then
+      begin
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikIntrinsic;
+        Instr.TypeId := GetPtrType;
+        Instr.IntrinsicName := 'exc_load';
+        EmitInstr(Instr);
+        S.PushTyped(Instr.ResultId, GetPtrType);
+      end
+      else if Token = 'strvar' then EmitExprStrVar(S, Arg)
+      else if Token = 'strlit' then EmitExprStrLit(S, Arg)
+      else if Token = 'var' then EmitExprVar(S, Arg)
+      else if Token = 'varref' then EmitExprVarRef(S, Arg)
+      else if Token = 'deref' then
+      begin
+        V := S.PopTyped(OperandType);
+        if OperandType <> 0 then
+          S.PushTyped(EmitLoad(OperandType, V), OperandType)
+        else
+          S.Push(EmitLoad(GetIntType, V));
+      end
+      else if Token = 'recvar' then EmitExprRecVar(S, Arg)
+      else if Token = 'is' then EmitExprIs(S, Arg)
+      else if Token = 'arr_load' then EmitExprArrLoad(S)
+      else if Token = 'arr_load_ptr' then EmitExprArrLoadPtr(S)
+      else if Token = 'arr_elem_ref' then EmitExprArrElemRef(S, Arg)
+      else if Token = 'field_ref' then EmitExprFieldRef(S, Arg)
+      else if Token = 'rload' then EmitExprRLoad(S, Arg)
+      else if Token = 'add' then EmitExprBinOp(S, hikAdd)
+      else if Token = 'sub' then EmitExprBinOp(S, hikSub)
+      else if Token = 'mul' then EmitExprBinOp(S, hikMul)
+      else if Token = 'div' then EmitExprBinOp(S, hikDiv)
+      else if Token = 'mod' then EmitExprBinOp(S, hikMod)
+      else if Token = 'neg' then EmitExprUnaryOp(S, hikNeg, '')
+      else if Token = 'abs' then EmitExprUnaryOp(S, hikIntrinsic, 'abs')
+      else if Token = 'cmp' then EmitExprCmp(S, Arg)
+      else if Token = 'strcmp' then EmitExprStrCmp(S, Arg)
+      else if Token = 'zext' then EmitExprZext(S)
+      else if Token = 'call' then EmitExprCall(S, Arg)
+      else if Token = 'arrvar' then
+      begin
         V := FindAlloca(Arg + '$ptr');
         if V <> 0 then
-          S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType);
-      end;
-      V := FindAlloca(Arg + '$len');
-      if V <> 0 then
-        S.Push(EmitLoad(GetIntTypeByWidth(32, True), V))
-      else
-      begin
-        EnsureAlloca(Arg + '$len', GetIntTypeByWidth(32, True));
+          S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+        else
+        begin
+          EnsureAlloca(Arg + '$ptr', GetPtrType);
+          V := FindAlloca(Arg + '$ptr');
+          if V <> 0 then
+            S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType);
+        end;
         V := FindAlloca(Arg + '$len');
         if V <> 0 then
-          S.Push(EmitLoad(GetIntTypeByWidth(32, True), V));
-      end;
-    end
-    else if Token = 'arrload' then EmitExprArrLoadVar(S, Arg)
-    else if Token = 'field' then EmitExprField(S, Arg)
-    else if Token = 'vcall' then EmitExprVcall(S, Arg)
-    else if Token = 'ivcall' then EmitExprIvcall(S, Arg);
-  end;
+          S.Push(EmitLoad(GetIntTypeByWidth(32, True), V))
+        else
+        begin
+          EnsureAlloca(Arg + '$len', GetIntTypeByWidth(32, True));
+          V := FindAlloca(Arg + '$len');
+          if V <> 0 then
+            S.Push(EmitLoad(GetIntTypeByWidth(32, True), V));
+        end;
+      end
+      else if Token = 'arrload' then EmitExprArrLoadVar(S, Arg)
+      else if Token = 'field' then EmitExprField(S, Arg)
+      else if Token = 'vcall' then EmitExprVcall(S, Arg)
+      else if Token = 'ivcall' then EmitExprIvcall(S, Arg);
+    end;
 
-  if S.Count > 0 then
-    Result := S.PopTyped(ATypeId);
+    if S.Count > 0 then
+      Result := S.PopTyped(ATypeId);
+  finally
+    Lines.Free;
+    S.Done;
+  end;
 end;
 
 procedure THIRBuilder.ProcessVarDecl(const ANode: TTypedHirNode);
@@ -225,14 +218,7 @@ begin
     end
     else if FInStartFunc then
     begin
-      if FGlobalCount >= Length(FGlobalNames) then
-      begin
-        SetLength(FGlobalNames, FGlobalCount + 32);
-        SetLength(FGlobalTypes, FGlobalCount + 32);
-      end;
-      FGlobalNames[FGlobalCount] := ANode.Operand;
-      FGlobalTypes[FGlobalCount] := DeclType;
-      Inc(FGlobalCount);
+      RegisterGlobal(ANode.Operand, DeclType);
       FModule.AddGlobal(ANode.Operand, DeclType, ANode.IsThreadVar);
     end
     else
@@ -246,23 +232,9 @@ begin
       ArrName := ANode.Operand;
     if FInStartFunc then
     begin
-      if FGlobalCount >= Length(FGlobalNames) then
-      begin
-        SetLength(FGlobalNames, FGlobalCount + 32);
-        SetLength(FGlobalTypes, FGlobalCount + 32);
-      end;
-      FGlobalNames[FGlobalCount] := ArrName + '$ptr';
-      FGlobalTypes[FGlobalCount] := GetPtrType;
-      Inc(FGlobalCount);
+      RegisterGlobal(ArrName + '$ptr', GetPtrType);
       FModule.AddGlobal(ArrName + '$ptr', GetPtrType);
-      if FGlobalCount >= Length(FGlobalNames) then
-      begin
-        SetLength(FGlobalNames, FGlobalCount + 32);
-        SetLength(FGlobalTypes, FGlobalCount + 32);
-      end;
-      FGlobalNames[FGlobalCount] := ArrName + '$len';
-      FGlobalTypes[FGlobalCount] := GetIntTypeByWidth(32, True);
-      Inc(FGlobalCount);
+      RegisterGlobal(ArrName + '$len', GetIntTypeByWidth(32, True));
       FModule.AddGlobal(ArrName + '$len', GetIntTypeByWidth(32, True));
       if IsStaticArray then
         EmitStaticArrayBacking(ArrName, ArrLength);
@@ -359,7 +331,8 @@ begin
         EmitInstr(Instr);
 
         RegisterAllocaEntry(Arg, Instr.ResultId, GetIntType, False);
-        FAllocas[FAllocaCount - 1].RecordSlots := ParamIdx;
+        if FAllocas.Count > 0 then
+          FAllocas.GetPtr(FAllocas.Count - 1)^.RecordSlots := ParamIdx;
       end;
     end;
   end;
@@ -463,7 +436,7 @@ begin
     FPendingObjectFreeHeapRelease := False;
   end;
 
-  if (FPendingCleanupCount > 0) and
+  if (FPendingCleanupNodes.Count > 0) and
     (ANode.NodeKind <> hnkDynArrayCleanupRuntime) and
     (ANode.NodeKind <> hnkTStringCleanupRuntime) and
     (ANode.NodeKind <> hnkHaltCallRuntime) and
@@ -606,30 +579,28 @@ end;
 
 procedure THIRBuilder.QueueCleanupNode(const ANode: TTypedHirNode);
 begin
-  if FPendingCleanupCount >= Length(FPendingCleanupNodes) then
-    SetLength(FPendingCleanupNodes, FPendingCleanupCount + 8);
-  FPendingCleanupNodes[FPendingCleanupCount] := ANode;
-  Inc(FPendingCleanupCount);
+  FPendingCleanupNodes.Push(ANode);
 end;
 
 procedure THIRBuilder.FlushPendingCleanupNodes;
 var
-  I: LongInt;
+  I: SizeUInt;
   Node: TTypedHirNode;
 begin
-  for I := 0 to FPendingCleanupCount - 1 do
-  begin
-    Node := FPendingCleanupNodes[I];
-    case Node.NodeKind of
-      hnkDynArrayCleanupRuntime:
-        ProcessDynArrayCleanup(Node);
-      hnkTStringCleanupRuntime:
-        EmitTStringFini(FindAlloca(Node.Operand + '$ts'));
-      hnkManagedRecordCleanupRuntime:
-        ProcessManagedRecordCleanup(Node);
+  if FPendingCleanupNodes.Count > 0 then
+    for I := 0 to FPendingCleanupNodes.Count - 1 do
+    begin
+      Node := FPendingCleanupNodes[I];
+      case Node.NodeKind of
+        hnkDynArrayCleanupRuntime:
+          ProcessDynArrayCleanup(Node);
+        hnkTStringCleanupRuntime:
+          EmitTStringFini(FindAlloca(Node.Operand + '$ts'));
+        hnkManagedRecordCleanupRuntime:
+          ProcessManagedRecordCleanup(Node);
+      end;
     end;
-  end;
-  FPendingCleanupCount := 0;
+  FPendingCleanupNodes.Clear;
 end;
 
 procedure THIRBuilder.EmitProcessInit;
@@ -666,7 +637,8 @@ var
   FwdColon, FwdColon2: LongInt;
   LOrder: array of string;
 begin
-  FFwdFuncCount := 0;
+  FFwdFuncNames.Clear;
+  FFwdFuncRetTypes.Clear;
   for I := 0 to FSemaModel.TypedHirNodeCount - 1 do
   begin
     Node := FSemaModel.TypedHirNodeAt(I);
@@ -685,19 +657,13 @@ begin
         else
           FwdRest := '';
       end;
-      if FFwdFuncCount >= Length(FFwdFuncNames) then
-      begin
-        SetLength(FFwdFuncNames, FFwdFuncCount + 32);
-        SetLength(FFwdFuncRetTypes, FFwdFuncCount + 32);
-      end;
-      FFwdFuncNames[FFwdFuncCount] := FwdName;
+      FFwdFuncNames.Push(FwdName);
       if FwdRest = 'p' then
-        FFwdFuncRetTypes[FFwdFuncCount] := GetPtrType
+        FFwdFuncRetTypes.Push(GetPtrType)
       else if (FwdRest = 's') or (FwdRest = 'so') then
-        FFwdFuncRetTypes[FFwdFuncCount] := GetStringType
+        FFwdFuncRetTypes.Push(GetStringType)
       else
-        FFwdFuncRetTypes[FFwdFuncCount] := GetIntType;
-      Inc(FFwdFuncCount);
+        FFwdFuncRetTypes.Push(GetIntType);
     end;
   end;
 

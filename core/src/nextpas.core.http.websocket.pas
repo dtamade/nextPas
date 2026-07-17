@@ -9,6 +9,7 @@ unit nextpas.core.http.websocket;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf;
@@ -89,7 +90,7 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.base,
+  nextpas.core.bytes,
   nextpas.core.errors,
   nextpas.core.hash,
   nextpas.core.hash.base,
@@ -101,7 +102,6 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.io.util,
-  nextpas.core.bytes,
   nextpas.core.http.url,
   nextpas.core.http.headers,
   nextpas.core.http.message,
@@ -171,9 +171,9 @@ end;
 procedure ValidateWebSocketOptions(const AOptions: TWebSocketOptions);
 begin
   if AOptions.MaxFrameSize < 0 then
-    raise EArgumentError.Create('WebSocket max frame size must not be negative');
+    raise EHttpError.Create(hekArgument, 'WebSocket max frame size must not be negative');
   if AOptions.MaxMessageSize < 0 then
-    raise EArgumentError.Create('WebSocket max message size must not be negative');
+    raise EHttpError.Create(hekArgument, 'WebSocket max message size must not be negative');
 end;
 
 function IsOWS(const ACh: Char): Boolean;
@@ -260,11 +260,11 @@ begin
     LDecoded := Base64Decode(AKey);
   except
     on E: EConvertError do
-      raise EHttpError.Create('Invalid Sec-WebSocket-Key header');
+      raise EHttpError.Create(hekUpgrade, 'Invalid Sec-WebSocket-Key header');
   end;
 
   if Length(LDecoded) <> 16 then
-    raise EHttpError.Create('Invalid Sec-WebSocket-Key header');
+    raise EHttpError.Create(hekUpgrade, 'Invalid Sec-WebSocket-Key header');
 end;
 
 function IsValidOpcode(const AOpcode: Byte): Boolean;
@@ -295,14 +295,14 @@ begin
   if Length(APayload) = 0 then
     Exit;
   if Length(APayload) = 1 then
-    raise EHttpError.Create('WebSocket: invalid close frame payload');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: invalid close frame payload');
 
   LCode := (UInt16(APayload[0]) shl 8) or UInt16(APayload[1]);
   if not IsValidCloseCode(LCode) then
-    raise EHttpError.Create('WebSocket: invalid close code');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: invalid close code');
   if (Length(APayload) > 2) and
      (not UTF8IsValid(@APayload[2], SizeUInt(Length(APayload) - 2))) then
-    raise EHttpError.Create('WebSocket: invalid close reason encoding');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: invalid close reason encoding');
 end;
 
 procedure ValidateTextPayload(const APayload: string);
@@ -310,7 +310,7 @@ begin
   if Length(APayload) = 0 then
     Exit;
   if not UTF8IsValid(PByte(@APayload[1]), SizeUInt(Length(APayload))) then
-    raise EHttpError.Create('WebSocket: invalid text payload encoding');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: invalid text payload encoding');
 end;
 
 function SizeExceedsLimit(const ASize: UInt64; const ALimit: Int64): Boolean;
@@ -333,7 +333,7 @@ end;
 procedure ValidateControlPayloadSize(const APayload: TBytes);
 begin
   if Length(APayload) > 125 then
-    raise EHttpError.Create('WebSocket: control frame payload too large');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: control frame payload too large');
 end;
 
 { UpgradeWebSocket }
@@ -355,9 +355,9 @@ var
   LConn: ITcpStream;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('WebSocket upgrade request is nil');
+    raise EHttpError.Create(hekArgument, 'WebSocket upgrade request is nil');
   if AW = nil then
-    raise EArgumentError.Create('WebSocket upgrade response writer is nil');
+    raise EHttpError.Create(hekArgument, 'WebSocket upgrade response writer is nil');
   ValidateWebSocketOptions(AOptions);
 
   LUpgrade := LowerTrimOWS(AReq.Headers.Get('upgrade'));
@@ -371,26 +371,26 @@ begin
 
   { RFC 6455 Section 4.1: request must be GET with HTTP/1.1 }
   if AReq.Method <> hmGet then
-    raise EHttpError.Create('WebSocket upgrade requires GET method');
+    raise EHttpError.Create(hekUpgrade, 'WebSocket upgrade requires GET method');
   if AReq.Version <> hvHttp11 then
-    raise EHttpError.Create('WebSocket upgrade requires HTTP/1.1');
+    raise EHttpError.Create(hekUpgrade, 'WebSocket upgrade requires HTTP/1.1');
 
   if LUpgrade <> 'websocket' then
-    raise EHttpError.Create('Missing or invalid Upgrade header');
+    raise EHttpError.Create(hekUpgrade, 'Missing or invalid Upgrade header');
   if not HeaderValuesHaveToken(LConnectionValues, 'upgrade') then
-    raise EHttpError.Create('Missing or invalid Connection header');
+    raise EHttpError.Create(hekUpgrade, 'Missing or invalid Connection header');
   if LKey = '' then
-    raise EHttpError.Create('Missing Sec-WebSocket-Key header');
+    raise EHttpError.Create(hekUpgrade, 'Missing Sec-WebSocket-Key header');
   ValidateHandshakeKey(LKey);
   if LVersion <> '13' then
-    raise EHttpError.Create('Unsupported Sec-WebSocket-Version');
+    raise EHttpError.Create(hekUpgrade, 'Unsupported Sec-WebSocket-Version');
 
   { Origin validation }
   LOrigin := AReq.Headers.Get('origin');
   if Assigned(AOptions.OnCheckOrigin) then
   begin
     if not AOptions.OnCheckOrigin(LOrigin) then
-      raise EHttpError.Create('WebSocket: origin not allowed');
+      raise EHttpError.Create(hekUpgrade, 'WebSocket: origin not allowed');
   end
   else
   begin
@@ -399,12 +399,12 @@ begin
       a sandboxed iframe or a non-browser client trying to evade checks.
       Also reject empty Origin as it indicates a non-browser client. }
     if (LOrigin = 'null') or (LOrigin = '') then
-      raise EHttpError.Create('WebSocket: Origin must be present and non-null');
+      raise EHttpError.Create(hekUpgrade, 'WebSocket: Origin must be present and non-null');
   end;
 
   { Hijack the connection }
   if not Supports(AW, IHttpHijacker, LHijacker) then
-    raise EHttpError.Create('Response writer does not support connection hijack');
+    raise EHttpError.Create(hekUpgrade, 'Response writer does not support connection hijack');
   LConn := LHijacker.Hijack;
 
   LAccept := ComputeAcceptKey(LKey);
@@ -453,7 +453,7 @@ begin
   begin
     LRead := FReader.Read(LPtr^, ACount);
     if LRead = 0 then
-      raise EHttpError.Create('WebSocket: unexpected end of stream');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: unexpected end of stream');
     Inc(LPtr, LRead);
     Dec(ACount, LRead);
   end;
@@ -472,21 +472,21 @@ var
 begin
   Result := Default(TWebSocketFrame);
   if not FOpen then
-    raise EHttpError.Create('WebSocket: connection closed');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: connection closed');
 
   ReadExact(LHdr[0], 2);
   Result.Fin := (LHdr[0] and $80) <> 0;
   if (LHdr[0] and $70) <> 0 then
-    raise EHttpError.Create('WebSocket: reserved bits set');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: reserved bits set');
   LOpcode := LHdr[0] and $0F;
   if not IsValidOpcode(LOpcode) then
-    raise EHttpError.Create('WebSocket: reserved or invalid opcode');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: reserved or invalid opcode');
   if (LOpcode >= $08) and (not Result.Fin) then
-    raise EHttpError.Create('WebSocket: control frames must not be fragmented');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: control frames must not be fragmented');
   if (LOpcode = Byte(wsOpContinuation)) and (not FFragmentOpen) then
-    raise EHttpError.Create('WebSocket: unexpected continuation frame');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: unexpected continuation frame');
   if (LOpcode in [Byte(wsOpText), Byte(wsOpBinary)]) and FFragmentOpen then
-    raise EHttpError.Create('WebSocket: data frame interrupts fragmented message');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: data frame interrupts fragmented message');
   Result.Opcode := TWebSocketOpcode(LOpcode);
   LMasked := (LHdr[1] and $80) <> 0;
   LPayloadLen := LHdr[1] and $7F;
@@ -495,12 +495,12 @@ begin
   if FIsClient then
   begin
     if LMasked then
-      raise EHttpError.Create('WebSocket: server frames must not be masked');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: server frames must not be masked');
   end
   else
   begin
     if not LMasked then
-      raise EHttpError.Create('WebSocket: client frames must be masked');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: client frames must be masked');
   end;
 
   if LPayloadLen = 126 then
@@ -508,37 +508,37 @@ begin
     ReadExact(LExtLen[0], 2);
     LPayloadLen := (UInt64(LExtLen[0]) shl 8) or UInt64(LExtLen[1]);
     if LPayloadLen < 126 then
-      raise EHttpError.Create('WebSocket: non-canonical payload length');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: non-canonical payload length');
   end
   else if LPayloadLen = 127 then
   begin
     ReadExact(LExtLen[0], 8);
     if (LExtLen[0] and $80) <> 0 then
-      raise EHttpError.Create('WebSocket: invalid 64-bit payload length');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: invalid 64-bit payload length');
     LPayloadLen := 0;
     for I := 0 to 7 do
       LPayloadLen := (LPayloadLen shl 8) or UInt64(LExtLen[I]);
     if LPayloadLen < 65536 then
-      raise EHttpError.Create('WebSocket: non-canonical payload length');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: non-canonical payload length');
   end;
 
   if (LOpcode >= $08) and (LPayloadLen > 125) then
-    raise EHttpError.Create('WebSocket: control frame payload too large');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: control frame payload too large');
 
   if SizeExceedsLimit(LPayloadLen, FOptions.MaxFrameSize) then
-    raise EHttpError.Create('WebSocket: frame too large');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: frame too large');
   if LPayloadLen > UInt64(High(SizeInt)) then
-    raise EHttpError.Create('WebSocket: frame exceeds platform capacity');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: frame exceeds platform capacity');
   if LOpcode in [Byte(wsOpText), Byte(wsOpBinary)] then
   begin
     if SizeExceedsLimit(LPayloadLen, FOptions.MaxMessageSize) then
-      raise EHttpError.Create('WebSocket: message too large');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: message too large');
   end
   else if LOpcode = Byte(wsOpContinuation) then
   begin
     if CombinedSizeExceedsLimit(FFragmentPayloadSize, LPayloadLen,
        FOptions.MaxMessageSize) then
-      raise EHttpError.Create('WebSocket: message too large');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: message too large');
   end;
 
   if LMasked then
@@ -660,7 +660,7 @@ begin
               Exit;
             end;
             if LFrame.Opcode <> wsOpContinuation then
-              raise EHttpError.Create('WebSocket: expected continuation frame');
+              raise EHttpError.Create(hekProtocol, 'WebSocket: expected continuation frame');
             LPayload := BytesConcat(LPayload, LFrame.Payload);
             if LFrame.Fin then
             begin
@@ -674,7 +674,7 @@ begin
       end;
 
       wsOpContinuation:
-        raise EHttpError.Create('WebSocket: unexpected continuation frame');
+        raise EHttpError.Create(hekProtocol, 'WebSocket: unexpected continuation frame');
     end;
   end;
 end;
@@ -794,7 +794,7 @@ end;
 procedure TWebSocketImpl.WriteFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes);
 begin
   if not IsOpen then
-    raise EHttpError.Create('WebSocket: connection closed');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: connection closed');
   if AOpcode in [wsOpClose, wsOpPing, wsOpPong] then
     ValidateControlPayloadSize(APayload);
   WriteFrameRaw(AOpcode, APayload);
@@ -896,12 +896,12 @@ begin
   repeat
     LLen := AReader.Read(LCh, 1);
     if LLen = 0 then
-      raise EHttpError.Create('WebSocket: unexpected end of stream reading response');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: unexpected end of stream reading response');
     if LCh <> #10 then
       LLine := LLine + LCh;
   until (LCh = #10) or (Length(LLine) > MAX_STATUS_LINE_SIZE);
   if Length(LLine) > MAX_STATUS_LINE_SIZE then
-    raise EHttpError.Create('WebSocket: HTTP status line too large');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: HTTP status line too large');
 
   { Remove trailing CR }
   if (Length(LLine) > 0) and (LLine[Length(LLine)] = #13) then
@@ -909,9 +909,9 @@ begin
 
   { Parse status code }
   if Copy(LLine, 1, 8) <> 'HTTP/1.1' then
-    raise EHttpError.Create('WebSocket: invalid HTTP response');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: invalid HTTP response');
   if Length(LLine) < 12 then
-    raise EHttpError.Create('WebSocket: invalid HTTP response');
+    raise EHttpError.Create(hekProtocol, 'WebSocket: invalid HTTP response');
   AStatusCode := StrToIntDef(Copy(LLine, 10, 3), 0);
 
   { Read headers }
@@ -920,12 +920,12 @@ begin
     repeat
       LLen := AReader.Read(LCh, 1);
       if LLen = 0 then
-        raise EHttpError.Create('WebSocket: unexpected end of stream reading headers');
+        raise EHttpError.Create(hekProtocol, 'WebSocket: unexpected end of stream reading headers');
       if LCh <> #10 then
         LLine := LLine + LCh;
     until (LCh = #10) or (Length(LLine) > MAX_HEADER_LINE_SIZE);
     if Length(LLine) > MAX_HEADER_LINE_SIZE then
-      raise EHttpError.Create('WebSocket: HTTP response header line too large');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: HTTP response header line too large');
 
     { Remove trailing CR }
     if (Length(LLine) > 0) and (LLine[Length(LLine)] = #13) then
@@ -937,9 +937,9 @@ begin
 
     Inc(LHeaderBytes, SizeUInt(Length(LLine)) + 2);
     if LHeaderBytes > MAX_HEADER_BYTES then
-      raise EHttpError.Create('WebSocket: HTTP response headers too large');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: HTTP response headers too large');
     if LHeaderCount >= MAX_HEADER_COUNT then
-      raise EHttpError.Create('WebSocket: too many HTTP response headers');
+      raise EHttpError.Create(hekProtocol, 'WebSocket: too many HTTP response headers');
 
     { Store header }
     if LHeaderCount >= Length(AHeaders) then
@@ -1018,9 +1018,9 @@ var
   LUpgrade, LConnection, LAcceptHeader: string;
 begin
   if AClient = nil then
-    raise EArgumentError.Create('WebSocket client is nil');
+    raise EHttpError.Create(hekArgument, 'WebSocket client is nil');
   if AUrl = '' then
-    raise EArgumentError.Create('WebSocket URL is empty');
+    raise EHttpError.Create(hekArgument, 'WebSocket URL is empty');
   ValidateWebSocketOptions(AOptions);
 
   { Parse URL }
@@ -1033,13 +1033,13 @@ begin
 
   { Validate scheme }
   if (LScheme <> 'ws') and (LScheme <> 'wss') then
-    raise EHttpError.Create('WebSocket: invalid scheme (expected ws:// or wss://)');
+    raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid scheme (expected ws:// or wss://)');
 
   { Validate host and path for CRLF injection }
   if (Pos(#13, LHost) > 0) or (Pos(#10, LHost) > 0) then
-    raise EHttpError.Create('WebSocket: CRLF in host');
+    raise EHttpError.Create(hekUpgrade, 'WebSocket: CRLF in host');
   if (Pos(#13, LPath) > 0) or (Pos(#10, LPath) > 0) then
-    raise EHttpError.Create('WebSocket: CRLF in path');
+    raise EHttpError.Create(hekUpgrade, 'WebSocket: CRLF in path');
 
   { Include query string in request target }
   if LParsedUrl.RawQuery <> '' then
@@ -1058,7 +1058,7 @@ begin
   { Establish TCP connection }
   LConn := TcpConnect(LHost, LPort);
   if LConn = nil then
-    raise EHttpError.Create('WebSocket: failed to connect to ' + LHost + ':' + IntToStr(LPort));
+    raise EHttpError.Create(hekConnect, 'WebSocket: failed to connect to ' + LHost + ':' + IntToStr(LPort));
 
   { Wrap with TLS if wss:// }
   if LScheme = 'wss' then
@@ -1103,22 +1103,22 @@ begin
 
   { Validate response }
   if LStatusCode <> 101 then
-    raise EHttpError.Create('WebSocket: expected 101, got ' + IntToStr(LStatusCode));
+    raise EHttpError.Create(hekUpgrade, 'WebSocket: expected 101, got ' + IntToStr(LStatusCode));
 
   LUpgrade := LowerCase(FindHeader(LHeaders, 'Upgrade'));
   LConnection := LowerCase(FindHeader(LHeaders, 'Connection'));
   LAcceptHeader := FindHeader(LHeaders, 'Sec-WebSocket-Accept');
 
   if not HeaderValueHasToken(LUpgrade, 'websocket') then
-    raise EHttpError.Create('WebSocket: invalid Upgrade header');
+    raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Upgrade header');
   if not HeaderValueHasToken(LConnection, 'upgrade') then
-    raise EHttpError.Create('WebSocket: invalid Connection header');
+    raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Connection header');
   if LAcceptHeader = '' then
-    raise EHttpError.Create('WebSocket: missing Sec-WebSocket-Accept header');
+    raise EHttpError.Create(hekUpgrade, 'WebSocket: missing Sec-WebSocket-Accept header');
 
   { Validate Accept key }
   if not ValidateAcceptKey(LKey, LAcceptHeader) then
-    raise EHttpError.Create('WebSocket: invalid Sec-WebSocket-Accept');
+    raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Sec-WebSocket-Accept');
 
   { Create WebSocket client }
   Result := TWebSocketImpl.Create(LReader, LWriter, AOptions, True);

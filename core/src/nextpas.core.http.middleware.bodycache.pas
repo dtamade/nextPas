@@ -29,23 +29,13 @@ uses
   nextpas.core.io.memory;
 
 type
-  { Wraps IHttpRequest, replacing Body with a cached TBytes buffer }
-  TCachedBodyRequest = class(TInterfacedObject, IHttpRequest)
+  { Wraps IHttpRequest, replacing Body with a cached TBytes buffer.
+    Forwards context/options via THttpRequestWrapper. }
+  TCachedBodyRequest = class(THttpRequestWrapper)
   private
-    FInner: IHttpRequest;
     FCachedBody: TBytes;
-    function GetMethod: THttpMethod;
-    function GetUrl: TUrl;
-    function GetPath: string;
-    function GetRawQuery: string;
-    function GetVersion: THttpVersion;
-    function GetHeaders: IHttpHeaders;
-    function GetTrailers: IHttpHeaders;
-    function GetBody: IReader;
-    function GetContentLength: Int64;
-    function GetRemoteAddr: string;
-    function PathParam(const AName: string): string;
-    function QueryParam(const AName: string): string;
+  protected
+    function GetBody: IReader; override;
   public
     constructor Create(const AInner: IHttpRequest; const ACachedBody: TBytes);
   end;
@@ -53,44 +43,8 @@ type
 constructor TCachedBodyRequest.Create(const AInner: IHttpRequest;
   const ACachedBody: TBytes);
 begin
-  inherited Create;
-  FInner := AInner;
+  inherited Create(AInner);
   FCachedBody := ACachedBody;
-end;
-
-function TCachedBodyRequest.GetMethod: THttpMethod;
-begin
-  Result := FInner.GetMethod;
-end;
-
-function TCachedBodyRequest.GetUrl: TUrl;
-begin
-  Result := FInner.GetUrl;
-end;
-
-function TCachedBodyRequest.GetPath: string;
-begin
-  Result := FInner.GetPath;
-end;
-
-function TCachedBodyRequest.GetRawQuery: string;
-begin
-  Result := FInner.GetRawQuery;
-end;
-
-function TCachedBodyRequest.GetVersion: THttpVersion;
-begin
-  Result := FInner.GetVersion;
-end;
-
-function TCachedBodyRequest.GetHeaders: IHttpHeaders;
-begin
-  Result := FInner.GetHeaders;
-end;
-
-function TCachedBodyRequest.GetTrailers: IHttpHeaders;
-begin
-  Result := FInner.GetTrailers;
 end;
 
 function TCachedBodyRequest.GetBody: IReader;
@@ -101,26 +55,6 @@ begin
     Exit(nil);
   LCopy := Copy(FCachedBody, 0, Length(FCachedBody));
   Result := CreateBytesStreamFrom(LCopy) as IReader;
-end;
-
-function TCachedBodyRequest.GetContentLength: Int64;
-begin
-  Result := FInner.GetContentLength;
-end;
-
-function TCachedBodyRequest.GetRemoteAddr: string;
-begin
-  Result := FInner.GetRemoteAddr;
-end;
-
-function TCachedBodyRequest.PathParam(const AName: string): string;
-begin
-  Result := FInner.PathParam(AName);
-end;
-
-function TCachedBodyRequest.QueryParam(const AName: string): string;
-begin
-  Result := FInner.QueryParam(AName);
 end;
 
 function BodyCacheMiddleware: IHttpMiddleware;

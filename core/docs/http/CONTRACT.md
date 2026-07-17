@@ -1,175 +1,374 @@
 # nextpas.core.http 代码契约
 
-**模块路径**：`core/src/nextpas.core.http*.pas`（36 个源文件）
-**层级**：L3（依赖 L0-L2: net, tls, json）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-06
-**版本**：2.0
+**模块路径**：`core/src/nextpas.core.http*.pas`（约 58 个源文件）
+**层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
+**Owner**：http worktree lane
+**最后更新**：2026-07-16
+**版本**：3.0
 
 ---
 
-## 1. 接口契约
-
-### 1.1 子模块
+## 1. 模块边界
 
 ```
-http.base          ← THttpMethod, THttpStatus, THttpVersion, TUrl, EHttpError,
-                     THttpClientOptions, THttpServerOptions, HttpStatusText
-http.headers       ← THttpHeaders (header storage, RFC 9110 validation)
-http.request       ← THttpRequest (value type)
-http.response      ← THttpResponse (value type)
-http.client        ← IHttpClient (transport abstraction), THttpClient (facade)
-http.server        ← IHttpServer (transport abstraction), THttpServer (facade)
-http.middleware.*   ← CORS, logging, rate-limit, request-id, recovery, compress
-http.impl.h1       ← HTTP/1.1 transport (client + server)
-http.impl.h2.*     ← HTTP/2 transport (client + server + TLS + HPACK)
-http.impl.registry ← Default protocol registry (H1/H2 factory resolution)
-http.static        ← Static file serving middleware
-http.pas           ← 门面 (re-exports)
+http.pas                 ← 统一门面（re-export）
+http.base                ← THttpMethod/Status/Version, TUrl, options, EHttpError
+http.intf                ← IHttp* 接口（Request/Response/Client/Server/Router/…）
+http.message             ← THttpRequest/THttpResponse + helpers + THttpRequestBuilder
+http.headers             ← IHttpHeaders 实现
+http.url                 ← URL parse / encode helpers（base/TUrl 拥有核心类型）
+http.router[+group]      ← radix router + path params + regex routes + groups
+http.middleware.*        ← 中间件链与内建 middleware
+http.client / server     ← facade 编排（server 委托 net.server）
+http.static / websocket  ← helper 级公开面
+http.form / cookie / sse ← 表单、Cookie、SSE 辅助
+http.impl.registry       ← 版本 → transport factory
+http.impl.h1.*           ← HTTP/1.x transport + parser/writer/chunked/fast
+http.impl.h2.*           ← HTTP/2 frame/HPACK/stream/session/client/TLS
+http.impl.tls.stream     ← TLS over TCP stream wrapper
+http.fuzz                ← 模糊测试辅助（测试/安全验证用）
 ```
 
-### 1.2 核心接口
+公开消费方默认只 `uses nextpas.core.http`。
+
+---
+
+## 2. 核心公开接口（与源码一致）
+
+### 2.1 Server / Client
 
 ```pascal
-{ Transport abstraction — one instance per connection }
-IHttpClient = interface
-  function GetOptions: THttpClientOptions;
-  procedure SetOptions(const AValue: THttpClientOptions);
-  function RoundTrip(const AReq: THttpRequest): THttpResponse;
-  property Options: THttpClientOptions read GetOptions write SetOptions;
-end;
-
 IHttpServer = interface
-  function GetRequestHandler: THttpServerRequestEvent;
-  procedure SetRequestHandler(const AValue: THttpServerRequestEvent);
-  procedure AddRoute(const AMethod, APath: string;
-    const AHandler: THttpServerRequestEvent);
-  procedure AddMiddleware(const AMiddleware: IHttpMiddleware);
-  procedure SetDefaultHandler(const AHandler: THttpServerRequestEvent);
-  procedure Start;
-  procedure Stop;
+  procedure ListenAndServe(const AAddr: string; const APort: UInt16);
+  procedure Shutdown;
+  function LocalAddr: TNetAddress;
+  function IsRunning: Boolean;
+end;
+
+IHttpClient = interface
+  function Send(const AReq: IHttpRequest): IHttpResponse;
+  procedure CloseIdleConnections;
+  function Get/Post/Put/Delete/Patch/Head/Options(...): IHttpResponse;
+  function PostForm / PostJson / PutJson / PatchJson / DeleteJson(...): IHttpResponse;
+  function SendStreaming(...): IHttpResponse;
+  function WithBasicAuth / WithBearerAuth / WithHeader /
+           WithTimeout / WithMaxRedirects / WithFollowRedirects /
+           WithRetry(...): IHttpClient;
 end;
 ```
 
-### 1.3 请求/响应值类型
+### 2.2 Request / Response
+
+- 公开类型是 **接口** `IHttpRequest` / `IHttpResponse`，不是裸 record wire 模型。
+- 推荐构造：`THttpRequestBuilder`（fluent：Header / BasicAuth / BearerAuth /
+  ContentType / Body / QueryParam / Timeout / MaxRedirects / FollowRedirects / Build）。
+- **非 deprecated 工厂（仅 2 个）**：
+  - `NewRequest(Method, TUrl)` — 最小原始工厂（测试/内部桥接仍可直接用）
+  - `NewGetRequest(Path)` — 路径级 GET 便捷工厂
+- **公开 request 工厂白名单（仅 2 个）**：
+  - `NewRequest(Method, TUrl)` — 最小原始工厂
+  - `NewGetRequest(Path)` — 路径级 GET 便捷工厂
+  - 另保留 `NewRequest(Method, string)` 作为 URL 解析桥（不带 headers/body）
+- 多参 `NewRequest` overload **已物理删除**；一律用 `THttpRequestBuilder`。
+- `NewStreamingRequest` **已物理删除**；已知长度流式 body 用
+  `THttpRequestBuilder.Body(IReader)+ContentLength` 或
+  `IHttpClient.SendStreaming`。
+- Body 通过 `IReader` 表达；固定 body helpers 会复制到内存 reader 并发布 `Content-Length`。
+- Builder body 契约：
+  - `Body(string|TBytes)`：按实际长度发布 `Content-Length`；**空 string** 仍是
+    有 body + `Content-Length: 0`（与「未调用 Body」区分）。
+  - `Body(IReader)` + **`ContentLength(N)`**：已知长度流式请求。
+  - 仅 `Body(IReader)` 未声明长度 → **H1 chunked**（`ContentLength = -1`，
+    发布 `Transfer-Encoding: chunked`）；**禁止**静默 `Content-Length: 0`。
+  - `SendStreaming(..., ContentLength < 0)` 同样走 H1 chunked。
+  - H2 拒绝未知长度 / chunked request body（`hekArgument`）。
+- Streaming：`SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
+- Client convenience `Post/Put/Patch/Delete` **仅** `string` / `TBytes` body 重载
+  （**无** `IReader` 便捷 overload）。
+- `WithRetry(N)`：对 **5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
+  （`hekTimeout` / `hekConnect` / 裸 `ETimeoutError` / `ENetworkError`）在
+  最多 N 次额外尝试内指数退避重试（100ms 基、封顶 5s）。**不**重试 4xx。
+  **幂等门闩**（与 H1/H2 pool retry 同一规则）：仅当
+  `HttpIsRetrySafeRequest(Req)` 为真时才进入重试环——即 method ∈
+  {GET, HEAD, OPTIONS, TRACE} **或** 请求带 `Idempotency-Key` /
+  `X-Idempotency-Key`。非幂等（如裸 POST）即使 5xx/timeout 也只尝试一次。
+  重试前若 body 可回放（`IStream`）则 rewind；非空且不可回放 body 不重试。
+- 请求取消：`IHttpCancelToken`（**协作检查点**，非 OS 级硬中断）+
+  `THttpRequestOptions` / builder / client 挂钩。
+  **检查点清单**：
+  1. `IHttpClient.Send` 入口
+  2. redirect 跟进前
+  3. `WithRetry` 退避前后
+  4. H1 `RoundTrip`：入口、新 dial 前、request write 后 / response read 前
+  5. pool reconnect 重写前
+  取消抛 `EHttpError(hekCanceled)`。H1 client 在 dial 后把 cancel token
+  接到 `ITcpStream.SetCancelToken`：阻塞 Read/Write 以 ~50ms 切片轮询
+  cancel，中途取消抛 `hekCanceled`（经 `ECancelledError` 包装）。
+  **仍建议**与 `Timeout` / `WithTimeout` 配对，避免无 cancel 时无限等待。
+  超时仍为 `hekTimeout`（`WithTimeout` / client options）。
+- Client 超时拆分（`THttpClientOptions`）：
+  - `Timeout`：socket 就绪后的 request 读/写 deadline（ms；0=无限）
+  - `ConnectTimeout`：新 dial 时 **OS `connect()` + post-dial 首写** budget（ms）。
+    `>0` 时经 `TcpConnect(host, port, ms)` 有界 dial，并作为首写 budget。
+    `=0` 时 dial 回退到 `Timeout`（`Timeout>0` 则有界，否则无界）；首写用
+    `Timeout`。
+- **Production defaults（可用性纪律）**：
+  - 生产 client：`THttpClientOptions.Default.Timeout` = **30000** ms；
+    仍可用 `WithTimeout` 覆盖。`Timeout=0` 仅适合测试/特殊工具。
+    默认 `Timeout` 也会作为 OS dial 上界（当 `ConnectTimeout=0`）。
+  - **禁止**把“只挂 cancel、不设 Timeout”当作唯一生产模板（cancel 延迟约一个切片）。
+  - 生产 server：`THttpServerOptions.Default` 的 Read/Write timeout 仍为 **0**
+    （兼容测试）；生产路径使用 **`THttpServerOptions.Production`**
+    （Read/Write = 30000 ms）或显式 `WithReadTimeout` / `WithWriteTimeout`。
+    IdleTimeout alone 不是完整生产模板。示例 `http_hello_server` /
+    `http_websocket_echo_demo` 使用 Production。
+  - 示例 `http_get_client` 使用有限 client timeout。
+
+### 2.2.0a Net-dependent capabilities
+
+| Capability | HTTP surface today | Owner | Status |
+|------------|-------------------|-------|--------|
+| OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** |
+| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1 client wire | **Landed** (slice latency) |
+| HTTPS CONNECT / proxy auth | plain HTTP absolute-form proxy only | http + TLS tunnel design | **Deferred** (separate milestone) |
+
+### 2.2.1 EHttpError.Kind
+
+- `EHttpError` 保留单一异常类型；`THttpErrorKind` 含 Argument/Timeout/Connect/
+  Protocol/Parse/Redirect/Body/Upgrade/Registry/Status/**Canceled**/… 与
+  `Kind` / 可选 `Status` / `Op`。
+- `Create(string)` 保持兼容（`Kind = hekUnknown`，Category 仍默认 network）。
+- 新代码优先 `Create(Kind, Message)`；调用方可 `except on E: EHttpError` 后匹配 Kind。
+- **消息形状错误**（非法/冲突 Content-Length、不支持 Transfer-Encoding、
+  builder 非法 CL）→ `hekArgument`。
+- **配置/nil 前置条件**（nil writer/client、负超时/负 max redirects、
+  server/websocket/**SSE**/middleware 构造与公开前置条件等）→ 也归
+  `hekArgument`（不再裸 `EArgumentError`，便于统一 `HttpErrorIsUserError`）。
+- **ensure-2xx / download / redirect 客户端错误消息**：在已知 method/URL 时
+  前缀为 `METHOD url: detail`（如 `GET http://example/path: HTTP request failed
+  with status 404 Not Found`）。`HttpEnsureSuccess` 提供无上下文与
+  `(Resp, Method, Url)` 两形态。
+- Transport 边界：裸 `ETimeoutError` → `hekTimeout` + `Op=transport`；
+  裸 `ENetworkError`（含 connect 失败）→ `hekConnect` + `Op=transport`
+  （H1/H2 client RoundTrip 经 `HttpWrapTransportException`）。
+- 门面 helper：
+  - `HttpErrorIsTimeout` / `HttpErrorIsRetryable`
+  - `HttpErrorIsUserError` — `hekArgument` / `hekCanceled`（调用方错误，非服务端故障）
+  - `HttpIsRetrySafeRequest` / `HttpIsRetryableMethod` — 与 WithRetry / pool 共用
+- Request body framing：known Content-Length **或** H1 chunked request body
+  （未知长度）。`ContentLength < 0` 的非法值 fail-fast。
+
+### 2.2.2 IHttpContext
+
+- Context 附着在 **请求对象**（`IHttpRequestWithContext`），不使用进程级 pointer map。
+- `SetValue` = 非拥有；`SetOwnedValue` = context 拥有并在覆盖/Remove/Destroy 时 Free。
+- `Has(Key)` = 键存在（允许 value=nil 的非拥有条目）。
+- 类型化 helper（门面 re-export）：`HttpContextGetString` / `HttpContextSetString` /
+  `HttpContextGetInt64` / `HttpContextSetInt64`（内部 box 为拥有对象）。
+- Middleware request 装饰基类 `THttpRequestWrapper` 转发
+  `IHttpRequestWithContext` / `IHttpRequestWithOptions`，避免 bodycache/decompress
+  等包装丢 `Supports` 保真。
+
+### 2.2.3 CookieJar / Proxy（client 可用性）
+
+- `IHttpCookieJar`：RFC 6265 最小存储；`NewHttpCookieJar` + client
+  `WithCookieJar(Jar)` 在 Send 前注入 `Cookie`，在响应后吸收 `Set-Cookie`。
+  默认 **无** jar（不隐式持久化）。
+  **过期**：解析 `Max-Age`（优先）与 `Expires`（IMF-fix）；到期在
+  `StoreFromResponse` / `CookieHeaderFor` 时淘汰；`Max-Age<=0` 删除匹配项。
+  Session cookie（无过期属性）不自动淘汰。无磁盘持久化。
+  **SameSite**（无完整 PSL）：解析 `SameSite=Strict|Lax|None`；缺省按 **Lax**；
+  `None` 必须带 `Secure` 否则不存储。SiteKey ≈ 主机最后两段 label（无 PSL）。
+  同站发送全部匹配 cookie；跨站仅发送 `SameSite=None`。
+- HTTP proxy：`THttpClientOptions.ProxyUrl` **或** fluent
+  `IHttpClient.WithProxyUrl`（重建 transport；装饰器 re-stack）。
+  明文 `http://host:port` 正向代理。H1 对目标 `http://` 经 proxy 发
+  absolute-form request-line；**HTTPS CONNECT / 认证代理不在本 slice**。
+  net 层最小 hook：connect 到 proxy 主机而非目标主机。
+- `PostMultipart(Url, Fields, Files)`：multipart/form-data 便捷 POST
+  （自动 boundary + `EncodeMultipartFormData`）。
+- `IHttpClient.GetString` / `GetBytes`：与 free function `HttpGetString` /
+  `HttpGetBytes` 等价（ensure 2xx + body）。
+- H1 默认 `User-Agent: nextpas-http/1.0`（请求未设置 `User-Agent` 时注入）。
+
+### 2.2.4 IHttpResponse.Close
+
+- `Close` 语义对齐 `HttpReleaseResponseBody`（幂等）；析构时若未 Close 则自动 Close。
+- 调用方应先读完 body 再让 response 离开作用域，或显式 `Close` / Read helper。
+
+### 2.2.4 FPC RTL 隔离（可用性修复）
+
+- 生产 HTTP 源与 examples/tests：**禁止**直接 `uses SysUtils` / `Process` /
+  `BaseUnix`（仅 `nextpas.core.system` 可直接依赖 FPC RTL）。
+- 子进程：`nextpas.core.process`（`Command` / `IChild`）；文本：`text.conv`；
+  环境：`os.env`；路径/文件：`path` / `fs`。
+
+### 2.3 Router / Middleware
 
 ```pascal
-THttpRequest = record
-  Method: string;             { GET, POST, etc. (uppercase) }
-  RequestTarget: string;      { /path?query }
-  Version: THttpVersion;      { hvHttp10, hvHttp11, hvHttp2 }
-  Headers: THttpHeaders;      { owned by caller }
-  Body: TBytes;               { nil = no body }
-  Trailers: THttpHeaders;     { for chunked trailer }
-  MaxResponseBodySize: Int64; { 0 = default (32MB) }
+IHttpRouter = interface(IHttpHandler)
+  procedure Handle / Get / Head / Post / Put / Delete / Patch / Options / ...
+  procedure HandleRegex / GetRegex / ...
+  procedure Use(const AMiddleware: IHttpMiddleware);
 end;
 
-THttpResponse = record
-  Version: THttpVersion;
-  StatusCode: THttpStatus;    { UInt16 }
-  StatusText: string;
-  Headers: THttpHeaders;
-  Body: TBytes;
-  Trailers: THttpHeaders;
-  IsInformational: Boolean;   { 1xx }
-  GetSkippableInformational: Boolean; { 100/101/103 }
-  HeaderBytes: Int64;
+IHttpHandler = interface
+  procedure ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
+end;
+
+IHttpMiddleware = interface
+  function Wrap(const ANext: IHttpHandler): IHttpHandler;
 end;
 ```
 
-### 1.4 HTTP/2
+- 404/405 默认走 RFC 7807 `HttpWriteErrorResponse`（`application/problem+json`）。
+- 405 设置 `Allow` 列表；HEAD 可隐式回落到 GET 路由。
 
-- HPACK 头部压缩/解压 (`nextpas.core.http.impl.h2.hpack`)
-- 帧解析 (`nextpas.core.http.impl.h2.h2frame`)
-- 流多路复用 + 流量控制 (`nextpas.core.http.impl.h2.client/server`)
-- TLS ALPN 协商 h2 (`nextpas.core.http.impl.h2.tls`)
-- 连接池: `TH2ConnectionPool` (线程安全, `FPoolLock: TRTLCriticalSection`)
+### 2.4 Transport seams
 
-### 1.5 HTTP/1.1
+```pascal
+IHttpTransport.RoundTrip(Req): Response
+IHttpServerTransport.ServeConn(Conn, Handler): ownership
+IHttpServerSessionFactory[.WithContext]
+```
 
-- llhttp C 库解析 (`nextpas.core.http.impl.h1.parser`)
-- 连接池: `TH1ConnectionPool` (线程安全, `FPoolLock: TRTLCriticalSection`)
-- keep-alive 默认开启, `Connection: close` 正确处理
-- 响应解析器在 keep-alive 消息完成后暂停 (HPE_PAUSED)
-
----
-
-## 2. 不变量
-
-- **[INV-1]** HTTP/1.1 keep-alive 默认开启，`Connection: close` 响应后连接不复用
-- **[INV-2]** HTTP/2 流 ID 奇偶分离（客户端奇/服务端偶）
-- **[INV-3]** HPACK 动态表有大小上限 (SETTINGS_MAX_HEADER_TABLE_SIZE)
-- **[INV-4]** chunked 编码以 0 长度块终止，可带 trailers
-- **[INV-5]** 响应解析器在 keep-alive 消息完成后暂停 (HPE_PAUSED)，保留未消费字节
-- **[INV-6]** 注册表初始化后冻结 (GFrozen)，运行时不可修改
-- **[INV-7]** THttpHeaders 名称规范化: 小写存储，查找时大小写不敏感
-- **[INV-8]** THttpHeaders 值验证: 拒绝 CR/LF/控制字符，允许 HTAB (RFC 9110 §5.5)
+- `NewHttpClient([Transport][, Options])` / `NewHttpServer(Handler[, Transport][, Options])`
+- 显式 transport 注入优先于 registry 默认解析。
+- 内建：`hvHttp10`/`hvHttp11` → H1；`hvHttp2` → H2。默认版本 `hvHttp11`。
+- Registry 初始化后冻结（`GFrozen`）；测试可经逃生口解冻。
 
 ---
 
-## 3. 错误处理
+## 3. 不变量
 
-所有错误通过 `EHttpError` (继承 `ENextPasError`, 错误码 `ecNetwork`) 统一报告:
+| ID | 内容 |
+|----|------|
+| INV-1 | H1 keep-alive 默认开启；`Connection: close` 后不复用 |
+| INV-2 | H2 流 ID 奇偶分离（客户端奇 / 服务端偶） |
+| INV-3 | HPACK 动态表受 `SETTINGS_MAX_HEADER_TABLE_SIZE` 约束 |
+| INV-4 | chunked 以 0-size chunk 终止，可带 trailer section |
+| INV-5 | H1 response parser 在 keep-alive 消息完成后 pause，保留未消费字节 |
+| INV-6 | registry 冻结后不可改 |
+| INV-7 | header 名大小写不敏感查找 |
+| INV-8 | header 值拒绝 CR/LF/控制字符（允许 HTAB，RFC 9110 §5.5） |
+| INV-9 | public HTTP contract 保持同步直线型，不泄漏 epoll/reactor 细节 |
+| INV-10 | trailer 字段不污染普通请求 `Headers`；可保留 `Trailer:` 声明头 |
+| INV-11 | 错误响应 helper 默认 RFC 7807 Problem Details |
+| INV-12 | Keep-alive request-tail 见 §3.1（final public contract，非 provisional truth） |
 
-| 场景 | 抛出位置 | 消息模式 |
-|------|----------|----------|
-| 连接失败 | `TH1ClientTransport.ConnectSocket` | `'connect failed: ' + host + ':' + port + ': ' + msg` |
-| TLS 握手失败 | `TH2TlsClientTransport.RoundTrip` | `'TLS handshake failed: ' + SysErrorMessage` |
-| 协议错误 | `TH1ClientTransport.ReadResponse` | `'HTTP response incomplete: ' + msg` |
-| 断言失败 | `TH2ClientTransport.AssertSuccess` | `'nghttp2 ' + funcName + ' failed: ' + errorCode` |
-| 注册表冻结后修改 | `registry.Register/Unregister/SetDefault` | `'registry frozen: cannot ...'` |
-| Header 名称无效 | `THttpHeaders.ValidateName` | `'header name must not be empty'` |
-| Header 值无效 | `THttpHeaders.ValidateValue` | `'invalid header value character'` |
+### 3.1 Keep-Alive Request-Tail（INV-12，2026-07-16 定稿）
 
-超时由 HTTP 客户端包装层处理: 比较 `DateTimeToSTicks(Now) - LStartTime >= LTimeout`。
+H1 server 对同连接上“当前请求 framing 完成后的未消费字节”采用 **request isolation + deferred follow-up parse**，而不是“首请求成功后立刻因尾巴拒整连接”或“把尾巴并进当前请求”。
+
+#### A. `Connection: close` 请求
+
+| 输入 | 契约 |
+|------|------|
+| `Content-Length` body 结束后仍有 extra bytes | **同请求** parser error → 显式 `400`，**不进入** handler |
+| chunked terminal chunk 结束后仍有 extra bytes | **同请求** parser error → 显式 `400`，**不进入** handler |
+
+#### B. Keep-alive 请求（默认 / 非 close）
+
+适用范围：fixed-length（`Content-Length`）、plain chunked、trailer-complete chunked。
+
+1. **Framing 完成即交付**
+   当前请求在 framing 完成时立刻完成并进入 handler；handler 只看到本请求声明长度/解码后的 body。
+2. **Tail 隔离**
+   未消费字节进入连接级 pending buffer（`TH1ServerConnectionState.FPending`），**不得**污染当前 method/url/headers/body。
+3. **合法 pipeline**
+   同 write / 后续 write 中的完整下一请求按序处理；首响应与次请求响应保持 wire 顺序。
+4. **Partial follow-up 不得早拒**
+   半截 follow-up request-line / headers 在连接仍可继续读时，**不得**提前当成 malformed；补齐后可成为合法第二请求。
+5. **Follow-up 400 时机**
+   仅当 follow-up **结论性 malformed**，或 peer half-close / EOF 使 follow-up 截断无法完成时，才对 **follow-up** 返回显式 `400`（排在先前成功响应之后）。
+6. **Garbage tail**
+   framing 完成后的垃圾字节（非合法 HTTP 请求起始）→ 首请求仍 `200`（若合法）→ follow-up `400`。
+
+#### C. 明确拒绝的收紧方案（不做）
+
+- 不因 keep-alive 尾巴把 **已完整 framing 的首请求** 改成同请求 `400`
+- 不在 partial follow-up 仍可能补全时主动“猜测拒绝”
+- 不把该契约泄漏为 public async/callback API
+
+#### D. 证据层
+
+| 层 | 套件 | 锁什么 |
+|----|------|--------|
+| parser | `test_http_h1parser` | 只消费首请求；partial 可补全；pipeline 不污染 |
+| server | `test_http_server` | handler body 边界；follow-up `400`；threaded + epoll |
+| security | `test_http_security` | raw-wire safe-handling / wire-order |
+
+状态：**final public contract**（不再记为 transport current truth）。
 
 ---
 
-## 4. 线程安全
+## 4. 错误与生命周期
 
-| 组件 | 线程安全 | 机制 |
-|------|----------|------|
-| `IHttpClient` | ✅ | 连接池用 `TRTLCriticalSection` 保护 |
-| `IHttpServer` | ✅ | Handler 由 TCP server 线程池调用 |
-| `THttpHeaders` | ✅ 读 | 只读操作无锁; 写操作非线程安全 |
-| `THttpClient` | ✅ | 内部持有 `IHttpClient`，`Options` 写时创建新 transport |
-| `THttpServer` | ✅ | 内部持有 `IHttpServer`，`Options` 写时创建新 server |
-| 注册表 | ✅ | 初始化后冻结，读操作无锁 |
-
----
-
-## 5. 内存管理
-
-- **请求/响应 body**: `TBytes`，调用方管理生命周期
-- **THttpHeaders**: 值类型 record，内部 `FEntries` 动态数组，浅拷贝共享引用
-- **HPACK 动态表**: 内置于 H2 连接，连接关闭时释放
-- **连接池**: `THttpClient.Destroy` 时断开所有池连接
-- **llhttp 解析器**: 每连接一个 `llhttp_t`，连接关闭时释放
+- 模块错误类型：公开前置条件、transport 构造/入口前置条件与协议故障以
+  **`EHttpError`** 为主（`hekArgument` / `hekTimeout` / …）。H1/H2/TLS stream
+  的 nil conn/req/handler 等前置条件亦为 `hekArgument`（不再裸
+  `EArgumentError`）。`HttpErrorIsUserError` 仍兼容框架 `EArgumentError` 与
+  `hekArgument` / `hekCanceled`。
+- Server runtime ownership：`nextpas.core.net.server`；HTTP 只拥有协议状态机。
+- Client：idle pool 经 `CloseIdleConnections`；`Send` 拥有 close-capable request body。
+- Redirect：`301/302/303` → GET 无 body；`307/308` 保方法；跨 authority 剥离敏感头。
+- WebSocket / SSE：`UpgradeWebSocket` / `ConnectWebSocket`；`StartSSE` —
+  公开前置条件均为 `hekArgument`。
 
 ---
 
-## 6. 性能特征
+## 5. 协议策略
 
-- **Header 查找**: O(n) 线性扫描，规范化仅在首次查找时触发
-- **连接池**: 空闲连接复用，避免 TCP 握手开销
-- **HPACK**: 动态表减少重复头部传输
-- **llhttp**: C 库解析，比 Pascal 实现快 ~10x
-- **Body 传输**: `TBytes` 零拷贝传递 (引用计数)
+### H1
+
+- llhttp 翻译 parser + 保守 fast path
+- chunked / keep-alive / Expect:100-continue / hijack
+- keep-alive request-tail：INV-12（isolation + deferred follow-up parse）
+- threaded 正确性基线；Linux epoll poll-driven session 已落地
+
+### H2
+
+- 完整 transport：frame / HPACK / stream / session / client / TLS ALPN `h2`
+- cleartext：prior knowledge only（无 h2c Upgrade）
+- 设计排除：server push、CONNECT/WS-over-H2、PRIORITY 调度
+
+### H3
+
+- **未实现**；仅版本枚举 + registry seam（`hvHttp3` / `HttpVersionToStr`）
+- 内建 `RegisterBuiltins` **不**注册 H3 client/server factory
+- 未注册时 `Resolve*Transport(hvHttp3)` → `EHttpError`（`test_http_registry`）
+- 阻塞：独立 QUIC 模块（连接/流/TLS）；禁止空 H3 facade
 
 ---
 
-## 7. 测试覆盖
+## 6. 测试门禁
 
-- **31 个测试套件**, ~1447 测试
-- **测试工具**: `tests/harness/` (TCP echo server, TLS cert gen, binary validator)
-- **关键覆盖**: HTTP/1.1 解析, HTTP/2 帧, HPACK, keep-alive, chunked, CORS, 中间件
-- **已知缺口**: TLS mock 测试缺失, 100 Continue 仅基本覆盖, 压力测试待建
+主门禁：`core/tests/nextpas.core.http/Makefile`（35 suites）
+
+纳入：base/url/headers/message/form/cookie/router/middleware(s)/hsts/static/
+client/contract/registry/h1*/server/security/stress/h2*/websocket*/fuzz/https_redirect
+
+旁路：benchmarks、examples、smoke、integration、tls_real（环境/性能/长集成）
+
+单套件：
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.http/test_http_router
+```
 
 ---
 
-## 变更记录
+## 7. 变更记录
 
-| 日期 | 版本 | 变更描述 | 作者 |
-|------|------|----------|------|
-| 2026-07-01 | 1.0 | 初始版本 | Claude |
-| 2026-07-06 | 2.0 | 完全重写: 匹配实际代码接口，修正错误类型/线程安全描述 | Claude |
+| 日期 | 版本 | 变更 |
+|------|------|------|
+| 2026-07-01 | 1.0 | 初始 |
+| 2026-07-06 | 2.0 | 对齐接口重写（仍混有旧 record 描述） |
+| 2026-07-16 | 3.0 | 与真实 IHttp* 面、builder、H2、门禁清单对齐 |
+| 2026-07-16 | 3.1 | 定稿 INV-12 keep-alive request-tail final public contract |
+| 2026-07-16 | 3.2 | H2 facade E2E 门禁 `test_http_h2_facade`；session write-drain 死锁修复 |
+| 2026-07-16 | 3.3 | P3 API audit：facade/message deprecation 对齐；builder-first 清单 |
+| 2026-07-16 | 3.4 | P4 成本隔离阶梯 + HTTP benches SysUtils 隔离修复 |
+| 2026-07-16 | 3.5 | P5 H3 honesty：无内建 H3 factory；QUIC 阻塞显式化 |
+| 2026-07-16 | 3.6 | Usability wave-2：hekTimeout wrap、hekArgument 消息形状、IReader fail-fast、THttpRequestWrapper、RTL isolation |
+| 2026-07-16 | 3.7 | Usability wave-3：WithRetry=5xx+IsRetryable；connect wrap；删 IReader client overload；known-CL only；删 NewStreamingRequest；多参 NewRequest 仍 deprecated；decorator forwarder |

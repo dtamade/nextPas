@@ -238,7 +238,7 @@ begin
   Symbol := AModel.SymbolAt(AExpr.SymbolId - 1);
   if Symbol.Name <> AExpectedSymbolName then
     Halt(ABaseExitCode + 4);
-  if Length(AExpr.Children) <> 0 then
+  if SemanticHirChildCount(AExpr.Children) <> 0 then
     Halt(ABaseExitCode + 5);
 end;
 
@@ -252,9 +252,9 @@ begin
     Halt(ABaseExitCode);
   if AExpr.ValueClass <> shvcAddress then
     Halt(ABaseExitCode + 1);
-  if Length(AExpr.Children) <> 1 then
+  if SemanticHirChildCount(AExpr.Children) <> 1 then
     Halt(ABaseExitCode + 2);
-  BaseExpr := AModel.HirExprAt(AExpr.Children[0] - 1);
+  BaseExpr := AModel.HirExprAt(AExpr.Children[SizeUInt(0)] - 1);
   if BaseExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 3);
   if AModel.SymbolAt(BaseExpr.SymbolId - 1).Name <> ASymbolName then
@@ -274,9 +274,9 @@ begin
   if Expr.Kind <> shekCast then
     Halt(ABaseExitCode + 1);
   AssertExprTypeName(AModel, Expr, AExpectedTargetTypeName, ABaseExitCode + 2);
-  if Length(Expr.Children) < 1 then
+  if SemanticHirChildCount(Expr.Children) < 1 then
     Halt(ABaseExitCode + 3);
-  Child := AModel.HirExprAt(Expr.Children[0] - 1);
+  Child := AModel.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
   AssertExprTypeName(AModel, Child, AExpectedChildTypeName, ABaseExitCode + 4);
 end;
 
@@ -293,12 +293,12 @@ begin
     if Node.ExprId <= 0 then
       Continue;
     AExpr := AModel.HirExprAt(Node.ExprId - 1);
-    if (AExpr.Kind <> shekCompareOp) or (Length(AExpr.Children) < 1) then
+    if (AExpr.Kind <> shekCompareOp) or (SemanticHirChildCount(AExpr.Children) < 1) then
       Continue;
-    FirstChild := AModel.HirExprAt(AExpr.Children[0] - 1);
-    if (FirstChild.Kind <> shekCast) or (Length(FirstChild.Children) < 1) then
+    FirstChild := AModel.HirExprAt(AExpr.Children[SizeUInt(0)] - 1);
+    if (FirstChild.Kind <> shekCast) or (SemanticHirChildCount(FirstChild.Children) < 1) then
       Continue;
-    CastChild := AModel.HirExprAt(FirstChild.Children[0] - 1);
+    CastChild := AModel.HirExprAt(FirstChild.Children[SizeUInt(0)] - 1);
     if SameText(TypeNameOf(AModel, CastChild.TypeId), AChildTypeName) then
       Exit(True);
   end;
@@ -343,9 +343,9 @@ begin
   if Expr.ValueClass <> shvcScalar then
     Halt(ABaseExitCode + 3);
   AssertExprTypeName(AModel, Expr, 'Pointer', ABaseExitCode + 4);
-  if Length(Expr.Children) < 1 then
+  if SemanticHirChildCount(Expr.Children) < 1 then
     Halt(ABaseExitCode + 5);
-  Child := AModel.HirExprAt(Expr.Children[0] - 1);
+  Child := AModel.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
   if Child.Kind <> shekSymbolAddress then
     Halt(ABaseExitCode + 6);
   if Child.ValueClass <> shvcAddress then
@@ -375,9 +375,9 @@ begin
   if Expr.ValueClass <> shvcAddress then
     Halt(ABaseExitCode + 3);
   AssertExprTypeName(AModel, Expr, 'Integer', ABaseExitCode + 4);
-  if Length(Expr.Children) < 1 then
+  if SemanticHirChildCount(Expr.Children) < 1 then
     Halt(ABaseExitCode + 5);
-  Child := AModel.HirExprAt(Expr.Children[0] - 1);
+  Child := AModel.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
   if Child.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 6);
   if Child.ValueClass <> shvcScalar then
@@ -407,10 +407,10 @@ begin
   if Expr.ValueClass <> shvcScalar then
     Halt(ABaseExitCode + 3);
   AssertExprTypeName(AModel, Expr, 'Pointer', ABaseExitCode + 4);
-  if Length(Expr.Children) < 1 then
+  if SemanticHirChildCount(Expr.Children) < 1 then
     Halt(ABaseExitCode + 5);
 
-  Child := AModel.HirExprAt(Expr.Children[0] - 1);
+  Child := AModel.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
   if Child.Kind <> shekArrayElem then
     Halt(ABaseExitCode + 6);
   if Child.ValueClass <> shvcAddress then
@@ -421,10 +421,10 @@ begin
   Symbol := AModel.SymbolAt(Child.SymbolId - 1);
   if Symbol.Name <> AExpectedArrayName then
     Halt(ABaseExitCode + 10);
-  if Length(Child.Children) < 1 then
+  if SemanticHirChildCount(Child.Children) < 1 then
     Halt(ABaseExitCode + 11);
 
-  IndexExpr := AModel.HirExprAt(Child.Children[0] - 1);
+  IndexExpr := AModel.HirExprAt(Child.Children[SizeUInt(0)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 12);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 13);
@@ -456,10 +456,10 @@ begin
   Symbol := AModel.SymbolAt(Expr.SymbolId - 1);
   if Symbol.Name <> AExpectedArrayName then
     Halt(ABaseExitCode + 5);
-  if Length(Expr.Children) < 1 then
+  if SemanticHirChildCount(Expr.Children) < 1 then
     Halt(ABaseExitCode + 6);
 
-  IndexExpr := AModel.HirExprAt(Expr.Children[0] - 1);
+  IndexExpr := AModel.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 7);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 8);
@@ -493,10 +493,10 @@ begin
   Symbol := AModel.SymbolAt(Expr.SymbolId - 1);
   if Symbol.Name <> AExpectedArrayName then
     Halt(ABaseExitCode + 5);
-  if Length(Expr.Children) < 1 then
+  if SemanticHirChildCount(Expr.Children) < 1 then
     Halt(ABaseExitCode + 6);
 
-  IndexExpr := AModel.HirExprAt(Expr.Children[0] - 1);
+  IndexExpr := AModel.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 7);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 8);
@@ -530,10 +530,10 @@ begin
     Halt(ABaseExitCode + 4);
   if FieldExpr.LiteralStr <> AExpectedFieldName then
     Halt(ABaseExitCode + 5);
-  if Length(FieldExpr.Children) < 1 then
+  if SemanticHirChildCount(FieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 6);
 
-  ArrayExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  ArrayExpr := AModel.HirExprAt(FieldExpr.Children[SizeUInt(0)] - 1);
   if ArrayExpr.Kind <> shekArrayElem then
     Halt(ABaseExitCode + 7);
   if ArrayExpr.ValueClass <> shvcAddress then
@@ -545,10 +545,10 @@ begin
   Symbol := AModel.SymbolAt(ArrayExpr.SymbolId - 1);
   if Symbol.Name <> AExpectedArrayName then
     Halt(ABaseExitCode + 11);
-  if Length(ArrayExpr.Children) < 1 then
+  if SemanticHirChildCount(ArrayExpr.Children) < 1 then
     Halt(ABaseExitCode + 12);
 
-  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[0] - 1);
+  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(0)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 13);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 14);
@@ -584,10 +584,10 @@ begin
     Halt(ABaseExitCode + 4);
   if LeafFieldExpr.LiteralStr <> AExpectedLeafFieldName then
     Halt(ABaseExitCode + 5);
-  if Length(LeafFieldExpr.Children) < 1 then
+  if SemanticHirChildCount(LeafFieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 6);
 
-  OuterFieldExpr := AModel.HirExprAt(LeafFieldExpr.Children[0] - 1);
+  OuterFieldExpr := AModel.HirExprAt(LeafFieldExpr.Children[SizeUInt(0)] - 1);
   if OuterFieldExpr.Kind <> shekField then
     Halt(ABaseExitCode + 7);
   if OuterFieldExpr.ValueClass <> shvcAddress then
@@ -598,10 +598,10 @@ begin
     Halt(ABaseExitCode + 10);
   if OuterFieldExpr.LiteralStr <> AExpectedOuterFieldName then
     Halt(ABaseExitCode + 11);
-  if Length(OuterFieldExpr.Children) < 1 then
+  if SemanticHirChildCount(OuterFieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 12);
 
-  ArrayExpr := AModel.HirExprAt(OuterFieldExpr.Children[0] - 1);
+  ArrayExpr := AModel.HirExprAt(OuterFieldExpr.Children[SizeUInt(0)] - 1);
   if ArrayExpr.Kind <> shekArrayElem then
     Halt(ABaseExitCode + 13);
   if ArrayExpr.ValueClass <> shvcAddress then
@@ -613,10 +613,10 @@ begin
   Symbol := AModel.SymbolAt(ArrayExpr.SymbolId - 1);
   if Symbol.Name <> AExpectedArrayName then
     Halt(ABaseExitCode + 17);
-  if Length(ArrayExpr.Children) < 1 then
+  if SemanticHirChildCount(ArrayExpr.Children) < 1 then
     Halt(ABaseExitCode + 18);
 
-  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[0] - 1);
+  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(0)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 19);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 20);
@@ -652,10 +652,10 @@ begin
     Halt(ABaseExitCode + 4);
   if LeafFieldExpr.LiteralStr <> AExpectedLeafFieldName then
     Halt(ABaseExitCode + 5);
-  if Length(LeafFieldExpr.Children) < 1 then
+  if SemanticHirChildCount(LeafFieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 6);
 
-  OuterFieldExpr := AModel.HirExprAt(LeafFieldExpr.Children[0] - 1);
+  OuterFieldExpr := AModel.HirExprAt(LeafFieldExpr.Children[SizeUInt(0)] - 1);
   if OuterFieldExpr.Kind <> shekField then
     Halt(ABaseExitCode + 7);
   if OuterFieldExpr.ValueClass <> shvcAddress then
@@ -666,10 +666,10 @@ begin
     Halt(ABaseExitCode + 10);
   if OuterFieldExpr.LiteralStr <> AExpectedOuterFieldName then
     Halt(ABaseExitCode + 11);
-  if Length(OuterFieldExpr.Children) < 1 then
+  if SemanticHirChildCount(OuterFieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 12);
 
-  ArrayExpr := AModel.HirExprAt(OuterFieldExpr.Children[0] - 1);
+  ArrayExpr := AModel.HirExprAt(OuterFieldExpr.Children[SizeUInt(0)] - 1);
   if ArrayExpr.Kind <> shekArrayElem then
     Halt(ABaseExitCode + 13);
   if ArrayExpr.ValueClass <> shvcAddress then
@@ -681,10 +681,10 @@ begin
   Symbol := AModel.SymbolAt(ArrayExpr.SymbolId - 1);
   if Symbol.Name <> AExpectedArrayName then
     Halt(ABaseExitCode + 17);
-  if Length(ArrayExpr.Children) < 1 then
+  if SemanticHirChildCount(ArrayExpr.Children) < 1 then
     Halt(ABaseExitCode + 18);
 
-  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[0] - 1);
+  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(0)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 19);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 20);
@@ -715,10 +715,10 @@ begin
     ABaseExitCode + 3);
   if ArrayExpr.SymbolId <> 0 then
     Halt(ABaseExitCode + 4);
-  if Length(ArrayExpr.Children) < 2 then
+  if SemanticHirChildCount(ArrayExpr.Children) < 2 then
     Halt(ABaseExitCode + 5);
 
-  FieldExpr := AModel.HirExprAt(ArrayExpr.Children[0] - 1);
+  FieldExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(0)] - 1);
   if FieldExpr.Kind <> shekField then
     Halt(ABaseExitCode + 6);
   if FieldExpr.ValueClass <> shvcAddress then
@@ -728,18 +728,18 @@ begin
     Halt(ABaseExitCode + 9);
   if FieldExpr.LiteralStr <> AExpectedFieldName then
     Halt(ABaseExitCode + 10);
-  if Length(FieldExpr.Children) < 1 then
+  if SemanticHirChildCount(FieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 11);
 
-  DerefExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  DerefExpr := AModel.HirExprAt(FieldExpr.Children[SizeUInt(0)] - 1);
   if DerefExpr.Kind <> shekDeref then
     Halt(ABaseExitCode + 12);
   if DerefExpr.ValueClass <> shvcAddress then
     Halt(ABaseExitCode + 13);
-  if Length(DerefExpr.Children) < 1 then
+  if SemanticHirChildCount(DerefExpr.Children) < 1 then
     Halt(ABaseExitCode + 14);
 
-  PointerExpr := AModel.HirExprAt(DerefExpr.Children[0] - 1);
+  PointerExpr := AModel.HirExprAt(DerefExpr.Children[SizeUInt(0)] - 1);
   if PointerExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 15);
   if PointerExpr.ValueClass <> shvcScalar then
@@ -751,7 +751,7 @@ begin
   if Symbol.Name <> 'self' then
     Halt(ABaseExitCode + 19);
 
-  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[1] - 1);
+  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(1)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 20);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 21);
@@ -783,10 +783,10 @@ begin
     ABaseExitCode + 3);
   if ArrayExpr.SymbolId <> 0 then
     Halt(ABaseExitCode + 4);
-  if Length(ArrayExpr.Children) < 2 then
+  if SemanticHirChildCount(ArrayExpr.Children) < 2 then
     Halt(ABaseExitCode + 5);
 
-  FieldExpr := AModel.HirExprAt(ArrayExpr.Children[0] - 1);
+  FieldExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(0)] - 1);
   if FieldExpr.Kind <> shekField then
     Halt(ABaseExitCode + 6);
   if FieldExpr.ValueClass <> shvcAddress then
@@ -796,18 +796,18 @@ begin
     Halt(ABaseExitCode + 9);
   if FieldExpr.LiteralStr <> AExpectedFieldName then
     Halt(ABaseExitCode + 10);
-  if Length(FieldExpr.Children) < 1 then
+  if SemanticHirChildCount(FieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 11);
 
-  DerefExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  DerefExpr := AModel.HirExprAt(FieldExpr.Children[SizeUInt(0)] - 1);
   if DerefExpr.Kind <> shekDeref then
     Halt(ABaseExitCode + 12);
   if DerefExpr.ValueClass <> shvcAddress then
     Halt(ABaseExitCode + 13);
-  if Length(DerefExpr.Children) < 1 then
+  if SemanticHirChildCount(DerefExpr.Children) < 1 then
     Halt(ABaseExitCode + 14);
 
-  PointerExpr := AModel.HirExprAt(DerefExpr.Children[0] - 1);
+  PointerExpr := AModel.HirExprAt(DerefExpr.Children[SizeUInt(0)] - 1);
   if PointerExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 15);
   if PointerExpr.ValueClass <> shvcScalar then
@@ -819,7 +819,7 @@ begin
   if Symbol.Name <> AExpectedBaseName then
     Halt(ABaseExitCode + 19);
 
-  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[1] - 1);
+  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(1)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 20);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 21);
@@ -876,10 +876,10 @@ begin
     Halt(ABaseExitCode + 4);
   if LeafFieldExpr.LiteralStr <> AExpectedLeafFieldName then
     Halt(ABaseExitCode + 5);
-  if Length(LeafFieldExpr.Children) < 1 then
+  if SemanticHirChildCount(LeafFieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 6);
 
-  OuterFieldExpr := AModel.HirExprAt(LeafFieldExpr.Children[0] - 1);
+  OuterFieldExpr := AModel.HirExprAt(LeafFieldExpr.Children[SizeUInt(0)] - 1);
   if OuterFieldExpr.Kind <> shekField then
     Halt(ABaseExitCode + 7);
   if OuterFieldExpr.ValueClass <> shvcAddress then
@@ -890,10 +890,10 @@ begin
     Halt(ABaseExitCode + 10);
   if OuterFieldExpr.LiteralStr <> AExpectedOuterFieldName then
     Halt(ABaseExitCode + 11);
-  if Length(OuterFieldExpr.Children) < 1 then
+  if SemanticHirChildCount(OuterFieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 12);
 
-  ArrayExpr := AModel.HirExprAt(OuterFieldExpr.Children[0] - 1);
+  ArrayExpr := AModel.HirExprAt(OuterFieldExpr.Children[SizeUInt(0)] - 1);
   if ArrayExpr.Kind <> shekArrayElem then
     Halt(ABaseExitCode + 13);
   if ArrayExpr.ValueClass <> shvcAddress then
@@ -902,10 +902,10 @@ begin
     ABaseExitCode + 15);
   if ArrayExpr.SymbolId <> 0 then
     Halt(ABaseExitCode + 16);
-  if Length(ArrayExpr.Children) < 2 then
+  if SemanticHirChildCount(ArrayExpr.Children) < 2 then
     Halt(ABaseExitCode + 17);
 
-  FieldExpr := AModel.HirExprAt(ArrayExpr.Children[0] - 1);
+  FieldExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(0)] - 1);
   if FieldExpr.Kind <> shekField then
     Halt(ABaseExitCode + 18);
   if FieldExpr.ValueClass <> shvcAddress then
@@ -915,18 +915,18 @@ begin
     Halt(ABaseExitCode + 21);
   if FieldExpr.LiteralStr <> AExpectedFieldName then
     Halt(ABaseExitCode + 22);
-  if Length(FieldExpr.Children) < 1 then
+  if SemanticHirChildCount(FieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 23);
 
-  DerefExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  DerefExpr := AModel.HirExprAt(FieldExpr.Children[SizeUInt(0)] - 1);
   if DerefExpr.Kind <> shekDeref then
     Halt(ABaseExitCode + 24);
   if DerefExpr.ValueClass <> shvcAddress then
     Halt(ABaseExitCode + 25);
-  if Length(DerefExpr.Children) < 1 then
+  if SemanticHirChildCount(DerefExpr.Children) < 1 then
     Halt(ABaseExitCode + 26);
 
-  PointerExpr := AModel.HirExprAt(DerefExpr.Children[0] - 1);
+  PointerExpr := AModel.HirExprAt(DerefExpr.Children[SizeUInt(0)] - 1);
   if PointerExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 27);
   if PointerExpr.ValueClass <> shvcScalar then
@@ -938,7 +938,7 @@ begin
   if Symbol.Name <> 'self' then
     Halt(ABaseExitCode + 31);
 
-  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[1] - 1);
+  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(1)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 32);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 33);
@@ -976,10 +976,10 @@ begin
     Halt(ABaseExitCode + 4);
   if LeafFieldExpr.LiteralStr <> AExpectedLeafFieldName then
     Halt(ABaseExitCode + 5);
-  if Length(LeafFieldExpr.Children) < 1 then
+  if SemanticHirChildCount(LeafFieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 6);
 
-  OuterFieldExpr := AModel.HirExprAt(LeafFieldExpr.Children[0] - 1);
+  OuterFieldExpr := AModel.HirExprAt(LeafFieldExpr.Children[SizeUInt(0)] - 1);
   if OuterFieldExpr.Kind <> shekField then
     Halt(ABaseExitCode + 7);
   if OuterFieldExpr.ValueClass <> shvcAddress then
@@ -990,10 +990,10 @@ begin
     Halt(ABaseExitCode + 10);
   if OuterFieldExpr.LiteralStr <> AExpectedOuterFieldName then
     Halt(ABaseExitCode + 11);
-  if Length(OuterFieldExpr.Children) < 1 then
+  if SemanticHirChildCount(OuterFieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 12);
 
-  ArrayExpr := AModel.HirExprAt(OuterFieldExpr.Children[0] - 1);
+  ArrayExpr := AModel.HirExprAt(OuterFieldExpr.Children[SizeUInt(0)] - 1);
   if ArrayExpr.Kind <> shekArrayElem then
     Halt(ABaseExitCode + 13);
   if ArrayExpr.ValueClass <> shvcAddress then
@@ -1002,10 +1002,10 @@ begin
     ABaseExitCode + 15);
   if ArrayExpr.SymbolId <> 0 then
     Halt(ABaseExitCode + 16);
-  if Length(ArrayExpr.Children) < 2 then
+  if SemanticHirChildCount(ArrayExpr.Children) < 2 then
     Halt(ABaseExitCode + 17);
 
-  FieldExpr := AModel.HirExprAt(ArrayExpr.Children[0] - 1);
+  FieldExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(0)] - 1);
   if FieldExpr.Kind <> shekField then
     Halt(ABaseExitCode + 18);
   if FieldExpr.ValueClass <> shvcAddress then
@@ -1015,18 +1015,18 @@ begin
     Halt(ABaseExitCode + 21);
   if FieldExpr.LiteralStr <> AExpectedFieldName then
     Halt(ABaseExitCode + 22);
-  if Length(FieldExpr.Children) < 1 then
+  if SemanticHirChildCount(FieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 23);
 
-  DerefExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  DerefExpr := AModel.HirExprAt(FieldExpr.Children[SizeUInt(0)] - 1);
   if DerefExpr.Kind <> shekDeref then
     Halt(ABaseExitCode + 24);
   if DerefExpr.ValueClass <> shvcAddress then
     Halt(ABaseExitCode + 25);
-  if Length(DerefExpr.Children) < 1 then
+  if SemanticHirChildCount(DerefExpr.Children) < 1 then
     Halt(ABaseExitCode + 26);
 
-  PointerExpr := AModel.HirExprAt(DerefExpr.Children[0] - 1);
+  PointerExpr := AModel.HirExprAt(DerefExpr.Children[SizeUInt(0)] - 1);
   if PointerExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 27);
   if PointerExpr.ValueClass <> shvcScalar then
@@ -1038,7 +1038,7 @@ begin
   if Symbol.Name <> AExpectedBaseName then
     Halt(ABaseExitCode + 31);
 
-  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[1] - 1);
+  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[SizeUInt(1)] - 1);
   if IndexExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 32);
   AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 33);
@@ -1101,10 +1101,10 @@ begin
   if Expr.ValueClass <> shvcScalar then
     Halt(ABaseExitCode + 3);
   AssertExprTypeName(AModel, Expr, 'Pointer', ABaseExitCode + 4);
-  if Length(Expr.Children) < 1 then
+  if SemanticHirChildCount(Expr.Children) < 1 then
     Halt(ABaseExitCode + 5);
 
-  FieldExpr := AModel.HirExprAt(Expr.Children[0] - 1);
+  FieldExpr := AModel.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
   if FieldExpr.Kind <> shekField then
     Halt(ABaseExitCode + 6);
   if FieldExpr.ValueClass <> shvcAddress then
@@ -1114,20 +1114,20 @@ begin
     Halt(ABaseExitCode + 9);
   if FieldExpr.LiteralStr <> AExpectedFieldName then
     Halt(ABaseExitCode + 10);
-  if Length(FieldExpr.Children) < 1 then
+  if SemanticHirChildCount(FieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 11);
 
-  DerefExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  DerefExpr := AModel.HirExprAt(FieldExpr.Children[SizeUInt(0)] - 1);
   if DerefExpr.Kind <> shekDeref then
     Halt(ABaseExitCode + 12);
   if DerefExpr.ValueClass <> shvcAddress then
     Halt(ABaseExitCode + 13);
   AssertExprTypeName(AModel, DerefExpr, AExpectedRecordTypeName,
     ABaseExitCode + 14);
-  if Length(DerefExpr.Children) < 1 then
+  if SemanticHirChildCount(DerefExpr.Children) < 1 then
     Halt(ABaseExitCode + 15);
 
-  PointerExpr := AModel.HirExprAt(DerefExpr.Children[0] - 1);
+  PointerExpr := AModel.HirExprAt(DerefExpr.Children[SizeUInt(0)] - 1);
   if PointerExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 16);
   if PointerExpr.ValueClass <> shvcScalar then
@@ -1162,10 +1162,10 @@ begin
     Halt(ABaseExitCode + 4);
   if FieldExpr.LiteralStr <> AExpectedFieldName then
     Halt(ABaseExitCode + 5);
-  if Length(FieldExpr.Children) < 1 then
+  if SemanticHirChildCount(FieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 6);
 
-  BaseExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  BaseExpr := AModel.HirExprAt(FieldExpr.Children[SizeUInt(0)] - 1);
   if BaseExpr.Kind <> shekSymbolAddress then
     Halt(ABaseExitCode + 7);
   if BaseExpr.ValueClass <> shvcAddress then
@@ -1201,20 +1201,20 @@ begin
     Halt(ABaseExitCode + 4);
   if FieldExpr.LiteralStr <> AExpectedFieldName then
     Halt(ABaseExitCode + 5);
-  if Length(FieldExpr.Children) < 1 then
+  if SemanticHirChildCount(FieldExpr.Children) < 1 then
     Halt(ABaseExitCode + 6);
 
-  DerefExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  DerefExpr := AModel.HirExprAt(FieldExpr.Children[SizeUInt(0)] - 1);
   if DerefExpr.Kind <> shekDeref then
     Halt(ABaseExitCode + 7);
   if DerefExpr.ValueClass <> shvcAddress then
     Halt(ABaseExitCode + 8);
   AssertExprTypeName(AModel, DerefExpr, AExpectedClassTypeName,
     ABaseExitCode + 9);
-  if Length(DerefExpr.Children) < 1 then
+  if SemanticHirChildCount(DerefExpr.Children) < 1 then
     Halt(ABaseExitCode + 10);
 
-  PointerExpr := AModel.HirExprAt(DerefExpr.Children[0] - 1);
+  PointerExpr := AModel.HirExprAt(DerefExpr.Children[SizeUInt(0)] - 1);
   if PointerExpr.Kind <> shekSymbolValue then
     Halt(ABaseExitCode + 11);
   if PointerExpr.ValueClass <> shvcScalar then
@@ -2502,10 +2502,10 @@ begin
     if Expr.Kind <> shekBinaryOp then
       Halt(74);
     AssertExprTypeName(Model, Expr, 'Integer', 75);
-    if Length(Expr.Children) < 2 then
+    if SemanticHirChildCount(Expr.Children) < 2 then
       Halt(76);
-    AssertCastChildType(Model, Expr.Children[0], 'Integer', 'Byte', 77);
-    AssertExprTypeName(Model, Model.HirExprAt(Expr.Children[1] - 1),
+    AssertCastChildType(Model, Expr.Children[SizeUInt(0)], 'Integer', 'Byte', 77);
+    AssertExprTypeName(Model, Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1),
       'Integer', 82);
 
     if not FindCompareExprWithFirstCastChild(Model, 'Byte', Expr) then
@@ -2513,10 +2513,10 @@ begin
     if Expr.Kind <> shekCompareOp then
       Halt(85);
     AssertExprTypeName(Model, Expr, 'Boolean', 86);
-    if Length(Expr.Children) < 2 then
+    if SemanticHirChildCount(Expr.Children) < 2 then
       Halt(87);
-    AssertCastChildType(Model, Expr.Children[0], 'Integer', 'Byte', 88);
-    AssertExprTypeName(Model, Model.HirExprAt(Expr.Children[1] - 1),
+    AssertCastChildType(Model, Expr.Children[SizeUInt(0)], 'Integer', 'Byte', 88);
+    AssertExprTypeName(Model, Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1),
       'Integer', 93);
 
     if not FindCompareExprWithFirstCastChild(Model, 'LongWord', Expr) then
@@ -2524,10 +2524,10 @@ begin
     if Expr.Kind <> shekCompareOp then
       Halt(96);
     AssertExprTypeName(Model, Expr, 'Boolean', 97);
-    if Length(Expr.Children) < 2 then
+    if SemanticHirChildCount(Expr.Children) < 2 then
       Halt(98);
-    AssertCastChildType(Model, Expr.Children[0], 'Int64', 'LongWord', 99);
-    AssertCastChildType(Model, Expr.Children[1], 'Int64', 'Integer', 104);
+    AssertCastChildType(Model, Expr.Children[SizeUInt(0)], 'Int64', 'LongWord', 99);
+    AssertCastChildType(Model, Expr.Children[SizeUInt(1)], 'Int64', 'Integer', 104);
 
     Builder := THIRBuilder.Create(Model);
     try
@@ -2721,9 +2721,9 @@ begin
     if (Expr.LiteralStr <> 'AddOne') or (Expr.Op <> 'i') then
       Halt(159);
     AssertExprTypeName(Model, Expr, 'Integer', 160);
-    if Length(Expr.Children) <> 1 then
+    if SemanticHirChildCount(Expr.Children) <> 1 then
       Halt(161);
-    ArgExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     if ArgExpr.Kind <> shekIntLiteral then
       Halt(162);
     if Expr.ValueClass <> shvcScalar then
@@ -2769,7 +2769,7 @@ begin
     if Expr.Op <> '' then
       Halt(169);
     AssertExprTypeName(Model, Expr, 'Pointer', 170);
-    if Length(Expr.Children) <> 0 then
+    if SemanticHirChildCount(Expr.Children) <> 0 then
       Halt(171);
     if Expr.ValueClass <> shvcScalar then
       Halt(172);
@@ -2838,19 +2838,19 @@ begin
     if (Expr.LiteralStr <> 'TCalc.AddTo') or (Expr.Op <> 'pi') then
       Halt(324);
     AssertExprTypeName(Model, Expr, 'Integer', 325);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(326);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'A', 327);
-    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     if ArgExpr.Kind <> shekCall then
       Halt(333);
     if (ArgExpr.LiteralStr <> 'TCalc.Get') or (ArgExpr.Op <> 'p') then
       Halt(334);
     AssertExprTypeName(Model, ArgExpr, 'Integer', 335);
-    if Length(ArgExpr.Children) <> 1 then
+    if SemanticHirChildCount(ArgExpr.Children) <> 1 then
       Halt(336);
-    NestedReceiverExpr := Model.HirExprAt(ArgExpr.Children[0] - 1);
+    NestedReceiverExpr := Model.HirExprAt(ArgExpr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, NestedReceiverExpr, 'B', 337);
 
     if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'SumSelf',
@@ -2864,19 +2864,19 @@ begin
     if (Expr.LiteralStr <> 'TCalc.AddTo') or (Expr.Op <> 'pi') then
       Halt(346);
     AssertExprTypeName(Model, Expr, 'Integer', 347);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(348);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'self', 349);
-    NestedExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    NestedExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     if NestedExpr.Kind <> shekCall then
       Halt(355);
     if (NestedExpr.LiteralStr <> 'TCalc.Get') or (NestedExpr.Op <> 'p') then
       Halt(356);
     AssertExprTypeName(Model, NestedExpr, 'Integer', 357);
-    if Length(NestedExpr.Children) <> 1 then
+    if SemanticHirChildCount(NestedExpr.Children) <> 1 then
       Halt(358);
-    NestedReceiverExpr := Model.HirExprAt(NestedExpr.Children[0] - 1);
+    NestedReceiverExpr := Model.HirExprAt(NestedExpr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, NestedReceiverExpr, 'self', 359);
 
     if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'C',
@@ -2890,9 +2890,9 @@ begin
     if (Expr.LiteralStr <> 'TCalc.Next') or (Expr.Op <> 'p') then
       Halt(368);
     AssertExprTypeName(Model, Expr, 'Pointer', 369);
-    if Length(Expr.Children) <> 1 then
+    if SemanticHirChildCount(Expr.Children) <> 1 then
       Halt(370);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'A', 371);
   finally
     Model.Free;
@@ -2952,11 +2952,11 @@ begin
     if Expr.Op <> 'pi' then
       Halt(386);
     AssertExprTypeName(Model, Expr, 'Integer', 387);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(388);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Base', 389);
-    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     if ArgExpr.Kind <> shekIntLiteral then
       Halt(395);
     if ArgExpr.LiteralInt <> 16 then
@@ -3002,9 +3002,9 @@ begin
     if Expr.Op <> 'p' then
       Halt(406);
     AssertExprTypeName(Model, Expr, 'Integer', 407);
-    if Length(Expr.Children) <> 1 then
+    if SemanticHirChildCount(Expr.Children) <> 1 then
       Halt(408);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Counter', 409);
   finally
     Model.Free;
@@ -3063,27 +3063,27 @@ begin
       Halt(413);
     if not SameText(Expr.Op, 'div') then
       Halt(414);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(415);
 
-    LeftExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    LeftExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     if LeftExpr.Kind <> shekVirtualCall then
       Halt(416);
     if LeftExpr.LiteralStr <> 'TCollection.Sum' then
       Halt(417);
     if LeftExpr.Op <> 'p' then
       Halt(418);
-    if Length(LeftExpr.Children) <> 1 then
+    if SemanticHirChildCount(LeftExpr.Children) <> 1 then
       Halt(419);
 
-    RightExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    RightExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     if RightExpr.Kind <> shekVirtualCall then
       Halt(420);
     if RightExpr.LiteralStr <> 'TCollection.Count' then
       Halt(421);
     if RightExpr.Op <> 'p' then
       Halt(422);
-    if Length(RightExpr.Children) <> 1 then
+    if SemanticHirChildCount(RightExpr.Children) <> 1 then
       Halt(423);
   finally
     Model.Free;
@@ -3191,9 +3191,9 @@ begin
       Halt(33);
     if (Expr.LiteralStr <> 'Bump') or (Expr.Op <> 'r') then
       Halt(34);
-    if Length(Expr.Children) <> 1 then
+    if SemanticHirChildCount(Expr.Children) <> 1 then
       Halt(35);
-    ArgExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Value', 'Integer', 36);
 
     if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'B',
@@ -3206,11 +3206,11 @@ begin
       Halt(40);
     if (Expr.LiteralStr <> 'TCounter.Touch') or (Expr.Op <> 'pr') then
       Halt(41);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(42);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Counter', 43);
-    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Value', 'Integer', 44);
 
     if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'C',
@@ -3223,9 +3223,9 @@ begin
       Halt(448);
     if (Expr.LiteralStr <> 'BumpNode') or (Expr.Op <> 'r') then
       Halt(449);
-    if Length(Expr.Children) <> 1 then
+    if SemanticHirChildCount(Expr.Children) <> 1 then
       Halt(450);
-    ArgExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 451);
 
     if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'D',
@@ -3238,11 +3238,11 @@ begin
       Halt(459);
     if (Expr.LiteralStr <> 'TCounter.TouchNode') or (Expr.Op <> 'pr') then
       Halt(460);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(461);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Counter', 462);
-    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 463);
 
     if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'E',
@@ -3256,11 +3256,11 @@ begin
     if (Expr.LiteralStr <> 'TVirtualNodeUser.UseNode') or
       (Expr.Op <> 'pr') then
       Halt(472);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(473);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Base', 474);
-    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 475);
 
     if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'E',
@@ -3273,11 +3273,11 @@ begin
       Halt(483);
     if (Expr.LiteralStr <> 'INodeUser.UseNode') or (Expr.Op <> 'pr') then
       Halt(484);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(485);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'User', 486);
-    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 487);
   finally
     Model.Free;
@@ -3355,9 +3355,9 @@ begin
       Halt(491);
     if (Expr.LiteralStr <> 'ClearNodeDirect') or (Expr.Op <> 'r') then
       Halt(492);
-    if Length(Expr.Children) <> 1 then
+    if SemanticHirChildCount(Expr.Children) <> 1 then
       Halt(493);
-    ArgExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 494);
 
     if not FindFirstNodeByKindAndOperandText(Model, 'call-runtime',
@@ -3370,11 +3370,11 @@ begin
       Halt(497);
     if (Expr.LiteralStr <> 'TNodeHelper.ClearNode') or (Expr.Op <> 'pr') then
       Halt(498);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(499);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Helper', 500);
-    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 501);
 
     if not FindFirstNodeByKindAndOperandText(Model, 'call-runtime',
@@ -3387,11 +3387,11 @@ begin
       Halt(504);
     if (Expr.LiteralStr <> 'TVirtualNodeUser.ClearNode') or (Expr.Op <> 'pr') then
       Halt(505);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(506);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Base', 507);
-    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 508);
 
     if not FindFirstNodeByKindAndOperandText(Model, 'halt-call-runtime',
@@ -3404,11 +3404,11 @@ begin
       Halt(511);
     if (Expr.LiteralStr <> 'INodeResetter.ClearNode') or (Expr.Op <> 'pr') then
       Halt(512);
-    if Length(Expr.Children) <> 2 then
+    if SemanticHirChildCount(Expr.Children) <> 2 then
       Halt(513);
-    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[SizeUInt(0)] - 1);
     AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Resetter', 514);
-    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    ArgExpr := Model.HirExprAt(Expr.Children[SizeUInt(1)] - 1);
     AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 515);
   finally
     Model.Free;

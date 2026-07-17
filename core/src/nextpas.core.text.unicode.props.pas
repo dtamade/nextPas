@@ -10,6 +10,7 @@ uses
 
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;
 function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory; inline;
+function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -74,6 +75,7 @@ const
 
 {$I nextpas.core.text.unicode.data.inc}
 {$I nextpas.core.text.unicode.props.inc}
+{$I nextpas.core.text.unicode.gcb.inc}
 
 function GetAsciiGeneralCategory(const ACp: Byte): TGeneralCategory; inline;
 begin
@@ -181,6 +183,29 @@ begin
     Exit(TGeneralCategory(LValue));
 
   Result := gcuUnassigned;
+end;
+
+function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty;
+var
+  LValue: Byte;
+begin
+  if ACp > UNICODE_MAX_CODEPOINT then
+    Exit(gbpControl);
+
+  // Fast path: CR and LF
+  if ACp = $000D then Exit(gbpCR);
+  if ACp = $000A then Exit(gbpLF);
+
+  // Fast path: ZWJ
+  if ACp = $200D then Exit(gbpZWJ);
+
+  if ACp <= $FFFF then
+    Exit(TGraphemeBreakProperty(GCB_BMP_TABLE[Byte(ACp shr 8), Byte(ACp and $FF)]));
+
+  if FindRange3Value(ACp, GCB_SMP_RANGES, LValue) then
+    Exit(TGraphemeBreakProperty(LValue));
+
+  Result := gbpOther;
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;

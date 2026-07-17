@@ -311,19 +311,7 @@ begin
   end
   else
   begin
-    PrimaryToolStep.StepId := '';
-    PrimaryToolStep.ToolRole := '';
-    PrimaryToolStep.ProfileId := '';
-    PrimaryToolStep.SysrootRef := '';
-    PrimaryToolStep.LogicalExecutable := '';
-    PrimaryToolStep.ExecutableRef := '';
-    PrimaryToolStep.WorkingDirectory := '';
-    PrimaryToolStep.FailureMapping := '';
-    SetLength(PrimaryToolStep.Argv, 0);
-    SetLength(PrimaryToolStep.EnvDelta, 0);
-    SetLength(PrimaryToolStep.Inputs, 0);
-    SetLength(PrimaryToolStep.Outputs, 0);
-    SetLength(PrimaryToolStep.Sidecars, 0);
+    ClearToolInvocationStepView(PrimaryToolStep);
     PrimaryStep.StepId := '';
     PrimaryStep.LogicalExecutable := '';
     PrimaryStep.ResolvedPath := '';

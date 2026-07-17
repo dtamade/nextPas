@@ -33,6 +33,8 @@ nextpas env use --target linux-x86_64 --toolchain-binding <id> --workspace <root
 nextpas env sync --target linux-x86_64 [--toolchain-binding <id>] --workspace <root>
 nextpas env clean --target linux-x86_64 --workspace <root>
 nextpas doctor --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
+# doctor 文本投影含 mem-process-stats=<FormatMemStats>
+# build/query 会话投影含 mem-session-stats=<MemFormatSessionStats>
 nextpas query symbols <source> --target linux-x86_64 [--toolchain-binding <id>] [--workspace <root>]
 nextpas pkg inspect --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]
 nextpas pkg plan --workspace <root> --target linux-x86_64 [--toolchain-binding <id>]

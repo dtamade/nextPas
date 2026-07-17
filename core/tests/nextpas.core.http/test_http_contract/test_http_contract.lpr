@@ -10,6 +10,7 @@ uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.io.intf,
@@ -899,20 +900,20 @@ begin
   try
     THttpServer.Create(LHandler, LOptions).Free;
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'THttpServer.Create rejects nil handler');
+  Check(LRaised, 'THttpServer.Create rejects nil handler as hekArgument');
 
   LRaised := False;
   try
     LServer := NewHttpServer(LHandler);
     LServer := nil;
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'NewHttpServer rejects nil handler');
+  Check(LRaised, 'NewHttpServer rejects nil handler as hekArgument');
 end;
 
 procedure TestHttpServerLifecycleContractOnInterface;
@@ -1013,6 +1014,53 @@ begin
   Check(SourceHas(LSource,
     'Result := (FTcpServer <> nil) and FTcpServer.IsRunning;'),
     'HTTP IsRunning delegates runtime truth to TCP server');
+end;
+
+procedure TestNewRequestFacadeDeprecationParitySourceContract;
+{ Whitelist only: NewRequest(Method, TUrl|string) + NewGetRequest.
+  Multi-arg NewRequest and NewStreamingRequest are physically deleted. }
+var
+  LFacade: string;
+  LMessage: string;
+begin
+  LFacade := ReadTextFile('../../../src/nextpas.core.http.pas');
+  LMessage := ReadTextFile('../../../src/nextpas.core.http.message.pas');
+
+  Check(SourceHas(LMessage,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload;'),
+    'message keeps NewRequest(Method, TUrl) as the non-deprecated primitive');
+  Check(SourceHas(LMessage,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload;'),
+    'message keeps NewRequest(Method, string) URL-parse bridge');
+  Check(SourceHas(LFacade,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;'),
+    'facade keeps NewRequest(Method, TUrl) as the non-deprecated primitive');
+  Check(SourceHas(LFacade,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload; inline;'),
+    'facade keeps NewRequest(Method, string) URL-parse bridge');
+  Check(SourceHas(LFacade, 'function NewGetRequest(const APath: string): IHttpRequest; inline;'),
+    'facade keeps NewGetRequest non-deprecated');
+
+  { Multi-arg NewRequest overloads removed from both units. }
+  Check(not SourceHas(LFacade, 'const ABody: IReader; const AContentLength: Int64): IHttpRequest'),
+    'facade has no NewRequest body+CL overload');
+  Check(not SourceHas(LFacade, 'const AHeaders: IHttpHeaders; const ABody: IReader;'),
+    'facade has no NewRequest headers+body overload');
+  Check(not SourceHas(LFacade, 'const ABodyText: string): IHttpRequest'),
+    'facade has no NewRequest body-text overload');
+  Check(not SourceHas(LFacade, 'const ABodyBytes: TBytes): IHttpRequest'),
+    'facade has no NewRequest body-bytes overload');
+  Check(not SourceHas(LMessage, 'deprecated ''Use THttpRequestBuilder instead'''),
+    'message no longer carries deprecated multi-arg NewRequest markers');
+
+  Check(SourceHas(LFacade, 'THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;'),
+    'facade re-exports THttpRequestBuilder as the recommended construction path');
+
+  { NewStreamingRequest physically deleted — builder / SendStreaming only. }
+  Check(not SourceHas(LMessage, 'function NewStreamingRequest'),
+    'message no longer declares NewStreamingRequest');
+  Check(not SourceHas(LFacade, 'function NewStreamingRequest'),
+    'facade no longer declares NewStreamingRequest');
 end;
 
 procedure TestChunkedRequestTrailerContract;
@@ -1223,6 +1271,8 @@ begin
     @TestHttpServerHonorsExplicitBackendSelection);
   T.Test('HttpServer facade owner-boundary source contract',
     @TestHttpServerFacadeOwnerBoundarySourceContract);
+  T.Test('NewRequest facade deprecation parity source contract',
+    @TestNewRequestFacadeDeprecationParitySourceContract);
   T.Test('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
   T.Test('Chunked request multiple trailer declaration contract',

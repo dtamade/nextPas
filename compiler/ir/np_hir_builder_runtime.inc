@@ -6,24 +6,26 @@ var
   Instr: THIRInstr;
   I: LongInt;
 begin
-  for I := 0 to FIntfVarCount - 1 do
-  begin
-    ObjPtr := FindAlloca(FIntfVarNames[I] + '$obj');
-    if ObjPtr <> 0 then
+  if FIntfVarNames.Count > 0 then
+    for I := 0 to LongInt(FIntfVarNames.Count) - 1 do
     begin
-      ObjPtr := EmitLoad(GetPtrType, ObjPtr);
-      FillChar(Instr, SizeOf(Instr), 0);
-      Instr.ResultId := FModule.NewValue;
-      Instr.Kind := hikIntrinsic;
-      Instr.TypeId := 0;
-      Instr.IntrinsicName := 'intf_release';
-      SetLength(Instr.Operands, 1);
-      Instr.Operands[0] := MakeTypedOperand(ObjPtr, GetPtrType);
-      EmitInstr(Instr);
+      ObjPtr := FindAlloca(FIntfVarNames[I] + '$obj');
+      if ObjPtr <> 0 then
+      begin
+        ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikIntrinsic;
+        Instr.TypeId := 0;
+        Instr.IntrinsicName := 'intf_release';
+        SetLength(Instr.Operands, 1);
+        Instr.Operands[0] := MakeTypedOperand(ObjPtr, GetPtrType);
+        EmitInstr(Instr);
+      end;
     end;
-  end;
   Func := FModule.FunctionAt(FModule.FunctionCount - 1);
-  if (Length(Func.Params) > 0) and (Func.Params[0].Name = 'sret_ptr') then
+  if (Func.Params <> nil) and (Func.Params.Count > 0) and
+    (Func.Params[0].Name = 'sret_ptr') then
   begin
     FlushPendingCleanupNodes;
     FillChar(Term, SizeOf(Term), 0);
@@ -205,7 +207,7 @@ begin
   if OwnsObjectFreeDestroy then
   begin
     Instr.Kind := hikIntrinsic;
-    Instr.IntrinsicName := NPSYSTEM_OBJECT_FREE_DESTROY;
+    AssignSystemContract(Instr, sckObjectFreeDestroy);
   end
   else
     Instr.Kind := hikCall;
@@ -226,7 +228,7 @@ begin
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-    Instr.IntrinsicName := NPSYSTEM_OBJECT_FREE_RELEASE;
+    AssignSystemContract(Instr, sckObjectFreeRelease);
     SetLength(Instr.Operands, 1);
     Instr.Operands[0] := MakeTypedOperand(ObjectFreeReceiverValue, GetPtrType);
     EmitInstr(Instr);
@@ -296,7 +298,7 @@ begin
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
-  Instr.IntrinsicName := ANode.DisplayName;
+  AssignSystemContract(Instr, sckObjectFree);
   Instr.CallTarget := DestroyName;
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(ReceiverPtr, GetPtrType);

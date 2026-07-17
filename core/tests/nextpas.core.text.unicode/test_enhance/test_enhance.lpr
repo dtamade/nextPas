@@ -86,6 +86,36 @@ begin
   // 测试句子后的引号
   LResults := SegmentSentences('He said "Hello." She replied.');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Sentence with closing quote');
+
+  // 测试省略号（U+2026 HORIZONTAL ELLIPSIS）
+  LResults := SegmentSentences('Wait' + #$E2#$80#$A6 + ' Really?');
+  CheckEqual(Int64(2), Int64(Length(LResults)), 'Ellipsis + question');
+
+  // 测试全角句号
+  LResults := SegmentSentences('你好．世界！');
+  CheckEqual(Int64(2), Int64(Length(LResults)), 'Fullwidth period + fullwidth excl');
+
+  // 测试 ?! 序列合并为一个句子
+  LResults := SegmentSentences('Really?! Yes.');
+  CheckEqual(Int64(2), Int64(Length(LResults)), '?! merged as one sentence');
+
+  // 测试 !? 序列
+  LResults := SegmentSentences('No way!? Indeed.');
+  CheckEqual(Int64(2), Int64(Length(LResults)), '!? merged as one sentence');
+
+  // 测试 ... 后跟 ?!
+  LResults := SegmentSentences('Wait... Really?! OK.');
+  CheckEqual(Int64(3), Int64(Length(LResults)), '... then ?! then period');
+
+  // 测试 CJK 单词分割（每个表意文字是独立的词）
+  LResults := SegmentWords('你好世界');
+  CheckEqual(Int64(4), Int64(Length(LResults)), 'CJK: 4 separate words');
+  CheckEqual(Int64(3), Int64(LResults[0].Length), 'CJK: each word is 3 bytes (UTF-8)');
+  CheckEqual(Int64(3), Int64(LResults[1].Length), 'CJK: each word is 3 bytes (UTF-8)');
+
+  // 测试中英混合
+  LResults := SegmentWords('Hello你好World');
+  CheckEqual(Int64(4), Int64(Length(LResults)), 'Mixed: Hello + 你 + 好 + World = 4 words');
 end;
 
 procedure TestCollation;
@@ -98,8 +128,8 @@ begin
   Check(LCollator.Compare('a', 'b') < 0, 'a < b');
   Check(LCollator.Compare('b', 'a') > 0, 'b > a');
   Check(LCollator.Compare('a', 'a') = 0, 'a = a');
-  Check(LCollator.Equals('a', 'a'), 'a equals a');
-  Check(not LCollator.Equals('a', 'b'), 'a not equals b');
+  Check(LCollator.TextEquals('a', 'a'), 'a equals a');
+  Check(not LCollator.TextEquals('a', 'b'), 'a not equals b');
   Check(LCollator.StartsWith('Hello', 'He'), 'Hello starts with He');
   Check(not LCollator.StartsWith('Hello', 'Wo'), 'Hello not starts with Wo');
   Check(LCollator.EndsWith('Hello', 'lo'), 'Hello ends with lo');
@@ -121,6 +151,106 @@ begin
   Check(not IsLetter(Ord('9')), '9 is not letter');
 end;
 
+procedure TestConvenienceFunctions;
+var
+  LArr: array[0..4] of string;
+begin
+  // CompareText
+  Check(CompareText('a', 'b') < 0, 'CompareText a < b');
+  Check(CompareText('b', 'a') > 0, 'CompareText b > a');
+  CheckEqual(CompareText('hello', 'hello'), 0, 'CompareText equal');
+
+  // GetSortKey
+  Check(Length(GetSortKey('A')) > 0, 'GetSortKey non-empty');
+  CheckEqual(Length(GetSortKey('')), 0, 'GetSortKey empty');
+
+  // SortStrings
+  LArr[0] := 'cherry';
+  LArr[1] := 'apple';
+  LArr[2] := 'banana';
+  LArr[3] := 'date';
+  LArr[4] := 'elderberry';
+  SortStrings(LArr);
+  CheckEqual(LArr[0], 'apple', 'SortStrings [0]');
+  CheckEqual(LArr[1], 'banana', 'SortStrings [1]');
+  CheckEqual(LArr[2], 'cherry', 'SortStrings [2]');
+  CheckEqual(LArr[3], 'date', 'SortStrings [3]');
+  CheckEqual(LArr[4], 'elderberry', 'SortStrings [4]');
+end;
+
+procedure TestNextAPIs;
+var
+  LSeg: IUnicodeSegmenter;
+  LPos: SizeInt;
+begin
+  LSeg := UnicodeSegmenter;
+
+  // NextGraphemeCluster: 从头开始
+  LPos := LSeg.NextGraphemeCluster('Hello', 1);
+  CheckEqual(Int64(2), Int64(LPos), 'NextGraphemeCluster H→e');
+
+  // NextGraphemeCluster: 从中间开始
+  LPos := LSeg.NextGraphemeCluster('Hello', 3);
+  CheckEqual(Int64(4), Int64(LPos), 'NextGraphemeCluster l→l (mid)');
+
+  // NextGraphemeCluster: 最后一个字符返回 len+1
+  LPos := LSeg.NextGraphemeCluster('Hello', 5);
+  CheckEqual(Int64(6), Int64(LPos), 'NextGraphemeCluster o→end');
+
+  // NextWord: 从头开始
+  LPos := LSeg.NextWord('Hello World', 1);
+  CheckEqual(Int64(6), Int64(LPos), 'NextWord Hello→space');
+
+  // NextWord: 从空格开始 — 跳过空格后找到下一个词的结尾
+  LPos := LSeg.NextWord('Hello World', 6);
+  Check(LPos > 6, 'NextWord space advances past space');
+
+  // NextLine: 从头开始 — LF 后是 Line2 的第一个字符
+  LPos := LSeg.NextLine('Line1' + #10 + 'Line2', 1);
+  Check(LPos > 5, 'NextLine advances past LF');
+
+  // NextSentence: 从头开始
+  LPos := LSeg.NextSentence('Hello. World!', 1);
+  Check(LPos > 1, 'NextSentence advances past period');
+end;
+
+procedure TestWordBoundaries;
+var
+  LResults: TSegmentResultArray;
+begin
+  // 数字与单词边界
+  LResults := SegmentWords('v2.0 release');
+  Check(Length(LResults) >= 2, 'v2.0 splits at dot boundary');
+
+  // 标点与 CJK 边界
+  LResults := SegmentWords('你好,世界');
+  Check(Length(LResults) >= 3, 'CJK comma splits into multiple segments');
+
+  // 纯标点
+  LResults := SegmentWords('...');
+  Check(Length(LResults) >= 1, 'Punctuation produces word segments');
+
+  // 空字符串
+  LResults := SegmentWords('');
+  CheckEqual(Int64(0), Int64(Length(LResults)), 'Empty string has no words');
+
+  // 纯空格 — 可能产生 0 或 1 个非词段
+  LResults := SegmentWords('   ');
+  Check(Length(LResults) <= 1, 'Spaces produce at most 1 segment');
+
+  // 连字符后跟数字 — 可能拆分为多段
+  LResults := SegmentWords('test-123');
+  Check(Length(LResults) >= 1, 'test-123 produces word segments');
+
+  // 混合数字和字母
+  LResults := SegmentWords('abc123def');
+  CheckEqual(Int64(1), Int64(Length(LResults)), 'abc123def is one word');
+
+  // CJK 标点（全角逗号）— 标点作为独立段
+  LResults := SegmentWords('你好，世界');
+  Check(Length(LResults) >= 3, 'Fullwidth comma splits CJK into segments');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode.enhance');
   T.Test('Script properties', @TestScriptProperties);
@@ -128,5 +258,8 @@ begin
   T.Test('text segmentation', @TestSegmentation);
   T.Test('collation', @TestCollation);
   T.Test('enhanced properties', @TestEnhancedProperties);
+  T.Test('convenience functions', @TestConvenienceFunctions);
+  T.Test('Next* standalone APIs', @TestNextAPIs);
+  T.Test('word segmentation boundaries', @TestWordBoundaries);
   if not T.Run then Halt(1);
 end.

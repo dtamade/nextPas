@@ -3,7 +3,6 @@ program hello_http_server;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.http,
   nextpas.core.text.conv;
 
@@ -36,22 +35,44 @@ begin
       LBody: string;
       LName: string;
       LPage: string;
+      LArena: IArena;
+      LScratch: Pointer;
+      LUsed: SizeUInt;
     begin
+      LArena := HttpRequestArenaOf(AReq);
+      LScratch := nil;
+      LUsed := 0;
+      if LArena <> nil then
+      begin
+        LScratch := LArena.Alloc(256);
+        if LScratch <> nil then
+          FillChar(LScratch^, 256, 0);
+        LUsed := LArena.UsedSize;
+      end;
       LName := AReq.PathParam('name');
       LPage := AReq.QueryParam('page');
       if LPage = '' then
         LPage := '1';
       LBody := 'hello=' + LName + LineEnding +
         'page=' + LPage + LineEnding +
-        'path=' + AReq.Path + LineEnding;
+        'path=' + AReq.Path + LineEnding +
+        'arena-used=' + IntToStr(Int64(LUsed)) + LineEnding;
       WritePlainText(AW, HTTP_STATUS_OK, LBody);
+      { Arena dropped by server-root RequestArena wire — no FreeMem. }
+    end);
+  LRouter.Get('/memstats',
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      WritePlainText(AW, HTTP_STATUS_OK, HttpFormatProcessMemStats + LineEnding);
     end);
 
-  LOptions := THttpServerOptions.Default;
+  { Production Read/Write timeouts + RequestArena on server kernel wire. }
+  LOptions := THttpServerOptions.Production.WithRequestArena;
   LServer := NewHttpServer(LRouter, LOptions);
 
   WriteLn('http-hello-server=ready');
   WriteLn('listen=127.0.0.1:', LPort);
   WriteLn('example=http://127.0.0.1:', LPort, '/hello/world?page=2');
+  WriteLn('memstats=http://127.0.0.1:', LPort, '/memstats');
   LServer.ListenAndServe('127.0.0.1', LPort);
 end.

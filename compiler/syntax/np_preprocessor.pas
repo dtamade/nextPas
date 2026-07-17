@@ -2,10 +2,14 @@ unit np_preprocessor;
 
 {$mode objfpc}{$H+}
 {$modeswitch advancedrecords}
+{$UNITPATH .}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec,
   np_base_types, np_lexer;
 
 type
@@ -15,13 +19,17 @@ type
       out APath: string; out AContent: string): Boolean;
   end;
 
+  TIncludePathVec = specialize TVec<string>;
+
   TFileIncludeResolver = class(TInterfacedObject, IIncludeResolver)
   private
-    FSearchPaths: array of string;
-    FSearchCount: LongInt;
+    FAllocator: IAllocator;
+    FSearchPaths: TIncludePathVec;
     FBaseDir: string;
   public
-    constructor Create(const ABaseDir: string);
+    { Optional AAllocator: session/phase scratch for include search-path TVec. }
+    constructor Create(const ABaseDir: string; AAllocator: IAllocator = nil);
+    destructor Destroy; override;
     procedure AddSearchPath(const APath: string);
     function ResolveInclude(const AName: string;
       const AFromFileId: TCoreId;
@@ -34,13 +42,17 @@ type
     HasValue: Boolean;
   end;
 
+  TDefineEntryVec = specialize TVec<TDefineEntry>;
+
   TDefineTable = class
   private
-    FEntries: array of TDefineEntry;
-    FCount: LongInt;
+    FAllocator: IAllocator;
+    FEntries: TDefineEntryVec;
     function IndexOf(const AName: string): LongInt;
   public
-    constructor Create;
+    { Optional AAllocator: session/phase scratch for define entries TVec. }
+    constructor Create(AAllocator: IAllocator = nil);
+    destructor Destroy; override;
     procedure Define(const AName: string);
     procedure DefineValue(const AName, AValue: string);
     procedure Undef(const AName: string);
@@ -59,15 +71,17 @@ type
     SeenElse: Boolean;
   end;
 
+  TConditionalFrameVec = specialize TVec<TConditionalFrame>;
+  TTokenVec = specialize TVec<TToken>;
+
   TPreprocessor = class
   private
     FDefines: TDefineTable;
     FOwnsDefines: Boolean;
     FIncludeResolver: IIncludeResolver;
-    FStack: array of TConditionalFrame;
-    FStackCount: LongInt;
-    FOutputTokens: array of TToken;
-    FOutputCount: LongInt;
+    FAllocator: IAllocator;
+    FStack: TConditionalFrameVec;
+    FOutputTokens: TTokenVec;
     FCurrentFileId: TCoreId;
     FNextFileId: TCoreId;
     FEvalExpr: string;
@@ -95,8 +109,9 @@ type
     function EvalOr: Int64;
     procedure ProcessInclude(const AArg: string);
   public
+    { Optional AAllocator: session/phase scratch for stack + output token TVecs. }
     constructor Create(ADefines: TDefineTable; AOwnsDefines: Boolean;
-      AIncludeResolver: IIncludeResolver);
+      AIncludeResolver: IIncludeResolver; AAllocator: IAllocator = nil);
     destructor Destroy; override;
     procedure Process(const ALexer: TLexerResult);
     function ToLexerResult: TLexerResult;
@@ -112,9 +127,9 @@ uses
 {$I np_preprocessor_tables.inc}
 function TPreprocessor.IsActive: Boolean;
 begin
-  if FStackCount = 0 then
+  if FStack.Count = 0 then
     Exit(True);
-  Result := FStack[FStackCount - 1].CurrentActive;
+  Result := FStack[FStack.Count - 1].CurrentActive;
 end;
 
 procedure TPreprocessor.PushFrame(ACondition: Boolean);
@@ -125,51 +140,52 @@ begin
   Frame.AnyBranchTaken := Frame.ParentActive and ACondition;
   Frame.CurrentActive := Frame.ParentActive and ACondition;
   Frame.SeenElse := False;
-  if FStackCount >= Length(FStack) then
-    SetLength(FStack, FStackCount + 16);
-  FStack[FStackCount] := Frame;
-  Inc(FStackCount);
+  FStack.Push(Frame);
 end;
 
 procedure TPreprocessor.HandleElse;
+var
+  Frame: TConditionalFrame;
+  Idx: SizeUInt;
 begin
-  if FStackCount = 0 then Exit;
-  with FStack[FStackCount - 1] do
-  begin
-    if SeenElse then Exit;
-    SeenElse := True;
-    CurrentActive := ParentActive and (not AnyBranchTaken);
-  end;
+  if FStack.Count = 0 then Exit;
+  Idx := FStack.Count - 1;
+  Frame := FStack[Idx];
+  if Frame.SeenElse then Exit;
+  Frame.SeenElse := True;
+  Frame.CurrentActive := Frame.ParentActive and (not Frame.AnyBranchTaken);
+  FStack[Idx] := Frame;
 end;
 
 procedure TPreprocessor.HandleElseIf(ACondition: Boolean);
+var
+  Frame: TConditionalFrame;
+  Idx: SizeUInt;
 begin
-  if FStackCount = 0 then Exit;
-  with FStack[FStackCount - 1] do
+  if FStack.Count = 0 then Exit;
+  Idx := FStack.Count - 1;
+  Frame := FStack[Idx];
+  if Frame.SeenElse then Exit;
+  if Frame.ParentActive and ACondition and (not Frame.AnyBranchTaken) then
   begin
-    if SeenElse then Exit;
-    if ParentActive and ACondition and (not AnyBranchTaken) then
-    begin
-      CurrentActive := True;
-      AnyBranchTaken := True;
-    end
-    else
-      CurrentActive := False;
-  end;
+    Frame.CurrentActive := True;
+    Frame.AnyBranchTaken := True;
+  end
+  else
+    Frame.CurrentActive := False;
+  FStack[Idx] := Frame;
 end;
 
 procedure TPreprocessor.HandleEndIf;
 begin
-  if FStackCount > 0 then
-    Dec(FStackCount);
+  if FStack.Count > 0 then
+    FStack.Resize(FStack.Count - 1);
 end;
 
 procedure TPreprocessor.EmitToken(const AToken: TToken);
 begin
-  if FOutputCount >= Length(FOutputTokens) then
-    SetLength(FOutputTokens, FOutputCount + 256);
-  FOutputTokens[FOutputCount] := AToken;
-  Inc(FOutputCount);
+  { Deep-copy nested trivia; source lexer retains its entry-owned vecs. }
+  FOutputTokens.Push(CloneTokenWithTrivia(AToken, FAllocator));
 end;
 
 function TPreprocessor.ParseDirectiveName(const ALexeme: string;
@@ -267,10 +283,14 @@ var
   Tok: TToken;
   Dir, Arg: string;
 begin
-  FOutputCount := 0;
-  FStackCount := 0;
+  FOutputTokens.Clear;
+  FStack.Clear;
   if ALexer.TokenCount > 0 then
+  begin
+    { Pre-size capacity only. Ensure() raises Count and inserts empty tokens. }
+    FOutputTokens.EnsureCapacity(SizeUInt(ALexer.TokenCount));
     FCurrentFileId := ALexer.TokenAt(0).FileId;
+  end;
   for I := 0 to ALexer.TokenCount - 1 do
   begin
     Tok := ALexer.TokenAt(I);
@@ -327,19 +347,27 @@ begin
 end;
 
 function TPreprocessor.ToLexerResult: TLexerResult;
+var
+  TokenArr: array of TToken;
+  I: LongInt;
+  N: LongInt;
 begin
-  Result := TLexerResult.CreateFromTokens(FOutputTokens, FOutputCount);
+  N := LongInt(FOutputTokens.Count);
+  SetLength(TokenArr, N);
+  for I := 0 to N - 1 do
+    TokenArr[I] := FOutputTokens[I];
+  Result := TLexerResult.CreateFromTokens(TokenArr, N);
 end;
 
 function TPreprocessor.OutputTokenCount: LongInt;
 begin
-  Result := FOutputCount;
+  Result := LongInt(FOutputTokens.Count);
 end;
 
 function TPreprocessor.OutputTokenAt(const AIndex: LongInt): TToken;
 begin
-  if (AIndex >= 0) and (AIndex < FOutputCount) then
-    Result := FOutputTokens[AIndex]
+  if (AIndex >= 0) and (AIndex < LongInt(FOutputTokens.Count)) then
+    Result := FOutputTokens[SizeUInt(AIndex)]
   else
   begin
     FillChar(Result, SizeOf(Result), 0);

@@ -16,14 +16,7 @@ begin
   else if FInStartFunc then
   begin
     { Global variable: register as global }
-    if FGlobalCount >= Length(FGlobalNames) then
-    begin
-      SetLength(FGlobalNames, FGlobalCount + 32);
-      SetLength(FGlobalTypes, FGlobalCount + 32);
-    end;
-    FGlobalNames[FGlobalCount] := ANode.Operand + '$ts';
-    FGlobalTypes[FGlobalCount] := GetPtrType;
-    Inc(FGlobalCount);
+    RegisterGlobal(ANode.Operand + '$ts', GetPtrType);
     FModule.AddGlobal(ANode.Operand + '$ts', GetPtrType);
   end
   else
@@ -651,7 +644,7 @@ var
   Term: THIRTerminator;
 begin
   { Flush cleanup before return }
-  if FPendingCleanupCount > 0 then
+  if FPendingCleanupNodes.Count > 0 then
     FlushPendingCleanupNodes;
   { Find source TString variable }
   SrcName := ANode.Operand;

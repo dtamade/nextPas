@@ -4,11 +4,14 @@ unit np_backend_plan;
 {$UNITPATH ../ir}
 {$UNITPATH ../targets}
 {$UNITPATH ../diagnostics}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   nextpas.core.text.conv, nextpas.core.path, nextpas.core.fs.dir, nextpas.core.os.env,
+  nextpas.core.mem.intf, nextpas.core.compiler.mem,
+  nextpas.core.collections.vec,
   np_target_facts,
   np_semantic_model, np_hir_types, np_hir_model, np_hir_builder,
   np_hir_llvm_emitter, nextpas_json_helpers,
@@ -29,10 +32,13 @@ type
     Strength: string;
   end;
 
+  TBackendArtifactVec = specialize TVec<TBackendArtifact>;
+  TBackendLogicalLibraryRequestVec = specialize TVec<TBackendLogicalLibraryRequest>;
+
   TBackendPlan = class
   private
-    FArtifacts: array of TBackendArtifact;
-    FLogicalLibraryRequests: array of TBackendLogicalLibraryRequest;
+    FArtifacts: TBackendArtifactVec;
+    FLogicalLibraryRequests: TBackendLogicalLibraryRequestVec;
     FStatus: string;
     FRootName: string;
     FOutputKind: string;
@@ -65,6 +71,7 @@ type
     FLlvmExecutableSetId: string;
   public
     constructor Create;
+    destructor Destroy; override;
     function AddArtifact(const AKind: string; const APath: string): LongInt;
     function ArtifactCount: LongInt;
     function ArtifactAt(const AIndex: LongInt): TBackendArtifact;
@@ -150,8 +157,8 @@ implementation
 constructor TBackendPlan.Create;
 begin
   inherited Create;
-  SetLength(FArtifacts, 0);
-  SetLength(FLogicalLibraryRequests, 0);
+  FArtifacts := TBackendArtifactVec.Create;
+  FLogicalLibraryRequests := TBackendLogicalLibraryRequestVec.Create;
   FStatus := 'deferred';
   FRootName := '';
   FOutputKind := '';
@@ -182,6 +189,15 @@ begin
   FLinkScriptPolicy := '';
   FLlvmEnabled := False;
   FLlvmExecutableSetId := '';
+end;
+
+destructor TBackendPlan.Destroy;
+begin
+  FLogicalLibraryRequests.Free;
+  FLogicalLibraryRequests := nil;
+  FArtifacts.Free;
+  FArtifacts := nil;
+  inherited Destroy;
 end;
 
 {$I np_backend_plan_accessors.inc}
@@ -219,6 +235,7 @@ var
   OutputKindValue: string;
   PrimaryArtifactKindValue: string;
   PrimaryArtifactPath: string;
+  PhaseScratch: IAllocator;
 begin
   if FSemaModel = nil then
   begin
@@ -278,53 +295,62 @@ begin
       Exit;
     end;
 
-    HirBuilder := THIRBuilder.Create(FSemaModel);
+    { Phase scratch for HIR builder / MIR value-map working storage.
+      MIR/HIR modules themselves stay on the default heap. }
+    PhaseScratch := CompilerCreateUnitAllocator;
     try
-      HirBuilder.Build;
-      if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
-      begin
-        { Opt-in: HIR -> MIR -> MIR passes -> LLVM IR pipeline }
-        Lowering := THirToMirLowering.Create(HirBuilder.Module);
-        try
-          Lowering.Lower;
-          MirModule := Lowering.DetachModule;
-        finally
-          Lowering.Free;
-        end;
-
-        { Run MIR optimization passes }
-        if not FNoFold then
+      HirBuilder := THIRBuilder.Create(FSemaModel, nil, 0, PhaseScratch);
+      try
+        HirBuilder.Build;
+        if GetEnvironmentVariable('NEXTPAS_MIR') = '1' then
         begin
-          PassManager := TMirPassManager.Create;
+          { Opt-in: HIR -> MIR -> MIR passes -> LLVM IR pipeline }
+          Lowering := THirToMirLowering.Create(HirBuilder.Module, PhaseScratch);
           try
-            RegisterMirPassesForLevel(PassManager, FOptLevel);
-            PassManager.RunAll(MirModule);
+            Lowering.Lower;
+            MirModule := Lowering.DetachModule;
           finally
-            PassManager.Free;
+            Lowering.Free;
+          end;
+
+          { Run MIR optimization passes; registry TVec on PhaseScratch }
+          if not FNoFold then
+          begin
+            PassManager := TMirPassManager.Create(PhaseScratch);
+            try
+              RegisterMirPassesForLevel(PassManager, FOptLevel);
+              PassManager.RunAll(MirModule);
+            finally
+              PassManager.Free;
+            end;
+          end;
+
+          { MIR→LLVM output lines on PhaseScratch TVec }
+          LlvmTranslator := TMirToLlvmTranslator.Create(MirModule, PhaseScratch);
+          try
+            LlvmTranslator.SaveToFile(LlvmIrArtifactPath);
+          finally
+            LlvmTranslator.Free;
+          end;
+        end
+        else
+        begin
+          { Default: HIR -> LLVM IR direct path; lines/refs on PhaseScratch }
+          HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module,
+            FTargetFacts.LlvmTriple, FTargetFacts.LlvmDataLayout,
+            False, PhaseScratch);
+          try
+            HirEmitter.EmitModule;
+            HirEmitter.SaveToFile(LlvmIrArtifactPath);
+          finally
+            HirEmitter.Free;
           end;
         end;
-
-        LlvmTranslator := TMirToLlvmTranslator.Create(MirModule);
-        try
-          LlvmTranslator.SaveToFile(LlvmIrArtifactPath);
-        finally
-          LlvmTranslator.Free;
-        end;
-      end
-      else
-      begin
-        { Default: HIR -> LLVM IR direct path }
-        HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module,
-          FTargetFacts.LlvmTriple, FTargetFacts.LlvmDataLayout);
-        try
-          HirEmitter.EmitModule;
-          HirEmitter.SaveToFile(LlvmIrArtifactPath);
-        finally
-          HirEmitter.Free;
-        end;
+      finally
+        HirBuilder.Free;
       end;
     finally
-      HirBuilder.Free;
+      PhaseScratch := nil;
     end;
   end
   else

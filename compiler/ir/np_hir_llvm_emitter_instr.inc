@@ -3,10 +3,14 @@ var
   LlvmType, Op, LTruncVal: string;
   I, LDbgIdx: LongInt;
 begin
-  if FPendingObjectFreeActive and not ((AInstr.Kind = hikIntrinsic) and
-    (SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_DESTROY) or
-    SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_CLEANUP) or
-    SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_RELEASE))) then
+  if AInstr.HasSystemContract then
+  begin
+    if not EmitSystemContractInstr(AInstr) then
+      raise Exception.Create('system-contract-dispatch-not-handled');
+    Exit;
+  end;
+
+  if FPendingObjectFreeActive and not IsObjectFreeGuardContinuation(AInstr) then
     ClosePendingObjectFreeGuard;
 
   LlvmType := TypeToLlvm(AInstr.TypeId);
@@ -177,18 +181,6 @@ begin
           Emit('  call void asm sideeffect "movq $$60, %rax; syscall",' +
             ' "{rdi},~{rax},~{rcx},~{r11}"(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
-      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE) then
-        EmitObjectFreeGuardStart(AInstr)
-      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_DESTROY) then
-        EmitObjectFreeOwnedDestroy(AInstr)
-      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_CLEANUP) then
-      begin
-        if Length(AInstr.Operands) >= 1 then
-          Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
-            ValueRef(AInstr.Operands[0].ValueId) + ')');
-      end
-      else if SameText(AInstr.IntrinsicName, NPSYSTEM_OBJECT_FREE_RELEASE) then
-        EmitObjectFreeRelease(AInstr)
       else if AInstr.IntrinsicName = 'write_int' then
       begin
         FNeedsWriteInt := True;
@@ -295,14 +287,8 @@ begin
       end
       else if AInstr.IntrinsicName = 'global_ref' then
       begin
-        if FGlobalRefCount >= Length(FGlobalRefNames) then
-        begin
-          SetLength(FGlobalRefNames, FGlobalRefCount + 16);
-          SetLength(FGlobalRefIds, FGlobalRefCount + 16);
-        end;
-        FGlobalRefNames[FGlobalRefCount] := AInstr.CallTarget;
-        FGlobalRefIds[FGlobalRefCount] := AInstr.ResultId;
-        Inc(FGlobalRefCount);
+        FGlobalRefNames.Push(AInstr.CallTarget);
+        FGlobalRefIds.Push(AInstr.ResultId);
       end
       else if AInstr.IntrinsicName = 'gep_i64' then
       begin
@@ -862,11 +848,11 @@ begin
 
   { Append debug location metadata if available }
   if FDebugInfoEnabled and (FCurrentDISubprogram >= 0) and
-    (AInstr.SourceLine > 0) and (FLineCount > 0) then
+    (AInstr.SourceLine > 0) and (FLines.Count > 0) then
   begin
     LDbgIdx := EmitDILocation(AInstr.SourceLine, AInstr.SourceCol);
     if LDbgIdx >= 0 then
-      FLines[FLineCount - 1] := FLines[FLineCount - 1] +
-        ', !dbg !' + IntToStr(LDbgIdx);
+      FLines.GetPtr(FLines.Count - 1)^ :=
+        FLines[FLines.Count - 1] + ', !dbg !' + IntToStr(LDbgIdx);
   end;
 end;

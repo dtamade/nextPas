@@ -82,10 +82,11 @@ begin
         { O1: 6 个基础 pass — 快速优化，适合开发阶段 }
         AManager.RegisterPass(TMirConstFoldPass.Create);
         AManager.RegisterPass(TMirStrengthRedPass.Create);
-        AManager.RegisterPass(TMirCsePass.Create);
-        AManager.RegisterPass(TMirDcePass.Create);
-        AManager.RegisterPass(TMirInlinePass.Create);
-        AManager.RegisterPass(TMirDeadArgPass.Create);
+        { Work tables on phase-scratch when manager has Allocator }
+        AManager.RegisterPass(TMirCsePass.Create(AManager.Allocator));
+        AManager.RegisterPass(TMirDcePass.Create(AManager.Allocator));
+        AManager.RegisterPass(TMirInlinePass.Create(AManager.Allocator));
+        AManager.RegisterPass(TMirDeadArgPass.Create(AManager.Allocator));
       end;
 
     molO2:
@@ -94,17 +95,17 @@ begin
         { 基础 pass }
         AManager.RegisterPass(TMirConstFoldPass.Create);
         AManager.RegisterPass(TMirStrengthRedPass.Create);
-        AManager.RegisterPass(TMirCsePass.Create);
+        AManager.RegisterPass(TMirCsePass.Create(AManager.Allocator));
         { 进阶 pass }
-        AManager.RegisterPass(TMirLicmPass.Create);
-        AManager.RegisterPass(TMirEscapePass.Create);
+        AManager.RegisterPass(TMirLicmPass.Create(AManager.Allocator));
+        AManager.RegisterPass(TMirEscapePass.Create(AManager.Allocator));
         AManager.RegisterPass(TMirInlineHeuristicPass.Create);
-        AManager.RegisterPass(TMirInlinePass.Create);
-        AManager.RegisterPass(TMirDcePass.Create);
+        AManager.RegisterPass(TMirInlinePass.Create(AManager.Allocator));
+        AManager.RegisterPass(TMirDcePass.Create(AManager.Allocator));
         AManager.RegisterPass(TMirTailCallPass.Create);
         AManager.RegisterPass(TMirDevirtPass.Create);
         AManager.RegisterPass(TMirVectorizePass.Create);
-        AManager.RegisterPass(TMirDeadArgPass.Create);
+        AManager.RegisterPass(TMirDeadArgPass.Create(AManager.Allocator));
       end;
   end;
 end;

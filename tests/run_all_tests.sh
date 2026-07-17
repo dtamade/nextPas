@@ -20,7 +20,8 @@ RUNNER_BINARY="$RUNNER_BUILD_DIR/runner"
 STAGE0_SOURCE="$REPO_ROOT/tools/stage0/nextpas.pas"
 STAGE0_BUILD_DIR="$REPO_ROOT/build/stage0-bootstrap"
 STAGE0_BINARY="$STAGE0_BUILD_DIR/nextpas"
-STAGE0_FPC_FLAGS="-Fucompiler/frontend -Fucompiler/diagnostics -Fucompiler/targets -Fucompiler/syntax -Fucompiler/sema -Fucompiler/lower -Fucompiler/ir -Fucompiler/backend -Fucompiler/toolchain -Futools/stage0 -Furtl/core/base -Furtl/core/text -Fucore/src -Ficore/src"
+# shellcheck source=../scripts/stage0-fpc-flags.sh
+. "$REPO_ROOT/scripts/stage0-fpc-flags.sh"
 BASELINE_TARGET="linux-x86_64"
 
 emit_bootstrap_failure() {

@@ -9,12 +9,15 @@ unit np_compilation_session;
 {$UNITPATH ../syntax}
 {$UNITPATH ../toolchain}
 {$UNITPATH ../targets}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   nextpas.core.text, nextpas.core.text.conv, nextpas.core.path, nextpas.core.os.env,
-  nextpas.core.time, nextpas.core.base.utils,
+  nextpas.core.time, nextpas.core.base.utils, nextpas.core.compiler.mem,
+  nextpas.core.mem.intf, nextpas.core.mem.allocator.arena,
+  nextpas.core.collections.vec,
   np_ast_facade, np_backend_plan, np_diagnostics_sink, np_green_tree,
   np_lexer, np_preprocessor, np_hir_types, np_hir_model, np_hir_builder,
   np_hir_printer, np_hir_llvm_emitter, np_source_database, np_target_facts,
@@ -66,9 +69,21 @@ type
     HasExitCode: Boolean;
   end;
 
+  { Session-long tool events (outlive phase scratch Reset) — default-heap TVec. }
+  TToolStatusEventVec = specialize TVec<TToolStatusEventRecord>;
+
   TCompilationSession = class
   private
     FSessionId: string;
+    { Session-owned VirtualArena (compiler.mem). AnalyzeSyntax/ResolveUnits
+      call UnitBegin + MemAlloc phase scratch + UnitEnd; do not FreeMem. }
+    FMemScope: TCompilerSessionScope;
+    { Session AST node storage (VirtualArena IAllocator). Not reset by UnitBegin;
+      Reset on syntax reparse / session end. GreenTree TVec grows via alloc+copy. }
+    FAstAllocator: IAllocator;
+    { Phase scratch IAllocator (resolver dep trees, analyzer TVecs, HIR/MIR
+      working maps). Reset after each consumer phase; independent of FAstAllocator. }
+    FScratchAllocator: IAllocator;
     FSourceDatabase: TSourceDatabase;
     FTargetFacts: TTargetFactsView;
     FDiagnosticsSink: TDiagnosticsSink;
@@ -100,9 +115,10 @@ type
     FToolRunStatus: string;
     FToolRunStepCount: LongInt;
     FPrimaryToolRunStatus: string;
-    FToolStatusEvents: array of TToolStatusEventRecord;
+    FToolStatusEvents: TToolStatusEventVec;
     FBuildTraceRef: string;
     FBuildTraceJson: string;
+    procedure ResetScratchAllocator;
     procedure ResetSyntaxState;
     procedure ResetResolutionState;
     procedure ResetSemanticState;
@@ -162,6 +178,22 @@ type
       const TargetFacts: TTargetFactsView
     );
     destructor Destroy; override;
+    {** Session VirtualArena scope active (compiler.mem product wire). }
+    function MemScopeActive: Boolean;
+    {** Peak across UnitBegin/UnitEnd (updated by AnalyzeSyntax/ResolveUnits). }
+    function MemSessionPeak: SizeUInt;
+    {** Units that called UnitBegin this session. }
+    function MemUnitCount: SizeUInt;
+    {** Current session arena used bytes (0 after UnitEnd Reset of next begin). }
+    function MemTotalUsed: SizeUInt;
+    {** Scratch alloc from session arena; nil if inactive. Do not FreeMem. }
+    function MemAlloc(const ASize: SizeUInt): Pointer;
+    {** Session AST IAllocator (VirtualArena); used by ParseGreenTree. }
+    function MemAstAllocator: IAllocator;
+    {** Phase scratch IAllocator (resolver/sema working storage). }
+    function MemScratchAllocator: IAllocator;
+    {** One-line session mem diagnostics (units/peak/ast/scratch). }
+    function MemFormatSessionStats: string;
     procedure AnalyzeSyntax;
 
     { Incremental compilation: check for file changes and invalidate caches }

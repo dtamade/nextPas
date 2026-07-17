@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 19 — streaming request body ownership API)
+> Last updated: 2026-07-16 (usability-fix wave-3 M0–M6 closed; non-H3 stage-complete)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -17,26 +17,126 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 
 ## Current Position
 
-This lane is in **G2/G3/G4/G5 active hardening**:
+This lane is **non-H3 stage-complete** on protocol surface. Usability-fix
+waves **1–3 are closed** (wave-3 defaults D1–D8):
 
-- G0 control and module discipline already exist in `AGENTS.md`, `core/AGENTS.md`, and `core/docs/design-conventions.md`.
-- G1 stable H1 public surface is largely landed: server/client/router/headers/url/message/middleware/static/websocket all exist and already have substantial focused coverage.
-- G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
-- G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
-- G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 207 focused tests. H2 is production-transport-ready, not just a foundation slice. All H2 test coverage gaps closed (client 55, frame 37, hpack 30). Session test hardening complete (55 tests, MaxConcurrentStreams check-order bug fixed).
-- G5 Static graduation complete: range requests (RFC 7233), ETag, Last-Modified, Cache-Control, Content-Disposition all implemented with 21 focused tests. WebSocket stable at 32 tests.
-- H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
+- G0–G5 and H3 honesty remain as previously closed (see below / Recent Fixes).
+- Wave-1 (M0–M7): builder `ContentLength` + fail-fast; `EHttpError.Kind`;
+  request-attached context + `SetOwnedValue`; `IHttpResponse.Close`; `IMutex`.
+- Wave-2 (M1–M5): transport `hekTimeout` wrap; message-shape `hekArgument`;
+  `HttpErrorIsTimeout` / `HttpErrorIsRetryable`; `THttpRequestWrapper` fidelity;
+  `Post(IReader)` fail-fast then **wave-3 deletes** those overloads; RTL isolation.
+- Wave-3 (M0–M6): `WithRetry` = 5xx + `IsRetryable`; connect wrap `hekConnect`;
+  delete `IReader` client convenience overloads; known-CL only (dead TE branch
+  removed); physical delete `NewStreamingRequest`; multi-arg `NewRequest` stays
+  deprecated (bulk delete deferred); whitelist non-deprecated factories remain
+  `NewRequest(Method, TUrl)` + `NewGetRequest`; cancel = timeout docs only;
+  decorator forwarder; no facade split.
+- Module gate: `core/tests/nextpas.core.http/Makefile` runs **35** focused suites.
+
+### Stage completion definition (non-H3)
+
+HTTP can be called stage-complete only when all of these hold:
+
+1. Public contracts and docs match source (`CONTRACT.md` / `ARCHITECTURE.md` / this tree).
+2. Main Makefile gate is green with heaptrc-sensitive suites at `0 unfreed` where claimed.
+3. H1 malformed/lifecycle/ownership open decisions are closed — keep-alive request-tail is **INV-12 final** (`CONTRACT.md` §3.1).
+4. H2 is reachable from facade options with live proof; design exclusions remain explicit.
+5. Runtime truth (threaded baseline + epoll poll path) is documented and not contradicted by gates.
+6. Performance claims stay scoped; no fake H3 surface.
+
+### Recent Fixes (2026-07-16)
+
+**Usability-fix wave-3 M0–M6 (2026-07-16, closed)**
+
+- `WithRetry`: 5xx responses **and** `HttpErrorIsRetryable` exceptions.
+- Transport wrap: bare `ENetworkError` → `hekConnect` + `Op=transport` (with timeout).
+- Delete `IHttpClient` `Post/Put/Patch/Delete(IReader)` convenience overloads.
+- Known-CL only: remove dead `Transfer-Encoding: chunked` branch in `NewRequest`.
+- Physical delete public `NewStreamingRequest`; multi-arg `NewRequest` remains
+  deprecated (follow-up bulk migration); public non-deprecated factories =
+  `NewRequest(Method, TUrl)` + `NewGetRequest` + builder.
+- Client decorators: `THttpClientForwarder` base (Send-centric).
+- Cancel: docs only (timeout path = cancel surrogate).
+- Evidence: full 35 Makefile suites green; hygiene pass.
+
+**Usability-fix wave-2 M1–M5 (2026-07-16)**
+
+- Transport: H1/H2 client wrap bare `ETimeoutError` → `hekTimeout` + `Op=transport`.
+- Taxonomy: message-shape validation uses `hekArgument`；config/nil 前置条件在
+  后续 residual/cycle-3 亦迁移为 `hekArgument`（历史曾短暂保留框架
+  `EArgumentError`，**不是 live 行为**）。
+- Helpers: `HttpErrorIsTimeout` / `HttpErrorIsRetryable` on base + facade.
+- Middleware: `THttpRequestWrapper` forwards context/options; bodycache/decompress
+  inherit it.
+- Client: `Post/Put/Patch/Delete(IReader)` fail-fast (no silent ReadAll) — superseded
+  by wave-3 deletion of those overloads.
+- RTL isolation: examples drop SysUtils; `test_http_examples` /
+  `test_http_benchmarks` use `nextpas.core.process` instead of `Process`/`BaseUnix`.
+- Cross-module: `process.pipe.DrainReadHandle` no longer loops to EAGAIN on
+  blocking parent pipes (hang with long-lived children).
+- Examples readiness: after ready markers, poll real HTTP GET until serving;
+  websocket demo allows non-browser Origin for smoke.
+- Docs: `CONTRACT.md` §2.2.x updated for Kind helpers, body fail-fast, isolation.
+- Evidence: 35 Makefile suites all green; `test_http_examples` 5/5; hygiene pass.
+
+**Usability-fix wave M0–M7 (2026-07-16)**
+
+- Builder: `ContentLength()`, body-kind, fail-fast when `Body(IReader)` lacks length;
+  empty string body is not “no body”.
+- `EHttpError.Kind` (`THttpErrorKind`) + Category mapping; main raise sites tagged.
+- Context: request-attached via `IHttpRequestWithContext`; drop process-global map;
+  `SetOwnedValue` / fixed `Has`; `IMutex`.
+- `IHttpResponse.Close` + destructor auto-close; client helpers call `Close`.
+- Pool/metrics/ratelimit/context: `TRTLCriticalSection` → `IMutex`.
+- Evidence: 35 suites, **1723** passed / 0 failed, hygiene pass.
+
+**Stage-complete gate repair (2026-07-16): full 35-suite green**
+
+- SysUtils isolation drift in tests: `FsReadFileText`→`ReadFileText`, `Sleep`→`TSleep`,
+  `FileExists` via `nextpas.core.fs`.
+- RFC 7807 expectations aligned (`application/problem+json`, `title`/`detail`).
+- WebSocket tests updated for `TWebSocketFrame.Payload: TBytes` + Ping/Pong TBytes.
+- Headers source-contract mask now applied (`nextpas.core.http*.pas` etc.).
+- Prior evidence: 35 suites, 1719 passed / 0 failed, hygiene pass.
+
+**P2–P5 (2026-07-16): Queue closure toward non-H3 stage-complete**
+
+- **P2**: `test_http_h2_facade` live E2E; `TH2ServerSession.Run` drains writes after
+  `ExecuteReadyStreams`; IdleTimeout arms keep-alive reads when `ReadTimeout=0`.
+- **P3**: facade/message `deprecated` parity on `NewRequest` overloads; builder-first
+  inventory in `CONTRACT.md` / `README.md`; `test_http_contract` source lock.
+- **P4**: residual cost ladder in `BENCHMARKS.md`; restored `bench_fullchain` /
+  `bench_server` / `bench_h1parser` after SysUtils isolation; stress gate green.
+- **P5**: H3 honesty — no built-in factory; `test_http_registry` proves unregistered
+  `hvHttp3` resolve raises; unblock only after QUIC module.
+
+**P1 (2026-07-16): Keep-alive request-tail contract final**
+
+- Decision: **final public contract**, not provisional transport truth.
+- Policy: framing-complete first request is delivered; unread tail is isolated into next-request pending buffer; partial follow-up must not be early-rejected; conclusively malformed / EOF-truncated follow-up becomes follow-up `400` after prior response; `Connection: close` + extra bytes stays same-request `400` with no handler.
+- Recorded as **INV-12** in `CONTRACT.md` §3.1; implementation comment on `FPending` drain loop in `impl.h1`.
+- Evidence already locked by `test_http_h1parser` + `test_http_server` + `test_http_security` (threaded/epoll garbage-tail / partial-complete / pipeline).
+- Explicit non-goals: do not reclassify a complete first request as same-request `400` solely because keep-alive garbage follows.
+
+**Slice 0 (2026-07-16): Control-plane truth + gate audit**
+
+- Reconciled `CONTRACT.md` / `inbox.md` / this goal tree to current IHttp* surface, builder-first API, H2 status, and gate inventory.
+- Expanded main HTTP Makefile gate: 27 → 34 suites (`base`, `url`, `router`, `middleware`, `static`, `h1scan`, `h1outbound`).
+- Documented intentional side suites: `benchmarks`, `examples`, `smoke`, `integration`, `tls_real`.
+- Fixed `test_http_router` 404/405 expectations to RFC 7807 Problem Details (`application/problem+json`).
+- Fixed router group-test ownership cleanup and `THttpRouter.Destroy` middleware/regex handler release.
+- Evidence: `test_http_router` 30 passed / 0 failed / 0 unfreed.
 
 ### Recent Fixes (2026-07-07)
 
 **Phase 19 (2026-07-07): Streaming Request Body Ownership API**
 
-- **`NewStreamingRequest`**: factory functions that create `IHttpRequest` with a non-buffered `IReader` body — the body is passed directly to the transport, not read into memory
 - **`IHttpClient.SendStreaming`**: sends a streaming request with explicit body ownership contract — `Send` takes ownership and closes the body after the round trip (success or error)
-- **Body ownership contract**: documented in `NewStreamingRequest` docstring — caller creates body, `Send` closes it; for redirects, non-seekable streams raise `EHttpError('redirect request body is not replayable')`
-- **Decorator support**: `TAuthClient`/`THeaderClient`/`TOptionsOverrideClient` all implement `SendStreaming` with correct header injection and options merging
-- **Re-exported**: `NewStreamingRequest` overloads available from `nextpas.core.http` facade
-- **Tests**: 5 new tests (content-length, body closed after send, body closed on error, headers preserved, redirect ownership), 166 client total / 0 leaks
+- **Body ownership contract**: caller creates body, `Send`/`SendStreaming` closes it; for redirects, non-seekable streams raise `EHttpError('redirect request body is not replayable')`
+- **Decorator support**: auth/header/options/retry forwarders implement `SendStreaming` via `THttpClientForwarder`
+- **Wave-3 note**: `NewStreamingRequest` factory overloads were later **physically removed**; known-length streaming construction is builder `Body(IReader)+ContentLength` or `SendStreaming`
+- **Tests**: streaming content-length, body closed after send, body closed on error, headers preserved, redirect ownership
 
 **Phase 18 (2026-07-07): Fluent Request Builder**
 
@@ -167,11 +267,11 @@ This lane is in **G2/G3/G4/G5 active hardening**:
 
 ```text
 nextpas.core.http
-├── G0: Module control, docs, and verification discipline         [active baseline]
-├── G1: Stable public H1 surface                                 [mostly landed]
-├── G2: Correctness, safety, lifecycle, and ownership proof      [advanced]
-├── G3: API ergonomics and performance isolation                 [active]
-├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [H2 transport landed, test hardening]
+├── G0: Module control, docs, and verification discipline         [baseline]
+├── G1: Stable public H1 surface                                 [landed]
+├── G2: Correctness, safety, lifecycle, and ownership proof      [INV-12 final]
+├── G3: API ergonomics and performance isolation                 [stage-closed]
+├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [H2 facade-proven; H3 blocked]
 ├── G5: Static/WebSocket graduation gates                        [helper-level stable]
 └── G6: Cross-language benchmark truth and long-run positioning  [ongoing, not final]
 ```
@@ -243,7 +343,7 @@ Already landed:
 - `WithTimeout`/`WithMaxRedirects`/`WithFollowRedirects` per-request options decorator (overrides client defaults for a single request)
 - `IHttpRequestWithOptions` interface + `THttpRequestOptions` record for per-request option overrides
 - `THttpRequestBuilder` fluent request builder (Header, BasicAuth, BearerAuth, ContentType, Body, QueryParam, Timeout, MaxRedirects, FollowRedirects, Build)
-- `NewStreamingRequest` + `SendStreaming` streaming body ownership API (non-buffered IReader, explicit close-on-send contract, redirect replayability caveat)
+- Builder / `SendStreaming` streaming body ownership API (non-buffered IReader, explicit close-on-send contract, redirect replayability caveat); `NewStreamingRequest` removed
 - per-request timeout override at transport level (H1 transport checks `IHttpRequestWithOptions` to override `FOptions.Timeout`)
 - `HttpEnsureSuccess` response status guard (raises EHttpError on non-2xx, returns response for chaining)
 
@@ -303,7 +403,9 @@ Current isolation direction:
 - writer plus outbound drain combination
 - full-chain correlation with direct/router/middleware workload splits
 
-What still matters most now is isolating remaining runtime/socket overhead and other non-parser/non-writer costs, not collecting more final benchmark tables too early.
+P4 residual cost isolation is closed: ladder + benches restored. Further
+performance work should profile specific L1/L2 hotspots with scoped caveats,
+not collect more ranking tables.
 
 ## Protocol Evolution Gates
 
@@ -373,22 +475,30 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 
 ## Current Highest-Value Slices
 
-As of 2026-06-07, the best next slices are:
+As of 2026-07-16, ordered execution queue:
 
-1. **HTTP goal/control docs**
-   - keep this goal tree and HTTP docs aligned with real status
-   - separate stable architecture facts from active route decisions
-2. **Runtime/socket cost isolation**
-   - keep splitting non-parser/non-writer server cost with narrow benchmarks
-   - avoid jumping straight to final benchmark rankings
-3. **Client ergonomics, but only for real gaps**
-   - prefer one stable helper over a sprawling builder surface
-4. **Cross-language benchmark truth**
-   - keep Rust std-only vs. Hyper/Tokio labeling honest
-   - improve reproducibility and workload clarity before headline comparisons
-5. **Protocol seam readiness**
-   - continue H2 codec proof with broader HPACK integer/string/header-block coverage, frame-type-specific validation, and later QPACK/QUIC planning
-   - improve H2/H3 seam quality only where it reduces future design risk without faking support
+1. **P1 — keep-alive request-tail contract decision** ✅ closed (INV-12)
+2. **P2 — H2 facade end-to-end proof** ✅ closed
+   - live `NewHttpClient/Server` + `Options.WithVersion(hvHttp2)` cleartext
+     prior-knowledge proven by `test_http_h2_facade` (4 cases, 0 unfreed)
+   - fixed `TH2ServerSession.Run` write-before-read drain deadlock and
+     IdleTimeout fallback for keep-alive read waits
+   - explicit exclusions remain: h2c Upgrade / push / WS-over-H2
+3. **P3 — API surface audit (no expansion by default)** ✅ closed
+   - recommended path: `THttpRequestBuilder`; only `NewRequest(Method, TUrl)`
+     and `NewGetRequest` stay non-deprecated factories
+   - fixed 6 facade overloads that had dropped `deprecated` vs `message.pas`
+   - source-contract in `test_http_contract` locks deprecation parity
+   - no second overlapping API family; builder `ContentLength()` not added
+4. **P4 — runtime/socket cost isolation** ✅ closed
+   - residual cost ladder documented in `BENCHMARKS.md` (L0 tcp → L4 comparison)
+   - restored HTTP benches after SysUtils isolation (`fullchain`/`server`/`h1parser`)
+   - fullchain wires filter/max-iters and isolation markers; stress gate green
+   - no ranking claims without scoped caveats
+5. **P5 — H3 honesty** ✅ closed-as-blocked
+   - no built-in H3 factory; enum + registry seam only
+   - `test_http_registry` proves unregistered `hvHttp3` resolve raises
+   - unblock requires independent QUIC module before H3 frame/QPACK work
 
 ## Immediate Do-Not-Drift Rules
 

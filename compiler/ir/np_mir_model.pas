@@ -14,8 +14,12 @@
 unit np_mir_model;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
+
+uses
+  nextpas.core.collections.vec;
 
 type
   {** MIR 值 ID（SSA 虚拟寄存器） }
@@ -31,10 +35,13 @@ type
     IsSigned: Boolean;
   end;
 
+  TMirStructFieldVec = specialize TVec<TMirStructField>;
+
   {** MIR 结构体类型 }
   TMirStructType = record
     Name: string;
-    Fields: array of TMirStructField;
+    { Nested product table owned by module struct-type entry (default heap). }
+    Fields: TMirStructFieldVec;
   end;
 
   {** MIR 函数 ID }
@@ -89,6 +96,8 @@ type
     moSIToFP, moFPToSI, moUIToFP, moFPToUI
   );
 
+  TMirOperandVec = specialize TVec<TMirOperand>;
+
   {** MIR 语句 }
   TMirStmt = record
     Kind: TMirStmtKind;
@@ -98,7 +107,8 @@ type
     Rhs: TMirOperand;        // 二元右操作数
     Op: TMirOp;              // 一元/二元操作符
     FuncName: string;        // mskCall: 被调用函数名
-    Args: array of TMirOperand;  // mskCall: 实参列表
+    { Nested product table owned by block stmt entry (default heap). }
+    Args: TMirOperandVec;    // mskCall: 实参列表
     FieldIndex: LongInt;     // mskGetFieldPtr: 字段索引
     BitWidth: LongInt;       // mskAlloca: 分配宽度
     StructTypeName: string;   // 非空时表示 alloca/操作的 struct 类型名
@@ -119,6 +129,8 @@ type
     Target: TMirBlockId;
   end;
 
+  TMirSwitchCaseVec = specialize TVec<TMirSwitchCase>;
+
   {** MIR 终结符 }
   TMirTerminator = record
     Kind: TMirTermKind;
@@ -128,15 +140,19 @@ type
     FalseBlock: TMirBlockId;     // mtkIf
     Target: TMirBlockId;         // mtkGoto
     SwitchValue: TMirValueId;    // mtkSwitch
-    SwitchCases: array of TMirSwitchCase;  // mtkSwitch
+    { Nested product table owned by block terminator (default heap). }
+    SwitchCases: TMirSwitchCaseVec;  // mtkSwitch
     DefaultBlock: TMirBlockId;   // mtkSwitch
   end;
+
+  TMirStmtVec = specialize TVec<TMirStmt>;
 
   {** MIR 基本块 }
   TMirBlock = record
     Id: TMirBlockId;
     Name: string;
-    Stmts: array of TMirStmt;
+    { Nested product table owned by module block entry (default heap). }
+    Stmts: TMirStmtVec;
     Terminator: TMirTerminator;
   end;
 
@@ -148,31 +164,43 @@ type
     IsSigned: Boolean;
   end;
 
+  TMirParamVec = specialize TVec<TMirParam>;
+  TMirBlockVec = specialize TVec<TMirBlock>;
+
   {** MIR 函数 }
   TMirFunction = record
     Id: TMirFuncId;
     Name: string;
     ReturnBitWidth: LongInt;     // 0 = void
     ReturnIsSigned: Boolean;
-    Params: array of TMirParam;
-    Blocks: array of TMirBlock;
+    { Nested product tables owned by module function entry (default heap). }
+    Params: TMirParamVec;
+    Blocks: TMirBlockVec;
     EntryBlockId: TMirBlockId;
     IsExternal: Boolean;
     ExternalLib: string;
     ExternalName: string;
   end;
 
+  PMirFunction = ^TMirFunction;
+  PMirBlock = ^TMirBlock;
+  PMirStmt = ^TMirStmt;
+  PMirStructType = ^TMirStructType;
+  TMirFunctionVec = specialize TVec<TMirFunction>;
+  TMirStructTypeVec = specialize TVec<TMirStructType>;
+
   {** MIR 模块 — 包含所有函数和全局变量 }
   TMirModule = class
   private
     FName: string;
-    FFunctions: array of TMirFunction;
+    FFunctions: TMirFunctionVec;
     FNextValueId: TMirValueId;
     FNextBlockId: TMirBlockId;
     FNextFuncId: TMirFuncId;
-    FStructTypes: array of TMirStructType;
+    FStructTypes: TMirStructTypeVec;
   public
     constructor Create(const AName: string);
+    destructor Destroy; override;
     function ModuleName: string;
 
     {** 注册结构体类型，返回类型索引 }
@@ -192,6 +220,8 @@ type
     {** 添加函数参数 }
     procedure AddParam(AFuncId: TMirFuncId; const AName: string;
       ABitWidth: LongInt; AIsSigned: Boolean);
+    {** 替换函数参数列表（dead-arg 等优化 pass 写回） }
+    procedure SetParams(AFuncId: TMirFuncId; const AParams: array of TMirParam);
     {** 设置函数为 external }
     procedure SetExternal(AFuncId: TMirFuncId;
       const ALib, AExternalName: string);
@@ -232,6 +262,12 @@ type
   function MirIntConst(AValue: Int64; ABitWidth: LongInt): TMirOperand;
   function MirFloatConst(AValue: Double): TMirOperand;
   function MirBoolConst(AValue: Boolean): TMirOperand;
+
+  {** Deep-clone call Args for stmt copies (inline / hoist). Nil stays nil. }
+  function CloneMirOperandVec(const ASrc: TMirOperandVec): TMirOperandVec;
+  {** Deep-clone switch cases for terminator copies. Nil stays nil. }
+  function CloneMirSwitchCaseVec(
+    const ASrc: TMirSwitchCaseVec): TMirSwitchCaseVec;
 
 implementation
 
@@ -282,15 +318,93 @@ begin
   Result.ConstVal.BoolVal := AValue;
 end;
 
+function CloneMirOperandVec(const ASrc: TMirOperandVec): TMirOperandVec;
+var
+  I: SizeInt;
+begin
+  if ASrc = nil then
+    Exit(nil);
+  Result := TMirOperandVec.Create(ASrc.Count);
+  for I := 0 to SizeInt(ASrc.Count) - 1 do
+    Result.Push(ASrc[SizeUInt(I)]);
+end;
+
+function CloneMirSwitchCaseVec(
+  const ASrc: TMirSwitchCaseVec): TMirSwitchCaseVec;
+var
+  I: SizeInt;
+begin
+  if ASrc = nil then
+    Exit(nil);
+  Result := TMirSwitchCaseVec.Create(ASrc.Count);
+  for I := 0 to SizeInt(ASrc.Count) - 1 do
+    Result.Push(ASrc[SizeUInt(I)]);
+end;
+
 constructor TMirModule.Create(const AName: string);
 begin
   inherited Create;
   FName := AName;
-  SetLength(FFunctions, 0);
+  FFunctions := TMirFunctionVec.Create;
+  FStructTypes := TMirStructTypeVec.Create;
   FNextValueId := 1;
   FNextBlockId := 1;
   FNextFuncId := 1;
-  SetLength(FStructTypes, 0);
+end;
+
+destructor TMirModule.Destroy;
+var
+  I, BI, SI: SizeInt;
+  ST: PMirStructType;
+  Func: PMirFunction;
+  Block: PMirBlock;
+  Stmt: PMirStmt;
+begin
+  if FStructTypes <> nil then
+  begin
+    for I := 0 to SizeInt(FStructTypes.Count) - 1 do
+    begin
+      ST := FStructTypes.GetPtr(SizeUInt(I));
+      ST^.Fields.Free;
+      ST^.Fields := nil;
+    end;
+  end;
+  FStructTypes.Free;
+  FStructTypes := nil;
+  if FFunctions <> nil then
+  begin
+    for I := 0 to SizeInt(FFunctions.Count) - 1 do
+    begin
+      Func := FFunctions.GetPtr(SizeUInt(I));
+      Func^.Params.Free;
+      Func^.Params := nil;
+      if Func^.Blocks <> nil then
+      begin
+        for BI := 0 to SizeInt(Func^.Blocks.Count) - 1 do
+        begin
+          Block := Func^.Blocks.GetPtr(SizeUInt(BI));
+          if Block^.Stmts <> nil then
+          begin
+            for SI := 0 to SizeInt(Block^.Stmts.Count) - 1 do
+            begin
+              Stmt := Block^.Stmts.GetPtr(SizeUInt(SI));
+              Stmt^.Args.Free;
+              Stmt^.Args := nil;
+            end;
+          end;
+          Block^.Stmts.Free;
+          Block^.Stmts := nil;
+          Block^.Terminator.SwitchCases.Free;
+          Block^.Terminator.SwitchCases := nil;
+        end;
+      end;
+      Func^.Blocks.Free;
+      Func^.Blocks := nil;
+    end;
+  end;
+  FFunctions.Free;
+  FFunctions := nil;
+  inherited Destroy;
 end;
 
 function TMirModule.ModuleName: string;
@@ -302,30 +416,36 @@ function TMirModule.AddStructType(const AName: string;
   const AFields: array of TMirStructField): LongInt;
 var
   I: LongInt;
+  Entry: TMirStructType;
 begin
-  I := Length(FStructTypes);
-  SetLength(FStructTypes, I + 1);
-  FStructTypes[I].Name := AName;
-  SetLength(FStructTypes[I].Fields, Length(AFields));
+  Entry := Default(TMirStructType);
+  Entry.Name := AName;
+  if Length(AFields) > 0 then
+    Entry.Fields := TMirStructFieldVec.Create(SizeUInt(Length(AFields)))
+  else
+    Entry.Fields := TMirStructFieldVec.Create;
   for I := 0 to High(AFields) do
-    FStructTypes[Length(FStructTypes) - 1].Fields[I] := AFields[I];
-  Result := I; { returns index before the SetLength, so use Length-1 below }
-  Result := Length(FStructTypes) - 1;
+    Entry.Fields.Push(AFields[I]);
+  FStructTypes.Push(Entry);
+  Result := LongInt(FStructTypes.Count) - 1;
 end;
 
 function TMirModule.StructTypeCount: LongInt;
 begin
-  Result := Length(FStructTypes);
+  if FStructTypes = nil then
+    Exit(0);
+  Result := LongInt(FStructTypes.Count);
 end;
 
 function TMirModule.StructTypeAt(AIndex: LongInt): TMirStructType;
 begin
-  if (AIndex >= 0) and (AIndex < Length(FStructTypes)) then
-    Result := FStructTypes[AIndex]
+  if (FStructTypes <> nil) and (AIndex >= 0) and
+    (AIndex < LongInt(FStructTypes.Count)) then
+    Result := FStructTypes[SizeUInt(AIndex)]
   else
   begin
     Result.Name := '';
-    SetLength(Result.Fields, 0);
+    Result.Fields := nil;
   end;
 end;
 
@@ -344,18 +464,16 @@ end;
 function TMirModule.AddFunction(const AName: string;
   AReturnBitWidth: LongInt; AReturnIsSigned: Boolean): TMirFuncId;
 var
-  Idx: SizeInt;
+  Func: TMirFunction;
 begin
-  Idx := Length(FFunctions);
-  SetLength(FFunctions, Idx + 1);
-  FFunctions[Idx].Id := FNextFuncId;
-  FFunctions[Idx].Name := AName;
-  FFunctions[Idx].ReturnBitWidth := AReturnBitWidth;
-  FFunctions[Idx].ReturnIsSigned := AReturnIsSigned;
-  FFunctions[Idx].EntryBlockId := 0;
-  FFunctions[Idx].IsExternal := False;
-  SetLength(FFunctions[Idx].Params, 0);
-  SetLength(FFunctions[Idx].Blocks, 0);
+  Func := Default(TMirFunction);
+  Func.Id := FNextFuncId;
+  Func.Name := AName;
+  Func.ReturnBitWidth := AReturnBitWidth;
+  Func.ReturnIsSigned := AReturnIsSigned;
+  Func.EntryBlockId := 0;
+  Func.IsExternal := False;
+  FFunctions.Push(Func);
   Result := FNextFuncId;
   Inc(FNextFuncId);
 end;
@@ -363,179 +481,284 @@ end;
 procedure TMirModule.AddParam(AFuncId: TMirFuncId; const AName: string;
   ABitWidth: LongInt; AIsSigned: Boolean);
 var
-  I, Idx: SizeInt;
+  I: SizeInt;
+  Func: PMirFunction;
+  Param: TMirParam;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      Idx := Length(FFunctions[I].Params);
-      SetLength(FFunctions[I].Params, Idx + 1);
-      FFunctions[I].Params[Idx].Name := AName;
-      FFunctions[I].Params[Idx].ValueId := NewValue;
-      FFunctions[I].Params[Idx].BitWidth := ABitWidth;
-      FFunctions[I].Params[Idx].IsSigned := AIsSigned;
+      if Func^.Params = nil then
+        Func^.Params := TMirParamVec.Create;
+      Param.Name := AName;
+      Param.ValueId := NewValue;
+      Param.BitWidth := ABitWidth;
+      Param.IsSigned := AIsSigned;
+      Func^.Params.Push(Param);
       Exit;
     end;
+  end;
+end;
+
+procedure TMirModule.SetParams(AFuncId: TMirFuncId;
+  const AParams: array of TMirParam);
+var
+  I, J: SizeInt;
+  Func: PMirFunction;
+begin
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
+    begin
+      Func^.Params.Free;
+      Func^.Params := nil;
+      if Length(AParams) > 0 then
+      begin
+        Func^.Params := TMirParamVec.Create(SizeUInt(Length(AParams)));
+        for J := 0 to High(AParams) do
+          Func^.Params.Push(AParams[J]);
+      end;
+      Exit;
+    end;
+  end;
 end;
 
 procedure TMirModule.SetStmt(AFuncId, ABlockId: TMirBlockId;
   AStmtIndex: LongInt; const AStmt: TMirStmt);
 var
   FI, BI: LongInt;
+  Func: PMirFunction;
+  Block: PMirBlock;
+  Old: PMirStmt;
 begin
-  for FI := 0 to High(FFunctions) do
-    for BI := 0 to High(FFunctions[FI].Blocks) do
-      if FFunctions[FI].Blocks[BI].Id = ABlockId then
+  for FI := 0 to LongInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(FI));
+    if Func^.Blocks = nil then
+      Continue;
+    for BI := 0 to LongInt(Func^.Blocks.Count) - 1 do
+    begin
+      Block := Func^.Blocks.GetPtr(SizeUInt(BI));
+      if Block^.Id = ABlockId then
       begin
-        if (AStmtIndex >= 0) and (AStmtIndex < Length(FFunctions[FI].Blocks[BI].Stmts)) then
-          FFunctions[FI].Blocks[BI].Stmts[AStmtIndex] := AStmt;
+        if (Block^.Stmts <> nil) and (AStmtIndex >= 0) and
+          (AStmtIndex < LongInt(Block^.Stmts.Count)) then
+        begin
+          Old := Block^.Stmts.GetPtr(SizeUInt(AStmtIndex));
+          { Free previous Args only when ownership actually changes. }
+          if Old^.Args <> AStmt.Args then
+          begin
+            Old^.Args.Free;
+            Old^.Args := nil;
+          end;
+          Old^ := AStmt;
+        end;
         Exit;
       end;
+    end;
+  end;
 end;
 
 function TMirModule.GetStmt(AFuncId, ABlockId: TMirBlockId;
   AStmtIndex: LongInt; out AStmt: TMirStmt): Boolean;
 var
   FI, BI: LongInt;
+  Func: PMirFunction;
+  Block: PMirBlock;
 begin
   Result := False;
-  for FI := 0 to High(FFunctions) do
-    for BI := 0 to High(FFunctions[FI].Blocks) do
-      if FFunctions[FI].Blocks[BI].Id = ABlockId then
+  for FI := 0 to LongInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(FI));
+    if Func^.Blocks = nil then
+      Continue;
+    for BI := 0 to LongInt(Func^.Blocks.Count) - 1 do
+    begin
+      Block := Func^.Blocks.GetPtr(SizeUInt(BI));
+      if Block^.Id = ABlockId then
       begin
-        if (AStmtIndex >= 0) and (AStmtIndex < Length(FFunctions[FI].Blocks[BI].Stmts)) then
+        if (Block^.Stmts <> nil) and (AStmtIndex >= 0) and
+          (AStmtIndex < LongInt(Block^.Stmts.Count)) then
         begin
-          AStmt := FFunctions[FI].Blocks[BI].Stmts[AStmtIndex];
+          AStmt := Block^.Stmts[SizeUInt(AStmtIndex)];
           Result := True;
         end;
         Exit;
       end;
+    end;
+  end;
 end;
 
 procedure TMirModule.SetExternal(AFuncId: TMirFuncId;
   const ALib, AExternalName: string);
 var
   I: SizeInt;
+  Func: PMirFunction;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      FFunctions[I].IsExternal := True;
-      FFunctions[I].ExternalLib := ALib;
-      FFunctions[I].ExternalName := AExternalName;
+      Func^.IsExternal := True;
+      Func^.ExternalLib := ALib;
+      Func^.ExternalName := AExternalName;
       Exit;
     end;
+  end;
 end;
 
 function TMirModule.AddBlock(AFuncId: TMirFuncId;
   const AName: string): TMirBlockId;
 var
-  I, Idx: SizeInt;
+  I: SizeInt;
+  Func: PMirFunction;
+  Block: TMirBlock;
 begin
   Result := NewBlockId;
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      Idx := Length(FFunctions[I].Blocks);
-      SetLength(FFunctions[I].Blocks, Idx + 1);
-      FFunctions[I].Blocks[Idx].Id := Result;
-      FFunctions[I].Blocks[Idx].Name := AName;
-      SetLength(FFunctions[I].Blocks[Idx].Stmts, 0);
-      FFunctions[I].Blocks[Idx].Terminator.Kind := mtkUnreachable;
+      if Func^.Blocks = nil then
+        Func^.Blocks := TMirBlockVec.Create;
+      Block := Default(TMirBlock);
+      Block.Id := Result;
+      Block.Name := AName;
+      Block.Terminator.Kind := mtkUnreachable;
+      Func^.Blocks.Push(Block);
       Exit;
     end;
+  end;
 end;
 
 procedure TMirModule.SetEntryBlock(AFuncId: TMirFuncId;
   ABlockId: TMirBlockId);
 var
   I: SizeInt;
+  Func: PMirFunction;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Id = AFuncId then
+  for I := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(I));
+    if Func^.Id = AFuncId then
     begin
-      FFunctions[I].EntryBlockId := ABlockId;
+      Func^.EntryBlockId := ABlockId;
       Exit;
     end;
+  end;
 end;
 
 procedure TMirModule.AddStmt(AFuncId, ABlockId: TMirBlockId;
   const AStmt: TMirStmt);
 var
-  FI, BI, Idx: SizeInt;
+  FI, BI: SizeInt;
+  Func: PMirFunction;
+  Block: PMirBlock;
 begin
-  for FI := 0 to High(FFunctions) do
-    if FFunctions[FI].Id = AFuncId then
+  for FI := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(FI));
+    if Func^.Id = AFuncId then
     begin
-      for BI := 0 to High(FFunctions[FI].Blocks) do
-        if FFunctions[FI].Blocks[BI].Id = ABlockId then
+      if Func^.Blocks = nil then
+        Exit;
+      for BI := 0 to SizeInt(Func^.Blocks.Count) - 1 do
+      begin
+        Block := Func^.Blocks.GetPtr(SizeUInt(BI));
+        if Block^.Id = ABlockId then
         begin
-          Idx := Length(FFunctions[FI].Blocks[BI].Stmts);
-          SetLength(FFunctions[FI].Blocks[BI].Stmts, Idx + 1);
-          FFunctions[FI].Blocks[BI].Stmts[Idx] := AStmt;
+          if Block^.Stmts = nil then
+            Block^.Stmts := TMirStmtVec.Create;
+          Block^.Stmts.Push(AStmt);
           Exit;
         end;
+      end;
       Exit;
     end;
+  end;
 end;
 
 procedure TMirModule.SetTerminator(AFuncId, ABlockId: TMirBlockId;
   const ATerm: TMirTerminator);
 var
   FI, BI: SizeInt;
+  Func: PMirFunction;
+  Block: PMirBlock;
 begin
-  for FI := 0 to High(FFunctions) do
-    if FFunctions[FI].Id = AFuncId then
+  for FI := 0 to SizeInt(FFunctions.Count) - 1 do
+  begin
+    Func := FFunctions.GetPtr(SizeUInt(FI));
+    if Func^.Id = AFuncId then
     begin
-      for BI := 0 to High(FFunctions[FI].Blocks) do
-        if FFunctions[FI].Blocks[BI].Id = ABlockId then
+      if Func^.Blocks = nil then
+        Exit;
+      for BI := 0 to SizeInt(Func^.Blocks.Count) - 1 do
+      begin
+        Block := Func^.Blocks.GetPtr(SizeUInt(BI));
+        if Block^.Id = ABlockId then
         begin
-          FFunctions[FI].Blocks[BI].Terminator := ATerm;
+          if Block^.Terminator.SwitchCases <> ATerm.SwitchCases then
+          begin
+            Block^.Terminator.SwitchCases.Free;
+            Block^.Terminator.SwitchCases := nil;
+          end;
+          Block^.Terminator := ATerm;
           Exit;
         end;
+      end;
       Exit;
     end;
+  end;
 end;
 
 function TMirModule.FunctionCount: LongInt;
 begin
-  Result := Length(FFunctions);
+  if FFunctions = nil then
+    Exit(0);
+  Result := LongInt(FFunctions.Count);
 end;
 
 function TMirModule.FunctionAt(AIndex: LongInt): TMirFunction;
 begin
-  Result := FFunctions[AIndex];
+  Result := FFunctions[SizeUInt(AIndex)];
 end;
 
 function TMirModule.FindFunction(const AName: string): TMirFuncId;
 var
   I: LongInt;
 begin
-  for I := 0 to High(FFunctions) do
-    if FFunctions[I].Name = AName then
-      Exit(FFunctions[I].Id);
+  for I := 0 to LongInt(FFunctions.Count) - 1 do
+    if FFunctions[SizeUInt(I)].Name = AName then
+      Exit(FFunctions[SizeUInt(I)].Id);
   Result := 0;
 end;
 
 function TMirModule.Verify(out AMessage: string): Boolean;
 var
   FI, BI: LongInt;
+  Func: PMirFunction;
 begin
   AMessage := '';
-  for FI := 0 to High(FFunctions) do
+  for FI := 0 to LongInt(FFunctions.Count) - 1 do
   begin
-    if FFunctions[FI].EntryBlockId = 0 then
+    Func := FFunctions.GetPtr(SizeUInt(FI));
+    if Func^.EntryBlockId = 0 then
     begin
-      AMessage := 'Function "' + FFunctions[FI].Name + '" has no entry block';
+      AMessage := 'Function "' + Func^.Name + '" has no entry block';
       Exit(False);
     end;
-    if Length(FFunctions[FI].Blocks) = 0 then
+    if (Func^.Blocks = nil) or (Func^.Blocks.Count = 0) then
     begin
-      AMessage := 'Function "' + FFunctions[FI].Name + '" has no blocks';
+      AMessage := 'Function "' + Func^.Name + '" has no blocks';
       Exit(False);
     end;
-    for BI := 0 to High(FFunctions[FI].Blocks) do
-      if FFunctions[FI].Blocks[BI].Terminator.Kind = mtkUnreachable then
+    for BI := 0 to LongInt(Func^.Blocks.Count) - 1 do
+      if Func^.Blocks[SizeUInt(BI)].Terminator.Kind = mtkUnreachable then
       begin
         // warn but don't fail — unreachable is valid for incomplete functions
       end;

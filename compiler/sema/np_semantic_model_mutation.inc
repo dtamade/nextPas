@@ -4,8 +4,8 @@ function TSemanticModel.FindTypeScalarFactIndex(
 var
   I: LongInt;
 begin
-  for I := 0 to Length(FTypeScalarFacts) - 1 do
-    if FTypeScalarFacts[I].TypeId = ATypeId then
+  for I := 0 to LongInt(FTypeScalarFacts.Count) - 1 do
+    if FTypeScalarFacts[SizeUInt(I)].TypeId = ATypeId then
       Exit(I);
   Result := -1;
 end;
@@ -18,21 +18,20 @@ function TSemanticModel.AddSymbol(
   const AByteOffset: LongInt
 ): LongInt;
 var
-  NextIndex: SizeInt;
+  Entry: TSemanticSymbol;
 begin
-  NextIndex := Length(FSymbols);
-  SetLength(FSymbols, NextIndex + 1);
-  FSymbols[NextIndex].SymbolId := NextIndex + 1;
-  FSymbols[NextIndex].Name := AName;
-  FSymbols[NextIndex].Kind := AKind;
-  FSymbols[NextIndex].OwnerUnitId := AOwnerUnitId;
-  FSymbols[NextIndex].ScopeId := 0;
-  FSymbols[NextIndex].TypeId := ATypeId;
-  FSymbols[NextIndex].ParamCount := -1;
-  FSymbols[NextIndex].ParamSignature := '';
-  FSymbols[NextIndex].ByteOffset := AByteOffset;
-  Result := FSymbols[NextIndex].SymbolId;
-  // Update O(1) lookup index (case-insensitive)
+  Entry := Default(TSemanticSymbol);
+  Entry.SymbolId := LongInt(FSymbols.Count) + 1;
+  Entry.Name := AName;
+  Entry.Kind := AKind;
+  Entry.OwnerUnitId := AOwnerUnitId;
+  Entry.ScopeId := 0;
+  Entry.TypeId := ATypeId;
+  Entry.ParamCount := -1;
+  Entry.ParamSignature := '';
+  Entry.ByteOffset := AByteOffset;
+  FSymbols.Push(Entry);
+  Result := Entry.SymbolId;
   FSymbolNameIndex.Put(LowerCase(AName), Result);
 end;
 
@@ -41,16 +40,15 @@ function TSemanticModel.AddType(
   const AKind: string
 ): LongInt;
 var
-  NextIndex: SizeInt;
+  Entry: TSemanticType;
 begin
-  NextIndex := Length(FTypes);
-  SetLength(FTypes, NextIndex + 1);
-  FTypes[NextIndex].TypeId := NextIndex + 1;
-  FTypes[NextIndex].Name := AName;
-  FTypes[NextIndex].Kind := AKind;
-  FTypes[NextIndex].ParentTypeId := 0;
-  Result := FTypes[NextIndex].TypeId;
-  // Update O(1) lookup index (case-insensitive)
+  Entry := Default(TSemanticType);
+  Entry.TypeId := LongInt(FTypes.Count) + 1;
+  Entry.Name := AName;
+  Entry.Kind := AKind;
+  Entry.ParentTypeId := 0;
+  FTypes.Push(Entry);
+  Result := Entry.TypeId;
   FTypeNameIndex.Put(LowerCase(AName), Result);
 end;
 
@@ -60,8 +58,8 @@ var
   Idx: LongInt;
 begin
   Idx := ATypeId - 1;
-  if (Idx >= 0) and (Idx < Length(FTypes)) then
-    FTypes[Idx].Kind := AKind;
+  if (Idx >= 0) and (Idx < LongInt(FTypes.Count)) then
+    FTypes.GetPtr(SizeUInt(Idx))^.Kind := AKind;
 end;
 
 procedure TSemanticModel.SetTypeScalarFact(const ATypeId: LongInt;
@@ -69,8 +67,10 @@ procedure TSemanticModel.SetTypeScalarFact(const ATypeId: LongInt;
   const ASigned: Boolean);
 var
   Idx: LongInt;
+  Fact: TSemanticScalarTypeFact;
+  P: PSemanticScalarTypeFact;
 begin
-  if (ATypeId <= 0) or (ATypeId > Length(FTypes)) then
+  if (ATypeId <= 0) or (ATypeId > LongInt(FTypes.Count)) then
     Exit;
   if AKind = sskNone then
     Exit;
@@ -80,14 +80,16 @@ begin
   Idx := FindTypeScalarFactIndex(ATypeId);
   if Idx < 0 then
   begin
-    Idx := Length(FTypeScalarFacts);
-    SetLength(FTypeScalarFacts, Idx + 1);
+    Fact := Default(TSemanticScalarTypeFact);
+    FTypeScalarFacts.Push(Fact);
+    Idx := LongInt(FTypeScalarFacts.Count) - 1;
   end;
 
-  FTypeScalarFacts[Idx].TypeId := ATypeId;
-  FTypeScalarFacts[Idx].Kind := AKind;
-  FTypeScalarFacts[Idx].BitWidth := ABitWidth;
-  FTypeScalarFacts[Idx].Signed := ASigned;
+  P := FTypeScalarFacts.GetPtr(SizeUInt(Idx));
+  P^.TypeId := ATypeId;
+  P^.Kind := AKind;
+  P^.BitWidth := ABitWidth;
+  P^.Signed := ASigned;
 end;
 
 function TSemanticModel.GetTypeScalarFact(const ATypeId: LongInt;
@@ -104,7 +106,7 @@ begin
   if Idx < 0 then
     Exit(False);
 
-  AFact := FTypeScalarFacts[Idx];
+  AFact := FTypeScalarFacts[SizeUInt(Idx)];
   Result := True;
 end;
 
@@ -121,48 +123,70 @@ var
   Idx: LongInt;
 begin
   Idx := ATypeId - 1;
-  if (Idx >= 0) and (Idx < Length(FTypes)) then
-    FTypes[Idx].OwnerUnitId := AOwnerUnitId;
+  if (Idx >= 0) and (Idx < LongInt(FTypes.Count)) then
+    FTypes.GetPtr(SizeUInt(Idx))^.OwnerUnitId := AOwnerUnitId;
 end;
 
 procedure TSemanticModel.SetTypeParent(const ATypeId: LongInt;
   const AParentTypeId: LongInt);
 var
+  CurrentTypeId: LongInt;
+  Depth: LongInt;
   Idx: LongInt;
 begin
   Idx := ATypeId - 1;
-  if (Idx >= 0) and (Idx < Length(FTypes)) then
-    FTypes[Idx].ParentTypeId := AParentTypeId;
+  if (Idx < 0) or (Idx >= LongInt(FTypes.Count)) then
+    Exit;
+
+  CurrentTypeId := AParentTypeId;
+  Depth := 0;
+  while CurrentTypeId <> 0 do
+  begin
+    if (CurrentTypeId < 1) or (CurrentTypeId > LongInt(FTypes.Count)) then
+      Exit;
+    if CurrentTypeId = ATypeId then
+      Exit;
+    if Depth >= LongInt(FTypes.Count) then
+      Exit;
+    CurrentTypeId := FTypes[SizeUInt(CurrentTypeId - 1)].ParentTypeId;
+    Inc(Depth);
+  end;
+
+  FTypes.GetPtr(SizeUInt(Idx))^.ParentTypeId := AParentTypeId;
 end;
 
 procedure TSemanticModel.SetTypeAliasTarget(const ATypeId: LongInt;
   const ATargetTypeId: LongInt);
 var
   I: LongInt;
+  Entry: TTypeMetadata;
 begin
-  for I := 0 to Length(FTypeMetadataEntries) - 1 do
-    if FTypeMetadataEntries[I].TypeId = ATypeId then
+  for I := 0 to LongInt(FTypeMetadataEntries.Count) - 1 do
+    if FTypeMetadataEntries[SizeUInt(I)].TypeId = ATypeId then
     begin
-      FTypeMetadataEntries[I].AliasTargetTypeId := ATargetTypeId;
+      FTypeMetadataEntries.GetPtr(SizeUInt(I))^.AliasTargetTypeId := ATargetTypeId;
       Exit;
     end;
-  SetLength(FTypeMetadataEntries, Length(FTypeMetadataEntries) + 1);
-  FTypeMetadataEntries[High(FTypeMetadataEntries)].TypeId := ATypeId;
-  FTypeMetadataEntries[High(FTypeMetadataEntries)].AliasTargetTypeId := ATargetTypeId;
+  Entry := Default(TTypeMetadata);
+  Entry.TypeId := ATypeId;
+  Entry.AliasTargetTypeId := ATargetTypeId;
+  FTypeMetadataEntries.Push(Entry);
 end;
 
 procedure TSemanticModel.SetTypeGenericParent(const ATypeId: LongInt;
   const ATemplateTypeId: LongInt; const AArgIndices: array of LongInt);
 var
   Idx, I: LongInt;
+  Ty: PSemanticType;
 begin
   Idx := ATypeId - 1;
-  if (Idx >= 0) and (Idx < Length(FTypes)) then
+  if (Idx >= 0) and (Idx < LongInt(FTypes.Count)) then
   begin
-    FTypes[Idx].GenericParent.TemplateTypeId := ATemplateTypeId;
-    SetLength(FTypes[Idx].GenericParent.ArgIndices, Length(AArgIndices));
+    Ty := FTypes.GetPtr(SizeUInt(Idx));
+    Ty^.GenericParent.TemplateTypeId := ATemplateTypeId;
+    SetLength(Ty^.GenericParent.ArgIndices, Length(AArgIndices));
     for I := 0 to High(AArgIndices) do
-      FTypes[Idx].GenericParent.ArgIndices[I] := AArgIndices[I];
+      Ty^.GenericParent.ArgIndices[I] := AArgIndices[I];
   end;
 end;
 
@@ -171,9 +195,10 @@ procedure TSemanticModel.SetTypeParams(const ATypeId: LongInt;
 var
   Idx, I, ColonPos: LongInt;
   Params, Constraints, ParamText, ParamName, Constraint: string;
+  Ty: PSemanticType;
 begin
   Idx := ATypeId - 1;
-  if (Idx < 0) or (Idx >= Length(FTypes)) then
+  if (Idx < 0) or (Idx >= LongInt(FTypes.Count)) then
     Exit;
   if AParamListNode = nil then
     Exit;
@@ -205,8 +230,9 @@ begin
       Constraints := Constraints + Constraint;
     end;
   end;
-  FTypes[Idx].TypeParams := Params;
-  FTypes[Idx].TypeConstraints := Constraints;
+  Ty := FTypes.GetPtr(SizeUInt(Idx));
+  Ty^.TypeParams := Params;
+  Ty^.TypeConstraints := Constraints;
 end;
 
 procedure TSemanticModel.SetTypeInstantiatedFrom(const ATypeId: LongInt;
@@ -215,8 +241,8 @@ var
   Idx: LongInt;
 begin
   Idx := ATypeId - 1;
-  if (Idx >= 0) and (Idx < Length(FTypes)) then
-    FTypes[Idx].InstantiatedFrom := AFromTypeId;
+  if (Idx >= 0) and (Idx < LongInt(FTypes.Count)) then
+    FTypes.GetPtr(SizeUInt(Idx))^.InstantiatedFrom := AFromTypeId;
 end;
 
 procedure TSemanticModel.AppendTypeConstraint(const ATypeId: LongInt;
@@ -226,11 +252,13 @@ var
   Params: string;
   Parts: TStringVec;
   I, J: LongInt;
+  Ty: PSemanticType;
 begin
   Idx := ATypeId - 1;
-  if (Idx < 0) or (Idx >= Length(FTypes)) then
+  if (Idx < 0) or (Idx >= LongInt(FTypes.Count)) then
     Exit;
-  Params := FTypes[Idx].TypeParams;
+  Ty := FTypes.GetPtr(SizeUInt(Idx));
+  Params := Ty^.TypeParams;
   ParamIdx := -1;
   CommaCount := 0;
   I := 1;
@@ -251,24 +279,24 @@ begin
     Exit;
   Parts := TStringVec.Create;
   I := 1;
-  while I <= Length(FTypes[Idx].TypeConstraints) do
+  while I <= Length(Ty^.TypeConstraints) do
   begin
     J := I;
-    while (J <= Length(FTypes[Idx].TypeConstraints)) and
-      (FTypes[Idx].TypeConstraints[J] <> ',') do
+    while (J <= Length(Ty^.TypeConstraints)) and
+      (Ty^.TypeConstraints[J] <> ',') do
       Inc(J);
-    Parts.Push(Copy(FTypes[Idx].TypeConstraints, I, J - I));
+    Parts.Push(Copy(Ty^.TypeConstraints, I, J - I));
     I := J + 1;
   end;
   while Parts.Count <= ParamIdx do
     Parts.Push('');
   Parts[ParamIdx] := AConstraint;
-  FTypes[Idx].TypeConstraints := '';
+  Ty^.TypeConstraints := '';
   for I := 0 to Parts.Count - 1 do
   begin
     if I > 0 then
-      FTypes[Idx].TypeConstraints := FTypes[Idx].TypeConstraints + ',';
-    FTypes[Idx].TypeConstraints := FTypes[Idx].TypeConstraints + Parts[I];
+      Ty^.TypeConstraints := Ty^.TypeConstraints + ',';
+    Ty^.TypeConstraints := Ty^.TypeConstraints + Parts[I];
   end;
   Parts.Free;
 end;
@@ -286,9 +314,9 @@ begin
   while (Current > 0) and (Depth < 32) do
   begin
     Idx := Current - 1;
-    if (Idx < 0) or (Idx >= Length(FTypes)) then
+    if (Idx < 0) or (Idx >= LongInt(FTypes.Count)) then
       Exit(False);
-    Current := FTypes[Idx].ParentTypeId;
+    Current := FTypes[SizeUInt(Idx)].ParentTypeId;
     if Current = AAncestorTypeId then
       Exit(True);
     Inc(Depth);
@@ -299,20 +327,20 @@ end;
 function TSemanticModel.AddScope(const AKind: TScopeKind;
   const AName: string; const AParentScopeId: LongInt): LongInt;
 var
-  NextIndex: SizeInt;
+  Entry: TSemanticScope;
 begin
-  NextIndex := Length(FScopes);
-  SetLength(FScopes, NextIndex + 1);
-  FScopes[NextIndex].ScopeId := NextIndex + 1;
-  FScopes[NextIndex].Kind := AKind;
-  FScopes[NextIndex].Name := AName;
-  FScopes[NextIndex].ParentScopeId := AParentScopeId;
-  Result := FScopes[NextIndex].ScopeId;
+  Entry := Default(TSemanticScope);
+  Entry.ScopeId := LongInt(FScopes.Count) + 1;
+  Entry.Kind := AKind;
+  Entry.Name := AName;
+  Entry.ParentScopeId := AParentScopeId;
+  FScopes.Push(Entry);
+  Result := Entry.ScopeId;
 end;
 
 function TSemanticModel.ScopeCount: LongInt;
 begin
-  Result := Length(FScopes);
+  Result := LongInt(FScopes.Count);
 end;
 
 procedure TSemanticModel.SetSymbolScope(const ASymbolId: LongInt;
@@ -321,8 +349,8 @@ var
   Idx: LongInt;
 begin
   Idx := ASymbolId - 1;
-  if (Idx >= 0) and (Idx < Length(FSymbols)) then
-    FSymbols[Idx].ScopeId := AScopeId;
+  if (Idx >= 0) and (Idx < LongInt(FSymbols.Count)) then
+    FSymbols.GetPtr(SizeUInt(Idx))^.ScopeId := AScopeId;
 end;
 
 procedure TSemanticModel.SetSymbolTypeId(const ASymbolId: LongInt;
@@ -331,8 +359,8 @@ var
   Idx: LongInt;
 begin
   Idx := ASymbolId - 1;
-  if (Idx >= 0) and (Idx < Length(FSymbols)) then
-    FSymbols[Idx].TypeId := ATypeId;
+  if (Idx >= 0) and (Idx < LongInt(FSymbols.Count)) then
+    FSymbols.GetPtr(SizeUInt(Idx))^.TypeId := ATypeId;
 end;
 
 procedure TSemanticModel.SetSymbolParamCount(const ASymbolId: LongInt;
@@ -341,8 +369,8 @@ var
   Idx: LongInt;
 begin
   Idx := ASymbolId - 1;
-  if (Idx >= 0) and (Idx < Length(FSymbols)) then
-    FSymbols[Idx].ParamCount := ACount;
+  if (Idx >= 0) and (Idx < LongInt(FSymbols.Count)) then
+    FSymbols.GetPtr(SizeUInt(Idx))^.ParamCount := ACount;
 end;
 
 procedure TSemanticModel.SetSymbolMinParamCount(const ASymbolId: LongInt;
@@ -351,8 +379,8 @@ var
   Idx: LongInt;
 begin
   Idx := ASymbolId - 1;
-  if (Idx >= 0) and (Idx < Length(FSymbols)) then
-    FSymbols[Idx].MinParamCount := ACount;
+  if (Idx >= 0) and (Idx < LongInt(FSymbols.Count)) then
+    FSymbols.GetPtr(SizeUInt(Idx))^.MinParamCount := ACount;
 end;
 
 procedure TSemanticModel.SetSymbolVisibility(const ASymbolId: LongInt;
@@ -361,8 +389,8 @@ var
   Idx: LongInt;
 begin
   Idx := ASymbolId - 1;
-  if (Idx >= 0) and (Idx < Length(FSymbols)) then
-    FSymbols[Idx].Visibility := AVisibility;
+  if (Idx >= 0) and (Idx < LongInt(FSymbols.Count)) then
+    FSymbols.GetPtr(SizeUInt(Idx))^.Visibility := AVisibility;
 end;
 
 procedure TSemanticModel.SetSymbolParamSignature(const ASymbolId: LongInt;
@@ -371,8 +399,8 @@ var
   Idx: LongInt;
 begin
   Idx := ASymbolId - 1;
-  if (Idx >= 0) and (Idx < Length(FSymbols)) then
-    FSymbols[Idx].ParamSignature := ASignature;
+  if (Idx >= 0) and (Idx < LongInt(FSymbols.Count)) then
+    FSymbols.GetPtr(SizeUInt(Idx))^.ParamSignature := ASignature;
 end;
 
 procedure TSemanticModel.SetSymbolReturnTypeId(const ASymbolId: LongInt;
@@ -381,7 +409,6 @@ var
   Idx: LongInt;
 begin
   Idx := ASymbolId - 1;
-  if (Idx >= 0) and (Idx < Length(FSymbols)) then
-    FSymbols[Idx].ReturnTypeId := AReturnTypeId;
+  if (Idx >= 0) and (Idx < LongInt(FSymbols.Count)) then
+    FSymbols.GetPtr(SizeUInt(Idx))^.ReturnTypeId := AReturnTypeId;
 end;
-

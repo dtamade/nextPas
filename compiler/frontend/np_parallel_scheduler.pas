@@ -14,12 +14,14 @@
 unit np_parallel_scheduler;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   SysUtils,
   nextpas.core.text.strings,
+  nextpas.core.collections.vec,
   np_unit_graph;
 
 type
@@ -38,14 +40,17 @@ type
     ErrorMessage: string;
   end;
 
+  TCompileTaskVec = specialize TVec<TCompileTask>;
+  TCompileOrderVec = specialize TVec<string>;
+
   {** 并行编译调度器 }
   TParallelScheduler = class
   private
-    FTasks: array of TCompileTask;
-    FTaskCount: LongInt;
-    FCompileOrder: TStringArray;
+    FTasks: TCompileTaskVec;
+    FCompileOrder: TCompileOrderVec;
     FMaxParallel: LongInt;
     function FindTaskIndex(const AUnitId: string): LongInt;
+    function GetTaskCount: LongInt;
   public
     constructor Create;
     destructor Destroy; override;
@@ -70,7 +75,7 @@ type
     property MaxParallel: LongInt read FMaxParallel write FMaxParallel;
 
     {** 任务数 }
-    property TaskCount: LongInt read FTaskCount;
+    property TaskCount: LongInt read GetTaskCount;
   end;
 
 implementation
@@ -78,24 +83,37 @@ implementation
 constructor TParallelScheduler.Create;
 begin
   inherited Create;
-  SetLength(FTasks, 64);
-  FTaskCount := 0;
+  FTasks := TCompileTaskVec.Create;
+  FTasks.EnsureCapacity(64);
+  FCompileOrder := TCompileOrderVec.Create;
+  FCompileOrder.EnsureCapacity(64);
   FMaxParallel := 4;  { 默认 4 并行 }
 end;
 
 destructor TParallelScheduler.Destroy;
 begin
-  SetLength(FTasks, 0);
-  SetLength(FCompileOrder, 0);
+  FTasks.Free;
+  FTasks := nil;
+  FCompileOrder.Free;
+  FCompileOrder := nil;
   inherited Destroy;
+end;
+
+function TParallelScheduler.GetTaskCount: LongInt;
+begin
+  if FTasks = nil then
+    Exit(0);
+  Result := LongInt(FTasks.Count);
 end;
 
 function TParallelScheduler.FindTaskIndex(const AUnitId: string): LongInt;
 var
   I: LongInt;
 begin
-  for I := 0 to FTaskCount - 1 do
-    if SameText(FTasks[I].UnitId, AUnitId) then
+  if FTasks = nil then
+    Exit(-1);
+  for I := 0 to LongInt(FTasks.Count) - 1 do
+    if SameText(FTasks[SizeUInt(I)].UnitId, AUnitId) then
       Exit(I);
   Result := -1;
 end;
@@ -103,46 +121,62 @@ end;
 procedure TParallelScheduler.BuildSchedule(const AGraph: TUnitGraph);
 var
   I: LongInt;
+  Order: TStringArray;
+  Task: TCompileTask;
   Unit_: TResolvedUnit;
 begin
-  FTaskCount := 0;
+  if FTasks = nil then
+    FTasks := TCompileTaskVec.Create;
+  FTasks.Clear;
+  if FCompileOrder = nil then
+    FCompileOrder := TCompileOrderVec.Create;
+  FCompileOrder.Clear;
 
   { 为每个已解析的单元创建任务 }
   for I := 0 to AGraph.ResolvedUnitCount - 1 do
   begin
     Unit_ := AGraph.ResolvedUnitAt(I);
-    if FTaskCount >= Length(FTasks) then
-      SetLength(FTasks, FTaskCount + 32);
-
-    FTasks[FTaskCount].UnitId := Unit_.UnitId;
-    FTasks[FTaskCount].Status := tsPending;
-    FTasks[FTaskCount].ErrorMessage := '';
-    Inc(FTaskCount);
+    Task := Default(TCompileTask);
+    Task.UnitId := Unit_.UnitId;
+    Task.Status := tsPending;
+    Task.ErrorMessage := '';
+    FTasks.Push(Task);
   end;
 
-  { 获取拓扑排序 }
-  FCompileOrder := AGraph.TopologicalInitOrder;
+  { 获取拓扑排序（图 API 仍返回 dynarray；session 表落 TVec 默认堆） }
+  Order := AGraph.TopologicalInitOrder;
+  for I := 0 to Length(Order) - 1 do
+    FCompileOrder.Push(Order[I]);
 end;
 
 function TParallelScheduler.GetNextBatch: TStringArray;
 var
   I, BatchCount: LongInt;
   Idx: LongInt;
+  Task: TCompileTask;
 begin
   SetLength(Result, FMaxParallel);
   BatchCount := 0;
 
+  if FCompileOrder = nil then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
   { 按拓扑序获取 pending 任务 }
-  for I := 0 to Length(FCompileOrder) - 1 do
+  for I := 0 to LongInt(FCompileOrder.Count) - 1 do
   begin
     if BatchCount >= FMaxParallel then
       Break;
 
-    Idx := FindTaskIndex(FCompileOrder[I]);
-    if (Idx >= 0) and (FTasks[Idx].Status = tsPending) then
+    Idx := FindTaskIndex(FCompileOrder[SizeUInt(I)]);
+    if (Idx >= 0) and (FTasks[SizeUInt(Idx)].Status = tsPending) then
     begin
-      FTasks[Idx].Status := tsRunning;
-      Result[BatchCount] := FTasks[Idx].UnitId;
+      Task := FTasks[SizeUInt(Idx)];
+      Task.Status := tsRunning;
+      FTasks[SizeUInt(Idx)] := Task;
+      Result[BatchCount] := Task.UnitId;
       Inc(BatchCount);
     end;
   end;
@@ -154,25 +188,30 @@ procedure TParallelScheduler.MarkCompleted(const AUnitId: string;
   ASuccess: Boolean; const AError: string);
 var
   Idx: LongInt;
+  Task: TCompileTask;
 begin
   Idx := FindTaskIndex(AUnitId);
   if Idx < 0 then Exit;
 
+  Task := FTasks[SizeUInt(Idx)];
   if ASuccess then
-    FTasks[Idx].Status := tsSuccess
+    Task.Status := tsSuccess
   else
   begin
-    FTasks[Idx].Status := tsFailed;
-    FTasks[Idx].ErrorMessage := AError;
+    Task.Status := tsFailed;
+    Task.ErrorMessage := AError;
   end;
+  FTasks[SizeUInt(Idx)] := Task;
 end;
 
 function TParallelScheduler.AllDone: Boolean;
 var
   I: LongInt;
 begin
-  for I := 0 to FTaskCount - 1 do
-    if FTasks[I].Status in [tsPending, tsRunning] then
+  if FTasks = nil then
+    Exit(True);
+  for I := 0 to LongInt(FTasks.Count) - 1 do
+    if FTasks[SizeUInt(I)].Status in [tsPending, tsRunning] then
       Exit(False);
   Result := True;
 end;
@@ -186,8 +225,10 @@ begin
   ASuccess := 0;
   AFailed := 0;
 
-  for I := 0 to FTaskCount - 1 do
-    case FTasks[I].Status of
+  if FTasks = nil then
+    Exit;
+  for I := 0 to LongInt(FTasks.Count) - 1 do
+    case FTasks[SizeUInt(I)].Status of
       tsPending: Inc(APending);
       tsRunning: Inc(ARunning);
       tsSuccess: Inc(ASuccess);

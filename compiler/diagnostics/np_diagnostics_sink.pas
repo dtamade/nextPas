@@ -3,11 +3,15 @@ unit np_diagnostics_sink;
 {$mode objfpc}{$H+}
 {$UNITPATH .}
 {$UNITPATH ../../rtl/core/base}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
-  nextpas.core.text.conv, np_base_types, nextpas_json_helpers;
+  nextpas.core.text.conv,
+  nextpas.core.collections.vec,
+  np_base_types,
+  nextpas_json_helpers;
 
 type
   TDiagnosticsPolicy = record
@@ -20,7 +24,8 @@ type
     Message: string;
   end;
 
-  TRelatedInformationArray = array of TRelatedInformation;
+  { Nested product tables owned by diagnostic entry (default heap). }
+  TRelatedInformationVec = specialize TVec<TRelatedInformation>;
 
   TSuggestedFix = record
     Description: string;
@@ -28,7 +33,7 @@ type
     ReplacementText: string;
   end;
 
-  TSuggestedFixArray = array of TSuggestedFix;
+  TSuggestedFixVec = specialize TVec<TSuggestedFix>;
 
   TOverloadCandidate = record
     Name: string;
@@ -38,7 +43,10 @@ type
     MismatchReason: string;
   end;
 
+  { Analyzer out-param build/discard path keeps managed dynarray. }
   TOverloadCandidateArray = array of TOverloadCandidate;
+  { Nested product table owned by diagnostic payload (default heap). }
+  TOverloadCandidateVec = specialize TVec<TOverloadCandidate>;
 
   TDiagnosticPayloadKind = (
     dpkNone,
@@ -54,7 +62,7 @@ type
     ArgIndex: LongInt;
     ExpectedCount: LongInt;
     ActualCount: LongInt;
-    Candidates: TOverloadCandidateArray;
+    Candidates: TOverloadCandidateVec;
   end;
 
   TDiagnosticRecord = record
@@ -64,8 +72,8 @@ type
     Severity: string;
     PrimarySpan: TCoreSourceSpan;
     MessageText: string;
-    RelatedInformation: TRelatedInformationArray;
-    SuggestedFixes: TSuggestedFixArray;
+    RelatedInformation: TRelatedInformationVec;
+    SuggestedFixes: TSuggestedFixVec;
     Payload: TDiagnosticPayload;
     BindingId: string;
     ProfileId: string;
@@ -79,14 +87,17 @@ type
     HasExitCode: Boolean;
   end;
 
+  TDiagnosticRecordVec = specialize TVec<TDiagnosticRecord>;
+
   TDiagnosticsSink = class
   private
     FPolicy: TDiagnosticsPolicy;
     FErrorCount: LongInt;
     FWarningCount: LongInt;
-    FDiagnostics: array of TDiagnosticRecord;
+    FDiagnostics: TDiagnosticRecordVec;
   public
     constructor CreateDefault;
+    destructor Destroy; override;
     procedure SetWarningAsError(const AValue: Boolean);
     procedure EmitError(
       const ACode: string;
@@ -150,7 +161,14 @@ type
     function HasLastDiagnosticExitCode: Boolean;
     function DiagnosticsJson: string;
     function Summary: string;
+    { Adopts AFixes into the last diagnostic (takes ownership). }
+    procedure AdoptSuggestedFixesOnLast(AFixes: TSuggestedFixVec);
   end;
+
+{ Copy analyzer dynarray into entry-owned TVec (nil if empty). }
+function CloneOverloadCandidatesFromArray(
+  const ACandidates: TOverloadCandidateArray
+): TOverloadCandidateVec;
 
 implementation
 
@@ -165,6 +183,29 @@ begin
   Result := 'diag-' + NumericText;
 end;
 
+function CloneOverloadCandidatesFromArray(
+  const ACandidates: TOverloadCandidateArray
+): TOverloadCandidateVec;
+var
+  I: LongInt;
+begin
+  Result := nil;
+  if Length(ACandidates) = 0 then
+    Exit;
+  Result := TOverloadCandidateVec.Create(SizeUInt(Length(ACandidates)));
+  for I := 0 to High(ACandidates) do
+    Result.Push(ACandidates[I]);
+end;
+
+procedure FreeDiagnosticNestedTables(var AEvent: TDiagnosticRecord);
+begin
+  AEvent.RelatedInformation.Free;
+  AEvent.RelatedInformation := nil;
+  AEvent.SuggestedFixes.Free;
+  AEvent.SuggestedFixes := nil;
+  AEvent.Payload.Candidates.Free;
+  AEvent.Payload.Candidates := nil;
+end;
 
 constructor TDiagnosticsSink.CreateDefault;
 begin
@@ -173,7 +214,35 @@ begin
   FPolicy.WarningAsError := False;
   FErrorCount := 0;
   FWarningCount := 0;
-  SetLength(FDiagnostics, 0);
+  FDiagnostics := TDiagnosticRecordVec.Create;
+end;
+
+destructor TDiagnosticsSink.Destroy;
+var
+  I: SizeInt;
+begin
+  if FDiagnostics <> nil then
+  begin
+    for I := 0 to SizeInt(FDiagnostics.Count) - 1 do
+      FreeDiagnosticNestedTables(FDiagnostics.GetPtr(SizeUInt(I))^);
+    FDiagnostics.Free;
+    FDiagnostics := nil;
+  end;
+  inherited Destroy;
+end;
+
+procedure TDiagnosticsSink.AdoptSuggestedFixesOnLast(AFixes: TSuggestedFixVec);
+var
+  P: ^TDiagnosticRecord;
+begin
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
+  begin
+    AFixes.Free;
+    Exit;
+  end;
+  P := FDiagnostics.GetPtr(FDiagnostics.Count - 1);
+  P^.SuggestedFixes.Free;
+  P^.SuggestedFixes := AFixes;
 end;
 
 {$I np_diagnostics_sink_accessors.inc}
@@ -193,11 +262,11 @@ var
   RIFields: string;
   StructuredFields: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('[]');
 
   Result := '[';
-  for Index := 0 to High(FDiagnostics) do
+  for Index := 0 to SizeInt(FDiagnostics.Count) - 1 do
   begin
     if Index > 0 then
       Result := Result + ',';
@@ -321,57 +390,60 @@ begin
         begin
           AppendJsonField(StructuredFields, 'kind', JsonString('overload-candidates'));
           CandidateArray := '';
-          for CI := 0 to High(FDiagnostics[Index].Payload.Candidates) do
-          begin
-            if CI > 0 then
-              CandidateArray := CandidateArray + ',';
-            CandidateFields := '';
-            AppendJsonField(CandidateFields, 'name',
-              JsonString(FDiagnostics[Index].Payload.Candidates[CI].Name));
-            AppendJsonField(CandidateFields, 'paramCount',
-              IntToStr(FDiagnostics[Index].Payload.Candidates[CI].ParamCount));
-            AppendJsonField(CandidateFields, 'mismatchReason',
-              JsonString(FDiagnostics[Index].Payload.Candidates[CI].MismatchReason));
-            CandidateArray := CandidateArray + '{' + CandidateFields + '}';
-          end;
+          if FDiagnostics[Index].Payload.Candidates <> nil then
+            for CI := 0 to SizeInt(FDiagnostics[Index].Payload.Candidates.Count) - 1 do
+            begin
+              if CI > 0 then
+                CandidateArray := CandidateArray + ',';
+              CandidateFields := '';
+              AppendJsonField(CandidateFields, 'name',
+                JsonString(FDiagnostics[Index].Payload.Candidates[SizeUInt(CI)].Name));
+              AppendJsonField(CandidateFields, 'paramCount',
+                IntToStr(FDiagnostics[Index].Payload.Candidates[SizeUInt(CI)].ParamCount));
+              AppendJsonField(CandidateFields, 'mismatchReason',
+                JsonString(FDiagnostics[Index].Payload.Candidates[SizeUInt(CI)].MismatchReason));
+              CandidateArray := CandidateArray + '{' + CandidateFields + '}';
+            end;
           AppendJsonField(StructuredFields, 'candidates', '[' + CandidateArray + ']');
         end;
       end;
       AppendJsonField(DiagnosticFields, 'structured', '{' + StructuredFields + '}');
     end;
-    if Length(FDiagnostics[Index].RelatedInformation) > 0 then
+    if (FDiagnostics[Index].RelatedInformation <> nil) and
+      (FDiagnostics[Index].RelatedInformation.Count > 0) then
     begin
       RelatedArray := '';
-      for RI := 0 to High(FDiagnostics[Index].RelatedInformation) do
+      for RI := 0 to SizeInt(FDiagnostics[Index].RelatedInformation.Count) - 1 do
       begin
         if RI > 0 then
           RelatedArray := RelatedArray + ',';
         RIFields := '';
         AppendJsonField(RIFields, 'message',
-          JsonString(FDiagnostics[Index].RelatedInformation[RI].Message));
-        if FDiagnostics[Index].RelatedInformation[RI].Span.FileId > 0 then
+          JsonString(FDiagnostics[Index].RelatedInformation[SizeUInt(RI)].Message));
+        if FDiagnostics[Index].RelatedInformation[SizeUInt(RI)].Span.FileId > 0 then
         begin
           AppendJsonField(RIFields, 'fileId',
-            IntToStr(FDiagnostics[Index].RelatedInformation[RI].Span.FileId));
+            IntToStr(FDiagnostics[Index].RelatedInformation[SizeUInt(RI)].Span.FileId));
           AppendJsonField(RIFields, 'byteOffset',
-            IntToStr(FDiagnostics[Index].RelatedInformation[RI].Span.ByteSpan.Offset));
+            IntToStr(FDiagnostics[Index].RelatedInformation[SizeUInt(RI)].Span.ByteSpan.Offset));
         end;
         RelatedArray := RelatedArray + '{' + RIFields + '}';
       end;
       AppendJsonField(DiagnosticFields, 'relatedInformation', '[' + RelatedArray + ']');
     end;
-    if Length(FDiagnostics[Index].SuggestedFixes) > 0 then
+    if (FDiagnostics[Index].SuggestedFixes <> nil) and
+      (FDiagnostics[Index].SuggestedFixes.Count > 0) then
     begin
       FixArray := '';
-      for FI := 0 to High(FDiagnostics[Index].SuggestedFixes) do
+      for FI := 0 to SizeInt(FDiagnostics[Index].SuggestedFixes.Count) - 1 do
       begin
         if FI > 0 then
           FixArray := FixArray + ',';
         FixFields := '';
         AppendJsonField(FixFields, 'description',
-          JsonString(FDiagnostics[Index].SuggestedFixes[FI].Description));
+          JsonString(FDiagnostics[Index].SuggestedFixes[SizeUInt(FI)].Description));
         AppendJsonField(FixFields, 'replacementText',
-          JsonString(FDiagnostics[Index].SuggestedFixes[FI].ReplacementText));
+          JsonString(FDiagnostics[Index].SuggestedFixes[SizeUInt(FI)].ReplacementText));
         FixArray := FixArray + '{' + FixFields + '}';
       end;
       AppendJsonField(DiagnosticFields, 'suggestedFixes', '[' + FixArray + ']');
@@ -383,10 +455,10 @@ end;
 
 function TDiagnosticsSink.Summary: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('none');
 
-  Result := FDiagnostics[High(FDiagnostics)].Code;
+  Result := FDiagnostics.Last.Code;
 end;
 
 end.

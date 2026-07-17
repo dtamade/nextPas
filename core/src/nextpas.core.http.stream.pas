@@ -62,9 +62,11 @@ uses
 procedure ValidateBufferSize(const AContext: string; const ABufSize: SizeUInt);
 begin
   if ABufSize = 0 then
-    raise EArgumentError.Create(AContext + ': buffer size must be positive');
+    raise EHttpError.Create(hekArgument,
+      AContext + ': buffer size must be positive');
   if ABufSize > SizeUInt(High(SizeInt)) then
-    raise EArgumentError.Create(AContext + ': buffer size exceeds platform capacity');
+    raise EHttpError.Create(hekArgument,
+      AContext + ': buffer size exceeds platform capacity');
 end;
 
 procedure WriteAllResponse(const AW: IHttpResponseWriter; const ABuf;
@@ -94,9 +96,9 @@ var
   LN: SizeUInt;
 begin
   if AW = nil then
-    raise EArgumentError.Create('HttpWriteStream: response writer is nil');
+    raise EHttpError.Create(hekArgument, 'HttpWriteStream: response writer is nil');
   if AReader = nil then
-    raise EArgumentError.Create('HttpWriteStream: reader is nil');
+    raise EHttpError.Create(hekArgument, 'HttpWriteStream: reader is nil');
   ValidateBufferSize('HttpWriteStream', ABufSize);
 
   SetLength(LBuf, ABufSize);
@@ -125,11 +127,14 @@ var
   LN: SizeUInt;
 begin
   if AW = nil then
-    raise EArgumentError.Create('HttpWriteStreamWithLength: response writer is nil');
+    raise EHttpError.Create(hekArgument,
+      'HttpWriteStreamWithLength: response writer is nil');
   if AReader = nil then
-    raise EArgumentError.Create('HttpWriteStreamWithLength: reader is nil');
+    raise EHttpError.Create(hekArgument,
+      'HttpWriteStreamWithLength: reader is nil');
   if AContentLength < 0 then
-    raise EArgumentError.Create('HttpWriteStreamWithLength: negative content length');
+    raise EHttpError.Create(hekArgument,
+      'HttpWriteStreamWithLength: negative content length');
   ValidateBufferSize('HttpWriteStreamWithLength', ABufSize);
 
   AW.GetHeaders.SetHeader('content-length', IntToStr(AContentLength));
@@ -161,9 +166,11 @@ var
   LN: SizeUInt;
 begin
   if ABody = nil then
-    raise EArgumentError.Create('HttpRequestReadChunks: body reader is nil');
+    raise EHttpError.Create(hekArgument,
+      'HttpRequestReadChunks: body reader is nil');
   if not Assigned(AOnChunk) then
-    raise EArgumentError.Create('HttpRequestReadChunks: callback is nil');
+    raise EHttpError.Create(hekArgument,
+      'HttpRequestReadChunks: callback is nil');
   ValidateBufferSize('HttpRequestReadChunks', ABufSize);
 
   SetLength(LBuf, ABufSize);
@@ -193,9 +200,11 @@ var
   LTotal: Int64;
 begin
   if ABody = nil then
-    raise EArgumentError.Create('HttpRequestReadBody: body reader is nil');
+    raise EHttpError.Create(hekArgument,
+      'HttpRequestReadBody: body reader is nil');
   if AMaxBytes < 0 then
-    raise EArgumentError.Create('HttpRequestReadBody: negative max bytes');
+    raise EHttpError.Create(hekArgument,
+      'HttpRequestReadBody: negative max bytes');
   ValidateBufferSize('HttpRequestReadBody', ABufSize);
 
   SetLength(LBuf, ABufSize);
@@ -214,8 +223,9 @@ begin
         raise EIOError.Create('HttpRequestReadBody: byte count overflow');
       Inc(LTotal, Int64(LN));
       if LTotal > AMaxBytes then
-        raise EHttpError.CreateFmt(
-          'Request body exceeds maximum allowed size (%d bytes)', [AMaxBytes]);
+        raise EHttpError.Create(hekBody,
+          'Request body exceeds maximum allowed size (' +
+          IntToStr(AMaxBytes) + ' bytes)');
 
       { Grow result buffer }
       if LResultLen + LN > LResultCap then

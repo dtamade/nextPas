@@ -3,17 +3,21 @@
  *
  * 运行时变量注册表 — 从 TSemanticAnalyzer 提取的纯数据管理方法
  *
+ * 表存储可挂 phase-scratch IAllocator（analyzer FScratchAllocator）。
+ *
  * 对标：rustc 的 local_names 表，Go gc 的 func info
  *}
 
 unit np_sema_runtime_vars;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   SysUtils,
+  nextpas.core.mem.intf,
   nextpas.core.collections.vec;
 
 type
@@ -23,28 +27,33 @@ type
 
   TSemaRuntimeVarRegistry = class
   private
-    FRuntimeVarNames: array of string;
-    FRuntimeStrVarNames: array of string;
-    FOwnedRuntimeStrVarNames: array of string;
-    FBorrowedRuntimeStrVarNames: array of string;
-    FOwnedStringReturnFuncNames: array of string;
-    FPendingStringTempNames: array of string;
-    FPendingStringTempSources: array of string;
-    FRuntimeArrVarNames: array of string;
-    FBorrowedRuntimeArrVarNames: array of string;
-    FClassVarNames: array of string;
-    FClassVarTypes: array of string;
-    FRecordVarNames: array of string;
-    FRecordVarTypes: array of string;
-    FManagedRecordVarNames: array of string;
-    FManagedRecordVarTypes: array of string;
-    FPointerVarNames: array of string;
-    FPointerVarTypes: array of string;
+    FAllocator: IAllocator;
+    FRuntimeVarNames: TStringVec;
+    FRuntimeStrVarNames: TStringVec;
+    FOwnedRuntimeStrVarNames: TStringVec;
+    FBorrowedRuntimeStrVarNames: TStringVec;
+    FOwnedStringReturnFuncNames: TStringVec;
+    FPendingStringTempNames: TStringVec;
+    FPendingStringTempSources: TStringVec;
+    FRuntimeArrVarNames: TStringVec;
+    FBorrowedRuntimeArrVarNames: TStringVec;
+    FClassVarNames: TStringVec;
+    FClassVarTypes: TStringVec;
+    FRecordVarNames: TStringVec;
+    FRecordVarTypes: TStringVec;
+    FManagedRecordVarNames: TStringVec;
+    FManagedRecordVarTypes: TStringVec;
+    FPointerVarNames: TStringVec;
+    FPointerVarTypes: TStringVec;
     FVarParamNames: TStringVec;
-    FPtrReturnFuncs: array of string;
-    FPtrReturnTypes: array of string;
+    FPtrReturnFuncs: TStringVec;
+    FPtrReturnTypes: TStringVec;
+    function CreateStringVec: TStringVec;
+    function StringVecToArray(AVec: TStringVec): TStringArray;
+    function ContainsName(AVec: TStringVec; const AName: string): Boolean;
+    procedure RegisterUniqueName(AVec: TStringVec; const AName: string);
   public
-    constructor Create;
+    constructor Create(AAllocator: IAllocator = nil);
     destructor Destroy; override;
 
     procedure RegisterRuntimeVar(const AName: string);
@@ -104,43 +113,104 @@ type
 
 implementation
 
-constructor TSemaRuntimeVarRegistry.Create;
+function TSemaRuntimeVarRegistry.CreateStringVec: TStringVec;
+begin
+  if FAllocator <> nil then
+    Result := TStringVec.Create(0, FAllocator)
+  else
+    Result := TStringVec.Create;
+end;
+
+function TSemaRuntimeVarRegistry.StringVecToArray(AVec: TStringVec): TStringArray;
+var
+  I: LongInt;
+begin
+  SetLength(Result, LongInt(AVec.Count));
+  for I := 0 to LongInt(AVec.Count) - 1 do
+    Result[I] := AVec[I];
+end;
+
+function TSemaRuntimeVarRegistry.ContainsName(AVec: TStringVec;
+  const AName: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to LongInt(AVec.Count) - 1 do
+    if SameText(AVec[Idx], AName) then
+      Exit(True);
+  Result := False;
+end;
+
+procedure TSemaRuntimeVarRegistry.RegisterUniqueName(AVec: TStringVec;
+  const AName: string);
+begin
+  if ContainsName(AVec, AName) then
+    Exit;
+  AVec.Push(AName);
+end;
+
+constructor TSemaRuntimeVarRegistry.Create(AAllocator: IAllocator);
 begin
   inherited Create;
-  FVarParamNames := TStringVec.Create;
+  FAllocator := AAllocator;
+  FRuntimeVarNames := CreateStringVec;
+  FRuntimeStrVarNames := CreateStringVec;
+  FOwnedRuntimeStrVarNames := CreateStringVec;
+  FBorrowedRuntimeStrVarNames := CreateStringVec;
+  FOwnedStringReturnFuncNames := CreateStringVec;
+  FPendingStringTempNames := CreateStringVec;
+  FPendingStringTempSources := CreateStringVec;
+  FRuntimeArrVarNames := CreateStringVec;
+  FBorrowedRuntimeArrVarNames := CreateStringVec;
+  FClassVarNames := CreateStringVec;
+  FClassVarTypes := CreateStringVec;
+  FRecordVarNames := CreateStringVec;
+  FRecordVarTypes := CreateStringVec;
+  FManagedRecordVarNames := CreateStringVec;
+  FManagedRecordVarTypes := CreateStringVec;
+  FPointerVarNames := CreateStringVec;
+  FPointerVarTypes := CreateStringVec;
+  FVarParamNames := CreateStringVec;
+  FPtrReturnFuncs := CreateStringVec;
+  FPtrReturnTypes := CreateStringVec;
 end;
 
 destructor TSemaRuntimeVarRegistry.Destroy;
 begin
+  FRuntimeVarNames.Free;
+  FRuntimeStrVarNames.Free;
+  FOwnedRuntimeStrVarNames.Free;
+  FBorrowedRuntimeStrVarNames.Free;
+  FOwnedStringReturnFuncNames.Free;
+  FPendingStringTempNames.Free;
+  FPendingStringTempSources.Free;
+  FRuntimeArrVarNames.Free;
+  FBorrowedRuntimeArrVarNames.Free;
+  FClassVarNames.Free;
+  FClassVarTypes.Free;
+  FRecordVarNames.Free;
+  FRecordVarTypes.Free;
+  FManagedRecordVarNames.Free;
+  FManagedRecordVarTypes.Free;
+  FPointerVarNames.Free;
+  FPointerVarTypes.Free;
   FVarParamNames.Free;
+  FPtrReturnFuncs.Free;
+  FPtrReturnTypes.Free;
   inherited Destroy;
 end;
 
 procedure TSemaRuntimeVarRegistry.RegisterRuntimeVar(const AName: string);
-var
-  Idx: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Idx := 0 to Length(FRuntimeVarNames) - 1 do
-    if SameText(FRuntimeVarNames[Idx], AName) then
-      Exit;
-  NextIndex := Length(FRuntimeVarNames);
-  SetLength(FRuntimeVarNames, NextIndex + 1);
-  FRuntimeVarNames[NextIndex] := AName;
+  RegisterUniqueName(FRuntimeVarNames, AName);
 end;
 
 function TSemaRuntimeVarRegistry.IsRuntimeVar(const AName: string): Boolean;
-var
-  Idx: LongInt;
 begin
-  for Idx := 0 to Length(FRuntimeVarNames) - 1 do
-    if SameText(FRuntimeVarNames[Idx], AName) then
-      Exit(True);
-  Result := False;
+  Result := ContainsName(FRuntimeVarNames, AName);
 end;
+
 {$I np_sema_runtime_vars_str_arr.inc}
-end;
 {$I np_sema_runtime_vars_class_record.inc}
-end;
 
 end.

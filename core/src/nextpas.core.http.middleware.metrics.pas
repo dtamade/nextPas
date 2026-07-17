@@ -2,7 +2,7 @@ unit nextpas.core.http.middleware.metrics;
 {**
  * @desc Metrics middleware. Collects basic HTTP request metrics:
  *       total request count, status code class counts, and total duration.
- *       Thread-safe via TRTLCriticalSection.
+ *       Thread-safe via IMutex.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -69,12 +69,13 @@ uses
   nextpas.core.errors,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.sync;
 
 type
   THttpMetricsCollector = class(TInterfacedObject, IHttpMetricsCollector)
   private
-    FLock: TRTLCriticalSection;
+    FLock: IMutex;
     FMetrics: THttpMetrics;
   public
     constructor Create;
@@ -89,33 +90,33 @@ type
 constructor THttpMetricsCollector.Create;
 begin
   inherited Create;
-  InitCriticalSection(FLock);
+  FLock := Mutex;
   FillChar(FMetrics, SizeOf(FMetrics), 0);
 end;
 
 destructor THttpMetricsCollector.Destroy;
 begin
-  DoneCriticalSection(FLock);
+  FLock := nil;
   inherited;
 end;
 
 function THttpMetricsCollector.Snapshot: THttpMetrics;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Result := FMetrics;
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
 procedure THttpMetricsCollector.Reset;
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     FillChar(FMetrics, SizeOf(FMetrics), 0);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -127,7 +128,7 @@ end;
 procedure THttpMetricsCollector.RecordRequestWithBytes(const AStatus: Int64;
   const ADurationUs: Int64; const ARequestBytes: Int64; const AResponseBytes: Int64);
 begin
-  EnterCriticalSection(FLock);
+  FLock.Acquire;
   try
     Inc(FMetrics.TotalRequests);
     Inc(FMetrics.TotalDurationUs, ADurationUs);
@@ -142,7 +143,7 @@ begin
     else if (AStatus >= 500) and (AStatus < 600) then
       Inc(FMetrics.Status5xx);
   finally
-    LeaveCriticalSection(FLock);
+    FLock.Release;
   end;
 end;
 
@@ -166,7 +167,7 @@ var
   LCollector: IHttpMetricsCollector;
 begin
   if ACollector = nil then
-    raise EArgumentError.Create('MetricsMiddleware collector must not be nil');
+    raise EHttpError.Create(hekArgument, 'MetricsMiddleware collector must not be nil');
   LCollector := ACollector;
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
@@ -190,7 +191,7 @@ var
   LCallback: THttpMetricsCallback;
 begin
   if not Assigned(ACallback) then
-    raise EArgumentError.Create('MetricsMiddlewareWith callback must not be nil');
+    raise EHttpError.Create(hekArgument, 'MetricsMiddlewareWith callback must not be nil');
   LCallback := ACallback;
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
@@ -213,7 +214,7 @@ var
   LCallback: THttpMetricsFieldsCallback;
 begin
   if not Assigned(ACallback) then
-    raise EArgumentError.Create('MetricsMiddlewareWithFields callback must not be nil');
+    raise EHttpError.Create(hekArgument, 'MetricsMiddlewareWithFields callback must not be nil');
   LCallback := ACallback;
 
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler

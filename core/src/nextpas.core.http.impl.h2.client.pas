@@ -14,6 +14,7 @@ uses
   nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net.intf,
+  nextpas.core.sync,
   nextpas.core.time.deadline,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -174,7 +175,7 @@ type
   private
     FOptions: TH2ClientTransportOptions;
     FDefaultTLSContext: ISSLContext;
-    FPoolLock: TRTLCriticalSection;
+    FPoolLock: IMutex;
     FPool: array of TH2PoolEntry;
     FPoolCount: Int32;
     function PoolGet(const AHost: string; const APort: UInt16;
@@ -270,7 +271,7 @@ var
 begin
   LScheme := LowerCase(AUrl.Scheme);
   if (LScheme <> '') and (LScheme <> 'http') and (LScheme <> 'https') then
-    raise EHttpError.Create('unsupported HTTP client URL scheme: ' +
+    raise EHttpError.Create(hekParse, 'unsupported HTTP client URL scheme: ' +
       AUrl.Scheme);
 end;
 
@@ -300,20 +301,17 @@ end;
 
 function IsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
 begin
-  Result := AMethod in [hmGet, hmHead, hmOptions, hmTrace];
+  Result := HttpIsRetryableMethod(AMethod);
 end;
 
 function HasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
 begin
-  Result := (AReq <> nil) and (AReq.Headers <> nil) and
-    (AReq.Headers.Has('idempotency-key') or AReq.Headers.Has('x-idempotency-key'));
+  Result := HttpHasRetryIdempotencyKey(AReq);
 end;
 
 function IsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
 begin
-  if AReq = nil then
-    Exit(False);
-  Result := IsRetryableMethod(AReq.Method) or HasRetryIdempotencyKey(AReq);
+  Result := HttpIsRetrySafeRequest(AReq);
 end;
 
 function CaptureRetryBodyPosition(const AReq: IHttpRequest;
@@ -334,7 +332,7 @@ begin
   if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit;
   if ABodyStream = nil then
-    raise EHttpError.Create('pooled retry request body is not replayable');
+    raise EHttpError.Create(hekBody, 'pooled retry request body is not replayable');
   ABodyStream.Position := AStartPosition;
 end;
 
@@ -354,9 +352,13 @@ begin
   AConn.SetWriteDeadline(ADeadline);
 end;
 
-function DefaultH2ClientDial(const AHost: string; const APort: UInt16): ITcpStream;
+function DefaultH2ClientDial(const AHost: string; const APort: UInt16;
+  const ATimeoutMs: Int64): ITcpStream;
 begin
-  Result := TcpConnect(AHost, APort);
+  if ATimeoutMs > 0 then
+    Result := TcpConnect(AHost, APort, ATimeoutMs)
+  else
+    Result := TcpConnect(AHost, APort);
 end;
 
 procedure SetH2ClientDialFuncForTests(const ADial: TH2ClientDialFunc);
@@ -369,12 +371,13 @@ begin
   GH2ClientDialFunc := nil;
 end;
 
-function H2ClientDial(const AHost: string; const APort: UInt16): ITcpStream;
+function H2ClientDial(const AHost: string; const APort: UInt16;
+  const ATimeoutMs: Int64): ITcpStream;
 begin
   if Assigned(GH2ClientDialFunc) then
     Result := GH2ClientDialFunc(AHost, APort)
   else
-    Result := DefaultH2ClientDial(AHost, APort);
+    Result := DefaultH2ClientDial(AHost, APort, ATimeoutMs);
 end;
 
 { TH2ClientConnection.TH2ResponseState }
@@ -404,7 +407,7 @@ constructor TH2ClientConnection.Create(const AConn: ITcpStream;
 begin
   inherited Create;
   if AConn = nil then
-    raise EArgumentError.Create('h2 client connection requires connection');
+    raise EHttpError.Create(hekArgument, 'h2 client connection requires connection');
   AOptions.Validate;
   FConn := AConn;
   FOptions := AOptions;
@@ -442,13 +445,13 @@ end;
 procedure TH2ClientConnection.EnsureActive;
 begin
   if FState <> h2ccsActive then
-    raise EHttpError.Create('h2 client connection is not active');
+    raise EHttpError.Create(hekProtocol, 'h2 client connection is not active');
 end;
 
 procedure TH2ClientConnection.EnsureOpen;
 begin
   if FState = h2ccsClosed then
-    raise EHttpError.Create('h2 client connection is closed');
+    raise EHttpError.Create(hekProtocol, 'h2 client connection is closed');
 end;
 
 procedure TH2ClientConnection.TransitionClosed;
@@ -537,7 +540,7 @@ begin
     if LWritten = 0 then
     begin
       TransitionClosed;
-      raise EHttpError.Create('HTTP/2 client write failed: connection closed');
+      raise EHttpError.Create(hekProtocol, 'HTTP/2 client write failed: connection closed');
     end;
     Inc(LOffset, SizeInt(LWritten));
   end;
@@ -618,7 +621,7 @@ begin
     end;
     TransitionClosed;
   end;
-  raise EHttpError.Create(AMessage);
+  raise EHttpError.Create(hekProtocol, AMessage);
 end;
 
 procedure TH2ClientConnection.SendConnectionWindowDelta;
@@ -673,7 +676,7 @@ end;
 function TH2ClientConnection.AllocateStreamID: UInt32;
 begin
   if FNextStreamID = 0 then
-    raise EHttpError.Create('HTTP/2 client stream ID overflow');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 client stream ID overflow');
   Result := FNextStreamID;
   if Result > H2_MAX_STREAM_ID - 2 then
     FNextStreamID := 0
@@ -765,7 +768,7 @@ end;
 function TH2ClientConnection.AddActiveStream(const AStreamID: UInt32): SizeInt;
 begin
   if FindActiveStreamIndex(AStreamID) >= 0 then
-    raise EHttpError.Create('HTTP/2 client stream is already active');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 client stream is already active');
   if FActiveStreamCount >= Length(FActiveStreams) then
     SetLength(FActiveStreams, FActiveStreamCount + 4);
   Result := FActiveStreamCount;
@@ -821,7 +824,7 @@ var
   LFrame: TH2Frame;
 begin
   if not ReadFrame(LFrame) then
-    raise EHttpError.Create(
+    raise EHttpError.Create(hekProtocol,
       'HTTP/2 client request body stalled: connection closed');
   DispatchFrame(LFrame, AStreamID, AStreamFlow, AResponse);
   if AResponse.PendingWindowUpdate > 0 then
@@ -831,7 +834,7 @@ begin
   end;
   FlushPendingConnectionWindowUpdate;
   if AResponse.Reset then
-    raise EHttpError.Create('HTTP/2 stream ' + IntToStr(AStreamID) + ' reset while sending request body: ' +
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 stream ' + IntToStr(AStreamID) + ' reset while sending request body: ' +
       H2ErrorCodeName(AResponse.ResetCode));
 end;
 
@@ -865,13 +868,13 @@ begin
     SetLength(LBuffer, LChunkSize);
     LRead := AReq.Body.Read(LBuffer[0], LChunkSize);
     if LRead = 0 then
-      raise EHttpError.Create('HTTP/2 client request body ended before content-length');
+      raise EHttpError.Create(hekBody, 'HTTP/2 client request body ended before content-length');
     if not FConnectionFlow.SendWindow.TryReserve(UInt32(LRead)) then
-      raise EHttpError.Create('HTTP/2 client connection send window reserve failed');
+      raise EHttpError.Create(hekProtocol, 'HTTP/2 client connection send window reserve failed');
     if not AStreamFlow.SendWindow.TryReserve(UInt32(LRead)) then
     begin
       FConnectionFlow.SendWindow.ReleaseReserved(UInt32(LRead));
-      raise EHttpError.Create('HTTP/2 client stream send window reserve failed');
+      raise EHttpError.Create(hekProtocol, 'HTTP/2 client stream send window reserve failed');
     end;
     SetLength(LPayload, LRead);
     Move(LBuffer[0], LPayload[1], LRead);
@@ -956,9 +959,9 @@ begin
   for LI := 0 to LLen - 1 do
     Inc(LTotalBytes, Length(AResponse.HeaderFragments[LI]));
   if (FOptions.MaxHeaderListSize > 0) and (LTotalBytes > FOptions.MaxHeaderListSize) then
-    raise EHttpError.Create('HTTP/2 response headers too large');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 response headers too large');
   if LTotalBytes > H2_HEADER_HARD_CAP then
-    raise EHttpError.Create('HTTP/2 response headers exceed hard cap');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 response headers exceed hard cap');
   SetLength(AResponse.HeaderFragments, LLen + 1);
   AResponse.HeaderFragments[LLen] := AFragment;
 end;
@@ -996,7 +999,7 @@ begin
   end;
   SetLength(LHeaders, Length(LBlock));
   if not FDecoder.DecodeView(LBlock, LHeaders) then
-    raise EHttpError.Create('HTTP/2 client HPACK decode failed');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 client HPACK decode failed');
   if AResponse.HeadersStore = nil then
   begin
     AResponse.HeadersStore := TH2OwnedHeaders.Create;
@@ -1015,14 +1018,14 @@ begin
     begin
       { RFC 9113 §8.1: only :status pseudo-header allowed in response }
       if LStatusSeen or LRegularSeen then
-        raise EHttpError.Create('HTTP/2 invalid response pseudo-header order');
+        raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid response pseudo-header order');
       LStatusText := string(LValueStr);
       LStatusSeen := True;
     end
     else if (Length(LNameStr) > 0) and (LNameStr[1] = ':') then
     begin
       { No other pseudo-headers allowed in response }
-      raise EHttpError.Create('HTTP/2 invalid response pseudo-header: ' + string(LNameStr));
+      raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid response pseudo-header: ' + string(LNameStr));
     end
     else
     begin
@@ -1030,22 +1033,22 @@ begin
       { RFC 9113 §8.2: field names MUST be lowercase }
       for LJ := 1 to Length(LNameStr) do
         if (LNameStr[LJ] >= 'A') and (LNameStr[LJ] <= 'Z') then
-          raise EHttpError.Create('HTTP/2 response header not lowercase: ' + string(LNameStr));
+          raise EHttpError.Create(hekProtocol, 'HTTP/2 response header not lowercase: ' + string(LNameStr));
       { Reject connection-specific headers }
       if (LNameStr = 'connection') or (LNameStr = 'upgrade') or
          (LNameStr = 'keep-alive') or (LNameStr = 'proxy-connection') or
          (LNameStr = 'transfer-encoding') then
-        raise EHttpError.Create('HTTP/2 forbidden response header: ' + string(LNameStr));
+        raise EHttpError.Create(hekProtocol, 'HTTP/2 forbidden response header: ' + string(LNameStr));
       if (LNameStr = 'te') and (LValueStr <> 'trailers') then
-        raise EHttpError.Create('HTTP/2 invalid TE header value');
+        raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid TE header value');
       TH2OwnedHeaders(AResponse.HeadersStore).Add(string(LNameStr),
         string(LValueStr));
     end;
   end;
   if (LStatusText = '') or (not TryStrToInt64(LStatusText, LStatusValue)) then
-    raise EHttpError.Create('HTTP/2 response missing valid :status');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 response missing valid :status');
   if (LStatusValue < 100) or (LStatusValue > 599) then
-    raise EHttpError.Create('HTTP/2 :status out of range: ' + LStatusText);
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 :status out of range: ' + LStatusText);
   AResponse.StatusCode := THttpStatus(LStatusValue);
   AResponse.HeadersDecoded := True;
 end;
@@ -1062,7 +1065,7 @@ begin
   { Prevent memory DoS from unbounded body accumulation }
   if (FOptions.MaxResponseBodySize > 0) and
      (AResponse.BodyLen + LPayloadLen > SizeInt(FOptions.MaxResponseBodySize)) then
-    raise EHttpError.Create('HTTP/2 response body too large');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 response body too large');
   LOldLen := Length(AResponse.Body);
   SetLength(AResponse.Body, LOldLen + LPayloadLen);
   Move(APayload[1], AResponse.Body[LOldLen], LPayloadLen);
@@ -1105,7 +1108,7 @@ begin
     Exit;
   end;
   if not ParseSettingsPayload(AFrame.Payload, LSettings) then
-    raise EHttpError.Create('HTTP/2 invalid SETTINGS payload');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid SETTINGS payload');
   LOldInitialWindowSize := FRemoteSettings.InitialWindowSize;
   FRemoteSettings := LSettings;
   if FRemoteSettings.InitialWindowSize <> LOldInitialWindowSize then
@@ -1121,7 +1124,7 @@ var
   LIncrement: UInt32;
 begin
   if not H2DecodeWindowUpdate(AFrame.Payload, LIncrement) then
-    raise EHttpError.Create('HTTP/2 invalid WINDOW_UPDATE payload');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid WINDOW_UPDATE payload');
   if AFrame.Header.StreamID = 0 then
     FConnectionFlow.SendWindow.OnWindowUpdate(LIncrement)
   else if AFrame.Header.StreamID = AStreamID then
@@ -1133,7 +1136,7 @@ var
   LData: UInt64;
 begin
   if not H2DecodePing(AFrame.Payload, LData) then
-    raise EHttpError.Create('HTTP/2 invalid PING payload');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid PING payload');
   if (AFrame.Header.Flags and H2_FLAG_PING_ACK) = 0 then
     SendPingAck(LData)
   else
@@ -1147,7 +1150,7 @@ var
   LLastStreamID: UInt32;
 begin
   if not H2DecodeGoaway(AFrame.Payload, LLastStreamID, LErrorCode, LDebugData) then
-    raise EHttpError.Create('HTTP/2 invalid GOAWAY payload');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid GOAWAY payload');
   FGoawayReceived := True;
   FLastPeerStreamID := LLastStreamID;
   if FState <> h2ccsClosed then
@@ -1160,7 +1163,7 @@ var
   LErrorCode: UInt32;
 begin
   if not H2DecodeRstStream(AFrame.Payload, LErrorCode) then
-    raise EHttpError.Create('HTTP/2 invalid RST_STREAM payload');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid RST_STREAM payload');
   if AFrame.Header.StreamID = AStreamID then
   begin
     AResponse.Reset := True;
@@ -1180,7 +1183,7 @@ begin
   if AFrame.Header.StreamID <> AStreamID then
     Exit;
   if not ExtractHeadersFragment(AFrame.Header.Flags, AFrame.Payload, LFragment) then
-    raise EHttpError.Create('HTTP/2 invalid HEADERS payload');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid HEADERS payload');
   AResponse.HeaderFragments := nil;
   AppendResponseHeaderFragment(AResponse, LFragment);
   AResponse.HeadersComplete := False;
@@ -1231,7 +1234,7 @@ begin
   if AFrame.Header.StreamID <> AStreamID then
     Exit;
   if not ExtractDataPayload(AFrame.Header.Flags, AFrame.Payload, LData) then
-    raise EHttpError.Create('HTTP/2 invalid DATA payload');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 invalid DATA payload');
   { Flow control accounts for entire frame payload including padding }
   LFrameLen := UInt32(Length(AFrame.Payload));
   if LFrameLen > 0 then
@@ -1304,10 +1307,10 @@ var
   LBody: IReader;
 begin
   if AResponse.Reset then
-    raise EHttpError.Create('HTTP/2 stream ' + IntToStr(AResponse.StreamID) + ' reset: ' +
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 stream ' + IntToStr(AResponse.StreamID) + ' reset: ' +
       H2ErrorCodeName(AResponse.ResetCode));
   if AResponse.StatusCode = 0 then
-    raise EHttpError.Create('HTTP/2 response missing status');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 response missing status');
   if Length(AResponse.Body) > 0 then
     LBody := TH2ClientResponseBodyReader.Create(AResponse.Body)
   else
@@ -1347,7 +1350,7 @@ begin
           Exit(False);
         end;
     else
-      raise EHttpError.Create('HTTP/2 handshake expected SETTINGS first');
+      raise EHttpError.Create(hekProtocol, 'HTTP/2 handshake expected SETTINGS first');
     end;
   end;
   FState := h2ccsActive;
@@ -1363,17 +1366,20 @@ var
   LResponse: TH2ResponseState;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('h2 client transport requires request');
+    raise EHttpError.Create(hekArgument, 'h2 client transport requires request');
   if AReq.Headers = nil then
-    raise EArgumentError.Create('h2 client transport requires request headers');
+    raise EHttpError.Create(hekArgument, 'h2 client transport requires request headers');
   if not Handshake then
-    raise EHttpError.Create('HTTP/2 client handshake failed');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 client handshake failed');
   EnsureActive;
   LStreamID := AllocateStreamID;
   TH2ResponseState.Init(LResponse);
   LResponse.StreamID := LStreamID;
   LStreamIndex := AddActiveStream(LStreamID);
   try
+    if (AReq.Body <> nil) and (AReq.ContentLength < 0) then
+      raise EHttpError.Create(hekArgument,
+        'HTTP/2 client does not support chunked/unknown-length request bodies');
     LHasBody := (AReq.Body <> nil) and (AReq.ContentLength > 0);
     SendRequestHeaders(LStreamID, AReq, not LHasBody);
     if LHasBody then
@@ -1382,13 +1388,13 @@ begin
     while not LResponse.EndStream do
     begin
       if not ReadFrame(LFrame) then
-        raise EHttpError.Create('HTTP/2 response incomplete: connection closed');
+        raise EHttpError.Create(hekProtocol, 'HTTP/2 response incomplete: connection closed');
       DispatchFrame(LFrame, LStreamID, FActiveStreams[LStreamIndex].Flow,
         LResponse);
       { RFC 9113 §6.8: GOAWAY indicates the server is shutting down.
         If we receive GOAWAY while waiting for a response, abort immediately. }
       if FGoawayReceived and (not LResponse.EndStream) then
-        raise EHttpError.Create('HTTP/2 GOAWAY received during response');
+        raise EHttpError.Create(hekProtocol, 'HTTP/2 GOAWAY received during response');
       if LResponse.PendingWindowUpdate > 0 then
       begin
         SendWindowUpdate(LStreamID, LResponse.PendingWindowUpdate);
@@ -1439,7 +1445,7 @@ begin
   AOptions.Validate;
   FOptions := AOptions;
   FDefaultTLSContext := nil;
-  InitCriticalSection(FPoolLock);
+  FPoolLock := Mutex;
   FPool := nil;
   FPoolCount := 0;
 end;
@@ -1447,7 +1453,7 @@ end;
 destructor TH2ClientTransport.Destroy;
 begin
   PoolClear;
-  DoneCriticalSection(FPoolLock);
+  FPoolLock := nil;
   FDefaultTLSContext := nil;
   inherited Destroy;
 end;
@@ -1458,7 +1464,7 @@ var
   LI: Int32;
 begin
   Result := nil;
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     for LI := 0 to FPoolCount - 1 do
       if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
@@ -1478,14 +1484,14 @@ begin
         Exit;
       end;
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
 end;
 
 procedure TH2ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const ASecure: Boolean; const AConn: TH2ClientConnection);
 begin
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     if (AConn = nil) or (not AConn.IsReusable) then
     begin
@@ -1510,7 +1516,7 @@ begin
     FPool[FPoolCount].Conn := AConn;
     Inc(FPoolCount);
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
 end;
 
@@ -1518,7 +1524,7 @@ procedure TH2ClientTransport.PoolClear;
 var
   LI: Int32;
 begin
-  EnterCriticalSection(FPoolLock);
+  FPoolLock.Acquire;
   try
     for LI := 0 to FPoolCount - 1 do
       if FPool[LI].Conn <> nil then
@@ -1529,7 +1535,7 @@ begin
     FPool := nil;
     FPoolCount := 0;
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
 end;
 
@@ -1556,16 +1562,17 @@ var
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
   LRequestWriteComplete: Boolean;
+  LWrapped: Exception;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('h2 client transport requires request');
+    raise EHttpError.Create(hekArgument, 'h2 client transport requires request');
   if AReq.Headers = nil then
-    raise EArgumentError.Create('h2 client transport requires request headers');
+    raise EHttpError.Create(hekArgument, 'h2 client transport requires request headers');
   LUrl := AReq.Url;
   ValidateH2ClientUrlScheme(LUrl);
   LHost := LUrl.Host;
   if LHost = '' then
-    raise EHttpError.Create('HTTP/2 client request requires host');
+    raise EHttpError.Create(hekParse, 'HTTP/2 client request requires host');
   LSecure := LowerCase(LUrl.Scheme) = 'https';
   LPort := LUrl.Port;
   if LPort = 0 then
@@ -1581,14 +1588,14 @@ begin
   LPooled := LConn <> nil;
   if not LPooled then
   begin
-    LRawConn := H2ClientDial(LHost, LPort);
+    LRawConn := H2ClientDial(LHost, LPort, FOptions.Timeout);
     if LSecure then
     begin
       LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,
         HTTP2_ALPN_PROTOCOL);
       LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
       if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
-        raise EHttpError.Create(
+        raise EHttpError.Create(hekProtocol,
           'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
     end;
     LConn := TH2ClientConnection.Create(LRawConn, FOptions);
@@ -1598,39 +1605,55 @@ begin
     Result := LConn.RoundTrip(AReq);
     LRequestWriteComplete := True;
   except
-    if LPooled then
+    on E: Exception do
     begin
-      LConn.Close;
-      LConn.Free;
-      if (not LRequestWriteComplete) and (not IsRetrySafeRequest(AReq)) then
-        raise;
-      if (AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil) then
-        raise;
-      RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
-      LRawConn := H2ClientDial(LHost, LPort);
-      if LSecure then
+      if LPooled then
       begin
-        LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,
-          HTTP2_ALPN_PROTOCOL);
-        LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
-        if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
-          raise EHttpError.Create(
-            'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
-      end;
-      LConn := TH2ClientConnection.Create(LRawConn, FOptions);
-      try
-        Result := LConn.RoundTrip(AReq);
-      except
         LConn.Close;
         LConn.Free;
+        if ((not LRequestWriteComplete) and (not IsRetrySafeRequest(AReq))) or
+           ((AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil)) then
+        begin
+          LWrapped := HttpWrapTransportException(E);
+          if LWrapped <> nil then
+            raise LWrapped;
+          raise;
+        end;
+        RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
+        LRawConn := H2ClientDial(LHost, LPort, FOptions.Timeout);
+        if LSecure then
+        begin
+          LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,
+            HTTP2_ALPN_PROTOCOL);
+          LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
+          if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
+            raise EHttpError.Create(hekProtocol,
+              'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
+        end;
+        LConn := TH2ClientConnection.Create(LRawConn, FOptions);
+        try
+          Result := LConn.RoundTrip(AReq);
+        except
+          on E2: Exception do
+          begin
+            LConn.Close;
+            LConn.Free;
+            LWrapped := HttpWrapTransportException(E2);
+            if LWrapped <> nil then
+              raise LWrapped;
+            raise;
+          end;
+        end;
+      end
+      else
+      begin
+        LConn.Close;
+        LConn.Free;
+        LWrapped := HttpWrapTransportException(E);
+        if LWrapped <> nil then
+          raise LWrapped;
         raise;
       end;
-    end
-    else
-    begin
-      LConn.Close;
-      LConn.Free;
-      raise;
     end;
   end;
   if HeadersHaveConnectionCloseToken(AReq.Headers) or (not LConn.IsReusable) then

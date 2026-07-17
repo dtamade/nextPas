@@ -44,7 +44,11 @@ function NewHttpServer(const AHandler: IHttpHandler;
 
 implementation
 
-uses nextpas.core.base.utils, nextpas.core.errors, nextpas.core.http.impl.registry;
+uses
+  nextpas.core.base.utils,
+  nextpas.core.errors,
+  nextpas.core.http.impl.registry,
+  nextpas.core.http.middleware.requestarena;
 
 type
   THttpConnHandler = class(TInterfacedObject, ITcpServerHandler,
@@ -75,21 +79,21 @@ type
 procedure ValidateServerOptions(const AOptions: THttpServerOptions);
 begin
   if AOptions.ReadTimeout < 0 then
-    raise EArgumentError.Create('http server read timeout must not be negative');
+    raise EHttpError.Create(hekArgument, 'http server read timeout must not be negative');
   if AOptions.WriteTimeout < 0 then
-    raise EArgumentError.Create('http server write timeout must not be negative');
+    raise EHttpError.Create(hekArgument, 'http server write timeout must not be negative');
   if AOptions.IdleTimeout < 0 then
-    raise EArgumentError.Create('http server idle timeout must not be negative');
+    raise EHttpError.Create(hekArgument, 'http server idle timeout must not be negative');
   if AOptions.MaxHeaderSize < 0 then
-    raise EArgumentError.Create('http server max header size must not be negative');
+    raise EHttpError.Create(hekArgument, 'http server max header size must not be negative');
   if AOptions.MaxBodySize < 0 then
-    raise EArgumentError.Create('http server max body size must not be negative');
+    raise EHttpError.Create(hekArgument, 'http server max body size must not be negative');
   if AOptions.ShutdownTimeout < 0 then
-    raise EArgumentError.Create('http server shutdown timeout must not be negative');
+    raise EHttpError.Create(hekArgument, 'http server shutdown timeout must not be negative');
   if AOptions.ShutdownTimeout > High(Int64) div 1000000 then
-    raise EArgumentError.Create('http server shutdown timeout too large (would overflow nanoseconds)');
+    raise EHttpError.Create(hekArgument, 'http server shutdown timeout too large (would overflow nanoseconds)');
   if AOptions.MaxRequestsPerConnection < 0 then
-    raise EArgumentError.Create('http server max requests per connection must not be negative');
+    raise EHttpError.Create(hekArgument, 'http server max requests per connection must not be negative');
 end;
 
 constructor THttpConnHandler.Create(const ATransport: IHttpServerTransport;
@@ -153,18 +157,29 @@ constructor THttpServer.Create(const AHandler: IHttpHandler;
   const ATransport: IHttpServerTransport; const AOptions: THttpServerOptions);
 var
   LTcpOptions: TTcpServerOptions;
+  LVersion: THttpVersion;
+  LUseNativeArena: Boolean;
 begin
   if AHandler = nil then
-    raise EArgumentError.Create('http server handler must not be nil');
+    raise EHttpError.Create(hekArgument, 'http server handler must not be nil');
   inherited Create;
   ValidateServerOptions(AOptions);
-  FHandler := AHandler;
   FOptions := AOptions;
+  { RequestArena wire:
+    - Default H1 (10/11) / H2 transport: connection-scoped LocalArena inside
+      transport (registry copies RequestArena*; no middleware double wrap).
+    - Custom transport / H3 / unknown: middleware wrap at root handler. }
+  LVersion := AOptions.EffectiveVersion(GetDefaultServerVersion);
+  LUseNativeArena := AOptions.RequestArena and (ATransport = nil) and
+    ((LVersion = hvHttp10) or (LVersion = hvHttp11) or (LVersion = hvHttp2));
+  if AOptions.RequestArena and (not LUseNativeArena) then
+    FHandler := HttpWithRequestArena(AHandler, AOptions.RequestArenaCapacity)
+  else
+    FHandler := AHandler;
   if ATransport <> nil then
     FTransport := ATransport
   else
-    FTransport := ResolveServerTransport(
-      AOptions.EffectiveVersion(GetDefaultServerVersion), AOptions);
+    FTransport := ResolveServerTransport(LVersion, AOptions);
   LTcpOptions := TTcpServerOptions.Default;
   LTcpOptions.Backend := AOptions.Backend;
   LTcpOptions.ShutdownTimeoutNs := AOptions.ShutdownTimeout * Int64(1000000);

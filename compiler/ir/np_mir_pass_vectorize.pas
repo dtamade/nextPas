@@ -46,24 +46,25 @@ begin
 end;
 
 { Check if statements in a loop are vectorizable }
-function HasVectorizablePattern(
-  const AStmts: array of TMirStmt
-): Boolean;
+function HasVectorizablePattern(AStmts: TMirStmtVec): Boolean;
 var
   I: LongInt;
   LoadCount, StoreCount, ArithCount: LongInt;
 begin
+  Result := False;
+  if AStmts = nil then
+    Exit;
   LoadCount := 0;
   StoreCount := 0;
   ArithCount := 0;
 
-  for I := 0 to High(AStmts) do
+  for I := 0 to LongInt(AStmts.Count) - 1 do
   begin
-    case AStmts[I].Kind of
+    case AStmts[SizeUInt(I)].Kind of
       mskLoad:  Inc(LoadCount);
       mskStore: Inc(StoreCount);
       mskBinary:
-        case AStmts[I].Op of
+        case AStmts[SizeUInt(I)].Op of
           moAdd, moSub, moMul: Inc(ArithCount);
         end;
     end;
@@ -90,12 +91,13 @@ begin
   begin
     Fn := AModule.FunctionAt(FuncIdx);
 
-    for BlkIdx := 0 to High(Fn.Blocks) do
+    if Fn.Blocks <> nil then
+      for BlkIdx := 0 to LongInt(Fn.Blocks.Count) - 1 do
     begin
-      if not IsCountedLoop(Fn.Blocks[BlkIdx]) then
+      if not IsCountedLoop(Fn.Blocks[SizeUInt(BlkIdx)]) then
         Continue;
 
-      if HasVectorizablePattern(Fn.Blocks[BlkIdx].Stmts) then
+      if HasVectorizablePattern(Fn.Blocks[SizeUInt(BlkIdx)].Stmts) then
       begin
         { Annotate: insert vectorize hint as a special comment stmt }
         { In MIR, we use a no-op store to mark vectorization candidates }

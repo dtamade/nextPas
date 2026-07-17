@@ -12,7 +12,7 @@ CORE_ROOT := ../..
 ALL_TESTS := $(sort $(wildcard test_*))
 
 # compile-gate 和平台特化测试（无运行时可执行文件）
-COMPILE_GATE_TESTS := test_memory_map_compile_gate test_mem_secure_windows_compile_gate
+COMPILE_GATE_TESTS := test_memory_map_compile_gate test_mem_secure_windows_compile_gate test_mem_cross_os_compile_gate
 # 需要 NEXTPAS_TESTING 定义的测试
 TESTING_FLAG_TESTS := test_oom test_platform_virtual test_shared_memory
 # 可能在非特权环境失败的平台测试

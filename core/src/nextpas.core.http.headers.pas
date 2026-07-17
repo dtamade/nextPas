@@ -81,7 +81,7 @@ end;
 procedure RequireHeaders(const AHeaders: IHttpHeaders);
 begin
   if AHeaders = nil then
-    raise EArgumentError.Create('HTTP headers are nil');
+    raise EHttpError.Create(hekArgument, 'HTTP headers are nil');
 end;
 
 { THttpHeaders }
@@ -175,12 +175,12 @@ var
   LI: SizeInt;
 begin
   if AName = '' then
-    raise EHttpError.Create('empty header name');
+    raise EHttpError.Create(hekParse, 'empty header name');
   Result := False;
   for LI := 1 to Length(AName) do
   begin
     if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
-      raise EHttpError.Create('invalid header name character');
+      raise EHttpError.Create(hekParse, 'invalid header name character');
     if (AName[LI] >= 'A') and (AName[LI] <= 'Z') then
       Result := True;
   end;
@@ -197,7 +197,7 @@ begin
   for LI := 1 to Length(AValue) do
     if (((AValue[LI] < #32) and (AValue[LI] <> #9)) or
         (AValue[LI] = #127)) then
-      raise EHttpError.Create('invalid header value character');
+      raise EHttpError.Create(hekParse, 'invalid header value character');
 end;
 
 function THttpHeaders.FindFirst(const AName: string): Int32; inline;
@@ -405,7 +405,7 @@ var
   LI: Int32;
 begin
   if ACallback = nil then
-    raise EArgumentError.Create('HTTP header iterator is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP header iterator is nil');
 
   for LI := 0 to FCount - 1 do
     ACallback(FEntries[LI].Name, FEntries[LI].Value);

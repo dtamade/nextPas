@@ -14,7 +14,16 @@ uses
   nextpas.core.json;
 
 type
-  THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions)
+  { Builder body discriminant: distinguishes "no body" from empty string/bytes. }
+  THttpBuilderBodyKind = (
+    bbkNone,
+    bbkString,
+    bbkBytes,
+    bbkReader
+  );
+
+  THttpRequest = class(TInterfacedObject, IHttpRequest, IHttpRequestWithOptions,
+    IHttpRequestWithContext)
   private
     type
       TPathParam = record
@@ -39,6 +48,7 @@ type
       FQueryParsed: Boolean;
       FQueryParams: TQueryParams;
       FRequestOptions: THttpRequestOptions;
+      FContext: IHttpContext;
     procedure EnsureUrlParsed;
     procedure EnsureRequestTargetParts;
   public
@@ -67,6 +77,8 @@ type
     function QueryParam(const AName: string): string;
     procedure SetRequestOptions(const AOptions: THttpRequestOptions);
     function GetRequestOptions: THttpRequestOptions;
+    function GetContext: IHttpContext;
+    procedure SetContext(const ACtx: IHttpContext);
   end;
 
   THttpResponse = class(TInterfacedObject, IHttpResponse)
@@ -74,87 +86,21 @@ type
     FStatusCode: THttpStatus;
     FHeaders: IHttpHeaders;
     FBody: IReader;
+    FBodyClosed: Boolean;
   public
     constructor Create(const AStatusCode: THttpStatus;
       const AHeaders: IHttpHeaders; const ABody: IReader);
+    destructor Destroy; override;
     function GetStatusCode: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
+    procedure Close;
   end;
 
-{ Factory helpers }
+{ Factory helpers — whitelist only. Headers/body/auth → THttpRequestBuilder. }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ANilBody: Pointer): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ANilBody: Pointer): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyText: string): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType, ABodyText: string): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType, ABodyText: string): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyBytes: TBytes): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
 function NewGetRequest(const APath: string): IHttpRequest;
-{** Create a request with a streaming body that is NOT buffered into memory.
-   The body reader is passed directly to the transport. The caller must ensure
-   the body remains valid until Send closes it. Content-Length must be known
-   and declared by the caller. If the body supports IStream seeking, redirect
-   retries will rewind automatically; otherwise redirects that change the body
-   (301/302/303) will close the stream and drop the body. }
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload;
-  deprecated 'Use THttpRequestBuilder instead';
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse; overload;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
@@ -200,6 +146,14 @@ procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
 {** @desc 308 Permanent Redirect (preserves method and body). }
 procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
   const ALocation: string); inline;
+
+{** Retry-safety policy shared by WithRetry and H1/H2 pool reconnect.
+   Safe methods: GET / HEAD / OPTIONS / TRACE. }
+function HttpIsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
+{** True if request carries Idempotency-Key or X-Idempotency-Key. }
+function HttpHasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
+{** True when method is retryable or an explicit idempotency key is present. }
+function HttpIsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
 {** @desc Write an RFC 7807 Problem Details error response.
    Sets content-type application/problem+json. }
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
@@ -273,7 +227,9 @@ type
     FBodyReader: IReader;
     FBodyString: string;
     FBodyBytes: TBytes;
-    FHasBody: Boolean;
+    FBodyKind: THttpBuilderBodyKind;
+    FContentLength: Int64;
+    FHasContentLength: Boolean;
     FContentType: string;
     FQueryParams: TQueryParams;
     FQueryCount: Int32;
@@ -281,9 +237,13 @@ type
   public
     constructor Create(const AMethod: THttpMethod; const AUrl: string);
     function Header(const AName, AValue: string): THttpRequestBuilder;
+    { Merge/replace with a full header bag (clone of AHeaders when FHeaders empty). }
+    function Headers(const AHeaders: IHttpHeaders): THttpRequestBuilder;
     function BasicAuth(const AUsername, APassword: string): THttpRequestBuilder;
     function BearerAuth(const AToken: string): THttpRequestBuilder;
     function ContentType(const AContentType: string): THttpRequestBuilder;
+    { Known-length for Body(IReader). Optional: omit for H1 chunked (CL = -1). }
+    function ContentLength(const ALen: Int64): THttpRequestBuilder;
     function Body(const ABody: string): THttpRequestBuilder; overload;
     function Body(const ABody: TBytes): THttpRequestBuilder; overload;
     function Body(const ABody: IReader): THttpRequestBuilder; overload;
@@ -291,12 +251,14 @@ type
     function Timeout(const ATimeoutMs: Int64): THttpRequestBuilder;
     function MaxRedirects(const AMaxRedirects: Int32): THttpRequestBuilder;
     function FollowRedirects(const AFollow: Boolean): THttpRequestBuilder;
+    function CancelToken(const AToken: IHttpCancelToken): THttpRequestBuilder;
     function Build: IHttpRequest;
   end;
 
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.io.memory,
   nextpas.core.text.conv,
@@ -399,39 +361,75 @@ var
   LDigit: Int64;
 begin
   if AValue = '' then
-    raise EArgumentError.Create('HTTP request content-length is invalid');
+    raise EHttpError.Create(hekArgument, 'HTTP request content-length is invalid');
   Result := 0;
   for LI := 1 to Length(AValue) do
   begin
     if (AValue[LI] < '0') or (AValue[LI] > '9') then
-      raise EArgumentError.Create('HTTP request content-length is invalid');
+      raise EHttpError.Create(hekArgument, 'HTTP request content-length is invalid');
     LDigit := Ord(AValue[LI]) - Ord('0');
     if Result > ((High(Int64) - LDigit) div 10) then
-      raise EArgumentError.Create('HTTP request content-length is too large');
+      raise EHttpError.Create(hekArgument, 'HTTP request content-length is too large');
     Result := (Result * 10) + LDigit;
   end;
+end;
+
+function TransferEncodingIsChunkedOnly(const AValue: string): Boolean;
+var
+  LCompact: string;
+  LI: SizeInt;
+begin
+  { Accept only "chunked" (case-insensitive, optional surrounding spaces).
+     Multi-coding TE (e.g. gzip, chunked) is not supported for request bodies. }
+  LCompact := '';
+  for LI := 1 to Length(AValue) do
+    if AValue[LI] <> ' ' then
+      LCompact := LCompact + LowerCase(AValue[LI]);
+  Result := LCompact = 'chunked';
 end;
 
 procedure ValidateRequestBodyHeaders(const AHeaders: IHttpHeaders;
   const ADeclaredContentLength: Int64);
 var
   LValues: TStringArray;
+  LTeValues: TStringArray;
   LHeaderLength: Int64;
+  LI: SizeInt;
 begin
   if AHeaders = nil then
     Exit;
 
   LValues := AHeaders.GetAll('content-length');
-  if AHeaders.Has('transfer-encoding') then
-    raise EArgumentError.Create('HTTP request transfer-encoding is unsupported');
+  LTeValues := AHeaders.GetAll('transfer-encoding');
+
+  if ADeclaredContentLength < 0 then
+  begin
+    { Chunked / unknown-length request body. }
+    if Length(LValues) > 0 then
+      raise EHttpError.Create(hekArgument,
+        'HTTP request content-length conflicts with chunked body');
+    if Length(LTeValues) = 0 then
+      Exit;
+    for LI := Low(LTeValues) to High(LTeValues) do
+      if not TransferEncodingIsChunkedOnly(LTeValues[LI]) then
+        raise EHttpError.Create(hekArgument,
+          'HTTP request transfer-encoding must be chunked for unknown-length body');
+    Exit;
+  end;
+
+  if Length(LTeValues) > 0 then
+    raise EHttpError.Create(hekArgument,
+      'HTTP request transfer-encoding is unsupported');
 
   if Length(LValues) = 0 then
     Exit;
   if Length(LValues) <> 1 then
-    raise EArgumentError.Create('HTTP request content-length is duplicated');
+    raise EHttpError.Create(hekArgument,
+      'HTTP request content-length is duplicated');
   LHeaderLength := ParseDeclaredContentLength(LValues[0]);
   if LHeaderLength <> ADeclaredContentLength then
-    raise EArgumentError.Create('HTTP request content-length conflicts with body length');
+    raise EHttpError.Create(hekArgument,
+      'HTTP request content-length conflicts with body length');
 end;
 
 procedure ValidateFixedBodyResponseHeaders(const AHeaders: IHttpHeaders;
@@ -444,16 +442,18 @@ begin
     Exit;
 
   if AHeaders.Has('transfer-encoding') then
-    raise EArgumentError.Create('HTTP response transfer-encoding is unsupported');
+    raise EHttpError.Create(hekArgument,
+      'HTTP response transfer-encoding is unsupported');
 
   LValues := AHeaders.GetAll('content-length');
   if Length(LValues) = 0 then
     Exit;
   if Length(LValues) <> 1 then
-    raise EArgumentError.Create('HTTP response content-length is duplicated');
+    raise EHttpError.Create(hekArgument,
+      'HTTP response content-length is duplicated');
   LHeaderLength := ParseDeclaredContentLength(LValues[0]);
   if LHeaderLength <> ABodyLength then
-    raise EArgumentError.Create(
+    raise EHttpError.Create(hekArgument,
       'HTTP response content-length conflicts with body length');
 end;
 
@@ -468,13 +468,13 @@ procedure ValidateFixedBodyResponseStatus(const AStatus: THttpStatus;
   const ABodyLength: Int64);
 begin
   if (ABodyLength > 0) and ResponseStatusMustNotHaveBody(AStatus) then
-    raise EHttpError.Create('HTTP response status must not include a body');
+    raise EHttpError.Create(hekArgument, 'HTTP response status must not include a body');
 end;
 
 procedure RequireResponseWriter(const AW: IHttpResponseWriter);
 begin
   if AW = nil then
-    raise EArgumentError.Create('HTTP response writer is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP response writer is nil');
 end;
 
 function WriteAllResponseBodyString(const AW: IHttpResponseWriter;
@@ -558,7 +558,7 @@ begin
   end;
 
   if FRawRequestTarget = '' then
-    raise EHttpError.Create('Cannot parse empty request-target');
+    raise EHttpError.Create(hekParse, 'Cannot parse empty request-target');
 
   if (FRawRequestTarget[1] <> '/') and (FRawRequestTarget[1] <> '*') and
     (Pos('://', FRawRequestTarget) > 0) then
@@ -701,6 +701,16 @@ begin
   Result := FRequestOptions;
 end;
 
+function THttpRequest.GetContext: IHttpContext;
+begin
+  Result := FContext;
+end;
+
+procedure THttpRequest.SetContext(const ACtx: IHttpContext);
+begin
+  FContext := ACtx;
+end;
+
 { THttpResponse }
 
 constructor THttpResponse.Create(const AStatusCode: THttpStatus;
@@ -710,6 +720,17 @@ begin
   FStatusCode := AStatusCode;
   FHeaders := HeadersOrNew(AHeaders);
   FBody := ABody;
+  FBodyClosed := False;
+end;
+
+destructor THttpResponse.Destroy;
+begin
+  try
+    Close;
+  except
+    { Destructor must not raise. }
+  end;
+  inherited;
 end;
 
 function THttpResponse.GetStatusCode: THttpStatus;
@@ -727,7 +748,75 @@ begin
   Result := FBody;
 end;
 
+procedure THttpResponse.Close;
+var
+  LBody: IReader;
+  LReadCloser: IReadCloser;
+  LCloser: ICloser;
+  LStream: IStream;
+  LBuf: array[0..4095] of Byte;
+begin
+  if FBodyClosed then
+    Exit;
+  FBodyClosed := True;
+  LBody := FBody;
+  if LBody = nil then
+    Exit;
+
+  if Supports(LBody, IReadCloser, LReadCloser) then
+  begin
+    LReadCloser.Close;
+    Exit;
+  end;
+  if Supports(LBody, ICloser, LCloser) then
+  begin
+    LCloser.Close;
+    Exit;
+  end;
+  if Supports(LBody, IStream, LStream) then
+  begin
+    LStream.Close;
+    Exit;
+  end;
+
+  while LBody.Read(LBuf[0], SizeUInt(Length(LBuf))) > 0 do
+    ;
+end;
+
 { Factory helpers }
+
+function MakeHttpRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+var
+  LHeaders: IHttpHeaders;
+begin
+  if AContentLength < -1 then
+    raise EHttpError.Create(hekArgument, 'HTTP request content-length is invalid');
+  if (ABody = nil) and (AContentLength > 0) then
+    raise EHttpError.Create(hekArgument,
+      'HTTP request body is nil but content-length is positive');
+  if (ABody = nil) and (AContentLength < 0) then
+    raise EHttpError.Create(hekArgument,
+      'HTTP request body is nil but chunked framing was requested');
+
+  LHeaders := AHeaders;
+  if LHeaders = nil then
+    LHeaders := NewHttpHeaders;
+  ValidateRequestBodyHeaders(LHeaders, AContentLength);
+  if AContentLength < 0 then
+  begin
+    { Unknown-length body → H1 Transfer-Encoding: chunked. }
+    if not LHeaders.Has('transfer-encoding') then
+      LHeaders.SetHeader('transfer-encoding', 'chunked');
+  end
+  else if AContentLength > 0 then
+    LHeaders.SetHeader('content-length', IntToStr(AContentLength))
+  else if ABody <> nil then
+    LHeaders.SetHeader('content-length', '0');
+  Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders, ABody,
+    AContentLength);
+end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
 begin
@@ -739,180 +828,6 @@ begin
   Result := NewRequest(AMethod, TUrl.Parse(AUrl));
 end;
 
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders): IHttpRequest;
-begin
-  ValidateRequestBodyHeaders(AHeaders, 0);
-  Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, HeadersOrNew(AHeaders),
-    nil, 0);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, nil, 0);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ANilBody: Pointer): IHttpRequest;
-var
-  LHeaders: IHttpHeaders;
-begin
-  if ANilBody <> nil then
-    raise EArgumentError.Create(
-      'HTTP nil-body compatibility overload only accepts nil');
-  LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '0');
-  Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders,
-    BytesBodyReader(nil), 0);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ANilBody: Pointer): IHttpRequest;
-begin
-  if ANilBody <> nil then
-    raise EArgumentError.Create(
-      'HTTP nil-body compatibility overload only accepts nil');
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), Pointer(nil));
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, nil, ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), nil, ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl,
-    NewRequestContentTypeHeaders(AContentType), ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AContentType, ABody,
-    AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-var
-  LHeaders: IHttpHeaders;
-begin
-  if AContentLength < 0 then
-    raise EArgumentError.Create('HTTP request content-length is negative');
-  if (ABody = nil) and (AContentLength > 0) then
-    raise EArgumentError.Create(
-      'HTTP request body is nil but content-length is positive');
-
-  LHeaders := AHeaders;
-  if LHeaders = nil then
-    LHeaders := NewHttpHeaders;
-  ValidateRequestBodyHeaders(LHeaders, AContentLength);
-  if AContentLength > 0 then
-    LHeaders.SetHeader('content-length', IntToStr(AContentLength))
-  else if (ABody <> nil) and (AContentLength < 0) then
-    { Body with unknown length: don't set content-length, let chunked handle it }
-    LHeaders.SetHeader('transfer-encoding', 'chunked');
-  Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders, ABody,
-    AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, ABody,
-    AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyText: string): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, nil, ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyText: string): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), nil, ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType, ABodyText: string): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl,
-    NewRequestContentTypeHeaders(AContentType), ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType, ABodyText: string): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AContentType, ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, AHeaders, StringBodyReader(ABodyText),
-    Int64(Length(ABodyText)));
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, nil, ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), nil, ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl,
-    NewRequestContentTypeHeaders(AContentType), ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AContentType, ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, AHeaders, BytesBodyReader(ABodyBytes),
-    Int64(Length(ABodyBytes)));
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, ABodyBytes);
-end;
-
 function NewGetRequest(const APath: string): IHttpRequest;
 var
   LUrl: TUrl;
@@ -920,26 +835,6 @@ begin
   LUrl := Default(TUrl);
   LUrl.Path := APath;
   Result := THttpRequest.Create(hmGet, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, nil, ABody, AContentLength);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, AHeaders, ABody, AContentLength);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := NewRequest(AMethod, AUrl, AContentType, ABody, AContentLength);
 end;
 
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
@@ -952,7 +847,7 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ANilBody: Pointer): IHttpResponse;
 begin
   if ANilBody <> nil then
-    raise EArgumentError.Create(
+    raise EHttpError.Create(hekArgument,
       'HTTP nil-body response compatibility overload only accepts nil');
   Result := THttpResponse.Create(AStatus, AHeaders, nil);
 end;
@@ -986,12 +881,12 @@ function HttpWriteResponseString(const AW: IHttpResponseWriter;
 begin
   RequireResponseWriter(AW);
   if HttpStatusIsInformational(AStatus) then
-    raise EHttpError.Create(
+    raise EHttpError.Create(hekArgument,
       'HTTP response string helper requires a final response status');
   if ResponseStatusMustNotHaveBody(AStatus) then
   begin
     if ABody <> '' then
-      raise EHttpError.Create('HTTP response status must not include a body');
+      raise EHttpError.Create(hekArgument, 'HTTP response status must not include a body');
     AW.WriteHeader(AStatus);
     Exit(0);
   end;
@@ -1020,12 +915,12 @@ var
 begin
   RequireResponseWriter(AW);
   if HttpStatusIsInformational(AStatus) then
-    raise EHttpError.Create(
+    raise EHttpError.Create(hekArgument,
       'HTTP response bytes helper requires a final response status');
   if ResponseStatusMustNotHaveBody(AStatus) then
   begin
     if (ABody <> nil) and (Length(ABody) > 0) then
-      raise EHttpError.Create('HTTP response status must not include a body');
+      raise EHttpError.Create(hekArgument, 'HTTP response status must not include a body');
     AW.WriteHeader(AStatus);
     Exit(0);
   end;
@@ -1062,7 +957,7 @@ var
   LTotal: SizeUInt;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('HTTP request is nil');
+    raise EHttpError.Create(hekArgument, 'HTTP request is nil');
   LBody := AReq.Body;
   if LBody = nil then
     Exit(nil);
@@ -1097,7 +992,7 @@ begin
   LBody := HttpReadRequestBodyString(AReq);
   Result := JsonParse(LBody);
   if (Result <> nil) and Result.HasError then
-    raise EHttpError.Create('HTTP request body contains invalid JSON');
+    raise EHttpError.Create(hekParse, 'HTTP request body contains invalid JSON');
 end;
 
 { Escape a string for safe inclusion in an HTML attribute context.
@@ -1133,12 +1028,13 @@ var
 begin
   RequireResponseWriter(AW);
   if not HttpStatusIsRedirect(AStatus) then
-    raise EHttpError.Create('HttpRedirect requires a 3xx redirect status');
+    raise EHttpError.Create(hekArgument, 'HttpRedirect requires a 3xx redirect status');
   if ALocation = '' then
-    raise EArgumentError.Create('HttpRedirect location must not be empty');
+    raise EHttpError.Create(hekArgument, 'HttpRedirect location must not be empty');
   { Reject protocol-relative URLs to prevent open redirect }
   if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
-    raise EArgumentError.Create('HttpRedirect: protocol-relative URL not allowed');
+    raise EHttpError.Create(hekArgument,
+      'HttpRedirect: protocol-relative URL not allowed');
   AW.GetHeaders.SetHeader('location', ALocation);
   LEscaped := HtmlEscapeAttr(ALocation);
   LBody := '<html><body>Redirecting to <a href="' + LEscaped + '">' +
@@ -1174,6 +1070,26 @@ procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
   const ALocation: string);
 begin
   HttpRedirect(AW, HTTP_STATUS_PERMANENT_REDIRECT, ALocation);
+end;
+
+function HttpIsRetryableMethod(const AMethod: THttpMethod): Boolean;
+begin
+  Result := AMethod in [hmGet, hmHead, hmOptions, hmTrace];
+end;
+
+function HttpHasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean;
+begin
+  Result := (AReq <> nil) and (AReq.Headers <> nil) and
+    (AReq.Headers.Has('idempotency-key') or
+     AReq.Headers.Has('x-idempotency-key'));
+end;
+
+function HttpIsRetrySafeRequest(const AReq: IHttpRequest): Boolean;
+begin
+  if AReq = nil then
+    Exit(False);
+  Result := HttpIsRetryableMethod(AReq.Method) or
+    HttpHasRetryIdempotencyKey(AReq);
 end;
 
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
@@ -1311,7 +1227,9 @@ begin
   FBodyReader := nil;
   FBodyString := '';
   FBodyBytes := nil;
-  FHasBody := False;
+  FBodyKind := bbkNone;
+  FContentLength := 0;
+  FHasContentLength := False;
   FContentType := '';
   FQueryCount := 0;
   FRequestOptions := Default(THttpRequestOptions);
@@ -1324,6 +1242,27 @@ begin
   if Result.FHeaders = nil then
     Result.FHeaders := NewHttpHeaders;
   Result.FHeaders.SetHeader(AName, AValue);
+end;
+
+function THttpRequestBuilder.Headers(
+  const AHeaders: IHttpHeaders): THttpRequestBuilder;
+var
+  LTarget: IHttpHeaders;
+begin
+  Result := Self;
+  if AHeaders = nil then
+    Exit;
+  if Result.FHeaders = nil then
+    Result.FHeaders := AHeaders.Clone
+  else
+  begin
+    LTarget := Result.FHeaders;
+    AHeaders.ForEach(
+      procedure(const AName, AValue: string)
+      begin
+        LTarget.Add(AName, AValue);
+      end);
+  end;
 end;
 
 function THttpRequestBuilder.BasicAuth(const AUsername,
@@ -1352,6 +1291,18 @@ begin
   Result.FContentType := AContentType;
 end;
 
+function THttpRequestBuilder.ContentLength(
+  const ALen: Int64): THttpRequestBuilder;
+begin
+  Result := Self;
+  { -1 requests H1 chunked framing; other negatives are invalid. }
+  if ALen < -1 then
+    raise EHttpError.Create(hekArgument,
+      'THttpRequestBuilder.ContentLength must be >= -1');
+  Result.FContentLength := ALen;
+  Result.FHasContentLength := True;
+end;
+
 function THttpRequestBuilder.Body(
   const ABody: string): THttpRequestBuilder;
 begin
@@ -1359,7 +1310,7 @@ begin
   Result.FBodyString := ABody;
   Result.FBodyReader := nil;
   Result.FBodyBytes := nil;
-  Result.FHasBody := True;
+  Result.FBodyKind := bbkString;
 end;
 
 function THttpRequestBuilder.Body(
@@ -1369,7 +1320,7 @@ begin
   Result.FBodyBytes := ABody;
   Result.FBodyString := '';
   Result.FBodyReader := nil;
-  Result.FHasBody := True;
+  Result.FBodyKind := bbkBytes;
 end;
 
 function THttpRequestBuilder.Body(
@@ -1379,7 +1330,7 @@ begin
   Result.FBodyReader := ABody;
   Result.FBodyString := '';
   Result.FBodyBytes := nil;
-  Result.FHasBody := True;
+  Result.FBodyKind := bbkReader;
 end;
 
 function THttpRequestBuilder.QueryParam(const AName,
@@ -1417,6 +1368,14 @@ begin
   Result.FRequestOptions.HasFollowRedirects := True;
 end;
 
+function THttpRequestBuilder.CancelToken(
+  const AToken: IHttpCancelToken): THttpRequestBuilder;
+begin
+  Result := Self;
+  Result.FRequestOptions.CancelToken := AToken;
+  Result.FRequestOptions.HasCancelToken := True;
+end;
+
 function THttpRequestBuilder.Build: IHttpRequest;
 var
   LI: SizeInt;
@@ -1451,30 +1410,37 @@ begin
   if FContentType <> '' then
     LHeaders.SetHeader('content-type', FContentType);
 
-  if FHasBody then
-  begin
-    if FBodyReader <> nil then
-      Result := NewRequest(FMethod, LUrl, LHeaders, FBodyReader, 0)
-    else if FBodyString <> '' then
-    begin
-      LBodyString := FBodyString;
-      LBody := StringBodyReader(LBodyString);
-      Result := NewRequest(FMethod, LUrl, LHeaders, LBody, Int64(Length(LBodyString)));
-    end
-    else if FBodyBytes <> nil then
-    begin
-      LBodyBytes := FBodyBytes;
-      LBody := BytesBodyReader(LBodyBytes);
-      Result := NewRequest(FMethod, LUrl, LHeaders, LBody, Int64(Length(LBodyBytes)));
-    end
-    else
-      Result := NewRequest(FMethod, LUrl, LHeaders, nil, 0);
-  end
+  case FBodyKind of
+    bbkReader:
+      begin
+        if FHasContentLength then
+          Result := MakeHttpRequest(FMethod, TUrl.Parse(LUrl), LHeaders,
+            FBodyReader, FContentLength)
+        else
+          { Unknown length → H1 chunked request body (ContentLength = -1). }
+          Result := MakeHttpRequest(FMethod, TUrl.Parse(LUrl), LHeaders,
+            FBodyReader, -1);
+      end;
+    bbkString:
+      begin
+        LBodyString := FBodyString;
+        LBody := StringBodyReader(LBodyString);
+        Result := MakeHttpRequest(FMethod, TUrl.Parse(LUrl), LHeaders, LBody,
+          Int64(Length(LBodyString)));
+      end;
+    bbkBytes:
+      begin
+        LBodyBytes := FBodyBytes;
+        LBody := BytesBodyReader(LBodyBytes);
+        Result := MakeHttpRequest(FMethod, TUrl.Parse(LUrl), LHeaders, LBody,
+          Int64(Length(LBodyBytes)));
+      end;
   else
-    Result := NewRequest(FMethod, LUrl, LHeaders, nil, 0);
+    Result := MakeHttpRequest(FMethod, TUrl.Parse(LUrl), LHeaders, nil, 0);
+  end;
 
   if FRequestOptions.HasTimeout or FRequestOptions.HasMaxRedirects or
-    FRequestOptions.HasFollowRedirects then
+    FRequestOptions.HasFollowRedirects or FRequestOptions.HasCancelToken then
     (Result as IHttpRequestWithOptions).SetRequestOptions(FRequestOptions);
 end;
 

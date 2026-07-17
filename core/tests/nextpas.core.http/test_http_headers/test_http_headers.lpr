@@ -17,7 +17,7 @@ var
 
 function LoadTextFile(const APath: string): string;
 begin
-  Result := FsReadFileText(APath);
+  Result := ReadFileText(APath);
 end;
 
 procedure CheckSourceNotContains(const ASource, AFragment, ALabel: string);
@@ -41,6 +41,26 @@ begin
   CheckSourceNotContains(LoadTextFile(APath), AFragment, ALabel + ': ' + APath);
 end;
 
+function NameMatchesSimpleMask(const AName, AMask: string): Boolean;
+var
+  LStar: SizeInt;
+  LPrefix, LSuffix: string;
+begin
+  { Single-star masks only (e.g. nextpas.core.http*.pas, *.lpr). }
+  if AMask = '' then
+    Exit(True);
+  LStar := Pos('*', AMask);
+  if LStar = 0 then
+    Exit(AName = AMask);
+  LPrefix := Copy(AMask, 1, LStar - 1);
+  LSuffix := Copy(AMask, LStar + 1, MaxInt);
+  if Length(AName) < Length(LPrefix) + Length(LSuffix) then
+    Exit(False);
+  Result :=
+    (Copy(AName, 1, Length(LPrefix)) = LPrefix) and
+    (Copy(AName, Length(AName) - Length(LSuffix) + 1, Length(LSuffix)) = LSuffix);
+end;
+
 procedure CheckSourceTreeNotContains(const ADir, AMask, AFragment, ALabel: string);
 var
   LEntries: TDirEntryArray;
@@ -53,7 +73,8 @@ begin
     LPath := IncludeTrailingPathDelimiter(ADir) + LEntry.Name;
     if not LEntry.IsDir then
     begin
-      if IsHttpHandwrittenSource(LPath) then
+      if NameMatchesSimpleMask(LEntry.Name, AMask) and
+         IsHttpHandwrittenSource(LPath) then
         CheckSourceFileNotContains(LPath, AFragment, ALabel + ': ' + LPath);
     end;
   end;
@@ -622,7 +643,7 @@ begin
   try
     SetBearerAuth(LH, 'token');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'bearer helper rejects nil headers');
@@ -631,7 +652,7 @@ begin
   try
     SetBasicAuth(LH, 'user', 'pass');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'basic helper rejects nil headers');
@@ -650,7 +671,7 @@ begin
   try
     LH.ForEach(LCallback);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'foreach rejects nil callback');

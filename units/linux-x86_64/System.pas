@@ -2,11 +2,14 @@ unit System;
 
 {$mode objfpc}{$H+}
 
+{ Canonical compiler-root source. Refresh target projections with
+  `make system-projection-sync`; do not edit installed copies directly. }
+
 {$IFNDEF FPC}
 interface
 
 type
-  { 基础 ordinal 类型 — 与 FPC 兼容 }
+  { Basic ordinal types compatible with the stage0 surface. }
   Boolean = Boolean;
   ByteBool = Boolean;
   WordBool = Boolean;
@@ -23,7 +26,7 @@ type
   Int64 = Int64;
   QWord = QWord;
 
-  { 指针大小类型 }
+  { Pointer-sized types. }
   NativeInt = NativeInt;
   NativeUInt = NativeUInt;
   SizeInt = SizeInt;
@@ -31,7 +34,7 @@ type
   PtrInt = PtrInt;
   PtrUInt = PtrUInt;
 
-  { 浮点类型 }
+  { Floating-point types. }
   Single = Single;
   Double = Double;
   Extended = Extended;
@@ -39,17 +42,17 @@ type
   Comp = Comp;
   Currency = Currency;
 
-  { 字符类型 }
+  { Character types. }
   Char = Char;
   AnsiChar = AnsiChar;
   WideChar = WideChar;
 
-  { 字符串类型 }
+  { String types. }
   ShortString = ShortString;
   AnsiString = AnsiString;
   WideString = WideString;
 
-  { 指针类型 }
+  { Pointer types. }
   PChar = ^Char;
   PAnsiChar = ^AnsiChar;
   PByte = ^Byte;
@@ -60,13 +63,12 @@ type
   PQWord = ^QWord;
   PPointer = ^Pointer;
 
-  { 集合类型 }
   ByteSet = set of Byte;
 
-  { 变体类型 — stage0 stub }
+  { Stage0 variant placeholder. }
   Variant = record end;
 
-  { TTypeKind — 最小 RTTI 支持 }
+  { Minimum RTTI kind surface. }
   TTypeKind = (
     tkUnknown, tkInteger, tkChar, tkEnumeration, tkFloat,
     tkString, tkSet, tkClass, tkMethod, tkWChar, tkLString,
@@ -101,11 +103,13 @@ type
   ERangeError = class(Exception);
   EDivByZero = class(Exception);
 
-  { FreeAndNil — compiler inline, no body needed }
+  { Compiler intrinsic; no Pascal body is required. }
   procedure FreeAndNil(var Obj);
 
+procedure np_process_init; cdecl;
+procedure np_process_fini; cdecl;
+
 const
-  { Ordinal 常量 }
   MaxInt = High(Integer);
   MaxLongint = High(LongInt);
   MaxSmallint = High(SmallInt);
@@ -113,11 +117,9 @@ const
   MaxInt64 = High(Int64);
   MaxQWord = High(QWord);
 
-  { 布尔常量 }
   True = Boolean(1);
   False = Boolean(0);
 
-  { 路径分隔符 }
   PathDelim = '/';
   DriveDelim = '';
   PathSep = ':';
@@ -147,7 +149,7 @@ end;
 
 function TObject.ClassType: TClass;
 begin
-  { First field of any TObject instance is the VMT pointer }
+  { The first field of a TObject instance is its VMT pointer. }
   Result := TClass(PPointer(Self)^);
 end;
 
@@ -198,11 +200,15 @@ begin
   inherited Destroy;
 end;
 
-function InterlockedCompareExchange(var Target: Pointer; NewValue: Pointer; Comperand: Pointer): Pointer;
+function InterlockedCompareExchange(var Target: Pointer; NewValue: Pointer;
+  Comperand: Pointer): Pointer;
 begin
   Result := Target;
   Target := NewValue;
 end;
+
+procedure np_process_init; cdecl; external name 'np_process_init';
+procedure np_process_fini; cdecl; external name 'np_process_fini';
 
 {$ELSE}
 interface

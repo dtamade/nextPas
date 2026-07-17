@@ -6,7 +6,9 @@ unit np_hir_llvm_emitter;
 interface
 
 uses
-  np_hir_types, np_hir_model;
+  np_hir_types, np_hir_model,
+  nextpas.core.mem.intf,
+  nextpas.core.collections.vec;
 
 const
   { 默认目标元数据 —— 仅当 emitter 未被注入 target facts 时回退使用，
@@ -16,16 +18,20 @@ const
     'e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64';
 
 type
+  TLlvmLineVec = specialize TVec<string>;
+  TLlvmNameVec = specialize TVec<string>;
+  TLlvmValueIdVec = specialize TVec<THIRValueId>;
+
   THIRLlvmEmitter = class
   private
     FModule: THIRModule;
     FLlvmTriple: string;
     FLlvmDataLayout: string;
-    FLines: array of string;
-    FLineCount: LongInt;
-    FGlobalRefNames: array of string;
-    FGlobalRefIds: array of THIRValueId;
-    FGlobalRefCount: LongInt;
+    { Optional phase scratch for emit working TVecs. }
+    FAllocator: IAllocator;
+    FLines: TLlvmLineVec;
+    FGlobalRefNames: TLlvmNameVec;
+    FGlobalRefIds: TLlvmValueIdVec;
     FNeedsWriteInt: Boolean;
     FNeedsAlloc: Boolean;
     FNeedsFree: Boolean;
@@ -40,13 +46,14 @@ type
     FNeedsObjectAlloc: Boolean;
     FNeedsObjectFreeRelease: Boolean;
     FNeedsDynArrayHelpers: Boolean;
-    FStrConstants: array of string;
-    FStrConstCount: LongInt;
+    FStrConstants: TLlvmNameVec;
     FCurrentReturnTypeId: THIRTypeId;
     FCurrentFuncIsTStringSret: Boolean;
     FIsCheckCounter: LongInt;
     FObjectFreeCounter: LongInt;
     FPendingObjectFreeActive: Boolean;
+    FPendingObjectFreeReceiverValueId: THIRValueId;
+    FPendingObjectFreeDestroyTarget: string;
     FPendingObjectFreeEndLabel: string;
     FNeedsExceptionRuntime: Boolean;
     FNeedsProcessLifecycle: Boolean;
@@ -56,11 +63,11 @@ type
     FTryCounter: LongInt;
     { Debug info metadata }
     FDebugInfoEnabled: Boolean;
-    FDebugMetadata: array of string;
-    FDebugMetadataCount: LongInt;
+    FDebugMetadata: TLlvmNameVec;
     FCurrentDISubprogram: LongInt;  { metadata index of current function's DISubprogram }
     FDIFileIndex: LongInt;          { metadata index of the DIFile }
     FDICUIndex: LongInt;            { metadata index of the DICompileUnit }
+    procedure ClearGlobalRefs;
     function AddDebugMetadata(const AMetadata: string): LongInt;
     function EmitDILocation(ALine, ACol: LongInt): LongInt;
     procedure EmitDebugMetadataSection;
@@ -69,7 +76,9 @@ type
     constructor Create(AModule: THIRModule); overload;
     constructor Create(AModule: THIRModule;
       const ALlvmTriple, ALlvmDataLayout: string;
-      ADebugInfo: Boolean = False); overload;
+      ADebugInfo: Boolean = False;
+      AAllocator: IAllocator = nil); overload;
+    destructor Destroy; override;
     function ValueRef(AValueId: THIRValueId): string;
     function TypeToLlvm(ATypeId: THIRTypeId): string;
     function BlockEndsWithIntrinsicReturn(const ABlock: THIRBlock): Boolean;
@@ -87,6 +96,8 @@ type
     procedure EmitFunction(const AFunc: THIRFunction);
     procedure EmitCallInstr(const AInstr: THIRInstr);
     procedure ClosePendingObjectFreeGuard;
+    function IsObjectFreeGuardContinuation(const AInstr: THIRInstr): Boolean;
+    function EmitSystemContractInstr(const AInstr: THIRInstr): Boolean;
     procedure EmitObjectFreeGuardStart(const AInstr: THIRInstr);
     procedure EmitObjectFreeOwnedDestroy(const AInstr: THIRInstr);
     procedure EmitObjectFreeRelease(const AInstr: THIRInstr);
@@ -133,8 +144,10 @@ var
   LAlreadyEmitted: Boolean;
   J: LongInt;
 begin
-  FLineCount := 0;
-  FStrConstCount := 0;
+  FLines.Clear;
+  FStrConstants.Clear;
+  FDebugMetadata.Clear;
+  ClearGlobalRefs;
   FNeedsWriteInt := False;
   FNeedsAlloc := False;
   FNeedsFree := False;
@@ -157,6 +170,8 @@ begin
   FTryCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
+  FPendingObjectFreeReceiverValueId := 0;
+  FPendingObjectFreeDestroyTarget := '';
   FPendingObjectFreeEndLabel := '';
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
   Emit('target triple = "' + FLlvmTriple + '"');
@@ -166,7 +181,6 @@ begin
   { Initialize debug info metadata if enabled }
   if FDebugInfoEnabled then
   begin
-    FDebugMetadataCount := 0;
     { !0 = !DIFile }
     FDIFileIndex := AddDebugMetadata(
       '!DIFile(filename: "' + EscapeLlvmStr(FModule.ModuleName) +
@@ -187,11 +201,12 @@ begin
     begin
       Emit('');
       Emit('%' + GType.Name + ' = type {');
-      for J := 0 to High(GType.Fields) do
-      begin
-        if J > 0 then Emit(', ');
-        Emit(TypeToLlvm(GType.Fields[J].TypeId));
-      end;
+      if GType.Fields <> nil then
+        for J := 0 to LongInt(GType.Fields.Count) - 1 do
+        begin
+          if J > 0 then Emit(', ');
+          Emit(TypeToLlvm(GType.Fields[SizeUInt(J)].TypeId));
+        end;
       Emit('}');
     end;
   end;
@@ -250,7 +265,7 @@ begin
     EmitUnitDeclares;
   end;
 
-  if FStrConstCount > 0 then
+  if FStrConstants.Count > 0 then
   begin
     Emit('');
     EmitStrConstants;
