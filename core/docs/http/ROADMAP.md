@@ -1,17 +1,17 @@
 # nextpas.core.http Roadmap
 
-**Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。  
-**Companion**: 北极星与阶段定义见 `GOAL_TREE.md`；契约真相见 `CONTRACT.md`。  
-**Updated**: 2026-07-17（post Wave F / cycle-11 on main `cd02d03d0`）
+**Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
+**Companion**: 北极星与阶段定义见 `GOAL_TREE.md`；契约真相见 `CONTRACT.md`。
+**Updated**: 2026-07-17（docs hygiene landed; post Wave F on main `cd02d03d0`）
 
 ---
 
 ## 怎么工作（以后按这个走）
 
-1. **先看本文件「当前该做」**，不要从零 inventory、不要用户催才开工。  
-2. 每一波只做表里 **最多 3 项**；做完 path-limited land，再回写本文件状态。  
-3. 改范围必须先改本文件（讨论 → 更新表 → 再写代码）。  
-4. 历史 cycle assessment / research / fix-plan 只作档案，**不再当主路线图**。  
+1. **先看本文件「当前该做」**，不要从零 inventory、不要用户催才开工。
+2. 每一波只做表里 **最多 3 项**；做完 path-limited land，再回写本文件状态。
+3. 改范围必须先改本文件（讨论 → 更新表 → 再写代码）。
+4. 历史 cycle assessment / research / fix-plan 只作档案，**不再当主路线图**。
 5. 跨模块依赖（QUIC、OpenSSL residual）标 **Blocked**，不在 http lane 硬堆 workaround。
 
 **波次节奏**（固定）：
@@ -31,7 +31,7 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 | **可用性 Wave A–F** | 完成并 landed main（dial/cancel、JSON、CONNECT、direct HTTPS、proxy Basic、HTTP-date Retry-After、WithTLSContext、*JsonDocument） |
 | **下一执行点** | **Phase P — Product depth** 的 **Wave G**（见下） |
 
-日常客户端主路径（GET/POST JSON、redirect、timeout/cancel、cookie 基础、HTTPS 直连/代理 Basic、retry）已齐。  
+日常客户端主路径（GET/POST JSON、redirect、timeout/cancel、cookie 基础、HTTPS 直连/代理 Basic、retry）已齐。
 剩下是 **加深**（cookie 站点模型、响应元数据、代理鉴权变体）和 **协议演进**（H2 边角、H3 等 QUIC），不是再补「能不能发请求」。
 
 ---
@@ -47,7 +47,7 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 | Wave E | H1 direct HTTPS；ProxyUrl Basic |
 | Wave F | HTTP-date Retry-After；WithTLSContext；Post/Put/PatchJsonDocument |
 
-详细证据在对应 `2026-07-17-usability-*-cycleN.md` 与 `API_COVERAGE.md` 历史段。
+详细证据在 [`archive/`](archive/README.md) 与 `API_COVERAGE.md` 矩阵。
 
 ---
 
@@ -71,7 +71,7 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 | Wave | 主题 | 做 | 状态 |
 |------|------|----|------|
 | **K** | Deprecated factory 清退 | 批量迁移/删除多参 `NewRequest` 等已 deprecated 工厂；测试与 examples 只走 builder | queued |
-| **L** | Docs/archive hygiene | 压缩 API_COVERAGE 顶部历史；GOAL_TREE Recent Fixes 归档到本文件或 `archive/` 索引；避免双入口 | queued |
+| **L** | Docs/archive hygiene | 压缩 API_COVERAGE 顶部历史；GOAL_TREE Recent Fixes 归档到 `archive/` 索引；避免双入口 | **done**（本轮） |
 
 ### Phase R — Protocol edges（依赖设计，可延后）
 
@@ -105,7 +105,7 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 5. 本文件：Wave G → landed；Wave H → NEXT（或讨论后改序）
 ```
 
-**没有用户「马上下一波」指令时：默认仍执行 Wave G。**  
+**没有用户「马上下一波」指令时：默认仍执行 Wave G。**
 只有 Blocked / 需跨模块决策时才停下来问。
 
 ---
@@ -117,8 +117,8 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 | **ROADMAP.md（本文件）** | 向前做什么、顺序、状态 |
 | **GOAL_TREE.md** | 为什么做、阶段定义、不漂移规则 |
 | **CONTRACT.md** | 对外行为契约 |
-| **API_COVERAGE.md** | 证据矩阵（可逐步瘦身历史） |
-| `2026-07-17-usability-*` | 已完成波次档案，不再扩展为「隐式路线图」 |
+| **API_COVERAGE.md** | 证据矩阵（顶部短结论 + Public Surface Matrix） |
+| **[`archive/`](archive/README.md)** | 已完成波次档案；禁止当作隐式路线图 |
 
 ---
 
@@ -127,3 +127,4 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 | 日期 | 变更 |
 |------|------|
 | 2026-07-17 | 初版：合并 stage + Wave A–F 完成态；定义 Phase P/Q/R/X；Wave G = NEXT |
+| 2026-07-17 | Wave L：历史 docs → `archive/`；瘦身 API_COVERAGE / GOAL_TREE 当前段 |
