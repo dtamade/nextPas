@@ -2260,6 +2260,9 @@ var
   LByte: Byte;
   LRead: SizeUInt;
 begin
+  { Active health probe on borrow (Wave I1): non-blocking peek. WouldBlock =
+    idle/live; any data/EOF/error = discard (peer closed or half-closed).
+    Must not run while holding FPoolLock. }
   Result := False;
   if AConn = nil then
     Exit;
