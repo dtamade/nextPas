@@ -678,9 +678,55 @@ procedure TestUnsupportedPipeIoStubSourceContract;
 var
   LSource: string;
 begin
-  LSource := LowerCase(LoadSourceText('src/nextpas.core.platform.process.pas'));
-  Check(Pos('begin result := -1; end;', LSource) = 0,
-    'unsupported process pipe I/O stubs must not return raw -1');
+  LSource := LoadSourceText('src/nextpas.core.platform.process.pas');
+  { Unsupported host stubs for pipe I/O must use PLATFORM_ERR_UNSUPPORTED.
+    Do not ban all "Result := -1" — value/sentinel helpers (getpid, io_*) may
+    still use -1 on unsupported hosts. }
+  Check(Pos(
+    'function platform_process_write_stdin_ex(AStdinWrite: PtrInt;' + LineEnding +
+    '  AData: PAnsiChar; ALen: Int32; out ABytesWritten: Int32): Int32;' + LineEnding +
+    'begin ABytesWritten := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'write_stdin_ex unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_read_stdout_ex(AStdoutRead: PtrInt;' + LineEnding +
+    '  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;' + LineEnding +
+    'begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'read_stdout_ex unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_read_stderr_ex(AStderrRead: PtrInt;' + LineEnding +
+    '  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;' + LineEnding +
+    'begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'read_stderr_ex unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_write_stdin(AStdinWrite: PtrInt;' + LineEnding +
+    '  AData: PAnsiChar; ALen: Int32): Int32; deprecated ''Use platform_process_write_stdin_ex'';' +
+    LineEnding +
+    'begin Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'legacy write_stdin unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_read_stdout(AStdoutRead: PtrInt;' + LineEnding +
+    '  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated ''Use platform_process_read_stdout_ex'';' +
+    LineEnding +
+    'begin Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'legacy read_stdout unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_read_stderr(AStderrRead: PtrInt;' + LineEnding +
+    '  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated ''Use platform_process_read_stderr_ex'';' +
+    LineEnding +
+    'begin Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'legacy read_stderr unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_write_stdin(AStdinWrite: PtrInt;' + LineEnding +
+    '  AData: PAnsiChar; ALen: Int32): Int32;' + LineEnding +
+    'begin Result := -1; end;',
+    LSource) = 0,
+    'legacy write_stdin must not use raw -1 unsupported stub');
 end;
 
 procedure TestLegacyPipeIoApisAreDeprecatedSourceContract;
