@@ -1545,6 +1545,9 @@ end;
 
 procedure TH2ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const ASecure: Boolean; const AConn: TH2ClientConnection);
+var
+  LI: Int32;
+  LAuthorityIdle: Int32;
 begin
   FPoolLock.Acquire;
   try
@@ -1557,11 +1560,19 @@ begin
       end;
       Exit;
     end;
-    if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
+    if FOptions.MaxPoolSize > 0 then
     begin
-      AConn.Close;
-      AConn.Free;
-      Exit;
+      LAuthorityIdle := 0;
+      for LI := 0 to FPoolCount - 1 do
+        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
+           (FPool[LI].Secure = ASecure) then
+          Inc(LAuthorityIdle);
+      if LAuthorityIdle >= FOptions.MaxPoolSize then
+      begin
+        AConn.Close;
+        AConn.Free;
+        Exit;
+      end;
     end;
     if FPoolCount >= Length(FPool) then
       SetLength(FPool, FPoolCount + 4);

@@ -569,6 +569,7 @@ begin
     AW.GetHeaders.SetHeader('etag', LETag);
     AW.GetHeaders.SetHeader('last-modified', LLastModified);
     AW.GetHeaders.SetHeader('cache-control', 'public, max-age=0, must-revalidate');
+    AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
     AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
     if ADownloadName <> '' then
     begin
@@ -581,7 +582,8 @@ begin
         'attachment; filename="' + LEscapedName + '"');
     end;
 
-    { Range request support }
+    { Range request support (single byte range only; multi-range → 416).
+      Body path always streams via IFile + io.Copy / CopyFileRange — never ReadAll. }
     if AReq <> nil then
       LRangeHeader := AReq.GetHeaders.Get('range')
     else

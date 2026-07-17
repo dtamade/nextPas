@@ -51,7 +51,9 @@ var
   GRawAcceptLimit: Int32;
   GRawAcceptCount: Int32;
   GAcceptCount: Int32;
+  GAcceptCountAlt: Int32;
   GPoolListener: ITcpListener;
+  GPoolListenerAlt: ITcpListener;
   GRetryListener: ITcpListener;
   GRetryAcceptCount: Int32;
   GRetryPooledMethod: string;
@@ -484,6 +486,7 @@ begin
 end;
 
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl; forward;
+function PoolAcceptThreadAlt(AArg: Pointer): Pointer; cdecl; forward;
 function PoolAuthorityCaseThread(AArg: Pointer): Pointer; cdecl; forward;
 
 function RawResponseThread(AArg: Pointer): Pointer; cdecl;
@@ -3045,6 +3048,27 @@ begin
     LDestroyBlock := Copy(LSource, LDestroyPos, 256);
     Check(Pos('PoolClear;', LDestroyBlock) > 0,
       'h1 client transport destructor closes pooled idle connections');
+  end;
+end;
+
+procedure TestH1ClientPoolMaxSizePerAuthoritySourceContract;
+var
+  LSource: string;
+  LPutPos: SizeInt;
+  LPutBlock: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  LPutPos := Pos('procedure TH1ClientTransport.PoolPut(', LSource);
+  Check(LPutPos > 0, 'h1 PoolPut is present');
+  if LPutPos > 0 then
+  begin
+    LPutBlock := Copy(LSource, LPutPos, 900);
+    Check(Pos('LAuthorityIdle', LPutBlock) > 0,
+      'h1 PoolPut counts idle connections per authority');
+    Check(Pos('FPoolCount >= FOptions.MaxPoolSize', LPutBlock) = 0,
+      'h1 PoolPut does not use global FPoolCount as MaxPoolSize cap');
+    Check(Pos('LAuthorityIdle >= FOptions.MaxPoolSize', LPutBlock) > 0,
+      'h1 PoolPut enforces MaxPoolSize against per-authority idle count');
   end;
 end;
 
@@ -6778,6 +6802,65 @@ begin
   end;
 end;
 
+procedure TestClientMaxPoolSizeIsPerAuthority;
+var
+  LPortA, LPortB: UInt16;
+  LHandleA, LHandleB: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+  LUrlA, LUrlB: string;
+begin
+  { MaxPoolSize=1 is per authority: two ports each keep one idle and both reuse.
+    A global cap of 1 would drop the second authority and re-accept it. }
+  GAcceptCount := 0;
+  GAcceptCountAlt := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  GPoolListenerAlt := NetTcpListen('127.0.0.1', 0);
+  LPortA := GPoolListener.LocalAddr.Port;
+  LPortB := GPoolListenerAlt.LocalAddr.Port;
+  platform_thread_create(LHandleA, @PoolAcceptThread, nil);
+  platform_thread_create(LHandleB, @PoolAcceptThreadAlt, nil);
+  try
+    LOptions := THttpClientOptions.Default.WithMaxPoolSize(1);
+    LClient := NewHttpClient(LOptions);
+    LUrlA := 'http://127.0.0.1:' + IntToStr(Int64(LPortA)) + '/a';
+    LUrlB := 'http://127.0.0.1:' + IntToStr(Int64(LPortB)) + '/b';
+
+    LResp := LClient.Get(LUrlA);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority A first status');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUrlB);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority B first status');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUrlA);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority A reuse status');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUrlB);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority B reuse status');
+    HttpReleaseResponseBody(LResp);
+
+    CheckEqual(Int64(1), Int64(GAcceptCount),
+      'authority A accepted once under MaxPoolSize=1');
+    CheckEqual(Int64(1), Int64(GAcceptCountAlt),
+      'authority B accepted once under MaxPoolSize=1');
+    LClient := nil;
+  finally
+    GPoolListener.Close;
+    GPoolListenerAlt.Close;
+    platform_thread_join(LHandleA, LRet);
+    platform_thread_join(LHandleB, LRet);
+    GPoolListener := nil;
+    GPoolListenerAlt := nil;
+    GAcceptCount := 0;
+    GAcceptCountAlt := 0;
+  end;
+end;
+
 procedure TestClientTimeoutDoesNotPoisonIdleConnectionReuse;
 var
   LPort: UInt16;
@@ -8015,6 +8098,51 @@ begin
   end;
 end;
 
+function PoolAcceptThreadAlt(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LReply: string;
+  LAccum: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  while True do
+  begin
+    try
+      LConn := GPoolListenerAlt.Accept;
+    except
+      Break;
+    end;
+    if LConn = nil then Break;
+    InterlockedIncrement(GAcceptCountAlt);
+    try
+      LAccum := '';
+      while True do
+      begin
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN = 0 then Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+        while True do
+        begin
+          LP := Pos(#13#10#13#10, LAccum);
+          if LP = 0 then Break;
+          LReply := 'HTTP/1.1 200 OK'#13#10 +
+                    'Content-Length: 2'#13#10 +
+                    #13#10 +
+                    'ok';
+          LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+          System.Delete(LAccum, 1, LP + 3);
+        end;
+      end;
+    except
+    end;
+    LConn.Close;
+  end;
+end;
+
 procedure WritePoolOkResponse(const AConn: ITcpStream);
 var
   LReply: string;
@@ -8348,6 +8476,52 @@ begin
   LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
   LResp := LClient.WithTimeout(5000).Get('http://localhost/test');
   Check(LResp <> nil, 'WithTimeout decorator does not crash');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestWithTimeoutOuterWinsAndComposesWithRetry;
+{ Wave E2: outer WithTimeout overrides; stack with WithRetry still applies. }
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+
+  LResp := LClient.WithTimeout(5000).WithTimeout(9000).Get('http://localhost/t');
+  CheckEqual(Int64(9000), LTransport.CapturedTimeoutMs,
+    'outer WithTimeout(9000) wins over WithTimeout(5000)');
+  HttpReleaseResponseBody(LResp);
+
+  LResp := LClient.WithRetry(1).WithTimeout(8000).Get('http://localhost/t');
+  CheckEqual(Int64(8000), LTransport.CapturedTimeoutMs,
+    'WithRetry then WithTimeout still overrides transport default');
+  HttpReleaseResponseBody(LResp);
+
+  LResp := LClient.WithTimeout(7000).WithRetry(1).Get('http://localhost/t');
+  CheckEqual(Int64(7000), LTransport.CapturedTimeoutMs,
+    'WithTimeout under WithRetry still applies request timeout');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestWithHeaderOuterWinsOverInner;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient
+    .WithHeader('X-Trace', 'inner')
+    .WithHeader('X-Trace', 'outer')
+    .Get('http://localhost/hdr');
+  Check(LResp <> nil, 'stacked WithHeader returns response');
+  CheckEqual(Int64(2), Int64(LTransport.Calls),
+    'default follow-redirects makes second capture call');
+  CheckEqual('outer', LTransport.SeenTraceHeader,
+    'outer WithHeader wins for same name');
   HttpReleaseResponseBody(LResp);
 end;
 
@@ -10336,6 +10510,26 @@ begin
     'H1 incomplete response uses CreateOp with Op=transport');
 end;
 
+procedure TestClientTaxonomyOpsAlignedSourceContract;
+{ Wave E1: client hotspot Ops stay aligned with CONTRACT Op table. }
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  Check(Pos('CreateOp(hekProtocol, ''json'',', LSource) > 0,
+    'json decode failures use Op=json');
+  Check(Pos('CreateOp(hekProtocol, ''content_encoding'',', LSource) > 0,
+    'unsupported Content-Encoding uses Op=content_encoding');
+  Check(Pos('CreateOp(hekBody, ''content_encoding'',', LSource) > 0,
+    'corrupt Content-Encoding uses Op=content_encoding');
+  Check(Pos('CreateOp(hekStatus, ''ensure'',', LSource) > 0,
+    'ensure non-2xx uses Op=ensure');
+  Check(Pos('CreateOp(hekConnect, ''download'',', LSource) > 0,
+    'download nil response uses Op=download');
+  Check(Pos('raise EArgumentError', LSource) = 0,
+    'client must not raise bare EArgumentError');
+end;
+
 procedure TestHttpEnsureSuccessOpIsEnsure;
 var
   LResp: IHttpResponse;
@@ -10744,6 +10938,8 @@ begin
     @TestClientShortcutBodyImplementationUsesBytesBuffer);
   T.Test('H1 client transport destroy closes idle pool source contract',
     @TestH1ClientTransportDestroyClosesIdlePoolSourceContract);
+  T.Test('H1 client pool MaxPoolSize per authority source contract',
+    @TestH1ClientPoolMaxSizePerAuthoritySourceContract);
   T.Test('H1 client pooled retry fresh failure closes connection source contract',
     @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
   T.Test('Client POST string body overload',
@@ -10944,6 +11140,8 @@ begin
   T.Test('Client respects max redirects', @TestClientMaxRedirects);
   T.Test('Client CloseIdleConnections drops pooled connections',
     @TestClientCloseIdleConnectionsDropsPooledConnections);
+  T.Test('Client MaxPoolSize is per authority',
+    @TestClientMaxPoolSizeIsPerAuthority);
   T.Test('Client timeout does not poison idle connection reuse',
     @TestClientTimeoutDoesNotPoisonIdleConnectionReuse);
   T.Test('Client request write failure closes body and drops connection',
@@ -11002,6 +11200,10 @@ begin
     @TestWithFollowRedirectsOverrideClientDefault);
   T.Test('WithTimeout decorator does not crash',
     @TestWithTimeoutDecorator);
+  T.Test('WithTimeout outer wins and composes with WithRetry',
+    @TestWithTimeoutOuterWinsAndComposesWithRetry);
+  T.Test('WithHeader outer wins over inner',
+    @TestWithHeaderOuterWinsOverInner);
   T.Test('Per-request timeout overrides transport default',
     @TestPerRequestTimeoutAtTransportLevel);
   T.Test('Builder creates GET request', @TestBuilderGetRequest);
@@ -11107,6 +11309,8 @@ begin
     @TestClientRedirectCreateOpSourceContract);
   T.Test('Client cancel/transport CreateOp source contract',
     @TestClientCancelAndTransportCreateOpSourceContract);
+  T.Test('Client taxonomy Ops aligned source contract',
+    @TestClientTaxonomyOpsAlignedSourceContract);
   T.Test('HttpEnsureSuccess Op=ensure on non-2xx',
     @TestHttpEnsureSuccessOpIsEnsure);
   T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);

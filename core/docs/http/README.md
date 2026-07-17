@@ -174,6 +174,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   (`http_hello_server`, `http_websocket_echo_demo`) use Production.
   Convenience `NewHttpServerWithRequestArena` (no explicit options) also bases
   on **Production** + RequestArena so arena demos do not inherit unbounded RW.
+- **With* chain / Timeout vs ConnectTimeout / Default vs Production**：权威表见
+  [`CONTRACT.md`](CONTRACT.md) §2.2「With* 链语义（Wave E2）」；勿在 README 双写细节。
 - Cancel: `IHttpCancelToken` is **cooperative** → `hekCanceled` at Send /
   redirect / retry / H1 RoundTrip checkpoints, and mid-read/write via
   `ITcpStream.SetCancelToken` (~50ms SO_RCVTIMEO slices). Prefer pairing with
