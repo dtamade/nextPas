@@ -126,9 +126,29 @@
       "reason": "known SIMD CPUInfo environment override debt"
     },
     {
+      "path": "src/nextpas.core.simd.linalg.gemm.parallel.pas",
+      "unit": "nextpas.core.thread.init",
+      "reason": "parallel GEMM needs thread spawn; transitional until simd owns a thin L0 worker seam"
+    },
+    {
+      "path": "src/nextpas.core.system.classes.pas",
+      "unit": "nextpas.core.io.intf",
+      "reason": "system Classes facade re-exports IStream/IReader/IWriter; transitional RTL frontier debt"
+    },
+    {
       "path": "src/nextpas.core.system.sysutils.pas",
       "unit": "nextpas.core.text.conv",
       "reason": "temporary system compatibility facade text dependency"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.path",
+      "reason": "temporary system SysUtils facade path helper debt"
+    },
+    {
+      "path": "src/nextpas.core.system.sysutils.pas",
+      "unit": "nextpas.core.fs",
+      "reason": "temporary system SysUtils facade filesystem helper debt"
     }
   ],
   "raw_ffi_tokens": [
@@ -236,6 +256,16 @@
     }
   ],
   "raw_ffi_explicit_allowlist": [
+    {
+      "path": "src/nextpas.core.numa.linux.pas",
+      "token": "BaseUnix",
+      "reason": "NUMA Linux backend host-unit debt pending platform-owned topology route"
+    },
+    {
+      "path": "src/nextpas.core.numa.windows.pas",
+      "token": "Windows",
+      "reason": "NUMA Windows backend host-unit debt pending platform-owned topology route"
+    },
     {
       "path": "src/nextpas.core.fs.util.pas",
       "token": "BaseUnix",
