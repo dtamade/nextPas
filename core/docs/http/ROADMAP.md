@@ -1,7 +1,7 @@
 # nextpas.core.http Roadmap
 
-**Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。  
-**Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。  
+**Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
+**Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
 **Updated**: 2026-07-17（Wave J Error Op hygiene landed）
 
 ---
@@ -293,7 +293,7 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 ## Era 4 — Performance（高性能）
 
-**目标**：G6 收成可复现证据，不是排行榜文案。  
+**目标**：G6 收成可复现证据，不是排行榜文案。
 **规则**：正确性回归不过 → 性能改动整波回滚。
 
 ### Wave P1 — Profile one hotspot
