@@ -35,7 +35,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=S25a
+CURRENT=S25b
 ```
 
 ---
@@ -129,11 +129,11 @@ CURRENT=S25a
 | **NEXT** | S25a |
 | **WHY** | Optional 1–N Memory/Batch leaves with real evidence |
 
-### S25a — Benchmark methodology + remeasure hotspots  【CURRENT】
+### S25a — Benchmark methodology + remeasure hotspots  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
+| **STATUS** | done (2026-07-17) |
 | **NEXT** | S25b |
 | **WHY** | High-performance requires reproducible SIMD vs true-scalar |
 | **IN_SCOPE_PATHS** | `core/benchmarks/nextpas.core.simd/**`; simd docs § performance; related test benches |
@@ -141,18 +141,19 @@ CURRENT=S25a
 | **DELIVERABLES** | Method note (anti FPC auto-vectorization); remeasure ArrayMulF32 etc.; record host/flags |
 | **GATES** | Documented command runs; hygiene |
 | **DoD** | Numbers in roadmap/README with method; CURRENT→S25b |
+| **EVIDENCE** | `bench_hotspots` + `performance-methodology.md`; vsTrue AddF32 4.51x / AddF64 6.36x / MulF32 4.12x / MemEqual 43.98x @ AVX2 Xeon E5-2696 v4 |
 
-### S25b — Optimize or revise targets
+### S25b — Optimize or revise targets  【CURRENT】
 
 | Field | Content |
 |-------|---------|
 | **STATUS** | pending |
 | **NEXT** | M-V1 |
-| **WHY** | Close or honestly re-baseline underperforming targets |
-| **IN_SCOPE_PATHS** | Hot leaf impls + docs |
-| **OUT_OF_SCOPE** | Silent target deletion without reason |
-| **DELIVERABLES** | Opt commit and/or revised targets with rationale |
-| **GATES** | focused + relevant benches |
+| **WHY** | Close or honestly re-baseline underperforming targets under **vsTrue** primary metric |
+| **IN_SCOPE_PATHS** | Hot leaf impls + docs；可引用 `performance-methodology.md` |
+| **OUT_OF_SCOPE** | Silent target deletion without reason；把 vsLib 当主指标 |
+| **DELIVERABLES** | Opt commit and/or revised targets with rationale（建议：Mul 目标保留 4x@vsTrue 并标注达标；AddF32 选优化或改 4x+ 目标） |
+| **GATES** | focused + `bench_hotspots`（若改叶）+ hygiene |
 | **DoD** | CURRENT→M-V1 |
 
 ---
@@ -265,7 +266,8 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 - [x] NEON Memory 15/15 + SharedMask
 - [x] NEON BatchF32 high-frequency representative set (S23a/S23b; Div deferred)
 - [x] RVV honesty (S24a)
-- [ ] Perf method + hotspot close-or-revise (S25a/b)
+- [x] Perf method + hotspot remeasure (S25a)
+- [ ] Hotspot close-or-revise (S25b)
 - [ ] Docs CURRENT coherent
 
 ### math lane-complete
@@ -290,7 +292,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 ## Default order (happy path)
 
 ```text
-G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a → S25b → M-V1 → M-V2 → Q1 → Q2 → IDLE
+G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b → M-V1 → M-V2 → Q1 → Q2 → IDLE
          (S23c optional)                       (S24b only if hardware)
 ```
 

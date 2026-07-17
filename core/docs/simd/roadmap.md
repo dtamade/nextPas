@@ -73,7 +73,7 @@ Facade (flat public API)
 | `make hygiene` | ✅ | pass |
 | `api-coverage-contract` | ✅ | missing=0 / thin=0（Phase 21 收口，strict-thin 未降） |
 | RVV 真机 Phase 3 | ⏸ | 需 RISC-V 硬件证据 |
-| 性能部分目标 | ⚠️ | 如 ArrayMulF32 等仍低于历史目标线（见 §5） |
+| 性能部分目标 | ✅/⚠️ | S25a：vsTrue 主指标下 Mul/AddF64/MemEqual 达标；AddF32 4.51x 未到 6x（见 §5） |
 
 ### 1.5 文档问题（Phase 20 已处理）
 
@@ -156,12 +156,14 @@ Facade (flat public API)
 | **验收** | focused 绿；契约禁止 `table.Memory.` / `table.Batch*` 假绑定；文档不谎报 native |
 | **非目标** | 无硬件时假装 G16 完成 |
 
-### Phase 25 — 性能与分派开销  【P2】
+### Phase 25 — 性能与分派开销  【P2 · 进行中】
 
 | 项 | 内容 |
 |----|------|
 | **目标** | 可复现的 SIMD vs 真标量基准；关闭明显未达标热点 |
-| **交付物** | 基准方法说明（防 FPC 自动向量化污染）；`ArrayMulF32` 等热点优化或目标修订；G17 Phase 4 分派开销测量记录 |
+| **25a（✅）** | 方法文档 + `bench_hotspots` 复测；主指标 **vsTrue**；主机/flags 入 [performance-methodology.md](performance-methodology.md) |
+| **25b（下一刀）** | 优化或修订目标（Mul 已达标 vsTrue→优先 re-baseline / 处理 AddF32 4.51x vs 6x） |
+| **交付物** | 基准方法说明；热点优化或目标修订；G17 Phase 4 分派开销测量记录（可后置） |
 | **依赖** | Phase 21 建议先完成（避免测到未覆盖 API） |
 | **验收** | 文档中有可复现命令 + 主机/flags/数字；目标变更须写明原因 |
 
@@ -199,22 +201,30 @@ P20 文档真相面 ──► P21 api-coverage 绿
    P26 编译器（阻塞） / P27 新 ISA（阻塞）
 ```
 
-**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **S25a** — benchmark methodology）。
+**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **S25b** — optimize or revise targets）。
 不要用聊天「继续」驱动；按队列卡执行并翻 `CURRENT`。
 
 ---
 
-## 5. 性能参考线（历史目标，需 Phase 25 复核）
+## 5. 性能参考线（S25a 复核，2026-07-17）
 
-| 操作 | 历史目标 | 文档记载现状 | 备注 |
-|------|----------|--------------|------|
-| ArrayAddF32 @1024 | 6x+ | ~5.67x | 接近 |
-| ArrayAddF64 @1024 | 6x+ | ~6.08x | 达标 |
-| ArrayMulF32 @16KB | 4x+ | ~2.5x | 未达标 |
-| MemEqual @4KB | 4x+ | ~4.4x | 达标 |
-| 超越函数批处理 | 高倍率 | 多数超额 | 保留回归 |
+**方法权威**：[performance-methodology.md](performance-methodology.md)
+**复现**：`make -C core/benchmarks/nextpas.core.simd/bench_hotspots clean run`
+**主机摘要**：Xeon E5-2696 v4 · FPC 3.3.1 · `-O3` · **AVX2** · VectorAsm=True
 
-基准比较必须使用 **不可被 FPC 自动向量化污染** 的标量对照（见既有 batch_bench 讨论）。
+| 操作 | 历史目标 | vsTrue（主） | vsLib（历史） | 判定（vsTrue） |
+|------|----------|--------------|---------------|----------------|
+| ArrayAddF32 @1024 | 6x+ | **4.51x** | 2.98x | 接近 6x，未达标 |
+| ArrayAddF64 @1024 | 6x+ | **6.36x** | 4.24x | **达标** |
+| ArrayMulF32 @16KB | 4x+ | **4.12x** | 2.58x | **达标**（旧 ~2.5x 为 vsLib 污染） |
+| MemEqual @4KB | 4x+ | **43.98x** | 4.33x | **达标** |
+| 超越函数批处理 | 高倍率 | （未在 hotspots 复测） | suite 多数超额 | 保留回归 |
+
+规则：
+
+- **主指标 = vsTrue**（真标量循环 + volatile sink）。
+- **vsLib 不得单独写为“SIMD 相对标量加速比”**；它常被生产 `Scalar*` 抬高。
+- FPC 3.3.1 无可靠 `NOVECTORIZE`；细节见 performance-methodology。
 
 ---
 
@@ -265,15 +275,15 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 | NEON Memory 6 槽 | 全做 vs 先 3 高频 | **先 Copy/Fill/DiffRange**（P22a） |
 | NEON Batch 范围 | 全表 vs 最小代表集 | **最小代表集**（P23） |
 | RVV 无硬件 | 只契约 vs 停更 | **只契约诚实化**（P24a） |
-| 性能未达标 | 优化 vs 改目标 | **先复核基准方法再定**（P25） |
+| 性能未达标 | 优化 vs 改目标 | **S25a 已复核**：Mul/Mem/AddF64 vsTrue 达标；S25b 处理 AddF32 与目标表述 |
 
 ---
 
 ## 9. 当前指针
 
-- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=S25a**）
-- **活动阶段**: Goal CURRENT=S25a（S24a RVV Memory/Batch 诚实化已收；Phase 23a/23b + M-C1 已收）
-- **已收口**: Phase 20–23b；G0；M-C1；S24a
+- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=S25b**）
+- **活动阶段**: Goal CURRENT=S25b（S25a 方法+热点复测已收）
+- **已收口**: Phase 20–23b；G0；M-C1；S24a；S25a
 - **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等
 
 ---
@@ -287,3 +297,4 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 - 2026-07-17: Phase 23b NEON BatchF32 Min/Max/Abs/Neg 真叶（Div 推迟）；CURRENT→M-C1。
 - 2026-07-17: M-C1 math consumer smoke 全绿（305 tests / API surface 70/0）；CURRENT→S24a。
 - 2026-07-17: S24a RVV Memory/Batch 故意 scalar 诚实矩阵 + DispatchAPI 契约；CURRENT→S25a。
+- 2026-07-17: S25a performance-methodology + bench_hotspots；vsTrue 数字入 §5；CURRENT→S25b。

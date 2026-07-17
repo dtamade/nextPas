@@ -58,6 +58,7 @@
 
 ### 可选工具
 - 模块内 `bench_*` / 仓库 benchmark 入口
+- **热点复测**: `make -C core/benchmarks/nextpas.core.simd/bench_hotspots clean run`（方法见 [performance-methodology.md](performance-methodology.md)）
 - `valgrind` / `perf` / `heaptrack`
 
 ## 沟通规范
