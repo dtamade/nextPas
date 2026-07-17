@@ -84,8 +84,8 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` is a fixed-capacity stack: `TryPush` returns `False` when no free slot remains, and `IsEmpty` / `ApproxCount` are snapshot helpers over the current top-linked list rather than linearization guarantees under contention.
 
 `TWorkStealingDeque<T>` is a work-stealing deque: owner thread executes `TryPush` / `TryPop`, thief
-threads only execute `TrySteal`. Current implementation has no close/wait surface.
-`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
+threads only execute `TrySteal`. Supports `Close` / `IsClosed`: after Close, `TryPush` returns False; already-queued items remain drainable via `TryPop` / `TrySteal` (no wait/timeout surface).
+`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full or closed, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
 
 `TSpmcQueue<T>` is a single-producer, multi-consumer bounded queue. `TryEnqueue` is a non-blocking operation; `TryDequeue` has multiple consumers competing via CAS;
 `EnqueueWait` / `DequeueWait` block via wait-address seam; timeout versions use nanosecond timeouts.

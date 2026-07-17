@@ -1,8 +1,10 @@
 # Lockfree 数据结构选型指南
 
-> 更新: 2026-07-06
+> 更新: 2026-07-17
 
 [English](selection-guide.en.md)
+
+> 相对性能以 `core/benchmarks/nextpas.core.lockfree` 为准；本指南**不**给无平台信封的绝对 Mops/s。
 
 ## 快速决策树
 
@@ -10,71 +12,46 @@
 需要队列？
 ├── 单生产者 + 单消费者 (SPSC)
 │   └── 使用 TSpscQueue<T>
-│       - 最快，无 CAS 竞争
+│       - 通常最快（无 CAS 竞争）
 │       - 支持 batch/wait/timeout/close
-│       - 性能: 4.4 M ops/s
 │
 ├── 单生产者 + 多消费者 (SPMC)
 │   └── 使用 TSpmcQueue<T>
 │       - 多消费者 CAS 竞争 dequeue
 │       - 支持 wait/timeout/close
-│       - 性能: 2.6 M ops/s (1P+2C)
 │
 ├── 多生产者 + 多消费者 (MPMC)
-│   ├── 使用 TMpmcQueue<T> (有界)
-│   │   - 通用但有 CAS 竞争开销
-│   │   - 支持 batch/wait/timeout/close
-│   │   - 性能: 1.3 M ops/s (2P+2C)
+│   ├── 使用 TMpmcQueue<T> (有界 ring)
+│   │   - 通用；batch/wait/timeout/close
 │   │
-│   └── 使用 TLockFreeMsQueue<T> (无界)
-│       - Michael-Scott 经典算法
-│       - Sentinel 节点 + CAS
-│       - 自动扩容，无容量限制
+│   ├── 使用 TLockFreeMsQueue<T> (无界节点池)
+│   │   - Michael-Scott；Close → join → Free
+│   │   - Destroy 会 Close+drain；仍须 quiescent Free
+│   │
+│   └── 使用 TSegQueue<T> (无界分段 MPMC)
+│       - EBR 回收段；Close 后 Try=False，Enqueue raise
 │
 ├── 多生产者 + 单消费者 (MPSC)
 │   └── 使用 TMpscQueue<T>
-│       - 无界，多生产者安全
-│       - Close 后 TryEnqueue=False；Enqueue 抛 EInvalidOperationError
+│       - 无界链表；单消费者
+│       - Close 后 TryEnqueue=False；Enqueue raise
 │       - 生命周期: Close → join producers/waiters → Free
-│       - 性能: 最高 (无 CAS enqueue)
 │
-└── 无界 MPSC (高吞吐)
-    └── 使用 TSegQueue<T>
-        - 分段设计，EBR 回收
-        - 无界，自动扩展
-        - 支持 try-enqueue/close
-        - 性能: 1.5 M ops/s (2P+2C)
-
 需要栈？
-├── LIFO (后进先出)
-│   └── 使用 TLockFreeStack<T>
-│       - Treiber stack 算法
-│       - ABA 安全
-│       - 性能: 最高 (单 CAS push/pop)
+├── LIFO
+│   └── 使用 TLockFreeStack<T>（仅 TryPush/TryPop）
 │
-└── 工作窃取 (owner push/pop + thief steal)
+└── 工作窃取
     └── 使用 TWorkStealingDeque<T>
-        - owner LIFO pop, thief FIFO steal
-        - 适用于任务调度
-        - 性能: 取决于竞争程度
+        - owner TryPush/TryPop；thief TrySteal；有 Close
 
 需要内存回收？
-├── 使用 TEbrDomain + TEbrGuard
-│   - Epoch-Based Reclamation
-│   - 保守单次检查设计
-│   - 适用: 读多写少场景
-│
-└── 使用 THazardDomain
-    - Hazard Pointer
-    - 精确保护，适合读写均衡场景
-    - 适用: 延迟敏感、内存受限场景
+├── TEbrDomain / TQSBRDomain（zero-active QSBR 风格）
+└── THazardDomain（Hazard Pointer）
 
 需要并发 HashMap？
-└── 使用 TShardedHashMap / TConcurrentHashMap（T1 facade）
-    - **分片自旋锁**并发 HashMap（16 shards）— NOT lock-free
-    - Insert/Find/Remove/Contains/Count
-    - 自动 resize
-    - 需要真正无锁映射时，评估 MSQueue/SegQueue 组合或专用算法，勿把分片锁当 lock-free
+└── TShardedHashMap / TConcurrentHashMap（同一实现别名）
+    - 分片自旋锁 — NOT lock-free
 
 ---
 

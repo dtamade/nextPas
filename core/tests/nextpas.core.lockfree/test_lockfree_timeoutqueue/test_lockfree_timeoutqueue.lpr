@@ -3,7 +3,6 @@ program test_lockfree_timeoutqueue;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.timeoutqueue,
   nextpas.core.lockfree,
   nextpas.core.test,

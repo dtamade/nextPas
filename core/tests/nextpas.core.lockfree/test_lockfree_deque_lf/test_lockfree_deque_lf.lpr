@@ -2,8 +2,9 @@
 program test_lockfree_deque_lf;
 
 uses
-  SysUtils,
-  Classes,
+  nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.errors,
   nextpas.core.lockfree.deque_lf;
 
 var

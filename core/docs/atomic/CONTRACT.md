@@ -14,27 +14,27 @@
 
 | 文件 | 职责 |
 |------|------|
-| atomic.types | TAtomicInt, TAtomicUInt64, TAtomicBool 类型 |
-| atomic.core | CAS/Load/Store/FetchAdd/FetchOr 等核心原语 |
-| atomic.compat | C++ std::memory_order 兼容 API |
-| atomic.pas | 门面 |
+| atomic.types | `TAtomicInt32`/`TAtomicUInt32`/`TAtomicInt64`/`TAtomicUInt64`/`TAtomicBool` 等 |
+| atomic.core | CAS/Load/Store/FetchAdd/FetchOr 等核心原语（`atomic_*` + `mo_*`） |
+| atomic.compat | 兼容层 / 旧 PascalCase 表面 |
+| atomic.pas | 门面 re-export |
 
 ### 1.2 核心类型
 
 ```pascal
-TAtomicInt = record
-  function Load(AOrder: TMemoryOrder = moSeqCst): Integer;
-  procedure Store(AValue: Integer; AOrder: TMemoryOrder = moSeqCst);
-  function Exchange(AValue: Integer; AOrder: TMemoryOrder = moSeqCst): Integer;
-  function CompareExchange(AExpected, ADesired: Integer; AOrder: TMemoryOrder = moSeqCst): Boolean;
-  function FetchAdd(AValue: Integer; AOrder: TMemoryOrder = moSeqCst): Integer;
-  function FetchSub(AValue: Integer; AOrder: TMemoryOrder = moSeqCst): Integer;
-  function FetchOr(AValue: Integer; AOrder: TMemoryOrder = moSeqCst): Integer;
-  function FetchAnd(AValue: Integer; AOrder: TMemoryOrder = moSeqCst): Integer;
+TAtomicInt32 = record
+  function Load(AOrder: TMemoryOrder = moSeqCst): Int32;
+  procedure Store(AValue: Int32; AOrder: TMemoryOrder = moSeqCst);
+  function Exchange(AValue: Int32; AOrder: TMemoryOrder = moSeqCst): Int32;
+  function CompareExchange(AExpected, ADesired: Int32; AOrder: TMemoryOrder = moSeqCst): Boolean;
+  function FetchAdd(AValue: Int32; AOrder: TMemoryOrder = moSeqCst): Int32;
+  function FetchSub(AValue: Int32; AOrder: TMemoryOrder = moSeqCst): Int32;
+  function FetchOr(AValue: Int32; AOrder: TMemoryOrder = moSeqCst): Int32;
+  function FetchAnd(AValue: Int32; AOrder: TMemoryOrder = moSeqCst): Int32;
 end;
 
 TAtomicUInt64 = record
-  // 同 TAtomicInt，但操作 UInt64
+  // 同 TAtomicInt32 宽度族，但操作 UInt64
 end;
 
 TAtomicBool = record
@@ -70,7 +70,14 @@ TMemoryOrder = (moRelaxed, moAcquire, moRelease, moAcqRel, moSeqCst);
 - **[INV-2]** mo_seq_cst / moSeqCst 提供最强的全序保证
 - **[INV-3]** CAS 操作返回 True 时，值已被替换
 - **[INV-4]** 原子类型必须自然对齐（SizeOf(Pointer) 边界）
-- **[INV-5]** 生产单元不直接 `uses` FPC RTL；异常经 `nextpas.core.errors`
+- **[INV-5]** 生产/测试/示例均不直接 `uses` FPC RTL（仅 `nextpas.core.system*` 门面可桥接）；异常经 `nextpas.core.errors`
+
+### 2.1 FPC RTL isolation
+
+`nextpas.core.atomic*` 生产单元与 `core/tests/nextpas.core.atomic/**` 测试不得直接
+`uses SysUtils/Classes/Math/Windows/BaseUnix/Unix/TypInfo/StrUtils/DateUtils/SyncObjs/Contnrs`。
+与 lockfree 共享 isolation source-contract（见 `core/docs/lockfree/CONTRACT.md` §2.1）。
+公开类型名是 **`TAtomicInt32`**（不是 `TAtomicInt`）。
 
 ---
 
@@ -97,10 +104,10 @@ TMemoryOrder = (moRelaxed, moAcquire, moRelease, moAcqRel, moSeqCst);
 
 ## 6. 测试覆盖
 
-| 测试目录 | 说明 |
-|----------|------|
-| test_atomic | Load/Store/CAS/FetchAdd 多线程测试 |
-| **合计** | **1 个测试目录** |
+| 测试目录 | 说明 | 规模（约） |
+|----------|------|------------|
+| test_atomic | Load/Store/CAS/FetchAdd/内存序/wait/notify | **~45** tests |
+| **合计** | **1 个测试目录** | |
 
 ---
 
@@ -109,3 +116,4 @@ TMemoryOrder = (moRelaxed, moAcquire, moRelease, moAcqRel, moSeqCst);
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-07-17 | 1.1 | TAtomicInt32 命名；RTL isolation；~45 tests | Codex |

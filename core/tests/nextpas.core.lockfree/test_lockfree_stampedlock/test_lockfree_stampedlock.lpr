@@ -3,7 +3,6 @@ program test_lockfree_stampedlock;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.stampedlock,
   nextpas.core.lockfree,
   nextpas.core.test;

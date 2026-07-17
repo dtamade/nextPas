@@ -4,7 +4,6 @@ program test_lockfree_phaser;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.phaser,
   nextpas.core.lockfree,
   nextpas.core.platform.thread,

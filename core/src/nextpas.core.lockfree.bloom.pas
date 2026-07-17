@@ -60,6 +60,8 @@ var
   LHashCount: Integer;
   LWords: PtrUInt;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TConcurrentBloomFilter: T must be unmanaged (no string/interface/dynarray)');
   if AExpectedItems = 0 then
     raise EArgumentError.Create('TConcurrentBloomFilter: expected items must be > 0');
   if (AFalsePositiveRate <= 0) or (AFalsePositiveRate >= 1) then

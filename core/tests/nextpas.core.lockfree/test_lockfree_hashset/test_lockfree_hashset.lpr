@@ -4,7 +4,6 @@ program test_lockfree_hashset;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.lockfree,

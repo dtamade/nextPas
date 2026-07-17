@@ -83,10 +83,11 @@ closed、当前为空且没有 admitted producer 仍可能发布时才把 closed
 **生命周期：Close → join producers/waiters → Free**。`Destroy` 会 Close+drain，但不能替代 join
 活跃 producer。`ApproxCount` 是原子计数器快照。
 
-`TSegQueue<T>` 是基于 segmented linked ring 的无界 MPMC queue。`Enqueue` 在当前 tail segment
-没有后继时按 segment 粒度扩展存储；`TryEnqueue` 在 Close 后返回 False；`TryDequeue` 只在对应 slot
-的 sequence 已发布时返回成功。`ApproxCount` / `IsEmpty` 是当前 enqueue/dequeue position 的 snapshot
-helper，不承诺在竞争下提供共同线性化视图。`Close` 不影响已入队数据的读取。
+`TSegQueue<T>` 是基于 segmented linked ring 的无界 **MPMC** queue。`Enqueue` 在当前 tail segment
+没有后继时按 segment 粒度扩展存储；**Close 后 `TryEnqueue` 返回 False，plain `Enqueue` 抛
+`EInvalidOperationError`**（与 MPSC/Channel 对齐）。`TryDequeue` 只在对应 slot 的 sequence 已发布时
+返回成功。`ApproxCount` / `IsEmpty` 是当前 enqueue/dequeue position 的 snapshot helper，不承诺在
+竞争下提供共同线性化视图。`Close` 不影响已入队数据的读取。
 
 `TLockFreeStack<T>` 是固定容量 stack。push/pop 会先从内部 free-list 取得或归还 slot，因此不是
 无界栈，也不动态分配节点。
@@ -95,8 +96,9 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` is a fixed-capacity stack: `TryPush` returns `False` when no free slot remains, and `IsEmpty` / `ApproxCount` are snapshot helpers over the current top-linked list rather than linearization guarantees under contention.
 
 `TWorkStealingDeque<T>` 是 work-stealing deque：owner 线程执行 `TryPush` / `TryPop`，thief
-线程只执行 `TrySteal`。当前实现没有 close/wait surface。
-`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
+线程只执行 `TrySteal`。支持 `Close` / `IsClosed`：Close 后 `TryPush` 返回 False，已入队数据仍可
+`TryPop` / `TrySteal` 取出；无 wait/timeout surface。
+`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full or closed, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
 `TSpmcQueue<T>` 是单 producer、多 consumer 有界队列。`TryEnqueue` 是非阻塞操作；`TryDequeue` 多消费者间
 竞争 CAS；`EnqueueWait` / `DequeueWait` 通过 wait-address seam 阻塞；timeout 版本使用纳秒超时。
 `Close` 设置 closed flag 并唤醒所有等待者；close 后 drain-on-close 语义允许读取已入队数据。
@@ -220,13 +222,8 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 | GetOrUpdate | O(1) amortized | ✅ | 原子 get-or-create-then-update |
 | Clear | O(n) | ✅ | 逐 shard 清空 |
 
-**性能特征**（vs TConcurrentHashMap）:
-
-| 场景 | TShardedHashMap | TConcurrentHashMap |
-|------|-----------------|-------------------|
-| 锁机制 | AtomicExchange ~1ns | RWLock ~10-50ns |
-| 内存管理 | 无引用计数 | 有引用计数 |
-| 适用场景 | 高频、低竞争、unmanaged | 通用、支持 managed |
+`TConcurrentHashMap` 是 `TShardedHashMap` 的**同实现别名**（同一 `TShardedHashMapImpl`），不是第二套
+实现；不要用两者对比“性能差异”——它们是同一分片自旋锁 HashMap。
 
 **使用场景**:
 - 高频读写、低竞争的缓存
@@ -235,7 +232,7 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 
 ## Channel
 
-`TLockFreeChannel<T>` 是有界无锁 Channel，序列号驱动的 MPSC/SPMC 通道。
+`TLockFreeChannel<T>` 是有界无锁 Channel，序列号驱动的 **MPMC-style** 通道（多 producer / 多 consumer）。
 
 **设计特点**:
 - 容量自动向上取整到 2 的幂（位运算优化）

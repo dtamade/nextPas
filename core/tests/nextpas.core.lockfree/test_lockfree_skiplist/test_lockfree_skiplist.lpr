@@ -4,9 +4,9 @@ program test_lockfree_skiplist;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.atomic,
   nextpas.core.platform.thread,
   nextpas.core.lockfree.skiplist;

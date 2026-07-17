@@ -3,7 +3,6 @@ program test_lockfree_unrolled_list;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.unrolled_list,
   nextpas.core.test;
 

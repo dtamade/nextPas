@@ -3,7 +3,6 @@ program test_lockfree_adjmap;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.adjmap,
   nextpas.core.test;
 

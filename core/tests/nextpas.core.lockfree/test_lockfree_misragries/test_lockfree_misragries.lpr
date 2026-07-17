@@ -3,8 +3,7 @@ program test_lockfree_misragries;
 {$mode objfpc}{$H+}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
   nextpas.core.lockfree.misragries,
   nextpas.core.test;
 

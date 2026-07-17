@@ -2,7 +2,7 @@
 program test_lockfree_fibheap;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.fibheap;
 
 var

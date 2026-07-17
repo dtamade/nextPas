@@ -2,7 +2,7 @@
 program test_lockfree_consistent_hashring;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.consistent_hashring;
 
 var

@@ -2,7 +2,7 @@
 program test_lockfree_hyperloglog;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.hyperloglog;
 
 var

@@ -3,7 +3,6 @@ program test_lockfree_timerwheel;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.timerwheel,
   nextpas.core.lockfree,
   nextpas.core.test;

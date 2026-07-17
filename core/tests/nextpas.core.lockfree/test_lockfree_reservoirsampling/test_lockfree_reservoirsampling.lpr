@@ -3,8 +3,7 @@ program test_lockfree_reservoirsampling;
 {$mode objfpc}{$H+}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
   nextpas.core.lockfree.reservoirsampling,
   nextpas.core.test;
 

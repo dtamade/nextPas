@@ -59,6 +59,8 @@ constructor TRingBufferImpl.Create(const ACapacity: Int64);
 var
   LI: Int64;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TRingBuffer: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity <= 0 then
     raise EArgumentError.Create('TRingBuffer: capacity must be > 0');
   if ACapacity > (Int64(1) shl 62) then

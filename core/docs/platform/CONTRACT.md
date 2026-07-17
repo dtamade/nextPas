@@ -19,32 +19,32 @@
 | platform.pas | 门面 re-export | — |
 | platform.base.pas | TOSKind, TCPUArch, TEndianness | — |
 | platform.error.pas | 错误码常量 + 消息映射 | PLATFORM_ERR_*, platform_error_message |
-| platform.info.pas | OS/架构/字节序检测 | platform_info_os, platform_info_arch |
-| platform.time.pas | 时间 API | platform_monotonic_ns, platform_wallclock_ns |
+| platform.info.pas | OS/架构/字节序检测 | CurrentOS, CurrentCPU, OSName, CPUName |
+| platform.time.pas | 时间 API | platform_monotonic_ns, platform_realtime_ns |
 | platform.process.pas (`platform_io_*`) | 过渡 fd I/O（process.pipe；value/sentinel） | platform_io_read, platform_io_write, platform_io_poll; close 为 error-code |
 | platform.files.pas | 文件操作 | platform_file_open, platform_file_stat, platform_dir_open |
-| platform.fs.pas | 文件系统高级操作 | platform_fs_mkdir_p, platform_fs_copy, platform_fs_glob |
+| platform.fs.pas | 文件系统高级操作 | platform_fs_mkdir_p, platform_fs_copy_file, platform_fs_walk |
 | platform.path.pas | 路径操作 | platform_path_join, platform_path_dirname |
-| platform.pipe.pas | 管道操作 | platform_pipe_open, platform_pipe_close |
+| platform.pipe.pas | 管道操作 | platform_pipe_create, platform_pipe_close |
 | platform.dl.pas | 动态库加载 | platform_dl_open, platform_dl_sym |
-| platform.socket.pas | 网络 Socket | platform_socket_create, platform_socket_connect |
-| platform.process.pas | 进程管理 | platform_process_spawn, platform_process_wait |
+| platform.socket.pas | 网络 Socket | platform_socket_create, platform_socket_create_tcp, platform_socket_connect |
+| platform.process.pas | 进程管理 | platform_process_spawn, platform_process_wait, platform_process_*_ex |
 | platform.signal.pas | 信号处理 | platform_signal_set, platform_signal_block |
 | platform.thread.pas | 线程管理 | platform_thread_create, platform_thread_join |
 | platform.sync.pas | 同步原语 | platform_mutex_*, platform_rwlock_*, platform_condvar_* |
 | platform.memory.pas | 内存分配 | platform_aligned_alloc, platform_aligned_realloc |
-| platform.mmap.pas | 内存映射 | platform_mmap_file, platform_mmap_shared |
-| platform.env.pas | 环境变量 | platform_env_get, platform_env_set |
+| platform.mmap.pas | 内存映射 | platform_mmap_file, platform_mmap_close, platform_shm_create |
+| platform.env.pas | 环境变量 | platform_env_get, platform_env_set（`env_get_str` 为 FPC managed 便捷面） |
 | platform.args.pas | 命令行参数 | platform_args_count, platform_args_get |
 | platform.console.pas | 控制台 I/O | platform_console_read, platform_console_write |
 | platform.random.pas | 随机数 | platform_random_bytes |
-| platform.resource.pas | 资源限制 | platform_resource_get, platform_resource_set |
+| platform.resource.pas | 资源限制 | platform_resource_get_limit, platform_resource_set_limit |
 | platform.secure.pas | 安全操作 | platform_secure_zero |
-| platform.fmt.pas | 格式化输出 | platform_fmt_snprintf |
+| platform.fmt.pas | 格式化/解析 | platform_fmt_int/uint/hex/float/buf, platform_parse_*, platform_str_* |
 | platform.watch.pas | 文件监控 | platform_watch_create |
 | platform.which.pas | 可执行文件查找 | platform_which |
 | platform.pty.pas | 伪终端 | platform_pty_open |
-| platform.freetype.pas | FreeType 字体 | platform_ft_init, platform_ft_load |
+| platform.freetype.pas | FreeType 宿主绑定（边界待评审） | ft_load, ft_unload, ft_is_loaded |
 
 ### 1.2 平台特定层
 

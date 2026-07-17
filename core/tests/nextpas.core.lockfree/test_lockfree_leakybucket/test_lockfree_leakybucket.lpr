@@ -3,7 +3,7 @@ program test_lockfree_leakybucket;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.platform.thread,
   nextpas.core.lockfree.leakybucket,
   nextpas.core.test;
 
@@ -73,7 +73,7 @@ begin
   try
     Check(LB.TryAdd = lbAllowed, 'Initial request should fill bucket');
     Check(LB.TryAdd = lbRejected, 'Full bucket should reject');
-    Sleep(60);
+    platform_thread_sleep_ms(60);
     Check(LB.TryAdd = lbAllowed, 'Elapsed time should leak one unit');
   finally
     LB.Free;

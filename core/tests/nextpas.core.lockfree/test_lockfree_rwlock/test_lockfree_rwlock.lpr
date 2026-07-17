@@ -4,7 +4,6 @@ program test_lockfree_rwlock;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.rwlock,
   nextpas.core.lockfree,
   nextpas.core.atomic,

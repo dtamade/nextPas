@@ -56,8 +56,8 @@ feature units (`platform.files`, `platform.process`, ...) for real work.
 These remain for history or migration reference; do not treat as current truth:
 
 - [api-reference.md](api-reference.md) — superseded by `API-REFERENCE.md`
-- [ROADMAP.md](ROADMAP.md) — historical roadmap snapshot
+- [ROADMAP.md](ROADMAP.md) — historical roadmap snapshot (**ignore embedded 8.56 score**)
 - [ROADMAP-v2.md](ROADMAP-v2.md) — planning snapshot; verify against goal-tree
-- [GOVERNANCE-PLAN.md](GOVERNANCE-PLAN.md), daily reports
-- [USABILITY-ASSESSMENT.md](USABILITY-ASSESSMENT.md) — historical 2026-07-06 scores; superseded by RETURN-SEMANTICS + live gates
+- [GOVERNANCE-PLAN.md](GOVERNANCE-PLAN.md), daily reports, [TEST-COVERAGE-REPORT.md](TEST-COVERAGE-REPORT.md), [API-CONSISTENCY-PLAN.md](API-CONSISTENCY-PLAN.md)
+- [USABILITY-ASSESSMENT.md](USABILITY-ASSESSMENT.md) — body is 2026-07-06 historical; **only the top banner score is current** (wave-4)
 - `../platform-ffi-*` — ABI evidence indexes until fully folded here
