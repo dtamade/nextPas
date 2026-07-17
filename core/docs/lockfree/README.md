@@ -11,6 +11,18 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 
 **层级**：L1（依赖 L0 `base` + `atomic`；见 `core/docs/core-module-registry.md`）。
 
+## 文档与路线图
+
+| 文档 | 用途 |
+|------|------|
+| [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
+| [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
+| [`selection-guide.md`](selection-guide.md) | 选型 |
+| [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
+| [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
+
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap 为准。
+
 ## Progress-guarantee matrix
 
 | Class | Progress model | Sync mechanism | Default facade (T1) |

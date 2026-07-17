@@ -85,7 +85,9 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 // 队列（T1）
 generic TSpscQueue<T> = class
   function TryEnqueue(const AValue: T): Boolean;
+  function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   function EnqueueWait(const AValue: T): Boolean;
   function DequeueWait(out AValue: T): Boolean;
   procedure Close;
@@ -93,20 +95,26 @@ end;
 
 generic TMpmcQueue<T> = class
   function TryEnqueue(const AValue: T): Boolean;
+  function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
 generic TMpscQueue<T> = class
   procedure Enqueue(const AValue: T);          // closed -> EInvalidOperationError
   function TryEnqueue(const AValue: T): Boolean; // closed -> False
+  function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
 generic TSpmcQueue<T> = class
   function TryEnqueue(const AValue: T): Boolean;
+  function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
@@ -128,7 +136,9 @@ end;
 // 栈 / 工作窃取（T1）— 非阻塞 surface 使用 Try*
 generic TLockFreeStack<T> = class
   function TryPush(const AValue: T): Boolean;
+  function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryPop(out AValue: T): Boolean;
+  function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
@@ -167,8 +177,20 @@ generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<
 
 ### 1.4 Diagnostic Try*Ex（可选）
 
-Boolean 热路径 `TrySend` / `TryEnqueue` / `TryReceive` / `TryDequeue` **保持不变**。
-需要区分 full / empty / closed 时使用可选诊断 API（Wave-3 pilot：Channel / Channel SPSC / SegQueue）：
+Boolean 热路径 `TrySend` / `TryEnqueue` / `TryPush` / `TryReceive` / `TryDequeue` / `TryPop` **保持不变**。
+需要区分 full / empty / closed 时使用可选诊断 API：
+
+**已覆盖结构（R3+R4）**：
+| 结构 | Publish Ex | Consume Ex |
+|------|------------|------------|
+| Channel | `TrySendEx` | `TryReceiveEx` |
+| Channel SPSC | `TrySendEx` | `TryReceiveEx` |
+| SegQueue | `TryEnqueueEx` | `TryDequeueEx` |
+| SPSC ring | `TryEnqueueEx` | `TryDequeueEx` |
+| MPMC ring | `TryEnqueueEx` | `TryDequeueEx` |
+| SPMC ring | `TryEnqueueEx` | `TryDequeueEx` |
+| MPSC（无界） | `TryEnqueueEx` | `TryDequeueEx` |
+| Stack（有界） | `TryPushEx` | `TryPopEx` |
 
 ```pascal
 type
@@ -185,7 +207,7 @@ type
 
 实现为现有 `Try*` + `IsClosed` 的薄包装，不替代 Boolean API。
 `plain Enqueue` / `Send` 在 closed 时仍抛 `EInvalidOperationError`。
-SegQueue 无界：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（不会出现 `lfteFull`）。
+无界结构（SegQueue / MPSC）：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（不会出现 `lfteFull`）。
 
 ---
 

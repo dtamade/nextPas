@@ -5714,6 +5714,139 @@ begin
   end;
 end;
 
+procedure TestSpscTryExDiagnostics;
+var
+  LQ: TIntSpsc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntSpsc.Create(1);
+  try
+    Check(LQ.TryEnqueueEx(41, LErr), 'SPSC TryEnqueueEx success');
+    Check(LErr = lfteNone, 'SPSC success error is lfteNone');
+    Check(not LQ.TryEnqueueEx(42, LErr), 'SPSC full TryEnqueueEx fails');
+    Check(LErr = lfteFull, 'SPSC full is lfteFull');
+    Check(LQ.TryDequeueEx(LV, LErr), 'SPSC TryDequeueEx success');
+    CheckEqual(41, LV, 'SPSC TryDequeueEx value');
+    Check(LErr = lfteNone, 'SPSC dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SPSC empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'SPSC empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(43, LErr), 'SPSC closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'SPSC closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SPSC closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'SPSC closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMpmcTryExDiagnostics;
+var
+  LQ: TIntMpmc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntMpmc.Create(1);
+  try
+    Check(LQ.TryEnqueueEx(51, LErr), 'MPMC TryEnqueueEx success');
+    Check(LErr = lfteNone, 'MPMC success error is lfteNone');
+    Check(not LQ.TryEnqueueEx(52, LErr), 'MPMC full TryEnqueueEx fails');
+    Check(LErr = lfteFull, 'MPMC full is lfteFull');
+    Check(LQ.TryDequeueEx(LV, LErr), 'MPMC TryDequeueEx success');
+    CheckEqual(51, LV, 'MPMC TryDequeueEx value');
+    Check(LErr = lfteNone, 'MPMC dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MPMC empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'MPMC empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(53, LErr), 'MPMC closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'MPMC closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MPMC closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'MPMC closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpmcTryExDiagnostics;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntSpmc.Create(1);
+  try
+    Check(LQ.TryEnqueueEx(61, LErr), 'SPMC TryEnqueueEx success');
+    Check(LErr = lfteNone, 'SPMC success error is lfteNone');
+    Check(not LQ.TryEnqueueEx(62, LErr), 'SPMC full TryEnqueueEx fails');
+    Check(LErr = lfteFull, 'SPMC full is lfteFull');
+    Check(LQ.TryDequeueEx(LV, LErr), 'SPMC TryDequeueEx success');
+    CheckEqual(61, LV, 'SPMC TryDequeueEx value');
+    Check(LErr = lfteNone, 'SPMC dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SPMC empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'SPMC empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(63, LErr), 'SPMC closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'SPMC closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SPMC closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'SPMC closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMpscTryExDiagnostics;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntMpsc.Create;
+  try
+    Check(LQ.TryEnqueueEx(71, LErr), 'MPSC TryEnqueueEx success');
+    Check(LErr = lfteNone, 'MPSC success error is lfteNone');
+    Check(LQ.TryDequeueEx(LV, LErr), 'MPSC TryDequeueEx success');
+    CheckEqual(71, LV, 'MPSC TryDequeueEx value');
+    Check(LErr = lfteNone, 'MPSC dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MPSC empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'MPSC empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(72, LErr), 'MPSC closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'MPSC closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MPSC closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'MPSC closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestStackTryExDiagnostics;
+var
+  LS: TIntStack;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LS := TIntStack.Create(1);
+  try
+    Check(LS.TryPushEx(81, LErr), 'Stack TryPushEx success');
+    Check(LErr = lfteNone, 'Stack success error is lfteNone');
+    Check(not LS.TryPushEx(82, LErr), 'Stack full TryPushEx fails');
+    Check(LErr = lfteFull, 'Stack full is lfteFull');
+    Check(LS.TryPopEx(LV, LErr), 'Stack TryPopEx success');
+    CheckEqual(81, LV, 'Stack TryPopEx value');
+    Check(LErr = lfteNone, 'Stack pop success error is lfteNone');
+    Check(not LS.TryPopEx(LV, LErr), 'Stack empty TryPopEx fails');
+    Check(LErr = lfteEmpty, 'Stack empty not closed is lfteEmpty');
+    LS.Close;
+    Check(not LS.TryPushEx(83, LErr), 'Stack closed TryPushEx fails');
+    Check(LErr = lfteClosed, 'Stack closed publish is lfteClosed');
+    Check(not LS.TryPopEx(LV, LErr), 'Stack closed empty TryPopEx fails');
+    Check(LErr = lfteClosed, 'Stack closed empty is lfteClosed');
+  finally
+    LS.Free;
+  end;
+end;
+
 procedure TestMsQueueDestroyCloseAndDrain;
 var
   LQ: specialize TLockFreeMsQueue<Integer>;
@@ -7344,6 +7477,11 @@ begin
   T.Test('SegQueue Try*Ex diagnostics', @TestSegQueueTryExDiagnostics);
   T.Test('Channel Try*Ex diagnostics', @TestChannelTryExDiagnostics);
   T.Test('Channel SPSC Try*Ex diagnostics', @TestChannelSpscTryExDiagnostics);
+  T.Test('SPSC Try*Ex diagnostics', @TestSpscTryExDiagnostics);
+  T.Test('MPMC Try*Ex diagnostics', @TestMpmcTryExDiagnostics);
+  T.Test('SPMC Try*Ex diagnostics', @TestSpmcTryExDiagnostics);
+  T.Test('MPSC Try*Ex diagnostics', @TestMpscTryExDiagnostics);
+  T.Test('Stack Try*Ex diagnostics', @TestStackTryExDiagnostics);
   T.Test('MSQueue Destroy Close and drain', @TestMsQueueDestroyCloseAndDrain);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);

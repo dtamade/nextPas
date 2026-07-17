@@ -5,7 +5,8 @@ unit nextpas.core.lockfree.mpsc;
 interface
 
 uses
-  nextpas.core.atomic.core;
+  nextpas.core.atomic.core,
+  nextpas.core.lockfree.base;
 
 type
   {**
@@ -54,8 +55,12 @@ type
     procedure Enqueue(const AValue: T);
     {** @desc 非阻塞入队；已关闭时返回 False }
     function TryEnqueue(const AValue: T): Boolean;
+    {** @desc 非阻塞入队并返回失败原因；无界 publish 失败即为 closed；成功 AError=lfteNone }
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 非阻塞出队（**严格单消费者**：只能由一个线程调用） }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 非阻塞出队并返回失败原因（empty vs closed-empty）；成功 AError=lfteNone }
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 阻塞出队（**严格单消费者**：只能由一个线程调用） }
     function DequeueWait(out AValue: T): Boolean;
     {** @desc 带超时出队（**严格单消费者**：只能由一个线程调用） }
@@ -155,6 +160,21 @@ begin
   Result := True;
 end;
 
+function TMpscQueueImpl.TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryEnqueue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  { Unbounded: False is closed under ClosedPublishPolicy. }
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 function TMpscQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LTail, LNext, LPrev: PNode;
@@ -193,6 +213,20 @@ begin
     Result := True;
     Exit;
   end;
+  Result := False;
+end;
+
+function TMpscQueueImpl.TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryDequeue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
   Result := False;
 end;
 

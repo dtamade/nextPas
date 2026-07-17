@@ -4,6 +4,9 @@
 `atomic_*` 函数或 `TAtomic*` 类型安全 record；PascalCase facade 和部分 pointer
 arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点迁移保留。
 
+**契约**：[`CONTRACT.md`](CONTRACT.md)
+**与 lockfree 联合推进主线**：[`../lockfree/roadmap.md`](../lockfree/roadmap.md)（R* 阶段；atomic 含于 R0/R6/R7）
+
 ## 模块分层
 
 当前 live source set 由这些单元组成：

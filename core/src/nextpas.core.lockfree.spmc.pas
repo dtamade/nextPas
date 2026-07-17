@@ -58,12 +58,16 @@ type
     destructor Destroy; override;
     {** @desc 非阻塞入队；队列满时立即返回 False }
     function TryEnqueue(const AValue: T): Boolean;
+    {** @desc 非阻塞入队并返回失败原因（full vs closed）；成功 AError=lfteNone }
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 阻塞入队；队列满时等待直到有空间 }
     function EnqueueWait(const AValue: T): Boolean;
     {** @desc 带超时入队；超时返回 False }
     function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
     {** @desc 非阻塞出队；队列空时立即返回 False }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 非阻塞出队并返回失败原因（empty vs closed-empty）；成功 AError=lfteNone }
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 阻塞出队；队列空时等待直到有数据 }
     function DequeueWait(out AValue: T): Boolean;
     {** @desc 带超时出队；超时返回 False }
@@ -145,6 +149,20 @@ begin
   end;
 end;
 
+function TSpmcQueueImpl.TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryEnqueue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 function TSpmcQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LPos: Int64;
@@ -189,6 +207,20 @@ begin
     else
       CpuPause;
   end;
+end;
+
+function TSpmcQueueImpl.TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryDequeue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TSpmcQueueImpl.EnqueueWait(const AValue: T): Boolean;

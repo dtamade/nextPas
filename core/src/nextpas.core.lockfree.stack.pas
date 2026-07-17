@@ -52,7 +52,11 @@ type
     constructor Create(const ACapacity: PtrUInt);
     destructor Destroy; override;
     function TryPush(const AValue: T): Boolean;
+    {** @desc 非阻塞压栈并返回失败原因（full vs closed）；成功 AError=lfteNone }
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     function TryPop(out AValue: T): Boolean;
+    {** @desc 非阻塞弹栈并返回失败原因（empty vs closed-empty）；成功 AError=lfteNone }
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean;
@@ -132,6 +136,20 @@ begin
   Result := True;
 end;
 
+function TLockFreeStackImpl.TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryPush(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 function TLockFreeStackImpl.TryPop(out AValue: T): Boolean;
 var
   LOldTop, LNewTop, LOldFree, LNewFree: Int64;
@@ -155,6 +173,20 @@ begin
     LNewFree := PackTagIdx(LIdx, UnpackTag(LOldFree) + 1);
   until AtomicCompareExchange64(FFreeHead, LOldFree, LNewFree, moAcqRel) = LOldFree;
   Result := True;
+end;
+
+function TLockFreeStackImpl.TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryPop(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TLockFreeStackImpl.IsEmpty: Boolean;
