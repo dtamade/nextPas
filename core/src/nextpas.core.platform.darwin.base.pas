@@ -146,6 +146,9 @@ const
   O_TRUNC = Int32($400);
   O_APPEND = Int32($8);
   O_NONBLOCK = Int32($4);
+  { Darwin fcntl.h: O_FSYNC=0x80; O_SYNC is an alias of O_FSYNC. }
+  O_FSYNC = Int32($80);
+  O_SYNC = O_FSYNC;
   O_DIRECTORY = Int32($100000);
   O_CLOEXEC = Int32($1000000);
 

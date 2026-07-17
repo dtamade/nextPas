@@ -9,8 +9,8 @@
 #   ./scripts/platform-windows-ci-matrix.sh
 #   ./core/scripts/platform-windows-ci-matrix.sh
 #
-# Evidence: truth=real-windows-runtime-ci (focused gates).
-# Do NOT print truth=ci-matrix until ROADMAP D1.d promotion criteria are met.
+# Evidence: truth=ci-matrix for the documented 17-gate set (ROADMAP D1.d).
+# Scope is the MODULE_ENTRIES list only — not full-host Windows parity.
 
 set -euo pipefail
 
@@ -51,7 +51,7 @@ fail_count=0
 failed=()
 
 echo "=== Platform Windows CI Matrix (real host) ==="
-echo "truth=real-windows-runtime-ci; focused gates; not full ci-matrix promotion"
+echo "truth=ci-matrix; documented 17-gate set; not full-host Windows parity"
 echo "core=$CORE_ROOT"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 fpc -iV 2>/dev/null || true
@@ -82,7 +82,7 @@ for entry in "${MODULE_ENTRIES[@]}"; do
 done
 
 echo "summary: pass=$pass_count fail=$fail_count total=${#MODULE_ENTRIES[@]}"
-echo "truth=real-windows-runtime-ci; gates_passed=$pass_count; gates_failed=$fail_count"
+echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-17-gate-set"
 
 if [[ "$fail_count" -gt 0 ]]; then
   echo "failed:"

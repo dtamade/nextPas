@@ -1,8 +1,29 @@
 # nextpas.core.http Benchmarks
 
-This page records the current HTTP server benchmark harness and one local
-snapshot. Treat the numbers as evidence for this machine and toolchain, not as
+This page records the current HTTP server benchmark harness and local
+snapshots. Treat the numbers as evidence for this machine and toolchain, not as
 a permanent ranking across platforms.
+
+## Stage performance complete (G6 / Wave P5)
+
+**Status**: stage-closed (2026-07-17).
+
+Exit criteria are owned by [`GOAL_TREE.md`](GOAL_TREE.md) § “G6 stage performance
+complete”. This file holds **commands + local numbers**; GOAL_TREE holds the
+checklist that ends “ongoing with no standard.”
+
+| Criterion (short) | Where proven here |
+| ----------------- | ----------------- |
+| Ladder L0–L4 documented | Residual Cost Isolation Ladder |
+| L1 micros runnable | project Makefiles under `benchmarks/nextpas.core.http/bench_*` |
+| L2/L3 fullchain + backend metadata | Wave P3 commands (`NEXTPAS_BENCH_BACKEND`) |
+| threaded vs epoll same workload | Wave P3 snapshot table |
+| One L1 hotspot before/after | Wave P1 headers Get/Has |
+| Comparator honesty | Run the Server Comparison (not epoll ranking) |
+| No fake H3 | H3 remains unregistered / Blocked (CONTRACT) |
+
+Framework-complete **(non-H3)** does **not** require infinite ranking refresh.
+Optional P2/P4 and future hotspots are demand-driven only.
 
 The maintained Pascal benchmark assets under `benchmarks/nextpas.core.http/`
 are the focused projects with their own project `Makefile`s and focused smoke
@@ -55,6 +76,84 @@ Do **not** subtract L0 from L2 as a precise residual: payload and read/write
 shapes differ. Durable conclusion: socket/runtime floor is a first-order share
 of fullchain cost; further wins need L1 micros or profiled hotspots, not more
 ranking tables.
+
+### Wave P1 hotspot: header Get/Has fuse (2026-07-17)
+
+**Hotspot**: L1 `THttpHeaders.Get` / `Has` — public path ran
+`ValidateNameAndNeedsNormalize` then `FindFirst` (second case-fold scan; mixed-case
+names normalized twice).
+
+**Change**: one validate+normalize pass, then scan on the normalized name
+(`FindFirstNormalized`). No API surface change.
+
+**Command** (repo `core/`):
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+**Local before/after** (Linux 6.12 amd64, FPC 3.3.1, same machine, mean ns/op):
+
+| row | before | after | note |
+| --- | -----: | ----: | ---- |
+| Get miss (3 headers) | 98.5 | **81.5** | ~17% faster; primary lookup residual |
+| Set+Get 5 headers (filtered mean) | 867.8 | 852.3 | small; dominated by create/set |
+| Set+Get 15 headers (filtered mean) | 2.74µs | 2.71µs | noise / create-bound |
+| GetAll miss (5 headers) | 69.9 | 71.0 | already single-normalize; noise |
+
+Caveat: single-host micro only; not fullchain ranking. Correctness:
+`make focused FOCUS=core/tests/nextpas.core.http/test_http_headers` (28 pass).
+
+### Wave P3: threaded vs epoll fullchain (2026-07-17)
+
+**Goal**: same L2/L3 keep-alive workload on both nextPas backends; honest local
+characterization, not ranking.
+
+**Commands** (from repo `core/`):
+
+```sh
+# L2 direct handler — threaded
+NEXTPAS_BENCH_FILTER='Direct/Plaintext' NEXTPAS_BENCH_BACKEND=threaded \
+  NEXTPAS_BENCH_MAX_ITERS=5000 \
+  make -C benchmarks/nextpas.core.http/bench_fullchain run
+
+# L2 direct handler — epoll
+NEXTPAS_BENCH_FILTER='Direct/Plaintext' NEXTPAS_BENCH_BACKEND=epoll \
+  NEXTPAS_BENCH_MAX_ITERS=5000 \
+  make -C benchmarks/nextpas.core.http/bench_fullchain run
+
+# L3 router delta — same filter Router/Plaintext, both backends
+NEXTPAS_BENCH_FILTER='Router/Plaintext' NEXTPAS_BENCH_BACKEND=threaded \
+  NEXTPAS_BENCH_MAX_ITERS=5000 \
+  make -C benchmarks/nextpas.core.http/bench_fullchain run
+NEXTPAS_BENCH_FILTER='Router/Plaintext' NEXTPAS_BENCH_BACKEND=epoll \
+  NEXTPAS_BENCH_MAX_ITERS=5000 \
+  make -C benchmarks/nextpas.core.http/bench_fullchain run
+```
+
+`bench_fullchain` emits `operation=http.fullchain.keepalive` and
+`backend=threaded|epoll` on every run.
+
+**Local snapshot** (Linux 6.12 amd64, FPC 3.3.1, 44 cores, 2026-07-17,
+`MAX_ITERS=5000`, single client keep-alive loop):
+
+| workload | backend | mean ns/op | median ns/op | ops/s (mean) |
+| -------- | ------- | ---------: | -----------: | -----------: |
+| Direct/Plaintext | threaded | 42209 | 40543 | ~23.7k |
+| Direct/Plaintext | epoll | 92595 | 92235 | ~10.8k |
+| Router/Plaintext | threaded | 49532 | 49523 | ~20.2k |
+| Router/Plaintext | epoll | 95315 | 94565 | ~10.5k |
+
+**Caveats (required)**:
+
+- This is **one machine, one day, sequential single-connection** keep-alive.
+  epoll’s design target is many concurrent fds; this harness does **not** prove
+  multi-connection throughput ranking.
+- threaded wins here for this shape; do **not** read as “epoll is always slower”
+  or as a cross-OS ranking.
+- Go/Rust `run_server_comparison` rows use their own runtimes; only nextPas rows
+  switch with `--nextpas-backend` / `NEXTPAS_BENCH_BACKEND`.
+- CV on threaded Direct was elevated (~16%); treat means as approximate.
 
 SysUtils isolation note (2026-07-16): HTTP benches no longer rely on implicit
 `SysUtils` symbols. `bench_fullchain` / `bench_server` use

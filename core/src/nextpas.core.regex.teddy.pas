@@ -1,7 +1,8 @@
 unit nextpas.core.regex.teddy;
 
 {$I nextpas.core.settings.inc}
-{$asmmode intel}
+{ INTEL asm only valid on x86_64; aarch64 (macOS CI) uses scalar path. }
+{$IFDEF CPUX86_64}{$asmmode intel}{$ENDIF}
 
 interface
 
