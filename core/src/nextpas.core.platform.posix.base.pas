@@ -371,8 +371,10 @@ const
   POLLHUP = Int16($0010);
   POLLNVAL = Int16($0020);
 
+{ O_CLOEXEC / FD_* live in per-host base units (Linux/Darwin/FreeBSD/Android).
+  Do not put a Linux-only O_CLOEXEC here — Darwin is 0x1000000, FreeBSD
+  0x100000, Linux 0x80000. Host base must appear in uses after this unit. }
 const
-  O_CLOEXEC  = $80000;
   F_SETFD    = 2;
   FD_CLOEXEC = 1;
   F_GETFD    = 1;

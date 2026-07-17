@@ -238,8 +238,9 @@ function getnameinfo(sa: Pointer; salen: UInt32; host: PAnsiChar; hostlen: PtrUI
 { Random }
 procedure arc4random_buf(buf: Pointer; nbytes: PtrUInt); cdecl; external 'c' name 'arc4random_buf';
 
-{ Directory reading }
-function getdirentries(fd: Int32; buf: PAnsiChar; nbytes: PtrUInt; basep: Pointer): PtrInt; cdecl; external 'c' name 'getdirentries';
+{ Directory reading — 64-bit inode path (getdirentries is legacy/32-bit).
+  ssize_t getdirentries64(int fd, void *buf, size_t bufsize, off_t *basep); }
+function getdirentries64(fd: Int32; buf: Pointer; bufsize: PtrUInt; basep: Pointer): PtrInt; cdecl; external 'c' name 'getdirentries64';
 
 { PTY — in libc on macOS }
 function openpty(amaster: pcint; aslave: pcint; name: PAnsiChar; termp: Pointer; winp: Pointer): cint; cdecl; external 'c' name 'openpty';

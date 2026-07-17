@@ -54,10 +54,13 @@ MODULE_ENTRIES=(
 pass_count=0
 fail_count=0
 failed=()
+# Per-gate wall clock (seconds). Prevents a hung gate from blocking the job.
+GATE_TIMEOUT_SEC="${NEXTPAS_MACOS_GATE_TIMEOUT_SEC:-180}"
 
 echo "=== Platform macOS CI Matrix (real host) ==="
 echo "truth=macos-focused-runtime; documented 8-gate set; not full-host macOS parity"
 echo "core=$CORE_ROOT"
+echo "gate_timeout_sec=$GATE_TIMEOUT_SEC"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 fpc -iV 2>/dev/null || true
 fpc -iTP -iTO 2>/dev/null || true
@@ -96,14 +99,34 @@ for entry in "${MODULE_ENTRIES[@]}"; do
   fi
 
   echo "=== macos: $name ($dir) ==="
-  if make -C "$dir" clean test; then
+  set +e
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --signal=TERM --kill-after=15 "${GATE_TIMEOUT_SEC}" \
+      make -C "$dir" clean test
+    code=$?
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout --signal=TERM --kill-after=15 "${GATE_TIMEOUT_SEC}" \
+      make -C "$dir" clean test
+    code=$?
+  else
+    # macOS often lacks GNU timeout; use perl alarm wrapper.
+    perl -e 'alarm shift; exec @ARGV' "${GATE_TIMEOUT_SEC}" \
+      make -C "$dir" clean test
+    code=$?
+  fi
+  set -e
+  if [[ "$code" -eq 0 ]]; then
     echo "PASS $name"
     pass_count=$((pass_count + 1))
   else
-    code=$?
-    echo "FAIL $name (exit $code)"
+    if [[ "$code" -eq 124 ]] || [[ "$code" -eq 142 ]] || [[ "$code" -eq 14 ]]; then
+      echo "FAIL $name (timeout ${GATE_TIMEOUT_SEC}s, exit $code)"
+      failed+=("$name (timeout ${GATE_TIMEOUT_SEC}s)")
+    else
+      echo "FAIL $name (exit $code)"
+      failed+=("$name (exit $code)")
+    fi
     fail_count=$((fail_count + 1))
-    failed+=("$name (exit $code)")
   fi
   echo
 done

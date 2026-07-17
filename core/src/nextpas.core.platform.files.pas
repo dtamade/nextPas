@@ -810,7 +810,8 @@ begin
   begin
     if AHandle.Pos >= AHandle.Len then
     begin
-      AHandle.Len := Int32(getdirentries(AHandle.Fd, @AHandle.Buf[0], SizeOf(AHandle.Buf), @LBase));
+      AHandle.Len := Int32(getdirentries64(AHandle.Fd, @AHandle.Buf[0],
+        PtrUInt(SizeOf(AHandle.Buf)), @LBase));
       if AHandle.Len <= 0 then
       begin
         if AHandle.Len = 0 then
@@ -822,6 +823,13 @@ begin
       AHandle.Pos := 0;
     end;
     LDent := PDarwinDirent(@AHandle.Buf[AHandle.Pos]);
+    { d_reclen=0 would spin forever; treat as corrupt stream. }
+    if (LDent^.d_reclen = 0) or
+       (Int32(AHandle.Pos) + Int32(LDent^.d_reclen) > AHandle.Len) then
+    begin
+      Result := PLATFORM_ERR_IO;
+      Exit;
+    end;
     Inc(AHandle.Pos, LDent^.d_reclen);
     LNamePtr := @LDent^.d_name[0];
     if (LNamePtr[0] = '.') and (LNamePtr[1] = #0) then

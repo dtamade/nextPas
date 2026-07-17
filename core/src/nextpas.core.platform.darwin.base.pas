@@ -102,10 +102,18 @@ type
   PPlatformDarwinStat = ^TPlatformDarwinStat;
 
   PPlatformPThreadState = ^TPlatformPThreadState;
+  { Darwin has no pthread_timedjoin_np; store user entry so timedjoin can poll
+    a Finished flag set by a trampoline before reaping with pthread_join. }
   TPlatformPThreadState = record
     case Integer of
       0: (FAlign: TPlatformPThreadTokenAlign);
-      1: (Thread: array[0..PLATFORM_PTHREAD_TOKEN_SIZE - 1] of Byte);
+      1: (
+        Thread: array[0..PLATFORM_PTHREAD_TOKEN_SIZE - 1] of Byte;
+        UserProc: Pointer;
+        UserArg: Pointer;
+        RetVal: Pointer;
+        Finished: LongInt
+      );
   end;
 
   mach_timebase_info_data_t = record
@@ -122,9 +130,10 @@ const
   PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0;
   PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0;
 
+  { Darwin pthread.h: NORMAL=0, ERRORCHECK=1, RECURSIVE=2 (not Linux order). }
   _PTHREAD_MUTEX_NORMAL = 0;
-  _PTHREAD_MUTEX_RECURSIVE = 1;
-  _PTHREAD_MUTEX_ERRORCHECK = 2;
+  _PTHREAD_MUTEX_ERRORCHECK = 1;
+  _PTHREAD_MUTEX_RECURSIVE = 2;
   PTHREAD_MUTEX_SIZE = SizeOf(pthread_mutex_t);
   PTHREAD_RWLOCK_SIZE = SizeOf(pthread_rwlock_t);
   PTHREAD_CONDVAR_SIZE = SizeOf(pthread_cond_t);

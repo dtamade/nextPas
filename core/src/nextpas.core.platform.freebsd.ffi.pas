@@ -21,6 +21,9 @@ function pthread_getthreadid_np: Int32; cdecl; external 'pthread' name 'pthread_
 
 function pthread_setname_np(AThread: pthread_t; const AName: PAnsiChar): Int32; cdecl; external 'pthread' name 'pthread_setname_np';
 
+{ FreeBSD has pthread_timedjoin_np (same contract as glibc). }
+function pthread_timedjoin_np(thread: PtrUInt; retval: PPointer; abstime: Pointer): Int32; cdecl; external 'c' name 'pthread_timedjoin_np';
+
 { 信号处理 }
 
 {** @desc 设置信号处理动作（FreeBSD 版本）
