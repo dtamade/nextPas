@@ -228,7 +228,7 @@ end;
 destructor TXmlReader.Destroy;
 begin
   if FData <> nil then
-    FreeMem(FData);
+    FreeMem(FData, FLen);
   inherited;
 end;
 

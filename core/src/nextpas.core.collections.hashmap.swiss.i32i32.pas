@@ -7,6 +7,8 @@ interface
 uses
   nextpas.core.mem.intf,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.default,
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
@@ -77,10 +79,11 @@ begin
   LCtrlSize := ACapacity + GROUP_SIZE;
   LSlotSize := ACapacity * SizeOf(TSwissSlotI32I32);
   LTotal := LCtrlSize + LSlotSize;
-  if FAllocator <> nil then
-    FCtrl := FAllocator.GetMem(LTotal)
-  else
-    GetMem(FCtrl, LTotal);
+  if FAllocator = nil then
+    FAllocator := DefaultAllocator;
+  FCtrl := FAllocator.GetMem(LTotal);
+  if FCtrl = nil then
+    raise Exception.Create('TSwissTableI32I32.AllocTable: allocation failed');
   FSlots := PSwissSlotI32I32(FCtrl + LCtrlSize);
   FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);
   FillChar(FSlots^, LSlotSize, 0);
@@ -90,7 +93,10 @@ end;
 procedure TSwissTableI32I32.FreeTable;
 begin
   if FCtrl = nil then Exit;
-  if FAllocator <> nil then FAllocator.FreeMem(FCtrl) else FreeMem(FCtrl);
+  if FAllocator = nil then
+    FAllocator := DefaultAllocator;
+  FreeMemOf(FAllocator, FCtrl,
+    (FCapacity + GROUP_SIZE) + FCapacity * SizeOf(TSwissSlotI32I32));
   FCtrl := nil; FSlots := nil;
 end;
 
@@ -131,14 +137,17 @@ begin
           LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
         end;
       end;
-    if FAllocator <> nil then FAllocator.FreeMem(LOldCtrl) else FreeMem(LOldCtrl);
+    if FAllocator = nil then
+      FAllocator := DefaultAllocator;
+    FreeMemOf(FAllocator, LOldCtrl,
+      (LOldCap + GROUP_SIZE) + LOldCap * SizeOf(TSwissSlotI32I32));
   end;
 end;
 
 constructor TSwissTableI32I32.Create(aCapacity: SizeUInt);
 begin
   inherited Create;
-  FCtrl := nil; FSlots := nil; FAllocator := nil;
+  FCtrl := nil; FSlots := nil; FAllocator := DefaultAllocator;
   FCapacity := 0; FGroupCount := 0; FCount := 0; FGrowthLeft := 0;
   if aCapacity > 0 then
   begin
@@ -157,7 +166,11 @@ end;
 constructor TSwissTableI32I32.CreateWith(aCapacity: SizeUInt; const aAllocator: TMemAllocator);
 begin
   inherited Create;
-  FCtrl := nil; FSlots := nil; FAllocator := aAllocator;
+  FCtrl := nil; FSlots := nil;
+  if aAllocator <> nil then
+    FAllocator := aAllocator
+  else
+    FAllocator := DefaultAllocator;
   FCapacity := 0; FGroupCount := 0; FCount := 0; FGrowthLeft := 0;
   if aCapacity > 0 then
   begin

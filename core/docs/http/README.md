@@ -31,7 +31,8 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 | Client GET/POST JSON | raw: `PostJson` → `IHttpResponse`; ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `GetJson` / `HttpReadResponseJson` |
 | Fluent request | `THttpRequestBuilder` → `Send` |
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
-| Auth / retry / jar / proxy | `WithBearerAuth`, `WithRetry`, `WithCookieJar`, `WithProxyUrl` |
+| Auth / retry / jar / proxy | `WithBearerAuth`, `WithRetry`, `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → Basic) |
+| Direct HTTPS client | `NewHttpClient` + optional `TLSContext` → `Get('https://…')` (H1 TLS wrap) |
 | Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, `WithConnectTimeout` / options `ConnectTimeout` |
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
@@ -179,7 +180,10 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite
   store/send (default Lax; None requires Secure; SiteKey approx, no PSL).
 - `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
-  (`http://host:port`); no HTTPS CONNECT in this slice.
+  (`http://host:port`). Target `http://` uses absolute-form; target `https://`
+  uses CONNECT then TLS over the tunnel (origin-form). Optional
+  `TLSContext` for verify-none / custom trust. No proxy auth yet; H1 direct
+  https without proxy still unsupported.
 - `IHttpClient.GetString` / `GetBytes` and free `HttpGetString` / `HttpGetBytes`.
 - `IHttpClient.GetJson` and free `HttpGetJson` / `HttpReadResponseJson`
   (ensure 2xx + JSON document; invalid body → `hekProtocol` Op=`json`).

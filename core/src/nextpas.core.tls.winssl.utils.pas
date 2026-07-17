@@ -21,6 +21,7 @@ unit nextpas.core.tls.winssl.utils;
 interface
 
 uses
+  nextpas.core.mem,
   Windows, nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.winssl.base;
@@ -504,7 +505,7 @@ begin
   Result^.BufferType := aType;
   
   if aSize > 0 then
-    GetMem(Result^.pvBuffer, aSize)
+    Result^.pvBuffer := GetMem(aSize)
   else
     Result^.pvBuffer := nil;
 end;
@@ -527,7 +528,7 @@ begin
   Result^.cBuffers := aBufferCount;
   
   if aBufferCount > 0 then
-    GetMem(Result^.pBuffers, SizeOf(TSecBuffer) * aBufferCount)
+    Result^.pBuffers := GetMem(SizeOf(TSecBuffer) * aBufferCount)
   else
     Result^.pBuffers := nil;
 end;
@@ -587,7 +588,7 @@ begin
     
   WS := UTF8Decode(S);
   Len := Length(WS);
-  GetMem(Result, (Len + 1) * SizeOf(WideChar));
+  Result := GetMem((Len + 1) * SizeOf(WideChar));
   Move(WS[1], Result^, Len * SizeOf(WideChar));
   Result[Len] := #0;
 end;

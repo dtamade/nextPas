@@ -5,6 +5,7 @@ unit nextpas.core.collections.tree.rb;
 interface
 
 uses
+  nextpas.core.mem,
   nextpas.core.base,
   nextpas.core.collections.base;
 
@@ -130,7 +131,7 @@ var
 begin
   if FPoolNext >= FPoolEnd then
   begin
-    GetMem(LBlock, BLOCK_SIZE * SizeOf(TNode));
+    LBlock := GetMem(BLOCK_SIZE * SizeOf(TNode));
     FillChar(LBlock^, BLOCK_SIZE * SizeOf(TNode), 0);
     Inc(FPoolBlockCount);
     SetLength(FPoolBlocks, FPoolBlockCount);
@@ -375,7 +376,7 @@ begin
   FCount := 0;
   if FPoolBlockCount > 0 then
     for i := 0 to FPoolBlockCount - 1 do
-      FreeMem(FPoolBlocks[i]);
+      FreeMem(FPoolBlocks[i], BLOCK_SIZE * SizeOf(TNode));
   SetLength(FPoolBlocks, 0);
   FPoolBlockCount := 0;
   FPoolNext := nil;

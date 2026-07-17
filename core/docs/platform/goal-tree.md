@@ -53,6 +53,19 @@ Wine matrix promotion). Wine compile remains environment-dependent
 - USABILITY banner → 8.21; API-REFERENCE cross-links RETURN/ERROR; RETURN names `str_find` as index value-sentinel
 - F6 raw OS API / F8 doctest / F9 rename / host truth **unchanged** (Won't or deferred)
 
+### 2026-07-17 long-term residual LT0–LT3 (usability maintenance)
+
+Usability is **maintenance baseline 8.21** — no open wave-5. Authority: [residual-roadmap.md](residual-roadmap.md).
+
+| Stage | Result |
+| --- | --- |
+| LT0 | residual-roadmap + goal-tree/README freeze; USABILITY maintenance banner |
+| LT1 | QUICKSTART live-name gate + `test_platform_docs_live_patterns` smoke (F8) |
+| LT2 | `process.pipe` read/write/close via `platform.files`; dual-IO production whitelist (F5) |
+| LT3 | `platform_get_last_os_error` raw host side-channel (F6) |
+| LT4 | Windows/macOS host truth — **registered only**, not claimed ready |
+| Deferred | F7 mapping symmetry, F9 rename, F10 diagnostics, F14 freetype move-out |
+
 ## Host Status
 
 | Host | Current truth | Required next proof |

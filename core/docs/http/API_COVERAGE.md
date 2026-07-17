@@ -11,20 +11,46 @@
 
 ## 当前结论
 
-- **2026-07-17 cycle-8 usability Wave C（现行评估/修复入口）**：
+- **2026-07-17 cycle-10 usability Wave E（现行评估/修复入口）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle10.md`、
+    `2026-07-17-usability-cycle10-research.md`、
+    `2026-07-17-usability-cycle10-fix-plan.md`
+    （Wave E = H1 direct HTTPS + proxy Basic auth）。
+  - **Wave E（本切片）**：
+    - H1 直连 `https://`：dial → TLS wrap（`TLSContext` 或 SecureClient）→
+      origin-form；pool key `https|host`。
+    - `ProxyUrl` UserInfo → `Proxy-Authorization: Basic`（CONNECT + absolute-form；
+      absolute-form 不覆盖请求已有头）。
+    - 测试：direct HTTPS e2e、CONNECT Basic、absolute-form Basic、keep explicit
+      （`test_http_client`）。
+  - **Deferred** 仍真：full PSL / Response metadata / Op-everywhere / H3 /
+    Digest / SOCKS。
+- **2026-07-17 cycle-9 usability Wave D（已吸收）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle9.md`、
+    `2026-07-17-usability-cycle9-research.md`、
+    `2026-07-17-usability-cycle9-fix-plan.md`
+    （Wave D = HTTPS CONNECT via plain HTTP proxy）。
+  - **Wave D（landed）**：
+    - H1：`https` 目标 + `ProxyUrl=http://…` → `CONNECT host:port` →
+      TLS wrap（`TLSContext` 或 SecureClient，SNI=origin，ALPN=`http/1.1`）→
+      origin-form request。
+    - 目标 `http` + proxy：保持 absolute-form。
+    - 非 2xx CONNECT → `hekConnect`。
+    - 测试：CONNECT tunnel success + denied（`test_http_client`）。
+  - 历史 Deferred 中 direct https / proxy Basic 由 **cycle-10 Wave E Closed**。
+- **2026-07-17 cycle-8 usability Wave C（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle8.md`、
     `2026-07-17-usability-cycle8-research.md`、
     `2026-07-17-usability-cycle8-fix-plan.md`（pre **97/100**；
     Wave C = GetJson ensure+decode + Retry-After/429）。
-  - **Wave C（本切片）**：
+  - **Wave C（landed）**：
     - `HttpGetJson` / `HttpReadResponseJson` / `IHttpClient.GetJson`：
       ensure-2xx + `JsonParse` → `IJsonDocument`；非法 JSON →
       `hekProtocol` Op=`json`。
     - `WithRetry`：429 + 5xx 可重试；优先 delta-seconds `Retry-After`
       （硬顶 60s），否则指数退避；HTTP-date 形式诚实忽略。
     - inventory / CONTRACT / GOAL_TREE 对齐。
-  - **Deferred** 仍真：CONNECT / full PSL / Response metadata /
-    Op-everywhere / H3（GetJson decode 与 Retry-After **已 Closed**）。
+  - 历史 Deferred 中 CONNECT 由 **cycle-9 Wave D Closed**。
 - **2026-07-17 cycle-7 usability inventory + Wave B fix（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle7.md`、
     `2026-07-17-usability-cycle7-research.md`、

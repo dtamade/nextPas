@@ -73,6 +73,7 @@ procedure MemSet_AVX2(dst: Pointer; len: SizeUInt; value: Byte);
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.scalar, // For fallback functions
@@ -96,8 +97,8 @@ begin
       FreeMem(GAVX2TanCosBuf);
     // 分配新缓冲区
     GAVX2TanBufCapacity := aCount;
-    GetMem(GAVX2TanSinBuf, aCount * SizeOf(Single));
-    GetMem(GAVX2TanCosBuf, aCount * SizeOf(Single));
+    GAVX2TanSinBuf := GetMem(aCount * SizeOf(Single));
+    GAVX2TanCosBuf := GetMem(aCount * SizeOf(Single));
   end;
 end;
 

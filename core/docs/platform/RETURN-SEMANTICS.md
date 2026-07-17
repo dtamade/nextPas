@@ -32,15 +32,16 @@ Authority companion to [CONTRACT.md](CONTRACT.md). Live constants: `nextpas.core
 
 - **files**: handle and directory primitives (`open`/`read`/`write`/`stat`/`dir_*`).
 - **fs**: path-level composition (`mkdir_p`, `copy`, `exists`, `temp_dir`); may call files.
-- **io**: poller/event surface (`platform.io`); generic fd helpers living under `process` (`platform_io_read` / `write` / `poll`) are **transitional / dual-API** value/sentinel surfaces for `process.pipe` only. New code must prefer `platform.files` and `platform_process_*_ex`. Do not expand `platform_io_*` surface.
+- **io**: poller/event surface (`platform.io`); generic fd helpers living under `process` (`platform_io_read` / `write` / `poll`) are **transitional / dual-API** value/sentinel surfaces. Production consumers are **whitelisted** (see residual-roadmap F5): `platform.process` owns the symbols; `process.pipe` may still call `platform_io_poll` for drain. Read/write/close on pipes use `platform.files`. New code must prefer `platform.files` and `platform_process_*_ex`. Do not expand `platform_io_*` surface.
+- **raw OS side-channel**: `platform_get_last_os_error` is a **value** API returning the unmapped host error code (not a portable `PLATFORM_ERR_*`). It is orthogonal to `platform_get_last_error`.
 
 ## Dual API deprecation (process)
 
 | Legacy | Prefer | Notes |
 |--------|--------|-------|
 | `platform_process_write_stdin` / `read_stdout` / `read_stderr` | `*_ex` variants | FPC `deprecated`; length/-1 wrappers |
-| `platform_io_read` / `write` / `poll` | `platform.files` / process `*_ex` | Kept for process.pipe; value/sentinel; not for new public use |
-| `platform_io_close` | `platform_process_close_handle` / files close | Error-code API; keep
+| `platform_io_read` / `write` / `poll` | `platform.files` / process `*_ex` / `platform.io` | Dual-API owner is `platform.process`; `process.pipe` may use `platform_io_poll` only |
+| `platform_io_close` | `platform_process_close_handle` / `platform_file_close` | Error-code API; keep |
 
 ## Args ownership
 

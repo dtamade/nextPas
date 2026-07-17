@@ -434,6 +434,8 @@ begin
   Check(Pos('transitional', LRet) > 0, 'RETURN-SEMANTICS documents transitional io helpers');
   Check(Pos('platform_io_read', LRet) > 0, 'RETURN-SEMANTICS names platform_io_read');
   Check(Pos('dual api', LRet) > 0, 'RETURN-SEMANTICS has Dual API section');
+  Check(Pos('whitelist', LRet) > 0, 'RETURN-SEMANTICS documents dual-IO whitelist');
+  Check(Pos('platform_io_poll', LRet) > 0, 'RETURN-SEMANTICS allows process.pipe poll');
 
   LEx := LowerCase(FsReadFileText(ResolveDocs('EXAMPLES.md')));
   { ban uses-clause style SysUtils, allow the ban rule text itself }
@@ -594,6 +596,121 @@ begin
   Check(LPid > 0, 'getpid returns positive pid on host');
 end;
 
+procedure TestQuickstartLivePatterns;
+var
+  LQ: string;
+begin
+  LQ := LowerCase(FsReadFileText(ResolveDocs('QUICKSTART.md')));
+  Check(Pos('platform_file_open', LQ) > 0, 'QUICKSTART uses platform_file_open');
+  Check(Pos('fomreadonly', LQ) > 0, 'QUICKSTART uses fomReadOnly');
+  Check(Pos('platform_file_read', LQ) > 0, 'QUICKSTART uses platform_file_read');
+  Check(Pos('platform_file_close', LQ) > 0, 'QUICKSTART uses platform_file_close');
+  Check(Pos('platform_err_', LQ) > 0, 'QUICKSTART mentions PLATFORM_ERR_*');
+  Check(Pos('platform_net_', LQ) = 0, 'QUICKSTART has no ghost platform_net_*');
+  Check(Pos('fileio', LQ) = 0, 'QUICKSTART has no ghost fileio');
+end;
+
+procedure TestLastOsErrorSideChannel;
+var
+  LSrc, LErrDoc, LRet, LApi: string;
+  LOs, LMapped: Int32;
+begin
+  LSrc := ReadRaw(ResolveSrc('nextpas.core.platform.error.pas'));
+  Check(Pos('function platform_get_last_os_error: Int32;', LSrc) > 0,
+    'error.pas declares platform_get_last_os_error');
+
+  LOs := platform_get_last_os_error;
+  LMapped := platform_get_last_error;
+  Check(LOs >= 0, 'Linux/raw os error is non-negative host code');
+  { both callable; values need not match after mapping on Windows }
+  Check(LMapped >= -8, 'get_last_error returns portable or host-local code');
+
+  LErrDoc := LowerCase(FsReadFileText(ResolveDocs('ERROR-HANDLING.md')));
+  Check(Pos('platform_get_last_os_error', LErrDoc) > 0,
+    'ERROR-HANDLING documents platform_get_last_os_error');
+  Check(Pos('won''t do this wave', LErrDoc) = 0,
+    'ERROR-HANDLING no longer says Won''t do this wave for raw OS');
+
+  LRet := LowerCase(FsReadFileText(ResolveDocs('RETURN-SEMANTICS.md')));
+  Check(Pos('platform_get_last_os_error', LRet) > 0,
+    'RETURN-SEMANTICS documents raw OS side-channel');
+
+  LApi := LowerCase(FsReadFileText(ResolveDocs('API-REFERENCE.md')));
+  Check(Pos('platform_get_last_os_error', LApi) > 0,
+    'API-REFERENCE lists platform_get_last_os_error');
+end;
+
+procedure TestDualIoConsumerWhitelist;
+var
+  LRoot: string;
+  LFiles: TStringArray;
+  I: Int32;
+  LName, LSrc: string;
+  LPipe: string;
+begin
+  LRoot := ResolveSrcRoot;
+  LFiles := FsGlob(LRoot, 'nextpas.core.*.pas');
+  Check(Length(LFiles) > 50, 'expected broad core/src scan');
+  for I := 0 to High(LFiles) do
+  begin
+    LName := ExtractFileName(LFiles[I]);
+    { dual-IO owner may define and use all symbols }
+    if LName = 'nextpas.core.platform.process.pas' then
+      Continue;
+    LSrc := LowerCase(FsReadFileText(LFiles[I]));
+    if LName = 'nextpas.core.process.pipe.pas' then
+    begin
+      Check(Pos('platform_io_read(', LSrc) = 0,
+        'process.pipe must not call platform_io_read');
+      Check(Pos('platform_io_write(', LSrc) = 0,
+        'process.pipe must not call platform_io_write');
+      Check(Pos('platform_io_close(', LSrc) = 0,
+        'process.pipe must not call platform_io_close');
+      Check(Pos('platform_io_poll(', LSrc) > 0,
+        'process.pipe may still call platform_io_poll for drain');
+      Check(Pos('platform_file_read', LSrc) > 0,
+        'process.pipe routes read via platform.files');
+      Continue;
+    end;
+    Check(Pos('platform_io_read(', LSrc) = 0,
+      LName + ' must not call platform_io_read');
+    Check(Pos('platform_io_write(', LSrc) = 0,
+      LName + ' must not call platform_io_write');
+    Check(Pos('platform_io_poll(', LSrc) = 0,
+      LName + ' must not call platform_io_poll');
+  end;
+
+  LPipe := LowerCase(FsReadFileText(ResolveDocs('residual-roadmap.md')));
+  Check(Pos('platform_io_poll', LPipe) > 0,
+    'residual-roadmap documents dual-IO whitelist');
+  Check(Pos('lt4', LPipe) > 0, 'residual-roadmap registers LT4');
+end;
+
+procedure TestResidualRoadmapFreeze;
+var
+  LRoad, LGoal, LReadme, LUsab: string;
+begin
+  LRoad := LowerCase(FsReadFileText(ResolveDocs('residual-roadmap.md')));
+  Check(Pos('8.21', LRoad) > 0, 'residual-roadmap freezes 8.21');
+  Check(Pos('lt0', LRoad) > 0, 'residual-roadmap has LT0');
+  Check(Pos('lt3', LRoad) > 0, 'residual-roadmap has LT3');
+  Check(Pos('maintenance', LRoad) > 0, 'residual-roadmap maintenance stance');
+
+  LGoal := LowerCase(FsReadFileText(ResolveDocs('goal-tree.md')));
+  Check(Pos('residual-roadmap', LGoal) > 0, 'goal-tree points residual-roadmap');
+  Check(Pos('maintenance baseline 8.21', LGoal) > 0,
+    'goal-tree states maintenance baseline 8.21');
+
+  LReadme := LowerCase(FsReadFileText(ResolveDocs('README.md')));
+  Check(Pos('residual-roadmap.md', LReadme) > 0, 'README links residual-roadmap');
+  Check(Pos('test_platform_docs_live_patterns', LReadme) > 0,
+    'README lists docs live patterns gate');
+
+  LUsab := LowerCase(FsReadFileText(ResolveDocs('USABILITY-ASSESSMENT.md')));
+  Check(Pos('maintenance baseline', LUsab) > 0, 'USABILITY maintenance banner');
+  Check(Pos('8.21', LUsab) > 0, 'USABILITY banner score 8.21');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.return_semantics_contract');
   T.Test('PLATFORM_ERR constants match live authority', @TestErrorConstantsMatchDoc);
@@ -617,5 +734,9 @@ begin
   T.Test('docs authority present', @TestDocsAuthorityPresent);
   T.Test('API-REFERENCE has no phantom PLATFORM_ERR_*', @TestApiReferenceNoPhantomErrors);
   T.Test('getpid is value/sentinel api', @TestGetpidIsSentinelApi);
+  T.Test('QUICKSTART live API patterns', @TestQuickstartLivePatterns);
+  T.Test('last_os_error side-channel + docs', @TestLastOsErrorSideChannel);
+  T.Test('dual-IO production consumer whitelist', @TestDualIoConsumerWhitelist);
+  T.Test('residual roadmap freeze', @TestResidualRoadmapFreeze);
   if not T.Run then Halt(1);
 end.

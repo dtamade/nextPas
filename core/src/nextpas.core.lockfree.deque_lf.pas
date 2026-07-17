@@ -98,6 +98,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.atomic,
   nextpas.core.errors,
   nextpas.core.lockfree.base;
@@ -162,7 +163,7 @@ var
   LNewData: array of AnsiString;
 begin
   if FCapacity > High(Int32) div 2 then
-    raise EOutOfMemoryError.Create('TLockFreeDeque.Grow: capacity overflow');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TLockFreeDeque.Grow: capacity overflow'));
   LNewCap := FCapacity * 2;
   SetLength(LNewData, LNewCap);
   { Copy elements in order }

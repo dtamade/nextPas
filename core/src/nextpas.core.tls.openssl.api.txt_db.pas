@@ -81,7 +81,7 @@ function TXTDBFindRow(db: PTXT_DB; FieldIndex: Integer; const Value: string): PP
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.mem, nextpas.core.tls.openssl.api.utils;
 
 const
   { TXT_DB function bindings for batch loading }
@@ -170,7 +170,7 @@ var
     LLength: SizeInt;
   begin
     LLength := Length(AValue);
-    GetMem(Result, LLength + 1);
+    Result := GetMem(LLength + 1);
     if LLength > 0 then
       Move(AValue[1], Result^, LLength);
     Result[LLength] := #0;
@@ -188,7 +188,7 @@ begin
   Result := False;
   if (db = nil) or (Length(Fields) = 0) then Exit;
   
-  GetMem(Row, SizeOf(PChar) * Length(Fields));
+  Row := GetMem(SizeOf(PChar) * Length(Fields));
   try
     for I := 0 to High(Fields) do
       Row[I] := nil;
@@ -218,7 +218,7 @@ begin
   if (db = nil) or not Assigned(TXT_DB_get_by_index) then Exit;
   
   LLength := Length(Value);
-  GetMem(SearchVal, LLength + 1);
+  SearchVal := GetMem(LLength + 1);
   try
     if LLength > 0 then
       Move(Value[1], SearchVal^, LLength);

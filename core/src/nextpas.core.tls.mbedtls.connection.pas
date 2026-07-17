@@ -112,6 +112,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.tls.mbedtls.certificate,
   nextpas.core.tls.mbedtls.session;
 
@@ -300,7 +301,7 @@ begin
     FreeSSLContext;
 
   // Allocate SSL context
-  GetMem(FSSLContext, MBEDTLS_SSL_CONTEXT_SIZE);
+  FSSLContext := GetMem(MBEDTLS_SSL_CONTEXT_SIZE);
   FillChar(FSSLContext^, MBEDTLS_SSL_CONTEXT_SIZE, 0);
 
   if Assigned(mbedtls_ssl_init) then
@@ -352,7 +353,7 @@ begin
   begin
     if Assigned(mbedtls_ssl_free) then
       mbedtls_ssl_free(FSSLContext);
-    FreeMem(FSSLContext);
+    FreeMem(FSSLContext, MBEDTLS_SSL_CONTEXT_SIZE);
     FSSLContext := nil;
   end;
 end;

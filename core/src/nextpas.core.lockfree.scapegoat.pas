@@ -85,6 +85,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic;
 
@@ -143,7 +144,7 @@ end;
 procedure TConcurrentScapegoatTree.FreeNode(ANode: PScapegoatNode);
 begin
   if ANode <> nil then
-    FreeMem(ANode);
+    FreeMem(ANode, SizeOf(TScapegoatNode));
 end;
 
 function TConcurrentScapegoatTree.NodeSize(ANode: PScapegoatNode): Int32;

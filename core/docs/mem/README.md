@@ -11,6 +11,8 @@ make lane-focused LANE=mem
 
 权威计划：[STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) · 决策树：[API-GUIDE.md](API-GUIDE.md) · 性能：[SCORECARD.md](SCORECARD.md)
 
+**Consumer audit（2026-07-17，FIX CLOSED）**: 全仓库 mem 使用/范式/复用检查 + 全修 — [摘要](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) · [Findings](CONSUMER-AUDIT-FINDINGS-2026-07-17.md)（不 reopen 可用性主线；CA-011 keepers 仍 WAIVED）
+
 ---
 
 ## 30 秒上手
