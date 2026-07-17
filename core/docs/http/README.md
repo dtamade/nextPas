@@ -33,7 +33,7 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 
 | Scenario | Start here |
 | --- | --- |
-| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse`; ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `HttpPostJsonDocument` / `GetJson` / `HttpReadResponseJson` |
+| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse` (`FinalUrl` / `Version` metadata); ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `HttpPostJsonDocument` / `GetJson` / `HttpReadResponseJson` |
 | Fluent request | `THttpRequestBuilder` → `Send` |
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
 | Auth / retry / jar / proxy / TLS | `WithBearerAuth`, `WithRetry` (delta + HTTP-date Retry-After), `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → Basic), `WithTLSContext` |

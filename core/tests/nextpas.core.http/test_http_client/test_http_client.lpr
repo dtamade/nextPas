@@ -188,6 +188,8 @@ type
     function GetStatusCode: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
+    function GetFinalUrl: string;
+    function GetVersion: THttpVersion;
     procedure Close;
   end;
 
@@ -1629,6 +1631,16 @@ end;
 function TNilHeadersRedirectResponse.GetBody: IReader;
 begin
   Result := nil;
+end;
+
+function TNilHeadersRedirectResponse.GetFinalUrl: string;
+begin
+  Result := '';
+end;
+
+function TNilHeadersRedirectResponse.GetVersion: THttpVersion;
+begin
+  Result := hvHttp11;
 end;
 
 procedure TNilHeadersRedirectResponse.Close;
@@ -5294,6 +5306,7 @@ var
   LClient: IHttpClient;
   LResp: IHttpResponse;
   LBody: string;
+  LBase: string;
 begin
   LRouter := THttpRouter.Create;
   LRouter.Get('/old', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
@@ -5313,10 +5326,49 @@ begin
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LClient := NewHttpClient;
-    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/old');
+    LBase := 'http://127.0.0.1:' + IntToStr(Int64(LPort));
+    LResp := LClient.Get(LBase + '/old');
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'followed redirect to 200');
     LBody := ReadBodyStr(LResp);
     CheckEqual('arrived', LBody, 'body from final destination');
+    CheckEqual(LBase + '/new', LResp.FinalUrl,
+      'FinalUrl is the post-redirect request URL');
+    CheckEqual(Int64(Ord(hvHttp11)), Int64(Ord(LResp.Version)),
+      'H1 live redirect response version is HTTP/1.1');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientResponseMetadataOnDirectGet;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LUrl: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/meta', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LB: string;
+  begin
+    LB := 'ok';
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LB))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], SizeUInt(Length(LB)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LUrl := 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/meta';
+    LResp := LClient.Get(LUrl);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'direct get status 200');
+    CheckEqual(LUrl, LResp.FinalUrl, 'FinalUrl matches request URL');
+    CheckEqual(Int64(Ord(hvHttp11)), Int64(Ord(LResp.Version)),
+      'H1 live response version is HTTP/1.1');
+    CheckEqual('ok', ReadBodyStr(LResp), 'direct get body');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -10435,6 +10487,8 @@ begin
   T.Test('HttpGetToFile keeps read error when close fails',
     @TestHttpGetToFileKeepsReadErrorWhenCloseFails);
   T.Test('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
+  T.Test('Client response FinalUrl and Version on direct GET',
+    @TestClientResponseMetadataOnDirectGet);
   T.Test('Client closes original body before GET-style redirect follow-up',
     @TestClientClosesOriginalBodyBeforeGetStyleRedirectFollowup);
   T.Test('Client does not retry close when GET-style redirect body close fails',

@@ -2556,10 +2556,11 @@ begin
   if LBodyReader <> nil then
   begin
     Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders,
-      LBodyReader);
+      LBodyReader, LParser.GetHttpVersion);
   end
   else
-    Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil);
+    Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil,
+      LParser.GetHttpVersion);
 end;
 
 function TH1ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;

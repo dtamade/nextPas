@@ -922,7 +922,14 @@ begin
     Result := DoRequest(LNewReq, ARedirectsLeft - 1, ARequestBodyCloseAttempted);
   end
   else
+  begin
     Result := LResp;
+    { Stamp final URL on the concrete response (transport-built THttpResponse).
+      Custom mock transports that implement IHttpResponse without THttpResponse
+      keep FinalUrl empty — that is intentional. }
+    if Result is THttpResponse then
+      (Result as THttpResponse).SetFinalUrl(LUrl.ToString);
+  end;
 end;
 
 function THttpClient.Send(const AReq: IHttpRequest): IHttpResponse;
