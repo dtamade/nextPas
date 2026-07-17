@@ -3,23 +3,23 @@
 > 最后更新: 2026-07-17  
 > **权威主线**: [roadmap.md](roadmap.md)。本文件只跟踪「当前阶段」任务，避免与路线图双写。
 
-## 当前阶段: Phase 22 — NEON Memory 真叶
+## 当前阶段: Phase 22b / 23 候选
 
-| 状态 | 下一刀（P21 已收口） |
-|------|----------------------|
+| 状态 | 22a 已收口；下一刀待选 22b 或 23 |
+|------|----------------------------------|
 | 优先级 | P1 |
-| 验收 | 见 roadmap §3 Phase 22 |
+| 验收 | 见 roadmap §3 |
 
 ### 刚完成
 
 - [x] **Phase 20** 文档真相面 + 可执行 Phase 20–27 路线图
 - [x] **Phase 21** `api-coverage-contract` 变绿（missing=0 / thin=0，strict 不降）
+- [x] **Phase 22a** NEON `MemCopy` / `MemSet` / `MemDiffRange` 真 asm 叶 + 契约翻转
 
-### 本阶段任务
+### 候选下一刀
 
-- [ ] 优先实现 NEON `Copy` / `Fill` / `DiffRange` 真叶（asm + register + 契约翻转）
-- [ ] focused + neon-optin + hygiene 绿
-- [ ] 次优槽（Reverse / BytesIndexOf / Utf8Validate）按收益拆 22b
+- [ ] Phase 22b：`Reverse` / `BytesIndexOf` / `Utf8Validate`
+- [ ] Phase 23：NEON Batch 最小代表面
 
 入口命令:
 

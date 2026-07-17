@@ -66,6 +66,9 @@ procedure RegisterNEONBackend;
 // Memory operations
 function MemEqual_NEON(a, b: Pointer; len: SizeUInt): LongBool;
 function MemFindByte_NEON(p: Pointer; len: SizeUInt; value: Byte): PtrInt;
+function MemDiffRange_NEON(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean;
+procedure MemCopy_NEON(src, dst: Pointer; len: SizeUInt);
+procedure MemSet_NEON(dst: Pointer; len: SizeUInt; value: Byte);
 
 // Statistics functions
 function SumBytes_NEON(p: Pointer; len: SizeUInt): UInt64;

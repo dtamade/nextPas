@@ -6885,23 +6885,16 @@ begin
     LSourceLines.Free;
   end;
 
-  CheckTrue(Pos('function memdiffrange_neon(', LUnitSource) = 0, 'MemDiffRange_NEON dead wrapper should be removed from the NEON unit interface');
-  CheckTrue(Pos('procedure memcopy_neon(', LUnitSource) = 0, 'MemCopy_NEON dead wrapper should be removed from the NEON unit interface');
-  CheckTrue(Pos('procedure memset_neon(', LUnitSource) = 0, 'MemSet_NEON dead wrapper should be removed from the NEON unit interface');
+  // Phase 22a: DiffRange/Copy/Fill are real NEON leaves (see FacadeFastSlots).
+  // Remaining Memory gaps must still not reintroduce dead scalar wrappers.
   CheckTrue(Pos('procedure memreverse_neon(', LUnitSource) = 0, 'MemReverse_NEON dead wrapper should be removed from the NEON unit interface');
   CheckTrue(Pos('function utf8validate_neon(', LUnitSource) = 0, 'Utf8Validate_NEON dead wrapper should be removed from the NEON unit interface');
   CheckTrue(Pos('function bytesindexof_neon(', LUnitSource) = 0, 'BytesIndexOf_NEON dead wrapper should be removed from the NEON unit interface');
 
-  CheckTrue(Pos('function memdiffrange_neon(', LFacadeSource) = 0, 'MemDiffRange_NEON dead wrapper should be removed from the platform facade include');
-  CheckTrue(Pos('procedure memcopy_neon(', LFacadeSource) = 0, 'MemCopy_NEON dead wrapper should be removed from the platform facade include');
-  CheckTrue(Pos('procedure memset_neon(', LFacadeSource) = 0, 'MemSet_NEON dead wrapper should be removed from the platform facade include');
   CheckTrue(Pos('procedure memreverse_neon(', LFacadeSource) = 0, 'MemReverse_NEON dead wrapper should be removed from the platform facade include');
   CheckTrue(Pos('function utf8validate_neon(', LFacadeSource) = 0, 'Utf8Validate_NEON dead wrapper should be removed from the platform facade include');
   CheckTrue(Pos('function bytesindexof_neon(', LFacadeSource) = 0, 'BytesIndexOf_NEON dead wrapper should be removed from the platform facade include');
 
-  AssertRegisterKeepsBaseScalar('MemDiffRange', 'table.Memory.DiffRange := @MemDiffRange_NEON;');
-  AssertRegisterKeepsBaseScalar('MemCopy', 'table.Memory.Copy := @MemCopy_NEON;');
-  AssertRegisterKeepsBaseScalar('MemSet', 'table.Memory.Fill := @MemSet_NEON;');
   AssertRegisterKeepsBaseScalar('MemReverse', 'table.Memory.Reverse := @MemReverse_NEON;');
   AssertRegisterKeepsBaseScalar('Utf8Validate', 'table.Memory.Utf8Validate := @Utf8Validate_NEON;');
   AssertRegisterKeepsBaseScalar('BytesIndexOf', 'table.Memory.BytesIndexOf := @BytesIndexOf_NEON;');
@@ -6915,9 +6908,6 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('MemDiffRange', Pointer(LScalarTable.Memory.DiffRange), Pointer(LNEONTable.Memory.DiffRange));
-  AssertSlotReusesScalar('MemCopy', Pointer(LScalarTable.Memory.Copy), Pointer(LNEONTable.Memory.Copy));
-  AssertSlotReusesScalar('MemSet', Pointer(LScalarTable.Memory.Fill), Pointer(LNEONTable.Memory.Fill));
   AssertSlotReusesScalar('MemReverse', Pointer(LScalarTable.Memory.Reverse), Pointer(LNEONTable.Memory.Reverse));
   AssertSlotReusesScalar('Utf8Validate', Pointer(LScalarTable.Memory.Utf8Validate), Pointer(LNEONTable.Memory.Utf8Validate));
   AssertSlotReusesScalar('BytesIndexOf', Pointer(LScalarTable.Memory.BytesIndexOf), Pointer(LNEONTable.Memory.BytesIndexOf));
@@ -6971,6 +6961,9 @@ begin
 
   AssertSourceContains('MemEqual_NEON asm', 'function MemEqual_NEON(a, b: Pointer; len: SizeUInt): LongBool; assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('MemFindByte_NEON asm', 'function MemFindByte_NEON(p: Pointer; len: SizeUInt; value: Byte): PtrInt; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('MemDiffRange_NEON asm', 'function MemDiffRange_NEON(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('MemCopy_NEON asm', 'procedure MemCopy_NEON(src, dst: Pointer; len: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('MemSet_NEON asm', 'procedure MemSet_NEON(dst: Pointer; len: SizeUInt; value: Byte); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('SumBytes_NEON asm', 'function SumBytes_NEON(p: Pointer; len: SizeUInt): UInt64; assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('MinMaxBytes_NEON asm', 'procedure MinMaxBytes_NEON(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('CountByte_NEON asm', 'function CountByte_NEON(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; assembler; nostackframe;', LAsmFacadeSource);
@@ -6981,6 +6974,9 @@ begin
 
   AssertSourceContains('MemEqual_NEON scalar fallback', 'Result := MemEqual_Scalar(a, b, len);', LScalarFacadeSource);
   AssertSourceContains('MemFindByte_NEON scalar fallback', 'Result := MemFindByte_Scalar(p, len, value);', LScalarFacadeSource);
+  AssertSourceContains('MemDiffRange_NEON scalar fallback', 'Result := MemDiffRange_Scalar(a, b, len, firstDiff, lastDiff);', LScalarFacadeSource);
+  AssertSourceContains('MemCopy_NEON scalar fallback', 'MemCopy_Scalar(src, dst, len);', LScalarFacadeSource);
+  AssertSourceContains('MemSet_NEON scalar fallback', 'MemSet_Scalar(dst, len, value);', LScalarFacadeSource);
   AssertSourceContains('SumBytes_NEON scalar fallback', 'Result := SumBytes_Scalar(p, len);', LScalarFacadeSource);
   AssertSourceContains('MinMaxBytes_NEON scalar fallback', 'MinMaxBytes_Scalar(p, len, minVal, maxVal);', LScalarFacadeSource);
   AssertSourceContains('CountByte_NEON scalar fallback', 'Result := CountByte_Scalar(p, len, value);', LScalarFacadeSource);
@@ -6991,6 +6987,9 @@ begin
 
   CheckTrue(Pos('table.memory.equal := @memequal_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MemEqual_NEON explicitly so asm builds keep the native facade slot');
   CheckTrue(Pos('table.memory.findbyte := @memfindbyte_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MemFindByte_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.diffrange := @memdiffrange_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should wire MemDiffRange_NEON for Phase 22a Memory leaves');
+  CheckTrue(Pos('table.memory.copy := @memcopy_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should wire MemCopy_NEON for Phase 22a Memory leaves');
+  CheckTrue(Pos('table.memory.fill := @memset_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should wire MemSet_NEON for Phase 22a Memory leaves');
   CheckTrue(Pos('table.memory.sumbytes := @sumbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire SumBytes_NEON explicitly so asm builds keep the native facade slot');
   CheckTrue(Pos('table.memory.minmaxbytes := @minmaxbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MinMaxBytes_NEON explicitly so asm builds keep the native facade slot');
   CheckTrue(Pos('table.memory.countbyte := @countbyte_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire CountByte_NEON explicitly so asm builds keep the native facade slot');
@@ -7010,6 +7009,9 @@ begin
 
   AssertRuntimeSlotExpectation('MemEqual', Pointer(LScalarTable.Memory.Equal), Pointer(LNEONTable.Memory.Equal));
   AssertRuntimeSlotExpectation('MemFindByte', Pointer(LScalarTable.Memory.FindByte), Pointer(LNEONTable.Memory.FindByte));
+  AssertRuntimeSlotExpectation('MemDiffRange', Pointer(LScalarTable.Memory.DiffRange), Pointer(LNEONTable.Memory.DiffRange));
+  AssertRuntimeSlotExpectation('MemCopy', Pointer(LScalarTable.Memory.Copy), Pointer(LNEONTable.Memory.Copy));
+  AssertRuntimeSlotExpectation('MemSet', Pointer(LScalarTable.Memory.Fill), Pointer(LNEONTable.Memory.Fill));
   AssertRuntimeSlotExpectation('SumBytes', Pointer(LScalarTable.Memory.SumBytes), Pointer(LNEONTable.Memory.SumBytes));
   AssertRuntimeSlotExpectation('MinMaxBytes', Pointer(LScalarTable.Memory.MinMaxBytes), Pointer(LNEONTable.Memory.MinMaxBytes));
   AssertRuntimeSlotExpectation('CountByte', Pointer(LScalarTable.Memory.CountByte), Pointer(LNEONTable.Memory.CountByte));

@@ -540,3 +540,188 @@ asm
 .Lnotequal:
   mov   w0, #0
 end;
+
+// === Phase 22a: NEON Memory Copy / Fill / DiffRange ===
+
+procedure MemCopy_NEON(src, dst: Pointer; len: SizeUInt); assembler; nostackframe;
+asm
+  // x0 = src, x1 = dst, x2 = len
+  cbz   x2, .Lcopy_done
+  cbz   x0, .Lcopy_done
+  cbz   x1, .Lcopy_done
+  cmp   x0, x1
+  b.eq  .Lcopy_done
+
+.Lcopy_loop16:
+  cmp   x2, #16
+  b.lo  .Lcopy_tail
+  // ICE-safe 16-byte load/store
+  ldp   x3, x4, [x0], #16
+  stp   x3, x4, [x1], #16
+  sub   x2, x2, #16
+  cbnz  x2, .Lcopy_loop16
+  b     .Lcopy_done
+
+.Lcopy_tail:
+  cbz   x2, .Lcopy_done
+.Lcopy_tail_loop:
+  ldrb  w3, [x0], #1
+  strb  w3, [x1], #1
+  subs  x2, x2, #1
+  b.ne  .Lcopy_tail_loop
+
+.Lcopy_done:
+  ret
+end;
+
+procedure MemSet_NEON(dst: Pointer; len: SizeUInt; value: Byte); assembler; nostackframe;
+asm
+  // x0 = dst, x1 = len, w2 = value
+  cbz   x1, .Lset_done
+  cbz   x0, .Lset_done
+  dup   v0.16b, w2
+
+.Lset_loop16:
+  cmp   x1, #16
+  b.lo  .Lset_tail
+  // ICE-safe store of broadcast byte
+  umov  x3, v0.d[0]
+  umov  x4, v0.d[1]
+  stp   x3, x4, [x0], #16
+  sub   x1, x1, #16
+  cbnz  x1, .Lset_loop16
+  b     .Lset_done
+
+.Lset_tail:
+  cbz   x1, .Lset_done
+.Lset_tail_loop:
+  strb  w2, [x0], #1
+  subs  x1, x1, #1
+  b.ne  .Lset_tail_loop
+
+.Lset_done:
+  ret
+end;
+
+function MemDiffRange_NEON(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean; assembler; nostackframe;
+asm
+  // x0 = a, x1 = b, x2 = len, x3 = &firstDiff, x4 = &lastDiff
+  // Return: w0 = Boolean
+  str   xzr, [x3]
+  str   xzr, [x4]
+  cbz   x2, .Ldiff_false
+
+  // nil handling: either nil and pointers differ → full range
+  cbz   x0, .Ldiff_nil
+  cbz   x1, .Ldiff_nil
+  cmp   x0, x1
+  b.eq  .Ldiff_false
+
+  mov   x5, x0               // save a base
+  mov   x6, x1               // save b base
+  mov   x7, x2               // save len
+  mov   x8, #0               // offset = 0
+
+  // ---- find first difference (16-byte NEON compare) ----
+.Ldiff_first_loop:
+  cmp   x2, #16
+  b.lo  .Ldiff_first_tail
+  ldp   x9, x10, [x0]
+  fmov  d0, x9
+  fmov  d2, x10
+  ins   v0.d[1], v2.d[0]
+  ldp   x9, x10, [x1]
+  fmov  d1, x9
+  fmov  d2, x10
+  ins   v1.d[1], v2.d[0]
+  cmeq  v0.16b, v0.16b, v1.16b
+  uminv b2, v0.16b
+  umov  w9, v2.b[0]
+  cmp   w9, #255
+  b.ne  .Ldiff_first_in_block
+  add   x0, x0, #16
+  add   x1, x1, #16
+  add   x8, x8, #16
+  sub   x2, x2, #16
+  cbnz  x2, .Ldiff_first_loop
+  b     .Ldiff_false
+
+.Ldiff_first_in_block:
+  // Scan 16 lanes for first unequal byte (mask byte != 0xFF)
+  mov   w10, #0
+.Ldiff_first_scan:
+  umov  w9, v0.b[0]
+  cmp   w9, #255
+  b.ne  .Ldiff_first_found
+  ext   v0.16b, v0.16b, v0.16b, #1
+  add   w10, w10, #1
+  cmp   w10, #16
+  b.lo  .Ldiff_first_scan
+  // Should not reach; treat as continue
+  add   x0, x0, #16
+  add   x1, x1, #16
+  add   x8, x8, #16
+  sub   x2, x2, #16
+  cbnz  x2, .Ldiff_first_loop
+  b     .Ldiff_false
+
+.Ldiff_first_found:
+  add   x8, x8, x10          // first offset
+  str   x8, [x3]
+  // last defaults to first; refine from end
+  str   x8, [x4]
+  b     .Ldiff_find_last
+
+.Ldiff_first_tail:
+  cbz   x2, .Ldiff_false
+.Ldiff_first_tail_loop:
+  ldrb  w9, [x0], #1
+  ldrb  w10, [x1], #1
+  cmp   w9, w10
+  b.ne  .Ldiff_first_tail_found
+  add   x8, x8, #1
+  subs  x2, x2, #1
+  b.ne  .Ldiff_first_tail_loop
+  b     .Ldiff_false
+
+.Ldiff_first_tail_found:
+  str   x8, [x3]
+  str   x8, [x4]
+
+  // ---- find last difference: scan backward from end (scalar; one-shot) ----
+.Ldiff_find_last:
+  // x5=a base, x6=b base, x7=len, first in [x3]
+  ldr   x8, [x3]             // firstDiff
+  sub   x9, x7, #1           // i = len-1
+.Ldiff_last_loop:
+  cmp   x9, x8
+  b.ls  .Ldiff_true          // i <= first → last already first
+  ldrb  w10, [x5, x9]
+  ldrb  w11, [x6, x9]
+  cmp   w10, w11
+  b.ne  .Ldiff_last_found
+  sub   x9, x9, #1
+  b     .Ldiff_last_loop
+
+.Ldiff_last_found:
+  str   x9, [x4]
+  b     .Ldiff_true
+
+.Ldiff_nil:
+  // one nil (or both nil with different pointers already excluded by equal len==0)
+  // if a <> b (pointer inequality): full range
+  cmp   x0, x1
+  b.eq  .Ldiff_false
+  str   xzr, [x3]
+  sub   x2, x2, #1
+  str   x2, [x4]
+  b     .Ldiff_true
+
+.Ldiff_true:
+  mov   w0, #1
+  ret
+
+.Ldiff_false:
+  mov   w0, #0
+  ret
+end;

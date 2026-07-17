@@ -10,6 +10,21 @@ begin
   Result := MemFindByte_Scalar(p, len, value);
 end;
 
+function MemDiffRange_NEON(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean;
+begin
+  Result := MemDiffRange_Scalar(a, b, len, firstDiff, lastDiff);
+end;
+
+procedure MemCopy_NEON(src, dst: Pointer; len: SizeUInt);
+begin
+  MemCopy_Scalar(src, dst, len);
+end;
+
+procedure MemSet_NEON(dst: Pointer; len: SizeUInt; value: Byte);
+begin
+  MemSet_Scalar(dst, len, value);
+end;
+
 function SumBytes_NEON(p: Pointer; len: SizeUInt): UInt64;
 begin
   Result := SumBytes_Scalar(p, len);

@@ -47,12 +47,13 @@ Facade (flat public API)
 | Scalar | 全 baseline | 全 | 全 | 全 | 参考实现 |
 | SSE2/AVX2 链 | 深 | 深 | SharedMask + 本地 PopCount | 深 | MaskedOps 常开 |
 | AVX512 | 宽向量深 | 部分/继承 | 部分 SharedMask | 宽批 | FMA/Shuffle 等按可用性 |
-| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **9/15**（6 槽刻意 scalar） | **20/20 SharedMask** | **0（全继承 scalar）** | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
+| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **12/15**（22a：Copy/Fill/DiffRange；余 3 槽 scalar） | **20/20 SharedMask** | **0（全继承 scalar）** | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
 | **RVV** | 大量（~412） | **0（全 scalar）** | **20/20 本地** | **0（全 scalar）** | MaskedOps 跟 vector-asm；实验性 |
 | LASX/WASM/VSX/MSA | — | — | — | — | 🔒 FPC/编译器阻塞 |
 
-**NEON Memory 刻意缺口（契约锁定，禁止假 wrapper）**  
-`DiffRange` / `Copy` / `Fill` / `Reverse` / `BytesIndexOf` / `Utf8Validate`
+**NEON Memory 剩余缺口（契约锁定，禁止假 wrapper）**  
+`Reverse` / `BytesIndexOf` / `Utf8Validate`  
+（Phase 22a 已关闭：`Copy` / `Fill` / `DiffRange`，asm 叶 + register 绑定，仅 `NEXTPAS_SIMD_NEON_ASM_ENABLED` 下接管）
 
 ### 1.4 验证真相
 
@@ -111,16 +112,16 @@ Facade (flat public API)
 | **非目标** | 不为刷绿删除公共 API；不降低 strict 标准 |
 | **状态** | ✅ 源码 token 扫描 + 运行时断言双过 |
 
-### Phase 22 — NEON Memory 真叶  【P1 · 当前】
+### Phase 22 — NEON Memory 真叶  【P1 · 22a 已完成 / 22b 待做】
 
 | 项 | 内容 |
 |----|------|
-| **目标** | 关闭 6 个 Memory 缺口中 **有真实 NEON 收益** 的槽；禁止标量 forwarder |
-| **候选槽** | 优先：`Copy` / `Fill` / `DiffRange`；次优：`Reverse` / `BytesIndexOf` / `Utf8Validate`（按实现成本与收益排序，可拆 22a/22b） |
-| **交付物** | AArch64 asm leaves + register 绑定 + source-contract 从「必须 scalar」翻转为「必须 backend-owned + 无死包装」+ 语义 parity |
-| **依赖** | Phase 21 不硬阻塞，但建议质量门先稳；NEON asm 仍受 FPC trunk / opt-in 约束 |
-| **验收** | focused + neon-optin 绿；对应槽 pointer ≠ scalar；契约更新；hygiene 绿 |
-| **非目标** | 不为覆盖率写 `NEONMemX := ScalarMemX` 包装 |
+| **目标** | 关闭 Memory 缺口中 **有真实 NEON 收益** 的槽；禁止标量 forwarder |
+| **22a（✅）** | `Copy` / `Fill` / `DiffRange`：AArch64 asm + register（`NEXTPAS_SIMD_NEON_ASM_ENABLED`）+ scalar fallback 仅用于非 asm 编译单元；契约从 KeepBaseScalar 翻到 FacadeFastSlots |
+| **22b（当前）** | `Reverse` / `BytesIndexOf` / `Utf8Validate`（按实现成本与收益排序） |
+| **依赖** | Phase 21 已完成；NEON asm 仍受 FPC trunk / AArch64 opt-in 约束 |
+| **验收 22a** | focused + neon-optin + hygiene 绿；源契约要求 asm/register 绑定；x86 上 runtime 仍继承 scalar（无 asm） |
+| **非目标** | 不为覆盖率写永久 `NEONMemX := ScalarMemX` 死包装注册 |
 
 ### Phase 23 — NEON Batch* 最小可用面  【P1】
 
@@ -185,7 +186,7 @@ P20 文档真相面 ──► P21 api-coverage 绿
    P26 编译器（阻塞） / P27 新 ISA（阻塞）
 ```
 
-**默认下一刀**：Phase 22a — NEON `Copy` / `Fill` / `DiffRange` 真叶。
+**默认下一刀**：Phase 22b — NEON `Reverse` / `BytesIndexOf` / `Utf8Validate`（或 Phase 23 Batch 最小面，按收益择一）。
 
 ---
 
@@ -256,12 +257,13 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 
 ## 9. 当前指针
 
-- **活动阶段**: Phase 22 — NEON Memory 真叶（优先 Copy/Fill/DiffRange）  
-- **已收口**: Phase 20 文档真相面；Phase 21 api-coverage-contract（missing=0 / thin=0）  
+- **活动阶段**: Phase 22b — 剩余 Memory 缺口 / 或 Phase 23 NEON Batch 最小面  
+- **已收口**: Phase 20 文档；Phase 21 api-coverage；Phase 22a Memory Copy/Fill/DiffRange  
 - **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等  
 
 ---
 
 *修订记录*  
 - 2026-07-17: 重写为 forward-looking 主线；归档 Phase 1–19 / Wave B；建立 Phase 20–27。  
-- 2026-07-17: Phase 20 提交；Phase 21 补 facade 覆盖测试并变绿；指针切到 Phase 22。
+- 2026-07-17: Phase 20 提交；Phase 21 补 facade 覆盖测试并变绿；指针切到 Phase 22。  
+- 2026-07-17: Phase 22a NEON MemCopy/MemSet/MemDiffRange asm 叶与契约翻转。

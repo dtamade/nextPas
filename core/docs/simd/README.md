@@ -22,9 +22,9 @@
 - **Intrinsics 层**: ✅ 主路径真实 ISA；实验性 ISA 可能 stub
 - **分派器层**: ✅ 嵌套表 `CoreVectors` / `Batch*` / `Memory` / `Mask`（Phase 19）；Public ABI 字段名保持 flat
 - **Mask**: ✅ NEON 绑定 portable `SharedMask*` + `scMaskedOps`（Wave B）
-- **NEON Memory**: ⚠️ 9/15 自有；6 槽刻意 scalar（DiffRange/Copy/Fill/Reverse/BytesIndexOf/Utf8Validate）→ roadmap Phase 22
+- **NEON Memory**: ⚠️ **12/15** 自有（Phase 22a：Copy/Fill/DiffRange 真 asm 叶）；余 3 槽 scalar（Reverse/BytesIndexOf/Utf8Validate）→ Phase 22b
 - **cpuinfo**: ✅ 主路径稳定
-- **活动阶段**: Phase 20–21 已收口 → **Phase 22 NEON Memory 真叶**
+- **活动阶段**: Phase 20–21 已收口；**Phase 22a 进行中/收口**
 - **验证基线 (2026-07-17)**:
   - `make focused FOCUS=core/tests/nextpas.core.simd` → **1740 passed**
   - `neon-optin-focused` → **1740 passed**（Wave B 后）
