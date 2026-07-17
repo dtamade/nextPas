@@ -151,6 +151,58 @@ begin
   end;
 end;
 
+procedure TestHttpErrorCreateOpTaxonomy;
+var
+  LOp: EHttpError;
+  LStatus: EHttpError;
+  LBareArg: EArgumentError;
+  LCancel: ECancelledError;
+  LWrapped: Exception;
+begin
+  LOp := EHttpError.CreateOp(hekProtocol, 'json', 'bad json');
+  try
+    Check(LOp.Kind = hekProtocol, 'CreateOp sets Kind');
+    CheckEqual('json', LOp.Op, 'CreateOp sets Op');
+    CheckEqual('bad json', LOp.Message, 'CreateOp sets Message');
+    CheckEqual(Int64(0), Int64(LOp.Status), 'CreateOp without Status leaves 0');
+  finally
+    LOp.Free;
+  end;
+
+  LStatus := EHttpError.CreateOp(hekStatus, 'ensure', 'not found',
+    HTTP_STATUS_NOT_FOUND);
+  try
+    Check(LStatus.Kind = hekStatus, 'CreateOp+Status Kind');
+    CheckEqual('ensure', LStatus.Op, 'CreateOp+Status Op');
+    CheckEqual(Int64(HTTP_STATUS_NOT_FOUND), Int64(LStatus.Status),
+      'CreateOp+Status preserves Status');
+  finally
+    LStatus.Free;
+  end;
+
+  LBareArg := EArgumentError.Create('foreign precondition');
+  try
+    Check(HttpErrorIsUserError(LBareArg),
+      'foreign bare EArgumentError still counts as user error');
+  finally
+    LBareArg.Free;
+  end;
+
+  LCancel := ECancelledError.Create('bare cancel');
+  try
+    LWrapped := HttpWrapTransportException(LCancel);
+    try
+      Check(LWrapped is EHttpError, 'cancel wrap produces EHttpError');
+      Check(EHttpError(LWrapped).Kind = hekCanceled, 'cancel wrap Kind');
+      CheckEqual('transport', EHttpError(LWrapped).Op, 'cancel wrap Op=transport');
+    finally
+      LWrapped.Free;
+    end;
+  finally
+    LCancel.Free;
+  end;
+end;
+
 procedure TestHttpStatusText;
 begin
   CheckEqual('Continue', HttpStatusText(100), '100');
@@ -549,6 +601,7 @@ begin
   T.Test('HttpStrToMethod', @TestHttpStrToMethod);
   T.Test('EHttpError category', @TestHttpErrorCategory);
   T.Test('HttpError Kind helpers', @TestHttpErrorKindHelpers);
+  T.Test('EHttpError CreateOp taxonomy', @TestHttpErrorCreateOpTaxonomy);
   T.Test('HttpStatusText', @TestHttpStatusText);
   T.Test('HttpStatus class helpers', @TestHttpStatusClassHelpers);
   T.Test('HttpVersionToStr', @TestHttpVersionToStr);

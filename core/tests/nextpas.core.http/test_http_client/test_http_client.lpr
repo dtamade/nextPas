@@ -10336,6 +10336,26 @@ begin
     'H1 incomplete response uses CreateOp with Op=transport');
 end;
 
+procedure TestClientTaxonomyOpsAlignedSourceContract;
+{ Wave E1: client hotspot Ops stay aligned with CONTRACT Op table. }
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  Check(Pos('CreateOp(hekProtocol, ''json'',', LSource) > 0,
+    'json decode failures use Op=json');
+  Check(Pos('CreateOp(hekProtocol, ''content_encoding'',', LSource) > 0,
+    'unsupported Content-Encoding uses Op=content_encoding');
+  Check(Pos('CreateOp(hekBody, ''content_encoding'',', LSource) > 0,
+    'corrupt Content-Encoding uses Op=content_encoding');
+  Check(Pos('CreateOp(hekStatus, ''ensure'',', LSource) > 0,
+    'ensure non-2xx uses Op=ensure');
+  Check(Pos('CreateOp(hekConnect, ''download'',', LSource) > 0,
+    'download nil response uses Op=download');
+  Check(Pos('raise EArgumentError', LSource) = 0,
+    'client must not raise bare EArgumentError');
+end;
+
 procedure TestHttpEnsureSuccessOpIsEnsure;
 var
   LResp: IHttpResponse;
@@ -11107,6 +11127,8 @@ begin
     @TestClientRedirectCreateOpSourceContract);
   T.Test('Client cancel/transport CreateOp source contract',
     @TestClientCancelAndTransportCreateOpSourceContract);
+  T.Test('Client taxonomy Ops aligned source contract',
+    @TestClientTaxonomyOpsAlignedSourceContract);
   T.Test('HttpEnsureSuccess Op=ensure on non-2xx',
     @TestHttpEnsureSuccessOpIsEnsure);
   T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);
