@@ -25,6 +25,20 @@ fi
 
 cd "$CORE_ROOT"
 
+# Optional GHA toolchain hints (set by core-ci test-macos Setup).
+if [[ -n "${NEXTPAS_FPC_UNITS:-}" ]]; then
+  WRAP="$CORE_ROOT/build/macos-fpc-wrap.sh"
+  mkdir -p "$(dirname "$WRAP")"
+  {
+    echo '#!/usr/bin/env bash'
+    echo 'set -euo pipefail'
+    echo "exec fpc -Fu${NEXTPAS_FPC_UNITS} ${NEXTPAS_FPC_SDK:+-XR${NEXTPAS_FPC_SDK}} \"\$@\""
+  } >"$WRAP"
+  chmod +x "$WRAP"
+  export FPC="$WRAP"
+  echo "fpc-wrap=$WRAP units=$NEXTPAS_FPC_UNITS"
+fi
+
 # Documented D2.b set (ROADMAP): time, sync, thread, files, path, env, error, socket.
 MODULE_ENTRIES=(
   "platform.time tests/nextpas.core.platform.time/test_platform_time_helpers"
