@@ -8351,6 +8351,52 @@ begin
   HttpReleaseResponseBody(LResp);
 end;
 
+procedure TestWithTimeoutOuterWinsAndComposesWithRetry;
+{ Wave E2: outer WithTimeout overrides; stack with WithRetry still applies. }
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+
+  LResp := LClient.WithTimeout(5000).WithTimeout(9000).Get('http://localhost/t');
+  CheckEqual(Int64(9000), LTransport.CapturedTimeoutMs,
+    'outer WithTimeout(9000) wins over WithTimeout(5000)');
+  HttpReleaseResponseBody(LResp);
+
+  LResp := LClient.WithRetry(1).WithTimeout(8000).Get('http://localhost/t');
+  CheckEqual(Int64(8000), LTransport.CapturedTimeoutMs,
+    'WithRetry then WithTimeout still overrides transport default');
+  HttpReleaseResponseBody(LResp);
+
+  LResp := LClient.WithTimeout(7000).WithRetry(1).Get('http://localhost/t');
+  CheckEqual(Int64(7000), LTransport.CapturedTimeoutMs,
+    'WithTimeout under WithRetry still applies request timeout');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestWithHeaderOuterWinsOverInner;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient
+    .WithHeader('X-Trace', 'inner')
+    .WithHeader('X-Trace', 'outer')
+    .Get('http://localhost/hdr');
+  Check(LResp <> nil, 'stacked WithHeader returns response');
+  CheckEqual(Int64(2), Int64(LTransport.Calls),
+    'default follow-redirects makes second capture call');
+  CheckEqual('outer', LTransport.SeenTraceHeader,
+    'outer WithHeader wins for same name');
+  HttpReleaseResponseBody(LResp);
+end;
+
 procedure TestPerRequestTimeoutAtTransportLevel;
 var
   LTransport: TTimeoutCaptureTransport;
@@ -11022,6 +11068,10 @@ begin
     @TestWithFollowRedirectsOverrideClientDefault);
   T.Test('WithTimeout decorator does not crash',
     @TestWithTimeoutDecorator);
+  T.Test('WithTimeout outer wins and composes with WithRetry',
+    @TestWithTimeoutOuterWinsAndComposesWithRetry);
+  T.Test('WithHeader outer wins over inner',
+    @TestWithHeaderOuterWinsOverInner);
   T.Test('Per-request timeout overrides transport default',
     @TestPerRequestTimeoutAtTransportLevel);
   T.Test('Builder creates GET request', @TestBuilderGetRequest);

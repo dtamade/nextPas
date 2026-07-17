@@ -485,6 +485,9 @@ var
 begin
   LOptions := THttpClientOptions.Default;
   CheckEqual(Int64(30000), LOptions.Timeout, 'default timeout');
+  CheckEqual(Int64(0), LOptions.ConnectTimeout, 'default ConnectTimeout is 0');
+  CheckEqual(LOptions.Timeout, LOptions.EffectiveConnectTimeout,
+    'ConnectTimeout=0 falls back to Timeout');
   CheckEqual(Int64(10), Int64(LOptions.MaxRedirects), 'default max redirects');
   Check(LOptions.FollowRedirects, 'default follows redirects');
   Check(LOptions.Version = hvHttp11, 'default client version field');
@@ -525,6 +528,25 @@ begin
   LOptions := LOptions.WithRequestArena(4096);
   Check(LOptions.RequestArena, 'WithRequestArena enables');
   CheckEqual(Int64(4096), Int64(LOptions.RequestArenaCapacity), 'WithRequestArena cap');
+end;
+
+procedure TestHttpServerOptionsProduction;
+var
+  LDefault: THttpServerOptions;
+  LProd: THttpServerOptions;
+begin
+  LDefault := THttpServerOptions.Default;
+  LProd := THttpServerOptions.Production;
+  CheckEqual(Int64(0), LDefault.ReadTimeout, 'Default ReadTimeout stays 0');
+  CheckEqual(Int64(0), LDefault.WriteTimeout, 'Default WriteTimeout stays 0');
+  CheckEqual(Int64(30000), LProd.ReadTimeout, 'Production ReadTimeout is 30000');
+  CheckEqual(Int64(30000), LProd.WriteTimeout, 'Production WriteTimeout is 30000');
+  CheckEqual(LDefault.IdleTimeout, LProd.IdleTimeout,
+    'Production keeps Default IdleTimeout');
+  CheckEqual(Int64(LDefault.MaxHeaderSize), Int64(LProd.MaxHeaderSize),
+    'Production keeps Default MaxHeaderSize');
+  CheckEqual(LDefault.MaxBodySize, LProd.MaxBodySize,
+    'Production keeps Default MaxBodySize');
 end;
 
 procedure TestHttpOptionsWithVersion;
@@ -625,6 +647,7 @@ begin
   T.Test('THttpClientOptions.WithTLSContext fluent',
     @TestHttpClientOptionsWithTLSContextFluent);
   T.Test('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
+  T.Test('THttpServerOptions.Production', @TestHttpServerOptionsProduction);
   T.Test('HTTP options WithVersion', @TestHttpOptionsWithVersion);
   T.Test('HTTP options WithTimeout', @TestHttpOptionsWithTimeout);
   T.Test('HTTP options WithMaxRedirects', @TestHttpOptionsWithMaxRedirects);
