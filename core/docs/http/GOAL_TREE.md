@@ -1,9 +1,10 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-17 (Wave P5 G6 closure; framework-complete non-H3)
+> Last updated: 2026-07-17 (Era 6 Excellence open; framework-complete non-H3 retained)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — ordered Eras/Waves, Goal Loop, Inbox. This file is north star + stage truth, **not** a day-to-day backlog.
+> **Product focus**: H1/H2 client+server and WebSocket excellence. **No H3 product demand** — keep H3 blocked/honest, never fake facade.
 
 ## North Star And Scope
 
@@ -23,11 +24,12 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 |----|------|
 | G0–G5 骨架 | 完成 |
 | G6 performance evidence | **stage-closed**（见下「G6 stage performance complete」；细节在 [`BENCHMARKS.md`](BENCHMARKS.md)） |
-| non-H3 stage-complete | 完成（H3 诚实 blocked on QUIC） |
-| **framework-complete (non-H3)** | **yes** — Era 0–4 默认路径 landed；H3-* Blocked on QUIC（不空转） |
+| non-H3 stage-complete | 完成（H3 诚实 blocked on QUIC；无产品需求） |
+| **framework-complete (non-H3)** | **yes** — Era 0–4 默认路径 landed |
+| **Excellence (Era 6)** | **in progress** — H1/H2/WS 精品；可受控反哺 net/tls（见 ROADMAP） |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | ~35 focused suites |
-| **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（H3 Blocked 时 STOP 或 Inbox；本文件不写具体 Wave 名） |
+| **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
 
 四支柱、推荐路径、Done when、Gates、Inbox 均只在 ROADMAP 维护。
 
@@ -56,9 +58,22 @@ nextpas.core.http
 ├── G2: Correctness, safety, lifecycle, and ownership proof      [INV-12 final]
 ├── G3: API ergonomics and performance isolation                 [stage-closed]
 ├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [H2 facade-proven; H3 blocked]
-├── G5: Static/WebSocket graduation gates                        [helper-level stable]
-└── G6: Cross-language benchmark truth and long-run positioning  [stage-closed]
+├── G5: Static/WebSocket graduation gates                        [helper-level stable; WS Excellence in ROADMAP Era 6]
+└── G6: Cross-language benchmark truth and long-run positioning  [stage-closed; further wins optional via Era 6 X5]
 ```
+
+### Excellence stage (post framework-complete non-H3)
+
+After framework-complete (non-H3), the live product push is **H1/H2 + WebSocket depth**, not H3.
+
+Win dimensions (not ecosystem checklists):
+
+1. Correctness edges proven (timeouts, cancel, pools, WS close, H2 edges already landed).
+2. Predictable contracts (Kind/Op, options, ownership).
+3. Evidence-backed performance (ladder + comparators; profiled wins).
+4. Pascal-first small synchronous APIs.
+
+Lower-layer fixes (`net` cancel floor, `tls` factory residual) are preferred over HTTP-only workarounds when they unblock these dimensions. Ordered work: **only** [`ROADMAP.md`](ROADMAP.md) Era 6.
 
 ### G6 stage performance complete
 
@@ -252,18 +267,16 @@ H3 is blocked on the QUIC module. Only `nextpas.core.tls.quic.crypto.pas` (QUIC 
 
 ## Static And WebSocket Graduation Criteria
 
-Static and WebSocket helpers are intentionally helper-level public surfaces today.
+Static serving remains a helper-level public surface with tight range/conditional/stream contracts already landed.
 
-They should stay that way unless there is a clear graduation contract:
+WebSocket is a **production-intended helper**: RFC framing coverage is already strong; Era 6 Wave X1 graduates it via **lifecycle contract + cancel/ownership evidence**, not by growing extension negotiation APIs.
 
-- static serving should not grow into a broader service family until range, streaming, cache, and binary-file semantics are defined tightly enough to stay stable
-- WebSocket should not grow new option families or extension negotiation APIs without a clear ownership and behavior story
-- more negative-case testing is not itself progress unless it closes a real behavior gap
+Graduation rules:
 
-Current rule of thumb:
-
-- helper-level behavior can keep tightening
-- helper-to-subsystem graduation needs an explicit design decision
+- static: do not grow into a broader service family without a stable multi-feature contract
+- WebSocket: no new option families / permessage-deflate / subprotocol stacks without real consumer demand and ownership story
+- more negative-case tests alone are not progress unless they close a real behavior gap
+- WS-over-H2 stays parked until a real consumer
 
 ## Verification And Done Criteria
 

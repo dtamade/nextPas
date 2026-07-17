@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
 **最后更新**：2026-07-17（Wave A2 pool + protocol select）
-**版本**：3.2
+**版本**：3.13
 
 ---
 
@@ -154,8 +154,10 @@ end;
   4. H1 `RoundTrip`：入口、新 dial 前、request write 后 / response read 前
   5. pool reconnect 重写前
   取消抛 `EHttpError(hekCanceled)`。H1 client 在 dial 后把 cancel token
-  接到 `ITcpStream.SetCancelToken`：阻塞 Read/Write 以 ~50ms 切片轮询
-  cancel，中途取消抛 `hekCanceled`（经 `ECancelledError` 包装）。
+  接到 `ITcpStream.SetCancelToken`：阻塞 Read/Write 当前以 ~50ms
+  `SO_RCVTIMEO` 切片轮询 cancel（**net residual**；Era 6 Wave X2 授权在
+  `nextpas.core.net` 改进唤醒，不在 http 堆第二套 IO）。中途取消抛
+  `hekCanceled`（经 `ECancelledError` 包装）。
   **仍建议**与 `Timeout` / `WithTimeout` 配对，避免无 cancel 时无限等待。
   超时仍为 `hekTimeout`（`WithTimeout` / client options）。
 - Client 超时拆分（`THttpClientOptions`）：
@@ -209,7 +211,7 @@ end;
 | Capability | HTTP surface today | Owner | Status |
 |------------|-------------------|-------|--------|
 | OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** (H1/H2) |
-| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1/H2 client wire | **Landed** (slice latency) |
+| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1/H2 client wire | **Landed** (slice latency); **Era 6 X2** may replace slice with faster wake in net |
 | WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
 | HTTPS CONNECT (plain HTTP proxy) | CONNECT + TLS over tunnel; origin-form | http H1 + TLS stream | **Landed** (cycle-9 Wave D) |
 | H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
@@ -534,8 +536,8 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 **诚实 residual（非缺口伪装）**：
 
 - 公开 `IHttpClient` 不暴露“单连接并发多请求”多路 API；多请求并发依赖多连接或上层调度。
-- OpenSSL backend heaptrc residual 属 tls 层，不在 http 内清零。
-- H3 / QUIC、h2c Upgrade、CONNECT/WS-over-H2：排除或 Blocked（见下节 / ROADMAP）。
+- OpenSSL backend heaptrc residual 属 **tls** 层；http 不单独清零宣称。**Era 6 Wave X4** 授权在 tls 收敛。
+- H3 / QUIC：无产品需求 + Blocked on QUIC；禁止空 facade。h2c Upgrade、CONNECT/WS-over-H2：Park（见 ROADMAP）。
 
 #### Client connection pool（Wave A2）
 
@@ -545,7 +547,7 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 | `MaxPoolSize` | **每 authority 最大空闲连接数**（默认 64）；**不是**跨 host 全局上限 | `test_http_client` / `test_http_h2_client` per-authority |
 | Idle put | 仅 keep-alive / `IsReusable` 连接入池；超 per-authority 上限则关闭新归还连接 | pool max / non-reusable tests |
 | Idle clear | `IHttpClient.CloseIdleConnections` → transport `IHttpTransportIdleConnections.CloseIdleConnections` 清空全部 authority 的空闲项；destroy 亦 `PoolClear` | CloseIdle + destroy source-contract |
-| 无 idle TTL | 当前**无**按墙钟自动淘汰空闲连接；调用方用 `CloseIdleConnections` 或进程结束 | residual（诚实） |
+| 无 idle TTL | 当前**无**按墙钟自动淘汰空闲连接；调用方用 `CloseIdleConnections` 或进程结束 | residual（诚实）；**Era 6 Wave X3** 计划消除 |
 | 并发模型 | 同步 `RoundTrip` 串行一流；同 transport 可多线程各自 RoundTrip（池 mutex）；**无**同连接多路 API | A1 residual |
 
 #### H1 / H2 选择策略（Wave A2）
@@ -604,3 +606,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.10 | Wave C1：Content-Encoding 契约；client `HttpDecodeContentEncoding` / `HttpReadResponseBody*Decoded`；Op=`content_encoding`；server Compression/Decompress middleware 已落地 |
 | 2026-07-17 | 3.11 | Wave C2：条件请求 helper + ServeFile 304 契约表（If-None-Match / If-Modified-Since） |
 | 2026-07-17 | 3.12 | Wave C3：Range 单段/416/`Accept-Ranges` + 流式契约 |
+| 2026-07-17 | 3.13 | Era 6 Excellence：cancel/OpenSSL/idle-TTL residual 标明 X2/X4/X3 可主动收敛；H3 无产品需求 |
