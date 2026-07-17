@@ -559,13 +559,14 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 | Server GOAWAY | 停止新流；split last-stream tracking；peer GOAWAY 不覆盖 last seen peer id | `test_http_h2_session` GOAWAY 套件 |
 | 流控 | 双向 WINDOW_UPDATE；发送窗耗尽等 peer update；连接级 flush pending update | client/session window tests |
 | MaxConcurrentStreams | server 超限 → `REFUSED_STREAM` RST | session enforcement tests |
-| 池 / 多路表征 | client **同步** `RoundTrip`：单连接上**串行**一流；池按 authority/`MaxPoolSize` 复用连接；**不**提供同连接并发多 `RoundTrip` 多路 API | pool tests + 本表 residual |
+| 池 / 多路表征 | 默认 `IHttpTransport.RoundTrip`：单连接**串行**一流；池按 authority/`MaxPoolSize` 复用。**Era 8 I3**：可选 `IHttpTransportMultiplex.RoundTripMany` 同连接并发多流（H2 only） | pool tests；`RoundTripMany` focused |
 | Server push | `ENABLE_PUSH=0`；`PUSH_PROMISE` → GOAWAY `PROTOCOL_ERROR` | client SETTINGS + PUSH tests |
 | TLS H2 | ALPN `h2`；`http://` prior knowledge；无 h2c Upgrade | facade / tls_real |
 
 **诚实 residual（非缺口伪装）**：
 
-- 公开 `IHttpClient` 不暴露“单连接并发多请求”多路 API；多请求并发依赖多连接或上层调度。
+- 默认 `IHttpClient.Send` / `IHttpTransport.RoundTrip` 仍为串行一流。同连接多路走 **`IHttpTransportMultiplex.RoundTripMany`**（`Supports` 探测；H2 实现，H1 无此接口）。
+- `RoundTripMany`：同 authority（scheme/host/port）；响应按请求下标排序；受 peer `MaxConcurrentStreams` 约束；流 ID 客户端奇数递增；GOAWAY 期间未完成且 stream id > last-stream-id → `hekProtocol`；cancel 与单次 RoundTrip 同源（首请求 token）。
 - OpenSSL backend heaptrc（**Wave X4 + R2 dig + R4 fix**）：
   - X4 修 `FPinValidator` 未释放（每 `CreateContext` ~32B → FreeAndNil）。
   - R2 曾诚实 Park **1×41B**（heaptrc size 41、无帧；process-lifetime）。
@@ -589,7 +590,7 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 | Idle clear | `IHttpClient.CloseIdleConnections` → transport `IHttpTransportIdleConnections.CloseIdleConnections` 清空全部 authority 的空闲项；destroy 亦 `PoolClear` | CloseIdle + destroy source-contract |
 | `IdleTTL` | 墙钟空闲淘汰（默认 **90000** ms）；`WithIdleTTL` 外层胜；**0** = 关闭墙钟淘汰；负值 `hekArgument`；借出/归还路径淘汰过期项（`IdleAtMs` 在 put 时打戳） | `test_http_client` IdleTTL expires / IdleTTL=0 keep；H1/H2 同源实现 |
 | 主动健康探测（Wave I1） | **借出路径**（`PoolGet`，锁外）：H1 非阻塞 `TryRead` 探针（WouldBlock=活；数据/EOF/错误=丢弃）；H2 在读缓冲空时发 PING，等 ACK（`PingTimeout` 默认 5000ms；**0**=关闭 PING 探针，仅状态位）；失败连接 Close 后继续取池或 dial | `test_http_client` H1 probe source-contract；`test_http_h2_client` PING on borrow / discard closed / PingTimeout=0 |
-| 并发模型 | 同步 `RoundTrip` 串行一流；同 transport 可多线程各自 RoundTrip（池 mutex）；**无**同连接多路 API | A1 residual |
+| 并发模型 | 默认同步 `RoundTrip` 串行一流；同 transport 可多线程各自 RoundTrip（池 mutex）；**I3** 同连接多路 = `IHttpTransportMultiplex.RoundTripMany`（不改默认 Send 语义） | I3 focused + A1 residual |
 
 #### H1 / H2 选择策略（Wave A2）
 

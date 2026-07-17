@@ -3554,6 +3554,124 @@ begin
   end;
 end;
 
+{ Wave I3: two concurrent streams on one connection (interleaved responses). }
+procedure TestRoundTripManyTwoConcurrentStreams;
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LReqs: array of IHttpRequest;
+  LResps: THttpResponseArray;
+  LFrames: array[0..15] of TH2Frame;
+  LCount: SizeInt;
+  LHeadersSeen: array[0..1] of Boolean;
+  LI: SizeInt;
+begin
+  { Server replies on stream 3 first, then stream 1 — demux must reorder by
+    request index, not arrival. }
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(3, '200', 'second', []) +
+    ComposeResponse(1, '200', 'first', []));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    SetLength(LReqs, 2);
+    LReqs[0] := NewRequest(hmGet, 'http://example.com/a');
+    LReqs[1] := NewRequest(hmGet, 'http://example.com/b');
+    LResps := LConn.RoundTripMany(LReqs);
+    CheckEqual(Int64(2), Int64(Length(LResps)), 'multiplex: two responses');
+    CheckEqual(Int64(200), Int64(LResps[0].StatusCode), 'multiplex: resp0 status');
+    CheckEqual(Int64(200), Int64(LResps[1].StatusCode), 'multiplex: resp1 status');
+    CheckEqual('first', ReadAllBody(LResps[0].Body), 'multiplex: resp0 body by index');
+    CheckEqual('second', ReadAllBody(LResps[1].Body), 'multiplex: resp1 body by index');
+
+    DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
+      MaxInt), LFrames, LCount);
+    LHeadersSeen[0] := False;
+    LHeadersSeen[1] := False;
+    for LI := 0 to LCount - 1 do
+      if LFrames[LI].Header.FrameType = H2_FRAME_HEADERS then
+      begin
+        if LFrames[LI].Header.StreamID = 1 then
+          LHeadersSeen[0] := True
+        else if LFrames[LI].Header.StreamID = 3 then
+          LHeadersSeen[1] := True;
+      end;
+    Check(LHeadersSeen[0] and LHeadersSeen[1],
+      'multiplex: client opened stream 1 and 3');
+  finally
+    LResps := nil;
+    LReqs := nil;
+    LConn.Free;
+    LStream := nil;
+  end;
+end;
+
+procedure TestTransportMultiplexTwoStreams;
+var
+  LTransport: IHttpTransport;
+  LMux: IHttpTransportMultiplex;
+  LStream: TFakeTcpStream;
+  LReqs: array of IHttpRequest;
+  LResps: THttpResponseArray;
+begin
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '201', 'one', []) +
+    ComposeResponse(3, '202', 'two', []));
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LTransport := NewH2ClientTransport(TH2ClientTransportOptions.Default);
+    Check(Supports(LTransport, IHttpTransportMultiplex, LMux),
+      'H2 transport exposes IHttpTransportMultiplex');
+    SetLength(LReqs, 2);
+    LReqs[0] := NewRequest(hmGet, 'http://example.com/one');
+    LReqs[1] := NewRequest(hmGet, 'http://example.com/two');
+    LResps := LMux.RoundTripMany(LReqs);
+    CheckEqual(Int64(201), Int64(LResps[0].StatusCode), 'transport mux status0');
+    CheckEqual(Int64(202), Int64(LResps[1].StatusCode), 'transport mux status1');
+    CheckEqual('one', ReadAllBody(LResps[0].Body), 'transport mux body0');
+    CheckEqual('two', ReadAllBody(LResps[1].Body), 'transport mux body1');
+  finally
+    LResps := nil;
+    LReqs := nil;
+    LMux := nil;
+    LTransport := nil;
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LStream := nil;
+  end;
+end;
+
+procedure TestRoundTripManyRejectsMixedAuthority;
+var
+  LTransport: IHttpTransport;
+  LMux: IHttpTransportMultiplex;
+  LReqs: array of IHttpRequest;
+  LGot: Boolean;
+begin
+  LTransport := NewH2ClientTransport(TH2ClientTransportOptions.Default);
+  Check(Supports(LTransport, IHttpTransportMultiplex, LMux),
+    'mixed-authority: multiplex interface present');
+  SetLength(LReqs, 2);
+  LReqs[0] := NewRequest(hmGet, 'http://example.com/a');
+  LReqs[1] := NewRequest(hmGet, 'http://other.example/b');
+  LGot := False;
+  try
+    LMux.RoundTripMany(LReqs);
+  except
+    on E: EHttpError do
+      LGot := (E.Kind = hekArgument) and
+        (Pos('same authority', E.Message) > 0);
+  end;
+  Check(LGot, 'mixed authority raises hekArgument');
+  LReqs := nil;
+  LMux := nil;
+  LTransport := nil;
+end;
+
 begin
   T := TTestSuite.Create('test_http_h2_client');
   T.Test('Handshake writes client preface and settings',
@@ -3662,5 +3780,11 @@ begin
   T.Test('OPTIONS * request path', @TestOptionsStarRequestPath);
   T.Test('Empty path defaults to /', @TestEmptyPathDefaultsToSlash);
   T.Test('Invalid :status value raises error', @TestInvalidStatusValueRaisesError);
+  T.Test('RoundTripMany two concurrent streams',
+    @TestRoundTripManyTwoConcurrentStreams);
+  T.Test('Transport multiplex interface two streams',
+    @TestTransportMultiplexTwoStreams);
+  T.Test('RoundTripMany rejects mixed authority',
+    @TestRoundTripManyRejectsMixedAuthority);
   if not T.Run then Halt(1);
 end.

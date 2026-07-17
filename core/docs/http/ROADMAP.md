@@ -98,7 +98,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave R4 HTTPS 1×41B zero | 完成（capabilities cache FillChar → Default；client 0 unfreed） |
 | Wave I0 Era 8 open | 完成（Inbox 三项升格 I1–I3；推荐路径 I1→I2→I3） |
 | Wave I1 pool health probe | 完成（H1 TryRead 借出探针 + H2 PING/ACK；0 unfreed） |
-| **下一执行点** | **Wave I3** — H2 same-connection multiplex API |
+| **下一执行点** | **Era 8 Done / STOP**（I0–I3 landed；H3 仍 Blocked） |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
@@ -612,13 +612,14 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 同连接并发多 `RoundTrip`/流的**最小**公开面设计+实现；流 ID/流控/cancel 边界写 CONTRACT；与现串行池路径共存；focused 并发测试；0 unfreed |
 | **Don't** | 假 facade；破坏现同步契约默认语义；server push；h2c Upgrade |
 | **Done when** | 文档化 API + 至少 2 并发流证据；串行路径回归绿 |
 | **Gates** | `test_http_h2_client`（+ 新 focused 若拆分）；hygiene |
 | **Land paths** | H2 client/transport + intf/facade 最小 + docs + tests |
 | **Next** | Era 8 Done / STOP |
+| **Evidence** | `IHttpTransportMultiplex.RoundTripMany`；连接层 demux；同 authority 校验；`MaxConcurrentStreams`；串行 `RoundTrip` 不变；`test_http_h2_client` 72/0 |
 
 **Era 8 Done when**：I0–I3 landed（或 I3 诚实 Park 并写清原因）；H3 仍 Blocked。
 
@@ -645,11 +646,11 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
 3. Era 6 X0–X5 landed — Excellence Done
 4. Era 7 + R4 Done（HTTPS client 0 unfreed）
-5. Era 8 I0–I2 landed — NEXT = Wave I3（H2 same-connection multiplex）
+5. Era 8 I0–I3 landed — framework depth Done (non-H3)；H3 仍 Blocked
 6. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：自动执行 NEXT Wave（I3）；不要空转 H3。**
+**没有用户指令时：STOP（Era 8 Done）；不要空转 H3。**
 
 ---
 
