@@ -1,9 +1,9 @@
 # Atomic & Lockfree 可执行路线图（权威）
 
-> **状态**: **Maintenance**（2026-07-17）· R0–R7 + RC Ready + H2 + **H3-1 + H3-2** **已完成** · **Owner**: atomic-lockfree lane
-> **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）+ consumer `async.loop`（H3-1）+ bag/multimap（H3-2）
+> **状态**: **Maintenance**（2026-07-18）· R0–R7 + RC Ready + H2 + **H3-1 + H3-2 + H3-3** **已完成** · **Owner**: atomic-lockfree lane
+> **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）+ consumer `async.loop`（H3-1）+ bag/multimap（H3-2）+ consumer gate（H3-3）
 > **当前执行主线**: **Maintenance**。H2 记录见 [`roadmap-h2.md`](roadmap-h2.md)；H3 见 [`roadmap-h3.md`](roadmap-h3.md)。
-> **H3**: Wave-1 **done**；**H3-2 done**（bag+multimap CONTRACT §0.3）；**H3-3…H3-4 未授权**。
+> **H3**: Wave-1 **done**；**H3-2 done**；**H3-3 done**（`verify-h3-consumers`）；**H3-4 / H3-5 未授权实现**。
 > **R8**: 研究 pack 诚实收口（opt-in docs）— [`r8-research-status.md`](r8-research-status.md)；**不**默认生产化。
 > **Lane**: `.worktrees/atomic-lockfree`；见 [`READY.md`](READY.md)。
 > 冲突时以 **CONTRACT + [`roadmap-h2.md`](roadmap-h2.md) + 本路线图** 为准。
@@ -20,9 +20,9 @@
 | [`CONTRACT.md`](CONTRACT.md) | 运行时/API 契约（Closed、managed、RTL isolation、Try\*Ex） | **契约真相** |
 | [`README.md`](README.md) | 模块入口、T1 矩阵、生命周期、如何用 | **产品真相** |
 | **[`roadmap-h2.md`](roadmap-h2.md)** | Horizon-2（H2-0…H2-6）章程与完成记录 | **H2 完成记录** |
-| **[`roadmap-h3.md`](roadmap-h3.md)** | Horizon-3 章程 + H3-0…H3-4 记录 | **H3-1 + H3-2 done**；H3-3… 未授权 |
+| **[`roadmap-h3.md`](roadmap-h3.md)** | Horizon-3 章程 + H3-0…H3-5 记录 | **H3-1…H3-3 done**；H3-4/H3-5 未授权实现 |
 | **`roadmap.md`（本文件）** | R0–R7 完成记录、全局非目标、历史索引 | **R 线记录 + 指针** |
-| [`READY.md`](READY.md) | 状态入口、验收清单、Maintenance 策略 | **Maintenance**（含 H3 Wave-1 done） |
+| [`READY.md`](READY.md) | 状态入口、验收清单、Maintenance 策略 | **Maintenance**（含 H3-3 consumer gate） |
 | [`r8-research-status.md`](r8-research-status.md) | R8（NUMA/RTM/TLA）诚实状态与 research pack 收口 | 研究，opt-in |
 | [`formal/README.md`](formal/README.md) | TLA+ 如何跑 / 无 TLC 时 model-only | 研究 |
 | [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 | 证据 / 维护参考 |
@@ -35,7 +35,7 @@
 | `benchmark-comparison-*.md` | 历史对照数据（需平台信封） | 证据附件 |
 | `formal/tla/*` | 形式化模型 | 研究 |
 
-**原则**：R 线、H2、**H3-1** 与 **H3-2** 已完成；**默认进入 Maintenance**。不要再开无名编号的「Phase N」或擅自开 R9。R8 仅研究 opt-in（**不**生产化）。H3-3… 须单独授权，**不自动执行**。
+**原则**：R 线、H2、**H3-1…H3-3** 已完成；**默认进入 Maintenance**。不要再开无名编号的「Phase N」或擅自开 R9。R8 仅研究 opt-in（**不**生产化）。H3-4 / H3-5 须单独授权，**不自动执行**。
 
 ---
 
@@ -83,11 +83,12 @@
 |--------|------|----------|
 | — | 主线 R0–R7 + RC Ready | **DONE** |
 | — | Horizon-2（Deque Try\*Ex、T2 分档、atomic 首选路径、bench 信封、stress、真实消费者） | **H2-0…H2-6 DONE** |
-| **P0 当前** | Maintenance：T1/atomic 缺陷、契约修订、`verify-t1` 保绿、H3-1 async 回归 | **Maintenance** |
+| **P0 当前** | Maintenance：T1/atomic 缺陷、契约修订、`verify-t1` + `verify-h3-consumers` 保绿 | **Maintenance** |
 | — | H3 Wave-1（async Post → T1 MPSC） | **DONE** — [`roadmap-h3.md`](roadmap-h3.md) |
+| — | H3-2 bag+multimap / H3-3 consumer gate | **DONE** |
 | 文档（opt-in） | R8 研究 pack 诚实状态 | **docs** — [`r8-research-status.md`](r8-research-status.md) |
 | 研究（仅 opt-in） | NUMA Phase-3 亲和 residual / TSX / TLA+（有 TLC 时加深） | **R8**（非默认，不自动推进；见 r8-research-status） |
-| 生产向（需授权） | 更多跨模块 / consumer regression 门 / 扩 T2 子集 | **H3-3…**（**未授权不实施**）；H3-2 bag+multimap **done** |
+| 生产向（需授权） | 证据卫生 / thread worksteal 接入 / 扩 T2 子集 | **H3-4 / H3-5**（**未授权不实施**） |
 
 ### 1.5 标准验证门（所有阶段验收默认集）
 
@@ -96,7 +97,10 @@
 ```bash
 export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
 make -C core/tests/nextpas.core.lockfree verify-t1
-# 日志默认: core/build/verify-lockfree/verify-t1.log
+make -C core/tests/nextpas.core.lockfree verify-h3-consumers
+# 日志默认:
+#   core/build/verify-lockfree/verify-t1.log
+#   core/build/verify-lockfree/verify-h3-consumers.log
 ```
 
 等价分步：
@@ -106,6 +110,9 @@ export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
 make -C core/tests/nextpas.core.atomic/test_atomic clean test
 make -C core/tests/nextpas.core.lockfree/test_lockfree clean test
 make -C core/tests/nextpas.core.lockfree/test_lockfree_stress clean test   # 建议 ×3
+make -C core/tests/nextpas.core.async/test_async clean test
+make -C core/tests/nextpas.core.lockfree/test_lockfree_bag clean test
+make -C core/tests/nextpas.core.lockfree/test_lockfree_multimap clean test
 make hygiene
 git diff --check
 ```
@@ -126,12 +133,18 @@ H2-0…H2-6  Horizon-2  ── DONE  →  roadmap-h2.md
 H3 Wave-1 (H3-0e + H3-1)  ── DONE  →  roadmap-h3.md / main 710ddd7ab
     │
     ▼
+H3-2 bag+multimap  ── DONE
+    │
+    ▼
+H3-3 verify-h3-consumers  ── DONE
+    │
+    ▼
 Maintenance  ── 当前默认（生产执行主线）
     │
     ├─(opt-in)──► R8 research pack done（docs + verify-r8）
     │                → r8-research-status.md；不生产化
     │
-    └─(opt-in)──► H3-3…H3-4（roadmap-h3.md）；H3-2 done
+    └─(opt-in)──► H3-4 / H3-5（roadmap-h3.md）
                      NOT auto exec；须单独授权
 ```
 
@@ -145,10 +158,12 @@ Maintenance  ── 当前默认（生产执行主线）
 | **RC** | Ready close-out | — | R7 | **已完成** |
 | **H2-0…H2-6** | Horizon-2 | **P0** | RC Ready | **已完成** — [`roadmap-h2.md`](roadmap-h2.md) |
 | **H3 Wave-1** | H3-0e + H3-1 async MPSC | **P0** | H2 complete + 授权 | **已完成** — [`roadmap-h3.md`](roadmap-h3.md) |
-| **Maintenance** | 缺陷 / 契约 / 门 | **P0 当前** | H2 + Wave-1 | **是** |
-| **R8** | 研究扩展 / pack 收口 | 研究 | 独立 | **否**；docs opt-in；生产化需重大讨论 |
 | **H3-2** | bag+multimap Guarded 子集 | 生产契约 | Maintenance | **done** |
-| **H3-3…H3-4** | Horizon-3 余下阶段 | 生产向（未来） | Maintenance | **否** — 须单独授权 |
+| **H3-3** | consumer regression 门 | 工程门 | H3-1/H3-2 | **done** — `verify-h3-consumers` |
+| **Maintenance** | 缺陷 / 契约 / 门 | **P0 当前** | H3-3 | **是** |
+| **R8** | 研究扩展 / pack 收口 | 研究 | 独立 | **否**；docs opt-in；生产化需重大讨论 |
+| **H3-4** | 证据 / api-ref 卫生 | 文档 | Maintenance | **否** — 须单独授权 |
+| **H3-5** | thread worksteal 接入 | 跨模块 | Maintenance | **否** — 章程草案 only |
 
 ---
 

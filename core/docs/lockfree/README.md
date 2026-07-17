@@ -17,15 +17,16 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 |------|------|
 | [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
 | [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
-| [`READY.md`](READY.md) | **状态入口**（R0–R7 基线 + **H2 in progress**） |
-| [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6） |
+| [`READY.md`](READY.md) | **状态入口**（**Maintenance**；H3-1…H3-3 done） |
+| [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6 complete） |
+| [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-3 done；H3-4/H3-5 未授权实现） |
 | [`bench-envelope.md`](bench-envelope.md) | **H2-4** bench 证据信封（禁止无信封绝对 Mops） |
-| [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 |
+| [`consumer-audit.md`](consumer-audit.md) | 消费者审计 + H3-3 门入口 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
 
-历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap-h2 + roadmap 为准。主线 **R0–R7 + RC Ready 已完成**，当前 **H2 in progress**（详见 [`READY.md`](READY.md) / [`roadmap-h2.md`](roadmap-h2.md)）。
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-3 已完成**，当前 **Maintenance**（详见 [`READY.md`](READY.md)）。
 
 ## Progress-guarantee matrix
 
