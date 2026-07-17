@@ -1,9 +1,10 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: Active（Era D 规划中；A–C 已闭合）
+**状态**: Active（Era D Steward；A–C 已闭合；D0/D1 已进 main）
 **Owner**: mem lane（`.worktrees/mem`）
 **更新**: 2026-07-17
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
+**最近 land**: `d2b704ffe`（path-limited → `origin/main`）
 
 ---
 
@@ -70,8 +71,8 @@
 
 | ID | 主题 | 目标 | 验收 | 优先级 |
 |----|------|------|------|--------|
-| **D0** | 文档单源 | 路线图不乱；README 只链活文档 | 本文件 + README 索引更新 | P0 — 本 slice |
-| **D1** | 回归锁进主线 | consumer-audit 源契约在 `main` 可跑 | path-limited land `check_consumer_audit_contracts` + guardrails | P0 — 等 main 安静 |
+| **D0** | 文档单源 | 路线图不乱；README 只链活文档 | 本文件 + README 索引更新 | **DONE** `d2b704ffe` |
+| **D1** | 回归锁进主线 | consumer-audit 源契约在 `main` 可跑 | path-limited land `check_consumer_audit_contracts` + guardrails | **DONE** `d2b704ffe` |
 | **D2** | 契约不漂移 | Tier-0/1 行为与文档一致 | `test_contract_matrix` + `test_usability_guardrails` 常绿 | P0 持续 |
 | **D3** | Consumer 按触达升级 | 已知 size → sized free / `FreeMemOf`；OOM → `FormatAllocErrorMsg` | **谁改谁顺手**；禁止全仓机械扫 | P1 持续 |
 | **D4** | Scorecard 可信 | RELEASE 基线可复现；对外说数字有出处 | `make -C …/scorecard clean test RELEASE=1` + [SCORECARD.md](SCORECARD.md) 刷新 | P1 |
@@ -84,8 +85,8 @@
 
 | Slice | 内容 | 依赖 | 状态 |
 |-------|------|------|------|
-| D0-a | 归档时代 A ROADMAP\*；本文件成为权威 | — | **本提交** |
-| D1-a | `02ce6b9c3` 类 consumer-audit 门禁 path-limited → main | main 无冲突 landing 窗口 | pending |
+| D0-a | 归档时代 A ROADMAP\*；本文件成为权威 | — | **landed** `d2b704ffe` |
+| D1-a | consumer-audit 门禁 path-limited → main | main 安静窗口 | **landed** `d2b704ffe` |
 | D2-a | 默认 lane gate 不变：`lane-focused LANE=mem` | — | 已落地 |
 | D4-a | 刷新 SCORECARD 发布数字注释（有机器时跑 RELEASE） | 安静环境 | pending |
 | D3-a | 不主动扫仓；其它 lane 触达堆路径时提供 review 清单 | 其它模块 owner | 持续 |
@@ -94,10 +95,10 @@
 
 同时满足即可把时代 D 标为 **Steady**（维护模式，不必再开大里程碑）：
 
-1. D1 门禁在 `origin/main`
-2. 连续两次 mem landing 无可用性/契约回归
-3. SCORECARD RELEASE 基线有日期戳且与文档一致
-4. 无命名 consumer 的开放 P0/P1 需求单
+1. D1 门禁在 `origin/main` — **已满足**（`d2b704ffe`）
+2. 连续两次 mem landing 无可用性/契约回归 — **1/2**（本批为第 1 次干净 docs/test land）
+3. SCORECARD RELEASE 基线有日期戳且与文档一致 — pending（D4-a）
+4. 无命名 consumer 的开放 P0/P1 需求单 — 当前无
 
 Steady 之后默认：**只做 D3 顺手升级 + 修回归**，新里程碑需总控或 consumer 发起。
 
@@ -153,3 +154,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 日期 | 变更 |
 |------|------|
 | 2026-07-17 | 初版权威路线图：归档时代 A 多文件 ROADMAP；标注 A–C 闭合；开启时代 D（Steward） |
+| 2026-07-17 | D0/D1 path-limited land → `origin/main` `d2b704ffe`；切片状态与退出条件同步 |
