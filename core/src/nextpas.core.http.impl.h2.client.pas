@@ -402,7 +402,7 @@ constructor TH2ClientConnection.Create(const AConn: ITcpStream;
 begin
   inherited Create;
   if AConn = nil then
-    raise EArgumentError.Create('h2 client connection requires connection');
+    raise EHttpError.Create(hekArgument, 'h2 client connection requires connection');
   AOptions.Validate;
   FConn := AConn;
   FOptions := AOptions;
@@ -1361,9 +1361,9 @@ var
   LResponse: TH2ResponseState;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('h2 client transport requires request');
+    raise EHttpError.Create(hekArgument, 'h2 client transport requires request');
   if AReq.Headers = nil then
-    raise EArgumentError.Create('h2 client transport requires request headers');
+    raise EHttpError.Create(hekArgument, 'h2 client transport requires request headers');
   if not Handshake then
     raise EHttpError.Create(hekProtocol, 'HTTP/2 client handshake failed');
   EnsureActive;
@@ -1560,9 +1560,9 @@ var
   LWrapped: Exception;
 begin
   if AReq = nil then
-    raise EArgumentError.Create('h2 client transport requires request');
+    raise EHttpError.Create(hekArgument, 'h2 client transport requires request');
   if AReq.Headers = nil then
-    raise EArgumentError.Create('h2 client transport requires request headers');
+    raise EHttpError.Create(hekArgument, 'h2 client transport requires request headers');
   LUrl := AReq.Url;
   ValidateH2ClientUrlScheme(LUrl);
   LHost := LUrl.Host;

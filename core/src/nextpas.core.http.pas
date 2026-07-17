@@ -1408,8 +1408,9 @@ end;
 
 function NewHttpServerWithRequestArena(const AHandler: IHttpHandler): IHttpServer;
 begin
-  { Options carrier path — THttpServer.Create applies RequestArena wrap once. }
-  Result := NewHttpServer(AHandler, THttpServerOptions.Default.WithRequestArena);
+  { Production RW timeouts: arena convenience should not invite unbounded IO.
+    THttpServer.Create applies RequestArena wrap once. }
+  Result := NewHttpServer(AHandler, THttpServerOptions.Production.WithRequestArena);
 end;
 
 function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
@@ -1422,7 +1423,7 @@ function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
   AArenaCapacity: SizeUInt): IHttpServer;
 begin
   Result := NewHttpServer(AHandler,
-    THttpServerOptions.Default.WithRequestArena(AArenaCapacity));
+    THttpServerOptions.Production.WithRequestArena(AArenaCapacity));
 end;
 
 function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;

@@ -11,7 +11,19 @@
 
 ## 当前结论
 
-- **2026-07-17 post-residual usability fix（现行真相；以本条为准）**：
+- **2026-07-17 cycle-3 usability fix（现行真相；以本条为准）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle3.md`、
+    `2026-07-17-usability-cycle3-research.md`、
+    `2026-07-17-usability-cycle3-fix-plan.md`（baseline `82ecf1f3e`，score 93→fix）。
+  - Transport 前置条件（H1/H2/TLS stream nil conn/req/handler 等）→
+    **`EHttpError(hekArgument)`**（不再裸 `EArgumentError`）。
+  - `NewHttpServerWithRequestArena` 无参重载基于 **Production** + RequestArena。
+  - Redirect resolve / body rewind / download mkdir-publish 错误消息在已知 method/URL
+    时带 `METHOD url:` 前缀。
+  - **Blocked** 仍真：OS dial timeout、mid-read cancel（net）。
+  - **Deferred** 仍真：CONNECT / Retry-After / full PSL / Response metadata /
+    ensure-2xx JSON decode / Op-everywhere。
+- **2026-07-17 post-residual usability fix（已吸收）**：
   - Research/plan：`2026-07-17-usability-post-residual-research.md`、
     `2026-07-17-usability-post-residual-fix-plan.md`（含 post-`feec31b45`
     assessment 92/100 inventory）。更早 residual/wave-6 文档已吸收。
