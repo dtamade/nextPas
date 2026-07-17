@@ -1,6 +1,6 @@
 # Usability Fix Plan: nextpas.core.http cycle-9 Wave D
 
-**Status**: verified (client 236 / contract+base pending land; CONNECT e2e green)
+**Status**: landed main `61ee03f93` (client 236; contract 31; base 31; landing-check pass; pushed)
 **Assessment**: `2026-07-17-usability-assessment-cycle9.md`
 **Research**: `2026-07-17-usability-cycle9-research.md`
 
