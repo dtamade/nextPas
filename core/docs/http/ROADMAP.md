@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave X5 landed → **Era 6 Done**）
+**Updated**: 2026-07-17（Era 7 Residual Hardening → **Done / STOP**）
 
 ---
 
@@ -91,12 +91,16 @@ CHECKPOINT（不阻塞续波）:
 | Wave X3 Client pool idle TTL | 完成（IdleTTL 默认 90s；借出/归还淘汰；0=关闭） |
 | Wave X4 TLS OpenSSL residual | 完成（PinValidator FreeAndNil；HTTPS residual 11→1×41B process-lifetime） |
 | Wave X5 Comparator + profiled win | 完成（equal-fold Get/Has；fullchain 刷新；无假 H3） |
-| **下一执行点** | **Era 6 Done** — 无默认 NEXT；Inbox 仅升格后开工 |
+| Wave R0 Residual era open | 完成（Era 7 表 + 推荐路径 R1→R3） |
+| Wave R1 Client IdleTTL hang | 完成（pool Close 锁外 + accept 测试 deadline + CloseIdle teardown） |
+| Wave R2 HTTPS 1×41B dig | 完成（无可靠 call stack → 诚实 process-lifetime residual） |
+| Wave R3 Windows cancel honesty | 完成（probe-only only + source-contract） |
+| **下一执行点** | **STOP**（Era 7 Done；H3 仍 Blocked；无 Inbox 升格） |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~92%   高级 ~85%   优雅 ~88%   性能 ~78%  (Excellence: H1/H2/WS landed)
+完整 ~92%   高级 ~86%   优雅 ~88%   性能 ~78%  (Residual hardening)
 ```
 
 ---
@@ -473,14 +477,76 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 ---
 
+## Era 7 — Residual Hardening（残差硬化）
+
+**目标**：在 Excellence 已完成的前提下，收敛**已知可感 residual**——测试稳定性、TLS heaptrc 余量、跨 OS cancel 诚实声明——**不**开 H3、不扩 Inbox API。
+
+**推荐路径**：`R0 → R1 → R2 → R3`
+
+### Wave R0 — Open residual era（docs）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed**（本提交起） |
+| **Do** | 写 Era 7 有序表；NEXT=R1；GOAL_TREE 指针可选 |
+| **Don't** | 改业务代码；开 H3 / Inbox |
+| **Done when** | 全局 NEXT 唯一指向 R1 |
+| **Gates** | hygiene；diff --check |
+| **Land paths** | `core/docs/http/**` |
+| **Next** | Wave R1 |
+
+### Wave R1 — Client suite hang after IdleTTL
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed**（本提交起） |
+| **Do** | 复现/钉死 `test_http_client` 在 IdleTTL 用例后偶发 futex 挂死；硬化 pool accept 测试线程（读 deadline / 可靠 join）；必要时修 pool close 时序 |
+| **Don't** | 删 IdleTTL 测试；掩盖 hang 为 skip |
+| **Done when** | `test_http_client` 在 180s 内稳定通过 ≥2 次；无 IdleTTL 后永久 hang |
+| **Gates** | `make focused FOCUS=core/tests/nextpas.core.http/test_http_client` ×2；hygiene |
+| **Land paths** | `core/tests/nextpas.core.http/test_http_client/**`；若根因在 pool 实现则 `core/src/nextpas.core.http.impl.h1.pas` 等最小 |
+| **Next** | Wave R2 |
+| **Evidence** | 根因：H1/H2 `PoolGet`/`PoolPut`/`PoolClear` 持 `FPoolLock` 时 `Close`（H1 另含锁内 `PooledConnectionIsReusable` TryRead）。修：锁内只摘节点，锁外 Close/probe；测试 `PoolAcceptThread` 5s read deadline + IdleTTL 用例 `CloseIdleConnections` teardown；source-contract 窗口覆盖 close-outside-lock。`test_http_client` ×2（270/0，~30s，hygiene pass）；`test_http_h2_client` 66/0。HTTPS 1×41B 仍在（R2）。 |
+
+### Wave R2 — HTTPS 1×41B residual dig
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed**（诚实 Park） |
+| **Do** | 定位 client HTTPS 路径 process-lifetime 1×41B（owner=tls 优先）；修到 0 unfreed **或** 缩小 claim + 证据 |
+| **Don't** | 在 http 吞泄漏；换 TLS 后端 |
+| **Done when** | 0 unfreed **或** residual 文档写清子路径/不可归因 |
+| **Gates** | `test_http_client`；相关 tls gate（若有）；hygiene |
+| **Land paths** | `core/src/nextpas.core.tls*` 最小 + http docs |
+| **Next** | Wave R3 |
+| **Evidence** | 全量 client 含 HTTPS 后恒 **1×41B**；heaptrc `Call trace … size 41` **无帧**，不可归因单对象；与请求次数无关 → process-lifetime / tls-OpenSSL 侧效应。CONTRACT residual 表写清；**不**假修 0。 |
+
+### Wave R3 — Windows cancel residual honesty
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed** |
+| **Do** | CONTRACT/ROADMAP 明确 Windows 无 socketpair 时 cancel residual；Linux waitable 路径证据不变；可选 source-contract 锁平台分叉注释 |
+| **Don't** | 为 Windows 完美对等重写 async；假称全平台近即时 |
+| **Done when** | 文档 residual 表与源码一致；相关 cancel 测绿 |
+| **Gates** | net/http cancel 抽样 + hygiene |
+| **Land paths** | docs + 必要注释/contract；无大代码除非最小 |
+| **Next** | Era 7 Done / STOP |
+| **Evidence** | Windows `platform_socket_pair` → `PLATFORM_ERR_UNSUPPORTED`；`TNetCancelToken` probe-only；CONTRACT §2.2.0/0a + residual 表；`test_http_client` Windows cancel residual source-contract；Linux live mid-read cancel 仍绿。 |
+
+**Era 7 Done when**：R0–R3 landed（或 residual 诚实 Park）；H3 仍 Blocked。 **Met.**
+
+---
+
 ## Era X — Explicit non-goals & residuals
 
 | 项 | 立场 |
 |----|------|
 | server `Default` RW=0 | **Keep**（测试兼容）；生产用 `THttpServerOptions.Production` |
-| cancel ~50 ms 切片 | **X2 landed**：waitable token 近即时唤醒；probe-only 退回 ~10ms slice；Windows 无 socketpair 时 residual |
-| OpenSSL factory unfreed | **X4 landed**：PinValidator 所有权修复；client HTTPS 余 **1×41B** process-lifetime residual（诚实）；非 HTTPS 0 |
-| pool idle TTL | **X3 landed**：`IdleTTL` 默认 90s；0=关闭墙钟淘汰；`CloseIdleConnections` 仍全清 |
+| cancel ~50 ms 切片 | **X2 landed**：Unix waitable 近即时；probe-only ~10ms；**Windows = probe-only only**（**R3**） |
+| OpenSSL factory unfreed | **X4 landed**：PinValidator 已修；HTTPS **1×41B** process-lifetime 无可靠栈（**R2** 诚实 Park） |
+| pool idle TTL | **X3 landed**；suite hang residual → **R1 landed**（close-outside-lock） |
+| client suite hang after IdleTTL | **R1 landed** |
 | JSON dual raw vs ensure-string | **Keep** 三层模型 |
 | Digest / NTLM / Negotiate proxy auth | **Park**（Wave I） |
 | 完整企业代理栈 | **Park** 除非真实 consumer |
@@ -515,11 +581,12 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ```text
 1. Era 0–4 landed；framework-complete (non-H3) 已立住
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
-3. Era 6 X0–X5 landed — Excellence Done；默认 STOP（Inbox 仅升格后开工）
-4. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
+3. Era 6 X0–X5 landed — Excellence Done
+4. Era 7 **Done / STOP**（R0–R3 landed）；H3 仍 Blocked；Inbox 仅升格后开工
+5. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：Era 6 已 Done — STOP；不要空转 H3；Inbox 仅升格后开工。**
+**没有用户指令时：STOP（Era 7 完成）；不要空转 H3；Inbox 仅升格后开工。**
 
 ---
 
@@ -565,3 +632,7 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave X3 landed：client pool IdleTTL（默认 90s / 0=off）+ get/put 淘汰；Wave X4 = NEXT |
 | 2026-07-17 | Wave X4 landed：TLS PinValidator FreeAndNil；HTTPS residual 11→1×41B；Wave X5 = NEXT |
 | 2026-07-17 | Wave X5 landed：headers equal-fold Get/Has（uppercase ~30%）；fullchain 刷新；Era 6 Done |
+| 2026-07-17 | **Era 7 Residual Hardening** 开启（R0）：R1 hang → R2 41B → R3 Windows cancel；Wave R1 = NEXT |
+| 2026-07-17 | Wave R1 landed：H1/H2 pool Close 锁外 + IdleTTL 测试硬化；Wave R2 = NEXT |
+| 2026-07-17 | Wave R2 landed：HTTPS 1×41B dig → 无可靠 call stack，诚实 Park |
+| 2026-07-17 | Wave R3 landed：Windows cancel = probe-only only + source-contract；**Era 7 Done / STOP** |

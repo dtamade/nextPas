@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-17 (Era 6 Excellence Done X0–X5; framework-complete non-H3 retained)
+> Last updated: 2026-07-17 (Era 6 Excellence Done X0–X5; Era 7 residual Done; framework-complete non-H3 retained)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — ordered Eras/Waves, Goal Loop, Inbox. This file is north star + stage truth, **not** a day-to-day backlog.
@@ -27,9 +27,10 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | non-H3 stage-complete | 完成（H3 诚实 blocked on QUIC；无产品需求） |
 | **framework-complete (non-H3)** | **yes** — Era 0–4 默认路径 landed |
 | **Excellence (Era 6)** | **Done** — X0–X5 landed（WS/cancel/IdleTTL/TLS residual/equal-fold+comparator）；H3 仍 Blocked |
+| **Residual (Era 7)** | **Done** — R1 pool close-outside-lock hang；R2 HTTPS 1×41B 诚实 Park；R3 Windows cancel probe-only only |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | ~35 focused suites |
-| **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
+| **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名；当前 STOP） |
 
 四支柱、推荐路径、Done when、Gates、Inbox 均只在 ROADMAP 维护。
 

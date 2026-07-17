@@ -3062,7 +3062,9 @@ begin
   Check(LPutPos > 0, 'h1 PoolPut is present');
   if LPutPos > 0 then
   begin
-    LPutBlock := Copy(LSource, LPutPos, 1400);
+    { Window covers per-authority MaxPoolSize, IdleTTL stamp, expire eviction,
+      and close-outside-lock tail (Wave R1). }
+    LPutBlock := Copy(LSource, LPutPos, 2400);
     Check(Pos('LAuthorityIdle', LPutBlock) > 0,
       'h1 PoolPut counts idle connections per authority');
     Check(Pos('FPoolCount >= FOptions.MaxPoolSize', LPutBlock) = 0,
@@ -3073,6 +3075,8 @@ begin
       'h1 PoolPut stamps IdleAtMs for IdleTTL');
     Check(Pos('PoolEntryExpired', LPutBlock) > 0,
       'h1 PoolPut evicts expired idle peers before MaxPoolSize count');
+    Check(Pos('LToClose', LPutBlock) > 0,
+      'h1 PoolPut defers Close outside FPoolLock');
   end;
 end;
 
@@ -3127,6 +3131,37 @@ begin
     Check(Pos('FreeAndNil(FPinValidator)', LDestroyBlock) > 0,
       'OpenSSL context Destroy frees owned FPinValidator');
   end;
+end;
+
+procedure TestWindowsCancelProbeOnlyResidualSourceContract;
+var
+  LCancelSrc: string;
+  LPlatformSrc: string;
+  LPairPos: SizeInt;
+  LPairBlock: string;
+begin
+  { Wave R3: Unix waitable cancel uses socketpair wake; Windows platform
+    socket_pair is explicitly UNSUPPORTED so tokens stay probe-only (~10ms). }
+  LCancelSrc := ReadFileText('../../../src/nextpas.core.net.cancel.pas');
+  Check(Pos('Windows falls back to probe-only', LCancelSrc) > 0,
+    'net.cancel documents Windows probe-only residual');
+  Check(Pos('platform_socket_pair', LCancelSrc) > 0,
+    'net.cancel attempts platform_socket_pair for waitable wake');
+  LPlatformSrc := ReadFileText('../../../src/nextpas.core.platform.socket.pas');
+  LPairPos := Pos(
+    'function platform_socket_pair(ADomain, AType, AProtocol: Int32;',
+    LPlatformSrc);
+  { Prefer the Windows residual implementation when present in this unit. }
+  if Pos('Windows doesn''t have socketpair', LPlatformSrc) > 0 then
+  begin
+    LPairPos := Pos('Windows doesn''t have socketpair', LPlatformSrc);
+    LPairBlock := Copy(LPlatformSrc, LPairPos, 400);
+    Check(Pos('PLATFORM_ERR_UNSUPPORTED', LPairBlock) > 0,
+      'Windows platform_socket_pair returns PLATFORM_ERR_UNSUPPORTED');
+  end
+  else
+    Check(LPairPos > 0,
+      'platform_socket_pair is present for waitable cancel wiring');
 end;
 
 procedure TestClientPostStringBodyOverload;
@@ -6854,9 +6889,21 @@ begin
     HttpReleaseResponseBody(LResp);
     CheckEqual(Int64(2), Int64(GAcceptCount),
       'expired idle connection is not reused after IdleTTL');
+    { Drop pooled sockets before tearing down the accept thread so Read/join
+      cannot race a half-closed keep-alive peer (suite hang residual). }
+    LClient.CloseIdleConnections;
     LClient := nil;
   finally
-    GPoolListener.Close;
+    if LClient <> nil then
+    begin
+      try
+        LClient.CloseIdleConnections;
+      except
+      end;
+      LClient := nil;
+    end;
+    if GPoolListener <> nil then
+      GPoolListener.Close;
     platform_thread_join(LHandle, LRet);
     GPoolListener := nil;
     GAcceptCount := 0;
@@ -6891,9 +6938,19 @@ begin
     HttpReleaseResponseBody(LResp);
     CheckEqual(Int64(1), Int64(GAcceptCount),
       'IdleTTL=0 keeps reuse after short idle');
+    LClient.CloseIdleConnections;
     LClient := nil;
   finally
-    GPoolListener.Close;
+    if LClient <> nil then
+    begin
+      try
+        LClient.CloseIdleConnections;
+      except
+      end;
+      LClient := nil;
+    end;
+    if GPoolListener <> nil then
+      GPoolListener.Close;
     platform_thread_join(LHandle, LRet);
     GPoolListener := nil;
     GAcceptCount := 0;
@@ -8166,12 +8223,22 @@ begin
     end;
     if LConn = nil then Break;
     InterlockedIncrement(GAcceptCount);
+    { Bound idle keep-alive reads so a closed/expired client cannot leave this
+      thread in an unbounded Read (suite hang after IdleTTL tests). }
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    except
+    end;
     { Serve multiple requests on this connection by detecting \r\n\r\n boundaries }
     try
       LAccum := '';
       while True do
       begin
-        LN := LConn.Read(LBuf[0], 4096);
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          Break;
+        end;
         if LN = 0 then Break;
         SetLength(LAccum, Length(LAccum) + Int32(LN));
         Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
@@ -8192,7 +8259,10 @@ begin
       end;
     except
     end;
-    LConn.Close;
+    try
+      LConn.Close;
+    except
+    end;
   end;
 end;
 
@@ -8216,10 +8286,18 @@ begin
     if LConn = nil then Break;
     InterlockedIncrement(GAcceptCountAlt);
     try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    except
+    end;
+    try
       LAccum := '';
       while True do
       begin
-        LN := LConn.Read(LBuf[0], 4096);
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          Break;
+        end;
         if LN = 0 then Break;
         SetLength(LAccum, Length(LAccum) + Int32(LN));
         Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
@@ -8237,7 +8315,10 @@ begin
       end;
     except
     end;
-    LConn.Close;
+    try
+      LConn.Close;
+    except
+    end;
   end;
 end;
 
@@ -11042,6 +11123,8 @@ begin
     @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
   T.Test('OpenSSL context frees PinValidator source contract',
     @TestOpenSSLContextFreesPinValidatorSourceContract);
+  T.Test('Windows cancel probe-only residual source contract',
+    @TestWindowsCancelProbeOnlyResidualSourceContract);
   T.Test('Client POST string body overload',
     @TestClientPostStringBodyOverload);
   T.Test('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
