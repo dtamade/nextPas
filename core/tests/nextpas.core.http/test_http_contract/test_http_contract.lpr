@@ -1114,6 +1114,39 @@ begin
     'decompress must not bare-re-raise EArgumentError');
 end;
 
+procedure TestHttpWithStarChainSemanticsSourceContract;
+{ Wave E2: decorator vs rebuild classification stays as CONTRACT table. }
+var
+  LClient: string;
+begin
+  LClient := ReadTextFile('../../../src/nextpas.core.http.client.pas');
+
+  Check(SourceHas(LClient,
+    'Result := TOptionsOverrideClient.Create(Self,'#10 +
+    '    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));'),
+    'WithTimeout is request-options decorator, not options rebuild');
+  Check(SourceHas(LClient,
+    'Result := NewHttpClient(FOptions.WithConnectTimeout(ATimeoutMs));'),
+    'WithConnectTimeout rebuilds base client options/transport');
+  Check(SourceHas(LClient,
+    'Result := NewHttpClient(FOptions.WithProxyUrl(AProxyUrl));'),
+    'WithProxyUrl rebuilds base client');
+  Check(SourceHas(LClient,
+    'Result := NewHttpClient(FOptions.WithTLSContext(ATLSContext));'),
+    'WithTLSContext rebuilds base client');
+  Check(SourceHas(LClient,
+    'Result := RebindInner(FInner.WithConnectTimeout(ATimeoutMs));'),
+    'decorator rebinds around ConnectTimeout rebuild');
+  Check(SourceHas(LClient,
+    'Result := RebindInner(FInner.WithProxyUrl(AProxyUrl));'),
+    'decorator rebinds around ProxyUrl rebuild');
+  Check(SourceHas(LClient,
+    'Result := RebindInner(FInner.WithTLSContext(ATLSContext));'),
+    'decorator rebinds around TLSContext rebuild');
+  Check(SourceHas(LClient, 'Result := TRetryClient.Create(Self, AMaxRetries);'),
+    'WithRetry remains a decorator');
+end;
+
 procedure TestHttpErrorStableOpSetSourceContract;
 { Wave E1 aligns Wave J Op names; lock the stable Op string set. }
 var
@@ -1378,6 +1411,8 @@ begin
     @TestHttpErrorTaxonomyNoBareArgumentErrorSourceContract);
   T.Test('Error taxonomy: stable Op set source contract',
     @TestHttpErrorStableOpSetSourceContract);
+  T.Test('With* chain semantics source contract',
+    @TestHttpWithStarChainSemanticsSourceContract);
   T.Test('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
   T.Test('Chunked request multiple trailer declaration contract',

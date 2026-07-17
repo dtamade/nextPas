@@ -176,6 +176,34 @@ end;
     `http_websocket_echo_demo` 使用 Production。
   - 示例 `http_get_client` 使用有限 client timeout。
 
+#### With* 链语义（Wave E2）
+
+| 调用 | 机制 | 覆盖规则 | 注释 |
+|------|------|----------|------|
+| `WithTimeout(ms)` | **decorator** `TOptionsOverrideClient` | 合并到 per-request `TimeoutMs`；**外层（后链式调用）胜** | **不**改 `THttpClientOptions.Timeout` / `ConnectTimeout` |
+| `WithMaxRedirects` / `WithFollowRedirects` | **decorator** 同上 | 同字段外层胜 | 请求级覆盖 client options |
+| `WithRetry(N)` | **decorator** `TRetryClient` | 外层包装；可与 timeout/header 叠 | 见重试规则段 |
+| `WithHeader` / `WithBasicAuth` / `WithBearerAuth` | **decorator** | 同名头/Authorization：**外层胜**（仅当尚未设置时写入） | Send 由外向内 |
+| `WithCookieJar` | **decorator** | jar 外层保留；已有 Cookie 头不覆盖 | nil → `hekArgument` |
+| `WithConnectTimeout(ms)` | **rebuild** `NewHttpClient(options)` | 写入 `THttpClientOptions.ConnectTimeout` | dial budget；`=0` 时 `EffectiveConnectTimeout` = `Timeout` |
+| `WithProxyUrl` / `WithTLSContext` | **rebuild** 同上 | 写入 options 并重建 transport | 装饰器链经 `RebindInner` 重绑到新 base，**不丢**外层 auth/retry/header/timeout |
+| 构造 `NewHttpClient(opts)` | base options | record `With*` 链式字段覆盖 | client `Default.Timeout=30000`；server 用 `Production` 非 `Default` |
+
+**Timeout vs ConnectTimeout 分界**：
+
+| 字段 | 作用阶段 | 0 含义 | 覆盖入口 |
+|------|----------|--------|----------|
+| `Timeout` | socket 就绪后 request 读/写 | 无界（仅测试/工具） | options / `WithTimeout` / builder / request options |
+| `ConnectTimeout` | OS `connect` + 新连接首写 | 回退到 `Timeout`（`Timeout` 亦 0 则无界） | options / `WithConnectTimeout`（rebuild） |
+
+**Default vs Production**：
+
+| 载体 | Default | Production / 生产建议 |
+|------|---------|----------------------|
+| `THttpClientOptions` | `Timeout=30000`，`ConnectTimeout=0` | 保持 Default 或显式有限 `WithTimeout`；勿依赖 cancel-only |
+| `THttpServerOptions` | Read/Write=**0**（测兼容） | **`Production`** Read/Write=30000；Idle  alone 不足 |
+| `TWebSocketOptions` | ConnectTimeout=Timeout=30000 | 同 Default；`=0` 仅显式无界 |
+
 ### 2.2.0a Net-dependent capabilities
 
 | Capability | HTTP surface today | Owner | Status |

@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave E1 Error taxonomy；NEXT=E2）
+**Updated**: 2026-07-17（Wave E2 Options/decorator；NEXT=A1）
 
 ---
 
@@ -77,12 +77,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave C2 Conditional | 完成（If-None-Match/If-Modified-Since helper + ServeFile 304；ParseHttpDate/mtime 秒修复） |
 | Wave C3 Range + static | 完成（单段 Range/206/416、`Accept-Ranges`、流式 source-contract） |
 | Wave E1 Error taxonomy | 完成（Kind 分类表 + Op 对齐；公开面无裸 EArgumentError；source-contract） |
-| **下一执行点** | **Era 2 / Wave E2 — Options / decorator 一致** |
+| Wave E2 Options/decorator | 完成（With* 链语义表；外层胜；Timeout/ConnectTimeout/Production 分界） |
+| **下一执行点** | **Era 3 / Wave A1 — H2 production edges** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~88%   高级 ~63%   优雅 ~78%   性能 ~50%
+完整 ~88%   高级 ~63%   优雅 ~85%   性能 ~50%
 ```
 
 ---
@@ -246,12 +247,13 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | `With*` 链语义表（覆盖、组合、生产默认 vs 测试默认）；钉死 `Timeout`/`ConnectTimeout`/`Production` 分界 |
 | **Don't** | 新 decorator 家族「凑齐对称」 |
 | **Done when** | CONTRACT/README 一张表；测试覆盖组合边角至少一组 |
 | **Gates** | client + contract |
 | **Next** | Wave A1 |
+| **Evidence** | CONTRACT With* 表；decorator 外层胜；Production/ConnectTimeout tests；client combo + contract source-contract |
 
 ### Wave E3–E5（低优先 / 按需）
 
@@ -261,7 +263,7 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 | E4 | Middleware suite 纪律（不膨胀全家桶） | parked until demand |
 | E5 | Dual-compiler / facade 卫生扫尾 | parked until demand |
 
-**Era 2 Done when**：E1–E2 landed；新人只读 README+CONTRACT 能走通主路径。
+**Era 2 Done when**：E1–E2 landed；新人只读 README+CONTRACT 能走通主路径。 **Met.**
 
 ---
 
@@ -273,7 +275,7 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | 流控边角、GOAWAY 消费、池与多路表征；**有失败证据或明确缺口再改** |
 | **Don't** | 无证据重写 session；开启 server push |
 | **Done when** | 选定边角 focused 证明或文档诚实 residual；无假 claim |
@@ -398,14 +400,14 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave E2 仍是 NEXT
-2. With* 链语义表（覆盖、组合、Timeout/ConnectTimeout/Production 分界）
-3. CONTRACT/README 表 + client/contract focused；path-limited land
-4. 本文件：Wave E2 → landed；Wave A1 → NEXT；changelog 一行
+1. 打开本文件确认 Wave A1 仍是 NEXT
+2. H2 流控边角 / GOAWAY 消费 / 池与多路：有失败证据再改；诚实 residual 亦可
+3. H2 client/session focused + path-limited land
+4. 本文件：Wave A1 → landed；Wave A2 → NEXT；changelog 一行
 5. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave E2，然后自动续波。**
+**没有用户指令时：默认执行 Wave A1，然后自动续波。**
 
 ---
 
@@ -439,3 +441,4 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | 2026-07-17 | Wave C2 landed：条件请求 helper + IMS/ParseHttpDate 修复；Wave C3 = NEXT |
 | 2026-07-17 | Wave C3 landed：Range/`Accept-Ranges`/流式契约；Era 1 完成；Wave E1 = NEXT |
 | 2026-07-17 | Wave E1 landed：Kind 分类表 + 公开面无裸 EArgumentError + Op source-contract；Wave E2 = NEXT |
+| 2026-07-17 | Wave E2 landed：With* 链语义表 + 外层胜 + Timeout/ConnectTimeout/Production；Era 2 完成；Wave A1 = NEXT |

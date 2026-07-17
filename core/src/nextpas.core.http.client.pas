@@ -1562,7 +1562,9 @@ end;
 
 function TAuthClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
-  if (AReq <> nil) and (AReq.Headers <> nil) then
+  { Outer auth wins: only set when not already present. }
+  if (AReq <> nil) and (AReq.Headers <> nil) and
+     (not AReq.Headers.Has('authorization')) then
     AReq.Headers.SetHeader('authorization', FAuthHeader);
   Result := inherited Send(AReq);
 end;
@@ -1584,7 +1586,9 @@ end;
 
 function THeaderClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
-  if (AReq <> nil) and (AReq.Headers <> nil) then
+  { Outer WithHeader wins for the same name (Send walks outer→inner). }
+  if (AReq <> nil) and (AReq.Headers <> nil) and
+     (not AReq.Headers.Has(FName)) then
     AReq.Headers.SetHeader(FName, FValue);
   Result := inherited Send(AReq);
 end;
@@ -1612,22 +1616,24 @@ begin
   if not Supports(AReq, IHttpRequestWithOptions, LReqWithOpts) then
     Exit;
   LMerged := LReqWithOpts.RequestOptions;
-  if FRequestOptions.HasTimeout then
+  { Outer decorator Send runs first; only fill unset fields so later fluent
+    With* (outer) wins over earlier With* (inner). }
+  if FRequestOptions.HasTimeout and (not LMerged.HasTimeout) then
   begin
     LMerged.TimeoutMs := FRequestOptions.TimeoutMs;
     LMerged.HasTimeout := True;
   end;
-  if FRequestOptions.HasMaxRedirects then
+  if FRequestOptions.HasMaxRedirects and (not LMerged.HasMaxRedirects) then
   begin
     LMerged.MaxRedirects := FRequestOptions.MaxRedirects;
     LMerged.HasMaxRedirects := True;
   end;
-  if FRequestOptions.HasFollowRedirects then
+  if FRequestOptions.HasFollowRedirects and (not LMerged.HasFollowRedirects) then
   begin
     LMerged.FollowRedirects := FRequestOptions.FollowRedirects;
     LMerged.HasFollowRedirects := True;
   end;
-  if FRequestOptions.HasCancelToken then
+  if FRequestOptions.HasCancelToken and (not LMerged.HasCancelToken) then
   begin
     LMerged.CancelToken := FRequestOptions.CancelToken;
     LMerged.HasCancelToken := True;
