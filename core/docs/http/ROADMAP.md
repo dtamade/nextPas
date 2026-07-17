@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave E2 Options/decorator；NEXT=A1）
+**Updated**: 2026-07-17（Wave A1 H2 production edges；NEXT=A2）
 
 ---
 
@@ -78,12 +78,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave C3 Range + static | 完成（单段 Range/206/416、`Accept-Ranges`、流式 source-contract） |
 | Wave E1 Error taxonomy | 完成（Kind 分类表 + Op 对齐；公开面无裸 EArgumentError；source-contract） |
 | Wave E2 Options/decorator | 完成（With* 链语义表；外层胜；Timeout/ConnectTimeout/Production 分界） |
-| **下一执行点** | **Era 3 / Wave A1 — H2 production edges** |
+| Wave A1 H2 production edges | 完成（GOAWAY mid-response + 池/多路/流控边角表 + residual 诚实） |
+| **下一执行点** | **Era 3 / Wave A2 — Client pool sophistication** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~88%   高级 ~63%   优雅 ~85%   性能 ~50%
+完整 ~88%   高级 ~72%   优雅 ~85%   性能 ~50%
 ```
 
 ---
@@ -275,18 +276,19 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 流控边角、GOAWAY 消费、池与多路表征；**有失败证据或明确缺口再改** |
 | **Don't** | 无证据重写 session；开启 server push |
 | **Done when** | 选定边角 focused 证明或文档诚实 residual；无假 claim |
 | **Gates** | H2 client/session 相关 suites |
 | **Next** | Wave A2 |
+| **Evidence** | CONTRACT H2 production edges 表；mid-response GOAWAY→hekProtocol focused；IsReusable/ENABLE_PUSH source-contract；session 37 + client 66 |
 
 ### Wave A2 — Client pool sophistication
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | 空闲清理、按 authority 池限、H1/H2 选择策略文档化 + 必要代码 |
 | **Don't** | 完整服务发现 / LB |
 | **Done when** | CONTRACT 有池语义；focused 覆盖至少 idle clear + 上限行为 |
