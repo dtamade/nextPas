@@ -19,7 +19,7 @@
 |-------|------|--------------|--------|
 | **LT0** | Freeze maintenance baseline, backlog authority, README/goal-tree pointers | A | **Done** (this file + goal-tree) |
 | **LT1** | QUICKSTART/EXAMPLES/BEST-PRACTICES live-name gates + docs live patterns smoke | F8 | **Done** |
-| **LT2** | `process.pipe` off `platform_io_read/write/close`; production whitelist for remaining dual-IO | F5 | **Done** |
+| **LT2** | `process.pipe` off all `platform_io_*` call sites; dual-IO symbols remain on `platform.process` only | F5 | **Done** |
 | **LT3** | `platform_get_last_os_error` raw host side-channel + docs/tests | F6 | **Done** |
 | **LT4** | Windows ci-matrix / macOS focused-runtime evidence | F12 | **Registered only** |
 | Deferred | POSIX/Windows mapping symmetry, ALen rename, diagnostics hooks, freetype move-out | F7 / F9 / F10 / F14 | Won't this program |
@@ -43,14 +43,14 @@ make hygiene
 
 ## dual-IO consumer whitelist (F5)
 
-Production call sites of `platform_io_read` / `platform_io_write` / `platform_io_poll` are limited to:
+Production **call sites** of `platform_io_read` / `platform_io_write` / `platform_io_poll` / `platform_io_close`:
 
-| Unit | Allowed symbols | Notes |
-|------|-----------------|-------|
-| `nextpas.core.platform.process.pas` | definitions + internal use | transitional dual-API owner |
-| `nextpas.core.process.pipe.pas` | `platform_io_poll` only | drain path; read/write/close use `platform.files` |
+| Unit | Allowed | Notes |
+|------|---------|-------|
+| `nextpas.core.platform.process.pas` | definitions (and any internal use) | transitional dual-API owner; keep symbols for compatibility |
+| all other production units | **none** | `process.pipe` uses `platform.files` + local `PipePoll` (posix.ffi) |
 
-New consumers must use `platform.files` / `platform_process_*_ex` / `platform.io` poller.
+New code must use `platform.files` / `platform_process_*_ex` / `platform.io` poller.
 
 ## Raw OS side-channel (F6)
 

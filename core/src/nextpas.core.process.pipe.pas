@@ -53,6 +53,7 @@ uses
   nextpas.core.text.conv,
   {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.process,
@@ -170,6 +171,24 @@ begin
     Exit(PLATFORM_ERR_BADF);
   LHandle := PipeFdAsFileHandle(AFd);
   Result := platform_file_close(LHandle);
+end;
+
+{ Multi-fd drain poll: host poll via platform.posix.ffi with EINTR retry.
+  Avoids transitional platform_io_poll dual-API (F5 complete). }
+function PipePoll(AFds: Pointer; ACount: Int32; ATimeoutMs: Int32): Int32;
+var
+  LPollResult: Int32;
+begin
+  if (AFds = nil) or (ACount <= 0) then
+    Exit(-1);
+  repeat
+    LPollResult := poll(AFds, cuint(ACount), ATimeoutMs);
+    if LPollResult >= 0 then
+      Exit(LPollResult);
+    if platform_get_errno = PLATFORM_ERR_INTR then
+      Continue;
+    Exit(-1);
+  until False;
 end;
 
 procedure EnsureSigPipeIgnored;
@@ -399,7 +418,7 @@ begin
   if LPollCount = 0 then
     Exit;
 
-  LPollResult := platform_io_poll(@LPollFds[0], LPollCount, ATimeout);
+  LPollResult := PipePoll(@LPollFds[0], LPollCount, ATimeout);
   if LPollResult < 0 then
     raise PipeSyscallError('DrainPipePair.poll');
 
