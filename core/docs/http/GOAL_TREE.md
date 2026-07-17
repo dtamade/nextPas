@@ -26,10 +26,11 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | Usability Wave A–F | 完成并 landed main |
 | Wave G Cookie site | 完成（eTLD+1 + PSL 子集） |
 | Wave H Response metadata | 完成（FinalUrl + Version） |
+| Wave I Proxy auth | 完成（Basic only freeze；Digest Park） |
 | 主 Makefile gate | 35 focused suites |
-| **下一执行点** | **[`ROADMAP.md`](ROADMAP.md) Wave I — Proxy auth variants** |
+| **下一执行点** | **[`ROADMAP.md`](ROADMAP.md) Wave J — Error Op hygiene** |
 
-日常客户端主路径已齐。剩下是 product depth（代理鉴权变体、Op hygiene）与协议演进（H2 边角、H3/QUIC）。
+日常客户端主路径已齐。剩下是 product depth（Op hygiene）与协议演进（H2 边角、H3/QUIC）。
 
 ### Stage completion definition (non-H3)
 
@@ -267,7 +268,7 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 | Stage P1–P5 (2026-07-16) | keep-alive INV-12 · H2 facade · API audit · bench honesty · H3 blocked-honest — **closed** |
 | Usability Wave A–F (2026-07-17) | dial/cancel · GetJson/Retry-After · CONNECT · direct HTTPS · proxy Basic · HTTP-date · WithTLSContext · *JsonDocument — **landed main** |
 | Wave G (2026-07-17) | Cookie eTLD+1 SiteKey · multi-label PSL subset · reject Domain=public-suffix — **landed** |
-| **Next** | **ROADMAP Phase P / Wave I — Proxy auth variants** |
+| **Next** | **ROADMAP Phase P / Wave J — Error Op hygiene** |
 
 If ROADMAP and any cycle assessment disagree, **ROADMAP wins** until explicitly revised.
 

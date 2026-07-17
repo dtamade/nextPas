@@ -574,6 +574,16 @@ begin
       Exit;
     end;
 
+    if GConnectProxyMode = 'auth-required' then
+    begin
+      LReply := 'HTTP/1.1 407 Proxy Authentication Required'#13#10 +
+                'Proxy-Authenticate: Basic realm="proxy"'#13#10 +
+                'Content-Length: 0'#13#10 +
+                #13#10;
+      LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+      Exit;
+    end;
+
     LReply := 'HTTP/1.1 200 Connection Established'#13#10 +
               #13#10;
     LConn.Write(LReply[1], SizeUInt(Length(LReply)));
@@ -9551,6 +9561,87 @@ begin
   end;
 end;
 
+procedure TestClientHttpsProxyConnect407BasicOnlyMessage;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LRaised: Boolean;
+  LMsg: string;
+  LKind: THttpErrorKind;
+begin
+  { Wave I: CONNECT 407 is not Digest-retried; error text freezes Basic-only. }
+  GConnectProxyMode := 'auth-required';
+  GConnectProxyConnectRequest := '';
+  GConnectProxyHttpRequest := '';
+  GConnectProxyHttpReply := '';
+  GConnectProxyServerCtx := nil;
+  GConnectProxyListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GConnectProxyListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @ConnectProxyThread, nil);
+  try
+    LOpts := THttpClientOptions.Default
+      .WithProxyUrl('http://127.0.0.1:' + IntToStr(Int64(LPort)))
+      .WithTimeout(5000)
+      .WithConnectTimeout(3000);
+    LOpts.TLSContext := NewConnectTestClientCtx;
+    LClient := NewHttpClient(LOpts);
+    LRaised := False;
+    LMsg := '';
+    LKind := hekProtocol;
+    try
+      LClient.Get('https://example.test/need-auth');
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LMsg := E.Message;
+        LKind := E.Kind;
+      end;
+    end;
+    Check(LRaised, 'CONNECT 407 raises EHttpError');
+    CheckEqual(Int64(Ord(hekConnect)), Int64(Ord(LKind)),
+      'CONNECT 407 is hekConnect');
+    Check(Pos('407', LMsg) > 0, 'CONNECT 407 message includes status');
+    Check(Pos('Basic', LMsg) > 0,
+      'CONNECT 407 message freezes Basic-only proxy auth stance');
+    Check(Pos('CONNECT example.test:443', GConnectProxyConnectRequest) > 0,
+      '407 path still sent CONNECT');
+  finally
+    GConnectProxyListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GConnectProxyListener := nil;
+    GConnectProxyServerCtx := nil;
+    GConnectProxyConnectRequest := '';
+    GConnectProxyHttpRequest := '';
+    GConnectProxyMode := '';
+  end;
+end;
+
+procedure TestProxyAuthBasicOnlySourceContract;
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('function ProxyBasicAuthorizationValue', LSource) > 0,
+    'proxy auth helper is Basic-only');
+  Check(Pos('''Basic '' + Base64Encode', LSource) > 0,
+    'proxy auth encodes Basic scheme');
+  Check(Pos('ProxyUrl UserInfo → Proxy-Authorization Basic only', LSource) > 0,
+    'CONNECT 407 error freezes Basic-only product stance');
+  { Implementation symbols — comments may name parked schemes. }
+  Check(Pos('function ProxyDigest', LSource) = 0,
+    'no ProxyDigest implementation');
+  Check(Pos('function ProxyNtlm', LSource) = 0,
+    'no ProxyNtlm implementation');
+  Check(Pos('function ProxyNegotiate', LSource) = 0,
+    'no ProxyNegotiate implementation');
+  Check(Pos('Proxy-Authenticate:', LSource) = 0,
+    'H1 client does not parse Proxy-Authenticate challenges');
+end;
+
 procedure TestClientHttpsProxyConnectWithBasicAuth;
 var
   LPort: UInt16;
@@ -10703,6 +10794,10 @@ begin
     @TestClientDirectHttpsRoundTrip);
   T.Test('Client WithTLSContext fluent direct HTTPS',
     @TestClientWithTLSContextFluentDirectHttps);
+  T.Test('Client HTTPS proxy CONNECT 407 Basic-only message',
+    @TestClientHttpsProxyConnect407BasicOnlyMessage);
+  T.Test('Proxy auth Basic-only source contract',
+    @TestProxyAuthBasicOnlySourceContract);
   T.Test('Client HTTPS proxy CONNECT Basic auth',
     @TestClientHttpsProxyConnectWithBasicAuth);
   T.Test('Client HTTP proxy absolute-form Basic auth',
