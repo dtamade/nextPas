@@ -83,6 +83,57 @@ make -C benchmarks/nextpas.core.http/bench_headers clean run
 Caveat: single-host micro only; not fullchain ranking. Correctness:
 `make focused FOCUS=core/tests/nextpas.core.http/test_http_headers` (28 pass).
 
+### Wave P3: threaded vs epoll fullchain (2026-07-17)
+
+**Goal**: same L2/L3 keep-alive workload on both nextPas backends; honest local
+characterization, not ranking.
+
+**Commands** (from repo `core/`):
+
+```sh
+# L2 direct handler — threaded
+NEXTPAS_BENCH_FILTER='Direct/Plaintext' NEXTPAS_BENCH_BACKEND=threaded \
+  NEXTPAS_BENCH_MAX_ITERS=5000 \
+  make -C benchmarks/nextpas.core.http/bench_fullchain run
+
+# L2 direct handler — epoll
+NEXTPAS_BENCH_FILTER='Direct/Plaintext' NEXTPAS_BENCH_BACKEND=epoll \
+  NEXTPAS_BENCH_MAX_ITERS=5000 \
+  make -C benchmarks/nextpas.core.http/bench_fullchain run
+
+# L3 router delta — same filter Router/Plaintext, both backends
+NEXTPAS_BENCH_FILTER='Router/Plaintext' NEXTPAS_BENCH_BACKEND=threaded \
+  NEXTPAS_BENCH_MAX_ITERS=5000 \
+  make -C benchmarks/nextpas.core.http/bench_fullchain run
+NEXTPAS_BENCH_FILTER='Router/Plaintext' NEXTPAS_BENCH_BACKEND=epoll \
+  NEXTPAS_BENCH_MAX_ITERS=5000 \
+  make -C benchmarks/nextpas.core.http/bench_fullchain run
+```
+
+`bench_fullchain` emits `operation=http.fullchain.keepalive` and
+`backend=threaded|epoll` on every run.
+
+**Local snapshot** (Linux 6.12 amd64, FPC 3.3.1, 44 cores, 2026-07-17,
+`MAX_ITERS=5000`, single client keep-alive loop):
+
+| workload | backend | mean ns/op | median ns/op | ops/s (mean) |
+| -------- | ------- | ---------: | -----------: | -----------: |
+| Direct/Plaintext | threaded | 42209 | 40543 | ~23.7k |
+| Direct/Plaintext | epoll | 92595 | 92235 | ~10.8k |
+| Router/Plaintext | threaded | 49532 | 49523 | ~20.2k |
+| Router/Plaintext | epoll | 95315 | 94565 | ~10.5k |
+
+**Caveats (required)**:
+
+- This is **one machine, one day, sequential single-connection** keep-alive.
+  epoll’s design target is many concurrent fds; this harness does **not** prove
+  multi-connection throughput ranking.
+- threaded wins here for this shape; do **not** read as “epoll is always slower”
+  or as a cross-OS ranking.
+- Go/Rust `run_server_comparison` rows use their own runtimes; only nextPas rows
+  switch with `--nextpas-backend` / `NEXTPAS_BENCH_BACKEND`.
+- CV on threaded Direct was elevated (~16%); treat means as approximate.
+
 SysUtils isolation note (2026-07-16): HTTP benches no longer rely on implicit
 `SysUtils` symbols. `bench_fullchain` / `bench_server` use
 `nextpas.core.os.env` + `nextpas.core.errors`; `bench_h1parser` uses
