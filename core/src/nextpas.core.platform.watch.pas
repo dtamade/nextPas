@@ -414,8 +414,8 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
-  nextpas.core.platform.windows.base,
-  nextpas.core.platform.posix.errno;
+  nextpas.core.platform.error,
+  nextpas.core.platform.windows.base;
 
 function TPlatformWatcher.IsValid: Boolean;
 begin
@@ -458,24 +458,24 @@ begin SetString(Result, PAnsiChar(@Name[0]), NameLen); end;
 function platform_watch_create(out AWatcher: TPlatformWatcher): Int32;
 begin
   AWatcher.Fd := -1;
-  Result := Int32(ERROR_NOT_SUPPORTED);
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
 function platform_watch_add(var AWatcher: TPlatformWatcher; const APath: PAnsiChar): Int32;
 begin
-  Result := Int32(ERROR_NOT_SUPPORTED);
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
 function platform_watch_poll(var AWatcher: TPlatformWatcher; out AEvent: TPlatformWatchEvent; ATimeoutMs: Int64): Int32;
 begin
   FillChar(AEvent, SizeOf(AEvent), 0);
-  Result := -Int32(ERROR_NOT_SUPPORTED);
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
 function platform_watch_close(var AWatcher: TPlatformWatcher): Int32;
 begin
   AWatcher.Fd := -1;
-  Result := Int32(ERROR_NOT_SUPPORTED);
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 

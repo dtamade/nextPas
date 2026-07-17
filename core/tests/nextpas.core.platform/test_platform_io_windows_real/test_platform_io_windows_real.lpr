@@ -5,7 +5,6 @@ program test_platform_io_windows_real;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.platform.io.base,
   nextpas.core.platform.io,

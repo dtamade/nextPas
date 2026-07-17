@@ -137,6 +137,88 @@ begin
   end;
 end;
 
+function ResolveTestPath(const AFromTest, AFromRoot: string): string;
+begin
+  if FileExists(AFromTest) then
+    Exit(AFromTest);
+  if FileExists(AFromRoot) then
+    Exit(AFromRoot);
+  Result := AFromTest;
+end;
+
+procedure CheckTestSourceNoFpcRtlUses(const AFromTest, AFromRoot, ALabel: string);
+var
+  LPath, LSrc: string;
+begin
+  LPath := ResolveTestPath(AFromTest, AFromRoot);
+  Check(FileExists(LPath), 'test source exists: ' + ALabel);
+  LSrc := LowerCase(FsReadFileText(LPath));
+  { ban uses-clause style references }
+  Check(Pos('sysutils,', LSrc) = 0, ALabel + ' must not uses SysUtils,');
+  Check(Pos('sysutils;', LSrc) = 0, ALabel + ' must not uses SysUtils;');
+  Check(Pos('baseunix,', LSrc) = 0, ALabel + ' must not uses BaseUnix,');
+  Check(Pos('baseunix;', LSrc) = 0, ALabel + ' must not uses BaseUnix;');
+  Check(Pos('sysutils.', LSrc) = 0, ALabel + ' must not call SysUtils.*');
+  Check(Pos('baseunix.', LSrc) = 0, ALabel + ' must not call BaseUnix.*');
+end;
+
+procedure TestPlatformTestTreeNoFpcRtlUses;
+begin
+  { previously offending wine/windows harnesses — must stay clean }
+  CheckTestSourceNoFpcRtlUses(
+    '../test_platform_linux_modern/test_platform_linux_modern.lpr',
+    'core/tests/nextpas.core.platform/test_platform_linux_modern/test_platform_linux_modern.lpr',
+    'linux_modern');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.args/test_platform_args_wine/test_platform_args_wine.lpr',
+    'core/tests/nextpas.core.platform.args/test_platform_args_wine/test_platform_args_wine.lpr',
+    'args_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.console/test_platform_console_wine/test_platform_console_wine.lpr',
+    'core/tests/nextpas.core.platform.console/test_platform_console_wine/test_platform_console_wine.lpr',
+    'console_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.memory/test_platform_memory_wine/test_platform_memory_wine.lpr',
+    'core/tests/nextpas.core.platform.memory/test_platform_memory_wine/test_platform_memory_wine.lpr',
+    'memory_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.pty/test_platform_pty_wine/test_platform_pty_wine.lpr',
+    'core/tests/nextpas.core.platform.pty/test_platform_pty_wine/test_platform_pty_wine.lpr',
+    'pty_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.resource/test_platform_resource_wine/test_platform_resource_wine.lpr',
+    'core/tests/nextpas.core.platform.resource/test_platform_resource_wine/test_platform_resource_wine.lpr',
+    'resource_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.signal/test_platform_signal_wine/test_platform_signal_wine.lpr',
+    'core/tests/nextpas.core.platform.signal/test_platform_signal_wine/test_platform_signal_wine.lpr',
+    'signal_wine');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.signal/test_platform_windows_signal_contract/test_platform_windows_signal_contract.lpr',
+    'core/tests/nextpas.core.platform.signal/test_platform_windows_signal_contract/test_platform_windows_signal_contract.lpr',
+    'windows_signal_contract');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.socket/test_platform_socket_windows_real/test_platform_socket_windows_real.lpr',
+    'core/tests/nextpas.core.platform.socket/test_platform_socket_windows_real/test_platform_socket_windows_real.lpr',
+    'socket_windows_real');
+  CheckTestSourceNoFpcRtlUses(
+    '../test_platform_io_windows_real/test_platform_io_windows_real.lpr',
+    'core/tests/nextpas.core.platform/test_platform_io_windows_real/test_platform_io_windows_real.lpr',
+    'io_windows_real');
+  CheckTestSourceNoFpcRtlUses(
+    '../test_platform_windows_utf16_contract/test_platform_windows_utf16_contract.lpr',
+    'core/tests/nextpas.core.platform/test_platform_windows_utf16_contract/test_platform_windows_utf16_contract.lpr',
+    'windows_utf16_contract');
+  CheckTestSourceNoFpcRtlUses(
+    '../test_platform_wine_ci_matrix_contract/test_platform_wine_ci_matrix_contract.lpr',
+    'core/tests/nextpas.core.platform/test_platform_wine_ci_matrix_contract/test_platform_wine_ci_matrix_contract.lpr',
+    'wine_ci_matrix_contract');
+  CheckTestSourceNoFpcRtlUses(
+    '../../nextpas.core.platform.watch/test_platform_watch_wine/test_platform_watch_wine.lpr',
+    'core/tests/nextpas.core.platform.watch/test_platform_watch_wine/test_platform_watch_wine.lpr',
+    'watch_wine');
+end;
+
 procedure TestErrorMessageSourceNoBareMinusOne;
 var
   LSrc: string;
@@ -242,6 +324,7 @@ begin
   T.Test('error_message is length API (no bare -1)', @TestErrorMessageLengthApi);
   T.Test('args host source no FPC RTL params', @TestArgsHostSourceNoRtl);
   T.Test('production units no FPC SysUtils/BaseUnix/Windows/Classes', @TestProductionUnitsNoFpcRtl);
+  T.Test('platform test tree no uses SysUtils/BaseUnix', @TestPlatformTestTreeNoFpcRtlUses);
   T.Test('error.pas source has no bare -1 failure exits', @TestErrorMessageSourceNoBareMinusOne);
   T.Test('windows io_close is error-code API', @TestIoCloseIsErrorCodeApi);
   T.Test('resource uses PLATFORM_ERR_* family', @TestResourceUsesPlatformErr);

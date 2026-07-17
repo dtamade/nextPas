@@ -144,8 +144,10 @@ begin
     'Windows pipe read fd facade must not truncate HANDLE');
   CheckContains(LWindowsBranch, 'apipe.writefd := ptrint(lwrite)',
     'Windows pipe write fd facade must not truncate HANDLE');
-  CheckContains(LWindowsBranch, 'error_not_supported',
-    'Windows dup2 must return stable unsupported semantics');
+  CheckContains(LWindowsBranch, 'platform_err_unsupported',
+    'Windows dup2 must return stable PLATFORM_ERR_UNSUPPORTED');
+  CheckAbsent(LWindowsBranch, 'error_not_supported',
+    'Windows dup2 must not leak raw Windows ERROR_NOT_SUPPORTED');
   CheckAbsent(LWindowsBranch, 'result := -1; // not implemented on windows',
     'Windows dup2 must not remain a bare -1 stub');
 end;
