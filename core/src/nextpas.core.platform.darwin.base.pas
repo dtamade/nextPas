@@ -105,13 +105,17 @@ type
   { Darwin has no pthread_timedjoin_np; store user entry so timedjoin can poll
     a Finished flag set by a trampoline before reaping with pthread_join.
     Flat layout (no variant) avoids offset bugs when pthread_create writes
-    the thread id into the first field. }
+    the thread id into the first field.
+    RefCount=2 on create (caller + trampoline); join/detach and trampoline
+    each release once so detach cannot Dispose while the trampoline still
+    writes Finished/RetVal. }
   TPlatformPThreadState = record
     Thread: pthread_t;
     UserProc: Pointer;
     UserArg: Pointer;
     RetVal: Pointer;
     Finished: LongInt;
+    RefCount: LongInt;
   end;
 
   mach_timebase_info_data_t = record
