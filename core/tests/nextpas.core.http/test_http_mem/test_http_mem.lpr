@@ -228,9 +228,17 @@ begin
   LServer := NewHttpServerWithRequestArena(LInner);
   Check(LServer <> nil, 'NewHttpServerWithRequestArena');
   Check(not LServer.IsRunning, 'constructed idle');
+  { No-arg factory bases on Production (finite RW), not Default. }
+  LOpts := THttpServerOptions.Production.WithRequestArena;
+  CheckEqual(30000, LOpts.ReadTimeout,
+    'Production.WithRequestArena ReadTimeout template');
+  CheckEqual(30000, LOpts.WriteTimeout,
+    'Production.WithRequestArena WriteTimeout template');
+  Check(LOpts.RequestArena, 'Production.WithRequestArena enables arena');
 
   LOpts := THttpServerOptions.Default.WithRequestArena;
   Check(LOpts.RequestArena, 'options RequestArena');
+  CheckEqual(0, LOpts.ReadTimeout, 'explicit Default.WithRequestArena keeps RW=0');
   LServer := NewHttpServer(LInner, LOpts);
   Check(LServer <> nil, 'NewHttpServer WithRequestArena options');
 

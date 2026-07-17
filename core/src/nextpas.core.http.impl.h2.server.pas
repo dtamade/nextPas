@@ -23,6 +23,7 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.http.base,
   nextpas.core.http.impl.h2.session;
 
 type
@@ -56,9 +57,9 @@ procedure TH2ServerTransport.ValidateInputs(const AConn: ITcpStream;
   const AHandler: IHttpHandler);
 begin
   if AConn = nil then
-    raise EArgumentError.Create('h2 server transport requires connection');
+    raise EHttpError.Create(hekArgument, 'h2 server transport requires connection');
   if AHandler = nil then
-    raise EArgumentError.Create('h2 server transport requires handler');
+    raise EHttpError.Create(hekArgument, 'h2 server transport requires handler');
 end;
 
 function TH2ServerTransport.CreateSession(const AConn: ITcpStream;

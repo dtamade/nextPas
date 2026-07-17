@@ -52,7 +52,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ```
 
 - `http_hello_server` shows `NewRouter`, `Router.Get(...)`,
-  `Req.PathParam`, `Req.QueryParam`, `NewHttpServer(..., THttpServerOptions.Default)`,
+  `Req.PathParam`, `Req.QueryParam`,
+  `NewHttpServer(..., THttpServerOptions.Production.WithRequestArena)`,
   and `ListenAndServe`.
 - `http_get_client` shows `NewHttpClient`, `Client.Get(URL)`,
   `HttpReadResponseBodyString(Resp)`, and printing status / headers / body.
@@ -164,6 +165,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   Read/Write = 30000 ms) or explicit `WithReadTimeout` / `WithWriteTimeout`.
   IdleTimeout alone is not a full production template. Examples
   (`http_hello_server`, `http_websocket_echo_demo`) use Production.
+  Convenience `NewHttpServerWithRequestArena` (no explicit options) also bases
+  on **Production** + RequestArena so arena demos do not inherit unbounded RW.
 - Cancel: `IHttpCancelToken` is **cooperative** (not OS interrupt) →
   `hekCanceled` at Send / redirect / retry / H1 RoundTrip checkpoints
   (entry, pre-dial, post-write). A blocked socket read may lag until the
