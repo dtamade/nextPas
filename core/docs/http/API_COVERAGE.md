@@ -11,12 +11,21 @@
 
 ## 当前结论
 
-- **2026-07-17 cycle-6 usability inventory（只读；现行评估入口）**：
-  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle6.md`、
-    `2026-07-17-usability-cycle6-research.md`、
-    `2026-07-17-usability-cycle6-fix-plan.md`（score **96/100**；Wave A = land cycle-5）。
-  - Open residual：cycle-5 uncommitted→land；WS mid-frame cancel P2；H2 live dial optional；
-    Deferred product list unchanged.
+- **2026-07-17 cycle-7 usability inventory + Wave B fix（现行评估/修复入口）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle7.md`、
+    `2026-07-17-usability-cycle7-research.md`、
+    `2026-07-17-usability-cycle7-fix-plan.md`（score **97/100** pre-Wave-B；
+    Wave B = P2-1..P2-4）。
+  - **Wave B（本切片）**：
+    - WS `WithCancelToken` + mid-frame cancel wire（~50ms residual honest）。
+    - H2 live dial-timeout e2e（backlog-full peer）。
+    - client redirect resolve 热路径 `CreateOp(..., 'redirect', ...)`。
+    - inventory 文档对齐 landed cycle-5 + cycle-7。
+  - **Deferred** 仍真：CONNECT / Retry-After / full PSL / Response metadata /
+    ensure-2xx JSON decode / Op-everywhere / H3。
+- **2026-07-17 cycle-6 usability inventory（已归档；process P0 = land cycle-5 已完成）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle6.md` 等
+    （score 96/100；Wave A land cycle-5 → **done on main**）。
 - **2026-07-17 cycle-5 usability fix（已吸收 / Wave A land）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle5.md`、
     `2026-07-17-usability-cycle5-research.md`、
