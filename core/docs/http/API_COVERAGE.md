@@ -11,20 +11,24 @@
 
 ## 当前结论
 
-- **2026-07-17 residual usability fix（现行真相；以本条为准）**：
-  - Research/plan：`2026-07-17-usability-residual-research.md`、
-    `2026-07-17-usability-residual-fix-plan.md`（以及 wave-6
-    `2026-07-17-usability-findings-research.md` / fix-plan）。
+- **2026-07-17 post-residual usability fix（现行真相；以本条为准）**：
+  - Research/plan：`2026-07-17-usability-post-residual-research.md`、
+    `2026-07-17-usability-post-residual-fix-plan.md`（含 post-`feec31b45`
+    assessment 92/100 inventory）。更早 residual/wave-6 文档已吸收。
   - Request 工厂白名单：`NewRequest(Method, TUrl|string)` + `NewGetRequest`；
     推荐 `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` **已删除**。
     **下列 2026-07-06 长段落中的多参 “本轮补齐 / 现在都接受” 为 Historical archive，
     不是 live API**——勿按那些 overload 写新代码。
-  - Production discipline：client 必须设 `Timeout` / `WithTimeout`；cancel 须与
-    Timeout 配对（CONTRACT §2.2 Production defaults）。
-  - `ConnectTimeout` = post-dial first-write only；OS dial timeout / mid-read
-    cancel = **Blocked** on net（CONTRACT §2.2.0a）。
+  - Production discipline：
+    - client：`THttpClientOptions.Default.Timeout` = 30000；cancel 须与 Timeout 配对。
+    - server：`Default` Read/Write = 0（测试/兼容）；生产用
+      **`THttpServerOptions.Production`**（RW=30000）或显式 WithRead/WriteTimeout。
+  - `ConnectTimeout` = **post-dial first-write only**（非 OS dial）；OS dial timeout /
+    mid-read cancel = **Blocked** on net（CONTRACT §2.2.0a）。
   - Public construction preconditions（message/form/headers/stream/**server/**
-    **websocket/middleware**）：`EHttpError(hekArgument)`。
+    **websocket/middleware/SSE**/client Send(nil)/body helpers/auth helpers）：
+    **`EHttpError(hekArgument)`**。Historical 段落里若仍写裸 `EArgumentError`，
+    **不是 live 行为**。
   - CookieJar：Max-Age/Expires + SameSite（default Lax；None 需 Secure；SiteKey 近似；
     full PSL deferred）。
   - ensure-2xx：free-fn `HttpGet/Post/Put/Patch/DeleteString` + 方法对称
@@ -32,11 +36,14 @@
     `PatchString` / `DeleteString`。非 2xx 错误消息含 `METHOD url` 前缀
     （`HttpEnsureSuccess(Resp, Method, Url)` overload）。
   - H1 默认 `User-Agent: nextpas-http/1.0`。
-  - Proxy：明文 HTTP absolute-form only；HTTPS CONNECT / Retry-After /
-    Response metadata expand = **Deferred**（见 residual research §2.7）。
-  - H3：仅 seam；H3/QUIC non-goal。
+  - Proxy：明文 HTTP absolute-form only。
+  - **Deferred**（本 cycle 不实现）：HTTPS CONNECT、Retry-After 策略、full PSL、
+    Response metadata expand、ensure-2xx JSON decode、全路径结构化 Op/URL。
+  - **Non-goal**：H3/QUIC。
+- **2026-07-17 residual usability fix（已吸收）**：hekArgument client/server/ws/
+  middleware 主路径、ensure-2xx 对称、error METHOD url、docs honesty。
 - **2026-07-17 usability findings fix（wave-6，已吸收）**：
-  - 同上现行真相的子集（hekArgument message 层、GetString、SameSite、docs honesty）。
+  - 同上子集（hekArgument message 层、GetString、SameSite、docs honesty）。
 - **2026-07-16 wave-5 可用性抛光（已吸收）**：
   - H1 chunked request body：`Body(IReader)` 无 CL / `SendStreaming(..., CL<0)`。
   - Cancel：协作检查点（非 OS 中断）；见 CONTRACT §2.2。
@@ -66,6 +73,9 @@
   现行工厂仅：`NewRequest(Method, TUrl|string)` + `NewGetRequest` +
   `THttpRequestBuilder`。下列 “本轮补齐 / 现在都接受” 叙述只作历史，
   **不要**当作当前 public surface。
+  **Superseded exception wording**: 历史段若写 `Send(nil)` / 负超时 / nil body
+  helpers 抛裸 `EArgumentError`，现行一律为 `EHttpError(hekArgument)`
+  （见上「当前结论」与 CONTRACT §2.2.1）。
   - 已够稳（仍真）：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` /
     `IsRunning` 同步 facade；handler / middleware / router 组合面；static +
     WebSocket helper 层；H2 production-transport-ready；H3 仍被 QUIC 阻塞。

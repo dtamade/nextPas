@@ -66,8 +66,8 @@ begin
       WritePlainText(AW, HTTP_STATUS_OK, HttpFormatProcessMemStats + LineEnding);
     end);
 
-  { Product path: RequestArena on THttpServerOptions (server kernel wire). }
-  LOptions := THttpServerOptions.Default.WithRequestArena;
+  { Production Read/Write timeouts + RequestArena on server kernel wire. }
+  LOptions := THttpServerOptions.Production.WithRequestArena;
   LServer := NewHttpServer(LRouter, LOptions);
 
   WriteLn('http-hello-server=ready');

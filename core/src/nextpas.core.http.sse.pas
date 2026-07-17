@@ -88,7 +88,7 @@ end;
 function StartSSE(const AW: IHttpResponseWriter): ISSEEventWriter;
 begin
   if AW = nil then
-    raise EArgumentError.Create('StartSSE: response writer is nil');
+    raise EHttpError.Create(hekArgument, 'StartSSE: response writer is nil');
 
   AW.GetHeaders.SetHeader('content-type', 'text/event-stream');
   AW.GetHeaders.SetHeader('cache-control', 'no-cache');
@@ -115,9 +115,11 @@ begin
   for LI := 1 to Length(AValue) do
   begin
     if AValue[LI] in [#10, #13] then
-      raise EArgumentError.Create('SSE ' + AFieldName + ' must not contain line breaks');
+      raise EHttpError.Create(hekArgument,
+        'SSE ' + AFieldName + ' must not contain line breaks');
     if ARejectNull and (AValue[LI] = #0) then
-      raise EArgumentError.Create('SSE ' + AFieldName + ' must not contain null bytes');
+      raise EHttpError.Create(hekArgument,
+        'SSE ' + AFieldName + ' must not contain null bytes');
   end;
 end;
 
@@ -172,7 +174,7 @@ begin
   if not FOpen then
     raise EHttpError.Create(hekProtocol, 'SSE: stream already closed');
   if AEvent.Retry < 0 then
-    raise EArgumentError.Create('SSE retry must not be negative');
+    raise EHttpError.Create(hekArgument, 'SSE retry must not be negative');
   ValidateSSEFieldValue('event name', AEvent.Event, False);
   ValidateSSEFieldValue('event id', AEvent.Id, True);
 
@@ -249,7 +251,7 @@ end;
 procedure TSSEEventWriter.WriteRetry(const AMs: Int64);
 begin
   if AMs < 0 then
-    raise EArgumentError.Create('SSE retry must not be negative');
+    raise EHttpError.Create(hekArgument, 'SSE retry must not be negative');
   WriteRaw('retry: ' + IntToStr(AMs));
 end;
 

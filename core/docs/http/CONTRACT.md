@@ -112,11 +112,17 @@ end;
     **不**打断阻塞 OS `connect()`；名称中的 “Connect” 指 post-dial 首写
     阶段，不是 OS dial 超时。全量 dial 超时 / mid-read cancel 见下方 Blocked 表。
 - **Production defaults（可用性纪律）**：
-  - 生产 client **必须**设置有限 `Timeout`（`WithTimeout` 或 options）。
-  - `Timeout=0` 仅适合明确需要无限等待的测试/特殊工具。
+  - 生产 client：`THttpClientOptions.Default.Timeout` = **30000** ms；
+    仍可用 `WithTimeout` 覆盖。`Timeout=0` 仅适合测试/特殊工具。
   - **禁止**把“只挂 cancel、不设 Timeout”当作有界等待模板。
-  - 示例 `http_get_client` 默认 `WithTimeout(30000)`。
+  - 生产 server：`THttpServerOptions.Default` 的 Read/Write timeout 仍为 **0**
+    （兼容测试）；生产路径使用 **`THttpServerOptions.Production`**
+    （Read/Write = 30000 ms）或显式 `WithReadTimeout` / `WithWriteTimeout`。
+    IdleTimeout alone 不是完整生产模板。示例 `http_hello_server` /
+    `http_websocket_echo_demo` 使用 Production。
+  - 示例 `http_get_client` 使用有限 client timeout。
   - OS dial 有界与 mid-read 硬取消见 §2.2.0a（Blocked on net）。
+  - `ConnectTimeout` **仅** post-dial 首写 budget，**不是** OS dial 超时。
 
 ### 2.2.0a Net-dependent capabilities (Blocked)
 
@@ -136,8 +142,8 @@ end;
 - **消息形状错误**（非法/冲突 Content-Length、不支持 Transfer-Encoding、
   builder 非法 CL）→ `hekArgument`。
 - **配置/nil 前置条件**（nil writer/client、负超时/负 max redirects、
-  server/websocket/middleware 构造参数等）→ 也归 `hekArgument`
-  （不再裸 `EArgumentError`，便于统一 `HttpErrorIsUserError`）。
+  server/websocket/**SSE**/middleware 构造与公开前置条件等）→ 也归
+  `hekArgument`（不再裸 `EArgumentError`，便于统一 `HttpErrorIsUserError`）。
 - **ensure-2xx / download / redirect 客户端错误消息**：在已知 method/URL 时
   前缀为 `METHOD url: detail`（如 `GET http://example/path: HTTP request failed
   with status 404 Not Found`）。`HttpEnsureSuccess` 提供无上下文与
@@ -298,11 +304,14 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 
 ## 4. 错误与生命周期
 
-- 模块错误类型：`EHttpError`（及参数边界上的 `EArgumentError`）。
+- 模块错误类型：公开前置条件与协议故障以 **`EHttpError`** 为主
+  （`hekArgument` / `hekTimeout` / …）。内部 transport 实现仍可能抛
+  框架 `EArgumentError`；`HttpErrorIsUserError` 对两者都视为 user-side。
 - Server runtime ownership：`nextpas.core.net.server`；HTTP 只拥有协议状态机。
 - Client：idle pool 经 `CloseIdleConnections`；`Send` 拥有 close-capable request body。
 - Redirect：`301/302/303` → GET 无 body；`307/308` 保方法；跨 authority 剥离敏感头。
-- WebSocket：`UpgradeWebSocket`（server）/ `ConnectWebSocket`（client）；client 帧掩码。
+- WebSocket / SSE：`UpgradeWebSocket` / `ConnectWebSocket`；`StartSSE` —
+  公开前置条件均为 `hekArgument`。
 
 ---
 

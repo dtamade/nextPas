@@ -94,7 +94,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `SetHeader/Add/Get/GetAll/Has/Remove/Count/ForEach/Clone`
 - `SetBasicAuth(Headers, Username, Password)` / `SetBearerAuth(Headers, Token)`
   — set the `Authorization` header for common client request auth cases; nil
-  headers raise `EArgumentError`, and existing authorization values are replaced.
+  headers raise `EHttpError(hekArgument)`, and existing authorization values are replaced.
 
 ### URL Utilities
 
@@ -133,7 +133,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   the nil-body form and does not publish `Content-Length`.
 - `HttpWriteResponseString(Writer, Status, ContentType, Body)` — write a
   fixed Pascal string response through an `IHttpResponseWriter` and return the
-  body bytes accepted by the writer. Nil writers raise `EArgumentError`;
+  body bytes accepted by the writer. Nil writers raise `EHttpError(hekArgument)`;
   informational statuses raise `EHttpError` because the helper writes final
   responses; non-empty bodies for `204` / `304` raise before committing bytes;
   empty `204` / `304` responses skip entity headers; body-permitted final
@@ -144,7 +144,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown` / `LocalAddr` / `IsRunning`
 - `IHttpClient.Send(Req)` / `CloseIdleConnections` / `Get(Url)` /
   `Post(Url, ContentType, Body)` / `Put` / `Delete` / `Patch` / `Head`;
-  `Send(nil)` raises `EArgumentError`
+  `Send(nil)` raises `EHttpError(hekArgument)`
 - `Post` / `Put` / `Patch` / `Delete` body shortcuts accept Pascal `string` and
   `TBytes` only (publish `Content-Length`). Non-empty caller `Content-Type` is
   forwarded; empty content type omits the header. Stream bodies use
@@ -154,10 +154,16 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   Only **idempotent-safe** requests retry: GET/HEAD/OPTIONS/TRACE or
   `Idempotency-Key` / `X-Idempotency-Key` (`HttpIsRetrySafeRequest`). Body is
   rewound via `IStream` when present.
-- **Production client defaults**: always set a finite `Timeout` (options
-  `WithTimeout` / `THttpClientOptions.Timeout`). `Timeout=0` means unbounded
-  post-dial IO — fine for tests, unsafe as a production template. Examples such
-  as `http_get_client` use a 30s default for this reason.
+- **Production client defaults**: `THttpClientOptions.Default.Timeout` is
+  **30000** ms. Explicit `Timeout=0` still means unbounded post-dial IO
+  (tests/special tools only). Prefer `WithTimeout` when overriding. Examples
+  such as `http_get_client` use a finite timeout for this reason.
+- **Production server defaults**: `THttpServerOptions.Default` keeps
+  `ReadTimeout`/`WriteTimeout` = **0** (unbounded) for tests/compat.
+  Production servers must use **`THttpServerOptions.Production`** (finite
+  Read/Write = 30000 ms) or explicit `WithReadTimeout` / `WithWriteTimeout`.
+  IdleTimeout alone is not a full production template. Examples
+  (`http_hello_server`, `http_websocket_echo_demo`) use Production.
 - Cancel: `IHttpCancelToken` is **cooperative** (not OS interrupt) →
   `hekCanceled` at Send / redirect / retry / H1 RoundTrip checkpoints
   (entry, pre-dial, post-write). A blocked socket read may lag until the
@@ -225,19 +231,27 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   abandoned redirect body into connection reuse.
 - `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`; consumed or discarded response bodies are released before the helper returns or raises
 - `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, cleans partial temp files on failure, and releases the response body before returning or raising
-- `HttpReadResponseBodyBytes(Resp)` — consumes `Resp.Body` into `TBytes`; nil body returns empty bytes, nil response raises `EArgumentError`
-- `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EArgumentError`
+- `HttpReadResponseBodyBytes(Resp)` — consumes `Resp.Body` into `TBytes`; nil body returns empty bytes, nil response raises `EHttpError(hekArgument)`
+- `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EHttpError(hekArgument)`
 - `HttpReleaseResponseBody(Resp)` — releases a response body the caller will
   not read: close-capable bodies are closed, plain `IReader` bodies are drained
-  to EOF, nil body is a no-op, and nil response raises `EArgumentError`
+  to EOF, nil body is a no-op, and nil response raises `EHttpError(hekArgument)`
 - `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`
-- `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、
-  `MaxHeaderSize`、`MaxBodySize`; negative timeout or size-limit fields raise
-  `EArgumentError` at server construction time.
+- `THttpServerOptions` — 公开 carrier（`Backend`、timeouts、`MaxHeaderSize`、
+  `MaxBodySize`…）。`Default` vs `Production` 见上。Negative timeout or
+  size-limit fields raise `EHttpError(hekArgument)` at server construction time.
 - `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
-- `THttpClientOptions` — 公开 carrier，当前包括 `Timeout`、`MaxRedirects` 和
-  `FollowRedirects`; negative `Timeout` or `MaxRedirects` raises
-  `EArgumentError` at client construction time.
+- `THttpClientOptions` — 公开 carrier，当前包括 `Timeout`、`ConnectTimeout`（**post-dial
+  first-write only**，非 OS dial）、`MaxRedirects` 和 `FollowRedirects`;
+  negative `Timeout` or `MaxRedirects` raises `EHttpError(hekArgument)` at
+  client construction time.
+
+### SSE
+
+- `StartSSE(Writer)` / `ISSEEventWriter` — Server-Sent Events writer.
+  Nil writer, field injection (CR/LF in event name/id), and negative retry
+  raise `EHttpError(hekArgument)` (same public precondition style as client/
+  server/websocket).
 
 ### WebSocket
 
