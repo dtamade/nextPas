@@ -239,44 +239,42 @@ begin
       Inc(LI);
       case AFmt[LI] of
         's': begin
-          if LArgIdx <= High(AArgs) then
-          begin
-            case AArgs[LArgIdx].VType of
-              vtAnsiString: begin
-                LTmpStr := string(AArgs[LArgIdx].VAnsiString);
-                Result := Result + LTmpStr;
-              end;
-              vtUnicodeString: begin
-                LTmpStr := string(AArgs[LArgIdx].VUnicodeString);
-                Result := Result + LTmpStr;
-              end;
-              vtString: Result := Result + AArgs[LArgIdx].VString^;
-              vtChar: Result := Result + AArgs[LArgIdx].VChar;
-              vtPChar: begin
-                LTmpStr := string(AArgs[LArgIdx].VPChar);
-                Result := Result + LTmpStr;
-              end;
-              vtWideChar: Result := Result + Char(AArgs[LArgIdx].VWideChar);
-            else
-              Result := Result + '???';
+          if LArgIdx > High(AArgs) then
+            raise EConvertError.Create('FormatStr: not enough arguments for %s');
+          case AArgs[LArgIdx].VType of
+            vtAnsiString: begin
+              LTmpStr := string(AArgs[LArgIdx].VAnsiString);
+              Result := Result + LTmpStr;
             end;
-            Inc(LArgIdx);
+            vtUnicodeString: begin
+              LTmpStr := string(AArgs[LArgIdx].VUnicodeString);
+              Result := Result + LTmpStr;
+            end;
+            vtString: Result := Result + AArgs[LArgIdx].VString^;
+            vtChar: Result := Result + AArgs[LArgIdx].VChar;
+            vtPChar: begin
+              LTmpStr := string(AArgs[LArgIdx].VPChar);
+              Result := Result + LTmpStr;
+            end;
+            vtWideChar: Result := Result + Char(AArgs[LArgIdx].VWideChar);
+          else
+            Result := Result + '???';
           end;
+          Inc(LArgIdx);
         end;
         'd': begin
-          if LArgIdx <= High(AArgs) then
-          begin
-            case AArgs[LArgIdx].VType of
-              vtInteger: LVal := AArgs[LArgIdx].VInteger;
-              vtInt64: LVal := AArgs[LArgIdx].VInt64^;
-              vtBoolean: LVal := Ord(AArgs[LArgIdx].VBoolean);
-            else
-              LVal := 0;
-            end;
-            Str(LVal, LIntBuf);
-            Result := Result + LIntBuf;
-            Inc(LArgIdx);
+          if LArgIdx > High(AArgs) then
+            raise EConvertError.Create('FormatStr: not enough arguments for %d');
+          case AArgs[LArgIdx].VType of
+            vtInteger: LVal := AArgs[LArgIdx].VInteger;
+            vtInt64: LVal := AArgs[LArgIdx].VInt64^;
+            vtBoolean: LVal := Ord(AArgs[LArgIdx].VBoolean);
+          else
+            LVal := 0;
           end;
+          Str(LVal, LIntBuf);
+          Result := Result + LIntBuf;
+          Inc(LArgIdx);
         end;
         '%': Result := Result + '%';
       else
