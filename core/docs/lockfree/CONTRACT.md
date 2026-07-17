@@ -4,7 +4,7 @@
 **层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-17
-**版本**：2.5
+**版本**：2.6
 
 ---
 
@@ -60,6 +60,30 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 | `ttl_cache` | AnsiString key/value |
 
 > 注：hash-only sketch（`counting_bloom` / `countminsketch` / `hyperloglog`）仅用 AnsiString 作瞬时哈希输入，不存储 managed 元素，归为 n/a 而非 exception。
+
+### 0.2 T2 maturity tiers（H2-2）
+
+默认门面 **不** 升 T2。T2 直接 import 时用下列成熟度档位（文档分档，**不**重写算法）：
+
+| 档位 | 含义 | 消费者期望 |
+|------|------|------------|
+| **Available** | 有测试套件；API 稳定可用；progress 多为 lock-based | 可生产使用，须读单元 progress 与 managed 例外 |
+| **Guarded** | Available + 有 managed 守卫或 AnsiString 例外表；生命周期/关闭语义文档化 | 生产可用但需遵守 Close/守卫约束 |
+| **Experimental** | 研究/局部覆盖；命名或算法可能变 | 仅 opt-in；不进默认门面 |
+
+**分档示例（非穷尽；以单元文档 + 测试存在为准）**：
+
+| 档位 | 示例单元 / 类型 |
+|------|-----------------|
+| **Guarded** | `bag`, `multimap`, `ringbuffer`, `timeoutqueue`, `workstealing`（`TWorkStealingPool`）, `priority_queue`, 多数 `*cache` / `bloom` / `counter` / sync helpers |
+| **Available** | `skiplist*`, `btree`/`rbtree`/`treap`/`bplus`/`scapegoat`, `graph`/`dag`, `crdt`, sketch 类（HLL/CMS…）, `deque_lf`（spin-lock + AnsiString） |
+| **Experimental** | `hashmap.rtm`, `hashmap.numa`, RTM/NUMA 扩展，formal-only 路径 |
+
+T1 成熟度不在本表：T1 为 **Ready-for-consumer**（见 READY）。T3 = Experimental 的子集（研究扩展）。
+
+**不做（H2-2）**：把任一 T2 档升入默认门面；统一重写 T2 算法；改变 Closed 语义。
+
+---
 
 ## 1. 接口契约
 
@@ -157,8 +181,11 @@ end;
 
 generic TWorkStealingDeque<T> = class
   function TryPush(const AValue: T): Boolean;
+  function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryPop(out AValue: T): Boolean;
+  function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   function TrySteal(out AValue: T): Boolean;
+  function TryStealEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
@@ -193,7 +220,7 @@ generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<
 Boolean 热路径 `TrySend` / `TryEnqueue` / `TryPush` / `TryReceive` / `TryDequeue` / `TryPop` **保持不变**。
 需要区分 full / empty / closed 时使用可选诊断 API：
 
-**已覆盖结构（R3+R4）**：
+**已覆盖结构（R3+R4+H2-1）**：
 | 结构 | Publish Ex | Consume Ex |
 |------|------------|------------|
 | Channel | `TrySendEx` | `TryReceiveEx` |
@@ -204,6 +231,9 @@ Boolean 热路径 `TrySend` / `TryEnqueue` / `TryPush` / `TryReceive` / `TryDequ
 | SPMC ring | `TryEnqueueEx` | `TryDequeueEx` |
 | MPSC（无界） | `TryEnqueueEx` | `TryDequeueEx` |
 | Stack（有界） | `TryPushEx` | `TryPopEx` |
+| WorkStealingDeque（有界 T1） | `TryPushEx` | `TryPopEx` / `TryStealEx` |
+
+**非 T1 Try\*Ex 目标**：`lockfree.deque_lf`（`TLockFreeDeque`）为 **spin-lock** + `TDequeResult`（`dqOk`/`dqEmpty`/`dqFull`），**无** `Close` / `TLockFreeTryError` 面；progress **非** lock-free / **非** wait-free（历史名 `lf`）。真 lock-free 双端队列用 `TWorkStealingDeque`。
 
 ```pascal
 type
@@ -318,9 +348,20 @@ Key/Value 双参数类型用：
 
 | 测试入口 | 说明 | 规模（约） |
 |----------|------|------------|
-| `test_lockfree` | T1 + source-contract + isolation | **~166** tests |
-| `test_lockfree_stress` | 多线程 stress | focused gate |
+| `test_lockfree` | T1 + source-contract + isolation | **~178** tests（H2-1 +Deque Try\*Ex） |
+| `test_lockfree_stress` | 多线程 stress（含 H2-5 Channel Close-join-Free） | focused gate |
 | `test_lockfree_*` | 子模块独立套件 | 90+ suites |
+| `examples/.../t1_close_join_free` | H2-6 真实消费者证明 | manual / `make run` |
+
+### 6.1 Formal / 已知限制（H2-5）
+
+| 模型 | 路径 | 覆盖 | 限制 |
+|------|------|------|------|
+| SPSC | `formal/tla/SpscQueue.tla` | 有界 SPSC 协议 | 研究证据；非 CI 默认门 |
+| MPMC | `formal/tla/MpmcQueue.tla` | 有界 MPMC sequence | 同上 |
+| Channel | `formal/tla/LockFreeChannel.tla` | channel 发送/接收 | 同上；cap=1 以 R5 测试为准 |
+
+形式化模型加深 **不** 改变 T1 运行时契约。失败场景优先修 bug；无法修则记入本表。
 | `test_atomic` | 原子操作/内存序/CAS/wait/notify | **~45** tests |
 
 入口：

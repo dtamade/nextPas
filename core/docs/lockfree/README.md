@@ -19,6 +19,7 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
 | [`READY.md`](READY.md) | **状态入口**（R0–R7 基线 + **H2 in progress**） |
 | [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6） |
+| [`bench-envelope.md`](bench-envelope.md) | **H2-4** bench 证据信封（禁止无信封绝对 Mops） |
 | [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
@@ -52,8 +53,20 @@ Single-owner means concurrent multi-owner use is outside the contract (e.g. mult
 | Tier | Contents | How to use |
 | --- | --- | --- |
 | **T1 runtime core** | SPSC/MPMC/MPSC/SPMC/SegQueue/MSQueue, Stack, WorkStealingDeque, EBR/Hazard, Channel, Selector, ShardedHashMap (+ ConcurrentHashMap alias) | `uses nextpas.core.lockfree;` |
-| **T2 concurrent containers** | SkipList, BTree, caches, Bloom, Bag, MultiMap, graph/tree extras, sync helpers under `lockfree.*` | `uses nextpas.core.lockfree.<unit>;` |
+| **T2 concurrent containers** | SkipList, BTree, caches, Bloom, Bag, MultiMap, graph/tree extras, sync helpers under `lockfree.*` | `uses nextpas.core.lockfree.<unit>;` — **not** default facade |
 | **T3 research / extensions** | RTM HashMap, NUMA HashMap, experimental algos | direct unit only |
+
+### T2 maturity tiers (H2-2)
+
+Within T2, containers are **documented** (not re-ranked into T1) as:
+
+| Maturity | Meaning | Examples |
+| --- | --- | --- |
+| **Guarded** | Tests + managed/close discipline documented | bag, multimap, ringbuffer, workstealing pool, many caches/filters/sync helpers |
+| **Available** | Usable concurrent structure; progress often lock-based | trees/skiplist, sketches, `deque_lf` (spin-lock) |
+| **Experimental** | Research / unstable surface | `hashmap.rtm`, `hashmap.numa` |
+
+Full table: [`CONTRACT.md`](CONTRACT.md) §0.2. Selection: [`selection-guide.md`](selection-guide.md).
 
 ## 模块分层（T1 live set）
 
@@ -118,9 +131,10 @@ closed、当前为空且没有 admitted producer 仍可能发布时才把 closed
 with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` is a fixed-capacity stack: `TryPush` returns `False` when no free slot remains, and `IsEmpty` / `ApproxCount` are snapshot helpers over the current top-linked list rather than linearization guarantees under contention.
 
-`TWorkStealingDeque<T>` 是 work-stealing deque：owner 线程执行 `TryPush` / `TryPop`，thief
-线程只执行 `TrySteal`。支持 `Close` / `IsClosed`：Close 后 `TryPush` 返回 False，已入队数据仍可
-`TryPop` / `TrySteal` 取出；无 wait/timeout surface。
+`TWorkStealingDeque<T>` 是 work-stealing deque：owner 线程执行 `TryPush` / `TryPop`（可选 `TryPushEx` / `TryPopEx`），thief
+线程只执行 `TrySteal`（可选 `TryStealEx`）。支持 `Close` / `IsClosed`：Close 后 `TryPush`/`TryPushEx` 返回 False（`lfteClosed`），已入队数据仍可
+`TryPop` / `TrySteal` 取出；空且 closed 时 Ex API 报 `lfteClosed`。无 wait/timeout surface。
+`deque_lf`（`TLockFreeDeque`）为 **spin-lock** + `TDequeResult`，非 T1 Try\*Ex 目标，非 wait-free。
 `TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full or closed, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
 `TSpmcQueue<T>` 是单 producer、多 consumer 有界队列。`TryEnqueue` 是非阻塞操作；`TryDequeue` 多消费者间
 竞争 CAS；`EnqueueWait` / `DequeueWait` 通过 wait-address seam 阻塞；timeout 版本使用纳秒超时。

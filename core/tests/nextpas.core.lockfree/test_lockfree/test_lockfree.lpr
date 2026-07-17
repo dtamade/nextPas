@@ -5877,6 +5877,42 @@ begin
   end;
 end;
 
+procedure TestDequeTryExDiagnostics;
+var
+  LD: TIntDeque;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LD := TIntDeque.Create(1);
+  try
+    Check(LD.TryPushEx(91, LErr), 'Deque TryPushEx success');
+    Check(LErr = lfteNone, 'Deque push success error is lfteNone');
+    Check(not LD.TryPushEx(92, LErr), 'Deque full TryPushEx fails');
+    Check(LErr = lfteFull, 'Deque full is lfteFull');
+    Check(LD.TryPopEx(LV, LErr), 'Deque TryPopEx success');
+    CheckEqual(91, LV, 'Deque TryPopEx value');
+    Check(LErr = lfteNone, 'Deque pop success error is lfteNone');
+    Check(not LD.TryPopEx(LV, LErr), 'Deque empty TryPopEx fails');
+    Check(LErr = lfteEmpty, 'Deque empty not closed is lfteEmpty');
+    Check(not LD.TryStealEx(LV, LErr), 'Deque empty TryStealEx fails');
+    Check(LErr = lfteEmpty, 'Deque empty steal not closed is lfteEmpty');
+    Check(LD.TryPushEx(93, LErr), 'Deque TryPushEx after empty');
+    Check(LErr = lfteNone, 'Deque push after empty is lfteNone');
+    Check(LD.TryStealEx(LV, LErr), 'Deque TryStealEx success');
+    CheckEqual(93, LV, 'Deque TryStealEx value');
+    Check(LErr = lfteNone, 'Deque steal success error is lfteNone');
+    LD.Close;
+    Check(not LD.TryPushEx(94, LErr), 'Deque closed TryPushEx fails');
+    Check(LErr = lfteClosed, 'Deque closed publish is lfteClosed');
+    Check(not LD.TryPopEx(LV, LErr), 'Deque closed empty TryPopEx fails');
+    Check(LErr = lfteClosed, 'Deque closed empty pop is lfteClosed');
+    Check(not LD.TryStealEx(LV, LErr), 'Deque closed empty TryStealEx fails');
+    Check(LErr = lfteClosed, 'Deque closed empty steal is lfteClosed');
+  finally
+    LD.Free;
+  end;
+end;
+
 procedure TestMsQueueDestroyCloseAndDrain;
 var
   LQ: specialize TLockFreeMsQueue<Integer>;
@@ -7512,6 +7548,7 @@ begin
   T.Test('SPMC Try*Ex diagnostics', @TestSpmcTryExDiagnostics);
   T.Test('MPSC Try*Ex diagnostics', @TestMpscTryExDiagnostics);
   T.Test('Stack Try*Ex diagnostics', @TestStackTryExDiagnostics);
+  T.Test('Deque Try*Ex diagnostics', @TestDequeTryExDiagnostics);
   T.Test('MSQueue Destroy Close and drain', @TestMsQueueDestroyCloseAndDrain);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);

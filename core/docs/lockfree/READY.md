@@ -30,13 +30,13 @@ R-line map: [`roadmap.md`](roadmap.md). **H2 charter**: [`roadmap-h2.md`](roadma
 
 | Stage | Name | Status |
 |-------|------|--------|
-| **H2-0** | Charter + status switch | **in progress** |
-| H2-1 | Deque Try\*Ex (T1 parity) | pending |
-| H2-2 | T2 maturity tiers (docs only) | pending |
-| H2-3 | atomic preferred path | pending |
-| H2-4 | bench evidence envelope | pending |
-| H2-5 | formal / stress deepen | pending |
-| H2-6 | real consumer in core | pending |
+| **H2-0** | Charter + status switch | **done** (`archive/atomic-lockfree-h2-0-landed-20260717`) |
+| H2-1 | Deque Try\*Ex (T1 parity) | **implemented** (pending verify/land) |
+| H2-2 | T2 maturity tiers (docs only) | **implemented** (pending land) |
+| H2-3 | atomic preferred path | **implemented** (pending land) |
+| H2-4 | bench evidence envelope | **implemented** (pending land) |
+| H2-5 | formal / stress deepen | **implemented** (pending verify/land) |
+| H2-6 | real consumer in core | **implemented** (pending verify/land) |
 | H2 close-out | READY/roadmap + archive tag | pending |
 
 Details, deliverables, non-goals, and acceptance: [`roadmap-h2.md`](roadmap-h2.md).
@@ -91,7 +91,7 @@ git diff --check
 
 Expected: atomic + lockfree main suite + stress green; log default `core/build/verify-lockfree/verify-t1.log`.
 
-Current main-suite size after R5: **lockfree 177** tests (R4 was 176; +`TestChannelCapacityOneFullEmpty`). H2-1 may add Deque Try\*Ex cases.
+Current main-suite size after R5: **lockfree 177** tests. H2-1 adds `TestDequeTryExDiagnostics` (expect **178** after land).
 
 ---
 
