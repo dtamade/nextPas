@@ -1840,8 +1840,8 @@ begin
     'H2 RoundTrip applies cancel token to connection stream');
   Check(Pos('LConn.ClearCancelToken;', LSrc) > 0,
     'H2 RoundTrip clears cancel token before pool return');
-  Check(Pos('THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken)',
-    LSrc) > 0, 'H2 bridges IHttpCancelToken to INetCancelToken');
+  Check(Pos('THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken, INetCancelWaitable)',
+    LSrc) > 0, 'H2 bridges IHttpCancelToken to INetCancelToken/waitable');
   Check(Pos('HttpWrapTransportException', LSrc) > 0,
     'H2 wraps transport cancel/timeout into EHttpError');
 end;

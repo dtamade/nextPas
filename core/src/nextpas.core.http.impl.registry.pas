@@ -70,6 +70,7 @@ begin
   LH1Options.Timeout := AOptions.Timeout;
   LH1Options.ConnectTimeout := AOptions.ConnectTimeout;
   LH1Options.MaxPoolSize := AOptions.MaxPoolSize;
+  LH1Options.IdleTTL := AOptions.IdleTTL;
   LH1Options.ProxyUrl := AOptions.ProxyUrl;
   LH1Options.TLSContext := AOptions.TLSContext;
   Result := NewH1ClientTransport(LH1Options);
@@ -83,6 +84,7 @@ begin
   LH2Options.Timeout := AOptions.Timeout;
   LH2Options.ConnectTimeout := AOptions.ConnectTimeout;
   LH2Options.MaxPoolSize := AOptions.MaxPoolSize;
+  LH2Options.IdleTTL := AOptions.IdleTTL;
   LH2Options.TLSContext := AOptions.TLSContext;
   Result := NewH2ClientTransport(LH2Options);
 end;

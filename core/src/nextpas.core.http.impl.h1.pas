@@ -20,6 +20,8 @@ type
     { Max idle connections retained per pool authority key (host/port, with
       scheme/proxy variants encoded in the host key). Not a global pool cap. }
     MaxPoolSize: Int32;
+    { Wall-clock idle TTL (ms). 0 = no TTL. Default comes from client options. }
+    IdleTTL: Int64;
     { Plain HTTP forward proxy URL (http://[user:pass@]host:port). Empty = direct.
       For https targets, client dials proxy and opens a CONNECT tunnel, then
       TLS-wraps the tunneled stream (SNI = origin host). Plain http targets
@@ -53,7 +55,8 @@ implementation
 uses
   nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors,
   nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
-  nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.text.conv,
+  nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.time,
+  nextpas.core.text.conv,
   nextpas.core.encoding,
   nextpas.core.http.headers, nextpas.core.http.message,
   nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast,
@@ -71,6 +74,7 @@ type
     Host: string;
     Port: UInt16;
     Conn: ITcpStream;
+    IdleAtMs: UInt64;
   end;
 
   TReadPrependTcpStream = class(TInterfacedObject, IReader, IWriter, ITcpStream)
@@ -135,6 +139,8 @@ type
     FPending: string;
     FDefaultTLSContext: ISSLContext;
     function PooledConnectionIsReusable(const AConn: ITcpStream): Boolean;
+    function PoolEntryExpired(const AEntry: TPoolEntry): Boolean;
+    procedure PoolRemoveAt(const AIndex: Int32);
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
     procedure PoolClear;
@@ -2272,6 +2278,30 @@ begin
   end;
 end;
 
+function TH1ClientTransport.PoolEntryExpired(const AEntry: TPoolEntry): Boolean;
+var
+  LNow: UInt64;
+  LAge: UInt64;
+begin
+  Result := False;
+  if FOptions.IdleTTL <= 0 then
+    Exit;
+  LNow := GetTickCount64;
+  if LNow >= AEntry.IdleAtMs then
+    LAge := LNow - AEntry.IdleAtMs
+  else
+    LAge := 0;
+  Result := LAge >= UInt64(FOptions.IdleTTL);
+end;
+
+procedure TH1ClientTransport.PoolRemoveAt(const AIndex: Int32);
+begin
+  if (AIndex < 0) or (AIndex >= FPoolCount) then
+    Exit;
+  FPool[AIndex] := FPool[FPoolCount - 1];
+  Dec(FPoolCount);
+end;
+
 function TH1ClientTransport.PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
 var
   LI: Int32;
@@ -2279,18 +2309,28 @@ begin
   Result := nil;
   FPoolLock.Acquire;
   try
-    for LI := 0 to FPoolCount - 1 do
+    LI := 0;
+    while LI < FPoolCount do
+    begin
       if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
       begin
+        if PoolEntryExpired(FPool[LI]) then
+        begin
+          if FPool[LI].Conn <> nil then
+            FPool[LI].Conn.Close;
+          PoolRemoveAt(LI);
+          Continue;
+        end;
         Result := FPool[LI].Conn;
-        FPool[LI] := FPool[FPoolCount - 1];
-        Dec(FPoolCount);
+        PoolRemoveAt(LI);
         if PooledConnectionIsReusable(Result) then
           Exit;
         Result.Close;
         Result := nil;
         Exit;
       end;
+      Inc(LI);
+    end;
   finally
     FPoolLock.Release;
   end;
@@ -2304,6 +2344,21 @@ var
 begin
   FPoolLock.Acquire;
   try
+    { Drop expired peers for this authority so MaxPoolSize counts live idle only. }
+    LI := 0;
+    while LI < FPoolCount do
+    begin
+      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
+         PoolEntryExpired(FPool[LI]) then
+      begin
+        if FPool[LI].Conn <> nil then
+          FPool[LI].Conn.Close;
+        PoolRemoveAt(LI);
+      end
+      else
+        Inc(LI);
+    end;
+
     if FOptions.MaxPoolSize > 0 then
     begin
       LAuthorityIdle := 0;
@@ -2323,6 +2378,7 @@ begin
     FPool[FPoolCount].Host := AHost;
     FPool[FPoolCount].Port := APort;
     FPool[FPoolCount].Conn := AConn;
+    FPool[FPoolCount].IdleAtMs := GetTickCount64;
     Inc(FPoolCount);
   finally
     FPoolLock.Release;
