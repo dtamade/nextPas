@@ -1,9 +1,10 @@
 # Atomic & Lockfree 可执行路线图（权威）
 
-> **状态**: **生效**（2026-07-17 用户确认 Q1–Q5 默认）· **更新**: 2026-07-17 · **Owner**: atomic-lockfree lane
+> **状态**: **Mainline complete · Ready/Maintenance**（2026-07-17）· **Owner**: atomic-lockfree lane
 > **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）
 > **本文件是推进主线**。历史 phase 笔记与研究材料降级为附录引用，冲突时以 **CONTRACT + 本路线图** 为准。
 > **已锁定**: Q1 R4–R7 主线 / Q2 R5 倾向修 cap=1 / Q3 rings+MPSC 优先 Stack 次之 / Q4 Makefile 证据 / Q5 phase 归档保留。
+> **Ready 声明**: [`READY.md`](READY.md)（验收清单、维护策略、exclude-from-land）。
 
 ---
 
@@ -14,6 +15,7 @@
 | [`CONTRACT.md`](CONTRACT.md) | 运行时/API 契约（Closed、managed、RTL isolation、Try\*Ex） | **契约真相** |
 | [`README.md`](README.md) | 模块入口、T1 矩阵、生命周期、如何用 | **产品真相** |
 | **`roadmap.md`（本文件）** | 分阶段目标、交付、依赖、优先级、验收 | **推进主线** |
+| [`READY.md`](READY.md) | **Ready 声明**、验收清单、维护策略 | **Ready / Maintenance 状态** |
 | [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 | 证据 / 维护参考 |
 | [`selection-guide.md`](selection-guide.md) | 选型决策树 | 用户向 |
 | [`api-reference.md`](api-reference.md) | API 摘要（易漂移，改 API 必须同步） | 参考，次于 CONTRACT |
@@ -23,7 +25,7 @@
 | `benchmark-comparison-*.md` | 历史对照数据（需平台信封） | 证据附件 |
 | `formal/tla/*` | 形式化模型 | 研究 |
 
-**原则**：新工作只挂到本路线图的 **R 阶段编号**；不要再开无编号的「Phase N」平行文档，除非重大修订讨论后新增。
+**原则**：新工作只挂到本路线图的 **R 阶段编号**；不要再开无编号的「Phase N」平行文档，除非重大修订讨论后新增。无维护期默认不新增 R 编号。
 
 ---
 
@@ -46,10 +48,11 @@
 | **R1** 可用性 Wave-1 | ClosedPublishPolicy；SegQueue closed raise；MSQueue Destroy Close+drain；生产+主测试 RTL isolation；大量 T2 `IsManagedType` | `eeaa7c840` 一带；lockfree~168、atomic 45 |
 | **R2** 可用性 Wave-2 | 剩余 generic 守卫（btree/trie/selector.impl）；SegQueue Destroy Close；bench 去 RTL 符号；CONTRACT 例外表；api-ref `moSeqCst` | `334a61a69` |
 | **R3** 诊断 API 试点 | `TLockFreeTryError` + Channel/ChannelSPSC/SegQueue `Try*Ex` | `373f86896`；lockfree **171** |
-| **R4** Try\*Ex 扩面 | SPSC/MPMC/SPMC/MPSC/Stack `Try*Ex`；CONTRACT §1.4 | 已完成；lockfree **176** |
-| **R5** Channel cap=1 | MPMC Channel empty/full sequence 编码（方案 A）；`TestChannelCapacityOneFullEmpty`；CONTRACT §1.5 | 见本轮 landing |
-| **R6** 工程卫生 | 模块 `verify-t1` Makefile；CONTRACT §3.1 managed 文案模板；api-ref EN `moSeqCst` 对齐 | 见本轮 landing |
-| **R7** 消费者 + legacy | [`consumer-audit.md`](consumer-audit.md)；atomic CONTRACT §1.4 legacy CAS 偏好；T2 命名诚实脚注扩充 | 见本轮 landing |
+| **R4** Try\*Ex 扩面 | SPSC/MPMC/SPMC/MPSC/Stack `Try*Ex`；CONTRACT §1.4 | 已完成；lockfree **177**（R4 落地时 176；R5 +1） |
+| **R5** Channel cap=1 | MPMC Channel empty/full sequence 编码（方案 A）；`TestChannelCapacityOneFullEmpty`；CONTRACT §1.5 | 已合入；lockfree **177** |
+| **R6** 工程卫生 | 模块 `verify-t1` Makefile；CONTRACT §3.1 managed 文案模板；api-ref EN `moSeqCst` 对齐 | 已合入 |
+| **R7** 消费者 + legacy | [`consumer-audit.md`](consumer-audit.md)；atomic CONTRACT §1.4 legacy CAS 偏好；T2 命名诚实脚注扩充 | 已合入 |
+| **RC** Ready close-out | [`READY.md`](READY.md) 验收清单 + Maintenance 策略 | 本文件 / READY |
 
 ### 1.3 成熟度（诚实）
 
@@ -59,14 +62,14 @@
 | **atomic** | **Ready-for-consumer** | 双 API 文档化；legacy 仍在 |
 | **T2 容器** | **可用但非统一生产契约** | 多数有 managed 守卫或 AnsiString 例外表；progress 多为 lock-based |
 | **T3 / 研究** | 实验 | RTM/NUMA/TLA 等，不默认门面 |
-| **文档卫生** | 部分过时 | 旧 roadmap 曾宣称「全无锁」——**已废止** |
+| **文档卫生** | **已整理** | 主文档以 CONTRACT + README + roadmap + READY 为准；旧「全无锁」宣称**已废止**；历史 phase 为归档 |
 
-### 1.4 已知缺口（按优先级）
+### 1.4 已知缺口 / 剩余（按优先级）
 
 | 优先级 | 缺口 | 对应阶段 |
 |--------|------|----------|
-| — | R7 交付：消费者审计 + legacy CAS 文档 + T2 命名脚注 | **DONE** |
-| 研究 | NUMA 亲和 / TSX 扩展 / TLA+ 扩模型 | **R8**（非默认） |
+| — | 主线 R0–R7 | **DONE** |
+| 研究（仅 opt-in） | NUMA 亲和 / TSX 扩展 / TLA+ 扩模型 | **R8**（非默认，不自动推进） |
 
 ### 1.5 标准验证门（所有 R* 验收默认集）
 
@@ -113,9 +116,9 @@ R8  研究线（NUMA/TSX/TLA）              可选，重大变更需讨论
 | 阶段 | 名称 | 优先级 | 依赖 | 默认是否自动推进 |
 |------|------|--------|------|------------------|
 | R0–R3 | 基线 + Wave1–3 | — | — | 已完成 |
-| **R4** | Try\*Ex 扩至 T1 rings | **P1** | R3 | **是**（确认路线图后） |
-| **R5** | Channel cap=1 语义 | **P1** | R3；可与 R4 并行评估 | **是**（若 R4 发现阻塞则先 R5） |
-| **R6** | 证据与文档卫生 | **P2** | R4 或并行小切片 | **是** |
+| **R4** | Try\*Ex 扩至 T1 rings | **P1** | R3 | **已完成** |
+| **R5** | Channel cap=1 语义 | **P1** | R3；可与 R4 并行评估 | **已完成** |
+| **R6** | 证据与文档卫生 | **P2** | R4 或并行小切片 | **已完成** |
 | **R7** | 消费者 + legacy | **P3** | R6 | **已完成** |
 | **R8** | 研究扩展 | 研究 | 独立 | **否**，重大变更先讨论 |
 
@@ -209,7 +212,19 @@ R8  研究线（NUMA/TSX/TLA）              可选，重大变更需讨论
 | Q4 | R6：优先模块 Makefile 目标 | **确认** |
 | Q5 | 旧 phase 归档横幅保留 | **确认** |
 
-**当前执行**: **none**（主线 R0–R7 完成；**R8 仅研究 opt-in**，默认不推进）。
+**当前执行**: **none / maintenance**（主线 R0–R7 完成；**R8 仅研究 opt-in**，默认不推进；无 R9）。
+
+### RC Ready close-out — **DONE**
+
+正式 Ready 声明与验收清单见 [`READY.md`](READY.md)：
+
+- 状态 **Ready / Maintenance**
+- 模块成熟度表（T1/atomic Ready-for-consumer；T2 非统一生产契约）
+- 验收项：ClosedPublishPolicy、managed guards、RTL isolation、Try\*Ex T1、Channel cap=1、verify-t1、consumer-audit
+- 维护策略：bugfix only；不擅自开 R9
+- 验证：`make -C core/tests/nextpas.core.lockfree verify-t1`
+- 归档标签 R4–R7 + `archive/atomic-lockfree-ready-20260717`
+- 禁止入仓：`.playwright-mcp/`、一次性 migrate 脚本
 
 ---
 
