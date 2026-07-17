@@ -1,12 +1,15 @@
 # mem 标准库质量计划
 
-**状态**: Active — **product dual-track CLOSED**（2026-07-16）；维护与 landing 候选，不再开 dynarray→TVec 产品表冲刺
-**Owner**: mem lane
-**创建**: 2026-07-14
-**目标**: 把 `nextpas.core.mem` 从“分配器平台/博物馆”收敛为 **对标并在关键维度超过 Go runtime / Rust Allocator 生态** 的标准库级内存底座。
+**状态**: **COMPLETED**（时代 B，2026-07-14 … 2026-07-16）— 90 天 M1–M3 与 S1–S7 已闭合  
+**活路线图**: 见 **[ROADMAP.md](ROADMAP.md)**（时代 D Steward）  
+**仍权威**: 本文 **§3 Tier 分层**（门面规则）；其余章节为执行档案 / changelog  
+**Owner**: mem lane  
+**创建**: 2026-07-14  
+**目标（已达成）**: 把 `nextpas.core.mem` 从“分配器平台/博物馆”收敛为标准库级内存底座（默认路径、契约、诊断、上层集成）。
 
 相关文档：
 
+- [ROADMAP.md](ROADMAP.md) — **唯一活路线图**
 - [README.md](README.md) — 模块入口与选择指南
 - [ARCHITECTURE.md](ARCHITECTURE.md) — 分层与 owner
 - [CONTRACT.md](CONTRACT.md) — 运行时契约
@@ -14,7 +17,7 @@
 - [BENCHMARKS.md](BENCHMARKS.md) — 历史基准
 - [SCORECARD.md](SCORECARD.md) — SC1–SC4 权威性能入口
 - [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md) — DEBUG 包装链（M2-5）
-- [USABILITY-SCORE.md](USABILITY-SCORE.md) — **权威**可用性评分（post-S5 / lane 收口）
+- [USABILITY-SCORE.md](USABILITY-SCORE.md) — **权威**可用性评分（主线 CLOSED）
 - [USABILITY-AUDIT.md](USABILITY-AUDIT.md) — 历史可用性长报告（SUPERSEDED）
 
 ---

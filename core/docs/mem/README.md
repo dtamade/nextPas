@@ -2,16 +2,17 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-**Lane 状态（2026-07-16）**: 产品表 dual-track **CLOSED**；可用性权威见 [USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
+**Lane 状态（2026-07-17）**: 时代 A–C **CLOSED**；当前 **时代 D（Steward）** — 见 **[ROADMAP.md](ROADMAP.md)**。  
+可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
 
 ```bash
 make lane-focused LANE=mem
 # make focused FOCUS=core/tests/nextpas.core.mem/test_usability_guardrails
 ```
 
-权威计划：[STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) · 决策树：[API-GUIDE.md](API-GUIDE.md) · 性能：[SCORECARD.md](SCORECARD.md)
+**活路线图**: [ROADMAP.md](ROADMAP.md) · 决策树：[API-GUIDE.md](API-GUIDE.md) · 性能：[SCORECARD.md](SCORECARD.md) · Tier 规则：[STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3
 
-**Consumer audit（2026-07-17，FIX CLOSED）**: 全仓库 mem 使用/范式/复用检查 + 全修 — [摘要](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) · [Findings](CONSUMER-AUDIT-FINDINGS-2026-07-17.md)（不 reopen 可用性主线；CA-011 keepers 仍 WAIVED）。回归门禁：`test_usability_guardrails` 内 `check_consumer_audit_contracts.sh`。
+**Consumer audit（FIX CLOSED）**: [摘要](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) · [Findings](CONSUMER-AUDIT-FINDINGS-2026-07-17.md)。回归：`check_consumer_audit_contracts.sh`（guardrails source-contract）。
 
 ---
 
@@ -373,14 +374,18 @@ end;
 
 | 文档 | 用途 |
 |------|------|
-| [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) | 90 天质量计划与 changelog |
+| **[ROADMAP.md](ROADMAP.md)** | **唯一活路线图**（时代 D） |
+| [USABILITY-SCORE.md](USABILITY-SCORE.md) | **权威**可用性评分（主线 CLOSED） |
+| [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) | 时代 B 档案；**§3 Tier 仍权威** |
 | [API-GUIDE.md](API-GUIDE.md) | 选择决策树与误区 |
 | [ERROR-POLICY.md](ERROR-POLICY.md) | **错误模型冻结**（nil vs raise） |
 | [SCORECARD.md](SCORECARD.md) | SC1–SC7 权威性能 |
 | [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md) | DEBUG 链设计 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 分层与 owner |
 | [CONTRACT.md](CONTRACT.md) | 运行时契约 |
+| [FACADES-SURFACE.md](FACADES-SURFACE.md) | 门面白/黑名单 |
+| [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) | consumer-audit 收口摘要 |
 | [BENCHMARKS.md](BENCHMARKS.md) | 历史微基准（非 Ready 权威） |
 | [API.md](API.md) | 长参考；冲突时以 README/GUIDE 为准 |
-| [USABILITY-SCORE.md](USABILITY-SCORE.md) | **权威**可用性评分（**10.0 / HIGH**） |
-| [USABILITY-AUDIT.md](USABILITY-AUDIT.md) | **历史**可用性长报告（SUPERSEDED） |
+| [USABILITY-AUDIT.md](USABILITY-AUDIT.md) | 历史可用性长报告（SUPERSEDED） |
+| [archive/](archive/) | 时代 A ROADMAP phase 清单与旧设计 |
