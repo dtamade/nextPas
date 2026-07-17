@@ -560,7 +560,7 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 **诚实 residual（非缺口伪装）**：
 
 - 公开 `IHttpClient` 不暴露“单连接并发多请求”多路 API；多请求并发依赖多连接或上层调度。
-- OpenSSL backend heaptrc residual 属 **tls** 层；http 不单独清零宣称。**Era 6 Wave X4** 授权在 tls 收敛。
+- OpenSSL backend heaptrc：**Wave X4** 修 `FPinValidator` 未释放（每 `CreateContext` ~32B）；client HTTPS 路径现余 **1×41B process-lifetime** residual（与请求次数无关；非 HTTPS 0 unfreed）。http 不宣称绝对 0。
 - H3 / QUIC：无产品需求 + Blocked on QUIC；禁止空 facade。h2c Upgrade、CONNECT/WS-over-H2：Park（见 ROADMAP）。
 
 #### Client connection pool（Wave A2）

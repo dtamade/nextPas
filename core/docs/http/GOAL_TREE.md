@@ -260,7 +260,7 @@ Design exclusions (by design, not gaps):
 
 Remaining H2 hardening:
 - Test coverage vs h2-test-coverage-plan.md targets: client 55/55 (✅ closed), frame 37/35 (✅ closed), hpack 30/30 (✅ closed); session gap closed
-- Real TLS runtime proof: ✅ `test_http_tls_real` (5 tests, self-signed cert + handshake + stream wrapper + H2 transport creation); 9 unfreed blocks are in openssl backend layer, not HTTP
+- Real TLS runtime proof: ✅ OpenSSL path covered by client HTTPS + H2 ALPN focused；`test_http_tls_real` currently compile-blocked on `TThread` (pre-existing). Wave X4: PinValidator free; client HTTPS residual 1×41B process-lifetime
 - Documentation alignment (this document and ARCHITECTURE.md)
 
 H3 is blocked on the QUIC module. Only `nextpas.core.tls.quic.crypto.pas` (QUIC v1 crypto primitives) exists; no QPACK/HTTP3 frame/stream source code.
