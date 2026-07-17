@@ -254,6 +254,7 @@ type
     procedure Test_NonX86_DispatchTable_WiringChecklist;
     procedure Test_NonX86_NativeWideFloorCeil_Slots_NotScalar_IfAvailable;
     procedure Test_X86_DispatchTable_WiringChecklist_Grouped;
+    procedure Test_Phase19_DispatchTable_NestedOnly_NoDeadDraftArtifacts;
   end;
 
   TTestCase_X86MaskedFmaContract = class(TDispatchAPIStatefulTestCase)
@@ -15777,6 +15778,136 @@ begin
 
   if LRegisteredCount = 0 then
     CheckTrue(True, 'No non-x86 backend registered on this host (allowed)');
+end;
+
+procedure TTestCase_DispatchAPI.Test_Phase19_DispatchTable_NestedOnly_NoDeadDraftArtifacts;
+var
+  LSourceLines: TStringList;
+  LTableSource: string;
+  LTypesSource: string;
+  LRegisterSource: string;
+  LPath: string;
+  LFiles: array[0..8] of string;
+  LIndex: Integer;
+  LLine: string;
+  LLower: string;
+  LAssignPos: SizeInt;
+  LDotPos: SizeInt;
+  LGroup: string;
+  LAllowed: Boolean;
+
+  function IsAllowedNestedGroup(const aGroup: string): Boolean;
+  begin
+    Result :=
+      (aGroup = 'corevectors') or
+      (aGroup = 'memory') or
+      (aGroup = 'mask') or
+      (aGroup = 'batchf32') or
+      (aGroup = 'batchf64') or
+      (aGroup = 'batchinteger') or
+      (aGroup = 'backend') or
+      (aGroup = 'backendinfo');
+  end;
+begin
+  LSourceLines := TStringList.Create;
+  try
+    LPath := ExpandSimdRepoPath('src/nextpas.core.simd.dispatch.table.inc');
+    CheckTrue(FileExists(LPath), 'dispatch.table.inc should exist: ' + LPath);
+    LSourceLines.LoadFromFile(LPath);
+    LTableSource := LowerCase(LSourceLines.Text);
+    CheckTrue(Pos('corevectors: tsimdcorevectorops;', LTableSource) > 0, 'table.inc should nest CoreVectors');
+    CheckTrue(Pos('memory: tsimdmemoryops;', LTableSource) > 0, 'table.inc should nest Memory');
+    CheckTrue(Pos('mask: tsimdmaskops;', LTableSource) > 0, 'table.inc should nest Mask');
+    CheckTrue(Pos('batchf32: tsimdbatchf32ops;', LTableSource) > 0, 'table.inc should nest BatchF32');
+    CheckTrue(Pos('batchf64: tsimdbatchf64ops;', LTableSource) > 0, 'table.inc should nest BatchF64');
+    CheckTrue(Pos('batchinteger: tsimdbatchintegerops;', LTableSource) > 0, 'table.inc should nest BatchInteger');
+    CheckTrue(Pos('addf32x4:', LTableSource) = 0, 'table.inc must not keep flat AddF32x4 fields');
+    CheckTrue(Pos('f32x4: tsimdvecf32x4ops;', LTableSource) = 0, 'table.inc must not use experimental short-name F32x4 group');
+
+    LPath := ExpandSimdRepoPath('src/nextpas.core.simd.dispatch.types.inc');
+    CheckTrue(FileExists(LPath), 'dispatch.types.inc should exist: ' + LPath);
+    LSourceLines.LoadFromFile(LPath);
+    LTypesSource := LowerCase(LSourceLines.Text);
+    CheckTrue(Pos('tsimdcorevectorops = record', LTypesSource) > 0, 'types.inc should define TSimdCoreVectorOps');
+    CheckTrue(Pos('tsimdvecf32x4ops = record', LTypesSource) = 0, 'Phase 6 must drop experimental TSimdVecF32x4Ops');
+    CheckTrue(Pos('tsimdvecf64x2ops = record', LTypesSource) = 0, 'Phase 6 must drop experimental TSimdVecF64x2Ops');
+    CheckTrue(Pos('tsimdveci32x4ops = record', LTypesSource) = 0, 'Phase 6 must drop experimental TSimdVecI32x4Ops');
+
+    CheckTrue(not FileExists(ExpandSimdRepoPath('src/nextpas.core.simd.dispatch.table.new.inc')),
+      'Phase 6 must remove unused dispatch.table.new.inc draft');
+
+    LFiles[0] := 'src/nextpas.core.simd.dispatch.baseline.inc';
+    LFiles[1] := 'src/nextpas.core.simd.sse2.register.inc';
+    LFiles[2] := 'src/nextpas.core.simd.avx2.register.inc';
+    LFiles[3] := 'src/nextpas.core.simd.avx512.register.inc';
+    LFiles[4] := 'src/nextpas.core.simd.neon.register.inc';
+    LFiles[5] := 'src/nextpas.core.simd.riscvv.register.inc';
+    LFiles[6] := 'src/nextpas.core.simd.sse3.register.inc';
+    LFiles[7] := 'src/nextpas.core.simd.sse41.register.inc';
+    LFiles[8] := 'src/nextpas.core.simd.sse42.register.inc';
+
+    for LIndex := Low(LFiles) to High(LFiles) do
+    begin
+      LPath := ExpandSimdRepoPath(LFiles[LIndex]);
+      CheckTrue(FileExists(LPath), 'register/baseline source missing: ' + LPath);
+      LSourceLines.LoadFromFile(LPath);
+      LRegisterSource := LSourceLines.Text;
+      for LLine in LSourceLines do
+      begin
+        LLower := LowerCase(Trim(LLine));
+        if (Pos('//', LLower) = 1) then
+          Continue;
+        LAssignPos := Pos('dispatchtable.', LLower);
+        if LAssignPos = 0 then
+          LAssignPos := Pos('table.', LLower);
+        if LAssignPos = 0 then
+          Continue;
+        if Pos(':=', LLower) = 0 then
+          Continue;
+        // Extract first group after table/dispatchtable.
+        if Pos('dispatchtable.', LLower) > 0 then
+          LGroup := Copy(LLower, Pos('dispatchtable.', LLower) + Length('dispatchtable.'), 64)
+        else
+          LGroup := Copy(LLower, Pos('table.', LLower) + Length('table.'), 64);
+        LDotPos := Pos('.', LGroup);
+        if LDotPos > 0 then
+          LGroup := Copy(LGroup, 1, LDotPos - 1)
+        else
+        begin
+          LDotPos := Pos(' ', LGroup);
+          if LDotPos > 0 then
+            LGroup := Copy(LGroup, 1, LDotPos - 1);
+          LDotPos := Pos(':', LGroup);
+          if LDotPos > 0 then
+            LGroup := Copy(LGroup, 1, LDotPos - 1);
+          LDotPos := Pos(';', LGroup);
+          if LDotPos > 0 then
+            LGroup := Copy(LGroup, 1, LDotPos - 1);
+        end;
+        LAllowed := IsAllowedNestedGroup(LGroup);
+        CheckTrue(LAllowed,
+          'Phase 19 residual: non-nested dispatch assignment in ' + LFiles[LIndex] +
+          ' group=' + LGroup + ' line=' + LLine);
+      end;
+    end;
+
+    // NEON / RVV path alignment: same nested group names as x86 (not short-name F32x4.*).
+    LPath := ExpandSimdRepoPath('src/nextpas.core.simd.neon.register.inc');
+    LSourceLines.LoadFromFile(LPath);
+    LRegisterSource := LowerCase(LSourceLines.Text);
+    CheckTrue(Pos('table.corevectors.', LRegisterSource) > 0, 'NEON register must assign CoreVectors nested paths');
+    CheckTrue(Pos('table.memory.', LRegisterSource) > 0, 'NEON register must assign Memory nested paths');
+    CheckTrue(Pos('fillbasedispatchtable(table)', LRegisterSource) > 0, 'NEON must seed from FillBaseDispatchTable');
+
+    LPath := ExpandSimdRepoPath('src/nextpas.core.simd.riscvv.register.inc');
+    LSourceLines.LoadFromFile(LPath);
+    LRegisterSource := LowerCase(LSourceLines.Text);
+    CheckTrue(Pos('table.corevectors.', LRegisterSource) > 0, 'RVV register must assign CoreVectors nested paths');
+    CheckTrue(Pos('table.mask.', LRegisterSource) > 0, 'RVV register must assign Mask nested paths');
+    CheckTrue(Pos('fillbasedispatchtable(table)', LRegisterSource) > 0, 'RVV must seed from FillBaseDispatchTable');
+  finally
+    LSourceLines.Free;
+  end;
 end;
 
 procedure TTestCase_DispatchAPI.Test_NonX86_NativeWideFloorCeil_Slots_NotScalar_IfAvailable;

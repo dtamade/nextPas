@@ -2,7 +2,26 @@
 
 ## 当前状态
 
-当前 `TSimdDispatchTable` 是一个单一的 record，包含 95+ 个批量操作和 100+ 个向量操作。所有操作混合在一起，难以维护和扩展。
+**Phase 19 已完成（Phase 1–6，2026-07-17）。**
+
+`TSimdDispatchTable` 已拆为嵌套子记录，生产路径：
+
+| 字段 | 类型 | 规模 | 说明 |
+|------|------|------|------|
+| `Backend` / `BackendInfo` | 元数据 | — | 后端身份与能力位 |
+| `CoreVectors` | `TSimdCoreVectorOps` | 533 | 全宽向量槽；字段名完整保留（`AddF32x4`…） |
+| `Memory` | `TSimdMemoryOps` | 15 | 原 `Mem*`/`SumBytes`/…；`MemSet`→`Fill` 等映射见 Phase 4 |
+| `Mask` | `TSimdMaskOps` | 20 | `Mask2/4/8/16*` |
+| `BatchF32` | `TSimdBatchF32Ops` | 48 | F32 批量与 F32 超越/归约 |
+| `BatchF64` | `TSimdBatchF64Ops` | 48 | F64 批量与 F64 超越/归约 |
+| `BatchInteger` | `TSimdBatchIntegerOps` | 52 型 / baseline 11 fill | 整数批量；未 fill 槽靠 clone 链 |
+
+**未落地（刻意不做）**：
+- 按 lane 缩短名的 `TSimdVecF32x4Ops.Add` 风格（Phase 6 已删除实验草稿）
+- 独立 `TranscendentalF32/F64` / `Utility` 子记录（超越与归约留在 `BatchF32`/`BatchF64`）
+- 未使用的 `dispatch.table.new.inc` 草稿（Phase 6 删除）
+
+**Public ABI**：`TNextPasSimdPublicApi` 与 facade 签名仍 flat。
 
 ## 设计目标
 
@@ -14,35 +33,28 @@
 
 ## 模块化方案
 
-### 子记录定义
+### 子记录定义（落地形态）
 
 ```pascal
-// 1. 核心向量操作
+// 1. 核心向量操作（字段名完整，不缩短）
 TSimdCoreVectorOps = record
   // F32x4
   AddF32x4: function(const a, b: TVecF32x4): TVecF32x4;
   SubF32x4: function(const a, b: TVecF32x4): TVecF32x4;
   MulF32x4: function(const a, b: TVecF32x4): TVecF32x4;
   DivF32x4: function(const a, b: TVecF32x4): TVecF32x4;
-  // ... 其他 F32x4 操作
-  
-  // F64x2
-  AddF64x2: function(const a, b: TVecF64x2): TVecF64x2;
-  SubF64x2: function(const a, b: TVecF64x2): TVecF64x2;
-  // ... 其他 F64x2 操作
-  
-  // I32x4, I64x2, U64x2, F64x4, I32x8, F32x8, F32x16, F64x8, etc.
+  // ... 其他 F32x4 / F64x2 / I32x4 / wide / sat 等共 533 槽
 end;
 
-// 2. 内存操作
+// 2. 内存操作（嵌表字段短名；facade 仍 Mem*）
 TSimdMemoryOps = record
-  MemEqual: function(a, b: Pointer; len: SizeUInt): LongBool;
-  MemFindByte: function(p: Pointer; len: SizeUInt; value: Byte): PtrInt;
-  MemDiffRange: function(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean;
-  MemCopy: procedure(src, dst: Pointer; len: SizeUInt);
-  MemSet: procedure(dst: Pointer; len: SizeUInt; value: Byte);
-  MemReverse: procedure(p: Pointer; len: SizeUInt);
-  // ... 其他内存操作
+  Equal: function(a, b: Pointer; len: SizeUInt): LongBool;
+  FindByte: function(p: Pointer; len: SizeUInt; value: Byte): PtrInt;
+  DiffRange: function(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean;
+  Copy: procedure(src, dst: Pointer; len: SizeUInt);
+  Fill: procedure(dst: Pointer; len: SizeUInt; value: Byte);
+  Reverse: procedure(p: Pointer; len: SizeUInt);
+  // ... SumBytes / Utf8Validate / BitsetPopCount 等
 end;
 
 // 3. F32 批量操作
@@ -63,80 +75,33 @@ TSimdBatchF64Ops = record
   // ... 其他 F64 批量操作
 end;
 
-// 5. F64 超越函数
-TSimdTranscendentalF64Ops = record
-  ArraySinF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-  ArrayCosF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-  ArrayExpF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-  ArrayLogF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-  // ... 其他 F64 超越函数
-end;
-
-// 6. F32 超越函数
-TSimdTranscendentalF32Ops = record
-  ArrayExpF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-  ArrayLogF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-  ArrayPowF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aExponent: Single);
-  // ... 其他 F32 超越函数
-end;
-
-// 7. 整数批量操作
+// 5. 整数批量操作
 TSimdBatchIntegerOps = record
-  // I32
   ArrayAddI32: procedure(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
-  ArraySubI32: procedure(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
-  ArrayMulI16: procedure(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
-  // ... 其他整数操作
-  
-  // I8, U8, I16, U16, I64, U64, U32
+  // ... 其余整数/转换槽（见 types.inc）
 end;
 
-// 8. 工具操作
-TSimdUtilityOps = record
-  // 聚合操作
-  ReduceSumF32: function(aSrc: PSingle; aCount: SizeUInt): Single;
-  ReduceDotF32: function(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single;
-  ReduceMinF32: function(aSrc: PSingle; aCount: SizeUInt): Single;
-  ReduceMaxF32: function(aSrc: PSingle; aCount: SizeUInt): Single;
-  // ... 其他聚合操作
-  
-  // 类型转换
-  ConvertF32ToI32: procedure(aSrc: PSingle; aDst: PInt32; aCount: SizeUInt);
-  ConvertI32ToF32: procedure(aSrc: PInt32; aDst: PSingle; aCount: SizeUInt);
-  // ... 其他类型转换
-end;
-
-// 9. Mask 操作
+// 6. Mask 操作
 TSimdMaskOps = record
-  // TMask2
   Mask2All: function(mask: TMask2): Boolean;
-  Mask2Any: function(mask: TMask2): Boolean;
-  Mask2None: function(mask: TMask2): Boolean;
-  Mask2PopCount: function(mask: TMask2): Integer;
-  Mask2FirstSet: function(mask: TMask2): Integer;
-  
-  // TMask4, TMask8, TMask16
+  // ... Mask2/4/8/16 *
 end;
 ```
 
-### 主 Dispatch Table 组合
+> 说明：早期设计稿中的 `Transcendental*` / `Utility` 独立子记录**未落地**；对应槽位已并入 `BatchF32` / `BatchF64`。
+
+### 主 Dispatch Table 组合（落地）
 
 ```pascal
 TSimdDispatchTable = record
-  // Backend 信息
   Backend: TSimdBackend;
   BackendInfo: TSimdBackendInfo;
-  
-  // 组合子记录
   CoreVectors: TSimdCoreVectorOps;
   Memory: TSimdMemoryOps;
+  Mask: TSimdMaskOps;
   BatchF32: TSimdBatchF32Ops;
   BatchF64: TSimdBatchF64Ops;
-  TranscendentalF64: TSimdTranscendentalF64Ops;
-  TranscendentalF32: TSimdTranscendentalF32Ops;
   BatchInteger: TSimdBatchIntegerOps;
-  Utility: TSimdUtilityOps;
-  Mask: TSimdMaskOps;
 end;
 ```
 
@@ -193,10 +158,16 @@ end;
 5. source-contract `Pos('dispatchtable.corevectors.*')` 对齐（Fma/Select 宽向量等）
 6. **保持不变**：对外 facade 签名与 Public ABI 字段名仍 flat；仅内部 dispatch 访问路径变化
 
-### Phase 6: 清理和优化 (下一步)
-1. 移除过渡期 flat 残留与重复命名（若有）
-2. NEON / RVV register 与 x86 路径对齐审计
-3. 更新基准测试与 roadmap 完成态
+### Phase 6: 清理和优化 — ✅ (2026-07-17)
+1. **死草稿清理**：删除未接入的 `dispatch.table.new.inc`；删除未使用的 short-name 实验类型 `TSimdVecF32x4Ops` / `TSimdVecF64x2Ops` / `TSimdVecI32x4Ops`
+2. **路径残留契约**：`Test_Phase19_DispatchTable_NestedOnly_NoDeadDraftArtifacts` 断言 table/types 仅嵌套组、register/baseline 禁止 flat 槽赋值
+3. **NEON / RVV 对齐审计（路径级）**：
+   - NEON / RVV 与 x86 使用**同一嵌套组名**（`table.CoreVectors.*` / `Memory.*` / `Mask.*`…），均 `FillBaseDispatchTable` 播种后按需 override
+   - **槽级覆盖差距是刻意的**（非路径错位）：靠 baseline 继承，不在本 phase 补全 native 实现
+     - NEON：有 `CoreVectors`（~332）+ 部分 `Memory`（9/15）；**无** Batch*/Mask override（继承 scalar）
+     - RVV：有 `CoreVectors`（~412）+ 完整 `Mask`（20）；**无** Memory/Batch* override
+     - x86 SSE2/AVX2：Batch/Memory/Mask 覆盖最全，供 clone 链（如 AVX2←SSE2）复用
+4. 文档与 roadmap 记为 Phase 19 完成
 
 ## 风险评估
 

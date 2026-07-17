@@ -3,8 +3,8 @@
     Backend: TSimdBackend;
     BackendInfo: TSimdBackendInfo;
 
-    // === Nested sub-records (Phase 19 Phase 2–5) ===
-    // CoreVectors holds former flat lane/vector slots (AddF32x4, Select*, sat, ...).
+    // === Nested sub-records (Phase 19 complete) ===
+    // CoreVectors holds lane/vector slots (AddF32x4, Select*, sat, ...); field names full.
     CoreVectors: TSimdCoreVectorOps;
     Memory: TSimdMemoryOps;
     Mask: TSimdMaskOps;
