@@ -101,35 +101,35 @@ end;
   3. `WithRetry` 退避前后
   4. H1 `RoundTrip`：入口、新 dial 前、request write 后 / response read 前
   5. pool reconnect 重写前
-  取消抛 `EHttpError(hekCanceled)`。卡在底层阻塞 `Read` 中时可能滞后，
-  直到该 read 返回并到达下一检查点。**取消不能单独保证有界等待**——
-  生产路径必须与 `Timeout` / `WithTimeout` 配对，以便阻塞 read 由
-  SO_RCVTIMEO/deadline 返回后到达下一检查点。
+  取消抛 `EHttpError(hekCanceled)`。H1 client 在 dial 后把 cancel token
+  接到 `ITcpStream.SetCancelToken`：阻塞 Read/Write 以 ~50ms 切片轮询
+  cancel，中途取消抛 `hekCanceled`（经 `ECancelledError` 包装）。
+  **仍建议**与 `Timeout` / `WithTimeout` 配对，避免无 cancel 时无限等待。
   超时仍为 `hekTimeout`（`WithTimeout` / client options）。
 - Client 超时拆分（`THttpClientOptions`）：
   - `Timeout`：socket 就绪后的 request 读/写 deadline（ms；0=无限）
-  - `ConnectTimeout`：新 dial 后 **首写** budget（ms；0=同 Timeout）。
-    **不**打断阻塞 OS `connect()`；名称中的 “Connect” 指 post-dial 首写
-    阶段，不是 OS dial 超时。全量 dial 超时 / mid-read cancel 见下方 Blocked 表。
+  - `ConnectTimeout`：新 dial 时 **OS `connect()` + post-dial 首写** budget（ms）。
+    `>0` 时经 `TcpConnect(host, port, ms)` 有界 dial，并作为首写 budget。
+    `=0` 时 dial 回退到 `Timeout`（`Timeout>0` 则有界，否则无界）；首写用
+    `Timeout`。
 - **Production defaults（可用性纪律）**：
   - 生产 client：`THttpClientOptions.Default.Timeout` = **30000** ms；
     仍可用 `WithTimeout` 覆盖。`Timeout=0` 仅适合测试/特殊工具。
-  - **禁止**把“只挂 cancel、不设 Timeout”当作有界等待模板。
+    默认 `Timeout` 也会作为 OS dial 上界（当 `ConnectTimeout=0`）。
+  - **禁止**把“只挂 cancel、不设 Timeout”当作唯一生产模板（cancel 延迟约一个切片）。
   - 生产 server：`THttpServerOptions.Default` 的 Read/Write timeout 仍为 **0**
     （兼容测试）；生产路径使用 **`THttpServerOptions.Production`**
     （Read/Write = 30000 ms）或显式 `WithReadTimeout` / `WithWriteTimeout`。
     IdleTimeout alone 不是完整生产模板。示例 `http_hello_server` /
     `http_websocket_echo_demo` 使用 Production。
   - 示例 `http_get_client` 使用有限 client timeout。
-  - OS dial 有界与 mid-read 硬取消见 §2.2.0a（Blocked on net）。
-  - `ConnectTimeout` **仅** post-dial 首写 budget，**不是** OS dial 超时。
 
-### 2.2.0a Net-dependent capabilities (Blocked)
+### 2.2.0a Net-dependent capabilities
 
 | Capability | HTTP surface today | Owner | Status |
 |------------|-------------------|-------|--------|
-| OS `connect()` dial timeout | `ConnectTimeout` **does not** bound dial; only post-dial first write | `nextpas.core.net` / platform | **Blocked** — no fake dial timeout field in http |
-| Interruptible blocked socket read on cancel | cancel checkpoints only; pair with `Timeout` | net + http transport | **Blocked** for true mid-read cancel |
+| OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** |
+| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1 client wire | **Landed** (slice latency) |
 | HTTPS CONNECT / proxy auth | plain HTTP absolute-form proxy only | http + TLS tunnel design | **Deferred** (separate milestone) |
 
 ### 2.2.1 EHttpError.Kind

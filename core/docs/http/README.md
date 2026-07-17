@@ -167,16 +167,14 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   (`http_hello_server`, `http_websocket_echo_demo`) use Production.
   Convenience `NewHttpServerWithRequestArena` (no explicit options) also bases
   on **Production** + RequestArena so arena demos do not inherit unbounded RW.
-- Cancel: `IHttpCancelToken` is **cooperative** (not OS interrupt) →
-  `hekCanceled` at Send / redirect / retry / H1 RoundTrip checkpoints
-  (entry, pre-dial, post-write). A blocked socket read may lag until the
-  next checkpoint — **cancel alone is not enough**; **pair cancel with
-  `Timeout`/`WithTimeout`** for bounded wait. Timeouts remain `hekTimeout`.
-  True mid-read cancel is **Blocked** on net (see CONTRACT §2.2.0a).
+- Cancel: `IHttpCancelToken` is **cooperative** → `hekCanceled` at Send /
+  redirect / retry / H1 RoundTrip checkpoints, and mid-read/write via
+  `ITcpStream.SetCancelToken` (~50ms SO_RCVTIMEO slices). Prefer pairing with
+  `Timeout`/`WithTimeout`. Timeouts remain `hekTimeout`.
 - Timeouts: `THttpClientOptions.Timeout` = request read/write deadline after
-  the socket is up; `ConnectTimeout` = **post-dial first-write** budget on new
-  sockets (`0` = same as Timeout). It does **not** interrupt OS `connect()`;
-  OS dial timeout is **Blocked** on net (no fake dial field in http).
+  the socket is up; `ConnectTimeout` = **OS dial + post-dial first-write**
+  budget on new sockets. When `ConnectTimeout=0`, dial uses `Timeout` if
+  `Timeout>0`, else unbounded.
 - `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite
   store/send (default Lax; None requires Secure; SiteKey approx, no PSL).
 - `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
@@ -244,8 +242,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `MaxBodySize`…）。`Default` vs `Production` 见上。Negative timeout or
   size-limit fields raise `EHttpError(hekArgument)` at server construction time.
 - `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
-- `THttpClientOptions` — 公开 carrier，当前包括 `Timeout`、`ConnectTimeout`（**post-dial
-  first-write only**，非 OS dial）、`MaxRedirects` 和 `FollowRedirects`;
+- `THttpClientOptions` — 公开 carrier，当前包括 `Timeout`、`ConnectTimeout`
+  （OS dial + post-dial 首写 budget）、`MaxRedirects` 和 `FollowRedirects`;
   negative `Timeout` or `MaxRedirects` raises `EHttpError(hekArgument)` at
   client construction time.
 

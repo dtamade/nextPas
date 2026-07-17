@@ -62,7 +62,8 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
-  end;
+  procedure SetCancelToken(const AToken: INetCancelToken);
+end;
 
   TMockDrainStreamRuntime = class(TInterfacedObject, ITcpStreamRuntime)
   private
@@ -214,6 +215,10 @@ begin
 end;
 
 procedure TMockTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+end;
+
+procedure TMockTcpStream.SetCancelToken(const AToken: INetCancelToken);
 begin
 end;
 

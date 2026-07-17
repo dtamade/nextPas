@@ -16,6 +16,14 @@ uses
   nextpas.core.net.base;
 
 type
+  { Cooperative cancel for blocking stream IO. When set on ITcpStream, Read/Write
+    poll in short slices and raise ECancelledError if IsCanceled becomes true
+    before the operation completes. Does not force-close the peer socket. }
+  INetCancelToken = interface
+    ['{C1D2E3F4-A5B6-7890-ABCD-300000000007}']
+    function IsCanceled: Boolean;
+  end;
+
   { Runtime-facing socket seam for advanced server backends.
     Ordinary consumers can ignore it; evented runtimes may opt-in via Supports. }
   ITcpSocketRuntime = interface
@@ -46,6 +54,9 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+    { Optional cancel token for mid-read / mid-write interrupt (slice poll).
+      Pass nil to clear. }
+    procedure SetCancelToken(const AToken: INetCancelToken);
   end;
 
   ITcpListener = interface

@@ -19,6 +19,7 @@ type
   TNetAddress = nextpas.core.net.base.TNetAddress;
   TTcpStreamIOResult = nextpas.core.net.intf.TTcpStreamIOResult;
   TTcpAcceptResult = nextpas.core.net.intf.TTcpAcceptResult;
+  INetCancelToken = nextpas.core.net.intf.INetCancelToken;
   ITcpSocketRuntime = nextpas.core.net.intf.ITcpSocketRuntime;
   ITcpStreamRuntime = nextpas.core.net.intf.ITcpStreamRuntime;
   ITcpListenerRuntime = nextpas.core.net.intf.ITcpListenerRuntime;
@@ -28,6 +29,9 @@ type
 
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;
+{ ATimeoutMs > 0 bounds OS connect(); <= 0 is unbounded blocking connect. }
+function TcpConnect(const AAddr: string; const APort: UInt16;
+  const ATimeoutMs: Int64): ITcpStream; inline;
 function UdpBind(const AAddr: string; const APort: UInt16): IUdpSocket; inline;
 function Resolve(const AHost: string): TNetAddress; inline;
 
@@ -41,6 +45,12 @@ end;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
 begin
   Result := nextpas.core.net.tcp.NetTcpConnect(AAddr, APort);
+end;
+
+function TcpConnect(const AAddr: string; const APort: UInt16;
+  const ATimeoutMs: Int64): ITcpStream;
+begin
+  Result := nextpas.core.net.tcp.NetTcpConnect(AAddr, APort, ATimeoutMs);
 end;
 
 function UdpBind(const AAddr: string; const APort: UInt16): IUdpSocket;
