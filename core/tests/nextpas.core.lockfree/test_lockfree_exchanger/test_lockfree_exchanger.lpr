@@ -4,7 +4,6 @@ program test_lockfree_exchanger;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.exchanger,
   nextpas.core.lockfree,
   nextpas.core.platform.thread,
@@ -71,7 +70,7 @@ begin
       'thread create must succeed');
 
     // Small delay to let thread start and offer value
-    Sleep(10);
+    platform_thread_sleep_ms(10);
 
     // Our exchange
     LResult := LExchanger.Exchange(200, LOut);

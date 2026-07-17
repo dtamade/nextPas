@@ -63,6 +63,8 @@ uses
 
 constructor TExchangerImpl.Create;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TExchanger: T must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   FState := EXCHANGER_STATE_EMPTY;
   FClosed := 0;

@@ -13,6 +13,7 @@ uses
   nextpas.core.lockfree.ebr,
   nextpas.core.lockfree.channel.spsc,
   nextpas.core.platform.thread,
+  nextpas.core.platform.time,
   nextpas.core.text.conv,
   nextpas.core.time;
 
@@ -42,6 +43,11 @@ var
   GForEachSum: Integer;
   GForEachCount: Integer;
   GComputeCallCount: Integer;
+
+function TestMonotonicMs: UInt64; inline;
+begin
+  Result := platform_monotonic_ns div 1000000;
+end;
 
 function StartThread(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer; const AMessage: string): Int32;
 begin
@@ -287,10 +293,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
       'blocked EnqueueTimeout should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedProducer, LProducerStarted, 'SPSC close timeout producer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
       'blocked EnqueueTimeout woken by close');
     Check(LElapsedMs < 1000, 'blocked EnqueueTimeout should return promptly after close');
@@ -325,10 +331,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
       'blocked DequeueTimeout should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'SPSC close timeout consumer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
       'blocked DequeueTimeout woken by close');
     Check(LElapsedMs < 1000, 'blocked DequeueTimeout should return promptly after close');
@@ -374,10 +380,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
       'blocked EnqueueWait should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedProducer, LProducerStarted, 'SPSC close wait producer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseProducerResult, moAcquire)),
       'blocked EnqueueWait woken by close');
     Check(LElapsedMs < 1000, 'blocked EnqueueWait should return promptly after close');
@@ -412,10 +418,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
       'blocked DequeueWait should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'SPSC close wait consumer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GSpscCloseConsumerResult, moAcquire)),
       'blocked DequeueWait woken by close');
     Check(LElapsedMs < 1000, 'blocked DequeueWait should return promptly after close');
@@ -566,11 +572,11 @@ begin
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscPublishWakeConsumerResult, moAcquire)),
       'SPSC DequeueTimeout consumer should still be pending before publish');
 
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     Check(LQ.TryEnqueue(42), 'SPSC producer must publish the wake item');
     JoinThread(LConsumer, LRetVal, 'publish wake consumer thread');
     LJoined := True;
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
 
     CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscPublishWakeConsumerResult, moAcquire)),
       'SPSC DequeueTimeout must receive the producer-published item');
@@ -628,12 +634,12 @@ begin
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GSpscSpaceWakeProducerResult, moAcquire)),
       'SPSC EnqueueTimeout producer must not complete before space release');
 
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     Check(LQ.TryDequeue(LV), 'SPSC consumer must release queue space');
     CheckEqual(Int64(1), Int64(LV));
     JoinThread(LProducer, LRetVal, 'space wake producer thread');
     LJoined := True;
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
 
     CheckEqual(Int64(1), Int64(AtomicLoad32(GSpscSpaceWakeProducerResult, moAcquire)),
       'SPSC EnqueueTimeout must publish after space release');
@@ -816,10 +822,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
       'blocked EnqueueTimeout should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedProducer, LProducerStarted, 'MPMC close timeout producer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
       'blocked EnqueueTimeout woken by close');
     Check(LElapsedMs < 1000, 'blocked EnqueueTimeout should return promptly after close');
@@ -854,10 +860,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
       'blocked DequeueTimeout should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPMC close timeout consumer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
       'blocked DequeueTimeout woken by close');
     Check(LElapsedMs < 1000, 'blocked DequeueTimeout should return promptly after close');
@@ -903,10 +909,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
       'blocked MPMC EnqueueWait should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedProducer, LProducerStarted, 'MPMC close wait producer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
       'blocked MPMC EnqueueWait woken by close');
     Check(LElapsedMs < 1000, 'blocked MPMC EnqueueWait should return promptly after close');
@@ -941,10 +947,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
       'blocked MPMC DequeueWait should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPMC close wait consumer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GMpmcCloseWakeResult, moAcquire)),
       'blocked MPMC DequeueWait woken by close');
     Check(LElapsedMs < 1000, 'blocked MPMC DequeueWait should return promptly after close');
@@ -1002,11 +1008,11 @@ begin
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcPublishWakeConsumerResult, moAcquire)),
       'MPMC DequeueTimeout consumer should still be pending before publish');
 
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     Check(LQ.TryEnqueue(42), 'MPMC producer must publish the wake item');
     JoinThread(LConsumer, LRetVal, 'publish wake consumer thread');
     LJoined := True;
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
 
     CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcPublishWakeConsumerResult, moAcquire)),
       'MPMC DequeueTimeout must receive the producer-published item');
@@ -1066,12 +1072,12 @@ begin
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpmcSpaceWakeProducerResult, moAcquire)),
       'MPMC EnqueueTimeout producer must not complete before space release');
 
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     Check(LQ.TryDequeue(LV), 'MPMC consumer must release queue space');
     CheckEqual(Int64(1), Int64(LV));
     JoinThread(LProducer, LRetVal, 'space wake producer thread');
     LJoined := True;
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
 
     CheckEqual(Int64(1), Int64(AtomicLoad32(GMpmcSpaceWakeProducerResult, moAcquire)),
       'MPMC EnqueueTimeout must publish after space release');
@@ -1624,10 +1630,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
       'blocked MPSC DequeueTimeout should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPSC close timeout consumer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
       'blocked MPSC DequeueTimeout woken by close');
     Check(LElapsedMs < 1000, 'blocked MPSC DequeueTimeout should return promptly after close');
@@ -1670,10 +1676,10 @@ begin
     platform_thread_sleep_ns(CloseWakePendingProbeNs);
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
       'blocked MPSC DequeueWait should still be pending before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Close;
     JoinStartedThread(LBlockedConsumer, LConsumerStarted, 'MPSC close wait consumer thread');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(0), Int64(AtomicLoad32(GMpscCloseWakeResult, moAcquire)),
       'blocked MPSC DequeueWait woken by close');
     Check(LElapsedMs < 1000, 'blocked MPSC DequeueWait should return promptly after close');
@@ -1709,7 +1715,8 @@ end;
 
 procedure TestT1DestroyCallsCloseSourceContract;
 var
-  LMpscSource, LSpscSource, LMpmcSource, LSpmcSource, LChannelSource, LChannelSpscSource: string;
+  LMpscSource, LSpscSource, LMpmcSource, LSpmcSource, LChannelSource, LChannelSpscSource,
+  LMsQueueSource: string;
 begin
   { Safe lifecycle remains Close → join waiters → Free. Destroy must still call Close
     so unblocked teardown paths wake waiters and drain fixed/owned storage. }
@@ -1719,6 +1726,7 @@ begin
   LSpmcSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.spmc.pas');
   LChannelSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.channel.pas');
   LChannelSpscSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.channel.spsc.pas');
+  LMsQueueSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.msqueue.pas');
   CheckContains(LMpscSource, 'destructor TMpscQueueImpl.Destroy;',
     'MPSC must keep Destroy override');
   CheckContains(ExtractSection(LMpscSource,
@@ -1745,92 +1753,176 @@ begin
     'destructor TLockFreeChannelSpscImpl.Destroy;',
     'function TLockFreeChannelSpscImpl.TrySend',
     'ChannelSpsc Destroy body'), 'Close;', 'ChannelSpsc Destroy must call Close');
+  CheckContains(ExtractSection(LMsQueueSource,
+    'destructor TLockFreeMsQueueImpl.Destroy;',
+    'function TLockFreeMsQueueImpl.TryEnqueue',
+    'MSQueue Destroy body'), 'Close;', 'MSQueue Destroy must call Close');
 end;
 
 procedure AssertNoForbiddenRtlUses(const APath, ALabel: string);
 var
   LText: string;
   LCompact: string;
+  LSysUtils, LClasses, LMath, LWindows, LBaseUnix, LUnix: string;
+  LTick, LSleep0, LFreeAndNil: string;
 begin
   Check(FileExists(APath), ALabel + ' must exist for RTL isolation contract');
   LText := ReadUtf8TextFile(APath);
   LCompact := RemoveWhitespace(LText);
+  { Build needles by concatenation so this harness file does not self-match. }
+  LSysUtils := 'Sys' + 'Utils';
+  LClasses := 'Cla' + 'sses';
+  LMath := 'Ma' + 'th';
+  LWindows := 'Win' + 'dows';
+  LBaseUnix := 'Base' + 'Unix';
+  LUnix := 'Uni' + 'x';
+  LTick := 'GetTick' + 'Count64';
+  LSleep0 := 'Sle' + 'ep(0)';
+  LFreeAndNil := 'FreeAnd' + 'Nil(';
   { Match unit names only inside uses clauses (comma/semicolon delimited), not prose. }
-  CheckNotContains(LCompact, 'usesSysUtils,', ALabel + ': must not uses SysUtils');
-  CheckNotContains(LCompact, 'usesSysUtils;', ALabel + ': must not uses SysUtils');
-  CheckNotContains(LCompact, ',SysUtils,', ALabel + ': must not uses SysUtils');
-  CheckNotContains(LCompact, ',SysUtils;', ALabel + ': must not uses SysUtils');
-  CheckNotContains(LCompact, 'usesClasses,', ALabel + ': must not uses Classes');
-  CheckNotContains(LCompact, 'usesClasses;', ALabel + ': must not uses Classes');
-  CheckNotContains(LCompact, ',Classes,', ALabel + ': must not uses Classes');
-  CheckNotContains(LCompact, ',Classes;', ALabel + ': must not uses Classes');
-  CheckNotContains(LCompact, 'usesMath,', ALabel + ': must not uses Math');
-  CheckNotContains(LCompact, 'usesMath;', ALabel + ': must not uses Math');
-  CheckNotContains(LCompact, ',Math,', ALabel + ': must not uses Math');
-  CheckNotContains(LCompact, ',Math;', ALabel + ': must not uses Math');
-  CheckNotContains(LCompact, 'usesWindows,', ALabel + ': must not uses Windows');
-  CheckNotContains(LCompact, ',Windows;', ALabel + ': must not uses Windows');
-  CheckNotContains(LCompact, 'usesBaseUnix,', ALabel + ': must not uses BaseUnix');
-  CheckNotContains(LCompact, ',BaseUnix;', ALabel + ': must not uses BaseUnix');
-  CheckNotContains(LCompact, 'usesUnix,', ALabel + ': must not uses Unix');
-  CheckNotContains(LCompact, ',Unix;', ALabel + ': must not uses Unix');
-  { Symbol-aware: bare SysUtils helpers that remain after uses-clause stripping. }
-  CheckNotContains(LText, 'GetTickCount64',
-    ALabel + ': must not call GetTickCount64 (use platform_monotonic_ns)');
-  CheckNotContains(LCompact, 'Sleep(0)',
-    ALabel + ': must not call Sleep(0) (use ThreadSwitch)');
-  CheckNotContains(LCompact, 'FreeAndNil(',
-    ALabel + ': must not call FreeAndNil (use Obj.Free; Obj:=nil or base.utils)');
-  if Pos('IntToStr', LText) > 0 then
+  CheckNotContains(LCompact, 'uses' + LSysUtils + ',', ALabel + ': must not uses SysUtils');
+  CheckNotContains(LCompact, 'uses' + LSysUtils + ';', ALabel + ': must not uses SysUtils');
+  CheckNotContains(LCompact, ',' + LSysUtils + ',', ALabel + ': must not uses SysUtils');
+  CheckNotContains(LCompact, ',' + LSysUtils + ';', ALabel + ': must not uses SysUtils');
+  CheckNotContains(LCompact, 'uses' + LClasses + ',', ALabel + ': must not uses Classes');
+  CheckNotContains(LCompact, 'uses' + LClasses + ';', ALabel + ': must not uses Classes');
+  CheckNotContains(LCompact, ',' + LClasses + ',', ALabel + ': must not uses Classes');
+  CheckNotContains(LCompact, ',' + LClasses + ';', ALabel + ': must not uses Classes');
+  CheckNotContains(LCompact, 'uses' + LMath + ',', ALabel + ': must not uses Math');
+  CheckNotContains(LCompact, 'uses' + LMath + ';', ALabel + ': must not uses Math');
+  CheckNotContains(LCompact, ',' + LMath + ',', ALabel + ': must not uses Math');
+  CheckNotContains(LCompact, ',' + LMath + ';', ALabel + ': must not uses Math');
+  CheckNotContains(LCompact, 'uses' + LWindows + ',', ALabel + ': must not uses Windows');
+  CheckNotContains(LCompact, ',' + LWindows + ';', ALabel + ': must not uses Windows');
+  CheckNotContains(LCompact, 'uses' + LBaseUnix + ',', ALabel + ': must not uses BaseUnix');
+  CheckNotContains(LCompact, ',' + LBaseUnix + ';', ALabel + ': must not uses BaseUnix');
+  CheckNotContains(LCompact, 'uses' + LUnix + ',', ALabel + ': must not uses Unix');
+  CheckNotContains(LCompact, ',' + LUnix + ';', ALabel + ': must not uses Unix');
+  { Symbol-aware: bare SysUtils helpers that remain after uses-clause stripping.
+    Message strings also avoid contiguous banned tokens to prevent harness self-match. }
+  CheckNotContains(LText, LTick,
+    ALabel + ': must not call GetTick' + 'Count64 (use platform_monotonic_ns)');
+  CheckNotContains(LCompact, LSleep0,
+    ALabel + ': must not call Sle' + 'ep(0) (use ThreadSwitch)');
+  CheckNotContains(LCompact, LFreeAndNil,
+    ALabel + ': must not call FreeAnd' + 'Nil (use Obj.Free; Obj:=nil or base.utils)');
+  if Pos('Int' + 'ToStr', LText) > 0 then
     Check(Pos('nextpas.core.text.conv', LText) > 0,
-      ALabel + ': IntToStr requires nextpas.core.text.conv');
+      ALabel + ': Int' + 'ToStr requires nextpas.core.text.conv');
 end;
 
 procedure TestFpcRtlIsolationSourceContract;
 const
   Src = '../../../src/';
-  Paths: array[0..40] of string = (
+  { Full production surface: every nextpas.core.atomic* and nextpas.core.lockfree* unit. }
+  Paths: array[0..106] of string = (
     'nextpas.core.atomic.pas',
     'nextpas.core.atomic.core.pas',
     'nextpas.core.atomic.types.pas',
     'nextpas.core.atomic.compat.pas',
     'nextpas.core.lockfree.pas',
+    'nextpas.core.lockfree.base.pas',
+    'nextpas.core.lockfree.wait.pas',
+    'nextpas.core.lockfree.ebr.pas',
+    'nextpas.core.lockfree.hazard.pas',
+    'nextpas.core.lockfree.rcu.pas',
     'nextpas.core.lockfree.spsc.pas',
     'nextpas.core.lockfree.mpmc.pas',
     'nextpas.core.lockfree.mpsc.pas',
     'nextpas.core.lockfree.spmc.pas',
+    'nextpas.core.lockfree.segqueue.pas',
+    'nextpas.core.lockfree.msqueue.pas',
+    'nextpas.core.lockfree.ringbuffer.pas',
+    'nextpas.core.lockfree.timeoutqueue.pas',
     'nextpas.core.lockfree.stack.pas',
+    'nextpas.core.lockfree.elimination_stack.pas',
     'nextpas.core.lockfree.deque.pas',
+    'nextpas.core.lockfree.deque_lf.pas',
     'nextpas.core.lockfree.channel.pas',
     'nextpas.core.lockfree.channel.spsc.pas',
     'nextpas.core.lockfree.hashmap.pas',
-    'nextpas.core.lockfree.segqueue.pas',
-    'nextpas.core.lockfree.msqueue.pas',
-    'nextpas.core.lockfree.lru_cache.pas',
-    'nextpas.core.lockfree.deque_lf.pas',
-    'nextpas.core.lockfree.timeseries_ringbuffer.pas',
+    'nextpas.core.lockfree.hashset.pas',
+    'nextpas.core.lockfree.hashtable.pas',
+    'nextpas.core.lockfree.multimap.pas',
+    'nextpas.core.lockfree.trie.pas',
+    'nextpas.core.lockfree.trie_map.pas',
+    'nextpas.core.lockfree.trie_hmt.pas',
+    'nextpas.core.lockfree.skiplist.pas',
+    'nextpas.core.lockfree.skiplist_map.pas',
+    'nextpas.core.lockfree.robinhood.pas',
+    'nextpas.core.lockfree.btree.pas',
+    'nextpas.core.lockfree.bplus.pas',
+    'nextpas.core.lockfree.rbtree.pas',
+    'nextpas.core.lockfree.treap.pas',
+    'nextpas.core.lockfree.scapegoat.pas',
+    'nextpas.core.lockfree.radix.pas',
+    'nextpas.core.lockfree.sortedset.pas',
+    'nextpas.core.lockfree.graph.pas',
+    'nextpas.core.lockfree.dag.pas',
+    'nextpas.core.lockfree.adjmap.pas',
+    'nextpas.core.lockfree.disjointset.pas',
+    'nextpas.core.lockfree.merkle_tree.pas',
+    'nextpas.core.lockfree.fibheap.pas',
+    'nextpas.core.lockfree.fenwick.pas',
     'nextpas.core.lockfree.intervaltree.pas',
-    'nextpas.core.lockfree.scalable_bloom.pas',
-    'nextpas.core.lockfree.tdigest.pas',
-    'nextpas.core.lockfree.leakybucket.pas',
-    'nextpas.core.lockfree.ratelimit.pas',
     'nextpas.core.lockfree.persistent_vector.pas',
-    'nextpas.core.lockfree.cuckooset.pas',
+    'nextpas.core.lockfree.mutex.pas',
+    'nextpas.core.lockfree.rwlock.pas',
+    'nextpas.core.lockfree.semaphore.pas',
+    'nextpas.core.lockfree.barrier.pas',
+    'nextpas.core.lockfree.condvar.pas',
+    'nextpas.core.lockfree.countdown.pas',
+    'nextpas.core.lockfree.phaser.pas',
+    'nextpas.core.lockfree.stampedlock.pas',
+    'nextpas.core.lockfree.exchanger.pas',
+    'nextpas.core.lockfree.flatcombining.pas',
+    'nextpas.core.lockfree.leftright.pas',
+    'nextpas.core.lockfree.lru.pas',
+    'nextpas.core.lockfree.lru_cache.pas',
+    'nextpas.core.lockfree.lfu.pas',
+    'nextpas.core.lockfree.ttl_cache.pas',
+    'nextpas.core.lockfree.arccache.pas',
+    'nextpas.core.lockfree.bloom.pas',
     'nextpas.core.lockfree.counting_bloom.pas',
+    'nextpas.core.lockfree.scalable_bloom.pas',
+    'nextpas.core.lockfree.cuckooset.pas',
+    'nextpas.core.lockfree.hyperloglog.pas',
+    'nextpas.core.lockfree.countminsketch.pas',
+    'nextpas.core.lockfree.xorfilter.pas',
+    'nextpas.core.lockfree.tdigest.pas',
+    'nextpas.core.lockfree.spacesaving.pas',
+    'nextpas.core.lockfree.misragries.pas',
+    'nextpas.core.lockfree.reservoirsampling.pas',
+    'nextpas.core.lockfree.ratelimit.pas',
+    'nextpas.core.lockfree.leakybucket.pas',
+    'nextpas.core.lockfree.slidingwindow.pas',
+    'nextpas.core.lockfree.actor.pas',
+    'nextpas.core.lockfree.forkjoin.pas',
+    'nextpas.core.lockfree.workstealing.pas',
+    'nextpas.core.lockfree.selector.pas',
+    'nextpas.core.lockfree.selector.impl.pas',
+    'nextpas.core.lockfree.counter.pas',
+    'nextpas.core.lockfree.bag.pas',
+    'nextpas.core.lockfree.bitset.pas',
+    'nextpas.core.lockfree.linkedlist.pas',
+    'nextpas.core.lockfree.unrolled_list.pas',
+    'nextpas.core.lockfree.cowarray.pas',
+    'nextpas.core.lockfree.snapshot.pas',
+    'nextpas.core.lockfree.statscounter.pas',
+    'nextpas.core.lockfree.consistent_hashring.pas',
+    'nextpas.core.lockfree.suffixarray.pas',
+    'nextpas.core.lockfree.roaring_bitmap.pas',
+    'nextpas.core.lockfree.timeseries_ringbuffer.pas',
+    'nextpas.core.lockfree.crdt.pas',
+    'nextpas.core.lockfree.rope.pas',
+    'nextpas.core.lockfree.versionvector.pas',
+    'nextpas.core.lockfree.wrr.pas',
+    'nextpas.core.lockfree.matrix.pas',
     'nextpas.core.lockfree.hashmap.rtm.pas',
     'nextpas.core.lockfree.hashmap.numa.pas',
-    'nextpas.core.lockfree.ttl_cache.pas',
-    'nextpas.core.lockfree.consistent_hashring.pas',
-    'nextpas.core.lockfree.trie_hmt.pas',
-    'nextpas.core.lockfree.trie_map.pas',
-    'nextpas.core.lockfree.suffixarray.pas',
-    'nextpas.core.lockfree.skiplist_map.pas',
-    'nextpas.core.lockfree.fibheap.pas',
-    'nextpas.core.lockfree.hyperloglog.pas',
-    'nextpas.core.lockfree.roaring_bitmap.pas',
-    'nextpas.core.lockfree.countminsketch.pas',
-    'nextpas.core.lockfree.mpmc.pas',
-    'nextpas.core.lockfree.spmc.pas'
+    'nextpas.core.lockfree.priority_queue.pas',
+    'nextpas.core.lockfree.timerwheel.pas',
+    'nextpas.core.lockfree.rtm.pas'
   );
 var
   LI: Integer;
@@ -1840,6 +1932,13 @@ begin
   for LI := Low(Paths) to High(Paths) do
     AssertNoForbiddenRtlUses(Src + Paths[LI], Paths[LI]);
   AssertNoForbiddenRtlUses('../../../examples/lockfree_example.lpr', 'lockfree_example');
+
+  { Main test harnesses must not direct-uses banned RTL after M6 migration. }
+  AssertNoForbiddenRtlUses('test_lockfree.lpr', 'test_lockfree.lpr');
+  AssertNoForbiddenRtlUses('../test_lockfree_stress/test_lockfree_stress.lpr',
+    'test_lockfree_stress.lpr');
+  AssertNoForbiddenRtlUses('../../nextpas.core.atomic/test_atomic/test_atomic.lpr',
+    'test_atomic.lpr');
 
   LMakefile := ReadUtf8TextFile('Makefile');
   CheckContains(LMakefile, 'T2_ISOLATION_COMPILE_SOURCE := test_lockfree_t2_isolation_compile.lpr',
@@ -2079,12 +2178,12 @@ var
 begin
   LEpoch := 1;
   LWaiters := 0;
-  LElapsedMs := GetTickCount64;
+  LElapsedMs := TestMonotonicMs;
   if AUseSpaceWait then
     LockFreeWaitSpace(@LEpoch, @LWaiters, 0, WaitHelperStaleEpochTimeoutNs)
   else
     LockFreeWaitData(@LEpoch, @LWaiters, 0, WaitHelperStaleEpochTimeoutNs);
-  LElapsedMs := GetTickCount64 - LElapsedMs;
+  LElapsedMs := TestMonotonicMs - LElapsedMs;
   Check(LElapsedMs < WaitHelperImmediateReturnBudgetMs,
     ALabel + ' stale epoch must return before timeout');
   CheckEqual(Int64(0), Int64(LWaiters),
@@ -2172,11 +2271,11 @@ begin
     CheckEqual(Int64(-1), Int64(AtomicLoad32(GMpscPublishWakeConsumerResult, moAcquire)),
       'MPSC DequeueTimeout consumer must not complete before publish');
 
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LQ.Enqueue(42);
     JoinThread(LConsumer, LRetVal, 'publish wake consumer thread');
     LJoined := True;
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
 
     CheckEqual(Int64(1), Int64(AtomicLoad32(GMpscPublishWakeConsumerResult, moAcquire)),
       'MPSC DequeueTimeout must receive the producer-published item');
@@ -3893,10 +3992,10 @@ begin
   LQ := TIntSpmc.Create(1);
   try
     Check(LQ.TryEnqueue(1), 'SPMC full-timeout test must fill the queue');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     Check(not LQ.EnqueueTimeout(2, 1000000),
       'SPMC EnqueueTimeout must return false on a full single-slot queue');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     Check(LElapsedMs < WaitHelperImmediateReturnBudgetMs,
       'SPMC EnqueueTimeout on full must return promptly instead of spinning forever');
     Check(LQ.TryDequeue(LV), 'SPMC full-timeout test must preserve the queued item');
@@ -3939,10 +4038,10 @@ begin
     CheckEqual(Int64(1), Int64(AtomicLoad32(GSpmcSpaceWakeConsumerStarted, moAcquire)),
       'SPMC space-release consumer thread must start before EnqueueTimeout waits');
 
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     Check(LQ.EnqueueTimeout(42, QueuePublishWakeTimeoutNs),
       'SPMC EnqueueTimeout must succeed after a consumer releases space');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
 
     JoinThread(LConsumer, LRetVal, 'SPMC space wake consumer thread');
     LJoined := True;
@@ -3970,10 +4069,10 @@ var
 begin
   LQ := TIntSpmc.Create(1);
   try
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     Check(not LQ.DequeueTimeout(LV, 1000000),
       'SPMC DequeueTimeout must return false on an empty single-slot queue');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     Check(LElapsedMs < WaitHelperImmediateReturnBudgetMs,
       'SPMC DequeueTimeout on empty must return promptly');
     Check(LQ.IsEmpty, 'SPMC empty-timeout test must leave the queue empty');
@@ -4056,9 +4155,9 @@ begin
     CheckEqual(Int64(1), Int64(AtomicLoad32(GSpmcEnqWaitConsumerStarted, moAcquire)),
       'SPMC EnqueueWait consumer must start before producer waits');
 
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     Check(LQ.EnqueueWait(42), 'SPMC EnqueueWait must succeed after consumer frees space');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
 
     JoinThread(LConsumer, LRetVal, 'SPMC EnqueueWait consumer thread');
     LJoined := True;
@@ -4124,9 +4223,9 @@ begin
     CheckEqual(Int64(1), Int64(AtomicLoad32(GSpmcDeqWaitProducerStarted, moAcquire)),
       'SPMC DequeueWait producer must start before consumer waits');
 
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     Check(LQ.DequeueWait(LV), 'SPMC DequeueWait must succeed after producer publishes');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     CheckEqual(Int64(99), Int64(LV));
 
     JoinThread(LProducer, LRetVal, 'SPMC DequeueWait producer thread');
@@ -4460,10 +4559,10 @@ begin
     end;
     CheckEqual(Int64(1), Int64(AtomicLoad32(GChannelCloseSendStarted, moAcquire)),
       'blocked SendTimeout thread must start before close');
-    LElapsedMs := GetTickCount64;
+    LElapsedMs := TestMonotonicMs;
     LCh.Close;
     JoinStartedThread(LProducer, LProducerStarted, 'Channel close-while-send producer');
-    LElapsedMs := GetTickCount64 - LElapsedMs;
+    LElapsedMs := TestMonotonicMs - LElapsedMs;
     LResult := AtomicLoad32(GChannelCloseSendResult, moAcquire);
     Check(LResult >= 0, 'blocked SendTimeout must complete after close (0=sent before close, 1=closed)');
     Check(LElapsedMs < 1000, 'blocked SendTimeout should return promptly after close');
@@ -4580,9 +4679,9 @@ begin
     Check(not LCh.TrySend(3), 'Third send must fail (full)');
 
     { SendTimeout should timeout }
-    LStart := GetTickCount64;
+    LStart := TestMonotonicMs;
     Check(not LCh.SendTimeout(3, 10000000), 'SendTimeout must timeout (10ms)');
-    LElapsed := GetTickCount64 - LStart;
+    LElapsed := TestMonotonicMs - LStart;
     Check(LElapsed >= 8, 'SendTimeout must wait at least 8ms');
 
     { Receive one item }
@@ -4598,9 +4697,9 @@ begin
     Check(LCh.TryReceive(LV), 'Receive must succeed');
     CheckEqual(3, LV, 'Received value must be 3');
 
-    LStart := GetTickCount64;
+    LStart := TestMonotonicMs;
     Check(not LCh.ReceiveTimeout(LV, 10000000), 'ReceiveTimeout must timeout (10ms)');
-    LElapsed := GetTickCount64 - LStart;
+    LElapsed := TestMonotonicMs - LStart;
     Check(LElapsed >= 8, 'ReceiveTimeout must wait at least 8ms');
   finally
     LCh.Free;
@@ -5493,6 +5592,60 @@ begin
   end;
 end;
 
+procedure TestSegQueueEnqueueRaisesWhenClosed;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+  LRaised: Boolean;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    LQ.Enqueue(7);
+    LQ.Close;
+    Check(not LQ.TryEnqueue(8), 'TryEnqueue after close returns false');
+    LRaised := False;
+    try
+      LQ.Enqueue(9);
+    except
+      on E: EInvalidOperationError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'plain Enqueue after close must raise EInvalidOperationError');
+    Check(LQ.TryDequeue(LV), 'queued item still drainable after close');
+    CheckEqual(7, LV, 'drained value matches pre-close enqueue');
+    Check(not LQ.TryDequeue(LV), 'queue empty after drain');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMsQueueDestroyCloseAndDrain;
+var
+  LQ: specialize TLockFreeMsQueue<Integer>;
+  LV: Integer;
+  LSrc, LDestroyBody: string;
+begin
+  LQ := specialize TLockFreeMsQueue<Integer>.Create(16);
+  Check(LQ.TryEnqueue(11), 'msqueue seed enqueue');
+  Check(LQ.TryEnqueue(22), 'msqueue seed enqueue 2');
+  LQ.Close;
+  Check(not LQ.TryEnqueue(33), 'msqueue TryEnqueue after Close is false');
+  Check(LQ.TryDequeue(LV), 'msqueue drain after Close');
+  CheckEqual(11, LV);
+  LQ.Free;
+
+  LQ := specialize TLockFreeMsQueue<Integer>.Create(16);
+  Check(LQ.TryEnqueue(44), 'msqueue seed before destroy');
+  LQ.Free;
+
+  LSrc := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.msqueue.pas');
+  LDestroyBody := ExtractSection(LSrc,
+    'destructor TLockFreeMsQueueImpl.Destroy;',
+    'function TLockFreeMsQueueImpl.TryEnqueue',
+    'MSQueue Destroy body');
+  CheckContains(LDestroyBody, 'Close;', 'MSQueue Destroy must call Close');
+end;
+
 procedure TestLockFreeSourceContracts;
 const
   LockFreeSourcePath = '../../../src/nextpas.core.lockfree.pas';
@@ -6037,7 +6190,7 @@ begin
     '`TLockFreeStack<T>` is a fixed-capacity stack: `TryPush` returns `False` when no free slot remains, and `IsEmpty` / `ApproxCount` are snapshot helpers over the current top-linked list rather than linearization guarantees under contention.',
     'lockfree README must document the stack query surface contract');
   CheckContains(LDocsReadme,
-    '`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.',
+    '`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full or closed, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.',
     'lockfree README must document the deque query surface contract');
   CheckContains(LDocsReadme, 'Atomic dependency',
     'lockfree README must document dependency on atomic wait/notify');
@@ -7075,6 +7228,8 @@ begin
   T.Test('SegQueue TryDequeue empty', @TestSegQueueTryDequeueEmpty);
   T.Test('SegQueue TryDequeue closed', @TestSegQueueTryDequeueClosed);
   T.Test('SegQueue TryEnqueue closed', @TestSegQueueTryEnqueueClosed);
+  T.Test('SegQueue Enqueue raises when closed', @TestSegQueueEnqueueRaisesWhenClosed);
+  T.Test('MSQueue Destroy Close and drain', @TestMsQueueDestroyCloseAndDrain);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);
 

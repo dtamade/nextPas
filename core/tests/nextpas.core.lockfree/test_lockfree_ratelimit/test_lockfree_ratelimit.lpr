@@ -3,8 +3,7 @@ program test_lockfree_ratelimit;
 {$mode objfpc}{$H+}
 
 uses
-  Math,
-  SysUtils,
+  nextpas.core.platform.thread,
   nextpas.core.lockfree.ratelimit,
   nextpas.core.lockfree,
   nextpas.core.errors,
@@ -112,7 +111,7 @@ begin
   try
     Check(LLimiter.TryAcquire = rlAllowed, 'Initial burst token should be available');
     Check(LLimiter.TryAcquire = rlRejected, 'Exhausted bucket should reject');
-    Sleep(60);
+    platform_thread_sleep_ms(60);
     Check(LLimiter.TryAcquire = rlAllowed, 'Elapsed time should refill one token');
   finally
     LLimiter.Free;
@@ -123,10 +122,17 @@ procedure TestRateLimiterRejectsNonFiniteInputs;
 var
   LLimiter: TTokenBucketLimiter;
   LRaised: Boolean;
+  LZero: Double;
+  LNaN: Double;
+  LInf: Double;
 begin
+  LZero := 0.0;
+  LNaN := LZero / LZero;
+  LInf := 1.0 / LZero;
+
   LRaised := False;
   try
-    LLimiter := TTokenBucketLimiter.Create(NaN, 1.0);
+    LLimiter := TTokenBucketLimiter.Create(LNaN, 1.0);
     LLimiter.Free;
   except
     on E: EArgumentError do
@@ -136,7 +142,7 @@ begin
 
   LRaised := False;
   try
-    LLimiter := TTokenBucketLimiter.Create(1.0, Infinity);
+    LLimiter := TTokenBucketLimiter.Create(1.0, LInf);
     LLimiter.Free;
   except
     on E: EArgumentError do

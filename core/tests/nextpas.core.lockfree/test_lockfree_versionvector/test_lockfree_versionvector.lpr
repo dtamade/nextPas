@@ -4,8 +4,7 @@ program test_lockfree_versionvector;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
   nextpas.core.lockfree.versionvector,
   nextpas.core.test;
 

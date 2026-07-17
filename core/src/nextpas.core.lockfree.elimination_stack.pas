@@ -148,6 +148,8 @@ constructor TEliminationStackImpl.Create(const ACapacity: PtrUInt; const AElimSi
 var
   LI: Int32;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TEliminationStack: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TEliminationStack: capacity must be > 0');
   if ACapacity > PtrUInt(High(Int32)) then

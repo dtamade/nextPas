@@ -3,7 +3,6 @@ program test_lockfree_treap;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.treap,
   nextpas.core.atomic,
   nextpas.core.test;

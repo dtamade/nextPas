@@ -4,8 +4,7 @@ program test_lockfree_graph;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
   nextpas.core.lockfree.graph,
   nextpas.core.test;
 

@@ -6,8 +6,7 @@ program test_lockfree_dag;
 
 uses
   nextpas.core.thread.init,
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
   nextpas.core.atomic,
   nextpas.core.lockfree.dag;
 

@@ -3,7 +3,6 @@ program test_lockfree_trie;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.trie,
   nextpas.core.test;
 

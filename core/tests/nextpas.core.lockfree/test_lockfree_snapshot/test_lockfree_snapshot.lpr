@@ -3,7 +3,6 @@ program test_lockfree_snapshot;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.snapshot,
   nextpas.core.lockfree,
   nextpas.core.test;

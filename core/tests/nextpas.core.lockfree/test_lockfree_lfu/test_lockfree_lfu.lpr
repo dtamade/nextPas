@@ -3,7 +3,6 @@ program test_lockfree_lfu;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.platform.thread,
   nextpas.core.lockfree.lfu,
   nextpas.core.lockfree,

@@ -6,7 +6,6 @@ program test_lockfree_actor;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.actor,
   nextpas.core.atomic,
   nextpas.core.platform.thread;
