@@ -71,6 +71,18 @@ end;
 | ensure string | free-fn `HttpPostJson` / `HttpGetString` / 方法 `GetString`/`PostString`/… | ensure 2xx + body string（或 TBytes） |
 | ensure+decode | free-fn `HttpGetJson` / `HttpPostJsonDocument` / `HttpPutJsonDocument` / `HttpPatchJsonDocument` / `HttpReadResponseJson` / 方法 `GetJson` | ensure 2xx + `JsonParse` → `IJsonDocument`；非法 JSON → `hekProtocol` Op=`json` |
 
+**Content-Encoding（Wave C1）**：
+
+| 侧 | API | 行为 |
+|----|-----|------|
+| server 响应压缩 | `CompressionMiddleware` / `CompressionMiddlewareWith` | 按 `Accept-Encoding` 选 gzip/deflate；默认最小 body 1024 |
+| server 请求解压 | `DecompressMiddleware(AMaxSize)` | 请求 `Content-Encoding: gzip\|deflate` 解压；失败 → 400 |
+| client raw body | `HttpReadResponseBodyBytes` / `String` / `StringAuto` | **不**自动解 Content-Encoding（wire 字节） |
+| client 显式解码 | `HttpDecodeContentEncoding` / `HttpReadResponseBodyBytesDecoded` / `HttpReadResponseBodyStringDecoded` | 单 coding：`gzip`/`x-gzip`/`deflate`/`identity`/缺省；`AMaxSize>0` 限制解压输出 |
+| 不支持编码 | 同上 | `hekProtocol` Op=`content_encoding`（含 multi-coding） |
+| 损坏 payload | 同上 | `hekBody` Op=`content_encoding` |
+| 非目标 | br / zstd / 浏览器完整 content 栈 / 默认自动 Accept-Encoding 协商 | 不在 C1；未支持编码诚实失败 |
+
 ### 2.2 Request / Response
 
 - 公开类型是 **接口** `IHttpRequest` / `IHttpResponse`，不是裸 record wire 模型。
@@ -174,6 +186,7 @@ end;
 | `ensure` | hekStatus | `HttpEnsureSuccess` 非 2xx（Status 保留） |
 | `download` | hekConnect / hekStatus / hekBody | GetToWriter/File 路径 |
 | `json` | hekProtocol | ensure+decode JSON 非法 body |
+| `content_encoding` | hekProtocol / hekBody | 客户端 Content-Encoding：不支持编码 → hekProtocol；损坏 payload → hekBody |
 | `websocket` | hekConnect | WS 升级/传输失败 |
 
 - **消息形状错误**（非法/冲突 Content-Length、不支持 Transfer-Encoding、
@@ -477,3 +490,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.7 | Usability wave-3：WithRetry=5xx+IsRetryable；connect wrap；删 IReader client overload；known-CL only；删 NewStreamingRequest；多参 NewRequest 仍 deprecated；decorator forwarder |
 | 2026-07-17 | 3.8 | cycle-8 Wave C：`GetJson`/`HttpReadResponseJson` ensure+decode；`WithRetry` 支持 429 + delta-seconds Retry-After（cap 60s） |
 | 2026-07-17 | 3.9 | cycle-11 Wave F：HTTP-date Retry-After；`WithTLSContext`；`HttpPost/Put/PatchJsonDocument` ensure+decode |
+| 2026-07-17 | 3.10 | Wave C1：Content-Encoding 契约；client `HttpDecodeContentEncoding` / `HttpReadResponseBody*Decoded`；Op=`content_encoding`；server Compression/Decompress middleware 已落地 |
