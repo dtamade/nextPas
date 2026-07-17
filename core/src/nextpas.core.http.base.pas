@@ -20,6 +20,9 @@ type
   THttpStatus = UInt16;
   TTcpServerBackend = nextpas.core.net.server.base.TTcpServerBackend;
 
+  { Note: NewHttpCancelToken is waitable (INetCancelWaitable) so mid-IO cancel
+    wakes blocked socket reads via net poll+socketpair on Unix. }
+
   { Programmable HTTP error classification (single exception type, Kind field). }
   THttpErrorKind = (
     hekUnknown,
@@ -267,7 +270,9 @@ procedure HttpThrowIfCanceled(const AToken: IHttpCancelToken);
 implementation
 
 uses
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.net.intf,
+  nextpas.core.net.cancel;
 
 { EHttpError }
 
@@ -377,29 +382,60 @@ begin
 end;
 
 type
-  THttpCancelToken = class(TInterfacedObject, IHttpCancelToken)
+  { Composes NewNetCancelToken so HTTP cancel is waitable on ITcpStream. }
+  THttpCancelToken = class(TInterfacedObject, IHttpCancelToken, INetCancelToken,
+    INetCancelWaitable)
   private
-    FCanceled: Boolean;
+    FNet: INetCancelController;
+    FWaitable: INetCancelWaitable;
   public
+    constructor Create;
     function IsCanceled: Boolean;
     procedure Cancel;
     procedure ThrowIfCanceled;
+    function WakeHandle: PtrUInt;
+    procedure DrainWake;
   end;
+
+constructor THttpCancelToken.Create;
+begin
+  inherited Create;
+  FNet := NewNetCancelToken;
+  FWaitable := nil;
+  if (FNet <> nil) and
+     (FNet.QueryInterface(INetCancelWaitable, FWaitable) <> 0) then
+    FWaitable := nil;
+end;
 
 function THttpCancelToken.IsCanceled: Boolean;
 begin
-  Result := FCanceled;
+  Result := (FNet <> nil) and FNet.IsCanceled;
 end;
 
 procedure THttpCancelToken.Cancel;
 begin
-  FCanceled := True;
+  if FNet <> nil then
+    FNet.Cancel;
 end;
 
 procedure THttpCancelToken.ThrowIfCanceled;
 begin
-  if FCanceled then
+  if IsCanceled then
     raise EHttpError.CreateOp(hekCanceled, 'cancel', 'HTTP request canceled');
+end;
+
+function THttpCancelToken.WakeHandle: PtrUInt;
+begin
+  if FWaitable <> nil then
+    Result := FWaitable.WakeHandle
+  else
+    Result := 0;
+end;
+
+procedure THttpCancelToken.DrainWake;
+begin
+  if FWaitable <> nil then
+    FWaitable.DrainWake;
 end;
 
 function NewHttpCancelToken: IHttpCancelToken;

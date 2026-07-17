@@ -35,7 +35,8 @@ Conn.Write(Buf, Len);
 BytesRead := Conn.Read(Buf, BufSize);
 Conn.Shutdown;
 { Optional mid-read/write cancel: SetCancelToken + INetCancelToken.
-  Read/Write poll in ~50ms slices and raise ECancelledError when canceled. }
+  Prefer NewNetCancelToken (waitable socketpair wake). Probe-only tokens
+  use ~10ms SO_*TIMEO slices. Raises ECancelledError when canceled. }
 ```
 
 ### UDP
@@ -59,7 +60,7 @@ Addr := Resolve('example.com');
 ## Interfaces
 
 - `ITcpStream` — extends IStream with LocalAddr, RemoteAddr, Shutdown, SetNoDelay, SetKeepAlive, SetReadDeadline, SetWriteDeadline, SetCancelToken
-- `INetCancelToken` — cooperative cancel probe (`IsCanceled`) for mid-IO interrupt
+- `INetCancelToken` / `INetCancelController` / `INetCancelWaitable` — cooperative cancel; `NewNetCancelToken` for fast wake
 - `ITcpListener` — Accept, LocalAddr, Close
 - `IUdpSocket` — SendTo, RecvFrom, LocalAddr, Close
 - `ITcpSocketRuntime` — optional advanced-runtime seam that exposes a native socket handle plus blocking/nonblocking control for server backends; ordinary application code usually does not need it

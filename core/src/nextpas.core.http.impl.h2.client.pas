@@ -356,24 +356,45 @@ begin
 end;
 
 type
-  { Bridge IHttpCancelToken → INetCancelToken for mid-read/write cancel slices. }
-  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken)
+  { Bridge IHttpCancelToken → INetCancelToken; forward waitable when present. }
+  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken, INetCancelWaitable)
   private
     FToken: IHttpCancelToken;
+    FWaitable: INetCancelWaitable;
   public
     constructor Create(const AToken: IHttpCancelToken);
     function IsCanceled: Boolean;
+    function WakeHandle: PtrUInt;
+    procedure DrainWake;
   end;
 
 constructor THttpNetCancelAdapter.Create(const AToken: IHttpCancelToken);
 begin
   inherited Create;
   FToken := AToken;
+  FWaitable := nil;
+  if (AToken <> nil) and
+     (AToken.QueryInterface(INetCancelWaitable, FWaitable) <> 0) then
+    FWaitable := nil;
 end;
 
 function THttpNetCancelAdapter.IsCanceled: Boolean;
 begin
   Result := (FToken <> nil) and FToken.IsCanceled;
+end;
+
+function THttpNetCancelAdapter.WakeHandle: PtrUInt;
+begin
+  if FWaitable <> nil then
+    Result := FWaitable.WakeHandle
+  else
+    Result := 0;
+end;
+
+procedure THttpNetCancelAdapter.DrainWake;
+begin
+  if FWaitable <> nil then
+    FWaitable.DrainWake;
 end;
 
 function DefaultH2ClientDial(const AHost: string; const APort: UInt16;
@@ -1390,11 +1411,15 @@ begin
 end;
 
 procedure TH2ClientConnection.ApplyCancelToken(const AToken: IHttpCancelToken);
+var
+  LNet: INetCancelToken;
 begin
   if FConn = nil then
     Exit;
   if AToken = nil then
     FConn.SetCancelToken(nil)
+  else if AToken.QueryInterface(INetCancelToken, LNet) = 0 then
+    FConn.SetCancelToken(LNet)
   else
     FConn.SetCancelToken(THttpNetCancelAdapter.Create(AToken));
 end;

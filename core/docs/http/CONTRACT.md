@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
 **最后更新**：2026-07-17（Wave A2 pool + protocol select）
-**版本**：3.14
+**版本**：3.15
 
 ---
 
@@ -154,10 +154,10 @@ end;
   4. H1 `RoundTrip`：入口、新 dial 前、request write 后 / response read 前
   5. pool reconnect 重写前
   取消抛 `EHttpError(hekCanceled)`。H1 client 在 dial 后把 cancel token
-  接到 `ITcpStream.SetCancelToken`：阻塞 Read/Write 当前以 ~50ms
-  `SO_RCVTIMEO` 切片轮询 cancel（**net residual**；Era 6 Wave X2 授权在
-  `nextpas.core.net` 改进唤醒，不在 http 堆第二套 IO）。中途取消抛
-  `hekCanceled`（经 `ECancelledError` 包装）。
+  接到 `ITcpStream.SetCancelToken`：`NewHttpCancelToken` 为 waitable
+  （socketpair wake + `platform_socket_poll_or_wake`，Unix）；probe-only
+  token 退回 ~10ms `SO_*TIMEO` 切片。中途取消抛 `hekCanceled`（经
+  `ECancelledError` 包装）。Windows 无 socketpair 时 wake residual。
   **仍建议**与 `Timeout` / `WithTimeout` 配对，避免无 cancel 时无限等待。
   超时仍为 `hekTimeout`（`WithTimeout` / client options）。
 - Client 超时拆分（`THttpClientOptions`）：
@@ -170,7 +170,8 @@ end;
   - 生产 client：`THttpClientOptions.Default.Timeout` = **30000** ms；
     仍可用 `WithTimeout` 覆盖。`Timeout=0` 仅适合测试/特殊工具。
     默认 `Timeout` 也会作为 OS dial 上界（当 `ConnectTimeout=0`）。
-  - **禁止**把“只挂 cancel、不设 Timeout”当作唯一生产模板（cancel 延迟约一个切片）。
+  - **禁止**把“只挂 cancel、不设 Timeout”当作唯一生产模板（waitable 近即时；
+    probe-only 仍有 ~10ms 切片上界）。
   - 生产 server：`THttpServerOptions.Default` 的 Read/Write timeout 仍为 **0**
     （兼容测试）；生产路径使用 **`THttpServerOptions.Production`**
     （Read/Write = 30000 ms）或显式 `WithReadTimeout` / `WithWriteTimeout`。
@@ -211,7 +212,7 @@ end;
 | Capability | HTTP surface today | Owner | Status |
 |------------|-------------------|-------|--------|
 | OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** (H1/H2) |
-| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1/H2 client wire | **Landed** (slice latency); **Era 6 X2** may replace slice with faster wake in net |
+| Interruptible blocked socket read on cancel | waitable `NewNetCancelToken` / `NewHttpCancelToken` + poll-or-wake; probe-only ~10ms slice | net + H1/H2/WS client wire | **Landed** (X2); Windows socketpair residual |
 | WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
 | HTTPS CONNECT (plain HTTP proxy) | CONNECT + TLS over tunnel; origin-form | http H1 + TLS stream | **Landed** (cycle-9 Wave D) |
 | H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
@@ -358,7 +359,7 @@ end;
 - **Cancel（cycle-7 Wave B）**：
   - `WithCancelToken(IHttpCancelToken)` 挂协作取消；dial 后与握手、mid-frame
     `ReadFrame`/`Write*` 路径生效。
-  - 有 `ITcpStream` 时：`SetCancelToken` + ~50ms 切片（与 H1/H2 client 同 residual）。
+  - 有 `ITcpStream` 时：`SetCancelToken` + waitable wake（与 H1/H2 client 同路径）。
   - 入口 `HttpThrowIfCanceled`：token 已 cancel 时立即 `hekCanceled`（无需等切片）。
   - 成功 101 后 **保留** cancel、**清除** handshake deadline。
   - Close/Destroy 清除 stream cancel token。
@@ -631,3 +632,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-17 | 3.12 | Wave C3：Range 单段/416/`Accept-Ranges` + 流式契约 |
 | 2026-07-17 | 3.13 | Era 6 Excellence：cancel/OpenSSL/idle-TTL residual 标明 X2/X4/X3 可主动收敛；H3 无产品需求 |
 | 2026-07-17 | 3.14 | Wave X1：WebSocket lifecycle 表（Close/`IsOpen`/关闭后读写/cancel Op） |
+| 2026-07-17 | 3.15 | Wave X2：waitable cancel 唤醒（socketpair+poll）；probe-only ~10ms residual |
