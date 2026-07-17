@@ -44,7 +44,7 @@
 | platform.watch.pas | 文件监控 | platform_watch_create |
 | platform.which.pas | 可执行文件查找 | platform_which |
 | platform.pty.pas | 伪终端 | platform_pty_open |
-| platform.freetype.pas | FreeType 宿主绑定（边界待评审） | ft_load, ft_unload, ft_is_loaded |
+| platform.freetype.pas | FreeType 可选宿主绑定（D3.d：保留在 platform；迁出需独立 owner lane） | ft_load, ft_unload, ft_is_loaded |
 
 ### 1.2 平台特定层
 

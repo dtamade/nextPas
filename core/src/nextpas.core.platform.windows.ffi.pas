@@ -822,6 +822,12 @@ function GetCurrentProcess: HANDLE; stdcall; external 'kernel32' name 'GetCurren
     @return TRUE 成功 *}
 function SetConsoleCtrlHandler(HandlerRoutine: TConsoleCtrlHandlerRoutine; Add: WINBOOL): WINBOOL; stdcall; external 'kernel32' name 'SetConsoleCtrlHandler';
 
+{** @desc 向控制台进程组发送控制事件（Ctrl+C / Ctrl+Break）
+    @param dwCtrlEvent 控制事件类型（CTRL_C_EVENT / CTRL_BREAK_EVENT）
+    @param dwProcessGroupId 进程组 ID（0 表示当前）
+    @return TRUE 成功 *}
+function GenerateConsoleCtrlEvent(dwCtrlEvent: DWORD; dwProcessGroupId: DWORD): WINBOOL; stdcall; external 'kernel32' name 'GenerateConsoleCtrlEvent';
+
 {** @desc 获取标准句柄
     @param nStdHandle 标准句柄类型（STD_INPUT/OUTPUT/ERROR_HANDLE）
     @return 句柄 *}

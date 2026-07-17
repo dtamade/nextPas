@@ -66,16 +66,18 @@ make -C core/tests/architecture/source_contracts host-raw-ffi-audit
 make hygiene
 ```
 
-## dual-IO consumer whitelist (F5)
+## dual-IO consumer whitelist (F5) — permanent owner-only (D3.c)
 
 Production **call sites** of `platform_io_read` / `platform_io_write` / `platform_io_poll` / `platform_io_close`:
 
 | Unit | Allowed | Notes |
 |------|---------|-------|
-| `nextpas.core.platform.process.pas` | definitions (and any internal use) | transitional dual-API owner; keep symbols for compatibility |
+| `nextpas.core.platform.process.pas` | definitions (and any internal use) | **permanent** dual-API owner; symbols retained for compatibility; **no sunset this program** |
 | all other production units | **none** | `process.pipe` uses `platform.files` + local `PipePoll` (posix.ffi) |
 
 New code must use `platform.files` / `platform_process_*_ex` / `platform.io` poller.
+
+**Deprecation schedule (D3.c):** none. dual-IO remains owner-only on `platform.process` indefinitely for this program. Removal would require a future explicit owner decision + consumer migration plan outside residual LT0–LT3.
 
 ## Raw OS side-channel (F6)
 
