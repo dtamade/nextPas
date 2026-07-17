@@ -212,5 +212,9 @@ Landing：path-limited candidate + `make landing-check` + ff-only main + push（
 | **`roadmap-h2.md`（本文件）** | **H2 章程与完成记录** |
 | [`READY.md`](READY.md) | Ready / H2 complete / Maintenance 状态入口 |
 | [`CONTRACT.md`](CONTRACT.md) | 契约真相 |
-| [`long-term-roadmap.md`](long-term-roadmap.md) | = R8 研究线 |
+| [`long-term-roadmap.md`](long-term-roadmap.md) | = R8 研究线（历史计划） |
+| [`r8-research-status.md`](r8-research-status.md) | R8 诚实状态（opt-in） |
+| [`roadmap-h3.md`](roadmap-h3.md) | **successor 章程 only**（H3；**未开工 / 不自动执行**） |
 | phase4–8 / optimization-* | 历史归档 |
+
+> **Successor 脚注**：H2 complete 之后的下一编号 horizon 是 **H3**（[`roadmap-h3.md`](roadmap-h3.md)），**仅章程**，不是本文件的延续执行，也**不叫 R9**。默认主线仍为 Maintenance；H3-1… 需单独授权。
