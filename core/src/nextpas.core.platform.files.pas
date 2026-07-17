@@ -303,6 +303,14 @@ begin
     LFlags := LFlags or O_SYNC;
   LFlags := LFlags or O_CLOEXEC;
   Result := FdToFileHandle(open(APath, LFlags, APerm), AHandle);
+  { Darwin/BSD: if O_CLOEXEC rejected, retry and set FD_CLOEXEC via fcntl. }
+  if (Result <> 0) and (Result = ESysEINVAL) then
+  begin
+    LFlags := LFlags and (not O_CLOEXEC);
+    Result := FdToFileHandle(open(APath, LFlags, APerm), AHandle);
+    if Result = 0 then
+      fcntl(AHandle.Value, F_SETFD, FD_CLOEXEC);
+  end;
 end;
 
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;

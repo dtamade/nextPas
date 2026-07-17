@@ -249,7 +249,8 @@ begin
   AState^.UserArg := AArgument;
   AState^.Finished := 0;
   Result := pthread_create(
-    @AState^.Thread[0], nil, @platform_thread_darwin_trampoline, AState);
+    @AState^.Thread, nil,
+    TPThreadStartRoutine(@platform_thread_darwin_trampoline), AState);
   {$ELSE}
   Result := pthread_create(
     @AState^.Thread[0], nil, TPThreadStartRoutine(AStartRoutine), AArgument);
@@ -267,7 +268,11 @@ begin
   if AState = nil then
     Exit(PLATFORM_ERR_INVALID);
 
+{$IFDEF NEXTPAS_MACOS}
+  Result := pthread_join(AState^.Thread, @ARetVal);
+{$ELSE}
   Result := pthread_join(PPThreadToken(@AState^.Thread[0])^, @ARetVal);
+{$ENDIF}
   if Result = 0 then
     Dispose(AState);
 end;
@@ -277,7 +282,11 @@ begin
   if AState = nil then
     Exit(PLATFORM_ERR_INVALID);
 
+{$IFDEF NEXTPAS_MACOS}
+  Result := pthread_detach(AState^.Thread);
+{$ELSE}
   Result := pthread_detach(PPThreadToken(@AState^.Thread[0])^);
+{$ENDIF}
   if Result = 0 then
     Dispose(AState);
 end;

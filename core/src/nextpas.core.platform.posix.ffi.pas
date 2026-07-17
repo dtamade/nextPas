@@ -488,6 +488,7 @@ function pthread_cond_broadcast(cond: Pointer): Int32; cdecl; external 'pthread'
     @return 0 成功 *}
 function pipe(pipefd: PInt32): cint; cdecl; external 'c' name 'pipe';
 
+{$IFNDEF NEXTPAS_MACOS}
 {** @desc 创建管道（带标志）
     @param pipefd 输出管道文件描述符数组 [读, 写]
     @param flags 标志（O_CLOEXEC/O_NONBLOCK）
@@ -497,6 +498,7 @@ function pipe2(pipefd: PInt32; flags: cint): cint; cdecl; external 'c' name 'pip
 var
   {** 环境变量数组 *}
   environ: PPAnsiChar; external name 'environ';
+{$ENDIF}
 
 { File descriptor }
 

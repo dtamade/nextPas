@@ -103,17 +103,15 @@ type
 
   PPlatformPThreadState = ^TPlatformPThreadState;
   { Darwin has no pthread_timedjoin_np; store user entry so timedjoin can poll
-    a Finished flag set by a trampoline before reaping with pthread_join. }
+    a Finished flag set by a trampoline before reaping with pthread_join.
+    Flat layout (no variant) avoids offset bugs when pthread_create writes
+    the thread id into the first field. }
   TPlatformPThreadState = record
-    case Integer of
-      0: (FAlign: TPlatformPThreadTokenAlign);
-      1: (
-        Thread: array[0..PLATFORM_PTHREAD_TOKEN_SIZE - 1] of Byte;
-        UserProc: Pointer;
-        UserArg: Pointer;
-        RetVal: Pointer;
-        Finished: LongInt
-      );
+    Thread: pthread_t;
+    UserProc: Pointer;
+    UserArg: Pointer;
+    RetVal: Pointer;
+    Finished: LongInt;
   end;
 
   mach_timebase_info_data_t = record
