@@ -264,6 +264,23 @@ type
 - managed 元素构造抛 `EArgumentError`
 - 已关闭后的 plain publish（Channel.Send / MPSC.Enqueue / SegQueue.Enqueue）抛 `EInvalidOperationError`
 
+### 3.1 managed 拒绝文案（推荐模板）
+
+泛型 `Create` 在 `IsManagedType` 拒绝时，**推荐**统一为：
+
+```text
+'<TypeName>: T must be unmanaged'
+```
+
+Key/Value 双参数类型用：
+
+```text
+'<TypeName>: TKey must be unmanaged'
+'<TypeName>: TValue must be unmanaged'
+```
+
+历史消息可能附带 `(no string/interface/dynarray)` 后缀；语义等价，**不强制全量改名**。新代码与触达修改优先用短模板。
+
 ---
 
 ## 4. 线程安全

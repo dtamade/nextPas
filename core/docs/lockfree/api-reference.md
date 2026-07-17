@@ -1,6 +1,6 @@
 # Lockfree API 参考手册
 
-> 更新: 2026-07-06
+> 更新: 2026-07-17
 
 [English](api-reference.en.md)
 
@@ -1344,10 +1344,10 @@ type
 
 ## T 类型约束
 
-所有 lockfree 数据结构要求 `T` 为非托管类型：
+所有 lockfree 数据结构要求 `T` 为非托管类型（推荐文案见 CONTRACT §3.1）：
 ```pascal
 if IsManagedType(T) then
-  raise EArgumentError.Create('T must be unmanaged');
+  raise EArgumentError.Create('<TypeName>: T must be unmanaged');
 ```
 
 支持的类型: Integer, UInt32, UInt64, Pointer, record (无 string/dyn array/interface)
