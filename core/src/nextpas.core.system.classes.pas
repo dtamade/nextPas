@@ -16,6 +16,8 @@ uses
 type
   TSeekOrigin = Classes.TSeekOrigin;
   TStream = Classes.TStream;
+  THandleStream = Classes.THandleStream;
+  TMemoryStream = Classes.TMemoryStream;
   TFileStream = Classes.TFileStream;
   TList = Classes.TList;
   TInterfaceList = Classes.TInterfaceList;

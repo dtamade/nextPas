@@ -61,7 +61,9 @@ CRYPTO_UTILS="src/nextpas.core.tls.crypto.utils.pas"
 BACKEND_SELECTOR="src/nextpas.core.tls.backend.selector.pas"
 SYSTEM_CLASSES="src/nextpas.core.system.classes.pas"
 
-require_token "$CERTCHAIN" "Classes,"
+# certchain: Classes → nextpas.core.system.classes; text ops via text.conv
+require_token "$CERTCHAIN" "nextpas.core.system.classes"
+reject_token "$CERTCHAIN" "Classes,"
 reject_token "$CERTCHAIN" "SysUtils"
 reject_token "$CERTCHAIN" "Math"
 require_token "$CERTCHAIN" "nextpas.core.text.conv"
@@ -72,7 +74,11 @@ require_token "$CERTCHAIN" "nextpas.core.text.conv.Format("
 require_token "$CERTCHAIN" "nextpas.core.text.conv.Trim("
 require_token "$CERTCHAIN" "nextpas.core.text.conv.SameText("
 
-require_token "$ASN1" "Classes, Contnrs,"
+# asn1: left Classes/Contnrs; uses collections + io.intf + text.conv
+require_token "$ASN1" "nextpas.core.collections.vec"
+require_token "$ASN1" "nextpas.core.io.intf"
+reject_token "$ASN1" "Classes,"
+reject_token "$ASN1" "Contnrs,"
 reject_token "$ASN1" "SysUtils, Classes, Contnrs"
 if interface_uses_block "$ASN1" | grep -F --quiet "SysUtils"; then
   fail "$ASN1 interface uses must not depend on SysUtils"
@@ -81,11 +87,13 @@ require_token "$ASN1" "nextpas.core.text.conv"
 reject_regex "$ASN1" '(^|[^.[:alnum:]_])Format\('
 require_token "$ASN1" "nextpas.core.text.conv.Format("
 
+# crypto.utils: no bare SysUtils/Classes; stream via io/fs, not system.classes
 reject_token "$CRYPTO_UTILS" "SysUtils, Classes"
 reject_token "$CRYPTO_UTILS" "SysUtils,"
 reject_token "$CRYPTO_UTILS" "Classes,"
 require_token "$CRYPTO_UTILS" "nextpas.core.system"
-require_token "$CRYPTO_UTILS" "nextpas.core.system.classes"
+require_token "$CRYPTO_UTILS" "nextpas.core.io.intf"
+require_token "$CRYPTO_UTILS" "nextpas.core.fs.stream"
 
 reject_token "$BACKEND_SELECTOR" "SysUtils"
 
