@@ -551,6 +551,7 @@ function BuildSetCookie(const ACookie: TSetCookie): string; inline;
 function MakeCookie(const AName, AValue: string): TSetCookie; inline;
 function ParseSingleCookie(const AStr: string; out AName, AValue: string): Boolean; inline;
 function NewHttpCookieJar: IHttpCookieJar; inline;
+function HttpCookieSiteKey(const AHost: string): string; inline;
 
 { Server/Client factories }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
@@ -1397,6 +1398,11 @@ end;
 function NewHttpCookieJar: IHttpCookieJar;
 begin
   Result := nextpas.core.http.cookie.NewHttpCookieJar;
+end;
+
+function HttpCookieSiteKey(const AHost: string): string;
+begin
+  Result := nextpas.core.http.cookie.HttpCookieSiteKey(AHost);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;

@@ -11,9 +11,9 @@
 
 ## 当前结论
 
-- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（post Wave F；下一波 **Wave G Cookie PSL**）。
+- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（post Wave G；下一波 **Wave H Response metadata**）。
 - **Stage**：non-H3 stage-complete（P1–P5 关闭；H3 诚实 blocked on QUIC）。
-- **可用性 Wave A–F**：已 landed main。日常客户端主路径可用（JSON 三层、redirect、timeout/cancel、cookie 基础、HTTPS 直连/CONNECT/代理 Basic、Retry-After delta+HTTP-date、`WithTLSContext`）。
+- **可用性 Wave A–F + G**：已齐。日常客户端主路径可用；Cookie SiteKey = eTLD+1（multi-label PSL 子集）；`Domain=public-suffix` 拒绝；`HttpCookieSiteKey`。
 - **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` 已删除。
 - **前置条件错误**：公开面 nil/非法参数 → `EHttpError(hekArgument)`（不是裸 `EArgumentError`）。
 - **Residual-honest**：cancel ~50ms 切片；server `Default` RW=0（测试兼容，生产用 `Production`）；OpenSSL factory unfreed 跨模块 residual。

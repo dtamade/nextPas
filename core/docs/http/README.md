@@ -182,7 +182,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   the socket is up; `ConnectTimeout` = **OS dial + post-dial first-write**
   budget on new sockets. When `ConnectTimeout=0`, dial uses `Timeout` if
   `Timeout>0`, else unbounded.
-- `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite
+- `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite +
+  eTLD+1 SiteKey (`HttpCookieSiteKey`; multi-label PSL subset; reject
+  `Domain=public-suffix`)
   store/send (default Lax; None requires Secure; SiteKey approx, no PSL).
 - `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
   (`http://host:port`). Target `http://` uses absolute-form; target `https://`
