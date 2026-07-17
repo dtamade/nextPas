@@ -63,6 +63,29 @@ begin
   CheckEqual(10000, LOpts.WriteTimeout, 'builder preserves WriteTimeout');
 end;
 
+procedure TestServerOptionsDefaultAndProductionTimeouts;
+var
+  LDefault, LProd: THttpServerOptions;
+begin
+  LDefault := THttpServerOptions.Default;
+  CheckEqual(0, LDefault.ReadTimeout,
+    'Default ReadTimeout stays 0 (unbounded) for tests/compat');
+  CheckEqual(0, LDefault.WriteTimeout,
+    'Default WriteTimeout stays 0 (unbounded) for tests/compat');
+  CheckEqual(30000, LDefault.IdleTimeout, 'Default IdleTimeout');
+
+  LProd := THttpServerOptions.Production;
+  CheckEqual(30000, LProd.ReadTimeout, 'Production ReadTimeout is 30s');
+  CheckEqual(30000, LProd.WriteTimeout, 'Production WriteTimeout is 30s');
+  CheckEqual(30000, LProd.IdleTimeout, 'Production keeps IdleTimeout');
+  CheckEqual(8192, LProd.MaxHeaderSize, 'Production keeps MaxHeaderSize');
+  CheckEqual(4194304, LProd.MaxBodySize, 'Production keeps MaxBodySize');
+  { Production must not mutate Default semantics for subsequent Default calls }
+  LDefault := THttpServerOptions.Default;
+  CheckEqual(0, LDefault.ReadTimeout, 'Default still 0 after Production');
+  CheckEqual(0, LDefault.WriteTimeout, 'Default Write still 0 after Production');
+end;
+
 var
   T: TTestSuite;
 
@@ -12758,6 +12781,8 @@ begin
   T.Test('Hijack exception does not write 500 or close handler connection',
     @TestHijackExceptionDoesNotWrite500OrCloseHandlerConnection);
   T.Test('Server options builder', @TestServerOptionsBuilder);
+  T.Test('Server options Default vs Production timeouts',
+    @TestServerOptionsDefaultAndProductionTimeouts);
   T.Test('Max requests per connection', @TestMaxRequestsPerConnection);
   if not T.Run then Halt(1);
 end.

@@ -74,6 +74,8 @@ var
 begin
   LOptions := THttpServerOptions.Default;
   LOptions.Backend := ParseBackend(ParamStr(1));
+  { Explicit finite Read/Write (demo also tightens MaxHeader/MaxBody). }
+  LOptions.ReadTimeout := 5000;
   LOptions.WriteTimeout := 5000;
   LOptions.MaxHeaderSize := 1024;
   LOptions.MaxBodySize := 64;

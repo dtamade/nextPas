@@ -154,7 +154,13 @@ type
     RequestArena: Boolean;
     { RequestArenaCapacity: 0 = HTTP_DEFAULT_REQUEST_ARENA when RequestArena. }
     RequestArenaCapacity: SizeUInt;
+    { Default: ReadTimeout/WriteTimeout = 0 (unbounded) for tests and special
+      tools. Production servers should use Production or set finite
+      WithReadTimeout/WithWriteTimeout (IdleTimeout alone is not enough). }
     class function Default: THttpServerOptions; static;
+    { Production template: Default plus finite Read/Write = 30000 ms.
+      Does not change MaxHeader/MaxBody/Idle; not a silent Default flip. }
+    class function Production: THttpServerOptions; static;
     function WithVersion(const AVersion: THttpVersion): THttpServerOptions;
     function WithReadTimeout(const AMs: Int64): THttpServerOptions;
     function WithWriteTimeout(const AMs: Int64): THttpServerOptions;
@@ -987,6 +993,13 @@ begin
   Result.TLSContext := nil;
   Result.RequestArena := False;
   Result.RequestArenaCapacity := 0;
+end;
+
+class function THttpServerOptions.Production: THttpServerOptions;
+begin
+  Result := Default;
+  Result.ReadTimeout := 30000;
+  Result.WriteTimeout := 30000;
 end;
 
 function THttpServerOptions.WithVersion(

@@ -3742,22 +3742,77 @@ var
   LWObj: TMockResponseWriter;
   LW: IHttpResponseWriter;
   LWriter: ISSEEventWriter;
+  LCaught: Boolean;
 begin
   LWObj := TMockResponseWriter.Create;
   LW := LWObj;
   LWriter := StartSSE(LW);
+  LCaught := False;
   try
     LWriter.WriteEventSimple('message'#10'id: injected', 'body', '');
     Check(False, 'SSE event name newline must raise');
   except
-    on E: EArgumentError do Check(True, 'SSE event name injection rejected');
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
   end;
+  Check(LCaught, 'SSE event name injection rejected as hekArgument');
+  LCaught := False;
   try
     LWriter.WriteEventSimple('message', 'body', 'ok'#13#10'retry: 1');
     Check(False, 'SSE id newline must raise');
   except
-    on E: EArgumentError do Check(True, 'SSE id injection rejected');
+    on E: EHttpError do
+      LCaught := E.Kind = hekArgument;
   end;
+  Check(LCaught, 'SSE id injection rejected as hekArgument');
+end;
+
+procedure TestSSEStartNilWriterRaisesHekArgument;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    StartSSE(nil);
+    Check(False, 'StartSSE(nil) must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (Pos('nil', E.Message) > 0);
+  end;
+  Check(LCaught, 'StartSSE(nil) raises hekArgument');
+end;
+
+procedure TestSSEWriteRetryNegativeRaisesHekArgument;
+var
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LWriter: ISSEEventWriter;
+  LEvt: TSSEvent;
+  LCaught: Boolean;
+begin
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LWriter := StartSSE(LW);
+  LCaught := False;
+  try
+    LWriter.WriteRetry(-1);
+    Check(False, 'WriteRetry(-1) must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (Pos('negative', E.Message) > 0);
+  end;
+  Check(LCaught, 'WriteRetry(-1) raises hekArgument');
+  LEvt := MakeSSEvent('message', 'body', '');
+  LEvt.Retry := -5;
+  LCaught := False;
+  try
+    LWriter.WriteEvent(LEvt);
+    Check(False, 'WriteEvent negative retry must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (Pos('negative', E.Message) > 0);
+  end;
+  Check(LCaught, 'WriteEvent negative retry raises hekArgument');
 end;
 
 var
@@ -3922,6 +3977,8 @@ begin
   T.Test('SSE: handles short writes', @TestSSEEventWriterHandlesShortWrites);
   T.Test('SSE: splits CR data lines', @TestSSEEventWriterSplitsCarriageReturnData);
   T.Test('SSE: rejects field injection', @TestSSEEventWriterRejectsFieldInjection);
+  T.Test('SSE: StartSSE(nil) is hekArgument', @TestSSEStartNilWriterRaisesHekArgument);
+  T.Test('SSE: negative retry is hekArgument', @TestSSEWriteRetryNegativeRaisesHekArgument);
   if not T.Run then Halt(1);
   GTestSentinel.Free;
 end.

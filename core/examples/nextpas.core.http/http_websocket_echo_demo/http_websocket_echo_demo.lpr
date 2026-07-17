@@ -36,7 +36,7 @@ begin
   else
     LPort := 8082;
 
-  LOptions := THttpServerOptions.Default;
+  LOptions := THttpServerOptions.Production;
   LRouter := NewRouter;
 
   LRouter.Get('/health',
