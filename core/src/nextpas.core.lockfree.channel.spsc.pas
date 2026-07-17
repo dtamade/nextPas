@@ -55,6 +55,8 @@ type
     procedure Send(const AValue: T);
     {** @desc 非阻塞发送，无空间或已关闭时立即返回 False }
     function TrySend(const AValue: T): Boolean;
+    {** @desc 非阻塞发送并返回失败原因（full vs closed）；成功 AError=lfteNone }
+    function TrySendEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 带超时发送，超时或已关闭返回 False }
     function SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
 
@@ -62,6 +64,8 @@ type
     function Receive(out AValue: T): Boolean;
     {** @desc 非阻塞接收；无数据时返回 False }
     function TryReceive(out AValue: T): Boolean;
+    {** @desc 非阻塞接收并返回失败原因（empty vs closed-empty） }
+    function TryReceiveEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 带超时接收；超时返回 False }
     function ReceiveTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
 
@@ -143,6 +147,20 @@ begin
   Result := True;
 end;
 
+function TLockFreeChannelSpscImpl.TrySendEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TrySend(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 procedure TLockFreeChannelSpscImpl.Send(const AValue: T);
 var
   LEpoch: Int32;
@@ -207,6 +225,20 @@ begin
   if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
     LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
   Result := True;
+end;
+
+function TLockFreeChannelSpscImpl.TryReceiveEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryReceive(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TLockFreeChannelSpscImpl.Receive(out AValue: T): Boolean;

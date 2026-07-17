@@ -58,6 +58,8 @@ Need concurrent HashMap?
 | Plain `Enqueue` / `Send` (MPSC, Channel, SegQueue) | raise `EInvalidOperationError` |
 | Ring Wait/Timeout | False |
 
+Optional `Try*Ex` (`TLockFreeTryError`) distinguishes full/empty/closed without changing Boolean hot-path `Try*`.
+
 ## Notes
 
 - Default facade `uses nextpas.core.lockfree` is **T1-only**. Import T2/T3 units directly.

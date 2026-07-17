@@ -48,6 +48,7 @@ type
   THazardGuard = nextpas.core.lockfree.hazard.THazardGuard;
   TSelectResult = nextpas.core.lockfree.selector.TSelectResult;
   TLockFreeMsQueueResult = nextpas.core.lockfree.msqueue.TLockFreeMsQueueResult;
+  TLockFreeTryError = nextpas.core.lockfree.base.TLockFreeTryError;
 
   {** @desc QSBR 域（TQSBRDomain 是 TEbrDomain 的语义别名）
     @details Quiescent-State Based Reclamation：仅当 FActiveCount=0 时回收所有退休节点。

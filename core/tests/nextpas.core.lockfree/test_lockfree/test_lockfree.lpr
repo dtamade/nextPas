@@ -9,6 +9,7 @@ uses
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree,
+  nextpas.core.lockfree.base,
   nextpas.core.lockfree.wait,
   nextpas.core.lockfree.ebr,
   nextpas.core.lockfree.channel.spsc,
@@ -5628,6 +5629,91 @@ begin
   end;
 end;
 
+procedure TestSegQueueTryExDiagnostics;
+var
+  LQ: TIntSegQueue;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntSegQueue.Create;
+  try
+    Check(LQ.TryEnqueueEx(11, LErr), 'SegQueue TryEnqueueEx success');
+    Check(LErr = lfteNone, 'SegQueue success error is lfteNone');
+    Check(LQ.TryDequeueEx(LV, LErr), 'SegQueue TryDequeueEx success');
+    CheckEqual(11, LV, 'SegQueue TryDequeueEx value');
+    Check(LErr = lfteNone, 'SegQueue dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SegQueue empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'SegQueue empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(12, LErr), 'SegQueue closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'SegQueue closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SegQueue closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'SegQueue closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestChannelTryExDiagnostics;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  { MPMC channel sequence protocol needs capacity>=2 to observe full (same as capacity-enforce tests). }
+  LCh := TIntChannel.Create(2);
+  try
+    Check(LCh.TrySendEx(21, LErr), 'Channel TrySendEx success');
+    Check(LErr = lfteNone, 'Channel success error is lfteNone');
+    Check(LCh.TrySendEx(20, LErr), 'Channel second TrySendEx success');
+    Check(LErr = lfteNone, 'Channel second success error is lfteNone');
+    Check(not LCh.TrySendEx(22, LErr), 'Channel full TrySendEx fails');
+    Check(LErr = lfteFull, 'Channel full is lfteFull');
+    Check(LCh.TryReceiveEx(LV, LErr), 'Channel TryReceiveEx success');
+    CheckEqual(21, LV, 'Channel TryReceiveEx value');
+    Check(LErr = lfteNone, 'Channel receive success error is lfteNone');
+    Check(LCh.TryReceiveEx(LV, LErr), 'Channel second TryReceiveEx success');
+    CheckEqual(20, LV, 'Channel second TryReceiveEx value');
+    Check(LErr = lfteNone, 'Channel second receive success error is lfteNone');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'Channel empty TryReceiveEx fails');
+    Check(LErr = lfteEmpty, 'Channel empty not closed is lfteEmpty');
+    LCh.Close;
+    Check(not LCh.TrySendEx(23, LErr), 'Channel closed TrySendEx fails');
+    Check(LErr = lfteClosed, 'Channel closed publish is lfteClosed');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'Channel closed empty TryReceiveEx fails');
+    Check(LErr = lfteClosed, 'Channel closed empty is lfteClosed');
+  finally
+    LCh.Free;
+  end;
+end;
+
+procedure TestChannelSpscTryExDiagnostics;
+var
+  LCh: TIntChannelSpsc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LCh := TIntChannelSpsc.Create(1);
+  try
+    Check(LCh.TrySendEx(31, LErr), 'SPSC Channel TrySendEx success');
+    Check(LErr = lfteNone, 'SPSC Channel success error is lfteNone');
+    Check(not LCh.TrySendEx(32, LErr), 'SPSC Channel full TrySendEx fails');
+    Check(LErr = lfteFull, 'SPSC Channel full is lfteFull');
+    Check(LCh.TryReceiveEx(LV, LErr), 'SPSC Channel TryReceiveEx success');
+    CheckEqual(31, LV, 'SPSC Channel TryReceiveEx value');
+    Check(LErr = lfteNone, 'SPSC Channel receive success error is lfteNone');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'SPSC Channel empty TryReceiveEx fails');
+    Check(LErr = lfteEmpty, 'SPSC Channel empty not closed is lfteEmpty');
+    LCh.Close;
+    Check(not LCh.TrySendEx(33, LErr), 'SPSC Channel closed TrySendEx fails');
+    Check(LErr = lfteClosed, 'SPSC Channel closed publish is lfteClosed');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'SPSC Channel closed empty TryReceiveEx fails');
+    Check(LErr = lfteClosed, 'SPSC Channel closed empty is lfteClosed');
+  finally
+    LCh.Free;
+  end;
+end;
+
 procedure TestMsQueueDestroyCloseAndDrain;
 var
   LQ: specialize TLockFreeMsQueue<Integer>;
@@ -7255,6 +7341,9 @@ begin
   T.Test('SegQueue TryDequeue closed', @TestSegQueueTryDequeueClosed);
   T.Test('SegQueue TryEnqueue closed', @TestSegQueueTryEnqueueClosed);
   T.Test('SegQueue Enqueue raises when closed', @TestSegQueueEnqueueRaisesWhenClosed);
+  T.Test('SegQueue Try*Ex diagnostics', @TestSegQueueTryExDiagnostics);
+  T.Test('Channel Try*Ex diagnostics', @TestChannelTryExDiagnostics);
+  T.Test('Channel SPSC Try*Ex diagnostics', @TestChannelSpscTryExDiagnostics);
   T.Test('MSQueue Destroy Close and drain', @TestMsQueueDestroyCloseAndDrain);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);
