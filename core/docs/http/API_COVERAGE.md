@@ -11,13 +11,13 @@
 
 ## 当前结论
 
-- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（post Wave I；下一波 **Wave J Error Op hygiene**）。
-- **Stage**：non-H3 stage-complete（P1–P5 关闭；H3 诚实 blocked on QUIC）。
-- **可用性 Wave A–F + G**：已齐。日常客户端主路径可用；Cookie SiteKey = eTLD+1（multi-label PSL 子集）；`Domain=public-suffix` 拒绝；`HttpCookieSiteKey`。
-- **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` 已删除。
-- **前置条件错误**：公开面 nil/非法参数 → `EHttpError(hekArgument)`（不是裸 `EArgumentError`）。
-- **Residual-honest**：cancel ~50ms 切片；server `Default` RW=0（测试兼容，生产用 `Production`）；OpenSSL factory unfreed 跨模块 residual。
-- **历史波次档案**（assessment / research / fix-plan）：[`archive/`](archive/README.md)。本文件**不**再维护 cycle 叙事；与 ROADMAP 冲突时以 ROADMAP + 源码为准。
+- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（多时代 + Goal Loop；**NEXT = Wave J**，之后自动 J→K→L′→C1…）。
+- **Stage**：non-H3 stage-complete；H3 诚实 blocked on QUIC。
+- **可用性 A–I**：主路径齐；Cookie eTLD+1；`FinalUrl`/`Version`；proxy **Basic only**。
+- **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。
+- **前置条件错误**：公开面 nil/非法参数 → `EHttpError(hekArgument)`。
+- **Residual-honest**：cancel ~50ms；server `Default` RW=0；OpenSSL factory unfreed 跨模块。
+- **历史档案**：[`archive/`](archive/README.md)。与 ROADMAP 冲突时以 ROADMAP + 源码为准。
 
 下列 **Public Surface Matrix** 是本文件的主内容：公开契约 ↔ 测试证据。
 
@@ -51,6 +51,6 @@
 
 ## Highest-Priority Remaining Work
 
-**不在此维护有序列表。** 见 [`ROADMAP.md`](ROADMAP.md) Phase P（Wave G→J）/ Q / R / X。
+**不在此维护有序列表。** 见 [`ROADMAP.md`](ROADMAP.md) Era 0–5 + Goal Loop。
 
-摘要：Wave I Proxy auth Basic-only freeze landed → J Error Op hygiene；H3 blocked on QUIC。
+摘要：NEXT = Wave J（Op hygiene）→ 满自治按推荐路径续波；H3 Blocked on QUIC。
