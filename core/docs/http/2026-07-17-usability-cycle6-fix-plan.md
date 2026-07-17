@@ -37,7 +37,7 @@ M4  Focused gates + Ready                 ── after selected M*
 | **M3** | P2 | M0 | Optional remaining client CreateOp sites |
 | **M4** | — | M0 (+ any P2) | hygiene + focused gates + Ready report |
 
-**Recommended default wave**: **M0 + M4 only** (ship cycle-5).  
+**Recommended default wave**: **M0 + M4 only** (ship cycle-5).
 **Full polish wave**: M0 + M1(A) + M2 + M3 + M4.
 
 ---
@@ -77,7 +77,7 @@ updated if authorized, assessment archives not self-contradictory.
 - CONTRACT/README: post-upgrade I/O has no framework cancel; app must Close peer or
   use process-level shutdown; dial/handshake remain bounded.
 
-**Default recommendation if user wants minimal blast**: **B** in same land as M0.  
+**Default recommendation if user wants minimal blast**: **B** in same land as M0.
 **If user wants feature parity**: **A**.
 
 ---
