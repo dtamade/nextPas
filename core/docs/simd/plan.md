@@ -7,12 +7,12 @@
 ## 当前 Goal
 
 ```text
-CURRENT = M-C1  (见 GOAL_QUEUE.md)
+CURRENT = S24a  (见 GOAL_QUEUE.md)
 ```
 
 | 字段 | 值 |
 |------|-----|
-| 阶段 | M-C1 — math consumer smoke |
+| 阶段 | S24a — RVV Memory/Batch honesty |
 | 优先级 | P1 |
 | 验收 | GOAL_QUEUE 卡内 GATES + roadmap §6 |
 
@@ -26,11 +26,11 @@ CURRENT = M-C1  (见 GOAL_QUEUE.md)
 - [x] G0 Goal 队列 + 指针
 - [x] **S23a** NEON `ArrayAdd/Sub/Mul` F32
 - [x] **S23b** NEON `Min/Max/Abs/Neg` F32（Div 推迟）
+- [x] **M-C1** math consumer smoke（full math clean test green）
 
 ### 队列摘要
 
-- [ ] **M-C1** math consumer smoke（CURRENT）
-- [ ] S24a RVV 诚实化
+- [ ] **S24a** RVV 诚实化（CURRENT）
 - [ ] S25 性能方法与热点
 - [ ] M-V1/M-V2 math residual
 

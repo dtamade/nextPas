@@ -25,10 +25,11 @@
 - **NEON Memory**: ✅ **15/15** 自有（Phase 22：Copy/Fill/DiffRange + Reverse/BytesIndexOf/Utf8Validate 真 asm 叶，仅 ASM opt-in 绑定）
 - **NEON Batch\***: ⚠️ Phase 23a/23b 已接管 F32 Add/Sub/Mul/Min/Max/Abs/Neg；其余 Batch 槽仍 scalar
 - **cpuinfo**: ✅ 主路径稳定
-- **活动阶段**: Phase 20–23b 已收口；**Goal CURRENT=M-C1**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
+- **活动阶段**: Phase 20–23b + M-C1 已收口；**Goal CURRENT=S24a**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
 - **验证基线 (2026-07-17)**:
   - `make focused FOCUS=core/tests/nextpas.core.simd` → **1740+ passed**
   - `neon-optin-focused` → **1740+ passed**
+  - `make -C core/tests/nextpas.core.math clean test` → **exit 0**（M-C1: 305 tests, MATH_API_SURFACE 70/0）
   - `make hygiene` → pass
   - `api-coverage-contract` → **OK**（720/720 covered，missing=0 / thin=0，strict-thin）
 

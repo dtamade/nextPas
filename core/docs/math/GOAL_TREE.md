@@ -23,16 +23,26 @@ Detailed behavior contracts live in `API.md`; this goal tree stays compact.
 ## Current Position
 
 Current roadmap position: M8 complete on Linux+Windows with macOS deferred, M7 complete, M9 not started.
+Lane residual: **M-C1 done** (consumer smoke after NEON Batch leaves); next math residual is M-V1 via GOAL_QUEUE after simd S24a/S25.
 
 Verified on this lane (2026-07-17, `math-simd`):
 
 - `make -C core/tests/nextpas.core.math clean test` → exit 0
-  (17 projects: source-contract + 16 Pascal suites, ~273 tests, heaptrc 0)
+  (17 projects: source-contract + 16 Pascal suites, **305 tests**, heaptrc 0 unfreed)
 - `MATH_API_SURFACE OK: scanned=70 findings=0`
 - Math production sources import only public `nextpas.core.simd` (no private backend/dispatch/cpuinfo/dataplane units)
 - Public batch API is F32-complete via `batch.pas → batch.simd.pas`
 - Benchmark evidence (M7): 33-308x on N=16384 batch kernels
 - M8 complete for available host matrix; macOS trig host proof remains deferred until a mac runner exists.
+
+### M-C1 consumer smoke (after Phase 23a/23b NEON BatchF32)
+
+- **When**: 2026-07-17, post S23a/S23b (NEON BatchF32 Add/Sub/Mul/Min/Max/Abs/Neg leaves).
+- **Command**: `make -C core/tests/nextpas.core.math clean test` → **exit 0**.
+- **API surface**: `MATH_API_SURFACE OK: scanned=70 findings=0`.
+- **Runtime**: 16 suites, 305 passed / 0 failed; heaptrc 0 unfreed on every suite.
+- **Boundary**: still public `nextpas.core.simd` only — no private backend imports required to stay green.
+- **Outcome**: math remains a valid consumer of simd after NEON Batch high-frequency leaves; CURRENT advanced to **S24a**.
 
 Host matrix:
 
@@ -103,12 +113,12 @@ Executable work is queued in [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QU
 
 ### In-lane residual (goal-queue)
 
-1. **M-C1** — math consumer smoke after NEON Batch leaves land (usually run-only).
-2. **M-V1** — `vec.batch` Double minimal parity (F32-first gap).
-3. **M-V2** — residual docs / lane-complete checklist cleanup.
+1. **M-V1** — `vec.batch` Double minimal parity (F32-first gap).
+2. **M-V2** — residual docs / lane-complete checklist cleanup.
 
 ### Done (archive; not active work)
 
+- **M-C1** — math consumer smoke after NEON Batch leaves (2026-07-17; full math clean test green).
 - Public `Batch*F64` family (facade + simd wrappers + tests).
 
 ### Deferred / blocked
@@ -128,4 +138,4 @@ Executable work is queued in [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QU
 ## Goal entry
 
 Open [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) and execute **CURRENT** only.
-Default simd-first order: `S23a → S23b → M-C1 → …`.
+Default simd-first order: `S23a ✅ → S23b ✅ → M-C1 ✅ → S24a → …`.

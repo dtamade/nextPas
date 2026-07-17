@@ -188,7 +188,7 @@ P20 文档真相面 ──► P21 api-coverage 绿
    P26 编译器（阻塞） / P27 新 ISA（阻塞）
 ```
 
-**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **M-C1** — math consumer smoke）。
+**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **S24a** — RVV Memory/Batch honesty）。
 不要用聊天「继续」驱动；按队列卡执行并翻 `CURRENT`。
 
 ---
@@ -260,9 +260,9 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 
 ## 9. 当前指针
 
-- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=M-C1**）
-- **活动阶段**: Goal CURRENT=M-C1（Phase 23a/23b BatchF32 代表集已收；Memory 15/15 已由 Phase 22 收口）
-- **已收口**: Phase 20–22；G0 goal 队列
+- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=S24a**）
+- **活动阶段**: Goal CURRENT=S24a（Phase 23a/23b BatchF32 代表集 + M-C1 consumer smoke 已收；Memory 15/15 已由 Phase 22 收口）
+- **已收口**: Phase 20–23b；G0；M-C1
 - **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等
 
 ---
@@ -274,3 +274,4 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 - 2026-07-17: Phase 22b Memory 15/15；G0 `GOAL_QUEUE.md`；默认下一刀 S23a。
 - 2026-07-17: Phase 23a NEON BatchF32 ArrayAdd/Sub/Mul 真叶；CURRENT→S23b。
 - 2026-07-17: Phase 23b NEON BatchF32 Min/Max/Abs/Neg 真叶（Div 推迟）；CURRENT→M-C1。
+- 2026-07-17: M-C1 math consumer smoke 全绿（305 tests / API surface 70/0）；CURRENT→S24a。

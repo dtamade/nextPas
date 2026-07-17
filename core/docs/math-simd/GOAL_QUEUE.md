@@ -35,7 +35,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=M-C1
+CURRENT=S24a
 ```
 
 ---
@@ -105,7 +105,7 @@ CURRENT=M-C1
 | **GATES** | Same focused set |
 | **DoD** | Or mark skipped in CURRENT notes |
 
-### S24a — RVV Memory/Batch honesty  【docs+contracts】
+### S24a — RVV Memory/Batch honesty  【CURRENT】
 
 | Field | Content |
 |-------|---------|
@@ -158,12 +158,12 @@ CURRENT=M-C1
 
 ## Wave 2 — math residual (secondary)
 
-### M-C1 — math consumer smoke after NEON Batch  【CURRENT】
+### M-C1 — math consumer smoke after NEON Batch  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
-| **NEXT** | S24a (if not done) or M-V1 |
+| **STATUS** | done (2026-07-17) |
+| **NEXT** | S24a |
 | **WHY** | math must keep working when simd Batch leaves appear (public-only) |
 | **IN_SCOPE_PATHS** | `core/tests/nextpas.core.math/**` (run); math docs only if needed |
 | **OUT_OF_SCOPE** | math production rewrites; private simd imports |
@@ -171,6 +171,7 @@ CURRENT=M-C1
 | **GATES** | math clean test; hygiene if any file touch |
 | **DoD** | Evidence recorded; CURRENT advanced |
 | **STOP** | Failures requiring private simd coupling |
+| **EVIDENCE** | `make -C core/tests/nextpas.core.math clean test` → exit 0; `MATH_API_SURFACE OK: scanned=70 findings=0`; 16 Pascal suites / 305 tests, 0 failed; heaptrc 0 unfreed on all suites |
 
 ### M-V1 — vec.batch Double minimal parity
 
@@ -272,7 +273,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 - [x] Public batch F32/F64 via public simd
 - [ ] vec.batch Double minimal parity **or** explicit frozen non-goal (M-V1)
 - [ ] Residual backlog clean (M-V2)
-- [ ] Consumer smoke after Batch leaves (M-C1)
+- [x] Consumer smoke after Batch leaves (M-C1)
 - [x] M9/macOS explicitly blocked (not silent)
 
 ### Non-goals (always)
@@ -288,8 +289,8 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 ## Default order (happy path)
 
 ```text
-G0 ✅ → S23a → S23b → M-C1 → S24a → S25a → S25b → M-V1 → M-V2 → Q1 → Q2 → IDLE
-         (S23c optional)   (S24b only if hardware)
+G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a → S25a → S25b → M-V1 → M-V2 → Q1 → Q2 → IDLE
+         (S23c optional)              (S24b only if hardware)
 ```
 
 ## Agent session prompt (paste)
