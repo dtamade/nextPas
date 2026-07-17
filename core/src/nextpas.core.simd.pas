@@ -2335,28 +2335,28 @@ procedure ArrayAddI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayAddI32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchInteger.ArrayAddI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure ArraySubI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArraySubI32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchInteger.ArraySubI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure ArrayMulI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayMulI16(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchInteger.ArrayMulI16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure ArrayPackSatI32toI16(aSrc: PInt32; aDst: PInt16; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayPackSatI32toI16(aSrc, aDst, aCount);
+  LDispatch^.BatchInteger.ArrayPackSatI32toI16(aSrc, aDst, aCount);
 end;
 
 // === Type Conversion Batch Implementation ===
@@ -2365,14 +2365,14 @@ procedure ArrayF32toI32(aSrc: PSingle; aDst: PInt32; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayF32toI32(aSrc, aDst, aCount);
+  LDispatch^.BatchInteger.ArrayF32toI32(aSrc, aDst, aCount);
 end;
 
 procedure ArrayI32toF32(aSrc: PInt32; aDst: PSingle; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayI32toF32(aSrc, aDst, aCount);
+  LDispatch^.BatchInteger.ArrayI32toF32(aSrc, aDst, aCount);
 end;
 
 // === Bitwise Batch Implementation ===
@@ -2381,35 +2381,35 @@ procedure ArrayAndI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayAndI32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchInteger.ArrayAndI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure ArrayOrI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayOrI32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchInteger.ArrayOrI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure ArrayXorI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayXorI32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchInteger.ArrayXorI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure ArrayShlI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayShlI32(aSrc, aDst, aCount, aShift);
+  LDispatch^.BatchInteger.ArrayShlI32(aSrc, aDst, aCount, aShift);
 end;
 
 procedure ArrayShrI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer);
 var LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.ArrayShrI32(aSrc, aDst, aCount, aShift);
+  LDispatch^.BatchInteger.ArrayShrI32(aSrc, aDst, aCount, aShift);
 end;
 
 // === Saturating Arithmetic Implementation ===

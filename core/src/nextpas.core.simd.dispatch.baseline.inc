@@ -754,19 +754,19 @@ begin
   dispatchTable.BatchF32.ArrayStep := @ScalarArrayStepF32;
   dispatchTable.BatchF32.ArraySmoothstep := @ScalarArraySmoothstepF32;
   // === Batch Array Operations - Integer ===
-  dispatchTable.ArrayAddI32 := @ScalarArrayAddI32;
-  dispatchTable.ArraySubI32 := @ScalarArraySubI32;
-  dispatchTable.ArrayMulI16 := @ScalarArrayMulI16;
-  dispatchTable.ArrayPackSatI32toI16 := @ScalarArrayPackSatI32toI16;
+  dispatchTable.BatchInteger.ArrayAddI32 := @ScalarArrayAddI32;
+  dispatchTable.BatchInteger.ArraySubI32 := @ScalarArraySubI32;
+  dispatchTable.BatchInteger.ArrayMulI16 := @ScalarArrayMulI16;
+  dispatchTable.BatchInteger.ArrayPackSatI32toI16 := @ScalarArrayPackSatI32toI16;
   // === Batch Array Operations - Type Conversion ===
-  dispatchTable.ArrayF32toI32 := @ScalarArrayF32toI32;
-  dispatchTable.ArrayI32toF32 := @ScalarArrayI32toF32;
+  dispatchTable.BatchInteger.ArrayF32toI32 := @ScalarArrayF32toI32;
+  dispatchTable.BatchInteger.ArrayI32toF32 := @ScalarArrayI32toF32;
   // === Batch Array Operations - Bitwise (I32) ===
-  dispatchTable.ArrayAndI32 := @ScalarArrayAndI32;
-  dispatchTable.ArrayOrI32 := @ScalarArrayOrI32;
-  dispatchTable.ArrayXorI32 := @ScalarArrayXorI32;
-  dispatchTable.ArrayShlI32 := @ScalarArrayShlI32;
-  dispatchTable.ArrayShrI32 := @ScalarArrayShrI32;
+  dispatchTable.BatchInteger.ArrayAndI32 := @ScalarArrayAndI32;
+  dispatchTable.BatchInteger.ArrayOrI32 := @ScalarArrayOrI32;
+  dispatchTable.BatchInteger.ArrayXorI32 := @ScalarArrayXorI32;
+  dispatchTable.BatchInteger.ArrayShlI32 := @ScalarArrayShlI32;
+  dispatchTable.BatchInteger.ArrayShrI32 := @ScalarArrayShrI32;
   // === Load/Store/Splat/Zero ===
   dispatchTable.ZeroF32x4 := @ScalarZeroF32x4;
   dispatchTable.ZeroF32x8 := @ScalarZeroF32x8;

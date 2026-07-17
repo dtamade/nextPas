@@ -171,15 +171,26 @@ end;
 4. 公共 `Array*F32` / `Array*F64` API 签名不变；仅内部访问路径变化
 5. 附带修复：`SSE2`/`AVX2` `ArrayLinearReLUF64` 语义对齐 `max(0, scale*x+bias)`；api-coverage Round/Rsqrt/Smoothstep 期望与 `System.Round` / 浮点契约对齐
 
-### Phase 3: 其余子记录嵌表 (下一步)
-1. Integer / Memory / CoreVectors / Mask / Utility 从 flat 迁入对应子记录
-2. NEON / RVV register 与 x86 路径对齐
-3. 确保所有测试通过并更新文档
+### Phase 3: BatchInteger 嵌表 — ✅ (2026-07-17)
+1. `TSimdDispatchTable` 中 flat 整数批量槽迁入 `BatchInteger: TSimdBatchIntegerOps`（类型 52 字段）
+2. Scalar baseline、SSE2/AVX2/AVX512 register fill 改为 `dispatchTable.BatchInteger.*`
+3. facade 公开 `Array*I*` / 转换 / 位运算入口、accessor、相关 benches 同步迁路径
+4. 公共 `ArrayAddI32` 等 API 签名不变；仅内部访问路径变化
+5. **非目标**：不补齐 baseline 历史未实现的 41/52 scalar 槽（与 HEAD fill 面一致；依赖 clone 链继承）
 
-### Phase 4: 清理和优化
+### Phase 4: Memory + Mask 嵌表 (下一步)
+1. flat `Mem*` / `Mask*` 槽迁入 `Memory: TSimdMemoryOps` / `Mask: TSimdMaskOps`
+2. 注意 Memory 命名映射：`MemSet` → `Memory.Fill`，`MemCopy` → `Memory.Copy` 等
+3. backend register + facade + tests 同步；验证通过
+
+### Phase 5: CoreVectors 嵌表 (后续)
+1. 定义 `TSimdCoreVectorOps`（types 尚无）并将 ~533 个向量 flat 槽迁入
+2. 机械路径迁移，零语义改动；强验证后单主题 commit
+
+### Phase 6: 清理和优化
 1. 移除过渡期 flat 残留与重复命名
-2. 优化子记录访问路径
-3. 更新基准测试
+2. NEON / RVV register 与 x86 路径对齐审计
+3. 更新基准测试与 roadmap 完成态
 
 ## 风险评估
 

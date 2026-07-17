@@ -1,6 +1,6 @@
 # nextpas.core.simd 路线图和计划任务
 
-> 最后更新: 2026-07-17 (Phase 19 Phase 2：BatchF32/BatchF64 嵌进真实 dispatch 表)
+> 最后更新: 2026-07-17 (Phase 19 Phase 3：BatchInteger 嵌进真实 dispatch 表)
 
 ## 当前状态
 
@@ -72,7 +72,7 @@
 | Phase 16: AVX2 F64 批量操作 SIMD | ✅ 100% | 17个AVX2 SIMD实现 (2x YMM展开, 8 doubles/iteration) |
 | Phase 17: SSE2 F64 超越函数 SIMD | ✅ 100% | 10个SSE2 SIMD实现 (Sin/Cos/Exp/Log/Log2/Log10/Ceil/Floor/Round/Trunc) |
 | Phase 18: AVX2 F64 超越函数 SIMD | ✅ 100% | 10个AVX2 SIMD实现 (Sin/Cos/Exp/Log/Log2/Log10/Ceil/Floor/Round/Trunc) |
-| Phase 19: Dispatch Table 模块化 | ✅ Phase 1–2 | Phase 1 子记录类型；Phase 2 已将 `BatchF32`/`BatchF64` 嵌进 `TSimdDispatchTable`，Scalar/SSE2/AVX2/AVX512 register + facade/accessor 同步迁路径 |
+| Phase 19: Dispatch Table 模块化 | ✅ Phase 1–3 | Phase 1 子记录类型；Phase 2 `BatchF32`/`BatchF64` 嵌表；Phase 3 `BatchInteger` 嵌表（Scalar/SSE2/AVX2/AVX512 register + facade/accessor/benches 同步迁路径） |
 
 ### 进行中 (⚠️)
 
@@ -96,7 +96,7 @@
 
 | 目标 | 优先级 | 说明 |
 |------|--------|------|
-| Phase 19 Phase 3–6 | P0 | Integer/Memory/CoreVectors/Mask 等其余子记录嵌进主表；NEON/RVV register 对齐 |
+| Phase 19 Phase 4–6 | P0 | Memory/Mask 嵌表 → CoreVectors 嵌表 → 残留清理与 NEON/RVV register 对齐审计 |
 | G16 RVV Phase 3 | P2 | 需真实 RISC-V 硬件证据 |
 | G17 Phase 4 | P2 | dispatch 开销硬件测量 |
 | 编译器集成 | P3 | nextpas 编译器 SIMD 内建支持（长期） |

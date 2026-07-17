@@ -755,21 +755,21 @@ begin
   Add('ArrayCosF32',           Pointer(aTbl.BatchF32.ArrayCos));
 
   // ── Batch Integer ──
-  Add('ArrayAddI32',           Pointer(aTbl.ArrayAddI32));
-  Add('ArraySubI32',           Pointer(aTbl.ArraySubI32));
-  Add('ArrayMulI16',           Pointer(aTbl.ArrayMulI16));
-  Add('ArrayPackSatI32toI16',  Pointer(aTbl.ArrayPackSatI32toI16));
+  Add('ArrayAddI32',           Pointer(aTbl.BatchInteger.ArrayAddI32));
+  Add('ArraySubI32',           Pointer(aTbl.BatchInteger.ArraySubI32));
+  Add('ArrayMulI16',           Pointer(aTbl.BatchInteger.ArrayMulI16));
+  Add('ArrayPackSatI32toI16',  Pointer(aTbl.BatchInteger.ArrayPackSatI32toI16));
 
   // ── Batch Type Conversion ──
-  Add('ArrayF32toI32',         Pointer(aTbl.ArrayF32toI32));
-  Add('ArrayI32toF32',         Pointer(aTbl.ArrayI32toF32));
+  Add('ArrayF32toI32',         Pointer(aTbl.BatchInteger.ArrayF32toI32));
+  Add('ArrayI32toF32',         Pointer(aTbl.BatchInteger.ArrayI32toF32));
 
   // ── Batch Bitwise ──
-  Add('ArrayAndI32',           Pointer(aTbl.ArrayAndI32));
-  Add('ArrayOrI32',            Pointer(aTbl.ArrayOrI32));
-  Add('ArrayXorI32',           Pointer(aTbl.ArrayXorI32));
-  Add('ArrayShlI32',           Pointer(aTbl.ArrayShlI32));
-  Add('ArrayShrI32',           Pointer(aTbl.ArrayShrI32));
+  Add('ArrayAndI32',           Pointer(aTbl.BatchInteger.ArrayAndI32));
+  Add('ArrayOrI32',            Pointer(aTbl.BatchInteger.ArrayOrI32));
+  Add('ArrayXorI32',           Pointer(aTbl.BatchInteger.ArrayXorI32));
+  Add('ArrayShlI32',           Pointer(aTbl.BatchInteger.ArrayShlI32));
+  Add('ArrayShrI32',           Pointer(aTbl.BatchInteger.ArrayShrI32));
 
   // ── Fused Batch ──
   Add('ArrayLinearF32',        Pointer(aTbl.BatchF32.ArrayLinear));

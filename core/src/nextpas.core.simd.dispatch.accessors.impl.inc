@@ -1321,260 +1321,260 @@ end;
 
 procedure TBatchIntegerAccessor.ArrayAddI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddI32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAddI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArraySubI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubI32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArraySubI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAndI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAndI32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAndI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayOrI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayOrI32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayOrI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayXorI32(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayXorI32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayXorI32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayShlI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer); inline;
 begin
-  FTable^.ArrayShlI32(aSrc, aDst, aCount, aShift);
+  FTable^.BatchInteger.ArrayShlI32(aSrc, aDst, aCount, aShift);
 end;
 
 procedure TBatchIntegerAccessor.ArrayShrI32(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer); inline;
 begin
-  FTable^.ArrayShrI32(aSrc, aDst, aCount, aShift);
+  FTable^.BatchInteger.ArrayShrI32(aSrc, aDst, aCount, aShift);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAddI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddI16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAddI16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArraySubI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubI16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArraySubI16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayMulI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMulI16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayMulI16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAndI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAndI16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAndI16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayOrI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayOrI16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayOrI16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayXorI16(aSrc1, aSrc2, aDst: PInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayXorI16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayXorI16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayPackSatI32toI16(aSrc: PInt32; aDst: PInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayPackSatI32toI16(aSrc, aDst, aCount);
+  FTable^.BatchInteger.ArrayPackSatI32toI16(aSrc, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAddI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddI8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAddI8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArraySubI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubI8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArraySubI8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayMulI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMulI8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayMulI8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAndI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAndI8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAndI8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayOrI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayOrI8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayOrI8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayXorI8(aSrc1, aSrc2, aDst: PInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayXorI8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayXorI8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAddU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddU32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAddU32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArraySubU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubU32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArraySubU32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayMulU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMulU32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayMulU32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAndU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAndU32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAndU32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayOrU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayOrU32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayOrU32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayXorU32(aSrc1, aSrc2, aDst: PUInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayXorU32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayXorU32(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAddU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddU16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAddU16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArraySubU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubU16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArraySubU16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayMulU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMulU16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayMulU16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAndU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAndU16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAndU16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayOrU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayOrU16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayOrU16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayXorU16(aSrc1, aSrc2, aDst: PUInt16; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayXorU16(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayXorU16(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAddU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddU8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAddU8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArraySubU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubU8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArraySubU8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayMulU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMulU8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayMulU8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAndU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAndU8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAndU8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayOrU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayOrU8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayOrU8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayXorU8(aSrc1, aSrc2, aDst: PUInt8; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayXorU8(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayXorU8(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAddI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddI64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAddI64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArraySubI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubI64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArraySubI64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayMulI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMulI64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayMulI64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAndI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAndI64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAndI64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayOrI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayOrI64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayOrI64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayXorI64(aSrc1, aSrc2, aDst: PInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayXorI64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayXorI64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAddU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddU64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAddU64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArraySubU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubU64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArraySubU64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayMulU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMulU64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayMulU64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayAndU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAndU64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayAndU64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayOrU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayOrU64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayOrU64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayXorU64(aSrc1, aSrc2, aDst: PUInt64; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayXorU64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchInteger.ArrayXorU64(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayF32toI32(aSrc: PSingle; aDst: PInt32; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayF32toI32(aSrc, aDst, aCount);
+  FTable^.BatchInteger.ArrayF32toI32(aSrc, aDst, aCount);
 end;
 
 procedure TBatchIntegerAccessor.ArrayI32toF32(aSrc: PInt32; aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayI32toF32(aSrc, aDst, aCount);
+  FTable^.BatchInteger.ArrayI32toF32(aSrc, aDst, aCount);
 end;

@@ -354,8 +354,8 @@ begin
   dispatchTable.BatchF64.ArrayFma := @AVX512ArrayFmaF64;
 
   // === Integer Batch (512-bit / 16 x Int32) ===
-  dispatchTable.ArrayAddI32 := @AVX512ArrayAddI32;
-  dispatchTable.ArraySubI32 := @AVX512ArraySubI32;
+  dispatchTable.BatchInteger.ArrayAddI32 := @AVX512ArrayAddI32;
+  dispatchTable.BatchInteger.ArraySubI32 := @AVX512ArraySubI32;
 
   // Register the backend
   RegisterBackend(sbAVX512, dispatchTable);

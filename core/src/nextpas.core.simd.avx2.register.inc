@@ -574,21 +574,21 @@ begin
   dispatchTable.BatchF64.ArrayTrunc := @AVX2ArrayTruncF64;
 
   // Integer batch
-  dispatchTable.ArrayAddI32 := @AVX2ArrayAddI32;
-  dispatchTable.ArraySubI32 := @AVX2ArraySubI32;
-  dispatchTable.ArrayMulI16 := @AVX2ArrayMulI16;
-  dispatchTable.ArrayPackSatI32toI16 := @AVX2ArrayPackSatI32toI16;
+  dispatchTable.BatchInteger.ArrayAddI32 := @AVX2ArrayAddI32;
+  dispatchTable.BatchInteger.ArraySubI32 := @AVX2ArraySubI32;
+  dispatchTable.BatchInteger.ArrayMulI16 := @AVX2ArrayMulI16;
+  dispatchTable.BatchInteger.ArrayPackSatI32toI16 := @AVX2ArrayPackSatI32toI16;
 
   // Type conversion
-  dispatchTable.ArrayF32toI32 := @AVX2ArrayF32toI32;
-  dispatchTable.ArrayI32toF32 := @AVX2ArrayI32toF32;
+  dispatchTable.BatchInteger.ArrayF32toI32 := @AVX2ArrayF32toI32;
+  dispatchTable.BatchInteger.ArrayI32toF32 := @AVX2ArrayI32toF32;
 
   // Bitwise batch
-  dispatchTable.ArrayAndI32 := @AVX2ArrayAndI32;
-  dispatchTable.ArrayOrI32 := @AVX2ArrayOrI32;
-  dispatchTable.ArrayXorI32 := @AVX2ArrayXorI32;
-  dispatchTable.ArrayShlI32 := @AVX2ArrayShlI32;
-  dispatchTable.ArrayShrI32 := @AVX2ArrayShrI32;
+  dispatchTable.BatchInteger.ArrayAndI32 := @AVX2ArrayAndI32;
+  dispatchTable.BatchInteger.ArrayOrI32 := @AVX2ArrayOrI32;
+  dispatchTable.BatchInteger.ArrayXorI32 := @AVX2ArrayXorI32;
+  dispatchTable.BatchInteger.ArrayShlI32 := @AVX2ArrayShlI32;
+  dispatchTable.BatchInteger.ArrayShrI32 := @AVX2ArrayShrI32;
 
   // Transcendental (SIMD polynomial approximation)
   dispatchTable.BatchF32.ArrayExp := @AVX2ArrayExpF32;

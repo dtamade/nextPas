@@ -157,7 +157,7 @@ end;
 
 procedure BenchI32SimdAdd;
 begin
-  g_Dispatch^.ArrayAddI32(@I32A[0], @I32B[0], @I32Dst[0], g_BenchCount);
+  g_Dispatch^.BatchInteger.ArrayAddI32(@I32A[0], @I32B[0], @I32Dst[0], g_BenchCount);
   g_ScalarI32Dummy := I32Dst[g_BenchCount - 1];
 end;
 

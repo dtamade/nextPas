@@ -216,11 +216,11 @@ begin
 
     // Test ArrayAddU32
     for warm := 0 to WARMUP - 1 do
-      g_Dispatch^.ArrayAddU32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
+      g_Dispatch^.BatchInteger.ArrayAddU32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
 
     t0 := GetNanoTime;
     for j := 0 to ITERS - 1 do
-      g_Dispatch^.ArrayAddU32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
+      g_Dispatch^.BatchInteger.ArrayAddU32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
     t1 := GetNanoTime;
 
     nsPerElem := (t1 - t0) / ITERS / SIZES[sizeIdx];
@@ -228,11 +228,11 @@ begin
 
     // Test ArrayMulU32
     for warm := 0 to WARMUP - 1 do
-      g_Dispatch^.ArrayMulU32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
+      g_Dispatch^.BatchInteger.ArrayMulU32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
 
     t0 := GetNanoTime;
     for j := 0 to ITERS - 1 do
-      g_Dispatch^.ArrayMulU32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
+      g_Dispatch^.BatchInteger.ArrayMulU32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
     t1 := GetNanoTime;
 
     nsPerElem := (t1 - t0) / ITERS / SIZES[sizeIdx];

@@ -665,26 +665,26 @@ begin
   dispatchTable.BatchF64.ArrayHypot := @SSE2ArrayHypotF64;
 
   // Integer batch
-  dispatchTable.ArrayAddI32 := @SSE2ArrayAddI32;
-  dispatchTable.ArraySubI32 := @SSE2ArraySubI32;
-  dispatchTable.ArrayMulI16 := @SSE2ArrayMulI16;
-  dispatchTable.ArrayAndI32 := @SSE2ArrayAndI32;
-  dispatchTable.ArrayOrI32 := @SSE2ArrayOrI32;
-  dispatchTable.ArrayXorI32 := @SSE2ArrayXorI32;
-  dispatchTable.ArrayShlI32 := @SSE2ArrayShlI32;
-  dispatchTable.ArrayShrI32 := @SSE2ArrayShrI32;
+  dispatchTable.BatchInteger.ArrayAddI32 := @SSE2ArrayAddI32;
+  dispatchTable.BatchInteger.ArraySubI32 := @SSE2ArraySubI32;
+  dispatchTable.BatchInteger.ArrayMulI16 := @SSE2ArrayMulI16;
+  dispatchTable.BatchInteger.ArrayAndI32 := @SSE2ArrayAndI32;
+  dispatchTable.BatchInteger.ArrayOrI32 := @SSE2ArrayOrI32;
+  dispatchTable.BatchInteger.ArrayXorI32 := @SSE2ArrayXorI32;
+  dispatchTable.BatchInteger.ArrayShlI32 := @SSE2ArrayShlI32;
+  dispatchTable.BatchInteger.ArrayShrI32 := @SSE2ArrayShrI32;
 
   // U32 batch
-  dispatchTable.ArrayAddU32 := @SSE2ArrayAddU32;
-  dispatchTable.ArraySubU32 := @SSE2ArraySubU32;
-  dispatchTable.ArrayMulU32 := @SSE2ArrayMulU32;
-  dispatchTable.ArrayAndU32 := @SSE2ArrayAndU32;
-  dispatchTable.ArrayOrU32 := @SSE2ArrayOrU32;
-  dispatchTable.ArrayXorU32 := @SSE2ArrayXorU32;
+  dispatchTable.BatchInteger.ArrayAddU32 := @SSE2ArrayAddU32;
+  dispatchTable.BatchInteger.ArraySubU32 := @SSE2ArraySubU32;
+  dispatchTable.BatchInteger.ArrayMulU32 := @SSE2ArrayMulU32;
+  dispatchTable.BatchInteger.ArrayAndU32 := @SSE2ArrayAndU32;
+  dispatchTable.BatchInteger.ArrayOrU32 := @SSE2ArrayOrU32;
+  dispatchTable.BatchInteger.ArrayXorU32 := @SSE2ArrayXorU32;
 
   // Type conversion
-  dispatchTable.ArrayF32toI32 := @SSE2ArrayF32toI32;
-  dispatchTable.ArrayI32toF32 := @SSE2ArrayI32toF32;
+  dispatchTable.BatchInteger.ArrayF32toI32 := @SSE2ArrayF32toI32;
+  dispatchTable.BatchInteger.ArrayI32toF32 := @SSE2ArrayI32toF32;
 
   // F64 reductions
   dispatchTable.BatchF64.ReduceSum := @SSE2ReduceSumF64;
@@ -699,7 +699,7 @@ begin
   dispatchTable.BatchF64.ReduceMax := @SSE2ReduceMaxF64;
 
   // PackSat + NR Refine
-  dispatchTable.ArrayPackSatI32toI16 := @SSE2ArrayPackSatI32toI16;
+  dispatchTable.BatchInteger.ArrayPackSatI32toI16 := @SSE2ArrayPackSatI32toI16;
   dispatchTable.BatchF32.ArrayRcpRefine := @SSE2ArrayRcpRefineF32;
   dispatchTable.BatchF32.ArrayRsqrtRefine := @SSE2ArrayRsqrtRefineF32;
 
