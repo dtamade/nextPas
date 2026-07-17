@@ -15,12 +15,15 @@ Not an FPC `BaseUnix` / `Windows` / `SysUtils` compatibility layer.
 | [ERROR-HANDLING.md](ERROR-HANDLING.md) | **Error authority**: live `PLATFORM_ERR_*` table (must match `error.pas`) |
 | [QUICKSTART.md](QUICKSTART.md) | Common usage patterns |
 | [API-REFERENCE.md](API-REFERENCE.md) | Public API catalog; error names must match ERROR-HANDLING (no phantoms) |
+| [residual-roadmap.md](residual-roadmap.md) | Long-term residual backlog (LT0–LT4); usability **maintenance @ 8.21** |
 
 ## Current truth (one line)
 
 Linux x86_64 is `focused-runtime` across facade modules. Windows has Wine smoke
 plus partial real-Windows runtime; macOS / FreeBSD / Android remain
 `source-contract` / `forced-compile`. See [goal-tree.md](goal-tree.md).
+Usability score is frozen at **8.21** (maintenance); residual work is scheduled in
+[residual-roadmap.md](residual-roadmap.md), not open-ended assessment waves.
 
 ## Focused verification
 
@@ -32,6 +35,7 @@ make focused FOCUS=core/tests/nextpas.core.platform.pty/test_platform_pty
 make focused FOCUS=core/tests/nextpas.core.platform.args/test_platform_args
 make focused FOCUS=core/tests/nextpas.core.platform.error/test_platform_error
 make focused FOCUS=core/tests/nextpas.core.platform/test_platform_return_semantics_contract
+make focused FOCUS=core/tests/nextpas.core.platform/test_platform_docs_live_patterns
 make focused FOCUS=core/tests/nextpas.core.platform/test_platform
 make focused FOCUS=core/tests/nextpas.core.platform/test_platform_goal_tree_contract
 

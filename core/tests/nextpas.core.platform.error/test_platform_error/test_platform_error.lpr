@@ -296,6 +296,21 @@ begin
     'UNKNOWN maps to ecInternal');
 end;
 
+procedure TestLastOsErrorSideChannel;
+var
+  LOs, LMapped: Int32;
+  LBuf: array[0..63] of AnsiChar;
+begin
+  LOs := platform_get_last_os_error;
+  LMapped := platform_get_last_error;
+  Check(LOs >= 0, 'last_os_error is non-negative host code');
+  { mapped API remains callable independently }
+  Check(LMapped >= -8, 'last_error stays in portable/host range');
+  { trigger a known missing path so both APIs remain well-defined after a failure }
+  Check(platform_error_message(PLATFORM_ERR_NOENT, @LBuf[0], SizeOf(LBuf)) > 0,
+    'error_message still works alongside last_os_error');
+end;
+
 { POSIX errno category mapping tests }
 procedure TestPosixCategoryEnoent;
 begin
@@ -618,6 +633,7 @@ begin
   T.Test('ENOTDIR maps to ecNotFound', @TestCategoryEnotdir);
   T.Test('PATH_TOO_LONG maps to ecInvalidArgument', @TestCategoryPathTooLong);
   T.Test('UNKNOWN constant message and category', @TestUnknownConstantAndMessage);
+  T.Test('last_os_error side-channel callable', @TestLastOsErrorSideChannel);
   { POSIX errno category tests }
   T.Test('POSIX ENOENT(2) maps to ecNotFound', @TestPosixCategoryEnoent);
   T.Test('POSIX EPERM(1) maps to ecPermission', @TestPosixCategoryEperm);

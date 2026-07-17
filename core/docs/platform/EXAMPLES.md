@@ -254,7 +254,7 @@ end.
 ## 9. 进程管道 IO 偏好（`platform.process`）
 
 新代码使用 `platform_process_*_ex`（error-code + out 字节数）。
-`platform_io_read` / `write` / `poll` 为 process.pipe **过渡** value/sentinel API，勿扩大使用面。
+`platform_io_*` 为过渡 dual-API：生产侧仅 `platform.process` 与 `process.pipe`（`poll`）白名单可引用；管道读写关闭走 `platform.files`。
 见 [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md) Dual API 表。
 
 ## 10. 反模式

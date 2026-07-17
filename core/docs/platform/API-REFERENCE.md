@@ -64,6 +64,8 @@
 |------|------|
 | `platform_error_message(ACode, ABuf, ABufSize): Int32` | 获取错误消息 |
 | `platform_error_category(ACode): TErrorCategory` | 获取错误分类 |
+| `platform_get_last_error: Int32` | 最近一次错误，映射为 `PLATFORM_ERR_*` |
+| `platform_get_last_os_error: Int32` | 最近一次宿主原生错误码（`errno` / `GetLastError`，未映射） |
 | `platform_fatal(AMsg)` | 致命错误退出 |
 | `platform_fatal_code(AMsg, ACode)` | 带错误码的致命退出（退出码按低 8 位截断） |
 

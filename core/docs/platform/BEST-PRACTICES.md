@@ -61,7 +61,7 @@ end;
 ```
 
 管道字节 I/O 使用 `platform_process_*_ex`（error-code + out 字节数）。
-`platform_io_read` / `write` / `poll` 为 process.pipe **过渡** value/sentinel API，勿扩大使用面。
+`platform_io_*` 为过渡 dual-API：生产侧仅 `platform.process` 与 `process.pipe`（`poll`）白名单；管道读写关闭走 `platform.files`（见 residual-roadmap F5）。
 
 ## 3. Socket（error-code + out socket）
 

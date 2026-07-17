@@ -44,8 +44,8 @@ There is **no** `PLATFORM_ERR_OK` constant; success is the integer `0`.
 - **`PLATFORM_FS_SHORT_READ_ERROR` / `PLATFORM_FS_SHORT_WRITE_ERROR`** are **aliases of `PLATFORM_ERR_IO` (5)**. They are not a second public error family and no longer use parallel magic values `-6`/`-5`.
 - **`platform_parse_*`**: failure is `PLATFORM_ERR_INVALID` (error-code tier), never bare `-1`.
 - **`platform_dl_error`**: length API; illegal buffer returns `PLATFORM_ERR_INVALID`, not bare `-1`.
-- **Observability (raw OS side-channel)**: **Won't do this wave** — no `platform_get_last_os_error` API. Portable code space does not carry raw `GetLastError` for unmapped Windows codes (`UNKNOWN`). Host-side debug logs remain the place for raw OS codes until a dedicated side-channel is designed.
-- **Diagnostics hooks** (trace/metrics sink): deferred (product layer, not L0 requirement this wave).
+- **Observability (raw OS side-channel)**: `platform_get_last_os_error` returns the **unmapped** host code (POSIX `errno`, Windows `GetLastError`). It does **not** replace `platform_get_last_error` (portable `PLATFORM_ERR_*`). Prefer portable codes for control flow; use raw OS only for diagnostics / logs. See [residual-roadmap.md](residual-roadmap.md) LT3.
+- **Diagnostics hooks** (trace/metrics sink): deferred — residual F10, not L0 this program.
 
 ## 2. Call pattern (error-code APIs)
 
@@ -73,7 +73,8 @@ end;
 Last host error (after a failed native call):
 
 ```pascal
-LErr := platform_get_last_error; { already mapped to PLATFORM_ERR_* when possible }
+LErr := platform_get_last_error; { mapped to PLATFORM_ERR_* when possible }
+LOs  := platform_get_last_os_error; { raw errno / GetLastError for diagnostics }
 ```
 
 ## 3. What not to do
