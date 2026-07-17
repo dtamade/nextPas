@@ -25,14 +25,6 @@ uses
   nextpas.core.test.expect,
   nextpas.core.test.mock;
 
-type
-  TMockAddFunc = function(A, B: Integer): Integer;
-
-function MockAdd(A, B: Integer): Integer;
-begin
-  Result := A + B;
-end;
-
 { === Benchmarks === }
 
 procedure BenchCheckIntEq(const ACtx: IBenchContext);
@@ -60,7 +52,7 @@ procedure BenchExpectInt(const ACtx: IBenchContext);
 var I: Integer;
 begin
   for I := 0 to 999 do
-    Expect(42).ToEqual(42);
+    ExpectInt(42).ToEqualInt(42);
 end;
 
 procedure BenchExpectStr(const ACtx: IBenchContext);
@@ -74,25 +66,25 @@ procedure BenchExpectChain(const ACtx: IBenchContext);
 var I: Integer;
 begin
   for I := 0 to 999 do
-    Expect(42).ToBeGreaterThan(0).ToBeLessThan(100);
+    ExpectInt(42).ToBeGreaterThan(0).ToBeLessThan(100);
 end;
 
 procedure BenchExpectNegated(const ACtx: IBenchContext);
 var I: Integer;
 begin
   for I := 0 to 999 do
-    Expect(42).Not_.ToEqual(99);
+    ExpectInt(42).Not_.ToEqualInt(99);
 end;
 
 procedure BenchMockSetup(const ACtx: IBenchContext);
 var I: Integer;
-    LMock: specialize TMock<TMockAddFunc>;
+    LMock: TMock;
 begin
-  LMock := specialize TMock<TMockAddFunc>.Create('Add');
+  LMock := TMock.Create;
   try
-    LMock.WhenCalled.Returns(100);
+    LMock.Setup('Add').ReturnsInt(100);
     for I := 0 to 999 do
-      LMock.Verify.CallCount;
+      LMock.Verify('Add').CalledExactly(0);
   finally
     LMock.Free;
   end;
@@ -102,7 +94,7 @@ procedure BenchExpectObjPool(const ACtx: IBenchContext);
 var I: Integer;
 begin
   for I := 0 to 999 do
-    Expect(42).ToEqual(42);
+    ExpectInt(42).ToEqualInt(42);
 end;
 
 { === Main === }
