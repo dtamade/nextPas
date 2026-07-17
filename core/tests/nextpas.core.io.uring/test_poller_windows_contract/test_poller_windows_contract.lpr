@@ -410,10 +410,12 @@ begin
     'function tasyncloop.asyncwritetimeout',
     'function tasyncloop.asyncrecvtimeout');
 
-  CheckBefore(LCloseBody, 'fpoller.close;', 'ftimers.clear;',
+  { Close order: poller first so abort callbacks can still re-enter timer/wake/pending
+    ownership paths. Clear was renamed to Close; FPendingLock became MPSC. }
+  CheckBefore(LCloseBody, 'fpoller.close;', 'ftimers.close;',
     'async loop close must keep timers alive while poller close aborts I/O');
-  CheckBefore(LCloseBody, 'fpoller.close;', 'platform_mutex_destroy(fpendinglock);',
-    'async loop close must keep pending callback lock alive while poller close aborts I/O');
+  CheckBefore(LCloseBody, 'fpoller.close;', 'fpending.free;',
+    'async loop close must keep pending queue alive while poller close aborts I/O');
   CheckBefore(LCloseBody, 'fpoller.close;', 'platform_poller_close(fwakepoller);',
     'async loop close must keep wake resources alive while abort callbacks can re-enter');
 
