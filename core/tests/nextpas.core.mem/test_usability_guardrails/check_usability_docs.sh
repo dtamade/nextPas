@@ -154,6 +154,9 @@ need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'GetGrowingIAllocator|Growing IAllocato
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'HEAP_DEBUG|NEXTPAS_MEM_HEAP_DEBUG' 'USABILITY-SCORE must cover HEAP_DEBUG opt-in'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'TryBlockSize|SC8' 'USABILITY-SCORE must cover TryBlockSize/SC8'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'SC9' 'USABILITY-SCORE must cover SC9 dual-track'
+need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'TryFreeMemOf|U1' 'USABILITY-SCORE must cover TryFreeMemOf/U1 residual'
+need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'CLOSED' 'USABILITY-SCORE must mark usability mainline CLOSED'
+need_grep "$MEM_DOCS/API-GUIDE.md" 'TryFreeMemOf\(nil' 'API-GUIDE must document TryFreeMemOf nil+owned'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'WithRequestArena|HttpRequestAllocatorOf|HttpFormatProcessMemStats' \
   'USABILITY-SCORE must cover product wires'
 need_grep "$MEM_DOCS/README.md" 'SC9' 'README must cite SC9 dual-track evidence'

@@ -298,6 +298,35 @@ begin
   Check(not TryFreeMemOf(nil, Pointer(PtrUInt(1)), 16), 'nil alloc + foreign → False');
 end;
 
+procedure TestTryFreeMemOfNilAllocatorOwned;
+{ U1: TryFreeMemOf(nil, owned) frees; foreign still False (fail-closed).
+  Under HEAP_DEBUG sized gate is off — still frees via process FreeMem. }
+var
+  LPtr: Pointer;
+  LSz: SizeUInt;
+  LBefore, LAfter: TMemStats;
+begin
+  RebuildDebug('');
+  LPtr := GetMem(48);
+  Check(LPtr <> nil, 'process alloc');
+  Check(TryBlockSize(LPtr, LSz), 'owned size-class');
+  GetMemStats(LBefore);
+  Check(TryFreeMemOf(nil, LPtr, LSz), 'nil alloc + owned → free True');
+  GetMemStats(LAfter);
+  Check(LAfter.LiveBytes <= LBefore.LiveBytes, 'live_bytes not increased after free');
+  Check(not TryFreeMemOf(nil, Pointer(PtrUInt(1)), 16), 'foreign still False');
+
+  { HEAP_DEBUG: FreeMemOfAllowsSizedHeapFree=False; process FreeMem still tracks. }
+  RebuildDebug('');
+  SetHeapDebugEnv('1');
+  ResetDebugWrapForTests;
+  Check(IsMemHeapDebugEnabled, 'HEAP_DEBUG on');
+  LPtr := GetMem(32);
+  Check(LPtr <> nil, 'process alloc under HEAP_DEBUG');
+  Check(TryFreeMemOf(nil, LPtr, 32), 'nil alloc frees under HEAP_DEBUG');
+  RebuildDebug('');
+end;
+
 procedure TestFreeMemOfUnderPluginDebugTracksFree;
 { FreeMemOf must not bypass tracking Free when NEXTPAS_MEM_DEBUG is on
   (HEAP_DEBUG still off). Sized DefaultHeap free would leave ActiveAllocCount stale. }
@@ -784,6 +813,7 @@ begin
   T.Test('process sized FreeMem/ReallocMem', @TestProcessSizedFreePreferred);
   T.Test('process TryBlockSize facade', @TestProcessTryBlockSize);
   T.Test('FreeMemOf sized same-heap', @TestFreeMemOfSizedSameHeap);
+  T.Test('TryFreeMemOf nil allocator owned', @TestTryFreeMemOfNilAllocatorOwned);
   T.Test('FreeMemOf under plugin DEBUG tracks free', @TestFreeMemOfUnderPluginDebugTracksFree);
   T.Test('ReallocMemOf sized same-heap', @TestReallocMemOfSizedSameHeap);
   T.Test('ReallocMemOf under plugin DEBUG tracks', @TestReallocMemOfUnderPluginDebugTracks);
