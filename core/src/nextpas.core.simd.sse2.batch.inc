@@ -2283,6 +2283,759 @@ begin
 end;
 
 // ============================================================================
+// SSE2 F64 Extended Batch Array Operations
+// 策略: 2x XMM 展开 (每轮 4 double = 32 bytes), 标量尾部
+// ============================================================================
+
+procedure SSE2ArrayAxpyF64(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pX, pY, pD: PDouble;
+  LAlpha: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pX := aX; pY := aY; pD := aDst; LAlpha := aAlpha; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pX
+      mov    rdx, pY
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      movlpd xmm7, [LAlpha]
+      pshufd xmm7, xmm7, $44
+
+      movupd xmm0, [rax + r8]
+      mulpd  xmm0, xmm7
+      addpd  xmm0, [rdx + r8]
+      movupd [rcx + r8], xmm0
+
+      movupd xmm1, [rax + r8 + 16]
+      mulpd  xmm1, xmm7
+      addpd  xmm1, [rdx + r8 + 16]
+      movupd [rcx + r8 + 16], xmm1
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := LAlpha * pX[i] + pY[i];
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayRcpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      mov    r9, $3FF0000000000000
+      movq   xmm7, r9
+      pshufd xmm7, xmm7, $44
+
+      movupd xmm0, [rax + r8]
+      divpd  xmm7, xmm0
+      movupd [rcx + r8], xmm7
+
+      mov    r9, $3FF0000000000000
+      movq   xmm7, r9
+      pshufd xmm7, xmm7, $44
+      movupd xmm1, [rax + r8 + 16]
+      divpd  xmm7, xmm1
+      movupd [rcx + r8 + 16], xmm7
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := 1.0 / pS[i];
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayRsqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      mov    r9, $3FF0000000000000
+      movq   xmm7, r9
+      pshufd xmm7, xmm7, $44
+
+      movupd xmm0, [rax + r8]
+      sqrtpd xmm0, xmm0
+      divpd  xmm7, xmm0
+      movupd [rcx + r8], xmm7
+
+      mov    r9, $3FF0000000000000
+      movq   xmm7, r9
+      pshufd xmm7, xmm7, $44
+      movupd xmm1, [rax + r8 + 16]
+      sqrtpd xmm1, xmm1
+      divpd  xmm7, xmm1
+      movupd [rcx + r8 + 16], xmm7
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := 1.0 / Sqrt(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayTanF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Sin(pS[i]) / Cos(pS[i]);
+  {$POP}
+end;
+
+procedure SSE2ArraySignF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+  begin
+    if pS[i] > 0 then pD[i] := 1.0
+    else if pS[i] < 0 then pD[i] := -1.0
+    else pD[i] := 0.0;
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayFractF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := pS[i] - Int(pS[i]);
+  {$POP}
+end;
+
+procedure SSE2ArrayModF64(aSrc, aDst: PDouble; aCount: SizeUInt; aDivisor: Double);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := pS[i] - aDivisor * Int(pS[i] / aDivisor);
+  {$POP}
+end;
+
+procedure SSE2ArrayPowF64(aSrc, aDst: PDouble; aCount: SizeUInt; aExponent: Double);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := SimdPowerF64(pS[i], aExponent);
+  {$POP}
+end;
+
+procedure SSE2ArrayLerpF64(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double);
+var
+  i: SizeUInt;
+  pS1, pS2, pD: PDouble;
+  LT: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aStart; pS2 := aEnd; pD := aDst; LT := aT; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pS1
+      mov    rdx, pS2
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      movlpd xmm7, [LT]
+      pshufd xmm7, xmm7, $44
+
+      movupd xmm0, [rdx + r8]
+      subpd  xmm0, [rax + r8]
+      mulpd  xmm0, xmm7
+      addpd  xmm0, [rax + r8]
+      movupd [rcx + r8], xmm0
+
+      movupd xmm1, [rdx + r8 + 16]
+      subpd  xmm1, [rax + r8 + 16]
+      mulpd  xmm1, xmm7
+      addpd  xmm1, [rax + r8 + 16]
+      movupd [rcx + r8 + 16], xmm1
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := pS1[i] + LT * (pS2[i] - pS1[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      xorpd  xmm7, xmm7
+
+      movupd xmm0, [rax + r8]
+      maxpd  xmm0, xmm7
+      movupd [rcx + r8], xmm0
+
+      movupd xmm1, [rax + r8 + 16]
+      maxpd  xmm1, xmm7
+      movupd [rcx + r8 + 16], xmm1
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    if pS[i] > 0 then pD[i] := pS[i] else pD[i] := 0.0;
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayAbsDiffF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS1, pS2, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pS1
+      mov    rdx, pS2
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      mov    r9, $7FFFFFFFFFFFFFFF
+      movq   xmm7, r9
+      pshufd xmm7, xmm7, $44
+
+      movupd xmm0, [rax + r8]
+      subpd  xmm0, [rdx + r8]
+      andpd  xmm0, xmm7
+      movupd [rcx + r8], xmm0
+
+      movupd xmm1, [rax + r8 + 16]
+      subpd  xmm1, [rdx + r8 + 16]
+      andpd  xmm1, xmm7
+      movupd [rcx + r8 + 16], xmm1
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Abs(pS1[i] - pS2[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayNormF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMean, aInvStd: Double);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+  LMean, LInvStd: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; LMean := aMean; LInvStd := aInvStd; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      movlpd xmm6, [LMean]
+      pshufd xmm6, xmm6, $44
+      movlpd xmm7, [LInvStd]
+      pshufd xmm7, xmm7, $44
+
+      movupd xmm0, [rax + r8]
+      subpd  xmm0, xmm6
+      mulpd  xmm0, xmm7
+      movupd [rcx + r8], xmm0
+
+      movupd xmm1, [rax + r8 + 16]
+      subpd  xmm1, xmm6
+      mulpd  xmm1, xmm7
+      movupd [rcx + r8 + 16], xmm1
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := (pS[i] - LMean) * LInvStd;
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayLinearReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+  LScale, LBias, LVal: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; LScale := aScale; LBias := aBias; i := 0;
+
+  // max(0, scale * x + bias) — same contract as Scalar / F32 max path
+  // SSE2 has no maxpd; emulate with cmple + and/andn/or
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      movlpd xmm6, [LScale]
+      pshufd xmm6, xmm6, $44
+      movlpd xmm7, [LBias]
+      pshufd xmm7, xmm7, $44
+      xorpd  xmm5, xmm5
+
+      movupd xmm0, [rax + r8]
+      movapd xmm2, xmm0
+      mulpd  xmm2, xmm6
+      addpd  xmm2, xmm7
+      movapd xmm0, xmm2
+      cmplepd xmm0, xmm5      // mask where linear <= 0
+      andnpd xmm0, xmm2      // zero where linear <= 0, keep positive
+      movupd [rcx + r8], xmm0
+
+      movupd xmm1, [rax + r8 + 16]
+      movapd xmm3, xmm1
+      mulpd  xmm3, xmm6
+      addpd  xmm3, xmm7
+      movapd xmm1, xmm3
+      cmplepd xmm1, xmm5
+      andnpd xmm1, xmm3
+      movupd [rcx + r8 + 16], xmm1
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    LVal := LScale * pS[i] + LBias;
+    if LVal < 0 then LVal := 0;
+    pD[i] := LVal;
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayStepF64(aEdge, aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pE, pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pE := aEdge; pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pE
+      mov    rdx, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+
+      movupd xmm0, [rdx + r8]
+      cmpltpd xmm0, [rax + r8]
+      movupd [rcx + r8], xmm0
+
+      movupd xmm1, [rdx + r8 + 16]
+      cmpltpd xmm1, [rax + r8 + 16]
+      movupd [rcx + r8 + 16], xmm1
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    if pS[i] < pE[i] then pD[i] := 0.0 else pD[i] := 1.0;
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArraySmoothstepF64(aEdge0, aEdge1, aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pE0, pE1, pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pE0 := aEdge0; pE1 := aEdge1; pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+  begin
+    if pS[i] <= pE0[i] then pD[i] := 0.0
+    else if pS[i] >= pE1[i] then pD[i] := 1.0
+    else
+    begin
+      pD[i] := (pS[i] - pE0[i]) / (pE1[i] - pE0[i]);
+      pD[i] := pD[i] * pD[i] * (3.0 - 2.0 * pD[i]);
+    end;
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayAtan2F64(aY, aX, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pY, pX, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pY := aY; pX := aX; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := ArcTan2(pY[i], pX[i]);
+  {$POP}
+end;
+
+procedure SSE2ArrayHypotF64(aX, aY, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pX, pY, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pX := aX; pY := aY; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    asm
+      mov    rax, pX
+      mov    rdx, pY
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+
+      movupd xmm0, [rax + r8]
+      mulpd  xmm0, xmm0
+      movupd xmm2, [rdx + r8]
+      mulpd  xmm2, xmm2
+      addpd  xmm0, xmm2
+      sqrtpd xmm0, xmm0
+      movupd [rcx + r8], xmm0
+
+      movupd xmm1, [rax + r8 + 16]
+      mulpd  xmm1, xmm1
+      movupd xmm3, [rdx + r8 + 16]
+      mulpd  xmm3, xmm3
+      addpd  xmm1, xmm3
+      sqrtpd xmm1, xmm1
+      movupd [rcx + r8 + 16], xmm1
+    end;
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Sqrt(pX[i] * pX[i] + pY[i] * pY[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+// ============================================================================
+// SSE2 F64 Transcendental Batch Array Operations
+// 策略: 标量回退 + 循环展开 (4x unroll)
+// ============================================================================
+
+procedure SSE2ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Sin(pS[i]);
+    pD[i+1] := Sin(pS[i+1]);
+    pD[i+2] := Sin(pS[i+2]);
+    pD[i+3] := Sin(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Sin(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Cos(pS[i]);
+    pD[i+1] := Cos(pS[i+1]);
+    pD[i+2] := Cos(pS[i+2]);
+    pD[i+3] := Cos(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Cos(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Exp(pS[i]);
+    pD[i+1] := Exp(pS[i+1]);
+    pD[i+2] := Exp(pS[i+2]);
+    pD[i+3] := Exp(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Exp(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Ln(pS[i]);
+    pD[i+1] := Ln(pS[i+1]);
+    pD[i+2] := Ln(pS[i+2]);
+    pD[i+3] := Ln(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Ln(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayLog2F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Log2(pS[i]);
+    pD[i+1] := Log2(pS[i+1]);
+    pD[i+2] := Log2(pS[i+2]);
+    pD[i+3] := Log2(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Log2(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayLog10F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 4 <= aCount do
+  begin
+    pD[i] := Log10(pS[i]);
+    pD[i+1] := Log10(pS[i+1]);
+    pD[i+2] := Log10(pS[i+2]);
+    pD[i+3] := Log10(pS[i+3]);
+    Inc(i, 4);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Log10(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure SSE2ArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Math.Ceil(pS[i]);
+  {$POP}
+end;
+
+procedure SSE2ArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Math.Floor(pS[i]);
+  {$POP}
+end;
+
+procedure SSE2ArrayRoundF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Double(System.Round(pS[i]));
+  {$POP}
+end;
+
+procedure SSE2ArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Trunc(pS[i]);
+  {$POP}
+end;
+
+// ============================================================================
 // SSE2 Integer Batch Array Operations
 // paddd (4x I32), psubd, pmullw (8x I16), pand, por, pxor, pslld, psrad
 // ============================================================================
@@ -3183,7 +3936,7 @@ begin
     test r8, r8
     jz @done
   @scalar_loop:
-    cvtsi2ss xmm0, [rax]
+    cvtsi2ss xmm0, dword ptr [rax]
     movss [rcx], xmm0
     add rax, 4
     add rcx, 4
@@ -5123,7 +5876,7 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movq xmm7, [LScalar]
+    movlpd xmm7, [LScalar]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
@@ -5161,7 +5914,7 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movq xmm7, [LScalar]
+    movlpd xmm7, [LScalar]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
@@ -5199,9 +5952,9 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movq xmm6, [LMin]
+    movlpd xmm6, [LMin]
     unpcklpd xmm6, xmm6
-    movq xmm7, [LMax]
+    movlpd xmm7, [LMax]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
@@ -5241,9 +5994,9 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movq xmm6, [LScale]
+    movlpd xmm6, [LScale]
     unpcklpd xmm6, xmm6
-    movq xmm7, [LBias]
+    movlpd xmm7, [LBias]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2

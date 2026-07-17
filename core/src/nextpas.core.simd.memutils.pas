@@ -299,8 +299,11 @@ begin
   RequireValidAlignment(alignment);
   {$PUSH}{$WARN 4055 OFF}
   addr := NativeUInt(ptr);
+  { mem.base.AlignUp(0) uses (not 0)+1 under {$Q+} and overflows; nil stays nil. }
+  if addr = 0 then
+    Exit(nil);
   aligned := nextpas.core.mem.base.AlignUp(SizeUInt(addr), SizeUInt(alignment));
-  if (addr > 0) and (aligned = 0) then
+  if aligned = 0 then
     raise EOutOfMemory.CreateFmt(
       'Aligned pointer overflow: addr=%d, alignment=%d', [addr, alignment]);
   Result := Pointer(aligned);
@@ -310,9 +313,12 @@ end;
 function AlignUpSize(size: NativeUInt; alignment: NativeUInt): NativeUInt;
 begin
   RequireValidAlignment(alignment);
+  { size=0 is valid and must not call mem.base.AlignUp(0) under {$Q+}. }
+  if size = 0 then
+    Exit(0);
   { Reuse mem.base.AlignUp (overflow → 0); keep SIMD overflow raise contract. }
   Result := nextpas.core.mem.base.AlignUp(SizeUInt(size), SizeUInt(alignment));
-  if (size > 0) and (Result = 0) then
+  if Result = 0 then
     raise EOutOfMemory.CreateFmt(
       'Aligned size overflow: size=%d, alignment=%d', [size, alignment]);
 end;
@@ -665,7 +671,8 @@ begin
   if count > 0 then
   begin
     // ✅ Safety check: prevent integer overflow in size calculation
-    maxCount := NativeUInt(High(NativeUInt)) div NativeUInt(SizeOf(T));
+    { Avoid High(NativeUInt) under {$Q+} — FPC treats it as signed -1. }
+    maxCount := NativeUInt(not NativeUInt(0)) div NativeUInt(SizeOf(T));
     if count > maxCount then
       raise EOutOfMemory.CreateFmt('Allocation size overflow: count=%d, elemSize=%d', [count, SizeOf(T)]);
     Result.FData := AlignedAlloc(count * SizeOf(T), alignment);

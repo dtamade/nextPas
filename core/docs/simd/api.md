@@ -1,6 +1,6 @@
 # nextpas.core.simd API 参考
 
-> 最后更新: 2026-07-06
+> 最后更新: 2026-07-11
 
 ## 概述
 
@@ -220,6 +220,51 @@ procedure ArrayAddF64(A, B, C: PDouble; Count: SizeUInt);
 procedure ArraySubF64(A, B, C: PDouble; Count: SizeUInt);
 procedure ArrayMulF64(A, B, C: PDouble; Count: SizeUInt);
 procedure ArrayDivF64(A, B, C: PDouble; Count: SizeUInt);
+procedure ArrayAbsF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayNegF64(A, B: PDouble; Count: SizeUInt);
+procedure ArraySqrtF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayClampF64(A, B: PDouble; Count: SizeUInt; Min, Max: Double);
+procedure ArrayFmaF64(A, B, C, D: PDouble; Count: SizeUInt);
+procedure ArrayMinF64(A, B, C: PDouble; Count: SizeUInt);
+procedure ArrayMaxF64(A, B, C: PDouble; Count: SizeUInt);
+```
+
+### F64 超越函数
+
+```pascal
+procedure ArraySinF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayCosF64(A, B: PDouble; Count: SizeUInt);
+procedure ArraySinCosF64(A, SinB, CosB: PDouble; Count: SizeUInt);
+procedure ArrayExpF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayLogF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayLog2F64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayLog10F64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayCeilF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayFloorF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayRoundF64(A, B: PDouble; Count: SizeUInt);
+procedure ArrayTruncF64(A, B: PDouble; Count: SizeUInt);
+```
+
+### F64 扩展批量操作
+
+```pascal
+procedure ArrayAxpyF64(Alpha: Double; X, Y, Dst: PDouble; Count: SizeUInt);
+procedure ArrayRcpF64(Src, Dst: PDouble; Count: SizeUInt);
+procedure ArrayRsqrtF64(Src, Dst: PDouble; Count: SizeUInt);
+procedure ArrayTanF64(Src, Dst: PDouble; Count: SizeUInt);
+procedure ArraySignF64(Src, Dst: PDouble; Count: SizeUInt);
+procedure ArrayFractF64(Src, Dst: PDouble; Count: SizeUInt);
+procedure ArrayModF64(Src, Dst: PDouble; Count: SizeUInt; Divisor: Double);
+procedure ArrayPowF64(Src, Dst: PDouble; Count: SizeUInt; Exponent: Double);
+procedure ArrayLerpF64(Start, End_, Dst: PDouble; Count: SizeUInt; T: Double);
+procedure ArrayReLUF64(Src, Dst: PDouble; Count: SizeUInt);
+procedure ArrayAbsDiffF64(Src1, Src2, Dst: PDouble; Count: SizeUInt);
+procedure ArrayNormF64(Src, Dst: PDouble; Count: SizeUInt; Mean, InvStd: Double);
+procedure ArrayLinearReLUF64(Src, Dst: PDouble; Count: SizeUInt; Scale, Bias: Double);
+procedure ArrayStepF64(Edge, Src, Dst: PDouble; Count: SizeUInt);
+procedure ArraySmoothstepF64(Edge0, Edge1, Src, Dst: PDouble; Count: SizeUInt);
+procedure ArrayAtan2F64(Y, X, Dst: PDouble; Count: SizeUInt);
+procedure ArrayHypotF64(X, Y, Dst: PDouble; Count: SizeUInt);
 ```
 
 ### I32 数组操作

@@ -40,7 +40,7 @@ unit nextpas.core.simd.publicabi.testcase;
 interface
 
 uses
-  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.test,
+  nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.test,
   nextpas.core.simd,
   nextpas.core.simd.fixturehelpers,
   nextpas.core.simd.testcase,
@@ -1259,21 +1259,21 @@ begin
     Exit(nil);
 
   case aSlotIndex of
-    0: Result := Pointer(aDispatch^.MemEqual);
-    1: Result := Pointer(aDispatch^.MemFindByte);
-    2: Result := Pointer(aDispatch^.MemDiffRange);
-    3: Result := Pointer(aDispatch^.SumBytes);
-    4: Result := Pointer(aDispatch^.CountByte);
-    5: Result := Pointer(aDispatch^.BitsetPopCount);
-    6: Result := Pointer(aDispatch^.Utf8Validate);
-    7: Result := Pointer(aDispatch^.AsciiIEqual);
-    8: Result := Pointer(aDispatch^.BytesIndexOf);
-    9: Result := Pointer(aDispatch^.MemCopy);
-    10: Result := Pointer(aDispatch^.MemSet);
-    11: Result := Pointer(aDispatch^.ToLowerAscii);
-    12: Result := Pointer(aDispatch^.ToUpperAscii);
-    13: Result := Pointer(aDispatch^.MemReverse);
-    14: Result := Pointer(aDispatch^.MinMaxBytes);
+    0: Result := Pointer(aDispatch^.Memory.Equal);
+    1: Result := Pointer(aDispatch^.Memory.FindByte);
+    2: Result := Pointer(aDispatch^.Memory.DiffRange);
+    3: Result := Pointer(aDispatch^.Memory.SumBytes);
+    4: Result := Pointer(aDispatch^.Memory.CountByte);
+    5: Result := Pointer(aDispatch^.Memory.BitsetPopCount);
+    6: Result := Pointer(aDispatch^.Memory.Utf8Validate);
+    7: Result := Pointer(aDispatch^.Memory.AsciiIEqual);
+    8: Result := Pointer(aDispatch^.Memory.BytesIndexOf);
+    9: Result := Pointer(aDispatch^.Memory.Copy);
+    10: Result := Pointer(aDispatch^.Memory.Fill);
+    11: Result := Pointer(aDispatch^.Memory.ToLowerAscii);
+    12: Result := Pointer(aDispatch^.Memory.ToUpperAscii);
+    13: Result := Pointer(aDispatch^.Memory.Reverse);
+    14: Result := Pointer(aDispatch^.Memory.MinMaxBytes);
   else
     Result := nil;
   end;
@@ -1627,13 +1627,13 @@ begin
   LOriginalTableRestored := False;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.MemEqual := @PublicAbiSyntheticMemEqualAlwaysTrue;
+  LModifiedTable.Memory.Equal := @PublicAbiSyntheticMemEqualAlwaysTrue;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckTrue(LApiBefore^.MemEqual(@LBufferA[0], @LBufferB[0], SizeUInt(Length(LBufferA))), 'Cached cdecl entry point should observe the latest rebound MemEqual=true slot');
 
     LModifiedTable := LOriginalTable;
-    LModifiedTable.MemEqual := @PublicAbiSyntheticMemEqualAlwaysFalse;
+    LModifiedTable.Memory.Equal := @PublicAbiSyntheticMemEqualAlwaysFalse;
     RegisterBackend(LBackend, LModifiedTable);
     try
       LApiAfter := GetSimdPublicApi;
@@ -1982,11 +1982,11 @@ begin
       Continue;
 
     LHasNonScalarShuffleSlots := False;
-    ObserveRepresentativeSlot(Pointer(LScalarTable.SelectF32x4), Pointer(LBackendTable.SelectF32x4));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.InsertF32x4), Pointer(LBackendTable.InsertF32x4));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.ExtractF32x4), Pointer(LBackendTable.ExtractF32x4));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.SelectF32x8), Pointer(LBackendTable.SelectF32x8));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.SelectF64x4), Pointer(LBackendTable.SelectF64x4));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.SelectF32x4), Pointer(LBackendTable.CoreVectors.SelectF32x4));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.InsertF32x4), Pointer(LBackendTable.CoreVectors.InsertF32x4));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.ExtractF32x4), Pointer(LBackendTable.CoreVectors.ExtractF32x4));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.SelectF32x8), Pointer(LBackendTable.CoreVectors.SelectF32x8));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.SelectF64x4), Pointer(LBackendTable.CoreVectors.SelectF64x4));
 
     if not LHasNonScalarShuffleSlots then
       Continue;
@@ -2036,11 +2036,11 @@ begin
       Continue;
 
     LHasNonScalarMaskedSlots := False;
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask2All), Pointer(LBackendTable.Mask2All));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask4PopCount), Pointer(LBackendTable.Mask4PopCount));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask8All), Pointer(LBackendTable.Mask8All));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask8PopCount), Pointer(LBackendTable.Mask8PopCount));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask16FirstSet), Pointer(LBackendTable.Mask16FirstSet));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask2All), Pointer(LBackendTable.Mask.Mask2All));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask4PopCount), Pointer(LBackendTable.Mask.Mask4PopCount));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask8All), Pointer(LBackendTable.Mask.Mask8All));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask8PopCount), Pointer(LBackendTable.Mask.Mask8PopCount));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask16FirstSet), Pointer(LBackendTable.Mask.Mask16FirstSet));
 
     if not LHasNonScalarMaskedSlots then
       Continue;
@@ -2066,11 +2066,11 @@ begin
   if not TryGetSimdBackendPodInfo(sbAVX2, LInfo) then
     Exit;
 
-  if (Pointer(LAVX2Table.SelectF32x4) = Pointer(LScalarTable.SelectF32x4)) and
-     (Pointer(LAVX2Table.InsertF32x4) = Pointer(LScalarTable.InsertF32x4)) and
-     (Pointer(LAVX2Table.ExtractF32x4) = Pointer(LScalarTable.ExtractF32x4)) and
-     (Pointer(LAVX2Table.SelectF32x8) = Pointer(LScalarTable.SelectF32x8)) and
-     (Pointer(LAVX2Table.SelectF64x4) = Pointer(LScalarTable.SelectF64x4)) then
+  if (Pointer(LAVX2Table.CoreVectors.SelectF32x4) = Pointer(LScalarTable.CoreVectors.SelectF32x4)) and
+     (Pointer(LAVX2Table.CoreVectors.InsertF32x4) = Pointer(LScalarTable.CoreVectors.InsertF32x4)) and
+     (Pointer(LAVX2Table.CoreVectors.ExtractF32x4) = Pointer(LScalarTable.CoreVectors.ExtractF32x4)) and
+     (Pointer(LAVX2Table.CoreVectors.SelectF32x8) = Pointer(LScalarTable.CoreVectors.SelectF32x8)) and
+     (Pointer(LAVX2Table.CoreVectors.SelectF64x4) = Pointer(LScalarTable.CoreVectors.SelectF64x4)) then
     Exit;
 
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scShuffle))) <> 0, 'Public ABI CapabilityBits should expose AVX2 scShuffle when representative shuffle slots are non-scalar');
@@ -2109,9 +2109,9 @@ begin
     if not TryGetSimdBackendPodInfo(LBackend, LInfo) then
       Continue;
 
-    CheckEqual(PtrUInt(LScalarTable.SelectF32x4), PtrUInt(LBackendTable.SelectF32x4), 'Representative SelectF32x4 slot should be scalar when vector asm is disabled for backend=' + PublicAbiBackendName(LBackend));
-    CheckEqual(PtrUInt(LScalarTable.InsertF32x4), PtrUInt(LBackendTable.InsertF32x4), 'Representative InsertF32x4 slot should be scalar when vector asm is disabled for backend=' + PublicAbiBackendName(LBackend));
-    CheckEqual(PtrUInt(LScalarTable.ExtractF32x4), PtrUInt(LBackendTable.ExtractF32x4), 'Representative ExtractF32x4 slot should be scalar when vector asm is disabled for backend=' + PublicAbiBackendName(LBackend));
+    CheckEqual(PtrUInt(LScalarTable.CoreVectors.SelectF32x4), PtrUInt(LBackendTable.CoreVectors.SelectF32x4), 'Representative SelectF32x4 slot should be scalar when vector asm is disabled for backend=' + PublicAbiBackendName(LBackend));
+    CheckEqual(PtrUInt(LScalarTable.CoreVectors.InsertF32x4), PtrUInt(LBackendTable.CoreVectors.InsertF32x4), 'Representative InsertF32x4 slot should be scalar when vector asm is disabled for backend=' + PublicAbiBackendName(LBackend));
+    CheckEqual(PtrUInt(LScalarTable.CoreVectors.ExtractF32x4), PtrUInt(LBackendTable.CoreVectors.ExtractF32x4), 'Representative ExtractF32x4 slot should be scalar when vector asm is disabled for backend=' + PublicAbiBackendName(LBackend));
 
     CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scShuffle))) = 0, 'Public ABI CapabilityBits should clear scShuffle when representative shuffle slots are scalar for backend=' + PublicAbiBackendName(LBackend));
   end;
@@ -2158,11 +2158,11 @@ begin
       Continue;
 
     LHasNonScalarAlwaysOnIntegerSlots := False;
-    ObserveRepresentativeSlot(Pointer(LScalarTable.AddI16x8), Pointer(LBackendTable.AddI16x8));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.AndI16x8), Pointer(LBackendTable.AndI16x8));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.CmpEqI16x8), Pointer(LBackendTable.CmpEqI16x8));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.AddU8x16), Pointer(LBackendTable.AddU8x16));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.MaxU8x16), Pointer(LBackendTable.MaxU8x16));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.AddI16x8), Pointer(LBackendTable.CoreVectors.AddI16x8));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.AndI16x8), Pointer(LBackendTable.CoreVectors.AndI16x8));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.CmpEqI16x8), Pointer(LBackendTable.CoreVectors.CmpEqI16x8));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.AddU8x16), Pointer(LBackendTable.CoreVectors.AddU8x16));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.CoreVectors.MaxU8x16), Pointer(LBackendTable.CoreVectors.MaxU8x16));
 
     if not LHasNonScalarAlwaysOnIntegerSlots then
       Continue;
@@ -2188,11 +2188,11 @@ begin
   if not TryGetSimdBackendPodInfo(sbAVX512, LInfo) then
     Exit;
 
-  CheckTrue(Assigned(LAVX512Table.FmaF32x16), 'AVX512 FmaF32x16 should be assigned');
-  CheckTrue(Assigned(LAVX512Table.FmaF64x8), 'AVX512 FmaF64x8 should be assigned');
+  CheckTrue(Assigned(LAVX512Table.CoreVectors.FmaF32x16), 'AVX512 FmaF32x16 should be assigned');
+  CheckTrue(Assigned(LAVX512Table.CoreVectors.FmaF64x8), 'AVX512 FmaF64x8 should be assigned');
 
-  if (Pointer(LAVX512Table.FmaF32x16) = Pointer(LScalarTable.FmaF32x16)) and
-     (Pointer(LAVX512Table.FmaF64x8) = Pointer(LScalarTable.FmaF64x8)) then
+  if (Pointer(LAVX512Table.CoreVectors.FmaF32x16) = Pointer(LScalarTable.CoreVectors.FmaF32x16)) and
+     (Pointer(LAVX512Table.CoreVectors.FmaF64x8) = Pointer(LScalarTable.CoreVectors.FmaF64x8)) then
     Exit;
 
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scFMA))) <> 0, 'Public ABI CapabilityBits should expose AVX512 scFMA when wide FMA slots are non-scalar');
@@ -2215,8 +2215,8 @@ begin
   if not TryGetSimdBackendPodInfo(sbAVX512, LInfo) then
     Exit;
 
-  if (Pointer(LAVX512Table.SelectF32x16) = Pointer(LScalarTable.SelectF32x16)) and
-     (Pointer(LAVX512Table.SelectF64x8) = Pointer(LScalarTable.SelectF64x8)) then
+  if (Pointer(LAVX512Table.CoreVectors.SelectF32x16) = Pointer(LScalarTable.CoreVectors.SelectF32x16)) and
+     (Pointer(LAVX512Table.CoreVectors.SelectF64x8) = Pointer(LScalarTable.CoreVectors.SelectF64x8)) then
     Exit;
 
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scShuffle))) <> 0, 'Public ABI CapabilityBits should expose AVX512 scShuffle when wide select slots are non-scalar');
@@ -2288,11 +2288,11 @@ begin
       Continue;
 
     LHasNonScalarMaskedSlots := False;
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask2All), Pointer(LBackendTable.Mask2All));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask4PopCount), Pointer(LBackendTable.Mask4PopCount));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask8All), Pointer(LBackendTable.Mask8All));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask8PopCount), Pointer(LBackendTable.Mask8PopCount));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask16FirstSet), Pointer(LBackendTable.Mask16FirstSet));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask2All), Pointer(LBackendTable.Mask.Mask2All));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask4PopCount), Pointer(LBackendTable.Mask.Mask4PopCount));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask8All), Pointer(LBackendTable.Mask.Mask8All));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask8PopCount), Pointer(LBackendTable.Mask.Mask8PopCount));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask16FirstSet), Pointer(LBackendTable.Mask.Mask16FirstSet));
 
     if not LHasNonScalarMaskedSlots then
       Continue;
@@ -2319,11 +2319,11 @@ begin
     Exit;
   {$ENDIF}
 
-  if (Pointer(LNEONTable.SelectF32x4) = Pointer(LScalarTable.SelectF32x4)) and
-     (Pointer(LNEONTable.InsertF32x4) = Pointer(LScalarTable.InsertF32x4)) and
-     (Pointer(LNEONTable.ExtractF32x4) = Pointer(LScalarTable.ExtractF32x4)) and
-     (Pointer(LNEONTable.SelectF32x8) = Pointer(LScalarTable.SelectF32x8)) and
-     (Pointer(LNEONTable.SelectF64x4) = Pointer(LScalarTable.SelectF64x4)) then
+  if (Pointer(LNEONTable.CoreVectors.SelectF32x4) = Pointer(LScalarTable.CoreVectors.SelectF32x4)) and
+     (Pointer(LNEONTable.CoreVectors.InsertF32x4) = Pointer(LScalarTable.CoreVectors.InsertF32x4)) and
+     (Pointer(LNEONTable.CoreVectors.ExtractF32x4) = Pointer(LScalarTable.CoreVectors.ExtractF32x4)) and
+     (Pointer(LNEONTable.CoreVectors.SelectF32x8) = Pointer(LScalarTable.CoreVectors.SelectF32x8)) and
+     (Pointer(LNEONTable.CoreVectors.SelectF64x4) = Pointer(LScalarTable.CoreVectors.SelectF64x4)) then
     Exit;
 
   {$IFDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
@@ -2348,10 +2348,10 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LNEONTable.FmaF32x4), 'NEON FmaF32x4 should be assigned');
-  CheckTrue(Assigned(LNEONTable.FmaF32x8), 'NEON FmaF32x8 should be assigned');
-  CheckTrue(Assigned(LNEONTable.FmaF64x2), 'NEON FmaF64x2 should be assigned');
-  CheckTrue(Assigned(LNEONTable.FmaF64x4), 'NEON FmaF64x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.FmaF32x4), 'NEON FmaF32x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.FmaF32x8), 'NEON FmaF32x8 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.FmaF64x2), 'NEON FmaF64x2 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.FmaF64x4), 'NEON FmaF64x4 should be assigned');
 
   {$IFDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scFMA))) <> 0, 'Public ABI CapabilityBits should expose NEON scFMA when NEON asm-backed FMA slots are compiled');
@@ -2375,9 +2375,9 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LNEONTable.AddI32x4), 'NEON AddI32x4 should be assigned');
-  CheckTrue(Assigned(LNEONTable.AndI32x4), 'NEON AndI32x4 should be assigned');
-  CheckTrue(Assigned(LNEONTable.AddI16x8), 'NEON AddI16x8 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.AddI32x4), 'NEON AddI32x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.AndI32x4), 'NEON AndI32x4 should be assigned');
+  CheckTrue(Assigned(LNEONTable.CoreVectors.AddI16x8), 'NEON AddI16x8 should be assigned');
 
   {$IFDEF NEXTPAS_SIMD_TEST_NEON_ASM_COMPILED}
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scIntegerOps))) <> 0, 'Public ABI CapabilityBits should expose NEON scIntegerOps when NEON asm-backed integer slots are compiled');
@@ -2427,9 +2427,9 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LRISCVVTable.AddI32x4), 'RISCVV AddI32x4 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.AndI32x4), 'RISCVV AndI32x4 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.AddI64x2), 'RISCVV AddI64x2 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.AddI32x4), 'RISCVV AddI32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.AndI32x4), 'RISCVV AndI32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.AddI64x2), 'RISCVV AddI64x2 should be assigned');
 
   {$IFDEF NEXTPAS_SIMD_TEST_RISCVV_ASM_COMPILED}
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scIntegerOps))) <> 0, 'Public ABI CapabilityBits should expose RISCVV scIntegerOps when RVV asm-backed integer slots are compiled');
@@ -2461,12 +2461,12 @@ begin
     Exit;
   {$ENDIF}
 
-  if (Pointer(LRISCVVTable.FmaF32x4) = Pointer(LScalarTable.FmaF32x4)) and
-     (Pointer(LRISCVVTable.FmaF32x8) = Pointer(LScalarTable.FmaF32x8)) and
-     (Pointer(LRISCVVTable.FmaF64x2) = Pointer(LScalarTable.FmaF64x2)) and
-     (Pointer(LRISCVVTable.FmaF64x4) = Pointer(LScalarTable.FmaF64x4)) and
-     (Pointer(LRISCVVTable.FmaF32x16) = Pointer(LScalarTable.FmaF32x16)) and
-     (Pointer(LRISCVVTable.FmaF64x8) = Pointer(LScalarTable.FmaF64x8)) then
+  if (Pointer(LRISCVVTable.CoreVectors.FmaF32x4) = Pointer(LScalarTable.CoreVectors.FmaF32x4)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF32x8) = Pointer(LScalarTable.CoreVectors.FmaF32x8)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF64x2) = Pointer(LScalarTable.CoreVectors.FmaF64x2)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF64x4) = Pointer(LScalarTable.CoreVectors.FmaF64x4)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF32x16) = Pointer(LScalarTable.CoreVectors.FmaF32x16)) and
+     (Pointer(LRISCVVTable.CoreVectors.FmaF64x8) = Pointer(LScalarTable.CoreVectors.FmaF64x8)) then
     Exit;
 
   {$IFDEF NEXTPAS_SIMD_TEST_RISCVV_ASM_COMPILED}
@@ -2496,9 +2496,9 @@ begin
     Exit;
   {$ENDIF}
 
-  CheckTrue(Assigned(LRISCVVTable.SelectF32x4), 'RISCVV SelectF32x4 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.InsertF32x4), 'RISCVV InsertF32x4 should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.ExtractF32x4), 'RISCVV ExtractF32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.SelectF32x4), 'RISCVV SelectF32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.InsertF32x4), 'RISCVV InsertF32x4 should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.CoreVectors.ExtractF32x4), 'RISCVV ExtractF32x4 should be assigned');
 
   {$IFDEF NEXTPAS_SIMD_TEST_RISCVV_ASM_COMPILED}
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scShuffle))) <> 0, 'Public ABI CapabilityBits should expose RISCVV scShuffle when RVV asm-backed representative shuffle slots are compiled');
@@ -4280,10 +4280,10 @@ var
   function IsScalarBackedForRepresentativeSlots(const aBackendTable, aScalarTable: TSimdDispatchTable): Boolean;
   begin
     Result :=
-      (Pointer(aBackendTable.AddF32x4) = Pointer(aScalarTable.AddF32x4)) and
-      (Pointer(aBackendTable.MulF32x4) = Pointer(aScalarTable.MulF32x4)) and
-      (Pointer(aBackendTable.AddI32x4) = Pointer(aScalarTable.AddI32x4)) and
-      (Pointer(aBackendTable.SelectF32x4) = Pointer(aScalarTable.SelectF32x4));
+      (Pointer(aBackendTable.CoreVectors.AddF32x4) = Pointer(aScalarTable.CoreVectors.AddF32x4)) and
+      (Pointer(aBackendTable.CoreVectors.MulF32x4) = Pointer(aScalarTable.CoreVectors.MulF32x4)) and
+      (Pointer(aBackendTable.CoreVectors.AddI32x4) = Pointer(aScalarTable.CoreVectors.AddI32x4)) and
+      (Pointer(aBackendTable.CoreVectors.SelectF32x4) = Pointer(aScalarTable.CoreVectors.SelectF32x4));
   end;
 begin
   ResetToAutomaticBackend;
@@ -5461,7 +5461,7 @@ begin
     CheckEqual(LMaxFacade, LMaxApi, 'MinMaxBytes parity(max)');
   except
     on E: Exception do
-      Fail(Format('Public ABI data-plane stage %s raised %s: %s', [LStage, E.ClassName, E.Message]));
+      Fail(TextFormat('Public ABI data-plane stage %s raised %s: %s', [LStage, E.ClassName, E.Message]));
   end;
 end;
 

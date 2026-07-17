@@ -1,6 +1,7 @@
 # nextpas.core.simd 模块
 
-> 最后更新: 2026-07-06
+> 最后更新: 2026-07-17
+> **开发主线**: [roadmap.md](roadmap.md)（Phase 20+）。当前活动清单: [plan.md](plan.md)。
 
 ## 概述
 
@@ -12,12 +13,33 @@
 - **高性能**: 手写汇编微内核，零开销 Backend Adapters
 - **兼容性**: 标量回退确保任何平台可运行
 - **易用性**: 统一 API，自动选择最优后端
+- **所有权诚实**: 无 dead wrapper；未实现槽继承 scalar baseline 并契约锁定
 
 ### 当前状态
 
-- **Backend Adapters**: ✅ 真正 SIMD 汇编实现
-- **Intrinsics 层**: ⚠️ FP 算术是标量回退，整数/Load/Store 是真正 SIMD
-- **分派器层**: ⚠️ FPC 编译器限制，无法内联函数指针
+- **Backend Adapters**: ✅ x86 SSE2…AVX-512 与 NEON 真 SIMD 汇编；RVV 实验；scalar 全覆盖回退
+- **批量 / 超越函数**: ✅ x86 上 F32/F64 `Array*` 批量与超越函数深覆盖（Phase 13–18）；NEON BatchF32 代表 7 叶；RVV Batch* **故意 scalar**（S24a）
+- **Intrinsics 层**: ✅ 主路径真实 ISA；实验性 ISA 可能 stub
+- **分派器层**: ✅ 嵌套表 `CoreVectors` / `Batch*` / `Memory` / `Mask`（Phase 19）；Public ABI 字段名保持 flat
+- **Mask**: ✅ NEON 绑定 portable `SharedMask*` + `scMaskedOps`（Wave B）
+- **NEON Memory**: ✅ **15/15** 自有（Phase 22：Copy/Fill/DiffRange + Reverse/BytesIndexOf/Utf8Validate 真 asm 叶，仅 ASM opt-in 绑定）
+- **NEON Batch\***: ⚠️ Phase 23a/23b 已接管 F32 Add/Sub/Mul/Min/Max/Abs/Neg；其余 Batch 槽仍 scalar
+- **RVV Memory/Batch**: ✅ **故意 0 叶 scalar**（S24a 契约锁定；真叶等 S24b 硬件）
+- **cpuinfo**: ✅ 主路径稳定
+- **活动阶段**: Phase 20–23b + Phase 25 + math residual + Q1/Q2 已收口；**Goal CURRENT=IDLE**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
+- **math 消费者边界**: public batch 在 math；`Array*`/`VecF32x*` 叶在 simd；edit-where 表见 GOAL_QUEUE §「math↔simd linkage (Q2)」
+- **验证基线 (2026-07-17)** — 与 roadmap §1.4 同源:
+  - `make focused FOCUS=core/tests/nextpas.core.simd` → **1741 passed**（S25b focused）
+  - `neon-optin-focused` → 同量级（与 focused 同源 suite）
+  - `make -C core/tests/nextpas.core.math clean test` → **exit 0**（M-V1 后仍绿；API surface 70/0）
+  - `make hygiene` → pass
+  - `api-coverage-contract` → **OK**（720/720 covered，missing=0 / thin=0，strict-thin）
+  - **S25b SLA（vsTrue 主指标，S25a 主机）** — 四热点全绿:
+    - ArrayAddF32 @1024 → **4.51x**（正式 SLA **4x+**；stretch 6x+）
+    - ArrayAddF64 @1024 → **6.36x**（SLA 6x+）
+    - ArrayMulF32 @16KB → **4.12x**（SLA 4x+；旧 ~2.5x=vsLib）
+    - MemEqual @4KB → **43.98x**（SLA 4x+）
+  - 方法与复现 → [performance-methodology.md](performance-methodology.md)
 
 ## 快速入门
 
@@ -35,6 +57,17 @@ end;
 
 ## 文档索引
 
+### 主线（先读）
+
+| 文档 | 内容 |
+|------|------|
+| **[roadmap.md](roadmap.md)** | **开发路线图（权威）**：现状、Phase 20+、验收、优先级 |
+| **[plan.md](plan.md)** | 当前阶段任务清单（薄指针） |
+| [methodology.md](methodology.md) | 协作与验证纪律 |
+| [performance-methodology.md](performance-methodology.md) | **S25a** 基准方法（vsTrue/vsLib）与热点数字 |
+
+### 稳定参考
+
 | 文档 | 内容 |
 |------|------|
 | [architecture.md](architecture.md) | 架构设计（分层、组件、依赖） |
@@ -43,11 +76,15 @@ end;
 | [intrinsics.md](intrinsics.md) | Intrinsics 层详解 |
 | [dispatch.md](dispatch.md) | 分派器层详解 |
 | [platforms.md](platforms.md) | 平台支持 |
-| [roadmap.md](roadmap.md) | 路线图 |
-| [plan.md](plan.md) | 实施计划 |
-| [progress.md](progress.md) | 进度跟踪 |
-| [methodology.md](methodology.md) | 工作方法论 |
 | [maintenance.md](maintenance.md) | 维护指南 |
+| [design/dispatch-table-modularization.md](design/dispatch-table-modularization.md) | Phase 19 + Wave B 设计 |
+
+### 历史存档（勿当主线）
+
+| 文档 | 内容 |
+|------|------|
+| [plans/](plans/) | 历史专项计划 |
+| `PHASE11_DEEPENING_PLAN.md` / `SIMD_DEEPENING_PLAN.md` / `SIMD_TODO_CLEANUP_PLAN.md` / `file-merge-plan.md` | 已完成或过期实施草稿 |
 
 ## 架构概览
 
@@ -145,4 +182,7 @@ make -C core/tests/nextpas.core.simd/test_dispatch clean test
 
 # 运行基准测试
 make -C core/tests/nextpas.core.simd/bench_dispatch_overhead clean test
+
+# S25a 热点复测（TrueScalar vs ScalarLib vs Dispatch）
+make -C core/benchmarks/nextpas.core.simd/bench_hotspots clean run
 ```

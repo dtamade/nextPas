@@ -13,7 +13,7 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a, b)
   else
-    Result := GetSimdFacadeDispatchFastPath^.AddF32x4(a, b);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.AddF32x4(a, b);
 end;
 
 function VecF32x4Sub(const a, b: TVecF32x4): TVecF32x4; inline;
@@ -29,7 +29,7 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a, b)
   else
-    Result := GetSimdFacadeDispatchFastPath^.SubF32x4(a, b);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.SubF32x4(a, b);
 end;
 
 function VecF32x4Mul(const a, b: TVecF32x4): TVecF32x4; inline;
@@ -45,7 +45,7 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a, b)
   else
-    Result := GetSimdFacadeDispatchFastPath^.MulF32x4(a, b);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.MulF32x4(a, b);
 end;
 
 function VecF32x4Div(const a, b: TVecF32x4): TVecF32x4; inline;
@@ -61,7 +61,7 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a, b)
   else
-    Result := GetSimdFacadeDispatchFastPath^.DivF32x4(a, b);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.DivF32x4(a, b);
 end;
 
 function VecF32x4CmpEq(const a, b: TVecF32x4): TMask4; inline;
@@ -77,42 +77,42 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a, b)
   else
-    Result := GetSimdFacadeDispatchFastPath^.CmpEqF32x4(a, b);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.CmpEqF32x4(a, b);
 end;
 
 function VecF32x4CmpLt(const a, b: TVecF32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.CmpLtF32x4(a, b);
+  Result := dispatch^.CoreVectors.CmpLtF32x4(a, b);
 end;
 
 function VecF32x4CmpLe(const a, b: TVecF32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.CmpLeF32x4(a, b);
+  Result := dispatch^.CoreVectors.CmpLeF32x4(a, b);
 end;
 
 function VecF32x4CmpGt(const a, b: TVecF32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.CmpGtF32x4(a, b);
+  Result := dispatch^.CoreVectors.CmpGtF32x4(a, b);
 end;
 
 function VecF32x4CmpGe(const a, b: TVecF32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.CmpGeF32x4(a, b);
+  Result := dispatch^.CoreVectors.CmpGeF32x4(a, b);
 end;
 
 function VecF32x4CmpNe(const a, b: TVecF32x4): TMask4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.CmpNeF32x4(a, b);
+  Result := dispatch^.CoreVectors.CmpNeF32x4(a, b);
 end;
 
 function VecF32x4Abs(const a: TVecF32x4): TVecF32x4; inline;
@@ -128,7 +128,7 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a)
   else
-    Result := GetSimdFacadeDispatchFastPath^.AbsF32x4(a);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.AbsF32x4(a);
 end;
 
 function VecF32x4Sqrt(const a: TVecF32x4): TVecF32x4; inline;
@@ -144,7 +144,7 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a)
   else
-    Result := GetSimdFacadeDispatchFastPath^.SqrtF32x4(a);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.SqrtF32x4(a);
 end;
 
 function VecF32x4Min(const a, b: TVecF32x4): TVecF32x4; inline;
@@ -160,7 +160,7 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a, b)
   else
-    Result := GetSimdFacadeDispatchFastPath^.MinF32x4(a, b);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.MinF32x4(a, b);
 end;
 
 function VecF32x4Max(const a, b: TVecF32x4): TVecF32x4; inline;
@@ -176,7 +176,7 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a, b)
   else
-    Result := GetSimdFacadeDispatchFastPath^.MaxF32x4(a, b);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.MaxF32x4(a, b);
 end;
 
 // === Extended Math Functions ===
@@ -194,56 +194,56 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a, b, c)
   else
-    Result := GetSimdFacadeDispatchFastPath^.FmaF32x4(a, b, c);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.FmaF32x4(a, b, c);
 end;
 
 function VecF32x4Rcp(const a: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.RcpF32x4(a);
+  Result := dispatch^.CoreVectors.RcpF32x4(a);
 end;
 
 function VecF32x4Rsqrt(const a: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.RsqrtF32x4(a);
+  Result := dispatch^.CoreVectors.RsqrtF32x4(a);
 end;
 
 function VecF32x4Floor(const a: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.FloorF32x4(a);
+  Result := dispatch^.CoreVectors.FloorF32x4(a);
 end;
 
 function VecF32x4Ceil(const a: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.CeilF32x4(a);
+  Result := dispatch^.CoreVectors.CeilF32x4(a);
 end;
 
 function VecF32x4Round(const a: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.RoundF32x4(a);
+  Result := dispatch^.CoreVectors.RoundF32x4(a);
 end;
 
 function VecF32x4Trunc(const a: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.TruncF32x4(a);
+  Result := dispatch^.CoreVectors.TruncF32x4(a);
 end;
 
 function VecF32x4Clamp(const a, minVal, maxVal: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.ClampF32x4(a, minVal, maxVal);
+  Result := dispatch^.CoreVectors.ClampF32x4(a, minVal, maxVal);
 end;
 
 // === 3D/4D Vector Math ===
@@ -261,49 +261,49 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(a, b)
   else
-    Result := GetSimdFacadeDispatchFastPath^.DotF32x4(a, b);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.DotF32x4(a, b);
 end;
 
 function VecF32x3Dot(const a, b: TVecF32x4): Single;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.DotF32x3(a, b);
+  Result := dispatch^.CoreVectors.DotF32x3(a, b);
 end;
 
 function VecF32x3Cross(const a, b: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.CrossF32x3(a, b);
+  Result := dispatch^.CoreVectors.CrossF32x3(a, b);
 end;
 
 function VecF32x4Length(const a: TVecF32x4): Single;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.LengthF32x4(a);
+  Result := dispatch^.CoreVectors.LengthF32x4(a);
 end;
 
 function VecF32x3Length(const a: TVecF32x4): Single;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.LengthF32x3(a);
+  Result := dispatch^.CoreVectors.LengthF32x3(a);
 end;
 
 function VecF32x4Normalize(const a: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.NormalizeF32x4(a);
+  Result := dispatch^.CoreVectors.NormalizeF32x4(a);
 end;
 
 function VecF32x3Normalize(const a: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.NormalizeF32x3(a);
+  Result := dispatch^.CoreVectors.NormalizeF32x3(a);
 end;
 
 // FMA-optimized Dot Product Functions
@@ -312,21 +312,21 @@ function VecF32x8Dot(const a, b: TVecF32x8): Single;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.DotF32x8(a, b);
+  Result := dispatch^.CoreVectors.DotF32x8(a, b);
 end;
 
 function VecF64x2Dot(const a, b: TVecF64x2): Double;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.DotF64x2(a, b);
+  Result := dispatch^.CoreVectors.DotF64x2(a, b);
 end;
 
 function VecF64x4Dot(const a, b: TVecF64x4): Double;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.DotF64x4(a, b);
+  Result := dispatch^.CoreVectors.DotF64x4(a, b);
 end;
 
 
@@ -334,56 +334,56 @@ function VecF32x4ReduceAdd(const a: TVecF32x4): Single;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.ReduceAddF32x4(a);
+  Result := dispatch^.CoreVectors.ReduceAddF32x4(a);
 end;
 
 function VecF32x4ReduceMin(const a: TVecF32x4): Single;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.ReduceMinF32x4(a);
+  Result := dispatch^.CoreVectors.ReduceMinF32x4(a);
 end;
 
 function VecF32x4ReduceMax(const a: TVecF32x4): Single;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.ReduceMaxF32x4(a);
+  Result := dispatch^.CoreVectors.ReduceMaxF32x4(a);
 end;
 
 function VecF32x4ReduceMul(const a: TVecF32x4): Single;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.ReduceMulF32x4(a);
+  Result := dispatch^.CoreVectors.ReduceMulF32x4(a);
 end;
 
 function VecF32x4Load(p: PSingle): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.LoadF32x4(p);
+  Result := dispatch^.CoreVectors.LoadF32x4(p);
 end;
 
 function VecF32x4LoadAligned(p: PSingle): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.LoadF32x4Aligned(p);
+  Result := dispatch^.CoreVectors.LoadF32x4Aligned(p);
 end;
 
 procedure VecF32x4Store(p: PSingle; const a: TVecF32x4);
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  dispatch^.StoreF32x4(p, a);
+  dispatch^.CoreVectors.StoreF32x4(p, a);
 end;
 
 procedure VecF32x4StoreAligned(p: PSingle; const a: TVecF32x4);
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  dispatch^.StoreF32x4Aligned(p, a);
+  dispatch^.CoreVectors.StoreF32x4Aligned(p, a);
 end;
 
 function VecF32x4Splat(value: Single): TVecF32x4; inline;
@@ -399,7 +399,7 @@ begin
   if Assigned(LFunc) then
     Result := LFunc(value)
   else
-    Result := GetSimdFacadeDispatchFastPath^.SplatF32x4(value);
+    Result := GetSimdFacadeDispatchFastPath^.CoreVectors.SplatF32x4(value);
 end;
 
 function VecF32x4Make(x, y, z, w: Single): TVecF32x4;
@@ -414,14 +414,14 @@ function VecF32x4Zero: TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.ZeroF32x4();
+  Result := dispatch^.CoreVectors.ZeroF32x4();
 end;
 
 function VecF32x4Select(const mask: TMask4; const a, b: TVecF32x4): TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.SelectF32x4(mask, a, b);
+  Result := dispatch^.CoreVectors.SelectF32x4(mask, a, b);
 end;
 
 function VecF32x4Extract(const a: TVecF32x4; index: Integer): Single;
@@ -429,8 +429,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractF32x4) then
-    Result := dispatch^.ExtractF32x4(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractF32x4) then
+    Result := dispatch^.CoreVectors.ExtractF32x4(a, index)
   else
   begin
     LIndex := index;
@@ -445,8 +445,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertF32x4) then
-    Result := dispatch^.InsertF32x4(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertF32x4) then
+    Result := dispatch^.CoreVectors.InsertF32x4(a, value, index)
   else
   begin
     LIndex := index;
@@ -465,8 +465,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractF64x2) then
-    Result := dispatch^.ExtractF64x2(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractF64x2) then
+    Result := dispatch^.CoreVectors.ExtractF64x2(a, index)
   else
   begin
     LIndex := index;
@@ -481,8 +481,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertF64x2) then
-    Result := dispatch^.InsertF64x2(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertF64x2) then
+    Result := dispatch^.CoreVectors.InsertF64x2(a, value, index)
   else
   begin
     LIndex := index;
@@ -499,8 +499,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractI32x4) then
-    Result := dispatch^.ExtractI32x4(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractI32x4) then
+    Result := dispatch^.CoreVectors.ExtractI32x4(a, index)
   else
   begin
     LIndex := index;
@@ -515,8 +515,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertI32x4) then
-    Result := dispatch^.InsertI32x4(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertI32x4) then
+    Result := dispatch^.CoreVectors.InsertI32x4(a, value, index)
   else
   begin
     LIndex := index;
@@ -533,8 +533,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractI64x2) then
-    Result := dispatch^.ExtractI64x2(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractI64x2) then
+    Result := dispatch^.CoreVectors.ExtractI64x2(a, index)
   else
   begin
     LIndex := index;
@@ -549,8 +549,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertI64x2) then
-    Result := dispatch^.InsertI64x2(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertI64x2) then
+    Result := dispatch^.CoreVectors.InsertI64x2(a, value, index)
   else
   begin
     LIndex := index;
@@ -567,8 +567,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractF32x8) then
-    Result := dispatch^.ExtractF32x8(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractF32x8) then
+    Result := dispatch^.CoreVectors.ExtractF32x8(a, index)
   else
   begin
     LIndex := index;
@@ -583,8 +583,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertF32x8) then
-    Result := dispatch^.InsertF32x8(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertF32x8) then
+    Result := dispatch^.CoreVectors.InsertF32x8(a, value, index)
   else
   begin
     LIndex := index;
@@ -601,8 +601,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractF64x4) then
-    Result := dispatch^.ExtractF64x4(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractF64x4) then
+    Result := dispatch^.CoreVectors.ExtractF64x4(a, index)
   else
   begin
     LIndex := index;
@@ -617,8 +617,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertF64x4) then
-    Result := dispatch^.InsertF64x4(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertF64x4) then
+    Result := dispatch^.CoreVectors.InsertF64x4(a, value, index)
   else
   begin
     LIndex := index;
@@ -635,8 +635,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractI32x8) then
-    Result := dispatch^.ExtractI32x8(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractI32x8) then
+    Result := dispatch^.CoreVectors.ExtractI32x8(a, index)
   else
   begin
     LIndex := index;
@@ -651,8 +651,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertI32x8) then
-    Result := dispatch^.InsertI32x8(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertI32x8) then
+    Result := dispatch^.CoreVectors.InsertI32x8(a, value, index)
   else
   begin
     LIndex := index;
@@ -669,8 +669,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractI64x4) then
-    Result := dispatch^.ExtractI64x4(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractI64x4) then
+    Result := dispatch^.CoreVectors.ExtractI64x4(a, index)
   else
   begin
     LIndex := index;
@@ -685,8 +685,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertI64x4) then
-    Result := dispatch^.InsertI64x4(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertI64x4) then
+    Result := dispatch^.CoreVectors.InsertI64x4(a, value, index)
   else
   begin
     LIndex := index;
@@ -703,8 +703,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractF32x16) then
-    Result := dispatch^.ExtractF32x16(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractF32x16) then
+    Result := dispatch^.CoreVectors.ExtractF32x16(a, index)
   else
   begin
     LIndex := index;
@@ -719,8 +719,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertF32x16) then
-    Result := dispatch^.InsertF32x16(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertF32x16) then
+    Result := dispatch^.CoreVectors.InsertF32x16(a, value, index)
   else
   begin
     LIndex := index;
@@ -736,7 +736,7 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  Result := LDispatch^.LoadF32x16(p);
+  Result := LDispatch^.CoreVectors.LoadF32x16(p);
 end;
 
 procedure VecF32x16Store(p: PSingle; const a: TVecF32x16);
@@ -744,7 +744,7 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.StoreF32x16(p, a);
+  LDispatch^.CoreVectors.StoreF32x16(p, a);
 end;
 
 function VecF32x16Splat(value: Single): TVecF32x16;
@@ -752,7 +752,7 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  Result := LDispatch^.SplatF32x16(value);
+  Result := LDispatch^.CoreVectors.SplatF32x16(value);
 end;
 
 function VecF32x16Zero: TVecF32x16;
@@ -760,7 +760,7 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  Result := LDispatch^.ZeroF32x16();
+  Result := LDispatch^.CoreVectors.ZeroF32x16();
 end;
 
 function VecF64x8Load(p: PDouble): TVecF64x8;
@@ -768,7 +768,7 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  Result := LDispatch^.LoadF64x8(p);
+  Result := LDispatch^.CoreVectors.LoadF64x8(p);
 end;
 
 procedure VecF64x8Store(p: PDouble; const a: TVecF64x8);
@@ -776,7 +776,7 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  LDispatch^.StoreF64x8(p, a);
+  LDispatch^.CoreVectors.StoreF64x8(p, a);
 end;
 
 function VecF64x8Splat(value: Double): TVecF64x8;
@@ -784,7 +784,7 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  Result := LDispatch^.SplatF64x8(value);
+  Result := LDispatch^.CoreVectors.SplatF64x8(value);
 end;
 
 function VecF64x8Zero: TVecF64x8;
@@ -792,7 +792,7 @@ var
   LDispatch: PSimdDispatchTable;
 begin
   LDispatch := GetSimdFacadeDispatchFastPath;
-  Result := LDispatch^.ZeroF64x8();
+  Result := LDispatch^.CoreVectors.ZeroF64x8();
 end;
 
 // I32x16 (512-bit)
@@ -801,8 +801,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.ExtractI32x16) then
-    Result := dispatch^.ExtractI32x16(a, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.ExtractI32x16) then
+    Result := dispatch^.CoreVectors.ExtractI32x16(a, index)
   else
   begin
     LIndex := index;
@@ -817,8 +817,8 @@ var dispatch: PSimdDispatchTable;
     LIndex: Integer;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  if (dispatch <> nil) and Assigned(dispatch^.InsertI32x16) then
-    Result := dispatch^.InsertI32x16(a, value, index)
+  if (dispatch <> nil) and Assigned(dispatch^.CoreVectors.InsertI32x16) then
+    Result := dispatch^.CoreVectors.InsertI32x16(a, value, index)
   else
   begin
     LIndex := index;

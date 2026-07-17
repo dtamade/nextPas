@@ -1,4 +1,5 @@
 // === AVX2 Memory Functions (256-bit) ===
+// 优化策略: 4x YMM 展开 (128 bytes/iter) + 预取
 
 function MemEqual_AVX2(a, b: Pointer; len: SizeUInt): LongBool; assembler; nostackframe;
 // SysV: RDI = a, RSI = b, RDX = len
@@ -15,8 +16,44 @@ asm
   cmp rdi, rsi
   je @equal              // Same pointer = equal
 
+  // 大数组路径: 4x YMM 展开 (128 bytes/iter)
+  cmp rdx, 128
+  jb @loop32
   xor rcx, rcx           // i = 0
 
+@loop128:
+  lea r8, [rcx + 128]
+  cmp r8, rdx
+  ja @loop32_setup
+  // 预取下一批数据
+  prefetchnta [rdi + rcx + 256]
+  prefetchnta [rsi + rcx + 256]
+  // 4x YMM 比较
+  vmovdqu ymm0, [rdi + rcx]
+  vpcmpeqb ymm0, ymm0, [rsi + rcx]
+  vpmovmskb eax, ymm0
+  cmp eax, $FFFFFFFF
+  jne @not_equal_cleanup
+  vmovdqu ymm1, [rdi + rcx + 32]
+  vpcmpeqb ymm1, ymm1, [rsi + rcx + 32]
+  vpmovmskb eax, ymm1
+  cmp eax, $FFFFFFFF
+  jne @not_equal_cleanup
+  vmovdqu ymm2, [rdi + rcx + 64]
+  vpcmpeqb ymm2, ymm2, [rsi + rcx + 64]
+  vpmovmskb eax, ymm2
+  cmp eax, $FFFFFFFF
+  jne @not_equal_cleanup
+  vmovdqu ymm3, [rdi + rcx + 96]
+  vpcmpeqb ymm3, ymm3, [rsi + rcx + 96]
+  vpmovmskb eax, ymm3
+  cmp eax, $FFFFFFFF
+  jne @not_equal_cleanup
+  add rcx, 128
+  jmp @loop128
+
+@loop32_setup:
+  // 继续 32 字节块循环
 @loop32:
   lea r8, [rcx + 32]
   cmp r8, rdx
