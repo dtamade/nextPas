@@ -149,7 +149,8 @@ end;
 | Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1/H2 client wire | **Landed** (slice latency) |
 | WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
 | HTTPS CONNECT (plain HTTP proxy) | CONNECT + TLS over tunnel; origin-form | http H1 + TLS stream | **Landed** (cycle-9 Wave D) |
-| Proxy authentication | — | http | **Deferred** (Proxy-Authorization on CONNECT) |
+| H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
+| Proxy authentication | `ProxyUrl` UserInfo → `Proxy-Authorization: Basic` | http H1 | **Landed** (cycle-10 Wave E; Basic only) |
 
 ### 2.2.1 EHttpError.Kind
 
@@ -201,14 +202,19 @@ end;
   同站发送全部匹配 cookie；跨站仅发送 `SameSite=None`。
 - HTTP proxy：`THttpClientOptions.ProxyUrl` **或** fluent
   `IHttpClient.WithProxyUrl`（重建 transport；装饰器 re-stack）。
-  明文 `http://host:port` 正向代理（proxy scheme 仅 `http`）。
+  明文 `http://[user:pass@]host:port` 正向代理（proxy scheme 仅 `http`）。
   - 目标 `http://`：absolute-form request-line（不变）。
   - 目标 `https://`：对 proxy 发 `CONNECT host:port`，2xx 后对隧道
     `NewTlsClientTcpStream`（SNI=origin host，ALPN=`http/1.1`），再发
     origin-form 请求。非 2xx CONNECT → `hekConnect`。
+  - `ProxyUrl` 含 UserInfo 时注入 `Proxy-Authorization: Basic`
+    （`Base64(UTF-8(raw UserInfo))`，不做 percent-decode）：
+    CONNECT 必带；absolute-form 仅在请求未设置该头时注入。
   - 可选 `THttpClientOptions.TLSContext`（nil → `TSSLQuick.SecureClient`）。
-  - **认证代理（Proxy-Authorization）仍 Deferred**。
-  - H1 **无 proxy 的直连 https** 仍拒绝（scheme unsupported）。
+  - Digest/NTLM/SOCKS **仍 Deferred**。
+- H1 **直连 https**（无 proxy）：dial origin → `NewTlsClientTcpStream`
+  （同 TLSContext/SecureClient，SNI=host，ALPN=`http/1.1`）→ origin-form；
+  连接池键前缀 `https|` 与明文隔离。
 - `PostMultipart(Url, Fields, Files)`：multipart/form-data 便捷 POST
   （自动 boundary + `EncodeMultipartFormData`）。
 - `IHttpClient.GetString` / `GetBytes`：与 free function `HttpGetString` /

@@ -18,13 +18,15 @@ type
       0 = dial uses Timeout when Timeout > 0; post-dial first-write uses Timeout. }
     ConnectTimeout: Int64;
     MaxPoolSize: Int32;
-    { Plain HTTP forward proxy URL (http://host:port). Empty = direct.
+    { Plain HTTP forward proxy URL (http://[user:pass@]host:port). Empty = direct.
       For https targets, client dials proxy and opens a CONNECT tunnel, then
       TLS-wraps the tunneled stream (SNI = origin host). Plain http targets
-      keep absolute-form forwarding (no CONNECT). }
+      keep absolute-form forwarding (no CONNECT). When UserInfo is present,
+      injects Proxy-Authorization: Basic (raw userinfo, no percent-decode)
+      on CONNECT and on absolute-form when the request lacks that header. }
     ProxyUrl: string;
-    { Optional client TLS context for https-over-CONNECT (and future direct
-      H1 https). Nil uses TSSLQuick.SecureClient. }
+    { Optional client TLS context for direct H1 https and https-over-CONNECT.
+      Nil uses TSSLQuick.SecureClient. }
     TLSContext: ISSLContext;
   end;
 
@@ -49,6 +51,7 @@ uses
   nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors,
   nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
   nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.text.conv,
+  nextpas.core.encoding,
   nextpas.core.http.headers, nextpas.core.http.message,
   nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast,
   nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer,
@@ -134,12 +137,14 @@ type
     procedure PoolClear;
     function SecureClientContext: ISSLContext;
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest;
-      const AAutoHost: string; const AAbsoluteForm: Boolean): Boolean;
+      const AAutoHost: string; const AAbsoluteForm: Boolean;
+      const AProxyAuthorization: string): Boolean;
     function ReadResponse(const AReader: IReader;
       const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
       out AResponseStarted: Boolean): IHttpResponse;
     procedure EstablishHttpsConnectTunnel(var AConn: ITcpStream;
-      const ATargetHost: string; const ATargetPort: UInt16);
+      const ATargetHost: string; const ATargetPort: UInt16;
+      const AProxyAuthorization: string);
   public
     constructor Create(const AOptions: TH1ClientTransportOptions);
     destructor Destroy; override;
@@ -368,22 +373,26 @@ begin
       raise EHttpError.Create(hekParse, 'invalid header name character');
 end;
 
-procedure ValidatePlainHttpClientUrlScheme(const AUrl: TUrl;
-  const AHasProxy: Boolean);
+procedure ValidatePlainHttpClientUrlScheme(const AUrl: TUrl);
 var
   LScheme: string;
 begin
   LScheme := LowerCase(AUrl.Scheme);
   if LScheme = '' then
     Exit;
-  if LScheme = 'http' then
-    Exit;
-  { H1 direct https is not enabled in this transport; https is accepted only
-    when a plain HTTP proxy is configured so CONNECT + TLS can be used. }
-  if (LScheme = 'https') and AHasProxy then
+  if (LScheme = 'http') or (LScheme = 'https') then
     Exit;
   raise EHttpError.Create(hekProtocol, 'unsupported HTTP client URL scheme: ' +
     AUrl.Scheme);
+end;
+
+function ProxyBasicAuthorizationValue(const AUserInfo: string): string;
+begin
+  if AUserInfo = '' then
+    Exit('');
+  { Raw UserInfo from TUrl.Parse (no percent-decode). Same encoding path as
+    THttpRequestBuilder.BasicAuth. }
+  Result := 'Basic ' + Base64Encode(StringToUTF8Bytes(AUserInfo));
 end;
 
 function ConnectAuthority(const AHost: string; const APort: UInt16): string;
@@ -2142,7 +2151,8 @@ begin
 end;
 
 procedure TH1ClientTransport.EstablishHttpsConnectTunnel(var AConn: ITcpStream;
-  const ATargetHost: string; const ATargetPort: UInt16);
+  const ATargetHost: string; const ATargetPort: UInt16;
+  const AProxyAuthorization: string);
 const
   CRLF: AnsiString = #13#10;
 var
@@ -2163,11 +2173,16 @@ begin
   LAuthority := ConnectAuthority(ATargetHost, ATargetPort);
   ValidateWireRequestTarget(LAuthority);
   ValidateWireHeaderValue(LAuthority);
+  if AProxyAuthorization <> '' then
+    ValidateWireHeaderValue(AProxyAuthorization);
 
   LRequest := 'CONNECT ' + LAuthority + ' HTTP/1.1' + CRLF +
     'Host: ' + LAuthority + CRLF +
-    'Proxy-Connection: keep-alive' + CRLF +
-    CRLF;
+    'Proxy-Connection: keep-alive' + CRLF;
+  if AProxyAuthorization <> '' then
+    LRequest := LRequest +
+      'Proxy-Authorization: ' + AProxyAuthorization + CRLF;
+  LRequest := LRequest + CRLF;
   AConn.Write(LRequest[1], SizeUInt(Length(LRequest)));
 
   { CONNECT responses have no payload; any leftover bytes belong to the tunnel. }
@@ -2282,7 +2297,7 @@ end;
 
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
   const AReq: IHttpRequest; const AAutoHost: string;
-  const AAbsoluteForm: Boolean): Boolean;
+  const AAbsoluteForm: Boolean; const AProxyAuthorization: string): Boolean;
 const
   CRLF: AnsiString = #13#10;
 var
@@ -2373,6 +2388,17 @@ begin
   if not AReq.Headers.Has('user-agent') then
   begin
     LStr := 'user-agent: nextpas-http/1.0';
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
+
+  { Absolute-form proxy only: inject Basic from ProxyUrl UserInfo when the
+    request did not already set Proxy-Authorization. }
+  if AAbsoluteForm and (AProxyAuthorization <> '') and
+     (not AReq.Headers.Has('proxy-authorization')) then
+  begin
+    ValidateWireHeaderValue(AProxyAuthorization);
+    LStr := 'proxy-authorization: ' + AProxyAuthorization;
     LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
     LBuf.Write(CRLF[1], 2);
   end;
@@ -2546,6 +2572,7 @@ var
   LConnectHost: string;
   LConnectPort: UInt16;
   LProxyUrl: TUrl;
+  LProxyAuthorization: string;
   LUseAbsoluteForm: Boolean;
   LUseConnectTunnel: Boolean;
   LSecure: Boolean;
@@ -2562,6 +2589,22 @@ var
   LTimeoutMs: Int64;
   LReqOpts: IHttpRequestWithOptions;
   LWrapped: Exception;
+
+  procedure WrapConnectionWithTls;
+  begin
+    { Bound TLS handshake I/O with ConnectTimeout when set. }
+    if FOptions.ConnectTimeout > 0 then
+      ApplyClientDeadline(LConn, ClientRequestDeadline(FOptions.ConnectTimeout))
+    else
+      ApplyClientDeadline(LConn, LRequestDeadline);
+    LConn := NewTlsClientTcpStream(LConn, SecureClientContext, LHost,
+      'http/1.1');
+    if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+      ApplyClientCancelToken(LConn,
+        LReqOpts.RequestOptions.EffectiveCancelToken)
+    else
+      ApplyClientCancelToken(LConn, nil);
+  end;
 
   procedure PrepareFreshConnection;
   begin
@@ -2580,20 +2623,12 @@ var
 
     if LUseConnectTunnel then
     begin
-      EstablishHttpsConnectTunnel(LConn, LHost, LPort);
-      { Bound TLS handshake I/O with ConnectTimeout when set. }
-      if FOptions.ConnectTimeout > 0 then
-        ApplyClientDeadline(LConn, ClientRequestDeadline(FOptions.ConnectTimeout))
-      else
-        ApplyClientDeadline(LConn, LRequestDeadline);
-      LConn := NewTlsClientTcpStream(LConn, SecureClientContext, LHost,
-        'http/1.1');
-      if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
-        ApplyClientCancelToken(LConn,
-          LReqOpts.RequestOptions.EffectiveCancelToken)
-      else
-        ApplyClientCancelToken(LConn, nil);
-    end;
+      EstablishHttpsConnectTunnel(LConn, LHost, LPort, LProxyAuthorization);
+      WrapConnectionWithTls;
+    end
+    else if LSecure then
+      { Direct https: TLS-wrap the origin socket (SNI = origin host). }
+      WrapConnectionWithTls;
   end;
 
 begin
@@ -2611,7 +2646,7 @@ begin
   end;
 
   LUrl := AReq.Url;
-  ValidatePlainHttpClientUrlScheme(LUrl, FOptions.ProxyUrl <> '');
+  ValidatePlainHttpClientUrlScheme(LUrl);
   LHost := LUrl.Host;
   LSecure := LowerCase(LUrl.Scheme) = 'https';
   LAutoHost := '';
@@ -2627,9 +2662,13 @@ begin
 
   LUseAbsoluteForm := False;
   LUseConnectTunnel := False;
+  LProxyAuthorization := '';
   LConnectHost := LHost;
   LConnectPort := LPort;
   LPoolHostKey := CanonicalPoolHostKey(LHost);
+  if LSecure then
+    { Keep plain and TLS idle sockets in separate pools. }
+    LPoolHostKey := 'https|' + LPoolHostKey;
   if FOptions.ProxyUrl <> '' then
   begin
     LProxyUrl := TUrl.Parse(FOptions.ProxyUrl);
@@ -2638,6 +2677,7 @@ begin
         'HTTP client proxy must use http:// scheme');
     if LProxyUrl.Host = '' then
       raise EHttpError.Create(hekArgument, 'HTTP client proxy host is empty');
+    LProxyAuthorization := ProxyBasicAuthorizationValue(LProxyUrl.UserInfo);
     LConnectHost := LProxyUrl.Host;
     LConnectPort := LProxyUrl.Port;
     if LConnectPort = 0 then
@@ -2680,7 +2720,8 @@ begin
   LResponseStarted := False;
   LRequestWriteComplete := False;
   try
-    WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm);
+    WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm,
+      LProxyAuthorization);
     LRequestWriteComplete := True;
     if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
       HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
@@ -2710,7 +2751,8 @@ begin
         try
           PrepareFreshConnection;
           LRequestWriteComplete := False;
-          WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm);
+          WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm,
+            LProxyAuthorization);
           LRequestWriteComplete := True;
           if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
             HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
