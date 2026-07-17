@@ -5,7 +5,8 @@
 arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点迁移保留。
 
 **契约**：[`CONTRACT.md`](CONTRACT.md)
-**与 lockfree 联合推进主线**：[`../lockfree/roadmap.md`](../lockfree/roadmap.md)（R* 阶段；atomic 含于 R0/R6/R7）
+**与 lockfree 联合主线**：[`../lockfree/roadmap.md`](../lockfree/roadmap.md)（R* 阶段；atomic 含于 R0/R6/R7）
+**状态**：主线 **Ready / Maintenance**（R0–R7 完成）— 正式声明见 [`../lockfree/READY.md`](../lockfree/READY.md)
 
 ## 模块分层
 
