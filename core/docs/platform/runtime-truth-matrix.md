@@ -10,8 +10,9 @@
 | Windows documented facade matrix | **ci-matrix** | 14 wine-suite dirs + 3 real gates via `platform-windows-ci-matrix.sh` on GHA `test-windows-runtime`. |
 | Android files/mmap | forced-compile/source-contract | Android files stat/lstat/fstat, directory enumeration through getdents64, and mmap size paths compile through host-owned declarations; no Android device runtime proof exists. |
 | Resource limits | Linux focused-runtime, Android forced-compile/source-contract | Linux rlimit get/set is focused-runtime covered; Android is compile/source proof only, not device runtime proof. |
-| Platform memory secure-zero | Linux focused-runtime, POSIX forced-compile/source-contract, Windows source-contract | Linux/POSIX host path uses shared POSIX `explicit_bzero`; forced POSIX compile proves branch coherence. Windows remains fallback/deferred with no native runtime proof. |
-| Darwin/macOS documented 8-gate set | GHA `test-macos` via `platform-macos-ci-matrix.sh` (fail-closed) | Candidate focused-runtime for time/sync/thread/files/path/env/error/socket; promote goal-tree only after D2.c green evidence. Best-effort whole suite remains non-evidence. |
+| Platform memory secure-zero | Linux focused-runtime, POSIX forced-compile/source-contract, Windows permanent-fallback (source-contract + wine smoke) | Linux/POSIX host path uses shared POSIX `explicit_bzero` / Darwin `memset_s`; forced POSIX compile proves branch coherence. Windows closed as permanent FillChar+ReadWriteBarrier (`pszbWindowsPermanentFallback`); no stable RtlSecureZeroMemory/SecureZeroMemory DLL export across Wine+real Windows SDK. |
+| Platform signal Windows | forced-compile + source-contract | `NEXTPAS_FORCE_HOST_WINDOWS` compile gate + windows signal contract. Console Ctrl handler is not wine-matrix runtime evidence. |
+| Darwin/macOS documented 8-gate set | **focused-runtime** (GHA `test-macos` via `platform-macos-ci-matrix.sh`, fail-closed) | Documented set only: time/sync/thread/files/path/env/error/socket on `macos-14` aarch64. Not full-host macOS parity. Best-effort whole suite remains non-evidence. |
 | Darwin/FreeBSD best-effort CI | best-effort inventory only | Skipped/failed rows are non-evidence. |
 | Android/other forced host surfaces | forced-compile | Compile truth only. |
 

@@ -1,11 +1,11 @@
 # Atomic & Lockfree 可执行路线图（权威）
 
-> **状态**: **H2 complete / Maintenance / Lane archived**（2026-07-17）· R0–R7 + RC Ready + H2-0…H2-6 **已完成** · **Owner**: atomic-lockfree lane（**已归档**）
+> **状态**: **H3 Wave-1 in progress**（2026-07-17）· R0–R7 + RC Ready + H2-0…H2-6 **已完成** · **Owner**: atomic-lockfree lane（reopened）
 > **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）
-> **当前执行主线**: **Maintenance**（T1/atomic 缺陷修复、契约修订、验证门保绿）。H2 记录见 [`roadmap-h2.md`](roadmap-h2.md)。
-> **H3**: 章程 only — [`roadmap-h3.md`](roadmap-h3.md)；**未开工 / 不自动执行**。实施须 **新 worktree**（如 `atomic-lockfree-h3` / `codex/core-lockfree-h3`）。
+> **当前执行主线**: **H3 Wave-1**（H3-1：async.loop Post → T1 MPSC）。H2 记录见 [`roadmap-h2.md`](roadmap-h2.md)。
+> **H3**: [`roadmap-h3.md`](roadmap-h3.md) — **H3-1 authorized / in progress**；H3-2…H3-4 未授权。worktree：`.worktrees/atomic-lockfree`。
 > **R8**: 研究 pack 诚实收口（opt-in docs）— [`r8-research-status.md`](r8-research-status.md)；**不**默认生产化。
-> **Lane**: 长期 `atomic-lockfree` worktree **已归档**；见 [`READY.md`](READY.md) Archive tags（H3/R8/lane-final）。
+> **Lane**: reopened on `atomic-lockfree`；见 [`READY.md`](READY.md)。
 > 冲突时以 **CONTRACT + [`roadmap-h2.md`](roadmap-h2.md) + 本路线图** 为准。
 > **已锁定 (R 线)**: Q1 R4–R7 / Q2 R5 修 cap=1 / Q3 rings+MPSC 优先 / Q4 Makefile 证据 / Q5 phase 归档。
 > **已锁定 (H2)**: D1–D5 见 [`roadmap-h2.md`](roadmap-h2.md)；**不叫 R9**；R8 仍为 opt-in 研究。

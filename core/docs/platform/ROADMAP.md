@@ -67,12 +67,13 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 
 | Gap | Severity | Notes |
 |-----|----------|--------|
-| Windows beyond documented 17-gate set | **P1** | signal / secure-zero native / full AcceptEx-ConnectEx suite not in matrix |
-| macOS focused-runtime partial | **P0** | D2.b matrix wired (8 gates); promote goal-tree after green (D2.c) |
-| `platform.signal` Win64 wine path | **P1** | Missing error/FFI uses; not in 14-module matrix |
-| Windows secure-zero native path | **P1** | Documented deferred; still fallback |
-| dual-IO symbols on `platform.process` | **P2** | Owner-only; long-term deprecation not scheduled |
-| Deferred F7/F9/F10/F14 | **P3** | Mapping symmetry, ALen rename, diagnostics, freetype move-out |
+| Windows beyond documented 17-gate set | **P1** | Full AcceptEx-ConnectEx depth / modules outside 17-gate not in matrix |
+| macOS beyond documented 8-gate set | **P1** | D2.c done for listed modules only; full-host parity not claimed |
+| `platform.signal` Win64 runtime delivery | **P2** | D3.a: forced-compile + contract green; wine runtime not matrix (console Ctrl handler) |
+| Windows secure-zero native export | **P2** | D3.b closed: permanent FillChar+barrier; no stable DLL export across Wine+real Windows |
+| dual-IO symbols on `platform.process` | **P2** | D3.c: **permanent owner-only** (no sunset this program) |
+| Deferred F7/F9/F10 | **P3** | Mapping symmetry, ALen rename, diagnostics — Won't unless consumer pain |
+| F14 freetype | **P3** | D3.d: stays under platform as optional host binding |
 | Doc authority sprawl | **P0 docs** | Multiple “roadmaps”; fixed by this file becoming sole forward map |
 | Stale claims in older docs | **P1 docs** | e.g. master-spec “no real Windows CI runner”; truth-matrix poller row |
 
@@ -82,7 +83,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
 | Windows x86_64 | **`ci-matrix` for documented 17-gate set** + wine-runtime-smoke secondary | expand matrix modules; keep wine green |
-| macOS | D2.b matrix (8 gates) fail-closed on GHA; inventory via best-effort | D2.c promote listed modules after green |
+| macOS | **`focused-runtime` for documented 8-gate set** (D2.c); inventory via best-effort | keep matrix green; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
 | Linux aarch64/arm32/riscv64 | forced-compile | runtime only with hardware/CI |
@@ -180,6 +181,18 @@ Do not start a later phase’s promotion claims until earlier phase exit criteri
 
 **macOS promotion criteria (D2.c):** durable Actions green on the 8-gate matrix + truth-matrix/goal-tree rows updated. Not full-host parity.
 
+**D2.c status (2026-07-17): Done** for the documented 8-gate set only.
+
+| Check | Evidence |
+|-------|----------|
+| 1 real macOS | GHA `test-macos` on `macos-14` aarch64 via native `make clean test` |
+| 2 documented 8-gate set | `platform-macos-ci-matrix.sh` lists time/sync/thread/files/path/env/error/socket |
+| 3 fail-closed matrix green | step `Run platform macOS focused matrix (fail-closed)` success on run 29578542275 (~2 min wall; no gate timeout) after Darwin varargs/detach/errno fixes (25c843edb) |
+| 4 docs | runtime-truth-matrix + goal-tree + master-spec + this ROADMAP updated in D2.c land |
+| 5 scope honesty | not full-host macOS parity; best-effort inventory still non-evidence |
+
+**Not claimed by D2.c:** full-host macOS parity; modules outside the 8-gate list; FreeBSD promotion.
+
 ### D3 — Contract & debt cleanup (maintenance)
 
 | Field | Content |
@@ -188,13 +201,17 @@ Do not start a later phase’s promotion claims until earlier phase exit criteri
 | **Depends on** | D0; preferably after D1 not blocked |
 | **Priority** | **P1–P2** |
 
-| Slice | Item | Acceptance |
-|-------|------|------------|
-| **D3.a** | `platform.signal` Win64 compile + wine or real-Windows smoke | wine-build green or real gate; no silent stubs |
-| **D3.b** | Windows secure-zero native path or explicit permanent unsupported | truth-matrix honest either way |
-| **D3.c** | dual-IO deprecation schedule (keep symbols, document sunset or permanent owner-only) | residual/CONTRACT/ROADMAP agree |
-| **D3.d** | F14 freetype boundary decision (keep under platform vs move) | ADR or CONTRACT note + owner |
-| **D3.e** | Deferred F7/F9/F10 only if consumer pain forces | otherwise stay Won't |
+| Slice | Item | Acceptance | Status |
+|-------|------|------------|--------|
+| **D3.a** | `platform.signal` Win64 forced-compile + contract (no silent stubs) | `test_platform_windows_signal_compile_gate` with `NEXTPAS_FORCE_HOST_WINDOWS`; FFI owns `GenerateConsoleCtrlEvent`; uses `platform.error` | **Done** |
+| **D3.b** | Windows secure-zero native path or explicit permanent unsupported | permanent FillChar+barrier (`pszbWindowsPermanentFallback`); truth-matrix honest | **Done** |
+| **D3.c** | dual-IO deprecation schedule | permanent owner-only on `platform.process`; no sunset this program | **Done** |
+| **D3.d** | F14 freetype boundary decision | stay under platform as optional host binding; move-out needs separate owner lane | **Done** |
+| **D3.e** | Deferred F7/F9/F10 only if consumer pain forces | otherwise stay Won't | **Won't** (default) |
+
+**D3.a notes:** Wine does not reliably deliver console control events; signal is intentionally **not** in the 14-module wine matrix. Evidence is forced-compile + source-contract on Linux host, plus existing real-Windows path when compiled under `NEXTPAS_WINDOWS`.
+
+**D3.b notes:** Wine `ntdll` has no `RtlSecureZeroMemory` export; SDK `SecureZeroMemory` is FORCEINLINE. Promoting a raw external would break wine/link honesty. Permanent fallback is the closed decision until a dual-host export proof exists.
 
 ### D4 — Secondary hosts (honest, low urgency)
 
@@ -247,8 +264,8 @@ Optional readiness inventory (not a promotion):
 
 1. **D0** done.
 2. **D1.a–D1.d** done for documented 17-gate Windows `ci-matrix` set; keep wine + GHA green.
-3. **D2.a/b** in progress: FPC cfg fix + 8-gate macOS matrix fail-closed; **D2.c** after green.
-4. **D3** debt in severity order when not blocking D2.
+3. **D2.a–D2.c** done for documented 8-gate macOS `focused-runtime` set; keep GHA matrix green.
+4. **D3.a–D3.d** done (signal compile, secure-zero permanent fallback, dual-IO owner-only, freetype stay); D3.e remains Won't.
 5. **D4/D5** opportunistic / owner-gated.
 
 ---
@@ -268,6 +285,13 @@ Optional readiness inventory (not a promotion):
 | 2026-07-17 | D1.c closed: real-Windows matrix **pass=17 fail=0** (run 29569033144). Mapped PLATFORM_ERR_AGAIN treated as Winsock would-block in wake drain + socket classifiers. D1.d promotion still pending criteria checklist |
 | 2026-07-17 | **D1.d done**: promote documented 17-gate set to `truth=ci-matrix` after criteria 1–4 met (GHA 17/17 durable; wine 14/14; fail-closed). Not full-host Windows parity. Next: D2 macOS. |
 | 2026-07-17 | **D2.a**: macOS best-effort is non-evidence (~5/812); FPC trunk missing System unit without compiler-local fpc.cfg. **D2.b**: add fail-closed 8-gate `platform-macos-ci-matrix.sh` + FPC verify; best-effort demoted to inventory-only. |
+| 2026-07-17 | Darwin residual: aarch64 varargs `open`/`fcntl`, thread detach RefCount (trampoline UAF), host `ESysE*` error tests; land 25c843edb |
+| 2026-07-17 | **D2.c done**: promote documented 8-gate set to `focused-runtime` after GHA matrix fail-closed success (run 29578542275 step 8). Not full-host macOS parity. Next: D3 debt. |
+| 2026-07-17 | **D3.a done**: Windows signal forced-compile uses `platform.error` + `GenerateConsoleCtrlEvent` FFI; compile gate forces `NEXTPAS_FORCE_HOST_WINDOWS`. Not wine-matrix. |
+| 2026-07-17 | **D3.b done**: Windows secure-zero closed as permanent FillChar+barrier (`pszbWindowsPermanentFallback`); no RtlSecureZeroMemory export on Wine. |
+| 2026-07-17 | **D3.c done**: dual-IO permanent owner-only on `platform.process`; no sunset this program. |
+| 2026-07-17 | **D3.d done**: freetype stays under platform as optional host binding; move-out requires separate owner lane. |
+| 2026-07-17 | **D3.e**: F7/F9/F10 remain Won't unless consumer pain forces reopen. |
 
 ---
 
@@ -278,6 +302,7 @@ Optional readiness inventory (not a promotion):
 - [x] Windows `ci-matrix` criteria (section D1) accepted as written
 - [x] D2 macOS after D1.b pattern accepted
 - [x] D3 dual-IO stays owner-only unless we schedule deprecation (default: no removal this program)
+- [x] D3.a–D3.d debt cleanup decisions accepted as documented above
 - [x] D4/D5 remain low priority unless hosts/owners appear
 
 Autonomous execution follows §5; only major criteria changes revise this file.

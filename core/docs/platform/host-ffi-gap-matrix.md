@@ -47,9 +47,11 @@ should not create `platform.time.ffi`, `platform.sync.ffi`, or
   through `nextpas.core.platform.posix.ffi` and reports native POSIX backend
   truth. Linux has focused runtime proof through `test_platform_memory`; other
   Unix hosts remain source/compile proof until host runtime evidence exists.
-  Windows secure-zero remains fallback/deferred because direct
-  `RtlSecureZeroMemory` promotion still needs a separate host-owned
-  dynamic-loading or raw symbol seam.
+  Windows secure-zero is **permanent FillChar+ReadWriteBarrier**
+  (`pszbWindowsPermanentFallback`, D3.b): Wine `ntdll` has no
+  `RtlSecureZeroMemory` export and SDK `SecureZeroMemory` is FORCEINLINE, so a
+  raw external is not dual-host honest. Re-open only with host-owned export
+  proof on both Wine and real Windows.
 - Platform Host ABI Completeness Wave 15 corrects the FFI boundary: all
   host/shared `.ffi` files are raw external declaration owners only. The earlier
   Wave 13/14 helper-name direction is superseded; wrapper/projection logic now

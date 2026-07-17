@@ -64,6 +64,8 @@ begin
     'base must define typed console control handler routine');
   CheckContains(LFfi, 'SetConsoleCtrlHandler',
     'FFI must expose SetConsoleCtrlHandler');
+  CheckContains(LFfi, 'GenerateConsoleCtrlEvent',
+    'FFI must expose GenerateConsoleCtrlEvent for platform_signal_raise');
   CheckContains(LFfi, 'TConsoleCtrlHandlerRoutine',
     'SetConsoleCtrlHandler must use nextPas-owned typed handler');
 end;
@@ -82,6 +84,10 @@ begin
     'upper layers must not be told to call WinAPI directly');
   CheckContains(LWindowsBranch, 'SetConsoleCtrlHandler',
     'Windows signal branch must install console control handler internally');
+  CheckContains(LWindowsBranch, 'GenerateConsoleCtrlEvent',
+    'Windows signal branch must raise via GenerateConsoleCtrlEvent');
+  CheckContains(LWindowsBranch, 'nextpas.core.platform.error',
+    'Windows signal branch must use platform.error for PLATFORM_ERR_*');
   CheckContains(LWindowsBranch, 'PLATFORM_SIGINT',
     'Windows signal branch must map Ctrl+C to PLATFORM_SIGINT');
   CheckContains(LWindowsBranch, 'PLATFORM_SIGBREAK',

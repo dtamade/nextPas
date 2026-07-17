@@ -117,9 +117,13 @@ procedure TestSecureZeroBackend;
 begin
   Check(platform_secure_zero_memory_backend in [
     pszbFallbackFillCharBarrier,
-    pszbWindowsNativeDeferred,
+    pszbWindowsPermanentFallback,
     pszbPosixExplicitBZero
   ], 'secure_zero_memory_backend returns valid enum value');
+  Check(platform_secure_zero_memory_backend = pszbWindowsPermanentFallback,
+    'Windows wine host reports permanent secure-zero fallback');
+  Check(not platform_secure_zero_memory_is_native,
+    'Windows permanent secure-zero fallback is not native');
 end;
 
 { 8. secure_zero_memory_is_native returns boolean }
