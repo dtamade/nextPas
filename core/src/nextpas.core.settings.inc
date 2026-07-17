@@ -8,6 +8,7 @@
 {$modeswitch advancedrecords}
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
+{$GOTO ON}
 
 {$IFOPT O+}
   {$DEFINE NEXTPAS_CORE_INLINE}

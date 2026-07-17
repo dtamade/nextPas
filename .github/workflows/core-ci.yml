@@ -176,10 +176,13 @@ jobs:
             UNITS_CFG="${UNITS_DIR}"
             BIN_CFG="${BIN_DIR}"
           fi
+          # -Sg: allow LABEL/GOTO (used by mem/http/json ports). Local Linux
+          # developer fpc.cfg often has -Sgic; trunk snapshot defaults do not.
           printf '%s\n' \
             "-Fu${UNITS_CFG}" \
             "-Fu${UNITS_CFG}/*" \
             "-FD${BIN_CFG}" \
+            "-Sg" \
             > "${BIN_DIR}/fpc.cfg"
           echo "--- fpc.cfg ---"
           cat "${BIN_DIR}/fpc.cfg"
