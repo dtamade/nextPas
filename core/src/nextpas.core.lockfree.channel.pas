@@ -126,6 +126,8 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TLockFreeChannel: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeChannel: capacity must be > 0');
   inherited Create;
@@ -155,6 +157,13 @@ destructor TLockFreeChannelImpl.Destroy;
 var
   LI: PtrUInt;
 begin
+  { Failed construction (e.g. managed-type reject before capacity init) leaves
+    FCapacity=0. PtrUInt underflow on FCapacity-1 would walk the whole address space. }
+  if FCapacity = 0 then
+  begin
+    inherited;
+    Exit;
+  end;
   Close;
   for LI := 0 to FCapacity - 1 do
     FSlots[LI].Value := Default(T);

@@ -44,33 +44,40 @@ TAtomicBool = record
 end;
 ```
 
-### 1.3 内存序
+### 1.3 内存序（双入口）
+
+两套等价别名并存，语义相同：
 
 ```pascal
-TMemoryOrder = (
-  moRelaxed,  // 无序
-  moAcquire,  // 读屏障
-  moRelease,  // 写屏障
-  moAcqRel,   // 读写屏障
-  moSeqCst    // 全序（默认）
-);
+// C11 风格（atomic.core / 低层 hot path 推荐）
+memory_order_t = (mo_relaxed, mo_consume, mo_acquire, mo_release, mo_acq_rel, mo_seq_cst);
+
+// PascalCase 别名（facade / TAtomic* 记录常用）
+TMemoryOrder = (moRelaxed, moAcquire, moRelease, moAcqRel, moSeqCst);
+// 另有 moConsume 对应 mo_consume
 ```
+
+**选择规则**：
+1. 新低层 / 热路径代码优先 `atomic_*` + `mo_*`（例如 `atomic_load(V, mo_acquire)`）
+2. 需要类型安全所有权时用 `TAtomic*` + `moAcquire` 等 PascalCase 别名
+3. 不要在同一函数内混用两套命名；模块内保持一种风格
 
 ---
 
 ## 2. 不变量
 
 - **[INV-1]** 所有原子操作在硬件级别保证原子性
-- **[INV-2]** moSeqCst 提供最强的全序保证
+- **[INV-2]** mo_seq_cst / moSeqCst 提供最强的全序保证
 - **[INV-3]** CAS 操作返回 True 时，值已被替换
 - **[INV-4]** 原子类型必须自然对齐（SizeOf(Pointer) 边界）
+- **[INV-5]** 生产单元不直接 `uses` FPC RTL；异常经 `nextpas.core.errors`
 
 ---
 
 ## 3. 错误处理
 
-- 无异常。所有操作直接操作内存。
-- CAS 失败返回 False，不抛异常。
+- 核心原子 RMW 无异常；CAS 失败返回 False
+- 类型包装层对非法配置可抛 `EArgumentError`（经 errors 门面）
 
 ---
 

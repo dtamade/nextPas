@@ -34,7 +34,8 @@
 ├── 多生产者 + 单消费者 (MPSC)
 │   └── 使用 TMpscQueue<T>
 │       - 无界，多生产者安全
-│       - 支持 wait/timeout/try-enqueue/close
+│       - Close 后 TryEnqueue=False；Enqueue 抛 EInvalidOperationError
+│       - 生命周期: Close → join producers/waiters → Free
 │       - 性能: 最高 (无 CAS enqueue)
 │
 └── 无界 MPSC (高吞吐)
@@ -289,21 +290,24 @@
 
 ## 线程安全契约
 
+生命周期：**Close → join producers/waiters → Free**。Destroy 的 Close+drain 不替代 join。
+T1 元素类型必须 unmanaged（构造时 `EArgumentError`）。
+
 | 数据结构 | 生产者 | 消费者 | Close 安全 |
 |----------|--------|--------|-----------|
 | TSpscQueue | 1 线程 | 1 线程 | ✅ |
 | TSpmcQueue | 1 线程 | N 线程 | ✅ |
 | TMpmcQueue | N 线程 | N 线程 | ✅ |
-| TMpscQueue | N 线程 | 1 线程 | ✅ |
+| TMpscQueue | N 线程 | 1 线程 | ✅（Close 后 Enqueue 抛错；用 TryEnqueue） |
 | TSegQueue | N 线程 | N 线程 | ✅ |
 | TLockFreeStack | N 线程 | N 线程 | N/A |
 | TWorkStealingDeque | 1 owner + N thieves | 1 owner + N thieves | N/A |
 | TLockFreeChannelSpsc | 1 线程 | 1 线程 | ✅ |
-| TLockFreeChannel | N 线程 | N 线程 | ✅ |
+| TLockFreeChannel | N 线程 | N 线程 | ✅（Send 在 closed 时抛错） |
 | TLockFreeMsQueue | N 线程 | N 线程 | ✅ |
-| TLockFreeForkJoinPool | N 工作者 | N 工作者 | ✅ |
-| TCopyOnWriteArray | N 读 / 1 写 | N 读 | ✅ |
-| TLockFreeDisjointSet | N 线程 | N 线程 | N/A |
+| TLockFreeForkJoinPool | N 工作者 | N 工作者 | ✅ (T2) |
+| TCopyOnWriteArray | N 读 / 1 写 | N 读 | ✅ (T2) |
+| TLockFreeDisjointSet | N 线程 | N 线程 | N/A (T2) |
 
 ## 内存回收方案选择
 

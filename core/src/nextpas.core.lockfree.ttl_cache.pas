@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.ttl_cache;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   TTL_DEFAULT_CAPACITY = 1024;
@@ -111,11 +111,12 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.lockfree.base;
+  nextpas.core.lockfree.base,
+  nextpas.core.platform.time;
 
 function TTTLCache.GetNowMs: Int64;
 begin
-  Result := Int64(GetTickCount64);
+  Result := Int64(platform_monotonic_ns div 1000000);
 end;
 
 function TTTLCache.ComputeExpiresAt(ANow, ATTLMs: Int64): Int64;

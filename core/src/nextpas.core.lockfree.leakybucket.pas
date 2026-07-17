@@ -55,7 +55,7 @@ type
 implementation
 
 uses
-  Math,
+  nextpas.core.math,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.platform.time;
@@ -67,10 +67,10 @@ end;
 
 constructor TLeakyBucket.Create(const ALeakRatePerSecond: Double; const ABucketSize: Double);
 begin
-  if IsNan(ALeakRatePerSecond) or IsInfinite(ALeakRatePerSecond) or
+  if IsNaN(ALeakRatePerSecond) or IsInfinite(ALeakRatePerSecond) or
      (ALeakRatePerSecond <= 0) then
     raise EArgumentError.Create('TLeakyBucket: leak rate must be > 0');
-  if IsNan(ABucketSize) or IsInfinite(ABucketSize) or (ABucketSize <= 0) then
+  if IsNaN(ABucketSize) or IsInfinite(ABucketSize) or (ABucketSize <= 0) then
     raise EArgumentError.Create('TLeakyBucket: bucket size must be > 0');
   inherited Create;
   FLeakRate := ALeakRatePerSecond;
@@ -132,7 +132,7 @@ end;
 
 function TLeakyBucket.TryAddN(const AN: Double): TLeakyBucketResult;
 begin
-  if IsNan(AN) or IsInfinite(AN) or (AN <= 0) then
+  if IsNaN(AN) or IsInfinite(AN) or (AN <= 0) then
     raise EArgumentError.Create('TLeakyBucket.TryAddN: N must be > 0');
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(lbClosed);

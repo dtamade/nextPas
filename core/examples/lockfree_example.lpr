@@ -14,7 +14,7 @@ program lockfree_example;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree,
   nextpas.core.lockfree.priority_queue;

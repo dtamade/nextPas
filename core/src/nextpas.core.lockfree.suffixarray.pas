@@ -19,7 +19,7 @@ unit nextpas.core.lockfree.suffixarray;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   TSuffixArrayResult = (

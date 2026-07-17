@@ -20,7 +20,7 @@ unit nextpas.core.lockfree.consistent_hashring;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   TConsistentHashRingResult = (
@@ -68,7 +68,8 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.lockfree.base;
+  nextpas.core.lockfree.base,
+  nextpas.core.text.conv;
 
 { ---------- FNV-1a Hash ---------- }
 

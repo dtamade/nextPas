@@ -69,6 +69,8 @@ constructor TWorkStealingDequeImpl.Create(const ACapacity: PtrUInt);
 var
   LCap: PtrUInt;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TWorkStealingDeque: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TWorkStealingDeque: capacity must be > 0');
   inherited Create;

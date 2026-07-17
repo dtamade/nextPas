@@ -41,7 +41,7 @@ type
 implementation
 
 uses
-  Math,
+  nextpas.core.math,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.platform.time;
@@ -53,10 +53,10 @@ end;
 
 constructor TTokenBucketLimiter.Create(const ARatePerSecond: Double; const ABurst: Double);
 begin
-  if IsNan(ARatePerSecond) or IsInfinite(ARatePerSecond) or
+  if IsNaN(ARatePerSecond) or IsInfinite(ARatePerSecond) or
      (ARatePerSecond <= 0) then
     raise EArgumentError.Create('TTokenBucketLimiter: rate must be > 0');
-  if IsNan(ABurst) or IsInfinite(ABurst) or (ABurst <= 0) then
+  if IsNaN(ABurst) or IsInfinite(ABurst) or (ABurst <= 0) then
     raise EArgumentError.Create('TTokenBucketLimiter: burst must be > 0');
   inherited Create;
   FRate := ARatePerSecond;
@@ -120,7 +120,7 @@ end;
 
 function TTokenBucketLimiter.TryAcquireN(const AN: Double): TLockFreeRateLimiterResult;
 begin
-  if IsNan(AN) or IsInfinite(AN) or (AN <= 0) then
+  if IsNaN(AN) or IsInfinite(AN) or (AN <= 0) then
     raise EArgumentError.Create('TTokenBucketLimiter.TryAcquireN: N must be > 0');
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(rlClosed);

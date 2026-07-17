@@ -105,6 +105,8 @@ var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TMpmcQueue: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TMpmcQueue: capacity must be > 0');
   inherited Create;
