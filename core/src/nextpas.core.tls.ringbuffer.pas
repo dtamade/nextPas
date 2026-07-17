@@ -29,6 +29,7 @@ unit nextpas.core.tls.ringbuffer;
 interface
 
 uses
+  nextpas.core.mem,
   nextpas.core.base;
 
 
@@ -228,7 +229,7 @@ begin
   FMask := FCapacity - 1;
 
   // 分配缓冲区
-  GetMem(FBuffer, FCapacity);
+  FBuffer := GetMem(FCapacity);
   FillChar(FBuffer^, FCapacity, 0);
 
   // 初始化索引
@@ -244,7 +245,7 @@ end;
 destructor TLockFreeRingBuffer.Destroy;
 begin
   if FBuffer <> nil then
-    FreeMem(FBuffer);
+    FreeMem(FBuffer, FCapacity);
   inherited Destroy;
 end;
 

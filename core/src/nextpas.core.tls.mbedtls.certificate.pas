@@ -159,6 +159,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
@@ -371,7 +372,7 @@ begin
   if FX509Crt <> nil then
     FreeCertificate;
 
-  GetMem(FX509Crt, MBEDTLS_X509_CRT_SIZE);
+  FX509Crt := GetMem(MBEDTLS_X509_CRT_SIZE);
   FillChar(FX509Crt^, MBEDTLS_X509_CRT_SIZE, 0);
 
   if Assigned(mbedtls_x509_crt_init) then
@@ -407,7 +408,7 @@ begin
   begin
     if Assigned(mbedtls_x509_crt_free) then
       mbedtls_x509_crt_free(FX509Crt);
-    FreeMem(FX509Crt);
+    FreeMem(FX509Crt, MBEDTLS_X509_CRT_SIZE);
     FX509Crt := nil;
   end;
 end;
@@ -1611,7 +1612,7 @@ begin
   if FCACerts <> nil then
     FreeStore;
 
-  GetMem(FCACerts, MBEDTLS_X509_CRT_SIZE);
+  FCACerts := GetMem(MBEDTLS_X509_CRT_SIZE);
   FillChar(FCACerts^, MBEDTLS_X509_CRT_SIZE, 0);
 
   if Assigned(mbedtls_x509_crt_init) then
@@ -1624,7 +1625,7 @@ begin
   begin
     if Assigned(mbedtls_x509_crt_free) then
       mbedtls_x509_crt_free(FCACerts);
-    FreeMem(FCACerts);
+    FreeMem(FCACerts, MBEDTLS_X509_CRT_SIZE);
     FCACerts := nil;
   end;
 end;

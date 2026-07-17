@@ -85,6 +85,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic;
 
@@ -105,7 +106,7 @@ end;
 destructor TConcurrentRBTree.Destroy;
 begin
   Clear;
-  FreeMem(FNil);
+  FreeMem(FNil, SizeOf(TRBNode));
   inherited Destroy;
 end;
 
@@ -145,7 +146,7 @@ end;
 procedure TConcurrentRBTree.FreeNode(ANode: PRBNode);
 begin
   if ANode <> FNil then
-    FreeMem(ANode);
+    FreeMem(ANode, SizeOf(TRBNode));
 end;
 
 procedure TConcurrentRBTree.RotateLeft(ANode: PRBNode);

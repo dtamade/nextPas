@@ -129,6 +129,7 @@ const
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.text.strings,
     nextpas.core.tls.exceptions,
   nextpas.core.tls.random,
@@ -156,7 +157,11 @@ class operator TSecureString.Finalize(var ARecord: TSecureString);
 begin
   ARecord.ZeroMemory;
   if ARecord.FData <> nil then
-    FreeMem(ARecord.FData);
+  begin
+    if ARecord.FCapacity > 0 then
+      SecureZeroMemory(ARecord.FData, ARecord.FCapacity);
+    FreeMem(ARecord.FData, ARecord.FCapacity);
+  end;
 end;
 
 procedure TSecureString.CopyFrom(const ASrc: TSecureString);
@@ -179,11 +184,15 @@ begin
   
   ZeroMemory;
   if FData <> nil then
-    FreeMem(FData);
-    
+  begin
+    if FCapacity > 0 then
+      SecureZeroMemory(FData, FCapacity);
+    FreeMem(FData, FCapacity);
+  end;
+
   FCapacity := ASize + 16; // Some padding
   FLength := ASize;
-  GetMem(FData, FCapacity);
+  FData := GetMem(FCapacity);
   FillChar(FData^, FCapacity, 0);
 end;
 
@@ -247,7 +256,11 @@ class operator TSecureBytes.Finalize(var ARecord: TSecureBytes);
 begin
   ARecord.ZeroMemory;
   if ARecord.FData <> nil then
-    FreeMem(ARecord.FData);
+  begin
+    if ARecord.FCapacity > 0 then
+      SecureZeroMemory(ARecord.FData, ARecord.FCapacity);
+    FreeMem(ARecord.FData, ARecord.FCapacity);
+  end;
 end;
 
 procedure TSecureBytes.CopyFrom(const ASrc: TSecureBytes);
@@ -270,11 +283,15 @@ begin
   
   ZeroMemory;
   if FData <> nil then
-    FreeMem(FData);
-    
+  begin
+    if FCapacity > 0 then
+      SecureZeroMemory(FData, FCapacity);
+    FreeMem(FData, FCapacity);
+  end;
+
   FCapacity := ASize + 16;
   FLength := ASize;
-  GetMem(FData, FCapacity);
+  FData := GetMem(FCapacity);
   FillChar(FData^, FCapacity, 0);
 end;
 

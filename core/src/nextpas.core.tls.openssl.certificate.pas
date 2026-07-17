@@ -97,6 +97,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.exception,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
@@ -1836,7 +1837,7 @@ begin
   if DERLen <= 0 then
     Exit;
 
-  GetMem(DER, DERLen);
+  DER := GetMem(DERLen);
   try
     P := DER;
     i2d_X509(FX509, @P);

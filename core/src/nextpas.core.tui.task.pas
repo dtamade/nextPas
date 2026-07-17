@@ -2,7 +2,8 @@ unit nextpas.core.tui.task;
 {$I nextpas.core.settings.inc}
 
 interface
-uses nextpas.core.sync, nextpas.core.platform.thread, nextpas.core.exception;
+uses nextpas.core.sync, nextpas.core.platform.thread, nextpas.core.exception,
+  nextpas.core.mem;
 const
   TASK_QUEUE_CAPACITY = 32;
   MAX_CONCURRENT_TASKS = 8;
@@ -135,7 +136,7 @@ begin
     Res.Status := tsCancelled;
   LP^.Manager.OnThreadComplete(LP^.Id, Res);
   if LP^.Context.Param <> nil then
-    FreeMem(LP^.Context.Param);
+    FreeMem(LP^.Context.Param, LP^.Context.ParamSize);
   Dispose(LP);
   Result := nil;
 end;
@@ -421,7 +422,7 @@ begin
                              @TaskThreadEntry, LP) <> 0 then
     begin
       if LP^.Context.Param <> nil then
-        FreeMem(LP^.Context.Param);
+        FreeMem(LP^.Context.Param, LP^.Context.ParamSize);
       Dispose(LP);
       // Thread creation failed — mark task as failed
       OnThreadComplete(ToLaunch[I].Id, MakeFailedResult('Thread creation failed'));
@@ -445,7 +446,7 @@ begin
   ParamCopy := nil;
   if (Spec.Param <> nil) and (Spec.ParamSize > 0) then
   begin
-    GetMem(ParamCopy, Spec.ParamSize);
+    ParamCopy := GetMem(Spec.ParamSize);
     Move(Spec.Param^, ParamCopy^, Spec.ParamSize);
   end;
   ShouldLaunch := False;
@@ -455,7 +456,7 @@ begin
   try
     if FShuttingDown then
     begin
-      if ParamCopy <> nil then FreeMem(ParamCopy);
+      if ParamCopy <> nil then FreeMem(ParamCopy, Spec.ParamSize);
       Result := 0;
       Exit;
     end;
@@ -475,7 +476,7 @@ begin
     begin
       if FPendCount >= TASK_QUEUE_CAPACITY then
       begin
-        if ParamCopy <> nil then FreeMem(ParamCopy);
+        if ParamCopy <> nil then FreeMem(ParamCopy, Spec.ParamSize);
         Result := 0;
         Exit;
       end;
@@ -503,7 +504,7 @@ begin
     if platform_thread_spawn(FActive[Slot].Handle, @TaskThreadEntry, LP) <> 0 then
     begin
       if LP^.Context.Param <> nil then
-        FreeMem(LP^.Context.Param);
+        FreeMem(LP^.Context.Param, LP^.Context.ParamSize);
       Dispose(LP);
       OnThreadComplete(Id, MakeFailedResult('Thread creation failed'));
     end;
@@ -627,7 +628,7 @@ begin
         Pending := FPending[I];
         RemovePendingAt(I);
         if Pending.ParamCopy <> nil then
-          FreeMem(Pending.ParamCopy);
+          FreeMem(Pending.ParamCopy, Pending.ParamSize);
         Res.Data := nil;
         Res.DataSize := 0;
         Res.Error := '';
@@ -664,7 +665,7 @@ begin
     end;
     for I := 0 to FPendCount - 1 do
       if FPending[(FPendHead + I) mod TASK_QUEUE_CAPACITY].ParamCopy <> nil then
-        FreeMem(FPending[(FPendHead + I) mod TASK_QUEUE_CAPACITY].ParamCopy);
+        FreeMem(FPending[(FPendHead + I) mod TASK_QUEUE_CAPACITY].ParamCopy, FPending[(FPendHead + I) mod TASK_QUEUE_CAPACITY].ParamSize);
     FPendCount := 0;
   finally
     FLock.Release;
@@ -677,14 +678,16 @@ begin
     while FCompCount > 0 do
     begin
       if FCompletions[FCompHead].Result.Data <> nil then
-        FreeMem(FCompletions[FCompHead].Result.Data);
+        FreeMem(FCompletions[FCompHead].Result.Data,
+          FCompletions[FCompHead].Result.DataSize);
       FCompHead := (FCompHead + 1) mod TASK_QUEUE_CAPACITY;
       Dec(FCompCount);
     end;
     while FOverflowCount > 0 do
     begin
       if FOverflow[FOverflowHead].Result.Data <> nil then
-        FreeMem(FOverflow[FOverflowHead].Result.Data);
+        FreeMem(FOverflow[FOverflowHead].Result.Data,
+          FOverflow[FOverflowHead].Result.DataSize);
       FOverflowHead := (FOverflowHead + 1) mod Length(FOverflow);
       Dec(FOverflowCount);
     end;

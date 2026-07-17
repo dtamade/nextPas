@@ -388,6 +388,7 @@ function FindFirstNotOf_SSE42(const haystack: PAnsiChar; haystackLen: Integer;
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.simd.mathutil,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.scalar,
@@ -412,8 +413,8 @@ begin
       FreeMem(GTanCosBuf);
     // 分配新缓冲区
     GTanBufCapacity := aCount;
-    GetMem(GTanSinBuf, aCount * SizeOf(Single));
-    GetMem(GTanCosBuf, aCount * SizeOf(Single));
+    GTanSinBuf := GetMem(aCount * SizeOf(Single));
+    GTanCosBuf := GetMem(aCount * SizeOf(Single));
   end;
 end;
 

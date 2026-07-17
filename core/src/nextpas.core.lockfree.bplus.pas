@@ -104,6 +104,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic;
 
@@ -165,7 +166,7 @@ end;
 procedure TConcurrentBPlusTree.FreeNode(ANode: PBplusNode);
 begin
   if ANode <> nil then
-    FreeMem(ANode);
+    FreeMem(ANode, SizeOf(TBplusNode));
 end;
 
 function TConcurrentBPlusTree.FindLeaf(AKey: Int64): PBplusNode;

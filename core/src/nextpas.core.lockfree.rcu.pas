@@ -76,6 +76,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic;
 
@@ -87,14 +88,14 @@ threadvar
 
 function RcuAllocNode(ASize: SizeInt): PRcuValueNode;
 begin
-  GetMem(Result, SizeOf(TRcuValueNode) + ASize);
+  Result := GetMem(SizeOf(TRcuValueNode) + ASize);
   Result^.ValueSize := ASize;
 end;
 
 procedure RcuFreeNode(ANode: PRcuValueNode);
 begin
   if ANode <> nil then
-    FreeMem(ANode);
+    FreeMem(ANode, SizeOf(TRcuValueNode) + ANode^.ValueSize);
 end;
 
 procedure RcuCopyToNode(ANode: PRcuValueNode; const ASource; ASize: SizeInt);

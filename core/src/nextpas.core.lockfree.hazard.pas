@@ -21,6 +21,7 @@ unit nextpas.core.lockfree.hazard;
 interface
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree.base,
@@ -196,7 +197,7 @@ begin
   begin
     LNextThread := LThread^.Next;
     SetLength(LThread^.HP, 0);
-    FreeMem(LThread);
+    FreeMem(LThread, SizeOf(THazardThreadRec));
     LThread := LNextThread;
   end;
   // 释放所有退休节点
@@ -206,7 +207,7 @@ begin
     LNext := LNode^.Next;
     if Assigned(LNode^.Reclaim) then
       LNode^.Reclaim(LNode^.Data, LNode^.UserData);
-    FreeMem(LNode);
+    FreeMem(LNode, SizeOf(THazardRetiredNode));
     LNode := LNext;
   end;
   inherited;
@@ -260,7 +261,7 @@ begin
     for LI := 0 to FHPCount - 1 do
       AtomicStorePtr(LCurrent^.HP[LI], nil, moRelease);
     SetLength(LCurrent^.HP, 0);
-    FreeMem(LCurrent);
+    FreeMem(LCurrent, SizeOf(THazardThreadRec));
   finally
     ReleaseThreads;
   end;
@@ -331,7 +332,7 @@ begin
   try
     IncrementRetiredCount;
   except
-    FreeMem(LNode);
+    FreeMem(LNode, SizeOf(THazardRetiredNode));
     raise;
   end;
   repeat
@@ -408,7 +409,7 @@ begin
       LNext := LNode^.Next;
       if Assigned(LNode^.Reclaim) then
         LNode^.Reclaim(LNode^.Data, LNode^.UserData);
-      FreeMem(LNode);
+      FreeMem(LNode, SizeOf(THazardRetiredNode));
       Inc(LReclaimCount);
       if LPrev = nil then
         LList := LNext

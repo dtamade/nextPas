@@ -116,7 +116,7 @@ procedure UnregisterMbedTLSBackend;
 
 implementation
 
-uses nextpas.core.tls.context.config, nextpas.core.tls.errors, nextpas.core.tls.exceptions, nextpas.core.tls.factory, nextpas.core.tls.mbedtls.context, nextpas.core.tls.mbedtls.certificate;
+uses nextpas.core.mem, nextpas.core.tls.context.config, nextpas.core.tls.errors, nextpas.core.tls.exceptions, nextpas.core.tls.factory, nextpas.core.tls.mbedtls.context, nextpas.core.tls.mbedtls.certificate;
 
 var
   GSkipFinalizeOnDestroy: Boolean = False;
@@ -251,11 +251,11 @@ begin
   Result := False;
 
   // 分配熵源上下文
-  GetMem(FEntropyContext, MBEDTLS_ENTROPY_CONTEXT_SIZE);
+  FEntropyContext := GetMem(MBEDTLS_ENTROPY_CONTEXT_SIZE);
   FillChar(FEntropyContext^, MBEDTLS_ENTROPY_CONTEXT_SIZE, 0);
 
   // 分配随机数生成器上下文
-  GetMem(FCtrDrbgContext, MBEDTLS_CTR_DRBG_CONTEXT_SIZE);
+  FCtrDrbgContext := GetMem(MBEDTLS_CTR_DRBG_CONTEXT_SIZE);
   FillChar(FCtrDrbgContext^, MBEDTLS_CTR_DRBG_CONTEXT_SIZE, 0);
 
   // 初始化熵源
@@ -294,7 +294,7 @@ begin
   begin
     if Assigned(mbedtls_ctr_drbg_free) then
       mbedtls_ctr_drbg_free(FCtrDrbgContext);
-    FreeMem(FCtrDrbgContext);
+    FreeMem(FCtrDrbgContext, MBEDTLS_CTR_DRBG_CONTEXT_SIZE);
     FCtrDrbgContext := nil;
   end;
 
@@ -302,7 +302,7 @@ begin
   begin
     if Assigned(mbedtls_entropy_free) then
       mbedtls_entropy_free(FEntropyContext);
-    FreeMem(FEntropyContext);
+    FreeMem(FEntropyContext, MBEDTLS_ENTROPY_CONTEXT_SIZE);
     FEntropyContext := nil;
   end;
 end;
