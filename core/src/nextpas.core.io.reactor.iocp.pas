@@ -68,6 +68,7 @@ implementation
 uses
   nextpas.core.mem,
   nextpas.core.atomic,
+  nextpas.core.errors,
   nextpas.core.platform.windows.ffi;
 
 const

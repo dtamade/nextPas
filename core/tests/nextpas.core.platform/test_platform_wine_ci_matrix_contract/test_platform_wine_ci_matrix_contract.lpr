@@ -86,6 +86,10 @@ begin
     'Wine CI matrix script must invoke make inside each module test directory');
   CheckContains(LScript, 'wine-runtime-smoke',
     'Wine CI matrix script must invoke per-module wine-runtime-smoke targets');
+  CheckContains(LScript, 'wine-runtime-smoke requires wine|skip:',
+    'Wine CI matrix must SKIP only when Wine-missing markers appear in logs');
+  CheckContains(LScript, 'make failed (exit',
+    'Wine CI matrix must surface non-Wine make failures as FAIL with exit code');
   CheckContains(LScript, 'pass_count',
     'Wine CI matrix script must track pass count');
   CheckContains(LScript, 'fail_count',

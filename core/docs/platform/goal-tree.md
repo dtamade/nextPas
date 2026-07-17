@@ -63,7 +63,7 @@ Usability is **maintenance baseline 8.21** — no open wave-5. Authority: [resid
 | LT1 | QUICKSTART live-name gate + `test_platform_docs_live_patterns` smoke (F8) |
 | LT2 | `process.pipe` off all `platform_io_*` call sites; dual-IO owner-only (F5) |
 | LT3 | `platform_get_last_os_error` raw host side-channel (F6) |
-| LT4 | Windows/macOS host truth — **registered only**, not claimed ready |
+| LT4 | Windows/macOS host truth — **in progress** (wine matrix 14/14; GHA real-Windows focused gates; not promoted) |
 | Deferred | F7 mapping symmetry, F9 rename, F10 diagnostics, F14 freetype move-out |
 
 ## Host Status
@@ -123,8 +123,11 @@ args (FPC RTL ParamStr cross-platform), freetype/net (extra deps), pty (Unix-onl
 
 | Module | Tests | Known gaps |
 | --- | :-: | --- |
-| platform.io (real) | 10 | IOCP/AcceptEx/ConnectEx not tested |
-| platform.socket (real) | 16 | AcceptEx/ConnectEx/TransmitFile not tested |
+| platform.io (real) | 10 | IOCP/AcceptEx/ConnectEx not tested; GHA `test-windows-runtime` |
+| platform.socket (real) | 16 | AcceptEx/ConnectEx/TransmitFile not tested; GHA `test-windows-runtime` |
+| io.poller / IOCP smoke | 2 | file AsyncRead/Write only; GHA `test-windows-runtime` |
+
+GHA expands real-Windows focused gates but does **not** promote the host to full `ci-matrix`.
 
 ## Milestones
 
