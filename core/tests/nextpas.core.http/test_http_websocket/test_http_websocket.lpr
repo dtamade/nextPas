@@ -18,6 +18,7 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.router,
   nextpas.core.http.server,
+  nextpas.core.compress.deflate,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.platform.thread;
@@ -3076,6 +3077,210 @@ begin
   end;
 end;
 
+{ Wave I2: server with EnablePermessageDeflate accepts client offer. }
+procedure TestPermessageDeflateHandshakeAccepted;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LKey: string;
+  LOpts: TWebSocketOptions;
+begin
+  LOpts := TWebSocketOptions.Default.WithEnablePermessageDeflate(True);
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW, LOpts);
+    LWs.Close(1000, 'ok');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + LKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://example.com'#13#10 +
+      'Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; ' +
+      'server_no_context_takeover'#13#10 +
+      #13#10, 512);
+    Check(Pos('HTTP/1.1 101', LResp) > 0, 'pmd accept: got 101');
+    Check(Pos('permessage-deflate', LowerCase(LResp)) > 0,
+      'pmd accept: response includes permessage-deflate');
+    Check(Pos('client_no_context_takeover', LowerCase(LResp)) > 0,
+      'pmd accept: no context takeover');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Wave I2: default options do not negotiate deflate even if client offers. }
+procedure TestPermessageDeflateNotNegotiatedByDefault;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LKey: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    LWs.Close(1000, 'ok');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LResp := SendRawAndRead(LPort,
+      'GET /ws HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Upgrade: websocket'#13#10 +
+      'Connection: Upgrade'#13#10 +
+      'Sec-WebSocket-Key: ' + LKey + #13#10 +
+      'Sec-WebSocket-Version: 13'#13#10 +
+      'Origin: http://example.com'#13#10 +
+      'Sec-WebSocket-Extensions: permessage-deflate'#13#10 +
+      #13#10, 512);
+    Check(Pos('HTTP/1.1 101', LResp) > 0, 'pmd default: got 101');
+    Check(Pos('permessage-deflate', LowerCase(LResp)) = 0,
+      'pmd default: must not accept extension without opt-in');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Wave I2: RSV1 data frame accepted and decompressed after negotiation. }
+procedure TestPermessageDeflateCompressedTextEcho;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq, LFrame, LResp: string;
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+  LOpts: TWebSocketOptions;
+  LPlain, LComp: TBytes;
+  LPayload: string;
+  I: SizeInt;
+  LHdr: string;
+  LMask: array[0..3] of Byte;
+  LPayloadStart: Integer;
+  LLen: Byte;
+  LOut: string;
+begin
+  LOpts := TWebSocketOptions.Default.WithEnablePermessageDeflate(True);
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW, LOpts);
+    LF := LWs.ReadFrame;
+    if LF.Opcode = wsOpText then
+      LWs.WriteText(UTF8BytesToString(LF.Payload));
+    LWs.Close(1000, '');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            'Origin: http://localhost'#13#10 +
+            'Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; ' +
+            'server_no_context_takeover'#13#10 +
+            #13#10;
+    LPlain := StringToUTF8Bytes(RepeatChar('Z', 200));
+    LComp := nextpas.core.compress.deflate.RawDeflateMessageCompress(LPlain);
+    Check(Length(LComp) > 0, 'pmd echo: compressed payload non-empty');
+    Check(Length(LComp) < Length(LPlain), 'pmd echo: compression shrinks');
+
+    LMask[0] := $12; LMask[1] := $34; LMask[2] := $56; LMask[3] := $78;
+    SetLength(LHdr, 6);
+    LHdr[1] := Chr($C1); { FIN + RSV1 + text }
+    LHdr[2] := Chr($80 or Length(LComp));
+    LHdr[3] := Chr(LMask[0]);
+    LHdr[4] := Chr(LMask[1]);
+    LHdr[5] := Chr(LMask[2]);
+    LHdr[6] := Chr(LMask[3]);
+    LPayload := LHdr;
+    for I := 0 to High(LComp) do
+      LPayload := LPayload + Chr(LComp[I] xor LMask[I mod 4]);
+    LFrame := LPayload;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'pmd echo: got 101');
+      Check(Pos('permessage-deflate', LowerCase(LResp)) > 0, 'pmd echo: negotiated');
+
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 2, 'pmd echo: got frame');
+      { Server may reply with RSV1 compressed or plain if not smaller. }
+      Check((Ord(LResp[1]) and $0F) = $01, 'pmd echo: text opcode');
+      LLen := Ord(LResp[2]) and $7F;
+      Check(LLen > 0, 'pmd echo: payload present');
+      LPayloadStart := 3;
+      if (Ord(LResp[1]) and $40) <> 0 then
+      begin
+        SetLength(LComp, LLen);
+        Move(LResp[LPayloadStart], LComp[0], LLen);
+        LPlain := nextpas.core.compress.deflate.RawDeflateMessageDecompress(
+          LComp, 65536);
+        LOut := UTF8BytesToString(LPlain);
+      end
+      else
+        LOut := Copy(LResp, LPayloadStart, LLen);
+      CheckEqual(RepeatChar('Z', 200), LOut, 'pmd echo: decompressed text');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test: Origin: null rejected by default (no OnCheckOrigin) }
 procedure TestOriginNullRejectedByDefault;
 var
@@ -3173,5 +3378,11 @@ begin
   T.Test('OriginValidationRejectsDisallowed', @TestOriginValidationRejectsDisallowed);
   T.Test('OriginValidationAcceptsAllowed', @TestOriginValidationAcceptsAllowed);
   T.Test('OriginNullRejectedByDefault', @TestOriginNullRejectedByDefault);
+  T.Test('PermessageDeflateHandshakeAccepted',
+    @TestPermessageDeflateHandshakeAccepted);
+  T.Test('PermessageDeflateNotNegotiatedByDefault',
+    @TestPermessageDeflateNotNegotiatedByDefault);
+  T.Test('PermessageDeflateCompressedTextEcho',
+    @TestPermessageDeflateCompressedTextEcho);
   if not T.Run then Halt(1);
 end.

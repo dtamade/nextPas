@@ -98,7 +98,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave R4 HTTPS 1×41B zero | 完成（capabilities cache FillChar → Default；client 0 unfreed） |
 | Wave I0 Era 8 open | 完成（Inbox 三项升格 I1–I3；推荐路径 I1→I2→I3） |
 | Wave I1 pool health probe | 完成（H1 TryRead 借出探针 + H2 PING/ACK；0 unfreed） |
-| **下一执行点** | **Wave I2** — WS permessage-deflate |
+| **下一执行点** | **Wave I3** — H2 same-connection multiplex API |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
@@ -599,19 +599,20 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | RFC 7692 permessage-deflate：握手扩展协商（client/server）；压缩/解压帧路径；失败/拒协商诚实；CONTRACT WS 表；focused WS tests；0 unfreed |
 | **Don't** | 子协议全家桶；WS-over-H2；新无关 Options 家族；无界压缩内存 |
 | **Done when** | 协商成功可互通；拒协商/关闭路径绿；无默认内存炸弹 |
 | **Gates** | `test_http_websocket` / `test_http_websocket_client`；hygiene |
 | **Land paths** | websocket 实现 + tests + `core/docs/http/**`；必要时最小跨模块（压缩库 owner） |
 | **Next** | Wave I3 |
+| **Evidence** | `EnablePermessageDeflate` opt-in；握手 `client/server_no_context_takeover`；RSV1 + `RawDeflateMessageCompress/Decompress`；默认拒协商；MaxMessageSize 约束解压；`test_http_websocket` 41/0；`test_http_websocket_client` 10/0 |
 
 ### Wave I3 — H2 same-connection multiplex API
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | pending |
+| **Status** | **NEXT** |
 | **Do** | 同连接并发多 `RoundTrip`/流的**最小**公开面设计+实现；流 ID/流控/cancel 边界写 CONTRACT；与现串行池路径共存；focused 并发测试；0 unfreed |
 | **Don't** | 假 facade；破坏现同步契约默认语义；server push；h2c Upgrade |
 | **Done when** | 文档化 API + 至少 2 并发流证据；串行路径回归绿 |
@@ -644,11 +645,11 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
 3. Era 6 X0–X5 landed — Excellence Done
 4. Era 7 + R4 Done（HTTPS client 0 unfreed）
-5. Era 8 I0–I1 landed — NEXT = Wave I2（WS permessage-deflate）→ I3
+5. Era 8 I0–I2 landed — NEXT = Wave I3（H2 same-connection multiplex）
 6. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：自动执行 NEXT Wave（I2）；不要空转 H3。**
+**没有用户指令时：自动执行 NEXT Wave（I3）；不要空转 H3。**
 
 ---
 

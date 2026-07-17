@@ -38,10 +38,16 @@ type
       (same residual as HTTP client). Default: unset. }
     CancelToken: IHttpCancelToken;
     HasCancelToken: Boolean;
+    { RFC 7692 permessage-deflate. Default False (opt-in). When True, offer/
+      accept extension with client_no_context_takeover and
+      server_no_context_takeover (no shared LZ77 context across messages). }
+    EnablePermessageDeflate: Boolean;
     class function Default: TWebSocketOptions; static;
     function WithConnectTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
     function WithTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
     function WithCancelToken(const AToken: IHttpCancelToken): TWebSocketOptions;
+    function WithEnablePermessageDeflate(
+      const AEnable: Boolean): TWebSocketOptions;
     function EffectiveCancelToken: IHttpCancelToken;
   end;
 
@@ -125,7 +131,8 @@ uses
   nextpas.core.http.message,
   nextpas.core.http.client,
   nextpas.core.http.impl.tls.stream,
-  nextpas.core.tls.random;
+  nextpas.core.tls.random,
+  nextpas.core.compress.deflate;
 
 type
   TWebSocketImpl = class(TInterfacedObject, IWebSocket)
@@ -140,17 +147,25 @@ type
     FFragmentOpcode: TWebSocketOpcode;
     FFragmentPayloadSize: UInt64;
     FFragmentBinaryPayload: TBytes;
+    FFragmentCompressed: Boolean;
     FOptions: TWebSocketOptions;
     FIsClient: Boolean;
-    procedure WriteFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes);
-    procedure WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: TBytes);
+    FDeflateEnabled: Boolean;
+    procedure WriteFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes;
+      const ARsv1: Boolean = False);
+    procedure WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: TBytes;
+      const ARsv1: Boolean = False);
+    procedure WriteDataMessage(AOpcode: TWebSocketOpcode; const APayload: TBytes);
+    function MaybeDecompressPayload(const ACompressed: Boolean;
+      const APayload: TBytes): TBytes;
     procedure ReadExact(var ABuf; ACount: SizeUInt);
     procedure ThrowIfCanceled;
     procedure ClearStreamCancel;
   public
     constructor Create(const AReader: IReader; const AWriter: IWriter;
       const AOptions: TWebSocketOptions; AIsClient: Boolean = False;
-      const AStream: ITcpStream = nil);
+      const AStream: ITcpStream = nil;
+      const ADeflateEnabled: Boolean = False);
     destructor Destroy; override;
     function ReadFrame: TWebSocketFrame;
     function ReadMessage: TWebSocketFrame;
@@ -206,6 +221,7 @@ begin
   Result.Timeout := 30000;
   Result.CancelToken := nil;
   Result.HasCancelToken := False;
+  Result.EnablePermessageDeflate := False;
 end;
 
 function TWebSocketOptions.WithConnectTimeout(
@@ -227,6 +243,13 @@ begin
   Result := Self;
   Result.CancelToken := AToken;
   Result.HasCancelToken := True;
+end;
+
+function TWebSocketOptions.WithEnablePermessageDeflate(
+  const AEnable: Boolean): TWebSocketOptions;
+begin
+  Result := Self;
+  Result.EnablePermessageDeflate := AEnable;
 end;
 
 function TWebSocketOptions.EffectiveCancelToken: IHttpCancelToken;
@@ -407,6 +430,53 @@ begin
       Exit(True);
 end;
 
+const
+  { RFC 7692: always negotiate no context takeover (fresh LZ77 per message). }
+  WS_PMD_EXTENSION_VALUE =
+    'permessage-deflate; client_no_context_takeover; server_no_context_takeover';
+
+function ExtensionOfferIsPermessageDeflate(const AOffer: string): Boolean;
+var
+  LName: string;
+  LSemi: Integer;
+begin
+  LSemi := Pos(';', AOffer);
+  if LSemi > 0 then
+    LName := LowerTrimOWS(Copy(AOffer, 1, LSemi - 1))
+  else
+    LName := LowerTrimOWS(AOffer);
+  Result := LName = 'permessage-deflate';
+end;
+
+function HeaderOffersPermessageDeflate(const AHeader: string): Boolean;
+var
+  LStart, LPos: Integer;
+begin
+  Result := False;
+  if AHeader = '' then
+    Exit;
+  LStart := 1;
+  while LStart <= Length(AHeader) + 1 do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(AHeader)) and (AHeader[LPos] <> ',') do
+      Inc(LPos);
+    if ExtensionOfferIsPermessageDeflate(Copy(AHeader, LStart, LPos - LStart)) then
+      Exit(True);
+    LStart := LPos + 1;
+  end;
+end;
+
+function HeadersOfferPermessageDeflate(const AValues: TStringArray): Boolean;
+var
+  LI: SizeInt;
+begin
+  Result := False;
+  for LI := Low(AValues) to High(AValues) do
+    if HeaderOffersPermessageDeflate(AValues[LI]) then
+      Exit(True);
+end;
+
 function ComputeAcceptKey(const AKey: string): string;
 var
   LConcat: string;
@@ -516,11 +586,12 @@ function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWrite
   const AOptions: TWebSocketOptions): IWebSocket;
 var
   LUpgrade, LKey, LVersion, LOrigin: string;
-  LConnectionValues, LKeyValues: TStringArray;
+  LConnectionValues, LKeyValues, LExtValues: TStringArray;
   LAccept: string;
   LResp: string;
   LHijacker: IHttpHijacker;
   LConn: ITcpStream;
+  LDeflate: Boolean;
 begin
   if AReq = nil then
     raise EHttpError.Create(hekArgument, 'WebSocket upgrade request is nil');
@@ -570,6 +641,13 @@ begin
       raise EHttpError.Create(hekUpgrade, 'WebSocket: Origin must be present and non-null');
   end;
 
+  LDeflate := False;
+  if AOptions.EnablePermessageDeflate then
+  begin
+    LExtValues := AReq.Headers.GetAll('sec-websocket-extensions');
+    LDeflate := HeadersOfferPermessageDeflate(LExtValues);
+  end;
+
   { Hijack the connection }
   if not Supports(AW, IHttpHijacker, LHijacker) then
     raise EHttpError.Create(hekUpgrade, 'Response writer does not support connection hijack');
@@ -580,8 +658,10 @@ begin
   LResp := 'HTTP/1.1 101 Switching Protocols'#13#10 +
            'Upgrade: websocket'#13#10 +
            'Connection: Upgrade'#13#10 +
-           'Sec-WebSocket-Accept: ' + LAccept + #13#10 +
-           #13#10;
+           'Sec-WebSocket-Accept: ' + LAccept + #13#10;
+  if LDeflate then
+    LResp := LResp + 'Sec-WebSocket-Extensions: ' + WS_PMD_EXTENSION_VALUE + #13#10;
+  LResp := LResp + #13#10;
   try
     IoWriteAll(LConn as IWriter, LResp[1], SizeUInt(Length(LResp)));
   except
@@ -591,14 +671,14 @@ begin
 
   ApplyWebSocketCancelToken(LConn, AOptions.EffectiveCancelToken);
   Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions,
-    False, LConn);
+    False, LConn, LDeflate);
 end;
 
 { TWebSocketImpl }
 
 constructor TWebSocketImpl.Create(const AReader: IReader; const AWriter: IWriter;
   const AOptions: TWebSocketOptions; AIsClient: Boolean;
-  const AStream: ITcpStream);
+  const AStream: ITcpStream; const ADeflateEnabled: Boolean);
 begin
   inherited Create;
   FReader := AReader;
@@ -606,6 +686,7 @@ begin
   FStream := AStream;
   FOptions := AOptions;
   FIsClient := AIsClient;
+  FDeflateEnabled := ADeflateEnabled;
   FOpen := True;
   FCloseReceived := False;
   FCloseSent := False;
@@ -613,6 +694,7 @@ begin
   FFragmentOpcode := wsOpContinuation;
   FFragmentPayloadSize := 0;
   FFragmentBinaryPayload := nil;
+  FFragmentCompressed := False;
   if FStream <> nil then
     ApplyWebSocketCancelToken(FStream, AOptions.EffectiveCancelToken);
 end;
@@ -666,6 +748,7 @@ var
   LMasked: Boolean;
   LOpcode: Byte;
   LBuf: TBytes;
+  LRsv1: Boolean;
   I: SizeUInt;
 begin
   Result := Default(TWebSocketFrame);
@@ -674,9 +757,17 @@ begin
 
   ReadExact(LHdr[0], 2);
   Result.Fin := (LHdr[0] and $80) <> 0;
-  if (LHdr[0] and $70) <> 0 then
+  LRsv1 := (LHdr[0] and $40) <> 0;
+  if (LHdr[0] and $30) <> 0 then
     raise EHttpError.Create(hekProtocol, 'WebSocket: reserved bits set');
+  if LRsv1 and (not FDeflateEnabled) then
+    raise EHttpError.Create(hekProtocol, 'WebSocket: RSV1 without permessage-deflate');
   LOpcode := LHdr[0] and $0F;
+  if LRsv1 and (LOpcode >= $08) then
+    raise EHttpError.Create(hekProtocol, 'WebSocket: RSV1 on control frame');
+  if LRsv1 and (LOpcode = Byte(wsOpContinuation)) then
+    raise EHttpError.Create(hekProtocol,
+      'WebSocket: RSV1 only allowed on first compressed data frame');
   if not IsValidOpcode(LOpcode) then
     raise EHttpError.Create(hekProtocol, 'WebSocket: reserved or invalid opcode');
   if (LOpcode >= $08) and (not Result.Fin) then
@@ -761,22 +852,39 @@ begin
 
   if Result.Opcode = wsOpContinuation then
   begin
-    if FFragmentOpcode = wsOpText then
+    if not FFragmentCompressed then
     begin
-      FFragmentBinaryPayload := BytesConcat(FFragmentBinaryPayload, Result.Payload);
-      if Result.Fin then
-        ValidateTextPayload(BytesToString(FFragmentBinaryPayload));
+      if FFragmentOpcode = wsOpText then
+      begin
+        FFragmentBinaryPayload := BytesConcat(FFragmentBinaryPayload, Result.Payload);
+        if Result.Fin then
+          ValidateTextPayload(BytesToString(FFragmentBinaryPayload));
+      end
+      else
+        FFragmentBinaryPayload := BytesConcat(FFragmentBinaryPayload, Result.Payload);
     end
     else
       FFragmentBinaryPayload := BytesConcat(FFragmentBinaryPayload, Result.Payload);
     if Result.Fin then
     begin
-      if FFragmentOpcode = wsOpText then
+      { Final continuation always returns the fully assembled message. }
+      if FFragmentCompressed then
+      begin
+        Result.Payload := MaybeDecompressPayload(True, FFragmentBinaryPayload);
+        if FFragmentOpcode = wsOpText then
+          ValidateTextPayload(BytesToString(Result.Payload));
+      end
+      else
+      begin
         Result.Payload := FFragmentBinaryPayload;
+        if FFragmentOpcode = wsOpText then
+          ValidateTextPayload(BytesToString(Result.Payload));
+      end;
       FFragmentOpen := False;
       FFragmentOpcode := wsOpContinuation;
       FFragmentPayloadSize := 0;
       FFragmentBinaryPayload := nil;
+      FFragmentCompressed := False;
     end
     else
       Inc(FFragmentPayloadSize, LPayloadLen);
@@ -785,6 +893,7 @@ begin
   begin
     if Result.Fin then
     begin
+      Result.Payload := MaybeDecompressPayload(LRsv1, Result.Payload);
       if Result.Opcode = wsOpText then
         ValidateTextPayload(BytesToString(Result.Payload));
     end
@@ -794,6 +903,7 @@ begin
       FFragmentOpcode := Result.Opcode;
       FFragmentPayloadSize := LPayloadLen;
       FFragmentBinaryPayload := Result.Payload;
+      FFragmentCompressed := LRsv1;
     end;
   end;
 end;
@@ -801,7 +911,6 @@ end;
 function TWebSocketImpl.ReadMessage: TWebSocketFrame;
 var
   LFrame: TWebSocketFrame;
-  LPayload: TBytes;
   LMessageOpcode: TWebSocketOpcode;
 begin
   { Read frames until we get a complete data message }
@@ -839,9 +948,8 @@ begin
         end
         else
         begin
-          { First fragment — collect continuation frames }
+          { First fragment — ReadFrame assembles (and decompresses) on final Fin. }
           LMessageOpcode := LFrame.Opcode;
-          LPayload := LFrame.Payload;
           while True do
           begin
             LFrame := ReadFrame;
@@ -859,12 +967,11 @@ begin
             end;
             if LFrame.Opcode <> wsOpContinuation then
               raise EHttpError.Create(hekProtocol, 'WebSocket: expected continuation frame');
-            LPayload := BytesConcat(LPayload, LFrame.Payload);
             if LFrame.Fin then
             begin
               Result.Opcode := LMessageOpcode;
               Result.Fin := True;
-              Result.Payload := LPayload;
+              Result.Payload := LFrame.Payload;
               Exit;
             end;
           end;
@@ -877,7 +984,8 @@ begin
   end;
 end;
 
-procedure TWebSocketImpl.WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: TBytes);
+procedure TWebSocketImpl.WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: TBytes;
+  const ARsv1: Boolean);
 var
   LHdr: array[0..9] of Byte;
   LHdrLen: Integer;
@@ -891,6 +999,8 @@ begin
   LPayloadLen := SizeUInt(Length(APayload));
 
   LHdr[0] := $80 or Byte(AOpcode); { FIN + opcode }
+  if ARsv1 then
+    LHdr[0] := LHdr[0] or $40;
 
   { RFC 6455 §5.3: Client frames MUST be masked }
   if FIsClient then
@@ -1004,24 +1114,80 @@ begin
   end;
 end;
 
-procedure TWebSocketImpl.WriteFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes);
+procedure TWebSocketImpl.WriteFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes;
+  const ARsv1: Boolean);
 begin
   if not IsOpen then
     raise EHttpError.Create(hekProtocol, 'WebSocket: connection closed');
   if AOpcode in [wsOpClose, wsOpPing, wsOpPong] then
+  begin
+    if ARsv1 then
+      raise EHttpError.Create(hekProtocol, 'WebSocket: RSV1 on control frame');
     ValidateControlPayloadSize(APayload);
-  WriteFrameRaw(AOpcode, APayload);
+  end;
+  WriteFrameRaw(AOpcode, APayload, ARsv1);
+end;
+
+function TWebSocketImpl.MaybeDecompressPayload(const ACompressed: Boolean;
+  const APayload: TBytes): TBytes;
+var
+  LMax: SizeUInt;
+begin
+  if not ACompressed then
+    Exit(APayload);
+  if not FDeflateEnabled then
+    raise EHttpError.Create(hekProtocol,
+      'WebSocket: RSV1 without permessage-deflate');
+  if FOptions.MaxMessageSize > 0 then
+    LMax := SizeUInt(FOptions.MaxMessageSize)
+  else
+    LMax := SizeUInt(WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE);
+  try
+    Result := RawDeflateMessageDecompress(APayload, LMax);
+  except
+    on E: EIOError do
+      raise EHttpError.Create(hekProtocol,
+        'WebSocket: permessage-deflate decompress failed: ' + E.Message);
+  end;
+end;
+
+procedure TWebSocketImpl.WriteDataMessage(AOpcode: TWebSocketOpcode;
+  const APayload: TBytes);
+var
+  LOut: TBytes;
+  LRsv1: Boolean;
+begin
+  LRsv1 := False;
+  LOut := APayload;
+  if FDeflateEnabled then
+  begin
+    try
+      LOut := RawDeflateMessageCompress(APayload);
+      { Prefer uncompressed wire size when deflate does not shrink. }
+      if Length(LOut) < Length(APayload) then
+        LRsv1 := True
+      else
+        LOut := APayload;
+    except
+      on E: EIOError do
+      begin
+        LOut := APayload;
+        LRsv1 := False;
+      end;
+    end;
+  end;
+  WriteFrame(AOpcode, LOut, LRsv1);
 end;
 
 procedure TWebSocketImpl.WriteText(const AData: string);
 begin
   ValidateTextPayload(AData);
-  WriteFrame(wsOpText, StringToBytes(AData));
+  WriteDataMessage(wsOpText, StringToBytes(AData));
 end;
 
 procedure TWebSocketImpl.WriteBinary(const AData: TBytes);
 begin
-  WriteFrame(wsOpBinary, AData);
+  WriteDataMessage(wsOpBinary, AData);
 end;
 
 procedure TWebSocketImpl.Ping(const AData: TBytes);
@@ -1232,9 +1398,10 @@ var
   LRequest: string;
   LStatusCode: Integer;
   LHeaders: TStringArray;
-  LUpgrade, LConnection, LAcceptHeader: string;
+  LUpgrade, LConnection, LAcceptHeader, LExtHeader: string;
   LDialMs: Int64;
   LHandshakeMs: Int64;
+  LDeflate: Boolean;
 begin
   if AClient = nil then
     raise EHttpError.Create(hekArgument, 'WebSocket client is nil');
@@ -1339,6 +1506,9 @@ begin
       LRequest := LRequest + 'Origin: https://' + LHost + #13#10
     else
       LRequest := LRequest + 'Origin: http://' + LHost + #13#10;
+    if AOptions.EnablePermessageDeflate then
+      LRequest := LRequest + 'Sec-WebSocket-Extensions: ' +
+        WS_PMD_EXTENSION_VALUE + #13#10;
     LRequest := LRequest + #13#10;
 
     { Send upgrade request + read response under handshake deadline }
@@ -1369,12 +1539,20 @@ begin
     if not ValidateAcceptKey(LKey, LAcceptHeader) then
       raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Sec-WebSocket-Accept');
 
+    LDeflate := False;
+    if AOptions.EnablePermessageDeflate then
+    begin
+      LExtHeader := FindHeader(LHeaders, 'Sec-WebSocket-Extensions');
+      LDeflate := HeaderOffersPermessageDeflate(LExtHeader);
+    end;
+
     { Post-handshake: clear connect/handshake deadlines for long-lived frames.
       Keep CancelToken on the stream for mid-frame cooperative cancel. }
     ClearWebSocketStreamDeadline(LActive);
 
     { Create WebSocket client; ownership of LActive transferred into IWebSocket. }
-    Result := TWebSocketImpl.Create(LReader, LWriter, AOptions, True, LActive);
+    Result := TWebSocketImpl.Create(LReader, LWriter, AOptions, True, LActive,
+      LDeflate);
     LActive := nil;
     LConn := nil;
     LTlsConn := nil;

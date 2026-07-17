@@ -377,6 +377,96 @@ begin
   end;
 end;
 
+{ Wave I2: client+server opt-in permessage-deflate round-trip. }
+procedure TestClientPermessageDeflateEcho;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LWs: IWebSocket;
+  LFrame: TWebSocketFrame;
+  LOpts: TWebSocketOptions;
+  LMsg: string;
+  I: Integer;
+begin
+  LOpts := TWebSocketOptions.Default.WithEnablePermessageDeflate(True);
+  SetLength(LMsg, 400);
+  for I := 1 to Length(LMsg) do
+    LMsg[I] := 'A';
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW, LOpts);
+    LF := LWs.ReadFrame;
+    if LF.Opcode = wsOpText then
+      LWs.WriteText(UTF8BytesToString(LF.Payload));
+    LWs.Close(1000, '');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LWs := ConnectWebSocket('ws://127.0.0.1:' + IntToStr(LPort) + '/ws', LOpts);
+    try
+      CheckTrue(LWs.IsOpen, 'pmd client: open');
+      LWs.WriteText(LMsg);
+      LFrame := LWs.ReadFrame;
+      CheckEqual(Ord(wsOpText), Ord(LFrame.Opcode), 'pmd client: text opcode');
+      CheckEqual(LMsg, UTF8BytesToString(LFrame.Payload), 'pmd client: echo body');
+      LWs.Close(1000, 'done');
+    finally
+      LWs := nil;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Wave I2: client offers deflate but server default declines; still works plain. }
+procedure TestClientPermessageDeflateDeclinedStillWorks;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LWs: IWebSocket;
+  LFrame: TWebSocketFrame;
+  LClientOpts: TWebSocketOptions;
+begin
+  LClientOpts := TWebSocketOptions.Default.WithEnablePermessageDeflate(True);
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    { Server default: no deflate. }
+    LWs := UpgradeWebSocket(AReq, AW);
+    LF := LWs.ReadFrame;
+    if LF.Opcode = wsOpText then
+      LWs.WriteText(UTF8BytesToString(LF.Payload));
+    LWs.Close(1000, '');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LWs := ConnectWebSocket('ws://127.0.0.1:' + IntToStr(LPort) + '/ws',
+      LClientOpts);
+    try
+      LWs.WriteText('plain-ok');
+      LFrame := LWs.ReadFrame;
+      CheckEqual('plain-ok', UTF8BytesToString(LFrame.Payload),
+        'pmd declined: plain echo still works');
+      LWs.Close(1000, '');
+    finally
+      LWs := nil;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Live WS dial timeout via backlog-full peer (same technique as test_net). }
 procedure TestWebSocketLiveConnectTimeout;
 var
@@ -454,6 +544,10 @@ begin
     @TestWebSocketCanceledBeforeReadRaises);
   T.Test('WebSocket close lifecycle IsOpen and post-close IO',
     @TestWebSocketCloseLifecycle);
+  T.Test('WebSocket client permessage-deflate echo',
+    @TestClientPermessageDeflateEcho);
+  T.Test('WebSocket client permessage-deflate declined still works',
+    @TestClientPermessageDeflateDeclinedStillWorks);
   T.Test('WebSocket live ConnectTimeout via backlog-full peer',
     @TestWebSocketLiveConnectTimeout);
 
