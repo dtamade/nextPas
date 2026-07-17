@@ -20,7 +20,7 @@
 
 ---
 
-## 1. 现状盘点 (2026-07-17；Phase 20–21 收口后)
+## 1. 现状盘点 (2026-07-17；Phase 20–25 + math residual 收口后)
 
 ### 1.1 定位
 
@@ -68,8 +68,8 @@ Facade (flat public API)
 
 | Gate | 状态 | 说明 |
 |------|------|------|
-| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | 1740+ passed（2026-07-17） |
-| `make -C core/tests/nextpas.core.simd neon-optin-focused` | ✅ | 与 focused 同量级 |
+| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | **1741** passed（2026-07-17，S25b focused） |
+| `make -C core/tests/nextpas.core.simd neon-optin-focused` | ✅ | 与 focused 同量级 suite |
 | `make hygiene` | ✅ | pass |
 | `api-coverage-contract` | ✅ | missing=0 / thin=0（Phase 21 收口，strict-thin 未降） |
 | RVV 真机 Phase 3 | ⏸ | 需 RISC-V 硬件证据 |
@@ -201,7 +201,7 @@ P20 文档真相面 ──► P21 api-coverage 绿
    P26 编译器（阻塞） / P27 新 ISA（阻塞）
 ```
 
-**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **Q1** — pointer freshness）。
+**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **Q2** — math↔simd linkage）。
 不要用聊天「继续」驱动；按队列卡执行并翻 `CURRENT`。
 
 ---
@@ -291,9 +291,9 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 
 ## 9. 当前指针
 
-- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=Q1**）
-- **活动阶段**: Goal CURRENT=Q1（math residual M-V2 已关；质量波）
-- **已收口**: Phase 20–23b；Phase 25；G0；M-C1；S24a；S25a；S25b；M-V1；M-V2
+- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=Q2**）
+- **活动阶段**: Goal CURRENT=Q2（Q1 指针新鲜度已收；质量波）
+- **已收口**: Phase 20–23b；Phase 25；G0；M-C1；S24a；S25a；S25b；M-V1；M-V2；Q1
 - **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等
 
 ---
@@ -311,3 +311,4 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 - 2026-07-17: S25b 诚实 re-baseline（AddF32 SLA 4x+ / stretch 6x+；四热点 SLA 全绿）；CURRENT→M-V1。
 - 2026-07-17: M-V1 vec.batch Double 最小对称（Dot/Normalize/Transform/Lerp/Clamp）；CURRENT→M-V2。
 - 2026-07-17: M-V2 math residual docs + lane-complete 分类；CURRENT→Q1。
+- 2026-07-17: Q1 指针新鲜度（验证数 1741、去掉假 Double 缺口）；CURRENT→Q2。

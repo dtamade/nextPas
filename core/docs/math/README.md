@@ -69,13 +69,13 @@ git status --short --branch
 
 - `API.md` is the public behavior contract and command reference.
 - `GOAL_TREE.md` is the roadmap/status control map.
-- Executable goals for this lane: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) (shared math+simd queue; CURRENT is usually simd-first).
+- Executable goals for this lane: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) (shared math+simd queue; **CURRENT=Q2** after Q1 pointer pass — quality wave, not new math features).
 - `FINAL_API_MIGRATION_DESIGN.md` records stable design decisions only.
 - Canonical constant ownership: `nextpas.core.math.base` is the only unit that declares the numeric literals. `nextpas.core.math.trig` and `nextpas.core.math` expose only compile-time aliases to those base constants.
 - Public value-type methods remain scalar. SIMD acceleration is exposed through public batch APIs (`math.batch` / `math.vec.batch`), not through value-type methods.
 - `math.impl.simd` is an internal seam only and is not public API.
 - Public batch surface covers F32 and F64 scalar arrays plus `vec.batch` F32 core and Double minimal parity (Dot/Normalize/Transform/Lerp/Clamp). `Batch*F64` is a thin open-array facade over simd `Array*F64` (same core set as public F32: sin/cos/exp/ln/sqrt/abs/neg/ceil/floor/round/trunc/lerp/clamp/scale-offset).
-- Math in-lane residual (M-C1 / M-V1 / M-V2) is closed; next goals are quality wave Q1/Q2 in the shared GOAL_QUEUE.
+- Math in-lane residual (M-C1 / M-V1 / M-V2) is closed; quality wave: Q1 pointer freshness **done**, **CURRENT=Q2** (math↔simd linkage table).
 - Linux local focused suite is green with heaptrc zero evidence.
 - Windows trig host link/runtime proof exists via Wine.
 - M8 is complete on Linux+Windows; macOS host trig proof is deferred.
@@ -84,6 +84,6 @@ git status --short --branch
 ## Remaining Gaps
 
 - macOS host trig link/runtime smoke evidence (deferred; blocks full host matrix).
-- Vec batch Double parity (`vec.batch` remains primarily Single-oriented).
-- `fafafa.game` cutover to final `nextpas.core.math.*` names (M9).
+- `fafafa.game` cutover to final `nextpas.core.math.*` names (M9, blocked).
 - Do not wire public value-type methods through SIMD without profiled evidence.
+- Optional stretch only: deeper `vec.batch` Double (beyond M-V1 core set) if consumers demand — not an open residual.

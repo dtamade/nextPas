@@ -26,11 +26,11 @@
 - **NEON Batch\***: ⚠️ Phase 23a/23b 已接管 F32 Add/Sub/Mul/Min/Max/Abs/Neg；其余 Batch 槽仍 scalar
 - **RVV Memory/Batch**: ✅ **故意 0 叶 scalar**（S24a 契约锁定；真叶等 S24b 硬件）
 - **cpuinfo**: ✅ 主路径稳定
-- **活动阶段**: Phase 20–23b + Phase 25 + math residual (M-C1/M-V1/M-V2) 已收口；**Goal CURRENT=Q1**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
-- **验证基线 (2026-07-17)**:
-  - `make focused FOCUS=core/tests/nextpas.core.simd` → **1740+ passed**
-  - `neon-optin-focused` → **1740+ passed**
-  - `make -C core/tests/nextpas.core.math clean test` → **exit 0**（M-C1: 305 tests, MATH_API_SURFACE 70/0）
+- **活动阶段**: Phase 20–23b + Phase 25 + math residual (M-C1/M-V1/M-V2) + **Q1** 已收口；**Goal CURRENT=Q2**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
+- **验证基线 (2026-07-17)** — 与 roadmap §1.4 同源:
+  - `make focused FOCUS=core/tests/nextpas.core.simd` → **1741 passed**（S25b focused）
+  - `neon-optin-focused` → 同量级（与 focused 同源 suite）
+  - `make -C core/tests/nextpas.core.math clean test` → **exit 0**（M-V1 后仍绿；API surface 70/0）
   - `make hygiene` → pass
   - `api-coverage-contract` → **OK**（720/720 covered，missing=0 / thin=0，strict-thin）
   - **S25b SLA（vsTrue 主指标，S25a 主机）** — 四热点全绿:

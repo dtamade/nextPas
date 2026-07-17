@@ -25,7 +25,7 @@ Detailed behavior contracts live in `API.md`; this goal tree stays compact.
 Current roadmap position: M8 complete on Linux+Windows with macOS deferred, M7 complete, M9 not started.
 
 **math residual (M-C1 / M-V1 / M-V2): closed** on this lane (2026-07-17).
-Next executable work is quality wave **Q1** in
+Quality wave: **Q1 done**; next is **Q2** (math↔simd linkage) in
 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) — not new math code
 milestones.
 
@@ -96,8 +96,8 @@ Do not invent new math milestones in chat. Do not auto-start Wave 4 walls.
 
 ### In-lane quality (shared queue, not math feature work)
 
-1. **Q1** — pointer freshness (CURRENT / README / roadmap alignment)
-2. **Q2** — math↔simd linkage table
+1. ~~**Q1** — pointer freshness~~ **done**
+2. **Q2** — math↔simd linkage table （CURRENT）
 
 ### Explicitly blocked (out of default queue)
 
@@ -115,7 +115,8 @@ Do not invent new math milestones in chat. Do not auto-start Wave 4 walls.
 - [x] Consumer smoke after Batch leaves (M-C1)
 - [x] Residual docs / backlog classification (M-V2)
 - [x] M9 / macOS explicitly blocked (not silent unknowns)
-- [ ] Q1/Q2 pointer + linkage (shared quality wave)
+- [x] Q1 pointer freshness
+- [ ] Q2 math↔simd linkage
 
 ## Explicit Non-Goals
 
@@ -127,4 +128,4 @@ Do not invent new math milestones in chat. Do not auto-start Wave 4 walls.
 ## Goal entry
 
 Open [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md) and execute **CURRENT** only.
-Happy path (archive): `… → M-C1 ✅ → … → M-V1 ✅ → M-V2 ✅ → Q1 → Q2 → IDLE`.
+Happy path (archive): `… → M-C1 ✅ → … → M-V1 ✅ → M-V2 ✅ → Q1 ✅ → Q2 → IDLE`.

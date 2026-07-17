@@ -7,12 +7,12 @@
 ## 当前 Goal
 
 ```text
-CURRENT = Q1  (见 GOAL_QUEUE.md)
+CURRENT = Q2  (见 GOAL_QUEUE.md)
 ```
 
 | 字段 | 值 |
 |------|-----|
-| 阶段 | Q1 — Pointer freshness（CURRENT / README / roadmap 对齐） |
+| 阶段 | Q2 — math↔simd linkage table |
 | 优先级 | P2 |
 | 验收 | GOAL_QUEUE 卡内 GATES |
 
@@ -20,14 +20,13 @@ CURRENT = Q1  (见 GOAL_QUEUE.md)
 
 ### 刚完成
 
-- [x] Phase 20–23b / Phase 25 / G0 / S24a / S25a / S25b
-- [x] M-C1 / **M-V1** / **M-V2**（math residual 关闭）
+- [x] Phase 20–23b / Phase 25 / G0 / S24–S25 / M-C1 / M-V1 / M-V2
+- [x] **Q1** 指针新鲜度（验证数 1741；清除 math README 假 Double 缺口）
 
 ### 队列摘要
 
-- [ ] **Q1** 指针新鲜度（CURRENT）
-- [ ] Q2 math↔simd linkage
-- [ ] IDLE（lane 无在途代码目标）
+- [ ] **Q2** math↔simd linkage（CURRENT）
+- [ ] IDLE
 
 入口:
 
@@ -38,7 +37,7 @@ make hygiene
 
 ## 非当前工作（勿抢跑）
 
-- M9 / macOS / RVV 真机 / compiler / 新 ISA（见 Wave 4 blocked）
-- 新 math 功能里程碑（residual 已关）
+- M9 / macOS / RVV 真机 / compiler / 新 ISA（Wave 4 blocked）
+- 新 math/simd 功能里程碑（residual 已关）
 
 细节以 [GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md) 与 [roadmap.md](roadmap.md) 为准。

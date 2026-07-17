@@ -35,7 +35,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=Q1
+CURRENT=Q2
 ```
 
 ---
@@ -223,19 +223,20 @@ CURRENT=Q1
 
 ## Wave 3 — quality / elegance
 
-### Q1 — Pointer freshness  【CURRENT】
+### Q1 — Pointer freshness  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
+| **STATUS** | done (2026-07-17) |
 | **NEXT** | Q2 |
 | **WHY** | CURRENT, README, roadmap §1 must not drift |
 | **IN_SCOPE_PATHS** | simd/math docs |
 | **DELIVERABLES** | Align phase headers, verification counts, CURRENT |
 | **GATES** | diff-check |
 | **DoD** | CURRENT→Q2 or IDLE |
+| **EVIDENCE** | README/roadmap 验证 **1741**；math Remaining Gaps 去掉已完成 Double 伪缺口；指针统一 CURRENT=Q2 |
 
-### Q2 — math↔simd linkage table
+### Q2 — math↔simd linkage table  【CURRENT】
 
 | Field | Content |
 |-------|---------|
@@ -271,7 +272,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 - [x] RVV honesty (S24a)
 - [x] Perf method + hotspot remeasure (S25a)
 - [x] Hotspot close-or-revise (S25b re-baseline)
-- [ ] Docs CURRENT coherent (Q1)
+- [x] Docs CURRENT coherent (Q1)
 
 ### math lane-complete
 
@@ -295,7 +296,7 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 ## Default order (happy path)
 
 ```text
-G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b ✅ → M-V1 ✅ → M-V2 ✅ → Q1 → Q2 → IDLE
+G0 ✅ → S23a ✅ → S23b ✅ → M-C1 ✅ → S24a ✅ → S25a ✅ → S25b ✅ → M-V1 ✅ → M-V2 ✅ → Q1 ✅ → Q2 → IDLE
          (S23c optional)                       (S24b only if hardware)
 ```
 
