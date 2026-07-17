@@ -374,22 +374,38 @@
 
 ## 错误码常量
 
-| 常量 | 说明 |
-|------|------|
-| `PLATFORM_ERR_OK` | 成功 |
-| `PLATFORM_ERR_INVALID` | 无效参数 |
-| `PLATFORM_ERR_NOT_FOUND` | 不存在 |
-| `PLATFORM_ERR_EXISTS` | 已存在 |
-| `PLATFORM_ERR_ACCESS` | 权限不足 |
-| `PLATFORM_ERR_BUSY` | 资源忙 |
-| `PLATFORM_ERR_FULL` | 空间满 |
-| `PLATFORM_ERR_TIMEOUT` | 超时 |
-| `PLATFORM_ERR_ABORTED` | 中止 |
-| `PLATFORM_ERR_IO` | I/O 错误 |
-| `PLATFORM_ERR_NETWORK` | 网络错误 |
-| `PLATFORM_ERR_UNSUPPORTED` | 不支持 |
+Live authority: [`ERROR-HANDLING.md`](ERROR-HANDLING.md) and
+`nextpas.core.platform.error.pas`. Success is integer `0` (there is no
+OK constant under the PLATFORM_ERR family).
+
+| 常量 | 值 | 说明 |
+|------|---:|------|
+| *(success)* | 0 | 错误码 API 成功 |
+| `PLATFORM_ERR_PERM` | 1 | 操作不允许 |
+| `PLATFORM_ERR_NOENT` | 2 | 不存在 |
+| `PLATFORM_ERR_INTR` | 4 | 被信号中断 |
+| `PLATFORM_ERR_IO` | 5 | I/O 错误 |
+| `PLATFORM_ERR_BADF` | 9 | 无效句柄/描述符 |
+| `PLATFORM_ERR_AGAIN` | 11 | 暂时不可用 |
+| `PLATFORM_ERR_NOMEM` | 12 | 内存不足 |
+| `PLATFORM_ERR_BUSY` | 16 | 资源忙 |
+| `PLATFORM_ERR_EXIST` | 17 | 已存在 |
+| `PLATFORM_ERR_NOTDIR` | 20 | 不是目录 |
+| `PLATFORM_ERR_INVALID` | 22 | 无效参数 |
+| `PLATFORM_ERR_NOSPC` | 28 | 空间满 |
+| `PLATFORM_ERR_PIPE` | 32 | 管道断开 |
+| `PLATFORM_ERR_NOSYS` | 38 | 未实现 |
+| `PLATFORM_ERR_UNSUPPORTED` | 95 | 不支持 |
+| `PLATFORM_ERR_CONNRESET` | 104 | 连接重置 |
+| `PLATFORM_ERR_TIMEDOUT` | 110 | 超时（alias `PLATFORM_ERR_TIMEOUT`） |
+| `PLATFORM_ERR_CONNREFUSED` | 111 | 连接拒绝 |
+| `PLATFORM_ERR_PATH_TOO_LONG` | -7 | 路径过长 |
+
+Do not invent catalog-only error names. Use the live table above and
+ERROR-HANDLING; never alias NOT_FOUND/EXISTS/ACCESS/FULL/ABORTED/NETWORK
+as separate PLATFORM_ERR identifiers.
 
 ---
 
 **文档维护**: 随 platform 模块演进更新
-**最后更新**: 2026-07-06
+**最后更新**: 2026-07-17

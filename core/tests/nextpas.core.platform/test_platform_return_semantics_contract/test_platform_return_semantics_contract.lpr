@@ -282,14 +282,20 @@ begin
   Check(R > 0, 'exe_path length > 0');
 end;
 
+function ResolveDocs(const AName: string): string;
+begin
+  if FileExists('../../../docs/platform/' + AName) then
+    Exit('../../../docs/platform/' + AName);
+  if FileExists('core/docs/platform/' + AName) then
+    Exit('core/docs/platform/' + AName);
+  Result := '../../../docs/platform/' + AName;
+end;
+
 procedure TestDocsAuthorityPresent;
 var
   LPath, LText: string;
 begin
-  if FileExists('../../../docs/platform/RETURN-SEMANTICS.md') then
-    LPath := '../../../docs/platform/RETURN-SEMANTICS.md'
-  else
-    LPath := 'core/docs/platform/RETURN-SEMANTICS.md';
+  LPath := ResolveDocs('RETURN-SEMANTICS.md');
   Check(FileExists(LPath), 'RETURN-SEMANTICS.md exists');
   LText := LowerCase(FsReadFileText(LPath));
   CheckContains(LText, 'error-code', 'return tiers document error-code');
@@ -298,16 +304,52 @@ begin
   CheckContains(LText, 'platform_err_', 'return tiers cite PLATFORM_ERR_*');
   CheckContains(LText, 'paramcount', 'return tiers ban ParamCount');
 
-  if FileExists('../../../docs/platform/ERROR-HANDLING.md') then
-    LPath := '../../../docs/platform/ERROR-HANDLING.md'
-  else
-    LPath := 'core/docs/platform/ERROR-HANDLING.md';
+  LPath := ResolveDocs('ERROR-HANDLING.md');
   LText := LowerCase(FsReadFileText(LPath));
   CheckContains(LText, 'platform_err_invalid', 'ERROR-HANDLING lists INVALID');
   CheckContains(LText, '| `platform_err_invalid` | 22 |',
     'ERROR-HANDLING table row INVALID=22');
   CheckContains(LText, 'there is **no** `platform_err_ok`',
     'ERROR-HANDLING forbids PLATFORM_ERR_OK constant');
+end;
+
+procedure TestApiReferenceNoPhantomErrors;
+var
+  LPath, LText: string;
+begin
+  { API-REFERENCE is in README Authority; it must not invent error names.
+    Live table lives in ERROR-HANDLING.md / error.pas. }
+  LPath := ResolveDocs('API-REFERENCE.md');
+  Check(FileExists(LPath), 'API-REFERENCE.md exists');
+  LText := LowerCase(FsReadFileText(LPath));
+
+  CheckAbsent(LText, 'platform_err_ok',
+    'API-REFERENCE must not invent PLATFORM_ERR_OK');
+  CheckAbsent(LText, 'platform_err_not_found',
+    'API-REFERENCE must not invent PLATFORM_ERR_NOT_FOUND');
+  CheckAbsent(LText, 'platform_err_exists',
+    'API-REFERENCE must not invent PLATFORM_ERR_EXISTS');
+  CheckAbsent(LText, 'platform_err_access',
+    'API-REFERENCE must not invent PLATFORM_ERR_ACCESS');
+  CheckAbsent(LText, 'platform_err_full',
+    'API-REFERENCE must not invent PLATFORM_ERR_FULL');
+  CheckAbsent(LText, 'platform_err_aborted',
+    'API-REFERENCE must not invent PLATFORM_ERR_ABORTED');
+  CheckAbsent(LText, 'platform_err_network',
+    'API-REFERENCE must not invent PLATFORM_ERR_NETWORK');
+
+  CheckContains(LText, 'platform_err_noent',
+    'API-REFERENCE lists live PLATFORM_ERR_NOENT');
+  CheckContains(LText, 'platform_err_exist',
+    'API-REFERENCE lists live PLATFORM_ERR_EXIST');
+  CheckContains(LText, 'platform_err_invalid',
+    'API-REFERENCE lists live PLATFORM_ERR_INVALID');
+  CheckContains(LText, 'platform_err_unsupported',
+    'API-REFERENCE lists live PLATFORM_ERR_UNSUPPORTED');
+  CheckContains(LText, 'platform_err_nospc',
+    'API-REFERENCE lists live PLATFORM_ERR_NOSPC');
+  CheckContains(LText, 'error-handling.md',
+    'API-REFERENCE points to ERROR-HANDLING authority');
 end;
 
 procedure TestGetpidIsSentinelApi;
@@ -330,6 +372,7 @@ begin
   T.Test('resource uses PLATFORM_ERR_* family', @TestResourceUsesPlatformErr);
   T.Test('args runtime host cmdline', @TestArgsRuntime);
   T.Test('docs authority present', @TestDocsAuthorityPresent);
+  T.Test('API-REFERENCE has no phantom PLATFORM_ERR_*', @TestApiReferenceNoPhantomErrors);
   T.Test('getpid is value/sentinel api', @TestGetpidIsSentinelApi);
   if not T.Run then Halt(1);
 end.
