@@ -134,9 +134,11 @@ make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
 
 按改动表面追加：`test_debug_wrap` / `make stage0-heap-debug-recipe` / `test_compiler_mem`。
 
-### 仍可演进（独立 lane 或远期，非 mem dual-track 阻塞）
+### 仍可演进（非可用性阻塞）
 
-1. package manifest/lock DTO 整树 → TVec：**独立 package lane**。
-2. 双轨表面（热 vs 插件）— 设计选择，已文档化（SC9）；不追求合并。
-3. 全库历史异常类统一到 `EAllocError` — 爆炸半径大，另开 slice。
-4. Scorecard 外部对照 / 更多 host 覆盖 — 性能演进，非可用性阻塞。
+完整待办与优先级见 **[ROADMAP.md](ROADMAP.md) 时代 D**。摘要：
+
+1. package manifest/lock DTO 整树 → TVec：**独立 package lane**（非 mem）。
+2. 双轨表面（热 vs 插件）— 设计选择（SC9）；不追求合并。
+3. 全库异常类 → `EAllocError` — ROADMAP D7，默认先设计。
+4. Scorecard / 多 host — ROADMAP D4–D5，性能与契约演进。

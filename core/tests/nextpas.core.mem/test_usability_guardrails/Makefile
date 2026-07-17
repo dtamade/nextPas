@@ -17,6 +17,7 @@ run: build
 
 test-source-contract:
 	bash check_usability_docs.sh
+	bash check_consumer_audit_contracts.sh
 
 test: test-source-contract run
 
