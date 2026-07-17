@@ -1346,7 +1346,8 @@ begin
     LBody := TH2ClientResponseBodyReader.Create(AResponse.Body)
   else
     LBody := nil;
-  Result := THttpResponse.Create(AResponse.StatusCode, AResponse.Headers, LBody);
+  Result := THttpResponse.Create(AResponse.StatusCode, AResponse.Headers, LBody,
+    hvHttp2);
 end;
 
 function TH2ClientConnection.Handshake: Boolean;
