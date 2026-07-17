@@ -323,12 +323,25 @@ type
     FFailStatus: THttpStatus;
     FRaiseKind: THttpErrorKind;
     FRaiseOnFail: Boolean;
+    FRetryAfter: string;
+    FFailBody: string;
   public
     constructor Create(const AFailCount: Int32; const AFailStatus: THttpStatus);
     constructor CreateRaising(const AFailCount: Int32;
       const ARaiseKind: THttpErrorKind);
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
+    property RetryAfter: string read FRetryAfter write FRetryAfter;
+    property FailBody: string read FFailBody write FFailBody;
+  end;
+
+  TJsonBodyTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FStatus: THttpStatus;
+    FBody: string;
+  public
+    constructor Create(const AStatus: THttpStatus; const ABody: string);
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
   end;
 
   TRedirectBodyReleaseTransport = class(TInterfacedObject, IHttpTransport)
@@ -393,6 +406,7 @@ type
     function Get(const AUrl: string): IHttpResponse;
     function GetString(const AUrl: string): string;
     function GetBytes(const AUrl: string): TBytes;
+    function GetJson(const AUrl: string): IJsonDocument;
     function PostString(const AUrl, AContentType, ABody: string): string;
     function PutString(const AUrl, AContentType, ABody: string): string;
     function PatchString(const AUrl, AContentType, ABody: string): string;
@@ -1808,6 +1822,8 @@ begin
   FCalls := 0;
   FRaiseKind := hekUnknown;
   FRaiseOnFail := False;
+  FRetryAfter := '';
+  FFailBody := '';
 end;
 
 constructor TRetryTestTransport.CreateRaising(const AFailCount: Int32;
@@ -1819,22 +1835,62 @@ begin
   FCalls := 0;
   FRaiseKind := ARaiseKind;
   FRaiseOnFail := True;
+  FRetryAfter := '';
+  FFailBody := '';
 end;
 
 function TRetryTestTransport.RoundTrip(
   const AReq: IHttpRequest): IHttpResponse;
 var
   LHeaders: IHttpHeaders;
+  LBody: IReader;
 begin
   Inc(FCalls);
   if FRaiseOnFail and (FCalls <= FFailCount) then
     raise EHttpError.Create(FRaiseKind, 'retry transport fail kind');
   LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '0');
   if FCalls <= FFailCount then
-    Result := NewResponse(FFailStatus, LHeaders, nil)
+  begin
+    if FRetryAfter <> '' then
+      LHeaders.SetHeader('retry-after', FRetryAfter);
+    if FFailBody <> '' then
+    begin
+      LHeaders.SetHeader('content-length', IntToStr(Length(FFailBody)));
+      LBody := StringBodyReader(FFailBody);
+      Result := NewResponse(FFailStatus, LHeaders, LBody);
+    end
+    else
+    begin
+      LHeaders.SetHeader('content-length', '0');
+      Result := NewResponse(FFailStatus, LHeaders, nil);
+    end;
+  end
   else
+  begin
+    LHeaders.SetHeader('content-length', '0');
     Result := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
+  end;
+end;
+
+constructor TJsonBodyTransport.Create(const AStatus: THttpStatus;
+  const ABody: string);
+begin
+  inherited Create;
+  FStatus := AStatus;
+  FBody := ABody;
+end;
+
+function TJsonBodyTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-type', 'application/json');
+  LHeaders.SetHeader('content-length', IntToStr(Length(FBody)));
+  if FBody <> '' then
+    Result := NewResponse(FStatus, LHeaders, StringBodyReader(FBody))
+  else
+    Result := NewResponse(FStatus, LHeaders, nil);
 end;
 
 constructor TRedirectBodyReleaseTransport.Create;
@@ -1990,6 +2046,11 @@ end;
 function TDownloadClient.GetBytes(const AUrl: string): TBytes;
 begin
   Result := HttpGetBytes(Self, AUrl);
+end;
+
+function TDownloadClient.GetJson(const AUrl: string): IJsonDocument;
+begin
+  Result := HttpGetJson(Self, AUrl);
 end;
 
 function TDownloadClient.PostString(const AUrl, AContentType, ABody: string): string;
@@ -8598,6 +8659,142 @@ begin
   Check(not HttpHasRetryIdempotencyKey(LPost), 'key helper false');
 end;
 
+procedure TestWithRetryRetries429WithRetryAfterZero;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(1, HTTP_STATUS_TOO_MANY_REQUESTS);
+  LTransport.RetryAfter := '0';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(2).Get('http://localhost/test');
+  Check(LResp <> nil, '429 retry returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), '429 + Retry-After:0 eventually succeeds');
+  CheckEqual(2, LTransport.Calls, '429: 1 fail + 1 success');
+end;
+
+procedure TestWithRetryRetries503WithInvalidRetryAfter;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(1, HTTP_STATUS_SERVICE_UNAVAILABLE);
+  LTransport.RetryAfter := 'not-a-number';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(2).Get('http://localhost/test');
+  Check(LResp <> nil, '503 invalid Retry-After returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), 'invalid Retry-After falls back to backoff');
+  CheckEqual(2, LTransport.Calls, '503 invalid header still retries');
+end;
+
+procedure TestWithRetryDoesNotRetryOther4xx;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(5, HTTP_STATUS_FORBIDDEN);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(3).Get('http://localhost/test');
+  CheckEqual(403, Int32(LResp.StatusCode), '403 not retried');
+  CheckEqual(1, LTransport.Calls, 'only one call for non-429 4xx');
+end;
+
+procedure TestHttpGetJsonSuccess;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, '{"a":1}');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := HttpGetJson(LClient, 'http://localhost/api');
+  Check(LDoc <> nil, 'GetJson returns document');
+  Check(not LDoc.HasError, 'GetJson document has no parse error');
+  Check(LDoc.Root.IsObject, 'GetJson root is object');
+  CheckEqual(Int64(1), LDoc.Root.ObjectGet('a').AsInt, 'GetJson field a=1');
+end;
+
+procedure TestHttpGetJsonMethodSuccess;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, '{"ok":true}');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := LClient.GetJson('http://localhost/api');
+  Check(LDoc <> nil, 'method GetJson returns document');
+  Check(LDoc.Root.ObjectGet('ok').AsBool, 'method GetJson field ok');
+end;
+
+procedure TestHttpGetJsonRaisesOn404;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+  LKind: THttpErrorKind;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_NOT_FOUND, '{"err":1}');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  LKind := hekUnknown;
+  try
+    HttpGetJson(LClient, 'http://localhost/missing');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LKind := E.Kind;
+    end;
+  end;
+  Check(LCaught, 'GetJson raises on 404');
+  Check(LKind = hekStatus, 'GetJson 404 is hekStatus');
+end;
+
+procedure TestHttpGetJsonRaisesOnInvalidJson;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+  LKind: THttpErrorKind;
+  LOp: string;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, 'not-json');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  LKind := hekUnknown;
+  LOp := '';
+  try
+    HttpGetJson(LClient, 'http://localhost/bad');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LKind := E.Kind;
+      LOp := E.Op;
+    end;
+  end;
+  Check(LCaught, 'GetJson raises on invalid JSON');
+  Check(LKind = hekProtocol, 'invalid JSON is hekProtocol');
+  CheckEqual('json', LOp, 'invalid JSON Op=json');
+end;
+
+procedure TestHttpReadResponseJsonSuccess;
+var
+  LResp: IHttpResponse;
+  LDoc: IJsonDocument;
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-type', 'application/json');
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('{"n":2}'));
+  LDoc := HttpReadResponseJson(LResp, 'GET', 'http://localhost/x');
+  CheckEqual(Int64(2), LDoc.Root.ObjectGet('n').AsInt, 'ReadResponseJson field n');
+end;
+
 procedure TestCancelTokenRaisesHekCanceledAtSend;
 var
   LTransport: TRetryTestTransport;
@@ -9812,6 +10009,14 @@ begin
   T.Test('WithRetry does not retry non-idempotent POST', @TestWithRetryDoesNotRetryNonIdempotentPost);
   T.Test('WithRetry retries POST with Idempotency-Key', @TestWithRetryRetriesPostWithIdempotencyKey);
   T.Test('HttpIsRetrySafeRequest helpers', @TestHttpIsRetrySafeRequestHelpers);
+  T.Test('WithRetry retries 429 with Retry-After:0', @TestWithRetryRetries429WithRetryAfterZero);
+  T.Test('WithRetry 503 invalid Retry-After still retries', @TestWithRetryRetries503WithInvalidRetryAfter);
+  T.Test('WithRetry does not retry other 4xx', @TestWithRetryDoesNotRetryOther4xx);
+  T.Test('HttpGetJson parses object on 200', @TestHttpGetJsonSuccess);
+  T.Test('IHttpClient.GetJson parses object on 200', @TestHttpGetJsonMethodSuccess);
+  T.Test('HttpGetJson raises hekStatus on 404', @TestHttpGetJsonRaisesOn404);
+  T.Test('HttpGetJson raises hekProtocol Op=json on invalid body', @TestHttpGetJsonRaisesOnInvalidJson);
+  T.Test('HttpReadResponseJson parses object', @TestHttpReadResponseJsonSuccess);
   T.Test('CancelToken raises hekCanceled at Send', @TestCancelTokenRaisesHekCanceledAtSend);
   T.Test('CancelToken allows send when not canceled', @TestCancelTokenNotCanceledAllowsSend);
   T.Test('Client sends H1 chunked request body', @TestClientSendsChunkedRequestBody);

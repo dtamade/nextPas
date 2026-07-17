@@ -11,18 +11,31 @@
 
 ## 当前结论
 
-- **2026-07-17 cycle-7 usability inventory + Wave B fix（现行评估/修复入口）**：
+- **2026-07-17 cycle-8 usability Wave C（现行评估/修复入口）**：
+  - Assessment/research/plan：`2026-07-17-usability-assessment-cycle8.md`、
+    `2026-07-17-usability-cycle8-research.md`、
+    `2026-07-17-usability-cycle8-fix-plan.md`（pre **97/100**；
+    Wave C = GetJson ensure+decode + Retry-After/429）。
+  - **Wave C（本切片）**：
+    - `HttpGetJson` / `HttpReadResponseJson` / `IHttpClient.GetJson`：
+      ensure-2xx + `JsonParse` → `IJsonDocument`；非法 JSON →
+      `hekProtocol` Op=`json`。
+    - `WithRetry`：429 + 5xx 可重试；优先 delta-seconds `Retry-After`
+      （硬顶 60s），否则指数退避；HTTP-date 形式诚实忽略。
+    - inventory / CONTRACT / GOAL_TREE 对齐。
+  - **Deferred** 仍真：CONNECT / full PSL / Response metadata /
+    Op-everywhere / H3（GetJson decode 与 Retry-After **已 Closed**）。
+- **2026-07-17 cycle-7 usability inventory + Wave B fix（已吸收）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle7.md`、
     `2026-07-17-usability-cycle7-research.md`、
     `2026-07-17-usability-cycle7-fix-plan.md`（score **97/100** pre-Wave-B；
     Wave B = P2-1..P2-4）。
-  - **Wave B（本切片）**：
+  - **Wave B（landed）**：
     - WS `WithCancelToken` + mid-frame cancel wire（~50ms residual honest）。
     - H2 live dial-timeout e2e（backlog-full peer）。
     - client redirect resolve 热路径 `CreateOp(..., 'redirect', ...)`。
     - inventory 文档对齐 landed cycle-5 + cycle-7。
-  - **Deferred** 仍真：CONNECT / Retry-After / full PSL / Response metadata /
-    ensure-2xx JSON decode / Op-everywhere / H3。
+  - 历史 Deferred 中 GetJson / Retry-After 由 **cycle-8 Wave C Closed**。
 - **2026-07-17 cycle-6 usability inventory（已归档；process P0 = land cycle-5 已完成）**：
   - Assessment/research/plan：`2026-07-17-usability-assessment-cycle6.md` 等
     （score 96/100；Wave A land cycle-5 → **done on main**）。

@@ -51,6 +51,7 @@ IHttpClient = interface
   function Get/Post/Put/Delete/Patch/Head/Options(...): IHttpResponse;
   function GetString / GetBytes / PostString / PutString /
            PatchString / DeleteString(...): string or TBytes;  { ensure-2xx }
+  function GetJson(...): IJsonDocument;  { ensure-2xx + JsonParse }
   function PostForm / PostMultipart(...): IHttpResponse;
   function PostJson / PutJson / PatchJson / DeleteJson(...): IHttpResponse;  { raw }
   function SendStreaming(...): IHttpResponse;
@@ -67,7 +68,7 @@ end;
 |------|-----|------|
 | raw | `IHttpClient.PostJson/PutJson/PatchJson/DeleteJson` | 返回 `IHttpResponse`，**不** ensure-2xx |
 | ensure string | free-fn `HttpPostJson` / `HttpGetString` / 方法 `GetString`/`PostString`/… | ensure 2xx + body string（或 TBytes） |
-| decode product | `GetJson` / ensure+parse 到 `TJsonValue` | **Deferred**（本版本不提供） |
+| ensure+decode | free-fn `HttpGetJson` / `HttpReadResponseJson` / 方法 `GetJson` | ensure 2xx + `JsonParse` → `IJsonDocument`；非法 JSON → `hekProtocol` Op=`json` |
 
 ### 2.2 Request / Response
 
@@ -97,13 +98,17 @@ end;
 - Streaming：`SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
 - Client convenience `Post/Put/Patch/Delete` **仅** `string` / `TBytes` body 重载
   （**无** `IReader` 便捷 overload）。
-- `WithRetry(N)`：对 **5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
+- `WithRetry(N)`：对 **429**、**5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
   （`hekTimeout` / `hekConnect` / 裸 `ETimeoutError` / `ENetworkError`）在
-  最多 N 次额外尝试内指数退避重试（100ms 基、封顶 5s）。**不**重试 4xx。
+  最多 N 次额外尝试内重试。**不**重试其他 4xx。
+  **退避**（cycle-8）：若响应带可解析的 **delta-seconds** `Retry-After`，
+  优先使用该延迟（**硬顶 60s**）；否则指数退避（100ms 基、封顶 5s）。
+  HTTP-date 形式的 `Retry-After` 本 slice **忽略**（回退指数退避）。
+  长 sleep 以 ~100ms 切片轮询 cancel。
   **幂等门闩**（与 H1/H2 pool retry 同一规则）：仅当
   `HttpIsRetrySafeRequest(Req)` 为真时才进入重试环——即 method ∈
   {GET, HEAD, OPTIONS, TRACE} **或** 请求带 `Idempotency-Key` /
-  `X-Idempotency-Key`。非幂等（如裸 POST）即使 5xx/timeout 也只尝试一次。
+  `X-Idempotency-Key`。非幂等（如裸 POST）即使 5xx/timeout/429 也只尝试一次。
   重试前若 body 可回放（`IStream`）则 rewind；非空且不可回放 body 不重试。
 - 请求取消：`IHttpCancelToken`（**协作检查点**，非 OS 级硬中断）+
   `THttpRequestOptions` / builder / client 挂钩。
@@ -202,6 +207,9 @@ end;
   （自动 boundary + `EncodeMultipartFormData`）。
 - `IHttpClient.GetString` / `GetBytes`：与 free function `HttpGetString` /
   `HttpGetBytes` 等价（ensure 2xx + body）。
+- `IHttpClient.GetJson`：与 free function `HttpGetJson` 等价（ensure 2xx +
+  `JsonParse` → `IJsonDocument`）。另提供 `HttpReadResponseJson` 从已有
+  `IHttpResponse` ensure+decode。非法 JSON：`EHttpError(hekProtocol, Op=json)`。
 - H1 默认 `User-Agent: nextpas-http/1.0`（请求未设置 `User-Agent` 时注入）。
 
 ### 2.2.3b WebSocket client connect budgets（cycle-5）+ cancel（cycle-7）
@@ -404,3 +412,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.5 | P5 H3 honesty：无内建 H3 factory；QUIC 阻塞显式化 |
 | 2026-07-16 | 3.6 | Usability wave-2：hekTimeout wrap、hekArgument 消息形状、IReader fail-fast、THttpRequestWrapper、RTL isolation |
 | 2026-07-16 | 3.7 | Usability wave-3：WithRetry=5xx+IsRetryable；connect wrap；删 IReader client overload；known-CL only；删 NewStreamingRequest；多参 NewRequest 仍 deprecated；decorator forwarder |
+| 2026-07-17 | 3.8 | cycle-8 Wave C：`GetJson`/`HttpReadResponseJson` ensure+decode；`WithRetry` 支持 429 + delta-seconds Retry-After（cap 60s） |

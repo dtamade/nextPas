@@ -13,13 +13,15 @@ uses
   nextpas.core.net.server.intf,
   nextpas.core.http.base,
   nextpas.core.http.form.base,
-  nextpas.core.json.value;
+  nextpas.core.json.value,
+  nextpas.core.json;
 
 type
   TStringArray = nextpas.core.base.TStringArray;
   TFormFieldArray = nextpas.core.http.form.base.TFormFieldArray;
   THttpFileArray = nextpas.core.http.form.base.THttpFileArray;
   TJsonValue = nextpas.core.json.value.TJsonValue;
+  IJsonDocument = nextpas.core.json.IJsonDocument;
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
   ITcpServerSessionContext = nextpas.core.net.server.intf.ITcpServerSessionContext;
@@ -201,6 +203,9 @@ type
     function GetString(const AUrl: string): string;
     {** GET + ensure 2xx + body as TBytes. Raises EHttpError on non-2xx. }
     function GetBytes(const AUrl: string): TBytes;
+    {** GET + ensure 2xx + parse body as JSON document. Raises on non-2xx or
+       invalid JSON (hekProtocol, Op=json). }
+    function GetJson(const AUrl: string): IJsonDocument;
     {** POST + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
     function PostString(const AUrl, AContentType, ABody: string): string;
     {** PUT + ensure 2xx + body as string. Raises EHttpError on non-2xx. }
@@ -245,9 +250,10 @@ type
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     {** @desc Returns a decorator that retries failed requests up to AMaxRetries
-       extra attempts. Retries on 5xx responses and HttpErrorIsRetryable
-       exceptions (timeout/connect) with exponential backoff (100ms base, max 5s).
-       Does NOT retry on 4xx client errors. }
+       extra attempts. Retries on 429, 5xx responses, and HttpErrorIsRetryable
+       exceptions (timeout/connect). Delay prefers delta-seconds Retry-After
+       (capped at 60s); otherwise exponential backoff (100ms base, max 5s).
+       Does NOT retry other 4xx client errors. HTTP-date Retry-After is ignored. }
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
     {** Optional cookie jar decorator. Injects Cookie before Send and absorbs
        Set-Cookie after a successful response. }

@@ -28,7 +28,7 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 
 | Scenario | Start here |
 | --- | --- |
-| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse`; ensure-2xx: `HttpPostJson` / `GetString` / `PostString` + `HttpReadResponseBodyString` |
+| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse`; ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `GetJson` / `HttpReadResponseJson` |
 | Fluent request | `THttpRequestBuilder` → `Send` |
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
 | Auth / retry / jar / proxy | `WithBearerAuth`, `WithRetry`, `WithCookieJar`, `WithProxyUrl` |
@@ -150,11 +150,12 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `TBytes` only (publish `Content-Length`). Non-empty caller `Content-Type` is
   forwarded; empty content type omits the header. Stream bodies use
   `SendStreaming` or builder + `Send`.
-- `WithRetry(N)` retries **5xx** and **retryable transport errors**
-  (`HttpErrorIsRetryable`: timeout/connect) with exponential backoff; not 4xx.
-  Only **idempotent-safe** requests retry: GET/HEAD/OPTIONS/TRACE or
-  `Idempotency-Key` / `X-Idempotency-Key` (`HttpIsRetrySafeRequest`). Body is
-  rewound via `IStream` when present.
+- `WithRetry(N)` retries **429**, **5xx**, and **retryable transport errors**
+  (`HttpErrorIsRetryable`: timeout/connect). Prefers delta-seconds
+  `Retry-After` (cap 60s); otherwise exponential backoff (100ms base, max 5s).
+  Other 4xx are not retried. Only **idempotent-safe** requests enter the loop:
+  GET/HEAD/OPTIONS/TRACE or `Idempotency-Key` / `X-Idempotency-Key`
+  (`HttpIsRetrySafeRequest`). Body is rewound via `IStream` when present.
 - **Production client defaults**: `THttpClientOptions.Default.Timeout` is
   **30000** ms. Explicit `Timeout=0` still means unbounded post-dial IO
   (tests/special tools only). Prefer `WithTimeout` when overriding. Examples
@@ -180,6 +181,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
   (`http://host:port`); no HTTPS CONNECT in this slice.
 - `IHttpClient.GetString` / `GetBytes` and free `HttpGetString` / `HttpGetBytes`.
+- `IHttpClient.GetJson` and free `HttpGetJson` / `HttpReadResponseJson`
+  (ensure 2xx + JSON document; invalid body → `hekProtocol` Op=`json`).
 - H1 default `User-Agent: nextpas-http/1.0` when the request omits it.
 - `PostMultipart(Url, Fields, Files)` — multipart/form-data convenience POST.
 - `IHttpClient.Send` owns any close-capable request body for the duration of the
