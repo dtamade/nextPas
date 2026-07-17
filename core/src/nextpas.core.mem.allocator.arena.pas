@@ -140,7 +140,8 @@ begin
   if (APtr = nil) and (ASize = 0) then
     Exit;
   raise EAllocError.Create(aeReallocNotSupported,
-    'TLocalArenaAllocator.ReallocMem: arena does not track individual allocation sizes');
+    FormatAllocErrorMsg('TLocalArenaAllocator', 'ReallocMem',
+      'arena does not track individual allocation sizes'));
 end;
 
 procedure TLocalArenaAllocator.FreeMem(APtr: Pointer); inline;
@@ -193,7 +194,8 @@ end;
 function TVirtualArenaAllocator.ReallocMem(APtr: Pointer; ASize: SizeUInt): Pointer; inline;
 begin
   raise EAllocError.Create(aeReallocNotSupported,
-    'TVirtualArenaAllocator.ReallocMem: arena does not track individual allocation sizes');
+    FormatAllocErrorMsg('TVirtualArenaAllocator', 'ReallocMem',
+      'arena does not track individual allocation sizes'));
 end;
 
 procedure TVirtualArenaAllocator.FreeMem(APtr: Pointer); inline;
