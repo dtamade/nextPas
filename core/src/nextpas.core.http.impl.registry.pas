@@ -80,6 +80,7 @@ var
 begin
   LH2Options := TH2ClientTransportOptions.Default;
   LH2Options.Timeout := AOptions.Timeout;
+  LH2Options.ConnectTimeout := AOptions.ConnectTimeout;
   LH2Options.MaxPoolSize := AOptions.MaxPoolSize;
   LH2Options.TLSContext := AOptions.TLSContext;
   Result := NewH2ClientTransport(LH2Options);

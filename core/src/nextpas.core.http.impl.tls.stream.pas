@@ -309,14 +309,20 @@ end;
 
 procedure TTlsTcpStream.SetReadDeadline(const ADeadline: TDeadline);
 begin
+  { SSL layer timeout alone is not enough: TLS still blocks on FInner socket
+    SO_RCVTIMEO. Forward so ApplyDeadline(Timeout) can re-arm after ConnectTimeout. }
   if FStream <> nil then
     FStream.SetReadTimeout(TimeoutMsFromDeadline(ADeadline));
+  if FInner <> nil then
+    FInner.SetReadDeadline(ADeadline);
 end;
 
 procedure TTlsTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   if FStream <> nil then
     FStream.SetWriteTimeout(TimeoutMsFromDeadline(ADeadline));
+  if FInner <> nil then
+    FInner.SetWriteDeadline(ADeadline);
 end;
 
 procedure TTlsTcpStream.SetCancelToken(const AToken: INetCancelToken);

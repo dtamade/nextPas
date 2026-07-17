@@ -66,6 +66,7 @@ type
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
@@ -115,6 +116,7 @@ type
     function WithBearerAuth(const AToken: string): IHttpClient; virtual;
     function WithHeader(const AName, AValue: string): IHttpClient; virtual;
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient; virtual;
+    function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient; virtual;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient; virtual;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient; virtual;
     function WithRetry(const AMaxRetries: Int32): IHttpClient; virtual;
@@ -1136,6 +1138,12 @@ begin
     Default(THttpRequestOptions).WithTimeout(ATimeoutMs));
 end;
 
+function THttpClient.WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  { Rebuild transport so ConnectTimeout is plumbed to H1/H2 dial options. }
+  Result := NewHttpClient(FOptions.WithConnectTimeout(ATimeoutMs));
+end;
+
 function THttpClient.WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
 begin
   Result := TOptionsOverrideClient.Create(Self,
@@ -1163,6 +1171,12 @@ end;
 function THttpClient.WithProxyUrl(const AProxyUrl: string): IHttpClient;
 begin
   Result := NewHttpClient(FOptions.WithProxyUrl(AProxyUrl));
+end;
+
+function THttpClientForwarder.WithConnectTimeout(
+  const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := RebindInner(FInner.WithConnectTimeout(ATimeoutMs));
 end;
 
 { THttpClientForwarder }

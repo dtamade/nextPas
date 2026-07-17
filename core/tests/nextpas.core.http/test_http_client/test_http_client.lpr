@@ -422,6 +422,7 @@ type
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
@@ -2126,6 +2127,11 @@ begin
 end;
 
 function TDownloadClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
 begin
   Result := Self;
 end;
@@ -8940,6 +8946,37 @@ begin
     'EffectiveConnectTimeout prefers ConnectTimeout');
 end;
 
+procedure TestClientWithConnectTimeoutFluent;
+var
+  LClient: IHttpClient;
+begin
+  LClient := NewHttpClient.WithConnectTimeout(1500);
+  Check(LClient <> nil, 'WithConnectTimeout returns client');
+  { Decorator rebind: fluent chain keeps usable client surface. }
+  LClient := NewHttpClient.WithHeader('X-Test', '1').WithConnectTimeout(2000);
+  Check(LClient <> nil, 'WithConnectTimeout rebinds through decorator');
+  LClient := LClient.WithTimeout(5000);
+  Check(LClient <> nil, 'decorator chain after WithConnectTimeout works');
+end;
+
+procedure TestClientWithConnectTimeoutSourceContract;
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  Check(Pos('function THttpClient.WithConnectTimeout(', LSource) > 0,
+    'client implements WithConnectTimeout');
+  Check(Pos('NewHttpClient(FOptions.WithConnectTimeout(ATimeoutMs))', LSource) > 0,
+    'WithConnectTimeout rebuilds transport via NewHttpClient');
+  Check(Pos('function THttpClientForwarder.WithConnectTimeout(', LSource) > 0,
+    'forwarder rebinds WithConnectTimeout');
+  Check(Pos('RebindInner(FInner.WithConnectTimeout(ATimeoutMs))', LSource) > 0,
+    'forwarder re-stacks around rebuilt base client');
+  LSource := ReadFileText('../../../src/nextpas.core.http.intf.pas');
+  Check(Pos('function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;',
+    LSource) > 0, 'IHttpClient declares WithConnectTimeout');
+end;
+
 procedure TestClientDefaultUserAgent;
 var
   LRouter: THttpRouter;
@@ -9616,6 +9653,10 @@ begin
   T.Test('Client HTTP proxy absolute-form', @TestClientHttpProxyAbsoluteForm);
   T.Test('Client WithProxyUrl fluent absolute-form',
     @TestClientWithProxyUrlFluentAbsoluteForm);
+  T.Test('Client WithConnectTimeout fluent rebuilds',
+    @TestClientWithConnectTimeoutFluent);
+  T.Test('Client WithConnectTimeout source contract',
+    @TestClientWithConnectTimeoutSourceContract);
   T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);
   T.Test('Client ConnectTimeout option defaults',
     @TestClientConnectTimeoutOptionDefault);

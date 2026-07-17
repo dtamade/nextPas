@@ -28,11 +28,11 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 
 | Scenario | Start here |
 | --- | --- |
-| Client GET/POST JSON | `NewHttpClient`, `Get` / `GetString` / `PostString` / `PostJson`, `HttpReadResponseBodyString` |
+| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse`; ensure-2xx: `HttpPostJson` / `GetString` / `PostString` + `HttpReadResponseBodyString` |
 | Fluent request | `THttpRequestBuilder` → `Send` |
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
 | Auth / retry / jar / proxy | `WithBearerAuth`, `WithRetry`, `WithCookieJar`, `WithProxyUrl` |
-| Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, options `ConnectTimeout` |
+| Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, `WithConnectTimeout` / options `ConnectTimeout` |
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
 | Middleware | `CorsMiddleware`, `RecoveryMiddleware`, `Chain`, … |
