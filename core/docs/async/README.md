@@ -36,7 +36,7 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - Runtime backend detection (automatic best selection)
 - Timer heap (min-heap, O(log n) schedule/cancel)
 - I/O with deadline (timeout race mechanism with atomic CAS)
-- Cross-thread wake (platform poller wake + Post queue)
+- Cross-thread wake (platform poller wake + Post via T1 MPSC, H3-1)
 - Task state machine (idle/pending/completed/failed/timedout/cancelled)
 - Zero memory leaks (`test_async_timeout` enforces heaptrc on the timeout race mechanism)
 
@@ -73,8 +73,8 @@ end.
 | Method | Description |
 |--------|-------------|
 | `Create(AQueueDepth)` | Create loop with I/O queue depth (default 64) |
-| `Close` | Release all resources (poller, wake poller, mutex) — aborts pending I/O with -ECANCELED |
-| `IsValid` | Returns True if all three owned resources are initialized: poller, wake poller, and pending queue mutex |
+| `Close` | Release all resources (poller, wake poller, T1 MPSC pending queue) — discards unfired Post items; aborts pending I/O with -ECANCELED |
+| `IsValid` | Returns True if poller, wake poller, and pending MPSC (`FPendingReady`) are all ready |
 | `Run` | Run loop until `Stop` is called |
 | `RunOnce` | Process one batch of events then return |
 | `Poll` | Non-blocking: fire timers + poll I/O + drain pending |
@@ -174,7 +174,7 @@ type
 
 - **TPoller**: Unified I/O backend that dispatches to io_uring or epoll based on runtime detection.
 - **TTimerHeap**: Min-heap with tombstone cancellation. Entries are recycled via a free-list.
-- **Platform wake**: Cross-thread wake via the platform poller wake seam. `Post` appends to a mutex-protected queue and wakes the loop. The loop drains the queue on each iteration.
+- **Platform wake**: Cross-thread wake via the platform poller wake seam. `Post` enqueues onto a T1 MPSC queue (`TMpscQueueImpl<TAsyncPendingItem>`, H3-1) and wakes the loop. The loop thread is the single consumer (`DrainPending`).
 
 ## Backend Selection
 
@@ -263,7 +263,7 @@ This split avoids forcing a result parameter into timer/post callbacks where it 
 ### Resource lifecycle (Close convention)
 
 All heap-owning record types use `Close` for teardown:
-- `TAsyncLoop.Close` — releases poller, wake poller, mutex; aborts pending I/O
+- `TAsyncLoop.Close` — releases poller, wake poller, MPSC pending queue (discard unfired Posts); aborts pending I/O
 - `TPoller.Close` — releases backend reactor
 - `TTimerHeap.Close` — nils callback references, frees heap storage
 

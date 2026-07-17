@@ -685,7 +685,7 @@ begin
     'async README must document the unsupported backend truth');
   CheckSourceContains(LReadme, '`test_async_timeout` enforces heaptrc',
     'async README leak proof must name the gate that enforces heaptrc');
-  CheckSourceContains(LReadme, 'poller, wake poller, and pending queue mutex',
+  CheckSourceContains(LReadme, 'poller, wake poller, and pending mpsc',
     'async README IsValid truth must include every loop-owned readiness bit');
   CheckSourceContains(LReadme, 'pure idle waits may block indefinitely',
     'async README must document pure idle platform-wake waits');
