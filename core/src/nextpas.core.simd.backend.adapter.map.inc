@@ -936,120 +936,120 @@
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.MemEqual) then
-    table.MemEqual := ops.Facade.MemEqual;
+    table.Memory.Equal := ops.Facade.MemEqual;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.MemEqual := table.MemEqual;
+  ops.Facade.MemEqual := table.Memory.Equal;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.MemFindByte) then
-    table.MemFindByte := ops.Facade.MemFindByte;
+    table.Memory.FindByte := ops.Facade.MemFindByte;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.MemFindByte := table.MemFindByte;
+  ops.Facade.MemFindByte := table.Memory.FindByte;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.MemDiffRange) then
-    table.MemDiffRange := ops.Facade.MemDiffRange;
+    table.Memory.DiffRange := ops.Facade.MemDiffRange;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.MemDiffRange := table.MemDiffRange;
+  ops.Facade.MemDiffRange := table.Memory.DiffRange;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.MemCopy) then
-    table.MemCopy := ops.Facade.MemCopy;
+    table.Memory.Copy := ops.Facade.MemCopy;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.MemCopy := table.MemCopy;
+  ops.Facade.MemCopy := table.Memory.Copy;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.MemSet) then
-    table.MemSet := ops.Facade.MemSet;
+    table.Memory.Fill := ops.Facade.MemSet;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.MemSet := table.MemSet;
+  ops.Facade.MemSet := table.Memory.Fill;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.MemReverse) then
-    table.MemReverse := ops.Facade.MemReverse;
+    table.Memory.Reverse := ops.Facade.MemReverse;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.MemReverse := table.MemReverse;
+  ops.Facade.MemReverse := table.Memory.Reverse;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.SumBytes) then
-    table.SumBytes := ops.Facade.SumBytes;
+    table.Memory.SumBytes := ops.Facade.SumBytes;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.SumBytes := table.SumBytes;
+  ops.Facade.SumBytes := table.Memory.SumBytes;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.MinMaxBytes) then
-    table.MinMaxBytes := ops.Facade.MinMaxBytes;
+    table.Memory.MinMaxBytes := ops.Facade.MinMaxBytes;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.MinMaxBytes := table.MinMaxBytes;
+  ops.Facade.MinMaxBytes := table.Memory.MinMaxBytes;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.CountByte) then
-    table.CountByte := ops.Facade.CountByte;
+    table.Memory.CountByte := ops.Facade.CountByte;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.CountByte := table.CountByte;
+  ops.Facade.CountByte := table.Memory.CountByte;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.Utf8Validate) then
-    table.Utf8Validate := ops.Facade.Utf8Validate;
+    table.Memory.Utf8Validate := ops.Facade.Utf8Validate;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.Utf8Validate := table.Utf8Validate;
+  ops.Facade.Utf8Validate := table.Memory.Utf8Validate;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.AsciiIEqual) then
-    table.AsciiIEqual := ops.Facade.AsciiIEqual;
+    table.Memory.AsciiIEqual := ops.Facade.AsciiIEqual;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.AsciiIEqual := table.AsciiIEqual;
+  ops.Facade.AsciiIEqual := table.Memory.AsciiIEqual;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.ToLowerAscii) then
-    table.ToLowerAscii := ops.Facade.ToLowerAscii;
+    table.Memory.ToLowerAscii := ops.Facade.ToLowerAscii;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.ToLowerAscii := table.ToLowerAscii;
+  ops.Facade.ToLowerAscii := table.Memory.ToLowerAscii;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.ToUpperAscii) then
-    table.ToUpperAscii := ops.Facade.ToUpperAscii;
+    table.Memory.ToUpperAscii := ops.Facade.ToUpperAscii;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.ToUpperAscii := table.ToUpperAscii;
+  ops.Facade.ToUpperAscii := table.Memory.ToUpperAscii;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.BytesIndexOf) then
-    table.BytesIndexOf := ops.Facade.BytesIndexOf;
+    table.Memory.BytesIndexOf := ops.Facade.BytesIndexOf;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.BytesIndexOf := table.BytesIndexOf;
+  ops.Facade.BytesIndexOf := table.Memory.BytesIndexOf;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_FORWARD}
   if Assigned(ops.Facade.BitsetPopCount) then
-    table.BitsetPopCount := ops.Facade.BitsetPopCount;
+    table.Memory.BitsetPopCount := ops.Facade.BitsetPopCount;
 {$ENDIF}
 {$IFDEF NEXTPAS_SIMD_BACKEND_ADAPTER_BACKWARD}
-  ops.Facade.BitsetPopCount := table.BitsetPopCount;
+  ops.Facade.BitsetPopCount := table.Memory.BitsetPopCount;
 {$ENDIF}

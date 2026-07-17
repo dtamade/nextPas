@@ -436,77 +436,77 @@ end;
 
 function TMemoryAccessor.Equal(a, b: Pointer; len: SizeUInt): LongBool; inline;
 begin
-  Result := FTable^.MemEqual(a, b, len);
+  Result := FTable^.Memory.Equal(a, b, len);
 end;
 
 function TMemoryAccessor.FindByte(p: Pointer; len: SizeUInt; value: Byte): PtrInt; inline;
 begin
-  Result := FTable^.MemFindByte(p, len, value);
+  Result := FTable^.Memory.FindByte(p, len, value);
 end;
 
 function TMemoryAccessor.DiffRange(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean; inline;
 begin
-  Result := FTable^.MemDiffRange(a, b, len, firstDiff, lastDiff);
+  Result := FTable^.Memory.DiffRange(a, b, len, firstDiff, lastDiff);
 end;
 
 procedure TMemoryAccessor.Copy(src, dst: Pointer; len: SizeUInt); inline;
 begin
-  FTable^.MemCopy(src, dst, len);
+  FTable^.Memory.Copy(src, dst, len);
 end;
 
 procedure TMemoryAccessor.Fill(dst: Pointer; len: SizeUInt; value: Byte); inline;
 begin
-  FTable^.MemSet(dst, len, value);
+  FTable^.Memory.Fill(dst, len, value);
 end;
 
 procedure TMemoryAccessor.Reverse(p: Pointer; len: SizeUInt); inline;
 begin
-  FTable^.MemReverse(p, len);
+  FTable^.Memory.Reverse(p, len);
 end;
 
 function TMemoryAccessor.SumBytes(p: Pointer; len: SizeUInt): UInt64; inline;
 begin
-  Result := FTable^.SumBytes(p, len);
+  Result := FTable^.Memory.SumBytes(p, len);
 end;
 
 procedure TMemoryAccessor.MinMaxBytes(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); inline;
 begin
-  FTable^.MinMaxBytes(p, len, minVal, maxVal);
+  FTable^.Memory.MinMaxBytes(p, len, minVal, maxVal);
 end;
 
 function TMemoryAccessor.CountByte(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; inline;
 begin
-  Result := FTable^.CountByte(p, len, value);
+  Result := FTable^.Memory.CountByte(p, len, value);
 end;
 
 function TMemoryAccessor.Utf8Validate(p: Pointer; len: SizeUInt): Boolean; inline;
 begin
-  Result := FTable^.Utf8Validate(p, len);
+  Result := FTable^.Memory.Utf8Validate(p, len);
 end;
 
 function TMemoryAccessor.AsciiIEqual(a, b: Pointer; len: SizeUInt): Boolean; inline;
 begin
-  Result := FTable^.AsciiIEqual(a, b, len);
+  Result := FTable^.Memory.AsciiIEqual(a, b, len);
 end;
 
 procedure TMemoryAccessor.ToLowerAscii(p: Pointer; len: SizeUInt); inline;
 begin
-  FTable^.ToLowerAscii(p, len);
+  FTable^.Memory.ToLowerAscii(p, len);
 end;
 
 procedure TMemoryAccessor.ToUpperAscii(p: Pointer; len: SizeUInt); inline;
 begin
-  FTable^.ToUpperAscii(p, len);
+  FTable^.Memory.ToUpperAscii(p, len);
 end;
 
 function TMemoryAccessor.BytesIndexOf(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt; inline;
 begin
-  Result := FTable^.BytesIndexOf(haystack, haystackLen, needle, needleLen);
+  Result := FTable^.Memory.BytesIndexOf(haystack, haystackLen, needle, needleLen);
 end;
 
 function TMemoryAccessor.BitsetPopCount(p: Pointer; len: SizeUInt): SizeUInt; inline;
 begin
-  Result := FTable^.BitsetPopCount(p, len);
+  Result := FTable^.Memory.BitsetPopCount(p, len);
 end;
 
 // --- TBatchF32Accessor ---
@@ -1214,102 +1214,102 @@ end;
 
 function TMaskAccessor.Mask2All(mask: TMask2): Boolean; inline;
 begin
-  Result := FTable^.Mask2All(mask);
+  Result := FTable^.Mask.Mask2All(mask);
 end;
 
 function TMaskAccessor.Mask2Any(mask: TMask2): Boolean; inline;
 begin
-  Result := FTable^.Mask2Any(mask);
+  Result := FTable^.Mask.Mask2Any(mask);
 end;
 
 function TMaskAccessor.Mask2None(mask: TMask2): Boolean; inline;
 begin
-  Result := FTable^.Mask2None(mask);
+  Result := FTable^.Mask.Mask2None(mask);
 end;
 
 function TMaskAccessor.Mask2PopCount(mask: TMask2): Integer; inline;
 begin
-  Result := FTable^.Mask2PopCount(mask);
+  Result := FTable^.Mask.Mask2PopCount(mask);
 end;
 
 function TMaskAccessor.Mask2FirstSet(mask: TMask2): Integer; inline;
 begin
-  Result := FTable^.Mask2FirstSet(mask);
+  Result := FTable^.Mask.Mask2FirstSet(mask);
 end;
 
 function TMaskAccessor.Mask4All(mask: TMask4): Boolean; inline;
 begin
-  Result := FTable^.Mask4All(mask);
+  Result := FTable^.Mask.Mask4All(mask);
 end;
 
 function TMaskAccessor.Mask4Any(mask: TMask4): Boolean; inline;
 begin
-  Result := FTable^.Mask4Any(mask);
+  Result := FTable^.Mask.Mask4Any(mask);
 end;
 
 function TMaskAccessor.Mask4None(mask: TMask4): Boolean; inline;
 begin
-  Result := FTable^.Mask4None(mask);
+  Result := FTable^.Mask.Mask4None(mask);
 end;
 
 function TMaskAccessor.Mask4PopCount(mask: TMask4): Integer; inline;
 begin
-  Result := FTable^.Mask4PopCount(mask);
+  Result := FTable^.Mask.Mask4PopCount(mask);
 end;
 
 function TMaskAccessor.Mask4FirstSet(mask: TMask4): Integer; inline;
 begin
-  Result := FTable^.Mask4FirstSet(mask);
+  Result := FTable^.Mask.Mask4FirstSet(mask);
 end;
 
 function TMaskAccessor.Mask8All(mask: TMask8): Boolean; inline;
 begin
-  Result := FTable^.Mask8All(mask);
+  Result := FTable^.Mask.Mask8All(mask);
 end;
 
 function TMaskAccessor.Mask8Any(mask: TMask8): Boolean; inline;
 begin
-  Result := FTable^.Mask8Any(mask);
+  Result := FTable^.Mask.Mask8Any(mask);
 end;
 
 function TMaskAccessor.Mask8None(mask: TMask8): Boolean; inline;
 begin
-  Result := FTable^.Mask8None(mask);
+  Result := FTable^.Mask.Mask8None(mask);
 end;
 
 function TMaskAccessor.Mask8PopCount(mask: TMask8): Integer; inline;
 begin
-  Result := FTable^.Mask8PopCount(mask);
+  Result := FTable^.Mask.Mask8PopCount(mask);
 end;
 
 function TMaskAccessor.Mask8FirstSet(mask: TMask8): Integer; inline;
 begin
-  Result := FTable^.Mask8FirstSet(mask);
+  Result := FTable^.Mask.Mask8FirstSet(mask);
 end;
 
 function TMaskAccessor.Mask16All(mask: TMask16): Boolean; inline;
 begin
-  Result := FTable^.Mask16All(mask);
+  Result := FTable^.Mask.Mask16All(mask);
 end;
 
 function TMaskAccessor.Mask16Any(mask: TMask16): Boolean; inline;
 begin
-  Result := FTable^.Mask16Any(mask);
+  Result := FTable^.Mask.Mask16Any(mask);
 end;
 
 function TMaskAccessor.Mask16None(mask: TMask16): Boolean; inline;
 begin
-  Result := FTable^.Mask16None(mask);
+  Result := FTable^.Mask.Mask16None(mask);
 end;
 
 function TMaskAccessor.Mask16PopCount(mask: TMask16): Integer; inline;
 begin
-  Result := FTable^.Mask16PopCount(mask);
+  Result := FTable^.Mask.Mask16PopCount(mask);
 end;
 
 function TMaskAccessor.Mask16FirstSet(mask: TMask16): Integer; inline;
 begin
-  Result := FTable^.Mask16FirstSet(mask);
+  Result := FTable^.Mask.Mask16FirstSet(mask);
 end;
 
 // --- TBatchIntegerAccessor ---

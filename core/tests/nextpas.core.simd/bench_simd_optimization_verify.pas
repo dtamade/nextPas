@@ -148,12 +148,12 @@ begin
 
     // Warmup
     for warm := 0 to WARMUP - 1 do
-      match := g_Dispatch^.MemEqual(@LA[0], @LB[0], SIZES[sizeIdx]);
+      match := g_Dispatch^.Memory.Equal(@LA[0], @LB[0], SIZES[sizeIdx]);
 
     // Benchmark
     t0 := GetNanoTime;
     for j := 0 to ITERS - 1 do
-      match := g_Dispatch^.MemEqual(@LA[0], @LB[0], SIZES[sizeIdx]);
+      match := g_Dispatch^.Memory.Equal(@LA[0], @LB[0], SIZES[sizeIdx]);
     t1 := GetNanoTime;
 
     nsPerElem := (t1 - t0) / ITERS / SIZES[sizeIdx];

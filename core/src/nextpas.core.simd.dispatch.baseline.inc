@@ -516,25 +516,25 @@ begin
   dispatchTable.StoreF64x8 := @ScalarStoreF64x8;
   dispatchTable.SplatF64x8 := @ScalarSplatF64x8;
   // === Memory operations ===
-  dispatchTable.MemEqual := @MemEqual_Scalar;
-  dispatchTable.MemFindByte := @MemFindByte_Scalar;
-  dispatchTable.MemDiffRange := @MemDiffRange_Scalar;
-  dispatchTable.MemCopy := @MemCopy_Scalar;
-  dispatchTable.MemSet := @MemSet_Scalar;
-  dispatchTable.MemReverse := @MemReverse_Scalar;
+  dispatchTable.Memory.Equal := @MemEqual_Scalar;
+  dispatchTable.Memory.FindByte := @MemFindByte_Scalar;
+  dispatchTable.Memory.DiffRange := @MemDiffRange_Scalar;
+  dispatchTable.Memory.Copy := @MemCopy_Scalar;
+  dispatchTable.Memory.Fill := @MemSet_Scalar;
+  dispatchTable.Memory.Reverse := @MemReverse_Scalar;
   // === Statistics functions ===
-  dispatchTable.SumBytes := @SumBytes_Scalar;
-  dispatchTable.MinMaxBytes := @MinMaxBytes_Scalar;
-  dispatchTable.CountByte := @CountByte_Scalar;
+  dispatchTable.Memory.SumBytes := @SumBytes_Scalar;
+  dispatchTable.Memory.MinMaxBytes := @MinMaxBytes_Scalar;
+  dispatchTable.Memory.CountByte := @CountByte_Scalar;
   // === Text processing functions ===
-  dispatchTable.Utf8Validate := @Utf8Validate_Scalar;
-  dispatchTable.AsciiIEqual := @AsciiIEqual_Scalar;
-  dispatchTable.ToLowerAscii := @ToLowerAscii_Scalar;
-  dispatchTable.ToUpperAscii := @ToUpperAscii_Scalar;
+  dispatchTable.Memory.Utf8Validate := @Utf8Validate_Scalar;
+  dispatchTable.Memory.AsciiIEqual := @AsciiIEqual_Scalar;
+  dispatchTable.Memory.ToLowerAscii := @ToLowerAscii_Scalar;
+  dispatchTable.Memory.ToUpperAscii := @ToUpperAscii_Scalar;
   // === Search functions ===
-  dispatchTable.BytesIndexOf := @BytesIndexOf_Scalar;
+  dispatchTable.Memory.BytesIndexOf := @BytesIndexOf_Scalar;
   // === Bitset functions ===
-  dispatchTable.BitsetPopCount := @BitsetPopCount_Scalar;
+  dispatchTable.Memory.BitsetPopCount := @BitsetPopCount_Scalar;
   // === Saturating Arithmetic (音视频处理必需) ===
   dispatchTable.I8x16SatAdd := @ScalarI8x16SatAdd;
   dispatchTable.I8x16SatSub := @ScalarI8x16SatSub;
@@ -627,29 +627,29 @@ begin
   dispatchTable.MinU8x16 := @ScalarMinU8x16;
   dispatchTable.MaxU8x16 := @ScalarMaxU8x16;
   // === TMask2 操作 (2 元素) ===
-  dispatchTable.Mask2All := @ScalarMask2All;
-  dispatchTable.Mask2Any := @ScalarMask2Any;
-  dispatchTable.Mask2None := @ScalarMask2None;
-  dispatchTable.Mask2PopCount := @ScalarMask2PopCount;
-  dispatchTable.Mask2FirstSet := @ScalarMask2FirstSet;
+  dispatchTable.Mask.Mask2All := @ScalarMask2All;
+  dispatchTable.Mask.Mask2Any := @ScalarMask2Any;
+  dispatchTable.Mask.Mask2None := @ScalarMask2None;
+  dispatchTable.Mask.Mask2PopCount := @ScalarMask2PopCount;
+  dispatchTable.Mask.Mask2FirstSet := @ScalarMask2FirstSet;
   // === TMask4 操作 (4 元素) ===
-  dispatchTable.Mask4All := @ScalarMask4All;
-  dispatchTable.Mask4Any := @ScalarMask4Any;
-  dispatchTable.Mask4None := @ScalarMask4None;
-  dispatchTable.Mask4PopCount := @ScalarMask4PopCount;
-  dispatchTable.Mask4FirstSet := @ScalarMask4FirstSet;
+  dispatchTable.Mask.Mask4All := @ScalarMask4All;
+  dispatchTable.Mask.Mask4Any := @ScalarMask4Any;
+  dispatchTable.Mask.Mask4None := @ScalarMask4None;
+  dispatchTable.Mask.Mask4PopCount := @ScalarMask4PopCount;
+  dispatchTable.Mask.Mask4FirstSet := @ScalarMask4FirstSet;
   // === TMask8 操作 (8 元素) ===
-  dispatchTable.Mask8All := @ScalarMask8All;
-  dispatchTable.Mask8Any := @ScalarMask8Any;
-  dispatchTable.Mask8None := @ScalarMask8None;
-  dispatchTable.Mask8PopCount := @ScalarMask8PopCount;
-  dispatchTable.Mask8FirstSet := @ScalarMask8FirstSet;
+  dispatchTable.Mask.Mask8All := @ScalarMask8All;
+  dispatchTable.Mask.Mask8Any := @ScalarMask8Any;
+  dispatchTable.Mask.Mask8None := @ScalarMask8None;
+  dispatchTable.Mask.Mask8PopCount := @ScalarMask8PopCount;
+  dispatchTable.Mask.Mask8FirstSet := @ScalarMask8FirstSet;
   // === TMask16 操作 (16 元素) ===
-  dispatchTable.Mask16All := @ScalarMask16All;
-  dispatchTable.Mask16Any := @ScalarMask16Any;
-  dispatchTable.Mask16None := @ScalarMask16None;
-  dispatchTable.Mask16PopCount := @ScalarMask16PopCount;
-  dispatchTable.Mask16FirstSet := @ScalarMask16FirstSet;
+  dispatchTable.Mask.Mask16All := @ScalarMask16All;
+  dispatchTable.Mask.Mask16Any := @ScalarMask16Any;
+  dispatchTable.Mask.Mask16None := @ScalarMask16None;
+  dispatchTable.Mask.Mask16PopCount := @ScalarMask16PopCount;
+  dispatchTable.Mask.Mask16FirstSet := @ScalarMask16FirstSet;
   // === F64x2 Select 操作 ===
   dispatchTable.SelectF64x2 := @ScalarSelectF64x2;
   // === 512-bit Select operations ===

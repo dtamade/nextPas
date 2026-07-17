@@ -414,140 +414,140 @@ function Mask2All(mask: TMask2): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask2All(mask);
+  Result := dispatch^.Mask.Mask2All(mask);
 end;
 
 function Mask2Any(mask: TMask2): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask2Any(mask);
+  Result := dispatch^.Mask.Mask2Any(mask);
 end;
 
 function Mask2None(mask: TMask2): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask2None(mask);
+  Result := dispatch^.Mask.Mask2None(mask);
 end;
 
 function Mask2PopCount(mask: TMask2): Integer;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask2PopCount(mask);
+  Result := dispatch^.Mask.Mask2PopCount(mask);
 end;
 
 function Mask2FirstSet(mask: TMask2): Integer;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask2FirstSet(mask);
+  Result := dispatch^.Mask.Mask2FirstSet(mask);
 end;
 
 function Mask4All(mask: TMask4): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask4All(mask);
+  Result := dispatch^.Mask.Mask4All(mask);
 end;
 
 function Mask4Any(mask: TMask4): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask4Any(mask);
+  Result := dispatch^.Mask.Mask4Any(mask);
 end;
 
 function Mask4None(mask: TMask4): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask4None(mask);
+  Result := dispatch^.Mask.Mask4None(mask);
 end;
 
 function Mask4PopCount(mask: TMask4): Integer;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask4PopCount(mask);
+  Result := dispatch^.Mask.Mask4PopCount(mask);
 end;
 
 function Mask4FirstSet(mask: TMask4): Integer;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask4FirstSet(mask);
+  Result := dispatch^.Mask.Mask4FirstSet(mask);
 end;
 
 function Mask8All(mask: TMask8): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask8All(mask);
+  Result := dispatch^.Mask.Mask8All(mask);
 end;
 
 function Mask8Any(mask: TMask8): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask8Any(mask);
+  Result := dispatch^.Mask.Mask8Any(mask);
 end;
 
 function Mask8None(mask: TMask8): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask8None(mask);
+  Result := dispatch^.Mask.Mask8None(mask);
 end;
 
 function Mask8PopCount(mask: TMask8): Integer;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask8PopCount(mask);
+  Result := dispatch^.Mask.Mask8PopCount(mask);
 end;
 
 function Mask8FirstSet(mask: TMask8): Integer;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask8FirstSet(mask);
+  Result := dispatch^.Mask.Mask8FirstSet(mask);
 end;
 
 function Mask16All(mask: TMask16): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask16All(mask);
+  Result := dispatch^.Mask.Mask16All(mask);
 end;
 
 function Mask16Any(mask: TMask16): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask16Any(mask);
+  Result := dispatch^.Mask.Mask16Any(mask);
 end;
 
 function Mask16None(mask: TMask16): Boolean;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask16None(mask);
+  Result := dispatch^.Mask.Mask16None(mask);
 end;
 
 function Mask16PopCount(mask: TMask16): Integer;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask16PopCount(mask);
+  Result := dispatch^.Mask.Mask16PopCount(mask);
 end;
 
 function Mask16FirstSet(mask: TMask16): Integer;
 var dispatch: PSimdDispatchTable;
 begin
   dispatch := GetSimdFacadeDispatchFastPath;
-  Result := dispatch^.Mask16FirstSet(mask);
+  Result := dispatch^.Mask.Mask16FirstSet(mask);
 end;
 
 // === I32x4 Operations Implementation ===

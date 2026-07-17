@@ -178,12 +178,14 @@ end;
 4. 公共 `ArrayAddI32` 等 API 签名不变；仅内部访问路径变化
 5. **非目标**：不补齐 baseline 历史未实现的 41/52 scalar 槽（与 HEAD fill 面一致；依赖 clone 链继承）
 
-### Phase 4: Memory + Mask 嵌表 (下一步)
-1. flat `Mem*` / `Mask*` 槽迁入 `Memory: TSimdMemoryOps` / `Mask: TSimdMaskOps`
-2. 注意 Memory 命名映射：`MemSet` → `Memory.Fill`，`MemCopy` → `Memory.Copy` 等
-3. backend register + facade + tests 同步；验证通过
+### Phase 4: Memory + Mask 嵌表 — ✅ (2026-07-17)
+1. `TSimdDispatchTable` 中 flat Memory/Mask 槽迁入 `Memory: TSimdMemoryOps`（15 字段）与 `Mask: TSimdMaskOps`（20 字段）
+2. 命名映射：`MemEqual`→`Memory.Equal`，`MemFindByte`→`Memory.FindByte`，`MemDiffRange`→`Memory.DiffRange`，`MemCopy`→`Memory.Copy`，`MemSet`→`Memory.Fill`，`MemReverse`→`Memory.Reverse`；其余聚合/字符串/bitset 槽同名迁入 `Memory.*`；`Mask*` 迁入 `Mask.Mask*`
+3. Scalar baseline、SSE2/SSE4.2/AVX2/AVX512/NEON/RVV register fill 改为 `dispatchTable.Memory.*` / `dispatchTable.Mask.*`
+4. facade 公开 `Mem*`/`Mask*` API、accessor、dataplane、adapter map、text.utf8、相关 tests/benches 同步迁路径
+5. **保持不变**：`TNextPasSimdPublicApi` / V2 Public ABI 字段名仍 flat（`MemEqual`/`MemSet`/`SumBytes`…）；对外 facade 签名不变
 
-### Phase 5: CoreVectors 嵌表 (后续)
+### Phase 5: CoreVectors 嵌表 (下一步)
 1. 定义 `TSimdCoreVectorOps`（types 尚无）并将 ~533 个向量 flat 槽迁入
 2. 机械路径迁移，零语义改动；强验证后单主题 commit
 

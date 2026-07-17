@@ -6897,12 +6897,12 @@ begin
   CheckTrue(Pos('function utf8validate_neon(', LFacadeSource) = 0, 'Utf8Validate_NEON dead wrapper should be removed from the platform facade include');
   CheckTrue(Pos('function bytesindexof_neon(', LFacadeSource) = 0, 'BytesIndexOf_NEON dead wrapper should be removed from the platform facade include');
 
-  AssertRegisterKeepsBaseScalar('MemDiffRange', 'table.MemDiffRange := @MemDiffRange_NEON;');
-  AssertRegisterKeepsBaseScalar('MemCopy', 'table.MemCopy := @MemCopy_NEON;');
-  AssertRegisterKeepsBaseScalar('MemSet', 'table.MemSet := @MemSet_NEON;');
-  AssertRegisterKeepsBaseScalar('MemReverse', 'table.MemReverse := @MemReverse_NEON;');
-  AssertRegisterKeepsBaseScalar('Utf8Validate', 'table.Utf8Validate := @Utf8Validate_NEON;');
-  AssertRegisterKeepsBaseScalar('BytesIndexOf', 'table.BytesIndexOf := @BytesIndexOf_NEON;');
+  AssertRegisterKeepsBaseScalar('MemDiffRange', 'table.Memory.DiffRange := @MemDiffRange_NEON;');
+  AssertRegisterKeepsBaseScalar('MemCopy', 'table.Memory.Copy := @MemCopy_NEON;');
+  AssertRegisterKeepsBaseScalar('MemSet', 'table.Memory.Fill := @MemSet_NEON;');
+  AssertRegisterKeepsBaseScalar('MemReverse', 'table.Memory.Reverse := @MemReverse_NEON;');
+  AssertRegisterKeepsBaseScalar('Utf8Validate', 'table.Memory.Utf8Validate := @Utf8Validate_NEON;');
+  AssertRegisterKeepsBaseScalar('BytesIndexOf', 'table.Memory.BytesIndexOf := @BytesIndexOf_NEON;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -6913,12 +6913,12 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('MemDiffRange', Pointer(LScalarTable.MemDiffRange), Pointer(LNEONTable.MemDiffRange));
-  AssertSlotReusesScalar('MemCopy', Pointer(LScalarTable.MemCopy), Pointer(LNEONTable.MemCopy));
-  AssertSlotReusesScalar('MemSet', Pointer(LScalarTable.MemSet), Pointer(LNEONTable.MemSet));
-  AssertSlotReusesScalar('MemReverse', Pointer(LScalarTable.MemReverse), Pointer(LNEONTable.MemReverse));
-  AssertSlotReusesScalar('Utf8Validate', Pointer(LScalarTable.Utf8Validate), Pointer(LNEONTable.Utf8Validate));
-  AssertSlotReusesScalar('BytesIndexOf', Pointer(LScalarTable.BytesIndexOf), Pointer(LNEONTable.BytesIndexOf));
+  AssertSlotReusesScalar('MemDiffRange', Pointer(LScalarTable.Memory.DiffRange), Pointer(LNEONTable.Memory.DiffRange));
+  AssertSlotReusesScalar('MemCopy', Pointer(LScalarTable.Memory.Copy), Pointer(LNEONTable.Memory.Copy));
+  AssertSlotReusesScalar('MemSet', Pointer(LScalarTable.Memory.Fill), Pointer(LNEONTable.Memory.Fill));
+  AssertSlotReusesScalar('MemReverse', Pointer(LScalarTable.Memory.Reverse), Pointer(LNEONTable.Memory.Reverse));
+  AssertSlotReusesScalar('Utf8Validate', Pointer(LScalarTable.Memory.Utf8Validate), Pointer(LNEONTable.Memory.Utf8Validate));
+  AssertSlotReusesScalar('BytesIndexOf', Pointer(LScalarTable.Memory.BytesIndexOf), Pointer(LNEONTable.Memory.BytesIndexOf));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_FacadeFastSlots_OnlyBind_When_NEONAsm_Is_Compiled;
@@ -6987,15 +6987,15 @@ begin
   AssertSourceContains('ToUpperAscii_NEON scalar fallback', 'ToUpperAscii_Scalar(p, len);', LScalarFacadeSource);
   AssertSourceContains('BitsetPopCount_NEON scalar fallback', 'Result := BitsetPopCount_Scalar(p, byteLen);', LScalarFacadeSource);
 
-  CheckTrue(Pos('table.memequal := @memequal_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MemEqual_NEON explicitly so asm builds keep the native facade slot');
-  CheckTrue(Pos('table.memfindbyte := @memfindbyte_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MemFindByte_NEON explicitly so asm builds keep the native facade slot');
-  CheckTrue(Pos('table.sumbytes := @sumbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire SumBytes_NEON explicitly so asm builds keep the native facade slot');
-  CheckTrue(Pos('table.minmaxbytes := @minmaxbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MinMaxBytes_NEON explicitly so asm builds keep the native facade slot');
-  CheckTrue(Pos('table.countbyte := @countbyte_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire CountByte_NEON explicitly so asm builds keep the native facade slot');
-  CheckTrue(Pos('table.asciiiequal := @asciiiequal_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire AsciiIEqual_NEON explicitly so asm builds keep the native facade slot');
-  CheckTrue(Pos('table.tolowerascii := @tolowerascii_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire ToLowerAscii_NEON explicitly so asm builds keep the native facade slot');
-  CheckTrue(Pos('table.toupperascii := @toupperascii_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire ToUpperAscii_NEON explicitly so asm builds keep the native facade slot');
-  CheckTrue(Pos('table.bitsetpopcount := @bitsetpopcount_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire BitsetPopCount_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.equal := @memequal_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MemEqual_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.findbyte := @memfindbyte_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MemFindByte_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.sumbytes := @sumbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire SumBytes_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.minmaxbytes := @minmaxbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MinMaxBytes_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.countbyte := @countbyte_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire CountByte_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.asciiiequal := @asciiiequal_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire AsciiIEqual_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.tolowerascii := @tolowerascii_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire ToLowerAscii_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.toupperascii := @toupperascii_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire ToUpperAscii_NEON explicitly so asm builds keep the native facade slot');
+  CheckTrue(Pos('table.memory.bitsetpopcount := @bitsetpopcount_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire BitsetPopCount_NEON explicitly so asm builds keep the native facade slot');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -7006,15 +7006,15 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertRuntimeSlotExpectation('MemEqual', Pointer(LScalarTable.MemEqual), Pointer(LNEONTable.MemEqual));
-  AssertRuntimeSlotExpectation('MemFindByte', Pointer(LScalarTable.MemFindByte), Pointer(LNEONTable.MemFindByte));
-  AssertRuntimeSlotExpectation('SumBytes', Pointer(LScalarTable.SumBytes), Pointer(LNEONTable.SumBytes));
-  AssertRuntimeSlotExpectation('MinMaxBytes', Pointer(LScalarTable.MinMaxBytes), Pointer(LNEONTable.MinMaxBytes));
-  AssertRuntimeSlotExpectation('CountByte', Pointer(LScalarTable.CountByte), Pointer(LNEONTable.CountByte));
-  AssertRuntimeSlotExpectation('AsciiIEqual', Pointer(LScalarTable.AsciiIEqual), Pointer(LNEONTable.AsciiIEqual));
-  AssertRuntimeSlotExpectation('ToLowerAscii', Pointer(LScalarTable.ToLowerAscii), Pointer(LNEONTable.ToLowerAscii));
-  AssertRuntimeSlotExpectation('ToUpperAscii', Pointer(LScalarTable.ToUpperAscii), Pointer(LNEONTable.ToUpperAscii));
-  AssertRuntimeSlotExpectation('BitsetPopCount', Pointer(LScalarTable.BitsetPopCount), Pointer(LNEONTable.BitsetPopCount));
+  AssertRuntimeSlotExpectation('MemEqual', Pointer(LScalarTable.Memory.Equal), Pointer(LNEONTable.Memory.Equal));
+  AssertRuntimeSlotExpectation('MemFindByte', Pointer(LScalarTable.Memory.FindByte), Pointer(LNEONTable.Memory.FindByte));
+  AssertRuntimeSlotExpectation('SumBytes', Pointer(LScalarTable.Memory.SumBytes), Pointer(LNEONTable.Memory.SumBytes));
+  AssertRuntimeSlotExpectation('MinMaxBytes', Pointer(LScalarTable.Memory.MinMaxBytes), Pointer(LNEONTable.Memory.MinMaxBytes));
+  AssertRuntimeSlotExpectation('CountByte', Pointer(LScalarTable.Memory.CountByte), Pointer(LNEONTable.Memory.CountByte));
+  AssertRuntimeSlotExpectation('AsciiIEqual', Pointer(LScalarTable.Memory.AsciiIEqual), Pointer(LNEONTable.Memory.AsciiIEqual));
+  AssertRuntimeSlotExpectation('ToLowerAscii', Pointer(LScalarTable.Memory.ToLowerAscii), Pointer(LNEONTable.Memory.ToLowerAscii));
+  AssertRuntimeSlotExpectation('ToUpperAscii', Pointer(LScalarTable.Memory.ToUpperAscii), Pointer(LNEONTable.Memory.ToUpperAscii));
+  AssertRuntimeSlotExpectation('BitsetPopCount', Pointer(LScalarTable.Memory.BitsetPopCount), Pointer(LNEONTable.Memory.BitsetPopCount));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_WideFloatMemoryUtilitySlots_Bind_AsmHelpers_When_Available;
@@ -9085,26 +9085,26 @@ begin
   AssertDeadWrapperRemoved('NEONMask16PopCount', 'function NEONMask16PopCount(');
   AssertDeadWrapperRemoved('NEONMask16FirstSet', 'function NEONMask16FirstSet(');
 
-  AssertRegisterKeepsBaseScalar('Mask2All', 'table.Mask2All := @NEONMask2All;');
-  AssertRegisterKeepsBaseScalar('Mask2Any', 'table.Mask2Any := @NEONMask2Any;');
-  AssertRegisterKeepsBaseScalar('Mask2None', 'table.Mask2None := @NEONMask2None;');
-  AssertRegisterKeepsBaseScalar('Mask2PopCount', 'table.Mask2PopCount := @NEONMask2PopCount;');
-  AssertRegisterKeepsBaseScalar('Mask2FirstSet', 'table.Mask2FirstSet := @NEONMask2FirstSet;');
-  AssertRegisterKeepsBaseScalar('Mask4All', 'table.Mask4All := @NEONMask4All;');
-  AssertRegisterKeepsBaseScalar('Mask4Any', 'table.Mask4Any := @NEONMask4Any;');
-  AssertRegisterKeepsBaseScalar('Mask4None', 'table.Mask4None := @NEONMask4None;');
-  AssertRegisterKeepsBaseScalar('Mask4PopCount', 'table.Mask4PopCount := @NEONMask4PopCount;');
-  AssertRegisterKeepsBaseScalar('Mask4FirstSet', 'table.Mask4FirstSet := @NEONMask4FirstSet;');
-  AssertRegisterKeepsBaseScalar('Mask8All', 'table.Mask8All := @NEONMask8All;');
-  AssertRegisterKeepsBaseScalar('Mask8Any', 'table.Mask8Any := @NEONMask8Any;');
-  AssertRegisterKeepsBaseScalar('Mask8None', 'table.Mask8None := @NEONMask8None;');
-  AssertRegisterKeepsBaseScalar('Mask8PopCount', 'table.Mask8PopCount := @NEONMask8PopCount;');
-  AssertRegisterKeepsBaseScalar('Mask8FirstSet', 'table.Mask8FirstSet := @NEONMask8FirstSet;');
-  AssertRegisterKeepsBaseScalar('Mask16All', 'table.Mask16All := @NEONMask16All;');
-  AssertRegisterKeepsBaseScalar('Mask16Any', 'table.Mask16Any := @NEONMask16Any;');
-  AssertRegisterKeepsBaseScalar('Mask16None', 'table.Mask16None := @NEONMask16None;');
-  AssertRegisterKeepsBaseScalar('Mask16PopCount', 'table.Mask16PopCount := @NEONMask16PopCount;');
-  AssertRegisterKeepsBaseScalar('Mask16FirstSet', 'table.Mask16FirstSet := @NEONMask16FirstSet;');
+  AssertRegisterKeepsBaseScalar('Mask2All', 'table.Mask.Mask2All := @NEONMask2All;');
+  AssertRegisterKeepsBaseScalar('Mask2Any', 'table.Mask.Mask2Any := @NEONMask2Any;');
+  AssertRegisterKeepsBaseScalar('Mask2None', 'table.Mask.Mask2None := @NEONMask2None;');
+  AssertRegisterKeepsBaseScalar('Mask2PopCount', 'table.Mask.Mask2PopCount := @NEONMask2PopCount;');
+  AssertRegisterKeepsBaseScalar('Mask2FirstSet', 'table.Mask.Mask2FirstSet := @NEONMask2FirstSet;');
+  AssertRegisterKeepsBaseScalar('Mask4All', 'table.Mask.Mask4All := @NEONMask4All;');
+  AssertRegisterKeepsBaseScalar('Mask4Any', 'table.Mask.Mask4Any := @NEONMask4Any;');
+  AssertRegisterKeepsBaseScalar('Mask4None', 'table.Mask.Mask4None := @NEONMask4None;');
+  AssertRegisterKeepsBaseScalar('Mask4PopCount', 'table.Mask.Mask4PopCount := @NEONMask4PopCount;');
+  AssertRegisterKeepsBaseScalar('Mask4FirstSet', 'table.Mask.Mask4FirstSet := @NEONMask4FirstSet;');
+  AssertRegisterKeepsBaseScalar('Mask8All', 'table.Mask.Mask8All := @NEONMask8All;');
+  AssertRegisterKeepsBaseScalar('Mask8Any', 'table.Mask.Mask8Any := @NEONMask8Any;');
+  AssertRegisterKeepsBaseScalar('Mask8None', 'table.Mask.Mask8None := @NEONMask8None;');
+  AssertRegisterKeepsBaseScalar('Mask8PopCount', 'table.Mask.Mask8PopCount := @NEONMask8PopCount;');
+  AssertRegisterKeepsBaseScalar('Mask8FirstSet', 'table.Mask.Mask8FirstSet := @NEONMask8FirstSet;');
+  AssertRegisterKeepsBaseScalar('Mask16All', 'table.Mask.Mask16All := @NEONMask16All;');
+  AssertRegisterKeepsBaseScalar('Mask16Any', 'table.Mask.Mask16Any := @NEONMask16Any;');
+  AssertRegisterKeepsBaseScalar('Mask16None', 'table.Mask.Mask16None := @NEONMask16None;');
+  AssertRegisterKeepsBaseScalar('Mask16PopCount', 'table.Mask.Mask16PopCount := @NEONMask16PopCount;');
+  AssertRegisterKeepsBaseScalar('Mask16FirstSet', 'table.Mask.Mask16FirstSet := @NEONMask16FirstSet;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -9115,26 +9115,26 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('Mask2All', Pointer(LScalarTable.Mask2All), Pointer(LNEONTable.Mask2All));
-  AssertSlotReusesScalar('Mask2Any', Pointer(LScalarTable.Mask2Any), Pointer(LNEONTable.Mask2Any));
-  AssertSlotReusesScalar('Mask2None', Pointer(LScalarTable.Mask2None), Pointer(LNEONTable.Mask2None));
-  AssertSlotReusesScalar('Mask2PopCount', Pointer(LScalarTable.Mask2PopCount), Pointer(LNEONTable.Mask2PopCount));
-  AssertSlotReusesScalar('Mask2FirstSet', Pointer(LScalarTable.Mask2FirstSet), Pointer(LNEONTable.Mask2FirstSet));
-  AssertSlotReusesScalar('Mask4All', Pointer(LScalarTable.Mask4All), Pointer(LNEONTable.Mask4All));
-  AssertSlotReusesScalar('Mask4Any', Pointer(LScalarTable.Mask4Any), Pointer(LNEONTable.Mask4Any));
-  AssertSlotReusesScalar('Mask4None', Pointer(LScalarTable.Mask4None), Pointer(LNEONTable.Mask4None));
-  AssertSlotReusesScalar('Mask4PopCount', Pointer(LScalarTable.Mask4PopCount), Pointer(LNEONTable.Mask4PopCount));
-  AssertSlotReusesScalar('Mask4FirstSet', Pointer(LScalarTable.Mask4FirstSet), Pointer(LNEONTable.Mask4FirstSet));
-  AssertSlotReusesScalar('Mask8All', Pointer(LScalarTable.Mask8All), Pointer(LNEONTable.Mask8All));
-  AssertSlotReusesScalar('Mask8Any', Pointer(LScalarTable.Mask8Any), Pointer(LNEONTable.Mask8Any));
-  AssertSlotReusesScalar('Mask8None', Pointer(LScalarTable.Mask8None), Pointer(LNEONTable.Mask8None));
-  AssertSlotReusesScalar('Mask8PopCount', Pointer(LScalarTable.Mask8PopCount), Pointer(LNEONTable.Mask8PopCount));
-  AssertSlotReusesScalar('Mask8FirstSet', Pointer(LScalarTable.Mask8FirstSet), Pointer(LNEONTable.Mask8FirstSet));
-  AssertSlotReusesScalar('Mask16All', Pointer(LScalarTable.Mask16All), Pointer(LNEONTable.Mask16All));
-  AssertSlotReusesScalar('Mask16Any', Pointer(LScalarTable.Mask16Any), Pointer(LNEONTable.Mask16Any));
-  AssertSlotReusesScalar('Mask16None', Pointer(LScalarTable.Mask16None), Pointer(LNEONTable.Mask16None));
-  AssertSlotReusesScalar('Mask16PopCount', Pointer(LScalarTable.Mask16PopCount), Pointer(LNEONTable.Mask16PopCount));
-  AssertSlotReusesScalar('Mask16FirstSet', Pointer(LScalarTable.Mask16FirstSet), Pointer(LNEONTable.Mask16FirstSet));
+  AssertSlotReusesScalar('Mask2All', Pointer(LScalarTable.Mask.Mask2All), Pointer(LNEONTable.Mask.Mask2All));
+  AssertSlotReusesScalar('Mask2Any', Pointer(LScalarTable.Mask.Mask2Any), Pointer(LNEONTable.Mask.Mask2Any));
+  AssertSlotReusesScalar('Mask2None', Pointer(LScalarTable.Mask.Mask2None), Pointer(LNEONTable.Mask.Mask2None));
+  AssertSlotReusesScalar('Mask2PopCount', Pointer(LScalarTable.Mask.Mask2PopCount), Pointer(LNEONTable.Mask.Mask2PopCount));
+  AssertSlotReusesScalar('Mask2FirstSet', Pointer(LScalarTable.Mask.Mask2FirstSet), Pointer(LNEONTable.Mask.Mask2FirstSet));
+  AssertSlotReusesScalar('Mask4All', Pointer(LScalarTable.Mask.Mask4All), Pointer(LNEONTable.Mask.Mask4All));
+  AssertSlotReusesScalar('Mask4Any', Pointer(LScalarTable.Mask.Mask4Any), Pointer(LNEONTable.Mask.Mask4Any));
+  AssertSlotReusesScalar('Mask4None', Pointer(LScalarTable.Mask.Mask4None), Pointer(LNEONTable.Mask.Mask4None));
+  AssertSlotReusesScalar('Mask4PopCount', Pointer(LScalarTable.Mask.Mask4PopCount), Pointer(LNEONTable.Mask.Mask4PopCount));
+  AssertSlotReusesScalar('Mask4FirstSet', Pointer(LScalarTable.Mask.Mask4FirstSet), Pointer(LNEONTable.Mask.Mask4FirstSet));
+  AssertSlotReusesScalar('Mask8All', Pointer(LScalarTable.Mask.Mask8All), Pointer(LNEONTable.Mask.Mask8All));
+  AssertSlotReusesScalar('Mask8Any', Pointer(LScalarTable.Mask.Mask8Any), Pointer(LNEONTable.Mask.Mask8Any));
+  AssertSlotReusesScalar('Mask8None', Pointer(LScalarTable.Mask.Mask8None), Pointer(LNEONTable.Mask.Mask8None));
+  AssertSlotReusesScalar('Mask8PopCount', Pointer(LScalarTable.Mask.Mask8PopCount), Pointer(LNEONTable.Mask.Mask8PopCount));
+  AssertSlotReusesScalar('Mask8FirstSet', Pointer(LScalarTable.Mask.Mask8FirstSet), Pointer(LNEONTable.Mask.Mask8FirstSet));
+  AssertSlotReusesScalar('Mask16All', Pointer(LScalarTable.Mask.Mask16All), Pointer(LNEONTable.Mask.Mask16All));
+  AssertSlotReusesScalar('Mask16Any', Pointer(LScalarTable.Mask.Mask16Any), Pointer(LNEONTable.Mask.Mask16Any));
+  AssertSlotReusesScalar('Mask16None', Pointer(LScalarTable.Mask.Mask16None), Pointer(LNEONTable.Mask.Mask16None));
+  AssertSlotReusesScalar('Mask16PopCount', Pointer(LScalarTable.Mask.Mask16PopCount), Pointer(LNEONTable.Mask.Mask16PopCount));
+  AssertSlotReusesScalar('Mask16FirstSet', Pointer(LScalarTable.Mask.Mask16FirstSet), Pointer(LNEONTable.Mask.Mask16FirstSet));
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar;
@@ -9921,21 +9921,21 @@ begin
   AssertDeadWrapperRemoved('RISCVVRoundF64x2 dead wrapper', 'function RISCVVRoundF64x2(const a: TVecF64x2): TVecF64x2;');
   AssertDeadWrapperRemoved('RISCVVTruncF64x2 dead wrapper', 'function RISCVVTruncF64x2(const a: TVecF64x2): TVecF64x2;');
 
-  AssertRegisterKeepsBaseScalar('MemEqual', 'table.MemEqual := @MemEqual_RISCVV;');
-  AssertRegisterKeepsBaseScalar('MemFindByte', 'table.MemFindByte := @MemFindByte_RISCVV;');
-  AssertRegisterKeepsBaseScalar('MemDiffRange', 'table.MemDiffRange := @MemDiffRange_RISCVV;');
-  AssertRegisterKeepsBaseScalar('MemCopy', 'table.MemCopy := @MemCopy_RISCVV;');
-  AssertRegisterKeepsBaseScalar('MemSet', 'table.MemSet := @MemSet_RISCVV;');
-  AssertRegisterKeepsBaseScalar('MemReverse', 'table.MemReverse := @MemReverse_RISCVV;');
-  AssertRegisterKeepsBaseScalar('SumBytes', 'table.SumBytes := @SumBytes_RISCVV;');
-  AssertRegisterKeepsBaseScalar('MinMaxBytes', 'table.MinMaxBytes := @MinMaxBytes_RISCVV;');
-  AssertRegisterKeepsBaseScalar('CountByte', 'table.CountByte := @CountByte_RISCVV;');
-  AssertRegisterKeepsBaseScalar('Utf8Validate', 'table.Utf8Validate := @Utf8Validate_RISCVV;');
-  AssertRegisterKeepsBaseScalar('AsciiIEqual', 'table.AsciiIEqual := @AsciiIEqual_RISCVV;');
-  AssertRegisterKeepsBaseScalar('ToLowerAscii', 'table.ToLowerAscii := @ToLowerAscii_RISCVV;');
-  AssertRegisterKeepsBaseScalar('ToUpperAscii', 'table.ToUpperAscii := @ToUpperAscii_RISCVV;');
-  AssertRegisterKeepsBaseScalar('BytesIndexOf', 'table.BytesIndexOf := @BytesIndexOf_RISCVV;');
-  AssertRegisterKeepsBaseScalar('BitsetPopCount', 'table.BitsetPopCount := @BitsetPopCount_RISCVV;');
+  AssertRegisterKeepsBaseScalar('MemEqual', 'table.Memory.Equal := @MemEqual_RISCVV;');
+  AssertRegisterKeepsBaseScalar('MemFindByte', 'table.Memory.FindByte := @MemFindByte_RISCVV;');
+  AssertRegisterKeepsBaseScalar('MemDiffRange', 'table.Memory.DiffRange := @MemDiffRange_RISCVV;');
+  AssertRegisterKeepsBaseScalar('MemCopy', 'table.Memory.Copy := @MemCopy_RISCVV;');
+  AssertRegisterKeepsBaseScalar('MemSet', 'table.Memory.Fill := @MemSet_RISCVV;');
+  AssertRegisterKeepsBaseScalar('MemReverse', 'table.Memory.Reverse := @MemReverse_RISCVV;');
+  AssertRegisterKeepsBaseScalar('SumBytes', 'table.Memory.SumBytes := @SumBytes_RISCVV;');
+  AssertRegisterKeepsBaseScalar('MinMaxBytes', 'table.Memory.MinMaxBytes := @MinMaxBytes_RISCVV;');
+  AssertRegisterKeepsBaseScalar('CountByte', 'table.Memory.CountByte := @CountByte_RISCVV;');
+  AssertRegisterKeepsBaseScalar('Utf8Validate', 'table.Memory.Utf8Validate := @Utf8Validate_RISCVV;');
+  AssertRegisterKeepsBaseScalar('AsciiIEqual', 'table.Memory.AsciiIEqual := @AsciiIEqual_RISCVV;');
+  AssertRegisterKeepsBaseScalar('ToLowerAscii', 'table.Memory.ToLowerAscii := @ToLowerAscii_RISCVV;');
+  AssertRegisterKeepsBaseScalar('ToUpperAscii', 'table.Memory.ToUpperAscii := @ToUpperAscii_RISCVV;');
+  AssertRegisterKeepsBaseScalar('BytesIndexOf', 'table.Memory.BytesIndexOf := @BytesIndexOf_RISCVV;');
+  AssertRegisterKeepsBaseScalar('BitsetPopCount', 'table.Memory.BitsetPopCount := @BitsetPopCount_RISCVV;');
   AssertRegisterKeepsBaseScalar('FloorF32x4 scalar override', 'table.FloorF32x4 := @ScalarFloorF32x4;');
   AssertRegisterKeepsBaseScalar('CeilF32x4 scalar override', 'table.CeilF32x4 := @ScalarCeilF32x4;');
   AssertRegisterKeepsBaseScalar('RoundF32x4 scalar override', 'table.RoundF32x4 := @ScalarRoundF32x4;');
@@ -9965,21 +9965,21 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('MemEqual', Pointer(LScalarTable.MemEqual), Pointer(LRISCVVTable.MemEqual));
-  AssertSlotReusesScalar('MemFindByte', Pointer(LScalarTable.MemFindByte), Pointer(LRISCVVTable.MemFindByte));
-  AssertSlotReusesScalar('MemDiffRange', Pointer(LScalarTable.MemDiffRange), Pointer(LRISCVVTable.MemDiffRange));
-  AssertSlotReusesScalar('MemCopy', Pointer(LScalarTable.MemCopy), Pointer(LRISCVVTable.MemCopy));
-  AssertSlotReusesScalar('MemSet', Pointer(LScalarTable.MemSet), Pointer(LRISCVVTable.MemSet));
-  AssertSlotReusesScalar('MemReverse', Pointer(LScalarTable.MemReverse), Pointer(LRISCVVTable.MemReverse));
-  AssertSlotReusesScalar('SumBytes', Pointer(LScalarTable.SumBytes), Pointer(LRISCVVTable.SumBytes));
-  AssertSlotReusesScalar('MinMaxBytes', Pointer(LScalarTable.MinMaxBytes), Pointer(LRISCVVTable.MinMaxBytes));
-  AssertSlotReusesScalar('CountByte', Pointer(LScalarTable.CountByte), Pointer(LRISCVVTable.CountByte));
-  AssertSlotReusesScalar('Utf8Validate', Pointer(LScalarTable.Utf8Validate), Pointer(LRISCVVTable.Utf8Validate));
-  AssertSlotReusesScalar('AsciiIEqual', Pointer(LScalarTable.AsciiIEqual), Pointer(LRISCVVTable.AsciiIEqual));
-  AssertSlotReusesScalar('ToLowerAscii', Pointer(LScalarTable.ToLowerAscii), Pointer(LRISCVVTable.ToLowerAscii));
-  AssertSlotReusesScalar('ToUpperAscii', Pointer(LScalarTable.ToUpperAscii), Pointer(LRISCVVTable.ToUpperAscii));
-  AssertSlotReusesScalar('BytesIndexOf', Pointer(LScalarTable.BytesIndexOf), Pointer(LRISCVVTable.BytesIndexOf));
-  AssertSlotReusesScalar('BitsetPopCount', Pointer(LScalarTable.BitsetPopCount), Pointer(LRISCVVTable.BitsetPopCount));
+  AssertSlotReusesScalar('MemEqual', Pointer(LScalarTable.Memory.Equal), Pointer(LRISCVVTable.Memory.Equal));
+  AssertSlotReusesScalar('MemFindByte', Pointer(LScalarTable.Memory.FindByte), Pointer(LRISCVVTable.Memory.FindByte));
+  AssertSlotReusesScalar('MemDiffRange', Pointer(LScalarTable.Memory.DiffRange), Pointer(LRISCVVTable.Memory.DiffRange));
+  AssertSlotReusesScalar('MemCopy', Pointer(LScalarTable.Memory.Copy), Pointer(LRISCVVTable.Memory.Copy));
+  AssertSlotReusesScalar('MemSet', Pointer(LScalarTable.Memory.Fill), Pointer(LRISCVVTable.Memory.Fill));
+  AssertSlotReusesScalar('MemReverse', Pointer(LScalarTable.Memory.Reverse), Pointer(LRISCVVTable.Memory.Reverse));
+  AssertSlotReusesScalar('SumBytes', Pointer(LScalarTable.Memory.SumBytes), Pointer(LRISCVVTable.Memory.SumBytes));
+  AssertSlotReusesScalar('MinMaxBytes', Pointer(LScalarTable.Memory.MinMaxBytes), Pointer(LRISCVVTable.Memory.MinMaxBytes));
+  AssertSlotReusesScalar('CountByte', Pointer(LScalarTable.Memory.CountByte), Pointer(LRISCVVTable.Memory.CountByte));
+  AssertSlotReusesScalar('Utf8Validate', Pointer(LScalarTable.Memory.Utf8Validate), Pointer(LRISCVVTable.Memory.Utf8Validate));
+  AssertSlotReusesScalar('AsciiIEqual', Pointer(LScalarTable.Memory.AsciiIEqual), Pointer(LRISCVVTable.Memory.AsciiIEqual));
+  AssertSlotReusesScalar('ToLowerAscii', Pointer(LScalarTable.Memory.ToLowerAscii), Pointer(LRISCVVTable.Memory.ToLowerAscii));
+  AssertSlotReusesScalar('ToUpperAscii', Pointer(LScalarTable.Memory.ToUpperAscii), Pointer(LRISCVVTable.Memory.ToUpperAscii));
+  AssertSlotReusesScalar('BytesIndexOf', Pointer(LScalarTable.Memory.BytesIndexOf), Pointer(LRISCVVTable.Memory.BytesIndexOf));
+  AssertSlotReusesScalar('BitsetPopCount', Pointer(LScalarTable.Memory.BitsetPopCount), Pointer(LRISCVVTable.Memory.BitsetPopCount));
   AssertSlotReusesScalar('FloorF32x4', Pointer(LScalarTable.FloorF32x4), Pointer(LRISCVVTable.FloorF32x4));
   AssertSlotReusesScalar('CeilF32x4', Pointer(LScalarTable.CeilF32x4), Pointer(LRISCVVTable.CeilF32x4));
   AssertSlotReusesScalar('RoundF32x4', Pointer(LScalarTable.RoundF32x4), Pointer(LRISCVVTable.RoundF32x4));
@@ -13778,11 +13778,11 @@ begin
       Continue;
 
     LHasNonScalarMaskedSlots := False;
-    ObserveRepresentativeSlot('Mask2All', Pointer(LScalar.Mask2All), Pointer(LTable.Mask2All));
-    ObserveRepresentativeSlot('Mask4PopCount', Pointer(LScalar.Mask4PopCount), Pointer(LTable.Mask4PopCount));
-    ObserveRepresentativeSlot('Mask8All', Pointer(LScalar.Mask8All), Pointer(LTable.Mask8All));
-    ObserveRepresentativeSlot('Mask8PopCount', Pointer(LScalar.Mask8PopCount), Pointer(LTable.Mask8PopCount));
-    ObserveRepresentativeSlot('Mask16FirstSet', Pointer(LScalar.Mask16FirstSet), Pointer(LTable.Mask16FirstSet));
+    ObserveRepresentativeSlot('Mask2All', Pointer(LScalar.Mask.Mask2All), Pointer(LTable.Mask.Mask2All));
+    ObserveRepresentativeSlot('Mask4PopCount', Pointer(LScalar.Mask.Mask4PopCount), Pointer(LTable.Mask.Mask4PopCount));
+    ObserveRepresentativeSlot('Mask8All', Pointer(LScalar.Mask.Mask8All), Pointer(LTable.Mask.Mask8All));
+    ObserveRepresentativeSlot('Mask8PopCount', Pointer(LScalar.Mask.Mask8PopCount), Pointer(LTable.Mask.Mask8PopCount));
+    ObserveRepresentativeSlot('Mask16FirstSet', Pointer(LScalar.Mask.Mask16FirstSet), Pointer(LTable.Mask.Mask16FirstSet));
 
     if not LHasNonScalarMaskedSlots then
       Continue;
@@ -13935,11 +13935,11 @@ begin
       Continue;
 
     LHasNonScalarMaskedSlots := False;
-    ObserveRepresentativeSlot('Mask2All', Pointer(LScalar.Mask2All), Pointer(LTable.Mask2All));
-    ObserveRepresentativeSlot('Mask4PopCount', Pointer(LScalar.Mask4PopCount), Pointer(LTable.Mask4PopCount));
-    ObserveRepresentativeSlot('Mask8All', Pointer(LScalar.Mask8All), Pointer(LTable.Mask8All));
-    ObserveRepresentativeSlot('Mask8PopCount', Pointer(LScalar.Mask8PopCount), Pointer(LTable.Mask8PopCount));
-    ObserveRepresentativeSlot('Mask16FirstSet', Pointer(LScalar.Mask16FirstSet), Pointer(LTable.Mask16FirstSet));
+    ObserveRepresentativeSlot('Mask2All', Pointer(LScalar.Mask.Mask2All), Pointer(LTable.Mask.Mask2All));
+    ObserveRepresentativeSlot('Mask4PopCount', Pointer(LScalar.Mask.Mask4PopCount), Pointer(LTable.Mask.Mask4PopCount));
+    ObserveRepresentativeSlot('Mask8All', Pointer(LScalar.Mask.Mask8All), Pointer(LTable.Mask.Mask8All));
+    ObserveRepresentativeSlot('Mask8PopCount', Pointer(LScalar.Mask.Mask8PopCount), Pointer(LTable.Mask.Mask8PopCount));
+    ObserveRepresentativeSlot('Mask16FirstSet', Pointer(LScalar.Mask.Mask16FirstSet), Pointer(LTable.Mask.Mask16FirstSet));
 
     if not LHasNonScalarMaskedSlots then
       Continue;
@@ -14258,10 +14258,10 @@ begin
   CheckTrue(IsVectorAsmEnabled, 'Vector asm flag should be enabled before probing native RISCVV mask helpers');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable), 'RISCVV backend should be registered in mask capability contract test');
-  CheckTrue(Assigned(LRISCVVTable.Mask2All), 'RISCVV Mask2All should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.Mask8PopCount), 'RISCVV Mask8PopCount should be assigned');
-  CheckTrue(Assigned(LRISCVVTable.Mask16FirstSet), 'RISCVV Mask16FirstSet should be assigned');
-  CheckTrue((Pointer(LRISCVVTable.Mask2All) <> Pointer(LScalarTable.Mask2All)) or (Pointer(LRISCVVTable.Mask8PopCount) <> Pointer(LScalarTable.Mask8PopCount)) or (Pointer(LRISCVVTable.Mask16FirstSet) <> Pointer(LScalarTable.Mask16FirstSet)), 'Representative RISCVV mask helper slots should be native in asm contract test');
+  CheckTrue(Assigned(LRISCVVTable.Mask.Mask2All), 'RISCVV Mask2All should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.Mask.Mask8PopCount), 'RISCVV Mask8PopCount should be assigned');
+  CheckTrue(Assigned(LRISCVVTable.Mask.Mask16FirstSet), 'RISCVV Mask16FirstSet should be assigned');
+  CheckTrue((Pointer(LRISCVVTable.Mask.Mask2All) <> Pointer(LScalarTable.Mask.Mask2All)) or (Pointer(LRISCVVTable.Mask.Mask8PopCount) <> Pointer(LScalarTable.Mask.Mask8PopCount)) or (Pointer(LRISCVVTable.Mask.Mask16FirstSet) <> Pointer(LScalarTable.Mask.Mask16FirstSet)), 'Representative RISCVV mask helper slots should be native in asm contract test');
   CheckTrue(scMaskedOps in LRISCVVTable.BackendInfo.Capabilities, 'RISCVV scMaskedOps should be set while representative mask helper slots are native');
 end;
 
@@ -14285,7 +14285,7 @@ begin
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbRISCVV, LRISCVVTable), 'RISCVV backend should be registered for public ABI mask contract test');
   CheckTrue(TryGetSimdBackendPodInfo(sbRISCVV, LInfo), 'Public ABI pod info should be available for RISCVV mask contract test');
-  CheckTrue((Pointer(LRISCVVTable.Mask2All) <> Pointer(LScalarTable.Mask2All)) or (Pointer(LRISCVVTable.Mask8PopCount) <> Pointer(LScalarTable.Mask8PopCount)) or (Pointer(LRISCVVTable.Mask16FirstSet) <> Pointer(LScalarTable.Mask16FirstSet)), 'Representative RISCVV mask helper slots should be native before checking public ABI bits');
+  CheckTrue((Pointer(LRISCVVTable.Mask.Mask2All) <> Pointer(LScalarTable.Mask.Mask2All)) or (Pointer(LRISCVVTable.Mask.Mask8PopCount) <> Pointer(LScalarTable.Mask.Mask8PopCount)) or (Pointer(LRISCVVTable.Mask.Mask16FirstSet) <> Pointer(LScalarTable.Mask.Mask16FirstSet)), 'Representative RISCVV mask helper slots should be native before checking public ABI bits');
   CheckTrue((LInfo.CapabilityBits and (UInt64(1) shl Ord(scMaskedOps))) <> 0, 'Public ABI CapabilityBits should expose RISCVV scMaskedOps while representative mask helper slots are native');
 end;
 
@@ -14796,26 +14796,26 @@ begin
 
   CheckTrue(Pos('fillbasedispatchtable(dispatchtable);', LRegisterSource) > 0, 'AVX2 register should still seed from FillBaseDispatchTable before applying backend-local overrides');
 
-  CheckTrue(Pos('dispatchtable.memequal := @memequal_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemEqual should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.memfindbyte := @memfindbyte_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemFindByte should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.sumbytes := @sumbytes_scalar;', LRegisterSource) = 0, 'Win64 AVX2 SumBytes should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.countbyte := @countbyte_scalar;', LRegisterSource) = 0, 'Win64 AVX2 CountByte should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.memdiffrange := @memdiffrange_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemDiffRange should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.memreverse := @memreverse_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemReverse should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.minmaxbytes := @minmaxbytes_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MinMaxBytes should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.utf8validate := @utf8validate_scalar;', LRegisterSource) = 0, 'Win64 AVX2 Utf8Validate should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.asciiiequal := @asciiiequal_scalar;', LRegisterSource) = 0, 'Win64 AVX2 AsciiIEqual should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.tolowerascii := @tolowerascii_scalar;', LRegisterSource) = 0, 'Win64 AVX2 ToLowerAscii should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.toupperascii := @toupperascii_scalar;', LRegisterSource) = 0, 'Win64 AVX2 ToUpperAscii should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.bytesindexof := @bytesindexof_scalar;', LRegisterSource) = 0, 'Win64 AVX2 BytesIndexOf should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.bitsetpopcount := @bitsetpopcount_scalar;', LRegisterSource) = 0, 'Win64 AVX2 BitsetPopCount should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.memcopy := @memcopy_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemCopy should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
-  CheckTrue(Pos('dispatchtable.memset := @memset_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemSet should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.equal := @memequal_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemEqual should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.findbyte := @memfindbyte_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemFindByte should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.sumbytes := @sumbytes_scalar;', LRegisterSource) = 0, 'Win64 AVX2 SumBytes should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.countbyte := @countbyte_scalar;', LRegisterSource) = 0, 'Win64 AVX2 CountByte should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.diffrange := @memdiffrange_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemDiffRange should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.reverse := @memreverse_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemReverse should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.minmaxbytes := @minmaxbytes_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MinMaxBytes should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.utf8validate := @utf8validate_scalar;', LRegisterSource) = 0, 'Win64 AVX2 Utf8Validate should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.asciiiequal := @asciiiequal_scalar;', LRegisterSource) = 0, 'Win64 AVX2 AsciiIEqual should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.tolowerascii := @tolowerascii_scalar;', LRegisterSource) = 0, 'Win64 AVX2 ToLowerAscii should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.toupperascii := @toupperascii_scalar;', LRegisterSource) = 0, 'Win64 AVX2 ToUpperAscii should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.bytesindexof := @bytesindexof_scalar;', LRegisterSource) = 0, 'Win64 AVX2 BytesIndexOf should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.bitsetpopcount := @bitsetpopcount_scalar;', LRegisterSource) = 0, 'Win64 AVX2 BitsetPopCount should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.copy := @memcopy_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemCopy should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
+  CheckTrue(Pos('dispatchtable.memory.fill := @memset_scalar;', LRegisterSource) = 0, 'Win64 AVX2 MemSet should reuse FillBaseDispatchTable instead of redundant scalar rebinding');
 
-  CheckTrue(Pos('dispatchtable.memequal := @memequal_avx2;', LRegisterSource) > 0, 'Non-Windows AVX2 register path should keep MemEqual_AVX2 explicit so native facade binding remains truthful');
-  CheckTrue(Pos('dispatchtable.utf8validate := @utf8validate_avx2;', LRegisterSource) > 0, 'Non-Windows AVX2 register path should keep Utf8Validate_AVX2 explicit so native facade binding remains truthful');
-  CheckTrue(Pos('dispatchtable.memcopy := @memcopy_avx2;', LRegisterSource) > 0, 'Non-Windows AVX2 register path should keep MemCopy_AVX2 explicit so native facade binding remains truthful');
-  CheckTrue(Pos('dispatchtable.bitsetpopcount := @bitsetpopcount_avx2;', LRegisterSource) > 0, 'Non-Windows AVX2 register path should keep BitsetPopCount_AVX2 explicit so native facade binding remains truthful');
+  CheckTrue(Pos('dispatchtable.memory.equal := @memequal_avx2;', LRegisterSource) > 0, 'Non-Windows AVX2 register path should keep MemEqual_AVX2 explicit so native facade binding remains truthful');
+  CheckTrue(Pos('dispatchtable.memory.utf8validate := @utf8validate_avx2;', LRegisterSource) > 0, 'Non-Windows AVX2 register path should keep Utf8Validate_AVX2 explicit so native facade binding remains truthful');
+  CheckTrue(Pos('dispatchtable.memory.copy := @memcopy_avx2;', LRegisterSource) > 0, 'Non-Windows AVX2 register path should keep MemCopy_AVX2 explicit so native facade binding remains truthful');
+  CheckTrue(Pos('dispatchtable.memory.bitsetpopcount := @bitsetpopcount_avx2;', LRegisterSource) > 0, 'Non-Windows AVX2 register path should keep BitsetPopCount_AVX2 explicit so native facade binding remains truthful');
 
   CheckTrue(Pos('function memequal_avx2', LFacadeSource) > 0, 'AVX2 facade include should still define MemEqual_AVX2');
   CheckTrue(Pos('function utf8validate_avx2', LFacadeSource) > 0, 'AVX2 facade include should still define Utf8Validate_AVX2');
@@ -14828,15 +14828,15 @@ begin
     Exit;
 
   {$IFDEF WINDOWS}
-  CheckEqual(PtrUInt(LScalarTable.MemEqual), PtrUInt(LAVX2Table.MemEqual), 'Win64 AVX2 MemEqual should stay scalar-safe via FillBaseDispatchTable');
-  CheckEqual(PtrUInt(LScalarTable.Utf8Validate), PtrUInt(LAVX2Table.Utf8Validate), 'Win64 AVX2 Utf8Validate should stay scalar-safe via FillBaseDispatchTable');
-  CheckEqual(PtrUInt(LScalarTable.MemCopy), PtrUInt(LAVX2Table.MemCopy), 'Win64 AVX2 MemCopy should stay scalar-safe via FillBaseDispatchTable');
-  CheckEqual(PtrUInt(LScalarTable.BitsetPopCount), PtrUInt(LAVX2Table.BitsetPopCount), 'Win64 AVX2 BitsetPopCount should stay scalar-safe via FillBaseDispatchTable');
+  CheckEqual(PtrUInt(LScalarTable.Memory.Equal), PtrUInt(LAVX2Table.Memory.Equal), 'Win64 AVX2 MemEqual should stay scalar-safe via FillBaseDispatchTable');
+  CheckEqual(PtrUInt(LScalarTable.Memory.Utf8Validate), PtrUInt(LAVX2Table.Memory.Utf8Validate), 'Win64 AVX2 Utf8Validate should stay scalar-safe via FillBaseDispatchTable');
+  CheckEqual(PtrUInt(LScalarTable.Memory.Copy), PtrUInt(LAVX2Table.Memory.Copy), 'Win64 AVX2 MemCopy should stay scalar-safe via FillBaseDispatchTable');
+  CheckEqual(PtrUInt(LScalarTable.Memory.BitsetPopCount), PtrUInt(LAVX2Table.Memory.BitsetPopCount), 'Win64 AVX2 BitsetPopCount should stay scalar-safe via FillBaseDispatchTable');
   {$ELSE}
-  CheckTrue(Pointer(LAVX2Table.MemEqual) <> Pointer(LScalarTable.MemEqual), 'Non-Windows AVX2 MemEqual should keep a native facade binding');
-  CheckTrue(Pointer(LAVX2Table.Utf8Validate) <> Pointer(LScalarTable.Utf8Validate), 'Non-Windows AVX2 Utf8Validate should keep a native facade binding');
-  CheckTrue(Pointer(LAVX2Table.MemCopy) <> Pointer(LScalarTable.MemCopy), 'Non-Windows AVX2 MemCopy should keep a native facade binding');
-  CheckTrue(Pointer(LAVX2Table.BitsetPopCount) <> Pointer(LScalarTable.BitsetPopCount), 'Non-Windows AVX2 BitsetPopCount should keep a native facade binding');
+  CheckTrue(Pointer(LAVX2Table.Memory.Equal) <> Pointer(LScalarTable.Memory.Equal), 'Non-Windows AVX2 MemEqual should keep a native facade binding');
+  CheckTrue(Pointer(LAVX2Table.Memory.Utf8Validate) <> Pointer(LScalarTable.Memory.Utf8Validate), 'Non-Windows AVX2 Utf8Validate should keep a native facade binding');
+  CheckTrue(Pointer(LAVX2Table.Memory.Copy) <> Pointer(LScalarTable.Memory.Copy), 'Non-Windows AVX2 MemCopy should keep a native facade binding');
+  CheckTrue(Pointer(LAVX2Table.Memory.BitsetPopCount) <> Pointer(LScalarTable.Memory.BitsetPopCount), 'Non-Windows AVX2 BitsetPopCount should keep a native facade binding');
   {$ENDIF}
 end;
 
@@ -15483,10 +15483,10 @@ begin
   CheckTrue(Pos('function memdiffrange_avx512(', LFallbackSource) = 0, 'MemDiffRange_AVX512 pass-through wrapper should be removed from the AVX512 fallback include');
   CheckTrue(Pos('function bytesindexof_avx512(', LFallbackSource) = 0, 'BytesIndexOf_AVX512 pass-through wrapper should be removed from the AVX512 fallback include');
 
-  AssertRegisterKeepsClonedAVX2('Utf8Validate', 'dispatchTable.Utf8Validate := @Utf8Validate_AVX512;');
-  AssertRegisterKeepsClonedAVX2('MemReverse', 'dispatchTable.MemReverse := @MemReverse_AVX512;');
-  AssertRegisterKeepsClonedAVX2('MemDiffRange', 'dispatchTable.MemDiffRange := @MemDiffRange_AVX512;');
-  AssertRegisterKeepsClonedAVX2('BytesIndexOf', 'dispatchTable.BytesIndexOf := @BytesIndexOf_AVX512;');
+  AssertRegisterKeepsClonedAVX2('Utf8Validate', 'dispatchTable.Memory.Utf8Validate := @Utf8Validate_AVX512;');
+  AssertRegisterKeepsClonedAVX2('MemReverse', 'dispatchTable.Memory.Reverse := @MemReverse_AVX512;');
+  AssertRegisterKeepsClonedAVX2('MemDiffRange', 'dispatchTable.Memory.DiffRange := @MemDiffRange_AVX512;');
+  AssertRegisterKeepsClonedAVX2('BytesIndexOf', 'dispatchTable.Memory.BytesIndexOf := @BytesIndexOf_AVX512;');
 
   GetDispatchTable;
   SetVectorAsmEnabled(True);
@@ -15497,10 +15497,10 @@ begin
   if not TryGetRegisteredBackendDispatchTable(sbAVX512, LAVX512Table) then
     Exit;
 
-  AssertSlotReusesAVX2('Utf8Validate', Pointer(LAVX2Table.Utf8Validate), Pointer(LAVX512Table.Utf8Validate));
-  AssertSlotReusesAVX2('MemReverse', Pointer(LAVX2Table.MemReverse), Pointer(LAVX512Table.MemReverse));
-  AssertSlotReusesAVX2('MemDiffRange', Pointer(LAVX2Table.MemDiffRange), Pointer(LAVX512Table.MemDiffRange));
-  AssertSlotReusesAVX2('BytesIndexOf', Pointer(LAVX2Table.BytesIndexOf), Pointer(LAVX512Table.BytesIndexOf));
+  AssertSlotReusesAVX2('Utf8Validate', Pointer(LAVX2Table.Memory.Utf8Validate), Pointer(LAVX512Table.Memory.Utf8Validate));
+  AssertSlotReusesAVX2('MemReverse', Pointer(LAVX2Table.Memory.Reverse), Pointer(LAVX512Table.Memory.Reverse));
+  AssertSlotReusesAVX2('MemDiffRange', Pointer(LAVX2Table.Memory.DiffRange), Pointer(LAVX512Table.Memory.DiffRange));
+  AssertSlotReusesAVX2('BytesIndexOf', Pointer(LAVX2Table.Memory.BytesIndexOf), Pointer(LAVX512Table.Memory.BytesIndexOf));
 end;
 
 procedure TTestCase_DispatchAPI.Test_X86_BackendCapabilities_Clear_Shuffle_When_VectorAsmDisabled;
@@ -19734,29 +19734,29 @@ var
 
   procedure AssertMask4HelperParity(const aLabel: string; const aMask: TMask4);
   begin
-    CheckEqual(ScalarMask4All(aMask), LBackendTable.Mask4All(aMask), aLabel + ' Mask4All');
-    CheckEqual(ScalarMask4Any(aMask), LBackendTable.Mask4Any(aMask), aLabel + ' Mask4Any');
-    CheckEqual(ScalarMask4None(aMask), LBackendTable.Mask4None(aMask), aLabel + ' Mask4None');
-    CheckEqual(ScalarMask4PopCount(aMask), LBackendTable.Mask4PopCount(aMask), aLabel + ' Mask4PopCount');
-    CheckEqual(ScalarMask4FirstSet(aMask), LBackendTable.Mask4FirstSet(aMask), aLabel + ' Mask4FirstSet');
+    CheckEqual(ScalarMask4All(aMask), LBackendTable.Mask.Mask4All(aMask), aLabel + ' Mask4All');
+    CheckEqual(ScalarMask4Any(aMask), LBackendTable.Mask.Mask4Any(aMask), aLabel + ' Mask4Any');
+    CheckEqual(ScalarMask4None(aMask), LBackendTable.Mask.Mask4None(aMask), aLabel + ' Mask4None');
+    CheckEqual(ScalarMask4PopCount(aMask), LBackendTable.Mask.Mask4PopCount(aMask), aLabel + ' Mask4PopCount');
+    CheckEqual(ScalarMask4FirstSet(aMask), LBackendTable.Mask.Mask4FirstSet(aMask), aLabel + ' Mask4FirstSet');
   end;
 
   procedure AssertMask8HelperParity(const aLabel: string; const aMask: TMask8);
   begin
-    CheckEqual(ScalarMask8All(aMask), LBackendTable.Mask8All(aMask), aLabel + ' Mask8All');
-    CheckEqual(ScalarMask8Any(aMask), LBackendTable.Mask8Any(aMask), aLabel + ' Mask8Any');
-    CheckEqual(ScalarMask8None(aMask), LBackendTable.Mask8None(aMask), aLabel + ' Mask8None');
-    CheckEqual(ScalarMask8PopCount(aMask), LBackendTable.Mask8PopCount(aMask), aLabel + ' Mask8PopCount');
-    CheckEqual(ScalarMask8FirstSet(aMask), LBackendTable.Mask8FirstSet(aMask), aLabel + ' Mask8FirstSet');
+    CheckEqual(ScalarMask8All(aMask), LBackendTable.Mask.Mask8All(aMask), aLabel + ' Mask8All');
+    CheckEqual(ScalarMask8Any(aMask), LBackendTable.Mask.Mask8Any(aMask), aLabel + ' Mask8Any');
+    CheckEqual(ScalarMask8None(aMask), LBackendTable.Mask.Mask8None(aMask), aLabel + ' Mask8None');
+    CheckEqual(ScalarMask8PopCount(aMask), LBackendTable.Mask.Mask8PopCount(aMask), aLabel + ' Mask8PopCount');
+    CheckEqual(ScalarMask8FirstSet(aMask), LBackendTable.Mask.Mask8FirstSet(aMask), aLabel + ' Mask8FirstSet');
   end;
 
   procedure AssertMask16HelperParity(const aLabel: string; const aMask: TMask16);
   begin
-    CheckEqual(ScalarMask16All(aMask), LBackendTable.Mask16All(aMask), aLabel + ' Mask16All');
-    CheckEqual(ScalarMask16Any(aMask), LBackendTable.Mask16Any(aMask), aLabel + ' Mask16Any');
-    CheckEqual(ScalarMask16None(aMask), LBackendTable.Mask16None(aMask), aLabel + ' Mask16None');
-    CheckEqual(ScalarMask16PopCount(aMask), LBackendTable.Mask16PopCount(aMask), aLabel + ' Mask16PopCount');
-    CheckEqual(ScalarMask16FirstSet(aMask), LBackendTable.Mask16FirstSet(aMask), aLabel + ' Mask16FirstSet');
+    CheckEqual(ScalarMask16All(aMask), LBackendTable.Mask.Mask16All(aMask), aLabel + ' Mask16All');
+    CheckEqual(ScalarMask16Any(aMask), LBackendTable.Mask.Mask16Any(aMask), aLabel + ' Mask16Any');
+    CheckEqual(ScalarMask16None(aMask), LBackendTable.Mask.Mask16None(aMask), aLabel + ' Mask16None');
+    CheckEqual(ScalarMask16PopCount(aMask), LBackendTable.Mask.Mask16PopCount(aMask), aLabel + ' Mask16PopCount');
+    CheckEqual(ScalarMask16FirstSet(aMask), LBackendTable.Mask.Mask16FirstSet(aMask), aLabel + ' Mask16FirstSet');
   end;
 
   procedure LoadI32x8OneHotProbe(const aLane: Integer; const aLessThan: Boolean);
@@ -19934,21 +19934,21 @@ begin
       CheckTrue(Assigned(LBackendTable.CmpLeI64x8), 'CmpLeI64x8 missing: ' + NonX86BackendName(LBackend));
       CheckTrue(Assigned(LBackendTable.CmpGeI64x8), 'CmpGeI64x8 missing: ' + NonX86BackendName(LBackend));
       CheckTrue(Assigned(LBackendTable.CmpNeI64x8), 'CmpNeI64x8 missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask4All), 'Mask4All missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask4Any), 'Mask4Any missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask4None), 'Mask4None missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask4PopCount), 'Mask4PopCount missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask4FirstSet), 'Mask4FirstSet missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask8All), 'Mask8All missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask8Any), 'Mask8Any missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask8None), 'Mask8None missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask8PopCount), 'Mask8PopCount missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask8FirstSet), 'Mask8FirstSet missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask16All), 'Mask16All missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask16Any), 'Mask16Any missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask16None), 'Mask16None missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask16PopCount), 'Mask16PopCount missing: ' + NonX86BackendName(LBackend));
-      CheckTrue(Assigned(LBackendTable.Mask16FirstSet), 'Mask16FirstSet missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask4All), 'Mask4All missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask4Any), 'Mask4Any missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask4None), 'Mask4None missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask4PopCount), 'Mask4PopCount missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask4FirstSet), 'Mask4FirstSet missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask8All), 'Mask8All missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask8Any), 'Mask8Any missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask8None), 'Mask8None missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask8PopCount), 'Mask8PopCount missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask8FirstSet), 'Mask8FirstSet missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask16All), 'Mask16All missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask16Any), 'Mask16Any missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask16None), 'Mask16None missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask16PopCount), 'Mask16PopCount missing: ' + NonX86BackendName(LBackend));
+      CheckTrue(Assigned(LBackendTable.Mask.Mask16FirstSet), 'Mask16FirstSet missing: ' + NonX86BackendName(LBackend));
 
       for LCaseIdx := 0 to C_SIGNED_CASE_COUNT - 1 do
       begin

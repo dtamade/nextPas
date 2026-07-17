@@ -166,8 +166,8 @@ begin
   if AData = nil then
     Exit(False);
   LDispatch := GetDispatchTable;
-  if (LDispatch <> nil) and Assigned(LDispatch^.Utf8Validate) then
-    Result := LDispatch^.Utf8Validate(AData, ALen)
+  if (LDispatch <> nil) and Assigned(LDispatch^.Memory.Utf8Validate) then
+    Result := LDispatch^.Memory.Utf8Validate(AData, ALen)
   else
     Result := UTF8IsValidScalar(AData, ALen);
 end;

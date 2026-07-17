@@ -122,15 +122,15 @@ begin
 
   // Facade functions
   {$IFDEF NEXTPAS_SIMD_NEON_ASM_ENABLED}
-  table.MemEqual := @MemEqual_NEON;
-  table.MemFindByte := @MemFindByte_NEON;
-  table.SumBytes := @SumBytes_NEON;
-  table.MinMaxBytes := @MinMaxBytes_NEON;
-  table.CountByte := @CountByte_NEON;
-  table.AsciiIEqual := @AsciiIEqual_NEON;
-  table.ToLowerAscii := @ToLowerAscii_NEON;
-  table.ToUpperAscii := @ToUpperAscii_NEON;
-  table.BitsetPopCount := @BitsetPopCount_NEON;
+  table.Memory.Equal := @MemEqual_NEON;
+  table.Memory.FindByte := @MemFindByte_NEON;
+  table.Memory.SumBytes := @SumBytes_NEON;
+  table.Memory.MinMaxBytes := @MinMaxBytes_NEON;
+  table.Memory.CountByte := @CountByte_NEON;
+  table.Memory.AsciiIEqual := @AsciiIEqual_NEON;
+  table.Memory.ToLowerAscii := @ToLowerAscii_NEON;
+  table.Memory.ToUpperAscii := @ToUpperAscii_NEON;
+  table.Memory.BitsetPopCount := @BitsetPopCount_NEON;
   {$ENDIF}
 
   // Keep permanently-scalar platform facade helpers on the base scalar slots.

@@ -427,21 +427,21 @@ begin
 
   {$IFNDEF WINDOWS}
   // Facade functions (AVX2-accelerated)
-  dispatchTable.MemEqual := @MemEqual_AVX2;
-  dispatchTable.MemFindByte := @MemFindByte_AVX2;
-  dispatchTable.SumBytes := @SumBytes_AVX2;
-  dispatchTable.CountByte := @CountByte_AVX2;
-  dispatchTable.MemDiffRange := @MemDiffRange_AVX2;
-  dispatchTable.MemReverse := @MemReverse_AVX2;
-  dispatchTable.MinMaxBytes := @MinMaxBytes_AVX2;
-  dispatchTable.Utf8Validate := @Utf8Validate_AVX2;
-  dispatchTable.AsciiIEqual := @AsciiIEqual_AVX2;
-  dispatchTable.ToLowerAscii := @ToLowerAscii_AVX2;
-  dispatchTable.ToUpperAscii := @ToUpperAscii_AVX2;
-  dispatchTable.BytesIndexOf := @BytesIndexOf_AVX2;
-  dispatchTable.BitsetPopCount := @BitsetPopCount_AVX2;
-  dispatchTable.MemCopy := @MemCopy_AVX2;
-  dispatchTable.MemSet := @MemSet_AVX2;
+  dispatchTable.Memory.Equal := @MemEqual_AVX2;
+  dispatchTable.Memory.FindByte := @MemFindByte_AVX2;
+  dispatchTable.Memory.SumBytes := @SumBytes_AVX2;
+  dispatchTable.Memory.CountByte := @CountByte_AVX2;
+  dispatchTable.Memory.DiffRange := @MemDiffRange_AVX2;
+  dispatchTable.Memory.Reverse := @MemReverse_AVX2;
+  dispatchTable.Memory.MinMaxBytes := @MinMaxBytes_AVX2;
+  dispatchTable.Memory.Utf8Validate := @Utf8Validate_AVX2;
+  dispatchTable.Memory.AsciiIEqual := @AsciiIEqual_AVX2;
+  dispatchTable.Memory.ToLowerAscii := @ToLowerAscii_AVX2;
+  dispatchTable.Memory.ToUpperAscii := @ToUpperAscii_AVX2;
+  dispatchTable.Memory.BytesIndexOf := @BytesIndexOf_AVX2;
+  dispatchTable.Memory.BitsetPopCount := @BitsetPopCount_AVX2;
+  dispatchTable.Memory.Copy := @MemCopy_AVX2;
+  dispatchTable.Memory.Fill := @MemSet_AVX2;
   {$ENDIF}
 
   // Saturating arithmetic (VEX-encoded, always enabled)
@@ -455,26 +455,26 @@ begin
   dispatchTable.U16x8SatSub := @AVX2U16x8SatSub;
 
   // Mask operations (native popcnt, always enabled)
-  dispatchTable.Mask2All := @SharedMask2All;
-  dispatchTable.Mask2Any := @SharedMask2Any;
-  dispatchTable.Mask2None := @SharedMask2None;
-  dispatchTable.Mask2PopCount := @AVX2Mask2PopCount;
-  dispatchTable.Mask2FirstSet := @SharedMask2FirstSet;
-  dispatchTable.Mask4All := @SharedMask4All;
-  dispatchTable.Mask4Any := @SharedMask4Any;
-  dispatchTable.Mask4None := @SharedMask4None;
-  dispatchTable.Mask4PopCount := @AVX2Mask4PopCount;
-  dispatchTable.Mask4FirstSet := @SharedMask4FirstSet;
-  dispatchTable.Mask8All := @SharedMask8All;
-  dispatchTable.Mask8Any := @SharedMask8Any;
-  dispatchTable.Mask8None := @SharedMask8None;
-  dispatchTable.Mask8PopCount := @AVX2Mask8PopCount;
-  dispatchTable.Mask8FirstSet := @SharedMask8FirstSet;
-  dispatchTable.Mask16All := @SharedMask16All;
-  dispatchTable.Mask16Any := @SharedMask16Any;
-  dispatchTable.Mask16None := @SharedMask16None;
-  dispatchTable.Mask16PopCount := @AVX2Mask16PopCount;
-  dispatchTable.Mask16FirstSet := @SharedMask16FirstSet;
+  dispatchTable.Mask.Mask2All := @SharedMask2All;
+  dispatchTable.Mask.Mask2Any := @SharedMask2Any;
+  dispatchTable.Mask.Mask2None := @SharedMask2None;
+  dispatchTable.Mask.Mask2PopCount := @AVX2Mask2PopCount;
+  dispatchTable.Mask.Mask2FirstSet := @SharedMask2FirstSet;
+  dispatchTable.Mask.Mask4All := @SharedMask4All;
+  dispatchTable.Mask.Mask4Any := @SharedMask4Any;
+  dispatchTable.Mask.Mask4None := @SharedMask4None;
+  dispatchTable.Mask.Mask4PopCount := @AVX2Mask4PopCount;
+  dispatchTable.Mask.Mask4FirstSet := @SharedMask4FirstSet;
+  dispatchTable.Mask.Mask8All := @SharedMask8All;
+  dispatchTable.Mask.Mask8Any := @SharedMask8Any;
+  dispatchTable.Mask.Mask8None := @SharedMask8None;
+  dispatchTable.Mask.Mask8PopCount := @AVX2Mask8PopCount;
+  dispatchTable.Mask.Mask8FirstSet := @SharedMask8FirstSet;
+  dispatchTable.Mask.Mask16All := @SharedMask16All;
+  dispatchTable.Mask.Mask16Any := @SharedMask16Any;
+  dispatchTable.Mask.Mask16None := @SharedMask16None;
+  dispatchTable.Mask.Mask16PopCount := @AVX2Mask16PopCount;
+  dispatchTable.Mask.Mask16FirstSet := @SharedMask16FirstSet;
 
   // Batch array operations (AVX2 256-bit)
   dispatchTable.BatchF32.ArrayAdd := @AVX2ArrayAddF32_Smart;

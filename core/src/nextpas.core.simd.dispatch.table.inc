@@ -558,30 +558,7 @@
     ZeroF64x8: function: TVecF64x8;
 
     // === Facade Functions (High-Level API) ===
-    // Memory operations
-    MemEqual: function(a, b: Pointer; len: SizeUInt): LongBool;
-    MemFindByte: function(p: Pointer; len: SizeUInt; value: Byte): PtrInt;
-    MemDiffRange: function(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean;
-    MemCopy: procedure(src, dst: Pointer; len: SizeUInt);
-    MemSet: procedure(dst: Pointer; len: SizeUInt; value: Byte);
-    MemReverse: procedure(p: Pointer; len: SizeUInt);
-    
-    // Statistics functions
-    SumBytes: function(p: Pointer; len: SizeUInt): UInt64;
-    MinMaxBytes: procedure(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte);
-    CountByte: function(p: Pointer; len: SizeUInt; value: Byte): SizeUInt;
-    
-    // Text processing functions
-    Utf8Validate: function(p: Pointer; len: SizeUInt): Boolean;
-    AsciiIEqual: function(a, b: Pointer; len: SizeUInt): Boolean;
-    ToLowerAscii: procedure(p: Pointer; len: SizeUInt);
-    ToUpperAscii: procedure(p: Pointer; len: SizeUInt);
-    
-    // Search functions
-    BytesIndexOf: function(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt;
-    
-    // Bitset functions
-    BitsetPopCount: function(p: Pointer; byteLen: SizeUInt): SizeUInt;
+    // Memory ops live under Memory: TSimdMemoryOps (Phase 19 Phase 4).
 
     // Saturating Arithmetic (音视频处理必需)
     // 有符号饱和 (I8: [-128, 127], I16: [-32768, 32767])
@@ -687,31 +664,7 @@
     MinU8x16: function(const a, b: TVecU8x16): TVecU8x16;
     MaxU8x16: function(const a, b: TVecU8x16): TVecU8x16;
 
-    // Mask 类型操作 (条件分支优化)
-    // TMask2 操作 (2 元素)
-    Mask2All: function(mask: TMask2): Boolean;
-    Mask2Any: function(mask: TMask2): Boolean;
-    Mask2None: function(mask: TMask2): Boolean;
-    Mask2PopCount: function(mask: TMask2): Integer;
-    Mask2FirstSet: function(mask: TMask2): Integer;  // -1 if none
-    // TMask4 操作 (4 元素)
-    Mask4All: function(mask: TMask4): Boolean;
-    Mask4Any: function(mask: TMask4): Boolean;
-    Mask4None: function(mask: TMask4): Boolean;
-    Mask4PopCount: function(mask: TMask4): Integer;
-    Mask4FirstSet: function(mask: TMask4): Integer;  // -1 if none
-    // TMask8 操作 (8 元素)
-    Mask8All: function(mask: TMask8): Boolean;
-    Mask8Any: function(mask: TMask8): Boolean;
-    Mask8None: function(mask: TMask8): Boolean;
-    Mask8PopCount: function(mask: TMask8): Integer;
-    Mask8FirstSet: function(mask: TMask8): Integer;  // -1 if none
-    // TMask16 操作 (16 元素)
-    Mask16All: function(mask: TMask16): Boolean;
-    Mask16Any: function(mask: TMask16): Boolean;
-    Mask16None: function(mask: TMask16): Boolean;
-    Mask16PopCount: function(mask: TMask16): Integer;
-    Mask16FirstSet: function(mask: TMask16): Integer;  // -1 if none
+    // Mask ops live under Mask: TSimdMaskOps (Phase 19 Phase 4).
 
     // F64x2 Select 操作
     SelectF64x2: function(const mask: TMask2; const a, b: TVecF64x2): TVecF64x2;
@@ -730,8 +683,10 @@
     AndNotU16x8: function(const a, b: TVecU16x8): TVecU16x8;
     AndNotU8x16: function(const a, b: TVecU8x16): TVecU8x16;
 
-    // === Batch Array Operations (nested sub-records; Phase 19 Phase 2–3) ===
-    // Flat Array*F32 / Array*F64 / Reduce* / integer Array* slots moved into:
+    // === Nested sub-records (Phase 19 Phase 2–4) ===
+    // Flat Memory/Mask/Array*F32/F64/integer slots moved into:
+    Memory: TSimdMemoryOps;
+    Mask: TSimdMaskOps;
     BatchF32: TSimdBatchF32Ops;
     BatchF64: TSimdBatchF64Ops;
     BatchInteger: TSimdBatchIntegerOps;

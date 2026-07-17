@@ -30,11 +30,11 @@ begin
   dispatchTable.BackendInfo.Priority := GetSimdBackendPriorityValue(sbSSE2);
 
   // Override facade functions with SSE2-accelerated versions
-  dispatchTable.MemEqual := @MemEqual_SSE2_i386;
-  dispatchTable.MemFindByte := @MemFindByte_SSE2_i386;
-  dispatchTable.SumBytes := @SumBytes_SSE2_i386;
-  dispatchTable.CountByte := @CountByte_SSE2_i386;
-  dispatchTable.BitsetPopCount := @BitsetPopCount_SSE2_i386;
+  dispatchTable.Memory.Equal := @MemEqual_SSE2_i386;
+  dispatchTable.Memory.FindByte := @MemFindByte_SSE2_i386;
+  dispatchTable.Memory.SumBytes := @SumBytes_SSE2_i386;
+  dispatchTable.Memory.CountByte := @CountByte_SSE2_i386;
+  dispatchTable.Memory.BitsetPopCount := @BitsetPopCount_SSE2_i386;
 
   // Override vector operations with SSE2-accelerated versions
   if LUseVectorAsm then

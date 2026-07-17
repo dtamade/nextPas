@@ -285,36 +285,36 @@ begin
 
   // === Mask Operations ===
   // TMask4 Operations
-  table.Mask4All := @RISCVVMask4All;
-  table.Mask4Any := @RISCVVMask4Any;
-  table.Mask4None := @RISCVVMask4None;
-  table.Mask4PopCount := @RISCVVMask4PopCount;
-  table.Mask4FirstSet := @RISCVVMask4FirstSet;
+  table.Mask.Mask4All := @RISCVVMask4All;
+  table.Mask.Mask4Any := @RISCVVMask4Any;
+  table.Mask.Mask4None := @RISCVVMask4None;
+  table.Mask.Mask4PopCount := @RISCVVMask4PopCount;
+  table.Mask.Mask4FirstSet := @RISCVVMask4FirstSet;
 
   // TMask8 Operations
-  table.Mask8All := @RISCVVMask8All;
-  table.Mask8Any := @RISCVVMask8Any;
-  table.Mask8None := @RISCVVMask8None;
-  table.Mask8PopCount := @RISCVVMask8PopCount;
-  table.Mask8FirstSet := @RISCVVMask8FirstSet;
+  table.Mask.Mask8All := @RISCVVMask8All;
+  table.Mask.Mask8Any := @RISCVVMask8Any;
+  table.Mask.Mask8None := @RISCVVMask8None;
+  table.Mask.Mask8PopCount := @RISCVVMask8PopCount;
+  table.Mask.Mask8FirstSet := @RISCVVMask8FirstSet;
 
   // TMask16 Operations
-  table.Mask16All := @RISCVVMask16All;
-  table.Mask16Any := @RISCVVMask16Any;
-  table.Mask16None := @RISCVVMask16None;
-  table.Mask16PopCount := @RISCVVMask16PopCount;
-  table.Mask16FirstSet := @RISCVVMask16FirstSet;
+  table.Mask.Mask16All := @RISCVVMask16All;
+  table.Mask.Mask16Any := @RISCVVMask16Any;
+  table.Mask.Mask16None := @RISCVVMask16None;
+  table.Mask.Mask16PopCount := @RISCVVMask16PopCount;
+  table.Mask.Mask16FirstSet := @RISCVVMask16FirstSet;
 
   // =============================================================
   // Additional Operations Registration (100% Coverage)
   // =============================================================
 
   // TMask2 Operations
-  table.Mask2All := @RISCVVMask2All;
-  table.Mask2Any := @RISCVVMask2Any;
-  table.Mask2None := @RISCVVMask2None;
-  table.Mask2PopCount := @RISCVVMask2PopCount;
-  table.Mask2FirstSet := @RISCVVMask2FirstSet;
+  table.Mask.Mask2All := @RISCVVMask2All;
+  table.Mask.Mask2Any := @RISCVVMask2Any;
+  table.Mask.Mask2None := @RISCVVMask2None;
+  table.Mask.Mask2PopCount := @RISCVVMask2PopCount;
+  table.Mask.Mask2FirstSet := @RISCVVMask2FirstSet;
 
   // Wide Float Operations (Abs, Sqrt, Min, Max, Clamp)
   table.AbsF32x16 := @RISCVVAbsF32x16;

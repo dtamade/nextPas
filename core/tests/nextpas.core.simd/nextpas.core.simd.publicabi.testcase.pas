@@ -1259,21 +1259,21 @@ begin
     Exit(nil);
 
   case aSlotIndex of
-    0: Result := Pointer(aDispatch^.MemEqual);
-    1: Result := Pointer(aDispatch^.MemFindByte);
-    2: Result := Pointer(aDispatch^.MemDiffRange);
-    3: Result := Pointer(aDispatch^.SumBytes);
-    4: Result := Pointer(aDispatch^.CountByte);
-    5: Result := Pointer(aDispatch^.BitsetPopCount);
-    6: Result := Pointer(aDispatch^.Utf8Validate);
-    7: Result := Pointer(aDispatch^.AsciiIEqual);
-    8: Result := Pointer(aDispatch^.BytesIndexOf);
-    9: Result := Pointer(aDispatch^.MemCopy);
-    10: Result := Pointer(aDispatch^.MemSet);
-    11: Result := Pointer(aDispatch^.ToLowerAscii);
-    12: Result := Pointer(aDispatch^.ToUpperAscii);
-    13: Result := Pointer(aDispatch^.MemReverse);
-    14: Result := Pointer(aDispatch^.MinMaxBytes);
+    0: Result := Pointer(aDispatch^.Memory.Equal);
+    1: Result := Pointer(aDispatch^.Memory.FindByte);
+    2: Result := Pointer(aDispatch^.Memory.DiffRange);
+    3: Result := Pointer(aDispatch^.Memory.SumBytes);
+    4: Result := Pointer(aDispatch^.Memory.CountByte);
+    5: Result := Pointer(aDispatch^.Memory.BitsetPopCount);
+    6: Result := Pointer(aDispatch^.Memory.Utf8Validate);
+    7: Result := Pointer(aDispatch^.Memory.AsciiIEqual);
+    8: Result := Pointer(aDispatch^.Memory.BytesIndexOf);
+    9: Result := Pointer(aDispatch^.Memory.Copy);
+    10: Result := Pointer(aDispatch^.Memory.Fill);
+    11: Result := Pointer(aDispatch^.Memory.ToLowerAscii);
+    12: Result := Pointer(aDispatch^.Memory.ToUpperAscii);
+    13: Result := Pointer(aDispatch^.Memory.Reverse);
+    14: Result := Pointer(aDispatch^.Memory.MinMaxBytes);
   else
     Result := nil;
   end;
@@ -1627,13 +1627,13 @@ begin
   LOriginalTableRestored := False;
 
   LModifiedTable := LOriginalTable;
-  LModifiedTable.MemEqual := @PublicAbiSyntheticMemEqualAlwaysTrue;
+  LModifiedTable.Memory.Equal := @PublicAbiSyntheticMemEqualAlwaysTrue;
   RegisterBackend(LBackend, LModifiedTable);
   try
     CheckTrue(LApiBefore^.MemEqual(@LBufferA[0], @LBufferB[0], SizeUInt(Length(LBufferA))), 'Cached cdecl entry point should observe the latest rebound MemEqual=true slot');
 
     LModifiedTable := LOriginalTable;
-    LModifiedTable.MemEqual := @PublicAbiSyntheticMemEqualAlwaysFalse;
+    LModifiedTable.Memory.Equal := @PublicAbiSyntheticMemEqualAlwaysFalse;
     RegisterBackend(LBackend, LModifiedTable);
     try
       LApiAfter := GetSimdPublicApi;
@@ -2036,11 +2036,11 @@ begin
       Continue;
 
     LHasNonScalarMaskedSlots := False;
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask2All), Pointer(LBackendTable.Mask2All));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask4PopCount), Pointer(LBackendTable.Mask4PopCount));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask8All), Pointer(LBackendTable.Mask8All));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask8PopCount), Pointer(LBackendTable.Mask8PopCount));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask16FirstSet), Pointer(LBackendTable.Mask16FirstSet));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask2All), Pointer(LBackendTable.Mask.Mask2All));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask4PopCount), Pointer(LBackendTable.Mask.Mask4PopCount));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask8All), Pointer(LBackendTable.Mask.Mask8All));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask8PopCount), Pointer(LBackendTable.Mask.Mask8PopCount));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask16FirstSet), Pointer(LBackendTable.Mask.Mask16FirstSet));
 
     if not LHasNonScalarMaskedSlots then
       Continue;
@@ -2288,11 +2288,11 @@ begin
       Continue;
 
     LHasNonScalarMaskedSlots := False;
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask2All), Pointer(LBackendTable.Mask2All));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask4PopCount), Pointer(LBackendTable.Mask4PopCount));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask8All), Pointer(LBackendTable.Mask8All));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask8PopCount), Pointer(LBackendTable.Mask8PopCount));
-    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask16FirstSet), Pointer(LBackendTable.Mask16FirstSet));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask2All), Pointer(LBackendTable.Mask.Mask2All));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask4PopCount), Pointer(LBackendTable.Mask.Mask4PopCount));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask8All), Pointer(LBackendTable.Mask.Mask8All));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask8PopCount), Pointer(LBackendTable.Mask.Mask8PopCount));
+    ObserveRepresentativeSlot(Pointer(LScalarTable.Mask.Mask16FirstSet), Pointer(LBackendTable.Mask.Mask16FirstSet));
 
     if not LHasNonScalarMaskedSlots then
       Continue;

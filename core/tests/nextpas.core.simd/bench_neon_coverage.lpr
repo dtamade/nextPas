@@ -554,21 +554,21 @@ begin
   Add('ZeroF64x8',             Pointer(aTbl.ZeroF64x8));
 
   // ── Facade (Mem) ──
-  Add('MemEqual',              Pointer(aTbl.MemEqual));
-  Add('MemFindByte',           Pointer(aTbl.MemFindByte));
-  Add('MemDiffRange',          Pointer(aTbl.MemDiffRange));
-  Add('MemCopy',               Pointer(aTbl.MemCopy));
-  Add('MemSet',                Pointer(aTbl.MemSet));
-  Add('MemReverse',            Pointer(aTbl.MemReverse));
-  Add('SumBytes',              Pointer(aTbl.SumBytes));
-  Add('MinMaxBytes',           Pointer(aTbl.MinMaxBytes));
-  Add('CountByte',             Pointer(aTbl.CountByte));
-  Add('Utf8Validate',          Pointer(aTbl.Utf8Validate));
-  Add('AsciiIEqual',           Pointer(aTbl.AsciiIEqual));
-  Add('ToLowerAscii',          Pointer(aTbl.ToLowerAscii));
-  Add('ToUpperAscii',          Pointer(aTbl.ToUpperAscii));
-  Add('BytesIndexOf',          Pointer(aTbl.BytesIndexOf));
-  Add('BitsetPopCount',        Pointer(aTbl.BitsetPopCount));
+  Add('MemEqual',              Pointer(aTbl.Memory.Equal));
+  Add('MemFindByte',           Pointer(aTbl.Memory.FindByte));
+  Add('MemDiffRange',          Pointer(aTbl.Memory.DiffRange));
+  Add('MemCopy',               Pointer(aTbl.Memory.Copy));
+  Add('MemSet',                Pointer(aTbl.Memory.Fill));
+  Add('MemReverse',            Pointer(aTbl.Memory.Reverse));
+  Add('SumBytes',              Pointer(aTbl.Memory.SumBytes));
+  Add('MinMaxBytes',           Pointer(aTbl.Memory.MinMaxBytes));
+  Add('CountByte',             Pointer(aTbl.Memory.CountByte));
+  Add('Utf8Validate',          Pointer(aTbl.Memory.Utf8Validate));
+  Add('AsciiIEqual',           Pointer(aTbl.Memory.AsciiIEqual));
+  Add('ToLowerAscii',          Pointer(aTbl.Memory.ToLowerAscii));
+  Add('ToUpperAscii',          Pointer(aTbl.Memory.ToUpperAscii));
+  Add('BytesIndexOf',          Pointer(aTbl.Memory.BytesIndexOf));
+  Add('BitsetPopCount',        Pointer(aTbl.Memory.BitsetPopCount));
 
   // ── Saturating Arithmetic ──
   Add('I8x16SatAdd',           Pointer(aTbl.I8x16SatAdd));
@@ -672,26 +672,26 @@ begin
   Add('MaxU8x16',              Pointer(aTbl.MaxU8x16));
 
   // ── Mask ──
-  Add('Mask2All',              Pointer(aTbl.Mask2All));
-  Add('Mask2Any',              Pointer(aTbl.Mask2Any));
-  Add('Mask2None',             Pointer(aTbl.Mask2None));
-  Add('Mask2PopCount',         Pointer(aTbl.Mask2PopCount));
-  Add('Mask2FirstSet',         Pointer(aTbl.Mask2FirstSet));
-  Add('Mask4All',              Pointer(aTbl.Mask4All));
-  Add('Mask4Any',              Pointer(aTbl.Mask4Any));
-  Add('Mask4None',             Pointer(aTbl.Mask4None));
-  Add('Mask4PopCount',         Pointer(aTbl.Mask4PopCount));
-  Add('Mask4FirstSet',         Pointer(aTbl.Mask4FirstSet));
-  Add('Mask8All',              Pointer(aTbl.Mask8All));
-  Add('Mask8Any',              Pointer(aTbl.Mask8Any));
-  Add('Mask8None',             Pointer(aTbl.Mask8None));
-  Add('Mask8PopCount',         Pointer(aTbl.Mask8PopCount));
-  Add('Mask8FirstSet',         Pointer(aTbl.Mask8FirstSet));
-  Add('Mask16All',             Pointer(aTbl.Mask16All));
-  Add('Mask16Any',             Pointer(aTbl.Mask16Any));
-  Add('Mask16None',            Pointer(aTbl.Mask16None));
-  Add('Mask16PopCount',        Pointer(aTbl.Mask16PopCount));
-  Add('Mask16FirstSet',        Pointer(aTbl.Mask16FirstSet));
+  Add('Mask2All',              Pointer(aTbl.Mask.Mask2All));
+  Add('Mask2Any',              Pointer(aTbl.Mask.Mask2Any));
+  Add('Mask2None',             Pointer(aTbl.Mask.Mask2None));
+  Add('Mask2PopCount',         Pointer(aTbl.Mask.Mask2PopCount));
+  Add('Mask2FirstSet',         Pointer(aTbl.Mask.Mask2FirstSet));
+  Add('Mask4All',              Pointer(aTbl.Mask.Mask4All));
+  Add('Mask4Any',              Pointer(aTbl.Mask.Mask4Any));
+  Add('Mask4None',             Pointer(aTbl.Mask.Mask4None));
+  Add('Mask4PopCount',         Pointer(aTbl.Mask.Mask4PopCount));
+  Add('Mask4FirstSet',         Pointer(aTbl.Mask.Mask4FirstSet));
+  Add('Mask8All',              Pointer(aTbl.Mask.Mask8All));
+  Add('Mask8Any',              Pointer(aTbl.Mask.Mask8Any));
+  Add('Mask8None',             Pointer(aTbl.Mask.Mask8None));
+  Add('Mask8PopCount',         Pointer(aTbl.Mask.Mask8PopCount));
+  Add('Mask8FirstSet',         Pointer(aTbl.Mask.Mask8FirstSet));
+  Add('Mask16All',             Pointer(aTbl.Mask.Mask16All));
+  Add('Mask16Any',             Pointer(aTbl.Mask.Mask16Any));
+  Add('Mask16None',            Pointer(aTbl.Mask.Mask16None));
+  Add('Mask16PopCount',        Pointer(aTbl.Mask.Mask16PopCount));
+  Add('Mask16FirstSet',        Pointer(aTbl.Mask.Mask16FirstSet));
 
   // ── Select ──
   Add('SelectF64x2',           Pointer(aTbl.SelectF64x2));

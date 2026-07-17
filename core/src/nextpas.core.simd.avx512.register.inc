@@ -43,17 +43,17 @@ begin
   if LEnableVectorAsm then
   begin
     // Override facade functions with AVX-512 accelerated versions
-    dispatchTable.MemEqual := @MemEqual_AVX512;
-    dispatchTable.MemFindByte := @MemFindByte_AVX512;
-    dispatchTable.SumBytes := @SumBytes_AVX512;
-    dispatchTable.CountByte := @CountByte_AVX512;
-    dispatchTable.MinMaxBytes := @MinMaxBytes_AVX512;
-    dispatchTable.BitsetPopCount := @BitsetPopCount_AVX512;
-    dispatchTable.MemCopy := @MemCopy_AVX512;
-    dispatchTable.MemSet := @MemSet_AVX512;
-    dispatchTable.ToLowerAscii := @ToLowerAscii_AVX512;
-    dispatchTable.ToUpperAscii := @ToUpperAscii_AVX512;
-    dispatchTable.AsciiIEqual := @AsciiIEqual_AVX512;
+    dispatchTable.Memory.Equal := @MemEqual_AVX512;
+    dispatchTable.Memory.FindByte := @MemFindByte_AVX512;
+    dispatchTable.Memory.SumBytes := @SumBytes_AVX512;
+    dispatchTable.Memory.CountByte := @CountByte_AVX512;
+    dispatchTable.Memory.MinMaxBytes := @MinMaxBytes_AVX512;
+    dispatchTable.Memory.BitsetPopCount := @BitsetPopCount_AVX512;
+    dispatchTable.Memory.Copy := @MemCopy_AVX512;
+    dispatchTable.Memory.Fill := @MemSet_AVX512;
+    dispatchTable.Memory.ToLowerAscii := @ToLowerAscii_AVX512;
+    dispatchTable.Memory.ToUpperAscii := @ToUpperAscii_AVX512;
+    dispatchTable.Memory.AsciiIEqual := @AsciiIEqual_AVX512;
     // Utf8Validate/MemReverse/MemDiffRange/BytesIndexOf keep the cloned AVX2 slots.
 
   // === 512-bit Vector Type Operations ===
@@ -267,11 +267,11 @@ begin
   dispatchTable.ReduceMulF64x8 := @AVX512ReduceMulF64x8;
 
   // === Mask16 Operations (shared scalar, ABI-safe) ===
-  dispatchTable.Mask16All := @SharedMask16All;
-  dispatchTable.Mask16Any := @SharedMask16Any;
-  dispatchTable.Mask16None := @SharedMask16None;
-  dispatchTable.Mask16PopCount := @AVX512Mask16PopCount;
-  dispatchTable.Mask16FirstSet := @AVX512Mask16FirstSet;
+  dispatchTable.Mask.Mask16All := @SharedMask16All;
+  dispatchTable.Mask.Mask16Any := @SharedMask16Any;
+  dispatchTable.Mask.Mask16None := @SharedMask16None;
+  dispatchTable.Mask.Mask16PopCount := @AVX512Mask16PopCount;
+  dispatchTable.Mask.Mask16FirstSet := @AVX512Mask16FirstSet;
 
   // ✅ P2: Saturating Arithmetic (EVEX-encoded, always enabled)
   dispatchTable.I8x16SatAdd := @AVX512I8x16SatAdd;

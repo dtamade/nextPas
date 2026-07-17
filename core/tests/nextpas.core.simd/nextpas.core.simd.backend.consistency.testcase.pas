@@ -736,10 +736,10 @@ begin
     // 测试 MemEqual（相等情况）
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedBool := dispatch^.MemEqual(@buf1[0], @buf1[0], 256);
+    expectedBool := dispatch^.Memory.Equal(@buf1[0], @buf1[0], 256);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualBool := dispatch^.MemEqual(@buf1[0], @buf1[0], 256);
+    actualBool := dispatch^.Memory.Equal(@buf1[0], @buf1[0], 256);
 
     if expectedBool <> actualBool then
     begin
@@ -751,10 +751,10 @@ begin
     // 测试 MemEqual（不等情况）
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedBool := dispatch^.MemEqual(@buf1[0], @buf2[0], 256);
+    expectedBool := dispatch^.Memory.Equal(@buf1[0], @buf2[0], 256);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualBool := dispatch^.MemEqual(@buf1[0], @buf2[0], 256);
+    actualBool := dispatch^.Memory.Equal(@buf1[0], @buf2[0], 256);
 
     if expectedBool <> actualBool then
     begin
@@ -766,10 +766,10 @@ begin
     // 测试 MemFindByte
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedIdx := dispatch^.MemFindByte(@buf1[0], 256, 100);
+    expectedIdx := dispatch^.Memory.FindByte(@buf1[0], 256, 100);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualIdx := dispatch^.MemFindByte(@buf1[0], 256, 100);
+    actualIdx := dispatch^.Memory.FindByte(@buf1[0], 256, 100);
 
     if expectedIdx <> actualIdx then
     begin
@@ -781,10 +781,10 @@ begin
     // 测试 SumBytes
     SetActiveBackend(sbScalar);
     dispatch := GetDispatchTable;
-    expectedSum := dispatch^.SumBytes(@buf1[0], 256);
+    expectedSum := dispatch^.Memory.SumBytes(@buf1[0], 256);
     SetActiveBackend(backend);
     dispatch := GetDispatchTable;
-    actualSum := dispatch^.SumBytes(@buf1[0], 256);
+    actualSum := dispatch^.Memory.SumBytes(@buf1[0], 256);
 
     if expectedSum <> actualSum then
     begin

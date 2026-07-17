@@ -254,20 +254,20 @@ procedure ConfigureDirectDispatchSyntheticTableA(var aDispatchTable: TSimdDispat
 begin
   aDispatchTable.AddF32x4 := @DirectDispatchSyntheticAddA;
   aDispatchTable.ReduceAddF32x4 := @DirectDispatchSyntheticReduceAddA;
-  aDispatchTable.MemEqual := @DirectDispatchSyntheticMemEqualA;
-  aDispatchTable.SumBytes := @DirectDispatchSyntheticSumBytesA;
-  aDispatchTable.CountByte := @DirectDispatchSyntheticCountByteA;
-  aDispatchTable.BitsetPopCount := @DirectDispatchSyntheticBitsetPopCountA;
+  aDispatchTable.Memory.Equal := @DirectDispatchSyntheticMemEqualA;
+  aDispatchTable.Memory.SumBytes := @DirectDispatchSyntheticSumBytesA;
+  aDispatchTable.Memory.CountByte := @DirectDispatchSyntheticCountByteA;
+  aDispatchTable.Memory.BitsetPopCount := @DirectDispatchSyntheticBitsetPopCountA;
 end;
 
 procedure ConfigureDirectDispatchSyntheticTableB(var aDispatchTable: TSimdDispatchTable);
 begin
   aDispatchTable.AddF32x4 := @DirectDispatchSyntheticAddB;
   aDispatchTable.ReduceAddF32x4 := @DirectDispatchSyntheticReduceAddB;
-  aDispatchTable.MemEqual := @DirectDispatchSyntheticMemEqualB;
-  aDispatchTable.SumBytes := @DirectDispatchSyntheticSumBytesB;
-  aDispatchTable.CountByte := @DirectDispatchSyntheticCountByteB;
-  aDispatchTable.BitsetPopCount := @DirectDispatchSyntheticBitsetPopCountB;
+  aDispatchTable.Memory.Equal := @DirectDispatchSyntheticMemEqualB;
+  aDispatchTable.Memory.SumBytes := @DirectDispatchSyntheticSumBytesB;
+  aDispatchTable.Memory.CountByte := @DirectDispatchSyntheticCountByteB;
+  aDispatchTable.Memory.BitsetPopCount := @DirectDispatchSyntheticBitsetPopCountB;
 end;
 
 function IsDirectDispatchSyntheticSnapshotA(aDispatchTable: PSimdDispatchTable): Boolean;
@@ -275,10 +275,10 @@ begin
   Result :=
     (Pointer(aDispatchTable^.AddF32x4) = Pointer(@DirectDispatchSyntheticAddA)) and
     (Pointer(aDispatchTable^.ReduceAddF32x4) = Pointer(@DirectDispatchSyntheticReduceAddA)) and
-    (Pointer(aDispatchTable^.MemEqual) = Pointer(@DirectDispatchSyntheticMemEqualA)) and
-    (Pointer(aDispatchTable^.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesA)) and
-    (Pointer(aDispatchTable^.CountByte) = Pointer(@DirectDispatchSyntheticCountByteA)) and
-    (Pointer(aDispatchTable^.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountA));
+    (Pointer(aDispatchTable^.Memory.Equal) = Pointer(@DirectDispatchSyntheticMemEqualA)) and
+    (Pointer(aDispatchTable^.Memory.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesA)) and
+    (Pointer(aDispatchTable^.Memory.CountByte) = Pointer(@DirectDispatchSyntheticCountByteA)) and
+    (Pointer(aDispatchTable^.Memory.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountA));
 end;
 
 function IsDirectDispatchSyntheticSnapshotB(aDispatchTable: PSimdDispatchTable): Boolean;
@@ -286,10 +286,10 @@ begin
   Result :=
     (Pointer(aDispatchTable^.AddF32x4) = Pointer(@DirectDispatchSyntheticAddB)) and
     (Pointer(aDispatchTable^.ReduceAddF32x4) = Pointer(@DirectDispatchSyntheticReduceAddB)) and
-    (Pointer(aDispatchTable^.MemEqual) = Pointer(@DirectDispatchSyntheticMemEqualB)) and
-    (Pointer(aDispatchTable^.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesB)) and
-    (Pointer(aDispatchTable^.CountByte) = Pointer(@DirectDispatchSyntheticCountByteB)) and
-    (Pointer(aDispatchTable^.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountB));
+    (Pointer(aDispatchTable^.Memory.Equal) = Pointer(@DirectDispatchSyntheticMemEqualB)) and
+    (Pointer(aDispatchTable^.Memory.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesB)) and
+    (Pointer(aDispatchTable^.Memory.CountByte) = Pointer(@DirectDispatchSyntheticCountByteB)) and
+    (Pointer(aDispatchTable^.Memory.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountB));
 end;
 
 function DescribeDirectDispatchSyntheticSnapshot(aDispatchTable: PSimdDispatchTable): string;
@@ -299,14 +299,14 @@ begin
       BoolToTrueFalse(Pointer(aDispatchTable^.AddF32x4) = Pointer(@DirectDispatchSyntheticAddB)) +
     ', ReduceAdd=' + BoolToTrueFalse(Pointer(aDispatchTable^.ReduceAddF32x4) = Pointer(@DirectDispatchSyntheticReduceAddA)) + '/' +
       BoolToTrueFalse(Pointer(aDispatchTable^.ReduceAddF32x4) = Pointer(@DirectDispatchSyntheticReduceAddB)) +
-    ', MemEqual=' + BoolToTrueFalse(Pointer(aDispatchTable^.MemEqual) = Pointer(@DirectDispatchSyntheticMemEqualA)) + '/' +
-      BoolToTrueFalse(Pointer(aDispatchTable^.MemEqual) = Pointer(@DirectDispatchSyntheticMemEqualB)) +
-    ', SumBytes=' + BoolToTrueFalse(Pointer(aDispatchTable^.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesA)) + '/' +
-      BoolToTrueFalse(Pointer(aDispatchTable^.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesB)) +
-    ', CountByte=' + BoolToTrueFalse(Pointer(aDispatchTable^.CountByte) = Pointer(@DirectDispatchSyntheticCountByteA)) + '/' +
-      BoolToTrueFalse(Pointer(aDispatchTable^.CountByte) = Pointer(@DirectDispatchSyntheticCountByteB)) +
-    ', BitsetPopCount=' + BoolToTrueFalse(Pointer(aDispatchTable^.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountA)) + '/' +
-      BoolToTrueFalse(Pointer(aDispatchTable^.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountB));
+    ', MemEqual=' + BoolToTrueFalse(Pointer(aDispatchTable^.Memory.Equal) = Pointer(@DirectDispatchSyntheticMemEqualA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.Memory.Equal) = Pointer(@DirectDispatchSyntheticMemEqualB)) +
+    ', SumBytes=' + BoolToTrueFalse(Pointer(aDispatchTable^.Memory.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.Memory.SumBytes) = Pointer(@DirectDispatchSyntheticSumBytesB)) +
+    ', CountByte=' + BoolToTrueFalse(Pointer(aDispatchTable^.Memory.CountByte) = Pointer(@DirectDispatchSyntheticCountByteA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.Memory.CountByte) = Pointer(@DirectDispatchSyntheticCountByteB)) +
+    ', BitsetPopCount=' + BoolToTrueFalse(Pointer(aDispatchTable^.Memory.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountA)) + '/' +
+      BoolToTrueFalse(Pointer(aDispatchTable^.Memory.BitsetPopCount) = Pointer(@DirectDispatchSyntheticBitsetPopCountB));
 end;
 
 constructor TDirectDispatchMutationWorker.Create(aIterations, aWriterPhase: Integer;
@@ -390,13 +390,13 @@ begin
       ThreadSwitch;
       LReduceAddPtr := Pointer(LDispatchTable^.ReduceAddF32x4);
       ThreadSwitch;
-      LMemEqualPtr := Pointer(LDispatchTable^.MemEqual);
+      LMemEqualPtr := Pointer(LDispatchTable^.Memory.Equal);
       ThreadSwitch;
-      LSumBytesPtr := Pointer(LDispatchTable^.SumBytes);
+      LSumBytesPtr := Pointer(LDispatchTable^.Memory.SumBytes);
       ThreadSwitch;
-      LCountBytePtr := Pointer(LDispatchTable^.CountByte);
+      LCountBytePtr := Pointer(LDispatchTable^.Memory.CountByte);
       ThreadSwitch;
-      LBitsetPopCountPtr := Pointer(LDispatchTable^.BitsetPopCount);
+      LBitsetPopCountPtr := Pointer(LDispatchTable^.Memory.BitsetPopCount);
 
       LAddIsA := LAddPtr = Pointer(@DirectDispatchSyntheticAddA);
       LAddIsB := LAddPtr = Pointer(@DirectDispatchSyntheticAddB);
@@ -455,10 +455,10 @@ begin
   // Spot-check a few representative entries across categories.
   CheckTrue(dt^.AddF32x4 = directDt^.AddF32x4, 'AddF32x4 pointer should match');
   CheckTrue(dt^.SplatF32x4 = directDt^.SplatF32x4, 'SplatF32x4 pointer should match');
-  CheckTrue(dt^.MemEqual = directDt^.MemEqual, 'MemEqual pointer should match');
-  CheckTrue(dt^.MemCopy = directDt^.MemCopy, 'MemCopy pointer should match');
-  CheckTrue(dt^.SumBytes = directDt^.SumBytes, 'SumBytes pointer should match');
-  CheckTrue(dt^.Mask4All = directDt^.Mask4All, 'Mask4All pointer should match');
+  CheckTrue(dt^.Memory.Equal = directDt^.Memory.Equal, 'MemEqual pointer should match');
+  CheckTrue(dt^.Memory.Copy = directDt^.Memory.Copy, 'MemCopy pointer should match');
+  CheckTrue(dt^.Memory.SumBytes = directDt^.Memory.SumBytes, 'SumBytes pointer should match');
+  CheckTrue(dt^.Mask.Mask4All = directDt^.Mask.Mask4All, 'Mask4All pointer should match');
 end;
 
 procedure TTestCase_DirectDispatch.Test_DirectDispatchTable_Rebind_AfterForceBackend;
@@ -569,10 +569,10 @@ begin
   CheckTrue(dt^.MinI32x4 = directDt^.MinI32x4, 'MinI32x4 pointer should match');
   CheckTrue(dt^.AndNotI32x4 = directDt^.AndNotI32x4, 'AndNotI32x4 pointer should match');
   CheckTrue(dt^.U8x16SatAdd = directDt^.U8x16SatAdd, 'U8x16SatAdd pointer should match');
-  CheckTrue(dt^.MemFindByte = directDt^.MemFindByte, 'MemFindByte pointer should match');
-  CheckTrue(dt^.CountByte = directDt^.CountByte, 'CountByte pointer should match');
-  CheckTrue(dt^.Utf8Validate = directDt^.Utf8Validate, 'Utf8Validate pointer should match');
-  CheckTrue(dt^.Mask16PopCount = directDt^.Mask16PopCount, 'Mask16PopCount pointer should match');
+  CheckTrue(dt^.Memory.FindByte = directDt^.Memory.FindByte, 'MemFindByte pointer should match');
+  CheckTrue(dt^.Memory.CountByte = directDt^.Memory.CountByte, 'CountByte pointer should match');
+  CheckTrue(dt^.Memory.Utf8Validate = directDt^.Memory.Utf8Validate, 'Utf8Validate pointer should match');
+  CheckTrue(dt^.Mask.Mask16PopCount = directDt^.Mask.Mask16PopCount, 'Mask16PopCount pointer should match');
 end;
 
 procedure TTestCase_DirectDispatch.Test_DirectDispatchTable_TrySetUnavailableBackend_NoDrift;
@@ -693,11 +693,11 @@ begin
 
       LMask := VecF32x4CmpLt(LA, LB);
       LFacadeMaskAll := Mask4All(LMask);
-      LDirectMaskAll := LDirectDispatch^.Mask4All(LMask);
+      LDirectMaskAll := LDirectDispatch^.Mask.Mask4All(LMask);
       CheckEqual(LFacadeMaskAll, LDirectMaskAll, 'Direct Mask4All parity backend ' + DirectBackendName(LBackend));
 
       LFacadeFind := MemFindByte(@LBuffer[0], SizeUInt(Length(LBuffer)), 7);
-      LDirectFind := LDirectDispatch^.MemFindByte(@LBuffer[0], SizeUInt(Length(LBuffer)), 7);
+      LDirectFind := LDirectDispatch^.Memory.FindByte(@LBuffer[0], SizeUInt(Length(LBuffer)), 7);
       CheckEqual(LFacadeFind, LDirectFind, 'Direct MemFindByte parity backend ' + DirectBackendName(LBackend));
     end;
 
@@ -765,11 +765,11 @@ begin
       CheckTrue(Assigned(LDirectDispatch^.ReduceMaxF32x4), 'ReduceMaxF32x4 should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(Assigned(LDirectDispatch^.ReduceMulF32x4), 'ReduceMulF32x4 should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(Assigned(LDirectDispatch^.CmpEqI32x4), 'CmpEqI32x4 should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.Mask4All), 'Mask4All should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.Mask16PopCount), 'Mask16PopCount should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.BytesIndexOf), 'BytesIndexOf should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.Utf8Validate), 'Utf8Validate should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.BitsetPopCount), 'BitsetPopCount should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Mask.Mask4All), 'Mask4All should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Mask.Mask16PopCount), 'Mask16PopCount should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.BytesIndexOf), 'BytesIndexOf should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.Utf8Validate), 'Utf8Validate should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.BitsetPopCount), 'BitsetPopCount should be assigned for backend ' + DirectBackendName(LBackend));
 
       LA.f[0] := 1.25;
       LA.f[1] := -2.0;
@@ -847,28 +847,28 @@ begin
       CheckEqual(Integer(LFacadeMask4), Integer(LDirectMask4), 'Direct CmpEqI32x4 parity backend ' + DirectBackendName(LBackend));
 
       LFacadeMask4All := Mask4All(LFacadeMask4);
-      LDirectMask4All := LDirectDispatch^.Mask4All(LDirectMask4);
+      LDirectMask4All := LDirectDispatch^.Mask.Mask4All(LDirectMask4);
       CheckEqual(LFacadeMask4All, LDirectMask4All, 'Direct Mask4All parity backend ' + DirectBackendName(LBackend));
 
       LFacadeMask16 := VecU8x16CmpGt(LU8A, LU8B);
       LFacadeMask16PopCount := Mask16PopCount(LFacadeMask16);
-      LDirectMask16PopCount := LDirectDispatch^.Mask16PopCount(LFacadeMask16);
+      LDirectMask16PopCount := LDirectDispatch^.Mask.Mask16PopCount(LFacadeMask16);
       CheckEqual(LFacadeMask16PopCount, LDirectMask16PopCount, 'Direct Mask16PopCount parity backend ' + DirectBackendName(LBackend));
 
       LFacadeBytesIndex := BytesIndexOf(@LHaystack[0], SizeUInt(Length(LHaystack)), @LNeedle[0], SizeUInt(Length(LNeedle)));
-      LDirectBytesIndex := LDirectDispatch^.BytesIndexOf(@LHaystack[0], SizeUInt(Length(LHaystack)), @LNeedle[0], SizeUInt(Length(LNeedle)));
+      LDirectBytesIndex := LDirectDispatch^.Memory.BytesIndexOf(@LHaystack[0], SizeUInt(Length(LHaystack)), @LNeedle[0], SizeUInt(Length(LNeedle)));
       CheckEqual(LFacadeBytesIndex, LDirectBytesIndex, 'Direct BytesIndexOf parity backend ' + DirectBackendName(LBackend));
 
       LFacadeUtf8Valid := Utf8Validate(@LUtf8Valid[0], SizeUInt(Length(LUtf8Valid)));
-      LDirectUtf8Valid := LDirectDispatch^.Utf8Validate(@LUtf8Valid[0], SizeUInt(Length(LUtf8Valid)));
+      LDirectUtf8Valid := LDirectDispatch^.Memory.Utf8Validate(@LUtf8Valid[0], SizeUInt(Length(LUtf8Valid)));
       CheckEqual(LFacadeUtf8Valid, LDirectUtf8Valid, 'Direct Utf8Validate(valid) parity backend ' + DirectBackendName(LBackend));
 
       LFacadeUtf8Invalid := Utf8Validate(@LUtf8Invalid[0], SizeUInt(Length(LUtf8Invalid)));
-      LDirectUtf8Invalid := LDirectDispatch^.Utf8Validate(@LUtf8Invalid[0], SizeUInt(Length(LUtf8Invalid)));
+      LDirectUtf8Invalid := LDirectDispatch^.Memory.Utf8Validate(@LUtf8Invalid[0], SizeUInt(Length(LUtf8Invalid)));
       CheckEqual(LFacadeUtf8Invalid, LDirectUtf8Invalid, 'Direct Utf8Validate(invalid) parity backend ' + DirectBackendName(LBackend));
 
       LFacadeBitsetPopCount := BitsetPopCount(@LBitset[0], SizeUInt(Length(LBitset)));
-      LDirectBitsetPopCount := LDirectDispatch^.BitsetPopCount(@LBitset[0], SizeUInt(Length(LBitset)));
+      LDirectBitsetPopCount := LDirectDispatch^.Memory.BitsetPopCount(@LBitset[0], SizeUInt(Length(LBitset)));
       CheckEqual(LFacadeBitsetPopCount, LDirectBitsetPopCount, 'Direct BitsetPopCount parity backend ' + DirectBackendName(LBackend));
 
       if LBackend = sbScalar then
@@ -974,11 +974,11 @@ begin
 
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.MemEqual), 'MemEqual should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.MemDiffRange), 'MemDiffRange should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.AsciiIEqual), 'AsciiIEqual should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.ToLowerAscii), 'ToLowerAscii should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.ToUpperAscii), 'ToUpperAscii should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.Equal), 'MemEqual should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.DiffRange), 'MemDiffRange should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.AsciiIEqual), 'AsciiIEqual should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.ToLowerAscii), 'ToLowerAscii should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.ToUpperAscii), 'ToUpperAscii should be assigned for backend ' + DirectBackendName(LBackend));
 
       LStage := 'begin-backend';
       try
@@ -989,12 +989,12 @@ begin
 
         LStage := 'MemEqual(equal),len=' + IntToStr(LLen);
         LFacadeMemEqual := MemEqual(@LBufA[0], @LBufB[0], SizeUInt(LLen));
-        LDirectMemEqual := LDirectDispatch^.MemEqual(@LBufA[0], @LBufB[0], SizeUInt(LLen));
+        LDirectMemEqual := LDirectDispatch^.Memory.Equal(@LBufA[0], @LBufB[0], SizeUInt(LLen));
         CheckEqual(Boolean(LFacadeMemEqual), Boolean(LDirectMemEqual), 'Direct MemEqual(equal) parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen));
 
         LStage := 'MemDiffRange(equal),len=' + IntToStr(LLen);
         LFacadeHasDiff := MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(LLen), LFacadeFirstDiff, LFacadeLastDiff);
-        LDirectHasDiff := LDirectDispatch^.MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(LLen), LDirectFirstDiff, LDirectLastDiff);
+        LDirectHasDiff := LDirectDispatch^.Memory.DiffRange(@LBufA[0], @LBufB[0], SizeUInt(LLen), LDirectFirstDiff, LDirectLastDiff);
         CheckEqual(LFacadeHasDiff, LDirectHasDiff, 'Direct MemDiffRange(equal) hasDiff parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen));
         if LFacadeHasDiff then
         begin
@@ -1017,13 +1017,13 @@ begin
 
             LStage := 'MemEqual(diff),len=' + IntToStr(LLen) + ',scenario=' + IntToStr(LScenario);
             LFacadeMemEqual := MemEqual(@LBufA[0], @LBufB[0], SizeUInt(LLen));
-            LDirectMemEqual := LDirectDispatch^.MemEqual(@LBufA[0], @LBufB[0], SizeUInt(LLen));
+            LDirectMemEqual := LDirectDispatch^.Memory.Equal(@LBufA[0], @LBufB[0], SizeUInt(LLen));
             CheckEqual(Boolean(LFacadeMemEqual), Boolean(LDirectMemEqual), 'Direct MemEqual(diff) parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' scenario=' + IntToStr(LScenario));
             CheckFalse(Boolean(LFacadeMemEqual), 'Facade MemEqual(diff) should be false len=' + IntToStr(LLen) + ' scenario=' + IntToStr(LScenario));
 
             LStage := 'MemDiffRange(diff),len=' + IntToStr(LLen) + ',scenario=' + IntToStr(LScenario);
             LFacadeHasDiff := MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(LLen), LFacadeFirstDiff, LFacadeLastDiff);
-            LDirectHasDiff := LDirectDispatch^.MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(LLen), LDirectFirstDiff, LDirectLastDiff);
+            LDirectHasDiff := LDirectDispatch^.Memory.DiffRange(@LBufA[0], @LBufB[0], SizeUInt(LLen), LDirectFirstDiff, LDirectLastDiff);
             CheckEqual(LFacadeHasDiff, LDirectHasDiff, 'Direct MemDiffRange(diff) hasDiff parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' scenario=' + IntToStr(LScenario));
             CheckTrue(LFacadeHasDiff, 'Facade MemDiffRange(diff) should report hasDiff len=' + IntToStr(LLen) + ' scenario=' + IntToStr(LScenario));
             if LFacadeHasDiff then
@@ -1043,7 +1043,7 @@ begin
 
             LStage := 'MemDiffRange(double-diff),len=' + IntToStr(LLen);
             LFacadeHasDiff := MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(LLen), LFacadeFirstDiff, LFacadeLastDiff);
-            LDirectHasDiff := LDirectDispatch^.MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(LLen), LDirectFirstDiff, LDirectLastDiff);
+            LDirectHasDiff := LDirectDispatch^.Memory.DiffRange(@LBufA[0], @LBufB[0], SizeUInt(LLen), LDirectFirstDiff, LDirectLastDiff);
             CheckEqual(LFacadeHasDiff, LDirectHasDiff, 'Direct MemDiffRange(double-diff) hasDiff parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen));
             CheckTrue(LFacadeHasDiff, 'Facade MemDiffRange(double-diff) should report hasDiff len=' + IntToStr(LLen));
             if LFacadeHasDiff then
@@ -1061,7 +1061,7 @@ begin
       begin
         LStage := 'AsciiIEqual(case-insensitive),len=' + IntToStr(LAsciiLen);
         LFacadeAsciiEq := AsciiIEqual(Pointer(PAnsiChar(LAsciiSameA)), Pointer(PAnsiChar(LAsciiSameB)), SizeUInt(LAsciiLen));
-        LDirectAsciiEq := LDirectDispatch^.AsciiIEqual(Pointer(PAnsiChar(LAsciiSameA)), Pointer(PAnsiChar(LAsciiSameB)), SizeUInt(LAsciiLen));
+        LDirectAsciiEq := LDirectDispatch^.Memory.AsciiIEqual(Pointer(PAnsiChar(LAsciiSameA)), Pointer(PAnsiChar(LAsciiSameB)), SizeUInt(LAsciiLen));
         CheckEqual(LFacadeAsciiEq, LDirectAsciiEq, 'Direct AsciiIEqual(case-insensitive) parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LAsciiLen));
       end;
 
@@ -1069,7 +1069,7 @@ begin
       begin
         LStage := 'AsciiIEqual(mismatch),len=' + IntToStr(LAsciiLen);
         LFacadeAsciiEq := AsciiIEqual(Pointer(PAnsiChar(LAsciiDiffA)), Pointer(PAnsiChar(LAsciiDiffB)), SizeUInt(LAsciiLen));
-        LDirectAsciiEq := LDirectDispatch^.AsciiIEqual(Pointer(PAnsiChar(LAsciiDiffA)), Pointer(PAnsiChar(LAsciiDiffB)), SizeUInt(LAsciiLen));
+        LDirectAsciiEq := LDirectDispatch^.Memory.AsciiIEqual(Pointer(PAnsiChar(LAsciiDiffA)), Pointer(PAnsiChar(LAsciiDiffB)), SizeUInt(LAsciiLen));
         CheckEqual(LFacadeAsciiEq, LDirectAsciiEq, 'Direct AsciiIEqual(mismatch) parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LAsciiLen));
       end;
 
@@ -1086,13 +1086,13 @@ begin
 
         LStage := 'ToLowerAscii,len=' + IntToStr(LTransformLen);
         ToLowerAscii(@LLowerFacade[0], SizeUInt(LTransformLen));
-        LDirectDispatch^.ToLowerAscii(@LLowerDirect[0], SizeUInt(LTransformLen));
+        LDirectDispatch^.Memory.ToLowerAscii(@LLowerDirect[0], SizeUInt(LTransformLen));
         for LIndex := 0 to LTransformLen - 1 do
           CheckEqual(Integer(LLowerFacade[LIndex]), Integer(LLowerDirect[LIndex]), 'Direct ToLowerAscii parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LTransformLen) + ' idx=' + IntToStr(LIndex));
 
         LStage := 'ToUpperAscii,len=' + IntToStr(LTransformLen);
         ToUpperAscii(@LUpperFacade[0], SizeUInt(LTransformLen));
-        LDirectDispatch^.ToUpperAscii(@LUpperDirect[0], SizeUInt(LTransformLen));
+        LDirectDispatch^.Memory.ToUpperAscii(@LUpperDirect[0], SizeUInt(LTransformLen));
         for LIndex := 0 to LTransformLen - 1 do
           CheckEqual(Integer(LUpperFacade[LIndex]), Integer(LUpperDirect[LIndex]), 'Direct ToUpperAscii parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LTransformLen) + ' idx=' + IntToStr(LIndex));
       end;
@@ -1175,9 +1175,9 @@ begin
 
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.MemCopy), 'MemCopy should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.MemSet), 'MemSet should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.MemReverse), 'MemReverse should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.Copy), 'MemCopy should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.Fill), 'MemSet should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.Reverse), 'MemReverse should be assigned for backend ' + DirectBackendName(LBackend));
 
       for LLenCaseIdx := Low(C_LEN_CASES) to High(C_LEN_CASES) do
       begin
@@ -1191,7 +1191,7 @@ begin
 
           FillWorkBuffers;
           MemCopy(@LSource[LSrcOffset], @LFacadeBuf[LDstOffset], SizeUInt(LLen));
-          LDirectDispatch^.MemCopy(@LSource[LSrcOffset], @LDirectBuf[LDstOffset], SizeUInt(LLen));
+          LDirectDispatch^.Memory.Copy(@LSource[LSrcOffset], @LDirectBuf[LDstOffset], SizeUInt(LLen));
           AssertBuffersEqual('Direct MemCopy parity backend ' + DirectBackendName(LBackend) +
             ' len=' + IntToStr(LLen) + ' srcOff=' + IntToStr(LSrcOffset) + ' dstOff=' + IntToStr(LDstOffset));
         end;
@@ -1203,7 +1203,7 @@ begin
 
           FillWorkBuffers;
           MemSet(@LFacadeBuf[LDstOffset], SizeUInt(LLen), C_SET_VALUES[LSetIdx]);
-          LDirectDispatch^.MemSet(@LDirectBuf[LDstOffset], SizeUInt(LLen), C_SET_VALUES[LSetIdx]);
+          LDirectDispatch^.Memory.Fill(@LDirectBuf[LDstOffset], SizeUInt(LLen), C_SET_VALUES[LSetIdx]);
           AssertBuffersEqual('Direct MemSet parity backend ' + DirectBackendName(LBackend) +
             ' len=' + IntToStr(LLen) + ' dstOff=' + IntToStr(LDstOffset) +
             ' value=' + IntToStr(C_SET_VALUES[LSetIdx]));
@@ -1222,7 +1222,7 @@ begin
           end;
 
           MemReverse(@LFacadeBuf[LDstOffset], SizeUInt(LLen));
-          LDirectDispatch^.MemReverse(@LDirectBuf[LDstOffset], SizeUInt(LLen));
+          LDirectDispatch^.Memory.Reverse(@LDirectBuf[LDstOffset], SizeUInt(LLen));
           AssertBuffersEqual('Direct MemReverse parity backend ' + DirectBackendName(LBackend) +
             ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LDstOffset));
         end;
@@ -1290,9 +1290,9 @@ begin
 
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.SumBytes), 'SumBytes should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.CountByte), 'CountByte should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.MinMaxBytes), 'MinMaxBytes should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.SumBytes), 'SumBytes should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.CountByte), 'CountByte should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.MinMaxBytes), 'MinMaxBytes should be assigned for backend ' + DirectBackendName(LBackend));
 
       for LLenCaseIdx := Low(C_LEN_CASES) to High(C_LEN_CASES) do
       begin
@@ -1307,18 +1307,18 @@ begin
             LBuf[LOffset + LIndex] := Byte((LBuf[LOffset + LIndex] + Byte((LLen + LOffset + LIndex) and $FF)) and $FF);
 
           LFacadeSum := SumBytes(@LBuf[LOffset], SizeUInt(LLen));
-          LDirectSum := LDirectDispatch^.SumBytes(@LBuf[LOffset], SizeUInt(LLen));
+          LDirectSum := LDirectDispatch^.Memory.SumBytes(@LBuf[LOffset], SizeUInt(LLen));
           CheckEqual(LFacadeSum, LDirectSum, 'Direct SumBytes parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
 
           for LValueIdx := Low(C_COUNT_VALUES) to High(C_COUNT_VALUES) do
           begin
             LFacadeCount := CountByte(@LBuf[LOffset], SizeUInt(LLen), C_COUNT_VALUES[LValueIdx]);
-            LDirectCount := LDirectDispatch^.CountByte(@LBuf[LOffset], SizeUInt(LLen), C_COUNT_VALUES[LValueIdx]);
+            LDirectCount := LDirectDispatch^.Memory.CountByte(@LBuf[LOffset], SizeUInt(LLen), C_COUNT_VALUES[LValueIdx]);
             CheckEqual(LFacadeCount, LDirectCount, 'Direct CountByte parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset) + ' value=' + IntToStr(C_COUNT_VALUES[LValueIdx]));
           end;
 
           MinMaxBytes(@LBuf[LOffset], SizeUInt(LLen), LFacadeMin, LFacadeMax);
-          LDirectDispatch^.MinMaxBytes(@LBuf[LOffset], SizeUInt(LLen), LDirectMin, LDirectMax);
+          LDirectDispatch^.Memory.MinMaxBytes(@LBuf[LOffset], SizeUInt(LLen), LDirectMin, LDirectMax);
           CheckEqual(Integer(LFacadeMin), Integer(LDirectMin), 'Direct MinMaxBytes.min parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
           CheckEqual(Integer(LFacadeMax), Integer(LDirectMax), 'Direct MinMaxBytes.max parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
         end;
@@ -1380,7 +1380,7 @@ begin
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(Assigned(LDirectDispatch^.CmpEqF32x4), 'CmpEqF32x4 should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.Mask4All), 'Mask4All should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Mask.Mask4All), 'Mask4All should be assigned for backend ' + DirectBackendName(LBackend));
 
       LMaskEqFacade := VecF32x4CmpEq(LA, LB);
       LMaskEqDirect := LDirectDispatch^.CmpEqF32x4(LA, LB);
@@ -1407,23 +1407,23 @@ begin
       CheckEqual(Integer(LMaskNeFacade), Integer(LMaskNeDirect), 'Direct CmpNeF32x4 parity backend ' + DirectBackendName(LBackend));
 
       LFacadeAll := Mask4All(LMaskLtFacade);
-      LDirectAll := LDirectDispatch^.Mask4All(LMaskLtDirect);
+      LDirectAll := LDirectDispatch^.Mask.Mask4All(LMaskLtDirect);
       CheckEqual(LFacadeAll, LDirectAll, 'Direct Mask4All parity backend ' + DirectBackendName(LBackend));
 
       LFacadeAny := Mask4Any(LMaskLtFacade);
-      LDirectAny := LDirectDispatch^.Mask4Any(LMaskLtDirect);
+      LDirectAny := LDirectDispatch^.Mask.Mask4Any(LMaskLtDirect);
       CheckEqual(LFacadeAny, LDirectAny, 'Direct Mask4Any parity backend ' + DirectBackendName(LBackend));
 
       LFacadeNone := Mask4None(LMaskLtFacade);
-      LDirectNone := LDirectDispatch^.Mask4None(LMaskLtDirect);
+      LDirectNone := LDirectDispatch^.Mask.Mask4None(LMaskLtDirect);
       CheckEqual(LFacadeNone, LDirectNone, 'Direct Mask4None parity backend ' + DirectBackendName(LBackend));
 
       LFacadePop := Mask4PopCount(LMaskLtFacade);
-      LDirectPop := LDirectDispatch^.Mask4PopCount(LMaskLtDirect);
+      LDirectPop := LDirectDispatch^.Mask.Mask4PopCount(LMaskLtDirect);
       CheckEqual(LFacadePop, LDirectPop, 'Direct Mask4PopCount parity backend ' + DirectBackendName(LBackend));
 
       LFacadeFirst := Mask4FirstSet(LMaskLtFacade);
-      LDirectFirst := LDirectDispatch^.Mask4FirstSet(LMaskLtDirect);
+      LDirectFirst := LDirectDispatch^.Mask.Mask4FirstSet(LMaskLtDirect);
       CheckEqual(LFacadeFirst, LDirectFirst, 'Direct Mask4FirstSet parity backend ' + DirectBackendName(LBackend));
 
       LDotFacade := VecF32x4Dot(LA, LB);
@@ -1523,7 +1523,7 @@ begin
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(Assigned(LDirectDispatch^.CmpEqF64x2), 'CmpEqF64x2 should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.Mask16All), 'Mask16All should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Mask.Mask16All), 'Mask16All should be assigned for backend ' + DirectBackendName(LBackend));
 
       // === Mask2 (from F64 compare) ===
       LMask2EqFacade := VecF64x2CmpEq(LAf64, LBf64);
@@ -1551,23 +1551,23 @@ begin
       CheckEqual(Integer(LMask2NeFacade), Integer(LMask2NeDirect), 'Direct CmpNeF64x2 parity backend ' + DirectBackendName(LBackend));
 
       LMask2AllFacade := Mask2All(LMask2LtFacade);
-      LMask2AllDirect := LDirectDispatch^.Mask2All(LMask2LtDirect);
+      LMask2AllDirect := LDirectDispatch^.Mask.Mask2All(LMask2LtDirect);
       CheckEqual(LMask2AllFacade, LMask2AllDirect, 'Direct Mask2All parity backend ' + DirectBackendName(LBackend));
 
       LMask2AnyFacade := Mask2Any(LMask2LtFacade);
-      LMask2AnyDirect := LDirectDispatch^.Mask2Any(LMask2LtDirect);
+      LMask2AnyDirect := LDirectDispatch^.Mask.Mask2Any(LMask2LtDirect);
       CheckEqual(LMask2AnyFacade, LMask2AnyDirect, 'Direct Mask2Any parity backend ' + DirectBackendName(LBackend));
 
       LMask2NoneFacade := Mask2None(LMask2LtFacade);
-      LMask2NoneDirect := LDirectDispatch^.Mask2None(LMask2LtDirect);
+      LMask2NoneDirect := LDirectDispatch^.Mask.Mask2None(LMask2LtDirect);
       CheckEqual(LMask2NoneFacade, LMask2NoneDirect, 'Direct Mask2None parity backend ' + DirectBackendName(LBackend));
 
       LMask2PopFacade := Mask2PopCount(LMask2LtFacade);
-      LMask2PopDirect := LDirectDispatch^.Mask2PopCount(LMask2LtDirect);
+      LMask2PopDirect := LDirectDispatch^.Mask.Mask2PopCount(LMask2LtDirect);
       CheckEqual(LMask2PopFacade, LMask2PopDirect, 'Direct Mask2PopCount parity backend ' + DirectBackendName(LBackend));
 
       LMask2FirstFacade := Mask2FirstSet(LMask2LtFacade);
-      LMask2FirstDirect := LDirectDispatch^.Mask2FirstSet(LMask2LtDirect);
+      LMask2FirstDirect := LDirectDispatch^.Mask.Mask2FirstSet(LMask2LtDirect);
       CheckEqual(LMask2FirstFacade, LMask2FirstDirect, 'Direct Mask2FirstSet parity backend ' + DirectBackendName(LBackend));
 
       // === Mask8 (from I16 compare) ===
@@ -1584,23 +1584,23 @@ begin
       CheckEqual(Integer(LMask8GtFacade), Integer(LMask8GtDirect), 'Direct CmpGtI16x8 parity backend ' + DirectBackendName(LBackend));
 
       LMask8AllFacade := Mask8All(LMask8LtFacade);
-      LMask8AllDirect := LDirectDispatch^.Mask8All(LMask8LtDirect);
+      LMask8AllDirect := LDirectDispatch^.Mask.Mask8All(LMask8LtDirect);
       CheckEqual(LMask8AllFacade, LMask8AllDirect, 'Direct Mask8All parity backend ' + DirectBackendName(LBackend));
 
       LMask8AnyFacade := Mask8Any(LMask8LtFacade);
-      LMask8AnyDirect := LDirectDispatch^.Mask8Any(LMask8LtDirect);
+      LMask8AnyDirect := LDirectDispatch^.Mask.Mask8Any(LMask8LtDirect);
       CheckEqual(LMask8AnyFacade, LMask8AnyDirect, 'Direct Mask8Any parity backend ' + DirectBackendName(LBackend));
 
       LMask8NoneFacade := Mask8None(LMask8LtFacade);
-      LMask8NoneDirect := LDirectDispatch^.Mask8None(LMask8LtDirect);
+      LMask8NoneDirect := LDirectDispatch^.Mask.Mask8None(LMask8LtDirect);
       CheckEqual(LMask8NoneFacade, LMask8NoneDirect, 'Direct Mask8None parity backend ' + DirectBackendName(LBackend));
 
       LMask8PopFacade := Mask8PopCount(LMask8LtFacade);
-      LMask8PopDirect := LDirectDispatch^.Mask8PopCount(LMask8LtDirect);
+      LMask8PopDirect := LDirectDispatch^.Mask.Mask8PopCount(LMask8LtDirect);
       CheckEqual(LMask8PopFacade, LMask8PopDirect, 'Direct Mask8PopCount parity backend ' + DirectBackendName(LBackend));
 
       LMask8FirstFacade := Mask8FirstSet(LMask8LtFacade);
-      LMask8FirstDirect := LDirectDispatch^.Mask8FirstSet(LMask8LtDirect);
+      LMask8FirstDirect := LDirectDispatch^.Mask.Mask8FirstSet(LMask8LtDirect);
       CheckEqual(LMask8FirstFacade, LMask8FirstDirect, 'Direct Mask8FirstSet parity backend ' + DirectBackendName(LBackend));
 
       // === Mask16 (from I8 compare) ===
@@ -1617,23 +1617,23 @@ begin
       CheckEqual(Integer(LMask16GtFacade), Integer(LMask16GtDirect), 'Direct CmpGtI8x16 parity backend ' + DirectBackendName(LBackend));
 
       LMask16AllFacade := Mask16All(LMask16LtFacade);
-      LMask16AllDirect := LDirectDispatch^.Mask16All(LMask16LtDirect);
+      LMask16AllDirect := LDirectDispatch^.Mask.Mask16All(LMask16LtDirect);
       CheckEqual(LMask16AllFacade, LMask16AllDirect, 'Direct Mask16All parity backend ' + DirectBackendName(LBackend));
 
       LMask16AnyFacade := Mask16Any(LMask16LtFacade);
-      LMask16AnyDirect := LDirectDispatch^.Mask16Any(LMask16LtDirect);
+      LMask16AnyDirect := LDirectDispatch^.Mask.Mask16Any(LMask16LtDirect);
       CheckEqual(LMask16AnyFacade, LMask16AnyDirect, 'Direct Mask16Any parity backend ' + DirectBackendName(LBackend));
 
       LMask16NoneFacade := Mask16None(LMask16LtFacade);
-      LMask16NoneDirect := LDirectDispatch^.Mask16None(LMask16LtDirect);
+      LMask16NoneDirect := LDirectDispatch^.Mask.Mask16None(LMask16LtDirect);
       CheckEqual(LMask16NoneFacade, LMask16NoneDirect, 'Direct Mask16None parity backend ' + DirectBackendName(LBackend));
 
       LMask16PopFacade := Mask16PopCount(LMask16LtFacade);
-      LMask16PopDirect := LDirectDispatch^.Mask16PopCount(LMask16LtDirect);
+      LMask16PopDirect := LDirectDispatch^.Mask.Mask16PopCount(LMask16LtDirect);
       CheckEqual(LMask16PopFacade, LMask16PopDirect, 'Direct Mask16PopCount parity backend ' + DirectBackendName(LBackend));
 
       LMask16FirstFacade := Mask16FirstSet(LMask16LtFacade);
-      LMask16FirstDirect := LDirectDispatch^.Mask16FirstSet(LMask16LtDirect);
+      LMask16FirstDirect := LDirectDispatch^.Mask.Mask16FirstSet(LMask16LtDirect);
       CheckEqual(LMask16FirstFacade, LMask16FirstDirect, 'Direct Mask16FirstSet parity backend ' + DirectBackendName(LBackend));
     end;
 
@@ -1688,7 +1688,7 @@ begin
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(Assigned(LDirectDispatch^.CmpEqF64x2), 'CmpEqF64x2 should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.Mask2All), 'Mask2All should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Mask.Mask2All), 'Mask2All should be assigned for backend ' + DirectBackendName(LBackend));
 
       for LCaseIdx := Low(C_CASES) to High(C_CASES) do
       begin
@@ -1722,23 +1722,23 @@ begin
         CheckEqual(Integer(LMaskNeFacade), Integer(LMaskNeDirect), 'Direct CmpNeF64x2 parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAllFacade := Mask2All(LMaskLtFacade);
-        LAllDirect := LDirectDispatch^.Mask2All(LMaskLtDirect);
+        LAllDirect := LDirectDispatch^.Mask.Mask2All(LMaskLtDirect);
         CheckEqual(LAllFacade, LAllDirect, 'Direct Mask2All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAnyFacade := Mask2Any(LMaskLtFacade);
-        LAnyDirect := LDirectDispatch^.Mask2Any(LMaskLtDirect);
+        LAnyDirect := LDirectDispatch^.Mask.Mask2Any(LMaskLtDirect);
         CheckEqual(LAnyFacade, LAnyDirect, 'Direct Mask2Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LNoneFacade := Mask2None(LMaskLtFacade);
-        LNoneDirect := LDirectDispatch^.Mask2None(LMaskLtDirect);
+        LNoneDirect := LDirectDispatch^.Mask.Mask2None(LMaskLtDirect);
         CheckEqual(LNoneFacade, LNoneDirect, 'Direct Mask2None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LPopFacade := Mask2PopCount(LMaskLtFacade);
-        LPopDirect := LDirectDispatch^.Mask2PopCount(LMaskLtDirect);
+        LPopDirect := LDirectDispatch^.Mask.Mask2PopCount(LMaskLtDirect);
         CheckEqual(LPopFacade, LPopDirect, 'Direct Mask2PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LFirstFacade := Mask2FirstSet(LMaskLtFacade);
-        LFirstDirect := LDirectDispatch^.Mask2FirstSet(LMaskLtDirect);
+        LFirstDirect := LDirectDispatch^.Mask.Mask2FirstSet(LMaskLtDirect);
         CheckEqual(LFirstFacade, LFirstDirect, 'Direct Mask2FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
       end;
     end;
@@ -1807,7 +1807,7 @@ begin
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(Assigned(LDirectDispatch^.CmpEqF32x4), 'CmpEqF32x4 should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.Mask4All), 'Mask4All should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Mask.Mask4All), 'Mask4All should be assigned for backend ' + DirectBackendName(LBackend));
 
       for LCaseIdx := 0 to C_CASE_COUNT - 1 do
       begin
@@ -1842,23 +1842,23 @@ begin
         CheckEqual(Integer(LMaskNeFacade), Integer(LMaskNeDirect), 'Direct CmpNeF32x4 parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAllFacade := Mask4All(LMaskLtFacade);
-        LAllDirect := LDirectDispatch^.Mask4All(LMaskLtDirect);
+        LAllDirect := LDirectDispatch^.Mask.Mask4All(LMaskLtDirect);
         CheckEqual(LAllFacade, LAllDirect, 'Direct Mask4All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAnyFacade := Mask4Any(LMaskLtFacade);
-        LAnyDirect := LDirectDispatch^.Mask4Any(LMaskLtDirect);
+        LAnyDirect := LDirectDispatch^.Mask.Mask4Any(LMaskLtDirect);
         CheckEqual(LAnyFacade, LAnyDirect, 'Direct Mask4Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LNoneFacade := Mask4None(LMaskLtFacade);
-        LNoneDirect := LDirectDispatch^.Mask4None(LMaskLtDirect);
+        LNoneDirect := LDirectDispatch^.Mask.Mask4None(LMaskLtDirect);
         CheckEqual(LNoneFacade, LNoneDirect, 'Direct Mask4None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LPopFacade := Mask4PopCount(LMaskLtFacade);
-        LPopDirect := LDirectDispatch^.Mask4PopCount(LMaskLtDirect);
+        LPopDirect := LDirectDispatch^.Mask.Mask4PopCount(LMaskLtDirect);
         CheckEqual(LPopFacade, LPopDirect, 'Direct Mask4PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LFirstFacade := Mask4FirstSet(LMaskLtFacade);
-        LFirstDirect := LDirectDispatch^.Mask4FirstSet(LMaskLtDirect);
+        LFirstDirect := LDirectDispatch^.Mask.Mask4FirstSet(LMaskLtDirect);
         CheckEqual(LFirstFacade, LFirstDirect, 'Direct Mask4FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
       end;
     end;
@@ -1961,16 +1961,16 @@ begin
          (not Assigned(LDirectDispatch^.CmpGtU64x4)) or
          (not Assigned(LDirectDispatch^.CmpGeU64x4)) or
          (not Assigned(LDirectDispatch^.CmpNeU64x4)) or
-         (not Assigned(LDirectDispatch^.Mask8All)) or
-         (not Assigned(LDirectDispatch^.Mask8Any)) or
-         (not Assigned(LDirectDispatch^.Mask8None)) or
-         (not Assigned(LDirectDispatch^.Mask8PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask8FirstSet)) or
-         (not Assigned(LDirectDispatch^.Mask4All)) or
-         (not Assigned(LDirectDispatch^.Mask4Any)) or
-         (not Assigned(LDirectDispatch^.Mask4None)) or
-         (not Assigned(LDirectDispatch^.Mask4PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask4FirstSet)) then
+         (not Assigned(LDirectDispatch^.Mask.Mask8All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8FirstSet)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4FirstSet)) then
         Continue;
 
       Inc(LTestedCount);
@@ -2019,23 +2019,23 @@ begin
         CheckEqual(Integer(LMask8NeExpected), Integer(LMask8NeDirect), 'Direct CmpNeU32x8 expected parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8AllFacade := Mask8All(LMask8LtFacade);
-        LMask8AllDirect := LDirectDispatch^.Mask8All(LMask8LtDirect);
+        LMask8AllDirect := LDirectDispatch^.Mask.Mask8All(LMask8LtDirect);
         CheckEqual(LMask8AllFacade, LMask8AllDirect, 'Direct Mask8All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8AnyFacade := Mask8Any(LMask8LtFacade);
-        LMask8AnyDirect := LDirectDispatch^.Mask8Any(LMask8LtDirect);
+        LMask8AnyDirect := LDirectDispatch^.Mask.Mask8Any(LMask8LtDirect);
         CheckEqual(LMask8AnyFacade, LMask8AnyDirect, 'Direct Mask8Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8NoneFacade := Mask8None(LMask8LtFacade);
-        LMask8NoneDirect := LDirectDispatch^.Mask8None(LMask8LtDirect);
+        LMask8NoneDirect := LDirectDispatch^.Mask.Mask8None(LMask8LtDirect);
         CheckEqual(LMask8NoneFacade, LMask8NoneDirect, 'Direct Mask8None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8PopFacade := Mask8PopCount(LMask8LtFacade);
-        LMask8PopDirect := LDirectDispatch^.Mask8PopCount(LMask8LtDirect);
+        LMask8PopDirect := LDirectDispatch^.Mask.Mask8PopCount(LMask8LtDirect);
         CheckEqual(LMask8PopFacade, LMask8PopDirect, 'Direct Mask8PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8FirstFacade := Mask8FirstSet(LMask8LtFacade);
-        LMask8FirstDirect := LDirectDispatch^.Mask8FirstSet(LMask8LtDirect);
+        LMask8FirstDirect := LDirectDispatch^.Mask.Mask8FirstSet(LMask8LtDirect);
         CheckEqual(LMask8FirstFacade, LMask8FirstDirect, 'Direct Mask8FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         // U64x4 compare parity
@@ -2064,23 +2064,23 @@ begin
         CheckEqual(Integer(LMask4NeFacade), Integer(LMask4NeDirect), 'Direct CmpNeU64x4 parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask4AllFacade := Mask4All(LMask4LtFacade);
-        LMask4AllDirect := LDirectDispatch^.Mask4All(LMask4LtDirect);
+        LMask4AllDirect := LDirectDispatch^.Mask.Mask4All(LMask4LtDirect);
         CheckEqual(LMask4AllFacade, LMask4AllDirect, 'Direct Mask4All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask4AnyFacade := Mask4Any(LMask4LtFacade);
-        LMask4AnyDirect := LDirectDispatch^.Mask4Any(LMask4LtDirect);
+        LMask4AnyDirect := LDirectDispatch^.Mask.Mask4Any(LMask4LtDirect);
         CheckEqual(LMask4AnyFacade, LMask4AnyDirect, 'Direct Mask4Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask4NoneFacade := Mask4None(LMask4LtFacade);
-        LMask4NoneDirect := LDirectDispatch^.Mask4None(LMask4LtDirect);
+        LMask4NoneDirect := LDirectDispatch^.Mask.Mask4None(LMask4LtDirect);
         CheckEqual(LMask4NoneFacade, LMask4NoneDirect, 'Direct Mask4None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask4PopFacade := Mask4PopCount(LMask4LtFacade);
-        LMask4PopDirect := LDirectDispatch^.Mask4PopCount(LMask4LtDirect);
+        LMask4PopDirect := LDirectDispatch^.Mask.Mask4PopCount(LMask4LtDirect);
         CheckEqual(LMask4PopFacade, LMask4PopDirect, 'Direct Mask4PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask4FirstFacade := Mask4FirstSet(LMask4LtFacade);
-        LMask4FirstDirect := LDirectDispatch^.Mask4FirstSet(LMask4LtDirect);
+        LMask4FirstDirect := LDirectDispatch^.Mask.Mask4FirstSet(LMask4LtDirect);
         CheckEqual(LMask4FirstFacade, LMask4FirstDirect, 'Direct Mask4FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
       end;
     end;
@@ -2375,16 +2375,16 @@ begin
          (not Assigned(LDirectDispatch^.ReduceAddF64x8)) or
          (not Assigned(LDirectDispatch^.ReduceMinF64x8)) or
          (not Assigned(LDirectDispatch^.ReduceMaxF64x8)) or
-         (not Assigned(LDirectDispatch^.Mask16All)) or
-         (not Assigned(LDirectDispatch^.Mask16Any)) or
-         (not Assigned(LDirectDispatch^.Mask16None)) or
-         (not Assigned(LDirectDispatch^.Mask16PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask16FirstSet)) or
-         (not Assigned(LDirectDispatch^.Mask8All)) or
-         (not Assigned(LDirectDispatch^.Mask8Any)) or
-         (not Assigned(LDirectDispatch^.Mask8None)) or
-         (not Assigned(LDirectDispatch^.Mask8PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask8FirstSet)) then
+         (not Assigned(LDirectDispatch^.Mask.Mask16All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16FirstSet)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8FirstSet)) then
         Continue;
 
       Inc(LTestedCount);
@@ -2451,43 +2451,43 @@ begin
         CheckEqual(Integer(LMask8NeFacade), Integer(LMask8NeDirect), 'Direct CmpNeF64x8 parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16AllFacade := Mask16All(LMask16LtFacade);
-        LMask16AllDirect := LDirectDispatch^.Mask16All(LMask16LtDirect);
+        LMask16AllDirect := LDirectDispatch^.Mask.Mask16All(LMask16LtDirect);
         CheckEqual(LMask16AllFacade, LMask16AllDirect, 'Direct Mask16All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16AnyFacade := Mask16Any(LMask16LtFacade);
-        LMask16AnyDirect := LDirectDispatch^.Mask16Any(LMask16LtDirect);
+        LMask16AnyDirect := LDirectDispatch^.Mask.Mask16Any(LMask16LtDirect);
         CheckEqual(LMask16AnyFacade, LMask16AnyDirect, 'Direct Mask16Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16NoneFacade := Mask16None(LMask16LtFacade);
-        LMask16NoneDirect := LDirectDispatch^.Mask16None(LMask16LtDirect);
+        LMask16NoneDirect := LDirectDispatch^.Mask.Mask16None(LMask16LtDirect);
         CheckEqual(LMask16NoneFacade, LMask16NoneDirect, 'Direct Mask16None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16PopFacade := Mask16PopCount(LMask16LtFacade);
-        LMask16PopDirect := LDirectDispatch^.Mask16PopCount(LMask16LtDirect);
+        LMask16PopDirect := LDirectDispatch^.Mask.Mask16PopCount(LMask16LtDirect);
         CheckEqual(LMask16PopFacade, LMask16PopDirect, 'Direct Mask16PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16FirstFacade := Mask16FirstSet(LMask16LtFacade);
-        LMask16FirstDirect := LDirectDispatch^.Mask16FirstSet(LMask16LtDirect);
+        LMask16FirstDirect := LDirectDispatch^.Mask.Mask16FirstSet(LMask16LtDirect);
         CheckEqual(LMask16FirstFacade, LMask16FirstDirect, 'Direct Mask16FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8AllFacade := Mask8All(LMask8LtFacade);
-        LMask8AllDirect := LDirectDispatch^.Mask8All(LMask8LtDirect);
+        LMask8AllDirect := LDirectDispatch^.Mask.Mask8All(LMask8LtDirect);
         CheckEqual(LMask8AllFacade, LMask8AllDirect, 'Direct Mask8All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8AnyFacade := Mask8Any(LMask8LtFacade);
-        LMask8AnyDirect := LDirectDispatch^.Mask8Any(LMask8LtDirect);
+        LMask8AnyDirect := LDirectDispatch^.Mask.Mask8Any(LMask8LtDirect);
         CheckEqual(LMask8AnyFacade, LMask8AnyDirect, 'Direct Mask8Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8NoneFacade := Mask8None(LMask8LtFacade);
-        LMask8NoneDirect := LDirectDispatch^.Mask8None(LMask8LtDirect);
+        LMask8NoneDirect := LDirectDispatch^.Mask.Mask8None(LMask8LtDirect);
         CheckEqual(LMask8NoneFacade, LMask8NoneDirect, 'Direct Mask8None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8PopFacade := Mask8PopCount(LMask8LtFacade);
-        LMask8PopDirect := LDirectDispatch^.Mask8PopCount(LMask8LtDirect);
+        LMask8PopDirect := LDirectDispatch^.Mask.Mask8PopCount(LMask8LtDirect);
         CheckEqual(LMask8PopFacade, LMask8PopDirect, 'Direct Mask8PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8FirstFacade := Mask8FirstSet(LMask8LtFacade);
-        LMask8FirstDirect := LDirectDispatch^.Mask8FirstSet(LMask8LtDirect);
+        LMask8FirstDirect := LDirectDispatch^.Mask.Mask8FirstSet(LMask8LtDirect);
         CheckEqual(LMask8FirstFacade, LMask8FirstDirect, 'Direct Mask8FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LReduceAddF32Facade := VecF32x16ReduceAdd(LAf32);
@@ -2750,16 +2750,16 @@ begin
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
 
-      if (not Assigned(LDirectDispatch^.Mask8All)) or
-         (not Assigned(LDirectDispatch^.Mask8Any)) or
-         (not Assigned(LDirectDispatch^.Mask8None)) or
-         (not Assigned(LDirectDispatch^.Mask8PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask8FirstSet)) or
-         (not Assigned(LDirectDispatch^.Mask16All)) or
-         (not Assigned(LDirectDispatch^.Mask16Any)) or
-         (not Assigned(LDirectDispatch^.Mask16None)) or
-         (not Assigned(LDirectDispatch^.Mask16PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask16FirstSet)) then
+      if (not Assigned(LDirectDispatch^.Mask.Mask8All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8FirstSet)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16FirstSet)) then
         Continue;
 
       Inc(LTestedCount);
@@ -2768,23 +2768,23 @@ begin
         LMask8 := C_MASK8[LIdx];
 
         LAllFacade := Mask8All(LMask8);
-        LAllDirect := LDirectDispatch^.Mask8All(LMask8);
+        LAllDirect := LDirectDispatch^.Mask.Mask8All(LMask8);
         CheckEqual(LAllFacade, LAllDirect, 'Direct Mask8All parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         LAnyFacade := Mask8Any(LMask8);
-        LAnyDirect := LDirectDispatch^.Mask8Any(LMask8);
+        LAnyDirect := LDirectDispatch^.Mask.Mask8Any(LMask8);
         CheckEqual(LAnyFacade, LAnyDirect, 'Direct Mask8Any parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         LNoneFacade := Mask8None(LMask8);
-        LNoneDirect := LDirectDispatch^.Mask8None(LMask8);
+        LNoneDirect := LDirectDispatch^.Mask.Mask8None(LMask8);
         CheckEqual(LNoneFacade, LNoneDirect, 'Direct Mask8None parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         LPopFacade := Mask8PopCount(LMask8);
-        LPopDirect := LDirectDispatch^.Mask8PopCount(LMask8);
+        LPopDirect := LDirectDispatch^.Mask.Mask8PopCount(LMask8);
         CheckEqual(LPopFacade, LPopDirect, 'Direct Mask8PopCount parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         LFirstFacade := Mask8FirstSet(LMask8);
-        LFirstDirect := LDirectDispatch^.Mask8FirstSet(LMask8);
+        LFirstDirect := LDirectDispatch^.Mask.Mask8FirstSet(LMask8);
         CheckEqual(LFirstFacade, LFirstDirect, 'Direct Mask8FirstSet parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         CheckEqual(LAnyFacade, not LNoneFacade, 'Mask8 inverse property backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
@@ -2797,23 +2797,23 @@ begin
         LMask16 := C_MASK16[LIdx];
 
         LAllFacade := Mask16All(LMask16);
-        LAllDirect := LDirectDispatch^.Mask16All(LMask16);
+        LAllDirect := LDirectDispatch^.Mask.Mask16All(LMask16);
         CheckEqual(LAllFacade, LAllDirect, 'Direct Mask16All parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         LAnyFacade := Mask16Any(LMask16);
-        LAnyDirect := LDirectDispatch^.Mask16Any(LMask16);
+        LAnyDirect := LDirectDispatch^.Mask.Mask16Any(LMask16);
         CheckEqual(LAnyFacade, LAnyDirect, 'Direct Mask16Any parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         LNoneFacade := Mask16None(LMask16);
-        LNoneDirect := LDirectDispatch^.Mask16None(LMask16);
+        LNoneDirect := LDirectDispatch^.Mask.Mask16None(LMask16);
         CheckEqual(LNoneFacade, LNoneDirect, 'Direct Mask16None parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         LPopFacade := Mask16PopCount(LMask16);
-        LPopDirect := LDirectDispatch^.Mask16PopCount(LMask16);
+        LPopDirect := LDirectDispatch^.Mask.Mask16PopCount(LMask16);
         CheckEqual(LPopFacade, LPopDirect, 'Direct Mask16PopCount parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         LFirstFacade := Mask16FirstSet(LMask16);
-        LFirstDirect := LDirectDispatch^.Mask16FirstSet(LMask16);
+        LFirstDirect := LDirectDispatch^.Mask.Mask16FirstSet(LMask16);
         CheckEqual(LFirstFacade, LFirstDirect, 'Direct Mask16FirstSet parity backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
 
         CheckEqual(LAnyFacade, not LNoneFacade, 'Mask16 inverse property backend ' + DirectBackendName(LBackend) + ' idx=' + IntToStr(LIdx));
@@ -3021,16 +3021,16 @@ begin
          (not Assigned(LDirectDispatch^.CmpGtU64x4)) or
          (not Assigned(LDirectDispatch^.CmpGeU64x4)) or
          (not Assigned(LDirectDispatch^.CmpNeU64x4)) or
-         (not Assigned(LDirectDispatch^.Mask8All)) or
-         (not Assigned(LDirectDispatch^.Mask8Any)) or
-         (not Assigned(LDirectDispatch^.Mask8None)) or
-         (not Assigned(LDirectDispatch^.Mask8PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask8FirstSet)) or
-         (not Assigned(LDirectDispatch^.Mask4All)) or
-         (not Assigned(LDirectDispatch^.Mask4Any)) or
-         (not Assigned(LDirectDispatch^.Mask4None)) or
-         (not Assigned(LDirectDispatch^.Mask4PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask4FirstSet)) then
+         (not Assigned(LDirectDispatch^.Mask.Mask8All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8FirstSet)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4FirstSet)) then
         Continue;
 
       Inc(LTestedCount);
@@ -3063,23 +3063,23 @@ begin
         CheckEqual(Integer(LMask8Ge), Integer(LMask8Gt or LMask8Eq), 'U32x8 Ge decomposition backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAnyFacade := Mask8Any(LMask8Lt);
-        LAnyDirect := LDirectDispatch^.Mask8Any(LMask8Lt);
+        LAnyDirect := LDirectDispatch^.Mask.Mask8Any(LMask8Lt);
         CheckEqual(LAnyFacade, LAnyDirect, 'Direct Mask8Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LNoneFacade := Mask8None(LMask8Lt);
-        LNoneDirect := LDirectDispatch^.Mask8None(LMask8Lt);
+        LNoneDirect := LDirectDispatch^.Mask.Mask8None(LMask8Lt);
         CheckEqual(LNoneFacade, LNoneDirect, 'Direct Mask8None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAllFacade := Mask8All(LMask8Lt);
-        LAllDirect := LDirectDispatch^.Mask8All(LMask8Lt);
+        LAllDirect := LDirectDispatch^.Mask.Mask8All(LMask8Lt);
         CheckEqual(LAllFacade, LAllDirect, 'Direct Mask8All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LPopFacade := Mask8PopCount(LMask8Lt);
-        LPopDirect := LDirectDispatch^.Mask8PopCount(LMask8Lt);
+        LPopDirect := LDirectDispatch^.Mask.Mask8PopCount(LMask8Lt);
         CheckEqual(LPopFacade, LPopDirect, 'Direct Mask8PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LFirstFacade := Mask8FirstSet(LMask8Lt);
-        LFirstDirect := LDirectDispatch^.Mask8FirstSet(LMask8Lt);
+        LFirstDirect := LDirectDispatch^.Mask.Mask8FirstSet(LMask8Lt);
         CheckEqual(LFirstFacade, LFirstDirect, 'Direct Mask8FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         CheckEqual(LAnyFacade, not LNoneFacade, 'U32x8 Mask inverse property backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
@@ -3107,23 +3107,23 @@ begin
         CheckEqual(Integer(LMask4Ge), Integer(LMask4Gt or LMask4Eq), 'U64x4 Ge decomposition backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAnyFacade := Mask4Any(LMask4Lt);
-        LAnyDirect := LDirectDispatch^.Mask4Any(LMask4Lt);
+        LAnyDirect := LDirectDispatch^.Mask.Mask4Any(LMask4Lt);
         CheckEqual(LAnyFacade, LAnyDirect, 'Direct Mask4Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LNoneFacade := Mask4None(LMask4Lt);
-        LNoneDirect := LDirectDispatch^.Mask4None(LMask4Lt);
+        LNoneDirect := LDirectDispatch^.Mask.Mask4None(LMask4Lt);
         CheckEqual(LNoneFacade, LNoneDirect, 'Direct Mask4None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAllFacade := Mask4All(LMask4Lt);
-        LAllDirect := LDirectDispatch^.Mask4All(LMask4Lt);
+        LAllDirect := LDirectDispatch^.Mask.Mask4All(LMask4Lt);
         CheckEqual(LAllFacade, LAllDirect, 'Direct Mask4All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LPopFacade := Mask4PopCount(LMask4Lt);
-        LPopDirect := LDirectDispatch^.Mask4PopCount(LMask4Lt);
+        LPopDirect := LDirectDispatch^.Mask.Mask4PopCount(LMask4Lt);
         CheckEqual(LPopFacade, LPopDirect, 'Direct Mask4PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LFirstFacade := Mask4FirstSet(LMask4Lt);
-        LFirstDirect := LDirectDispatch^.Mask4FirstSet(LMask4Lt);
+        LFirstDirect := LDirectDispatch^.Mask.Mask4FirstSet(LMask4Lt);
         CheckEqual(LFirstFacade, LFirstDirect, 'Direct Mask4FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         CheckEqual(LAnyFacade, not LNoneFacade, 'U64x4 Mask inverse property backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
@@ -3213,16 +3213,16 @@ begin
          (not Assigned(LDirectDispatch^.CmpGtF64x4)) or
          (not Assigned(LDirectDispatch^.CmpGeF64x4)) or
          (not Assigned(LDirectDispatch^.CmpNeF64x4)) or
-         (not Assigned(LDirectDispatch^.Mask8All)) or
-         (not Assigned(LDirectDispatch^.Mask8Any)) or
-         (not Assigned(LDirectDispatch^.Mask8None)) or
-         (not Assigned(LDirectDispatch^.Mask8PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask8FirstSet)) or
-         (not Assigned(LDirectDispatch^.Mask4All)) or
-         (not Assigned(LDirectDispatch^.Mask4Any)) or
-         (not Assigned(LDirectDispatch^.Mask4None)) or
-         (not Assigned(LDirectDispatch^.Mask4PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask4FirstSet)) then
+         (not Assigned(LDirectDispatch^.Mask.Mask8All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8FirstSet)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4FirstSet)) then
         Continue;
 
       Inc(LTestedCount);
@@ -3254,19 +3254,19 @@ begin
         CheckEqual(Integer(LMask8Ge), Integer(LMask8Gt or LMask8Eq), 'F32x8 Ge decomposition backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAnyFacade := Mask8Any(LMask8Lt);
-        LAnyDirect := LDirectDispatch^.Mask8Any(LMask8Lt);
+        LAnyDirect := LDirectDispatch^.Mask.Mask8Any(LMask8Lt);
         CheckEqual(LAnyFacade, LAnyDirect, 'Direct Mask8Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
         LNoneFacade := Mask8None(LMask8Lt);
-        LNoneDirect := LDirectDispatch^.Mask8None(LMask8Lt);
+        LNoneDirect := LDirectDispatch^.Mask.Mask8None(LMask8Lt);
         CheckEqual(LNoneFacade, LNoneDirect, 'Direct Mask8None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
         LAllFacade := Mask8All(LMask8Lt);
-        LAllDirect := LDirectDispatch^.Mask8All(LMask8Lt);
+        LAllDirect := LDirectDispatch^.Mask.Mask8All(LMask8Lt);
         CheckEqual(LAllFacade, LAllDirect, 'Direct Mask8All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
         LPopFacade := Mask8PopCount(LMask8Lt);
-        LPopDirect := LDirectDispatch^.Mask8PopCount(LMask8Lt);
+        LPopDirect := LDirectDispatch^.Mask.Mask8PopCount(LMask8Lt);
         CheckEqual(LPopFacade, LPopDirect, 'Direct Mask8PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
         LFirstFacade := Mask8FirstSet(LMask8Lt);
-        LFirstDirect := LDirectDispatch^.Mask8FirstSet(LMask8Lt);
+        LFirstDirect := LDirectDispatch^.Mask.Mask8FirstSet(LMask8Lt);
         CheckEqual(LFirstFacade, LFirstDirect, 'Direct Mask8FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         CheckEqual(LAnyFacade, not LNoneFacade, 'F32x8 Mask inverse property backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
@@ -3290,19 +3290,19 @@ begin
         CheckEqual(Integer(LMask4Ge), Integer(LMask4Gt or LMask4Eq), 'F64x4 Ge decomposition backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LAnyFacade := Mask4Any(LMask4Lt);
-        LAnyDirect := LDirectDispatch^.Mask4Any(LMask4Lt);
+        LAnyDirect := LDirectDispatch^.Mask.Mask4Any(LMask4Lt);
         CheckEqual(LAnyFacade, LAnyDirect, 'Direct Mask4Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
         LNoneFacade := Mask4None(LMask4Lt);
-        LNoneDirect := LDirectDispatch^.Mask4None(LMask4Lt);
+        LNoneDirect := LDirectDispatch^.Mask.Mask4None(LMask4Lt);
         CheckEqual(LNoneFacade, LNoneDirect, 'Direct Mask4None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
         LAllFacade := Mask4All(LMask4Lt);
-        LAllDirect := LDirectDispatch^.Mask4All(LMask4Lt);
+        LAllDirect := LDirectDispatch^.Mask.Mask4All(LMask4Lt);
         CheckEqual(LAllFacade, LAllDirect, 'Direct Mask4All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
         LPopFacade := Mask4PopCount(LMask4Lt);
-        LPopDirect := LDirectDispatch^.Mask4PopCount(LMask4Lt);
+        LPopDirect := LDirectDispatch^.Mask.Mask4PopCount(LMask4Lt);
         CheckEqual(LPopFacade, LPopDirect, 'Direct Mask4PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
         LFirstFacade := Mask4FirstSet(LMask4Lt);
-        LFirstDirect := LDirectDispatch^.Mask4FirstSet(LMask4Lt);
+        LFirstDirect := LDirectDispatch^.Mask.Mask4FirstSet(LMask4Lt);
         CheckEqual(LFirstFacade, LFirstDirect, 'Direct Mask4FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         CheckEqual(LAnyFacade, not LNoneFacade, 'F64x4 Mask inverse property backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
@@ -3414,23 +3414,23 @@ begin
         CheckEqual(Integer(LMask8GtFacade), Integer(LMask8GtDirect), 'Direct CmpGtI16x8 parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8AllFacade := Mask8All(LMask8LtFacade);
-        LMask8AllDirect := LDirectDispatch^.Mask8All(LMask8LtDirect);
+        LMask8AllDirect := LDirectDispatch^.Mask.Mask8All(LMask8LtDirect);
         CheckEqual(LMask8AllFacade, LMask8AllDirect, 'Direct Mask8All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8AnyFacade := Mask8Any(LMask8LtFacade);
-        LMask8AnyDirect := LDirectDispatch^.Mask8Any(LMask8LtDirect);
+        LMask8AnyDirect := LDirectDispatch^.Mask.Mask8Any(LMask8LtDirect);
         CheckEqual(LMask8AnyFacade, LMask8AnyDirect, 'Direct Mask8Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8NoneFacade := Mask8None(LMask8LtFacade);
-        LMask8NoneDirect := LDirectDispatch^.Mask8None(LMask8LtDirect);
+        LMask8NoneDirect := LDirectDispatch^.Mask.Mask8None(LMask8LtDirect);
         CheckEqual(LMask8NoneFacade, LMask8NoneDirect, 'Direct Mask8None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8PopFacade := Mask8PopCount(LMask8LtFacade);
-        LMask8PopDirect := LDirectDispatch^.Mask8PopCount(LMask8LtDirect);
+        LMask8PopDirect := LDirectDispatch^.Mask.Mask8PopCount(LMask8LtDirect);
         CheckEqual(LMask8PopFacade, LMask8PopDirect, 'Direct Mask8PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask8FirstFacade := Mask8FirstSet(LMask8LtFacade);
-        LMask8FirstDirect := LDirectDispatch^.Mask8FirstSet(LMask8LtDirect);
+        LMask8FirstDirect := LDirectDispatch^.Mask.Mask8FirstSet(LMask8LtDirect);
         CheckEqual(LMask8FirstFacade, LMask8FirstDirect, 'Direct Mask8FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         // I8x16 compare + Mask16
@@ -3447,23 +3447,23 @@ begin
         CheckEqual(Integer(LMask16GtFacade), Integer(LMask16GtDirect), 'Direct CmpGtI8x16 parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16AllFacade := Mask16All(LMask16LtFacade);
-        LMask16AllDirect := LDirectDispatch^.Mask16All(LMask16LtDirect);
+        LMask16AllDirect := LDirectDispatch^.Mask.Mask16All(LMask16LtDirect);
         CheckEqual(LMask16AllFacade, LMask16AllDirect, 'Direct Mask16All parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16AnyFacade := Mask16Any(LMask16LtFacade);
-        LMask16AnyDirect := LDirectDispatch^.Mask16Any(LMask16LtDirect);
+        LMask16AnyDirect := LDirectDispatch^.Mask.Mask16Any(LMask16LtDirect);
         CheckEqual(LMask16AnyFacade, LMask16AnyDirect, 'Direct Mask16Any parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16NoneFacade := Mask16None(LMask16LtFacade);
-        LMask16NoneDirect := LDirectDispatch^.Mask16None(LMask16LtDirect);
+        LMask16NoneDirect := LDirectDispatch^.Mask.Mask16None(LMask16LtDirect);
         CheckEqual(LMask16NoneFacade, LMask16NoneDirect, 'Direct Mask16None parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16PopFacade := Mask16PopCount(LMask16LtFacade);
-        LMask16PopDirect := LDirectDispatch^.Mask16PopCount(LMask16LtDirect);
+        LMask16PopDirect := LDirectDispatch^.Mask.Mask16PopCount(LMask16LtDirect);
         CheckEqual(LMask16PopFacade, LMask16PopDirect, 'Direct Mask16PopCount parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
 
         LMask16FirstFacade := Mask16FirstSet(LMask16LtFacade);
-        LMask16FirstDirect := LDirectDispatch^.Mask16FirstSet(LMask16LtDirect);
+        LMask16FirstDirect := LDirectDispatch^.Mask.Mask16FirstSet(LMask16LtDirect);
         CheckEqual(LMask16FirstFacade, LMask16FirstDirect, 'Direct Mask16FirstSet parity backend ' + DirectBackendName(LBackend) + ' case=' + IntToStr(LCaseIdx));
       end;
     end;
@@ -3527,29 +3527,29 @@ var
 
   procedure AssertMask4HelperParity(const aLabel: string; const aMask: TMask4);
   begin
-    CheckEqual(ScalarMask4All(aMask), LDirectDispatch^.Mask4All(aMask), aLabel + ' Mask4All backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask4Any(aMask), LDirectDispatch^.Mask4Any(aMask), aLabel + ' Mask4Any backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask4None(aMask), LDirectDispatch^.Mask4None(aMask), aLabel + ' Mask4None backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask4PopCount(aMask), LDirectDispatch^.Mask4PopCount(aMask), aLabel + ' Mask4PopCount backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask4FirstSet(aMask), LDirectDispatch^.Mask4FirstSet(aMask), aLabel + ' Mask4FirstSet backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask4All(aMask), LDirectDispatch^.Mask.Mask4All(aMask), aLabel + ' Mask4All backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask4Any(aMask), LDirectDispatch^.Mask.Mask4Any(aMask), aLabel + ' Mask4Any backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask4None(aMask), LDirectDispatch^.Mask.Mask4None(aMask), aLabel + ' Mask4None backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask4PopCount(aMask), LDirectDispatch^.Mask.Mask4PopCount(aMask), aLabel + ' Mask4PopCount backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask4FirstSet(aMask), LDirectDispatch^.Mask.Mask4FirstSet(aMask), aLabel + ' Mask4FirstSet backend ' + DirectBackendName(LBackend));
   end;
 
   procedure AssertMask8HelperParity(const aLabel: string; const aMask: TMask8);
   begin
-    CheckEqual(ScalarMask8All(aMask), LDirectDispatch^.Mask8All(aMask), aLabel + ' Mask8All backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask8Any(aMask), LDirectDispatch^.Mask8Any(aMask), aLabel + ' Mask8Any backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask8None(aMask), LDirectDispatch^.Mask8None(aMask), aLabel + ' Mask8None backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask8PopCount(aMask), LDirectDispatch^.Mask8PopCount(aMask), aLabel + ' Mask8PopCount backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask8FirstSet(aMask), LDirectDispatch^.Mask8FirstSet(aMask), aLabel + ' Mask8FirstSet backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask8All(aMask), LDirectDispatch^.Mask.Mask8All(aMask), aLabel + ' Mask8All backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask8Any(aMask), LDirectDispatch^.Mask.Mask8Any(aMask), aLabel + ' Mask8Any backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask8None(aMask), LDirectDispatch^.Mask.Mask8None(aMask), aLabel + ' Mask8None backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask8PopCount(aMask), LDirectDispatch^.Mask.Mask8PopCount(aMask), aLabel + ' Mask8PopCount backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask8FirstSet(aMask), LDirectDispatch^.Mask.Mask8FirstSet(aMask), aLabel + ' Mask8FirstSet backend ' + DirectBackendName(LBackend));
   end;
 
   procedure AssertMask16HelperParity(const aLabel: string; const aMask: TMask16);
   begin
-    CheckEqual(ScalarMask16All(aMask), LDirectDispatch^.Mask16All(aMask), aLabel + ' Mask16All backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask16Any(aMask), LDirectDispatch^.Mask16Any(aMask), aLabel + ' Mask16Any backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask16None(aMask), LDirectDispatch^.Mask16None(aMask), aLabel + ' Mask16None backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask16PopCount(aMask), LDirectDispatch^.Mask16PopCount(aMask), aLabel + ' Mask16PopCount backend ' + DirectBackendName(LBackend));
-    CheckEqual(ScalarMask16FirstSet(aMask), LDirectDispatch^.Mask16FirstSet(aMask), aLabel + ' Mask16FirstSet backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask16All(aMask), LDirectDispatch^.Mask.Mask16All(aMask), aLabel + ' Mask16All backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask16Any(aMask), LDirectDispatch^.Mask.Mask16Any(aMask), aLabel + ' Mask16Any backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask16None(aMask), LDirectDispatch^.Mask.Mask16None(aMask), aLabel + ' Mask16None backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask16PopCount(aMask), LDirectDispatch^.Mask.Mask16PopCount(aMask), aLabel + ' Mask16PopCount backend ' + DirectBackendName(LBackend));
+    CheckEqual(ScalarMask16FirstSet(aMask), LDirectDispatch^.Mask.Mask16FirstSet(aMask), aLabel + ' Mask16FirstSet backend ' + DirectBackendName(LBackend));
   end;
 begin
   LTestedCount := 0;
@@ -3590,21 +3590,21 @@ begin
          (not Assigned(LDirectDispatch^.CmpLeI64x8)) or
          (not Assigned(LDirectDispatch^.CmpGeI64x8)) or
          (not Assigned(LDirectDispatch^.CmpNeI64x8)) or
-         (not Assigned(LDirectDispatch^.Mask4All)) or
-         (not Assigned(LDirectDispatch^.Mask4Any)) or
-         (not Assigned(LDirectDispatch^.Mask4None)) or
-         (not Assigned(LDirectDispatch^.Mask4PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask4FirstSet)) or
-         (not Assigned(LDirectDispatch^.Mask8All)) or
-         (not Assigned(LDirectDispatch^.Mask8Any)) or
-         (not Assigned(LDirectDispatch^.Mask8None)) or
-         (not Assigned(LDirectDispatch^.Mask8PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask8FirstSet)) or
-         (not Assigned(LDirectDispatch^.Mask16All)) or
-         (not Assigned(LDirectDispatch^.Mask16Any)) or
-         (not Assigned(LDirectDispatch^.Mask16None)) or
-         (not Assigned(LDirectDispatch^.Mask16PopCount)) or
-         (not Assigned(LDirectDispatch^.Mask16FirstSet)) then
+         (not Assigned(LDirectDispatch^.Mask.Mask4All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask4FirstSet)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask8FirstSet)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16All)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16Any)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16None)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16PopCount)) or
+         (not Assigned(LDirectDispatch^.Mask.Mask16FirstSet)) then
         Continue;
 
       Inc(LTestedCount);
@@ -4487,35 +4487,35 @@ begin
 
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.BytesIndexOf), 'BytesIndexOf should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.BitsetPopCount), 'BitsetPopCount should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.Utf8Validate), 'Utf8Validate should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.BytesIndexOf), 'BytesIndexOf should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.BitsetPopCount), 'BitsetPopCount should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.Utf8Validate), 'Utf8Validate should be assigned for backend ' + DirectBackendName(LBackend));
 
       // BytesIndexOf parity (found)
       LFacadeIdx := BytesIndexOf(@LBuf[0], SizeUInt(C_BUF_LEN), @LNeedleHit[0], SizeUInt(C_NEEDLE_LEN));
-      LDirectIdx := LDirectDispatch^.BytesIndexOf(@LBuf[0], SizeUInt(C_BUF_LEN), @LNeedleHit[0], SizeUInt(C_NEEDLE_LEN));
+      LDirectIdx := LDirectDispatch^.Memory.BytesIndexOf(@LBuf[0], SizeUInt(C_BUF_LEN), @LNeedleHit[0], SizeUInt(C_NEEDLE_LEN));
       CheckEqual(LFacadeIdx, LDirectIdx, 'Direct BytesIndexOf(found) parity backend ' + DirectBackendName(LBackend));
       CheckEqual(LFoundOffset, Integer(LFacadeIdx), 'BytesIndexOf(found) expected offset backend ' + DirectBackendName(LBackend));
 
       // BytesIndexOf parity (not found)
       LFacadeIdx := BytesIndexOf(@LBuf[0], SizeUInt(C_BUF_LEN), @LNeedleMiss[0], SizeUInt(C_NEEDLE_LEN));
-      LDirectIdx := LDirectDispatch^.BytesIndexOf(@LBuf[0], SizeUInt(C_BUF_LEN), @LNeedleMiss[0], SizeUInt(C_NEEDLE_LEN));
+      LDirectIdx := LDirectDispatch^.Memory.BytesIndexOf(@LBuf[0], SizeUInt(C_BUF_LEN), @LNeedleMiss[0], SizeUInt(C_NEEDLE_LEN));
       CheckEqual(LFacadeIdx, LDirectIdx, 'Direct BytesIndexOf(not-found) parity backend ' + DirectBackendName(LBackend));
       CheckEqual(-1, Integer(LFacadeIdx), 'BytesIndexOf(not-found) expected -1 backend ' + DirectBackendName(LBackend));
 
       // BitsetPopCount parity
       LFacadeBits := BitsetPopCount(@LBuf[0], SizeUInt(C_BUF_LEN));
-      LDirectBits := LDirectDispatch^.BitsetPopCount(@LBuf[0], SizeUInt(C_BUF_LEN));
+      LDirectBits := LDirectDispatch^.Memory.BitsetPopCount(@LBuf[0], SizeUInt(C_BUF_LEN));
       CheckEqual(LFacadeBits, LDirectBits, 'Direct BitsetPopCount parity backend ' + DirectBackendName(LBackend));
 
       // UTF-8 parity (good)
       LFacadeUtf8 := Utf8Validate(@LUtf8Good[0], SizeUInt(Length(LUtf8Good)));
-      LDirectUtf8 := LDirectDispatch^.Utf8Validate(@LUtf8Good[0], SizeUInt(Length(LUtf8Good)));
+      LDirectUtf8 := LDirectDispatch^.Memory.Utf8Validate(@LUtf8Good[0], SizeUInt(Length(LUtf8Good)));
       CheckEqual(LFacadeUtf8, LDirectUtf8, 'Direct Utf8Validate(good) parity backend ' + DirectBackendName(LBackend));
 
       // UTF-8 parity (bad)
       LFacadeUtf8 := Utf8Validate(@LUtf8Bad[0], SizeUInt(Length(LUtf8Bad)));
-      LDirectUtf8 := LDirectDispatch^.Utf8Validate(@LUtf8Bad[0], SizeUInt(Length(LUtf8Bad)));
+      LDirectUtf8 := LDirectDispatch^.Memory.Utf8Validate(@LUtf8Bad[0], SizeUInt(Length(LUtf8Bad)));
       CheckEqual(LFacadeUtf8, LDirectUtf8, 'Direct Utf8Validate(bad) parity backend ' + DirectBackendName(LBackend));
     end;
 
@@ -4581,10 +4581,10 @@ begin
 
       CheckTrue(LDispatch <> nil, 'Dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
       CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.MemEqual), 'MemEqual should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.MemFindByte), 'MemFindByte should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.MemDiffRange), 'MemDiffRange should be assigned for backend ' + DirectBackendName(LBackend));
-      CheckTrue(Assigned(LDirectDispatch^.BytesIndexOf), 'BytesIndexOf should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.Equal), 'MemEqual should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.FindByte), 'MemFindByte should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.DiffRange), 'MemDiffRange should be assigned for backend ' + DirectBackendName(LBackend));
+      CheckTrue(Assigned(LDirectDispatch^.Memory.BytesIndexOf), 'BytesIndexOf should be assigned for backend ' + DirectBackendName(LBackend));
 
       for LLenCaseIdx := Low(C_LEN_CASES) to High(C_LEN_CASES) do
       begin
@@ -4601,7 +4601,7 @@ begin
             LBufB[LOffset + LIndex] := LBufA[LOffset + LIndex];
 
           LFacadeEq := MemEqual(@LBufA[LOffset], @LBufB[LOffset], SizeUInt(LLen));
-          LDirectEq := LDirectDispatch^.MemEqual(@LBufA[LOffset], @LBufB[LOffset], SizeUInt(LLen));
+          LDirectEq := LDirectDispatch^.Memory.Equal(@LBufA[LOffset], @LBufB[LOffset], SizeUInt(LLen));
           CheckEqual(Boolean(LFacadeEq), Boolean(LDirectEq), 'Direct MemEqual(equal) parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
 
           // 2) MemEqual/MemDiffRange(diff)
@@ -4609,11 +4609,11 @@ begin
           LBufB[LDiffPosLocal] := LBufA[LDiffPosLocal] xor $5A;
 
           LFacadeEq := MemEqual(@LBufA[LOffset], @LBufB[LOffset], SizeUInt(LLen));
-          LDirectEq := LDirectDispatch^.MemEqual(@LBufA[LOffset], @LBufB[LOffset], SizeUInt(LLen));
+          LDirectEq := LDirectDispatch^.Memory.Equal(@LBufA[LOffset], @LBufB[LOffset], SizeUInt(LLen));
           CheckEqual(Boolean(LFacadeEq), Boolean(LDirectEq), 'Direct MemEqual(diff) parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
 
           LFacadeHasDiff := MemDiffRange(@LBufA[LOffset], @LBufB[LOffset], SizeUInt(LLen), LFacadeFirstDiff, LFacadeLastDiff);
-          LDirectHasDiff := LDirectDispatch^.MemDiffRange(@LBufA[LOffset], @LBufB[LOffset], SizeUInt(LLen), LDirectFirstDiff, LDirectLastDiff);
+          LDirectHasDiff := LDirectDispatch^.Memory.DiffRange(@LBufA[LOffset], @LBufB[LOffset], SizeUInt(LLen), LDirectFirstDiff, LDirectLastDiff);
           CheckEqual(LFacadeHasDiff, LDirectHasDiff, 'Direct MemDiffRange(diff).hasDiff parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
           if LFacadeHasDiff then
           begin
@@ -4635,7 +4635,7 @@ begin
             end;
 
           LFacadeFind := MemFindByte(@LBufA[LOffset], SizeUInt(LLen), LFindValue);
-          LDirectFind := LDirectDispatch^.MemFindByte(@LBufA[LOffset], SizeUInt(LLen), LFindValue);
+          LDirectFind := LDirectDispatch^.Memory.FindByte(@LBufA[LOffset], SizeUInt(LLen), LFindValue);
           CheckEqual(LFacadeFind, LDirectFind, 'Direct MemFindByte(found) parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
           CheckEqual(LExpectedFindPos, Integer(LFacadeFind), 'MemFindByte(found) expected position backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
 
@@ -4651,11 +4651,11 @@ begin
             LNeedleHit[2] := LBufA[LOffset + LNeedlePos + 2];
 
             LFacadeBytesHit := BytesIndexOf(@LBufA[LOffset], SizeUInt(LLen), @LNeedleHit[0], 3);
-            LDirectBytesHit := LDirectDispatch^.BytesIndexOf(@LBufA[LOffset], SizeUInt(LLen), @LNeedleHit[0], 3);
+            LDirectBytesHit := LDirectDispatch^.Memory.BytesIndexOf(@LBufA[LOffset], SizeUInt(LLen), @LNeedleHit[0], 3);
             CheckEqual(LFacadeBytesHit, LDirectBytesHit, 'Direct BytesIndexOf(hit) parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
 
             LFacadeBytesMiss := BytesIndexOf(@LBufA[LOffset], SizeUInt(LLen), @LNeedleMiss[0], 3);
-            LDirectBytesMiss := LDirectDispatch^.BytesIndexOf(@LBufA[LOffset], SizeUInt(LLen), @LNeedleMiss[0], 3);
+            LDirectBytesMiss := LDirectDispatch^.Memory.BytesIndexOf(@LBufA[LOffset], SizeUInt(LLen), @LNeedleMiss[0], 3);
             CheckEqual(LFacadeBytesMiss, LDirectBytesMiss, 'Direct BytesIndexOf(miss) parity backend ' + DirectBackendName(LBackend) + ' len=' + IntToStr(LLen) + ' off=' + IntToStr(LOffset));
           end;
         end;
@@ -4706,9 +4706,9 @@ begin
 
     CheckTrue(LDirectDispatch <> nil, 'Direct dispatch table should be assigned');
     CheckEqual(Ord(sbScalar), Ord(LDirectDispatch^.Backend), 'Direct backend should be scalar');
-    CheckTrue(Assigned(LDirectDispatch^.BytesIndexOf), 'BytesIndexOf should be assigned');
-    CheckTrue(Assigned(LDirectDispatch^.MemDiffRange), 'MemDiffRange should be assigned');
-    CheckTrue(Assigned(LDirectDispatch^.MinMaxBytes), 'MinMaxBytes should be assigned');
+    CheckTrue(Assigned(LDirectDispatch^.Memory.BytesIndexOf), 'BytesIndexOf should be assigned');
+    CheckTrue(Assigned(LDirectDispatch^.Memory.DiffRange), 'MemDiffRange should be assigned');
+    CheckTrue(Assigned(LDirectDispatch^.Memory.MinMaxBytes), 'MinMaxBytes should be assigned');
 
     for LCaseIndex := 0 to C_CASE_COUNT - 1 do
     begin
@@ -4742,13 +4742,13 @@ begin
         end;
       end;
 
-      LDirectIndex := LDirectDispatch^.BytesIndexOf(@LBufA[0], SizeUInt(C_BUFFER_LEN), @LNeedleFound[0], SizeUInt(LNeedleLen));
+      LDirectIndex := LDirectDispatch^.Memory.BytesIndexOf(@LBufA[0], SizeUInt(C_BUFFER_LEN), @LNeedleFound[0], SizeUInt(LNeedleLen));
       CheckEqual(LFacadeIndex, LDirectIndex, 'Direct BytesIndexOf(found) parity case=' + IntToStr(LCaseIndex));
 
       CheckTrue(MemEqual(@LBufA[0], @LBufB[0], SizeUInt(C_BUFFER_LEN)), 'Reference MemEqual(equal) should be true case=' + IntToStr(LCaseIndex));
       LRefHasDiff := MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(C_BUFFER_LEN), LRefFirstDiff, LRefLastDiff);
 
-      LDirectHasDiff := LDirectDispatch^.MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(C_BUFFER_LEN), LDirectFirstDiff, LDirectLastDiff);
+      LDirectHasDiff := LDirectDispatch^.Memory.DiffRange(@LBufA[0], @LBufB[0], SizeUInt(C_BUFFER_LEN), LDirectFirstDiff, LDirectLastDiff);
       CheckEqual(LRefHasDiff, LDirectHasDiff, 'Direct MemDiffRange(equal).hasDiff parity case=' + IntToStr(LCaseIndex));
       CheckFalse(LRefHasDiff, 'Reference MemDiffRange(equal) should be false case=' + IntToStr(LCaseIndex));
 
@@ -4758,7 +4758,7 @@ begin
       CheckFalse(MemEqual(@LBufA[0], @LBufB[0], SizeUInt(C_BUFFER_LEN)), 'Reference MemEqual(diff) should be false case=' + IntToStr(LCaseIndex));
       LRefHasDiff := MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(C_BUFFER_LEN), LRefFirstDiff, LRefLastDiff);
 
-      LDirectHasDiff := LDirectDispatch^.MemDiffRange(@LBufA[0], @LBufB[0], SizeUInt(C_BUFFER_LEN), LDirectFirstDiff, LDirectLastDiff);
+      LDirectHasDiff := LDirectDispatch^.Memory.DiffRange(@LBufA[0], @LBufB[0], SizeUInt(C_BUFFER_LEN), LDirectFirstDiff, LDirectLastDiff);
       CheckEqual(LRefHasDiff, LDirectHasDiff, 'Direct MemDiffRange(diff).hasDiff parity case=' + IntToStr(LCaseIndex));
       CheckTrue(LRefHasDiff, 'Reference MemDiffRange(diff) should be true case=' + IntToStr(LCaseIndex));
       if LRefHasDiff then
@@ -4779,7 +4779,7 @@ begin
           LRefMax := LBufA[LIndex];
       end;
 
-      LDirectDispatch^.MinMaxBytes(@LBufA[0], SizeUInt(C_BUFFER_LEN), LDirectMin, LDirectMax);
+      LDirectDispatch^.Memory.MinMaxBytes(@LBufA[0], SizeUInt(C_BUFFER_LEN), LDirectMin, LDirectMax);
       CheckEqual(Integer(LRefMin), Integer(LDirectMin), 'Direct MinMaxBytes(full).min parity case=' + IntToStr(LCaseIndex));
       CheckEqual(Integer(LRefMax), Integer(LDirectMax), 'Direct MinMaxBytes(full).max parity case=' + IntToStr(LCaseIndex));
 
@@ -4796,7 +4796,7 @@ begin
           LRefMax := LBufA[LIndex];
       end;
 
-      LDirectDispatch^.MinMaxBytes(@LBufA[LSegmentOffset], SizeUInt(LSegmentLen), LDirectMin, LDirectMax);
+      LDirectDispatch^.Memory.MinMaxBytes(@LBufA[LSegmentOffset], SizeUInt(LSegmentLen), LDirectMin, LDirectMax);
       CheckEqual(Integer(LRefMin), Integer(LDirectMin), 'Direct MinMaxBytes(segment).min parity case=' + IntToStr(LCaseIndex));
       CheckEqual(Integer(LRefMax), Integer(LDirectMax), 'Direct MinMaxBytes(segment).max parity case=' + IntToStr(LCaseIndex));
     end;

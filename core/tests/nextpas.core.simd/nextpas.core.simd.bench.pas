@@ -546,7 +546,7 @@ var
   LIndex: Integer;
 begin
   for LIndex := 1 to PUBLIC_ABI_HOT_INNER do
-    g_PublicAbiDummyEq := GetDispatchTable^.MemEqual(@g_PublicAbiBuf1[0], @g_PublicAbiBuf2[0], PUBLIC_ABI_HOT_SIZE);
+    g_PublicAbiDummyEq := GetDispatchTable^.Memory.Equal(@g_PublicAbiBuf1[0], @g_PublicAbiBuf2[0], PUBLIC_ABI_HOT_SIZE);
   Result := PUBLIC_ABI_HOT_INNER;
 end;
 
@@ -584,7 +584,7 @@ var
   LIndex: Integer;
 begin
   for LIndex := 1 to PUBLIC_ABI_HOT_INNER do
-    g_PublicAbiDummySum := GetDispatchTable^.SumBytes(@g_PublicAbiBuf1[0], PUBLIC_ABI_HOT_SIZE);
+    g_PublicAbiDummySum := GetDispatchTable^.Memory.SumBytes(@g_PublicAbiBuf1[0], PUBLIC_ABI_HOT_SIZE);
   Result := PUBLIC_ABI_HOT_INNER;
 end;
 

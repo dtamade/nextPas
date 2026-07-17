@@ -7695,8 +7695,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.MemEqual), 'Dispatch.MemEqual should be assigned');
-  CheckTrue(dt^.MemEqual <> @MemEqual_Scalar, 'MemEqual should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.Equal), 'Dispatch.MemEqual should be assigned');
+  CheckTrue(dt^.Memory.Equal <> @MemEqual_Scalar, 'MemEqual should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf1) do
   begin
@@ -7707,7 +7707,7 @@ begin
   expected := MemEqual_Scalar(@buf1[0], @buf2[0], SizeUInt(Length(buf1)));
 
   actual := False;
-  ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.MemEqual), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
+  ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.Memory.Equal), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemEqual equal)');
   CheckEqual(expected, actual, 'ABI MemEqual equal result');
 
@@ -7716,7 +7716,7 @@ begin
   expected := MemEqual_Scalar(@buf1[0], @buf2[0], SizeUInt(Length(buf1)));
 
   actual := False;
-  ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.MemEqual), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
+  ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.Memory.Equal), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemEqual different)');
   CheckEqual(expected, actual, 'ABI MemEqual different result');
 end;
@@ -7737,8 +7737,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.SumBytes), 'Dispatch.SumBytes should be assigned');
-  CheckTrue(dt^.SumBytes <> @SumBytes_Scalar, 'SumBytes should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.SumBytes), 'Dispatch.SumBytes should be assigned');
+  CheckTrue(dt^.Memory.SumBytes <> @SumBytes_Scalar, 'SumBytes should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf) do
     buf[i] := Byte(i);
@@ -7746,7 +7746,7 @@ begin
   expected := SumBytes_Scalar(@buf[0], SizeUInt(Length(buf)));
 
   actual := 0;
-  ok := AbiCall_SumBytes_CheckCalleeSaved(Pointer(dt^.SumBytes), @buf[0], SizeUInt(Length(buf)), actual);
+  ok := AbiCall_SumBytes_CheckCalleeSaved(Pointer(dt^.Memory.SumBytes), @buf[0], SizeUInt(Length(buf)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (SumBytes)');
   CheckEqual(expected, actual, 'ABI SumBytes result');
 end;
@@ -7767,8 +7767,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.CountByte), 'Dispatch.CountByte should be assigned');
-  CheckTrue(dt^.CountByte <> @CountByte_Scalar, 'CountByte should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.CountByte), 'Dispatch.CountByte should be assigned');
+  CheckTrue(dt^.Memory.CountByte <> @CountByte_Scalar, 'CountByte should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf) do
     buf[i] := Byte(i and $0F);
@@ -7776,7 +7776,7 @@ begin
   expected := CountByte_Scalar(@buf[0], SizeUInt(Length(buf)), 5);
 
   actual := 0;
-  ok := AbiCall_CountByte_CheckCalleeSaved(Pointer(dt^.CountByte), @buf[0], SizeUInt(Length(buf)), 5, actual);
+  ok := AbiCall_CountByte_CheckCalleeSaved(Pointer(dt^.Memory.CountByte), @buf[0], SizeUInt(Length(buf)), 5, actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (CountByte)');
   CheckEqual(expected, actual, 'ABI CountByte result');
 end;
@@ -7797,8 +7797,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
-  CheckTrue(dt^.BitsetPopCount <> @BitsetPopCount_Scalar, 'BitsetPopCount should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
+  CheckTrue(dt^.Memory.BitsetPopCount <> @BitsetPopCount_Scalar, 'BitsetPopCount should not be scalar when vector asm enabled');
 
   // 构造确定性位模式
   for i := 0 to High(buf) do
@@ -7807,7 +7807,7 @@ begin
   expected := BitsetPopCount_Scalar(@buf[0], SizeUInt(Length(buf)));
 
   actual := 0;
-  ok := AbiCall_BitsetPopCount_CheckCalleeSaved(Pointer(dt^.BitsetPopCount), @buf[0], SizeUInt(Length(buf)), actual);
+  ok := AbiCall_BitsetPopCount_CheckCalleeSaved(Pointer(dt^.Memory.BitsetPopCount), @buf[0], SizeUInt(Length(buf)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (BitsetPopCount)');
   CheckEqual(expected, actual, 'ABI BitsetPopCount result');
 end;
@@ -7829,14 +7829,14 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.Utf8Validate), 'Dispatch.Utf8Validate should be assigned');
-  CheckTrue(dt^.Utf8Validate <> @Utf8Validate_Scalar, 'Utf8Validate should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.Utf8Validate), 'Dispatch.Utf8Validate should be assigned');
+  CheckTrue(dt^.Memory.Utf8Validate <> @Utf8Validate_Scalar, 'Utf8Validate should not be scalar when vector asm enabled');
 
   // valid
   expected := Utf8Validate_Scalar(@ValidASCII[0], SizeUInt(Length(ValidASCII)));
 
   actual := False;
-  ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Utf8Validate), @ValidASCII[0], SizeUInt(Length(ValidASCII)), actual);
+  ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Memory.Utf8Validate), @ValidASCII[0], SizeUInt(Length(ValidASCII)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (Utf8Validate valid)');
   CheckEqual(expected, actual, 'ABI Utf8Validate valid result');
 
@@ -7844,7 +7844,7 @@ begin
   expected := Utf8Validate_Scalar(@InvalidOverlong[0], SizeUInt(Length(InvalidOverlong)));
 
   actual := False;
-  ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Utf8Validate), @InvalidOverlong[0], SizeUInt(Length(InvalidOverlong)), actual);
+  ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Memory.Utf8Validate), @InvalidOverlong[0], SizeUInt(Length(InvalidOverlong)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (Utf8Validate invalid)');
   CheckEqual(expected, actual, 'ABI Utf8Validate invalid result');
 end;
@@ -7867,14 +7867,14 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
-  CheckTrue(dt^.AsciiIEqual <> @AsciiIEqual_Scalar, 'AsciiIEqual should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
+  CheckTrue(dt^.Memory.AsciiIEqual <> @AsciiIEqual_Scalar, 'AsciiIEqual should not be scalar when vector asm enabled');
 
   // equal (case-insensitive)
   expected := AsciiIEqual_Scalar(@A1[0], @B1[0], SizeUInt(Length(A1)));
 
   actual := False;
-  ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.AsciiIEqual), @A1[0], @B1[0], SizeUInt(Length(A1)), actual);
+  ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.Memory.AsciiIEqual), @A1[0], @B1[0], SizeUInt(Length(A1)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (AsciiIEqual equal)');
   CheckEqual(expected, actual, 'ABI AsciiIEqual equal result');
 
@@ -7882,7 +7882,7 @@ begin
   expected := AsciiIEqual_Scalar(@A1[0], @B2[0], SizeUInt(Length(A1)));
 
   actual := False;
-  ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.AsciiIEqual), @A1[0], @B2[0], SizeUInt(Length(A1)), actual);
+  ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.Memory.AsciiIEqual), @A1[0], @B2[0], SizeUInt(Length(A1)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (AsciiIEqual different)');
   CheckEqual(expected, actual, 'ABI AsciiIEqual different result');
 end;
@@ -7902,8 +7902,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
-  CheckTrue(dt^.ToLowerAscii <> @ToLowerAscii_Scalar, 'ToLowerAscii should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
+  CheckTrue(dt^.Memory.ToLowerAscii <> @ToLowerAscii_Scalar, 'ToLowerAscii should not be scalar when vector asm enabled');
 
   for i := 0 to High(actual) do
   begin
@@ -7919,7 +7919,7 @@ begin
   expected := actual;
   ToLowerAscii_Scalar(@expected[0], SizeUInt(Length(expected)));
 
-  ok := AbiCall_ToLowerAscii_CheckCalleeSaved(Pointer(dt^.ToLowerAscii), @actual[0], SizeUInt(Length(actual)));
+  ok := AbiCall_ToLowerAscii_CheckCalleeSaved(Pointer(dt^.Memory.ToLowerAscii), @actual[0], SizeUInt(Length(actual)));
   CheckTrue(ok, 'ABI callee-saved should be preserved (ToLowerAscii)');
 
   for i := 0 to High(actual) do
@@ -7941,8 +7941,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
-  CheckTrue(dt^.ToUpperAscii <> @ToUpperAscii_Scalar, 'ToUpperAscii should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
+  CheckTrue(dt^.Memory.ToUpperAscii <> @ToUpperAscii_Scalar, 'ToUpperAscii should not be scalar when vector asm enabled');
 
   for i := 0 to High(actual) do
   begin
@@ -7958,7 +7958,7 @@ begin
   expected := actual;
   ToUpperAscii_Scalar(@expected[0], SizeUInt(Length(expected)));
 
-  ok := AbiCall_ToUpperAscii_CheckCalleeSaved(Pointer(dt^.ToUpperAscii), @actual[0], SizeUInt(Length(actual)));
+  ok := AbiCall_ToUpperAscii_CheckCalleeSaved(Pointer(dt^.Memory.ToUpperAscii), @actual[0], SizeUInt(Length(actual)));
   CheckTrue(ok, 'ABI callee-saved should be preserved (ToUpperAscii)');
 
   for i := 0 to High(actual) do
@@ -7983,8 +7983,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.MemDiffRange), 'Dispatch.MemDiffRange should be assigned');
-  CheckTrue(dt^.MemDiffRange <> @MemDiffRange_Scalar, 'MemDiffRange should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.DiffRange), 'Dispatch.MemDiffRange should be assigned');
+  CheckTrue(dt^.Memory.DiffRange <> @MemDiffRange_Scalar, 'MemDiffRange should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf1) do
   begin
@@ -8003,7 +8003,7 @@ begin
   actualLast := 0;
   actualRes := False;
 
-  ok := AbiCall_MemDiffRange_CheckCalleeSaved(Pointer(dt^.MemDiffRange), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actualFirst, actualLast, actualRes);
+  ok := AbiCall_MemDiffRange_CheckCalleeSaved(Pointer(dt^.Memory.DiffRange), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actualFirst, actualLast, actualRes);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemDiffRange)');
 
   CheckEqual(expectedRes, actualRes, 'ABI MemDiffRange result');
@@ -8027,8 +8027,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.MemFindByte), 'Dispatch.MemFindByte should be assigned');
-  CheckTrue(dt^.MemFindByte <> @MemFindByte_Scalar, 'MemFindByte should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.FindByte), 'Dispatch.MemFindByte should be assigned');
+  CheckTrue(dt^.Memory.FindByte <> @MemFindByte_Scalar, 'MemFindByte should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf) do
     buf[i] := Byte(i and $7F);
@@ -8038,14 +8038,14 @@ begin
   expected := MemFindByte_Scalar(@buf[0], SizeUInt(Length(buf)), 200);
 
   actual := 0;
-  ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.MemFindByte), @buf[0], SizeUInt(Length(buf)), 200, actual);
+  ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.Memory.FindByte), @buf[0], SizeUInt(Length(buf)), 200, actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemFindByte)');
   CheckEqual(expected, actual, 'ABI MemFindByte result');
 
   expected := MemFindByte_Scalar(@buf[0], SizeUInt(Length(buf)), 255);
 
   actual := 0;
-  ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.MemFindByte), @buf[0], SizeUInt(Length(buf)), 255, actual);
+  ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.Memory.FindByte), @buf[0], SizeUInt(Length(buf)), 255, actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemFindByte not found)');
   CheckEqual(expected, actual, 'ABI MemFindByte not found');
 end;
@@ -8068,7 +8068,7 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.MemCopy), 'Dispatch.MemCopy should be assigned');
+  CheckTrue(Assigned(dt^.Memory.Copy), 'Dispatch.MemCopy should be assigned');
   // Note: AVX2 now has its own MemCopy implementation (MemCopy_AVX2) which is correct
 
   for i := 0 to High(src) do
@@ -8080,7 +8080,7 @@ begin
   expected := actual;
   MemCopy_Scalar(@src[0], @expected[0], SizeUInt(CopyLen));
 
-  ok := AbiCall_MemCopy_CheckCalleeSaved(Pointer(dt^.MemCopy), @src[0], @actual[0], SizeUInt(CopyLen));
+  ok := AbiCall_MemCopy_CheckCalleeSaved(Pointer(dt^.Memory.Copy), @src[0], @actual[0], SizeUInt(CopyLen));
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemCopy)');
 
   for i := 0 to High(actual) do
@@ -8104,8 +8104,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.BytesIndexOf), 'Dispatch.BytesIndexOf should be assigned');
-  CheckTrue(dt^.BytesIndexOf <> @BytesIndexOf_Scalar, 'BytesIndexOf should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.BytesIndexOf), 'Dispatch.BytesIndexOf should be assigned');
+  CheckTrue(dt^.Memory.BytesIndexOf <> @BytesIndexOf_Scalar, 'BytesIndexOf should not be scalar when vector asm enabled');
 
   for i := 0 to High(haystack) do
     haystack[i] := Byte(i and $7F);
@@ -8117,7 +8117,7 @@ begin
 
   expected := BytesIndexOf_Scalar(@haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)));
 
-  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
+  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.Memory.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (BytesIndexOf)');
   CheckEqual(expected, actual, 'ABI BytesIndexOf result');
 
@@ -8129,7 +8129,7 @@ begin
 
   expected := BytesIndexOf_Scalar(@haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)));
 
-  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
+  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.Memory.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (BytesIndexOf not found)');
   CheckEqual(expected, actual, 'ABI BytesIndexOf not found');
 end;
@@ -8948,7 +8948,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MemEqual), 'Dispatch.MemEqual should be assigned');
+  CheckTrue(Assigned(dt^.Memory.Equal), 'Dispatch.MemEqual should be assigned');
 
   RandSeed := 20260113;
 
@@ -8963,14 +8963,14 @@ begin
 
     // Test equal buffers
     expRes := MemEqual_Scalar(@buf1[0], @buf2[0], 512);
-    actRes := dt^.MemEqual(@buf1[0], @buf2[0], 512);
+    actRes := dt^.Memory.Equal(@buf1[0], @buf2[0], 512);
     CheckEqual(expRes, actRes, 'MemEqual equal iter ' + IntToStr(iter));
 
     // Create a difference at random position
     buf2[Random(512)] := buf2[Random(512)] xor $FF;
 
     expRes := MemEqual_Scalar(@buf1[0], @buf2[0], 512);
-    actRes := dt^.MemEqual(@buf1[0], @buf2[0], 512);
+    actRes := dt^.Memory.Equal(@buf1[0], @buf2[0], 512);
     CheckEqual(expRes, actRes, 'MemEqual diff iter ' + IntToStr(iter));
   end;
 end;
@@ -8990,7 +8990,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MemFindByte), 'Dispatch.MemFindByte should be assigned');
+  CheckTrue(Assigned(dt^.Memory.FindByte), 'Dispatch.MemFindByte should be assigned');
 
   RandSeed := 20260114;
 
@@ -9002,13 +9002,13 @@ begin
     // Find existing byte
     searchByte := Byte(Random(128));
     expRes := MemFindByte_Scalar(@buf[0], 512, searchByte);
-    actRes := dt^.MemFindByte(@buf[0], 512, searchByte);
+    actRes := dt^.Memory.FindByte(@buf[0], 512, searchByte);
     CheckEqual(expRes, actRes, 'MemFindByte iter ' + IntToStr(iter));
 
     // Find non-existing byte
     searchByte := Byte(200 + Random(56));
     expRes := MemFindByte_Scalar(@buf[0], 512, searchByte);
-    actRes := dt^.MemFindByte(@buf[0], 512, searchByte);
+    actRes := dt^.Memory.FindByte(@buf[0], 512, searchByte);
     CheckEqual(expRes, actRes, 'MemFindByte not found iter ' + IntToStr(iter));
   end;
 end;
@@ -9027,7 +9027,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.SumBytes), 'Dispatch.SumBytes should be assigned');
+  CheckTrue(Assigned(dt^.Memory.SumBytes), 'Dispatch.SumBytes should be assigned');
 
   RandSeed := 20260115;
 
@@ -9037,7 +9037,7 @@ begin
       buf[i] := Byte(Random(256));
 
     expSum := SumBytes_Scalar(@buf[0], 512);
-    actSum := dt^.SumBytes(@buf[0], 512);
+    actSum := dt^.Memory.SumBytes(@buf[0], 512);
     CheckEqual(expSum, actSum, 'SumBytes iter ' + IntToStr(iter));
   end;
 end;
@@ -9057,7 +9057,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.CountByte), 'Dispatch.CountByte should be assigned');
+  CheckTrue(Assigned(dt^.Memory.CountByte), 'Dispatch.CountByte should be assigned');
 
   RandSeed := 20260116;
 
@@ -9068,7 +9068,7 @@ begin
 
     searchByte := Byte(Random(32));
     expCnt := CountByte_Scalar(@buf[0], 512, searchByte);
-    actCnt := dt^.CountByte(@buf[0], 512, searchByte);
+    actCnt := dt^.Memory.CountByte(@buf[0], 512, searchByte);
     CheckEqual(expCnt, actCnt, 'CountByte iter ' + IntToStr(iter));
   end;
 end;
@@ -9087,7 +9087,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MinMaxBytes), 'Dispatch.MinMaxBytes should be assigned');
+  CheckTrue(Assigned(dt^.Memory.MinMaxBytes), 'Dispatch.MinMaxBytes should be assigned');
 
   RandSeed := 20260117;
 
@@ -9097,7 +9097,7 @@ begin
       buf[i] := Byte(Random(256));
 
     MinMaxBytes_Scalar(@buf[0], 512, expMin, expMax);
-    dt^.MinMaxBytes(@buf[0], 512, actMin, actMax);
+    dt^.Memory.MinMaxBytes(@buf[0], 512, actMin, actMax);
     CheckEqual(expMin, actMin, 'MinMaxBytes min iter ' + IntToStr(iter));
     CheckEqual(expMax, actMax, 'MinMaxBytes max iter ' + IntToStr(iter));
   end;
@@ -9117,7 +9117,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
+  CheckTrue(Assigned(dt^.Memory.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
 
   RandSeed := 20260118;
 
@@ -9127,7 +9127,7 @@ begin
       buf[i] := Byte(Random(256));
 
     expCnt := BitsetPopCount_Scalar(@buf[0], 256);
-    actCnt := dt^.BitsetPopCount(@buf[0], 256);
+    actCnt := dt^.Memory.BitsetPopCount(@buf[0], 256);
     CheckEqual(expCnt, actCnt, 'BitsetPopCount iter ' + IntToStr(iter));
   end;
 end;
@@ -9145,7 +9145,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MemCopy), 'Dispatch.MemCopy should be assigned');
+  CheckTrue(Assigned(dt^.Memory.Copy), 'Dispatch.MemCopy should be assigned');
 
   RandSeed := 20260119;
 
@@ -9159,7 +9159,7 @@ begin
     end;
 
     MemCopy_Scalar(@src[0], @dstExp[0], 512);
-    dt^.MemCopy(@src[0], @dstAct[0], 512);
+    dt^.Memory.Copy(@src[0], @dstAct[0], 512);
 
     for i := 0 to 511 do
       CheckEqual(dstExp[i], dstAct[i], 'MemCopy iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
@@ -9180,7 +9180,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MemSet), 'Dispatch.MemSet should be assigned');
+  CheckTrue(Assigned(dt^.Memory.Fill), 'Dispatch.MemSet should be assigned');
 
   RandSeed := 20260120;
 
@@ -9195,7 +9195,7 @@ begin
     end;
 
     MemSet_Scalar(@dstExp[0], 512, setValue);
-    dt^.MemSet(@dstAct[0], 512, setValue);
+    dt^.Memory.Fill(@dstAct[0], 512, setValue);
 
     for i := 0 to 511 do
       CheckEqual(dstExp[i], dstAct[i], 'MemSet iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
@@ -9215,7 +9215,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
+  CheckTrue(Assigned(dt^.Memory.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
 
   RandSeed := 20260121;
 
@@ -9228,7 +9228,7 @@ begin
     end;
 
     ToLowerAscii_Scalar(@bufExp[0], 128);
-    dt^.ToLowerAscii(@bufAct[0], 128);
+    dt^.Memory.ToLowerAscii(@bufAct[0], 128);
 
     for i := 0 to 127 do
       CheckEqual(bufExp[i], bufAct[i], 'ToLowerAscii iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
@@ -9248,7 +9248,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
+  CheckTrue(Assigned(dt^.Memory.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
 
   RandSeed := 20260122;
 
@@ -9261,7 +9261,7 @@ begin
     end;
 
     ToUpperAscii_Scalar(@bufExp[0], 128);
-    dt^.ToUpperAscii(@bufAct[0], 128);
+    dt^.Memory.ToUpperAscii(@bufAct[0], 128);
 
     for i := 0 to 127 do
       CheckEqual(bufExp[i], bufAct[i], 'ToUpperAscii iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
@@ -9282,7 +9282,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
+  CheckTrue(Assigned(dt^.Memory.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
 
   RandSeed := 20260123;
 
@@ -9303,13 +9303,13 @@ begin
     end;
 
     expRes := AsciiIEqual_Scalar(@buf1[0], @buf2[0], 128);
-    actRes := dt^.AsciiIEqual(@buf1[0], @buf2[0], 128);
+    actRes := dt^.Memory.AsciiIEqual(@buf1[0], @buf2[0], 128);
     CheckEqual(expRes, actRes, 'AsciiIEqual same iter ' + IntToStr(iter));
 
     // Make them differ
     buf2[Random(128)] := Byte(48 + Random(10));
     expRes := AsciiIEqual_Scalar(@buf1[0], @buf2[0], 128);
-    actRes := dt^.AsciiIEqual(@buf1[0], @buf2[0], 128);
+    actRes := dt^.Memory.AsciiIEqual(@buf1[0], @buf2[0], 128);
     CheckEqual(expRes, actRes, 'AsciiIEqual diff iter ' + IntToStr(iter));
   end;
 end;
