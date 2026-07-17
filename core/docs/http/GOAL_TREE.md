@@ -271,12 +271,12 @@ H3 is blocked on the QUIC module. Only `nextpas.core.tls.quic.crypto.pas` (QUIC 
 
 Static serving remains a helper-level public surface with tight range/conditional/stream contracts already landed.
 
-WebSocket is a **production-intended helper**: RFC framing coverage is already strong; Era 6 Wave X1 graduates it via **lifecycle contract + cancel/ownership evidence**, not by growing extension negotiation APIs.
+WebSocket is a **production-intended helper**: RFC framing coverage is already strong; Era 6 Wave X1 graduates lifecycle/cancel/ownership; Era 8 Wave I2 adds opt-in RFC 7692 permessage-deflate (no_context_takeover only).
 
 Graduation rules:
 
 - static: do not grow into a broader service family without a stable multi-feature contract
-- WebSocket: no new option families / permessage-deflate / subprotocol stacks without real consumer demand and ownership story
+- WebSocket: no subprotocol stacks / extra extension families beyond I2 permessage-deflate without real consumer demand
 - more negative-case tests alone are not progress unless they close a real behavior gap
 - WS-over-H2 stays parked until a real consumer
 

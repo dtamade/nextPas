@@ -375,7 +375,7 @@ end;
 
 ### 2.2.3c WebSocket lifecycle（Era 6 Wave X1）
 
-公开面：`UpgradeWebSocket` / `ConnectWebSocket` → `IWebSocket`。不扩扩展协商（无 permessage-deflate / 子协议 API）。
+公开面：`UpgradeWebSocket` / `ConnectWebSocket` → `IWebSocket`。
 
 | 阶段 | 行为 | 错误 / 证据 |
 |------|------|-------------|
@@ -390,10 +390,11 @@ end;
 | Cancel | token 已 cancel → 入口/mid-frame `hekCanceled`；Close/Destroy 清 stream cancel | client cancel test |
 | Upgrade 失败 | `hekUpgrade` / `hekArgument` / `hekConnect` 等；**不**写 500 到已 hijack 连接 | UpgradeException ownership test |
 | 所有权 | `IWebSocket` 持有 hijack 后的 stream；server handler 异常不得再写 HTTP 500 到已升级连接 | ownership focused |
+| **permessage-deflate（Era 8 I2）** | `TWebSocketOptions.EnablePermessageDeflate` 默认 **False**（opt-in）；`WithEnablePermessageDeflate`。握手：`Sec-WebSocket-Extensions: permessage-deflate; client_no_context_takeover; server_no_context_takeover`。仅双方都同意时 `FDeflateEnabled`。写路径：数据帧可设 RSV1 + raw DEFLATE（`RawDeflateMessageCompress`，无 context takeover）；不缩小则发明文。读路径：RSV1 解压，输出受 `MaxMessageSize` 约束。未协商却见 RSV1 → `hekProtocol`。 | websocket + websocket_client focused |
 
-**毕业判定（production-helper）**：上表 + focused 全绿 + WS 路径 heaptrc 0 unfreed；**不是**子系统拆分，也不是扩展族 API。
+**毕业判定（production-helper）**：上表 + focused 全绿 + WS 路径 heaptrc 0 unfreed；**不是**子系统拆分。
 
-**仍 Park**：WS-over-H2；扩展协商；新 Options 家族。
+**仍 Park**：WS-over-H2；子协议全家桶；新无关 Options 家族。
 
 ### 2.2.4 IHttpResponse metadata + Close
 
