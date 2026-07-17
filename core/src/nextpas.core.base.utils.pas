@@ -24,6 +24,7 @@ function CheckedMulSizeUInt(const ALeft, ARight: SizeUInt): SizeUInt; inline;
 procedure CheckSizeRange(const AOffset, ALength, ASize: SizeUInt);
 
 {** 接口查询 *}
+procedure ClearOutInterface(out AIntf);
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 
@@ -122,16 +123,33 @@ begin
       [AOffset, ALength, ASize]);
 end;
 
+procedure ClearOutInterface(out AIntf);
+begin
+  IInterface(AIntf) := nil;
+end;
+
 function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
 begin
-  if AInstance = nil then Exit(False);
+  if AInstance = nil then
+  begin
+    ClearOutInterface(AIntf);
+    Exit(False);
+  end;
   Result := AInstance.GetInterface(AIID, AIntf);
+  if not Result then
+    ClearOutInterface(AIntf);
 end;
 
 function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 begin
-  if AInstance = nil then Exit(False);
+  if AInstance = nil then
+  begin
+    ClearOutInterface(AIntf);
+    Exit(False);
+  end;
   Result := AInstance.QueryInterface(AIID, AIntf) = S_OK;
+  if not Result then
+    ClearOutInterface(AIntf);
 end;
 
 end.
