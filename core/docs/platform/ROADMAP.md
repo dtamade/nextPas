@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` |
-| Real Windows GHA | 17-gate matrix via `platform-windows-ci-matrix.sh` (14 wine-suite dirs + poller/io/socket real); D1.c fixing remaining reds |
+| Real Windows GHA | 17-gate matrix green (`truth=real-windows-runtime-ci`, pass=17); not yet D1.d `ci-matrix` promotion |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -233,6 +233,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-17 | MSYS2 has no `mingw-w64-x86_64-fpc` package; Windows CI installs official FPC 3.3.1 x86_64-win64 trunk snapshot + MSYS2 make/bash |
 | 2026-07-17 | Windows CI toolchain reaches real compile; enable `-Sg`/`{$GOTO ON}` project-wide so mem/http/json ports build without host fpc.cfg |
 | 2026-07-17 | First full matrix: pass=13 fail=4 (sync trylock, random zeros flaky, io create-server/wake, socket CompareMem). D1.c fixes: SRW TryAcquire returns Win32 BOOLEAN not BOOL; FIONBIO=$8004667E; CreateServerSocket loopback/host-order; random any-nonzero; socket uses system.CompareMem |
+| 2026-07-17 | D1.c closed: real-Windows matrix **pass=17 fail=0** (run 29569033144). Mapped PLATFORM_ERR_AGAIN treated as Winsock would-block in wake drain + socket classifiers. D1.d promotion still pending criteria checklist |
 
 ---
 
