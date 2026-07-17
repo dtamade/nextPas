@@ -204,7 +204,8 @@ jobs:
             *) echo "error: need Windows target, got ${os}" >&2; exit 1 ;;
           esac
           # Smoke-compile: prove units resolve and functionreferences work (3.3.1+).
-          # Use a Windows-native path; fpc.exe does not understand MSYS /tmp.
+          # Compile inside the smoke dir. Avoid -FE with mixed drive paths:
+          # fpc.exe can mangle D:/a/... into D:A:\... under MSYS.
           SMOKE_DIR="${FPC_ROOT}/smoke"
           mkdir -p "${SMOKE_DIR}"
           printf '%s\n' \
@@ -215,12 +216,7 @@ jobs:
             'begin' \
             'end.' \
             > "${SMOKE_DIR}/fpc_ref_smoke.pas"
-          if command -v cygpath >/dev/null 2>&1; then
-            SMOKE_WIN="$(cygpath -m "${SMOKE_DIR}")"
-          else
-            SMOKE_WIN="${SMOKE_DIR}"
-          fi
-          fpc "-FE${SMOKE_WIN}" "${SMOKE_WIN}/fpc_ref_smoke.pas"
+          ( cd "${SMOKE_DIR}" && fpc fpc_ref_smoke.pas )
           make --version | head -n 1
 
       - name: Run Windows runtime matrix
