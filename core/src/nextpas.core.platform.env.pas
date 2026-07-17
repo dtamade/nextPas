@@ -66,7 +66,11 @@ uses
   nextpas.core.platform.error,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.posix.helpers;
+  nextpas.core.platform.posix.helpers
+  {$IFDEF NEXTPAS_MACOS}
+  , nextpas.core.platform.darwin.ffi
+  {$ENDIF}
+  ;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -148,12 +152,23 @@ function platform_env_enumerate(ACallback: TPlatformEnvEnumerateCallback;
   AData: Pointer): Int32;
 var
   LCur: PPAnsiChar;
+  {$IFDEF NEXTPAS_MACOS}
+  LEnviron: PPPAnsiChar;
+  {$ENDIF}
 begin
   if not Assigned(ACallback) then
     Exit(PLATFORM_ERR_INVALID);
+  {$IFDEF NEXTPAS_MACOS}
+  { Darwin does not export a linkable environ; use CRT helper. }
+  LEnviron := NSGetEnviron;
+  if (LEnviron = nil) or (LEnviron^ = nil) then
+    Exit(0);
+  LCur := LEnviron^;
+  {$ELSE}
   LCur := environ;
   if LCur = nil then
     Exit(0);
+  {$ENDIF}
   while LCur^ <> nil do
   begin
     if not ACallback(LCur^, AData) then

@@ -96,18 +96,16 @@ function platform_cpu_count: Int32;
 
 { Thread naming - for debugging }
 
-{$IFDEF NEXTPAS_LINUX}
 {** @desc 设置当前线程名称（用于调试器显示）
     @param AName 线程名称
-    @return 0 成功，PLATFORM_ERR_* 错误码 *}
+    @return 0 成功，PLATFORM_ERR_* 错误码；不支持时 PLATFORM_ERR_UNSUPPORTED *}
 function platform_thread_set_name(const AName: PAnsiChar): Int32;
 
 {** @desc 获取当前线程名称
     @param ABuf 输出缓冲区
     @param ABufSize 缓冲区大小
-    @return 名称实际长度 *}
+    @return 0 成功；不支持时 PLATFORM_ERR_UNSUPPORTED *}
 function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
-{$ENDIF}
 
 type
   {**
@@ -877,6 +875,21 @@ begin
     Result := 1;
 end;
 
+function platform_thread_set_name(const AName: PAnsiChar): Int32;
+begin
+  if AName = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  { SetThreadDescription is Win10+; keep unsupported until owned FFI lands. }
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
+function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
+begin
+  if (ABuf <> nil) and (ABufSize > 0) then
+    ABuf[0] := #0;
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
 {$ENDIF}
 
 {$IFNDEF NEXTPAS_UNIX}{$IFNDEF NEXTPAS_WINDOWS}
@@ -895,6 +908,12 @@ function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32; begin Result 
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer; begin Result := nil; end;
 function platform_cpu_count: Int32; begin Result := 1; end;
+function platform_thread_set_name(const AName: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
+begin
+  if (ABuf <> nil) and (ABufSize > 0) then ABuf[0] := #0;
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
 {$ENDIF}{$ENDIF}
 
 { TPlatformThreadRecord helpers }
