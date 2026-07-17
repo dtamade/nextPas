@@ -11,6 +11,17 @@ const
 type
   TCacheLinePad = array[0..3] of Int64;
 
+  {** @desc Diagnostic failure reason for optional Try*Ex APIs.
+    @details Hot-path Boolean Try* APIs stay unchanged. Try*Ex fills AError:
+      lfteNone on success; lfteFull / lfteEmpty for capacity or empty;
+      lfteClosed when Close blocks publish or terminal empty consume. }
+  TLockFreeTryError = (
+    lfteNone,
+    lfteFull,
+    lfteEmpty,
+    lfteClosed
+  );
+
 function LockFreeNextPow2(const AValue: PtrUInt): PtrUInt;
 function LockFreeIsPow2(const AValue: PtrUInt): Boolean;
 
