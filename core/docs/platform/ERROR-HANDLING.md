@@ -38,9 +38,14 @@ There is **no** `PLATFORM_ERR_OK` constant; success is the integer `0`.
 
 ### Mapping rules
 
-- **POSIX**: `platform_get_last_error` returns host errno; known values already match `PLATFORM_ERR_*` Linux numbers. Unknown errno values stay as host errno for `platform_error_message` (strerror) but categorize as `ecInternal` when not in the portable set.
+- **POSIX**: `platform_get_last_error` returns host errno; known values already match `PLATFORM_ERR_*` Linux numbers. **Unknown errno values stay as host errno** for `platform_error_message` (strerror) but categorize as `ecInternal` when not in the portable set. This is **intentionally asymmetric** with Windows: Linux errno numbers often already equal the portable table; forcing every unmapped code to `UNKNOWN` would drop strerror detail. Portable `case` branches must only match documented `PLATFORM_ERR_*` and treat other positive codes as host-local.
 - **Windows**: `platform_map_windows_error_code` maps `ERROR_*` / `WSAE*` into `PLATFORM_ERR_*`. **Unmapped codes become `PLATFORM_ERR_UNKNOWN`**, never raw `ERROR_*` passthrough.
 - **`PATH_TOO_LONG` (-7)** is a client-side domain limit used by `platform.fs` path clamps; it is intentionally not Linux `ENAMETOOLONG` (36).
+- **`PLATFORM_FS_SHORT_READ_ERROR` / `PLATFORM_FS_SHORT_WRITE_ERROR`** are **aliases of `PLATFORM_ERR_IO` (5)**. They are not a second public error family and no longer use parallel magic values `-6`/`-5`.
+- **`platform_parse_*`**: failure is `PLATFORM_ERR_INVALID` (error-code tier), never bare `-1`.
+- **`platform_dl_error`**: length API; illegal buffer returns `PLATFORM_ERR_INVALID`, not bare `-1`.
+- **Observability (raw OS side-channel)**: **Won't do this wave** — no `platform_get_last_os_error` API. Portable code space does not carry raw `GetLastError` for unmapped Windows codes (`UNKNOWN`). Host-side debug logs remain the place for raw OS codes until a dedicated side-channel is designed.
+- **Diagnostics hooks** (trace/metrics sink): deferred (product layer, not L0 requirement this wave).
 
 ## 2. Call pattern (error-code APIs)
 

@@ -194,7 +194,7 @@ begin
     end;
     ABuf[0] := '-';
     LLen := platform_fmt_uint(UInt64(-AValue), @ABuf[1], ABufSize - 1);
-    if LLen < 0 then Exit(-1);
+    if LLen < 0 then Exit(PLATFORM_ERR_INVALID);
     Result := LLen + 1;
   end
   else
@@ -489,18 +489,18 @@ var
 begin
   AValue := 0;
   if (AStr = nil) or (ALen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   for I := 0 to ALen - 1 do
   begin
     if (AStr[I] < '0') or (AStr[I] > '9') then
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     LDigit := UInt64(Ord(AStr[I]) - Ord('0'));
     LPrev := AValue;
     AValue := AValue * 10 + LDigit;
     if AValue < LPrev then
     begin
       AValue := 0;
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     end;
   end;
   Result := 0;
@@ -514,7 +514,7 @@ var
 begin
   AValue := 0;
   if (AStr = nil) or (ALen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LNeg := AStr[0] = '-';
   if LNeg or (AStr[0] = '+') then
     LStart := 1
@@ -522,19 +522,19 @@ begin
     LStart := 0;
   LActualLen := ALen - LStart;
   if LActualLen <= 0 then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if platform_parse_uint(@AStr[LStart], LActualLen, LU) <> 0 then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if LNeg then
   begin
     if LU > UInt64(High(Int64)) + 1 then
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     AValue := -Int64(LU);
   end
   else
   begin
     if LU > UInt64(High(Int64)) then
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     AValue := Int64(LU);
   end;
   Result := 0;
@@ -548,7 +548,7 @@ var
 begin
   AValue := 0;
   if (AStr = nil) or (ALen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   for I := 0 to ALen - 1 do
   begin
     C := AStr[I];
@@ -557,12 +557,12 @@ begin
       'a'..'f': LDigit := UInt64(Ord(C) - Ord('a') + 10);
       'A'..'F': LDigit := UInt64(Ord(C) - Ord('A') + 10);
     else
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     end;
     if (AValue and $F000000000000000) <> 0 then
     begin
       AValue := 0;
-      Exit(-1);
+      Exit(PLATFORM_ERR_INVALID);
     end;
     AValue := (AValue shl 4) or LDigit;
   end;
@@ -576,7 +576,7 @@ var
   C: AnsiChar;
 begin
   if (ADst = nil) or (ADstLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if ASrc = nil then
   begin
     ADst[0] := #0;
@@ -608,7 +608,7 @@ var
   C: AnsiChar;
 begin
   if (ADst = nil) or (ADstLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if ASrc = nil then
   begin
     ADst[0] := #0;
@@ -639,7 +639,7 @@ var
   LStart, LEnd, LLen: Int32;
 begin
   if (ADst = nil) or (ADstLen <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   if ASrc = nil then
   begin
     ADst[0] := #0;
@@ -744,13 +744,13 @@ var
   LHasDot: Boolean;
 begin
   AValue := 0.0;
-  if (AStr = nil) or (ALen <= 0) then Exit(-1);
+  if (AStr = nil) or (ALen <= 0) then Exit(PLATFORM_ERR_INVALID);
 
   I := 0;
   LNeg := False;
   if AStr[I] = '-' then begin LNeg := True; Inc(I); end
   else if AStr[I] = '+' then Inc(I);
-  if I >= ALen then Exit(-1);
+  if I >= ALen then Exit(PLATFORM_ERR_INVALID);
 
   LIntPart := 0;
   LHasDot := False;
@@ -774,7 +774,7 @@ begin
     end;
   end;
 
-  if (I = 0) or ((not LHasDot) and (I = Ord(LNeg))) then Exit(-1);
+  if (I = 0) or ((not LHasDot) and (I = Ord(LNeg))) then Exit(PLATFORM_ERR_INVALID);
 
   AValue := Double(LIntPart) + Double(LFracPart) / LFracDiv;
 
@@ -797,7 +797,7 @@ begin
   end;
 
   if LNeg then AValue := -AValue;
-  if I <> ALen then Exit(-1);
+  if I <> ALen then Exit(PLATFORM_ERR_INVALID);
   Result := 0;
 end;
 

@@ -69,10 +69,10 @@ function platform_dl_sym(const ALib: TPlatformLibrary;
     @return 0 成功，PLATFORM_ERR_* 错误码 *}
 function platform_dl_close(var ALib: TPlatformLibrary): Int32;
 
-{** @desc 获取动态库操作的错误信息
+{** @desc 获取动态库操作的错误信息（length API）
     @param ABuf 输出缓冲区
     @param ABufSize 缓冲区大小
-    @return 错误信息长度 *}
+    @return 成功：写入字节数（>=0）；失败：PLATFORM_ERR_*（非法 buffer 为 PLATFORM_ERR_INVALID） *}
 function platform_dl_error(ABuf: PAnsiChar; ABufSize: Int32): Int32;
 
 {** @desc 将类型安全的标志集合转换为整数标志
@@ -208,7 +208,7 @@ var
   LLen, I: Int32;
 begin
   if (ABuf = nil) or (ABufSize <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LMsg := dlerror;
   if LMsg = nil then
   begin
@@ -311,7 +311,7 @@ var
   I: Int32;
 begin
   if (ABuf = nil) or (ABufSize <= 0) then
-    Exit(-1);
+    Exit(PLATFORM_ERR_INVALID);
   LErr := GetLastError;
   if LErr = 0 then
   begin

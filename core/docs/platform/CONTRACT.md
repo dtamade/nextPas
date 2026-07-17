@@ -1,10 +1,12 @@
 # nextpas.core.platform 代码契约
 
 **模块路径**：`core/src/nextpas.core.platform*.pas`（60+ 个源文件）
-**层级**：L0（仅依赖 FPC RTL）
+**层级**：L0 — host FFI（`platform.*.base` / `*.ffi`）+ `core.base` / `errors` / `exception`
+**FPC RTL**：生产/测试/示例 **禁止** `uses SysUtils` / `BaseUnix` / `Windows` / `Classes` 等 FPC RTL。
+仅 `nextpas.core.system` 允许直接引用 FPC RTL（仓库级编译器无关性原则）。
 **Owner**：platform lane（`.worktrees/platform`）
 **最后更新**：2026-07-17
-**版本**：2.1
+**版本**：2.2
 
 ---
 
@@ -145,11 +147,18 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
   - `PLATFORM_ERR_BUSY` (16) — 资源忙
   - `PLATFORM_ERR_AGAIN` (11) — 资源暂时不可用
   - `PLATFORM_ERR_UNSUPPORTED` (95) — 不支持的操作
-  - `PLATFORM_ERR_PATH_TOO_LONG` (-7) — 路径超过 PLATFORM_FS_MAX_PATH
+  - `PLATFORM_ERR_PATH_TOO_LONG` (-7) — 路径超过 PLATFORM_FS_MAX_PATH（域钳制，非 OS ENAMETOOLONG）
+  - `PLATFORM_ERR_UNKNOWN` (-8) — 宿主原生错误无法映射（Windows 禁止 raw ERROR_* 透传）
+  - `PLATFORM_ERR_IO` (5) — I/O 错误；`PLATFORM_FS_SHORT_READ/WRITE_ERROR` 为其 **alias**（无平行 -5/-6）
 - **错误消息**: `platform_error_message` 是 length API：成功返回写入字节数，失败返回 `PLATFORM_ERR_*`
 - **错误分类**: `platform_error_category(ACode)` 返回 `TErrorCategory`（`nextpas.core.exception`）
 - **单一错误族**: 资源限制等 API 同样返回 `PLATFORM_ERR_*`，无独立 `PLATFORM_RESOURCE_ERROR_*` 公共语言
-- **RTL 隔离**: 生产 platform 不得 `uses SysUtils`/`BaseUnix`/`Windows`/`Classes`；`platform.args` 不得依赖 `ParamCount`/`ParamStr`
+- **RTL 隔离**: 生产/测试/示例 platform 不得 `uses` FPC RTL；`platform.args` 不得依赖 `ParamCount`/`ParamStr`
+- **parse 失败**: `platform_parse_*` 返回 `PLATFORM_ERR_INVALID`，禁止 bare `-1` 作为错误码
+- **length 失败**: `platform_fmt_*` / `platform_dl_error` / `platform_error_message` 等 length API 失败返回 `PLATFORM_ERR_*`（禁止 bare `-1`，deprecated 包装除外）
+- **out-init**: error-code + `out` 参数在宿主调用前写 sentinel（见 RETURN-SEMANTICS §13）
+- **convenience managed API**: `platform_env_get_str` 等返回 `AnsiString` 的接口为 **FPC 便捷面**，非稳定 C ABI；可移植核心路径优先 `PAnsiChar` buffer API
+- **文档权威**: API 目录以 `API-REFERENCE.md` 为准；`api-reference.md` 仅为 redirect；示例以 `EXAMPLES.md` / `BEST-PRACTICES.md`（live）为准
 
 ### 3.1 files / fs / io 边界
 
