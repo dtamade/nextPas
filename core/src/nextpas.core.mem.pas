@@ -508,9 +508,18 @@ begin
     DefaultHeap.FreeMem(APtr, LClassSize);
     Exit(True);
   end;
-  if AAllocator = nil then
+  if AAllocator <> nil then
+  begin
+    AAllocator.FreeMem(APtr);
+    Exit(True);
+  end;
+  { U1: nil allocator — free only when DefaultHeap owns the block (safe),
+    via process FreeMem so HEAP_DEBUG still tracks. Foreign → False (no UB).
+    FreeMemOf(nil, foreign) still falls through to process FreeMem (UB);
+    Try stays the fail-closed form. }
+  if not TryBlockSize(APtr, LClassSize) then
     Exit(False);
-  AAllocator.FreeMem(APtr);
+  FreeMem(APtr);
   Result := True;
 end;
 

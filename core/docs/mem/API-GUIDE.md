@@ -63,7 +63,7 @@ Writeln(FormatMemStats); // … debug_process=… debug_coverage_gap=…
 - 对标 Go `runtime.ReadMemStats` 的“一结构体读进程堆”体验
 - 热路径不调用；DEBUG 字段默认全 0
 - 细节字段与 SC5 对齐：`TGrowingHeapStats`
-- 插件面 sized free 助手：`FreeMemOf(Alloc, P, Size)` / `TryFreeMemOf`（无 DEBUG wrap 且无 HEAP_DEBUG/SAFETY 时同堆走 DefaultHeap sized；否则走 `Alloc.FreeMem` 以保留 tracking）
+- 插件面 sized free 助手：`FreeMemOf(Alloc, P, Size)` / `TryFreeMemOf`（无 DEBUG wrap 且无 HEAP_DEBUG/SAFETY 时同堆走 DefaultHeap sized；否则走 `Alloc.FreeMem` 以保留 tracking；`TryFreeMemOf(nil, P)` 仅当 DefaultHeap 自有时 process free，foreign → False）
 - 插件面 sized realloc：`ReallocMemOf(Alloc, P, Old, New)` / `TryReallocMemOf`（同门控；wrap 开时走 `Alloc.ReallocMem`；**Try 与非 Try 成功语义一致**，含 nil allocator → process GetMem）
 - 一行 env profile：`FormatMemDebugProfile`（`heap_debug`/`heap_safety`/`arena_strict`/`debug`/`debug_process`/`debug_coverage_gap`）
 - `FormatMemStats` 含 `heap_safety=` / `arena_strict=`（与 HEAP_DEBUG / coverage_gap 并列）
