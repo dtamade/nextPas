@@ -92,3 +92,25 @@ begin
   ScalarArrayMulF32(aSrc1, aSrc2, aDst, aCount);
 end;
 
+// === Phase 23b: BatchF32 ArrayMin / ArrayMax / ArrayAbs / ArrayNeg (no-asm companions) ===
+
+procedure NEONArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+begin
+  ScalarArrayMinF32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure NEONArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+begin
+  ScalarArrayMaxF32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure NEONArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+begin
+  ScalarArrayAbsF32(aSrc, aDst, aCount);
+end;
+
+procedure NEONArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+begin
+  ScalarArrayNegF32(aSrc, aDst, aCount);
+end;
+

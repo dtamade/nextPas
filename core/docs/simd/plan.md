@@ -1,18 +1,18 @@
 # SIMD 当前活动计划
 
-> 最后更新: 2026-07-17  
-> **权威主线**: [roadmap.md](roadmap.md)  
+> 最后更新: 2026-07-17
+> **权威主线**: [roadmap.md](roadmap.md)
 > **Goal 队列（执行入口）**: [../math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)
 
 ## 当前 Goal
 
 ```text
-CURRENT = S23b  (见 GOAL_QUEUE.md)
+CURRENT = M-C1  (见 GOAL_QUEUE.md)
 ```
 
 | 字段 | 值 |
 |------|-----|
-| 阶段 | Phase 23b — NEON BatchF32 Min/Max/Abs/Neg |
+| 阶段 | M-C1 — math consumer smoke |
 | 优先级 | P1 |
 | 验收 | GOAL_QUEUE 卡内 GATES + roadmap §6 |
 
@@ -25,11 +25,11 @@ CURRENT = S23b  (见 GOAL_QUEUE.md)
 - [x] Phase 22a/22b NEON Memory 15/15
 - [x] G0 Goal 队列 + 指针
 - [x] **S23a** NEON `ArrayAdd/Sub/Mul` F32
+- [x] **S23b** NEON `Min/Max/Abs/Neg` F32（Div 推迟）
 
 ### 队列摘要
 
-- [ ] **S23b** Min/Max/Abs/Neg（CURRENT）
-- [ ] M-C1 math consumer smoke
+- [ ] **M-C1** math consumer smoke（CURRENT）
 - [ ] S24a RVV 诚实化
 - [ ] S25 性能方法与热点
 - [ ] M-V1/M-V2 math residual

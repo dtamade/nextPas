@@ -6878,17 +6878,15 @@ begin
     LSourceLines.Free;
   end;
 
-  // Phase 22b closed Memory (15/15). Phase 23a owns BatchF32 Add/Sub/Mul only
-  // under ASM (asserted in FacadeFastSlots). Remaining Batch* stay scalar.
+  // Phase 22b closed Memory (15/15). Phase 23a/23b own BatchF32 Add/Sub/Mul/
+  // Min/Max/Abs/Neg under ASM (asserted in FacadeFastSlots). Remaining Batch* stay scalar.
   CheckTrue(Trim(LFacadeSource) <> '', 'Retired platform facade include should remain as an audited empty boundary');
   CheckTrue(Pos('table.batchf64.', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF64 until a real NEON leaf exists');
   CheckTrue(Pos('table.batchinteger.', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchInteger until a real NEON leaf exists');
-  // Phase 23a only wires ArrayAdd/Sub/Mul; forbid premature wider BatchF32 ownership.
+  // Forbid premature wider BatchF32 ownership beyond S23a/S23b.
   CheckTrue(Pos('table.batchf32.arraydiv :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayDiv until a later Phase 23 slice owns it');
-  CheckTrue(Pos('table.batchf32.arraymin :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayMin until S23b owns it');
-  CheckTrue(Pos('table.batchf32.arraymax :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayMax until S23b owns it');
-  CheckTrue(Pos('table.batchf32.arrayabs :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayAbs until S23b owns it');
-  CheckTrue(Pos('table.batchf32.arrayneg :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayNeg until S23b owns it');
+  CheckTrue(Pos('table.batchf32.arraysqrt :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArraySqrt until a later slice owns it');
+  CheckTrue(Pos('table.batchf32.arrayfma :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayFma until a later slice owns it');
   CheckTrue(Pos('table.batchf32.reducesum :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ReduceSum until a later slice owns it');
 
   // Defensive: no Memory dead wrappers reintroduced into the retired include.
@@ -6906,12 +6904,11 @@ begin
     Exit;
   {$ENDIF}
 
-  // Remaining Batch slots still inherit FillBase scalar (not S23a ArrayAdd/Sub/Mul).
+  // Remaining Batch slots still inherit FillBase scalar (not S23a/S23b leaves).
   AssertSlotReusesScalar('BatchF32.ArrayDiv', Pointer(LScalarTable.BatchF32.ArrayDiv), Pointer(LNEONTable.BatchF32.ArrayDiv));
-  AssertSlotReusesScalar('BatchF32.ArrayMin', Pointer(LScalarTable.BatchF32.ArrayMin), Pointer(LNEONTable.BatchF32.ArrayMin));
-  AssertSlotReusesScalar('BatchF32.ArrayMax', Pointer(LScalarTable.BatchF32.ArrayMax), Pointer(LNEONTable.BatchF32.ArrayMax));
-  AssertSlotReusesScalar('BatchF32.ArrayAbs', Pointer(LScalarTable.BatchF32.ArrayAbs), Pointer(LNEONTable.BatchF32.ArrayAbs));
-  AssertSlotReusesScalar('BatchF32.ArrayNeg', Pointer(LScalarTable.BatchF32.ArrayNeg), Pointer(LNEONTable.BatchF32.ArrayNeg));
+  AssertSlotReusesScalar('BatchF32.ArraySqrt', Pointer(LScalarTable.BatchF32.ArraySqrt), Pointer(LNEONTable.BatchF32.ArraySqrt));
+  AssertSlotReusesScalar('BatchF32.ArrayFma', Pointer(LScalarTable.BatchF32.ArrayFma), Pointer(LNEONTable.BatchF32.ArrayFma));
+  AssertSlotReusesScalar('BatchF32.ReduceSum', Pointer(LScalarTable.BatchF32.ReduceSum), Pointer(LNEONTable.BatchF32.ReduceSum));
   AssertSlotReusesScalar('BatchF64.ArrayAdd', Pointer(LScalarTable.BatchF64.ArrayAdd), Pointer(LNEONTable.BatchF64.ArrayAdd));
   AssertSlotReusesScalar('BatchInteger.ArrayAddI32', Pointer(LScalarTable.BatchInteger.ArrayAddI32), Pointer(LNEONTable.BatchInteger.ArrayAddI32));
 end;
@@ -6973,6 +6970,10 @@ begin
   AssertSourceContains('NEONArrayAddF32 asm', 'procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('NEONArraySubF32 asm', 'procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('NEONArrayMulF32 asm', 'procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayMinF32 asm', 'procedure NEONArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayMaxF32 asm', 'procedure NEONArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAbsF32 asm', 'procedure NEONArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayNegF32 asm', 'procedure NEONArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('SumBytes_NEON asm', 'function SumBytes_NEON(p: Pointer; len: SizeUInt): UInt64; assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('MinMaxBytes_NEON asm', 'procedure MinMaxBytes_NEON(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('CountByte_NEON asm', 'function CountByte_NEON(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; assembler; nostackframe;', LAsmFacadeSource);
@@ -6992,6 +6993,10 @@ begin
   AssertSourceContains('NEONArrayAddF32 scalar fallback', 'ScalarArrayAddF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('NEONArraySubF32 scalar fallback', 'ScalarArraySubF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('NEONArrayMulF32 scalar fallback', 'ScalarArrayMulF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayMinF32 scalar fallback', 'ScalarArrayMinF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayMaxF32 scalar fallback', 'ScalarArrayMaxF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAbsF32 scalar fallback', 'ScalarArrayAbsF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayNegF32 scalar fallback', 'ScalarArrayNegF32(aSrc, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('SumBytes_NEON scalar fallback', 'Result := SumBytes_Scalar(p, len);', LScalarFacadeSource);
   AssertSourceContains('MinMaxBytes_NEON scalar fallback', 'MinMaxBytes_Scalar(p, len, minVal, maxVal);', LScalarFacadeSource);
   AssertSourceContains('CountByte_NEON scalar fallback', 'Result := CountByte_Scalar(p, len, value);', LScalarFacadeSource);
@@ -7011,6 +7016,10 @@ begin
   CheckTrue(Pos('table.batchf32.arrayadd := @neonarrayaddf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAddF32 for Phase 23a BatchF32 leaves');
   CheckTrue(Pos('table.batchf32.arraysub := @neonarraysubf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArraySubF32 for Phase 23a BatchF32 leaves');
   CheckTrue(Pos('table.batchf32.arraymul := @neonarraymulf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMulF32 for Phase 23a BatchF32 leaves');
+  CheckTrue(Pos('table.batchf32.arraymin := @neonarrayminf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMinF32 for Phase 23b BatchF32 leaves');
+  CheckTrue(Pos('table.batchf32.arraymax := @neonarraymaxf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMaxF32 for Phase 23b BatchF32 leaves');
+  CheckTrue(Pos('table.batchf32.arrayabs := @neonarrayabsf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAbsF32 for Phase 23b BatchF32 leaves');
+  CheckTrue(Pos('table.batchf32.arrayneg := @neonarraynegf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayNegF32 for Phase 23b BatchF32 leaves');
   CheckTrue(Pos('table.memory.sumbytes := @sumbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire SumBytes_NEON explicitly so asm builds keep the native facade slot');
   CheckTrue(Pos('table.memory.minmaxbytes := @minmaxbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MinMaxBytes_NEON explicitly so asm builds keep the native facade slot');
   CheckTrue(Pos('table.memory.countbyte := @countbyte_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire CountByte_NEON explicitly so asm builds keep the native facade slot');
@@ -7039,6 +7048,10 @@ begin
   AssertRuntimeSlotExpectation('BatchF32.ArrayAdd', Pointer(LScalarTable.BatchF32.ArrayAdd), Pointer(LNEONTable.BatchF32.ArrayAdd));
   AssertRuntimeSlotExpectation('BatchF32.ArraySub', Pointer(LScalarTable.BatchF32.ArraySub), Pointer(LNEONTable.BatchF32.ArraySub));
   AssertRuntimeSlotExpectation('BatchF32.ArrayMul', Pointer(LScalarTable.BatchF32.ArrayMul), Pointer(LNEONTable.BatchF32.ArrayMul));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayMin', Pointer(LScalarTable.BatchF32.ArrayMin), Pointer(LNEONTable.BatchF32.ArrayMin));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayMax', Pointer(LScalarTable.BatchF32.ArrayMax), Pointer(LNEONTable.BatchF32.ArrayMax));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayAbs', Pointer(LScalarTable.BatchF32.ArrayAbs), Pointer(LNEONTable.BatchF32.ArrayAbs));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayNeg', Pointer(LScalarTable.BatchF32.ArrayNeg), Pointer(LNEONTable.BatchF32.ArrayNeg));
   AssertRuntimeSlotExpectation('SumBytes', Pointer(LScalarTable.Memory.SumBytes), Pointer(LNEONTable.Memory.SumBytes));
   AssertRuntimeSlotExpectation('MinMaxBytes', Pointer(LScalarTable.Memory.MinMaxBytes), Pointer(LNEONTable.Memory.MinMaxBytes));
   AssertRuntimeSlotExpectation('CountByte', Pointer(LScalarTable.Memory.CountByte), Pointer(LNEONTable.Memory.CountByte));

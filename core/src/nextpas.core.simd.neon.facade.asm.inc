@@ -1215,3 +1215,142 @@ asm
 .Larrmul_done:
   ret
 end;
+
+// === Phase 23b: NEON BatchF32 ArrayMin / ArrayMax / ArrayAbs / ArrayNeg ===
+// Min/Max ABI: x0=aSrc1, x1=aSrc2, x2=aDst, x3=aCount
+// Abs/Neg ABI: x0=aSrc, x1=aDst, x2=aCount
+// ICE-safe: ldp/fmov/ins + fmin/fmax/fabs/fneg + umov/stp; scalar s-reg tail.
+
+procedure NEONArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larrmin_done
+
+.Larrmin_loop4:
+  cmp   x3, #4
+  b.lo  .Larrmin_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fmin  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larrmin_loop4
+
+.Larrmin_tail:
+  cbz   x3, .Larrmin_done
+.Larrmin_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fmin  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larrmin_tail_loop
+
+.Larrmin_done:
+  ret
+end;
+
+procedure NEONArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larrmax_done
+
+.Larrmax_loop4:
+  cmp   x3, #4
+  b.lo  .Larrmax_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fmax  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larrmax_loop4
+
+.Larrmax_tail:
+  cbz   x3, .Larrmax_done
+.Larrmax_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fmax  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larrmax_tail_loop
+
+.Larrmax_done:
+  ret
+end;
+
+procedure NEONArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x2, .Larrabs_done
+
+.Larrabs_loop4:
+  cmp   x2, #4
+  b.lo  .Larrabs_tail
+  ldp   x3, x4, [x0], #16
+  fmov  d0, x3
+  fmov  d1, x4
+  ins   v0.d[1], v1.d[0]
+  fabs  v0.4s, v0.4s
+  umov  x3, v0.d[0]
+  umov  x4, v0.d[1]
+  stp   x3, x4, [x1], #16
+  sub   x2, x2, #4
+  b     .Larrabs_loop4
+
+.Larrabs_tail:
+  cbz   x2, .Larrabs_done
+.Larrabs_tail_loop:
+  ldr   s0, [x0], #4
+  fabs  s0, s0
+  str   s0, [x1], #4
+  subs  x2, x2, #1
+  b.ne  .Larrabs_tail_loop
+
+.Larrabs_done:
+  ret
+end;
+
+procedure NEONArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x2, .Larrneg_done
+
+.Larrneg_loop4:
+  cmp   x2, #4
+  b.lo  .Larrneg_tail
+  ldp   x3, x4, [x0], #16
+  fmov  d0, x3
+  fmov  d1, x4
+  ins   v0.d[1], v1.d[0]
+  fneg  v0.4s, v0.4s
+  umov  x3, v0.d[0]
+  umov  x4, v0.d[1]
+  stp   x3, x4, [x1], #16
+  sub   x2, x2, #4
+  b     .Larrneg_loop4
+
+.Larrneg_tail:
+  cbz   x2, .Larrneg_done
+.Larrneg_tail_loop:
+  ldr   s0, [x0], #4
+  fneg  s0, s0
+  str   s0, [x1], #4
+  subs  x2, x2, #1
+  b.ne  .Larrneg_tail_loop
+
+.Larrneg_done:
+  ret
+end;

@@ -53,7 +53,7 @@ Facade (flat public API)
 
 **NEON Memory**：Phase 22 已关闭全部 15 槽（asm 叶 + register，仅 `NEXTPAS_SIMD_NEON_ASM_ENABLED` 下接管；非 asm 编译保留 scalar fallback 符号）。
 
-**NEON Batch 进度**：Phase 23a 已接管 `BatchF32.ArrayAdd/Sub/Mul`（ASM opt-in）；其余 `BatchF32` 槽 + 全部 `BatchF64` / `BatchInteger` 仍继承 scalar → S23b+。
+**NEON Batch 进度**：Phase 23a/23b 已接管 `BatchF32` Add/Sub/Mul/Min/Max/Abs/Neg（ASM opt-in；Div 未接）；其余 `BatchF32` 槽 + 全部 `BatchF64` / `BatchInteger` 仍继承 scalar。
 
 ### 1.4 验证真相
 
@@ -129,7 +129,7 @@ Facade (flat public API)
 |----|------|
 | **目标** | 在 ARM 上提供与 x86 对齐的 **高频** Batch 路径（非整表抄写） |
 | **23a（✅）** | `BatchF32` `ArrayAdd` / `ArraySub` / `ArrayMul`：AArch64 asm 叶 + register（仅 `NEXTPAS_SIMD_NEON_ASM_ENABLED`）+ 非 asm scalar companion；契约 FacadeFastSlots 运行时绑定期望 |
-| **23b（下一切）** | `Min` / `Max` / `Abs` / `Neg`（可选 `Div`） |
+| **23b（✅）** | `Min` / `Max` / `Abs` / `Neg`（`Div` 推迟） |
 | **交付物** | `BatchF32` 代表集 + register + parity smoke；能力位策略写清 |
 | **依赖** | Phase 22 Memory 叶已稳定 |
 | **验收** | neon-optin 契约 + 语义 smoke；未实现槽继续 scalar 继承并有注释/契约 |
@@ -188,7 +188,7 @@ P20 文档真相面 ──► P21 api-coverage 绿
    P26 编译器（阻塞） / P27 新 ISA（阻塞）
 ```
 
-**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **S23b** — NEON `BatchF32` Min/Max/Abs/Neg）。
+**默认下一刀 / Goal CURRENT**：见 [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（现为 **M-C1** — math consumer smoke）。
 不要用聊天「继续」驱动；按队列卡执行并翻 `CURRENT`。
 
 ---
@@ -260,8 +260,8 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 
 ## 9. 当前指针
 
-- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=S23b**）
-- **活动阶段**: Phase 23b — NEON BatchF32 Min/Max/Abs/Neg（23a 已收 ArrayAdd/Sub/Mul；Memory 15/15 已由 Phase 22 收口）
+- **Goal 队列**: [`../math-simd/GOAL_QUEUE.md`](../math-simd/GOAL_QUEUE.md)（**CURRENT=M-C1**）
+- **活动阶段**: Goal CURRENT=M-C1（Phase 23a/23b BatchF32 代表集已收；Memory 15/15 已由 Phase 22 收口）
 - **已收口**: Phase 20–22；G0 goal 队列
 - **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等
 
@@ -273,3 +273,4 @@ G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Ph
 - 2026-07-17: Phase 22a NEON MemCopy/MemSet/MemDiffRange asm 叶与契约翻转。
 - 2026-07-17: Phase 22b Memory 15/15；G0 `GOAL_QUEUE.md`；默认下一刀 S23a。
 - 2026-07-17: Phase 23a NEON BatchF32 ArrayAdd/Sub/Mul 真叶；CURRENT→S23b。
+- 2026-07-17: Phase 23b NEON BatchF32 Min/Max/Abs/Neg 真叶（Div 推迟）；CURRENT→M-C1。

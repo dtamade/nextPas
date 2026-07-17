@@ -1,7 +1,7 @@
 # math-simd Goal Queue
 
-> Last updated: 2026-07-17  
-> Lane: `math-simd` worktree  
+> Last updated: 2026-07-17
+> Lane: `math-simd` worktree
 > Purpose: **single CURRENT pointer** so agents run end-to-end cards without human “继续”.
 
 ## How to execute (agent contract)
@@ -35,7 +35,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=S23b
+CURRENT=M-C1
 ```
 
 ---
@@ -79,11 +79,11 @@ CURRENT=S23b
 
 **Pattern:** same ownership as Phase 22 Memory — real asm leaf + non-asm scalar symbol + register only when ASM enabled. Names match `static.inc` (`NEONArray*F32`).
 
-### S23b — NEON BatchF32 Min/Max/Abs/Neg (+ optional Div)  【CURRENT】
+### S23b — NEON BatchF32 Min/Max/Abs/Neg (+ optional Div)  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
+| **STATUS** | done (Min/Max/Abs/Neg; Div deferred) |
 | **NEXT** | M-C1 |
 | **WHY** | Second high-frequency BatchF32 band without filling F64/Integer |
 | **IN_SCOPE_PATHS** | Same neon/batch/test/docs set as S23a |
@@ -158,7 +158,7 @@ CURRENT=S23b
 
 ## Wave 2 — math residual (secondary)
 
-### M-C1 — math consumer smoke after NEON Batch
+### M-C1 — math consumer smoke after NEON Batch  【CURRENT】
 
 | Field | Content |
 |-------|---------|
@@ -259,29 +259,29 @@ When CURRENT=`IDLE`: lane has no in-lane code goal. Agent only re-verifies gates
 
 ### simd lane-complete
 
-- [x] Nested dispatch + honest ownership discipline  
-- [x] NEON Memory 15/15 + SharedMask  
-- [ ] NEON BatchF32 high-frequency representative set (S23a/S23b)  
-- [ ] RVV honesty (S24a)  
-- [ ] Perf method + hotspot close-or-revise (S25a/b)  
-- [ ] Docs CURRENT coherent  
+- [x] Nested dispatch + honest ownership discipline
+- [x] NEON Memory 15/15 + SharedMask
+- [x] NEON BatchF32 high-frequency representative set (S23a/S23b; Div deferred)
+- [ ] RVV honesty (S24a)
+- [ ] Perf method + hotspot close-or-revise (S25a/b)
+- [ ] Docs CURRENT coherent
 
 ### math lane-complete
 
-- [x] M0–M8 available-host gates  
-- [x] Public batch F32/F64 via public simd  
-- [ ] vec.batch Double minimal parity **or** explicit frozen non-goal (M-V1)  
-- [ ] Residual backlog clean (M-V2)  
-- [ ] Consumer smoke after Batch leaves (M-C1)  
-- [x] M9/macOS explicitly blocked (not silent)  
+- [x] M0–M8 available-host gates
+- [x] Public batch F32/F64 via public simd
+- [ ] vec.batch Double minimal parity **or** explicit frozen non-goal (M-V1)
+- [ ] Residual backlog clean (M-V2)
+- [ ] Consumer smoke after Batch leaves (M-C1)
+- [x] M9/macOS explicitly blocked (not silent)
 
 ### Non-goals (always)
 
-- Dead scalar wrappers registered as “native”  
-- math importing private simd backend units  
-- Value-type methods → SIMD without profile + design review  
-- raw-merge long-lived lane to main  
-- Claiming blocked hardware/compiler work done  
+- Dead scalar wrappers registered as “native”
+- math importing private simd backend units
+- Value-type methods → SIMD without profile + design review
+- raw-merge long-lived lane to main
+- Claiming blocked hardware/compiler work done
 
 ---
 

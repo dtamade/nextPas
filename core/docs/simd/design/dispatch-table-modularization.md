@@ -164,7 +164,7 @@ end;
 3. **NEON / RVV 对齐审计（路径级）**：
    - NEON / RVV 与 x86 使用**同一嵌套组名**（`table.CoreVectors.*` / `Memory.*` / `Mask.*`…），均 `FillBaseDispatchTable` 播种后按需 override
    - **槽级覆盖差距是刻意的**（非路径错位）：靠 baseline 继承，不在本 phase 补全 native 实现
-     - NEON：有 `CoreVectors`（~332）+ 完整 `Memory`（15/15，Phase 22）+ 完整 `Mask`（20，绑定 portable `SharedMask*`，非 `NEONMask*` 死包装）；`BatchF32` 已有 ArrayAdd/Sub/Mul（Phase 23a，ASM opt-in）；其余 Batch* 仍继承 scalar
+     - NEON：有 `CoreVectors`（~332）+ 完整 `Memory`（15/15，Phase 22）+ 完整 `Mask`（20，绑定 portable `SharedMask*`，非 `NEONMask*` 死包装）；`BatchF32` 已有 Add/Sub/Mul/Min/Max/Abs/Neg（Phase 23a/23b，ASM opt-in）；其余 Batch* 仍继承 scalar
      - RVV：有 `CoreVectors`（~412）+ 完整 `Mask`（20）；**无** Memory/Batch* override
      - x86 SSE2/AVX2：Batch/Memory/Mask 覆盖最全，供 clone 链（如 AVX2←SSE2）复用
 4. 文档与 roadmap 记为 Phase 19 完成
@@ -172,7 +172,7 @@ end;
 ### Post-Phase-19 Wave B (NEON coverage) — ✅ (2026-07-17)
 1. `nextpas.core.simd.mask`：`SharedMask*` 可移植（x86_64 保留 BSF asm；其他 host 用 Pascal；PopCount 全 host SWAR Pascal）
 2. NEON register 绑定全部 20 个 Mask 槽到 `SharedMask*`，始终声明 `scMaskedOps`（与 SSE2 always-on Mask 模型对齐；不造 `NEONMask*` 死包装）
-3. Memory 15/15 已由 Phase 22 接管（ASM opt-in）；BatchF32 Add/Sub/Mul 已由 Phase 23a 接管；其余 Batch* 保持 scalar 继承 + source-contract 锁定 → S23b+
+3. Memory 15/15 已由 Phase 22 接管（ASM opt-in）；BatchF32 Add/Sub/Mul/Min/Max/Abs/Neg 已由 Phase 23a/23b 接管；其余 Batch* 保持 scalar 继承 + source-contract 锁定
 4. DispatchAPI 契约：SharedMask ownership、禁止 `NEONMask*`、vector-asm disable 后仍保持 `scMaskedOps`
 
 ## 风险评估

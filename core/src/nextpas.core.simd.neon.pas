@@ -91,6 +91,12 @@ procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
 
+// === Phase 23b: BatchF32 Array Min / Max / Abs / Neg ===
+procedure NEONArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+
 implementation
 
 uses
