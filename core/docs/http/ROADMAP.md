@@ -71,7 +71,8 @@ CHECKPOINT（不阻塞续波）:
 | Wave H Response metadata | 完成（FinalUrl + Version） |
 | Wave I Proxy auth | 完成（Basic only freeze；Digest/NTLM Park） |
 | Wave J Error Op hygiene | 完成（热点 CreateOp + source-contract + CONTRACT Op 表） |
-| **下一执行点** | **Era 0 / Wave K — Surface freeze audit** |
+| Wave K Surface freeze | 完成（工厂白名单已冻；无 deprecated；ARCHITECTURE 对齐） |
+| **下一执行点** | **Era 0 / Wave L′ — Doc dual-status kill** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
@@ -133,19 +134,20 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | 扫 facade / message 工厂：无残留 deprecated 死面；tests/examples 只走 `THttpRequestBuilder` + 白名单 `NewRequest`/`NewGetRequest`；删无引用死入口 |
 | **Don't** | 新公开 API 家族；大范围重命名 |
 | **Done when** | 无生产 deprecated 请求工厂；examples/tests 编译路径干净；CONTRACT/README 与源码一致 |
 | **Gates** | `test_http_contract` + `test_http_examples`（或本波触及 suite）+ `make hygiene` |
 | **Land paths** | http 源/测/文档/examples |
 | **Next** | Wave L′ |
+| **Evidence** | 白名单仅 `NewRequest(Method,TUrl|string)`+`NewGetRequest`；`NewStreamingRequest`/多参已删除；contract 31p + examples 5p；ARCHITECTURE 去 stale deprecated 叙述 |
 
 ### Wave L′ — Doc dual-status kill
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | GOAL_TREE / API_COVERAGE / README 顶部只保留「NEXT → ROADMAP Wave X」指针；去掉与 ROADMAP 重复的下一执行点双写；archive 索引不膨胀 |
 | **Don't** | 重写历史叙事；把 archive 当 backlog |
 | **Done when** | 全局搜「下一执行点」仅 ROADMAP 有权威表；GOAL_TREE Current Position 一行指针 |
@@ -386,15 +388,15 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave K 仍是 NEXT
-2. 扫 facade/message 工厂与 tests/examples：无 deprecated 死面
-3. 必要时修路径 + contract/examples gate
+1. 打开本文件确认 Wave L′ 仍是 NEXT
+2. GOAL_TREE / API_COVERAGE / README 只保留 NEXT → ROADMAP 指针
+3. docs-only diff --check；可选 hygiene
 4. path-limited land main
-5. 本文件：Wave K → landed；Wave L′ → NEXT；changelog 一行
+5. 本文件：Wave L′ → landed；Wave C1 → NEXT；changelog 一行
 6. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave K，然后自动续波。**
+**没有用户指令时：默认执行 Wave L′，然后自动续波。**
 
 ---
 
