@@ -3,7 +3,6 @@ program test_lockfree_lru;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.lru,
   nextpas.core.lockfree,
   nextpas.core.atomic,

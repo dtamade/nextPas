@@ -4,6 +4,9 @@ unit nextpas.core.platform.console;
 
 interface
 
+uses
+  nextpas.core.platform.posix.errno;
+
 { POSIX raw/read/write/wait support is Linux-only; Windows uses a separate
   standard-handle implementation; macOS/FreeBSD return PLATFORM_ERR_UNSUPPORTED
   or cwError for raw/read/write/wait. }
@@ -413,10 +416,10 @@ begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 begin Result := cwError; end;
 function platform_console_write_str(AStr: PAnsiChar; ALen: Int32): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_write_colored(AStr: PAnsiChar; ALen: Int32;
   const AFg: AnsiString): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_cursor_move(ACol, ARow: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_clear_line: Int32;
@@ -736,10 +739,10 @@ begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_wait_readable(AFd: Int32; ATimeoutMs: Int64): TPlatformConsoleWait;
 begin Result := cwError; end;
 function platform_console_write_str(AStr: PAnsiChar; ALen: Int32): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_write_colored(AStr: PAnsiChar; ALen: Int32;
   const AFg: AnsiString): Int32;
-begin Result := -1; end;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_cursor_move(ACol, ARow: Int32): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_console_clear_line: Int32;

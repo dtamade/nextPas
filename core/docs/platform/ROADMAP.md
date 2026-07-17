@@ -1,8 +1,11 @@
 # nextPas Platform 总路线图
 
+> **Historical.** Current phase state lives in [goal-tree.md](goal-tree.md).
+> Planning snapshot may also appear in [ROADMAP-v2.md](ROADMAP-v2.md); verify against goal-tree.
+
 **日期**: 2026-07-06
 **版本**: v1.0
-**状态**: 活跃维护
+**状态**: historical
 
 ---
 

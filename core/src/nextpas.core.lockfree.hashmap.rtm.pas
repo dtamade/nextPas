@@ -86,10 +86,14 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 constructor TRtmHashMapImpl.Create(const AInitialCapacity: PtrUInt);
 begin
+  if IsManagedType(TKey) then
+    raise EArgumentError.Create('TRtmHashMap: TKey must be unmanaged (no string/interface/dynarray)');
+  if IsManagedType(TValue) then
+    raise EArgumentError.Create('TRtmHashMap: TValue must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   FHashMap := THashMap.Create(AInitialCapacity);
   FRtmSupported := RtmIsSupported;
@@ -97,7 +101,8 @@ end;
 
 destructor TRtmHashMapImpl.Destroy;
 begin
-  FreeAndNil(FHashMap);
+  FHashMap.Free;
+  FHashMap := nil;
   inherited;
 end;
 

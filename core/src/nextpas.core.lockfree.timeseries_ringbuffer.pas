@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.timeseries_ringbuffer;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   TSRING_DEFAULT_CAPACITY = 1024;
@@ -105,11 +105,12 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.lockfree.base;
+  nextpas.core.lockfree.base,
+  nextpas.core.platform.time;
 
 function TTimeSeriesRingBuffer.GetNowMs: Int64;
 begin
-  Result := Int64(GetTickCount64);
+  Result := Int64(platform_monotonic_ns div 1000000);
 end;
 
 procedure TTimeSeriesRingBuffer.Lock;

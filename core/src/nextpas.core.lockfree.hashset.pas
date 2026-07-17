@@ -65,8 +65,13 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 constructor TConcurrentHashSetImpl.Create(const AInitialCapacity: Integer);
 begin
+  if IsManagedType(TKey) then
+    raise EArgumentError.Create('TConcurrentHashSet: TKey must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   FMap := TMap.Create(AInitialCapacity);
 end;

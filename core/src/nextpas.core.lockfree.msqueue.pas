@@ -22,6 +22,8 @@ type
       - Sentinel 节点简化空队列边界处理
       - 支持 Close 语义
       - 节点池自动扩容
+      - 生命周期: Close → join producers/consumers → Free
+      - Destroy 会 Close；Free 前必须 quiescent（无并发出入队）
  * @concurrency Thread-safe (see source for details).
   }
   generic TLockFreeMsQueueImpl<T> = class
@@ -228,7 +230,20 @@ begin
 end;
 
 destructor TLockFreeMsQueueImpl.Destroy;
+var
+  LV: T;
 begin
+  { Failed construction (e.g. managed-type reject before node storage init)
+    leaves FNodes empty. Drain would index FNodes[head] and AV. }
+  if Length(FNodes) = 0 then
+  begin
+    inherited Destroy;
+    Exit;
+  end;
+  { Reject new publishes; drain remaining values while quiescent.
+    Callers must still join concurrent producers/consumers before Free. }
+  Close;
+  while TryDequeue(LV) do;
   SetLength(FNodes, 0);
   SetLength(FFreeList, 0);
   inherited Destroy;

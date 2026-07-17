@@ -3,7 +3,7 @@ program test_lockfree_slidingwindow;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.platform.thread,
   nextpas.core.lockfree.slidingwindow,
   nextpas.core.errors,
   nextpas.core.test;
@@ -74,7 +74,7 @@ begin
   try
     Check(SW.TryAcquire = swAllowed, 'Initial request should be allowed');
     Check(SW.TryAcquire = swRejected, 'Current window should be full');
-    Sleep(50);
+    platform_thread_sleep_ms(50);
     Check(SW.TryAcquire = swAllowed, 'Two elapsed windows should clear prior weight');
   finally
     SW.Free;

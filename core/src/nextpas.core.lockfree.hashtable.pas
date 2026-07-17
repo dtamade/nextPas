@@ -97,6 +97,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 function TLockFreeHashTableImpl.HashKey(const AKey: TKey): UInt32;
 var
   LBytes: PByte;
@@ -233,6 +236,10 @@ constructor TLockFreeHashTableImpl.Create(ACapacity: Int32);
 var
   I: Int32;
 begin
+  if IsManagedType(TKey) then
+    raise EArgumentError.Create('TLockFreeHashTable: TKey must be unmanaged (no string/interface/dynarray)');
+  if IsManagedType(TValue) then
+    raise EArgumentError.Create('TLockFreeHashTable: TValue must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   if ACapacity < 16 then
     ACapacity := 16;

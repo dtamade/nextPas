@@ -5,7 +5,8 @@ unit nextpas.core.platform.io;
 interface
 
 uses
-  nextpas.core.platform.io.base;
+  nextpas.core.platform.io.base,
+  nextpas.core.platform.posix.errno;
 
 {** @desc 创建 I/O 多路复用器
     @param APoller 输出复用器句柄

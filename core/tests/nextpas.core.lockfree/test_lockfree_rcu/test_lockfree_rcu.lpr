@@ -4,7 +4,6 @@ program test_lockfree_rcu;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.rcu,
   nextpas.core.lockfree,
   nextpas.core.atomic,

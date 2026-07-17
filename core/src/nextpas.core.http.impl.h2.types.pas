@@ -182,6 +182,8 @@ type
 
   TH2ClientTransportOptions = record
     Timeout: Int64;
+    { OS dial + post-dial first-write budget (ms). 0 = fall back to Timeout. }
+    ConnectTimeout: Int64;
     MaxPoolSize: Int32;
     HeaderTableSize: UInt32;
     EnablePush: Boolean;
@@ -196,6 +198,8 @@ type
     class function Default: TH2ClientTransportOptions; static;
     procedure Validate;
     function ToSettings: TH2Settings;
+    { ConnectTimeout if >0, else Timeout (matches THttpClientOptions). }
+    function EffectiveConnectTimeout: Int64;
   end;
 
   { Generic flow-control bookkeeping shared by send and receive windows.
@@ -379,6 +383,7 @@ end;
 class function TH2ClientTransportOptions.Default: TH2ClientTransportOptions;
 begin
   Result.Timeout := 30000;
+  Result.ConnectTimeout := 0;
   Result.MaxPoolSize := 64;
   Result.HeaderTableSize := H2_DEFAULT_HEADER_TABLE_SIZE;
   Result.EnablePush := False;
@@ -398,7 +403,16 @@ begin
   EnsureValidConnectionWindowSize(InitialConnectionWindowSize);
   EnsureValidMaxFrameSize(MaxFrameSize);
   EnsureNonNegativeTimeout(Timeout, 'Timeout');
+  EnsureNonNegativeTimeout(ConnectTimeout, 'ConnectTimeout');
   EnsureNonNegativeTimeout(PingTimeout, 'PingTimeout');
+end;
+
+function TH2ClientTransportOptions.EffectiveConnectTimeout: Int64;
+begin
+  if ConnectTimeout > 0 then
+    Result := ConnectTimeout
+  else
+    Result := Timeout;
 end;
 
 function TH2ClientTransportOptions.ToSettings: TH2Settings;

@@ -5,6 +5,7 @@ unit nextpas.core.platform.socket;
 interface
 
 uses
+  nextpas.core.platform.posix.errno,
   nextpas.core.platform.socket.base,
 {$IFDEF NEXTPAS_UNIX}
   nextpas.core.platform.posix.base,
@@ -1203,6 +1204,8 @@ begin
   ARecvd := 0;
   if ABuf = nil then
     Exit(PLATFORM_ERR_INVALID);
+  if AAddrLen = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if ALen <= 0 then
     Exit(0);
   LResult := winsock_recvfrom(TSocket(ASocket.Value), ABuf, ALen, AFlags, AAddr, AAddrLen);
@@ -1455,6 +1458,8 @@ function platform_socket_pair(ADomain, AType, AProtocol: Int32;
   out ASocket1, ASocket2: TPlatformSocket): Int32;
 begin
   { Windows doesn't have socketpair, use loopback connect }
+  ASocket1.Value := -1;
+  ASocket2.Value := -1;
   Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
@@ -1601,11 +1606,11 @@ finalization
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-function platform_socket_create(const ADomain, AType, AProtocol: Int32; out ASocket: TPlatformSocket): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_create(const ADomain, AType, AProtocol: Int32; out ASocket: TPlatformSocket): Int32; begin ASocket.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_close(var ASocket: TPlatformSocket): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_bind(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_listen(const ASocket: TPlatformSocket; ABacklog: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_socket_accept(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer; out AClient: TPlatformSocket): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_accept(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer; out AClient: TPlatformSocket): Int32; begin AClient.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_connect(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Int32): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_send(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ASent: Int32): Int32; begin ASent := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_recv(const ASocket: TPlatformSocket; ABuf: Pointer; ALen: Int32; AFlags: Int32; out ARecvd: Int32): Int32; begin ARecvd := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;

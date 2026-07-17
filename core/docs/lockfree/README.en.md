@@ -2,14 +2,36 @@
 
 [中文版](README.md)
 
-`nextpas.core.lockfree` provides reusable lock-free-oriented / non-blocking fast-path data structures for nextpas.core internals. This module primarily serves runtime/framework internal hot paths rather than claiming to be a complete replacement for Rust std, Go std, or C++ std concurrent containers; lock-free progress claims only apply to paths where the underlying platform atomic operations are themselves lock-free.
+`nextpas.core.lockfree` provides reusable lock-free-oriented / concurrent data structures for nextpas.core internals. This module primarily serves runtime/framework internal hot paths rather than claiming to be a complete replacement for Rust std, Go std, or C++ std concurrent containers; **lock-free progress claims only apply to types listed as lock-free in the matrix**, and only where underlying platform atomics are themselves lock-free.
 
 All structures only accept unmanaged element types; `string`, interface, dynamic array and other managed types are rejected.
-`TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.
+All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TSpmcQueue`, `TSegQueue`, `TLockFreeMsQueue`, `TLockFreeStack`, `TWorkStealingDeque`, `TLockFreeChannel`, `TLockFreeChannelSpsc`, `TShardedHashMap` keys/values) reject managed types at construction with `EArgumentError`.
 
-## Module Layers
+**Layer**: L1 (depends on L0 `base` + `atomic`; see `core/docs/core-module-registry.md`).
 
-The current live source set consists of these units:
+## Progress-guarantee matrix
+
+| Class | Progress model | Sync mechanism | Default facade (T1) |
+| --- | --- | --- | --- |
+| SPSC/MPMC/SPMC/SegQueue/MSQueue/Stack/Channel | lock-free | atomics | yes |
+| MPSC | lock-free producers + single-owner consumer | atomics | yes |
+| WorkStealingDeque | lock-free + single-owner push/pop | atomics | yes |
+| EBR/Hazard | reclamation domains | atomics + TLS/HP | yes |
+| Selector | concurrent multiplexer | poll/backoff | yes |
+| ShardedHashMap / ConcurrentHashMap | **lock-based concurrent** | per-shard spin lock | yes |
+| Trees/caches/CRDT/RTM/NUMA/most lockfree.* extras | lock-based concurrent or specialized | see unit docs | **no** — direct unit import |
+
+## Tiered surface
+
+| Tier | Contents | How to use |
+| --- | --- | --- |
+| **T1 runtime core** | queues, stack, deque, EBR/Hazard, channel, selector, sharded hashmap | `uses nextpas.core.lockfree;` |
+| **T2 concurrent containers** | skiplist, btree, caches, bloom, bag, multimap, … | `uses nextpas.core.lockfree.<unit>;` |
+| **T3 research** | RTM/NUMA maps, experimental | direct unit only |
+
+## Module Layers (T1 live set)
+
+The current T1 live source set consists of these units:
 
 | Unit | Responsibility |
 |------|---------------|
@@ -21,19 +43,16 @@ The current live source set consists of these units:
 | `nextpas.core.lockfree.stack` | `TLockFreeStack<T>`, bounded stack using tagged index to constrain ABA-sensitive top/free-list reuse risk. |
 | `nextpas.core.lockfree.deque` | `TWorkStealingDeque<T>`, bounded single-owner push/pop + multi-thief steal deque. |
 | `nextpas.core.lockfree.ebr` | `TEbrDomain` + `TEbrGuard`, conservative epoch-based reclamation domain. |
-| `nextpas.core.lockfree.hazard` | `THazardDomain` + `THazardThread`, Hazard Pointer memory reclamation domain. |
+| `nextpas.core.lockfree.hazard` | `THazardDomain` + `THazardGuard`, Hazard Pointer memory reclamation domain. |
 | `nextpas.core.lockfree.segqueue` | `TSegQueue<T>`, unbounded multi-producer/multi-consumer segment queue, recycling old segments via EBR. |
 | `nextpas.core.lockfree.spmc` | `TSpmcQueue<T>`, bounded single-producer/multi-consumer ring queue. |
-| `nextpas.core.lockfree.hashmap` | `TShardedHashMap<TKey, TValue>`, sharded-lock concurrent HashMap. |
+| `nextpas.core.lockfree.msqueue` | `TLockFreeMsQueue<T>`, Michael-Scott unbounded MPMC queue. |
+| `nextpas.core.lockfree.hashmap` | `TShardedHashMap<TKey, TValue>`, **sharded-lock** concurrent HashMap (not lock-free). |
 | `nextpas.core.lockfree.channel` | `TLockFreeChannel<T>`, bounded lock-free Channel, sequence-number driven MPMC channel. |
-| `nextpas.core.lockfree.channel.spsc` | `TLockFreeChannelSpsc<T>`, single-producer single-consumer bounded Channel, optimized for 1P1C. |
-| `nextpas.core.lockfree` | Aggregate facade. |
+| `nextpas.core.lockfree.selector` | `TLockFreeSelector<T>`, multi-channel multiplexer. |
+| `nextpas.core.lockfree` | **T1-only** default facade. |
 
-`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,
-`TLockFreeStack<T>`, `TWorkStealingDeque<T>`, `TSegQueue<T>`, `TSpmcQueue<T>`, `TShardedHashMap<TKey, TValue>`,
-`THazardDomain`, `TEbrDomain`, `TEbrGuard`, `TLockFreeChannel<T>`, `TLockFreeChannelSpsc<T>`,
-`TLockFreeSelector<T>` so consumers can use the public lockfree surface without
-importing implementation submodules directly.
+Default facade exposes only T1 types. `TLockFreeChannelSpsc` remains on `nextpas.core.lockfree.channel.spsc`.
 
 The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation
 bases. Keep variables and parameters on one public boundary; the wrappers are source-compatible
@@ -52,9 +71,10 @@ Batch APIs are convenience methods over consecutive single-element operations, n
 `TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
 `TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
 
-`TMpscQueue<T>` is a multi-producer, single-consumer queue. `Enqueue` is a procedure, not returning close result; `TryEnqueue`
-returns False after `Close`; `Close` only serves as consumer wait wakeup and termination signal. Callers must stop producers cooperatively,
-join producers, and drain the queue before destroying the object. `ApproxCount` is an atomic counter snapshot.
+`TMpscQueue<T>` is a multi-producer, single-consumer queue. After `Close`, `TryEnqueue` returns False and plain
+`Enqueue` raises `EInvalidOperationError` (aligned with `TLockFreeChannel.Send`). `Close` also wakes blocked
+consumers. Lifecycle: Close → join producers/waiters → Free. `Destroy` performs Close+drain but does not replace
+joining live producers. `ApproxCount` is an atomic counter snapshot.
 
 `TSegQueue<T>` is an unbounded MPMC queue based on segmented linked ring. `Enqueue` extends storage at segment granularity when the current tail segment has no successor; `TryEnqueue` returns False after `Close`; `TryDequeue` only returns success when the corresponding slot's sequence has been published. `ApproxCount` / `IsEmpty` are snapshot helpers over current enqueue/dequeue positions, not promising a shared linearization view under contention. `Close` does not affect reading of already-enqueued data.
 
@@ -64,8 +84,8 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` is a fixed-capacity stack: `TryPush` returns `False` when no free slot remains, and `IsEmpty` / `ApproxCount` are snapshot helpers over the current top-linked list rather than linearization guarantees under contention.
 
 `TWorkStealingDeque<T>` is a work-stealing deque: owner thread executes `TryPush` / `TryPop`, thief
-threads only execute `TrySteal`. Current implementation has no close/wait surface.
-`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
+threads only execute `TrySteal`. Supports `Close` / `IsClosed`: after Close, `TryPush` returns False; already-queued items remain drainable via `TryPop` / `TrySteal` (no wait/timeout surface).
+`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full or closed, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
 
 `TSpmcQueue<T>` is a single-producer, multi-consumer bounded queue. `TryEnqueue` is a non-blocking operation; `TryDequeue` has multiple consumers competing via CAS;
 `EnqueueWait` / `DequeueWait` block via wait-address seam; timeout versions use nanosecond timeouts.
@@ -80,7 +100,7 @@ rather than overflowing and continuing construction.
 
 `TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.
 `TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers. Enqueue calls admitted before observing the closed flag may still publish at their normal per-item linearization point; calls that observe `Close` fail, and consumers only treat closed-empty as terminal after no admitted producer can still publish.
-`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False, while plain `Enqueue` does not; callers must stop and join producers before destroy.
+`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False; plain `Enqueue` raises `EInvalidOperationError` after `Close`; callers must Close → join producers/waiters → Free.
 `TSegQueue<T>` permits multiple concurrent producers and consumers; segment retirement is internal and readers observe only FIFO dequeue success/failure.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
@@ -295,16 +315,17 @@ producer-side waiting operations should return failure, consumer-side can contin
 `TMpmcQueue<T>.Close` wakes already-blocked `EnqueueWait` / `DequeueWait` calls so blocked producers and consumers stop waiting even without a timeout.
 `TMpmcQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so blocked producers and consumers stop waiting promptly instead of sleeping until the full timeout.
 
-`TMpscQueue<T>`'s `Close` does not automatically fail `Enqueue`. It only wakes waiting consumers, and makes
-`DequeueWait` / `DequeueTimeout` return failure when currently empty. Before destruction, these must be satisfied:
+After `TMpscQueue<T>.Close`: `TryEnqueue` returns False, plain `Enqueue` raises `EInvalidOperationError`,
+and `DequeueWait` / `DequeueTimeout` return failure when currently empty. `Close` wakes blocked consumers.
+Before destruction, these must be satisfied:
 `TMpscQueue<T>.Close` wakes already-blocked `DequeueWait` consumers so a closed-empty queue stops waiting even without a timeout.
 `TMpscQueue<T>.Close` wakes already-blocked `DequeueTimeout` consumers so a closed-empty queue stops waiting promptly.
 
 1. `Close` has been called.
-2. Producers have stopped and joined.
-3. Consumer has drained the queue.
+2. Producers have stopped and joined (`Close` is not a join barrier).
+3. Consumer has drained the queue (or rely on Destroy Close+drain).
 
-Debug build `TMpscQueue.Destroy` retains close-before-destroy and drained-before-destroy asserts to enforce this discipline.
+`TMpscQueue.Destroy` calls `Close` then drains remaining nodes; callers must still join producers/waiters before `Free`.
 
 ## Atomic Dependency
 

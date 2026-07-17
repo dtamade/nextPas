@@ -5,7 +5,6 @@ program test_platform_memory_wine;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.platform.memory;
 

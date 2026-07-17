@@ -587,6 +587,13 @@ function HttpEnsureSuccess(const AResp: IHttpResponse;
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string; inline;
 {** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes; inline;
+{** @desc Ensure 2xx and parse response body as JSON document. }
+function HttpReadResponseJson(const AResp: IHttpResponse): IJsonDocument; overload; inline;
+{** @desc Same as HttpReadResponseJson, with method/URL prefix in error messages. }
+function HttpReadResponseJson(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IJsonDocument; overload; inline;
+{** @desc GET url, ensure 2xx, parse body as JSON document. Raises on non-2xx or invalid JSON. }
+function HttpGetJson(const AClient: IHttpClient; const AUrl: string): IJsonDocument; inline;
 {** @desc POST with body, ensure 2xx, return response body as string. Raises on non-2xx. }
 function HttpPostString(const AClient: IHttpClient;
   const AUrl, AContentType, ABody: string): string; inline;
@@ -1503,6 +1510,22 @@ end;
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
 begin
   Result := nextpas.core.http.client.HttpGetBytes(AClient, AUrl);
+end;
+
+function HttpReadResponseJson(const AResp: IHttpResponse): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseJson(AResp);
+end;
+
+function HttpReadResponseJson(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseJson(AResp, AMethod, AUrl);
+end;
+
+function HttpGetJson(const AClient: IHttpClient; const AUrl: string): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpGetJson(AClient, AUrl);
 end;
 
 function HttpPostString(const AClient: IHttpClient;

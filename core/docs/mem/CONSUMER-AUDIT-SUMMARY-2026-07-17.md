@@ -1,7 +1,7 @@
 # Consumer Audit Summary — 2026-07-17
 
-**完整报告**: [CONSUMER-AUDIT-FINDINGS-2026-07-17.md](CONSUMER-AUDIT-FINDINGS-2026-07-17.md)  
-**状态**: **FIX CLOSED**（审计 + 全修 slice）  
+**完整报告**: [CONSUMER-AUDIT-FINDINGS-2026-07-17.md](CONSUMER-AUDIT-FINDINGS-2026-07-17.md)
+**状态**: **FIX CLOSED**（审计 + 全修 slice）
 **分支**: `mem` · worktree `.worktrees/mem`
 
 ## 一句话

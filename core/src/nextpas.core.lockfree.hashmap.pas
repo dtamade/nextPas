@@ -377,6 +377,10 @@ var
   LI: PtrUInt;
   LCap: PtrUInt;
 begin
+  if IsManagedType(TKey) then
+    raise EArgumentError.Create('TShardedHashMap: TKey must be unmanaged (no string/interface/dynarray)');
+  if IsManagedType(TValue) then
+    raise EArgumentError.Create('TShardedHashMap: TValue must be unmanaged (no string/interface/dynarray)');
   if SizeOf(TKey) = 0 then
     raise EArgumentError.Create('TShardedHashMap: TKey must have non-zero size');
   inherited Create;
@@ -394,6 +398,12 @@ destructor TShardedHashMapImpl.Destroy;
 var
   LI: PtrUInt;
 begin
+  { Failed construction leaves FShardCount=0; guard against PtrUInt underflow. }
+  if FShardCount = 0 then
+  begin
+    inherited;
+    Exit;
+  end;
   for LI := 0 to FShardCount - 1 do
     SetLength(FShards[LI].Entries, 0);
   inherited;

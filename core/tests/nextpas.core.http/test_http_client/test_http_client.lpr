@@ -23,6 +23,7 @@ uses
   nextpas.core.http.router,
   nextpas.core.http.server,
   nextpas.core.http.impl.h1,
+  nextpas.core.http.impl.tls.stream,
   nextpas.core.http.client,
   nextpas.core.http.form.base,
   nextpas.core.json,
@@ -30,6 +31,11 @@ uses
   nextpas.core.http,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
+  nextpas.core.encoding,
+  nextpas.core.tls.base,
+  nextpas.core.tls.cert.builder,
+  nextpas.core.tls.context.builder,
+  nextpas.core.tls.openssl.backed,
   nextpas.core.platform.thread;
 
 var
@@ -62,6 +68,16 @@ var
   GWriteFailureListener: ITcpListener;
   GWriteFailureAcceptCount: Int32;
   GWriteFailureFirstBody: string;
+  GConnectProxyListener: ITcpListener;
+  GConnectProxyServerCtx: ISSLContext;
+  GConnectProxyMode: string;
+  GConnectProxyConnectRequest: string;
+  GConnectProxyHttpRequest: string;
+  GConnectProxyHttpReply: string;
+  GDirectHttpsListener: ITcpListener;
+  GDirectHttpsServerCtx: ISSLContext;
+  GDirectHttpsRequest: string;
+  GDirectHttpsReply: string;
 
 type
   TTrackedRequestBody = class;
@@ -323,12 +339,25 @@ type
     FFailStatus: THttpStatus;
     FRaiseKind: THttpErrorKind;
     FRaiseOnFail: Boolean;
+    FRetryAfter: string;
+    FFailBody: string;
   public
     constructor Create(const AFailCount: Int32; const AFailStatus: THttpStatus);
     constructor CreateRaising(const AFailCount: Int32;
       const ARaiseKind: THttpErrorKind);
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
+    property RetryAfter: string read FRetryAfter write FRetryAfter;
+    property FailBody: string read FFailBody write FFailBody;
+  end;
+
+  TJsonBodyTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FStatus: THttpStatus;
+    FBody: string;
+  public
+    constructor Create(const AStatus: THttpStatus; const ABody: string);
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
   end;
 
   TRedirectBodyReleaseTransport = class(TInterfacedObject, IHttpTransport)
@@ -393,6 +422,7 @@ type
     function Get(const AUrl: string): IHttpResponse;
     function GetString(const AUrl: string): string;
     function GetBytes(const AUrl: string): TBytes;
+    function GetJson(const AUrl: string): IJsonDocument;
     function PostString(const AUrl, AContentType, ABody: string): string;
     function PutString(const AUrl, AContentType, ABody: string): string;
     function PatchString(const AUrl, AContentType, ABody: string): string;
@@ -422,6 +452,7 @@ type
     function WithBearerAuth(const AToken: string): IHttpClient;
     function WithHeader(const AName, AValue: string): IHttpClient;
     function WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+    function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
     function WithMaxRedirects(const AMaxRedirects: Int32): IHttpClient;
     function WithFollowRedirects(const AFollow: Boolean): IHttpClient;
     function WithRetry(const AMaxRetries: Int32): IHttpClient;
@@ -499,6 +530,116 @@ begin
     end;
     LConn.Close;
   end;
+end;
+
+function ConnectProxyThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LTlsConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LReply: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  try
+    LConn := GConnectProxyListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+  try
+    LAccum := '';
+    repeat
+      LN := LConn.Read(LBuf[0], 4096);
+      if LN = 0 then
+        Break;
+      SetLength(LAccum, Length(LAccum) + Int32(LN));
+      Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+      LP := Pos(#13#10#13#10, LAccum);
+    until LP > 0;
+    GConnectProxyConnectRequest := LAccum;
+
+    if GConnectProxyMode = 'deny' then
+    begin
+      LReply := 'HTTP/1.1 403 Forbidden'#13#10 +
+                'Content-Length: 0'#13#10 +
+                #13#10;
+      LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+      Exit;
+    end;
+
+    LReply := 'HTTP/1.1 200 Connection Established'#13#10 +
+              #13#10;
+    LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+
+    if GConnectProxyServerCtx = nil then
+      Exit;
+    LTlsConn := NewTlsServerTcpStream(LConn, GConnectProxyServerCtx);
+    try
+      LAccum := '';
+      repeat
+        LN := LTlsConn.Read(LBuf[0], 4096);
+        if LN = 0 then
+          Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+        LP := Pos(#13#10#13#10, LAccum);
+      until LP > 0;
+      GConnectProxyHttpRequest := LAccum;
+      if GConnectProxyHttpReply <> '' then
+        LTlsConn.Write(GConnectProxyHttpReply[1],
+          SizeUInt(Length(GConnectProxyHttpReply)));
+    finally
+      LTlsConn.Close;
+    end;
+  except
+  end;
+  LConn.Close;
+end;
+
+function DirectHttpsThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LTlsConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  try
+    LConn := GDirectHttpsListener.Accept;
+  except
+    Exit;
+  end;
+  if LConn = nil then
+    Exit;
+  try
+    if GDirectHttpsServerCtx = nil then
+      Exit;
+    LTlsConn := NewTlsServerTcpStream(LConn, GDirectHttpsServerCtx);
+    try
+      LAccum := '';
+      repeat
+        LN := LTlsConn.Read(LBuf[0], 4096);
+        if LN = 0 then
+          Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+        LP := Pos(#13#10#13#10, LAccum);
+      until LP > 0;
+      GDirectHttpsRequest := LAccum;
+      if GDirectHttpsReply <> '' then
+        LTlsConn.Write(GDirectHttpsReply[1], SizeUInt(Length(GDirectHttpsReply)));
+    finally
+      LTlsConn.Close;
+    end;
+  except
+  end;
+  LConn.Close;
 end;
 
 function RetryRequestMethod(const ARawRequest: string): string;
@@ -1807,6 +1948,8 @@ begin
   FCalls := 0;
   FRaiseKind := hekUnknown;
   FRaiseOnFail := False;
+  FRetryAfter := '';
+  FFailBody := '';
 end;
 
 constructor TRetryTestTransport.CreateRaising(const AFailCount: Int32;
@@ -1818,22 +1961,62 @@ begin
   FCalls := 0;
   FRaiseKind := ARaiseKind;
   FRaiseOnFail := True;
+  FRetryAfter := '';
+  FFailBody := '';
 end;
 
 function TRetryTestTransport.RoundTrip(
   const AReq: IHttpRequest): IHttpResponse;
 var
   LHeaders: IHttpHeaders;
+  LBody: IReader;
 begin
   Inc(FCalls);
   if FRaiseOnFail and (FCalls <= FFailCount) then
     raise EHttpError.Create(FRaiseKind, 'retry transport fail kind');
   LHeaders := NewHttpHeaders;
-  LHeaders.SetHeader('content-length', '0');
   if FCalls <= FFailCount then
-    Result := NewResponse(FFailStatus, LHeaders, nil)
+  begin
+    if FRetryAfter <> '' then
+      LHeaders.SetHeader('retry-after', FRetryAfter);
+    if FFailBody <> '' then
+    begin
+      LHeaders.SetHeader('content-length', IntToStr(Length(FFailBody)));
+      LBody := StringBodyReader(FFailBody);
+      Result := NewResponse(FFailStatus, LHeaders, LBody);
+    end
+    else
+    begin
+      LHeaders.SetHeader('content-length', '0');
+      Result := NewResponse(FFailStatus, LHeaders, nil);
+    end;
+  end
   else
+  begin
+    LHeaders.SetHeader('content-length', '0');
     Result := NewResponse(HTTP_STATUS_OK, LHeaders, nil);
+  end;
+end;
+
+constructor TJsonBodyTransport.Create(const AStatus: THttpStatus;
+  const ABody: string);
+begin
+  inherited Create;
+  FStatus := AStatus;
+  FBody := ABody;
+end;
+
+function TJsonBodyTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-type', 'application/json');
+  LHeaders.SetHeader('content-length', IntToStr(Length(FBody)));
+  if FBody <> '' then
+    Result := NewResponse(FStatus, LHeaders, StringBodyReader(FBody))
+  else
+    Result := NewResponse(FStatus, LHeaders, nil);
 end;
 
 constructor TRedirectBodyReleaseTransport.Create;
@@ -1991,6 +2174,11 @@ begin
   Result := HttpGetBytes(Self, AUrl);
 end;
 
+function TDownloadClient.GetJson(const AUrl: string): IJsonDocument;
+begin
+  Result := HttpGetJson(Self, AUrl);
+end;
+
 function TDownloadClient.PostString(const AUrl, AContentType, ABody: string): string;
 begin
   Result := HttpPostString(Self, AUrl, AContentType, ABody);
@@ -2126,6 +2314,11 @@ begin
 end;
 
 function TDownloadClient.WithTimeout(const ATimeoutMs: Int64): IHttpClient;
+begin
+  Result := Self;
+end;
+
+function TDownloadClient.WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;
 begin
   Result := Self;
 end;
@@ -2842,7 +3035,8 @@ begin
     { Window covers ConnectTimeout re-arm, cancel checkpoints, timeout-wrap,
       dial helper, cancel token wire, and bare re-raise on the fresh path. }
     LReconnectBlock := Copy(LSource, LReconnectPos, 2200);
-    Check((Pos('LConn := H1ClientDial(LConnectHost, LConnectPort,', LReconnectBlock) > 0) or
+    Check((Pos('PrepareFreshConnection;', LReconnectBlock) > 0) or
+          (Pos('LConn := H1ClientDial(LConnectHost, LConnectPort,', LReconnectBlock) > 0) or
           (Pos('LConn := TcpConnect(LConnectHost, LConnectPort);', LReconnectBlock) > 0) or
           (Pos('LConn := TcpConnect(LHost, LPort);', LReconnectBlock) > 0),
       'h1 client pooled retry opens a fresh connection after body rewind');
@@ -7285,7 +7479,7 @@ end;
 
 procedure TestClientRejectsUnsupportedDirectSchemes;
 begin
-  CheckClientRejectsUnsupportedDirectScheme('https');
+  { https is supported on H1 (direct TLS); non-http(s) schemes stay rejected. }
   CheckClientRejectsUnsupportedDirectScheme('ftp');
 end;
 
@@ -8592,6 +8786,142 @@ begin
   Check(not HttpHasRetryIdempotencyKey(LPost), 'key helper false');
 end;
 
+procedure TestWithRetryRetries429WithRetryAfterZero;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(1, HTTP_STATUS_TOO_MANY_REQUESTS);
+  LTransport.RetryAfter := '0';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(2).Get('http://localhost/test');
+  Check(LResp <> nil, '429 retry returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), '429 + Retry-After:0 eventually succeeds');
+  CheckEqual(2, LTransport.Calls, '429: 1 fail + 1 success');
+end;
+
+procedure TestWithRetryRetries503WithInvalidRetryAfter;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(1, HTTP_STATUS_SERVICE_UNAVAILABLE);
+  LTransport.RetryAfter := 'not-a-number';
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(2).Get('http://localhost/test');
+  Check(LResp <> nil, '503 invalid Retry-After returns response');
+  CheckEqual(200, Int32(LResp.StatusCode), 'invalid Retry-After falls back to backoff');
+  CheckEqual(2, LTransport.Calls, '503 invalid header still retries');
+end;
+
+procedure TestWithRetryDoesNotRetryOther4xx;
+var
+  LTransport: TRetryTestTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRetryTestTransport.Create(5, HTTP_STATUS_FORBIDDEN);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient.WithRetry(3).Get('http://localhost/test');
+  CheckEqual(403, Int32(LResp.StatusCode), '403 not retried');
+  CheckEqual(1, LTransport.Calls, 'only one call for non-429 4xx');
+end;
+
+procedure TestHttpGetJsonSuccess;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, '{"a":1}');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := HttpGetJson(LClient, 'http://localhost/api');
+  Check(LDoc <> nil, 'GetJson returns document');
+  Check(not LDoc.HasError, 'GetJson document has no parse error');
+  Check(LDoc.Root.IsObject, 'GetJson root is object');
+  CheckEqual(Int64(1), LDoc.Root.ObjectGet('a').AsInt, 'GetJson field a=1');
+end;
+
+procedure TestHttpGetJsonMethodSuccess;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LDoc: IJsonDocument;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, '{"ok":true}');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LDoc := LClient.GetJson('http://localhost/api');
+  Check(LDoc <> nil, 'method GetJson returns document');
+  Check(LDoc.Root.ObjectGet('ok').AsBool, 'method GetJson field ok');
+end;
+
+procedure TestHttpGetJsonRaisesOn404;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+  LKind: THttpErrorKind;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_NOT_FOUND, '{"err":1}');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  LKind := hekUnknown;
+  try
+    HttpGetJson(LClient, 'http://localhost/missing');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LKind := E.Kind;
+    end;
+  end;
+  Check(LCaught, 'GetJson raises on 404');
+  Check(LKind = hekStatus, 'GetJson 404 is hekStatus');
+end;
+
+procedure TestHttpGetJsonRaisesOnInvalidJson;
+var
+  LTransport: TJsonBodyTransport;
+  LClient: IHttpClient;
+  LCaught: Boolean;
+  LKind: THttpErrorKind;
+  LOp: string;
+begin
+  LTransport := TJsonBodyTransport.Create(HTTP_STATUS_OK, 'not-json');
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LCaught := False;
+  LKind := hekUnknown;
+  LOp := '';
+  try
+    HttpGetJson(LClient, 'http://localhost/bad');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LKind := E.Kind;
+      LOp := E.Op;
+    end;
+  end;
+  Check(LCaught, 'GetJson raises on invalid JSON');
+  Check(LKind = hekProtocol, 'invalid JSON is hekProtocol');
+  CheckEqual('json', LOp, 'invalid JSON Op=json');
+end;
+
+procedure TestHttpReadResponseJsonSuccess;
+var
+  LResp: IHttpResponse;
+  LDoc: IJsonDocument;
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-type', 'application/json');
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('{"n":2}'));
+  LDoc := HttpReadResponseJson(LResp, 'GET', 'http://localhost/x');
+  CheckEqual(Int64(2), LDoc.Root.ObjectGet('n').AsInt, 'ReadResponseJson field n');
+end;
+
 procedure TestCancelTokenRaisesHekCanceledAtSend;
 var
   LTransport: TRetryTestTransport;
@@ -8831,6 +9161,334 @@ begin
   end;
 end;
 
+function NewConnectTestClientCtx: ISSLContext;
+begin
+  Result := TSSLContextBuilder.Create
+    .WithTLS12And13
+    .WithVerifyNone
+    .BuildClient;
+end;
+
+function NewConnectTestServerCtx(const ACommonName: string): ISSLContext;
+var
+  LKeyPair: IKeyPairWithCertificate;
+  LCertPEM, LKeyPEM: string;
+begin
+  LKeyPair := TCertificateBuilder.Create
+    .WithCommonName(ACommonName)
+    .WithOrganization('nextpas-http-connect-test')
+    .SelfSigned;
+  LKeyPair.SaveToPEM(LCertPEM, LKeyPEM);
+  Result := TSSLContextBuilder.Create
+    .WithTLS12And13
+    .WithCertificatePEM(LCertPEM)
+    .WithPrivateKeyPEM(LKeyPEM)
+    .WithVerifyNone
+    .BuildServer;
+end;
+
+procedure TestClientHttpsProxyConnectTunnel;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LResp: IHttpResponse;
+  LReqLine: string;
+  LLineEnd: SizeInt;
+begin
+  GConnectProxyMode := 'ok';
+  GConnectProxyConnectRequest := '';
+  GConnectProxyHttpRequest := '';
+  GConnectProxyHttpReply :=
+    'HTTP/1.1 200 OK'#13#10 +
+    'Content-Length: 8'#13#10 +
+    #13#10 +
+    'tunneled';
+  GConnectProxyServerCtx := NewConnectTestServerCtx('example.test');
+  GConnectProxyListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GConnectProxyListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @ConnectProxyThread, nil);
+  try
+    LOpts := THttpClientOptions.Default
+      .WithProxyUrl('http://127.0.0.1:' + IntToStr(Int64(LPort)))
+      .WithTimeout(10000)
+      .WithConnectTimeout(5000);
+    LOpts.TLSContext := NewConnectTestClientCtx;
+    LClient := NewHttpClient(LOpts);
+    LResp := LClient.Get('https://example.test/via-connect?q=1');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'CONNECT tunnel returns 200');
+    CheckEqual('tunneled', ReadBodyStr(LResp), 'CONNECT tunnel response body');
+
+    LLineEnd := Pos(#13#10, GConnectProxyConnectRequest);
+    Check(LLineEnd > 0, 'proxy received CONNECT request-line');
+    LReqLine := System.Copy(GConnectProxyConnectRequest, 1, LLineEnd - 1);
+    Check(Pos('CONNECT example.test:443 HTTP/1.1', LReqLine) > 0,
+      'proxy receives CONNECT authority-form target');
+
+    LLineEnd := Pos(#13#10, GConnectProxyHttpRequest);
+    Check(LLineEnd > 0, 'origin received request-line over TLS tunnel');
+    LReqLine := System.Copy(GConnectProxyHttpRequest, 1, LLineEnd - 1);
+    Check(Pos('GET /via-connect?q=1 HTTP/1.1', LReqLine) > 0,
+      'tunneled request uses origin-form (not absolute-form)');
+    Check(Pos('GET https://', GConnectProxyHttpRequest) = 0,
+      'tunneled request does not use absolute-form');
+  finally
+    GConnectProxyListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GConnectProxyListener := nil;
+    GConnectProxyServerCtx := nil;
+    GConnectProxyConnectRequest := '';
+    GConnectProxyHttpRequest := '';
+    GConnectProxyHttpReply := '';
+    GConnectProxyMode := '';
+  end;
+end;
+
+procedure TestClientHttpsProxyConnectDenied;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LRaised: Boolean;
+  LConnectKind: Boolean;
+begin
+  GConnectProxyMode := 'deny';
+  GConnectProxyConnectRequest := '';
+  GConnectProxyHttpRequest := '';
+  GConnectProxyHttpReply := '';
+  GConnectProxyServerCtx := nil;
+  GConnectProxyListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GConnectProxyListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @ConnectProxyThread, nil);
+  try
+    LOpts := THttpClientOptions.Default
+      .WithProxyUrl('http://127.0.0.1:' + IntToStr(Int64(LPort)))
+      .WithTimeout(5000)
+      .WithConnectTimeout(3000);
+    LOpts.TLSContext := NewConnectTestClientCtx;
+    LClient := NewHttpClient(LOpts);
+    LRaised := False;
+    LConnectKind := False;
+    try
+      LClient.Get('https://example.test/denied');
+    except
+      on E: EHttpError do
+      begin
+        LRaised := True;
+        LConnectKind := (E.Kind = hekConnect) or
+          (Pos('CONNECT', UpperCase(E.Message)) > 0);
+      end;
+    end;
+    Check(LRaised, 'denied CONNECT raises EHttpError');
+    Check(LConnectKind, 'denied CONNECT reports connect/tunnel failure');
+    Check(Pos('CONNECT example.test:443', GConnectProxyConnectRequest) > 0,
+      'denied path still sent CONNECT request');
+  finally
+    GConnectProxyListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GConnectProxyListener := nil;
+    GConnectProxyServerCtx := nil;
+    GConnectProxyConnectRequest := '';
+    GConnectProxyHttpRequest := '';
+    GConnectProxyMode := '';
+  end;
+end;
+
+procedure TestClientDirectHttpsRoundTrip;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LResp: IHttpResponse;
+  LReqLine: string;
+  LLineEnd: SizeInt;
+begin
+  GDirectHttpsRequest := '';
+  GDirectHttpsReply :=
+    'HTTP/1.1 200 OK'#13#10 +
+    'Content-Length: 6'#13#10 +
+    #13#10 +
+    'direct';
+  GDirectHttpsServerCtx := NewConnectTestServerCtx('127.0.0.1');
+  GDirectHttpsListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GDirectHttpsListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @DirectHttpsThread, nil);
+  try
+    LOpts := THttpClientOptions.Default
+      .WithTimeout(10000)
+      .WithConnectTimeout(5000);
+    LOpts.TLSContext := NewConnectTestClientCtx;
+    LClient := NewHttpClient(LOpts);
+    LResp := LClient.Get('https://127.0.0.1:' + IntToStr(Int64(LPort)) +
+      '/direct-https?x=1');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'direct https returns 200');
+    CheckEqual('direct', ReadBodyStr(LResp), 'direct https response body');
+
+    LLineEnd := Pos(#13#10, GDirectHttpsRequest);
+    Check(LLineEnd > 0, 'direct https server received request-line');
+    LReqLine := System.Copy(GDirectHttpsRequest, 1, LLineEnd - 1);
+    Check(Pos('GET /direct-https?x=1 HTTP/1.1', LReqLine) > 0,
+      'direct https uses origin-form request-target');
+    Check(Pos('GET https://', GDirectHttpsRequest) = 0,
+      'direct https does not use absolute-form');
+  finally
+    GDirectHttpsListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GDirectHttpsListener := nil;
+    GDirectHttpsServerCtx := nil;
+    GDirectHttpsRequest := '';
+    GDirectHttpsReply := '';
+  end;
+end;
+
+procedure TestClientHttpsProxyConnectWithBasicAuth;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LResp: IHttpResponse;
+  LExpectedAuth: string;
+begin
+  GConnectProxyMode := 'ok';
+  GConnectProxyConnectRequest := '';
+  GConnectProxyHttpRequest := '';
+  GConnectProxyHttpReply :=
+    'HTTP/1.1 200 OK'#13#10 +
+    'Content-Length: 8'#13#10 +
+    #13#10 +
+    'tunneled';
+  GConnectProxyServerCtx := NewConnectTestServerCtx('example.test');
+  GConnectProxyListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GConnectProxyListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @ConnectProxyThread, nil);
+  try
+    LExpectedAuth := 'Basic ' +
+      Base64Encode(StringToUTF8Bytes('proxyuser:proxypass'));
+    LOpts := THttpClientOptions.Default
+      .WithProxyUrl('http://proxyuser:proxypass@127.0.0.1:' +
+        IntToStr(Int64(LPort)))
+      .WithTimeout(10000)
+      .WithConnectTimeout(5000);
+    LOpts.TLSContext := NewConnectTestClientCtx;
+    LClient := NewHttpClient(LOpts);
+    LResp := LClient.Get('https://example.test/via-auth');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'CONNECT with Basic auth returns 200');
+    CheckEqual(LExpectedAuth,
+      RawHeaderValue(GConnectProxyConnectRequest, 'Proxy-Authorization'),
+      'CONNECT injects Proxy-Authorization Basic from UserInfo');
+    Check(Pos('CONNECT example.test:443', GConnectProxyConnectRequest) > 0,
+      'auth path still sends CONNECT authority-form');
+  finally
+    GConnectProxyListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GConnectProxyListener := nil;
+    GConnectProxyServerCtx := nil;
+    GConnectProxyConnectRequest := '';
+    GConnectProxyHttpRequest := '';
+    GConnectProxyHttpReply := '';
+    GConnectProxyMode := '';
+  end;
+end;
+
+procedure TestClientHttpProxyAbsoluteFormWithBasicAuth;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LResp: IHttpResponse;
+  LExpectedAuth: string;
+begin
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 2'#13#10 +
+                   #13#10 +
+                   'ok';
+  GRawResponse2 := '';
+  GRawRequest1 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+  try
+    LExpectedAuth := 'Basic ' +
+      Base64Encode(StringToUTF8Bytes('alice:s3cret'));
+    LOpts := THttpClientOptions.Default.WithProxyUrl(
+      'http://alice:s3cret@127.0.0.1:' + IntToStr(Int64(LPort)));
+    LClient := NewHttpClient(LOpts);
+    LResp := LClient.Get('http://example.test/proxy-auth');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'absolute-form with Basic auth returns 200');
+    Check(Pos('GET http://example.test/proxy-auth HTTP/1.1', GRawRequest1) > 0,
+      'absolute-form with auth keeps absolute request-target');
+    CheckEqual(LExpectedAuth,
+      RawHeaderValue(GRawRequest1, 'Proxy-Authorization'),
+      'absolute-form injects Proxy-Authorization Basic from UserInfo');
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawRequest1 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
+procedure TestClientHttpProxyAbsoluteFormKeepsExplicitProxyAuth;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LOpts: THttpClientOptions;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LResp: IHttpResponse;
+begin
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 2'#13#10 +
+                   #13#10 +
+                   'ok';
+  GRawResponse2 := '';
+  GRawRequest1 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+  try
+    LOpts := THttpClientOptions.Default.WithProxyUrl(
+      'http://alice:s3cret@127.0.0.1:' + IntToStr(Int64(LPort)));
+    LClient := NewHttpClient(LOpts);
+    LUrl := TUrl.Parse('http://example.test/keep-auth');
+    LReq := NewRequest(hmGet, LUrl);
+    LReq.Headers.SetHeader('proxy-authorization', 'Basic explicit-token');
+    LResp := LClient.Send(LReq);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'explicit Proxy-Authorization still succeeds');
+    CheckEqual('Basic explicit-token',
+      RawHeaderValue(GRawRequest1, 'Proxy-Authorization'),
+      'explicit Proxy-Authorization is not overwritten by UserInfo');
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawRequest1 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
 procedure TestClientCookieJarExpiresMaxAge;
 var
   LJar: IHttpCookieJar;
@@ -8938,6 +9596,204 @@ begin
   CheckEqual(Int64(1500), LOpts.ConnectTimeout, 'WithConnectTimeout sets field');
   CheckEqual(Int64(1500), LOpts.EffectiveConnectTimeout,
     'EffectiveConnectTimeout prefers ConnectTimeout');
+end;
+
+procedure TestClientWithConnectTimeoutFluent;
+var
+  LClient: IHttpClient;
+begin
+  LClient := NewHttpClient.WithConnectTimeout(1500);
+  Check(LClient <> nil, 'WithConnectTimeout returns client');
+  { Decorator rebind: fluent chain keeps usable client surface. }
+  LClient := NewHttpClient.WithHeader('X-Test', '1').WithConnectTimeout(2000);
+  Check(LClient <> nil, 'WithConnectTimeout rebinds through decorator');
+  LClient := LClient.WithTimeout(5000);
+  Check(LClient <> nil, 'decorator chain after WithConnectTimeout works');
+end;
+
+procedure TestClientWithConnectTimeoutSourceContract;
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  Check(Pos('function THttpClient.WithConnectTimeout(', LSource) > 0,
+    'client implements WithConnectTimeout');
+  Check(Pos('NewHttpClient(FOptions.WithConnectTimeout(ATimeoutMs))', LSource) > 0,
+    'WithConnectTimeout rebuilds transport via NewHttpClient');
+  Check(Pos('function THttpClientForwarder.WithConnectTimeout(', LSource) > 0,
+    'forwarder rebinds WithConnectTimeout');
+  Check(Pos('RebindInner(FInner.WithConnectTimeout(ATimeoutMs))', LSource) > 0,
+    'forwarder re-stacks around rebuilt base client');
+  LSource := ReadFileText('../../../src/nextpas.core.http.intf.pas');
+  Check(Pos('function WithConnectTimeout(const ATimeoutMs: Int64): IHttpClient;',
+    LSource) > 0, 'IHttpClient declares WithConnectTimeout');
+end;
+
+{ Live H1 dial timeout through NewHttpClient (backlog-full peer; no blackhole IP). }
+procedure TestClientLiveConnectTimeout;
+var
+  LListener: ITcpListener;
+  LFillers: array of ITcpStream;
+  LConn: ITcpStream;
+  LClient: IHttpClient;
+  LPort: UInt16;
+  I: Integer;
+  LFilled: Boolean;
+  LGot: Boolean;
+  LKind: THttpErrorKind;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LPort := LListener.LocalAddr.Port;
+  SetLength(LFillers, 0);
+  LFilled := False;
+  for I := 1 to 256 do
+  begin
+    try
+      LConn := TcpConnect('127.0.0.1', LPort, 100);
+      SetLength(LFillers, Length(LFillers) + 1);
+      LFillers[High(LFillers)] := LConn;
+    except
+      on E: ETimeoutError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+      on E: ENetworkError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+    end;
+  end;
+  Check(LFilled or (Length(LFillers) > 0),
+    'backlog fill made progress for client connect-timeout setup');
+  LClient := NewHttpClient.WithConnectTimeout(200).WithTimeout(5000);
+  LGot := False;
+  LKind := hekUnknown;
+  try
+    LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/');
+  except
+    on E: EHttpError do
+    begin
+      LKind := E.Kind;
+      LGot := E.Kind in [hekTimeout, hekConnect];
+    end;
+    on E: ETimeoutError do
+    begin
+      LGot := True;
+      LKind := hekTimeout;
+    end;
+  end;
+  Check(LGot,
+    'live client dial timeout surfaces as hekTimeout/hekConnect (kind=' +
+    IntToStr(Ord(LKind)) + ')');
+  for I := 0 to High(LFillers) do
+    if LFillers[I] <> nil then
+      LFillers[I].Close;
+  LListener.Close;
+end;
+
+var
+  GMidReadCancelPort: UInt16 = 0;
+  GMidReadCancelToken: IHttpCancelToken = nil;
+
+function MidReadCancelSignalThread(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  platform_thread_sleep_ns(80000000); { 80ms }
+  if GMidReadCancelToken <> nil then
+    GMidReadCancelToken.Cancel;
+end;
+
+function MidReadHoldServerThread(AArg: Pointer): Pointer; cdecl;
+var
+  LListener: ITcpListener;
+  LConn: ITcpStream;
+  LBuf: array[0..1023] of Byte;
+begin
+  Result := nil;
+  LListener := TcpListen('127.0.0.1', 0);
+  GMidReadCancelPort := LListener.LocalAddr.Port;
+  try
+    LConn := LListener.Accept;
+    try
+      { Drain request line/headers then hold without response body. }
+      try
+        LConn.Read(LBuf[0], SizeOf(LBuf));
+      except
+      end;
+      platform_thread_sleep_ns(2000000000); { 2s hold if cancel fails }
+    finally
+      if LConn <> nil then
+        LConn.Close;
+    end;
+  finally
+    LListener.Close;
+  end;
+end;
+
+{ Live mid-read cancel: server holds after accept; client cancel → hekCanceled. }
+procedure TestClientLiveMidReadCancel;
+var
+  LServerHandle: TPlatformThreadHandle;
+  LCancelHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LToken: IHttpCancelToken;
+  LReq: IHttpRequest;
+  LGot: Boolean;
+  LKind: THttpErrorKind;
+  LWait: Int32;
+begin
+  GMidReadCancelPort := 0;
+  GMidReadCancelToken := nil;
+  platform_thread_create(LServerHandle, @MidReadHoldServerThread, nil);
+  LWait := 0;
+  while (GMidReadCancelPort = 0) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+  Check(GMidReadCancelPort <> 0, 'mid-read hold server published port');
+
+  LToken := NewHttpCancelToken;
+  GMidReadCancelToken := LToken;
+  platform_thread_create(LCancelHandle, @MidReadCancelSignalThread, nil);
+  LClient := NewHttpClient.WithTimeout(10000);
+  LReq := THttpRequestBuilder.Create(hmGet,
+    'http://127.0.0.1:' + IntToStr(Int64(GMidReadCancelPort)) + '/')
+    .CancelToken(LToken)
+    .Build;
+  LGot := False;
+  LKind := hekUnknown;
+  try
+    LClient.Send(LReq);
+  except
+    on E: EHttpError do
+    begin
+      LKind := E.Kind;
+      LGot := E.Kind = hekCanceled;
+    end;
+    on E: ECancelledError do
+    begin
+      LGot := True;
+      LKind := hekCanceled;
+    end;
+  end;
+  platform_thread_join(LCancelHandle, LRet);
+  platform_thread_join(LServerHandle, LRet);
+  GMidReadCancelToken := nil;
+  Check(LGot, 'live mid-read cancel surfaces hekCanceled (kind=' +
+    IntToStr(Ord(LKind)) + ')');
+end;
+
+procedure TestClientRedirectCreateOpSourceContract;
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  Check(Pos('raise EHttpError.CreateOp(hekRedirect, ''redirect'',', LSource) > 0,
+    'redirect failures use CreateOp with Op=redirect');
 end;
 
 procedure TestClientDefaultUserAgent;
@@ -9608,6 +10464,14 @@ begin
   T.Test('WithRetry does not retry non-idempotent POST', @TestWithRetryDoesNotRetryNonIdempotentPost);
   T.Test('WithRetry retries POST with Idempotency-Key', @TestWithRetryRetriesPostWithIdempotencyKey);
   T.Test('HttpIsRetrySafeRequest helpers', @TestHttpIsRetrySafeRequestHelpers);
+  T.Test('WithRetry retries 429 with Retry-After:0', @TestWithRetryRetries429WithRetryAfterZero);
+  T.Test('WithRetry 503 invalid Retry-After still retries', @TestWithRetryRetries503WithInvalidRetryAfter);
+  T.Test('WithRetry does not retry other 4xx', @TestWithRetryDoesNotRetryOther4xx);
+  T.Test('HttpGetJson parses object on 200', @TestHttpGetJsonSuccess);
+  T.Test('IHttpClient.GetJson parses object on 200', @TestHttpGetJsonMethodSuccess);
+  T.Test('HttpGetJson raises hekStatus on 404', @TestHttpGetJsonRaisesOn404);
+  T.Test('HttpGetJson raises hekProtocol Op=json on invalid body', @TestHttpGetJsonRaisesOnInvalidJson);
+  T.Test('HttpReadResponseJson parses object', @TestHttpReadResponseJsonSuccess);
   T.Test('CancelToken raises hekCanceled at Send', @TestCancelTokenRaisesHekCanceledAtSend);
   T.Test('CancelToken allows send when not canceled', @TestCancelTokenNotCanceledAllowsSend);
   T.Test('Client sends H1 chunked request body', @TestClientSendsChunkedRequestBody);
@@ -9616,6 +10480,28 @@ begin
   T.Test('Client HTTP proxy absolute-form', @TestClientHttpProxyAbsoluteForm);
   T.Test('Client WithProxyUrl fluent absolute-form',
     @TestClientWithProxyUrlFluentAbsoluteForm);
+  T.Test('Client HTTPS proxy CONNECT tunnel',
+    @TestClientHttpsProxyConnectTunnel);
+  T.Test('Client HTTPS proxy CONNECT denied',
+    @TestClientHttpsProxyConnectDenied);
+  T.Test('Client direct HTTPS round-trip',
+    @TestClientDirectHttpsRoundTrip);
+  T.Test('Client HTTPS proxy CONNECT Basic auth',
+    @TestClientHttpsProxyConnectWithBasicAuth);
+  T.Test('Client HTTP proxy absolute-form Basic auth',
+    @TestClientHttpProxyAbsoluteFormWithBasicAuth);
+  T.Test('Client HTTP proxy keeps explicit Proxy-Authorization',
+    @TestClientHttpProxyAbsoluteFormKeepsExplicitProxyAuth);
+  T.Test('Client WithConnectTimeout fluent rebuilds',
+    @TestClientWithConnectTimeoutFluent);
+  T.Test('Client WithConnectTimeout source contract',
+    @TestClientWithConnectTimeoutSourceContract);
+  T.Test('Client live ConnectTimeout via backlog-full peer',
+    @TestClientLiveConnectTimeout);
+  T.Test('Client live mid-read cancel via hold server',
+    @TestClientLiveMidReadCancel);
+  T.Test('Client redirect CreateOp source contract',
+    @TestClientRedirectCreateOpSourceContract);
   T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);
   T.Test('Client ConnectTimeout option defaults',
     @TestClientConnectTimeoutOptionDefault);

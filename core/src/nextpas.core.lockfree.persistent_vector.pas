@@ -16,7 +16,7 @@ unit nextpas.core.lockfree.persistent_vector;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   PVECTOR_CHUNK_SIZE = 32;

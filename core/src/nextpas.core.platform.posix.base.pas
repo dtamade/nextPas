@@ -337,7 +337,6 @@ const
   MADV_SEQUENTIAL = cint(2);
   MADV_WILLNEED   = cint(3);
   MADV_DONTNEED   = cint(4);
-  MADV_HUGEPAGE   = cint(14);
 
   MS_ASYNC      = cint(1);
   MS_INVALIDATE = cint(2);
@@ -356,9 +355,6 @@ type
 
 { POSIX socket types - shared struct shapes }
 {$I nextpas.core.platform.posix.base.socket.inc}
-
-function platform_get_errno: Int32; inline;
-
 
 
 type
@@ -381,19 +377,5 @@ const
   FD_CLOEXEC = 1;
   F_GETFD    = 1;
 implementation
-
-uses
-  nextpas.core.platform.posix.ffi;
-
-function platform_get_errno: Int32; inline;
-begin
-{$IFDEF NEXTPAS_LINUX}
-  Result := __errno_location^;
-{$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
-  Result := __error^;
-{$ELSE}
-  Result := 0;
-{$ENDIF}
-end;
 
 end.

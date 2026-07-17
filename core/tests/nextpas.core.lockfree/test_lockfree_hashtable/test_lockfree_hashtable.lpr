@@ -4,9 +4,9 @@ program test_lockfree_hashtable;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.atomic,
   nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.platform.thread,
   nextpas.core.lockfree.hashtable;
 

@@ -283,6 +283,19 @@ begin
     'PATH_TOO_LONG maps to ecInvalidArgument');
 end;
 
+procedure TestUnknownConstantAndMessage;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  CheckEqual(Int64(-8), Int64(PLATFORM_ERR_UNKNOWN), 'UNKNOWN is -8');
+  R := platform_error_message(PLATFORM_ERR_UNKNOWN, @Buf[0], 256);
+  Check(R > 0, 'UNKNOWN message length > 0');
+  Check(StrContains(@Buf[0], 'unknown'), 'UNKNOWN message contains unknown');
+  Check(platform_error_category(PLATFORM_ERR_UNKNOWN) = ecInternal,
+    'UNKNOWN maps to ecInternal');
+end;
+
 { POSIX errno category mapping tests }
 procedure TestPosixCategoryEnoent;
 begin
@@ -590,9 +603,9 @@ begin
   T.Test('small buffer truncation', @TestSmallBuffer);
   T.Test('fatal API exists', @TestFatalExists);
   T.Test('fatal behavior (via subprocess)', @TestFatalBehavior);
-  T.Test('nil buffer returns -1', @TestNilBuffer);
-  T.Test('zero length buffer returns -1', @TestZeroLengthBuffer);
-  T.Test('negative length buffer returns -1', @TestNegativeLengthBuffer);
+  T.Test('nil buffer returns PLATFORM_ERR_INVALID', @TestNilBuffer);
+  T.Test('zero length buffer returns PLATFORM_ERR_INVALID', @TestZeroLengthBuffer);
+  T.Test('negative length buffer returns PLATFORM_ERR_INVALID', @TestNegativeLengthBuffer);
   T.Test('INVALID maps to ecInvalidArgument', @TestCategoryInvalid);
   T.Test('UNSUPPORTED maps to ecNotSupported', @TestCategoryUnsupported);
   T.Test('TIMEOUT maps to ecTimeout', @TestCategoryTimeout);
@@ -604,6 +617,7 @@ begin
   T.Test('EEXIST maps to ecAlreadyExists', @TestCategoryEexist);
   T.Test('ENOTDIR maps to ecNotFound', @TestCategoryEnotdir);
   T.Test('PATH_TOO_LONG maps to ecInvalidArgument', @TestCategoryPathTooLong);
+  T.Test('UNKNOWN constant message and category', @TestUnknownConstantAndMessage);
   { POSIX errno category tests }
   T.Test('POSIX ENOENT(2) maps to ecNotFound', @TestPosixCategoryEnoent);
   T.Test('POSIX EPERM(1) maps to ecPermission', @TestPosixCategoryEperm);

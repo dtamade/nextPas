@@ -10,6 +10,7 @@ uses
   nextpas.core.platform.fs,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
+  nextpas.core.platform.error,
   nextpas.core.test;
 
 var
@@ -503,6 +504,124 @@ begin
     'rename non-existent fails');
 end;
 
+procedure TestIsSymlink;
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+const
+  TARGET = '/tmp/nextpas_fs_symlink_target.txt';
+  LINK = '/tmp/nextpas_fs_symlink_link';
+begin
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+  platform_file_open(TARGET, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('link target'), 12, W);
+  platform_file_close(H);
+  Check(platform_file_symlink(TARGET, LINK) = 0, 'symlink created');
+  Check(platform_fs_is_symlink(LINK), 'is_symlink true');
+  Check(not platform_fs_is_symlink(TARGET), 'is_symlink false for regular');
+  Check(not platform_fs_is_symlink('/tmp/nextpas_nonexistent_xyz_sl'), 'is_symlink false for nonexistent');
+  Check(not platform_fs_is_symlink(nil), 'is_symlink nil false');
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+end;
+
+procedure TestReadlink;
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  Buf: array[0..511] of AnsiChar;
+  R: Int32;
+const
+  TARGET = '/tmp/nextpas_fs_rl_target.txt';
+  LINK = '/tmp/nextpas_fs_rl_link';
+begin
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+  platform_file_open(TARGET, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('rl target'), 9, W);
+  platform_file_close(H);
+  platform_file_symlink(TARGET, LINK);
+  FillChar(Buf, SizeOf(Buf), 0);
+  R := platform_fs_readlink(LINK, @Buf[0], SizeOf(Buf));
+  Check(R > 0, 'readlink returns positive length');
+  Check(Platform_fs_readlink(LINK, @Buf[0], SizeOf(Buf)) >= 0, 'readlink ok');
+  platform_file_unlink(LINK);
+  platform_file_unlink(TARGET);
+end;
+
+procedure TestReadlinkNilBuffer;
+var
+  R: Int32;
+begin
+  R := platform_fs_readlink('/tmp/nextpas_nonexistent_xyz_rl', nil, 256);
+  Check(R = PLATFORM_ERR_INVALID, 'readlink nil buffer returns INVALID');
+end;
+
+procedure TestChmod;
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  LStat: TPlatformFileStat;
+const
+  PATH = '/tmp/nextpas_fs_chmod_test.txt';
+begin
+  platform_file_unlink(PATH);
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('chmod'), 5, W);
+  platform_file_close(H);
+  Check(platform_fs_chmod(PATH, $1A4) = 0, 'chmod to 0644');
+  Check(platform_file_stat(PATH, LStat) = 0, 'stat after chmod');
+  platform_file_unlink(PATH);
+end;
+
+procedure TestChmodNonExistent;
+begin
+  Check(platform_fs_chmod('/tmp/nextpas_nonexistent_chmod_xyz', $1A4) <> 0,
+    'chmod non-existent fails');
+end;
+
+procedure TestTruncate;
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  LSize: Int64;
+const
+  PATH = '/tmp/nextpas_fs_truncate_test.txt';
+begin
+  platform_file_unlink(PATH);
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('hello truncate'), 14, W);
+  platform_file_close(H);
+  Check(platform_fs_truncate(PATH, 5) = 0, 'truncate to 5');
+  Check(platform_fs_file_size(PATH, LSize) = 0, 'stat after truncate');
+  Check(LSize = 5, 'size = 5 after truncate');
+  platform_file_unlink(PATH);
+end;
+
+procedure TestTruncateNonExistent;
+begin
+  Check(platform_fs_truncate('/tmp/nextpas_nonexistent_trunc_xyz', 0) <> 0,
+    'truncate non-existent fails');
+end;
+
+procedure TestSync;
+var
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  R: Int32;
+const
+  PATH = '/tmp/nextpas_fs_sync_test.txt';
+begin
+  platform_file_unlink(PATH);
+  platform_file_open(PATH, fomWriteOnly, fcmCreateAlways, H);
+  platform_file_write(H, PAnsiChar('sync me'), 7, W);
+  R := platform_fs_sync(H);
+  Check(R = 0, 'sync returns 0 on valid handle');
+  platform_file_close(H);
+  platform_file_unlink(PATH);
+end;
+
 procedure TestExistsNilPath;
 begin
   Check(not platform_fs_exists(nil), 'exists nil returns false');
@@ -569,5 +688,13 @@ begin
   T.Test('is_dir nil path', @TestIsDirNilPath);
   T.Test('temp_dir returns valid path', @TestTempDirNotNil);
   T.Test('file_size non-existent', @TestFileSizeNonExistent);
+  T.Test('is_symlink', @TestIsSymlink);
+  T.Test('readlink', @TestReadlink);
+  T.Test('readlink nil buffer', @TestReadlinkNilBuffer);
+  T.Test('chmod', @TestChmod);
+  T.Test('chmod non-existent', @TestChmodNonExistent);
+  T.Test('truncate', @TestTruncate);
+  T.Test('truncate non-existent', @TestTruncateNonExistent);
+  T.Test('sync', @TestSync);
   if not T.Run then Halt(1);
 end.

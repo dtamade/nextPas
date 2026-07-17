@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.lockfree.base,
-  Math;
+  nextpas.core.math;
 
 const
   SCALABLE_BLOOM_DEFAULT_ITEMS = 10000;

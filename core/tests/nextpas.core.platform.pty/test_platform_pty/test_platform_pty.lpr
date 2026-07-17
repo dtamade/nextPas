@@ -357,6 +357,10 @@ var
   LSize: TPlatformPtySize;
   I: Int32;
 begin
+  LSize.Cols := 80;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
   Check(platform_pty_open(LSize, LPty) = 0, 'open');
   for I := 0 to 9 do
   begin
@@ -444,6 +448,72 @@ begin
     'pty child failure path must document posix_exit semantics');
 end;
 
+procedure TestWindowsMasterFdInvalidSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.pty.pas');
+  CheckContains(LSource, 'if APty.PipeOut = 0 then',
+    'windows master_fd must normalize closed pipe handle before exposing it');
+  CheckContains(LSource, 'Exit(-1);',
+    'windows master_fd must return -1 for invalid handle state');
+end;
+
+procedure TestUnsupportedCloseSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.pty.pas');
+  CheckContains(LSource,
+    'function platform_pty_close(var APty: TPlatformPty): Int32;' + LineEnding +
+    'begin FillChar(APty, SizeOf(APty), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    'unsupported close should still clear the PTY carrier before returning unsupported');
+end;
+
+procedure TestPtySizeEmptySemantics;
+var
+  LSize: TPlatformPtySize;
+begin
+  LSize.Cols := 0;
+  LSize.Rows := 24;
+  LSize.XPixel := 0;
+  LSize.YPixel := 0;
+  Check(not LSize.IsEmpty, 'single zero dimension is invalid, not empty');
+
+  LSize.Cols := 80;
+  LSize.Rows := 0;
+  Check(not LSize.IsEmpty, 'other single zero dimension is invalid, not empty');
+
+  LSize.Cols := 0;
+  LSize.Rows := 0;
+  Check(LSize.IsEmpty, 'both zero dimensions are empty');
+end;
+
+procedure TestWindowsValiditySourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('../../../src/nextpas.core.platform.pty.base.pas');
+  CheckContains(LSource,
+    'function TPlatformPty.IsMasterValid: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    '{$IFDEF NEXTPAS_UNIX}' + LineEnding +
+    '  Result := MasterFd >= 0;' + LineEnding +
+    '{$ENDIF}' + LineEnding +
+    '{$IFDEF NEXTPAS_WINDOWS}' + LineEnding +
+    '  Result := (PipeIn <> 0) and (PipeOut <> 0);',
+    'windows master validity must follow host pipe readiness');
+  CheckContains(LSource,
+    'function TPlatformPty.IsSlaveValid: Boolean;' + LineEnding +
+    'begin' + LineEnding +
+    '{$IFDEF NEXTPAS_UNIX}' + LineEnding +
+    '  Result := SlaveFd >= 0;' + LineEnding +
+    '{$ENDIF}' + LineEnding +
+    '{$IFDEF NEXTPAS_WINDOWS}' + LineEnding +
+    '  Result := ConPty <> nil;',
+    'windows slave validity must follow pseudoconsole readiness');
+end;
+
 begin
   T := TTestSuite.Create('platform.pty');
 {$IFDEF NEXTPAS_UNIX}
@@ -466,5 +536,10 @@ begin
   T.Test('TestPtyApiShape', @TestPtyApiShape);
 {$ENDIF}
   T.Test('posix_exit source contract', @TestPosixExitSourceContract);
+  T.Test('Windows master_fd invalid source contract',
+    @TestWindowsMasterFdInvalidSourceContract);
+  T.Test('unsupported close source contract', @TestUnsupportedCloseSourceContract);
+  T.Test('pty size empty semantics', @TestPtySizeEmptySemantics);
+  T.Test('windows validity source contract', @TestWindowsValiditySourceContract);
   if not T.Run then Halt(1);
 end.

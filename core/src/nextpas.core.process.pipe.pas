@@ -5,7 +5,8 @@ unit nextpas.core.process.pipe;
 interface
 
 uses
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.platform.posix.errno;
 
 type
   IPipeDrainReader = interface(IReadCloser)

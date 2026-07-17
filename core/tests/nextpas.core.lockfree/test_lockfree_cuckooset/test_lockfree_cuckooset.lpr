@@ -2,7 +2,7 @@
 program test_lockfree_cuckooset;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.cuckooset;
 
 var

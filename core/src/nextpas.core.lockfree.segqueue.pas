@@ -71,13 +71,14 @@ type
     class procedure SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer); static;
     function AllocSegment(const AStartIndex: Int64): PSegment;
     function FindOrCreateSegment(const APosition: Int64): PSegment;
+    procedure Publish(const AValue: T);
   public
-    {** @desc 创建无界 MPSC 队列（EBR 回收段） }
+    {** @desc 创建无界 MPMC 分段队列（EBR 回收段） }
     constructor Create;
     destructor Destroy; override;
-    {** @desc 无界入队；段不足时自动扩展 }
+    {** @desc 无界入队；段不足时自动扩展；已关闭时抛 EInvalidOperationError }
     procedure Enqueue(const AValue: T);
-    {** @desc 非阻塞入队；已关闭时返回 False（语义与 Enqueue 相同，仅增加关闭检查） }
+    {** @desc 非阻塞入队；已关闭时返回 False }
     function TryEnqueue(const AValue: T): Boolean;
     {** @desc 非阻塞出队；队列空时返回 False }
     function TryDequeue(out AValue: T): Boolean;
@@ -223,7 +224,7 @@ begin
     FreeMem(AData, SizeOf(TSegment));
 end;
 
-procedure TSegQueueImpl.Enqueue(const AValue: T);
+procedure TSegQueueImpl.Publish(const AValue: T);
 var
   LPos: Int64;
   LIdx: Integer;
@@ -248,11 +249,18 @@ begin
   end;
 end;
 
+procedure TSegQueueImpl.Enqueue(const AValue: T);
+begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    raise EInvalidOperationError.Create('TSegQueue: Enqueue on closed queue');
+  Publish(AValue);
+end;
+
 function TSegQueueImpl.TryEnqueue(const AValue: T): Boolean;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  Enqueue(AValue);
+  Publish(AValue);
   Result := True;
 end;
 

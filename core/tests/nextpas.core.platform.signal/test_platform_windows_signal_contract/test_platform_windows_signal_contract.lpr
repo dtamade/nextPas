@@ -3,8 +3,8 @@ program test_platform_windows_signal_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
   nextpas.core.test;
 
 var
@@ -12,23 +12,20 @@ var
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
-  Result := ExpandFileName('../../../' + ARelativePath);
+  if FileExists('../../../' + ARelativePath) then
+    Exit('../../../' + ARelativePath);
+  if FileExists('core/' + ARelativePath) then
+    Exit('core/' + ARelativePath);
+  Result := '../../../' + ARelativePath;
 end;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
   LSourcePath := ExpandRepoPath(ARelativePath);
   Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := FsReadFileText(LSourcePath);
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
@@ -89,8 +86,8 @@ begin
     'Windows signal branch must map Ctrl+C to PLATFORM_SIGINT');
   CheckContains(LWindowsBranch, 'PLATFORM_SIGBREAK',
     'Windows signal branch must map Ctrl+Break');
-  CheckContains(LWindowsBranch, 'ERROR_NOT_SUPPORTED',
-    'unsupported POSIX signals must return stable unsupported error');
+  CheckContains(LWindowsBranch, 'PLATFORM_ERR_UNSUPPORTED',
+    'unsupported POSIX signals must return stable PLATFORM_ERR_UNSUPPORTED');
 end;
 
 procedure TestSignalConstantsDocumentWindowsBreak;

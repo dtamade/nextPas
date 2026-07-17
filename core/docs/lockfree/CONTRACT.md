@@ -1,16 +1,29 @@
 # nextpas.core.lockfree 代码契约
 
-**模块路径**：`core/src/nextpas.core.lockfree*.pas`（103 个源文件）
-**层级**：L0（依赖 base, atomic）
+**模块路径**：`core/src/nextpas.core.lockfree*.pas`（约 100+ 源文件；默认门面仅 T1）
+**层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-06
-**版本**：2.0
+**最后更新**：2026-07-17
+**版本**：2.2
 
 ---
 
+## 0. 默认门面（T1）
+
+`uses nextpas.core.lockfree` 仅 re-export **T1 runtime core**：
+SPSC/MPMC/MPSC/SPMC/SegQueue/MSQueue、Stack、WorkStealingDeque、EBR/Hazard、Channel、Selector、ShardedHashMap（及 `TConcurrentHashMap` 别名）。
+
+T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nextpas.core.lockfree.<unit>`，不会被默认门面拉入。
+
+进度保证（lock-free vs lock-based）见 `README.md` 的 Progress-guarantee matrix；`TShardedHashMap` / `TConcurrentHashMap` 为同一分片自旋锁实现（别名，不是两套实现）。
+
+**命名例外**：
+- `nextpas.core.lockfree.deque_lf` 名称含 “lf”，实现为 **lock-based** concurrent deque（非 lock-free）。
+- `nextpas.core.lockfree.lru_cache` / 部分 AnsiString 特化单元允许 managed `AnsiString` 载荷；不要求 `IsManagedType` 泛型守卫。
+
 ## 1. 接口契约
 
-### 1.1 子模块（103 个源文件）
+### 1.1 子模块（完整源树；默认门面仅 T1）
 
 | 类别 | 文件 | 职责 |
 |------|------|------|
@@ -23,173 +36,155 @@
 | **队列** | lockfree.mpmc | 多生产者多消费者队列 |
 | **队列** | lockfree.mpsc | 多生产者单消费者队列 |
 | **队列** | lockfree.spmc | 单生产者多消费者队列 |
-| **队列** | lockfree.segqueue | 分段无锁队列 |
+| **队列** | lockfree.segqueue | 分段无锁队列（无界 MPMC） |
 | **队列** | lockfree.msqueue | Michael-Scott 无锁队列 |
 | **队列** | lockfree.ringbuffer | 环形缓冲区 |
 | **队列** | lockfree.timeoutqueue | 带超时的队列 |
 | **栈** | lockfree.stack | 无锁栈 |
 | **栈** | lockfree.elimination_stack | 消除回退栈 |
-| **双端队列** | lockfree.deque | 工作窃取双端队列 |
-| **双端队列** | lockfree.deque_lf | 无锁双端队列 |
-| **通道** | lockfree.channel | 无锁通道 |
+| **双端队列** | lockfree.deque | 工作窃取双端队列（有 Close） |
+| **双端队列** | lockfree.deque_lf | **lock-based** 双端队列（名称例外） |
+| **通道** | lockfree.channel | 有界 MPMC-style 无锁通道 |
 | **通道** | lockfree.channel.spsc | SPSC 通道 |
-| **映射** | lockfree.hashmap | 分片 HashMap |
-| **映射** | lockfree.hashset | 并发 HashSet |
-| **映射** | lockfree.hashtable | 无锁哈希表 |
-| **映射** | lockfree.multimap | 并发 MultiMap |
-| **映射** | lockfree.trie | 并发 Trie |
-| **映射** | lockfree.trie_map | 并发 Trie Map |
-| **映射** | lockfree.trie_hmt | Hash Mapped Trie |
-| **映射** | lockfree.skiplist_map | 并发跳表 Map |
-| **映射** | lockfree.robinhood | Robin Hood 哈希表 |
-| **有序结构** | lockfree.skiplist | 并发跳表 |
-| **有序结构** | lockfree.btree | 并发 B-Tree |
-| **有序结构** | lockfree.bplus | B+ Tree |
-| **有序结构** | lockfree.rbtree | 并发红黑树 |
-| **有序结构** | lockfree.treap | 并发 Treap |
-| **有序结构** | lockfree.scapegoat | Scapegoat Tree |
-| **有序结构** | lockfree.radix | Radix Tree |
-| **有序结构** | lockfree.sortedset | 并发有序集合 |
-| **图** | lockfree.graph | 并发图 |
-| **图** | lockfree.dag | 并发 DAG |
-| **图** | lockfree.adjmap | 加权图邻接表 |
-| **图** | lockfree.disjointset | 并查集 |
-| **图** | lockfree.merkle_tree | Merkle Tree |
-| **树** | lockfree.fibheap | Fibonacci 堆 |
-| **树** | lockfree.fenwick | Fenwick Tree |
-| **树** | lockfree.intervaltree | 区间树 |
-| **树** | lockfree.persistent_vector | 持久化向量 |
-| **同步原语** | lockfree.mutex | 并发互斥锁 |
-| **同步原语** | lockfree.rwlock | 并发读写锁 |
-| **同步原语** | lockfree.semaphore | 并发信号量 |
-| **同步原语** | lockfree.barrier | 并发屏障 |
-| **同步原语** | lockfree.condvar | 并发条件变量 |
-| **同步原语** | lockfree.countdown | 倒计时闩 |
-| **同步原语** | lockfree.phaser | 相位同步器 |
-| **同步原语** | lockfree.stampedlock | 戳锁 |
-| **同步原语** | lockfree.exchanger | 并发交换器 |
-| **同步原语** | lockfree.flatcombining | Flat Combining |
-| **同步原语** | lockfree.leftright | Left-Right 并发控制 |
-| **缓存** | lockfree.lru | 并发 LRU 缓存 |
-| **缓存** | lockfree.lru_cache | 并发 LRU 缓存 (AnsiString) |
-| **缓存** | lockfree.lfu | LFU 缓存 |
-| **缓存** | lockfree.ttl_cache | TTL 缓存 |
-| **缓存** | lockfree.arccache | ARC Cache |
-| **概率** | lockfree.bloom | 布隆过滤器 |
-| **概率** | lockfree.counting_bloom | 计数布隆过滤器 |
-| **概率** | lockfree.scalable_bloom | 可扩容布隆过滤器 |
-| **概率** | lockfree.cuckooset | Cuckoo 集合 |
-| **概率** | lockfree.hyperloglog | HyperLogLog |
-| **概率** | lockfree.countminsketch | Count-Min Sketch |
-| **概率** | lockfree.xorfilter | XOR Filter |
-| **流式** | lockfree.tdigest | T-Digest 分位数 |
-| **流式** | lockfree.spacesaving | Space-Saving Top-K |
-| **流式** | lockfree.misragries | Misra-Gries 频繁项 |
-| **流式** | lockfree.reservoirsampling | 蓄水池采样 |
-| **限流** | lockfree.ratelimit | 令牌桶限流器 |
-| **限流** | lockfree.leakybucket | 漏桶限流器 |
-| **限流** | lockfree.slidingwindow | 滑动窗口限流器 |
-| **并发模型** | lockfree.actor | Actor 模型 |
-| **并发模型** | lockfree.forkjoin | ForkJoin 框架 |
-| **并发模型** | lockfree.workstealing | 工作窃取线程池 |
-| **并发模型** | lockfree.selector | 多路复用器 |
-| **并发模型** | lockfree.selector.impl | 多路复用器实现 |
-| **其他** | lockfree.counter | 并发计数器 |
-| **其他** | lockfree.bag | 并发 Bag |
-| **其他** | lockfree.bitset | 并发位集合 |
-| **其他** | lockfree.linkedlist | 并发有序链表 |
-| **其他** | lockfree.unrolled_list | 非滚动链表 |
-| **其他** | lockfree.cowarray | 写时复制数组 |
-| **其他** | lockfree.snapshot | 快照隔离 |
-| **其他** | lockfree.statscounter | 统计计数器 |
-| **其他** | lockfree.consistent_hashring | 一致性哈希环 |
-| **其他** | lockfree.suffixarray | 后缀数组 |
-| **其他** | lockfree.roaring_bitmap | Roaring Bitmap |
-| **其他** | lockfree.timeseries_ringbuffer | 时间序列环形缓冲区 |
-| **其他** | lockfree.crdt | CRDT |
-| **其他** | lockfree.rope | Rope 大字符串 |
-| **其他** | lockfree.versionvector | Version Vector |
-| **其他** | lockfree.wrr | 加权轮询 |
-| **其他** | lockfree.matrix | 并发矩阵 |
-| **扩展** | lockfree.hashmap.rtm | RTM 优化 HashMap (硬件事务内存) |
-| **扩展** | lockfree.hashmap.numa | NUMA 感知 HashMap |
-| **门面** | lockfree.pas | 门面 re-export |
+| **映射** | lockfree.hashmap | 分片 HashMap（`TConcurrentHashMap` 同实现别名） |
+| **映射 / 其他** | lockfree.* | T2/T3：trees、caches、filters、sync primitives 等（直接 import） |
+| **门面** | lockfree.pas | **T1-only** 门面 re-export |
 
-### 1.2 核心类型（187 个类型 re-export）
+完整单元清单以 `core/src/nextpas.core.lockfree*.pas` 为准；上表不再宣称“187 个类型 re-export”。
+
+### 1.2 核心类型（T1 实际门面类型）
 
 ```pascal
-// 队列
+// 队列（T1）
 generic TSpscQueue<T> = class
   function TryEnqueue(const AValue: T): Boolean;
   function TryDequeue(out AValue: T): Boolean;
   function EnqueueWait(const AValue: T): Boolean;
   function DequeueWait(out AValue: T): Boolean;
+  procedure Close;
 end;
 
 generic TMpmcQueue<T> = class
   function TryEnqueue(const AValue: T): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  procedure Close;
 end;
 
-// 栈
+generic TMpscQueue<T> = class
+  procedure Enqueue(const AValue: T);          // closed -> EInvalidOperationError
+  function TryEnqueue(const AValue: T): Boolean; // closed -> False
+  function TryDequeue(out AValue: T): Boolean;
+  procedure Close;
+end;
+
+generic TSpmcQueue<T> = class
+  function TryEnqueue(const AValue: T): Boolean;
+  function TryDequeue(out AValue: T): Boolean;
+  procedure Close;
+end;
+
+generic TSegQueue<T> = class
+  procedure Enqueue(const AValue: T);          // closed -> EInvalidOperationError
+  function TryEnqueue(const AValue: T): Boolean; // closed -> False
+  function TryDequeue(out AValue: T): Boolean;
+  procedure Close;
+end;
+
+generic TLockFreeMsQueue<T> = class
+  function TryEnqueue(const AValue: T): Boolean;
+  function TryDequeue(out AValue: T): Boolean;
+  procedure Close;
+end;
+
+// 栈 / 工作窃取（T1）— 非阻塞 surface 使用 Try*
 generic TLockFreeStack<T> = class
-  procedure Push(const AValue: T);
+  function TryPush(const AValue: T): Boolean;
   function TryPop(out AValue: T): Boolean;
+  procedure Close;
 end;
 
-// 工作窃取
 generic TWorkStealingDeque<T> = class
-  procedure Push(const AValue: T);
+  function TryPush(const AValue: T): Boolean;
   function TryPop(out AValue: T): Boolean;
   function TrySteal(out AValue: T): Boolean;
+  procedure Close;
 end;
 
-// 映射
+// 映射（T1）— TConcurrentHashMap 是同一实现的别名
 generic TShardedHashMap<TKey, TValue> = class
   function Insert(const AKey: TKey; const AValue: TValue): Boolean;
   function Find(const AKey: TKey; out AValue: TValue): Boolean;
   function Remove(const AKey: TKey): Boolean;
 end;
+generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>);
 
-// 同步原语
-TConcurrentMutex = class
-  procedure Lock;
-  procedure Unlock;
-  function TryLock: Boolean;
-end;
-
-TConcurrentRwLock = class
-  procedure ReadLock;
-  procedure WriteLock;
-  procedure Unlock;
-end;
+// Channel / Selector / reclamation — 见 api-reference 与 README
 ```
+
+### 1.3 ClosedPublishPolicy
+
+| API 形态 | Close 后 publish 行为 |
+|----------|------------------------|
+| `TryEnqueue` / `TryPush` / `TrySend` | 返回 **False**（不抛异常） |
+| plain `Enqueue` / `Send`（阻塞式或无界 publish） | 抛 **`EInvalidOperationError`** |
+| `*Wait` / `*Timeout` publish | 返回 **False**（立即失败，不无限阻塞） |
+| consume / drain | 仍可读已入队数据；closed+empty 时返回 False |
+
+具体对齐：
+- **SegQueue**：`Close` 后 `TryEnqueue=False`，plain `Enqueue` 抛 `EInvalidOperationError`；已入队仍可 `TryDequeue`。
+- **MPSC**：同 SegQueue publish 策略；生命周期 **Close → join producers/waiters → Free**。
+- **MSQueue**：`Destroy` 执行 **Close + drain**；调用方仍须 join 活跃 producer/consumer。`Close → join → Free` 是安全生命周期；Destroy 的 Close+drain **不替代** join。
+- **Channel**：`Send` closed 抛异常；`TrySend` 返回 False。
 
 ---
 
 ## 2. 不变量
 
 - EBR 保护期内的节点不被回收
-- 无锁栈 Push/Pop 满足 LIFO 顺序
-- 工作窃取双端队列：Owner 从尾部 Pop，Thief 从头部 Steal
+- 无锁栈 TryPush/TryPop 满足 LIFO 顺序
+- 工作窃取双端队列：Owner 从尾部 TryPop，Thief 从头部 TrySteal；**有 Close**
 - SPSC 队列：单生产者单消费者，无锁
 - MPMC 队列：多生产者多消费者，无锁
-- 分片 HashMap：每个分片独立锁，减少竞争
-- 所有泛型容器要求 T 为非托管类型（无 string/interface/dynarray）
+- SegQueue：无界 **MPMC**（不是 MPSC）
+- 分片 HashMap：每个分片独立锁，减少竞争；`TConcurrentHashMap` 与其同实现
+- 所有 T1 泛型容器要求 T（及 HashMap 的 TKey/TValue）为非托管类型；构造时 `IsManagedType` 拒绝
+- T2 泛型容器同样应在构造时 `IsManagedType` 拒绝（AnsiString 特化单元除外）
+- MPSC / SegQueue：`Close` 后 `TryEnqueue` 返回 False，`Enqueue` 抛 `EInvalidOperationError`
+- 生命周期：Close → join producers/waiters → Free；Destroy 的 Close+drain 不替代 join
+
+### 2.1 FPC RTL isolation
+
+**生产单元** `nextpas.core.atomic*` / `nextpas.core.lockfree*` 与 `core/examples/lockfree_example.lpr` 不得直接 `uses` 下列 FPC RTL：
+
+`SysUtils` / `Classes` / `Math` / `Windows` / `BaseUnix` / `Unix` / `TypInfo` / `StrUtils` / `DateUtils` / `SyncObjs` / `Contnrs`
+
+- 异常走 `nextpas.core.errors`
+- 数学走 `nextpas.core.math`
+- 文本转换走 `nextpas.core.text.conv`
+- 时间/休眠走 `nextpas.core.time` / `nextpas.core.platform`（`platform_monotonic_ns`、`platform_thread_sleep_ms` 等）
+
+**测试同样适用**（`core/tests/nextpas.core.atomic/**` 与 `core/tests/nextpas.core.lockfree/**` 的 `.lpr`）：
+- 不得直接 `uses` 上述 banned RTL
+- 需要 `IntToStr`/`Format` 时 `uses nextpas.core.text.conv`
+- 需要 `TStringList`/`TFileStream` 等时经 `nextpas.core.system.classes` / `nextpas.core.fs`，不得直接 `uses Classes`
+- source-contract（`TestFpcRtlIsolationSourceContract`）覆盖全部生产 `atomic*`/`lockfree*` 单元 + example；并对主测试入口做 isolation 断言
 
 ---
 
 ## 3. 错误处理
 
 - `TryPop`/`TrySteal` 空时返回 False
-- 不抛异常
+- managed 元素构造抛 `EArgumentError`
+- 已关闭后的 plain publish（Channel.Send / MPSC.Enqueue / SegQueue.Enqueue）抛 `EInvalidOperationError`
 
 ---
 
 ## 4. 线程安全
 
-- 所有操作使用 CAS/原子指令，无锁
+- T1 队列/栈/channel 热路径使用 CAS/原子指令
+- `TShardedHashMap` / `TConcurrentHashMap` 为分片自旋锁（非 lock-free）
 - EBR 使用 TLS 线程本地状态
+- `deque_lf` 为 lock-based，尽管单元名含 “lf”
 
 ---
 
@@ -197,11 +192,22 @@ end;
 
 - EBR 管理延迟回收，避免 ABA 问题
 - Hazard Pointer 提供精确内存回收
+- MSQueue Destroy：Close + drain 内部节点/值
 
 ---
 
 ## 6. 测试覆盖
 
-- `test_lockfree`: 137 测试 - Stack/SegQueue/Deque/Channel/HashMap/MPMC/MPSC/EBR/Hazard/Selector
-- `test_lockfree_*`: 90+ 独立测试套件，覆盖所有子模块
-- `test_atomic`: 45 测试 - 原子操作/内存序/CAS/wait/notify
+| 测试入口 | 说明 | 规模（约） |
+|----------|------|------------|
+| `test_lockfree` | T1 + source-contract + isolation | **~166** tests |
+| `test_lockfree_stress` | 多线程 stress | focused gate |
+| `test_lockfree_*` | 子模块独立套件 | 90+ suites |
+| `test_atomic` | 原子操作/内存序/CAS/wait/notify | **~45** tests |
+
+入口：
+```bash
+make -C core/tests/nextpas.core.lockfree/test_lockfree clean test
+make -C core/tests/nextpas.core.lockfree/test_lockfree_stress clean test
+make -C core/tests/nextpas.core.atomic/test_atomic clean test
+```

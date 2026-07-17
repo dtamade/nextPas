@@ -4,7 +4,6 @@ program test_lockfree_barrier;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.barrier,
   nextpas.core.atomic,
   nextpas.core.lockfree,

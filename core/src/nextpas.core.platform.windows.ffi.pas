@@ -489,6 +489,13 @@ function GetFullPathNameW(lpFileName: LPCWSTR; nBufferLength: DWORD; lpBuffer: L
     @param lpBuffer 输出缓冲区
     @param nSize 缓冲区大小
     @return 值长度 *}
+{** @desc 获取进程命令行（Unicode） *}
+function GetCommandLineW: LPCWSTR; stdcall; external 'kernel32' name 'GetCommandLineW';
+
+{** @desc 将命令行拆成 argv 向量（Unicode）；返回值用 LocalFree 释放 *}
+function CommandLineToArgvW(lpCmdLine: LPCWSTR; pNumArgs: PLONG): Pointer; stdcall;
+  external 'shell32' name 'CommandLineToArgvW';
+
 function GetEnvironmentVariableA(lpName: LPCSTR; lpBuffer: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'GetEnvironmentVariableA';
 
 {** @desc 获取环境变量（Unicode）

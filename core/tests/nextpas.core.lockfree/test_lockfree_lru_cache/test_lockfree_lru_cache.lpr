@@ -2,7 +2,7 @@
 program test_lockfree_lru_cache;
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.lockfree.lru_cache;
 
 var

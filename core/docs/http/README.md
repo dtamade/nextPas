@@ -28,15 +28,16 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 
 | Scenario | Start here |
 | --- | --- |
-| Client GET/POST JSON | `NewHttpClient`, `Get` / `GetString` / `PostString` / `PostJson`, `HttpReadResponseBodyString` |
+| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse`; ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `GetJson` / `HttpReadResponseJson` |
 | Fluent request | `THttpRequestBuilder` → `Send` |
 | Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
-| Auth / retry / jar / proxy | `WithBearerAuth`, `WithRetry`, `WithCookieJar`, `WithProxyUrl` |
-| Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, options `ConnectTimeout` |
+| Auth / retry / jar / proxy | `WithBearerAuth`, `WithRetry`, `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → Basic) |
+| Direct HTTPS client | `NewHttpClient` + optional `TLSContext` → `Get('https://…')` (H1 TLS wrap) |
+| Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, `WithConnectTimeout` / options `ConnectTimeout` |
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
 | Middleware | `CorsMiddleware`, `RecoveryMiddleware`, `Chain`, … |
-| WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` |
+| WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` + `TWebSocketOptions.ConnectTimeout`/`Timeout` (Default 30s) + optional `WithCancelToken` for mid-frame cancel |
 | Static files | `ServeFile` / `ServeDir` |
 | Form parse | `ParseUrlEncodedForm` / `ParseMultipartFormData` |
 
@@ -150,11 +151,12 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `TBytes` only (publish `Content-Length`). Non-empty caller `Content-Type` is
   forwarded; empty content type omits the header. Stream bodies use
   `SendStreaming` or builder + `Send`.
-- `WithRetry(N)` retries **5xx** and **retryable transport errors**
-  (`HttpErrorIsRetryable`: timeout/connect) with exponential backoff; not 4xx.
-  Only **idempotent-safe** requests retry: GET/HEAD/OPTIONS/TRACE or
-  `Idempotency-Key` / `X-Idempotency-Key` (`HttpIsRetrySafeRequest`). Body is
-  rewound via `IStream` when present.
+- `WithRetry(N)` retries **429**, **5xx**, and **retryable transport errors**
+  (`HttpErrorIsRetryable`: timeout/connect). Prefers delta-seconds
+  `Retry-After` (cap 60s); otherwise exponential backoff (100ms base, max 5s).
+  Other 4xx are not retried. Only **idempotent-safe** requests enter the loop:
+  GET/HEAD/OPTIONS/TRACE or `Idempotency-Key` / `X-Idempotency-Key`
+  (`HttpIsRetrySafeRequest`). Body is rewound via `IStream` when present.
 - **Production client defaults**: `THttpClientOptions.Default.Timeout` is
   **30000** ms. Explicit `Timeout=0` still means unbounded post-dial IO
   (tests/special tools only). Prefer `WithTimeout` when overriding. Examples
@@ -178,8 +180,13 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite
   store/send (default Lax; None requires Secure; SiteKey approx, no PSL).
 - `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
-  (`http://host:port`); no HTTPS CONNECT in this slice.
+  (`http://host:port`). Target `http://` uses absolute-form; target `https://`
+  uses CONNECT then TLS over the tunnel (origin-form). Optional
+  `TLSContext` for verify-none / custom trust. No proxy auth yet; H1 direct
+  https without proxy still unsupported.
 - `IHttpClient.GetString` / `GetBytes` and free `HttpGetString` / `HttpGetBytes`.
+- `IHttpClient.GetJson` and free `HttpGetJson` / `HttpReadResponseJson`
+  (ensure 2xx + JSON document; invalid body → `hekProtocol` Op=`json`).
 - H1 default `User-Agent: nextpas-http/1.0` when the request omits it.
 - `PostMultipart(Url, Fields, Files)` — multipart/form-data convenience POST.
 - `IHttpClient.Send` owns any close-capable request body for the duration of the
@@ -257,8 +264,11 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ### WebSocket
 
 - `UpgradeWebSocket(Req, Writer[, Options])` — 升级 HTTP 连接并返回 handler-owned `IWebSocket`
-- `TWebSocketOptions` — 公开 carrier，当前包括 `MaxFrameSize` 与 `MaxMessageSize`
-- `TWebSocketOptions.Default` — 默认限制为 16 MiB frame / 64 MiB message，调用方可按 endpoint 调整
+- `ConnectWebSocket(Url[, Options])` — 客户端 dial + upgrade；生产路径有界
+- `TWebSocketOptions` — `MaxFrameSize` / `MaxMessageSize` / `ConnectTimeout` / `Timeout` /
+  `OnCheckOrigin`；fluent `WithConnectTimeout` / `WithTimeout`
+- `TWebSocketOptions.Default` — 16 MiB frame / 64 MiB message；**ConnectTimeout=Timeout=30000**
+  （OS dial + handshake I/O）；`=0` 显式恢复无界
 
 `MaxFrameSize` 在 payload 分配/读取前检查 declared frame length；`MaxMessageSize`
 会累计 fragmented message，超过限制时由 `ReadFrame` 抛出 `EHttpError`。

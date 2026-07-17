@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-16 (usability-fix wave-3 M0–M6 closed; non-H3 stage-complete)
+> Last updated: 2026-07-17 (usability cycle-10 Wave E: H1 direct HTTPS + proxy Basic)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 
 ## North Star And Scope
@@ -18,7 +18,18 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 ## Current Position
 
 This lane is **non-H3 stage-complete** on protocol surface. Usability-fix
-waves **1–3 are closed** (wave-3 defaults D1–D8):
+waves **1–3 are closed**; **cycle-4** landed H1/H2 OS dial timeout + mid-read
+cancel parity + fluent `WithConnectTimeout`; **cycle-5** landed WebSocket dial
+budgets (Default 30s), CONTRACT §2.1 truth, live H1 dial/cancel e2e;
+**cycle-7 Wave B** lands WS mid-frame cancel (`WithCancelToken`), H2 live dial
+e2e, client redirect CreateOp polish, and inventory docs truth;
+**cycle-8 Wave C** lands ensure+decode JSON (`HttpGetJson` / `GetJson` /
+`HttpReadResponseJson`) and `WithRetry` **429 + Retry-After** (delta-seconds,
+cap 60s) (see `2026-07-17-usability-cycle8-fix-plan.md`);
+**cycle-9 Wave D** lands HTTPS CONNECT via plain HTTP proxy;
+**cycle-10 Wave E** lands H1 direct HTTPS + proxy Basic from `ProxyUrl` UserInfo
+(see `2026-07-17-usability-cycle10-fix-plan.md`).
+Prior waves (D1–D8):
 
 - G0–G5 and H3 honesty remain as previously closed (see below / Recent Fixes).
 - Wave-1 (M0–M7): builder `ContentLength` + fail-fast; `EHttpError.Kind`;

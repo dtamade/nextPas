@@ -196,7 +196,7 @@ begin
     'Windows console wait must use WaitForSingleObject');
   CheckContains(LWindowsBranch, 'cwtimeout',
     'Windows console wait must map timeout result');
-  CheckContains(LWindowsBranch, 'error_invalid_handle',
+  CheckContains(LWindowsBranch, 'platform_err_invalid_handle',
     'invalid Windows std fd must return stable invalid-handle semantics');
   CheckAbsent(LWindowsBranch, 'windows raw mode / io / wait',
     'Windows console branch must not document raw/io/wait as stubs');
@@ -211,6 +211,15 @@ begin
     'console docs must state POSIX raw/read/write/wait Linux-only support');
   CheckContains(LConsole, 'macos/freebsd return platform_err_unsupported',
     'console docs must state macOS/FreeBSD unsupported behavior');
+end;
+
+procedure TestUnsupportedWriteStubSourceContract;
+var
+  LConsole: string;
+begin
+  LConsole := LoadSourceText('src/nextpas.core.platform.console.pas');
+  CheckAbsent(LConsole, 'begin result := -1; end;',
+    'console unsupported write stubs must not return raw -1');
 end;
 
 procedure TestReadFromPipe;
@@ -324,6 +333,8 @@ begin
   T.Test('Windows console source contract', @TestWindowsConsoleSourceContract);
   T.Test('POSIX console Linux-only source contract',
     @TestPosixConsoleLinuxOnlySourceContract);
+  T.Test('unsupported write stub source contract',
+    @TestUnsupportedWriteStubSourceContract);
   T.Test('get size fd', @TestGetSizeFd);
   T.Test('set raw / restore raw', @TestSetRawRestore);
   T.Test('write stdout', @TestWriteStdout);

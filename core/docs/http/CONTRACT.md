@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（约 58 个源文件）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-16
-**版本**：3.0
+**最后更新**：2026-07-17
+**版本**：3.1
 
 ---
 
@@ -49,13 +49,26 @@ IHttpClient = interface
   function Send(const AReq: IHttpRequest): IHttpResponse;
   procedure CloseIdleConnections;
   function Get/Post/Put/Delete/Patch/Head/Options(...): IHttpResponse;
-  function PostForm / PostJson / PutJson / PatchJson / DeleteJson(...): IHttpResponse;
+  function GetString / GetBytes / PostString / PutString /
+           PatchString / DeleteString(...): string or TBytes;  { ensure-2xx }
+  function GetJson(...): IJsonDocument;  { ensure-2xx + JsonParse }
+  function PostForm / PostMultipart(...): IHttpResponse;
+  function PostJson / PutJson / PatchJson / DeleteJson(...): IHttpResponse;  { raw }
   function SendStreaming(...): IHttpResponse;
   function WithBasicAuth / WithBearerAuth / WithHeader /
-           WithTimeout / WithMaxRedirects / WithFollowRedirects /
-           WithRetry(...): IHttpClient;
+           WithTimeout / WithConnectTimeout /
+           WithMaxRedirects / WithFollowRedirects /
+           WithRetry / WithCookieJar / WithProxyUrl(...): IHttpClient;
 end;
 ```
+
+**JSON 双层（raw vs ensure）**：
+
+| 形态 | API | 行为 |
+|------|-----|------|
+| raw | `IHttpClient.PostJson/PutJson/PatchJson/DeleteJson` | 返回 `IHttpResponse`，**不** ensure-2xx |
+| ensure string | free-fn `HttpPostJson` / `HttpGetString` / 方法 `GetString`/`PostString`/… | ensure 2xx + body string（或 TBytes） |
+| ensure+decode | free-fn `HttpGetJson` / `HttpReadResponseJson` / 方法 `GetJson` | ensure 2xx + `JsonParse` → `IJsonDocument`；非法 JSON → `hekProtocol` Op=`json` |
 
 ### 2.2 Request / Response
 
@@ -85,13 +98,17 @@ end;
 - Streaming：`SendStreaming` — Send 拥有并关闭 body；不可回放 body 遇 redirect 失败。
 - Client convenience `Post/Put/Patch/Delete` **仅** `string` / `TBytes` body 重载
   （**无** `IReader` 便捷 overload）。
-- `WithRetry(N)`：对 **5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
+- `WithRetry(N)`：对 **429**、**5xx 响应** 与 **`HttpErrorIsRetryable` 异常**
   （`hekTimeout` / `hekConnect` / 裸 `ETimeoutError` / `ENetworkError`）在
-  最多 N 次额外尝试内指数退避重试（100ms 基、封顶 5s）。**不**重试 4xx。
+  最多 N 次额外尝试内重试。**不**重试其他 4xx。
+  **退避**（cycle-8）：若响应带可解析的 **delta-seconds** `Retry-After`，
+  优先使用该延迟（**硬顶 60s**）；否则指数退避（100ms 基、封顶 5s）。
+  HTTP-date 形式的 `Retry-After` 本 slice **忽略**（回退指数退避）。
+  长 sleep 以 ~100ms 切片轮询 cancel。
   **幂等门闩**（与 H1/H2 pool retry 同一规则）：仅当
   `HttpIsRetrySafeRequest(Req)` 为真时才进入重试环——即 method ∈
   {GET, HEAD, OPTIONS, TRACE} **或** 请求带 `Idempotency-Key` /
-  `X-Idempotency-Key`。非幂等（如裸 POST）即使 5xx/timeout 也只尝试一次。
+  `X-Idempotency-Key`。非幂等（如裸 POST）即使 5xx/timeout/429 也只尝试一次。
   重试前若 body 可回放（`IStream`）则 rewind；非空且不可回放 body 不重试。
 - 请求取消：`IHttpCancelToken`（**协作检查点**，非 OS 级硬中断）+
   `THttpRequestOptions` / builder / client 挂钩。
@@ -128,9 +145,12 @@ end;
 
 | Capability | HTTP surface today | Owner | Status |
 |------------|-------------------|-------|--------|
-| OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** |
-| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1 client wire | **Landed** (slice latency) |
-| HTTPS CONNECT / proxy auth | plain HTTP absolute-form proxy only | http + TLS tunnel design | **Deferred** (separate milestone) |
+| OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** (H1/H2) |
+| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1/H2 client wire | **Landed** (slice latency) |
+| WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
+| HTTPS CONNECT (plain HTTP proxy) | CONNECT + TLS over tunnel; origin-form | http H1 + TLS stream | **Landed** (cycle-9 Wave D) |
+| H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
+| Proxy authentication | `ProxyUrl` UserInfo → `Proxy-Authorization: Basic` | http H1 | **Landed** (cycle-10 Wave E; Basic only) |
 
 ### 2.2.1 EHttpError.Kind
 
@@ -182,14 +202,46 @@ end;
   同站发送全部匹配 cookie；跨站仅发送 `SameSite=None`。
 - HTTP proxy：`THttpClientOptions.ProxyUrl` **或** fluent
   `IHttpClient.WithProxyUrl`（重建 transport；装饰器 re-stack）。
-  明文 `http://host:port` 正向代理。H1 对目标 `http://` 经 proxy 发
-  absolute-form request-line；**HTTPS CONNECT / 认证代理不在本 slice**。
-  net 层最小 hook：connect 到 proxy 主机而非目标主机。
+  明文 `http://[user:pass@]host:port` 正向代理（proxy scheme 仅 `http`）。
+  - 目标 `http://`：absolute-form request-line（不变）。
+  - 目标 `https://`：对 proxy 发 `CONNECT host:port`，2xx 后对隧道
+    `NewTlsClientTcpStream`（SNI=origin host，ALPN=`http/1.1`），再发
+    origin-form 请求。非 2xx CONNECT → `hekConnect`。
+  - `ProxyUrl` 含 UserInfo 时注入 `Proxy-Authorization: Basic`
+    （`Base64(UTF-8(raw UserInfo))`，不做 percent-decode）：
+    CONNECT 必带；absolute-form 仅在请求未设置该头时注入。
+  - 可选 `THttpClientOptions.TLSContext`（nil → `TSSLQuick.SecureClient`）。
+  - Digest/NTLM/SOCKS **仍 Deferred**。
+- H1 **直连 https**（无 proxy）：dial origin → `NewTlsClientTcpStream`
+  （同 TLSContext/SecureClient，SNI=host，ALPN=`http/1.1`）→ origin-form；
+  连接池键前缀 `https|` 与明文隔离。
 - `PostMultipart(Url, Fields, Files)`：multipart/form-data 便捷 POST
   （自动 boundary + `EncodeMultipartFormData`）。
 - `IHttpClient.GetString` / `GetBytes`：与 free function `HttpGetString` /
   `HttpGetBytes` 等价（ensure 2xx + body）。
+- `IHttpClient.GetJson`：与 free function `HttpGetJson` 等价（ensure 2xx +
+  `JsonParse` → `IJsonDocument`）。另提供 `HttpReadResponseJson` 从已有
+  `IHttpResponse` ensure+decode。非法 JSON：`EHttpError(hekProtocol, Op=json)`。
 - H1 默认 `User-Agent: nextpas-http/1.0`（请求未设置 `User-Agent` 时注入）。
+
+### 2.2.3b WebSocket client connect budgets（cycle-5）+ cancel（cycle-7）
+
+- `TWebSocketOptions.Default`：`ConnectTimeout = 30000`，`Timeout = 30000`
+  （与 HTTP client production discipline 对齐）；**无**默认 CancelToken。
+- `ConnectTimeout`：OS dial budget → `TcpConnect(host, port, ms)` when >0。
+  `=0` 时 dial 回退到 `Timeout`（仍为 0 则无界 dial）。
+- `Timeout`：upgrade handshake 读/写 deadline；成功 101 后清除，便于长连接帧 I/O。
+- fluent：`WithConnectTimeout` / `WithTimeout` / **`WithCancelToken`** on options record。
+- **Cancel（cycle-7 Wave B）**：
+  - `WithCancelToken(IHttpCancelToken)` 挂协作取消；dial 后与握手、mid-frame
+    `ReadFrame`/`Write*` 路径生效。
+  - 有 `ITcpStream` 时：`SetCancelToken` + ~50ms 切片（与 H1/H2 client 同 residual）。
+  - 入口 `HttpThrowIfCanceled`：token 已 cancel 时立即 `hekCanceled`（无需等切片）。
+  - 成功 101 后 **保留** cancel、**清除** handshake deadline。
+  - Close/Destroy 清除 stream cancel token。
+- 传输错误经 `HttpWrapTransportException` → `hekTimeout` / `hekConnect` /
+  `hekCanceled`，Op=`websocket` 或 transport。
+- 显式 `ConnectTimeout=0` + `Timeout=0` 才恢复无界 dial（测试/特殊工具）。
 
 ### 2.2.4 IHttpResponse.Close
 
@@ -372,3 +424,4 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.5 | P5 H3 honesty：无内建 H3 factory；QUIC 阻塞显式化 |
 | 2026-07-16 | 3.6 | Usability wave-2：hekTimeout wrap、hekArgument 消息形状、IReader fail-fast、THttpRequestWrapper、RTL isolation |
 | 2026-07-16 | 3.7 | Usability wave-3：WithRetry=5xx+IsRetryable；connect wrap；删 IReader client overload；known-CL only；删 NewStreamingRequest；多参 NewRequest 仍 deprecated；decorator forwarder |
+| 2026-07-17 | 3.8 | cycle-8 Wave C：`GetJson`/`HttpReadResponseJson` ensure+decode；`WithRetry` 支持 429 + delta-seconds Retry-After（cap 60s） |

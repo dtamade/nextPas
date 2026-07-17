@@ -1,9 +1,12 @@
 # Platform 模块规划路线图
 
+> **Planning snapshot.** Phase evidence authority is [goal-tree.md](goal-tree.md).
+> Do not promote host truth tiers from this file alone.
+
 **日期**: 2026-07-06
 **版本**: v2.0
-**状态**: 活跃规划
-**Owner**: Claude
+**状态**: planning snapshot（非证据权威）
+**Owner**: platform lane
 
 ---
 

@@ -1,10 +1,17 @@
 # Platform API 参考手册
 
 **日期**: 2026-07-06
-**更新**: 2026-07-08 (v1.2: breakdown_utc 月份循环修复)
-**版本**: v1.1
+**更新**: 2026-07-17 (wave-4: return/error cross-links; catalog names must match live sources)
+**版本**: v1.3
 **模块数**: 24
 **API数**: ~1067
+
+**Authority companions** (do not invent names from this catalog alone):
+
+- Errors: [ERROR-HANDLING.md](ERROR-HANDLING.md) + `nextpas.core.platform.error.pas`
+- Return tiers / out-init / length / dual-IO: [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md)
+- Module table (live names): [CONTRACT.md](CONTRACT.md)
+- Examples: [EXAMPLES.md](EXAMPLES.md), [BEST-PRACTICES.md](BEST-PRACTICES.md)
 
 ---
 
@@ -204,6 +211,18 @@
 | `platform_pipe_close(var APipe): Int32` | 关闭管道 |
 | `platform_dup2(AOldFd, ANewFd): Int32` | 复制文件描述符 |
 
+## 14b. process — 进程（节选）
+
+| 函数 | 说明 |
+|------|------|
+| `platform_process_spawn(...)` | 启动进程 |
+| `platform_process_wait` / `try_wait` | 等待退出 |
+| `platform_process_create_piped(...)` | 带 stdin/stdout/stderr 管道启动 |
+| `platform_process_write_stdin_ex(fd, data, len, out n): Int32` | **规范** stdin 写：`0` 成功 |
+| `platform_process_read_stdout_ex(fd, buf, len, out n): Int32` | **规范** stdout 读：`0` 成功；EAGAIN/EOF → n=0 |
+| `platform_process_read_stderr_ex(fd, buf, len, out n): Int32` | **规范** stderr 读：同上 |
+| `platform_process_write_stdin` / `read_stdout` / `read_stderr` | **deprecated** 兼容包装（字节数/-1） |
+
 ## 15. pty — 伪终端
 
 | 函数 | 说明 |
@@ -362,22 +381,39 @@
 
 ## 错误码常量
 
-| 常量 | 说明 |
-|------|------|
-| `PLATFORM_ERR_OK` | 成功 |
-| `PLATFORM_ERR_INVALID` | 无效参数 |
-| `PLATFORM_ERR_NOT_FOUND` | 不存在 |
-| `PLATFORM_ERR_EXISTS` | 已存在 |
-| `PLATFORM_ERR_ACCESS` | 权限不足 |
-| `PLATFORM_ERR_BUSY` | 资源忙 |
-| `PLATFORM_ERR_FULL` | 空间满 |
-| `PLATFORM_ERR_TIMEOUT` | 超时 |
-| `PLATFORM_ERR_ABORTED` | 中止 |
-| `PLATFORM_ERR_IO` | I/O 错误 |
-| `PLATFORM_ERR_NETWORK` | 网络错误 |
-| `PLATFORM_ERR_UNSUPPORTED` | 不支持 |
+Live authority: [`ERROR-HANDLING.md`](ERROR-HANDLING.md) and
+`nextpas.core.platform.error.pas`. Success is integer `0` (there is no
+OK constant under the PLATFORM_ERR family).
+
+| 常量 | 值 | 说明 |
+|------|---:|------|
+| *(success)* | 0 | 错误码 API 成功 |
+| `PLATFORM_ERR_PERM` | 1 | 操作不允许 |
+| `PLATFORM_ERR_NOENT` | 2 | 不存在 |
+| `PLATFORM_ERR_INTR` | 4 | 被信号中断 |
+| `PLATFORM_ERR_IO` | 5 | I/O 错误 |
+| `PLATFORM_ERR_BADF` | 9 | 无效句柄/描述符 |
+| `PLATFORM_ERR_AGAIN` | 11 | 暂时不可用 |
+| `PLATFORM_ERR_NOMEM` | 12 | 内存不足 |
+| `PLATFORM_ERR_BUSY` | 16 | 资源忙 |
+| `PLATFORM_ERR_EXIST` | 17 | 已存在 |
+| `PLATFORM_ERR_NOTDIR` | 20 | 不是目录 |
+| `PLATFORM_ERR_INVALID` | 22 | 无效参数 |
+| `PLATFORM_ERR_NOSPC` | 28 | 空间满 |
+| `PLATFORM_ERR_PIPE` | 32 | 管道断开 |
+| `PLATFORM_ERR_NOSYS` | 38 | 未实现 |
+| `PLATFORM_ERR_UNSUPPORTED` | 95 | 不支持 |
+| `PLATFORM_ERR_CONNRESET` | 104 | 连接重置 |
+| `PLATFORM_ERR_TIMEDOUT` | 110 | 超时（alias `PLATFORM_ERR_TIMEOUT`） |
+| `PLATFORM_ERR_CONNREFUSED` | 111 | 连接拒绝 |
+| `PLATFORM_ERR_PATH_TOO_LONG` | -7 | 路径过长（域内 `PLATFORM_FS_MAX_PATH`，非 OS ENAMETOOLONG） |
+| `PLATFORM_ERR_UNKNOWN` | -8 | 无法映射的宿主原生错误（Windows 未映射码；禁止 raw ERROR_* 透传） |
+
+Do not invent catalog-only error names. Use the live table above and
+ERROR-HANDLING; never alias NOT_FOUND/EXISTS/ACCESS/FULL/ABORTED/NETWORK
+as separate PLATFORM_ERR identifiers.
 
 ---
 
 **文档维护**: 随 platform 模块演进更新
-**最后更新**: 2026-07-06
+**最后更新**: 2026-07-17

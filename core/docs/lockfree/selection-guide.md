@@ -1,8 +1,10 @@
 # Lockfree 数据结构选型指南
 
-> 更新: 2026-07-06
+> 更新: 2026-07-17
 
 [English](selection-guide.en.md)
+
+> 相对性能以 `core/benchmarks/nextpas.core.lockfree` 为准；本指南**不**给无平台信封的绝对 Mops/s。
 
 ## 快速决策树
 
@@ -10,116 +12,98 @@
 需要队列？
 ├── 单生产者 + 单消费者 (SPSC)
 │   └── 使用 TSpscQueue<T>
-│       - 最快，无 CAS 竞争
+│       - 通常最快（无 CAS 竞争）
 │       - 支持 batch/wait/timeout/close
-│       - 性能: 4.4 M ops/s
 │
 ├── 单生产者 + 多消费者 (SPMC)
 │   └── 使用 TSpmcQueue<T>
 │       - 多消费者 CAS 竞争 dequeue
 │       - 支持 wait/timeout/close
-│       - 性能: 2.6 M ops/s (1P+2C)
 │
 ├── 多生产者 + 多消费者 (MPMC)
-│   ├── 使用 TMpmcQueue<T> (有界)
-│   │   - 通用但有 CAS 竞争开销
-│   │   - 支持 batch/wait/timeout/close
-│   │   - 性能: 1.3 M ops/s (2P+2C)
+│   ├── 使用 TMpmcQueue<T> (有界 ring)
+│   │   - 通用；batch/wait/timeout/close
 │   │
-│   └── 使用 TLockFreeMsQueue<T> (无界)
-│       - Michael-Scott 经典算法
-│       - Sentinel 节点 + CAS
-│       - 自动扩容，无容量限制
+│   ├── 使用 TLockFreeMsQueue<T> (无界节点池)
+│   │   - Michael-Scott；Close → join → Free
+│   │   - Destroy 会 Close+drain；仍须 quiescent Free
+│   │
+│   └── 使用 TSegQueue<T> (无界分段 MPMC)
+│       - EBR 回收段；Close 后 Try=False，Enqueue raise
 │
 ├── 多生产者 + 单消费者 (MPSC)
 │   └── 使用 TMpscQueue<T>
-│       - 无界，多生产者安全
-│       - 支持 wait/timeout/try-enqueue/close
-│       - 性能: 最高 (无 CAS enqueue)
+│       - 无界链表；单消费者
+│       - Close 后 TryEnqueue=False；Enqueue raise
+│       - 生命周期: Close → join producers/waiters → Free
 │
-└── 无界 MPSC (高吞吐)
-    └── 使用 TSegQueue<T>
-        - 分段设计，EBR 回收
-        - 无界，自动扩展
-        - 支持 try-enqueue/close
-        - 性能: 1.5 M ops/s (2P+2C)
-
 需要栈？
-├── LIFO (后进先出)
-│   └── 使用 TLockFreeStack<T>
-│       - Treiber stack 算法
-│       - ABA 安全
-│       - 性能: 最高 (单 CAS push/pop)
+├── LIFO
+│   └── 使用 TLockFreeStack<T>（仅 TryPush/TryPop）
 │
-└── 工作窃取 (owner push/pop + thief steal)
+└── 工作窃取
     └── 使用 TWorkStealingDeque<T>
-        - owner LIFO pop, thief FIFO steal
-        - 适用于任务调度
-        - 性能: 取决于竞争程度
+        - owner TryPush/TryPop；thief TrySteal；有 Close
 
 需要内存回收？
-├── 使用 TEbrDomain + TEbrGuard
-│   - Epoch-Based Reclamation
-│   - 保守单次检查设计
-│   - 适用: 读多写少场景
-│
-└── 使用 THazardDomain
-    - Hazard Pointer
-    - 精确保护，适合读写均衡场景
-    - 适用: 延迟敏感、内存受限场景
+├── TEbrDomain / TQSBRDomain（zero-active QSBR 风格）
+└── THazardDomain（Hazard Pointer）
 
 需要并发 HashMap？
-└── 使用 TLockFreeHashMap<TKey,TValue>
-    - 分片锁 HashMap (16 shards)
-    - Insert/Find/Remove/Contains/Count
-    - 自动 resize
+└── TShardedHashMap / TConcurrentHashMap（同一实现别名）
+    - 分片自旋锁 — NOT lock-free
+
+---
+
+以下为 **T2（直接 `uses nextpas.core.lockfree.<unit>`，默认 facade 不拉入）**：
+多数为 **lock-based concurrent** 或专用结构，名称中的 Concurrent/LockFree 以单元 `@concurrency` 与矩阵为准。
 
 需要 Bag（允许重复元素的并发集合）？
-└── 使用 TLockFreeBag<T>
+└── `uses nextpas.core.lockfree.bag` → TLockFreeBag<T>
     - 基于 MPMC 队列，允许重复元素
     - FIFO 顺序
     - 阻塞/非阻塞/超时
     - 适用: 任务队列、工作池
 
 需要 MultiMap（一个键多个值）？
-└── 使用 TLockFreeMultiMap<TKey,TValue>
-    - 基于分片锁 HashMap
+└── `uses nextpas.core.lockfree.multimap` → TLockFreeMultiMap
+    - **分片锁** HashMap 后端（lock-based concurrent）
     - 一个键可以有多个值
     - 适用于索引、标签系统
 
 需要 Bloom Filter（快速成员检查）？
-└── 使用 TConcurrentBloomFilter<T>
+└── `uses nextpas.core.lockfree.bloom` → TConcurrentBloomFilter<T>
     - 概率数据结构，可能存在假阳性
     - 空间效率高
     - 适用于缓存、去重、快速成员检查
 
 需要 LRU Cache（最近最少使用缓存）？
-└── 使用 TConcurrentLruCache<TKey,TValue>
-    - 分片锁 HashMap + 访问计数
+└── `uses nextpas.core.lockfree.lru` → TConcurrentLruCache
+    - **分片锁** + 访问计数（lock-based concurrent）
     - 自动淘汰最久未访问的条目
     - 适用于缓存、淘汰场景
 
 需要并发计数器？
-└── 使用 TConcurrentCounter
-    - 原子操作，无锁
+└── `uses nextpas.core.lockfree.counter` → TConcurrentCounter
+    - 原子操作
     - Increment/Decrement/Add/Sub/Load/Store
     - 适用于统计、计数
 
 需要信号量（资源池限流）？
-└── 使用 TConcurrentSemaphore
-    - 原子 CAS 操作
+└── `uses nextpas.core.lockfree.semaphore` → TConcurrentSemaphore
+    - 原子 CAS 自旋/等待（非容器 lock-free 声明）
     - TryAcquire/Acquire/AcquireTimeout/Release
     - 适用于资源池、限流
 
 需要互斥锁？
-└── 使用 TConcurrentMutex
-    - 原子 CAS 操作
+└── `uses nextpas.core.lockfree.mutex` → TConcurrentMutex
+    - 原子 CAS 互斥（lock-based）
     - TryLock/Lock/LockTimeout/Unlock
-    - 适用于互斥访问
+    - 适用于互斥访问；长期边界见 sync 模块（ownership 迁移未在本 lane 执行）
 
 需要读写锁？
-└── 使用 TConcurrentRwLock
-    - 单 Int32 状态编码 (0/-1/>0)
+└── `uses nextpas.core.lockfree.rwlock` → TConcurrentRwLock
+    - 单 Int32 状态编码 (0/-1/>0)（lock-based）
     - 多读者并发，写者独占
     - 适用于读多写少场景
 
@@ -283,21 +267,24 @@
 
 ## 线程安全契约
 
+生命周期：**Close → join producers/waiters → Free**。Destroy 的 Close+drain 不替代 join。
+T1 元素类型必须 unmanaged（构造时 `EArgumentError`）。
+
 | 数据结构 | 生产者 | 消费者 | Close 安全 |
 |----------|--------|--------|-----------|
 | TSpscQueue | 1 线程 | 1 线程 | ✅ |
 | TSpmcQueue | 1 线程 | N 线程 | ✅ |
 | TMpmcQueue | N 线程 | N 线程 | ✅ |
-| TMpscQueue | N 线程 | 1 线程 | ✅ |
+| TMpscQueue | N 线程 | 1 线程 | ✅（Close 后 Enqueue 抛错；用 TryEnqueue） |
 | TSegQueue | N 线程 | N 线程 | ✅ |
 | TLockFreeStack | N 线程 | N 线程 | N/A |
 | TWorkStealingDeque | 1 owner + N thieves | 1 owner + N thieves | N/A |
 | TLockFreeChannelSpsc | 1 线程 | 1 线程 | ✅ |
-| TLockFreeChannel | N 线程 | N 线程 | ✅ |
+| TLockFreeChannel | N 线程 | N 线程 | ✅（Send 在 closed 时抛错） |
 | TLockFreeMsQueue | N 线程 | N 线程 | ✅ |
-| TLockFreeForkJoinPool | N 工作者 | N 工作者 | ✅ |
-| TCopyOnWriteArray | N 读 / 1 写 | N 读 | ✅ |
-| TLockFreeDisjointSet | N 线程 | N 线程 | N/A |
+| TLockFreeForkJoinPool | N 工作者 | N 工作者 | ✅ (T2) |
+| TCopyOnWriteArray | N 读 / 1 写 | N 读 | ✅ (T2) |
+| TLockFreeDisjointSet | N 线程 | N 线程 | N/A (T2) |
 
 ## 内存回收方案选择
 

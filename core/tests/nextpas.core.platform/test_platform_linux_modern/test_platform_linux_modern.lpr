@@ -3,9 +3,9 @@ program test_platform_linux_modern;
 {$I nextpas.core.settings.inc}
 
 uses
- BaseUnix,
   nextpas.core.test,
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.platform.linux.modern;
 
 var
@@ -13,7 +13,7 @@ var
 
 procedure TestMemfdCreate;
 var
-  LFd: cint;
+  LFd: Int32;
   LBuf: array[0..7] of Byte;
   LN: ssize_t;
 begin
@@ -22,21 +22,21 @@ begin
   if LFd >= 0 then
   begin
     LBuf[0] := 42; LBuf[1] := 43;
-    LN := FpWrite(LFd, @LBuf[0], 2);
+    LN := write(LFd, @LBuf[0], 2);
     Check(LN = 2, 'write to memfd');
-    FpLseek(LFd, 0, SEEK_SET);
+    Check(lseek(LFd, 0, 0{SEEK_SET}) = 0, 'lseek to start');
     FillChar(LBuf, SizeOf(LBuf), 0);
-    LN := FpRead(LFd, @LBuf[0], 2);
+    LN := read(LFd, @LBuf[0], 2);
     Check(LN = 2, 'read from memfd');
     Check((LBuf[0] = 42) and (LBuf[1] = 43), 'memfd data correct');
-    FpClose(LFd);
+    close(LFd);
   end;
 end;
 
 procedure TestIoUringSetup;
 var
   LParams: TIoUringParams;
-  LFd: cint;
+  LFd: Int32;
 begin
   FillChar(LParams, SizeOf(LParams), 0);
   LFd := io_uring_setup(8, @LParams);
@@ -45,7 +45,7 @@ begin
     Check(True, 'io_uring_setup succeeds');
     Check(LParams.sq_entries >= 8, 'sq_entries >= 8');
     Check(LParams.cq_entries >= 8, 'cq_entries >= 8');
-    FpClose(LFd);
+    close(LFd);
   end
   else
     Check(True, 'io_uring_setup not available (kernel too old or no permission)');
@@ -53,13 +53,13 @@ end;
 
 procedure TestPidfdOpen;
 var
-  LFd: cint;
+  LFd: Int32;
 begin
-  LFd := pidfd_open(FpGetpid, 0);
+  LFd := pidfd_open(getpid, 0);
   if LFd >= 0 then
   begin
     Check(True, 'pidfd_open succeeds for self');
-    FpClose(LFd);
+    close(LFd);
   end
   else
     Check(True, 'pidfd_open not available (kernel < 5.3)');
@@ -67,8 +67,8 @@ end;
 
 procedure TestCloseRange;
 var
-  LFd1, LFd2: cint;
-  LRet: cint;
+  LFd1, LFd2: Int32;
+  LRet: Int32;
 begin
   LFd1 := memfd_create('cr1', MFD_CLOEXEC);
   LFd2 := memfd_create('cr2', MFD_CLOEXEC);
@@ -82,8 +82,8 @@ begin
   end
   else
   begin
-    if LFd1 >= 0 then FpClose(LFd1);
-    if LFd2 >= 0 then FpClose(LFd2);
+    if LFd1 >= 0 then close(LFd1);
+    if LFd2 >= 0 then close(LFd2);
     Check(True, 'memfd not available for close_range test');
   end;
 end;
@@ -91,7 +91,7 @@ end;
 procedure TestOpenat2;
 var
   LHow: TOpenHow;
-  LFd: cint;
+  LFd: Int32;
 begin
   FillChar(LHow, SizeOf(LHow), 0);
   LHow.flags := $0; // O_RDONLY
@@ -101,7 +101,7 @@ begin
   if LFd >= 0 then
   begin
     Check(True, 'openat2 succeeds');
-    FpClose(LFd);
+    close(LFd);
   end
   else
     Check(True, 'openat2 not available (kernel < 5.6)');

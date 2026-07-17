@@ -1,12 +1,12 @@
 # 全仓库 mem Consumer Audit — Findings
 
-**日期**: 2026-07-17  
-**分支 / worktree**: `mem`（`.worktrees/mem`）  
-**范围**: 全仓库 consumer 对 `nextpas.core.mem` 的使用是否正确、范式是否一致、是否充分复用  
-**非目标**: mem 模块内部再审；reopen USABILITY-SCORE CLOSED keepers 为 P0  
-**方法**: 自动化 sweep（S1–S9）+ 关键模块 deep dive + 可编译证据 → **Wave1–7 全修 + focused 验证**  
-**Scratch**: `/tmp/grok-mem-consumer-audit/` · `/tmp/grok-mem-consumer-fix/`（不入仓）  
-**摘要**: [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md)  
+**日期**: 2026-07-17
+**分支 / worktree**: `mem`（`.worktrees/mem`）
+**范围**: 全仓库 consumer 对 `nextpas.core.mem` 的使用是否正确、范式是否一致、是否充分复用
+**非目标**: mem 模块内部再审；reopen USABILITY-SCORE CLOSED keepers 为 P0
+**方法**: 自动化 sweep（S1–S9）+ 关键模块 deep dive + 可编译证据 → **Wave1–7 全修 + focused 验证**
+**Scratch**: `/tmp/grok-mem-consumer-audit/` · `/tmp/grok-mem-consumer-fix/`（不入仓）
+**摘要**: [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md)
 **修复状态**: **CLOSED**（见 §9）
 
 ---
@@ -101,9 +101,9 @@
 
 **代表簇**:
 
-1. **platform.fs** `platform_fs_read_until_eof`  
-   - `GetMem(LBuf, LBufSize)` 后 `FreeMem(LBuf)` / 扩容后 free 旧缓冲均 unsized  
-   - 注释明确 “Caller must FreeMem”  
+1. **platform.fs** `platform_fs_read_until_eof`
+   - `GetMem(LBuf, LBufSize)` 后 `FreeMem(LBuf)` / 扩容后 free 旧缓冲均 unsized
+   - 注释明确 “Caller must FreeMem”
    - **无** `uses nextpas.core.mem` → 走 FPC `System.GetMem`（L0 旁路，见 CA-004）
 
 2. **platform.io / pty** — poll 缓冲、属性表：分配 size 已知，free unsized
@@ -131,8 +131,8 @@
 
 **分层原则**:
 
-- **L0 platform.memory / SysGetMem**: 底座实现，**WAIVED** 为 mem 依赖源，不得倒依赖  
-- **L0 其他 platform 文件**: 可用 System 堆，但 consumer 契约必须写清  
+- **L0 platform.memory / SysGetMem**: 底座实现，**WAIVED** 为 mem 依赖源，不得倒依赖
+- **L0 其他 platform 文件**: 可用 System 堆，但 consumer 契约必须写清
 - **L1+（collections 已部分接入；lockfree/tui/yaml）**: 默认应 `uses nextpas.core.mem`，走过程式 `GetMem` 或 `DefaultAllocator` 注入
 
 ### CA-005 / CA-014 — 错误模型分叉（P2）
@@ -172,9 +172,9 @@ ERROR-POLICY：资源不足可 nil/False；编程错误 raise。Consumer 在 **�
 
 ### CA-008 / CA-009 / CA-010 — 健康项
 
-- **M1**: 无消费者热路径 `DefaultAllocator.GetMem` 误用（门面内部桥接除外）  
-- **M3**: `http` RequestArena / `compiler.mem` PhaseScratch 为正确 bulk-reclaim wire；S3 交集文件为文档与 re-export，未发现 Arena 块 `FreeMem` 实锤  
-- **M10**: `np_backend_plan` `PhaseScratch := CompilerCreateUnitAllocator`；HTTP `RequestArenaMiddleware` / `HttpRequestAllocatorOf` 已产品化  
+- **M1**: 无消费者热路径 `DefaultAllocator.GetMem` 误用（门面内部桥接除外）
+- **M3**: `http` RequestArena / `compiler.mem` PhaseScratch 为正确 bulk-reclaim wire；S3 交集文件为文档与 re-export，未发现 Arena 块 `FreeMem` 实锤
+- **M10**: `np_backend_plan` `PhaseScratch := CompilerCreateUnitAllocator`；HTTP `RequestArenaMiddleware` / `HttpRequestAllocatorOf` 已产品化
 
 ### CA-011 — dynarray keepers（WAIVED）
 
@@ -182,8 +182,8 @@ ERROR-POLICY：资源不足可 nil/False；编程错误 raise。Consumer 在 **�
 
 ### CA-012 — SecureZero 覆盖（P2–P3）
 
-- 已用：`tls.secure`、`mem.secure`、部分 crypto / tls13 / pkcs11  
-- 未做全仓敏感字段×释放点闭合证明  
+- 已用：`tls.secure`、`mem.secure`、部分 crypto / tls13 / pkcs11
+- 未做全仓敏感字段×释放点闭合证明
 - 建议：tls/crypto lane 单独 source-contract，而非 mem 可用性主线
 
 ---
@@ -206,13 +206,13 @@ ERROR-POLICY：资源不足可 nil/False；编程错误 raise。Consumer 在 **�
 
 ## 6. 修复序列（已执行）
 
-1. **Wave1 P0** CA-001/007：swiss.i32/str/i32i32/generic → GetMem/FreeMemOf + DefaultAllocator  
-2. **Wave2** CA-004/015：L1+ 注入 `uses nextpas.core.mem`；两参 `GetMem(var,size)` 改为函数形式  
-3. **Wave3** CA-002/003/013：platform/tui/lockfree/tls/text/… 已知 size → sized free / FreeMemOf  
-4. **Wave4** CA-006：simd.memutils → `mem.base.AlignUp`  
-5. **Wave5** CA-005/014：yaml.builder + lockfree OOM → FormatAllocErrorMsg  
-6. **Wave6** CA-012：mbedtls 私钥 / tls.secure 全容量 SecureZero + sized free  
-7. **Wave7**：re-sweep、findings CLOSED、hygiene、focused gates  
+1. **Wave1 P0** CA-001/007：swiss.i32/str/i32i32/generic → GetMem/FreeMemOf + DefaultAllocator
+2. **Wave2** CA-004/015：L1+ 注入 `uses nextpas.core.mem`；两参 `GetMem(var,size)` 改为函数形式
+3. **Wave3** CA-002/003/013：platform/tui/lockfree/tls/text/… 已知 size → sized free / FreeMemOf
+4. **Wave4** CA-006：simd.memutils → `mem.base.AlignUp`
+5. **Wave5** CA-005/014：yaml.builder + lockfree OOM → FormatAllocErrorMsg
+6. **Wave6** CA-012：mbedtls 私钥 / tls.secure 全容量 SecureZero + sized free
+7. **Wave7**：re-sweep、findings CLOSED、hygiene、focused gates
 
 **保留**: CA-011 WAIVED；L0 platform 不 `uses nextpas.core.mem`（循环依赖）；不全库机械 FreeMemOf；旧 raise 不全扫。
 
@@ -230,8 +230,8 @@ ERROR-POLICY：资源不足可 nil/False；编程错误 raise。Consumer 在 **�
 
 ## 8. 验证（audit 时）
 
-- 只读 audit 阶段：swiss.i32 `Allocate` 编译失败证据  
-- fix 阶段：见 §9  
+- 只读 audit 阶段：swiss.i32 `Allocate` 编译失败证据
+- fix 阶段：见 §9
 
 ---
 

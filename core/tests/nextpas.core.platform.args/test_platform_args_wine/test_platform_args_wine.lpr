@@ -3,7 +3,6 @@ program test_platform_args_wine;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.platform.args,
   nextpas.core.platform.error;
 

@@ -529,7 +529,7 @@ begin
 
   CheckContains(LWindowsClose, 'if FindClose(AHandle.FindHandle) then',
     'Windows dir_close must check FindClose return value');
-  CheckContains(LWindowsClose, 'Result := Int32(GetLastError)',
+  CheckContains(LWindowsClose, 'platform_get_last_error',
     'Windows dir_close must surface FindClose failure');
   CheckContains(LWindowsClose, 'AHandle.FindHandle := HANDLE(PtrInt(-1))',
     'Windows dir_close must invalidate the handle after close attempt');
@@ -549,8 +549,7 @@ begin
   LSource := LowerCase(LoadSourceText('../../../src/nextpas.core.platform.files.pas'));
   LAndroidBase := LowerCase(LoadSourceText('../../../src/nextpas.core.platform.android.base.pas'));
   LAndroidDirRead := SourceSlice(LSource,
-    'function platform_dir_read(var ahandle: tplatformdirhandle; out aentry: tplatformdirentry): int32;' +
-      LineEnding + '{$if defined(nextpas_linux) or defined(nextpas_android)}',
+    '{$if defined(nextpas_linux) or defined(nextpas_android)}',
     'function platform_dir_close(var ahandle: tplatformdirhandle): int32;');
 
   CheckContains(LAndroidBase, 'android_syscall_getdents64',
@@ -701,10 +700,10 @@ var
   LSource: string;
 begin
   LSource := LoadSourceText('../../../src/nextpas.core.platform.files.pas');
-  CheckContains(LSource, 'FILE_ATTRIBUTE_NORMAL',
-    'Windows chmod must use named FILE_ATTRIBUTE_NORMAL');
-  CheckAbsent(LSource, 'FILE_ATTRIBUTE_NORMAL = $80',
-    'Windows chmod must not redeclare FILE_ATTRIBUTE_NORMAL magic value');
+  CheckContains(LSource, 'FILE_ATTRIBUTE_READONLY',
+    'Windows chmod must use named FILE_ATTRIBUTE_READONLY');
+  CheckAbsent(LSource, 'FILE_ATTRIBUTE_READONLY = $1',
+    'Windows chmod must not redeclare FILE_ATTRIBUTE_READONLY magic value');
 end;
 
 procedure TestFstatInvalidHandleReturnsError;
@@ -858,7 +857,7 @@ begin
     @TestWindowsReadlinkFinalPathnameSourceContract);
   T.Test('CreateTime ctime source contract',
     @TestCreateTimeCtimeSourceContract);
-  T.Test('Windows chmod FILE_ATTRIBUTE_NORMAL source contract',
+  T.Test('Windows chmod FILE_ATTRIBUTE_READONLY source contract',
     @TestWindowsChmodUsesFileAttributeNormalSourceContract);
   T.Test('fstat invalid handle returns error', @TestFstatInvalidHandleReturnsError);
   T.Test('truncate invalid handle returns error', @TestTruncateInvalidHandleReturnsError);

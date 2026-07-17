@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.trie_map;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   TRIE_BRANCH_BITS = 4;

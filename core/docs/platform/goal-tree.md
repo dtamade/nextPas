@@ -10,6 +10,49 @@ Windows has focused-runtime evidence for 14 modules on real Windows VM via SSH,
 plus Wine runtime smoke for 20 modules. macOS, FreeBSD, and Android remain
 source-contract or forced-compile only.
 
+### 2026-07-17 process/console/pty contract slice
+
+Linux focused-runtime evidence added/refreshed for:
+
+- `platform_process_*_ex` pipe IO error-code APIs + deprecated legacy wrappers
+- console unsupported write stubs (`PLATFORM_ERR_UNSUPPORTED`, no raw `-1`)
+- pty `IsEmpty` / Windows validity / unsupported close clearing
+
+Windows truth tiers are **unchanged** by this slice (no new real-Windows or
+Wine matrix promotion). Wine compile remains environment-dependent
+(`ppcrossx64` required).
+
+### 2026-07-17 usability residual (M0–M7)
+
+- `PLATFORM_ERR_UNKNOWN` (-8): Windows unmapped host errors never passthrough raw `ERROR_*`
+- `PLATFORM_ERR_PATH_TOO_LONG` stays -7 (domain path clamp; not OS ENAMETOOLONG)
+- `platform_io_*` dual-API documented as transitional for process.pipe
+- EXAMPLES.md: no SysUtils in sample code
+- Authority: ERROR-HANDLING / RETURN-SEMANTICS / API-REFERENCE aligned
+
+### 2026-07-17 usability residual wave-2 (assessment 7.28)
+
+- EXAMPLES rewritten to live `files`/`fs`/`socket`/`env`/`fmt` APIs (no `fileio` / `platform.net_*` ghosts)
+- `PLATFORM_FS_SHORT_*` → alias `PLATFORM_ERR_IO`; `platform_parse_*` fails with `PLATFORM_ERR_INVALID`
+- CONTRACT L0 wording: host FFI + ban FPC RTL (not “depends on FPC RTL”)
+- Full production RTL uses scan + expanded out-init contracts in return_semantics gate
+- Windows/macOS/Android truth tiers **unchanged** (no fake promotion)
+
+### 2026-07-17 usability residual wave-3 (assessment 7.91)
+
+- BEST-PRACTICES rewritten to live APIs; `api-reference.md` redirect-only; historical USABILITY banner points to wave-3 score
+- `platform_dl_error` length failure → `PLATFORM_ERR_INVALID`; RETURN length/out-init/stub rules expanded
+- files seek/stat out-init strengthened; return_semantics contracts for dl_error / seek / stat / BEST-PRACTICES ghosts
+- F6 raw OS side-channel **Won't this wave**; F7 POSIX/Windows asymmetry **documented**; F10 diagnostics deferred
+- Host truth tiers **unchanged** (no fake promotion)
+
+### 2026-07-17 usability residual wave-4 (assessment 8.21)
+
+- CONTRACT §1.1 submodule table aligned to live API names (no resource_get / fmt_snprintf / pipe_open ghosts)
+- unsupported stubs: files open + socket create/accept (+ Windows socket_pair) out-init sentinels
+- USABILITY banner → 8.21; API-REFERENCE cross-links RETURN/ERROR; RETURN names `str_find` as index value-sentinel
+- F6 raw OS API / F8 doctest / F9 rename / host truth **unchanged** (Won't or deferred)
+
 ## Host Status
 
 | Host | Current truth | Required next proof |

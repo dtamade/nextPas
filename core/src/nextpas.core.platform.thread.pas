@@ -5,7 +5,8 @@ unit nextpas.core.platform.thread;
 interface
 
 uses
-  nextpas.core.platform.thread.base;
+  nextpas.core.platform.thread.base,
+  nextpas.core.platform.posix.errno;
 
 type
   TPlatformThreadHandle = nextpas.core.platform.thread.base.TPlatformThreadHandle;
@@ -503,22 +504,32 @@ begin
   Result := platform_thread_host_cpu_count_i32;
 end;
 
+{ Thread name buffer: POSIX systems limit thread names to 15 chars + null.
+  This helper copies up to 15 chars from AName into a 16-byte buffer,
+  null-terminating the result. Returns the number of chars copied. }
+function CopyThreadName16(const AName: PAnsiChar; out AName16: array of AnsiChar): Int32;
+var
+  LLen: Int32;
+begin
+  LLen := 0;
+  while (AName[LLen] <> #0) and (LLen < 15) do
+  begin
+    AName16[LLen] := AName[LLen];
+    Inc(LLen);
+  end;
+  AName16[LLen] := #0;
+  Result := LLen;
+end;
+
 { Thread naming }
 
 function platform_thread_set_name(const AName: PAnsiChar): Int32;
 {$IFDEF NEXTPAS_LINUX}
 var
   LName: array[0..15] of AnsiChar;
-  LLen: Int32;
 begin
   if AName = nil then Exit(PLATFORM_ERR_INVALID);
-  LLen := 0;
-  while (AName[LLen] <> #0) and (LLen < 15) do
-  begin
-    LName[LLen] := AName[LLen];
-    Inc(LLen);
-  end;
-  LName[LLen] := #0;
+  CopyThreadName16(AName, LName);
   Result := Int32(nextpas.core.platform.linux.ffi.prctl(
     15 { PR_SET_NAME }, PtrUInt(@LName[0]), 0, 0, 0));
   if Result <> 0 then Result := platform_get_errno;
@@ -526,32 +537,18 @@ end;
 {$ELSEIF defined(NEXTPAS_MACOS)}
 var
   LName: array[0..15] of AnsiChar;
-  LLen: Int32;
 begin
   if AName = nil then Exit(PLATFORM_ERR_INVALID);
-  LLen := 0;
-  while (AName[LLen] <> #0) and (LLen < 15) do
-  begin
-    LName[LLen] := AName[LLen];
-    Inc(LLen);
-  end;
-  LName[LLen] := #0;
+  CopyThreadName16(AName, LName);
   Result := nextpas.core.platform.darwin.ffi.pthread_setname_np(@LName[0]);
   if Result <> 0 then Result := platform_get_errno;
 end;
 {$ELSEIF defined(NEXTPAS_FREEBSD)}
 var
   LName: array[0..15] of AnsiChar;
-  LLen: Int32;
 begin
   if AName = nil then Exit(PLATFORM_ERR_INVALID);
-  LLen := 0;
-  while (AName[LLen] <> #0) and (LLen < 15) do
-  begin
-    LName[LLen] := AName[LLen];
-    Inc(LLen);
-  end;
-  LName[LLen] := #0;
+  CopyThreadName16(AName, LName);
   Result := nextpas.core.platform.freebsd.ffi.pthread_setname_np(
     pthread_self, @LName[0]);
   if Result <> 0 then Result := platform_get_errno;

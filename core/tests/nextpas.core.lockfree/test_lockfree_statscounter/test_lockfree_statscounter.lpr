@@ -3,7 +3,7 @@ program test_lockfree_statscounter;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.statscounter;
 
 var

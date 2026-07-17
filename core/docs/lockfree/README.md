@@ -2,16 +2,38 @@
 
 [English](README.en.md)
 
-`nextpas.core.lockfree` 提供 nextpas.core 内部可复用的 lock-free-oriented / non-blocking fast-path
+`nextpas.core.lockfree` 提供 nextpas.core 内部可复用的 lock-free-oriented / concurrent
 数据结构。当前模块优先服务 runtime/framework 内部热路径，而不是公开宣称完整替代 Rust std、
-Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标平台底层 atomic 操作本身
-也是 lock-free 的路径。
+Go std 或 C++ std 的并发容器；**lock-free progress claim 只适用于下表标为 lock-free 的类型，
+且底层 atomic 在目标平台也是 lock-free 的路径**。
 所有结构只接受 unmanaged element type；`string`、interface、dynamic array 等 managed 类型会被拒绝。
-`TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.
+All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TSpmcQueue`, `TSegQueue`, `TLockFreeMsQueue`, `TLockFreeStack`, `TWorkStealingDeque`, `TLockFreeChannel`, `TLockFreeChannelSpsc`, `TShardedHashMap` keys/values) reject managed types at construction with `EArgumentError`.
 
-## 模块分层
+**层级**：L1（依赖 L0 `base` + `atomic`；见 `core/docs/core-module-registry.md`）。
 
-当前 live source set 由这些单元组成：
+## Progress-guarantee matrix
+
+| Class | Progress model | Sync mechanism | Default facade (T1) |
+| --- | --- | --- | --- |
+| `TSpscQueue` / `TMpmcQueue` / `TSpmcQueue` / `TSegQueue` / `TLockFreeMsQueue` / `TLockFreeStack` / `TLockFreeChannel` | lock-free (atomic CAS/sequence) | no locks | yes |
+| `TMpscQueue` | lock-free producers + single-owner consumer | no locks; single consumer only | yes |
+| `TWorkStealingDeque` | lock-free with single-owner push/pop | owner thread exclusive for push/pop; thieves steal | yes |
+| `TEbrDomain` / `THazardDomain` | reclamation domains (not containers) | atomics + TLS/HP slots | yes |
+| `TLockFreeSelector` | concurrent multiplexer | poll + backoff over channels | yes |
+| `TShardedHashMap` / `TConcurrentHashMap` | **lock-based concurrent** | per-shard spin lock (+ optimistic read path) | yes (honest concurrent alias) |
+| Trees (SkipList/BTree/RBTree/Treap/…), caches, CRDT, filters, RTM/NUMA maps, most sync primitives in `lockfree.*` | **lock-based concurrent** or specialized | spin/RW locks as documented per unit | **no** — import unit directly |
+
+Single-owner means concurrent multi-owner use is outside the contract (e.g. multiple SPSC producers).
+
+## Tiered module surface
+
+| Tier | Contents | How to use |
+| --- | --- | --- |
+| **T1 runtime core** | SPSC/MPMC/MPSC/SPMC/SegQueue/MSQueue, Stack, WorkStealingDeque, EBR/Hazard, Channel, Selector, ShardedHashMap (+ ConcurrentHashMap alias) | `uses nextpas.core.lockfree;` |
+| **T2 concurrent containers** | SkipList, BTree, caches, Bloom, Bag, MultiMap, graph/tree extras, sync helpers under `lockfree.*` | `uses nextpas.core.lockfree.<unit>;` |
+| **T3 research / extensions** | RTM HashMap, NUMA HashMap, experimental algos | direct unit only |
+
+## 模块分层（T1 live set）
 
 | 单元                             | 职责                                                                                               |
 | -------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -23,22 +45,18 @@ Go std 或 C++ std 的并发容器；lock-free progress claim 只适用于目标
 | `nextpas.core.lockfree.stack`    | `TLockFreeStack<T>`，有界 stack，内部使用 tagged index 约束 ABA-sensitive top/free-list 复用风险。 |
 | `nextpas.core.lockfree.deque`    | `TWorkStealingDeque<T>`，有界 single-owner push/pop + multi-thief steal deque。                    |
 | `nextpas.core.lockfree.ebr`      | `TEbrDomain` + `TEbrGuard`，保守 epoch-based reclamation 域。                                      |
-| `nextpas.core.lockfree.hazard`   | `THazardDomain` + `THazardThread`，Hazard Pointer 内存回收域。                                     |
+| `nextpas.core.lockfree.hazard`   | `THazardDomain` + `THazardGuard`，Hazard Pointer 内存回收域。                                     |
 | `nextpas.core.lockfree.segqueue` | `TSegQueue<T>`，无界 multi-producer/multi-consumer segment queue，基于 EBR 回收旧 segment。        |
 | `nextpas.core.lockfree.spmc`     | `TSpmcQueue<T>`，有界 single-producer/multi-consumer ring queue。                                  |
-| `nextpas.core.lockfree.hashmap`  | `TShardedHashMap<TKey, TValue>`，基于分片锁的并发 HashMap。                                        |
-| `nextpas.core.lockfree.bag`      | `TLockFreeBag<T>`，基于 MPMC 队列的并发 Bag，允许重复元素。                                        |
-| `nextpas.core.lockfree.multimap` | `TLockFreeMultiMap<TKey, TValue>`，基于分片锁的并发 MultiMap，一键多值。                          |
-| `nextpas.core.lockfree.bloom`   | `TConcurrentBloomFilter<T>`，基于多个哈希函数的并发布隆过滤器。                                  |
+| `nextpas.core.lockfree.msqueue`  | `TLockFreeMsQueue<T>`，Michael-Scott 无界 MPMC 队列。                                              |
+| `nextpas.core.lockfree.hashmap`  | `TShardedHashMap<TKey, TValue>`，**分片锁**并发 HashMap（非 lock-free）。                          |
 | `nextpas.core.lockfree.channel`  | `TLockFreeChannel<T>`，有界无锁 Channel，序列号驱动的 MPMC 通道。                                  |
-| `nextpas.core.lockfree.channel.spsc` | `TLockFreeChannelSpsc<T>`，单生产者单消费者有界 Channel，专为 1P1C 优化。                    |
-| `nextpas.core.lockfree`          | 聚合 facade。                                                                                      |
+| `nextpas.core.lockfree.selector` | `TLockFreeSelector<T>`，多路 channel 复用。                                                        |
+| `nextpas.core.lockfree`          | **T1-only** 默认 facade。T2/T3 不经此 unit 拉入。                                                  |
 
-`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,
-`TLockFreeStack<T>`, `TWorkStealingDeque<T>`, `TSegQueue<T>`, `TSpmcQueue<T>`, `TShardedHashMap<TKey, TValue>`,
-`TLockFreeBag<T>`, `TLockFreeMultiMap<TKey, TValue>`, `TConcurrentBloomFilter<T>`, `THazardDomain`,
-`TEbrDomain`, `TEbrGuard`, `TLockFreeChannel<T>`, `TLockFreeChannelSpsc<T>`, `TLockFreeSelector<T>`
-so consumers can use the public lockfree surface without importing implementation submodules directly.
+`nextpas.core.lockfree` facade exposes only T1 types listed above (plus `TConcurrentHashMap` as the honest alias for sharded spin-lock HashMap).
+Import T2/T3 units directly when needed (e.g. `nextpas.core.lockfree.skiplist`).
+`TLockFreeChannelSpsc<T>` is available from `nextpas.core.lockfree.channel.spsc` (not on the default facade pull-in).
 
 The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation
 bases. Keep variables and parameters on one public boundary; the wrappers are source-compatible
@@ -60,14 +78,16 @@ closed、当前为空且没有 admitted producer 仍可能发布时才把 closed
 `TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
 `TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
 
-`TMpscQueue<T>` 是多 producer、单 consumer 队列。`Enqueue` 是过程，不返回 close 结果；`TryEnqueue`
-在 Close 后返回 False；`Close` 只作为 consumer 等待唤醒和终止信号。调用方必须让 producer 协作停止、
-join producer，并 drain 队列后再销毁对象。`ApproxCount` 是原子计数器快照。
+`TMpscQueue<T>` 是多 producer、单 consumer 队列。`Close` 后 `TryEnqueue` 返回 False，`Enqueue`
+抛出 `EInvalidOperationError`（与 `TLockFreeChannel.Send` 对齐）。`Close` 唤醒 blocked consumer。
+**生命周期：Close → join producers/waiters → Free**。`Destroy` 会 Close+drain，但不能替代 join
+活跃 producer。`ApproxCount` 是原子计数器快照。
 
-`TSegQueue<T>` 是基于 segmented linked ring 的无界 MPMC queue。`Enqueue` 在当前 tail segment
-没有后继时按 segment 粒度扩展存储；`TryEnqueue` 在 Close 后返回 False；`TryDequeue` 只在对应 slot
-的 sequence 已发布时返回成功。`ApproxCount` / `IsEmpty` 是当前 enqueue/dequeue position 的 snapshot
-helper，不承诺在竞争下提供共同线性化视图。`Close` 不影响已入队数据的读取。
+`TSegQueue<T>` 是基于 segmented linked ring 的无界 **MPMC** queue。`Enqueue` 在当前 tail segment
+没有后继时按 segment 粒度扩展存储；**Close 后 `TryEnqueue` 返回 False，plain `Enqueue` 抛
+`EInvalidOperationError`**（与 MPSC/Channel 对齐）。`TryDequeue` 只在对应 slot 的 sequence 已发布时
+返回成功。`ApproxCount` / `IsEmpty` 是当前 enqueue/dequeue position 的 snapshot helper，不承诺在
+竞争下提供共同线性化视图。`Close` 不影响已入队数据的读取。
 
 `TLockFreeStack<T>` 是固定容量 stack。push/pop 会先从内部 free-list 取得或归还 slot，因此不是
 无界栈，也不动态分配节点。
@@ -76,8 +96,9 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` is a fixed-capacity stack: `TryPush` returns `False` when no free slot remains, and `IsEmpty` / `ApproxCount` are snapshot helpers over the current top-linked list rather than linearization guarantees under contention.
 
 `TWorkStealingDeque<T>` 是 work-stealing deque：owner 线程执行 `TryPush` / `TryPop`，thief
-线程只执行 `TrySteal`。当前实现没有 close/wait surface。
-`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
+线程只执行 `TrySteal`。支持 `Close` / `IsClosed`：Close 后 `TryPush` 返回 False，已入队数据仍可
+`TryPop` / `TrySteal` 取出；无 wait/timeout surface。
+`TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full or closed, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
 `TSpmcQueue<T>` 是单 producer、多 consumer 有界队列。`TryEnqueue` 是非阻塞操作；`TryDequeue` 多消费者间
 竞争 CAS；`EnqueueWait` / `DequeueWait` 通过 wait-address seam 阻塞；timeout 版本使用纳秒超时。
 `Close` 设置 closed flag 并唤醒所有等待者；close 后 drain-on-close 语义允许读取已入队数据。
@@ -91,7 +112,7 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 
 `TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.
 `TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers. Enqueue calls admitted before observing the closed flag may still publish at their normal per-item linearization point; calls that observe `Close` fail, and consumers only treat closed-empty as terminal after no admitted producer can still publish.
-`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False, while plain `Enqueue` does not; callers must stop and join producers before destroy.
+`TMpscQueue<T>` permits multiple producers and exactly one consumer; `TryEnqueue` observes `Close` and returns False; plain `Enqueue` raises `EInvalidOperationError` after `Close`; callers must Close → join producers/waiters → Free.
 `TSegQueue<T>` permits multiple concurrent producers and consumers; segment retirement is internal and readers observe only FIFO dequeue success/failure.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
@@ -173,7 +194,8 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 
 ## ShardedHashMap
 
-`TShardedHashMap<TKey, TValue>` 是基于分片锁的并发 HashMap。设计目标是高频低竞争场景下的最优性能。
+`TShardedHashMap<TKey, TValue>`（别名 `TConcurrentHashMap`）是基于**分片自旋锁**的并发 HashMap，
+**不是 lock-free 结构**。设计目标是高频低竞争场景下的最优性能。
 
 **设计特点**:
 - 16 个分片，每个分片使用 `AtomicExchange32` 自旋锁
@@ -200,13 +222,8 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 | GetOrUpdate | O(1) amortized | ✅ | 原子 get-or-create-then-update |
 | Clear | O(n) | ✅ | 逐 shard 清空 |
 
-**性能特征**（vs TConcurrentHashMap）:
-
-| 场景 | TShardedHashMap | TConcurrentHashMap |
-|------|-----------------|-------------------|
-| 锁机制 | AtomicExchange ~1ns | RWLock ~10-50ns |
-| 内存管理 | 无引用计数 | 有引用计数 |
-| 适用场景 | 高频、低竞争、unmanaged | 通用、支持 managed |
+`TConcurrentHashMap` 是 `TShardedHashMap` 的**同实现别名**（同一 `TShardedHashMapImpl`），不是第二套
+实现；不要用两者对比“性能差异”——它们是同一分片自旋锁 HashMap。
 
 **使用场景**:
 - 高频读写、低竞争的缓存
@@ -215,7 +232,7 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 
 ## Channel
 
-`TLockFreeChannel<T>` 是有界无锁 Channel，序列号驱动的 MPSC/SPMC 通道。
+`TLockFreeChannel<T>` 是有界无锁 Channel，序列号驱动的 **MPMC-style** 通道（多 producer / 多 consumer）。
 
 **设计特点**:
 - 容量自动向上取整到 2 的幂（位运算优化）
@@ -318,16 +335,18 @@ producer 侧等待操作应返回失败，consumer 侧可继续 drain 已发布�
 `TMpmcQueue<T>.Close` wakes already-blocked `EnqueueWait` / `DequeueWait` calls so blocked producers and consumers stop waiting even without a timeout.
 `TMpmcQueue<T>.Close` wakes already-blocked `EnqueueTimeout` / `DequeueTimeout` calls so blocked producers and consumers stop waiting promptly instead of sleeping until the full timeout.
 
-`TMpscQueue<T>` 的 `Close` 不会让 `Enqueue` 自动失败。它只唤醒等待中的 consumer，并让
-`DequeueWait` / `DequeueTimeout` 在当前无元素时返回失败。销毁前必须满足：
+`TMpscQueue<T>` 的 `Close` 后：`TryEnqueue` 返回 False，`Enqueue` 抛出 `EInvalidOperationError`
+（与 `TLockFreeChannel.Send` 对齐）；`DequeueWait` / `DequeueTimeout` 在当前无元素时返回失败；
+`Close` 唤醒 blocked consumer。销毁前必须满足：
 `TMpscQueue<T>.Close` wakes already-blocked `DequeueWait` consumers so a closed-empty queue stops waiting even without a timeout.
 `TMpscQueue<T>.Close` wakes already-blocked `DequeueTimeout` consumers so a closed-empty queue stops waiting promptly.
 
 1. 已调用 `Close`。
-2. producer 已停止并 join。
-3. consumer 已 drain 队列。
+2. producer 已停止并 join（Close 不是 join barrier）。
+3. consumer 已 drain 队列（或依赖 Destroy 的 Close+drain）。
 
-debug build 中 `TMpscQueue.Destroy` 保留 close-before-destroy 和 drained-before-destroy assert，用来冻结这条纪律。
+`TMpscQueue.Destroy` 会调用 `Close` 以唤醒阻塞中的单消费者，然后 drain 剩余节点。
+调用方仍必须在 `Free` 前停止并 join 所有 producer/waiter（`Close` / `Destroy` 不能替代 join）。
 
 ## Atomic dependency
 
