@@ -222,6 +222,21 @@ jobs:
       - name: Run Windows runtime matrix
         run: |
           set -euo pipefail
+          # Re-export toolchain for this step. GITHUB_ENV PATH is unreliable for
+          # make's fpc lookup across MSYS2 steps on windows-latest.
+          FPC_ROOT="${HOME}/fpc-trunk"
+          BIN_DIR="${FPC_ROOT}/bin/x86_64-win64"
+          export PATH="${BIN_DIR}:${FPC_ROOT}/bin:${PATH}"
+          # common.mk uses $(FPC); pin absolute path so make does not depend on PATH.
+          if [[ -f "${BIN_DIR}/fpc.exe" ]]; then
+            export FPC="${BIN_DIR}/fpc.exe"
+          else
+            export FPC="${BIN_DIR}/fpc"
+          fi
+          command -v fpc || true
+          "${FPC}" -iV
+          "${FPC}" -iTP
+          "${FPC}" -iTO
           # Real Windows host evidence (not Wine).
           # 14 suite dirs + 3 dedicated real gates.
           # truth=real-windows-runtime-ci only — not full ci-matrix until ROADMAP D1.d.
