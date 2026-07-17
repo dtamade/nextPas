@@ -58,7 +58,7 @@ Need concurrent HashMap?
 | Plain `Enqueue` / `Send` (MPSC, Channel, SegQueue) | raise `EInvalidOperationError` |
 | Ring Wait/Timeout | False |
 
-Optional `Try*Ex` (`TLockFreeTryError`) distinguishes full/empty/closed without changing Boolean hot-path `Try*`.
+Optional `Try*Ex` (`TLockFreeTryError`) distinguishes full/empty/closed without changing Boolean hot-path `Try*` (Channel/SegQueue/SPSC/MPMC/SPMC/MPSC/Stack).
 
 ## Notes
 

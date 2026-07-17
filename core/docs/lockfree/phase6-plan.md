@@ -1,3 +1,5 @@
+> **归档**（2026-07-17）：历史 Phase 6 计划。推进主线见 [`roadmap.md`](roadmap.md)。
+
 # Phase 6: EBR Per-thread Retire Buffer
 
 > 创建: 2026-07-06 | 状态: 评估完成，方案不可行
