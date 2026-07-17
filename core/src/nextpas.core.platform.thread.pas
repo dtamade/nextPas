@@ -223,7 +223,8 @@ end;
 
 {$IFDEF NEXTPAS_MACOS}
 { Darwin trampoline: run user entry, stash return value, mark Finished for
-  timedjoin polling (no pthread_timedjoin_np on Darwin). }
+  timedjoin polling (no pthread_timedjoin_np on Darwin). Releases one RefCount
+  so detach may free only after this write-back completes. }
 function platform_thread_darwin_trampoline(AArg: Pointer): Pointer; cdecl;
 var
   LState: PPlatformPThreadState;
@@ -232,6 +233,16 @@ begin
   Result := TPlatformThreadProc(LState^.UserProc)(LState^.UserArg);
   LState^.RetVal := Result;
   InterlockedExchange(LState^.Finished, 1);
+  if InterlockedDecrement(LState^.RefCount) = 0 then
+    Dispose(LState);
+end;
+
+procedure platform_thread_darwin_state_release(const AState: PPlatformPThreadState); inline;
+begin
+  if AState = nil then
+    Exit;
+  if InterlockedDecrement(AState^.RefCount) = 0 then
+    Dispose(AState);
 end;
 {$ENDIF}
 
@@ -248,6 +259,7 @@ begin
   AState^.UserProc := AStartRoutine;
   AState^.UserArg := AArgument;
   AState^.Finished := 0;
+  AState^.RefCount := 2;
   Result := pthread_create(
     @AState^.Thread, nil,
     TPThreadStartRoutine(@platform_thread_darwin_trampoline), AState);
@@ -270,11 +282,18 @@ begin
 
 {$IFDEF NEXTPAS_MACOS}
   Result := pthread_join(AState^.Thread, @ARetVal);
+  if Result = 0 then
+  begin
+    { Trampoline may have stored RetVal; prefer join's value if non-nil. }
+    if ARetVal = nil then
+      ARetVal := AState^.RetVal;
+    platform_thread_darwin_state_release(AState);
+  end;
 {$ELSE}
   Result := pthread_join(PPThreadToken(@AState^.Thread[0])^, @ARetVal);
-{$ENDIF}
   if Result = 0 then
     Dispose(AState);
+{$ENDIF}
 end;
 
 function platform_thread_host_state_detach(const AState: PPlatformPThreadState): Int32; inline;
@@ -284,11 +303,13 @@ begin
 
 {$IFDEF NEXTPAS_MACOS}
   Result := pthread_detach(AState^.Thread);
+  if Result = 0 then
+    platform_thread_darwin_state_release(AState);
 {$ELSE}
   Result := pthread_detach(PPThreadToken(@AState^.Thread[0])^);
-{$ENDIF}
   if Result = 0 then
     Dispose(AState);
+{$ENDIF}
 end;
 
 { GNU extension / host timedjoin:
