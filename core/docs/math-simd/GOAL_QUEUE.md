@@ -35,7 +35,7 @@ BLOCKED_UNTIL: (optional)
 ## CURRENT
 
 ```text
-CURRENT=S23a
+CURRENT=S23b
 ```
 
 ---
@@ -57,11 +57,11 @@ CURRENT=S23a
 
 ## Wave 1 — simd kernel (main)
 
-### S23a — NEON BatchF32 ArrayAdd/Sub/Mul  【CURRENT】
+### S23a — NEON BatchF32 ArrayAdd/Sub/Mul  【done】
 
 | Field | Content |
 |-------|---------|
-| **STATUS** | pending |
+| **STATUS** | done |
 | **NEXT** | S23b |
 | **WHY** | Close the largest NEON “all Batch inherits scalar” gap with high-ROI leaves |
 | **IN_SCOPE_PATHS** | `core/src/nextpas.core.simd.neon.pas`; `core/src/nextpas.core.simd.neon.register.inc`; `core/src/nextpas.core.simd.neon.facade.asm.inc` and/or new `neon.batch*.inc`; `core/src/nextpas.core.simd.neon.facade.scalar.inc` / scalar batch fallback include; `core/tests/nextpas.core.simd/nextpas.core.simd.dispatchapi.testcase.pas`; `core/docs/simd/{roadmap,plan,README}.md`; this file |
@@ -79,7 +79,7 @@ CURRENT=S23a
 
 **Pattern:** same ownership as Phase 22 Memory — real asm leaf + non-asm scalar symbol + register only when ASM enabled. Names match `static.inc` (`NEONArray*F32`).
 
-### S23b — NEON BatchF32 Min/Max/Abs/Neg (+ optional Div)
+### S23b — NEON BatchF32 Min/Max/Abs/Neg (+ optional Div)  【CURRENT】
 
 | Field | Content |
 |-------|---------|

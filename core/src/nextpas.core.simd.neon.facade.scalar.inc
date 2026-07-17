@@ -75,3 +75,20 @@ begin
   Result := AsciiIEqual_Scalar(a, b, len);
 end;
 
+// === Phase 23a: BatchF32 ArrayAdd / ArraySub / ArrayMul (no-asm companions) ===
+
+procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+begin
+  ScalarArrayAddF32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+begin
+  ScalarArraySubF32(aSrc1, aSrc2, aDst, aCount);
+end;
+
+procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+begin
+  ScalarArrayMulF32(aSrc1, aSrc2, aDst, aCount);
+end;
+

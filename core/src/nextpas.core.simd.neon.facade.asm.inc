@@ -1103,3 +1103,115 @@ asm
   mov   w0, #0
   ret
 end;
+
+// === Phase 23a: NEON BatchF32 ArrayAdd / ArraySub / ArrayMul ===
+// ABI (AAPCS64): x0=aSrc1, x1=aSrc2, x2=aDst, x3=aCount
+// ICE-safe: ldp/fmov/ins + fadd/fsub/fmul vN.4s + umov/stp; scalar s-reg tail.
+
+procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larradd_done
+
+.Larradd_loop4:
+  cmp   x3, #4
+  b.lo  .Larradd_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fadd  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larradd_loop4
+
+.Larradd_tail:
+  cbz   x3, .Larradd_done
+.Larradd_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fadd  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larradd_tail_loop
+
+.Larradd_done:
+  ret
+end;
+
+procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larrsub_done
+
+.Larrsub_loop4:
+  cmp   x3, #4
+  b.lo  .Larrsub_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fsub  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larrsub_loop4
+
+.Larrsub_tail:
+  cbz   x3, .Larrsub_done
+.Larrsub_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fsub  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larrsub_tail_loop
+
+.Larrsub_done:
+  ret
+end;
+
+procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;
+asm
+  cbz   x3, .Larrmul_done
+
+.Larrmul_loop4:
+  cmp   x3, #4
+  b.lo  .Larrmul_tail
+  ldp   x4, x5, [x0], #16
+  fmov  d0, x4
+  fmov  d2, x5
+  ins   v0.d[1], v2.d[0]
+  ldp   x4, x5, [x1], #16
+  fmov  d1, x4
+  fmov  d2, x5
+  ins   v1.d[1], v2.d[0]
+  fmul  v0.4s, v0.4s, v1.4s
+  umov  x4, v0.d[0]
+  umov  x5, v0.d[1]
+  stp   x4, x5, [x2], #16
+  sub   x3, x3, #4
+  b     .Larrmul_loop4
+
+.Larrmul_tail:
+  cbz   x3, .Larrmul_done
+.Larrmul_tail_loop:
+  ldr   s0, [x0], #4
+  ldr   s1, [x1], #4
+  fmul  s0, s0, s1
+  str   s0, [x2], #4
+  subs  x3, x3, #1
+  b.ne  .Larrmul_tail_loop
+
+.Larrmul_done:
+  ret
+end;

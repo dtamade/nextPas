@@ -6878,12 +6878,18 @@ begin
     LSourceLines.Free;
   end;
 
-  // Phase 22b closed Memory (15/15). Remaining always-scalar platform gaps are
-  // Batch* groups — lock inheritance and forbid retired platform-facade wrappers.
+  // Phase 22b closed Memory (15/15). Phase 23a owns BatchF32 Add/Sub/Mul only
+  // under ASM (asserted in FacadeFastSlots). Remaining Batch* stay scalar.
   CheckTrue(Trim(LFacadeSource) <> '', 'Retired platform facade include should remain as an audited empty boundary');
-  CheckTrue(Pos('table.batchf32.', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32 until Phase 23 owns real leaves');
-  CheckTrue(Pos('table.batchf64.', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF64 until Phase 23 owns real leaves');
-  CheckTrue(Pos('table.batchinteger.', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchInteger until Phase 23 owns real leaves');
+  CheckTrue(Pos('table.batchf64.', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF64 until a real NEON leaf exists');
+  CheckTrue(Pos('table.batchinteger.', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchInteger until a real NEON leaf exists');
+  // Phase 23a only wires ArrayAdd/Sub/Mul; forbid premature wider BatchF32 ownership.
+  CheckTrue(Pos('table.batchf32.arraydiv :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayDiv until a later Phase 23 slice owns it');
+  CheckTrue(Pos('table.batchf32.arraymin :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayMin until S23b owns it');
+  CheckTrue(Pos('table.batchf32.arraymax :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayMax until S23b owns it');
+  CheckTrue(Pos('table.batchf32.arrayabs :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayAbs until S23b owns it');
+  CheckTrue(Pos('table.batchf32.arrayneg :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayNeg until S23b owns it');
+  CheckTrue(Pos('table.batchf32.reducesum :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ReduceSum until a later slice owns it');
 
   // Defensive: no Memory dead wrappers reintroduced into the retired include.
   AssertRegisterKeepsBaseScalar('retired MemReverse platform path', 'table.Memory.Reverse := @MemReverse_Scalar;');
@@ -6900,8 +6906,12 @@ begin
     Exit;
   {$ENDIF}
 
-  // Sample Batch slots: full Batch* tables inherit FillBase scalar until Phase 23.
-  AssertSlotReusesScalar('BatchF32.ArrayAdd', Pointer(LScalarTable.BatchF32.ArrayAdd), Pointer(LNEONTable.BatchF32.ArrayAdd));
+  // Remaining Batch slots still inherit FillBase scalar (not S23a ArrayAdd/Sub/Mul).
+  AssertSlotReusesScalar('BatchF32.ArrayDiv', Pointer(LScalarTable.BatchF32.ArrayDiv), Pointer(LNEONTable.BatchF32.ArrayDiv));
+  AssertSlotReusesScalar('BatchF32.ArrayMin', Pointer(LScalarTable.BatchF32.ArrayMin), Pointer(LNEONTable.BatchF32.ArrayMin));
+  AssertSlotReusesScalar('BatchF32.ArrayMax', Pointer(LScalarTable.BatchF32.ArrayMax), Pointer(LNEONTable.BatchF32.ArrayMax));
+  AssertSlotReusesScalar('BatchF32.ArrayAbs', Pointer(LScalarTable.BatchF32.ArrayAbs), Pointer(LNEONTable.BatchF32.ArrayAbs));
+  AssertSlotReusesScalar('BatchF32.ArrayNeg', Pointer(LScalarTable.BatchF32.ArrayNeg), Pointer(LNEONTable.BatchF32.ArrayNeg));
   AssertSlotReusesScalar('BatchF64.ArrayAdd', Pointer(LScalarTable.BatchF64.ArrayAdd), Pointer(LNEONTable.BatchF64.ArrayAdd));
   AssertSlotReusesScalar('BatchInteger.ArrayAddI32', Pointer(LScalarTable.BatchInteger.ArrayAddI32), Pointer(LNEONTable.BatchInteger.ArrayAddI32));
 end;
@@ -6960,6 +6970,9 @@ begin
   AssertSourceContains('MemReverse_NEON asm', 'procedure MemReverse_NEON(p: Pointer; len: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('BytesIndexOf_NEON asm', 'function BytesIndexOf_NEON(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt; assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('Utf8Validate_NEON asm', 'function Utf8Validate_NEON(p: Pointer; len: SizeUInt): Boolean; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAddF32 asm', 'procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArraySubF32 asm', 'procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayMulF32 asm', 'procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('SumBytes_NEON asm', 'function SumBytes_NEON(p: Pointer; len: SizeUInt): UInt64; assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('MinMaxBytes_NEON asm', 'procedure MinMaxBytes_NEON(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('CountByte_NEON asm', 'function CountByte_NEON(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; assembler; nostackframe;', LAsmFacadeSource);
@@ -6976,6 +6989,9 @@ begin
   AssertSourceContains('MemReverse_NEON scalar fallback', 'MemReverse_Scalar(p, len);', LScalarFacadeSource);
   AssertSourceContains('BytesIndexOf_NEON scalar fallback', 'Result := BytesIndexOf_Scalar(haystack, haystackLen, needle, needleLen);', LScalarFacadeSource);
   AssertSourceContains('Utf8Validate_NEON scalar fallback', 'Result := Utf8Validate_Scalar(p, len);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAddF32 scalar fallback', 'ScalarArrayAddF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArraySubF32 scalar fallback', 'ScalarArraySubF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayMulF32 scalar fallback', 'ScalarArrayMulF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('SumBytes_NEON scalar fallback', 'Result := SumBytes_Scalar(p, len);', LScalarFacadeSource);
   AssertSourceContains('MinMaxBytes_NEON scalar fallback', 'MinMaxBytes_Scalar(p, len, minVal, maxVal);', LScalarFacadeSource);
   AssertSourceContains('CountByte_NEON scalar fallback', 'Result := CountByte_Scalar(p, len, value);', LScalarFacadeSource);
@@ -6992,6 +7008,9 @@ begin
   CheckTrue(Pos('table.memory.reverse := @memreverse_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should wire MemReverse_NEON for Phase 22b Memory leaves');
   CheckTrue(Pos('table.memory.bytesindexof := @bytesindexof_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should wire BytesIndexOf_NEON for Phase 22b Memory leaves');
   CheckTrue(Pos('table.memory.utf8validate := @utf8validate_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should wire Utf8Validate_NEON for Phase 22b Memory leaves');
+  CheckTrue(Pos('table.batchf32.arrayadd := @neonarrayaddf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAddF32 for Phase 23a BatchF32 leaves');
+  CheckTrue(Pos('table.batchf32.arraysub := @neonarraysubf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArraySubF32 for Phase 23a BatchF32 leaves');
+  CheckTrue(Pos('table.batchf32.arraymul := @neonarraymulf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMulF32 for Phase 23a BatchF32 leaves');
   CheckTrue(Pos('table.memory.sumbytes := @sumbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire SumBytes_NEON explicitly so asm builds keep the native facade slot');
   CheckTrue(Pos('table.memory.minmaxbytes := @minmaxbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MinMaxBytes_NEON explicitly so asm builds keep the native facade slot');
   CheckTrue(Pos('table.memory.countbyte := @countbyte_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire CountByte_NEON explicitly so asm builds keep the native facade slot');
@@ -7017,6 +7036,9 @@ begin
   AssertRuntimeSlotExpectation('MemReverse', Pointer(LScalarTable.Memory.Reverse), Pointer(LNEONTable.Memory.Reverse));
   AssertRuntimeSlotExpectation('BytesIndexOf', Pointer(LScalarTable.Memory.BytesIndexOf), Pointer(LNEONTable.Memory.BytesIndexOf));
   AssertRuntimeSlotExpectation('Utf8Validate', Pointer(LScalarTable.Memory.Utf8Validate), Pointer(LNEONTable.Memory.Utf8Validate));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayAdd', Pointer(LScalarTable.BatchF32.ArrayAdd), Pointer(LNEONTable.BatchF32.ArrayAdd));
+  AssertRuntimeSlotExpectation('BatchF32.ArraySub', Pointer(LScalarTable.BatchF32.ArraySub), Pointer(LNEONTable.BatchF32.ArraySub));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayMul', Pointer(LScalarTable.BatchF32.ArrayMul), Pointer(LNEONTable.BatchF32.ArrayMul));
   AssertRuntimeSlotExpectation('SumBytes', Pointer(LScalarTable.Memory.SumBytes), Pointer(LNEONTable.Memory.SumBytes));
   AssertRuntimeSlotExpectation('MinMaxBytes', Pointer(LScalarTable.Memory.MinMaxBytes), Pointer(LNEONTable.Memory.MinMaxBytes));
   AssertRuntimeSlotExpectation('CountByte', Pointer(LScalarTable.Memory.CountByte), Pointer(LNEONTable.Memory.CountByte));

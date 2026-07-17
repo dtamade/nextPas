@@ -161,12 +161,17 @@ begin
   table.Memory.ToLowerAscii := @ToLowerAscii_NEON;
   table.Memory.ToUpperAscii := @ToUpperAscii_NEON;
   table.Memory.BitsetPopCount := @BitsetPopCount_NEON;
+  // Phase 23a: BatchF32 ArrayAdd/Sub/Mul real leaves (register only under ASM).
+  table.BatchF32.ArrayAdd := @NEONArrayAddF32;
+  table.BatchF32.ArraySub := @NEONArraySubF32;
+  table.BatchF32.ArrayMul := @NEONArrayMulF32;
   {$ENDIF}
 
   // Keep permanently-scalar platform facade helpers on the base scalar slots.
   // Backend-local wrappers add no runtime value and make slot ownership harder to audit.
   // Wide dot fallback-only helpers follow the same rule until NEON owns a real implementation.
-  // Phase 22b closed Memory (15/15 under ASM). Remaining platform gaps: Batch*.
+  // Phase 22b closed Memory (15/15 under ASM). Phase 23a owns BatchF32 Add/Sub/Mul;
+  // remaining BatchF32 / BatchF64 / BatchInteger slots still inherit FillBase scalar.
 
   // Saturating arithmetic is backend-owned only when NEON asm is compiled.
   {$IFDEF NEXTPAS_SIMD_NEON_ASM_ENABLED}

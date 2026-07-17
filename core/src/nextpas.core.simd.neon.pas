@@ -86,6 +86,11 @@ procedure ToUpperAscii_NEON(p: Pointer; len: SizeUInt);
 // Search functions
 function BitsetPopCount_NEON(p: Pointer; byteLen: SizeUInt): SizeUInt;
 
+// === Phase 23a: BatchF32 Array Add / Sub / Mul ===
+procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+
 implementation
 
 uses

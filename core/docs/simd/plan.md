@@ -7,12 +7,12 @@
 ## 当前 Goal
 
 ```text
-CURRENT = S23a  (见 GOAL_QUEUE.md)
+CURRENT = S23b  (见 GOAL_QUEUE.md)
 ```
 
 | 字段 | 值 |
 |------|-----|
-| 阶段 | Phase 23a — NEON BatchF32 ArrayAdd/Sub/Mul |
+| 阶段 | Phase 23b — NEON BatchF32 Min/Max/Abs/Neg |
 | 优先级 | P1 |
 | 验收 | GOAL_QUEUE 卡内 GATES + roadmap §6 |
 
@@ -24,11 +24,11 @@ CURRENT = S23a  (见 GOAL_QUEUE.md)
 - [x] Phase 21 api-coverage
 - [x] Phase 22a/22b NEON Memory 15/15
 - [x] G0 Goal 队列 + 指针
+- [x] **S23a** NEON `ArrayAdd/Sub/Mul` F32
 
 ### 队列摘要
 
-- [ ] **S23a** NEON `ArrayAdd/Sub/Mul` F32（CURRENT）
-- [ ] S23b Min/Max/Abs/Neg
+- [ ] **S23b** Min/Max/Abs/Neg（CURRENT）
 - [ ] M-C1 math consumer smoke
 - [ ] S24a RVV 诚实化
 - [ ] S25 性能方法与热点

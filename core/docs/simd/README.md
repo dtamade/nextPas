@@ -23,9 +23,9 @@
 - **分派器层**: ✅ 嵌套表 `CoreVectors` / `Batch*` / `Memory` / `Mask`（Phase 19）；Public ABI 字段名保持 flat
 - **Mask**: ✅ NEON 绑定 portable `SharedMask*` + `scMaskedOps`（Wave B）
 - **NEON Memory**: ✅ **15/15** 自有（Phase 22：Copy/Fill/DiffRange + Reverse/BytesIndexOf/Utf8Validate 真 asm 叶，仅 ASM opt-in 绑定）
-- **NEON Batch\***: ⚠️ 全继承 scalar → Phase 23
+- **NEON Batch\***: ⚠️ Phase 23a 已接管 F32 `ArrayAdd/Sub/Mul`；其余 Batch 槽仍 scalar → S23b+
 - **cpuinfo**: ✅ 主路径稳定
-- **活动阶段**: Phase 20–22 已收口；**Goal CURRENT=S23a**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
+- **活动阶段**: Phase 20–22 已收口；**Goal CURRENT=S23b**（见 [math-simd/GOAL_QUEUE.md](../math-simd/GOAL_QUEUE.md)）
 - **验证基线 (2026-07-17)**:
   - `make focused FOCUS=core/tests/nextpas.core.simd` → **1740+ passed**
   - `neon-optin-focused` → **1740+ passed**
