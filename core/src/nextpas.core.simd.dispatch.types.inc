@@ -280,6 +280,11 @@ TSimdBatchF64Ops = record
   ArrayAbs: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
   ArrayNeg: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
   ArraySqrt: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+  // Extended reciprocal / rsqrt (parity with F32 batch)
+  ArrayRcp: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+  ArrayRsqrt: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+  ArrayRcpRefine: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
+  ArrayRsqrtRefine: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
   // Scalar operations
   ArrayMulScalar: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
   ArrayAddScalar: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);

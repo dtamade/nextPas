@@ -355,7 +355,7 @@ end;
 
 function BenchArrayAddF32_Active: Int64;
 begin
-  g_ArrayF32Dispatch^.ArrayAddF32(@g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
+  g_ArrayF32Dispatch^.BatchF32.ArrayAdd(@g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
   g_ArrayF32Dummy := g_ArrayF32Dst[ARRAY_F32_COUNT - 1];
   Result := ARRAY_F32_COUNT;
 end;
@@ -369,7 +369,7 @@ end;
 
 function BenchArrayMulF32_Active: Int64;
 begin
-  g_ArrayF32Dispatch^.ArrayMulF32(@g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
+  g_ArrayF32Dispatch^.BatchF32.ArrayMul(@g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
   g_ArrayF32Dummy := g_ArrayF32Dst[ARRAY_F32_COUNT - 1];
   Result := ARRAY_F32_COUNT;
 end;
@@ -383,7 +383,7 @@ end;
 
 function BenchArrayMulScalarF32_Active: Int64;
 begin
-  g_ArrayF32Dispatch^.ArrayMulScalarF32(@g_ArrayF32A[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT, -1.25);
+  g_ArrayF32Dispatch^.BatchF32.ArrayMulScalar(@g_ArrayF32A[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT, -1.25);
   g_ArrayF32Dummy := g_ArrayF32Dst[ARRAY_F32_COUNT - 1];
   Result := ARRAY_F32_COUNT;
 end;
@@ -397,7 +397,7 @@ end;
 
 function BenchArrayAxpyF32_Active: Int64;
 begin
-  g_ArrayF32Dispatch^.ArrayAxpyF32(1.75, @g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
+  g_ArrayF32Dispatch^.BatchF32.ArrayAxpy(1.75, @g_ArrayF32A[0], @g_ArrayF32B[0], @g_ArrayF32Dst[0], ARRAY_F32_COUNT);
   g_ArrayF32Dummy := g_ArrayF32Dst[ARRAY_F32_COUNT - 1];
   Result := ARRAY_F32_COUNT;
 end;

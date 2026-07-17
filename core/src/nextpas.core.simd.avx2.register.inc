@@ -477,101 +477,101 @@ begin
   dispatchTable.Mask16FirstSet := @SharedMask16FirstSet;
 
   // Batch array operations (AVX2 256-bit)
-  dispatchTable.ArrayAddF32 := @AVX2ArrayAddF32_Smart;
-  dispatchTable.ArraySubF32 := @AVX2ArraySubF32;
-  dispatchTable.ArrayMulF32 := @AVX2ArrayMulF32;
-  dispatchTable.ArrayDivF32 := @AVX2ArrayDivF32;
-  dispatchTable.ArrayMinF32 := @AVX2ArrayMinF32;
-  dispatchTable.ArrayMaxF32 := @AVX2ArrayMaxF32;
-  dispatchTable.ArrayAbsF32 := @AVX2ArrayAbsF32;
-  dispatchTable.ArrayNegF32 := @AVX2ArrayNegF32;
-  dispatchTable.ArraySqrtF32 := @AVX2ArraySqrtF32;
-  dispatchTable.ArrayRcpF32 := @AVX2ArrayRcpF32;
-  dispatchTable.ArrayRsqrtF32 := @AVX2ArrayRsqrtF32;
-  dispatchTable.ArrayRcpRefineF32 := @AVX2ArrayRcpRefineF32;
-  dispatchTable.ArrayRsqrtRefineF32 := @AVX2ArrayRsqrtRefineF32;
-  dispatchTable.ArrayAddScalarF32 := @AVX2ArrayAddScalarF32;
-  dispatchTable.ArrayMulScalarF32 := @AVX2ArrayMulScalarF32;
-  dispatchTable.ArrayClampF32 := @AVX2ArrayClampF32;
+  dispatchTable.BatchF32.ArrayAdd := @AVX2ArrayAddF32_Smart;
+  dispatchTable.BatchF32.ArraySub := @AVX2ArraySubF32;
+  dispatchTable.BatchF32.ArrayMul := @AVX2ArrayMulF32;
+  dispatchTable.BatchF32.ArrayDiv := @AVX2ArrayDivF32;
+  dispatchTable.BatchF32.ArrayMin := @AVX2ArrayMinF32;
+  dispatchTable.BatchF32.ArrayMax := @AVX2ArrayMaxF32;
+  dispatchTable.BatchF32.ArrayAbs := @AVX2ArrayAbsF32;
+  dispatchTable.BatchF32.ArrayNeg := @AVX2ArrayNegF32;
+  dispatchTable.BatchF32.ArraySqrt := @AVX2ArraySqrtF32;
+  dispatchTable.BatchF32.ArrayRcp := @AVX2ArrayRcpF32;
+  dispatchTable.BatchF32.ArrayRsqrt := @AVX2ArrayRsqrtF32;
+  dispatchTable.BatchF32.ArrayRcpRefine := @AVX2ArrayRcpRefineF32;
+  dispatchTable.BatchF32.ArrayRsqrtRefine := @AVX2ArrayRsqrtRefineF32;
+  dispatchTable.BatchF32.ArrayAddScalar := @AVX2ArrayAddScalarF32;
+  dispatchTable.BatchF32.ArrayMulScalar := @AVX2ArrayMulScalarF32;
+  dispatchTable.BatchF32.ArrayClamp := @AVX2ArrayClampF32;
   if LHasHardwareFma then
-    dispatchTable.ArrayFmaF32 := @AVX2ArrayFmaF32;
-  dispatchTable.ArrayAxpyF32 := @AVX2ArrayAxpyF32;
-  dispatchTable.ReduceSumF32 := @AVX2ReduceSumF32;
-  dispatchTable.ReduceDotF32 := @AVX2ReduceDotF32;
-  dispatchTable.ReduceMinF32 := @AVX2ReduceMinF32;
-  dispatchTable.ReduceMaxF32 := @AVX2ReduceMaxF32;
+    dispatchTable.BatchF32.ArrayFma := @AVX2ArrayFmaF32;
+  dispatchTable.BatchF32.ArrayAxpy := @AVX2ArrayAxpyF32;
+  dispatchTable.BatchF32.ReduceSum := @AVX2ReduceSumF32;
+  dispatchTable.BatchF32.ReduceDot := @AVX2ReduceDotF32;
+  dispatchTable.BatchF32.ReduceMin := @AVX2ReduceMinF32;
+  dispatchTable.BatchF32.ReduceMax := @AVX2ReduceMaxF32;
 
   // Trig, log, rounding - use AVX2 256-bit implementations where available
-  dispatchTable.ArraySinF32 := @AVX2ArraySinF32;
-  dispatchTable.ArrayCosF32 := @AVX2ArrayCosF32;
-  dispatchTable.ArrayExpF32 := @AVX2ArrayExpF32;
-  dispatchTable.ArrayLogF32 := @AVX2ArrayLogF32;
-  dispatchTable.ArrayPowF32 := @AVX2ArrayPowF32;
-  dispatchTable.ArrayCeilF32 := @AVX2ArrayCeilF32;
-  dispatchTable.ArrayFloorF32 := @AVX2ArrayFloorF32;
-  dispatchTable.ArrayRoundF32 := @AVX2ArrayRoundF32;
-  dispatchTable.ArrayTruncF32 := @AVX2ArrayTruncF32;
-  dispatchTable.ArrayLerpF32 := @AVX2ArrayLerpF32;
+  dispatchTable.BatchF32.ArraySin := @AVX2ArraySinF32;
+  dispatchTable.BatchF32.ArrayCos := @AVX2ArrayCosF32;
+  dispatchTable.BatchF32.ArrayExp := @AVX2ArrayExpF32;
+  dispatchTable.BatchF32.ArrayLog := @AVX2ArrayLogF32;
+  dispatchTable.BatchF32.ArrayPow := @AVX2ArrayPowF32;
+  dispatchTable.BatchF32.ArrayCeil := @AVX2ArrayCeilF32;
+  dispatchTable.BatchF32.ArrayFloor := @AVX2ArrayFloorF32;
+  dispatchTable.BatchF32.ArrayRound := @AVX2ArrayRoundF32;
+  dispatchTable.BatchF32.ArrayTrunc := @AVX2ArrayTruncF32;
+  dispatchTable.BatchF32.ArrayLerp := @AVX2ArrayLerpF32;
   // These delegate to SSE2 but still use SIMD internally
-  dispatchTable.ArrayTanF32 := @AVX2ArrayTanF32;
-  dispatchTable.ArraySinCosF32 := @AVX2ArraySinCosF32;
-  dispatchTable.ArrayLog2F32 := @AVX2ArrayLog2F32;
-  dispatchTable.ArrayLog10F32 := @AVX2ArrayLog10F32;
+  dispatchTable.BatchF32.ArrayTan := @AVX2ArrayTanF32;
+  dispatchTable.BatchF32.ArraySinCos := @AVX2ArraySinCosF32;
+  dispatchTable.BatchF32.ArrayLog2 := @AVX2ArrayLog2F32;
+  dispatchTable.BatchF32.ArrayLog10 := @AVX2ArrayLog10F32;
 
   // F64 batch
-  dispatchTable.ArrayAddF64 := @AVX2ArrayAddF64;
-  dispatchTable.ArraySubF64 := @AVX2ArraySubF64;
-  dispatchTable.ArrayMulF64 := @AVX2ArrayMulF64;
-  dispatchTable.ArrayDivF64 := @AVX2ArrayDivF64;
-  dispatchTable.ArrayAbsF64 := @AVX2ArrayAbsF64;
-  dispatchTable.ArrayNegF64 := @AVX2ArrayNegF64;
-  dispatchTable.ArraySqrtF64 := @AVX2ArraySqrtF64;
-  dispatchTable.ArrayMulScalarF64 := @AVX2ArrayMulScalarF64;
-  dispatchTable.ArrayAddScalarF64 := @AVX2ArrayAddScalarF64;
-  dispatchTable.ArrayClampF64 := @AVX2ArrayClampF64;
-  dispatchTable.ArrayLinearF64 := @AVX2ArrayLinearF64;
-  dispatchTable.ReduceSumF64 := @AVX2ReduceSumF64;
-  dispatchTable.ReduceDotF64 := @AVX2ReduceDotF64;
-  dispatchTable.ReduceMinF64 := @AVX2ReduceMinF64;
-  dispatchTable.ReduceMaxF64 := @AVX2ReduceMaxF64;
-  dispatchTable.ArrayMinF64 := @AVX2ArrayMinF64;
-  dispatchTable.ArrayMaxF64 := @AVX2ArrayMaxF64;
-  dispatchTable.ArrayFmaF64 := @AVX2ArrayFmaF64;
+  dispatchTable.BatchF64.ArrayAdd := @AVX2ArrayAddF64;
+  dispatchTable.BatchF64.ArraySub := @AVX2ArraySubF64;
+  dispatchTable.BatchF64.ArrayMul := @AVX2ArrayMulF64;
+  dispatchTable.BatchF64.ArrayDiv := @AVX2ArrayDivF64;
+  dispatchTable.BatchF64.ArrayAbs := @AVX2ArrayAbsF64;
+  dispatchTable.BatchF64.ArrayNeg := @AVX2ArrayNegF64;
+  dispatchTable.BatchF64.ArraySqrt := @AVX2ArraySqrtF64;
+  dispatchTable.BatchF64.ArrayMulScalar := @AVX2ArrayMulScalarF64;
+  dispatchTable.BatchF64.ArrayAddScalar := @AVX2ArrayAddScalarF64;
+  dispatchTable.BatchF64.ArrayClamp := @AVX2ArrayClampF64;
+  dispatchTable.BatchF64.ArrayLinear := @AVX2ArrayLinearF64;
+  dispatchTable.BatchF64.ReduceSum := @AVX2ReduceSumF64;
+  dispatchTable.BatchF64.ReduceDot := @AVX2ReduceDotF64;
+  dispatchTable.BatchF64.ReduceMin := @AVX2ReduceMinF64;
+  dispatchTable.BatchF64.ReduceMax := @AVX2ReduceMaxF64;
+  dispatchTable.BatchF64.ArrayMin := @AVX2ArrayMinF64;
+  dispatchTable.BatchF64.ArrayMax := @AVX2ArrayMaxF64;
+  dispatchTable.BatchF64.ArrayFma := @AVX2ArrayFmaF64;
 
   // F64 extended batch
-  dispatchTable.ArrayAxpyF64 := @AVX2ArrayAxpyF64;
-  dispatchTable.ArrayRcpF64 := @AVX2ArrayRcpF64;
-  dispatchTable.ArrayRsqrtF64 := @AVX2ArrayRsqrtF64;
-  dispatchTable.ArrayRcpRefineF64 := @ScalarArrayRcpRefineF64;
-  dispatchTable.ArrayRsqrtRefineF64 := @ScalarArrayRsqrtRefineF64;
-  dispatchTable.ArrayTanF64 := @AVX2ArrayTanF64;
-  dispatchTable.ArraySignF64 := @AVX2ArraySignF64;
-  dispatchTable.ArrayFractF64 := @AVX2ArrayFractF64;
-  dispatchTable.ArrayModF64 := @AVX2ArrayModF64;
-  dispatchTable.ArrayPowF64 := @AVX2ArrayPowF64;
-  dispatchTable.ArrayLerpF64 := @AVX2ArrayLerpF64;
-  dispatchTable.ArrayReLUF64 := @AVX2ArrayReLUF64;
-  dispatchTable.ArrayAbsDiffF64 := @AVX2ArrayAbsDiffF64;
-  dispatchTable.ArrayNormF64 := @AVX2ArrayNormF64;
-  dispatchTable.ArrayLinearReLUF64 := @AVX2ArrayLinearReLUF64;
-  dispatchTable.ArrayStepF64 := @AVX2ArrayStepF64;
-  dispatchTable.ArraySmoothstepF64 := @AVX2ArraySmoothstepF64;
-  dispatchTable.ArrayAtan2F64 := @AVX2ArrayAtan2F64;
-  dispatchTable.ArrayHypotF64 := @AVX2ArrayHypotF64;
+  dispatchTable.BatchF64.ArrayAxpy := @AVX2ArrayAxpyF64;
+  dispatchTable.BatchF64.ArrayRcp := @AVX2ArrayRcpF64;
+  dispatchTable.BatchF64.ArrayRsqrt := @AVX2ArrayRsqrtF64;
+  dispatchTable.BatchF64.ArrayRcpRefine := @ScalarArrayRcpRefineF64;
+  dispatchTable.BatchF64.ArrayRsqrtRefine := @ScalarArrayRsqrtRefineF64;
+  dispatchTable.BatchF64.ArrayTan := @AVX2ArrayTanF64;
+  dispatchTable.BatchF64.ArraySign := @AVX2ArraySignF64;
+  dispatchTable.BatchF64.ArrayFract := @AVX2ArrayFractF64;
+  dispatchTable.BatchF64.ArrayMod := @AVX2ArrayModF64;
+  dispatchTable.BatchF64.ArrayPow := @AVX2ArrayPowF64;
+  dispatchTable.BatchF64.ArrayLerp := @AVX2ArrayLerpF64;
+  dispatchTable.BatchF64.ArrayReLU := @AVX2ArrayReLUF64;
+  dispatchTable.BatchF64.ArrayAbsDiff := @AVX2ArrayAbsDiffF64;
+  dispatchTable.BatchF64.ArrayNorm := @AVX2ArrayNormF64;
+  dispatchTable.BatchF64.ArrayLinearReLU := @AVX2ArrayLinearReLUF64;
+  dispatchTable.BatchF64.ArrayStep := @AVX2ArrayStepF64;
+  dispatchTable.BatchF64.ArraySmoothstep := @AVX2ArraySmoothstepF64;
+  dispatchTable.BatchF64.ArrayAtan2 := @AVX2ArrayAtan2F64;
+  dispatchTable.BatchF64.ArrayHypot := @AVX2ArrayHypotF64;
 
   // F64 Transcendental (AVX2 with loop unrolling)
-  dispatchTable.ArraySinF64 := @AVX2ArraySinF64;
-  dispatchTable.ArrayCosF64 := @AVX2ArrayCosF64;
-  dispatchTable.ArrayExpF64 := @AVX2ArrayExpF64;
-  dispatchTable.ArrayLogF64 := @AVX2ArrayLogF64;
-  dispatchTable.ArrayLog2F64 := @AVX2ArrayLog2F64;
-  dispatchTable.ArrayLog10F64 := @AVX2ArrayLog10F64;
+  dispatchTable.BatchF64.ArraySin := @AVX2ArraySinF64;
+  dispatchTable.BatchF64.ArrayCos := @AVX2ArrayCosF64;
+  dispatchTable.BatchF64.ArrayExp := @AVX2ArrayExpF64;
+  dispatchTable.BatchF64.ArrayLog := @AVX2ArrayLogF64;
+  dispatchTable.BatchF64.ArrayLog2 := @AVX2ArrayLog2F64;
+  dispatchTable.BatchF64.ArrayLog10 := @AVX2ArrayLog10F64;
 
   // F64 Rounding (AVX2 vroundpd)
-  dispatchTable.ArrayCeilF64 := @AVX2ArrayCeilF64;
-  dispatchTable.ArrayFloorF64 := @AVX2ArrayFloorF64;
-  dispatchTable.ArrayRoundF64 := @AVX2ArrayRoundF64;
-  dispatchTable.ArrayTruncF64 := @AVX2ArrayTruncF64;
+  dispatchTable.BatchF64.ArrayCeil := @AVX2ArrayCeilF64;
+  dispatchTable.BatchF64.ArrayFloor := @AVX2ArrayFloorF64;
+  dispatchTable.BatchF64.ArrayRound := @AVX2ArrayRoundF64;
+  dispatchTable.BatchF64.ArrayTrunc := @AVX2ArrayTruncF64;
 
   // Integer batch
   dispatchTable.ArrayAddI32 := @AVX2ArrayAddI32;
@@ -591,18 +591,18 @@ begin
   dispatchTable.ArrayShrI32 := @AVX2ArrayShrI32;
 
   // Transcendental (SIMD polynomial approximation)
-  dispatchTable.ArrayExpF32 := @AVX2ArrayExpF32;
-  dispatchTable.ArrayLogF32 := @AVX2ArrayLogF32;
-  dispatchTable.ArraySinF32 := @AVX2ArraySinF32;
-  dispatchTable.ArrayCosF32 := @AVX2ArrayCosF32;
-  dispatchTable.ArrayPowF32 := @AVX2ArrayPowF32;
+  dispatchTable.BatchF32.ArrayExp := @AVX2ArrayExpF32;
+  dispatchTable.BatchF32.ArrayLog := @AVX2ArrayLogF32;
+  dispatchTable.BatchF32.ArraySin := @AVX2ArraySinF32;
+  dispatchTable.BatchF32.ArrayCos := @AVX2ArrayCosF32;
+  dispatchTable.BatchF32.ArrayPow := @AVX2ArrayPowF32;
 
   // Fused (single-pass, reduced memory traffic)
-  dispatchTable.ArrayLinearF32 := @AVX2ArrayLinearF32;
-  dispatchTable.ArrayAbsDiffF32 := @AVX2ArrayAbsDiffF32;
-  dispatchTable.ArrayReLUF32 := @AVX2ArrayReLUF32;
-  dispatchTable.ArrayNormF32 := @AVX2ArrayNormF32;
-  dispatchTable.ArrayLinearReLUF32 := @AVX2ArrayLinearReLUF32;
+  dispatchTable.BatchF32.ArrayLinear := @AVX2ArrayLinearF32;
+  dispatchTable.BatchF32.ArrayAbsDiff := @AVX2ArrayAbsDiffF32;
+  dispatchTable.BatchF32.ArrayReLU := @AVX2ArrayReLUF32;
+  dispatchTable.BatchF32.ArrayNorm := @AVX2ArrayNormF32;
+  dispatchTable.BatchF32.ArrayLinearReLU := @AVX2ArrayLinearReLUF32;
 
   // Register the backend
   RegisterBackend(sbAVX2, dispatchTable);

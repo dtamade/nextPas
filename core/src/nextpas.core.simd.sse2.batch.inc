@@ -2654,12 +2654,14 @@ procedure SSE2ArrayLinearReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, 
 var
   i: SizeUInt;
   pS, pD: PDouble;
-  LScale, LBias: Double;
+  LScale, LBias, LVal: Double;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
   pS := aSrc; pD := aDst; LScale := aScale; LBias := aBias; i := 0;
 
+  // max(0, scale * x + bias) — same contract as Scalar / F32 max path
+  // SSE2 has no maxpd; emulate with cmple + and/andn/or
   while i + 4 <= aCount do
   begin
     asm
@@ -2674,27 +2676,31 @@ begin
       xorpd  xmm5, xmm5
 
       movupd xmm0, [rax + r8]
-      movupd xmm2, xmm0
+      movapd xmm2, xmm0
       mulpd  xmm2, xmm6
       addpd  xmm2, xmm7
-      cmpltpd xmm0, xmm5
-      andpd  xmm2, xmm0
-      movupd [rcx + r8], xmm2
+      movapd xmm0, xmm2
+      cmplepd xmm0, xmm5      // mask where linear <= 0
+      andnpd xmm0, xmm2      // zero where linear <= 0, keep positive
+      movupd [rcx + r8], xmm0
 
       movupd xmm1, [rax + r8 + 16]
-      movupd xmm3, xmm1
+      movapd xmm3, xmm1
       mulpd  xmm3, xmm6
       addpd  xmm3, xmm7
-      cmpltpd xmm1, xmm5
-      andpd  xmm3, xmm1
-      movupd [rcx + r8 + 16], xmm3
+      movapd xmm1, xmm3
+      cmplepd xmm1, xmm5
+      andnpd xmm1, xmm3
+      movupd [rcx + r8 + 16], xmm1
     end;
     Inc(i, 4);
   end;
 
   while i < aCount do
   begin
-    if pS[i] < 0 then pD[i] := LScale * pS[i] + LBias else pD[i] := 0.0;
+    LVal := LScale * pS[i] + LBias;
+    if LVal < 0 then LVal := 0;
+    pD[i] := LVal;
     Inc(i);
   end;
   {$POP}

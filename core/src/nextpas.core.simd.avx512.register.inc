@@ -286,72 +286,72 @@ begin
   end;
 
   // === Batch Array Operations (512-bit) ===
-  dispatchTable.ArrayAddF32 := @AVX512ArrayAddF32;
-  dispatchTable.ArraySubF32 := @AVX512ArraySubF32;
-  dispatchTable.ArrayMulF32 := @AVX512ArrayMulF32;
-  dispatchTable.ArrayDivF32 := @AVX512ArrayDivF32;
-  dispatchTable.ArrayAbsF32 := @AVX512ArrayAbsF32;
-  dispatchTable.ArrayNegF32 := @AVX512ArrayNegF32;
-  dispatchTable.ArraySqrtF32 := @AVX512ArraySqrtF32;
-  dispatchTable.ArrayRcpF32 := @AVX512ArrayRcpF32;
-  dispatchTable.ArrayRsqrtF32 := @AVX512ArrayRsqrtF32;
-  dispatchTable.ArrayRcpRefineF32 := @AVX512ArrayRcpRefineF32;
-  dispatchTable.ArrayRsqrtRefineF32 := @AVX512ArrayRsqrtRefineF32;
+  dispatchTable.BatchF32.ArrayAdd := @AVX512ArrayAddF32;
+  dispatchTable.BatchF32.ArraySub := @AVX512ArraySubF32;
+  dispatchTable.BatchF32.ArrayMul := @AVX512ArrayMulF32;
+  dispatchTable.BatchF32.ArrayDiv := @AVX512ArrayDivF32;
+  dispatchTable.BatchF32.ArrayAbs := @AVX512ArrayAbsF32;
+  dispatchTable.BatchF32.ArrayNeg := @AVX512ArrayNegF32;
+  dispatchTable.BatchF32.ArraySqrt := @AVX512ArraySqrtF32;
+  dispatchTable.BatchF32.ArrayRcp := @AVX512ArrayRcpF32;
+  dispatchTable.BatchF32.ArrayRsqrt := @AVX512ArrayRsqrtF32;
+  dispatchTable.BatchF32.ArrayRcpRefine := @AVX512ArrayRcpRefineF32;
+  dispatchTable.BatchF32.ArrayRsqrtRefine := @AVX512ArrayRsqrtRefineF32;
 
   // Transcendental (ZMM, 16 floats/iter)
-  dispatchTable.ArrayExpF32 := @AVX512ArrayExpF32;
-  dispatchTable.ArrayLogF32 := @AVX512ArrayLogF32;
-  dispatchTable.ArraySinF32 := @AVX512ArraySinF32;
-  dispatchTable.ArrayCosF32 := @AVX512ArrayCosF32;
-  dispatchTable.ArrayPowF32 := @AVX512ArrayPowF32;
+  dispatchTable.BatchF32.ArrayExp := @AVX512ArrayExpF32;
+  dispatchTable.BatchF32.ArrayLog := @AVX512ArrayLogF32;
+  dispatchTable.BatchF32.ArraySin := @AVX512ArraySinF32;
+  dispatchTable.BatchF32.ArrayCos := @AVX512ArrayCosF32;
+  dispatchTable.BatchF32.ArrayPow := @AVX512ArrayPowF32;
 
   // Fused (ZMM, single-pass)
-  dispatchTable.ArrayLinearF32 := @AVX512ArrayLinearF32;
-  dispatchTable.ArrayAbsDiffF32 := @AVX512ArrayAbsDiffF32;
-  dispatchTable.ArrayReLUF32 := @AVX512ArrayReLUF32;
-  dispatchTable.ArrayNormF32 := @AVX512ArrayNormF32;
-  dispatchTable.ArrayLinearReLUF32 := @AVX512ArrayLinearReLUF32;
+  dispatchTable.BatchF32.ArrayLinear := @AVX512ArrayLinearF32;
+  dispatchTable.BatchF32.ArrayAbsDiff := @AVX512ArrayAbsDiffF32;
+  dispatchTable.BatchF32.ArrayReLU := @AVX512ArrayReLUF32;
+  dispatchTable.BatchF32.ArrayNorm := @AVX512ArrayNormF32;
+  dispatchTable.BatchF32.ArrayLinearReLU := @AVX512ArrayLinearReLUF32;
 
   // Scalar/Affine (ZMM broadcast)
-  dispatchTable.ArrayAddScalarF32 := @AVX512ArrayAddScalarF32;
-  dispatchTable.ArrayMulScalarF32 := @AVX512ArrayMulScalarF32;
-  dispatchTable.ArrayClampF32 := @AVX512ArrayClampF32;
-  dispatchTable.ArrayFmaF32 := @AVX512ArrayFmaF32;
-  dispatchTable.ArrayAxpyF32 := @AVX512ArrayAxpyF32;
+  dispatchTable.BatchF32.ArrayAddScalar := @AVX512ArrayAddScalarF32;
+  dispatchTable.BatchF32.ArrayMulScalar := @AVX512ArrayMulScalarF32;
+  dispatchTable.BatchF32.ArrayClamp := @AVX512ArrayClampF32;
+  dispatchTable.BatchF32.ArrayFma := @AVX512ArrayFmaF32;
+  dispatchTable.BatchF32.ArrayAxpy := @AVX512ArrayAxpyF32;
 
   // Min/Max (ZMM element-wise)
-  dispatchTable.ArrayMinF32 := @AVX512ArrayMinF32;
-  dispatchTable.ArrayMaxF32 := @AVX512ArrayMaxF32;
+  dispatchTable.BatchF32.ArrayMin := @AVX512ArrayMinF32;
+  dispatchTable.BatchF32.ArrayMax := @AVX512ArrayMaxF32;
 
   // Reductions (ZMM accumulators → horizontal reduce)
-  dispatchTable.ReduceSumF32 := @AVX512ReduceSumF32;
-  dispatchTable.ReduceDotF32 := @AVX512ReduceDotF32;
-  dispatchTable.ReduceMinF32 := @AVX512ReduceMinF32;
-  dispatchTable.ReduceMaxF32 := @AVX512ReduceMaxF32;
+  dispatchTable.BatchF32.ReduceSum := @AVX512ReduceSumF32;
+  dispatchTable.BatchF32.ReduceDot := @AVX512ReduceDotF32;
+  dispatchTable.BatchF32.ReduceMin := @AVX512ReduceMinF32;
+  dispatchTable.BatchF32.ReduceMax := @AVX512ReduceMaxF32;
 
   // === F64 Batch Array Operations (ZMM, 8 doubles/iter) ===
-  dispatchTable.ArrayAddF64 := @AVX512ArrayAddF64;
-  dispatchTable.ArraySubF64 := @AVX512ArraySubF64;
-  dispatchTable.ArrayMulF64 := @AVX512ArrayMulF64;
-  dispatchTable.ArrayDivF64 := @AVX512ArrayDivF64;
-  dispatchTable.ArrayAbsF64 := @AVX512ArrayAbsF64;
-  dispatchTable.ArrayNegF64 := @AVX512ArrayNegF64;
-  dispatchTable.ArraySqrtF64 := @AVX512ArraySqrtF64;
+  dispatchTable.BatchF64.ArrayAdd := @AVX512ArrayAddF64;
+  dispatchTable.BatchF64.ArraySub := @AVX512ArraySubF64;
+  dispatchTable.BatchF64.ArrayMul := @AVX512ArrayMulF64;
+  dispatchTable.BatchF64.ArrayDiv := @AVX512ArrayDivF64;
+  dispatchTable.BatchF64.ArrayAbs := @AVX512ArrayAbsF64;
+  dispatchTable.BatchF64.ArrayNeg := @AVX512ArrayNegF64;
+  dispatchTable.BatchF64.ArraySqrt := @AVX512ArraySqrtF64;
 
   // F64 Reductions (ZMM accumulators)
-  dispatchTable.ReduceSumF64 := @AVX512ReduceSumF64;
-  dispatchTable.ReduceDotF64 := @AVX512ReduceDotF64;
-  dispatchTable.ReduceMinF64 := @AVX512ReduceMinF64;
-  dispatchTable.ReduceMaxF64 := @AVX512ReduceMaxF64;
+  dispatchTable.BatchF64.ReduceSum := @AVX512ReduceSumF64;
+  dispatchTable.BatchF64.ReduceDot := @AVX512ReduceDotF64;
+  dispatchTable.BatchF64.ReduceMin := @AVX512ReduceMinF64;
+  dispatchTable.BatchF64.ReduceMax := @AVX512ReduceMaxF64;
 
   // F64 Scalar/Affine (ZMM broadcast)
-  dispatchTable.ArrayMulScalarF64 := @AVX512ArrayMulScalarF64;
-  dispatchTable.ArrayAddScalarF64 := @AVX512ArrayAddScalarF64;
-  dispatchTable.ArrayClampF64 := @AVX512ArrayClampF64;
-  dispatchTable.ArrayLinearF64 := @AVX512ArrayLinearF64;
-  dispatchTable.ArrayMinF64 := @AVX512ArrayMinF64;
-  dispatchTable.ArrayMaxF64 := @AVX512ArrayMaxF64;
-  dispatchTable.ArrayFmaF64 := @AVX512ArrayFmaF64;
+  dispatchTable.BatchF64.ArrayMulScalar := @AVX512ArrayMulScalarF64;
+  dispatchTable.BatchF64.ArrayAddScalar := @AVX512ArrayAddScalarF64;
+  dispatchTable.BatchF64.ArrayClamp := @AVX512ArrayClampF64;
+  dispatchTable.BatchF64.ArrayLinear := @AVX512ArrayLinearF64;
+  dispatchTable.BatchF64.ArrayMin := @AVX512ArrayMinF64;
+  dispatchTable.BatchF64.ArrayMax := @AVX512ArrayMaxF64;
+  dispatchTable.BatchF64.ArrayFma := @AVX512ArrayFmaF64;
 
   // === Integer Batch (512-bit / 16 x Int32) ===
   dispatchTable.ArrayAddI32 := @AVX512ArrayAddI32;

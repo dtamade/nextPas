@@ -160,25 +160,24 @@ end;
 
 ## 实现步骤
 
-### Phase 1: 定义子记录类型
-1. 创建 `nextpas.core.simd.dispatch.types.inc`
-2. 定义所有子记录类型
-3. 更新主 dispatch table 使用子记录
+### Phase 1: 定义子记录类型 — ✅
+1. `nextpas.core.simd.dispatch.types.inc` 已定义 `TSimdBatchF32Ops` / `TSimdBatchF64Ops` 等子记录
+2. accessor 层与 F32/F64 对等契约已落地
 
-### Phase 2: 更新 Backend 实现
-1. 更新 SSE2 backend 使用子记录
-2. 更新 AVX2 backend 使用子记录
-3. 更新 AVX512 backend 使用子记录
-4. 更新 Scalar backend 使用子记录
-5. 更新其他 backend (NEON, RVV, etc.)
+### Phase 2: 嵌进主表 + Backend register — ✅ (2026-07-17)
+1. `TSimdDispatchTable` 中 flat `Array*F32` / `Array*F64` / `Reduce*F32` / `Reduce*F64` 槽位迁入 `BatchF32` / `BatchF64`
+2. Scalar baseline、SSE2/AVX2/AVX512 register fill 改为 `dispatchTable.BatchF32.*` / `BatchF64.*`
+3. facade (`nextpas.core.simd.pas`)、accessors、pipeline、arrays、algorithms、相关 tests/benches 同步迁路径
+4. 公共 `Array*F32` / `Array*F64` API 签名不变；仅内部访问路径变化
+5. 附带修复：`SSE2`/`AVX2` `ArrayLinearReLUF64` 语义对齐 `max(0, scale*x+bias)`；api-coverage Round/Rsqrt/Smoothstep 期望与 `System.Round` / 浮点契约对齐
 
-### Phase 3: 更新公共 API
-1. 更新所有 facade 函数使用新的访问模式
-2. 确保所有测试通过
-3. 更新文档
+### Phase 3: 其余子记录嵌表 (下一步)
+1. Integer / Memory / CoreVectors / Mask / Utility 从 flat 迁入对应子记录
+2. NEON / RVV register 与 x86 路径对齐
+3. 确保所有测试通过并更新文档
 
 ### Phase 4: 清理和优化
-1. 移除旧的 dispatch table 定义
+1. 移除过渡期 flat 残留与重复命名
 2. 优化子记录访问路径
 3. 更新基准测试
 

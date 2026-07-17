@@ -518,242 +518,242 @@ end;
 
 procedure TBatchF32Accessor.ArrayAdd(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddF32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF32.ArrayAdd(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArraySub(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubF32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF32.ArraySub(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayMul(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMulF32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF32.ArrayMul(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayDiv(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayDivF32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF32.ArrayDiv(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayMin(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMinF32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF32.ArrayMin(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayMax(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMaxF32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF32.ArrayMax(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayAbs(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAbsF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayAbs(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayNeg(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayNegF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayNeg(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArraySqrt(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySqrtF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArraySqrt(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayRcp(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRcpF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayRcp(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayRsqrt(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRsqrtF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayRsqrt(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayRcpRefine(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRcpRefineF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayRcpRefine(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayRsqrtRefine(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRsqrtRefineF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayRsqrtRefine(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayAddScalar(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single); inline;
 begin
-  FTable^.ArrayAddScalarF32(aSrc, aDst, aCount, aScalar);
+  FTable^.BatchF32.ArrayAddScalar(aSrc, aDst, aCount, aScalar);
 end;
 
 procedure TBatchF32Accessor.ArrayMulScalar(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single); inline;
 begin
-  FTable^.ArrayMulScalarF32(aSrc, aDst, aCount, aScalar);
+  FTable^.BatchF32.ArrayMulScalar(aSrc, aDst, aCount, aScalar);
 end;
 
 procedure TBatchF32Accessor.ArrayClamp(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: Single); inline;
 begin
-  FTable^.ArrayClampF32(aSrc, aDst, aCount, aMin, aMax);
+  FTable^.BatchF32.ArrayClamp(aSrc, aDst, aCount, aMin, aMax);
 end;
 
 procedure TBatchF32Accessor.ArrayFma(aA, aB, aC, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayFmaF32(aA, aB, aC, aDst, aCount);
+  FTable^.BatchF32.ArrayFma(aA, aB, aC, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayAxpy(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAxpyF32(aAlpha, aX, aY, aDst, aCount);
+  FTable^.BatchF32.ArrayAxpy(aAlpha, aX, aY, aDst, aCount);
 end;
 
 function TBatchF32Accessor.ReduceSum(aSrc: PSingle; aCount: SizeUInt): Single; inline;
 begin
-  Result := FTable^.ReduceSumF32(aSrc, aCount);
+  Result := FTable^.BatchF32.ReduceSum(aSrc, aCount);
 end;
 
 function TBatchF32Accessor.ReduceDot(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single; inline;
 begin
-  Result := FTable^.ReduceDotF32(aSrc1, aSrc2, aCount);
+  Result := FTable^.BatchF32.ReduceDot(aSrc1, aSrc2, aCount);
 end;
 
 function TBatchF32Accessor.ReduceMin(aSrc: PSingle; aCount: SizeUInt): Single; inline;
 begin
-  Result := FTable^.ReduceMinF32(aSrc, aCount);
+  Result := FTable^.BatchF32.ReduceMin(aSrc, aCount);
 end;
 
 function TBatchF32Accessor.ReduceMax(aSrc: PSingle; aCount: SizeUInt): Single; inline;
 begin
-  Result := FTable^.ReduceMaxF32(aSrc, aCount);
+  Result := FTable^.BatchF32.ReduceMax(aSrc, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayExp(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayExpF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayExp(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayLog(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayLogF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayLog(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayPow(aSrc, aDst: PSingle; aCount: SizeUInt; aExponent: Single); inline;
 begin
-  FTable^.ArrayPowF32(aSrc, aDst, aCount, aExponent);
+  FTable^.BatchF32.ArrayPow(aSrc, aDst, aCount, aExponent);
 end;
 
 procedure TBatchF32Accessor.ArraySin(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySinF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArraySin(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayCos(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayCosF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayCos(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayTan(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayTanF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayTan(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArraySinCos(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySinCosF32(aSrc, aSinDst, aCosDst, aCount);
+  FTable^.BatchF32.ArraySinCos(aSrc, aSinDst, aCosDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayLog2(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayLog2F32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayLog2(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayLog10(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayLog10F32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayLog10(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayAtan2(aY, aX, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAtan2F32(aY, aX, aDst, aCount);
+  FTable^.BatchF32.ArrayAtan2(aY, aX, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayHypot(aX, aY, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayHypotF32(aX, aY, aDst, aCount);
+  FTable^.BatchF32.ArrayHypot(aX, aY, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayCeil(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayCeilF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayCeil(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayFloor(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayFloorF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayFloor(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayRound(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRoundF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayRound(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayTrunc(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayTruncF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayTrunc(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayFract(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayFractF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayFract(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayLerp(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single); inline;
 begin
-  FTable^.ArrayLerpF32(aStart, aEnd, aDst, aCount, aT);
+  FTable^.BatchF32.ArrayLerp(aStart, aEnd, aDst, aCount, aT);
 end;
 
 procedure TBatchF32Accessor.ArrayMod(aSrc, aDst: PSingle; aCount: SizeUInt; aDivisor: Single); inline;
 begin
-  FTable^.ArrayModF32(aSrc, aDst, aCount, aDivisor);
+  FTable^.BatchF32.ArrayMod(aSrc, aDst, aCount, aDivisor);
 end;
 
 procedure TBatchF32Accessor.ArraySign(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySignF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArraySign(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayStep(aEdge, aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayStepF32(aEdge, aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayStep(aEdge, aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArraySmoothstep(aEdge0, aEdge1, aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySmoothstepF32(aEdge0, aEdge1, aSrc, aDst, aCount);
+  FTable^.BatchF32.ArraySmoothstep(aEdge0, aEdge1, aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayLinear(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single); inline;
 begin
-  FTable^.ArrayLinearF32(aSrc, aDst, aCount, aScale, aBias);
+  FTable^.BatchF32.ArrayLinear(aSrc, aDst, aCount, aScale, aBias);
 end;
 
 procedure TBatchF32Accessor.ArrayAbsDiff(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAbsDiffF32(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF32.ArrayAbsDiff(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayReLU(aSrc, aDst: PSingle; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayReLUF32(aSrc, aDst, aCount);
+  FTable^.BatchF32.ArrayReLU(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF32Accessor.ArrayNorm(aSrc, aDst: PSingle; aCount: SizeUInt; aMean, aInvStd: Single); inline;
 begin
-  FTable^.ArrayNormF32(aSrc, aDst, aCount, aMean, aInvStd);
+  FTable^.BatchF32.ArrayNorm(aSrc, aDst, aCount, aMean, aInvStd);
 end;
 
 procedure TBatchF32Accessor.ArrayLinearReLU(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single); inline;
 begin
-  FTable^.ArrayLinearReLUF32(aSrc, aDst, aCount, aScale, aBias);
+  FTable^.BatchF32.ArrayLinearReLU(aSrc, aDst, aCount, aScale, aBias);
 end;
 
 // --- TBatchF64Accessor ---
@@ -765,242 +765,242 @@ end;
 
 procedure TBatchF64Accessor.ArrayAdd(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAddF64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF64.ArrayAdd(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArraySub(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySubF64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF64.ArraySub(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayMul(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMulF64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF64.ArrayMul(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayDiv(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayDivF64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF64.ArrayDiv(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayMin(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMinF64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF64.ArrayMin(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayMax(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayMaxF64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF64.ArrayMax(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayAbs(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAbsF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayAbs(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayNeg(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayNegF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayNeg(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArraySqrt(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySqrtF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArraySqrt(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayRcp(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRcpF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayRcp(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayRsqrt(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRsqrtF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayRsqrt(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayRcpRefine(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRcpRefineF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayRcpRefine(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayRsqrtRefine(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRsqrtRefineF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayRsqrtRefine(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayMulScalar(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); inline;
 begin
-  FTable^.ArrayMulScalarF64(aSrc, aDst, aCount, aScalar);
+  FTable^.BatchF64.ArrayMulScalar(aSrc, aDst, aCount, aScalar);
 end;
 
 procedure TBatchF64Accessor.ArrayAddScalar(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); inline;
 begin
-  FTable^.ArrayAddScalarF64(aSrc, aDst, aCount, aScalar);
+  FTable^.BatchF64.ArrayAddScalar(aSrc, aDst, aCount, aScalar);
 end;
 
 procedure TBatchF64Accessor.ArrayClamp(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double); inline;
 begin
-  FTable^.ArrayClampF64(aSrc, aDst, aCount, aMin, aMax);
+  FTable^.BatchF64.ArrayClamp(aSrc, aDst, aCount, aMin, aMax);
 end;
 
 procedure TBatchF64Accessor.ArrayLinear(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double); inline;
 begin
-  FTable^.ArrayLinearF64(aSrc, aDst, aCount, aScale, aBias);
+  FTable^.BatchF64.ArrayLinear(aSrc, aDst, aCount, aScale, aBias);
 end;
 
 procedure TBatchF64Accessor.ArrayFma(aA, aB, aC, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayFmaF64(aA, aB, aC, aDst, aCount);
+  FTable^.BatchF64.ArrayFma(aA, aB, aC, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayAxpy(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAxpyF64(aAlpha, aX, aY, aDst, aCount);
+  FTable^.BatchF64.ArrayAxpy(aAlpha, aX, aY, aDst, aCount);
 end;
 
 function TBatchF64Accessor.ReduceSum(aSrc: PDouble; aCount: SizeUInt): Double; inline;
 begin
-  Result := FTable^.ReduceSumF64(aSrc, aCount);
+  Result := FTable^.BatchF64.ReduceSum(aSrc, aCount);
 end;
 
 function TBatchF64Accessor.ReduceDot(aSrc1, aSrc2: PDouble; aCount: SizeUInt): Double; inline;
 begin
-  Result := FTable^.ReduceDotF64(aSrc1, aSrc2, aCount);
+  Result := FTable^.BatchF64.ReduceDot(aSrc1, aSrc2, aCount);
 end;
 
 function TBatchF64Accessor.ReduceMin(aSrc: PDouble; aCount: SizeUInt): Double; inline;
 begin
-  Result := FTable^.ReduceMinF64(aSrc, aCount);
+  Result := FTable^.BatchF64.ReduceMin(aSrc, aCount);
 end;
 
 function TBatchF64Accessor.ReduceMax(aSrc: PDouble; aCount: SizeUInt): Double; inline;
 begin
-  Result := FTable^.ReduceMaxF64(aSrc, aCount);
+  Result := FTable^.BatchF64.ReduceMax(aSrc, aCount);
 end;
 
 procedure TBatchF64Accessor.ArraySin(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySinF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArraySin(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayCos(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayCosF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayCos(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArraySinCos(aSrc, aSinDst, aCosDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySinCosF64(aSrc, aSinDst, aCosDst, aCount);
+  FTable^.BatchF64.ArraySinCos(aSrc, aSinDst, aCosDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayExp(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayExpF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayExp(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayLog(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayLogF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayLog(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayLog2(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayLog2F64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayLog2(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayLog10(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayLog10F64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayLog10(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayCeil(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayCeilF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayCeil(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayFloor(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayFloorF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayFloor(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayRound(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayRoundF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayRound(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayTrunc(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayTruncF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayTrunc(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayTan(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayTanF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayTan(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArraySign(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySignF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArraySign(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayFract(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayFractF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayFract(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayMod(aSrc, aDst: PDouble; aCount: SizeUInt; aDivisor: Double); inline;
 begin
-  FTable^.ArrayModF64(aSrc, aDst, aCount, aDivisor);
+  FTable^.BatchF64.ArrayMod(aSrc, aDst, aCount, aDivisor);
 end;
 
 procedure TBatchF64Accessor.ArrayPow(aSrc, aDst: PDouble; aCount: SizeUInt; aExponent: Double); inline;
 begin
-  FTable^.ArrayPowF64(aSrc, aDst, aCount, aExponent);
+  FTable^.BatchF64.ArrayPow(aSrc, aDst, aCount, aExponent);
 end;
 
 procedure TBatchF64Accessor.ArrayLerp(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double); inline;
 begin
-  FTable^.ArrayLerpF64(aStart, aEnd, aDst, aCount, aT);
+  FTable^.BatchF64.ArrayLerp(aStart, aEnd, aDst, aCount, aT);
 end;
 
 procedure TBatchF64Accessor.ArrayReLU(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayReLUF64(aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayReLU(aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayAbsDiff(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAbsDiffF64(aSrc1, aSrc2, aDst, aCount);
+  FTable^.BatchF64.ArrayAbsDiff(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayNorm(aSrc, aDst: PDouble; aCount: SizeUInt; aMean, aInvStd: Double); inline;
 begin
-  FTable^.ArrayNormF64(aSrc, aDst, aCount, aMean, aInvStd);
+  FTable^.BatchF64.ArrayNorm(aSrc, aDst, aCount, aMean, aInvStd);
 end;
 
 procedure TBatchF64Accessor.ArrayLinearReLU(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double); inline;
 begin
-  FTable^.ArrayLinearReLUF64(aSrc, aDst, aCount, aScale, aBias);
+  FTable^.BatchF64.ArrayLinearReLU(aSrc, aDst, aCount, aScale, aBias);
 end;
 
 procedure TBatchF64Accessor.ArrayStep(aEdge, aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayStepF64(aEdge, aSrc, aDst, aCount);
+  FTable^.BatchF64.ArrayStep(aEdge, aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArraySmoothstep(aEdge0, aEdge1, aSrc, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArraySmoothstepF64(aEdge0, aEdge1, aSrc, aDst, aCount);
+  FTable^.BatchF64.ArraySmoothstep(aEdge0, aEdge1, aSrc, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayAtan2(aY, aX, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayAtan2F64(aY, aX, aDst, aCount);
+  FTable^.BatchF64.ArrayAtan2(aY, aX, aDst, aCount);
 end;
 
 procedure TBatchF64Accessor.ArrayHypot(aX, aY, aDst: PDouble; aCount: SizeUInt); inline;
 begin
-  FTable^.ArrayHypotF64(aX, aY, aDst, aCount);
+  FTable^.BatchF64.ArrayHypot(aX, aY, aDst, aCount);
 end;
 
 // --- TI32x4Accessor ---

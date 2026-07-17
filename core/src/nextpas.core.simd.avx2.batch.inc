@@ -3255,12 +3255,13 @@ procedure AVX2ArrayLinearReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, 
 var
   i: SizeUInt;
   pS, pD: PDouble;
-  LScale, LBias: Double;
+  LScale, LBias, LVal: Double;
 begin
   {$PUSH}{$Q-}{$R-}
   if aCount = 0 then Exit;
   pS := aSrc; pD := aDst; LScale := aScale; LBias := aBias; i := 0;
 
+  // max(0, scale * x + bias) — same contract as Scalar / F32 vmax path
   while i + 8 <= aCount do
   begin
     asm
@@ -3275,15 +3276,13 @@ begin
       vmovupd ymm0, [rax + r8]
       vmulpd  ymm2, ymm0, ymm6
       vaddpd  ymm2, ymm2, ymm7
-      vcmpltpd ymm0, ymm0, ymm5
-      vandpd  ymm2, ymm2, ymm0
+      vmaxpd  ymm2, ymm2, ymm5
       vmovupd [rcx + r8], ymm2
 
       vmovupd ymm1, [rax + r8 + 32]
       vmulpd  ymm3, ymm1, ymm6
       vaddpd  ymm3, ymm3, ymm7
-      vcmpltpd ymm1, ymm1, ymm5
-      vandpd  ymm3, ymm3, ymm1
+      vmaxpd  ymm3, ymm3, ymm5
       vmovupd [rcx + r8 + 32], ymm3
     end;
     Inc(i, 8);
@@ -3291,7 +3290,9 @@ begin
 
   while i < aCount do
   begin
-    if pS[i] < 0 then pD[i] := LScale * pS[i] + LBias else pD[i] := 0.0;
+    LVal := LScale * pS[i] + LBias;
+    if LVal < 0 then LVal := 0;
+    pD[i] := LVal;
     Inc(i);
   end;
 

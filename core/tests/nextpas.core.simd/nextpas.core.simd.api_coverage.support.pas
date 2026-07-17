@@ -63,9 +63,10 @@ end;
 
 procedure CheckFloat(aActual, aExpected: Single; const aMessage: string; aEpsilon: Single = 1e-5);
 begin
+  // Avoid text.conv.Format %g — TextFormat only supports d/u/x/X/s/f.
   Check(
     Abs(aActual - aExpected) < aEpsilon,
-    aMessage + Format(' (got %g, exp %g)', [aActual, aExpected])
+    aMessage + ' (got ' + FloatToStr(aActual) + ', exp ' + FloatToStr(aExpected) + ')'
   );
 end;
 
@@ -73,13 +74,13 @@ procedure CheckDouble(aActual, aExpected: Double; const aMessage: string; aEpsil
 begin
   Check(
     Abs(aActual - aExpected) < aEpsilon,
-    aMessage + Format(' (got %g, exp %g)', [aActual, aExpected])
+    aMessage + ' (got ' + FloatToStr(aActual) + ', exp ' + FloatToStr(aExpected) + ')'
   );
 end;
 
 procedure PrintApiCoverageSummary;
 begin
-  WriteLn(Format('--- %d tests passed, %d failed ---', [GPass, GFail]));
+  WriteLn('--- ', GPass, ' tests passed, ', GFail, ' failed ---');
   if GFail = 0 then
     WriteLn('ALL PASS');
 end;

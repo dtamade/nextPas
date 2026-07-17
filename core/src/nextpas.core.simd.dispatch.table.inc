@@ -730,112 +730,10 @@
     AndNotU16x8: function(const a, b: TVecU16x8): TVecU16x8;
     AndNotU8x16: function(const a, b: TVecU8x16): TVecU8x16;
 
-    // === Batch Array Operations (O(1) dispatch, internal loop) ===
-    ArrayAddF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
-    ArraySubF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
-    ArrayMulF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
-    ArrayDivF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
-    ArrayMinF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
-    ArrayMaxF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
-    ArrayAbsF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayNegF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArraySqrtF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayRcpF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayRsqrtF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayRcpRefineF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayRsqrtRefineF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayAddScalarF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
-    ArrayMulScalarF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single);
-    ArrayClampF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: Single);
-    ArrayFmaF32: procedure(aA, aB, aC, aDst: PSingle; aCount: SizeUInt);
-    ArrayAxpyF32: procedure(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt);
-    ReduceSumF32: function(aSrc: PSingle; aCount: SizeUInt): Single;
-    ReduceDotF32: function(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single;
-    ReduceMinF32: function(aSrc: PSingle; aCount: SizeUInt): Single;
-    ReduceMaxF32: function(aSrc: PSingle; aCount: SizeUInt): Single;
-
-    // === Batch Array Operations - F64 ===
-    ArrayAddF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
-    ArraySubF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
-    ArrayMulF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
-    ArrayDivF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
-    ReduceSumF64: function(aSrc: PDouble; aCount: SizeUInt): Double;
-    ReduceDotF64: function(aSrc1, aSrc2: PDouble; aCount: SizeUInt): Double;
-    ReduceMinF64: function(aSrc: PDouble; aCount: SizeUInt): Double;
-    ReduceMaxF64: function(aSrc: PDouble; aCount: SizeUInt): Double;
-    ArrayAbsF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayNegF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArraySqrtF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayMulScalarF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
-    ArrayAddScalarF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double);
-    ArrayClampF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double);
-    ArrayLinearF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
-    ArrayMinF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
-    ArrayMaxF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
-    ArrayFmaF64: procedure(aA, aB, aC, aDst: PDouble; aCount: SizeUInt);
-
-    // === Batch Array Operations - Transcendental F64 ===
-    ArraySinF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayCosF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArraySinCosF64: procedure(aSrc, aSinDst, aCosDst: PDouble; aCount: SizeUInt);
-    ArrayExpF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayLogF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayLog2F64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayLog10F64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayCeilF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayFloorF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayRoundF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayTruncF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-
-    // === Batch Array Operations - F64 Extended ===
-    ArrayAxpyF64: procedure(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
-    ArrayRcpF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayRsqrtF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayRcpRefineF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayRsqrtRefineF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayTanF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArraySignF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayFractF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayModF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aDivisor: Double);
-    ArrayPowF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aExponent: Double);
-    ArrayLerpF64: procedure(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double);
-    ArrayReLUF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayAbsDiffF64: procedure(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
-    ArrayNormF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aMean, aInvStd: Double);
-    ArrayLinearReLUF64: procedure(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
-    ArrayStepF64: procedure(aEdge, aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArraySmoothstepF64: procedure(aEdge0, aEdge1, aSrc, aDst: PDouble; aCount: SizeUInt);
-    ArrayAtan2F64: procedure(aY, aX, aDst: PDouble; aCount: SizeUInt);
-    ArrayHypotF64: procedure(aX, aY, aDst: PDouble; aCount: SizeUInt);
-
-    // === Batch Array Operations - Transcendental F32 ===
-    ArrayExpF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayLogF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayPowF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aExponent: Single);
-    ArraySinF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayCosF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayTanF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArraySinCosF32: procedure(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);
-    ArrayLog2F32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayLog10F32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayAtan2F32: procedure(aY, aX, aDst: PSingle; aCount: SizeUInt);
-    ArrayHypotF32: procedure(aX, aY, aDst: PSingle; aCount: SizeUInt);
-
-    // === Batch Array Operations - Rounding F32 ===
-    ArrayCeilF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayFloorF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayRoundF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayTruncF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayFractF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-
-    // === Batch Array Operations - Interpolation F32 ===
-    ArrayLerpF32: procedure(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single);
-
-    // === Batch Array Operations - Utility F32 ===
-    ArrayModF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aDivisor: Single);
-    ArraySignF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayStepF32: procedure(aEdge, aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArraySmoothstepF32: procedure(aEdge0, aEdge1, aSrc, aDst: PSingle; aCount: SizeUInt);
+    // === Batch Array Operations (nested sub-records; Phase 19 Phase 2) ===
+    // Flat Array*F32 / Array*F64 / Reduce*F32 / Reduce*F64 slots moved into:
+    BatchF32: TSimdBatchF32Ops;
+    BatchF64: TSimdBatchF64Ops;
 
     // === Batch Array Operations - Integer ===
     ArrayAddI32: procedure(aSrc1, aSrc2, aDst: PInt32; aCount: SizeUInt);
@@ -909,10 +807,5 @@
     ArrayShlI32: procedure(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer);
     ArrayShrI32: procedure(aSrc, aDst: PInt32; aCount: SizeUInt; aShift: Integer);
 
-    // === Fused Batch Operations (single-pass, reduced memory traffic) ===
-    ArrayLinearF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single);
-    ArrayAbsDiffF32: procedure(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
-    ArrayReLUF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt);
-    ArrayNormF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aMean, aInvStd: Single);
-    ArrayLinearReLUF32: procedure(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single);
+    // Fused F32 batch ops live under BatchF32 (ArrayLinear/AbsDiff/ReLU/Norm/LinearReLU).
   end;

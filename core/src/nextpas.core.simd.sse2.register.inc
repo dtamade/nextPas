@@ -609,60 +609,60 @@ begin
   // ============================================================================
   // Batch Array Operations (SSE2 SIMD loops)
   // ============================================================================
-  dispatchTable.ArrayAddF32 := @SSE2ArrayAddF32;
-  dispatchTable.ArraySubF32 := @SSE2ArraySubF32;
-  dispatchTable.ArrayMulF32 := @SSE2ArrayMulF32;
-  dispatchTable.ArrayDivF32 := @SSE2ArrayDivF32;
-  dispatchTable.ArrayMinF32 := @SSE2ArrayMinF32;
-  dispatchTable.ArrayMaxF32 := @SSE2ArrayMaxF32;
-  dispatchTable.ArrayAbsF32 := @SSE2ArrayAbsF32;
-  dispatchTable.ArrayNegF32 := @SSE2ArrayNegF32;
-  dispatchTable.ArraySqrtF32 := @SSE2ArraySqrtF32;
-  dispatchTable.ArrayRcpF32 := @SSE2ArrayRcpF32;
-  dispatchTable.ArrayRsqrtF32 := @SSE2ArrayRsqrtF32;
-  dispatchTable.ArrayAddScalarF32 := @SSE2ArrayAddScalarF32;
-  dispatchTable.ArrayMulScalarF32 := @SSE2ArrayMulScalarF32;
-  dispatchTable.ArrayClampF32 := @SSE2ArrayClampF32;
-  dispatchTable.ArrayFmaF32 := @SSE2ArrayFmaF32;
-  dispatchTable.ArrayAxpyF32 := @SSE2ArrayAxpyF32;
-  dispatchTable.ReduceSumF32 := @SSE2ReduceSumF32;
-  dispatchTable.ReduceDotF32 := @SSE2ReduceDotF32;
+  dispatchTable.BatchF32.ArrayAdd := @SSE2ArrayAddF32;
+  dispatchTable.BatchF32.ArraySub := @SSE2ArraySubF32;
+  dispatchTable.BatchF32.ArrayMul := @SSE2ArrayMulF32;
+  dispatchTable.BatchF32.ArrayDiv := @SSE2ArrayDivF32;
+  dispatchTable.BatchF32.ArrayMin := @SSE2ArrayMinF32;
+  dispatchTable.BatchF32.ArrayMax := @SSE2ArrayMaxF32;
+  dispatchTable.BatchF32.ArrayAbs := @SSE2ArrayAbsF32;
+  dispatchTable.BatchF32.ArrayNeg := @SSE2ArrayNegF32;
+  dispatchTable.BatchF32.ArraySqrt := @SSE2ArraySqrtF32;
+  dispatchTable.BatchF32.ArrayRcp := @SSE2ArrayRcpF32;
+  dispatchTable.BatchF32.ArrayRsqrt := @SSE2ArrayRsqrtF32;
+  dispatchTable.BatchF32.ArrayAddScalar := @SSE2ArrayAddScalarF32;
+  dispatchTable.BatchF32.ArrayMulScalar := @SSE2ArrayMulScalarF32;
+  dispatchTable.BatchF32.ArrayClamp := @SSE2ArrayClampF32;
+  dispatchTable.BatchF32.ArrayFma := @SSE2ArrayFmaF32;
+  dispatchTable.BatchF32.ArrayAxpy := @SSE2ArrayAxpyF32;
+  dispatchTable.BatchF32.ReduceSum := @SSE2ReduceSumF32;
+  dispatchTable.BatchF32.ReduceDot := @SSE2ReduceDotF32;
 
   // F64 batch unary
-  dispatchTable.ArrayAbsF64 := @SSE2ArrayAbsF64;
-  dispatchTable.ArrayNegF64 := @SSE2ArrayNegF64;
-  dispatchTable.ArraySqrtF64 := @SSE2ArraySqrtF64;
-  dispatchTable.ArrayMulScalarF64 := @SSE2ArrayMulScalarF64;
-  dispatchTable.ArrayAddScalarF64 := @SSE2ArrayAddScalarF64;
-  dispatchTable.ArrayClampF64 := @SSE2ArrayClampF64;
-  dispatchTable.ArrayLinearF64 := @SSE2ArrayLinearF64;
+  dispatchTable.BatchF64.ArrayAbs := @SSE2ArrayAbsF64;
+  dispatchTable.BatchF64.ArrayNeg := @SSE2ArrayNegF64;
+  dispatchTable.BatchF64.ArraySqrt := @SSE2ArraySqrtF64;
+  dispatchTable.BatchF64.ArrayMulScalar := @SSE2ArrayMulScalarF64;
+  dispatchTable.BatchF64.ArrayAddScalar := @SSE2ArrayAddScalarF64;
+  dispatchTable.BatchF64.ArrayClamp := @SSE2ArrayClampF64;
+  dispatchTable.BatchF64.ArrayLinear := @SSE2ArrayLinearF64;
 
   // F64 batch arithmetic
-  dispatchTable.ArrayAddF64 := @SSE2ArrayAddF64;
-  dispatchTable.ArraySubF64 := @SSE2ArraySubF64;
-  dispatchTable.ArrayMulF64 := @SSE2ArrayMulF64;
-  dispatchTable.ArrayDivF64 := @SSE2ArrayDivF64;
+  dispatchTable.BatchF64.ArrayAdd := @SSE2ArrayAddF64;
+  dispatchTable.BatchF64.ArraySub := @SSE2ArraySubF64;
+  dispatchTable.BatchF64.ArrayMul := @SSE2ArrayMulF64;
+  dispatchTable.BatchF64.ArrayDiv := @SSE2ArrayDivF64;
 
   // F64 extended batch operations
-  dispatchTable.ArrayAxpyF64 := @SSE2ArrayAxpyF64;
-  dispatchTable.ArrayRcpF64 := @SSE2ArrayRcpF64;
-  dispatchTable.ArrayRsqrtF64 := @SSE2ArrayRsqrtF64;
-  dispatchTable.ArrayRcpRefineF64 := @ScalarArrayRcpRefineF64;
-  dispatchTable.ArrayRsqrtRefineF64 := @ScalarArrayRsqrtRefineF64;
-  dispatchTable.ArrayTanF64 := @SSE2ArrayTanF64;
-  dispatchTable.ArraySignF64 := @SSE2ArraySignF64;
-  dispatchTable.ArrayFractF64 := @SSE2ArrayFractF64;
-  dispatchTable.ArrayModF64 := @SSE2ArrayModF64;
-  dispatchTable.ArrayPowF64 := @SSE2ArrayPowF64;
-  dispatchTable.ArrayLerpF64 := @SSE2ArrayLerpF64;
-  dispatchTable.ArrayReLUF64 := @SSE2ArrayReLUF64;
-  dispatchTable.ArrayAbsDiffF64 := @SSE2ArrayAbsDiffF64;
-  dispatchTable.ArrayNormF64 := @SSE2ArrayNormF64;
-  dispatchTable.ArrayLinearReLUF64 := @SSE2ArrayLinearReLUF64;
-  dispatchTable.ArrayStepF64 := @SSE2ArrayStepF64;
-  dispatchTable.ArraySmoothstepF64 := @SSE2ArraySmoothstepF64;
-  dispatchTable.ArrayAtan2F64 := @SSE2ArrayAtan2F64;
-  dispatchTable.ArrayHypotF64 := @SSE2ArrayHypotF64;
+  dispatchTable.BatchF64.ArrayAxpy := @SSE2ArrayAxpyF64;
+  dispatchTable.BatchF64.ArrayRcp := @SSE2ArrayRcpF64;
+  dispatchTable.BatchF64.ArrayRsqrt := @SSE2ArrayRsqrtF64;
+  dispatchTable.BatchF64.ArrayRcpRefine := @ScalarArrayRcpRefineF64;
+  dispatchTable.BatchF64.ArrayRsqrtRefine := @ScalarArrayRsqrtRefineF64;
+  dispatchTable.BatchF64.ArrayTan := @SSE2ArrayTanF64;
+  dispatchTable.BatchF64.ArraySign := @SSE2ArraySignF64;
+  dispatchTable.BatchF64.ArrayFract := @SSE2ArrayFractF64;
+  dispatchTable.BatchF64.ArrayMod := @SSE2ArrayModF64;
+  dispatchTable.BatchF64.ArrayPow := @SSE2ArrayPowF64;
+  dispatchTable.BatchF64.ArrayLerp := @SSE2ArrayLerpF64;
+  dispatchTable.BatchF64.ArrayReLU := @SSE2ArrayReLUF64;
+  dispatchTable.BatchF64.ArrayAbsDiff := @SSE2ArrayAbsDiffF64;
+  dispatchTable.BatchF64.ArrayNorm := @SSE2ArrayNormF64;
+  dispatchTable.BatchF64.ArrayLinearReLU := @SSE2ArrayLinearReLUF64;
+  dispatchTable.BatchF64.ArrayStep := @SSE2ArrayStepF64;
+  dispatchTable.BatchF64.ArraySmoothstep := @SSE2ArraySmoothstepF64;
+  dispatchTable.BatchF64.ArrayAtan2 := @SSE2ArrayAtan2F64;
+  dispatchTable.BatchF64.ArrayHypot := @SSE2ArrayHypotF64;
 
   // Integer batch
   dispatchTable.ArrayAddI32 := @SSE2ArrayAddI32;
@@ -687,94 +687,94 @@ begin
   dispatchTable.ArrayI32toF32 := @SSE2ArrayI32toF32;
 
   // F64 reductions
-  dispatchTable.ReduceSumF64 := @SSE2ReduceSumF64;
-  dispatchTable.ReduceDotF64 := @SSE2ReduceDotF64;
+  dispatchTable.BatchF64.ReduceSum := @SSE2ReduceSumF64;
+  dispatchTable.BatchF64.ReduceDot := @SSE2ReduceDotF64;
 
   // F32 reductions
-  dispatchTable.ReduceMinF32 := @SSE2ReduceMinF32;
-  dispatchTable.ReduceMaxF32 := @SSE2ReduceMaxF32;
+  dispatchTable.BatchF32.ReduceMin := @SSE2ReduceMinF32;
+  dispatchTable.BatchF32.ReduceMax := @SSE2ReduceMaxF32;
 
   // F64 reductions
-  dispatchTable.ReduceMinF64 := @SSE2ReduceMinF64;
-  dispatchTable.ReduceMaxF64 := @SSE2ReduceMaxF64;
+  dispatchTable.BatchF64.ReduceMin := @SSE2ReduceMinF64;
+  dispatchTable.BatchF64.ReduceMax := @SSE2ReduceMaxF64;
 
   // PackSat + NR Refine
   dispatchTable.ArrayPackSatI32toI16 := @SSE2ArrayPackSatI32toI16;
-  dispatchTable.ArrayRcpRefineF32 := @SSE2ArrayRcpRefineF32;
-  dispatchTable.ArrayRsqrtRefineF32 := @SSE2ArrayRsqrtRefineF32;
+  dispatchTable.BatchF32.ArrayRcpRefine := @SSE2ArrayRcpRefineF32;
+  dispatchTable.BatchF32.ArrayRsqrtRefine := @SSE2ArrayRsqrtRefineF32;
 
   // Transcendental
-  dispatchTable.ArrayExpF32 := @SSE2ArrayExpF32;
-  dispatchTable.ArrayLogF32 := @SSE2ArrayLogF32;
-  dispatchTable.ArraySinF32 := @SSE2ArraySinF32;
-  dispatchTable.ArrayCosF32 := @SSE2ArrayCosF32;
-  dispatchTable.ArrayPowF32 := @SSE2ArrayPowF32;
-  dispatchTable.ArrayTanF32 := @SSE2ArrayTanF32;
-  dispatchTable.ArraySinCosF32 := @SSE2ArraySinCosF32;
-  dispatchTable.ArrayLog2F32 := @SSE2ArrayLog2F32;
-  dispatchTable.ArrayLog10F32 := @SSE2ArrayLog10F32;
-  dispatchTable.ArrayAtan2F32 := @SSE2ArrayAtan2F32;
-  dispatchTable.ArrayHypotF32 := @SSE2ArrayHypotF32;
+  dispatchTable.BatchF32.ArrayExp := @SSE2ArrayExpF32;
+  dispatchTable.BatchF32.ArrayLog := @SSE2ArrayLogF32;
+  dispatchTable.BatchF32.ArraySin := @SSE2ArraySinF32;
+  dispatchTable.BatchF32.ArrayCos := @SSE2ArrayCosF32;
+  dispatchTable.BatchF32.ArrayPow := @SSE2ArrayPowF32;
+  dispatchTable.BatchF32.ArrayTan := @SSE2ArrayTanF32;
+  dispatchTable.BatchF32.ArraySinCos := @SSE2ArraySinCosF32;
+  dispatchTable.BatchF32.ArrayLog2 := @SSE2ArrayLog2F32;
+  dispatchTable.BatchF32.ArrayLog10 := @SSE2ArrayLog10F32;
+  dispatchTable.BatchF32.ArrayAtan2 := @SSE2ArrayAtan2F32;
+  dispatchTable.BatchF32.ArrayHypot := @SSE2ArrayHypotF32;
 
   // Rounding - SSE4.1 roundps 指令，纯 SSE2 CPU 使用标量回退
   if HasSSE41 then
   begin
-    dispatchTable.ArrayCeilF32 := @SSE2ArrayCeilF32;
-    dispatchTable.ArrayFloorF32 := @SSE2ArrayFloorF32;
-    dispatchTable.ArrayRoundF32 := @SSE2ArrayRoundF32;
-    dispatchTable.ArrayTruncF32 := @SSE2ArrayTruncF32;
-    dispatchTable.ArrayFractF32 := @SSE2ArrayFractF32;
+    dispatchTable.BatchF32.ArrayCeil := @SSE2ArrayCeilF32;
+    dispatchTable.BatchF32.ArrayFloor := @SSE2ArrayFloorF32;
+    dispatchTable.BatchF32.ArrayRound := @SSE2ArrayRoundF32;
+    dispatchTable.BatchF32.ArrayTrunc := @SSE2ArrayTruncF32;
+    dispatchTable.BatchF32.ArrayFract := @SSE2ArrayFractF32;
   end
   else
   begin
-    dispatchTable.ArrayCeilF32 := @ScalarArrayCeilF32;
-    dispatchTable.ArrayFloorF32 := @ScalarArrayFloorF32;
-    dispatchTable.ArrayRoundF32 := @ScalarArrayRoundF32;
-    dispatchTable.ArrayTruncF32 := @ScalarArrayTruncF32;
-    dispatchTable.ArrayFractF32 := @ScalarArrayFractF32;
+    dispatchTable.BatchF32.ArrayCeil := @ScalarArrayCeilF32;
+    dispatchTable.BatchF32.ArrayFloor := @ScalarArrayFloorF32;
+    dispatchTable.BatchF32.ArrayRound := @ScalarArrayRoundF32;
+    dispatchTable.BatchF32.ArrayTrunc := @ScalarArrayTruncF32;
+    dispatchTable.BatchF32.ArrayFract := @ScalarArrayFractF32;
   end;
 
   // Interpolation
-  dispatchTable.ArrayLerpF32 := @SSE2ArrayLerpF32;
+  dispatchTable.BatchF32.ArrayLerp := @SSE2ArrayLerpF32;
 
   // Utility — ArrayModF32 uses roundps (SSE4.1), gate with scalar fallback
   if HasSSE41 then
-    dispatchTable.ArrayModF32 := @SSE2ArrayModF32
+    dispatchTable.BatchF32.ArrayMod := @SSE2ArrayModF32
   else
-    dispatchTable.ArrayModF32 := @ScalarArrayModF32;
-  dispatchTable.ArraySignF32 := @SSE2ArraySignF32;
-  dispatchTable.ArrayStepF32 := @SSE2ArrayStepF32;
-  dispatchTable.ArraySmoothstepF32 := @SSE2ArraySmoothstepF32;
+    dispatchTable.BatchF32.ArrayMod := @ScalarArrayModF32;
+  dispatchTable.BatchF32.ArraySign := @SSE2ArraySignF32;
+  dispatchTable.BatchF32.ArrayStep := @SSE2ArrayStepF32;
+  dispatchTable.BatchF32.ArraySmoothstep := @SSE2ArraySmoothstepF32;
 
   // Fused
-  dispatchTable.ArrayLinearF32 := @SSE2ArrayLinearF32;
-  dispatchTable.ArrayAbsDiffF32 := @SSE2ArrayAbsDiffF32;
-  dispatchTable.ArrayReLUF32 := @SSE2ArrayReLUF32;
-  dispatchTable.ArrayNormF32 := @SSE2ArrayNormF32;
-  dispatchTable.ArrayLinearReLUF32 := @SSE2ArrayLinearReLUF32;
+  dispatchTable.BatchF32.ArrayLinear := @SSE2ArrayLinearF32;
+  dispatchTable.BatchF32.ArrayAbsDiff := @SSE2ArrayAbsDiffF32;
+  dispatchTable.BatchF32.ArrayReLU := @SSE2ArrayReLUF32;
+  dispatchTable.BatchF32.ArrayNorm := @SSE2ArrayNormF32;
+  dispatchTable.BatchF32.ArrayLinearReLU := @SSE2ArrayLinearReLUF32;
 
   // F64 Transcendental (SSE2 with loop unrolling)
-  dispatchTable.ArraySinF64 := @SSE2ArraySinF64;
-  dispatchTable.ArrayCosF64 := @SSE2ArrayCosF64;
-  dispatchTable.ArrayExpF64 := @SSE2ArrayExpF64;
-  dispatchTable.ArrayLogF64 := @SSE2ArrayLogF64;
-  dispatchTable.ArrayLog2F64 := @SSE2ArrayLog2F64;
-  dispatchTable.ArrayLog10F64 := @SSE2ArrayLog10F64;
+  dispatchTable.BatchF64.ArraySin := @SSE2ArraySinF64;
+  dispatchTable.BatchF64.ArrayCos := @SSE2ArrayCosF64;
+  dispatchTable.BatchF64.ArrayExp := @SSE2ArrayExpF64;
+  dispatchTable.BatchF64.ArrayLog := @SSE2ArrayLogF64;
+  dispatchTable.BatchF64.ArrayLog2 := @SSE2ArrayLog2F64;
+  dispatchTable.BatchF64.ArrayLog10 := @SSE2ArrayLog10F64;
 
   // F64 Rounding (SSE4.1 roundpd)
   if HasSSE41 then
   begin
-    dispatchTable.ArrayCeilF64 := @SSE2ArrayCeilF64;
-    dispatchTable.ArrayFloorF64 := @SSE2ArrayFloorF64;
-    dispatchTable.ArrayRoundF64 := @SSE2ArrayRoundF64;
-    dispatchTable.ArrayTruncF64 := @SSE2ArrayTruncF64;
+    dispatchTable.BatchF64.ArrayCeil := @SSE2ArrayCeilF64;
+    dispatchTable.BatchF64.ArrayFloor := @SSE2ArrayFloorF64;
+    dispatchTable.BatchF64.ArrayRound := @SSE2ArrayRoundF64;
+    dispatchTable.BatchF64.ArrayTrunc := @SSE2ArrayTruncF64;
   end
   else
   begin
-    dispatchTable.ArrayCeilF64 := @ScalarArrayCeilF64;
-    dispatchTable.ArrayFloorF64 := @ScalarArrayFloorF64;
-    dispatchTable.ArrayRoundF64 := @ScalarArrayRoundF64;
-    dispatchTable.ArrayTruncF64 := @ScalarArrayTruncF64;
+    dispatchTable.BatchF64.ArrayCeil := @ScalarArrayCeilF64;
+    dispatchTable.BatchF64.ArrayFloor := @ScalarArrayFloorF64;
+    dispatchTable.BatchF64.ArrayRound := @ScalarArrayRoundF64;
+    dispatchTable.BatchF64.ArrayTrunc := @ScalarArrayTruncF64;
   end;
 
   // Register the backend

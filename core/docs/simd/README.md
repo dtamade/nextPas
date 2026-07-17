@@ -18,9 +18,9 @@
 - **Backend Adapters**: ✅ x86 SSE2/AVX2/AVX-512 与 NEON 真 SIMD 汇编；scalar 全覆盖回退
 - **批量 / 超越函数**: ✅ F32/F64 `Array*` 批量与超越函数后端已对等（见 roadmap Phase 13–18）
 - **Intrinsics 层**: ✅ 主路径使用真实 ISA 指令；实验性 ISA 仍可能 stub
-- **分派器层**: ✅ 运行时函数指针表；Phase 19 子记录模块化仅完成 Phase 1
+- **分派器层**: ✅ 运行时函数指针表；Phase 19 Phase 2 已将 `BatchF32`/`BatchF64` 嵌进主 dispatch 表（Integer 等仍 flat）
 - **cpuinfo**: ✅ 主路径稳定；invalid backend / AVX fail-close 契约在 2026-07-17 收紧
-- **验证基线 (2026-07-17)**: `make -C core/tests/nextpas.core.simd clean test` → 1738 passed
+- **验证基线 (2026-07-17)**: `make -C core/tests/nextpas.core.simd test` → 1738 passed；api-coverage 全绿；math `test_batch_simd` 49 passed
 
 ## 快速入门
 

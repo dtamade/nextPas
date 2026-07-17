@@ -707,52 +707,52 @@ begin
   Add('AndNotU8x16',           Pointer(aTbl.AndNotU8x16));
 
   // ── Batch Array F32 ──
-  Add('ArrayAddF32',           Pointer(aTbl.ArrayAddF32));
-  Add('ArraySubF32',           Pointer(aTbl.ArraySubF32));
-  Add('ArrayMulF32',           Pointer(aTbl.ArrayMulF32));
-  Add('ArrayDivF32',           Pointer(aTbl.ArrayDivF32));
-  Add('ArrayMinF32',           Pointer(aTbl.ArrayMinF32));
-  Add('ArrayMaxF32',           Pointer(aTbl.ArrayMaxF32));
-  Add('ArrayAbsF32',           Pointer(aTbl.ArrayAbsF32));
-  Add('ArrayNegF32',           Pointer(aTbl.ArrayNegF32));
-  Add('ArraySqrtF32',          Pointer(aTbl.ArraySqrtF32));
-  Add('ArrayRcpF32',           Pointer(aTbl.ArrayRcpF32));
-  Add('ArrayRsqrtF32',         Pointer(aTbl.ArrayRsqrtF32));
-  Add('ArrayRcpRefineF32',     Pointer(aTbl.ArrayRcpRefineF32));
-  Add('ArrayRsqrtRefineF32',   Pointer(aTbl.ArrayRsqrtRefineF32));
-  Add('ArrayAddScalarF32',     Pointer(aTbl.ArrayAddScalarF32));
-  Add('ArrayMulScalarF32',     Pointer(aTbl.ArrayMulScalarF32));
-  Add('ArrayClampF32',         Pointer(aTbl.ArrayClampF32));
-  Add('ArrayFmaF32',           Pointer(aTbl.ArrayFmaF32));
-  Add('ArrayAxpyF32',          Pointer(aTbl.ArrayAxpyF32));
-  Add('ReduceSumF32',          Pointer(aTbl.ReduceSumF32));
-  Add('ReduceDotF32',          Pointer(aTbl.ReduceDotF32));
-  Add('ReduceMinF32',          Pointer(aTbl.ReduceMinF32));
-  Add('ReduceMaxF32',          Pointer(aTbl.ReduceMaxF32));
+  Add('ArrayAddF32',           Pointer(aTbl.BatchF32.ArrayAdd));
+  Add('ArraySubF32',           Pointer(aTbl.BatchF32.ArraySub));
+  Add('ArrayMulF32',           Pointer(aTbl.BatchF32.ArrayMul));
+  Add('ArrayDivF32',           Pointer(aTbl.BatchF32.ArrayDiv));
+  Add('ArrayMinF32',           Pointer(aTbl.BatchF32.ArrayMin));
+  Add('ArrayMaxF32',           Pointer(aTbl.BatchF32.ArrayMax));
+  Add('ArrayAbsF32',           Pointer(aTbl.BatchF32.ArrayAbs));
+  Add('ArrayNegF32',           Pointer(aTbl.BatchF32.ArrayNeg));
+  Add('ArraySqrtF32',          Pointer(aTbl.BatchF32.ArraySqrt));
+  Add('ArrayRcpF32',           Pointer(aTbl.BatchF32.ArrayRcp));
+  Add('ArrayRsqrtF32',         Pointer(aTbl.BatchF32.ArrayRsqrt));
+  Add('ArrayRcpRefineF32',     Pointer(aTbl.BatchF32.ArrayRcpRefine));
+  Add('ArrayRsqrtRefineF32',   Pointer(aTbl.BatchF32.ArrayRsqrtRefine));
+  Add('ArrayAddScalarF32',     Pointer(aTbl.BatchF32.ArrayAddScalar));
+  Add('ArrayMulScalarF32',     Pointer(aTbl.BatchF32.ArrayMulScalar));
+  Add('ArrayClampF32',         Pointer(aTbl.BatchF32.ArrayClamp));
+  Add('ArrayFmaF32',           Pointer(aTbl.BatchF32.ArrayFma));
+  Add('ArrayAxpyF32',          Pointer(aTbl.BatchF32.ArrayAxpy));
+  Add('ReduceSumF32',          Pointer(aTbl.BatchF32.ReduceSum));
+  Add('ReduceDotF32',          Pointer(aTbl.BatchF32.ReduceDot));
+  Add('ReduceMinF32',          Pointer(aTbl.BatchF32.ReduceMin));
+  Add('ReduceMaxF32',          Pointer(aTbl.BatchF32.ReduceMax));
 
   // ── Batch Array F64 ──
-  Add('ArrayAddF64',           Pointer(aTbl.ArrayAddF64));
-  Add('ArraySubF64',           Pointer(aTbl.ArraySubF64));
-  Add('ArrayMulF64',           Pointer(aTbl.ArrayMulF64));
-  Add('ArrayDivF64',           Pointer(aTbl.ArrayDivF64));
-  Add('ReduceSumF64',          Pointer(aTbl.ReduceSumF64));
-  Add('ReduceDotF64',          Pointer(aTbl.ReduceDotF64));
-  Add('ReduceMinF64',          Pointer(aTbl.ReduceMinF64));
-  Add('ReduceMaxF64',          Pointer(aTbl.ReduceMaxF64));
-  Add('ArrayAbsF64',           Pointer(aTbl.ArrayAbsF64));
-  Add('ArrayNegF64',           Pointer(aTbl.ArrayNegF64));
-  Add('ArraySqrtF64',          Pointer(aTbl.ArraySqrtF64));
-  Add('ArrayMulScalarF64',     Pointer(aTbl.ArrayMulScalarF64));
-  Add('ArrayAddScalarF64',     Pointer(aTbl.ArrayAddScalarF64));
-  Add('ArrayClampF64',         Pointer(aTbl.ArrayClampF64));
-  Add('ArrayLinearF64',        Pointer(aTbl.ArrayLinearF64));
+  Add('ArrayAddF64',           Pointer(aTbl.BatchF64.ArrayAdd));
+  Add('ArraySubF64',           Pointer(aTbl.BatchF64.ArraySub));
+  Add('ArrayMulF64',           Pointer(aTbl.BatchF64.ArrayMul));
+  Add('ArrayDivF64',           Pointer(aTbl.BatchF64.ArrayDiv));
+  Add('ReduceSumF64',          Pointer(aTbl.BatchF64.ReduceSum));
+  Add('ReduceDotF64',          Pointer(aTbl.BatchF64.ReduceDot));
+  Add('ReduceMinF64',          Pointer(aTbl.BatchF64.ReduceMin));
+  Add('ReduceMaxF64',          Pointer(aTbl.BatchF64.ReduceMax));
+  Add('ArrayAbsF64',           Pointer(aTbl.BatchF64.ArrayAbs));
+  Add('ArrayNegF64',           Pointer(aTbl.BatchF64.ArrayNeg));
+  Add('ArraySqrtF64',          Pointer(aTbl.BatchF64.ArraySqrt));
+  Add('ArrayMulScalarF64',     Pointer(aTbl.BatchF64.ArrayMulScalar));
+  Add('ArrayAddScalarF64',     Pointer(aTbl.BatchF64.ArrayAddScalar));
+  Add('ArrayClampF64',         Pointer(aTbl.BatchF64.ArrayClamp));
+  Add('ArrayLinearF64',        Pointer(aTbl.BatchF64.ArrayLinear));
 
   // ── Batch Transcendental ──
-  Add('ArrayExpF32',           Pointer(aTbl.ArrayExpF32));
-  Add('ArrayLogF32',           Pointer(aTbl.ArrayLogF32));
-  Add('ArrayPowF32',           Pointer(aTbl.ArrayPowF32));
-  Add('ArraySinF32',           Pointer(aTbl.ArraySinF32));
-  Add('ArrayCosF32',           Pointer(aTbl.ArrayCosF32));
+  Add('ArrayExpF32',           Pointer(aTbl.BatchF32.ArrayExp));
+  Add('ArrayLogF32',           Pointer(aTbl.BatchF32.ArrayLog));
+  Add('ArrayPowF32',           Pointer(aTbl.BatchF32.ArrayPow));
+  Add('ArraySinF32',           Pointer(aTbl.BatchF32.ArraySin));
+  Add('ArrayCosF32',           Pointer(aTbl.BatchF32.ArrayCos));
 
   // ── Batch Integer ──
   Add('ArrayAddI32',           Pointer(aTbl.ArrayAddI32));
@@ -772,11 +772,11 @@ begin
   Add('ArrayShrI32',           Pointer(aTbl.ArrayShrI32));
 
   // ── Fused Batch ──
-  Add('ArrayLinearF32',        Pointer(aTbl.ArrayLinearF32));
-  Add('ArrayAbsDiffF32',       Pointer(aTbl.ArrayAbsDiffF32));
-  Add('ArrayReLUF32',          Pointer(aTbl.ArrayReLUF32));
-  Add('ArrayNormF32',          Pointer(aTbl.ArrayNormF32));
-  Add('ArrayLinearReLUF32',    Pointer(aTbl.ArrayLinearReLUF32));
+  Add('ArrayLinearF32',        Pointer(aTbl.BatchF32.ArrayLinear));
+  Add('ArrayAbsDiffF32',       Pointer(aTbl.BatchF32.ArrayAbsDiff));
+  Add('ArrayReLUF32',          Pointer(aTbl.BatchF32.ArrayReLU));
+  Add('ArrayNormF32',          Pointer(aTbl.BatchF32.ArrayNorm));
+  Add('ArrayLinearReLUF32',    Pointer(aTbl.BatchF32.ArrayLinearReLU));
 
   // ── Statistics ──
   total := n;

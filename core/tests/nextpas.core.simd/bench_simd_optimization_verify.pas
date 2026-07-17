@@ -75,12 +75,12 @@ begin
 
     // Warmup
     for warm := 0 to WARMUP - 1 do
-      g_Dispatch^.ArrayAddF32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
+      g_Dispatch^.BatchF32.ArrayAdd(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
 
     // Benchmark
     t0 := GetNanoTime;
     for j := 0 to ITERS - 1 do
-      g_Dispatch^.ArrayAddF32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
+      g_Dispatch^.BatchF32.ArrayAdd(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
     t1 := GetNanoTime;
 
     nsPerElem := (t1 - t0) / ITERS / SIZES[sizeIdx];
@@ -111,11 +111,11 @@ begin
     end;
 
     for warm := 0 to WARMUP - 1 do
-      g_Dispatch^.ArrayMulF32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
+      g_Dispatch^.BatchF32.ArrayMul(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
 
     t0 := GetNanoTime;
     for j := 0 to ITERS - 1 do
-      g_Dispatch^.ArrayMulF32(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
+      g_Dispatch^.BatchF32.ArrayMul(@LA[0], @LB[0], @LD[0], SIZES[sizeIdx]);
     t1 := GetNanoTime;
 
     nsPerElem := (t1 - t0) / ITERS / SIZES[sizeIdx];
@@ -180,11 +180,11 @@ begin
       LA[i] := Sin(i * 0.7) * 50.0;
 
     for warm := 0 to WARMUP - 1 do
-      maxVal := g_Dispatch^.ReduceMaxF32(@LA[0], SIZES[sizeIdx]);
+      maxVal := g_Dispatch^.BatchF32.ReduceMax(@LA[0], SIZES[sizeIdx]);
 
     t0 := GetNanoTime;
     for j := 0 to ITERS - 1 do
-      maxVal := g_Dispatch^.ReduceMaxF32(@LA[0], SIZES[sizeIdx]);
+      maxVal := g_Dispatch^.BatchF32.ReduceMax(@LA[0], SIZES[sizeIdx]);
     t1 := GetNanoTime;
 
     nsPerElem := (t1 - t0) / ITERS / SIZES[sizeIdx];
@@ -266,11 +266,11 @@ begin
 
     // Test Smart dispatch (should use NT for large arrays)
     for warm := 0 to WARMUP - 1 do
-      g_Dispatch^.ArrayAddF32(@LA[0], @LB[0], @LD[0], largeSizes[sizeIdx]);
+      g_Dispatch^.BatchF32.ArrayAdd(@LA[0], @LB[0], @LD[0], largeSizes[sizeIdx]);
 
     t0 := GetNanoTime;
     for j := 0 to ITERS - 1 do
-      g_Dispatch^.ArrayAddF32(@LA[0], @LB[0], @LD[0], largeSizes[sizeIdx]);
+      g_Dispatch^.BatchF32.ArrayAdd(@LA[0], @LB[0], @LD[0], largeSizes[sizeIdx]);
     t1 := GetNanoTime;
 
     nsPerElem := (t1 - t0) / ITERS / largeSizes[sizeIdx];

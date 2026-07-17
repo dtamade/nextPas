@@ -69,10 +69,10 @@ begin
   Check(dst[2] = 3.0, 'Floor[3.7]');
   Check(dst[3] = 4.0, 'Floor[4.1]');
 
-  // Test ArrayRoundF64
+  // Test ArrayRoundF64 — matches System.Round banker's (ties-to-even)
   ArrayRoundF64(@src[0], @dst[0], 4);
   Check(dst[0] = 1.0, 'Round[1.2]');
-  Check(dst[1] = 3.0, 'Round[2.5]');
+  Check(dst[1] = 2.0, 'Round[2.5]');  // 2.5 -> 2 (even), not half-up
   Check(dst[2] = 4.0, 'Round[3.7]');
   Check(dst[3] = 4.0, 'Round[4.1]');
 
@@ -295,12 +295,13 @@ begin
   Check(Abs(dst[3] - 2.0) < 1e-10, 'Rcp[0.5]');
 
   // Test ArrayRsqrtF64: 1/sqrt(x)
+  // Compare against 1/Sqrt(x) (same formula as impl); 1/3 is not bit-exact for Sqrt(9).
   src[0] := 1; src[1] := 4; src[2] := 9; src[3] := 16;
   ArrayRsqrtF64(@src[0], @dst[0], 4);
-  Check(Abs(dst[0] - 1.0) < 1e-10, 'Rsqrt[1]');
-  Check(Abs(dst[1] - 0.5) < 1e-10, 'Rsqrt[4]');
-  Check(Abs(dst[2] - 1.0/3.0) < 1e-10, 'Rsqrt[9]');
-  Check(Abs(dst[3] - 0.25) < 1e-10, 'Rsqrt[16]');
+  Check(Abs(dst[0] - 1.0/Sqrt(1.0)) < 1e-12, 'Rsqrt[1]');
+  Check(Abs(dst[1] - 1.0/Sqrt(4.0)) < 1e-12, 'Rsqrt[4]');
+  Check(Abs(dst[2] - 1.0/Sqrt(9.0)) < 1e-12, 'Rsqrt[9]');
+  Check(Abs(dst[3] - 1.0/Sqrt(16.0)) < 1e-12, 'Rsqrt[16]');
 
   // Test ArrayTanF64
   src[0] := 0; src[1] := Pi/4; src[2] := Pi/6; src[3] := Pi/3;
@@ -388,13 +389,15 @@ begin
   Check(dst[2] = 1.0, 'Step[1]');
   Check(dst[3] = 1.0, 'Step[0.5]');
 
-  // Test ArraySmoothstepF64
+  // Test ArraySmoothstepF64 — Hermite smoothstep on [edge0, edge1]
   edge[0] := 0; edge[1] := 0; edge[2] := 0; edge[3] := 0;
-  edge[0] := 0; edge[1] := 0; edge[2] := 0; edge[3] := 0;
+  src2[0] := 1; src2[1] := 1; src2[2] := 1; src2[3] := 1;  // edge1
   src[0] := 0; src[1] := 0.5; src[2] := 1; src[3] := 0.25;
   ArraySmoothstepF64(@edge[0], @src2[0], @src[0], @dst[0], 4);
   Check(dst[0] = 0.0, 'Smoothstep[0]');
-  Check(dst[1] = 0.5, 'Smoothstep[0.5]');
+  // t=0.5 → t*t*(3-2*t) = 0.5
+  Check(Abs(dst[1] - 0.5) < 1e-12, 'Smoothstep[0.5]');
+  Check(dst[2] = 1.0, 'Smoothstep[1]');
 
   // Test ArrayAtan2F64
   src[0] := 0; src[1] := 1; src[2] := 1; src[3] := -1;

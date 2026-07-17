@@ -318,7 +318,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(0.0);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceSumF64(aSrc, aCount);
+  Result := LDispatch^.BatchF64.ReduceSum(aSrc, aCount);
 end;
 
 function SimdArraySumKahanF64(aSrc: PDouble; aCount: SizeUInt): Double;
@@ -385,7 +385,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(PosInfinityF64);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceMinF64(aSrc, aCount);
+  Result := LDispatch^.BatchF64.ReduceMin(aSrc, aCount);
 end;
 
 function SimdArrayMaxF64(aSrc: PDouble; aCount: SizeUInt): Double;
@@ -394,7 +394,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(NegInfinityF64);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceMaxF64(aSrc, aCount);
+  Result := LDispatch^.BatchF64.ReduceMax(aSrc, aCount);
 end;
 
 procedure SimdArrayMinMaxF64(aSrc: PDouble; aCount: SizeUInt; out aMin, aMax: Double);
@@ -407,8 +407,8 @@ begin
     Exit;
   end;
   LDispatch := GetDirectDispatchTable;
-  aMin := LDispatch^.ReduceMinF64(aSrc, aCount);
-  aMax := LDispatch^.ReduceMaxF64(aSrc, aCount);
+  aMin := LDispatch^.BatchF64.ReduceMin(aSrc, aCount);
+  aMax := LDispatch^.BatchF64.ReduceMax(aSrc, aCount);
 end;
 
 function SimdArrayMeanF64(aSrc: PDouble; aCount: SizeUInt): Double;
@@ -516,7 +516,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aCount = 0) then
     Exit(0.0);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceDotF64(aSrc1, aSrc2, aCount);
+  Result := LDispatch^.BatchF64.ReduceDot(aSrc1, aSrc2, aCount);
 end;
 
 function SimdArrayL2NormF64(aSrc: PDouble; aCount: SizeUInt): Double;
@@ -534,7 +534,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(0.0);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceSumF32(aSrc, aCount);
+  Result := LDispatch^.BatchF32.ReduceSum(aSrc, aCount);
 end;
 
 function SimdArraySumKahanF32(aSrc: PSingle; aCount: SizeUInt): Single;
@@ -601,7 +601,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(PosInfinityF32);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceMinF32(aSrc, aCount);
+  Result := LDispatch^.BatchF32.ReduceMin(aSrc, aCount);
 end;
 
 function SimdArrayMaxF32(aSrc: PSingle; aCount: SizeUInt): Single;
@@ -610,7 +610,7 @@ begin
   if (aSrc = nil) or (aCount = 0) then
     Exit(NegInfinityF32);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceMaxF32(aSrc, aCount);
+  Result := LDispatch^.BatchF32.ReduceMax(aSrc, aCount);
 end;
 
 procedure SimdArrayMinMaxF32(aSrc: PSingle; aCount: SizeUInt; out aMin, aMax: Single);
@@ -623,8 +623,8 @@ begin
     Exit;
   end;
   LDispatch := GetDirectDispatchTable;
-  aMin := LDispatch^.ReduceMinF32(aSrc, aCount);
-  aMax := LDispatch^.ReduceMaxF32(aSrc, aCount);
+  aMin := LDispatch^.BatchF32.ReduceMin(aSrc, aCount);
+  aMax := LDispatch^.BatchF32.ReduceMax(aSrc, aCount);
 end;
 
 function SimdArrayMeanF32(aSrc: PSingle; aCount: SizeUInt): Single;
@@ -730,7 +730,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aCount = 0) then
     Exit(0.0);
   LDispatch := GetDirectDispatchTable;
-  Result := LDispatch^.ReduceDotF32(aSrc1, aSrc2, aCount);
+  Result := LDispatch^.BatchF32.ReduceDot(aSrc1, aSrc2, aCount);
 end;
 
 function SimdArrayL2NormF32(aSrc: PSingle; aCount: SizeUInt): Single;
@@ -784,7 +784,7 @@ begin
   if (aSrc = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAbsF64(aSrc, aDst, aCount);
+  LDispatch^.BatchF64.ArrayAbs(aSrc, aDst, aCount);
 end;
 
 procedure SimdArrayAddF64(aSrc, aDst: PDouble; aCount: SizeUInt; aValue: Double);
@@ -829,7 +829,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAddF64(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF64.ArrayAdd(aSrc1, aSrc2, aDst, aCount);
 end;
 
 // ============================================================================
@@ -842,7 +842,7 @@ begin
   if (aSrc = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayMulScalarF32(aSrc, aDst, aCount, aFactor);
+  LDispatch^.BatchF32.ArrayMulScalar(aSrc, aDst, aCount, aFactor);
 end;
 
 procedure SimdArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt);
@@ -853,7 +853,7 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAbsF32(aSrc, aDst, aCount);
+  LDispatch^.BatchF32.ArrayAbs(aSrc, aDst, aCount);
 end;
 
 procedure SimdArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt);
@@ -864,7 +864,7 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayNegF32(aSrc, aDst, aCount);
+  LDispatch^.BatchF32.ArrayNeg(aSrc, aDst, aCount);
 end;
 
 procedure SimdArraySqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt);
@@ -875,7 +875,7 @@ begin
     Exit;
 
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArraySqrtF32(aSrc, aDst, aCount);
+  LDispatch^.BatchF32.ArraySqrt(aSrc, aDst, aCount);
 end;
 
 procedure SimdArrayAddF32(aSrc, aDst: PSingle; aCount: SizeUInt; aValue: Single);
@@ -884,7 +884,7 @@ begin
   if (aSrc = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAddScalarF32(aSrc, aDst, aCount, aValue);
+  LDispatch^.BatchF32.ArrayAddScalar(aSrc, aDst, aCount, aValue);
 end;
 
 procedure SimdArrayAddArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -893,7 +893,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayAddF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayAdd(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArraySubArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -902,7 +902,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArraySubF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArraySub(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayMulArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -911,7 +911,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayMulF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayMul(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayDivArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -920,7 +920,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayDivF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayDiv(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayMinArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -929,7 +929,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayMinF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayMin(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayMaxArrayF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -938,7 +938,7 @@ begin
   if (aSrc1 = nil) or (aSrc2 = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayMaxF32(aSrc1, aSrc2, aDst, aCount);
+  LDispatch^.BatchF32.ArrayMax(aSrc1, aSrc2, aDst, aCount);
 end;
 
 procedure SimdArrayClampF32(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: Single);
@@ -947,7 +947,7 @@ begin
   if (aSrc = nil) or (aDst = nil) or (aCount = 0) then
     Exit;
   LDispatch := GetDirectDispatchTable;
-  LDispatch^.ArrayClampF32(aSrc, aDst, aCount, aMin, aMax);
+  LDispatch^.BatchF32.ArrayClamp(aSrc, aDst, aCount, aMin, aMax);
 end;
 
 end.

@@ -133,7 +133,7 @@ end;
 
 procedure BenchF32SimdAdd;
 begin
-  g_Dispatch^.ArrayAddF32(@F32A[0], @F32B[0], @F32Dst[0], g_BenchCount);
+  g_Dispatch^.BatchF32.ArrayAdd(@F32A[0], @F32B[0], @F32Dst[0], g_BenchCount);
   g_ScalarF32Dummy := F32Dst[g_BenchCount - 1];
 end;
 
@@ -145,7 +145,7 @@ end;
 
 procedure BenchF64SimdAdd;
 begin
-  g_Dispatch^.ArrayAddF64(@F64A[0], @F64B[0], @F64Dst[0], g_BenchCount);
+  g_Dispatch^.BatchF64.ArrayAdd(@F64A[0], @F64B[0], @F64Dst[0], g_BenchCount);
   g_ScalarF64Dummy := F64Dst[g_BenchCount - 1];
 end;
 
