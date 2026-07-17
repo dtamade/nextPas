@@ -1,6 +1,6 @@
 # nextpas.core.simd 路线图和计划任务
 
-> 最后更新: 2026-07-17 (Phase 19 完成：dispatch 表嵌套模块化 Phase 1–6)
+> 最后更新: 2026-07-17 (Wave B：NEON Mask → SharedMask* + Memory 缺口契约)
 
 ## 当前状态
 
@@ -73,6 +73,7 @@
 | Phase 17: SSE2 F64 超越函数 SIMD | ✅ 100% | 10个SSE2 SIMD实现 (Sin/Cos/Exp/Log/Log2/Log10/Ceil/Floor/Round/Trunc) |
 | Phase 18: AVX2 F64 超越函数 SIMD | ✅ 100% | 10个AVX2 SIMD实现 (Sin/Cos/Exp/Log/Log2/Log10/Ceil/Floor/Round/Trunc) |
 | Phase 19: Dispatch Table 模块化 | ✅ 100% | Phase 1–5 嵌表完成；Phase 6 死草稿/short-name 清理 + 嵌套路径 residual 契约 + NEON/RVV 与 x86 **路径级**对齐审计（槽级覆盖差距靠 baseline 继承，不在本 phase 扩 native） |
+| Wave B: NEON Mask/Memory 覆盖 | ✅ 100% | SharedMask 可移植 + NEON 20 Mask 槽绑定 + `scMaskedOps`；Memory 6 槽缺口刻意 scalar 继承（契约锁定） |
 
 ### 进行中 (⚠️)
 
@@ -96,7 +97,7 @@
 
 | 目标 | 优先级 | 说明 |
 |------|--------|------|
-| （Phase 19 已闭环） | — | 后续若补 NEON Batch*/Memory 或 RVV Memory native，属独立后端覆盖任务，不再阻塞模块化 |
+| （Wave B 已闭环） | — | NEON Mask 已 SharedMask 对齐；后续若补 NEON Batch*/Memory native 或 RVV Memory native，属独立后端覆盖任务 |
 | G16 RVV Phase 3 | P2 | 需真实 RISC-V 硬件证据 |
 | G17 Phase 4 | P2 | dispatch 开销硬件测量 |
 | 编译器集成 | P3 | nextpas 编译器 SIMD 内建支持（长期） |

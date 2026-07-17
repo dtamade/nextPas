@@ -173,7 +173,8 @@ type
     procedure Test_NEON_NoAsmNarrowF64CompareAndSimpleReductionSlots_Reuse_BaseScalar_When_Wrappers_Have_No_SourceConsumers;
     procedure Test_NEON_NoAsmWideClampSlots_Reuse_BaseScalar_For_F32_And_F64_When_NoAsm;
     procedure Test_NEON_NoAsmAbsAndWideFloorCeilSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
-    procedure Test_NEON_MaskHelperSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
+    procedure Test_NEON_MaskHelperSlots_Bind_SharedMask_Without_DeadNEONWrappers;
+    procedure Test_NEON_BackendCapabilities_Expose_MaskedOps_When_MaskSlots_AreShared;
     procedure Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar;
     procedure Test_NEON_NoAsmIntegerFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Not_BackendOwned;
     procedure Test_NEON_SelectF32x4_Keep_LocalSourceCompanion_But_Reuse_BaseScalar_RuntimeSlot;
@@ -9025,7 +9026,7 @@ begin
   AssertSlotReusesScalar('FloorF64x8', Pointer(LScalarTable.CoreVectors.FloorF64x8), Pointer(LNEONTable.CoreVectors.FloorF64x8));
 end;
 
-procedure TTestCase_DispatchAPI.Test_NEON_MaskHelperSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
+procedure TTestCase_DispatchAPI.Test_NEON_MaskHelperSlots_Bind_SharedMask_Without_DeadNEONWrappers;
 var
   LScalarTable: TSimdDispatchTable;
   LNEONTable: TSimdDispatchTable;
@@ -9037,17 +9038,23 @@ var
 
   procedure AssertDeadWrapperRemoved(const aLabel, aSnippet: string);
   begin
-    CheckTrue(Pos(LowerCase(aSnippet), LUtilitySource) = 0, aLabel + ' dead wrapper should be removed from the NEON scalar utility include');
+    CheckTrue(Pos(LowerCase(aSnippet), LUtilitySource) = 0, aLabel + ' dead wrapper should stay removed from the NEON scalar utility include');
   end;
 
-  procedure AssertRegisterKeepsBaseScalar(const aLabel, aSnippet: string);
+  procedure AssertRegisterForbidsDeadNEONMask(const aLabel, aSnippet: string);
   begin
-    CheckTrue(Pos(LowerCase(aSnippet), LRegisterSource) = 0, 'RegisterNEONBackend should keep base scalar ' + aLabel + ' when the NEON mask helper wrapper is only a scalar forwarder');
+    CheckTrue(Pos(LowerCase(aSnippet), LRegisterSource) = 0, 'RegisterNEONBackend must not bind dead NEONMask* wrappers for ' + aLabel);
   end;
 
-  procedure AssertSlotReusesScalar(const aLabel: string; const aScalarSlot, aBackendSlot: Pointer);
+  procedure AssertRegisterBindsSharedMask(const aLabel, aSnippet: string);
   begin
-    CheckEqual(PtrUInt(aScalarSlot), PtrUInt(aBackendSlot), 'NEON ' + aLabel + ' should reuse the base scalar slot when the NEON mask helper wrapper is only a scalar forwarder');
+    CheckTrue(Pos(LowerCase(aSnippet), LRegisterSource) > 0, 'RegisterNEONBackend should bind SharedMask for ' + aLabel);
+  end;
+
+  procedure AssertSlotNotScalar(const aLabel: string; const aScalarSlot, aBackendSlot: Pointer);
+  begin
+    CheckTrue(aBackendSlot <> nil, 'NEON ' + aLabel + ' should be assigned');
+    CheckTrue(PtrUInt(aBackendSlot) <> PtrUInt(aScalarSlot), 'NEON ' + aLabel + ' should own SharedMask rather than reuse the base scalar slot');
   end;
 begin
   LSourceLines := TStringList.Create;
@@ -9086,26 +9093,47 @@ begin
   AssertDeadWrapperRemoved('NEONMask16PopCount', 'function NEONMask16PopCount(');
   AssertDeadWrapperRemoved('NEONMask16FirstSet', 'function NEONMask16FirstSet(');
 
-  AssertRegisterKeepsBaseScalar('Mask2All', 'table.Mask.Mask2All := @NEONMask2All;');
-  AssertRegisterKeepsBaseScalar('Mask2Any', 'table.Mask.Mask2Any := @NEONMask2Any;');
-  AssertRegisterKeepsBaseScalar('Mask2None', 'table.Mask.Mask2None := @NEONMask2None;');
-  AssertRegisterKeepsBaseScalar('Mask2PopCount', 'table.Mask.Mask2PopCount := @NEONMask2PopCount;');
-  AssertRegisterKeepsBaseScalar('Mask2FirstSet', 'table.Mask.Mask2FirstSet := @NEONMask2FirstSet;');
-  AssertRegisterKeepsBaseScalar('Mask4All', 'table.Mask.Mask4All := @NEONMask4All;');
-  AssertRegisterKeepsBaseScalar('Mask4Any', 'table.Mask.Mask4Any := @NEONMask4Any;');
-  AssertRegisterKeepsBaseScalar('Mask4None', 'table.Mask.Mask4None := @NEONMask4None;');
-  AssertRegisterKeepsBaseScalar('Mask4PopCount', 'table.Mask.Mask4PopCount := @NEONMask4PopCount;');
-  AssertRegisterKeepsBaseScalar('Mask4FirstSet', 'table.Mask.Mask4FirstSet := @NEONMask4FirstSet;');
-  AssertRegisterKeepsBaseScalar('Mask8All', 'table.Mask.Mask8All := @NEONMask8All;');
-  AssertRegisterKeepsBaseScalar('Mask8Any', 'table.Mask.Mask8Any := @NEONMask8Any;');
-  AssertRegisterKeepsBaseScalar('Mask8None', 'table.Mask.Mask8None := @NEONMask8None;');
-  AssertRegisterKeepsBaseScalar('Mask8PopCount', 'table.Mask.Mask8PopCount := @NEONMask8PopCount;');
-  AssertRegisterKeepsBaseScalar('Mask8FirstSet', 'table.Mask.Mask8FirstSet := @NEONMask8FirstSet;');
-  AssertRegisterKeepsBaseScalar('Mask16All', 'table.Mask.Mask16All := @NEONMask16All;');
-  AssertRegisterKeepsBaseScalar('Mask16Any', 'table.Mask.Mask16Any := @NEONMask16Any;');
-  AssertRegisterKeepsBaseScalar('Mask16None', 'table.Mask.Mask16None := @NEONMask16None;');
-  AssertRegisterKeepsBaseScalar('Mask16PopCount', 'table.Mask.Mask16PopCount := @NEONMask16PopCount;');
-  AssertRegisterKeepsBaseScalar('Mask16FirstSet', 'table.Mask.Mask16FirstSet := @NEONMask16FirstSet;');
+  AssertRegisterForbidsDeadNEONMask('Mask2All', 'table.Mask.Mask2All := @NEONMask2All;');
+  AssertRegisterForbidsDeadNEONMask('Mask2Any', 'table.Mask.Mask2Any := @NEONMask2Any;');
+  AssertRegisterForbidsDeadNEONMask('Mask2None', 'table.Mask.Mask2None := @NEONMask2None;');
+  AssertRegisterForbidsDeadNEONMask('Mask2PopCount', 'table.Mask.Mask2PopCount := @NEONMask2PopCount;');
+  AssertRegisterForbidsDeadNEONMask('Mask2FirstSet', 'table.Mask.Mask2FirstSet := @NEONMask2FirstSet;');
+  AssertRegisterForbidsDeadNEONMask('Mask4All', 'table.Mask.Mask4All := @NEONMask4All;');
+  AssertRegisterForbidsDeadNEONMask('Mask4Any', 'table.Mask.Mask4Any := @NEONMask4Any;');
+  AssertRegisterForbidsDeadNEONMask('Mask4None', 'table.Mask.Mask4None := @NEONMask4None;');
+  AssertRegisterForbidsDeadNEONMask('Mask4PopCount', 'table.Mask.Mask4PopCount := @NEONMask4PopCount;');
+  AssertRegisterForbidsDeadNEONMask('Mask4FirstSet', 'table.Mask.Mask4FirstSet := @NEONMask4FirstSet;');
+  AssertRegisterForbidsDeadNEONMask('Mask8All', 'table.Mask.Mask8All := @NEONMask8All;');
+  AssertRegisterForbidsDeadNEONMask('Mask8Any', 'table.Mask.Mask8Any := @NEONMask8Any;');
+  AssertRegisterForbidsDeadNEONMask('Mask8None', 'table.Mask.Mask8None := @NEONMask8None;');
+  AssertRegisterForbidsDeadNEONMask('Mask8PopCount', 'table.Mask.Mask8PopCount := @NEONMask8PopCount;');
+  AssertRegisterForbidsDeadNEONMask('Mask8FirstSet', 'table.Mask.Mask8FirstSet := @NEONMask8FirstSet;');
+  AssertRegisterForbidsDeadNEONMask('Mask16All', 'table.Mask.Mask16All := @NEONMask16All;');
+  AssertRegisterForbidsDeadNEONMask('Mask16Any', 'table.Mask.Mask16Any := @NEONMask16Any;');
+  AssertRegisterForbidsDeadNEONMask('Mask16None', 'table.Mask.Mask16None := @NEONMask16None;');
+  AssertRegisterForbidsDeadNEONMask('Mask16PopCount', 'table.Mask.Mask16PopCount := @NEONMask16PopCount;');
+  AssertRegisterForbidsDeadNEONMask('Mask16FirstSet', 'table.Mask.Mask16FirstSet := @NEONMask16FirstSet;');
+
+  AssertRegisterBindsSharedMask('Mask2All', 'table.Mask.Mask2All := @SharedMask2All;');
+  AssertRegisterBindsSharedMask('Mask2Any', 'table.Mask.Mask2Any := @SharedMask2Any;');
+  AssertRegisterBindsSharedMask('Mask2None', 'table.Mask.Mask2None := @SharedMask2None;');
+  AssertRegisterBindsSharedMask('Mask2PopCount', 'table.Mask.Mask2PopCount := @SharedMask2PopCount;');
+  AssertRegisterBindsSharedMask('Mask2FirstSet', 'table.Mask.Mask2FirstSet := @SharedMask2FirstSet;');
+  AssertRegisterBindsSharedMask('Mask4All', 'table.Mask.Mask4All := @SharedMask4All;');
+  AssertRegisterBindsSharedMask('Mask4Any', 'table.Mask.Mask4Any := @SharedMask4Any;');
+  AssertRegisterBindsSharedMask('Mask4None', 'table.Mask.Mask4None := @SharedMask4None;');
+  AssertRegisterBindsSharedMask('Mask4PopCount', 'table.Mask.Mask4PopCount := @SharedMask4PopCount;');
+  AssertRegisterBindsSharedMask('Mask4FirstSet', 'table.Mask.Mask4FirstSet := @SharedMask4FirstSet;');
+  AssertRegisterBindsSharedMask('Mask8All', 'table.Mask.Mask8All := @SharedMask8All;');
+  AssertRegisterBindsSharedMask('Mask8Any', 'table.Mask.Mask8Any := @SharedMask8Any;');
+  AssertRegisterBindsSharedMask('Mask8None', 'table.Mask.Mask8None := @SharedMask8None;');
+  AssertRegisterBindsSharedMask('Mask8PopCount', 'table.Mask.Mask8PopCount := @SharedMask8PopCount;');
+  AssertRegisterBindsSharedMask('Mask8FirstSet', 'table.Mask.Mask8FirstSet := @SharedMask8FirstSet;');
+  AssertRegisterBindsSharedMask('Mask16All', 'table.Mask.Mask16All := @SharedMask16All;');
+  AssertRegisterBindsSharedMask('Mask16Any', 'table.Mask.Mask16Any := @SharedMask16Any;');
+  AssertRegisterBindsSharedMask('Mask16None', 'table.Mask.Mask16None := @SharedMask16None;');
+  AssertRegisterBindsSharedMask('Mask16PopCount', 'table.Mask.Mask16PopCount := @SharedMask16PopCount;');
+  AssertRegisterBindsSharedMask('Mask16FirstSet', 'table.Mask.Mask16FirstSet := @SharedMask16FirstSet;');
 
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
 
@@ -9116,26 +9144,51 @@ begin
     Exit;
   {$ENDIF}
 
-  AssertSlotReusesScalar('Mask2All', Pointer(LScalarTable.Mask.Mask2All), Pointer(LNEONTable.Mask.Mask2All));
-  AssertSlotReusesScalar('Mask2Any', Pointer(LScalarTable.Mask.Mask2Any), Pointer(LNEONTable.Mask.Mask2Any));
-  AssertSlotReusesScalar('Mask2None', Pointer(LScalarTable.Mask.Mask2None), Pointer(LNEONTable.Mask.Mask2None));
-  AssertSlotReusesScalar('Mask2PopCount', Pointer(LScalarTable.Mask.Mask2PopCount), Pointer(LNEONTable.Mask.Mask2PopCount));
-  AssertSlotReusesScalar('Mask2FirstSet', Pointer(LScalarTable.Mask.Mask2FirstSet), Pointer(LNEONTable.Mask.Mask2FirstSet));
-  AssertSlotReusesScalar('Mask4All', Pointer(LScalarTable.Mask.Mask4All), Pointer(LNEONTable.Mask.Mask4All));
-  AssertSlotReusesScalar('Mask4Any', Pointer(LScalarTable.Mask.Mask4Any), Pointer(LNEONTable.Mask.Mask4Any));
-  AssertSlotReusesScalar('Mask4None', Pointer(LScalarTable.Mask.Mask4None), Pointer(LNEONTable.Mask.Mask4None));
-  AssertSlotReusesScalar('Mask4PopCount', Pointer(LScalarTable.Mask.Mask4PopCount), Pointer(LNEONTable.Mask.Mask4PopCount));
-  AssertSlotReusesScalar('Mask4FirstSet', Pointer(LScalarTable.Mask.Mask4FirstSet), Pointer(LNEONTable.Mask.Mask4FirstSet));
-  AssertSlotReusesScalar('Mask8All', Pointer(LScalarTable.Mask.Mask8All), Pointer(LNEONTable.Mask.Mask8All));
-  AssertSlotReusesScalar('Mask8Any', Pointer(LScalarTable.Mask.Mask8Any), Pointer(LNEONTable.Mask.Mask8Any));
-  AssertSlotReusesScalar('Mask8None', Pointer(LScalarTable.Mask.Mask8None), Pointer(LNEONTable.Mask.Mask8None));
-  AssertSlotReusesScalar('Mask8PopCount', Pointer(LScalarTable.Mask.Mask8PopCount), Pointer(LNEONTable.Mask.Mask8PopCount));
-  AssertSlotReusesScalar('Mask8FirstSet', Pointer(LScalarTable.Mask.Mask8FirstSet), Pointer(LNEONTable.Mask.Mask8FirstSet));
-  AssertSlotReusesScalar('Mask16All', Pointer(LScalarTable.Mask.Mask16All), Pointer(LNEONTable.Mask.Mask16All));
-  AssertSlotReusesScalar('Mask16Any', Pointer(LScalarTable.Mask.Mask16Any), Pointer(LNEONTable.Mask.Mask16Any));
-  AssertSlotReusesScalar('Mask16None', Pointer(LScalarTable.Mask.Mask16None), Pointer(LNEONTable.Mask.Mask16None));
-  AssertSlotReusesScalar('Mask16PopCount', Pointer(LScalarTable.Mask.Mask16PopCount), Pointer(LNEONTable.Mask.Mask16PopCount));
-  AssertSlotReusesScalar('Mask16FirstSet', Pointer(LScalarTable.Mask.Mask16FirstSet), Pointer(LNEONTable.Mask.Mask16FirstSet));
+  AssertSlotNotScalar('Mask2All', Pointer(LScalarTable.Mask.Mask2All), Pointer(LNEONTable.Mask.Mask2All));
+  AssertSlotNotScalar('Mask2Any', Pointer(LScalarTable.Mask.Mask2Any), Pointer(LNEONTable.Mask.Mask2Any));
+  AssertSlotNotScalar('Mask2None', Pointer(LScalarTable.Mask.Mask2None), Pointer(LNEONTable.Mask.Mask2None));
+  AssertSlotNotScalar('Mask2PopCount', Pointer(LScalarTable.Mask.Mask2PopCount), Pointer(LNEONTable.Mask.Mask2PopCount));
+  AssertSlotNotScalar('Mask2FirstSet', Pointer(LScalarTable.Mask.Mask2FirstSet), Pointer(LNEONTable.Mask.Mask2FirstSet));
+  AssertSlotNotScalar('Mask4All', Pointer(LScalarTable.Mask.Mask4All), Pointer(LNEONTable.Mask.Mask4All));
+  AssertSlotNotScalar('Mask4Any', Pointer(LScalarTable.Mask.Mask4Any), Pointer(LNEONTable.Mask.Mask4Any));
+  AssertSlotNotScalar('Mask4None', Pointer(LScalarTable.Mask.Mask4None), Pointer(LNEONTable.Mask.Mask4None));
+  AssertSlotNotScalar('Mask4PopCount', Pointer(LScalarTable.Mask.Mask4PopCount), Pointer(LNEONTable.Mask.Mask4PopCount));
+  AssertSlotNotScalar('Mask4FirstSet', Pointer(LScalarTable.Mask.Mask4FirstSet), Pointer(LNEONTable.Mask.Mask4FirstSet));
+  AssertSlotNotScalar('Mask8All', Pointer(LScalarTable.Mask.Mask8All), Pointer(LNEONTable.Mask.Mask8All));
+  AssertSlotNotScalar('Mask8Any', Pointer(LScalarTable.Mask.Mask8Any), Pointer(LNEONTable.Mask.Mask8Any));
+  AssertSlotNotScalar('Mask8None', Pointer(LScalarTable.Mask.Mask8None), Pointer(LNEONTable.Mask.Mask8None));
+  AssertSlotNotScalar('Mask8PopCount', Pointer(LScalarTable.Mask.Mask8PopCount), Pointer(LNEONTable.Mask.Mask8PopCount));
+  AssertSlotNotScalar('Mask8FirstSet', Pointer(LScalarTable.Mask.Mask8FirstSet), Pointer(LNEONTable.Mask.Mask8FirstSet));
+  AssertSlotNotScalar('Mask16All', Pointer(LScalarTable.Mask.Mask16All), Pointer(LNEONTable.Mask.Mask16All));
+  AssertSlotNotScalar('Mask16Any', Pointer(LScalarTable.Mask.Mask16Any), Pointer(LNEONTable.Mask.Mask16Any));
+  AssertSlotNotScalar('Mask16None', Pointer(LScalarTable.Mask.Mask16None), Pointer(LNEONTable.Mask.Mask16None));
+  AssertSlotNotScalar('Mask16PopCount', Pointer(LScalarTable.Mask.Mask16PopCount), Pointer(LNEONTable.Mask.Mask16PopCount));
+  AssertSlotNotScalar('Mask16FirstSet', Pointer(LScalarTable.Mask.Mask16FirstSet), Pointer(LNEONTable.Mask.Mask16FirstSet));
+end;
+
+procedure TTestCase_DispatchAPI.Test_NEON_BackendCapabilities_Expose_MaskedOps_When_MaskSlots_AreShared;
+var
+  LScalarTable: TSimdDispatchTable;
+  LNEONTable: TSimdDispatchTable;
+begin
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbScalar, LScalarTable), 'Scalar dispatch table should be registered');
+
+  {$IFDEF NEXTPAS_SIMD_TEST_REGISTER_NEON_BACKEND}
+  CheckTrue(TryGetRegisteredBackendDispatchTable(sbNEON, LNEONTable), 'NEON opt-in test registration should be present');
+  {$ELSE}
+  if not TryGetRegisteredBackendDispatchTable(sbNEON, LNEONTable) then
+    Exit;
+  {$ENDIF}
+
+  CheckTrue(Assigned(LNEONTable.Mask.Mask2All), 'NEON Mask2All should be assigned');
+  CheckTrue(Assigned(LNEONTable.Mask.Mask4PopCount), 'NEON Mask4PopCount should be assigned');
+  CheckTrue(Assigned(LNEONTable.Mask.Mask16FirstSet), 'NEON Mask16FirstSet should be assigned');
+  CheckTrue(
+    (Pointer(LNEONTable.Mask.Mask2All) <> Pointer(LScalarTable.Mask.Mask2All)) or
+    (Pointer(LNEONTable.Mask.Mask4PopCount) <> Pointer(LScalarTable.Mask.Mask4PopCount)) or
+    (Pointer(LNEONTable.Mask.Mask16FirstSet) <> Pointer(LScalarTable.Mask.Mask16FirstSet)),
+    'Representative NEON mask helper slots should own SharedMask rather than scalar baseline');
+  CheckTrue(scMaskedOps in LNEONTable.BackendInfo.Capabilities, 'NEON should advertise scMaskedOps when Mask slots own SharedMask');
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_NoAsmWideIntegerCompareSlots_Keep_SourceCompanions_But_Reuse_BaseScalar;
@@ -14551,6 +14604,10 @@ begin
   CheckFalse(scFMA in LNEONTable.BackendInfo.Capabilities, 'NEON scFMA should clear when vector asm is disabled');
   CheckFalse(scIntegerOps in LNEONTable.BackendInfo.Capabilities, 'NEON scIntegerOps should clear when vector asm is disabled');
   CheckFalse(scShuffle in LNEONTable.BackendInfo.Capabilities, 'NEON scShuffle should clear when vector asm is disabled');
+  // SharedMask ownership is not vector-asm gated; keep scMaskedOps and non-scalar Mask slots.
+  CheckTrue(scMaskedOps in LNEONTable.BackendInfo.Capabilities, 'NEON scMaskedOps should remain when SharedMask slots stay owned after vector asm disable');
+  CheckTrue(PtrUInt(LNEONTable.Mask.Mask2All) <> PtrUInt(LExpectedBaseTable.Mask.Mask2All), 'NEON Mask2All should keep SharedMask ownership when vector asm is disabled');
+  CheckTrue(PtrUInt(LNEONTable.Mask.Mask16FirstSet) <> PtrUInt(LExpectedBaseTable.Mask.Mask16FirstSet), 'NEON Mask16FirstSet should keep SharedMask ownership when vector asm is disabled');
 end;
 
 procedure TTestCase_DispatchAPI.Test_RISCVV_BackendCapabilities_Expose_IntegerOps_When_IntegerSlots_AreNative;

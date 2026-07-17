@@ -23,8 +23,10 @@ begin
   table.BackendInfo.Available := (not LAsmCapable) or LUseVectorAsm;
   table.BackendInfo.Name := 'NEON';
   table.BackendInfo.Description := 'ARM NEON 128-bit SIMD';
+  // Mask helpers own SharedMask* (portable Pascal / x86 BSF leaves) on every
+  // host. They are not NEON-asm gated, matching the SSE2 always-on Mask model.
   LCapabilities := [scBasicArithmetic, scComparison, scMathFunctions,
-                    scReduction, scLoadStore];
+                    scReduction, scLoadStore, scMaskedOps];
   if LUseVectorAsm then
     Include(LCapabilities, scIntegerOps);
   if LUseVectorAsm then
@@ -33,6 +35,28 @@ begin
     Include(LCapabilities, scShuffle);
   table.BackendInfo.Capabilities := LCapabilities;
   table.BackendInfo.Priority := GetSimdBackendPriorityValue(sbNEON);
+
+  // Portable shared mask helpers. Do not invent NEONMask* scalar forwarders.
+  table.Mask.Mask2All := @SharedMask2All;
+  table.Mask.Mask2Any := @SharedMask2Any;
+  table.Mask.Mask2None := @SharedMask2None;
+  table.Mask.Mask2PopCount := @SharedMask2PopCount;
+  table.Mask.Mask2FirstSet := @SharedMask2FirstSet;
+  table.Mask.Mask4All := @SharedMask4All;
+  table.Mask.Mask4Any := @SharedMask4Any;
+  table.Mask.Mask4None := @SharedMask4None;
+  table.Mask.Mask4PopCount := @SharedMask4PopCount;
+  table.Mask.Mask4FirstSet := @SharedMask4FirstSet;
+  table.Mask.Mask8All := @SharedMask8All;
+  table.Mask.Mask8Any := @SharedMask8Any;
+  table.Mask.Mask8None := @SharedMask8None;
+  table.Mask.Mask8PopCount := @SharedMask8PopCount;
+  table.Mask.Mask8FirstSet := @SharedMask8FirstSet;
+  table.Mask.Mask16All := @SharedMask16All;
+  table.Mask.Mask16Any := @SharedMask16Any;
+  table.Mask.Mask16None := @SharedMask16None;
+  table.Mask.Mask16PopCount := @SharedMask16PopCount;
+  table.Mask.Mask16FirstSet := @SharedMask16FirstSet;
 
   if LAsmCapable and (not LUseVectorAsm) then
   begin
@@ -136,6 +160,8 @@ begin
   // Keep permanently-scalar platform facade helpers on the base scalar slots.
   // Backend-local wrappers add no runtime value and make slot ownership harder to audit.
   // Wide dot fallback-only helpers follow the same rule until NEON owns a real implementation.
+  // Memory gaps intentionally inherited from FillBase (no NEON leaf yet):
+  // DiffRange / Copy / Fill / Reverse / BytesIndexOf / Utf8Validate.
 
   // Saturating arithmetic is backend-owned only when NEON asm is compiled.
   {$IFDEF NEXTPAS_SIMD_NEON_ASM_ENABLED}

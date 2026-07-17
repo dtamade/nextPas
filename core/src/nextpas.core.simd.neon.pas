@@ -55,7 +55,8 @@ interface
 uses
   nextpas.core.simd.backend.priority,
   nextpas.core.simd.base,
-  nextpas.core.simd.dispatch;
+  nextpas.core.simd.dispatch,
+  nextpas.core.simd.mask;
 
 // Register the NEON backend
 procedure RegisterNEONBackend;

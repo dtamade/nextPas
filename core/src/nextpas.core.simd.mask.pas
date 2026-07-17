@@ -8,7 +8,10 @@ interface
 uses
   nextpas.core.simd.base;
 
-{$IFDEF CPUX86_64}
+// Portable shared mask helpers used by backend register paths.
+// x86-64 keeps asm leaves for All/Any/None/FirstSet; other hosts use Pascal.
+// PopCount is pure Pascal on all hosts (small SWAR / bit loops).
+
 function SharedMask2FirstSet(mask: TMask2): Integer;
 function SharedMask4FirstSet(mask: TMask4): Integer;
 function SharedMask8FirstSet(mask: TMask8): Integer;
@@ -26,7 +29,11 @@ function SharedMask8None(mask: TMask8): Boolean;
 function SharedMask16All(mask: TMask16): Boolean;
 function SharedMask16Any(mask: TMask16): Boolean;
 function SharedMask16None(mask: TMask16): Boolean;
-{$ENDIF}
+
+function SharedMask2PopCount(mask: TMask2): Integer;
+function SharedMask4PopCount(mask: TMask4): Integer;
+function SharedMask8PopCount(mask: TMask8): Integer;
+function SharedMask16PopCount(mask: TMask16): Integer;
 
 implementation
 
@@ -99,8 +106,6 @@ asm
 @done:
   {$ENDIF}
 end;
-
-// === All / Any / None ===
 
 function SharedMask2All(mask: TMask2): Boolean; assembler; nostackframe;
 asm
@@ -238,6 +243,162 @@ asm
   {$ENDIF}
 end;
 
+{$ELSE}
+
+function SharedMask2FirstSet(mask: TMask2): Integer;
+var
+  m: Byte;
+begin
+  m := mask and $03;
+  if m = 0 then
+    Exit(-1);
+  if (m and 1) <> 0 then
+    Exit(0);
+  Result := 1;
+end;
+
+function SharedMask4FirstSet(mask: TMask4): Integer;
+var
+  m: Byte;
+  i: Integer;
+begin
+  m := mask and $0F;
+  if m = 0 then
+    Exit(-1);
+  for i := 0 to 3 do
+    if (m and (1 shl i)) <> 0 then
+      Exit(i);
+  Result := -1;
+end;
+
+function SharedMask8FirstSet(mask: TMask8): Integer;
+var
+  m: Byte;
+  i: Integer;
+begin
+  m := Byte(mask);
+  if m = 0 then
+    Exit(-1);
+  for i := 0 to 7 do
+    if (m and (1 shl i)) <> 0 then
+      Exit(i);
+  Result := -1;
+end;
+
+function SharedMask16FirstSet(mask: TMask16): Integer;
+var
+  m: Word;
+  i: Integer;
+begin
+  m := Word(mask);
+  if m = 0 then
+    Exit(-1);
+  for i := 0 to 15 do
+    if (m and (Word(1) shl i)) <> 0 then
+      Exit(i);
+  Result := -1;
+end;
+
+function SharedMask2All(mask: TMask2): Boolean;
+begin
+  Result := (mask and $03) = $03;
+end;
+
+function SharedMask2Any(mask: TMask2): Boolean;
+begin
+  Result := (mask and $03) <> 0;
+end;
+
+function SharedMask2None(mask: TMask2): Boolean;
+begin
+  Result := (mask and $03) = 0;
+end;
+
+function SharedMask4All(mask: TMask4): Boolean;
+begin
+  Result := (mask and $0F) = $0F;
+end;
+
+function SharedMask4Any(mask: TMask4): Boolean;
+begin
+  Result := (mask and $0F) <> 0;
+end;
+
+function SharedMask4None(mask: TMask4): Boolean;
+begin
+  Result := (mask and $0F) = 0;
+end;
+
+function SharedMask8All(mask: TMask8): Boolean;
+begin
+  Result := Byte(mask) = $FF;
+end;
+
+function SharedMask8Any(mask: TMask8): Boolean;
+begin
+  Result := Byte(mask) <> 0;
+end;
+
+function SharedMask8None(mask: TMask8): Boolean;
+begin
+  Result := Byte(mask) = 0;
+end;
+
+function SharedMask16All(mask: TMask16): Boolean;
+begin
+  Result := Word(mask) = $FFFF;
+end;
+
+function SharedMask16Any(mask: TMask16): Boolean;
+begin
+  Result := Word(mask) <> 0;
+end;
+
+function SharedMask16None(mask: TMask16): Boolean;
+begin
+  Result := Word(mask) = 0;
+end;
+
 {$ENDIF}
+
+function SharedMask2PopCount(mask: TMask2): Integer;
+var
+  m: Byte;
+begin
+  m := mask and $03;
+  Result := (m and 1) + ((m shr 1) and 1);
+end;
+
+function SharedMask4PopCount(mask: TMask4): Integer;
+var
+  m: Byte;
+begin
+  m := mask and $0F;
+  // SWAR 4-bit popcount
+  m := m - ((m shr 1) and $5);
+  m := (m and $3) + ((m shr 2) and $3);
+  Result := m;
+end;
+
+function SharedMask8PopCount(mask: TMask8): Integer;
+var
+  m: Byte;
+begin
+  m := Byte(mask);
+  m := m - ((m shr 1) and $55);
+  m := (m and $33) + ((m shr 2) and $33);
+  Result := Byte((m + (m shr 4)) and $0F);
+end;
+
+function SharedMask16PopCount(mask: TMask16): Integer;
+var
+  m: Word;
+begin
+  m := Word(mask);
+  m := m - ((m shr 1) and $5555);
+  m := (m and $3333) + ((m shr 2) and $3333);
+  m := (m + (m shr 4)) and $0F0F;
+  Result := Byte((m + (m shr 8)) and $1F);
+end;
 
 end.
