@@ -8,10 +8,21 @@ phase state and evidence only. **Forward execution queue**: [ROADMAP.md](ROADMAP
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 Windows x86_64 has durable **`ci-matrix`** for the documented 17-gate set on GHA
 `test-windows-runtime` (14 wine-suite dirs + poller/io/socket real), plus secondary
-Wine runtime smoke (matrix 14 green). Remaining real-Windows runtime gaps sit
-outside that matrix (signal, secure-zero native, deeper AcceptEx/ConnectEx).
-macOS has **focused-runtime** for the documented 8-gate set (ROADMAP D2.c).
-FreeBSD and Android remain source-contract, forced-compile, or best-effort CI only.
+Wine runtime smoke (matrix 14 green). Outside that matrix: deeper AcceptEx/ConnectEx;
+signal is forced-compile/source-contract only (D3.a); secure-zero Windows is permanent
+FillChar+barrier fallback (D3.b). macOS has **focused-runtime** for the documented
+8-gate set (ROADMAP D2.c). FreeBSD and Android remain source-contract, forced-compile,
+or best-effort CI only.
+
+### 2026-07-17 D3 debt cleanup
+
+| Slice | Result |
+| --- | --- |
+| D3.a | Windows signal forced-compile (`NEXTPAS_FORCE_HOST_WINDOWS`) + contract; FFI owns `GenerateConsoleCtrlEvent` |
+| D3.b | Windows secure-zero permanent fallback (`pszbWindowsPermanentFallback`) |
+| D3.c | dual-IO permanent owner-only on `platform.process` |
+| D3.d | freetype stays under platform as optional host binding |
+| D3.e | F7/F9/F10 remain Won't |
 
 ### 2026-07-17 process/console/pty contract slice
 
@@ -67,7 +78,7 @@ Usability is **maintenance baseline 8.21** — no open wave-5. Authority: [resid
 | LT2 | `process.pipe` off all `platform_io_*` call sites; dual-IO owner-only (F5) |
 | LT3 | `platform_get_last_os_error` raw host side-channel (F6) |
 | LT4 | Windows/macOS host truth — **ROADMAP D1 done** (Windows 17-gate `ci-matrix`); **D2 done** (macOS documented 8-gate `focused-runtime`) |
-| Deferred | F7 mapping symmetry, F9 rename, F10 diagnostics, F14 freetype move-out |
+| Deferred | F7 mapping symmetry, F9 rename, F10 diagnostics (Won't); F14 freetype stays under platform (D3.d) |
 
 ### 2026-07-17 forward roadmap authority
 
