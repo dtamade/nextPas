@@ -204,14 +204,21 @@ end;
   `HttpGetBytes` 等价（ensure 2xx + body）。
 - H1 默认 `User-Agent: nextpas-http/1.0`（请求未设置 `User-Agent` 时注入）。
 
-### 2.2.3b WebSocket client connect budgets（cycle-5）
+### 2.2.3b WebSocket client connect budgets（cycle-5）+ cancel（cycle-7）
 
 - `TWebSocketOptions.Default`：`ConnectTimeout = 30000`，`Timeout = 30000`
-  （与 HTTP client production discipline 对齐）。
+  （与 HTTP client production discipline 对齐）；**无**默认 CancelToken。
 - `ConnectTimeout`：OS dial budget → `TcpConnect(host, port, ms)` when >0。
   `=0` 时 dial 回退到 `Timeout`（仍为 0 则无界 dial）。
 - `Timeout`：upgrade handshake 读/写 deadline；成功 101 后清除，便于长连接帧 I/O。
-- fluent：`WithConnectTimeout` / `WithTimeout` on options record。
+- fluent：`WithConnectTimeout` / `WithTimeout` / **`WithCancelToken`** on options record。
+- **Cancel（cycle-7 Wave B）**：
+  - `WithCancelToken(IHttpCancelToken)` 挂协作取消；dial 后与握手、mid-frame
+    `ReadFrame`/`Write*` 路径生效。
+  - 有 `ITcpStream` 时：`SetCancelToken` + ~50ms 切片（与 H1/H2 client 同 residual）。
+  - 入口 `HttpThrowIfCanceled`：token 已 cancel 时立即 `hekCanceled`（无需等切片）。
+  - 成功 101 后 **保留** cancel、**清除** handshake deadline。
+  - Close/Destroy 清除 stream cancel token。
 - 传输错误经 `HttpWrapTransportException` → `hekTimeout` / `hekConnect` /
   `hekCanceled`，Op=`websocket` 或 transport。
 - 显式 `ConnectTimeout=0` + `Timeout=0` 才恢复无界 dial（测试/特殊工具）。

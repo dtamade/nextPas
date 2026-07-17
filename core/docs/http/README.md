@@ -36,7 +36,7 @@ Use a single `uses nextpas.core.http` entry; pick APIs by job:
 | Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
 | Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
 | Middleware | `CorsMiddleware`, `RecoveryMiddleware`, `Chain`, … |
-| WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` + `TWebSocketOptions.ConnectTimeout`/`Timeout` (Default 30s) |
+| WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` + `TWebSocketOptions.ConnectTimeout`/`Timeout` (Default 30s) + optional `WithCancelToken` for mid-frame cancel |
 | Static files | `ServeFile` / `ServeDir` |
 | Form parse | `ParseUrlEncodedForm` / `ParseMultipartFormData` |
 

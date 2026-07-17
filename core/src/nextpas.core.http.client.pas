@@ -486,9 +486,11 @@ begin
   Result := TUrl.Parse(AUrl);
   Result.Scheme := AScheme;
   if Result.Host = '' then
-    raise EHttpError.Create(hekRedirect, 'redirect URL host is empty');
+    raise EHttpError.CreateOp(hekRedirect, 'redirect',
+      'redirect URL host is empty');
   if not RedirectAuthorityPortIsValid(AUrl) then
-    raise EHttpError.Create(hekRedirect, 'redirect URL port is invalid');
+    raise EHttpError.CreateOp(hekRedirect, 'redirect',
+      'redirect URL port is invalid');
 end;
 
 function DefaultPortForScheme(const AScheme: string): UInt16;
@@ -599,7 +601,8 @@ begin
   if (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit;
   if ABodyStream = nil then
-    raise EHttpError.Create(hekBody, 'redirect request body is not replayable');
+    raise EHttpError.CreateOp(hekBody, 'redirect',
+      'redirect request body is not replayable');
   ABodyStream.Position := AStartPosition;
 end;
 
@@ -707,13 +710,15 @@ begin
   if LScheme <> '' then
   begin
     if (LScheme <> 'http') and (LScheme <> 'https') then
-      raise EHttpError.Create(hekRedirect, 'unsupported redirect URL scheme: ' + LScheme);
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
+        'unsupported redirect URL scheme: ' + LScheme);
     Exit(ParseRedirectAuthorityUrl(ALocation, LScheme));
   end;
   if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
   begin
     if ABaseUrl.Scheme = '' then
-      raise EHttpError.Create(hekRedirect, 'network-path redirect requires base URL scheme');
+      raise EHttpError.CreateOp(hekRedirect, 'redirect',
+        'network-path redirect requires base URL scheme');
     Exit(ParseRedirectAuthorityUrl(ABaseUrl.Scheme + ':' + ALocation,
       ABaseUrl.Scheme));
   end;

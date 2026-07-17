@@ -33,9 +33,16 @@ type
       deadline for upgrade request/response; 0 = unbounded handshake I/O.
       Default Production discipline: 30000. }
     Timeout: Int64;
+    { Optional cooperative cancel for dial/handshake and mid-frame I/O.
+      When HasCancelToken, stream SetCancelToken enables ~50ms slice polling
+      (same residual as HTTP client). Default: unset. }
+    CancelToken: IHttpCancelToken;
+    HasCancelToken: Boolean;
     class function Default: TWebSocketOptions; static;
     function WithConnectTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
     function WithTimeout(const ATimeoutMs: Int64): TWebSocketOptions;
+    function WithCancelToken(const AToken: IHttpCancelToken): TWebSocketOptions;
+    function EffectiveCancelToken: IHttpCancelToken;
   end;
 
   TWebSocketOpcode = (
@@ -125,6 +132,7 @@ type
   private
     FReader: IReader;
     FWriter: IWriter;
+    FStream: ITcpStream;
     FOpen: Boolean;
     FCloseReceived: Boolean;
     FCloseSent: Boolean;
@@ -137,9 +145,13 @@ type
     procedure WriteFrame(AOpcode: TWebSocketOpcode; const APayload: TBytes);
     procedure WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: TBytes);
     procedure ReadExact(var ABuf; ACount: SizeUInt);
+    procedure ThrowIfCanceled;
+    procedure ClearStreamCancel;
   public
     constructor Create(const AReader: IReader; const AWriter: IWriter;
-      const AOptions: TWebSocketOptions; AIsClient: Boolean = False);
+      const AOptions: TWebSocketOptions; AIsClient: Boolean = False;
+      const AStream: ITcpStream = nil);
+    destructor Destroy; override;
     function ReadFrame: TWebSocketFrame;
     function ReadMessage: TWebSocketFrame;
     procedure WriteText(const AData: string);
@@ -148,6 +160,15 @@ type
     procedure Pong(const AData: TBytes);
     procedure Close(const ACode: UInt16; const AReason: string);
     function IsOpen: Boolean;
+  end;
+
+  { Bridge IHttpCancelToken → INetCancelToken (local copy; H1/H2 have peers). }
+  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken)
+  private
+    FToken: IHttpCancelToken;
+  public
+    constructor Create(const AToken: IHttpCancelToken);
+    function IsCanceled: Boolean;
   end;
 
 { Helpers }
@@ -180,6 +201,8 @@ begin
   { Match HTTP client production discipline: bounded dial + handshake. }
   Result.ConnectTimeout := 30000;
   Result.Timeout := 30000;
+  Result.CancelToken := nil;
+  Result.HasCancelToken := False;
 end;
 
 function TWebSocketOptions.WithConnectTimeout(
@@ -193,6 +216,22 @@ function TWebSocketOptions.WithTimeout(const ATimeoutMs: Int64): TWebSocketOptio
 begin
   Result := Self;
   Result.Timeout := ATimeoutMs;
+end;
+
+function TWebSocketOptions.WithCancelToken(
+  const AToken: IHttpCancelToken): TWebSocketOptions;
+begin
+  Result := Self;
+  Result.CancelToken := AToken;
+  Result.HasCancelToken := True;
+end;
+
+function TWebSocketOptions.EffectiveCancelToken: IHttpCancelToken;
+begin
+  if HasCancelToken then
+    Result := CancelToken
+  else
+    Result := nil;
 end;
 
 procedure ValidateWebSocketOptions(const AOptions: TWebSocketOptions);
@@ -237,6 +276,35 @@ begin
     Exit;
   AConn.SetReadDeadline(TDeadline.Infinite);
   AConn.SetWriteDeadline(TDeadline.Infinite);
+end;
+
+constructor THttpNetCancelAdapter.Create(const AToken: IHttpCancelToken);
+begin
+  inherited Create;
+  FToken := AToken;
+end;
+
+function THttpNetCancelAdapter.IsCanceled: Boolean;
+begin
+  Result := (FToken <> nil) and FToken.IsCanceled;
+end;
+
+procedure ApplyWebSocketCancelToken(const AConn: ITcpStream;
+  const AToken: IHttpCancelToken);
+begin
+  if AConn = nil then
+    Exit;
+  if AToken = nil then
+    AConn.SetCancelToken(nil)
+  else
+    AConn.SetCancelToken(THttpNetCancelAdapter.Create(AToken));
+end;
+
+procedure ClearWebSocketCancelToken(const AConn: ITcpStream);
+begin
+  if AConn = nil then
+    Exit;
+  AConn.SetCancelToken(nil);
 end;
 
 procedure RaiseWebSocketTransport(const E: Exception);
@@ -496,17 +564,21 @@ begin
     raise;
   end;
 
-  Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions);
+  ApplyWebSocketCancelToken(LConn, AOptions.EffectiveCancelToken);
+  Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions,
+    False, LConn);
 end;
 
 { TWebSocketImpl }
 
 constructor TWebSocketImpl.Create(const AReader: IReader; const AWriter: IWriter;
-  const AOptions: TWebSocketOptions; AIsClient: Boolean);
+  const AOptions: TWebSocketOptions; AIsClient: Boolean;
+  const AStream: ITcpStream);
 begin
   inherited Create;
   FReader := AReader;
   FWriter := AWriter;
+  FStream := AStream;
   FOptions := AOptions;
   FIsClient := AIsClient;
   FOpen := True;
@@ -516,6 +588,24 @@ begin
   FFragmentOpcode := wsOpContinuation;
   FFragmentPayloadSize := 0;
   FFragmentBinaryPayload := nil;
+  if FStream <> nil then
+    ApplyWebSocketCancelToken(FStream, AOptions.EffectiveCancelToken);
+end;
+
+destructor TWebSocketImpl.Destroy;
+begin
+  ClearStreamCancel;
+  inherited Destroy;
+end;
+
+procedure TWebSocketImpl.ThrowIfCanceled;
+begin
+  HttpThrowIfCanceled(FOptions.EffectiveCancelToken);
+end;
+
+procedure TWebSocketImpl.ClearStreamCancel;
+begin
+  ClearWebSocketCancelToken(FStream);
 end;
 
 procedure TWebSocketImpl.ReadExact(var ABuf; ACount: SizeUInt);
@@ -526,7 +616,15 @@ begin
   LPtr := @ABuf;
   while ACount > 0 do
   begin
-    LRead := FReader.Read(LPtr^, ACount);
+    ThrowIfCanceled;
+    try
+      LRead := FReader.Read(LPtr^, ACount);
+    except
+      on E: EHttpError do
+        raise;
+      on E: Exception do
+        RaiseWebSocketTransport(E);
+    end;
     if LRead = 0 then
       raise EHttpError.Create(hekProtocol, 'WebSocket: unexpected end of stream');
     Inc(LPtr, LRead);
@@ -764,6 +862,7 @@ var
   LBufLen: SizeUInt;
   I, J: SizeUInt;
 begin
+  ThrowIfCanceled;
   LPayloadLen := SizeUInt(Length(APayload));
 
   LHdr[0] := $80 or Byte(AOpcode); { FIN + opcode }
@@ -826,7 +925,14 @@ begin
       for J := 0 to LPayloadLen - 1 do
         LBuf[I + J] := APayload[J] xor LMaskKey[J mod 4];
     end;
-    IoWriteAll(FWriter, LBuf[0], LBufLen);
+    try
+      IoWriteAll(FWriter, LBuf[0], LBufLen);
+    except
+      on E: EHttpError do
+        raise;
+      on E: Exception do
+        RaiseWebSocketTransport(E);
+    end;
   end
   else
   begin
@@ -862,7 +968,14 @@ begin
     Move(LHdr[0], LBuf[0], SizeUInt(LHdrLen));
     if LPayloadLen > 0 then
       Move(APayload[0], LBuf[LHdrLen], LPayloadLen);
-    IoWriteAll(FWriter, LBuf[0], LBufLen);
+    try
+      IoWriteAll(FWriter, LBuf[0], LBufLen);
+    except
+      on E: EHttpError do
+        raise;
+      on E: Exception do
+        RaiseWebSocketTransport(E);
+    end;
   end;
 end;
 
@@ -913,7 +1026,11 @@ begin
   ValidateClosePayload(LPayload);
   FCloseSent := True;
   FOpen := False;
-  WriteFrameRaw(wsOpClose, LPayload);
+  try
+    WriteFrameRaw(wsOpClose, LPayload);
+  finally
+    ClearStreamCancel;
+  end;
 end;
 
 function TWebSocketImpl.IsOpen: Boolean;
@@ -1154,6 +1271,7 @@ begin
     if LHandshakeMs <= 0 then
       LHandshakeMs := AOptions.ConnectTimeout;
     ApplyWebSocketStreamDeadline(LActive, LHandshakeMs);
+    ApplyWebSocketCancelToken(LActive, AOptions.EffectiveCancelToken);
 
     { Wrap with TLS if wss:// }
     if LScheme = 'wss' then
@@ -1166,6 +1284,7 @@ begin
       end;
       LActive := LTlsConn;
       ApplyWebSocketStreamDeadline(LActive, LHandshakeMs);
+      ApplyWebSocketCancelToken(LActive, AOptions.EffectiveCancelToken);
       LReader := LTlsConn as IReader;
       LWriter := LTlsConn as IWriter;
     end
@@ -1225,19 +1344,26 @@ begin
     if not ValidateAcceptKey(LKey, LAcceptHeader) then
       raise EHttpError.Create(hekUpgrade, 'WebSocket: invalid Sec-WebSocket-Accept');
 
-    { Post-handshake: clear connect/handshake deadlines for long-lived frames. }
+    { Post-handshake: clear connect/handshake deadlines for long-lived frames.
+      Keep CancelToken on the stream for mid-frame cooperative cancel. }
     ClearWebSocketStreamDeadline(LActive);
 
-    { Create WebSocket client }
-    Result := TWebSocketImpl.Create(LReader, LWriter, AOptions, True);
-    LActive := nil; { ownership transferred into IWebSocket }
+    { Create WebSocket client; ownership of LActive transferred into IWebSocket. }
+    Result := TWebSocketImpl.Create(LReader, LWriter, AOptions, True, LActive);
+    LActive := nil;
     LConn := nil;
     LTlsConn := nil;
   except
     if LActive <> nil then
-      LActive.Close
+    begin
+      ClearWebSocketCancelToken(LActive);
+      LActive.Close;
+    end
     else if LConn <> nil then
+    begin
+      ClearWebSocketCancelToken(LConn);
       LConn.Close;
+    end;
     raise;
   end;
 end;

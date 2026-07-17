@@ -5,10 +5,12 @@ program test_http_h2_client;
 uses
   nextpas.core.base,
   nextpas.core.base.utils,
+  nextpas.core.errors,
   nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.io.base,
   nextpas.core.io.memory,
+  nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.time.deadline,
@@ -25,6 +27,7 @@ uses
   nextpas.core.http.impl.tls.stream,
   nextpas.core.http.impl.registry,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base;
 
@@ -1841,6 +1844,79 @@ begin
     'H2 wraps transport cancel/timeout into EHttpError');
 end;
 
+{ Live H2 OS dial timeout via backlog-full peer (parity with H1/WS live e2e). }
+procedure TestH2LiveConnectTimeoutViaBacklogFullPeer;
+var
+  LListener: ITcpListener;
+  LFillers: array of ITcpStream;
+  LConn: ITcpStream;
+  LOpts: TH2ClientTransportOptions;
+  LTransport: IHttpTransport;
+  LPort: UInt16;
+  I: Integer;
+  LFilled: Boolean;
+  LGot: Boolean;
+  LKind: THttpErrorKind;
+begin
+  { Ensure test dial hook is not installed. }
+  ResetH2ClientDialFuncForTests;
+  ResetDialQueue;
+  LListener := TcpListen('127.0.0.1', 0);
+  LPort := LListener.LocalAddr.Port;
+  SetLength(LFillers, 0);
+  LFilled := False;
+  for I := 1 to 256 do
+  begin
+    try
+      LConn := TcpConnect('127.0.0.1', LPort, 100);
+      SetLength(LFillers, Length(LFillers) + 1);
+      LFillers[High(LFillers)] := LConn;
+    except
+      on E: ETimeoutError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+      on E: ENetworkError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+    end;
+  end;
+  Check(LFilled or (Length(LFillers) > 0),
+    'backlog fill made progress for H2 connect-timeout setup');
+  LOpts := TH2ClientTransportOptions.Default;
+  LOpts.ConnectTimeout := 200;
+  LOpts.Timeout := 200;
+  LTransport := NewH2ClientTransport(LOpts);
+  LGot := False;
+  LKind := hekUnknown;
+  try
+    LTransport.RoundTrip(NewRequest(hmGet,
+      'http://127.0.0.1:' + IntToStr(LPort) + '/'));
+  except
+    on E: EHttpError do
+    begin
+      LKind := E.Kind;
+      LGot := E.Kind in [hekTimeout, hekConnect];
+    end;
+    on E: ETimeoutError do
+    begin
+      LGot := True;
+      LKind := hekTimeout;
+    end;
+  end;
+  Check(LGot,
+    'live H2 dial timeout surfaces as hekTimeout/hekConnect (kind=' +
+    IntToStr(Ord(LKind)) + ')');
+  LTransport := nil;
+  for I := 0 to High(LFillers) do
+    if LFillers[I] <> nil then
+      LFillers[I].Close;
+  LListener.Close;
+end;
+
 procedure TestTlsStreamForwardsDeadlineToInnerSourceContract;
 var
   LSrc: string;
@@ -3232,6 +3308,8 @@ begin
     @TestH2ConnectTimeoutRegistrySourceContract);
   T.Test('H2 dial and cancel source contract',
     @TestH2DialAndCancelSourceContract);
+  T.Test('H2 live ConnectTimeout via backlog-full peer',
+    @TestH2LiveConnectTimeoutViaBacklogFullPeer);
   T.Test('TLS stream forwards deadline to inner source contract',
     @TestTlsStreamForwardsDeadlineToInnerSourceContract);
   T.Test('HTTPS transport re-arms Timeout after ConnectTimeout',
