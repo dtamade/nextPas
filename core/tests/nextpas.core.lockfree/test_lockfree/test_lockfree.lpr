@@ -1680,33 +1680,16 @@ begin
   end;
 end;
 
-procedure TestMpscDestroyRequiresDrainInDebug;
+procedure TestMpscDestroyAutoCloseAndDrain;
 var
   LQ: TIntMpsc;
   LV: Integer;
-  LRaised: Boolean;
 begin
+  { Destroy must Close + drain remaining nodes so Free is safe after producers stop. }
   LQ := TIntMpsc.Create;
   LQ.Enqueue(42);
-  LQ.Close;
-  LRaised := False;
-  try
-    LQ.Free;
-  except
-    on E: EAssertionFailed do
-      LRaised := True;
-  end;
-  {$IFDEF DEBUG}
-  Check(LRaised, 'DEBUG MPSC destroy must reject close-without-drain');
-  if LRaised then
-  begin
-    Check(LQ.TryDequeue(LV), 'cleanup drain queued MPSC item after failed destroy');
-    CheckEqual(Int64(42), Int64(LV));
-    LQ.Free;
-  end;
-  {$ELSE}
-  Check(not LRaised, 'non-DEBUG MPSC destroy should not raise close-without-drain assertion');
-  {$ENDIF}
+  LQ.Enqueue(7);
+  LQ.Free;
 
   LQ := TIntMpsc.Create;
   LQ.Enqueue(42);
@@ -1714,6 +1697,46 @@ begin
   Check(LQ.TryDequeue(LV), 'drain queued MPSC item before destroy');
   CheckEqual(Int64(42), Int64(LV));
   LQ.Free;
+end;
+
+procedure TestT1DestroyCallsCloseSourceContract;
+var
+  LMpscSource, LSpscSource, LMpmcSource, LSpmcSource, LChannelSource, LChannelSpscSource: string;
+begin
+  { Safe lifecycle remains Close → join waiters → Free. Destroy must still call Close
+    so unblocked teardown paths wake waiters and drain fixed/owned storage. }
+  LMpscSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.mpsc.pas');
+  LSpscSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.spsc.pas');
+  LMpmcSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.mpmc.pas');
+  LSpmcSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.spmc.pas');
+  LChannelSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.channel.pas');
+  LChannelSpscSource := ReadUtf8TextFile('../../../src/nextpas.core.lockfree.channel.spsc.pas');
+  CheckContains(LMpscSource, 'destructor TMpscQueueImpl.Destroy;',
+    'MPSC must keep Destroy override');
+  CheckContains(ExtractSection(LMpscSource,
+    'destructor TMpscQueueImpl.Destroy;',
+    'procedure TMpscQueueImpl.Enqueue',
+    'MPSC Destroy body'), 'Close;', 'MPSC Destroy must call Close');
+  CheckContains(ExtractSection(LSpscSource,
+    'destructor TSpscQueueImpl.Destroy;',
+    'function TSpscQueueImpl.IsClosed',
+    'SPSC Destroy body'), 'Close;', 'SPSC Destroy must call Close');
+  CheckContains(ExtractSection(LMpmcSource,
+    'destructor TMpmcQueueImpl.Destroy;',
+    'function TMpmcQueueImpl.IsClosed',
+    'MPMC Destroy body'), 'Close;', 'MPMC Destroy must call Close');
+  CheckContains(ExtractSection(LSpmcSource,
+    'destructor TSpmcQueueImpl.Destroy;',
+    'function TSpmcQueueImpl.IsClosed',
+    'SPMC Destroy body'), 'Close;', 'SPMC Destroy must call Close');
+  CheckContains(ExtractSection(LChannelSource,
+    'destructor TLockFreeChannelImpl.Destroy;',
+    'procedure TLockFreeChannelImpl.WakeAllWaiters',
+    'Channel Destroy body'), 'Close;', 'Channel Destroy must call Close');
+  CheckContains(ExtractSection(LChannelSpscSource,
+    'destructor TLockFreeChannelSpscImpl.Destroy;',
+    'function TLockFreeChannelSpscImpl.TrySend',
+    'ChannelSpsc Destroy body'), 'Close;', 'ChannelSpsc Destroy must call Close');
 end;
 
 procedure TestMpscMultiProducer;
@@ -5329,6 +5352,7 @@ var
   LMpscCloseWakeTestSection: string;
   LMpscCloseWakeWaitTestSection: string;
   LMpscDestroyDrainTestSection: string;
+  LFacadeUsesSection: string;
   LMpscMultiProducerTestSection: string;
   LMpscPublishWakeTestSection: string;
   LMpscTimeoutTestSection: string;
@@ -5498,10 +5522,10 @@ begin
     'MPSC close wake timeout test source section');
   LMpscCloseWakeWaitTestSection := ExtractSection(LTestSource,
     'procedure TestMpscCloseWakeWait;',
-    'procedure TestMpscDestroyRequiresDrainInDebug;',
+    'procedure TestMpscDestroyAutoCloseAndDrain;',
     'MPSC close wake wait test source section');
   LMpscDestroyDrainTestSection := ExtractSection(LTestSource,
-    'procedure TestMpscDestroyRequiresDrainInDebug;',
+    'procedure TestMpscDestroyAutoCloseAndDrain;',
     'procedure TestMpscMultiProducer;',
     'MPSC destroy drain contract test source section');
   LMpscMultiProducerTestSection := ExtractSection(LTestSource,
@@ -5616,15 +5640,21 @@ begin
   CheckNotContains(LFacadeForcedCompileSource, 'nextpas.core.lockfree.spmc',
     'lockfree facade forced compile fixture must not import the SPMC implementation unit');
   CheckContains(LDocsReadme,
-    '`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,',
-    'lockfree README must document the facade re-export surface including SegQueue and SPMC');
+    'Progress-guarantee matrix',
+    'lockfree README must include an explicit progress-guarantee matrix');
+  CheckContains(LDocsReadme,
+    'TShardedHashMap` / `TConcurrentHashMap` | **lock-based concurrent**',
+    'lockfree README matrix must mark sharded HashMap as lock-based concurrent');
+  CheckContains(LDocsReadme,
+    '**T1-only** 默认 facade',
+    'lockfree README must document T1-only default facade');
   CheckContains(LDocsReadme, 'TSegQueue<T>',
     'lockfree README must document SegQueue in the facade re-export surface');
   CheckContains(LDocsReadme, 'TSpmcQueue<T>',
     'lockfree README must document SPMC queue in the facade re-export surface');
   CheckContains(LDocsReadme,
-    '`TLockFreeStack<T>`, and `TWorkStealingDeque<T>`',
-    'lockfree README must document the facade stack/deque surface');
+    'SPSC/MPMC/MPSC/SPMC/SegQueue/MSQueue, Stack, WorkStealingDeque, EBR/Hazard, Channel, Selector, ShardedHashMap',
+    'lockfree README must document the T1 runtime-core surface');
   CheckContains(LDocsReadme,
     'The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation',
     'lockfree README must document the generic facade wrapper boundary');
@@ -5750,8 +5780,8 @@ begin
     '`TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`, `TLockFreeStack<T>`, and `TWorkStealingDeque<T>` reject managed element types at construction time with `EArgumentError`.',
     'lockfree README must document constructor-time managed-type rejection for every public structure');
   CheckContains(LDocsReadme,
-    'debug build 中 `TMpscQueue.Destroy` 保留 close-before-destroy 和 drained-before-destroy assert，用来冻结这条纪律。',
-    'lockfree README must document the DEBUG close-and-drain destroy asserts');
+    '`TMpscQueue.Destroy` 会调用 `Close` 以唤醒阻塞中的单消费者，然后 drain 剩余节点。',
+    'lockfree README must document MPSC Destroy Close+drain wake discipline');
   CheckContains(LDocsReadme,
     '`TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.',
     'lockfree README must document the stack caller-role contract');
@@ -6311,14 +6341,10 @@ begin
     'fork-join PopOrSteal must reject invalid worker IDs before indexing a deque');
   CheckContains(LWaitSource, 'if (AEpoch = nil) or (AWaiters = nil) then',
     'lockfree wait helper must reject nil counter addresses before dereferencing them');
-  CheckContains(LMpscSource, 'Assert(FClosed <> 0',
-    'MPSC destroy must keep the close-before-destroy debug guard');
-  CheckContains(LMpscSource, 'Close must be called before Destroy',
-    'MPSC destroy guard must document the close-before-destroy discipline');
-  CheckContains(LMpscSource, 'Assert(IsEmpty',
-    'MPSC destroy must keep the drained-before-destroy debug guard');
-  CheckContains(LMpscSource, 'queue must be drained before Destroy after Close',
-    'MPSC destroy guard must document the drain-before-destroy discipline');
+  CheckContains(LMpscSource, 'Close;' + LineEnding + '  while TryDequeue(LV) do;',
+    'MPSC destroy must Close then drain remaining nodes');
+  CheckContains(LMpscSource, 'Wake any blocked single-consumer DequeueWait/Timeout',
+    'MPSC destroy must document wake-on-destroy for blocked consumers');
   CheckContains(LMpscBasicTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
     'MPSC basic test must close before freeing the queue');
   CheckContains(LMpscCloseProducerTestSection,
@@ -6352,11 +6378,35 @@ begin
   CheckContains(LMpscCloseWakeWaitTestSection, 'blocked MPSC DequeueWait wake must leave the closed empty queue empty',
     'MPSC close wait test must prove the closed empty MPSC queue stays empty after the blocked consumer wait returns');
   CheckContains(LMpscDestroyDrainTestSection,
-    'Check(LRaised, ''DEBUG MPSC destroy must reject close-without-drain'');',
-    'MPSC destroy drain contract test must reject freeing a closed but undrained queue in DEBUG builds');
+    'LQ.Free;',
+    'MPSC destroy auto-drain contract test must free an undrained queue safely');
   CheckContains(LMpscDestroyDrainTestSection,
     'Check(LQ.TryDequeue(LV), ''drain queued MPSC item before destroy'');',
-    'MPSC destroy drain contract test must drain queued items before the final free');
+    'MPSC destroy drain contract test must still cover explicit drain before free');
+  { Restrict T2/T3 absence checks to the interface uses clause so documentation
+    may still mention direct-unit import examples (e.g. skiplist) without failing. }
+  LFacadeUsesSection := ExtractSection(LLockFreeSource,
+    LineEnding + 'uses' + LineEnding,
+    LineEnding + 'const' + LineEnding,
+    'T1 facade uses clause');
+  CheckContains(LFacadeUsesSection, 'nextpas.core.lockfree.msqueue',
+    'T1 facade must pull MSQueue');
+  CheckContains(LFacadeUsesSection, 'nextpas.core.lockfree.hashmap',
+    'T1 facade must pull sharded HashMap');
+  CheckNotContains(LFacadeUsesSection, 'nextpas.core.lockfree.skiplist',
+    'T1 facade must not pull T2 skiplist');
+  CheckNotContains(LFacadeUsesSection, 'nextpas.core.lockfree.rbtree',
+    'T1 facade must not pull T2 rbtree');
+  CheckNotContains(LFacadeUsesSection, 'nextpas.core.lockfree.crdt',
+    'T1 facade must not pull T3 CRDT');
+  CheckNotContains(LFacadeUsesSection, 'nextpas.core.lockfree.hashmap.rtm',
+    'T1 facade must not pull RTM HashMap extension');
+  CheckNotContains(LFacadeUsesSection, 'nextpas.core.lockfree.hashmap.numa',
+    'T1 facade must not pull NUMA HashMap extension');
+  CheckNotContains(LFacadeUsesSection, 'nextpas.core.lockfree.mutex',
+    'T1 facade must not pull mutex (sync-style primitive stays direct-unit)');
+  CheckNotContains(LFacadeUsesSection, 'nextpas.core.lockfree.bloom',
+    'T1 facade must not pull T2 bloom filter');
   CheckContains(LMpscMultiProducerTestSection, 'JoinStartedThreads(LHandles, LHandleCount, ''worker thread'');',
     'MPSC multi-producer test must join every started producer in cleanup paths');
   CheckContains(LMpscMultiProducerTestSection,
@@ -6678,7 +6728,8 @@ begin
   T.Test('MPSC close producer contract', @TestMpscCloseProducerContract);
   T.Test('MPSC close wake timeout', @TestMpscCloseWakeTimeout);
   T.Test('MPSC close wake wait', @TestMpscCloseWakeWait);
-  T.Test('MPSC destroy requires drain in DEBUG', @TestMpscDestroyRequiresDrainInDebug);
+  T.Test('MPSC destroy auto-close and drain', @TestMpscDestroyAutoCloseAndDrain);
+  T.Test('T1 Destroy calls Close (source-contract)', @TestT1DestroyCallsCloseSourceContract);
   T.Test('MPSC multi-producer', @TestMpscMultiProducer);
   T.Test('Deque basic', @TestDequeBasic);
   T.Test('Deque query contract', @TestDequeQueryContract);
