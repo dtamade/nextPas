@@ -104,12 +104,13 @@ type
 
   THttpClientOptions = record
     { Request IO deadline (ms) for read/write after the socket is up. 0 = none.
-      Pair with cancel: IHttpCancelToken is cooperative and will not interrupt a
-      blocked socket Read until the read returns (use Timeout to bound wait). }
+      With IHttpCancelToken, mid-read/write is polled in short slices and raises
+      hekCanceled when canceled (also pair Timeout to bound wait without cancel). }
     Timeout: Int64;
-    { Post-dial first-write budget on newly opened sockets (ms). 0 = same as
-      Timeout. Does NOT interrupt a blocking OS connect(); OS dial timeout is a
-      net/platform capability (Blocked until net provides timed connect). }
+    { OS dial + post-dial first-write budget on newly opened sockets (ms).
+      When > 0: bounds OS connect() and first write after dial.
+      When 0: OS dial uses Timeout if Timeout > 0, else unbounded; first write
+      uses Timeout. }
     ConnectTimeout: Int64;
     MaxRedirects: Int32;
     MaxPoolSize: Int32;
@@ -352,6 +353,8 @@ begin
     Exit;
   if E is ETimeoutError then
     Result := EHttpError.CreateOp(hekTimeout, 'transport', E.Message)
+  else if E is ECancelledError then
+    Result := EHttpError.CreateOp(hekCanceled, 'transport', E.Message)
   else if E is ENetworkError then
     Result := EHttpError.CreateOp(hekConnect, 'transport', E.Message);
 end;
