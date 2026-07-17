@@ -4,6 +4,9 @@
 `atomic_*` 函数或 `TAtomic*` 类型安全 record；PascalCase facade 和部分 pointer
 arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点迁移保留。
 
+**契约**：[`CONTRACT.md`](CONTRACT.md)
+**与 lockfree 联合推进主线**：[`../lockfree/roadmap.md`](../lockfree/roadmap.md)（R* 阶段；atomic 含于 R0/R6/R7）
+
 ## 模块分层
 
 当前 live source set 由这些单元组成：
@@ -24,8 +27,14 @@ arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点�
 
 1. 新的低层或热路径代码使用 `atomic_*`，例如 `atomic_load(Value, mo_acquire)`。
 2. 需要更清晰所有权和类型边界时使用 `TAtomic*` record。
-3. 旧 PascalCase surface，例如 `AtomicLoad32`、`AtomicFetchAdd64`、`AtomicWait32`，只用于兼容旧代码。
+3. 旧 PascalCase surface，例如 `AtomicLoad32`、`AtomicFetchAdd64`、`AtomicWait32`、`AtomicCompareExchange32`，只用于兼容旧代码。
 4. `nextpas.core.atomic.compat` 中的 pointer arithmetic/bitwise overload 不再扩大；新代码应使用整数或 typed pointer API 明确表达意图。
+
+### Legacy CAS 偏好（R7）
+
+- **首选**：`atomic_compare_exchange_strong` / `TAtomic*.CompareExchangeStrong`（Boolean + `var Expected`）。
+- **legacy**：`AtomicCompareExchange32/64/Ptr` 返回 **观测值**（不是 Boolean）；保留不删，新代码勿扩散。
+- 完整表与日程：[`CONTRACT.md`](CONTRACT.md) §1.4。消费者扫描：[`../lockfree/consumer-audit.md`](../lockfree/consumer-audit.md)。
 
 Compatibility boundary: pointer arithmetic/bitwise overloads stay in `nextpas.core.atomic.compat` and must not be added to the main facade.
 `atomic_fetch_add/sub(var Pointer; PtrInt)` are the canonical main-facade pointer arithmetic APIs: they apply byte offsets, return the previous pointer, and publish the adjusted pointer; pointer bitwise overloads remain compat-only.

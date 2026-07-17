@@ -198,9 +198,15 @@ end;
   **过期**：解析 `Max-Age`（优先）与 `Expires`（IMF-fix）；到期在
   `StoreFromResponse` / `CookieHeaderFor` 时淘汰；`Max-Age<=0` 删除匹配项。
   Session cookie（无过期属性）不自动淘汰。无磁盘持久化。
-  **SameSite**（无完整 PSL）：解析 `SameSite=Strict|Lax|None`；缺省按 **Lax**；
-  `None` 必须带 `Secure` 否则不存储。SiteKey ≈ 主机最后两段 label（无 PSL）。
-  同站发送全部匹配 cookie；跨站仅发送 `SameSite=None`。
+  **SameSite** + **SiteKey (eTLD+1)**：解析 `SameSite=Strict|Lax|None`；缺省按 **Lax**；
+  `None` 必须带 `Secure` 否则不存储。SiteKey = 可注册域（eTLD+1）：默认单标签
+  eTLD（`a.b.example.com` → `example.com`），并对可维护的 **multi-label public
+  suffix 子集**（如 `co.uk`、`com.au`、`github.io`）取 eTLD+1（`a.foo.co.uk` →
+  `foo.co.uk`）。公开 API：`HttpCookieSiteKey`。`Domain` 等于 public suffix
+  （含单标签 TLD）时 **拒绝存储**（防 super-cookie）。`Domain` 必须 domain-match
+  请求 host。同站发送全部匹配 cookie；当 cookie Domain 的 SiteKey ≠ 请求 host
+  SiteKey 时仅发送 `SameSite=None`。客户端 jar **不**建模页面 initiator / 顶层
+  站点上下文（无跨站子资源导航语义）；Domain 匹配仍是主过滤。
 - HTTP proxy：`THttpClientOptions.ProxyUrl` **或** fluent
   `IHttpClient.WithProxyUrl`（重建 transport；装饰器 re-stack）。
   明文 `http://[user:pass@]host:port` 正向代理（proxy scheme 仅 `http`）。
@@ -249,8 +255,22 @@ end;
   `hekCanceled`，Op=`websocket` 或 transport。
 - 显式 `ConnectTimeout=0` + `Timeout=0` 才恢复无界 dial（测试/特殊工具）。
 
-### 2.2.4 IHttpResponse.Close
+### 2.2.4 IHttpResponse metadata + Close
 
+```pascal
+IHttpResponse = interface
+  property StatusCode: THttpStatus;
+  property Headers: IHttpHeaders;
+  property Body: IReader;
+  property FinalUrl: string;      { post-redirect request URL; empty if synthetic }
+  property Version: THttpVersion; { final-hop protocol; H1 from status-line, H2=hvHttp2 }
+  procedure Close;
+end;
+```
+
+- **FinalUrl**（Wave H）：`IHttpClient.Send` / 便捷方法在**最终**响应上盖章为产生该响应的请求 URL（`TUrl.ToString`）。`FollowRedirects` 开启时为最后一跳 URL，不是初始请求 URL。合成 `NewResponse` / 非 `THttpResponse` mock 的 FinalUrl 为空。
+- **Version**（Wave H）：传输层写入。H1 来自 status-line 解析（`hvHttp10` / `hvHttp11`）；H2 `BuildResponse` 固定 `hvHttp2`。合成 `NewResponse` 默认 `hvHttp11`。
+- **不做**：TLS 摘要、`Request` 回指、ContentLength 字段、transport 句柄泄漏到公开面。
 - `Close` 语义对齐 `HttpReleaseResponseBody`（幂等）；析构时若未 Close 则自动 Close。
 - 调用方应先读完 body 再让 response 离开作用域，或显式 `Close` / Read helper。
 

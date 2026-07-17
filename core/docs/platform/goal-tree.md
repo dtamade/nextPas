@@ -1,14 +1,15 @@
 # nextPas Platform Goal Tree
 
 Stable terminology lives in [master-spec](master-spec.md). This file tracks
-phase state and evidence only.
+phase state and evidence only. **Forward execution queue**: [ROADMAP.md](ROADMAP.md).
 
 ## Current position
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 Windows has focused-runtime evidence for 14 modules on real Windows VM via SSH,
-plus Wine runtime smoke for 20 modules. macOS, FreeBSD, and Android remain
-source-contract or forced-compile only.
+plus Wine runtime smoke (matrix 14 modules green; broader discovery ~20), plus
+GHA real-Windows focused gates (poller/io/socket). macOS, FreeBSD, and Android remain
+source-contract, forced-compile, or best-effort CI only.
 
 ### 2026-07-17 process/console/pty contract slice
 
@@ -63,8 +64,13 @@ Usability is **maintenance baseline 8.21** — no open wave-5. Authority: [resid
 | LT1 | QUICKSTART live-name gate + `test_platform_docs_live_patterns` smoke (F8) |
 | LT2 | `process.pipe` off all `platform_io_*` call sites; dual-IO owner-only (F5) |
 | LT3 | `platform_get_last_os_error` raw host side-channel (F6) |
-| LT4 | Windows/macOS host truth — **in progress** (wine matrix 14/14; GHA real-Windows focused gates; not promoted) |
+| LT4 | Windows/macOS host truth — **ROADMAP D1/D2** (wine 14/14; GHA windows matrix 14+3 gates; not ci-matrix) |
 | Deferred | F7 mapping symmetry, F9 rename, F10 diagnostics, F14 freetype move-out |
+
+### 2026-07-17 forward roadmap authority
+
+[ROADMAP.md](ROADMAP.md) is the sole forward-execution plan (phases D0–D5).
+residual-roadmap remains the closed LT0–LT3 + dual-IO/F6 freeze record.
 
 ## Host Status
 

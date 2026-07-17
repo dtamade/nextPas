@@ -11,6 +11,19 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 
 **层级**：L1（依赖 L0 `base` + `atomic`；见 `core/docs/core-module-registry.md`）。
 
+## 文档与路线图
+
+| 文档 | 用途 |
+|------|------|
+| [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
+| [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
+| [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 |
+| [`selection-guide.md`](selection-guide.md) | 选型 |
+| [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
+| [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
+
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap 为准。
+
 ## Progress-guarantee matrix
 
 | Class | Progress model | Sync mechanism | Default facade (T1) |
@@ -22,6 +35,13 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | `TLockFreeSelector` | concurrent multiplexer | poll + backoff over channels | yes |
 | `TShardedHashMap` / `TConcurrentHashMap` | **lock-based concurrent** | per-shard spin lock (+ optimistic read path) | yes (honest concurrent alias) |
 | Trees (SkipList/BTree/RBTree/Treap/…), caches, CRDT, filters, RTM/NUMA maps, most sync primitives in `lockfree.*` | **lock-based concurrent** or specialized | spin/RW locks as documented per unit | **no** — import unit directly |
+
+**命名诚实脚注（R7）**：
+- `nextpas.core.lockfree.deque_lf`：单元名含 `lf`，实现为 **spin-lock** deque，不是 lock-free；真 lock-free work-stealing 见 `TWorkStealingDeque`（`lockfree.deque`）。
+- `TShardedHashMap` / `TConcurrentHashMap`：T1 门面类型，**分片自旋锁**，不是 lock-free map。
+- 多数 T2 树/缓存/过滤器/同步器：落在 `lockfree.*` 命名空间只表示“并发 + 原子原语”，**不**表示 progress 为 lock-free。
+- `collections` 模块另有自有 `TConcurrentHashMap`，与 lockfree 门面别名 **不是**同一类型。
+- 完整例外表：[`CONTRACT.md`](CONTRACT.md) §0；消费者扫描：[`consumer-audit.md`](consumer-audit.md)。
 
 Single-owner means concurrent multi-owner use is outside the contract (e.g. multiple SPSC producers).
 
@@ -77,6 +97,7 @@ closed、当前为空且没有 admitted producer 仍可能发布时才把 closed
 `TMpmcQueue<T>.EnqueueBatch` / `DequeueBatch` are convenience loops over consecutive `TryEnqueue` / `TryDequeue` calls: they return the successful prefix so far when the next single-item operation would fail, instead of waiting for the remainder or promising a shared batch linearization point.
 `TMpmcQueue<T>.EnqueueBatch` returns 0 when it observes `Close` before publishing any item; under concurrent `Close`, it returns the prefix already published by its underlying `TryEnqueue` calls.
 `TMpmcQueue<T>` accepts requested capacity 1; its per-slot sequence token uses separate empty/full states so a single-slot queue still distinguishes full from empty.
+`TLockFreeChannel<T>` uses the same empty/full sequence encoding, so capacity=1 also distinguishes full (`TrySend`/`TrySendEx` → `lfteFull`) from empty (`TryReceive`/`TryReceiveEx` → `lfteEmpty`).
 
 `TMpscQueue<T>` 是多 producer、单 consumer 队列。`Close` 后 `TryEnqueue` 返回 False，`Enqueue`
 抛出 `EInvalidOperationError`（与 `TLockFreeChannel.Send` 对齐）。`Close` 唤醒 blocked consumer。
@@ -235,7 +256,8 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 `TLockFreeChannel<T>` 是有界无锁 Channel，序列号驱动的 **MPMC-style** 通道（多 producer / 多 consumer）。
 
 **设计特点**:
-- 容量自动向上取整到 2 的幂（位运算优化）
+- 容量自动向上取整到 2 的幂（位运算优化）；**capacity=1 合法**，full/empty 可分
+- per-slot sequence 与 `TMpmcQueue` 相同：empty/full 分离 token
 - 阻塞/非阻塞/超时三种发送和接收模式
 - Close 后已入队数据仍可读
 - Send 到已关闭 channel 抛异常，TrySend 返回 False（Go 对齐）
@@ -368,6 +390,13 @@ notify-between-retry-and-wait window: if a producer or consumer advances the epo
 the helper returns instead of sleeping on the new epoch.
 
 ## 验证
+
+**一键 T1 门（R6）**：atomic + lockfree 主套 + stress，日志默认写到 `core/build/verify-lockfree/verify-t1.log`：
+
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/tests/nextpas.core.lockfree verify-t1
+```
 
 普通 lockfree 切片至少运行：
 

@@ -5183,6 +5183,41 @@ begin
 end;
 
 { ============================================================ }
+{ Edge-case: Channel capacity=1 full/empty (R5)                 }
+{ ============================================================ }
+
+procedure TestChannelCapacityOneFullEmpty;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LCh := TIntChannel.Create(1);
+  try
+    CheckEqual(Int64(1), Int64(LCh.Capacity), 'capacity=1');
+    Check(LCh.IsEmpty, 'empty initially');
+    Check(not LCh.TryReceiveEx(LV, LErr), 'empty TryReceiveEx fails');
+    Check(LErr = lfteEmpty, 'empty is lfteEmpty');
+    Check(LCh.TrySend(42), 'send to capacity=1');
+    Check(not LCh.IsEmpty, 'not empty after send');
+    Check(not LCh.TrySend(99), 'send to full capacity=1 fails');
+    Check(not LCh.TrySendEx(100, LErr), 'full TrySendEx fails');
+    Check(LErr = lfteFull, 'full is lfteFull');
+    Check(LCh.TryReceive(LV), 'receive from capacity=1');
+    CheckEqual(42, LV, 'value matches');
+    Check(LCh.IsEmpty, 'empty after receive');
+    Check(not LCh.TryReceive(LV), 'receive from empty fails');
+    Check(LCh.TrySendEx(7, LErr), 'resend after drain');
+    Check(LErr = lfteNone, 'resend success is lfteNone');
+    Check(LCh.TryReceiveEx(LV, LErr), 'rereceive after resend');
+    CheckEqual(7, LV, 'resend value matches');
+    Check(LErr = lfteNone, 'rereceive success is lfteNone');
+  finally
+    LCh.Free;
+  end;
+end;
+
+{ ============================================================ }
 { Edge-case: Channel capacity=2                                 }
 { ============================================================ }
 
@@ -5660,21 +5695,16 @@ var
   LV: Integer;
   LErr: TLockFreeTryError;
 begin
-  { MPMC channel sequence protocol needs capacity>=2 to observe full (same as capacity-enforce tests). }
-  LCh := TIntChannel.Create(2);
+  { R5: empty/full sequence tokens allow capacity=1 full vs empty diagnostics. }
+  LCh := TIntChannel.Create(1);
   try
     Check(LCh.TrySendEx(21, LErr), 'Channel TrySendEx success');
     Check(LErr = lfteNone, 'Channel success error is lfteNone');
-    Check(LCh.TrySendEx(20, LErr), 'Channel second TrySendEx success');
-    Check(LErr = lfteNone, 'Channel second success error is lfteNone');
     Check(not LCh.TrySendEx(22, LErr), 'Channel full TrySendEx fails');
     Check(LErr = lfteFull, 'Channel full is lfteFull');
     Check(LCh.TryReceiveEx(LV, LErr), 'Channel TryReceiveEx success');
     CheckEqual(21, LV, 'Channel TryReceiveEx value');
     Check(LErr = lfteNone, 'Channel receive success error is lfteNone');
-    Check(LCh.TryReceiveEx(LV, LErr), 'Channel second TryReceiveEx success');
-    CheckEqual(20, LV, 'Channel second TryReceiveEx value');
-    Check(LErr = lfteNone, 'Channel second receive success error is lfteNone');
     Check(not LCh.TryReceiveEx(LV, LErr), 'Channel empty TryReceiveEx fails');
     Check(LErr = lfteEmpty, 'Channel empty not closed is lfteEmpty');
     LCh.Close;
@@ -5711,6 +5741,139 @@ begin
     Check(LErr = lfteClosed, 'SPSC Channel closed empty is lfteClosed');
   finally
     LCh.Free;
+  end;
+end;
+
+procedure TestSpscTryExDiagnostics;
+var
+  LQ: TIntSpsc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntSpsc.Create(1);
+  try
+    Check(LQ.TryEnqueueEx(41, LErr), 'SPSC TryEnqueueEx success');
+    Check(LErr = lfteNone, 'SPSC success error is lfteNone');
+    Check(not LQ.TryEnqueueEx(42, LErr), 'SPSC full TryEnqueueEx fails');
+    Check(LErr = lfteFull, 'SPSC full is lfteFull');
+    Check(LQ.TryDequeueEx(LV, LErr), 'SPSC TryDequeueEx success');
+    CheckEqual(41, LV, 'SPSC TryDequeueEx value');
+    Check(LErr = lfteNone, 'SPSC dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SPSC empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'SPSC empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(43, LErr), 'SPSC closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'SPSC closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SPSC closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'SPSC closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMpmcTryExDiagnostics;
+var
+  LQ: TIntMpmc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntMpmc.Create(1);
+  try
+    Check(LQ.TryEnqueueEx(51, LErr), 'MPMC TryEnqueueEx success');
+    Check(LErr = lfteNone, 'MPMC success error is lfteNone');
+    Check(not LQ.TryEnqueueEx(52, LErr), 'MPMC full TryEnqueueEx fails');
+    Check(LErr = lfteFull, 'MPMC full is lfteFull');
+    Check(LQ.TryDequeueEx(LV, LErr), 'MPMC TryDequeueEx success');
+    CheckEqual(51, LV, 'MPMC TryDequeueEx value');
+    Check(LErr = lfteNone, 'MPMC dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MPMC empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'MPMC empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(53, LErr), 'MPMC closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'MPMC closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MPMC closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'MPMC closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestSpmcTryExDiagnostics;
+var
+  LQ: TIntSpmc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntSpmc.Create(1);
+  try
+    Check(LQ.TryEnqueueEx(61, LErr), 'SPMC TryEnqueueEx success');
+    Check(LErr = lfteNone, 'SPMC success error is lfteNone');
+    Check(not LQ.TryEnqueueEx(62, LErr), 'SPMC full TryEnqueueEx fails');
+    Check(LErr = lfteFull, 'SPMC full is lfteFull');
+    Check(LQ.TryDequeueEx(LV, LErr), 'SPMC TryDequeueEx success');
+    CheckEqual(61, LV, 'SPMC TryDequeueEx value');
+    Check(LErr = lfteNone, 'SPMC dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SPMC empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'SPMC empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(63, LErr), 'SPMC closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'SPMC closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'SPMC closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'SPMC closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestMpscTryExDiagnostics;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LQ := TIntMpsc.Create;
+  try
+    Check(LQ.TryEnqueueEx(71, LErr), 'MPSC TryEnqueueEx success');
+    Check(LErr = lfteNone, 'MPSC success error is lfteNone');
+    Check(LQ.TryDequeueEx(LV, LErr), 'MPSC TryDequeueEx success');
+    CheckEqual(71, LV, 'MPSC TryDequeueEx value');
+    Check(LErr = lfteNone, 'MPSC dequeue success error is lfteNone');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MPSC empty TryDequeueEx fails');
+    Check(LErr = lfteEmpty, 'MPSC empty not closed is lfteEmpty');
+    LQ.Close;
+    Check(not LQ.TryEnqueueEx(72, LErr), 'MPSC closed TryEnqueueEx fails');
+    Check(LErr = lfteClosed, 'MPSC closed publish is lfteClosed');
+    Check(not LQ.TryDequeueEx(LV, LErr), 'MPSC closed empty TryDequeueEx fails');
+    Check(LErr = lfteClosed, 'MPSC closed empty is lfteClosed');
+  finally
+    LQ.Free;
+  end;
+end;
+
+procedure TestStackTryExDiagnostics;
+var
+  LS: TIntStack;
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  LS := TIntStack.Create(1);
+  try
+    Check(LS.TryPushEx(81, LErr), 'Stack TryPushEx success');
+    Check(LErr = lfteNone, 'Stack success error is lfteNone');
+    Check(not LS.TryPushEx(82, LErr), 'Stack full TryPushEx fails');
+    Check(LErr = lfteFull, 'Stack full is lfteFull');
+    Check(LS.TryPopEx(LV, LErr), 'Stack TryPopEx success');
+    CheckEqual(81, LV, 'Stack TryPopEx value');
+    Check(LErr = lfteNone, 'Stack pop success error is lfteNone');
+    Check(not LS.TryPopEx(LV, LErr), 'Stack empty TryPopEx fails');
+    Check(LErr = lfteEmpty, 'Stack empty not closed is lfteEmpty');
+    LS.Close;
+    Check(not LS.TryPushEx(83, LErr), 'Stack closed TryPushEx fails');
+    Check(LErr = lfteClosed, 'Stack closed publish is lfteClosed');
+    Check(not LS.TryPopEx(LV, LErr), 'Stack closed empty TryPopEx fails');
+    Check(LErr = lfteClosed, 'Stack closed empty is lfteClosed');
+  finally
+    LS.Free;
   end;
 end;
 
@@ -7344,6 +7507,11 @@ begin
   T.Test('SegQueue Try*Ex diagnostics', @TestSegQueueTryExDiagnostics);
   T.Test('Channel Try*Ex diagnostics', @TestChannelTryExDiagnostics);
   T.Test('Channel SPSC Try*Ex diagnostics', @TestChannelSpscTryExDiagnostics);
+  T.Test('SPSC Try*Ex diagnostics', @TestSpscTryExDiagnostics);
+  T.Test('MPMC Try*Ex diagnostics', @TestMpmcTryExDiagnostics);
+  T.Test('SPMC Try*Ex diagnostics', @TestSpmcTryExDiagnostics);
+  T.Test('MPSC Try*Ex diagnostics', @TestMpscTryExDiagnostics);
+  T.Test('Stack Try*Ex diagnostics', @TestStackTryExDiagnostics);
   T.Test('MSQueue Destroy Close and drain', @TestMsQueueDestroyCloseAndDrain);
   T.Test('Managed type reject', @TestManagedTypeReject);
   T.Test('Source contracts', @TestLockFreeSourceContracts);
@@ -7370,6 +7538,7 @@ begin
   T.Test('HashMap Find empty', @TestHashMapFindEmpty);
   T.Test('HashMap Remove empty', @TestHashMapRemoveEmpty);
   T.Test('HashMap Contains missing', @TestHashMapContainsMissing);
+  T.Test('Channel capacity=1 full/empty', @TestChannelCapacityOneFullEmpty);
   T.Test('Channel capacity=2', @TestChannelCapacityTwo);
   T.Test('Channel SPSC capacity=1', @TestChannelSpscCapacityOne);
 

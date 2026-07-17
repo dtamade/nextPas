@@ -1,6 +1,6 @@
 # Lockfree API 参考手册
 
-> 更新: 2026-07-06
+> 更新: 2026-07-17
 
 [English](api-reference.en.md)
 
@@ -486,7 +486,8 @@ type
 - `Send` 到已关闭 channel 抛 `EInvalidOperationError`（Go panic 对齐）
 - `TrySend` 到已关闭 channel 返回 `False`（Go select ok=false 对齐）
 - 已入队数据在 Close 后仍可读
-- 容量自动向上取整到 2 的幂
+- 容量自动向上取整到 2 的幂；**capacity=1 支持** full/empty 可分（与 MPMC empty/full sequence 对齐；R5）
+- 可选 `TrySendEx` / `TryReceiveEx`：full→`lfteFull`，empty→`lfteEmpty`，closed→`lfteClosed`
 
 ---
 
@@ -1343,10 +1344,10 @@ type
 
 ## T 类型约束
 
-所有 lockfree 数据结构要求 `T` 为非托管类型：
+所有 lockfree 数据结构要求 `T` 为非托管类型（推荐文案见 CONTRACT §3.1）：
 ```pascal
 if IsManagedType(T) then
-  raise EArgumentError.Create('T must be unmanaged');
+  raise EArgumentError.Create('<TypeName>: T must be unmanaged');
 ```
 
 支持的类型: Integer, UInt32, UInt64, Pointer, record (无 string/dyn array/interface)

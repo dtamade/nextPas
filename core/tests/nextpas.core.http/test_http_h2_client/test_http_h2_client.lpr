@@ -1142,6 +1142,8 @@ begin
   try
     LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/ping'));
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'response status');
+    CheckEqual(Int64(Ord(hvHttp2)), Int64(Ord(LResp.Version)),
+      'H2 BuildResponse sets Version to HTTP/2');
     CheckEqual('pong', ReadAllBody(LResp.Body), 'response body');
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);

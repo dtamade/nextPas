@@ -4,7 +4,7 @@
 **层级**：L1（依赖 L0: base, atomic；与 `core/docs/core-module-registry.md` 一致）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-17
-**版本**：2.3
+**版本**：2.5
 
 ---
 
@@ -17,9 +17,22 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 
 进度保证（lock-free vs lock-based）见 `README.md` 的 Progress-guarantee matrix；`TShardedHashMap` / `TConcurrentHashMap` 为同一分片自旋锁实现（别名，不是两套实现）。
 
-**命名例外**：
-- `nextpas.core.lockfree.deque_lf` 名称含 “lf”，实现为 **lock-based** concurrent deque（非 lock-free）。
-- `nextpas.core.lockfree.lru_cache` / 部分 AnsiString 特化单元允许 managed `AnsiString` 载荷；不要求 `IsManagedType` 泛型守卫。
+**命名例外 / T2 命名诚实（R7 扩充）**：
+
+| 单元 / 名称 | 看起来像 | 实际 progress | 备注 |
+|-------------|---------|---------------|------|
+| `lockfree.deque_lf` | lock-free deque | **spin-lock** concurrent deque | 历史名；真 lock-free deque 见 `lockfree.deque`（`TWorkStealingDeque`，单 owner） |
+| `TShardedHashMap` / `TConcurrentHashMap` | 可能被当成 lock-free map | **per-shard spin lock** | T1 门面诚实别名，同一实现 |
+| `lockfree.radix` / 多数 tree（`btree`/`rbtree`/`treap`/`skiplist*`/`scapegoat`/`bplus`/`graph`/`dag`…） | 在 `lockfree.*` 命名空间 | **lock-based** 或混合（文档 per unit） | **不进**默认门面；直接 import |
+| `lockfree.lru` / `lru_cache` / `ttl_cache` / `arccache` / `lfu` | 无锁缓存 | **分片锁 / 自旋锁** | `lru_cache` 另属 AnsiString 例外 |
+| `lockfree.mutex` / `rwlock` / `semaphore` / `stampedlock` / `condvar` | 可能被当成“无锁同步原语” | **锁或 CAS 自旋互斥** | 名称是 concurrent helper，不是 container lock-free 声明 |
+| `lockfree.hashmap.rtm` / `hashmap.numa` | 生产默认 | **T3 研究扩展** | 直接 import；不进 T1 门面 |
+| `collections.concurrent.hashmap.TConcurrentHashMap` | 与 lockfree 同名 | **另一套实现** | 勿与 lockfree 门面别名混淆 |
+
+- 部分 AnsiString 特化单元允许 managed `AnsiString` 载荷；不要求 `IsManagedType` 泛型守卫（表见 §0.1）。
+- Progress 总表以 [`README.md`](README.md) Progress-guarantee matrix 为准；冲突时以 **CONTRACT + README** 覆盖单元头注释中的“无锁”口语。
+
+消费者审计：[`consumer-audit.md`](consumer-audit.md)。
 
 ### 0.1 AnsiString-specialized exceptions（`IsManagedType` 守卫例外）
 
@@ -85,7 +98,9 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 // 队列（T1）
 generic TSpscQueue<T> = class
   function TryEnqueue(const AValue: T): Boolean;
+  function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   function EnqueueWait(const AValue: T): Boolean;
   function DequeueWait(out AValue: T): Boolean;
   procedure Close;
@@ -93,20 +108,26 @@ end;
 
 generic TMpmcQueue<T> = class
   function TryEnqueue(const AValue: T): Boolean;
+  function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
 generic TMpscQueue<T> = class
   procedure Enqueue(const AValue: T);          // closed -> EInvalidOperationError
   function TryEnqueue(const AValue: T): Boolean; // closed -> False
+  function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
 generic TSpmcQueue<T> = class
   function TryEnqueue(const AValue: T): Boolean;
+  function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryDequeue(out AValue: T): Boolean;
+  function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
@@ -128,7 +149,9 @@ end;
 // 栈 / 工作窃取（T1）— 非阻塞 surface 使用 Try*
 generic TLockFreeStack<T> = class
   function TryPush(const AValue: T): Boolean;
+  function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
   function TryPop(out AValue: T): Boolean;
+  function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
   procedure Close;
 end;
 
@@ -167,8 +190,20 @@ generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<
 
 ### 1.4 Diagnostic Try*Ex（可选）
 
-Boolean 热路径 `TrySend` / `TryEnqueue` / `TryReceive` / `TryDequeue` **保持不变**。
-需要区分 full / empty / closed 时使用可选诊断 API（Wave-3 pilot：Channel / Channel SPSC / SegQueue）：
+Boolean 热路径 `TrySend` / `TryEnqueue` / `TryPush` / `TryReceive` / `TryDequeue` / `TryPop` **保持不变**。
+需要区分 full / empty / closed 时使用可选诊断 API：
+
+**已覆盖结构（R3+R4）**：
+| 结构 | Publish Ex | Consume Ex |
+|------|------------|------------|
+| Channel | `TrySendEx` | `TryReceiveEx` |
+| Channel SPSC | `TrySendEx` | `TryReceiveEx` |
+| SegQueue | `TryEnqueueEx` | `TryDequeueEx` |
+| SPSC ring | `TryEnqueueEx` | `TryDequeueEx` |
+| MPMC ring | `TryEnqueueEx` | `TryDequeueEx` |
+| SPMC ring | `TryEnqueueEx` | `TryDequeueEx` |
+| MPSC（无界） | `TryEnqueueEx` | `TryDequeueEx` |
+| Stack（有界） | `TryPushEx` | `TryPopEx` |
 
 ```pascal
 type
@@ -185,7 +220,20 @@ type
 
 实现为现有 `Try*` + `IsClosed` 的薄包装，不替代 Boolean API。
 `plain Enqueue` / `Send` 在 closed 时仍抛 `EInvalidOperationError`。
-SegQueue 无界：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（不会出现 `lfteFull`）。
+无界结构（SegQueue / MPSC）：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（不会出现 `lfteFull`）。
+
+### 1.5 Channel capacity=1（R5）
+
+`TLockFreeChannel<T>` 接受请求容量 1（向上取整后仍为 1）。per-slot sequence 使用与 `TMpmcQueue` 相同的 empty/full 分离编码（`empty(pos)=pos*2`，`full(pos)=pos*2+1`），因此单槽 channel 下 `TrySend`/`TrySendEx` 与 `TryReceive`/`TryReceiveEx` 可区分 full 与 empty：
+
+| 状态（未 closed） | Boolean | Try\*Ex `AError` |
+|-------------------|---------|------------------|
+| 空 | `TryReceive` False | `lfteEmpty` |
+| 满 | `TrySend` False | `lfteFull` |
+| 有空间 | `TrySend` True | `lfteNone` |
+| 有数据 | `TryReceive` True | `lfteNone` |
+
+`TLockFreeChannelSpsc` 用 count 路径，本就支持 cap=1；本条锁定 MPMC Channel 与队列对齐。
 
 ---
 
@@ -195,7 +243,8 @@ SegQueue 无界：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（�
 - 无锁栈 TryPush/TryPop 满足 LIFO 顺序
 - 工作窃取双端队列：Owner 从尾部 TryPop，Thief 从头部 TrySteal；**有 Close**
 - SPSC 队列：单生产者单消费者，无锁
-- MPMC 队列：多生产者多消费者，无锁
+- MPMC 队列：多生产者多消费者，无锁；capacity=1 时 empty/full sequence 可分
+- Channel（MPMC）：同 MPMC empty/full sequence 编码；capacity=1 时 full/empty 可分
 - SegQueue：无界 **MPMC**（不是 MPSC）
 - 分片 HashMap：每个分片独立锁，减少竞争；`TConcurrentHashMap` 与其同实现
 - 所有 T1 泛型容器要求 T（及 HashMap 的 TKey/TValue）为非托管类型；构造时 `IsManagedType` 拒绝
@@ -227,6 +276,23 @@ SegQueue 无界：`TryEnqueueEx` 失败在正常路径上即为 `lfteClosed`（�
 - `TryPop`/`TrySteal` 空时返回 False
 - managed 元素构造抛 `EArgumentError`
 - 已关闭后的 plain publish（Channel.Send / MPSC.Enqueue / SegQueue.Enqueue）抛 `EInvalidOperationError`
+
+### 3.1 managed 拒绝文案（推荐模板）
+
+泛型 `Create` 在 `IsManagedType` 拒绝时，**推荐**统一为：
+
+```text
+'<TypeName>: T must be unmanaged'
+```
+
+Key/Value 双参数类型用：
+
+```text
+'<TypeName>: TKey must be unmanaged'
+'<TypeName>: TValue must be unmanaged'
+```
+
+历史消息可能附带 `(no string/interface/dynarray)` 后缀；语义等价，**不强制全量改名**。新代码与触达修改优先用短模板。
 
 ---
 

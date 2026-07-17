@@ -57,6 +57,7 @@
 
 以下为 **T2（直接 `uses nextpas.core.lockfree.<unit>`，默认 facade 不拉入）**：
 多数为 **lock-based concurrent** 或专用结构，名称中的 Concurrent/LockFree 以单元 `@concurrency` 与矩阵为准。
+命名诚实总表见 [`CONTRACT.md`](CONTRACT.md) §0 / [`README.md`](README.md) Progress-guarantee 脚注；**勿**因单元落在 `lockfree.*` 就假定 lock-free progress（典型例外：`deque_lf` 为 spin-lock）。
 
 需要 Bag（允许重复元素的并发集合）？
 └── `uses nextpas.core.lockfree.bag` → TLockFreeBag<T>
@@ -269,7 +270,7 @@
 
 生命周期：**Close → join producers/waiters → Free**。Destroy 的 Close+drain 不替代 join。
 T1 元素类型必须 unmanaged（构造时 `EArgumentError`）。
-需要区分 full/empty/closed 时用可选 `Try*Ex`（`TLockFreeTryError`；Boolean `Try*` 热路径不变）。
+需要区分 full/empty/closed 时用可选 `Try*Ex`（`TLockFreeTryError`；Boolean `Try*` 热路径不变；覆盖 Channel/SegQueue/SPSC/MPMC/SPMC/MPSC/Stack）。
 
 | 数据结构 | 生产者 | 消费者 | Close 安全 |
 |----------|--------|--------|-----------|

@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星与阶段定义见 `GOAL_TREE.md`；契约真相见 `CONTRACT.md`。
-**Updated**: 2026-07-17（docs hygiene landed; post Wave F on main `cd02d03d0`）
+**Updated**: 2026-07-17（Wave H Response metadata）
 
 ---
 
@@ -29,10 +29,12 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 | **G0–G5 模块骨架** | 完成（见 GOAL_TREE Map） |
 | **non-H3 stage-complete** | 完成（P1–P5 关闭；H3 诚实 blocked） |
 | **可用性 Wave A–F** | 完成并 landed main（dial/cancel、JSON、CONNECT、direct HTTPS、proxy Basic、HTTP-date Retry-After、WithTLSContext、*JsonDocument） |
-| **下一执行点** | **Phase P — Product depth** 的 **Wave G**（见下） |
+| **Wave G Cookie site** | 完成（eTLD+1 SiteKey + multi-label PSL 子集；拒绝 Domain=public-suffix） |
+| **Wave H Response metadata** | 完成（`IHttpResponse.FinalUrl` + `Version`；H1/H2 写入；client 盖章） |
+| **下一执行点** | **Phase P** 的 **Wave I**（Proxy auth variants） |
 
-日常客户端主路径（GET/POST JSON、redirect、timeout/cancel、cookie 基础、HTTPS 直连/代理 Basic、retry）已齐。
-剩下是 **加深**（cookie 站点模型、响应元数据、代理鉴权变体）和 **协议演进**（H2 边角、H3 等 QUIC），不是再补「能不能发请求」。
+日常客户端主路径、cookie 站点模型与响应元数据已齐。
+剩下是 **加深**（代理鉴权变体、Op hygiene）和 **协议演进**（H2 边角、H3 等 QUIC）。
 
 ---
 
@@ -46,6 +48,7 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 | Wave D | HTTPS CONNECT via HTTP proxy |
 | Wave E | H1 direct HTTPS；ProxyUrl Basic |
 | Wave F | HTTP-date Retry-After；WithTLSContext；Post/Put/PatchJsonDocument |
+| Wave G | Cookie eTLD+1 SiteKey；multi-label PSL 子集；拒绝 Domain=public-suffix；`HttpCookieSiteKey` |
 
 详细证据在 [`archive/`](archive/README.md) 与 `API_COVERAGE.md` 矩阵。
 
@@ -59,12 +62,12 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 
 | Wave | 主题 | 做 | 不做 | 预估 | 状态 |
 |------|------|----|------|------|------|
-| **G** | Cookie site model | 引入 **public suffix**（或可维护的 PSL 子集）修正 SiteKey；SameSite 跨站判定对齐；回归 jar 测试 | 不改 jar 存储 API 形状；不磁盘持久化 | M | **NEXT** |
-| **H** | Response metadata | 设计冻结后扩展只读元数据（至少：final URL / 协议版本；可选 TLS 摘要）；CONTRACT + 测试 | 不把 transport 句柄泄漏到公开面 | M | queued |
-| **I** | Proxy auth variants | **Digest**（若仍要走 HTTP 代理）和/或 文档级明确「仅 Basic」；评估是否值得做 | NTLM 默认 **Park**；SOCKS 见 Phase X | M | queued |
+| **G** | Cookie site model | 引入 **public suffix**（或可维护的 PSL 子集）修正 SiteKey；SameSite 跨站判定对齐；回归 jar 测试 | 不改 jar 存储 API 形状；不磁盘持久化 | M | **landed** |
+| **H** | Response metadata | `IHttpResponse.FinalUrl` + `Version`；H1/H2 写入；client 盖章；CONTRACT + 测试 | TLS 摘要、transport 句柄泄漏 | M | **landed** |
+| **I** | Proxy auth variants | **Digest**（若仍要走 HTTP 代理）和/或 文档级明确「仅 Basic」；评估是否值得做 | NTLM 默认 **Park**；SOCKS 见 Phase X | M | **NEXT** |
 | **J** | Error Op hygiene | 热点路径 `CreateOp` 补齐（client Send / redirect / retry / H1 RoundTrip 边界）；source-contract 锁定数 | 全模块 Op-everywhere | S–M | queued |
 
-**Wave G 为默认下一波。** H/I/J 可在 G 后按 ROI 重排，但必须改本表，不能静默跳波。
+**Wave I 为默认下一波。** I/J 可按 ROI 重排，但必须改本表，不能静默跳波。
 
 ### Phase Q — Surface cleanup（低风险还债）
 
@@ -98,14 +101,13 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 ## 当前该做（给执行者）
 
 ```text
-1. 打开本文件确认 Wave G 仍是 NEXT
-2. 写短 fix-plan（或直接实现若无设计分歧）：PSL 数据来源、SiteKey 规则、测试矩阵
-3. 实现 + test_http_cookie / test_http_client 相关 gate
-4. path-limited land main
-5. 本文件：Wave G → landed；Wave H → NEXT（或讨论后改序）
+1. 打开本文件确认 Wave I 仍是 NEXT
+2. 评估 Digest vs 文档级「仅 Basic」；冻结范围后再实现
+3. 实现 + CONTRACT + focused tests；path-limited land main
+4. 本文件：Wave I → landed；Wave J → NEXT（或讨论后改序）
 ```
 
-**没有用户「马上下一波」指令时：默认仍执行 Wave G。**
+**没有用户「马上下一波」指令时：默认执行 Wave I。**
 只有 Blocked / 需跨模块决策时才停下来问。
 
 ---
@@ -128,3 +130,5 @@ ROADMAP 下一波 → 短 plan（若有歧义）→ 实现 + focused gate → pa
 |------|------|
 | 2026-07-17 | 初版：合并 stage + Wave A–F 完成态；定义 Phase P/Q/R/X；Wave G = NEXT |
 | 2026-07-17 | Wave L：历史 docs → `archive/`；瘦身 API_COVERAGE / GOAL_TREE 当前段 |
+| 2026-07-17 | Wave G landed：Cookie eTLD+1 + PSL 子集；Wave H = NEXT |
+| 2026-07-17 | Wave H landed：`IHttpResponse.FinalUrl` + `Version`；Wave I = NEXT |

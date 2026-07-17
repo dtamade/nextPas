@@ -4,6 +4,8 @@
 
 ## 1. 优化总览
 
+> **归档**（2026-07-17）：历史优化切片。当前推进主线见 [`roadmap.md`](roadmap.md)。下文不再作为待办清单。
+
 基于状态检查发现的 8 个优化方向，分 5 个阶段实施：
 
 | 阶段 | 优先级 | 优化方向 | 工时 | 收益 | 状态 |
@@ -100,7 +102,7 @@ begin
   // 先本地积累
   GThreadRetireBuffer[GThreadRetireCount] := APtr;
   Inc(GThreadRetireCount);
-  
+
   // 达到阈值再批量提交
   if GThreadRetireCount >= 16 then
     FlushRetireBuffer;

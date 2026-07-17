@@ -1,3 +1,5 @@
+> **归档**（2026-07-17）：历史 Phase 8 结论。推进主线见 [`roadmap.md`](roadmap.md)。
+
 # Phase 8: EBR per-thread retire buffer — 最终结论
 
 ## 调研目标
