@@ -166,6 +166,8 @@ begin
   CheckEqual('Forbidden', HttpStatusText(403), '403');
   CheckEqual('Not Found', HttpStatusText(404), '404');
   CheckEqual('Method Not Allowed', HttpStatusText(405), '405');
+  CheckEqual('Proxy Authentication Required',
+    HttpStatusText(HTTP_STATUS_PROXY_AUTH_REQUIRED), '407');
   CheckEqual('Internal Server Error', HttpStatusText(500), '500');
   CheckEqual('Expectation Failed', HttpStatusText(417), '417');
   CheckEqual('Bad Gateway', HttpStatusText(502), '502');

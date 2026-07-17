@@ -11,7 +11,7 @@
 
 ## 当前结论
 
-- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（post Wave H；下一波 **Wave I Proxy auth variants**）。
+- **向前开发入口**：[`ROADMAP.md`](ROADMAP.md)（post Wave I；下一波 **Wave J Error Op hygiene**）。
 - **Stage**：non-H3 stage-complete（P1–P5 关闭；H3 诚实 blocked on QUIC）。
 - **可用性 Wave A–F + G**：已齐。日常客户端主路径可用；Cookie SiteKey = eTLD+1（multi-label PSL 子集）；`Domain=public-suffix` 拒绝；`HttpCookieSiteKey`。
 - **Live 工厂白名单**：`NewRequest(Method, TUrl|string)` + `NewGetRequest` + `THttpRequestBuilder`。多参 `NewRequest` / `NewStreamingRequest` 已删除。
@@ -53,4 +53,4 @@
 
 **不在此维护有序列表。** 见 [`ROADMAP.md`](ROADMAP.md) Phase P（Wave G→J）/ Q / R / X。
 
-摘要：Wave H Response FinalUrl/Version landed → I Proxy auth variants → J Error Op hygiene；H3 blocked on QUIC。
+摘要：Wave I Proxy auth Basic-only freeze landed → J Error Op hygiene；H3 blocked on QUIC。
