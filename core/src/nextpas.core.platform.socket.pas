@@ -1295,18 +1295,20 @@ end;
 
 function platform_socket_error_would_block(const AError: Int32): Boolean;
 begin
-  Result := AError = WSAEWOULDBLOCK;
+  { Accept portable PLATFORM_ERR_AGAIN and raw Winsock codes. }
+  Result := (AError = PLATFORM_ERR_AGAIN) or (AError = WSAEWOULDBLOCK);
 end;
 
 function platform_socket_error_timed_out(const AError: Int32): Boolean;
 begin
-  Result := AError = WSAETIMEDOUT;
+  Result := (AError = PLATFORM_ERR_TIMEDOUT) or (AError = WSAETIMEDOUT);
 end;
 
 function platform_socket_error_in_progress(const AError: Int32): Boolean;
 begin
-  { Winsock nonblocking connect typically returns WSAEWOULDBLOCK. }
-  Result := (AError = WSAEINPROGRESS) or (AError = WSAEWOULDBLOCK);
+  { Winsock nonblocking connect typically returns WSAEWOULDBLOCK → AGAIN. }
+  Result := (AError = PLATFORM_ERR_AGAIN) or
+    (AError = WSAEINPROGRESS) or (AError = WSAEWOULDBLOCK);
 end;
 
 function platform_socket_poll(const ASocket: TPlatformSocket;

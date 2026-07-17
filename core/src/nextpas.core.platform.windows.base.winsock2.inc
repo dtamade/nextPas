@@ -146,8 +146,9 @@ const
   IOC_IN   = DWORD($80000000);
   IOC_OUT  = DWORD($40000000);
   IOC_WS2  = DWORD($08000000);
-  FIONBIO  = DWORD(IOC_IN or $04 shl 16 or 126);
-  FIONREAD = DWORD(IOC_OUT or $04 shl 16 or 127);
+  { _IOW('f', 126, u_long) / _IOR('f', 127, u_long) — include IOC group letter }
+  FIONBIO  = DWORD($8004667E);
+  FIONREAD = DWORD($4004667F);
   SIO_GET_EXTENSION_FUNCTION_POINTER = DWORD(IOC_IN or IOC_OUT or IOC_WS2 or 6);
 
 type

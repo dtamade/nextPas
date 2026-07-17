@@ -676,7 +676,8 @@ type
 
 function WindowsSocketError: Int32; inline;
 begin
-  Result := platform_get_last_error;
+  { Winsock errors live in WSAGetLastError; map into PLATFORM_ERR_*. }
+  Result := platform_map_windows_error_code(DWORD(WSAGetLastError));
 end;
 
 function EnsureWinsockReady: Int32;
@@ -785,6 +786,7 @@ var
   LAddr: sockaddr_in;
   LLen: Int32;
 begin
+  Result := 0;
   AReadSocket := WINDOWS_INVALID_POLL_SOCKET;
   AWriteSocket := WINDOWS_INVALID_POLL_SOCKET;
   LListener := TSocket(WINDOWS_INVALID_POLL_SOCKET);
@@ -798,25 +800,43 @@ begin
     FillChar(LAddr, SizeOf(LAddr), 0);
     LAddr.sin_family := AF_INET;
     LAddr.sin_port := 0;
-    LAddr.sin_addr.s_addr := htonl($7F000001);
+    LAddr.sin_addr.s_addr := htonl(INADDR_LOOPBACK);
     if winsock_bind(LListener, @LAddr, SizeOf(LAddr)) <> 0 then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
     if winsock_listen(LListener, 1) <> 0 then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
 
     LLen := SizeOf(LAddr);
     if winsock_getsockname(LListener, @LAddr, @LLen) <> 0 then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
 
     LWrite := winsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if LWrite = TSocket(WINDOWS_INVALID_POLL_SOCKET) then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
     if winsock_connect(LWrite, @LAddr, SizeOf(LAddr)) <> 0 then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
 
     LRead := winsock_accept(LListener, nil, nil);
     if LRead = TSocket(WINDOWS_INVALID_POLL_SOCKET) then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
 
     AReadSocket := PtrUInt(LRead);
     AWriteSocket := PtrUInt(LWrite);
@@ -825,10 +845,8 @@ begin
 
     Result := WindowsSetSocketNonBlocking(AReadSocket);
     if Result <> 0 then
-      Exit(Result);
+      Exit;
     Result := WindowsSetSocketNonBlocking(AWriteSocket);
-    if Result <> 0 then
-      Exit(Result);
   finally
     if LRead <> TSocket(WINDOWS_INVALID_POLL_SOCKET) then
       closesocket(LRead);
@@ -964,7 +982,8 @@ begin
   if LSent = 1 then
     Exit(0);
   LErr := WindowsSocketError;
-  if LErr = WSAEWOULDBLOCK then
+  { WindowsSocketError returns PLATFORM_ERR_* (WSAEWOULDBLOCK → AGAIN). }
+  if LErr = PLATFORM_ERR_AGAIN then
     Exit(0);
   Result := LErr;
 end;
@@ -985,7 +1004,7 @@ begin
     if LRead = 0 then
       Exit(0);
     LErr := WindowsSocketError;
-    if LErr = WSAEWOULDBLOCK then
+    if LErr = PLATFORM_ERR_AGAIN then
       Exit(0);
     Result := LErr;
     Exit;

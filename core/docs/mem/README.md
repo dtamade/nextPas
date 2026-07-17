@@ -14,6 +14,8 @@ make lane-focused LANE=mem
 
 **Consumer audit（FIX CLOSED）**: [摘要](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) · [Findings](CONSUMER-AUDIT-FINDINGS-2026-07-17.md)。回归：`check_consumer_audit_contracts.sh`（guardrails source-contract）。
 
+**Steward 观测（2026-07-17，只读）**: [Inventory 可删清单](INVENTORY-AUDIT-2026-07-17.md) · [Consumer 热路径/unsized free](CONSUMER-OBSERVATION-2026-07-17.md) — **不删代码、不强制改 consumer**。
+
 ---
 
 ## 30 秒上手
@@ -307,8 +309,12 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 | SC3 | cross-thread free | 正确性 + 并发代价 |
 | SC4 | arena reset+reuse | 确定性生命周期 |
 | SC5 | long-run scavenge | LiveBytes / Released* |
+| SC6 | VirtualArena AST churn | 编译器式 bulk reclaim |
+| SC7 | LocalArena per-request | HTTP 式 p99 |
+| SC8 | sized vs unsized free | `FreeMem(ptr,size)` 税 |
+| SC9 | hot heap vs plugin IA | 双轨税（~8–9×） |
 
-最新数字与环境见 [SCORECARD.md](SCORECARD.md)。改 Growing/DefaultHeap 必跑：
+最新数字与环境见 [SCORECARD.md](SCORECARD.md)（RELEASE=1 基线 2026-07-17）。改 Growing/DefaultHeap 必跑：
 
 ```bash
 make focused FOCUS=core/tests/nextpas.core.mem/test_contract_matrix
@@ -362,10 +368,10 @@ end;
 |---|------|------|
 | S1 | 默认路径无聊且正确 | ✅ 双轨文档 + 决策树 + 反例 + guardrails |
 | S2 | 契约矩阵 | ✅ `test_contract_matrix`（RTL/Growing/DefaultHeap/Arena/Pool） |
-| S3 | Scorecard 可信 | ✅ SC1–SC7 脚手架 + RELEASE 基线 |
+| S3 | Scorecard 可信 | ✅ SC1–SC9 + RELEASE 基线（2026-07-17） |
 | S4 | 诊断零成本默认 | ✅ `NEXTPAS_MEM_DEBUG`（仅插件面） |
 | S5 | 上层注入吃 DefaultHeap | ✅ Growing IAllocator 根；**HTTP + compiler 产品面**；compiler 源改用另 lane |
-| S6 | Arena/Pool 延迟优势 | ✅ SC4；对照扩展中 |
+| S6 | Arena/Pool 延迟优势 | ✅ SC4 / SC6 / SC7 |
 | S7 | 小门面 | ✅ Tier-3 已出门面 |
 
 ---
@@ -379,12 +385,14 @@ end;
 | [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) | 时代 B 档案；**§3 Tier 仍权威** |
 | [API-GUIDE.md](API-GUIDE.md) | 选择决策树与误区 |
 | [ERROR-POLICY.md](ERROR-POLICY.md) | **错误模型冻结**（nil vs raise） |
-| [SCORECARD.md](SCORECARD.md) | SC1–SC7 权威性能 |
+| [SCORECARD.md](SCORECARD.md) | SC1–SC9 权威性能（RELEASE 基线） |
 | [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md) | DEBUG 链设计 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 分层与 owner |
 | [CONTRACT.md](CONTRACT.md) | 运行时契约 |
 | [FACADES-SURFACE.md](FACADES-SURFACE.md) | 门面白/黑名单 |
-| [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) | consumer-audit 收口摘要 |
+| [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) | consumer-audit 收口摘要（FIX CLOSED） |
+| [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) | Tier-3 / 无 consumer 可删清单（**未删**） |
+| [CONSUMER-OBSERVATION-2026-07-17.md](CONSUMER-OBSERVATION-2026-07-17.md) | unsized free / 插件面只读观测 |
 | [BENCHMARKS.md](BENCHMARKS.md) | 历史微基准（非 Ready 权威） |
 | [API.md](API.md) | 长参考；冲突时以 README/GUIDE 为准 |
 | [USABILITY-AUDIT.md](USABILITY-AUDIT.md) | 历史可用性长报告（SUPERSEDED） |

@@ -23,6 +23,8 @@ type
   WINBOOL = LongBool;
   {** @desc 布尔类型 *}
   BOOL = WINBOOL;
+  {** @desc Win32 BOOLEAN (1-byte). Do not confuse with BOOL/LongBool. *}
+  WINDOWS_BOOLEAN = Byte;
   {** @desc 句柄类型（不透明指针） *}
   HANDLE = Pointer;
   PHANDLE = ^HANDLE;

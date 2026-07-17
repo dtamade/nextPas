@@ -15,7 +15,7 @@
 - [CONTRACT.md](CONTRACT.md) — 运行时契约
 - [API-GUIDE.md](API-GUIDE.md) — 决策树
 - [BENCHMARKS.md](BENCHMARKS.md) — 历史基准
-- [SCORECARD.md](SCORECARD.md) — SC1–SC4 权威性能入口
+- [SCORECARD.md](SCORECARD.md) — SC1–SC9 权威性能入口
 - [DEBUG-WRAP-DESIGN.md](DEBUG-WRAP-DESIGN.md) — DEBUG 包装链（M2-5）
 - [USABILITY-SCORE.md](USABILITY-SCORE.md) — **权威**可用性评分（主线 CLOSED）
 - [USABILITY-AUDIT.md](USABILITY-AUDIT.md) — 历史可用性长报告（SUPERSEDED）
