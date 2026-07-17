@@ -1,15 +1,17 @@
 # Atomic & Lockfree — Ready / Horizon-2 状态
 
-> **Status**: **H2 complete**（base: R0–R7 + RC Ready；Horizon-2 H2-0…H2-6 landed）
+> **Status**: **H2 complete / Maintenance**（base: R0–R7 + RC Ready；Horizon-2 H2-0…H2-6 landed）
 > **Date**: 2026-07-17
 > **Owner**: atomic-lockfree lane
 > **Scope**: `nextpas.core.atomic` (L0) + `nextpas.core.lockfree` (L1)
 
 Mainline stages **R0–R7 and RC Ready close-out are complete**.
 **Horizon-2 (H2-0…H2-6) is complete** — see [`roadmap-h2.md`](roadmap-h2.md).
-**Current execution line**: **Maintenance** (consumer bugs, contract amendments, opt-in R8 research only).
-**R8** (NUMA / TSX / TLA+) remains **opt-in research** and is **not** a default production item.
-Do **not** invent an R9; H2 was the numbered successor for consistency / evidence / consumer work.
+**Current execution line**: **Maintenance** (T1/atomic bugfix, contract amendments, verify-t1 hygiene, docs sync).
+**H3**: charter only — see [`roadmap-h3.md`](roadmap-h3.md); **H3 not started** / **not auto-started**.
+**R8** research pack close-out (docs + optional `verify-r8`): see [`r8-research-status.md`](r8-research-status.md).
+R8 remains **opt-in research** and is **not** a default production item.
+Do **not** invent an R9; next production-oriented horizon is **H3** (charter only until authorized).
 
 Archive: `archive/atomic-lockfree-h2-complete-20260717` (H2-1…H2-6 land HEAD `d93780c27`);
 close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
@@ -23,10 +25,11 @@ close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
 | **T1 runtime core** (lockfree facade) | **Ready-for-consumer** | Unmanaged elements; `Close → join → Free`; contract + tests aligned; H2-1 Deque `Try*Ex` parity landed |
 | **atomic** | **Ready-for-consumer** | Canonical `atomic_*` / `TAtomic*`; legacy CAS documented, not preferred (H2-3) |
 | **T2 concurrent containers** | **Available, not a unified production contract** | H2-2 maturity tiers documented; **not** default facade |
-| **T3 / research** | Experimental | RTM / NUMA / formal models — direct import only |
+| **T3 / research** | Experimental | RTM / NUMA / formal models — direct import only; R8 status in [`r8-research-status.md`](r8-research-status.md) |
 
 Authoritative contract: [`CONTRACT.md`](CONTRACT.md). Product entry: [`README.md`](README.md).
 R-line map: [`roadmap.md`](roadmap.md). **H2 charter (complete)**: [`roadmap-h2.md`](roadmap-h2.md).
+**H3 charter only (not started)**: [`roadmap-h3.md`](roadmap-h3.md).
 
 ---
 
@@ -44,6 +47,18 @@ R-line map: [`roadmap.md`](roadmap.md). **H2 charter (complete)**: [`roadmap-h2.
 | **H2 close-out** | READY/roadmap + archive tag | **done** | this document · `archive/atomic-lockfree-h2-closeout-20260717` |
 
 Details, deliverables, non-goals, and acceptance: [`roadmap-h2.md`](roadmap-h2.md).
+
+---
+
+## Horizon-3 — **charter only / NOT started**
+
+| Item | Status |
+|------|--------|
+| H3 charter | [`roadmap-h3.md`](roadmap-h3.md) — docs only |
+| H3-1…H3-4 implementation | **not authorized** / **not auto-started** |
+| Default production line | still **Maintenance** |
+
+H3 does **not** start because docs landed. Separate authorization is required for H3-1.
 
 ---
 
@@ -80,7 +95,40 @@ Related earlier landings:
 3. **Major changes** (Closed semantics, expand default facade to T2, promote R8 to production, delete legacy CAS): stop, revise roadmap, ask.
 4. Prefer path-limited landings; do not raw-merge long-lived lane history into `main`.
 5. Keep artifact hygiene: no `.o`/`.ppu`/build noise in the source tree; `make hygiene` before land.
-6. New feature waves need an explicit charter (do not silently extend H2 numbering).
+6. New feature waves need an explicit charter (do not silently extend H2 numbering). H3 charter exists as docs only — see below.
+
+---
+
+## Post-H2 maintenance checklist
+
+### Allowed without new charter
+
+- T1 / atomic **bugfix**
+- **CONTRACT** amendments for **clarity** (no silent semantic flip)
+- **`verify-t1` hygiene** (green gate, isolation, hygiene)
+- **Docs sync** (README / api-ref / selection-guide / READY / roadmap pointers)
+
+### Requires new charter (H3 or explicit opt-in)
+
+- New **production features**
+- **Cross-module consumer wiring** (async / thread / net, etc.)
+- **T2 production contract subsets** (Guarded Close/managed/progress for 1–2 types)
+- **R8 production promotion**
+
+Charter (docs only, **not auto-started**): [`roadmap-h3.md`](roadmap-h3.md).
+
+### Still forbidden without major-change discussion
+
+- **Closed** semantics change
+- Expand **default facade** to T2
+- **Delete legacy CAS**
+- **Invent R9**
+
+### Opt-in research
+
+- R8 research pack status / close-out: [`r8-research-status.md`](r8-research-status.md)
+- Formal models: [`formal/README.md`](formal/README.md)
+- Optional gate: `make -C core/tests/nextpas.core.lockfree verify-r8` (does **not** replace `verify-t1`)
 
 ---
 
@@ -101,6 +149,12 @@ Optional consumer example:
 
 ```bash
 make -C core/examples/nextpas.core.lockfree/t1_close_join_free clean run
+```
+
+Optional R8 research gate (does not replace T1):
+
+```bash
+make -C core/tests/nextpas.core.lockfree verify-r8
 ```
 
 ---
@@ -138,11 +192,15 @@ Do **not** bring the following into mainline commits:
 | Doc | Role |
 |-----|------|
 | [`roadmap-h2.md`](roadmap-h2.md) | **H2 charter (complete)** |
+| [`roadmap-h3.md`](roadmap-h3.md) | **H3 charter only** (not started; not auto-started) |
+| [`r8-research-status.md`](r8-research-status.md) | **R8 honest status** / research pack close-out (opt-in) |
+| [`formal/README.md`](formal/README.md) | TLA+ models how-to (model-only without TLC) |
 | [`CONTRACT.md`](CONTRACT.md) | Runtime / API contract truth |
-| [`roadmap.md`](roadmap.md) | R0–R7 record + pointer to H2 complete / Maintenance |
+| [`roadmap.md`](roadmap.md) | R0–R7 record + Maintenance; H3/R8 pointers |
 | [`consumer-audit.md`](consumer-audit.md) | R7 uses / Close / legacy CAS audit |
 | [`README.md`](README.md) | Module entry + T1 matrix |
 | [`../atomic/README.md`](../atomic/README.md) / [`../atomic/CONTRACT.md`](../atomic/CONTRACT.md) | Atomic entry + contract |
 | [`selection-guide.md`](selection-guide.md) | Consumer selection tree |
 | [`api-reference.md`](api-reference.md) | API summary (sync when API changes) |
 | [`bench-envelope.md`](bench-envelope.md) | H2-4 reproducible bench envelope |
+| [`long-term-roadmap.md`](long-term-roadmap.md) | R8 historical research plan (see r8-research-status for honesty) |
