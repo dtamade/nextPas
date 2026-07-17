@@ -1,79 +1,64 @@
 # SIMD 模块工作方法论
 
-> 最后更新: 2026-07-06
+> 最后更新: 2026-07-17
 
 ## 核心原则
 
-**按图施工，文档驱动，增量验证**
+**按图施工，文档驱动，增量验证**  
+主线图: [roadmap.md](roadmap.md)。当前阶段清单: [plan.md](plan.md)。
 
 ## 工作流程
 
-### 阶段 1: 全面调研
-- 了解所有目标平台和指令集
-- 检查现有代码状态
-- 识别遗漏和问题
+1. **对齐路线图** — 确认当前 phase、非目标与验收
+2. **最小调研** — 只读与本 phase 相关的源/契约/测试
+3. **增量实施** — 一个逻辑单元一个 commit；禁止假 wrapper
+4. **验证** — 用 roadmap §6 清单；触及公共 API 后以 api-coverage 为硬门（Phase 21 起）
+5. **收口** — 更新 roadmap 状态行 + plan 清单 + 必要 design；Ready 汇报
 
-### 阶段 2: 系统化分析
-- 逐个检查每个平台/指令集的状态
-- 记录问题和改进点
-- 评估优先级和资源
-
-### 阶段 3: 优先级排序
-- 根据实际需求排序
-- 考虑资源约束
-- 确定实施顺序
-
-### 阶段 4: 增量实施
-- 分阶段实施改进
-- 每个阶段有明确目标
-- 逐步推进，不跳跃
-
-### 阶段 5: 持续验证
-- 每个阶段完成后验证效果
-- 测试覆盖所有改动
-- 记录验证结果
+重大范围变更：先改 roadmap，再动代码。
 
 ## 文档要求
 
 ### 必需文档
-1. **路线图** (`roadmap.md`) - 长期规划和阶段目标
-2. **计划** (`plan.md`) - 当前阶段详细任务
-3. **设计** (`architecture.md`) - 架构设计和决策
-4. **进度** (`progress.md`) - 实施进度和验证结果
+1. **路线图** (`roadmap.md`) — 权威主线（目标/交付/依赖/优先级/验收）
+2. **计划** (`plan.md`) — 当前阶段薄任务清单
+3. **设计** (`architecture.md` / `design/*`) — 稳定或专项设计事实
+4. **入口** (`README.md`) — 现状摘要与索引
 
 ### 文档更新规则
-- 路线图：每阶段结束后更新
-- 计划：每任务开始前更新
-- 设计：每决策后更新
-- 进度：每完成一项任务后更新
+- 路线图：每 phase 收口更新状态；主线变更须显式修订
+- 计划：阶段切换时重写清单
+- 设计：边界/所有权变化时更新
+- **不**维护独立 `progress.md`；进度以 roadmap 状态 + git 历史 + Ready 汇报为准
 
 ## 质量保证
 
 ### 验证清单
 - [ ] 代码编译通过
-- [ ] 测试全部通过
-- [ ] 性能无回归
-- [ ] 文档更新完整
-- [ ] 覆盖率不降低
+- [ ] 本模块 focused / 相关 opt-in gate 通过
+- [ ] `make hygiene` 通过
+- [ ] 性能无未记录的回退
+- [ ] 文档与代码同步（尤其验证数字与「进行中」表）
+- [ ] 公共 API 变更后 coverage 契约通过
 
 ### 禁止事项
-- ❌ 跳过调研直接实施
+- ❌ 跳过路线图直接大改
 - ❌ 未验证就进入下一阶段
-- ❌ 文档与代码不同步
-- ❌ 未记录决策和理由
+- ❌ 文档与代码不同步 / 谎报全绿
+- ❌ 用 scalar forwarder 伪装 backend 所有权
+- ❌ raw-merge 长期 lane 到 main
 
 ## 工具支持
 
-### 必需工具
-- `make -C core test` - 运行测试
-- `make -C core/benchmarks build-and-bench` - 运行基准
-- `grep` - 搜索代码
-- `git` - 版本控制
+### 必需入口
+- `make focused FOCUS=core/tests/nextpas.core.simd`
+- `make -C core/tests/nextpas.core.simd neon-optin-focused`
+- `make -C core/tests/nextpas.core.simd api-coverage-contract`
+- `make hygiene`
 
 ### 可选工具
-- `valgrind` - 内存检查
-- `perf` - 性能分析
-- `heaptrack` - 内存分析
+- 模块内 `bench_*` / 仓库 benchmark 入口
+- `valgrind` / `perf` / `heaptrack`
 
 ## 沟通规范
 

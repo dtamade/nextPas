@@ -1,357 +1,263 @@
-# nextpas.core.simd 路线图和计划任务
+# nextpas.core.simd 开发路线图
 
-> 最后更新: 2026-07-17 (Wave B：NEON Mask → SharedMask* + Memory 缺口契约)
+> 最后更新: 2026-07-17  
+> 权威性: **本文件是 forward-looking 主线**。历史 Phase 1–19 / Wave B 的细节见下方「已完成归档」；活动设计见 `design/`；过期实施草稿见 `plans/` 与旧 plan 文件（仅存档）。
 
-## 当前状态
+## 0. 文档权威图
 
-### 平台支持矩阵
+| 文档 | 角色 | 更新节奏 |
+|------|------|----------|
+| **[roadmap.md](roadmap.md)**（本文件） | 分阶段目标、优先级、验收、下一步主线 | 每 wave/phase 收口更新 |
+| [README.md](README.md) | 模块入口、现状摘要、文档索引 | 与真相面同步 |
+| [architecture.md](architecture.md) / [dispatch.md](dispatch.md) / [backends.md](backends.md) | 稳定架构事实 | 边界变化时更新 |
+| [api.md](api.md) | 公开 API 参考 | 公共 API 变化时更新 |
+| [design/](design/) | 活动/已完成设计说明 | 大设计收口时更新 |
+| [plan.md](plan.md) | **当前活动阶段**任务清单（薄；细节指向本文件） | 开工/收口更新 |
+| [methodology.md](methodology.md) | 协作与验证纪律 | 很少改 |
+| `plans/`、`PHASE11_*`、`SIMD_*_PLAN.md`、`file-merge-plan.md` | **历史/专项存档**，不再当主线 | 不主动扩写 |
 
-| 平台 | 架构 | 指令集 | Backend | Intrinsics | 状态 |
-|------|------|--------|---------|------------|------|
-| x86/x86_64 | x86 | SSE | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | SSE2 | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | SSE3 | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | SSSE3 | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | SSE4.1 | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | SSE4.2 | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | AVX | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | AVX2 | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | AVX-512 | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | FMA3 | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | AES-NI | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | SHA | ✅ | ✅ | 稳定 |
-| x86/x86_64 | x86 | MMX | ✅ | ✅ | 稳定 |
-| ARM/AArch64 | ARM | NEON | ✅ | ✅ | 稳定 (需 opt-in) |
-| ARM/AArch64 | ARM | SVE | ❌ | ✅ | 实验性 |
-| ARM/AArch64 | ARM | SVE2 | ❌ | ✅ | 实验性 |
-| RISC-V | RISC-V | RVV | ✅ | ✅ | 实验性 |
-| LoongArch | LoongArch | LASX | ❌ | ✅ | 实验性/stub |
-| WebAssembly | WASM | SIMD128 | ❌ | ❌ | 未支持 |
-| POWER | POWER | VSX | ❌ | ❌ | 未支持 |
-| MIPS | MIPS | MSA | ❌ | ❌ | 未支持 |
+**纪律**：后续开发以本路线图主线推进；重大范围变更先修订本节「活动路线」再动刀。
 
-### 已完成 (✅)
+---
 
-| 目标 | 状态 | 说明 |
+## 1. 现状盘点 (2026-07-17, HEAD `8403ebc04`)
+
+### 1.1 定位
+
+`nextpas.core.simd` 是跨平台 SIMD 运行时：嵌套 dispatch 表 + backend register + 标量 baseline + 公共 facade。  
+**唯一实现层**在 `nextpas.core.*`；x86 最深，NEON/RVV 为覆盖扩展面。
+
+### 1.2 架构真相（已稳定）
+
+```
+Facade (flat public API)
+  → Dispatch (nested: CoreVectors / Batch* / Memory / Mask)
+    → Backend register (SSE2…AVX512 / NEON / RVV / Scalar)
+      → leaves (asm or Pascal)
+```
+
+- Phase 19：dispatch **路径级**模块化完成（嵌套组 + residual 契约）
+- Wave B：NEON Mask → portable `SharedMask*` + `scMaskedOps`；Memory 缺口契约锁定
+- Public ABI 字段名保持 **flat**（不随内部嵌套改名）
+
+### 1.3 后端覆盖矩阵（槽所有权，非“能不能跑”）
+
+| 后端 | CoreVectors | Memory | Mask | BatchF32/F64/Integer | 能力位要点 |
+|------|-------------|--------|------|----------------------|------------|
+| Scalar | 全 baseline | 全 | 全 | 全 | 参考实现 |
+| SSE2/AVX2 链 | 深 | 深 | SharedMask + 本地 PopCount | 深 | MaskedOps 常开 |
+| AVX512 | 宽向量深 | 部分/继承 | 部分 SharedMask | 宽批 | FMA/Shuffle 等按可用性 |
+| **NEON** | 大量（~332 绑定；无 asm 时 scalar 继承） | **9/15**（6 槽刻意 scalar） | **20/20 SharedMask** | **0（全继承 scalar）** | `scMaskedOps` 常开；Integer/FMA/Shuffle 跟 vector-asm |
+| **RVV** | 大量（~412） | **0（全 scalar）** | **20/20 本地** | **0（全 scalar）** | MaskedOps 跟 vector-asm；实验性 |
+| LASX/WASM/VSX/MSA | — | — | — | — | 🔒 FPC/编译器阻塞 |
+
+**NEON Memory 刻意缺口（契约锁定，禁止假 wrapper）**  
+`DiffRange` / `Copy` / `Fill` / `Reverse` / `BytesIndexOf` / `Utf8Validate`
+
+### 1.4 验证真相
+
+| Gate | 状态 | 说明 |
 |------|------|------|
-| G1: 核心运算完备性 | ✅ 100% | F32/F64/Integer batch 操作 |
-| G2: 神经网络推理层 | ✅ 100% | 47 个函数 |
-| G3: 质量保障 | ✅ 100% | 审计/测试/内存 |
-| G4: 文档与可发现性 | ✅ 100% | 文档体系 |
-| G5: 性能验证与基准 | ✅ 100% | 基准测试 |
-| G6: 文本/内存 SIMD 加速 | ✅ 100% | MemEqual, Utf8Validate |
-| G7: GEMM 微内核 | ✅ 100% | 矩阵乘法 |
-| G8: FFT SIMD 化 | ✅ 100% | 信号处理 |
-| G9: RTL 依赖清零 | ✅ 100% | 无 FPC RTL 依赖 |
-| G10: 高级计算 | ✅ 100% | parallel/quant/NEON |
-| G11: SIMD 深化 | ✅ 100% | INT8 dot/RealFft |
-| G12: 算法层 | ✅ 100% | Winograd/Attention/Strassen |
-| G13: SIMD contract qualification | ✅ 100% | 合规路线图 |
-| G14: 维护可持续性 | ✅ 100% | 维护体系 |
-| G15: 代码组织瘦身 | ✅ 100% | 可维护性 |
-| G19: SysUtils 残留清理 | ✅ 100% | 77→0 |
-| G20: Gather/Scatter 正式化 | ✅ 100% | 正式 API |
-| Phase 1: 编译期快速路径 | ✅ 100% | 静态分派宏 (SIMD_STATIC_*) |
-| Phase 2: FP 快速路径 + IEEE 754 | ✅ 100% | SSE2/AVX2 真实 SIMD 指令 |
-| Phase 3: 文件合并 + 命名规范化 | ✅ 100% | 214→88 文件 |
-| Phase 4: 平台扩展 | ✅ 100% | LoongArch/PPC64 QEMU 验证 |
-| Phase 5: Highway 静态调度 | ✅ 100% | SIMD_STATIC_BACKEND 支持 |
-| Phase 6: 类型覆盖扩展 | ✅ 100% | 全类型运算符 |
-| Phase 7: 批量操作深度优化 | ✅ 100% | SSE2/AVX2/AVX512 循环展开 |
-| Phase 8: 基准测试修正 | ✅ 100% | SIMD vs Scalar 对比框架 |
-| Phase 9: 宽向量优化 | ✅ 100% | AVX-512 批量操作 |
-| Phase 10: 内存操作优化 | ✅ 100% | SimdMemCopy/Fill/Compare |
-| SSE2 GEMM 微内核 | ✅ 100% | 4×4 F32 + 2×2 F64 运行时分派 |
-| 信号处理扩展 | ✅ 100% | Kaiser 窗 + 滤波器 + 信号生成 |
-| Phase 11: 矩阵分解扩展 | ✅ 100% | QR/Cholesky/SVD + 秩 + 伪逆 |
-| Phase 11: 信号处理高级功能 | ✅ 100% | STFT/Spectrogram/Mel/MFCC |
-| Phase 12: 性能优化 + 静态调度 | ✅ 100% | 8x YMM展开 + 超越函数静态调度 |
-| Phase 13: F64 超越函数补全 | ✅ 100% | 11个F64超越函数完整覆盖 |
-| Phase 14: F64 批量操作扩展 | ✅ 100% | 17个F64扩展操作 (Axpy/Rcp/Rsqrt/Tan/Sign/Fract/Mod/Pow/Lerp/ReLU/AbsDiff/Norm/LinearReLU/Step/Smoothstep/Atan2/Hypot) |
-| Phase 15: SSE2 F64 批量操作 SIMD | ✅ 100% | 17个SSE2 SIMD实现 (2x XMM展开, 4 doubles/iteration) |
-| Phase 16: AVX2 F64 批量操作 SIMD | ✅ 100% | 17个AVX2 SIMD实现 (2x YMM展开, 8 doubles/iteration) |
-| Phase 17: SSE2 F64 超越函数 SIMD | ✅ 100% | 10个SSE2 SIMD实现 (Sin/Cos/Exp/Log/Log2/Log10/Ceil/Floor/Round/Trunc) |
-| Phase 18: AVX2 F64 超越函数 SIMD | ✅ 100% | 10个AVX2 SIMD实现 (Sin/Cos/Exp/Log/Log2/Log10/Ceil/Floor/Round/Trunc) |
-| Phase 19: Dispatch Table 模块化 | ✅ 100% | Phase 1–5 嵌表完成；Phase 6 死草稿/short-name 清理 + 嵌套路径 residual 契约 + NEON/RVV 与 x86 **路径级**对齐审计（槽级覆盖差距靠 baseline 继承，不在本 phase 扩 native） |
-| Wave B: NEON Mask/Memory 覆盖 | ✅ 100% | SharedMask 可移植 + NEON 20 Mask 槽绑定 + `scMaskedOps`；Memory 6 槽缺口刻意 scalar 继承（契约锁定） |
-
-### 进行中 (⚠️)
-
-| 目标 | 状态 | 说明 |
-|------|------|------|
-| G16: RISC-V V 后端 | Phase 1-2 ✅ | Phase 3 需硬件 |
-| G17: Dispatch 开销优化 | Phase 1-3 ✅ | Phase 4: 硬件测量 |
-| G18: ArrayAdd 加速比 | ✅ 达标 | 5.67x @1024 elements (AVX2) |
-| G21: NEON AArch64 覆盖度 | ✅ 100% | 558 槽位全覆盖 |
-
-### 延迟项 (🔒 等待 nextpas 编译器)
-
-| 目标 | 状态 | 说明 |
-|------|------|------|
-| LoongArch LASX Backend | 🔒 STUB | FPC 无 LASX 内联汇编 |
-| WebAssembly SIMD | 🔒 STUB | FPC WASM32 无 SIMD128 |
-| POWER VSX | 🔒 STUB | 需 nextpas 后端 |
-| MIPS MSA | 🔒 STUB | FPC mips64el InternalError |
-
-### 下一步工作 (真实 backlog)
-
-| 目标 | 优先级 | 说明 |
-|------|--------|------|
-| （Wave B 已闭环） | — | NEON Mask 已 SharedMask 对齐；后续若补 NEON Batch*/Memory native 或 RVV Memory native，属独立后端覆盖任务 |
-| G16 RVV Phase 3 | P2 | 需真实 RISC-V 硬件证据 |
-| G17 Phase 4 | P2 | dispatch 开销硬件测量 |
-| 编译器集成 | P3 | nextpas 编译器 SIMD 内建支持（长期） |
-| LASX/WASM/VSX/MSA | 🔒 | 等待 nextpas 编译器后端 |
-
-> math 公开 `Batch*F64` 已在 2026-07-17 落地（`Batch*F64` 薄封装），不再列 backlog。
-
-> Phase 7–18 已完成，不再列在“下一步”。细节见上方“已完成”表。
-
-## 问题分析
-
-### 问题 1: 基准测试不公平 (已发现)
-
-**现状**: 标量基准被 FPC 自动向量化，导致 SIMD 看起来比标量慢
-**原因**: FPC `-O2`/`-O3` 会将 `for i := 0 to 3 do Result.f[i] := a.f[i] + b.f[i]` 编译为 SSE2 指令
-**影响**: 单向量操作基准 0.64x (实际 SIMD 并不慢，是标量已经很快)
-**解决**: 需要修正基准测试方法
-
-### 问题 2: 批量操作优化空间
-
-**现状**: ArrayAddF32 2.24x 加速比 (16KB)
-**原因**: 循环展开、预取、对齐优化不足
-**影响**: 批量操作性能可进一步提升
-**解决**: 深度优化批量操作循环
-
-### 问题 3: 平台覆盖受限
-
-**现状**: x86/ARM/RISC-V 已支持，LoongArch/PPC64 已验证，MIPS/WASM 延迟
-**原因**: FPC 后端限制，需等待 nextpas 编译器
-**影响**: 跨平台兼容性受限
-**解决**: 等待 nextpas 编译器实现对应后端
-
-## 路线图
-
-### Phase 7: 批量操作深度优化 ✅ (2026-07-06 完成)
-
-**目标**: 优化批量操作性能，充分发挥 SIMD 优势
+| `make focused FOCUS=core/tests/nextpas.core.simd` | ✅ | 1740 passed（2026-07-17） |
+| `make -C core/tests/nextpas.core.simd neon-optin-focused` | ✅ | 1740 passed |
+| `make hygiene` | ✅ | pass |
+| `api-coverage-contract` | ❌ | missing≈27 / thin≈26（**真实质量债**，非文档笔误） |
+| RVV 真机 Phase 3 | ⏸ | 需 RISC-V 硬件证据 |
+| 性能部分目标 | ⚠️ | 如 ArrayMulF32 等仍低于历史目标线（见 §5） |
+
+### 1.5 文档问题（本次整理要解决）
 
-**已完成**:
-1. ✅ ArrayAddF32 循环展开优化
-   - SSE2: 4x 展开 (16 elements/iter)
-   - AVX2: 8x 展开 (32 elements/iter) + 预取
-   - 非临时存储: AVX2 NT 路径 (>= 4096 elements)
+1. 路线图几乎全是 **已完成清单**，缺少可执行「下一步」
+2. `plan.md` 停在 Phase 10 时代，与代码脱节
+3. 多份旧 plan（PHASE11 / DEEPENING / TODO_CLEANUP / file-merge）与主线重复
+4. README 验证数字 / api-coverage 状态过时
+5. methodology 引用不存在的 `progress.md`
+
+---
+
+## 2. 战略目标（长期）
+
+1. **正确性优先**：标量 baseline 语义为金标准；backend override 必须有 parity/source-contract
+2. **所有权诚实**：无 dead wrapper、无假 NEON*/RVV* 绑定；缺口靠 baseline 继承并契约锁定
+3. **x86 深、非 x86 可测**：NEON/RVV 在 opt-in 与契约层可回归；真机证据单独 wave
+4. **质量门可红可修**：不靠文档撒谎；红点进入路线图并闭环
+5. **不 raw-merge 长期 lane**：math-simd worktree 纪律不变
+
+---
+
+## 3. 活动路线（Phase 20+）— 待确认后执行
+
+> 下列阶段是 **可执行主线**。确认后按优先级推进，不依赖反复催促；重大变更再改本表。
+
+### Phase 20 — 文档与真相面收口  【P0 · 当前】
+
+| 项 | 内容 |
+|----|------|
+| **目标** | 单一权威路线图；入口/计划/索引与代码一致；历史文档降级为存档 |
+| **交付物** | 本文件结构；README 索引与验证数字；`plan.md` 改为「当前阶段指针」；methodology 去掉失效引用；旧 plan 文件标注 archived |
+| **依赖** | 无代码依赖 |
+| **验收** | 新人只读 README + roadmap 能回答：现状 / 下一步 / 跑什么 gate；无互相矛盾的「进行中」表 |
+
+### Phase 21 — 质量门修复（api-coverage）  【P0】
+
+| 项 | 内容 |
+|----|------|
+| **目标** | `api-coverage-contract` 变绿（或明确降级策略经确认） |
+| **交付物** | 补齐 missing≈27 公共 API 测试引用；thin 符号达到 `min_refs=2`；必要时刷新 checklist |
+| **依赖** | Phase 20 完成（避免文档再谎报绿） |
+| **验收** | `make -C core/tests/nextpas.core.simd api-coverage-contract` 通过；`api-coverage-focused` 可选加强 |
+| **非目标** | 不为刷绿删除公共 API；不降低 strict 标准除非单独 ADR |
+
+### Phase 22 — NEON Memory 真叶  【P1】
+
+| 项 | 内容 |
+|----|------|
+| **目标** | 关闭 6 个 Memory 缺口中 **有真实 NEON 收益** 的槽；禁止标量 forwarder |
+| **候选槽** | 优先：`Copy` / `Fill` / `DiffRange`；次优：`Reverse` / `BytesIndexOf` / `Utf8Validate`（按实现成本与收益排序，可拆 22a/22b） |
+| **交付物** | AArch64 asm leaves + register 绑定 + source-contract 从「必须 scalar」翻转为「必须 backend-owned + 无死包装」+ 语义 parity |
+| **依赖** | Phase 21 不硬阻塞，但建议质量门先稳；NEON asm 仍受 FPC trunk / opt-in 约束 |
+| **验收** | focused + neon-optin 绿；对应槽 pointer ≠ scalar；契约更新；hygiene 绿 |
+| **非目标** | 不为覆盖率写 `NEONMemX := ScalarMemX` 包装 |
+
+### Phase 23 — NEON Batch* 最小可用面  【P1】
+
+| 项 | 内容 |
+|----|------|
+| **目标** | 在 ARM 上提供与 x86 对齐的 **高频** Batch 路径（非整表抄写） |
+| **交付物** | 至少：`BatchF32` 代表集（ArrayAdd/Sub/Mul/… 按 SSE2 优先级裁剪）+ register + parity smoke；能力位策略写清 |
+| **依赖** | Phase 22 可并行，但建议 Memory 叶稳定后再扩 Batch，避免 register/inc 冲突面过大 |
+| **验收** | neon-optin 契约 + 语义 smoke；未实现槽继续 scalar 继承并有注释/契约 |
+| **非目标** | 一次填满全部 BatchF64/BatchInteger |
+
+### Phase 24 — RVV 覆盖诚实化  【P2】
+
+| 项 | 内容 |
+|----|------|
+| **目标** | RVV Memory/Batch 要么真实现，要么文档+契约明确「故意 scalar」；Phase 3 真机证据单独 gate |
+| **交付物** | 24a 文档/契约矩阵对齐现状；24b（可选）1–N 个 Memory 或 Batch 真叶；24c 真机证据包（硬件可用时） |
+| **依赖** | 真机证据依赖硬件；软件契约不依赖 |
+| **验收** | opt-in/compile smoke 不谎报 native；有硬件时补充性能/正确性日志路径 |
+| **非目标** | 无硬件时假装 G16 完成 |
+
+### Phase 25 — 性能与分派开销  【P2】
+
+| 项 | 内容 |
+|----|------|
+| **目标** | 可复现的 SIMD vs 真标量基准；关闭明显未达标热点 |
+| **交付物** | 基准方法说明（防 FPC 自动向量化污染）；`ArrayMulF32` 等热点优化或目标修订；G17 Phase 4 分派开销测量记录 |
+| **依赖** | Phase 21 建议先完成（避免测到未覆盖 API） |
+| **验收** | 文档中有可复现命令 + 主机/flags/数字；目标变更须写明原因 |
+
+### Phase 26 — 编译器集成（长期）  【P3 · 阻塞】
+
+| 项 | 内容 |
+|----|------|
+| **目标** | nextpas 编译器内建 SIMD 类型/运算符/自动向量化 |
+| **交付物** | 跨 lane（compiler + simd）；不在本 worktree 单独闭环 |
+| **依赖** | nextpas 编译器 SIMD 内建能力 |
+| **验收** | 编译器侧测试 + 与 runtime facade 共存策略文档 |
+
+### Phase 27+ — 新 ISA 后端  【🔒 阻塞】
 
-2. ✅ ArrayMulF32/ArrayDivF32 优化
-   - SSE2: 4x 展开
-   - AVX2: 8x 展开 + 预取
+LASX / WASM SIMD128 / VSX / MSA：保持 stub；启用条件 = nextpas/FPC 后端可用 + QEMU/真机验证流程。
 
-3. ✅ 内存对齐优化
-   - 使用 movups/movupd (unaligned load/store)
-   - 自动处理对齐和非对齐数据
+---
 
-4. ✅ 预取策略
-   - AVX2: prefetchnta 预取下一批数据
-   - 阈值: 4096 elements 启用预取
+## 4. 推荐执行顺序
 
-**验证**:
-- 测试: 1645 tests 全部通过
-- 实现: SSE2/AVX2 backend 完整覆盖
+```
+P20 文档真相面 ──► P21 api-coverage 绿
+                      │
+          ┌───────────┴───────────┐
+          ▼                       ▼
+   P22 NEON Memory 真叶    P25 性能/分派（可后置）
+          │
+          ▼
+   P23 NEON Batch 最小面
+          │
+          ▼
+   P24 RVV 诚实化 / 真机
+          │
+          ▼
+   P26 编译器（阻塞） / P27 新 ISA（阻塞）
+```
 
-### Phase 8: 基准测试修正 ✅ (2026-07-06 完成)
+**默认下一刀（确认后）**：收完 Phase 20 → 立即 Phase 21。
 
-**目标**: 修正基准测试方法，公平比较 SIMD vs 标量
+---
 
-**已完成**:
-1. ✅ 基准测试框架
-   - batch_bench.pas 已实现 SIMD vs Scalar 对比
-   - 使用 GetNanoTime 高精度计时
-   - Warmup + 多次迭代取平均
+## 5. 性能参考线（历史目标，需 Phase 25 复核）
 
-2. ✅ SIMD vs 手写标量基准
-   - RunBench() 对比 dispatch vs scalar
-   - 自动计算加速比
+| 操作 | 历史目标 | 文档记载现状 | 备注 |
+|------|----------|--------------|------|
+| ArrayAddF32 @1024 | 6x+ | ~5.67x | 接近 |
+| ArrayAddF64 @1024 | 6x+ | ~6.08x | 达标 |
+| ArrayMulF32 @16KB | 4x+ | ~2.5x | 未达标 |
+| MemEqual @4KB | 4x+ | ~4.4x | 达标 |
+| 超越函数批处理 | 高倍率 | 多数超额 | 保留回归 |
 
-3. ✅ 吞吐量基准
-   - 测量 ns/elem (每元素纳秒)
-   - 批量操作吞吐量
+基准比较必须使用 **不可被 FPC 自动向量化污染** 的标量对照（见既有 batch_bench 讨论）。
 
-**验证**:
-- 基准测试: SIMD vs Scalar 对比完整
-- 文档: 性能数据已记录
+---
 
-### Phase 9: 宽向量优化 ✅ (2026-07-06 完成)
+## 6. 通用验收清单（每个 phase 收口）
 
-**目标**: 优化 512-bit 批量操作
+1. worktree clean（仅任务文件）
+2. `git diff --check` 通过
+3. `make hygiene` 通过
+4. 本模块 focused gate：`make focused FOCUS=core/tests/nextpas.core.simd`
+5. 触及 NEON 契约时：`neon-optin-focused`
+6. 触及公共 API 时：`api-coverage-contract`（Phase 21 后应为硬门）
+7. 文档：roadmap 状态行 + README 数字 + 相关 design/契约同步
+8. 提交：一个逻辑单元；message 说明「改了什么 / 为什么」
+9. 汇报：Ready / Blocked / Needs Review（跨模块时）
 
-**已完成**:
-1. ✅ AVX-512 批量操作
-   - AVX512ArrayAddF32: 4x zmm 展开 (64 elements/iter)
-   - AVX512ArrayMulF32: 同样优化
-   - prefetcht0 预取
+---
 
-2. ✅ 256-bit 批量操作优化
-   - AVX2: 8x ymm 展开 (32 elements/iter)
-   - prefetchnta 预取 + NT 存储
+## 7. 已完成归档（压缩；细节不重复展开）
 
-3. ✅ 向量宽度自动选择
-   - 运行时检测 CPU 能力
-   - 动态选择 Scalar/SSE2/AVX2/AVX-512
+### 目标类（G）
 
-**验证**:
-- 测试: 1645 tests 全部通过
-- 实现: 完整的多宽度 SIMD 支持
+G1–G15、G18–G21 已完成或达标；G16 RVV 软件 Phase 1–2 完成、Phase 3 待硬件；G17 软件 Phase 1–3 完成、Phase 4 待测量。
 
-### Phase 10: 内存操作优化 ✅ (2026-07-06 完成 + 优化)
+### 阶段类（Phase）
 
-**目标**: 通过 nextpas.core 抽象层优化内存操作
+| 范围 | 摘要 |
+|------|------|
+| Phase 1–6 | 静态路径、IEEE、文件合并、平台扩展、Highway、类型覆盖 |
+| Phase 7–10 | 批量优化、基准框架、宽向量、内存工具 |
+| Phase 11–12 | 矩阵分解/信号高级 + 性能与静态调度深化 |
+| Phase 13–18 | F64 批量/超越函数与 SSE2/AVX2 SIMD 叶 |
+| Phase 19 | Dispatch 嵌套模块化 P1–P6（路径对齐；槽差距刻意） |
+| Wave B | SharedMask 可移植 + NEON Mask 绑定 + Memory 缺口契约 |
 
-**架构约束**:
-- 仅 `nextpas.core.system` 可直接引用 FPC RTL
-- 其他模块必须通过 `nextpas.core.mem.utils` 抽象层
-- SIMD 优化需在框架内提供，不能绕过抽象层
+### 平台支持（摘要）
 
-**已完成**:
-1. ✅ SIMD 优化的 AlignedMemCopy
-   - SimdMemCopy_SSE2: 64字节批量拷贝 (4x16B)
-   - 大数组优化 (>4KB): 128字节展开 (8x16B) + prefetchnta 预取
-   - 通过 AlignedMemCopy 调用
+- **稳定**: x86 SSE2…AVX512、FMA3、AES/SHA/MMX；NEON（opt-in）
+- **实验**: RVV；SVE/SVE2 intrinsics
+- **阻塞**: LASX / WASM / VSX / MSA
 
-2. ✅ SIMD 优化的 AlignedMemFill
-   - SimdMemFill_SSE2: 64字节批量填充
-   - 通过 AlignedMemFill 调用
+---
 
-3. ✅ 集成到 mem.utils 抽象层
-   - AlignedMemCopy/AlignedMemFill 现在使用 SIMD 优化
-   - 新增公开 API: SimdMemCopy/SimdMemFill/SimdMemCompare
-   - 保持 API 兼容性
+## 8. 风险与决策点（需人确认时再改路线）
 
-**性能优化** (2026-07-11):
-- SimdMemCopy_SSE2 大数组 (>4KB) 使用 128 字节展开
-- 添加 prefetchnta 预取下一条缓存线
-- 提升大内存拷贝的缓存命中率
+| 决策 | 选项 | 默认建议 |
+|------|------|----------|
+| api-coverage 红点 | 补测 vs 降 strict | **补测**（P21） |
+| NEON Memory 6 槽 | 全做 vs 先 3 高频 | **先 Copy/Fill/DiffRange**（P22a） |
+| NEON Batch 范围 | 全表 vs 最小代表集 | **最小代表集**（P23） |
+| RVV 无硬件 | 只契约 vs 停更 | **只契约诚实化**（P24a） |
+| 性能未达标 | 优化 vs 改目标 | **先复核基准方法再定**（P25） |
 
-**验证**:
-- 测试: 1645 tests 全部通过
-- 架构: 通过 nextpas.core.simd.memutils 提供，符合约束
+---
 
-### Phase 11: 编译器集成 (P2, 长期)
+## 9. 当前指针
 
-**目标**: nextpas 编译器 SIMD 内建支持
+- **活动阶段**: Phase 20（文档与真相面收口）— 进行中  
+- **下一执行**: Phase 21（api-coverage）— 待 Phase 20 确认后开工  
+- **禁止带入 main 的噪音**: 临时 task_plan / findings / 本地 `.codegraph` 等  
 
-**任务**:
-1. [ ] SIMD 类型内建支持
-   - TVecF32x4 作为编译器内建类型
-   - 直接生成 SIMD 指令
+---
 
-2. [ ] SIMD 运算符重载
-   - `+`, `-`, `*`, `/` 直接映射到 SIMD 指令
-   - 无函数调用开销
-
-3. [ ] 自动向量化
-   - 编译器自动将循环向量化
-   - 利用 SIMD 指令
-
-**验证**:
-- 编译器: SIMD 类型和运算符工作
-- 性能: 无函数调用开销
-
-## 优先级
-
-### P0: 必须完成 (Phase 7-8)
-
-1. 批量操作深度优化 (ArrayAdd 6x+)
-2. 基准测试修正 (公平比较)
-3. 循环展开 + 预取优化
-
-### P1: 应该完成 (Phase 9-10)
-
-1. 宽向量(512-bit)批处理优化
-2. 内存操作优化 (MemCopy/MemSet)
-3. 向量宽度自动选择
-
-### P2: 未来完成 (Phase 11)
-
-1. nextpas 编译器 SIMD 内建支持
-2. SIMD 类型和运算符
-3. 自动向量化
-
-## 验证标准
-
-### 性能验证
-
-| 操作 | 目标 | 当前 | 状态 |
-|------|------|------|------|
-| ArrayAddF32 (1024) | 6x+ | 5.67x | ✅ 接近目标 |
-| ArrayAddF64 (1024) | 6x+ | 6.08x | ✅ 达标 |
-| ArrayAddI32 (1024) | 6x+ | 6.47x | ✅ 达标 |
-| ArrayMulF32 (16KB) | 4x+ | 2.52x | ⚠️ 需优化 |
-| MemEqual (4KB) | 4x+ | 4.41x | ✅ 达标 |
-| Sin/Cos/Exp (16K) | 30x+ | 50-60x | ✅ 超额 |
-| Ceil/Floor/Round | 50x+ | 100-226x | ✅ 超额 |
-
-### 正确性验证
-
-- SIMD 测试: 60 suites, 1730 tests, 0 failed
-- Math 测试: 17 suites, 263 tests, 0 failed
-- IEEE 754 一致性测试
-- 边界条件测试
-
-### 兼容性验证
-
-- x86_64: SSE2, AVX2, AVX-512 ✅
-- AArch64: NEON ✅ (opt-in)
-- RISC-V: RVV ✅ (experimental)
-- LoongArch: QEMU 验证 ✅
-- PPC64: QEMU 验证 ✅
-- 标量回退: 全平台 ✅
-
-## 风险评估
-
-### 高风险
-
-1. **FPC 编译器限制**: 无法内联函数指针，Phase 1 可能无法达到目标
-2. **IEEE 754 一致性**: 不同 CPU 行为不同，Phase 2 可能有兼容性问题
-
-### 中风险
-
-1. **文件简化**: 可能破坏现有代码
-2. **静态调度**: 可能增加维护成本
-
-### 低风险
-
-1. **平台扩展**: 可以逐步推进
-2. **性能优化**: 可以增量改进
-
-## 成功标准
-
-### Phase 7 成功标准
-
-- ArrayAddF32: 6x+ 加速比
-- ArrayMulF32: 4x+ 加速比
-- 循环展开: 4x/8x 展开
-- 测试: 全部通过
-
-### Phase 8 成功标准
-
-- 基准测试: SIMD vs 真实标量 4x+ 加速比
-- 文档: 更新性能数据
-- 测试: 全部通过
-
-### Phase 9 成功标准
-
-- 512-bit: 2x+ 快于 256-bit
-- 向量宽度: 自动选择
-- 测试: 全部通过
-
-### Phase 10 成功标准
-
-- MemCopy: 3x+ 加速比
-- MemSet: 4x+ 加速比
-- 测试: 全部通过
-
-### Phase 11 成功标准
-
-- 编译器: SIMD 类型和运算符工作
-- 性能: 无函数调用开销
-- 兼容性: 与现有代码兼容
+*修订记录*  
+- 2026-07-17: 重写为 forward-looking 主线；归档 Phase 1–19 / Wave B；建立 Phase 20–27。

@@ -1,5 +1,7 @@
 # Dispatch Table Modularization - Implementation Plan
 
+> 状态: **ARCHIVED（Phase 19 已完成）** — 勿当主线；现行路线见 [../roadmap.md](../roadmap.md)；设计真相见 [../design/dispatch-table-modularization.md](../design/dispatch-table-modularization.md)
+
 ## 目标
 
 将 `TSimdDispatchTable` 拆分为逻辑子记录，提升代码可维护性和可扩展性。
