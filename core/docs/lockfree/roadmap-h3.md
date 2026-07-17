@@ -1,6 +1,6 @@
 # Atomic & Lockfree — Horizon-3 章程
 
-> **状态**: **H3 Wave-1 in progress**（2026-07-17）— H3-0e + **H3-1 authorized**；H3-2…H3-4 未授权
+> **状态**: **H3 Wave-1 COMPLETE**（2026-07-17）— H3-0e + **H3-1 done**；H3-2…H3-4 **未授权**
 > **Owner**: atomic-lockfree lane（`.worktrees/atomic-lockfree`）
 > **范围**: `nextpas.core.atomic`（L0）+ `nextpas.core.lockfree`（L1）+ 受控 consumer `async.loop`
 > 冲突时以 **CONTRACT + [`roadmap.md`](roadmap.md) + 本文件** 为准；状态入口见 [`READY.md`](READY.md)。
@@ -17,7 +17,8 @@
 | **R0–R7 / RC** | 已完成主线 + Ready close-out | DONE |
 | **H2-0…H2-6** | 一致性 / 证据 / 消费者 | DONE — [`roadmap-h2.md`](roadmap-h2.md) |
 | **R8** | NUMA / TSX / TLA+ **研究** | opt-in；诚实状态见 [`r8-research-status.md`](r8-research-status.md) |
-| **H3-0…H3-4** | 生产向下一 horizon | **仅章程**；未开工 |
+| **H3 Wave-1** | H3-0e + H3-1（async Post → T1 MPSC） | **DONE** — main `710ddd7ab` |
+| **H3-2…H3-4** | T2 Guarded / consumer 门 / 证据卫生 | **未授权** |
 
 **R8 保持研究线**，不因 H3 章程而自动生产化。
 
@@ -27,9 +28,9 @@
 
 | 阶段 | 名称 | 交付 | 状态 |
 |------|------|------|------|
-| **H3-0** | 章程与状态 | 本文件 + READY 指针 | **charter landed** |
-| **H3-0e** | Wave-1 状态切换 | READY → H3 in progress | **in progress** |
-| **H3-1** | 跨模块真实接入 | **async.loop Post → T1 MPSC**；`Close → discard → Free`；loop 外 join producers | **in progress** |
+| **H3-0** | 章程与状态 | 本文件 + READY 指针 | **done** |
+| **H3-0e** | Wave-1 状态切换 | READY → H3 in progress → Maintenance | **done** |
+| **H3-1** | 跨模块真实接入 | **async.loop Post → T1 MPSC**；`Close → discard → Free`；loop 外 join producers | **done** (`8d99b07ab` / land `710ddd7ab`) |
 | **H3-2** | T2 Guarded 生产契约子集 | 1–2 个类型：Close / managed / progress 文档与契约；**不进**默认门面 | **未授权** |
 | **H3-3** | Consumer regression 门 | focused gate 或 source-contract，覆盖跨模块消费者 | **未授权** |
 | **H3-4** | 证据与文档卫生 | bench envelope 同步；api-ref 与契约对齐 | **未授权** |
@@ -41,20 +42,34 @@ H2 complete / Maintenance
 H3-0  章程 landed
          │
          ▼
-H3-0e + H3-1  Wave-1  ── in progress（async.loop → lockfree.mpsc）
+H3-0e + H3-1  Wave-1  ── DONE（async.loop → lockfree.mpsc）
+         │
+         ▼
+Maintenance  ── 当前默认
          │
          ▼
 H3-2 … H3-4  ── 未授权
 ```
 
-### H3-1 选型（Wave-1 锁定）
+### H3-1 选型（Wave-1 锁定 / 已交付）
 
 | 项 | 选择 |
 |----|------|
 | 接入点 | `TAsyncLoop` 跨线程 `Post` / `DrainPending` |
 | 原语 | `specialize TMpscQueueImpl<TAsyncPendingItem>`（`lockfree.mpsc`） |
+| Close 语义 | `FPendingReady := False` → `Close` → discard without fire → `Free` |
 | 不做 | 替换 poller/timer；有界 Channel；thread.pool.worksteal 全量改写 |
 | 依赖方向 | async → lockfree；**禁止** lockfree → async |
+
+### H3-1 证据
+
+| 面 | 路径 / SHA |
+|----|------------|
+| 实现 | `core/src/nextpas.core.async.loop.pas` |
+| 测试 | `core/tests/nextpas.core.async/test_async` — `AsyncLoopPendingQueueMpscSourceContract` |
+| 审计 | [`consumer-audit.md`](consumer-audit.md) §2.1 |
+| Land | path-limited `landing/atomic-lockfree-h3-1-20260717` → main `710ddd7ab` |
+| Feat | `8d99b07ab` feat(async,lockfree): H3-1 TAsyncLoop Post uses T1 MPSC |
 
 ---
 
@@ -71,11 +86,10 @@ H3-2 … H3-4  ── 未授权
 
 ## 3. 执行策略（硬规则）
 
-1. **本章程不授权 H3-1…H3-4 实现**。仅固定边界、阶段名与非目标。
-2. 启动 H3-1 必须有 **单独授权**（总控或用户显式指令），并建议：
-   - 新 worktree：`atomic-lockfree-h3` 或 `codex/core-lockfree-h3`
+1. **Wave-1（H3-1）已交付**。后续 H3-2…H3-4 **仍须单独授权**，不因 Wave-1 完成而自动推进。
+2. 启动 H3-2+ 必须有 **单独授权**（总控或用户显式指令），并建议：
    - path-limited land；`verify-t1` 保绿；跨模块须额外 consumer 验证
-3. 在未授权前，默认继续 **Maintenance**（见 [`READY.md`](READY.md) Post-H2 checklist）。
+3. 在未授权前，默认继续 **Maintenance**（见 [`READY.md`](READY.md) Post-Wave-1 checklist）。
 4. 重大变更（Closed、默认门面 T2、R8 生产化、删 legacy）仍属 stop-and-ask，不因 H3 编号自动放行。
 
 ---
@@ -84,18 +98,28 @@ H3-2 … H3-4  ── 未授权
 
 | 文档 | 角色 |
 |------|------|
-| [`READY.md`](READY.md) | 状态入口；**H3 not started** |
-| [`roadmap.md`](roadmap.md) | R 线记录 + Maintenance；指向 H3 charter |
+| [`READY.md`](READY.md) | 状态入口；**Maintenance**；H3 Wave-1 done |
+| [`roadmap.md`](roadmap.md) | R 线记录 + Maintenance；指向 H3 Wave-1 complete |
 | [`roadmap-h2.md`](roadmap-h2.md) | H2 完成记录；successor 指针 → 本文件 |
 | [`r8-research-status.md`](r8-research-status.md) | R8 诚实研究状态（非 H3 交付） |
 | [`CONTRACT.md`](CONTRACT.md) | 契约真相；H3-2 若开工须先改此处 |
+| [`consumer-audit.md`](consumer-audit.md) | H3-1 async.loop 消费者已登记 |
 
 ---
 
-## 5. 验收（仅 H3-0 / 章程）
+## 5. 验收
+
+### H3-0 / 章程 — **done**
 
 | 项 | 内容 |
 |----|------|
-| **交付** | 本文件入仓；READY / roadmap 指向 H3 charter only |
-| **不做** | 生产 Pascal API 变更；跨模块 wiring；T2 升门面 |
-| **通过标准** | 文档一致写明 **H3 not started** / **not auto-started**；Maintenance 仍为默认主线 |
+| **交付** | 本文件入仓；READY / roadmap 指向 H3 |
+| **通过标准** | 边界与非目标固定；R8 不静默升级 |
+
+### H3-1 / Wave-1 — **done**
+
+| 项 | 内容 |
+|----|------|
+| **交付** | `async.loop` Post 队列 = T1 MPSC；Close discard；source-contract 测试；consumer-audit |
+| **不做** | poller/timer 替换；T2 升门面；R8 生产化 |
+| **通过标准** | path-limited land 到 main；`verify-t1` + async focused gate 绿（land 时证据）；文档一致写 **Wave-1 complete / Maintenance** |
