@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-17（Wave C1 Content-Encoding；NEXT=C2）
+**Updated**: 2026-07-17（Wave C2 Conditional helpers；NEXT=C3）
 
 ---
 
@@ -74,12 +74,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave K Surface freeze | 完成（工厂白名单已冻；无 deprecated；ARCHITECTURE 对齐） |
 | Wave L′ Doc dual-status | 完成（GOAL_TREE/API_COVERAGE/README 无 NEXT Wave 双写） |
 | Wave C1 Content-Encoding | 完成（client decode helper + server middleware 契约 + Op=`content_encoding`） |
-| **下一执行点** | **Era 1 / Wave C2 — Conditional + cache helpers** |
+| Wave C2 Conditional | 完成（If-None-Match/If-Modified-Since helper + ServeFile 304；ParseHttpDate/mtime 秒修复） |
+| **下一执行点** | **Era 1 / Wave C3 — Range + static depth** |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~82%   高级 ~60%   优雅 ~70%   性能 ~50%
+完整 ~85%   高级 ~62%   优雅 ~72%   性能 ~50%
 ```
 
 ---
@@ -183,18 +184,19 @@ Era 5:  H3-* Blocked until QUIC — 跳过，不空转
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **NEXT** |
+| **Status** | **landed** |
 | **Do** | `ETag` / `If-None-Match` / `If-Modified-Since` 辅助与 304 路径；静态 `ServeFile` 可接条件请求 |
 | **Don't** | 完整 HTTP cache 实现、启发式缓存策略框架 |
 | **Done when** | 条件请求最小正确面 focused；CONTRACT 有行为表 |
 | **Gates** | static + message/client 相关 focused |
 | **Next** | Wave C3 |
+| **Evidence** | `HttpMakeStrongETag`/`HttpIfNoneMatchMatches`/`HttpNotModifiedSince`/`HttpTryWriteNotModified`；mtime ns→s；ParseHttpDate fix；`test_http_static` 26 |
 
 ### Wave C3 — Range + static depth
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | queued |
+| **Status** | **NEXT** |
 | **Do** | `ServeFile`/`ServeDir`：`Range` / `Accept-Ranges`、大文件流式、越界 416 |
 | **Don't** | 变成 CDN/静态站框架；目录列表产品化 |
 | **Done when** | Range 单段 focused；大文件不整文件进内存（契约写明） |
@@ -392,15 +394,14 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. 打开本文件确认 Wave C2 仍是 NEXT
-2. ETag / If-None-Match / If-Modified-Since + 304 最小路径
-3. ServeFile 可接条件请求；CONTRACT 行为表 + focused
-4. path-limited land main
-5. 本文件：Wave C2 → landed；Wave C3 → NEXT；changelog 一行
-6. 自动续波
+1. 打开本文件确认 Wave C3 仍是 NEXT
+2. ServeFile/ServeDir Range / Accept-Ranges / 416 + 大文件流式契约
+3. focused + CONTRACT；path-limited land main
+4. 本文件：Wave C3 → landed；Wave E1 → NEXT；changelog 一行
+5. 自动续波
 ```
 
-**没有用户指令时：默认执行 Wave C2，然后自动续波。**
+**没有用户指令时：默认执行 Wave C3，然后自动续波。**
 
 ---
 
