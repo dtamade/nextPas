@@ -188,6 +188,7 @@ end;
 {$IFDEF NEXTPAS_MACOS}
 uses
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
   nextpas.core.platform.darwin.base,
   nextpas.core.platform.darwin.ffi,
   nextpas.core.platform.error;

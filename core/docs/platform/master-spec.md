@@ -34,21 +34,22 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (14-module matrix), real Windows
-focused-runtime (VM + GHA focused gates for poller/io/socket and broader VM
-module sets), and IOCP send/recv/AcceptEx/ConnectEx evidence on Wine and VM.
+Windows compile gates, Wine runtime smoke (14-module matrix), and durable GHA
+**`ci-matrix`** for the **documented 17-gate set** in
+`platform-windows-ci-matrix.sh` / `.ps1` (14 suite dirs + poller/io/socket real
+gates) under job `test-windows-runtime` on `windows-latest`.
 
-It does **not** yet claim full-host **`ci-matrix`**: GHA runs
-`platform-windows-ci-matrix.ps1` (14 suite dirs + 3 dedicated real gates) as
-`truth=real-windows-runtime-ci`. Full promotion is ROADMAP D1.d.
+D1.d promotion is **scoped**: it does **not** claim full-host Windows parity for
+modules outside that list (e.g. signal, console, native secure-zero) or for
+IOCP AcceptEx/ConnectEx depth beyond current smoke gaps.
 
 Allowed wording:
 
 - `source-contract covered`
 - `forced Windows compile covered`
-- `wine-runtime-smoke (not real Windows ci-matrix)`
-- `focused-runtime` only for modules with real Windows host logs
-- `ci-matrix` only after ROADMAP D1.d criteria
+- `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
+- `focused-runtime` for modules with real Windows host logs outside CI matrix
+- `ci-matrix` for the documented 17-gate set only (ROADMAP D1.d)
 
 ### IOCP completion operations
 

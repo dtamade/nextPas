@@ -8,8 +8,8 @@
 #   pwsh core/scripts/platform-windows-ci-matrix.ps1
 #   pwsh scripts/platform-windows-ci-matrix.ps1   # when cwd is core/
 #
-# Evidence: truth=real-windows-runtime-ci (focused gates).
-# Do NOT print truth=ci-matrix until ROADMAP D1.d promotion criteria are met.
+# Evidence: truth=ci-matrix for the documented 17-gate set (ROADMAP D1.d).
+# Scope is the listed module dirs only — not full-host Windows parity.
 
 $ErrorActionPreference = 'Stop'
 
@@ -56,7 +56,7 @@ $fail = 0
 $failed = @()
 
 Write-Output '=== Platform Windows CI Matrix (real host) ==='
-Write-Output 'truth=real-windows-runtime-ci; focused gates; not full ci-matrix promotion'
+Write-Output 'truth=ci-matrix; documented 17-gate set; not full-host Windows parity'
 Write-Output "core=$CoreRoot"
 Write-Output ''
 
@@ -84,7 +84,7 @@ foreach ($entry in $AllEntries) {
 }
 
 Write-Output "summary: pass=$pass fail=$fail total=$($AllEntries.Count)"
-Write-Output "truth=real-windows-runtime-ci; gates_passed=$pass; gates_failed=$fail"
+Write-Output "truth=ci-matrix; gates_passed=$pass; gates_failed=$fail; scope=documented-17-gate-set"
 
 if ($fail -gt 0) {
   Write-Output 'failed:'

@@ -90,29 +90,75 @@ jobs:
 
       - name: Setup FPC config and PATH
         run: |
-          $HOME/fpc-trunk/bin/fpcmkcfg -d "basepath=$HOME/fpc-trunk/lib/fpc/\$fpcversion" -o $HOME/fpc-trunk/bin/fpc.cfg
-          echo "-XR$(xcrun --show-sdk-path)" >> $HOME/fpc-trunk/bin/fpc.cfg
-          # Ensure units are findable - hardcode the path since fpcmkcfg variables may not expand
-          UNITS_DIR=$(find $HOME/fpc-trunk/lib/fpc -name "system.ppu" 2>/dev/null | head -1)
-          if [ -n "$UNITS_DIR" ]; then
-            UNITS_BASE=$(dirname "$UNITS_DIR")
-            echo "-Fu$UNITS_BASE" >> $HOME/fpc-trunk/bin/fpc.cfg
-            echo "-Fu$UNITS_BASE/*" >> $HOME/fpc-trunk/bin/fpc.cfg
-            echo "Found units at: $UNITS_BASE"
-          else
-            echo "WARNING: system.ppu not found under ~/fpc-trunk"
-            find $HOME/fpc-trunk -name "system.ppu" 2>/dev/null || echo "No system.ppu anywhere"
+          set -euo pipefail
+          UNITS_PPU=$(find "$HOME/fpc-trunk/lib/fpc" -name system.ppu 2>/dev/null | head -1)
+          if [ -z "$UNITS_PPU" ]; then
+            echo "ERROR: system.ppu not found under ~/fpc-trunk"
+            find "$HOME/fpc-trunk" -name 'system.ppu' 2>/dev/null || true
+            exit 1
           fi
-          echo "$HOME/fpc-trunk/bin" >> $GITHUB_PATH
-          FPC_LIB=$(find $HOME/fpc-trunk/lib/fpc -maxdepth 1 -type d -name '3.*' | head -1)
-          if [ -n "$FPC_LIB" ]; then echo "$FPC_LIB" >> $GITHUB_PATH; fi
+          UNITS_BASE=$(dirname "$UNITS_PPU")
+          UNITS_CPU=$(dirname "$UNITS_BASE")
+          FPC_LIB=$(find "$HOME/fpc-trunk/lib/fpc" -maxdepth 1 -type d -name '3.*' | head -1)
+          if [ -z "$FPC_LIB" ]; then
+            echo "ERROR: no fpc lib dir under ~/fpc-trunk/lib/fpc"
+            exit 1
+          fi
+          SDK_PATH=$(xcrun --show-sdk-path)
+          CFG="$HOME/fpc-trunk/fpc-macos.cfg"
+          # Minimal host cfg: no $fpcversion placeholders; explicit unit dirs.
+          {
+            echo "# nextPas macOS GHA fpc.cfg (generated)"
+            echo "-XR${SDK_PATH}"
+            echo "-FD${FPC_LIB}"
+            echo "-Fu${UNITS_BASE}"
+            echo "-Fu${UNITS_CPU}/*"
+            echo "-Fl${UNITS_BASE}"
+          } > "$CFG"
+          # FPC searches ~/.fpc.cfg and compiler-dir/fpc.cfg; also honor FPCCFG.
+          cp "$CFG" "$HOME/.fpc.cfg"
+          cp "$CFG" "$FPC_LIB/fpc.cfg"
+          cp "$CFG" "$HOME/fpc-trunk/bin/fpc.cfg"
+          echo "Found units at: $UNITS_BASE"
+          echo "Wrote cfg: $CFG"
+          cat "$CFG"
+          echo "FPCCFG=$CFG" >> "$GITHUB_ENV"
+          echo "NEXTPAS_FPC_UNITS=$UNITS_BASE" >> "$GITHUB_ENV"
+          echo "NEXTPAS_FPC_SDK=$SDK_PATH" >> "$GITHUB_ENV"
+          # Prefer trunk fpc over brew 3.2.2.
+          echo "$HOME/fpc-trunk/bin" >> "$GITHUB_PATH"
+          echo "$FPC_LIB" >> "$GITHUB_PATH"
 
       - name: Verify FPC
         run: |
+          set -euo pipefail
+          which fpc
           fpc -iV
-          fpc -vt -Fu$(pwd)/src -Fi$(pwd)/src tests/nextpas.core.platform/test_platform_ctypes_abi/test_platform_ctypes_abi.lpr -FE/tmp 2>&1 | tail -5 || true
+          fpc -iTP -iTO
+          printf '%s\n' \
+            'program macos_fpc_probe;' \
+            'begin' \
+            "  WriteLn('macos-fpc-probe-ok');" \
+            'end.' > /tmp/macos_fpc_probe.pas
+          # -n disables other cfgs; pass units explicitly as a belt-and-suspenders check.
+          fpc -n \
+            -Fu"${NEXTPAS_FPC_UNITS}" \
+            -XR"${NEXTPAS_FPC_SDK}" \
+            -MObjFPC -FE/tmp /tmp/macos_fpc_probe.pas
+          out=$(/tmp/macos_fpc_probe | tr -d '\r')
+          test "$out" = "macos-fpc-probe-ok"
+          # Also prove default cfg path works (what matrix/make will use).
+          fpc -MObjFPC -FE/tmp /tmp/macos_fpc_probe.pas
+          out2=$(/tmp/macos_fpc_probe | tr -d '\r')
+          test "$out2" = "macos-fpc-probe-ok"
 
-      - name: Run tests (best-effort)
+      - name: Run platform macOS focused matrix (fail-closed)
+        run: |
+          # Documented 8-gate set (ROADMAP D2.b). truth=macos-focused-runtime for that set only.
+          bash scripts/platform-macos-ci-matrix.sh
+
+      - name: Run tests (best-effort inventory; non-promotional)
+        continue-on-error: true
         run: make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS
 
   test-windows-runtime:
@@ -241,8 +287,8 @@ jobs:
           "${FPC}" -iTP
           "${FPC}" -iTO
           # Real Windows host evidence (not Wine).
-          # 14 suite dirs + 3 dedicated real gates.
-          # truth=real-windows-runtime-ci only — not full ci-matrix until ROADMAP D1.d.
+          # Documented 17-gate set: 14 suite dirs + poller/io/socket real gates.
+          # truth=ci-matrix for that set only (ROADMAP D1.d); not full-host parity.
           bash scripts/platform-windows-ci-matrix.sh
 
   test-freebsd:
