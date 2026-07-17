@@ -68,7 +68,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Gap | Severity | Notes |
 |-----|----------|--------|
 | Windows beyond documented 17-gate set | **P1** | signal / secure-zero native / full AcceptEx-ConnectEx suite not in matrix |
-| macOS not `focused-runtime` | **P0** | GHA best-effort; no named module promotion criteria met |
+| macOS focused-runtime partial | **P0** | D2.b matrix wired (8 gates); promote goal-tree after green (D2.c) |
 | `platform.signal` Win64 wine path | **P1** | Missing error/FFI uses; not in 14-module matrix |
 | Windows secure-zero native path | **P1** | Documented deferred; still fallback |
 | dual-IO symbols on `platform.process` | **P2** | Owner-only; long-term deprecation not scheduled |
@@ -82,7 +82,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
 | Windows x86_64 | **`ci-matrix` for documented 17-gate set** + wine-runtime-smoke secondary | expand matrix modules; keep wine green |
-| macOS | source-contract / best-effort CI | named focused-runtime gates (D2) |
+| macOS | D2.b matrix (8 gates) fail-closed on GHA; inventory via best-effort | D2.c promote listed modules after green |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
 | Linux aarch64/arm32/riscv64 | forced-compile | runtime only with hardware/CI |
@@ -161,7 +161,24 @@ Do not start a later phase’s promotion claims until earlier phase exit criteri
 | **D2.b** | Add focused gates: at least time, sync, thread, files, path, env, error, socket (kqueue path) | real macOS runner; fail closed for listed gates |
 | **D2.c** | Promote listed modules to `focused-runtime` in goal-tree + truth-matrix | no claim of full-host parity |
 
-**macOS promotion criteria:** durable Actions (or owned host) + named gates green + truth-matrix rows updated.
+**D2.a inventory (2026-07-17, from GHA `macos-14` best-effort):**
+
+| Observation | Evidence |
+|-------------|----------|
+| Best-effort whole suite | ~5 pass / ~807 skip (failures reported as SKIP); not promotional |
+| Root toolchain footgun | trunk `ppca64` could not find `System` unless `fpc.cfg` is copied next to compiler + explicit `-Fu…/units/aarch64-darwin/rtl` |
+| Platform runtime under best-effort | essentially not green (almost all platform gates skipped as compile/run fails) |
+| Intended focused set | D2.b documented 8-gate list below |
+
+**D2.b status:** matrix script `core/scripts/platform-macos-ci-matrix.sh` + GHA fail-closed step; FPC verify fails closed. Best-effort remains non-promotional inventory only.
+
+**Documented macOS focused gate list (8):**
+`platform.{time,sync,thread,files,path,env,error,socket}` via primary host suites
+(`test_platform_time_helpers`, `test_platform_sync`, `test_platform_thread`,
+`test_platform_files`, `test_platform_path`, `test_platform_env`,
+`test_platform_error`, `test_platform_socket`).
+
+**macOS promotion criteria (D2.c):** durable Actions green on the 8-gate matrix + truth-matrix/goal-tree rows updated. Not full-host parity.
 
 ### D3 — Contract & debt cleanup (maintenance)
 
@@ -230,7 +247,7 @@ Optional readiness inventory (not a promotion):
 
 1. **D0** done.
 2. **D1.a–D1.d** done for documented 17-gate Windows `ci-matrix` set; keep wine + GHA green.
-3. **D2** macOS named focused-runtime gates (next P0).
+3. **D2.a/b** in progress: FPC cfg fix + 8-gate macOS matrix fail-closed; **D2.c** after green.
 4. **D3** debt in severity order when not blocking D2.
 5. **D4/D5** opportunistic / owner-gated.
 
@@ -250,6 +267,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-17 | First full matrix: pass=13 fail=4 (sync trylock, random zeros flaky, io create-server/wake, socket CompareMem). D1.c fixes: SRW TryAcquire returns Win32 BOOLEAN not BOOL; FIONBIO=$8004667E; CreateServerSocket loopback/host-order; random any-nonzero; socket uses system.CompareMem |
 | 2026-07-17 | D1.c closed: real-Windows matrix **pass=17 fail=0** (run 29569033144). Mapped PLATFORM_ERR_AGAIN treated as Winsock would-block in wake drain + socket classifiers. D1.d promotion still pending criteria checklist |
 | 2026-07-17 | **D1.d done**: promote documented 17-gate set to `truth=ci-matrix` after criteria 1–4 met (GHA 17/17 durable; wine 14/14; fail-closed). Not full-host Windows parity. Next: D2 macOS. |
+| 2026-07-17 | **D2.a**: macOS best-effort is non-evidence (~5/812); FPC trunk missing System unit without compiler-local fpc.cfg. **D2.b**: add fail-closed 8-gate `platform-macos-ci-matrix.sh` + FPC verify; best-effort demoted to inventory-only. |
 
 ---
 

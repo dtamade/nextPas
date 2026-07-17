@@ -100,8 +100,15 @@ if grep -q 'truth=ci-matrix' "$REPO_ROOT/core/scripts/platform-windows-ci-matrix
 else
   mark_blocked "windows-ci-matrix-promoted"
 fi
+if [[ -f "$REPO_ROOT/core/scripts/platform-macos-ci-matrix.sh" ]]; then
+  mark_ready "macos-focused-matrix-script"
+  note "GHA job test-macos runs platform-macos-ci-matrix.sh (8-gate fail-closed; D2.b)"
+else
+  mark_blocked "macos-focused-matrix-script"
+fi
+# Host promotion stays blocked until D2.c after green GHA evidence.
 mark_blocked "macos-focused-runtime-host"
-note "macOS focused-runtime promotion is ROADMAP D2"
+note "macOS focused-runtime goal-tree promotion is ROADMAP D2.c after matrix green"
 
 echo "ready (${#ready[@]}):"
 for item in "${ready[@]}"; do

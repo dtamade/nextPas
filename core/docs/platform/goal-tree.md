@@ -79,7 +79,7 @@ residual-roadmap remains the closed LT0–LT3 + dual-IO/F6 freeze record.
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across all facade modules | keep gates green |
 | Windows x86_64 | **ci-matrix** documented 17-gate set; wine-runtime-smoke secondary; real-Windows runtime gaps remain outside matrix | expand matrix; keep GHA+wine green |
-| macOS / FreeBSD | source-contract and selected compile fragments | macOS named focused-runtime (D2) |
+| macOS / FreeBSD | macOS D2.b 8-gate matrix fail-closed (promotion pending D2.c); FreeBSD best-effort | D2.c promote macOS listed modules after green |
 | Android | forced-compile fragments | runtime evidence |
 
 ## Evidence Gates

@@ -11,7 +11,8 @@
 | Android files/mmap | forced-compile/source-contract | Android files stat/lstat/fstat, directory enumeration through getdents64, and mmap size paths compile through host-owned declarations; no Android device runtime proof exists. |
 | Resource limits | Linux focused-runtime, Android forced-compile/source-contract | Linux rlimit get/set is focused-runtime covered; Android is compile/source proof only, not device runtime proof. |
 | Platform memory secure-zero | Linux focused-runtime, POSIX forced-compile/source-contract, Windows source-contract | Linux/POSIX host path uses shared POSIX `explicit_bzero`; forced POSIX compile proves branch coherence. Windows remains fallback/deferred with no native runtime proof. |
-| Darwin/FreeBSD best-effort CI | ci-runtime-matrix for passed rows | Skipped rows are non-evidence. |
+| Darwin/macOS documented 8-gate set | GHA `test-macos` via `platform-macos-ci-matrix.sh` (fail-closed) | Candidate focused-runtime for time/sync/thread/files/path/env/error/socket; promote goal-tree only after D2.c green evidence. Best-effort whole suite remains non-evidence. |
+| Darwin/FreeBSD best-effort CI | best-effort inventory only | Skipped/failed rows are non-evidence. |
 | Android/other forced host surfaces | forced-compile | Compile truth only. |
 
 Update this file only when the evidence category changes.

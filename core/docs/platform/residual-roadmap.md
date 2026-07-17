@@ -43,7 +43,7 @@ LT4 is no longer a residual-only stage. Track and execute under:
 | Wine CI matrix (14 modules) | pass=14 fail=0 skip=0 (secondary) |
 | Real Windows GHA gates | `platform-windows-ci-matrix.sh`: 14 suite dirs + poller/io/socket real gates |
 | Windows `ci-matrix` | **Promoted (D1.d)** for documented 17-gate set only; not full-host parity |
-| macOS `focused-runtime` | **Not promoted** (ROADMAP D2) |
+| macOS `focused-runtime` | **D2.b matrix wired** (8 gates fail-closed); D2.c promotion pending green evidence |
 
 Wine remains `wine-runtime-smoke` forever: useful regression signal, **never** substitute for real Windows `ci-matrix`.
 

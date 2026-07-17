@@ -100,19 +100,44 @@ jobs:
             echo "-Fu$UNITS_BASE/*" >> $HOME/fpc-trunk/bin/fpc.cfg
             echo "Found units at: $UNITS_BASE"
           else
-            echo "WARNING: system.ppu not found under ~/fpc-trunk"
+            echo "ERROR: system.ppu not found under ~/fpc-trunk"
             find $HOME/fpc-trunk -name "system.ppu" 2>/dev/null || echo "No system.ppu anywhere"
+            exit 1
           fi
-          echo "$HOME/fpc-trunk/bin" >> $GITHUB_PATH
+          # ppca64 reads fpc.cfg next to the compiler binary (same pattern as Linux job).
           FPC_LIB=$(find $HOME/fpc-trunk/lib/fpc -maxdepth 1 -type d -name '3.*' | head -1)
-          if [ -n "$FPC_LIB" ]; then echo "$FPC_LIB" >> $GITHUB_PATH; fi
+          if [ -z "$FPC_LIB" ]; then
+            echo "ERROR: no fpc lib dir under ~/fpc-trunk/lib/fpc"
+            exit 1
+          fi
+          cp $HOME/fpc-trunk/bin/fpc.cfg "$FPC_LIB/fpc.cfg"
+          # Also install user-level cfg for the fpc driver script.
+          mkdir -p "$HOME/.fpc"
+          cp $HOME/fpc-trunk/bin/fpc.cfg "$HOME/.fpc/fpc.cfg"
+          echo "$HOME/fpc-trunk/bin" >> $GITHUB_PATH
+          echo "$FPC_LIB" >> $GITHUB_PATH
 
       - name: Verify FPC
         run: |
+          set -euo pipefail
           fpc -iV
-          fpc -vt -Fu$(pwd)/src -Fi$(pwd)/src tests/nextpas.core.platform/test_platform_ctypes_abi/test_platform_ctypes_abi.lpr -FE/tmp 2>&1 | tail -5 || true
+          fpc -iTP -iTO
+          printf '%s\n' \
+            'program macos_fpc_probe;' \
+            'begin' \
+            "  WriteLn('macos-fpc-probe-ok');" \
+            'end.' > /tmp/macos_fpc_probe.pas
+          fpc -MObjFPC -FE/tmp /tmp/macos_fpc_probe.pas
+          out=$(/tmp/macos_fpc_probe | tr -d '\r')
+          test "$out" = "macos-fpc-probe-ok"
 
-      - name: Run tests (best-effort)
+      - name: Run platform macOS focused matrix (fail-closed)
+        run: |
+          # Documented 8-gate set (ROADMAP D2.b). truth=macos-focused-runtime for that set only.
+          bash scripts/platform-macos-ci-matrix.sh
+
+      - name: Run tests (best-effort inventory; non-promotional)
+        continue-on-error: true
         run: make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS
 
   test-windows-runtime:
