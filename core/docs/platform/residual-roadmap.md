@@ -21,20 +21,20 @@
 | **LT1** | QUICKSTART/EXAMPLES/BEST-PRACTICES live-name gates + docs live patterns smoke | F8 | **Done** |
 | **LT2** | `process.pipe` off all `platform_io_*` call sites; dual-IO symbols remain on `platform.process` only | F5 | **Done** |
 | **LT3** | `platform_get_last_os_error` raw host side-channel + docs/tests | F6 | **Done** |
-| **LT4** | Windows ci-matrix / macOS focused-runtime evidence | F12 | **Registered only** |
+| **LT4** | Windows ci-matrix / macOS focused-runtime evidence | F12 | **In progress** (prep + wine matrix green; not promoted) |
 | Deferred | POSIX/Windows mapping symmetry, ALen rename, diagnostics hooks, freetype move-out | F7 / F9 / F10 / F14 | Won't this program |
 
-## LT4 registration (not this land)
+## LT4 progress (not complete; truth tiers not promoted)
 
-**Status**: registered only. Local inventory does **not** promote truth tiers.
+**Status**: prep + wine-runtime-smoke matrix green + GHA real-Windows focused gates expanded. Still **not** `ci-matrix` / macOS `focused-runtime` promoted.
 
 ### Entry criteria (all required to leave "registered only")
 
-| Host | Promote to | Required evidence |
-|------|------------|-------------------|
-| Windows x86_64 | `ci-matrix` | Real Windows CI runner (not only Wine) repeating focused-runtime gates |
-| macOS x86_64/arm64 | `focused-runtime` | Real macOS host (or durable Actions runner) running named module gates |
-| FreeBSD / Android | higher than compile | Device/host runtime gates (out of scope until owners exist) |
+| Host | Promote to | Required evidence | Current |
+|------|------------|-------------------|---------|
+| Windows x86_64 | `ci-matrix` | Real Windows CI runner repeating full focused-runtime module set | GHA `test-windows-runtime` runs 3 focused real-Windows gates only |
+| macOS x86_64/arm64 | `focused-runtime` | Real macOS host (or durable Actions runner) running named module gates | GHA `test-macos` best-effort only |
+| FreeBSD / Android | higher than compile | Device/host runtime gates (out of scope until owners exist) | unchanged |
 
 Wine remains `wine-runtime-smoke` forever: useful regression signal, **never** substitute for real Windows `ci-matrix`.
 
@@ -47,18 +47,21 @@ Probe: `./scripts/platform-lt4-readiness.sh`
 | `fpc` + `fpc -Twin64 -Px86_64` | Ready (ppcrossx64 under FPC units; not required on `$PATH`) |
 | `wine` runs Win64 PE | Ready |
 | `core/tests/common.mk` `wine-runtime-smoke` target | Restored (was lost in common.mk batch convert) |
-| `core/scripts/platform-wine-ci-matrix.sh` | Present |
-| Sample wine gates (2026-07-17) | `time` 5/5 + `error` 6/6 under Wine 10.0; heaptrc 0 leak |
-| Real Windows CI runner | **Blocked** |
-| macOS focused-runtime host | **Blocked** |
+| `core/scripts/platform-wine-ci-matrix.sh` | Present; SKIP only on explicit Wine-missing log markers |
+| Wine CI matrix (14 modules, 2026-07-17) | **pass=14 fail=0 skip=0** under Wine; heaptrc 0 leak on sample gates |
+| Real Windows CI runner | GHA `windows-latest` focused gates (poller + io + socket); **not** full module set |
+| macOS focused-runtime host | GHA `macos-14` best-effort; **blocked** for promotion |
 
-### Win64 compile fixes landed with LT4 prep (still wine-runtime-smoke)
+### Win64 compile fixes (still wine-runtime-smoke)
 
 | Fix | Why |
 |-----|-----|
 | `windows.base` `PINT64 = System.PInt64` | `PINT64 = ^Int64` shadowed `System.PInt64` (case-insensitive) and broke `platform_wait_address64` forwards |
 | mem Fls helpers local `TFlsDWord`/`TFlsBool` | raw `DWORD`/`BOOL` without host types under `MSWINDOWS` |
 | `test.expect` IUnknown methods `stdcall` on Windows | `{$IFNDEF WINDOWS}cdecl{$ENDIF}` left empty calling-convention slot → syntax error |
+| `platform.io` Windows `uses platform.error` + FreeMem size | Win64 miss of `PLATFORM_ERR_*` / `platform_get_last_error`; FreeMem used Linux registration pointer size |
+| `platform.process` Windows local `PLATFORM_SIGKILL = 9` | Win64 kill path needed contract number without pulling broken signal wine deps |
+| `io.reactor.iocp` `uses nextpas.core.errors` | `Exception` re-export required for callback except paths under Win64 |
 
 ### Operator commands (still not LT4 complete)
 
@@ -70,7 +73,15 @@ make -C core/tests/nextpas.core.platform.error/test_platform_error_wine wine-run
 ./scripts/platform-wine-runtime-smoke.sh    # broader *_wine discovery runner
 ```
 
-Do **not** rewrite [runtime-truth-matrix.md](runtime-truth-matrix.md) or claim `ci-matrix` until entry criteria above are met with host logs.
+Real Windows GHA gates (`.github/workflows/core-ci.yml` → `test-windows-runtime`):
+
+```text
+tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke
+tests/nextpas.core.platform/test_platform_io_windows_real
+tests/nextpas.core.platform.socket/test_platform_socket_windows_real
+```
+
+Do **not** rewrite [runtime-truth-matrix.md](runtime-truth-matrix.md) or claim full `ci-matrix` until entry criteria above are met with host logs covering the full focused-runtime module set.
 
 ## Maintenance gates (must stay green)
 

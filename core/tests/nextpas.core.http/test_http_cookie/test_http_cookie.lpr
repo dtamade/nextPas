@@ -289,37 +289,94 @@ begin
     'absent SameSite defaults to Lax and sends on same-site request');
 end;
 
-procedure TestJarCrossSiteSuppressesLaxAndStrict;
+procedure TestHttpCookieSiteKeyETldPlusOne;
+begin
+  CheckEqual('example.com', HttpCookieSiteKey('example.com'), 'apex');
+  CheckEqual('example.com', HttpCookieSiteKey('a.b.example.com'), 'subdomain');
+  CheckEqual('foo.co.uk', HttpCookieSiteKey('foo.co.uk'), 'multi-label apex');
+  CheckEqual('foo.co.uk', HttpCookieSiteKey('a.foo.co.uk'), 'multi-label sub');
+  CheckEqual('bar.co.uk', HttpCookieSiteKey('www.bar.co.uk'), 'other multi-label');
+  Check(HttpCookieSiteKey('a.foo.co.uk') <> HttpCookieSiteKey('a.bar.co.uk'),
+    'distinct registrable domains under co.uk');
+  CheckEqual('localhost', HttpCookieSiteKey('localhost'), 'localhost');
+  CheckEqual('127.0.0.1', HttpCookieSiteKey('127.0.0.1'), 'ipv4');
+  CheckEqual('github.io', HttpCookieSiteKey('github.io'), 'suffix host');
+  CheckEqual('user.github.io', HttpCookieSiteKey('pages.user.github.io'),
+    'github.io pages site');
+end;
+
+procedure TestJarRejectsPublicSuffixDomain;
 var
   LJar: IHttpCookieJar;
   LHeaders: IHttpHeaders;
-  LStoreUrl, LSameUrl, LCrossUrl: TUrl;
-  LCookie: string;
+  LUrl: TUrl;
 begin
-  { Domain=net matches host "net" and "*.net". SiteKey("net")="net" while
-    SiteKey("foo.net")="foo.net" → cross-site under last-two-label approx. }
   LJar := NewHttpCookieJar;
-  LStoreUrl := TUrl.Parse('https://net/');
-  LSameUrl := TUrl.Parse('https://net/path');
-  LCrossUrl := TUrl.Parse('https://foo.net/');
+  LUrl := TUrl.Parse('https://a.foo.co.uk/');
   LHeaders := NewHttpHeaders;
   LHeaders.Add('set-cookie',
-    'lax=1; Domain=net; Path=/; SameSite=Lax; Secure');
+    'bad=1; Domain=co.uk; Path=/; SameSite=Lax; Secure');
+  LJar.StoreFromResponse(LUrl, LHeaders);
+  CheckEqual('', LJar.CookieHeaderFor(LUrl),
+    'Domain=public-suffix is rejected (no super-cookie)');
+
+  LHeaders := NewHttpHeaders;
   LHeaders.Add('set-cookie',
-    'strict=1; Domain=net; Path=/; SameSite=Strict; Secure');
+    'bad2=1; Domain=com; Path=/; SameSite=Lax; Secure');
+  LJar.StoreFromResponse(TUrl.Parse('https://example.com/'), LHeaders);
+  CheckEqual('', LJar.CookieHeaderFor(TUrl.Parse('https://example.com/')),
+    'Domain=com single-label public suffix rejected');
+end;
+
+procedure TestJarMultiLabelTldSameSiteSharing;
+var
+  LJar: IHttpCookieJar;
+  LHeaders: IHttpHeaders;
+  LStoreUrl, LSiblingUrl, LOtherSiteUrl: TUrl;
+  LCookie: string;
+begin
+  { Domain=foo.co.uk is registrable (eTLD+1); siblings share site; bar.co.uk does not. }
+  LJar := NewHttpCookieJar;
+  LStoreUrl := TUrl.Parse('https://a.foo.co.uk/');
+  LSiblingUrl := TUrl.Parse('https://b.foo.co.uk/app');
+  LOtherSiteUrl := TUrl.Parse('https://a.bar.co.uk/');
+  LHeaders := NewHttpHeaders;
   LHeaders.Add('set-cookie',
-    'none=1; Domain=net; Path=/; SameSite=None; Secure');
+    'sess=1; Domain=foo.co.uk; Path=/; SameSite=Lax; Secure');
   LJar.StoreFromResponse(LStoreUrl, LHeaders);
 
-  LCookie := LJar.CookieHeaderFor(LSameUrl);
-  Check(Pos('lax=1', LCookie) > 0, 'same-site sends Lax');
-  Check(Pos('strict=1', LCookie) > 0, 'same-site sends Strict');
-  Check(Pos('none=1', LCookie) > 0, 'same-site sends None');
+  LCookie := LJar.CookieHeaderFor(LSiblingUrl);
+  Check(Pos('sess=1', LCookie) > 0,
+    'multi-label eTLD+1 Domain sends to sibling host');
 
-  LCookie := LJar.CookieHeaderFor(LCrossUrl);
-  Check(Pos('lax=1', LCookie) = 0, 'cross-site suppresses Lax');
-  Check(Pos('strict=1', LCookie) = 0, 'cross-site suppresses Strict');
-  Check(Pos('none=1', LCookie) > 0, 'cross-site sends None only');
+  LCookie := LJar.CookieHeaderFor(LOtherSiteUrl);
+  Check(Pos('sess=1', LCookie) = 0,
+    'other registrable domain under co.uk does not receive cookie');
+end;
+
+procedure TestJarSameSiteSendsOnRegistrableDomain;
+var
+  LJar: IHttpCookieJar;
+  LHeaders: IHttpHeaders;
+  LStoreUrl, LSubUrl: TUrl;
+  LCookie: string;
+begin
+  LJar := NewHttpCookieJar;
+  LStoreUrl := TUrl.Parse('https://www.example.com/');
+  LSubUrl := TUrl.Parse('https://api.example.com/v1');
+  LHeaders := NewHttpHeaders;
+  LHeaders.Add('set-cookie',
+    'lax=1; Domain=example.com; Path=/; SameSite=Lax; Secure');
+  LHeaders.Add('set-cookie',
+    'strict=1; Domain=example.com; Path=/; SameSite=Strict; Secure');
+  LHeaders.Add('set-cookie',
+    'none=1; Domain=example.com; Path=/; SameSite=None; Secure');
+  LJar.StoreFromResponse(LStoreUrl, LHeaders);
+
+  LCookie := LJar.CookieHeaderFor(LSubUrl);
+  Check(Pos('lax=1', LCookie) > 0, 'same-site subdomain sends Lax');
+  Check(Pos('strict=1', LCookie) > 0, 'same-site subdomain sends Strict');
+  Check(Pos('none=1', LCookie) > 0, 'same-site subdomain sends None');
 end;
 
 var
@@ -353,6 +410,9 @@ begin
   T.Test('BuildCookieRejectsNonAsciiAttribute', @TestBuildCookieRejectsNonAsciiAttribute);
   T.Test('JarDropsSameSiteNoneWithoutSecure', @TestJarDropsSameSiteNoneWithoutSecure);
   T.Test('JarDefaultSameSiteLaxSendsSameSite', @TestJarDefaultSameSiteLaxSendsSameSite);
-  T.Test('JarCrossSiteSuppressesLaxAndStrict', @TestJarCrossSiteSuppressesLaxAndStrict);
+  T.Test('HttpCookieSiteKeyETldPlusOne', @TestHttpCookieSiteKeyETldPlusOne);
+  T.Test('JarRejectsPublicSuffixDomain', @TestJarRejectsPublicSuffixDomain);
+  T.Test('JarMultiLabelTldSameSiteSharing', @TestJarMultiLabelTldSameSiteSharing);
+  T.Test('JarSameSiteSendsOnRegistrableDomain', @TestJarSameSiteSendsOnRegistrableDomain);
   if not T.Run then Halt(1);
 end.

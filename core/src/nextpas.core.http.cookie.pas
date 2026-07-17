@@ -94,6 +94,10 @@ function ParseSingleCookie(const AStr: string; out AName, AValue: string): Boole
    StoreFromResponse absorbs Set-Cookie; CookieHeaderFor builds Cookie for a URL. }
 function NewHttpCookieJar: IHttpCookieJar;
 
+{ Registrable domain (eTLD+1) used as SameSite site identity.
+  Uses a maintainable multi-label public-suffix subset plus default single-label eTLD. }
+function HttpCookieSiteKey(const AHost: string): string;
+
 implementation
 
 uses
@@ -501,33 +505,256 @@ begin
   Result := DateTimeToUnix(DateTimeUtcNow);
 end;
 
-{ SiteKey approximation without PSL: host with ≤1 label, or last two labels.
-  e.g. a.b.example.com → example.com; localhost → localhost. }
-function CookieSiteKey(const AHost: string): string;
+{ Multi-label public suffixes only (sorted, binary-searchable).
+  Single-label TLDs use the default rule (eTLD length = 1).
+  This is a maintainable product subset — not the full publicsuffix.org list. }
+const
+  COOKIE_MULTI_PUBLIC_SUFFIXES: array[0..40] of string = (
+    'ac.jp',
+    'ac.uk',
+    'co.id',
+    'co.il',
+    'co.in',
+    'co.jp',
+    'co.kr',
+    'co.nz',
+    'co.uk',
+    'co.za',
+    'com.ar',
+    'com.au',
+    'com.br',
+    'com.cn',
+    'com.hk',
+    'com.mx',
+    'com.sg',
+    'com.tr',
+    'com.tw',
+    'edu.au',
+    'edu.cn',
+    'github.io',
+    'gov.au',
+    'gov.cn',
+    'gov.uk',
+    'herokuapp.com',
+    'ltd.uk',
+    'me.uk',
+    'ne.jp',
+    'net.au',
+    'net.cn',
+    'net.uk',
+    'or.jp',
+    'org.au',
+    'org.cn',
+    'org.uk',
+    'org.za',
+    'pages.dev',
+    'plc.uk',
+    'sch.uk',
+    'workers.dev'
+  );
+
+function CookieSuffixCompare(const A, B: string): Integer;
+{ strcmp-like for lowercase ASCII host suffixes. }
 var
-  LHost: string;
-  LDot, LPrev: SizeInt;
+  LI, LLenA, LLenB, LMin: SizeInt;
 begin
-  LHost := LowerAscii(AHost);
-  if LHost = '' then
-    Exit('');
-  LDot := 0;
-  LPrev := 0;
-  for LPrev := Length(LHost) downto 1 do
-    if LHost[LPrev] = '.' then
+  LLenA := Length(A);
+  LLenB := Length(B);
+  if LLenA < LLenB then
+    LMin := LLenA
+  else
+    LMin := LLenB;
+  for LI := 1 to LMin do
+    if A[LI] <> B[LI] then
     begin
-      if LDot = 0 then
-        LDot := LPrev
+      if Ord(A[LI]) < Ord(B[LI]) then
+        Exit(-1)
       else
+        Exit(1);
+    end;
+  if LLenA < LLenB then
+    Result := -1
+  else if LLenA > LLenB then
+    Result := 1
+  else
+    Result := 0;
+end;
+
+function IsKnownMultiPublicSuffix(const ASuffix: string): Boolean;
+var
+  LLo, LHi, LMid, LCmp: SizeInt;
+begin
+  Result := False;
+  LLo := Low(COOKIE_MULTI_PUBLIC_SUFFIXES);
+  LHi := High(COOKIE_MULTI_PUBLIC_SUFFIXES);
+  while LLo <= LHi do
+  begin
+    LMid := LLo + (LHi - LLo) div 2;
+    LCmp := CookieSuffixCompare(ASuffix, COOKIE_MULTI_PUBLIC_SUFFIXES[LMid]);
+    if LCmp = 0 then
+      Exit(True);
+    if LCmp < 0 then
+      LHi := LMid - 1
+    else
+      LLo := LMid + 1;
+  end;
+end;
+
+function IsCookiePublicSuffix(const AHostOrSuffix: string): Boolean;
+{ True when the name is a known multi-label public suffix, or a single label
+  (default eTLD). Empty is not a public suffix. }
+var
+  LName: string;
+  LI: SizeInt;
+  LDots: Integer;
+begin
+  LName := LowerAscii(AHostOrSuffix);
+  if (LName <> '') and (LName[1] = '.') then
+    LName := System.Copy(LName, 2, MaxInt);
+  while (LName <> '') and (LName[Length(LName)] = '.') do
+    SetLength(LName, Length(LName) - 1);
+  if LName = '' then
+    Exit(False);
+  if IsKnownMultiPublicSuffix(LName) then
+    Exit(True);
+  LDots := 0;
+  for LI := 1 to Length(LName) do
+    if LName[LI] = '.' then
+      Inc(LDots);
+  { Default rule: every single DNS label is treated as a public suffix (TLD). }
+  Result := LDots = 0;
+end;
+
+function HostLooksLikeIpLiteral(const AHost: string): Boolean;
+var
+  LI: SizeInt;
+  LHasColon, LHasDot, LHasAlpha: Boolean;
+begin
+  Result := False;
+  if AHost = '' then
+    Exit;
+  LHasColon := False;
+  LHasDot := False;
+  LHasAlpha := False;
+  for LI := 1 to Length(AHost) do
+  begin
+    case AHost[LI] of
+      '0'..'9': ;
+      '.': LHasDot := True;
+      ':': LHasColon := True;
+      'a'..'z', 'A'..'Z': LHasAlpha := True;
+    else
+      Exit(False);
+    end;
+  end;
+  if LHasColon then
+    Exit(True); { IPv6-ish }
+  if LHasAlpha then
+    Exit(False);
+  Result := LHasDot; { IPv4-ish dotted digits }
+end;
+
+function CookieLabelCount(const AHost: string): Integer;
+var
+  LI: SizeInt;
+begin
+  if AHost = '' then
+    Exit(0);
+  Result := 1;
+  for LI := 1 to Length(AHost) do
+    if AHost[LI] = '.' then
+      Inc(Result);
+end;
+
+function CookieTrailingLabels(const AHost: string; ALabelCount: Integer): string;
+{ Return the last ALabelCount labels of AHost (ALabelCount >= 1). }
+var
+  LI: SizeInt;
+  LNeed: Integer;
+begin
+  if (AHost = '') or (ALabelCount <= 0) then
+    Exit('');
+  if ALabelCount >= CookieLabelCount(AHost) then
+    Exit(AHost);
+  LNeed := ALabelCount;
+  for LI := Length(AHost) downto 1 do
+    if AHost[LI] = '.' then
+    begin
+      Dec(LNeed);
+      if LNeed = 0 then
       begin
-        Result := System.Copy(LHost, LPrev + 1, MaxInt);
+        Result := System.Copy(AHost, LI + 1, MaxInt);
         Exit;
       end;
     end;
-  if LDot > 0 then
-    Result := LHost
-  else
-    Result := LHost;
+  Result := AHost;
+end;
+
+function CookiePublicSuffixLabelCount(const AHost: string): Integer;
+{ Longest known multi-label public suffix length in labels; default 1. }
+var
+  LLabels, LI: Integer;
+  LCand: string;
+begin
+  Result := 1;
+  LLabels := CookieLabelCount(AHost);
+  if LLabels < 2 then
+    Exit;
+  for LI := LLabels downto 2 do
+  begin
+    LCand := CookieTrailingLabels(AHost, LI);
+    if IsKnownMultiPublicSuffix(LCand) then
+      Exit(LI);
+  end;
+end;
+
+{ SiteKey = registrable domain (eTLD+1) for SameSite site comparison.
+  - example.com / a.b.example.com → example.com
+  - foo.co.uk / a.foo.co.uk → foo.co.uk  (co.uk is multi-label public suffix)
+  - localhost / 127.0.0.1 → host itself
+  Unknown multi-part TLDs fall back to single-label eTLD (last two labels). }
+function CookieSiteKey(const AHost: string): string;
+var
+  LHost: string;
+  LSuffixLabels, LHostLabels: Integer;
+begin
+  LHost := LowerAscii(AHost);
+  if (LHost <> '') and (LHost[1] = '.') then
+    LHost := System.Copy(LHost, 2, MaxInt);
+  while (LHost <> '') and (LHost[Length(LHost)] = '.') do
+    SetLength(LHost, Length(LHost) - 1);
+  if LHost = '' then
+    Exit('');
+  if HostLooksLikeIpLiteral(LHost) then
+    Exit(LHost);
+  LHostLabels := CookieLabelCount(LHost);
+  if LHostLabels <= 1 then
+    Exit(LHost);
+  LSuffixLabels := CookiePublicSuffixLabelCount(LHost);
+  if LHostLabels <= LSuffixLabels then
+    { Host is exactly a public suffix (or shorter) — no registrable owner. }
+    Exit(LHost);
+  Result := CookieTrailingLabels(LHost, LSuffixLabels + 1);
+end;
+
+function CookieDomainMatchesHost(const ACookieDomain, AHost: string;
+  const AHostOnly: Boolean): Boolean;
+var
+  LHost, LDomain: string;
+begin
+  LHost := LowerAscii(AHost);
+  LDomain := LowerAscii(ACookieDomain);
+  if LDomain = '' then
+    Exit(False);
+  if AHostOnly then
+    Exit(LHost = LDomain);
+  if LHost = LDomain then
+    Exit(True);
+  if Length(LHost) <= Length(LDomain) then
+    Exit(False);
+  Result := (System.Copy(LHost, Length(LHost) - Length(LDomain) + 1,
+    Length(LDomain)) = LDomain) and
+    (LHost[Length(LHost) - Length(LDomain)] = '.');
 end;
 
 function SameSiteAllowsSend(const ASameSite: TSameSite;
@@ -744,6 +971,15 @@ begin
   begin
     AItem.Domain := LowerAscii(ARequestUrl.Host);
     AItem.HostOnly := True;
+  end
+  else
+  begin
+    { RFC 6265bis: Domain attribute must not be a public suffix (super-cookie). }
+    if IsCookiePublicSuffix(AItem.Domain) then
+      Exit(False);
+    { Domain must domain-match the request host. }
+    if not CookieDomainMatchesHost(AItem.Domain, ARequestUrl.Host, False) then
+      Exit(False);
   end;
   if (AItem.Path = '') or (AItem.Path[1] <> '/') then
   begin
@@ -795,22 +1031,8 @@ end;
 
 function THttpCookieJar.DomainMatches(const ACookieDomain, AHost: string;
   const AHostOnly: Boolean): Boolean;
-var
-  LHost, LDomain: string;
 begin
-  LHost := LowerAscii(AHost);
-  LDomain := LowerAscii(ACookieDomain);
-  if LDomain = '' then
-    Exit(False);
-  if AHostOnly then
-    Exit(LHost = LDomain);
-  if LHost = LDomain then
-    Exit(True);
-  if Length(LHost) <= Length(LDomain) then
-    Exit(False);
-  Result := (System.Copy(LHost, Length(LHost) - Length(LDomain) + 1,
-    Length(LDomain)) = LDomain) and
-    (LHost[Length(LHost) - Length(LDomain)] = '.');
+  Result := CookieDomainMatchesHost(ACookieDomain, AHost, AHostOnly);
 end;
 
 function THttpCookieJar.PathMatches(const ACookiePath,
@@ -963,6 +1185,11 @@ end;
 function NewHttpCookieJar: IHttpCookieJar;
 begin
   Result := THttpCookieJar.Create;
+end;
+
+function HttpCookieSiteKey(const AHost: string): string;
+begin
+  Result := CookieSiteKey(AHost);
 end;
 
 end.

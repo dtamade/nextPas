@@ -1,7 +1,8 @@
 # Consumer Audit Summary — 2026-07-17
 
 **完整报告**: [CONSUMER-AUDIT-FINDINGS-2026-07-17.md](CONSUMER-AUDIT-FINDINGS-2026-07-17.md)
-**状态**: **FIX CLOSED**（审计 + 全修 slice）
+**状态**: **FIX CLOSED**（审计 + 全修 slice；归属路线图时代 C）
+**活路线图**: [ROADMAP.md](ROADMAP.md) 时代 D 起只做回归锁 / 按触达升级
 **分支**: `mem` · worktree `.worktrees/mem`
 
 ## 一句话

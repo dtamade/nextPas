@@ -1,5 +1,7 @@
 # mem 可用性实施规划（含 U1 收口）
 
+> **SUPERSEDED 作为待办**: 主线已 CLOSED。活路线图见 [ROADMAP.md](ROADMAP.md)；评分见 [USABILITY-SCORE.md](USABILITY-SCORE.md)。本文仅作履历。
+
 **状态**: F1–F7 / R / S / T / **U1 implemented** — 默认双轨可用性主线 **CLOSED**
 **前置**: [USABILITY-EVAL-2026-07-17.md](USABILITY-EVAL-2026-07-17.md) · [USABILITY-FINDINGS-RESEARCH.md](USABILITY-FINDINGS-RESEARCH.md)
 **日期**: 2026-07-17

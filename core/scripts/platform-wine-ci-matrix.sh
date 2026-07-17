@@ -117,7 +117,9 @@ run_module() {
   else
     exit_code=$?
     summary="$(extract_summary_line "$log_path")"
-    if [ "$exit_code" -eq 2 ]; then
+    # GNU make returns 2 for any recipe failure; only treat explicit Wine-missing
+    # messages as SKIP. Compile/runtime failures must surface as FAIL.
+    if grep -Eq -- 'wine-runtime-smoke requires Wine|SKIP:.*[Ww]ine' "$log_path"; then
       skip_count=$((skip_count + 1))
       status="SKIP"
       printf '%s %s\n' "${COLOR_SKIP}SKIP${COLOR_RESET}" "$module_name"
@@ -129,6 +131,10 @@ run_module() {
       status="FAIL"
       append_failed_log "$module_name" "$log_path"
       printf '%s %s\n' "${COLOR_FAIL}FAIL${COLOR_RESET}" "$module_name"
+      if [ "$summary" = "no summary line captured" ]; then
+        summary="$(grep -E -- 'Error:|Fatal:|错误' "$log_path" | head -n 1 || true)"
+        summary="$(trim_whitespace "${summary:-make failed (exit $exit_code)}")"
+      fi
     fi
     append_summary_row "$module_name" "$status" "$summary"
     return 0

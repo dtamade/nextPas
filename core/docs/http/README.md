@@ -5,10 +5,15 @@ middleware chaining, and a centralized internal transport registry.
 
 ## Module Docs
 
-- `GOAL_TREE.md` — north star, route map, done criteria, and current highest-value slices
-- `ARCHITECTURE.md` — stable architecture facts, runtime ownership, and protocol seams
-- `API_COVERAGE.md` — public API proof and parity decisions
-- `BENCHMARKS.md` — benchmark truth, microbenchmark evidence, and comparator caveats
+| Doc | Role |
+|-----|------|
+| **[`ROADMAP.md`](ROADMAP.md)** | **Forward work only** — start here before coding |
+| [`GOAL_TREE.md`](GOAL_TREE.md) | North star, stage definition, do-not-drift rules |
+| [`CONTRACT.md`](CONTRACT.md) | Public behavior contract |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable architecture facts, runtime ownership, protocol seams |
+| [`API_COVERAGE.md`](API_COVERAGE.md) | Public API evidence matrix |
+| [`BENCHMARKS.md`](BENCHMARKS.md) | Benchmark truth and comparator caveats |
+| [`archive/`](archive/README.md) | Historical waves only — **not** a backlog |
 
 ## Architecture
 
@@ -177,7 +182,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   the socket is up; `ConnectTimeout` = **OS dial + post-dial first-write**
   budget on new sockets. When `ConnectTimeout=0`, dial uses `Timeout` if
   `Timeout>0`, else unbounded.
-- `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite
+- `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite +
+  eTLD+1 SiteKey (`HttpCookieSiteKey`; multi-label PSL subset; reject
+  `Domain=public-suffix`)
   store/send (default Lax; None requires Secure; SiteKey approx, no PSL).
 - `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
   (`http://host:port`). Target `http://` uses absolute-form; target `https://`
