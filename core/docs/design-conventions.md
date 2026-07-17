@@ -230,7 +230,7 @@ if User <> nil then ...
 **简单过程/函数 —— 一行搞定：**
 
 ```pascal
-Compressed := nextpas.core.compress.GzipEncode(Data);
+Compressed := nextpas.core.compress.GzipCompress(Data);
 ```
 
 **Fluent Builder —— 链式调用：**
