@@ -44,6 +44,7 @@ fs.pas           ← 门面 re-export
 - **[INV-2]** ReadAllText 返回完整内容的 string 拷贝
 - **[INV-3]** GlobMatch 支持 `*`, `?`, `[...]` 模式
 - **[INV-4]** CreateDirAll 递归创建，已存在时静默成功
+- **[INV-5]** Mkdir/MkdirAll/Remove/RemoveAll/Rename 失败抛异常；Boolean 成功恒为 True（兼容遗留 `if not Mkdir` 写法，勿依赖 False）
 
 ---
 

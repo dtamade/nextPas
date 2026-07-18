@@ -244,20 +244,54 @@ end;
 
 procedure TestUserCacheDir;
 var
-  LCache: string;
+  LCache, LSaved, LApp: string;
+  LHadXdg: Boolean;
 begin
-  LCache := UserCacheDir;
-  Check(LCache <> '', 'UserCacheDir is not empty');
-  Check(Pos('.cache', LCache) > 0, 'UserCacheDir contains .cache');
+  LHadXdg := TryGetEnv('XDG_CACHE_HOME', LSaved);
+  try
+    UnsetEnv('XDG_CACHE_HOME');
+    LCache := UserCacheDir;
+    Check(LCache <> '', 'UserCacheDir is not empty');
+    Check(Pos('.cache', LCache) > 0, 'UserCacheDir fallback contains .cache');
+
+    SetEnv('XDG_CACHE_HOME', '/tmp/nextpas-xdg-cache-test');
+    LCache := UserCacheDir;
+    CheckEqual('/tmp/nextpas-xdg-cache-test', LCache,
+      'UserCacheDir respects XDG_CACHE_HOME');
+
+    LApp := UserCacheDir('myapp');
+    CheckEqual('/tmp/nextpas-xdg-cache-test/myapp', LApp,
+      'UserCacheDir joins AppName');
+  finally
+    if LHadXdg then
+      SetEnv('XDG_CACHE_HOME', LSaved)
+    else
+      UnsetEnv('XDG_CACHE_HOME');
+  end;
 end;
 
 procedure TestUserConfigDir;
 var
-  LConfig: string;
+  LConfig, LSaved: string;
+  LHadXdg: Boolean;
 begin
-  LConfig := UserConfigDir;
-  Check(LConfig <> '', 'UserConfigDir is not empty');
-  Check(Pos('.config', LConfig) > 0, 'UserConfigDir contains .config');
+  LHadXdg := TryGetEnv('XDG_CONFIG_HOME', LSaved);
+  try
+    UnsetEnv('XDG_CONFIG_HOME');
+    LConfig := UserConfigDir;
+    Check(LConfig <> '', 'UserConfigDir is not empty');
+    Check(Pos('.config', LConfig) > 0, 'UserConfigDir fallback contains .config');
+
+    SetEnv('XDG_CONFIG_HOME', '/tmp/nextpas-xdg-config-test');
+    LConfig := UserConfigDir('app');
+    CheckEqual('/tmp/nextpas-xdg-config-test/app', LConfig,
+      'UserConfigDir XDG + AppName');
+  finally
+    if LHadXdg then
+      SetEnv('XDG_CONFIG_HOME', LSaved)
+    else
+      UnsetEnv('XDG_CONFIG_HOME');
+  end;
 end;
 
 procedure TestGetEnvDefault;

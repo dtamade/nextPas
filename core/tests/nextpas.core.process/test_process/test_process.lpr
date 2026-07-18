@@ -1168,6 +1168,18 @@ begin
   { Capture still ignores non-zero exit (documented) }
   LStr := Capture('/bin/false', []);
   Check('Capture false — no raise, empty stdout', LStr = '');
+
+  LRaised := False;
+  try
+    MustCaptureCombined('/bin/false', []);
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('MustCaptureCombined false — raises', LRaised);
+
+  LStr := MustCaptureCombined('/bin/echo', ['combined-ok']);
+  Check('MustCaptureCombined success — has stdout', Pos('combined-ok', LStr) > 0);
 end;
 
 

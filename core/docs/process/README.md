@@ -147,7 +147,25 @@ WriteLn(Result.StdOut);  // "hello"
 
 ## 平台支持
 
-当前实现仅支持 Unix (Linux/macOS)。Windows 支持在 platform 层已有基础（CreateProcess），但 L2 层尚未适配。
+| 层 | Unix (Linux/macOS) | Windows |
+|----|--------------------|---------|
+| L2 `nextpas.core.process` | ✅ 一等支持 | ⚠️ 可用但未做完整 parity（管道/poll/信号语义差异） |
+| L0 `platform.process` | ✅ | ✅ CreateProcess 基础；`platform_process_run` 捕获 stderr 有限 |
+
+**建议**：生产路径以 Unix 为准；Windows 调用请走 `platform.process` 或先在 Wine/CI 补回归。完整 Windows L2 对等列为后续里程碑。
+
+## 推荐 API 分层（避免便利函数爆炸）
+
+| 场景 | 推荐 | 说明 |
+|------|------|------|
+| 完整控制 | `Command(...).Args.Dir.EnvAdd.Timeout.Spawn/Output` | 唯一完整入口 |
+| 同步拿输出 | `Run` / `RunIn` | 检查 `ExitCode` / `TimedOut` |
+| 失败即错 | `RunChecked` / `MustCapture` / `MustCaptureCombined` | 类似 Go `Output()` |
+| 只要文本且可忽略 exit | `Capture*` | **不检查退出码** |
+| 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut` |
+| PATH 查找 | `LookPath` / `TryLookPath` | 含目录部分也校验可执行 |
+
+其余 `RunInWithInputTimeout...` 组合函数保留兼容；新代码优先 builder。
 
 ## 环境变量
 
@@ -194,4 +212,4 @@ make -C core/tests/nextpas.core.process/test_process_deep clean test
 make -C core/tests/nextpas.core.process/test_process_pipe_contract clean test
 ```
 
-285 个测试，覆盖所有公共 API，heaptrc 零泄漏。
+覆盖公共 API，heaptrc 零泄漏。

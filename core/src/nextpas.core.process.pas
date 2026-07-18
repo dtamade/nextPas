@@ -82,11 +82,15 @@ function MustCaptureIn(const APath: string; const AArgs: array of string;
  *        如需区分两个流，请使用 Run(...) 然后分别读取 .StdOut 和 .StdErr。 *}
 function CaptureCombined(const APath: string;
   const AArgs: array of string): string;
+{** @desc 执行并返回 stdout+stderr 合并文本；非成功退出抛 EProcessError *}
+function MustCaptureCombined(const APath: string;
+  const AArgs: array of string): string;
 {**
  * @desc 在指定工作目录中执行子进程并返回 stdout + stderr 合并文本
  *
  * @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。
  *       各自内部保持写入顺序，但合并后不交错。
+ *       不检查退出码。
  *
  * @params
  *   APath  可执行文件路径
@@ -365,6 +369,16 @@ var
   LOutput: TProcessOutput;
 begin
   LOutput := Run(APath, AArgs);
+  Result := LOutput.StdOut + LOutput.StdErr;
+end;
+
+function MustCaptureCombined(const APath: string;
+  const AArgs: array of string): string;
+var
+  LOutput: TProcessOutput;
+begin
+  LOutput := Run(APath, AArgs);
+  RaiseIfProcessFailed(APath, LOutput);
   Result := LOutput.StdOut + LOutput.StdErr;
 end;
 

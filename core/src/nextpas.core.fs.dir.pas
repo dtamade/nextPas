@@ -22,11 +22,18 @@ function FsOpenDir(const APath: string): IDirIterator;
 function FsMkdir(const APath: string;
   const APerm: TFilePermission = PermDirDefault): Boolean;
 {** @desc 递归创建目录（等同 mkdir -p）
-    @note 成功返回 True；失败时抛出异常。保留 Boolean 返回值仅为向后兼容。 *}
+    @note 成功返回 True；失败时抛出异常。保留 Boolean 返回值仅为向后兼容。
+          不要写 if not MkdirAll(...) — 失败路径走异常，不会返回 False。 *}
 function FsMkdirAll(const APath: string;
   const APerm: TFilePermission = PermDirDefault): Boolean;
+{** @desc 删除文件或空目录
+    @note 成功返回 True；失败时抛异常。Boolean 仅为兼容。 *}
 function FsRemove(const APath: string): Boolean;
+{** @desc 递归删除（rm -rf）
+    @note 成功返回 True；失败时抛异常。Boolean 仅为兼容。 *}
 function FsRemoveAll(const APath: string): Boolean;
+{** @desc 重命名/移动
+    @note 成功返回 True；失败时抛异常。Boolean 仅为兼容。 *}
 function FsRename(const AOld, ANew: string): Boolean;
 procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
 {** @desc 递归遍历目录树，只访问文件（跳过目录条目）

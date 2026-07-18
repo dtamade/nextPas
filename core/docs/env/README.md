@@ -27,8 +27,8 @@
 | 函数 | 说明 |
 |------|------|
 | `UserHomeDir` | 用户主目录（Unix: `$HOME`, Windows: `%USERPROFILE%`） |
-| `UserCacheDir` | 用户缓存目录（Unix: `$HOME/.cache`, Windows: `%LOCALAPPDATA%`） |
-| `UserConfigDir` | 用户配置目录（Unix: `$HOME/.config`, Windows: `%APPDATA%`） |
+| `UserCacheDir([AppName])` | 缓存目录（Unix: `$XDG_CACHE_HOME` 或 `$HOME/.cache`；Windows: `%LOCALAPPDATA%`） |
+| `UserConfigDir([AppName])` | 配置目录（Unix: `$XDG_CONFIG_HOME` 或 `$HOME/.config`；Windows: `%APPDATA%`） |
 
 ### 写入
 

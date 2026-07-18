@@ -35,11 +35,11 @@ LPath := ExpandEnvStrict('$HOME/.config');     // 严格：未定义抛异常
 LPath := ExpandEnv('${HOME}/.config');
 LPath := ExpandEnv('${VAR}_suffix');
 
-// 用户目录
+// 用户目录（遵循 XDG；可选 AppName）
 LHome := UserHomeDir();
-LCache := UserCacheDir();   // Unix: $HOME/.cache；Windows: %LOCALAPPDATA%
-LConfig := UserConfigDir(); // Unix: $HOME/.config；Windows: %APPDATA%
-// 应用子目录请自行 PathJoin(UserCacheDir, 'myapp')
+LCache := UserCacheDir();            // $XDG_CACHE_HOME 或 $HOME/.cache
+LCacheApp := UserCacheDir('myapp');  // .../myapp
+LConfig := UserConfigDir('myapp');
 
 // 列出所有环境变量名
 LKeys := EnvKeys;
@@ -77,8 +77,8 @@ LKeys := EnvKeys;
 | 函数 | 说明 |
 |------|------|
 | `UserHomeDir(): string` | 获取用户主目录 |
-| `UserCacheDir(): string` | 获取用户缓存目录根（不含 app 名；自行 Join） |
-| `UserConfigDir(): string` | 获取用户配置目录根（不含 app 名；自行 Join） |
+| `UserCacheDir(AppName=''): string` | 缓存根或 `根/AppName`（Unix 尊重 `XDG_CACHE_HOME`） |
+| `UserConfigDir(AppName=''): string` | 配置根或 `根/AppName`（Unix 尊重 `XDG_CONFIG_HOME`） |
 
 ## 展开语法
 
