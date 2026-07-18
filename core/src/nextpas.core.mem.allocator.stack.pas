@@ -187,8 +187,13 @@ var
   LTotalSize: SizeUInt;
   LSizePtr: PSizeUInt;
 begin
+  if ASize = 0 then
+    Exit(nil);
+
   { size header + user data, aligned to 8 }
   LTotalSize := (SizeOf(SizeUInt) + ASize + 7) and not SizeUInt(7);
+  if LTotalSize < ASize then { overflow check }
+    Exit(nil);
 
   { 检查当前区域是否有足够空间 }
   if FCurrentOffset + LTotalSize > FRegionSize then

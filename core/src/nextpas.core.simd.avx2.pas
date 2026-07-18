@@ -73,10 +73,13 @@ procedure MemSet_AVX2(dst: Pointer; len: SizeUInt; value: Byte);
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.simd.scalar, // For fallback functions
-  nextpas.core.simd.mathutil; // For SimdMax in stable normalization
+  nextpas.core.simd.mathutil, // For SimdMax in stable normalization
+  nextpas.core.math.trig, // For ArcTan2
+  Math; // For Ceil, Floor
 
 // Thread-local scratch buffers for Tan computation (AVX2 specific)
 // 使用 PSingle (raw pointer) 代替动态数组，避免 FPC threadvar 清理问题
@@ -96,8 +99,8 @@ begin
       FreeMem(GAVX2TanCosBuf);
     // 分配新缓冲区
     GAVX2TanBufCapacity := aCount;
-    GetMem(GAVX2TanSinBuf, aCount * SizeOf(Single));
-    GetMem(GAVX2TanCosBuf, aCount * SizeOf(Single));
+    GAVX2TanSinBuf := GetMem(aCount * SizeOf(Single));
+    GAVX2TanCosBuf := GetMem(aCount * SizeOf(Single));
   end;
 end;
 

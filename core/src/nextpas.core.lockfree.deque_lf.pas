@@ -3,16 +3,21 @@
 
   Concurrent Deque — double-ended queue with spin-lock protection.
 
+  Progress model (honest):
+  - **NOT lock-free / NOT wait-free**. Mutual exclusion via CAS spin lock
+    (AcquireLock / ReleaseLock on FLock). Contended paths spin then ThreadSwitch.
+  - Unit name "lf" is historical only. Default T1 lock-free work-stealing deque
+    is nextpas.core.lockfree.deque (TWorkStealingDeque).
+
   Design:
   - Array-based circular buffer for O(1) push/pop at both ends
-  - Spin lock for thread safety (NOT lock-free — name is historical)
+  - Spin lock for thread safety
   - Automatic capacity doubling when full
-  - PushLeft/PushRight/PopLeft/PopRight
-
-  Note: Despite the "lock-free" prefix (historical naming), this module uses
-  a spin lock for mutual exclusion. For true lock-free deque, see collections.deque.
+  - PushLeft/PushRight/PopLeft/PopRight return TDequeResult (dqOk/dqEmpty/dqFull)
+  - No Close / TLockFreeTryError surface — not T1 Try*Ex parity target
 
   2026-07-06  Phase 4
+  2026-07-17  H2-1: progress-model honesty (spin-lock, not wait-free)
 ******************************************************************************}
 {$mode ObjFPC}{$H+}{$J-}
 unit nextpas.core.lockfree.deque_lf;
@@ -20,7 +25,7 @@ unit nextpas.core.lockfree.deque_lf;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   DEQUE_DEFAULT_CAPACITY = 64;
@@ -33,15 +38,24 @@ type
   );
 
   {**
-   * 无锁双端队列。
+   * 并发双端队列（spin-lock，非 lock-free）。
    *
    * 基于循环数组实现，支持两端 O(1) 操作。
-   * 使用 spin lock 保证线程安全。
+   * 使用 spin lock 保证线程安全；名称含 LockFree 仅为历史命名。
    *
    * @constraints
    *   - TValue 必须是 AnsiString
    *   - 自动扩容
+   * @progress lock-based (spin lock); not wait-free
    *}
+  {** @desc 双端队列（lock-based）
+    @details 基于循环数组的双端队列。
+      - 两端 O(1) Push/Pop 操作
+      - 自动扩容
+      - progress: spin-lock，非 lock-free / 非 wait-free
+      - T1 真 lock-free 工作窃取见 TWorkStealingDeque
+      - 适用场景：通用双端并发缓冲（非默认门面首选）
+   * @concurrency Thread-safe via spin lock (not lock-free). }
   TLockFreeDeque = class
   private
     FData: array of AnsiString;
@@ -92,6 +106,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.atomic,
   nextpas.core.errors,
   nextpas.core.lockfree.base;
@@ -156,7 +171,7 @@ var
   LNewData: array of AnsiString;
 begin
   if FCapacity > High(Int32) div 2 then
-    raise EOutOfMemoryError.Create('TLockFreeDeque.Grow: capacity overflow');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TLockFreeDeque.Grow: capacity overflow'));
   LNewCap := FCapacity * 2;
   SetLength(LNewData, LNewCap);
   { Copy elements in order }

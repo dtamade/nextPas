@@ -3,7 +3,6 @@ program test_lockfree_counter;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.counter,
   nextpas.core.lockfree,
   nextpas.core.atomic,

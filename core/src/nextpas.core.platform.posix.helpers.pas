@@ -16,6 +16,7 @@ unit nextpas.core.platform.posix.helpers;
 interface
 
 uses
+  nextpas.core.platform.posix.errno,
   nextpas.core.platform.error,
   nextpas.core.platform.posix.base;
 

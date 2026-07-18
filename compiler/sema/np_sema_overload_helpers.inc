@@ -72,26 +72,26 @@ begin
 end;
 
 function HasOverload(const AName: string;
-  const AProcedureBodies: TProcedureBodyArray): Boolean;
+  const AProcedureBodies: TProcedureBodyVec): Boolean;
 var
   Index, Count: LongInt;
 begin
   Count := 0;
-  for Index := 0 to Length(AProcedureBodies) - 1 do
+  for Index := 0 to LongInt(AProcedureBodies.Count) - 1 do
     if SameText(AProcedureBodies[Index].Name, AName) then
       Inc(Count);
   Result := Count > 1;
 end;
 
 function LookupOverload(const AName: string; AArgCount: LongInt;
-  const AProcedureBodies: TProcedureBodyArray;
+  const AProcedureBodies: TProcedureBodyVec;
   out ABody: TGreenNode; out ADecl: TGreenNode): Boolean;
 var
   Index: LongInt;
 begin
   ABody := nil;
   ADecl := nil;
-  for Index := 0 to Length(AProcedureBodies) - 1 do
+  for Index := 0 to LongInt(AProcedureBodies.Count) - 1 do
     if SameText(AProcedureBodies[Index].Name, AName) and
       DeclAcceptsArgCount(AProcedureBodies[Index].Decl, AArgCount) then
     begin
@@ -200,7 +200,9 @@ begin
     Exit(False);
   end;
 
-  for Index := 0 to Length(Ctx.ImportedUnitTrees) - 1 do
+  if Ctx.ImportedUnitTrees = nil then
+    Exit(False);
+  for Index := 0 to LongInt(Ctx.ImportedUnitTrees.Count) - 1 do
   begin
     if not SameText(Ctx.ImportedUnitOwners[Index], OwnerUnitId) then
       Continue;

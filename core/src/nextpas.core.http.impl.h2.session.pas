@@ -17,6 +17,7 @@ uses
   nextpas.core.net.server.intf,
   nextpas.core.platform.io.base,
   nextpas.core.time.deadline,
+  nextpas.core.mem.arena.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.impl.h2.frame,
@@ -115,6 +116,9 @@ type
     FShutdownErrorCode: UInt32;
     FReadDeadline: TDeadline;
     FWriteDeadline: TDeadline;
+    FRequestArena: IArena;
+    procedure InvokeHandler(const AReq: IHttpRequest;
+      const AW: IHttpResponseWriter);
     function StreamBodyTooLarge(const AStream: TH2Stream): Boolean;
     procedure ArmReadDeadline(const ATimeoutMs: Int64);
     procedure ArmWriteDeadline(const ATimeoutMs: Int64);
@@ -204,7 +208,9 @@ uses
   nextpas.core.io.memory,
   nextpas.core.time.base,
   nextpas.core.http.headers,
-  nextpas.core.http.message;
+  nextpas.core.http.message,
+  nextpas.core.http.mem,
+  nextpas.core.http.middleware.requestarena;
 
 {** Hard limit on accumulated read buffer to prevent memory exhaustion.
     16 MB is generous for legitimate traffic; an attacker sending tiny
@@ -599,13 +605,18 @@ constructor TH2ServerSession.Create(const AConn: ITcpStream;
 begin
   inherited Create;
   if AConn = nil then
-    raise EArgumentError.Create('h2 server session requires connection');
+    raise EHttpError.Create(hekArgument, 'h2 server session requires connection');
   if AHandler = nil then
-    raise EArgumentError.Create('h2 server session requires handler');
+    raise EHttpError.Create(hekArgument, 'h2 server session requires handler');
   AOptions.Validate;
   FConn := AConn;
   FHandler := AHandler;
   FOptions := AOptions;
+  { Connection-scoped request arena: Reset per stream request (session is serial). }
+  if AOptions.RequestArena then
+    FRequestArena := HttpCreateRequestArena(AOptions.RequestArenaCapacity)
+  else
+    FRequestArena := nil;
   FState := h2sesExpectPreface;
   FStreams := TH2StreamMap.Create;
   FRemoteSettings := TH2Settings.Default;
@@ -637,9 +648,16 @@ begin
 end;
 
 procedure TH2ServerSession.ArmReadDeadline(const ATimeoutMs: Int64);
+var
+  LTimeoutMs: Int64;
 begin
-  if ATimeoutMs > 0 then
-    FReadDeadline := TDeadline.After(TDuration.FromMilliseconds(ATimeoutMs))
+  { Prefer explicit read timeout; fall back to idle timeout for keep-alive waits
+    so blocking Run() does not hang forever after a response is flushed. }
+  LTimeoutMs := ATimeoutMs;
+  if (LTimeoutMs <= 0) and (FOptions.IdleTimeout > 0) then
+    LTimeoutMs := FOptions.IdleTimeout;
+  if LTimeoutMs > 0 then
+    FReadDeadline := TDeadline.After(TDuration.FromMilliseconds(LTimeoutMs))
   else
     FReadDeadline := TDeadline.Infinite;
   FConn.SetReadDeadline(FReadDeadline);
@@ -1346,7 +1364,7 @@ var
 begin
   LOriginalHeaders := AStream.Headers;
   if LOriginalHeaders = nil then
-    raise EHttpError.Create('h2 stream missing headers');
+    raise EHttpError.Create(hekProtocol, 'h2 stream missing headers');
   LMethod := HttpMethodFromPseudo(ExtractPseudoHeader(LOriginalHeaders, ':method'));
   LPath := ExtractPseudoHeader(LOriginalHeaders, ':path');
   LScheme := ExtractPseudoHeader(LOriginalHeaders, ':scheme');
@@ -1408,6 +1426,25 @@ begin
   end;
 end;
 
+procedure TH2ServerSession.InvokeHandler(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter);
+begin
+  if FRequestArena = nil then
+  begin
+    FHandler.ServeHTTP(AReq, AW);
+    Exit;
+  end;
+  { Session-serial: one LocalArena, Reset per stream request. }
+  FRequestArena.Reset;
+  HttpAttachRequestArena(AReq, FRequestArena);
+  try
+    FHandler.ServeHTTP(AReq, AW);
+  finally
+    HttpDetachRequestArena(AReq);
+    FRequestArena.Reset;
+  end;
+end;
+
 procedure TH2ServerSession.ExecuteStreamRequest(const AStream: TH2Stream);
 var
   LReq: IHttpRequest;
@@ -1432,7 +1469,7 @@ begin
   LReq := BuildRequestFromStream(AStream);
   LWriterObj := TH2ResponseWriter.Create;
   try
-    FHandler.ServeHTTP(LReq, LWriterObj as IHttpResponseWriter);
+    InvokeHandler(LReq, LWriterObj as IHttpResponseWriter);
     AStream.MarkRequestHandled;
     EncodeResponse(AStream, LWriterObj);
   except
@@ -1621,6 +1658,11 @@ begin
       Break;
     ApplyAllPendingWindowUpdates;
     ExecuteReadyStreams;
+    { Flush responses (and SETTINGS ACK / RST / WINDOW_UPDATE) before blocking
+      on the next read. Otherwise a keep-alive client waiting for headers will
+      deadlock with a server blocked in FillReadBufferBlocking. }
+    if not DrainWriteBuffer then
+      Break;
     if (FState = h2sesShuttingDown) and (FStreams.ActiveCount = 0) then
     begin
       if not FGoawaySent then

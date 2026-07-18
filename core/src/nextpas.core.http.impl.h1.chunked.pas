@@ -45,7 +45,7 @@ var
 begin
   if ACount = 0 then Exit(0);
   if FFinished then
-    raise EHttpError.Create('chunked response already finalized');
+    raise EHttpError.Create(hekProtocol, 'chunked response already finalized');
   LHexLen := IntToHexBuffer(UInt64(ACount), @LHex[0], 1);
   IoWriteAll(FInner, LHex[0], SizeUInt(LHexLen));
   IoWriteAll(FInner, PAnsiChar(#13#10)^, 2);

@@ -9,12 +9,30 @@ unit nextpas.core.http.impl.h1;
 
 interface
 
-uses nextpas.core.io.intf, nextpas.core.net.intf, nextpas.core.net.server.intf, nextpas.core.net.server.base, nextpas.core.platform.io.base, nextpas.core.http.base, nextpas.core.http.intf;
+uses nextpas.core.io.intf, nextpas.core.net.intf, nextpas.core.net.server.intf, nextpas.core.net.server.base, nextpas.core.platform.io.base, nextpas.core.tls.base, nextpas.core.http.base, nextpas.core.http.intf;
 
 type
   TH1ClientTransportOptions = record
     Timeout: Int64;
+    { OS dial + post-dial first-write budget for newly opened sockets (ms).
+      0 = dial uses Timeout when Timeout > 0; post-dial first-write uses Timeout. }
+    ConnectTimeout: Int64;
+    { Max idle connections retained per pool authority key (host/port, with
+      scheme/proxy variants encoded in the host key). Not a global pool cap. }
     MaxPoolSize: Int32;
+    { Wall-clock idle TTL (ms). 0 = no TTL. Default comes from client options. }
+    IdleTTL: Int64;
+    { Plain HTTP forward proxy URL (http://[user:pass@]host:port). Empty = direct.
+      For https targets, client dials proxy and opens a CONNECT tunnel, then
+      TLS-wraps the tunneled stream (SNI = origin host). Plain http targets
+      keep absolute-form forwarding (no CONNECT). When UserInfo is present,
+      injects Proxy-Authorization: Basic (raw userinfo, no percent-decode)
+      on CONNECT and on absolute-form when the request lacks that header.
+      Wave I freeze: Basic only — no Digest/NTLM/Negotiate challenge retry. }
+    ProxyUrl: string;
+    { Optional client TLS context for direct H1 https and https-over-CONNECT.
+      Nil uses TSSLQuick.SecureClient. }
+    TLSContext: ISSLContext;
   end;
 
   TH1ServerTransportOptions = record
@@ -24,6 +42,9 @@ type
     MaxHeaderSize: Int32;
     MaxBodySize: Int64;
     MaxRequestsPerConnection: Int32;
+    { Connection-scoped LocalArena: Reset per request, attach for handlers. }
+    RequestArena: Boolean;
+    RequestArenaCapacity: SizeUInt;
   end;
 
 function NewH1ClientTransport(const AOptions: TH1ClientTransportOptions): IHttpTransport;
@@ -31,13 +52,29 @@ function NewH1ServerTransport(const AOptions: TH1ServerTransportOptions): IHttpS
 
 implementation
 
-uses nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors, nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net, nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.text.conv, nextpas.core.http.headers, nextpas.core.http.message, nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast, nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer;
+uses
+  nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors,
+  nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
+  nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.time,
+  nextpas.core.text.conv,
+  nextpas.core.encoding,
+  nextpas.core.http.headers, nextpas.core.http.message,
+  nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast,
+  nextpas.core.http.impl.h1.parser, nextpas.core.http.impl.h1.writer,
+  nextpas.core.http.impl.h1.chunked,
+  nextpas.core.http.impl.tls.stream,
+  nextpas.core.tls.quick,
+  nextpas.core.sync,
+  nextpas.core.mem.arena.intf,
+  nextpas.core.http.mem,
+  nextpas.core.http.middleware.requestarena;
 
 type
   TPoolEntry = record
     Host: string;
     Port: UInt16;
     Conn: ITcpStream;
+    IdleAtMs: UInt64;
   end;
 
   TReadPrependTcpStream = class(TInterfacedObject, IReader, IWriter, ITcpStream)
@@ -57,6 +94,7 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+    procedure SetCancelToken(const AToken: INetCancelToken);
   end;
 
   TH1FastRequestSnapshot = class(TInterfacedObject, IH1Parser)
@@ -95,19 +133,27 @@ type
     IHttpTransportIdleConnections)
   private
     FOptions: TH1ClientTransportOptions;
-    FPoolLock: TRTLCriticalSection;
+    FPoolLock: IMutex;
     FPool: array of TPoolEntry;
     FPoolCount: Int32;
     FPending: string;
+    FDefaultTLSContext: ISSLContext;
     function PooledConnectionIsReusable(const AConn: ITcpStream): Boolean;
+    function PoolEntryExpired(const AEntry: TPoolEntry): Boolean;
+    procedure PoolRemoveAt(const AIndex: Int32);
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
     procedure PoolClear;
+    function SecureClientContext: ISSLContext;
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest;
-      const AAutoHost: string): Boolean;
+      const AAutoHost: string; const AAbsoluteForm: Boolean;
+      const AProxyAuthorization: string): Boolean;
     function ReadResponse(const AReader: IReader;
       const ARequestMethod: THttpMethod; out AKeepAlive: Boolean;
       out AResponseStarted: Boolean): IHttpResponse;
+    procedure EstablishHttpsConnectTunnel(var AConn: ITcpStream;
+      const ATargetHost: string; const ATargetPort: UInt16;
+      const AProxyAuthorization: string);
   public
     constructor Create(const AOptions: TH1ClientTransportOptions);
     destructor Destroy; override;
@@ -211,6 +257,9 @@ type
     FPollWriteDeadline: TDeadline;
     FParserIsSnapshot: Boolean;
     FRequestCount: Int32;
+    FRequestArena: IArena;
+    procedure InvokeHandler(const AReq: IHttpRequest;
+      const AW: IHttpResponseWriter);
     procedure ArmPollReadDeadline(const ATimeoutMs: Int64;
       const AIsIdle: Boolean);
     procedure ArmPollRequestReadDeadline;
@@ -310,7 +359,7 @@ begin
   for LI := 1 to Length(AValue) do
     if (((AValue[LI] < #32) and (AValue[LI] <> #9)) or
         (AValue[LI] = #127)) then
-      raise EHttpError.Create('invalid header value character');
+      raise EHttpError.Create(hekParse, 'invalid header value character');
 end;
 
 procedure ValidateWireRequestTarget(const ATarget: string);
@@ -319,7 +368,7 @@ var
 begin
   for LI := 1 to Length(ATarget) do
     if (ATarget[LI] <= #32) or (ATarget[LI] = #127) then
-      raise EHttpError.Create('invalid request target character');
+      raise EHttpError.Create(hekParse, 'invalid request target character');
 end;
 
 procedure ValidateWireHeaderName(const AName: string);
@@ -327,10 +376,10 @@ var
   LI: SizeInt;
 begin
   if AName = '' then
-    raise EHttpError.Create('empty header name');
+    raise EHttpError.Create(hekProtocol, 'empty header name');
   for LI := 1 to Length(AName) do
     if not IsHttpHeaderNameChar(AnsiChar(AName[LI])) then
-      raise EHttpError.Create('invalid header name character');
+      raise EHttpError.Create(hekParse, 'invalid header name character');
 end;
 
 procedure ValidatePlainHttpClientUrlScheme(const AUrl: TUrl);
@@ -338,9 +387,45 @@ var
   LScheme: string;
 begin
   LScheme := LowerCase(AUrl.Scheme);
-  if (LScheme <> '') and (LScheme <> 'http') then
-    raise EHttpError.Create('unsupported HTTP client URL scheme: ' +
-      AUrl.Scheme);
+  if LScheme = '' then
+    Exit;
+  if (LScheme = 'http') or (LScheme = 'https') then
+    Exit;
+  raise EHttpError.CreateOp(hekProtocol, 'transport',
+    'unsupported HTTP client URL scheme: ' + AUrl.Scheme);
+end;
+
+function ProxyBasicAuthorizationValue(const AUserInfo: string): string;
+begin
+  if AUserInfo = '' then
+    Exit('');
+  { Wave I product freeze: proxy authentication is Basic only.
+    Raw UserInfo from TUrl.Parse (no percent-decode). Same encoding path as
+    THttpRequestBuilder.BasicAuth. Digest / NTLM / Negotiate are not
+    implemented and must not be added as silent half-implementations. }
+  Result := 'Basic ' + Base64Encode(StringToUTF8Bytes(AUserInfo));
+end;
+
+function ConnectAuthority(const AHost: string; const APort: UInt16): string;
+var
+  LHost: string;
+begin
+  if (AHost <> '') and (AHost[1] <> '[') and (Pos(':', AHost) > 0) then
+    LHost := '[' + AHost + ']'
+  else
+    LHost := AHost;
+  Result := LHost + ':' + IntToStr(Int64(APort));
+end;
+
+function DefaultPortForHttpScheme(const AScheme: string): UInt16;
+var
+  LScheme: string;
+begin
+  LScheme := LowerCase(AScheme);
+  if LScheme = 'https' then
+    Result := 443
+  else
+    Result := 80;
 end;
 
 function CanonicalPoolHostKey(const AHost: string): string; inline;
@@ -377,20 +462,17 @@ end;
 
 function IsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
 begin
-  Result := AMethod in [hmGet, hmHead, hmOptions, hmTrace];
+  Result := HttpIsRetryableMethod(AMethod);
 end;
 
 function HasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
 begin
-  Result := (AReq <> nil) and (AReq.Headers <> nil) and
-    (AReq.Headers.Has('idempotency-key') or AReq.Headers.Has('x-idempotency-key'));
+  Result := HttpHasRetryIdempotencyKey(AReq);
 end;
 
 function IsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
 begin
-  if AReq = nil then
-    Exit(False);
-  Result := IsRetryableMethod(AReq.Method) or HasRetryIdempotencyKey(AReq);
+  Result := HttpIsRetrySafeRequest(AReq);
 end;
 
 function IsSkippableInformationalResponse(const AStatus: THttpStatus): Boolean; inline;
@@ -404,6 +486,7 @@ function CaptureRetryBodyPosition(const AReq: IHttpRequest;
 begin
   ABodyStream := nil;
   AStartPosition := 0;
+  { ContentLength = 0 means no body bytes; < 0 is chunked unknown-length. }
   if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit(True);
   Result := Supports(AReq.Body, IStream, ABodyStream);
@@ -417,7 +500,8 @@ begin
   if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit;
   if ABodyStream = nil then
-    raise EHttpError.Create('pooled retry request body is not replayable');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'pooled retry request body is not replayable');
   ABodyStream.Position := AStartPosition;
 end;
 
@@ -436,6 +520,78 @@ begin
     Exit;
   AConn.SetReadDeadline(ADeadline);
   AConn.SetWriteDeadline(ADeadline);
+end;
+
+type
+  { Bridge IHttpCancelToken → INetCancelToken when token is probe-only. }
+  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken, INetCancelWaitable)
+  private
+    FToken: IHttpCancelToken;
+    FWaitable: INetCancelWaitable;
+  public
+    constructor Create(const AToken: IHttpCancelToken);
+    function IsCanceled: Boolean;
+    function WakeHandle: PtrUInt;
+    procedure DrainWake;
+  end;
+
+constructor THttpNetCancelAdapter.Create(const AToken: IHttpCancelToken);
+begin
+  inherited Create;
+  FToken := AToken;
+  FWaitable := nil;
+  if (AToken <> nil) and
+     (AToken.QueryInterface(INetCancelWaitable, FWaitable) <> 0) then
+    FWaitable := nil;
+end;
+
+function THttpNetCancelAdapter.IsCanceled: Boolean;
+begin
+  Result := (FToken <> nil) and FToken.IsCanceled;
+end;
+
+function THttpNetCancelAdapter.WakeHandle: PtrUInt;
+begin
+  if FWaitable <> nil then
+    Result := FWaitable.WakeHandle
+  else
+    Result := 0;
+end;
+
+procedure THttpNetCancelAdapter.DrainWake;
+begin
+  if FWaitable <> nil then
+    FWaitable.DrainWake;
+end;
+
+procedure ApplyClientCancelToken(const AConn: ITcpStream;
+  const AToken: IHttpCancelToken);
+var
+  LNet: INetCancelToken;
+begin
+  if AConn = nil then
+    Exit;
+  if AToken = nil then
+    AConn.SetCancelToken(nil)
+  else if AToken.QueryInterface(INetCancelToken, LNet) = 0 then
+    AConn.SetCancelToken(LNet)
+  else
+    AConn.SetCancelToken(THttpNetCancelAdapter.Create(AToken));
+end;
+
+function H1ClientDial(const AHost: string; const APort: UInt16;
+  const AConnectTimeoutMs, ATimeoutMs: Int64): ITcpStream;
+var
+  LDialMs: Int64;
+begin
+  if AConnectTimeoutMs > 0 then
+    LDialMs := AConnectTimeoutMs
+  else
+    LDialMs := ATimeoutMs;
+  if LDialMs > 0 then
+    Result := TcpConnect(AHost, APort, LDialMs)
+  else
+    Result := TcpConnect(AHost, APort);
 end;
 
 function RequestMetadata(const AParser: IH1Parser): TH1RequestMetadata; inline;
@@ -509,7 +665,8 @@ begin
   Result := False;
   if E = nil then
     Exit(False);
-  Result := (E is ETimeoutError) or (E is ENetworkError);
+  Result := HttpErrorIsTimeout(E) or (E is ENetworkError) or
+    ((E is EHttpError) and (EHttpError(E).Kind = hekConnect));
 end;
 
 { TReadPrependTcpStream }
@@ -592,6 +749,11 @@ end;
 procedure TReadPrependTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   FInner.SetWriteDeadline(ADeadline);
+end;
+
+procedure TReadPrependTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+  FInner.SetCancelToken(AToken);
 end;
 
 { TH1FastRequestSnapshot }
@@ -898,6 +1060,11 @@ begin
   FParser := NewH1RequestParser;
   FPending := '';
   FKeepAlive := True;
+  { Connection-scoped request arena: one LocalArena, Reset per request. }
+  if AOptions.RequestArena then
+    FRequestArena := HttpCreateRequestArena(AOptions.RequestArenaCapacity)
+  else
+    FRequestArena := nil;
   if FOptions.IdleTimeout > 0 then
     FIdleMs := FOptions.IdleTimeout
   else
@@ -927,6 +1094,25 @@ begin
   FRequestCount := 0;
   if FStreamRuntime <> nil then
     ArmPollRequestReadDeadline;
+end;
+
+procedure TH1ServerConnectionState.InvokeHandler(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter);
+begin
+  if FRequestArena = nil then
+  begin
+    FHandler.ServeHTTP(AReq, AW);
+    Exit;
+  end;
+  { Connection-scoped LocalArena: Reset → attach → ServeHTTP → detach → Reset. }
+  FRequestArena.Reset;
+  HttpAttachRequestArena(AReq, FRequestArena);
+  try
+    FHandler.ServeHTTP(AReq, AW);
+  finally
+    HttpDetachRequestArena(AReq);
+    FRequestArena.Reset;
+  end;
 end;
 
 procedure TH1ServerConnectionState.ArmPollReadDeadline(const ATimeoutMs: Int64;
@@ -1208,7 +1394,7 @@ begin
     if not LKeepAlive then
       LW.GetHeaders.SetHeader('connection', 'close');
 
-    FHandler.ServeHTTP(LReq, LW);
+    InvokeHandler(LReq, LW);
 
     if (LW as TH1ResponseWriter).IsHijacked then
     begin
@@ -1319,7 +1505,7 @@ begin
     if not LKeepAlive then
       LW.GetHeaders.SetHeader('connection', 'close');
 
-    FHandler.ServeHTTP(LReq, LW);
+    InvokeHandler(LReq, LW);
 
     if (LW as TH1ResponseWriter).IsHijacked then
     begin
@@ -1394,6 +1580,11 @@ begin
       LHeadersDone := False;
       FContinueSent := False;
       LRejected := False;
+      { INV-12 keep-alive request-tail:
+        parser only consumes the current framed request; any remainder stays in
+        FPending for the next loop. Partial follow-up bytes are not rejected
+        early; conclusively malformed / EOF-truncated follow-ups become the
+        next request's 400 after the prior response. }
       repeat
         if FPending <> '' then
         begin
@@ -1974,15 +2165,92 @@ begin
   FOptions := AOptions;
   if FOptions.MaxPoolSize <= 0 then
     FOptions.MaxPoolSize := 64;
-  InitCriticalSection(FPoolLock);
+  FPoolLock := Mutex;
   FPoolCount := 0;
+  FDefaultTLSContext := nil;
 end;
 
 destructor TH1ClientTransport.Destroy;
 begin
   PoolClear;
-  DoneCriticalSection(FPoolLock);
+  FPoolLock := nil;
+  FDefaultTLSContext := nil;
   inherited Destroy;
+end;
+
+function TH1ClientTransport.SecureClientContext: ISSLContext;
+begin
+  if FOptions.TLSContext <> nil then
+    Exit(FOptions.TLSContext);
+  if FDefaultTLSContext = nil then
+    FDefaultTLSContext := TSSLQuick.SecureClient;
+  Result := FDefaultTLSContext;
+end;
+
+procedure TH1ClientTransport.EstablishHttpsConnectTunnel(var AConn: ITcpStream;
+  const ATargetHost: string; const ATargetPort: UInt16;
+  const AProxyAuthorization: string);
+const
+  CRLF: AnsiString = #13#10;
+var
+  LAuthority: string;
+  LRequest: string;
+  LResp: IHttpResponse;
+  LKeepAlive: Boolean;
+  LResponseStarted: Boolean;
+  LBody: IReader;
+  LTmp: array[0..255] of Byte;
+  LN: SizeUInt;
+begin
+  if AConn = nil then
+    raise EHttpError.Create(hekArgument, 'proxy CONNECT requires connection');
+  if ATargetHost = '' then
+    raise EHttpError.Create(hekArgument, 'proxy CONNECT target host is empty');
+
+  LAuthority := ConnectAuthority(ATargetHost, ATargetPort);
+  ValidateWireRequestTarget(LAuthority);
+  ValidateWireHeaderValue(LAuthority);
+  if AProxyAuthorization <> '' then
+    ValidateWireHeaderValue(AProxyAuthorization);
+
+  LRequest := 'CONNECT ' + LAuthority + ' HTTP/1.1' + CRLF +
+    'Host: ' + LAuthority + CRLF +
+    'Proxy-Connection: keep-alive' + CRLF;
+  if AProxyAuthorization <> '' then
+    LRequest := LRequest +
+      'Proxy-Authorization: ' + AProxyAuthorization + CRLF;
+  LRequest := LRequest + CRLF;
+  AConn.Write(LRequest[1], SizeUInt(Length(LRequest)));
+
+  { CONNECT responses have no payload; any leftover bytes belong to the tunnel. }
+  FPending := '';
+  LResp := ReadResponse(AConn as IReader, hmHead, LKeepAlive, LResponseStarted);
+  if (LResp.StatusCode < 200) or (LResp.StatusCode > 299) then
+  begin
+    { 407 is not auto-retried with Digest/NTLM. Supported path is preemptive
+      Basic from ProxyUrl UserInfo only (Wave I freeze). }
+    if LResp.StatusCode = HTTP_STATUS_PROXY_AUTH_REQUIRED then
+      raise EHttpError.CreateOp(hekConnect, 'connect',
+        'proxy CONNECT failed: HTTP 407 Proxy Authentication Required ' +
+        '(supported: ProxyUrl UserInfo → Proxy-Authorization Basic only)')
+    else
+      raise EHttpError.CreateOp(hekConnect, 'connect',
+        'proxy CONNECT failed: HTTP ' + IntToStr(Int64(LResp.StatusCode)));
+  end;
+
+  LBody := LResp.Body;
+  if LBody <> nil then
+  begin
+    repeat
+      LN := LBody.Read(LTmp[0], SizeUInt(SizeOf(LTmp)));
+    until LN = 0;
+  end;
+
+  if FPending <> '' then
+  begin
+    AConn := TReadPrependTcpStream.Create(AConn, FPending);
+    FPending := '';
+  end;
 end;
 
 function TH1ClientTransport.PooledConnectionIsReusable(
@@ -2010,39 +2278,142 @@ begin
   end;
 end;
 
+function TH1ClientTransport.PoolEntryExpired(const AEntry: TPoolEntry): Boolean;
+var
+  LNow: UInt64;
+  LAge: UInt64;
+begin
+  Result := False;
+  if FOptions.IdleTTL <= 0 then
+    Exit;
+  LNow := GetTickCount64;
+  if LNow >= AEntry.IdleAtMs then
+    LAge := LNow - AEntry.IdleAtMs
+  else
+    LAge := 0;
+  Result := LAge >= UInt64(FOptions.IdleTTL);
+end;
+
+procedure TH1ClientTransport.PoolRemoveAt(const AIndex: Int32);
+begin
+  if (AIndex < 0) or (AIndex >= FPoolCount) then
+    Exit;
+  FPool[AIndex] := FPool[FPoolCount - 1];
+  Dec(FPoolCount);
+end;
+
 function TH1ClientTransport.PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
 var
   LI: Int32;
+  LCandidate: ITcpStream;
+  LToClose: array of ITcpStream;
+  LCloseCount: Int32;
 begin
+  { Never Close or probe sockets while holding FPoolLock: Close/TryRead can
+    block or re-enter pool paths and hang the IdleTTL client suite. }
   Result := nil;
-  EnterCriticalSection(FPoolLock);
-  try
-    for LI := 0 to FPoolCount - 1 do
-      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+  LCloseCount := 0;
+  SetLength(LToClose, 0);
+  while True do
+  begin
+    LCandidate := nil;
+    FPoolLock.Acquire;
+    try
+      LI := 0;
+      while LI < FPoolCount do
       begin
-        Result := FPool[LI].Conn;
-        FPool[LI] := FPool[FPoolCount - 1];
-        Dec(FPoolCount);
-        if PooledConnectionIsReusable(Result) then
-          Exit;
-        Result.Close;
-        Result := nil;
-        Exit;
+        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+        begin
+          if PoolEntryExpired(FPool[LI]) then
+          begin
+            if FPool[LI].Conn <> nil then
+            begin
+              if LCloseCount >= Length(LToClose) then
+                SetLength(LToClose, LCloseCount + 4);
+              LToClose[LCloseCount] := FPool[LI].Conn;
+              Inc(LCloseCount);
+            end;
+            PoolRemoveAt(LI);
+            Continue;
+          end;
+          LCandidate := FPool[LI].Conn;
+          PoolRemoveAt(LI);
+          Break;
+        end;
+        Inc(LI);
       end;
-  finally
-    LeaveCriticalSection(FPoolLock);
+    finally
+      FPoolLock.Release;
+    end;
+
+    if LCandidate = nil then
+      Break;
+
+    if PooledConnectionIsReusable(LCandidate) then
+    begin
+      Result := LCandidate;
+      Break;
+    end;
+
+    if LCloseCount >= Length(LToClose) then
+      SetLength(LToClose, LCloseCount + 4);
+    LToClose[LCloseCount] := LCandidate;
+    Inc(LCloseCount);
   end;
+
+  for LI := 0 to LCloseCount - 1 do
+    if LToClose[LI] <> nil then
+    try
+      LToClose[LI].Close;
+    except
+    end;
 end;
 
 procedure TH1ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const AConn: ITcpStream);
+var
+  LI: Int32;
+  LAuthorityIdle: Int32;
+  LToClose: array of ITcpStream;
+  LCloseCount: Int32;
+  LReject: Boolean;
 begin
-  EnterCriticalSection(FPoolLock);
+  LCloseCount := 0;
+  SetLength(LToClose, 0);
+  LReject := False;
+  FPoolLock.Acquire;
   try
-    if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
+    { Drop expired peers for this authority so MaxPoolSize counts live idle only. }
+    LI := 0;
+    while LI < FPoolCount do
     begin
-      AConn.Close;
-      Exit;
+      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
+         PoolEntryExpired(FPool[LI]) then
+      begin
+        if FPool[LI].Conn <> nil then
+        begin
+          if LCloseCount >= Length(LToClose) then
+            SetLength(LToClose, LCloseCount + 4);
+          LToClose[LCloseCount] := FPool[LI].Conn;
+          Inc(LCloseCount);
+        end;
+        PoolRemoveAt(LI);
+      end
+      else
+        Inc(LI);
+    end;
+
+    if FOptions.MaxPoolSize > 0 then
+    begin
+      LAuthorityIdle := 0;
+      for LI := 0 to FPoolCount - 1 do
+        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+          Inc(LAuthorityIdle);
+      if LAuthorityIdle >= FOptions.MaxPoolSize then
+      begin
+        LReject := True;
+        Exit;
+      end;
     end;
     AConn.SetReadDeadline(TDeadline.Infinite);
     AConn.SetWriteDeadline(TDeadline.Infinite);
@@ -2051,51 +2422,102 @@ begin
     FPool[FPoolCount].Host := AHost;
     FPool[FPoolCount].Port := APort;
     FPool[FPoolCount].Conn := AConn;
+    FPool[FPoolCount].IdleAtMs := GetTickCount64;
     Inc(FPoolCount);
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
+
+  if LReject then
+  begin
+    if LCloseCount >= Length(LToClose) then
+      SetLength(LToClose, LCloseCount + 4);
+    LToClose[LCloseCount] := AConn;
+    Inc(LCloseCount);
+  end;
+  for LI := 0 to LCloseCount - 1 do
+    if LToClose[LI] <> nil then
+    try
+      LToClose[LI].Close;
+    except
+    end;
 end;
 
 procedure TH1ClientTransport.PoolClear;
 var
   LI: Int32;
+  LToClose: array of ITcpStream;
+  LCloseCount: Int32;
 begin
-  EnterCriticalSection(FPoolLock);
+  LCloseCount := 0;
+  SetLength(LToClose, 0);
+  FPoolLock.Acquire;
   try
     for LI := 0 to FPoolCount - 1 do
       if FPool[LI].Conn <> nil then
-        FPool[LI].Conn.Close;
+      begin
+        if LCloseCount >= Length(LToClose) then
+          SetLength(LToClose, LCloseCount + 4);
+        LToClose[LCloseCount] := FPool[LI].Conn;
+        Inc(LCloseCount);
+      end;
     FPoolCount := 0;
     SetLength(FPool, 0);
   finally
-    LeaveCriticalSection(FPoolLock);
+    FPoolLock.Release;
   end;
+  for LI := 0 to LCloseCount - 1 do
+    if LToClose[LI] <> nil then
+    try
+      LToClose[LI].Close;
+    except
+    end;
 end;
 
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
-  const AReq: IHttpRequest; const AAutoHost: string): Boolean;
+  const AReq: IHttpRequest; const AAutoHost: string;
+  const AAbsoluteForm: Boolean; const AProxyAuthorization: string): Boolean;
 const
   CRLF: AnsiString = #13#10;
 var
   LPath: string;
+  LUrl: TUrl;
   LBuf: IWriter;
+  LChunked: IWriter;
+  LChunkedFlusher: IFlusher;
   LFlusher: IFlusher;
   LN: SizeUInt;
   LRemaining: Int64;
   LReadSize: SizeUInt;
   LTmp: array[0..4095] of Byte;
   LStr: string;
+  LUseChunked: Boolean;
 begin
   Result := True;
   if not (AReq.Version in [hvHttp10, hvHttp11]) then
-    raise EHttpError.Create('h1 transport only supports HTTP/1.x requests');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'h1 transport only supports HTTP/1.x requests');
 
-  LPath := AReq.Path;
-  if LPath = '' then
-    LPath := '/';
-  if AReq.RawQuery <> '' then
-    LPath := LPath + '?' + AReq.RawQuery;
+  LUrl := AReq.Url;
+  if AAbsoluteForm then
+  begin
+    { Proxy absolute-form request-target: scheme://host[:port]/path[?query] }
+    LPath := LUrl.ToString;
+    if LUrl.Fragment <> '' then
+    begin
+      { Fragment is never sent on the wire. }
+      if Pos('#', LPath) > 0 then
+        LPath := System.Copy(LPath, 1, Pos('#', LPath) - 1);
+    end;
+  end
+  else
+  begin
+    LPath := AReq.Path;
+    if LPath = '' then
+      LPath := '/';
+    if AReq.RawQuery <> '' then
+      LPath := LPath + '?' + AReq.RawQuery;
+  end;
   ValidateWireRequestTarget(LPath);
 
   LBuf := CreateBufferedWriter(AWriter, 4096);
@@ -2120,6 +2542,8 @@ begin
     LBuf.Write(CRLF[1], 2);
   end);
 
+  LUseChunked := (AReq.Body <> nil) and (AReq.ContentLength < 0);
+
   if (AReq.ContentLength > 0) and (not AReq.Headers.Has('content-length')) then
   begin
     LStr := 'content-length: ' + IntToStr(AReq.ContentLength);
@@ -2127,9 +2551,34 @@ begin
     LBuf.Write(CRLF[1], 2);
   end;
 
+  if LUseChunked and (not AReq.Headers.Has('transfer-encoding')) then
+  begin
+    LStr := 'transfer-encoding: chunked';
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
+
   if (AAutoHost <> '') and (not AReq.Headers.Has('host')) then
   begin
     LStr := 'host: ' + AAutoHost;
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
+
+  if not AReq.Headers.Has('user-agent') then
+  begin
+    LStr := 'user-agent: nextpas-http/1.0';
+    LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
+    LBuf.Write(CRLF[1], 2);
+  end;
+
+  { Absolute-form proxy only: inject Basic from ProxyUrl UserInfo when the
+    request did not already set Proxy-Authorization. }
+  if AAbsoluteForm and (AProxyAuthorization <> '') and
+     (not AReq.Headers.Has('proxy-authorization')) then
+  begin
+    ValidateWireHeaderValue(AProxyAuthorization);
+    LStr := 'proxy-authorization: ' + AProxyAuthorization;
     LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
     LBuf.Write(CRLF[1], 2);
   end;
@@ -2148,7 +2597,15 @@ begin
         LN := AReq.Body.Read(LTmp[0], LReadSize);
       except
         on E: Exception do
-          raise EHttpError.Create('HTTP request body read failed: ' + E.Message);
+        begin
+          if E is ETimeoutError then
+            raise EHttpError.CreateOp(hekTimeout, 'transport',
+              'HTTP request body read failed: ' + E.Message);
+          if E is EHttpError then
+            raise;
+          raise EHttpError.CreateOp(hekProtocol, 'transport',
+            'HTTP request body read failed: ' + E.Message);
+        end;
       end;
       if LN > 0 then
       begin
@@ -2161,10 +2618,36 @@ begin
       begin
         if Supports(LBuf, IFlusher, LFlusher) then
           LFlusher.Flush;
-        raise EHttpError.Create(
+        raise EHttpError.CreateOp(hekBody, 'transport',
           'HTTP request body shorter than declared content-length');
       end;
     end;
+  end
+  else if LUseChunked then
+  begin
+    LChunked := TChunkedWriter.Create(LBuf);
+    while True do
+    begin
+      try
+        LN := AReq.Body.Read(LTmp[0], SizeUInt(SizeOf(LTmp)));
+      except
+        on E: Exception do
+        begin
+          if E is ETimeoutError then
+            raise EHttpError.CreateOp(hekTimeout, 'transport',
+              'HTTP request body read failed: ' + E.Message);
+          if E is EHttpError then
+            raise;
+          raise EHttpError.CreateOp(hekProtocol, 'transport',
+            'HTTP request body read failed: ' + E.Message);
+        end;
+      end;
+      if LN = 0 then
+        Break;
+      LChunked.Write(LTmp[0], LN);
+    end;
+    if Supports(LChunked, IFlusher, LChunkedFlusher) then
+      LChunkedFlusher.Flush;
   end;
 
   if Supports(LBuf, IFlusher, LFlusher) then
@@ -2234,15 +2717,19 @@ begin
 
   if LParser.IsComplete and
     IsSkippableInformationalResponse(LParser.GetStatusCode) then
-    raise EHttpError.Create('HTTP response incomplete: missing final response');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'HTTP response incomplete: missing final response');
 
   if LSkippedInformational and (not LCurrentResponseStarted) then
-    raise EHttpError.Create('HTTP response incomplete: missing final response');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'HTTP response incomplete: missing final response');
 
   if LParser.HasError then
-    raise EHttpError.Create('HTTP parse error: ' + LParser.ErrorMessage);
+    raise EHttpError.CreateOp(hekParse, 'transport',
+      'HTTP parse error: ' + LParser.ErrorMessage);
   if not LParser.IsComplete then
-    raise EHttpError.Create('HTTP response incomplete: connection closed');
+    raise EHttpError.CreateOp(hekConnect, 'transport',
+      'HTTP response incomplete: connection closed');
 
   FPending := LPending;
   LHasResponseTail := FPending <> '';
@@ -2253,10 +2740,11 @@ begin
   if LBodyReader <> nil then
   begin
     Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders,
-      LBodyReader);
+      LBodyReader, LParser.GetHttpVersion);
   end
   else
-    Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil);
+    Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil,
+      LParser.GetHttpVersion);
 end;
 
 function TH1ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
@@ -2266,6 +2754,13 @@ var
   LPoolHostKey: string;
   LAutoHost: string;
   LPort: UInt16;
+  LConnectHost: string;
+  LConnectPort: UInt16;
+  LProxyUrl: TUrl;
+  LProxyAuthorization: string;
+  LUseAbsoluteForm: Boolean;
+  LUseConnectTunnel: Boolean;
+  LSecure: Boolean;
   LConn: ITcpStream;
   LResp: IHttpResponse;
   LPooled: Boolean;
@@ -2278,21 +2773,67 @@ var
   LRequestDeadline: TDeadline;
   LTimeoutMs: Int64;
   LReqOpts: IHttpRequestWithOptions;
+  LWrapped: Exception;
+
+  procedure WrapConnectionWithTls;
+  begin
+    { Bound TLS handshake I/O with ConnectTimeout when set. }
+    if FOptions.ConnectTimeout > 0 then
+      ApplyClientDeadline(LConn, ClientRequestDeadline(FOptions.ConnectTimeout))
+    else
+      ApplyClientDeadline(LConn, LRequestDeadline);
+    LConn := NewTlsClientTcpStream(LConn, SecureClientContext, LHost,
+      'http/1.1');
+    if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+      ApplyClientCancelToken(LConn,
+        LReqOpts.RequestOptions.EffectiveCancelToken)
+    else
+      ApplyClientCancelToken(LConn, nil);
+  end;
+
+  procedure PrepareFreshConnection;
+  begin
+    { ConnectTimeout (or Timeout when ConnectTimeout=0) bounds OS dial. }
+    LConn := H1ClientDial(LConnectHost, LConnectPort, FOptions.ConnectTimeout,
+      LTimeoutMs);
+    { New dial: ConnectTimeout also bounds post-dial first write / CONNECT. }
+    if FOptions.ConnectTimeout > 0 then
+      ApplyClientDeadline(LConn, ClientRequestDeadline(FOptions.ConnectTimeout))
+    else
+      ApplyClientDeadline(LConn, LRequestDeadline);
+    if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+      ApplyClientCancelToken(LConn, LReqOpts.RequestOptions.EffectiveCancelToken)
+    else
+      ApplyClientCancelToken(LConn, nil);
+
+    if LUseConnectTunnel then
+    begin
+      EstablishHttpsConnectTunnel(LConn, LHost, LPort, LProxyAuthorization);
+      WrapConnectionWithTls;
+    end
+    else if LSecure then
+      { Direct https: TLS-wrap the origin socket (SNI = origin host). }
+      WrapConnectionWithTls;
+  end;
+
 begin
   if AReq = nil then
-    raise EArgumentError.Create('h1 client transport requires request');
+    raise EHttpError.Create(hekArgument, 'h1 client transport requires request');
   if AReq.Headers = nil then
-    raise EArgumentError.Create('h1 client transport requires request headers');
+    raise EHttpError.Create(hekArgument, 'h1 client transport requires request headers');
 
   // Per-request timeout override: check request options first, fall back to transport default
   LTimeoutMs := FOptions.Timeout;
   if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+  begin
     LTimeoutMs := LReqOpts.RequestOptions.EffectiveTimeout(FOptions.Timeout);
+    HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
+  end;
 
   LUrl := AReq.Url;
   ValidatePlainHttpClientUrlScheme(LUrl);
   LHost := LUrl.Host;
-  LPoolHostKey := CanonicalPoolHostKey(LHost);
+  LSecure := LowerCase(LUrl.Scheme) = 'https';
   LAutoHost := '';
   if not AReq.Headers.Has('host') then
   begin
@@ -2302,60 +2843,131 @@ begin
   LRequestClose := HeadersHaveConnectionCloseToken(AReq.Headers);
   LPort := LUrl.Port;
   if LPort = 0 then
-    LPort := 80;
+    LPort := DefaultPortForHttpScheme(LUrl.Scheme);
+
+  LUseAbsoluteForm := False;
+  LUseConnectTunnel := False;
+  LProxyAuthorization := '';
+  LConnectHost := LHost;
+  LConnectPort := LPort;
+  LPoolHostKey := CanonicalPoolHostKey(LHost);
+  if LSecure then
+    { Keep plain and TLS idle sockets in separate pools. }
+    LPoolHostKey := 'https|' + LPoolHostKey;
+  if FOptions.ProxyUrl <> '' then
+  begin
+    LProxyUrl := TUrl.Parse(FOptions.ProxyUrl);
+    if LowerCase(LProxyUrl.Scheme) <> 'http' then
+      raise EHttpError.Create(hekArgument,
+        'HTTP client proxy must use http:// scheme');
+    if LProxyUrl.Host = '' then
+      raise EHttpError.Create(hekArgument, 'HTTP client proxy host is empty');
+    LProxyAuthorization := ProxyBasicAuthorizationValue(LProxyUrl.UserInfo);
+    LConnectHost := LProxyUrl.Host;
+    LConnectPort := LProxyUrl.Port;
+    if LConnectPort = 0 then
+      LConnectPort := 80;
+    if LSecure then
+    begin
+      { https through plain HTTP proxy: CONNECT host:port, then TLS. }
+      LUseConnectTunnel := True;
+      LUseAbsoluteForm := False;
+      LPoolHostKey := 'connect|' + CanonicalPoolHostKey(LConnectHost) + '|' +
+        CanonicalPoolHostKey(LHost) + ':' + IntToStr(Int64(LPort));
+    end
+    else
+    begin
+      LUseAbsoluteForm := True;
+      { Pool by proxy + target so different targets do not share a proxy socket. }
+      LPoolHostKey := CanonicalPoolHostKey(LConnectHost) + '|' +
+        CanonicalPoolHostKey(LHost) + ':' + IntToStr(Int64(LPort));
+    end;
+  end;
 
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LRequestDeadline := ClientRequestDeadline(LTimeoutMs);
   FPending := '';
-  LConn := PoolGet(LPoolHostKey, LPort);
+  if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+    HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
+  LConn := PoolGet(LPoolHostKey, LConnectPort);
   LPooled := LConn <> nil;
   if not LPooled then
-    LConn := TcpConnect(LHost, LPort);
-
-  ApplyClientDeadline(LConn, LRequestDeadline);
+    PrepareFreshConnection
+  else
+  begin
+    ApplyClientDeadline(LConn, LRequestDeadline);
+    if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+      ApplyClientCancelToken(LConn, LReqOpts.RequestOptions.EffectiveCancelToken)
+    else
+      ApplyClientCancelToken(LConn, nil);
+  end;
 
   LResponseStarted := False;
   LRequestWriteComplete := False;
   try
-    WriteRequest(LConn as IWriter, AReq, LAutoHost);
+    WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm,
+      LProxyAuthorization);
     LRequestWriteComplete := True;
+    if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+      HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
+    { Re-arm request deadline for response read (after connect-write budget). }
+    ApplyClientDeadline(LConn, LRequestDeadline);
     LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
       LResponseStarted);
   except
-    if LPooled then
+    on E: Exception do
     begin
-      LConn.Close;
-      if not LRequestWriteComplete then
-        raise;
-      if LResponseStarted then
-        raise;
-      if not IsRetrySafeRequest(AReq) then
-        raise;
-      if (AReq.Body <> nil) and (AReq.ContentLength > 0) and (LBodyStream = nil) then
-        raise;
-      RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
-      LConn := TcpConnect(LHost, LPort);
-      try
-        ApplyClientDeadline(LConn, LRequestDeadline);
-        LRequestWriteComplete := False;
-        WriteRequest(LConn as IWriter, AReq, LAutoHost);
-        LRequestWriteComplete := True;
-        LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
-          LResponseStarted);
-      except
+      if LPooled then
+      begin
         LConn.Close;
+        if (not LRequestWriteComplete) or LResponseStarted or
+           (not IsRetrySafeRequest(AReq)) or
+           ((AReq.Body <> nil) and (AReq.ContentLength <> 0) and
+            (LBodyStream = nil)) then
+        begin
+          LWrapped := HttpWrapTransportException(E);
+          if LWrapped <> nil then
+            raise LWrapped;
+          raise;
+        end;
+        RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
+        if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+          HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
+        try
+          PrepareFreshConnection;
+          LRequestWriteComplete := False;
+          WriteRequest(LConn as IWriter, AReq, LAutoHost, LUseAbsoluteForm,
+            LProxyAuthorization);
+          LRequestWriteComplete := True;
+          if Supports(AReq, IHttpRequestWithOptions, LReqOpts) then
+            HttpThrowIfCanceled(LReqOpts.RequestOptions.EffectiveCancelToken);
+          ApplyClientDeadline(LConn, LRequestDeadline);
+          LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive,
+            LResponseStarted);
+        except
+          on E2: Exception do
+          begin
+            LConn.Close;
+            LWrapped := HttpWrapTransportException(E2);
+            if LWrapped <> nil then
+              raise LWrapped;
+            raise;
+          end;
+        end;
+      end
+      else
+      begin
+        LConn.Close;
+        LWrapped := HttpWrapTransportException(E);
+        if LWrapped <> nil then
+          raise LWrapped;
         raise;
       end;
-    end
-    else
-    begin
-      LConn.Close;
-      raise;
     end;
   end;
 
   if LKeepAlive and (not LRequestClose) then
-    PoolPut(LPoolHostKey, LPort, LConn)
+    PoolPut(LPoolHostKey, LConnectPort, LConn)
   else
     LConn.Close;
 
@@ -2379,9 +2991,9 @@ procedure TH1ServerTransport.ValidateInputs(const AConn: ITcpStream;
   const AHandler: IHttpHandler);
 begin
   if AConn = nil then
-    raise EArgumentError.Create('h1 server transport requires connection');
+    raise EHttpError.Create(hekArgument, 'h1 server transport requires connection');
   if AHandler = nil then
-    raise EArgumentError.Create('h1 server transport requires handler');
+    raise EHttpError.Create(hekArgument, 'h1 server transport requires handler');
 end;
 
 function TH1ServerTransport.HandleConnection(const AConn: ITcpStream;

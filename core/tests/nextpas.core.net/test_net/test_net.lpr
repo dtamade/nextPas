@@ -269,6 +269,178 @@ begin
   Check(LGot, 'connection refused raises');
 end;
 
+procedure TestConnectTimeout;
+var
+  LListener: ITcpListener;
+  LFillers: array of ITcpStream;
+  LConn: ITcpStream;
+  LGot: Boolean;
+  LPort: UInt16;
+  I: Integer;
+  LFilled: Boolean;
+begin
+  { Fill the listen backlog so a subsequent connect blocks, then assert dial
+    timeout. External blackhole IPs are unreliable under transparent proxies. }
+  LListener := TcpListen('127.0.0.1', 0);
+  LPort := LListener.LocalAddr.Port;
+  SetLength(LFillers, 0);
+  LFilled := False;
+  for I := 1 to 256 do
+  begin
+    try
+      LConn := TcpConnect('127.0.0.1', LPort, 100);
+      SetLength(LFillers, Length(LFillers) + 1);
+      LFillers[High(LFillers)] := LConn;
+    except
+      on E: ETimeoutError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+      on E: ENetworkError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+    end;
+  end;
+  Check(LFilled or (Length(LFillers) > 0),
+    'backlog fill made progress for connect-timeout setup');
+  LGot := False;
+  try
+    TcpConnect('127.0.0.1', LPort, 200);
+  except
+    on E: ETimeoutError do
+      LGot := True;
+  end;
+  Check(LGot, 'timed TcpConnect raises ETimeoutError when peer does not accept');
+  for I := 0 to High(LFillers) do
+    if LFillers[I] <> nil then
+      LFillers[I].Close;
+  LListener.Close;
+end;
+
+type
+  TTestNetCancelToken = class(TInterfacedObject, INetCancelToken)
+  private
+    FCanceled: Boolean;
+  public
+    function IsCanceled: Boolean;
+    procedure Cancel;
+  end;
+
+function TTestNetCancelToken.IsCanceled: Boolean;
+begin
+  Result := FCanceled;
+end;
+
+procedure TTestNetCancelToken.Cancel;
+begin
+  FCanceled := True;
+end;
+
+var
+  GCancelPort: UInt16 = 0;
+  GCancelReady: Int32 = 0;
+  GCancelToken: TTestNetCancelToken = nil;
+
+function CancelSignalThread(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  platform_thread_sleep_ns(80000000); { 80ms }
+  if GCancelToken <> nil then
+    GCancelToken.Cancel;
+end;
+
+procedure TestReadCancelToken;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LGot: Boolean;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LToken: INetCancelToken;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  GCancelPort := LListener.LocalAddr.Port;
+  LClient := TcpConnect('127.0.0.1', GCancelPort);
+  GCancelToken := TTestNetCancelToken.Create;
+  LToken := GCancelToken;
+  LClient.SetCancelToken(LToken);
+  platform_thread_create(LHandle, @CancelSignalThread, nil);
+  LGot := False;
+  try
+    LClient.Read(LBuf[0], 32);
+  except
+    on E: ECancelledError do
+      LGot := True;
+  end;
+  platform_thread_join(LHandle, LRetVal);
+  Check(LGot, 'read with cancel token raises ECancelledError');
+  LClient.Close;
+  LListener.Close;
+  GCancelToken := nil;
+end;
+
+{ Wave X2: waitable cancel must wake blocked Read far faster than old 50ms slices. }
+var
+  GWakeCancel: INetCancelController = nil;
+
+function WakeCancelSignalThread(AArg: Pointer): Pointer; cdecl;
+begin
+  Result := nil;
+  platform_thread_sleep_ns(20000000); { 20ms hold then cancel }
+  if GWakeCancel <> nil then
+    GWakeCancel.Cancel;
+end;
+
+procedure TestReadCancelWakeSLA;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LGot: Boolean;
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LToken: INetCancelController;
+  LWaitable: INetCancelWaitable;
+  LStart: QWord;
+  LElapsedMs: QWord;
+begin
+  LToken := NewNetCancelToken;
+  Check(LToken.QueryInterface(INetCancelWaitable, LWaitable) = 0,
+    'NewNetCancelToken is waitable');
+  if LWaitable.WakeHandle = 0 then
+  begin
+    { Windows residual: socketpair may be unsupported; skip SLA. }
+    Exit;
+  end;
+
+  LListener := TcpListen('127.0.0.1', 0);
+  LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  GWakeCancel := LToken;
+  LClient.SetCancelToken(LToken);
+  platform_thread_create(LHandle, @WakeCancelSignalThread, nil);
+  LGot := False;
+  LStart := GetTickCount64;
+  try
+    LClient.Read(LBuf[0], 32);
+  except
+    on E: ECancelledError do
+      LGot := True;
+  end;
+  LElapsedMs := GetTickCount64 - LStart;
+  platform_thread_join(LHandle, LRetVal);
+  Check(LGot, 'waitable cancel raises ECancelledError');
+  { 20ms sleep + wake; old slice model needed ~50ms after cancel → ~70ms+.
+    Bound total wait under 45ms so we prove sub-slice wake. }
+  Check(LElapsedMs < 45, 'waitable cancel wake SLA ms=' + IntToStr(LElapsedMs));
+  LClient.Close;
+  LListener.Close;
+  GWakeCancel := nil;
+end;
+
 { ITcpStream as IReader/IWriter }
 
 var
@@ -755,6 +927,9 @@ begin
   T.Test('Resolve DNS', @TestResolveDNS);
   T.Test('NetAddress', @TestNetAddress);
   T.Test('Connect refused', @TestConnectRefused);
+  T.Test('Connect timeout', @TestConnectTimeout);
+  T.Test('Read cancel token', @TestReadCancelToken);
+  T.Test('Read cancel waitable wake SLA', @TestReadCancelWakeSLA);
   T.Test('IO integration', @TestIoIntegration);
   T.Test('Read deadline', @TestReadDeadline);
   T.Test('Expired deadline', @TestExpiredDeadline);

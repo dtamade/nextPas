@@ -82,23 +82,23 @@ begin
   LDispatch := GetDispatchTable;
   for i := 0 to N-1 do begin LSrc1[i] := QNaN; LSrc2[i] := 1.0 + i; end;
 
-  LDispatch^.ArrayAddF32(@LSrc1[0], @LSrc2[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayAdd(@LSrc1[0], @LSrc2[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckIsNaN(Format('Add(NaN,x)[%d]', [i]), LDst[i]);
 
-  LDispatch^.ArraySubF32(@LSrc1[0], @LSrc2[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArraySub(@LSrc1[0], @LSrc2[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckIsNaN(Format('Sub(NaN,x)[%d]', [i]), LDst[i]);
 
-  LDispatch^.ArrayMulF32(@LSrc1[0], @LSrc2[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayMul(@LSrc1[0], @LSrc2[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckIsNaN(Format('Mul(NaN,x)[%d]', [i]), LDst[i]);
 
-  LDispatch^.ArrayDivF32(@LSrc1[0], @LSrc2[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayDiv(@LSrc1[0], @LSrc2[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckIsNaN(Format('Div(NaN,x)[%d]', [i]), LDst[i]);
 
-  LDispatch^.ArraySqrtF32(@LSrc1[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArraySqrt(@LSrc1[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckIsNaN(Format('Sqrt(NaN)[%d]', [i]), LDst[i]);
 
@@ -114,20 +114,20 @@ begin
   LDispatch := GetDispatchTable;
   for i := 0 to N-1 do begin LSrc1[i] := PosInf; LSrc2[i] := 2.0; end;
 
-  LDispatch^.ArrayAddF32(@LSrc1[0], @LSrc2[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayAdd(@LSrc1[0], @LSrc2[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckIsInf('Add(+Inf,2)', LDst[i], True);
 
-  LDispatch^.ArrayMulF32(@LSrc1[0], @LSrc2[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayMul(@LSrc1[0], @LSrc2[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckIsInf('Mul(+Inf,2)', LDst[i], True);
 
   for i := 0 to N-1 do LSrc2[i] := -3.0;
-  LDispatch^.ArrayMulF32(@LSrc1[0], @LSrc2[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayMul(@LSrc1[0], @LSrc2[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckIsInf('Mul(+Inf,-3)', LDst[i], False);
 
-  LDispatch^.ArraySqrtF32(@LSrc1[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArraySqrt(@LSrc1[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckIsInf('Sqrt(+Inf)', LDst[i], True);
 
@@ -144,7 +144,7 @@ begin
   LDispatch := GetDispatchTable;
   for i := 0 to N-1 do LSrc[i] := NegZero;
 
-  LDispatch^.ArrayAbsF32(@LSrc[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayAbs(@LSrc[0], @LDst[0], N);
   for i := 0 to N-1 do
   begin
     bits := PLongWord(@LDst[i])^;
@@ -153,7 +153,7 @@ begin
       Fail(Format('Abs(-0)[%d]: expected +0 (bits=$00000000) got bits=$%08X', [i, bits]));
   end;
 
-  LDispatch^.ArrayNegF32(@LSrc[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayNeg(@LSrc[0], @LDst[0], N);
   for i := 0 to N-1 do
   begin
     bits := PLongWord(@LDst[i])^;
@@ -163,7 +163,7 @@ begin
   end;
 
   for i := 0 to N-1 do LSrc[i] := 0.0;
-  LDispatch^.ArrayNegF32(@LSrc[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayNeg(@LSrc[0], @LDst[0], N);
   for i := 0 to N-1 do
   begin
     bits := PLongWord(@LDst[i])^;
@@ -186,12 +186,12 @@ begin
   for i := 0 to N-1 do begin LSrc1[i] := Denormal; LSrc2[i] := 2.0; end;
 
   ScalarArrayMulF32(@LSrc1[0], @LSrc2[0], @LDstScalar[0], N);
-  LDispatch^.ArrayMulF32(@LSrc1[0], @LSrc2[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayMul(@LSrc1[0], @LSrc2[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckBitsEqual(Format('Mul(denormal,2)[%d]', [i]), LDstScalar[i], LDst[i]);
 
   ScalarArrayAddF32(@LSrc1[0], @LSrc1[0], @LDstScalar[0], N);
-  LDispatch^.ArrayAddF32(@LSrc1[0], @LSrc1[0], @LDst[0], N);
+  LDispatch^.BatchF32.ArrayAdd(@LSrc1[0], @LSrc1[0], @LDst[0], N);
   for i := 0 to N-1 do
     CheckBitsEqual(Format('Add(denormal,denormal)[%d]', [i]), LDstScalar[i], LDst[i]);
 
@@ -209,17 +209,17 @@ begin
 
   for i := 0 to N-1 do LSrc[i] := 1.0;
   LSrc[3] := QNaN;
-  LResult := LDispatch^.ReduceSumF32(@LSrc[0], N);
+  LResult := LDispatch^.BatchF32.ReduceSum(@LSrc[0], N);
   CheckIsNaN('ReduceSum with NaN', LResult);
 
   for i := 0 to N-1 do LSrc[i] := i * 1.0;
   LSrc[5] := NegInf;
-  LResult := LDispatch^.ReduceMinF32(@LSrc[0], N);
+  LResult := LDispatch^.BatchF32.ReduceMin(@LSrc[0], N);
   CheckIsInf('ReduceMin with -Inf', LResult, False);
 
   for i := 0 to N-1 do LSrc[i] := i * 1.0;
   LSrc[5] := PosInf;
-  LResult := LDispatch^.ReduceMaxF32(@LSrc[0], N);
+  LResult := LDispatch^.BatchF32.ReduceMax(@LSrc[0], N);
   CheckIsInf('ReduceMax with +Inf', LResult, True);
 
   WriteLn('  Reduce with specials: checked');

@@ -12,6 +12,21 @@ begin
   Result := '[' + Result + ']';
 end;
 
+function BuildStringVecJson(const AValues: TToolchainStringVec): string;
+var
+  Index: SizeInt;
+begin
+  Result := '';
+  if AValues <> nil then
+    for Index := 0 to SizeInt(AValues.Count) - 1 do
+    begin
+      if Result <> '' then
+        Result := Result + ',';
+      Result := Result + JsonString(AValues[SizeUInt(Index)]);
+    end;
+  Result := '[' + Result + ']';
+end;
+
 function BuildToolArtifactArrayJson(const AValues: array of TToolArtifactRef): string;
 var
   EntryFields: string;
@@ -27,6 +42,25 @@ begin
     AppendJsonField(EntryFields, 'path', JsonString(AValues[Index].Path));
     Result := Result + '{' + EntryFields + '}';
   end;
+  Result := '[' + Result + ']';
+end;
+
+function BuildToolArtifactVecJson(const AValues: TToolArtifactRefVec): string;
+var
+  EntryFields: string;
+  Index: SizeInt;
+begin
+  Result := '';
+  if AValues <> nil then
+    for Index := 0 to SizeInt(AValues.Count) - 1 do
+    begin
+      if Result <> '' then
+        Result := Result + ',';
+      EntryFields := '';
+      AppendJsonField(EntryFields, 'kind', JsonString(AValues[SizeUInt(Index)].Kind));
+      AppendJsonField(EntryFields, 'path', JsonString(AValues[SizeUInt(Index)].Path));
+      Result := Result + '{' + EntryFields + '}';
+    end;
   Result := '[' + Result + ']';
 end;
 
@@ -55,6 +89,74 @@ begin
   Result := '[' + Result + ']';
 end;
 
+function BuildToolSidecarVecJson(const AValues: TToolSidecarRefVec): string;
+var
+  EntryFields: string;
+  Index: SizeInt;
+begin
+  Result := '';
+  if AValues <> nil then
+    for Index := 0 to SizeInt(AValues.Count) - 1 do
+    begin
+      if Result <> '' then
+        Result := Result + ',';
+      EntryFields := '';
+      AppendJsonField(EntryFields, 'kind', JsonString(AValues[SizeUInt(Index)].Kind));
+      AppendJsonField(EntryFields, 'path', JsonString(AValues[SizeUInt(Index)].Path));
+      AppendJsonField(EntryFields, 'ownerStepId', JsonString(AValues[SizeUInt(Index)].OwnerStepId));
+      AppendJsonField(
+        EntryFields,
+        'materializationTiming',
+        JsonString(AValues[SizeUInt(Index)].MaterializationTiming)
+      );
+      AppendJsonField(EntryFields, 'cleanupPolicy', JsonString(AValues[SizeUInt(Index)].CleanupPolicy));
+      Result := Result + '{' + EntryFields + '}';
+    end;
+  Result := '[' + Result + ']';
+end;
+
+procedure FreeToolInvocationStepNested(var AStep: TToolInvocationStep);
+begin
+  AStep.Argv.Free;
+  AStep.Argv := nil;
+  AStep.EnvDelta.Free;
+  AStep.EnvDelta := nil;
+  AStep.Inputs.Free;
+  AStep.Inputs := nil;
+  AStep.Outputs.Free;
+  AStep.Outputs := nil;
+  AStep.Sidecars.Free;
+  AStep.Sidecars := nil;
+end;
+
+procedure InitToolInvocationStepNested(var AStep: TToolInvocationStep);
+begin
+  AStep.Argv := TToolchainStringVec.Create;
+  AStep.EnvDelta := TToolEnvDeltaVec.Create;
+  AStep.Inputs := TToolArtifactRefVec.Create;
+  AStep.Outputs := TToolArtifactRefVec.Create;
+  AStep.Sidecars := TToolSidecarRefVec.Create;
+end;
+
+procedure ClearToolInvocationStepView(out AStep: TToolInvocationStep);
+begin
+  AStep := Default(TToolInvocationStep);
+end;
+
+function ToolchainArgvAsArray(const AArgv: TToolchainStringVec): TStringArray;
+var
+  Index: SizeInt;
+begin
+  if (AArgv = nil) or (AArgv.Count = 0) then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+  SetLength(Result, AArgv.Count);
+  for Index := 0 to SizeInt(AArgv.Count) - 1 do
+    Result[Index] := AArgv[SizeUInt(Index)];
+end;
+
 function BuildLogicalLibraryRequestJson(
   const AValues: array of TLogicalLibraryRequest
 ): string;
@@ -76,6 +178,28 @@ begin
   Result := '[' + Result + ']';
 end;
 
+function BuildLogicalLibraryRequestVecJson(
+  const AValues: TLogicalLibraryRequestVec
+): string;
+var
+  EntryFields: string;
+  Index: SizeInt;
+begin
+  Result := '';
+  if AValues <> nil then
+    for Index := 0 to SizeInt(AValues.Count) - 1 do
+    begin
+      if Result <> '' then
+        Result := Result + ',';
+      EntryFields := '';
+      AppendJsonField(EntryFields, 'logicalId', JsonString(AValues[SizeUInt(Index)].LogicalId));
+      AppendJsonField(EntryFields, 'linkageKind', JsonString(AValues[SizeUInt(Index)].LinkageKind));
+      AppendJsonField(EntryFields, 'strength', JsonString(AValues[SizeUInt(Index)].Strength));
+      Result := Result + '{' + EntryFields + '}';
+    end;
+  Result := '[' + Result + ']';
+end;
+
 constructor TToolchainPlan.Create;
 begin
   inherited Create;
@@ -90,15 +214,37 @@ begin
   FHostId := '';
   FTargetId := '';
   FSysrootRef := '';
-  SetLength(FSteps, 0);
+  FSteps := TToolInvocationStepVec.Create;
   FLogicalLinkRequest.RequestKind := 'logical-link-request';
   FLogicalLinkRequest.Status := 'deferred';
-  SetLength(FLogicalLinkRequest.ObjectInputs, 0);
-  SetLength(FLogicalLinkRequest.LibraryRequests, 0);
-  SetLength(FLogicalLinkRequest.OrderedSymbols, 0);
+  FLogicalLinkRequest.ObjectInputs := TToolArtifactRefVec.Create;
+  FLogicalLinkRequest.LibraryRequests := TLogicalLibraryRequestVec.Create;
+  FLogicalLinkRequest.OrderedSymbols := TToolchainStringVec.Create;
   FLlvmExecutableContract.ContractKind := 'llvm-executable-set';
   FLlvmExecutableContract.Status := 'deferred';
   FLlvmExecutableContract.Enabled := False;
+end;
+
+destructor TToolchainPlan.Destroy;
+var
+  Index: LongInt;
+  Step: PToolInvocationStep;
+begin
+  if FSteps <> nil then
+    for Index := 0 to LongInt(FSteps.Count) - 1 do
+    begin
+      Step := FSteps.GetPtr(SizeUInt(Index));
+      FreeToolInvocationStepNested(Step^);
+    end;
+  FSteps.Free;
+  FSteps := nil;
+  FLogicalLinkRequest.ObjectInputs.Free;
+  FLogicalLinkRequest.ObjectInputs := nil;
+  FLogicalLinkRequest.LibraryRequests.Free;
+  FLogicalLinkRequest.LibraryRequests := nil;
+  FLogicalLinkRequest.OrderedSymbols.Free;
+  FLogicalLinkRequest.OrderedSymbols := nil;
+  inherited Destroy;
 end;
 
 procedure TToolchainPlan.SetPlanFamily(const AValue: string);
@@ -136,24 +282,22 @@ function TToolchainPlan.AddStep(
   const AFailureMapping: string
 ): LongInt;
 var
-  NextIndex: SizeInt;
+  Step: TToolInvocationStep;
 begin
-  NextIndex := Length(FSteps);
-  SetLength(FSteps, NextIndex + 1);
-  FSteps[NextIndex].StepId := AStepId;
-  FSteps[NextIndex].ToolRole := FToolRole;
-  FSteps[NextIndex].ProfileId := FProfileId;
-  FSteps[NextIndex].SysrootRef := FSysrootRef;
-  FSteps[NextIndex].LogicalExecutable := ALogicalExecutable;
-  FSteps[NextIndex].ExecutableRef := AExecutableRef;
-  FSteps[NextIndex].WorkingDirectory := AWorkingDirectory;
-  FSteps[NextIndex].FailureMapping := AFailureMapping;
-  SetLength(FSteps[NextIndex].Argv, 0);
-  SetLength(FSteps[NextIndex].EnvDelta, 0);
-  SetLength(FSteps[NextIndex].Inputs, 0);
-  SetLength(FSteps[NextIndex].Outputs, 0);
-  SetLength(FSteps[NextIndex].Sidecars, 0);
-  Result := NextIndex;
+  if FSteps = nil then
+    FSteps := TToolInvocationStepVec.Create;
+  Step := Default(TToolInvocationStep);
+  Step.StepId := AStepId;
+  Step.ToolRole := FToolRole;
+  Step.ProfileId := FProfileId;
+  Step.SysrootRef := FSysrootRef;
+  Step.LogicalExecutable := ALogicalExecutable;
+  Step.ExecutableRef := AExecutableRef;
+  Step.WorkingDirectory := AWorkingDirectory;
+  Step.FailureMapping := AFailureMapping;
+  InitToolInvocationStepNested(Step);
+  Result := LongInt(FSteps.Count);
+  FSteps.Push(Step);
 end;
 
 procedure TToolchainPlan.SetStepContext(
@@ -162,24 +306,28 @@ procedure TToolchainPlan.SetStepContext(
   const AProfileId: string;
   const ASysrootRef: string
 );
+var
+  Step: PToolInvocationStep;
 begin
-  if (AStepIndex < 0) or (AStepIndex > High(FSteps)) then
+  if (FSteps = nil) or (AStepIndex < 0) or (AStepIndex >= LongInt(FSteps.Count)) then
     Exit;
 
-  FSteps[AStepIndex].ToolRole := AToolRole;
-  FSteps[AStepIndex].ProfileId := AProfileId;
-  FSteps[AStepIndex].SysrootRef := ASysrootRef;
+  Step := FSteps.GetPtr(SizeUInt(AStepIndex));
+  Step^.ToolRole := AToolRole;
+  Step^.ProfileId := AProfileId;
+  Step^.SysrootRef := ASysrootRef;
 end;
 
 procedure TToolchainPlan.AddStepArg(const AStepIndex: LongInt; const AValue: string);
 var
-  NextIndex: SizeInt;
+  Step: PToolInvocationStep;
 begin
-  if (AStepIndex < 0) or (AStepIndex > High(FSteps)) then
+  if (FSteps = nil) or (AStepIndex < 0) or (AStepIndex >= LongInt(FSteps.Count)) then
     Exit;
-  NextIndex := Length(FSteps[AStepIndex].Argv);
-  SetLength(FSteps[AStepIndex].Argv, NextIndex + 1);
-  FSteps[AStepIndex].Argv[NextIndex] := AValue;
+  Step := FSteps.GetPtr(SizeUInt(AStepIndex));
+  if Step^.Argv = nil then
+    Step^.Argv := TToolchainStringVec.Create;
+  Step^.Argv.Push(AValue);
 end;
 
 procedure TToolchainPlan.AddStepInput(
@@ -188,14 +336,17 @@ procedure TToolchainPlan.AddStepInput(
   const APath: string
 );
 var
-  NextIndex: SizeInt;
+  Entry: TToolArtifactRef;
+  Step: PToolInvocationStep;
 begin
-  if (AStepIndex < 0) or (AStepIndex > High(FSteps)) then
+  if (FSteps = nil) or (AStepIndex < 0) or (AStepIndex >= LongInt(FSteps.Count)) then
     Exit;
-  NextIndex := Length(FSteps[AStepIndex].Inputs);
-  SetLength(FSteps[AStepIndex].Inputs, NextIndex + 1);
-  FSteps[AStepIndex].Inputs[NextIndex].Kind := AKind;
-  FSteps[AStepIndex].Inputs[NextIndex].Path := APath;
+  Step := FSteps.GetPtr(SizeUInt(AStepIndex));
+  if Step^.Inputs = nil then
+    Step^.Inputs := TToolArtifactRefVec.Create;
+  Entry.Kind := AKind;
+  Entry.Path := APath;
+  Step^.Inputs.Push(Entry);
 end;
 
 procedure TToolchainPlan.AddStepOutput(
@@ -204,14 +355,17 @@ procedure TToolchainPlan.AddStepOutput(
   const APath: string
 );
 var
-  NextIndex: SizeInt;
+  Entry: TToolArtifactRef;
+  Step: PToolInvocationStep;
 begin
-  if (AStepIndex < 0) or (AStepIndex > High(FSteps)) then
+  if (FSteps = nil) or (AStepIndex < 0) or (AStepIndex >= LongInt(FSteps.Count)) then
     Exit;
-  NextIndex := Length(FSteps[AStepIndex].Outputs);
-  SetLength(FSteps[AStepIndex].Outputs, NextIndex + 1);
-  FSteps[AStepIndex].Outputs[NextIndex].Kind := AKind;
-  FSteps[AStepIndex].Outputs[NextIndex].Path := APath;
+  Step := FSteps.GetPtr(SizeUInt(AStepIndex));
+  if Step^.Outputs = nil then
+    Step^.Outputs := TToolArtifactRefVec.Create;
+  Entry.Kind := AKind;
+  Entry.Path := APath;
+  Step^.Outputs.Push(Entry);
 end;
 
 procedure TToolchainPlan.AddStepSidecar(
@@ -223,17 +377,20 @@ procedure TToolchainPlan.AddStepSidecar(
   const ACleanupPolicy: string
 );
 var
-  NextIndex: SizeInt;
+  Entry: TToolSidecarRef;
+  Step: PToolInvocationStep;
 begin
-  if (AStepIndex < 0) or (AStepIndex > High(FSteps)) then
+  if (FSteps = nil) or (AStepIndex < 0) or (AStepIndex >= LongInt(FSteps.Count)) then
     Exit;
-  NextIndex := Length(FSteps[AStepIndex].Sidecars);
-  SetLength(FSteps[AStepIndex].Sidecars, NextIndex + 1);
-  FSteps[AStepIndex].Sidecars[NextIndex].Kind := AKind;
-  FSteps[AStepIndex].Sidecars[NextIndex].Path := APath;
-  FSteps[AStepIndex].Sidecars[NextIndex].OwnerStepId := AOwnerStepId;
-  FSteps[AStepIndex].Sidecars[NextIndex].MaterializationTiming := AMaterializationTiming;
-  FSteps[AStepIndex].Sidecars[NextIndex].CleanupPolicy := ACleanupPolicy;
+  Step := FSteps.GetPtr(SizeUInt(AStepIndex));
+  if Step^.Sidecars = nil then
+    Step^.Sidecars := TToolSidecarRefVec.Create;
+  Entry.Kind := AKind;
+  Entry.Path := APath;
+  Entry.OwnerStepId := AOwnerStepId;
+  Entry.MaterializationTiming := AMaterializationTiming;
+  Entry.CleanupPolicy := ACleanupPolicy;
+  Step^.Sidecars.Push(Entry);
 end;
 
 procedure TToolchainPlan.ConfigureLogicalLinkRequest(
@@ -252,19 +409,29 @@ begin
   FLogicalLinkRequest.LinkerProfileId := ALinkerProfileId;
   FLogicalLinkRequest.OutputKind := AOutputKind;
   FLogicalLinkRequest.PrimaryArtifactPath := APrimaryArtifactPath;
-  SetLength(FLogicalLinkRequest.ObjectInputs, 0);
-  SetLength(FLogicalLinkRequest.LibraryRequests, 0);
-  SetLength(FLogicalLinkRequest.OrderedSymbols, 0);
+  if FLogicalLinkRequest.ObjectInputs = nil then
+    FLogicalLinkRequest.ObjectInputs := TToolArtifactRefVec.Create
+  else
+    FLogicalLinkRequest.ObjectInputs.Clear;
+  if FLogicalLinkRequest.LibraryRequests = nil then
+    FLogicalLinkRequest.LibraryRequests := TLogicalLibraryRequestVec.Create
+  else
+    FLogicalLinkRequest.LibraryRequests.Clear;
+  if FLogicalLinkRequest.OrderedSymbols = nil then
+    FLogicalLinkRequest.OrderedSymbols := TToolchainStringVec.Create
+  else
+    FLogicalLinkRequest.OrderedSymbols.Clear;
 end;
 
 procedure TToolchainPlan.AddLogicalObjectInput(const APath: string);
 var
-  NextIndex: SizeInt;
+  Entry: TToolArtifactRef;
 begin
-  NextIndex := Length(FLogicalLinkRequest.ObjectInputs);
-  SetLength(FLogicalLinkRequest.ObjectInputs, NextIndex + 1);
-  FLogicalLinkRequest.ObjectInputs[NextIndex].Kind := 'object-file';
-  FLogicalLinkRequest.ObjectInputs[NextIndex].Path := APath;
+  if FLogicalLinkRequest.ObjectInputs = nil then
+    FLogicalLinkRequest.ObjectInputs := TToolArtifactRefVec.Create;
+  Entry.Kind := 'object-file';
+  Entry.Path := APath;
+  FLogicalLinkRequest.ObjectInputs.Push(Entry);
 end;
 
 procedure TToolchainPlan.AddLogicalLibraryRequest(
@@ -273,13 +440,14 @@ procedure TToolchainPlan.AddLogicalLibraryRequest(
   const AStrength: string
 );
 var
-  NextIndex: SizeInt;
+  Entry: TLogicalLibraryRequest;
 begin
-  NextIndex := Length(FLogicalLinkRequest.LibraryRequests);
-  SetLength(FLogicalLinkRequest.LibraryRequests, NextIndex + 1);
-  FLogicalLinkRequest.LibraryRequests[NextIndex].LogicalId := ALogicalId;
-  FLogicalLinkRequest.LibraryRequests[NextIndex].LinkageKind := ALinkageKind;
-  FLogicalLinkRequest.LibraryRequests[NextIndex].Strength := AStrength;
+  if FLogicalLinkRequest.LibraryRequests = nil then
+    FLogicalLinkRequest.LibraryRequests := TLogicalLibraryRequestVec.Create;
+  Entry.LogicalId := ALogicalId;
+  Entry.LinkageKind := ALinkageKind;
+  Entry.Strength := AStrength;
+  FLogicalLinkRequest.LibraryRequests.Push(Entry);
 end;
 
 procedure TToolchainPlan.SetLlvmExecutableContract(
@@ -343,27 +511,20 @@ end;
 
 function TToolchainPlan.ToolInvocationCount: LongInt;
 begin
-  Result := Length(FSteps);
+  if FSteps = nil then
+    Exit(0);
+  Result := LongInt(FSteps.Count);
 end;
 
 function TToolchainPlan.StepAt(const AIndex: LongInt): TToolInvocationStep;
 begin
-  if (AIndex < 0) or (AIndex > High(FSteps)) then
+  if (FSteps = nil) or (AIndex < 0) or (AIndex >= LongInt(FSteps.Count)) then
   begin
-    Result.StepId := '';
-    Result.LogicalExecutable := '';
-    Result.ExecutableRef := '';
-    Result.WorkingDirectory := '';
-    Result.FailureMapping := '';
-    SetLength(Result.Argv, 0);
-    SetLength(Result.EnvDelta, 0);
-    SetLength(Result.Inputs, 0);
-    SetLength(Result.Outputs, 0);
-    SetLength(Result.Sidecars, 0);
+    ClearToolInvocationStepView(Result);
     Exit;
   end;
 
-  Result := FSteps[AIndex];
+  Result := FSteps[SizeUInt(AIndex)];
 end;
 
 function TToolchainPlan.PrimaryToolRole: string;
@@ -378,21 +539,21 @@ end;
 
 function TToolchainPlan.PrimaryToolStepId: string;
 begin
-  if Length(FSteps) = 0 then
+  if (FSteps = nil) or (FSteps.Count = 0) then
     Exit('');
   Result := FSteps[0].StepId;
 end;
 
 function TToolchainPlan.PrimaryToolLogicalExecutable: string;
 begin
-  if Length(FSteps) = 0 then
+  if (FSteps = nil) or (FSteps.Count = 0) then
     Exit('');
   Result := FSteps[0].LogicalExecutable;
 end;
 
 function TToolchainPlan.PrimaryToolExecutableRef: string;
 begin
-  if Length(FSteps) = 0 then
+  if (FSteps = nil) or (FSteps.Count = 0) then
     Exit('');
   Result := FSteps[0].ExecutableRef;
 end;
@@ -404,28 +565,29 @@ end;
 
 function TToolchainPlan.PrimaryToolFailureMapping: string;
 begin
-  if Length(FSteps) = 0 then
+  if (FSteps = nil) or (FSteps.Count = 0) then
     Exit('');
   Result := FSteps[0].FailureMapping;
 end;
 
 function TToolchainPlan.PrimaryToolArgCount: LongInt;
 begin
-  if Length(FSteps) = 0 then
+  if (FSteps = nil) or (FSteps.Count = 0) or (FSteps[0].Argv = nil) then
     Exit(0);
-  Result := Length(FSteps[0].Argv);
+  Result := LongInt(FSteps[0].Argv.Count);
 end;
 
 function TToolchainPlan.PrimaryToolArgValue(const AIndex: LongInt): string;
 begin
-  if (Length(FSteps) = 0) or (AIndex < 0) or (AIndex > High(FSteps[0].Argv)) then
+  if (FSteps = nil) or (FSteps.Count = 0) or (FSteps[0].Argv = nil) or
+    (AIndex < 0) or (AIndex >= LongInt(FSteps[0].Argv.Count)) then
     Exit('');
-  Result := FSteps[0].Argv[AIndex];
+  Result := FSteps[0].Argv[SizeUInt(AIndex)];
 end;
 
 function TToolchainPlan.PrimaryToolWorkingDirectory: string;
 begin
-  if Length(FSteps) = 0 then
+  if (FSteps = nil) or (FSteps.Count = 0) then
     Exit('');
   Result := FSteps[0].WorkingDirectory;
 end;
@@ -442,7 +604,9 @@ end;
 
 function TToolchainPlan.LogicalLibraryRequestCount: LongInt;
 begin
-  Result := Length(FLogicalLinkRequest.LibraryRequests);
+  if FLogicalLinkRequest.LibraryRequests = nil then
+    Exit(0);
+  Result := LongInt(FLogicalLinkRequest.LibraryRequests.Count);
 end;
 
 function TToolchainPlan.LlvmToolchainStatus: string;

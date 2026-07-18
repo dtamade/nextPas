@@ -3,7 +3,7 @@ program test_http_h1fast;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,
@@ -504,10 +504,10 @@ begin
   try
     LR.Headers.ForEach(LCallback);
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'lazy headers foreach rejects nil callback');
+  Check(LRaised, 'lazy headers foreach rejects nil callback as hekArgument');
 end;
 
 procedure TestPolicyHeaderFlags;

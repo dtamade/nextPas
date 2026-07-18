@@ -236,6 +236,9 @@ var
   LClassIdx: Int32;
   LBlock: Pointer;
 begin
+  if ASize = 0 then
+    Exit(nil);
+
   { 查找合适的 size class }
   LClassIdx := FindSizeClass(ASize);
 
@@ -253,8 +256,12 @@ begin
   end
   else
   begin
-    { 大对象: 直接委托给内部分配器 }
-    Result := FInner.GetMem(ASize);
+    { 大对象: 委托给内部分配器，添加头部以便 FreeMem 正确识别 }
+    LBlock := FInner.GetMem(SLAB_HEADER_SIZE + SizeOf(Pointer) + ASize);
+    if LBlock = nil then
+      Exit(nil);
+    PInt32(LBlock)^ := SLAB_SIZE_CLASS_COUNT;  { 哨兵值：标记为大对象 }
+    Result := Pointer(PtrUInt(LBlock) + SLAB_HEADER_SIZE + SizeOf(Pointer));
     Inc(FLargeAllocCount);
   end;
 end;
@@ -323,8 +330,8 @@ begin
   end
   else
   begin
-    { 大对象: 委托给内部分配器 }
-    FInner.FreeMem(APtr);
+    { 大对象: 委托给内部分配器（释放带头部的原始块） }
+    FInner.FreeMem(LBlock);
     Inc(FLargeFreeCount);
   end;
 end;

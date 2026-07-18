@@ -8,8 +8,8 @@ program test_http_security;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.errors,
@@ -219,6 +219,9 @@ begin
   Result.IdleTimeout := AHttpOptions.IdleTimeout;
   Result.MaxHeaderSize := AHttpOptions.MaxHeaderSize;
   Result.MaxBodySize := AHttpOptions.MaxBodySize;
+  Result.MaxRequestsPerConnection := AHttpOptions.MaxRequestsPerConnection;
+  Result.RequestArena := AHttpOptions.RequestArena;
+  Result.RequestArenaCapacity := AHttpOptions.RequestArenaCapacity;
 end;
 
 function SocketFromRuntime(const ARuntime: ITcpSocketRuntime): TPlatformSocket;

@@ -3,7 +3,6 @@ program test_lockfree_semaphore;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.semaphore,
   nextpas.core.lockfree,
   nextpas.core.atomic,

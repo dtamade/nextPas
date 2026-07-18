@@ -16,7 +16,7 @@ unit nextpas.core.lockfree.persistent_vector;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   PVECTOR_CHUNK_SIZE = 32;
@@ -34,6 +34,7 @@ type
    * Append/Assoc 返回新版本，只复制修改路径上的 chunk；未修改 chunk
    * 通过原子引用计数共享。调用方拥有每个返回的 vector 对象。
    *}
+  {** @concurrency Thread-safe (see source for details). }
   TPersistentVector = class
   private type
     PVectorChunk = ^TVectorChunk;

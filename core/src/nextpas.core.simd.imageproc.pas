@@ -60,6 +60,7 @@ procedure ApplyEdgeDetection(var aDest: TImage; const aSrc: TImage);
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.simd.mathutil;
@@ -468,7 +469,7 @@ begin
 
   if Result.DataSize > 0 then
   begin
-    GetMem(Result.Data, Result.DataSize);
+    Result.Data := GetMem(Result.DataSize);
     FillChar(Result.Data^, Result.DataSize, 0);
   end
   else

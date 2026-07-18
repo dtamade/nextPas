@@ -21,6 +21,19 @@ function ServeDir(const ARoot: string): THttpHandlerFunc;
 function ServeFileDownload(const APath: string): THttpHandlerFunc; overload;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload;
 
+{** @desc Strong ETag from size + mtime: quoted "hexsize-hexmtime". }
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
+{** @desc If-None-Match match: `*`, exact quoted ETag, or comma-separated list. }
+function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
+{** @desc True when If-Modified-Since parses and resource mtime <= that instant. }
+function HttpNotModifiedSince(const AIfModifiedSince: string;
+  const AModTimeUnix: Int64): Boolean;
+{** @desc RFC 7232 conditional GET helper. Writes 304 when not modified; returns True
+   if 304 written (caller must not write a body). If-None-Match takes precedence. }
+function HttpTryWriteNotModified(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AETag, ALastModified: string;
+  const AModTimeUnix: Int64): Boolean;
+
 implementation
 
 uses
@@ -258,19 +271,19 @@ var
 begin
   Result := 0;
   LLen := Length(ADate);
-  { Minimum: "Sun, 06 Nov 1994 08:49:37 GMT" = 29 chars }
+  { Preferred form: "Sun, 06 Nov 1994 08:49:37 GMT" = 29 chars (1-based). }
   if LLen < 29 then Exit;
 
-  { Skip day-name and comma+space: "Sun, " = 5 chars }
-  LPos := 5;
+  { Day name + ", " occupies indices 1..5; day digits start at 6. }
+  LPos := 6;
+  if LPos + 1 > LLen then Exit;
+  if (ADate[LPos] < '0') or (ADate[LPos] > '9') or
+    (ADate[LPos + 1] < '0') or (ADate[LPos + 1] > '9') then
+    Exit;
+  LDay := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
+  Inc(LPos, 3); { day + space → month }
 
-  { Parse day (2 digits) }
-  if (LPos + 2 > LLen) then Exit;
-  LDay := (Ord(ADate[LPos + 1]) - Ord('0')) * 10 + (Ord(ADate[LPos + 2]) - Ord('0'));
-  Inc(LPos, 3); { skip day + space }
-
-  { Parse month (3 chars) }
-  if (LPos + 3 > LLen) then Exit;
+  if LPos + 2 > LLen then Exit;
   LMonthStr := System.Copy(ADate, LPos, 3);
   LMonth := 0;
   for LI := 1 to 12 do
@@ -280,18 +293,17 @@ begin
       Break;
     end;
   if LMonth = 0 then Exit;
-  Inc(LPos, 4); { skip month + space }
+  Inc(LPos, 4); { month + space → year }
 
-  { Parse year (4 digits) }
-  if (LPos + 4 > LLen) then Exit;
+  if LPos + 3 > LLen then Exit;
+  if (ADate[LPos] < '0') or (ADate[LPos] > '9') then Exit;
   LYear := (Ord(ADate[LPos]) - Ord('0')) * 1000
          + (Ord(ADate[LPos + 1]) - Ord('0')) * 100
          + (Ord(ADate[LPos + 2]) - Ord('0')) * 10
          + (Ord(ADate[LPos + 3]) - Ord('0'));
-  Inc(LPos, 5); { skip year + space }
+  Inc(LPos, 5); { year + space → time }
 
-  { Parse hour:minute:second }
-  if (LPos + 8 > LLen) then Exit;
+  if LPos + 7 > LLen then Exit;
   LHour := (Ord(ADate[LPos]) - Ord('0')) * 10 + (Ord(ADate[LPos + 1]) - Ord('0'));
   LMinute := (Ord(ADate[LPos + 3]) - Ord('0')) * 10 + (Ord(ADate[LPos + 4]) - Ord('0'));
   LSecond := (Ord(ADate[LPos + 6]) - Ord('0')) * 10 + (Ord(ADate[LPos + 7]) - Ord('0'));
@@ -306,11 +318,107 @@ begin
   end;
 end;
 
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
+begin
+  Result := '"' + IntToHex(ASize, 16) + '-' + IntToHex(AModTime, 16) + '"';
+end;
+
+{ TFileInfo.ModTime is platform nanoseconds since Unix epoch. }
+function FileModTimeToUnixSeconds(const AModTimeNs: Int64): Int64; inline;
+begin
+  if AModTimeNs < 0 then
+    Exit(0);
+  Result := AModTimeNs div 1000000000;
+end;
+
 { Generate ETag from file size and modification time.
   Format: "size-mtime" hex pair for strong ETag. }
 function GenerateETag(ASize: Int64; AModTime: Int64): string;
 begin
-  Result := '"' + IntToHex(ASize, 16) + '-' + IntToHex(AModTime, 16) + '"';
+  Result := HttpMakeStrongETag(ASize, AModTime);
+end;
+
+function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
+var
+  LRest, LToken: string;
+  LComma: SizeInt;
+begin
+  Result := False;
+  if (AIfNoneMatch = '') or (AServerETag = '') then
+    Exit;
+  LRest := Trim(AIfNoneMatch);
+  if LRest = '*' then
+    Exit(True);
+  while LRest <> '' do
+  begin
+    LComma := Pos(',', LRest);
+    if LComma > 0 then
+    begin
+      LToken := Trim(System.Copy(LRest, 1, LComma - 1));
+      LRest := Trim(System.Copy(LRest, LComma + 1, Length(LRest) - LComma));
+    end
+    else
+    begin
+      LToken := Trim(LRest);
+      LRest := '';
+    end;
+    if LToken = AServerETag then
+      Exit(True);
+  end;
+end;
+
+function HttpNotModifiedSince(const AIfModifiedSince: string;
+  const AModTimeUnix: Int64): Boolean;
+var
+  LSince: Int64;
+begin
+  Result := False;
+  if AIfModifiedSince = '' then
+    Exit;
+  LSince := ParseHttpDate(AIfModifiedSince);
+  if LSince = 0 then
+    Exit;
+  Result := AModTimeUnix <= LSince;
+end;
+
+function HttpTryWriteNotModified(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AETag, ALastModified: string;
+  const AModTimeUnix: Int64): Boolean;
+var
+  LIfNoneMatch: string;
+  LIfModifiedSince: string;
+begin
+  Result := False;
+  if (AReq = nil) or (AW = nil) then
+    Exit;
+
+  LIfNoneMatch := AReq.GetHeaders.Get('if-none-match');
+  if LIfNoneMatch <> '' then
+  begin
+    if HttpIfNoneMatchMatches(LIfNoneMatch, AETag) then
+    begin
+      AW.GetHeaders.SetHeader('etag', AETag);
+      if ALastModified <> '' then
+        AW.GetHeaders.SetHeader('last-modified', ALastModified);
+      AW.GetHeaders.SetHeader('content-length', '0');
+      AW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
+      Exit(True);
+    end;
+    { RFC 7232: when If-None-Match is present, ignore If-Modified-Since. }
+    Exit(False);
+  end;
+
+  LIfModifiedSince := AReq.GetHeaders.Get('if-modified-since');
+  if HttpNotModifiedSince(LIfModifiedSince, AModTimeUnix) then
+  begin
+    if AETag <> '' then
+      AW.GetHeaders.SetHeader('etag', AETag);
+    if ALastModified <> '' then
+      AW.GetHeaders.SetHeader('last-modified', ALastModified);
+    AW.GetHeaders.SetHeader('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
+    Exit(True);
+  end;
 end;
 
 { Parse Range header value. Returns True if valid single range.
@@ -428,8 +536,6 @@ var
   LETag: string;
   LLastModified: string;
   LRangeHeader: string;
-  LIfNoneMatch: string;
-  LIfModifiedSince: string;
   LStart, LEnd: Int64;
   LFileSize: Int64;
   LEscapedName: string;
@@ -451,43 +557,19 @@ begin
     LExt := ExtractExt(AFilePath);
     LMime := MimeTypeFromExt(LExt);
     LETag := GenerateETag(LFileSize, LInfo.ModTime);
-    LLastModified := FormatHttpDate(LInfo.ModTime);
+    { HTTP-date / If-Modified-Since use second resolution; ETag keeps full ns. }
+    LLastModified := FormatHttpDate(FileModTimeToUnixSeconds(LInfo.ModTime));
 
-    { Conditional request: If-None-Match }
-    if AReq <> nil then
-    begin
-      LIfNoneMatch := AReq.GetHeaders.Get('if-none-match');
-      if (LIfNoneMatch <> '') and (LIfNoneMatch = LETag) then
-      begin
-        AW.GetHeaders.SetHeader('etag', LETag);
-        AW.GetHeaders.SetHeader('last-modified', LLastModified);
-        AW.GetHeaders.SetHeader('content-length', '0');
-        AW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
-        Exit;
-      end;
-
-      { Conditional request: If-Modified-Since }
-      LIfModifiedSince := AReq.GetHeaders.Get('if-modified-since');
-      if (LIfNoneMatch = '') and (LIfModifiedSince <> '') then
-      begin
-        { RFC 7232 §3.3: parse date and compare timestamps.
-          Return 304 if the resource has not been modified since the given date. }
-        if LInfo.ModTime <= ParseHttpDate(LIfModifiedSince) then
-        begin
-          AW.GetHeaders.SetHeader('etag', LETag);
-          AW.GetHeaders.SetHeader('last-modified', LLastModified);
-          AW.GetHeaders.SetHeader('content-length', '0');
-          AW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
-          Exit;
-        end;
-      end;
-    end;
+    if HttpTryWriteNotModified(AReq, AW, LETag, LLastModified,
+      FileModTimeToUnixSeconds(LInfo.ModTime)) then
+      Exit;
 
     { Set common headers }
     AW.GetHeaders.SetHeader('content-type', LMime);
     AW.GetHeaders.SetHeader('etag', LETag);
     AW.GetHeaders.SetHeader('last-modified', LLastModified);
     AW.GetHeaders.SetHeader('cache-control', 'public, max-age=0, must-revalidate');
+    AW.GetHeaders.SetHeader('accept-ranges', 'bytes');
     AW.GetHeaders.SetHeader('x-content-type-options', 'nosniff');
     if ADownloadName <> '' then
     begin
@@ -500,7 +582,8 @@ begin
         'attachment; filename="' + LEscapedName + '"');
     end;
 
-    { Range request support }
+    { Range request support (single byte range only; multi-range → 416).
+      Body path always streams via IFile + io.Copy / CopyFileRange — never ReadAll. }
     if AReq <> nil then
       LRangeHeader := AReq.GetHeaders.Get('range')
     else

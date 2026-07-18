@@ -4,6 +4,7 @@ program test_platform_resource;
 
 uses
   nextpas.core.text.conv,
+  nextpas.core.platform.error,
   nextpas.core.platform.resource,
   nextpas.core.platform.resource.base,
   nextpas.core.test;
@@ -93,8 +94,8 @@ var
   LLimit: TPlatformResourceLimit;
 begin
   Check(platform_resource_get_limit(TPlatformResourceLimitKind(99), LLimit) =
-    PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT,
-    'invalid kind returns INVALID_ARGUMENT');
+    PLATFORM_ERR_INVALID,
+    'invalid kind returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestSetLimitInvalidKind;
@@ -105,8 +106,8 @@ begin
   LLimit.Current := 1024;
   LLimit.Maximum := 2048;
   Check(platform_resource_set_limit(TPlatformResourceLimitKind(99), LLimit) =
-    PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT,
-    'set invalid kind returns INVALID_ARGUMENT');
+    PLATFORM_ERR_INVALID,
+    'set invalid kind returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestSetLimitInvalidValues;
@@ -117,8 +118,8 @@ begin
   LLimit.Current := 2048;
   LLimit.Maximum := 1024;
   Check(platform_resource_set_limit(prlkOpenFiles, LLimit) =
-    PLATFORM_RESOURCE_ERROR_INVALID_ARGUMENT,
-    'current > maximum returns INVALID_ARGUMENT');
+    PLATFORM_ERR_INVALID,
+    'current > maximum returns PLATFORM_ERR_INVALID');
 end;
 
 procedure TestSetLimitInfinityMaximum;

@@ -53,14 +53,20 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryEnqueue(const AValue: T): Boolean;
+    {** @desc 非阻塞入队并返回失败原因（full vs closed）；成功 AError=lfteNone }
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 非阻塞出队并返回失败原因（empty vs closed-empty）；成功 AError=lfteNone }
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function EnqueueWait(const AValue: T): Boolean;
     function DequeueWait(out AValue: T): Boolean;
     function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     function EnqueueBatch(const AValues: array of T): PtrUInt;
     function DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean;
     function IsEmpty: Boolean;
@@ -126,6 +132,20 @@ begin
   Result := True;
 end;
 
+function TSpscQueueImpl.TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryEnqueue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 function TSpscQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LHead: Int64;
@@ -142,6 +162,20 @@ begin
   AtomicStore64(FHeadPublished, LHead + 1, moRelease);
   LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
   Result := True;
+end;
+
+function TSpscQueueImpl.TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryDequeue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TSpscQueueImpl.EnqueueWait(const AValue: T): Boolean;
@@ -302,11 +336,32 @@ begin
   Result := LCount;
 end;
 
+function TSpscQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TSpscQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TSpscQueueImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TSpscQueueImpl.IsClosed: Boolean;

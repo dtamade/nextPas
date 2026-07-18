@@ -9,6 +9,8 @@ uses
   nextpas.core.thread.init,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.os.env,
   nextpas.core.text.conv,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -251,7 +253,21 @@ begin
     GConn := TcpConnect('127.0.0.1', GPort);
     GConn.SetNoDelay(True);
     GConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(30)));
+    { Residual cost isolation ladder (local characterization, not ranking):
+      L0 net bench_tcp socket floor → L1 micro benches (parser/headers/router/
+      writer/outbound) → L2 fullchain Direct/* (HTTP+socket, no router) →
+      L3 Router/* / Middleware/* → L4 multi-thread server comparison. }
+    WriteLn('operation=http.fullchain.keepalive');
+    WriteLn('backend=', BackendName);
+    WriteLn('bench_max_iters=', IntToStr(GIterations));
+    WriteLn('bench_filter=', GFilter);
+    WriteLn('client_read_mode=buffered');
+    WriteLn('cost_isolation_ladder=net_bench_tcp|micro|direct|router_middleware|server_comparison');
+    WriteLn('dispatch_split=Direct/*=direct_handler;Router/*=router;Middleware/*=middleware_router');
     LSuite := TBenchSuite.Create('fullchain');
+    LSuite.SetMaxIterations(GIterations);
+    if GFilter <> '' then
+      LSuite.SetFilter(GFilter);
     LSuite.Add('Direct/Plaintext', @BenchDirectPlaintext).Add('Direct/1KB', @BenchDirect1K)
       .Add('Middleware/Noop', @BenchMiddlewareNoop).Add('Router/Plaintext', @BenchPlaintext)
       .Add('Router/JSON', @BenchJson).Add('Router/Echo/1KB', @BenchEcho1K)

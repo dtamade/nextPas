@@ -9,11 +9,11 @@ var
   StepResolvedPath: string;
   StepIndex: SizeInt;
 begin
-  if Length(FSteps) = 0 then
+  if (FSteps = nil) or (FSteps.Count = 0) then
     Exit('');
 
   StepJson := '';
-  for StepIndex := 0 to High(FSteps) do
+  for StepIndex := 0 to SizeInt(FSteps.Count) - 1 do
   begin
     if StepJson <> '' then
       StepJson := StepJson + ',';
@@ -31,7 +31,7 @@ begin
       StepResolvedPath := FSteps[StepIndex].ExecutableRef;
     if StepResolvedPath <> '' then
       AppendJsonField(StepFields, 'resolvedPath', JsonString(StepResolvedPath));
-    AppendJsonField(StepFields, 'argv', BuildStringArrayJson(FSteps[StepIndex].Argv));
+    AppendJsonField(StepFields, 'argv', BuildStringVecJson(FSteps[StepIndex].Argv));
     AppendJsonField(
       StepFields,
       'workingDirectory',
@@ -40,17 +40,17 @@ begin
     AppendJsonField(
       StepFields,
       'inputs',
-      BuildToolArtifactArrayJson(FSteps[StepIndex].Inputs)
+      BuildToolArtifactVecJson(FSteps[StepIndex].Inputs)
     );
     AppendJsonField(
       StepFields,
       'outputs',
-      BuildToolArtifactArrayJson(FSteps[StepIndex].Outputs)
+      BuildToolArtifactVecJson(FSteps[StepIndex].Outputs)
     );
     AppendJsonField(
       StepFields,
       'sidecars',
-      BuildToolSidecarArrayJson(FSteps[StepIndex].Sidecars)
+      BuildToolSidecarVecJson(FSteps[StepIndex].Sidecars)
     );
     AppendJsonField(
       StepFields,
@@ -98,17 +98,17 @@ begin
   AppendJsonField(
     Fields,
     'objectInputs',
-    BuildToolArtifactArrayJson(FLogicalLinkRequest.ObjectInputs)
+    BuildToolArtifactVecJson(FLogicalLinkRequest.ObjectInputs)
   );
   AppendJsonField(
     Fields,
     'libraryRequests',
-    BuildLogicalLibraryRequestJson(FLogicalLinkRequest.LibraryRequests)
+    BuildLogicalLibraryRequestVecJson(FLogicalLinkRequest.LibraryRequests)
   );
   AppendJsonField(
     Fields,
     'orderedSymbols',
-    BuildStringArrayJson(FLogicalLinkRequest.OrderedSymbols)
+    BuildStringVecJson(FLogicalLinkRequest.OrderedSymbols)
   );
   Result := '{' + Fields + '}';
 end;

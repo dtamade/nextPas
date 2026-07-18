@@ -5,7 +5,8 @@ unit nextpas.core.platform.thread;
 interface
 
 uses
-  nextpas.core.platform.thread.base;
+  nextpas.core.platform.thread.base,
+  nextpas.core.platform.posix.errno;
 
 type
   TPlatformThreadHandle = nextpas.core.platform.thread.base.TPlatformThreadHandle;
@@ -95,18 +96,16 @@ function platform_cpu_count: Int32;
 
 { Thread naming - for debugging }
 
-{$IFDEF NEXTPAS_LINUX}
 {** @desc 设置当前线程名称（用于调试器显示）
     @param AName 线程名称
-    @return 0 成功，PLATFORM_ERR_* 错误码 *}
+    @return 0 成功，PLATFORM_ERR_* 错误码；不支持时 PLATFORM_ERR_UNSUPPORTED *}
 function platform_thread_set_name(const AName: PAnsiChar): Int32;
 
 {** @desc 获取当前线程名称
     @param ABuf 输出缓冲区
     @param ABufSize 缓冲区大小
-    @return 名称实际长度 *}
+    @return 0 成功；不支持时 PLATFORM_ERR_UNSUPPORTED *}
 function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
-{$ENDIF}
 
 type
   {**
@@ -222,6 +221,31 @@ begin
   {$ENDIF}
 end;
 
+{$IFDEF NEXTPAS_MACOS}
+{ Darwin trampoline: run user entry, stash return value, mark Finished for
+  timedjoin polling (no pthread_timedjoin_np on Darwin). Releases one RefCount
+  so detach may free only after this write-back completes. }
+function platform_thread_darwin_trampoline(AArg: Pointer): Pointer; cdecl;
+var
+  LState: PPlatformPThreadState;
+begin
+  LState := PPlatformPThreadState(AArg);
+  Result := TPlatformThreadProc(LState^.UserProc)(LState^.UserArg);
+  LState^.RetVal := Result;
+  InterlockedExchange(LState^.Finished, 1);
+  if InterlockedDecrement(LState^.RefCount) = 0 then
+    Dispose(LState);
+end;
+
+procedure platform_thread_darwin_state_release(const AState: PPlatformPThreadState); inline;
+begin
+  if AState = nil then
+    Exit;
+  if InterlockedDecrement(AState^.RefCount) = 0 then
+    Dispose(AState);
+end;
+{$ENDIF}
+
 function platform_thread_host_state_create(out AState: PPlatformPThreadState; const AStartRoutine: Pointer; const AArgument: Pointer): Int32; inline;
 begin
   AState := nil;
@@ -231,8 +255,18 @@ begin
   New(AState);
   FillChar(AState^, SizeOf(AState^), 0);
 
+  {$IFDEF NEXTPAS_MACOS}
+  AState^.UserProc := AStartRoutine;
+  AState^.UserArg := AArgument;
+  AState^.Finished := 0;
+  AState^.RefCount := 2;
+  Result := pthread_create(
+    @AState^.Thread, nil,
+    TPThreadStartRoutine(@platform_thread_darwin_trampoline), AState);
+  {$ELSE}
   Result := pthread_create(
     @AState^.Thread[0], nil, TPThreadStartRoutine(AStartRoutine), AArgument);
+  {$ENDIF}
   if Result <> 0 then
   begin
     Dispose(AState);
@@ -246,9 +280,20 @@ begin
   if AState = nil then
     Exit(PLATFORM_ERR_INVALID);
 
+{$IFDEF NEXTPAS_MACOS}
+  Result := pthread_join(AState^.Thread, @ARetVal);
+  if Result = 0 then
+  begin
+    { Trampoline may have stored RetVal; prefer join's value if non-nil. }
+    if ARetVal = nil then
+      ARetVal := AState^.RetVal;
+    platform_thread_darwin_state_release(AState);
+  end;
+{$ELSE}
   Result := pthread_join(PPThreadToken(@AState^.Thread[0])^, @ARetVal);
   if Result = 0 then
     Dispose(AState);
+{$ENDIF}
 end;
 
 function platform_thread_host_state_detach(const AState: PPlatformPThreadState): Int32; inline;
@@ -256,15 +301,22 @@ begin
   if AState = nil then
     Exit(PLATFORM_ERR_INVALID);
 
+{$IFDEF NEXTPAS_MACOS}
+  Result := pthread_detach(AState^.Thread);
+  if Result = 0 then
+    platform_thread_darwin_state_release(AState);
+{$ELSE}
   Result := pthread_detach(PPThreadToken(@AState^.Thread[0])^);
   if Result = 0 then
     Dispose(AState);
+{$ENDIF}
 end;
 
-{ GNU extension — available since glibc 2.24 (2016). PTHREAD_TIMEOUT_CLOCK_ID
-  defaults to CLOCK_MONOTONIC on modern kernels.
-  Declaration moved to nextpas.core.platform.linux.ffi.pas }
-{$IFDEF NEXTPAS_LINUX}
+{ GNU extension / host timedjoin:
+  - Linux/FreeBSD: pthread_timedjoin_np (absolute CLOCK_REALTIME / host clock)
+  - Darwin: poll Finished flag from trampoline, then pthread_join
+  - other: zero/positive timeout without tryjoin → return 1 (still joinable) }
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_FREEBSD)}
 
 function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle;
   ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
@@ -290,34 +342,78 @@ begin
   Result := pthread_timedjoin_np(PPThreadToken(@LState^.Thread[0])^, @ARetVal, @LAbsTime);
   if Result = 0 then
   begin
-    { Thread finished — clean up state }
     Dispose(LState);
   end
-  else if Result = ESysETIMEDOUT then 
+  else if Result = ESysETIMEDOUT then
   begin
     Result := 1; { Caller decides: detach or re-try }
   end
   else
   begin
-    Result := PLATFORM_ERR_INVALID; { Unexpected error }
+    Result := PLATFORM_ERR_INVALID;
   end;
 end;
+
+{$ELSEIF defined(NEXTPAS_MACOS)}
+
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle;
+  ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
+var
+  LState: PPlatformPThreadState;
+  LElapsed: Int64;
+  LSlice: Int64;
+begin
+  ARetVal := nil;
+  LState := PPlatformPThreadState(AHandle);
+  if LState = nil then
+    Exit(PLATFORM_ERR_INVALID);
+
+  if ATimeoutMs < 0 then
+    Exit(platform_thread_join(AHandle, ARetVal));
+
+  { Poll Finished. ATimeoutMs=0 is a pure try: no sleep, return 1 if still
+    running so the handle remains joinable. }
+  LElapsed := 0;
+  while LState^.Finished = 0 do
+  begin
+    if LElapsed >= ATimeoutMs then
+    begin
+      Result := 1;
+      Exit;
+    end;
+    LSlice := ATimeoutMs - LElapsed;
+    if LSlice > 1 then
+      LSlice := 1;
+    if LSlice > 0 then
+    begin
+      platform_thread_sleep_ms(UInt64(LSlice));
+      Inc(LElapsed, LSlice);
+    end
+    else
+    begin
+      Result := 1;
+      Exit;
+    end;
+  end;
+
+  Result := platform_thread_join(AHandle, ARetVal);
+end;
+
 {$ELSE}
-{ macOS/Android/FreeBSD: fall back to blocking join (no timed join available).
-  When ATimeoutMs > 0: return PLATFORM_ERR_UNSUPPORTED — caller must use a
-  polling loop with platform_thread_is_alive + platform_thread_detach instead.
-  When ATimeoutMs = 0: blocking join (no timeout). }
+
 function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle;
   ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
 begin
-  if ATimeoutMs > 0 then
-  begin
-    ARetVal := nil;
-    Result := PLATFORM_ERR_UNSUPPORTED;
-    Exit;
-  end;
-  Result := platform_thread_join(AHandle, ARetVal);
+  { Android/generic Unix without timedjoin_np: do not block on timeout>=0 so
+    the handle stays joinable. Infinite wait still blocks via join. }
+  if ATimeoutMs < 0 then
+    Exit(platform_thread_join(AHandle, ARetVal));
+  ARetVal := nil;
+  if AHandle = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := 1;
 end;
+
 {$ENDIF}
 
 function platform_thread_host_self_token_u64: UInt64; inline;
@@ -503,22 +599,32 @@ begin
   Result := platform_thread_host_cpu_count_i32;
 end;
 
+{ Thread name buffer: POSIX systems limit thread names to 15 chars + null.
+  This helper copies up to 15 chars from AName into a 16-byte buffer,
+  null-terminating the result. Returns the number of chars copied. }
+function CopyThreadName16(const AName: PAnsiChar; out AName16: array of AnsiChar): Int32;
+var
+  LLen: Int32;
+begin
+  LLen := 0;
+  while (AName[LLen] <> #0) and (LLen < 15) do
+  begin
+    AName16[LLen] := AName[LLen];
+    Inc(LLen);
+  end;
+  AName16[LLen] := #0;
+  Result := LLen;
+end;
+
 { Thread naming }
 
 function platform_thread_set_name(const AName: PAnsiChar): Int32;
 {$IFDEF NEXTPAS_LINUX}
 var
   LName: array[0..15] of AnsiChar;
-  LLen: Int32;
 begin
   if AName = nil then Exit(PLATFORM_ERR_INVALID);
-  LLen := 0;
-  while (AName[LLen] <> #0) and (LLen < 15) do
-  begin
-    LName[LLen] := AName[LLen];
-    Inc(LLen);
-  end;
-  LName[LLen] := #0;
+  CopyThreadName16(AName, LName);
   Result := Int32(nextpas.core.platform.linux.ffi.prctl(
     15 { PR_SET_NAME }, PtrUInt(@LName[0]), 0, 0, 0));
   if Result <> 0 then Result := platform_get_errno;
@@ -526,34 +632,20 @@ end;
 {$ELSEIF defined(NEXTPAS_MACOS)}
 var
   LName: array[0..15] of AnsiChar;
-  LLen: Int32;
 begin
   if AName = nil then Exit(PLATFORM_ERR_INVALID);
-  LLen := 0;
-  while (AName[LLen] <> #0) and (LLen < 15) do
-  begin
-    LName[LLen] := AName[LLen];
-    Inc(LLen);
-  end;
-  LName[LLen] := #0;
+  CopyThreadName16(AName, LName);
   Result := nextpas.core.platform.darwin.ffi.pthread_setname_np(@LName[0]);
   if Result <> 0 then Result := platform_get_errno;
 end;
 {$ELSEIF defined(NEXTPAS_FREEBSD)}
 var
   LName: array[0..15] of AnsiChar;
-  LLen: Int32;
 begin
   if AName = nil then Exit(PLATFORM_ERR_INVALID);
-  LLen := 0;
-  while (AName[LLen] <> #0) and (LLen < 15) do
-  begin
-    LName[LLen] := AName[LLen];
-    Inc(LLen);
-  end;
-  LName[LLen] := #0;
+  CopyThreadName16(AName, LName);
   Result := nextpas.core.platform.freebsd.ffi.pthread_setname_np(
-    nextpas.core.platform.freebsd.ffi.pthread_getthreadid_np, @LName[0]);
+    pthread_self, @LName[0]);
   if Result <> 0 then Result := platform_get_errno;
 end;
 {$ELSE}
@@ -880,6 +972,21 @@ begin
     Result := 1;
 end;
 
+function platform_thread_set_name(const AName: PAnsiChar): Int32;
+begin
+  if AName = nil then
+    Exit(PLATFORM_ERR_INVALID);
+  { SetThreadDescription is Win10+; keep unsupported until owned FFI lands. }
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
+function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
+begin
+  if (ABuf <> nil) and (ABufSize > 0) then
+    ABuf[0] := #0;
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
+
 {$ENDIF}
 
 {$IFNDEF NEXTPAS_UNIX}{$IFNDEF NEXTPAS_WINDOWS}
@@ -898,6 +1005,12 @@ function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32; begin Result 
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_tls_get(const AKey: TPlatformTLSKey): Pointer; begin Result := nil; end;
 function platform_cpu_count: Int32; begin Result := 1; end;
+function platform_thread_set_name(const AName: PAnsiChar): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_thread_get_name(ABuf: PAnsiChar; ABufSize: Int32): Int32;
+begin
+  if (ABuf <> nil) and (ABufSize > 0) then ABuf[0] := #0;
+  Result := PLATFORM_ERR_UNSUPPORTED;
+end;
 {$ENDIF}{$ENDIF}
 
 { TPlatformThreadRecord helpers }

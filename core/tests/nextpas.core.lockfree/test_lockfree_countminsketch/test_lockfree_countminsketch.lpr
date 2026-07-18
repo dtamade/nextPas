@@ -2,7 +2,7 @@
 program test_lockfree_countminsketch;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.countminsketch;
 
 var

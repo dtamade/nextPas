@@ -21,6 +21,7 @@ type
       - 写操作：复制数组 → 修改副本 → CAS 替换指针
       - 线程安全的快照语义
       - 支持索引访问、追加、替换、删除
+ * @concurrency Thread-safe (see source for details).
   }
   generic TCopyOnWriteArrayImpl<T> = class
   private type
@@ -75,6 +76,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.errors;
+
 procedure TCopyOnWriteArrayImpl.FreeData(AData: PData);
 begin
   if AData <> nil then
@@ -95,6 +99,8 @@ end;
 
 constructor TCopyOnWriteArrayImpl.Create;
 begin
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TCopyOnWriteArray: T must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   New(FData);
   FData^.FCount := 0;

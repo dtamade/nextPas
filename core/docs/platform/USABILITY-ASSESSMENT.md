@@ -1,10 +1,18 @@
 # nextpas.core.platform 可用性评估报告
 
+> **HISTORICAL (2026-07-06). Do not cite scores in the body as current.**
+>
+> **Maintenance baseline (2026-07-17, post wave-4 + LT0–LT3): 8.21/10 LOW-MEDIUM**
+> Usability waves are **closed**. No wave-5 without a large API/contract change.
+> Residual backlog: [residual-roadmap.md](residual-roadmap.md).
+> Live contracts: [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md), [ERROR-HANDLING.md](ERROR-HANDLING.md),
+> [CONTRACT.md](CONTRACT.md), [EXAMPLES.md](EXAMPLES.md), [API-REFERENCE.md](API-REFERENCE.md).
+
 **日期**: 2026-07-06
 **评估人**: Claude (AI)
 **评估范围**: 全部 89 个源文件、93 个测试文件、489 个公开 API
 **对标标准**: Rust std::os / Go os+syscall 工程标准
-**当前版本**: platform-usability-v6
+**当前版本**: platform-usability-v6 (historical)
 
 ---
 

@@ -4,7 +4,6 @@ program test_lockfree_flatcombining;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.flatcombining,
   nextpas.core.lockfree,
   nextpas.core.errors,

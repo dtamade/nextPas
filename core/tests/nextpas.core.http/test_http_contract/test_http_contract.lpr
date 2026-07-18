@@ -8,8 +8,9 @@ program test_http_contract;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.io.intf,
@@ -899,20 +900,20 @@ begin
   try
     THttpServer.Create(LHandler, LOptions).Free;
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'THttpServer.Create rejects nil handler');
+  Check(LRaised, 'THttpServer.Create rejects nil handler as hekArgument');
 
   LRaised := False;
   try
     LServer := NewHttpServer(LHandler);
     LServer := nil;
   except
-    on E: EArgumentError do
-      LRaised := True;
+    on E: EHttpError do
+      LRaised := E.Kind = hekArgument;
   end;
-  Check(LRaised, 'NewHttpServer rejects nil handler');
+  Check(LRaised, 'NewHttpServer rejects nil handler as hekArgument');
 end;
 
 procedure TestHttpServerLifecycleContractOnInterface;
@@ -1013,6 +1014,187 @@ begin
   Check(SourceHas(LSource,
     'Result := (FTcpServer <> nil) and FTcpServer.IsRunning;'),
     'HTTP IsRunning delegates runtime truth to TCP server');
+end;
+
+procedure TestNewRequestFacadeDeprecationParitySourceContract;
+{ Whitelist only: NewRequest(Method, TUrl|string) + NewGetRequest.
+  Multi-arg NewRequest and NewStreamingRequest are physically deleted. }
+var
+  LFacade: string;
+  LMessage: string;
+begin
+  LFacade := ReadTextFile('../../../src/nextpas.core.http.pas');
+  LMessage := ReadTextFile('../../../src/nextpas.core.http.message.pas');
+
+  Check(SourceHas(LMessage,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload;'),
+    'message keeps NewRequest(Method, TUrl) as the non-deprecated primitive');
+  Check(SourceHas(LMessage,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload;'),
+    'message keeps NewRequest(Method, string) URL-parse bridge');
+  Check(SourceHas(LFacade,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;'),
+    'facade keeps NewRequest(Method, TUrl) as the non-deprecated primitive');
+  Check(SourceHas(LFacade,
+    'function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload; inline;'),
+    'facade keeps NewRequest(Method, string) URL-parse bridge');
+  Check(SourceHas(LFacade, 'function NewGetRequest(const APath: string): IHttpRequest; inline;'),
+    'facade keeps NewGetRequest non-deprecated');
+
+  { Multi-arg NewRequest overloads removed from both units. }
+  Check(not SourceHas(LFacade, 'const ABody: IReader; const AContentLength: Int64): IHttpRequest'),
+    'facade has no NewRequest body+CL overload');
+  Check(not SourceHas(LFacade, 'const AHeaders: IHttpHeaders; const ABody: IReader;'),
+    'facade has no NewRequest headers+body overload');
+  Check(not SourceHas(LFacade, 'const ABodyText: string): IHttpRequest'),
+    'facade has no NewRequest body-text overload');
+  Check(not SourceHas(LFacade, 'const ABodyBytes: TBytes): IHttpRequest'),
+    'facade has no NewRequest body-bytes overload');
+  Check(not SourceHas(LMessage, 'deprecated ''Use THttpRequestBuilder instead'''),
+    'message no longer carries deprecated multi-arg NewRequest markers');
+
+  Check(SourceHas(LFacade, 'THttpRequestBuilder = nextpas.core.http.message.THttpRequestBuilder;'),
+    'facade re-exports THttpRequestBuilder as the recommended construction path');
+
+  { NewStreamingRequest physically deleted — builder / SendStreaming only. }
+  Check(not SourceHas(LMessage, 'function NewStreamingRequest'),
+    'message no longer declares NewStreamingRequest');
+  Check(not SourceHas(LFacade, 'function NewStreamingRequest'),
+    'facade no longer declares NewStreamingRequest');
+
+  { Wave K freeze: no deprecated markers on request factories. }
+  Check(not SourceHas(LFacade, 'deprecated'),
+    'facade has no deprecated markers');
+  Check(not SourceHas(LMessage, 'deprecated'),
+    'message has no deprecated markers');
+end;
+
+procedure TestHttpErrorTaxonomyNoBareArgumentErrorSourceContract;
+{ Wave E1: public http surface must not raise bare EArgumentError. }
+var
+  LPaths: array[0..11] of string;
+  LSource: string;
+  I: Integer;
+begin
+  LPaths[0] := '../../../src/nextpas.core.http.pas';
+  LPaths[1] := '../../../src/nextpas.core.http.base.pas';
+  LPaths[2] := '../../../src/nextpas.core.http.client.pas';
+  LPaths[3] := '../../../src/nextpas.core.http.message.pas';
+  LPaths[4] := '../../../src/nextpas.core.http.server.pas';
+  LPaths[5] := '../../../src/nextpas.core.http.websocket.pas';
+  LPaths[6] := '../../../src/nextpas.core.http.static.pas';
+  LPaths[7] := '../../../src/nextpas.core.http.sse.pas';
+  LPaths[8] := '../../../src/nextpas.core.http.stream.pas';
+  LPaths[9] := '../../../src/nextpas.core.http.middleware.decompress.pas';
+  LPaths[10] := '../../../src/nextpas.core.http.middleware.compression.pas';
+  LPaths[11] := '../../../src/nextpas.core.http.middleware.bodylimit.pas';
+
+  for I := Low(LPaths) to High(LPaths) do
+  begin
+    LSource := ReadTextFile(LPaths[I]);
+    Check(Pos('raise EArgumentError', LSource) = 0,
+      LPaths[I] + ' must not raise bare EArgumentError');
+    Check(Pos('EArgumentError.Create', LSource) = 0,
+      LPaths[I] + ' must not construct bare EArgumentError');
+  end;
+
+  LSource := ReadTextFile('../../../src/nextpas.core.http.pas');
+  Check(SourceHas(LSource,
+    'raise EHttpError.Create(hekArgument,'#10 +
+    '      ''HttpUseRequestArena: router must not be nil'')'),
+    'HttpUseRequestArena nil router uses hekArgument');
+
+  LSource := ReadTextFile(
+    '../../../src/nextpas.core.http.middleware.decompress.pas');
+  Check(SourceHas(LSource,
+    'raise EHttpError.Create(hekArgument, E.Message)'),
+    'decompress wraps foreign EArgumentError as hekArgument');
+  Check(not SourceHas(LSource, 'on E: EArgumentError do'#10 +
+    '          raise;'),
+    'decompress must not bare-re-raise EArgumentError');
+end;
+
+procedure TestHttpWithStarChainSemanticsSourceContract;
+{ Wave E2: decorator vs rebuild classification stays as CONTRACT table. }
+var
+  LClient: string;
+begin
+  LClient := ReadTextFile('../../../src/nextpas.core.http.client.pas');
+
+  Check(SourceHas(LClient,
+    'Result := TOptionsOverrideClient.Create(Self,'#10 +
+    '    Default(THttpRequestOptions).WithTimeout(ATimeoutMs));'),
+    'WithTimeout is request-options decorator, not options rebuild');
+  Check(SourceHas(LClient,
+    'Result := NewHttpClient(FOptions.WithConnectTimeout(ATimeoutMs));'),
+    'WithConnectTimeout rebuilds base client options/transport');
+  Check(SourceHas(LClient,
+    'Result := NewHttpClient(FOptions.WithProxyUrl(AProxyUrl));'),
+    'WithProxyUrl rebuilds base client');
+  Check(SourceHas(LClient,
+    'Result := NewHttpClient(FOptions.WithTLSContext(ATLSContext));'),
+    'WithTLSContext rebuilds base client');
+  Check(SourceHas(LClient,
+    'Result := RebindInner(FInner.WithConnectTimeout(ATimeoutMs));'),
+    'decorator rebinds around ConnectTimeout rebuild');
+  Check(SourceHas(LClient,
+    'Result := RebindInner(FInner.WithProxyUrl(AProxyUrl));'),
+    'decorator rebinds around ProxyUrl rebuild');
+  Check(SourceHas(LClient,
+    'Result := RebindInner(FInner.WithTLSContext(ATLSContext));'),
+    'decorator rebinds around TLSContext rebuild');
+  Check(SourceHas(LClient, 'Result := TRetryClient.Create(Self, AMaxRetries);'),
+    'WithRetry remains a decorator');
+end;
+
+procedure TestHttpErrorStableOpSetSourceContract;
+{ Wave E1 aligns Wave J Op names; lock the stable Op string set. }
+var
+  LClient: string;
+  LBase: string;
+  LH1: string;
+  LWs: string;
+begin
+  LClient := ReadTextFile('../../../src/nextpas.core.http.client.pas');
+  LBase := ReadTextFile('../../../src/nextpas.core.http.base.pas');
+  LH1 := ReadTextFile('../../../src/nextpas.core.http.impl.h1.pas');
+  LWs := ReadTextFile('../../../src/nextpas.core.http.websocket.pas');
+
+  Check(SourceHas(LClient, '''redirect'''),
+    'client uses Op=redirect');
+  Check(SourceHas(LClient, '''round_trip'''),
+    'client uses Op=round_trip');
+  Check(SourceHas(LClient, '''ensure'''),
+    'client uses Op=ensure');
+  Check(SourceHas(LClient, '''download'''),
+    'client uses Op=download');
+  Check(SourceHas(LClient, '''json'''),
+    'client uses Op=json');
+  Check(SourceHas(LClient, '''content_encoding'''),
+    'client uses Op=content_encoding');
+  Check(SourceHas(LBase, '''cancel'''),
+    'base uses Op=cancel');
+  Check(SourceHas(LBase, '''transport'''),
+    'base uses Op=transport');
+  Check(SourceHas(LH1, '''connect'''),
+    'H1 uses Op=connect');
+  Check(SourceHas(LWs, '''websocket'''),
+    'websocket uses Op=websocket');
+
+  Check(SourceHas(LBase,
+    'hekUnknown,'#10 +
+    '    hekArgument,'#10 +
+    '    hekTimeout,'#10 +
+    '    hekConnect,'#10 +
+    '    hekProtocol,'#10 +
+    '    hekParse,'#10 +
+    '    hekRedirect,'#10 +
+    '    hekBody,'#10 +
+    '    hekUpgrade,'#10 +
+    '    hekRegistry,'#10 +
+    '    hekStatus,'#10 +
+    '    hekCanceled'),
+    'THttpErrorKind order stays the Wave E1 taxonomy set');
 end;
 
 procedure TestChunkedRequestTrailerContract;
@@ -1223,6 +1405,14 @@ begin
     @TestHttpServerHonorsExplicitBackendSelection);
   T.Test('HttpServer facade owner-boundary source contract',
     @TestHttpServerFacadeOwnerBoundarySourceContract);
+  T.Test('NewRequest facade deprecation parity source contract',
+    @TestNewRequestFacadeDeprecationParitySourceContract);
+  T.Test('Error taxonomy: no bare EArgumentError source contract',
+    @TestHttpErrorTaxonomyNoBareArgumentErrorSourceContract);
+  T.Test('Error taxonomy: stable Op set source contract',
+    @TestHttpErrorStableOpSetSourceContract);
+  T.Test('With* chain semantics source contract',
+    @TestHttpWithStarChainSemanticsSourceContract);
   T.Test('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
   T.Test('Chunked request multiple trailer declaration contract',

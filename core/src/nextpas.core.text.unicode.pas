@@ -13,7 +13,8 @@ uses
   nextpas.core.text.unicode.script,
   nextpas.core.text.unicode.block,
   nextpas.core.text.unicode.segment,
-  nextpas.core.text.unicode.collate;
+  nextpas.core.text.unicode.collate,
+  nextpas.core.text.unicode.data;
 
 type
   // 基础类型
@@ -25,6 +26,13 @@ type
   TCodepointRange3 = nextpas.core.text.unicode.types.TCodepointRange3;
   TCaseFoldMap = nextpas.core.text.unicode.types.TCaseFoldMap;
   TCaseFoldEntry = nextpas.core.text.unicode.types.TCaseFoldEntry;
+  TGraphemeBreakProperty = nextpas.core.text.unicode.types.TGraphemeBreakProperty;
+
+  TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
+  TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
+  TCollationKey = nextpas.core.text.unicode.collate.TCollationKey;
+  IUnicodeCollator = nextpas.core.text.unicode.collate.IUnicodeCollator;
+  TUnicodeCollator = nextpas.core.text.unicode.collate.TUnicodeCollator;
 
   // 新增类型
   TUnicodeScript = nextpas.core.text.unicode.types.TUnicodeScript;
@@ -32,13 +40,10 @@ type
   TSegmentType = nextpas.core.text.unicode.segment.TSegmentType;
   TSegmentResult = nextpas.core.text.unicode.segment.TSegmentResult;
   TSegmentResultArray = nextpas.core.text.unicode.segment.TSegmentResultArray;
-  TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
-  TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
-  TCollationKey = nextpas.core.text.unicode.collate.TCollationKey;
 
   // 接口类型
   IUnicodeSegmenter = nextpas.core.text.unicode.segment.IUnicodeSegmenter;
-  IUnicodeCollator = nextpas.core.text.unicode.collate.IUnicodeCollator;
+  IUnicodeDataManager = nextpas.core.text.unicode.data.IUnicodeDataManager;
 
 const
   UNICODE_MAX_CODEPOINT = nextpas.core.text.unicode.types.UNICODE_MAX_CODEPOINT;
@@ -48,6 +53,7 @@ const
 // 属性查询函数
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;
 function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory; inline;
+function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -79,12 +85,23 @@ function UTF8CaseFold(const AValue: string): string; inline;
 function UTF8CaseFoldSimple(const AValue: string): string; inline;
 
 // 规范化函数
-function NFD(const s: string): string; inline;
-function NFC(const s: string): string; inline;
-function NFKD(const s: string): string; inline;
-function NFKC(const s: string): string; inline;
-function IsNormalizedNFD(const s: string): Boolean; inline;
-function IsNormalizedNFC(const s: string): Boolean; inline;
+function NFD(const AText: string): string; inline;
+function NFC(const AText: string): string; inline;
+function NFKD(const AText: string): string; inline;
+function NFKC(const AText: string): string; inline;
+function IsNormalizedNFD(const AText: string): Boolean; inline;
+function IsNormalizedNFC(const AText: string): Boolean; inline;
+function IsNormalizedNFKD(const AText: string): Boolean; inline;
+function IsNormalizedNFKC(const AText: string): Boolean; inline;
+function QuickCheckNFD(const AText: string): Boolean; inline;
+function QuickCheckNFKD(const AText: string): Boolean; inline;
+function QuickCheckNFC(const AText: string): Boolean; inline;
+function QuickCheckNFKC(const AText: string): Boolean; inline;
+function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte; inline;
+function GetDecompositionMapping(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeCodepoint; out ALen: Byte;
+  out AIsCompatibility: Boolean): Boolean; inline;
+function IsCompositionExcluded(const ACp: TUnicodeCodepoint): Boolean; inline;
 
 // 文本分割函数
 function UnicodeSegmenter: IUnicodeSegmenter; inline;
@@ -94,9 +111,21 @@ function SegmentLines(const AText: string): TSegmentResultArray; inline;
 function SegmentSentences(const AText: string): TSegmentResultArray; inline;
 
 // 排序规则函数
+function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32; inline;
+function UnpackPrimary(const AWeight: UInt32): UInt16; inline;
+function UnpackSecondary(const AWeight: UInt32): Byte; inline;
+function UnpackTertiary(const AWeight: UInt32): Byte; inline;
 function UnicodeCollator: IUnicodeCollator; inline;
 function UnicodeCollatorWithOptions(const AOptions: TCollationOptions): IUnicodeCollator; inline;
 function DefaultCollationOptions: TCollationOptions; inline;
+
+// 便利函数
+function CompareText(const A, B: string): Integer; inline;
+function GetSortKey(const AText: string): TCollationKey; inline;
+procedure SortStrings(var AStrings: array of string);
+
+// 数据管理器
+function UnicodeData: IUnicodeDataManager; inline;
 
 implementation
 
@@ -108,6 +137,11 @@ end;
 function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory;
 begin
   Result := nextpas.core.text.unicode.props.GetGeneralCategory(ACp);
+end;
+
+function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty;
+begin
+  Result := nextpas.core.text.unicode.props.GetGraphemeBreakProperty(ACp);
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;
@@ -235,34 +269,81 @@ begin
   Result := nextpas.core.text.unicode.casefold.UTF8CaseFoldSimple(AValue);
 end;
 
-function NFD(const s: string): string;
+function NFD(const AText: string): string;
 begin
-  Result := nextpas.core.text.unicode.normalize.NFD(s);
+  Result := nextpas.core.text.unicode.normalize.NFD(AText);
 end;
 
-function NFC(const s: string): string;
+function NFC(const AText: string): string;
 begin
-  Result := nextpas.core.text.unicode.normalize.NFC(s);
+  Result := nextpas.core.text.unicode.normalize.NFC(AText);
 end;
 
-function NFKD(const s: string): string;
+function NFKD(const AText: string): string;
 begin
-  Result := nextpas.core.text.unicode.normalize.NFKD(s);
+  Result := nextpas.core.text.unicode.normalize.NFKD(AText);
 end;
 
-function NFKC(const s: string): string;
+function NFKC(const AText: string): string;
 begin
-  Result := nextpas.core.text.unicode.normalize.NFKC(s);
+  Result := nextpas.core.text.unicode.normalize.NFKC(AText);
 end;
 
-function IsNormalizedNFD(const s: string): Boolean;
+function IsNormalizedNFD(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFD(s);
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFD(AText);
 end;
 
-function IsNormalizedNFC(const s: string): Boolean;
+function IsNormalizedNFC(const AText: string): Boolean;
 begin
-  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFC(s);
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFC(AText);
+end;
+
+function IsNormalizedNFKD(const AText: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFKD(AText);
+end;
+
+function IsNormalizedNFKC(const AText: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.IsNormalizedNFKC(AText);
+end;
+
+function QuickCheckNFD(const AText: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFD(AText);
+end;
+
+function QuickCheckNFC(const AText: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFC(AText);
+end;
+
+function QuickCheckNFKD(const AText: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFKD(AText);
+end;
+
+function QuickCheckNFKC(const AText: string): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.QuickCheckNFKC(AText);
+end;
+
+function GetCanonicalCombiningClass(const ACp: TUnicodeCodepoint): Byte;
+begin
+  Result := nextpas.core.text.unicode.normalize.GetCanonicalCombiningClass(ACp);
+end;
+
+function GetDecompositionMapping(const ACp: TUnicodeCodepoint;
+  out ADst: array of TUnicodeCodepoint; out ALen: Byte;
+  out AIsCompatibility: Boolean): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.GetDecompositionMapping(ACp, ADst, ALen, AIsCompatibility);
+end;
+
+function IsCompositionExcluded(const ACp: TUnicodeCodepoint): Boolean;
+begin
+  Result := nextpas.core.text.unicode.normalize.IsCompositionExcluded(ACp);
 end;
 
 function UnicodeSegmenter: IUnicodeSegmenter;
@@ -290,6 +371,26 @@ begin
   Result := nextpas.core.text.unicode.segment.UnicodeSegmenter.SegmentSentences(AText);
 end;
 
+function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;
+begin
+  Result := nextpas.core.text.unicode.collate.GetCollationWeight(ACp);
+end;
+
+function UnpackPrimary(const AWeight: UInt32): UInt16;
+begin
+  Result := nextpas.core.text.unicode.collate.UnpackPrimary(AWeight);
+end;
+
+function UnpackSecondary(const AWeight: UInt32): Byte;
+begin
+  Result := nextpas.core.text.unicode.collate.UnpackSecondary(AWeight);
+end;
+
+function UnpackTertiary(const AWeight: UInt32): Byte;
+begin
+  Result := nextpas.core.text.unicode.collate.UnpackTertiary(AWeight);
+end;
+
 function UnicodeCollator: IUnicodeCollator;
 begin
   Result := nextpas.core.text.unicode.collate.UnicodeCollator;
@@ -303,6 +404,78 @@ end;
 function DefaultCollationOptions: TCollationOptions;
 begin
   Result := nextpas.core.text.unicode.collate.DefaultCollationOptions;
+end;
+
+function CompareText(const A, B: string): Integer;
+begin
+  Result := UnicodeCollator.Compare(A, B);
+end;
+
+function GetSortKey(const AText: string): TCollationKey;
+begin
+  Result := UnicodeCollator.GetSortKey(AText);
+end;
+
+procedure QuickSortStrings(var AStrings: array of string;
+  const ACollator: IUnicodeCollator; ALo, AHi: SizeInt);
+var
+  LPivot: string;
+  LI, LJ: SizeInt;
+  LTemp: string;
+begin
+  if ALo >= AHi then
+    Exit;
+  // Lomuto partition: pivot at AHi
+  LPivot := AStrings[AHi];
+  LJ := ALo;
+  for LI := ALo to AHi - 1 do
+  begin
+    if ACollator.Compare(AStrings[LI], LPivot) <= 0 then
+    begin
+      LTemp := AStrings[LJ]; AStrings[LJ] := AStrings[LI]; AStrings[LI] := LTemp;
+      Inc(LJ);
+    end;
+  end;
+  // Place pivot at final position
+  LTemp := AStrings[LJ]; AStrings[LJ] := AStrings[AHi]; AStrings[AHi] := LTemp;
+
+  QuickSortStrings(AStrings, ACollator, ALo, LJ - 1);
+  QuickSortStrings(AStrings, ACollator, LJ + 1, AHi);
+end;
+
+procedure SortStrings(var AStrings: array of string);
+var
+  LCollator: IUnicodeCollator;
+  LLen: SizeInt;
+  LI, LJ: SizeInt;
+  LTemp: string;
+begin
+  LLen := High(AStrings) - Low(AStrings) + 1;
+  if LLen <= 1 then
+    Exit;
+  LCollator := UnicodeCollator;
+  // Small arrays: insertion sort; large arrays: quicksort
+  if LLen <= 16 then
+  begin
+    for LI := 1 to High(AStrings) do
+    begin
+      LTemp := AStrings[LI];
+      LJ := LI;
+      while (LJ > 0) and (LCollator.Compare(AStrings[LJ - 1], LTemp) > 0) do
+      begin
+        AStrings[LJ] := AStrings[LJ - 1];
+        Dec(LJ);
+      end;
+      AStrings[LJ] := LTemp;
+    end;
+  end
+  else
+    QuickSortStrings(AStrings, LCollator, Low(AStrings), High(AStrings));
+end;
+
+function UnicodeData: IUnicodeDataManager;
+begin
+  Result := nextpas.core.text.unicode.data.UnicodeData;
 end;
 
 end.

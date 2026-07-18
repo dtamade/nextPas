@@ -1225,6 +1225,22 @@ begin
   ExpectArrayOfStr(['a','b']).Not_.ToEqualStrArray(['a','b','c']);
 end;
 
+{ ── Multi-diff reporting ───────────────────────────────────────────────────── }
+
+procedure TestToEqualIntArrayMultiDiff;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfInt([1, 2, 3, 4, 5]).ToEqualIntArray([1, 99, 3, 88, 5]);
+  end, '2 of 5 positions');
+end;
+
+procedure TestToEqualStrArrayMultiDiff;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfStr(['a', 'b', 'c', 'd']).ToEqualStrArray(['a', 'X', 'c', 'Y']);
+  end, '2 of 4 positions');
+end;
+
 procedure TestToContainIntPass;
 begin
   ExpectArrayOfInt([1,2,3]).ToContainInt(2);
@@ -1348,6 +1364,68 @@ end;
 procedure TestToBeSortedStrEmpty;
 begin
   ExpectArrayOfStr([]).ToBeSorted;
+end;
+
+procedure TestToBeSortedStrSingle;
+begin
+  ExpectArrayOfStr(['x']).ToBeSorted;
+end;
+
+procedure TestToBeSortedStrNot;
+begin
+  ExpectFail(procedure begin
+    ExpectArrayOfStr(['a', 'b', 'c']).Not_.ToBeSorted;
+  end, 'sorted');
+end;
+
+{ ── ToBeInstanceOf ─────────────────────────────────────────────────────────── }
+
+procedure TestToBeInstanceOfPass;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectObj(LObj).ToBeInstanceOf(TObject);
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestToBeInstanceOfFail;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectFail(procedure begin
+      ExpectObj(LObj).ToBeInstanceOf(EAssertionFailed);
+    end, 'TObject');
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestToBeInstanceOfNil;
+begin
+  ExpectFail(procedure begin
+    ExpectPtr(nil).ToBeInstanceOf(TObject);
+  end, 'nil');
+end;
+
+procedure TestToBeInstanceOfNot;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectObj(LObj).Not_.ToBeInstanceOf(EAssertionFailed);
+    ExpectFail(procedure begin
+      ExpectObj(LObj).Not_.ToBeInstanceOf(TObject);
+    end, 'TObject');
+  finally
+    LObj.Free;
+  end;
 end;
 
 { ── Main ──────────────────────────────────────────────────────────────────── }
@@ -1561,9 +1639,11 @@ begin
   LSuite.Test('ToEqualIntArray fail',      @TestToEqualIntArrayFail);
   LSuite.Test('ToEqualIntArray diff len',  @TestToEqualIntArrayDiffLen);
   LSuite.Test('Not_.ToEqualIntArray',      @TestToEqualIntArrayNot);
+  LSuite.Test('ToEqualIntArray multi-diff',@TestToEqualIntArrayMultiDiff);
   LSuite.Test('ToEqualStrArray pass',      @TestToEqualStrArrayPass);
   LSuite.Test('ToEqualStrArray fail',      @TestToEqualStrArrayFail);
   LSuite.Test('Not_.ToEqualStrArray',      @TestToEqualStrArrayNot);
+  LSuite.Test('ToEqualStrArray multi-diff',@TestToEqualStrArrayMultiDiff);
   LSuite.Test('ToContainInt pass',         @TestToContainIntPass);
   LSuite.Test('ToContainInt fail',         @TestToContainIntFail);
   LSuite.Test('Not_.ToContainInt',         @TestToContainIntNot);
@@ -1575,6 +1655,10 @@ begin
   LSuite.Test('ToMatch pass',              @TestToMatchPass);
   LSuite.Test('ToMatch fail',              @TestToMatchFail);
   LSuite.Test('Not_.ToMatch',              @TestToMatchNot);
+  LSuite.Test('ToBeInstanceOf pass',       @TestToBeInstanceOfPass);
+  LSuite.Test('ToBeInstanceOf fail',       @TestToBeInstanceOfFail);
+  LSuite.Test('ToBeInstanceOf nil',        @TestToBeInstanceOfNil);
+  LSuite.Test('Not_.ToBeInstanceOf',       @TestToBeInstanceOfNot);
 
   LSuite.Test('ToBeSorted int pass',      @TestToBeSortedIntPass);
   LSuite.Test('ToBeSorted int fail',      @TestToBeSortedIntFail);

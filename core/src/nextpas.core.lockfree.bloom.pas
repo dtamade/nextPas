@@ -18,6 +18,7 @@ type
       支持 Add/Contains/Clear/Count。
       适用于快速成员检查、去重等场景。
       注意：可能存在假阳性；仅执行 Add/Contains 且不并发 Clear 时不会有假阴性。
+ * @concurrency Thread-safe (see source for details).
   }
   generic TConcurrentBloomFilterImpl<T> = class
   private
@@ -60,7 +61,7 @@ var
   LWords: PtrUInt;
 begin
   if IsManagedType(T) then
-    raise EArgumentError.Create('TConcurrentBloomFilter: T must be unmanaged');
+    raise EArgumentError.Create('TConcurrentBloomFilter: T must be unmanaged (no string/interface/dynarray)');
   if AExpectedItems = 0 then
     raise EArgumentError.Create('TConcurrentBloomFilter: expected items must be > 0');
   if (AFalsePositiveRate <= 0) or (AFalsePositiveRate >= 1) then

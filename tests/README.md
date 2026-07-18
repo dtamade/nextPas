@@ -14,10 +14,15 @@
 - `run_all_tests.sh`：shell 控制面，暴露稳定的 `--list-groups` 与 `--filter <group>`
 - `harness/`：Pascal 执行层、snapshot helper 和统一失败留证语义
 - `snapshots/`：`compiler-fail` 与 `diagnostics` 的 text-baseline 资产
+- `regression/verify_incremental.sh`：多阶段增量编译 gate，证明 clean/seed/edit/warm/recovery 五步 truth
 - 稳定 group：`compiler-pass`、`compiler-fail`、`diagnostics`、`rtl`、`crt`、
   `regression`
 
 `smoke` 是横跨这些 group 的最小执行视角，不是另起的长期第七类。
+
+`verify_incremental.sh` 当前不是 `run_all_tests.sh` 里的 group。它需要真实源码变更、
+NPC cache 破坏与恢复，所以暂时由 `make test-incremental-gate` 和 `make verify`
+直接调用。
 
 ## 当前 fixture 命名约定
 

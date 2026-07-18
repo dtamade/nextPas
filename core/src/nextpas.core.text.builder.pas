@@ -71,6 +71,7 @@ function MakeStringBuilder(const AInitialCap: SizeUInt = 256): IStringBuilder;
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.base,
   nextpas.core.text.number;
 
@@ -206,7 +207,9 @@ begin
   if FAllocator <> nil then
     FBuf := FAllocator.ReallocMem(FBuf, LNewCap)
   else
-    ReallocMem(FBuf, LNewCap);
+    { nextpas.core.mem.ReallocMem is a function (returns the new pointer),
+      not System.ReallocMem(var p). Discarding the result leaves FBuf stale. }
+    FBuf := ReallocMem(FBuf, FCap, LNewCap);
   if (LNewCap > 0) and (FBuf = nil) then
     raise EOutOfMemory.Create('string builder allocation failed');
   FCap := LNewCap;
@@ -218,7 +221,7 @@ begin
   FCap := AInitialCap;
   FAllocator := nil;
   if FCap > 0 then
-    GetMem(FBuf, FCap)
+    FBuf := GetMem(FCap)
   else
     FBuf := nil;
 end;
@@ -233,7 +236,7 @@ begin
     if FAllocator <> nil then
       FBuf := FAllocator.GetMem(FCap)
     else
-      GetMem(FBuf, FCap);
+      FBuf := GetMem(FCap);
   end
   else
     FBuf := nil;
@@ -244,9 +247,9 @@ begin
   if FBuf <> nil then
   begin
     if FAllocator <> nil then
-      FAllocator.FreeMem(FBuf)
+      FreeMemOf(FAllocator, FBuf, FCap)
     else
-      FreeMem(FBuf);
+      FreeMem(FBuf, FCap);
     FBuf := nil;
   end;
   FLen := 0;

@@ -88,6 +88,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.text.strings,
   nextpas.core.tls.mbedtls.certificate;
 
@@ -358,7 +359,7 @@ begin
   if FSession <> nil then
     FreeSession;
 
-  GetMem(FSession, MBEDTLS_SSL_SESSION_SIZE);
+  FSession := GetMem(MBEDTLS_SSL_SESSION_SIZE);
   FillChar(FSession^, MBEDTLS_SSL_SESSION_SIZE, 0);
 
   if Assigned(mbedtls_ssl_session_init) then
@@ -373,7 +374,7 @@ begin
   begin
     if Assigned(mbedtls_ssl_session_free) then
       mbedtls_ssl_session_free(FSession);
-    FreeMem(FSession);
+    FreeMem(FSession, MBEDTLS_SSL_SESSION_SIZE);
     FSession := nil;
   end;
 end;
@@ -627,7 +628,7 @@ begin
   end;
 
   LSession := nil;
-  GetMem(LSession, MBEDTLS_SSL_SESSION_SIZE);
+  LSession := GetMem(MBEDTLS_SSL_SESSION_SIZE);
   FillChar(LSession^, MBEDTLS_SSL_SESSION_SIZE, 0);
 
   if Assigned(mbedtls_ssl_session_init) then
@@ -637,7 +638,7 @@ begin
   begin
     if Assigned(mbedtls_ssl_session_free) then
       mbedtls_ssl_session_free(LSession);
-    FreeMem(LSession);
+    FreeMem(LSession, MBEDTLS_SSL_SESSION_SIZE);
     Exit;
   end;
 

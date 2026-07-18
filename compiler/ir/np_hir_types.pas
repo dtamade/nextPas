@@ -1,8 +1,12 @@
 unit np_hir_types;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
+
+uses
+  nextpas.core.collections.vec;
 
 type
   THIRTypeId = LongInt;
@@ -126,6 +130,10 @@ type
     IsOut: Boolean;
   end;
 
+  THirFieldEntryVec = specialize TVec<THIRFieldEntry>;
+  THirParamEntryVec = specialize TVec<THIRParamEntry>;
+  THirTypeIdVec = specialize TVec<THIRTypeId>;
+
   THIRTypeRec = record
     Id: THIRTypeId;
     Kind: THIRTypeKind;
@@ -139,23 +147,28 @@ type
     LowBound: Int64;
     HighBound: Int64;
     StringKind: THIRStringKind;
-    Fields: array of THIRFieldEntry;
-    Params: array of THIRParamEntry;
+    { Nested product tables owned by the type table entry (default heap). }
+    Fields: THirFieldEntryVec;
+    Params: THirParamEntryVec;
     ReturnTypeId: THIRTypeId;
     CallConv: THIRCallConv;
     PointeeTypeId: THIRTypeId;
     ParentTypeId: THIRTypeId;
-    InterfaceIds: array of THIRTypeId;
+    InterfaceIds: THirTypeIdVec;
     SizeBytes: LongInt;
     Alignment: LongInt;
   end;
 
+  PHirTypeRec = ^THIRTypeRec;
+  THirTypeRecVec = specialize TVec<THIRTypeRec>;
+
   THIRTypeTable = class
   private
-    FTypes: array of THIRTypeRec;
+    FTypes: THirTypeRecVec;
     FNextId: THIRTypeId;
   public
     constructor Create;
+    destructor Destroy; override;
     function AddType(AKind: THIRTypeKind; const AName: string): THIRTypeId;
     function GetType(AId: THIRTypeId): THIRTypeRec;
     function FindByName(const AName: string): THIRTypeId;
@@ -269,37 +282,57 @@ end;
 constructor THIRTypeTable.Create;
 begin
   inherited Create;
-  SetLength(FTypes, 0);
+  FTypes := THirTypeRecVec.Create;
   FNextId := 1;
+end;
+
+destructor THIRTypeTable.Destroy;
+var
+  I: SizeInt;
+  Ty: PHirTypeRec;
+begin
+  if FTypes <> nil then
+  begin
+    for I := 0 to SizeInt(FTypes.Count) - 1 do
+    begin
+      Ty := FTypes.GetPtr(SizeUInt(I));
+      Ty^.Fields.Free;
+      Ty^.Fields := nil;
+      Ty^.Params.Free;
+      Ty^.Params := nil;
+      Ty^.InterfaceIds.Free;
+      Ty^.InterfaceIds := nil;
+    end;
+  end;
+  FTypes.Free;
+  FTypes := nil;
+  inherited Destroy;
 end;
 
 function THIRTypeTable.AddType(AKind: THIRTypeKind;
   const AName: string): THIRTypeId;
 var
-  Idx: SizeInt;
+  Entry: THIRTypeRec;
 begin
-  Idx := Length(FTypes);
-  SetLength(FTypes, Idx + 1);
-  FTypes[Idx].Id := FNextId;
-  FTypes[Idx].Kind := AKind;
-  FTypes[Idx].Name := AName;
-  FTypes[Idx].BitWidth := 0;
-  FTypes[Idx].Signed := True;
-  FTypes[Idx].CharWidth := 1;
-  FTypes[Idx].ElemTypeId := 0;
-  FTypes[Idx].IndexTypeId := 0;
-  FTypes[Idx].LowBound := 0;
-  FTypes[Idx].HighBound := 0;
-  FTypes[Idx].StringKind := skAnsi;
-  FTypes[Idx].ReturnTypeId := 0;
-  FTypes[Idx].CallConv := ccDefault;
-  FTypes[Idx].PointeeTypeId := 0;
-  FTypes[Idx].ParentTypeId := 0;
-  FTypes[Idx].SizeBytes := 0;
-  FTypes[Idx].Alignment := 0;
-  SetLength(FTypes[Idx].Fields, 0);
-  SetLength(FTypes[Idx].Params, 0);
-  SetLength(FTypes[Idx].InterfaceIds, 0);
+  Entry := Default(THIRTypeRec);
+  Entry.Id := FNextId;
+  Entry.Kind := AKind;
+  Entry.Name := AName;
+  Entry.BitWidth := 0;
+  Entry.Signed := True;
+  Entry.CharWidth := 1;
+  Entry.ElemTypeId := 0;
+  Entry.IndexTypeId := 0;
+  Entry.LowBound := 0;
+  Entry.HighBound := 0;
+  Entry.StringKind := skAnsi;
+  Entry.ReturnTypeId := 0;
+  Entry.CallConv := ccDefault;
+  Entry.PointeeTypeId := 0;
+  Entry.ParentTypeId := 0;
+  Entry.SizeBytes := 0;
+  Entry.Alignment := 0;
+  FTypes.Push(Entry);
   Result := FNextId;
   Inc(FNextId);
 end;
@@ -308,9 +341,9 @@ function THIRTypeTable.GetType(AId: THIRTypeId): THIRTypeRec;
 var
   I: SizeInt;
 begin
-  for I := 0 to High(FTypes) do
-    if FTypes[I].Id = AId then
-      Exit(FTypes[I]);
+  for I := 0 to SizeInt(FTypes.Count) - 1 do
+    if FTypes[SizeUInt(I)].Id = AId then
+      Exit(FTypes[SizeUInt(I)]);
   Result := Default(THIRTypeRec);
 end;
 
@@ -318,33 +351,35 @@ function THIRTypeTable.FindByName(const AName: string): THIRTypeId;
 var
   I: SizeInt;
 begin
-  for I := 0 to High(FTypes) do
-    if SameText(FTypes[I].Name, AName) then
-      Exit(FTypes[I].Id);
+  for I := 0 to SizeInt(FTypes.Count) - 1 do
+    if SameText(FTypes[SizeUInt(I)].Name, AName) then
+      Exit(FTypes[SizeUInt(I)].Id);
   Result := 0;
 end;
 
 function THIRTypeTable.Count: LongInt;
 begin
-  Result := Length(FTypes);
+  if FTypes = nil then
+    Exit(0);
+  Result := LongInt(FTypes.Count);
 end;
 
 function THIRTypeTable.AddIntType(ABitWidth: Byte;
   ASigned: Boolean): THIRTypeId;
 var
-  Idx: SizeInt;
+  Ty: PHirTypeRec;
 begin
   Result := AddType(htkInt, 'i' + IntToStr(ABitWidth));
-  Idx := Length(FTypes) - 1;
-  FTypes[Idx].BitWidth := ABitWidth;
-  FTypes[Idx].Signed := ASigned;
-  FTypes[Idx].SizeBytes := ABitWidth div 8;
-  FTypes[Idx].Alignment := FTypes[Idx].SizeBytes;
+  Ty := FTypes.GetPtr(FTypes.Count - 1);
+  Ty^.BitWidth := ABitWidth;
+  Ty^.Signed := ASigned;
+  Ty^.SizeBytes := ABitWidth div 8;
+  Ty^.Alignment := Ty^.SizeBytes;
 end;
 
 function THIRTypeTable.AddFloatType(AWidth: THIRFloatWidth): THIRTypeId;
 var
-  Idx: SizeInt;
+  Ty: PHirTypeRec;
   N: string;
 begin
   case AWidth of
@@ -353,52 +388,52 @@ begin
     fwF80: N := 'f80';
   end;
   Result := AddType(htkFloat, N);
-  Idx := Length(FTypes) - 1;
-  FTypes[Idx].FloatWidth := AWidth;
+  Ty := FTypes.GetPtr(FTypes.Count - 1);
+  Ty^.FloatWidth := AWidth;
   case AWidth of
-    fwF32: begin FTypes[Idx].SizeBytes := 4; FTypes[Idx].Alignment := 4; end;
-    fwF64: begin FTypes[Idx].SizeBytes := 8; FTypes[Idx].Alignment := 8; end;
-    fwF80: begin FTypes[Idx].SizeBytes := 10; FTypes[Idx].Alignment := 16; end;
+    fwF32: begin Ty^.SizeBytes := 4; Ty^.Alignment := 4; end;
+    fwF64: begin Ty^.SizeBytes := 8; Ty^.Alignment := 8; end;
+    fwF80: begin Ty^.SizeBytes := 10; Ty^.Alignment := 16; end;
   end;
 end;
 
 function THIRTypeTable.AddPointerType(APointee: THIRTypeId): THIRTypeId;
 var
-  Idx: SizeInt;
+  Ty: PHirTypeRec;
 begin
   Result := AddType(htkPointer, '^');
-  Idx := Length(FTypes) - 1;
-  FTypes[Idx].PointeeTypeId := APointee;
-  FTypes[Idx].SizeBytes := 8;
-  FTypes[Idx].Alignment := 8;
+  Ty := FTypes.GetPtr(FTypes.Count - 1);
+  Ty^.PointeeTypeId := APointee;
+  Ty^.SizeBytes := 8;
+  Ty^.Alignment := 8;
 end;
 
 function THIRTypeTable.AddArrayType(AElem: THIRTypeId;
   ALow, AHigh: Int64): THIRTypeId;
 var
-  Idx: SizeInt;
+  Ty: PHirTypeRec;
 begin
   Result := AddType(htkArray, 'array');
-  Idx := Length(FTypes) - 1;
-  FTypes[Idx].ElemTypeId := AElem;
-  FTypes[Idx].LowBound := ALow;
-  FTypes[Idx].HighBound := AHigh;
+  Ty := FTypes.GetPtr(FTypes.Count - 1);
+  Ty^.ElemTypeId := AElem;
+  Ty^.LowBound := ALow;
+  Ty^.HighBound := AHigh;
 end;
 
 function THIRTypeTable.AddDynArrayType(AElem: THIRTypeId): THIRTypeId;
 var
-  Idx: SizeInt;
+  Ty: PHirTypeRec;
 begin
   Result := AddType(htkDynArray, 'dynarray');
-  Idx := Length(FTypes) - 1;
-  FTypes[Idx].ElemTypeId := AElem;
-  FTypes[Idx].SizeBytes := 8;
-  FTypes[Idx].Alignment := 8;
+  Ty := FTypes.GetPtr(FTypes.Count - 1);
+  Ty^.ElemTypeId := AElem;
+  Ty^.SizeBytes := 8;
+  Ty^.Alignment := 8;
 end;
 
 function THIRTypeTable.AddStringType(AKind: THIRStringKind): THIRTypeId;
 var
-  Idx: SizeInt;
+  Ty: PHirTypeRec;
   N: string;
 begin
   case AKind of
@@ -407,10 +442,10 @@ begin
     skUnicode: N := 'UnicodeString';
   end;
   Result := AddType(htkString, N);
-  Idx := Length(FTypes) - 1;
-  FTypes[Idx].StringKind := AKind;
-  FTypes[Idx].SizeBytes := 24;
-  FTypes[Idx].Alignment := 8;
+  Ty := FTypes.GetPtr(FTypes.Count - 1);
+  Ty^.StringKind := AKind;
+  Ty^.SizeBytes := 24;
+  Ty^.Alignment := 8;
 end;
 
 function THIRTypeTable.AddRecordType(const AName: string): THIRTypeId;
@@ -422,33 +457,41 @@ procedure THIRTypeTable.AddRecordField(ARecordId: THIRTypeId;
   const AFieldName: string; AFieldType: THIRTypeId);
 var
   I: SizeInt;
-  Idx: SizeInt;
+  Ty: PHirTypeRec;
+  Field: THIRFieldEntry;
 begin
-  for I := 0 to High(FTypes) do
-    if FTypes[I].Id = ARecordId then
+  for I := 0 to SizeInt(FTypes.Count) - 1 do
+  begin
+    Ty := FTypes.GetPtr(SizeUInt(I));
+    if Ty^.Id = ARecordId then
     begin
-      Idx := Length(FTypes[I].Fields);
-      SetLength(FTypes[I].Fields, Idx + 1);
-      FTypes[I].Fields[Idx].Name := AFieldName;
-      FTypes[I].Fields[Idx].TypeId := AFieldType;
-      FTypes[I].Fields[Idx].Offset := -1;
+      if Ty^.Fields = nil then
+        Ty^.Fields := THirFieldEntryVec.Create;
+      Field.Name := AFieldName;
+      Field.TypeId := AFieldType;
+      Field.Offset := -1;
+      Ty^.Fields.Push(Field);
       Exit;
     end;
+  end;
 end;
 
 function THIRTypeTable.AddFuncType(const AParams: array of THIRParamEntry;
   ARetType: THIRTypeId; AConv: THIRCallConv): THIRTypeId;
 var
-  Idx: SizeInt;
+  Ty: PHirTypeRec;
   I: LongInt;
 begin
   Result := AddType(htkFunc, 'func');
-  Idx := Length(FTypes) - 1;
-  FTypes[Idx].ReturnTypeId := ARetType;
-  FTypes[Idx].CallConv := AConv;
-  SetLength(FTypes[Idx].Params, Length(AParams));
+  Ty := FTypes.GetPtr(FTypes.Count - 1);
+  Ty^.ReturnTypeId := ARetType;
+  Ty^.CallConv := AConv;
+  if Length(AParams) > 0 then
+    Ty^.Params := THirParamEntryVec.Create(SizeUInt(Length(AParams)))
+  else
+    Ty^.Params := THirParamEntryVec.Create;
   for I := 0 to High(AParams) do
-    FTypes[Idx].Params[I] := AParams[I];
+    Ty^.Params.Push(AParams[I]);
 end;
 
 end.

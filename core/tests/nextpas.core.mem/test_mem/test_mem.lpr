@@ -16,10 +16,15 @@ var
 procedure TestDefaultAllocatorNotNil;
 var
   LAlloc: IAllocator;
+  LHeap: TGrowingAllocator;
 begin
   LAlloc := DefaultAllocator;
   Check(LAlloc <> nil, 'DefaultAllocator should not be nil');
   Check(DefaultAllocator = LAlloc, 'DefaultAllocator should be singleton');
+  LHeap := DefaultHeap;
+  Check(LHeap <> nil, 'DefaultHeap should not be nil');
+  Check(DefaultHeap = LHeap, 'DefaultHeap should be singleton');
+  Check(DefaultGrowingAllocator = LHeap, 'DefaultGrowingAllocator aliases DefaultHeap');
 end;
 
 procedure TestAllocatorBasicOps;
@@ -194,6 +199,121 @@ begin
   { LTracker 引用计数自动释放 }
 end;
 
+{ 验证 Tier-0 默认堆/后端可通过 facade 访问 }
+procedure TestTier0HeapAccessible;
+var
+  LGrowing: TGrowingAllocator;
+  LRtl: TRtlAllocator;
+  LCrt: TCrtAllocator;
+  LPtr: Pointer;
+begin
+  LGrowing := TGrowingAllocator.Create;
+  try
+    Check(LGrowing <> nil, 'TGrowingAllocator accessible');
+    LPtr := LGrowing.GetMem(64);
+    Check(LPtr <> nil, 'TGrowingAllocator.GetMem should succeed');
+    LGrowing.FreeMem(LPtr);
+  finally
+    LGrowing.Free;
+  end;
+
+  LRtl := TRtlAllocator.Create;
+  try
+    Check(LRtl <> nil, 'TRtlAllocator accessible');
+  finally
+    LRtl.Free;
+  end;
+
+  LCrt := TCrtAllocator.Create;
+  try
+    Check(LCrt <> nil, 'TCrtAllocator accessible');
+  finally
+    LCrt.Free;
+  end;
+end;
+
+{ 验证 Tier-1 生产组合器可通过 facade 访问 }
+procedure TestTier1ComposersAccessible;
+var
+  LBatch: TBatchAllocator;
+  LAligned: TAlignedAllocator;
+  LBounded: TBoundedAllocator;
+  LFallback: TFallbackAllocator;
+  LHotswap: THotswapAllocator;
+  LPool: TPoolAllocator;
+  LScoped: TScopedAllocator;
+  LStats: TStatsAllocator;
+  LThreadSafe: TThreadSafeAllocator;
+  LZeroed: TZeroedAllocator;
+begin
+  LBatch := TBatchAllocator.Create(DefaultAllocator);
+  try Check(LBatch <> nil, 'TBatchAllocator accessible'); finally LBatch.Free; end;
+
+  LAligned := TAlignedAllocator.Create(DefaultAllocator, 16);
+  try Check(LAligned <> nil, 'TAlignedAllocator accessible'); finally LAligned.Free; end;
+
+  LBounded := TBoundedAllocator.Create(DefaultAllocator, 1024);
+  try Check(LBounded <> nil, 'TBoundedAllocator accessible'); finally LBounded.Free; end;
+
+  LFallback := TFallbackAllocator.Create(DefaultAllocator, DefaultAllocator);
+  try Check(LFallback <> nil, 'TFallbackAllocator accessible'); finally LFallback.Free; end;
+
+  LHotswap := THotswapAllocator.Create(DefaultAllocator);
+  try Check(LHotswap <> nil, 'THotswapAllocator accessible'); finally LHotswap.Free; end;
+
+  LPool := TPoolAllocator.Create(DefaultAllocator, 64, 16);
+  try Check(LPool <> nil, 'TPoolAllocator accessible'); finally LPool.Free; end;
+
+  LScoped := TScopedAllocator.Create(DefaultAllocator);
+  try Check(LScoped <> nil, 'TScopedAllocator accessible'); finally LScoped.Free; end;
+
+  LStats := TStatsAllocator.Create(DefaultAllocator);
+  try Check(LStats <> nil, 'TStatsAllocator accessible'); finally LStats.Free; end;
+
+  LThreadSafe := TThreadSafeAllocator.Create(DefaultAllocator);
+  try Check(LThreadSafe <> nil, 'TThreadSafeAllocator accessible'); finally LThreadSafe.Free; end;
+
+  LZeroed := TZeroedAllocator.Create(DefaultAllocator);
+  try Check(LZeroed <> nil, 'TZeroedAllocator accessible'); finally LZeroed.Free; end;
+end;
+
+{ 验证 Tier-2 诊断/故障注入可通过 facade 访问 }
+procedure TestTier2DiagnosticsAccessible;
+var
+  LSentinel: TSentinelAllocator;
+  LGuard: TGuardAllocator;
+  LLeakReport: TLeakReportAllocator;
+  LLogging: TLoggingAllocator;
+  LDebug: TDebugAllocator;
+  LSampling: TSamplingAllocator;
+  LCounting: TCountingAllocator;
+  LFail: TFailAllocator;
+begin
+  LSentinel := TSentinelAllocator.Create(DefaultAllocator);
+  try Check(LSentinel <> nil, 'TSentinelAllocator accessible'); finally LSentinel.Free; end;
+
+  LGuard := TGuardAllocator.Create;
+  try Check(LGuard <> nil, 'TGuardAllocator accessible'); finally LGuard.Free; end;
+
+  LLeakReport := TLeakReportAllocator.Create(DefaultAllocator);
+  try Check(LLeakReport <> nil, 'TLeakReportAllocator accessible'); finally LLeakReport.Free; end;
+
+  LLogging := TLoggingAllocator.Create(DefaultAllocator);
+  try Check(LLogging <> nil, 'TLoggingAllocator accessible'); finally LLogging.Free; end;
+
+  LDebug := TDebugAllocator.Create(DefaultAllocator);
+  try Check(LDebug <> nil, 'TDebugAllocator accessible'); finally LDebug.Free; end;
+
+  LSampling := TSamplingAllocator.Create(DefaultAllocator);
+  try Check(LSampling <> nil, 'TSamplingAllocator accessible'); finally LSampling.Free; end;
+
+  LCounting := TCountingAllocator.Create(DefaultAllocator);
+  try Check(LCounting <> nil, 'TCountingAllocator accessible'); finally LCounting.Free; end;
+
+  LFail := TFailAllocator.Create(DefaultAllocator, 0);
+  try Check(LFail <> nil, 'TFailAllocator accessible'); finally LFail.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.mem.facade');
   T.Test('DefaultAllocator not nil', @TestDefaultAllocatorNotNil);
@@ -208,6 +328,9 @@ begin
   T.Test('BlockPoolConcurrent accessible', @TestBlockPoolConcurrentAccessible);
   T.Test('SecureZero accessible', @TestSecureZeroAccessible);
   T.Test('TrackingAllocator accessible', @TestTrackingAllocatorAccessible);
+  T.Test('Tier-0 heap accessible', @TestTier0HeapAccessible);
+  T.Test('Tier-1 composers accessible', @TestTier1ComposersAccessible);
+  T.Test('Tier-2 diagnostics accessible', @TestTier2DiagnosticsAccessible);
   LRunPassed := T.Run;
 
   T.Summary;

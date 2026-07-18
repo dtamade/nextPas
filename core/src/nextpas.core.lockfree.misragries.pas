@@ -34,6 +34,7 @@ type
   {** @desc Misra-Gries 频繁项检测器
     @details 流式算法，维护 k 个计数器。
       保证找到频率 > n/(k+1) 的所有项。
+  {** @concurrency Thread-safe (see source for details). }
       线程安全：CAS 自旋锁。 }
   TMisraGries = class
   private
@@ -47,6 +48,7 @@ type
     function FindKey(AKey: UInt64): Int32;
   public
     constructor Create(const ACapacity: Int32);
+    destructor Destroy; override;
     function Add(AKey: UInt64): TMisraGriesResult;
     function GetCount(AKey: UInt64): Int64;
     function GetTotalOps: Int64;
@@ -244,6 +246,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TMisraGries.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TMisraGries.IsClosed: Boolean;

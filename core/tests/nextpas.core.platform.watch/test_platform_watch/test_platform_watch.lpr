@@ -278,14 +278,16 @@ begin
   LWindowsBranch := ExtractBetween(LWatch, '{$ifdef nextpas_windows}',
     '{$if not defined(nextpas_linux) and not defined(nextpas_macos)');
 
-  CheckContains(LWindowsBranch, 'error_not_supported',
-    'Windows watch branch must expose stable unsupported semantics');
-  CheckContains(LWindowsBranch, '-int32(error_not_supported)',
-    'Windows watch poll must not report unsupported as a ready event');
+  CheckContains(LWindowsBranch, 'platform_err_unsupported',
+    'Windows watch branch must expose stable PLATFORM_ERR_UNSUPPORTED');
+  CheckContains(LWindowsBranch, 'result := platform_err_unsupported',
+    'Windows watch poll must return PLATFORM_ERR_UNSUPPORTED not a ready event');
   CheckContains(LWindowsBranch, 'aevent',
     'Windows watch poll must keep the event out parameter deterministic');
   CheckAbsent(LWindowsBranch, 'result := -1',
     'Windows watch branch must not remain bare -1 stubs');
+  CheckAbsent(LWindowsBranch, 'error_not_supported',
+    'Windows watch branch must not leak raw Windows ERROR_NOT_SUPPORTED');
 end;
 
 procedure TestWatchAddSameDirTwice;

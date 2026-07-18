@@ -438,22 +438,19 @@ var
   EstimatedCapacity: SizeInt;
 begin
   inherited Create;
-  FTokenCount := 0;
-  { Pre-grow to a sensible initial capacity so the first ~256
-    tokens never trigger a copy. For larger files we still
-    double on demand inside AddToken. }
+  { Pre-grow so the first ~256 tokens avoid capacity churn. }
   EstimatedCapacity := Length(ASourceText) div 4 + 16;
   if EstimatedCapacity < 64 then
     EstimatedCapacity := 64;
-  SetLength(FTokens, EstimatedCapacity);
+  FTokens := TTokenVec.Create;
+  FTokens.EnsureCapacity(SizeUInt(EstimatedCapacity));
   FCurrentLine := 1;
   FLineStartByte := 0;
   FDiagnostics := ADiagnostics;
   FFileId := AFileId;
-  SetLength(FPendingTrivia, 0);
+  FPendingTrivia := TTriviaPieceVec.Create;
+  FPendingTrivia.EnsureCapacity(16);
   LexSource(ASourceText);
-  { Trim to actual length so callers iterate the right range. }
-  SetLength(FTokens, FTokenCount);
 end;
 
 constructor TLexerResult.CreateFromTokens(const ATokens: array of TToken;
@@ -462,15 +459,27 @@ var
   I: LongInt;
 begin
   inherited Create;
-  FTokenCount := ACount;
-  SetLength(FTokens, ACount);
+  FTokens := TTokenVec.Create;
+  if ACount > 0 then
+    FTokens.EnsureCapacity(SizeUInt(ACount));
+  { Clone nested trivia so caller retains ownership of source tokens. }
   for I := 0 to ACount - 1 do
-    FTokens[I] := ATokens[I];
+    FTokens.Push(CloneTokenWithTrivia(ATokens[I]));
   FCurrentLine := 1;
   FLineStartByte := 0;
   FDiagnostics := nil;
   FFileId := 0;
-  SetLength(FPendingTrivia, 0);
+  FPendingTrivia := TTriviaPieceVec.Create;
+end;
+
+destructor TLexerResult.Destroy;
+begin
+  FreeTokenVecNestedTrivia(FTokens);
+  FTokens.Free;
+  FTokens := nil;
+  FPendingTrivia.Free;
+  FPendingTrivia := nil;
+  inherited Destroy;
 end;
 
 procedure TLexerResult.ReportError(
@@ -490,23 +499,26 @@ procedure TLexerResult.CapturePendingTrivia(
   const ALength: LongInt
 );
 var
-  NextIndex: SizeInt;
+  Piece: TTriviaPiece;
 begin
   if ALength <= 0 then
     Exit;
-  NextIndex := System.Length(FPendingTrivia);
-  SetLength(FPendingTrivia, NextIndex + 1);
-  FPendingTrivia[NextIndex].Kind := AKind;
-  FPendingTrivia[NextIndex].ByteOffset := AByteOffset;
-  FPendingTrivia[NextIndex].Length := ALength;
+  if FPendingTrivia = nil then
+    FPendingTrivia := TTriviaPieceVec.Create;
+  Piece.Kind := AKind;
+  Piece.ByteOffset := AByteOffset;
+  Piece.Length := ALength;
+  FPendingTrivia.Push(Piece);
 end;
 
 procedure TLexerResult.FlushPendingTriviaToToken(const ATokenIndex: SizeInt);
 var
   TerminatorIndex, I, LeadingCount, TrailingCount: SizeInt;
   PrevTokenIndex: SizeInt;
+  Token: PToken;
+  PrevToken: PToken;
 begin
-  if System.Length(FPendingTrivia) = 0 then
+  if (FPendingTrivia = nil) or (FPendingTrivia.Count = 0) then
     Exit;
 
   { Per spec §"Trivia 处理":
@@ -517,42 +529,49 @@ begin
     - If there is no previous token (this is the first token in
       the stream), all trivia goes into LeadingTrivia. }
   TerminatorIndex := -1;
-  for I := 0 to System.Length(FPendingTrivia) - 1 do
-    if FPendingTrivia[I].Kind = tvkLineTerminator then
+  for I := 0 to SizeInt(FPendingTrivia.Count) - 1 do
+    if FPendingTrivia[SizeUInt(I)].Kind = tvkLineTerminator then
     begin
       TerminatorIndex := I;
       Break;
     end;
 
   PrevTokenIndex := ATokenIndex - 1;
+  Token := FTokens.GetPtr(SizeUInt(ATokenIndex));
 
   if PrevTokenIndex < 0 then
   begin
-    LeadingCount := System.Length(FPendingTrivia);
-    SetLength(FTokens[ATokenIndex].LeadingTrivia, LeadingCount);
+    LeadingCount := SizeInt(FPendingTrivia.Count);
+    Token^.LeadingTrivia.Free;
+    Token^.LeadingTrivia := TTriviaPieceVec.Create(SizeUInt(LeadingCount));
     for I := 0 to LeadingCount - 1 do
-      FTokens[ATokenIndex].LeadingTrivia[I] := FPendingTrivia[I];
+      Token^.LeadingTrivia.Push(FPendingTrivia[SizeUInt(I)]);
   end
   else if TerminatorIndex < 0 then
   begin
-    TrailingCount := System.Length(FPendingTrivia);
-    SetLength(FTokens[PrevTokenIndex].TrailingTrivia, TrailingCount);
+    PrevToken := FTokens.GetPtr(SizeUInt(PrevTokenIndex));
+    TrailingCount := SizeInt(FPendingTrivia.Count);
+    PrevToken^.TrailingTrivia.Free;
+    PrevToken^.TrailingTrivia := TTriviaPieceVec.Create(SizeUInt(TrailingCount));
     for I := 0 to TrailingCount - 1 do
-      FTokens[PrevTokenIndex].TrailingTrivia[I] := FPendingTrivia[I];
+      PrevToken^.TrailingTrivia.Push(FPendingTrivia[SizeUInt(I)]);
   end
   else
   begin
+    PrevToken := FTokens.GetPtr(SizeUInt(PrevTokenIndex));
     TrailingCount := TerminatorIndex;
-    LeadingCount := System.Length(FPendingTrivia) - TerminatorIndex;
-    SetLength(FTokens[PrevTokenIndex].TrailingTrivia, TrailingCount);
+    LeadingCount := SizeInt(FPendingTrivia.Count) - TerminatorIndex;
+    PrevToken^.TrailingTrivia.Free;
+    PrevToken^.TrailingTrivia := TTriviaPieceVec.Create(SizeUInt(TrailingCount));
     for I := 0 to TrailingCount - 1 do
-      FTokens[PrevTokenIndex].TrailingTrivia[I] := FPendingTrivia[I];
-    SetLength(FTokens[ATokenIndex].LeadingTrivia, LeadingCount);
+      PrevToken^.TrailingTrivia.Push(FPendingTrivia[SizeUInt(I)]);
+    Token^.LeadingTrivia.Free;
+    Token^.LeadingTrivia := TTriviaPieceVec.Create(SizeUInt(LeadingCount));
     for I := 0 to LeadingCount - 1 do
-      FTokens[ATokenIndex].LeadingTrivia[I] := FPendingTrivia[TerminatorIndex + I];
+      Token^.LeadingTrivia.Push(FPendingTrivia[SizeUInt(TerminatorIndex + I)]);
   end;
 
-  SetLength(FPendingTrivia, 0);
+  FPendingTrivia.Clear;
 end;
 
 procedure TLexerResult.AddToken(
@@ -564,25 +583,19 @@ procedure TLexerResult.AddToken(
 );
 var
   NextIndex: SizeInt;
-  NewCapacity: SizeInt;
+  Token: TToken;
 begin
-  NextIndex := FTokenCount;
-  if NextIndex >= Length(FTokens) then
-  begin
-    NewCapacity := Length(FTokens) * 2;
-    if NewCapacity < NextIndex + 16 then
-      NewCapacity := NextIndex + 16;
-    SetLength(FTokens, NewCapacity);
-  end;
-  FTokens[NextIndex].Kind := AKind;
-  FTokens[NextIndex].Lexeme := ALexeme;
-  FTokens[NextIndex].FileId := FFileId;
-  FTokens[NextIndex].ByteOffset := AByteOffset;
-  FTokens[NextIndex].Line := ALine;
-  FTokens[NextIndex].Column := AColumn;
-  SetLength(FTokens[NextIndex].LeadingTrivia, 0);
-  SetLength(FTokens[NextIndex].TrailingTrivia, 0);
-  Inc(FTokenCount);
+  if FTokens = nil then
+    FTokens := TTokenVec.Create;
+  Token := Default(TToken);
+  Token.Kind := AKind;
+  Token.Lexeme := ALexeme;
+  Token.FileId := FFileId;
+  Token.ByteOffset := AByteOffset;
+  Token.Line := ALine;
+  Token.Column := AColumn;
+  NextIndex := SizeInt(FTokens.Count);
+  FTokens.Push(Token);
   FlushPendingTriviaToToken(NextIndex);
 end;
 

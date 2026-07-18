@@ -1,6 +1,6 @@
 # Lockfree API 参考手册
 
-> 更新: 2026-07-06
+> 更新: 2026-07-17
 
 [English](api-reference.en.md)
 
@@ -11,18 +11,18 @@
 ```pascal
 type
   TAtomicInt32 = record
-    function Load(const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    procedure Store(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent);
+    function Load(const AOrder: TMemoryOrder = moSeqCst): Int32;
+    procedure Store(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst);
     function CompareExchangeStrong(var AExpected: Int32; const ADesired: Int32; ...): Boolean;
     function CompareExchangeWeak(var AExpected: Int32; const ADesired: Int32; ...): Boolean;
-    function FetchAdd(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchSub(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchAnd(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchOr(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchXor(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchMax(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchMin(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function Exchange(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
+    function FetchAdd(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchSub(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchAnd(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchOr(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchXor(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchMax(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchMin(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function Exchange(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
     function UpdateIfEqual(const AExpected, ADesired: Int32; ...): Boolean;
     procedure Wait(const AExpected: Int32);
     procedure NotifyOne;
@@ -47,10 +47,10 @@ type
 ```pascal
 type
   generic TAtomicPtr<T> = record
-    function Load(const AOrder: TMemoryOrder = moSequentiallyConsistent): T;
-    procedure Store(const AValue: T; const AOrder: TMemoryOrder = moSequentiallyConsistent);
+    function Load(const AOrder: TMemoryOrder = moSeqCst): T;
+    procedure Store(const AValue: T; const AOrder: TMemoryOrder = moSeqCst);
     function CompareExchangeStrong(var AExpected: T; const ADesired: T; ...): Boolean;
-    function Exchange(const AValue: T; const AOrder: TMemoryOrder = moSequentiallyConsistent): T;
+    function Exchange(const AValue: T; const AOrder: TMemoryOrder = moSeqCst): T;
   end;
 ```
 
@@ -63,9 +63,11 @@ type
   generic TSpscQueue<T> = class
     constructor Create(const ACapacity: PtrUInt);
     function TryEnqueue(const AValue: T): Boolean;
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     function EnqueueWait(const AValue: T): Boolean;
     function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
     function TryDequeue(out AValue: T): Boolean;
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function DequeueWait(out AValue: T): Boolean;
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     function EnqueueBatch(const AItems: array of T): PtrUInt;
@@ -167,7 +169,9 @@ type
     destructor Destroy; override;
     procedure Enqueue(const AValue: T);
     function TryEnqueue(const AValue: T): Boolean;
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     function TryDequeue(out AValue: T): Boolean;
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function DequeueWait(out AValue: T): Boolean;
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     procedure Close;
@@ -183,6 +187,58 @@ type
 - TryEnqueue 在 Close 后返回 False
 - Close 后 DequeueWait/DequeueTimeout 实现 drain-on-close
 - ApproxCount 使用原子计数器（近似值）
+- 可选 `Try*Ex`：无界 publish 失败正常路径为 `lfteClosed`（无 `lfteFull`）
+
+---
+
+## Stack (nextpas.core.lockfree.stack)
+
+```pascal
+type
+  generic TLockFreeStack<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function TryPush(const AValue: T): Boolean;
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+    function TryPop(out AValue: T): Boolean;
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function ApproxCount: PtrUInt;
+  end;
+```
+
+**Try\*Ex**: success→`lfteNone`；full→`lfteFull`；empty→`lfteEmpty`；closed→`lfteClosed`。
+
+---
+
+## WorkStealingDeque (nextpas.core.lockfree.deque) — T1
+
+```pascal
+type
+  generic TWorkStealingDeque<T> = class
+    constructor Create(const ACapacity: PtrUInt);
+    function TryPush(const AValue: T): Boolean;
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+    function TryPop(out AValue: T): Boolean;
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    function TrySteal(out AValue: T): Boolean;
+    function TryStealEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    procedure Close;
+    function IsClosed: Boolean;
+    function IsEmpty: Boolean;
+    function ApproxCount: PtrUInt;
+    function Capacity: PtrUInt;
+  end;
+```
+
+**特点**:
+- Owner 线程：`TryPush` / `TryPop`（LIFO 端）；thief：`TrySteal`（FIFO 端）
+- 有界 power-of-two；Close 后 publish 失败，已入队仍可 pop/steal
+- 可选 `Try*Ex`（H2-1）：full→`lfteFull`，empty→`lfteEmpty`，closed→`lfteClosed`
+- Boolean 热路径不变
+
+**非此类型**: `lockfree.deque_lf` / `TLockFreeDeque` 为 **spin-lock** + `TDequeResult`，非 lock-free / 非 wait-free，无 `TLockFreeTryError` 面。
 
 ---
 
@@ -459,7 +515,7 @@ end;
 
 ## Channel (nextpas.core.lockfree.channel)
 
-有界无锁 Channel，序列号驱动的 MPSC/SPMC 通道。
+有界无锁 Channel，序列号驱动的 **MPMC-style** 通道。
 
 ```pascal
 type
@@ -486,7 +542,8 @@ type
 - `Send` 到已关闭 channel 抛 `EInvalidOperationError`（Go panic 对齐）
 - `TrySend` 到已关闭 channel 返回 `False`（Go select ok=false 对齐）
 - 已入队数据在 Close 后仍可读
-- 容量自动向上取整到 2 的幂
+- 容量自动向上取整到 2 的幂；**capacity=1 支持** full/empty 可分（与 MPMC empty/full sequence 对齐；R5）
+- 可选 `TrySendEx` / `TryReceiveEx`：full→`lfteFull`，empty→`lfteEmpty`，closed→`lfteClosed`
 
 ---
 
@@ -1343,10 +1400,10 @@ type
 
 ## T 类型约束
 
-所有 lockfree 数据结构要求 `T` 为非托管类型：
+所有 lockfree 数据结构要求 `T` 为非托管类型（推荐文案见 CONTRACT §3.1）：
 ```pascal
 if IsManagedType(T) then
-  raise EArgumentError.Create('T must be unmanaged');
+  raise EArgumentError.Create('<TypeName>: T must be unmanaged');
 ```
 
 支持的类型: Integer, UInt32, UInt64, Pointer, record (无 string/dyn array/interface)

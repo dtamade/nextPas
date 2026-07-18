@@ -12,7 +12,7 @@ unit nextpas.core.simd.testcase;
 interface
 
 uses
-  nextpas.core.test, nextpas.core.base, nextpas.core.exception, nextpas.core.math, nextpas.core.text.conv, nextpas.core.simd, nextpas.core.simd.base,
+  nextpas.core.test, nextpas.core.base, nextpas.core.exception, nextpas.core.math, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.simd, nextpas.core.simd.base,
   nextpas.core.simd.fixturehelpers, nextpas.core.simd.utils, nextpas.core.simd.dispatch, nextpas.core.simd.scalar,
   nextpas.core.simd.backend.consistency.testcase, {$IFDEF CPUX86_64}
   nextpas.core.simd.sse2, nextpas.core.simd.avx2, {$ENDIF}
@@ -732,7 +732,8 @@ end;
 
 procedure TSimdBackendStatefulTestCase.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
   GetDispatchTable;
   FSavedBackend := GetCurrentBackend;
 end;
@@ -743,7 +744,8 @@ var
 begin
   LRestoredBackend := RestoreSavedBackendStateAndVerify(FSavedBackend, @GetCurrentBackend);
 
-  {{inherited TearDown; -- removed} -- removed}
+  // inherited TearDown; -- removed
+  // -- removed
 
   CheckTrue(LRestoredBackend, ClassName + ' should restore previous backend selection');
 end;
@@ -752,7 +754,8 @@ end;
 
 procedure TScalarBackendStatefulTestCase.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
   ForceBackend(sbScalar);
 end;
 
@@ -765,7 +768,8 @@ end;
 
 procedure TSimdVectorAsmStatefulTestCase.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
   FSavedVectorAsm := IsVectorAsmEnabled;
 end;
 
@@ -776,7 +780,8 @@ begin
   RestoreVectorAsmState;
   LRestoredVectorAsm := IsVectorAsmEnabled = FSavedVectorAsm;
 
-  {{inherited TearDown; -- removed} -- removed}
+  // inherited TearDown; -- removed
+  // -- removed
 
   CheckTrue(LRestoredVectorAsm, ClassName + ' should restore previous vector asm state');
 end;
@@ -793,7 +798,8 @@ end;
 
 procedure TSimdVectorAsmBackendStatefulTestCase.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
 
   // 强制开启 vector asm，并重新注册目标后端以刷新 dispatch table。
   SetVectorAsmEnabled(True);
@@ -1827,7 +1833,7 @@ begin
     CheckEqual(Ord(LOriginalBackend), Ord(GetCurrentBackend), 'Scalar should remain forced before helper restore test executes');
 
     LResult := TestF32x4Arithmetic(LTargetBackend);
-    CheckTrue(LResult.Passed, Format('Standalone helper sanity check failed for backend %s: %s', [GetConsistencyBackendName(LTargetBackend), LResult.ErrorMessage]));
+    CheckTrue(LResult.Passed, TextFormat('Standalone helper sanity check failed for backend %s: %s', [GetConsistencyBackendName(LTargetBackend), LResult.ErrorMessage]));
     CheckEqual(Ord(LOriginalBackend), Ord(GetCurrentBackend), 'Standalone backend consistency helper should preserve previous forced backend selection');
   finally
     CheckTrue(RestoreSavedBackendStateAndVerify(LEntryBackend, @GetCurrentBackend), 'Backend vector consistency helper meta-test should restore entry backend selection');
@@ -2277,6 +2283,8 @@ begin
   FillChar(F, SizeOf(F), 0);
 
   // NOTE: 本测试只验证“需求判定逻辑”，不触发任何 AVX-512 指令执行。
+  // HasAVX is an explicit fail-close prerequisite for malformed CPUID.
+  F.HasAVX := True;
   F.HasAVX2 := True;
   F.HasAVX512F := True;
 
@@ -2291,7 +2299,10 @@ begin
   CheckFalse(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should still require FMA after AVX2 + AVX512F + AVX512BW + POPCNT are present');
 
   F.HasFMA := True;
-  CheckTrue(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should be usable with AVX2 + AVX512F + AVX512BW + POPCNT + FMA');
+  CheckTrue(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should be usable with AVX + AVX2 + AVX512F + AVX512BW + POPCNT + FMA');
+
+  F.HasAVX := False;
+  CheckFalse(X86HasAVX512BackendRequiredFeatures(F), 'AVX-512 backend should fail-close when raw AVX prerequisite is missing');
 end;
 
 procedure TTestCase_X86BackendPredicates.Test_X86HasAVX512BackendRequiredFeatures_RequiresFMA;
@@ -2301,6 +2312,7 @@ begin
   FillChar(LF, SizeOf(LF), 0);
 
   // NOTE: 本测试只验证“需求判定逻辑”，不触发任何 AVX-512 指令执行。
+  LF.HasAVX := True;
   LF.HasAVX2 := True;
   LF.HasAVX512F := True;
   LF.HasAVX512BW := True;
@@ -2318,6 +2330,7 @@ var
 begin
   FillChar(LF, SizeOf(LF), 0);
 
+  LF.HasAVX := True;
   LF.HasAVX2 := True;
   LF.HasAVX512F := True;
   LF.HasAVX512BW := True;
@@ -2342,6 +2355,9 @@ begin
 
   LF.HasFMA := True;
   CheckTrue(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should become supported once FMA is present and 512-bit state is usable');
+
+  LF.HasAVX := False;
+  CheckFalse(X86SupportsAVX512BackendOnCPU(LF, True), 'AVX-512 backend should fail-close when raw AVX prerequisite is missing');
 end;
 
 procedure TTestCase_X86BackendPredicates.Test_X86DirectAVX512ExecutionGate_RequiresBackendSupportedPredicate;
@@ -2354,6 +2370,7 @@ begin
 
   CheckFalse(X86AllowsDirectAVX512Execution(LF, True), 'Direct AVX-512 execution gates must require backend-supported feature set, not just raw usable AVX512F');
 
+  LF.HasAVX := True;
   LF.HasAVX2 := True;
   LF.HasAVX512BW := True;
   LF.HasPOPCNT := True;
@@ -2369,7 +2386,8 @@ end;
 
 procedure TTestCase_AVX512BackendRequirements.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
+  // -- removed
   SetVectorAsmEnabled(True);
   RegisterAVX512Backend;
 end;
@@ -2392,19 +2410,19 @@ begin
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbAVX512, dt), 'AVX-512 backend dispatch table should be registered');
 
   // 512-bit Load/Store/Splat/Zero
-  CheckTrue(dt.LoadF32x16 <> @ScalarLoadF32x16, 'LoadF32x16 should be overridden');
-  CheckTrue(dt.StoreF32x16 <> @ScalarStoreF32x16, 'StoreF32x16 should be overridden');
-  CheckTrue(dt.SplatF32x16 <> @ScalarSplatF32x16, 'SplatF32x16 should be overridden');
-  CheckTrue(dt.ZeroF32x16 <> @ScalarZeroF32x16, 'ZeroF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.LoadF32x16 <> @ScalarLoadF32x16, 'LoadF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.StoreF32x16 <> @ScalarStoreF32x16, 'StoreF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.SplatF32x16 <> @ScalarSplatF32x16, 'SplatF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.ZeroF32x16 <> @ScalarZeroF32x16, 'ZeroF32x16 should be overridden');
 
-  CheckTrue(dt.LoadF64x8 <> @ScalarLoadF64x8, 'LoadF64x8 should be overridden');
-  CheckTrue(dt.StoreF64x8 <> @ScalarStoreF64x8, 'StoreF64x8 should be overridden');
-  CheckTrue(dt.SplatF64x8 <> @ScalarSplatF64x8, 'SplatF64x8 should be overridden');
-  CheckTrue(dt.ZeroF64x8 <> @ScalarZeroF64x8, 'ZeroF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.LoadF64x8 <> @ScalarLoadF64x8, 'LoadF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.StoreF64x8 <> @ScalarStoreF64x8, 'StoreF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.SplatF64x8 <> @ScalarSplatF64x8, 'SplatF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.ZeroF64x8 <> @ScalarZeroF64x8, 'ZeroF64x8 should be overridden');
 
   // 512-bit Select
-  CheckTrue(dt.SelectF32x16 <> @ScalarSelectF32x16, 'SelectF32x16 should be overridden');
-  CheckTrue(dt.SelectF64x8 <> @ScalarSelectF64x8, 'SelectF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.SelectF32x16 <> @ScalarSelectF32x16, 'SelectF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.SelectF64x8 <> @ScalarSelectF64x8, 'SelectF64x8 should be overridden');
 end;
 
 procedure TTestCase_AVX512BackendRequirements.Test_AVX512Backend_DispatchTable_Overrides512BitFloatCompare;
@@ -2416,20 +2434,20 @@ begin
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbAVX512, dt), 'AVX-512 backend dispatch table should be registered');
 
   // F32x16 (512-bit)
-  CheckTrue(dt.CmpEqF32x16 <> @ScalarCmpEqF32x16, 'CmpEqF32x16 should be overridden');
-  CheckTrue(dt.CmpLtF32x16 <> @ScalarCmpLtF32x16, 'CmpLtF32x16 should be overridden');
-  CheckTrue(dt.CmpLeF32x16 <> @ScalarCmpLeF32x16, 'CmpLeF32x16 should be overridden');
-  CheckTrue(dt.CmpGtF32x16 <> @ScalarCmpGtF32x16, 'CmpGtF32x16 should be overridden');
-  CheckTrue(dt.CmpGeF32x16 <> @ScalarCmpGeF32x16, 'CmpGeF32x16 should be overridden');
-  CheckTrue(dt.CmpNeF32x16 <> @ScalarCmpNeF32x16, 'CmpNeF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpEqF32x16 <> @ScalarCmpEqF32x16, 'CmpEqF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpLtF32x16 <> @ScalarCmpLtF32x16, 'CmpLtF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpLeF32x16 <> @ScalarCmpLeF32x16, 'CmpLeF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpGtF32x16 <> @ScalarCmpGtF32x16, 'CmpGtF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpGeF32x16 <> @ScalarCmpGeF32x16, 'CmpGeF32x16 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpNeF32x16 <> @ScalarCmpNeF32x16, 'CmpNeF32x16 should be overridden');
 
   // F64x8 (512-bit)
-  CheckTrue(dt.CmpEqF64x8 <> @ScalarCmpEqF64x8, 'CmpEqF64x8 should be overridden');
-  CheckTrue(dt.CmpLtF64x8 <> @ScalarCmpLtF64x8, 'CmpLtF64x8 should be overridden');
-  CheckTrue(dt.CmpLeF64x8 <> @ScalarCmpLeF64x8, 'CmpLeF64x8 should be overridden');
-  CheckTrue(dt.CmpGtF64x8 <> @ScalarCmpGtF64x8, 'CmpGtF64x8 should be overridden');
-  CheckTrue(dt.CmpGeF64x8 <> @ScalarCmpGeF64x8, 'CmpGeF64x8 should be overridden');
-  CheckTrue(dt.CmpNeF64x8 <> @ScalarCmpNeF64x8, 'CmpNeF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpEqF64x8 <> @ScalarCmpEqF64x8, 'CmpEqF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpLtF64x8 <> @ScalarCmpLtF64x8, 'CmpLtF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpLeF64x8 <> @ScalarCmpLeF64x8, 'CmpLeF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpGtF64x8 <> @ScalarCmpGtF64x8, 'CmpGtF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpGeF64x8 <> @ScalarCmpGeF64x8, 'CmpGeF64x8 should be overridden');
+  CheckTrue(dt.CoreVectors.CmpNeF64x8 <> @ScalarCmpNeF64x8, 'CmpNeF64x8 should be overridden');
 end;
 
 procedure TTestCase_AVX512BackendRequirements.Test_AVX512Backend_DispatchTable_Inherits_AVX2_I64x2_U64x2;
@@ -2439,48 +2457,48 @@ var
 begin
   CheckTrue(TryGetRegisteredBackendDispatchTable(sbAVX512, LAVX512), 'AVX-512 backend dispatch table should be registered');
 
-  CheckTrue(Assigned(LAVX512.AndNotI64x2), 'AVX-512 AndNotI64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.ShiftLeftI64x2), 'AVX-512 ShiftLeftI64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.ShiftRightI64x2), 'AVX-512 ShiftRightI64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.ShiftRightArithI64x2), 'AVX-512 ShiftRightArithI64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.MinI64x2), 'AVX-512 MinI64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.MaxI64x2), 'AVX-512 MaxI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.AndNotI64x2), 'AVX-512 AndNotI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.ShiftLeftI64x2), 'AVX-512 ShiftLeftI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.ShiftRightI64x2), 'AVX-512 ShiftRightI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.ShiftRightArithI64x2), 'AVX-512 ShiftRightArithI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.MinI64x2), 'AVX-512 MinI64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.MaxI64x2), 'AVX-512 MaxI64x2 should be assigned');
 
-  CheckTrue(Assigned(LAVX512.AddU64x2), 'AVX-512 AddU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.SubU64x2), 'AVX-512 SubU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.AndU64x2), 'AVX-512 AndU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.OrU64x2), 'AVX-512 OrU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.XorU64x2), 'AVX-512 XorU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.NotU64x2), 'AVX-512 NotU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.AndNotU64x2), 'AVX-512 AndNotU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.CmpEqU64x2), 'AVX-512 CmpEqU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.CmpLtU64x2), 'AVX-512 CmpLtU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.CmpGtU64x2), 'AVX-512 CmpGtU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.MinU64x2), 'AVX-512 MinU64x2 should be assigned');
-  CheckTrue(Assigned(LAVX512.MaxU64x2), 'AVX-512 MaxU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.AddU64x2), 'AVX-512 AddU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.SubU64x2), 'AVX-512 SubU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.AndU64x2), 'AVX-512 AndU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.OrU64x2), 'AVX-512 OrU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.XorU64x2), 'AVX-512 XorU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.NotU64x2), 'AVX-512 NotU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.AndNotU64x2), 'AVX-512 AndNotU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.CmpEqU64x2), 'AVX-512 CmpEqU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.CmpLtU64x2), 'AVX-512 CmpLtU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.CmpGtU64x2), 'AVX-512 CmpGtU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.MinU64x2), 'AVX-512 MinU64x2 should be assigned');
+  CheckTrue(Assigned(LAVX512.CoreVectors.MaxU64x2), 'AVX-512 MaxU64x2 should be assigned');
 
   LHasAVX2 := TryGetRegisteredBackendDispatchTable(sbAVX2, LAVX2);
   if LHasAVX2 then
   begin
-    CheckEqual(PtrUInt(LAVX2.AndNotI64x2), PtrUInt(LAVX512.AndNotI64x2), 'AVX-512 should inherit AVX2 AndNotI64x2');
-    CheckEqual(PtrUInt(LAVX2.ShiftLeftI64x2), PtrUInt(LAVX512.ShiftLeftI64x2), 'AVX-512 should inherit AVX2 ShiftLeftI64x2');
-    CheckEqual(PtrUInt(LAVX2.ShiftRightI64x2), PtrUInt(LAVX512.ShiftRightI64x2), 'AVX-512 should inherit AVX2 ShiftRightI64x2');
-    CheckEqual(PtrUInt(LAVX2.ShiftRightArithI64x2), PtrUInt(LAVX512.ShiftRightArithI64x2), 'AVX-512 should inherit AVX2 ShiftRightArithI64x2');
-    CheckEqual(PtrUInt(LAVX2.MinI64x2), PtrUInt(LAVX512.MinI64x2), 'AVX-512 should inherit AVX2 MinI64x2');
-    CheckEqual(PtrUInt(LAVX2.MaxI64x2), PtrUInt(LAVX512.MaxI64x2), 'AVX-512 should inherit AVX2 MaxI64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.AndNotI64x2), PtrUInt(LAVX512.CoreVectors.AndNotI64x2), 'AVX-512 should inherit AVX2 AndNotI64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.ShiftLeftI64x2), PtrUInt(LAVX512.CoreVectors.ShiftLeftI64x2), 'AVX-512 should inherit AVX2 ShiftLeftI64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.ShiftRightI64x2), PtrUInt(LAVX512.CoreVectors.ShiftRightI64x2), 'AVX-512 should inherit AVX2 ShiftRightI64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.ShiftRightArithI64x2), PtrUInt(LAVX512.CoreVectors.ShiftRightArithI64x2), 'AVX-512 should inherit AVX2 ShiftRightArithI64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.MinI64x2), PtrUInt(LAVX512.CoreVectors.MinI64x2), 'AVX-512 should inherit AVX2 MinI64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.MaxI64x2), PtrUInt(LAVX512.CoreVectors.MaxI64x2), 'AVX-512 should inherit AVX2 MaxI64x2');
 
-    CheckEqual(PtrUInt(LAVX2.AddU64x2), PtrUInt(LAVX512.AddU64x2), 'AVX-512 should inherit AVX2 AddU64x2');
-    CheckEqual(PtrUInt(LAVX2.SubU64x2), PtrUInt(LAVX512.SubU64x2), 'AVX-512 should inherit AVX2 SubU64x2');
-    CheckEqual(PtrUInt(LAVX2.AndU64x2), PtrUInt(LAVX512.AndU64x2), 'AVX-512 should inherit AVX2 AndU64x2');
-    CheckEqual(PtrUInt(LAVX2.OrU64x2), PtrUInt(LAVX512.OrU64x2), 'AVX-512 should inherit AVX2 OrU64x2');
-    CheckEqual(PtrUInt(LAVX2.XorU64x2), PtrUInt(LAVX512.XorU64x2), 'AVX-512 should inherit AVX2 XorU64x2');
-    CheckEqual(PtrUInt(LAVX2.NotU64x2), PtrUInt(LAVX512.NotU64x2), 'AVX-512 should inherit AVX2 NotU64x2');
-    CheckEqual(PtrUInt(LAVX2.AndNotU64x2), PtrUInt(LAVX512.AndNotU64x2), 'AVX-512 should inherit AVX2 AndNotU64x2');
-    CheckEqual(PtrUInt(LAVX2.CmpEqU64x2), PtrUInt(LAVX512.CmpEqU64x2), 'AVX-512 should inherit AVX2 CmpEqU64x2');
-    CheckEqual(PtrUInt(LAVX2.CmpLtU64x2), PtrUInt(LAVX512.CmpLtU64x2), 'AVX-512 should inherit AVX2 CmpLtU64x2');
-    CheckEqual(PtrUInt(LAVX2.CmpGtU64x2), PtrUInt(LAVX512.CmpGtU64x2), 'AVX-512 should inherit AVX2 CmpGtU64x2');
-    CheckEqual(PtrUInt(LAVX2.MinU64x2), PtrUInt(LAVX512.MinU64x2), 'AVX-512 should inherit AVX2 MinU64x2');
-    CheckEqual(PtrUInt(LAVX2.MaxU64x2), PtrUInt(LAVX512.MaxU64x2), 'AVX-512 should inherit AVX2 MaxU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.AddU64x2), PtrUInt(LAVX512.CoreVectors.AddU64x2), 'AVX-512 should inherit AVX2 AddU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.SubU64x2), PtrUInt(LAVX512.CoreVectors.SubU64x2), 'AVX-512 should inherit AVX2 SubU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.AndU64x2), PtrUInt(LAVX512.CoreVectors.AndU64x2), 'AVX-512 should inherit AVX2 AndU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.OrU64x2), PtrUInt(LAVX512.CoreVectors.OrU64x2), 'AVX-512 should inherit AVX2 OrU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.XorU64x2), PtrUInt(LAVX512.CoreVectors.XorU64x2), 'AVX-512 should inherit AVX2 XorU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.NotU64x2), PtrUInt(LAVX512.CoreVectors.NotU64x2), 'AVX-512 should inherit AVX2 NotU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.AndNotU64x2), PtrUInt(LAVX512.CoreVectors.AndNotU64x2), 'AVX-512 should inherit AVX2 AndNotU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.CmpEqU64x2), PtrUInt(LAVX512.CoreVectors.CmpEqU64x2), 'AVX-512 should inherit AVX2 CmpEqU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.CmpLtU64x2), PtrUInt(LAVX512.CoreVectors.CmpLtU64x2), 'AVX-512 should inherit AVX2 CmpLtU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.CmpGtU64x2), PtrUInt(LAVX512.CoreVectors.CmpGtU64x2), 'AVX-512 should inherit AVX2 CmpGtU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.MinU64x2), PtrUInt(LAVX512.CoreVectors.MinU64x2), 'AVX-512 should inherit AVX2 MinU64x2');
+    CheckEqual(PtrUInt(LAVX2.CoreVectors.MaxU64x2), PtrUInt(LAVX512.CoreVectors.MaxU64x2), 'AVX-512 should inherit AVX2 MaxU64x2');
   end;
 end;
 
@@ -4666,8 +4684,8 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.FmaF32x4), 'Dispatch.FmaF32x4 should be assigned');
-  CheckTrue(dt^.FmaF32x4 <> @ScalarFmaF32x4, 'FmaF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.FmaF32x4), 'Dispatch.CoreVectors.FmaF32x4 should be assigned');
+  CheckTrue(dt^.CoreVectors.FmaF32x4 <> @ScalarFmaF32x4, 'FmaF32x4 should not be scalar when vector asm enabled');
 
   // 构造一个“只有 fused FMA 才会得到非零”的经典用例：
   // a = b = 1 + 2^-23 (float32 的下一个可表示数)
@@ -4704,16 +4722,16 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddF32x8), 'Dispatch.AddF32x8 should be assigned');
-  CheckTrue(Assigned(dt^.SubF32x8), 'Dispatch.SubF32x8 should be assigned');
-  CheckTrue(Assigned(dt^.MulF32x8), 'Dispatch.MulF32x8 should be assigned');
-  CheckTrue(Assigned(dt^.DivF32x8), 'Dispatch.DivF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF32x8), 'Dispatch.CoreVectors.AddF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF32x8), 'Dispatch.CoreVectors.SubF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF32x8), 'Dispatch.CoreVectors.MulF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF32x8), 'Dispatch.CoreVectors.DivF32x8 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.AddF32x8 <> @ScalarAddF32x8, 'AddF32x8 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.SubF32x8 <> @ScalarSubF32x8, 'SubF32x8 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MulF32x8 <> @ScalarMulF32x8, 'MulF32x8 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.DivF32x8 <> @ScalarDivF32x8, 'DivF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AddF32x8 <> @ScalarAddF32x8, 'AddF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SubF32x8 <> @ScalarSubF32x8, 'SubF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MulF32x8 <> @ScalarMulF32x8, 'MulF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.DivF32x8 <> @ScalarDivF32x8, 'DivF32x8 should not be scalar when vector asm enabled');
 
   eps := 1e-6;
   RandSeed := 12345;
@@ -4731,25 +4749,25 @@ begin
 
     // Add
     expV := ScalarAddF32x8(a, b);
-    actV := dt^.AddF32x8(a, b);
+    actV := dt^.CoreVectors.AddF32x8(a, b);
     for i := 0 to 7 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Add elem ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF32x8(a, b);
-    actV := dt^.SubF32x8(a, b);
+    actV := dt^.CoreVectors.SubF32x8(a, b);
     for i := 0 to 7 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Sub elem ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF32x8(a, b);
-    actV := dt^.MulF32x8(a, b);
+    actV := dt^.CoreVectors.MulF32x8(a, b);
     for i := 0 to 7 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Mul elem ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF32x8(a, b);
-    actV := dt^.DivF32x8(a, b);
+    actV := dt^.CoreVectors.DivF32x8(a, b);
     for i := 0 to 7 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Div elem ' + IntToStr(i));
   end;
@@ -4783,16 +4801,16 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddF32x8), 'Dispatch.AddF32x8 should be assigned');
-  CheckTrue(Assigned(dt^.SubF32x8), 'Dispatch.SubF32x8 should be assigned');
-  CheckTrue(Assigned(dt^.MulF32x8), 'Dispatch.MulF32x8 should be assigned');
-  CheckTrue(Assigned(dt^.DivF32x8), 'Dispatch.DivF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF32x8), 'Dispatch.CoreVectors.AddF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF32x8), 'Dispatch.CoreVectors.SubF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF32x8), 'Dispatch.CoreVectors.MulF32x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF32x8), 'Dispatch.CoreVectors.DivF32x8 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.AddF32x8 <> @ScalarAddF32x8, 'AddF32x8 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.SubF32x8 <> @ScalarSubF32x8, 'SubF32x8 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MulF32x8 <> @ScalarMulF32x8, 'MulF32x8 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.DivF32x8 <> @ScalarDivF32x8, 'DivF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AddF32x8 <> @ScalarAddF32x8, 'AddF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SubF32x8 <> @ScalarSubF32x8, 'SubF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MulF32x8 <> @ScalarMulF32x8, 'MulF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.DivF32x8 <> @ScalarDivF32x8, 'DivF32x8 should not be scalar when vector asm enabled');
 
   // 构造包含 NaN/Inf/±0 的输入，确保在 AVX2 vector-asm 路径下与 scalar 参考结果一致。
   a.f[0] := SingleFromBits($80000000); // -0
@@ -4821,19 +4839,19 @@ begin
 
   // Add
   expV := ScalarAddF32x8(a, b);
-  actV := dt^.AddF32x8(a, b);
+  actV := dt^.CoreVectors.AddF32x8(a, b);
   for i := 0 to 7 do
     AssertSameElementBits('Add', i, expV.f[i], actV.f[i]);
 
   // Sub
   expV := ScalarSubF32x8(a, b);
-  actV := dt^.SubF32x8(a, b);
+  actV := dt^.CoreVectors.SubF32x8(a, b);
   for i := 0 to 7 do
     AssertSameElementBits('Sub', i, expV.f[i], actV.f[i]);
 
   // Mul
   expV := ScalarMulF32x8(a, b);
-  actV := dt^.MulF32x8(a, b);
+  actV := dt^.CoreVectors.MulF32x8(a, b);
   for i := 0 to 7 do
     AssertSameElementBits('Mul', i, expV.f[i], actV.f[i]);
 
@@ -4845,7 +4863,7 @@ begin
       bDiv.f[i] := 1.0;
 
   expV := ScalarDivF32x8(a, bDiv);
-  actV := dt^.DivF32x8(a, bDiv);
+  actV := dt^.CoreVectors.DivF32x8(a, bDiv);
   for i := 0 to 7 do
     AssertSameElementBits('Div', i, expV.f[i], actV.f[i]);
 end;
@@ -4865,16 +4883,16 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddF64x2), 'Dispatch.AddF64x2 should be assigned');
-  CheckTrue(Assigned(dt^.SubF64x2), 'Dispatch.SubF64x2 should be assigned');
-  CheckTrue(Assigned(dt^.MulF64x2), 'Dispatch.MulF64x2 should be assigned');
-  CheckTrue(Assigned(dt^.DivF64x2), 'Dispatch.DivF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF64x2), 'Dispatch.CoreVectors.AddF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF64x2), 'Dispatch.CoreVectors.SubF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF64x2), 'Dispatch.CoreVectors.MulF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF64x2), 'Dispatch.CoreVectors.DivF64x2 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.AddF64x2 <> @ScalarAddF64x2, 'AddF64x2 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.SubF64x2 <> @ScalarSubF64x2, 'SubF64x2 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MulF64x2 <> @ScalarMulF64x2, 'MulF64x2 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.DivF64x2 <> @ScalarDivF64x2, 'DivF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AddF64x2 <> @ScalarAddF64x2, 'AddF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SubF64x2 <> @ScalarSubF64x2, 'SubF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MulF64x2 <> @ScalarMulF64x2, 'MulF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.DivF64x2 <> @ScalarDivF64x2, 'DivF64x2 should not be scalar when vector asm enabled');
 
   eps := 1e-12;
   RandSeed := 20251224;
@@ -4891,25 +4909,25 @@ begin
 
     // Add
     expV := ScalarAddF64x2(a, b);
-    actV := dt^.AddF64x2(a, b);
+    actV := dt^.CoreVectors.AddF64x2(a, b);
     for i := 0 to 1 do
       CheckNear(expV.d[i], actV.d[i], eps, 'F64x2 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF64x2(a, b);
-    actV := dt^.SubF64x2(a, b);
+    actV := dt^.CoreVectors.SubF64x2(a, b);
     for i := 0 to 1 do
       CheckNear(expV.d[i], actV.d[i], eps, 'F64x2 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF64x2(a, b);
-    actV := dt^.MulF64x2(a, b);
+    actV := dt^.CoreVectors.MulF64x2(a, b);
     for i := 0 to 1 do
       CheckNear(expV.d[i], actV.d[i], eps, 'F64x2 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF64x2(a, b);
-    actV := dt^.DivF64x2(a, b);
+    actV := dt^.CoreVectors.DivF64x2(a, b);
     for i := 0 to 1 do
       CheckNear(expV.d[i], actV.d[i], eps, 'F64x2 Div iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -4943,16 +4961,16 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddF64x2), 'Dispatch.AddF64x2 should be assigned');
-  CheckTrue(Assigned(dt^.SubF64x2), 'Dispatch.SubF64x2 should be assigned');
-  CheckTrue(Assigned(dt^.MulF64x2), 'Dispatch.MulF64x2 should be assigned');
-  CheckTrue(Assigned(dt^.DivF64x2), 'Dispatch.DivF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF64x2), 'Dispatch.CoreVectors.AddF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF64x2), 'Dispatch.CoreVectors.SubF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF64x2), 'Dispatch.CoreVectors.MulF64x2 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF64x2), 'Dispatch.CoreVectors.DivF64x2 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.AddF64x2 <> @ScalarAddF64x2, 'AddF64x2 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.SubF64x2 <> @ScalarSubF64x2, 'SubF64x2 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MulF64x2 <> @ScalarMulF64x2, 'MulF64x2 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.DivF64x2 <> @ScalarDivF64x2, 'DivF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AddF64x2 <> @ScalarAddF64x2, 'AddF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SubF64x2 <> @ScalarSubF64x2, 'SubF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MulF64x2 <> @ScalarMulF64x2, 'MulF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.DivF64x2 <> @ScalarDivF64x2, 'DivF64x2 should not be scalar when vector asm enabled');
 
   // 特殊值：±0 / ±Inf / qNaN
   a.d[0] := DoubleFromBits(QWord($8000000000000000)); // -0
@@ -4963,19 +4981,19 @@ begin
 
   // Add
   expV := ScalarAddF64x2(a, b);
-  actV := dt^.AddF64x2(a, b);
+  actV := dt^.CoreVectors.AddF64x2(a, b);
   for i := 0 to 1 do
     AssertSameElementBits('F64x2 Add', i, expV.d[i], actV.d[i]);
 
   // Sub
   expV := ScalarSubF64x2(a, b);
-  actV := dt^.SubF64x2(a, b);
+  actV := dt^.CoreVectors.SubF64x2(a, b);
   for i := 0 to 1 do
     AssertSameElementBits('F64x2 Sub', i, expV.d[i], actV.d[i]);
 
   // Mul
   expV := ScalarMulF64x2(a, b);
-  actV := dt^.MulF64x2(a, b);
+  actV := dt^.CoreVectors.MulF64x2(a, b);
   for i := 0 to 1 do
     AssertSameElementBits('F64x2 Mul', i, expV.d[i], actV.d[i]);
 
@@ -4986,7 +5004,7 @@ begin
       bDiv.d[i] := 1.0;
 
   expV := ScalarDivF64x2(a, bDiv);
-  actV := dt^.DivF64x2(a, bDiv);
+  actV := dt^.CoreVectors.DivF64x2(a, bDiv);
   for i := 0 to 1 do
     AssertSameElementBits('F64x2 Div', i, expV.d[i], actV.d[i]);
 end;
@@ -5005,14 +5023,14 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddI32x4), 'Dispatch.AddI32x4 should be assigned');
-  CheckTrue(Assigned(dt^.SubI32x4), 'Dispatch.SubI32x4 should be assigned');
-  CheckTrue(Assigned(dt^.MulI32x4), 'Dispatch.MulI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddI32x4), 'Dispatch.CoreVectors.AddI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubI32x4), 'Dispatch.CoreVectors.SubI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulI32x4), 'Dispatch.CoreVectors.MulI32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.AddI32x4 <> @ScalarAddI32x4, 'AddI32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.SubI32x4 <> @ScalarSubI32x4, 'SubI32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MulI32x4 <> @ScalarMulI32x4, 'MulI32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AddI32x4 <> @ScalarAddI32x4, 'AddI32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SubI32x4 <> @ScalarSubI32x4, 'SubI32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MulI32x4 <> @ScalarMulI32x4, 'MulI32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20251225;
 
@@ -5027,19 +5045,19 @@ begin
 
     // Add
     expV := ScalarAddI32x4(a, b);
-    actV := dt^.AddI32x4(a, b);
+    actV := dt^.CoreVectors.AddI32x4(a, b);
     for i := 0 to 3 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x4 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubI32x4(a, b);
-    actV := dt^.SubI32x4(a, b);
+    actV := dt^.CoreVectors.SubI32x4(a, b);
     for i := 0 to 3 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x4 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulI32x4(a, b);
-    actV := dt^.MulI32x4(a, b);
+    actV := dt^.CoreVectors.MulI32x4(a, b);
     for i := 0 to 3 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x4 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -5059,9 +5077,9 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddI32x4), 'Dispatch.AddI32x4 should be assigned');
-  CheckTrue(Assigned(dt^.SubI32x4), 'Dispatch.SubI32x4 should be assigned');
-  CheckTrue(Assigned(dt^.MulI32x4), 'Dispatch.MulI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddI32x4), 'Dispatch.CoreVectors.AddI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubI32x4), 'Dispatch.CoreVectors.SubI32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulI32x4), 'Dispatch.CoreVectors.MulI32x4 should be assigned');
 
   // Add/Sub：边界但不溢出
   a.i[0] := High(Int32) - 1; b.i[0] := 1;  // -> High(Int32)
@@ -5070,12 +5088,12 @@ begin
   a.i[3] := -1;              b.i[3] := 1;
 
   expV := ScalarAddI32x4(a, b);
-  actV := dt^.AddI32x4(a, b);
+  actV := dt^.CoreVectors.AddI32x4(a, b);
   for i := 0 to 3 do
     CheckEqual(expV.i[i], actV.i[i], 'I32x4 Add boundary lane ' + IntToStr(i));
 
   expV := ScalarSubI32x4(a, b);
-  actV := dt^.SubI32x4(a, b);
+  actV := dt^.CoreVectors.SubI32x4(a, b);
   for i := 0 to 3 do
     CheckEqual(expV.i[i], actV.i[i], 'I32x4 Sub boundary lane ' + IntToStr(i));
 
@@ -5086,7 +5104,7 @@ begin
   a.i[3] := -1;     b.i[3] := -1;
 
   expV := ScalarMulI32x4(a, b);
-  actV := dt^.MulI32x4(a, b);
+  actV := dt^.CoreVectors.MulI32x4(a, b);
   for i := 0 to 3 do
     CheckEqual(expV.i[i], actV.i[i], 'I32x4 Mul boundary lane ' + IntToStr(i));
 end;
@@ -5115,20 +5133,20 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.CmpEqF32x4), 'Dispatch.CmpEqF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpLtF32x4), 'Dispatch.CmpLtF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpLeF32x4), 'Dispatch.CmpLeF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpGtF32x4), 'Dispatch.CmpGtF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpGeF32x4), 'Dispatch.CmpGeF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpNeF32x4), 'Dispatch.CmpNeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpEqF32x4), 'Dispatch.CoreVectors.CmpEqF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpLtF32x4), 'Dispatch.CoreVectors.CmpLtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpLeF32x4), 'Dispatch.CoreVectors.CmpLeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpGtF32x4), 'Dispatch.CoreVectors.CmpGtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpGeF32x4), 'Dispatch.CoreVectors.CmpGeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpNeF32x4), 'Dispatch.CoreVectors.CmpNeF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.CmpEqF32x4 <> @ScalarCmpEqF32x4, 'CmpEqF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpLtF32x4 <> @ScalarCmpLtF32x4, 'CmpLtF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpLeF32x4 <> @ScalarCmpLeF32x4, 'CmpLeF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpGtF32x4 <> @ScalarCmpGtF32x4, 'CmpGtF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpGeF32x4 <> @ScalarCmpGeF32x4, 'CmpGeF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpNeF32x4 <> @ScalarCmpNeF32x4, 'CmpNeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpEqF32x4 <> @ScalarCmpEqF32x4, 'CmpEqF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpLtF32x4 <> @ScalarCmpLtF32x4, 'CmpLtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpLeF32x4 <> @ScalarCmpLeF32x4, 'CmpLeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpGtF32x4 <> @ScalarCmpGtF32x4, 'CmpGtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpGeF32x4 <> @ScalarCmpGeF32x4, 'CmpGeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpNeF32x4 <> @ScalarCmpNeF32x4, 'CmpNeF32x4 should not be scalar when vector asm enabled');
 
   // 设计点：比较指令在 NaN 场景下会触发 InvalidOp（若未屏蔽异常），
   // 这里临时屏蔽所有 FPU 异常，避免测试运行被中断。
@@ -5150,32 +5168,32 @@ begin
 
     // Eq: NaN==x false; Inf==Inf true; -0==+0 true
     expMask := Mask4Of(False, False, True, True);
-    actMask := dt^.CmpEqF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpEqF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpEq mask');
 
     // Ne: NaN!=x true (unordered); Inf!=Inf false; -0!=+0 false
     expMask := Mask4Of(True, True, False, False);
-    actMask := dt^.CmpNeF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpNeF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpNe mask');
 
     // Lt: NaN comparisons false; Inf<Inf false; -0<+0 false
     expMask := Mask4Of(False, False, False, False);
-    actMask := dt^.CmpLtF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpLtF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpLt mask');
 
     // Le: NaN comparisons false; Inf<=Inf true; -0<=+0 true
     expMask := Mask4Of(False, False, True, True);
-    actMask := dt^.CmpLeF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpLeF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpLe mask');
 
     // Gt: NaN comparisons false; Inf>Inf false; -0>+0 false
     expMask := Mask4Of(False, False, False, False);
-    actMask := dt^.CmpGtF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpGtF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpGt mask');
 
     // Ge: NaN comparisons false; Inf>=Inf true; -0>=+0 true
     expMask := Mask4Of(False, False, True, True);
-    actMask := dt^.CmpGeF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpGeF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpGe mask');
   finally
     SetExceptionMask(savedMask);
@@ -5206,20 +5224,20 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.CmpEqF32x4), 'Dispatch.CmpEqF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpLtF32x4), 'Dispatch.CmpLtF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpLeF32x4), 'Dispatch.CmpLeF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpGtF32x4), 'Dispatch.CmpGtF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpGeF32x4), 'Dispatch.CmpGeF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpNeF32x4), 'Dispatch.CmpNeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpEqF32x4), 'Dispatch.CoreVectors.CmpEqF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpLtF32x4), 'Dispatch.CoreVectors.CmpLtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpLeF32x4), 'Dispatch.CoreVectors.CmpLeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpGtF32x4), 'Dispatch.CoreVectors.CmpGtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpGeF32x4), 'Dispatch.CoreVectors.CmpGeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpNeF32x4), 'Dispatch.CoreVectors.CmpNeF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.CmpEqF32x4 <> @ScalarCmpEqF32x4, 'CmpEqF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpLtF32x4 <> @ScalarCmpLtF32x4, 'CmpLtF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpLeF32x4 <> @ScalarCmpLeF32x4, 'CmpLeF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpGtF32x4 <> @ScalarCmpGtF32x4, 'CmpGtF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpGeF32x4 <> @ScalarCmpGeF32x4, 'CmpGeF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpNeF32x4 <> @ScalarCmpNeF32x4, 'CmpNeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpEqF32x4 <> @ScalarCmpEqF32x4, 'CmpEqF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpLtF32x4 <> @ScalarCmpLtF32x4, 'CmpLtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpLeF32x4 <> @ScalarCmpLeF32x4, 'CmpLeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpGtF32x4 <> @ScalarCmpGtF32x4, 'CmpGtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpGeF32x4 <> @ScalarCmpGeF32x4, 'CmpGeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpNeF32x4 <> @ScalarCmpNeF32x4, 'CmpNeF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20251216;
 
@@ -5243,27 +5261,27 @@ begin
     b.f[3] := (Random(2000001) - 1000000) / 1000.0;
 
     expMask := Mask4Of(a.f[0] = b.f[0], a.f[1] = b.f[1], a.f[2] = b.f[2], a.f[3] = b.f[3]);
-    actMask := dt^.CmpEqF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpEqF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpEq iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] <> b.f[0], a.f[1] <> b.f[1], a.f[2] <> b.f[2], a.f[3] <> b.f[3]);
-    actMask := dt^.CmpNeF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpNeF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpNe iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] < b.f[0], a.f[1] < b.f[1], a.f[2] < b.f[2], a.f[3] < b.f[3]);
-    actMask := dt^.CmpLtF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpLtF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpLt iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] <= b.f[0], a.f[1] <= b.f[1], a.f[2] <= b.f[2], a.f[3] <= b.f[3]);
-    actMask := dt^.CmpLeF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpLeF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpLe iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] > b.f[0], a.f[1] > b.f[1], a.f[2] > b.f[2], a.f[3] > b.f[3]);
-    actMask := dt^.CmpGtF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpGtF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpGt iter ' + IntToStr(iter));
 
     expMask := Mask4Of(a.f[0] >= b.f[0], a.f[1] >= b.f[1], a.f[2] >= b.f[2], a.f[3] >= b.f[3]);
-    actMask := dt^.CmpGeF32x4(a, b);
+    actMask := dt^.CoreVectors.CmpGeF32x4(a, b);
     CheckEqual(expMask, actMask, 'CmpGe iter ' + IntToStr(iter));
   end;
 end;
@@ -5283,16 +5301,16 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddF32x4), 'Dispatch.AddF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.SubF32x4), 'Dispatch.SubF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.MulF32x4), 'Dispatch.MulF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.DivF32x4), 'Dispatch.DivF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF32x4), 'Dispatch.CoreVectors.AddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF32x4), 'Dispatch.CoreVectors.SubF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF32x4), 'Dispatch.CoreVectors.MulF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF32x4), 'Dispatch.CoreVectors.DivF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.AddF32x4 <> @ScalarAddF32x4, 'AddF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.SubF32x4 <> @ScalarSubF32x4, 'SubF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MulF32x4 <> @ScalarMulF32x4, 'MulF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.DivF32x4 <> @ScalarDivF32x4, 'DivF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AddF32x4 <> @ScalarAddF32x4, 'AddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SubF32x4 <> @ScalarSubF32x4, 'SubF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MulF32x4 <> @ScalarMulF32x4, 'MulF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.DivF32x4 <> @ScalarDivF32x4, 'DivF32x4 should not be scalar when vector asm enabled');
 
   eps := 1e-6;
   RandSeed := 54321;
@@ -5309,25 +5327,25 @@ begin
 
     // Add
     expV := ScalarAddF32x4(a, b);
-    actV := dt^.AddF32x4(a, b);
+    actV := dt^.CoreVectors.AddF32x4(a, b);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Add elem ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF32x4(a, b);
-    actV := dt^.SubF32x4(a, b);
+    actV := dt^.CoreVectors.SubF32x4(a, b);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Sub elem ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF32x4(a, b);
-    actV := dt^.MulF32x4(a, b);
+    actV := dt^.CoreVectors.MulF32x4(a, b);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Mul elem ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF32x4(a, b);
-    actV := dt^.DivF32x4(a, b);
+    actV := dt^.CoreVectors.DivF32x4(a, b);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Div elem ' + IntToStr(i));
   end;
@@ -5361,16 +5379,16 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddF32x4), 'Dispatch.AddF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.SubF32x4), 'Dispatch.SubF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.MulF32x4), 'Dispatch.MulF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.DivF32x4), 'Dispatch.DivF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF32x4), 'Dispatch.CoreVectors.AddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF32x4), 'Dispatch.CoreVectors.SubF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF32x4), 'Dispatch.CoreVectors.MulF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF32x4), 'Dispatch.CoreVectors.DivF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.AddF32x4 <> @ScalarAddF32x4, 'AddF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.SubF32x4 <> @ScalarSubF32x4, 'SubF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MulF32x4 <> @ScalarMulF32x4, 'MulF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.DivF32x4 <> @ScalarDivF32x4, 'DivF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AddF32x4 <> @ScalarAddF32x4, 'AddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SubF32x4 <> @ScalarSubF32x4, 'SubF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MulF32x4 <> @ScalarMulF32x4, 'MulF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.DivF32x4 <> @ScalarDivF32x4, 'DivF32x4 should not be scalar when vector asm enabled');
 
   a.f[0] := SingleFromBits($80000000); // -0
   b.f[0] := SingleFromBits($00000000); // +0
@@ -5386,19 +5404,19 @@ begin
 
   // Add
   expV := ScalarAddF32x4(a, b);
-  actV := dt^.AddF32x4(a, b);
+  actV := dt^.CoreVectors.AddF32x4(a, b);
   for i := 0 to 3 do
     AssertSameElementBits('Add', i, expV.f[i], actV.f[i]);
 
   // Sub
   expV := ScalarSubF32x4(a, b);
-  actV := dt^.SubF32x4(a, b);
+  actV := dt^.CoreVectors.SubF32x4(a, b);
   for i := 0 to 3 do
     AssertSameElementBits('Sub', i, expV.f[i], actV.f[i]);
 
   // Mul
   expV := ScalarMulF32x4(a, b);
-  actV := dt^.MulF32x4(a, b);
+  actV := dt^.CoreVectors.MulF32x4(a, b);
   for i := 0 to 3 do
     AssertSameElementBits('Mul', i, expV.f[i], actV.f[i]);
 
@@ -5409,7 +5427,7 @@ begin
       bDiv.f[i] := 1.0;
 
   expV := ScalarDivF32x4(a, bDiv);
-  actV := dt^.DivF32x4(a, bDiv);
+  actV := dt^.CoreVectors.DivF32x4(a, bDiv);
   for i := 0 to 3 do
     AssertSameElementBits('Div', i, expV.f[i], actV.f[i]);
 end;
@@ -5429,9 +5447,9 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AbsF32x4), 'Dispatch.AbsF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AbsF32x4), 'Dispatch.CoreVectors.AbsF32x4 should be assigned');
 
-  CheckTrue(dt^.AbsF32x4 <> @ScalarAbsF32x4, 'AbsF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AbsF32x4 <> @ScalarAbsF32x4, 'AbsF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 24680;
 
@@ -5441,7 +5459,7 @@ begin
       a.f[i] := (Random(2000001) - 1000000) / 1000.0;
 
     expV := ScalarAbsF32x4(a);
-    actV := dt^.AbsF32x4(a);
+    actV := dt^.CoreVectors.AbsF32x4(a);
 
     for i := 0 to 3 do
     begin
@@ -5480,9 +5498,9 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AbsF32x4), 'Dispatch.AbsF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AbsF32x4), 'Dispatch.CoreVectors.AbsF32x4 should be assigned');
 
-  CheckTrue(dt^.AbsF32x4 <> @ScalarAbsF32x4, 'AbsF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AbsF32x4 <> @ScalarAbsF32x4, 'AbsF32x4 should not be scalar when vector asm enabled');
 
   a.f[0] := SingleFromBits($80000000); // -0
   a.f[1] := SingleFromBits($FF800000); // -Inf
@@ -5490,7 +5508,7 @@ begin
   a.f[3] := -123.0;
 
   expV := ScalarAbsF32x4(a);
-  actV := dt^.AbsF32x4(a);
+  actV := dt^.CoreVectors.AbsF32x4(a);
 
   for i := 0 to 3 do
     AssertSameElementBits('Abs', i, expV.f[i], actV.f[i]);
@@ -5511,9 +5529,9 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.SqrtF32x4), 'Dispatch.SqrtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SqrtF32x4), 'Dispatch.CoreVectors.SqrtF32x4 should be assigned');
 
-  CheckTrue(dt^.SqrtF32x4 <> @ScalarSqrtF32x4, 'SqrtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SqrtF32x4 <> @ScalarSqrtF32x4, 'SqrtF32x4 should not be scalar when vector asm enabled');
 
   eps := 1e-6;
   RandSeed := 13579;
@@ -5524,7 +5542,7 @@ begin
       a.f[i] := Random(1000001) / 1000.0; // [0..1000]
 
     expV := ScalarSqrtF32x4(a);
-    actV := dt^.SqrtF32x4(a);
+    actV := dt^.CoreVectors.SqrtF32x4(a);
 
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Sqrt elem ' + IntToStr(i));
@@ -5560,9 +5578,9 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.SqrtF32x4), 'Dispatch.SqrtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SqrtF32x4), 'Dispatch.CoreVectors.SqrtF32x4 should be assigned');
 
-  CheckTrue(dt^.SqrtF32x4 <> @ScalarSqrtF32x4, 'SqrtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SqrtF32x4 <> @ScalarSqrtF32x4, 'SqrtF32x4 should not be scalar when vector asm enabled');
 
   savedMask := GetExceptionMask;
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
@@ -5573,7 +5591,7 @@ begin
     a.f[3] := -1.0;
 
     expV := ScalarSqrtF32x4(a);
-    actV := dt^.SqrtF32x4(a);
+    actV := dt^.CoreVectors.SqrtF32x4(a);
 
     for i := 0 to 3 do
       AssertSameElementBits('Sqrt', i, expV.f[i], actV.f[i]);
@@ -5597,11 +5615,11 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MinF32x4), 'Dispatch.MinF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.MaxF32x4), 'Dispatch.MaxF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MinF32x4), 'Dispatch.CoreVectors.MinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MaxF32x4), 'Dispatch.CoreVectors.MaxF32x4 should be assigned');
 
-  CheckTrue(dt^.MinF32x4 <> @ScalarMinF32x4, 'MinF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MaxF32x4 <> @ScalarMaxF32x4, 'MaxF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MinF32x4 <> @ScalarMinF32x4, 'MinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MaxF32x4 <> @ScalarMaxF32x4, 'MaxF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 112233;
 
@@ -5615,7 +5633,7 @@ begin
 
     // Min
     expV := ScalarMinF32x4(a, b);
-    actV := dt^.MinF32x4(a, b);
+    actV := dt^.CoreVectors.MinF32x4(a, b);
     for i := 0 to 3 do
     begin
       expBits := BitsFromSingle(expV.f[i]);
@@ -5625,7 +5643,7 @@ begin
 
     // Max
     expV := ScalarMaxF32x4(a, b);
-    actV := dt^.MaxF32x4(a, b);
+    actV := dt^.CoreVectors.MaxF32x4(a, b);
     for i := 0 to 3 do
     begin
       expBits := BitsFromSingle(expV.f[i]);
@@ -5664,11 +5682,11 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MinF32x4), 'Dispatch.MinF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.MaxF32x4), 'Dispatch.MaxF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MinF32x4), 'Dispatch.CoreVectors.MinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MaxF32x4), 'Dispatch.CoreVectors.MaxF32x4 should be assigned');
 
-  CheckTrue(dt^.MinF32x4 <> @ScalarMinF32x4, 'MinF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MaxF32x4 <> @ScalarMaxF32x4, 'MaxF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MinF32x4 <> @ScalarMinF32x4, 'MinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MaxF32x4 <> @ScalarMaxF32x4, 'MaxF32x4 should not be scalar when vector asm enabled');
 
   savedMask := GetExceptionMask;
   SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
@@ -5688,13 +5706,13 @@ begin
 
     // Min
     expV := ScalarMinF32x4(a, b);
-    actV := dt^.MinF32x4(a, b);
+    actV := dt^.CoreVectors.MinF32x4(a, b);
     for i := 0 to 3 do
       AssertSameElementBits('Min', i, expV.f[i], actV.f[i]);
 
     // Max
     expV := ScalarMaxF32x4(a, b);
-    actV := dt^.MaxF32x4(a, b);
+    actV := dt^.CoreVectors.MaxF32x4(a, b);
     for i := 0 to 3 do
       AssertSameElementBits('Max', i, expV.f[i], actV.f[i]);
   finally
@@ -5731,15 +5749,15 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.ReduceAddF32x4), 'Dispatch.ReduceAddF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.ReduceMinF32x4), 'Dispatch.ReduceMinF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.ReduceMaxF32x4), 'Dispatch.ReduceMaxF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.ReduceMulF32x4), 'Dispatch.ReduceMulF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ReduceAddF32x4), 'Dispatch.CoreVectors.ReduceAddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ReduceMinF32x4), 'Dispatch.CoreVectors.ReduceMinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ReduceMaxF32x4), 'Dispatch.CoreVectors.ReduceMaxF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ReduceMulF32x4), 'Dispatch.CoreVectors.ReduceMulF32x4 should be assigned');
 
-  CheckTrue(dt^.ReduceAddF32x4 <> @ScalarReduceAddF32x4, 'ReduceAddF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.ReduceMinF32x4 <> @ScalarReduceMinF32x4, 'ReduceMinF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.ReduceMaxF32x4 <> @ScalarReduceMaxF32x4, 'ReduceMaxF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.ReduceMulF32x4 <> @ScalarReduceMulF32x4, 'ReduceMulF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ReduceAddF32x4 <> @ScalarReduceAddF32x4, 'ReduceAddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ReduceMinF32x4 <> @ScalarReduceMinF32x4, 'ReduceMinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ReduceMaxF32x4 <> @ScalarReduceMaxF32x4, 'ReduceMaxF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ReduceMulF32x4 <> @ScalarReduceMulF32x4, 'ReduceMulF32x4 should not be scalar when vector asm enabled');
 
   // ReduceAdd/ReduceMul 的求和/求积顺序可能在不同实现间不同（浮点非结合律），
   // 这里用小范围随机值 + 适度 eps 进行一致性验证。
@@ -5755,7 +5773,7 @@ begin
 
     // ReduceAdd
     expS := ScalarReduceAddF32x4(a);
-    actS := dt^.ReduceAddF32x4(a);
+    actS := dt^.CoreVectors.ReduceAddF32x4(a);
     if IsNaNSingle(expS) then
       CheckTrue(IsNaNSingle(actS), 'ReduceAdd iter ' + IntToStr(iter) + ' should be NaN')
     else
@@ -5763,7 +5781,7 @@ begin
 
     // ReduceMul
     expS := ScalarReduceMulF32x4(a);
-    actS := dt^.ReduceMulF32x4(a);
+    actS := dt^.CoreVectors.ReduceMulF32x4(a);
     if IsNaNSingle(expS) then
       CheckTrue(IsNaNSingle(actS), 'ReduceMul iter ' + IntToStr(iter) + ' should be NaN')
     else
@@ -5771,12 +5789,12 @@ begin
 
     // ReduceMin
     expS := ScalarReduceMinF32x4(a);
-    actS := dt^.ReduceMinF32x4(a);
+    actS := dt^.CoreVectors.ReduceMinF32x4(a);
     AssertSameSingleBits('ReduceMin iter ' + IntToStr(iter), expS, actS);
 
     // ReduceMax
     expS := ScalarReduceMaxF32x4(a);
-    actS := dt^.ReduceMaxF32x4(a);
+    actS := dt^.CoreVectors.ReduceMaxF32x4(a);
     AssertSameSingleBits('ReduceMax iter ' + IntToStr(iter), expS, actS);
   end;
 end;
@@ -5809,15 +5827,15 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.ReduceAddF32x4), 'Dispatch.ReduceAddF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.ReduceMinF32x4), 'Dispatch.ReduceMinF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.ReduceMaxF32x4), 'Dispatch.ReduceMaxF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.ReduceMulF32x4), 'Dispatch.ReduceMulF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ReduceAddF32x4), 'Dispatch.CoreVectors.ReduceAddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ReduceMinF32x4), 'Dispatch.CoreVectors.ReduceMinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ReduceMaxF32x4), 'Dispatch.CoreVectors.ReduceMaxF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ReduceMulF32x4), 'Dispatch.CoreVectors.ReduceMulF32x4 should be assigned');
 
-  CheckTrue(dt^.ReduceAddF32x4 <> @ScalarReduceAddF32x4, 'ReduceAddF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.ReduceMinF32x4 <> @ScalarReduceMinF32x4, 'ReduceMinF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.ReduceMaxF32x4 <> @ScalarReduceMaxF32x4, 'ReduceMaxF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.ReduceMulF32x4 <> @ScalarReduceMulF32x4, 'ReduceMulF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ReduceAddF32x4 <> @ScalarReduceAddF32x4, 'ReduceAddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ReduceMinF32x4 <> @ScalarReduceMinF32x4, 'ReduceMinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ReduceMaxF32x4 <> @ScalarReduceMaxF32x4, 'ReduceMaxF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ReduceMulF32x4 <> @ScalarReduceMulF32x4, 'ReduceMulF32x4 should not be scalar when vector asm enabled');
 
   // ReduceMin/Max 在 NaN/±0 场景下很容易出现“选择了哪个操作数”的差异。
   // 为避免某些 CPU/FPU 设置下触发 InvalidOp，这里局部屏蔽异常。
@@ -5831,22 +5849,22 @@ begin
     a.f[3] := 3.0;
 
     expS := ScalarReduceMinF32x4(a);
-    actS := dt^.ReduceMinF32x4(a);
+    actS := dt^.CoreVectors.ReduceMinF32x4(a);
     AssertSameSingleBits('ReduceMin NaN-position case', expS, actS);
 
     expS := ScalarReduceMaxF32x4(a);
-    actS := dt^.ReduceMaxF32x4(a);
+    actS := dt^.CoreVectors.ReduceMaxF32x4(a);
     AssertSameSingleBits('ReduceMax NaN-position case', expS, actS);
 
     expS := ScalarReduceAddF32x4(a);
-    actS := dt^.ReduceAddF32x4(a);
+    actS := dt^.CoreVectors.ReduceAddF32x4(a);
     if IsNaNSingle(expS) then
       CheckTrue(IsNaNSingle(actS), 'ReduceAdd NaN-position case should be NaN')
     else
       CheckNear(expS, actS, 0.0, 'ReduceAdd NaN-position case');
 
     expS := ScalarReduceMulF32x4(a);
-    actS := dt^.ReduceMulF32x4(a);
+    actS := dt^.CoreVectors.ReduceMulF32x4(a);
     if IsNaNSingle(expS) then
       CheckTrue(IsNaNSingle(actS), 'ReduceMul NaN-position case should be NaN')
     else
@@ -5859,7 +5877,7 @@ begin
     a.f[3] := 3.0;
 
     expS := ScalarReduceMaxF32x4(a);
-    actS := dt^.ReduceMaxF32x4(a);
+    actS := dt^.CoreVectors.ReduceMaxF32x4(a);
     AssertSameSingleBits('ReduceMax NaN-reset case', expS, actS);
 
     // Case 3: ±0（关注符号位）
@@ -5869,7 +5887,7 @@ begin
     a.f[3] := 2.0;
 
     expS := ScalarReduceMinF32x4(a);
-    actS := dt^.ReduceMinF32x4(a);
+    actS := dt^.CoreVectors.ReduceMinF32x4(a);
     AssertSameSingleBits('ReduceMin signed-zero case', expS, actS);
   finally
     SetExceptionMask(savedMask);
@@ -5913,15 +5931,15 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.LoadF32x4), 'Dispatch.LoadF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.StoreF32x4), 'Dispatch.StoreF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.LoadF32x4Aligned), 'Dispatch.LoadF32x4Aligned should be assigned');
-  CheckTrue(Assigned(dt^.StoreF32x4Aligned), 'Dispatch.StoreF32x4Aligned should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LoadF32x4), 'Dispatch.CoreVectors.LoadF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.StoreF32x4), 'Dispatch.CoreVectors.StoreF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LoadF32x4Aligned), 'Dispatch.CoreVectors.LoadF32x4Aligned should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.StoreF32x4Aligned), 'Dispatch.CoreVectors.StoreF32x4Aligned should be assigned');
 
-  CheckTrue(dt^.LoadF32x4 <> @ScalarLoadF32x4, 'LoadF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.StoreF32x4 <> @ScalarStoreF32x4, 'StoreF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned, 'LoadF32x4Aligned should not be scalar when vector asm enabled');
-  CheckTrue(dt^.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned, 'StoreF32x4Aligned should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.LoadF32x4 <> @ScalarLoadF32x4, 'LoadF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.StoreF32x4 <> @ScalarStoreF32x4, 'StoreF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned, 'LoadF32x4Aligned should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned, 'StoreF32x4Aligned should not be scalar when vector asm enabled');
 
   rawSrc := GetMem(64);
   rawDst := GetMem(64);
@@ -5953,7 +5971,7 @@ begin
 
       // --- Unaligned store ---
       FillChar(rawDst^, 64, $CD);
-      dt^.StoreF32x4(PSingle(pDst), a);
+      dt^.CoreVectors.StoreF32x4(PSingle(pDst), a);
       AssertAllBytesAre('StoreF32x4 prefix sentinel', rawDst, 3, $CD);
       AssertBytesEqual('StoreF32x4 payload', @expBytes[0], pDst, 16);
       AssertAllBytesAre('StoreF32x4 suffix sentinel', pDst + 16, 64 - (3 + 16), $CD);
@@ -5961,13 +5979,13 @@ begin
       // --- Unaligned load ---
       FillChar(rawSrc^, 64, $AB);
       Move(expBytes[0], pSrc^, 16);
-      v := dt^.LoadF32x4(PSingle(pSrc));
+      v := dt^.CoreVectors.LoadF32x4(PSingle(pSrc));
       for i := 0 to 3 do
         CheckEqual(BitsFromSingle(src[i]), BitsFromSingle(v.f[i]), 'LoadF32x4 elem ' + IntToStr(i) + ' bits');
 
       // --- Aligned store ---
       FillChar(PByte(alignedRaw)^, 128, $EF);
-      dt^.StoreF32x4Aligned(PSingle(pAlignedDst), a);
+      dt^.CoreVectors.StoreF32x4Aligned(PSingle(pAlignedDst), a);
       AssertAllBytesAre('StoreF32x4Aligned prefix sentinel', PByte(alignedRaw), 64, $EF);
       AssertBytesEqual('StoreF32x4Aligned payload', @expBytes[0], pAlignedDst, 16);
       AssertAllBytesAre('StoreF32x4Aligned suffix sentinel', pAlignedDst + 16, 128 - (64 + 16), $EF);
@@ -5975,7 +5993,7 @@ begin
       // --- Aligned load ---
       FillChar(PByte(alignedRaw)^, 128, $E1);
       Move(expBytes[0], pAlignedSrc^, 16);
-      v := dt^.LoadF32x4Aligned(PSingle(pAlignedSrc));
+      v := dt^.CoreVectors.LoadF32x4Aligned(PSingle(pAlignedSrc));
       for i := 0 to 3 do
         CheckEqual(BitsFromSingle(src[i]), BitsFromSingle(v.f[i]), 'LoadF32x4Aligned elem ' + IntToStr(i) + ' bits');
     end;
@@ -6014,15 +6032,15 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.LoadF32x4), 'Dispatch.LoadF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.StoreF32x4), 'Dispatch.StoreF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.LoadF32x4Aligned), 'Dispatch.LoadF32x4Aligned should be assigned');
-  CheckTrue(Assigned(dt^.StoreF32x4Aligned), 'Dispatch.StoreF32x4Aligned should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LoadF32x4), 'Dispatch.CoreVectors.LoadF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.StoreF32x4), 'Dispatch.CoreVectors.StoreF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LoadF32x4Aligned), 'Dispatch.CoreVectors.LoadF32x4Aligned should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.StoreF32x4Aligned), 'Dispatch.CoreVectors.StoreF32x4Aligned should be assigned');
 
-  CheckTrue(dt^.LoadF32x4 <> @ScalarLoadF32x4, 'LoadF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.StoreF32x4 <> @ScalarStoreF32x4, 'StoreF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned, 'LoadF32x4Aligned should not be scalar when vector asm enabled');
-  CheckTrue(dt^.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned, 'StoreF32x4Aligned should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.LoadF32x4 <> @ScalarLoadF32x4, 'LoadF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.StoreF32x4 <> @ScalarStoreF32x4, 'StoreF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned, 'LoadF32x4Aligned should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned, 'StoreF32x4Aligned should not be scalar when vector asm enabled');
 
   // 特殊值：±0 / ±Inf / qNaN
   src[0] := SingleFromBits($00000000); // +0
@@ -6049,25 +6067,25 @@ begin
 
     // Store unaligned
     FillChar(rawDst^, 64, $CD);
-    dt^.StoreF32x4(PSingle(pDst), a);
+    dt^.CoreVectors.StoreF32x4(PSingle(pDst), a);
     AssertBytesEqual('StoreF32x4 special-values payload', @expBytes[0], pDst, 16);
 
     // Load unaligned
     FillChar(rawSrc^, 64, $AB);
     Move(expBytes[0], pSrc^, 16);
-    v := dt^.LoadF32x4(PSingle(pSrc));
+    v := dt^.CoreVectors.LoadF32x4(PSingle(pSrc));
     for i := 0 to 3 do
       CheckEqual(BitsFromSingle(src[i]), BitsFromSingle(v.f[i]), 'LoadF32x4 special-values elem ' + IntToStr(i) + ' bits');
 
     // Store aligned
     FillChar(PByte(alignedRaw)^, 128, $EF);
-    dt^.StoreF32x4Aligned(PSingle(pAlignedDst), a);
+    dt^.CoreVectors.StoreF32x4Aligned(PSingle(pAlignedDst), a);
     AssertBytesEqual('StoreF32x4Aligned special-values payload', @expBytes[0], pAlignedDst, 16);
 
     // Load aligned
     FillChar(PByte(alignedRaw)^, 128, $E1);
     Move(expBytes[0], pAlignedSrc^, 16);
-    v := dt^.LoadF32x4Aligned(PSingle(pAlignedSrc));
+    v := dt^.CoreVectors.LoadF32x4Aligned(PSingle(pAlignedSrc));
     for i := 0 to 3 do
       CheckEqual(BitsFromSingle(src[i]), BitsFromSingle(v.f[i]), 'LoadF32x4Aligned special-values elem ' + IntToStr(i) + ' bits');
   finally
@@ -6094,9 +6112,9 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.SelectF32x4), 'Dispatch.SelectF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SelectF32x4), 'Dispatch.CoreVectors.SelectF32x4 should be assigned');
 
-  CheckTrue(dt^.SelectF32x4 <> @ScalarSelectF32x4, 'SelectF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SelectF32x4 <> @ScalarSelectF32x4, 'SelectF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 911911;
 
@@ -6119,7 +6137,7 @@ begin
       else
         expV.f[i] := b.f[i];
 
-    actV := dt^.SelectF32x4(mask, a, b);
+    actV := dt^.CoreVectors.SelectF32x4(mask, a, b);
 
     for i := 0 to 3 do
       CheckEqual(BitsFromSingle(expV.f[i]), BitsFromSingle(actV.f[i]), 'Select iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
@@ -6142,11 +6160,11 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.ExtractF32x4), 'Dispatch.ExtractF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.InsertF32x4), 'Dispatch.InsertF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ExtractF32x4), 'Dispatch.CoreVectors.ExtractF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.InsertF32x4), 'Dispatch.CoreVectors.InsertF32x4 should be assigned');
 
-  CheckTrue(dt^.ExtractF32x4 <> @ScalarExtractF32x4, 'ExtractF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.InsertF32x4 <> @ScalarInsertF32x4, 'InsertF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ExtractF32x4 <> @ScalarExtractF32x4, 'ExtractF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.InsertF32x4 <> @ScalarInsertF32x4, 'InsertF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 12211221;
 
@@ -6161,13 +6179,13 @@ begin
 
     idx := Random(4);
 
-    extracted := dt^.ExtractF32x4(a, idx);
+    extracted := dt^.CoreVectors.ExtractF32x4(a, idx);
     CheckEqual(BitsFromSingle(a.f[idx]), BitsFromSingle(extracted), 'Extract iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' bits');
 
     bits := DWord(Random($10000)) or (DWord(Random($10000)) shl 16);
     value := SingleFromBits(bits);
 
-    v := dt^.InsertF32x4(a, value, idx);
+    v := dt^.CoreVectors.InsertF32x4(a, value, idx);
 
     for i := 0 to 3 do
       if i = idx then
@@ -6175,7 +6193,7 @@ begin
       else
         CheckEqual(BitsFromSingle(a.f[i]), BitsFromSingle(v.f[i]), 'Insert iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' other lane ' + IntToStr(i) + ' bits');
 
-    extracted := dt^.ExtractF32x4(v, idx);
+    extracted := dt^.CoreVectors.ExtractF32x4(v, idx);
     CheckEqual(BitsFromSingle(value), BitsFromSingle(extracted), 'Extract-after-insert iter ' + IntToStr(iter) + ' idx ' + IntToStr(idx) + ' bits');
   end;
 
@@ -6185,9 +6203,9 @@ begin
   a.f[2] := 3.0;
   a.f[3] := 4.0;
   value := SingleFromBits($80000000); // -0
-  v := dt^.InsertF32x4(a, value, 1);
+  v := dt^.CoreVectors.InsertF32x4(a, value, 1);
   CheckEqual(DWord($80000000), BitsFromSingle(v.f[1]), 'Insert signed-zero lane bits');
-  extracted := dt^.ExtractF32x4(v, 1);
+  extracted := dt^.CoreVectors.ExtractF32x4(v, 1);
   CheckEqual(DWord($80000000), BitsFromSingle(extracted), 'Extract signed-zero lane bits');
 end;
 
@@ -6215,14 +6233,14 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.SplatF32x4), 'Dispatch.SplatF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.ZeroF32x4), 'Dispatch.ZeroF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SplatF32x4), 'Dispatch.CoreVectors.SplatF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ZeroF32x4), 'Dispatch.CoreVectors.ZeroF32x4 should be assigned');
 
-  CheckTrue(dt^.SplatF32x4 <> @ScalarSplatF32x4, 'SplatF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.ZeroF32x4 <> @ScalarZeroF32x4, 'ZeroF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SplatF32x4 <> @ScalarSplatF32x4, 'SplatF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ZeroF32x4 <> @ScalarZeroF32x4, 'ZeroF32x4 should not be scalar when vector asm enabled');
 
   // Zero：必须是 +0（全 0 bit），不能是 -0。
-  v := dt^.ZeroF32x4();
+  v := dt^.CoreVectors.ZeroF32x4();
   AssertAllLanesBits('ZeroF32x4', v, DWord(0));
 
   RandSeed := 334455;
@@ -6232,19 +6250,19 @@ begin
     bits := DWord(Random($10000)) or (DWord(Random($10000)) shl 16);
     value := SingleFromBits(bits);
 
-    v := dt^.SplatF32x4(value);
+    v := dt^.CoreVectors.SplatF32x4(value);
     for i := 0 to 3 do
       CheckEqual(bits, BitsFromSingle(v.f[i]), 'Splat iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
   end;
 
   // 特殊：-0 / qNaN payload
   value := SingleFromBits($80000000);
-  v := dt^.SplatF32x4(value);
+  v := dt^.CoreVectors.SplatF32x4(value);
   AssertAllLanesBits('Splat -0', v, DWord($80000000));
 
   bits := $7FC12345;
   value := SingleFromBits(bits);
-  v := dt^.SplatF32x4(value);
+  v := dt^.CoreVectors.SplatF32x4(value);
   AssertAllLanesBits('Splat qNaN payload', v, bits);
 end;
 
@@ -6264,13 +6282,13 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.RcpF32x4), 'Dispatch.RcpF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.RsqrtF32x4), 'Dispatch.RsqrtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.RcpF32x4), 'Dispatch.CoreVectors.RcpF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.RsqrtF32x4), 'Dispatch.CoreVectors.RsqrtF32x4 should be assigned');
 
   // 这个 suite 目标是验证 --vector-asm 路径：这里强制确保 AVX2 backend
   // 在 vector asm 打开时不会退回到 scalar reference。
-  CheckTrue(dt^.RcpF32x4 <> @ScalarRcpF32x4, 'RcpF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.RsqrtF32x4 <> @ScalarRsqrtF32x4, 'RsqrtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.RcpF32x4 <> @ScalarRcpF32x4, 'RcpF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.RsqrtF32x4 <> @ScalarRsqrtF32x4, 'RsqrtF32x4 should not be scalar when vector asm enabled');
 
   // Rcp/Rsqrt 可能是近似实现，这里选取温和输入范围并用 eps 做一致性验证。
   // 输入范围 [0.5..2.0]：避免 1/x 过大、以及 rsqrt 的负数/零域。
@@ -6285,13 +6303,13 @@ begin
 
     // Rcp
     expV := ScalarRcpF32x4(a);
-    actV := dt^.RcpF32x4(a);
+    actV := dt^.CoreVectors.RcpF32x4(a);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Rcp iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Rsqrt
     expV := ScalarRsqrtF32x4(a);
-    actV := dt^.RsqrtF32x4(a);
+    actV := dt^.CoreVectors.RsqrtF32x4(a);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Rsqrt iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -6312,12 +6330,12 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.FloorF32x4), 'Dispatch.FloorF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CeilF32x4), 'Dispatch.CeilF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.FloorF32x4), 'Dispatch.CoreVectors.FloorF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CeilF32x4), 'Dispatch.CoreVectors.CeilF32x4 should be assigned');
 
   // 同样要求：vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.FloorF32x4 <> @ScalarFloorF32x4, 'FloorF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CeilF32x4 <> @ScalarCeilF32x4, 'CeilF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.FloorF32x4 <> @ScalarFloorF32x4, 'FloorF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CeilF32x4 <> @ScalarCeilF32x4, 'CeilF32x4 should not be scalar when vector asm enabled');
 
   // 选择一个结果可精确表示的范围（避免超出 float32 的整数精度）。
   RandSeed := 778866;
@@ -6329,13 +6347,13 @@ begin
 
     // Floor
     expV := ScalarFloorF32x4(a);
-    actV := dt^.FloorF32x4(a);
+    actV := dt^.CoreVectors.FloorF32x4(a);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], 0.0, 'Floor iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Ceil
     expV := ScalarCeilF32x4(a);
-    actV := dt^.CeilF32x4(a);
+    actV := dt^.CoreVectors.CeilF32x4(a);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], 0.0, 'Ceil iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -6356,12 +6374,12 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.RoundF32x4), 'Dispatch.RoundF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.TruncF32x4), 'Dispatch.TruncF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.RoundF32x4), 'Dispatch.CoreVectors.RoundF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.TruncF32x4), 'Dispatch.CoreVectors.TruncF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.RoundF32x4 <> @ScalarRoundF32x4, 'RoundF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.TruncF32x4 <> @ScalarTruncF32x4, 'TruncF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.RoundF32x4 <> @ScalarRoundF32x4, 'RoundF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.TruncF32x4 <> @ScalarTruncF32x4, 'TruncF32x4 should not be scalar when vector asm enabled');
 
   // 先用确定性 case 覆盖“0.5 ties to even”语义。
   a.f[0] := 2.5;
@@ -6370,7 +6388,7 @@ begin
   a.f[3] := -3.5;
 
   expV := ScalarRoundF32x4(a);
-  actV := dt^.RoundF32x4(a);
+  actV := dt^.CoreVectors.RoundF32x4(a);
   for i := 0 to 3 do
     CheckNear(expV.f[i], actV.f[i], 0.0, 'Round tie-even lane ' + IntToStr(i));
 
@@ -6384,13 +6402,13 @@ begin
 
     // Round
     expV := ScalarRoundF32x4(a);
-    actV := dt^.RoundF32x4(a);
+    actV := dt^.CoreVectors.RoundF32x4(a);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], 0.0, 'Round iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Trunc
     expV := ScalarTruncF32x4(a);
-    actV := dt^.TruncF32x4(a);
+    actV := dt^.CoreVectors.TruncF32x4(a);
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], 0.0, 'Trunc iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -6425,10 +6443,10 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.ClampF32x4), 'Dispatch.ClampF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ClampF32x4), 'Dispatch.CoreVectors.ClampF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.ClampF32x4 <> @ScalarClampF32x4, 'ClampF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ClampF32x4 <> @ScalarClampF32x4, 'ClampF32x4 should not be scalar when vector asm enabled');
 
   // Clamp 内部会触发浮点比较（NaN 场景会触发 InvalidOp），这里局部屏蔽异常。
   savedMask := GetExceptionMask;
@@ -6441,7 +6459,7 @@ begin
     maxV := VecF32x4Splat(10.0);
 
     expV := ScalarClampF32x4(a, minV, maxV);
-    actV := dt^.ClampF32x4(a, minV, maxV);
+    actV := dt^.CoreVectors.ClampF32x4(a, minV, maxV);
     for i := 0 to 3 do
       AssertSameLaneBits('Clamp NaN-ordering', i, expV.f[i], actV.f[i]);
 
@@ -6460,7 +6478,7 @@ begin
       end;
 
       expV := ScalarClampF32x4(a, minV, maxV);
-      actV := dt^.ClampF32x4(a, minV, maxV);
+      actV := dt^.CoreVectors.ClampF32x4(a, minV, maxV);
 
       for i := 0 to 3 do
         AssertSameLaneBits('Clamp iter ' + IntToStr(iter), i, expV.f[i], actV.f[i]);
@@ -6484,10 +6502,10 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.DotF32x4), 'Dispatch.DotF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DotF32x4), 'Dispatch.CoreVectors.DotF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.DotF32x4 <> @ScalarDotF32x4, 'DotF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.DotF32x4 <> @ScalarDotF32x4, 'DotF32x4 should not be scalar when vector asm enabled');
 
   // 选择小整数，保证乘加结果在 float32 精确可表示的范围内，避免“求和顺序”带来的舍入差异。
   RandSeed := 20251217;
@@ -6501,7 +6519,7 @@ begin
     end;
 
     expS := ScalarDotF32x4(a, b);
-    actS := dt^.DotF32x4(a, b);
+    actS := dt^.CoreVectors.DotF32x4(a, b);
 
     CheckNear(expS, actS, 0.0, 'Dot iter ' + IntToStr(iter));
   end;
@@ -6521,10 +6539,10 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.DotF32x3), 'Dispatch.DotF32x3 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DotF32x3), 'Dispatch.CoreVectors.DotF32x3 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.DotF32x3 <> @ScalarDotF32x3, 'DotF32x3 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.DotF32x3 <> @ScalarDotF32x3, 'DotF32x3 should not be scalar when vector asm enabled');
 
   RandSeed := 20251218;
 
@@ -6540,7 +6558,7 @@ begin
     b.f[3] := Single(Random(2001) - 1000);
 
     expS := ScalarDotF32x3(a, b);
-    actS := dt^.DotF32x3(a, b);
+    actS := dt^.CoreVectors.DotF32x3(a, b);
 
     CheckNear(expS, actS, 0.0, 'Dot3 iter ' + IntToStr(iter));
   end;
@@ -6560,10 +6578,10 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.CrossF32x3), 'Dispatch.CrossF32x3 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CrossF32x3), 'Dispatch.CoreVectors.CrossF32x3 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.CrossF32x3 <> @ScalarCrossF32x3, 'CrossF32x3 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CrossF32x3 <> @ScalarCrossF32x3, 'CrossF32x3 should not be scalar when vector asm enabled');
 
   RandSeed := 20251219;
 
@@ -6580,7 +6598,7 @@ begin
     b.f[3] := Single(Random(2001) - 1000);
 
     expV := ScalarCrossF32x3(a, b);
-    actV := dt^.CrossF32x3(a, b);
+    actV := dt^.CoreVectors.CrossF32x3(a, b);
 
     for i := 0 to 2 do
       CheckNear(expV.f[i], actV.f[i], 0.0, 'Cross3 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
@@ -6604,15 +6622,15 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.LengthF32x4), 'Dispatch.LengthF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LengthF32x4), 'Dispatch.CoreVectors.LengthF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.LengthF32x4 <> @ScalarLengthF32x4, 'LengthF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.LengthF32x4 <> @ScalarLengthF32x4, 'LengthF32x4 should not be scalar when vector asm enabled');
 
   // 确定性：3-4-0-0 -> 5
   a.f[0] := 3.0; a.f[1] := 4.0; a.f[2] := 0.0; a.f[3] := 0.0;
   expS := ScalarLengthF32x4(a);
-  actS := dt^.LengthF32x4(a);
+  actS := dt^.CoreVectors.LengthF32x4(a);
   CheckNear(expS, actS, 0.0, 'Length(3,4,0,0)');
 
   // 随机一致性：避免极端值
@@ -6625,7 +6643,7 @@ begin
       a.f[i] := (Random(20001) - 10000) / 100.0; // [-100..100]
 
     expS := ScalarLengthF32x4(a);
-    actS := dt^.LengthF32x4(a);
+    actS := dt^.CoreVectors.LengthF32x4(a);
 
     CheckNear(expS, actS, eps, 'Length iter ' + IntToStr(iter));
   end;
@@ -6646,15 +6664,15 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.LengthF32x3), 'Dispatch.LengthF32x3 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LengthF32x3), 'Dispatch.CoreVectors.LengthF32x3 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.LengthF32x3 <> @ScalarLengthF32x3, 'LengthF32x3 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.LengthF32x3 <> @ScalarLengthF32x3, 'LengthF32x3 should not be scalar when vector asm enabled');
 
   // 确定性：|(3,4,0)| -> 5（w ignored）
   a.f[0] := 3.0; a.f[1] := 4.0; a.f[2] := 0.0; a.f[3] := 999.0;
   expS := ScalarLengthF32x3(a);
-  actS := dt^.LengthF32x3(a);
+  actS := dt^.CoreVectors.LengthF32x3(a);
   CheckNear(expS, actS, 0.0, 'Length3(3,4,0)');
 
   eps := 1e-4;
@@ -6667,7 +6685,7 @@ begin
     a.f[3] := (Random(20001) - 10000) / 100.0; // ignored
 
     expS := ScalarLengthF32x3(a);
-    actS := dt^.LengthF32x3(a);
+    actS := dt^.CoreVectors.LengthF32x3(a);
 
     CheckNear(expS, actS, eps, 'Length3 iter ' + IntToStr(iter));
   end;
@@ -6688,15 +6706,15 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.NormalizeF32x4), 'Dispatch.NormalizeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.NormalizeF32x4), 'Dispatch.CoreVectors.NormalizeF32x4 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.NormalizeF32x4 <> @ScalarNormalizeF32x4, 'NormalizeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.NormalizeF32x4 <> @ScalarNormalizeF32x4, 'NormalizeF32x4 should not be scalar when vector asm enabled');
 
   // 确定性：Normalize(3,0,0,0) -> (1,0,0,0)
   a.f[0] := 3.0; a.f[1] := 0.0; a.f[2] := 0.0; a.f[3] := 0.0;
   expV := ScalarNormalizeF32x4(a);
-  actV := dt^.NormalizeF32x4(a);
+  actV := dt^.CoreVectors.NormalizeF32x4(a);
   for i := 0 to 3 do
     CheckNear(expV.f[i], actV.f[i], 0.0, 'Normalize(3,0,0,0) lane ' + IntToStr(i));
 
@@ -6709,7 +6727,7 @@ begin
       a.f[i] := (Random(20001) - 10000) / 100.0;
 
     expV := ScalarNormalizeF32x4(a);
-    actV := dt^.NormalizeF32x4(a);
+    actV := dt^.CoreVectors.NormalizeF32x4(a);
 
     for i := 0 to 3 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Normalize iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
@@ -6731,15 +6749,15 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.NormalizeF32x3), 'Dispatch.NormalizeF32x3 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.NormalizeF32x3), 'Dispatch.CoreVectors.NormalizeF32x3 should be assigned');
 
   // vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.NormalizeF32x3 <> @ScalarNormalizeF32x3, 'NormalizeF32x3 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.NormalizeF32x3 <> @ScalarNormalizeF32x3, 'NormalizeF32x3 should not be scalar when vector asm enabled');
 
   // 确定性：Normalize3(3,4,0,w) -> (0.6,0.8,0,w=0)
   a.f[0] := 3.0; a.f[1] := 4.0; a.f[2] := 0.0; a.f[3] := 999.0;
   expV := ScalarNormalizeF32x3(a);
-  actV := dt^.NormalizeF32x3(a);
+  actV := dt^.CoreVectors.NormalizeF32x3(a);
   eps := 1e-4;
   for i := 0 to 2 do
     CheckNear(expV.f[i], actV.f[i], eps, 'Normalize3(3,4,0) lane ' + IntToStr(i));
@@ -6754,7 +6772,7 @@ begin
     a.f[3] := (Random(20001) - 10000) / 100.0;
 
     expV := ScalarNormalizeF32x3(a);
-    actV := dt^.NormalizeF32x3(a);
+    actV := dt^.CoreVectors.NormalizeF32x3(a);
 
     for i := 0 to 2 do
       CheckNear(expV.f[i], actV.f[i], eps, 'Normalize3 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
@@ -6780,14 +6798,14 @@ begin
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
   // 选择 3 个代表性的“返回 Single”的操作做 ABI 保护：Dot / Length / ReduceAdd。
-  CheckTrue(Assigned(dt^.DotF32x4), 'Dispatch.DotF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.LengthF32x4), 'Dispatch.LengthF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.ReduceAddF32x4), 'Dispatch.ReduceAddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DotF32x4), 'Dispatch.CoreVectors.DotF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LengthF32x4), 'Dispatch.CoreVectors.LengthF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ReduceAddF32x4), 'Dispatch.CoreVectors.ReduceAddF32x4 should be assigned');
 
   // 要求：vector asm 打开时，AVX2 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.DotF32x4 <> @ScalarDotF32x4, 'DotF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.LengthF32x4 <> @ScalarLengthF32x4, 'LengthF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.ReduceAddF32x4 <> @ScalarReduceAddF32x4, 'ReduceAddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.DotF32x4 <> @ScalarDotF32x4, 'DotF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.LengthF32x4 <> @ScalarLengthF32x4, 'LengthF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ReduceAddF32x4 <> @ScalarReduceAddF32x4, 'ReduceAddF32x4 should not be scalar when vector asm enabled');
 
   // Dot：用小整数保证精确可比。
   RandSeed := 20251226;
@@ -6800,7 +6818,7 @@ begin
     end;
 
     expected := ScalarDotF32x4(a, b);
-    ok := AbiCall_TwoVecToSingle_CheckCalleeSaved(Pointer(dt^.DotF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToSingle_CheckCalleeSaved(Pointer(dt^.CoreVectors.DotF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (Dot) iter ' + IntToStr(iter));
     CheckNear(expected, actual, 0.0, 'ABI Dot iter ' + IntToStr(iter));
   end;
@@ -6813,7 +6831,7 @@ begin
       a.f[i] := Single(Random(2001) - 1000);
 
     expected := ScalarReduceAddF32x4(a);
-    ok := AbiCall_OneVecToSingle_CheckCalleeSaved(Pointer(dt^.ReduceAddF32x4), a, actual);
+    ok := AbiCall_OneVecToSingle_CheckCalleeSaved(Pointer(dt^.CoreVectors.ReduceAddF32x4), a, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (ReduceAdd) iter ' + IntToStr(iter));
     CheckNear(expected, actual, 0.0, 'ABI ReduceAdd iter ' + IntToStr(iter));
   end;
@@ -6821,7 +6839,7 @@ begin
   // Length：包含 sqrt，使用可精确表示的 case + eps。
   a.f[0] := 3.0; a.f[1] := 4.0; a.f[2] := 0.0; a.f[3] := 0.0;
   expected := ScalarLengthF32x4(a);
-  ok := AbiCall_OneVecToSingle_CheckCalleeSaved(Pointer(dt^.LengthF32x4), a, actual);
+  ok := AbiCall_OneVecToSingle_CheckCalleeSaved(Pointer(dt^.CoreVectors.LengthF32x4), a, actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (Length)');
   eps := 1e-6;
   CheckNear(expected, actual, eps, 'ABI Length(3,4,0,0)');
@@ -6842,17 +6860,17 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.AddF32x4), 'Dispatch.AddF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.SubF32x4), 'Dispatch.SubF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.MulF32x4), 'Dispatch.MulF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.MinF32x4), 'Dispatch.MinF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.MaxF32x4), 'Dispatch.MaxF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF32x4), 'Dispatch.CoreVectors.AddF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF32x4), 'Dispatch.CoreVectors.SubF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF32x4), 'Dispatch.CoreVectors.MulF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MinF32x4), 'Dispatch.CoreVectors.MinF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MaxF32x4), 'Dispatch.CoreVectors.MaxF32x4 should be assigned');
 
-  CheckTrue(dt^.AddF32x4 <> @ScalarAddF32x4, 'AddF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.SubF32x4 <> @ScalarSubF32x4, 'SubF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MulF32x4 <> @ScalarMulF32x4, 'MulF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MinF32x4 <> @ScalarMinF32x4, 'MinF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.MaxF32x4 <> @ScalarMaxF32x4, 'MaxF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AddF32x4 <> @ScalarAddF32x4, 'AddF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SubF32x4 <> @ScalarSubF32x4, 'SubF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MulF32x4 <> @ScalarMulF32x4, 'MulF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MinF32x4 <> @ScalarMinF32x4, 'MinF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.MaxF32x4 <> @ScalarMaxF32x4, 'MaxF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20251228;
 
@@ -6867,35 +6885,35 @@ begin
 
     // Add
     expected := ScalarAddF32x4(a, b);
-    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.AddF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.AddF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (AddF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
       CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI AddF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Sub
     expected := ScalarSubF32x4(a, b);
-    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.SubF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.SubF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (SubF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
       CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI SubF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Mul
     expected := ScalarMulF32x4(a, b);
-    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.MulF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.MulF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (MulF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
       CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI MulF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Min
     expected := ScalarMinF32x4(a, b);
-    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.MinF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.MinF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (MinF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
       CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI MinF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     // Max
     expected := ScalarMaxF32x4(a, b);
-    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.MaxF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.MaxF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (MaxF32x4) iter ' + IntToStr(iter));
     for i := 0 to 3 do
       CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI MaxF32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
@@ -6918,11 +6936,11 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.AbsF32x4), 'Dispatch.AbsF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.SqrtF32x4), 'Dispatch.SqrtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AbsF32x4), 'Dispatch.CoreVectors.AbsF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SqrtF32x4), 'Dispatch.CoreVectors.SqrtF32x4 should be assigned');
 
-  CheckTrue(dt^.AbsF32x4 <> @ScalarAbsF32x4, 'AbsF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.SqrtF32x4 <> @ScalarSqrtF32x4, 'SqrtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.AbsF32x4 <> @ScalarAbsF32x4, 'AbsF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.SqrtF32x4 <> @ScalarSqrtF32x4, 'SqrtF32x4 should not be scalar when vector asm enabled');
 
   // Abs: bit-exact
   RandSeed := 20251229;
@@ -6932,7 +6950,7 @@ begin
       a.f[i] := Single(Random(2001) - 1000);
 
     expected := ScalarAbsF32x4(a);
-    ok := AbiCall_OneVecToVec_CheckCalleeSaved(Pointer(dt^.AbsF32x4), a, actual);
+    ok := AbiCall_OneVecToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.AbsF32x4), a, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (AbsF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -6950,7 +6968,7 @@ begin
     end;
 
     expected := ScalarSqrtF32x4(a);
-    ok := AbiCall_OneVecToVec_CheckCalleeSaved(Pointer(dt^.SqrtF32x4), a, actual);
+    ok := AbiCall_OneVecToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.SqrtF32x4), a, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (SqrtF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -6973,11 +6991,11 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.FmaF32x4), 'Dispatch.FmaF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.ClampF32x4), 'Dispatch.ClampF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.FmaF32x4), 'Dispatch.CoreVectors.FmaF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ClampF32x4), 'Dispatch.CoreVectors.ClampF32x4 should be assigned');
 
-  CheckTrue(dt^.FmaF32x4 <> @ScalarFmaF32x4, 'FmaF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.ClampF32x4 <> @ScalarClampF32x4, 'ClampF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.FmaF32x4 <> @ScalarFmaF32x4, 'FmaF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.ClampF32x4 <> @ScalarClampF32x4, 'ClampF32x4 should not be scalar when vector asm enabled');
 
   // Fma: choose small integers => bit-exact whether fused or not
   RandSeed := 20260101;
@@ -6991,7 +7009,7 @@ begin
     end;
 
     expected := ScalarFmaF32x4(a, b, c);
-    ok := AbiCall_ThreeVecToVec_CheckCalleeSaved(Pointer(dt^.FmaF32x4), a, b, c, actual);
+    ok := AbiCall_ThreeVecToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.FmaF32x4), a, b, c, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (FmaF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -7010,7 +7028,7 @@ begin
     end;
 
     expected := ScalarClampF32x4(a, b, c);
-    ok := AbiCall_ThreeVecToVec_CheckCalleeSaved(Pointer(dt^.ClampF32x4), a, b, c, actual);
+    ok := AbiCall_ThreeVecToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.ClampF32x4), a, b, c, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (ClampF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -7035,11 +7053,11 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.LoadF32x4), 'Dispatch.LoadF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.LoadF32x4Aligned), 'Dispatch.LoadF32x4Aligned should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LoadF32x4), 'Dispatch.CoreVectors.LoadF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.LoadF32x4Aligned), 'Dispatch.CoreVectors.LoadF32x4Aligned should be assigned');
 
-  CheckTrue(dt^.LoadF32x4 <> @ScalarLoadF32x4, 'LoadF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned, 'LoadF32x4Aligned should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.LoadF32x4 <> @ScalarLoadF32x4, 'LoadF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.LoadF32x4Aligned <> @ScalarLoadF32x4Aligned, 'LoadF32x4Aligned should not be scalar when vector asm enabled');
 
   // Unaligned load
   RandSeed := 20260103;
@@ -7049,7 +7067,7 @@ begin
       buf[i] := Single(Random(2001) - 1000);
 
     expected := ScalarLoadF32x4(@buf[0]);
-    ok := AbiCall_PtrToVec_CheckCalleeSaved(Pointer(dt^.LoadF32x4), @buf[0], actual);
+    ok := AbiCall_PtrToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.LoadF32x4), @buf[0], actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (LoadF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -7066,7 +7084,7 @@ begin
       pAligned[i] := Single(Random(2001) - 1000);
 
     expected := ScalarLoadF32x4Aligned(pAligned);
-    ok := AbiCall_PtrToVec_CheckCalleeSaved(Pointer(dt^.LoadF32x4Aligned), pAligned, actual);
+    ok := AbiCall_PtrToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.LoadF32x4Aligned), pAligned, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (LoadF32x4Aligned) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -7112,11 +7130,11 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.StoreF32x4), 'Dispatch.StoreF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.StoreF32x4Aligned), 'Dispatch.StoreF32x4Aligned should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.StoreF32x4), 'Dispatch.CoreVectors.StoreF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.StoreF32x4Aligned), 'Dispatch.CoreVectors.StoreF32x4Aligned should be assigned');
 
-  CheckTrue(dt^.StoreF32x4 <> @ScalarStoreF32x4, 'StoreF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned, 'StoreF32x4Aligned should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.StoreF32x4 <> @ScalarStoreF32x4, 'StoreF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.StoreF32x4Aligned <> @ScalarStoreF32x4Aligned, 'StoreF32x4Aligned should not be scalar when vector asm enabled');
 
   rawDst := GetMem(64);
   alignedRaw := AlignedAlloc(128, SIMD_ALIGN_16);
@@ -7142,7 +7160,7 @@ begin
 
       // --- Unaligned store ---
       FillChar(rawDst^, 64, $CD);
-      ok := AbiCall_PtrVecToVoid_CheckCalleeSaved(Pointer(dt^.StoreF32x4), PSingle(pDst), a);
+      ok := AbiCall_PtrVecToVoid_CheckCalleeSaved(Pointer(dt^.CoreVectors.StoreF32x4), PSingle(pDst), a);
       CheckTrue(ok, 'ABI callee-saved should be preserved (StoreF32x4) iter ' + IntToStr(iter));
 
       AssertAllBytesAre('StoreF32x4 prefix sentinel', rawDst, 3, $CD);
@@ -7151,7 +7169,7 @@ begin
 
       // --- Aligned store ---
       FillChar(PByte(alignedRaw)^, 128, $EF);
-      ok := AbiCall_PtrVecToVoid_CheckCalleeSaved(Pointer(dt^.StoreF32x4Aligned), PSingle(pAlignedDst), a);
+      ok := AbiCall_PtrVecToVoid_CheckCalleeSaved(Pointer(dt^.CoreVectors.StoreF32x4Aligned), PSingle(pAlignedDst), a);
       CheckTrue(ok, 'ABI callee-saved should be preserved (StoreF32x4Aligned) iter ' + IntToStr(iter));
 
       AssertAllBytesAre('StoreF32x4Aligned prefix sentinel', PByte(alignedRaw), 64, $EF);
@@ -7181,8 +7199,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.InsertF32x4), 'Dispatch.InsertF32x4 should be assigned');
-  CheckTrue(dt^.InsertF32x4 <> @ScalarInsertF32x4, 'InsertF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.InsertF32x4), 'Dispatch.CoreVectors.InsertF32x4 should be assigned');
+  CheckTrue(dt^.CoreVectors.InsertF32x4 <> @ScalarInsertF32x4, 'InsertF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260106;
 
@@ -7201,7 +7219,7 @@ begin
     idx := Random(4);
 
     expected := ScalarInsertF32x4(a, value, idx);
-    ok := AbiCall_VecSingleI32ToVec_CheckCalleeSaved(Pointer(dt^.InsertF32x4), a, value, idx, actual);
+    ok := AbiCall_VecSingleI32ToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.InsertF32x4), a, value, idx, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (InsertF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -7226,8 +7244,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.ExtractF32x4), 'Dispatch.ExtractF32x4 should be assigned');
-  CheckTrue(dt^.ExtractF32x4 <> @ScalarExtractF32x4, 'ExtractF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.ExtractF32x4), 'Dispatch.CoreVectors.ExtractF32x4 should be assigned');
+  CheckTrue(dt^.CoreVectors.ExtractF32x4 <> @ScalarExtractF32x4, 'ExtractF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260107;
 
@@ -7243,7 +7261,7 @@ begin
     idx := Random(4);
 
     expected := ScalarExtractF32x4(a, idx);
-    ok := AbiCall_VecI32ToSingle_CheckCalleeSaved(Pointer(dt^.ExtractF32x4), a, idx, actual);
+    ok := AbiCall_VecI32ToSingle_CheckCalleeSaved(Pointer(dt^.CoreVectors.ExtractF32x4), a, idx, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (ExtractF32x4) iter ' + IntToStr(iter));
     CheckEqual(BitsFromSingle(expected), BitsFromSingle(actual), 'ABI ExtractF32x4 iter ' + IntToStr(iter) + ' bits');
   end;
@@ -7265,19 +7283,19 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.CmpEqF32x4), 'Dispatch.CmpEqF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpLtF32x4), 'Dispatch.CmpLtF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpLeF32x4), 'Dispatch.CmpLeF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpGtF32x4), 'Dispatch.CmpGtF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpGeF32x4), 'Dispatch.CmpGeF32x4 should be assigned');
-  CheckTrue(Assigned(dt^.CmpNeF32x4), 'Dispatch.CmpNeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpEqF32x4), 'Dispatch.CoreVectors.CmpEqF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpLtF32x4), 'Dispatch.CoreVectors.CmpLtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpLeF32x4), 'Dispatch.CoreVectors.CmpLeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpGtF32x4), 'Dispatch.CoreVectors.CmpGtF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpGeF32x4), 'Dispatch.CoreVectors.CmpGeF32x4 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpNeF32x4), 'Dispatch.CoreVectors.CmpNeF32x4 should be assigned');
 
-  CheckTrue(dt^.CmpEqF32x4 <> @ScalarCmpEqF32x4, 'CmpEqF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpLtF32x4 <> @ScalarCmpLtF32x4, 'CmpLtF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpLeF32x4 <> @ScalarCmpLeF32x4, 'CmpLeF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpGtF32x4 <> @ScalarCmpGtF32x4, 'CmpGtF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpGeF32x4 <> @ScalarCmpGeF32x4, 'CmpGeF32x4 should not be scalar when vector asm enabled');
-  CheckTrue(dt^.CmpNeF32x4 <> @ScalarCmpNeF32x4, 'CmpNeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpEqF32x4 <> @ScalarCmpEqF32x4, 'CmpEqF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpLtF32x4 <> @ScalarCmpLtF32x4, 'CmpLtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpLeF32x4 <> @ScalarCmpLeF32x4, 'CmpLeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpGtF32x4 <> @ScalarCmpGtF32x4, 'CmpGtF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpGeF32x4 <> @ScalarCmpGeF32x4, 'CmpGeF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(dt^.CoreVectors.CmpNeF32x4 <> @ScalarCmpNeF32x4, 'CmpNeF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20251231;
 
@@ -7290,32 +7308,32 @@ begin
     end;
 
     expected := ScalarCmpEqF32x4(a, b);
-    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpEqF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CoreVectors.CmpEqF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (CmpEqF32x4) iter ' + IntToStr(iter));
     CheckEqual(expected, actual, 'ABI CmpEqF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpLtF32x4(a, b);
-    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpLtF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CoreVectors.CmpLtF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (CmpLtF32x4) iter ' + IntToStr(iter));
     CheckEqual(expected, actual, 'ABI CmpLtF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpLeF32x4(a, b);
-    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpLeF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CoreVectors.CmpLeF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (CmpLeF32x4) iter ' + IntToStr(iter));
     CheckEqual(expected, actual, 'ABI CmpLeF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpGtF32x4(a, b);
-    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpGtF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CoreVectors.CmpGtF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (CmpGtF32x4) iter ' + IntToStr(iter));
     CheckEqual(expected, actual, 'ABI CmpGtF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpGeF32x4(a, b);
-    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpGeF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CoreVectors.CmpGeF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (CmpGeF32x4) iter ' + IntToStr(iter));
     CheckEqual(expected, actual, 'ABI CmpGeF32x4 iter ' + IntToStr(iter));
 
     expected := ScalarCmpNeF32x4(a, b);
-    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CmpNeF32x4), a, b, actual);
+    ok := AbiCall_TwoVecToMask_CheckCalleeSaved(Pointer(dt^.CoreVectors.CmpNeF32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (CmpNeF32x4) iter ' + IntToStr(iter));
     CheckEqual(expected, actual, 'ABI CmpNeF32x4 iter ' + IntToStr(iter));
   end;
@@ -7336,10 +7354,10 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.ZeroF32x4), 'Dispatch.ZeroF32x4 should be assigned');
-  CheckTrue(dt^.ZeroF32x4 <> @ScalarZeroF32x4, 'ZeroF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.ZeroF32x4), 'Dispatch.CoreVectors.ZeroF32x4 should be assigned');
+  CheckTrue(dt^.CoreVectors.ZeroF32x4 <> @ScalarZeroF32x4, 'ZeroF32x4 should not be scalar when vector asm enabled');
 
-  ok := AbiCall_NoArgsToVec_CheckCalleeSaved(Pointer(dt^.ZeroF32x4), actual);
+  ok := AbiCall_NoArgsToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.ZeroF32x4), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (ZeroF32x4)');
 
   for i := 0 to 3 do
@@ -7363,8 +7381,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.SplatF32x4), 'Dispatch.SplatF32x4 should be assigned');
-  CheckTrue(dt^.SplatF32x4 <> @ScalarSplatF32x4, 'SplatF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.SplatF32x4), 'Dispatch.CoreVectors.SplatF32x4 should be assigned');
+  CheckTrue(dt^.CoreVectors.SplatF32x4 <> @ScalarSplatF32x4, 'SplatF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260108;
 
@@ -7373,7 +7391,7 @@ begin
     bits := DWord(Random($10000)) or (DWord(Random($10000)) shl 16);
     value := SingleFromBits(bits);
 
-    ok := AbiCall_SingleToVec_CheckCalleeSaved(Pointer(dt^.SplatF32x4), value, actual);
+    ok := AbiCall_SingleToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.SplatF32x4), value, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (SplatF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -7383,14 +7401,14 @@ begin
   // Special: -0 / qNaN payload
   bits := $80000000;
   value := SingleFromBits(bits);
-  ok := AbiCall_SingleToVec_CheckCalleeSaved(Pointer(dt^.SplatF32x4), value, actual);
+  ok := AbiCall_SingleToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.SplatF32x4), value, actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (SplatF32x4 -0)');
   for i := 0 to 3 do
     CheckEqual(bits, BitsFromSingle(actual.f[i]), 'ABI SplatF32x4 -0 lane ' + IntToStr(i) + ' bits');
 
   bits := $7FC12345;
   value := SingleFromBits(bits);
-  ok := AbiCall_SingleToVec_CheckCalleeSaved(Pointer(dt^.SplatF32x4), value, actual);
+  ok := AbiCall_SingleToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.SplatF32x4), value, actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (SplatF32x4 NaN payload)');
   for i := 0 to 3 do
     CheckEqual(bits, BitsFromSingle(actual.f[i]), 'ABI SplatF32x4 NaN lane ' + IntToStr(i) + ' bits');
@@ -7414,8 +7432,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.SelectF32x4), 'Dispatch.SelectF32x4 should be assigned');
-  CheckTrue(dt^.SelectF32x4 <> @ScalarSelectF32x4, 'SelectF32x4 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.SelectF32x4), 'Dispatch.CoreVectors.SelectF32x4 should be assigned');
+  CheckTrue(dt^.CoreVectors.SelectF32x4 <> @ScalarSelectF32x4, 'SelectF32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260109;
 
@@ -7437,7 +7455,7 @@ begin
       else
         expected.f[i] := b.f[i];
 
-    ok := AbiCall_TwoVecMaskToVec_CheckCalleeSaved(Pointer(dt^.SelectF32x4), a, b, mask, actual);
+    ok := AbiCall_TwoVecMaskToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.SelectF32x4), a, b, mask, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (SelectF32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -7463,17 +7481,17 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.AddF32x8), 'Dispatch.AddF32x8 should be assigned');
-  CheckTrue(dt^.AddF32x8 <> @ScalarAddF32x8, 'AddF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF32x8), 'Dispatch.CoreVectors.AddF32x8 should be assigned');
+  CheckTrue(dt^.CoreVectors.AddF32x8 <> @ScalarAddF32x8, 'AddF32x8 should not be scalar when vector asm enabled');
 
-  CheckTrue(Assigned(dt^.SubF32x8), 'Dispatch.SubF32x8 should be assigned');
-  CheckTrue(dt^.SubF32x8 <> @ScalarSubF32x8, 'SubF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF32x8), 'Dispatch.CoreVectors.SubF32x8 should be assigned');
+  CheckTrue(dt^.CoreVectors.SubF32x8 <> @ScalarSubF32x8, 'SubF32x8 should not be scalar when vector asm enabled');
 
-  CheckTrue(Assigned(dt^.MulF32x8), 'Dispatch.MulF32x8 should be assigned');
-  CheckTrue(dt^.MulF32x8 <> @ScalarMulF32x8, 'MulF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF32x8), 'Dispatch.CoreVectors.MulF32x8 should be assigned');
+  CheckTrue(dt^.CoreVectors.MulF32x8 <> @ScalarMulF32x8, 'MulF32x8 should not be scalar when vector asm enabled');
 
-  CheckTrue(Assigned(dt^.DivF32x8), 'Dispatch.DivF32x8 should be assigned');
-  CheckTrue(dt^.DivF32x8 <> @ScalarDivF32x8, 'DivF32x8 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF32x8), 'Dispatch.CoreVectors.DivF32x8 should be assigned');
+  CheckTrue(dt^.CoreVectors.DivF32x8 <> @ScalarDivF32x8, 'DivF32x8 should not be scalar when vector asm enabled');
 
   RandSeed := 20260110;
 
@@ -7487,21 +7505,21 @@ begin
     end;
 
     expected := ScalarAddF32x8(a, b);
-    ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.AddF32x8), @a, @b, actual);
+    ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.CoreVectors.AddF32x8), @a, @b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (AddF32x8) iter ' + IntToStr(iter));
 
     for i := 0 to 7 do
       CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI AddF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     expected := ScalarSubF32x8(a, b);
-    ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.SubF32x8), @a, @b, actual);
+    ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.CoreVectors.SubF32x8), @a, @b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (SubF32x8) iter ' + IntToStr(iter));
 
     for i := 0 to 7 do
       CheckEqual(BitsFromSingle(expected.f[i]), BitsFromSingle(actual.f[i]), 'ABI SubF32x8 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     expected := ScalarMulF32x8(a, b);
-    ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.MulF32x8), @a, @b, actual);
+    ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.CoreVectors.MulF32x8), @a, @b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (MulF32x8) iter ' + IntToStr(iter));
 
     for i := 0 to 7 do
@@ -7516,7 +7534,7 @@ begin
     end;
 
     expected := ScalarDivF32x8(aDiv, bDiv);
-    ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.DivF32x8), @aDiv, @bDiv, actual);
+    ok := AbiCall_TwoPtrToVecF32x8_CheckCalleeSaved(Pointer(dt^.CoreVectors.DivF32x8), @aDiv, @bDiv, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (DivF32x8) iter ' + IntToStr(iter));
 
     for i := 0 to 7 do
@@ -7542,17 +7560,17 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.AddF64x2), 'Dispatch.AddF64x2 should be assigned');
-  CheckTrue(dt^.AddF64x2 <> @ScalarAddF64x2, 'AddF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF64x2), 'Dispatch.CoreVectors.AddF64x2 should be assigned');
+  CheckTrue(dt^.CoreVectors.AddF64x2 <> @ScalarAddF64x2, 'AddF64x2 should not be scalar when vector asm enabled');
 
-  CheckTrue(Assigned(dt^.SubF64x2), 'Dispatch.SubF64x2 should be assigned');
-  CheckTrue(dt^.SubF64x2 <> @ScalarSubF64x2, 'SubF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF64x2), 'Dispatch.CoreVectors.SubF64x2 should be assigned');
+  CheckTrue(dt^.CoreVectors.SubF64x2 <> @ScalarSubF64x2, 'SubF64x2 should not be scalar when vector asm enabled');
 
-  CheckTrue(Assigned(dt^.MulF64x2), 'Dispatch.MulF64x2 should be assigned');
-  CheckTrue(dt^.MulF64x2 <> @ScalarMulF64x2, 'MulF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF64x2), 'Dispatch.CoreVectors.MulF64x2 should be assigned');
+  CheckTrue(dt^.CoreVectors.MulF64x2 <> @ScalarMulF64x2, 'MulF64x2 should not be scalar when vector asm enabled');
 
-  CheckTrue(Assigned(dt^.DivF64x2), 'Dispatch.DivF64x2 should be assigned');
-  CheckTrue(dt^.DivF64x2 <> @ScalarDivF64x2, 'DivF64x2 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF64x2), 'Dispatch.CoreVectors.DivF64x2 should be assigned');
+  CheckTrue(dt^.CoreVectors.DivF64x2 <> @ScalarDivF64x2, 'DivF64x2 should not be scalar when vector asm enabled');
 
   RandSeed := 20260111;
 
@@ -7566,21 +7584,21 @@ begin
     end;
 
     expected := ScalarAddF64x2(a, b);
-    ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.AddF64x2), a, b, actual);
+    ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.AddF64x2), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (AddF64x2) iter ' + IntToStr(iter));
 
     for i := 0 to 1 do
       CheckEqual(BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]), 'ABI AddF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     expected := ScalarSubF64x2(a, b);
-    ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.SubF64x2), a, b, actual);
+    ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.SubF64x2), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (SubF64x2) iter ' + IntToStr(iter));
 
     for i := 0 to 1 do
       CheckEqual(BitsFromDouble(expected.d[i]), BitsFromDouble(actual.d[i]), 'ABI SubF64x2 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i) + ' bits');
 
     expected := ScalarMulF64x2(a, b);
-    ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.MulF64x2), a, b, actual);
+    ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.MulF64x2), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (MulF64x2) iter ' + IntToStr(iter));
 
     for i := 0 to 1 do
@@ -7595,7 +7613,7 @@ begin
     end;
 
     expected := ScalarDivF64x2(aDiv, bDiv);
-    ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.DivF64x2), aDiv, bDiv, actual);
+    ok := AbiCall_TwoVecF64x2ToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.DivF64x2), aDiv, bDiv, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (DivF64x2) iter ' + IntToStr(iter));
 
     for i := 0 to 1 do
@@ -7618,14 +7636,14 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.AddI32x4), 'Dispatch.AddI32x4 should be assigned');
-  CheckTrue(dt^.AddI32x4 <> @ScalarAddI32x4, 'AddI32x4 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.AddI32x4), 'Dispatch.CoreVectors.AddI32x4 should be assigned');
+  CheckTrue(dt^.CoreVectors.AddI32x4 <> @ScalarAddI32x4, 'AddI32x4 should not be scalar when vector asm enabled');
 
-  CheckTrue(Assigned(dt^.SubI32x4), 'Dispatch.SubI32x4 should be assigned');
-  CheckTrue(dt^.SubI32x4 <> @ScalarSubI32x4, 'SubI32x4 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.SubI32x4), 'Dispatch.CoreVectors.SubI32x4 should be assigned');
+  CheckTrue(dt^.CoreVectors.SubI32x4 <> @ScalarSubI32x4, 'SubI32x4 should not be scalar when vector asm enabled');
 
-  CheckTrue(Assigned(dt^.MulI32x4), 'Dispatch.MulI32x4 should be assigned');
-  CheckTrue(dt^.MulI32x4 <> @ScalarMulI32x4, 'MulI32x4 should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.CoreVectors.MulI32x4), 'Dispatch.CoreVectors.MulI32x4 should be assigned');
+  CheckTrue(dt^.CoreVectors.MulI32x4 <> @ScalarMulI32x4, 'MulI32x4 should not be scalar when vector asm enabled');
 
   RandSeed := 20260112;
 
@@ -7639,21 +7657,21 @@ begin
     end;
 
     expected := ScalarAddI32x4(a, b);
-    ok := AbiCall_TwoVecI32x4ToVec_CheckCalleeSaved(Pointer(dt^.AddI32x4), a, b, actual);
+    ok := AbiCall_TwoVecI32x4ToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.AddI32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (AddI32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
       CheckEqual(expected.i[i], actual.i[i], 'ABI AddI32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expected := ScalarSubI32x4(a, b);
-    ok := AbiCall_TwoVecI32x4ToVec_CheckCalleeSaved(Pointer(dt^.SubI32x4), a, b, actual);
+    ok := AbiCall_TwoVecI32x4ToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.SubI32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (SubI32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
       CheckEqual(expected.i[i], actual.i[i], 'ABI SubI32x4 iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expected := ScalarMulI32x4(a, b);
-    ok := AbiCall_TwoVecI32x4ToVec_CheckCalleeSaved(Pointer(dt^.MulI32x4), a, b, actual);
+    ok := AbiCall_TwoVecI32x4ToVec_CheckCalleeSaved(Pointer(dt^.CoreVectors.MulI32x4), a, b, actual);
     CheckTrue(ok, 'ABI callee-saved should be preserved (MulI32x4) iter ' + IntToStr(iter));
 
     for i := 0 to 3 do
@@ -7677,8 +7695,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.MemEqual), 'Dispatch.MemEqual should be assigned');
-  CheckTrue(dt^.MemEqual <> @MemEqual_Scalar, 'MemEqual should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.Equal), 'Dispatch.MemEqual should be assigned');
+  CheckTrue(dt^.Memory.Equal <> @MemEqual_Scalar, 'MemEqual should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf1) do
   begin
@@ -7689,7 +7707,7 @@ begin
   expected := MemEqual_Scalar(@buf1[0], @buf2[0], SizeUInt(Length(buf1)));
 
   actual := False;
-  ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.MemEqual), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
+  ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.Memory.Equal), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemEqual equal)');
   CheckEqual(expected, actual, 'ABI MemEqual equal result');
 
@@ -7698,7 +7716,7 @@ begin
   expected := MemEqual_Scalar(@buf1[0], @buf2[0], SizeUInt(Length(buf1)));
 
   actual := False;
-  ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.MemEqual), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
+  ok := AbiCall_MemEqual_CheckCalleeSaved(Pointer(dt^.Memory.Equal), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemEqual different)');
   CheckEqual(expected, actual, 'ABI MemEqual different result');
 end;
@@ -7719,8 +7737,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.SumBytes), 'Dispatch.SumBytes should be assigned');
-  CheckTrue(dt^.SumBytes <> @SumBytes_Scalar, 'SumBytes should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.SumBytes), 'Dispatch.SumBytes should be assigned');
+  CheckTrue(dt^.Memory.SumBytes <> @SumBytes_Scalar, 'SumBytes should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf) do
     buf[i] := Byte(i);
@@ -7728,7 +7746,7 @@ begin
   expected := SumBytes_Scalar(@buf[0], SizeUInt(Length(buf)));
 
   actual := 0;
-  ok := AbiCall_SumBytes_CheckCalleeSaved(Pointer(dt^.SumBytes), @buf[0], SizeUInt(Length(buf)), actual);
+  ok := AbiCall_SumBytes_CheckCalleeSaved(Pointer(dt^.Memory.SumBytes), @buf[0], SizeUInt(Length(buf)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (SumBytes)');
   CheckEqual(expected, actual, 'ABI SumBytes result');
 end;
@@ -7749,8 +7767,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.CountByte), 'Dispatch.CountByte should be assigned');
-  CheckTrue(dt^.CountByte <> @CountByte_Scalar, 'CountByte should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.CountByte), 'Dispatch.CountByte should be assigned');
+  CheckTrue(dt^.Memory.CountByte <> @CountByte_Scalar, 'CountByte should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf) do
     buf[i] := Byte(i and $0F);
@@ -7758,7 +7776,7 @@ begin
   expected := CountByte_Scalar(@buf[0], SizeUInt(Length(buf)), 5);
 
   actual := 0;
-  ok := AbiCall_CountByte_CheckCalleeSaved(Pointer(dt^.CountByte), @buf[0], SizeUInt(Length(buf)), 5, actual);
+  ok := AbiCall_CountByte_CheckCalleeSaved(Pointer(dt^.Memory.CountByte), @buf[0], SizeUInt(Length(buf)), 5, actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (CountByte)');
   CheckEqual(expected, actual, 'ABI CountByte result');
 end;
@@ -7779,8 +7797,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
-  CheckTrue(dt^.BitsetPopCount <> @BitsetPopCount_Scalar, 'BitsetPopCount should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
+  CheckTrue(dt^.Memory.BitsetPopCount <> @BitsetPopCount_Scalar, 'BitsetPopCount should not be scalar when vector asm enabled');
 
   // 构造确定性位模式
   for i := 0 to High(buf) do
@@ -7789,7 +7807,7 @@ begin
   expected := BitsetPopCount_Scalar(@buf[0], SizeUInt(Length(buf)));
 
   actual := 0;
-  ok := AbiCall_BitsetPopCount_CheckCalleeSaved(Pointer(dt^.BitsetPopCount), @buf[0], SizeUInt(Length(buf)), actual);
+  ok := AbiCall_BitsetPopCount_CheckCalleeSaved(Pointer(dt^.Memory.BitsetPopCount), @buf[0], SizeUInt(Length(buf)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (BitsetPopCount)');
   CheckEqual(expected, actual, 'ABI BitsetPopCount result');
 end;
@@ -7811,14 +7829,14 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.Utf8Validate), 'Dispatch.Utf8Validate should be assigned');
-  CheckTrue(dt^.Utf8Validate <> @Utf8Validate_Scalar, 'Utf8Validate should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.Utf8Validate), 'Dispatch.Utf8Validate should be assigned');
+  CheckTrue(dt^.Memory.Utf8Validate <> @Utf8Validate_Scalar, 'Utf8Validate should not be scalar when vector asm enabled');
 
   // valid
   expected := Utf8Validate_Scalar(@ValidASCII[0], SizeUInt(Length(ValidASCII)));
 
   actual := False;
-  ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Utf8Validate), @ValidASCII[0], SizeUInt(Length(ValidASCII)), actual);
+  ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Memory.Utf8Validate), @ValidASCII[0], SizeUInt(Length(ValidASCII)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (Utf8Validate valid)');
   CheckEqual(expected, actual, 'ABI Utf8Validate valid result');
 
@@ -7826,7 +7844,7 @@ begin
   expected := Utf8Validate_Scalar(@InvalidOverlong[0], SizeUInt(Length(InvalidOverlong)));
 
   actual := False;
-  ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Utf8Validate), @InvalidOverlong[0], SizeUInt(Length(InvalidOverlong)), actual);
+  ok := AbiCall_Utf8Validate_CheckCalleeSaved(Pointer(dt^.Memory.Utf8Validate), @InvalidOverlong[0], SizeUInt(Length(InvalidOverlong)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (Utf8Validate invalid)');
   CheckEqual(expected, actual, 'ABI Utf8Validate invalid result');
 end;
@@ -7849,14 +7867,14 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
-  CheckTrue(dt^.AsciiIEqual <> @AsciiIEqual_Scalar, 'AsciiIEqual should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
+  CheckTrue(dt^.Memory.AsciiIEqual <> @AsciiIEqual_Scalar, 'AsciiIEqual should not be scalar when vector asm enabled');
 
   // equal (case-insensitive)
   expected := AsciiIEqual_Scalar(@A1[0], @B1[0], SizeUInt(Length(A1)));
 
   actual := False;
-  ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.AsciiIEqual), @A1[0], @B1[0], SizeUInt(Length(A1)), actual);
+  ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.Memory.AsciiIEqual), @A1[0], @B1[0], SizeUInt(Length(A1)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (AsciiIEqual equal)');
   CheckEqual(expected, actual, 'ABI AsciiIEqual equal result');
 
@@ -7864,7 +7882,7 @@ begin
   expected := AsciiIEqual_Scalar(@A1[0], @B2[0], SizeUInt(Length(A1)));
 
   actual := False;
-  ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.AsciiIEqual), @A1[0], @B2[0], SizeUInt(Length(A1)), actual);
+  ok := AbiCall_AsciiIEqual_CheckCalleeSaved(Pointer(dt^.Memory.AsciiIEqual), @A1[0], @B2[0], SizeUInt(Length(A1)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (AsciiIEqual different)');
   CheckEqual(expected, actual, 'ABI AsciiIEqual different result');
 end;
@@ -7884,8 +7902,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
-  CheckTrue(dt^.ToLowerAscii <> @ToLowerAscii_Scalar, 'ToLowerAscii should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
+  CheckTrue(dt^.Memory.ToLowerAscii <> @ToLowerAscii_Scalar, 'ToLowerAscii should not be scalar when vector asm enabled');
 
   for i := 0 to High(actual) do
   begin
@@ -7901,7 +7919,7 @@ begin
   expected := actual;
   ToLowerAscii_Scalar(@expected[0], SizeUInt(Length(expected)));
 
-  ok := AbiCall_ToLowerAscii_CheckCalleeSaved(Pointer(dt^.ToLowerAscii), @actual[0], SizeUInt(Length(actual)));
+  ok := AbiCall_ToLowerAscii_CheckCalleeSaved(Pointer(dt^.Memory.ToLowerAscii), @actual[0], SizeUInt(Length(actual)));
   CheckTrue(ok, 'ABI callee-saved should be preserved (ToLowerAscii)');
 
   for i := 0 to High(actual) do
@@ -7923,8 +7941,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
-  CheckTrue(dt^.ToUpperAscii <> @ToUpperAscii_Scalar, 'ToUpperAscii should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
+  CheckTrue(dt^.Memory.ToUpperAscii <> @ToUpperAscii_Scalar, 'ToUpperAscii should not be scalar when vector asm enabled');
 
   for i := 0 to High(actual) do
   begin
@@ -7940,7 +7958,7 @@ begin
   expected := actual;
   ToUpperAscii_Scalar(@expected[0], SizeUInt(Length(expected)));
 
-  ok := AbiCall_ToUpperAscii_CheckCalleeSaved(Pointer(dt^.ToUpperAscii), @actual[0], SizeUInt(Length(actual)));
+  ok := AbiCall_ToUpperAscii_CheckCalleeSaved(Pointer(dt^.Memory.ToUpperAscii), @actual[0], SizeUInt(Length(actual)));
   CheckTrue(ok, 'ABI callee-saved should be preserved (ToUpperAscii)');
 
   for i := 0 to High(actual) do
@@ -7965,8 +7983,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.MemDiffRange), 'Dispatch.MemDiffRange should be assigned');
-  CheckTrue(dt^.MemDiffRange <> @MemDiffRange_Scalar, 'MemDiffRange should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.DiffRange), 'Dispatch.MemDiffRange should be assigned');
+  CheckTrue(dt^.Memory.DiffRange <> @MemDiffRange_Scalar, 'MemDiffRange should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf1) do
   begin
@@ -7985,7 +8003,7 @@ begin
   actualLast := 0;
   actualRes := False;
 
-  ok := AbiCall_MemDiffRange_CheckCalleeSaved(Pointer(dt^.MemDiffRange), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actualFirst, actualLast, actualRes);
+  ok := AbiCall_MemDiffRange_CheckCalleeSaved(Pointer(dt^.Memory.DiffRange), @buf1[0], @buf2[0], SizeUInt(Length(buf1)), actualFirst, actualLast, actualRes);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemDiffRange)');
 
   CheckEqual(expectedRes, actualRes, 'ABI MemDiffRange result');
@@ -8009,8 +8027,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.MemFindByte), 'Dispatch.MemFindByte should be assigned');
-  CheckTrue(dt^.MemFindByte <> @MemFindByte_Scalar, 'MemFindByte should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.FindByte), 'Dispatch.MemFindByte should be assigned');
+  CheckTrue(dt^.Memory.FindByte <> @MemFindByte_Scalar, 'MemFindByte should not be scalar when vector asm enabled');
 
   for i := 0 to High(buf) do
     buf[i] := Byte(i and $7F);
@@ -8020,14 +8038,14 @@ begin
   expected := MemFindByte_Scalar(@buf[0], SizeUInt(Length(buf)), 200);
 
   actual := 0;
-  ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.MemFindByte), @buf[0], SizeUInt(Length(buf)), 200, actual);
+  ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.Memory.FindByte), @buf[0], SizeUInt(Length(buf)), 200, actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemFindByte)');
   CheckEqual(expected, actual, 'ABI MemFindByte result');
 
   expected := MemFindByte_Scalar(@buf[0], SizeUInt(Length(buf)), 255);
 
   actual := 0;
-  ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.MemFindByte), @buf[0], SizeUInt(Length(buf)), 255, actual);
+  ok := AbiCall_MemFindByte_CheckCalleeSaved(Pointer(dt^.Memory.FindByte), @buf[0], SizeUInt(Length(buf)), 255, actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemFindByte not found)');
   CheckEqual(expected, actual, 'ABI MemFindByte not found');
 end;
@@ -8050,7 +8068,7 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.MemCopy), 'Dispatch.MemCopy should be assigned');
+  CheckTrue(Assigned(dt^.Memory.Copy), 'Dispatch.MemCopy should be assigned');
   // Note: AVX2 now has its own MemCopy implementation (MemCopy_AVX2) which is correct
 
   for i := 0 to High(src) do
@@ -8062,7 +8080,7 @@ begin
   expected := actual;
   MemCopy_Scalar(@src[0], @expected[0], SizeUInt(CopyLen));
 
-  ok := AbiCall_MemCopy_CheckCalleeSaved(Pointer(dt^.MemCopy), @src[0], @actual[0], SizeUInt(CopyLen));
+  ok := AbiCall_MemCopy_CheckCalleeSaved(Pointer(dt^.Memory.Copy), @src[0], @actual[0], SizeUInt(CopyLen));
   CheckTrue(ok, 'ABI callee-saved should be preserved (MemCopy)');
 
   for i := 0 to High(actual) do
@@ -8086,8 +8104,8 @@ begin
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
 
-  CheckTrue(Assigned(dt^.BytesIndexOf), 'Dispatch.BytesIndexOf should be assigned');
-  CheckTrue(dt^.BytesIndexOf <> @BytesIndexOf_Scalar, 'BytesIndexOf should not be scalar when vector asm enabled');
+  CheckTrue(Assigned(dt^.Memory.BytesIndexOf), 'Dispatch.BytesIndexOf should be assigned');
+  CheckTrue(dt^.Memory.BytesIndexOf <> @BytesIndexOf_Scalar, 'BytesIndexOf should not be scalar when vector asm enabled');
 
   for i := 0 to High(haystack) do
     haystack[i] := Byte(i and $7F);
@@ -8099,7 +8117,7 @@ begin
 
   expected := BytesIndexOf_Scalar(@haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)));
 
-  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
+  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.Memory.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (BytesIndexOf)');
   CheckEqual(expected, actual, 'ABI BytesIndexOf result');
 
@@ -8111,7 +8129,7 @@ begin
 
   expected := BytesIndexOf_Scalar(@haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)));
 
-  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
+  ok := AbiCall_BytesIndexOf_CheckCalleeSaved(Pointer(dt^.Memory.BytesIndexOf), @haystack[0], SizeUInt(Length(haystack)), @needle[0], SizeUInt(Length(needle)), actual);
   CheckTrue(ok, 'ABI callee-saved should be preserved (BytesIndexOf not found)');
   CheckEqual(expected, actual, 'ABI BytesIndexOf not found');
 end;
@@ -8144,16 +8162,16 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddF32x16), 'Dispatch.AddF32x16 should be assigned');
-  CheckTrue(Assigned(dt^.SubF32x16), 'Dispatch.SubF32x16 should be assigned');
-  CheckTrue(Assigned(dt^.MulF32x16), 'Dispatch.MulF32x16 should be assigned');
-  CheckTrue(Assigned(dt^.DivF32x16), 'Dispatch.DivF32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF32x16), 'Dispatch.CoreVectors.AddF32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF32x16), 'Dispatch.CoreVectors.SubF32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF32x16), 'Dispatch.CoreVectors.MulF32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF32x16), 'Dispatch.CoreVectors.DivF32x16 should be assigned');
 
   // vector asm 打开时，AVX-512 backend 不应退回到 scalar reference。
-  CheckTrue(dt^.AddF32x16 <> @ScalarAddF32x16, 'AddF32x16 should not be scalar');
-  CheckTrue(dt^.SubF32x16 <> @ScalarSubF32x16, 'SubF32x16 should not be scalar');
-  CheckTrue(dt^.MulF32x16 <> @ScalarMulF32x16, 'MulF32x16 should not be scalar');
-  CheckTrue(dt^.DivF32x16 <> @ScalarDivF32x16, 'DivF32x16 should not be scalar');
+  CheckTrue(dt^.CoreVectors.AddF32x16 <> @ScalarAddF32x16, 'AddF32x16 should not be scalar');
+  CheckTrue(dt^.CoreVectors.SubF32x16 <> @ScalarSubF32x16, 'SubF32x16 should not be scalar');
+  CheckTrue(dt^.CoreVectors.MulF32x16 <> @ScalarMulF32x16, 'MulF32x16 should not be scalar');
+  CheckTrue(dt^.CoreVectors.DivF32x16 <> @ScalarDivF32x16, 'DivF32x16 should not be scalar');
 
   eps := 1e-5;
   RandSeed := 20260101;
@@ -8170,25 +8188,25 @@ begin
 
     // Add
     expV := ScalarAddF32x16(a, b);
-    actV := dt^.AddF32x16(a, b);
+    actV := dt^.CoreVectors.AddF32x16(a, b);
     for i := 0 to 15 do
       CheckNear(expV.f[i], actV.f[i], eps, 'F32x16 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF32x16(a, b);
-    actV := dt^.SubF32x16(a, b);
+    actV := dt^.CoreVectors.SubF32x16(a, b);
     for i := 0 to 15 do
       CheckNear(expV.f[i], actV.f[i], eps, 'F32x16 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF32x16(a, b);
-    actV := dt^.MulF32x16(a, b);
+    actV := dt^.CoreVectors.MulF32x16(a, b);
     for i := 0 to 15 do
       CheckNear(expV.f[i], actV.f[i], eps, 'F32x16 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF32x16(a, b);
-    actV := dt^.DivF32x16(a, b);
+    actV := dt^.CoreVectors.DivF32x16(a, b);
     for i := 0 to 15 do
       CheckNear(expV.f[i], actV.f[i], eps, 'F32x16 Div iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8242,19 +8260,19 @@ begin
 
   // Add
   expV := ScalarAddF32x16(a, b);
-  actV := dt^.AddF32x16(a, b);
+  actV := dt^.CoreVectors.AddF32x16(a, b);
   for i := 0 to 15 do
     AssertSameElementBits('F32x16 Add', i, expV.f[i], actV.f[i]);
 
   // Sub
   expV := ScalarSubF32x16(a, b);
-  actV := dt^.SubF32x16(a, b);
+  actV := dt^.CoreVectors.SubF32x16(a, b);
   for i := 0 to 15 do
     AssertSameElementBits('F32x16 Sub', i, expV.f[i], actV.f[i]);
 
   // Mul
   expV := ScalarMulF32x16(a, b);
-  actV := dt^.MulF32x16(a, b);
+  actV := dt^.CoreVectors.MulF32x16(a, b);
   for i := 0 to 15 do
     AssertSameElementBits('F32x16 Mul', i, expV.f[i], actV.f[i]);
 
@@ -8265,7 +8283,7 @@ begin
       bDiv.f[i] := 1.0;
 
   expV := ScalarDivF32x16(a, bDiv);
-  actV := dt^.DivF32x16(a, bDiv);
+  actV := dt^.CoreVectors.DivF32x16(a, bDiv);
   for i := 0 to 15 do
     AssertSameElementBits('F32x16 Div', i, expV.f[i], actV.f[i]);
 end;
@@ -8285,15 +8303,15 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddF64x8), 'Dispatch.AddF64x8 should be assigned');
-  CheckTrue(Assigned(dt^.SubF64x8), 'Dispatch.SubF64x8 should be assigned');
-  CheckTrue(Assigned(dt^.MulF64x8), 'Dispatch.MulF64x8 should be assigned');
-  CheckTrue(Assigned(dt^.DivF64x8), 'Dispatch.DivF64x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddF64x8), 'Dispatch.CoreVectors.AddF64x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubF64x8), 'Dispatch.CoreVectors.SubF64x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulF64x8), 'Dispatch.CoreVectors.MulF64x8 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.DivF64x8), 'Dispatch.CoreVectors.DivF64x8 should be assigned');
 
-  CheckTrue(dt^.AddF64x8 <> @ScalarAddF64x8, 'AddF64x8 should not be scalar');
-  CheckTrue(dt^.SubF64x8 <> @ScalarSubF64x8, 'SubF64x8 should not be scalar');
-  CheckTrue(dt^.MulF64x8 <> @ScalarMulF64x8, 'MulF64x8 should not be scalar');
-  CheckTrue(dt^.DivF64x8 <> @ScalarDivF64x8, 'DivF64x8 should not be scalar');
+  CheckTrue(dt^.CoreVectors.AddF64x8 <> @ScalarAddF64x8, 'AddF64x8 should not be scalar');
+  CheckTrue(dt^.CoreVectors.SubF64x8 <> @ScalarSubF64x8, 'SubF64x8 should not be scalar');
+  CheckTrue(dt^.CoreVectors.MulF64x8 <> @ScalarMulF64x8, 'MulF64x8 should not be scalar');
+  CheckTrue(dt^.CoreVectors.DivF64x8 <> @ScalarDivF64x8, 'DivF64x8 should not be scalar');
 
   eps := 1e-10;
   RandSeed := 20260102;
@@ -8310,25 +8328,25 @@ begin
 
     // Add
     expV := ScalarAddF64x8(a, b);
-    actV := dt^.AddF64x8(a, b);
+    actV := dt^.CoreVectors.AddF64x8(a, b);
     for i := 0 to 7 do
       CheckNear(expV.d[i], actV.d[i], eps, 'F64x8 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubF64x8(a, b);
-    actV := dt^.SubF64x8(a, b);
+    actV := dt^.CoreVectors.SubF64x8(a, b);
     for i := 0 to 7 do
       CheckNear(expV.d[i], actV.d[i], eps, 'F64x8 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulF64x8(a, b);
-    actV := dt^.MulF64x8(a, b);
+    actV := dt^.CoreVectors.MulF64x8(a, b);
     for i := 0 to 7 do
       CheckNear(expV.d[i], actV.d[i], eps, 'F64x8 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Div
     expV := ScalarDivF64x8(a, b);
-    actV := dt^.DivF64x8(a, b);
+    actV := dt^.CoreVectors.DivF64x8(a, b);
     for i := 0 to 7 do
       CheckNear(expV.d[i], actV.d[i], eps, 'F64x8 Div iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8382,19 +8400,19 @@ begin
 
   // Add
   expV := ScalarAddF64x8(a, b);
-  actV := dt^.AddF64x8(a, b);
+  actV := dt^.CoreVectors.AddF64x8(a, b);
   for i := 0 to 7 do
     AssertSameElementBits('F64x8 Add', i, expV.d[i], actV.d[i]);
 
   // Sub
   expV := ScalarSubF64x8(a, b);
-  actV := dt^.SubF64x8(a, b);
+  actV := dt^.CoreVectors.SubF64x8(a, b);
   for i := 0 to 7 do
     AssertSameElementBits('F64x8 Sub', i, expV.d[i], actV.d[i]);
 
   // Mul
   expV := ScalarMulF64x8(a, b);
-  actV := dt^.MulF64x8(a, b);
+  actV := dt^.CoreVectors.MulF64x8(a, b);
   for i := 0 to 7 do
     AssertSameElementBits('F64x8 Mul', i, expV.d[i], actV.d[i]);
 
@@ -8405,7 +8423,7 @@ begin
       bDiv.d[i] := 1.0;
 
   expV := ScalarDivF64x8(a, bDiv);
-  actV := dt^.DivF64x8(a, bDiv);
+  actV := dt^.CoreVectors.DivF64x8(a, bDiv);
   for i := 0 to 7 do
     AssertSameElementBits('F64x8 Div', i, expV.d[i], actV.d[i]);
 end;
@@ -8424,13 +8442,13 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AddI32x16), 'Dispatch.AddI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.SubI32x16), 'Dispatch.SubI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.MulI32x16), 'Dispatch.MulI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AddI32x16), 'Dispatch.CoreVectors.AddI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.SubI32x16), 'Dispatch.CoreVectors.SubI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MulI32x16), 'Dispatch.CoreVectors.MulI32x16 should be assigned');
 
-  CheckTrue(dt^.AddI32x16 <> @ScalarAddI32x16, 'AddI32x16 should not be scalar');
-  CheckTrue(dt^.SubI32x16 <> @ScalarSubI32x16, 'SubI32x16 should not be scalar');
-  CheckTrue(dt^.MulI32x16 <> @ScalarMulI32x16, 'MulI32x16 should not be scalar');
+  CheckTrue(dt^.CoreVectors.AddI32x16 <> @ScalarAddI32x16, 'AddI32x16 should not be scalar');
+  CheckTrue(dt^.CoreVectors.SubI32x16 <> @ScalarSubI32x16, 'SubI32x16 should not be scalar');
+  CheckTrue(dt^.CoreVectors.MulI32x16 <> @ScalarMulI32x16, 'MulI32x16 should not be scalar');
 
   RandSeed := 20260103;
 
@@ -8444,19 +8462,19 @@ begin
 
     // Add
     expV := ScalarAddI32x16(a, b);
-    actV := dt^.AddI32x16(a, b);
+    actV := dt^.CoreVectors.AddI32x16(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 Add iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Sub
     expV := ScalarSubI32x16(a, b);
-    actV := dt^.SubI32x16(a, b);
+    actV := dt^.CoreVectors.SubI32x16(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 Sub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // Mul
     expV := ScalarMulI32x16(a, b);
-    actV := dt^.MulI32x16(a, b);
+    actV := dt^.CoreVectors.MulI32x16(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 Mul iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8487,12 +8505,12 @@ begin
   end;
 
   expV := ScalarAddI32x16(a, b);
-  actV := dt^.AddI32x16(a, b);
+  actV := dt^.CoreVectors.AddI32x16(a, b);
   for i := 0 to 15 do
     CheckEqual(expV.i[i], actV.i[i], 'I32x16 Add boundary lane ' + IntToStr(i));
 
   expV := ScalarSubI32x16(a, b);
-  actV := dt^.SubI32x16(a, b);
+  actV := dt^.CoreVectors.SubI32x16(a, b);
   for i := 0 to 15 do
     CheckEqual(expV.i[i], actV.i[i], 'I32x16 Sub boundary lane ' + IntToStr(i));
 
@@ -8510,7 +8528,7 @@ begin
   end;
 
   expV := ScalarMulI32x16(a, b);
-  actV := dt^.MulI32x16(a, b);
+  actV := dt^.CoreVectors.MulI32x16(a, b);
   for i := 0 to 15 do
     CheckEqual(expV.i[i], actV.i[i], 'I32x16 Mul boundary lane ' + IntToStr(i));
 end;
@@ -8529,11 +8547,11 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AndI32x16), 'Dispatch.AndI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.OrI32x16), 'Dispatch.OrI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.XorI32x16), 'Dispatch.XorI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.NotI32x16), 'Dispatch.NotI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.AndNotI32x16), 'Dispatch.AndNotI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AndI32x16), 'Dispatch.CoreVectors.AndI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.OrI32x16), 'Dispatch.CoreVectors.OrI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.XorI32x16), 'Dispatch.CoreVectors.XorI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.NotI32x16), 'Dispatch.CoreVectors.NotI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.AndNotI32x16), 'Dispatch.CoreVectors.AndNotI32x16 should be assigned');
 
   RandSeed := 20260104;
 
@@ -8546,27 +8564,27 @@ begin
     end;
 
     expV := ScalarAndI32x16(a, b);
-    actV := dt^.AndI32x16(a, b);
+    actV := dt^.CoreVectors.AndI32x16(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 And iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarOrI32x16(a, b);
-    actV := dt^.OrI32x16(a, b);
+    actV := dt^.CoreVectors.OrI32x16(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 Or iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarXorI32x16(a, b);
-    actV := dt^.XorI32x16(a, b);
+    actV := dt^.CoreVectors.XorI32x16(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 Xor iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarNotI32x16(a);
-    actV := dt^.NotI32x16(a);
+    actV := dt^.CoreVectors.NotI32x16(a);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 Not iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarAndNotI32x16(a, b);
-    actV := dt^.AndNotI32x16(a, b);
+    actV := dt^.CoreVectors.AndNotI32x16(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 AndNot iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8586,9 +8604,9 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.ShiftLeftI32x16), 'Dispatch.ShiftLeftI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.ShiftRightI32x16), 'Dispatch.ShiftRightI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.ShiftRightArithI32x16), 'Dispatch.ShiftRightArithI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ShiftLeftI32x16), 'Dispatch.CoreVectors.ShiftLeftI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ShiftRightI32x16), 'Dispatch.CoreVectors.ShiftRightI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.ShiftRightArithI32x16), 'Dispatch.CoreVectors.ShiftRightArithI32x16 should be assigned');
 
   RandSeed := 20260105;
 
@@ -8600,17 +8618,17 @@ begin
     shift := Random(32);
 
     expV := ScalarShiftLeftI32x16(a, shift);
-    actV := dt^.ShiftLeftI32x16(a, shift);
+    actV := dt^.CoreVectors.ShiftLeftI32x16(a, shift);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 SHL ' + IntToStr(shift) + ' iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarShiftRightI32x16(a, shift);
-    actV := dt^.ShiftRightI32x16(a, shift);
+    actV := dt^.CoreVectors.ShiftRightI32x16(a, shift);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 SHR ' + IntToStr(shift) + ' iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarShiftRightArithI32x16(a, shift);
-    actV := dt^.ShiftRightArithI32x16(a, shift);
+    actV := dt^.CoreVectors.ShiftRightArithI32x16(a, shift);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 SAR ' + IntToStr(shift) + ' iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8630,9 +8648,9 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.CmpEqI32x16), 'Dispatch.CmpEqI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.CmpLtI32x16), 'Dispatch.CmpLtI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.CmpGtI32x16), 'Dispatch.CmpGtI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpEqI32x16), 'Dispatch.CoreVectors.CmpEqI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpLtI32x16), 'Dispatch.CoreVectors.CmpLtI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpGtI32x16), 'Dispatch.CoreVectors.CmpGtI32x16 should be assigned');
 
   RandSeed := 20260106;
 
@@ -8650,17 +8668,17 @@ begin
 
     // CmpEq
     expMask := ScalarCmpEqI32x16(a, b);
-    actMask := dt^.CmpEqI32x16(a, b);
+    actMask := dt^.CoreVectors.CmpEqI32x16(a, b);
     CheckEqual(expMask, actMask, 'I32x16 CmpEq iter ' + IntToStr(iter));
 
     // CmpLt
     expMask := ScalarCmpLtI32x16(a, b);
-    actMask := dt^.CmpLtI32x16(a, b);
+    actMask := dt^.CoreVectors.CmpLtI32x16(a, b);
     CheckEqual(expMask, actMask, 'I32x16 CmpLt iter ' + IntToStr(iter));
 
     // CmpGt
     expMask := ScalarCmpGtI32x16(a, b);
-    actMask := dt^.CmpGtI32x16(a, b);
+    actMask := dt^.CoreVectors.CmpGtI32x16(a, b);
     CheckEqual(expMask, actMask, 'I32x16 CmpGt iter ' + IntToStr(iter));
   end;
 end;
@@ -8679,8 +8697,8 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MinI32x16), 'Dispatch.MinI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.MaxI32x16), 'Dispatch.MaxI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MinI32x16), 'Dispatch.CoreVectors.MinI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.MaxI32x16), 'Dispatch.CoreVectors.MaxI32x16 should be assigned');
 
   RandSeed := 20260107;
 
@@ -8693,12 +8711,12 @@ begin
     end;
 
     expV := ScalarMinI32x16(a, b);
-    actV := dt^.MinI32x16(a, b);
+    actV := dt^.CoreVectors.MinI32x16(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 Min iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     expV := ScalarMaxI32x16(a, b);
-    actV := dt^.MaxI32x16(a, b);
+    actV := dt^.CoreVectors.MaxI32x16(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I32x16 Max iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8718,9 +8736,9 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.CmpLeI32x16), 'Dispatch.CmpLeI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.CmpGeI32x16), 'Dispatch.CmpGeI32x16 should be assigned');
-  CheckTrue(Assigned(dt^.CmpNeI32x16), 'Dispatch.CmpNeI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpLeI32x16), 'Dispatch.CoreVectors.CmpLeI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpGeI32x16), 'Dispatch.CoreVectors.CmpGeI32x16 should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.CmpNeI32x16), 'Dispatch.CoreVectors.CmpNeI32x16 should be assigned');
 
   RandSeed := 20260108;
 
@@ -8737,17 +8755,17 @@ begin
 
     // CmpLe
     expMask := ScalarCmpLeI32x16(a, b);
-    actMask := dt^.CmpLeI32x16(a, b);
+    actMask := dt^.CoreVectors.CmpLeI32x16(a, b);
     CheckEqual(expMask, actMask, 'I32x16 CmpLe iter ' + IntToStr(iter));
 
     // CmpGe
     expMask := ScalarCmpGeI32x16(a, b);
-    actMask := dt^.CmpGeI32x16(a, b);
+    actMask := dt^.CoreVectors.CmpGeI32x16(a, b);
     CheckEqual(expMask, actMask, 'I32x16 CmpGe iter ' + IntToStr(iter));
 
     // CmpNe
     expMask := ScalarCmpNeI32x16(a, b);
-    actMask := dt^.CmpNeI32x16(a, b);
+    actMask := dt^.CoreVectors.CmpNeI32x16(a, b);
     CheckEqual(expMask, actMask, 'I32x16 CmpNe iter ' + IntToStr(iter));
   end;
 end;
@@ -8766,8 +8784,8 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.I8x16SatAdd), 'Dispatch.I8x16SatAdd should be assigned');
-  CheckTrue(Assigned(dt^.I8x16SatSub), 'Dispatch.I8x16SatSub should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.I8x16SatAdd), 'Dispatch.CoreVectors.I8x16SatAdd should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.I8x16SatSub), 'Dispatch.CoreVectors.I8x16SatSub should be assigned');
 
   RandSeed := 20260109;
 
@@ -8781,13 +8799,13 @@ begin
 
     // SatAdd
     expV := ScalarI8x16SatAdd(a, b);
-    actV := dt^.I8x16SatAdd(a, b);
+    actV := dt^.CoreVectors.I8x16SatAdd(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I8x16 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // SatSub
     expV := ScalarI8x16SatSub(a, b);
-    actV := dt^.I8x16SatSub(a, b);
+    actV := dt^.CoreVectors.I8x16SatSub(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.i[i], actV.i[i], 'I8x16 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8807,8 +8825,8 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.I16x8SatAdd), 'Dispatch.I16x8SatAdd should be assigned');
-  CheckTrue(Assigned(dt^.I16x8SatSub), 'Dispatch.I16x8SatSub should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.I16x8SatAdd), 'Dispatch.CoreVectors.I16x8SatAdd should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.I16x8SatSub), 'Dispatch.CoreVectors.I16x8SatSub should be assigned');
 
   RandSeed := 20260110;
 
@@ -8822,13 +8840,13 @@ begin
 
     // SatAdd
     expV := ScalarI16x8SatAdd(a, b);
-    actV := dt^.I16x8SatAdd(a, b);
+    actV := dt^.CoreVectors.I16x8SatAdd(a, b);
     for i := 0 to 7 do
       CheckEqual(expV.i[i], actV.i[i], 'I16x8 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // SatSub
     expV := ScalarI16x8SatSub(a, b);
-    actV := dt^.I16x8SatSub(a, b);
+    actV := dt^.CoreVectors.I16x8SatSub(a, b);
     for i := 0 to 7 do
       CheckEqual(expV.i[i], actV.i[i], 'I16x8 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8848,8 +8866,8 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.U8x16SatAdd), 'Dispatch.U8x16SatAdd should be assigned');
-  CheckTrue(Assigned(dt^.U8x16SatSub), 'Dispatch.U8x16SatSub should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.U8x16SatAdd), 'Dispatch.CoreVectors.U8x16SatAdd should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.U8x16SatSub), 'Dispatch.CoreVectors.U8x16SatSub should be assigned');
 
   RandSeed := 20260111;
 
@@ -8863,13 +8881,13 @@ begin
 
     // SatAdd
     expV := ScalarU8x16SatAdd(a, b);
-    actV := dt^.U8x16SatAdd(a, b);
+    actV := dt^.CoreVectors.U8x16SatAdd(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.u[i], actV.u[i], 'U8x16 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // SatSub
     expV := ScalarU8x16SatSub(a, b);
-    actV := dt^.U8x16SatSub(a, b);
+    actV := dt^.CoreVectors.U8x16SatSub(a, b);
     for i := 0 to 15 do
       CheckEqual(expV.u[i], actV.u[i], 'U8x16 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8889,8 +8907,8 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.U16x8SatAdd), 'Dispatch.U16x8SatAdd should be assigned');
-  CheckTrue(Assigned(dt^.U16x8SatSub), 'Dispatch.U16x8SatSub should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.U16x8SatAdd), 'Dispatch.CoreVectors.U16x8SatAdd should be assigned');
+  CheckTrue(Assigned(dt^.CoreVectors.U16x8SatSub), 'Dispatch.CoreVectors.U16x8SatSub should be assigned');
 
   RandSeed := 20260112;
 
@@ -8904,13 +8922,13 @@ begin
 
     // SatAdd
     expV := ScalarU16x8SatAdd(a, b);
-    actV := dt^.U16x8SatAdd(a, b);
+    actV := dt^.CoreVectors.U16x8SatAdd(a, b);
     for i := 0 to 7 do
       CheckEqual(expV.u[i], actV.u[i], 'U16x8 SatAdd iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
 
     // SatSub
     expV := ScalarU16x8SatSub(a, b);
-    actV := dt^.U16x8SatSub(a, b);
+    actV := dt^.CoreVectors.U16x8SatSub(a, b);
     for i := 0 to 7 do
       CheckEqual(expV.u[i], actV.u[i], 'U16x8 SatSub iter ' + IntToStr(iter) + ' lane ' + IntToStr(i));
   end;
@@ -8930,7 +8948,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MemEqual), 'Dispatch.MemEqual should be assigned');
+  CheckTrue(Assigned(dt^.Memory.Equal), 'Dispatch.MemEqual should be assigned');
 
   RandSeed := 20260113;
 
@@ -8945,14 +8963,14 @@ begin
 
     // Test equal buffers
     expRes := MemEqual_Scalar(@buf1[0], @buf2[0], 512);
-    actRes := dt^.MemEqual(@buf1[0], @buf2[0], 512);
+    actRes := dt^.Memory.Equal(@buf1[0], @buf2[0], 512);
     CheckEqual(expRes, actRes, 'MemEqual equal iter ' + IntToStr(iter));
 
     // Create a difference at random position
     buf2[Random(512)] := buf2[Random(512)] xor $FF;
 
     expRes := MemEqual_Scalar(@buf1[0], @buf2[0], 512);
-    actRes := dt^.MemEqual(@buf1[0], @buf2[0], 512);
+    actRes := dt^.Memory.Equal(@buf1[0], @buf2[0], 512);
     CheckEqual(expRes, actRes, 'MemEqual diff iter ' + IntToStr(iter));
   end;
 end;
@@ -8972,7 +8990,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MemFindByte), 'Dispatch.MemFindByte should be assigned');
+  CheckTrue(Assigned(dt^.Memory.FindByte), 'Dispatch.MemFindByte should be assigned');
 
   RandSeed := 20260114;
 
@@ -8984,13 +9002,13 @@ begin
     // Find existing byte
     searchByte := Byte(Random(128));
     expRes := MemFindByte_Scalar(@buf[0], 512, searchByte);
-    actRes := dt^.MemFindByte(@buf[0], 512, searchByte);
+    actRes := dt^.Memory.FindByte(@buf[0], 512, searchByte);
     CheckEqual(expRes, actRes, 'MemFindByte iter ' + IntToStr(iter));
 
     // Find non-existing byte
     searchByte := Byte(200 + Random(56));
     expRes := MemFindByte_Scalar(@buf[0], 512, searchByte);
-    actRes := dt^.MemFindByte(@buf[0], 512, searchByte);
+    actRes := dt^.Memory.FindByte(@buf[0], 512, searchByte);
     CheckEqual(expRes, actRes, 'MemFindByte not found iter ' + IntToStr(iter));
   end;
 end;
@@ -9009,7 +9027,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.SumBytes), 'Dispatch.SumBytes should be assigned');
+  CheckTrue(Assigned(dt^.Memory.SumBytes), 'Dispatch.SumBytes should be assigned');
 
   RandSeed := 20260115;
 
@@ -9019,7 +9037,7 @@ begin
       buf[i] := Byte(Random(256));
 
     expSum := SumBytes_Scalar(@buf[0], 512);
-    actSum := dt^.SumBytes(@buf[0], 512);
+    actSum := dt^.Memory.SumBytes(@buf[0], 512);
     CheckEqual(expSum, actSum, 'SumBytes iter ' + IntToStr(iter));
   end;
 end;
@@ -9039,7 +9057,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.CountByte), 'Dispatch.CountByte should be assigned');
+  CheckTrue(Assigned(dt^.Memory.CountByte), 'Dispatch.CountByte should be assigned');
 
   RandSeed := 20260116;
 
@@ -9050,7 +9068,7 @@ begin
 
     searchByte := Byte(Random(32));
     expCnt := CountByte_Scalar(@buf[0], 512, searchByte);
-    actCnt := dt^.CountByte(@buf[0], 512, searchByte);
+    actCnt := dt^.Memory.CountByte(@buf[0], 512, searchByte);
     CheckEqual(expCnt, actCnt, 'CountByte iter ' + IntToStr(iter));
   end;
 end;
@@ -9069,7 +9087,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MinMaxBytes), 'Dispatch.MinMaxBytes should be assigned');
+  CheckTrue(Assigned(dt^.Memory.MinMaxBytes), 'Dispatch.MinMaxBytes should be assigned');
 
   RandSeed := 20260117;
 
@@ -9079,7 +9097,7 @@ begin
       buf[i] := Byte(Random(256));
 
     MinMaxBytes_Scalar(@buf[0], 512, expMin, expMax);
-    dt^.MinMaxBytes(@buf[0], 512, actMin, actMax);
+    dt^.Memory.MinMaxBytes(@buf[0], 512, actMin, actMax);
     CheckEqual(expMin, actMin, 'MinMaxBytes min iter ' + IntToStr(iter));
     CheckEqual(expMax, actMax, 'MinMaxBytes max iter ' + IntToStr(iter));
   end;
@@ -9099,7 +9117,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
+  CheckTrue(Assigned(dt^.Memory.BitsetPopCount), 'Dispatch.BitsetPopCount should be assigned');
 
   RandSeed := 20260118;
 
@@ -9109,7 +9127,7 @@ begin
       buf[i] := Byte(Random(256));
 
     expCnt := BitsetPopCount_Scalar(@buf[0], 256);
-    actCnt := dt^.BitsetPopCount(@buf[0], 256);
+    actCnt := dt^.Memory.BitsetPopCount(@buf[0], 256);
     CheckEqual(expCnt, actCnt, 'BitsetPopCount iter ' + IntToStr(iter));
   end;
 end;
@@ -9127,7 +9145,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MemCopy), 'Dispatch.MemCopy should be assigned');
+  CheckTrue(Assigned(dt^.Memory.Copy), 'Dispatch.MemCopy should be assigned');
 
   RandSeed := 20260119;
 
@@ -9141,7 +9159,7 @@ begin
     end;
 
     MemCopy_Scalar(@src[0], @dstExp[0], 512);
-    dt^.MemCopy(@src[0], @dstAct[0], 512);
+    dt^.Memory.Copy(@src[0], @dstAct[0], 512);
 
     for i := 0 to 511 do
       CheckEqual(dstExp[i], dstAct[i], 'MemCopy iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
@@ -9162,7 +9180,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.MemSet), 'Dispatch.MemSet should be assigned');
+  CheckTrue(Assigned(dt^.Memory.Fill), 'Dispatch.MemSet should be assigned');
 
   RandSeed := 20260120;
 
@@ -9177,7 +9195,7 @@ begin
     end;
 
     MemSet_Scalar(@dstExp[0], 512, setValue);
-    dt^.MemSet(@dstAct[0], 512, setValue);
+    dt^.Memory.Fill(@dstAct[0], 512, setValue);
 
     for i := 0 to 511 do
       CheckEqual(dstExp[i], dstAct[i], 'MemSet iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
@@ -9197,7 +9215,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
+  CheckTrue(Assigned(dt^.Memory.ToLowerAscii), 'Dispatch.ToLowerAscii should be assigned');
 
   RandSeed := 20260121;
 
@@ -9210,7 +9228,7 @@ begin
     end;
 
     ToLowerAscii_Scalar(@bufExp[0], 128);
-    dt^.ToLowerAscii(@bufAct[0], 128);
+    dt^.Memory.ToLowerAscii(@bufAct[0], 128);
 
     for i := 0 to 127 do
       CheckEqual(bufExp[i], bufAct[i], 'ToLowerAscii iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
@@ -9230,7 +9248,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
+  CheckTrue(Assigned(dt^.Memory.ToUpperAscii), 'Dispatch.ToUpperAscii should be assigned');
 
   RandSeed := 20260122;
 
@@ -9243,7 +9261,7 @@ begin
     end;
 
     ToUpperAscii_Scalar(@bufExp[0], 128);
-    dt^.ToUpperAscii(@bufAct[0], 128);
+    dt^.Memory.ToUpperAscii(@bufAct[0], 128);
 
     for i := 0 to 127 do
       CheckEqual(bufExp[i], bufAct[i], 'ToUpperAscii iter ' + IntToStr(iter) + ' byte ' + IntToStr(i));
@@ -9264,7 +9282,7 @@ begin
 
   dt := GetDispatchTable;
   CheckTrue(dt <> nil, 'Dispatch table should be assigned');
-  CheckTrue(Assigned(dt^.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
+  CheckTrue(Assigned(dt^.Memory.AsciiIEqual), 'Dispatch.AsciiIEqual should be assigned');
 
   RandSeed := 20260123;
 
@@ -9285,13 +9303,13 @@ begin
     end;
 
     expRes := AsciiIEqual_Scalar(@buf1[0], @buf2[0], 128);
-    actRes := dt^.AsciiIEqual(@buf1[0], @buf2[0], 128);
+    actRes := dt^.Memory.AsciiIEqual(@buf1[0], @buf2[0], 128);
     CheckEqual(expRes, actRes, 'AsciiIEqual same iter ' + IntToStr(iter));
 
     // Make them differ
     buf2[Random(128)] := Byte(48 + Random(10));
     expRes := AsciiIEqual_Scalar(@buf1[0], @buf2[0], 128);
-    actRes := dt^.AsciiIEqual(@buf1[0], @buf2[0], 128);
+    actRes := dt^.Memory.AsciiIEqual(@buf1[0], @buf2[0], 128);
     CheckEqual(expRes, actRes, 'AsciiIEqual diff iter ' + IntToStr(iter));
   end;
 end;
@@ -9318,22 +9336,22 @@ begin
   end;
 
   // 直接调用 dispatch 函数，验证结果正确性（无法在 Pascal 层面验证 callee-saved）
-  resultV := dt^.AddF32x16(a, b);
+  resultV := dt^.CoreVectors.AddF32x16(a, b);
 
   for i := 0 to 15 do
     CheckNear(a.f[i] + b.f[i], resultV.f[i], 1e-5, 'F32x16 Add result lane ' + IntToStr(i));
 
-  resultV := dt^.SubF32x16(a, b);
+  resultV := dt^.CoreVectors.SubF32x16(a, b);
 
   for i := 0 to 15 do
     CheckNear(a.f[i] - b.f[i], resultV.f[i], 1e-5, 'F32x16 Sub result lane ' + IntToStr(i));
 
-  resultV := dt^.MulF32x16(a, b);
+  resultV := dt^.CoreVectors.MulF32x16(a, b);
 
   for i := 0 to 15 do
     CheckNear(a.f[i] * b.f[i], resultV.f[i], 1e-5, 'F32x16 Mul result lane ' + IntToStr(i));
 
-  resultV := dt^.DivF32x16(a, b);
+  resultV := dt^.CoreVectors.DivF32x16(a, b);
 
   for i := 0 to 15 do
     CheckNear(a.f[i] / b.f[i], resultV.f[i], 1e-5, 'F32x16 Div result lane ' + IntToStr(i));
@@ -9361,27 +9379,27 @@ begin
   end;
 
   // 直接调用 dispatch 函数，验证结果正确性
-  resultV := dt^.AddI32x16(a, b);
+  resultV := dt^.CoreVectors.AddI32x16(a, b);
 
   for i := 0 to 15 do
     CheckEqual(a.i[i] + b.i[i], resultV.i[i], 'I32x16 Add result lane ' + IntToStr(i));
 
-  resultV := dt^.SubI32x16(a, b);
+  resultV := dt^.CoreVectors.SubI32x16(a, b);
 
   for i := 0 to 15 do
     CheckEqual(a.i[i] - b.i[i], resultV.i[i], 'I32x16 Sub result lane ' + IntToStr(i));
 
-  resultV := dt^.MulI32x16(a, b);
+  resultV := dt^.CoreVectors.MulI32x16(a, b);
 
   for i := 0 to 15 do
     CheckEqual(a.i[i] * b.i[i], resultV.i[i], 'I32x16 Mul result lane ' + IntToStr(i));
 
-  resultV := dt^.AndI32x16(a, b);
+  resultV := dt^.CoreVectors.AndI32x16(a, b);
 
   for i := 0 to 15 do
     CheckEqual(a.i[i] and b.i[i], resultV.i[i], 'I32x16 And result lane ' + IntToStr(i));
 
-  resultV := dt^.OrI32x16(a, b);
+  resultV := dt^.CoreVectors.OrI32x16(a, b);
 
   for i := 0 to 15 do
     CheckEqual(a.i[i] or b.i[i], resultV.i[i], 'I32x16 Or result lane ' + IntToStr(i));
@@ -10357,8 +10375,10 @@ begin
 
   LResult := VecI64x2AndNot(LVecA, LVecB);
 
-  CheckEqual(QWord($F0F0F0F0F0F0F0F0), QWord(LResult.i[0]), 'VecI64x2AndNot lane 0');
+  {$PUSH}{$WARNINGS OFF}
+  CheckEqual(QWord($F0F0F0F0) shl 32 or QWord($F0F0F0F0), QWord(LResult.i[0]), 'VecI64x2AndNot lane 0');
   CheckEqual(QWord(0), QWord(LResult.i[1]), 'VecI64x2AndNot lane 1');
+  {$POP}
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI64x2_Compare_Basic;
@@ -10489,10 +10509,12 @@ begin
 
   LResult := VecI64x4AndNot(LVecA, LVecB);
 
-  CheckEqual(QWord($F0F0F0F0F0F0F0F0), QWord(LResult.i[0]), 'VecI64x4AndNot lane 0');
+  {$PUSH}{$WARNINGS OFF}
+  CheckEqual(QWord($F0F0F0F0) shl 32 or QWord($F0F0F0F0), QWord(LResult.i[0]), 'VecI64x4AndNot lane 0');
   CheckEqual(QWord(0), QWord(LResult.i[1]), 'VecI64x4AndNot lane 1');
   CheckEqual(QWord($3333333333333333), QWord(LResult.i[2]), 'VecI64x4AndNot lane 2');
   CheckEqual(QWord($4444444444444444), QWord(LResult.i[3]), 'VecI64x4AndNot lane 3');
+  {$POP}
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecI64x4_Compare_Basic;
@@ -10589,8 +10611,10 @@ begin
 
   LResult := VecU64x2AndNot(LVecA, LVecB);
 
-  CheckEqual(QWord($F0F0F0F0F0F0F0F0), LResult.u[0], 'VecU64x2AndNot lane 0');
+  {$PUSH}{$WARNINGS OFF}
+  CheckEqual(QWord($F0F0F0F0) shl 32 or QWord($F0F0F0F0), LResult.u[0], 'VecU64x2AndNot lane 0');
   CheckEqual(QWord($123456789ABCDEF0), LResult.u[1], 'VecU64x2AndNot lane 1');
+  {$POP}
 end;
 
 procedure TTestCase_IntegerFacadeGuards.Test_VecU64x2_Compare_Unsigned;
@@ -12628,8 +12652,10 @@ begin
   v.u[0] := High(UInt64);  // max UInt64 = $FFFFFFFFFFFFFFFF
   v.u[1] := QWord($123456789ABCDEF0);
   
+  {$PUSH}{$WARNINGS OFF}
   CheckEqual(High(UInt64), v.u[0], 'u[0] should be max UInt64');
   CheckEqual(QWord($123456789ABCDEF0), v.u[1], 'u[1] should be $123456789ABCDEF0');
+  {$POP}
 end;
 
 procedure TTestCase_UnsignedVectorTypes.Test_VecU64x2_TypeDef_RawAccess;
@@ -13460,8 +13486,10 @@ var
   m: TMaskF64x2;
 begin
   m := MaskF64x2AllTrue;
-  CheckEqual(High(UInt64), m.m[0], 'm[0] should be max UInt64');
-  CheckEqual(High(UInt64), m.m[1], 'm[1] should be max UInt64');
+  {$PUSH}{$WARNINGS OFF}
+  CheckEqual(not UInt64(0), m.m[0], 'm[0] should be max UInt64');
+  CheckEqual(not UInt64(0), m.m[1], 'm[1] should be max UInt64');
+  {$POP}
 end;
 
 procedure TTestCase_VectorMaskTypes.Test_MaskF64x2_ToBitmask;

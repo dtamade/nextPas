@@ -68,7 +68,11 @@ var
   LH1Options: TH1ClientTransportOptions;
 begin
   LH1Options.Timeout := AOptions.Timeout;
+  LH1Options.ConnectTimeout := AOptions.ConnectTimeout;
   LH1Options.MaxPoolSize := AOptions.MaxPoolSize;
+  LH1Options.IdleTTL := AOptions.IdleTTL;
+  LH1Options.ProxyUrl := AOptions.ProxyUrl;
+  LH1Options.TLSContext := AOptions.TLSContext;
   Result := NewH1ClientTransport(LH1Options);
 end;
 
@@ -78,7 +82,9 @@ var
 begin
   LH2Options := TH2ClientTransportOptions.Default;
   LH2Options.Timeout := AOptions.Timeout;
+  LH2Options.ConnectTimeout := AOptions.ConnectTimeout;
   LH2Options.MaxPoolSize := AOptions.MaxPoolSize;
+  LH2Options.IdleTTL := AOptions.IdleTTL;
   LH2Options.TLSContext := AOptions.TLSContext;
   Result := NewH2ClientTransport(LH2Options);
 end;
@@ -89,7 +95,7 @@ var
   LH1Options: TH1ServerTransportOptions;
 begin
   if AOptions.TLSContext <> nil then
-    raise EHttpError.Create(
+    raise EHttpError.Create(hekRegistry,
       'TLS HTTP server currently requires HTTP/2 transport selection');
   LH1Options.ReadTimeout := AOptions.ReadTimeout;
   LH1Options.WriteTimeout := AOptions.WriteTimeout;
@@ -97,6 +103,9 @@ begin
   LH1Options.MaxHeaderSize := AOptions.MaxHeaderSize;
   LH1Options.MaxBodySize := AOptions.MaxBodySize;
   LH1Options.MaxRequestsPerConnection := AOptions.MaxRequestsPerConnection;
+  { H1 native connection-scoped RequestArena (Reset per request). }
+  LH1Options.RequestArena := AOptions.RequestArena;
+  LH1Options.RequestArenaCapacity := AOptions.RequestArenaCapacity;
   Result := NewH1ServerTransport(LH1Options);
 end;
 
@@ -118,6 +127,9 @@ begin
     LH2Options.MaxBodySize := UInt32(AOptions.MaxBodySize)
   else
     LH2Options.MaxBodySize := 0;
+  { H2 native connection-scoped RequestArena (Reset per stream request). }
+  LH2Options.RequestArena := AOptions.RequestArena;
+  LH2Options.RequestArenaCapacity := AOptions.RequestArenaCapacity;
   LInnerTransport := NewH2ServerTransport(LH2Options);
   if AOptions.TLSContext <> nil then
     Result := NewH2TlsServerTransport(AOptions.TLSContext, LInnerTransport)
@@ -131,9 +143,9 @@ procedure RegisterClientTransport(const AVersion: THttpVersion;
   const AFactory: THttpClientTransportFactory);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot register after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot register after initialization');
   if not Assigned(AFactory) then
-    raise EHttpError.Create('client transport factory must not be nil');
+    raise EHttpError.Create(hekRegistry, 'client transport factory must not be nil');
   GClientFactories[AVersion] := AFactory;
 end;
 
@@ -143,23 +155,23 @@ procedure RegisterServerTransport(const AVersion: THttpVersion;
   const AFactory: THttpServerTransportFactory);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot register after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot register after initialization');
   if not Assigned(AFactory) then
-    raise EHttpError.Create('server transport factory must not be nil');
+    raise EHttpError.Create(hekRegistry, 'server transport factory must not be nil');
   GServerFactories[AVersion] := AFactory;
 end;
 
 procedure UnregisterClientTransport(const AVersion: THttpVersion);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot unregister after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot unregister after initialization');
   GClientFactories[AVersion] := nil;
 end;
 
 procedure UnregisterServerTransport(const AVersion: THttpVersion);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot unregister after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot unregister after initialization');
   GServerFactories[AVersion] := nil;
 end;
 
@@ -190,9 +202,9 @@ end;
 procedure SetDefaultClientVersion(const AVersion: THttpVersion);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot change default after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot change default after initialization');
   if not HasClientTransport(AVersion) then
-    raise EHttpError.Create('no client transport registered for ' +
+    raise EHttpError.Create(hekRegistry, 'no client transport registered for ' +
       HttpVersionToStr(AVersion));
   GDefaultClientVersion := AVersion;
 end;
@@ -200,9 +212,9 @@ end;
 procedure SetDefaultServerVersion(const AVersion: THttpVersion);
 begin
   if GFrozen then
-    raise EHttpError.Create('registry frozen: cannot change default after initialization');
+    raise EHttpError.Create(hekRegistry, 'registry frozen: cannot change default after initialization');
   if not HasServerTransport(AVersion) then
-    raise EHttpError.Create('no server transport registered for ' +
+    raise EHttpError.Create(hekRegistry, 'no server transport registered for ' +
       HttpVersionToStr(AVersion));
   GDefaultServerVersion := AVersion;
 end;
@@ -228,7 +240,7 @@ var
   LFactory: THttpClientTransportFactory;
 begin
   if not TryGetClientTransportFactory(AVersion, LFactory) then
-    raise EHttpError.Create('no client transport registered for ' +
+    raise EHttpError.Create(hekRegistry, 'no client transport registered for ' +
       HttpVersionToStr(AVersion));
   Result := LFactory(AOptions);
 end;
@@ -239,7 +251,7 @@ var
   LFactory: THttpServerTransportFactory;
 begin
   if not TryGetServerTransportFactory(AVersion, LFactory) then
-    raise EHttpError.Create('no server transport registered for ' +
+    raise EHttpError.Create(hekRegistry, 'no server transport registered for ' +
       HttpVersionToStr(AVersion));
   Result := LFactory(AOptions);
 end;

@@ -3,7 +3,7 @@ program bench_http_h2;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.time,
   nextpas.core.base,
   nextpas.core.http.intf,
   nextpas.core.http.impl.h2.frame,

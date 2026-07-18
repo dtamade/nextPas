@@ -1,10 +1,29 @@
 # nextpas.core.mem 代码契约
 
-**模块路径**：`core/src/nextpas.core.mem*.pas`（106 个源文件）
+**模块路径**：`core/src/nextpas.core.mem*.pas`（105 个源文件）
 **层级**：L0-L3（内部分层）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-08
-**版本**：1.5
+**最后更新**：2026-07-15
+**版本**：1.7
+
+**关联冻结策略**：[ERROR-POLICY.md](ERROR-POLICY.md)（nil vs raise）
+**默认双轨**：[README.md](README.md) — 热路径 `DefaultHeap` / 插件面 `DefaultAllocator`
+
+---
+
+## 0. 默认双轨（契约级）
+
+| API | 后端 | 契约角色 |
+|-----|------|----------|
+| `DefaultHeap` / 过程式 `GetMem`·`FreeMem`·`AllocMem`·`ReallocMem` | `TGrowingAllocator` | **热路径默认堆** |
+| `DefaultAllocator: IAllocator` | Growing IAllocator 根 ± `NEXTPAS_MEM_DEBUG` | **注入/诊断面**，非热路径；**同进程堆** |
+| `GetRtlAllocator` | `TRtlAllocator` | 显式 RTL 后端 / bootstrap |
+
+- Growing 原生 free：`FreeMem(ptr, size)`；单参 `FreeMem(ptr)` 为兼容路径（span 扫描；非 size-class 块可回落 `System.FreeMem`）。
+- 过程式 `TryBlockSize(ptr, out size)`：查询 `DefaultHeap` 是否拥有该 size-class 块；True 时 `size` 为 size-class 容量（≥ 原请求）。nil / huge / 外源指针 → False。
+- **同堆互释（S5）**：`DefaultHeap` 与未包装 `DefaultAllocator`（`GetGrowingIAllocator`）分配的 size-class 块可互相释放；DEBUG wrap 链上的块必须经同一 wrap 链释放（除非 HEAP_DEBUG 把过程式也并入链）。`FreeMemOf` 仅在 wrap 关闭时短路 sized DefaultHeap free，避免绕过 tracking。
+- 双轨税证据：Scorecard **SC9**（`hot_heap` vs `plugin_ia`）。
+- `ResolveAllocator(nil)` → `GetGrowingIAllocator`（非 RTL）。
+- `NEXTPAS_MEM_DEBUG` **不得**改变 `DefaultHeap` 语义或性能。
 
 ---
 
@@ -56,7 +75,6 @@ IArena = interface
   procedure RestoreToMark(AMark: TArenaMark);
   procedure Reset;
   function UsedSize: SizeUInt;
-  function RemainingSize: SizeUInt;
   function Stats: TArenaStats;
 end;
 ```
@@ -135,7 +153,7 @@ constructor EOutOfMemory.CreateMsg(const aMsg: string);
 
 ### 全局不变量
 
-- **[INV-1]** `FAllocator` 字段永远非 nil（构造时通过内联 nil→GetRtlAllocator fallback 保证）
+- **[INV-1]** `FAllocator` 字段永远非 nil（构造时通过内联 nil→GetGrowingIAllocator / ResolveAllocator fallback 保证）
 - **[INV-2]** 对齐参数必须是 2 的幂（`IsPowerOfTwo` 验证）
 - **[INV-3]** `IAllocator` 实现的 `GetMem` 返回 nil 表示 OOM（不抛异常）
 - **[INV-4]** `IAllocator` 实现的 `FreeMem(nil)` 必须安全（调用方保证 nil 不传入）
@@ -211,7 +229,8 @@ Exception
 
 | 类型 | 线程安全 | 机制 | 说明 |
 |------|----------|------|------|
-| `TRtlAllocator` | ✅ | FPC RTL 保证 | 系统默认分配器 |
+| `TRtlAllocator` | ✅ | FPC RTL 保证 | 显式 `GetRtlAllocator`；`DefaultAllocator` 根是 Growing IAllocator |
+| `TGrowingIAllocator` | ✅ | Growing 适配 | `DefaultAllocator` / `ResolveAllocator(nil)` 根 |
 | `TGrowingAllocator` | ✅ | TLS cache + central lock | 核心分配器 |
 | `TTrackingAllocator` | ✅ | 内部 TMemMutex | 测试用 |
 | `TFallbackAllocator` | ❌ | 无 | 调用方负责同步 |
@@ -260,7 +279,7 @@ Arena（IArena 实现）
 ```
 IAllocator 实现：
   Create → [GetMem/FreeMem 循环] → Destroy
-    └── FAllocator 通过内联 nil→GetRtlAllocator fallback 绑定，生命周期跟随调用方
+    └── FAllocator 通过内联 nil→ResolveAllocator/GetGrowingIAllocator fallback 绑定，生命周期跟随调用方
 
 IArena 实现：
   Create → [Alloc 循环] → Reset → [Alloc 循环] → Destroy
@@ -279,57 +298,45 @@ IArena 实现：
 
 ## 6. 测试覆盖
 
-### 6.1 测试矩阵
+### 6.1 测试清单
 
-| 子系统 | 测试文件 | 套件数 | 测试数 | 失败数 |
-|--------|----------|--------|--------|--------|
-| Allocator CRT | allocator.crt | 1 | 2 | 0 |
-| Allocator Foundation | allocator.foundation | 1 | 3 | 0 |
-| Allocator Fallback | allocator.fallback | 1 | 20 | 0 |
-| Allocator Growing | growing_allocator | 1 | 15 | 0 |
-| Allocator Tracking | allocator.tracking | 1 | 19 | 0 |
-| Allocator Guard | test_guard | 1 | 13 | 0 |
-| Allocator 默认 | default_allocator | 1 | 2 | 0 |
-| Arena 基础 | arena | 1 | 15 | 0 |
-| Arena 分段 | arena.chunked | 1 | 27 | 0 |
-| Arena 类 | arena_class | 1 | 21 | 0 |
-| Arena 虚拟 | arena.virtual | 1 | 41 | 0 |
-| Arena 线程 | arena.thread | 1 | 26 | 0 |
-| BlockPool | blockpool | 1 | 15 | 0 |
-| BlockPool 增长 | blockpool.growable | 1 | 12 | 0 |
-| Central | central | 1 | 15 | 0 |
-| Concurrent | test_concurrent | 1 | 6 | 0 |
-| Concurrent 包装 | concurrent_wrappers | 1 | 16 | 0 |
-| 契约 | contracts | 1 | 25 | 0 |
-| Facade | facade | 1 | 12 | 0 |
-| Fixed Slab | fixed_slab | 1 | 14 | 0 |
-| Fuzz | fuzz | 1 | 7 | 0 |
-| Mapped Slab | mapped_slab_pool | 1 | 6 | 0 |
-| Memory Map | memory_map_allocator | 1 | 6 | 0 |
-| OOM | oom | 1 | 8 | 0 |
-| Platform Virtual | platform_virtual | 1 | 23 | 0 |
-| Pool 基础 | pool | 1 | 15 | 0 |
-| Pool Allocator | pool_allocator | 1 | 6 | 0 |
-| Pool Fixed 增长 | pool.fixed.growable | 1 | 12 | 0 |
-| Pool Object | pool.object_pool | 1 | 12 | 0 |
-| Pool SizeClass | pool.sizeclass | 1 | 16 | 0 |
-| Ring Buffer | ring_buffer | 1 | 31 | 0 |
-| Scavenger | scavenger | 1 | 7 | 0 |
-| Secure | secure | 1 | 7 | 0 |
-| Sharded Pools | sharded_pools | 1 | 12 | 0 |
-| Shared Memory | shared_memory | 1 | 8 | 0 |
-| Shuffle | shuffle | 1 | 7 | 0 |
-| SizeClass | sizeclass | 1 | 16 | 0 |
-| Slab Pool | slab_pool | 1 | 19 | 0 |
-| Slab Thread Safety | slab_thread_safety | 1 | 2 | 0 |
-| Span | span | 1 | 21 | 0 |
-| Stack Pool | stack_pool | 1 | 16 | 0 |
-| 稳定性 | stability | 1 | 17 | 0 |
-| Thread Cache | thread_cache | 1 | 7 | 0 |
-| Utils | utils | 1 | 42 | 0 |
-| **合计** | **44 个测试套件** | **44** | **639** | **0** |
+共 143 个测试目录（含 5 个 compile-gate）。完整列表：
 
-注：另有 5 个 compile-gate 测试（test_memory_map_compile_gate, test_mem_secure_windows_compile_gate, test_platform_virtual, test_shared_memory, test_mem），仅验证编译通过。
+```
+test_aligned test_aligned_allocator test_alignment_guarantee test_allocator_crt
+test_allocator_foundation test_allocator_mimalloc test_arena test_arena2
+test_arena_chunked test_arena_class test_arena_compiler test_arena_group
+test_arena_prop test_arena_stress test_base test_batch test_batch_allocator
+test_bitmap test_bitmap_allocator test_blockpool test_boundary_cases
+test_bounded test_bounded_allocator test_budget test_bump test_bump_allocator
+test_callback test_callback_allocator test_cascade test_cascade_allocator
+test_central test_coalesce test_compact test_composition test_concurrent
+test_concurrent_wrappers test_contracts test_counting test_cow test_cow_allocator
+test_crt test_crt_allocator test_debug test_debug_alloc test_debug_allocator
+test_default_allocator test_double_free test_dual test_error test_fail
+test_fail_allocator test_fallback test_fallback_allocator test_fixed_slab
+test_foundation test_fragmentation test_freelist test_fuzz test_group
+test_growing test_growing_allocator test_growing_block_pool test_growing_fixed_pool
+test_guard test_hotswap test_huge_page test_huge_page_allocator
+test_l0_dependency_boundaries test_leak_check_allocator test_leak_report
+test_logging test_mapped_file test_mapped_slab_pool test_mem
+test_memory_map_allocator test_memory_map_compile_gate test_mem_secure
+test_mem_secure_windows_compile_gate test_mem_stats test_mem_utils test_mimalloc
+test_mmap_allocator test_mutex test_numa test_object_pool test_oom test_oom_edge
+test_page test_platform_virtual test_pool test_pool2 test_pool_allocator
+test_pool_edge test_prediction test_prediction_allocator test_prefix
+test_prefix_allocator test_pressure test_realloc_edge test_registry test_replay
+test_ring_buffer test_rtl test_rwlock test_sampling test_sampling_allocator
+test_scavenger test_scoped test_scoped_allocator test_sentinel
+test_sentinel_allocator test_sharded_pools test_shared_memory test_shuffle
+test_size_class test_sizeclass test_size_class_allocator test_sizeclass_pool
+test_slab test_slab_allocator test_slab_pool test_slab_thread_safety test_sliding
+test_soak test_span test_stability test_stack test_stack_allocator
+test_stack_guard test_stack_pool test_stats test_stats_alloc test_stats_allocator
+test_thread_arena test_thread_cache test_thread_safe test_thread_safe_allocator
+test_threadsafe_concurrent test_tracking test_tracking_allocator test_watermark
+test_zeroed test_zeroed_allocator
+```
 
 ### 6.2 必须覆盖的场景
 
@@ -373,3 +380,4 @@ IArena 实现：
 | 2026-07-03 | 1.3 | 可用性审计修复：IAllocator 定义同步、nil/0 契约文档化、TAllocatorTraits 精简、IArenaCapacity 扩展接口 | Claude |
 | 2026-07-06 | 1.4 | 测试矩阵同步：44 suites / 639 tests，反映实际测试状态 | Claude |
 | 2026-07-08 | 1.5 | 演化路线图完成：106 源文件 / 58 测试目录 / 688 测试，新增 IBatchAllocator 接口 | Claude |
+| 2026-07-12 | 1.6 | 契约门禁修复：IAllocator 精简为 5 方法、IArena 移除 RemainingSize、测试清单同步 143 目录、源文件数 105 | Claude |

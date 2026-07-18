@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.skiplist_map;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   SL_MAP_MAX_LEVEL = 16;
@@ -73,6 +73,7 @@ type
     constructor Create(AMaxLevel: Int32 = SL_MAP_DEFAULT_MAX_LEVEL);
     destructor Destroy; override;
 
+  {** @concurrency Thread-safe (see source for details). }
     {** @desc 插入或更新键值对 }
     function Insert(const AKey, AValue: AnsiString): TSkipListMapResult;
     {** @desc 仅插入（键必须不存在） }

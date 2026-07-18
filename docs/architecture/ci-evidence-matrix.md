@@ -17,8 +17,10 @@ runtime evidence。
 
 | Workflow | Job | Public gate | Truth category | Boundary |
 | --- | --- | --- | --- | --- |
-| Linux Verification (`.github/workflows/ci.yml`) | `verify-linux-x86_64` | `make test-tooling` | `CI truth` and `source-contract` | Tooling contracts must run before local verification. |
-| Linux Verification (`.github/workflows/ci.yml`) | `verify-linux-x86_64` | `make verify` | `runtime`, `forced-compile`, and `CI truth` | Mirrors `build/verify_local.sh` through the root Makefile. |
+| Linux Verification (`.github/workflows/ci.yml`) | `verify-linux-x86_64` | `make test-tooling` | `CI truth` and `source-contract` | Tooling contracts must run before rebuild and local verification. |
+| Linux Verification (`.github/workflows/ci.yml`) | `verify-linux-x86_64` | `make rebuild-compiler` | `forced-compile` and `CI truth` | Canonical stage0 binary at `build/stage0-bootstrap/nextpas`; flags owned by `scripts/stage0-fpc-flags.sh` (shared with verify/run_all_tests). |
+| Linux Verification (`.github/workflows/ci.yml`) | `verify-linux-x86_64` | `make stage0-heap-debug-recipe` | `runtime` and `CI truth` | Fresh-process doctor under `NEXTPAS_MEM_HEAP_DEBUG` / `NEXTPAS_MEM_DEBUG`; asserts `heap_debug=y|n` dual-track via `scripts/stage0-heap-debug-env-recipe.sh`. |
+| Linux Verification (`.github/workflows/ci.yml`) | `verify-linux-x86_64` | `make verify` | `runtime`, `forced-compile`, and `CI truth` | Mirrors `build/verify_local.sh` through the root Makefile (rebuild-isolated stage0 + smoke, including mem-session/process-stats and the same HEAP_DEBUG recipe). |
 | Core CI (`.github/workflows/core-ci.yml`) | `test-linux` | `make -C .. core-ci-test` | `runtime` | Runs core tests and TUI benchmark smoke through the root Makefile gate. |
 | Core CI (`.github/workflows/core-ci.yml`) | `test-macos` | `make -C .. core-ci-best-effort-test CORE_CI_HOST=macOS` | `runtime` evidence where tests pass | Pass count 是有用的 host 覆盖；skipped rows 不是模块 readiness。 |
 | Core CI (`.github/workflows/core-ci.yml`) | `test-freebsd` | `make -C "$GITHUB_WORKSPACE" core-ci-best-effort-test CORE_CI_HOST=FreeBSD` | `runtime` evidence where tests pass | Push-only FreeBSD 覆盖；skipped rows 仍然是显式 non-evidence。 |
@@ -35,13 +37,15 @@ runtime evidence。
 `build/verify_local.sh` 或它拥有的 compiler/local verification surface，就运行
 `make verify`。
 
-在 root CI 里，`make test-tooling` must run before `make verify`。
+在 root CI 里，顺序固定为 `make test-tooling` → `make rebuild-compiler` → `make stage0-heap-debug-recipe` → `make verify`。
 
 ## Reading CI Results
 
 按声明的 truth category 读取 CI 结果：
 
-- `make test-tooling` pass 证明 tooling contracts 和 workflow wiring。
+- `make test-tooling` pass 证明 tooling contracts 和 workflow wiring（含 stage0 flags 单源契约与 HEAP_DEBUG recipe 接线）。
+- `make rebuild-compiler` pass 证明 canonical stage0 在 CI host FPC 下可重建（`-Fucore/src` / `-Fucompiler/lower` 等）。
+- `make stage0-heap-debug-recipe` pass 证明 doctor `mem-process-stats` 在 env 下双轨可观测（默认 `heap_debug=n`；`NEXTPAS_MEM_HEAP_DEBUG=1` → `heap_debug=y`）。
 - `make verify` pass 证明 Linux x86_64 上的 local verification mirror。
 - Core CI host pass 只证明那个 host 上实际跑过的测试的 runtime behavior。
 - 带 skips 的 best-effort host loop 是 coverage signal，不是 landing approval。

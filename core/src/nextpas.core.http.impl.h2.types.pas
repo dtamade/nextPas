@@ -172,6 +172,9 @@ type
     IdleTimeout: Int64;
     ReadIdleTimeout: Int64;
     PingTimeout: Int64;
+    { Connection-scoped LocalArena: Reset per stream request (serial on session). }
+    RequestArena: Boolean;
+    RequestArenaCapacity: SizeUInt;
     class function Default: TH2ServerTransportOptions; static;
     procedure Validate;
     function ToSettings: TH2Settings;
@@ -179,7 +182,13 @@ type
 
   TH2ClientTransportOptions = record
     Timeout: Int64;
+    { OS dial + post-dial first-write budget (ms). 0 = fall back to Timeout. }
+    ConnectTimeout: Int64;
+    { Max idle connections retained per authority (host/port/secure).
+      Not a global pool cap across hosts. Must be > 0. }
     MaxPoolSize: Int32;
+    { Wall-clock idle TTL (ms). 0 = no TTL. }
+    IdleTTL: Int64;
     HeaderTableSize: UInt32;
     EnablePush: Boolean;
     InitialStreamWindowSize: UInt32;
@@ -193,6 +202,8 @@ type
     class function Default: TH2ClientTransportOptions; static;
     procedure Validate;
     function ToSettings: TH2Settings;
+    { ConnectTimeout if >0, else Timeout (matches THttpClientOptions). }
+    function EffectiveConnectTimeout: Int64;
   end;
 
   { Generic flow-control bookkeeping shared by send and receive windows.
@@ -246,7 +257,7 @@ implementation
 
 procedure RaiseH2ConfigError(const AMessage: string);
 begin
-  raise EHttpError.Create(AMessage);
+  raise EHttpError.Create(hekArgument, AMessage);
 end;
 
 procedure EnsureNonNegativeTimeout(const AValue: Int64; const AName: string);
@@ -340,6 +351,8 @@ begin
   Result.IdleTimeout := 30000;
   Result.ReadIdleTimeout := 0;
   Result.PingTimeout := 5000;
+  Result.RequestArena := False;
+  Result.RequestArenaCapacity := 0;
 end;
 
 procedure TH2ServerTransportOptions.Validate;
@@ -374,7 +387,9 @@ end;
 class function TH2ClientTransportOptions.Default: TH2ClientTransportOptions;
 begin
   Result.Timeout := 30000;
+  Result.ConnectTimeout := 0;
   Result.MaxPoolSize := 64;
+  Result.IdleTTL := 90000;
   Result.HeaderTableSize := H2_DEFAULT_HEADER_TABLE_SIZE;
   Result.EnablePush := False;
   Result.InitialStreamWindowSize := H2_DEFAULT_INITIAL_WINDOW_SIZE;
@@ -393,7 +408,17 @@ begin
   EnsureValidConnectionWindowSize(InitialConnectionWindowSize);
   EnsureValidMaxFrameSize(MaxFrameSize);
   EnsureNonNegativeTimeout(Timeout, 'Timeout');
+  EnsureNonNegativeTimeout(ConnectTimeout, 'ConnectTimeout');
+  EnsureNonNegativeTimeout(IdleTTL, 'IdleTTL');
   EnsureNonNegativeTimeout(PingTimeout, 'PingTimeout');
+end;
+
+function TH2ClientTransportOptions.EffectiveConnectTimeout: Int64;
+begin
+  if ConnectTimeout > 0 then
+    Result := ConnectTimeout
+  else
+    Result := Timeout;
 end;
 
 function TH2ClientTransportOptions.ToSettings: TH2Settings;

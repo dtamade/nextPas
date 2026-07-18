@@ -7,11 +7,8 @@ end;
 
 function THIRLlvmEmitter.AddStrConstant(const AValue: string): LongInt;
 begin
-  Result := FStrConstCount;
-  if FStrConstCount >= Length(FStrConstants) then
-    SetLength(FStrConstants, FStrConstCount + 16);
-  FStrConstants[FStrConstCount] := AValue;
-  Inc(FStrConstCount);
+  Result := LongInt(FStrConstants.Count);
+  FStrConstants.Push(AValue);
 end;
 
 function THIRLlvmEmitter.EscapeLlvmStr(const AValue: string): string;
@@ -32,9 +29,12 @@ end;
 
 procedure THIRLlvmEmitter.EmitStrConstants;
 var
-  I, Len: LongInt;
+  I: SizeUInt;
+  Len: LongInt;
 begin
-  for I := 0 to FStrConstCount - 1 do
+  if FStrConstants.Count = 0 then
+    Exit;
+  for I := 0 to FStrConstants.Count - 1 do
   begin
     Len := Length(FStrConstants[I]);
     Emit('@.str.' + IntToStr(I) + ' = private constant [' + IntToStr(Len) +
@@ -238,20 +238,22 @@ var
   I, J: LongInt;
   Vmt: THIRVmtGlobal;
   Line: string;
+  FuncCount: LongInt;
 begin
   for I := 0 to FModule.VmtGlobalCount - 1 do
   begin
     Vmt := FModule.VmtGlobalAt(I);
-    if Length(Vmt.Funcs) = 0 then Continue;
+    if (Vmt.Funcs = nil) or (Vmt.Funcs.Count = 0) then Continue;
+    FuncCount := LongInt(Vmt.Funcs.Count);
     Line := '@' + Vmt.ClassName + '.vmt = internal constant [' +
-      IntToStr(Length(Vmt.Funcs)) + ' x ptr] [';
-    for J := 0 to High(Vmt.Funcs) do
+      IntToStr(FuncCount) + ' x ptr] [';
+    for J := 0 to FuncCount - 1 do
     begin
       if J > 0 then Line := Line + ', ';
-      if Vmt.Funcs[J] = '' then
+      if Vmt.Funcs[SizeUInt(J)] = '' then
         Line := Line + 'ptr null'
       else
-        Line := Line + 'ptr @' + Vmt.Funcs[J];
+        Line := Line + 'ptr @' + Vmt.Funcs[SizeUInt(J)];
     end;
     Line := Line + ']';
     Emit('');
@@ -264,32 +266,33 @@ var
   I, J, K: LongInt;
   Imt: THIRImtGlobal;
   Line, RealFunc, ThunkName, ParamStr, CallArgs: string;
-  OffsetBytes, ParamCount: LongInt;
+  OffsetBytes, ParamCount, ThunkCount: LongInt;
   UnderscorePos: LongInt;
 begin
   for I := 0 to FModule.ImtGlobalCount - 1 do
   begin
     Imt := FModule.ImtGlobalAt(I);
-    if Length(Imt.ThunkNames) = 0 then Continue;
+    if (Imt.ThunkNames = nil) or (Imt.ThunkNames.Count = 0) then Continue;
+    ThunkCount := LongInt(Imt.ThunkNames.Count);
 
     Line := '@' + Imt.ClassName + '.imt.' + Imt.InterfaceName +
-      ' = internal constant [' + IntToStr(Length(Imt.ThunkNames)) + ' x ptr] [';
-    for J := 0 to High(Imt.ThunkNames) do
+      ' = internal constant [' + IntToStr(ThunkCount) + ' x ptr] [';
+    for J := 0 to ThunkCount - 1 do
     begin
       if J > 0 then Line := Line + ', ';
-      if Imt.ThunkNames[J] = '' then
+      if Imt.ThunkNames[SizeUInt(J)] = '' then
         Line := Line + 'ptr null'
       else
-        Line := Line + 'ptr @' + Imt.ThunkNames[J];
+        Line := Line + 'ptr @' + Imt.ThunkNames[SizeUInt(J)];
     end;
     Line := Line + ']';
     Emit('');
     Emit(Line);
 
     OffsetBytes := Imt.SlotOffset * 8;
-    for J := 0 to High(Imt.ThunkNames) do
+    for J := 0 to ThunkCount - 1 do
     begin
-      ThunkName := Imt.ThunkNames[J];
+      ThunkName := Imt.ThunkNames[SizeUInt(J)];
       if ThunkName = '' then Continue;
       UnderscorePos := Pos('._intf_thunk_', ThunkName);
       if UnderscorePos > 0 then
@@ -299,8 +302,9 @@ begin
       else
         RealFunc := ThunkName;
       ParamCount := 0;
-      if J < Length(Imt.ThunkParamCounts) then
-        ParamCount := Imt.ThunkParamCounts[J];
+      if (Imt.ThunkParamCounts <> nil) and
+        (J < LongInt(Imt.ThunkParamCounts.Count)) then
+        ParamCount := Imt.ThunkParamCounts[SizeUInt(J)];
       ParamStr := 'ptr %intf_self';
       CallArgs := 'ptr %obj';
       for K := 0 to ParamCount - 1 do
@@ -321,21 +325,23 @@ end;
 
 function THIRLlvmEmitter.AsText: string;
 var
-  I: LongInt;
+  I: SizeUInt;
 begin
   Result := '';
-  for I := 0 to FLineCount - 1 do
-    Result := Result + FLines[I] + LineEnding;
+  if FLines.Count > 0 then
+    for I := 0 to FLines.Count - 1 do
+      Result := Result + FLines[I] + LineEnding;
 end;
 
 procedure THIRLlvmEmitter.SaveToFile(const APath: string);
 var
   F: TextFile;
-  I: LongInt;
+  I: SizeUInt;
 begin
   AssignFile(F, APath);
   Rewrite(F);
-  for I := 0 to FLineCount - 1 do
-    WriteLn(F, FLines[I]);
+  if FLines.Count > 0 then
+    for I := 0 to FLines.Count - 1 do
+      WriteLn(F, FLines[I]);
   CloseFile(F);
 end;

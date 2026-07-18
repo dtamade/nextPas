@@ -1,6 +1,6 @@
 # Lockfree API Reference
 
-> Updated: 2026-07-06
+> Updated: 2026-07-17
 
 [中文版](api-reference.md)
 
@@ -11,18 +11,18 @@
 ```pascal
 type
   TAtomicInt32 = record
-    function Load(const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    procedure Store(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent);
+    function Load(const AOrder: TMemoryOrder = moSeqCst): Int32;
+    procedure Store(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst);
     function CompareExchangeStrong(var AExpected: Int32; const ADesired: Int32; ...): Boolean;
     function CompareExchangeWeak(var AExpected: Int32; const ADesired: Int32; ...): Boolean;
-    function FetchAdd(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchSub(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchAnd(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchOr(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchXor(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchMax(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function FetchMin(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
-    function Exchange(const AValue: Int32; const AOrder: TMemoryOrder = moSequentiallyConsistent): Int32;
+    function FetchAdd(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchSub(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchAnd(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchOr(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchXor(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchMax(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function FetchMin(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
+    function Exchange(const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32;
     function UpdateIfEqual(const AExpected, ADesired: Int32; ...): Boolean;
     procedure Wait(const AExpected: Int32);
     procedure NotifyOne;
@@ -47,10 +47,10 @@ type
 ```pascal
 type
   generic TAtomicPtr<T> = record
-    function Load(const AOrder: TMemoryOrder = moSequentiallyConsistent): T;
-    procedure Store(const AValue: T; const AOrder: TMemoryOrder = moSequentiallyConsistent);
+    function Load(const AOrder: TMemoryOrder = moSeqCst): T;
+    procedure Store(const AValue: T; const AOrder: TMemoryOrder = moSeqCst);
     function CompareExchangeStrong(var AExpected: T; const ADesired: T; ...): Boolean;
-    function Exchange(const AValue: T; const AOrder: TMemoryOrder = moSequentiallyConsistent): T;
+    function Exchange(const AValue: T; const AOrder: TMemoryOrder = moSeqCst): T;
   end;
 ```
 
@@ -461,7 +461,7 @@ end;
 
 ## Channel (nextpas.core.lockfree.channel)
 
-Bounded lock-free Channel, sequence-number driven MPSC/SPMC channel.
+Bounded lock-free Channel, sequence-number driven **MPMC-style** channel.
 
 ```pascal
 type
@@ -489,7 +489,8 @@ type
 - `Send` to closed channel throws `EInvalidOperationError` (Go panic aligned)
 - `TrySend` to closed channel returns `False` (Go select ok=false aligned)
 - Already-enqueued data still readable after Close
-- Capacity automatically rounded up to power-of-two
+- Capacity automatically rounded up to power-of-two; **capacity=1 supported** with distinguishable full/empty (same empty/full sequence encoding as MPMC; R5)
+- Optional `TrySendEx` / `TryReceiveEx`: full→`lfteFull`, empty→`lfteEmpty`, closed→`lfteClosed`
 - `TryResize` dynamically adjusts capacity (spin-flag mechanism)
 
 ---
@@ -616,10 +617,10 @@ end;
 
 ## T Type Constraints
 
-All lockfree data structures require `T` to be unmanaged type:
+All lockfree data structures require `T` to be unmanaged (preferred message template: CONTRACT §3.1):
 ```pascal
 if IsManagedType(T) then
-  raise EArgumentError.Create('T must be unmanaged');
+  raise EArgumentError.Create('<TypeName>: T must be unmanaged');
 ```
 
 Supported types: Integer, UInt32, UInt64, Pointer, record (no string/dyn array/interface)

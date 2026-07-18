@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.trie_map;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   TRIE_BRANCH_BITS = 4;
@@ -93,6 +93,7 @@ type
     constructor Create;
     destructor Destroy; override;
 
+  {** @concurrency Thread-safe (see source for details). }
     {** @desc 插入或更新键值对 }
     function Insert(const AKey, AValue: AnsiString): TTrieMapResult;
     {** @desc 仅插入（键必须不存在） }

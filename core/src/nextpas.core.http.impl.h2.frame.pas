@@ -289,7 +289,7 @@ var
 begin
   LPayloadLen := SizeUInt(Length(APayload));
   if LPayloadLen > H2_ABSOLUTE_MAX_FRAME_SIZE then
-    raise EHttpError.Create('HTTP/2 frame payload exceeds 24-bit length limit');
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 frame payload exceeds 24-bit length limit');
   LHdr.Len := UInt32(LPayloadLen);
   LHdr.FrameType := AFrameType;
   LHdr.Flags := AFlags;

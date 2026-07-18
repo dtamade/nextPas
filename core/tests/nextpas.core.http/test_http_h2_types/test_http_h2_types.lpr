@@ -55,6 +55,9 @@ begin
   CheckEqual(Int64(0), Int64(LOptions.ReadIdleTimeout),
     'server read idle timeout');
   CheckEqual(Int64(5000), Int64(LOptions.PingTimeout), 'server ping timeout');
+  Check(not LOptions.RequestArena, 'server RequestArena default off');
+  CheckEqual(Int64(0), Int64(LOptions.RequestArenaCapacity),
+    'server RequestArenaCapacity default 0');
 end;
 
 procedure TestClientOptionsDefaults;

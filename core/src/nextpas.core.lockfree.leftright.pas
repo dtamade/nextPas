@@ -38,6 +38,7 @@ type
 
   {** @desc Left-Right 并发控制
     @details 双副本交替读写。读无锁，写等待所有读者完成后翻转。
+  {** @concurrency Thread-safe (see source for details). }
       比 RCU 更结构化，比 RwLock 读性能更好。 }
   TLeftRight = class
   private
@@ -50,6 +51,7 @@ type
     function HasReaders(AIndex: Int32): Boolean;
   public
     constructor Create;
+    destructor Destroy; override;
     { Read side: lock-free }
     function EnterRead: Int32;
     procedure ExitRead(AIndex: Int32);
@@ -182,6 +184,12 @@ end;
 procedure TLeftRight.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TLeftRight.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLeftRight.IsClosed: Boolean; inline;

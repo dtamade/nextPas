@@ -632,6 +632,354 @@ begin
   CheckNear(0.0, LOutput[1], 1e-6, 'Neg(0) = 0');
 end;
 
+{ ============================================================================
+  F64 batch surface — open-array / count / Array*F64 dispatch
+  ============================================================================ }
+
+procedure TestBatchSinSimdF64;
+var
+  LInput: array[0..3] of Double;
+  LOutput: array[0..3] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.0;
+  LInput[1] := PI_VALUE / 2;
+  LInput[2] := PI_VALUE;
+  LInput[3] := 3 * PI_VALUE / 2;
+
+  LCount := BatchSinSimdF64(LInput, LOutput);
+  Check(LCount = 4, 'BatchSinSimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchSinSimdF64 [0]');
+  CheckNear(1.0, LOutput[1], 1e-12, 'BatchSinSimdF64 [1]');
+  CheckNear(0.0, LOutput[2], 1e-12, 'BatchSinSimdF64 [2]');
+  CheckNear(-1.0, LOutput[3], 1e-12, 'BatchSinSimdF64 [3]');
+end;
+
+procedure TestBatchCosSimdF64;
+var
+  LInput: array[0..3] of Double;
+  LOutput: array[0..3] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.0;
+  LInput[1] := PI_VALUE / 2;
+  LInput[2] := PI_VALUE;
+  LInput[3] := 3 * PI_VALUE / 2;
+
+  LCount := BatchCosSimdF64(LInput, LOutput);
+  Check(LCount = 4, 'BatchCosSimdF64 returns correct count');
+  CheckNear(1.0, LOutput[0], 1e-12, 'BatchCosSimdF64 [0]');
+  CheckNear(0.0, LOutput[1], 1e-12, 'BatchCosSimdF64 [1]');
+  CheckNear(-1.0, LOutput[2], 1e-12, 'BatchCosSimdF64 [2]');
+  CheckNear(0.0, LOutput[3], 1e-12, 'BatchCosSimdF64 [3]');
+end;
+
+procedure TestBatchTanSimdF64;
+var
+  LInput: array[0..1] of Double;
+  LOutput: array[0..1] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.0;
+  LInput[1] := PI_VALUE / 4;
+
+  LCount := BatchTanSimdF64(LInput, LOutput);
+  Check(LCount = 2, 'BatchTanSimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchTanSimdF64 [0]');
+  CheckNear(1.0, LOutput[1], 1e-12, 'BatchTanSimdF64 [1]');
+end;
+
+procedure TestBatchSinCosSimdF64;
+var
+  LInput: array[0..3] of Double;
+  LSinOutput: array[0..3] of Double;
+  LCosOutput: array[0..3] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.0;
+  LInput[1] := PI_VALUE / 2;
+  LInput[2] := PI_VALUE;
+  LInput[3] := 3 * PI_VALUE / 2;
+
+  LCount := BatchSinCosSimdF64(LInput, LSinOutput, LCosOutput);
+  Check(LCount = 4, 'BatchSinCosSimdF64 returns correct count');
+  CheckNear(0.0, LSinOutput[0], 1e-12, 'BatchSinCosSimdF64 Sin[0]');
+  CheckNear(1.0, LSinOutput[1], 1e-12, 'BatchSinCosSimdF64 Sin[1]');
+  CheckNear(1.0, LCosOutput[0], 1e-12, 'BatchSinCosSimdF64 Cos[0]');
+  CheckNear(0.0, LCosOutput[1], 1e-12, 'BatchSinCosSimdF64 Cos[1]');
+end;
+
+procedure TestBatchExpSimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.0;
+  LInput[1] := 1.0;
+  LInput[2] := 2.0;
+
+  LCount := BatchExpSimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchExpSimdF64 returns correct count');
+  CheckNear(1.0, LOutput[0], 1e-12, 'BatchExpSimdF64 [0]');
+  CheckNear(2.718281828459045, LOutput[1], 1e-12, 'BatchExpSimdF64 [1]');
+  CheckNear(7.38905609893065, LOutput[2], 1e-12, 'BatchExpSimdF64 [2]');
+end;
+
+procedure TestBatchLnSimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 1.0;
+  LInput[1] := 2.718281828459045;
+  LInput[2] := 7.38905609893065;
+
+  LCount := BatchLnSimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchLnSimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchLnSimdF64 [0]');
+  CheckNear(1.0, LOutput[1], 1e-12, 'BatchLnSimdF64 [1]');
+  CheckNear(2.0, LOutput[2], 1e-12, 'BatchLnSimdF64 [2]');
+end;
+
+procedure TestBatchLog2SimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 1.0;
+  LInput[1] := 2.0;
+  LInput[2] := 4.0;
+
+  LCount := BatchLog2SimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchLog2SimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchLog2SimdF64 [0]');
+  CheckNear(1.0, LOutput[1], 1e-12, 'BatchLog2SimdF64 [1]');
+  CheckNear(2.0, LOutput[2], 1e-12, 'BatchLog2SimdF64 [2]');
+end;
+
+procedure TestBatchLog10SimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 1.0;
+  LInput[1] := 10.0;
+  LInput[2] := 100.0;
+
+  LCount := BatchLog10SimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchLog10SimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchLog10SimdF64 [0]');
+  CheckNear(1.0, LOutput[1], 1e-12, 'BatchLog10SimdF64 [1]');
+  CheckNear(2.0, LOutput[2], 1e-12, 'BatchLog10SimdF64 [2]');
+end;
+
+procedure TestBatchSqrtSimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.0;
+  LInput[1] := 4.0;
+  LInput[2] := 9.0;
+
+  LCount := BatchSqrtSimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchSqrtSimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchSqrtSimdF64 [0]');
+  CheckNear(2.0, LOutput[1], 1e-12, 'BatchSqrtSimdF64 [1]');
+  CheckNear(3.0, LOutput[2], 1e-12, 'BatchSqrtSimdF64 [2]');
+end;
+
+procedure TestBatchAbsSimdF64;
+var
+  LInput: array[0..3] of Double;
+  LOutput: array[0..3] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := -3.0;
+  LInput[1] := -1.0;
+  LInput[2] := 0.0;
+  LInput[3] := 2.0;
+
+  LCount := BatchAbsSimdF64(LInput, LOutput);
+  Check(LCount = 4, 'BatchAbsSimdF64 returns correct count');
+  CheckNear(3.0, LOutput[0], 1e-12, 'BatchAbsSimdF64 [0]');
+  CheckNear(1.0, LOutput[1], 1e-12, 'BatchAbsSimdF64 [1]');
+  CheckNear(0.0, LOutput[2], 1e-12, 'BatchAbsSimdF64 [2]');
+  CheckNear(2.0, LOutput[3], 1e-12, 'BatchAbsSimdF64 [3]');
+end;
+
+procedure TestBatchNegSimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 1.0;
+  LInput[1] := 0.0;
+  LInput[2] := -2.0;
+
+  LCount := BatchNegSimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchNegSimdF64 returns correct count');
+  CheckNear(-1.0, LOutput[0], 1e-12, 'BatchNegSimdF64 [0]');
+  CheckNear(0.0, LOutput[1], 1e-12, 'BatchNegSimdF64 [1]');
+  CheckNear(2.0, LOutput[2], 1e-12, 'BatchNegSimdF64 [2]');
+end;
+
+procedure TestBatchCeilSimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.5;
+  LInput[1] := 1.2;
+  LInput[2] := -0.8;
+
+  LCount := BatchCeilSimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchCeilSimdF64 returns correct count');
+  CheckNear(1.0, LOutput[0], 1e-12, 'BatchCeilSimdF64 [0]');
+  CheckNear(2.0, LOutput[1], 1e-12, 'BatchCeilSimdF64 [1]');
+  CheckNear(0.0, LOutput[2], 1e-12, 'BatchCeilSimdF64 [2]');
+end;
+
+procedure TestBatchFloorSimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.5;
+  LInput[1] := 1.2;
+  LInput[2] := -0.8;
+
+  LCount := BatchFloorSimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchFloorSimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchFloorSimdF64 [0]');
+  CheckNear(1.0, LOutput[1], 1e-12, 'BatchFloorSimdF64 [1]');
+  CheckNear(-1.0, LOutput[2], 1e-12, 'BatchFloorSimdF64 [2]');
+end;
+
+procedure TestBatchRoundSimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.4;
+  LInput[1] := 1.2;
+  LInput[2] := 1.7;
+
+  LCount := BatchRoundSimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchRoundSimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchRoundSimdF64 [0]');
+  CheckNear(1.0, LOutput[1], 1e-12, 'BatchRoundSimdF64 [1]');
+  CheckNear(2.0, LOutput[2], 1e-12, 'BatchRoundSimdF64 [2]');
+end;
+
+procedure TestBatchTruncSimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.5;
+  LInput[1] := 1.2;
+  LInput[2] := -1.7;
+
+  LCount := BatchTruncSimdF64(LInput, LOutput);
+  Check(LCount = 3, 'BatchTruncSimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchTruncSimdF64 [0]');
+  CheckNear(1.0, LOutput[1], 1e-12, 'BatchTruncSimdF64 [1]');
+  CheckNear(-1.0, LOutput[2], 1e-12, 'BatchTruncSimdF64 [2]');
+end;
+
+procedure TestBatchLerpSimdF64;
+var
+  LStart: array[0..2] of Double;
+  LEnd: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LStart[0] := 0.0; LEnd[0] := 10.0;
+  LStart[1] := 5.0; LEnd[1] := 15.0;
+  LStart[2] := 10.0; LEnd[2] := 20.0;
+
+  LCount := BatchLerpSimdF64(LStart, LEnd, 0.5, LOutput);
+  Check(LCount = 3, 'BatchLerpSimdF64 returns correct count');
+  CheckNear(5.0, LOutput[0], 1e-12, 'BatchLerpSimdF64 [0]');
+  CheckNear(10.0, LOutput[1], 1e-12, 'BatchLerpSimdF64 [1]');
+  CheckNear(15.0, LOutput[2], 1e-12, 'BatchLerpSimdF64 [2]');
+end;
+
+procedure TestBatchClampSimdF64;
+var
+  LInput: array[0..4] of Double;
+  LOutput: array[0..4] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := -5.0;
+  LInput[1] := 0.0;
+  LInput[2] := 3.0;
+  LInput[3] := 5.0;
+  LInput[4] := 10.0;
+
+  LCount := BatchClampSimdF64(LInput, 0.0, 5.0, LOutput);
+  Check(LCount = 5, 'BatchClampSimdF64 returns correct count');
+  CheckNear(0.0, LOutput[0], 1e-12, 'BatchClampSimdF64 [0]');
+  CheckNear(0.0, LOutput[1], 1e-12, 'BatchClampSimdF64 [1]');
+  CheckNear(3.0, LOutput[2], 1e-12, 'BatchClampSimdF64 [2]');
+  CheckNear(5.0, LOutput[3], 1e-12, 'BatchClampSimdF64 [3]');
+  CheckNear(5.0, LOutput[4], 1e-12, 'BatchClampSimdF64 [4]');
+end;
+
+procedure TestBatchScaleOffsetSimdF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..2] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 1.0;
+  LInput[1] := 2.0;
+  LInput[2] := 3.0;
+
+  LCount := BatchScaleOffsetSimdF64(LInput, 2.0, 1.0, LOutput);
+  Check(LCount = 3, 'BatchScaleOffsetSimdF64 returns correct count');
+  CheckNear(3.0, LOutput[0], 1e-12, 'BatchScaleOffsetSimdF64 [0]');
+  CheckNear(5.0, LOutput[1], 1e-12, 'BatchScaleOffsetSimdF64 [1]');
+  CheckNear(7.0, LOutput[2], 1e-12, 'BatchScaleOffsetSimdF64 [2]');
+end;
+
+procedure TestBatchSinEmptyF64;
+var
+  LInput: array of Double;
+  LOutput: array of Double;
+  LCount: SizeInt;
+begin
+  SetLength(LInput, 0);
+  SetLength(LOutput, 0);
+  LCount := BatchSinSimdF64(LInput, LOutput);
+  Check(LCount = 0, 'Empty F64 input should return 0');
+end;
+
+procedure TestBatchSinMismatchedLengthF64;
+var
+  LInput: array[0..2] of Double;
+  LOutput: array[0..0] of Double;
+  LCount: SizeInt;
+begin
+  LInput[0] := 0.0;
+  LInput[1] := 1.0;
+  LInput[2] := 2.0;
+
+  LCount := BatchSinSimdF64(LInput, LOutput);
+  Check(LCount = 1, 'F64 should return min length');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.math.batch.simd');
 
@@ -666,6 +1014,27 @@ begin
   T.Test('BatchSqrtSimdF32 Boundary', @TestBatchSqrtSimd_Boundary);
   T.Test('BatchAbsSimdF32 Boundary', @TestBatchAbsSimd_Boundary);
   T.Test('BatchNegSimdF32 Boundary', @TestBatchNegSimd_Boundary);
+
+  T.Test('BatchSinSimdF64', @TestBatchSinSimdF64);
+  T.Test('BatchCosSimdF64', @TestBatchCosSimdF64);
+  T.Test('BatchTanSimdF64', @TestBatchTanSimdF64);
+  T.Test('BatchSinCosSimdF64', @TestBatchSinCosSimdF64);
+  T.Test('BatchExpSimdF64', @TestBatchExpSimdF64);
+  T.Test('BatchLnSimdF64', @TestBatchLnSimdF64);
+  T.Test('BatchLog2SimdF64', @TestBatchLog2SimdF64);
+  T.Test('BatchLog10SimdF64', @TestBatchLog10SimdF64);
+  T.Test('BatchSqrtSimdF64', @TestBatchSqrtSimdF64);
+  T.Test('BatchAbsSimdF64', @TestBatchAbsSimdF64);
+  T.Test('BatchNegSimdF64', @TestBatchNegSimdF64);
+  T.Test('BatchCeilSimdF64', @TestBatchCeilSimdF64);
+  T.Test('BatchFloorSimdF64', @TestBatchFloorSimdF64);
+  T.Test('BatchRoundSimdF64', @TestBatchRoundSimdF64);
+  T.Test('BatchTruncSimdF64', @TestBatchTruncSimdF64);
+  T.Test('BatchLerpSimdF64', @TestBatchLerpSimdF64);
+  T.Test('BatchClampSimdF64', @TestBatchClampSimdF64);
+  T.Test('BatchScaleOffsetSimdF64', @TestBatchScaleOffsetSimdF64);
+  T.Test('BatchSinSimdF64 Empty', @TestBatchSinEmptyF64);
+  T.Test('BatchSinSimdF64 MismatchedLength', @TestBatchSinMismatchedLengthF64);
 
   if not T.Run then Halt(1);
 end.

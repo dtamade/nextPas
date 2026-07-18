@@ -3,11 +3,14 @@ program test_http_h2_client;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, Classes,
   nextpas.core.base,
+  nextpas.core.base.utils,
+  nextpas.core.errors,
+  nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.io.base,
   nextpas.core.io.memory,
+  nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.time.deadline,
@@ -24,6 +27,7 @@ uses
   nextpas.core.http.impl.tls.stream,
   nextpas.core.http.impl.registry,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.tls.base,
   nextpas.core.tls.connection.base;
 
@@ -32,6 +36,14 @@ const
     '../../../src/nextpas.core.http.impl.h2.client.pas';
   H2_CLIENT_SOURCE_PATH_FROM_ROOT =
     'core/src/nextpas.core.http.impl.h2.client.pas';
+  H2_REGISTRY_SOURCE_PATH_FROM_TEST =
+    '../../../src/nextpas.core.http.impl.registry.pas';
+  H2_REGISTRY_SOURCE_PATH_FROM_ROOT =
+    'core/src/nextpas.core.http.impl.registry.pas';
+  TLS_STREAM_SOURCE_PATH_FROM_TEST =
+    '../../../src/nextpas.core.http.impl.tls.stream.pas';
+  TLS_STREAM_SOURCE_PATH_FROM_ROOT =
+    'core/src/nextpas.core.http.impl.tls.stream.pas';
 
 type
   TFakeTcpStream = class(TInterfacedObject, ITcpStream)
@@ -45,6 +57,14 @@ type
     FReadDeadline: TDeadline;
     FWriteDeadline: TDeadline;
     FMaxWriteChunk: SizeUInt;
+    FCancelToken: INetCancelToken;
+    FCancelSetCount: Int32;
+    FCancelClearCount: Int32;
+    FReadDeadlineSetCount: Int32;
+    FWriteDeadlineSetCount: Int32;
+    FLastReadDeadlineMs: Int64;
+    FLastWriteDeadlineMs: Int64;
+    FMinFiniteReadDeadlineMs: Int64;
   public
     constructor Create(const AReadData: AnsiString);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -61,8 +81,17 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+    procedure SetCancelToken(const AToken: INetCancelToken);
     procedure AppendReadData(const AData: AnsiString);
     function WrittenData: AnsiString;
+    function HasCancelToken: Boolean;
+    property CancelSetCount: Int32 read FCancelSetCount;
+    property CancelClearCount: Int32 read FCancelClearCount;
+    property ReadDeadlineSetCount: Int32 read FReadDeadlineSetCount;
+    property WriteDeadlineSetCount: Int32 read FWriteDeadlineSetCount;
+    property LastReadDeadlineMs: Int64 read FLastReadDeadlineMs;
+    property LastWriteDeadlineMs: Int64 read FLastWriteDeadlineMs;
+    property MinFiniteReadDeadlineMs: Int64 read FMinFiniteReadDeadlineMs;
     property MaxWriteChunk: SizeUInt read FMaxWriteChunk write FMaxWriteChunk;
   end;
 
@@ -205,12 +234,15 @@ var
   GDialIndex: SizeInt;
   GLastDialHost: string;
   GLastDialPort: UInt16;
+  GLastDialTimeoutMs: Int64;
 
-function TestDial(const AHost: string; const APort: UInt16): ITcpStream;
+function TestDial(const AHost: string; const APort: UInt16;
+  const ADialTimeoutMs: Int64): ITcpStream;
 begin
   Check(GDialIndex < GDialCount, 'dial queue has connection');
   GLastDialHost := AHost;
   GLastDialPort := APort;
+  GLastDialTimeoutMs := ADialTimeoutMs;
   Result := GDialQueue[GDialIndex];
   Inc(GDialIndex);
 end;
@@ -226,6 +258,7 @@ begin
   GDialIndex := 0;
   GLastDialHost := '';
   GLastDialPort := 0;
+  GLastDialTimeoutMs := -1;
 end;
 
 procedure QueueDialConn(const AConn: ITcpStream);
@@ -470,6 +503,11 @@ begin
   FReadDeadline := TDeadline.Infinite;
   FWriteDeadline := TDeadline.Infinite;
   FMaxWriteChunk := 0;
+  FReadDeadlineSetCount := 0;
+  FWriteDeadlineSetCount := 0;
+  FLastReadDeadlineMs := -1;
+  FLastWriteDeadlineMs := -1;
+  FMinFiniteReadDeadlineMs := High(Int64);
 end;
 
 function TFakeTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -553,13 +591,44 @@ begin
 end;
 
 procedure TFakeTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+var
+  LMs: Int64;
 begin
   FReadDeadline := ADeadline;
+  Inc(FReadDeadlineSetCount);
+  if ADeadline.IsInfinite then
+    FLastReadDeadlineMs := -1
+  else
+  begin
+    LMs := ADeadline.Remaining.AsMilliseconds;
+    FLastReadDeadlineMs := LMs;
+    if LMs < FMinFiniteReadDeadlineMs then
+      FMinFiniteReadDeadlineMs := LMs;
+  end;
 end;
 
 procedure TFakeTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   FWriteDeadline := ADeadline;
+  Inc(FWriteDeadlineSetCount);
+  if ADeadline.IsInfinite then
+    FLastWriteDeadlineMs := -1
+  else
+    FLastWriteDeadlineMs := ADeadline.Remaining.AsMilliseconds;
+end;
+
+procedure TFakeTcpStream.SetCancelToken(const AToken: INetCancelToken);
+begin
+  FCancelToken := AToken;
+  if AToken = nil then
+    Inc(FCancelClearCount)
+  else
+    Inc(FCancelSetCount);
+end;
+
+function TFakeTcpStream.HasCancelToken: Boolean;
+begin
+  Result := FCancelToken <> nil;
 end;
 
 procedure TFakeTcpStream.AppendReadData(const AData: AnsiString);
@@ -1073,6 +1142,8 @@ begin
   try
     LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/ping'));
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'response status');
+    CheckEqual(Int64(Ord(hvHttp2)), Int64(Ord(LResp.Version)),
+      'H2 BuildResponse sets Version to HTTP/2');
     CheckEqual('pong', ReadAllBody(LResp.Body), 'response body');
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -1114,8 +1185,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPost, 'http://example.com/post',
-      NewHttpHeaders, LBody as IReader, 3));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPost, 'http://example.com/post').Headers(NewHttpHeaders).Body(LBody).ContentLength(3).Build);
     CheckEqual(Int64(201), Int64(LResp.StatusCode), 'post response status');
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -1159,8 +1229,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/filter',
-      LHeaders));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/filter').Headers(LHeaders).Build);
     LResp := nil;
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -1211,8 +1280,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/te-trailers',
-      LHeaders));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/te-trailers').Headers(LHeaders).Build);
     LResp := nil;
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -1255,8 +1323,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPost,
-      'http://example.com/settings-window', NewHttpHeaders, LBody as IReader, 4));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPost, 'http://example.com/settings-window').Headers(NewHttpHeaders).Body(LBody).ContentLength(4).Build);
     CheckEqual(Int64(200), Int64(LResp.StatusCode),
       'runtime SETTINGS response status');
 
@@ -1312,8 +1379,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPost,
-      'http://example.com/window-update', NewHttpHeaders, LBody as IReader, 4));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPost, 'http://example.com/window-update').Headers(NewHttpHeaders).Body(LBody).ContentLength(4).Build);
     CheckEqual(Int64(201), Int64(LResp.StatusCode),
       'WINDOW_UPDATE response status');
 
@@ -1593,6 +1659,345 @@ begin
   end;
 end;
 
+procedure TestTransportConnectTimeoutUsedAsDialBudget;
+var
+  LTransport: IHttpTransport;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LOpts: TH2ClientTransportOptions;
+begin
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []));
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LOpts := TH2ClientTransportOptions.Default;
+    LOpts.Timeout := 30000;
+    LOpts.ConnectTimeout := 1500;
+    LTransport := NewH2ClientTransport(LOpts);
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/ct'));
+    LResp := nil;
+    CheckEqual(Int64(1500), GLastDialTimeoutMs,
+      'ConnectTimeout is effective H2 dial budget');
+    CheckEqual(Int64(1500), LOpts.EffectiveConnectTimeout,
+      'EffectiveConnectTimeout prefers ConnectTimeout');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LTransport := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestTransportDialFallsBackToTimeoutWhenConnectTimeoutZero;
+var
+  LTransport: IHttpTransport;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LOpts: TH2ClientTransportOptions;
+begin
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []));
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LOpts := TH2ClientTransportOptions.Default;
+    LOpts.Timeout := 12000;
+    LOpts.ConnectTimeout := 0;
+    LTransport := NewH2ClientTransport(LOpts);
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/fb'));
+    LResp := nil;
+    CheckEqual(Int64(12000), GLastDialTimeoutMs,
+      'Timeout is dial budget when ConnectTimeout=0');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LTransport := nil;
+    LStream := nil;
+  end;
+end;
+
+procedure TestTransportAppliesAndClearsCancelToken;
+var
+  LTransport: IHttpTransport;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LToken: IHttpCancelToken;
+  LReq: IHttpRequest;
+  LOpts: THttpRequestOptions;
+begin
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []));
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LToken := NewHttpCancelToken;
+    LReq := NewRequest(hmGet, 'http://example.com/cancel');
+    LOpts := Default(THttpRequestOptions);
+    LOpts := LOpts.WithCancelToken(LToken);
+    (LReq as IHttpRequestWithOptions).SetRequestOptions(LOpts);
+    LTransport := NewH2ClientTransport(TH2ClientTransportOptions.Default);
+    LResp := LTransport.RoundTrip(LReq);
+    LResp := nil;
+    Check(LStream.CancelSetCount >= 1, 'cancel token applied to stream');
+    Check(LStream.CancelClearCount >= 1, 'cancel token cleared after RoundTrip');
+    Check(not LStream.HasCancelToken, 'stream has no cancel token after clear');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LTransport := nil;
+    LStream := nil;
+    LReq := nil;
+    LToken := nil;
+  end;
+end;
+
+procedure TestTransportPoolReuseClearsCancelBetweenRequests;
+var
+  LTransport: IHttpTransport;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LToken: IHttpCancelToken;
+  LReq: IHttpRequest;
+  LOpts: THttpRequestOptions;
+  LSetAfterFirst: Int32;
+begin
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', '', []) +
+    ComposeResponse(3, '200', '', []));
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LTransport := NewH2ClientTransport(TH2ClientTransportOptions.Default);
+    LToken := NewHttpCancelToken;
+    LReq := NewRequest(hmGet, 'http://example.com/one');
+    LOpts := Default(THttpRequestOptions).WithCancelToken(LToken);
+    (LReq as IHttpRequestWithOptions).SetRequestOptions(LOpts);
+    LResp := LTransport.RoundTrip(LReq);
+    LResp := nil;
+    LSetAfterFirst := LStream.CancelSetCount;
+    Check(LSetAfterFirst >= 1, 'first request applied cancel');
+    Check(not LStream.HasCancelToken, 'cleared before pool put');
+    { Second request without cancel must not leave a token. }
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/two'));
+    LResp := nil;
+    Check(not LStream.HasCancelToken, 'pooled second request ends without cancel');
+    CheckEqual(Int64(1), Int64(GDialIndex), 'still one dial (pooled)');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LTransport := nil;
+    LStream := nil;
+    LReq := nil;
+    LToken := nil;
+  end;
+end;
+
+procedure TestH2ConnectTimeoutRegistrySourceContract;
+var
+  LSrc: string;
+begin
+  LSrc := ReadSourceFile(ResolveSourcePath(H2_REGISTRY_SOURCE_PATH_FROM_TEST,
+    H2_REGISTRY_SOURCE_PATH_FROM_ROOT));
+  Check(Pos('LH2Options.ConnectTimeout := AOptions.ConnectTimeout', LSrc) > 0,
+    'registry copies ConnectTimeout into H2 client options');
+  Check(Pos('LH1Options.ConnectTimeout := AOptions.ConnectTimeout', LSrc) > 0,
+    'registry copies ConnectTimeout into H1 client options');
+end;
+
+procedure TestH2DialAndCancelSourceContract;
+var
+  LSrc: string;
+  LSecurePos: SizeInt;
+  LSecureBlock: string;
+begin
+  LSrc := ReadSourceFile(ResolveSourcePath(H2_CLIENT_SOURCE_PATH_FROM_TEST,
+    H2_CLIENT_SOURCE_PATH_FROM_ROOT));
+  Check(Pos('function H2ClientDial(const AHost: string; const APort: UInt16;',
+    LSrc) > 0, 'H2ClientDial helper is present');
+  Check(Pos('LRawConn := H2ClientDial(LHost, LPort, FOptions.ConnectTimeout,',
+    LSrc) > 0, 'H2 RoundTrip dials with ConnectTimeout budget');
+  Check(Pos('H2ApplyPostDialDeadline(LRawConn, FOptions);', LSrc) > 0,
+    'H2 applies post-dial first-write ConnectTimeout deadline');
+  LSecurePos := Pos('LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,',
+    LSrc);
+  Check(LSecurePos > 0, 'H2 HTTPS path wraps TLS after dial');
+  if LSecurePos > 0 then
+  begin
+    LSecureBlock := Copy(LSrc, LSecurePos, 700);
+    Check(Pos('H2ApplyPostDialDeadline(LRawConn, FOptions);', LSecureBlock) > 0,
+      'H2 re-applies post-dial deadline on final stream after TLS wrap');
+  end;
+  Check(Pos('LConn.ApplyCancelToken(LCancel);', LSrc) > 0,
+    'H2 RoundTrip applies cancel token to connection stream');
+  Check(Pos('LConn.ClearCancelToken;', LSrc) > 0,
+    'H2 RoundTrip clears cancel token before pool return');
+  Check(Pos('THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken, INetCancelWaitable)',
+    LSrc) > 0, 'H2 bridges IHttpCancelToken to INetCancelToken/waitable');
+  Check(Pos('HttpWrapTransportException', LSrc) > 0,
+    'H2 wraps transport cancel/timeout into EHttpError');
+end;
+
+{ Live H2 OS dial timeout via backlog-full peer (parity with H1/WS live e2e). }
+procedure TestH2LiveConnectTimeoutViaBacklogFullPeer;
+var
+  LListener: ITcpListener;
+  LFillers: array of ITcpStream;
+  LConn: ITcpStream;
+  LOpts: TH2ClientTransportOptions;
+  LTransport: IHttpTransport;
+  LPort: UInt16;
+  I: Integer;
+  LFilled: Boolean;
+  LGot: Boolean;
+  LKind: THttpErrorKind;
+begin
+  { Ensure test dial hook is not installed. }
+  ResetH2ClientDialFuncForTests;
+  ResetDialQueue;
+  LListener := TcpListen('127.0.0.1', 0);
+  LPort := LListener.LocalAddr.Port;
+  SetLength(LFillers, 0);
+  LFilled := False;
+  for I := 1 to 256 do
+  begin
+    try
+      LConn := TcpConnect('127.0.0.1', LPort, 100);
+      SetLength(LFillers, Length(LFillers) + 1);
+      LFillers[High(LFillers)] := LConn;
+    except
+      on E: ETimeoutError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+      on E: ENetworkError do
+      begin
+        LFilled := True;
+        Break;
+      end;
+    end;
+  end;
+  Check(LFilled or (Length(LFillers) > 0),
+    'backlog fill made progress for H2 connect-timeout setup');
+  LOpts := TH2ClientTransportOptions.Default;
+  LOpts.ConnectTimeout := 200;
+  LOpts.Timeout := 200;
+  LTransport := NewH2ClientTransport(LOpts);
+  LGot := False;
+  LKind := hekUnknown;
+  try
+    LTransport.RoundTrip(NewRequest(hmGet,
+      'http://127.0.0.1:' + IntToStr(LPort) + '/'));
+  except
+    on E: EHttpError do
+    begin
+      LKind := E.Kind;
+      LGot := E.Kind in [hekTimeout, hekConnect];
+    end;
+    on E: ETimeoutError do
+    begin
+      LGot := True;
+      LKind := hekTimeout;
+    end;
+  end;
+  Check(LGot,
+    'live H2 dial timeout surfaces as hekTimeout/hekConnect (kind=' +
+    IntToStr(Ord(LKind)) + ')');
+  LTransport := nil;
+  for I := 0 to High(LFillers) do
+    if LFillers[I] <> nil then
+      LFillers[I].Close;
+  LListener.Close;
+end;
+
+procedure TestTlsStreamForwardsDeadlineToInnerSourceContract;
+var
+  LSrc: string;
+  LReadPos: SizeInt;
+  LReadBlock: string;
+  LWritePos: SizeInt;
+  LWriteBlock: string;
+begin
+  LSrc := ReadSourceFile(ResolveSourcePath(TLS_STREAM_SOURCE_PATH_FROM_TEST,
+    TLS_STREAM_SOURCE_PATH_FROM_ROOT));
+  LReadPos := Pos('procedure TTlsTcpStream.SetReadDeadline(', LSrc);
+  Check(LReadPos > 0, 'TLS stream implements SetReadDeadline');
+  if LReadPos > 0 then
+  begin
+    LReadBlock := Copy(LSrc, LReadPos, 400);
+    Check(Pos('FInner.SetReadDeadline(ADeadline)', LReadBlock) > 0,
+      'TLS SetReadDeadline re-arms FInner TCP deadline');
+  end;
+  LWritePos := Pos('procedure TTlsTcpStream.SetWriteDeadline(', LSrc);
+  Check(LWritePos > 0, 'TLS stream implements SetWriteDeadline');
+  if LWritePos > 0 then
+  begin
+    LWriteBlock := Copy(LSrc, LWritePos, 400);
+    Check(Pos('FInner.SetWriteDeadline(ADeadline)', LWriteBlock) > 0,
+      'TLS SetWriteDeadline re-arms FInner TCP deadline');
+  end;
+end;
+
+procedure TestHttpsTransportRearmsTimeoutAfterConnectBudget;
+var
+  LTransport: IHttpTransport;
+  LOptions: TH2ClientTransportOptions;
+  LContextObj: TMockTLSContext;
+  LContext: ISSLContext;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+begin
+  { Regression: ConnectTimeout applied on raw TCP before TLS wrap must not
+    remain as FInner SO timeout after post-handshake ApplyDeadline(Timeout). }
+  ResetDialQueue;
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    ComposeResponse(1, '200', 'ok', []));
+  QueueDialConn(LStream as ITcpStream);
+  SetH2ClientDialFuncForTests(@TestDial);
+  try
+    LContextObj := TMockTLSContext.Create(sslCtxClient, 'h2');
+    LContext := LContextObj;
+    LOptions := TH2ClientTransportOptions.Default;
+    LOptions.TLSContext := LContext;
+    LOptions.ConnectTimeout := 1500;
+    LOptions.Timeout := 30000;
+    LTransport := NewH2ClientTransport(LOptions);
+    LResp := LTransport.RoundTrip(NewRequest(hmGet,
+      'https://secure.example.com/rearm'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'HTTPS H2 returns 200');
+    Check(LStream.ReadDeadlineSetCount >= 2,
+      'inner TCP saw connect budget and Timeout re-arm');
+    Check(LStream.WriteDeadlineSetCount >= 2,
+      'inner TCP write deadline re-armed after connect budget');
+    { Connect budget (~1500ms) must have been observed at least once. }
+    Check(LStream.MinFiniteReadDeadlineMs <= 1600,
+      'ConnectTimeout budget was applied to inner TCP');
+    { Final re-arm must be Timeout (30000), not stuck on ConnectTimeout. }
+    Check(LStream.LastReadDeadlineMs > 10000,
+      'post-handshake Timeout re-armed FInner (not stuck on ConnectTimeout)');
+    Check(LStream.LastWriteDeadlineMs > 10000,
+      'post-handshake Timeout re-armed FInner write deadline');
+  finally
+    ResetH2ClientDialFuncForTests;
+    ResetDialQueue;
+    LContextObj.ClearLastProbe;
+    LTransport := nil;
+    LResp := nil;
+    LContext := nil;
+    LStream := nil;
+  end;
+end;
+
 procedure TestTransportCloseIdleConnectionsClosesPooledConn;
 var
   LTransport: IHttpTransport;
@@ -1828,20 +2233,24 @@ end;
 
 { -- Connection pool tests -- }
 
-procedure TestTransportPoolMaxSizeEnforced;
+procedure TestTransportPoolMaxSizeIsPerAuthority;
 var
   LTransport: IHttpTransport;
   LOptions: TH2ClientTransportOptions;
   LStream1, LStream2: TFakeTcpStream;
   LResp: IHttpResponse;
 begin
+  { MaxPoolSize is per authority: with limit=1, two hosts each keep one idle
+    and both reuse. Global-cap semantics would drop host2 and re-dial it. }
   ResetDialQueue;
   LStream1 := TFakeTcpStream.Create(
     ComposeServerHandshake +
-    ComposeResponse(1, '200', '', []));
+    ComposeResponse(1, '200', '', []) +
+    ComposeResponse(3, '200', '', []));
   LStream2 := TFakeTcpStream.Create(
     ComposeServerHandshake +
-    ComposeResponse(1, '200', '', []));
+    ComposeResponse(1, '200', '', []) +
+    ComposeResponse(3, '200', '', []));
   QueueDialConn(LStream1 as ITcpStream);
   QueueDialConn(LStream2 as ITcpStream);
   SetH2ClientDialFuncForTests(@TestDial);
@@ -1853,7 +2262,12 @@ begin
     LResp := nil;
     LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://host2.com/b'));
     LResp := nil;
-    CheckEqual(Int64(2), Int64(GDialIndex), 'max pool size=1 forces new dial');
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://host1.com/c'));
+    LResp := nil;
+    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://host2.com/d'));
+    LResp := nil;
+    CheckEqual(Int64(2), Int64(GDialIndex),
+      'per-authority MaxPoolSize=1 reuses idle for each host');
   finally
     ResetH2ClientDialFuncForTests;
     ResetDialQueue;
@@ -1957,8 +2371,7 @@ begin
     LTransport := NewH2ClientTransport(TH2ClientTransportOptions.Default);
     LHeaders := NewHttpHeaders;
     LHeaders.Add('connection', 'close');
-    LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/close',
-      LHeaders));
+    LResp := LTransport.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/close').Headers(LHeaders).Build);
     LResp := nil;
     LHeaders := nil;
     LResp := LTransport.RoundTrip(NewRequest(hmGet, 'http://example.com/reuse'));
@@ -2313,8 +2726,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPost,
-      'http://example.com/stream-wu', NewHttpHeaders, LBody as IReader, 4));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPost, 'http://example.com/stream-wu').Headers(NewHttpHeaders).Body(LBody).ContentLength(4).Build);
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'stream WU response');
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -2384,6 +2796,71 @@ begin
     LConn.Free;
     LStream := nil;
   end;
+end;
+
+procedure TestGoawayMidResponseRaisesProtocol;
+{ Wave A1: incomplete response + GOAWAY aborts with hekProtocol. }
+var
+  LConn: TH2ClientConnection;
+  LStream: TFakeTcpStream;
+  LResp: IHttpResponse;
+  LKind: THttpErrorKind;
+  LMsg: string;
+  LCaught: Boolean;
+begin
+  LStream := TFakeTcpStream.Create(
+    ComposeServerHandshake +
+    H2EncodeFrame(H2_FRAME_HEADERS, H2_FLAG_HEADERS_END_HEADERS, 1,
+      ComposeResponseHeaders('200', [])) +
+    H2EncodeFrame(H2_FRAME_GOAWAY, 0, 0,
+      H2EncodeGoaway(0, H2_ERR_NO_ERROR, '')));
+  LConn := TH2ClientConnection.Create(LStream as ITcpStream,
+    TH2ClientTransportOptions.Default);
+  try
+    LCaught := False;
+    LKind := hekUnknown;
+    LMsg := '';
+    try
+      LResp := LConn.RoundTrip(
+        NewRequest(hmGet, 'http://example.com/mid-goaway'));
+      LResp := nil;
+    except
+      on E: EHttpError do
+      begin
+        LCaught := True;
+        LKind := E.Kind;
+        LMsg := E.Message;
+      end;
+    end;
+    Check(LCaught, 'mid-response GOAWAY raises EHttpError');
+    Check(LKind = hekProtocol, 'mid-response GOAWAY is hekProtocol');
+    Check(Pos('GOAWAY received during response', LMsg) > 0,
+      'mid-response GOAWAY message names the edge');
+    CheckEqual(False, LConn.IsReusable,
+      'mid-response GOAWAY leaves connection non-reusable');
+  finally
+    LConn.Free;
+    LStream := nil;
+  end;
+end;
+
+procedure TestH2ProductionEdgesSourceContract;
+{ Wave A1: lock GOAWAY/pool/push honesty seams. }
+var
+  LSource: string;
+begin
+  LSource := ReadSourceFile(ResolveSourcePath(H2_CLIENT_SOURCE_PATH_FROM_TEST,
+    H2_CLIENT_SOURCE_PATH_FROM_ROOT));
+  Check(Pos(
+    'raise EHttpError.Create(hekProtocol, ''HTTP/2 GOAWAY received during response'')',
+    LSource) > 0,
+    'client aborts incomplete RoundTrip on GOAWAY');
+  Check(Pos('(not FGoawayReceived) and (not FGoawaySent)', LSource) > 0,
+    'IsReusable requires no GOAWAY sent/received');
+  Check(Pos('H2_SETTINGS_ENABLE_PUSH', LSource) > 0,
+    'client advertises ENABLE_PUSH setting');
+  Check(Pos('Result := TRetryClient.Create', LSource) = 0,
+    'H2 client unit is transport-only (retry stays http.client decorator)');
 end;
 
 procedure TestHandshakeGoawayCausesFailure;
@@ -2704,8 +3181,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmPut, 'http://example.com/item',
-      NewHttpHeaders, LBody as IReader, 4));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmPut, 'http://example.com/item').Headers(NewHttpHeaders).Body(LBody).ContentLength(4).Build);
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'PUT response status');
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
@@ -2740,7 +3216,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/custom', LHeaders));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/custom').Headers(LHeaders).Build);
     DecodeFrames(Copy(LStream.WrittenData, Length(H2_CLIENT_PREFACE) + 1,
       MaxInt), LFrames, LCount);
     Check(LCount >= 3, 'custom headers sent');
@@ -2854,7 +3330,7 @@ begin
   LConn := TH2ClientConnection.Create(LStream as ITcpStream,
     TH2ClientTransportOptions.Default);
   try
-    LResp := LConn.RoundTrip(NewRequest(hmGet, 'http://example.com/headers', LHeaders));
+    LResp := LConn.RoundTrip(THttpRequestBuilder.Create(hmGet, 'http://example.com/headers').Headers(LHeaders).Build);
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'multi-header response status');
   finally
     LResp := nil;
@@ -2896,6 +3372,24 @@ begin
     @TestPingGetsAcked);
   T.Test('Transport reuses pooled connection',
     @TestTransportReusesPooledConnection);
+  T.Test('Transport ConnectTimeout used as dial budget',
+    @TestTransportConnectTimeoutUsedAsDialBudget);
+  T.Test('Transport dial falls back to Timeout when ConnectTimeout=0',
+    @TestTransportDialFallsBackToTimeoutWhenConnectTimeoutZero);
+  T.Test('Transport applies and clears cancel token',
+    @TestTransportAppliesAndClearsCancelToken);
+  T.Test('Transport pool reuse clears cancel between requests',
+    @TestTransportPoolReuseClearsCancelBetweenRequests);
+  T.Test('H2 ConnectTimeout registry source contract',
+    @TestH2ConnectTimeoutRegistrySourceContract);
+  T.Test('H2 dial and cancel source contract',
+    @TestH2DialAndCancelSourceContract);
+  T.Test('H2 live ConnectTimeout via backlog-full peer',
+    @TestH2LiveConnectTimeoutViaBacklogFullPeer);
+  T.Test('TLS stream forwards deadline to inner source contract',
+    @TestTlsStreamForwardsDeadlineToInnerSourceContract);
+  T.Test('HTTPS transport re-arms Timeout after ConnectTimeout',
+    @TestHttpsTransportRearmsTimeoutAfterConnectBudget);
   T.Test('Transport CloseIdleConnections closes pooled conn',
     @TestTransportCloseIdleConnectionsClosesPooledConn);
   T.Test('HTTPS transport negotiates h2 via ALPN',
@@ -2918,7 +3412,8 @@ begin
   T.Test('Multiple requests on same connection', @TestMultipleRequestsOnSameConnection);
   T.Test('Empty response body', @TestEmptyResponseBody);
   T.Test('Response with multiple headers', @TestResponseWithMultipleHeaders);
-  T.Test('Transport pool max size enforced', @TestTransportPoolMaxSizeEnforced);
+  T.Test('Transport pool max size is per authority',
+    @TestTransportPoolMaxSizeIsPerAuthority);
   T.Test('Transport pool different hosts separate entries', @TestTransportPoolDifferentHostsSeparateEntries);
   T.Test('Transport non-reusable conn not pooled', @TestTransportNonReusableConnNotPooled);
   T.Test('Transport connection:close prevents pooling', @TestTransportConnectionCloseHeaderPreventsPooling);
@@ -2935,6 +3430,10 @@ begin
   T.Test('Stream WINDOW_UPDATE resumes after exhaustion', @TestStreamWindowUpdateResumesAfterExhaustion);
   T.Test('SETTINGS ACK does not update remote settings', @TestSettingsAckDoesNotUpdateRemoteSettings);
   T.Test('GOAWAY preserves earlier streams', @TestGoawayPreservesEarlierStreams);
+  T.Test('GOAWAY mid-response raises hekProtocol',
+    @TestGoawayMidResponseRaisesProtocol);
+  T.Test('H2 production edges source contract',
+    @TestH2ProductionEdgesSourceContract);
   T.Test('Handshake GOAWAY causes failure', @TestHandshakeGoawayCausesFailure);
   T.Test('Multiple SETTINGS before handshake', @TestMultipleSettingsBeforeHandshake);
   T.Test('CONTINUATION frame assembles headers', @TestContinuationFrameAssemblesHeaders);

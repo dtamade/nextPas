@@ -1,13 +1,19 @@
 # nextpas.core.mem API 参考
 
+> **权威入口**：短路径与决策树以 [README.md](README.md) / [API-GUIDE.md](API-GUIDE.md) 为准。
+> 热路径默认堆是 **`DefaultHeap` / `GetMem`（Growing）**，不是 `DefaultAllocator`。
+> S5：`DefaultAllocator` / `ResolveAllocator(nil)` = Growing IAllocator 根（**同进程堆**，有 vtable）；显式 RTL 用 `GetRtlAllocator`。
+> 本文保留长参考与历史示例；冲突时以 README/GUIDE/Scorecard 为准。
+
 ## 分配器选择指南
 
 ### 决策树
 
 ```
 需要分配内存？
-├─ 通用场景 (malloc 替代) → DefaultAllocator (IAllocator)
-│  └─ 需要跟踪/泄漏检测 → TTrackingAllocator 包装
+├─ 通用场景 (malloc 替代) → DefaultHeap / GetMem（热路径）
+│  └─ 需要 IAllocator 注入（collections/组合器） → DefaultAllocator（同堆，非热路径）
+│  └─ 需要跟踪/泄漏检测 → TTrackingAllocator 包装（或 NEXTPAS_MEM_DEBUG）
 │  └─ 需要增强泄漏报告 → TLeakReportAllocator（调用栈+时间戳+标签聚合）
 │  └─ 需要哨兵守卫 → TSentinelAllocator（双端哨兵+延迟释放+校验和）
 │
@@ -27,6 +33,7 @@
 └─ 特殊场景
    ├─ 需要 IAllocator 接口的 Arena → CreateArenaAllocator
    ├─ 需要 fallback 链 → TFallbackAllocator
+   ├─ 显式 FPC RTL 后端 → GetRtlAllocator
    ├─ 需要 mmap 匿名映射 → TMemoryMapAllocator
    ├─ 需要 mimalloc → TMimallocAllocator (动态库)
    ├─ 需要 NUMA 感知 → TNumaAllocator（拓扑检测+节点路由）
@@ -38,7 +45,8 @@
 
 | 分配器 | 64B ns/op | 线程安全 | 适用场景 |
 |--------|-----------|----------|----------|
-| DefaultAllocator | 16 | ✅ | 通用 |
+| DefaultHeap / GetMem | 16 | ✅ | 通用热路径（Growing，零 vtable） |
+| DefaultAllocator | — | ✅ | 注入/诊断（Growing 根，同堆，有 vtable） |
 | TLocalArena | 5 | ❌ | 帧分配 |
 | TChunkedArena | 26 | ❌ | 可增长帧分配 |
 | TVirtualArena | 44 | ❌ | 编译器热路径 |
@@ -49,18 +57,18 @@
 
 ### 常见场景示例
 
-**场景 1: 通用分配**
+**场景 1: 通用分配（热路径）**
 ```pascal
 uses nextpas.core.mem;
 
 var
   LPtr: Pointer;
 begin
-  LPtr := DefaultAllocator.GetMem(1024);
+  LPtr := GetMem(1024);  // DefaultHeap / Growing
   try
     // 使用内存...
   finally
-    DefaultAllocator.FreeMem(LPtr);
+    FreeMem(LPtr, 1024);
   end;
 end;
 ```
@@ -521,7 +529,11 @@ end;
 门面 `nextpas.core.mem` 提供这几个常用 helper：
 
 ```pascal
-function DefaultAllocator: IAllocator;
+function DefaultHeap: TGrowingAllocator;
+function DefaultAllocator: IAllocator;       // Growing IAllocator 根 ± DEBUG
+function GetGrowingIAllocator: IAllocator;
+function GetRtlAllocator: IAllocator;          // 显式 RTL
+function ResolveAllocator(const A: IAllocator): IAllocator; // nil → Growing 根
 function AllocZeroed(const AAllocator: IAllocator; const ASize: SizeUInt): Pointer;
 function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeUInt): Pointer;
 
@@ -616,6 +628,388 @@ function TryGetMimallocAllocator(out A: IAllocator): Boolean;
 function CreateAnonymousMemoryMapAllocator(AReservationSize: UInt64): IAllocator;
 ```
 
+## 高性能分配器
+
+### `TBumpAllocator`
+
+线性分配器，分配 O(1) 无锁。适合请求/帧级生命周期。
+
+```pascal
+constructor Create(AInner: IAllocator; AChunkSize: SizeUInt);
+```
+
+### `TCascadeAllocator`
+
+级联 fallback 链，按优先级尝试多个分配器。
+
+```pascal
+constructor Create(const AAllocators: array of IAllocator);
+```
+
+### `TBitmapAllocator`
+
+位图管理的固定大小槽位池，O(1) 分配释放。
+
+```pascal
+constructor Create(AInner: IAllocator; ABlockSize: SizeUInt; ACapacity: Integer);
+```
+
+### `TBatchAllocator`
+
+批量分配包装器，减少锁频率。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+## 调试/监控分配器
+
+### `TSentinelAllocator`
+
+哨兵守卫分配器，双端哨兵 + 延迟释放 + 校验和，检测越界写入和 double-free。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TGuardAllocator`
+
+Guard page 分配器，每次分配用未映射页包围，越界写入立即 SIGSEGV。
+
+```pascal
+constructor Create;
+```
+
+### `TLeakReportAllocator`
+
+泄漏报告分配器，记录分配调用栈、时间戳、标签聚合。
+
+```pascal
+constructor Create(AInner: IAllocator);
+function Report: TLeakReportResult;
+```
+
+### `TLoggingAllocator`
+
+分配日志分配器，记录所有分配/释放操作。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TDebugAllocator`
+
+调试分配器，毒化释放内存 ($DE) 和新分配内存 ($AB)，检测 use-after-free 和未初始化读取。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TWatermarkAllocator`
+
+高水位线分配器，跟踪峰值内存使用。
+
+```pascal
+constructor Create(AInner: IAllocator);
+property HighWaterMark: SizeUInt;
+```
+
+### `TSamplingAllocator`
+
+采样分配器，按概率采样分配调用栈，用于性能分析。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TPrefixAllocator`
+
+前缀分配器，为每次分配添加元数据头。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TPredictionAllocator`
+
+预测分配器，跟踪分配频率，预分配高频大小。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TReplayAllocator`
+
+重放分配器，记录分配序列，可重放到目标分配器。
+
+```pascal
+constructor Create(AInner: IAllocator);
+procedure Replay(ATarget: IAllocator);
+```
+
+### `TNumaAllocator`
+
+NUMA 感知分配器，拓扑检测 + 节点路由。
+
+```pascal
+constructor Create(ADefault: IAllocator);
+procedure SetNodeAllocator(ANode: Integer; AAlloc: IAllocator);
+```
+
+## 通用分配器
+
+### `TAlignedAllocator`
+
+对齐分配器，保证返回指针对齐到指定边界。
+
+```pascal
+constructor Create(AInner: IAllocator; AAlignment: SizeUInt = 16);
+```
+
+### `TBoundedAllocator`
+
+有界分配器，超过字节限制时返回 nil。
+
+```pascal
+constructor Create(AInner: IAllocator; ALimitBytes: UInt64);
+```
+
+### `TCoalesceAllocator`
+
+合并分配器，相邻空闲块自动合并减少碎片。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TCountingAllocator`
+
+计数分配器，跟踪分配/释放次数和字节数。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TCowAllocator`
+
+写时复制分配器，Share 创建共享引用，WriteNotify 触发复制。
+
+```pascal
+constructor Create(AInner: IAllocator);
+function Share(APtr: Pointer): Pointer;
+function WriteNotify(APtr: Pointer): Pointer;
+function IsShared(APtr: Pointer): Boolean;
+```
+
+### `TCrtAllocator`
+
+CRT 堆分配器，使用 C 运行时库的 malloc/free。
+
+```pascal
+constructor Create;
+```
+
+### `TDualAllocator`
+
+双分配器，按大小路由到不同后端。
+
+```pascal
+constructor Create(ASmall, ALarge: IAllocator; AThreshold: SizeUInt = 1024);
+```
+
+### `TFailAllocator`
+
+故障注入分配器，第 N 次分配失败（用于测试）。
+
+```pascal
+constructor Create(AInner: IAllocator; AFailAt: UInt64 = 0);
+procedure SetFailAt(AFailAt: UInt64);
+```
+
+### `TFreelistAllocator`
+
+空闲链表分配器，回收的块放入链表供下次分配。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TGroupAllocator`
+
+分组分配器，批量分配减少系统调用。
+
+```pascal
+constructor Create(AInner: IAllocator; AGroupSize: SizeUInt = GROUP_DEFAULT_SIZE);
+```
+
+### `TGrowingAllocator`
+
+增长分配器，mimalloc/tcmalloc 风格：TLS 缓存 + 中央池 + 跨线程释放。
+
+```pascal
+constructor Create(AInner: IAllocator; ASlabSize: SizeUInt = 65536);
+```
+
+### `THotswapAllocator`
+
+热切换分配器，运行时替换后端分配器。
+
+```pascal
+constructor Create(AInitial: IAllocator);
+procedure Swap(ANew: IAllocator);
+```
+
+### `THugePageAllocator`
+
+大页分配器，透明大页 (THP) 支持。
+
+```pascal
+constructor Create(AInner: IAllocator; APageSize: THugePageSize = hps2MB; AThreshold: SizeUInt = 2 * 1024 * 1024);
+```
+
+### `TMappedFileAllocator`
+
+文件映射分配器，mmap 匿名映射。
+
+```pascal
+constructor Create(AInner: IAllocator; ARegionSize: SizeUInt = 1024 * 1024);
+```
+
+### `TPageAllocator`
+
+页分配器，按页大小对齐分配。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TPoolAllocator`
+
+池分配器，固定大小块池。
+
+```pascal
+constructor Create(AInner: IAllocator; ABlockSize: SizeUInt; ACapacity: Integer);
+```
+
+### `TPool2Allocator`
+
+池分配器 v2，改进的固定大小块池。
+
+```pascal
+constructor Create(AInner: IAllocator; ABlockSize: SizeUInt);
+```
+
+### `TRtlAllocator` / `GetRtlAllocator`
+
+FPC RTL 后端（`System.GetMem`）。**不是** `DefaultAllocator` 默认根（S5 起默认是 Growing IAllocator）。
+bootstrap / 显式对比 / 特殊 fallback 时用 `GetRtlAllocator`。
+
+```pascal
+function GetRtlAllocator: IAllocator;
+```
+
+### `TGrowingIAllocator` / `GetGrowingIAllocator`
+
+`DefaultHeap` 的 `IAllocator` 适配（S5）。`DefaultAllocator` 无 DEBUG 时的身份即此单例。
+
+```pascal
+function GetGrowingIAllocator: IAllocator;
+```
+
+### `TScopedAllocator`
+
+作用域分配器，Reset 一次性释放所有分配。
+
+```pascal
+constructor Create(AInner: IAllocator);
+procedure Reset;
+```
+
+### `TSizeClassAllocator`
+
+大小类分配器，16 个大小类 (8B-64KB) 自动路由。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TSlabAllocator`
+
+Slab 分配器，8 个大小类 (8B-1024B) + 大对象直通。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TSlidingAllocator`
+
+滑动分配器，环形缓冲区风格的帧分配。
+
+```pascal
+constructor Create(AInner: IAllocator; ARegionSize: SizeUInt = SLIDING_DEFAULT_SIZE);
+```
+
+### `TStackAllocator`
+
+栈分配器，LIFO 顺序释放。
+
+```pascal
+constructor Create(AInner: IAllocator; ACapacity: SizeUInt);
+function GetMark: TStackMark;
+procedure FreeToMark(AMark: TStackMark);
+```
+
+### `TStatsAllocator`
+
+统计分配器，跟踪分配/释放/峰值等统计信息。
+
+```pascal
+constructor Create(AInner: IAllocator);
+function GetStats: TAllocatorStats;
+procedure Reset;
+```
+
+### `TThreadCacheAllocator`
+
+线程缓存分配器，TLS 缓存减少锁争用。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TThreadSafeAllocator`
+
+线程安全分配器，互斥锁包装任意分配器。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TZeroedAllocator`
+
+零初始化分配器，所有分配自动清零。
+
+```pascal
+constructor Create(AInner: IAllocator);
+```
+
+### `TArena2Allocator`
+
+Arena 分配器 v2，可增长的 arena。
+
+```pascal
+constructor Create(AInner: IAllocator; APageSize: SizeUInt = 4096);
+procedure Reset;
+```
+
+### `TArenaGroupAllocator`
+
+Arena 分组分配器，多个 arena 轮转。
+
+```pascal
+constructor Create(AInner: IAllocator; ARegionSize: SizeUInt = ARENA_GROUP_DEFAULT_SIZE);
+```
+
 ## Pool 类型
 
 ### `IPool`
@@ -654,7 +1048,7 @@ LIFO 栈池，适合确定性生命周期的临时对象。
 
 ### `IMemoryPool`
 
-内存池接口（来自 `nextpas.core.mem.pool.memory_pool`）。
+内存池接口（定义在 `nextpas.core.mem.pool.base`，继承自 `IPool`）。
 
 ## 容器
 

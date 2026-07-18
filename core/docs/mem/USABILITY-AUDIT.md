@@ -1,5 +1,11 @@
 # nextpas.core.mem 可用性评估报告
 
+> **SUPERSEDED（2026-07-15）**
+> 本文综合分 8.7 / “生产就绪” **不再作为对外宣称**。
+> **当前权威可用性分**：[USABILITY-SCORE.md](USABILITY-SCORE.md)（post-S5 **8.2 / HIGH**）。
+> 另见 [README.md](README.md) / [ERROR-POLICY.md](ERROR-POLICY.md) / `test_usability_guardrails`。
+> 下文仅作历史修复记录保留。
+
 **评估日期**: 2026-07-02 (R1), 2026-07-02 (R2), 2026-07-04 (R4), 2026-07-05 (R5), 2026-07-05 (R6)
 **评估范围**: 58 个源文件 / 47 测试套件 / 545 tests / 0 failures / 0 leaks
 **评估维度**: 接口设计、API 易用性、调用一致性、错误提示、边界条件、测试覆盖、性能与内存安全
@@ -127,7 +133,7 @@
 
 ### F-08 [P2] Pool 接口碎片 — IPool / IMemoryPool / IAllocator 三套 API
 
-**位置**: `nextpas.core.mem.pool.base.pas`, `nextpas.core.mem.pool.memory_pool.pas`
+**位置**: `nextpas.core.mem.pool.base.pas`
 
 - `IPool`: Acquire/Release（固定大小）
 - `IMemoryPool`: 继承 IPool + GetMem/FreeMem（可变大小）
@@ -216,7 +222,7 @@ end;
 
 ### F-14 [P2-已修复] IMemoryPool 接口边界文档缺失
 
-**位置**: `nextpas.core.mem.pool.memory_pool.pas`
+**位置**: `nextpas.core.mem.pool.base.pas`
 
 **问题**: IMemoryPool 文档未说明与 IAllocator 的区别。
 
@@ -274,7 +280,7 @@ end;
 
 **问题**: 通过 IPool 引用调用 Acquire 分配最小 slab 单元；通过 IAllocator 引用调用 GetMem(64) 走 size-class 路由。同一对象、两种分配语义。
 
-**修复**: 在 pool.memory_pool.pas IMemoryPool 文档中添加语义边界说明，明确 Acquire vs GetMem 的分配粒度差异和推荐用法。
+**修复**: 在 pool.base.pas IMemoryPool 文档中添加语义边界说明，明确 Acquire vs GetMem 的分配粒度差异和推荐用法。
 
 ---
 

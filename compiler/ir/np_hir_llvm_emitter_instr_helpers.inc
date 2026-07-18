@@ -1,6 +1,6 @@
 
 uses
-  nextpas.core.text.conv, nextpas.core.system.contracts;
+  SysUtils, nextpas.core.text.conv, np_system_contracts;
 
 const
   NP_ALLOCATOR_PAGE_SIZE = 4096;
@@ -11,14 +11,16 @@ const
 
 constructor THIRLlvmEmitter.Create(AModule: THIRModule);
 begin
-  Create(AModule, DEFAULT_LLVM_TRIPLE, DEFAULT_LLVM_DATALAYOUT, False);
+  Create(AModule, DEFAULT_LLVM_TRIPLE, DEFAULT_LLVM_DATALAYOUT, False, nil);
 end;
 
 constructor THIRLlvmEmitter.Create(AModule: THIRModule;
-  const ALlvmTriple, ALlvmDataLayout: string; ADebugInfo: Boolean);
+  const ALlvmTriple, ALlvmDataLayout: string; ADebugInfo: Boolean;
+  AAllocator: IAllocator);
 begin
   inherited Create;
   FModule := AModule;
+  FAllocator := AAllocator;
   { 从参数读取，如果为空则使用 x86_64-linux 默认值 }
   if ALlvmTriple <> '' then
     FLlvmTriple := ALlvmTriple
@@ -28,8 +30,22 @@ begin
     FLlvmDataLayout := ALlvmDataLayout
   else
     FLlvmDataLayout := 'e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64';
-  FLineCount := 0;
-  FGlobalRefCount := 0;
+  if FAllocator <> nil then
+  begin
+    FLines := TLlvmLineVec.Create(0, FAllocator);
+    FGlobalRefNames := TLlvmNameVec.Create(0, FAllocator);
+    FGlobalRefIds := TLlvmValueIdVec.Create(0, FAllocator);
+    FStrConstants := TLlvmNameVec.Create(0, FAllocator);
+    FDebugMetadata := TLlvmNameVec.Create(0, FAllocator);
+  end
+  else
+  begin
+    FLines := TLlvmLineVec.Create;
+    FGlobalRefNames := TLlvmNameVec.Create;
+    FGlobalRefIds := TLlvmValueIdVec.Create;
+    FStrConstants := TLlvmNameVec.Create;
+    FDebugMetadata := TLlvmNameVec.Create;
+  end;
   FNeedsWriteInt := False;
   FNeedsAlloc := False;
   FNeedsFree := False;
@@ -47,34 +63,44 @@ begin
   FIsCheckCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
+  FPendingObjectFreeReceiverValueId := 0;
+  FPendingObjectFreeDestroyTarget := '';
   FPendingObjectFreeEndLabel := '';
   FNeedsExceptionRuntime := False;
   FNeedsProcessLifecycle := False;
   FProcessFiniEmitted := False;
   FTryCounter := 0;
   FDebugInfoEnabled := ADebugInfo;
-  FDebugMetadataCount := 0;
   FCurrentDISubprogram := -1;
   FDIFileIndex := -1;
   FDICUIndex := -1;
-  SetLength(FLines, 0);
+end;
+
+destructor THIRLlvmEmitter.Destroy;
+begin
+  FDebugMetadata.Free;
+  FStrConstants.Free;
+  FGlobalRefIds.Free;
+  FGlobalRefNames.Free;
+  FLines.Free;
+  inherited Destroy;
+end;
+
+procedure THIRLlvmEmitter.ClearGlobalRefs;
+begin
+  FGlobalRefNames.Clear;
+  FGlobalRefIds.Clear;
 end;
 
 procedure THIRLlvmEmitter.Emit(const S: string);
 begin
-  if FLineCount >= Length(FLines) then
-    SetLength(FLines, FLineCount + 128);
-  FLines[FLineCount] := S;
-  Inc(FLineCount);
+  FLines.Push(S);
 end;
 
 function THIRLlvmEmitter.AddDebugMetadata(const AMetadata: string): LongInt;
 begin
-  if FDebugMetadataCount >= Length(FDebugMetadata) then
-    SetLength(FDebugMetadata, FDebugMetadataCount + 32);
-  FDebugMetadata[FDebugMetadataCount] := AMetadata;
-  Result := FDebugMetadataCount;
-  Inc(FDebugMetadataCount);
+  Result := LongInt(FDebugMetadata.Count);
+  FDebugMetadata.Push(AMetadata);
 end;
 
 function THIRLlvmEmitter.EmitDILocation(ALine, ACol: LongInt): LongInt;
@@ -89,22 +115,23 @@ end;
 
 procedure THIRLlvmEmitter.EmitDebugMetadataSection;
 var
-  I: LongInt;
+  I: SizeUInt;
 begin
-  if FDebugMetadataCount = 0 then
+  if FDebugMetadata.Count = 0 then
     Exit;
   Emit('');
-  for I := 0 to FDebugMetadataCount - 1 do
+  for I := 0 to FDebugMetadata.Count - 1 do
     Emit('!' + IntToStr(I) + ' = ' + FDebugMetadata[I]);
 end;
 
 function THIRLlvmEmitter.ValueRef(AValueId: THIRValueId): string;
 var
-  I: LongInt;
+  I: SizeUInt;
 begin
-  for I := 0 to FGlobalRefCount - 1 do
-    if FGlobalRefIds[I] = AValueId then
-      Exit('@g_' + FGlobalRefNames[I]);
+  if FGlobalRefIds.Count > 0 then
+    for I := 0 to FGlobalRefIds.Count - 1 do
+      if FGlobalRefIds[I] = AValueId then
+        Exit('@g_' + FGlobalRefNames[I]);
   Result := '%v' + IntToStr(AValueId);
 end;
 
@@ -142,9 +169,9 @@ var
   LastInstr: THIRInstr;
 begin
   Result := False;
-  if Length(ABlock.Instrs) = 0 then
+  if (ABlock.Instrs = nil) or (ABlock.Instrs.Count = 0) then
     Exit;
-  LastInstr := ABlock.Instrs[High(ABlock.Instrs)];
+  LastInstr := ABlock.Instrs[ABlock.Instrs.Count - 1];
   Result := (LastInstr.Kind = hikIntrinsic) and
     ((LastInstr.IntrinsicName = 'ret_str') or
      (LastInstr.IntrinsicName = 'ret_str_owned'));
@@ -284,7 +311,69 @@ begin
   Emit('  br label %' + FPendingObjectFreeEndLabel);
   Emit(FPendingObjectFreeEndLabel + ':');
   FPendingObjectFreeActive := False;
+  FPendingObjectFreeReceiverValueId := 0;
+  FPendingObjectFreeDestroyTarget := '';
   FPendingObjectFreeEndLabel := '';
+end;
+
+function THIRLlvmEmitter.IsObjectFreeGuardContinuation(
+  const AInstr: THIRInstr): Boolean;
+begin
+  if (not AInstr.HasSystemContract) or (AInstr.Kind <> hikIntrinsic) then
+    Exit(False);
+  case AInstr.SystemContractKind of
+    sckObjectFreeDestroy,
+    sckObjectFreeCleanup,
+    sckObjectFreeRelease:
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
+function THIRLlvmEmitter.EmitSystemContractInstr(
+  const AInstr: THIRInstr): Boolean;
+var
+  ValidationError: string;
+begin
+  if not AInstr.HasSystemContract then
+    Exit(False);
+  if not ValidateSystemContractInstr(AInstr, FModule.Types,
+    ValidationError) then
+    raise Exception.Create(ValidationError);
+  if FPendingObjectFreeActive and not IsObjectFreeGuardContinuation(AInstr) then
+    ClosePendingObjectFreeGuard;
+  case AInstr.SystemContractKind of
+    sckObjectFreeDestroy,
+    sckObjectFreeCleanup,
+    sckObjectFreeRelease:
+      if not FPendingObjectFreeActive then
+        raise Exception.Create('system-contract-sequence-root-missing:' +
+          IntToStr(Ord(AInstr.SystemContractKind)))
+      else if not ValidateObjectFreeSequenceContinuation(
+        FPendingObjectFreeReceiverValueId,
+        AInstr.Operands[0].ValueId, FPendingObjectFreeDestroyTarget,
+        AInstr.CallTarget, AInstr.SystemContractKind,
+        ValidationError) then
+        raise Exception.Create(ValidationError);
+  else
+    ;
+  end;
+  case AInstr.SystemContractKind of
+    sckObjectFree:
+      EmitObjectFreeGuardStart(AInstr);
+    sckObjectFreeDestroy:
+      EmitObjectFreeOwnedDestroy(AInstr);
+    sckObjectFreeCleanup:
+      Emit('  call void @' + AInstr.CallTarget + '(ptr ' +
+        ValueRef(AInstr.Operands[0].ValueId) + ')');
+    sckObjectFreeRelease:
+      EmitObjectFreeRelease(AInstr);
+  else
+    raise Exception.Create('Unsupported typed System contract kind: ' +
+      IntToStr(Ord(AInstr.SystemContractKind)));
+  end;
+  Result := True;
 end;
 
 procedure THIRLlvmEmitter.EmitObjectFreeGuardStart(const AInstr: THIRInstr);
@@ -292,9 +381,6 @@ var
   CounterText: string;
   DestroyLabel: string;
 begin
-  if Length(AInstr.Operands) < 1 then
-    Exit;
-
   Inc(FObjectFreeCounter);
   CounterText := IntToStr(FObjectFreeCounter);
   DestroyLabel := 'objectfree.destroy.' + CounterText;
@@ -304,6 +390,8 @@ begin
   Emit('  br i1 %objectfree.isnull.' + CounterText + ', label %' +
     FPendingObjectFreeEndLabel + ', label %' + DestroyLabel);
   Emit(DestroyLabel + ':');
+  FPendingObjectFreeReceiverValueId := AInstr.Operands[0].ValueId;
+  FPendingObjectFreeDestroyTarget := AInstr.CallTarget;
   FPendingObjectFreeActive := True;
 end;
 
@@ -317,9 +405,7 @@ begin
   FNeedsAlloc := True;
   FNeedsFree := True;
   FNeedsObjectFreeRelease := True;
-  if Length(AInstr.Operands) >= 1 then
-    Emit('  call void @np_object_free_release(ptr ' +
-      ValueRef(AInstr.Operands[0].ValueId) + ')');
+  Emit('  call void @np_object_free_release(ptr ' +
+    ValueRef(AInstr.Operands[0].ValueId) + ')');
   ClosePendingObjectFreeGuard;
 end;
-

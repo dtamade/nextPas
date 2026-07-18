@@ -7,6 +7,7 @@ unit nextpas.core.lockfree.priority_queue;
  *
  * @see java.util.concurrent.PriorityBlockingQueue — reference implementation
  * @see Go container/heap — similar heap-based priority queue
+ * @concurrency Thread-safe (see source for details).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -14,6 +15,7 @@ unit nextpas.core.lockfree.priority_queue;
 interface
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.platform.sync;
@@ -101,7 +103,7 @@ begin
   FCompare := ACompare;
   FCapacity := AInitialCapacity;
   FCount := 0;
-  GetMem(FData, FCapacity * SizeOf(T));
+  FData := GetMem(FCapacity * SizeOf(T));
   platform_mutex_init(FMutex, PLATFORM_MUTEX_ERRORCHECK);
 end;
 
@@ -109,7 +111,7 @@ destructor TConcurrentPriorityQueueImpl.Destroy;
 begin
   platform_mutex_destroy(FMutex);
   if FData <> nil then
-    FreeMem(FData);
+    FreeMem(FData, FCapacity * SizeOf(T));
   inherited;
 end;
 
@@ -124,11 +126,11 @@ var
   LNewData: PHeapArray;
 begin
   if FCapacity > (MaxInt div SizeOf(T)) div 2 then
-    raise EOutOfMemoryError.Create('TConcurrentPriorityQueue.Grow: capacity overflow');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TConcurrentPriorityQueue.Grow: capacity overflow'));
   LNewCap := FCapacity * 2;
-  GetMem(LNewData, LNewCap * SizeOf(T));
+  LNewData := GetMem(LNewCap * SizeOf(T));
   Move(FData^[0], LNewData^[0], FCount * SizeOf(T));
-  FreeMem(FData);
+  FreeMem(FData, FCapacity * SizeOf(T));
   FData := LNewData;
   FCapacity := LNewCap;
 end;

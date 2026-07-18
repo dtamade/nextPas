@@ -15,6 +15,7 @@ type
       每个相位(phase)有 N 个参与方，所有参与方到达后进入下一相位。
       支持 Register/Arrive/ArriveAndAwaitAdvance/ArriveAndDeregister。
       适用场景：分阶段并行计算、动态任务分组。
+ * @concurrency Thread-safe (see source for details).
   }
   TPhaser = class
   private
@@ -29,6 +30,7 @@ type
     function AwaitAdvanceInternal(const APhase: Int64; const ATimeoutNs: Int64): TLockFreePhaserArriveResult;
   public
     constructor Create(const AParties: Int64 = 0);
+    destructor Destroy; override;
     function Register: Int64;
     function Arrive: Int64;
     function ArriveAndAwaitAdvance: Int64;
@@ -239,6 +241,12 @@ end;
 procedure TPhaser.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TPhaser.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TPhaser.IsClosed: Boolean; inline;

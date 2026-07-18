@@ -1,9 +1,15 @@
 # 自举路线图 v3.0
 
-> 最后更新：2026-07-06
+> **状态：历史快照。** 本文件保留 2026-07-06 的判断和执行顺序，不再是当前计划。
+> 当前 compiler/System、自举、query、MIR 与性能顺序见
+> `docs/plans/2026-07-12-nextpas-compiler-excellence-plan.md`。
+> 其中“resolver 编译全部 252 个索引单元”和 `platform-exclude` 修复已经被 live
+> dependency-graph 证据推翻，不得据此修改 resolver。
+>
+> 快照日期：2026-07-06；归档标记：2026-07-12
 > 基于 Codex (gpt-5.6-sol max) 战略审查 + 实际验证重构。
 
-## 当前状态
+## 2026-07-06 历史状态
 
 | 指标 | 值 | 状态 |
 |------|-----|------|
@@ -27,11 +33,11 @@
 
 ---
 
-## Phase 1: 最短自举阻塞清除（1 周）
+## Phase 1: 当时的最短自举判断（已废止）
 
 > 只做自举必须的最小能力，不碰 Sema 拆分、LLVM 优化、并行编译。
 
-### 实际阻塞点：SIMD 汇编排除
+### 当时判断：SIMD 汇编排除
 
 **根因**: unit resolver 编译搜索路径中的所有单元（252 个），包括 `nextpas.core.simd.*`（含 Intel 内联汇编），导致 assembler 失败。
 
@@ -74,7 +80,7 @@
 - [ ] 性能基线：冷编译、热编译、重复构建一致性
 - [ ] 确定性验证：全量/增量/重复构建产物一致性
 
-### 自举成功标准
+### 当时的自举成功标准（未形成可执行 B/C 证据）
 
 1. nextpas 编译器能编译自身全部源码
 2. 产出的编译器能再次编译自身（bootstrap 验证）
@@ -161,7 +167,7 @@
 
 ```
 Phase 0 (2-3d):   状态真相统一          ✅ 已完成
-Phase 1 (1周):    SIMD 汇编排除 + L6-A  ← 当前
+Phase 1 (1周):    SIMD 汇编排除 + L6-A  （已废止）
 Phase 2 (3-5d):   自举证据闭环
 Phase 3 (1-2周):  结构债收口 (Sema 拆分)
 Phase 4 (1周):    增量编译产品化
@@ -180,8 +186,9 @@ L6-B (5-8d):      Class helper 完整语义
 
 ## 变更记录
 
+- 2026-07-12: 标记为历史快照；当前执行顺序迁移到 compiler excellence plan
 - 2026-07-06: v3.0 基于 Codex 战略审查 + 实际验证重构，发现 SIMD 汇编是真正阻塞点
 - 2026-07-05: v2.0 合并 c8-roadmap-v2 + selfhost-blockers-roadmap
-- 2026-07-03: C7 自举验证完成
+- 2026-07-03: C7 compiler module/source probe 完成
 - 2026-06-30: c8-roadmap-v2 创建
 - 2026-06-20: selfhost-blockers-roadmap v2.0 创建

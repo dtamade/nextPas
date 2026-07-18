@@ -1,9 +1,14 @@
-# Platform 模块规划路线图
+# Platform 模块规划路线图（历史快照）
+
+> **Historical / non-authority.** Forward execution: [ROADMAP.md](ROADMAP.md).
+> Phase evidence log: [goal-tree.md](goal-tree.md).
+> Do not promote host truth tiers or schedule work from this file.
+> Embedded usability **8.56** is stale; maintenance baseline is **8.21**.
 
 **日期**: 2026-07-06
 **版本**: v2.0
-**状态**: 活跃规划
-**Owner**: Claude
+**状态**: historical planning snapshot
+**Owner**: platform lane (archive only)
 
 ---
 

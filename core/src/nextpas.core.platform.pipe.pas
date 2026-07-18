@@ -248,7 +248,7 @@ end;
 
 function platform_dup2(AOldFd: PtrInt; ANewFd: PtrInt): Int32;
 begin
-  Result := Int32(ERROR_NOT_SUPPORTED);
+  Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 {$ENDIF}
 

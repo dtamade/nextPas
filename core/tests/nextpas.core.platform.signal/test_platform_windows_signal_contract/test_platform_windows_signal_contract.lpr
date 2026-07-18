@@ -3,8 +3,8 @@ program test_platform_windows_signal_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
   nextpas.core.test;
 
 var
@@ -12,23 +12,20 @@ var
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
-  Result := ExpandFileName('../../../' + ARelativePath);
+  if FileExists('../../../' + ARelativePath) then
+    Exit('../../../' + ARelativePath);
+  if FileExists('core/' + ARelativePath) then
+    Exit('core/' + ARelativePath);
+  Result := '../../../' + ARelativePath;
 end;
 
 function LoadSourceText(const ARelativePath: string): string;
 var
   LSourcePath: string;
-  LLines: TStringList;
 begin
   LSourcePath := ExpandRepoPath(ARelativePath);
   Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LSourcePath);
-    Result := LLines.Text;
-  finally
-    LLines.Free;
-  end;
+  Result := FsReadFileText(LSourcePath);
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
@@ -67,6 +64,8 @@ begin
     'base must define typed console control handler routine');
   CheckContains(LFfi, 'SetConsoleCtrlHandler',
     'FFI must expose SetConsoleCtrlHandler');
+  CheckContains(LFfi, 'GenerateConsoleCtrlEvent',
+    'FFI must expose GenerateConsoleCtrlEvent for platform_signal_raise');
   CheckContains(LFfi, 'TConsoleCtrlHandlerRoutine',
     'SetConsoleCtrlHandler must use nextPas-owned typed handler');
 end;
@@ -85,12 +84,16 @@ begin
     'upper layers must not be told to call WinAPI directly');
   CheckContains(LWindowsBranch, 'SetConsoleCtrlHandler',
     'Windows signal branch must install console control handler internally');
+  CheckContains(LWindowsBranch, 'GenerateConsoleCtrlEvent',
+    'Windows signal branch must raise via GenerateConsoleCtrlEvent');
+  CheckContains(LWindowsBranch, 'nextpas.core.platform.error',
+    'Windows signal branch must use platform.error for PLATFORM_ERR_*');
   CheckContains(LWindowsBranch, 'PLATFORM_SIGINT',
     'Windows signal branch must map Ctrl+C to PLATFORM_SIGINT');
   CheckContains(LWindowsBranch, 'PLATFORM_SIGBREAK',
     'Windows signal branch must map Ctrl+Break');
-  CheckContains(LWindowsBranch, 'ERROR_NOT_SUPPORTED',
-    'unsupported POSIX signals must return stable unsupported error');
+  CheckContains(LWindowsBranch, 'PLATFORM_ERR_UNSUPPORTED',
+    'unsupported POSIX signals must return stable PLATFORM_ERR_UNSUPPORTED');
 end;
 
 procedure TestSignalConstantsDocumentWindowsBreak;

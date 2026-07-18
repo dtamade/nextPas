@@ -23,6 +23,8 @@ type
   WINBOOL = LongBool;
   {** @desc 布尔类型 *}
   BOOL = WINBOOL;
+  {** @desc Win32 BOOLEAN (1-byte). Do not confuse with BOOL/LongBool. *}
+  WINDOWS_BOOLEAN = Byte;
   {** @desc 句柄类型（不透明指针） *}
   HANDLE = Pointer;
   PHANDLE = ^HANDLE;
@@ -44,7 +46,8 @@ type
   LPDWORD = ^DWORD;
   {** @desc LONG 指针类型 *}
   PLONG = ^LONG;
-  {** @desc 64 位整数指针类型 *}
+  {** @desc 64 位整数指针类型（alias System.PInt64; do not redeclare ^Int64
+      or case-insensitive PInt64 shadows break public APIs that use PInt64) *}
   PINT64 = System.PInt64;
   {** @desc BYTE 指针类型 *}
   LPBYTE = ^BYTE;

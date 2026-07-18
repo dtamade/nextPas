@@ -16,6 +16,31 @@ uses
   nextpas.core.net.base;
 
 type
+  { Cooperative cancel for blocking stream IO. When set on ITcpStream, Read/Write
+    raise ECancelledError if IsCanceled becomes true before the operation
+    completes. Does not force-close the peer socket.
+    Prefer INetCancelWaitable tokens (NewNetCancelToken): Linux/macOS/BSD wake
+    blocked IO via poll+socketpair. Probe-only tokens fall back to short
+    SO_*TIMEO slices (~10ms). }
+  INetCancelToken = interface
+    ['{C1D2E3F4-A5B6-7890-ABCD-300000000007}']
+    function IsCanceled: Boolean;
+  end;
+
+  { Optional cancel controller: mark canceled (and signal wake when waitable). }
+  INetCancelController = interface(INetCancelToken)
+    ['{C1D2E3F4-A5B6-7890-ABCD-300000000008}']
+    procedure Cancel;
+  end;
+
+  { Optional fast-wake side-channel. WakeHandle is a readable fd/socket that
+    becomes ready when Cancel is called. 0 means unavailable (slice fallback). }
+  INetCancelWaitable = interface
+    ['{C1D2E3F4-A5B6-7890-ABCD-300000000009}']
+    function WakeHandle: PtrUInt;
+    procedure DrainWake;
+  end;
+
   { Runtime-facing socket seam for advanced server backends.
     Ordinary consumers can ignore it; evented runtimes may opt-in via Supports. }
   ITcpSocketRuntime = interface
@@ -46,6 +71,10 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+    { Optional cancel token for mid-read / mid-write interrupt.
+      Waitable tokens wake via poll; others use short SO_*TIMEO slices.
+      Pass nil to clear. }
+    procedure SetCancelToken(const AToken: INetCancelToken);
   end;
 
   ITcpListener = interface

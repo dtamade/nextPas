@@ -3,11 +3,11 @@ program test_http_headers;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.test,
+  nextpas.core.fs,
+  nextpas.core.path,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers;
@@ -16,16 +16,8 @@ var
   T: TTestSuite;
 
 function LoadTextFile(const APath: string): string;
-var
-  LText: TStringList;
 begin
-  LText := TStringList.Create;
-  try
-    LText.LoadFromFile(APath);
-    Result := LText.Text;
-  finally
-    LText.Free;
-  end;
+  Result := ReadFileText(APath);
 end;
 
 procedure CheckSourceNotContains(const ASource, AFragment, ALabel: string);
@@ -49,39 +41,49 @@ begin
   CheckSourceNotContains(LoadTextFile(APath), AFragment, ALabel + ': ' + APath);
 end;
 
+function NameMatchesSimpleMask(const AName, AMask: string): Boolean;
+var
+  LStar: SizeInt;
+  LPrefix, LSuffix: string;
+begin
+  { Single-star masks only (e.g. nextpas.core.http*.pas, *.lpr). }
+  if AMask = '' then
+    Exit(True);
+  LStar := Pos('*', AMask);
+  if LStar = 0 then
+    Exit(AName = AMask);
+  LPrefix := Copy(AMask, 1, LStar - 1);
+  LSuffix := Copy(AMask, LStar + 1, MaxInt);
+  if Length(AName) < Length(LPrefix) + Length(LSuffix) then
+    Exit(False);
+  Result :=
+    (Copy(AName, 1, Length(LPrefix)) = LPrefix) and
+    (Copy(AName, Length(AName) - Length(LSuffix) + 1, Length(LSuffix)) = LSuffix);
+end;
+
 procedure CheckSourceTreeNotContains(const ADir, AMask, AFragment, ALabel: string);
 var
-  LSearch: TSearchRec;
+  LEntries: TDirEntryArray;
+  LEntry: TDirEntry;
   LPath: string;
 begin
-  if FindFirst(IncludeTrailingPathDelimiter(ADir) + AMask, faAnyFile, LSearch) = 0 then
+  LEntries := ReadDir(ADir);
+  for LEntry in LEntries do
   begin
-    try
-      repeat
-        if (LSearch.Attr and faDirectory) = 0 then
-        begin
-          LPath := IncludeTrailingPathDelimiter(ADir) + LSearch.Name;
-          if IsHttpHandwrittenSource(LPath) then
-            CheckSourceFileNotContains(LPath, AFragment, ALabel);
-        end;
-      until FindNext(LSearch) <> 0;
-    finally
-      FindClose(LSearch);
+    LPath := IncludeTrailingPathDelimiter(ADir) + LEntry.Name;
+    if not LEntry.IsDir then
+    begin
+      if NameMatchesSimpleMask(LEntry.Name, AMask) and
+         IsHttpHandwrittenSource(LPath) then
+        CheckSourceFileNotContains(LPath, AFragment, ALabel + ': ' + LPath);
     end;
   end;
-
-  if FindFirst(IncludeTrailingPathDelimiter(ADir) + '*', faDirectory, LSearch) = 0 then
+  for LEntry in LEntries do
   begin
-    try
-      repeat
-        if ((LSearch.Attr and faDirectory) <> 0) and
-           (LSearch.Name <> '.') and (LSearch.Name <> '..') then
-          CheckSourceTreeNotContains(IncludeTrailingPathDelimiter(ADir) + LSearch.Name,
-            AMask, AFragment, ALabel);
-      until FindNext(LSearch) <> 0;
-    finally
-      FindClose(LSearch);
-    end;
+    if LEntry.IsDir and (LEntry.Name <> '.') and (LEntry.Name <> '..') then
+      CheckSourceTreeNotContains(
+        IncludeTrailingPathDelimiter(ADir) + LEntry.Name,
+        AMask, AFragment, ALabel);
   end;
 end;
 
@@ -641,7 +643,7 @@ begin
   try
     SetBearerAuth(LH, 'token');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'bearer helper rejects nil headers');
@@ -650,7 +652,7 @@ begin
   try
     SetBasicAuth(LH, 'user', 'pass');
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'basic helper rejects nil headers');
@@ -669,7 +671,7 @@ begin
   try
     LH.ForEach(LCallback);
   except
-    on E: EArgumentError do
+    on E: EHttpError do
       LRaised := True;
   end;
   Check(LRaised, 'foreach rejects nil callback');

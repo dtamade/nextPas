@@ -19,7 +19,7 @@ unit nextpas.core.tls.ringbuffer.lockfree;
 
 interface
 
-uses nextpas.core.tls.base;
+uses nextpas.core.mem, nextpas.core.tls.base;
 
 type
   { Cache line size for padding - typically 64 bytes on modern CPUs }
@@ -162,7 +162,7 @@ begin
   FMask := FCapacity - 1;
 
   // Allocate buffer with alignment for better cache behavior
-  GetMem(FBuffer, FCapacity);
+  FBuffer := GetMem(FCapacity);
   FillChar(FBuffer^, FCapacity, 0);
 
   // Initialize positions
@@ -181,7 +181,7 @@ end;
 destructor TLockFreeRingBuffer.Destroy;
 begin
   if Assigned(FBuffer) then
-    FreeMem(FBuffer);
+    FreeMem(FBuffer, FCapacity);
   inherited;
 end;
 

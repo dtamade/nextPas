@@ -14,6 +14,11 @@ begin
     Halt(1);
   if not platform_secure_zero_memory_is_native then
     Halt(1);
+{$ELSEIF defined(NEXTPAS_WINDOWS)}
+  if platform_secure_zero_memory_backend <> pszbWindowsPermanentFallback then
+    Halt(1);
+  if platform_secure_zero_memory_is_native then
+    Halt(1);
 {$ELSE}
   if platform_secure_zero_memory_backend <> pszbFallbackFillCharBarrier then
     Halt(1);

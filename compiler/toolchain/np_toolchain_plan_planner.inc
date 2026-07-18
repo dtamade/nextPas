@@ -1,3 +1,17 @@
+procedure AssignToolchainStrings(
+  const AVec: TToolchainStringVec;
+  const AValues: TStringArray
+);
+var
+  Index: LongInt;
+begin
+  if AVec = nil then
+    Exit;
+  AVec.Clear;
+  for Index := 0 to Length(AValues) - 1 do
+    AVec.Push(AValues[Index]);
+end;
+
 constructor TToolchainPlanner.Create(
   const ABackendPlan: TBackendPlan;
   const ATargetFacts: TTargetFactsView;
@@ -9,9 +23,9 @@ begin
   FTargetFacts := ATargetFacts;
   FSourcePath := ASourcePath;
   FArtifactRootPath := '';
-  SetLength(FProjectUnitRoots, 0);
-  SetLength(FExplicitUnitRoots, 0);
-  SetLength(FAdditionalAssemblyBaseNames, 0);
+  FProjectUnitRoots := TToolchainStringVec.Create;
+  FExplicitUnitRoots := TToolchainStringVec.Create;
+  FAdditionalAssemblyBaseNames := TToolchainStringVec.Create;
   FPlan := TToolchainPlan.Create;
 end;
 
@@ -30,15 +44,24 @@ begin
   FTargetFacts := ATargetFacts;
   FSourcePath := ASourcePath;
   FArtifactRootPath := AArtifactRootPath;
-  FProjectUnitRoots := AProjectUnitRoots;
-  FExplicitUnitRoots := AExplicitUnitRoots;
-  FAdditionalAssemblyBaseNames := AAdditionalAssemblyBaseNames;
+  FProjectUnitRoots := TToolchainStringVec.Create;
+  FExplicitUnitRoots := TToolchainStringVec.Create;
+  FAdditionalAssemblyBaseNames := TToolchainStringVec.Create;
+  AssignToolchainStrings(FProjectUnitRoots, AProjectUnitRoots);
+  AssignToolchainStrings(FExplicitUnitRoots, AExplicitUnitRoots);
+  AssignToolchainStrings(FAdditionalAssemblyBaseNames, AAdditionalAssemblyBaseNames);
   FPlan := TToolchainPlan.Create;
 end;
 
 destructor TToolchainPlanner.Destroy;
 begin
   FPlan.Free;
+  FProjectUnitRoots.Free;
+  FProjectUnitRoots := nil;
+  FExplicitUnitRoots.Free;
+  FExplicitUnitRoots := nil;
+  FAdditionalAssemblyBaseNames.Free;
+  FAdditionalAssemblyBaseNames := nil;
   inherited Destroy;
 end;
 
@@ -211,10 +234,12 @@ var
 begin
   SetLength(AddedRoots, 0);
   AddUniqueRoot(ExtractFileDir(ExpandFileName(FSourcePath)));
-  for Index := 0 to Length(FProjectUnitRoots) - 1 do
-    AddUniqueRoot(FProjectUnitRoots[Index]);
-  for Index := 0 to Length(FExplicitUnitRoots) - 1 do
-    AddUniqueRoot(FExplicitUnitRoots[Index]);
+  if FProjectUnitRoots <> nil then
+    for Index := 0 to LongInt(FProjectUnitRoots.Count) - 1 do
+      AddUniqueRoot(FProjectUnitRoots[SizeUInt(Index)]);
+  if FExplicitUnitRoots <> nil then
+    for Index := 0 to LongInt(FExplicitUnitRoots.Count) - 1 do
+      AddUniqueRoot(FExplicitUnitRoots[SizeUInt(Index)]);
   { Skip FTargetFacts.UnitsDir: FPC should use its own RTL units (System,
     SysUtils, BaseUnix, etc.) instead of the bridge stubs in the runtime
     SDK directory. The stubs are only needed for nextpas resolution. }

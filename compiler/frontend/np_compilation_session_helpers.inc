@@ -87,6 +87,14 @@ constructor TCompilationSession.CreateBuildSession(
 begin
   inherited Create;
 
+  { Session-owned VirtualArena — product wire to nextpas.core.compiler.mem. }
+  FillChar(FMemScope, SizeOf(FMemScope), 0);
+  FMemScope.BeginSession;
+  FAstAllocator := CompilerCreateUnitAllocator;
+  FScratchAllocator := CompilerCreateUnitAllocator;
+  { Session-long; not phase scratch (survives ResetScratchAllocator). }
+  FToolStatusEvents := TToolStatusEventVec.Create;
+
   FSourceDatabase := TSourceDatabase.Create;
   FDiagnosticsSink := TDiagnosticsSink.CreateDefault;
   FTargetFacts := TargetFacts;
@@ -155,5 +163,70 @@ begin
   FIncrementalCache.Free;
   FFileDetector.Free;
   FQueryDB.Free;
+  FreeAndNil(FToolStatusEvents);
+  FScratchAllocator := nil;
+  FAstAllocator := nil;
+  FMemScope.EndSession;
   inherited Destroy;
+end;
+
+procedure TCompilationSession.ResetScratchAllocator;
+begin
+  if FScratchAllocator <> nil then
+    (FScratchAllocator as TVirtualArenaAllocator).Reset;
+end;
+
+function TCompilationSession.MemScopeActive: Boolean;
+begin
+  Result := FMemScope.Active;
+end;
+
+function TCompilationSession.MemSessionPeak: SizeUInt;
+begin
+  Result := FMemScope.SessionPeak;
+end;
+
+function TCompilationSession.MemUnitCount: SizeUInt;
+begin
+  Result := FMemScope.UnitCount;
+end;
+
+function TCompilationSession.MemTotalUsed: SizeUInt;
+begin
+  Result := FMemScope.TotalUsed;
+end;
+
+function TCompilationSession.MemAlloc(const ASize: SizeUInt): Pointer;
+begin
+  Result := FMemScope.Alloc(ASize);
+end;
+
+function TCompilationSession.MemAstAllocator: IAllocator;
+begin
+  Result := FAstAllocator;
+end;
+
+function TCompilationSession.MemScratchAllocator: IAllocator;
+begin
+  Result := FScratchAllocator;
+end;
+
+function TCompilationSession.MemFormatSessionStats: string;
+var
+  LAst: string;
+  LScratch: string;
+begin
+  { Core line from TCompilerSessionScope.FormatStats; session product flags
+    for AST/scratch allocators are appended for ops. }
+  if FAstAllocator <> nil then
+    LAst := '1'
+  else
+    LAst := '0';
+  if FScratchAllocator <> nil then
+    LScratch := '1'
+  else
+    LScratch := '0';
+  Result := FMemScope.FormatStats +
+    ' ast=' + LAst +
+    ' scratch=' + LScratch;
 end;

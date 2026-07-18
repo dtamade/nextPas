@@ -21,7 +21,7 @@ interface
 uses
   {$IFDEF UNIX}
   nextpas.core.thread.init, {$ENDIF}
-  Classes, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.time.cpu, Math, nextpas.core.test, nextpas.core.simd, nextpas.core.simd.testcase,
+  Classes, nextpas.core.exception, nextpas.core.text.conv, nextpas.core.text.format, nextpas.core.time.cpu, Math, nextpas.core.test, nextpas.core.simd, nextpas.core.simd.testcase,
   nextpas.core.simd.base, nextpas.core.simd.backend.adapter, nextpas.core.simd.runtime, nextpas.core.simd.dispatch;
 
 type
@@ -628,17 +628,17 @@ end;
 
 function DescribeBackendInfoLocal(const aInfo: TSimdBackendInfo): string;
 begin
-  Result := Format('backend=%s available=%s caps=%d priority=%d name=%s', [ConcurrentBackendName(aInfo.Backend), BoolToStr(aInfo.Available), CapabilitiesToAbiBitsLocal(aInfo.Capabilities), aInfo.Priority, aInfo.Name]);
+  Result := TextFormat('backend=%s available=%s caps=%d priority=%d name=%s', [ConcurrentBackendName(aInfo.Backend), BoolToStr(aInfo.Available), CapabilitiesToAbiBitsLocal(aInfo.Capabilities), aInfo.Priority, aInfo.Name]);
 end;
 
 function DispatchTableRepresentativeSliceMatchesLocal(const aTable, aExpected: TSimdDispatchTable): Boolean;
 begin
   Result := (aTable.Backend = aExpected.Backend) and
     BackendInfoMatchesLocal(aTable.BackendInfo, aExpected.BackendInfo) and
-    (Pointer(aTable.AddF32x4) = Pointer(aExpected.AddF32x4)) and
-    (Pointer(aTable.MulF32x4) = Pointer(aExpected.MulF32x4)) and
-    (Pointer(aTable.AddI32x4) = Pointer(aExpected.AddI32x4)) and
-    (Pointer(aTable.SelectF32x4) = Pointer(aExpected.SelectF32x4));
+    (Pointer(aTable.CoreVectors.AddF32x4) = Pointer(aExpected.CoreVectors.AddF32x4)) and
+    (Pointer(aTable.CoreVectors.MulF32x4) = Pointer(aExpected.CoreVectors.MulF32x4)) and
+    (Pointer(aTable.CoreVectors.AddI32x4) = Pointer(aExpected.CoreVectors.AddI32x4)) and
+    (Pointer(aTable.CoreVectors.SelectF32x4) = Pointer(aExpected.CoreVectors.SelectF32x4));
 end;
 
 function SameBackendArrayLocal(const aLeft, aRight: TSimdBackendArray): Boolean;
@@ -680,7 +680,7 @@ end;
 
 function DescribeRuntimeSnapshotLocal(const aSnapshot: TSimdRuntimeSnapshot): string;
 begin
-  Result := Format(
+  Result := TextFormat(
     'backend=%s info=(%s) registered=%s dispatchable=%s best=%s', [ConcurrentBackendName(aSnapshot.CurrentBackend), DescribeBackendInfoLocal(aSnapshot.CurrentBackendInfo), DescribeBackendArrayLocal(aSnapshot.RegisteredBackends),
      DescribeBackendArrayLocal(aSnapshot.DispatchableBackends), ConcurrentBackendName(aSnapshot.BestDispatchableBackend)]);
 end;
@@ -793,7 +793,7 @@ begin
 
       if Abs(actual - expected) > FLOAT_EPSILON * Max(1.0, Abs(expected)) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -801,7 +801,7 @@ begin
     FSuccess := True;
   except
     on E: Exception do
-      FErrorMsg := Format('Worker %d exception: %s', [FWorkerIndex, E.Message]);
+      FErrorMsg := TextFormat('Worker %d exception: %s', [FWorkerIndex, E.Message]);
   end;
 end;
 
@@ -839,7 +839,7 @@ begin
 
       if Abs(actual - expected) > FLOAT_EPSILON * Max(1.0, Abs(expected)) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -847,7 +847,7 @@ begin
     FSuccess := True;
   except
     on E: Exception do
-      FErrorMsg := Format('Worker %d exception: %s', [FWorkerIndex, E.Message]);
+      FErrorMsg := TextFormat('Worker %d exception: %s', [FWorkerIndex, E.Message]);
   end;
 end;
 
@@ -886,7 +886,7 @@ begin
 
       if Abs(actual - expected) > DOUBLE_EPSILON * Abs(expected) + DOUBLE_EPSILON then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.10f, got %.10f', [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: expected %.10f, got %.10f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -894,7 +894,7 @@ begin
     FSuccess := True;
   except
     on E: Exception do
-      FErrorMsg := Format('Worker %d exception: %s', [FWorkerIndex, E.Message]);
+      FErrorMsg := TextFormat('Worker %d exception: %s', [FWorkerIndex, E.Message]);
   end;
 end;
 
@@ -927,32 +927,32 @@ begin
       // 验证 dispatch table 有效
       if dt = nil then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: dispatch table is nil', [FWorkerIndex, i]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: dispatch table is nil', [FWorkerIndex, i]);
         Exit;
       end;
 
       // 验证后端一致性
       if dt^.Backend <> backend then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: backend mismatch (table=%d, active=%d)', [FWorkerIndex, i, Ord(dt^.Backend), Ord(backend)]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: backend mismatch (table=%d, active=%d)', [FWorkerIndex, i, Ord(dt^.Backend), Ord(backend)]);
         Exit;
       end;
 
       // 验证函数指针有效
-      if not Assigned(dt^.AddF32x4) then
+      if not Assigned(dt^.CoreVectors.AddF32x4) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: AddF32x4 not assigned', [FWorkerIndex, i]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: AddF32x4 not assigned', [FWorkerIndex, i]);
         Exit;
       end;
 
       // 执行实际操作验证功能正常
       a := MakeSplatF32x4(1.0);
       b := MakeSplatF32x4(2.0);
-      c := dt^.AddF32x4(a, b);
+      c := dt^.CoreVectors.AddF32x4(a, b);
 
       if Abs(VecF32x4Extract(c, 0) - 3.0) > FLOAT_EPSILON then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: operation result incorrect', [FWorkerIndex, i]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: operation result incorrect', [FWorkerIndex, i]);
         Exit;
       end;
     end;
@@ -960,7 +960,7 @@ begin
     FSuccess := True;
   except
     on E: Exception do
-      FErrorMsg := Format('Worker %d exception: %s', [FWorkerIndex, E.Message]);
+      FErrorMsg := TextFormat('Worker %d exception: %s', [FWorkerIndex, E.Message]);
   end;
 end;
 
@@ -1002,7 +1002,7 @@ begin
 
       if Abs(actual - expected) > FLOAT_EPSILON * Max(1.0, Abs(expected)) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -1010,7 +1010,7 @@ begin
     FSuccess := True;
   except
     on E: Exception do
-      FErrorMsg := Format('Worker %d exception: %s', [FWorkerIndex, E.Message]);
+      FErrorMsg := TextFormat('Worker %d exception: %s', [FWorkerIndex, E.Message]);
   end;
 end;
 
@@ -1047,7 +1047,7 @@ begin
 
       if Abs(actual - expected) > FLOAT_EPSILON * Max(1.0, Abs(expected)) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: expected %.6f, got %.6f', [FWorkerIndex, i, expected, actual]);
         Exit;
       end;
     end;
@@ -1055,7 +1055,7 @@ begin
     FSuccess := True;
   except
     on E: Exception do
-      FErrorMsg := Format('Worker %d exception: %s', [FWorkerIndex, E.Message]);
+      FErrorMsg := TextFormat('Worker %d exception: %s', [FWorkerIndex, E.Message]);
   end;
 end;
 
@@ -1097,7 +1097,7 @@ begin
       sum := VecF32x4ReduceAdd(a);
       if IsNan(sum) or IsInfinite(sum) then
       begin
-        FErrorMsg := Format('Worker %d, iter %d: invalid result', [FWorkerIndex, i]);
+        FErrorMsg := TextFormat('Worker %d, iter %d: invalid result', [FWorkerIndex, i]);
         Exit;
       end;
     end;
@@ -1105,7 +1105,7 @@ begin
     FSuccess := True;
   except
     on E: Exception do
-      FErrorMsg := Format('Worker %d exception: %s', [FWorkerIndex, E.Message]);
+      FErrorMsg := TextFormat('Worker %d exception: %s', [FWorkerIndex, E.Message]);
   end;
 end;
 
@@ -1159,7 +1159,7 @@ begin
     FSuccess := True;
   except
     on E: Exception do
-      FErrorMsg := Format('Worker %d exception: %s', [FWorkerIndex, E.Message]);
+      FErrorMsg := TextFormat('Worker %d exception: %s', [FWorkerIndex, E.Message]);
   end;
 end;
 
@@ -1217,14 +1217,14 @@ begin
       LCurrent := IsVectorAsmEnabled;
       if LCurrent <> LExpected then
       begin
-        FErrorMsg := Format('toggle mismatch at iter %d: expected=%s got=%s', [LIndex, BoolToStr(LExpected), BoolToStr(LCurrent)]);
+        FErrorMsg := TextFormat('toggle mismatch at iter %d: expected=%s got=%s', [LIndex, BoolToStr(LExpected), BoolToStr(LCurrent)]);
         Exit;
       end;
 
       LDispatch := GetDispatchTable;
-      if (LDispatch = nil) or (not Assigned(LDispatch^.AddF32x4)) then
+      if (LDispatch = nil) or (not Assigned(LDispatch^.CoreVectors.AddF32x4)) then
       begin
-        FErrorMsg := Format('dispatch unavailable at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('dispatch unavailable at iter %d', [LIndex]);
         Exit;
       end;
     end;
@@ -1262,19 +1262,19 @@ begin
       SetVectorAsmEnabled(LTargetEnabled);
 
       LDispatch := GetDispatchTable;
-      if (LDispatch = nil) or (not Assigned(LDispatch^.SubF32x4)) then
+      if (LDispatch = nil) or (not Assigned(LDispatch^.CoreVectors.SubF32x4)) then
       begin
-        FErrorMsg := Format('multi-writer dispatch unavailable at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('multi-writer dispatch unavailable at iter %d', [LIndex]);
         Exit;
       end;
 
       LA := MakeSplatF32x4(4.0);
       LB := MakeSplatF32x4(-1.0);
-      LC := LDispatch^.SubF32x4(LA, LB);
+      LC := LDispatch^.CoreVectors.SubF32x4(LA, LB);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - 5.0) > FLOAT_EPSILON then
       begin
-        FErrorMsg := Format('multi-writer dispatch sub mismatch at iter %d: %.6f', [LIndex, LValue]);
+        FErrorMsg := TextFormat('multi-writer dispatch sub mismatch at iter %d: %.6f', [LIndex, LValue]);
         Exit;
       end;
     end;
@@ -1307,19 +1307,19 @@ begin
     for LIndex := 0 to FIterations - 1 do
     begin
       LDispatch := GetDispatchTable;
-      if (LDispatch = nil) or (not Assigned(LDispatch^.AddF32x4)) then
+      if (LDispatch = nil) or (not Assigned(LDispatch^.CoreVectors.AddF32x4)) then
       begin
-        FErrorMsg := Format('dispatch unavailable at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('dispatch unavailable at iter %d', [LIndex]);
         Exit;
       end;
 
       LA := MakeSplatF32x4(1.0);
       LB := MakeSplatF32x4(2.0);
-      LC := LDispatch^.AddF32x4(LA, LB);
+      LC := LDispatch^.CoreVectors.AddF32x4(LA, LB);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - 3.0) > FLOAT_EPSILON then
       begin
-        FErrorMsg := Format('dispatch add mismatch at iter %d: %.6f', [LIndex, LValue]);
+        FErrorMsg := TextFormat('dispatch add mismatch at iter %d: %.6f', [LIndex, LValue]);
         Exit;
       end;
     end;
@@ -1367,37 +1367,37 @@ begin
       LApi := GetSimdPublicApi;
       if LApi = nil then
       begin
-        FErrorMsg := Format('public api table is nil at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('public api table is nil at iter %d', [LIndex]);
         Exit;
       end;
       if LApi^.StructSize <> SizeOf(TNextPasSimdPublicApi) then
       begin
-        FErrorMsg := Format('public api StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
+        FErrorMsg := TextFormat('public api StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
         Exit;
       end;
       if LApi^.AbiVersionMajor <> LExpectedAbiMajor then
       begin
-        FErrorMsg := Format('public api AbiVersionMajor torn at iter %d: expected=%d got=%d', [LIndex, LExpectedAbiMajor, LApi^.AbiVersionMajor]);
+        FErrorMsg := TextFormat('public api AbiVersionMajor torn at iter %d: expected=%d got=%d', [LIndex, LExpectedAbiMajor, LApi^.AbiVersionMajor]);
         Exit;
       end;
       if LApi^.AbiVersionMinor <> LExpectedAbiMinor then
       begin
-        FErrorMsg := Format('public api AbiVersionMinor torn at iter %d: expected=%d got=%d', [LIndex, LExpectedAbiMinor, LApi^.AbiVersionMinor]);
+        FErrorMsg := TextFormat('public api AbiVersionMinor torn at iter %d: expected=%d got=%d', [LIndex, LExpectedAbiMinor, LApi^.AbiVersionMinor]);
         Exit;
       end;
       if (LApi^.AbiSignatureHi <> LExpectedSigHi) or (LApi^.AbiSignatureLo <> LExpectedSigLo) then
       begin
-        FErrorMsg := Format('public api signature torn at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('public api signature torn at iter %d', [LIndex]);
         Exit;
       end;
       if LApi^.ActiveBackendId > UInt32(Ord(High(TSimdBackend))) then
       begin
-        FErrorMsg := Format('public api ActiveBackendId out of range at iter %d: %d', [LIndex, LApi^.ActiveBackendId]);
+        FErrorMsg := TextFormat('public api ActiveBackendId out of range at iter %d: %d', [LIndex, LApi^.ActiveBackendId]);
         Exit;
       end;
       if (LApi^.ActiveFlags and LExpectedFlags) <> LExpectedFlags then
       begin
-        FErrorMsg := Format('public api ActiveFlags missing registered/dispatchable/active bits at iter %d: %d', [LIndex, LApi^.ActiveFlags]);
+        FErrorMsg := TextFormat('public api ActiveFlags missing registered/dispatchable/active bits at iter %d: %d', [LIndex, LApi^.ActiveFlags]);
         Exit;
       end;
       if (not Assigned(LApi^.MemEqual)) or
@@ -1405,12 +1405,12 @@ begin
          (not Assigned(LApi^.MemCopy)) or
          (not Assigned(LApi^.MinMaxBytes)) then
       begin
-        FErrorMsg := Format('public api shim pointer torn at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('public api shim pointer torn at iter %d', [LIndex]);
         Exit;
       end;
       if not LApi^.MemEqual(@LBufA[0], @LBufB[0], SizeUInt(Length(LBufA))) then
       begin
-        FErrorMsg := Format('public api MemEqual parity mismatch at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('public api MemEqual parity mismatch at iter %d', [LIndex]);
         Exit;
       end;
     end;
@@ -1501,17 +1501,17 @@ begin
         ThreadSwitch;
       if not TryGetSimdBackendPodInfo(FBackend, LInfo) then
       begin
-        FErrorMsg := Format('backend pod info query failed at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('backend pod info query failed at iter %d', [LIndex]);
         Exit;
       end;
       if LInfo.StructSize <> SizeOf(TNextPasSimdBackendPodInfo) then
       begin
-        FErrorMsg := Format('backend pod info StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
+        FErrorMsg := TextFormat('backend pod info StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
         Exit;
       end;
       if LInfo.BackendId <> UInt32(Ord(FBackend)) then
       begin
-        FErrorMsg := Format('backend pod info BackendId torn at iter %d: expected=%d got=%d', [LIndex, Ord(FBackend), LInfo.BackendId]);
+        FErrorMsg := TextFormat('backend pod info BackendId torn at iter %d: expected=%d got=%d', [LIndex, Ord(FBackend), LInfo.BackendId]);
         Exit;
       end;
 
@@ -1521,7 +1521,7 @@ begin
         (LInfo.Flags = FExpectedFlagsB);
       if (not LMatchesA) and (not LMatchesB) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'backend pod info mixed snapshot at iter %d: caps=%d flags=%d expectedA=(%d,%d) expectedB=(%d,%d)', [LIndex, LInfo.CapabilityBits, LInfo.Flags, FExpectedCapsA, FExpectedFlagsA, FExpectedCapsB, FExpectedFlagsB]);
         Exit;
       end;
@@ -1551,7 +1551,7 @@ begin
       LNamePtr := GetSimdBackendNamePtr(FBackend);
       if Pointer(LNamePtr) = nil then
       begin
-        FErrorMsg := Format('backend text getter returned nil name pointer at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('backend text getter returned nil name pointer at iter %d', [LIndex]);
         Exit;
       end;
 
@@ -1561,7 +1561,7 @@ begin
       LNameText := AnsiString(string(LNamePtr));
       if (LNameText <> FExpectedNameA) and (LNameText <> FExpectedNameB) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'backend text getter mixed name snapshot at iter %d: got=%s expectedA=%s expectedB=%s', [LIndex, string(LNameText), string(FExpectedNameA), string(FExpectedNameB)]);
         Exit;
       end;
@@ -1569,7 +1569,7 @@ begin
       LDescriptionPtr := GetSimdBackendDescriptionPtr(FBackend);
       if Pointer(LDescriptionPtr) = nil then
       begin
-        FErrorMsg := Format('backend text getter returned nil description pointer at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('backend text getter returned nil description pointer at iter %d', [LIndex]);
         Exit;
       end;
 
@@ -1580,7 +1580,7 @@ begin
       if (LDescriptionText <> FExpectedDescriptionA) and
          (LDescriptionText <> FExpectedDescriptionB) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'backend text getter mixed description snapshot at iter %d: got=%s expectedA=%s expectedB=%s', [LIndex, string(LDescriptionText), string(FExpectedDescriptionA), string(FExpectedDescriptionB)]);
         Exit;
       end;
@@ -1674,7 +1674,7 @@ begin
       if (LBackend <> FExpectedBackendA) and
          (LBackend <> FExpectedBackendB) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'current backend mixed snapshot at iter %d: got=%s expectedA=%s expectedB=%s', [LIndex, ConcurrentBackendName(LBackend), ConcurrentBackendName(FExpectedBackendA), ConcurrentBackendName(FExpectedBackendB)]);
         Exit;
       end;
@@ -1702,7 +1702,7 @@ begin
       if (not BackendInfoMatchesLocal(LInfo, FExpectedInfoA)) and
          (not BackendInfoMatchesLocal(LInfo, FExpectedInfoB)) then
       begin
-        FErrorMsg := Format('current backend info mixed snapshot at iter %d: got=(%s) expectedA=(%s) expectedB=(%s)', [LIndex, DescribeBackendInfoLocal(LInfo), DescribeBackendInfoLocal(FExpectedInfoA), DescribeBackendInfoLocal(FExpectedInfoB)]);
+        FErrorMsg := TextFormat('current backend info mixed snapshot at iter %d: got=(%s) expectedA=(%s) expectedB=(%s)', [LIndex, DescribeBackendInfoLocal(LInfo), DescribeBackendInfoLocal(FExpectedInfoA), DescribeBackendInfoLocal(FExpectedInfoB)]);
         Exit;
       end;
     end;
@@ -1729,7 +1729,7 @@ begin
       if (not RuntimeSnapshotMatchesLocal(LSnapshot, FExpectedSnapshotA)) and
          (not RuntimeSnapshotMatchesLocal(LSnapshot, FExpectedSnapshotB)) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'runtime snapshot mixed snapshot at iter %d: got=(%s) expectedA=(%s) expectedB=(%s)', [LIndex, DescribeRuntimeSnapshotLocal(LSnapshot), DescribeRuntimeSnapshotLocal(FExpectedSnapshotA),
            DescribeRuntimeSnapshotLocal(FExpectedSnapshotB)]);
         Exit;
@@ -1758,10 +1758,10 @@ begin
       if (not DispatchTableRepresentativeSliceMatchesLocal(LObservedTable, FExpectedTableA)) and
          (not DispatchTableRepresentativeSliceMatchesLocal(LObservedTable, FExpectedTableB)) then
       begin
-        FErrorMsg := Format(
-          'backend ops mixed snapshot at iter %d: info=(%s) add=[A:%s B:%s] mul=[A:%s B:%s] addi=[A:%s B:%s] select=[A:%s B:%s]', [LIndex, DescribeBackendInfoLocal(LObservedTable.BackendInfo), BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableA.AddF32x4)),
-           BoolToStr(Pointer(LObservedTable.AddF32x4) = Pointer(FExpectedTableB.AddF32x4)), BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableA.MulF32x4)), BoolToStr(Pointer(LObservedTable.MulF32x4) = Pointer(FExpectedTableB.MulF32x4)), BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableA.AddI32x4)),
-           BoolToStr(Pointer(LObservedTable.AddI32x4) = Pointer(FExpectedTableB.AddI32x4)), BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableA.SelectF32x4)), BoolToStr(Pointer(LObservedTable.SelectF32x4) = Pointer(FExpectedTableB.SelectF32x4))]);
+        FErrorMsg := TextFormat(
+          'backend ops mixed snapshot at iter %d: info=(%s) add=[A:%s B:%s] mul=[A:%s B:%s] addi=[A:%s B:%s] select=[A:%s B:%s]', [LIndex, DescribeBackendInfoLocal(LObservedTable.BackendInfo), BoolToStr(Pointer(LObservedTable.CoreVectors.AddF32x4) = Pointer(FExpectedTableA.CoreVectors.AddF32x4)),
+           BoolToStr(Pointer(LObservedTable.CoreVectors.AddF32x4) = Pointer(FExpectedTableB.CoreVectors.AddF32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.MulF32x4) = Pointer(FExpectedTableA.CoreVectors.MulF32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.MulF32x4) = Pointer(FExpectedTableB.CoreVectors.MulF32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.AddI32x4) = Pointer(FExpectedTableA.CoreVectors.AddI32x4)),
+           BoolToStr(Pointer(LObservedTable.CoreVectors.AddI32x4) = Pointer(FExpectedTableB.CoreVectors.AddI32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.SelectF32x4) = Pointer(FExpectedTableA.CoreVectors.SelectF32x4)), BoolToStr(Pointer(LObservedTable.CoreVectors.SelectF32x4) = Pointer(FExpectedTableB.CoreVectors.SelectF32x4))]);
         Exit;
       end;
     end;
@@ -1789,17 +1789,17 @@ begin
 
       if not TryGetSimdBackendPodInfo(FBackend, LInfo) then
       begin
-        FErrorMsg := Format('current backend pod info query failed at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('current backend pod info query failed at iter %d', [LIndex]);
         Exit;
       end;
       if LInfo.StructSize <> SizeOf(TNextPasSimdBackendPodInfo) then
       begin
-        FErrorMsg := Format('current backend pod info StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
+        FErrorMsg := TextFormat('current backend pod info StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdBackendPodInfo), LInfo.StructSize]);
         Exit;
       end;
       if LInfo.BackendId <> UInt32(Ord(FBackend)) then
       begin
-        FErrorMsg := Format('current backend pod info BackendId torn at iter %d: expected=%d got=%d', [LIndex, Ord(FBackend), LInfo.BackendId]);
+        FErrorMsg := TextFormat('current backend pod info BackendId torn at iter %d: expected=%d got=%d', [LIndex, Ord(FBackend), LInfo.BackendId]);
         Exit;
       end;
 
@@ -1813,7 +1813,7 @@ begin
          (not LMatchesEnabledInactive) and
          (not LMatchesDisabledInactive) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'current backend pod info mixed snapshot at iter %d: caps=%d flags=%d expected={enabled-active=(%d,%d) | enabled-inactive=(%d,%d) | disabled-inactive=(%d,%d)}', [LIndex, LInfo.CapabilityBits, LInfo.Flags, FExpectedCapsEnabled, FExpectedFlagsEnabledActive, FExpectedCapsEnabled, FExpectedFlagsEnabledInactive,
            FExpectedCapsDisabled, FExpectedFlagsDisabledInactive]);
         Exit;
@@ -1859,7 +1859,7 @@ begin
       if (not SameBackendArrayLocal(LDispatchableView, FExpectedListEnabled)) and
          (not SameBackendArrayLocal(LDispatchableView, FExpectedListDisabled)) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'dispatchable helper mixed snapshot at iter %d: got=%s expectedEnabled=%s expectedDisabled=%s', [LIndex, DescribeBackendArrayLocal(LDispatchableView), DescribeBackendArrayLocal(FExpectedListEnabled), DescribeBackendArrayLocal(FExpectedListDisabled)]);
         Exit;
       end;
@@ -1867,14 +1867,14 @@ begin
       if (not SameBackendArrayLocal(LAvailableView, FExpectedListEnabled)) and
          (not SameBackendArrayLocal(LAvailableView, FExpectedListDisabled)) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'available helper mixed snapshot at iter %d: got=%s expectedEnabled=%s expectedDisabled=%s', [LIndex, DescribeBackendArrayLocal(LAvailableView), DescribeBackendArrayLocal(FExpectedListEnabled), DescribeBackendArrayLocal(FExpectedListDisabled)]);
         Exit;
       end;
 
       if (LBestBackend <> FExpectedBestEnabled) and (LBestBackend <> FExpectedBestDisabled) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'best dispatchable backend mixed snapshot at iter %d: got=%d expectedEnabled=%d expectedDisabled=%d', [LIndex, Ord(LBestBackend), Ord(FExpectedBestEnabled), Ord(FExpectedBestDisabled)]);
         Exit;
       end;
@@ -1975,7 +1975,7 @@ begin
 
       if not LMatchesState then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'registered backend list mixed snapshot at iter %d: got=%s expectedStates=%s', [LIndex, DescribeBackendArrayLocal(LRegistered), DescribeBackendArrayStatesLocal(FExpectedStates)]);
         Exit;
       end;
@@ -2009,12 +2009,12 @@ begin
       LApi := GetSimdPublicApi;
       if LApi = nil then
       begin
-        FErrorMsg := Format('public api table is nil at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('public api table is nil at iter %d', [LIndex]);
         Exit;
       end;
       if LApi^.StructSize <> SizeOf(TNextPasSimdPublicApi) then
       begin
-        FErrorMsg := Format('public api StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
+        FErrorMsg := TextFormat('public api StructSize torn at iter %d: expected=%d got=%d', [LIndex, SizeOf(TNextPasSimdPublicApi), LApi^.StructSize]);
         Exit;
       end;
 
@@ -2024,7 +2024,7 @@ begin
         (LApi^.ActiveFlags = FExpectedFlagsB);
       if (not LMatchesA) and (not LMatchesB) then
       begin
-        FErrorMsg := Format(
+        FErrorMsg := TextFormat(
           'public api active metadata mixed snapshot at iter %d: id=%d flags=%d expectedA=(%d,%d) expectedB=(%d,%d)', [LIndex, LApi^.ActiveBackendId, LApi^.ActiveFlags, Ord(FExpectedBackendA), FExpectedFlagsA, Ord(FExpectedBackendB), FExpectedFlagsB]);
         Exit;
       end;
@@ -2032,7 +2032,7 @@ begin
       if (not Assigned(LApi^.MemEqual)) or
          (not LApi^.MemEqual(@LBufA[0], @LBufB[0], SizeUInt(Length(LBufA)))) then
       begin
-        FErrorMsg := Format('public api active metadata MemEqual parity mismatch at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('public api active metadata MemEqual parity mismatch at iter %d', [LIndex]);
         Exit;
       end;
     end;
@@ -2086,41 +2086,41 @@ begin
       end;
 
       LDispatch := GetDispatchTable;
-      if (LDispatch = nil) or (not Assigned(LDispatch^.AddF32x4)) then
+      if (LDispatch = nil) or (not Assigned(LDispatch^.CoreVectors.AddF32x4)) then
       begin
-        FErrorMsg := Format('mixed-control dispatch unavailable at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('mixed-control dispatch unavailable at iter %d', [LIndex]);
         Exit;
       end;
-      if (not Assigned(LDispatch^.RoundF32x4)) or (not Assigned(LDispatch^.TruncF32x4)) then
+      if (not Assigned(LDispatch^.CoreVectors.RoundF32x4)) or (not Assigned(LDispatch^.CoreVectors.TruncF32x4)) then
       begin
-        FErrorMsg := Format('mixed-control round/trunc unavailable at iter %d', [LIndex]);
+        FErrorMsg := TextFormat('mixed-control round/trunc unavailable at iter %d', [LIndex]);
         Exit;
       end;
 
       LA := MakeSplatF32x4(1.0);
       LB := MakeSplatF32x4(2.0);
-      LC := LDispatch^.AddF32x4(LA, LB);
+      LC := LDispatch^.CoreVectors.AddF32x4(LA, LB);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - 3.0) > FLOAT_EPSILON then
       begin
-        FErrorMsg := Format('mixed-control AddF32x4 mismatch at iter %d: %.6f', [LIndex, LValue]);
+        FErrorMsg := TextFormat('mixed-control AddF32x4 mismatch at iter %d: %.6f', [LIndex, LValue]);
         Exit;
       end;
 
       LProbe := MakeSplatF32x4(-1.75);
-      LC := LDispatch^.RoundF32x4(LProbe);
+      LC := LDispatch^.CoreVectors.RoundF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - (-2.0)) > FLOAT_EPSILON then
       begin
-        FErrorMsg := Format('mixed-control RoundF32x4 mismatch at iter %d: %.6f', [LIndex, LValue]);
+        FErrorMsg := TextFormat('mixed-control RoundF32x4 mismatch at iter %d: %.6f', [LIndex, LValue]);
         Exit;
       end;
 
-      LC := LDispatch^.TruncF32x4(LProbe);
+      LC := LDispatch^.CoreVectors.TruncF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
       if Abs(LValue - (-1.0)) > FLOAT_EPSILON then
       begin
-        FErrorMsg := Format('mixed-control TruncF32x4 mismatch at iter %d: %.6f', [LIndex, LValue]);
+        FErrorMsg := TextFormat('mixed-control TruncF32x4 mismatch at iter %d: %.6f', [LIndex, LValue]);
         Exit;
       end;
     end;
@@ -2173,12 +2173,12 @@ begin
 
     // 验证结果
     if IsNan(sum) or IsInfinite(sum) then
-      FErrorMsg := Format('Thread %d: invalid sum', [FWorkerIndex])
+      FErrorMsg := TextFormat('Thread %d: invalid sum', [FWorkerIndex])
     else
       FSuccess := True;
   except
     on E: Exception do
-      FErrorMsg := Format('Thread %d exception: %s', [FWorkerIndex, E.Message]);
+      FErrorMsg := TextFormat('Thread %d exception: %s', [FWorkerIndex, E.Message]);
   end;
 end;
 
@@ -3287,10 +3287,10 @@ var
   function IsScalarBackedForRepresentativeSlots(const aBackendTable, aScalarTable: TSimdDispatchTable): Boolean;
   begin
     Result :=
-      (Pointer(aBackendTable.AddF32x4) = Pointer(aScalarTable.AddF32x4)) and
-      (Pointer(aBackendTable.MulF32x4) = Pointer(aScalarTable.MulF32x4)) and
-      (Pointer(aBackendTable.AddI32x4) = Pointer(aScalarTable.AddI32x4)) and
-      (Pointer(aBackendTable.SelectF32x4) = Pointer(aScalarTable.SelectF32x4));
+      (Pointer(aBackendTable.CoreVectors.AddF32x4) = Pointer(aScalarTable.CoreVectors.AddF32x4)) and
+      (Pointer(aBackendTable.CoreVectors.MulF32x4) = Pointer(aScalarTable.CoreVectors.MulF32x4)) and
+      (Pointer(aBackendTable.CoreVectors.AddI32x4) = Pointer(aScalarTable.CoreVectors.AddI32x4)) and
+      (Pointer(aBackendTable.CoreVectors.SelectF32x4) = Pointer(aScalarTable.CoreVectors.SelectF32x4));
   end;
 begin
   LOldVectorAsm := IsVectorAsmEnabled;
@@ -3317,10 +3317,10 @@ begin
     LDisabledTable := LOriginalTable;
     LDisabledTable.BackendInfo.Available := False;
     LDisabledTable.BackendInfo.Capabilities := [];
-    LDisabledTable.AddF32x4 := LScalarTable.AddF32x4;
-    LDisabledTable.MulF32x4 := LScalarTable.MulF32x4;
-    LDisabledTable.AddI32x4 := LScalarTable.AddI32x4;
-    LDisabledTable.SelectF32x4 := LScalarTable.SelectF32x4;
+    LDisabledTable.CoreVectors.AddF32x4 := LScalarTable.CoreVectors.AddF32x4;
+    LDisabledTable.CoreVectors.MulF32x4 := LScalarTable.CoreVectors.MulF32x4;
+    LDisabledTable.CoreVectors.AddI32x4 := LScalarTable.CoreVectors.AddI32x4;
+    LDisabledTable.CoreVectors.SelectF32x4 := LScalarTable.CoreVectors.SelectF32x4;
 
     SetLength(LWriters, WRITER_THREADS);
     SetLength(LReaders, READER_THREADS);
@@ -3836,21 +3836,21 @@ begin
 
       ResetToAutomaticBackend;
       LDispatch := GetDispatchTable;
-      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.AddF32x4) and
-        Assigned(LDispatch^.RoundF32x4) and Assigned(LDispatch^.TruncF32x4),
+      CheckTrue((LDispatch <> nil) and Assigned(LDispatch^.CoreVectors.AddF32x4) and
+        Assigned(LDispatch^.CoreVectors.RoundF32x4) and Assigned(LDispatch^.CoreVectors.TruncF32x4),
         'Post-round dispatch should be available');
 
       LA := MakeSplatF32x4(1.0);
       LB := MakeSplatF32x4(2.0);
-      LC := LDispatch^.AddF32x4(LA, LB);
+      LC := LDispatch^.CoreVectors.AddF32x4(LA, LB);
       LValue := VecF32x4Extract(LC, 0);
       CheckTrue(Abs(LValue - 3.0) <= FLOAT_EPSILON, 'Post-round AddF32x4 sanity mismatch on round ' + IntToStr(LRound));
 
       LProbe := MakeSplatF32x4(-1.75);
-      LC := LDispatch^.RoundF32x4(LProbe);
+      LC := LDispatch^.CoreVectors.RoundF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
       CheckTrue(Abs(LValue - (-2.0)) <= FLOAT_EPSILON, 'Post-round RoundF32x4 sanity mismatch on round ' + IntToStr(LRound));
-      LC := LDispatch^.TruncF32x4(LProbe);
+      LC := LDispatch^.CoreVectors.TruncF32x4(LProbe);
       LValue := VecF32x4Extract(LC, 0);
       CheckTrue(Abs(LValue - (-1.0)) <= FLOAT_EPSILON, 'Post-round TruncF32x4 sanity mismatch on round ' + IntToStr(LRound));
 
@@ -3969,7 +3969,7 @@ begin
     workers[i].Free;
   end;
 
-  WriteLn(Format('  Stress test completed: %d threads, %d total SIMD operations', [STRESS_THREAD_COUNT, totalOps]));
+  WriteLn(TextFormat('  Stress test completed: %d threads, %d total SIMD operations', [STRESS_THREAD_COUNT, totalOps]));
 
   CheckTrue(allSuccess, 'Stress Concurrent SIMD failed: ' + errorMsgs);
 end;
@@ -3983,6 +3983,8 @@ var
   startTime: QWord;
   iterations: Integer;
 begin
+  allSuccess := False;
+  errorMsgs := '';
   startTime := GetTickCount64;
   iterations := 0;
 
@@ -4019,7 +4021,7 @@ begin
     Inc(iterations);
   end;
 
-  WriteLn(Format('  Long-running test: %d iterations in %d seconds', [iterations, LONG_RUNNING_SECONDS]));
+  WriteLn(TextFormat('  Long-running test: %d iterations in %d seconds', [iterations, LONG_RUNNING_SECONDS]));
 
   CheckTrue(allSuccess, 'Long-running stress test failed: ' + errorMsgs);
 end;
@@ -4047,7 +4049,7 @@ begin
       if not worker.Success then
       begin
         allSuccess := False;
-        errorMsg := Format('Iteration %d: %s', [i, worker.ErrorMsg]);
+        errorMsg := TextFormat('Iteration %d: %s', [i, worker.ErrorMsg]);
         Break;
       end;
     finally
@@ -4055,7 +4057,7 @@ begin
     end;
   end;
 
-  WriteLn(Format('  Rapid thread creation: %d threads created/destroyed', [RAPID_ITERATIONS]));
+  WriteLn(TextFormat('  Rapid thread creation: %d threads created/destroyed', [RAPID_ITERATIONS]));
 
   CheckTrue(allSuccess, 'Rapid thread creation failed: ' + errorMsg);
 end;

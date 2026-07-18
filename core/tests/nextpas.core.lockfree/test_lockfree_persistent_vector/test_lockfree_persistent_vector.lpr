@@ -2,8 +2,9 @@
 program test_lockfree_persistent_vector;
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
+  nextpas.core.text.conv,
+  nextpas.core.errors,
   nextpas.core.lockfree.persistent_vector;
 
 var

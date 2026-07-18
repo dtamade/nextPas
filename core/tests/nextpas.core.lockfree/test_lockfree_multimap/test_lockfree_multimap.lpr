@@ -3,12 +3,49 @@ program test_lockfree_multimap;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.multimap,
   nextpas.core.test;
 
 type
   TIntMultiMap = specialize TLockFreeMultiMap<Int64, Int64>;
+
+function ReadMultiMapSource: string;
+var
+  LFile: TextFile;
+  LLine: string;
+begin
+  Result := '';
+  AssignFile(LFile, '../../../src/nextpas.core.lockfree.multimap.pas');
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LLine + LineEnding;
+    end;
+  finally
+    CloseFile(LFile);
+  end;
+end;
+
+function ReadLockfreeFacadeSource: string;
+var
+  LFile: TextFile;
+  LLine: string;
+begin
+  Result := '';
+  AssignFile(LFile, '../../../src/nextpas.core.lockfree.pas');
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      Result := Result + LLine + LineEnding;
+    end;
+  finally
+    CloseFile(LFile);
+  end;
+end;
 
 procedure TestMultiMapBasic;
 var
@@ -208,6 +245,27 @@ begin
   end;
 end;
 
+procedure TestMultiMapH3_2ProductionContract;
+var
+  LSource: string;
+  LFacade: string;
+begin
+  LSource := ReadMultiMapSource;
+  Check(Pos('if IsManagedType(TKey) then', LSource) > 0,
+    'H3-2 MultiMap rejects managed TKey');
+  Check(Pos('if IsManagedType(TValue) then', LSource) > 0,
+    'H3-2 MultiMap rejects managed TValue');
+  Check(Pos('FLock: Int32', LSource) > 0,
+    'H3-2 MultiMap progress is single map spin lock');
+  Check(Pos('mmClosed', LSource) > 0, 'H3-2 MultiMap uses mmClosed');
+  Check(Pos('procedure Close', LSource) > 0, 'H3-2 MultiMap exposes Close');
+  Check(Pos('Close;', LSource) > 0, 'H3-2 MultiMap Destroy path includes Close');
+
+  LFacade := ReadLockfreeFacadeSource;
+  Check(Pos('lockfree.multimap', LFacade) = 0,
+    'H3-2 MultiMap must not be re-exported by default lockfree facade');
+end;
+
 begin
   WriteLn('=== test_lockfree_multimap ===');
   WriteLn;
@@ -232,6 +290,9 @@ begin
 
   TestMultiMapDuplicateKeys;
   WriteLn('  + Duplicate keys');
+
+  TestMultiMapH3_2ProductionContract;
+  WriteLn('  + H3-2 production contract pins');
 
   WriteLn;
   WriteLn('All multimap tests passed!');

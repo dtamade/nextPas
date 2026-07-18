@@ -15,21 +15,21 @@ const
   { Default number of slots per span. }
   CENTRAL_SPAN_SLOTS = 64;
 
-  { Scavenger: number of alloc/free ops before a fully-free span becomes
-    eligible for release. At ~10M ops/s, 100K ops ≈ 10ms idle. }
-  SCAVENGER_IDLE_THRESHOLD = 100000;
+  { Scavenger: soft purge — return physical pages, keep virtual reservation.
+    Must be < SCAVENGER_IDLE_THRESHOLD so decommit can fire before hard release.
+    At ~10M ops/s, 100K ops ≈ 10ms idle. }
+  SCAVENGER_DECOMMIT_THRESHOLD = 100000;
+
+  { Scavenger: hard release — FreeMem backing store after longer idle.
+    At ~10M ops/s, 1M ops ≈ 100ms idle. }
+  SCAVENGER_IDLE_THRESHOLD = 1000000;
 
   { Scavenger: how often (in ops) to run a scavenge check.
     Must be power of 2 for cheap masking. }
   SCAVENGER_CHECK_INTERVAL = 1024;
 
-  { Scavenger: max spans released per scavenge pass (bounds hold time). }
+  { Scavenger: max spans hard-released per scavenge pass (bounds hold time). }
   SCAVENGER_MAX_RELEASE = 16;
-
-  { Scavenger: idle threshold for OS memory decommit (physical pages returned).
-    At ~10M ops/s, 1M ops ≈ 100ms idle. Longer than SCAVENGER_IDLE_THRESHOLD
-    to avoid premature decommit of frequently reused spans. }
-  SCAVENGER_DECOMMIT_THRESHOLD = 1000000;
 
 type
   {** Entry in the central span pool: a span + its memory region. }
@@ -41,6 +41,20 @@ type
     FLastFreeTick: UInt64; { Op counter when span became fully free (0 = not idle). }
     FOwnerThreadId: QWord; { Thread that allocated this span (for cross-thread free). }
     FDecommitted: Boolean; { True if physical pages returned to OS (virtual reservation kept). }
+  end;
+
+  {** Snapshot of one central pool (live + lifetime counters). }
+  TCentralPoolStats = record
+    EntryCount: Int32;
+    LiveSpans: Int32;           { FMemory <> nil }
+    IdleSpans: Int32;           { fully free with FLastFreeTick <> 0 }
+    DecommittedSpans: Int32;    { live but physical pages returned }
+    FreeSlots: SizeUInt;
+    LiveBytes: SizeUInt;        { sum of FMemorySize for live spans (virtual) }
+    ReleasedSpans: UInt64;      { lifetime hard releases }
+    ReleasedBytes: UInt64;
+    DecommitEvents: UInt64;     { lifetime soft purges }
+    DecommittedBytes: UInt64;   { bytes soft-purged (may re-count if recommitted) }
   end;
 
   {** Central span pool for one size class. Manages partial and full spans.
@@ -57,6 +71,11 @@ type
     FSpinLock: SizeUInt;    { CentralPoolLock/CentralPoolUnlock. }
     FInboxHead: Pointer;    { Lock-free inbox: CAS singly linked list. }
     FLastHitIndex: Int32;   { MRU cache: last span found by FindSpanIndex (-1 = none). }
+    { Lifetime scavenger counters (monotonic; not reset by scavenge). }
+    FReleasedSpans: UInt64;
+    FReleasedBytes: UInt64;
+    FDecommitEvents: UInt64;
+    FDecommittedBytes: UInt64;
   end;
 
 {** Initialize a central pool for a given slot size. }
@@ -81,10 +100,15 @@ procedure CentralPoolFree(var APool: TCentralPool;
 {** Return total free slots across all non-released spans. }
 function CentralPoolFreeCount(var APool: TCentralPool): SizeUInt;
 
-{** Scan all entries and release backing memory for fully-free spans that have
-    been idle for more than AIdleThreshold ops.
+{** Snapshot live + lifetime scavenger counters. Thread-safe. }
+procedure CentralPoolGetStats(var APool: TCentralPool;
+  out AStats: TCentralPoolStats);
+
+{** Scan fully-free spans:
+    - age >= AIdleThreshold → hard FreeMem (counts as Released*)
+    - else age >= SCAVENGER_DECOMMIT_THRESHOLD → soft decommit (Decommit*)
     AOpCounter: current monotonic operation counter.
-    Returns number of spans released. Thread-safe. }
+    Returns number of spans hard-released this pass. Thread-safe. }
 function ScavengeCentralPools(var APool: TCentralPool;
   AOpCounter: UInt64; AIdleThreshold: UInt64): Int32;
 
@@ -142,6 +166,10 @@ begin
   APool.FSpinLock := 0;
   APool.FInboxHead := nil;
   APool.FLastHitIndex := -1;
+  APool.FReleasedSpans := 0;
+  APool.FReleasedBytes := 0;
+  APool.FDecommitEvents := 0;
+  APool.FDecommittedBytes := 0;
   SetLength(APool.FEntries, INITIAL_CAPACITY);
   SetLength(APool.FPartialNext, INITIAL_CAPACITY);
 end;
@@ -195,7 +223,9 @@ begin
   APool.FEntries[LIdx].FMemory := LMem;
   APool.FEntries[LIdx].FMemorySize := LMemSize;
   APool.FEntries[LIdx].FLastFreeTick := 0;
-  APool.FEntries[LIdx].FOwnerThreadId := GetCurrentThreadId;
+  { Darwin aarch64 TThreadID is not assignment-compatible with QWord without cast. }
+  APool.FEntries[LIdx].FOwnerThreadId := QWord(PtrUInt(GetCurrentThreadId));
+  APool.FEntries[LIdx].FDecommitted := False;
   { Add to partial list. }
   APool.FPartialNext[LIdx] := APool.FPartialHead;
   APool.FPartialHead := LIdx;
@@ -399,15 +429,52 @@ begin
   end;
 end;
 
+procedure CentralPoolGetStats(var APool: TCentralPool;
+  out AStats: TCentralPoolStats);
+var
+  I: Int32;
+begin
+  FillChar(AStats, SizeOf(AStats), 0);
+  CentralPoolLock(APool.FSpinLock);
+  try
+    AStats.EntryCount := APool.FEntryCount;
+    AStats.ReleasedSpans := APool.FReleasedSpans;
+    AStats.ReleasedBytes := APool.FReleasedBytes;
+    AStats.DecommitEvents := APool.FDecommitEvents;
+    AStats.DecommittedBytes := APool.FDecommittedBytes;
+    for I := 0 to APool.FEntryCount - 1 do
+    begin
+      if APool.FEntries[I].FMemory = nil then
+        Continue;
+      Inc(AStats.LiveSpans);
+      Inc(AStats.LiveBytes, APool.FEntries[I].FMemorySize);
+      Inc(AStats.FreeSlots, SpanFreeCount(APool.FEntries[I].FSpan));
+      if APool.FEntries[I].FDecommitted then
+        Inc(AStats.DecommittedSpans);
+      if (APool.FEntries[I].FLastFreeTick <> 0) and
+         SpanIsEmpty(APool.FEntries[I].FSpan) then
+        Inc(AStats.IdleSpans);
+    end;
+  finally
+    CentralPoolUnlock(APool.FSpinLock);
+  end;
+end;
+
 function ScavengeCentralPools(var APool: TCentralPool;
   AOpCounter: UInt64; AIdleThreshold: UInt64): Int32;
 var
   I, LPrev, LCur: Int32;
   LAge: UInt64;
+  LMemSize: SizeUInt;
+  LInboxChain: PInboxNode;
 begin
   Result := 0;
+  { Drain lock-free inbox first so fully-free spans become visible. }
+  LInboxChain := GrabInboxChain(APool);
   CentralPoolLock(APool.FSpinLock);
   try
+    if LInboxChain <> nil then
+      ProcessInboxChain(APool, LInboxChain, AOpCounter);
     for I := 0 to APool.FEntryCount - 1 do
     begin
       if Result >= SCAVENGER_MAX_RELEASE then
@@ -439,7 +506,8 @@ begin
           LPrev := LCur;
           LCur := APool.FPartialNext[LCur];
         end;
-        FreeMem(APool.FEntries[I].FMemory, APool.FEntries[I].FMemorySize);
+        LMemSize := APool.FEntries[I].FMemorySize;
+        FreeMem(APool.FEntries[I].FMemory, LMemSize);
         APool.FEntries[I].FMemory := nil;
         APool.FEntries[I].FLastFreeTick := 0;
         APool.FEntries[I].FDecommitted := False;
@@ -449,14 +517,19 @@ begin
         if APool.FLastHitIndex = I then
           APool.FLastHitIndex := -1;
         Inc(Result);
+        Inc(APool.FReleasedSpans);
+        Inc(APool.FReleasedBytes, LMemSize);
       end
-      { OS memory decommit: return physical pages, keep virtual reservation. }
+      { Soft purge: return physical pages, keep virtual reservation.
+        Only reachable when SCAVENGER_DECOMMIT_THRESHOLD < AIdleThreshold. }
       else if (LAge >= SCAVENGER_DECOMMIT_THRESHOLD) and
               (not APool.FEntries[I].FDecommitted) then
       begin
-        platform_virtual_decommit(APool.FEntries[I].FMemory,
-          APool.FEntries[I].FMemorySize);
+        LMemSize := APool.FEntries[I].FMemorySize;
+        platform_virtual_decommit(APool.FEntries[I].FMemory, LMemSize);
         APool.FEntries[I].FDecommitted := True;
+        Inc(APool.FDecommitEvents);
+        Inc(APool.FDecommittedBytes, LMemSize);
       end;
     end;
   finally

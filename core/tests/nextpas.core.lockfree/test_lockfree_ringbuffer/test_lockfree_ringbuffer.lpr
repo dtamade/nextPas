@@ -3,7 +3,6 @@ program test_lockfree_ringbuffer;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.ringbuffer,
   nextpas.core.lockfree,
   nextpas.core.test;

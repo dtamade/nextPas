@@ -3,7 +3,6 @@ program test_lockfree_scalable_bloom;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.scalable_bloom,
   nextpas.core.test;
 

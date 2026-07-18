@@ -55,12 +55,13 @@ end;
 procedure TestStats;
 var
   LAlloc: TDebugAllocator;
+  LPtr1, LPtr2: Pointer;
   LStats: TDebugAllocStats;
 begin
   LAlloc := TDebugAllocator.Create(GetRtlAllocator);
   try
-    LAlloc.GetMem(32);
-    LAlloc.GetMem(64);
+    LPtr1 := LAlloc.GetMem(32);
+    LPtr2 := LAlloc.GetMem(64);
 
     LStats := LAlloc.GetStats;
     Check(LStats.TotalAllocs >= 2, 'total allocs');
@@ -69,6 +70,9 @@ begin
     Check(LStats.TotalBytes >= 96, 'total bytes');
     Check(LStats.ActiveBytes >= 96, 'active bytes');
     Check(LStats.TrackedCount >= 2, 'tracked');
+
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr2);
   finally
     LAlloc.Free;
   end;
@@ -77,13 +81,15 @@ end;
 procedure TestReportLeaks;
 var
   LAlloc: TDebugAllocator;
+  LPtr: Pointer;
   LReport: string;
 begin
   LAlloc := TDebugAllocator.Create(GetRtlAllocator);
   try
-    LAlloc.GetMem(64);
+    LPtr := LAlloc.GetMem(64);
     LReport := LAlloc.ReportLeaks;
     Check(Pos('block', LReport) > 0, 'has block info');
+    LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
   end;

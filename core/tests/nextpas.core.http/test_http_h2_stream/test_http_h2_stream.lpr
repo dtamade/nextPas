@@ -3,7 +3,6 @@ program test_http_h2_stream;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.http.base,
   nextpas.core.http.intf,

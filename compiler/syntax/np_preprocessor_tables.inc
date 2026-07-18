@@ -21,11 +21,20 @@ begin
     (ADir = 'pic') or (ADir = 'asmmode');
 end;
 
-constructor TDefineTable.Create;
+constructor TDefineTable.Create(AAllocator: IAllocator);
 begin
   inherited Create;
-  SetLength(FEntries, 0);
-  FCount := 0;
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+    FEntries := TDefineEntryVec.Create(0, FAllocator)
+  else
+    FEntries := TDefineEntryVec.Create;
+end;
+
+destructor TDefineTable.Destroy;
+begin
+  FEntries.Free;
+  inherited Destroy;
 end;
 
 function TDefineTable.IndexOf(const AName: string): LongInt;
@@ -34,7 +43,7 @@ var
   Norm: string;
 begin
   Norm := UpperCase(AName);
-  for I := 0 to FCount - 1 do
+  for I := 0 to LongInt(FEntries.Count) - 1 do
     if FEntries[I].Name = Norm then
       Exit(I);
   Result := -1;
@@ -43,52 +52,52 @@ end;
 procedure TDefineTable.Define(const AName: string);
 var
   Idx: LongInt;
+  Entry: TDefineEntry;
 begin
   if AName = '' then Exit;
   Idx := IndexOf(AName);
   if Idx >= 0 then
   begin
-    FEntries[Idx].Value := '';
-    FEntries[Idx].HasValue := False;
+    Entry := FEntries[Idx];
+    Entry.Value := '';
+    Entry.HasValue := False;
+    FEntries[Idx] := Entry;
     Exit;
   end;
-  if FCount >= Length(FEntries) then
-    SetLength(FEntries, FCount + 16);
-  FEntries[FCount].Name := UpperCase(AName);
-  FEntries[FCount].Value := '';
-  FEntries[FCount].HasValue := False;
-  Inc(FCount);
+  Entry.Name := UpperCase(AName);
+  Entry.Value := '';
+  Entry.HasValue := False;
+  FEntries.Push(Entry);
 end;
 
 procedure TDefineTable.DefineValue(const AName, AValue: string);
 var
   Idx: LongInt;
+  Entry: TDefineEntry;
 begin
   if AName = '' then Exit;
   Idx := IndexOf(AName);
   if Idx >= 0 then
   begin
-    FEntries[Idx].Value := AValue;
-    FEntries[Idx].HasValue := True;
+    Entry := FEntries[Idx];
+    Entry.Value := AValue;
+    Entry.HasValue := True;
+    FEntries[Idx] := Entry;
     Exit;
   end;
-  if FCount >= Length(FEntries) then
-    SetLength(FEntries, FCount + 16);
-  FEntries[FCount].Name := UpperCase(AName);
-  FEntries[FCount].Value := AValue;
-  FEntries[FCount].HasValue := True;
-  Inc(FCount);
+  Entry.Name := UpperCase(AName);
+  Entry.Value := AValue;
+  Entry.HasValue := True;
+  FEntries.Push(Entry);
 end;
 
 procedure TDefineTable.Undef(const AName: string);
 var
-  Idx, J: LongInt;
+  Idx: LongInt;
 begin
   Idx := IndexOf(AName);
   if Idx < 0 then Exit;
-  for J := Idx to FCount - 2 do
-    FEntries[J] := FEntries[J + 1];
-  Dec(FCount);
+  FEntries.Delete(SizeUInt(Idx));
 end;
 
 function TDefineTable.IsDefined(const AName: string): Boolean;
@@ -121,13 +130,12 @@ end;
 
 procedure TDefineTable.Clear;
 begin
-  FCount := 0;
-  SetLength(FEntries, 0);
+  FEntries.Clear;
 end;
 
 function TDefineTable.Count: LongInt;
 begin
-  Result := FCount;
+  Result := LongInt(FEntries.Count);
 end;
 
 procedure TDefineTable.SeedFPCDefines;
@@ -179,20 +187,27 @@ end;
 
 { TFileIncludeResolver }
 
-constructor TFileIncludeResolver.Create(const ABaseDir: string);
+constructor TFileIncludeResolver.Create(const ABaseDir: string;
+  AAllocator: IAllocator);
 begin
   inherited Create;
   FBaseDir := ABaseDir;
-  FSearchCount := 0;
-  SetLength(FSearchPaths, 0);
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+    FSearchPaths := TIncludePathVec.Create(0, FAllocator)
+  else
+    FSearchPaths := TIncludePathVec.Create;
+end;
+
+destructor TFileIncludeResolver.Destroy;
+begin
+  FSearchPaths.Free;
+  inherited Destroy;
 end;
 
 procedure TFileIncludeResolver.AddSearchPath(const APath: string);
 begin
-  if FSearchCount >= Length(FSearchPaths) then
-    SetLength(FSearchPaths, FSearchCount + 8);
-  FSearchPaths[FSearchCount] := APath;
-  Inc(FSearchCount);
+  FSearchPaths.Push(APath);
 end;
 
 function TFileIncludeResolver.ResolveInclude(const AName: string;
@@ -221,7 +236,7 @@ begin
     Close(F);
     Exit(True);
   end;
-  for I := 0 to FSearchCount - 1 do
+  for I := 0 to LongInt(FSearchPaths.Count) - 1 do
   begin
     Candidate := FSearchPaths[I] + DirectorySeparator + AName;
     if FsExists(Candidate) then
@@ -245,22 +260,32 @@ end;
 { TPreprocessor }
 
 constructor TPreprocessor.Create(ADefines: TDefineTable; AOwnsDefines: Boolean;
-  AIncludeResolver: IIncludeResolver);
+  AIncludeResolver: IIncludeResolver; AAllocator: IAllocator);
 begin
   inherited Create;
   FDefines := ADefines;
   FOwnsDefines := AOwnsDefines;
   FIncludeResolver := AIncludeResolver;
-  FStackCount := 0;
-  SetLength(FStack, 0);
-  FOutputCount := 0;
-  SetLength(FOutputTokens, 0);
+  FAllocator := AAllocator;
+  if FAllocator <> nil then
+  begin
+    FStack := TConditionalFrameVec.Create(0, FAllocator);
+    FOutputTokens := TTokenVec.Create(0, FAllocator);
+  end
+  else
+  begin
+    FStack := TConditionalFrameVec.Create;
+    FOutputTokens := TTokenVec.Create;
+  end;
   FCurrentFileId := 0;
   FNextFileId := 1000;
 end;
 
 destructor TPreprocessor.Destroy;
 begin
+  FreeTokenVecNestedTrivia(FOutputTokens);
+  FOutputTokens.Free;
+  FStack.Free;
   if FOwnsDefines then
     FDefines.Free;
   inherited Destroy;

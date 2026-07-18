@@ -13,6 +13,7 @@ type
       初始计数为 N，每个 Done 将计数减 1。
       Wait 阻塞直到计数归零。
       适用于：等待一组 goroutine 完成、扇出-汇聚模式。
+ * @concurrency Thread-safe (see source for details).
   }
   TCountDownLatch = class
   private
@@ -20,6 +21,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const AInitialCount: Int64);
+    destructor Destroy; override;
     procedure Done;
     procedure DoneN(const AN: Int64);
     procedure Wait;
@@ -110,6 +112,12 @@ end;
 procedure TCountDownLatch.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TCountDownLatch.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TCountDownLatch.IsClosed: Boolean; inline;

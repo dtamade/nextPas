@@ -33,18 +33,22 @@ end;
 procedure TestTrackAllocations;
 var
   LAlloc: TStatsAllocator;
+  LPtr1, LPtr2: Pointer;
   LStats: TAllocatorStats;
 begin
   LAlloc := TStatsAllocator.Create(GetRtlAllocator);
   try
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(128);
+    LPtr1 := LAlloc.GetMem(64);
+    LPtr2 := LAlloc.GetMem(128);
 
     LStats := LAlloc.GetStats;
     Check(LStats.AllocCount >= 2, 'allocs');
     Check(LStats.ActiveBytes >= 192, 'active bytes');
     Check(LStats.PeakBytes >= 192, 'peak bytes');
     Check(LStats.ActiveAllocs >= 2, 'active allocs');
+
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr2);
   finally
     LAlloc.Free;
   end;
@@ -92,17 +96,22 @@ end;
 procedure TestMinMaxSize;
 var
   LAlloc: TStatsAllocator;
+  LPtr1, LPtr2, LPtr3: Pointer;
   LStats: TAllocatorStats;
 begin
   LAlloc := TStatsAllocator.Create(GetRtlAllocator);
   try
-    LAlloc.GetMem(32);
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(16);
+    LPtr1 := LAlloc.GetMem(32);
+    LPtr2 := LAlloc.GetMem(64);
+    LPtr3 := LAlloc.GetMem(16);
 
     LStats := LAlloc.GetStats;
     Check(LStats.MinAllocSize <= 16, 'min size');
     Check(LStats.MaxAllocSize >= 64, 'max size');
+
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr2);
+    LAlloc.FreeMem(LPtr3);
   finally
     LAlloc.Free;
   end;
@@ -111,12 +120,16 @@ end;
 procedure TestReset;
 var
   LAlloc: TStatsAllocator;
+  LPtr1, LPtr2: Pointer;
 begin
   LAlloc := TStatsAllocator.Create(GetRtlAllocator);
   try
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(128);
+    LPtr1 := LAlloc.GetMem(64);
+    LPtr2 := LAlloc.GetMem(128);
     Check(LAlloc.ActiveBytes > 0, 'before reset');
+
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr2);
 
     LAlloc.Reset;
     Check(LAlloc.ActiveBytes = 0, 'after reset');

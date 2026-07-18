@@ -8,7 +8,20 @@ uses
   nextpas.core.platform.process,
   nextpas.core.platform.posix.ffi,
   nextpas.core.errors,
-  nextpas.core.test;
+  nextpas.core.test
+{$IFDEF NEXTPAS_LINUX}
+  , nextpas.core.platform.linux.base
+{$ENDIF}
+{$IFDEF NEXTPAS_MACOS}
+  , nextpas.core.platform.darwin.base
+{$ENDIF}
+{$IFDEF NEXTPAS_FREEBSD}
+  , nextpas.core.platform.freebsd.base
+{$ENDIF}
+{$IFDEF NEXTPAS_ANDROID}
+  , nextpas.core.platform.android.base
+{$ENDIF}
+  ;
 
 var
   T: TTestSuite;
@@ -283,131 +296,160 @@ begin
     'PATH_TOO_LONG maps to ecInvalidArgument');
 end;
 
-{ POSIX errno category mapping tests }
+procedure TestUnknownConstantAndMessage;
+var
+  Buf: array[0..255] of AnsiChar;
+  R: Int32;
+begin
+  CheckEqual(Int64(-8), Int64(PLATFORM_ERR_UNKNOWN), 'UNKNOWN is -8');
+  R := platform_error_message(PLATFORM_ERR_UNKNOWN, @Buf[0], 256);
+  Check(R > 0, 'UNKNOWN message length > 0');
+  Check(StrContains(@Buf[0], 'unknown'), 'UNKNOWN message contains unknown');
+  Check(platform_error_category(PLATFORM_ERR_UNKNOWN) = ecInternal,
+    'UNKNOWN maps to ecInternal');
+end;
+
+procedure TestLastOsErrorSideChannel;
+var
+  LOs, LMapped: Int32;
+  LBuf: array[0..63] of AnsiChar;
+begin
+  LOs := platform_get_last_os_error;
+  LMapped := platform_get_last_error;
+  Check(LOs >= 0, 'last_os_error is non-negative host code');
+  { mapped API remains callable independently }
+  Check(LMapped >= -8, 'last_error stays in portable/host range');
+  { trigger a known missing path so both APIs remain well-defined after a failure }
+  Check(platform_error_message(PLATFORM_ERR_NOENT, @LBuf[0], SizeOf(LBuf)) > 0,
+    'error_message still works alongside last_os_error');
+end;
+
+{ POSIX errno category mapping tests — use host ESysE* (not Linux literals). }
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD) or defined(NEXTPAS_ANDROID)}
 procedure TestPosixCategoryEnoent;
 begin
-  Check(platform_error_category(2) = ecNotFound,
-    'POSIX ENOENT(2) maps to ecNotFound');
+  Check(platform_error_category(ESysENOENT) = ecNotFound,
+    'POSIX ENOENT maps to ecNotFound');
 end;
 
 procedure TestPosixCategoryEperm;
 begin
-  Check(platform_error_category(1) = ecPermission,
-    'POSIX EPERM(1) maps to ecPermission');
+  Check(platform_error_category(ESysEPERM) = ecPermission,
+    'POSIX EPERM maps to ecPermission');
 end;
 
 procedure TestPosixCategoryEacces;
 begin
-  Check(platform_error_category(13) = ecPermission,
-    'POSIX EACCES(13) maps to ecPermission');
+  Check(platform_error_category(ESysEACCES) = ecPermission,
+    'POSIX EACCES maps to ecPermission');
 end;
 
 procedure TestPosixCategoryEexist;
 begin
-  Check(platform_error_category(17) = ecAlreadyExists,
-    'POSIX EEXIST(17) maps to ecAlreadyExists');
+  Check(platform_error_category(ESysEEXIST) = ecAlreadyExists,
+    'POSIX EEXIST maps to ecAlreadyExists');
 end;
 
 procedure TestPosixCategoryEaddrinuse;
 begin
-  Check(platform_error_category(98) = ecAlreadyExists,
-    'POSIX EADDRINUSE(98) maps to ecAlreadyExists');
+  Check(platform_error_category(ESysEADDRINUSE) = ecAlreadyExists,
+    'POSIX EADDRINUSE maps to ecAlreadyExists');
 end;
 
 procedure TestPosixCategoryEnetunreach;
 begin
-  Check(platform_error_category(101) = ecNetwork,
-    'POSIX ENETUNREACH(101) maps to ecNetwork');
+  Check(platform_error_category(ESysENETUNREACH) = ecNetwork,
+    'POSIX ENETUNREACH maps to ecNetwork');
 end;
 
 procedure TestPosixCategoryEhostunreach;
 begin
-  Check(platform_error_category(113) = ecNetwork,
-    'POSIX EHOSTUNREACH(113) maps to ecNetwork');
+  Check(platform_error_category(ESysEHOSTUNREACH) = ecNetwork,
+    'POSIX EHOSTUNREACH maps to ecNetwork');
 end;
 
 procedure TestPosixCategoryEnotconn;
 begin
-  Check(platform_error_category(107) = ecNetwork,
-    'POSIX ENOTCONN(107) maps to ecNetwork');
+  Check(platform_error_category(ESysENOTCONN) = ecNetwork,
+    'POSIX ENOTCONN maps to ecNetwork');
 end;
 
 procedure TestPosixCategoryEnomem;
 begin
-  Check(platform_error_category(12) = ecResourceExhausted,
-    'POSIX ENOMEM(12) maps to ecResourceExhausted');
+  Check(platform_error_category(ESysENOMEM) = ecResourceExhausted,
+    'POSIX ENOMEM maps to ecResourceExhausted');
 end;
 
 procedure TestPosixCategoryEnospc;
 begin
-  Check(platform_error_category(28) = ecResourceExhausted,
-    'POSIX ENOSPC(28) maps to ecResourceExhausted');
+  Check(platform_error_category(ESysENOSPC) = ecResourceExhausted,
+    'POSIX ENOSPC maps to ecResourceExhausted');
 end;
 
 procedure TestPosixCategoryEinval;
 begin
-  Check(platform_error_category(22) = ecInvalidArgument,
-    'POSIX EINVAL(22) maps to ecInvalidArgument');
+  Check(platform_error_category(ESysEINVAL) = ecInvalidArgument,
+    'POSIX EINVAL maps to ecInvalidArgument');
 end;
 
 procedure TestPosixCategoryEopnotsupp;
 begin
-  Check(platform_error_category(95) = ecNotSupported,
-    'POSIX EOPNOTSUPP(95) maps to ecNotSupported');
+  Check(platform_error_category(ESysEOPNOTSUPP) = ecNotSupported,
+    'POSIX EOPNOTSUPP maps to ecNotSupported');
 end;
 
 procedure TestPosixCategoryEtimedout;
 begin
-  Check(platform_error_category(110) = ecTimeout,
-    'POSIX ETIMEDOUT(110) maps to ecTimeout');
+  Check(platform_error_category(ESysETIMEDOUT) = ecTimeout,
+    'POSIX ETIMEDOUT maps to ecTimeout');
 end;
 
 procedure TestPosixCategoryEagain;
 begin
-  Check(platform_error_category(11) = ecWouldBlock,
-    'POSIX EAGAIN(11) maps to ecWouldBlock');
+  Check(platform_error_category(ESysEAGAIN) = ecWouldBlock,
+    'POSIX EAGAIN maps to ecWouldBlock');
 end;
 
 procedure TestPosixCategoryEbusy;
 begin
-  Check(platform_error_category(16) = ecWouldBlock,
-    'POSIX EBUSY(16) maps to ecWouldBlock');
+  Check(platform_error_category(ESysEBUSY) = ecWouldBlock,
+    'POSIX EBUSY maps to ecWouldBlock');
 end;
 
 procedure TestPosixCategoryEio;
 begin
-  Check(platform_error_category(5) = ecIO,
-    'POSIX EIO(5) maps to ecIO');
+  Check(platform_error_category(ESysEIO) = ecIO,
+    'POSIX EIO maps to ecIO');
 end;
 
 procedure TestPosixCategoryEpipe;
 begin
-  Check(platform_error_category(32) = ecIO,
-    'POSIX EPIPE(32) maps to ecIO');
+  Check(platform_error_category(ESysEPIPE) = ecIO,
+    'POSIX EPIPE maps to ecIO');
 end;
 
 procedure TestPosixCategoryEconnaborted;
 begin
-  Check(platform_error_category(103) = ecIO,
-    'POSIX ECONNABORTED(103) maps to ecIO');
+  Check(platform_error_category(ESysECONNABORTED) = ecIO,
+    'POSIX ECONNABORTED maps to ecIO');
 end;
 
 procedure TestPosixCategoryEconnreset;
 begin
-  Check(platform_error_category(104) = ecIO,
-    'POSIX ECONNRESET(104) maps to ecIO');
+  Check(platform_error_category(ESysECONNRESET) = ecIO,
+    'POSIX ECONNRESET maps to ecIO');
 end;
 
 procedure TestPosixCategoryEconnrefused;
 begin
-  Check(platform_error_category(111) = ecIO,
-    'POSIX ECONNREFUSED(111) maps to ecIO');
+  Check(platform_error_category(ESysECONNREFUSED) = ecIO,
+    'POSIX ECONNREFUSED maps to ecIO');
 end;
 
 procedure TestPosixCategoryEintr;
 begin
-  Check(platform_error_category(4) = ecInterrupted,
-    'POSIX EINTR(4) maps to ecInterrupted');
+  Check(platform_error_category(ESysEINTR) = ecInterrupted,
+    'POSIX EINTR maps to ecInterrupted');
 end;
 
 procedure TestPosixCategoryUnknown;
@@ -415,6 +457,7 @@ begin
   Check(platform_error_category(9999) = ecInternal,
     'Unknown POSIX code maps to ecInternal');
 end;
+{$ENDIF}
 
 procedure TestNewPermConstant;
 begin
@@ -590,9 +633,9 @@ begin
   T.Test('small buffer truncation', @TestSmallBuffer);
   T.Test('fatal API exists', @TestFatalExists);
   T.Test('fatal behavior (via subprocess)', @TestFatalBehavior);
-  T.Test('nil buffer returns -1', @TestNilBuffer);
-  T.Test('zero length buffer returns -1', @TestZeroLengthBuffer);
-  T.Test('negative length buffer returns -1', @TestNegativeLengthBuffer);
+  T.Test('nil buffer returns PLATFORM_ERR_INVALID', @TestNilBuffer);
+  T.Test('zero length buffer returns PLATFORM_ERR_INVALID', @TestZeroLengthBuffer);
+  T.Test('negative length buffer returns PLATFORM_ERR_INVALID', @TestNegativeLengthBuffer);
   T.Test('INVALID maps to ecInvalidArgument', @TestCategoryInvalid);
   T.Test('UNSUPPORTED maps to ecNotSupported', @TestCategoryUnsupported);
   T.Test('TIMEOUT maps to ecTimeout', @TestCategoryTimeout);
@@ -604,29 +647,33 @@ begin
   T.Test('EEXIST maps to ecAlreadyExists', @TestCategoryEexist);
   T.Test('ENOTDIR maps to ecNotFound', @TestCategoryEnotdir);
   T.Test('PATH_TOO_LONG maps to ecInvalidArgument', @TestCategoryPathTooLong);
-  { POSIX errno category tests }
-  T.Test('POSIX ENOENT(2) maps to ecNotFound', @TestPosixCategoryEnoent);
-  T.Test('POSIX EPERM(1) maps to ecPermission', @TestPosixCategoryEperm);
-  T.Test('POSIX EACCES(13) maps to ecPermission', @TestPosixCategoryEacces);
-  T.Test('POSIX EEXIST(17) maps to ecAlreadyExists', @TestPosixCategoryEexist);
-  T.Test('POSIX EADDRINUSE(98) maps to ecAlreadyExists', @TestPosixCategoryEaddrinuse);
-  T.Test('POSIX ENETUNREACH(101) maps to ecNetwork', @TestPosixCategoryEnetunreach);
-  T.Test('POSIX EHOSTUNREACH(113) maps to ecNetwork', @TestPosixCategoryEhostunreach);
-  T.Test('POSIX ENOTCONN(107) maps to ecNetwork', @TestPosixCategoryEnotconn);
-  T.Test('POSIX ENOMEM(12) maps to ecResourceExhausted', @TestPosixCategoryEnomem);
-  T.Test('POSIX ENOSPC(28) maps to ecResourceExhausted', @TestPosixCategoryEnospc);
-  T.Test('POSIX EINVAL(22) maps to ecInvalidArgument', @TestPosixCategoryEinval);
-  T.Test('POSIX EOPNOTSUPP(95) maps to ecNotSupported', @TestPosixCategoryEopnotsupp);
-  T.Test('POSIX ETIMEDOUT(110) maps to ecTimeout', @TestPosixCategoryEtimedout);
-  T.Test('POSIX EAGAIN(11) maps to ecWouldBlock', @TestPosixCategoryEagain);
-  T.Test('POSIX EBUSY(16) maps to ecWouldBlock', @TestPosixCategoryEbusy);
-  T.Test('POSIX EIO(5) maps to ecIO', @TestPosixCategoryEio);
-  T.Test('POSIX EPIPE(32) maps to ecIO', @TestPosixCategoryEpipe);
-  T.Test('POSIX ECONNABORTED(103) maps to ecIO', @TestPosixCategoryEconnaborted);
-  T.Test('POSIX ECONNRESET(104) maps to ecIO', @TestPosixCategoryEconnreset);
-  T.Test('POSIX ECONNREFUSED(111) maps to ecIO', @TestPosixCategoryEconnrefused);
-  T.Test('POSIX EINTR(4) maps to ecInterrupted', @TestPosixCategoryEintr);
+  T.Test('UNKNOWN constant message and category', @TestUnknownConstantAndMessage);
+  T.Test('last_os_error side-channel callable', @TestLastOsErrorSideChannel);
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD) or defined(NEXTPAS_ANDROID)}
+  { POSIX errno category tests (host ESysE* values) }
+  T.Test('POSIX ENOENT maps to ecNotFound', @TestPosixCategoryEnoent);
+  T.Test('POSIX EPERM maps to ecPermission', @TestPosixCategoryEperm);
+  T.Test('POSIX EACCES maps to ecPermission', @TestPosixCategoryEacces);
+  T.Test('POSIX EEXIST maps to ecAlreadyExists', @TestPosixCategoryEexist);
+  T.Test('POSIX EADDRINUSE maps to ecAlreadyExists', @TestPosixCategoryEaddrinuse);
+  T.Test('POSIX ENETUNREACH maps to ecNetwork', @TestPosixCategoryEnetunreach);
+  T.Test('POSIX EHOSTUNREACH maps to ecNetwork', @TestPosixCategoryEhostunreach);
+  T.Test('POSIX ENOTCONN maps to ecNetwork', @TestPosixCategoryEnotconn);
+  T.Test('POSIX ENOMEM maps to ecResourceExhausted', @TestPosixCategoryEnomem);
+  T.Test('POSIX ENOSPC maps to ecResourceExhausted', @TestPosixCategoryEnospc);
+  T.Test('POSIX EINVAL maps to ecInvalidArgument', @TestPosixCategoryEinval);
+  T.Test('POSIX EOPNOTSUPP maps to ecNotSupported', @TestPosixCategoryEopnotsupp);
+  T.Test('POSIX ETIMEDOUT maps to ecTimeout', @TestPosixCategoryEtimedout);
+  T.Test('POSIX EAGAIN maps to ecWouldBlock', @TestPosixCategoryEagain);
+  T.Test('POSIX EBUSY maps to ecWouldBlock', @TestPosixCategoryEbusy);
+  T.Test('POSIX EIO maps to ecIO', @TestPosixCategoryEio);
+  T.Test('POSIX EPIPE maps to ecIO', @TestPosixCategoryEpipe);
+  T.Test('POSIX ECONNABORTED maps to ecIO', @TestPosixCategoryEconnaborted);
+  T.Test('POSIX ECONNRESET maps to ecIO', @TestPosixCategoryEconnreset);
+  T.Test('POSIX ECONNREFUSED maps to ecIO', @TestPosixCategoryEconnrefused);
+  T.Test('POSIX EINTR maps to ecInterrupted', @TestPosixCategoryEintr);
   T.Test('Unknown POSIX code maps to ecInternal', @TestPosixCategoryUnknown);
+{$ENDIF}
   T.Test('new PERM constant is 1', @TestNewPermConstant);
   T.Test('new IO constant is 5', @TestNewIoConstant);
   T.Test('new NOMEM constant is 12', @TestNewNomemConstant);

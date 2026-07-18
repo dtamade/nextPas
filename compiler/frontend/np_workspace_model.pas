@@ -1,12 +1,14 @@
 unit np_workspace_model;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   nextpas.core.text, nextpas.core.text.conv, nextpas.core.path,
   nextpas.core.fs.util, nextpas.core.exception,
+  nextpas.core.collections.vec,
   np_package_manifest;
 
 type
@@ -23,6 +25,10 @@ type
     Dependencies: TPackageDependencyInfoArray;
     DependencyIssues: TPackageDependencyIssueInfoArray;
   end;
+
+  TPackageRefVec = specialize TVec<TPackageRef>;
+  TProjectUnitRootInfoVec = specialize TVec<TProjectUnitRootInfo>;
+  TProjectUnitRootVec = specialize TVec<string>;
 
   TTargetSelection = record
     RequestedTargetId: string;
@@ -42,13 +48,14 @@ type
     FDiscoveryKind: string;
     FWorkspaceDescriptorPath: string;
     FPackageManifestPath: string;
-    FPackageRefs: array of TPackageRef;
-    FProjectUnitRootInfos: TProjectUnitRootInfoArray;
-    FProjectUnitRoots: TStringArray;
+    FPackageRefs: TPackageRefVec;
+    FProjectUnitRootInfos: TProjectUnitRootInfoVec;
+    FProjectUnitRoots: TProjectUnitRootVec;
     FTargetSelection: TTargetSelection;
     FArtifactRoots: TArtifactRootSet;
   public
     constructor Create;
+    destructor Destroy; override;
     function WorkspaceRootPath: string;
     function DiscoveryKind: string;
     function WorkspaceDescriptorPath: string;
@@ -86,18 +93,22 @@ function TryResolveWorkspaceModel(
 
 implementation
 
-procedure AppendUniqueString(var AValues: TStringArray; const AValue: string);
+procedure AppendUniqueRoot(
+  const AValues: TProjectUnitRootVec;
+  const AValue: string
+);
 var
   Index: SizeInt;
-  NextIndex: SizeInt;
 begin
-  for Index := 0 to Length(AValues) - 1 do
-    if AValues[Index] = AValue then
+  if AValues = nil then
+    Exit;
+
+  { Count is SizeUInt: `to Count - 1` underflows when empty. Use signed bound. }
+  for Index := 0 to SizeInt(AValues.Count) - 1 do
+    if AValues[SizeUInt(Index)] = AValue then
       Exit;
 
-  NextIndex := Length(AValues);
-  SetLength(AValues, NextIndex + 1);
-  AValues[NextIndex] := AValue;
+  AValues.Push(AValue);
 end;
 
 function IsAbsolutePath(const APath: string): Boolean;
@@ -211,9 +222,20 @@ end;
 constructor TWorkspaceModel.Create;
 begin
   inherited Create;
-  SetLength(FPackageRefs, 0);
-  SetLength(FProjectUnitRootInfos, 0);
-  SetLength(FProjectUnitRoots, 0);
+  FPackageRefs := TPackageRefVec.Create;
+  FProjectUnitRootInfos := TProjectUnitRootInfoVec.Create;
+  FProjectUnitRoots := TProjectUnitRootVec.Create;
+end;
+
+destructor TWorkspaceModel.Destroy;
+begin
+  FPackageRefs.Free;
+  FPackageRefs := nil;
+  FProjectUnitRootInfos.Free;
+  FProjectUnitRootInfos := nil;
+  FProjectUnitRoots.Free;
+  FProjectUnitRoots := nil;
+  inherited Destroy;
 end;
 
 function TWorkspaceModel.WorkspaceRootPath: string;
@@ -238,12 +260,15 @@ end;
 
 function TWorkspaceModel.PackageRefCount: LongInt;
 begin
-  Result := Length(FPackageRefs);
+  if FPackageRefs = nil then
+    Exit(0);
+  Result := LongInt(FPackageRefs.Count);
 end;
 
 function TWorkspaceModel.PackageRefAt(const AIndex: LongInt): TPackageRef;
 begin
-  if (AIndex < 0) or (AIndex > High(FPackageRefs)) then
+  if (FPackageRefs = nil) or (AIndex < 0) or
+    (AIndex >= LongInt(FPackageRefs.Count)) then
   begin
     Result.PackageName := '';
     Result.ManifestPath := '';
@@ -255,22 +280,44 @@ begin
     Exit;
   end;
 
-  Result := FPackageRefs[AIndex];
+  Result := FPackageRefs[SizeUInt(AIndex)];
 end;
 
 function TWorkspaceModel.SourceRootInfoCount: LongInt;
 begin
-  Result := Length(FProjectUnitRootInfos);
+  if FProjectUnitRootInfos = nil then
+    Exit(0);
+  Result := LongInt(FProjectUnitRootInfos.Count);
 end;
 
 function TWorkspaceModel.ProjectUnitRootInfos: TProjectUnitRootInfoArray;
+var
+  Index: SizeInt;
 begin
-  Result := FProjectUnitRootInfos;
+  if (FProjectUnitRootInfos = nil) or (FProjectUnitRootInfos.Count = 0) then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
+  SetLength(Result, FProjectUnitRootInfos.Count);
+  for Index := 0 to SizeInt(FProjectUnitRootInfos.Count) - 1 do
+    Result[Index] := FProjectUnitRootInfos[SizeUInt(Index)];
 end;
 
 function TWorkspaceModel.ProjectUnitRoots: TStringArray;
+var
+  Index: SizeInt;
 begin
-  Result := FProjectUnitRoots;
+  if (FProjectUnitRoots = nil) or (FProjectUnitRoots.Count = 0) then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
+  SetLength(Result, FProjectUnitRoots.Count);
+  for Index := 0 to SizeInt(FProjectUnitRoots.Count) - 1 do
+    Result[Index] := FProjectUnitRoots[SizeUInt(Index)];
 end;
 
 function TWorkspaceModel.ArtifactRootPath: string;
@@ -309,6 +356,7 @@ var
   PackageInfo: TPackageManifestInfo;
   PackageInfos: TPackageManifestInfoArray;
   PackageRef: TPackageRef;
+  RootInfos: TProjectUnitRootInfoArray;
   SourceDirectory: string;
   WorkspaceDescriptorRoot: string;
 begin
@@ -396,22 +444,35 @@ begin
     PackageRef.Dependencies := PackageInfo.Dependencies;
     PackageRef.DependencyIssues := PackageInfo.DependencyIssues;
 
-    SetLength(Result.FPackageRefs, Length(Result.FPackageRefs) + 1);
-    Result.FPackageRefs[High(Result.FPackageRefs)] := PackageRef;
+    if Result.FPackageRefs = nil then
+      Result.FPackageRefs := TPackageRefVec.Create;
+    Result.FPackageRefs.Push(PackageRef);
   end;
 
   if Length(PackageInfos) > 0 then
     Result.FPackageManifestPath := PackageInfos[0].ManifestPath;
 
-  Result.FProjectUnitRootInfos := ResolveProjectUnitRootInfos(
+  if Result.FProjectUnitRootInfos = nil then
+    Result.FProjectUnitRootInfos := TProjectUnitRootInfoVec.Create
+  else
+    Result.FProjectUnitRootInfos.Clear;
+  if Result.FProjectUnitRoots = nil then
+    Result.FProjectUnitRoots := TProjectUnitRootVec.Create
+  else
+    Result.FProjectUnitRoots.Clear;
+
+  RootInfos := ResolveProjectUnitRootInfos(
     Result.FResolvedSourcePath,
     Result.FWorkspaceRootPath
   );
-  for Index := 0 to Length(Result.FProjectUnitRootInfos) - 1 do
-    AppendUniqueString(
+  for Index := 0 to Length(RootInfos) - 1 do
+  begin
+    Result.FProjectUnitRootInfos.Push(RootInfos[Index]);
+    AppendUniqueRoot(
       Result.FProjectUnitRoots,
-      Result.FProjectUnitRootInfos[Index].RootPath
+      RootInfos[Index].RootPath
     );
+  end;
 end;
 
 function TryResolveWorkspaceModel(

@@ -42,7 +42,7 @@ type
     RootAst: TAstFacade;
     UnitGraph: TUnitGraph;
     CurrentProcessingUnitId: string;
-    ProcedureBodies: TProcedureBodyArray;
+    ProcedureBodies: TProcedureBodyVec;
     RuntimeVars: TSemaRuntimeVarRegistry;
     { Callback context pointer — 指向 TSemanticAnalyzer 实例 }
     CallbackCtx: Pointer;

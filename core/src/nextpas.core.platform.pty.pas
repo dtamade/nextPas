@@ -8,7 +8,8 @@ unit nextpas.core.platform.pty;
 interface
 
 uses
-  nextpas.core.platform.pty.base;
+  nextpas.core.platform.pty.base,
+  nextpas.core.platform.posix.errno;
 
 {** @desc 打开伪终端对
     @param ASize 终端尺寸
@@ -49,6 +50,8 @@ function platform_pty_close(var APty: TPlatformPty): Int32;
 function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
 
 implementation
+
+{ L0: uses System GetMem/FreeMem (must not uses nextpas.core.mem; mem depends on platform). }
 
 {$IFDEF NEXTPAS_UNIX}
 uses
@@ -126,11 +129,19 @@ begin
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
 
+{$IFDEF NEXTPAS_LINUX}
   if pipe2(@LErrPipe[0], O_CLOEXEC) <> 0 then
+{$ELSE}
+  if pipe(@LErrPipe[0]) <> 0 then
+{$ENDIF}
   begin
     AFailStage := ptssPipe;
     Exit(platform_get_errno);
   end;
+{$IFNDEF NEXTPAS_LINUX}
+  fcntl(LErrPipe[0], F_SETFD, FD_CLOEXEC);
+  fcntl(LErrPipe[1], F_SETFD, FD_CLOEXEC);
+{$ENDIF}
 
   LPid := fork;
   if LPid < 0 then
@@ -334,7 +345,7 @@ begin
 
   if not InitializeProcThreadAttributeList(LAttrList, 1, 0, LAttrSize) then
   begin
-    FreeMem(LAttrList);
+    FreeMem(LAttrList, LAttrSize);
     AFailStage := ptssPipe;
     Exit(platform_get_last_error);
   end;
@@ -344,7 +355,7 @@ begin
     SizeOf(HPCON), nil, nil) then
   begin
     DeleteProcThreadAttributeList(LAttrList);
-    FreeMem(LAttrList);
+    FreeMem(LAttrList, LAttrSize);
     AFailStage := ptssTiocsctty;
     Exit(platform_get_last_error);
   end;
@@ -354,7 +365,7 @@ begin
   if not platform_windows_argv_to_command_line(APath, AArgv, LCmd) then
   begin
     DeleteProcThreadAttributeList(LAttrList);
-    FreeMem(LAttrList);
+    FreeMem(LAttrList, LAttrSize);
     AFailStage := ptssExec;
     Exit(PLATFORM_ERR_INVALID);
   end;
@@ -365,7 +376,7 @@ begin
     if not platform_windows_utf8_to_wide_checked(ACwd, LCwd) then
     begin
       DeleteProcThreadAttributeList(LAttrList);
-      FreeMem(LAttrList);
+      FreeMem(LAttrList, LAttrSize);
       AFailStage := ptssChdir;
       Exit(PLATFORM_ERR_INVALID);
     end;
@@ -379,7 +390,7 @@ begin
     if not platform_windows_envp_to_wide_block(AEnvp, LEnvBlock) then
     begin
       DeleteProcThreadAttributeList(LAttrList);
-      FreeMem(LAttrList);
+      FreeMem(LAttrList, LAttrSize);
       AFailStage := ptssExec;
       Exit(PLATFORM_ERR_INVALID);
     end;
@@ -391,13 +402,13 @@ begin
     LCreationFlags, LEnvPtr, LCwdPtr, @LSiEx.StartupInfo, @LPi) then
   begin
     DeleteProcThreadAttributeList(LAttrList);
-    FreeMem(LAttrList);
+    FreeMem(LAttrList, LAttrSize);
     AFailStage := ptssExec;
     Exit(platform_get_last_error);
   end;
 
   DeleteProcThreadAttributeList(LAttrList);
-  FreeMem(LAttrList);
+  FreeMem(LAttrList, LAttrSize);
   CloseHandle(LPi.hThread);
   APid := Int32(LPi.dwProcessId);
   CloseHandle(LPi.hProcess);
@@ -436,6 +447,8 @@ end;
 
 function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
 begin
+  if APty.PipeOut = 0 then
+    Exit(-1);
   Result := PtrInt(APty.PipeOut);
 end;
 {$ENDIF}
@@ -448,7 +461,7 @@ begin APid := -1; AFailStage := ptssNone; Result := PLATFORM_ERR_UNSUPPORTED; en
 function platform_pty_resize(var APty: TPlatformPty; const ASize: TPlatformPtySize): Int32;
 begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pty_close(var APty: TPlatformPty): Int32;
-begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+begin FillChar(APty, SizeOf(APty), 0); Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_pty_master_fd(const APty: TPlatformPty): PtrInt;
 begin Result := -1; end;
 {$ENDIF}

@@ -36,22 +36,22 @@ begin
   if LUseVectorAsm then
   begin
     // Override reduction operations with SSE3 HADD versions (faster)
-    dispatchTable.ReduceAddF32x4 := @SSE3ReduceAddF32x4;
-    dispatchTable.ReduceAddF64x2 := @SSE3ReduceAddF64x2;
-    dispatchTable.ReduceMulF32x4 := @SSE3ReduceMulF32x4;
-    dispatchTable.ReduceMulF64x2 := @SSE3ReduceMulF64x2;
+    dispatchTable.CoreVectors.ReduceAddF32x4 := @SSE3ReduceAddF32x4;
+    dispatchTable.CoreVectors.ReduceAddF64x2 := @SSE3ReduceAddF64x2;
+    dispatchTable.CoreVectors.ReduceMulF32x4 := @SSE3ReduceMulF32x4;
+    dispatchTable.CoreVectors.ReduceMulF64x2 := @SSE3ReduceMulF64x2;
 
     // Override dot product with SSE3 version (uses HADD)
-    dispatchTable.DotF32x4 := @SSE3DotF32x4;
-    dispatchTable.DotF32x3 := @SSE3DotF32x3;
+    dispatchTable.CoreVectors.DotF32x4 := @SSE3DotF32x4;
+    dispatchTable.CoreVectors.DotF32x3 := @SSE3DotF32x3;
 
     // Override length with SSE3 version
-    dispatchTable.LengthF32x4 := @SSE3LengthF32x4;
-    dispatchTable.LengthF32x3 := @SSE3LengthF32x3;
+    dispatchTable.CoreVectors.LengthF32x4 := @SSE3LengthF32x4;
+    dispatchTable.CoreVectors.LengthF32x3 := @SSE3LengthF32x3;
 
     // Override normalize with SSE3 version
-    dispatchTable.NormalizeF32x4 := @SSE3NormalizeF32x4;
-    dispatchTable.NormalizeF32x3 := @SSE3NormalizeF32x3;
+    dispatchTable.CoreVectors.NormalizeF32x4 := @SSE3NormalizeF32x4;
+    dispatchTable.CoreVectors.NormalizeF32x3 := @SSE3NormalizeF32x3;
   end;
 
   // Register the backend

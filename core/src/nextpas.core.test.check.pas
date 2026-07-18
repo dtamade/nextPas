@@ -311,7 +311,9 @@ uses
   nextpas.core.math.scalar,     { IsNan for Double comparison NaN guards }
   nextpas.core.platform.env,   { platform_env_get_str for snapshot update flag }
   nextpas.core.fs,             { ReadFileText/WriteFileText for snapshot I/O }
-  nextpas.core.regex;          { RegexIsMatch for CheckMatch }
+  nextpas.core.regex,          { RegexIsMatch for CheckMatch }
+  nextpas.core.test.output,    { ColorDiff for colored string comparison }
+  nextpas.core.test.config;    { DefaultConfig for TTestConfig default }
 
 procedure FailWithDefault(const AMessage, ADefaultMsg: string);
 begin
@@ -380,35 +382,9 @@ end;
 
 procedure CheckEqual(const AExpected, AActual: string;
   const AMessage: string);
-var
-  LDiffPos, LMin, I: Integer;
 begin
   if AExpected <> AActual then
-  begin
-    if (Length(AExpected) > 40) or (Length(AActual) > 40) or
-       (Pos(#10, AExpected) > 0) or (Pos(#10, AActual) > 0) then
-      FailPrepend(AMessage, StringDiff(AExpected, AActual))
-    else
-    begin
-      { Find first differing position for short strings }
-      LMin := Length(AExpected);
-      if Length(AActual) < LMin then LMin := Length(AActual);
-      LDiffPos := 0;
-      for I := 1 to LMin do
-        if AExpected[I] <> AActual[I] then
-        begin
-          LDiffPos := I;
-          Break;
-        end;
-      if LDiffPos = 0 then
-        LDiffPos := LMin + 1; { difference is purely in length }
-      FailPrepend(AMessage,
-        'expected: "' + AExpected + '"'#10 +
-        '  actual: "' + AActual + '"'#10 +
-        '          ' + StringOfChar(' ', LDiffPos - 1) + '^' +
-        ' diff at pos ' + IntToStr(LDiffPos));
-    end;
-  end;
+    FailPrepend(AMessage, ColorDiff(AExpected, AActual, DefaultConfig));
 end;
 
 procedure CheckEqual(const AExpected, AActual: string);
@@ -1273,9 +1249,11 @@ end;
 
 procedure CheckArrayEqual(const AExpected, AActual: array of Int64;
   const AMessage: string);
+const
+  MAX_DIFFS = 10; { show up to 10 differences to avoid huge messages }
 var
-  I, LMin, LDiffIdx: Integer;
-  LMsg: string;
+  I, LMin, LDiffCount: Integer;
+  LMsg, LDiffs: string;
 begin
   if Length(AExpected) <> Length(AActual) then
   begin
@@ -1286,21 +1264,29 @@ begin
   end;
 
   LMin := Length(AExpected);
-  LDiffIdx := -1;
+  LDiffCount := 0;
+  LDiffs := '';
   for I := 0 to LMin - 1 do
   begin
     if AExpected[I] <> AActual[I] then
     begin
-      LDiffIdx := I;
-      Break;
+      Inc(LDiffCount);
+      if LDiffCount <= MAX_DIFFS then
+      begin
+        if LDiffs <> '' then LDiffs := LDiffs + #10;
+        LDiffs := LDiffs + '  [' + IntToStr(I) + '] expected ' +
+          IntToStr(AExpected[I]) + ' but got ' + IntToStr(AActual[I]);
+      end;
     end;
   end;
 
-  if LDiffIdx >= 0 then
+  if LDiffCount > 0 then
   begin
-    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) +
-      ': expected ' + IntToStr(AExpected[LDiffIdx]) +
-      ' but got ' + IntToStr(AActual[LDiffIdx]);
+    LMsg := 'Arrays differ at ' + IntToStr(LDiffCount) + ' of ' +
+      IntToStr(LMin) + ' positions:';
+    if LDiffCount > MAX_DIFFS then
+      LMsg := LMsg + ' (showing first ' + IntToStr(MAX_DIFFS) + ')';
+    LMsg := LMsg + #10 + LDiffs;
     FailPrepend(AMessage, LMsg);
   end;
 end;
@@ -1328,9 +1314,11 @@ end;
 
 procedure CheckArrayEqual(const AExpected, AActual: array of string;
   const AMessage: string);
+const
+  MAX_DIFFS = 10; { show up to 10 differences to avoid huge messages }
 var
-  I, LMin, LDiffIdx: Integer;
-  LMsg: string;
+  I, LMin, LDiffCount: Integer;
+  LMsg, LDiffs: string;
 begin
   if Length(AExpected) <> Length(AActual) then
   begin
@@ -1341,21 +1329,29 @@ begin
   end;
 
   LMin := Length(AExpected);
-  LDiffIdx := -1;
+  LDiffCount := 0;
+  LDiffs := '';
   for I := 0 to LMin - 1 do
   begin
     if AExpected[I] <> AActual[I] then
     begin
-      LDiffIdx := I;
-      Break;
+      Inc(LDiffCount);
+      if LDiffCount <= MAX_DIFFS then
+      begin
+        if LDiffs <> '' then LDiffs := LDiffs + #10;
+        LDiffs := LDiffs + '  [' + IntToStr(I) + '] expected "' +
+          AExpected[I] + '" but got "' + AActual[I] + '"';
+      end;
     end;
   end;
 
-  if LDiffIdx >= 0 then
+  if LDiffCount > 0 then
   begin
-    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) + ':'#10 +
-      '  expected: "' + AExpected[LDiffIdx] + '"'#10 +
-      '    actual: "' + AActual[LDiffIdx] + '"';
+    LMsg := 'Arrays differ at ' + IntToStr(LDiffCount) + ' of ' +
+      IntToStr(LMin) + ' positions:';
+    if LDiffCount > MAX_DIFFS then
+      LMsg := LMsg + ' (showing first ' + IntToStr(MAX_DIFFS) + ')';
+    LMsg := LMsg + #10 + LDiffs;
     FailPrepend(AMessage, LMsg);
   end;
 end;

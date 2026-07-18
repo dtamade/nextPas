@@ -3,7 +3,6 @@ program test_lockfree_rope;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.rope;
 
 var

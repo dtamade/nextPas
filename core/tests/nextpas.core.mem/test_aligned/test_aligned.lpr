@@ -99,16 +99,20 @@ end;
 procedure TestStats;
 var
   LAlloc: TAlignedAllocator;
+  LPtr1, LPtr2: Pointer;
   LStats: TAlignedStats;
 begin
   LAlloc := TAlignedAllocator.Create(DefaultAllocator, 64);
   try
-    LAlloc.GetMem(100);
+    LPtr1 := LAlloc.GetMem(100);
     LStats := LAlloc.GetStats;
     Check(LStats.AllocCount = 1, 'alloc count = 1');
     Check(LStats.ActiveAllocs = 1, 'active = 1');
     Check(LStats.Alignment = 64, 'alignment = 64');
-    LAlloc.FreeMem(LAlloc.GetMem(100));
+    LAlloc.FreeMem(LPtr1);
+
+    LPtr2 := LAlloc.GetMem(100);
+    LAlloc.FreeMem(LPtr2);
   finally
     LAlloc.Free;
   end;

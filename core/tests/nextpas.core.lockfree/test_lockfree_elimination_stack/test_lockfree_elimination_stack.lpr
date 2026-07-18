@@ -3,7 +3,6 @@ program test_lockfree_elimination_stack;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.elimination_stack,
   nextpas.core.test;
 

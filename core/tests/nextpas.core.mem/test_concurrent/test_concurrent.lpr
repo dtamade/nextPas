@@ -9,7 +9,8 @@ uses
   nextpas.core.mem.default,
   nextpas.core.mem.sizeclass,
   nextpas.core.mem.allocator.growing,
-  nextpas.core.mem.allocator.tracking;
+  nextpas.core.mem.allocator.tracking,
+  nextpas.core.atomic.core;
 
 var
   T: TTestSuite;
@@ -246,6 +247,7 @@ begin
       end;
       FillChar(LData^.Ptrs[LI]^, 64, Byte(LI));
     end;
+    ReadWriteBarrier; { 确保 Ptrs 写入在 Done 之前对其他线程可见 }
     LData^.Done := True;
     Result := 0;
   except
@@ -268,6 +270,7 @@ begin
     { Wait for allocator to finish }
     while not LData^.Done do
       SleepMs(1);
+    ReadWriteBarrier; { 确保看到 Ptrs 的最新写入 }
     { Free all from different thread }
     for LI := 0 to LData^.Count - 1 do
       LData^.Alloc.FreeMem(LData^.Ptrs[LI], 64);

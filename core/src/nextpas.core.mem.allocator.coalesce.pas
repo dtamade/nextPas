@@ -368,6 +368,9 @@ var
   LBlock: Pointer;
   LTotalNeeded: SizeUInt;
 begin
+  if ASize = 0 then
+    Exit(nil);
+
   { 查找空闲块 }
   LBlock := FindFreeBlock(ASize);
   if LBlock = nil then
@@ -381,6 +384,8 @@ begin
 
   { 计算实际需要的块大小 }
   LTotalNeeded := ASize + BLOCK_OVERHEAD;
+  if LTotalNeeded < ASize then { overflow check }
+    Exit(nil);
   if LTotalNeeded < MIN_TOTAL_BLOCK_SIZE then
     LTotalNeeded := MIN_TOTAL_BLOCK_SIZE;
   LTotalNeeded := (LTotalNeeded + 7) and not SizeUInt(7);

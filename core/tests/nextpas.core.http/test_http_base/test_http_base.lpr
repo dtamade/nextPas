@@ -3,7 +3,6 @@ program test_http_base;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.errors,
@@ -57,8 +56,17 @@ begin
   LErr := EHttpError.Create('network boundary');
   try
     Check(LErr is ENextPasError, 'EHttpError inherits ENextPasError');
-    Check(LErr.Category = ecNetwork, 'EHttpError category is network');
+    Check(LErr.Category = ecNetwork, 'EHttpError default category is network');
+    Check(LErr.Kind = hekUnknown, 'EHttpError default Kind is unknown');
     CheckEqual('network boundary', LErr.Message, 'EHttpError preserves message');
+  finally
+    LErr.Free;
+  end;
+
+  LErr := EHttpError.Create(hekTimeout, 'deadline exceeded');
+  try
+    Check(LErr.Kind = hekTimeout, 'typed Create sets Kind');
+    Check(LErr.Category = ecTimeout, 'timeout Kind maps to ecTimeout');
   finally
     LErr.Free;
   end;
@@ -70,10 +78,129 @@ begin
     on E: EHttpError do
     begin
       LCaught := True;
-      Check(E.Category = ecNetwork, 'HttpStrToMethod error category is network');
+      Check(E.Kind = hekParse, 'HttpStrToMethod Kind is parse');
+      Check(E.Category = ecParse, 'HttpStrToMethod error category is parse');
     end;
   end;
   Check(LCaught, 'HttpStrToMethod raises EHttpError for invalid method');
+end;
+
+procedure TestHttpErrorKindHelpers;
+var
+  LTimeout: EHttpError;
+  LConnect: EHttpError;
+  LParse: EHttpError;
+  LArg: EHttpError;
+  LCanceled: EHttpError;
+  LBareTimeout: ETimeoutError;
+  LNet: ENetworkError;
+  LWrapped: Exception;
+begin
+  LTimeout := EHttpError.Create(hekTimeout, 'http timeout');
+  LConnect := EHttpError.Create(hekConnect, 'connect failed');
+  LParse := EHttpError.Create(hekParse, 'bad');
+  LArg := EHttpError.Create(hekArgument, 'bad arg');
+  LCanceled := EHttpError.Create(hekCanceled, 'canceled');
+  LBareTimeout := ETimeoutError.Create('bare transport timeout');
+  LNet := ENetworkError.Create('network failed');
+  try
+    Check(HttpErrorIsTimeout(LTimeout), 'hekTimeout is timeout');
+    Check(HttpErrorIsTimeout(LBareTimeout), 'bare ETimeoutError is timeout');
+    Check(not HttpErrorIsTimeout(LConnect), 'hekConnect is not timeout');
+    Check(not HttpErrorIsTimeout(nil), 'nil is not timeout');
+
+    Check(HttpErrorIsRetryable(LTimeout), 'timeout is retryable');
+    Check(HttpErrorIsRetryable(LConnect), 'connect is retryable');
+    Check(HttpErrorIsRetryable(LBareTimeout), 'bare timeout is retryable');
+    Check(HttpErrorIsRetryable(LNet), 'network error is retryable');
+    Check(not HttpErrorIsRetryable(LParse), 'parse is not retryable');
+
+    Check(HttpErrorIsUserError(LArg), 'hekArgument is user error');
+    Check(HttpErrorIsUserError(LCanceled), 'hekCanceled is user error');
+    Check(not HttpErrorIsUserError(LTimeout), 'timeout is not user error');
+    Check(not HttpErrorIsUserError(LParse), 'parse is not user error');
+
+    LWrapped := HttpWrapTransportException(LBareTimeout);
+    try
+      Check(LWrapped is EHttpError, 'wrap produces EHttpError');
+      Check(EHttpError(LWrapped).Kind = hekTimeout, 'wrap sets hekTimeout');
+      CheckEqual('transport', EHttpError(LWrapped).Op, 'wrap sets transport op');
+    finally
+      LWrapped.Free;
+    end;
+    LWrapped := HttpWrapTransportException(LNet);
+    try
+      Check(LWrapped is EHttpError, 'network wrap produces EHttpError');
+      Check(EHttpError(LWrapped).Kind = hekConnect, 'network wrap sets hekConnect');
+      CheckEqual('transport', EHttpError(LWrapped).Op, 'network wrap sets transport op');
+    finally
+      LWrapped.Free;
+    end;
+    Check(HttpWrapTransportException(LConnect) = nil,
+      'already-typed EHttpError wrap returns nil');
+    Check(HttpWrapTransportException(LParse) = nil,
+      'non-transport wrap returns nil');
+  finally
+    LTimeout.Free;
+    LConnect.Free;
+    LParse.Free;
+    LArg.Free;
+    LCanceled.Free;
+    LBareTimeout.Free;
+    LNet.Free;
+  end;
+end;
+
+procedure TestHttpErrorCreateOpTaxonomy;
+var
+  LOp: EHttpError;
+  LStatus: EHttpError;
+  LBareArg: EArgumentError;
+  LCancel: ECancelledError;
+  LWrapped: Exception;
+begin
+  LOp := EHttpError.CreateOp(hekProtocol, 'json', 'bad json');
+  try
+    Check(LOp.Kind = hekProtocol, 'CreateOp sets Kind');
+    CheckEqual('json', LOp.Op, 'CreateOp sets Op');
+    CheckEqual('bad json', LOp.Message, 'CreateOp sets Message');
+    CheckEqual(Int64(0), Int64(LOp.Status), 'CreateOp without Status leaves 0');
+  finally
+    LOp.Free;
+  end;
+
+  LStatus := EHttpError.CreateOp(hekStatus, 'ensure', 'not found',
+    HTTP_STATUS_NOT_FOUND);
+  try
+    Check(LStatus.Kind = hekStatus, 'CreateOp+Status Kind');
+    CheckEqual('ensure', LStatus.Op, 'CreateOp+Status Op');
+    CheckEqual(Int64(HTTP_STATUS_NOT_FOUND), Int64(LStatus.Status),
+      'CreateOp+Status preserves Status');
+  finally
+    LStatus.Free;
+  end;
+
+  LBareArg := EArgumentError.Create('foreign precondition');
+  try
+    Check(HttpErrorIsUserError(LBareArg),
+      'foreign bare EArgumentError still counts as user error');
+  finally
+    LBareArg.Free;
+  end;
+
+  LCancel := ECancelledError.Create('bare cancel');
+  try
+    LWrapped := HttpWrapTransportException(LCancel);
+    try
+      Check(LWrapped is EHttpError, 'cancel wrap produces EHttpError');
+      Check(EHttpError(LWrapped).Kind = hekCanceled, 'cancel wrap Kind');
+      CheckEqual('transport', EHttpError(LWrapped).Op, 'cancel wrap Op=transport');
+    finally
+      LWrapped.Free;
+    end;
+  finally
+    LCancel.Free;
+  end;
 end;
 
 procedure TestHttpStatusText;
@@ -91,6 +218,8 @@ begin
   CheckEqual('Forbidden', HttpStatusText(403), '403');
   CheckEqual('Not Found', HttpStatusText(404), '404');
   CheckEqual('Method Not Allowed', HttpStatusText(405), '405');
+  CheckEqual('Proxy Authentication Required',
+    HttpStatusText(HTTP_STATUS_PROXY_AUTH_REQUIRED), '407');
   CheckEqual('Internal Server Error', HttpStatusText(500), '500');
   CheckEqual('Expectation Failed', HttpStatusText(417), '417');
   CheckEqual('Bad Gateway', HttpStatusText(502), '502');
@@ -356,11 +485,28 @@ var
 begin
   LOptions := THttpClientOptions.Default;
   CheckEqual(Int64(30000), LOptions.Timeout, 'default timeout');
+  CheckEqual(Int64(0), LOptions.ConnectTimeout, 'default ConnectTimeout is 0');
+  CheckEqual(LOptions.Timeout, LOptions.EffectiveConnectTimeout,
+    'ConnectTimeout=0 falls back to Timeout');
   CheckEqual(Int64(10), Int64(LOptions.MaxRedirects), 'default max redirects');
   Check(LOptions.FollowRedirects, 'default follows redirects');
   Check(LOptions.Version = hvHttp11, 'default client version field');
   Check(LOptions.UseRegistryVersion, 'default client uses registry version');
   Check(LOptions.TLSContext = nil, 'default client TLS context is nil');
+end;
+
+procedure TestHttpClientOptionsWithTLSContextFluent;
+var
+  LOptions: THttpClientOptions;
+begin
+  { Nil clear path: WithTLSContext(nil) keeps/clears field without crash. }
+  LOptions := THttpClientOptions.Default
+    .WithTimeout(15000)
+    .WithTLSContext(nil)
+    .WithProxyUrl('http://127.0.0.1:8080');
+  CheckEqual(Int64(15000), LOptions.Timeout, 'fluent chain keeps timeout');
+  Check(LOptions.TLSContext = nil, 'WithTLSContext(nil) is nil');
+  CheckEqual('http://127.0.0.1:8080', LOptions.ProxyUrl, 'fluent chain keeps proxy');
 end;
 
 procedure TestHttpServerOptionsDefault;
@@ -377,6 +523,30 @@ begin
   Check(LOptions.Version = hvHttp11, 'default server version field');
   Check(LOptions.UseRegistryVersion, 'default server uses registry version');
   Check(LOptions.TLSContext = nil, 'default server TLS context is nil');
+  Check(not LOptions.RequestArena, 'default RequestArena off');
+  CheckEqual(Int64(0), Int64(LOptions.RequestArenaCapacity), 'default arena cap 0');
+  LOptions := LOptions.WithRequestArena(4096);
+  Check(LOptions.RequestArena, 'WithRequestArena enables');
+  CheckEqual(Int64(4096), Int64(LOptions.RequestArenaCapacity), 'WithRequestArena cap');
+end;
+
+procedure TestHttpServerOptionsProduction;
+var
+  LDefault: THttpServerOptions;
+  LProd: THttpServerOptions;
+begin
+  LDefault := THttpServerOptions.Default;
+  LProd := THttpServerOptions.Production;
+  CheckEqual(Int64(0), LDefault.ReadTimeout, 'Default ReadTimeout stays 0');
+  CheckEqual(Int64(0), LDefault.WriteTimeout, 'Default WriteTimeout stays 0');
+  CheckEqual(Int64(30000), LProd.ReadTimeout, 'Production ReadTimeout is 30000');
+  CheckEqual(Int64(30000), LProd.WriteTimeout, 'Production WriteTimeout is 30000');
+  CheckEqual(LDefault.IdleTimeout, LProd.IdleTimeout,
+    'Production keeps Default IdleTimeout');
+  CheckEqual(Int64(LDefault.MaxHeaderSize), Int64(LProd.MaxHeaderSize),
+    'Production keeps Default MaxHeaderSize');
+  CheckEqual(LDefault.MaxBodySize, LProd.MaxBodySize,
+    'Production keeps Default MaxBodySize');
 end;
 
 procedure TestHttpOptionsWithVersion;
@@ -452,6 +622,8 @@ begin
   T.Test('HttpMethodToStr', @TestHttpMethodToStr);
   T.Test('HttpStrToMethod', @TestHttpStrToMethod);
   T.Test('EHttpError category', @TestHttpErrorCategory);
+  T.Test('HttpError Kind helpers', @TestHttpErrorKindHelpers);
+  T.Test('EHttpError CreateOp taxonomy', @TestHttpErrorCreateOpTaxonomy);
   T.Test('HttpStatusText', @TestHttpStatusText);
   T.Test('HttpStatus class helpers', @TestHttpStatusClassHelpers);
   T.Test('HttpVersionToStr', @TestHttpVersionToStr);
@@ -472,7 +644,10 @@ begin
   T.Test('TUrl.ParseRequestTarget scheme-like origin-form', @TestUrlParseRequestTargetOriginFormWithSchemeLikePath);
   T.Test('TUrl.ParseRequestTarget empty raises', @TestUrlParseRequestTargetEmptyRaises);
   T.Test('THttpClientOptions.Default', @TestHttpClientOptionsDefault);
+  T.Test('THttpClientOptions.WithTLSContext fluent',
+    @TestHttpClientOptionsWithTLSContextFluent);
   T.Test('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
+  T.Test('THttpServerOptions.Production', @TestHttpServerOptionsProduction);
   T.Test('HTTP options WithVersion', @TestHttpOptionsWithVersion);
   T.Test('HTTP options WithTimeout', @TestHttpOptionsWithTimeout);
   T.Test('HTTP options WithMaxRedirects', @TestHttpOptionsWithMaxRedirects);

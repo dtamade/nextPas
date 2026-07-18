@@ -11,6 +11,7 @@ uses
   nextpas.core.fs.util,
   nextpas.core.text.conv,
   nextpas.core.test,
+  nextpas.core.platform.error,
   nextpas.core.platform.fs,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
@@ -197,7 +198,7 @@ begin
   { Try to read into 10-byte buffer }
   LLen := 0;
   LR := platform_fs_read_file_into(TEST_FILE, @LBuf[0], SizeOf(LBuf), LLen);
-  Check(LR = -6, 'SHORT_READ error for undersized buffer');
+  Check(LR = PLATFORM_ERR_IO, 'SHORT_READ aliases PLATFORM_ERR_IO for undersized buffer');
   Check(LLen > 0, 'actual file size reported');
 
   { Cleanup }

@@ -26,11 +26,35 @@ uses
 
 function IsAsciiString(const AValue: string): Boolean;
 var
+  LLen: SizeInt;
   LIdx: SizeInt;
+  LPtr: PByte;
+  LWord: UInt64;
 begin
-  for LIdx := 1 to Length(AValue) do
-    if Ord(AValue[LIdx]) > $7F then
+  LLen := Length(AValue);
+  if LLen = 0 then
+    Exit(True);
+
+  LPtr := PByte(@AValue[1]);
+
+  // 8 字节并行检查：任一字节 bit7=1 则非 ASCII
+  LIdx := 0;
+  while LIdx + 7 < LLen do
+  begin
+    LWord := PUInt64(LPtr + LIdx)^;
+    if (LWord and UInt64($8080808080808080)) <> 0 then
       Exit(False);
+    Inc(LIdx, 8);
+  end;
+
+  // 剩余字节逐个检查
+  while LIdx < LLen do
+  begin
+    if LPtr[LIdx] > $7F then
+      Exit(False);
+    Inc(LIdx);
+  end;
+
   Result := True;
 end;
 

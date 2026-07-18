@@ -142,7 +142,7 @@ end;
 function DeadlineMiddleware(ATimeoutMs: Int64): IHttpMiddleware;
 begin
   if ATimeoutMs <= 0 then
-    raise EArgumentError.Create('deadline middleware timeout must be > 0');
+    raise EHttpError.Create(hekArgument, 'deadline middleware timeout must be > 0');
   Result := MiddlewareFunc(function(const ANext: IHttpHandler): IHttpHandler
   begin
     Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)

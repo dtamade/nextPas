@@ -22,6 +22,9 @@ type
       - Sentinel 节点简化空队列边界处理
       - 支持 Close 语义
       - 节点池自动扩容
+      - 生命周期: Close → join producers/consumers → Free
+      - Destroy 会 Close；Free 前必须 quiescent（无并发出入队）
+ * @concurrency Thread-safe (see source for details).
   }
   generic TLockFreeMsQueueImpl<T> = class
   private
@@ -62,6 +65,7 @@ type
     function TryEnqueue(const AValue: T): Boolean;
     {** 出队 }
     function TryDequeue(out AValue: T): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     {** 关闭队列 }
     procedure Close;
     {** 队列是否已关闭 }
@@ -75,6 +79,7 @@ type
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors;
 
 function TLockFreeMsQueueImpl.Pack(AIdx, ATag: Int32): Int64;
@@ -166,7 +171,7 @@ begin
     if (LOldCap > High(Int32) div 2) or
        (LOldCap > (MaxInt div SizeOf(TNode)) div 2) or
        (LOldCap > (MaxInt div SizeOf(TFreeNode)) div 2) then
-      raise EOutOfMemoryError.Create('TLockFreeMsQueue.Grow: capacity overflow');
+      raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TLockFreeMsQueue.Grow: capacity overflow'));
     LNewCap := LOldCap * 2;
 
     SetLength(LNewNodes, LNewCap);
@@ -215,7 +220,7 @@ begin
   FActiveOperations := 0;
   FResizing := 0;
   if not TryAllocNodeIdx(LSentinel) then
-    raise EOutOfMemoryError.Create('TLockFreeMsQueue: sentinel allocation failed');
+    raise EOutOfMemoryError.Create(FormatAllocErrorMsg('LockFree', 'Grow', 'TLockFreeMsQueue: sentinel allocation failed'));
   FNodes[LSentinel].FHasValue := False;
   FNodes[LSentinel].FNext := Pack(-1, 0);
   FHead := Pack(LSentinel, 0);
@@ -225,7 +230,20 @@ begin
 end;
 
 destructor TLockFreeMsQueueImpl.Destroy;
+var
+  LV: T;
 begin
+  { Failed construction (e.g. managed-type reject before node storage init)
+    leaves FNodes empty. Drain would index FNodes[head] and AV. }
+  if Length(FNodes) = 0 then
+  begin
+    inherited Destroy;
+    Exit;
+  end;
+  { Reject new publishes; drain remaining values while quiescent.
+    Callers must still join concurrent producers/consumers before Free. }
+  Close;
+  while TryDequeue(LV) do;
   SetLength(FNodes, 0);
   SetLength(FFreeList, 0);
   inherited Destroy;
@@ -335,6 +353,21 @@ begin
   finally
     LeaveOperation;
   end;
+end;
+
+function TLockFreeMsQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
 end;
 
 procedure TLockFreeMsQueueImpl.Close;

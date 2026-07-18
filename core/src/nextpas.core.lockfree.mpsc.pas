@@ -5,7 +5,8 @@ unit nextpas.core.lockfree.mpsc;
 interface
 
 uses
-  nextpas.core.atomic.core;
+  nextpas.core.atomic.core,
+  nextpas.core.lockfree.base;
 
 type
   {**
@@ -16,8 +17,8 @@ type
    *     多线程同时消费会导致数据竞争和 use-after-free。
    *   - Enqueue 可由多个线程并发调用。
    *   - T 必须是 unmanaged 类型。
-   *   - Close 后 Enqueue 仍可发布已 admitted 的元素；调用方必须自行停止 producer。
-   *   - Destroy 前必须调用 Close 并 drain 队列。
+   *   - Close 后 TryEnqueue 返回 False；Enqueue 抛出 EInvalidOperationError（与 Channel.Send 对齐）。
+   *   - 生命周期：Close → join producers/waiters → Free。Destroy 会 Close+drain，但不能替代 join。
    *
    * @safety
    *   FTail 的非原子读取是刻意设计，依赖 single-consumer contract 保证安全。
@@ -42,18 +43,25 @@ type
     function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode; inline;
     procedure AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t); inline;
     function AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode; inline;
+    procedure PublishNode(const AValue: T);
   public
     constructor Create;
     destructor Destroy; override;
+    {** @desc 入队；已关闭时抛出 EInvalidOperationError（与 Channel.Send 对齐） }
     procedure Enqueue(const AValue: T);
-    {** @desc 非阻塞入队；已关闭时返回 False（语义与 Enqueue 相同，仅增加关闭检查） }
+    {** @desc 非阻塞入队；已关闭时返回 False }
     function TryEnqueue(const AValue: T): Boolean;
+    {** @desc 非阻塞入队并返回失败原因；无界 publish 失败即为 closed；成功 AError=lfteNone }
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 非阻塞出队（**严格单消费者**：只能由一个线程调用） }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 非阻塞出队并返回失败原因（empty vs closed-empty）；成功 AError=lfteNone }
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 阻塞出队（**严格单消费者**：只能由一个线程调用） }
     function DequeueWait(out AValue: T): Boolean;
     {** @desc 带超时出队（**严格单消费者**：只能由一个线程调用） }
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean; inline;
     function IsEmpty: Boolean; inline;
@@ -111,15 +119,14 @@ begin
     inherited;
     Exit;
   end;
-  {$IFDEF DEBUG}
-  Assert(FClosed <> 0, 'TMpscQueue.Destroy: Close must be called before Destroy to ensure all producers have stopped');
-  Assert(IsEmpty, 'TMpscQueue.Destroy: queue must be drained before Destroy after Close');
-  {$ENDIF}
+  { Wake any blocked single-consumer DequeueWait/Timeout, then drain remaining nodes.
+    Callers must still stop and join producers before Free; Close alone is not a join barrier. }
+  Close;
   while TryDequeue(LV) do;
   inherited;
 end;
 
-procedure TMpscQueueImpl.Enqueue(const AValue: T);
+procedure TMpscQueueImpl.PublishNode(const AValue: T);
 var
   LNode, LPrev: PNode;
 begin
@@ -134,12 +141,34 @@ begin
     LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
 end;
 
+procedure TMpscQueueImpl.Enqueue(const AValue: T);
+begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    raise EInvalidOperationError.Create('TMpscQueue: Enqueue on closed queue');
+  PublishNode(AValue);
+end;
+
 function TMpscQueueImpl.TryEnqueue(const AValue: T): Boolean;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  Enqueue(AValue);
+  PublishNode(AValue);
   Result := True;
+end;
+
+function TMpscQueueImpl.TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryEnqueue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  { Unbounded: False is closed under ClosedPublishPolicy. }
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
 end;
 
 function TMpscQueueImpl.TryDequeue(out AValue: T): Boolean;
@@ -183,6 +212,20 @@ begin
   Result := False;
 end;
 
+function TMpscQueueImpl.TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryDequeue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
+end;
+
 function TMpscQueueImpl.DequeueWait(out AValue: T): Boolean;
 var
   LEpoch: Int32;
@@ -221,6 +264,21 @@ begin
       Exit(TryDequeue(AValue));
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
   end;
+end;
+
+function TMpscQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
 end;
 
 procedure TMpscQueueImpl.Close;

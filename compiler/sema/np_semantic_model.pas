@@ -1,12 +1,18 @@
 unit np_semantic_model;
 
 {$mode objfpc}{$H+}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
   np_green_tree, np_hir_types,
-  nextpas.core.collections.hashmap;
+  nextpas.core.collections.hashmap,
+  nextpas.core.collections.vec,
+  np_semantic_field_meta_vec,
+  np_semantic_vmt_slot_vec,
+  np_semantic_property_meta_vec,
+  np_semantic_interface_slot_vec;
 
 type
   TSemanticHirValueClass = (
@@ -55,12 +61,15 @@ type
     shekIntrinsic
   );
 
+  { Nested product table owned by HirExpr entry (default heap). }
+  TSemanticHirChildVec = specialize TVec<LongInt>;
+
   TSemanticHirExpr = record
     ExprId: LongInt;
     Kind: TSemanticHirExprKind;
     TypeId: LongInt;
     SymbolId: LongInt;
-    Children: array of LongInt;
+    Children: TSemanticHirChildVec;
     LiteralInt: Int64;
     LiteralFloat: Double;
     LiteralStr: string;
@@ -145,32 +154,20 @@ type
     Strength: string;
   end;
 
-  TFieldMeta = record
-    Name: string;
-    Index: LongInt;
-    IsString: Boolean;
-    IsPointer: Boolean;
-    IsDynArray: Boolean;
-    IsRecord: Boolean;
-    TypeId: LongInt;
-  end;
+  { Re-export from satellite units (keeps nested TVec specializes out of this .o). }
+  TFieldMeta = np_semantic_field_meta_vec.TFieldMeta;
+  TSemanticFieldMetaVec = np_semantic_field_meta_vec.TSemanticFieldMetaVec;
+  TVmtSlot = np_semantic_vmt_slot_vec.TVmtSlot;
+  TSemanticVmtSlotVec = np_semantic_vmt_slot_vec.TSemanticVmtSlotVec;
+  TPropertyMeta = np_semantic_property_meta_vec.TPropertyMeta;
+  TSemanticPropertyMetaVec = np_semantic_property_meta_vec.TSemanticPropertyMetaVec;
+  TInterfaceSlotMeta = np_semantic_interface_slot_vec.TInterfaceSlotMeta;
+  TSemanticInterfaceSlotMetaVec =
+    np_semantic_interface_slot_vec.TSemanticInterfaceSlotMetaVec;
 
-  TVmtSlot = record
-    MethodName: string;
-    SlotIndex: LongInt;
-    FuncQualName: string;
-  end;
-
-  TPropertyMeta = record
-    Name: string;
-    ReadAccessor: string;
-    WriteAccessor: string;
-  end;
-
-  TInterfaceSlotMeta = record
-    InterfaceName: string;
-    SlotOffset: LongInt;
-  end;
+  { Shared string product table; also used by nested RetPtrMethods (no extra
+    specialize — reuses this unit's TVec<string>). }
+  TSemanticStringVec = specialize TVec<string>;
 
   TTypeMetadata = record
     TypeId: LongInt;
@@ -180,11 +177,11 @@ type
     ParentClassId: LongInt;
     ParentClassName: string;
     Interfaces: string;
-    Fields: array of TFieldMeta;
-    VmtSlots: array of TVmtSlot;
-    RetPtrMethods: array of string;
-    Properties: array of TPropertyMeta;
-    InterfaceSlots: array of TInterfaceSlotMeta;
+    Fields: TSemanticFieldMetaVec;
+    VmtSlots: TSemanticVmtSlotVec;
+    RetPtrMethods: TSemanticStringVec;
+    Properties: TSemanticPropertyMetaVec;
+    InterfaceSlots: TSemanticInterfaceSlotMetaVec;
     ArrElemSize: Int64;
     ArrElemType: string;
     ArrLowBound: Int64;
@@ -232,24 +229,40 @@ type
     ParentScopeId: LongInt;
   end;
 
+  TSemanticHirExprVec = specialize TVec<TSemanticHirExpr>;
+  TSemanticSymbolVec = specialize TVec<TSemanticSymbol>;
+  TSemanticTypeVec = specialize TVec<TSemanticType>;
+  TSemanticScopeVec = specialize TVec<TSemanticScope>;
+  TTypedHirNodeVec = specialize TVec<TTypedHirNode>;
+  TSemanticBindingVec = specialize TVec<TSemanticBinding>;
+  TRuntimeContractVec = specialize TVec<TRuntimeContract>;
+  TSemanticForeignProcedureBindingVec = specialize TVec<TSemanticForeignProcedureBinding>;
+  TSemanticLibraryRequestVec = specialize TVec<TSemanticLibraryRequest>;
+  TSemanticConstValueVec = specialize TVec<TSemanticConstValue>;
+  TSemanticVarInitValueVec = specialize TVec<TSemanticVarInitValue>;
+  TSemanticStringConstValueVec = specialize TVec<TSemanticStringConstValue>;
+  TSemanticFloatConstValueVec = specialize TVec<TSemanticFloatConstValue>;
+  TTypeMetadataVec = specialize TVec<TTypeMetadata>;
+  TSemanticScalarTypeFactVec = specialize TVec<TSemanticScalarTypeFact>;
+
   TSemanticModel = class
   private
-    FHirExprs: array of TSemanticHirExpr;
-    FSymbols: array of TSemanticSymbol;
-    FTypes: array of TSemanticType;
-    FScopes: array of TSemanticScope;
-    FTypedHirNodes: array of TTypedHirNode;
-    FBindings: array of TSemanticBinding;
-    FRuntimeContracts: array of TRuntimeContract;
-    FForeignProcedureBindings: array of TSemanticForeignProcedureBinding;
-    FLibraryRequests: array of TSemanticLibraryRequest;
-    FConstValues: array of TSemanticConstValue;
-    FVarInitValues: array of TSemanticVarInitValue;
-    FStringConstValues: array of TSemanticStringConstValue;
-    FFloatConstValues: array of TSemanticFloatConstValue;
-    FTypeMetadataEntries: array of TTypeMetadata;
-    FTypeScalarFacts: array of TSemanticScalarTypeFact;
-    FUnitInitOrder: array of string;
+    FHirExprs: TSemanticHirExprVec;
+    FSymbols: TSemanticSymbolVec;
+    FTypes: TSemanticTypeVec;
+    FScopes: TSemanticScopeVec;
+    FTypedHirNodes: TTypedHirNodeVec;
+    FBindings: TSemanticBindingVec;
+    FRuntimeContracts: TRuntimeContractVec;
+    FForeignProcedureBindings: TSemanticForeignProcedureBindingVec;
+    FLibraryRequests: TSemanticLibraryRequestVec;
+    FConstValues: TSemanticConstValueVec;
+    FVarInitValues: TSemanticVarInitValueVec;
+    FStringConstValues: TSemanticStringConstValueVec;
+    FFloatConstValues: TSemanticFloatConstValueVec;
+    FTypeMetadataEntries: TTypeMetadataVec;
+    FTypeScalarFacts: TSemanticScalarTypeFactVec;
+    FUnitInitOrder: TSemanticStringVec;
     FRootName: string;
     FStatus: string;
     // O(1) lookup indexes via THashMap (case-insensitive keys)
@@ -410,33 +423,41 @@ type
     function Status: string;
   end;
 
+{ Nil-safe child count for entry-owned TSemanticHirChildVec. }
+function SemanticHirChildCount(const AChildren: TSemanticHirChildVec): LongInt; inline;
+
 implementation
 
 uses
-  nextpas.core.text.conv, nextpas.core.collections.vec;
+  nextpas.core.text.conv;
 
 type
-  TStringVec = specialize TVec<string>;
+  TStringVec = TSemanticStringVec;
+  PSemanticType = ^TSemanticType;
+  PSemanticScalarTypeFact = ^TSemanticScalarTypeFact;
+  PTypeMetadata = ^TTypeMetadata;
 
 constructor TSemanticModel.Create;
 begin
   inherited Create;
-  SetLength(FSymbols, 0);
-  SetLength(FTypes, 0);
-  SetLength(FScopes, 0);
-  SetLength(FTypedHirNodes, 0);
-  SetLength(FRuntimeContracts, 0);
-  SetLength(FForeignProcedureBindings, 0);
-  SetLength(FLibraryRequests, 0);
-  SetLength(FConstValues, 0);
-  SetLength(FVarInitValues, 0);
-  SetLength(FFloatConstValues, 0);
-  SetLength(FStringConstValues, 0);
-  SetLength(FTypeScalarFacts, 0);
-  SetLength(FHirExprs, 0);
+  FHirExprs := TSemanticHirExprVec.Create;
+  FSymbols := TSemanticSymbolVec.Create;
+  FTypes := TSemanticTypeVec.Create;
+  FScopes := TSemanticScopeVec.Create;
+  FTypedHirNodes := TTypedHirNodeVec.Create;
+  FBindings := TSemanticBindingVec.Create;
+  FRuntimeContracts := TRuntimeContractVec.Create;
+  FForeignProcedureBindings := TSemanticForeignProcedureBindingVec.Create;
+  FLibraryRequests := TSemanticLibraryRequestVec.Create;
+  FConstValues := TSemanticConstValueVec.Create;
+  FVarInitValues := TSemanticVarInitValueVec.Create;
+  FStringConstValues := TSemanticStringConstValueVec.Create;
+  FFloatConstValues := TSemanticFloatConstValueVec.Create;
+  FTypeMetadataEntries := TTypeMetadataVec.Create;
+  FTypeScalarFacts := TSemanticScalarTypeFactVec.Create;
+  FUnitInitOrder := TSemanticStringVec.Create;
   FRootName := '';
   FStatus := 'deferred';
-  // Initialize O(1) lookup indexes
   FTypeNameIndex := specialize THashMap<string, LongInt>.Create;
   FSymbolNameIndex := specialize THashMap<string, LongInt>.Create;
   FConstNameIndex := specialize THashMap<string, LongInt>.Create;
@@ -444,12 +465,80 @@ begin
 end;
 
 destructor TSemanticModel.Destroy;
+var
+  I: SizeInt;
+  Meta: PTypeMetadata;
 begin
   FTypeNameIndex.Free;
   FSymbolNameIndex.Free;
   FConstNameIndex.Free;
   FTypeMetaNameIndex.Free;
+  FUnitInitOrder.Free;
+  FUnitInitOrder := nil;
+  FTypeScalarFacts.Free;
+  FTypeScalarFacts := nil;
+  if FTypeMetadataEntries <> nil then
+  begin
+    for I := 0 to SizeInt(FTypeMetadataEntries.Count) - 1 do
+    begin
+      Meta := FTypeMetadataEntries.GetPtr(SizeUInt(I));
+      Meta^.Fields.Free;
+      Meta^.Fields := nil;
+      Meta^.VmtSlots.Free;
+      Meta^.VmtSlots := nil;
+      Meta^.RetPtrMethods.Free;
+      Meta^.RetPtrMethods := nil;
+      Meta^.Properties.Free;
+      Meta^.Properties := nil;
+      Meta^.InterfaceSlots.Free;
+      Meta^.InterfaceSlots := nil;
+    end;
+  end;
+  FTypeMetadataEntries.Free;
+  FTypeMetadataEntries := nil;
+  FFloatConstValues.Free;
+  FFloatConstValues := nil;
+  FStringConstValues.Free;
+  FStringConstValues := nil;
+  FVarInitValues.Free;
+  FVarInitValues := nil;
+  FConstValues.Free;
+  FConstValues := nil;
+  FLibraryRequests.Free;
+  FLibraryRequests := nil;
+  FForeignProcedureBindings.Free;
+  FForeignProcedureBindings := nil;
+  FRuntimeContracts.Free;
+  FRuntimeContracts := nil;
+  FBindings.Free;
+  FBindings := nil;
+  FTypedHirNodes.Free;
+  FTypedHirNodes := nil;
+  FScopes.Free;
+  FScopes := nil;
+  FTypes.Free;
+  FTypes := nil;
+  FSymbols.Free;
+  FSymbols := nil;
+  if FHirExprs <> nil then
+  begin
+    for I := 0 to SizeInt(FHirExprs.Count) - 1 do
+    begin
+      FHirExprs.GetPtr(SizeUInt(I))^.Children.Free;
+      FHirExprs.GetPtr(SizeUInt(I))^.Children := nil;
+    end;
+  end;
+  FHirExprs.Free;
+  FHirExprs := nil;
   inherited Destroy;
+end;
+
+function SemanticHirChildCount(const AChildren: TSemanticHirChildVec): LongInt;
+begin
+  if AChildren = nil then
+    Result := 0
+  else
+    Result := LongInt(AChildren.Count);
 end;
 
 {$I np_semantic_model_mutation.inc}

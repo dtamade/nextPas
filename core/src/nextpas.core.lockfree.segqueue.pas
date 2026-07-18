@@ -23,6 +23,7 @@ unit nextpas.core.lockfree.segqueue;
 interface
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree.base,
@@ -70,16 +71,22 @@ type
     class procedure SegQueueReclaimSegment(const AData: Pointer; const AUserData: Pointer); static;
     function AllocSegment(const AStartIndex: Int64): PSegment;
     function FindOrCreateSegment(const APosition: Int64): PSegment;
+    procedure Publish(const AValue: T);
   public
-    {** @desc 创建无界 MPSC 队列（EBR 回收段） }
+    {** @desc 创建无界 MPMC 分段队列（EBR 回收段） }
     constructor Create;
     destructor Destroy; override;
-    {** @desc 无界入队；段不足时自动扩展 }
+    {** @desc 无界入队；段不足时自动扩展；已关闭时抛 EInvalidOperationError }
     procedure Enqueue(const AValue: T);
-    {** @desc 非阻塞入队；已关闭时返回 False（语义与 Enqueue 相同，仅增加关闭检查） }
+    {** @desc 非阻塞入队；已关闭时返回 False }
     function TryEnqueue(const AValue: T): Boolean;
+    {** @desc 非阻塞入队并返回失败原因；成功 AError=lfteNone }
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 非阻塞出队；队列空时返回 False }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 非阻塞出队并返回失败原因；empty vs closed-empty }
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     {** @desc 关闭队列（已入队数据仍可读出） }
     procedure Close;
     {** @desc 队列是否已关闭 }
@@ -149,7 +156,7 @@ begin
         LNext := LNewSegment
       else
       begin
-        FreeMem(LNewSegment);
+        FreeMem(LNewSegment, SizeOf(TSegment));
         LNext := PSegment(AtomicLoadPtr(Pointer(Result^.Next), moAcquire));
       end;
     end;
@@ -179,6 +186,9 @@ var
   LSeg: PSegment;
   LNext: PSegment;
 begin
+  { Close rejects new publishes; callers must still join concurrent
+    producers/consumers before Free. }
+  Close;
   { Release EBR first: its destructor calls SegQueueReclaimSegment for
     retired segments, which pushes them back into FFreePool. }
   FEbr.Free;
@@ -186,14 +196,14 @@ begin
   while LSeg <> nil do
   begin
     LNext := LSeg^.Next;
-    FreeMem(LSeg);
+    FreeMem(LSeg, SizeOf(TSegment));
     LSeg := LNext;
   end;
   LSeg := FFreePool;
   while LSeg <> nil do
   begin
     LNext := LSeg^.Next;
-    FreeMem(LSeg);
+    FreeMem(LSeg, SizeOf(TSegment));
     LSeg := LNext;
   end;
   inherited;
@@ -218,10 +228,10 @@ begin
     AtomicFetchAdd32(LQueue.FFreePoolCount, 1, moRelaxed);
   end
   else
-    FreeMem(AData);
+    FreeMem(AData, SizeOf(TSegment));
 end;
 
-procedure TSegQueueImpl.Enqueue(const AValue: T);
+procedure TSegQueueImpl.Publish(const AValue: T);
 var
   LPos: Int64;
   LIdx: Integer;
@@ -246,12 +256,49 @@ begin
   end;
 end;
 
+procedure TSegQueueImpl.Enqueue(const AValue: T);
+begin
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    raise EInvalidOperationError.Create('TSegQueue: Enqueue on closed queue');
+  Publish(AValue);
+end;
+
 function TSegQueueImpl.TryEnqueue(const AValue: T): Boolean;
 begin
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(False);
-  Enqueue(AValue);
+  Publish(AValue);
   Result := True;
+end;
+
+function TSegQueueImpl.TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryEnqueue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  { Unbounded: False is closed under ClosedPublishPolicy. }
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
+function TSegQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
 end;
 
 procedure TSegQueueImpl.Close;
@@ -329,6 +376,20 @@ begin
     end;
     CpuPause;
   end;
+end;
+
+function TSegQueueImpl.TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryDequeue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TSegQueueImpl.IsEmpty: Boolean;

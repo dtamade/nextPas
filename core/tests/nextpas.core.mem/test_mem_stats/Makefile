@@ -1,9 +1,24 @@
+FPC ?= fpc
+CORE_ROOT := ../../..
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.mem/test_mem_stats
 PROGRAM := test_mem_stats
-include ../../common.mk
+SOURCE := $(PROGRAM).lpr
+FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
+FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
-.PHONY: test-source-contract
+.PHONY: build run test clean test-source-contract
 
-test: test-source-contract
+build:
+	@mkdir -p $(BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) $(SOURCE)
+
+run: build
+	$(BUILD_DIR)/$(PROGRAM)
 
 test-source-contract:
 	bash check_stats_atomic_reset.sh
+
+test: test-source-contract run
+
+clean:
+	rm -rf $(BUILD_DIR)

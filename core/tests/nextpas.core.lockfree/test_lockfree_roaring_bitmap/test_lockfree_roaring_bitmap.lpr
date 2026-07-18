@@ -2,7 +2,7 @@
 program test_lockfree_roaring_bitmap;
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.lockfree.roaring_bitmap;
 
 var

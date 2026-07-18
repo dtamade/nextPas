@@ -24,6 +24,7 @@ type
       **限制**:
       - 仅支持 1P1C，不支持 MPMC
       - 不支持 Close（需要手动同步）
+  {** @concurrency Thread-safe (see source for details). }
     }
   generic TLockFreeChannelSpscImpl<T> = class
   private type
@@ -54,6 +55,8 @@ type
     procedure Send(const AValue: T);
     {** @desc 非阻塞发送，无空间或已关闭时立即返回 False }
     function TrySend(const AValue: T): Boolean;
+    {** @desc 非阻塞发送并返回失败原因（full vs closed）；成功 AError=lfteNone }
+    function TrySendEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 带超时发送，超时或已关闭返回 False }
     function SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
 
@@ -61,6 +64,8 @@ type
     function Receive(out AValue: T): Boolean;
     {** @desc 非阻塞接收；无数据时返回 False }
     function TryReceive(out AValue: T): Boolean;
+    {** @desc 非阻塞接收并返回失败原因（empty vs closed-empty） }
+    function TryReceiveEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 带超时接收；超时返回 False }
     function ReceiveTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
 
@@ -87,7 +92,7 @@ var
   LI: PtrUInt;
 begin
   if IsManagedType(T) then
-    raise EArgumentError.Create('TLockFreeChannelSpsc: T must be unmanaged');
+    raise EArgumentError.Create('TLockFreeChannelSpsc: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeChannelSpsc: capacity must be > 0');
   inherited Create;
@@ -110,6 +115,13 @@ destructor TLockFreeChannelSpscImpl.Destroy;
 var
   LI: PtrUInt;
 begin
+  { Failed construction leaves FCapacity=0; guard against PtrUInt underflow. }
+  if FCapacity = 0 then
+  begin
+    inherited;
+    Exit;
+  end;
+  Close;
   for LI := 0 to FCapacity - 1 do
     FSlots[LI].Value := Default(T);
   inherited;
@@ -133,6 +145,20 @@ begin
   if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
     LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
   Result := True;
+end;
+
+function TLockFreeChannelSpscImpl.TrySendEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TrySend(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
 end;
 
 procedure TLockFreeChannelSpscImpl.Send(const AValue: T);
@@ -199,6 +225,20 @@ begin
   if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
     LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
   Result := True;
+end;
+
+function TLockFreeChannelSpscImpl.TryReceiveEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryReceive(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TLockFreeChannelSpscImpl.Receive(out AValue: T): Boolean;

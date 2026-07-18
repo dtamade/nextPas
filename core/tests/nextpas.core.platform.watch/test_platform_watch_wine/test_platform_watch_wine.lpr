@@ -3,8 +3,8 @@ program test_platform_watch_wine;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.platform.watch,
+  nextpas.core.platform.fs,
   nextpas.core.platform.error;
 
 var
@@ -67,8 +67,9 @@ begin
   LRet := platform_watch_create(LWatcher);
   Check(LRet = 0, 'watch_create for temp dir');
 
-  // Get temp directory
-  StrCopy(@LTmpDir[0], PAnsiChar(AnsiString(SysUtils.GetTempDir)));
+  // Get temp directory via platform API (no SysUtils)
+  LRet := platform_fs_temp_dir(@LTmpDir[0], SizeOf(LTmpDir));
+  Check(LRet >= 0, 'platform_fs_temp_dir succeeds');
   WriteLn('    temp dir: ', LTmpDir);
 
   LRet := platform_watch_add(LWatcher, @LTmpDir[0]);

@@ -115,7 +115,8 @@ begin
   end
   else
   begin
-    for I := 0 to FGlobalCount - 1 do
+    if FGlobalNames.Count > 0 then
+      for I := 0 to LongInt(FGlobalNames.Count) - 1 do
       if SameText(FGlobalNames[I], AArg) then
       begin
         FillChar(Instr, SizeOf(Instr), 0);
@@ -481,12 +482,13 @@ begin
   if Instr.TypeId = 0 then
   begin
     Instr.TypeId := GetIntType;
-    for J := 0 to FFwdFuncCount - 1 do
-      if FFwdFuncNames[J] = Target then
-      begin
-        Instr.TypeId := FFwdFuncRetTypes[J];
-        Break;
-      end;
+    if FFwdFuncNames.Count > 0 then
+      for J := 0 to LongInt(FFwdFuncNames.Count) - 1 do
+        if FFwdFuncNames[J] = Target then
+        begin
+          Instr.TypeId := FFwdFuncRetTypes[J];
+          Break;
+        end;
   end;
   Instr.CallTarget := Target;
   SetLength(Instr.Operands, ArgCount);

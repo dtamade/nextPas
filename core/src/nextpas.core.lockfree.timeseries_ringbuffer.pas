@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.timeseries_ringbuffer;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   TSRING_DEFAULT_CAPACITY = 1024;
@@ -72,6 +72,7 @@ type
       ADefaultTTLMs: Int64 = TSRING_DEFAULT_TTL_MS);
     destructor Destroy; override;
 
+  {** @concurrency Thread-safe (see source for details). }
     {** @desc 追加一个值（使用默认 TTL） }
     function Append(const AValue: AnsiString): TTSRingResult;
     {** @desc 追加一个值（指定 TTL 毫秒，0=永不过期） }
@@ -104,11 +105,12 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.lockfree.base;
+  nextpas.core.lockfree.base,
+  nextpas.core.platform.time;
 
 function TTimeSeriesRingBuffer.GetNowMs: Int64;
 begin
-  Result := Int64(GetTickCount64);
+  Result := Int64(platform_monotonic_ns div 1000000);
 end;
 
 procedure TTimeSeriesRingBuffer.Lock;

@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.fibheap;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   TFibHeapResult = (
@@ -42,6 +42,7 @@ type
     Right: PFibNode;
   end;
 
+  {** @concurrency Thread-safe (see source for details). }
   TLockFreeFibonacciHeap = class
   private
     FMin: PFibNode;

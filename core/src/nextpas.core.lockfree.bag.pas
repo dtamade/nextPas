@@ -10,10 +10,11 @@ uses
 type
   TLockFreeBagAddResult = (arAdded, arFull, arClosed);
 
-  {** @desc 无锁并发 Bag（允许重复元素）
-    @details 基于 MPMC 队列实现，允许重复元素。
-      支持 TryAdd/TryTake/Wait/Timeout/Close。
-      适用于任务队列、工作池等场景。
+  {** @desc 并发 Bag（允许重复元素）— T2 Guarded / H3-2 生产子集
+    @details 有界 MPMC 序列号 ring；允许重复；TryAdd/TryTake/Wait/Timeout/Close。
+      Managed T 在 Create 拒绝。Close 后禁止新增，已有元素可继续 Take。
+      **不**经默认 `uses nextpas.core.lockfree` 门面；见 CONTRACT §0.3。
+ * @concurrency Thread-safe; progress = lock-free ring + optional wait-address block.
   }
   generic TLockFreeBagImpl<T> = class
   private
@@ -49,6 +50,7 @@ type
     procedure LeaveActiveEnqueue; inline;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryAdd(const AValue: T): TLockFreeBagAddResult;
     function TryTake(out AValue: T): Boolean;
     function AddWait(const AValue: T): Boolean;
@@ -308,6 +310,12 @@ begin
   LockFreeWakeAll(@FDataEpoch);
   // Wake all waiting producers (so they can see close)
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TLockFreeBagImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLockFreeBagImpl.IsClosed: Boolean;

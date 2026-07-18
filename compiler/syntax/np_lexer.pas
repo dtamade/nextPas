@@ -3,11 +3,16 @@ unit np_lexer;
 {$mode objfpc}{$H+}
 {$UNITPATH ../diagnostics}
 {$UNITPATH ../../rtl/core/base}
+{$UNITPATH ../../core/src}
 
 interface
 
 uses
-  nextpas.core.text.conv, np_base_types, np_diagnostics_sink;
+  nextpas.core.mem.intf,
+  nextpas.core.text.conv,
+  nextpas.core.collections.vec,
+  np_base_types,
+  np_diagnostics_sink;
 
 type
   TTokenKind = (
@@ -168,7 +173,8 @@ type
     Length: LongInt;
   end;
 
-  TTriviaPieces = array of TTriviaPiece;
+  { Nested product table owned by token entry (default heap / optional alloc). }
+  TTriviaPieceVec = specialize TVec<TTriviaPiece>;
 
   TToken = record
     Kind: TTokenKind;
@@ -177,19 +183,20 @@ type
     ByteOffset: LongInt;
     Line: LongInt;
     Column: LongInt;
-    LeadingTrivia: TTriviaPieces;
-    TrailingTrivia: TTriviaPieces;
+    LeadingTrivia: TTriviaPieceVec;
+    TrailingTrivia: TTriviaPieceVec;
   end;
+  PToken = ^TToken;
+  TTokenVec = specialize TVec<TToken>;
 
   TLexerResult = class
   private
-    FTokens: array of TToken;
-    FTokenCount: SizeInt;
+    FTokens: TTokenVec;
     FCurrentLine: LongInt;
     FLineStartByte: LongInt;
     FDiagnostics: TDiagnosticsSink;
     FFileId: TCoreId;
-    FPendingTrivia: TTriviaPieces;
+    FPendingTrivia: TTriviaPieceVec;
     procedure ReportError(
       const ACode: string;
       const AByteOffset: LongInt;
@@ -258,9 +265,22 @@ type
     ); overload;
     constructor CreateFromTokens(const ATokens: array of TToken;
       const ACount: LongInt);
+    destructor Destroy; override;
     function TokenCount: LongInt;
     function TokenAt(const AIndex: LongInt): TToken;
   end;
+
+{ Deep-copy trivia for token value copies (EmitToken / CreateFromTokens). }
+function CloneTriviaPieceVec(
+  const ASrc: TTriviaPieceVec;
+  AAllocator: IAllocator = nil
+): TTriviaPieceVec;
+function CloneTokenWithTrivia(
+  const ASrc: TToken;
+  AAllocator: IAllocator = nil
+): TToken;
+procedure FreeTokenNestedTrivia(var AToken: TToken);
+procedure FreeTokenVecNestedTrivia(const ATokens: TTokenVec);
 
 function TokenKindName(const AKind: TTokenKind): string;
 
@@ -269,22 +289,69 @@ implementation
 {$I np_lexer_helpers.inc}
 {$I np_lexer_lex_source.inc}
 
+function CloneTriviaPieceVec(
+  const ASrc: TTriviaPieceVec;
+  AAllocator: IAllocator
+): TTriviaPieceVec;
+var
+  I: SizeInt;
+begin
+  if ASrc = nil then
+    Exit(nil);
+  if AAllocator <> nil then
+    Result := TTriviaPieceVec.Create(ASrc.Count, AAllocator)
+  else
+    Result := TTriviaPieceVec.Create(ASrc.Count);
+  for I := 0 to SizeInt(ASrc.Count) - 1 do
+    Result.Push(ASrc[SizeUInt(I)]);
+end;
+
+function CloneTokenWithTrivia(
+  const ASrc: TToken;
+  AAllocator: IAllocator
+): TToken;
+begin
+  Result := ASrc;
+  Result.LeadingTrivia := CloneTriviaPieceVec(ASrc.LeadingTrivia, AAllocator);
+  Result.TrailingTrivia := CloneTriviaPieceVec(ASrc.TrailingTrivia, AAllocator);
+end;
+
+procedure FreeTokenNestedTrivia(var AToken: TToken);
+begin
+  AToken.LeadingTrivia.Free;
+  AToken.LeadingTrivia := nil;
+  AToken.TrailingTrivia.Free;
+  AToken.TrailingTrivia := nil;
+end;
+
+procedure FreeTokenVecNestedTrivia(const ATokens: TTokenVec);
+var
+  I: SizeInt;
+begin
+  if ATokens = nil then
+    Exit;
+  for I := 0 to SizeInt(ATokens.Count) - 1 do
+    FreeTokenNestedTrivia(ATokens.GetPtr(SizeUInt(I))^);
+end;
+
 function TLexerResult.TokenCount: LongInt;
 begin
-  Result := FTokenCount;
+  if FTokens = nil then
+    Exit(0);
+  Result := LongInt(FTokens.Count);
 end;
 
 function TLexerResult.TokenAt(const AIndex: LongInt): TToken;
 begin
-  if (AIndex < 0) or (AIndex >= FTokenCount) then
+  if (FTokens = nil) or (AIndex < 0) or (AIndex >= LongInt(FTokens.Count)) then
   begin
+    Result := Default(TToken);
     Result.Kind := tkEOF;
-    Result.Lexeme := '';
-    Result.ByteOffset := 0;
     Exit;
   end;
 
-  Result := FTokens[AIndex];
+  { Shallow copy of entry; nested trivia remain owned by FTokens. }
+  Result := FTokens[SizeUInt(AIndex)];
 end;
 
 function TokenKindName(const AKind: TTokenKind): string;

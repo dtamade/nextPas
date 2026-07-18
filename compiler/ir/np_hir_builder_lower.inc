@@ -26,27 +26,27 @@ begin
     shekAddressOf:
       begin
         ResultType := ExprHirTypeId(AExpr);
-        Result := (Length(AExpr.Children) >= 1) and
+        Result := (SemanticHirChildCount(AExpr.Children) >= 1) and
           (ResultType <> 0) and
           (FModule.Types.GetType(ResultType).Kind = htkPointer) and
-          CanLowerExprAsAddress(AExpr.Children[0]);
+          CanLowerExprAsAddress(AExpr.Children[SizeUInt(0)]);
       end;
     shekDeref:
       begin
-        Result := (Length(AExpr.Children) >= 1) and
-          (AExpr.ValueClass = shvcAddress) and CanLowerExpr(AExpr.Children[0]);
+        Result := (SemanticHirChildCount(AExpr.Children) >= 1) and
+          (AExpr.ValueClass = shvcAddress) and CanLowerExpr(AExpr.Children[SizeUInt(0)]);
         if Result then
         begin
-          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+          LeftType := ExprIdHirTypeId(AExpr.Children[SizeUInt(0)]);
           Result := (LeftType <> 0) and
             (FModule.Types.GetType(LeftType).Kind = htkPointer);
         end;
       end;
     shekField:
-      Result := (Length(AExpr.Children) >= 1) and
+      Result := (SemanticHirChildCount(AExpr.Children) >= 1) and
         (AExpr.TypeId > 0) and (AExpr.ValueClass in [shvcScalar, shvcAddress]) and
         (AExpr.LiteralInt >= 0) and
-        CanLowerExpr(AExpr.Children[0]);
+        CanLowerExpr(AExpr.Children[SizeUInt(0)]);
     shekArrayElem:
       begin
         Result := (AExpr.TypeId > 0) and
@@ -56,31 +56,31 @@ begin
         if AExpr.SymbolId > 0 then
         begin
           Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
-          Result := (Symbol.Name <> '') and (Length(AExpr.Children) >= 1) and
-            CanLowerExpr(AExpr.Children[0]);
+          Result := (Symbol.Name <> '') and (SemanticHirChildCount(AExpr.Children) >= 1) and
+            CanLowerExpr(AExpr.Children[SizeUInt(0)]);
           if Result then
           begin
-            LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+            LeftType := ExprIdHirTypeId(AExpr.Children[SizeUInt(0)]);
             Result := HirTypeIsInt(LeftType);
           end;
           Exit;
         end;
-        Result := (AExpr.SymbolId = 0) and (Length(AExpr.Children) >= 2) and
-          CanLowerExprAsAddress(AExpr.Children[0]) and
-          CanLowerExpr(AExpr.Children[1]);
+        Result := (AExpr.SymbolId = 0) and (SemanticHirChildCount(AExpr.Children) >= 2) and
+          CanLowerExprAsAddress(AExpr.Children[SizeUInt(0)]) and
+          CanLowerExpr(AExpr.Children[SizeUInt(1)]);
         if Result then
         begin
-          LeftType := ExprIdHirTypeId(AExpr.Children[1]);
+          LeftType := ExprIdHirTypeId(AExpr.Children[SizeUInt(1)]);
           Result := HirTypeIsInt(LeftType);
         end;
       end;
     shekCast:
       begin
-        Result := (Length(AExpr.Children) >= 1) and
-          (ExprHirTypeId(AExpr) <> 0) and CanLowerExpr(AExpr.Children[0]);
+        Result := (SemanticHirChildCount(AExpr.Children) >= 1) and
+          (ExprHirTypeId(AExpr) <> 0) and CanLowerExpr(AExpr.Children[SizeUInt(0)]);
         if Result then
         begin
-          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+          LeftType := ExprIdHirTypeId(AExpr.Children[SizeUInt(0)]);
           Result := TryClassifyScalarCast(LeftType, ExprHirTypeId(AExpr),
             Kind, NoOp);
         end;
@@ -88,37 +88,37 @@ begin
     shekUnaryOp:
       begin
         Result := ((AExpr.Op = '-') or SameText(AExpr.Op, 'abs') or
-          SameText(AExpr.Op, 'not')) and (Length(AExpr.Children) >= 1) and
-          (ExprHirTypeId(AExpr) <> 0) and CanLowerExpr(AExpr.Children[0]);
+          SameText(AExpr.Op, 'not')) and (SemanticHirChildCount(AExpr.Children) >= 1) and
+          (ExprHirTypeId(AExpr) <> 0) and CanLowerExpr(AExpr.Children[SizeUInt(0)]);
         if Result and SameText(AExpr.Op, 'not') then
-          Result := HirTypeIsBool(ExprIdHirTypeId(AExpr.Children[0])) and
+          Result := HirTypeIsBool(ExprIdHirTypeId(AExpr.Children[SizeUInt(0)])) and
             HirTypeIsBool(ExprHirTypeId(AExpr));
         if Result and ((AExpr.Op = '-') or SameText(AExpr.Op, 'abs')) then
           Result := HirTypeIsInt(ExprHirTypeId(AExpr)) and
-            (ExprHirTypeId(AExpr) = ExprIdHirTypeId(AExpr.Children[0]));
+            (ExprHirTypeId(AExpr) = ExprIdHirTypeId(AExpr.Children[SizeUInt(0)]));
       end;
     shekBinaryOp:
       begin
         ResultType := ExprHirTypeId(AExpr);
-        Result := (Length(AExpr.Children) >= 2) and
+        Result := (SemanticHirChildCount(AExpr.Children) >= 2) and
           (ResultType <> 0) and
           (BinaryKindForOp(AExpr.Op, Kind) or SameText(AExpr.Op, 'and') or
            SameText(AExpr.Op, 'or'));
         if Result then
           for I := 0 to 1 do
-            if not CanLowerExpr(AExpr.Children[I]) then
+            if not CanLowerExpr(AExpr.Children[SizeUInt(I)]) then
               Exit(False);
         if Result and BinaryKindForOp(AExpr.Op, Kind) then
         begin
-          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
-          RightType := ExprIdHirTypeId(AExpr.Children[1]);
+          LeftType := ExprIdHirTypeId(AExpr.Children[SizeUInt(0)]);
+          RightType := ExprIdHirTypeId(AExpr.Children[SizeUInt(1)]);
           Result := HirTypeIsInt(ResultType) and (LeftType = ResultType) and
             (RightType = ResultType);
         end;
         if Result and (SameText(AExpr.Op, 'and') or SameText(AExpr.Op, 'or')) then
         begin
-          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
-          RightType := ExprIdHirTypeId(AExpr.Children[1]);
+          LeftType := ExprIdHirTypeId(AExpr.Children[SizeUInt(0)]);
+          RightType := ExprIdHirTypeId(AExpr.Children[SizeUInt(1)]);
           Result := HirTypeIsBool(ResultType) and HirTypeIsBool(LeftType) and
             HirTypeIsBool(RightType);
         end;
@@ -126,17 +126,17 @@ begin
     shekCompareOp:
       begin
         ResultType := ExprHirTypeId(AExpr);
-        Result := (Length(AExpr.Children) >= 2) and
+        Result := (SemanticHirChildCount(AExpr.Children) >= 2) and
           (ResultType <> 0) and HirTypeIsBool(ResultType) and
           CompareKindForOp(AExpr.Op, Kind);
         if Result then
           for I := 0 to 1 do
-            if not CanLowerExpr(AExpr.Children[I]) then
+            if not CanLowerExpr(AExpr.Children[SizeUInt(I)]) then
               Exit(False);
         if Result then
         begin
-          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
-          RightType := ExprIdHirTypeId(AExpr.Children[1]);
+          LeftType := ExprIdHirTypeId(AExpr.Children[SizeUInt(0)]);
+          RightType := ExprIdHirTypeId(AExpr.Children[SizeUInt(1)]);
           Result := (LeftType <> 0) and (LeftType = RightType) and
             (HirTypeIsInt(LeftType) or HirTypeIsBool(LeftType) or
              (FModule.Types.GetType(LeftType).Kind = htkPointer));
@@ -147,21 +147,21 @@ begin
         ResultType := ExprHirTypeId(AExpr);
         Result := (AExpr.ValueClass = shvcScalar) and
           (AExpr.LiteralStr <> '') and
-          (Length(AExpr.Children) = Length(AExpr.Op)) and
+          (SemanticHirChildCount(AExpr.Children) = Length(AExpr.Op)) and
           (HirTypeIsInt(ResultType) or
            (FModule.Types.GetType(ResultType).Kind = htkPointer));
         if not Result then
           Exit(False);
-        for I := 0 to High(AExpr.Children) do
+        for I := 0 to (SemanticHirChildCount(AExpr.Children) - 1) do
         begin
           if not (AExpr.Op[I + 1] in ['i', 'p', 'r']) then
             Exit(False);
           if AExpr.Op[I + 1] = 'r' then
           begin
-            if not CanLowerExprAsAddress(AExpr.Children[I]) then
+            if not CanLowerExprAsAddress(AExpr.Children[SizeUInt(I)]) then
               Exit(False);
           end
-          else if not CanLowerExpr(AExpr.Children[I]) then
+          else if not CanLowerExpr(AExpr.Children[SizeUInt(I)]) then
             Exit(False);
         end;
       end;
@@ -171,24 +171,24 @@ begin
         Result := (AExpr.ValueClass = shvcScalar) and
           (AExpr.LiteralStr <> '') and
           (AExpr.LiteralInt >= 0) and
-          (Length(AExpr.Children) = Length(AExpr.Op)) and
-          (Length(AExpr.Children) >= 1) and
+          (SemanticHirChildCount(AExpr.Children) = Length(AExpr.Op)) and
+          (SemanticHirChildCount(AExpr.Children) >= 1) and
           (AExpr.Op <> '') and (AExpr.Op[1] = 'p') and
           (HirTypeIsInt(ResultType) or
            (FModule.Types.GetType(ResultType).Kind = htkPointer)) and
-          CanLowerExprAsAddress(AExpr.Children[0]);
+          CanLowerExprAsAddress(AExpr.Children[SizeUInt(0)]);
         if not Result then
           Exit(False);
-        for I := 1 to High(AExpr.Children) do
+        for I := 1 to (SemanticHirChildCount(AExpr.Children) - 1) do
         begin
           if not (AExpr.Op[I + 1] in ['i', 'p', 'r']) then
             Exit(False);
           if AExpr.Op[I + 1] = 'r' then
           begin
-            if not CanLowerExprAsAddress(AExpr.Children[I]) then
+            if not CanLowerExprAsAddress(AExpr.Children[SizeUInt(I)]) then
               Exit(False);
           end
-          else if not CanLowerExpr(AExpr.Children[I]) then
+          else if not CanLowerExpr(AExpr.Children[SizeUInt(I)]) then
             Exit(False);
         end;
       end;
@@ -366,7 +366,8 @@ begin
   EmitInstr(Instr);
 
   RegisterAllocaEntry(AName + '$storage', Instr.ResultId, GetIntType, False);
-  FAllocas[FAllocaCount - 1].RecordSlots := ALength;
+  if FAllocas.Count > 0 then
+    FAllocas.GetPtr(FAllocas.Count - 1)^.RecordSlots := ALength;
 
   PtrSlot := FindAlloca(AName + '$ptr');
   LenSlot := FindAlloca(AName + '$len');
@@ -563,9 +564,9 @@ var
   PointerType: THIRTypeId;
 begin
   InitExprResult(AResult);
-  if Length(AExpr.Children) < 1 then
+  if SemanticHirChildCount(AExpr.Children) < 1 then
     Exit(False);
-  if not LowerExprAddress(AExpr.Children[0], Child) then
+  if not LowerExprAddress(AExpr.Children[SizeUInt(0)], Child) then
     Exit(False);
   PointerType := ExprHirTypeId(AExpr);
   if PointerType = 0 then
@@ -583,9 +584,9 @@ var
   HirType: THIRTypeId;
 begin
   InitExprResult(AResult);
-  if Length(AExpr.Children) < 1 then
+  if SemanticHirChildCount(AExpr.Children) < 1 then
     Exit(False);
-  if not LowerExprValue(AExpr.Children[0], Child) then
+  if not LowerExprValue(AExpr.Children[SizeUInt(0)], Child) then
     Exit(False);
   HirType := ExprHirTypeId(AExpr);
   if (Child.ValueId = 0) or (Child.TypeId = 0) then
@@ -608,7 +609,7 @@ var
   StructName: string;
 begin
   InitExprResult(AResult);
-  if (Length(AExpr.Children) < 1) or (AExpr.LiteralInt < 0) then
+  if (SemanticHirChildCount(AExpr.Children) < 1) or (AExpr.LiteralInt < 0) then
     Exit(False);
 
   HirType := ExprHirTypeId(AExpr);
@@ -617,11 +618,11 @@ begin
     Exit(False);
 
   // Lower base expression first to determine value class
-  if not LowerExpr(AExpr.Children[0], Base) then
+  if not LowerExpr(AExpr.Children[SizeUInt(0)], Base) then
     Exit(False);
 
   // Detect if base is a value-type record → use extractvalue instead of GEP
-  BaseExpr := FSemaModel.HirExprAt(AExpr.Children[0] - 1);
+  BaseExpr := FSemaModel.HirExprAt(AExpr.Children[SizeUInt(0)] - 1);
   if (BaseExpr.TypeId > 0) and (BaseExpr.TypeId <= FSemaModel.TypeCount) then
   begin
     SemType := FSemaModel.TypeAt(BaseExpr.TypeId - 1);
@@ -693,8 +694,8 @@ var
   Instr: THIRInstr;
 begin
   InitExprResult(AResult);
-  if ((AExpr.SymbolId > 0) and (Length(AExpr.Children) < 1)) or
-    ((AExpr.SymbolId = 0) and (Length(AExpr.Children) < 2)) then
+  if ((AExpr.SymbolId > 0) and (SemanticHirChildCount(AExpr.Children) < 1)) or
+    ((AExpr.SymbolId = 0) and (SemanticHirChildCount(AExpr.Children) < 2)) then
     Exit(False);
 
   if AExpr.SymbolId > 0 then
@@ -702,16 +703,16 @@ begin
     Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
     if Symbol.Name = '' then
       Exit(False);
-    if not LowerExprValue(AExpr.Children[0], IndexResult) then
+    if not LowerExprValue(AExpr.Children[SizeUInt(0)], IndexResult) then
       Exit(False);
   end
   else
   begin
-    if not LowerExprAddress(AExpr.Children[0], BaseResult) then
+    if not LowerExprAddress(AExpr.Children[SizeUInt(0)], BaseResult) then
       Exit(False);
     if BaseResult.AddressValueId = 0 then
       Exit(False);
-    if not LowerExprValue(AExpr.Children[1], IndexResult) then
+    if not LowerExprValue(AExpr.Children[SizeUInt(1)], IndexResult) then
       Exit(False);
   end;
 
@@ -765,13 +766,13 @@ var
   ValueId: THIRValueId;
 begin
   InitExprResult(AResult);
-  if Length(AExpr.Children) < 2 then
+  if SemanticHirChildCount(AExpr.Children) < 2 then
     Exit(False);
   if not CompareKindForOp(AExpr.Op, Kind) then
     Exit(False);
-  if not LowerExprValue(AExpr.Children[0], Lhs) then
+  if not LowerExprValue(AExpr.Children[SizeUInt(0)], Lhs) then
     Exit(False);
-  if not LowerExprValue(AExpr.Children[1], Rhs) then
+  if not LowerExprValue(AExpr.Children[SizeUInt(1)], Rhs) then
     Exit(False);
   if (Lhs.TypeId = 0) or (Lhs.TypeId <> Rhs.TypeId) then
     Exit(False);
@@ -791,9 +792,9 @@ var
   Instr: THIRInstr;
 begin
   InitExprResult(AResult);
-  if Length(AExpr.Children) < 1 then
+  if SemanticHirChildCount(AExpr.Children) < 1 then
     Exit(False);
-  if not LowerExprValue(AExpr.Children[0], Child) then
+  if not LowerExprValue(AExpr.Children[SizeUInt(0)], Child) then
     Exit(False);
   TargetType := ExprHirTypeId(AExpr);
   if TargetType = 0 then
@@ -826,9 +827,9 @@ var
   ResultType, BoolIntType: THIRTypeId;
 begin
   InitExprResult(AResult);
-  if Length(AExpr.Children) < 1 then
+  if SemanticHirChildCount(AExpr.Children) < 1 then
     Exit(False);
-  if not LowerExprValue(AExpr.Children[0], Child) then
+  if not LowerExprValue(AExpr.Children[SizeUInt(0)], Child) then
     Exit(False);
   ResultType := ExprHirTypeId(AExpr);
   if ResultType = 0 then
@@ -896,11 +897,11 @@ var
   ResultType, BoolIntType: THIRTypeId;
 begin
   InitExprResult(AResult);
-  if Length(AExpr.Children) < 2 then
+  if SemanticHirChildCount(AExpr.Children) < 2 then
     Exit(False);
-  if not LowerExprValue(AExpr.Children[0], Lhs) then
+  if not LowerExprValue(AExpr.Children[SizeUInt(0)], Lhs) then
     Exit(False);
-  if not LowerExprValue(AExpr.Children[1], Rhs) then
+  if not LowerExprValue(AExpr.Children[SizeUInt(1)], Rhs) then
     Exit(False);
   ResultType := ExprHirTypeId(AExpr);
   if ResultType = 0 then
@@ -1016,7 +1017,7 @@ begin
   InitExprResult(AResult);
   ResultType := ExprHirTypeId(AExpr);
   if (AExpr.LiteralStr = '') or
-    (Length(AExpr.Children) <> Length(AExpr.Op)) or
+    (SemanticHirChildCount(AExpr.Children) <> Length(AExpr.Op)) or
     (ResultType = 0) then
     Exit(False);
   if HirTypeIsInt(ResultType) then
@@ -1031,22 +1032,22 @@ begin
   Instr.Kind := hikCall;
   Instr.TypeId := AbiResultType;
   Instr.CallTarget := AExpr.LiteralStr;
-  SetLength(Instr.Operands, Length(AExpr.Children));
-  for I := 0 to High(AExpr.Children) do
+  SetLength(Instr.Operands, SemanticHirChildCount(AExpr.Children));
+  for I := 0 to (SemanticHirChildCount(AExpr.Children) - 1) do
   begin
     case AExpr.Op[I + 1] of
       'i':
         begin
-          if not LowerExprValue(AExpr.Children[I], ChildResult) then
+          if not LowerExprValue(AExpr.Children[SizeUInt(I)], ChildResult) then
             Exit(False);
           ExpectedType := GetIntType;
         end;
       'p':
         begin
           ExpectedType := GetPtrType;
-          if not LowerExprValue(AExpr.Children[I], ChildResult) then
+          if not LowerExprValue(AExpr.Children[SizeUInt(I)], ChildResult) then
           begin
-            if not LowerExprAddress(AExpr.Children[I], AddressResult) then
+            if not LowerExprAddress(AExpr.Children[SizeUInt(I)], AddressResult) then
               Exit(False);
             if AddressResult.AddressValueId = 0 then
               Exit(False);
@@ -1057,7 +1058,7 @@ begin
         end;
       'r':
         begin
-          if not LowerExprAddress(AExpr.Children[I], AddressResult) then
+          if not LowerExprAddress(AExpr.Children[SizeUInt(I)], AddressResult) then
             Exit(False);
           if AddressResult.AddressValueId = 0 then
             Exit(False);
@@ -1103,8 +1104,8 @@ begin
   InitExprResult(AResult);
   ResultType := ExprHirTypeId(AExpr);
   if (AExpr.LiteralStr = '') or (AExpr.LiteralInt < 0) or
-    (Length(AExpr.Children) <> Length(AExpr.Op)) or
-    (Length(AExpr.Children) < 1) or (ResultType = 0) or
+    (SemanticHirChildCount(AExpr.Children) <> Length(AExpr.Op)) or
+    (SemanticHirChildCount(AExpr.Children) < 1) or (ResultType = 0) or
     (AExpr.Op = '') or (AExpr.Op[1] <> 'p') then
     Exit(False);
 
@@ -1115,7 +1116,7 @@ begin
   else
     Exit(False);
 
-  if not LowerExprAddress(AExpr.Children[0], ReceiverResult) then
+  if not LowerExprAddress(AExpr.Children[SizeUInt(0)], ReceiverResult) then
     Exit(False);
   ReceiverPtr := ReceiverResult.AddressValueId;
   if ReceiverPtr = 0 then
@@ -1169,27 +1170,27 @@ begin
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := AbiResultType;
   Instr.IntrinsicName := 'vcall';
-  SetLength(Instr.Operands, Length(AExpr.Children) + 1);
+  SetLength(Instr.Operands, SemanticHirChildCount(AExpr.Children) + 1);
   Instr.Operands[0] := MakeTypedOperand(FnPtr, GetPtrType);
   Instr.Operands[1] := MakeTypedOperand(ReceiverPtr, GetPtrType);
-  for I := 1 to High(AExpr.Children) do
+  for I := 1 to (SemanticHirChildCount(AExpr.Children) - 1) do
   begin
     case AExpr.Op[I + 1] of
       'i':
         begin
-          if not LowerExprValue(AExpr.Children[I], ChildResult) then
+          if not LowerExprValue(AExpr.Children[SizeUInt(I)], ChildResult) then
             Exit(False);
           ExpectedType := GetIntType;
         end;
       'p':
         begin
-          if not LowerExprValue(AExpr.Children[I], ChildResult) then
+          if not LowerExprValue(AExpr.Children[SizeUInt(I)], ChildResult) then
             Exit(False);
           ExpectedType := GetPtrType;
         end;
       'r':
         begin
-          if not LowerExprAddress(AExpr.Children[I], AddressResult) then
+          if not LowerExprAddress(AExpr.Children[SizeUInt(I)], AddressResult) then
             Exit(False);
           if AddressResult.AddressValueId = 0 then
             Exit(False);

@@ -82,12 +82,16 @@ end;
 function TDualAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   LHeader: PByte;
+  LTotal: SizeUInt;
 begin
   if ASize = 0 then
     Exit(nil);
+  if ASize + DUAL_HEADER_SIZE < ASize then { overflow check }
+    Exit(nil);
+  LTotal := ASize + DUAL_HEADER_SIZE;
   if IsSmall(ASize) then
   begin
-    LHeader := PByte(FSmall.GetMem(ASize + DUAL_HEADER_SIZE));
+    LHeader := PByte(FSmall.GetMem(LTotal));
     if LHeader = nil then
       Exit(nil);
     LHeader^ := DUAL_TAG_SMALL;
@@ -96,7 +100,7 @@ begin
   end
   else
   begin
-    LHeader := PByte(FLarge.GetMem(ASize + DUAL_HEADER_SIZE));
+    LHeader := PByte(FLarge.GetMem(LTotal));
     if LHeader = nil then
       Exit(nil);
     LHeader^ := DUAL_TAG_LARGE;

@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.ttl_cache;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   TTL_DEFAULT_CAPACITY = 1024;
@@ -86,6 +86,7 @@ type
       ADefaultTTLMs: Int64 = TTL_DEFAULT_TTL_MS);
     destructor Destroy; override;
 
+  {** @concurrency Thread-safe (see source for details). }
     {** @desc 存入键值对（使用默认 TTL） }
     function Put(const AKey, AValue: AnsiString): TTTLCacheResult;
     {** @desc 存入键值对（指定 TTL 毫秒） }
@@ -110,11 +111,12 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.lockfree.base;
+  nextpas.core.lockfree.base,
+  nextpas.core.platform.time;
 
 function TTTLCache.GetNowMs: Int64;
 begin
-  Result := Int64(GetTickCount64);
+  Result := Int64(platform_monotonic_ns div 1000000);
 end;
 
 function TTTLCache.ComputeExpiresAt(ANow, ATTLMs: Int64): Int64;

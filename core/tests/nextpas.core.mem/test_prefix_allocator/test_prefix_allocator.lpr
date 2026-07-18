@@ -100,21 +100,24 @@ end;
 procedure TestStats;
 var
   LAlloc: TPrefixAllocator;
+  LPtr1, LPtr2: Pointer;
   LStats: TPrefixStats;
 begin
   LAlloc := TPrefixAllocator.Create(GetRtlAllocator);
   try
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(32);
+    LPtr1 := LAlloc.GetMem(64);
+    LPtr2 := LAlloc.GetMem(32);
 
     LStats := LAlloc.GetStats;
     Check(LStats.AllocCount >= 2, 'allocs');
     Check(LStats.ActiveAllocs >= 2, 'active');
     Check(LStats.TotalBytes >= 96, 'total bytes');
 
-    LAlloc.FreeMem(nil); // no-op
+    LAlloc.FreeMem(LPtr1);
+    LAlloc.FreeMem(LPtr2);
+
     LStats := LAlloc.GetStats;
-    Check(LStats.FreeCount >= 0, 'frees');
+    Check(LStats.FreeCount >= 2, 'frees');
   finally
     LAlloc.Free;
   end;

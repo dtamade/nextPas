@@ -31,20 +31,21 @@ procedure TDiagnosticsSink.EmitWarning(
   const AMessageText: string
 );
 var
-  NextIndex: SizeInt;
+  Event: TDiagnosticRecord;
   SeverityName: string;
 begin
-  NextIndex := Length(FDiagnostics);
-  SetLength(FDiagnostics, NextIndex + 1);
-  FDiagnostics[NextIndex].Id := BuildDiagnosticId(NextIndex + 1);
-  FDiagnostics[NextIndex].Code := ACode;
-  FDiagnostics[NextIndex].Phase := APhase;
-  FDiagnostics[NextIndex].PrimarySpan := BuildCoreSourceSpan(
+  if FDiagnostics = nil then
+    FDiagnostics := TDiagnosticRecordVec.Create;
+  Event := Default(TDiagnosticRecord);
+  Event.Id := BuildDiagnosticId(SizeInt(FDiagnostics.Count) + 1);
+  Event.Code := ACode;
+  Event.Phase := APhase;
+  Event.PrimarySpan := BuildCoreSourceSpan(
     AFileId,
     AByteOffset,
     0
   );
-  FDiagnostics[NextIndex].MessageText := AMessageText;
+  Event.MessageText := AMessageText;
 
   if FPolicy.WarningAsError then
   begin
@@ -57,7 +58,8 @@ begin
     Inc(FWarningCount);
   end;
 
-  FDiagnostics[NextIndex].Severity := SeverityName;
+  Event.Severity := SeverityName;
+  FDiagnostics.Push(Event);
 end;
 
 procedure TDiagnosticsSink.EmitErrorAtSpan(
@@ -81,17 +83,19 @@ procedure TDiagnosticsSink.EmitErrorWithPayload(
   const APayload: TDiagnosticPayload
 );
 var
-  NextIndex: SizeInt;
+  Event: TDiagnosticRecord;
 begin
-  NextIndex := Length(FDiagnostics);
-  SetLength(FDiagnostics, NextIndex + 1);
-  FDiagnostics[NextIndex].Id := BuildDiagnosticId(NextIndex + 1);
-  FDiagnostics[NextIndex].Code := ACode;
-  FDiagnostics[NextIndex].Phase := APhase;
-  FDiagnostics[NextIndex].Severity := 'error';
-  FDiagnostics[NextIndex].PrimarySpan := APrimarySpan;
-  FDiagnostics[NextIndex].MessageText := AMessageText;
-  FDiagnostics[NextIndex].Payload := APayload;
+  if FDiagnostics = nil then
+    FDiagnostics := TDiagnosticRecordVec.Create;
+  Event := Default(TDiagnosticRecord);
+  Event.Id := BuildDiagnosticId(SizeInt(FDiagnostics.Count) + 1);
+  Event.Code := ACode;
+  Event.Phase := APhase;
+  Event.Severity := 'error';
+  Event.PrimarySpan := APrimarySpan;
+  Event.MessageText := AMessageText;
+  Event.Payload := APayload;
+  FDiagnostics.Push(Event);
   Inc(FErrorCount);
 end;
 
@@ -110,26 +114,28 @@ procedure TDiagnosticsSink.EmitToolchainError(
   const AMessageText: string
 );
 var
-  NextIndex: SizeInt;
+  Event: TDiagnosticRecord;
 begin
-  NextIndex := Length(FDiagnostics);
-  SetLength(FDiagnostics, NextIndex + 1);
-  FDiagnostics[NextIndex].Id := BuildDiagnosticId(NextIndex + 1);
-  FDiagnostics[NextIndex].Code := ACode;
-  FDiagnostics[NextIndex].Phase := 'toolchain';
-  FDiagnostics[NextIndex].Severity := 'error';
-  FDiagnostics[NextIndex].PrimarySpan := BuildCoreSourceSpan(0, 0, 0);
-  FDiagnostics[NextIndex].MessageText := AMessageText;
-  FDiagnostics[NextIndex].BindingId := ABindingId;
-  FDiagnostics[NextIndex].ProfileId := AProfileId;
-  FDiagnostics[NextIndex].StepId := AStepId;
-  FDiagnostics[NextIndex].LogicalExecutable := ALogicalExecutable;
-  FDiagnostics[NextIndex].SysrootRef := ASysrootRef;
-  FDiagnostics[NextIndex].ResolvedPath := AResolvedPath;
-  FDiagnostics[NextIndex].PrimaryArtifactKind := APrimaryArtifactKind;
-  FDiagnostics[NextIndex].PrimaryArtifactPath := APrimaryArtifactPath;
-  FDiagnostics[NextIndex].ExitCode := AExitCode;
-  FDiagnostics[NextIndex].HasExitCode := AHasExitCode;
+  if FDiagnostics = nil then
+    FDiagnostics := TDiagnosticRecordVec.Create;
+  Event := Default(TDiagnosticRecord);
+  Event.Id := BuildDiagnosticId(SizeInt(FDiagnostics.Count) + 1);
+  Event.Code := ACode;
+  Event.Phase := 'toolchain';
+  Event.Severity := 'error';
+  Event.PrimarySpan := BuildCoreSourceSpan(0, 0, 0);
+  Event.MessageText := AMessageText;
+  Event.BindingId := ABindingId;
+  Event.ProfileId := AProfileId;
+  Event.StepId := AStepId;
+  Event.LogicalExecutable := ALogicalExecutable;
+  Event.SysrootRef := ASysrootRef;
+  Event.ResolvedPath := AResolvedPath;
+  Event.PrimaryArtifactKind := APrimaryArtifactKind;
+  Event.PrimaryArtifactPath := APrimaryArtifactPath;
+  Event.ExitCode := AExitCode;
+  Event.HasExitCode := AHasExitCode;
+  FDiagnostics.Push(Event);
   Inc(FErrorCount);
 end;
 
@@ -160,113 +166,112 @@ end;
 
 function TDiagnosticsSink.LastDiagnosticId: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].Id;
+  Result := FDiagnostics.Last.Id;
 end;
 
 function TDiagnosticsSink.LastDiagnosticCode: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].Code;
+  Result := FDiagnostics.Last.Code;
 end;
 
 function TDiagnosticsSink.LastDiagnosticPhase: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].Phase;
+  Result := FDiagnostics.Last.Phase;
 end;
 
 function TDiagnosticsSink.LastDiagnosticMessage: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].MessageText;
+  Result := FDiagnostics.Last.MessageText;
 end;
 
 function TDiagnosticsSink.LastDiagnosticBindingId: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].BindingId;
+  Result := FDiagnostics.Last.BindingId;
 end;
 
 function TDiagnosticsSink.LastDiagnosticProfileId: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].ProfileId;
+  Result := FDiagnostics.Last.ProfileId;
 end;
 
 function TDiagnosticsSink.LastDiagnosticStepId: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].StepId;
+  Result := FDiagnostics.Last.StepId;
 end;
 
 function TDiagnosticsSink.LastDiagnosticLogicalExecutable: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].LogicalExecutable;
+  Result := FDiagnostics.Last.LogicalExecutable;
 end;
 
 function TDiagnosticsSink.LastDiagnosticSysrootRef: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].SysrootRef;
+  Result := FDiagnostics.Last.SysrootRef;
 end;
 
 function TDiagnosticsSink.LastDiagnosticResolvedPath: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].ResolvedPath;
+  Result := FDiagnostics.Last.ResolvedPath;
 end;
 
 function TDiagnosticsSink.LastDiagnosticPrimaryArtifactKind: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].PrimaryArtifactKind;
+  Result := FDiagnostics.Last.PrimaryArtifactKind;
 end;
 
 function TDiagnosticsSink.LastDiagnosticPrimaryArtifactPath: string;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit('');
 
-  Result := FDiagnostics[High(FDiagnostics)].PrimaryArtifactPath;
+  Result := FDiagnostics.Last.PrimaryArtifactPath;
 end;
 
 function TDiagnosticsSink.LastDiagnosticExitCode: LongInt;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit(0);
 
-  Result := FDiagnostics[High(FDiagnostics)].ExitCode;
+  Result := FDiagnostics.Last.ExitCode;
 end;
 
 function TDiagnosticsSink.HasLastDiagnosticExitCode: Boolean;
 begin
-  if Length(FDiagnostics) = 0 then
+  if (FDiagnostics = nil) or (FDiagnostics.Count = 0) then
     Exit(False);
 
-  Result := FDiagnostics[High(FDiagnostics)].HasExitCode;
+  Result := FDiagnostics.Last.HasExitCode;
 end;
-

@@ -44,9 +44,17 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryPush(const AValue: T): Boolean;
+    {** @desc Owner push with full/closed diagnostic; Boolean hot path unchanged. }
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     function TryPop(out AValue: T): Boolean;
+    {** @desc Owner pop with empty/closed-empty diagnostic; Boolean hot path unchanged. }
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function TrySteal(out AValue: T): Boolean;
+    {** @desc Thief steal with empty/closed-empty diagnostic; CAS race may report empty. }
+    function TryStealEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean; inline;
     function IsEmpty: Boolean; inline;
@@ -68,7 +76,7 @@ var
   LCap: PtrUInt;
 begin
   if IsManagedType(T) then
-    raise EArgumentError.Create('TWorkStealingDeque: T must be unmanaged');
+    raise EArgumentError.Create('TWorkStealingDeque: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TWorkStealingDeque: capacity must be > 0');
   inherited Create;
@@ -95,6 +103,20 @@ begin
   FBuffer[PtrUInt(LBottom) and FMask] := AValue;
   AtomicStore64(FBottom, LBottom + 1, moRelease);
   Result := True;
+end;
+
+function TWorkStealingDequeImpl.TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryPush(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
 end;
 
 function TWorkStealingDequeImpl.TryPop(out AValue: T): Boolean;
@@ -125,6 +147,20 @@ begin
   end;
 end;
 
+function TWorkStealingDequeImpl.TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryPop(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
+end;
+
 function TWorkStealingDequeImpl.TrySteal(out AValue: T): Boolean;
 var
   LTop, LBottom: Int64;
@@ -139,6 +175,20 @@ begin
   Result := True;
 end;
 
+function TWorkStealingDequeImpl.TryStealEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TrySteal(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
+end;
+
 function TWorkStealingDequeImpl.IsEmpty: Boolean; inline;
 var
   LTop, LBottom: Int64;
@@ -148,9 +198,30 @@ begin
   Result := LTop >= LBottom;
 end;
 
+function TWorkStealingDequeImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryPop(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TWorkStealingDequeImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TWorkStealingDequeImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TWorkStealingDequeImpl.IsClosed: Boolean; inline;

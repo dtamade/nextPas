@@ -10,7 +10,9 @@ interface
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.io.intf,
+  nextpas.core.thread.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
@@ -33,6 +35,7 @@ uses
   nextpas.core.http.middleware.bodycache,
   nextpas.core.http.middleware.serverheader,
   nextpas.core.http.middleware.context,
+  nextpas.core.http.middleware.requestarena,
   nextpas.core.http.middleware.compression,
   nextpas.core.http.middleware.decompress,
   nextpas.core.http.middleware.deadline,
@@ -47,7 +50,8 @@ uses
   nextpas.core.http.client,
   nextpas.core.http.stream,
   nextpas.core.http.sse,
-  nextpas.core.http.cookie;
+  nextpas.core.http.cookie,
+  nextpas.core.http.mem;
 
 type
   { Re-export base types }
@@ -56,13 +60,16 @@ type
   THttpStatus = nextpas.core.http.base.THttpStatus;
   TTcpServerBackend = nextpas.core.http.base.TTcpServerBackend;
   TUrl = nextpas.core.http.base.TUrl;
+  THttpErrorKind = nextpas.core.http.base.THttpErrorKind;
   EHttpError = nextpas.core.http.base.EHttpError;
+  IHttpCancelToken = nextpas.core.http.base.IHttpCancelToken;
   THttpRequestOptions = nextpas.core.http.base.THttpRequestOptions;
 
   { Re-export interfaces }
   IHttpHeaders = nextpas.core.http.intf.IHttpHeaders;
   IHttpRequest = nextpas.core.http.intf.IHttpRequest;
   IHttpRequestWithOptions = nextpas.core.http.intf.IHttpRequestWithOptions;
+  IHttpRequestWithContext = nextpas.core.http.intf.IHttpRequestWithContext;
   IHttpResponse = nextpas.core.http.intf.IHttpResponse;
   IHttpResponseWriter = nextpas.core.http.intf.IHttpResponseWriter;
   IHttpHandler = nextpas.core.http.intf.IHttpHandler;
@@ -83,6 +90,10 @@ type
   IHttpContext = nextpas.core.http.intf.IHttpContext;
   IWebSocket = nextpas.core.http.websocket.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
+  { Request-scoped mem types (see http.mem / RequestArenaMiddleware) }
+  IArena = nextpas.core.http.mem.IArena;
+  IAllocator = nextpas.core.http.mem.IAllocator;
+  TGrowingAllocator = nextpas.core.http.mem.TGrowingAllocator;
 
   { Re-export callback types }
   THttpHandlerFunc = nextpas.core.http.intf.THttpHandlerFunc;
@@ -116,6 +127,7 @@ type
   TSameSite = nextpas.core.http.cookie.TSameSite;
   TRequestCookies = nextpas.core.http.cookie.TRequestCookies;
   TSetCookie = nextpas.core.http.cookie.TSetCookie;
+  IHttpCookieJar = nextpas.core.http.intf.IHttpCookieJar;
 
   { Re-export server/client types }
   THttpServer = nextpas.core.http.server.THttpServer;
@@ -223,6 +235,22 @@ function HttpStatusIsClientError(const ACode: THttpStatus): Boolean; inline;
 function HttpStatusIsServerError(const ACode: THttpStatus): Boolean; inline;
 {** @desc Convert HTTP version enum to string (e.g. hvHttp11 → "HTTP/1.1") }
 function HttpVersionToStr(const AVersion: THttpVersion): string; inline;
+{** @desc True if E is EHttpError(hekTimeout) or bare ETimeoutError. }
+function HttpErrorIsTimeout(const E: Exception): Boolean; inline;
+{** @desc True for timeout/connect failures suitable for client retry. }
+function HttpErrorIsRetryable(const E: Exception): Boolean; inline;
+{** @desc True for caller-side errors (hekArgument / hekCanceled). }
+function HttpErrorIsUserError(const E: Exception): Boolean; inline;
+{** @desc Create a cooperative cancel token for client requests. }
+function NewHttpCancelToken: IHttpCancelToken; inline;
+{** @desc Raise hekCanceled when token is non-nil and canceled. }
+procedure HttpThrowIfCanceled(const AToken: IHttpCancelToken); inline;
+{** @desc True for GET/HEAD/OPTIONS/TRACE. }
+function HttpIsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
+{** @desc True if request has Idempotency-Key or X-Idempotency-Key. }
+function HttpHasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
+{** @desc True when WithRetry / pool reconnect may re-issue the request. }
+function HttpIsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
 
 {** @desc Create empty mutable headers container }
 function NewHeaders: IHttpHeaders; inline;
@@ -297,6 +325,8 @@ function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpM
 function WhenMiddleware(
   const APredicate: TRequestPredicate;
   const AMiddleware: IHttpMiddleware): IHttpMiddleware;
+{** @desc Async middleware — dispatches handler execution to a thread pool. }
+function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware; inline;
 {** @desc Health check middleware at /healthz — returns 200 OK with {"status":"ok"}. }
 function HealthCheckMiddleware: IHttpMiddleware; inline;
 {** @desc Health check middleware at custom path — returns 200 OK with {"status":"ok"}. }
@@ -322,6 +352,28 @@ function ServerHeaderMiddlewareWith(const ACustomName: string): IHttpMiddleware;
 function ContextMiddleware: IHttpMiddleware; inline;
 {** @desc Get the IHttpContext attached to a request. Returns nil if no context. }
 function HttpContextOf(const AReq: IHttpRequest): IHttpContext; inline;
+{** @desc Typed context helpers (owned string/Int64 boxes). }
+function HttpContextGetString(const ACtx: IHttpContext;
+  const AKey: string): string; inline;
+procedure HttpContextSetString(const ACtx: IHttpContext;
+  const AKey, AValue: string); inline;
+function HttpContextGetInt64(const ACtx: IHttpContext;
+  const AKey: string): Int64; inline;
+procedure HttpContextSetInt64(const ACtx: IHttpContext;
+  const AKey: string; const AValue: Int64); inline;
+{** @desc Request Arena middleware — LocalArena per request; drop after handler. }
+function RequestArenaMiddleware: IHttpMiddleware; inline;
+{** @desc Request Arena middleware with custom capacity (0 = HTTP_DEFAULT_REQUEST_ARENA). }
+function RequestArenaMiddlewareWith(ACapacity: SizeUInt): IHttpMiddleware; inline;
+{** @desc Arena attached by RequestArenaMiddleware. Returns nil if inactive. }
+function HttpRequestArenaOf(const AReq: IHttpRequest): IArena; inline;
+{** @desc IAllocator over request LocalArena (FreeMem no-op). Nil if inactive. }
+function HttpRequestAllocatorOf(const AReq: IHttpRequest): IAllocator; inline;
+{** @desc Mount RequestArenaMiddleware on a router (0 capacity = default 256 KiB). }
+procedure HttpUseRequestArena(const ARouter: IHttpRouter; ACapacity: SizeUInt = 0); inline;
+{** @desc Wrap any IHttpHandler with RequestArenaMiddleware (server-level; 0 = default). }
+function HttpWithRequestArena(const AHandler: IHttpHandler;
+  ACapacity: SizeUInt = 0): IHttpHandler; inline;
 {** @desc Response compression middleware (gzip/deflate). Compresses responses >= 1024 bytes. }
 function CompressionMiddleware: IHttpMiddleware; inline;
 {** @desc Response compression middleware with custom minimum body size. }
@@ -341,67 +393,27 @@ function HstsMiddleware: IHttpMiddleware; inline;
 {** @desc HSTS middleware with custom options (max-age, includeSubDomains, preload). }
 function HstsMiddlewareWith(const AOptions: THstsOptions): IHttpMiddleware; inline;
 
-{** @desc Create IHttpRequest value type with method, URL, headers, body }
+{ --- Request-scoped memory (nextpas.core.mem product wire; see http.mem) --- }
+
+const
+  HTTP_DEFAULT_REQUEST_ARENA = nextpas.core.http.mem.HTTP_DEFAULT_REQUEST_ARENA;
+
+{** @desc Per-request IArena for handler scratch; drop at request end (no FreeMem). }
+function HttpCreateRequestArena(ACapacity: SizeUInt = 0): IArena; inline;
+{** @desc Per-request IAllocator (Arena FreeMem no-op) for inject-style handlers. }
+function HttpCreateRequestAllocator(ACapacity: SizeUInt = 0): IAllocator; inline;
+{** @desc Process DefaultHeap for long-lived server state. }
+function HttpProcessHeap: TGrowingAllocator; inline;
+{** @desc Process DefaultAllocator plug-in surface. }
+function HttpProcessAllocator: IAllocator; inline;
+{** @desc Process DefaultHeap one-line snapshot for ops/debug (not hot path). }
+function HttpFormatProcessMemStats: string; inline;
+
+{** @desc Create IHttpRequest (whitelist: Method+TUrl or Method+string URL).
+   Headers/body/auth → THttpRequestBuilder. }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ANilBody: Pointer): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ANilBody: Pointer): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyText: string): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyText: string): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType, ABodyText: string): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType, ABodyText: string): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
 function NewGetRequest(const APath: string): IHttpRequest; inline;
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-  overload; inline;
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest; overload; inline;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse; overload; inline;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
@@ -460,9 +472,10 @@ procedure HttpRedirectTemporaryRedirect(const AW: IHttpResponseWriter;
 {** @desc 308 Permanent Redirect (preserves method and body). }
 procedure HttpRedirectPermanentRedirect(const AW: IHttpResponseWriter;
   const ALocation: string); inline;
-{** @desc Write a JSON error response: {"error":{"code":"<code>","message":"<msg>"}}. }
+{** @desc Write an RFC 7807 Problem Details error response. }
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
-  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt; inline;
+  const AStatus: THttpStatus; const ACode, AMessage: string;
+  const AInstance: string = ''): SizeUInt; inline;
 {** @desc Write 400 Bad Request JSON error response. }
 function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
   const AMessage: string): SizeUInt; inline;
@@ -496,6 +509,17 @@ function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
 function ServeFileDownload(const APath: string): THttpHandlerFunc; overload; inline;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload; inline;
+{** @desc Strong ETag from size+mtime. }
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string; inline;
+{** @desc If-None-Match match helper (`*`, exact, comma list). }
+function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean; inline;
+{** @desc If-Modified-Since not-modified check. }
+function HttpNotModifiedSince(const AIfModifiedSince: string;
+  const AModTimeUnix: Int64): Boolean; inline;
+{** @desc Conditional GET: write 304 when not modified; True if 304 written. }
+function HttpTryWriteNotModified(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AETag, ALastModified: string;
+  const AModTimeUnix: Int64): Boolean; inline;
 
 { WebSocket helper }
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket; overload; inline;
@@ -537,6 +561,8 @@ function ParseCookies(const AHeaderValue: string): TRequestCookies; inline;
 function BuildSetCookie(const ACookie: TSetCookie): string; inline;
 function MakeCookie(const AName, AValue: string): TSetCookie; inline;
 function ParseSingleCookie(const AStr: string; out AName, AValue: string): Boolean; inline;
+function NewHttpCookieJar: IHttpCookieJar; inline;
+function HttpCookieSiteKey(const AHost: string): string; inline;
 
 { Server/Client factories }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
@@ -544,6 +570,14 @@ function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServer
 function NewHttpServer(const AHandler: IHttpHandler; const ATransport: IHttpServerTransport): IHttpServer; overload; inline;
 function NewHttpServer(const AHandler: IHttpHandler; const ATransport: IHttpServerTransport;
   const AOptions: THttpServerOptions): IHttpServer; overload; inline;
+{** @desc NewHttpServer with request LocalArena wired at the handler root. }
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler): IHttpServer; overload; inline;
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions): IHttpServer; overload; inline;
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  AArenaCapacity: SizeUInt): IHttpServer; overload; inline;
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions; AArenaCapacity: SizeUInt): IHttpServer; overload; inline;
 function NewHttpClient: IHttpClient; inline;
 function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient; overload; inline;
 function NewHttpClient(const ATransport: IHttpTransport): IHttpClient; overload; inline;
@@ -556,12 +590,31 @@ procedure HttpReleaseResponseBody(const AResp: IHttpResponse); inline;
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes; inline;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string; inline;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string; inline;
+{** @desc Decode body bytes for a single Content-Encoding (gzip/deflate/identity). }
+function HttpDecodeContentEncoding(const AEncoding: string;
+  const ABody: TBytes; const AMaxSize: Int64 = 0): TBytes; inline;
+{** @desc Read wire body then decode via Content-Encoding. }
+function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64 = 0): TBytes; inline;
+{** @desc Decoded response body as string. }
+function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64 = 0): string; inline;
 {** @desc Raise EHttpError if response status is not 2xx (200-299). Returns AResp for chaining. }
-function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; inline;
+function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; overload; inline;
+{** @desc Same as HttpEnsureSuccess, with method/URL prefix in error messages. }
+function HttpEnsureSuccess(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IHttpResponse; overload; inline;
 {** @desc GET url, ensure 2xx, return body as string. Raises on non-2xx. }
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string; inline;
 {** @desc GET url, ensure 2xx, return body as TBytes. Raises on non-2xx. }
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes; inline;
+{** @desc Ensure 2xx and parse response body as JSON document. }
+function HttpReadResponseJson(const AResp: IHttpResponse): IJsonDocument; overload; inline;
+{** @desc Same as HttpReadResponseJson, with method/URL prefix in error messages. }
+function HttpReadResponseJson(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IJsonDocument; overload; inline;
+{** @desc GET url, ensure 2xx, parse body as JSON document. Raises on non-2xx or invalid JSON. }
+function HttpGetJson(const AClient: IHttpClient; const AUrl: string): IJsonDocument; inline;
 {** @desc POST with body, ensure 2xx, return response body as string. Raises on non-2xx. }
 function HttpPostString(const AClient: IHttpClient;
   const AUrl, AContentType, ABody: string): string; inline;
@@ -590,8 +643,18 @@ function HttpPatchJson(const AClient: IHttpClient;
 {** @desc DELETE with JSON body, ensure 2xx, return response body as string. Raises on non-2xx. }
 function HttpDeleteJson(const AClient: IHttpClient;
   const AUrl: string; const ABody: IJsonDocument): string; inline;
+{** @desc POST JSON body, ensure 2xx, parse response as JSON document. }
+function HttpPostJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument; inline;
+{** @desc PUT JSON body, ensure 2xx, parse response as JSON document. }
+function HttpPutJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument; inline;
+{** @desc PATCH JSON body, ensure 2xx, parse response as JSON document. }
+function HttpPatchJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument; inline;
 function ExtractCharsetFromContentType(const AContentType: string): string; inline;
 function EncodeUrlEncodedForm(const AFields: TFormFieldArray): string; inline;
+function NewMultipartBoundary: string; inline;
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string = ''): string; inline;
 
@@ -640,6 +703,46 @@ end;
 function HttpVersionToStr(const AVersion: THttpVersion): string;
 begin
   Result := nextpas.core.http.base.HttpVersionToStr(AVersion);
+end;
+
+function HttpErrorIsTimeout(const E: Exception): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpErrorIsTimeout(E);
+end;
+
+function HttpErrorIsRetryable(const E: Exception): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpErrorIsRetryable(E);
+end;
+
+function HttpErrorIsUserError(const E: Exception): Boolean;
+begin
+  Result := nextpas.core.http.base.HttpErrorIsUserError(E);
+end;
+
+function NewHttpCancelToken: IHttpCancelToken;
+begin
+  Result := nextpas.core.http.base.NewHttpCancelToken;
+end;
+
+procedure HttpThrowIfCanceled(const AToken: IHttpCancelToken);
+begin
+  nextpas.core.http.base.HttpThrowIfCanceled(AToken);
+end;
+
+function HttpIsRetryableMethod(const AMethod: THttpMethod): Boolean;
+begin
+  Result := nextpas.core.http.message.HttpIsRetryableMethod(AMethod);
+end;
+
+function HttpHasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean;
+begin
+  Result := nextpas.core.http.message.HttpHasRetryIdempotencyKey(AReq);
+end;
+
+function HttpIsRetrySafeRequest(const AReq: IHttpRequest): Boolean;
+begin
+  Result := nextpas.core.http.message.HttpIsRetrySafeRequest(AReq);
 end;
 
 function NewHeaders: IHttpHeaders;
@@ -817,6 +920,11 @@ begin
   Result := nextpas.core.http.middleware.WhenMiddleware(APredicate, AMiddleware);
 end;
 
+function AsyncMiddleware(const APool: IThreadPool): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.AsyncMiddleware(APool);
+end;
+
 function HealthCheckMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.healthcheck.HealthCheckMiddleware;
@@ -878,6 +986,68 @@ begin
   Result := nextpas.core.http.middleware.context.HttpContextOf(AReq);
 end;
 
+function HttpContextGetString(const ACtx: IHttpContext;
+  const AKey: string): string;
+begin
+  Result := nextpas.core.http.middleware.context.HttpContextGetString(ACtx, AKey);
+end;
+
+procedure HttpContextSetString(const ACtx: IHttpContext;
+  const AKey, AValue: string);
+begin
+  nextpas.core.http.middleware.context.HttpContextSetString(ACtx, AKey, AValue);
+end;
+
+function HttpContextGetInt64(const ACtx: IHttpContext;
+  const AKey: string): Int64;
+begin
+  Result := nextpas.core.http.middleware.context.HttpContextGetInt64(ACtx, AKey);
+end;
+
+procedure HttpContextSetInt64(const ACtx: IHttpContext;
+  const AKey: string; const AValue: Int64);
+begin
+  nextpas.core.http.middleware.context.HttpContextSetInt64(ACtx, AKey, AValue);
+end;
+
+function RequestArenaMiddleware: IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestarena.RequestArenaMiddleware;
+end;
+
+function RequestArenaMiddlewareWith(ACapacity: SizeUInt): IHttpMiddleware;
+begin
+  Result := nextpas.core.http.middleware.requestarena.RequestArenaMiddlewareWith(ACapacity);
+end;
+
+function HttpRequestArenaOf(const AReq: IHttpRequest): IArena;
+begin
+  Result := nextpas.core.http.middleware.requestarena.HttpRequestArenaOf(AReq);
+end;
+
+function HttpRequestAllocatorOf(const AReq: IHttpRequest): IAllocator;
+begin
+  Result := nextpas.core.http.middleware.requestarena.HttpRequestAllocatorOf(AReq);
+end;
+
+procedure HttpUseRequestArena(const ARouter: IHttpRouter; ACapacity: SizeUInt);
+begin
+  if ARouter = nil then
+    raise EHttpError.Create(hekArgument,
+      'HttpUseRequestArena: router must not be nil');
+  if ACapacity = 0 then
+    ARouter.Use(RequestArenaMiddleware)
+  else
+    ARouter.Use(RequestArenaMiddlewareWith(ACapacity));
+end;
+
+function HttpWithRequestArena(const AHandler: IHttpHandler;
+  ACapacity: SizeUInt): IHttpHandler;
+begin
+  Result := nextpas.core.http.middleware.requestarena.HttpWithRequestArena(
+    AHandler, ACapacity);
+end;
+
 function CompressionMiddleware: IHttpMiddleware;
 begin
   Result := nextpas.core.http.middleware.compression.CompressionMiddleware;
@@ -930,182 +1100,9 @@ begin
   Result := nextpas.core.http.message.NewRequest(AMethod, AUrl);
 end;
 
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ANilBody: Pointer): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ANilBody);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ANilBody: Pointer): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ANilBody);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABody,
-    AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABody,
-    AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABody, AContentLength);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType, ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType, ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABodyText);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AContentType,
-    ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABodyBytes);
-end;
-
-function NewRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
-    ABodyBytes);
-end;
-
 function NewGetRequest(const APath: string): IHttpRequest;
 begin
   Result := nextpas.core.http.message.NewGetRequest(APath);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const ABody: IReader; const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewStreamingRequest(AMethod, AUrl,
-    ABody, AContentLength);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AHeaders: IHttpHeaders; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewStreamingRequest(AMethod, AUrl,
-    AHeaders, ABody, AContentLength);
-end;
-
-function NewStreamingRequest(const AMethod: THttpMethod; const AUrl: string;
-  const AContentType: string; const ABody: IReader;
-  const AContentLength: Int64): IHttpRequest;
-begin
-  Result := nextpas.core.http.message.NewStreamingRequest(AMethod, AUrl,
-    AContentType, ABody, AContentLength);
 end;
 
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse;
@@ -1245,9 +1242,11 @@ begin
 end;
 
 function HttpWriteErrorResponse(const AW: IHttpResponseWriter;
-  const AStatus: THttpStatus; const ACode, AMessage: string): SizeUInt;
+  const AStatus: THttpStatus; const ACode, AMessage: string;
+  const AInstance: string): SizeUInt;
 begin
-  Result := nextpas.core.http.message.HttpWriteErrorResponse(AW, AStatus, ACode, AMessage);
+  Result := nextpas.core.http.message.HttpWriteErrorResponse(
+    AW, AStatus, ACode, AMessage, AInstance);
 end;
 
 function HttpWriteErrorBadRequest(const AW: IHttpResponseWriter;
@@ -1322,6 +1321,31 @@ end;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc;
 begin
   Result := nextpas.core.http.static.ServeFileDownload(APath, ADownloadName);
+end;
+
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
+begin
+  Result := nextpas.core.http.static.HttpMakeStrongETag(ASize, AModTime);
+end;
+
+function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
+begin
+  Result := nextpas.core.http.static.HttpIfNoneMatchMatches(AIfNoneMatch, AServerETag);
+end;
+
+function HttpNotModifiedSince(const AIfModifiedSince: string;
+  const AModTimeUnix: Int64): Boolean;
+begin
+  Result := nextpas.core.http.static.HttpNotModifiedSince(
+    AIfModifiedSince, AModTimeUnix);
+end;
+
+function HttpTryWriteNotModified(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AETag, ALastModified: string;
+  const AModTimeUnix: Int64): Boolean;
+begin
+  Result := nextpas.core.http.static.HttpTryWriteNotModified(
+    AReq, AW, AETag, ALastModified, AModTimeUnix);
 end;
 
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket;
@@ -1417,6 +1441,16 @@ begin
   Result := nextpas.core.http.cookie.ParseSingleCookie(AStr, AName, AValue);
 end;
 
+function NewHttpCookieJar: IHttpCookieJar;
+begin
+  Result := nextpas.core.http.cookie.NewHttpCookieJar;
+end;
+
+function HttpCookieSiteKey(const AHost: string): string;
+begin
+  Result := nextpas.core.http.cookie.HttpCookieSiteKey(AHost);
+end;
+
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
 begin
   Result := nextpas.core.http.server.NewHttpServer(AHandler);
@@ -1438,6 +1472,32 @@ function NewHttpServer(const AHandler: IHttpHandler;
   const AOptions: THttpServerOptions): IHttpServer;
 begin
   Result := nextpas.core.http.server.NewHttpServer(AHandler, ATransport, AOptions);
+end;
+
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler): IHttpServer;
+begin
+  { Production RW timeouts: arena convenience should not invite unbounded IO.
+    THttpServer.Create applies RequestArena wrap once. }
+  Result := NewHttpServer(AHandler, THttpServerOptions.Production.WithRequestArena);
+end;
+
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions): IHttpServer;
+begin
+  Result := NewHttpServer(AHandler, AOptions.WithRequestArena);
+end;
+
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  AArenaCapacity: SizeUInt): IHttpServer;
+begin
+  Result := NewHttpServer(AHandler,
+    THttpServerOptions.Production.WithRequestArena(AArenaCapacity));
+end;
+
+function NewHttpServerWithRequestArena(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions; AArenaCapacity: SizeUInt): IHttpServer;
+begin
+  Result := NewHttpServer(AHandler, AOptions.WithRequestArena(AArenaCapacity));
 end;
 
 function NewHttpClient: IHttpClient;
@@ -1492,9 +1552,36 @@ begin
   Result := nextpas.core.http.client.HttpReadResponseBodyStringAuto(AResp);
 end;
 
+function HttpDecodeContentEncoding(const AEncoding: string;
+  const ABody: TBytes; const AMaxSize: Int64): TBytes;
+begin
+  Result := nextpas.core.http.client.HttpDecodeContentEncoding(
+    AEncoding, ABody, AMaxSize);
+end;
+
+function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64): TBytes;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseBodyBytesDecoded(
+    AResp, AMaxSize);
+end;
+
+function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64): string;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseBodyStringDecoded(
+    AResp, AMaxSize);
+end;
+
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;
 begin
   Result := nextpas.core.http.client.HttpEnsureSuccess(AResp);
+end;
+
+function HttpEnsureSuccess(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IHttpResponse;
+begin
+  Result := nextpas.core.http.client.HttpEnsureSuccess(AResp, AMethod, AUrl);
 end;
 
 function HttpGetString(const AClient: IHttpClient; const AUrl: string): string;
@@ -1505,6 +1592,22 @@ end;
 function HttpGetBytes(const AClient: IHttpClient; const AUrl: string): TBytes;
 begin
   Result := nextpas.core.http.client.HttpGetBytes(AClient, AUrl);
+end;
+
+function HttpReadResponseJson(const AResp: IHttpResponse): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseJson(AResp);
+end;
+
+function HttpReadResponseJson(const AResp: IHttpResponse;
+  const AMethod, AUrl: string): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseJson(AResp, AMethod, AUrl);
+end;
+
+function HttpGetJson(const AClient: IHttpClient; const AUrl: string): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpGetJson(AClient, AUrl);
 end;
 
 function HttpPostString(const AClient: IHttpClient;
@@ -1565,6 +1668,24 @@ begin
   Result := nextpas.core.http.client.HttpDeleteJson(AClient, AUrl, ABody);
 end;
 
+function HttpPostJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpPostJsonDocument(AClient, AUrl, ABody);
+end;
+
+function HttpPutJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpPutJsonDocument(AClient, AUrl, ABody);
+end;
+
+function HttpPatchJsonDocument(const AClient: IHttpClient;
+  const AUrl: string; const ABody: IJsonDocument): IJsonDocument;
+begin
+  Result := nextpas.core.http.client.HttpPatchJsonDocument(AClient, AUrl, ABody);
+end;
+
 function ExtractCharsetFromContentType(const AContentType: string): string;
 begin
   Result := nextpas.core.http.client.ExtractCharsetFromContentType(AContentType);
@@ -1575,10 +1696,40 @@ begin
   Result := nextpas.core.http.form.EncodeUrlEncodedForm(AFields);
 end;
 
+function NewMultipartBoundary: string;
+begin
+  Result := nextpas.core.http.form.NewMultipartBoundary;
+end;
+
 function EncodeMultipartFormData(const AFields: TFormFieldArray;
   const AFiles: THttpFileArray; const ABoundary: string): string;
 begin
   Result := nextpas.core.http.form.EncodeMultipartFormData(AFields, AFiles, ABoundary);
+end;
+
+function HttpCreateRequestArena(ACapacity: SizeUInt): IArena;
+begin
+  Result := nextpas.core.http.mem.HttpCreateRequestArena(ACapacity);
+end;
+
+function HttpCreateRequestAllocator(ACapacity: SizeUInt): IAllocator;
+begin
+  Result := nextpas.core.http.mem.HttpCreateRequestAllocator(ACapacity);
+end;
+
+function HttpProcessHeap: TGrowingAllocator;
+begin
+  Result := nextpas.core.http.mem.HttpProcessHeap;
+end;
+
+function HttpProcessAllocator: IAllocator;
+begin
+  Result := nextpas.core.http.mem.HttpProcessAllocator;
+end;
+
+function HttpFormatProcessMemStats: string;
+begin
+  Result := nextpas.core.http.mem.HttpFormatProcessMemStats;
 end;
 
 end.

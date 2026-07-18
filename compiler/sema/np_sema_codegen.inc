@@ -538,7 +538,7 @@ begin
       ATypeBodyNode) then
     Exit(True);
 
-  for Index := 0 to Length(FImportedUnitTrees) - 1 do
+  for Index := 0 to LongInt(FImportedUnitTrees.Count) - 1 do
   begin
     if (AOwnerUnitId <> '') and
       (not SameText(FImportedUnitOwners[Index], AOwnerUnitId)) then
@@ -549,7 +549,7 @@ begin
   end;
 
   if AOwnerUnitId <> '' then
-    for Index := 0 to Length(FImportedUnitTrees) - 1 do
+    for Index := 0 to LongInt(FImportedUnitTrees.Count) - 1 do
       if FindTypeDeclNodeInRoot(FImportedUnitTrees[Index].RootNode, ATypeName,
         ATypeDeclNode, ATypeBodyNode) then
         Exit(True);

@@ -1,23 +1,27 @@
 function TBackendPlan.AddArtifact(const AKind: string; const APath: string): LongInt;
 var
-  NextIndex: SizeInt;
+  Entry: TBackendArtifact;
 begin
-  NextIndex := Length(FArtifacts);
-  SetLength(FArtifacts, NextIndex + 1);
-  FArtifacts[NextIndex].ArtifactId := NextIndex + 1;
-  FArtifacts[NextIndex].Kind := AKind;
-  FArtifacts[NextIndex].Path := APath;
-  Result := FArtifacts[NextIndex].ArtifactId;
+  if FArtifacts = nil then
+    FArtifacts := TBackendArtifactVec.Create;
+  Entry := Default(TBackendArtifact);
+  Entry.ArtifactId := LongInt(FArtifacts.Count) + 1;
+  Entry.Kind := AKind;
+  Entry.Path := APath;
+  FArtifacts.Push(Entry);
+  Result := Entry.ArtifactId;
 end;
 
 function TBackendPlan.ArtifactCount: LongInt;
 begin
-  Result := Length(FArtifacts);
+  if FArtifacts = nil then
+    Exit(0);
+  Result := LongInt(FArtifacts.Count);
 end;
 
 function TBackendPlan.ArtifactAt(const AIndex: LongInt): TBackendArtifact;
 begin
-  if (AIndex < 0) or (AIndex > High(FArtifacts)) then
+  if (FArtifacts = nil) or (AIndex < 0) or (AIndex >= LongInt(FArtifacts.Count)) then
   begin
     Result.ArtifactId := 0;
     Result.Kind := '';
@@ -25,7 +29,7 @@ begin
     Exit;
   end;
 
-  Result := FArtifacts[AIndex];
+  Result := FArtifacts[SizeUInt(AIndex)];
 end;
 
 function TBackendPlan.ArtifactPathByKind(const AKind: string): string;
@@ -33,9 +37,11 @@ var
   Index: LongInt;
 begin
   Result := '';
-  for Index := 0 to High(FArtifacts) do
-    if SameText(FArtifacts[Index].Kind, AKind) then
-      Exit(FArtifacts[Index].Path);
+  if FArtifacts = nil then
+    Exit;
+  for Index := 0 to LongInt(FArtifacts.Count) - 1 do
+    if SameText(FArtifacts[SizeUInt(Index)].Kind, AKind) then
+      Exit(FArtifacts[SizeUInt(Index)].Path);
 end;
 
 function TBackendPlan.ArtifactsJson: string;
@@ -44,7 +50,9 @@ var
   Index: LongInt;
 begin
   Result := '';
-  for Index := 0 to High(FArtifacts) do
+  if FArtifacts = nil then
+    Exit('[]');
+  for Index := 0 to LongInt(FArtifacts.Count) - 1 do
   begin
     if Result <> '' then
       Result := Result + ',';
@@ -52,10 +60,10 @@ begin
     AppendJsonField(
       EntryFields,
       'artifactId',
-      IntToStr(FArtifacts[Index].ArtifactId)
+      IntToStr(FArtifacts[SizeUInt(Index)].ArtifactId)
     );
-    AppendJsonField(EntryFields, 'kind', JsonString(FArtifacts[Index].Kind));
-    AppendJsonField(EntryFields, 'path', JsonString(FArtifacts[Index].Path));
+    AppendJsonField(EntryFields, 'kind', JsonString(FArtifacts[SizeUInt(Index)].Kind));
+    AppendJsonField(EntryFields, 'path', JsonString(FArtifacts[SizeUInt(Index)].Path));
     Result := Result + '{' + EntryFields + '}';
   end;
   Result := '[' + Result + ']';
@@ -67,34 +75,39 @@ function TBackendPlan.AddLogicalLibraryRequest(
   const AStrength: string
 ): LongInt;
 var
+  Entry: TBackendLogicalLibraryRequest;
   Index: LongInt;
-  NextIndex: SizeInt;
 begin
-  for Index := 0 to Length(FLogicalLibraryRequests) - 1 do
-    if SameText(FLogicalLibraryRequests[Index].LogicalId, ALogicalId) and
-      SameText(FLogicalLibraryRequests[Index].LinkageKind, ALinkageKind) and
-      SameText(FLogicalLibraryRequests[Index].Strength, AStrength) then
-      Exit(FLogicalLibraryRequests[Index].RequestId);
+  if FLogicalLibraryRequests = nil then
+    FLogicalLibraryRequests := TBackendLogicalLibraryRequestVec.Create;
+  for Index := 0 to LongInt(FLogicalLibraryRequests.Count) - 1 do
+    if SameText(FLogicalLibraryRequests[SizeUInt(Index)].LogicalId, ALogicalId) and
+      SameText(FLogicalLibraryRequests[SizeUInt(Index)].LinkageKind, ALinkageKind) and
+      SameText(FLogicalLibraryRequests[SizeUInt(Index)].Strength, AStrength) then
+      Exit(FLogicalLibraryRequests[SizeUInt(Index)].RequestId);
 
-  NextIndex := Length(FLogicalLibraryRequests);
-  SetLength(FLogicalLibraryRequests, NextIndex + 1);
-  FLogicalLibraryRequests[NextIndex].RequestId := NextIndex + 1;
-  FLogicalLibraryRequests[NextIndex].LogicalId := ALogicalId;
-  FLogicalLibraryRequests[NextIndex].LinkageKind := ALinkageKind;
-  FLogicalLibraryRequests[NextIndex].Strength := AStrength;
-  Result := FLogicalLibraryRequests[NextIndex].RequestId;
+  Entry := Default(TBackendLogicalLibraryRequest);
+  Entry.RequestId := LongInt(FLogicalLibraryRequests.Count) + 1;
+  Entry.LogicalId := ALogicalId;
+  Entry.LinkageKind := ALinkageKind;
+  Entry.Strength := AStrength;
+  FLogicalLibraryRequests.Push(Entry);
+  Result := Entry.RequestId;
 end;
 
 function TBackendPlan.LogicalLibraryRequestCount: LongInt;
 begin
-  Result := Length(FLogicalLibraryRequests);
+  if FLogicalLibraryRequests = nil then
+    Exit(0);
+  Result := LongInt(FLogicalLibraryRequests.Count);
 end;
 
 function TBackendPlan.LogicalLibraryRequestAt(
   const AIndex: LongInt
 ): TBackendLogicalLibraryRequest;
 begin
-  if (AIndex < 0) or (AIndex > High(FLogicalLibraryRequests)) then
+  if (FLogicalLibraryRequests = nil) or (AIndex < 0) or
+    (AIndex >= LongInt(FLogicalLibraryRequests.Count)) then
   begin
     Result.RequestId := 0;
     Result.LogicalId := '';
@@ -103,7 +116,7 @@ begin
     Exit;
   end;
 
-  Result := FLogicalLibraryRequests[AIndex];
+  Result := FLogicalLibraryRequests[SizeUInt(AIndex)];
 end;
 
 procedure TBackendPlan.SetRootName(const AName: string);

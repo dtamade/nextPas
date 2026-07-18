@@ -105,6 +105,7 @@ function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
 function ExpectDouble(const AValue: Double): IExpectation;
 function ExpectPtr(const AValue: Pointer): IExpectation;
+function ExpectObj(const AValue: TObject): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 function ExpectBytes(const AValue: TBytes): IExpectation;
 function ExpectArrayOfInt(const AValues: array of Int64): IExpectation;
@@ -419,6 +420,7 @@ type
   TMockValue = nextpas.core.test.mock.TMockValue;
   TMockCalls = nextpas.core.test.mock.TMockCalls;
   TMockValues = nextpas.core.test.mock.TMockValues;
+  TMockCaptor = nextpas.core.test.mock.TMockCaptor;
   IMockSetup = nextpas.core.test.mock.IMockSetup;
   IMockWhen = nextpas.core.test.mock.IMockWhen;
   IMockVerify = nextpas.core.test.mock.IMockVerify;

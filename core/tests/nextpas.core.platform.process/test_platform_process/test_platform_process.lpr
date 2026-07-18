@@ -36,6 +36,24 @@ begin
   Result := FsReadFileText(LSourcePath);
 end;
 
+function CountSubstring(const AText: string; const APattern: string): Integer;
+var
+  LText: string;
+  LPos: SizeInt;
+begin
+  Result := 0;
+  if APattern = '' then
+    Exit;
+  LText := AText;
+  repeat
+    LPos := Pos(APattern, LText);
+    if LPos = 0 then
+      Exit;
+    Inc(Result);
+    Delete(LText, 1, LPos + Length(APattern) - 1);
+  until False;
+end;
+
 function RunOutputDrainProbe: Int32;
 var
   LArgv: array[0..3] of PAnsiChar;
@@ -304,6 +322,158 @@ begin
   Check(R.ExitCode = 0, 'exit 0');
 end;
 
+procedure TestSpawnPipedIoEx;
+var
+  P: TPlatformProcess;
+  R: TPlatformProcessResult;
+  LArgv: array[0..1] of PAnsiChar;
+  LBuf: array[0..63] of AnsiChar;
+  LErr: Int32;
+  LWritten: Int32;
+  LRead: Int32;
+  LStdinWrite: PtrInt;
+  LStdoutRead: PtrInt;
+  LStderrRead: PtrInt;
+begin
+  LArgv[0] := '/bin/cat';
+  LArgv[1] := nil;
+  SpawnWithPipes('/bin/cat', @LArgv[0], P, LStdinWrite, LStdoutRead, LStderrRead);
+
+  LErr := platform_process_write_stdin_ex(LStdinWrite, PAnsiChar('ping'), 4,
+    LWritten);
+  Check(LErr = 0, 'write_stdin_ex succeeds');
+  Check(LWritten = 4, 'write_stdin_ex writes 4 bytes');
+  platform_process_close_handle(LStdinWrite);
+
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LErr := platform_process_read_stdout_ex(LStdoutRead, @LBuf[0], SizeOf(LBuf),
+    LRead);
+  Check(LErr = 0, 'read_stdout_ex succeeds');
+  Check(LRead = 4, 'read_stdout_ex reads 4 bytes');
+  Check(LBuf[0] = 'p', 'stdout_ex data[0] = p');
+
+  platform_process_close_handle(LStdoutRead);
+  platform_process_close_handle(LStderrRead);
+  platform_process_wait(P, R);
+  Check(R.ExitCode = 0, 'exit 0');
+end;
+
+procedure TestSpawnPipedStderrEx;
+var
+  P: TPlatformProcess;
+  R: TPlatformProcessResult;
+  LArgv: array[0..3] of PAnsiChar;
+  LBuf: array[0..255] of AnsiChar;
+  LErr: Int32;
+  LRead: Int32;
+  LStdinWrite: PtrInt;
+  LStdoutRead: PtrInt;
+  LStderrRead: PtrInt;
+begin
+  LArgv[0] := '/bin/sh';
+  LArgv[1] := '-c';
+  LArgv[2] := 'echo errmsg >&2; exit 1';
+  LArgv[3] := nil;
+  SpawnWithPipes('/bin/sh', @LArgv[0], P, LStdinWrite, LStdoutRead, LStderrRead);
+
+  platform_process_close_handle(LStdinWrite);
+  platform_process_close_handle(LStdoutRead);
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LErr := platform_process_read_stderr_ex(LStderrRead, @LBuf[0], SizeOf(LBuf),
+    LRead);
+  Check(LErr = 0, 'read_stderr_ex succeeds');
+  Check(LRead > 0, 'read_stderr_ex returns data');
+  Check(LBuf[0] = 'e', 'stderr_ex data[0] = e');
+
+  platform_process_close_handle(LStderrRead);
+  platform_process_wait(P, R);
+  Check(R.ExitCode = 1, 'exit 1');
+end;
+
+procedure TestPipeIoExRejectsInvalidBuffers;
+var
+  LErr: Int32;
+  LCount: Int32;
+begin
+  LCount := 123;
+  LErr := platform_process_write_stdin_ex(-1, PAnsiChar('x'), 1, LCount);
+  Check(LErr = PLATFORM_ERR_INVALID, 'write_stdin_ex rejects invalid handle');
+  Check(LCount = 0, 'write_stdin_ex clears bytes on invalid handle');
+
+  LCount := 123;
+  LErr := platform_process_read_stdout_ex(-1, nil, 4, LCount);
+  Check(LErr = PLATFORM_ERR_INVALID, 'read_stdout_ex rejects invalid buffer');
+  Check(LCount = 0, 'read_stdout_ex clears bytes on invalid buffer');
+
+  LCount := 123;
+  LErr := platform_process_read_stderr_ex(-1, nil, 4, LCount);
+  Check(LErr = PLATFORM_ERR_INVALID, 'read_stderr_ex rejects invalid buffer');
+  Check(LCount = 0, 'read_stderr_ex clears bytes on invalid buffer');
+end;
+
+procedure TestPipeIoExZeroLength;
+var
+  LErr: Int32;
+  LCount: Int32;
+  LBuf: array[0..3] of AnsiChar;
+begin
+  LCount := 123;
+  LErr := platform_process_write_stdin_ex(0, nil, 0, LCount);
+  Check(LErr = 0, 'write_stdin_ex accepts zero length');
+  Check(LCount = 0, 'write_stdin_ex zero length writes 0');
+
+  LCount := 123;
+  LErr := platform_process_read_stdout_ex(0, nil, 0, LCount);
+  Check(LErr = 0, 'read_stdout_ex accepts zero length');
+  Check(LCount = 0, 'read_stdout_ex zero length reads 0');
+
+  LCount := 123;
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LErr := platform_process_read_stderr_ex(0, @LBuf[0], 0, LCount);
+  Check(LErr = 0, 'read_stderr_ex accepts zero length');
+  Check(LCount = 0, 'read_stderr_ex zero length reads 0');
+end;
+
+{$PUSH}{$WARN 6058 OFF} { allow deprecated legacy pipe I/O in compatibility tests }
+procedure TestLegacyPipeIoRoundtrip;
+var
+  P: TPlatformProcess;
+  R: TPlatformProcessResult;
+  LArgv: array[0..1] of PAnsiChar;
+  LBuf: array[0..63] of AnsiChar;
+  LWritten: Int32;
+  LRead: Int32;
+  LStdinWrite: PtrInt;
+  LStdoutRead: PtrInt;
+  LStderrRead: PtrInt;
+begin
+  LArgv[0] := '/bin/cat';
+  LArgv[1] := nil;
+  SpawnWithPipes('/bin/cat', @LArgv[0], P, LStdinWrite, LStdoutRead, LStderrRead);
+
+  LWritten := platform_process_write_stdin(LStdinWrite, PAnsiChar('pong'), 4);
+  Check(LWritten = 4, 'legacy write_stdin returns byte count');
+  platform_process_close_handle(LStdinWrite);
+
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  LRead := platform_process_read_stdout(LStdoutRead, @LBuf[0], SizeOf(LBuf));
+  Check(LRead = 4, 'legacy read_stdout returns byte count');
+  Check(LBuf[0] = 'p', 'legacy read_stdout data[0] = p');
+
+  Check(platform_process_write_stdin(-1, PAnsiChar('x'), 1) = -1,
+    'legacy write_stdin fails with -1');
+  Check(platform_process_read_stdout(-1, @LBuf[0], 4) = -1,
+    'legacy read_stdout fails with -1');
+  Check(platform_process_read_stderr(-1, @LBuf[0], 4) = -1,
+    'legacy read_stderr fails with -1');
+
+  platform_process_close_handle(LStdoutRead);
+  platform_process_close_handle(LStderrRead);
+  platform_process_wait(P, R);
+  Check(R.ExitCode = 0, 'exit 0');
+end;
+{$POP}
+
 procedure TestRun;
 var
   LArgv: array[0..2] of PAnsiChar;
@@ -502,6 +672,77 @@ begin
   LSource := LoadSourceText('src/nextpas.core.platform.process.pas');
   Check(Pos('Windows implementation currently captures stdout only', LSource) > 0,
     'run_capture interface docs must state Windows stdout-only limitation');
+end;
+
+procedure TestUnsupportedPipeIoStubSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.platform.process.pas');
+  { Unsupported host stubs for pipe I/O must use PLATFORM_ERR_UNSUPPORTED.
+    Do not ban all "Result := -1" — value/sentinel helpers (getpid, io_*) may
+    still use -1 on unsupported hosts. }
+  Check(Pos(
+    'function platform_process_write_stdin_ex(AStdinWrite: PtrInt;' + LineEnding +
+    '  AData: PAnsiChar; ALen: Int32; out ABytesWritten: Int32): Int32;' + LineEnding +
+    'begin ABytesWritten := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'write_stdin_ex unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_read_stdout_ex(AStdoutRead: PtrInt;' + LineEnding +
+    '  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;' + LineEnding +
+    'begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'read_stdout_ex unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_read_stderr_ex(AStderrRead: PtrInt;' + LineEnding +
+    '  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;' + LineEnding +
+    'begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'read_stderr_ex unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_write_stdin(AStdinWrite: PtrInt;' + LineEnding +
+    '  AData: PAnsiChar; ALen: Int32): Int32; deprecated ''Use platform_process_write_stdin_ex'';' +
+    LineEnding +
+    'begin Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'legacy write_stdin unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_read_stdout(AStdoutRead: PtrInt;' + LineEnding +
+    '  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated ''Use platform_process_read_stdout_ex'';' +
+    LineEnding +
+    'begin Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'legacy read_stdout unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_read_stderr(AStderrRead: PtrInt;' + LineEnding +
+    '  ABuf: PAnsiChar; ABufLen: Int32): Int32; deprecated ''Use platform_process_read_stderr_ex'';' +
+    LineEnding +
+    'begin Result := PLATFORM_ERR_UNSUPPORTED; end;',
+    LSource) > 0,
+    'legacy read_stderr unsupported stub must return PLATFORM_ERR_UNSUPPORTED');
+  Check(Pos(
+    'function platform_process_write_stdin(AStdinWrite: PtrInt;' + LineEnding +
+    '  AData: PAnsiChar; ALen: Int32): Int32;' + LineEnding +
+    'begin Result := -1; end;',
+    LSource) = 0,
+    'legacy write_stdin must not use raw -1 unsupported stub');
+end;
+
+procedure TestLegacyPipeIoApisAreDeprecatedSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.platform.process.pas');
+  Check(CountSubstring(LSource,
+    'deprecated ''Use platform_process_write_stdin_ex'';') = 4,
+    'legacy write_stdin API should be compiler-deprecated in interface and every host implementation');
+  Check(CountSubstring(LSource,
+    'deprecated ''Use platform_process_read_stdout_ex'';') = 4,
+    'legacy read_stdout API should be compiler-deprecated in interface and every host implementation');
+  Check(CountSubstring(LSource,
+    'deprecated ''Use platform_process_read_stderr_ex'';') = 4,
+    'legacy read_stderr API should be compiler-deprecated in interface and every host implementation');
 end;
 
 procedure TestSpawnFdsClosesHighInheritedFd;
@@ -930,6 +1171,11 @@ begin
   T.Test('piped: capture stdout', @TestSpawnPipedStdout);
   T.Test('piped: capture stderr', @TestSpawnPipedStderr);
   T.Test('piped: write stdin', @TestSpawnPipedStdin);
+  T.Test('piped ex: stdin/stdout roundtrip', @TestSpawnPipedIoEx);
+  T.Test('piped ex: capture stderr', @TestSpawnPipedStderrEx);
+  T.Test('piped ex: invalid buffers', @TestPipeIoExRejectsInvalidBuffers);
+  T.Test('piped ex: zero length', @TestPipeIoExZeroLength);
+  T.Test('legacy pipe I/O roundtrip', @TestLegacyPipeIoRoundtrip);
   T.Test('run: capture output', @TestRun);
   T.Test('run: working directory', @TestRunCwd);
   T.Test('run: discard stderr without changing exit', @TestRunDiscardsStderrWithoutChangingExit);
@@ -945,6 +1191,10 @@ begin
   T.Test('spawn_fds source: no hardcoded 1024', @TestSpawnFdsNoHardcoded1024SourceContract);
   T.Test('run_capture Windows stdout-only source contract',
     @TestWindowsRunCaptureStdoutOnlySourceContract);
+  T.Test('unsupported pipe I/O stub source contract',
+    @TestUnsupportedPipeIoStubSourceContract);
+  T.Test('legacy pipe I/O APIs deprecated source contract',
+    @TestLegacyPipeIoApisAreDeprecatedSourceContract);
   T.Test('spawn_fds closes high inherited fd', @TestSpawnFdsClosesHighInheritedFd);
   T.Test('spawn_fds exec failure keeps error pipe', @TestSpawnFdsExecFailureKeepsErrorPipe);
   T.Test('process signal', @TestProcessSignal);

@@ -1,10 +1,10 @@
 # nextpas.core.math 代码契约
 
-**模块路径**：`core/src/nextpas.core.math*.pas`（16 个源文件）
-**层级**：L1（依赖 L0: base）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-10
-**版本**：1.1
+**模块路径**：`core/src/nextpas.core.math*.pas`（约 20 个源文件）
+**层级**：L0（注册表权威；与 `base`/`simd`/`atomic` 同属 L0 治理集。batch/impl 可消费公开 `nextpas.core.simd` 门面）
+**Owner**：math-simd lane
+**最后更新**：2026-07-17
+**版本**：1.2
 
 ---
 
@@ -23,9 +23,13 @@
 | math.transform | 3D 变换 (Ortho/Perspective/LookAt/Translate/Scale/RotateX/Y/Z/Camera2D) |
 | math.easing | 22 种缓动函数 (Linear/Quad/Cubic/Quart/Expo/Elastic/Back/Bounce × In/Out/InOut) |
 | math.random | TRandomGen (xoroshiro128+), TNoiseGen |
-| math.vec.compat | 向后兼容函数式 API |
-| math.impl.scalar | 标量 SIMD fallback |
-| math.impl.simd | 平台 SIMD 实现 |
+| math.batch | 公开 F32 标量数组批量 API（委托 batch.simd） |
+| math.batch.simd | batch 的 SIMD 实现（只 uses 公开 simd 门面） |
+| math.vec.batch | 向量数组批量 API |
+| math.vec.batch.simd | vec.batch 的 SIMD 实现 |
+| math.vec.compat | 向后兼容函数式 API（deprecated 别名） |
+| math.impl.scalar | 内部标量 seam |
+| math.impl.simd | 内部 SIMD seam（非公开 API） |
 | math.pas | 门面 re-export |
 
 常量所有权只有一份：`math.base` 以 `NAME = Double(literal);` 声明
@@ -220,19 +224,19 @@ end;
 
 ## 6. 测试覆盖
 
-| 子系统 | 测试目录 | 测试数 |
-|--------|----------|--------|
-| Vec2f/3f/4f | test_vec2f, test_vec3f, test_vec4f 等 | ~80 |
-| Vec2d/3d/4d | test_vec2d, test_vec3d, test_vec4d | ~40 |
-| Mat3f/4f/4d | test_mat3f, test_mat4f, test_mat4d | ~30 |
-| Quatf/Quatd | test_quatf, test_quatd | ~20 |
-| Transform | test_transform | ~15 |
-| Easing | test_easing | ~22 |
-| Random | test_random | ~10 |
-| Scalar/Trig | test_scalar, test_trig | ~20 |
-| SIMD | test_simd | ~5 |
-| L0 边界 | test_l0_dependency | 1 |
-| **合计** | **16 个测试目录** | **~10422** |
+| 子系统 | 测试项目 | 说明 |
+|--------|----------|------|
+| API surface | `test_api_surface` | Python source-contract（legacy/FFI/impl 漂移） |
+| Facade / symbol | `test_facade`, `test_symbol_scope` | 门面 re-export 与符号边界 |
+| Scalar / Trig | `test_scalar`, `test_trig` | 标量与三角函数行为 |
+| Vec / Mat / Quat | `test_vec`, `test_mat`, `test_quat` | 值类型行为 |
+| Transform / Easing | `test_transform`, `test_easing` | 变换与缓动 |
+| Random / Noise | `test_random`, `test_noise` | 确定性随机与噪声 |
+| Batch | `test_batch_scalar`, `test_batch_simd`, `test_vec_batch` | 批量 API 与 SIMD seam |
+| Impl / Compat | `test_impl_simd`, `test_vec_compat` | 内部 seam 与 deprecated 别名 |
+| **合计** | **17 个 PROJECTS** | **2026-07-17: ~273 tests, 0 fail, heaptrc 0** |
+
+入口：`make -C core/tests/nextpas.core.math clean test`
 
 ---
 
@@ -240,5 +244,6 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-17 | 1.2 | 层级纠正为 L0；补 batch 单元；测试表与当前 gate 对齐 | math-simd lane |
 | 2026-07-10 | 1.1 | 固化 `math.base` canonical 常量及 trig/根门面编译期 alias 契约 | Codex |
 | 2026-07-01 | 1.0 | 初始版本：完整六项契约 | Claude |

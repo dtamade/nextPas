@@ -371,18 +371,18 @@ var LTmp: TSimdF64Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := nextpas.core.simd.ReduceSumF64(FSrc, FCount)
+    Result := nextpas.core.simd.BatchF64.ReduceSum(FSrc, FCount)
   else if (FStepCount = 1) and (FSteps[0].Op = f64poSquare) then
-    Result := nextpas.core.simd.ReduceDotF64(FSrc, FSrc, FCount)
+    Result := nextpas.core.simd.BatchF64.ReduceDot(FSrc, FSrc, FCount)
   else if (FStepCount = 1) and (FSteps[0].Op = f64poMulArray) then
-    Result := nextpas.core.simd.ReduceDotF64(FSrc, FSteps[0].ArrayPtr, FCount)
+    Result := nextpas.core.simd.BatchF64.ReduceDot(FSrc, FSteps[0].ArrayPtr, FCount)
   else if (FStepCount = 1) and (FSteps[0].Op = f64poMulScalar) then
-    Result := FSteps[0].ScalarA * nextpas.core.simd.ReduceSumF64(FSrc, FCount)
+    Result := FSteps[0].ScalarA * nextpas.core.simd.BatchF64.ReduceSum(FSrc, FCount)
   else
   begin
     LTmp := TSimdF64Array.Create(FCount);
     Into(LTmp.Data);
-    Result := nextpas.core.simd.ReduceSumF64(LTmp.Data, FCount);
+    Result := nextpas.core.simd.BatchF64.ReduceSum(LTmp.Data, FCount);
     LTmp.Free;
   end;
 end;
@@ -392,12 +392,12 @@ var LTmp: TSimdF64Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := nextpas.core.simd.ReduceMaxF64(FSrc, FCount)
+    Result := nextpas.core.simd.BatchF64.ReduceMax(FSrc, FCount)
   else
   begin
     LTmp := TSimdF64Array.Create(FCount);
     Into(LTmp.Data);
-    Result := nextpas.core.simd.ReduceMaxF64(LTmp.Data, FCount);
+    Result := nextpas.core.simd.BatchF64.ReduceMax(LTmp.Data, FCount);
     LTmp.Free;
   end;
 end;
@@ -407,12 +407,12 @@ var LTmp: TSimdF64Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := nextpas.core.simd.ReduceMinF64(FSrc, FCount)
+    Result := nextpas.core.simd.BatchF64.ReduceMin(FSrc, FCount)
   else
   begin
     LTmp := TSimdF64Array.Create(FCount);
     Into(LTmp.Data);
-    Result := nextpas.core.simd.ReduceMinF64(LTmp.Data, FCount);
+    Result := nextpas.core.simd.BatchF64.ReduceMin(LTmp.Data, FCount);
     LTmp.Free;
   end;
 end;
@@ -422,12 +422,12 @@ var LTmp: TSimdF64Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := nextpas.core.simd.ReduceDotF64(FSrc, aOther, FCount)
+    Result := nextpas.core.simd.BatchF64.ReduceDot(FSrc, aOther, FCount)
   else
   begin
     LTmp := TSimdF64Array.Create(FCount);
     Into(LTmp.Data);
-    Result := nextpas.core.simd.ReduceDotF64(LTmp.Data, aOther, FCount);
+    Result := nextpas.core.simd.BatchF64.ReduceDot(LTmp.Data, aOther, FCount);
     LTmp.Free;
   end;
 end;
@@ -448,12 +448,12 @@ var LTmp: TSimdF64Array;
 begin
   Optimize;
   if FStepCount = 0 then
-    Result := System.Sqrt(nextpas.core.simd.ReduceDotF64(FSrc, FSrc, FCount))
+    Result := System.Sqrt(nextpas.core.simd.BatchF64.ReduceDot(FSrc, FSrc, FCount))
   else
   begin
     LTmp := TSimdF64Array.Create(FCount);
     Into(LTmp.Data);
-    Result := System.Sqrt(nextpas.core.simd.ReduceDotF64(LTmp.Data, LTmp.Data, FCount));
+    Result := System.Sqrt(nextpas.core.simd.BatchF64.ReduceDot(LTmp.Data, LTmp.Data, FCount));
     LTmp.Free;
   end;
 end;

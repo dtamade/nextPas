@@ -1,7 +1,10 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-07 (Phase 19 — streaming request body ownership API)
+> Last updated: 2026-07-17 (Era 6 Excellence Done X0–X5; Era 7 residual Done; framework-complete non-H3 retained)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
+>
+> **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — ordered Eras/Waves, Goal Loop, Inbox. This file is north star + stage truth, **not** a day-to-day backlog.
+> **Product focus**: H1/H2 client+server and WebSocket excellence. **No H3 product demand** — keep H3 blocked/honest, never fake facade.
 
 ## North Star And Scope
 
@@ -17,164 +20,83 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 
 ## Current Position
 
-This lane is in **G2/G3/G4/G5 active hardening**:
+| 项 | 状态 |
+|----|------|
+| G0–G5 骨架 | 完成 |
+| G6 performance evidence | **stage-closed**（见下「G6 stage performance complete」；细节在 [`BENCHMARKS.md`](BENCHMARKS.md)） |
+| non-H3 stage-complete | 完成（H3 诚实 blocked on QUIC；无产品需求） |
+| **framework-complete (non-H3)** | **yes** — Era 0–4 默认路径 landed |
+| **Excellence (Era 6)** | **Done** — X0–X5 landed（WS/cancel/IdleTTL/TLS residual/equal-fold+comparator）；H3 仍 Blocked |
+| **Residual (Era 7)** | **Done** — R1 pool close-outside-lock hang；R2 HTTPS 1×41B 诚实 Park；R3 Windows cancel probe-only only |
+| Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
+| 主 Makefile gate | ~35 focused suites |
+| **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名；当前 STOP） |
 
-- G0 control and module discipline already exist in `AGENTS.md`, `core/AGENTS.md`, and `core/docs/design-conventions.md`.
-- G1 stable H1 public surface is largely landed: server/client/router/headers/url/message/middleware/static/websocket all exist and already have substantial focused coverage.
-- G2 correctness and lifecycle proof is well advanced: threaded and Linux `epoll` paths have broad raw-wire/server proof, client redirect/body ownership semantics are materially tighter, and examples have runnable smoke coverage.
-- G3 API and performance isolation is still active: client ergonomics keeps closing real gaps, and H1 performance work is now splitting costs into parser, lazy header, writer, outbound, and full-chain layers.
-- G4 H2 transport is now landed: server session + client transport + TLS ALPN + connection pool + RFC 9113 compliance are all implemented with 207 focused tests. H2 is production-transport-ready, not just a foundation slice. All H2 test coverage gaps closed (client 55, frame 37, hpack 30). Session test hardening complete (55 tests, MaxConcurrentStreams check-order bug fixed).
-- G5 Static graduation complete: range requests (RFC 7233), ETag, Last-Modified, Cache-Control, Content-Disposition all implemented with 21 focused tests. WebSocket stable at 32 tests.
-- H3 remains blocked on the QUIC module (only QUIC crypto primitives exist).
+四支柱、推荐路径、Done when、Gates、Inbox 均只在 ROADMAP 维护。
 
-### Recent Fixes (2026-07-07)
+### Stage completion definition (non-H3)
 
-**Phase 19 (2026-07-07): Streaming Request Body Ownership API**
+HTTP can be called stage-complete only when all of these hold:
 
-- **`NewStreamingRequest`**: factory functions that create `IHttpRequest` with a non-buffered `IReader` body — the body is passed directly to the transport, not read into memory
-- **`IHttpClient.SendStreaming`**: sends a streaming request with explicit body ownership contract — `Send` takes ownership and closes the body after the round trip (success or error)
-- **Body ownership contract**: documented in `NewStreamingRequest` docstring — caller creates body, `Send` closes it; for redirects, non-seekable streams raise `EHttpError('redirect request body is not replayable')`
-- **Decorator support**: `TAuthClient`/`THeaderClient`/`TOptionsOverrideClient` all implement `SendStreaming` with correct header injection and options merging
-- **Re-exported**: `NewStreamingRequest` overloads available from `nextpas.core.http` facade
-- **Tests**: 5 new tests (content-length, body closed after send, body closed on error, headers preserved, redirect ownership), 166 client total / 0 leaks
+1. Public contracts and docs match source (`CONTRACT.md` / `ARCHITECTURE.md` / this tree).
+2. Main Makefile gate is green with heaptrc-sensitive suites at `0 unfreed` where claimed.
+3. H1 malformed/lifecycle/ownership open decisions are closed — keep-alive request-tail is **INV-12 final** (`CONTRACT.md` §3.1).
+4. H2 is reachable from facade options with live proof; design exclusions remain explicit.
+5. Runtime truth (threaded baseline + epoll poll path) is documented and not contradicted by gates.
+6. Performance claims stay scoped; no fake H3 surface.
 
-**Phase 18 (2026-07-07): Fluent Request Builder**
+### Recent history
 
-- **`THttpRequestBuilder`**: record type with fluent API for constructing `IHttpRequest` objects
-- **Methods**: `Header`, `BasicAuth`, `BearerAuth`, `ContentType`, `Body` (string/TBytes/IReader), `QueryParam`, `Timeout`, `MaxRedirects`, `FollowRedirects`, `Build`
-- **Query handling**: accumulates params and encodes via `EncodeQueryString` on `Build()`, preserves existing query in URL
-- **Per-request options**: integrates with Phase 17's `IHttpRequestWithOptions` — `FollowRedirects(false)` etc. on the builder
-- **Re-exported**: `THttpRequestBuilder` available from `nextpas.core.http` facade
-- **Tests**: 8 new tests (GET, POST+body, headers+auth, BasicAuth, query params, existing query, per-request options, full chaining), 161 client total / 0 leaks
-
-**Phase 17 (2026-07-07): Per-Request Redirect/Timeout Override**
-
-- **`IHttpRequestWithOptions`**: new interface on `THttpRequest` carrying per-request `THttpRequestOptions` (timeout, follow-redirects, max-redirects)
-- **`THttpRequestOptions`**: record with `Has*` flags and `Effective*(default)` accessors — cleanly distinguishes "not set" from explicit values
-- **`IHttpClient`**: added `WithTimeout(ms)`, `WithMaxRedirects(n)`, `WithFollowRedirects(bool)` — per-request decorator methods
-- **`TOptionsOverrideClient`**: new decorator that merges per-request overrides onto the request before delegating to the inner client
-- **`THttpClient.Send/DoRequest`**: now check `IHttpRequestWithOptions` on the request for redirect behavior overrides
-- **Chaining**: all decorator methods compose — `client.WithHeader('x', 'y').WithFollowRedirects(false).Get(url)` works correctly
-- **Tests**: 5 new tests (WithFollowRedirects(false), WithMaxRedirects(0), chained decorator, override client default, WithTimeout), 153 client total / 0 leaks
-
-**Phase 16 (2026-07-07): Response Charset Auto-Detection**
-
-- **`HttpReadResponseBodyStringAuto(resp)`**: reads response body with charset auto-detection from Content-Type header
-- **`ExtractCharsetFromContentType(ct)`**: extracts charset parameter from Content-Type (handles quotes, semicolons)
-- **Charsets**: UTF-8, US-ASCII (default), ISO-8859-1/Latin-1/Windows-1252, fallback to raw bytes
-- **Tests**: 4 new tests (charset extraction, UTF-8 auto, Latin-1 auto, no-charset default), 148 client total / 0 leaks
-
-**Phase 15 (2026-07-07): THttpClientOptions Fluent Configuration**
-
-- **`THttpClientOptions`**: added `WithTimeout(ms)`, `WithMaxRedirects(n)`, `WithFollowRedirects(bool)`, `WithMaxPoolSize(n)` — chainable configuration methods
-- **Pattern**: `THttpClientOptions.Default.WithTimeout(10000).WithMaxRedirects(5).WithFollowRedirects(False)`
-- **Tests**: 5 new tests (WithTimeout, WithMaxRedirects, WithFollowRedirects, WithMaxPoolSize, fluent chain), 30 base total / 0 leaks
-
-**Phase 14 (2026-07-07): Delete Body Overloads + DeleteJson**
-
-- **`IHttpClient`**: added `Delete(url, contentType, body)` overloads (IReader, string, TBytes) — parity with Post/Put/Patch
-- **`IHttpClient`**: added `DeleteJson(url, body: TJsonValue)` — auto-serializes JSON + sets `application/json` content-type
-- **`TAuthClient`/`THeaderClient`**: all three decorator classes implement the new Delete overloads and DeleteJson
-- **Tests**: 2 new integration tests (Delete with body, DeleteJson), 144 client total / 0 leaks
-
-**Phase 13 (2026-07-07): TUrl Query Parameter Methods**
-
-- **`TUrl`**: added `AddQuery(name, value)` (percent-encodes, appends), `WithQuery(raw)` (replaces), `GetQueryParam(name)` (reads), `HasQueryParam(name)` (checks)
-- **`nextpas.core.http.base`**: inline `PercentEncodeQueryValue` helper (space-as-+, RFC 3986 unreserved)
-- **Tests**: 12 new TUrl method tests (basic, multiple, encoding, existing, replace, clear, read, empty, no-value, has, no-query, field preservation), 33 URL total / 0 leaks
-
-**Phase 12 (2026-07-07): Client WithHeader Decorator**
-
-- **`IHttpClient`**: added `WithHeader(name, value)` — returns new `IHttpClient` wrapper that injects arbitrary header on every request
-- **`THeaderClient`**: generic decorator, chains with auth: `WithBearerAuth(token).WithHeader('Accept', 'application/json')`
-- **Tests**: 4 new integration tests (custom header, chain with auth, multiple headers, original client unaffected), 142 client total / 0 leaks
-
-**Phase 11 (2026-07-07): Client Auth Decorator**
-
-- **`IHttpClient`**: added `WithBasicAuth(username, password)` / `WithBearerAuth(token)` — returns new `IHttpClient` wrapper with automatic `authorization` header injection
-- **`TAuthClient`**: decorator pattern, builds requests itself via `BufferedBodyRequest` to inject auth header before delegating to inner client
-- **Tests**: 4 new integration tests (Basic auth header, Bearer auth header, decorator delegation, original client unaffected), 138 client total / 0 leaks
-
-**Phase 10 (2026-07-07): Client JSON Convenience**
-
-- **`IHttpClient`**: added `PostJson`/`PutJson`/`PatchJson(url, body: TJsonValue)` — auto-serializes JSON + sets `application/json` content-type
-- **`nextpas.core.http.intf`**: added `TJsonValue` type alias, `nextpas.core.json.value` dependency
-- **Tests**: 1 new integration test (PostJson content-type + method verification), 136 client total / 0 leaks
-
-**Phase 9 (2026-07-07): Client PostForm Convenience**
-
-- **`IHttpClient`**: added `PostForm(url, fields)` — encodes `TFormFieldArray` as `application/x-www-form-urlencoded` and POSTs
-- **`THttpClient`**: implementation delegates to `Post` with encoded body
-- **`nextpas.core.http.intf`**: added `TFormFieldArray` type alias, `nextpas.core.http.form.base` dependency
-- **Tests**: 1 new integration test (content-type + method verification), 135 client total / 0 leaks
-
-**Phase 8 (2026-07-07): Form Encoding — Bidirectional Form Data**
-
-- **`nextpas.core.http.form`**: added `EncodeUrlEncodedForm` (space-as-+, roundtrip-safe) and `EncodeMultipartFormData` (auto boundary generation, field+file support)
-- **`nextpas.core.http` facade**: re-exported form types (`TFormField`, `TFormFieldArray`, `THttpFile`, `THttpFileArray`, `TMultipartFormData`) and encoding functions
-- **Tests**: 8 new encoding tests (basic, empty, special chars, roundtrip for both URL-encoded and multipart), 16 total / 0 leaks
-
-**Phase 7 (2026-07-07): GOAL_TREE Alignment**
-- **TLS runtime proof**: marked as ✅ — `test_http_tls_real` (5 tests) proves self-signed cert, handshake, stream wrapper, H2 transport creation
-- **H2 remaining hardening**: all items closed except documentation alignment
-
-**Phase 6 (2026-07-07): Client Ergonomics — Options Method**
-- **Options() convenience method**: `IHttpClient` now has full HTTP method coverage: Get, Post, Put, Delete, Patch, Head, Options
-- **Client tests**: 133 → 134 (+1), all with 0 leaks
-
-**Phase 5 (2026-07-07): TLS Warning Fix + Test Audit**
-- **ErrorList warning**: `ValidateRequirements` in `tls.backend.selector.pas` — `TStringArray` local variable explicitly initialized to silence FPC managed-type warning across all HTTP test suites
-- **Epoll backend audit**: confirmed 36 epoll test failures are pre-existing net-layer issues (main baseline identical), not HTTP regressions
-
-**Phase 4 (2026-07-07): Static Graduation + Benchmark Truth**
-- **Range requests**: RFC 7233 support — `bytes=start-end`, suffix (`bytes=-N`), open-ended (`bytes=N-`)
-- **Conditional requests**: ETag + `If-None-Match` → 304, `Last-Modified` + `If-Modified-Since` → 304
-- **Cache headers**: `Cache-Control: public, max-age=0, must-revalidate`
-- **File downloads**: `ServeFileDownload()` with `Content-Disposition: attachment`
-- **416 Range Not Satisfiable**: Invalid ranges return proper error with `Content-Range: bytes */size`
-- **Benchmark CI**: `verify_benchmark_truth.sh` validates Rust/Go/Hyper/nextPas label correctness
-- **Static tests**: 14 → 21 (+7), all with 0 leaks
-
-### Recent Fixes (2026-07-06)
-
-**Phase 1 (2026-07-06):**
-- **P1-4 注册表冻结**: `GFrozen` 标志防止运行时注册表修改，`UnfreezeRegistry` 测试逃生口
-- **P2-3 CONTRACT.md v2.0**: 完全重写匹配实际代码接口（IHttpClient/IHttpServer/THttpRequest/THttpResponse）
-- **P2-11 HttpStatusText**: 未知状态码返回 `IntToStr(ACode)` 而非 `'Unknown'`
-- **P2-13 ValidateValue**: 添加 RFC 9110 §5.5 规范注释
-
-**Phase 2 (2026-07-06):**
-- **P2-1 CORS 测试**: 5 个新测试（特定来源/拒绝/凭证+通配符/MaxAge/自定义方法头），覆盖率从 4→9
-- **P2-7 ServeFileContent**: 错误响应添加 `Content-Type: text/plain` + 异常处理 → 500
-- **P2-15 Logger**: `WriteLn` → `TLogger.Info` 结构化日志，新增 `LoggerMiddlewareWith` 重载
-
-**Phase 3 (2026-07-06):**
-- **H2 Client 测试覆盖**: 30→55 tests (+25)，覆盖连接池限制/错误处理/流控/协议边界/请求构造
-- **H2 HPACK 测试覆盖**: 29→30 tests (+1)，多字节整数编码 roundtrip
-- **Duplicate Host header**: Parser 检测重复 Host 头返回 400（RFC 9112 §6.2）
-- **H2 Frame 测试**: 18→37 tests (+19)，覆盖 GOAWAY/WINDOW_UPDATE/RST_STREAM/PING/SETTINGS
-- **H2 HPACK 测试**: 15→29 tests (+14)，覆盖编码器/动态表/Huffman/索引头
-
-**Earlier Fixes:**
-- **IPv4 字节序修复**: `platform_sockaddr_from_ipv4` 缺少 `htonl` 导致 `bind(99)` — 根因修复影响所有 TCP 服务器
-- **Response parser pause**: `CbOnMessageComplete` 移除 `FParserType=ptRequest` 门控，response parser 在 keep-alive 连接上也暂停，防止同 TCP segment 多响应时错误池化连接
-- **Same-read tail 检测**: `TH1ClientTransport.FPending` 跨 `ReadResponse` 调用保留未消费字节
-- **Connection:close 响应**: response parser 的 `HPE_CLOSED_CONNECTION` 处理容忍额外数据
-
-**测试**: 25 suites ~863 pass / 0 leak (36 epoll tests pre-existing failures on net layer)
+Long wave-by-wave fix notes and cycle assessments were moved to
+[`archive/`](archive/README.md). Do not treat that directory as a backlog.
 
 ## Map
 
 ```text
 nextpas.core.http
-├── G0: Module control, docs, and verification discipline         [active baseline]
-├── G1: Stable public H1 surface                                 [mostly landed]
-├── G2: Correctness, safety, lifecycle, and ownership proof      [advanced]
-├── G3: API ergonomics and performance isolation                 [active]
-├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [H2 transport landed, test hardening]
-├── G5: Static/WebSocket graduation gates                        [helper-level stable]
-└── G6: Cross-language benchmark truth and long-run positioning  [ongoing, not final]
+├── G0: Module control, docs, and verification discipline         [baseline]
+├── G1: Stable public H1 surface                                 [landed]
+├── G2: Correctness, safety, lifecycle, and ownership proof      [INV-12 final]
+├── G3: API ergonomics and performance isolation                 [stage-closed]
+├── G4: Protocol evolution seams (H2/H3 codec + registry + transport) [H2 facade-proven; H3 blocked]
+├── G5: Static/WebSocket graduation gates                        [static helper; WS production-helper contract in Era 6 X1]
+└── G6: Cross-language benchmark truth and long-run positioning  [stage-closed; further wins optional via Era 6 X5]
 ```
+
+### Excellence stage (post framework-complete non-H3)
+
+After framework-complete (non-H3), the live product push is **H1/H2 + WebSocket depth**, not H3.
+
+Win dimensions (not ecosystem checklists):
+
+1. Correctness edges proven (timeouts, cancel, pools, WS close, H2 edges already landed).
+2. Predictable contracts (Kind/Op, options, ownership).
+3. Evidence-backed performance (ladder + comparators; profiled wins).
+4. Pascal-first small synchronous APIs.
+
+Lower-layer fixes (`net` cancel floor, `tls` factory residual) are preferred over HTTP-only workarounds when they unblock these dimensions. Ordered work: **only** [`ROADMAP.md`](ROADMAP.md) Era 6.
+
+### G6 stage performance complete
+
+G6 is **stage-closed** (not “ongoing with no exit”) when **all** of the following hold.
+Numbers in [`BENCHMARKS.md`](BENCHMARKS.md) remain **machine-local** evidence, not rankings.
+
+| # | Criterion | Evidence location |
+|---|-----------|-------------------|
+| 1 | Residual cost ladder L0–L4 is documented and assets exist | BENCHMARKS “Residual Cost Isolation Ladder” |
+| 2 | Focused L1 micros runnable with project Makefiles | `bench_headers` / `bench_h1parser` / `bench_h1writer` / `bench_h1outbound` / `bench_router` |
+| 3 | L2/L3 fullchain keep-alive runnable; emits `backend=` + filter metadata | `bench_fullchain` + P3 commands |
+| 4 | nextPas threaded **and** epoll characterized on the **same** workload with caveats | BENCHMARKS Wave P3 table |
+| 5 | At least one L1 hotspot profiled with before/after on this tree | BENCHMARKS Wave P1 (headers Get/Has) |
+| 6 | Comparator harness exists; claims do not present Go/Rust rows as epoll ranking | `run_server_comparison.sh` docs in BENCHMARKS |
+| 7 | No fake H3 performance or API surface | CONTRACT H3 + registry residual |
+| 8 | Further perf work is **optional** (Inbox / parked), not blocking framework-complete (non-H3) | ROADMAP P2/P4 parked; A3+ parked |
+
+**Out of G6 stage scope** (explicit non-goals for this close-out):
+
+- Durable cross-machine / cross-OS leaderboard tables
+- Continuous multi-connection epoll throughput campaigns
+- Ecosystem feature-parity micro-benchmarks driven only by checklists
 
 ## Stable Public Surface
 
@@ -243,7 +165,7 @@ Already landed:
 - `WithTimeout`/`WithMaxRedirects`/`WithFollowRedirects` per-request options decorator (overrides client defaults for a single request)
 - `IHttpRequestWithOptions` interface + `THttpRequestOptions` record for per-request option overrides
 - `THttpRequestBuilder` fluent request builder (Header, BasicAuth, BearerAuth, ContentType, Body, QueryParam, Timeout, MaxRedirects, FollowRedirects, Build)
-- `NewStreamingRequest` + `SendStreaming` streaming body ownership API (non-buffered IReader, explicit close-on-send contract, redirect replayability caveat)
+- Builder / `SendStreaming` streaming body ownership API (non-buffered IReader, explicit close-on-send contract, redirect replayability caveat); `NewStreamingRequest` removed
 - per-request timeout override at transport level (H1 transport checks `IHttpRequestWithOptions` to override `FOptions.Timeout`)
 - `HttpEnsureSuccess` response status guard (raises EHttpError on non-2xx, returns response for chaining)
 
@@ -303,7 +225,9 @@ Current isolation direction:
 - writer plus outbound drain combination
 - full-chain correlation with direct/router/middleware workload splits
 
-What still matters most now is isolating remaining runtime/socket overhead and other non-parser/non-writer costs, not collecting more final benchmark tables too early.
+P4 residual cost isolation is closed: ladder + benches restored. Wave P1/P3/P5
+close G6 **stage** criteria (see above). Optional further hotspots stay
+Inbox/parked with scoped caveats — not more ranking tables.
 
 ## Protocol Evolution Gates
 
@@ -337,25 +261,23 @@ Design exclusions (by design, not gaps):
 
 Remaining H2 hardening:
 - Test coverage vs h2-test-coverage-plan.md targets: client 55/55 (✅ closed), frame 37/35 (✅ closed), hpack 30/30 (✅ closed); session gap closed
-- Real TLS runtime proof: ✅ `test_http_tls_real` (5 tests, self-signed cert + handshake + stream wrapper + H2 transport creation); 9 unfreed blocks are in openssl backend layer, not HTTP
+- Real TLS runtime proof: ✅ OpenSSL path covered by client HTTPS + H2 ALPN focused；`test_http_tls_real` currently compile-blocked on `TThread` (pre-existing). Wave X4: PinValidator free; client HTTPS residual 1×41B process-lifetime
 - Documentation alignment (this document and ARCHITECTURE.md)
 
 H3 is blocked on the QUIC module. Only `nextpas.core.tls.quic.crypto.pas` (QUIC v1 crypto primitives) exists; no QPACK/HTTP3 frame/stream source code.
 
 ## Static And WebSocket Graduation Criteria
 
-Static and WebSocket helpers are intentionally helper-level public surfaces today.
+Static serving remains a helper-level public surface with tight range/conditional/stream contracts already landed.
 
-They should stay that way unless there is a clear graduation contract:
+WebSocket is a **production-intended helper**: RFC framing coverage is already strong; Era 6 Wave X1 graduates it via **lifecycle contract + cancel/ownership evidence**, not by growing extension negotiation APIs.
 
-- static serving should not grow into a broader service family until range, streaming, cache, and binary-file semantics are defined tightly enough to stay stable
-- WebSocket should not grow new option families or extension negotiation APIs without a clear ownership and behavior story
-- more negative-case testing is not itself progress unless it closes a real behavior gap
+Graduation rules:
 
-Current rule of thumb:
-
-- helper-level behavior can keep tightening
-- helper-to-subsystem graduation needs an explicit design decision
+- static: do not grow into a broader service family without a stable multi-feature contract
+- WebSocket: no new option families / permessage-deflate / subprotocol stacks without real consumer demand and ownership story
+- more negative-case tests alone are not progress unless they close a real behavior gap
+- WS-over-H2 stays parked until a real consumer
 
 ## Verification And Done Criteria
 
@@ -373,22 +295,11 @@ The module is not “done” because one slice is green. The overall HTTP goal r
 
 ## Current Highest-Value Slices
 
-As of 2026-06-07, the best next slices are:
+**Not a live backlog.** Ordered work + Goal Loop: [`ROADMAP.md`](ROADMAP.md).
 
-1. **HTTP goal/control docs**
-   - keep this goal tree and HTTP docs aligned with real status
-   - separate stable architecture facts from active route decisions
-2. **Runtime/socket cost isolation**
-   - keep splitting non-parser/non-writer server cost with narrow benchmarks
-   - avoid jumping straight to final benchmark rankings
-3. **Client ergonomics, but only for real gaps**
-   - prefer one stable helper over a sprawling builder surface
-4. **Cross-language benchmark truth**
-   - keep Rust std-only vs. Hyper/Tokio labeling honest
-   - improve reproducibility and workload clarity before headline comparisons
-5. **Protocol seam readiness**
-   - continue H2 codec proof with broader HPACK integer/string/header-block coverage, frame-type-specific validation, and later QPACK/QUIC planning
-   - improve H2/H3 seam quality only where it reduces future design risk without faking support
+Closed eras (detail only in ROADMAP / archive): stage P1–P5, usability A–I, and any wave already marked landed on ROADMAP.
+
+**Live ordered path and current NEXT**: only [`ROADMAP.md`](ROADMAP.md). If archive notes disagree, **ROADMAP wins**.
 
 ## Immediate Do-Not-Drift Rules
 

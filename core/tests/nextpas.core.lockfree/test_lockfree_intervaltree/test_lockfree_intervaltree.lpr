@@ -2,7 +2,7 @@
 program test_lockfree_intervaltree;
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.lockfree.intervaltree;
 
 var

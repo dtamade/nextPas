@@ -1,5 +1,6 @@
 type
   TStringVec = specialize TVec<string>;
+  TLongIntVec = specialize TVec<LongInt>;
 
   TGenericCacheEntry = record
     Key: string;
@@ -22,9 +23,12 @@ type
     GenericName: string;
     MethodShortName: string;
     OwnerUnitId: string;
-    ParamNames: array of string;
-    ArgTypes: array of string;
+    { Nested product tables owned by pending-signature entry (scratch/default heap). }
+    ParamNames: TStringVec;
+    ArgTypes: TStringVec;
   end;
+  PPendingSignatureEntry = ^TPendingSignatureEntry;
+  TPendingSignatureVec = specialize TVec<TPendingSignatureEntry>;
 
   TSemanticAnalyzer = class
   private
@@ -33,14 +37,16 @@ type
     FDiagnostics: TDiagnosticsSink;
     FRootFileId: TSourceFileId;
     FNoFold: Boolean;
+    { Optional scratch IAllocator for working TVecs / imported unit trees. }
+    FAllocator: IAllocator;
     FModel: TSemanticModel;
-    FProcedureBodies: TProcedureBodyArray;
-    FCompilerProcNames: array of string;
-    FCompilerProcCount: LongInt;
-    FGenericWorkQueue: array of LongInt;
-    FGenericWorkCount: LongInt;
+    { Procedure body table on FAllocator when present; contexts borrow. }
+    FProcedureBodies: TProcedureBodyVec;
+    { Scratch work tables on FAllocator when present. }
+    FCompilerProcNames: TStringVec;
+    FGenericWorkQueue: TLongIntVec;
     FGenericCache: TGenericCacheVec;
-    FPendingSignatures: array of TPendingSignatureEntry;
+    FPendingSignatures: TPendingSignatureVec;
     FInliningStack: TStringVec;
     FBlockLabelCounter: LongInt;
     FCurrentBlockTerminated: Boolean;
@@ -53,8 +59,9 @@ type
     FCurrentMethodClass: string;
     FCurrentRetVarName: string;
     FCurrentOwnedStringReturn: Boolean;
-    FImportedUnitTrees: array of TGreenTree;
-    FImportedUnitOwners: array of string;
+    { Imported unit trees/owners on FAllocator when present; contexts borrow. }
+    FImportedUnitTrees: TSemaImportedTreeVec;
+    FImportedUnitOwners: TSemaImportedOwnerVec;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterOwnedRuntimeStrVar(const AName: string);
@@ -563,7 +570,8 @@ type
       const AUnitGraph: TUnitGraph;
       const ADiagnostics: TDiagnosticsSink;
       const ARootFileId: TSourceFileId;
-      const ANoFold: Boolean
+      const ANoFold: Boolean;
+      const AAllocator: IAllocator = nil
     );
     destructor Destroy; override;
     procedure Analyze;

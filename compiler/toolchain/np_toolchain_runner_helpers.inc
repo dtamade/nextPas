@@ -116,9 +116,11 @@ var
   InputIndex: LongInt;
 begin
   Result := '';
-  for InputIndex := 0 to Length(AStep.Inputs) - 1 do
-    if AStep.Inputs[InputIndex].Kind = 'object-file' then
-      Result := Result + ExpandFileName(AStep.Inputs[InputIndex].Path) +
+  if AStep.Inputs = nil then
+    Exit;
+  for InputIndex := 0 to LongInt(AStep.Inputs.Count) - 1 do
+    if AStep.Inputs[SizeUInt(InputIndex)].Kind = 'object-file' then
+      Result := Result + ExpandFileName(AStep.Inputs[SizeUInt(InputIndex)].Path) +
         LineEnding;
 end;
 
@@ -127,8 +129,10 @@ var
   InputIndex: LongInt;
 begin
   Result := '';
-  for InputIndex := 0 to Length(AStep.Inputs) - 1 do
-    Result := Result + ExpandFileName(AStep.Inputs[InputIndex].Path) +
+  if AStep.Inputs = nil then
+    Exit;
+  for InputIndex := 0 to LongInt(AStep.Inputs.Count) - 1 do
+    Result := Result + ExpandFileName(AStep.Inputs[SizeUInt(InputIndex)].Path) +
       LineEnding;
 end;
 
@@ -138,18 +142,20 @@ var
   InputIndex: LongInt;
 begin
   ArchivePath := '';
-  for InputIndex := 0 to Length(AStep.Outputs) - 1 do
-    if AStep.Outputs[InputIndex].Kind = 'static-library' then
-    begin
-      ArchivePath := ExpandFileName(AStep.Outputs[InputIndex].Path);
-      Break;
-    end;
+  if AStep.Outputs <> nil then
+    for InputIndex := 0 to LongInt(AStep.Outputs.Count) - 1 do
+      if AStep.Outputs[SizeUInt(InputIndex)].Kind = 'static-library' then
+      begin
+        ArchivePath := ExpandFileName(AStep.Outputs[SizeUInt(InputIndex)].Path);
+        Break;
+      end;
 
   Result := 'create ' + ArchivePath + LineEnding;
-  for InputIndex := 0 to Length(AStep.Inputs) - 1 do
-    if AStep.Inputs[InputIndex].Kind = 'object-file' then
-      Result := Result + 'addmod ' +
-        ExpandFileName(AStep.Inputs[InputIndex].Path) + LineEnding;
+  if AStep.Inputs <> nil then
+    for InputIndex := 0 to LongInt(AStep.Inputs.Count) - 1 do
+      if AStep.Inputs[SizeUInt(InputIndex)].Kind = 'object-file' then
+        Result := Result + 'addmod ' +
+          ExpandFileName(AStep.Inputs[SizeUInt(InputIndex)].Path) + LineEnding;
   Result := Result + 'save' + LineEnding + 'end' + LineEnding;
 end;
 
@@ -179,15 +185,22 @@ var
   SidecarIndex: LongInt;
 begin
   Result := nil;
-  SetLength(Result, Length(AStep.Sidecars));
-  for SidecarIndex := 0 to Length(AStep.Sidecars) - 1 do
+  if (AStep.Sidecars = nil) or (AStep.Sidecars.Count = 0) then
   begin
-    Result[SidecarIndex].Kind := AStep.Sidecars[SidecarIndex].Kind;
-    Result[SidecarIndex].Path := AStep.Sidecars[SidecarIndex].Path;
-    Result[SidecarIndex].OwnerStepId := AStep.Sidecars[SidecarIndex].OwnerStepId;
+    SetLength(Result, 0);
+    Exit;
+  end;
+  SetLength(Result, AStep.Sidecars.Count);
+  for SidecarIndex := 0 to LongInt(AStep.Sidecars.Count) - 1 do
+  begin
+    Result[SidecarIndex].Kind := AStep.Sidecars[SizeUInt(SidecarIndex)].Kind;
+    Result[SidecarIndex].Path := AStep.Sidecars[SizeUInt(SidecarIndex)].Path;
+    Result[SidecarIndex].OwnerStepId :=
+      AStep.Sidecars[SizeUInt(SidecarIndex)].OwnerStepId;
     Result[SidecarIndex].MaterializationTiming :=
-      AStep.Sidecars[SidecarIndex].MaterializationTiming;
-    Result[SidecarIndex].CleanupPolicy := AStep.Sidecars[SidecarIndex].CleanupPolicy;
+      AStep.Sidecars[SizeUInt(SidecarIndex)].MaterializationTiming;
+    Result[SidecarIndex].CleanupPolicy :=
+      AStep.Sidecars[SizeUInt(SidecarIndex)].CleanupPolicy;
     Result[SidecarIndex].Materialized := False;
     Result[SidecarIndex].CleanupStatus := 'not-requested';
   end;
@@ -200,12 +213,15 @@ procedure MaterializeSidecars(
 var
   SidecarIndex: LongInt;
 begin
-  for SidecarIndex := 0 to Length(AStep.Sidecars) - 1 do
-    if AStep.Sidecars[SidecarIndex].MaterializationTiming = 'before-step-exec' then
+  if AStep.Sidecars = nil then
+    Exit;
+  for SidecarIndex := 0 to LongInt(AStep.Sidecars.Count) - 1 do
+    if AStep.Sidecars[SizeUInt(SidecarIndex)].MaterializationTiming =
+      'before-step-exec' then
     begin
       WriteTextFile(
-        AStep.Sidecars[SidecarIndex].Path,
-        BuildSidecarText(AStep, AStep.Sidecars[SidecarIndex])
+        AStep.Sidecars[SizeUInt(SidecarIndex)].Path,
+        BuildSidecarText(AStep, AStep.Sidecars[SizeUInt(SidecarIndex)])
       );
       AExecutedSidecars[SidecarIndex].Materialized := True;
     end;

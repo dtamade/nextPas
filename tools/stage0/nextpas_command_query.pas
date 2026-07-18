@@ -91,6 +91,8 @@ begin
     Options.BuildContext.OutputDirPath := WorkspaceModel.OutputDirPath;
     Options.WorkspaceModel := WorkspaceModel;
     Options.ExplicitUnitRoots := ResolvedUnitRoots;
+    Options.NoFold := True;
+    Options.Incremental := False;
 
     Session := TCompilationSession.CreateBuildSession(Options, TargetFacts);
     WorkspaceModel := nil;

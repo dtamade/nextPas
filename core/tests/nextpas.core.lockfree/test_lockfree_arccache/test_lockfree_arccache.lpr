@@ -3,7 +3,6 @@ program test_lockfree_arccache;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.arccache,
   nextpas.core.lockfree,
   nextpas.core.atomic,

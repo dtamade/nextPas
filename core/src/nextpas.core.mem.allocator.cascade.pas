@@ -96,13 +96,17 @@ function TCascadeAllocator.GetMem(ASize: SizeUInt): Pointer; inline;
 var
   I: Integer;
   LPtr: PByte;
+  LTotal: SizeUInt;
 begin
   if ASize = 0 then
+    Exit(nil);
+  LTotal := CASCADE_HEADER_SIZE + ASize;
+  if LTotal < ASize then { overflow check }
     Exit(nil);
   Inc(FAllocAttempts);
   for I := 0 to FAllocatorCount - 1 do
   begin
-    LPtr := PByte(FAllocators[I].GetMem(CASCADE_HEADER_SIZE + ASize));
+    LPtr := PByte(FAllocators[I].GetMem(LTotal));
     if LPtr <> nil then
     begin
       PInteger(LPtr)^ := I;

@@ -58,16 +58,34 @@ const
   {$ENDIF}
   );
 
-{ Byte-order conversion — pure bit manipulation, no platform dependency }
+{** @desc 主机字节序转网络字节序（16 位）
+    @param AHost 主机字节序值
+    @return 网络字节序值 *}
 function platform_htons(AHost: UInt16): UInt16; inline;
+
+{** @desc 主机字节序转网络字节序（32 位）
+    @param AHost 主机字节序值
+    @return 网络字节序值 *}
 function platform_htonl(AHost: UInt32): UInt32; inline;
+
+{** @desc 网络字节序转主机字节序（16 位）
+    @param ANet 网络字节序值
+    @return 主机字节序值 *}
 function platform_ntohs(ANet: UInt16): UInt16; inline;
+
+{** @desc 网络字节序转主机字节序（32 位）
+    @param ANet 网络字节序值
+    @return 主机字节序值 *}
 function platform_ntohl(ANet: UInt32): UInt32; inline;
 
-{ IPv4 address parsing — returns network-byte-order address, 0 on error }
+{** @desc 解析 IPv4 点分十进制字符串
+    @param AAddr 点分十进制格式的 IP 地址字符串（如 "192.168.1.1"）
+    @return 网络字节序的 32 位 IPv4 地址，0 表示解析失败 *}
 function platform_ipv4_parse(const AAddr: string): UInt32;
 
-{ IPv4 address formatting — dotted-decimal string }
+{** @desc 将网络字节序 IPv4 地址格式化为点分十进制字符串
+    @param AIP 网络字节序的 32 位 IPv4 地址
+    @return 点分十进制格式的字符串（如 "192.168.1.1"） *}
 function platform_ipv4_to_string(AIP: UInt32): string;
 
 {** @desc 创建 IPv4 套接字地址结构

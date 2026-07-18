@@ -44,16 +44,19 @@ end;
 procedure TestRecordGetMem;
 var
   LR: TReplayAllocator;
+  LPtr: Pointer;
 begin
   LR := TReplayAllocator.Create(DefaultAllocator);
   try
     LR.StartRecording;
-    LR.GetMem(1024);
+    LPtr := LR.GetMem(1024);
     LR.StopRecording;
 
     Check(LR.EntryCount = 1, 'should have 1 entry');
     Check(LR.GetEntry(0).Op = roGetMem, 'op should be GetMem');
     Check(LR.GetEntry(0).Size = 1024, 'size should be 1024');
+
+    DefaultAllocator.FreeMem(LPtr);
   finally
     LR.Free;
   end;
@@ -106,13 +109,16 @@ end;
 procedure TestClear;
 var
   LR: TReplayAllocator;
+  LPtr: Pointer;
 begin
   LR := TReplayAllocator.Create(DefaultAllocator);
   try
     LR.StartRecording;
-    LR.GetMem(1024);
+    LPtr := LR.GetMem(1024);
     LR.StopRecording;
     Check(LR.EntryCount = 1, 'should have 1 entry');
+
+    DefaultAllocator.FreeMem(LPtr);
 
     LR.Clear;
     Check(LR.EntryCount = 0, 'should have 0 entries after clear');
@@ -125,14 +131,14 @@ procedure TestGetResult;
 var
   LR: TReplayAllocator;
   LResult: TReplayResult;
-  LPtr: Pointer;
+  LPtr1, LPtr2: Pointer;
 begin
   LR := TReplayAllocator.Create(DefaultAllocator);
   try
     LR.StartRecording;
-    LPtr := LR.GetMem(1024);
-    LR.FreeMem(LPtr);
-    LPtr := LR.GetMem(2048);
+    LPtr1 := LR.GetMem(1024);
+    LR.FreeMem(LPtr1);
+    LPtr2 := LR.GetMem(2048);
     LR.StopRecording;
 
     LResult := LR.GetResult;
@@ -141,6 +147,8 @@ begin
     Check(LResult.FreeOps = 1, 'free ops should be 1');
     Check(LResult.PeakAllocs = 1, 'peak allocs should be 1');
     Check(LResult.PeakBytes = 3072, 'peak bytes should be 3072 (1024+2048)');
+
+    DefaultAllocator.FreeMem(LPtr2);
   finally
     LR.Free;
   end;
@@ -159,8 +167,9 @@ begin
     LR1.StartRecording;
     LPtr := LR1.GetMem(1024);
     LR1.FreeMem(LPtr);
-    LR1.GetMem(2048);
+    LPtr := LR1.GetMem(2048);
     LR1.StopRecording;
+    DefaultAllocator.FreeMem(LPtr);
     LR1.SaveToFile(TEST_FILE);
   finally
     LR1.Free;
@@ -194,8 +203,10 @@ begin
     LR.StartRecording;
     LPtr := LR.GetMem(1024);
     LR.FreeMem(LPtr);
-    LR.GetMem(2048);
+    LPtr := LR.GetMem(2048);
     LR.StopRecording;
+
+    DefaultAllocator.FreeMem(LPtr);
 
     { 回放到另一个分配器 }
     LR.Replay(DefaultAllocator);

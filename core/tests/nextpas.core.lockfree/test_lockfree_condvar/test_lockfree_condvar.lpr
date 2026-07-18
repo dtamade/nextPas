@@ -4,7 +4,6 @@ program test_lockfree_condvar;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.condvar,
   nextpas.core.lockfree.mutex,
   nextpas.core.lockfree,

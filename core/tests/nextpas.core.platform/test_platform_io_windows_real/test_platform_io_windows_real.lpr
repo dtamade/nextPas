@@ -5,7 +5,6 @@ program test_platform_io_windows_real;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.platform.io.base,
   nextpas.core.platform.io,
@@ -35,10 +34,11 @@ begin
     PLATFORM_IPPROTO_TCP, AServer);
   if Result <> 0 then
     Exit;
-  Result := platform_sockaddr_ipv4(APort, platform_htonl($7F000001), AAddr);
+  { platform_sockaddr_ipv4 expects host-order address (it applies htonl). }
+  Result := platform_sockaddr_loopback4(APort, AAddr);
   if Result <> 0 then
     Exit;
-  Result := platform_socket_bind(AServer, @AAddr, AAddr.Len);
+  Result := platform_socket_bind(AServer, @AAddr.Storage, AAddr.Len);
 end;
 
 { 1. Create and verify WSAStartup initialization }
@@ -85,13 +85,13 @@ begin
   Check(platform_socket_listen(LServer, 1) = 0, 'listen');
 
   { Get actual port }
-  LErr := platform_socket_getsockname(LServer, @LAddr, @LAddr.Len);
+  LErr := platform_socket_getsockname(LServer, @LAddr.Storage, @LAddr.Len);
   Check(LErr = 0, 'getsockname');
 
   { Create client and connect }
   LErr := CreateTestSocket(LClient);
   Check(LErr = 0, 'create client');
-  LErr := platform_socket_connect(LClient, @LAddr, LAddr.Len);
+  LErr := platform_socket_connect(LClient, @LAddr.Storage, LAddr.Len);
   Check(LErr = 0, 'connect');
 
   { Accept connection }
@@ -268,18 +268,18 @@ begin
   Check(platform_socket_listen(LServer, 2) = 0, 'listen');
 
   { Get actual port }
-  LErr := platform_socket_getsockname(LServer, @LAddr, @LAddr.Len);
+  LErr := platform_socket_getsockname(LServer, @LAddr.Storage, @LAddr.Len);
   Check(LErr = 0, 'getsockname');
 
   { Create two clients and connect }
   LErr := CreateTestSocket(LClient1);
   Check(LErr = 0, 'create client1');
-  LErr := platform_socket_connect(LClient1, @LAddr, LAddr.Len);
+  LErr := platform_socket_connect(LClient1, @LAddr.Storage, LAddr.Len);
   Check(LErr = 0, 'connect client1');
 
   LErr := CreateTestSocket(LClient2);
   Check(LErr = 0, 'create client2');
-  LErr := platform_socket_connect(LClient2, @LAddr, LAddr.Len);
+  LErr := platform_socket_connect(LClient2, @LAddr.Storage, LAddr.Len);
   Check(LErr = 0, 'connect client2');
 
   { Accept connections }

@@ -56,6 +56,11 @@ procedure TMockWriter.Flush;
 begin
 end;
 
+procedure OkHandler(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
+begin
+  AW.WriteHeader(HTTP_STATUS_OK);
+end;
+
 { === HSTS Tests === }
 
 procedure TestHstsDefault;
@@ -63,18 +68,14 @@ var
   LHandler: IHttpHandler;
   LReq: IHttpRequest;
   LHdrs: IHttpHeaders;
-  LW: TMockWriter;
+  LW: IHttpResponseWriter;
   LHsts: string;
 begin
   LHandler := Chain(
-    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-    begin
-      AW.WriteHeader(HTTP_STATUS_OK);
-    end),
+    HandlerFunc(@OkHandler),
     [HstsMiddleware]
   );
   LHdrs := NewHttpHeaders;
-  { HTTPS request: HSTS header should be added }
   LReq := THttpRequest.Create(hmGet, TUrl.Parse('https://example.com/test'), hvHttp11, LHdrs, nil, 0);
   LW := TMockWriter.Create;
   LHandler.ServeHTTP(LReq, LW);
@@ -90,18 +91,14 @@ var
   LHandler: IHttpHandler;
   LReq: IHttpRequest;
   LHdrs: IHttpHeaders;
-  LW: TMockWriter;
+  LW: IHttpResponseWriter;
   LHsts: string;
 begin
   LHandler := Chain(
-    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-    begin
-      AW.WriteHeader(HTTP_STATUS_OK);
-    end),
+    HandlerFunc(@OkHandler),
     [HstsMiddleware]
   );
   LHdrs := NewHttpHeaders;
-  { Plain HTTP request: HSTS header must NOT be added (RFC 6797 §7.2) }
   LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/test'), hvHttp11, LHdrs, nil, 0);
   LW := TMockWriter.Create;
   LHandler.ServeHTTP(LReq, LW);
@@ -114,19 +111,15 @@ var
   LHandler: IHttpHandler;
   LReq: IHttpRequest;
   LHdrs: IHttpHeaders;
-  LW: TMockWriter;
+  LW: IHttpResponseWriter;
   LHsts: string;
 begin
   LHandler := Chain(
-    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-    begin
-      AW.WriteHeader(HTTP_STATUS_OK);
-    end),
+    HandlerFunc(@OkHandler),
     [HstsMiddleware]
   );
   LHdrs := NewHttpHeaders;
   LHdrs.SetHeader('x-forwarded-proto', 'https');
-  { HTTP request behind reverse proxy with X-Forwarded-Proto: https }
   LReq := THttpRequest.Create(hmGet, TUrl.Parse('http://example.com/test'), hvHttp11, LHdrs, nil, 0);
   LW := TMockWriter.Create;
   LHandler.ServeHTTP(LReq, LW);
@@ -139,7 +132,7 @@ var
   LHandler: IHttpHandler;
   LReq: IHttpRequest;
   LHdrs: IHttpHeaders;
-  LW: TMockWriter;
+  LW: IHttpResponseWriter;
   LHsts: string;
   LOpts: THstsOptions;
 begin
@@ -147,10 +140,7 @@ begin
   LOpts.IncludeSubDomains := False;
   LOpts.Preload := True;
   LHandler := Chain(
-    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-    begin
-      AW.WriteHeader(HTTP_STATUS_OK);
-    end),
+    HandlerFunc(@OkHandler),
     [HstsMiddlewareWith(LOpts)]
   );
   LHdrs := NewHttpHeaders;

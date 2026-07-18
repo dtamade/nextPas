@@ -33,6 +33,7 @@ const
 type
   TUnrolledResult = (ulOk, ulNotFound, ulExists, ulFull, ulClosed);
 
+  {** @concurrency Thread-safe (see source for details). }
   generic TConcurrentUnrolledListImpl<T> = class
   private
     type
@@ -79,7 +80,7 @@ uses
 constructor TConcurrentUnrolledListImpl.Create;
 begin
   if IsManagedType(T) then
-    raise EArgumentError.Create('TConcurrentUnrolledList: T must be unmanaged');
+    raise EArgumentError.Create('TConcurrentUnrolledList: T must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   FHead := nil;
   FCount := 0;

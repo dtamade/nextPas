@@ -166,19 +166,15 @@ begin
   Instr.Operands[0] := MakeTypedOperand(ObjPtr, GetPtrType);
   EmitInstr(Instr);
   Found := False;
-  for I := 0 to FIntfVarCount - 1 do
-    if SameText(FIntfVarNames[I], VarName) then
-    begin
-      Found := True;
-      Break;
-    end;
+  if FIntfVarNames.Count > 0 then
+    for I := 0 to LongInt(FIntfVarNames.Count) - 1 do
+      if SameText(FIntfVarNames[I], VarName) then
+      begin
+        Found := True;
+        Break;
+      end;
   if not Found then
-  begin
-    if FIntfVarCount >= Length(FIntfVarNames) then
-      SetLength(FIntfVarNames, FIntfVarCount + 8);
-    FIntfVarNames[FIntfVarCount] := VarName;
-    Inc(FIntfVarCount);
-  end;
+    FIntfVarNames.Push(VarName);
 end;
 
 procedure THIRBuilder.ProcessIntfRelease(const ANode: TTypedHirNode);

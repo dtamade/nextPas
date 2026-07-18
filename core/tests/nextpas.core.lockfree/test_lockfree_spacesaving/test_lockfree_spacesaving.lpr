@@ -3,8 +3,7 @@ program test_lockfree_spacesaving;
 {$mode objfpc}{$H+}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
   nextpas.core.lockfree.spacesaving,
   nextpas.core.lockfree,
   nextpas.core.atomic,

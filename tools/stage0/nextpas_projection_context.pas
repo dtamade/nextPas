@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.path, nextpas.core.fs, nextpas.core.text.conv,
+  nextpas.core.mem,
   nextpas_projection_types, nextpas_json_helpers,
   np_compilation_session, np_workspace_model, np_package_workflow,
   np_package_manifest, np_package_lock,
@@ -426,6 +427,7 @@ begin
   AContext.RootFileId := 0;
   AContext.SourceFileCount := 0;
   AContext.UnitStateCount := 0;
+  AContext.MemSessionStats := '';
 end;
 
 procedure ClearDiagnosticProjectionContextValue(
@@ -619,6 +621,7 @@ begin
   AContext.FindingCount := 0;
   ClearDoctorFindingValue(AContext.FirstFinding);
   AContext.FindingsJson := '';
+  AContext.MemProcessStats := '';
 end;
 
 procedure ClearQueryProjectionContextValue(var AContext: TQueryProjectionContext);
@@ -920,6 +923,9 @@ begin
     AContext.Status := 'warning'
   else
     AContext.Status := 'healthy';
+
+  { Ops surface: process heap snapshot (not compilation-session arena). }
+  AContext.MemProcessStats := FormatMemStats;
 end;
 
 procedure CapturePackageProjectionFromWorkflowTruth(
@@ -1030,6 +1036,7 @@ begin
   AContext.RootFileId := Session.RootFileId;
   AContext.SourceFileCount := Session.SourceFileCount;
   AContext.UnitStateCount := Session.UnitStateCount;
+  AContext.MemSessionStats := Session.MemFormatSessionStats;
 end;
 
 procedure CaptureDiagnosticProjectionContextValue(

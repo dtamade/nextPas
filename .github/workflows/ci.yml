@@ -25,5 +25,11 @@ jobs:
       - name: Run tooling gate
         run: make test-tooling
 
+      - name: Rebuild stage0 compiler (canonical path)
+        run: make rebuild-compiler
+
+      - name: Stage0 HEAP_DEBUG env recipe
+        run: make stage0-heap-debug-recipe
+
       - name: Run Linux local verification mirror
         run: make verify

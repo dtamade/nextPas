@@ -25,6 +25,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `bench` | tooling | benchmark harness | yes | module consumers | draft |
 | `bytes` | L1 | binary buffers | yes | L0 plus encoding/text seam | focused-runtime |
 | `collections` | L1 | containers | yes | L0 plus approved L1 | focused-runtime |
+| `compiler` | tooling | compiler mem/arena helpers | yes | L0 mem owners | draft |
 | `compress` | L2 | compression formats | yes | L0-L1 | focused-runtime |
 | `config` | L3 | configuration framework | yes | L0-L2 | focused-runtime |
 | `contracts` | L0 support | assertions/contracts | yes | L0 root | source-contract |
@@ -36,8 +37,10 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `errors` | L0 | error facade | yes | `exception`, `base` | focused-runtime |
 | `event` | L3 | event dispatch | yes | L0-L2 | draft |
 | `exception` | L0 root | exception taxonomy | yes | bootstrap RTL | source-contract |
+| `font` | L3 | font face/raster/atlas | yes | L0-L2 | draft |
 | `fs` | L2 | filesystem | yes | L0-L1; platform owns raw OS truth | focused-runtime |
 | `git` | L2 | git/libgit2 backend | yes | L0-L1 plus libgit2 FFI owner | draft |
+| `gpu` | L3 | OpenGL loader | yes | L0-L2 plus platform.x11 | draft |
 | `hash` | L2 | hash algorithms | yes | L0-L1 | focused-runtime |
 | `http` | L3 | HTTP framework | yes | L0-L2 | focused-runtime |
 | `id` | L1 | ID generators | yes | L0-L1 | focused-runtime |
@@ -50,6 +53,7 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `mem` | L0 with debt | allocators/pools | yes | L0 only; explicit debt allowlist | source-contract |
 | `multipart` | L2 | multipart format | yes | L0-L1 | focused-runtime |
 | `net` | L2 | networking | yes | L0-L1 | focused-runtime |
+| `numa` | L2 | NUMA topology/alloc | yes | L0-L1; host units debt | draft |
 | `os` | L2 | OS helper namespace | no | L0-L1; platform owns raw OS truth | source-contract |
 | `path` | L2 | path helpers | yes | L0-L1 | focused-runtime |
 | `platform` | L0 | host ABI and OS semantics | yes | host owner `platform.*.base/ffi`, L0 only | source-contract + focused-runtime |
@@ -61,9 +65,9 @@ top-level module family, not every implementation unit. Sub-unit rules live in
 | `sse` | L3 | server-sent events | yes | L0-L2 | draft |
 | `stopwatch` | L1 | high-resolution timing | yes | L0-L1 | focused-runtime |
 | `sync` | L1 | synchronization | yes | L0 plus approved L1 | focused-runtime |
-| `system` | L0 root facade exception | RTL frontier facade | yes | L0 plus explicit text debt | source-contract |
+| `system` | L0 root facade exception | RTL frontier facade | yes | L0 plus explicit text/io/path/fs debt | source-contract |
 | `template` | L3 | templating | yes | L0-L2 | draft |
-| `testing` | L1 | test framework | yes | L0 | focused-runtime |
+| `test` | L1 | test framework | yes | L0 | focused-runtime |
 | `text` | L1 | text/unicode helpers | yes | L0 plus bytes/encoding seam | focused-runtime |
 | `thread` | L1 | threads/tasks/channels | yes | L0 plus approved L1 | focused-runtime |
 | `time` | L1 | date/time APIs | yes | L0 plus approved L1 | focused-runtime |

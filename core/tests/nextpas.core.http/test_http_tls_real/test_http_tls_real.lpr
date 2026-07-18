@@ -11,8 +11,8 @@ program test_http_tls_real;
 
 uses
   cthreads,
-  SysUtils, Classes,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.io.intf,

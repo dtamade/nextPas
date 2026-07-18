@@ -209,7 +209,7 @@ begin
     Exit('[]');
 
   Result := '[';
-  for Index := 0 to FSearchPathSet.Count - 1 do
+  for Index := 0 to LongInt(FSearchPathSet.Count) - 1 do
   begin
     if Index > 0 then
       Result := Result + ',';
@@ -1041,28 +1041,32 @@ end;
 
 function TCompilationSession.ToolStatusEventCount: LongInt;
 begin
-  Result := Length(FToolStatusEvents);
+  if FToolStatusEvents = nil then
+    Exit(0);
+  Result := LongInt(FToolStatusEvents.Count);
 end;
 
 function TCompilationSession.ToolStatusEventsJson: string;
 var
   EventFields: string;
   Index: SizeInt;
+  Event: ^TToolStatusEventRecord;
 begin
-  if Length(FToolStatusEvents) = 0 then
+  if (FToolStatusEvents = nil) or (FToolStatusEvents.Count = 0) then
     Exit('');
 
   Result := '[';
-  for Index := 0 to High(FToolStatusEvents) do
+  for Index := 0 to SizeInt(FToolStatusEvents.Count) - 1 do
   begin
     if Index > 0 then
       Result := Result + ',';
 
+    Event := FToolStatusEvents.GetPtr(SizeUInt(Index));
     EventFields := '';
     AppendJsonField(
       EventFields,
       'eventKind',
-      JsonString(FToolStatusEvents[Index].EventKind)
+      JsonString(Event^.EventKind)
     );
     AppendJsonField(EventFields, 'sessionId', JsonString(FSessionId));
     AppendJsonField(EventFields, 'planId', JsonString(BuildTracePlanId));
@@ -1072,57 +1076,57 @@ begin
     AppendJsonField(
       EventFields,
       'profileId',
-      JsonString(FToolStatusEvents[Index].ProfileId)
+      JsonString(Event^.ProfileId)
     );
     AppendJsonField(
       EventFields,
       'stepId',
-      JsonString(FToolStatusEvents[Index].StepId)
+      JsonString(Event^.StepId)
     );
     AppendJsonField(
       EventFields,
       'toolRole',
-      JsonString(FToolStatusEvents[Index].ToolRole)
+      JsonString(Event^.ToolRole)
     );
     AppendJsonField(
       EventFields,
       'logicalExecutable',
-      JsonString(FToolStatusEvents[Index].LogicalExecutable)
+      JsonString(Event^.LogicalExecutable)
     );
     AppendJsonField(
       EventFields,
       'sysrootRef',
-      JsonString(FToolStatusEvents[Index].SysrootRef)
+      JsonString(Event^.SysrootRef)
     );
-    if FToolStatusEvents[Index].ResolvedPath <> '' then
+    if Event^.ResolvedPath <> '' then
       AppendJsonField(
         EventFields,
         'resolvedPath',
-        JsonString(FToolStatusEvents[Index].ResolvedPath)
+        JsonString(Event^.ResolvedPath)
       );
-    if FToolStatusEvents[Index].Status <> '' then
+    if Event^.Status <> '' then
       AppendJsonField(
         EventFields,
         'status',
-        JsonString(FToolStatusEvents[Index].Status)
+        JsonString(Event^.Status)
       );
-    if FToolStatusEvents[Index].ResultValue <> '' then
+    if Event^.ResultValue <> '' then
       AppendJsonField(
         EventFields,
         'result',
-        JsonString(FToolStatusEvents[Index].ResultValue)
+        JsonString(Event^.ResultValue)
       );
-    if FToolStatusEvents[Index].HasExitCode then
+    if Event^.HasExitCode then
       AppendJsonField(
         EventFields,
         'exitCode',
-        IntToStr(FToolStatusEvents[Index].ExitCode)
+        IntToStr(Event^.ExitCode)
       );
-    if FToolStatusEvents[Index].Summary <> '' then
+    if Event^.Summary <> '' then
       AppendJsonField(
         EventFields,
         'summary',
-        JsonString(FToolStatusEvents[Index].Summary)
+        JsonString(Event^.Summary)
       );
     Result := Result + '{' + EventFields + '}';
   end;

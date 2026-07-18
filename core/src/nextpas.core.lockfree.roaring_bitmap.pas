@@ -25,7 +25,7 @@ unit nextpas.core.lockfree.roaring_bitmap;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 const
   RB_CONTAINER_BITS = 16;
@@ -64,6 +64,7 @@ type
    *   - 最大支持 2^32 个位 (UInt32)
    *   - 单线程写，多线程读安全（不可变容器引用）
    *}
+  {** @concurrency Thread-safe (see source for details). }
   TRoaringBitmap = class
   private
     FContainers: array[0..RB_MAX_CONTAINERS - 1] of PRBContainer;

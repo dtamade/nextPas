@@ -3,8 +3,7 @@ program test_lockfree_spinlock_contracts;
 {$mode objfpc}{$H+}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.system.classes,
   nextpas.core.test;
 
 const

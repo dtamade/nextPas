@@ -150,8 +150,8 @@ procedure AcquireSRWLockExclusive(SRWLock: Pointer); stdcall; external 'kernel32
 
 {** @desc 尝试获取 SRW 排他锁
     @param SRWLock SRW 锁指针
-    @return TRUE 成功 *}
-function TryAcquireSRWLockExclusive(SRWLock: Pointer): BOOL; stdcall; external 'kernel32' name 'TryAcquireSRWLockExclusive';
+    @return non-zero on success (Win32 BOOLEAN, 1-byte — not BOOL/LongBool) *}
+function TryAcquireSRWLockExclusive(SRWLock: Pointer): WINDOWS_BOOLEAN; stdcall; external 'kernel32' name 'TryAcquireSRWLockExclusive';
 
 {** @desc 释放 SRW 排他锁
     @param SRWLock SRW 锁指针 *}
@@ -163,8 +163,8 @@ procedure AcquireSRWLockShared(SRWLock: Pointer); stdcall; external 'kernel32' n
 
 {** @desc 尝试获取 SRW 共享锁
     @param SRWLock SRW 锁指针
-    @return TRUE 成功 *}
-function TryAcquireSRWLockShared(SRWLock: Pointer): BOOL; stdcall; external 'kernel32' name 'TryAcquireSRWLockShared';
+    @return non-zero on success (Win32 BOOLEAN, 1-byte — not BOOL/LongBool) *}
+function TryAcquireSRWLockShared(SRWLock: Pointer): WINDOWS_BOOLEAN; stdcall; external 'kernel32' name 'TryAcquireSRWLockShared';
 
 {** @desc 释放 SRW 共享锁
     @param SRWLock SRW 锁指针 *}
@@ -489,6 +489,13 @@ function GetFullPathNameW(lpFileName: LPCWSTR; nBufferLength: DWORD; lpBuffer: L
     @param lpBuffer 输出缓冲区
     @param nSize 缓冲区大小
     @return 值长度 *}
+{** @desc 获取进程命令行（Unicode） *}
+function GetCommandLineW: LPCWSTR; stdcall; external 'kernel32' name 'GetCommandLineW';
+
+{** @desc 将命令行拆成 argv 向量（Unicode）；返回值用 LocalFree 释放 *}
+function CommandLineToArgvW(lpCmdLine: LPCWSTR; pNumArgs: PLONG): Pointer; stdcall;
+  external 'shell32' name 'CommandLineToArgvW';
+
 function GetEnvironmentVariableA(lpName: LPCSTR; lpBuffer: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'GetEnvironmentVariableA';
 
 {** @desc 获取环境变量（Unicode）
@@ -814,6 +821,12 @@ function GetCurrentProcess: HANDLE; stdcall; external 'kernel32' name 'GetCurren
     @param Add 是否添加
     @return TRUE 成功 *}
 function SetConsoleCtrlHandler(HandlerRoutine: TConsoleCtrlHandlerRoutine; Add: WINBOOL): WINBOOL; stdcall; external 'kernel32' name 'SetConsoleCtrlHandler';
+
+{** @desc 向控制台进程组发送控制事件（Ctrl+C / Ctrl+Break）
+    @param dwCtrlEvent 控制事件类型（CTRL_C_EVENT / CTRL_BREAK_EVENT）
+    @param dwProcessGroupId 进程组 ID（0 表示当前）
+    @return TRUE 成功 *}
+function GenerateConsoleCtrlEvent(dwCtrlEvent: DWORD; dwProcessGroupId: DWORD): WINBOOL; stdcall; external 'kernel32' name 'GenerateConsoleCtrlEvent';
 
 {** @desc 获取标准句柄
     @param nStdHandle 标准句柄类型（STD_INPUT/OUTPUT/ERROR_HANDLE）

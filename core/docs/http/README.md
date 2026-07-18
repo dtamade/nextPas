@@ -5,10 +5,15 @@ middleware chaining, and a centralized internal transport registry.
 
 ## Module Docs
 
-- `GOAL_TREE.md` — north star, route map, done criteria, and current highest-value slices
-- `ARCHITECTURE.md` — stable architecture facts, runtime ownership, and protocol seams
-- `API_COVERAGE.md` — public API proof and parity decisions
-- `BENCHMARKS.md` — benchmark truth, microbenchmark evidence, and comparator caveats
+| Doc | Role |
+|-----|------|
+| **[`ROADMAP.md`](ROADMAP.md)** | **Sole forward NEXT** — Eras/Waves, Goal Loop, Inbox |
+| [`GOAL_TREE.md`](GOAL_TREE.md) | North star + do-not-drift only (no live Wave name) |
+| [`CONTRACT.md`](CONTRACT.md) | Public behavior contract |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable architecture facts, runtime ownership, protocol seams |
+| [`API_COVERAGE.md`](API_COVERAGE.md) | Public API evidence matrix |
+| [`BENCHMARKS.md`](BENCHMARKS.md) | Benchmark truth and comparator caveats |
+| [`archive/`](archive/README.md) | Historical waves only — **not** a backlog |
 
 ## Architecture
 
@@ -22,6 +27,25 @@ Facade (nextpas.core.http) — single uses entry point
 Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`
 as the default client/server version.
 
+## Public Surface Map (by scenario)
+
+Use a single `uses nextpas.core.http` entry; pick APIs by job:
+
+| Scenario | Start here |
+| --- | --- |
+| Client GET/POST JSON | raw: `PostJson` → `IHttpResponse` (`FinalUrl` / `Version` metadata); ensure string: `HttpPostJson` / `GetString`; ensure+decode: `HttpGetJson` / `HttpPostJsonDocument` / `GetJson` / `HttpReadResponseJson` |
+| Fluent request | `THttpRequestBuilder` → `Send` |
+| Streaming / chunked body | `SendStreaming` / builder `Body(IReader)` (H1 chunked if CL omitted) |
+| Auth / retry / jar / proxy / TLS | `WithBearerAuth`, `WithRetry` (delta + HTTP-date Retry-After), `WithCookieJar`, `WithProxyUrl` (`http://user:pass@proxy` → **Basic only**), `WithTLSContext` |
+| Direct HTTPS client | `NewHttpClient` + `WithTLSContext` / options `TLSContext` → `Get('https://…')` (H1 TLS wrap) |
+| Cancel / timeout | `NewHttpCancelToken`, builder `CancelToken`, `WithTimeout`, `WithConnectTimeout` / options `ConnectTimeout` |
+| Multipart upload | `PostMultipart` or `EncodeMultipartFormData` + `Post` |
+| Server | `NewRouter` → `NewHttpServer` → `ListenAndServe` |
+| Middleware | `CorsMiddleware`, `RecoveryMiddleware`, `Chain`, … |
+| WebSocket | `UpgradeWebSocket` / `ConnectWebSocket` + `TWebSocketOptions.ConnectTimeout`/`Timeout` (Default 30s) + optional `WithCancelToken` for mid-frame cancel |
+| Static files | `ServeFile` / `ServeDir` |
+| Form parse | `ParseUrlEncodedForm` / `ParseMultipartFormData` |
+
 ## Quick Start
 
 Run the examples instead of copy-pasting a partial snippet:
@@ -34,7 +58,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ```
 
 - `http_hello_server` shows `NewRouter`, `Router.Get(...)`,
-  `Req.PathParam`, `Req.QueryParam`, `NewHttpServer(..., THttpServerOptions.Default)`,
+  `Req.PathParam`, `Req.QueryParam`,
+  `NewHttpServer(..., THttpServerOptions.Production.WithRequestArena)`,
   and `ListenAndServe`.
 - `http_get_client` shows `NewHttpClient`, `Client.Get(URL)`,
   `HttpReadResponseBodyString(Resp)`, and printing status / headers / body.
@@ -76,7 +101,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `SetHeader/Add/Get/GetAll/Has/Remove/Count/ForEach/Clone`
 - `SetBasicAuth(Headers, Username, Password)` / `SetBearerAuth(Headers, Token)`
   — set the `Authorization` header for common client request auth cases; nil
-  headers raise `EArgumentError`, and existing authorization values are replaced.
+  headers raise `EHttpError(hekArgument)`, and existing authorization values are replaced.
 
 ### URL Utilities
 
@@ -92,50 +117,18 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 ### Messages
 
-- `NewRequest(Method, Url)` / `NewGetRequest(Path)` — build simple requests;
-  `Url` can be either a `TUrl` or a URL string.
-- `NewRequest(Method, Url, Headers)` — build a headers-only request with nil
-  body and zero `Content-Length`; this covers the common `GET` / `HEAD` /
-  custom-header case without forcing callers to spell `Headers, nil, 0`.
-  An explicit single numeric `Content-Length: 0` is accepted; positive,
-  invalid, duplicate, or oversized `Content-Length` is rejected because no body
-  is supplied.
-  `nil` as the third argument is not the headers-only form: it stays source
-  compatible with the older empty-`TBytes` helper and therefore still produces
-  a zero-length body with `Content-Length: 0`.
-- `NewRequest(Method, Url, Headers, Body, ContentLength)` — build custom
-  requests for `IHttpClient.Send`; `Url` can be either a `TUrl` or a URL string,
-  nil headers create an empty header set, body requests publish
-  `Content-Length`, and negative content length raises `EArgumentError`.
-  Caller-supplied `Content-Length` is valid only when it is a single numeric
-  value matching the helper body length; duplicate, invalid, oversized, or
-  conflicting values raise `EArgumentError`.
-- `NewRequest(Method, Url, Headers, BodyText)` — build a custom request with
-  a copied Pascal string body and generated `Content-Length`; callers still set
-  `Content-Type` explicitly on the supplied headers when needed.
-- `NewRequest(Method, Url, ContentType, BodyText)` — the same copied Pascal
-  string body helper, but for the common case where callers want to declare a
-  request `Content-Type` without hand-constructing a header set first.
-- `NewRequest(Method, Url, BodyText)` — the same copied Pascal string body
-  helper, but with auto-created empty headers when callers do not need custom
-  request headers.
-- `NewRequest(Method, Url, Headers, BodyBytes)` — build a custom request with
-  a copied `TBytes` body and generated `Content-Length`; this preserves binary
-  payload bytes without forcing callers through a Pascal string.
-- `NewRequest(Method, Url, ContentType, BodyBytes)` / `NewRequest(Method, Url,
-  ContentType, Body, ContentLength)` — the same binary / reader body helpers
-  for the common case where callers want `Content-Type` published without
-  allocating a separate `IHttpHeaders` first.
-- `NewRequest(Method, Url, BodyBytes)` / `NewRequest(Method, Url, Body,
-  ContentLength)` — the same binary / reader body helpers without an explicit
-  headers object; they still publish `Content-Length` and still do not guess
-  `Content-Type`.
-- Request helpers do not implement caller-supplied `Transfer-Encoding`; any
-  `Transfer-Encoding` header raises `EArgumentError`. Streaming/chunked request
-  body ownership remains a future API seam rather than a silent header escape
-  hatch. When a headers object is supplied, the helper treats it as
-  request-owned and may write `Content-Length`; do not reuse the same headers
-  object for a different request shape.
+- **Recommended:** `THttpRequestBuilder.Create(Method, UrlString).Header(...).Body(...).Build`
+  — fluent construction; covers auth, content-type, query, per-request options.
+- **Public request factories (whitelist only):**
+  - `NewRequest(Method, TUrl)` — minimal primitive factory
+  - `NewRequest(Method, string)` — URL-parse bridge (no headers/body)
+  - `NewGetRequest(Path)` — path-level GET helper
+  - Prefer `THttpRequestBuilder` for headers/body/auth/options.
+- `NewStreamingRequest` and multi-arg `NewRequest` overloads are **physically
+  removed**. Use the builder or `IHttpClient.SendStreaming`.
+- Builder note: `Body(IReader)` + `ContentLength(N)` for known length; missing
+  length may use H1 chunked request body. Empty `Body('')` publishes
+  `Content-Length: 0`.
 - `NewResponse(Status, Headers, Body)` — build responses; nil headers create
   an empty header set so callers can safely read or mutate `Resp.Headers`.
 - `NewResponse(Status, Headers, BodyText)` /
@@ -147,7 +140,7 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   the nil-body form and does not publish `Content-Length`.
 - `HttpWriteResponseString(Writer, Status, ContentType, Body)` — write a
   fixed Pascal string response through an `IHttpResponseWriter` and return the
-  body bytes accepted by the writer. Nil writers raise `EArgumentError`;
+  body bytes accepted by the writer. Nil writers raise `EHttpError(hekArgument)`;
   informational statuses raise `EHttpError` because the helper writes final
   responses; non-empty bodies for `204` / `304` raise before committing bytes;
   empty `204` / `304` responses skip entity headers; body-permitted final
@@ -158,21 +151,57 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown` / `LocalAddr` / `IsRunning`
 - `IHttpClient.Send(Req)` / `CloseIdleConnections` / `Get(Url)` /
   `Post(Url, ContentType, Body)` / `Put` / `Delete` / `Patch` / `Head`;
-  `Send(nil)` raises `EArgumentError`
-- `Post` / `Put` / `Patch` expose three shortcut body forms:
-  `IReader`, Pascal `string`, and `TBytes`.
-- All three shortcut body forms publish `Content-Length`; a non-empty caller
-  supplied `Content-Type` is forwarded, while an empty content type omits the
-  header instead of sending an empty header value. The `IReader` form still
-  buffers to bytes rather than routing payload through a Pascal string, while
-  the `string` / `TBytes` forms reuse the public `NewRequest(..., BodyText)` /
-  `NewRequest(..., BodyBytes)` helpers.
+  `Send(nil)` raises `EHttpError(hekArgument)`
+- `Post` / `Put` / `Patch` / `Delete` body shortcuts accept Pascal `string` and
+  `TBytes` only (publish `Content-Length`). Non-empty caller `Content-Type` is
+  forwarded; empty content type omits the header. Stream bodies use
+  `SendStreaming` or builder + `Send`.
+- `WithRetry(N)` retries **429**, **5xx**, and **retryable transport errors**
+  (`HttpErrorIsRetryable`: timeout/connect). Prefers delta-seconds
+  `Retry-After` (cap 60s); otherwise exponential backoff (100ms base, max 5s).
+  Other 4xx are not retried. Only **idempotent-safe** requests enter the loop:
+  GET/HEAD/OPTIONS/TRACE or `Idempotency-Key` / `X-Idempotency-Key`
+  (`HttpIsRetrySafeRequest`). Body is rewound via `IStream` when present.
+- **Production client defaults**: `THttpClientOptions.Default.Timeout` is
+  **30000** ms. Explicit `Timeout=0` still means unbounded post-dial IO
+  (tests/special tools only). Prefer `WithTimeout` when overriding. Examples
+  such as `http_get_client` use a finite timeout for this reason.
+- **Production server defaults**: `THttpServerOptions.Default` keeps
+  `ReadTimeout`/`WriteTimeout` = **0** (unbounded) for tests/compat.
+  Production servers must use **`THttpServerOptions.Production`** (finite
+  Read/Write = 30000 ms) or explicit `WithReadTimeout` / `WithWriteTimeout`.
+  IdleTimeout alone is not a full production template. Examples
+  (`http_hello_server`, `http_websocket_echo_demo`) use Production.
+  Convenience `NewHttpServerWithRequestArena` (no explicit options) also bases
+  on **Production** + RequestArena so arena demos do not inherit unbounded RW.
+- **With* chain / Timeout vs ConnectTimeout / Default vs Production**：权威表见
+  [`CONTRACT.md`](CONTRACT.md) §2.2「With* 链语义（Wave E2）」；勿在 README 双写细节。
+- Cancel: `IHttpCancelToken` is **cooperative** → `hekCanceled` at Send /
+  redirect / retry / H1 RoundTrip checkpoints, and mid-read/write via
+  `ITcpStream.SetCancelToken` (~50ms SO_RCVTIMEO slices). Prefer pairing with
+  `Timeout`/`WithTimeout`. Timeouts remain `hekTimeout`.
+- Timeouts: `THttpClientOptions.Timeout` = request read/write deadline after
+  the socket is up; `ConnectTimeout` = **OS dial + post-dial first-write**
+  budget on new sockets. When `ConnectTimeout=0`, dial uses `Timeout` if
+  `Timeout>0`, else unbounded.
+- `WithCookieJar(Jar)` — optional jar; Max-Age/Expires eviction; SameSite +
+  eTLD+1 SiteKey (`HttpCookieSiteKey`; multi-label PSL subset; reject
+  `Domain=public-suffix`)
+  store/send (default Lax; None requires Secure; SiteKey approx, no PSL).
+- `WithProxyUrl` / `THttpClientOptions.ProxyUrl` — plain HTTP forward proxy
+  (`http://[user:pass@]host:port`). Target `http://` uses absolute-form; target
+  `https://` uses CONNECT then TLS over the tunnel (origin-form). UserInfo →
+  preemptive `Proxy-Authorization: Basic` only (no Digest/NTLM/407 challenge
+  retry). Optional `TLSContext` / `WithTLSContext` for verify-none / custom trust;
+  H1 direct https is supported without proxy.
+- `IHttpClient.GetString` / `GetBytes` and free `HttpGetString` / `HttpGetBytes`.
+- `IHttpClient.GetJson` and free `HttpGetJson` / `HttpReadResponseJson`
+  (ensure 2xx + JSON document; invalid body → `hekProtocol` Op=`json`).
+- H1 default `User-Agent: nextpas-http/1.0` when the request omits it.
+- `PostMultipart(Url, Fields, Files)` — multipart/form-data convenience POST.
 - `IHttpClient.Send` owns any close-capable request body for the duration of the
   request. After the final round trip or failure, `IReadCloser` / `ICloser` /
-  `IStream` request bodies are closed. The `Post` / `Put` / `Patch`
-  `IReader` shortcut closes the source reader after buffering it to bytes for
-  `Content-Length`, so callers do not have to close a file/stream body
-  separately once the helper returns.
+  `IStream` request bodies are closed.
 - `CloseIdleConnections` is a lifecycle seam for explicitly releasing idle
   keep-alive state. The public client does not leak H1 pool details; transports
   that own idle pooled connections may implement the optional capability and
@@ -220,25 +249,36 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   abandoned redirect body into connection reuse.
 - `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`; consumed or discarded response bodies are released before the helper returns or raises
 - `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, cleans partial temp files on failure, and releases the response body before returning or raising
-- `HttpReadResponseBodyBytes(Resp)` — consumes `Resp.Body` into `TBytes`; nil body returns empty bytes, nil response raises `EArgumentError`
-- `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EArgumentError`
+- `HttpReadResponseBodyBytes(Resp)` — consumes `Resp.Body` into `TBytes`; nil body returns empty bytes, nil response raises `EHttpError(hekArgument)`
+- `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EHttpError(hekArgument)`
 - `HttpReleaseResponseBody(Resp)` — releases a response body the caller will
   not read: close-capable bodies are closed, plain `IReader` bodies are drained
-  to EOF, nil body is a no-op, and nil response raises `EArgumentError`
+  to EOF, nil body is a no-op, and nil response raises `EHttpError(hekArgument)`
 - `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`
-- `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、
-  `MaxHeaderSize`、`MaxBodySize`; negative timeout or size-limit fields raise
-  `EArgumentError` at server construction time.
+- `THttpServerOptions` — 公开 carrier（`Backend`、timeouts、`MaxHeaderSize`、
+  `MaxBodySize`…）。`Default` vs `Production` 见上。Negative timeout or
+  size-limit fields raise `EHttpError(hekArgument)` at server construction time.
 - `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
-- `THttpClientOptions` — 公开 carrier，当前包括 `Timeout`、`MaxRedirects` 和
-  `FollowRedirects`; negative `Timeout` or `MaxRedirects` raises
-  `EArgumentError` at client construction time.
+- `THttpClientOptions` — 公开 carrier，当前包括 `Timeout`、`ConnectTimeout`
+  （OS dial + post-dial 首写 budget）、`MaxRedirects` 和 `FollowRedirects`;
+  negative `Timeout` or `MaxRedirects` raises `EHttpError(hekArgument)` at
+  client construction time.
+
+### SSE
+
+- `StartSSE(Writer)` / `ISSEEventWriter` — Server-Sent Events writer.
+  Nil writer, field injection (CR/LF in event name/id), and negative retry
+  raise `EHttpError(hekArgument)` (same public precondition style as client/
+  server/websocket).
 
 ### WebSocket
 
 - `UpgradeWebSocket(Req, Writer[, Options])` — 升级 HTTP 连接并返回 handler-owned `IWebSocket`
-- `TWebSocketOptions` — 公开 carrier，当前包括 `MaxFrameSize` 与 `MaxMessageSize`
-- `TWebSocketOptions.Default` — 默认限制为 16 MiB frame / 64 MiB message，调用方可按 endpoint 调整
+- `ConnectWebSocket(Url[, Options])` — 客户端 dial + upgrade；生产路径有界
+- `TWebSocketOptions` — `MaxFrameSize` / `MaxMessageSize` / `ConnectTimeout` / `Timeout` /
+  `OnCheckOrigin`；fluent `WithConnectTimeout` / `WithTimeout`
+- `TWebSocketOptions.Default` — 16 MiB frame / 64 MiB message；**ConnectTimeout=Timeout=30000**
+  （OS dial + handshake I/O）；`=0` 显式恢复无界
 
 `MaxFrameSize` 在 payload 分配/读取前检查 declared frame length；`MaxMessageSize`
 会累计 fragmented message，超过限制时由 `ReadFrame` 抛出 `EHttpError`。

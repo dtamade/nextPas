@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 verify test test-smoke test-tooling focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator hygiene clean clean-artifacts contract
+.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -13,7 +13,16 @@ contract:
 
 stage0: rebuild-compiler
 
+# Fresh-process doctor projection under NEXTPAS_MEM_HEAP_DEBUG / NEXTPAS_MEM_DEBUG.
+# Requires build/stage0-bootstrap/nextpas (run make rebuild-compiler first).
+stage0-heap-debug-recipe:
+	./scripts/stage0-heap-debug-env-recipe.sh
+
 verify: hygiene contract
+	$(MAKE) test-compiler-incremental-cache
+	$(MAKE) test-compiler-constructor-typing
+	$(MAKE) test-incremental-gate
+	$(MAKE) test-compiler-system-intrinsics
 	./build/verify_local.sh
 	$(MAKE) hygiene
 
@@ -28,6 +37,22 @@ test-tooling: hygiene
 	$(MAKE) -C tests/tooling test
 	$(MAKE) hygiene
 
+test-compiler-incremental-cache: hygiene
+	./compiler/tests/run_incremental_cache_framing.sh
+	./compiler/tests/run_incremental_cache_entry_identity.sh
+	$(MAKE) hygiene
+
+test-compiler-constructor-typing: hygiene
+	./compiler/tests/run_semantic_constructor_type_infer.sh
+	$(MAKE) hygiene
+
+test-incremental-gate: hygiene
+	./tests/regression/verify_incremental.sh
+	$(MAKE) hygiene
+
+test-compiler-system-intrinsics: hygiene system-projection-check
+	./compiler/tests/run_system_intrinsic_self_aliases_test.sh
+	$(MAKE) hygiene
 focused: hygiene
 	@test -n "$(FOCUS)" || { echo "FOCUS is required, e.g. make focused FOCUS=core/tests/nextpas.core.http/test_http_client" >&2; exit 1; }
 	@test -d "$(FOCUS)" || { echo "FOCUS directory not found: $(FOCUS)" >&2; exit 1; }
@@ -109,6 +134,12 @@ self-compile-modules: rebuild-compiler
 
 c8-probe-np-allocator: rebuild-compiler
 	./build/probe_self_compile_module.sh rtl/core/mem/np_allocator.pas
+
+system-projection-check:
+	bash scripts/system-projection.sh check linux-x86_64
+
+system-projection-sync:
+	bash scripts/system-projection.sh sync linux-x86_64
 
 hygiene:
 	./scripts/build-hygiene-check.sh

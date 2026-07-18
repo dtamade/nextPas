@@ -1,105 +1,73 @@
 # nextPas Platform Goal Tree
 
-Stable terminology lives in [master-spec](master-spec.md). This file tracks
-phase state and evidence only.
+Stable terminology: [master-spec](master-spec.md). Forward queue: [ROADMAP.md](ROADMAP.md).
+Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 
 ## Current position
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
-Windows has focused-runtime evidence for 14 modules on real Windows VM via SSH,
-plus Wine runtime smoke for 20 modules. macOS, FreeBSD, and Android remain
-source-contract or forced-compile only.
+
+- **Windows x86_64**: durable **`ci-matrix`** for documented 17-gate set on GHA
+  `test-windows-runtime` (14 wine-suite dirs + poller/io/socket real); Wine
+  runtime smoke secondary. Outside matrix: deeper AcceptEx/ConnectEx; signal is
+  forced-compile/source-contract only; secure-zero is permanent FillChar+barrier.
+- **macOS**: **focused-runtime** for documented 8-gate set (ROADMAP D2.c).
+- **FreeBSD / Android**: source-contract, forced-compile, or best-effort CI only.
+
+Usability baseline 8.21 is maintenance (LT0–LT3 + dual-IO/F6 freeze). D0–D3 closed.
+F7/F9/F10 Won't; F14 freetype stays under platform.
 
 ## Host Status
 
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
-| Linux x86_64 | focused-runtime across all facade modules | keep gates green |
-| Windows x86_64 | focused-runtime 14 modules; wine-runtime-smoke 20 modules; real-Windows runtime gap remains | promote to ci-matrix |
-| macOS / FreeBSD | source-contract and selected compile fragments | runtime evidence |
+| Linux x86_64 | focused-runtime across facade modules | keep gates green |
+| Windows x86_64 | **ci-matrix** 17-gate set; wine secondary | expand matrix; keep GHA+wine green |
+| macOS | **focused-runtime** 8-gate set (D2.c) | keep GHA matrix green |
+| FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
 
 ## Evidence Gates
 
-Windows readiness and completion proof is split across:
-- `test_poller_windows_contract` — IOCP/poller source-contract (IOCP read/write operations)
-- `test_poller_windows_compile_gate` — consumer IOCP forced compile
-- `test_platform_windows_poller_compile_gate` — platform readiness poller
-- `test_async` — Linux async consumer runtime
-- `test_platform_resource` — Linux resource limits (Linux runtime, Windows unsupported)
-- `test_platform_memory` / `test_platform_memory_secure_zero_compile_gate` — secure zero
-- `test_platform_files_android_compile` / `test_platform_mmap_android_compile` — Android files/mmap forced-compile proof only
+| Gate family | What it proves |
+| --- | --- |
+| `test_poller_windows_*` / platform poller compile | IOCP/poller source-contract + forced compile |
+| `test_async` | Linux async consumer runtime |
+| `test_platform_resource` | Linux resource limits |
+| `test_platform_memory*` | secure zero + compile gate |
+| Android files/mmap compile | forced-compile only |
 
-These gates prove source shape and forced Windows compile coherence, not Windows runtime behavior.
+These prove source shape and forced compile coherence, not full-host runtime.
 Focused runtime gates use heaptrc for leak-proof validation.
 
-## Wine Runtime Smoke Evidence (20 modules)
+## Windows matrix evidence
 
-Cross-compiled to Win64 PE via `-Twin64`, executed under Wine 10.0.
+**Wine smoke** (Win64 PE under Wine; secondary): time, memory, sync, thread, io,
+process, files, fs, path, env, mmap, random, socket, dl, pipe, fmt, info, error,
+which, io.reactor.iocp. Not covered: signal, console, args, freetype/net, pty.
 
-| Module | Tests | Known gaps |
-| --- | :-: | --- |
-| platform.time | 5 | — |
-| platform.memory | 8 | — |
-| platform.sync | 14 | recursive mutex (SRWLOCK unsupported) |
-| platform.thread | 9 | WaitOnAddress availability |
-| platform.io | 4 | — |
-| platform.process | 7 | — |
-| platform.files | 14 | — |
-| platform.fs | 11 | — |
-| platform.path | 11 | — |
-| platform.env | 5 | — |
-| platform.mmap | 7 | — |
-| platform.random | 4 | — |
-| platform.socket | 4 | — |
-| platform.dl | 8 | — |
-| platform.pipe | 8 | — |
-| platform.fmt | 10 | — |
-| platform.info | 5 | — |
-| platform.error | 6 | — |
-| platform.which | 5 | — |
-| io.reactor.iocp | 8 | ConnectEx graceful skip |
-
-Not covered by Wine: signal (SetConsoleCtrlHandler unsupported), console (pseudo-TTY),
-args (FPC RTL ParamStr cross-platform), freetype/net (extra deps), pty (Unix-only).
-
-## Windows Real Runtime Evidence
-
-| Module | Tests | Known gaps |
-| --- | :-: | --- |
-| platform.io (real) | 10 | IOCP/AcceptEx/ConnectEx not tested |
-| platform.socket (real) | 16 | AcceptEx/ConnectEx/TransmitFile not tested |
+**Real Windows ci-matrix (17)** via `platform-windows-ci-matrix.sh`: time, memory,
+sync, thread, io, process, files, fs, path, env, mmap, random, socket,
+io.reactor.iocp, poller.windows_runtime_smoke, platform.io.windows_real,
+platform.socket.windows_real. Not full-host parity outside that list.
 
 ## Milestones
 
 | Milestone | Goal | Current truth | Next proof |
 | --- | --- | --- | --- |
-| P1 Host ABI inventory | Host constants, records, handles | done | keep gap matrix current |
-| P2 Feature facades | 14 portable APIs | focused-runtime on Windows | expand consumer coverage |
-| P3 Readiness lane | platform_poller_*, wake, userdata | Linux runtime; Wine CI matrix; Windows readiness poller | real-Windows CI runner |
-| P4 Completion lane | IOCP/proactor | focused-runtime | promote to ci-matrix |
-| P5 Tier 2 targets | aarch64/riscv64/arm32 | 13-module forced-compile | FreeBSD/Android compile gate |
-| P6 Benchmarks | Performance baseline | 14-operation baseline | cross-platform comparison |
-
-## P5 Evidence Matrix
-
-| Target | Status | Evidence |
-|--------|--------|----------|
-| riscv64-linux | PASS | 13-module forced-compile |
-| aarch64-linux | PASS | 13-module forced-compile |
-| arm32-linux | PASS | 13-module forced-compile |
-
-## Deferred Milestones
-
-| Milestone | Status | Reason |
-|-----------|--------|--------|
-| P7 macOS/Darwin | Deferred | Requires Darwin cross-compiler toolchain |
-| P8 FreeBSD | Deferred | Requires cross-platform-actions CI |
-| P9 Android | Deferred | NDK + bionic libc + syscall differences; Android resource limits source-contract only |
+| P1 Host ABI inventory | constants, records, handles | stable | keep gap matrix current |
+| P2 Feature facades | portable APIs | focused-runtime / Windows ci-matrix | expand consumers |
+| P3 Readiness lane | platform_poller_*, wake | Linux runtime; Windows in ci-matrix | keep GHA green |
+| P4 Completion lane | IOCP/proactor | ci-matrix poller/iocp + focused-runtime | deepen AcceptEx/ConnectEx |
+| P5 Tier 2 targets | aarch64/riscv64/arm32 | 13-module forced-compile | FreeBSD/Android compile |
+| P6 Benchmarks | performance baseline | 14-operation baseline | cross-platform compare |
+| P7 macOS/Darwin | host truth | focused-runtime 8-gate set | keep matrix green |
+| P8 FreeBSD | host truth | deferred | cross-platform-actions CI |
+| P9 Android | host truth | deferred | NDK + bionic runtime |
 
 ## Evidence rules
 
-- Do not use a status label without an evidence tier.
+- No status label without an evidence tier.
 - `forced-compile` is not runtime proof.
-- Linux runtime proof does not imply Windows runtime proof.
-- Consumer source-contract tests prove ownership expectations, not host runtime behavior.
+- Linux runtime does not imply Windows runtime.
+- Consumer source-contract tests prove ownership expectations, not host runtime.

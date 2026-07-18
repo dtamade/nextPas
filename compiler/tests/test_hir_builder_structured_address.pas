@@ -139,10 +139,12 @@ function HasConstLoad(const AFunc: THIRFunction; const AName: string): Boolean;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikLoad) and
-        (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName = AName) then
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = hikLoad) and
+        (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].IntrinsicName = AName) then
         Exit(True);
   Result := False;
 end;
@@ -154,10 +156,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikLoad) and (Instr.IntrinsicName = '') and
         TypeIsIntWidth(AModule, Instr.TypeId, ABitWidth, ASigned) then
         Exit(True);
@@ -171,10 +175,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikStore) and
         TypeIsIntWidth(AModule, Instr.TypeId, ABitWidth, ASigned) then
         Exit(True);
@@ -187,10 +193,12 @@ function HasIntrinsic(const AFunc: THIRFunction;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikIntrinsic) and
-        (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName =
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = hikIntrinsic) and
+        (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].IntrinsicName =
          AIntrinsicName) then
         Exit(True);
   Result := False;
@@ -202,10 +210,12 @@ var
   BlockIndex, InstrIndex: LongInt;
 begin
   Result := 0;
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikIntrinsic) and
-        (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName =
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = hikIntrinsic) and
+        (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].IntrinsicName =
          AIntrinsicName) then
         Inc(Result);
 end;
@@ -215,9 +225,11 @@ function HasInstrKind(const AFunc: THIRFunction;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = AKind then
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = AKind then
         Exit(True);
   Result := False;
 end;
@@ -227,10 +239,12 @@ function HasRecordAllocaSlots(const AFunc: THIRFunction;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikAlloca) and
-        (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName =
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = hikAlloca) and
+        (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].IntrinsicName =
          'record:' + IntToStr(ASlotCount)) then
         Exit(True);
   Result := False;

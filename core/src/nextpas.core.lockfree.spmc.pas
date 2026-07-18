@@ -55,14 +55,19 @@ type
   public
     {** @desc 创建 SPMC 环形队列（容量向上取 2 的幂） }
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     {** @desc 非阻塞入队；队列满时立即返回 False }
     function TryEnqueue(const AValue: T): Boolean;
+    {** @desc 非阻塞入队并返回失败原因（full vs closed）；成功 AError=lfteNone }
+    function TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 阻塞入队；队列满时等待直到有空间 }
     function EnqueueWait(const AValue: T): Boolean;
     {** @desc 带超时入队；超时返回 False }
     function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
     {** @desc 非阻塞出队；队列空时立即返回 False }
     function TryDequeue(out AValue: T): Boolean;
+    {** @desc 非阻塞出队并返回失败原因（empty vs closed-empty）；成功 AError=lfteNone }
+    function TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 阻塞出队；队列空时等待直到有数据 }
     function DequeueWait(out AValue: T): Boolean;
     {** @desc 带超时出队；超时返回 False }
@@ -76,6 +81,7 @@ type
     {** @desc 队列实际容量（2 的幂） }
     function Capacity: PtrUInt; inline;
     {** @desc 关闭队列（唤醒所有等待者，已入队数据仍可读） }
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     {** @desc 队列是否已关闭 }
     function IsClosed: Boolean; inline;
@@ -92,7 +98,7 @@ var
   LI: PtrUInt;
 begin
   if IsManagedType(T) then
-    raise EArgumentError.Create('TSpmcQueue: T must be unmanaged');
+    raise EArgumentError.Create('TSpmcQueue: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TSpmcQueue: capacity must be > 0');
   inherited Create;
@@ -143,6 +149,20 @@ begin
   end;
 end;
 
+function TSpmcQueueImpl.TryEnqueueEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryEnqueue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 function TSpmcQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LPos: Int64;
@@ -187,6 +207,20 @@ begin
     else
       CpuPause;
   end;
+end;
+
+function TSpmcQueueImpl.TryDequeueEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryDequeue(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TSpmcQueueImpl.EnqueueWait(const AValue: T): Boolean;
@@ -296,11 +330,32 @@ begin
   Result := FCapacity;
 end;
 
+function TSpmcQueueImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryDequeue(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TSpmcQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
+end;
+
+destructor TSpmcQueueImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TSpmcQueueImpl.IsClosed: Boolean; inline;

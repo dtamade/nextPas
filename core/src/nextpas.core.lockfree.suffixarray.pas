@@ -19,7 +19,7 @@ unit nextpas.core.lockfree.suffixarray;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   TSuffixArrayResult = (
@@ -33,6 +33,7 @@ type
     Length: Int32;
   end;
 
+  {** @concurrency Thread-safe (see source for details). }
   TSuffixArray = class
   private
     FText: AnsiString;

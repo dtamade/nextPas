@@ -169,6 +169,8 @@ const
   PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED   = 1;
   PTHREAD_TIMEOUT_CLOCK_ID            = CLOCK_MONOTONIC;
 
+  MADV_HUGEPAGE = cint(14);
+
   PTHREAD_MUTEX_SIZE    = SizeOf(pthread_mutex_t);
   PTHREAD_RWLOCK_SIZE   = SizeOf(pthread_rwlock_t);
   PTHREAD_CONDVAR_SIZE  = SizeOf(pthread_cond_t);

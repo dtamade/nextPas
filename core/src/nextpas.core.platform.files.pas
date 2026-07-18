@@ -16,6 +16,7 @@ unit nextpas.core.platform.files;
 interface
 
 uses
+  nextpas.core.platform.posix.errno,
   nextpas.core.platform.files.base,
   nextpas.core.platform.error;
 
@@ -217,10 +218,9 @@ function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHand
     @param AEntry 输出目录条目
     @return 0 成功，1 无更多条目，否则返回错误码 *}
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
-{ POSIX dir_read uses getdents64 (Linux/Android) or readdir_r (macOS/FreeBSD)
-  to enumerate directory entries. Dot and dot-dot entries are filtered.
-  Thread safety: uses per-handle buffer; multiple handles on the same
-  directory are safe, but concurrent reads on the same handle are not. }
+{ POSIX dir_read uses getdents64 (Linux/Android), readdir (macOS), or
+  getdents (FreeBSD). Dot and dot-dot entries are filtered.
+  Thread safety: per-handle state; concurrent reads on the same handle are not. }
 
 {** @desc 关闭目录
     @param AHandle 目录句柄（置为无效）
@@ -303,6 +303,14 @@ begin
     LFlags := LFlags or O_SYNC;
   LFlags := LFlags or O_CLOEXEC;
   Result := FdToFileHandle(open(APath, LFlags, APerm), AHandle);
+  { Darwin/BSD: if O_CLOEXEC rejected, retry and set FD_CLOEXEC via fcntl. }
+  if (Result <> 0) and (Result = ESysEINVAL) then
+  begin
+    LFlags := LFlags and (not O_CLOEXEC);
+    Result := FdToFileHandle(open(APath, LFlags, APerm), AHandle);
+    if Result = 0 then
+      fcntl(AHandle.Value, F_SETFD, FD_CLOEXEC);
+  end;
 end;
 
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32;
@@ -362,6 +370,7 @@ function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
 var
   LWhence: Int32;
 begin
+  ANewPos := -1;
   case AOrigin of
     fsoBegin:   LWhence := 0;
     fsoCurrent: LWhence := 1;
@@ -486,11 +495,9 @@ var
          {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
          {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
+  FillChar(AStat, SizeOf(AStat), 0);
   if APath = nil then
-  begin
-    FillChar(AStat, SizeOf(AStat), 0);
     Exit(PLATFORM_ERR_INVALID);
-  end;
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, 0) <> 0 then
     Exit(platform_get_errno);
@@ -513,11 +520,9 @@ var
          {$IFDEF NEXTPAS_FREEBSD}TFreeBSDStat{$ENDIF}
          {$IFDEF NEXTPAS_ANDROID}TPlatformAndroidStat{$ENDIF};
 begin
+  FillChar(AStat, SizeOf(AStat), 0);
   if APath = nil then
-  begin
-    FillChar(AStat, SizeOf(AStat), 0);
     Exit(PLATFORM_ERR_INVALID);
-  end;
 {$IFDEF NEXTPAS_LINUX}
   if fstatat(AT_FDCWD, APath, LStat, AT_SYMLINK_NOFOLLOW) <> 0 then
     Exit(platform_get_errno);
@@ -696,6 +701,11 @@ begin
 end;
 
 function platform_dir_open(const APath: PAnsiChar; out AHandle: TPlatformDirHandle): Int32;
+{$IFDEF NEXTPAS_MACOS}
+var
+  LFd: cint;
+  LErr: Int32;
+{$ENDIF}
 begin
   { Thread safety: Windows FindFirstFile/FindNextFile use per-handle search
     state. Concurrent reads on the same handle are NOT safe. Each thread
@@ -703,14 +713,34 @@ begin
   FillChar(AHandle, SizeOf(AHandle), 0);
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
+{$IFDEF NEXTPAS_MACOS}
+  { Darwin: public DIR* API. getdirentries64 does not link on modern macOS. }
+  AHandle.Fd := -1;
+  AHandle.Dir := nil;
+  LFd := open(APath, O_RDONLY or O_DIRECTORY, 0);
+  if LFd < 0 then
+    Exit(platform_get_errno);
+  AHandle.Dir := fdopendir(LFd);
+  if AHandle.Dir = nil then
+  begin
+    LErr := platform_get_errno;
+    close(LFd);
+    Exit(LErr);
+  end;
+  { closedir owns LFd; keep Fd for IsValid. }
+  AHandle.Fd := LFd;
+  Result := 0;
+{$ELSE}
   Result := PosixFdToHandle(open(APath, O_RDONLY or O_DIRECTORY, 0), AHandle.Fd);
+{$ENDIF}
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
-{ POSIX dir_read uses getdents64 (Linux/Android) or readdir_r (macOS/FreeBSD)
-  to enumerate directory entries. Dot and dot-dot entries are filtered.
-  Thread safety: uses per-handle buffer; multiple handles on the same
-  directory are safe, but concurrent reads on the same handle are not. }
+{ POSIX dir_read uses getdents64 (Linux/Android), readdir (macOS), or
+  getdents (FreeBSD) to enumerate directory entries. Dot and dot-dot
+  entries are filtered. Thread safety: uses per-handle state; multiple
+  handles on the same directory are safe, but concurrent reads on the
+  same handle are not. }
 {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
 type
   PDirent64 = ^TDirent64;
@@ -741,7 +771,6 @@ var
   LDent: PDarwinDirent;
   LNameLen: Int32;
   LNamePtr: PAnsiChar;
-  LBase: Int64;
 {$ENDIF}
 {$IFDEF NEXTPAS_FREEBSD}
 type
@@ -807,24 +836,21 @@ begin
   end;
 {$ENDIF}
 {$IFDEF NEXTPAS_MACOS}
-  LBase := 0;
+  if AHandle.Dir = nil then
+    Exit(PLATFORM_ERR_BADF);
   while True do
   begin
-    if AHandle.Pos >= AHandle.Len then
+    { readdir returns nil for both EOF and error; clear errno to distinguish. }
+    __error^ := 0;
+    LDent := PDarwinDirent(readdir(AHandle.Dir));
+    if LDent = nil then
     begin
-      AHandle.Len := Int32(getdirentries(AHandle.Fd, @AHandle.Buf[0], SizeOf(AHandle.Buf), @LBase));
-      if AHandle.Len <= 0 then
-      begin
-        if AHandle.Len = 0 then
-          Result := 1
-        else
-          Result := platform_get_errno;
-        Exit;
-      end;
-      AHandle.Pos := 0;
+      if platform_get_errno = 0 then
+        Result := 1
+      else
+        Result := platform_get_errno;
+      Exit;
     end;
-    LDent := PDarwinDirent(@AHandle.Buf[AHandle.Pos]);
-    Inc(AHandle.Pos, LDent^.d_reclen);
     LNamePtr := @LDent^.d_name[0];
     if (LNamePtr[0] = '.') and (LNamePtr[1] = #0) then
       Continue;
@@ -881,6 +907,16 @@ end;
 
 function platform_dir_close(var AHandle: TPlatformDirHandle): Int32;
 begin
+{$IFDEF NEXTPAS_MACOS}
+  if AHandle.Dir <> nil then
+  begin
+    Result := PosixCheck(closedir(AHandle.Dir));
+    AHandle.Dir := nil;
+    AHandle.Fd := -1;
+  end
+  else
+    Result := PLATFORM_ERR_BADF;
+{$ELSE}
   if AHandle.Fd >= 0 then
   begin
     Result := PosixCheck(close(AHandle.Fd));
@@ -888,10 +924,25 @@ begin
   end
   else
     Result := PLATFORM_ERR_BADF;
+{$ENDIF}
 end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
+
+{** @desc 将 Windows 文件属性映射为平台文件类型
+    @param AAttrs dwFileAttributes 值
+    @return TPlatformFileType 枚举值 *}
+function WindowsFileAttrsToFileType(AAttrs: DWORD): TPlatformFileType; inline;
+begin
+  if (AAttrs and DWORD($400)) <> 0 then
+    Result := ftSymlink
+  else if (AAttrs and DWORD($10)) <> 0 then
+    Result := ftDirectory
+  else
+    Result := ftRegular;
+end;
+
 function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode;
   ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32;
 begin
@@ -1039,6 +1090,7 @@ function platform_file_seek(const AHandle: TPlatformFileHandle; AOffset: Int64;
 var
   LMethod: DWORD;
 begin
+  ANewPos := -1;
   case AOrigin of
     fsoBegin:   LMethod := FILE_BEGIN;
     fsoCurrent: LMethod := FILE_CURRENT;
@@ -1094,12 +1146,7 @@ begin
   LSize := UInt64(LData.nFileSizeHigh) shl 32 or LData.nFileSizeLow;
   AStat.Size := Int64(LSize);
   AStat.Mode := LData.dwFileAttributes;
-  if (LData.dwFileAttributes and $400) <> 0 then
-    AStat.FileType := ftSymlink
-  else if (LData.dwFileAttributes and $10) <> 0 then
-    AStat.FileType := ftDirectory
-  else
-    AStat.FileType := ftRegular;
+  AStat.FileType := WindowsFileAttrsToFileType(LData.dwFileAttributes);
   Result := 0;
 end;
 
@@ -1122,18 +1169,11 @@ begin
   AStat.Size := Int64(LSize);
   AStat.Mode := LInfo.dwFileAttributes;
   AStat.NLink := LInfo.nNumberOfLinks;
-  if (LInfo.dwFileAttributes and $400) <> 0 then
-    AStat.FileType := ftSymlink
-  else if (LInfo.dwFileAttributes and $10) <> 0 then
-    AStat.FileType := ftDirectory
-  else
-    AStat.FileType := ftRegular;
+  AStat.FileType := WindowsFileAttrsToFileType(LInfo.dwFileAttributes);
   Result := 0;
 end;
 
 function platform_file_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
-const
-  FILE_ATTRIBUTE_READONLY = $1;
 var
   LData: WIN32_FILE_ATTRIBUTE_DATA;
   LAttr: DWORD;
@@ -1381,10 +1421,7 @@ begin
 end;
 
 function platform_dir_read(var AHandle: TPlatformDirHandle; out AEntry: TPlatformDirEntry): Int32;
-{ POSIX dir_read uses getdents64 (Linux/Android) or readdir_r (macOS/FreeBSD)
-  to enumerate directory entries. Dot and dot-dot entries are filtered.
-  Thread safety: uses per-handle buffer; multiple handles on the same
-  directory are safe, but concurrent reads on the same handle are not. }
+{ Windows FindNextFile path. }
 var
   LNamePtr: PWideChar;
   LNameUtf8: AnsiString;
@@ -1417,12 +1454,7 @@ begin
       @AEntry.Name[0], SizeOf(AEntry.Name));
     AEntry.Ino := 0;
 
-    if (AHandle.FindData.dwFileAttributes and $400) <> 0 then
-      AEntry.FileType := ftSymlink
-    else if (AHandle.FindData.dwFileAttributes and $10) <> 0 then
-      AEntry.FileType := ftDirectory
-    else
-      AEntry.FileType := ftRegular;
+    AEntry.FileType := WindowsFileAttrsToFileType(AHandle.FindData.dwFileAttributes);
 
     Result := 0;
     Exit;
@@ -1442,11 +1474,18 @@ begin
   else
     Result := PLATFORM_ERR_BADF;
 end;
+
+function FileExistsByStat(const APath: PAnsiChar): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_lstat(APath, LStat) = 0;
+end;
 {$ENDIF}
 
 {$IF not defined(NEXTPAS_UNIX) and not defined(NEXTPAS_WINDOWS)}
-function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
-function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean; APerm: UInt32; out AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_open(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; out AHandle: TPlatformFileHandle): Int32; begin AHandle.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_file_open_ex(const APath: PAnsiChar; AMode: TPlatformFileOpenMode; ACreate: TPlatformFileCreateMode; AAppend: Boolean; ASync: Boolean; APerm: UInt32; out AHandle: TPlatformFileHandle): Int32; begin AHandle.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_close(var AHandle: TPlatformFileHandle): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_read(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; out ABytesRead: PtrUInt): Int32; begin ABytesRead := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_file_write(const AHandle: TPlatformFileHandle; ABuf: Pointer; ALen: PtrUInt; out ABytesWritten: PtrUInt): Int32; begin ABytesWritten := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;

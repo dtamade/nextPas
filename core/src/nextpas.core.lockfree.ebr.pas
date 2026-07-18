@@ -22,6 +22,7 @@ unit nextpas.core.lockfree.ebr;
 interface
 
 uses
+  nextpas.core.mem,
   nextpas.core.errors,
   nextpas.core.atomic;
 
@@ -89,7 +90,7 @@ begin
     LNext := LNode^.Next;
     if Assigned(LNode^.Reclaim) then
       LNode^.Reclaim(LNode^.Data, LNode^.UserData);
-    FreeMem(LNode);
+    FreeMem(LNode, SizeOf(TEbrRetiredNode));
     LNode := LNext;
   end;
   inherited Destroy;
@@ -172,7 +173,7 @@ begin
     LNext := LNode^.Next;
     if Assigned(LNode^.Reclaim) then
       LNode^.Reclaim(LNode^.Data, LNode^.UserData);
-    FreeMem(LNode);
+    FreeMem(LNode, SizeOf(TEbrRetiredNode));
     Inc(LReclaimedCount);
     LNode := LNext;
   end;

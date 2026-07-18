@@ -72,7 +72,7 @@
   BodyExactMatchCount := 0;
   BodyExactMatchIndex := -1;
   BodyMatchCount := 0;
-  for Index := 0 to Length(FProcedureBodies) - 1 do
+  for Index := 0 to LongInt(FProcedureBodies.Count) - 1 do
     if SameText(FProcedureBodies[Index].Name, QualifiedName) and
       SameText(FProcedureBodies[Index].OwnerUnitId, TypeSymbol.OwnerUnitId) then
     begin

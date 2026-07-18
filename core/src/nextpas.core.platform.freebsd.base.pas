@@ -141,6 +141,7 @@ const
   O_TRUNC = Int32($400);
   O_APPEND = Int32($8);
   O_NONBLOCK = Int32($4);
+  O_SYNC = Int32($80);      { same as O_FSYNC on FreeBSD }
   O_DIRECTORY = Int32($20000);
   O_CLOEXEC = Int32($100000);
 

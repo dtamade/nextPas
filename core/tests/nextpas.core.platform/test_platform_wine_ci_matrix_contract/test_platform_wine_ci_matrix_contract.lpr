@@ -3,8 +3,9 @@ program test_platform_wine_ci_matrix_contract;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
+  nextpas.core.fs,
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 const
@@ -26,17 +27,10 @@ end;
 function LoadScriptText: string;
 var
   LPath: string;
-  LLines: TStringList;
 begin
   LPath := ResolvePath(SCRIPT_PATH_FROM_TEST, SCRIPT_PATH_FROM_ROOT);
   Check(FileExists(LPath), 'platform Wine CI matrix script must exist: ' + LPath);
-  LLines := TStringList.Create;
-  try
-    LLines.LoadFromFile(LPath);
-    Result := LowerCase(LLines.Text);
-  finally
-    LLines.Free;
-  end;
+  Result := LowerCase(FsReadFileText(LPath));
 end;
 
 procedure CheckContains(const ASource, AToken, AMessage: string);
@@ -92,6 +86,10 @@ begin
     'Wine CI matrix script must invoke make inside each module test directory');
   CheckContains(LScript, 'wine-runtime-smoke',
     'Wine CI matrix script must invoke per-module wine-runtime-smoke targets');
+  CheckContains(LScript, 'wine-runtime-smoke requires wine|skip:',
+    'Wine CI matrix must SKIP only when Wine-missing markers appear in logs');
+  CheckContains(LScript, 'make failed (exit',
+    'Wine CI matrix must surface non-Wine make failures as FAIL with exit code');
   CheckContains(LScript, 'pass_count',
     'Wine CI matrix script must track pass count');
   CheckContains(LScript, 'fail_count',

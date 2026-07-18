@@ -3,7 +3,6 @@ program test_lockfree_robinhood;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.robinhood,
   nextpas.core.test;
 

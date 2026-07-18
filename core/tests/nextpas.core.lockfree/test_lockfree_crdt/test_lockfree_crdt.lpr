@@ -3,7 +3,6 @@ program test_lockfree_crdt;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.crdt;
 
 var

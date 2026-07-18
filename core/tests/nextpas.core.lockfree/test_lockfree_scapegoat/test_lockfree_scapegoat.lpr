@@ -3,7 +3,6 @@ program test_lockfree_scapegoat;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.scapegoat,
   nextpas.core.atomic,
   nextpas.core.test;

@@ -92,11 +92,11 @@ begin
     if AStr[LI] = '%' then
     begin
       if LI + 2 > LLen then
-        raise EHttpError.Create('Invalid percent-encoding: incomplete sequence');
+        raise EHttpError.Create(hekParse, 'Invalid percent-encoding: incomplete sequence');
       LHi := HexVal(AStr[LI + 1]);
       LLo := HexVal(AStr[LI + 2]);
       if (LHi < 0) or (LLo < 0) then
-        raise EHttpError.Create('Invalid percent-encoding: non-hex digit');
+        raise EHttpError.Create(hekParse, 'Invalid percent-encoding: non-hex digit');
       Result[LJ] := Char((LHi shl 4) or LLo);
       Inc(LI, 3);
     end

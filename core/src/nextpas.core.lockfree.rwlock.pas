@@ -12,6 +12,7 @@ type
     @details 基于原子操作的读写锁实现。
       支持 ReadLock/WriteLock/Unlock/TryReadLock/TryWriteLock。
       适用于读多写少的场景。
+ * @concurrency Thread-safe (see source for details).
   }
   TConcurrentRwLock = class
   private
@@ -20,6 +21,7 @@ type
     FWriterPending: Int32;
   public
     constructor Create;
+    destructor Destroy; override;
     function TryReadLock: Boolean;
     function ReadLock: Boolean;
     function TryWriteLock: Boolean;
@@ -119,6 +121,12 @@ end;
 procedure TConcurrentRwLock.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TConcurrentRwLock.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TConcurrentRwLock.IsClosed: Boolean; inline;

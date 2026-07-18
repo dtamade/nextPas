@@ -4,7 +4,18 @@ This document defines the acceptance criteria for nextPas to reach self-hosting 
 can compile itself). It focuses on the `np.system.*` contract vocabulary and runtime
 support that a self-hosted compiler will require.
 
-## Status: Pre-Self-Hosting (Partial Progress)
+## Status: M0 truth convergence; not self-host ready
+
+## Current readiness boundary
+
+Current focused fixtures are partial evidence for individual compiler/runtime contracts. A -> B -> C has not executed:
+the repository has not built a runnable stage A compiler-system bundle, used it to build stage B, then used
+stage B to build and compare stage C.
+
+The `PHASE 0 COMPLETE` labels in the historical assessments below are archived assessments, not present
+readiness claims. They do not prove canonical System ownership, executable lifecycle behavior, ABI
+stability, or a self-hosted compiler. Current readiness authority is the M0 bootstrap spine and its fresh
+projection, source-contract, compiler-consumer, runtime, and bootstrap evidence.
 
 The compiler currently uses FPC as the stage0 host compiler. Significant progress has been
 made on the compiler-side pipeline for unit/process lifecycle (Gates 2/3), but runtime

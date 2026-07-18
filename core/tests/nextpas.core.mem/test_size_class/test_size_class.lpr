@@ -25,6 +25,8 @@ begin
     LPtr2 := LAlloc.GetMem(16);
     Check(LPtr2 <> nil, 'alloc 16B');
     Check(LPtr1 <> LPtr2, 'different pointers');
+    LAlloc.FreeMem(LPtr2);
+    LAlloc.FreeMem(LPtr1);
   finally
     LAlloc.Free;
   end;
@@ -46,16 +48,24 @@ procedure Test_AllSizeClasses;
 var
   LAlloc: TSizeClassAllocator;
   LSize: SizeUInt;
-  LPtr: Pointer;
+  LPtrs: array[0..13] of Pointer;
+  LIdx: Integer;
 begin
   LAlloc := TSizeClassAllocator.Create(DefaultAllocator);
   try
+    LIdx := 0;
     LSize := 4;
     while LSize <= 32768 do
     begin
-      LPtr := LAlloc.GetMem(LSize);
-      Check(LPtr <> nil, 'alloc ' + IntToStr(LSize) + 'B');
+      LPtrs[LIdx] := LAlloc.GetMem(LSize);
+      Check(LPtrs[LIdx] <> nil, 'alloc ' + IntToStr(LSize) + 'B');
       LSize := LSize * 2;
+      Inc(LIdx);
+    end;
+    while LIdx > 0 do
+    begin
+      Dec(LIdx);
+      LAlloc.FreeMem(LPtrs[LIdx]);
     end;
   finally
     LAlloc.Free;
@@ -74,6 +84,7 @@ begin
     LAlloc.FreeMem(LPtr1);
     LPtr2 := LAlloc.GetMem(64);
     Check(LPtr2 <> nil, 'reuse freed block');
+    LAlloc.FreeMem(LPtr2);
   finally
     LAlloc.Free;
   end;
@@ -92,6 +103,7 @@ begin
     Check(LPtr <> nil, 'large alloc succeeds');
     LStats := LAlloc.GetStats;
     Check(LStats.LargeAllocCount >= 1, 'delegated to inner');
+    LAlloc.FreeMem(LPtr);
   finally
     LAlloc.Free;
   end;
@@ -101,16 +113,20 @@ procedure Test_Stats;
 var
   LAlloc: TSizeClassAllocator;
   LStats: TSizeClassStats;
+  LPtr1, LPtr2, LPtr3: Pointer;
 begin
   LAlloc := TSizeClassAllocator.Create(DefaultAllocator);
   try
-    LAlloc.GetMem(8);
-    LAlloc.GetMem(16);
-    LAlloc.GetMem(64);
+    LPtr1 := LAlloc.GetMem(8);
+    LPtr2 := LAlloc.GetMem(16);
+    LPtr3 := LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
     Check(LStats.TotalAlloc >= 3, 'total alloc >= 3');
     Check(LStats.ClassSizes[0] = 8, 'class 0 = 8B');
     Check(LStats.ClassSizes[1] = 16, 'class 1 = 16B');
+    LAlloc.FreeMem(LPtr3);
+    LAlloc.FreeMem(LPtr2);
+    LAlloc.FreeMem(LPtr1);
   finally
     LAlloc.Free;
   end;
@@ -136,6 +152,8 @@ begin
       LPtrs[I] := LAlloc.GetMem(32);
       Check(LPtrs[I] <> nil, 'realloc #' + IntToStr(I));
     end;
+    for I := 0 to 99 do
+      LAlloc.FreeMem(LPtrs[I]);
   finally
     LAlloc.Free;
   end;

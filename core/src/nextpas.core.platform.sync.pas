@@ -388,15 +388,7 @@ begin
     {$ELSE}
     if PTHREAD_CONDATTR_SETCLOCK_SUPPORTED <> 0 then
     begin
-      {$IFDEF NEXTPAS_LINUX}
       Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
-      {$ELSEIF defined(NEXTPAS_ANDROID)}
-      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
-      {$ELSEIF defined(NEXTPAS_FREEBSD)}
-      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
-      {$ELSE}
-      Result := pthread_condattr_setclock(@LAttr, PTHREAD_TIMEOUT_CLOCK_ID);
-      {$ENDIF}
       if Result <> 0 then
         Exit;
     end;
@@ -491,6 +483,7 @@ function platform_sync_host_pthread_timeout_deadline_after_ns(
   const ANanoseconds: UInt64;
   out ADeadline: timespec): Int32; inline;
 begin
+  FillChar(ADeadline, SizeOf(ADeadline), 0);
   if clock_gettime(PTHREAD_TIMEOUT_CLOCK_ID, @ADeadline) <> 0 then
     Exit(PLATFORM_ERR_INVALID);
   platform_posix_timespec_add_ns(ADeadline, ANanoseconds);
@@ -1354,7 +1347,8 @@ end;
 
 function platform_sync_windows_mutex_trylock(AMutex: Pointer): Int32; inline;
 begin
-  if TryAcquireSRWLockExclusive(AMutex) then
+  { TryAcquireSRWLock* returns Win32 BOOLEAN (1-byte). Compare explicitly. }
+  if TryAcquireSRWLockExclusive(AMutex) <> 0 then
     Result := 0
   else
     Result := PLATFORM_ERR_BUSY;
@@ -1385,7 +1379,7 @@ end;
 
 function platform_sync_windows_rwlock_tryrdlock(ARwLock: Pointer): Int32; inline;
 begin
-  if TryAcquireSRWLockShared(ARwLock) then
+  if TryAcquireSRWLockShared(ARwLock) <> 0 then
     Result := 0
   else
     Result := PLATFORM_ERR_BUSY;
@@ -1405,7 +1399,7 @@ end;
 
 function platform_sync_windows_rwlock_trywrlock(ARwLock: Pointer): Int32; inline;
 begin
-  if TryAcquireSRWLockExclusive(ARwLock) then
+  if TryAcquireSRWLockExclusive(ARwLock) <> 0 then
     Result := 0
   else
     Result := PLATFORM_ERR_BUSY;

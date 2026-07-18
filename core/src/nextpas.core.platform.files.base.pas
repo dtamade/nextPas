@@ -165,6 +165,11 @@ type
     Buf: array[0..4095] of Byte;
     Pos: Int32;
     Len: Int32;
+    {$IFDEF NEXTPAS_MACOS}
+    { DIR* from fdopendir; closedir owns Fd. getdirentries64 is not a
+      public linkable symbol on modern Darwin, so Darwin uses readdir. }
+    Dir: Pointer;
+    {$ENDIF}
   {$ENDIF}
     {** @desc 检查目录句柄是否有效
         @return True 如果句柄有效 *}
@@ -318,7 +323,7 @@ end;
 function TPlatformDirHandle.IsValid: Boolean;
 begin
 {$IFDEF NEXTPAS_WINDOWS}
-  Result := FindHandle <> INVALID_HANDLE_VALUE;
+  Result := FindHandle <> HANDLE(INVALID_HANDLE_VALUE);
 {$ELSE}
   Result := Fd >= 0;
 {$ENDIF}
@@ -327,7 +332,7 @@ end;
 function TPlatformDirHandle.IsInvalid: Boolean;
 begin
 {$IFDEF NEXTPAS_WINDOWS}
-  Result := FindHandle = INVALID_HANDLE_VALUE;
+  Result := FindHandle = HANDLE(INVALID_HANDLE_VALUE);
 {$ELSE}
   Result := Fd < 0;
 {$ENDIF}

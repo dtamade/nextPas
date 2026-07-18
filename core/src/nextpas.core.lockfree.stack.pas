@@ -50,8 +50,14 @@ type
     function UnpackTag(ATagged: Int64): UInt32; inline;
   public
     constructor Create(const ACapacity: PtrUInt);
+    destructor Destroy; override;
     function TryPush(const AValue: T): Boolean;
+    {** @desc 非阻塞压栈并返回失败原因（full vs closed）；成功 AError=lfteNone }
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     function TryPop(out AValue: T): Boolean;
+    {** @desc 非阻塞弹栈并返回失败原因（empty vs closed-empty）；成功 AError=lfteNone }
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+    function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean;
     function IsEmpty: Boolean;
@@ -87,7 +93,7 @@ var
   LI: Int32;
 begin
   if IsManagedType(T) then
-    raise EArgumentError.Create('TLockFreeStack: T must be unmanaged');
+    raise EArgumentError.Create('TLockFreeStack: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeStack: capacity must be > 0');
   if ACapacity > PtrUInt(High(Int32)) then
@@ -130,6 +136,20 @@ begin
   Result := True;
 end;
 
+function TLockFreeStackImpl.TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryPush(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 function TLockFreeStackImpl.TryPop(out AValue: T): Boolean;
 var
   LOldTop, LNewTop, LOldFree, LNewFree: Int64;
@@ -155,14 +175,49 @@ begin
   Result := True;
 end;
 
+function TLockFreeStackImpl.TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryPop(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
+end;
+
 function TLockFreeStackImpl.IsEmpty: Boolean;
 begin
   Result := UnpackIdx(AtomicLoad64(FTop, moAcquire)) = -1;
 end;
 
+function TLockFreeStackImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
+var
+  LValue: T;
+  LCount: PtrUInt;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if not TryPop(LValue) then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TLockFreeStackImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TLockFreeStackImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLockFreeStackImpl.IsClosed: Boolean;

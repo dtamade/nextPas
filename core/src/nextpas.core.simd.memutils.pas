@@ -100,6 +100,8 @@ const
 implementation
 
 uses
+  nextpas.core.mem,
+  nextpas.core.mem.base,
   nextpas.core.errors;
 
 function IsPowerOfTwo(const AValue: NativeUInt): Boolean; inline;
@@ -292,25 +294,33 @@ end;
 function AlignUp(ptr: Pointer; alignment: NativeUInt): Pointer;
 var
   addr: NativeUInt;
+  aligned: SizeUInt;
 begin
   RequireValidAlignment(alignment);
   {$PUSH}{$WARN 4055 OFF}
   addr := NativeUInt(ptr);
-  if addr > High(NativeUInt) - (alignment - 1) then
+  { mem.base.AlignUp(0) uses (not 0)+1 under {$Q+} and overflows; nil stays nil. }
+  if addr = 0 then
+    Exit(nil);
+  aligned := nextpas.core.mem.base.AlignUp(SizeUInt(addr), SizeUInt(alignment));
+  if aligned = 0 then
     raise EOutOfMemory.CreateFmt(
       'Aligned pointer overflow: addr=%d, alignment=%d', [addr, alignment]);
-  addr := (addr + alignment - 1) and not (alignment - 1);
-  Result := Pointer(addr);
+  Result := Pointer(aligned);
   {$POP}
 end;
 
 function AlignUpSize(size: NativeUInt; alignment: NativeUInt): NativeUInt;
 begin
   RequireValidAlignment(alignment);
-  if size > High(NativeUInt) - (alignment - 1) then
+  { size=0 is valid and must not call mem.base.AlignUp(0) under {$Q+}. }
+  if size = 0 then
+    Exit(0);
+  { Reuse mem.base.AlignUp (overflow → 0); keep SIMD overflow raise contract. }
+  Result := nextpas.core.mem.base.AlignUp(SizeUInt(size), SizeUInt(alignment));
+  if Result = 0 then
     raise EOutOfMemory.CreateFmt(
       'Aligned size overflow: size=%d, alignment=%d', [size, alignment]);
-  Result := (size + alignment - 1) and not (alignment - 1);
 end;
 
 function GetAlignment(ptr: Pointer): NativeUInt;
@@ -661,7 +671,8 @@ begin
   if count > 0 then
   begin
     // ✅ Safety check: prevent integer overflow in size calculation
-    maxCount := NativeUInt(High(NativeUInt)) div NativeUInt(SizeOf(T));
+    { Avoid High(NativeUInt) under {$Q+} — FPC treats it as signed -1. }
+    maxCount := NativeUInt(not NativeUInt(0)) div NativeUInt(SizeOf(T));
     if count > maxCount then
       raise EOutOfMemory.CreateFmt('Allocation size overflow: count=%d, elemSize=%d', [count, SizeOf(T)]);
     Result.FData := AlignedAlloc(count * SizeOf(T), alignment);

@@ -24,7 +24,7 @@ unit nextpas.core.lockfree.tdigest;
 interface
 
 uses
-  Math,
+  nextpas.core.math,
   nextpas.core.lockfree.base,
   nextpas.core.atomic;
 
@@ -44,6 +44,7 @@ type
     FCount: UInt64;
   end;
 
+  {** @concurrency Thread-safe (see source for details). }
   TTDigestImpl = class
   private
     FCentroids: array of TCentroid;

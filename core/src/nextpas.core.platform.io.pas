@@ -5,7 +5,8 @@ unit nextpas.core.platform.io;
 interface
 
 uses
-  nextpas.core.platform.io.base;
+  nextpas.core.platform.io.base,
+  nextpas.core.platform.posix.errno;
 
 {** @desc 创建 I/O 多路复用器
     @param APoller 输出复用器句柄
@@ -70,6 +71,8 @@ function platform_poller_wait(var APoller: TPlatformPoller;
   out ACount: Int32): Int32;
 
 implementation
+
+{ L0: uses System GetMem/FreeMem (must not uses nextpas.core.mem; mem depends on platform). }
 
 {$IFDEF NEXTPAS_LINUX}
 uses
@@ -146,7 +149,7 @@ begin
     Move(APoller.Entries^, LNewEntries^,
       SizeUInt(APoller.Count) * SizeOf(PPlatformPollRegistration));
   if APoller.Entries <> nil then
-    FreeMem(APoller.Entries);
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(PPlatformPollRegistration));
   APoller.Entries := LNewEntries;
   APoller.Capacity := LNewCapacity;
   Result := 0;
@@ -174,8 +177,8 @@ begin
     LEntries := LinuxPollEntries(APoller);
     for LI := 0 to APoller.Count - 1 do
       if LEntries^[LI] <> nil then
-        FreeMem(LEntries^[LI]);
-    FreeMem(APoller.Entries);
+        FreeMem(LEntries^[LI], SizeOf(TPlatformPollRegistration));
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(PPlatformPollRegistration));
     APoller.Entries := nil;
   end;
   APoller.Count := 0;
@@ -225,7 +228,7 @@ begin
     Exit(0);
   end;
   Result := platform_get_errno;
-  FreeMem(LRegistration);
+  FreeMem(LRegistration, SizeOf(TPlatformPollRegistration));
 end;
 
 function platform_poller_modify(var APoller: TPlatformPoller; AFd: PtrUInt;
@@ -268,7 +271,7 @@ begin
   if epoll_ctl(APoller.EpollFd, EPOLL_CTL_DEL, Int32(AFd), nil) <> 0 then
     Exit(platform_get_errno);
   LEntries := LinuxPollEntries(APoller);
-  FreeMem(LEntries^[LIndex]);
+  FreeMem(LEntries^[LIndex], SizeOf(TPlatformPollRegistration));
   LMoveCount := APoller.Count - LIndex - 1;
   if LMoveCount > 0 then
     Move(LEntries^[LIndex + 1], LEntries^[LIndex],
@@ -356,7 +359,7 @@ begin
     ACount := LN;
     Result := 0;
   finally
-    FreeMem(LEvents);
+    FreeMem(LEvents, SizeUInt(AMaxEntries) * SizeOf(epoll_event));
   end;
 end;
 {$ENDIF}
@@ -535,7 +538,7 @@ begin
     ACount := LN;
     Result := 0;
   finally
-    FreeMem(LEvents);
+    FreeMem(LEvents, SizeUInt(AMaxEntries) * SizeOf(TKEvent));
   end;
 end;
 
@@ -658,7 +661,8 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.error;
 
 const
   WINDOWS_INVALID_POLL_SOCKET = PtrUInt(not PtrUInt(0));
@@ -672,7 +676,8 @@ type
 
 function WindowsSocketError: Int32; inline;
 begin
-  Result := platform_get_last_error;
+  { Winsock errors live in WSAGetLastError; map into PLATFORM_ERR_*. }
+  Result := platform_map_windows_error_code(DWORD(WSAGetLastError));
 end;
 
 function EnsureWinsockReady: Int32;
@@ -747,7 +752,7 @@ begin
     Move(APoller.Entries^, LNewEntries^,
       SizeUInt(APoller.Count) * SizeOf(TPlatformPollEntry));
   if APoller.Entries <> nil then
-    FreeMem(APoller.Entries);
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(TPlatformPollEntry));
   APoller.Entries := LNewEntries;
   APoller.Capacity := LNewCapacity;
   Result := 0;
@@ -781,6 +786,7 @@ var
   LAddr: sockaddr_in;
   LLen: Int32;
 begin
+  Result := 0;
   AReadSocket := WINDOWS_INVALID_POLL_SOCKET;
   AWriteSocket := WINDOWS_INVALID_POLL_SOCKET;
   LListener := TSocket(WINDOWS_INVALID_POLL_SOCKET);
@@ -794,25 +800,43 @@ begin
     FillChar(LAddr, SizeOf(LAddr), 0);
     LAddr.sin_family := AF_INET;
     LAddr.sin_port := 0;
-    LAddr.sin_addr.s_addr := htonl($7F000001);
+    LAddr.sin_addr.s_addr := htonl(INADDR_LOOPBACK);
     if winsock_bind(LListener, @LAddr, SizeOf(LAddr)) <> 0 then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
     if winsock_listen(LListener, 1) <> 0 then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
 
     LLen := SizeOf(LAddr);
     if winsock_getsockname(LListener, @LAddr, @LLen) <> 0 then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
 
     LWrite := winsock_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if LWrite = TSocket(WINDOWS_INVALID_POLL_SOCKET) then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
     if winsock_connect(LWrite, @LAddr, SizeOf(LAddr)) <> 0 then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
 
     LRead := winsock_accept(LListener, nil, nil);
     if LRead = TSocket(WINDOWS_INVALID_POLL_SOCKET) then
-      Exit(WindowsSocketError);
+    begin
+      Result := WindowsSocketError;
+      Exit;
+    end;
 
     AReadSocket := PtrUInt(LRead);
     AWriteSocket := PtrUInt(LWrite);
@@ -821,10 +845,8 @@ begin
 
     Result := WindowsSetSocketNonBlocking(AReadSocket);
     if Result <> 0 then
-      Exit(Result);
+      Exit;
     Result := WindowsSetSocketNonBlocking(AWriteSocket);
-    if Result <> 0 then
-      Exit(Result);
   finally
     if LRead <> TSocket(WINDOWS_INVALID_POLL_SOCKET) then
       closesocket(LRead);
@@ -854,7 +876,7 @@ begin
   WindowsCloseSocketValue(APoller.WakeWriteSocket);
   if APoller.Entries <> nil then
   begin
-    FreeMem(APoller.Entries);
+    FreeMem(APoller.Entries, SizeUInt(APoller.Capacity) * SizeOf(TPlatformPollEntry));
     APoller.Entries := nil;
   end;
   APoller.Count := 0;
@@ -960,7 +982,8 @@ begin
   if LSent = 1 then
     Exit(0);
   LErr := WindowsSocketError;
-  if LErr = WSAEWOULDBLOCK then
+  { WindowsSocketError returns PLATFORM_ERR_* (WSAEWOULDBLOCK → AGAIN). }
+  if LErr = PLATFORM_ERR_AGAIN then
     Exit(0);
   Result := LErr;
 end;
@@ -981,7 +1004,7 @@ begin
     if LRead = 0 then
       Exit(0);
     LErr := WindowsSocketError;
-    if LErr = WSAEWOULDBLOCK then
+    if LErr = PLATFORM_ERR_AGAIN then
       Exit(0);
     Result := LErr;
     Exit;
@@ -1036,7 +1059,7 @@ begin
     end;
     Result := 0;
   finally
-    FreeMem(LPollFds);
+    FreeMem(LPollFds, SizeUInt(APoller.Count) * SizeOf(TWSAPollFd));
   end;
 end;
 {$ENDIF}

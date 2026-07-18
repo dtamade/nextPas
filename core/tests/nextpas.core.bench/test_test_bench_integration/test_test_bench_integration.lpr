@@ -173,10 +173,10 @@ begin
   Test_ParallelBench;
 
   WriteLn;
-  WriteLn(Format('  %d passed, %d failed, 0 skipped', [GPassCount, GFailCount]));
+  WriteLn('  ', GPassCount, ' passed, ', GFailCount, ' failed, 0 skipped');
   WriteLn('--- test-bench-integration ---');
-  WriteLn(Format('  Total tests: %d', [GTestCount]));
-  WriteLn(Format('  Passed: %d, Failed: %d, Skipped: 0', [GPassCount, GFailCount]));
+  WriteLn('  Total tests: ', GTestCount);
+  WriteLn('  Passed: ', GPassCount, ', Failed: ', GFailCount, ', Skipped: 0');
   WriteLn;
 
   if GFailCount > 0 then

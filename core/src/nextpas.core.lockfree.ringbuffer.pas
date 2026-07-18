@@ -15,6 +15,7 @@ type
       使用 head/tail 指针 + CAS 实现 MPMC 安全。
       容量自动取整到 2 的幂，使用位掩码取模。
       适用场景：生产者-消费者、日志缓冲、实时系统。
+ * @concurrency Thread-safe (see source for details).
   }
   generic TRingBufferImpl<T> = class
   private type
@@ -31,6 +32,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: Int64);
+    destructor Destroy; override;
     function TryWrite(const AValue: T): TLockFreeRingBufferResult;
     function TryRead(out AValue: T): TLockFreeRingBufferResult;
     function WriteWait(const AValue: T): TLockFreeRingBufferResult;
@@ -41,6 +43,7 @@ type
     function GetCapacity: Int64; inline;
     function IsEmpty: Boolean; inline;
     function IsFull: Boolean; inline;
+    function Drain(const AMaxCount: Int64 = High(Int64)): Int64;
     procedure Close;
     function IsClosed: Boolean; inline;
   end;
@@ -57,7 +60,7 @@ var
   LI: Int64;
 begin
   if IsManagedType(T) then
-    raise EArgumentError.Create('TRingBuffer: T must be unmanaged');
+    raise EArgumentError.Create('TRingBuffer: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity <= 0 then
     raise EArgumentError.Create('TRingBuffer: capacity must be > 0');
   if ACapacity > (Int64(1) shl 62) then
@@ -227,9 +230,30 @@ begin
   Result := (LHead - LTail) >= FCapacity;
 end;
 
+function TRingBufferImpl.Drain(const AMaxCount: Int64): Int64;
+var
+  LValue: T;
+  LCount: Int64;
+begin
+  LCount := 0;
+  while LCount < AMaxCount do
+  begin
+    if TryRead(LValue) <> rbWritten then
+      Break;
+    Inc(LCount);
+  end;
+  Result := LCount;
+end;
+
 procedure TRingBufferImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TRingBufferImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TRingBufferImpl.IsClosed: Boolean; inline;

@@ -5,7 +5,6 @@ unit nextpas.core.lockfree.hashmap.numa;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.numa,
   nextpas.core.lockfree.hashmap;
@@ -46,6 +45,7 @@ type
     function GetHashMapForNode(ANode: Integer): THashMap;
   public
     {** @desc 创建 NUMA 感知 HashMap
+  {** @concurrency Thread-safe (see source for details). }
       @param AInitialCapacityPerNode 每个 NUMA 节点内部 HashMap 的初始容量 }
     constructor Create(const AInitialCapacityPerNode: PtrUInt = HASHMAP_NUMA_DEFAULT_INITIAL_CAPACITY_PER_NODE);
     destructor Destroy; override;
@@ -92,7 +92,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 function TNumaShardedHashMapImpl.GetNodeForKey(const AKey: TKey): Integer;
 var
@@ -115,6 +115,10 @@ constructor TNumaShardedHashMapImpl.Create(const AInitialCapacityPerNode: PtrUIn
 var
   I: Integer;
 begin
+  if IsManagedType(TKey) then
+    raise EArgumentError.Create('TNumaShardedHashMap: TKey must be unmanaged (no string/interface/dynarray)');
+  if IsManagedType(TValue) then
+    raise EArgumentError.Create('TNumaShardedHashMap: TValue must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   FNodeCount := NumaNodeCount;
   if FNodeCount < 1 then
@@ -136,7 +140,10 @@ var
   I: Integer;
 begin
   for I := 0 to FNodeCount - 1 do
-    FreeAndNil(FNodeShards[I].HashMap);
+  begin
+    FNodeShards[I].HashMap.Free;
+    FNodeShards[I].HashMap := nil;
+  end;
   SetLength(FNodeShards, 0);
   inherited;
 end;

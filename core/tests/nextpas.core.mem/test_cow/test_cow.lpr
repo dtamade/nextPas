@@ -108,8 +108,8 @@ begin
     { Original should be unchanged }
     Check(PByte(LPtr1)^ = 0, 'original should be unchanged');
 
-    LCow.FreeMem(LPtr1);
     LCow.FreeMem(LPtr2);
+    LCow.FreeMem(LPtr1);
   finally
     LCow.Free;
   end;

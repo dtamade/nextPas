@@ -9,6 +9,7 @@ unit nextpas.core.lockfree.hashmap;
  *
  * @see dashmap (Rust) — similar sharded-lock design
  * @see sync.Map (Go) — different approach but same concurrent map category
+ * @concurrency Thread-safe (see source for details).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -376,8 +377,10 @@ var
   LI: PtrUInt;
   LCap: PtrUInt;
 begin
-  if IsManagedType(TKey) or IsManagedType(TValue) then
-    raise EArgumentError.Create('TShardedHashMap: TKey and TValue must be unmanaged');
+  if IsManagedType(TKey) then
+    raise EArgumentError.Create('TShardedHashMap: TKey must be unmanaged (no string/interface/dynarray)');
+  if IsManagedType(TValue) then
+    raise EArgumentError.Create('TShardedHashMap: TValue must be unmanaged (no string/interface/dynarray)');
   if SizeOf(TKey) = 0 then
     raise EArgumentError.Create('TShardedHashMap: TKey must have non-zero size');
   inherited Create;
@@ -395,6 +398,12 @@ destructor TShardedHashMapImpl.Destroy;
 var
   LI: PtrUInt;
 begin
+  { Failed construction leaves FShardCount=0; guard against PtrUInt underflow. }
+  if FShardCount = 0 then
+  begin
+    inherited;
+    Exit;
+  end;
   for LI := 0 to FShardCount - 1 do
     SetLength(FShards[LI].Entries, 0);
   inherited;

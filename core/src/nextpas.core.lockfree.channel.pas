@@ -38,6 +38,11 @@ type
   TChannelNotifier = procedure(AData: Pointer) of object;
 
   generic TLockFreeChannelImpl<T> = class
+  private
+    { Separate empty/full sequence tokens so capacity=1 distinguishes full from empty.
+      Same encoding as TMpmcQueue: empty(pos)=pos*2, full(pos)=pos*2+1. }
+    class function EmptySequence(const APos: Int64): Int64; static; inline;
+    class function FullSequence(const APos: Int64): Int64; static; inline;
   private type
     TSlot = record
       Sequence: Int64;
@@ -89,6 +94,8 @@ type
     {** @desc 非阻塞发送，无空间或已关闭时立即返回 False
       @note 关闭时返回 False 而非抛异常——与 Go 的 `ch <- v` (panic) vs `select { case ch <- v: }` (ok=false) 语义对齐 }
     function TrySend(const AValue: T): Boolean;
+    {** @desc 非阻塞发送并返回失败原因（full vs closed）；成功 AError=lfteNone }
+    function TrySendEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 带超时发送，超时或已关闭返回 False }
     function SendTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
 
@@ -96,6 +103,8 @@ type
     function Receive(out AValue: T): Boolean;
     {** @desc 非阻塞接收；无数据时返回 False }
     function TryReceive(out AValue: T): Boolean;
+    {** @desc 非阻塞接收并返回失败原因（empty vs closed-empty） }
+    function TryReceiveEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     {** @desc 带超时接收；超时返回 False }
     function ReceiveTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
 
@@ -121,13 +130,23 @@ type
 
 implementation
 
+class function TLockFreeChannelImpl.EmptySequence(const APos: Int64): Int64;
+begin
+  Result := APos * 2;
+end;
+
+class function TLockFreeChannelImpl.FullSequence(const APos: Int64): Int64;
+begin
+  Result := (APos * 2) + 1;
+end;
+
 constructor TLockFreeChannelImpl.Create(const ACapacity: PtrUInt);
 var
   LCap: PtrUInt;
   LI: PtrUInt;
 begin
   if IsManagedType(T) then
-    raise EArgumentError.Create('TLockFreeChannel: T must be unmanaged');
+    raise EArgumentError.Create('TLockFreeChannel: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeChannel: capacity must be > 0');
   inherited Create;
@@ -136,7 +155,7 @@ begin
   FMask := LCap - 1;
   SetLength(FSlots, LCap);
   for LI := 0 to LCap - 1 do
-    FSlots[LI].Sequence := Int64(LI);
+    FSlots[LI].Sequence := EmptySequence(Int64(LI));
   FSendPos := 0;
   FRecvPos := 0;
   FSpaceEpoch := 0;
@@ -157,6 +176,14 @@ destructor TLockFreeChannelImpl.Destroy;
 var
   LI: PtrUInt;
 begin
+  { Failed construction (e.g. managed-type reject before capacity init) leaves
+    FCapacity=0. PtrUInt underflow on FCapacity-1 would walk the whole address space. }
+  if FCapacity = 0 then
+  begin
+    inherited;
+    Exit;
+  end;
+  Close;
   for LI := 0 to FCapacity - 1 do
     FSlots[LI].Value := Default(T);
   inherited;
@@ -307,7 +334,7 @@ function TLockFreeChannelImpl.TrySend(const AValue: T): Boolean;
 var
   LPos: Int64;
   LIdx: PtrUInt;
-  LSeq: Int64;
+  LSeq, LExpected, LDiff: Int64;
   LBackoff: Integer;
   LI: Integer;
 begin
@@ -323,12 +350,14 @@ begin
       LPos := AtomicLoad64(FSendPos, moRelaxed);
       LIdx := PtrUInt(LPos) and FMask;
       LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-      if LSeq = LPos then
+      LExpected := EmptySequence(LPos);
+      LDiff := LSeq - LExpected;
+      if LDiff = 0 then
       begin
         if AtomicCompareExchange64(FSendPos, LPos, LPos + 1, moRelaxed) = LPos then
         begin
           FSlots[LIdx].Value := AValue;
-          AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
+          AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease);
           if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
             LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
           NotifyData;
@@ -346,7 +375,7 @@ begin
         else
           CpuPause;
       end
-      else if LSeq < LPos then
+      else if LDiff < 0 then
         Exit(False)
       else
         CpuPause;
@@ -354,6 +383,20 @@ begin
   finally
     LeaveOperation;
   end;
+end;
+
+function TLockFreeChannelImpl.TrySendEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TrySend(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
 end;
 
 procedure TLockFreeChannelImpl.Send(const AValue: T);
@@ -400,7 +443,7 @@ function TLockFreeChannelImpl.TryReceive(out AValue: T): Boolean;
 var
   LPos: Int64;
   LIdx: PtrUInt;
-  LSeq: Int64;
+  LSeq, LExpected, LDiff: Int64;
   LBackoff: Integer;
   LI: Integer;
 begin
@@ -414,13 +457,15 @@ begin
       LPos := AtomicLoad64(FRecvPos, moRelaxed);
       LIdx := PtrUInt(LPos) and FMask;
       LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
-      if LSeq = LPos + 1 then
+      LExpected := FullSequence(LPos);
+      LDiff := LSeq - LExpected;
+      if LDiff = 0 then
       begin
         if AtomicCompareExchange64(FRecvPos, LPos, LPos + 1, moRelaxed) = LPos then
         begin
           AValue := FSlots[LIdx].Value;
           FSlots[LIdx].Value := Default(T);
-          AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
+          AtomicStore64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), moRelease);
           if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
             LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
           NotifySpace;
@@ -438,7 +483,7 @@ begin
         else
           CpuPause;
       end
-      else if LSeq < LPos + 1 then
+      else if LDiff < 0 then
         Exit(False)
       else
         CpuPause;
@@ -446,6 +491,21 @@ begin
   finally
     LeaveOperation;
   end;
+end;
+
+function TLockFreeChannelImpl.TryReceiveEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryReceive(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  { Plain TryReceive conflates empty and closed-empty as False; Ex splits them. }
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TLockFreeChannelImpl.Receive(out AValue: T): Boolean;
@@ -571,10 +631,10 @@ begin
       Exit(False);
 
     LNewMask := LNewCap - 1;
-    { Allocate new slots }
+    { Allocate new slots with empty/full sequence tokens (capacity=1 safe). }
     SetLength(LNewSlots, LNewCap);
     for LI := 0 to LNewCap - 1 do
-      LNewSlots[LI].Sequence := Int64(LI);
+      LNewSlots[LI].Sequence := EmptySequence(Int64(LI));
 
     { Migrate existing data: read positions first }
     if LCount > 0 then
@@ -583,7 +643,7 @@ begin
         LOldIdx := PtrUInt(LRecv + Int64(LI)) and FMask;
         LNewIdx := LI and LNewMask;
         LNewSlots[LNewIdx].Value := FSlots[LOldIdx].Value;
-        AtomicStore64(LNewSlots[LNewIdx].Sequence, Int64(LI) + 1, moRelease);
+        AtomicStore64(LNewSlots[LNewIdx].Sequence, FullSequence(Int64(LI)), moRelease);
       end;
 
     FSlots := LNewSlots;

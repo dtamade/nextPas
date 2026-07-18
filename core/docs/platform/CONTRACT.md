@@ -1,10 +1,12 @@
 # nextpas.core.platform 代码契约
 
-**模块路径**：`core/src/nextpas.core.platform*.pas`（60 个源文件）
-**层级**：L0（仅依赖 FPC RTL）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-05
-**版本**：2.0
+**模块路径**：`core/src/nextpas.core.platform*.pas`（60+ 个源文件）
+**层级**：L0 — host FFI（`platform.*.base` / `*.ffi`）+ `core.base` / `errors` / `exception`
+**FPC RTL**：生产/测试/示例 **禁止** `uses SysUtils` / `BaseUnix` / `Windows` / `Classes` 等 FPC RTL。
+仅 `nextpas.core.system` 允许直接引用 FPC RTL（仓库级编译器无关性原则）。
+**Owner**：platform lane（`.worktrees/platform`）
+**最后更新**：2026-07-17
+**版本**：2.2
 
 ---
 
@@ -16,33 +18,33 @@
 |------|------|----------|
 | platform.pas | 门面 re-export | — |
 | platform.base.pas | TOSKind, TCPUArch, TEndianness | — |
-| platform.error.pas | 错误码常量 + 消息映射 | PLATFORM_ERR_*, platform_error_message |
-| platform.info.pas | OS/架构/字节序检测 | platform_info_os, platform_info_arch |
-| platform.time.pas | 时间 API | platform_monotonic_ns, platform_wallclock_ns |
-| platform.io.pas | 文件 I/O (deprecated) | platform_io_read, platform_io_write |
+| platform.error.pas | 错误码常量 + 消息映射 + last-error | PLATFORM_ERR_*, platform_error_message, platform_get_last_error, platform_get_last_os_error |
+| platform.info.pas | OS/架构/字节序检测 | CurrentOS, CurrentCPU, OSName, CPUName |
+| platform.time.pas | 时间 API | platform_monotonic_ns, platform_realtime_ns |
+| platform.process.pas (`platform_io_*`) | 过渡 fd I/O 定义（无生产外呼；value/sentinel） | platform_io_read/write/poll 定义；close 为 error-code；pipe 走 files + PipePoll |
 | platform.files.pas | 文件操作 | platform_file_open, platform_file_stat, platform_dir_open |
-| platform.fs.pas | 文件系统高级操作 | platform_fs_mkdir_p, platform_fs_copy, platform_fs_glob |
+| platform.fs.pas | 文件系统高级操作 | platform_fs_mkdir_p, platform_fs_copy_file, platform_fs_walk |
 | platform.path.pas | 路径操作 | platform_path_join, platform_path_dirname |
-| platform.pipe.pas | 管道操作 | platform_pipe_open, platform_pipe_close |
+| platform.pipe.pas | 管道操作 | platform_pipe_create, platform_pipe_close |
 | platform.dl.pas | 动态库加载 | platform_dl_open, platform_dl_sym |
-| platform.socket.pas | 网络 Socket | platform_socket_create, platform_socket_connect |
-| platform.process.pas | 进程管理 | platform_process_spawn, platform_process_wait |
+| platform.socket.pas | 网络 Socket | platform_socket_create, platform_socket_create_tcp, platform_socket_connect |
+| platform.process.pas | 进程管理 | platform_process_spawn, platform_process_wait, platform_process_*_ex |
 | platform.signal.pas | 信号处理 | platform_signal_set, platform_signal_block |
 | platform.thread.pas | 线程管理 | platform_thread_create, platform_thread_join |
 | platform.sync.pas | 同步原语 | platform_mutex_*, platform_rwlock_*, platform_condvar_* |
 | platform.memory.pas | 内存分配 | platform_aligned_alloc, platform_aligned_realloc |
-| platform.mmap.pas | 内存映射 | platform_mmap_file, platform_mmap_shared |
-| platform.env.pas | 环境变量 | platform_env_get, platform_env_set |
+| platform.mmap.pas | 内存映射 | platform_mmap_file, platform_mmap_close, platform_shm_create |
+| platform.env.pas | 环境变量 | platform_env_get, platform_env_set（`env_get_str` 为 FPC managed 便捷面） |
 | platform.args.pas | 命令行参数 | platform_args_count, platform_args_get |
 | platform.console.pas | 控制台 I/O | platform_console_read, platform_console_write |
 | platform.random.pas | 随机数 | platform_random_bytes |
-| platform.resource.pas | 资源限制 | platform_resource_get, platform_resource_set |
+| platform.resource.pas | 资源限制 | platform_resource_get_limit, platform_resource_set_limit |
 | platform.secure.pas | 安全操作 | platform_secure_zero |
-| platform.fmt.pas | 格式化输出 | platform_fmt_snprintf |
+| platform.fmt.pas | 格式化/解析 | platform_fmt_int/uint/hex/float/buf, platform_parse_*, platform_str_* |
 | platform.watch.pas | 文件监控 | platform_watch_create |
 | platform.which.pas | 可执行文件查找 | platform_which |
 | platform.pty.pas | 伪终端 | platform_pty_open |
-| platform.freetype.pas | FreeType 字体 | platform_ft_init, platform_ft_load |
+| platform.freetype.pas | FreeType 可选宿主绑定（D3.d：保留在 platform；迁出需独立 owner lane） | ft_load, ft_unload, ft_is_loaded |
 
 ### 1.2 平台特定层
 
@@ -77,6 +79,17 @@ function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
 function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult; ATimeoutMs: Int64 = 0): Int32;
 
+// 进程管道 IO（规范错误码 API；0 = 成功）
+function platform_process_write_stdin_ex(AStdinWrite: PtrInt;
+  AData: PAnsiChar; ALen: Int32; out ABytesWritten: Int32): Int32;
+function platform_process_read_stdout_ex(AStdoutRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+function platform_process_read_stderr_ex(AStderrRead: PtrInt;
+  ABuf: PAnsiChar; ABufLen: Int32; out ABytesRead: Int32): Int32;
+// 兼容旧 API（deprecated）：成功返回字节数；失败返回 -1；
+// unsupported 平台返回 PLATFORM_ERR_UNSUPPORTED。
+// 新代码必须使用 *_ex。
+
 // 线程
 function platform_thread_create(out AHandle: TPlatformThreadHandle;
   AProc: TPlatformThreadProc; AArg: Pointer): Int32;
@@ -98,12 +111,26 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 
 ## 2. 不变量
 
-- **返回值约定**: 所有函数返回 `Int32`，0 = 成功，正数 = errno/GetLastError，`PLATFORM_ERR_UNSUPPORTED` (95) = 不支持的平台
+### 2.1 三类返回语义（必须区分）
+
+完整表见 [RETURN-SEMANTICS.md](RETURN-SEMANTICS.md)。
+
+| 类别 | 约定 | 示例 |
+|------|------|------|
+| **Error-code APIs** | `Int32`：`0` = 成功；`PLATFORM_ERR_*` = 失败；禁止 bare `-1` 作为错误码 | `platform_file_open`, `platform_process_write_stdin_ex`, `platform_resource_get_limit` |
+| **Length / size APIs** | `>= 0` = 长度；失败返回 `PLATFORM_ERR_*` | `platform_args_get`, `platform_error_message`, `platform_fs_temp_dir` |
+| **Value / sentinel APIs** | 业务值；无效用 sentinel（`-1`/`nil`） | `platform_pty_master_fd`、`platform_io_read` 字节数、`platform_aligned_alloc` |
+
+禁止在 **Error-code API** 失败路径返回无语义 `-1`。Legacy 长度包装可以保留 `-1`，但必须 `deprecated` 并指向 `*_ex`。
+
+### 2.2 其它不变量
+
 - **句柄无效值**: `TPlatformFileHandle.Value = -1`（Unix）/ `INVALID_HANDLE_VALUE`（Windows）
 - **Socket 句柄**: >= 0（Unix）/ > 0（Windows）
 - **文件描述符**: 0/1/2 保留给 stdin/stdout/stderr
 - **内存分配**: 返回 `Pointer`，`nil` 表示失败
-- **字符串参数**: 所有 `PAnsiChar` 参数接受 nil（返回 `PLATFORM_ERR_INVALID`）
+- **字符串参数**: 所有 `PAnsiChar` 参数接受 nil（返回 `PLATFORM_ERR_INVALID`，除非语义允许空/零长度）
+- **out 参数**: Error-code API 在 early-exit 前必须初始化 out 结果（字节数/句柄等）
 
 ---
 
@@ -120,9 +147,24 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
   - `PLATFORM_ERR_BUSY` (16) — 资源忙
   - `PLATFORM_ERR_AGAIN` (11) — 资源暂时不可用
   - `PLATFORM_ERR_UNSUPPORTED` (95) — 不支持的操作
-  - `PLATFORM_ERR_PATH_TOO_LONG` (-7) — 路径超过 PLATFORM_FS_MAX_PATH
-- **错误消息**: `platform_error_message(ACode, ABuf, ABufSize)` 返回人类可读消息
-- **错误分类**: `platform_error_category(ACode)` 返回 `TPlatformErrorCategory`
+  - `PLATFORM_ERR_PATH_TOO_LONG` (-7) — 路径超过 PLATFORM_FS_MAX_PATH（域钳制，非 OS ENAMETOOLONG）
+  - `PLATFORM_ERR_UNKNOWN` (-8) — 宿主原生错误无法映射（Windows 禁止 raw ERROR_* 透传）
+  - `PLATFORM_ERR_IO` (5) — I/O 错误；`PLATFORM_FS_SHORT_READ/WRITE_ERROR` 为其 **alias**（无平行 -5/-6）
+- **错误消息**: `platform_error_message` 是 length API：成功返回写入字节数，失败返回 `PLATFORM_ERR_*`
+- **错误分类**: `platform_error_category(ACode)` 返回 `TErrorCategory`（`nextpas.core.exception`）
+- **单一错误族**: 资源限制等 API 同样返回 `PLATFORM_ERR_*`，无独立 `PLATFORM_RESOURCE_ERROR_*` 公共语言
+- **RTL 隔离**: 生产/测试/示例 platform 不得 `uses` FPC RTL；`platform.args` 不得依赖 `ParamCount`/`ParamStr`
+- **parse 失败**: `platform_parse_*` 返回 `PLATFORM_ERR_INVALID`，禁止 bare `-1` 作为错误码
+- **length 失败**: `platform_fmt_*` / `platform_dl_error` / `platform_error_message` 等 length API 失败返回 `PLATFORM_ERR_*`（禁止 bare `-1`，deprecated 包装除外）
+- **out-init**: error-code + `out` 参数在宿主调用前写 sentinel（见 RETURN-SEMANTICS §13）
+- **convenience managed API**: `platform_env_get_str` 等返回 `AnsiString` 的接口为 **FPC 便捷面**，非稳定 C ABI；可移植核心路径优先 `PAnsiChar` buffer API
+- **文档权威**: API 目录以 `API-REFERENCE.md` 为准；`api-reference.md` 仅为 redirect；示例以 `EXAMPLES.md` / `BEST-PRACTICES.md`（live）为准
+
+### 3.1 files / fs / io 边界
+
+- **files**: 句柄与目录原语
+- **fs**: 路径级组合（可调用 files）
+- **io**: poller；`process` 内 `platform_io_*` 为 value/sentinel 过渡 API
 
 ---
 
@@ -144,19 +186,18 @@ function platform_aligned_realloc(APtr: Pointer; ANewSize, AAlignment: SizeUInt)
 
 ---
 
-## 6. 平台支持
+## 6. 平台支持（证据语言，对齐 goal-tree）
 
-| 平台 | 状态 | 测试方式 |
-|------|------|----------|
-| Linux x86_64 | ✅ 完成 | 本地 + CI |
-| Linux aarch64 | ✅ 完成 | 交叉编译 + QEMU |
-| Linux arm32 | ✅ 完成 | 交叉编译 |
-| Linux riscv64 | ✅ 完成 | 交叉编译 |
-| macOS x86_64 | ✅ 完成 | CI |
-| Windows x86_64 | ✅ 完成 | Wine + CI |
-| FreeBSD | ✅ 完成 | 交叉编译 |
-| Android | ✅ 完成 | 交叉编译 |
-| Fallback stub | ✅ 完成 | 返回 PLATFORM_ERR_UNSUPPORTED |
+| 平台 | Truth tier | 证据 |
+|------|------------|------|
+| Linux x86_64 | focused-runtime | 本地 focused gates + heaptrc |
+| Linux aarch64 / arm32 / riscv64 | forced-compile | cross-compile gates；runtime 非全覆盖 |
+| Windows x86_64 | wine-runtime-smoke + 部分 focused-runtime | Wine smoke；真机 runtime 偏 io/socket |
+| macOS / FreeBSD | source-contract / selected compile | 无完整 runtime ready 声称 |
+| Android | forced-compile / source-contract | files/mmap 等片段 |
+| Fallback stub | compile-coherent | 返回 `PLATFORM_ERR_UNSUPPORTED` |
+
+详细矩阵见 `goal-tree.md` 与 `runtime-truth-matrix.md`。
 
 ---
 

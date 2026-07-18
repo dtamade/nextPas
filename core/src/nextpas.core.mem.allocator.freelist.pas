@@ -72,6 +72,7 @@ end;
 destructor TFreelistAllocator.Destroy;
 begin
   Drain;
+  FInner := nil;
   inherited Destroy;
 end;
 
@@ -119,7 +120,11 @@ begin
   if LBin >= 0 then
     LTotal := FBinSizes[LBin] + FREELIST_HEADER_SIZE
   else
+  begin
+    if ASize + FREELIST_HEADER_SIZE < ASize then { overflow check }
+      Exit(nil);
     LTotal := ASize + FREELIST_HEADER_SIZE;
+  end;
 
   LHeader := PSizeUInt(FInner.GetMem(LTotal));
   if LHeader = nil then

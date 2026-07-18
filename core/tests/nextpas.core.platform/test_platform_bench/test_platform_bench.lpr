@@ -15,7 +15,11 @@ uses
   nextpas.core.platform.thread,
   nextpas.core.platform.random,
   nextpas.core.platform.path,
-  nextpas.core.platform.mmap;
+  nextpas.core.platform.mmap,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files,
+  nextpas.core.platform.fs,
+  nextpas.core.platform.sync.base;
 
 var
   T: TTestSuite;
@@ -146,6 +150,58 @@ end;
 procedure BenchPathJoin(const ACtx: IBenchContext);
 begin
   platform_path_join('/usr/local', 'bin/test', @GPathBuf[0], 512);
+end;
+
+{ ─── Files: open/close /dev/null ─── }
+procedure BenchFileOpenClose(const ACtx: IBenchContext);
+var
+  LHandle: TPlatformFileHandle;
+begin
+  platform_file_open('/dev/null', fomReadOnly, fcmOpenExisting, LHandle);
+  platform_file_close(LHandle);
+end;
+
+{ ─── Files: stat on /dev/null ─── }
+var
+  GStatPath: array[0..8] of AnsiChar = '/dev/null';
+
+procedure BenchFileStat(const ACtx: IBenchContext);
+var
+  LStat: TPlatformFileStat;
+begin
+  platform_file_stat(@GStatPath[0], LStat);
+end;
+
+{ ─── Sync: condvar timedwait (zero timeout) ─── }
+var
+  GBenchMutex: TPlatformMutex;
+  GBenchCondVar: TPlatformCondVar;
+
+procedure BenchCondVarTimedWait(const ACtx: IBenchContext);
+begin
+  platform_mutex_lock(GBenchMutex);
+  platform_condvar_timedwait(GBenchCondVar, GBenchMutex, 0);
+  platform_mutex_unlock(GBenchMutex);
+end;
+
+{ ─── Sync: barrier wait (2 threads) ─── }
+var
+  GBenchBarrier: TPlatformBarrier;
+
+function BarrierThreadProc(AArg: Pointer): Pointer; cdecl;
+begin
+  platform_barrier_wait(GBenchBarrier);
+  Result := nil;
+end;
+
+procedure BenchBarrierWait(const ACtx: IBenchContext);
+var
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+begin
+  platform_thread_create(LHandle, @BarrierThreadProc, nil);
+  platform_barrier_wait(GBenchBarrier);
+  platform_thread_join(LHandle, LRet);
 end;
 
 { ─── Mmap: anonymous 4KB map/unmap ─── }
@@ -324,6 +380,56 @@ begin
   end;
 end;
 
+procedure TestBenchFiles;
+var
+  LRunner: TBenchRunner;
+  LResult: TBenchResult;
+begin
+  LRunner := TBenchRunner.Create;
+  try
+    ConfigureRunner(LRunner);
+    LResult := LRunner.RunOne('files.open_close', @BenchFileOpenClose);
+    Check(LResult.NsPerOp > 0, 'files_open_close NsPerOp > 0');
+    WriteLn(Format('  %-36s %10.1f ns/op  %12.0f ops/s',
+      [LResult.Name, LResult.NsPerOp, LResult.OpsPerSec]));
+
+    LResult := LRunner.RunOne('files.stat', @BenchFileStat);
+    Check(LResult.NsPerOp > 0, 'files_stat NsPerOp > 0');
+    WriteLn(Format('  %-36s %10.1f ns/op  %12.0f ops/s',
+      [LResult.Name, LResult.NsPerOp, LResult.OpsPerSec]));
+  finally
+    LRunner.Free;
+  end;
+end;
+
+procedure TestBenchSyncExtra;
+var
+  LRunner: TBenchRunner;
+  LResult: TBenchResult;
+begin
+  platform_mutex_init(GBenchMutex, PLATFORM_MUTEX_NORMAL);
+  platform_condvar_init(GBenchCondVar);
+  platform_barrier_init(GBenchBarrier, 2);
+  LRunner := TBenchRunner.Create;
+  try
+    ConfigureRunner(LRunner);
+    LResult := LRunner.RunOne('sync.condvar_timedwait', @BenchCondVarTimedWait);
+    Check(LResult.NsPerOp > 0, 'condvar_timedwait NsPerOp > 0');
+    WriteLn(Format('  %-36s %10.1f ns/op  %12.0f ops/s',
+      [LResult.Name, LResult.NsPerOp, LResult.OpsPerSec]));
+
+    LResult := LRunner.RunOne('sync.barrier_wait', @BenchBarrierWait);
+    Check(LResult.NsPerOp > 0, 'barrier_wait NsPerOp > 0');
+    WriteLn(Format('  %-36s %10.1f ns/op  %12.0f ops/s',
+      [LResult.Name, LResult.NsPerOp, LResult.OpsPerSec]));
+  finally
+    LRunner.Free;
+    platform_barrier_destroy(GBenchBarrier);
+    platform_condvar_destroy(GBenchCondVar);
+    platform_mutex_destroy(GBenchMutex);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('platform_bench');
   WriteLn('=== Platform Module Benchmarks ===');
@@ -335,6 +441,8 @@ begin
   T.Test('random', @TestBenchRandom);
   T.Test('path', @TestBenchPath);
   T.Test('mmap', @TestBenchMmap);
+  T.Test('files', @TestBenchFiles);
+  T.Test('sync_extra', @TestBenchSyncExtra);
   if not T.Run then
     Halt(1);
   WriteLn;

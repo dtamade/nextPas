@@ -3,8 +3,8 @@ program test_lockfree_bloom;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.bloom,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 type

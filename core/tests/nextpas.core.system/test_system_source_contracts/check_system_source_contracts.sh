@@ -599,9 +599,20 @@ require_file "docs/system/compatibility-facades.md"
 require_file "docs/system/compatibility-matrix.md"
 require_file "docs/system/typinfo-minimal-pressure.md"
 require_file "docs/plans/2026-06-07-system-typinfo-minimal-unlock-review.md"
+require_file "docs/system/self-hosting-readiness.md"
+require_file "docs/system/contract-coverage-table.md"
 require_file "src/nextpas.core.system.typinfo.pas"
 require_file "src/nextpas.core.system.sysutils.pas"
 require_file "src/nextpas.core.system.errors.pas"
+require_repo_file "docs/architecture/runtime-bootstrap-specification.md"
+
+require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "canonical compiler-root source"
+require_repo_token "docs/architecture/runtime-bootstrap-specification.md" "system-projection-check"
+require_token "docs/system/README.md" "M0 truth convergence"
+require_token "docs/system/README.md" "not self-host ready"
+require_token "docs/system/goal-tree.md" "canonical projection parity"
+require_token "docs/system/self-hosting-readiness.md" "A -> B -> C has not executed"
+require_token "docs/system/contract-coverage-table.md" "typed ledger is authoritative"
 
 require_token "docs/system/README.md" "RTL root"
 require_token "docs/system/README.md" "owner boundary"
@@ -792,6 +803,70 @@ done
 # SECTION: Runtime contract name and helper mapping checks
 # ============================================================================
 
+require_repo_file "compiler/ir/np_system_contracts.pas"
+
+contract_ledger_tmp_dir="$(mktemp -d)"
+trap 'rm -rf -- "$contract_ledger_tmp_dir"' EXIT
+contract_constants="$contract_ledger_tmp_dir/contract-constants"
+ledger_constants="$contract_ledger_tmp_dir/ledger-constants"
+contract_values="$contract_ledger_tmp_dir/contract-values"
+coverage_values="$contract_ledger_tmp_dir/coverage-values"
+awk '
+  match($0, /^[ \t]*(NPSYSTEM_[A-Z0-9_]+)[ \t]*=/, parts) {
+    print parts[1]
+  }
+' "$CORE_ROOT/src/nextpas.core.system.contracts.pas" | sort >"$contract_constants"
+awk '
+  match($0, /^[ \t]*SemanticName:[ \t]*(NPSYSTEM_[A-Z0-9_]+)[ \t]*;/, parts) {
+    print parts[1]
+  }
+' "$REPO_ROOT/compiler/ir/np_system_contracts.pas" | sort >"$ledger_constants"
+[[ -s "$contract_constants" ]] || fail "system contract declarations are empty"
+[[ -s "$ledger_constants" ]] || fail "typed ledger semantic-name rows are empty"
+if ! diff -u "$contract_constants" "$ledger_constants"; then
+  fail "system contract constants and typed ledger are not one-to-one"
+fi
+awk -F "'" '
+  /^[ \t]*NPSYSTEM_[A-Z0-9_]+[ \t]*=/ && $2 ~ /^np\.system\./ {
+    print $2
+  }
+' "$CORE_ROOT/src/nextpas.core.system.contracts.pas" >"$contract_values"
+if ! awk '
+  $0 == "<!-- ledger-table:start -->" {
+    if (in_table || saw_start) {
+      exit 2
+    }
+    in_table = 1
+    saw_start = 1
+    next
+  }
+  $0 == "<!-- ledger-table:end -->" {
+    if (!in_table || saw_end) {
+      exit 2
+    }
+    in_table = 0
+    saw_end = 1
+    next
+  }
+  in_table && match($0, /^\| `([^`]+)` \|/, parts) {
+    print parts[1]
+  }
+  END {
+    if (!saw_start || !saw_end || in_table) {
+      exit 2
+    }
+  }
+' "$CORE_ROOT/docs/system/contract-coverage-table.md" >"$coverage_values"; then
+  fail "contract coverage ledger table markers are missing or malformed"
+fi
+[[ -s "$contract_values" ]] || fail "system contract string values are empty"
+[[ -s "$coverage_values" ]] || fail "contract coverage ledger rows are empty"
+if ! diff -u "$contract_values" "$coverage_values"; then
+  fail "contract coverage table must match system contract values in declaration order"
+fi
+rm -rf -- "$contract_ledger_tmp_dir"
+trap - EXIT
+
 for helper in \
   "np.system.string_init" \
   "np.system.string_fini" \
@@ -816,20 +891,20 @@ require_token "docs/system/runtime-contracts.md" "backend-private interface help
 require_token "docs/system/runtime-contracts.md" "not Pascal facade symbols"
 require_token "docs/system/runtime-contracts.md" "not object-free completion"
 require_token "docs/system/runtime-contracts.md" "not finalized reference-counting strategy"
-require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'intf_addref';"
-require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'intf_release';"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_intf_addref"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_intf_release"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_intf_addref"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_intf_release"
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'intf_addref';"
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'intf_release';"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "call void @np_intf_addref"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "call void @np_intf_release"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_intf_addref"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_intf_release"
 # Halt intrinsic uses implementation name 'halt', not 'np.system.halt'
-require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'halt';"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "if AInstr.IntrinsicName = 'halt' then"
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'halt';"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "if AInstr.IntrinsicName = 'halt' then"
 # Heap allocation intrinsics use implementation names 'arr_alloc' and 'class_alloc'
-require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'arr_alloc';"
-require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'class_alloc';"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "@np_alloc"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "@np_object_alloc"
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'arr_alloc';"
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'class_alloc';"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "@np_alloc"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "@np_object_alloc"
 # Halt and allocation intrinsic mapping documented in runtime-contracts
 require_token "docs/system/runtime-contracts.md" "HIR uses \`halt\` as the internal intrinsic name"
 require_token "docs/system/runtime-contracts.md" "arr_alloc"
@@ -851,10 +926,10 @@ done
 require_token "docs/system/runtime-contracts.md" "backend-private memory helpers"
 require_token "docs/system/runtime-contracts.md" 'not aliases for public `CopyMem` / `ZeroMem`'
 require_token "docs/system/runtime-contracts.md" "not raw memory facade expansion"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_memcpy"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_memzero"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_memset"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_memmove"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_memcpy"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_memzero"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "call void @np_memset"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "call void @np_memmove"
 require_repo_token "tests/hir/test_hir_dynarray_release_contract.pas" "call void @np_tstring_concat("
 for helper in \
   "np.system.object_free" \
@@ -879,9 +954,9 @@ for token in \
   "syscall inline assembly"; do
   require_token "docs/system/runtime-contracts.md" "$token"
 done
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "halt-call-runtime"
-require_repo_token "compiler/ir/np_hir_builder.pas" "Instr.IntrinsicName := 'halt';"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" 'movq $$60, %rax; syscall'
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "halt-call-runtime"
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "Instr.IntrinsicName := 'halt';"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" 'movq $$60, %rax; syscall'
 require_repo_token "compiler/ir/np_hir_types.pas" "hnkHaltCallRuntime"
 require_repo_token "compiler/tests/test_semantic_hir_expr_producer.pas" "TestHaltRuntimeExprProducer"
 require_repo_token "tests/hir/test_hir_node_kind.pas" "halt-call-runtime"
@@ -946,7 +1021,7 @@ for helper in \
   "@np_raise" \
   "@np_finally_end" \
   "@np_except_end"; do
-  require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "$helper"
+  require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "$helper"
 done
 # Exception contract names documented in lifecycle-contracts.md
 for contract in \
@@ -961,16 +1036,16 @@ done
 require_token "docs/system/lifecycle-contracts.md" "HIR intrinsic"
 require_token "docs/system/lifecycle-contracts.md" "LLVM helper"
 require_token "docs/system/lifecycle-contracts.md" "Exception helper contracts map"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_try_push"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_try_pop"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_finally_end"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_except_end"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "call void @np_raise"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_try_push"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_try_pop"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_finally_end"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_except_end"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_raise"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "call void @np_try_push"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "call void @np_try_pop"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "call void @np_finally_end"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "call void @np_except_end"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "call void @np_raise"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_try_push"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_try_pop"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_finally_end"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_except_end"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_raise"
 
 for token in \
   "Process Lifecycle" \
@@ -998,11 +1073,11 @@ for helper in \
   require_token "docs/system/lifecycle-contracts.md" "$helper"
 done
 
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "SeedRuntimeContracts"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_INIT"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_FINI"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "FModel.AddRuntimeContract(AContractName)"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "AddRuntimeContract(NPSYSTEM_PROCESS_INIT, 'process-init-runtime')"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "SeedRuntimeContracts"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "NPSYSTEM_PROCESS_INIT"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "NPSYSTEM_PROCESS_FINI"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "FModel.AddRuntimeContract(AContractName)"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "AddRuntimeContract(NPSYSTEM_PROCESS_INIT, 'process-init-runtime')"
 require_repo_token "compiler/sema/np_semantic_model.pas" "function RuntimeContractAt(const AIndex: LongInt): TRuntimeContract;"
 require_repo_file "tests/semantic/test_semantic_runtime_contract_seed.pas"
 require_repo_token "tests/semantic/test_semantic_runtime_contract_seed.pas" "semantic-runtime-contract-seed-status=pass"
@@ -1139,19 +1214,26 @@ require_repo_reject_regex "tests/hir/test_hir_dynarray_release_contract.pas" "mi
 require_repo_reject_regex "tests/hir/test_hir_dynarray_release_contract.pas" "missing-managed-interface-dynarray-resize-call"
 require_repo_reject_regex "tests/hir/test_hir_dynarray_release_contract.pas" "managed-string-dynarray-still-bare-arr-alloc"
 require_repo_reject_regex "tests/hir/test_hir_dynarray_release_contract.pas" "managed-interface-dynarray-still-bare-arr-alloc"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_UNIT_INIT"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_UNIT_FINI"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_INIT"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "NPSYSTEM_PROCESS_FINI"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare ptr @np_dynarray_resize"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_dynarray_release"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_dynarray_fault"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "NPSYSTEM_UNIT_INIT"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "NPSYSTEM_UNIT_FINI"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "NPSYSTEM_PROCESS_INIT"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "NPSYSTEM_PROCESS_FINI"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare ptr @np_dynarray_resize"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_dynarray_release"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_dynarray_fault"
 require_repo_file "tests/hir/test_hir_object_free_contract.pas"
 require_repo_file "tests/semantic/test_semantic_call_bindings.pas"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "object-free-runtime"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.destroy"
-require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np.system.object_free.release"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "np_system_contracts"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFree)"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeDestroy)"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeCleanup)"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "IsSystemContract(Instr, sckObjectFreeRelease)"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "SystemContractAt(sckObjectFree).SemanticName"
+require_repo_token "tests/hir/test_hir_object_free_contract.pas" "untrusted-object-free-label"
+require_repo_reject_regex "tests/hir/test_hir_object_free_contract.pas" 'np[.]system[.]object_free'
+require_repo_reject_regex "tests/hir/test_hir_object_free_contract.pas" 'NPSYSTEM_OBJECT_FREE'
+require_repo_reject_regex "tests/hir/test_hir_object_free_contract.pas" 'SameText[[:space:]]*\([[:space:]]*Instr[.]IntrinsicName'
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "@np_object_free_release"
 require_repo_token "tests/hir/test_hir_object_free_contract.pas" "missing-object-free-release-helper-decl"
 require_repo_file "tests/hir/test_hir_field_dynarray_contract.pas"
@@ -1180,9 +1262,9 @@ require_repo_token "docs/architecture/runtime-bootstrap-specification.md" 'sourc
 require_repo_token "docs/architecture/runtime-bootstrap-specification.md" '`rtl/core/system/System.pas`'
 require_repo_token "docs/architecture/runtime-bootstrap-specification.md" '`TObject.Free`'
 require_repo_token "tests/semantic/test_semantic_call_bindings.pas" "np.system.object_free"
-require_repo_token "compiler/sema/np_semantic_analyzer.pas" "class-new-runtime"
-require_repo_token "compiler/ir/np_hir_builder.pas" "class_alloc"
-require_repo_token "compiler/ir/np_hir_llvm_emitter.pas" "declare void @np_object_free_release"
+require_repo_owner_family_token "compiler/sema" "np_semantic_analyzer" "class-new-runtime"
+require_repo_owner_family_token "compiler/ir" "np_hir_builder" "class_alloc"
+require_repo_owner_family_token "compiler/ir" "np_hir_llvm_emitter" "declare void @np_object_free_release"
 
 for path in \
   "core/src/nextpas.core.collections.arr.pas" \
@@ -1264,7 +1346,7 @@ require_token "tests/nextpas.core.system/Makefile" "test-typinfo-minimal"
 require_token "tests/nextpas.core.system/Makefile" "test-object-free-runtime-contract"
 require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_SOURCE"
 require_token "tests/nextpas.core.system/Makefile" "test_hir_object_free_contract.pas"
-require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_FPC_FLAGS"
+require_token "tests/nextpas.core.system/Makefile" 'OBJECT_FREE_RUNTIME_CONTRACT_FPC_FLAGS := -Fu$(ROOT_DIR)/compiler/frontend'
 require_token "tests/nextpas.core.system/Makefile" "OBJECT_FREE_RUNTIME_CONTRACT_BINARY"
 require_token "tests/nextpas.core.system/Makefile" "test-field-dynarray-contract"
 require_token "tests/nextpas.core.system/Makefile" "FIELD_DYNARRAY_CONTRACT_SOURCE"

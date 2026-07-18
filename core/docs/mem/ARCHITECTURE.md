@@ -74,7 +74,9 @@ Growing allocator 内部层（不单独对外暴露）：
 - `nextpas.core.mem.cache.thread` — TLS free list + batch refill/flush
 - `nextpas.core.mem.central` — Central span pool + spinlock + lock-free inbox
 - `nextpas.core.mem.shuffle` — Free-list 随机插入（防 heap spraying）
-- `nextpas.core.mem.default` — 全局 `DefaultAllocator`（`TRtlAllocator` 单例）
+- `nextpas.core.mem.default` — 默认双轨：`DefaultHeap`（Growing 热路径）+ `DefaultAllocator`（Growing IAllocator 根 / 可选 DEBUG 链）+ `GetMemStats`
+- `nextpas.core.mem.allocator.growing_ia` — Growing 的 `IAllocator` 适配（S5 插件面根）
+- `nextpas.core.mem.debug_wrap` — `NEXTPAS_MEM_DEBUG` 解析与包装链（只叠 `DefaultAllocator`）
 - `nextpas.core.mem.utils` — 内部工具函数（overlap/alignment/growth）
 
 Pool 侧：
@@ -87,7 +89,7 @@ Pool 侧：
 - `nextpas.core.mem.pool.slab` — 页级 slab 池
 - `nextpas.core.mem.pool.slab.concurrent` — 并发 slab 池
 - `nextpas.core.mem.pool.slab.sharded` — 分片 slab 池
-- `nextpas.core.mem.pool.memory_pool` — `IMemoryPool` 接口定义
+- `nextpas.core.mem.pool.base` — `IPool` / `IMemoryPool` 接口定义
 - `nextpas.core.mem.pool.object_pool` — 泛型对象池（`IObjectPool<T>`）
 - `nextpas.core.mem.pool.allocator` — 池分配器（池 → IAllocator 包装）
 - `nextpas.core.mem.pool` — Pool 侧聚合门面

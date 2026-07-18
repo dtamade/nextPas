@@ -213,7 +213,7 @@ function SetParamValue(Params: POSSL_PARAM; const Key: string; const Value: stri
 
 implementation
 
-uses nextpas.core.tls.openssl.api.utils;
+uses nextpas.core.mem, nextpas.core.tls.openssl.api.utils;
 
 const
   OSSL_PARAM_BINDINGS: array[0..53] of TFunctionBinding = (
@@ -326,7 +326,7 @@ function CreateParamArray(const Params: array of OSSL_PARAM): POSSL_PARAM;
 var
   i: Integer;
 begin
-  GetMem(Result, (Length(Params) + 1) * SizeOf(OSSL_PARAM));
+  Result := GetMem((Length(Params) + 1) * SizeOf(OSSL_PARAM));
   for i := 0 to High(Params) do
     Result[i] := Params[i];
   

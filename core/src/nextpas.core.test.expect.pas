@@ -105,6 +105,9 @@ type
     function ToBeOneOfBool(const AValues: array of Boolean): IExpectation;
     { Regex matching: value must match the pattern. }
     function ToMatch(const APattern: string): IExpectation;
+    { Object type checking: value must be an instance of AClass.
+      Works with pointer expectations (ExpectPtr). }
+    function ToBeInstanceOf(AClass: TClass): IExpectation;
     { Unconditional failure — use in conditional branches. }
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
@@ -118,6 +121,8 @@ function ExpectInt(const AValue: Int64): IExpectation;
 function ExpectBool(AValue: Boolean): IExpectation;
 function ExpectDouble(const AValue: Double): IExpectation;
 function ExpectPtr(const AValue: Pointer): IExpectation;
+{ ExpectObj: create expectation for a TObject. Aliased to ExpectPtr internally. }
+function ExpectObj(const AValue: TObject): IExpectation;
 function ExpectProc(AProc: TTestProc): IExpectation;
 function ExpectBytes(const AValue: TBytes): IExpectation;
 function ExpectArrayOfInt(const AValues: array of Int64): IExpectation;
@@ -172,9 +177,9 @@ type
   private
     FRefCount: LongInt;
   public
-    function QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
-    function _AddRef: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
-    function _Release: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+    function QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
+    function _AddRef: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
+    function _Release: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
   end;
 
   TExpectation = class(TExpectationBase, IExpectation)
@@ -293,6 +298,7 @@ type
     function ToBeEmpty: IExpectation;
     function ToBeNotEmpty: IExpectation;
     function ToBeSorted: IExpectation;
+    function ToBeInstanceOf(AClass: TClass): IExpectation;
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
@@ -353,7 +359,7 @@ end;
 
 { ── TExpectationBase (non-atomic refcount) ─────────────────────────────────── }
 
-function TExpectationBase.QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+function TExpectationBase.QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
 begin
   if GetInterface(IID, Obj) then
     Result := 0
@@ -361,13 +367,13 @@ begin
     Result := LongInt(E_NOINTERFACE);
 end;
 
-function TExpectationBase._AddRef: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+function TExpectationBase._AddRef: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
 begin
   Inc(FRefCount);
   Result := FRefCount;
 end;
 
-function TExpectationBase._Release: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+function TExpectationBase._Release: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
 begin
   Dec(FRefCount);
   Result := FRefCount;
@@ -1337,9 +1343,11 @@ begin
 end;
 
 function TExpectation.ToEqualIntArray(const AExpected: array of Int64): IExpectation;
+const
+  MAX_DIFFS = 10;
 var
-  I, LMin, LDiffIdx: Integer;
-  LMsg: string;
+  I, LMin, LDiffCount: Integer;
+  LMsg, LDiffs: string;
 begin
   RequireKind(ekIntArray, 'ToEqualIntArray');
   if Length(FIntArrayValue) <> Length(AExpected) then
@@ -1351,19 +1359,29 @@ begin
     Exit;
   end;
   LMin := Length(AExpected);
-  LDiffIdx := -1;
+  LDiffCount := 0;
+  LDiffs := '';
   for I := 0 to LMin - 1 do
+  begin
     if FIntArrayValue[I] <> AExpected[I] then
     begin
-      LDiffIdx := I;
-      Break;
+      Inc(LDiffCount);
+      if LDiffCount <= MAX_DIFFS then
+      begin
+        if LDiffs <> '' then LDiffs := LDiffs + #10;
+        LDiffs := LDiffs + '  [' + IntToStr(I) + '] expected ' +
+          IntToStr(AExpected[I]) + ' but got ' + IntToStr(FIntArrayValue[I]);
+      end;
     end;
-  if LDiffIdx >= 0 then
+  end;
+  if LDiffCount > 0 then
   begin
-    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) +
-      ': expected ' + IntToStr(AExpected[LDiffIdx]) +
-      ' but got ' + IntToStr(FIntArrayValue[LDiffIdx]);
-    CheckMatch(False, 'Expected arrays to be equal but ' + LMsg, LMsg);
+    LMsg := 'Arrays differ at ' + IntToStr(LDiffCount) + ' of ' +
+      IntToStr(LMin) + ' positions:';
+    if LDiffCount > MAX_DIFFS then
+      LMsg := LMsg + ' (showing first ' + IntToStr(MAX_DIFFS) + ')';
+    LMsg := LMsg + #10 + LDiffs;
+    CheckMatch(False, LMsg, LMsg);
   end
   else
     CheckMatch(True,
@@ -1373,9 +1391,11 @@ begin
 end;
 
 function TExpectation.ToEqualStrArray(const AExpected: array of string): IExpectation;
+const
+  MAX_DIFFS = 10;
 var
-  I, LMin, LDiffIdx: Integer;
-  LMsg: string;
+  I, LMin, LDiffCount: Integer;
+  LMsg, LDiffs: string;
 begin
   RequireKind(ekStrArray, 'ToEqualStrArray');
   if Length(FStrArrayValue) <> Length(AExpected) then
@@ -1387,19 +1407,29 @@ begin
     Exit;
   end;
   LMin := Length(AExpected);
-  LDiffIdx := -1;
+  LDiffCount := 0;
+  LDiffs := '';
   for I := 0 to LMin - 1 do
+  begin
     if FStrArrayValue[I] <> AExpected[I] then
     begin
-      LDiffIdx := I;
-      Break;
+      Inc(LDiffCount);
+      if LDiffCount <= MAX_DIFFS then
+      begin
+        if LDiffs <> '' then LDiffs := LDiffs + #10;
+        LDiffs := LDiffs + '  [' + IntToStr(I) + '] expected "' +
+          AExpected[I] + '" but got "' + FStrArrayValue[I] + '"';
+      end;
     end;
-  if LDiffIdx >= 0 then
+  end;
+  if LDiffCount > 0 then
   begin
-    LMsg := 'Arrays differ at index ' + IntToStr(LDiffIdx) + ':' +
-      #10'  expected: "' + AExpected[LDiffIdx] + '"' +
-      #10'    actual: "' + FStrArrayValue[LDiffIdx] + '"';
-    CheckMatch(False, 'Expected arrays to be equal but ' + LMsg, LMsg);
+    LMsg := 'Arrays differ at ' + IntToStr(LDiffCount) + ' of ' +
+      IntToStr(LMin) + ' positions:';
+    if LDiffCount > MAX_DIFFS then
+      LMsg := LMsg + ' (showing first ' + IntToStr(MAX_DIFFS) + ')';
+    LMsg := LMsg + #10 + LDiffs;
+    CheckMatch(False, LMsg, LMsg);
   end
   else
     CheckMatch(True,
@@ -1574,6 +1604,31 @@ begin
   end;
 end;
 
+function TExpectation.ToBeInstanceOf(AClass: TClass): IExpectation;
+var
+  LObj: TObject;
+begin
+  RequireKind(ekPointer, 'ToBeInstanceOf');
+  if AClass = nil then
+    InternalFail('ToBeInstanceOf: AClass is nil');
+  LObj := TObject(FPtrValue);
+  if FNegated then
+  begin
+    if (LObj <> nil) and (LObj is AClass) then
+      InternalFail('Expected object not to be instance of ' + AClass.ClassName +
+        ' but it is');
+  end
+  else
+  begin
+    if LObj = nil then
+      InternalFail('Expected instance of ' + AClass.ClassName + ' but got nil')
+    else if not (LObj is AClass) then
+      InternalFail('Expected instance of ' + AClass.ClassName +
+        ' but got ' + LObj.ClassName);
+  end;
+  Result := Self;
+end;
+
 { ── Expect factories ──────────────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
@@ -1604,6 +1659,11 @@ end;
 function ExpectPtr(const AValue: Pointer): IExpectation;
 begin
   Result := TExpectation.AllocPtr(AValue);
+end;
+
+function ExpectObj(const AValue: TObject): IExpectation;
+begin
+  Result := TExpectation.CreatePtr(Pointer(AValue));
 end;
 
 function ExpectProc(AProc: TTestProc): IExpectation;

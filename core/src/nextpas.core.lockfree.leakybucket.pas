@@ -27,6 +27,7 @@ type
 
   {** @desc 漏桶限流器
     @details 恒定速率漏水，请求加水。桶满则拒绝。
+  {** @concurrency Thread-safe (see source for details). }
       与 TokenBucket 互补：TokenBucket 允许突发，LeakyBucket 强制平滑输出。 }
   TLeakyBucket = class
   private
@@ -41,6 +42,7 @@ type
     procedure Leak;
   public
     constructor Create(const ALeakRatePerSecond: Double; const ABucketSize: Double);
+    destructor Destroy; override;
     function TryAdd: TLeakyBucketResult;
     function TryAddN(const AN: Double): TLeakyBucketResult;
     procedure Close;
@@ -53,7 +55,7 @@ type
 implementation
 
 uses
-  Math,
+  nextpas.core.math,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.platform.time;
@@ -65,10 +67,10 @@ end;
 
 constructor TLeakyBucket.Create(const ALeakRatePerSecond: Double; const ABucketSize: Double);
 begin
-  if IsNan(ALeakRatePerSecond) or IsInfinite(ALeakRatePerSecond) or
+  if IsNaN(ALeakRatePerSecond) or IsInfinite(ALeakRatePerSecond) or
      (ALeakRatePerSecond <= 0) then
     raise EArgumentError.Create('TLeakyBucket: leak rate must be > 0');
-  if IsNan(ABucketSize) or IsInfinite(ABucketSize) or (ABucketSize <= 0) then
+  if IsNaN(ABucketSize) or IsInfinite(ABucketSize) or (ABucketSize <= 0) then
     raise EArgumentError.Create('TLeakyBucket: bucket size must be > 0');
   inherited Create;
   FLeakRate := ALeakRatePerSecond;
@@ -130,7 +132,7 @@ end;
 
 function TLeakyBucket.TryAddN(const AN: Double): TLeakyBucketResult;
 begin
-  if IsNan(AN) or IsInfinite(AN) or (AN <= 0) then
+  if IsNaN(AN) or IsInfinite(AN) or (AN <= 0) then
     raise EArgumentError.Create('TLeakyBucket.TryAddN: N must be > 0');
   if AtomicLoad32(FClosed, moAcquire) <> 0 then
     Exit(lbClosed);
@@ -159,6 +161,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TLeakyBucket.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TLeakyBucket.IsClosed: Boolean; inline;

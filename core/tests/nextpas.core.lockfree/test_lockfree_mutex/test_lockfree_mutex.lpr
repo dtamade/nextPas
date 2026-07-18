@@ -4,7 +4,6 @@ program test_lockfree_mutex;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.lockfree.mutex,
   nextpas.core.lockfree,
   nextpas.core.atomic,

@@ -65,16 +65,19 @@ end;
 procedure TestStats;
 var
   LAlloc: TCascadeAllocator;
+  LPtr1, LPtr2: Pointer;
   LStats: TCascadeStats;
 begin
   LAlloc := TCascadeAllocator.Create([DefaultAllocator]);
   try
-    LAlloc.GetMem(64);
-    LAlloc.GetMem(64);
+    LPtr1 := LAlloc.GetMem(64);
+    LPtr2 := LAlloc.GetMem(64);
     LStats := LAlloc.GetStats;
     Check(LStats.AllocAttempts = 2, 'attempts = 2');
     Check(LStats.AllocatorHits[0] = 2, 'hits[0] = 2');
     Check(LStats.AllocatorCount = 1, 'count = 1');
+    LAlloc.FreeMem(LPtr2);
+    LAlloc.FreeMem(LPtr1);
   finally
     LAlloc.Free;
   end;

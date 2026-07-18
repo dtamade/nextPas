@@ -41,6 +41,7 @@ type
     FNext: PARCNode;
   end;
 
+  {** @concurrency Thread-safe (see source for details). }
   TARCCacheImpl = class
   private
     FCapacity: Integer;

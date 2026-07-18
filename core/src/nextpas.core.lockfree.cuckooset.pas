@@ -21,7 +21,7 @@ unit nextpas.core.lockfree.cuckooset;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   TCuckooSetResult = (
@@ -31,6 +31,7 @@ type
     csrFull
   );
 
+  {** @concurrency Thread-safe (see source for details). }
   TCuckooSet = class
   private
     FTable1: array of AnsiString;

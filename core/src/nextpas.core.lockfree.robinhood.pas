@@ -44,6 +44,7 @@ type
   {** @desc Robin Hood 哈希表
     @details 开放寻址 + 后向位移，减少探测序列方差。
       最坏情况查找 O(n)，期望平均 O(1)。
+  {** @concurrency Thread-safe (see source for details). }
       线程安全：CAS 自旋锁。 }
   TRobinHoodMap = class
   private
@@ -59,6 +60,7 @@ type
     function FindSlot(AKey: UInt64; out AIdx: Int32): Boolean;
   public
     constructor Create(const ACapacity: Int32 = ROBINHOOD_DEFAULT_CAPACITY);
+    destructor Destroy; override;
     function Insert(AKey, AValue: UInt64): TRobinHoodResult;
     function Lookup(AKey: UInt64; out AValue: UInt64): TRobinHoodResult;
     function Delete(AKey: UInt64): TRobinHoodResult;
@@ -353,6 +355,12 @@ end;
 procedure TRobinHoodMap.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TRobinHoodMap.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TRobinHoodMap.IsClosed: Boolean;

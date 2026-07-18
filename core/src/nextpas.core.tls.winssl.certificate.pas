@@ -111,6 +111,7 @@ function CreateWinSSLCertificateFromContext(ACertContext: PCCERT_CONTEXT; AOwnsC
 implementation
 
 uses
+  nextpas.core.mem,
   nextpas.core.text.conv,
   nextpas.core.text.strings,
   nextpas.core.tls.asn1,
@@ -597,7 +598,7 @@ begin
     Exit;
 
   // Allocate buffer and encode
-  GetMem(PEMData, PEMSize);
+  PEMData := GetMem(PEMSize);
   try
     if CryptBinaryToStringA(
       @DERData[0],
@@ -1270,7 +1271,7 @@ begin
   ) then
     Exit;
 
-  GetMem(BasicConstraints, BasicConstraintsSize);
+  BasicConstraints := GetMem(BasicConstraintsSize);
   try
     if CryptDecodeObject(
       X509_ASN_ENCODING or PKCS_7_ASN_ENCODING,
@@ -1433,7 +1434,7 @@ begin
   ) then
     Exit;
 
-  GetMem(AltNameInfo, AltNameInfoSize);
+  AltNameInfo := GetMem(AltNameInfoSize);
   try
     if CryptDecodeObject(
       X509_ASN_ENCODING or PKCS_7_ASN_ENCODING,
@@ -1546,7 +1547,7 @@ begin
   ) then
     Exit;
 
-  GetMem(KeyUsageInfo, KeyUsageSize);
+  KeyUsageInfo := GetMem(KeyUsageSize);
   try
     if CryptDecodeObject(
       X509_ASN_ENCODING or PKCS_7_ASN_ENCODING,
@@ -1638,7 +1639,7 @@ begin
   ) then
     Exit;
 
-  GetMem(EnhKeyUsage, EnhKeyUsageSize);
+  EnhKeyUsage := GetMem(EnhKeyUsageSize);
   try
     if CryptDecodeObject(
       X509_ASN_ENCODING or PKCS_7_ASN_ENCODING,

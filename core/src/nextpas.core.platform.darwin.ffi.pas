@@ -29,6 +29,27 @@ function pthread_threadid_np(thread: Pointer; thread_id: PUInt64): Int32; cdecl;
 
 function pthread_setname_np(const AName: PAnsiChar): Int32; cdecl; external 'pthread' name 'pthread_setname_np';
 
+{ Secure zero (macOS has memset_s, not explicit_bzero) }
+
+{** @desc C11 安全清零/填充
+    @param s 目标缓冲区
+    @param smax 目标容量
+    @param c 填充字节
+    @param n 填充长度
+    @return 0 成功 *}
+function memset_s(s: Pointer; smax: size_t; c: Int32; n: size_t): Int32; cdecl;
+  external 'c' name 'memset_s';
+
+{ Environment pointer (macOS does not export a linkable environ symbol) }
+
+type
+  {** @desc char *** — pointer to the environ array *}
+  PPPAnsiChar = ^PPAnsiChar;
+
+{** @desc 获取进程 environ 指针（macOS CRT）
+    @return 指向 environ 的指针 *}
+function NSGetEnviron: PPPAnsiChar; cdecl; external 'c' name '_NSGetEnviron';
+
 { Errno }
 
 {** @desc 获取 errno 指针（macOS 版本） *}
@@ -217,8 +238,12 @@ function getnameinfo(sa: Pointer; salen: UInt32; host: PAnsiChar; hostlen: PtrUI
 { Random }
 procedure arc4random_buf(buf: Pointer; nbytes: PtrUInt); cdecl; external 'c' name 'arc4random_buf';
 
-{ Directory reading }
-function getdirentries(fd: Int32; buf: PAnsiChar; nbytes: PtrUInt; basep: Pointer): PtrInt; cdecl; external 'c' name 'getdirentries';
+{ Directory reading — public libc DIR* path.
+  getdirentries64 is not a public linkable symbol on modern Darwin (GHA
+  macOS arm64 reports Undefined symbols: _getdirentries64). }
+function fdopendir(fd: cint): Pointer; cdecl; external 'c' name 'fdopendir';
+function readdir(dirp: Pointer): Pointer; cdecl; external 'c' name 'readdir';
+function closedir(dirp: Pointer): cint; cdecl; external 'c' name 'closedir';
 
 { PTY — in libc on macOS }
 function openpty(amaster: pcint; aslave: pcint; name: PAnsiChar; termp: Pointer; winp: Pointer): cint; cdecl; external 'c' name 'openpty';

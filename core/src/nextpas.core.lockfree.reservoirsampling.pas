@@ -33,6 +33,7 @@ type
 
   {** @desc 蓄水池采样器
     @details 固定内存处理无限流，等概率采样。
+  {** @concurrency Thread-safe (see source for details). }
       每个元素被选中的概率 = k/n（k=池大小，n=已见元素数）。 }
   generic TReservoirSamplerImpl<T> = class
   private
@@ -53,6 +54,7 @@ type
     function NextRandomBounded(const ABound: UInt64): UInt64;
   public
     constructor Create(const ACapacity: Int32 = RESERVOIR_DEFAULT_SIZE);
+    destructor Destroy; override;
     function Add(const AItem: T): TReservoirResult;
     function GetCount: Int64;
     function GetSampleSize: Int32;
@@ -252,6 +254,12 @@ begin
   finally
     Unlock;
   end;
+end;
+
+destructor TReservoirSamplerImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TReservoirSamplerImpl.IsClosed: Boolean;

@@ -5,7 +5,6 @@ unit nextpas.core.lockfree.hashmap.rtm;
 interface
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree.hashmap,
   nextpas.core.lockfree.rtm;
@@ -40,6 +39,7 @@ type
     FRtmSupported: Boolean;
   public
     {** @desc 创建 RTM 优化的 HashMap
+  {** @concurrency Thread-safe (see source for details). }
       @param AInitialCapacity 初始容量 }
     constructor Create(const AInitialCapacity: PtrUInt = HASHMAP_DEFAULT_CAPACITY);
     destructor Destroy; override;
@@ -86,10 +86,14 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 constructor TRtmHashMapImpl.Create(const AInitialCapacity: PtrUInt);
 begin
+  if IsManagedType(TKey) then
+    raise EArgumentError.Create('TRtmHashMap: TKey must be unmanaged (no string/interface/dynarray)');
+  if IsManagedType(TValue) then
+    raise EArgumentError.Create('TRtmHashMap: TValue must be unmanaged (no string/interface/dynarray)');
   inherited Create;
   FHashMap := THashMap.Create(AInitialCapacity);
   FRtmSupported := RtmIsSupported;
@@ -97,7 +101,8 @@ end;
 
 destructor TRtmHashMapImpl.Destroy;
 begin
-  FreeAndNil(FHashMap);
+  FHashMap.Free;
+  FHashMap := nil;
   inherited;
 end;
 

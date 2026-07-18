@@ -16,7 +16,9 @@ unit nextpas.core.platform.fs;
 interface
 
 uses
-  nextpas.core.platform.files.base;
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.posix.errno,
+  nextpas.core.platform.error;
 
 type
   {** @desc 目录遍历操作枚举 *}
@@ -71,10 +73,10 @@ const
   PLATFORM_WALK_BADARGS   = -1;
   {** @desc 最大遍历深度 *}
   PLATFORM_WALK_MAX_DEPTH = 256;
-  {** @desc 短读错误 *}
-  PLATFORM_FS_SHORT_READ_ERROR = -6;
-  {** @desc 路径过长错误 *}
-  PLATFORM_FS_PATH_TOO_LONG = -7;
+  {** @desc 短读错误 — alias PLATFORM_ERR_IO (单一错误族，不再使用平行 -6) *}
+  PLATFORM_FS_SHORT_READ_ERROR = PLATFORM_ERR_IO;
+  {** @desc 路径过长 — alias PLATFORM_ERR_PATH_TOO_LONG (-7 域钳制) *}
+  PLATFORM_FS_PATH_TOO_LONG = PLATFORM_ERR_PATH_TOO_LONG;
   {** @desc 动态读取初始块大小（64KB） *}
   PLATFORM_FS_READ_CHUNK_SIZE = 65536;
 
@@ -97,6 +99,35 @@ function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
     @param APath 路径
     @return True 可执行 *}
 function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+
+{** @desc 检查路径是否为符号链接
+    @param APath 路径
+    @return True 是符号链接 *}
+function platform_fs_is_symlink(const APath: PAnsiChar): Boolean;
+
+{** @desc 读取符号链接目标路径
+    @param APath 符号链接路径
+    @param ABuf 输出缓冲区
+    @param ABufSize 缓冲区大小
+    @return >= 0 目标路径长度，PLATFORM_ERR_* 错误码 *}
+function platform_fs_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+
+{** @desc 修改文件权限
+    @param APath 文件路径
+    @param AMode 权限位（如 &755）
+    @return 0 成功，否则返回错误码 *}
+function platform_fs_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
+
+{** @desc 截断文件到指定大小
+    @param APath 文件路径
+    @param ASize 目标大小（字节）
+    @return 0 成功，否则返回错误码 *}
+function platform_fs_truncate(const APath: PAnsiChar; ASize: Int64): Int32;
+
+{** @desc 强制将文件数据刷入磁盘
+    @param AHandle 文件句柄
+    @return 0 成功，否则返回错误码 *}
+function platform_fs_sync(const AHandle: TPlatformFileHandle): Int32;
 
 {** @desc 获取文件大小
     @param APath 文件路径
@@ -208,8 +239,7 @@ implementation
 uses
   nextpas.core.platform.files,
   nextpas.core.platform.env,
-  nextpas.core.platform.random,
-  nextpas.core.platform.error
+  nextpas.core.platform.random
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
@@ -253,7 +283,8 @@ begin
 end;
 
 const
-  PLATFORM_FS_SHORT_WRITE_ERROR = -5;
+  { short write — alias PLATFORM_ERR_IO (single error family; was parallel -5) }
+  PLATFORM_FS_SHORT_WRITE_ERROR = PLATFORM_ERR_IO;
   { POSIX permission bits — universal across all Unix systems }
   PLATFORM_S_IXUSR = $0040;  { 0100 octal: owner execute }
   PLATFORM_S_IXGRP = $0008;  { 0010 octal: group execute }
@@ -302,6 +333,7 @@ end;
  *
  * Eliminates TOCTOU race: no stat() before read(), buffer grows as needed.
  * Caller must FreeMem the returned buffer on success.
+ * L0: uses System GetMem/FreeMem (must not uses nextpas.core.mem; mem depends on platform).
  *
  * @param AHandle  Open file handle (read-only)
  * @param AData    Receives allocated buffer (nil on error)
@@ -333,17 +365,17 @@ begin
       LNewSize := LBufSize * 2;
       if LNewSize < LBufSize then { overflow check }
       begin
-        FreeMem(LBuf);
+        FreeMem(LBuf, LBufSize);
         Exit(PLATFORM_ERR_INVALID);
       end;
       GetMem(LNewBuf, LNewSize);
       if LNewBuf = nil then
       begin
-        FreeMem(LBuf);
+        FreeMem(LBuf, LBufSize);
         Exit(PLATFORM_ERR_INVALID);
       end;
       Move(LBuf^, LNewBuf^, LTotal);
-      FreeMem(LBuf);
+      FreeMem(LBuf, LBufSize);
       LBuf := LNewBuf;
       LBufSize := LNewSize;
     end;
@@ -353,7 +385,7 @@ begin
       Pointer(PtrUInt(LBuf) + LTotal), LBufSize - LTotal - 1, LChunk);
     if Result <> 0 then
     begin
-      FreeMem(LBuf);
+      FreeMem(LBuf, LBufSize);
       Exit;
     end;
     if LChunk = 0 then
@@ -395,6 +427,7 @@ end;
 
 
 function platform_fs_is_executable(const APath: PAnsiChar): Boolean;
+{$IFDEF NEXTPAS_UNIX}
 var
   LStat: TPlatformFileStat;
 begin
@@ -404,6 +437,14 @@ begin
     Exit(False);
   Result := (LStat.Mode and (PLATFORM_S_IXUSR or PLATFORM_S_IXGRP or PLATFORM_S_IXOTH)) <> 0;
 end;
+{$ELSE}
+begin
+  { Windows does not expose POSIX execute bits; always return False.
+    Callers needing Windows execute detection should check file extension
+    (.exe, .bat, .cmd, .com) or ACL via platform-specific APIs. }
+  Result := False;
+end;
+{$ENDIF}
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;
 var
   LStat: TPlatformFileStat;
@@ -520,7 +561,6 @@ var
   LStat: TPlatformFileStat;
   LTotal: Int64;
   LSent: ssize_t;
-  LNewPos: Int64;
   LHasSourceSize: Boolean;
 {$ENDIF}
 begin
@@ -786,7 +826,7 @@ begin
   if LR <> 0 then
   begin
     if AData <> nil then
-      FreeMem(AData);
+      FreeMem(AData); { size unknown at free site }
     AData := nil;
     ALen := 0;
   end;
@@ -1061,6 +1101,46 @@ end;
 function platform_fs_rename(const AOldPath: PAnsiChar; const ANewPath: PAnsiChar): Int32;
 begin
   Result := platform_file_rename(AOldPath, ANewPath);
+end;
+
+{ Check if path is a symbolic link }
+function platform_fs_is_symlink(const APath: PAnsiChar): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  if (APath = nil) or (APath[0] = #0) then
+    Exit(False);
+  Result := (platform_file_lstat(APath, LStat) = 0) and (LStat.FileType = ftSymlink);
+end;
+
+{ Read symbolic link target }
+function platform_fs_readlink(const APath: PAnsiChar; ABuf: PAnsiChar; ABufSize: Int32): Int32;
+var
+  LLen: Int32;
+begin
+  if (ABuf = nil) or (ABufSize <= 0) then
+    Exit(PLATFORM_ERR_INVALID);
+  Result := platform_file_readlink(APath, ABuf, ABufSize, LLen);
+  if Result = 0 then
+    Result := LLen;
+end;
+
+{ Change file permissions }
+function platform_fs_chmod(const APath: PAnsiChar; AMode: UInt32): Int32;
+begin
+  Result := platform_file_chmod(APath, AMode);
+end;
+
+{ Truncate file to specified size }
+function platform_fs_truncate(const APath: PAnsiChar; ASize: Int64): Int32;
+begin
+  Result := platform_file_truncate_path(APath, ASize);
+end;
+
+{ Flush file data to disk }
+function platform_fs_sync(const AHandle: TPlatformFileHandle): Int32;
+begin
+  Result := platform_file_sync(AHandle);
 end;
 
 end.

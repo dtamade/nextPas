@@ -17,10 +17,12 @@ function HasConstLoad(const AFunc: THIRFunction; const AName: string): Boolean;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
-      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikLoad) and
-        (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName = AName) then
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
+      if (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].Kind = hikLoad) and
+        (AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)].IntrinsicName = AName) then
         Exit(True);
   Result := False;
 end;
@@ -31,10 +33,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikStore) and
         (AModule.Types.GetType(Instr.TypeId).Kind = htkPointer) then
         Exit(True);
@@ -49,10 +53,12 @@ var
   Instr: THIRInstr;
   TypeRec: THIRTypeRec;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       TypeRec := AModule.Types.GetType(Instr.TypeId);
       if (Instr.Kind = hikStore) and (TypeRec.Kind = htkInt) and
         (TypeRec.BitWidth = ABitWidth) then
@@ -67,10 +73,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikCall) and (Instr.CallTarget = ATarget) then
         Exit(True);
   end;
@@ -83,10 +91,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikIntrinsic) and
         (Instr.IntrinsicName = AIntrinsicName) then
         Exit(True);
@@ -101,10 +111,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikCall) and (Instr.CallTarget = ATarget) and
         (AArgIndex >= 0) and (AArgIndex <= High(Instr.Operands)) and
         (Instr.Operands[AArgIndex].TypeId <> 0) and
@@ -119,10 +131,12 @@ function TryFindInstrByResultId(const AFunc: THIRFunction;
 var
   BlockIndex, InstrIndex: LongInt;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      AInstr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      AInstr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if AInstr.ResultId = AValueId then
         Exit(True);
     end;
@@ -136,10 +150,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr, SourceInstr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikCall) and (Instr.CallTarget = ATarget) and
         (AArgIndex >= 0) and (AArgIndex <= High(Instr.Operands)) and
         TryFindInstrByResultId(AFunc, Instr.Operands[AArgIndex].ValueId,
@@ -156,10 +172,12 @@ var
   BlockIndex, InstrIndex: LongInt;
   Instr, SourceInstr: THIRInstr;
 begin
-  for BlockIndex := 0 to High(AFunc.Blocks) do
-    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+  if AFunc.Blocks <> nil then
+    for BlockIndex := 0 to LongInt(AFunc.Blocks.Count) - 1 do
+    if AFunc.Blocks[SizeUInt(BlockIndex)].Instrs <> nil then
+      for InstrIndex := 0 to LongInt(AFunc.Blocks[SizeUInt(BlockIndex)].Instrs.Count) - 1 do
     begin
-      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      Instr := AFunc.Blocks[SizeUInt(BlockIndex)].Instrs[SizeUInt(InstrIndex)];
       if (Instr.Kind = hikIntrinsic) and
         (Instr.IntrinsicName = AIntrinsicName) and
         (AArgIndex >= 0) and (AArgIndex <= High(Instr.Operands)) and

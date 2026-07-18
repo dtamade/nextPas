@@ -3,7 +3,7 @@ program test_lockfree_formal;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.atomic,
   nextpas.core.lockfree.spsc,
   nextpas.core.lockfree.mpmc,

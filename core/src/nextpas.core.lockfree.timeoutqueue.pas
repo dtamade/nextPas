@@ -17,6 +17,7 @@ type
       入队时记录时间戳，出队时检查是否过期。
       过期元素自动跳过，返回下一个有效元素。
       适用场景：请求超时、缓存过期、任务调度。
+ * @concurrency Thread-safe (see source for details).
   }
   generic TTimeoutQueueImpl<T> = class
   private type
@@ -35,6 +36,7 @@ type
     FClosed: Int32;
   public
     constructor Create(const ACapacity: Int64; const ATimeoutNs: Int64);
+    destructor Destroy; override;
     function TryEnqueue(const AValue: T): Boolean;
     function TryDequeue(out AValue: T): TLockFreeTimeoutQueueResult;
     function DequeueWait(out AValue: T): TLockFreeTimeoutQueueResult;
@@ -58,7 +60,7 @@ var
   LI: Int64;
 begin
   if IsManagedType(T) then
-    raise EArgumentError.Create('TTimeoutQueue: T must be unmanaged');
+    raise EArgumentError.Create('TTimeoutQueue: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity <= 0 then
     raise EArgumentError.Create('TTimeoutQueue: capacity must be > 0');
   if ACapacity > (Int64(1) shl 62) then
@@ -214,6 +216,12 @@ end;
 procedure TTimeoutQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
+end;
+
+destructor TTimeoutQueueImpl.Destroy;
+begin
+  Close;
+  inherited Destroy;
 end;
 
 function TTimeoutQueueImpl.IsClosed: Boolean; inline;

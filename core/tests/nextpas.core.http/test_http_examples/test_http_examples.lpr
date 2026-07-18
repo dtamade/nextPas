@@ -3,10 +3,7 @@ program test_http_examples;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.thread.init, {$IFDEF UNIX}BaseUnix,{$ENDIF}
-  Classes,
-  Process,
-  SysUtils,
+  nextpas.core.thread.init,
   nextpas.core.base,
   nextpas.core.test,
   nextpas.core.io.intf,
@@ -14,7 +11,16 @@ uses
   nextpas.core.net,
   nextpas.core.http,
   nextpas.core.time.base,
-  nextpas.core.time.deadline;
+  nextpas.core.time.deadline,
+  nextpas.core.time.sleep,
+  nextpas.core.path,
+  nextpas.core.fs,
+  nextpas.core.os.env,
+  nextpas.core.process,
+  nextpas.core.process.base,
+  nextpas.core.process.pipe,
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 var
   T: TTestSuite;
@@ -34,21 +40,116 @@ const
   WebSocketExampleRelativeDir =
     'examples/nextpas.core.http/http_websocket_echo_demo';
   HttpUnitPath = 'src/nextpas.core.http.pas';
+  { POSIX signal numbers — same values as platform.signal, avoided as direct use. }
+  SIGTERM_NUM = 15;
+  SIGKILL_NUM = 9;
 
-procedure AppendAvailableProcessOutput(AProcess: TProcess; var AOutput: string);
-var
-  LBuffer: array[0..2047] of Byte;
-  LBytesRead: LongInt;
-  LChunk: RawByteString;
-begin
-  while AProcess.Output.NumBytesAvailable > 0 do
-  begin
-    LBytesRead := AProcess.Output.Read(LBuffer, SizeOf(LBuffer));
-    if LBytesRead <= 0 then
-      Break;
-    SetString(LChunk, PAnsiChar(@LBuffer[0]), LBytesRead);
-    AOutput := AOutput + string(LChunk);
+type
+  { Long-running example server handle (IChild + drained stdout/stderr pipes). }
+  TExampleChild = class
+  private
+    FChild: IChild;
+    FStdout: IReader;
+    FStderr: IReader;
+    FStdoutClosed: Boolean;
+    FStderrClosed: Boolean;
+    FExited: Boolean;
+    FExitCode: Integer;
+  public
+    constructor Create(const AChild: IChild);
+    destructor Destroy; override;
+    procedure AppendAvailableOutput(var AOutput: string);
+    function Running: Boolean;
+    procedure SignalTerm;
+    procedure KillHard;
+    procedure WaitDone(var AOutput: string);
+    property ExitCode: Integer read FExitCode;
   end;
+
+constructor TExampleChild.Create(const AChild: IChild);
+begin
+  inherited Create;
+  FChild := AChild;
+  FStdout := AChild.TakeStdout;
+  FStderr := AChild.TakeStderr;
+  FStdoutClosed := FStdout = nil;
+  FStderrClosed := FStderr = nil;
+  FExited := False;
+  FExitCode := -1;
+end;
+
+destructor TExampleChild.Destroy;
+begin
+  if (FChild <> nil) and (not FExited) then
+  begin
+    try
+      FChild.Kill;
+    except
+    end;
+    try
+      FChild.Wait;
+    except
+    end;
+  end;
+  FStdout := nil;
+  FStderr := nil;
+  FChild := nil;
+  inherited;
+end;
+
+procedure TExampleChild.AppendAvailableOutput(var AOutput: string);
+var
+  LOut, LErr: string;
+begin
+  LOut := '';
+  LErr := '';
+  DrainPipePair(FStdout, FStderr, 10, LOut, LErr, FStdoutClosed, FStderrClosed);
+  if LOut <> '' then
+    AOutput := AOutput + LOut;
+  if LErr <> '' then
+    AOutput := AOutput + LErr;
+end;
+
+function TExampleChild.Running: Boolean;
+var
+  LOut: TProcessOutput;
+begin
+  if FExited then
+    Exit(False);
+  if FChild.TryWait(LOut) then
+  begin
+    FExited := True;
+    FExitCode := LOut.ExitCode;
+    Exit(False);
+  end;
+  Result := True;
+end;
+
+procedure TExampleChild.SignalTerm;
+begin
+  if (FChild = nil) or FExited then
+    Exit;
+  FChild.Signal(SIGTERM_NUM);
+end;
+
+procedure TExampleChild.KillHard;
+begin
+  if (FChild = nil) or FExited then
+    Exit;
+  FChild.Kill;
+end;
+
+procedure TExampleChild.WaitDone(var AOutput: string);
+var
+  LOut: TProcessOutput;
+begin
+  AppendAvailableOutput(AOutput);
+  if FExited then
+    Exit;
+  LOut := FChild.Wait;
+  FExited := True;
+  FExitCode := LOut.ExitCode;
+  AppendAvailableOutput(AOutput);
 end;
 
 function PathJoin(const ALeft, ARight: string): string;
@@ -56,6 +157,15 @@ begin
   if ALeft = '' then
     Exit(ARight);
   Result := IncludeTrailingPathDelimiter(ALeft) + ARight;
+end;
+
+function RepeatChar(const ACh: Char; const ACount: Integer): string;
+var
+  I: Integer;
+begin
+  SetLength(Result, ACount);
+  for I := 1 to ACount do
+    Result[I] := ACh;
 end;
 
 function TryResolveCoreRootFrom(const AStartDir, AExampleRelativeDir: string;
@@ -98,9 +208,27 @@ end;
 
 function ResolveMakeExecutable: string;
 begin
-  Result := Trim(GetEnvironmentVariable('MAKE'));
+  Result := Trim(GetEnv('MAKE'));
   if Result = '' then
     Result := 'make';
+end;
+
+procedure ApplyEnvPairs(const ACmd: ICommand;
+  const AEnvironment: array of string);
+var
+  I, LEq: Integer;
+  LPair, LKey, LValue: string;
+begin
+  for I := Low(AEnvironment) to High(AEnvironment) do
+  begin
+    LPair := AEnvironment[I];
+    LEq := Pos('=', LPair);
+    if LEq <= 1 then
+      Continue;
+    LKey := Copy(LPair, 1, LEq - 1);
+    LValue := Copy(LPair, LEq + 1, Length(LPair) - LEq);
+    ACmd.EnvAdd(LKey, LValue);
+  end;
 end;
 
 procedure RunProcessAndCaptureWithEnv(const AExecutable: string;
@@ -108,37 +236,28 @@ procedure RunProcessAndCaptureWithEnv(const AExecutable: string;
   const AEnvironment: array of string; out AExitCode: Integer;
   out AOutput: string);
 var
-  LProcess: TProcess;
-  I: Integer;
+  LCmd: ICommand;
+  LOut: TProcessOutput;
 begin
   AExitCode := -1;
   AOutput := '';
-  LProcess := TProcess.Create(nil);
   try
-    LProcess.Executable := AExecutable;
-    LProcess.CurrentDirectory := AWorkingDir;
-    for I := Low(AArguments) to High(AArguments) do
-      LProcess.Parameters.Add(AArguments[I]);
-    for I := Low(AEnvironment) to High(AEnvironment) do
-      LProcess.Environment.Add(AEnvironment[I]);
-    LProcess.Options := [poUsePipes, poStderrToOutPut];
-    LProcess.Execute;
-    while LProcess.Running do
-    begin
-      AppendAvailableProcessOutput(LProcess, AOutput);
-      Sleep(10);
-    end;
-    AppendAvailableProcessOutput(LProcess, AOutput);
-    LProcess.WaitOnExit;
-    AExitCode := LProcess.ExitCode;
+    LCmd := Command(AExecutable)
+      .Args(AArguments)
+      .Dir(AWorkingDir)
+      .Stdout(stPiped)
+      .Stderr(stPiped);
+    ApplyEnvPairs(LCmd, AEnvironment);
+    LOut := LCmd.Spawn.WaitWithOutput;
+    AExitCode := LOut.ExitCode;
+    AOutput := LOut.StdOut + LOut.StdErr;
   except
     on E: Exception do
     begin
       AExitCode := -1;
-      AOutput := Format('%s: %s', [E.ClassName, E.Message]);
+      AOutput := TextFormat('%s: %s', [E.ClassName, E.Message]);
     end;
   end;
-  LProcess.Free;
 end;
 
 procedure RunProcessAndCapture(const AExecutable: string;
@@ -294,7 +413,7 @@ begin
   Result := Copy(LResp, 3, LPayloadLen);
 end;
 
-procedure StopExampleServer(var AProcess: TProcess; var AOutput: string);
+procedure StopExampleServer(var AProcess: TExampleChild; var AOutput: string);
 var
   LWait: Integer;
 begin
@@ -303,50 +422,106 @@ begin
 
   if AProcess.Running then
   begin
-    {$IFDEF UNIX}
-    fpKill(AProcess.ProcessID, SIGTERM);
-    {$ELSE}
-    AProcess.Terminate(0);
-    {$ENDIF}
+    AProcess.SignalTerm;
 
     for LWait := 0 to 99 do
     begin
-      AppendAvailableProcessOutput(AProcess, AOutput);
+      AProcess.AppendAvailableOutput(AOutput);
       if not AProcess.Running then
         Break;
-      Sleep(10);
+      TSleep.ForDuration(TDuration.FromMilliseconds(10));
     end;
 
     if AProcess.Running then
     begin
-      {$IFDEF UNIX}
-      fpKill(AProcess.ProcessID, SIGKILL);
-      {$ELSE}
-      AProcess.Terminate(1);
-      {$ENDIF}
+      AProcess.KillHard;
       for LWait := 0 to 99 do
       begin
-        AppendAvailableProcessOutput(AProcess, AOutput);
+        AProcess.AppendAvailableOutput(AOutput);
         if not AProcess.Running then
           Break;
-        Sleep(10);
+        TSleep.ForDuration(TDuration.FromMilliseconds(10));
       end;
     end;
   end;
 
-  AppendAvailableProcessOutput(AProcess, AOutput);
-  if not AProcess.Running then
-    AProcess.WaitOnExit;
+  AProcess.WaitDone(AOutput);
   AProcess.Free;
   AProcess := nil;
 end;
 
-procedure StartExampleServer(const APort: UInt16; out AProcess: TProcess;
+function SpawnExampleChild(const ABinaryPath, AExampleDir: string;
+  const AArguments: array of string): TExampleChild;
+var
+  LChild: IChild;
+begin
+  LChild := Command(ABinaryPath)
+    .Args(AArguments)
+    .Dir(AExampleDir)
+    .Stdout(stPiped)
+    .Stderr(stPiped)
+    .Spawn;
+  Result := TExampleChild.Create(LChild);
+end;
+
+function MakeUrl(const APort: UInt16; const APath: string): string;
+begin
+  Result := 'http://127.0.0.1:' + IntToStr(Int64(APort)) + APath;
+end;
+
+procedure WaitForReadyMarkers(AProcess: TExampleChild; var AOutput: string;
+  const AReadyMarker, APortMarker, AFailLabel: string);
+var
+  LWait: Integer;
+begin
+  for LWait := 0 to 399 do
+  begin
+    AProcess.AppendAvailableOutput(AOutput);
+    if (Pos(AReadyMarker, AOutput) > 0) and (Pos(APortMarker, AOutput) > 0) then
+      Exit;
+    if not AProcess.Running then
+      Break;
+    TSleep.ForDuration(TDuration.FromMilliseconds(10));
+  end;
+  StopExampleServer(AProcess, AOutput);
+  Fail(AFailLabel + LineEnding + AOutput);
+end;
+
+{ Examples print ready markers before ListenAndServe binds. Poll with a real
+  HTTP GET so readiness means "serving", not only "TCP accept works". }
+procedure WaitUntilHttpReady(const APort: UInt16; const APath: string;
+  AProcess: TExampleChild; var AOutput: string; const AFailLabel: string);
+var
+  LWait: Integer;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LClient := NewHttpClient;
+  for LWait := 0 to 399 do
+  begin
+    AProcess.AppendAvailableOutput(AOutput);
+    if not AProcess.Running then
+      Break;
+    try
+      LResp := LClient.Get(MakeUrl(APort, APath));
+      if (LResp <> nil) and (LResp.StatusCode > 0) and (LResp.StatusCode < 500) then
+        Exit;
+    except
+      on E: Exception do
+        { keep polling until listen/handler is ready }
+        ;
+    end;
+    TSleep.ForDuration(TDuration.FromMilliseconds(10));
+  end;
+  StopExampleServer(AProcess, AOutput);
+  Fail(AFailLabel + LineEnding + AOutput);
+end;
+
+procedure StartExampleServer(const APort: UInt16; out AProcess: TExampleChild;
   out AOutput: string);
 var
   LReadyMarker: string;
   LPortMarker: string;
-  LWait: Integer;
 begin
   EnsureExampleBuilt;
   CheckEqual(Int64(0), Int64(GBuildExitCode), 'example build exit code');
@@ -354,40 +529,19 @@ begin
 
   LReadyMarker := 'http-server-options-demo=ready';
   LPortMarker := 'listen=127.0.0.1:' + IntToStr(Int64(APort));
-  AProcess := TProcess.Create(nil);
   AOutput := '';
+  AProcess := nil;
   try
-    AProcess.Executable := GExampleBinaryPath;
-    AProcess.CurrentDirectory := GExampleDir;
-    AProcess.Parameters.Add('threaded');
-    AProcess.Parameters.Add(IntToStr(Int64(APort)));
-    AProcess.Options := [poUsePipes, poStderrToOutPut];
-    AProcess.Execute;
-
-    for LWait := 0 to 399 do
-    begin
-      AppendAvailableProcessOutput(AProcess, AOutput);
-      if (Pos(LReadyMarker, AOutput) > 0) and (Pos(LPortMarker, AOutput) > 0) then
-        Exit;
-      if not AProcess.Running then
-        Break;
-      Sleep(10);
-    end;
+    AProcess := SpawnExampleChild(GExampleBinaryPath, GExampleDir,
+      ['threaded', IntToStr(Int64(APort))]);
   except
     on E: Exception do
-    begin
-      StopExampleServer(AProcess, AOutput);
       Fail('unable to start example server: ' + E.ClassName + ': ' + E.Message);
-    end;
   end;
-
-  StopExampleServer(AProcess, AOutput);
-  Fail('example server did not reach ready state' + LineEnding + AOutput);
-end;
-
-function MakeUrl(const APort: UInt16; const APath: string): string;
-begin
-  Result := 'http://127.0.0.1:' + IntToStr(Int64(APort)) + APath;
+  WaitForReadyMarkers(AProcess, AOutput, LReadyMarker, LPortMarker,
+    'example server did not reach ready state');
+  WaitUntilHttpReady(APort, '/health', AProcess, AOutput,
+    'example server did not serve HTTP after ready markers');
 end;
 
 procedure TestServerOptionsDemoBuilds;
@@ -400,7 +554,7 @@ end;
 procedure TestServerOptionsDemoServesDocumentedEndpoints;
 var
   LPort: UInt16;
-  LProcess: TProcess;
+  LProcess: TExampleChild;
   LStartupOutput: string;
   LClient: IHttpClient;
   LResp: IHttpResponse;
@@ -430,8 +584,7 @@ begin
     CheckContains(LBody, 'hello=world', 'hello body marker');
     CheckContains(LBody, 'backend=threaded', 'hello backend marker');
 
-    LResp := LClient.Post(MakeUrl(LPort, '/echo'), 'text/plain',
-      StringBodyReader('hello'));
+    LResp := LClient.Post(MakeUrl(LPort, '/echo'), 'text/plain', 'hello');
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'echo status 200');
     LBody := ReadBodyStr(LResp);
     CheckContains(LBody, 'bytes=5', 'echo byte count marker');
@@ -439,7 +592,7 @@ begin
     CheckContains(LBody, 'max-body-size=64', 'echo limit marker');
 
     LResp := LClient.Post(MakeUrl(LPort, '/echo'), 'text/plain',
-      StringBodyReader(StringOfChar('x', 65)));
+      RepeatChar('x', 65));
     CheckEqual(Int64(413), Int64(LResp.StatusCode), 'oversize payload rejected');
     LBody := ReadBodyStr(LResp);
     Check(Pos('bytes=', LBody) = 0,
@@ -502,42 +655,26 @@ begin
 end;
 
 procedure StartHelloExampleServer(const ABinaryPath, AExampleDir: string;
-  const APort: UInt16; out AProcess: TProcess; out AOutput: string);
+  const APort: UInt16; out AProcess: TExampleChild; out AOutput: string);
 var
   LReadyMarker: string;
   LPortMarker: string;
-  LWait: Integer;
 begin
   LReadyMarker := 'http-hello-server=ready';
   LPortMarker := 'listen=127.0.0.1:' + IntToStr(Int64(APort));
-  AProcess := TProcess.Create(nil);
   AOutput := '';
+  AProcess := nil;
   try
-    AProcess.Executable := ABinaryPath;
-    AProcess.CurrentDirectory := AExampleDir;
-    AProcess.Parameters.Add(IntToStr(Int64(APort)));
-    AProcess.Options := [poUsePipes, poStderrToOutPut];
-    AProcess.Execute;
-
-    for LWait := 0 to 399 do
-    begin
-      AppendAvailableProcessOutput(AProcess, AOutput);
-      if (Pos(LReadyMarker, AOutput) > 0) and (Pos(LPortMarker, AOutput) > 0) then
-        Exit;
-      if not AProcess.Running then
-        Break;
-      Sleep(10);
-    end;
+    AProcess := SpawnExampleChild(ABinaryPath, AExampleDir,
+      [IntToStr(Int64(APort))]);
   except
     on E: Exception do
-    begin
-      StopExampleServer(AProcess, AOutput);
       Fail('unable to start hello example: ' + E.ClassName + ': ' + E.Message);
-    end;
   end;
-
-  StopExampleServer(AProcess, AOutput);
-  Fail('hello example did not reach ready state' + LineEnding + AOutput);
+  WaitForReadyMarkers(AProcess, AOutput, LReadyMarker, LPortMarker,
+    'hello example did not reach ready state');
+  WaitUntilHttpReady(APort, '/hello/world?page=2', AProcess, AOutput,
+    'hello example did not serve HTTP after ready markers');
 end;
 
 procedure TestHelloServerExampleServesDocumentedEndpoint;
@@ -545,7 +682,7 @@ var
   LBinaryPath: string;
   LExampleDir: string;
   LPort: UInt16;
-  LProcess: TProcess;
+  LProcess: TExampleChild;
   LStartupOutput: string;
   LClient: IHttpClient;
   LResp: IHttpResponse;
@@ -580,7 +717,7 @@ var
   LClientBinaryPath: string;
   LClientExampleDir: string;
   LPort: UInt16;
-  LProcess: TProcess;
+  LProcess: TExampleChild;
   LStartupOutput: string;
   LExitCode: Integer;
   LOutput: string;
@@ -626,42 +763,26 @@ begin
 end;
 
 procedure StartWebSocketExampleServer(const ABinaryPath, AExampleDir: string;
-  const APort: UInt16; out AProcess: TProcess; out AOutput: string);
+  const APort: UInt16; out AProcess: TExampleChild; out AOutput: string);
 var
   LReadyMarker: string;
   LPortMarker: string;
-  LWait: Integer;
 begin
   LReadyMarker := 'http-websocket-echo-demo=ready';
   LPortMarker := 'listen=127.0.0.1:' + IntToStr(Int64(APort));
-  AProcess := TProcess.Create(nil);
   AOutput := '';
+  AProcess := nil;
   try
-    AProcess.Executable := ABinaryPath;
-    AProcess.CurrentDirectory := AExampleDir;
-    AProcess.Parameters.Add(IntToStr(Int64(APort)));
-    AProcess.Options := [poUsePipes, poStderrToOutPut];
-    AProcess.Execute;
-
-    for LWait := 0 to 399 do
-    begin
-      AppendAvailableProcessOutput(AProcess, AOutput);
-      if (Pos(LReadyMarker, AOutput) > 0) and (Pos(LPortMarker, AOutput) > 0) then
-        Exit;
-      if not AProcess.Running then
-        Break;
-      Sleep(10);
-    end;
+    AProcess := SpawnExampleChild(ABinaryPath, AExampleDir,
+      [IntToStr(Int64(APort))]);
   except
     on E: Exception do
-    begin
-      StopExampleServer(AProcess, AOutput);
       Fail('unable to start websocket example: ' + E.ClassName + ': ' + E.Message);
-    end;
   end;
-
-  StopExampleServer(AProcess, AOutput);
-  Fail('websocket example did not reach ready state' + LineEnding + AOutput);
+  WaitForReadyMarkers(AProcess, AOutput, LReadyMarker, LPortMarker,
+    'websocket example did not reach ready state');
+  WaitUntilHttpReady(APort, '/health', AProcess, AOutput,
+    'websocket example did not serve HTTP after ready markers');
 end;
 
 procedure TestWebSocketEchoDemoServesDocumentedEndpoint;
@@ -669,7 +790,7 @@ var
   LBinaryPath: string;
   LExampleDir: string;
   LPort: UInt16;
-  LProcess: TProcess;
+  LProcess: TExampleChild;
   LStartupOutput: string;
   LConn: ITcpStream;
   LReq: string;
@@ -692,6 +813,7 @@ begin
         'Host: localhost'#13#10 +
         'Upgrade: websocket'#13#10 +
         'Connection: Upgrade'#13#10 +
+        'Origin: http://127.0.0.1'#13#10 +
         'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
         'Sec-WebSocket-Version: 13'#13#10 +
         #13#10;

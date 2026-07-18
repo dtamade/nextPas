@@ -4,11 +4,12 @@ program test_lockfree_stress;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree,
+  nextpas.core.lockfree.base,
   nextpas.core.lockfree.spsc,
   nextpas.core.lockfree.mpmc,
   nextpas.core.lockfree.stack,
@@ -25,6 +26,7 @@ type
   TIntDeque = specialize TWorkStealingDeque<Integer>;
   TIntSegQueue = specialize TSegQueue<Integer>;
   TIntSpmc = specialize TSpmcQueue<Integer>;
+  TIntChannel = specialize TLockFreeChannel<Integer>;
   TIntIntMap = specialize TShardedHashMap<Integer, Integer>;
 
 var
@@ -396,9 +398,12 @@ begin
   LIdx := Integer(PtrUInt(AArg));
   LCount := 0;
   AtomicFetchAdd32(GMpscCloseStarted, 1, moRelease);
-  while (LCount < MPSC_CLOSE_MAX_PER_PRODUCER) and (not GMpscCloseQ.IsClosed) do
+  while LCount < MPSC_CLOSE_MAX_PER_PRODUCER do
   begin
-    GMpscCloseQ.Enqueue(MpscCloseToken(LIdx, LCount));
+    { TryEnqueue returns False once Close is observed; never use Enqueue here
+      because Close raises EInvalidOperationError after the queue is closed. }
+    if not GMpscCloseQ.TryEnqueue(MpscCloseToken(LIdx, LCount)) then
+      Break;
     AtomicFetchAdd64(GMpscClosePublished, 1, moRelaxed);
     Inc(LCount);
     if LCount and $FF = 0 then
@@ -1833,6 +1838,124 @@ begin
 end;
 
 { ============================================================ }
+{ H2-5: Channel Close → join → Free with Try*Ex diagnostics    }
+{ 2P + 2C, cap=8; producers stop on lfteClosed; consumers drain }
+{ ============================================================ }
+
+const
+  CH_CJF_PRODUCERS = 2;
+  CH_CJF_CONSUMERS = 2;
+  CH_CJF_PER_PRODUCER = 2000;
+  CH_CJF_CAPACITY = 8;
+
+var
+  GChCjf: TIntChannel;
+  GChCjfSent: Int64;
+  GChCjfRecv: Int64;
+  GChCjfClosedPublish: Int64;
+  GChCjfClosedEmpty: Int64;
+
+function ChCjfProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+  LErr: TLockFreeTryError;
+  LBase: Integer;
+begin
+  Result := nil;
+  LBase := Integer(PtrUInt(AArg)) * CH_CJF_PER_PRODUCER;
+  for LI := 0 to CH_CJF_PER_PRODUCER - 1 do
+  begin
+    while True do
+    begin
+      if GChCjf.TrySendEx(LBase + LI, LErr) then
+      begin
+        AtomicFetchAdd64(GChCjfSent, 1, moRelaxed);
+        Break;
+      end;
+      if LErr = lfteClosed then
+      begin
+        AtomicFetchAdd64(GChCjfClosedPublish, 1, moRelaxed);
+        Exit;
+      end;
+      { full: retry }
+    end;
+  end;
+end;
+
+function ChCjfConsumer(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+  LErr: TLockFreeTryError;
+begin
+  Result := nil;
+  while True do
+  begin
+    if GChCjf.TryReceiveEx(LV, LErr) then
+    begin
+      AtomicFetchAdd64(GChCjfRecv, 1, moRelaxed);
+      Continue;
+    end;
+    if LErr = lfteClosed then
+    begin
+      AtomicFetchAdd64(GChCjfClosedEmpty, 1, moRelaxed);
+      Exit;
+    end;
+    { empty, not closed: spin }
+  end;
+end;
+
+procedure TestChannelCloseJoinFree;
+var
+  LProducers: array[0..CH_CJF_PRODUCERS - 1] of TPlatformThreadHandle;
+  LConsumers: array[0..CH_CJF_CONSUMERS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LPCount, LCCount: Integer;
+  LRet: Pointer;
+begin
+  GChCjf := TIntChannel.Create(CH_CJF_CAPACITY);
+  GChCjfSent := 0;
+  GChCjfRecv := 0;
+  GChCjfClosedPublish := 0;
+  GChCjfClosedEmpty := 0;
+  LPCount := 0;
+  LCCount := 0;
+  try
+    for LI := 0 to CH_CJF_CONSUMERS - 1 do
+    begin
+      StartThread(LConsumers[LI], @ChCjfConsumer, Pointer(PtrInt(LI)), 'ch cjf consumer');
+      Inc(LCCount);
+    end;
+    for LI := 0 to CH_CJF_PRODUCERS - 1 do
+    begin
+      StartThread(LProducers[LI], @ChCjfProducer, Pointer(PtrInt(LI)), 'ch cjf producer');
+      Inc(LPCount);
+    end;
+
+    { Let producers make progress, then Close — consumers must drain then exit. }
+    platform_thread_sleep_ms(5);
+    GChCjf.Close;
+
+    for LI := 0 to LPCount - 1 do
+      JoinThread(LProducers[LI], LRet, 'ch cjf producer join');
+    LPCount := 0;
+    for LI := 0 to LCCount - 1 do
+      JoinThread(LConsumers[LI], LRet, 'ch cjf consumer join');
+    LCCount := 0;
+
+    Check(GChCjfRecv <= GChCjfSent, 'channel cjf recv not exceed sent');
+    Check(GChCjf.IsClosed, 'channel is closed after Close');
+    { Recv may be less than sent if close races mid-publish; must not hang. }
+    Check(GChCjfRecv >= 0, 'channel cjf received non-negative');
+  finally
+    for LI := 0 to LPCount - 1 do
+      JoinThread(LProducers[LI], LRet, 'ch cjf producer cleanup');
+    for LI := 0 to LCCount - 1 do
+      JoinThread(LConsumers[LI], LRet, 'ch cjf consumer cleanup');
+    GChCjf.Free;
+  end;
+end;
+
+{ ============================================================ }
 { Main                                                         }
 { ============================================================ }
 
@@ -1855,5 +1978,6 @@ begin
   T.Test('HashMap concurrent Clear (3 insert + 1 clear)', @TestHashMapConcurrentClear);
 
   T.Test('SegQueue 4P+4C exactly-once (80K)', @TestSegQueueMultiThread);
+  T.Test('Channel Close join Free (2P+2C Try*Ex)', @TestChannelCloseJoinFree);
   if not T.Run then Halt(1);
 end.

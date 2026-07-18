@@ -3,7 +3,6 @@ program test_lockfree_fenwick;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.lockfree.fenwick,
   nextpas.core.atomic,
   nextpas.core.test;

@@ -4,8 +4,8 @@ program test_http_registry;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.test,
   nextpas.core.net,
   nextpas.core.net.base,
@@ -204,6 +204,38 @@ begin
   if LHadFactory then
     RestoreServerFactory(LOldFactory, hvHttp2);
   Check(LRaised, 'missing server transport raises EHttpError');
+end;
+
+procedure TestBuiltinHttp3TransportIsNotRegistered;
+{ P5 honesty: H3 is enum + registry seam only; no built-in factory until QUIC. }
+var
+  LClientFactory: THttpClientTransportFactory;
+  LServerFactory: THttpServerTransportFactory;
+  LRaisedClient: Boolean;
+  LRaisedServer: Boolean;
+begin
+  Check(not TryGetClientTransportFactory(hvHttp3, LClientFactory),
+    'builtins do not register HTTP/3 client transport');
+  Check(not TryGetServerTransportFactory(hvHttp3, LServerFactory),
+    'builtins do not register HTTP/3 server transport');
+
+  LRaisedClient := False;
+  try
+    ResolveClientTransport(hvHttp3, THttpClientOptions.Default);
+  except
+    on E: EHttpError do
+      LRaisedClient := True;
+  end;
+  Check(LRaisedClient, 'resolve HTTP/3 client without registration raises');
+
+  LRaisedServer := False;
+  try
+    ResolveServerTransport(hvHttp3, THttpServerOptions.Default);
+  except
+    on E: EHttpError do
+      LRaisedServer := True;
+  end;
+  Check(LRaisedServer, 'resolve HTTP/3 server without registration raises');
 end;
 
 procedure TestClientConstructorUsesRegistryDefault;
@@ -554,5 +586,7 @@ begin
     @TestServerConstructorUsesExplicitVersionOverRegistryDefault);
   T.Test('Built-in HTTP/2 server transport is registered',
     @TestBuiltinHttp2ServerTransportIsRegistered);
+  T.Test('Built-in HTTP/3 transport is not registered (QUIC blocked)',
+    @TestBuiltinHttp3TransportIsNotRegistered);
   if not T.Run then Halt(1);
 end.
