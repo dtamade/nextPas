@@ -3,7 +3,6 @@ program test_process_command;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, Classes,
   nextpas.core.process,
   nextpas.core.time.base,
   nextpas.core.process.base,

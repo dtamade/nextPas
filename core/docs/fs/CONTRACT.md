@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：1.3
+**版本**：1.4
 
 ---
 
@@ -46,6 +46,7 @@ fs.pas           ← 门面 re-export
 - **[INV-4]** CreateDirAll 递归创建，已存在时静默成功
 - **[INV-5]** Mkdir/MkdirAll/Remove/RemoveAll/Rename 为 **procedure**：失败抛异常，成功无返回值。`ForceDirectories`/`DeleteFile` 保留 Boolean 兼容壳（内部 try/except）
 - **[INV-6]** path 命名：`PathIsAbsolute`≡`PathIsAbs`，`PathNormalize`≡`PathClean`；`PathJoin2(a,b)` 对齐 path 二元 Join
+- **[INV-7]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.fs*` / `path` / `os.env` 源码与本模块测试不得 `uses SysUtils/Classes/BaseUnix/Unix/Windows`；能力经 platform / core 抽象。仅 `nextpas.core.system` 可直接引用 FPC RTL。文档中的「SysUtils 兼容」指 API 形状，不是 `uses SysUtils`。
 
 ---
 
@@ -102,3 +103,4 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 2026-07-19 | 1.1 | 测试数口径校准；INV-5 Boolean 见目录注释 | Claude |
 | 2026-07-19 | 1.2 | INV-5 procedure；Path 别名；GetEnv 兼容注释 | Claude |
 | 2026-07-19 | 1.3 | 修 test_fs_facade 对 procedure MkdirAll/Remove 的断言；六套件计数校准 | Claude |
+| 2026-07-19 | 1.4 | INV-7 FPC RTL 隔离；fs 测试去 SysUtils | Claude |

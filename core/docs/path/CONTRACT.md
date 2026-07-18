@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.path.pas`（1 个源文件）
 **层级**：L2（依赖 L0-L1: platform.path; 委托 fs.path）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-11
-**版本**：2.0
+**最后更新**：2026-07-19
+**版本**：2.2
 
 ---
 
@@ -43,6 +43,7 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 - **[INV-1]** 同时处理 `/` 和 `\` 分隔符
 - **[INV-2]** UTF-8 字符串安全
 - **[INV-3]** 空路径返回空字符串
+- **[INV-4]** 本单元与 path 测试不 `uses` FPC RTL；「SysUtils 兼容」仅指 API 形状，实现委托 `fs.path` / `platform.path`
 
 ---
 
@@ -82,3 +83,4 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-11 | 2.0 | 更新为实际 API 和测试数据 | Claude |
 | 2026-07-19 | 2.1 | 测试数口径校准 + 命名规范见 README | Claude |
+| 2026-07-19 | 2.2 | INV-4 FPC RTL 隔离 / 编译器无关 | Claude |

@@ -3,8 +3,10 @@ program test_fs_glob;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.base,
+  nextpas.core.text.conv,
+  nextpas.core.platform.process,
   nextpas.core.fs.dir,
   nextpas.core.fs.path,
   nextpas.core.fs.util,
@@ -275,7 +277,7 @@ end;
 
 procedure SetupTmpDir;
 begin
-  GTmpDir := '/tmp/nextpas_fs_glob_test_' + IntToStr(GetProcessID);
+  GTmpDir := '/tmp/nextpas_fs_glob_test_' + IntToStr(platform_getpid);
   FsMkdirAll(GTmpDir);
 end;
 

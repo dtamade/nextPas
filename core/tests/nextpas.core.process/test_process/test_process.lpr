@@ -492,6 +492,56 @@ begin
     'LCur := environ');
 end;
 
+procedure TestProcessOwnedSourcesNoFpcRtl;
+var
+  LFiles: array[0..5] of string;
+  LI: Integer;
+  LSource: string;
+begin
+  { Compiler independence: only nextpas.core.system may use FPC RTL units.
+    Tokens are uses-clause shapes so comments / this gate's messages do not false-fail. }
+  LFiles[0] := 'src/nextpas.core.process.pas';
+  LFiles[1] := 'src/nextpas.core.process.base.pas';
+  LFiles[2] := 'src/nextpas.core.process.command.pas';
+  LFiles[3] := 'src/nextpas.core.process.child.pas';
+  LFiles[4] := 'src/nextpas.core.process.pipe.pas';
+  LFiles[5] := 'src/nextpas.core.process.pathresolve.pas';
+  for LI := 0 to High(LFiles) do
+  begin
+    LSource := LoadSourceText(LFiles[LI]);
+    CheckAbsent('process src no uses SysUtils — ' + LFiles[LI], LSource, 'uses SysUtils');
+    CheckAbsent('process src no , SysUtils — ' + LFiles[LI], LSource, 'SysUtils,');
+    CheckAbsent('process src no uses Classes — ' + LFiles[LI], LSource, 'uses Classes');
+    CheckAbsent('process src no , Classes — ' + LFiles[LI], LSource, 'Classes,');
+    CheckAbsent('process src no uses BaseUnix — ' + LFiles[LI], LSource, 'uses BaseUnix');
+    CheckAbsent('process src no , BaseUnix — ' + LFiles[LI], LSource, 'BaseUnix,');
+    CheckAbsent('process src no uses Unix — ' + LFiles[LI], LSource, 'uses Unix');
+    CheckAbsent('process src no uses Windows — ' + LFiles[LI], LSource, 'uses Windows');
+  end;
+end;
+
+procedure TestProcessTestSuitesNoFpcRtl;
+var
+  LFiles: array[0..3] of string;
+  LI: Integer;
+  LSource: string;
+begin
+  { Skip self (this .lpr embeds the ban tokens as string literals in the gate). }
+  LFiles[0] := 'tests/nextpas.core.process/test_process_command/test_process_command.lpr';
+  LFiles[1] := 'tests/nextpas.core.process/test_process_deep/test_process_deep.lpr';
+  LFiles[2] :=
+    'tests/nextpas.core.process/test_process_pipe_contract/test_process_pipe_contract.lpr';
+  LFiles[3] := 'tests/nextpas.core.process/test_process_wine/test_process_wine.lpr';
+  for LI := 0 to High(LFiles) do
+  begin
+    LSource := LoadSourceText(LFiles[LI]);
+    CheckAbsent('process test no uses SysUtils — ' + LFiles[LI], LSource, 'uses SysUtils');
+    CheckAbsent('process test no SysUtils, — ' + LFiles[LI], LSource, 'SysUtils,');
+    CheckAbsent('process test no uses Classes — ' + LFiles[LI], LSource, 'uses Classes');
+    CheckAbsent('process test no Classes, — ' + LFiles[LI], LSource, 'Classes,');
+  end;
+end;
+
 procedure TestSpawnStdinPipe;
 var
   LChild: IChild;
@@ -1422,6 +1472,8 @@ begin
   TestPathResolverSourceContract;
   TestCommandSpawnPlatformHelperSourceContract;
   TestProcessEnvSnapshotSourceContract;
+  TestProcessOwnedSourcesNoFpcRtl;
+  TestProcessTestSuitesNoFpcRtl;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;

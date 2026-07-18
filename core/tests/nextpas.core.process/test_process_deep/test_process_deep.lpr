@@ -3,7 +3,6 @@ program test_process_deep;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.intf,

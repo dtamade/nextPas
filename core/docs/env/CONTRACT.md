@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L1: text.base; 委托 platform.env）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：1.2
+**版本**：1.3
 
 ---
 
@@ -41,6 +41,7 @@
 - **[INV-5]** 未终止的 `${...}` 抛 EArgumentError
 - **[INV-6]** `TryGetEnv`/`HasEnv` 区分「存在且为空」与「未定义」；`GetEnv` 两者均 `''`
 - **[INV-7]** `%NAME%` 仅匹配非空 `[A-Za-z0-9_]`；不完整 `%` 保留字面量
+- **[INV-8]** 本单元与 env 测试不 `uses` FPC RTL；环境访问仅经 `platform.env`
 
 ---
 
@@ -88,3 +89,4 @@
 | 2026-07-11 | 1.0 | 初始版本 | Claude |
 | 2026-07-19 | 1.1 | 测试数口径校准（含 XDG） | Claude |
 | 2026-07-19 | 1.2 | UserDataDir + %VAR%；INV-6/7；测试 36 | Claude |
+| 2026-07-19 | 1.3 | INV-8 FPC RTL 隔离 | Claude |
