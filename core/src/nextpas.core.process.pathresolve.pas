@@ -17,9 +17,9 @@ uses
  *   AEnv   环境变量数组（KEY=VALUE 格式），用于提取 PATH
  *   ASearchBase 相对 PATH 项的存在性检查基准目录，通常是子进程工作目录
  *
- * @return 找到的完整路径，或原始 AName（如果未找到）
+ * @return 找到的完整路径；未找到返回空字符串
  *
- * @note 如果 AName 已包含目录部分，直接返回不搜索
+ * @note 如果 AName 已包含目录部分，校验可执行性后返回 AName 或空
  * @note 调用方只在 custom env 模式下调用；AEnv 未提供 PATH 时不做隐式 fallback
  *}
 function CommandPathHasDirectoryPart(const AName: string): Boolean;
@@ -163,8 +163,16 @@ var
   LExtStart, LExtEnd: Integer;
 {$ENDIF}
 begin
+  if AName = '' then
+    Exit('');
+
+  { Absolute/relative path with directory component: verify executable (Go LookPath) }
   if CommandPathHasDirectoryPart(AName) then
-    Exit(AName);
+  begin
+    if TryExecutableCandidate(ASearchBase, AName, LResolved) then
+      Exit(AName);
+    Exit('');
+  end;
 
   LPath := ExtractPathFromEnv(AEnv);
   LStart := 1;
@@ -206,7 +214,7 @@ begin
 {$ENDIF}
     LStart := LColon + 1;
   end;
-  Result := AName;
+  Result := '';
 end;
 
 end.

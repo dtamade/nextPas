@@ -50,10 +50,18 @@ function Run(const APath: string; const AArgs: array of string): TProcessOutput;
  *}
 function RunIn(const APath: string; const AArgs: array of string;
   const ADir: string): TProcessOutput;
-{** @desc 执行子进程并返回 stdout 文本 *}
+{** @desc 同步执行并在非成功退出时抛 EProcessError（exit≠0 / 信号 / 超时） *}
+function RunChecked(const APath: string; const AArgs: array of string): TProcessOutput;
+{** @desc 在指定目录同步执行并在非成功退出时抛 EProcessError *}
+function RunInChecked(const APath: string; const AArgs: array of string;
+  const ADir: string): TProcessOutput;
+{** @desc 执行子进程并返回 stdout 文本。
+ *  @note 不检查退出码；失败时仍可能返回部分 stdout。需要失败即错请用 MustCapture。 *}
 function Capture(const APath: string; const AArgs: array of string): string;
 {**
  * @desc 在指定工作目录中执行子进程并返回 stdout 文本
+ *
+ * @note 不检查退出码；需要失败即错请用 MustCaptureIn。
  *
  * @params
  *   APath  可执行文件路径
@@ -62,9 +70,15 @@ function Capture(const APath: string; const AArgs: array of string): string;
  *}
 function CaptureIn(const APath: string; const AArgs: array of string;
   const ADir: string): string;
+{** @desc 执行并返回 stdout；非成功退出抛 EProcessError（消息含 stderr 摘要） *}
+function MustCapture(const APath: string; const AArgs: array of string): string;
+{** @desc 在指定目录执行并返回 stdout；非成功退出抛 EProcessError *}
+function MustCaptureIn(const APath: string; const AArgs: array of string;
+  const ADir: string): string;
 {** @desc 执行子进程并返回 stdout + stderr 合并文本
  *  @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。
  *        各自内部保持写入顺序，但合并后不交错。
+ *        不检查退出码；需要失败即错请用 MustCaptureCombined。
  *        如需区分两个流，请使用 Run(...) 然后分别读取 .StdOut 和 .StdErr。 *}
 function CaptureCombined(const APath: string;
   const AArgs: array of string): string;
@@ -224,7 +238,7 @@ function CaptureInTimeoutCombined(const APath: string;
  *
  * @return 找到的完整路径；未找到时抛出 EProcessError
  *
- * @note 如果 AName 已包含目录部分，直接返回不搜索
+ * @note 若 AName 含目录部分，校验该路径可执行后返回；不可执行则抛错
  * @note 使用当前进程的 PATH 环境变量
  *}
 function LookPath(const AName: string): string;
@@ -235,7 +249,7 @@ function LookPath(const AName: string): string;
  *   AName   可执行文件名或路径
  *   APath   输出找到的完整路径
  *
- * @return 找到返回 true，未找到返回 false
+ * @return 找到且可执行返回 true，否则 false（APath 为空）
  *}
 function TryLookPath(const AName: string; out APath: string): Boolean;
 {** @desc 获取当前进程的可执行文件完整路径
@@ -252,11 +266,40 @@ implementation
 
 uses
   nextpas.core.os.env,
-  nextpas.core.platform.args;
+  nextpas.core.platform.args,
+  nextpas.core.text.conv;
 
 function Command(const APath: string): ICommand;
 begin
   Result := TCommand.New(APath);
+end;
+
+function ProcessSucceeded(const AOut: TProcessOutput): Boolean;
+begin
+  Result := (not AOut.TimedOut) and
+    (AOut.Status = psExited) and (AOut.ExitCode = 0);
+end;
+
+procedure RaiseIfProcessFailed(const APath: string; const AOut: TProcessOutput);
+var
+  LMsg, LDetail: string;
+begin
+  if ProcessSucceeded(AOut) then
+    Exit;
+  if AOut.TimedOut then
+    LMsg := 'process timed out: ' + APath
+  else if AOut.Status = psSignaled then
+    LMsg := 'process killed by signal ' + IntToStr(AOut.ExitCode) + ': ' + APath
+  else
+    LMsg := 'process exited with code ' + IntToStr(AOut.ExitCode) + ': ' + APath;
+  LDetail := AOut.StdErr;
+  if LDetail = '' then
+    LDetail := AOut.StdOut;
+  if Length(LDetail) > 200 then
+    LDetail := Copy(LDetail, 1, 200) + '...';
+  if LDetail <> '' then
+    LMsg := LMsg + ' — ' + LDetail;
+  raise EProcessError.Create(LMsg, AOut.ExitCode);
 end;
 
 function Run(const APath: string; const AArgs: array of string): TProcessOutput;
@@ -268,6 +311,19 @@ function RunIn(const APath: string; const AArgs: array of string;
   const ADir: string): TProcessOutput;
 begin
   Result := TCommand.New(APath).Args(AArgs).Dir(ADir).Output;
+end;
+
+function RunChecked(const APath: string; const AArgs: array of string): TProcessOutput;
+begin
+  Result := Run(APath, AArgs);
+  RaiseIfProcessFailed(APath, Result);
+end;
+
+function RunInChecked(const APath: string; const AArgs: array of string;
+  const ADir: string): TProcessOutput;
+begin
+  Result := RunIn(APath, AArgs, ADir);
+  RaiseIfProcessFailed(APath, Result);
 end;
 
 function Capture(const APath: string; const AArgs: array of string): string;
@@ -282,6 +338,25 @@ function CaptureIn(const APath: string; const AArgs: array of string;
   const ADir: string): string;
 begin
   Result := RunIn(APath, AArgs, ADir).StdOut;
+end;
+
+function MustCapture(const APath: string; const AArgs: array of string): string;
+var
+  LOutput: TProcessOutput;
+begin
+  LOutput := Run(APath, AArgs);
+  RaiseIfProcessFailed(APath, LOutput);
+  Result := LOutput.StdOut;
+end;
+
+function MustCaptureIn(const APath: string; const AArgs: array of string;
+  const ADir: string): string;
+var
+  LOutput: TProcessOutput;
+begin
+  LOutput := RunIn(APath, AArgs, ADir);
+  RaiseIfProcessFailed(APath, LOutput);
+  Result := LOutput.StdOut;
 end;
 
 function CaptureCombined(const APath: string;
@@ -431,14 +506,18 @@ var
 begin
   LEnv := EnvironmentVariables;
   LResolved := ResolveExecutablePath(AName, LEnv);
-  if (LResolved = AName) and
-    not CommandPathHasDirectoryPart(AName) then
+  if LResolved = '' then
   begin
-    LPath := GetEnv('PATH');
-    if Length(LPath) > 200 then
-      LPath := Copy(LPath, 1, 200) + '...';
-    raise EProcessError.Create('executable not found in PATH: ' + AName +
-      ' (searched: ' + LPath + ')');
+    if CommandPathHasDirectoryPart(AName) then
+      raise EProcessError.Create('executable not found: ' + AName)
+    else
+    begin
+      LPath := GetEnv('PATH');
+      if Length(LPath) > 200 then
+        LPath := Copy(LPath, 1, 200) + '...';
+      raise EProcessError.Create('executable not found in PATH: ' + AName +
+        ' (searched: ' + LPath + ')');
+    end;
   end;
   Result := LResolved;
 end;
@@ -450,8 +529,7 @@ var
 begin
   LEnv := EnvironmentVariables;
   LResolved := ResolveExecutablePath(AName, LEnv);
-  if (LResolved = AName) and
-    not CommandPathHasDirectoryPart(AName) then
+  if LResolved = '' then
   begin
     APath := '';
     Result := False;

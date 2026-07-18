@@ -37,8 +37,9 @@ LPath := ExpandEnv('${VAR}_suffix');
 
 // 用户目录
 LHome := UserHomeDir();
-LCache := UserCacheDir('myapp');
-LConfig := UserConfigDir('myapp');
+LCache := UserCacheDir();   // Unix: $HOME/.cache；Windows: %LOCALAPPDATA%
+LConfig := UserConfigDir(); // Unix: $HOME/.config；Windows: %APPDATA%
+// 应用子目录请自行 PathJoin(UserCacheDir, 'myapp')
 
 // 列出所有环境变量名
 LKeys := EnvKeys;
@@ -76,8 +77,8 @@ LKeys := EnvKeys;
 | 函数 | 说明 |
 |------|------|
 | `UserHomeDir(): string` | 获取用户主目录 |
-| `UserCacheDir(AppName): string` | 获取用户缓存目录 |
-| `UserConfigDir(AppName): string` | 获取用户配置目录 |
+| `UserCacheDir(): string` | 获取用户缓存目录根（不含 app 名；自行 Join） |
+| `UserConfigDir(): string` | 获取用户配置目录根（不含 app 名；自行 Join） |
 
 ## 展开语法
 

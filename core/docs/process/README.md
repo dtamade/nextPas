@@ -8,14 +8,29 @@ L2 进程执行模块。提供类似 Go `os/exec` 和 Rust `std::process::Comman
 uses nextpas.core.process;
 
 // 一行执行，捕获输出
+// 注意：Capture / Run 不检查退出码；exit≠0 时仍返回输出
 var Out := Run('/bin/echo', ['hello', 'world']);
 WriteLn(Out.StdOut);  // "hello world\n"
+
+// 失败即错（类似 Go cmd.Output / 检查 ExitError）
+var OutOk := RunChecked('/bin/true', []);
+var TextOk := MustCapture('/bin/echo', ['ok']);
 
 // 只要退出码
 var Code := Command('/bin/true').Status;  // 0
 
-// 只要 stdout 文本
+// 只要 stdout 文本（不检查退出码）
 var Text := Capture('/usr/bin/fpc', ['--version']);
+
+// 超时后 TimedOut=True（Status 通常为 psSignaled）
+var Timed := RunTimeout('/bin/sleep', ['10'], TDuration.FromMilliseconds(100));
+if Timed.TimedOut then
+  WriteLn('timed out');
+
+// 查找 PATH 中的可执行文件（含目录部分时校验可执行性，对齐 Go LookPath）
+var FpcPath := LookPath('fpc');  // '/usr/bin/fpc'
+if not TryLookPath('/no/such/bin', FpcPath) then
+  WriteLn('missing absolute path rejected');
 
 // stdout + stderr 合并
 var Combined := CaptureCombined('/bin/sh', ['-c', 'echo out; echo err >&2']);

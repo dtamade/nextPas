@@ -177,11 +177,17 @@ begin
   if FClosed then Exit;
   LCloseError := nil;
   {$IFDEF NEXTPAS_UNIX}
-  if platform_io_close(FFd) <> 0 then
+  { platform_io_close treats fd<0 as no-op for cleanup; explicit Close must
+    surface EBADF so callers can detect invalid handles (pipe contract). }
+  if FFd < 0 then
+    LCloseError := PipeSystemError('TPipeReader.Close', PLATFORM_ERR_BADF)
+  else if platform_io_close(FFd) <> 0 then
     LCloseError := PipeSyscallError('TPipeReader.Close');
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
-  if not CloseHandle(HANDLE(FFd)) then
+  if FFd < 0 then
+    LCloseError := PipeSystemError('TPipeReader.Close', PLATFORM_ERR_BADF)
+  else if not CloseHandle(HANDLE(FFd)) then
     LCloseError := PipeSystemError('TPipeReader.Close', Int32(GetLastError));
   {$ENDIF}
   FClosed := True;
@@ -246,11 +252,15 @@ begin
   if FClosed then Exit;
   LCloseError := nil;
   {$IFDEF NEXTPAS_UNIX}
-  if platform_io_close(FFd) <> 0 then
+  if FFd < 0 then
+    LCloseError := PipeSystemError('TPipeWriter.Close', PLATFORM_ERR_BADF)
+  else if platform_io_close(FFd) <> 0 then
     LCloseError := PipeSyscallError('TPipeWriter.Close');
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
-  if not CloseHandle(HANDLE(FFd)) then
+  if FFd < 0 then
+    LCloseError := PipeSystemError('TPipeWriter.Close', PLATFORM_ERR_BADF)
+  else if not CloseHandle(HANDLE(FFd)) then
     LCloseError := PipeSystemError('TPipeWriter.Close', Int32(GetLastError));
   {$ENDIF}
   FClosed := True;

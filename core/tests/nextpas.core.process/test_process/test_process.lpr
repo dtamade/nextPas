@@ -1059,6 +1059,7 @@ begin
     .Timeout(TDuration.FromMilliseconds(200))
     .Output;
   Check('Timeout — killed (signaled)', LOut.Status = psSignaled);
+  Check('Timeout — TimedOut flag set', LOut.TimedOut);
   Check('Timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
 end;
 
@@ -1098,6 +1099,16 @@ begin
     on E: EProcessError do
       Check('LookPath nonexistent — correct exception', True);
   end;
+
+  { Absolute path that does not exist must not pretend to succeed }
+  try
+    LookPath('/nonexistent_abs_bin_xyz_12345');
+    Check('LookPath abs missing — should raise', False);
+  except
+    on E: EProcessError do
+      Check('LookPath abs missing — correct exception',
+        Pos('executable not found', E.Message) > 0);
+  end;
 end;
 
 procedure TestTryLookPath;
@@ -1117,6 +1128,46 @@ begin
   Check('TryLookPath nonexistent — not found',
     not TryLookPath('nonexistent_binary_12345', LPath));
   Check('TryLookPath nonexistent — path empty', LPath = '');
+
+  Check('TryLookPath abs missing — not found',
+    not TryLookPath('/nonexistent_abs_bin_xyz_12345', LPath));
+  Check('TryLookPath abs missing — path empty', LPath = '');
+end;
+
+procedure TestMustCaptureAndRunChecked;
+var
+  LStr: string;
+  LOut: TProcessOutput;
+  LRaised: Boolean;
+begin
+  LStr := MustCapture('/bin/echo', ['ok-checked']);
+  Check('MustCapture success — stdout', Pos('ok-checked', LStr) > 0);
+
+  LOut := RunChecked('/bin/true', []);
+  Check('RunChecked success — exit 0', LOut.ExitCode = 0);
+  Check('RunChecked success — not timed out', not LOut.TimedOut);
+
+  LRaised := False;
+  try
+    MustCapture('/bin/false', []);
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('MustCapture false — raises', LRaised);
+
+  LRaised := False;
+  try
+    RunChecked('/bin/false', []);
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('RunChecked false — raises', LRaised);
+
+  { Capture still ignores non-zero exit (documented) }
+  LStr := Capture('/bin/false', []);
+  Check('Capture false — no raise, empty stdout', LStr = '');
 end;
 
 
@@ -1326,6 +1377,7 @@ begin
   TestRunLargeOutput;
   TestLookPath;
   TestTryLookPath;
+  TestMustCaptureAndRunChecked;
   TestSignal;
   TestRunTimeoutConvenience;
   TestCaptureTimeoutConvenience;

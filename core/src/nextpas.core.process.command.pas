@@ -37,9 +37,10 @@ type
     function Args(const AValues: array of string): ICommand;
     {** 设置子进程工作目录 *}
     function Dir(const AWorkDir: string): ICommand;
-    {** 完全替换子进程环境变量（格式：KEY=VALUE） *}
+    {** 完全替换子进程环境变量（格式：KEY=VALUE）；不继承父进程环境 *}
     function Env(const AEnvPairs: array of string): ICommand;
-    {** 追加环境变量到替换列表（注意：设置任何 Env/EnvAdd 后不再继承父进程环境） *}
+    {** 在继承父进程环境的基础上追加/覆盖单个变量（pemOverlay）。
+     *    若此前已调用 Env（pemReplace），则仅在替换列表内追加/覆盖，不恢复继承。 *}
     function EnvAdd(const AKey, AValue: string): ICommand;
     {** 配置 stdin 模式 *}
     function Stdin(const AMode: TStdio): ICommand;
@@ -91,10 +92,12 @@ implementation
 uses
   nextpas.core.io.intf,
   nextpas.core.process.pipe,
+  nextpas.core.platform.error,
   nextpas.core.platform.process,
   nextpas.core.platform.process.base,
   nextpas.core.os.env,
   nextpas.core.text.compare,
+  nextpas.core.text.conv,
   nextpas.core.process.pathresolve;
 
 { TCommand }
@@ -144,6 +147,21 @@ begin
   P := Pos('=', APair);
   if P <= 1 then
     raise EProcessError.Create('environment variable pair must be KEY=VALUE');
+  ValidateEnvKey(Copy(APair, 1, P - 1));
+  ValidateEnvValue(Copy(APair, P + 1, Length(APair) - P));
+end;
+
+function FormatProcessOsError(const APrefix: string; ACode: Int32): string;
+var
+  LBuf: array[0..255] of AnsiChar;
+begin
+  Result := APrefix;
+  if ACode <> 0 then
+  begin
+    Result := Result + ' (' + IntToStr(ACode) + ')';
+    if platform_error_message(ACode, @LBuf[0], SizeOf(LBuf)) > 0 then
+      Result := Result + ': ' + string(PAnsiChar(@LBuf[0]));
+  end;
 end;
 
 procedure EnvPut(var AItems: TStringArray; const AKey, AValue: string);
@@ -315,11 +333,16 @@ begin
   else
     LFinalEnv := BuildFinalEnv(FEnvMode, FEnvPairs);
 
-  { Resolve path: always search PATH if name has no directory part }
-  if not CommandPathHasDirectoryPart(FPath) then
-    LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv, FWorkDir)
-  else
-    LResolvedPath := FPath;
+  { Resolve path: always search PATH if name has no directory part;
+    directory-form paths are verified for executability (Go LookPath). }
+  LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv, FWorkDir);
+  if LResolvedPath = '' then
+  begin
+    if CommandPathHasDirectoryPart(FPath) then
+      raise EProcessError.Create('executable not found: ' + FPath)
+    else
+      raise EProcessError.Create('executable not found in PATH: ' + FPath);
+  end;
 
   LArgc := Length(FArgs) + 2;
   SetLength(LArgv, LArgc);
@@ -358,40 +381,52 @@ begin
   try
     if FStdinMode = stPiped then
     begin
-      if platform_process_create_pipe(LStdinPipe[0], LStdinPipe[1]) <> 0 then
-        raise EProcessError.Create('Failed to create stdin pipe');
+      LErr := platform_process_create_pipe(LStdinPipe[0], LStdinPipe[1]);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to create stdin pipe', LErr), LErr);
       LChildStdin := LStdinPipe[0];
     end
     else if FStdinMode = stNull then
     begin
-      if platform_process_open_null(False, LDevNull) <> 0 then
-        raise EProcessError.Create('Failed to open null stdin');
+      LErr := platform_process_open_null(False, LDevNull);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to open null stdin', LErr), LErr);
       LChildStdin := LDevNull;
     end;
 
     if FStdoutMode = stPiped then
     begin
-      if platform_process_create_pipe(LStdoutPipe[0], LStdoutPipe[1]) <> 0 then
-        raise EProcessError.Create('Failed to create stdout pipe');
+      LErr := platform_process_create_pipe(LStdoutPipe[0], LStdoutPipe[1]);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to create stdout pipe', LErr), LErr);
       LChildStdout := LStdoutPipe[1];
     end
     else if FStdoutMode = stNull then
     begin
-      if platform_process_open_null(True, LDevNull) <> 0 then
-        raise EProcessError.Create('Failed to open null stdout');
+      LErr := platform_process_open_null(True, LDevNull);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to open null stdout', LErr), LErr);
       LChildStdout := LDevNull;
     end;
 
     if FStderrMode = stPiped then
     begin
-      if platform_process_create_pipe(LStderrPipe[0], LStderrPipe[1]) <> 0 then
-        raise EProcessError.Create('Failed to create stderr pipe');
+      LErr := platform_process_create_pipe(LStderrPipe[0], LStderrPipe[1]);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to create stderr pipe', LErr), LErr);
       LChildStderr := LStderrPipe[1];
     end
     else if FStderrMode = stNull then
     begin
-      if platform_process_open_null(True, LDevNull) <> 0 then
-        raise EProcessError.Create('Failed to open null stderr');
+      LErr := platform_process_open_null(True, LDevNull);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to open null stderr', LErr), LErr);
       LChildStderr := LDevNull;
     end;
 
@@ -405,10 +440,15 @@ begin
 
     if LErr <> 0 then
       case LFailStage of
-        pssChdir: raise EProcessError.Create('Failed to chdir: ' + FWorkDir, LErr);
-        pssExec: raise EProcessError.Create('Failed to exec: ' + FPath, LErr);
+        pssChdir:
+          raise EProcessError.Create(
+            FormatProcessOsError('Failed to chdir: ' + FWorkDir, LErr), LErr);
+        pssExec:
+          raise EProcessError.Create(
+            FormatProcessOsError('Failed to exec: ' + FPath, LErr), LErr);
       else
-        raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to spawn: ' + FPath, LErr), LErr);
       end;
 
   except

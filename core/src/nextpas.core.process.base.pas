@@ -40,12 +40,15 @@ type
    * @desc 进程执行的完整结果
    *
    * @note StdOut/StdErr 仅在对应流设为 stPiped 时有内容
+   * @note TimedOut=True 表示因 ICommand.Timeout 到期而被 Kill；
+   *       此时 Status 通常为 psSignaled，ExitCode 为信号相关值
    *}
   TProcessOutput = record
     ExitCode: Integer;
     Status: TProcessStatus;
     StdOut: string;
     StdErr: string;
+    TimedOut: Boolean;
   end;
 
   {**

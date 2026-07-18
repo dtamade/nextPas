@@ -62,7 +62,8 @@ type
     procedure EnsureAttached;
     procedure RaiseProcessPlatformError(const AOp: string; ACode: Int32);
     function FinishWaitResult(const AResult: TPlatformProcessResult;
-      const AStdOut, AStdErr: string): TProcessOutput;
+      const AStdOut, AStdErr: string;
+      const ATimedOut: Boolean = False): TProcessOutput;
   public
     constructor Create(const AProc: TPlatformProcess;
       const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
@@ -187,6 +188,7 @@ var
   LResult: TPlatformProcessResult;
   LDeadline: TInstant;
   LErr: Int32;
+  LTimedOut: Boolean;
 begin
   if FWaited then
     Exit(FLastOutput);
@@ -196,6 +198,8 @@ begin
   Result.Status := nextpas.core.process.base.psUnknown;
   Result.StdOut := '';
   Result.StdErr := '';
+  Result.TimedOut := False;
+  LTimedOut := False;
   CloseWriterBestEffort(FStdinWriter);
   if FTimeout.IsZero then
   begin
@@ -220,12 +224,13 @@ begin
         LErr := platform_process_wait(FProc, LResult);
         if LErr <> 0 then
           RaiseProcessPlatformError('platform_process_wait', LErr);
+        LTimedOut := True;
         Break;
       end;
       platform_thread_sleep_ns(10000000);
     until False;
   end;
-  Result := FinishWaitResult(LResult, '', '');
+  Result := FinishWaitResult(LResult, '', '', LTimedOut);
 end;
 
 function TChild.TryWait(out AOutput: TProcessOutput): Boolean;
@@ -244,6 +249,7 @@ begin
   AOutput.Status := nextpas.core.process.base.psUnknown;
   AOutput.StdOut := '';
   AOutput.StdErr := '';
+  AOutput.TimedOut := False;
   LErr := platform_process_try_wait(FProc, LResult);
   if LErr <> 0 then
     RaiseProcessPlatformError('platform_process_try_wait', LErr);
@@ -318,6 +324,7 @@ var
   LDeadline, LDrainDeadline: TInstant;
   LErr: Int32;
   LStdoutClosed, LStderrClosed: Boolean;
+  LTimedOut: Boolean;
 begin
   if FWaited then
     Exit(FLastOutput);
@@ -326,6 +333,8 @@ begin
   CloseWriterBestEffort(FStdinWriter);
   Result.StdOut := '';
   Result.StdErr := '';
+  Result.TimedOut := False;
+  LTimedOut := False;
   LHaveProcessResult := False;
   LStdoutClosed := FStdoutReader = nil;
   LStderrClosed := FStderrReader = nil;
@@ -386,6 +395,7 @@ begin
         if LErr <> 0 then
           RaiseProcessPlatformError('platform_process_wait', LErr);
         LHaveProcessResult := True;
+        LTimedOut := True;
         LDrainDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DRAIN_TIMEOUT_NS));
       end;
     end;
@@ -416,24 +426,28 @@ begin
   FStdoutReader := nil;
   FStderrReader := nil;
   if LHaveProcessResult then
-    Result := FinishWaitResult(LProcessResult, Result.StdOut, Result.StdErr)
+    Result := FinishWaitResult(LProcessResult, Result.StdOut, Result.StdErr, LTimedOut)
   else
   begin
     LWait := Wait;
     Result.ExitCode := LWait.ExitCode;
     Result.Status := LWait.Status;
+    Result.TimedOut := LWait.TimedOut or LTimedOut;
     FLastOutput.StdOut := Result.StdOut;
     FLastOutput.StdErr := Result.StdErr;
+    FLastOutput.TimedOut := Result.TimedOut;
     Result := FLastOutput;
   end;
 end;
 
 function TChild.FinishWaitResult(const AResult: TPlatformProcessResult;
-  const AStdOut, AStdErr: string): TProcessOutput;
+  const AStdOut, AStdErr: string;
+  const ATimedOut: Boolean): TProcessOutput;
 begin
   Result.ExitCode := AResult.ExitCode;
   Result.StdOut := AStdOut;
   Result.StdErr := AStdErr;
+  Result.TimedOut := ATimedOut;
   case AResult.Status of
     psExited: Result.Status := nextpas.core.process.base.psExited;
     psSignaled: Result.Status := nextpas.core.process.base.psSignaled;

@@ -18,7 +18,7 @@
 | `PathJoin3(A, B, C)` | 连接三个路径片段 |
 | `PathJoinN(AParts)` | 连接多个路径片段 |
 | `PathDir(APath)` | 提取目录部分 |
-| `PathBase(APath)` | 提取文件名（不含扩展名） |
+| `PathBase(APath)` | 提取文件名（含扩展名） |
 | `PathSplit(APath, ADir, ABase)` | 拆分目录和文件名 |
 | `PathExt(APath)` | 提取扩展名（含 `.`） |
 | `PathClean(APath)` | 规范化路径（去除 `..`、`.`、重复分隔符） |

@@ -26,15 +26,16 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath）
 | 函数 | 说明 |
 |------|------|
 | `Command(APath): ICommand` | 创建命令构建器 |
-| `Run(APath, AArgs): TProcessOutput` | 同步执行，捕获输出 |
-| `RunIn(APath, AArgs, ADir): TProcessOutput` | 同步执行，指定工作目录 |
-| `Capture(APath, AArgs): string` | 同步执行，只返回 stdout |
-| `LookPath(AName): string` | 在 PATH 中搜索可执行文件 |
-| `ICommand.Arg/Args/Dir/Env/EnvAdd` | 链式配置 |
+| `Run(APath, AArgs): TProcessOutput` | 同步执行，捕获输出（不检查 exit） |
+| `RunChecked(APath, AArgs): TProcessOutput` | 同步执行，非成功退出抛 EProcessError |
+| `Capture(APath, AArgs): string` | 同步执行，只返回 stdout（不检查 exit） |
+| `MustCapture(APath, AArgs): string` | 同步执行返回 stdout；非成功退出抛 EProcessError |
+| `LookPath(AName): string` | 在 PATH 中搜索可执行文件；含目录部分时校验可执行性 |
+| `ICommand.Arg/Args/Dir/Env/EnvAdd` | 链式配置；EnvAdd 默认继承父环境（overlay） |
 | `ICommand.Spawn: IChild` | 异步启动子进程 |
 | `ICommand.Output: TProcessOutput` | 同步执行并捕获 |
 | `ICommand.Status: Integer` | 同步执行，只返回退出码 |
-| `ICommand.Timeout(ADuration)` | 设置超时 |
+| `ICommand.Timeout(ADuration)` | 设置超时；超时后 TimedOut=True 并 Kill |
 | `IChild.Wait: TProcessOutput` | 阻塞等待 |
 | `IChild.TryWait: Boolean` | 非阻塞检查 |
 | `IChild.Kill` | 终止子进程（SIGKILL） |
@@ -51,7 +52,8 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath）
 - **[INV-2]** WaitWithOutput 用 poll(2) 同时读 stdout+stderr，避免死锁
 - **[INV-3]** 子进程 exec 前关闭所有继承的 fd（close(3..1023)）
 - **[INV-4]** EnvAdd 继承父进程环境并追加/覆盖；Env 完全替换
-- **[INV-5]** Timeout 超时后自动 Kill + Wait
+- **[INV-5]** Timeout 超时后自动 Kill + Wait，且 TProcessOutput.TimedOut=True
+- **[INV-6]** LookPath/ResolveExecutablePath 对含目录部分的路径校验可执行性；未找到返回空/抛错
 
 ---
 

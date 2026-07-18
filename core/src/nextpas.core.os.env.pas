@@ -104,7 +104,8 @@ uses
   nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.text.builder,
-  nextpas.core.platform.env;
+  nextpas.core.platform.env,
+  nextpas.core.platform.error;
 
 type
   PStringArray = ^TStringArray;
@@ -132,10 +133,16 @@ begin
 end;
 
 procedure RaiseEnvError(const ACode: Int32; const AOp, AName: string);
+var
+  LBuf: array[0..255] of AnsiChar;
+  LMsg: string;
 begin
   if ACode = 0 then
     Exit;
-  raise EIOError.Create(AOp + ' failed (' + IntToStr(ACode) + '): ' + AName);
+  LMsg := AOp + ' failed (' + IntToStr(ACode) + '): ' + AName;
+  if platform_error_message(ACode, @LBuf[0], SizeOf(LBuf)) > 0 then
+    LMsg := LMsg + ' — ' + string(PAnsiChar(@LBuf[0]));
+  raise EIOError.Create(LMsg);
 end;
 
 function CollectEnvEntry(const AEntry: PAnsiChar; AData: Pointer): Boolean;
