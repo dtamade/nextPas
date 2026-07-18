@@ -156,6 +156,54 @@ type
     Remaining: Integer;  // 跟踪剩余任务数
   end;
 
+procedure DiscardWrappedContext(AContext: Pointer);
+var
+  LWrapped: PWrappedContext;
+  LAll: PWhenAllState;
+  LAny: PWhenAnyState;
+begin
+  LWrapped := PWrappedContext(AContext);
+  if LWrapped = nil then
+    Exit;
+  if LWrapped^.IsWhenAll then
+  begin
+    LAll := PWhenAllState(LWrapped^.State);
+    Dispose(LWrapped);
+    if LAll = nil then
+      Exit;
+    Dec(LAll^.Remaining);
+    if LAll^.Remaining <= 0 then
+    begin
+      { Do not CancelTimer here: Close is already tearing down the loop.
+        Timer OnDiscard drops the timer ownership ref safely. }
+      if AtomicFetchSub32(LAll^.RefCount, 1, moAcqRel) = 1 then
+        Dispose(LAll);
+    end;
+  end
+  else
+  begin
+    LAny := PWhenAnyState(LWrapped^.State);
+    Dispose(LWrapped);
+    if LAny = nil then
+      Exit;
+    Dec(LAny^.Remaining);
+    if LAny^.Remaining <= 0 then
+      Dispose(LAny);
+  end;
+end;
+
+procedure DiscardWhenAllTimeoutState(AContext: Pointer);
+var
+  LState: PWhenAllState;
+begin
+  LState := PWhenAllState(AContext);
+  if LState = nil then
+    Exit;
+  { Timer was discarded without firing. Drop timer ownership only. }
+  if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
+    Dispose(LState);
+end;
+
 { ==================== WhenAll ==================== }
 
 { WhenAll 任务完成回调 }
@@ -184,9 +232,9 @@ begin
   { 检查是否全部完成 }
   if LState^.Remaining <= 0 then
   begin
-    { 取消超时定时器并释放其引用 }
     if (LState^.TimeoutMs > 0) and not LState^.TimedOut then
     begin
+      { Cancel abandons timer without OnDiscard; drop timer ownership here. }
       LState^.Loop.CancelTimer(LState^.TimerHandle);
       if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
       begin
@@ -195,7 +243,6 @@ begin
       end;
     end;
 
-    { 如果未超时，触发完成回调 }
     if not LState^.TimedOut then
     begin
       if Assigned(LState^.OnComplete) then
@@ -204,7 +251,6 @@ begin
         LState^.OnCompleteRef(LState^.OnCompleteCtx);
     end;
 
-    { 释放任务引用 }
     if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
       Dispose(LState);
   end;
@@ -270,10 +316,11 @@ begin
   if AOptions.TimeoutMs > 0 then
   begin
     Inc(LState^.RefCount);  // 定时器持有引用
-    LState^.TimerHandle := LLoop.Schedule(
+    LState^.TimerHandle := LLoop.ScheduleEx(
       TDuration.FromMilliseconds(AOptions.TimeoutMs),
       @WhenAllTimeoutCallback,
-      LState
+      LState,
+      @DiscardWhenAllTimeoutState
     );
   end;
 
@@ -287,7 +334,7 @@ begin
     LWrapped^.State := LState;
     LWrapped^.IsWhenAll := True;
 
-    LLoop.Post(@WhenAllTaskDone, LWrapped);
+    LLoop.PostEx(@WhenAllTaskDone, LWrapped, @DiscardWrappedContext);
   end;
 end;
 
@@ -327,10 +374,11 @@ begin
   if AOptions.TimeoutMs > 0 then
   begin
     Inc(LState^.RefCount);
-    LState^.TimerHandle := LLoop.Schedule(
+    LState^.TimerHandle := LLoop.ScheduleEx(
       TDuration.FromMilliseconds(AOptions.TimeoutMs),
       @WhenAllTimeoutCallback,
-      LState
+      LState,
+      @DiscardWhenAllTimeoutState
     );
   end;
 
@@ -343,7 +391,7 @@ begin
     LWrapped^.State := LState;
     LWrapped^.IsWhenAll := True;
 
-    LLoop.Post(@WhenAllTaskDone, LWrapped);
+    LLoop.PostEx(@WhenAllTaskDone, LWrapped, @DiscardWrappedContext);
   end;
 end;
 
@@ -426,7 +474,7 @@ begin
     LWrapped^.State := LState;
     LWrapped^.IsWhenAll := False;
 
-    LLoop.Post(@WhenAnyTaskDone, LWrapped);
+    LLoop.PostEx(@WhenAnyTaskDone, LWrapped, @DiscardWrappedContext);
   end;
 end;
 
@@ -470,7 +518,7 @@ begin
     LWrapped^.State := LState;
     LWrapped^.IsWhenAll := False;
 
-    LLoop.Post(@WhenAnyTaskDone, LWrapped);
+    LLoop.PostEx(@WhenAnyTaskDone, LWrapped, @DiscardWrappedContext);
   end;
 end;
 

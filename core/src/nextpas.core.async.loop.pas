@@ -54,6 +54,8 @@ type
     { Timer scheduling }
     function Schedule(const ADelay: TDuration; ACallback: TAsyncCallback;
       AContext: Pointer = nil): TAsyncTimerHandle;
+    function ScheduleEx(const ADelay: TDuration; ACallback: TAsyncCallback;
+      AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
     function ScheduleRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
       AContext: Pointer = nil): TAsyncTimerHandle;
     function ScheduleMethod(const ADelay: TDuration; ACallback: TAsyncCallbackMethod;
@@ -339,7 +341,11 @@ begin
     { Discard remaining items without firing callbacks (same as prior ClearPendingQueue). }
     while FPending.TryDequeue(LItem) do
     begin
-      DiscardPendingItem(LItem);
+      try
+        DiscardPendingItem(LItem);
+      except
+        { Close must continue releasing owned resources even if a discard hook fails. }
+      end;
       LItem.Callback := nil;
       LItem.Method := nil;
       LItem.Context := nil;
@@ -472,6 +478,14 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
+end;
+
+function TAsyncLoop.ScheduleEx(const ADelay: TDuration; ACallback: TAsyncCallback;
+  AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FTimers.ScheduleAfterEx(ADelay, ACallback, AContext, AOnDiscard);
 end;
 
 function TAsyncLoop.ScheduleRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;

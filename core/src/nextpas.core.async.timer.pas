@@ -14,6 +14,7 @@ type
     Ref: TAsyncCallbackRef;
     Method: TAsyncCallbackMethod;
     Context: Pointer;
+    OnDiscard: TAsyncCallback;
     Gen: UInt32;
     Cancelled: Boolean;
     NextFree: Int32;
@@ -38,18 +39,22 @@ type
     function IsBefore(A, B: UInt32): Boolean; inline;
     procedure SwapHeap(A, B: UInt32); inline;
     function AllocEntry: UInt32;
-    procedure RecycleEntry(AIdx: UInt32);
+    procedure RecycleEntry(AIdx: UInt32; ARunDiscard: Boolean = True);
   public
     class function Create: TTimerHeap; static;
     procedure Close;
     function Schedule(const ADeadline: TDeadline; ACallback: TAsyncCallback;
       AContext: Pointer): TAsyncTimerHandle;
+    function ScheduleEx(const ADeadline: TDeadline; ACallback: TAsyncCallback;
+      AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
     function ScheduleRef(const ADeadline: TDeadline; ACallback: TAsyncCallbackRef;
       AContext: Pointer): TAsyncTimerHandle;
     function ScheduleMethod(const ADeadline: TDeadline; ACallback: TAsyncCallbackMethod;
       AContext: Pointer): TAsyncTimerHandle;
     function ScheduleAfter(const ADelay: TDuration; ACallback: TAsyncCallback;
       AContext: Pointer): TAsyncTimerHandle;
+    function ScheduleAfterEx(const ADelay: TDuration; ACallback: TAsyncCallback;
+      AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
     function ScheduleAfterRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
       AContext: Pointer): TAsyncTimerHandle;
     function ScheduleAfterMethod(const ADelay: TDuration; ACallback: TAsyncCallbackMethod;
@@ -199,12 +204,24 @@ begin
   end;
 end;
 
-procedure TTimerHeap.RecycleEntry(AIdx: UInt32);
+procedure TTimerHeap.RecycleEntry(AIdx: UInt32; ARunDiscard: Boolean);
+var
+  LDiscard: TAsyncCallback;
+  LCtx: Pointer;
 begin
+  if ARunDiscard and Assigned(FEntries[AIdx].OnDiscard) then
+  begin
+    LDiscard := FEntries[AIdx].OnDiscard;
+    LCtx := FEntries[AIdx].Context;
+    FEntries[AIdx].OnDiscard := nil;
+    FEntries[AIdx].Context := nil;
+    LDiscard(LCtx);
+  end;
   FEntries[AIdx].Callback := nil;
   FEntries[AIdx].Ref := nil;
   FEntries[AIdx].Method := nil;
   FEntries[AIdx].Context := nil;
+  FEntries[AIdx].OnDiscard := nil;
   FEntries[AIdx].Gen := FNextGen;
   Inc(FNextGen);
   if FNextGen = 0 then
@@ -221,6 +238,11 @@ begin
   begin
     for LI := 0 to FEntryCount - 1 do
     begin
+      if Assigned(FEntries[LI].OnDiscard) then
+      begin
+        FEntries[LI].OnDiscard(FEntries[LI].Context);
+        FEntries[LI].OnDiscard := nil;
+      end;
       FEntries[LI].Callback := nil;
       FEntries[LI].Ref := nil;
       FEntries[LI].Method := nil;
@@ -239,13 +261,22 @@ end;
 
 function TTimerHeap.Schedule(const ADeadline: TDeadline; ACallback: TAsyncCallback;
   AContext: Pointer): TAsyncTimerHandle;
+begin
+  Result := ScheduleEx(ADeadline, ACallback, AContext, nil);
+end;
+
+function TTimerHeap.ScheduleEx(const ADeadline: TDeadline; ACallback: TAsyncCallback;
+  AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
 var
   LIdx: UInt32;
 begin
   LIdx := AllocEntry;
   FEntries[LIdx].Deadline := ADeadline;
   FEntries[LIdx].Callback := ACallback;
+  FEntries[LIdx].Ref := nil;
+  FEntries[LIdx].Method := nil;
   FEntries[LIdx].Context := AContext;
+  FEntries[LIdx].OnDiscard := AOnDiscard;
   FEntries[LIdx].Gen := FNextGen;
   FEntries[LIdx].Cancelled := False;
   FEntries[LIdx].NextFree := -1;
@@ -267,8 +298,11 @@ var
 begin
   LIdx := AllocEntry;
   FEntries[LIdx].Deadline := ADeadline;
+  FEntries[LIdx].Callback := nil;
   FEntries[LIdx].Ref := ACallback;
+  FEntries[LIdx].Method := nil;
   FEntries[LIdx].Context := AContext;
+  FEntries[LIdx].OnDiscard := nil;
   FEntries[LIdx].Gen := FNextGen;
   FEntries[LIdx].Cancelled := False;
   FEntries[LIdx].NextFree := -1;
@@ -290,8 +324,11 @@ var
 begin
   LIdx := AllocEntry;
   FEntries[LIdx].Deadline := ADeadline;
+  FEntries[LIdx].Callback := nil;
+  FEntries[LIdx].Ref := nil;
   FEntries[LIdx].Method := ACallback;
   FEntries[LIdx].Context := AContext;
+  FEntries[LIdx].OnDiscard := nil;
   FEntries[LIdx].Gen := FNextGen;
   FEntries[LIdx].Cancelled := False;
   FEntries[LIdx].NextFree := -1;
@@ -310,6 +347,12 @@ function TTimerHeap.ScheduleAfter(const ADelay: TDuration; ACallback: TAsyncCall
   AContext: Pointer): TAsyncTimerHandle;
 begin
   Result := Schedule(TDeadline.After(ADelay), ACallback, AContext);
+end;
+
+function TTimerHeap.ScheduleAfterEx(const ADelay: TDuration; ACallback: TAsyncCallback;
+  AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
+begin
+  Result := ScheduleEx(TDeadline.After(ADelay), ACallback, AContext, AOnDiscard);
 end;
 
 function TTimerHeap.ScheduleAfterRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
@@ -335,9 +378,12 @@ begin
   if FEntries[AHandle.FId].Cancelled then
     Exit(False);
   FEntries[AHandle.FId].Cancelled := True;
+  { Cancel does not run OnDiscard: caller still owns Context cleanup.
+    Close/RecycleEntry run OnDiscard for abandoned timers. }
   FEntries[AHandle.FId].Callback := nil;
   FEntries[AHandle.FId].Ref := nil;
   FEntries[AHandle.FId].Method := nil;
+  FEntries[AHandle.FId].OnDiscard := nil;
   FEntries[AHandle.FId].Context := nil;
   Result := True;
 end;
@@ -397,7 +443,7 @@ begin
       FHeap[0] := FHeap[FHeapCount];
       SiftDown(0);
     end;
-    RecycleEntry(LIdx);
+    RecycleEntry(LIdx, False);
     if not LEntry.IsEmpty then
       LEntry.Invoke;
     Inc(Result);
