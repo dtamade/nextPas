@@ -1,6 +1,7 @@
 unit nextpas.core.async;
 {**
- * @desc 异步模块门面：re-export async.base / timer / loop / task / io.base 全部公共类型。
+ * @desc 异步模块门面：re-export async.base / timer / loop / task 与高级子模块公共类型。
+ *       TAsyncLoop 暴露 Post/PostEx/PostRef/PostMethod 与 Schedule/ScheduleEx。
  *       消费方只需 uses nextpas.core.async 即可使用完整异步框架。
  *}
 

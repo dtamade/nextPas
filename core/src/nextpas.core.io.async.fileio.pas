@@ -79,6 +79,12 @@ begin
 end;
 
 { 完成回调 - 在事件循环线程中执行 }
+procedure DiscardFileIOPostCtx(AContext: Pointer);
+begin
+  if AContext <> nil then
+    Dispose(PFileIOPostContext(AContext));
+end;
+
 procedure FileIOPostCallback(AContext: Pointer);
 var
   LPostCtx: PFileIOPostContext;
@@ -159,7 +165,7 @@ begin
     LPostCtx^.CallbackRef := LCtx^.CallbackRef;
     LPostCtx^.Context := LCtx^.Context;
     LPostCtx^.Result := LResult;
-    LCtx^.Loop.Post(@FileIOPostCallback, LPostCtx);
+    LCtx^.Loop.PostEx(@FileIOPostCallback, LPostCtx, @DiscardFileIOPostCtx);
 
   finally
     Dispose(LCtx);

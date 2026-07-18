@@ -238,7 +238,7 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 - **[INV-1]** TAsyncTimerHandle 的 FId = High(UInt32) 表示无效句柄
 - **[INV-2]** TAsyncTask 状态只能单向转换：Idle → Pending → Completed/Failed/TimedOut/Cancelled
-- **[INV-3]** TAsyncLoop.Post/PostRef/PostMethod 是线程安全的
+- **[INV-3]** TAsyncLoop.Post/PostEx/PostRef/PostMethod 是线程安全的（T1 MPSC）
 - **[INV-4]** TTimerHeap 的定时器按到期时间排序（最小堆）
 - **[INV-5]** 匿名过程引用 (TAsyncCallbackRef) 通过引用计数管理生命周期
 - **[INV-6]** 方法指针 (TAsyncCallbackMethod) 绑定到对象实例
@@ -298,7 +298,7 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 | 组件 | 线程安全 | 机制 |
 |------|----------|------|
-| TAsyncLoop.Post/PostRef/PostMethod | ✅ | FPendingLock: TPlatformMutex |
+| TAsyncLoop.Post/PostEx/PostRef/PostMethod | ✅ | T1 MPSC pending queue (H3-1) |
 | TAsyncLoop.Wake | ✅ | platform_poller_wake |
 | TAsyncLoop.Schedule* | ❌ | 仅限事件循环线程 |
 | TAsyncLoop.Async* | ❌ | 仅限事件循环线程 |
@@ -419,3 +419,8 @@ atsCancelled: TAsyncTaskStatus = 5;
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-11 | 1.0 | 初始版本 | Claude |
+
+
+### OnDiscard / Close
+- Heap wraps posted to the loop must provide OnDiscard when Close may discard them.
+- Timeout I/O uses ScheduleEx + TimeoutCtxDiscardTimer so Close free TTimeoutCtx.

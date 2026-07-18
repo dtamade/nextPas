@@ -196,3 +196,11 @@ procedure OnCompleteMethod(ACallback: TAsyncCallbackMethod; AContext: Pointer);
 - **测试**: 197 async + 45 net + 71 io = 313 tests
 - **可用性得分**: 7.2/10 → **9.5/10**
 - **0 new failures, 0 critical leaks**
+
+
+### Phase 17: Close-path discard hardening (2026-07-19) ✅
+- [x] PostEx/OnDiscard for TaskGroup wraps
+- [x] ScheduleEx/OnDiscard for combinators/retry/TimeoutCtx
+- [x] CancelTimer does not run OnDiscard (owner cleanup)
+- [x] WhenAll/Retry close-before-poll regression tests
+- [x] Docs: MPSC truth + OnDiscard contract

@@ -76,6 +76,12 @@ begin
 end;
 
 { DNS 完成回调 - 在事件循环线程中执行 }
+procedure DiscardDnsPostCtx(AContext: Pointer);
+begin
+  if AContext <> nil then
+    Dispose(PDnsPostContext(AContext));
+end;
+
 procedure DnsPostCallback(AContext: Pointer);
 var
   LPostCtx: PDnsPostContext;
@@ -172,7 +178,7 @@ begin
     LPostCtx^.CallbackRef := LCtx^.CallbackRef;
     LPostCtx^.Context := LCtx^.Context;
     LPostCtx^.Result := LResult;
-    LCtx^.Loop.Post(@DnsPostCallback, LPostCtx);
+    LCtx^.Loop.PostEx(@DnsPostCallback, LPostCtx, @DiscardDnsPostCtx);
 
   finally
     Dispose(LCtx);

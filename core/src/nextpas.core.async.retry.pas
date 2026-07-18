@@ -149,6 +149,12 @@ type
 
 { ==================== 重试逻辑 ==================== }
 
+procedure DiscardRetryState(AContext: Pointer);
+begin
+  if AContext <> nil then
+    Dispose(PRetryState(AContext));
+end;
+
 { 统一的重试执行步骤（首次和后续重试共用） }
 procedure RetryExecuteStep(AContext: Pointer);
 var
@@ -175,10 +181,11 @@ begin
       end;
       { 用当前延迟调度下一次重试 }
       Inc(LState^.CurrentRetry);
-      LState^.Loop.Schedule(
+      LState^.Loop.ScheduleEx(
         TDuration.FromMilliseconds(LState^.CurrentDelayMs),
         @RetryExecuteStep,
-        LState
+        LState,
+        @DiscardRetryState
       );
       { 更新延迟供下次使用（在 schedule 之后，不影响本次调度） }
       LState^.CurrentDelayMs := LState^.CurrentDelayMs * LState^.Options.BackoffFactor;
@@ -232,7 +239,7 @@ begin
   LState^.Failed := False;
 
   // 立即执行第一次尝试
-  LLoop.Post(@RetryExecuteStep, LState);
+  LLoop.PostEx(@RetryExecuteStep, LState, @DiscardRetryState);
 end;
 
 procedure RetryWithFixedDelay(

@@ -11,7 +11,8 @@ uses
   nextpas.core.async.base,
   nextpas.core.async.loop,
   nextpas.core.async.taskgroup,
-  nextpas.core.async.combinators;
+  nextpas.core.async.combinators,
+  nextpas.core.async.retry;
 
 var
   GLoop: TAsyncLoop;
@@ -41,6 +42,37 @@ end;
 
 { ==================== WhenAll 测试 ==================== }
 
+procedure TestWhenAllCloseDiscardsWraps;
+var
+  LLoop: TAsyncLoop;
+  LCallbacks: array[0..2] of TAsyncCallback;
+  LContexts: array[0..2] of Pointer;
+  LCounters: array[0..2] of Integer;
+  I: Integer;
+begin
+  LLoop := TAsyncLoop.Create;
+  for I := 0 to 2 do
+  begin
+    LCounters[I] := 0;
+    LCallbacks[I] := @SimpleCallback;
+    LContexts[I] := @LCounters[I];
+  end;
+  WhenAll(LCallbacks, LContexts, 3, @WhenAllCompleteCallback, nil,
+    DefaultCombinatorOptions, LLoop);
+  LLoop.Close;
+  WriteLn('  PASS: WhenAllCloseDiscardsWraps');
+end;
+
+procedure TestRetryCloseDiscardsState;
+var
+  LLoop: TAsyncLoop;
+begin
+  LLoop := TAsyncLoop.Create;
+  RetryWithBackoff(@SimpleCallback, nil, nil, nil, nil, nil, DefaultRetryOptions, LLoop);
+  LLoop.Close;
+  WriteLn('  PASS: RetryCloseDiscardsState');
+end;
+
 procedure TestWhenAllEmpty;
 begin
   GWhenAllDone := False;
@@ -54,6 +86,7 @@ var
   LCallbacks: array[0..0] of TAsyncCallback;
   LContexts: array[0..0] of Pointer;
   LCounter: Integer;
+  I: Integer;
 begin
   GWhenAllDone := False;
   LCounter := 0;
@@ -62,8 +95,8 @@ begin
 
   WhenAll(LCallbacks, LContexts, 1, @WhenAllCompleteCallback, nil, DefaultCombinatorOptions, GLoop);
 
-  // 手动运行一次循环处理任务
-  GLoop.Poll;
+  for I := 0 to 10 do
+    GLoop.Poll;
   Check(GWhenAllDone, 'WhenAll single should complete');
   Check(LCounter = 1, 'Callback should be called once');
   WriteLn('  PASS: WhenAllSingle');
@@ -111,6 +144,7 @@ var
   LCallbacks: array[0..0] of TAsyncCallback;
   LContexts: array[0..0] of Pointer;
   LCounter: Integer;
+  I: Integer;
 begin
   GWhenAnyDone := False;
   LCounter := 0;
@@ -119,7 +153,8 @@ begin
 
   WhenAny(LCallbacks, LContexts, 1, @WhenAnyCompleteCallback, nil, DefaultCombinatorOptions, GLoop);
 
-  GLoop.Poll;
+  for I := 0 to 10 do
+    GLoop.Poll;
   Check(GWhenAnyDone, 'WhenAny single should complete');
   Check(LCounter = 1, 'Callback should be called once');
   WriteLn('  PASS: WhenAnySingle');
@@ -142,7 +177,8 @@ begin
 
   WhenAny(LCallbacks, LContexts, 3, @WhenAnyCompleteCallback, nil, DefaultCombinatorOptions, GLoop);
 
-  GLoop.Poll;
+  for I := 0 to 10 do
+    GLoop.Poll;
   Check(GWhenAnyDone, 'WhenAny multiple should complete');
   // 至少一个回调被调用
   Check((LCounters[0] + LCounters[1] + LCounters[2]) >= 1, 'At least one callback should be called');
@@ -157,6 +193,7 @@ var
   LContexts: array[0..0] of Pointer;
   LCounter: Integer;
   LOptions: TCombinatorOptions;
+  I: Integer;
 begin
   GWhenAllDone := False;
   LCounter := 0;
@@ -168,7 +205,8 @@ begin
 
   WhenAll(LCallbacks, LContexts, 1, @WhenAllCompleteCallback, nil, LOptions, GLoop);
 
-  GLoop.Poll;
+  for I := 0 to 10 do
+    GLoop.Poll;
   Check(GWhenAllDone, 'WhenAll with timeout should complete');
   WriteLn('  PASS: WhenAllWithTimeout');
 end;
@@ -176,6 +214,8 @@ end;
 { ==================== 主测试套件 ==================== }
 
 procedure RunAllTests;
+var
+  I: Integer;
 begin
   WriteLn('=== test_async_combinators ===');
 
@@ -183,6 +223,8 @@ begin
 
   { WhenAll 测试 }
   WriteLn('--- WhenAll Tests ---');
+  TestWhenAllCloseDiscardsWraps;
+  TestRetryCloseDiscardsState;
   TestWhenAllEmpty;
   TestWhenAllSingle;
   TestWhenAllMultiple;
@@ -194,7 +236,8 @@ begin
   TestWhenAnySingle;
   TestWhenAnyMultiple;
 
-  GLoop.Close;
+  for I := 0 to 20 do
+    GLoop.Poll;
   GLoop.Close;
 
   WriteLn('=== All tests passed ===');

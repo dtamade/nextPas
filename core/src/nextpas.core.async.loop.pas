@@ -54,6 +54,8 @@ type
     { Timer scheduling }
     function Schedule(const ADelay: TDuration; ACallback: TAsyncCallback;
       AContext: Pointer = nil): TAsyncTimerHandle;
+    function ScheduleEx(const ADelay: TDuration; ACallback: TAsyncCallback;
+      AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
     function ScheduleRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
       AContext: Pointer = nil): TAsyncTimerHandle;
     function ScheduleMethod(const ADelay: TDuration; ACallback: TAsyncCallbackMethod;
@@ -229,6 +231,18 @@ begin
     TimeoutCtxRelease(ACtx);
 end;
 
+{ Close/Recycle abandoned timeout timer without firing: drop timer ownership only. }
+procedure TimeoutCtxDiscardTimer(AContext: Pointer);
+var
+  LCtx: PTimeoutCtx;
+begin
+  LCtx := PTimeoutCtx(AContext);
+  if LCtx = nil then
+    Exit;
+  LCtx^.TimerHandle := TAsyncTimerHandle.None;
+  TimeoutCtxRelease(LCtx);
+end;
+
 procedure TimeoutCtxDetachUserRefs(ACtx: PTimeoutCtx;
   out ACallback: TIoCompletion; out AContext: Pointer);
 begin
@@ -290,8 +304,8 @@ begin
   Result^.UserContext := AContext;
   Result^.CompletionState := TIMEOUT_COMPLETION_PENDING;
   Result^.RefCount := 2;
-  Result^.TimerHandle := ALoop^.FTimers.Schedule(ADeadline,
-    @TimeoutTimerCallback, Result);
+  Result^.TimerHandle := ALoop^.FTimers.ScheduleEx(ADeadline,
+    @TimeoutTimerCallback, Result, @TimeoutCtxDiscardTimer);
 end;
 
 { TAsyncLoop }
@@ -339,7 +353,11 @@ begin
     { Discard remaining items without firing callbacks (same as prior ClearPendingQueue). }
     while FPending.TryDequeue(LItem) do
     begin
-      DiscardPendingItem(LItem);
+      try
+        DiscardPendingItem(LItem);
+      except
+        { Close must continue releasing owned resources even if a discard hook fails. }
+      end;
       LItem.Callback := nil;
       LItem.Method := nil;
       LItem.Context := nil;
@@ -472,6 +490,14 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
+end;
+
+function TAsyncLoop.ScheduleEx(const ADelay: TDuration; ACallback: TAsyncCallback;
+  AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FTimers.ScheduleAfterEx(ADelay, ACallback, AContext, AOnDiscard);
 end;
 
 function TAsyncLoop.ScheduleRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
