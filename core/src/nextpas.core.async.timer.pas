@@ -11,10 +11,14 @@ type
   TTimerEntry = record
     Deadline: TDeadline;
     Callback: TAsyncCallback;
+    Ref: TAsyncCallbackRef;
+    Method: TAsyncCallbackMethod;
     Context: Pointer;
     Gen: UInt32;
     Cancelled: Boolean;
     NextFree: Int32;
+    procedure Invoke;
+    function IsEmpty: Boolean;
   end;
 
   TTimerHeap = record
@@ -40,7 +44,15 @@ type
     procedure Close;
     function Schedule(const ADeadline: TDeadline; ACallback: TAsyncCallback;
       AContext: Pointer): TAsyncTimerHandle;
+    function ScheduleRef(const ADeadline: TDeadline; ACallback: TAsyncCallbackRef;
+      AContext: Pointer): TAsyncTimerHandle;
+    function ScheduleMethod(const ADeadline: TDeadline; ACallback: TAsyncCallbackMethod;
+      AContext: Pointer): TAsyncTimerHandle;
     function ScheduleAfter(const ADelay: TDuration; ACallback: TAsyncCallback;
+      AContext: Pointer): TAsyncTimerHandle;
+    function ScheduleAfterRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
+      AContext: Pointer): TAsyncTimerHandle;
+    function ScheduleAfterMethod(const ADelay: TDuration; ACallback: TAsyncCallbackMethod;
       AContext: Pointer): TAsyncTimerHandle;
     function Cancel(const AHandle: TAsyncTimerHandle): Boolean;
     function NextDeadline: TDeadline;
@@ -52,6 +64,23 @@ implementation
 
 const
   INITIAL_CAP = 16;
+
+{ TTimerEntry }
+
+procedure TTimerEntry.Invoke;
+begin
+  if Assigned(Callback) then
+    Callback(Context)
+  else if Assigned(Ref) then
+    Ref(Context)
+  else if Assigned(Method) then
+    Method(Context);
+end;
+
+function TTimerEntry.IsEmpty: Boolean;
+begin
+  Result := not Assigned(Callback) and not Assigned(Ref) and not Assigned(Method);
+end;
 
 { TTimerHeap }
 
@@ -173,6 +202,8 @@ end;
 procedure TTimerHeap.RecycleEntry(AIdx: UInt32);
 begin
   FEntries[AIdx].Callback := nil;
+  FEntries[AIdx].Ref := nil;
+  FEntries[AIdx].Method := nil;
   FEntries[AIdx].Context := nil;
   FEntries[AIdx].Gen := FNextGen;
   Inc(FNextGen);
@@ -191,6 +222,8 @@ begin
     for LI := 0 to FEntryCount - 1 do
     begin
       FEntries[LI].Callback := nil;
+      FEntries[LI].Ref := nil;
+      FEntries[LI].Method := nil;
       FEntries[LI].Context := nil;
     end;
   end;
@@ -227,10 +260,68 @@ begin
   SiftUp(FHeapCount - 1);
 end;
 
+function TTimerHeap.ScheduleRef(const ADeadline: TDeadline; ACallback: TAsyncCallbackRef;
+  AContext: Pointer): TAsyncTimerHandle;
+var
+  LIdx: UInt32;
+begin
+  LIdx := AllocEntry;
+  FEntries[LIdx].Deadline := ADeadline;
+  FEntries[LIdx].Ref := ACallback;
+  FEntries[LIdx].Context := AContext;
+  FEntries[LIdx].Gen := FNextGen;
+  FEntries[LIdx].Cancelled := False;
+  FEntries[LIdx].NextFree := -1;
+
+  Result.FId := LIdx;
+  Result.FGen := FNextGen;
+  Inc(FNextGen);
+  if FNextGen = 0 then FNextGen := 1;
+
+  FHeap[FHeapCount] := LIdx;
+  Inc(FHeapCount);
+  SiftUp(FHeapCount - 1);
+end;
+
+function TTimerHeap.ScheduleMethod(const ADeadline: TDeadline; ACallback: TAsyncCallbackMethod;
+  AContext: Pointer): TAsyncTimerHandle;
+var
+  LIdx: UInt32;
+begin
+  LIdx := AllocEntry;
+  FEntries[LIdx].Deadline := ADeadline;
+  FEntries[LIdx].Method := ACallback;
+  FEntries[LIdx].Context := AContext;
+  FEntries[LIdx].Gen := FNextGen;
+  FEntries[LIdx].Cancelled := False;
+  FEntries[LIdx].NextFree := -1;
+
+  Result.FId := LIdx;
+  Result.FGen := FNextGen;
+  Inc(FNextGen);
+  if FNextGen = 0 then FNextGen := 1;
+
+  FHeap[FHeapCount] := LIdx;
+  Inc(FHeapCount);
+  SiftUp(FHeapCount - 1);
+end;
+
 function TTimerHeap.ScheduleAfter(const ADelay: TDuration; ACallback: TAsyncCallback;
   AContext: Pointer): TAsyncTimerHandle;
 begin
   Result := Schedule(TDeadline.After(ADelay), ACallback, AContext);
+end;
+
+function TTimerHeap.ScheduleAfterRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
+  AContext: Pointer): TAsyncTimerHandle;
+begin
+  Result := ScheduleRef(TDeadline.After(ADelay), ACallback, AContext);
+end;
+
+function TTimerHeap.ScheduleAfterMethod(const ADelay: TDuration; ACallback: TAsyncCallbackMethod;
+  AContext: Pointer): TAsyncTimerHandle;
+begin
+  Result := ScheduleMethod(TDeadline.After(ADelay), ACallback, AContext);
 end;
 
 function TTimerHeap.Cancel(const AHandle: TAsyncTimerHandle): Boolean;
@@ -245,6 +336,8 @@ begin
     Exit(False);
   FEntries[AHandle.FId].Cancelled := True;
   FEntries[AHandle.FId].Callback := nil;
+  FEntries[AHandle.FId].Ref := nil;
+  FEntries[AHandle.FId].Method := nil;
   FEntries[AHandle.FId].Context := nil;
   Result := True;
 end;
@@ -275,8 +368,7 @@ end;
 function TTimerHeap.FireExpired: UInt32;
 var
   LIdx: UInt32;
-  LCb: TAsyncCallback;
-  LCtx: Pointer;
+  LEntry: TTimerEntry;
 begin
   Result := 0;
   while FHeapCount > 0 do
@@ -298,8 +390,7 @@ begin
     if not FEntries[LIdx].Deadline.IsExpired then
       Break;
     { Pop and fire }
-    LCb := FEntries[LIdx].Callback;
-    LCtx := FEntries[LIdx].Context;
+    LEntry := FEntries[LIdx];
     Dec(FHeapCount);
     if FHeapCount > 0 then
     begin
@@ -307,8 +398,8 @@ begin
       SiftDown(0);
     end;
     RecycleEntry(LIdx);
-    if Assigned(LCb) then
-      LCb(LCtx);
+    if not LEntry.IsEmpty then
+      LEntry.Invoke;
     Inc(Result);
   end;
 end;

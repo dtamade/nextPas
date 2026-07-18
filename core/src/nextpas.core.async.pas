@@ -13,10 +13,26 @@ uses
   nextpas.core.async.timer,
   nextpas.core.async.loop,
   nextpas.core.async.task,
+  nextpas.core.async.mutex,
+  nextpas.core.async.semaphore,
+  nextpas.core.async.channel,
+  nextpas.core.async.condvar,
+  nextpas.core.async.taskgroup,
+  nextpas.core.async.timeout,
+  nextpas.core.async.shutdown,
+  nextpas.core.async.combinators,
+  nextpas.core.async.retry,
+  nextpas.core.async.signal,
+  nextpas.core.async.buffer,
+  nextpas.core.async.cancellation,
   nextpas.core.io.poller;
 
 type
   TAsyncCallback = nextpas.core.async.base.TAsyncCallback;
+  TAsyncCallbackRef = nextpas.core.async.base.TAsyncCallbackRef;
+  TAsyncCallbackMethod = nextpas.core.async.base.TAsyncCallbackMethod;
+  TIoCompletion = nextpas.core.async.base.TIoCompletion;
+  TIoCompletionRef = nextpas.core.async.base.TIoCompletionRef;
   TAsyncTimerHandle = nextpas.core.async.base.TAsyncTimerHandle;
   TTimerHeap = nextpas.core.async.timer.TTimerHeap;
   TAsyncLoop = nextpas.core.async.loop.TAsyncLoop;
@@ -24,7 +40,34 @@ type
   TAsyncTaskState = nextpas.core.async.base.TAsyncTaskState;
   PAsyncTask = nextpas.core.async.task.PAsyncTask;
   TAsyncTask = nextpas.core.async.task.TAsyncTask;
-  TIoCompletion = nextpas.core.io.poller.TIoCompletion;
+  TAsyncCallbackStorage = nextpas.core.async.task.TAsyncCallbackStorage;
+  IAsyncMutex = nextpas.core.async.mutex.IAsyncMutex;
+  IAsyncSemaphore = nextpas.core.async.semaphore.IAsyncSemaphore;
+  IAsyncChannel = nextpas.core.async.channel.IAsyncChannel;
+  IAsyncCondVar = nextpas.core.async.condvar.IAsyncCondVar;
+  TAsyncTaskGroupState = nextpas.core.async.taskgroup.TAsyncTaskGroupState;
+  TAsyncTaskGroupOption = nextpas.core.async.taskgroup.TAsyncTaskGroupOption;
+  TAsyncTaskGroupOptions = nextpas.core.async.taskgroup.TAsyncTaskGroupOptions;
+  IAsyncTaskGroup = nextpas.core.async.taskgroup.IAsyncTaskGroup;
+  TAsyncTimeoutResult = nextpas.core.async.timeout.TAsyncTimeoutResult;
+  IAsyncTimeout = nextpas.core.async.timeout.IAsyncTimeout;
+  TShutdownPhase = nextpas.core.async.shutdown.TShutdownPhase;
+  TShutdownOption = nextpas.core.async.shutdown.TShutdownOption;
+  TShutdownOptions = nextpas.core.async.shutdown.TShutdownOptions;
+  IAsyncShutdown = nextpas.core.async.shutdown.IAsyncShutdown;
+  TCombinatorOptions = nextpas.core.async.combinators.TCombinatorOptions;
+  TAsyncRetryResult = nextpas.core.async.retry.TAsyncRetryResult;
+  TAsyncRetryOptions = nextpas.core.async.retry.TAsyncRetryOptions;
+  TSignalCallback = nextpas.core.async.signal.TSignalCallback;
+  TSignalOption = nextpas.core.async.signal.TSignalOption;
+  TSignalOptions = nextpas.core.async.signal.TSignalOptions;
+  IAsyncSignalHandler = nextpas.core.async.signal.IAsyncSignalHandler;
+  TAsyncBuffer = nextpas.core.async.buffer.TAsyncBuffer;
+  TBufferOption = nextpas.core.async.buffer.TBufferOption;
+  TBufferOptions = nextpas.core.async.buffer.TBufferOptions;
+  IAsyncBufferPool = nextpas.core.async.buffer.IAsyncBufferPool;
+  TCancelCallback = nextpas.core.async.cancellation.TCancelCallback;
+  IAsyncCancellationToken = nextpas.core.async.cancellation.IAsyncCancellationToken;
 
 const
   atsIdle: TAsyncTaskStatus = nextpas.core.async.base.atsIdle;
@@ -33,6 +76,26 @@ const
   atsFailed: TAsyncTaskStatus = nextpas.core.async.base.atsFailed;
   atsTimedOut: TAsyncTaskStatus = nextpas.core.async.base.atsTimedOut;
   atsCancelled: TAsyncTaskStatus = nextpas.core.async.base.atsCancelled;
+
+  agoFailFast: TAsyncTaskGroupOption = nextpas.core.async.taskgroup.agoFailFast;
+  agoCancelOnTimeout: TAsyncTaskGroupOption = nextpas.core.async.taskgroup.agoCancelOnTimeout;
+
+  atrCompleted: TAsyncTimeoutResult = nextpas.core.async.timeout.atrCompleted;
+  atrTimedOut: TAsyncTimeoutResult = nextpas.core.async.timeout.atrTimedOut;
+  atrCancelled: TAsyncTimeoutResult = nextpas.core.async.timeout.atrCancelled;
+
+  spRunning: TShutdownPhase = nextpas.core.async.shutdown.spRunning;
+  spDraining: TShutdownPhase = nextpas.core.async.shutdown.spDraining;
+  spForceClose: TShutdownPhase = nextpas.core.async.shutdown.spForceClose;
+  spClosed: TShutdownPhase = nextpas.core.async.shutdown.spClosed;
+
+  soGraceful: TShutdownOption = nextpas.core.async.shutdown.soGraceful;
+  soAbortOnTimeout: TShutdownOption = nextpas.core.async.shutdown.soAbortOnTimeout;
+  soLogProgress: TShutdownOption = nextpas.core.async.shutdown.soLogProgress;
+
+  arrSuccess: TAsyncRetryResult = nextpas.core.async.retry.arrSuccess;
+  arrMaxRetries: TAsyncRetryResult = nextpas.core.async.retry.arrMaxRetries;
+  arrCancelled: TAsyncRetryResult = nextpas.core.async.retry.arrCancelled;
 
 implementation
 
