@@ -54,6 +54,7 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - Buffer pool (IAsyncBufferPool for efficient buffer allocation/reuse)
 - CancellationToken tree with parent/child propagation
 - PostRef/PostMethod/ScheduleRef three-form callbacks (PostRef heap-wrapped for MPSC unmanaged constraint)
+- PostEx/ScheduleEx with OnDiscard: Close frees heap-wrapped contexts without invoking callbacks
 ## Quick Start
 
 ```pascal
@@ -252,6 +253,7 @@ The wake timeout:
 `TAsyncLoop.Schedule` and `TTimerHeap.Schedule` use **different semantics**:
 
 | Layer | `Schedule` takes | `ScheduleAt`/`ScheduleAfter` takes |
+| `ScheduleEx` | Schedule with OnDiscard for abandoned timer context free |
 |-------|------------------|-----------------------------------|
 | `TAsyncLoop` | `TDuration` (relative delay) | `ScheduleAt(TDeadline)` (absolute time) |
 | `TTimerHeap` | `TDeadline` (absolute deadline) | `ScheduleAfter(TDuration)` (relative delay) |
@@ -294,3 +296,11 @@ All heap-owning record types use `Close` for teardown:
 - **IOCP is compile-only**: `pbIocp` exists in the backend enum and the reactor stub compiles, but no runtime verification has been done on Windows.
 - **No WhenAll/WhenAny combinators**: tasks must be composed manually via callbacks.
 - **No file descriptor lifecycle management**: the caller is responsible for opening/closing fds.
+
+
+## OnDiscard ownership
+
+- Heap-wrapped Post contexts must use `PostEx(..., OnDiscard)` when Close may discard before invoke.
+- Timer contexts that need Close cleanup use `ScheduleEx(..., OnDiscard)`.
+- `CancelTimer` does **not** run OnDiscard; the cancelling owner still cleans up.
+- Close/Recycle runs OnDiscard for abandoned timer entries.

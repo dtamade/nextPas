@@ -168,3 +168,9 @@ end;
 | 2026-07-11 | 3.0 | 添加 Combinators/Retry/SyncPrimitives | Claude |
 | 2026-07-11 | 2.0 | 添加 TaskGroup/Shutdown/Timeout 高级模式 | Claude |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+
+
+### Close discard contract
+- Unfired MPSC items: invoke `OnDiscard(Context)` if set, else free PostRef heap wrap only.
+- Abandoned timers: Close/Recycle runs `OnDiscard` then clears entry.
+- `CancelTimer` does not run OnDiscard.
