@@ -77,15 +77,19 @@ fs.pas           ← 门面 re-export
 
 test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 
-| 测试文件 | 测试数 | 说明 |
-|----------|--------|------|
-| test_fs | 97 | 文件读写/目录操作/路径/符号链接 |
-| test_fs_glob | 31 | GlobMatch 通配符匹配 |
-| test_fs_facade | 8 | 门面完整性 |
-| test_fs_idir | 7 | IDir 接口 |
-| test_fs_ifile | 17 | IFile 接口 |
-| test_fs_text | 19 | 文本文件操作（BOM/UTF-8/UTF-16） |
-| **合计** | **6 个测试目录** | **179** |
+**最后校准：2026-07-19**（suite 通过数以 `make test` 输出为准；与早期 Check 粒度统计不同）。
+
+| 测试目录 | 参考通过数 | 说明 |
+|----------|-----------|------|
+| test_fs | 110 | 文件读写/目录/路径/符号链接 |
+| test_fs_glob | ~31 | GlobMatch / FsGlob |
+| test_fs_facade | 见运行输出 | 门面完整性 |
+| test_fs_idir | 见运行输出 | IDir 接口 |
+| test_fs_ifile | 见运行输出 | IFile 接口 |
+| test_fs_text | 见运行输出 | BOM/UTF-8/UTF-16 |
+| **合计** | **6 个测试目录** | heaptrc 0 leak 为门禁 |
+
+路径命名与 `nextpas.core.path` 对齐说明见 `core/docs/path/README.md`「命名规范」。
 
 ---
 
@@ -94,3 +98,4 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-07-19 | 1.1 | 测试数口径校准；INV-5 Boolean 见目录注释 | Claude |

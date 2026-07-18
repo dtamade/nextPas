@@ -1134,6 +1134,24 @@ begin
   Check('TryLookPath abs missing — path empty', LPath = '');
 end;
 
+procedure TestProcessSucceeded;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/true', []);
+  Check('ProcessSucceeded true — exit 0', ProcessSucceeded(LOut));
+
+  LOut := Run('/bin/false', []);
+  Check('ProcessSucceeded false — non-zero exit', not ProcessSucceeded(LOut));
+
+  LOut := TCommand.New('/bin/sleep')
+    .Arg('10')
+    .Timeout(TDuration.FromMilliseconds(200))
+    .Output;
+  Check('ProcessSucceeded false — timed out', not ProcessSucceeded(LOut));
+  Check('ProcessSucceeded timeout — TimedOut flag', LOut.TimedOut);
+end;
+
 procedure TestMustCaptureAndRunChecked;
 var
   LStr: string;
@@ -1389,6 +1407,7 @@ begin
   TestRunLargeOutput;
   TestLookPath;
   TestTryLookPath;
+  TestProcessSucceeded;
   TestMustCaptureAndRunChecked;
   TestSignal;
   TestRunTimeoutConvenience;

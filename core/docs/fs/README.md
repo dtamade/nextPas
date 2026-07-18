@@ -127,6 +127,8 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `PathWithoutExt(APath)` | 去除扩展名 |
 | `PathMatch(APattern, AName)` | glob 模式匹配 |
 
+路径命名与 `nextpas.core.path` 对齐：`PathIsAbs` ⇔ `PathIsAbsolute`，`PathClean` ⇔ `PathNormalize`。详见 `core/docs/path/README.md`「命名规范」。
+
 ### 工具函数
 
 | 函数 | 说明 |

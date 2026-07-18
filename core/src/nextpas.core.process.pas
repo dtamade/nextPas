@@ -26,6 +26,15 @@ type
   ICommand = nextpas.core.process.command.ICommand;
 
 {**
+ * @desc 判断进程结果是否成功
+ *
+ * @return 非 TimedOut 且 Status=psExited 且 ExitCode=0 时为 True
+ *
+ * @note 对标 Go ProcessState.Success / Rust ExitStatus::success
+ *}
+function ProcessSucceeded(const AOut: TProcessOutput): Boolean; inline;
+
+{**
  * @desc 创建命令构建器，通过链式调用配置子进程参数
  *
  * @params
@@ -273,15 +282,15 @@ uses
   nextpas.core.platform.args,
   nextpas.core.text.conv;
 
-function Command(const APath: string): ICommand;
-begin
-  Result := TCommand.New(APath);
-end;
-
 function ProcessSucceeded(const AOut: TProcessOutput): Boolean;
 begin
   Result := (not AOut.TimedOut) and
     (AOut.Status = psExited) and (AOut.ExitCode = 0);
+end;
+
+function Command(const APath: string): ICommand;
+begin
+  Result := TCommand.New(APath);
 end;
 
 procedure RaiseIfProcessFailed(const APath: string; const AOut: TProcessOutput);

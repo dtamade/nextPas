@@ -159,13 +159,24 @@ WriteLn(Result.StdOut);  // "hello"
 | 场景 | 推荐 | 说明 |
 |------|------|------|
 | 完整控制 | `Command(...).Args.Dir.EnvAdd.Timeout.Spawn/Output` | 唯一完整入口 |
-| 同步拿输出 | `Run` / `RunIn` | 检查 `ExitCode` / `TimedOut` |
+| 同步拿输出 | `Run` / `RunIn` | 检查 `ExitCode` / `TimedOut` 或 `ProcessSucceeded` |
+| 成功判定 | `ProcessSucceeded(Out)` | 非超时且 exit=0 |
 | 失败即错 | `RunChecked` / `MustCapture` / `MustCaptureCombined` | 类似 Go `Output()` |
 | 只要文本且可忽略 exit | `Capture*` | **不检查退出码** |
-| 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut` |
+| 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut`；`Status: Integer` 只返回 exit code |
 | PATH 查找 | `LookPath` / `TryLookPath` | 含目录部分也校验可执行 |
 
-其余 `RunInWithInputTimeout...` 组合函数保留兼容；新代码优先 builder。
+### 便利函数冻结策略
+
+- **新能力只加在 `ICommand` builder**（如新 stdio 模式、env 语义）。
+- **不再按 In×Timeout×Input×Combined 笛卡尔积扩展** 门面便利函数。
+- 现有 `Run*`/`Capture*` 组合 **保留兼容**，不删除；新代码优先上表推荐入口。
+
+### 大输出 / 流式
+
+- `Run` / `Capture` / `IChild.WaitWithOutput`：**全内存**缓冲 stdout/stderr。超大日志或二进制有 OOM 风险。
+- 大输出推荐：`Command(...).Stdout(stPiped).Spawn` → `TakeStdout` 流式读，再 `Wait`。
+- 有界输出（`MaxOutputBytes`）列为后续增强，当前不提供。
 
 ## 环境变量
 
@@ -212,4 +223,4 @@ make -C core/tests/nextpas.core.process/test_process_deep clean test
 make -C core/tests/nextpas.core.process/test_process_pipe_contract clean test
 ```
 
-覆盖公共 API，heaptrc 零泄漏。
+suite 通过数与覆盖细节见 `CONTRACT.md`（以 `make test` 输出为准）。

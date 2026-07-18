@@ -8,6 +8,19 @@
 - **职责**: 提供 SysUtils 兼容的路径操作函数
 - **实现**: 委托给 `nextpas.core.fs.path`（统一实现 owner）
 
+## 命名规范（path vs fs）
+
+| 规范名（推荐） | 别名 / 等价 | 单元 |
+|----------------|-------------|------|
+| `PathIsAbsolute` | `PathIsAbs`（fs 门面） | path / fs |
+| `PathNormalize` | `PathClean`（互为别名） | path / fs |
+| `PathBase` | 含扩展名；= `ExtractFileName` | path / fs |
+| `PathDir` | 目录部分（空路径→空） | path / fs |
+
+- **仅需路径字符串操作**：优先 `uses nextpas.core.path`。
+- **已依赖 fs**：可用 `PathIsAbs` / `PathClean`，语义与上表一致。
+- 新代码不要再发明第三套命名。
+
 ## API 入口
 
 ### 路径拼接与解析
@@ -22,7 +35,8 @@
 | `PathSplit(APath, ADir, ABase)` | 拆分目录和文件名 |
 | `PathExt(APath)` | 提取扩展名（含 `.`） |
 | `PathClean(APath)` | 规范化路径（去除 `..`、`.`、重复分隔符） |
-| `PathIsAbs(APath)` | 判断是否绝对路径 |
+| `PathIsAbsolute(APath)` | 判断是否绝对路径 |
+| `PathIsRelative(APath)` | 判断是否相对路径 |
 | `PathNormalize(APath)` | 同 `PathClean` |
 
 ### SysUtils 兼容函数
@@ -75,3 +89,5 @@ end;
 ```bash
 make -C core/tests/nextpas.core.path/test_path clean test
 ```
+
+suite 通过数见 `CONTRACT.md`（最后校准以 make test 为准）。
