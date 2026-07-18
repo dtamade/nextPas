@@ -43,6 +43,17 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - Task state machine (idle/pending/completed/failed/timedout/cancelled)
 - Zero memory leaks (`test_async_timeout` enforces heaptrc on the timeout race mechanism)
 
+- Structured concurrency (TaskGroup with cancel/drain/wait semantics)
+- Graceful shutdown management (phased shutdown with timeout)
+- Generic timeout wrapper (IAsyncTimeout with cancel/timeout tracking)
+- WhenAll/WhenAny combinators (parallel execution with completion notification)
+- Async retry with exponential backoff (RetryWithBackoff/RetryWithFixedDelay)
+- Async sync primitives (Mutex, Semaphore, Channel, CondVar)
+- Vectored I/O (AsyncReadv/AsyncWritev for scatter/gather operations)
+- Async signal handling (IAsyncSignalHandler with signalfd integration)
+- Buffer pool (IAsyncBufferPool for efficient buffer allocation/reuse)
+- CancellationToken tree with parent/child propagation
+- PostRef/PostMethod/ScheduleRef three-form callbacks (PostRef heap-wrapped for MPSC unmanaged constraint)
 ## Quick Start
 
 ```pascal
