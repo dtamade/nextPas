@@ -231,6 +231,18 @@ begin
     TimeoutCtxRelease(ACtx);
 end;
 
+{ Close/Recycle abandoned timeout timer without firing: drop timer ownership only. }
+procedure TimeoutCtxDiscardTimer(AContext: Pointer);
+var
+  LCtx: PTimeoutCtx;
+begin
+  LCtx := PTimeoutCtx(AContext);
+  if LCtx = nil then
+    Exit;
+  LCtx^.TimerHandle := TAsyncTimerHandle.None;
+  TimeoutCtxRelease(LCtx);
+end;
+
 procedure TimeoutCtxDetachUserRefs(ACtx: PTimeoutCtx;
   out ACallback: TIoCompletion; out AContext: Pointer);
 begin
@@ -292,8 +304,8 @@ begin
   Result^.UserContext := AContext;
   Result^.CompletionState := TIMEOUT_COMPLETION_PENDING;
   Result^.RefCount := 2;
-  Result^.TimerHandle := ALoop^.FTimers.Schedule(ADeadline,
-    @TimeoutTimerCallback, Result);
+  Result^.TimerHandle := ALoop^.FTimers.ScheduleEx(ADeadline,
+    @TimeoutTimerCallback, Result, @TimeoutCtxDiscardTimer);
 end;
 
 { TAsyncLoop }
