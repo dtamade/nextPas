@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.os.env.pas`（1 个源文件）
 **层级**：L2（依赖 L1: text.base; 委托 platform.env）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-11
-**版本**：1.0
+**最后更新**：2026-07-19
+**版本**：1.1
 
 ---
 
@@ -26,7 +26,9 @@
 | `EnvironmentVariableNamesCaseSensitive: Boolean` | 平台是否区分大小写 |
 | `SetEnv(AName, AValue)` | 设置环境变量 |
 | `UnsetEnv(AName)` | 删除环境变量 |
-| `ExpandEnv(AValue): string` | 展开 ${VAR} 和 $VAR 占位符 |
+| `ExpandEnv(AValue): string` | 展开 `${VAR}` / `$VAR` / `%VAR%` |
+| `ExpandEnvWithDefault` / `ExpandEnvStrict` | 默认值 / 严格模式 |
+| `UserHomeDir` / `UserCacheDir` / `UserConfigDir` / `UserDataDir` | 用户目录 |
 
 ---
 
@@ -34,9 +36,11 @@
 
 - **[INV-1]** 变量名不能为空，不能包含 `=` 或 NUL
 - **[INV-2]** 变量值不能包含 NUL
-- **[INV-3]** 未定义的变量展开为空字符串
+- **[INV-3]** 未定义的变量展开为空字符串（loose）
 - **[INV-4]** `$` 后无变量名字符时保留原样 `$`
 - **[INV-5]** 未终止的 `${...}` 抛 EArgumentError
+- **[INV-6]** `TryGetEnv`/`HasEnv` 区分「存在且为空」与「未定义」；`GetEnv` 两者均 `''`
+- **[INV-7]** `%NAME%` 仅匹配非空 `[A-Za-z0-9_]`；不完整 `%` 保留字面量
 
 ---
 

@@ -103,6 +103,16 @@ function UserCacheDir(const AAppName: string = ''): string;
  * @note 根目录环境变量不存在时返回空字符串
  *}
 function UserConfigDir(const AAppName: string = ''): string;
+{** @desc 获取用户数据目录
+ *
+ * @params
+ *   AAppName  可选应用名；非空时拼接到数据根目录下
+ *
+ * @return Unix: $XDG_DATA_HOME 或 $HOME/.local/share；Windows: %LOCALAPPDATA%
+ *
+ * @note 根目录环境变量不存在时返回空字符串
+ *}
+function UserDataDir(const AAppName: string = ''): string;
 
 implementation
 
@@ -282,6 +292,21 @@ var
   I, LStart: Integer;
   LName, LResolved: string;
   LBuilder: TBufStringBuilder;
+
+  procedure AppendResolvedOrMode(const AVarName: string);
+  begin
+    if TryGetEnv(AVarName, LResolved) then
+      LBuilder.AppendStr(LResolved)
+    else
+      case AMode of
+        emLoose: ;
+        emDefault: LBuilder.AppendStr(ADefault);
+        emStrict:
+          raise EArgumentError.Create(
+            'undefined environment variable: ' + AVarName);
+      end;
+  end;
+
 begin
   LBuilder.Init(Length(AValue));
   try
@@ -299,16 +324,7 @@ begin
             'unterminated ${...} in environment expansion');
         LName := Copy(AValue, LStart, I - LStart);
         ValidateEnvName(LName);
-        if TryGetEnv(LName, LResolved) then
-          LBuilder.AppendStr(LResolved)
-        else
-          case AMode of
-            emLoose: ; { empty }
-            emDefault: LBuilder.AppendStr(ADefault);
-            emStrict:
-              raise EArgumentError.Create(
-                'undefined environment variable: ' + LName);
-          end;
+        AppendResolvedOrMode(LName);
         Inc(I);
         Continue;
       end
@@ -324,17 +340,28 @@ begin
         else
         begin
           LName := Copy(AValue, LStart, I - LStart);
-          if TryGetEnv(LName, LResolved) then
-            LBuilder.AppendStr(LResolved)
-          else
-            case AMode of
-              emLoose: ;
-              emDefault: LBuilder.AppendStr(ADefault);
-              emStrict:
-                raise EArgumentError.Create(
-                  'undefined environment variable: ' + LName);
-            end;
+          AppendResolvedOrMode(LName);
         end;
+        Continue;
+      end
+      else if AValue[I] = '%' then
+      begin
+        { Windows-style %NAME% — NAME must be non-empty [A-Za-z0-9_] }
+        LStart := I + 1;
+        I := LStart;
+        while (I <= Length(AValue)) and
+          (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+          Inc(I);
+        if (I > LStart) and (I <= Length(AValue)) and (AValue[I] = '%') then
+        begin
+          LName := Copy(AValue, LStart, I - LStart);
+          AppendResolvedOrMode(LName);
+          Inc(I);
+          Continue;
+        end;
+        { Not a valid %NAME% — emit literal '%' and rescan from next char }
+        LBuilder.AppendChar('%');
+        I := LStart;
         Continue;
       end
       else
@@ -425,6 +452,27 @@ begin
     LHome := GetEnv('HOME');
     if LHome <> '' then
       Result := LHome + '/.config'
+    else
+      Result := '';
+  end;
+{$ENDIF}
+  Result := JoinUserDir(Result, AAppName);
+end;
+
+function UserDataDir(const AAppName: string): string;
+var
+  LHome, LXdg: string;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := GetEnv('LOCALAPPDATA');
+{$ELSE}
+  if TryGetEnv('XDG_DATA_HOME', LXdg) and (LXdg <> '') then
+    Result := LXdg
+  else
+  begin
+    LHome := GetEnv('HOME');
+    if LHome <> '' then
+      Result := LHome + '/.local/share'
     else
       Result := '';
   end;

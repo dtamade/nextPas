@@ -388,6 +388,49 @@ begin
   UnsetEnv('NEXTPAS_TEST_EMPTY');
 end;
 
+procedure TestUserDataDir;
+var
+  LData, LSaved: string;
+  LHadXdg: Boolean;
+begin
+  LHadXdg := TryGetEnv('XDG_DATA_HOME', LSaved);
+  try
+    UnsetEnv('XDG_DATA_HOME');
+    LData := UserDataDir;
+    Check(LData <> '', 'UserDataDir is not empty');
+    Check(Pos('.local/share', LData) > 0, 'UserDataDir fallback contains .local/share');
+
+    SetEnv('XDG_DATA_HOME', '/tmp/nextpas-xdg-data-test');
+    LData := UserDataDir('app');
+    CheckEqual('/tmp/nextpas-xdg-data-test/app', LData,
+      'UserDataDir XDG + AppName');
+  finally
+    if LHadXdg then
+      SetEnv('XDG_DATA_HOME', LSaved)
+    else
+      UnsetEnv('XDG_DATA_HOME');
+  end;
+end;
+
+procedure TestExpandEnv_PercentVar;
+begin
+  SetEnv('NEXTPAS_TEST_PERCENT', 'pctval');
+  try
+    CheckEqual('pctval', ExpandEnv('%NEXTPAS_TEST_PERCENT%'),
+      'ExpandEnv expands %VAR%');
+    CheckEqual('pre-pctval-post', ExpandEnv('pre-%NEXTPAS_TEST_PERCENT%-post'),
+      'ExpandEnv percent in middle');
+    CheckEqual('100%', ExpandEnv('100%'),
+      'ExpandEnv lone trailing percent stays');
+    CheckEqual('a%b', ExpandEnv('a%b'),
+      'ExpandEnv incomplete percent stays literal');
+    CheckEqual('pctval/pctval', ExpandEnv('%NEXTPAS_TEST_PERCENT%/$NEXTPAS_TEST_PERCENT'),
+      'ExpandEnv mixed percent and dollar');
+  finally
+    UnsetEnv('NEXTPAS_TEST_PERCENT');
+  end;
+end;
+
 { --- main --- }
 
 begin
@@ -420,6 +463,8 @@ begin
   T.Test('UserHomeDir', @TestUserHomeDir);
   T.Test('UserCacheDir', @TestUserCacheDir);
   T.Test('UserConfigDir', @TestUserConfigDir);
+  T.Test('UserDataDir', @TestUserDataDir);
+  T.Test('ExpandEnv_PercentVar', @TestExpandEnv_PercentVar);
   T.Test('GetEnvDefault', @TestGetEnvDefault);
   T.Test('ExpandEnvWithDefault', @TestExpandEnvWithDefault);
   T.Test('ExpandEnvWithDefault_EmptyValue', @TestExpandEnvWithDefault_EmptyValue);

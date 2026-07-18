@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.fs*.pas`（9 个源文件）
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-07-19
+**版本**：1.2
 
 ---
 
@@ -100,3 +100,4 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
 | 2026-07-19 | 1.1 | 测试数口径校准；INV-5 Boolean 见目录注释 | Claude |
+| 2026-07-19 | 1.2 | INV-5 procedure；Path 别名；GetEnv 兼容注释 | Claude |

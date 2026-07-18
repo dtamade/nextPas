@@ -238,13 +238,13 @@ end;
 
 procedure TestStdoutNull;
 var
-  LCode: Integer;
+  LOut: TProcessOutput;
 begin
-  LCode := Command('/bin/echo')
+  LOut := Command('/bin/echo')
     .Args(['should', 'not', 'appear'])
     .Stdout(stNull)
     .Status;
-  CheckEqual(Int64(0), Int64(LCode), 'stdout null exits 0');
+  CheckEqual(Int64(0), Int64(LOut.ExitCode), 'stdout null exits 0');
 end;
 
 { --- Test 15: Chdir fail --- }

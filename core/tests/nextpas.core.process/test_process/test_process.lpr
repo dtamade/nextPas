@@ -141,12 +141,21 @@ begin
 end;
 
 procedure TestCommandStatus;
-var LCode: Integer;
+var
+  LOut: TProcessOutput;
 begin
-  LCode := Command('/bin/true').Status;
-  Check('Command status true — 0', LCode = 0);
-  LCode := Command('/bin/false').Status;
-  Check('Command status false — non-zero', LCode <> 0);
+  LOut := Command('/bin/true').Status;
+  Check('Command status true — 0', LOut.ExitCode = 0);
+  Check('Command status true — succeeded', ProcessSucceeded(LOut));
+  LOut := Command('/bin/false').Status;
+  Check('Command status false — non-zero', LOut.ExitCode <> 0);
+  Check('Command status false — not succeeded', not ProcessSucceeded(LOut));
+  LOut := Command('/bin/sleep')
+    .Args(['10'])
+    .Timeout(TDuration.FromMilliseconds(100))
+    .Status;
+  Check('Command status timeout — TimedOut', LOut.TimedOut);
+  Check('Command status timeout — not succeeded', not ProcessSucceeded(LOut));
 end;
 
 procedure TestSpawnAndWait;
@@ -328,7 +337,9 @@ begin
   CheckContains('Wait timeout sleep — process child uses platform thread seam',
     LSource, 'nextpas.core.platform.thread');
   CheckContains('Wait timeout sleep — timeout loop uses platform sleep',
-    LMethod, 'platform_thread_sleep_ns(10000000)');
+    LMethod, 'platform_thread_sleep_ns(LSleepNs)');
+  CheckContains('Wait timeout sleep — exponential backoff cap 20ms',
+    LMethod, '20000000');
   CheckAbsent('Wait timeout sleep — timeout loop avoids raw nanosleep',
     LMethod, 'nanosleep');
   CheckAbsent('Wait timeout sleep — timeout loop avoids raw TTimeSpec',
@@ -572,13 +583,14 @@ begin
 end;
 
 procedure TestStdoutNull;
-var LCode: Integer;
+var
+  LOut: TProcessOutput;
 begin
-  LCode := TCommand.New('/bin/echo')
+  LOut := TCommand.New('/bin/echo')
     .Args(['should not appear'])
     .Stdout(stNull)
     .Status;
-  Check('Stdout null — exits 0', LCode = 0);
+  Check('Stdout null — exits 0', LOut.ExitCode = 0);
 end;
 
 procedure TestStderrPiped;

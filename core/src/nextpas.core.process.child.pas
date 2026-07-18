@@ -192,6 +192,7 @@ var
   LDeadline: TInstant;
   LErr: Int32;
   LTimedOut: Boolean;
+  LSleepNs: Int64;
 begin
   if FWaited then
     Exit(FLastOutput);
@@ -214,6 +215,7 @@ begin
   else
   begin
     LDeadline := TInstant.Now.Add(FTimeout);
+    LSleepNs := 1000000; { 1ms, exponential backoff up to 20ms }
     repeat
       LErr := platform_process_try_wait(FProc, LResult);
       if LErr <> 0 then
@@ -231,7 +233,13 @@ begin
         LTimedOut := True;
         Break;
       end;
-      platform_thread_sleep_ns(10000000);
+      platform_thread_sleep_ns(LSleepNs);
+      if LSleepNs < 20000000 then
+      begin
+        LSleepNs := LSleepNs * 2;
+        if LSleepNs > 20000000 then
+          LSleepNs := 20000000;
+      end;
     until False;
   end;
   Result := FinishWaitResult(LResult, '', '', LTimedOut);

@@ -237,7 +237,8 @@ function PathMatch(const APattern, AName: string): Boolean; inline;
 function GetCwd: string; inline;
 {** @desc 设置当前工作目录 *}
 procedure SetCwd(const APath: string); inline;
-{** @desc 获取环境变量，不存在返回空字符串（兼容入口；新代码请用 nextpas.core.os.env） *}
+{** @desc 获取环境变量，不存在返回空字符串。
+ *  兼容入口；新代码请用 nextpas.core.os.env.GetEnv / TryGetEnv（区分空值与未定义）。 *}
 function GetEnv(const AName: string): string; inline;
 {** @desc 获取系统临时目录路径（末尾带分隔符） *}
 function GetTempDir: string;
@@ -255,9 +256,9 @@ function DeleteFile(const APath: string): Boolean; inline;
 function GetCurrentDir: string; inline;
 {** @desc 获取环境变量（兼容入口；新代码请用 nextpas.core.os.env） *}
 function GetEnvironmentVariable(const AName: string): string; inline;
-{** @desc 命令行参数数量（兼容入口；新代码请用 args 模块） *}
+{** @desc 命令行参数数量（兼容入口；新代码请用 nextpas.core.args / platform.args） *}
 function ParamCount: Integer; inline;
-{** @desc 命令行参数（兼容入口；新代码请用 args 模块） *}
+{** @desc 命令行参数（兼容入口；新代码请用 nextpas.core.args / platform.args） *}
 function ParamStr(AIndex: Integer): string; inline;
 
 implementation

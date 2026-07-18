@@ -16,10 +16,14 @@ var Text := MustCapture('/usr/bin/fpc', ['--version']);
 var Builder := Command('/usr/bin/fpc')
   .Args(['--version'])
   .Timeout(TDuration.FromSeconds(30))
-  .MaxOutput(1024 * 1024);  // 可选：限制 stdout+stderr 累计字节
+  .MaxOutput(1024 * 1024);  // 生产推荐：限制 stdout+stderr 累计字节
 var Timed := Builder.Output;
 if Timed.TimedOut then ...
 if Timed.OutputLimited then ...
+
+// Status 返回完整 TProcessOutput（不捕获 stdout/stderr，含 TimedOut）
+var St := Command('/bin/true').Status;
+if ProcessSucceeded(St) then ...
 
 // 超时便利函数
 var Timed2 := RunTimeout('/bin/sleep', ['10'], TDuration.FromMilliseconds(100));
@@ -36,8 +40,10 @@ if not TryLookPath('/no/such/bin', FpcPath) then
 
 ```pascal
 // Capture 不检查退出码；需要失败即错用 MustCapture
+// 注意：Run/Capture* 默认无 MaxOutput 上限，海量子进程输出可导致 OOM
 var Text := Capture('/usr/bin/fpc', ['--version']);
 var Combined := CaptureCombined('/bin/sh', ['-c', 'echo out; echo err >&2']);
+// Combined = StdOut + StdErr 顺序拼接，非时间交错（弱于 Go CombinedOutput 真 merge）
 var Out2 := RunIn('/bin/ls', ['-la'], '/tmp');
 var Out3 := RunWithInputString('/bin/cat', [], 'hello');
 var ExePath := Executable;
@@ -136,8 +142,8 @@ WriteLn(Result.StdOut);  // "hello"
 | 成功判定 | `ProcessSucceeded(Out)` | 非超时、非超限且 exit=0 |
 | 失败即错 | `RunChecked` / `MustCapture` / `MustCaptureCombined` | 类似 Go `Output()`；`EProcessError.TimedOut/OutputLimited` |
 | 只要文本且可忽略 exit | `Capture*` | **不检查退出码** |
-| 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut`；`Status: Integer` **只返回 exit code** |
-| 有界输出 | `.MaxOutput(N)` | stdout+stderr 累计；超限 `OutputLimited=True` 并 Kill |
+| 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut`；`Status` 返回 `TProcessOutput`（不捕获输出） |
+| 有界输出 | `.MaxOutput(N)` | stdout+stderr 累计；**默认无界**；超限 `OutputLimited=True` 并 Kill |
 | PATH 查找 | `LookPath` / `TryLookPath` | 含目录部分也校验可执行 |
 
 ### 便利函数冻结策略

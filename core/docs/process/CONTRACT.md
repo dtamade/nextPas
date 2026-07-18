@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：2.1
+**版本**：2.3
 
 ---
 
@@ -35,7 +35,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `ICommand.Arg/Args/Dir/Env/EnvAdd` | 链式配置；EnvAdd 默认继承父环境（overlay） |
 | `ICommand.Spawn: IChild` | 异步启动子进程 |
 | `ICommand.Output: TProcessOutput` | 同步执行并捕获（含 TimedOut / OutputLimited） |
-| `ICommand.Status: Integer` | 同步执行，**只返回退出码**（不含 TimedOut/Limited；用 Output） |
+| `ICommand.Status: TProcessOutput` | 同步执行，**不捕获输出**；含 `TimedOut`/`ExitCode`/`Status`（对齐 Rust `status()`） |
 | `ICommand.Timeout(ADuration)` | 设置超时；超时后 TimedOut=True 并 Kill |
 | `ICommand.MaxOutput(ABytes)` | 限制 stdout+stderr 累计；<=0 不限制；超限 OutputLimited=True 并 Kill |
 | `IChild.Wait: TProcessOutput` | 阻塞等待 |
@@ -59,6 +59,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 - **[INV-7]** ProcessSucceeded ⇔ (not TimedOut) and (not OutputLimited) and (Status=psExited) and (ExitCode=0)
 - **[INV-8]** MaxOutput 超限：停缓冲、Kill、OutputLimited=True（不伪装 TimedOut）
 - **[INV-9]** 父保留管道端不可继承；Windows 用 PeekNamedPipe 并发 drain
+- **[INV-10]** 未设置 `MaxOutput`（默认 0）时 `Run`/`Capture*`/`Output` 可耗尽内存；生产请显式 `.MaxOutput(N)`（非 bug）
 
 ---
 
@@ -113,3 +114,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-11 | 2.0 | 更新为实际 API 和测试数据 | Claude |
 | 2026-07-19 | 2.1 | ProcessSucceeded 公开 + 测试数口径 + Status/大输出说明 | Claude |
 | 2026-07-19 | 2.2 | MaxOutput/OutputLimited；Windows inherit+drain；Mkdir procedure 见 fs | Claude |
+| 2026-07-19 | 2.3 | Status→TProcessOutput；INV-10 无界输出；L0 Win dual capture | Claude |

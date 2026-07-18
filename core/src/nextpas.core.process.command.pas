@@ -52,8 +52,9 @@ type
     function Spawn: IChild;
     {** 同步执行：自动设置 stdout+stderr 为 Piped，捕获输出 *}
     function Output: TProcessOutput;
-    {** 同步执行：只返回退出码（不含 TimedOut/OutputLimited；请用 Output） *}
-    function Status: Integer;
+    {** 同步执行：返回 TProcessOutput（不捕获 stdout/stderr；含 TimedOut）。
+     *  完整输出请用 Output。成功判定：ProcessSucceeded(Status)。 *}
+    function Status: TProcessOutput;
     {** 设置超时时间，超时后自动 Kill *}
     function Timeout(const ADuration: TDuration): ICommand;
     {** 限制 stdout+stderr 累计捕获字节数；<=0 表示不限制。超限置 OutputLimited 并 Kill *}
@@ -86,7 +87,7 @@ type
     function Stderr(const AMode: TStdio): ICommand;
     function Spawn: IChild;
     function Output: TProcessOutput;
-    function Status: Integer;
+    function Status: TProcessOutput;
     function Timeout(const ADuration: TDuration): ICommand;
     function MaxOutput(const ABytes: Int64): ICommand;
   end;
@@ -555,14 +556,13 @@ begin
   end;
 end;
 
-function TCommand.Status: Integer;
+function TCommand.Status: TProcessOutput;
 var
   LChild: IChild;
-  LOutput: TProcessOutput;
 begin
+  { 不强制 piped：对齐 Rust status() / Go Run — 只关心退出与超时 }
   LChild := Spawn;
-  LOutput := LChild.Wait;
-  Result := LOutput.ExitCode;
+  Result := LChild.Wait;
 end;
 
 end.
