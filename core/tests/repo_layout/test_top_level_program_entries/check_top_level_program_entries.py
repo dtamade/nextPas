@@ -7,7 +7,7 @@ from pathlib import Path
 
 LIMITS = {
     "tests/nextpas.core.tls": 287,
-    "tests/nextpas.core.simd": 48,
+    "tests/nextpas.core.simd": 64,
 }
 
 

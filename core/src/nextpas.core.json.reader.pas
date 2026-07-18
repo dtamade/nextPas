@@ -91,27 +91,46 @@ var
   LEnd: PtrInt;
   LStringOffset: SizeUInt;
   LRaw: TStringView;
-  LControlChar: Boolean;
+  LPos: SizeUInt;
+  LCh: Byte;
 begin
   LStringOffset := Offset;
   LEnd := JsonFindStringEnd(FInput.Data + 1, FInput.Len - 1);
   if LEnd = -1 then
   begin
+    { FindStringEnd collapses bare controls and true EOF into -1. Scan the
+      open string body so control-char errors keep precise offsets. }
+    LPos := 1;
+    while LPos < FInput.Len do
+    begin
+      LCh := Byte(FInput.Data[LPos]);
+      if LCh < $20 then
+      begin
+        LRaw := TStringView.Create(FInput.Data + 1, LPos - 1);
+        if not ValidateStringToken(LRaw, LStringOffset + 1) then
+          Exit(False);
+        SetError(PAnsiChar('control char in string'), 22,
+          LStringOffset + LPos);
+        Exit(False);
+      end;
+      if LCh = Ord('\') then
+      begin
+        Inc(LPos);
+        if LPos >= FInput.Len then
+          Break;
+        Inc(LPos);
+        Continue;
+      end;
+      if LCh = Ord('"') then
+        Break;
+      Inc(LPos);
+    end;
     SetError(PAnsiChar('unterminated string'), 19, FOrigLen);
     Exit(False);
   end;
-  LControlChar := LEnd < -1;
-  if LControlChar then
-    LEnd := -(LEnd + 2);
   LRaw := TStringView.Create(FInput.Data + 1, SizeUInt(LEnd));
   if not ValidateStringToken(LRaw, LStringOffset + 1) then
     Exit(False);
-  if LControlChar then
-  begin
-    SetError(PAnsiChar('control char in string'), 22,
-      LStringOffset + 1 + SizeUInt(LEnd));
-    Exit(False);
-  end;
   AStr := LRaw;
   FInput.Advance(SizeUInt(LEnd) + 2);
   Result := True;
@@ -146,7 +165,13 @@ begin
   LNumLen := ScanJsonNumber(FInput.Data, FInput.Len);
   if LNumLen = 0 then
   begin
-    SetError(PAnsiChar('invalid number'), 14, Offset);
+    { ScanJsonNumber is strict (returns 0 for 1e+/1.). Recover incomplete
+      exponent spans so nested error offsets point after e[+/-]. }
+    LNumLen := ScanJsonNumberIncompleteExponentSpan(FInput.Data, FInput.Len);
+    if (LNumLen > 0) and (LNumLen < FInput.Len) and HasTokenBoundary(LNumLen) then
+      SetError(PAnsiChar('invalid number'), 14, Offset + LNumLen)
+    else
+      SetError(PAnsiChar('invalid number'), 14, Offset);
     Exit(False);
   end;
   LNumView := FInput.Left(LNumLen);

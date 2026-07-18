@@ -1,10 +1,10 @@
-# Atomic & Lockfree Consumer Audit (R7 + H2-6)
+# Atomic & Lockfree Consumer Audit (R7 + H2-6 + H3)
 
-> **日期**: 2026-07-17
+> **日期**: 2026-07-18
 > **范围**: `core/` 内 `uses nextpas.core.lockfree*` / `uses nextpas.core.atomic*`
 > **方法**: ripgrep 扫描 `core/src/**/*.pas` 的 uses 子句；抽样查看 Close/Destroy 与 legacy CAS 调用形态
-> **主线**: R7 完成；H2-6 增加最小真实消费者证据
-> **状态**: **R7 DONE** + **H2-6 consumer proof**
+> **主线**: R7 完成；H2-6 最小真实消费者；H3-1 async MPSC；**H3-3 consumer regression 门**
+> **状态**: **R7 DONE** + **H2-6 consumer proof** + **H3-1/H3-3 gates**
 
 ---
 
@@ -54,7 +54,17 @@
 | `test_lockfree_stress` `TestChannelCloseJoinFree` | 2P+2C stress 加深同一生命周期（H2-5） |
 | `lockfree.workstealing` | 生产单元级消费 `TWorkStealingDeque`（仍属 lockfree 模块内） |
 
-**跨模块**：async.loop 已接入（H3-1）。http/net 仍无。H2-6 示例 + H3-1 生产路径均遵守 Close 纪律（loop 外 join Post 线程后再 Close/Free）。
+**跨模块**：async.loop 已接入（H3-1）。http/net/thread 仍未直接 uses lockfree 容器。H2-6 示例 + H3-1 生产路径均遵守 Close 纪律（loop 外 join Post 线程后再 Close/Free）。
+
+### 2.5 H3-3 consumer regression 门
+
+| 入口 | 覆盖 |
+|------|------|
+| `make -C core/tests/nextpas.core.lockfree verify-h3-consumers` | `test_async`（含 `AsyncLoopPendingQueueMpscSourceContract`）+ `test_lockfree_bag` + `test_lockfree_multimap` + `t1_close_join_free` |
+| 日志 | `core/build/verify-lockfree/verify-h3-consumers.log` |
+| 与 `verify-t1` | **不替代**；Maintenance / land 推荐两者都跑 |
+
+**thread worksteal 脚注（H3-5 草案）**：`thread.pool.worksteal` 与 `lockfree.workstealing` 仍是双实现；thread 侧为全局 mutex 数组环，**不是** T1 deque 消费者。审计与接入章程见 [`roadmap-h3.md`](roadmap-h3.md) §6（**未授权实现**）。
 
 > **R8 脚注**：R8 轴（NUMA / RTM / formal，见 [`r8-research-status.md`](r8-research-status.md)）**无**跨模块生产依赖——这是**预期**状态（Experimental / T3 direct import only），不是审计缺口。
 
@@ -62,7 +72,7 @@
 
 抽检 T1 实现单元（`spsc` / `mpmc` / `mpsc` / `spmc` / `segqueue` / `msqueue` / `stack` / `deque` / `channel*`）：均实现 `Close`；`Destroy` 路径与 R1/R2 契约（Close+drain 或 Close 唤醒）一致。
 
-**未发现** core 生产代码在持有活跃 producer 时仅 `Free` 而不 `Close` 的模式——因为 **没有** 跨模块 lockfree 容器字段/局部变量。
+**跨模块抽检**：`async.loop` 在 Close 时先清 `FPendingReady`，再 `FPending.Close`，discard without fire，再 `Free`；符合 H3-1 契约。其余 core 生产路径仍 **无** lockfree 容器字段（thread.pool.worksteal 仍用自有数组环，见 §2.5）。
 
 **Advisory（给未来接入方）**：
 

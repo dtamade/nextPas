@@ -740,30 +740,14 @@ end;
 
 function TGitRepository.Status: TStringArray;
 var
-  LList: TStringArray;
-  LCount: SizeInt;
   LP: TStatusListPayload;
-  function StatusCb(const APath: PChar; AFlags: cuint; APayload: Pointer): cint; cdecl;
-  begin
-    // APayload parameter reserved for callback context (unused in this implementation)
-    if APayload <> nil then; // Suppress unused parameter hint
-    if (AFlags <> GIT_STATUS_CURRENT) then
-      LList.Add(string(APath));
-    Result := 0; // Continue
-  end;
 begin
-  Result := nil;
-  try
-    LP.List := LList;
-    CheckGitResult(git_status_foreach(FHandle, @StatusListCb, @LP), 'Status foreach');
-    LCount := Length(LList);
-    if LCount > 0 then
-    begin
-      SetLength(Result, LCount);
-      while LCount > 0 do begin Dec(LCount); Result[LCount] := LList[LCount]; end;
-    end;
-  finally
-  end;
+  { Callback mutates LP.List via SetLength/Add; return that array directly.
+    Do not copy from a separate local: dynarray reallocation does not update
+    sibling references that still point at the previous empty array. }
+  LP.List := nil;
+  CheckGitResult(git_status_foreach(FHandle, @StatusListCb, @LP), 'Status foreach');
+  Result := LP.List;
 end;
 
 function TGitRepository.StatusEntries(const Filter: TGitStatusFilter): TGitStatusEntryArray;
@@ -1393,9 +1377,20 @@ begin
 end;
 
 function GitTimeToString(const ATime: TGitTime): string;
+var
+  LHours, LMins: Integer;
+  LSign: Char;
 begin
+  { TextFormat does not support the %+ width form used by SysUtils Format.
+    Emit timezone offset as +HHMM / -HHMM with zero-padded fields. }
   Result := FormatDateTime('yyyy-mm-dd hh:nn:ss', ATime.Time);
-  Result := Result + Format(' %+.2d%.2d', [ATime.Offset div 60, Abs(ATime.Offset) mod 60]);
+  LHours := ATime.Offset div 60;
+  LMins := Abs(ATime.Offset) mod 60;
+  if ATime.Offset >= 0 then
+    LSign := '+'
+  else
+    LSign := '-';
+  Result := Result + ' ' + LSign + Format('%.2d%.2d', [Abs(LHours), LMins]);
 end;
 
 end.

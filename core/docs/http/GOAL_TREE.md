@@ -27,7 +27,7 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | non-H3 stage-complete | 完成（H3 诚实 blocked on QUIC；无产品需求） |
 | **framework-complete (non-H3)** | **yes** — Era 0–4 默认路径 landed |
 | **Excellence (Era 6)** | **Done** — X0–X5 landed（WS/cancel/IdleTTL/TLS residual/equal-fold+comparator）；H3 仍 Blocked |
-| **Residual (Era 7)** | **Done** — R1 pool close-outside-lock hang；R2 HTTPS 1×41B 诚实 Park；R3 Windows cancel probe-only only |
+| **Residual (Era 7)** | **Done** — R1 hang；R2 dig→R4 清零 HTTPS 1×41B（capabilities cache）；R3 Windows cancel probe-only only |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | ~35 focused suites |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名；当前 STOP） |

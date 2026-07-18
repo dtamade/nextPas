@@ -655,7 +655,8 @@ var
   LVersion: TOpenSSL_version;
   LVersionValue: culong;
 begin
-  // 初始化默认值
+  { Managed VersionString: clear properly before re-detect (no FillChar orphan). }
+  FVersionInfo.VersionString := '';
   FillChar(FVersionInfo, SizeOf(FVersionInfo), 0);
   FVersionInfo.VersionString := 'Unknown';
 

@@ -9,6 +9,7 @@ uses
   nextpas.core.math,
   nextpas.core.mem.utils,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.mem.default,
   nextpas.core.collections.base,
   nextpas.core.collections.lrucache.base,

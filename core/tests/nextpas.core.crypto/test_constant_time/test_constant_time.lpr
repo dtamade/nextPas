@@ -16,7 +16,7 @@ begin
 end;
 
 var
-  LRunner: TTestSuite;
+  LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('constant_time');
@@ -93,7 +93,7 @@ begin
     CheckEqual(0, TConstantTime.IsZeroInt(MaxInt));
   end);
 
-  LRunner := TTestSuite.Create('nextpas.core.crypto.constant_time');
+  LRunner := TSuiteRunner.Create('nextpas.core.crypto.constant_time');
   LRunner.Add(LSuite);
   LRunner.RunAll;
   LRunner.Summary;
