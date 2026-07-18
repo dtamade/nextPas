@@ -59,6 +59,9 @@ type
     function Timeout(const ADuration: TDuration): ICommand;
     {** 限制 stdout+stderr 累计捕获字节数；<=0 表示不限制。超限置 OutputLimited 并 Kill *}
     function MaxOutput(const ABytes: Int64): ICommand;
+    {** 将子进程 stderr 写入与 stdout 同一管道（真时间交错，对齐 Go CombinedOutput）。
+     *  仅在 stdout 为 stPiped 时生效；合并后 WaitWithOutput 的 StdErr 为空。 *}
+    function MergeStderr(const AEnable: Boolean = True): ICommand;
   end;
 
   { TCommand — ICommand 实现 }
@@ -74,6 +77,7 @@ type
     FStderrMode: TStdio;
     FTimeout: TDuration;
     FMaxOutput: Int64;
+    FMergeStderr: Boolean;
   public
     constructor Create(const APath: string);
     class function New(const APath: string): ICommand;
@@ -90,6 +94,7 @@ type
     function Status: TProcessOutput;
     function Timeout(const ADuration: TDuration): ICommand;
     function MaxOutput(const ABytes: Int64): ICommand;
+    function MergeStderr(const AEnable: Boolean = True): ICommand;
   end;
 
 implementation
@@ -234,6 +239,7 @@ begin
   FStderrMode := stInherit;
   FTimeout := TDuration.Zero;
   FMaxOutput := 0;
+  FMergeStderr := False;
 end;
 
 class function TCommand.New(const APath: string): ICommand;
@@ -419,7 +425,11 @@ begin
       LChildStdout := LDevNull;
     end;
 
-    if FStderrMode = stPiped then
+    { MergeStderr: child stderr write end = stdout write end (true interleave).
+      Only when stdout is piped; otherwise fall through to normal stderr mode. }
+    if FMergeStderr and (FStdoutMode = stPiped) and (LChildStdout >= 0) then
+      LChildStderr := LChildStdout
+    else if FStderrMode = stPiped then
     begin
       LErr := platform_process_create_pipe(LStderrPipe[0], LStderrPipe[1]);
       if LErr <> 0 then
@@ -451,7 +461,7 @@ begin
         raise EProcessError.Create(
           FormatProcessOsError('Failed to set stdout parent non-inheritable', LErr), LErr);
     end;
-    if FStderrMode = stPiped then
+    if (FStderrMode = stPiped) and not (FMergeStderr and (FStdoutMode = stPiped)) then
     begin
       LErr := platform_process_set_handle_inheritable(LStderrPipe[0], False);
       if LErr <> 0 then
@@ -506,13 +516,14 @@ begin
     platform_process_close_handle(LStdinPipe[0]);
   if (FStdoutMode = stPiped) then
     platform_process_close_handle(LStdoutPipe[1]);
-  if (FStderrMode = stPiped) then
+  if (FStderrMode = stPiped) and not (FMergeStderr and (FStdoutMode = stPiped)) then
     platform_process_close_handle(LStderrPipe[1]);
   if (FStdinMode = stNull) and (LChildStdin >= 0) then
     platform_process_close_handle(LChildStdin);
   if (FStdoutMode = stNull) and (LChildStdout >= 0) then
     platform_process_close_handle(LChildStdout);
-  if (FStderrMode = stNull) and (LChildStderr >= 0) then
+  if (FStderrMode = stNull) and (LChildStderr >= 0) and
+     not (FMergeStderr and (FStdoutMode = stPiped)) then
     platform_process_close_handle(LChildStderr);
 
   { Create pipe wrappers }
@@ -520,7 +531,7 @@ begin
     LStdinW := TPipeWriter.Create(LStdinPipe[1]) as IWriter;
   if FStdoutMode = stPiped then
     LStdoutR := TPipeReader.Create(LStdoutPipe[0]) as IReader;
-  if FStderrMode = stPiped then
+  if (FStderrMode = stPiped) and not (FMergeStderr and (FStdoutMode = stPiped)) then
     LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
 
   Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout, FMaxOutput);
@@ -538,6 +549,12 @@ begin
   Result := Self;
 end;
 
+function TCommand.MergeStderr(const AEnable: Boolean): ICommand;
+begin
+  FMergeStderr := AEnable;
+  Result := Self;
+end;
+
 function TCommand.Output: TProcessOutput;
 var
   LChild: IChild;
@@ -546,7 +563,9 @@ begin
   LSavedStdout := FStdoutMode;
   LSavedStderr := FStderrMode;
   FStdoutMode := stPiped;
-  FStderrMode := stPiped;
+  { Merge path: only stdout pipe; stderr shares write end in Spawn }
+  if not FMergeStderr then
+    FStderrMode := stPiped;
   try
     LChild := Spawn;
     Result := LChild.WaitWithOutput;

@@ -746,12 +746,31 @@ end;
 procedure TestCaptureCombined;
 var
   LCombined: string;
+  LOut: TProcessOutput;
+  PA, PB, PC: Integer;
 begin
   { sh -c outputs to both stdout and stderr }
   LCombined := CaptureCombined('/bin/sh',
     ['-c', 'echo "out"; echo "err" >&2']);
   Check('CaptureCombined — has stdout', Pos('out', LCombined) > 0);
   Check('CaptureCombined — has stderr', Pos('err', LCombined) > 0);
+
+  { True interleave: printf A; printf B >&2; printf C → ABC not ACB }
+  LCombined := CaptureCombined('/bin/sh',
+    ['-c', 'printf A; printf B >&2; printf C']);
+  Check('CaptureCombined interleave — equals ABC', LCombined = 'ABC');
+  PA := Pos('A', LCombined);
+  PB := Pos('B', LCombined);
+  PC := Pos('C', LCombined);
+  Check('CaptureCombined interleave — A before B', (PA > 0) and (PA < PB));
+  Check('CaptureCombined interleave — B before C', (PB > 0) and (PB < PC));
+
+  LOut := TCommand.New('/bin/sh')
+    .Args(['-c', 'echo hi; echo e >&2'])
+    .MergeStderr
+    .Output;
+  Check('MergeStderr Output — StdOut non-empty', LOut.StdOut <> '');
+  Check('MergeStderr Output — StdErr empty', LOut.StdErr = '');
 end;
 
 procedure TestCaptureInCombined;

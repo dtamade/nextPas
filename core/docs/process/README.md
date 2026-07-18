@@ -40,13 +40,33 @@ if not TryLookPath('/no/such/bin', FpcPath) then
 
 ```pascal
 // Capture 不检查退出码；需要失败即错用 MustCapture
-// 注意：Run/Capture* 默认无 MaxOutput 上限，海量子进程输出可导致 OOM
+// 注意：Run/Capture* 默认无 MaxOutput 上限，海量子进程输出可导致 OOM（INV-10）
 var Text := Capture('/usr/bin/fpc', ['--version']);
 var Combined := CaptureCombined('/bin/sh', ['-c', 'echo out; echo err >&2']);
-// Combined = StdOut + StdErr 顺序拼接，非时间交错（弱于 Go CombinedOutput 真 merge）
+// Combined：stderr 重定向到 stdout 管道，按写入时间交错（对齐 Go CombinedOutput）
 var Out2 := RunIn('/bin/ls', ['-la'], '/tmp');
 var Out3 := RunWithInputString('/bin/cat', [], 'hello');
 var ExePath := Executable;
+```
+
+## Status vs Output
+
+| | `Status` | `Output` |
+|--|----------|----------|
+| 管道 | 不强制 piped | 强制 stdout+stderr Piped（或 Merge 单管道） |
+| `TimedOut` | ✓ | ✓ |
+| `OutputLimited` | 恒 False（不读输出） | ✓（若设了 MaxOutput） |
+| `StdOut` / `StdErr` | 空 | 有内容 |
+| 用途 | 只要退出/超时 | 捕获输出 |
+| 成功判定 | `ProcessSucceeded(cmd.Status)` | `ProcessSucceeded(cmd.Output)` |
+
+```pascal
+// 合并流（builder）
+var Merged := Command('/bin/sh')
+  .Args(['-c', 'printf A; printf B >&2; printf C'])
+  .MergeStderr
+  .Output;
+// Merged.StdOut = 'ABC'; Merged.StdErr = ''
 ```
 
 ## Builder 模式
@@ -143,12 +163,13 @@ WriteLn(Result.StdOut);  // "hello"
 | 失败即错 | `RunChecked` / `MustCapture` / `MustCaptureCombined` | 类似 Go `Output()`；`EProcessError.TimedOut/OutputLimited` |
 | 只要文本且可忽略 exit | `Capture*` | **不检查退出码** |
 | 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut`；`Status` 返回 `TProcessOutput`（不捕获输出） |
-| 有界输出 | `.MaxOutput(N)` | stdout+stderr 累计；**默认无界**；超限 `OutputLimited=True` 并 Kill |
+| 有界输出 | `.MaxOutput(N)` | stdout+stderr 累计；**默认无界（INV-10）**；超限 `OutputLimited` |
+| 合并 stderr | `.MergeStderr` / `Capture*Combined` | 真时间交错；`StdErr` 空、`StdOut` 为合并流 |
 | PATH 查找 | `LookPath` / `TryLookPath` | 含目录部分也校验可执行 |
 
 ### 便利函数冻结策略
 
-- **新能力只加在 `ICommand` builder**（如新 stdio 模式、env 语义、MaxOutput）。
+- **新能力只加在 `ICommand` builder**（Timeout、MaxOutput、MergeStderr…）。
 - **不再按 In×Timeout×Input×Combined 笛卡尔积扩展** 门面便利函数。
 - 现有 `Run*`/`Capture*` 组合 **保留兼容**，不删除；新代码优先上表推荐入口。
 

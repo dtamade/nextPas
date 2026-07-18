@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L1: text.base; 委托 platform.env）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：1.1
+**版本**：1.2
 
 ---
 
@@ -76,7 +76,7 @@
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_os_env | 34 | Get/Set/Unset/Expand/XDG/User*Dir |
+| test_os_env | 36 | Get/Set/Unset/Expand/%VAR%/XDG/User*Dir |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---
@@ -87,3 +87,4 @@
 |------|------|----------|------|
 | 2026-07-11 | 1.0 | 初始版本 | Claude |
 | 2026-07-19 | 1.1 | 测试数口径校准（含 XDG） | Claude |
+| 2026-07-19 | 1.2 | UserDataDir + %VAR%；INV-6/7；测试 36 | Claude |

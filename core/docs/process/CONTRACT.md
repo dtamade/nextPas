@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：2.3
+**版本**：2.4
 
 ---
 
@@ -38,6 +38,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `ICommand.Status: TProcessOutput` | 同步执行，**不捕获输出**；含 `TimedOut`/`ExitCode`/`Status`（对齐 Rust `status()`） |
 | `ICommand.Timeout(ADuration)` | 设置超时；超时后 TimedOut=True 并 Kill |
 | `ICommand.MaxOutput(ABytes)` | 限制 stdout+stderr 累计；<=0 不限制；超限 OutputLimited=True 并 Kill |
+| `ICommand.MergeStderr` | stderr 与 stdout 共用写端；Output 的 StdOut 为交错流，StdErr 空 |
 | `IChild.Wait: TProcessOutput` | 阻塞等待 |
 | `IChild.TryWait: Boolean` | 非阻塞检查 |
 | `IChild.Kill` | 终止子进程（SIGKILL） |
@@ -60,6 +61,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 - **[INV-8]** MaxOutput 超限：停缓冲、Kill、OutputLimited=True（不伪装 TimedOut）
 - **[INV-9]** 父保留管道端不可继承；Windows 用 PeekNamedPipe 并发 drain
 - **[INV-10]** 未设置 `MaxOutput`（默认 0）时 `Run`/`Capture*`/`Output` 可耗尽内存；生产请显式 `.MaxOutput(N)`（非 bug）
+- **[INV-11]** `MergeStderr` / `Capture*Combined`：子进程 stderr→stdout 同管道；合并流在 `StdOut`，`StdErr` 为空（时间交错，对齐 Go CombinedOutput）
 
 ---
 
@@ -97,8 +99,8 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_process | 236 Check | API 全覆盖 + ProcessSucceeded/MaxOutput/MustCapture |
-| test_process_command | 47 | ICommand builder |
+| test_process | 246 Check | API 全覆盖 + ProcessSucceeded/MaxOutput/MergeStderr/Combined |
+| test_process_command | 48 | ICommand builder |
 | test_process_deep | 20 | timeout/large output |
 | test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |
 | test_process_wine | wine-runtime-smoke | Windows L2（truth=wine） |
@@ -115,3 +117,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.1 | ProcessSucceeded 公开 + 测试数口径 + Status/大输出说明 | Claude |
 | 2026-07-19 | 2.2 | MaxOutput/OutputLimited；Windows inherit+drain；Mkdir procedure 见 fs | Claude |
 | 2026-07-19 | 2.3 | Status→TProcessOutput；INV-10 无界输出；L0 Win dual capture | Claude |
+| 2026-07-19 | 2.4 | MergeStderr 真 Combined；Status/Output 文档；测试数校准 | Claude |

@@ -85,8 +85,7 @@ function MustCapture(const APath: string; const AArgs: array of string): string;
 function MustCaptureIn(const APath: string; const AArgs: array of string;
   const ADir: string): string;
 {** @desc 执行子进程并返回 stdout + stderr 合并文本
- *  @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。
- *        各自内部保持写入顺序，但合并后不交错。
+ *  @note 子进程 stderr 重定向到 stdout 管道，按写入时间交错（对齐 Go CombinedOutput）。
  *        不检查退出码；需要失败即错请用 MustCaptureCombined。
  *        如需区分两个流，请使用 Run(...) 然后分别读取 .StdOut 和 .StdErr。 *}
 function CaptureCombined(const APath: string;
@@ -97,8 +96,7 @@ function MustCaptureCombined(const APath: string;
 {**
  * @desc 在指定工作目录中执行子进程并返回 stdout + stderr 合并文本
  *
- * @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。
- *       各自内部保持写入顺序，但合并后不交错。
+ * @note stderr 重定向到 stdout 管道，按写入时间交错。
  *       不检查退出码。
  *
  * @params
@@ -235,11 +233,11 @@ function RunInTimeout(const APath: string; const AArgs: array of string;
 function CaptureInTimeout(const APath: string; const AArgs: array of string;
   const ADir: string; const ATimeout: TDuration): string;
 {** @desc 带超时执行并返回 stdout + stderr 合并文本
- *  @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。 *}
+ *  @note stderr 重定向到 stdout 管道，按写入时间交错。 *}
 function CaptureTimeoutCombined(const APath: string;
   const AArgs: array of string; const ATimeout: TDuration): string;
 {** @desc 在指定工作目录中带超时执行并返回 stdout + stderr 合并文本
- *  @note stdout 和 stderr 分别捕获后顺序拼接（StdOut + StdErr）。 *}
+ *  @note stderr 重定向到 stdout 管道，按写入时间交错。 *}
 function CaptureInTimeoutCombined(const APath: string;
   const AArgs: array of string; const ADir: string;
   const ATimeout: TDuration): string;
@@ -378,11 +376,8 @@ end;
 
 function CaptureCombined(const APath: string;
   const AArgs: array of string): string;
-var
-  LOutput: TProcessOutput;
 begin
-  LOutput := Run(APath, AArgs);
-  Result := LOutput.StdOut + LOutput.StdErr;
+  Result := TCommand.New(APath).Args(AArgs).MergeStderr.Output.StdOut;
 end;
 
 function MustCaptureCombined(const APath: string;
@@ -390,18 +385,15 @@ function MustCaptureCombined(const APath: string;
 var
   LOutput: TProcessOutput;
 begin
-  LOutput := Run(APath, AArgs);
+  LOutput := TCommand.New(APath).Args(AArgs).MergeStderr.Output;
   RaiseIfProcessFailed(APath, LOutput);
-  Result := LOutput.StdOut + LOutput.StdErr;
+  Result := LOutput.StdOut;
 end;
 
 function CaptureInCombined(const APath: string; const AArgs: array of string;
   const ADir: string): string;
-var
-  LOutput: TProcessOutput;
 begin
-  LOutput := RunIn(APath, AArgs, ADir);
-  Result := LOutput.StdOut + LOutput.StdErr;
+  Result := TCommand.New(APath).Args(AArgs).Dir(ADir).MergeStderr.Output.StdOut;
 end;
 
 function RunTimeout(const APath: string; const AArgs: array of string;
@@ -430,21 +422,17 @@ end;
 
 function CaptureTimeoutCombined(const APath: string;
   const AArgs: array of string; const ATimeout: TDuration): string;
-var
-  LOutput: TProcessOutput;
 begin
-  LOutput := RunTimeout(APath, AArgs, ATimeout);
-  Result := LOutput.StdOut + LOutput.StdErr;
+  Result := TCommand.New(APath).Args(AArgs).Timeout(ATimeout).MergeStderr
+    .Output.StdOut;
 end;
 
 function CaptureInTimeoutCombined(const APath: string;
   const AArgs: array of string; const ADir: string;
   const ATimeout: TDuration): string;
-var
-  LOutput: TProcessOutput;
 begin
-  LOutput := RunInTimeout(APath, AArgs, ADir, ATimeout);
-  Result := LOutput.StdOut + LOutput.StdErr;
+  Result := TCommand.New(APath).Args(AArgs).Dir(ADir).Timeout(ATimeout)
+    .MergeStderr.Output.StdOut;
 end;
 
 function RunWithInput(const APath: string; const AArgs: array of string;

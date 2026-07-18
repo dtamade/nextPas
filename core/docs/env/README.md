@@ -31,6 +31,8 @@
 | `UserConfigDir([AppName])` | 配置目录（Unix: `$XDG_CONFIG_HOME` 或 `$HOME/.config`；Windows: `%APPDATA%`） |
 | `UserDataDir([AppName])` | 数据目录（Unix: `$XDG_DATA_HOME` 或 `$HOME/.local/share`；Windows: `%LOCALAPPDATA%`） |
 
+**Windows 说明**：`UserCacheDir` 与 `UserDataDir` **同根** `%LOCALAPPDATA%`（常见映射）。区分方式：不同 `AppName`，或由调用方在返回路径下再拼 `cache`/`data` 子目录。Unix 上 Cache/Config/Data 根路径不同。
+
 ### 写入
 
 | 函数 | 说明 |
