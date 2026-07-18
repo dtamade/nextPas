@@ -163,7 +163,16 @@ function TFreePascalFileEarlyDataReplayStore.DeleteFileAt(
   const AFileName: string
 ): Boolean;
 begin
-  Result := (AFileName <> '') and nextpas.core.fs.Remove(AFileName);
+  Result := False;
+  if AFileName = '' then
+    Exit;
+  try
+    nextpas.core.fs.Remove(AFileName);
+    Result := True;
+  except
+    on Exception do
+      Result := False;
+  end;
 end;
 
 function TFreePascalFileEarlyDataReplayStore.RenameFileAt(
@@ -171,8 +180,16 @@ function TFreePascalFileEarlyDataReplayStore.RenameFileAt(
   const ADestFileName: string
 ): Boolean;
 begin
-  Result := (ASourceFileName <> '') and (ADestFileName <> '') and
+  Result := False;
+  if (ASourceFileName = '') or (ADestFileName = '') then
+    Exit;
+  try
     nextpas.core.fs.Rename(ASourceFileName, ADestFileName);
+    Result := True;
+  except
+    on Exception do
+      Result := False;
+  end;
 end;
 
 function TFreePascalFileEarlyDataReplayStore.OpenReadFileStream(
@@ -222,8 +239,15 @@ begin
     Exit;
 
   LDir := PathDir(LLockFileName);
-  if (LDir <> '') and (not nextpas.core.fs.MkdirAll(LDir)) then
-    Exit;
+  if LDir <> '' then
+  begin
+    try
+      nextpas.core.fs.MkdirAll(LDir);
+    except
+      on Exception do
+        Exit;
+    end;
+  end;
 
   Result := platform_file_open_ex(PAnsiChar(LLockFileName),
     fomReadWrite, fcmOpenOrCreate, False, False, UInt32(PermDefault),
@@ -359,8 +383,15 @@ begin
     Exit;
 
   LDir := ExtractFileDir(FFileName);
-  if (LDir <> '') and (not nextpas.core.fs.MkdirAll(LDir)) then
-    Exit;
+  if LDir <> '' then
+  begin
+    try
+      nextpas.core.fs.MkdirAll(LDir);
+    except
+      on Exception do
+        Exit;
+    end;
+  end;
 
   LTempFileName := GetTempFileName;
   LBackupFileName := GetBackupFileName;

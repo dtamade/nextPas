@@ -42,6 +42,8 @@ type
    * @note StdOut/StdErr 仅在对应流设为 stPiped 时有内容
    * @note TimedOut=True 表示因 ICommand.Timeout 到期而被 Kill；
    *       此时 Status 通常为 psSignaled，ExitCode 为信号相关值
+   * @note OutputLimited=True 表示 stdout+stderr 累计超过 ICommand.MaxOutput；
+   *       与 TimedOut 独立，不伪装为超时
    *}
   TProcessOutput = record
     ExitCode: Integer;
@@ -49,29 +51,39 @@ type
     StdOut: string;
     StdErr: string;
     TimedOut: Boolean;
+    OutputLimited: Boolean;
   end;
 
   {**
    * EProcessError
    *
-   * @desc 进程启动失败时抛出的异常
+   * @desc 进程启动失败或非成功退出时抛出的异常
    *
-   * @note ExitCode 为平台错误码（errno 或 GetLastError）
+   * @note ExitCode 为退出码 / 信号 / 平台错误码（视场景）
+   * @note TimedOut / OutputLimited 便于结构化判断，无需解析 Message
    *}
   EProcessError = class(Exception)
   private
     FExitCode: Integer;
+    FTimedOut: Boolean;
+    FOutputLimited: Boolean;
   public
-    constructor Create(const AMessage: string; const AExitCode: Integer = -1);
+    constructor Create(const AMessage: string; const AExitCode: Integer = -1;
+      const ATimedOut: Boolean = False; const AOutputLimited: Boolean = False);
     property ExitCode: Integer read FExitCode;
+    property TimedOut: Boolean read FTimedOut;
+    property OutputLimited: Boolean read FOutputLimited;
   end;
 
 implementation
 
-constructor EProcessError.Create(const AMessage: string; const AExitCode: Integer);
+constructor EProcessError.Create(const AMessage: string; const AExitCode: Integer;
+  const ATimedOut: Boolean; const AOutputLimited: Boolean);
 begin
   inherited Create(AMessage);
   FExitCode := AExitCode;
+  FTimedOut := ATimedOut;
+  FOutputLimited := AOutputLimited;
 end;
 
 end.

@@ -1152,6 +1152,27 @@ begin
   Check('ProcessSucceeded timeout — TimedOut flag', LOut.TimedOut);
 end;
 
+procedure TestMaxOutput;
+var
+  LOut: TProcessOutput;
+begin
+  { yes emits infinite "y\n"; MaxOutput(64) must stop and flag OutputLimited }
+  LOut := TCommand.New('/usr/bin/yes')
+    .Stdout(stPiped)
+    .Stderr(stNull)
+    .MaxOutput(64)
+    .Output;
+  Check('MaxOutput — OutputLimited set', LOut.OutputLimited);
+  Check('MaxOutput — not TimedOut', not LOut.TimedOut);
+  Check('MaxOutput — buffered <= 64', Length(LOut.StdOut) <= 64);
+  Check('MaxOutput — ProcessSucceeded false', not ProcessSucceeded(LOut));
+
+  { Unlimited still works for small output }
+  LOut := TCommand.New('/bin/echo').Arg('ok-max').MaxOutput(0).Output;
+  Check('MaxOutput 0 — success', ProcessSucceeded(LOut));
+  Check('MaxOutput 0 — not limited', not LOut.OutputLimited);
+end;
+
 procedure TestMustCaptureAndRunChecked;
 var
   LStr: string;
@@ -1408,6 +1429,7 @@ begin
   TestLookPath;
   TestTryLookPath;
   TestProcessSucceeded;
+  TestMaxOutput;
   TestMustCaptureAndRunChecked;
   TestSignal;
   TestRunTimeoutConvenience;

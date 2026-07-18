@@ -41,8 +41,10 @@ type
     property Fd: PtrInt read FFd;
   end;
 
+{** AMaxTotal: stdout+stderr 累计上限（字节），<=0 不限制；超限置 ALimited=True *}
 procedure DrainPipePair(const AStdout, AStderr: IReader; const ATimeout: Int32;
-  var AStdoutText, AStderrText: string; var AStdoutClosed, AStderrClosed: Boolean);
+  var AStdoutText, AStderrText: string; var AStdoutClosed, AStderrClosed: Boolean;
+  const AMaxTotal: Int64; var ALimited: Boolean);
 
 implementation
 
@@ -73,14 +75,37 @@ var
 const
   PIPE_DRAIN_BUF_SIZE = 65536;
 
-procedure AppendPipeChunk(var ATarget: string; var ACount: Integer;
-  const ABuf; const AChunkSize: SizeInt);
+{** Append up to AChunkSize bytes; respects AMaxTotal across ACount+ASiblingCount.
+ *  Returns False if ALimited became True (caller should stop draining). *}
+function AppendPipeChunk(var ATarget: string; var ACount: Integer;
+  const ABuf; const AChunkSize: SizeInt; const AMaxTotal: Int64;
+  const ASiblingCount: Integer; var ALimited: Boolean): Boolean;
+var
+  LTake: SizeInt;
+  LRemain: Int64;
 begin
+  Result := True;
   if AChunkSize <= 0 then
     Exit;
-  SetLength(ATarget, ACount + Integer(AChunkSize));
-  Move(ABuf, ATarget[ACount + 1], AChunkSize);
-  Inc(ACount, Integer(AChunkSize));
+  LTake := AChunkSize;
+  if AMaxTotal > 0 then
+  begin
+    LRemain := AMaxTotal - Int64(ACount) - Int64(ASiblingCount);
+    if LRemain <= 0 then
+    begin
+      ALimited := True;
+      Exit(False);
+    end;
+    if Int64(LTake) > LRemain then
+    begin
+      LTake := SizeInt(LRemain);
+      ALimited := True;
+      Result := False;
+    end;
+  end;
+  SetLength(ATarget, ACount + Integer(LTake));
+  Move(ABuf, ATarget[ACount + 1], LTake);
+  Inc(ACount, Integer(LTake));
 end;
 
 function PipeSystemError(const AOperation: string; const ACode: Int32): EIOError;
@@ -372,7 +397,8 @@ begin
 end;
 
 function DrainReadHandle(const AHandle: PtrInt; var ATarget: string;
-  var ACount: Integer): Boolean;
+  var ACount: Integer; const AMaxTotal: Int64; const ASiblingCount: Integer;
+  var ALimited: Boolean): Boolean;
 var
   LBuf: array[0..PIPE_DRAIN_BUF_SIZE - 1] of Byte;
   LRead: PtrUInt;
@@ -381,10 +407,16 @@ begin
   { Parent pipe ends are blocking. After poll reports readability, one
     read is safe; looping until EAGAIN hangs while the child still holds
     the write end open. Callers re-enter via poll for remaining data. }
+  if (AMaxTotal > 0) and (Int64(ACount) + Int64(ASiblingCount) >= AMaxTotal) then
+  begin
+    ALimited := True;
+    Exit(False);
+  end;
   LErr := PipeFileRead(AHandle, @LBuf[0], SizeOf(LBuf), LRead);
   if (LErr = 0) and (LRead > 0) then
   begin
-    AppendPipeChunk(ATarget, ACount, LBuf[0], SizeInt(LRead));
+    AppendPipeChunk(ATarget, ACount, LBuf[0], SizeInt(LRead), AMaxTotal,
+      ASiblingCount, ALimited);
     Exit(False);
   end;
   if (LErr = 0) and (LRead = 0) then
@@ -394,7 +426,8 @@ end;
 
 procedure DrainWithPoll(const AStdout, AStderr: IPipeDrainReader;
   const ATimeout: Int32; var AStdoutText, AStderrText: string;
-  var AStdoutClosed, AStderrClosed: Boolean);
+  var AStdoutClosed, AStderrClosed: Boolean; const AMaxTotal: Int64;
+  var ALimited: Boolean);
 var
   LPollFds: array[0..1] of TPollFd;
   LPollCount: Integer;
@@ -402,6 +435,8 @@ var
   LStdoutLen, LStderrLen: Integer;
   LStdoutIndex, LStderrIndex: Integer;
 begin
+  if ALimited then
+    Exit;
   LStdoutLen := Length(AStdoutText);
   LStderrLen := Length(AStderrText);
   LPollCount := 0;
@@ -434,21 +469,93 @@ begin
     LStdoutIndex := DrainReaderIndex(LPollFds, LPollCount, AStdout.NativeHandle);
     if (LStdoutIndex >= 0) and
       ((LPollFds[LStdoutIndex].revents and (POLLIN or POLLHUP or POLLERR or POLLNVAL)) <> 0) then
-      AStdoutClosed := DrainReadHandle(AStdout.NativeHandle, AStdoutText, LStdoutLen);
+      AStdoutClosed := DrainReadHandle(AStdout.NativeHandle, AStdoutText, LStdoutLen,
+        AMaxTotal, LStderrLen, ALimited);
   end;
+
+  if ALimited then
+    Exit;
 
   if (AStderr <> nil) and (not AStderrClosed) then
   begin
     LStderrIndex := DrainReaderIndex(LPollFds, LPollCount, AStderr.NativeHandle);
     if (LStderrIndex >= 0) and
       ((LPollFds[LStderrIndex].revents and (POLLIN or POLLHUP or POLLERR or POLLNVAL)) <> 0) then
-      AStderrClosed := DrainReadHandle(AStderr.NativeHandle, AStderrText, LStderrLen);
+      AStderrClosed := DrainReadHandle(AStderr.NativeHandle, AStderrText, LStderrLen,
+        AMaxTotal, LStdoutLen, ALimited);
   end;
 end;
 {$ENDIF}
 
+{$IFDEF NEXTPAS_WINDOWS}
+function DrainReadHandleWin(const AHandle: PtrInt; var ATarget: string;
+  var ACount: Integer; const AMaxTotal: Int64; const ASiblingCount: Integer;
+  var ALimited: Boolean): Boolean;
+var
+  LBuf: array[0..PIPE_DRAIN_BUF_SIZE - 1] of Byte;
+  LAvail, LRead: DWORD;
+  LOk: WINBOOL;
+begin
+  { Returns True when the stream is closed (EOF / broken pipe). }
+  if (AMaxTotal > 0) and (Int64(ACount) + Int64(ASiblingCount) >= AMaxTotal) then
+  begin
+    ALimited := True;
+    Exit(False);
+  end;
+  LAvail := 0;
+  LOk := PeekNamedPipe(HANDLE(PtrUInt(AHandle)), nil, 0, nil, @LAvail, nil);
+  if not LOk then
+  begin
+    LRead := GetLastError;
+    if (LRead = ERROR_BROKEN_PIPE) or (LRead = ERROR_HANDLE_EOF) then
+      Exit(True);
+    Exit(False);
+  end;
+  if LAvail = 0 then
+    Exit(False);
+  LRead := 0;
+  if not ReadFile(HANDLE(PtrUInt(AHandle)), @LBuf[0],
+    DWORD(SizeOf(LBuf)), @LRead, nil) then
+  begin
+    LRead := GetLastError;
+    if (LRead = ERROR_BROKEN_PIPE) or (LRead = ERROR_HANDLE_EOF) then
+      Exit(True);
+    Exit(False);
+  end;
+  if LRead = 0 then
+    Exit(True);
+  AppendPipeChunk(ATarget, ACount, LBuf[0], SizeInt(LRead), AMaxTotal,
+    ASiblingCount, ALimited);
+  Result := False;
+end;
+
+procedure DrainWithPeek(const AStdout, AStderr: IPipeDrainReader;
+  var AStdoutText, AStderrText: string;
+  var AStdoutClosed, AStderrClosed: Boolean; const AMaxTotal: Int64;
+  var ALimited: Boolean);
+var
+  LStdoutLen, LStderrLen: Integer;
+begin
+  if ALimited then
+    Exit;
+  LStdoutLen := Length(AStdoutText);
+  LStderrLen := Length(AStderrText);
+  if (AStdout <> nil) and (not AStdoutClosed) then
+    AStdoutClosed := DrainReadHandleWin(AStdout.NativeHandle, AStdoutText,
+      LStdoutLen, AMaxTotal, LStderrLen, ALimited);
+  if ALimited then
+    Exit;
+  LStdoutLen := Length(AStdoutText);
+  LStderrLen := Length(AStderrText);
+  if (AStderr <> nil) and (not AStderrClosed) then
+    AStderrClosed := DrainReadHandleWin(AStderr.NativeHandle, AStderrText,
+      LStderrLen, AMaxTotal, LStdoutLen, ALimited);
+end;
+{$ENDIF}
+
 procedure DrainPipePair(const AStdout, AStderr: IReader; const ATimeout: Int32;
-  var AStdoutText, AStderrText: string; var AStdoutClosed, AStderrClosed: Boolean);
+  var AStdoutText, AStderrText: string; var AStdoutClosed, AStderrClosed: Boolean;
+  const AMaxTotal: Int64; var ALimited: Boolean);
 var
   LStdoutDrain: IPipeDrainReader;
   LStderrDrain: IPipeDrainReader;
@@ -457,6 +564,9 @@ var
   LRead: SizeUInt;
   LStdoutLen, LStderrLen: Integer;
 begin
+  if ALimited then
+    Exit;
+
   LStdoutDrain := nil;
   LStderrDrain := nil;
 
@@ -469,28 +579,41 @@ begin
   if (LStdoutDrain <> nil) or (LStderrDrain <> nil) then
   begin
     DrainWithPoll(LStdoutDrain, LStderrDrain, ATimeout, AStdoutText, AStderrText,
-      AStdoutClosed, AStderrClosed);
+      AStdoutClosed, AStderrClosed, AMaxTotal, ALimited);
+    Exit;
+  end;
+  {$ENDIF}
+
+  {$IFDEF NEXTPAS_WINDOWS}
+  if (LStdoutDrain <> nil) or (LStderrDrain <> nil) then
+  begin
+    DrainWithPeek(LStdoutDrain, LStderrDrain, AStdoutText, AStderrText,
+      AStdoutClosed, AStderrClosed, AMaxTotal, ALimited);
     Exit;
   end;
   {$ENDIF}
 
   LStdoutLen := Length(AStdoutText);
-  if (AStdout <> nil) and (not AStdoutClosed) then
+  if (AStdout <> nil) and (not AStdoutClosed) and (not ALimited) then
   repeat
     LRead := AStdout.Read(LStdoutBuf[0], SizeOf(LStdoutBuf));
     if LRead > 0 then
-      AppendPipeChunk(AStdoutText, LStdoutLen, LStdoutBuf[0], LRead);
-  until LRead = 0;
-  AStdoutClosed := (AStdout = nil) or AStdoutClosed or (LRead = 0);
+      if not AppendPipeChunk(AStdoutText, LStdoutLen, LStdoutBuf[0], LRead,
+        AMaxTotal, Length(AStderrText), ALimited) then
+        Break;
+  until (LRead = 0) or ALimited;
+  AStdoutClosed := (AStdout = nil) or AStdoutClosed or (LRead = 0) or ALimited;
 
   LStderrLen := Length(AStderrText);
-  if (AStderr <> nil) and (not AStderrClosed) then
+  if (AStderr <> nil) and (not AStderrClosed) and (not ALimited) then
   repeat
     LRead := AStderr.Read(LStderrBuf[0], SizeOf(LStderrBuf));
     if LRead > 0 then
-      AppendPipeChunk(AStderrText, LStderrLen, LStderrBuf[0], LRead);
-  until LRead = 0;
-  AStderrClosed := (AStderr = nil) or AStderrClosed or (LRead = 0);
+      if not AppendPipeChunk(AStderrText, LStderrLen, LStderrBuf[0], LRead,
+        AMaxTotal, Length(AStdoutText), ALimited) then
+        Break;
+  until (LRead = 0) or ALimited;
+  AStderrClosed := (AStderr = nil) or AStderrClosed or (LRead = 0) or ALimited;
 end;
 
 end.

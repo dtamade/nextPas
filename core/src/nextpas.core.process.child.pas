@@ -58,16 +58,18 @@ type
     FWaited: Boolean;
     FDetached: Boolean;
     FTimeout: TDuration;
+    FMaxOutput: Int64;
     FLastOutput: TProcessOutput;
     procedure EnsureAttached;
     procedure RaiseProcessPlatformError(const AOp: string; ACode: Int32);
     function FinishWaitResult(const AResult: TPlatformProcessResult;
       const AStdOut, AStdErr: string;
-      const ATimedOut: Boolean = False): TProcessOutput;
+      const ATimedOut: Boolean = False;
+      const AOutputLimited: Boolean = False): TProcessOutput;
   public
     constructor Create(const AProc: TPlatformProcess;
       const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
-      const ATimeout: TDuration);
+      const ATimeout: TDuration; const AMaxOutput: Int64 = 0);
     destructor Destroy; override;
     function Wait: TProcessOutput;
     function TryWait(out AOutput: TProcessOutput): Boolean;
@@ -109,7 +111,7 @@ end;
 
 constructor TChild.Create(const AProc: TPlatformProcess;
   const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
-  const ATimeout: TDuration);
+  const ATimeout: TDuration; const AMaxOutput: Int64);
 begin
   inherited Create;
   FProc := AProc;
@@ -119,6 +121,7 @@ begin
   FWaited := False;
   FDetached := False;
   FTimeout := ATimeout;
+  FMaxOutput := AMaxOutput;
   FillChar(FLastOutput, SizeOf(FLastOutput), 0);
 end;
 
@@ -199,6 +202,7 @@ begin
   Result.StdOut := '';
   Result.StdErr := '';
   Result.TimedOut := False;
+  Result.OutputLimited := False;
   LTimedOut := False;
   CloseWriterBestEffort(FStdinWriter);
   if FTimeout.IsZero then
@@ -250,6 +254,7 @@ begin
   AOutput.StdOut := '';
   AOutput.StdErr := '';
   AOutput.TimedOut := False;
+  AOutput.OutputLimited := False;
   LErr := platform_process_try_wait(FProc, LResult);
   if LErr <> 0 then
     RaiseProcessPlatformError('platform_process_try_wait', LErr);
@@ -325,6 +330,7 @@ var
   LErr: Int32;
   LStdoutClosed, LStderrClosed: Boolean;
   LTimedOut: Boolean;
+  LLimited: Boolean;
 begin
   if FWaited then
     Exit(FLastOutput);
@@ -334,7 +340,9 @@ begin
   Result.StdOut := '';
   Result.StdErr := '';
   Result.TimedOut := False;
+  Result.OutputLimited := False;
   LTimedOut := False;
+  LLimited := False;
   LHaveProcessResult := False;
   LStdoutClosed := FStdoutReader = nil;
   LStderrClosed := FStderrReader = nil;
@@ -345,7 +353,26 @@ begin
 
   repeat
     DrainPipePair(FStdoutReader, FStderrReader, 10, Result.StdOut, Result.StdErr,
-      LStdoutClosed, LStderrClosed);
+      LStdoutClosed, LStderrClosed, FMaxOutput, LLimited);
+    if LLimited then
+    begin
+      { Stop accepting more output: kill child and close parent pipe ends }
+      if not LHaveProcessResult then
+      begin
+        LErr := platform_process_kill(FProc);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_kill', LErr);
+        LErr := platform_process_wait(FProc, LProcessResult);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_wait', LErr);
+        LHaveProcessResult := True;
+      end;
+      FStdoutReader := nil;
+      FStderrReader := nil;
+      LStdoutClosed := True;
+      LStderrClosed := True;
+      Break;
+    end;
     if FTimeout.IsZero then
     begin
       { No explicit timeout: wait for process exit, then drain with safety deadline }
@@ -426,28 +453,33 @@ begin
   FStdoutReader := nil;
   FStderrReader := nil;
   if LHaveProcessResult then
-    Result := FinishWaitResult(LProcessResult, Result.StdOut, Result.StdErr, LTimedOut)
+    Result := FinishWaitResult(LProcessResult, Result.StdOut, Result.StdErr,
+      LTimedOut, LLimited)
   else
   begin
     LWait := Wait;
     Result.ExitCode := LWait.ExitCode;
     Result.Status := LWait.Status;
     Result.TimedOut := LWait.TimedOut or LTimedOut;
+    Result.OutputLimited := LLimited or LWait.OutputLimited;
     FLastOutput.StdOut := Result.StdOut;
     FLastOutput.StdErr := Result.StdErr;
     FLastOutput.TimedOut := Result.TimedOut;
+    FLastOutput.OutputLimited := Result.OutputLimited;
     Result := FLastOutput;
   end;
 end;
 
 function TChild.FinishWaitResult(const AResult: TPlatformProcessResult;
   const AStdOut, AStdErr: string;
-  const ATimedOut: Boolean): TProcessOutput;
+  const ATimedOut: Boolean;
+  const AOutputLimited: Boolean): TProcessOutput;
 begin
   Result.ExitCode := AResult.ExitCode;
   Result.StdOut := AStdOut;
   Result.StdErr := AStdErr;
   Result.TimedOut := ATimedOut;
+  Result.OutputLimited := AOutputLimited;
   case AResult.Status of
     psExited: Result.Status := nextpas.core.process.base.psExited;
     psSignaled: Result.Status := nextpas.core.process.base.psSignaled;

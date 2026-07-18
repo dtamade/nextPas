@@ -52,10 +52,12 @@ type
     function Spawn: IChild;
     {** 同步执行：自动设置 stdout+stderr 为 Piped，捕获输出 *}
     function Output: TProcessOutput;
-    {** 同步执行：只返回退出码 *}
+    {** 同步执行：只返回退出码（不含 TimedOut/OutputLimited；请用 Output） *}
     function Status: Integer;
     {** 设置超时时间，超时后自动 Kill *}
     function Timeout(const ADuration: TDuration): ICommand;
+    {** 限制 stdout+stderr 累计捕获字节数；<=0 表示不限制。超限置 OutputLimited 并 Kill *}
+    function MaxOutput(const ABytes: Int64): ICommand;
   end;
 
   { TCommand — ICommand 实现 }
@@ -70,6 +72,7 @@ type
     FStdoutMode: TStdio;
     FStderrMode: TStdio;
     FTimeout: TDuration;
+    FMaxOutput: Int64;
   public
     constructor Create(const APath: string);
     class function New(const APath: string): ICommand;
@@ -85,6 +88,7 @@ type
     function Output: TProcessOutput;
     function Status: Integer;
     function Timeout(const ADuration: TDuration): ICommand;
+    function MaxOutput(const ABytes: Int64): ICommand;
   end;
 
 implementation
@@ -228,6 +232,7 @@ begin
   FStdoutMode := stInherit;
   FStderrMode := stInherit;
   FTimeout := TDuration.Zero;
+  FMaxOutput := 0;
 end;
 
 class function TCommand.New(const APath: string): ICommand;
@@ -430,6 +435,29 @@ begin
       LChildStderr := LDevNull;
     end;
 
+    { Parent-retained pipe ends must not be inherited by the child }
+    if FStdinMode = stPiped then
+    begin
+      LErr := platform_process_set_handle_inheritable(LStdinPipe[1], False);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to set stdin parent non-inheritable', LErr), LErr);
+    end;
+    if FStdoutMode = stPiped then
+    begin
+      LErr := platform_process_set_handle_inheritable(LStdoutPipe[0], False);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to set stdout parent non-inheritable', LErr), LErr);
+    end;
+    if FStderrMode = stPiped then
+    begin
+      LErr := platform_process_set_handle_inheritable(LStderrPipe[0], False);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to set stderr parent non-inheritable', LErr), LErr);
+    end;
+
     { Spawn }
     if LEnvp <> nil then
       LErr := platform_process_spawn_fds(PAnsiChar(LResolvedPath), @LArgv[0], @LEnvp[0],
@@ -494,12 +522,18 @@ begin
   if FStderrMode = stPiped then
     LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
 
-  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout);
+  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout, FMaxOutput);
 end;
 
 function TCommand.Timeout(const ADuration: TDuration): ICommand;
 begin
   FTimeout := ADuration;
+  Result := Self;
+end;
+
+function TCommand.MaxOutput(const ABytes: Int64): ICommand;
+begin
+  FMaxOutput := ABytes;
   Result := Self;
 end;
 

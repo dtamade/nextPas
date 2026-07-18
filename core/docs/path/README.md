@@ -14,11 +14,12 @@
 |----------------|-------------|------|
 | `PathIsAbsolute` | `PathIsAbs`（fs 门面） | path / fs |
 | `PathNormalize` | `PathClean`（互为别名） | path / fs |
+| `PathJoin(a,b)` / `PathJoinN` | fs：`PathJoin2` / `PathJoin(array)` / `PathJoin3` | path / fs |
 | `PathBase` | 含扩展名；= `ExtractFileName` | path / fs |
 | `PathDir` | 目录部分（空路径→空） | path / fs |
 
-- **仅需路径字符串操作**：优先 `uses nextpas.core.path`。
-- **已依赖 fs**：可用 `PathIsAbs` / `PathClean`，语义与上表一致。
+- **仅需路径字符串操作**：优先 `uses nextpas.core.path`（`PathJoin` 为二元）。
+- **已依赖 fs**：用 `PathJoin([...])` 或 `PathJoin2`；不要假设 fs 的 `PathJoin` 是二元。
 - 新代码不要再发明第三套命名。
 
 ## API 入口

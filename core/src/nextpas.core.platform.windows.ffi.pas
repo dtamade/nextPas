@@ -790,6 +790,12 @@ function FlushViewOfFile(lpBaseAddress: Pointer; dwNumberOfBytesToFlush: PtrUInt
     @return TRUE 成功 *}
 function CreatePipe(hReadPipe: PHANDLE; hWritePipe: PHANDLE; lpPipeAttributes: LPSECURITY_ATTRIBUTES; nSize: DWORD): WINBOOL; stdcall; external 'kernel32' name 'CreatePipe';
 
+{** @desc 窥探命名/匿名管道可读字节数 *}
+function PeekNamedPipe(hNamedPipe: HANDLE; lpBuffer: Pointer;
+  nBufferSize: DWORD; lpBytesRead: LPDWORD; lpTotalBytesAvail: LPDWORD;
+  lpBytesLeftThisMessage: LPDWORD): WINBOOL; stdcall;
+  external 'kernel32' name 'PeekNamedPipe';
+
 { Handle }
 
 {** @desc 设置句柄信息

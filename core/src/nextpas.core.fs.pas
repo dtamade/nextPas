@@ -146,18 +146,18 @@ procedure Symlink(const ATarget, ALinkPath: string); inline;
 function Readlink(const APath: string): string; inline;
 
 { Directory operations }
-{** @desc 创建单级目录 *}
-function Mkdir(const APath: string;
-  const APerm: TFilePermission = PermDirDefault): Boolean; inline;
-{** @desc 递归创建目录（类似 mkdir -p） *}
-function MkdirAll(const APath: string;
-  const APerm: TFilePermission = PermDirDefault): Boolean; inline;
-{** @desc 删除文件或空目录 *}
-function Remove(const APath: string): Boolean; inline;
+{** @desc 创建单级目录；失败抛异常 *}
+procedure Mkdir(const APath: string;
+  const APerm: TFilePermission = PermDirDefault); inline;
+{** @desc 递归创建目录（类似 mkdir -p）；失败抛异常 *}
+procedure MkdirAll(const APath: string;
+  const APerm: TFilePermission = PermDirDefault); inline;
+{** @desc 删除文件或空目录；不存在视为成功 *}
+procedure Remove(const APath: string); inline;
 {** @desc 递归删除路径（类似 rm -rf） *}
-function RemoveAll(const APath: string): Boolean; inline;
+procedure RemoveAll(const APath: string); inline;
 {** @desc 重命名/移动文件或目录 *}
-function Rename(const AOld, ANew: string): Boolean; inline;
+procedure Rename(const AOld, ANew: string); inline;
 {** @desc 读取目录内容，返回 TDirEntryArray *}
 function ReadDir(const APath: string): TDirEntryArray; inline;
 {** @desc 打开目录，返回 IDirIterator 迭代器 *}
@@ -197,6 +197,10 @@ function GlobMatch(const APattern, AName: string): Boolean;
 { Path operations }
 {** @desc 连接多个路径片段 *}
 function PathJoin(const AParts: array of string): string; inline;
+{** @desc 连接两段路径（与 nextpas.core.path.PathJoin 同 arity） *}
+function PathJoin2(const ABase, AChild: string): string; inline;
+{** @desc 连接三段路径 *}
+function PathJoin3(const A, B, C: string): string; inline;
 {** @desc 返回路径的目录部分 *}
 function PathDir(const APath: string): string; inline;
 {** @desc 返回路径的文件名部分（含扩展名） *}
@@ -207,10 +211,14 @@ procedure PathSplit(const APath: string; out ADir, ABase: string); inline;
 function PathExt(const APath: string): string; inline;
 {** @desc 规范化路径（解析 . 和 ..，去除多余分隔符） *}
 function PathClean(const APath: string): string; inline;
+{** @desc PathClean 别名（与 path.PathNormalize 对齐） *}
+function PathNormalize(const APath: string): string; inline;
 {** @desc 将相对路径转为绝对路径 *}
 function PathAbs(const APath: string): string; inline;
 {** @desc 判断路径是否为绝对路径 *}
 function PathIsAbs(const APath: string): Boolean; inline;
+{** @desc PathIsAbs 别名（与 path.PathIsAbsolute 对齐） *}
+function PathIsAbsolute(const APath: string): Boolean; inline;
 {** @desc 计算从 ABase 到 ATarget 的相对路径 *}
 function PathRelative(const ABase, ATarget: string): string; inline;
 {** @desc 确保路径末尾有路径分隔符 *}
@@ -229,7 +237,7 @@ function PathMatch(const APattern, AName: string): Boolean; inline;
 function GetCwd: string; inline;
 {** @desc 设置当前工作目录 *}
 procedure SetCwd(const APath: string); inline;
-{** @desc 获取环境变量，不存在返回空字符串 *}
+{** @desc 获取环境变量，不存在返回空字符串（兼容入口；新代码请用 nextpas.core.os.env） *}
 function GetEnv(const AName: string): string; inline;
 {** @desc 获取系统临时目录路径（末尾带分隔符） *}
 function GetTempDir: string;
@@ -239,17 +247,17 @@ function GetTempDir: string;
 function FileExists(const APath: string): Boolean; inline;
 {** @desc 检查目录是否存在（SysUtils DirectoryExists 兼容） *}
 function DirectoryExists(const APath: string): Boolean; inline;
-{** @desc 递归创建目录（SysUtils ForceDirectories 兼容） *}
+{** @desc 递归创建目录（SysUtils ForceDirectories 兼容；失败返回 False 不抛） *}
 function ForceDirectories(const APath: string): Boolean; inline;
-{** @desc 删除文件（SysUtils DeleteFile 兼容） *}
+{** @desc 删除文件（SysUtils DeleteFile 兼容；失败返回 False） *}
 function DeleteFile(const APath: string): Boolean; inline;
 {** @desc 获取当前工作目录（SysUtils GetCurrentDir 兼容） *}
 function GetCurrentDir: string; inline;
-{** @desc 获取环境变量（SysUtils GetEnvironmentVariable 兼容） *}
+{** @desc 获取环境变量（兼容入口；新代码请用 nextpas.core.os.env） *}
 function GetEnvironmentVariable(const AName: string): string; inline;
-{** @desc 获取命令行参数数量（SysUtils ParamCount 兼容） *}
+{** @desc 命令行参数数量（兼容入口；新代码请用 args 模块） *}
 function ParamCount: Integer; inline;
-{** @desc 获取指定索引的命令行参数（SysUtils ParamStr 兼容） *}
+{** @desc 命令行参数（兼容入口；新代码请用 args 模块） *}
 function ParamStr(AIndex: Integer): string; inline;
 
 implementation
@@ -409,29 +417,29 @@ begin
   Result := nextpas.core.fs.util.FsReadlink(APath);
 end;
 
-function Mkdir(const APath: string; const APerm: TFilePermission): Boolean;
+procedure Mkdir(const APath: string; const APerm: TFilePermission);
 begin
-  Result := nextpas.core.fs.dir.FsMkdir(APath, APerm);
+  nextpas.core.fs.dir.FsMkdir(APath, APerm);
 end;
 
-function MkdirAll(const APath: string; const APerm: TFilePermission): Boolean;
+procedure MkdirAll(const APath: string; const APerm: TFilePermission);
 begin
-  Result := nextpas.core.fs.dir.FsMkdirAll(APath, APerm);
+  nextpas.core.fs.dir.FsMkdirAll(APath, APerm);
 end;
 
-function Remove(const APath: string): Boolean;
+procedure Remove(const APath: string);
 begin
-  Result := nextpas.core.fs.dir.FsRemove(APath);
+  nextpas.core.fs.dir.FsRemove(APath);
 end;
 
-function RemoveAll(const APath: string): Boolean;
+procedure RemoveAll(const APath: string);
 begin
-  Result := nextpas.core.fs.dir.FsRemoveAll(APath);
+  nextpas.core.fs.dir.FsRemoveAll(APath);
 end;
 
-function Rename(const AOld, ANew: string): Boolean;
+procedure Rename(const AOld, ANew: string);
 begin
-  Result := nextpas.core.fs.dir.FsRename(AOld, ANew);
+  nextpas.core.fs.dir.FsRename(AOld, ANew);
 end;
 
 function ReadDir(const APath: string): TDirEntryArray;
@@ -506,6 +514,16 @@ begin
   Result := nextpas.core.fs.path.FsPathJoin(AParts);
 end;
 
+function PathJoin2(const ABase, AChild: string): string;
+begin
+  Result := nextpas.core.fs.path.FsPathJoin([ABase, AChild]);
+end;
+
+function PathJoin3(const A, B, C: string): string;
+begin
+  Result := nextpas.core.fs.path.FsPathJoin([A, B, C]);
+end;
+
 function PathDir(const APath: string): string;
 begin
   Result := nextpas.core.fs.path.FsPathDir(APath);
@@ -531,6 +549,11 @@ begin
   Result := nextpas.core.fs.path.FsPathClean(APath);
 end;
 
+function PathNormalize(const APath: string): string;
+begin
+  Result := PathClean(APath);
+end;
+
 function PathAbs(const APath: string): string;
 begin
   Result := nextpas.core.fs.path.FsPathAbs(APath);
@@ -539,6 +562,11 @@ end;
 function PathIsAbs(const APath: string): Boolean;
 begin
   Result := nextpas.core.fs.path.FsPathIsAbs(APath);
+end;
+
+function PathIsAbsolute(const APath: string): Boolean;
+begin
+  Result := PathIsAbs(APath);
 end;
 
 function PathRelative(const ABase, ATarget: string): string;
@@ -618,12 +646,24 @@ end;
 
 function ForceDirectories(const APath: string): Boolean;
 begin
-  Result := MkdirAll(APath);
+  try
+    MkdirAll(APath);
+    Result := True;
+  except
+    on Exception do
+      Result := False;
+  end;
 end;
 
 function DeleteFile(const APath: string): Boolean;
 begin
-  Result := Remove(APath);
+  try
+    Remove(APath);
+    Result := True;
+  except
+    on Exception do
+      Result := False;
+  end;
 end;
 
 function GetCurrentDir: string;

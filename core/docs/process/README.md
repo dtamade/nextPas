@@ -7,71 +7,39 @@ L2 进程执行模块。提供类似 Go `os/exec` 和 Rust `std::process::Comman
 ```pascal
 uses nextpas.core.process;
 
-// 一行执行，捕获输出
-// 注意：Capture / Run 不检查退出码；exit≠0 时仍返回输出
-var Out := Run('/bin/echo', ['hello', 'world']);
-WriteLn(Out.StdOut);  // "hello world\n"
+// 推荐默认路径（新代码）
+var Out := RunChecked('/bin/echo', ['hello']);  // 失败抛 EProcessError
+if ProcessSucceeded(Out) then WriteLn(Out.StdOut);
 
-// 失败即错（类似 Go cmd.Output / 检查 ExitError）
-var OutOk := RunChecked('/bin/true', []);
-var TextOk := MustCapture('/bin/echo', ['ok']);
+var Text := MustCapture('/usr/bin/fpc', ['--version']);
 
-// 只要退出码
-var Code := Command('/bin/true').Status;  // 0
+var Builder := Command('/usr/bin/fpc')
+  .Args(['--version'])
+  .Timeout(TDuration.FromSeconds(30))
+  .MaxOutput(1024 * 1024);  // 可选：限制 stdout+stderr 累计字节
+var Timed := Builder.Output;
+if Timed.TimedOut then ...
+if Timed.OutputLimited then ...
 
-// 只要 stdout 文本（不检查退出码）
-var Text := Capture('/usr/bin/fpc', ['--version']);
-
-// 超时后 TimedOut=True（Status 通常为 psSignaled）
-var Timed := RunTimeout('/bin/sleep', ['10'], TDuration.FromMilliseconds(100));
-if Timed.TimedOut then
+// 超时便利函数
+var Timed2 := RunTimeout('/bin/sleep', ['10'], TDuration.FromMilliseconds(100));
+if Timed2.TimedOut then
   WriteLn('timed out');
 
-// 查找 PATH 中的可执行文件（含目录部分时校验可执行性，对齐 Go LookPath）
-var FpcPath := LookPath('fpc');  // '/usr/bin/fpc'
+// PATH 查找
+var FpcPath := LookPath('fpc');
 if not TryLookPath('/no/such/bin', FpcPath) then
   WriteLn('missing absolute path rejected');
+```
 
-// stdout + stderr 合并
+### 便利函数示例（兼容保留，新代码优先 builder）
+
+```pascal
+// Capture 不检查退出码；需要失败即错用 MustCapture
+var Text := Capture('/usr/bin/fpc', ['--version']);
 var Combined := CaptureCombined('/bin/sh', ['-c', 'echo out; echo err >&2']);
-
-// 在指定目录执行
 var Out2 := RunIn('/bin/ls', ['-la'], '/tmp');
-var Dir := CaptureIn('/bin/pwd', [], '/tmp');
-
-// 在指定目录 + 超时执行
-var Out3 := RunInTimeout('/bin/sleep', ['10'], '/tmp', TDuration.FromSeconds(1));
-var Dir2 := CaptureInTimeout('/bin/pwd', [], '/tmp', TDuration.FromSeconds(5));
-
-// 查找 PATH 中的可执行文件
-var FpcPath := LookPath('fpc');  // '/usr/bin/fpc'
-
-// 不抛异常版本
-if TryLookPath('fpc', FpcPath) then
-  WriteLn('fpc at: ', FpcPath);
-
-// 带超时执行（超时后自动 Kill）
-var Out := RunTimeout('/usr/bin/fpc', ['--version'], TDuration.FromSeconds(30));
-var Text := CaptureTimeout('/usr/bin/fpc', ['--version'], TDuration.FromSeconds(30));
-
-// 带超时 + stdout+stderr 合并
-var Combined := CaptureTimeoutCombined('/bin/sh', ['-c', 'echo out; echo err >&2'], TDuration.FromSeconds(5));
-var Combined2 := CaptureInTimeoutCombined('/bin/sh', ['-c', 'pwd; echo err >&2'], '/tmp', TDuration.FromSeconds(5));
-
-// 通过 stdin 传入数据
-var Input := TBytes.Create(Ord('h'), Ord('e'), Ord('l'), Ord('l'), Ord('o'));
-var Out := RunWithInput('/bin/cat', [], Input);
-var Text := CaptureWithInput('/bin/cat', [], Input);
-
-// 通过 stdin 传入字符串
-var Text := CaptureWithInputString('/bin/cat', [], 'hello world');
-
-// 在指定目录 + stdin 传入数据
-var Out4 := RunInWithInput('/bin/cat', [], '/tmp', Input);
-var Text4 := CaptureInWithInput('/bin/cat', [], '/tmp', Input);
-var Text5 := CaptureInWithInputString('/bin/cat', [], '/tmp', 'hello dir');
-
-// 获取当前进程可执行文件路径
+var Out3 := RunWithInputString('/bin/cat', [], 'hello');
 var ExePath := Executable;
 ```
 
@@ -149,34 +117,40 @@ WriteLn(Result.StdOut);  // "hello"
 
 | 层 | Unix (Linux/macOS) | Windows |
 |----|--------------------|---------|
-| L2 `nextpas.core.process` | ✅ 一等支持 | ⚠️ 可用但未做完整 parity（管道/poll/信号语义差异） |
-| L0 `platform.process` | ✅ | ✅ CreateProcess 基础；`platform_process_run` 捕获 stderr 有限 |
+| L2 `nextpas.core.process` | ✅ 一等支持 | ✅ L2 路径可用；证据 `truth=wine-runtime-smoke`（≠ 真 Windows host） |
+| L0 `platform.process` | ✅ | ✅ CreateProcess / 管道 / Kill |
 
-**建议**：生产路径以 Unix 为准；Windows 调用请走 `platform.process` 或先在 Wine/CI 补回归。完整 Windows L2 对等列为后续里程碑。
+**Windows 精确限制**
+
+- 无 POSIX 信号语义：`Signal` 仅 `SIGKILL(9)` → `TerminateProcess`；其它信号返回 unsupported
+- 管道：父端句柄清 inherit + `PeekNamedPipe` 并发 drain（避免双流死锁）
+- PATHEXT / LookPath 已支持
+- 验证：`make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke`
 
 ## 推荐 API 分层（避免便利函数爆炸）
 
 | 场景 | 推荐 | 说明 |
 |------|------|------|
-| 完整控制 | `Command(...).Args.Dir.EnvAdd.Timeout.Spawn/Output` | 唯一完整入口 |
-| 同步拿输出 | `Run` / `RunIn` | 检查 `ExitCode` / `TimedOut` 或 `ProcessSucceeded` |
-| 成功判定 | `ProcessSucceeded(Out)` | 非超时且 exit=0 |
-| 失败即错 | `RunChecked` / `MustCapture` / `MustCaptureCombined` | 类似 Go `Output()` |
+| 完整控制 | `Command(...).Args.Dir.EnvAdd.Timeout.MaxOutput.Spawn/Output` | 唯一完整入口 |
+| 同步拿输出 | `Run` / `RunIn` | 检查 `ExitCode` / `TimedOut` / `OutputLimited` 或 `ProcessSucceeded` |
+| 成功判定 | `ProcessSucceeded(Out)` | 非超时、非超限且 exit=0 |
+| 失败即错 | `RunChecked` / `MustCapture` / `MustCaptureCombined` | 类似 Go `Output()`；`EProcessError.TimedOut/OutputLimited` |
 | 只要文本且可忽略 exit | `Capture*` | **不检查退出码** |
-| 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut`；`Status: Integer` 只返回 exit code |
+| 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut`；`Status: Integer` **只返回 exit code** |
+| 有界输出 | `.MaxOutput(N)` | stdout+stderr 累计；超限 `OutputLimited=True` 并 Kill |
 | PATH 查找 | `LookPath` / `TryLookPath` | 含目录部分也校验可执行 |
 
 ### 便利函数冻结策略
 
-- **新能力只加在 `ICommand` builder**（如新 stdio 模式、env 语义）。
+- **新能力只加在 `ICommand` builder**（如新 stdio 模式、env 语义、MaxOutput）。
 - **不再按 In×Timeout×Input×Combined 笛卡尔积扩展** 门面便利函数。
 - 现有 `Run*`/`Capture*` 组合 **保留兼容**，不删除；新代码优先上表推荐入口。
 
 ### 大输出 / 流式
 
-- `Run` / `Capture` / `IChild.WaitWithOutput`：**全内存**缓冲 stdout/stderr。超大日志或二进制有 OOM 风险。
+- `Run` / `Capture` / `IChild.WaitWithOutput`：默认 **全内存**缓冲；可用 `.MaxOutput(N)` 有界。
 - 大输出推荐：`Command(...).Stdout(stPiped).Spawn` → `TakeStdout` 流式读，再 `Wait`。
-- 有界输出（`MaxOutputBytes`）列为后续增强，当前不提供。
+- 超限时不伪装为 `TimedOut`，单独看 `OutputLimited`。
 
 ## 环境变量
 

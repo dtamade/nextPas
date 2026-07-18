@@ -28,7 +28,7 @@ type
 {**
  * @desc 判断进程结果是否成功
  *
- * @return 非 TimedOut 且 Status=psExited 且 ExitCode=0 时为 True
+ * @return 非 TimedOut、非 OutputLimited 且 Status=psExited 且 ExitCode=0 时为 True
  *
  * @note 对标 Go ProcessState.Success / Rust ExitStatus::success
  *}
@@ -284,7 +284,7 @@ uses
 
 function ProcessSucceeded(const AOut: TProcessOutput): Boolean;
 begin
-  Result := (not AOut.TimedOut) and
+  Result := (not AOut.TimedOut) and (not AOut.OutputLimited) and
     (AOut.Status = psExited) and (AOut.ExitCode = 0);
 end;
 
@@ -296,10 +296,13 @@ end;
 procedure RaiseIfProcessFailed(const APath: string; const AOut: TProcessOutput);
 var
   LMsg, LDetail: string;
+  LEx: EProcessError;
 begin
   if ProcessSucceeded(AOut) then
     Exit;
-  if AOut.TimedOut then
+  if AOut.OutputLimited then
+    LMsg := 'process output exceeded MaxOutput: ' + APath
+  else if AOut.TimedOut then
     LMsg := 'process timed out: ' + APath
   else if AOut.Status = psSignaled then
     LMsg := 'process killed by signal ' + IntToStr(AOut.ExitCode) + ': ' + APath
@@ -312,7 +315,8 @@ begin
     LDetail := Copy(LDetail, 1, 200) + '...';
   if LDetail <> '' then
     LMsg := LMsg + ' — ' + LDetail;
-  raise EProcessError.Create(LMsg, AOut.ExitCode);
+  LEx := EProcessError.Create(LMsg, AOut.ExitCode, AOut.TimedOut, AOut.OutputLimited);
+  raise LEx;
 end;
 
 function Run(const APath: string; const AArgs: array of string): TProcessOutput;

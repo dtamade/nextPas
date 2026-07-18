@@ -453,7 +453,7 @@ end;
 
 procedure TestMkdirAll;
 begin
-  Check(FsMkdirAll(GTmpDir + '/a/b/c'), 'mkdir -p');
+  FsMkdirAll(GTmpDir + '/a/b/c');
   Check(FsIsDir(GTmpDir + '/a/b/c'), 'deep dir exists');
 end;
 
@@ -490,7 +490,7 @@ end;
 procedure TestRemove;
 begin
   FsWriteFile(GTmpDir + '/rm.txt', TBytes.Create(1));
-  Check(FsRemove(GTmpDir + '/rm.txt'), 'remove file');
+  FsRemove(GTmpDir + '/rm.txt');
   Check(not FsExists(GTmpDir + '/rm.txt'), 'gone');
 end;
 
@@ -517,17 +517,15 @@ end;
 
 procedure TestRemoveMissingPathReturnsTrue;
 begin
-  { FsRemove returns True for missing paths, matching Pascal Erase/DeleteFile }
-  Check(FsRemove(GTmpDir + '/missing-remove-path'),
-    'FsRemove missing path returns True');
+  { FsRemove treats missing paths as success (Pascal Erase/DeleteFile) }
+  FsRemove(GTmpDir + '/missing-remove-path');
+  Check(True, 'FsRemove missing path does not raise');
 end;
 
 procedure TestRemoveAllMissingPathReturnsTrue;
-var
-  LResult: Boolean;
 begin
-  LResult := FsRemoveAll(GTmpDir + '/missing-removeall-path');
-  Check(LResult, 'FsRemoveAll missing path returns True (nothing to remove)');
+  FsRemoveAll(GTmpDir + '/missing-removeall-path');
+  Check(True, 'FsRemoveAll missing path does not raise');
 end;
 
 procedure TestRemoveAllUnsafeRootGuardRaisesInvalidOperation;
@@ -557,7 +555,7 @@ procedure TestRemoveAll;
 begin
   FsMkdirAll(GTmpDir + '/rmall/sub');
   FsWriteFile(GTmpDir + '/rmall/sub/f.txt', TBytes.Create(1));
-  Check(FsRemoveAll(GTmpDir + '/rmall'), 'removeall');
+  FsRemoveAll(GTmpDir + '/rmall');
   Check(not FsExists(GTmpDir + '/rmall'), 'gone');
 end;
 
@@ -577,7 +575,7 @@ begin
     FsWriteFile(LPath + '/f.txt', TBytes.Create(I and $FF));
   end;
   Check(FsExists(LBase + '/d/d/f.txt'), 'deep tree created');
-  Check(FsRemoveAll(LBase), 'deep removeall');
+  FsRemoveAll(LBase);
   Check(not FsExists(LBase), 'deep tree gone');
 end;
 
@@ -630,7 +628,7 @@ end;
 procedure TestRename;
 begin
   FsWriteFile(GTmpDir + '/old.txt', TBytes.Create(42));
-  Check(FsRename(GTmpDir + '/old.txt', GTmpDir + '/new.txt'), 'rename');
+  FsRename(GTmpDir + '/old.txt', GTmpDir + '/new.txt');
   Check(not FsExists(GTmpDir + '/old.txt'), 'old gone');
   Check(FsExists(GTmpDir + '/new.txt'), 'new exists');
 end;
@@ -1327,7 +1325,7 @@ begin
     Check(True, 'symlink unsupported, skip');
     Exit;
   end;
-  Check(FsRemove(LLink), 'remove symlink-to-dir returns true');
+  FsRemove(LLink);
   Check(not FsExists(LLink), 'symlink-to-dir link removed');
   Check(FsExists(LTarget + '/keep.txt'), 'symlink-to-dir target tree intact');
 end;
