@@ -5,6 +5,7 @@ program bench_http_h2;
 uses
   nextpas.core.time,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.http.intf,
   nextpas.core.http.impl.h2.frame,
   nextpas.core.http.impl.h2.hpack,

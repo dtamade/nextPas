@@ -20,6 +20,9 @@ type
   THttpStatus = UInt16;
   TTcpServerBackend = nextpas.core.net.server.base.TTcpServerBackend;
 
+  { Note: NewHttpCancelToken is waitable (INetCancelWaitable) so mid-IO cancel
+    wakes blocked socket reads via net poll+socketpair on Unix. }
+
   { Programmable HTTP error classification (single exception type, Kind field). }
   THttpErrorKind = (
     hekUnknown,
@@ -49,6 +52,8 @@ type
       const AStatus: THttpStatus); overload;
     constructor CreateOp(const AKind: THttpErrorKind; const AOp,
       AMessage: string); overload;
+    constructor CreateOp(const AKind: THttpErrorKind; const AOp,
+      AMessage: string; const AStatus: THttpStatus); overload;
     property Kind: THttpErrorKind read FKind;
     property Status: THttpStatus read FStatus;
     property Op: string read FOp;
@@ -113,7 +118,13 @@ type
       uses Timeout. }
     ConnectTimeout: Int64;
     MaxRedirects: Int32;
+    { Max idle connections retained per pool authority (host/port/scheme key).
+      Default 64. Not a global cap across authorities. }
     MaxPoolSize: Int32;
+    { Max wall-clock idle time (ms) for a pooled connection before PoolGet
+      discards it. Default 90000. 0 = no TTL (only CloseIdleConnections /
+      destroy / MaxPoolSize). }
+    IdleTTL: Int64;
     FollowRedirects: Boolean;
     Version: THttpVersion;
     UseRegistryVersion: Boolean;
@@ -128,6 +139,7 @@ type
     function WithMaxRedirects(const AMaxRedirects: Int32): THttpClientOptions;
     function WithFollowRedirects(const AFollow: Boolean): THttpClientOptions;
     function WithMaxPoolSize(const AMaxPoolSize: Int32): THttpClientOptions;
+    function WithIdleTTL(const AIdleTTLMs: Int64): THttpClientOptions;
     function WithVersion(const AVersion: THttpVersion): THttpClientOptions;
     function WithProxyUrl(const AProxyUrl: string): THttpClientOptions;
     function WithTLSContext(const ATLSContext: ISSLContext): THttpClientOptions;
@@ -263,7 +275,9 @@ procedure HttpThrowIfCanceled(const AToken: IHttpCancelToken);
 implementation
 
 uses
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.net.intf,
+  nextpas.core.net.cancel;
 
 { EHttpError }
 
@@ -321,6 +335,15 @@ begin
   FOp := AOp;
 end;
 
+constructor EHttpError.CreateOp(const AKind: THttpErrorKind; const AOp,
+  AMessage: string; const AStatus: THttpStatus);
+begin
+  inherited Create(AMessage, HttpErrorKindToCategory(AKind));
+  FKind := AKind;
+  FStatus := AStatus;
+  FOp := AOp;
+end;
+
 function HttpErrorIsTimeout(const E: Exception): Boolean;
 begin
   if E = nil then
@@ -364,29 +387,60 @@ begin
 end;
 
 type
-  THttpCancelToken = class(TInterfacedObject, IHttpCancelToken)
+  { Composes NewNetCancelToken so HTTP cancel is waitable on ITcpStream. }
+  THttpCancelToken = class(TInterfacedObject, IHttpCancelToken, INetCancelToken,
+    INetCancelWaitable)
   private
-    FCanceled: Boolean;
+    FNet: INetCancelController;
+    FWaitable: INetCancelWaitable;
   public
+    constructor Create;
     function IsCanceled: Boolean;
     procedure Cancel;
     procedure ThrowIfCanceled;
+    function WakeHandle: PtrUInt;
+    procedure DrainWake;
   end;
+
+constructor THttpCancelToken.Create;
+begin
+  inherited Create;
+  FNet := NewNetCancelToken;
+  FWaitable := nil;
+  if (FNet <> nil) and
+     (FNet.QueryInterface(INetCancelWaitable, FWaitable) <> 0) then
+    FWaitable := nil;
+end;
 
 function THttpCancelToken.IsCanceled: Boolean;
 begin
-  Result := FCanceled;
+  Result := (FNet <> nil) and FNet.IsCanceled;
 end;
 
 procedure THttpCancelToken.Cancel;
 begin
-  FCanceled := True;
+  if FNet <> nil then
+    FNet.Cancel;
 end;
 
 procedure THttpCancelToken.ThrowIfCanceled;
 begin
-  if FCanceled then
-    raise EHttpError.Create(hekCanceled, 'HTTP request canceled');
+  if IsCanceled then
+    raise EHttpError.CreateOp(hekCanceled, 'cancel', 'HTTP request canceled');
+end;
+
+function THttpCancelToken.WakeHandle: PtrUInt;
+begin
+  if FWaitable <> nil then
+    Result := FWaitable.WakeHandle
+  else
+    Result := 0;
+end;
+
+procedure THttpCancelToken.DrainWake;
+begin
+  if FWaitable <> nil then
+    FWaitable.DrainWake;
 end;
 
 function NewHttpCancelToken: IHttpCancelToken;
@@ -914,6 +968,7 @@ begin
   Result.ConnectTimeout := 0;
   Result.MaxRedirects := 10;
   Result.MaxPoolSize := 64;
+  Result.IdleTTL := 90000;
   Result.FollowRedirects := True;
   Result.Version := hvHttp11;
   Result.UseRegistryVersion := True;
@@ -958,6 +1013,12 @@ function THttpClientOptions.WithMaxPoolSize(const AMaxPoolSize: Int32): THttpCli
 begin
   Result := Self;
   Result.MaxPoolSize := AMaxPoolSize;
+end;
+
+function THttpClientOptions.WithIdleTTL(const AIdleTTLMs: Int64): THttpClientOptions;
+begin
+  Result := Self;
+  Result.IdleTTL := AIdleTTLMs;
 end;
 
 function THttpClientOptions.WithVersion(

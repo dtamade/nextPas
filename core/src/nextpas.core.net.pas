@@ -11,21 +11,31 @@ interface
 uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
+  nextpas.core.net.cancel,
   nextpas.core.net.tcp,
   nextpas.core.net.udp,
-  nextpas.core.net.resolve;
+  nextpas.core.net.resolve,
+  nextpas.core.net.async.tcp,
+  nextpas.core.net.async.resolve;
 
 type
   TNetAddress = nextpas.core.net.base.TNetAddress;
   TTcpStreamIOResult = nextpas.core.net.intf.TTcpStreamIOResult;
   TTcpAcceptResult = nextpas.core.net.intf.TTcpAcceptResult;
   INetCancelToken = nextpas.core.net.intf.INetCancelToken;
+  INetCancelController = nextpas.core.net.intf.INetCancelController;
+  INetCancelWaitable = nextpas.core.net.intf.INetCancelWaitable;
   ITcpSocketRuntime = nextpas.core.net.intf.ITcpSocketRuntime;
   ITcpStreamRuntime = nextpas.core.net.intf.ITcpStreamRuntime;
   ITcpListenerRuntime = nextpas.core.net.intf.ITcpListenerRuntime;
   ITcpStream = nextpas.core.net.intf.ITcpStream;
   ITcpListener = nextpas.core.net.intf.ITcpListener;
   IUdpSocket = nextpas.core.net.intf.IUdpSocket;
+  IAsyncTcpStream = nextpas.core.net.async.tcp.IAsyncTcpStream;
+  IAsyncTcpListener = nextpas.core.net.async.tcp.IAsyncTcpListener;
+  TDnsResult = nextpas.core.net.async.resolve.TDnsResult;
+  TDnsCallback = nextpas.core.net.async.resolve.TDnsCallback;
+  TDnsCallbackRef = nextpas.core.net.async.resolve.TDnsCallbackRef;
 
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;
@@ -34,6 +44,7 @@ function TcpConnect(const AAddr: string; const APort: UInt16;
   const ATimeoutMs: Int64): ITcpStream; inline;
 function UdpBind(const AAddr: string; const APort: UInt16): IUdpSocket; inline;
 function Resolve(const AHost: string): TNetAddress; inline;
+function NewNetCancelToken: INetCancelController; inline;
 
 implementation
 
@@ -61,6 +72,11 @@ end;
 function Resolve(const AHost: string): TNetAddress;
 begin
   Result := nextpas.core.net.resolve.NetResolve(AHost);
+end;
+
+function NewNetCancelToken: INetCancelController;
+begin
+  Result := nextpas.core.net.cancel.NewNetCancelToken;
 end;
 
 end.

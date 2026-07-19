@@ -45,6 +45,24 @@ begin
   Check(LLeft < LRight, AMessage);
 end;
 
+{ Portable ready-spin for multi-thread setup (used by barrier tests on all hosts). }
+procedure WaitForReady(var AReady: Int32; const AName: string);
+var
+  I: Integer;
+begin
+  for I := 0 to 999 do
+  begin
+    if AReady <> 0 then
+      Exit;
+    {$IFDEF NEXTPAS_LINUX}
+    platform_wait_address32(@AReady, 0, 10000000);
+    {$ELSE}
+    platform_thread_sleep_ms(1);
+    {$ENDIF}
+  end;
+  Check(AReady <> 0, AName + ' ready');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 type
   PCondWaitState = ^TCondWaitState;
@@ -68,19 +86,6 @@ var
 begin
   LSleep := 0;
   platform_wait_address32(@LSleep, 0, 1000000);
-end;
-
-procedure WaitForReady(var AReady: Int32; const AName: string);
-var
-  I: Integer;
-begin
-  for I := 0 to 99 do
-  begin
-    if AReady <> 0 then
-      Exit;
-    platform_wait_address32(@AReady, 0, 10000000);
-  end;
-  Check(AReady <> 0, AName + ' ready');
 end;
 
 function CondWaitThread(AArg: Pointer): Pointer; cdecl;

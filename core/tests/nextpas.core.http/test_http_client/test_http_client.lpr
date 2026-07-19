@@ -28,6 +28,7 @@ uses
   nextpas.core.http.form.base,
   nextpas.core.json,
   nextpas.core.json.value,
+  nextpas.core.compress,
   nextpas.core.http,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -50,7 +51,9 @@ var
   GRawAcceptLimit: Int32;
   GRawAcceptCount: Int32;
   GAcceptCount: Int32;
+  GAcceptCountAlt: Int32;
   GPoolListener: ITcpListener;
+  GPoolListenerAlt: ITcpListener;
   GRetryListener: ITcpListener;
   GRetryAcceptCount: Int32;
   GRetryPooledMethod: string;
@@ -483,6 +486,7 @@ begin
 end;
 
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl; forward;
+function PoolAcceptThreadAlt(AArg: Pointer): Pointer; cdecl; forward;
 function PoolAuthorityCaseThread(AArg: Pointer): Pointer; cdecl; forward;
 
 function RawResponseThread(AArg: Pointer): Pointer; cdecl;
@@ -3047,6 +3051,35 @@ begin
   end;
 end;
 
+procedure TestH1ClientPoolMaxSizePerAuthoritySourceContract;
+var
+  LSource: string;
+  LPutPos: SizeInt;
+  LPutBlock: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  LPutPos := Pos('procedure TH1ClientTransport.PoolPut(', LSource);
+  Check(LPutPos > 0, 'h1 PoolPut is present');
+  if LPutPos > 0 then
+  begin
+    { Window covers per-authority MaxPoolSize, IdleTTL stamp, expire eviction,
+      and close-outside-lock tail (Wave R1). }
+    LPutBlock := Copy(LSource, LPutPos, 2400);
+    Check(Pos('LAuthorityIdle', LPutBlock) > 0,
+      'h1 PoolPut counts idle connections per authority');
+    Check(Pos('FPoolCount >= FOptions.MaxPoolSize', LPutBlock) = 0,
+      'h1 PoolPut does not use global FPoolCount as MaxPoolSize cap');
+    Check(Pos('LAuthorityIdle >= FOptions.MaxPoolSize', LPutBlock) > 0,
+      'h1 PoolPut enforces MaxPoolSize against per-authority idle count');
+    Check(Pos('IdleAtMs', LPutBlock) > 0,
+      'h1 PoolPut stamps IdleAtMs for IdleTTL');
+    Check(Pos('PoolEntryExpired', LPutBlock) > 0,
+      'h1 PoolPut evicts expired idle peers before MaxPoolSize count');
+    Check(Pos('LToClose', LPutBlock) > 0,
+      'h1 PoolPut defers Close outside FPoolLock');
+  end;
+end;
+
 procedure TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract;
 var
   LSource: string;
@@ -3079,6 +3112,56 @@ begin
     Check(Pos('HttpWrapTransportException', LReconnectBlock) > 0,
       'h1 client pooled retry wraps bare transport timeout/connect errors');
   end;
+end;
+
+procedure TestOpenSSLContextFreesPinValidatorSourceContract;
+var
+  LSource: string;
+  LDestroyPos: SizeInt;
+  LDestroyBlock: string;
+begin
+  { Wave X4: TPinValidator is a owned TObject on SSL context; must FreeAndNil
+    in Destroy or each CreateContext leaves a ~32-byte residual. }
+  LSource := ReadFileText('../../../src/nextpas.core.tls.openssl.context.pas');
+  LDestroyPos := Pos('destructor TOpenSSLContext.Destroy;', LSource);
+  Check(LDestroyPos > 0, 'OpenSSL context destructor is present');
+  if LDestroyPos > 0 then
+  begin
+    LDestroyBlock := Copy(LSource, LDestroyPos, 500);
+    Check(Pos('FreeAndNil(FPinValidator)', LDestroyBlock) > 0,
+      'OpenSSL context Destroy frees owned FPinValidator');
+  end;
+end;
+
+procedure TestWindowsCancelProbeOnlyResidualSourceContract;
+var
+  LCancelSrc: string;
+  LPlatformSrc: string;
+  LPairPos: SizeInt;
+  LPairBlock: string;
+begin
+  { Wave R3: Unix waitable cancel uses socketpair wake; Windows platform
+    socket_pair is explicitly UNSUPPORTED so tokens stay probe-only (~10ms). }
+  LCancelSrc := ReadFileText('../../../src/nextpas.core.net.cancel.pas');
+  Check(Pos('Windows falls back to probe-only', LCancelSrc) > 0,
+    'net.cancel documents Windows probe-only residual');
+  Check(Pos('platform_socket_pair', LCancelSrc) > 0,
+    'net.cancel attempts platform_socket_pair for waitable wake');
+  LPlatformSrc := ReadFileText('../../../src/nextpas.core.platform.socket.pas');
+  LPairPos := Pos(
+    'function platform_socket_pair(ADomain, AType, AProtocol: Int32;',
+    LPlatformSrc);
+  { Prefer the Windows residual implementation when present in this unit. }
+  if Pos('Windows doesn''t have socketpair', LPlatformSrc) > 0 then
+  begin
+    LPairPos := Pos('Windows doesn''t have socketpair', LPlatformSrc);
+    LPairBlock := Copy(LPlatformSrc, LPairPos, 400);
+    Check(Pos('PLATFORM_ERR_UNSUPPORTED', LPairBlock) > 0,
+      'Windows platform_socket_pair returns PLATFORM_ERR_UNSUPPORTED');
+  end
+  else
+    Check(LPairPos > 0,
+      'platform_socket_pair is present for waitable cancel wiring');
 end;
 
 procedure TestClientPostStringBodyOverload;
@@ -4808,6 +4891,227 @@ begin
     LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/nocharset');
     LBody := nextpas.core.http.client.HttpReadResponseBodyStringAuto(LResp);
     CheckEqual('hello world', LBody, 'no charset defaults to utf-8');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+function TestStringToBytes(const AValue: string): TBytes;
+begin
+  SetLength(Result, Length(AValue));
+  if Length(AValue) > 0 then
+    Move(AValue[1], Result[0], Length(AValue));
+end;
+
+procedure TestHttpDecodeContentEncodingGzip;
+var
+  LPlain, LCompressed, LDecoded: TBytes;
+begin
+  LPlain := TestStringToBytes('hello gzip world');
+  LCompressed := GzipCompress(LPlain);
+  LDecoded := HttpDecodeContentEncoding('gzip', LCompressed);
+  CheckEqual('hello gzip world', BytesToTestString(LDecoded),
+    'gzip Content-Encoding decodes');
+end;
+
+procedure TestHttpDecodeContentEncodingDeflate;
+var
+  LPlain, LCompressed, LDecoded: TBytes;
+begin
+  LPlain := TestStringToBytes('hello deflate world');
+  LCompressed := DeflateCompress(LPlain);
+  LDecoded := HttpDecodeContentEncoding('deflate', LCompressed);
+  CheckEqual('hello deflate world', BytesToTestString(LDecoded),
+    'deflate Content-Encoding decodes');
+end;
+
+procedure TestHttpDecodeContentEncodingIdentityAndEmpty;
+var
+  LPlain, LDecoded: TBytes;
+begin
+  LPlain := TestStringToBytes('plain');
+  LDecoded := HttpDecodeContentEncoding('', LPlain);
+  CheckEqual('plain', BytesToTestString(LDecoded), 'empty encoding is pass-through');
+  LDecoded := HttpDecodeContentEncoding('identity', LPlain);
+  CheckEqual('plain', BytesToTestString(LDecoded), 'identity encoding is pass-through');
+end;
+
+procedure TestHttpDecodeContentEncodingUnsupported;
+var
+  LRaised: Boolean;
+  LOp: string;
+  LKind: THttpErrorKind;
+begin
+  LRaised := False;
+  LOp := '';
+  LKind := hekUnknown;
+  try
+    HttpDecodeContentEncoding('br', TestStringToBytes('x'));
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LKind := E.Kind;
+      LOp := E.Op;
+    end;
+  end;
+  Check(LRaised, 'unsupported Content-Encoding raises');
+  Check(LKind = hekProtocol, 'unsupported encoding is hekProtocol');
+  CheckEqual('content_encoding', LOp, 'unsupported encoding Op=content_encoding');
+end;
+
+procedure TestHttpDecodeContentEncodingMultiCodingRejected;
+var
+  LRaised: Boolean;
+  LOp: string;
+begin
+  LRaised := False;
+  LOp := '';
+  try
+    HttpDecodeContentEncoding('gzip, deflate', TestStringToBytes('x'));
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LOp := E.Op;
+      Check(E.Kind = hekProtocol, 'multi-coding is hekProtocol');
+    end;
+  end;
+  Check(LRaised, 'multi Content-Encoding raises');
+  CheckEqual('content_encoding', LOp, 'multi-coding Op=content_encoding');
+end;
+
+procedure TestHttpDecodeContentEncodingCorrupt;
+var
+  LRaised: Boolean;
+  LOp: string;
+  LKind: THttpErrorKind;
+  LJunk: TBytes;
+begin
+  LJunk := TestStringToBytes('not-gzip-payload');
+  LRaised := False;
+  LOp := '';
+  LKind := hekUnknown;
+  try
+    HttpDecodeContentEncoding('gzip', LJunk);
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      LKind := E.Kind;
+      LOp := E.Op;
+    end;
+  end;
+  Check(LRaised, 'corrupt gzip raises');
+  Check(LKind = hekBody, 'corrupt payload is hekBody');
+  CheckEqual('content_encoding', LOp, 'corrupt payload Op=content_encoding');
+end;
+
+procedure TestHttpDecodeContentEncodingMaxSize;
+var
+  LPlain, LCompressed: TBytes;
+  LRaised: Boolean;
+begin
+  LPlain := TestStringToBytes('0123456789abcdefghij');
+  LCompressed := GzipCompress(LPlain);
+  LRaised := False;
+  try
+    HttpDecodeContentEncoding('gzip', LCompressed, 5);
+  except
+    on E: EHttpError do
+    begin
+      LRaised := True;
+      CheckEqual('content_encoding', E.Op, 'max-size failure Op=content_encoding');
+      Check(E.Kind = hekBody, 'max-size decode failure is hekBody');
+    end;
+  end;
+  Check(LRaised, 'max decompressed size is enforced');
+end;
+
+procedure TestHttpReadResponseBodyBytesDecodedGzip;
+var
+  LHeaders: IHttpHeaders;
+  LPlain, LCompressed, LDecoded: TBytes;
+  LResp: IHttpResponse;
+begin
+  LPlain := TestStringToBytes('decoded-body');
+  LCompressed := GzipCompress(LPlain);
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-encoding', 'gzip');
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LCompressed);
+  LDecoded := HttpReadResponseBodyBytesDecoded(LResp);
+  CheckEqual('decoded-body', BytesToTestString(LDecoded),
+    'response helper decodes Content-Encoding gzip');
+end;
+
+procedure TestHttpReadResponseBodyBytesDecodedNoEncodingIsRaw;
+var
+  LHeaders: IHttpHeaders;
+  LResp: IHttpResponse;
+  LDecoded: TBytes;
+begin
+  LHeaders := NewHttpHeaders;
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, TestStringToBytes('raw-body'));
+  LDecoded := HttpReadResponseBodyBytesDecoded(LResp);
+  CheckEqual('raw-body', BytesToTestString(LDecoded),
+    'missing Content-Encoding returns raw body');
+end;
+
+procedure TestHttpReadResponseBodyStringDecodedGzip;
+var
+  LHeaders: IHttpHeaders;
+  LPlain, LCompressed: TBytes;
+  LResp: IHttpResponse;
+  LText: string;
+begin
+  LPlain := TestStringToBytes('string-decoded');
+  LCompressed := GzipCompress(LPlain);
+  LHeaders := NewHttpHeaders;
+  LHeaders.SetHeader('content-encoding', 'gzip');
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LCompressed);
+  LText := HttpReadResponseBodyStringDecoded(LResp);
+  CheckEqual('string-decoded', LText, 'string decoded helper');
+end;
+
+procedure TestHttpReadResponseBodyBytesDecodedLiveCompression;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LBody: string;
+  LPlain: string;
+  LHandler: IHttpHandler;
+  I: Integer;
+begin
+  { Body large enough for default CompressionMiddleware min size (1024). }
+  LPlain := '';
+  for I := 1 to 1200 do
+    LPlain := LPlain + 'a';
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/gzip-body', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LPlain))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LPlain[1], SizeUInt(Length(LPlain)));
+  end);
+  LHandler := Chain(LRouter as IHttpHandler, [CompressionMiddleware]);
+  LHandle := StartServer(LHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LReq := THttpRequestBuilder.Create(hmGet,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/gzip-body')
+      .Header('accept-encoding', 'gzip')
+      .Build;
+    LResp := LClient.Send(LReq);
+    CheckEqual('gzip', LowerCase(LResp.Headers.Get('content-encoding')),
+      'server compression sets Content-Encoding gzip');
+    LBody := HttpReadResponseBodyStringDecoded(LResp);
+    CheckEqual(LPlain, LBody, 'client decodes live gzip response');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -6556,6 +6860,162 @@ begin
   end;
 end;
 
+procedure TestClientPoolIdleTTLExpiresIdleConnections;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+  LUrl: string;
+begin
+  { IdleTTL=40ms: first request pools; after sleep, second request redials. }
+  GAcceptCount := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoolListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PoolAcceptThread, nil);
+  try
+    LOptions := THttpClientOptions.Default.WithIdleTTL(40);
+    LClient := NewHttpClient(LOptions);
+    LUrl := 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ttl';
+    LResp := LClient.Get(LUrl);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'idle TTL first status');
+    HttpReleaseResponseBody(LResp);
+    CheckEqual(Int64(1), Int64(GAcceptCount), 'idle TTL first accept');
+    platform_thread_sleep_ns(80000000); { 80ms > IdleTTL }
+    LResp := LClient.Get(LUrl);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'idle TTL second status');
+    HttpReleaseResponseBody(LResp);
+    CheckEqual(Int64(2), Int64(GAcceptCount),
+      'expired idle connection is not reused after IdleTTL');
+    { Drop pooled sockets before tearing down the accept thread so Read/join
+      cannot race a half-closed keep-alive peer (suite hang residual). }
+    LClient.CloseIdleConnections;
+    LClient := nil;
+  finally
+    if LClient <> nil then
+    begin
+      try
+        LClient.CloseIdleConnections;
+      except
+      end;
+      LClient := nil;
+    end;
+    if GPoolListener <> nil then
+      GPoolListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoolListener := nil;
+    GAcceptCount := 0;
+  end;
+end;
+
+procedure TestClientPoolIdleTTLZeroKeepsReuse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+  LUrl: string;
+begin
+  { IdleTTL=0: no wall-clock eviction; short sleep still reuses. }
+  GAcceptCount := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoolListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PoolAcceptThread, nil);
+  try
+    LOptions := THttpClientOptions.Default.WithIdleTTL(0);
+    LClient := NewHttpClient(LOptions);
+    LUrl := 'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ttl0';
+    LResp := LClient.Get(LUrl);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'idle TTL0 first status');
+    HttpReleaseResponseBody(LResp);
+    platform_thread_sleep_ns(50000000); { 50ms }
+    LResp := LClient.Get(LUrl);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'idle TTL0 second status');
+    HttpReleaseResponseBody(LResp);
+    CheckEqual(Int64(1), Int64(GAcceptCount),
+      'IdleTTL=0 keeps reuse after short idle');
+    LClient.CloseIdleConnections;
+    LClient := nil;
+  finally
+    if LClient <> nil then
+    begin
+      try
+        LClient.CloseIdleConnections;
+      except
+      end;
+      LClient := nil;
+    end;
+    if GPoolListener <> nil then
+      GPoolListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoolListener := nil;
+    GAcceptCount := 0;
+  end;
+end;
+
+procedure TestClientMaxPoolSizeIsPerAuthority;
+var
+  LPortA, LPortB: UInt16;
+  LHandleA, LHandleB: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+  LUrlA, LUrlB: string;
+begin
+  { MaxPoolSize=1 is per authority: two ports each keep one idle and both reuse.
+    A global cap of 1 would drop the second authority and re-accept it. }
+  GAcceptCount := 0;
+  GAcceptCountAlt := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  GPoolListenerAlt := NetTcpListen('127.0.0.1', 0);
+  LPortA := GPoolListener.LocalAddr.Port;
+  LPortB := GPoolListenerAlt.LocalAddr.Port;
+  platform_thread_create(LHandleA, @PoolAcceptThread, nil);
+  platform_thread_create(LHandleB, @PoolAcceptThreadAlt, nil);
+  try
+    LOptions := THttpClientOptions.Default.WithMaxPoolSize(1);
+    LClient := NewHttpClient(LOptions);
+    LUrlA := 'http://127.0.0.1:' + IntToStr(Int64(LPortA)) + '/a';
+    LUrlB := 'http://127.0.0.1:' + IntToStr(Int64(LPortB)) + '/b';
+
+    LResp := LClient.Get(LUrlA);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority A first status');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUrlB);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority B first status');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUrlA);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority A reuse status');
+    HttpReleaseResponseBody(LResp);
+
+    LResp := LClient.Get(LUrlB);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'authority B reuse status');
+    HttpReleaseResponseBody(LResp);
+
+    CheckEqual(Int64(1), Int64(GAcceptCount),
+      'authority A accepted once under MaxPoolSize=1');
+    CheckEqual(Int64(1), Int64(GAcceptCountAlt),
+      'authority B accepted once under MaxPoolSize=1');
+    LClient := nil;
+  finally
+    GPoolListener.Close;
+    GPoolListenerAlt.Close;
+    platform_thread_join(LHandleA, LRet);
+    platform_thread_join(LHandleB, LRet);
+    GPoolListener := nil;
+    GPoolListenerAlt := nil;
+    GAcceptCount := 0;
+    GAcceptCountAlt := 0;
+  end;
+end;
+
 procedure TestClientTimeoutDoesNotPoisonIdleConnectionReuse;
 var
   LPort: UInt16;
@@ -7763,12 +8223,22 @@ begin
     end;
     if LConn = nil then Break;
     InterlockedIncrement(GAcceptCount);
+    { Bound idle keep-alive reads so a closed/expired client cannot leave this
+      thread in an unbounded Read (suite hang after IdleTTL tests). }
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    except
+    end;
     { Serve multiple requests on this connection by detecting \r\n\r\n boundaries }
     try
       LAccum := '';
       while True do
       begin
-        LN := LConn.Read(LBuf[0], 4096);
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          Break;
+        end;
         if LN = 0 then Break;
         SetLength(LAccum, Length(LAccum) + Int32(LN));
         Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
@@ -7789,7 +8259,66 @@ begin
       end;
     except
     end;
-    LConn.Close;
+    try
+      LConn.Close;
+    except
+    end;
+  end;
+end;
+
+function PoolAcceptThreadAlt(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LReply: string;
+  LAccum: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  while True do
+  begin
+    try
+      LConn := GPoolListenerAlt.Accept;
+    except
+      Break;
+    end;
+    if LConn = nil then Break;
+    InterlockedIncrement(GAcceptCountAlt);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    except
+    end;
+    try
+      LAccum := '';
+      while True do
+      begin
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          Break;
+        end;
+        if LN = 0 then Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+        while True do
+        begin
+          LP := Pos(#13#10#13#10, LAccum);
+          if LP = 0 then Break;
+          LReply := 'HTTP/1.1 200 OK'#13#10 +
+                    'Content-Length: 2'#13#10 +
+                    #13#10 +
+                    'ok';
+          LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+          System.Delete(LAccum, 1, LP + 3);
+        end;
+      end;
+    except
+    end;
+    try
+      LConn.Close;
+    except
+    end;
   end;
 end;
 
@@ -8126,6 +8655,52 @@ begin
   LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
   LResp := LClient.WithTimeout(5000).Get('http://localhost/test');
   Check(LResp <> nil, 'WithTimeout decorator does not crash');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestWithTimeoutOuterWinsAndComposesWithRetry;
+{ Wave E2: outer WithTimeout overrides; stack with WithRetry still applies. }
+var
+  LTransport: TTimeoutCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TTimeoutCaptureTransport.Create(3000);
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+
+  LResp := LClient.WithTimeout(5000).WithTimeout(9000).Get('http://localhost/t');
+  CheckEqual(Int64(9000), LTransport.CapturedTimeoutMs,
+    'outer WithTimeout(9000) wins over WithTimeout(5000)');
+  HttpReleaseResponseBody(LResp);
+
+  LResp := LClient.WithRetry(1).WithTimeout(8000).Get('http://localhost/t');
+  CheckEqual(Int64(8000), LTransport.CapturedTimeoutMs,
+    'WithRetry then WithTimeout still overrides transport default');
+  HttpReleaseResponseBody(LResp);
+
+  LResp := LClient.WithTimeout(7000).WithRetry(1).Get('http://localhost/t');
+  CheckEqual(Int64(7000), LTransport.CapturedTimeoutMs,
+    'WithTimeout under WithRetry still applies request timeout');
+  HttpReleaseResponseBody(LResp);
+end;
+
+procedure TestWithHeaderOuterWinsOverInner;
+var
+  LTransport: TRedirectCaptureTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TRedirectCaptureTransport.Create;
+  LClient := NewHttpClient(LTransport, THttpClientOptions.Default);
+  LResp := LClient
+    .WithHeader('X-Trace', 'inner')
+    .WithHeader('X-Trace', 'outer')
+    .Get('http://localhost/hdr');
+  Check(LResp <> nil, 'stacked WithHeader returns response');
+  CheckEqual(Int64(2), Int64(LTransport.Calls),
+    'default follow-redirects makes second capture call');
+  CheckEqual('outer', LTransport.SeenTraceHeader,
+    'outer WithHeader wins for same name');
   HttpReleaseResponseBody(LResp);
 end;
 
@@ -10089,6 +10664,75 @@ begin
   LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
   Check(Pos('raise EHttpError.CreateOp(hekRedirect, ''redirect'',', LSource) > 0,
     'redirect failures use CreateOp with Op=redirect');
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''round_trip'',', LSource) > 0,
+    'nil transport response uses CreateOp with Op=round_trip');
+  Check(Pos('raise EHttpError.CreateOp(hekStatus, ''ensure'',', LSource) > 0,
+    'HttpEnsureSuccess non-2xx uses CreateOp with Op=ensure');
+end;
+
+procedure TestClientCancelAndTransportCreateOpSourceContract;
+var
+  LBase: string;
+  LH1: string;
+begin
+  LBase := ReadFileText('../../../src/nextpas.core.http.base.pas');
+  LH1 := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('raise EHttpError.CreateOp(hekCanceled, ''cancel'',', LBase) > 0,
+    'cancel token uses CreateOp with Op=cancel');
+  Check(Pos('EHttpError.CreateOp(hekTimeout, ''transport'',', LBase) > 0,
+    'HttpWrapTransportException timeout uses Op=transport');
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''connect'',', LH1) > 0,
+    'proxy CONNECT failures use CreateOp with Op=connect');
+  Check(Pos('raise EHttpError.CreateOp(hekParse, ''transport'',', LH1) > 0,
+    'H1 response parse failures use CreateOp with Op=transport');
+  Check(Pos('raise EHttpError.CreateOp(hekConnect, ''transport'',', LH1) > 0,
+    'H1 incomplete response uses CreateOp with Op=transport');
+end;
+
+procedure TestClientTaxonomyOpsAlignedSourceContract;
+{ Wave E1: client hotspot Ops stay aligned with CONTRACT Op table. }
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  Check(Pos('CreateOp(hekProtocol, ''json'',', LSource) > 0,
+    'json decode failures use Op=json');
+  Check(Pos('CreateOp(hekProtocol, ''content_encoding'',', LSource) > 0,
+    'unsupported Content-Encoding uses Op=content_encoding');
+  Check(Pos('CreateOp(hekBody, ''content_encoding'',', LSource) > 0,
+    'corrupt Content-Encoding uses Op=content_encoding');
+  Check(Pos('CreateOp(hekStatus, ''ensure'',', LSource) > 0,
+    'ensure non-2xx uses Op=ensure');
+  Check(Pos('CreateOp(hekConnect, ''download'',', LSource) > 0,
+    'download nil response uses Op=download');
+  Check(Pos('raise EArgumentError', LSource) = 0,
+    'client must not raise bare EArgumentError');
+end;
+
+procedure TestHttpEnsureSuccessOpIsEnsure;
+var
+  LResp: IHttpResponse;
+  LOp: string;
+  LStatus: THttpStatus;
+  LCaught: Boolean;
+begin
+  LOp := '';
+  LStatus := 0;
+  LCaught := False;
+  LResp := NewResponse(HTTP_STATUS_NOT_FOUND, NewHeaders, nil);
+  try
+    HttpEnsureSuccess(LResp, 'GET', 'http://example.test/x');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      LOp := E.Op;
+      LStatus := E.Status;
+    end;
+  end;
+  Check(LCaught, 'EnsureSuccess raises');
+  CheckEqual('ensure', LOp, 'EnsureSuccess Op=ensure');
+  CheckEqual(Int64(HTTP_STATUS_NOT_FOUND), Int64(LStatus), 'EnsureSuccess preserves Status');
 end;
 
 procedure TestClientDefaultUserAgent;
@@ -10473,8 +11117,14 @@ begin
     @TestClientShortcutBodyImplementationUsesBytesBuffer);
   T.Test('H1 client transport destroy closes idle pool source contract',
     @TestH1ClientTransportDestroyClosesIdlePoolSourceContract);
+  T.Test('H1 client pool MaxPoolSize per authority source contract',
+    @TestH1ClientPoolMaxSizePerAuthoritySourceContract);
   T.Test('H1 client pooled retry fresh failure closes connection source contract',
     @TestH1ClientPooledRetryFreshFailureClosesConnectionSourceContract);
+  T.Test('OpenSSL context frees PinValidator source contract',
+    @TestOpenSSLContextFreesPinValidatorSourceContract);
+  T.Test('Windows cancel probe-only residual source contract',
+    @TestWindowsCancelProbeOnlyResidualSourceContract);
   T.Test('Client POST string body overload',
     @TestClientPostStringBodyOverload);
   T.Test('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
@@ -10550,6 +11200,26 @@ begin
   T.Test('HttpReadResponseBodyStringAuto UTF-8', @TestHttpReadResponseBodyStringAutoUtf8);
   T.Test('HttpReadResponseBodyStringAuto Latin-1', @TestHttpReadResponseBodyStringAutoLatin1);
   T.Test('HttpReadResponseBodyStringAuto no charset', @TestHttpReadResponseBodyStringAutoNoCharset);
+  T.Test('HttpDecodeContentEncoding gzip', @TestHttpDecodeContentEncodingGzip);
+  T.Test('HttpDecodeContentEncoding deflate', @TestHttpDecodeContentEncodingDeflate);
+  T.Test('HttpDecodeContentEncoding identity/empty',
+    @TestHttpDecodeContentEncodingIdentityAndEmpty);
+  T.Test('HttpDecodeContentEncoding unsupported br',
+    @TestHttpDecodeContentEncodingUnsupported);
+  T.Test('HttpDecodeContentEncoding multi-coding rejected',
+    @TestHttpDecodeContentEncodingMultiCodingRejected);
+  T.Test('HttpDecodeContentEncoding corrupt gzip',
+    @TestHttpDecodeContentEncodingCorrupt);
+  T.Test('HttpDecodeContentEncoding max size',
+    @TestHttpDecodeContentEncodingMaxSize);
+  T.Test('HttpReadResponseBodyBytesDecoded gzip',
+    @TestHttpReadResponseBodyBytesDecodedGzip);
+  T.Test('HttpReadResponseBodyBytesDecoded no encoding raw',
+    @TestHttpReadResponseBodyBytesDecodedNoEncodingIsRaw);
+  T.Test('HttpReadResponseBodyStringDecoded gzip',
+    @TestHttpReadResponseBodyStringDecodedGzip);
+  T.Test('HttpReadResponseBodyStringDecoded live CompressionMiddleware',
+    @TestHttpReadResponseBodyBytesDecodedLiveCompression);
   T.Test('HttpReleaseResponseBody closes close-capable body',
     @TestHttpReleaseResponseBodyClosesCloseCapableBody);
   T.Test('HttpReleaseResponseBody drains plain reader',
@@ -10653,6 +11323,12 @@ begin
   T.Test('Client respects max redirects', @TestClientMaxRedirects);
   T.Test('Client CloseIdleConnections drops pooled connections',
     @TestClientCloseIdleConnectionsDropsPooledConnections);
+  T.Test('Client pool IdleTTL expires idle connections',
+    @TestClientPoolIdleTTLExpiresIdleConnections);
+  T.Test('Client pool IdleTTL=0 keeps reuse',
+    @TestClientPoolIdleTTLZeroKeepsReuse);
+  T.Test('Client MaxPoolSize is per authority',
+    @TestClientMaxPoolSizeIsPerAuthority);
   T.Test('Client timeout does not poison idle connection reuse',
     @TestClientTimeoutDoesNotPoisonIdleConnectionReuse);
   T.Test('Client request write failure closes body and drops connection',
@@ -10711,6 +11387,10 @@ begin
     @TestWithFollowRedirectsOverrideClientDefault);
   T.Test('WithTimeout decorator does not crash',
     @TestWithTimeoutDecorator);
+  T.Test('WithTimeout outer wins and composes with WithRetry',
+    @TestWithTimeoutOuterWinsAndComposesWithRetry);
+  T.Test('WithHeader outer wins over inner',
+    @TestWithHeaderOuterWinsOverInner);
   T.Test('Per-request timeout overrides transport default',
     @TestPerRequestTimeoutAtTransportLevel);
   T.Test('Builder creates GET request', @TestBuilderGetRequest);
@@ -10814,6 +11494,12 @@ begin
     @TestClientLiveMidReadCancel);
   T.Test('Client redirect CreateOp source contract',
     @TestClientRedirectCreateOpSourceContract);
+  T.Test('Client cancel/transport CreateOp source contract',
+    @TestClientCancelAndTransportCreateOpSourceContract);
+  T.Test('Client taxonomy Ops aligned source contract',
+    @TestClientTaxonomyOpsAlignedSourceContract);
+  T.Test('HttpEnsureSuccess Op=ensure on non-2xx',
+    @TestHttpEnsureSuccessOpIsEnsure);
   T.Test('Client PostMultipart encodes fields and files', @TestClientPostMultipart);
   T.Test('Client ConnectTimeout option defaults',
     @TestClientConnectTimeoutOptionDefault);

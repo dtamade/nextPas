@@ -646,8 +646,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for I16x8 CmpLe');
-  CheckTrue(Assigned(LDispatch^.CmpLeI16x8), 'Dispatch CmpLeI16x8 should be assigned');
-  m := LDispatch^.CmpLeI16x8(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeI16x8), 'Dispatch CmpLeI16x8 should be assigned');
+  m := LDispatch^.CoreVectors.CmpLeI16x8(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'I16x8 CmpLe [0]: 10 <= 20');
   CheckTrue((m and (1 shl 1)) <> 0, 'I16x8 CmpLe [1]: 20 <= 20');
   CheckFalse((m and (1 shl 2)) <> 0, 'I16x8 CmpLe [2]: 30 > 20');
@@ -670,8 +670,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for I16x8 CmpGe');
-  CheckTrue(Assigned(LDispatch^.CmpGeI16x8), 'Dispatch CmpGeI16x8 should be assigned');
-  m := LDispatch^.CmpGeI16x8(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeI16x8), 'Dispatch CmpGeI16x8 should be assigned');
+  m := LDispatch^.CoreVectors.CmpGeI16x8(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'I16x8 CmpGe [0]: 30 >= 20');
   CheckTrue((m and (1 shl 1)) <> 0, 'I16x8 CmpGe [1]: 20 >= 20');
   CheckFalse((m and (1 shl 2)) <> 0, 'I16x8 CmpGe [2]: 10 < 20');
@@ -694,8 +694,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for I16x8 CmpNe');
-  CheckTrue(Assigned(LDispatch^.CmpNeI16x8), 'Dispatch CmpNeI16x8 should be assigned');
-  m := LDispatch^.CmpNeI16x8(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeI16x8), 'Dispatch CmpNeI16x8 should be assigned');
+  m := LDispatch^.CoreVectors.CmpNeI16x8(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'I16x8 CmpNe [0]: 10 <> 20');
   CheckFalse((m and (1 shl 1)) <> 0, 'I16x8 CmpNe [1]: 20 = 20');
   CheckTrue((m and (1 shl 2)) <> 0, 'I16x8 CmpNe [2]: -1 <> 1');
@@ -1048,8 +1048,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for I8x16 CmpLe');
-  CheckTrue(Assigned(LDispatch^.CmpLeI8x16), 'Dispatch CmpLeI8x16 should be assigned');
-  m := LDispatch^.CmpLeI8x16(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeI8x16), 'Dispatch CmpLeI8x16 should be assigned');
+  m := LDispatch^.CoreVectors.CmpLeI8x16(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'I8x16 CmpLe [0]: 10 <= 20');
   CheckTrue((m and (1 shl 1)) <> 0, 'I8x16 CmpLe [1]: 20 <= 20');
   CheckFalse((m and (1 shl 2)) <> 0, 'I8x16 CmpLe [2]: 30 > 20');
@@ -1073,8 +1073,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for I8x16 CmpGe');
-  CheckTrue(Assigned(LDispatch^.CmpGeI8x16), 'Dispatch CmpGeI8x16 should be assigned');
-  m := LDispatch^.CmpGeI8x16(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeI8x16), 'Dispatch CmpGeI8x16 should be assigned');
+  m := LDispatch^.CoreVectors.CmpGeI8x16(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'I8x16 CmpGe [0]: 30 >= 20');
   CheckTrue((m and (1 shl 1)) <> 0, 'I8x16 CmpGe [1]: 20 >= 20');
   CheckFalse((m and (1 shl 2)) <> 0, 'I8x16 CmpGe [2]: 10 < 20');
@@ -1098,8 +1098,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for I8x16 CmpNe');
-  CheckTrue(Assigned(LDispatch^.CmpNeI8x16), 'Dispatch CmpNeI8x16 should be assigned');
-  m := LDispatch^.CmpNeI8x16(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeI8x16), 'Dispatch CmpNeI8x16 should be assigned');
+  m := LDispatch^.CoreVectors.CmpNeI8x16(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'I8x16 CmpNe [0]: 10 <> 20');
   CheckFalse((m and (1 shl 1)) <> 0, 'I8x16 CmpNe [1]: 20 = 20');
   CheckTrue((m and (1 shl 2)) <> 0, 'I8x16 CmpNe [2]: -1 <> 1');
@@ -1925,8 +1925,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for U16x8 CmpLe');
-  CheckTrue(Assigned(LDispatch^.CmpLeU16x8), 'Dispatch CmpLeU16x8 should be assigned');
-  m := LDispatch^.CmpLeU16x8(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeU16x8), 'Dispatch CmpLeU16x8 should be assigned');
+  m := LDispatch^.CoreVectors.CmpLeU16x8(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'U16x8 CmpLe [0]: 100 <= 200');
   CheckTrue((m and (1 shl 1)) <> 0, 'U16x8 CmpLe [1]: 65535 <= 65535');
   CheckFalse((m and (1 shl 2)) <> 0, 'U16x8 CmpLe [2]: 65535 > 1');
@@ -1949,8 +1949,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for U16x8 CmpGe');
-  CheckTrue(Assigned(LDispatch^.CmpGeU16x8), 'Dispatch CmpGeU16x8 should be assigned');
-  m := LDispatch^.CmpGeU16x8(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeU16x8), 'Dispatch CmpGeU16x8 should be assigned');
+  m := LDispatch^.CoreVectors.CmpGeU16x8(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'U16x8 CmpGe [0]: 300 >= 200');
   CheckTrue((m and (1 shl 1)) <> 0, 'U16x8 CmpGe [1]: 65535 >= 65535');
   CheckFalse((m and (1 shl 2)) <> 0, 'U16x8 CmpGe [2]: 1 < 65535');
@@ -1973,8 +1973,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for U16x8 CmpNe');
-  CheckTrue(Assigned(LDispatch^.CmpNeU16x8), 'Dispatch CmpNeU16x8 should be assigned');
-  m := LDispatch^.CmpNeU16x8(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeU16x8), 'Dispatch CmpNeU16x8 should be assigned');
+  m := LDispatch^.CoreVectors.CmpNeU16x8(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'U16x8 CmpNe [0]: 100 <> 200');
   CheckFalse((m and (1 shl 1)) <> 0, 'U16x8 CmpNe [1]: 65535 = 65535');
   CheckTrue((m and (1 shl 2)) <> 0, 'U16x8 CmpNe [2]: 1 <> 65535');
@@ -2310,8 +2310,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for U8x16 CmpLe');
-  CheckTrue(Assigned(LDispatch^.CmpLeU8x16), 'Dispatch CmpLeU8x16 should be assigned');
-  m := LDispatch^.CmpLeU8x16(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpLeU8x16), 'Dispatch CmpLeU8x16 should be assigned');
+  m := LDispatch^.CoreVectors.CmpLeU8x16(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'U8x16 CmpLe [0]: 10 <= 20');
   CheckTrue((m and (1 shl 1)) <> 0, 'U8x16 CmpLe [1]: 255 <= 255');
   CheckFalse((m and (1 shl 2)) <> 0, 'U8x16 CmpLe [2]: 255 > 1');
@@ -2335,8 +2335,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for U8x16 CmpGe');
-  CheckTrue(Assigned(LDispatch^.CmpGeU8x16), 'Dispatch CmpGeU8x16 should be assigned');
-  m := LDispatch^.CmpGeU8x16(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpGeU8x16), 'Dispatch CmpGeU8x16 should be assigned');
+  m := LDispatch^.CoreVectors.CmpGeU8x16(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'U8x16 CmpGe [0]: 30 >= 20');
   CheckTrue((m and (1 shl 1)) <> 0, 'U8x16 CmpGe [1]: 255 >= 255');
   CheckFalse((m and (1 shl 2)) <> 0, 'U8x16 CmpGe [2]: 1 < 255');
@@ -2360,8 +2360,8 @@ begin
 
   LDispatch := GetDispatchTable;
   CheckTrue(Assigned(LDispatch), 'Dispatch table should be assigned for U8x16 CmpNe');
-  CheckTrue(Assigned(LDispatch^.CmpNeU8x16), 'Dispatch CmpNeU8x16 should be assigned');
-  m := LDispatch^.CmpNeU8x16(a, b);
+  CheckTrue(Assigned(LDispatch^.CoreVectors.CmpNeU8x16), 'Dispatch CmpNeU8x16 should be assigned');
+  m := LDispatch^.CoreVectors.CmpNeU8x16(a, b);
   CheckTrue((m and (1 shl 0)) <> 0, 'U8x16 CmpNe [0]: 10 <> 20');
   CheckFalse((m and (1 shl 1)) <> 0, 'U8x16 CmpNe [1]: 255 = 255');
   CheckTrue((m and (1 shl 2)) <> 0, 'U8x16 CmpNe [2]: 1 <> 255');

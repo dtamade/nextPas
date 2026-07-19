@@ -206,7 +206,7 @@ begin
     FillChar(LDstScalar, SizeOf(LDstScalar), 0);
     FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
     ScalarArraySubF32(@LSrc1[0], @LSrc2[0], @LDstScalar[0], LCount);
-    LDispatch^.ArraySubF32(@LSrc1[0], @LSrc2[0], @LDstDispatch[0], LCount);
+    LDispatch^.BatchF32.ArraySub(@LSrc1[0], @LSrc2[0], @LDstDispatch[0], LCount);
     for i := 0 to Integer(LCount) - 1 do
       CheckNear(Format('ArraySubF32[count=%d,i=%d]', [LCount, i]),
         LDstScalar[i], LDstDispatch[i]);
@@ -232,7 +232,7 @@ begin
     FillChar(LDstScalar, SizeOf(LDstScalar), 0);
     FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
     ScalarArrayDivF32(@LSrc1[0], @LSrc2[0], @LDstScalar[0], LCount);
-    LDispatch^.ArrayDivF32(@LSrc1[0], @LSrc2[0], @LDstDispatch[0], LCount);
+    LDispatch^.BatchF32.ArrayDiv(@LSrc1[0], @LSrc2[0], @LDstDispatch[0], LCount);
     for i := 0 to Integer(LCount) - 1 do
       CheckNear(Format('ArrayDivF32[count=%d,i=%d]', [LCount, i]),
         LDstScalar[i], LDstDispatch[i]);
@@ -257,7 +257,7 @@ begin
     FillChar(LDstScalar, SizeOf(LDstScalar), 0);
     FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
     ScalarArrayAbsF32(@LSrc[0], @LDstScalar[0], LCount);
-    LDispatch^.ArrayAbsF32(@LSrc[0], @LDstDispatch[0], LCount);
+    LDispatch^.BatchF32.ArrayAbs(@LSrc[0], @LDstDispatch[0], LCount);
     for i := 0 to Integer(LCount) - 1 do
       CheckNear(Format('ArrayAbsF32[count=%d,i=%d]', [LCount, i]),
         LDstScalar[i], LDstDispatch[i]);
@@ -265,7 +265,7 @@ begin
     FillChar(LDstScalar, SizeOf(LDstScalar), 0);
     FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
     ScalarArrayNegF32(@LSrc[0], @LDstScalar[0], LCount);
-    LDispatch^.ArrayNegF32(@LSrc[0], @LDstDispatch[0], LCount);
+    LDispatch^.BatchF32.ArrayNeg(@LSrc[0], @LDstDispatch[0], LCount);
     for i := 0 to Integer(LCount) - 1 do
       CheckNear(Format('ArrayNegF32[count=%d,i=%d]', [LCount, i]),
         LDstScalar[i], LDstDispatch[i]);
@@ -279,7 +279,7 @@ begin
     FillChar(LDstScalar, SizeOf(LDstScalar), 0);
     FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
     ScalarArraySqrtF32(@LSrc[0], @LDstScalar[0], LCount);
-    LDispatch^.ArraySqrtF32(@LSrc[0], @LDstDispatch[0], LCount);
+    LDispatch^.BatchF32.ArraySqrt(@LSrc[0], @LDstDispatch[0], LCount);
     for i := 0 to Integer(LCount) - 1 do
       CheckNear(Format('ArraySqrtF32[count=%d,i=%d]', [LCount, i]),
         LDstScalar[i], LDstDispatch[i]);
@@ -303,7 +303,7 @@ begin
     FillChar(LDstScalar, SizeOf(LDstScalar), 0);
     FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
     ScalarArrayClampF32(@LSrc[0], @LDstScalar[0], LCount, -10.0, 25.0);
-    LDispatch^.ArrayClampF32(@LSrc[0], @LDstDispatch[0], LCount, -10.0, 25.0);
+    LDispatch^.BatchF32.ArrayClamp(@LSrc[0], @LDstDispatch[0], LCount, -10.0, 25.0);
     for i := 0 to Integer(LCount) - 1 do
       CheckNear(Format('ArrayClampF32[count=%d,i=%d]', [LCount, i]),
         LDstScalar[i], LDstDispatch[i]);
@@ -332,7 +332,7 @@ begin
     FillChar(LDstScalar, SizeOf(LDstScalar), 0);
     FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
     ScalarArrayFmaF32(@LA[0], @LB[0], @LC[0], @LDstScalar[0], LCount);
-    LDispatch^.ArrayFmaF32(@LA[0], @LB[0], @LC[0], @LDstDispatch[0], LCount);
+    LDispatch^.BatchF32.ArrayFma(@LA[0], @LB[0], @LC[0], @LDstDispatch[0], LCount);
     for i := 0 to Integer(LCount) - 1 do
       CheckNearRelative(Format('ArrayFmaF32[count=%d,i=%d]', [LCount, i]),
         LDstScalar[i], LDstDispatch[i], 1e-6);
@@ -359,7 +359,7 @@ begin
   begin
     LCount := LCounts[ci];
     FillChar(LDst, SizeOf(LDst), 0);
-    LDispatch^.ArrayRcpF32(@LSrc[0], @LDst[0], LCount);
+    LDispatch^.BatchF32.ArrayRcp(@LSrc[0], @LDst[0], LCount);
     for i := 0 to Integer(LCount) - 1 do
     begin
       LExpected := 1.0 / LSrc[i];
@@ -368,7 +368,7 @@ begin
     end;
 
     FillChar(LDst, SizeOf(LDst), 0);
-    LDispatch^.ArrayRsqrtF32(@LSrc[0], @LDst[0], LCount);
+    LDispatch^.BatchF32.ArrayRsqrt(@LSrc[0], @LDst[0], LCount);
     for i := 0 to Integer(LCount) - 1 do
     begin
       LExpected := 1.0 / Sqrt(LSrc[i]);
@@ -400,19 +400,19 @@ begin
   begin
     LCount := LCounts[ci];
     LScalar := ScalarReduceSumF32(@LSrc1[0], LCount);
-    LDisp := LDispatch^.ReduceSumF32(@LSrc1[0], LCount);
+    LDisp := LDispatch^.BatchF32.ReduceSum(@LSrc1[0], LCount);
     CheckNearRelative(Format('ReduceSumF32[count=%d]', [LCount]), LScalar, LDisp, REDUCE_REL_TOL);
 
     LScalar := ScalarReduceMinF32(@LSrc1[0], LCount);
-    LDisp := LDispatch^.ReduceMinF32(@LSrc1[0], LCount);
+    LDisp := LDispatch^.BatchF32.ReduceMin(@LSrc1[0], LCount);
     CheckNear(Format('ReduceMinF32[count=%d]', [LCount]), LScalar, LDisp);
 
     LScalar := ScalarReduceMaxF32(@LSrc1[0], LCount);
-    LDisp := LDispatch^.ReduceMaxF32(@LSrc1[0], LCount);
+    LDisp := LDispatch^.BatchF32.ReduceMax(@LSrc1[0], LCount);
     CheckNear(Format('ReduceMaxF32[count=%d]', [LCount]), LScalar, LDisp);
 
     LScalar := ScalarReduceDotF32(@LSrc1[0], @LSrc2[0], LCount);
-    LDisp := LDispatch^.ReduceDotF32(@LSrc1[0], @LSrc2[0], LCount);
+    LDisp := LDispatch^.BatchF32.ReduceDot(@LSrc1[0], @LSrc2[0], LCount);
     CheckNearRelative(Format('ReduceDotF32[count=%d]', [LCount]), LScalar, LDisp, REDUCE_REL_TOL);
   end;
   WriteLn('  ReduceSum/Min/Max/DotF32: checked');

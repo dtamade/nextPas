@@ -37,9 +37,10 @@ type
     function Args(const AValues: array of string): ICommand;
     {** 设置子进程工作目录 *}
     function Dir(const AWorkDir: string): ICommand;
-    {** 完全替换子进程环境变量（格式：KEY=VALUE） *}
+    {** 完全替换子进程环境变量（格式：KEY=VALUE）；不继承父进程环境 *}
     function Env(const AEnvPairs: array of string): ICommand;
-    {** 追加环境变量到替换列表（注意：设置任何 Env/EnvAdd 后不再继承父进程环境） *}
+    {** 在继承父进程环境的基础上追加/覆盖单个变量（pemOverlay）。
+     *    若此前已调用 Env（pemReplace），则仅在替换列表内追加/覆盖，不恢复继承。 *}
     function EnvAdd(const AKey, AValue: string): ICommand;
     {** 配置 stdin 模式 *}
     function Stdin(const AMode: TStdio): ICommand;
@@ -51,10 +52,18 @@ type
     function Spawn: IChild;
     {** 同步执行：自动设置 stdout+stderr 为 Piped，捕获输出 *}
     function Output: TProcessOutput;
-    {** 同步执行：只返回退出码 *}
-    function Status: Integer;
+    {** 同步执行：返回 TProcessOutput（不捕获 stdout/stderr；含 TimedOut）。
+     *  完整输出请用 Output。成功判定：ProcessSucceeded(Status)。 *}
+    function Status: TProcessOutput;
     {** 设置超时时间，超时后自动 Kill *}
     function Timeout(const ADuration: TDuration): ICommand;
+    {** 限制 stdout+stderr 累计捕获字节数；<=0 表示不限制。超限置 OutputLimited 并 Kill *}
+    function MaxOutput(const ABytes: Int64): ICommand;
+    {** 将子进程 stderr 写入与 stdout 同一管道（真时间交错，对齐 Go CombinedOutput）。
+     *  必须 Stdout(stPiped)（.Output / Capture*Combined 会强制）；非 piped 时 Spawn 抛错。
+     *  优先级：stdout 为 stPiped 时 MergeStderr 覆盖 Stderr(stPiped/stInherit)；
+     *  与 Stderr(stNull) 冲突时 Spawn 抛 EProcessError。 *}
+    function MergeStderr(const AEnable: Boolean = True): ICommand;
   end;
 
   { TCommand — ICommand 实现 }
@@ -69,6 +78,8 @@ type
     FStdoutMode: TStdio;
     FStderrMode: TStdio;
     FTimeout: TDuration;
+    FMaxOutput: Int64;
+    FMergeStderr: Boolean;
   public
     constructor Create(const APath: string);
     class function New(const APath: string): ICommand;
@@ -82,8 +93,10 @@ type
     function Stderr(const AMode: TStdio): ICommand;
     function Spawn: IChild;
     function Output: TProcessOutput;
-    function Status: Integer;
+    function Status: TProcessOutput;
     function Timeout(const ADuration: TDuration): ICommand;
+    function MaxOutput(const ABytes: Int64): ICommand;
+    function MergeStderr(const AEnable: Boolean = True): ICommand;
   end;
 
 implementation
@@ -91,10 +104,12 @@ implementation
 uses
   nextpas.core.io.intf,
   nextpas.core.process.pipe,
+  nextpas.core.platform.error,
   nextpas.core.platform.process,
   nextpas.core.platform.process.base,
   nextpas.core.os.env,
   nextpas.core.text.compare,
+  nextpas.core.text.conv,
   nextpas.core.process.pathresolve;
 
 { TCommand }
@@ -144,6 +159,21 @@ begin
   P := Pos('=', APair);
   if P <= 1 then
     raise EProcessError.Create('environment variable pair must be KEY=VALUE');
+  ValidateEnvKey(Copy(APair, 1, P - 1));
+  ValidateEnvValue(Copy(APair, P + 1, Length(APair) - P));
+end;
+
+function FormatProcessOsError(const APrefix: string; ACode: Int32): string;
+var
+  LBuf: array[0..255] of AnsiChar;
+begin
+  Result := APrefix;
+  if ACode <> 0 then
+  begin
+    Result := Result + ' (' + IntToStr(ACode) + ')';
+    if platform_error_message(ACode, @LBuf[0], SizeOf(LBuf)) > 0 then
+      Result := Result + ': ' + string(PAnsiChar(@LBuf[0]));
+  end;
 end;
 
 procedure EnvPut(var AItems: TStringArray; const AKey, AValue: string);
@@ -210,6 +240,8 @@ begin
   FStdoutMode := stInherit;
   FStderrMode := stInherit;
   FTimeout := TDuration.Zero;
+  FMaxOutput := 0;
+  FMergeStderr := False;
 end;
 
 class function TCommand.New(const APath: string): ICommand;
@@ -315,11 +347,16 @@ begin
   else
     LFinalEnv := BuildFinalEnv(FEnvMode, FEnvPairs);
 
-  { Resolve path: always search PATH if name has no directory part }
-  if not CommandPathHasDirectoryPart(FPath) then
-    LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv, FWorkDir)
-  else
-    LResolvedPath := FPath;
+  { Resolve path: always search PATH if name has no directory part;
+    directory-form paths are verified for executability (Go LookPath). }
+  LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv, FWorkDir);
+  if LResolvedPath = '' then
+  begin
+    if CommandPathHasDirectoryPart(FPath) then
+      raise EProcessError.Create('executable not found: ' + FPath)
+    else
+      raise EProcessError.Create('executable not found in PATH: ' + FPath);
+  end;
 
   LArgc := Length(FArgs) + 2;
   SetLength(LArgv, LArgc);
@@ -358,41 +395,93 @@ begin
   try
     if FStdinMode = stPiped then
     begin
-      if platform_process_create_pipe(LStdinPipe[0], LStdinPipe[1]) <> 0 then
-        raise EProcessError.Create('Failed to create stdin pipe');
+      LErr := platform_process_create_pipe(LStdinPipe[0], LStdinPipe[1]);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to create stdin pipe', LErr), LErr);
       LChildStdin := LStdinPipe[0];
     end
     else if FStdinMode = stNull then
     begin
-      if platform_process_open_null(False, LDevNull) <> 0 then
-        raise EProcessError.Create('Failed to open null stdin');
+      LErr := platform_process_open_null(False, LDevNull);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to open null stdin', LErr), LErr);
       LChildStdin := LDevNull;
     end;
 
     if FStdoutMode = stPiped then
     begin
-      if platform_process_create_pipe(LStdoutPipe[0], LStdoutPipe[1]) <> 0 then
-        raise EProcessError.Create('Failed to create stdout pipe');
+      LErr := platform_process_create_pipe(LStdoutPipe[0], LStdoutPipe[1]);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to create stdout pipe', LErr), LErr);
       LChildStdout := LStdoutPipe[1];
     end
     else if FStdoutMode = stNull then
     begin
-      if platform_process_open_null(True, LDevNull) <> 0 then
-        raise EProcessError.Create('Failed to open null stdout');
+      LErr := platform_process_open_null(True, LDevNull);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to open null stdout', LErr), LErr);
       LChildStdout := LDevNull;
     end;
 
-    if FStderrMode = stPiped then
+    { MergeStderr: child stderr write end = stdout write end (true interleave).
+      Requires stdout stPiped (Output/CaptureCombined force this). Fail closed on
+      non-piped stdout or Stderr(stNull). }
+    if FMergeStderr then
     begin
-      if platform_process_create_pipe(LStderrPipe[0], LStderrPipe[1]) <> 0 then
-        raise EProcessError.Create('Failed to create stderr pipe');
+      if FStdoutMode <> stPiped then
+        raise EProcessError.Create(
+          'MergeStderr requires Stdout(stPiped); use .Output / Capture*Combined, ' +
+          'or set Stdout(stPiped) before Spawn');
+      if LChildStdout < 0 then
+        raise EProcessError.Create(
+          'MergeStderr requires a live stdout pipe write end');
+      if FStderrMode = stNull then
+        raise EProcessError.Create(
+          'MergeStderr conflicts with Stderr(stNull): cannot both discard and merge stderr');
+      LChildStderr := LChildStdout;
+    end
+    else if FStderrMode = stPiped then
+    begin
+      LErr := platform_process_create_pipe(LStderrPipe[0], LStderrPipe[1]);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to create stderr pipe', LErr), LErr);
       LChildStderr := LStderrPipe[1];
     end
     else if FStderrMode = stNull then
     begin
-      if platform_process_open_null(True, LDevNull) <> 0 then
-        raise EProcessError.Create('Failed to open null stderr');
+      LErr := platform_process_open_null(True, LDevNull);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to open null stderr', LErr), LErr);
       LChildStderr := LDevNull;
+    end;
+
+    { Parent-retained pipe ends must not be inherited by the child }
+    if FStdinMode = stPiped then
+    begin
+      LErr := platform_process_set_handle_inheritable(LStdinPipe[1], False);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to set stdin parent non-inheritable', LErr), LErr);
+    end;
+    if FStdoutMode = stPiped then
+    begin
+      LErr := platform_process_set_handle_inheritable(LStdoutPipe[0], False);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to set stdout parent non-inheritable', LErr), LErr);
+    end;
+    if (FStderrMode = stPiped) and not (FMergeStderr and (FStdoutMode = stPiped)) then
+    begin
+      LErr := platform_process_set_handle_inheritable(LStderrPipe[0], False);
+      if LErr <> 0 then
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to set stderr parent non-inheritable', LErr), LErr);
     end;
 
     { Spawn }
@@ -405,10 +494,15 @@ begin
 
     if LErr <> 0 then
       case LFailStage of
-        pssChdir: raise EProcessError.Create('Failed to chdir: ' + FWorkDir, LErr);
-        pssExec: raise EProcessError.Create('Failed to exec: ' + FPath, LErr);
+        pssChdir:
+          raise EProcessError.Create(
+            FormatProcessOsError('Failed to chdir: ' + FWorkDir, LErr), LErr);
+        pssExec:
+          raise EProcessError.Create(
+            FormatProcessOsError('Failed to exec: ' + FPath, LErr), LErr);
       else
-        raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
+        raise EProcessError.Create(
+          FormatProcessOsError('Failed to spawn: ' + FPath, LErr), LErr);
       end;
 
   except
@@ -437,13 +531,14 @@ begin
     platform_process_close_handle(LStdinPipe[0]);
   if (FStdoutMode = stPiped) then
     platform_process_close_handle(LStdoutPipe[1]);
-  if (FStderrMode = stPiped) then
+  if (FStderrMode = stPiped) and not (FMergeStderr and (FStdoutMode = stPiped)) then
     platform_process_close_handle(LStderrPipe[1]);
   if (FStdinMode = stNull) and (LChildStdin >= 0) then
     platform_process_close_handle(LChildStdin);
   if (FStdoutMode = stNull) and (LChildStdout >= 0) then
     platform_process_close_handle(LChildStdout);
-  if (FStderrMode = stNull) and (LChildStderr >= 0) then
+  if (FStderrMode = stNull) and (LChildStderr >= 0) and
+     not (FMergeStderr and (FStdoutMode = stPiped)) then
     platform_process_close_handle(LChildStderr);
 
   { Create pipe wrappers }
@@ -451,15 +546,27 @@ begin
     LStdinW := TPipeWriter.Create(LStdinPipe[1]) as IWriter;
   if FStdoutMode = stPiped then
     LStdoutR := TPipeReader.Create(LStdoutPipe[0]) as IReader;
-  if FStderrMode = stPiped then
+  if (FStderrMode = stPiped) and not (FMergeStderr and (FStdoutMode = stPiped)) then
     LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
 
-  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout);
+  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout, FMaxOutput);
 end;
 
 function TCommand.Timeout(const ADuration: TDuration): ICommand;
 begin
   FTimeout := ADuration;
+  Result := Self;
+end;
+
+function TCommand.MaxOutput(const ABytes: Int64): ICommand;
+begin
+  FMaxOutput := ABytes;
+  Result := Self;
+end;
+
+function TCommand.MergeStderr(const AEnable: Boolean): ICommand;
+begin
+  FMergeStderr := AEnable;
   Result := Self;
 end;
 
@@ -471,7 +578,9 @@ begin
   LSavedStdout := FStdoutMode;
   LSavedStderr := FStderrMode;
   FStdoutMode := stPiped;
-  FStderrMode := stPiped;
+  { Merge path: only stdout pipe; stderr shares write end in Spawn }
+  if not FMergeStderr then
+    FStderrMode := stPiped;
   try
     LChild := Spawn;
     Result := LChild.WaitWithOutput;
@@ -481,14 +590,13 @@ begin
   end;
 end;
 
-function TCommand.Status: Integer;
+function TCommand.Status: TProcessOutput;
 var
   LChild: IChild;
-  LOutput: TProcessOutput;
 begin
+  { 不强制 piped：对齐 Rust status() / Go Run — 只关心退出与超时 }
   LChild := Spawn;
-  LOutput := LChild.Wait;
-  Result := LOutput.ExitCode;
+  Result := LChild.Wait;
 end;
 
 end.

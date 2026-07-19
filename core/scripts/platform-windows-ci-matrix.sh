@@ -9,8 +9,9 @@
 #   ./scripts/platform-windows-ci-matrix.sh
 #   ./core/scripts/platform-windows-ci-matrix.sh
 #
-# Evidence: truth=real-windows-runtime-ci (focused gates).
-# Do NOT print truth=ci-matrix until ROADMAP D1.d promotion criteria are met.
+# Evidence: truth=ci-matrix for the documented gate set (ROADMAP D1.d + error expand).
+# Scope is the MODULE_ENTRIES list only — not full-host Windows parity.
+# 18-gate set = prior 17 + platform.error (pending durable GHA green before promote claims).
 
 set -euo pipefail
 
@@ -40,6 +41,7 @@ MODULE_ENTRIES=(
   "platform.mmap tests/nextpas.core.platform.mmap/test_platform_mmap_wine"
   "platform.random tests/nextpas.core.platform.random/test_platform_random_wine"
   "platform.socket tests/nextpas.core.platform.socket/test_platform_socket_wine"
+  "platform.error tests/nextpas.core.platform.error/test_platform_error_wine"
   "io.reactor.iocp tests/nextpas.core.io.uring/test_reactor_iocp_wine"
   "poller.windows_runtime_smoke tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke"
   "platform.io.windows_real tests/nextpas.core.platform/test_platform_io_windows_real"
@@ -51,7 +53,7 @@ fail_count=0
 failed=()
 
 echo "=== Platform Windows CI Matrix (real host) ==="
-echo "truth=real-windows-runtime-ci; focused gates; not full ci-matrix promotion"
+echo "truth=ci-matrix; documented 18-gate set (candidate until GHA green); not full-host Windows parity"
 echo "core=$CORE_ROOT"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 fpc -iV 2>/dev/null || true
@@ -82,7 +84,7 @@ for entry in "${MODULE_ENTRIES[@]}"; do
 done
 
 echo "summary: pass=$pass_count fail=$fail_count total=${#MODULE_ENTRIES[@]}"
-echo "truth=real-windows-runtime-ci; gates_passed=$pass_count; gates_failed=$fail_count"
+echo "truth=ci-matrix; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-18-gate-set"
 
 if [[ "$fail_count" -gt 0 ]]; then
   echo "failed:"

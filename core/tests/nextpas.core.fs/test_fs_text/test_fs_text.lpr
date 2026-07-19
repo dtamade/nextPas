@@ -3,8 +3,9 @@ program test_fs_text;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.fs;
 
 var

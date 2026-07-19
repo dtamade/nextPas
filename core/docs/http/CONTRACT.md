@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.http*.pas`（约 58 个源文件）
 **层级**：L3（依赖 L0–L2：net, tls, json, io, text, …）
 **Owner**：http worktree lane
-**最后更新**：2026-07-17
-**版本**：3.1
+**最后更新**：2026-07-17（Wave A2 pool + protocol select）
+**版本**：3.15
 
 ---
 
@@ -71,6 +71,40 @@ end;
 | ensure string | free-fn `HttpPostJson` / `HttpGetString` / 方法 `GetString`/`PostString`/… | ensure 2xx + body string（或 TBytes） |
 | ensure+decode | free-fn `HttpGetJson` / `HttpPostJsonDocument` / `HttpPutJsonDocument` / `HttpPatchJsonDocument` / `HttpReadResponseJson` / 方法 `GetJson` | ensure 2xx + `JsonParse` → `IJsonDocument`；非法 JSON → `hekProtocol` Op=`json` |
 
+**Content-Encoding（Wave C1）**：
+
+| 侧 | API | 行为 |
+|----|-----|------|
+| server 响应压缩 | `CompressionMiddleware` / `CompressionMiddlewareWith` | 按 `Accept-Encoding` 选 gzip/deflate；默认最小 body 1024 |
+| server 请求解压 | `DecompressMiddleware(AMaxSize)` | 请求 `Content-Encoding: gzip\|deflate` 解压；失败 → 400 |
+| client raw body | `HttpReadResponseBodyBytes` / `String` / `StringAuto` | **不**自动解 Content-Encoding（wire 字节） |
+| client 显式解码 | `HttpDecodeContentEncoding` / `HttpReadResponseBodyBytesDecoded` / `HttpReadResponseBodyStringDecoded` | 单 coding：`gzip`/`x-gzip`/`deflate`/`identity`/缺省；`AMaxSize>0` 限制解压输出 |
+| 不支持编码 | 同上 | `hekProtocol` Op=`content_encoding`（含 multi-coding） |
+| 损坏 payload | 同上 | `hekBody` Op=`content_encoding` |
+| 非目标 | br / zstd / 浏览器完整 content 栈 / 默认自动 Accept-Encoding 协商 | 不在 C1；未支持编码诚实失败 |
+
+**条件请求 / 静态缓存元数据（Wave C2）**：
+
+| 能力 | 行为 |
+|------|------|
+| `ServeFile` / `ServeDir` / `ServeFileDownload` | 发布 strong `ETag`（`HttpMakeStrongETag(size, mtime_ns)`）、`Last-Modified`（**秒**精度）、`Cache-Control: public, max-age=0, must-revalidate` |
+| `If-None-Match` | 与当前 ETag 精确匹配、`*`、或逗号列表命中 → **304** + ETag/Last-Modified；**优先于** `If-Modified-Since` |
+| `If-Modified-Since` | 仅在无 `If-None-Match` 时生效；HTTP-date 可解析且资源 mtime_seconds ≤ 该时刻 → **304**；非法日期忽略（当 200） |
+| 公开辅助 | `HttpIfNoneMatchMatches` / `HttpNotModifiedSince` / `HttpTryWriteNotModified`（自定义 handler 可复用 304 路径） |
+| 304 体 | 无 body；helper 设 `Content-Length: 0` 便于 framing |
+| 非目标 | 完整缓存策略、`If-Match`/`If-Unmodified-Since` 写路径、启发式过期、CDN 语义 |
+
+**Range / 静态流式（Wave C3）**：
+
+| 能力 | 行为 |
+|------|------|
+| `Accept-Ranges` | 200/206 成功静态响应发布 `Accept-Ranges: bytes` |
+| 单段 `Range: bytes=start-end` / `start-` / `-suffix` | **206** + `Content-Range` + 精确 `Content-Length`；body 经 `CopyFileRange` 流式写出 |
+| 越界 / 非法 / multi-range（含逗号） | **416** + `Content-Range: bytes */size` |
+| 整文件路径 | `IFile` + `io.Copy`；**禁止** `ReadFile`/`ReadAll` 整文件进内存（source-contract 锁定） |
+| 与条件请求 | 先评估 304；命中则不进入 Range |
+| 非目标 | multipart ranges、`If-Range`、目录列表产品化、CDN 语义 |
+
 ### 2.2 Request / Response
 
 - 公开类型是 **接口** `IHttpRequest` / `IHttpResponse`，不是裸 record wire 模型。
@@ -120,8 +154,15 @@ end;
   4. H1 `RoundTrip`：入口、新 dial 前、request write 后 / response read 前
   5. pool reconnect 重写前
   取消抛 `EHttpError(hekCanceled)`。H1 client 在 dial 后把 cancel token
-  接到 `ITcpStream.SetCancelToken`：阻塞 Read/Write 以 ~50ms 切片轮询
-  cancel，中途取消抛 `hekCanceled`（经 `ECancelledError` 包装）。
+  接到 `ITcpStream.SetCancelToken`：`NewHttpCancelToken` 为 waitable
+  （socketpair wake + `platform_socket_poll_or_wake`，Unix）；probe-only
+  token 退回 ~10ms `SO_*TIMEO` 切片。中途取消抛 `hekCanceled`（经
+  `ECancelledError` 包装）。
+  **Windows residual（Wave R3）**：`platform_socket_pair` 在 Windows 路径
+  固定返回 `PLATFORM_ERR_UNSUPPORTED`（无原生 socketpair；loopback 方案未
+  落地）。`TNetCancelToken` 因此 `FHasWake=False`，`WakeHandle=0`，全程
+  **probe-only**（~10ms `NET_IO_CANCEL_SLICE_MS`），**不**声称近即时唤醒。
+  Linux/macOS/FreeBSD waitable 证据不变（X2）。
   **仍建议**与 `Timeout` / `WithTimeout` 配对，避免无 cancel 时无限等待。
   超时仍为 `hekTimeout`（`WithTimeout` / client options）。
 - Client 超时拆分（`THttpClientOptions`）：
@@ -134,7 +175,8 @@ end;
   - 生产 client：`THttpClientOptions.Default.Timeout` = **30000** ms；
     仍可用 `WithTimeout` 覆盖。`Timeout=0` 仅适合测试/特殊工具。
     默认 `Timeout` 也会作为 OS dial 上界（当 `ConnectTimeout=0`）。
-  - **禁止**把“只挂 cancel、不设 Timeout”当作唯一生产模板（cancel 延迟约一个切片）。
+  - **禁止**把“只挂 cancel、不设 Timeout”当作唯一生产模板（waitable 近即时；
+    probe-only 仍有 ~10ms 切片上界）。
   - 生产 server：`THttpServerOptions.Default` 的 Read/Write timeout 仍为 **0**
     （兼容测试）；生产路径使用 **`THttpServerOptions.Production`**
     （Read/Write = 30000 ms）或显式 `WithReadTimeout` / `WithWriteTimeout`。
@@ -142,39 +184,107 @@ end;
     `http_websocket_echo_demo` 使用 Production。
   - 示例 `http_get_client` 使用有限 client timeout。
 
+#### With* 链语义（Wave E2）
+
+| 调用 | 机制 | 覆盖规则 | 注释 |
+|------|------|----------|------|
+| `WithTimeout(ms)` | **decorator** `TOptionsOverrideClient` | 合并到 per-request `TimeoutMs`；**外层（后链式调用）胜** | **不**改 `THttpClientOptions.Timeout` / `ConnectTimeout` |
+| `WithMaxRedirects` / `WithFollowRedirects` | **decorator** 同上 | 同字段外层胜 | 请求级覆盖 client options |
+| `WithRetry(N)` | **decorator** `TRetryClient` | 外层包装；可与 timeout/header 叠 | 见重试规则段 |
+| `WithHeader` / `WithBasicAuth` / `WithBearerAuth` | **decorator** | 同名头/Authorization：**外层胜**（仅当尚未设置时写入） | Send 由外向内 |
+| `WithCookieJar` | **decorator** | jar 外层保留；已有 Cookie 头不覆盖 | nil → `hekArgument` |
+| `WithConnectTimeout(ms)` | **rebuild** `NewHttpClient(options)` | 写入 `THttpClientOptions.ConnectTimeout` | dial budget；`=0` 时 `EffectiveConnectTimeout` = `Timeout` |
+| `WithProxyUrl` / `WithTLSContext` | **rebuild** 同上 | 写入 options 并重建 transport | 装饰器链经 `RebindInner` 重绑到新 base，**不丢**外层 auth/retry/header/timeout |
+| 构造 `NewHttpClient(opts)` | base options | record `With*` 链式字段覆盖 | client `Default.Timeout=30000`；server 用 `Production` 非 `Default` |
+
+**Timeout vs ConnectTimeout 分界**：
+
+| 字段 | 作用阶段 | 0 含义 | 覆盖入口 |
+|------|----------|--------|----------|
+| `Timeout` | socket 就绪后 request 读/写 | 无界（仅测试/工具） | options / `WithTimeout` / builder / request options |
+| `ConnectTimeout` | OS `connect` + 新连接首写 | 回退到 `Timeout`（`Timeout` 亦 0 则无界） | options / `WithConnectTimeout`（rebuild） |
+
+**Default vs Production**：
+
+| 载体 | Default | Production / 生产建议 |
+|------|---------|----------------------|
+| `THttpClientOptions` | `Timeout=30000`，`ConnectTimeout=0` | 保持 Default 或显式有限 `WithTimeout`；勿依赖 cancel-only |
+| `THttpServerOptions` | Read/Write=**0**（测兼容） | **`Production`** Read/Write=30000；Idle  alone 不足 |
+| `TWebSocketOptions` | ConnectTimeout=Timeout=30000 | 同 Default；`=0` 仅显式无界 |
+
 ### 2.2.0a Net-dependent capabilities
 
 | Capability | HTTP surface today | Owner | Status |
 |------------|-------------------|-------|--------|
 | OS `connect()` dial timeout | `ConnectTimeout` / `Timeout` → `TcpConnect(..., ms)` | `nextpas.core.net` + H1/H2 dial | **Landed** (H1/H2) |
-| Interruptible blocked socket read on cancel | `SetCancelToken` + ~50ms SO_RCVTIMEO slices | net + H1/H2 client wire | **Landed** (slice latency) |
+| Interruptible blocked socket read on cancel | waitable `NewNetCancelToken` / `NewHttpCancelToken` + poll-or-wake; probe-only ~10ms slice | net + H1/H2/WS client wire | **Landed** (X2); **Windows = probe-only only**（R3；`platform_socket_pair` → UNSUPPORTED） |
 | WebSocket client dial / handshake budget | `TWebSocketOptions.ConnectTimeout` / `Timeout` (Default=30000) | http.websocket | **Landed** (cycle-5) |
 | HTTPS CONNECT (plain HTTP proxy) | CONNECT + TLS over tunnel; origin-form | http H1 + TLS stream | **Landed** (cycle-9 Wave D) |
 | H1 direct HTTPS | dial → TLS wrap → origin-form; pool `https\|host` | http H1 + TLS stream | **Landed** (cycle-10 Wave E) |
 | Proxy authentication | `ProxyUrl` UserInfo → `Proxy-Authorization: Basic` only | http H1 | **Landed** (Wave E Basic + Wave I freeze) |
 
-### 2.2.1 EHttpError.Kind
+### 2.2.1 EHttpError taxonomy（Wave E1 + Wave J Op）
 
-- `EHttpError` 保留单一异常类型；`THttpErrorKind` 含 Argument/Timeout/Connect/
-  Protocol/Parse/Redirect/Body/Upgrade/Registry/Status/**Canceled**/… 与
-  `Kind` / 可选 `Status` / `Op`。
-- `Create(string)` 保持兼容（`Kind = hekUnknown`，Category 仍默认 network）。
-- 新代码优先 `Create(Kind, Message)`；调用方可 `except on E: EHttpError` 后匹配 Kind。
+- `EHttpError` 保留**单一**异常类型；字段：`Kind` / 可选 `Status` / 可选 `Op`。
+- `Create(string)` 仅兼容路径（`Kind = hekUnknown`，Category 默认 network）。
+- 新代码优先 `Create(Kind, Message)`；热点失败路径用 `CreateOp` 填稳定 `Op`
+  （metrics/日志友好）。`CreateOp(..., Status)` 在 `hekStatus` 保留 Status。
+- **不**要求 Op-everywhere；`hekArgument` 前置条件通常不填 Op。
+
+#### Kind 分类表
+
+| Kind | Category | 含义 | 典型 Op / 备注 |
+|------|----------|------|----------------|
+| `hekUnknown` | ecNetwork | 仅 `Create(string)` 兼容 | 新代码禁止用 |
+| `hekArgument` | ecInvalidArgument | 调用方前置条件、配置、消息形状 | 通常无 Op |
+| `hekTimeout` | ecTimeout | 读/写/连接 deadline | `transport` |
+| `hekConnect` | ecNetwork | dial / CONNECT / nil response / 传输连通 | `connect` `round_trip` `transport` `download` `websocket` |
+| `hekProtocol` | ecNetwork | HTTP/应用层协议违规 | `transport` `content_encoding` `json` |
+| `hekParse` | ecParse | 方法/URL/响应行等解析失败 | `transport` |
+| `hekRedirect` | ecNetwork | 重定向策略失败 | `redirect` |
+| `hekBody` | ecNetwork | body 读写/解码失败 | `redirect` `download` `content_encoding` `transport` |
+| `hekUpgrade` | ecNetwork | WebSocket 升级协商失败 | 通常无 Op |
+| `hekRegistry` | ecNetwork | transport registry | 通常无 Op |
+| `hekStatus` | ecNetwork | ensure-2xx 非 2xx | `ensure` `download`（Status 保留） |
+| `hekCanceled` | ecCancelled | 协作取消 | `cancel` `transport` |
+
+#### 稳定 Op 命名表（Wave J；E1 对齐，不扩家族）
+
+| Op | 典型 Kind | 边界 |
+|----|-----------|------|
+| `redirect` | hekRedirect / hekBody | client 重定向解析/回放 |
+| `round_trip` | hekConnect | transport 返回 nil response |
+| `transport` | hekTimeout / hekConnect / hekParse / hekProtocol / hekBody / hekCanceled | H1 RoundTrip 写读、wrap 裸 timeout/network/cancel |
+| `connect` | hekConnect | proxy CONNECT 非 2xx（含 407） |
+| `cancel` | hekCanceled | `IHttpCancelToken.ThrowIfCanceled` 检查点 |
+| `ensure` | hekStatus | `HttpEnsureSuccess` 非 2xx（Status 保留） |
+| `download` | hekConnect / hekStatus / hekBody | GetToWriter/File 路径 |
+| `json` | hekProtocol | ensure+decode JSON 非法 body |
+| `content_encoding` | hekProtocol / hekBody | 客户端 Content-Encoding：不支持编码 → hekProtocol；损坏 payload → hekBody |
+| `websocket` | hekConnect | WS 升级/传输失败 |
+
+#### 公开面纪律
+
 - **消息形状错误**（非法/冲突 Content-Length、不支持 Transfer-Encoding、
   builder 非法 CL）→ `hekArgument`。
-- **配置/nil 前置条件**（nil writer/client、负超时/负 max redirects、
-  server/websocket/**SSE**/middleware 构造与公开前置条件等）→ 也归
-  `hekArgument`（不再裸 `EArgumentError`，便于统一 `HttpErrorIsUserError`）。
+- **配置/nil 前置条件**（nil writer/client/router、负超时/负 max redirects、
+  server/websocket/**SSE**/middleware 构造等）→ `hekArgument`。
+- **禁止** `nextpas.core.http*` 公开路径 `raise EArgumentError` / 裸漏出
+  `EArgumentError`；跨模块（如 compress）若抛 `EArgumentError`，边界包装为
+  `EHttpError(hekArgument)`（middleware decompress 已包）。
+- `HttpErrorIsUserError` 仍对**外来**裸 `EArgumentError` 返回 true（兼容），
+  但 http 自身不制造该路径。
 - **ensure-2xx / download / redirect 客户端错误消息**：在已知 method/URL 时
-  前缀为 `METHOD url: detail`（如 `GET http://example/path: HTTP request failed
-  with status 404 Not Found`）。`HttpEnsureSuccess` 提供无上下文与
-  `(Resp, Method, Url)` 两形态。
+  前缀为 `METHOD url: detail`。`HttpEnsureSuccess` 无上下文与
+  `(Resp, Method, Url)` 两形态；非 2xx → `Op=ensure`。
 - Transport 边界：裸 `ETimeoutError` → `hekTimeout` + `Op=transport`；
-  裸 `ENetworkError`（含 connect 失败）→ `hekConnect` + `Op=transport`
-  （H1/H2 client RoundTrip 经 `HttpWrapTransportException`）。
+  裸 `ECancelledError` → `hekCanceled` + `Op=transport`；
+  裸 `ENetworkError` → `hekConnect` + `Op=transport`
+  （H1/H2 RoundTrip 经 `HttpWrapTransportException`）。
+  检查点 `HttpThrowIfCanceled` → `hekCanceled` + `Op=cancel`。
 - 门面 helper：
   - `HttpErrorIsTimeout` / `HttpErrorIsRetryable`
-  - `HttpErrorIsUserError` — `hekArgument` / `hekCanceled`（调用方错误，非服务端故障）
+  - `HttpErrorIsUserError` — `hekArgument` / `hekCanceled`（及兼容裸 `EArgumentError`）
   - `HttpIsRetrySafeRequest` / `HttpIsRetryableMethod` — 与 WithRetry / pool 共用
 - Request body framing：known Content-Length **或** H1 chunked request body
   （未知长度）。`ContentLength < 0` 的非法值 fail-fast。
@@ -254,13 +364,36 @@ end;
 - **Cancel（cycle-7 Wave B）**：
   - `WithCancelToken(IHttpCancelToken)` 挂协作取消；dial 后与握手、mid-frame
     `ReadFrame`/`Write*` 路径生效。
-  - 有 `ITcpStream` 时：`SetCancelToken` + ~50ms 切片（与 H1/H2 client 同 residual）。
+  - 有 `ITcpStream` 时：`SetCancelToken` + waitable wake（与 H1/H2 client 同路径）。
   - 入口 `HttpThrowIfCanceled`：token 已 cancel 时立即 `hekCanceled`（无需等切片）。
   - 成功 101 后 **保留** cancel、**清除** handshake deadline。
   - Close/Destroy 清除 stream cancel token。
 - 传输错误经 `HttpWrapTransportException` → `hekTimeout` / `hekConnect` /
-  `hekCanceled`，Op=`websocket` 或 transport。
+  `hekCanceled`，Op=`transport`（wrap）或 `websocket`（连接/升级失败 CreateOp）。
+- 入口 `HttpThrowIfCanceled`：`hekCanceled` Op=**`cancel`**（与 HTTP client 共用 token 语义；非 `websocket`）。
 - 显式 `ConnectTimeout=0` + `Timeout=0` 才恢复无界 dial（测试/特殊工具）。
+
+### 2.2.3c WebSocket lifecycle（Era 6 Wave X1）
+
+公开面：`UpgradeWebSocket` / `ConnectWebSocket` → `IWebSocket`。不扩扩展协商（无 permessage-deflate / 子协议 API）。
+
+| 阶段 | 行为 | 错误 / 证据 |
+|------|------|-------------|
+| Open | 101 后 `IsOpen=True`；成功握手清除 handshake deadline，**保留** cancel token | upgrade/client focused |
+| Read | `ReadFrame` / `ReadMessage`；Ping 自动 Pong；分片聚合 | RFC 边角 suite |
+| Write | `WriteText` / `WriteBinary` / `Ping` / `Pong`；控制帧 payload ≤125 | outgoing reject tests |
+| Local `Close(code, reason)` | 幂等：已 `FCloseSent` 则 no-op；校验 code/reason UTF-8；发送 close 帧；`FOpen=False`；清 stream cancel | X1 lifecycle + CloseFrame |
+| Peer close 帧 | `FCloseReceived=True` → `IsOpen=False`；仍可用 `Close`（`WriteFrameRaw`）回 close | CloseFrame echo |
+| `IsOpen` | `FOpen and not FCloseSent and not FCloseReceived` | X1 lifecycle |
+| 关闭后 Read | `hekProtocol`（`connection closed`） | X1 lifecycle |
+| 关闭后 Write\* | `hekProtocol`（`connection closed`）；**不**经 `WriteFrame` 的 final `Close` 除外 | X1 lifecycle |
+| Cancel | token 已 cancel → 入口/mid-frame `hekCanceled`；Close/Destroy 清 stream cancel | client cancel test |
+| Upgrade 失败 | `hekUpgrade` / `hekArgument` / `hekConnect` 等；**不**写 500 到已 hijack 连接 | UpgradeException ownership test |
+| 所有权 | `IWebSocket` 持有 hijack 后的 stream；server handler 异常不得再写 HTTP 500 到已升级连接 | ownership focused |
+
+**毕业判定（production-helper）**：上表 + focused 全绿 + WS 路径 heaptrc 0 unfreed；**不是**子系统拆分，也不是扩展族 API。
+
+**仍 Park**：WS-over-H2；扩展协商；新 Options 家族。
 
 ### 2.2.4 IHttpResponse metadata + Close
 
@@ -417,6 +550,56 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 - cleartext：prior knowledge only（无 h2c Upgrade）
 - 设计排除：server push、CONNECT/WS-over-H2、PRIORITY 调度
 
+#### H2 production edges（Wave A1）
+
+| 边角 | 行为 | 证据 / residual |
+|------|------|-----------------|
+| Client GOAWAY 消费 | 响应完成后再见 GOAWAY → 连接 `IsReusable=false` 不入池；**响应未完成**时收到 GOAWAY → `hekProtocol`（`HTTP/2 GOAWAY received during response`） | `test_http_h2_client` GOAWAY / mid-response |
+| Server GOAWAY | 停止新流；split last-stream tracking；peer GOAWAY 不覆盖 last seen peer id | `test_http_h2_session` GOAWAY 套件 |
+| 流控 | 双向 WINDOW_UPDATE；发送窗耗尽等 peer update；连接级 flush pending update | client/session window tests |
+| MaxConcurrentStreams | server 超限 → `REFUSED_STREAM` RST | session enforcement tests |
+| 池 / 多路表征 | client **同步** `RoundTrip`：单连接上**串行**一流；池按 authority/`MaxPoolSize` 复用连接；**不**提供同连接并发多 `RoundTrip` 多路 API | pool tests + 本表 residual |
+| Server push | `ENABLE_PUSH=0`；`PUSH_PROMISE` → GOAWAY `PROTOCOL_ERROR` | client SETTINGS + PUSH tests |
+| TLS H2 | ALPN `h2`；`http://` prior knowledge；无 h2c Upgrade | facade / tls_real |
+
+**诚实 residual（非缺口伪装）**：
+
+- 公开 `IHttpClient` 不暴露“单连接并发多请求”多路 API；多请求并发依赖多连接或上层调度。
+- OpenSSL backend heaptrc（**Wave X4 + R2 dig + R4 fix**）：
+  - X4 修 `FPinValidator` 未释放（每 `CreateContext` ~32B → FreeAndNil）。
+  - R2 曾诚实 Park **1×41B**（heaptrc size 41、无帧；process-lifetime）。
+  - **R4**：根因 = `TOpenSSLLibrary.InvalidateCapabilitiesCache` 对含
+    `BackendVersion: string` 的 `TSSLBackendCapabilities` 使用 `FillChar`，
+    在 library `Finalize` 时 orphan 版本串（内容 `OpenSSL x.y.z …`）。
+    修为 `FCapabilitiesCache := Default(TSSLBackendCapabilities)`（及同模式
+    其它 backend）。`test_http_client` HTTPS 全量路径 **0 unfreed**。
+- Cancel 平台分叉（**Wave R3**）：Unix waitable（socketpair+poll）；Windows
+  `platform_socket_pair` = UNSUPPORTED → **仅 probe-only ~10ms**。见 §2.2.0 /
+  §2.2.0a。
+- H3 / QUIC：无产品需求 + Blocked on QUIC；禁止空 facade。h2c Upgrade、CONNECT/WS-over-H2：Park（见 ROADMAP）。
+
+#### Client connection pool（Wave A2）
+
+| 语义 | 行为 | 证据 |
+|------|------|------|
+| Pool key / authority | H1：canonical host + port（`https\|` / `connect\|` / proxy+target 变体编码进 key）；H2：host + port + secure | H1/H2 pool reuse tests |
+| `MaxPoolSize` | **每 authority 最大空闲连接数**（默认 64）；**不是**跨 host 全局上限 | `test_http_client` / `test_http_h2_client` per-authority |
+| Idle put | 仅 keep-alive / `IsReusable` 连接入池；超 per-authority 上限则关闭新归还连接 | pool max / non-reusable tests |
+| Idle clear | `IHttpClient.CloseIdleConnections` → transport `IHttpTransportIdleConnections.CloseIdleConnections` 清空全部 authority 的空闲项；destroy 亦 `PoolClear` | CloseIdle + destroy source-contract |
+| `IdleTTL` | 墙钟空闲淘汰（默认 **90000** ms）；`WithIdleTTL` 外层胜；**0** = 关闭墙钟淘汰；负值 `hekArgument`；借出/归还路径淘汰过期项（`IdleAtMs` 在 put 时打戳） | `test_http_client` IdleTTL expires / IdleTTL=0 keep；H1/H2 同源实现 |
+| 并发模型 | 同步 `RoundTrip` 串行一流；同 transport 可多线程各自 RoundTrip（池 mutex）；**无**同连接多路 API | A1 residual |
+
+#### H1 / H2 选择策略（Wave A2）
+
+| 规则 | 行为 |
+|------|------|
+| 默认 | `THttpClientOptions.Default` → `UseRegistryVersion=True` → registry `GetDefaultClientVersion` = **`hvHttp11`** |
+| 钉版本 | `WithVersion(hvHttp2)` / `WithVersion(hvHttp11)` 设 `UseRegistryVersion=False`，构造时 `ResolveClientTransport` 选 factory |
+| 无自动升级 | **不会**在 H1 client 上因 ALPN 自动切到 H2；版本在 **client 构造时**选定 |
+| H2 HTTPS | ALPN 必须协商 `h2`，否则 `hekProtocol` |
+| H2 cleartext | prior knowledge only（`http://`）；无 h2c Upgrade |
+| H3 | 未注册 factory；`Resolve*Transport(hvHttp3)` → `hekRegistry`；Blocked on QUIC |
+
 ### H3
 
 - **未实现**；仅版本枚举 + registry seam（`hvHttp3` / `HttpVersionToStr`）
@@ -459,3 +642,13 @@ make focused FOCUS=core/tests/nextpas.core.http/test_http_router
 | 2026-07-16 | 3.7 | Usability wave-3：WithRetry=5xx+IsRetryable；connect wrap；删 IReader client overload；known-CL only；删 NewStreamingRequest；多参 NewRequest 仍 deprecated；decorator forwarder |
 | 2026-07-17 | 3.8 | cycle-8 Wave C：`GetJson`/`HttpReadResponseJson` ensure+decode；`WithRetry` 支持 429 + delta-seconds Retry-After（cap 60s） |
 | 2026-07-17 | 3.9 | cycle-11 Wave F：HTTP-date Retry-After；`WithTLSContext`；`HttpPost/Put/PatchJsonDocument` ensure+decode |
+| 2026-07-17 | 3.10 | Wave C1：Content-Encoding 契约；client `HttpDecodeContentEncoding` / `HttpReadResponseBody*Decoded`；Op=`content_encoding`；server Compression/Decompress middleware 已落地 |
+| 2026-07-17 | 3.11 | Wave C2：条件请求 helper + ServeFile 304 契约表（If-None-Match / If-Modified-Since） |
+| 2026-07-17 | 3.12 | Wave C3：Range 单段/416/`Accept-Ranges` + 流式契约 |
+| 2026-07-17 | 3.13 | Era 6 Excellence：cancel/OpenSSL/idle-TTL residual 标明 X2/X4/X3 可主动收敛；H3 无产品需求 |
+| 2026-07-17 | 3.14 | Wave X1：WebSocket lifecycle 表（Close/`IsOpen`/关闭后读写/cancel Op） |
+| 2026-07-17 | 3.15 | Wave X2：waitable cancel 唤醒（socketpair+poll）；probe-only ~10ms residual |
+| 2026-07-17 | 3.16 | Wave R1：H1/H2 pool Close 锁外，IdleTTL suite 稳定 |
+| 2026-07-17 | 3.17 | Wave R2：HTTPS 1×41B dig → 无可靠 call stack，诚实 process-lifetime residual |
+| 2026-07-17 | 3.18 | Wave R3：Windows cancel = probe-only only（socket_pair UNSUPPORTED） |
+| 2026-07-18 | 3.19 | Wave R4：HTTPS 1×41B 清零 — capabilities cache `Default` 替代 `FillChar` |

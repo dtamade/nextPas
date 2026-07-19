@@ -92,13 +92,9 @@ const
   PLATFORM_SO_LINGER   = 13;
 {$ENDIF}
   PLATFORM_SO_KEEPALIVE = SO_KEEPALIVE;
-  PLATFORM_SO_RCVTIMEO = 20;
-  PLATFORM_SO_SNDTIMEO = 21;
-{$IFDEF NEXTPAS_MACOS}
-  PLATFORM_SO_RCVBUF   = $1002;
-  PLATFORM_SO_SNDBUF   = $1001;
-  PLATFORM_SO_ERROR    = $1007;
-{$ELSEIF defined(NEXTPAS_FREEBSD)}
+  PLATFORM_SO_RCVTIMEO = SO_RCVTIMEO;
+  PLATFORM_SO_SNDTIMEO = SO_SNDTIMEO;
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   PLATFORM_SO_RCVBUF   = $1002;
   PLATFORM_SO_SNDBUF   = $1001;
   PLATFORM_SO_ERROR    = $1007;
@@ -316,6 +312,17 @@ const
 function platform_socket_poll(const ASocket: TPlatformSocket;
   const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32;
 
+{** @desc 等待 ASocket 就绪或 AWake 可读（cancel wake）
+    @param ASocket 业务套接字
+    @param AEvents ASocket 关注事件
+    @param AWake cancel wake 读端（必须有效）
+    @param ATimeoutMs 超时毫秒；&lt;0 无限，0 非阻塞
+    @param ARevents 当返回 1 时为 ASocket 的 revents
+    @return 0 超时，1 ASocket 就绪，2 AWake 可读，&lt;0 错误码 *}
+function platform_socket_poll_or_wake(const ASocket: TPlatformSocket;
+  const AEvents: Int32; const AWake: TPlatformSocket;
+  const ATimeoutMs: Int32; out ARevents: Int32): Int32;
+
 { Sockaddr helpers (from net layer merge) }
 
 {** @desc 构造 IPv4 sockaddr_in 结构
@@ -498,7 +505,8 @@ uses
   ;
 
 const
-  SOCK_CLOEXEC_LOCAL = $02000000;
+  { Linux SOCK_CLOEXEC is octal 02000000 = 0x80000. Darwin has no SOCK_CLOEXEC. }
+  SOCK_CLOEXEC_LOCAL = $00080000;
 
 { 套接字描述符转换辅助函数 }
 function FdToSocket(AFd: cint; out ASocket: TPlatformSocket): Int32; inline;
@@ -511,6 +519,12 @@ function platform_socket_create(const ADomain, AType, AProtocol: Int32;
 var
   LFd: cint;
 begin
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  { BSD: no SOCK_CLOEXEC type flag; set FD_CLOEXEC after create. }
+  LFd := socket(ADomain, AType, AProtocol);
+  if LFd >= 0 then
+    fcntl(LFd, F_SETFD, FD_CLOEXEC);
+{$ELSE}
   LFd := socket(ADomain, AType or SOCK_CLOEXEC_LOCAL, AProtocol);
   if (LFd < 0) and (platform_get_errno = ESysEINVAL) then
   begin
@@ -518,6 +532,7 @@ begin
     if LFd >= 0 then
       fcntl(LFd, F_SETFD, FD_CLOEXEC);
   end;
+{$ENDIF}
   Result := FdToSocket(LFd, ASocket);
 end;
 
@@ -733,6 +748,43 @@ begin
   until False;
 end;
 
+function platform_socket_poll_or_wake(const ASocket: TPlatformSocket;
+  const AEvents: Int32; const AWake: TPlatformSocket;
+  const ATimeoutMs: Int32; out ARevents: Int32): Int32;
+var
+  LPfds: array[0..1] of TPollFd;
+  LNready: Int32;
+begin
+  ARevents := 0;
+  FillChar(LPfds[0], SizeOf(LPfds), 0);
+  LPfds[0].fd := Int32(ASocket.Value);
+  LPfds[0].events := Int16(AEvents);
+  LPfds[1].fd := Int32(AWake.Value);
+  LPfds[1].events := Int16(PLATFORM_POLL_IN);
+  repeat
+    LNready := poll(@LPfds[0], 2, ATimeoutMs);
+    if LNready >= 0 then
+    begin
+      if LNready = 0 then
+        Exit(0);
+      { Prefer wake so cancel wins races with concurrent peer data. }
+      if (LPfds[1].revents and Int16(PLATFORM_POLL_IN or PLATFORM_POLL_HUP or
+        PLATFORM_POLL_ERR)) <> 0 then
+        Exit(2);
+      if (LPfds[0].revents and Int16(AEvents or PLATFORM_POLL_HUP or
+        PLATFORM_POLL_ERR)) <> 0 then
+      begin
+        ARevents := Int32(LPfds[0].revents);
+        Exit(1);
+      end;
+      Exit(0);
+    end;
+    if platform_get_errno = ESysEINTR then
+      Continue;
+    Exit(-platform_get_errno);
+  until False;
+end;
+
 { --- sockaddr helpers (byte-order + ipv4 forwarding from socket.base) --- }
 
 function platform_htons(AHost: UInt16): UInt16; inline;
@@ -769,6 +821,9 @@ function platform_sockaddr_from_ipv4(AIP: UInt32; APort: UInt16;
   out ASockAddr: sockaddr_in; out ALen: Int32): Int32;
 begin
   FillChar(ASockAddr, SizeOf(ASockAddr), 0);
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  ASockAddr.sin_len := SizeOf(sockaddr_in);
+{$ENDIF}
   ASockAddr.sin_family := AF_INET;
   ASockAddr.sin_port := platform_htons(APort);
   ASockAddr.sin_addr.s_addr := platform_htonl(AIP);
@@ -790,6 +845,9 @@ var
 begin
   FillChar(AResult, SizeOf(AResult), 0);
   LAddr := @AResult.Storage;
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  LAddr^.sin_len := SizeOf(sockaddr_in);
+{$ENDIF}
   LAddr^.sin_family := AF_INET;
   LAddr^.sin_port := platform_htons(APort);
   LAddr^.sin_addr.s_addr := platform_htonl(AAddr);
@@ -810,6 +868,9 @@ var
 begin
   FillChar(AResult, SizeOf(AResult), 0);
   LAddr := @AResult.Storage;
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  LAddr^.sin6_len := SizeOf(sockaddr_in6);
+{$ENDIF}
   LAddr^.sin6_family := AF_INET6;
   LAddr^.sin6_port := platform_htons(APort);
   LAddr^.sin6_flowinfo := 0;
@@ -864,6 +925,16 @@ function platform_socket_pair(ADomain, AType, AProtocol: Int32;
 var
   LSv: array[0..1] of cint;
 begin
+{$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  if socketpair(ADomain, AType, AProtocol, @LSv[0]) <> 0 then
+  begin
+    ASocket1.Value := -1;
+    ASocket2.Value := -1;
+    Exit(platform_get_errno);
+  end;
+  fcntl(LSv[0], F_SETFD, FD_CLOEXEC);
+  fcntl(LSv[1], F_SETFD, FD_CLOEXEC);
+{$ELSE}
   if socketpair(ADomain, AType or SOCK_CLOEXEC_LOCAL, AProtocol, @LSv[0]) <> 0 then
   begin
     if platform_get_errno = ESysEINVAL then
@@ -887,6 +958,7 @@ begin
       Exit(platform_get_errno);
     end;
   end;
+{$ENDIF}
   ASocket1.Value := LSv[0];
   ASocket2.Value := LSv[1];
   Result := 0;
@@ -1295,18 +1367,20 @@ end;
 
 function platform_socket_error_would_block(const AError: Int32): Boolean;
 begin
-  Result := AError = WSAEWOULDBLOCK;
+  { Accept portable PLATFORM_ERR_AGAIN and raw Winsock codes. }
+  Result := (AError = PLATFORM_ERR_AGAIN) or (AError = WSAEWOULDBLOCK);
 end;
 
 function platform_socket_error_timed_out(const AError: Int32): Boolean;
 begin
-  Result := AError = WSAETIMEDOUT;
+  Result := (AError = PLATFORM_ERR_TIMEDOUT) or (AError = WSAETIMEDOUT);
 end;
 
 function platform_socket_error_in_progress(const AError: Int32): Boolean;
 begin
-  { Winsock nonblocking connect typically returns WSAEWOULDBLOCK. }
-  Result := (AError = WSAEINPROGRESS) or (AError = WSAEWOULDBLOCK);
+  { Winsock nonblocking connect typically returns WSAEWOULDBLOCK → AGAIN. }
+  Result := (AError = PLATFORM_ERR_AGAIN) or
+    (AError = WSAEINPROGRESS) or (AError = WSAEWOULDBLOCK);
 end;
 
 function platform_socket_poll(const ASocket: TPlatformSocket;
@@ -1326,6 +1400,36 @@ begin
     Exit(0);
   ARevents := Int32(LPfd.revents);
   Result := 1;
+end;
+
+function platform_socket_poll_or_wake(const ASocket: TPlatformSocket;
+  const AEvents: Int32; const AWake: TPlatformSocket;
+  const ATimeoutMs: Int32; out ARevents: Int32): Int32;
+var
+  LPfds: array[0..1] of TWSAPollFd;
+  LNready: LongInt;
+begin
+  ARevents := 0;
+  FillChar(LPfds[0], SizeOf(LPfds), 0);
+  LPfds[0].fd := TSocket(ASocket.Value);
+  LPfds[0].events := SmallInt(AEvents);
+  LPfds[1].fd := TSocket(AWake.Value);
+  LPfds[1].events := SmallInt(PLATFORM_POLL_IN);
+  LNready := WSAPoll(@LPfds[0], 2, ATimeoutMs);
+  if LNready < 0 then
+    Exit(-platform_get_last_error);
+  if LNready = 0 then
+    Exit(0);
+  if (LPfds[1].revents and SmallInt(PLATFORM_POLL_IN or PLATFORM_POLL_HUP or
+    PLATFORM_POLL_ERR)) <> 0 then
+    Exit(2);
+  if (LPfds[0].revents and SmallInt(AEvents or PLATFORM_POLL_HUP or
+    PLATFORM_POLL_ERR)) <> 0 then
+  begin
+    ARevents := Int32(LPfds[0].revents);
+    Exit(1);
+  end;
+  Result := 0;
 end;
 
 { --- sockaddr helpers (byte-order + ipv4 forwarding from socket.base) --- }
@@ -1625,6 +1729,7 @@ function platform_socket_error_would_block(const AError: Int32): Boolean; begin 
 function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_in_progress(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_poll(const ASocket: TPlatformSocket; const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_socket_poll_or_wake(const ASocket: TPlatformSocket; const AEvents: Int32; const AWake: TPlatformSocket; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_pair(ADomain, AType, AProtocol: Int32; out ASocket1, ASocket2: TPlatformSocket): Int32; begin ASocket1.Value := -1; ASocket2.Value := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_getsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Pointer): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_tcp_nodelay(const ASocket: TPlatformSocket; const AEnable: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;

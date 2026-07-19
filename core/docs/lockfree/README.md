@@ -17,13 +17,16 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 |------|------|
 | [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
 | [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
-| [`READY.md`](READY.md) | **Ready / Maintenance 声明**（R0–R7 验收清单、维护策略） |
-| [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 |
+| [`READY.md`](READY.md) | **状态入口**（**Maintenance**；H3-1…H3-3 done） |
+| [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6 complete） |
+| [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-3 done；H3-4/H3-5 未授权实现） |
+| [`bench-envelope.md`](bench-envelope.md) | **H2-4** bench 证据信封（禁止无信封绝对 Mops） |
+| [`consumer-audit.md`](consumer-audit.md) | 消费者审计 + H3-3 门入口 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
 
-历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap 为准。主线 **R0–R7 已完成**，当前 **Ready / Maintenance**（详见 READY）。
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-3 已完成**，当前 **Maintenance**（详见 [`READY.md`](READY.md)）。
 
 ## Progress-guarantee matrix
 
@@ -51,8 +54,22 @@ Single-owner means concurrent multi-owner use is outside the contract (e.g. mult
 | Tier | Contents | How to use |
 | --- | --- | --- |
 | **T1 runtime core** | SPSC/MPMC/MPSC/SPMC/SegQueue/MSQueue, Stack, WorkStealingDeque, EBR/Hazard, Channel, Selector, ShardedHashMap (+ ConcurrentHashMap alias) | `uses nextpas.core.lockfree;` |
-| **T2 concurrent containers** | SkipList, BTree, caches, Bloom, Bag, MultiMap, graph/tree extras, sync helpers under `lockfree.*` | `uses nextpas.core.lockfree.<unit>;` |
+| **T2 concurrent containers** | SkipList, BTree, caches, Bloom, Bag, MultiMap, graph/tree extras, sync helpers under `lockfree.*` | `uses nextpas.core.lockfree.<unit>;` — **not** default facade |
 | **T3 research / extensions** | RTM HashMap, NUMA HashMap, experimental algos | direct unit only |
+
+### T2 maturity tiers (H2-2)
+
+Within T2, containers are **documented** (not re-ranked into T1) as:
+
+| Maturity | Meaning | Examples |
+| --- | --- | --- |
+| **Guarded** | Tests + managed/close discipline documented | bag, multimap, ringbuffer, workstealing pool, many caches/filters/sync helpers |
+| **Available** | Usable concurrent structure; progress often lock-based | trees/skiplist, sketches, `deque_lf` (spin-lock) |
+| **Experimental** | Research / unstable surface | `hashmap.rtm`, `hashmap.numa` |
+
+**H3-2 production subset** (authorized): `bag` + `multimap` have a **unified** Close / managed / progress contract in [`CONTRACT.md`](CONTRACT.md) §0.3. Still **direct import only** — not default facade. Other Guarded types remain H2-2 tier docs only.
+
+Full table: [`CONTRACT.md`](CONTRACT.md) §0.2–§0.3. Selection: [`selection-guide.md`](selection-guide.md).
 
 ## 模块分层（T1 live set）
 
@@ -117,9 +134,10 @@ closed、当前为空且没有 admitted producer 仍可能发布时才把 closed
 with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` is a fixed-capacity stack: `TryPush` returns `False` when no free slot remains, and `IsEmpty` / `ApproxCount` are snapshot helpers over the current top-linked list rather than linearization guarantees under contention.
 
-`TWorkStealingDeque<T>` 是 work-stealing deque：owner 线程执行 `TryPush` / `TryPop`，thief
-线程只执行 `TrySteal`。支持 `Close` / `IsClosed`：Close 后 `TryPush` 返回 False，已入队数据仍可
-`TryPop` / `TrySteal` 取出；无 wait/timeout surface。
+`TWorkStealingDeque<T>` 是 work-stealing deque：owner 线程执行 `TryPush` / `TryPop`（可选 `TryPushEx` / `TryPopEx`），thief
+线程只执行 `TrySteal`（可选 `TryStealEx`）。支持 `Close` / `IsClosed`：Close 后 `TryPush`/`TryPushEx` 返回 False（`lfteClosed`），已入队数据仍可
+`TryPop` / `TrySteal` 取出；空且 closed 时 Ex API 报 `lfteClosed`。无 wait/timeout surface。
+`deque_lf`（`TLockFreeDeque`）为 **spin-lock** + `TDequeResult`，非 T1 Try\*Ex 目标，非 wait-free。
 `TWorkStealingDeque<T>` rounds requested capacity up to power-of-two storage; `Capacity` returns that live ring bound, `TryPush` returns `False` when the deque is full or closed, and `ApproxCount` / `IsEmpty` are snapshot helpers over current top/bottom counters rather than multi-thread linearization guarantees.
 `TSpmcQueue<T>` 是单 producer、多 consumer 有界队列。`TryEnqueue` 是非阻塞操作；`TryDequeue` 多消费者间
 竞争 CAS；`EnqueueWait` / `DequeueWait` 通过 wait-address seam 阻塞；timeout 版本使用纳秒超时。
@@ -139,8 +157,8 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
 `TSpmcQueue<T>` permits exactly one producer and multiple concurrent consumers; CAS-protected dequeue positions ensure exactly-once delivery under contention.
-`TLockFreeBag<T>` permits multiple concurrent producers and consumers; based on MPMC queue, allows duplicate elements. FIFO order is preserved. `Close` prevents new additions but existing elements can still be retrieved.
-`TLockFreeMultiMap<TKey, TValue>` permits multiple concurrent producers and consumers; based on sharded HashMap, each key can have multiple values. `Close` prevents new additions but existing data can still be read and removed.
+`TLockFreeBag<T>` (H3-2 Guarded subset): multiple concurrent producers/consumers; **MPMC sequence ring** (lock-free try path); allows duplicates; FIFO. `Close` blocks new adds (`arClosed`); existing elements still takeable. Unmanaged `T` only. Direct `uses nextpas.core.lockfree.bag`.
+`TLockFreeMultiMap<TKey, TValue>` (H3-2 Guarded subset): concurrent multi-value map under **one map spin lock** (lock-based, **not** sharded, **not** lock-free). `Close` blocks new adds (`mmClosed`); existing keys readable/removable. Unmanaged key/value. Direct `uses nextpas.core.lockfree.multimap`.
 `TConcurrentBloomFilter<T>` permits multiple concurrent producers and consumers; based on multiple hash functions. `Add` and `Contains` are lock-free. `Close` prevents new additions but existing data can still be queried. May have false positives but no false negatives.
 
 ## Linearization points

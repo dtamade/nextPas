@@ -34,21 +34,37 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (14-module matrix), real Windows
-focused-runtime (VM + GHA focused gates for poller/io/socket and broader VM
-module sets), and IOCP send/recv/AcceptEx/ConnectEx evidence on Wine and VM.
+Windows compile gates, Wine runtime smoke (14-module matrix), and durable GHA
+**`ci-matrix`** for the **documented 17-gate set** in
+`platform-windows-ci-matrix.sh` / `.ps1` (14 suite dirs + poller/io/socket real
+gates) under job `test-windows-runtime` on `windows-latest`.
 
-It does **not** yet claim full-host **`ci-matrix`**: GHA runs
-`platform-windows-ci-matrix.ps1` (14 suite dirs + 3 dedicated real gates) as
-`truth=real-windows-runtime-ci`. Full promotion is ROADMAP D1.d.
+D1.d promotion is **scoped**: it does **not** claim full-host Windows parity for
+modules outside that list (e.g. signal, console, native secure-zero) or for
+IOCP AcceptEx/ConnectEx depth beyond current smoke gaps.
 
 Allowed wording:
 
 - `source-contract covered`
 - `forced Windows compile covered`
-- `wine-runtime-smoke (not real Windows ci-matrix)`
-- `focused-runtime` only for modules with real Windows host logs
-- `ci-matrix` only after ROADMAP D1.d criteria
+- `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
+- `focused-runtime` for modules with real Windows host logs outside CI matrix
+- `ci-matrix` for the documented 17-gate set only (ROADMAP D1.d)
+
+## Current macOS truth
+
+macOS aarch64 (`macos-14`) has durable GHA **`focused-runtime`** for the
+**documented 8-gate set** in `platform-macos-ci-matrix.sh` under job
+`test-macos` (fail-closed step; ROADMAP D2.c):
+`platform.{time,sync,thread,files,path,env,error,socket}`.
+
+D2.c promotion is **scoped**: it does **not** claim full-host macOS parity or
+treat best-effort whole-suite inventory as evidence.
+
+Allowed wording:
+
+- `focused-runtime` for the documented 8-gate set only (ROADMAP D2.c)
+- best-effort inventory remains non-promotional non-evidence
 
 ### IOCP completion operations
 

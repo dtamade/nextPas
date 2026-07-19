@@ -17,7 +17,11 @@ type
     { OS dial + post-dial first-write budget for newly opened sockets (ms).
       0 = dial uses Timeout when Timeout > 0; post-dial first-write uses Timeout. }
     ConnectTimeout: Int64;
+    { Max idle connections retained per pool authority key (host/port, with
+      scheme/proxy variants encoded in the host key). Not a global pool cap. }
     MaxPoolSize: Int32;
+    { Wall-clock idle TTL (ms). 0 = no TTL. Default comes from client options. }
+    IdleTTL: Int64;
     { Plain HTTP forward proxy URL (http://[user:pass@]host:port). Empty = direct.
       For https targets, client dials proxy and opens a CONNECT tunnel, then
       TLS-wraps the tunneled stream (SNI = origin host). Plain http targets
@@ -51,7 +55,8 @@ implementation
 uses
   nextpas.core.base, nextpas.core.base.utils, nextpas.core.errors,
   nextpas.core.io.base, nextpas.core.io.buffer, nextpas.core.net,
-  nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.text.conv,
+  nextpas.core.time.base, nextpas.core.time.deadline, nextpas.core.time,
+  nextpas.core.text.conv,
   nextpas.core.encoding,
   nextpas.core.http.headers, nextpas.core.http.message,
   nextpas.core.http.impl.h1.outbound, nextpas.core.http.impl.h1.fast,
@@ -69,6 +74,7 @@ type
     Host: string;
     Port: UInt16;
     Conn: ITcpStream;
+    IdleAtMs: UInt64;
   end;
 
   TReadPrependTcpStream = class(TInterfacedObject, IReader, IWriter, ITcpStream)
@@ -133,6 +139,8 @@ type
     FPending: string;
     FDefaultTLSContext: ISSLContext;
     function PooledConnectionIsReusable(const AConn: ITcpStream): Boolean;
+    function PoolEntryExpired(const AEntry: TPoolEntry): Boolean;
+    procedure PoolRemoveAt(const AIndex: Int32);
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
     procedure PoolClear;
@@ -383,8 +391,8 @@ begin
     Exit;
   if (LScheme = 'http') or (LScheme = 'https') then
     Exit;
-  raise EHttpError.Create(hekProtocol, 'unsupported HTTP client URL scheme: ' +
-    AUrl.Scheme);
+  raise EHttpError.CreateOp(hekProtocol, 'transport',
+    'unsupported HTTP client URL scheme: ' + AUrl.Scheme);
 end;
 
 function ProxyBasicAuthorizationValue(const AUserInfo: string): string;
@@ -492,7 +500,8 @@ begin
   if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
     Exit;
   if ABodyStream = nil then
-    raise EHttpError.Create(hekProtocol, 'pooled retry request body is not replayable');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'pooled retry request body is not replayable');
   ABodyStream.Position := AStartPosition;
 end;
 
@@ -514,19 +523,26 @@ begin
 end;
 
 type
-  { Bridge IHttpCancelToken → INetCancelToken for mid-read/write cancel slices. }
-  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken)
+  { Bridge IHttpCancelToken → INetCancelToken when token is probe-only. }
+  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken, INetCancelWaitable)
   private
     FToken: IHttpCancelToken;
+    FWaitable: INetCancelWaitable;
   public
     constructor Create(const AToken: IHttpCancelToken);
     function IsCanceled: Boolean;
+    function WakeHandle: PtrUInt;
+    procedure DrainWake;
   end;
 
 constructor THttpNetCancelAdapter.Create(const AToken: IHttpCancelToken);
 begin
   inherited Create;
   FToken := AToken;
+  FWaitable := nil;
+  if (AToken <> nil) and
+     (AToken.QueryInterface(INetCancelWaitable, FWaitable) <> 0) then
+    FWaitable := nil;
 end;
 
 function THttpNetCancelAdapter.IsCanceled: Boolean;
@@ -534,13 +550,31 @@ begin
   Result := (FToken <> nil) and FToken.IsCanceled;
 end;
 
+function THttpNetCancelAdapter.WakeHandle: PtrUInt;
+begin
+  if FWaitable <> nil then
+    Result := FWaitable.WakeHandle
+  else
+    Result := 0;
+end;
+
+procedure THttpNetCancelAdapter.DrainWake;
+begin
+  if FWaitable <> nil then
+    FWaitable.DrainWake;
+end;
+
 procedure ApplyClientCancelToken(const AConn: ITcpStream;
   const AToken: IHttpCancelToken);
+var
+  LNet: INetCancelToken;
 begin
   if AConn = nil then
     Exit;
   if AToken = nil then
     AConn.SetCancelToken(nil)
+  else if AToken.QueryInterface(INetCancelToken, LNet) = 0 then
+    AConn.SetCancelToken(LNet)
   else
     AConn.SetCancelToken(THttpNetCancelAdapter.Create(AToken));
 end;
@@ -2196,11 +2230,11 @@ begin
     { 407 is not auto-retried with Digest/NTLM. Supported path is preemptive
       Basic from ProxyUrl UserInfo only (Wave I freeze). }
     if LResp.StatusCode = HTTP_STATUS_PROXY_AUTH_REQUIRED then
-      raise EHttpError.Create(hekConnect,
+      raise EHttpError.CreateOp(hekConnect, 'connect',
         'proxy CONNECT failed: HTTP 407 Proxy Authentication Required ' +
         '(supported: ProxyUrl UserInfo → Proxy-Authorization Basic only)')
     else
-      raise EHttpError.Create(hekConnect,
+      raise EHttpError.CreateOp(hekConnect, 'connect',
         'proxy CONNECT failed: HTTP ' + IntToStr(Int64(LResp.StatusCode)));
   end;
 
@@ -2244,39 +2278,142 @@ begin
   end;
 end;
 
+function TH1ClientTransport.PoolEntryExpired(const AEntry: TPoolEntry): Boolean;
+var
+  LNow: UInt64;
+  LAge: UInt64;
+begin
+  Result := False;
+  if FOptions.IdleTTL <= 0 then
+    Exit;
+  LNow := GetTickCount64;
+  if LNow >= AEntry.IdleAtMs then
+    LAge := LNow - AEntry.IdleAtMs
+  else
+    LAge := 0;
+  Result := LAge >= UInt64(FOptions.IdleTTL);
+end;
+
+procedure TH1ClientTransport.PoolRemoveAt(const AIndex: Int32);
+begin
+  if (AIndex < 0) or (AIndex >= FPoolCount) then
+    Exit;
+  FPool[AIndex] := FPool[FPoolCount - 1];
+  Dec(FPoolCount);
+end;
+
 function TH1ClientTransport.PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
 var
   LI: Int32;
+  LCandidate: ITcpStream;
+  LToClose: array of ITcpStream;
+  LCloseCount: Int32;
 begin
+  { Never Close or probe sockets while holding FPoolLock: Close/TryRead can
+    block or re-enter pool paths and hang the IdleTTL client suite. }
   Result := nil;
-  FPoolLock.Acquire;
-  try
-    for LI := 0 to FPoolCount - 1 do
-      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+  LCloseCount := 0;
+  SetLength(LToClose, 0);
+  while True do
+  begin
+    LCandidate := nil;
+    FPoolLock.Acquire;
+    try
+      LI := 0;
+      while LI < FPoolCount do
       begin
-        Result := FPool[LI].Conn;
-        FPool[LI] := FPool[FPoolCount - 1];
-        Dec(FPoolCount);
-        if PooledConnectionIsReusable(Result) then
-          Exit;
-        Result.Close;
-        Result := nil;
-        Exit;
+        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+        begin
+          if PoolEntryExpired(FPool[LI]) then
+          begin
+            if FPool[LI].Conn <> nil then
+            begin
+              if LCloseCount >= Length(LToClose) then
+                SetLength(LToClose, LCloseCount + 4);
+              LToClose[LCloseCount] := FPool[LI].Conn;
+              Inc(LCloseCount);
+            end;
+            PoolRemoveAt(LI);
+            Continue;
+          end;
+          LCandidate := FPool[LI].Conn;
+          PoolRemoveAt(LI);
+          Break;
+        end;
+        Inc(LI);
       end;
-  finally
-    FPoolLock.Release;
+    finally
+      FPoolLock.Release;
+    end;
+
+    if LCandidate = nil then
+      Break;
+
+    if PooledConnectionIsReusable(LCandidate) then
+    begin
+      Result := LCandidate;
+      Break;
+    end;
+
+    if LCloseCount >= Length(LToClose) then
+      SetLength(LToClose, LCloseCount + 4);
+    LToClose[LCloseCount] := LCandidate;
+    Inc(LCloseCount);
   end;
+
+  for LI := 0 to LCloseCount - 1 do
+    if LToClose[LI] <> nil then
+    try
+      LToClose[LI].Close;
+    except
+    end;
 end;
 
 procedure TH1ClientTransport.PoolPut(const AHost: string; const APort: UInt16;
   const AConn: ITcpStream);
+var
+  LI: Int32;
+  LAuthorityIdle: Int32;
+  LToClose: array of ITcpStream;
+  LCloseCount: Int32;
+  LReject: Boolean;
 begin
+  LCloseCount := 0;
+  SetLength(LToClose, 0);
+  LReject := False;
   FPoolLock.Acquire;
   try
-    if (FOptions.MaxPoolSize > 0) and (FPoolCount >= FOptions.MaxPoolSize) then
+    { Drop expired peers for this authority so MaxPoolSize counts live idle only. }
+    LI := 0;
+    while LI < FPoolCount do
     begin
-      AConn.Close;
-      Exit;
+      if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) and
+         PoolEntryExpired(FPool[LI]) then
+      begin
+        if FPool[LI].Conn <> nil then
+        begin
+          if LCloseCount >= Length(LToClose) then
+            SetLength(LToClose, LCloseCount + 4);
+          LToClose[LCloseCount] := FPool[LI].Conn;
+          Inc(LCloseCount);
+        end;
+        PoolRemoveAt(LI);
+      end
+      else
+        Inc(LI);
+    end;
+
+    if FOptions.MaxPoolSize > 0 then
+    begin
+      LAuthorityIdle := 0;
+      for LI := 0 to FPoolCount - 1 do
+        if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+          Inc(LAuthorityIdle);
+      if LAuthorityIdle >= FOptions.MaxPoolSize then
+      begin
+        LReject := True;
+        Exit;
+      end;
     end;
     AConn.SetReadDeadline(TDeadline.Infinite);
     AConn.SetWriteDeadline(TDeadline.Infinite);
@@ -2285,26 +2422,56 @@ begin
     FPool[FPoolCount].Host := AHost;
     FPool[FPoolCount].Port := APort;
     FPool[FPoolCount].Conn := AConn;
+    FPool[FPoolCount].IdleAtMs := GetTickCount64;
     Inc(FPoolCount);
   finally
     FPoolLock.Release;
   end;
+
+  if LReject then
+  begin
+    if LCloseCount >= Length(LToClose) then
+      SetLength(LToClose, LCloseCount + 4);
+    LToClose[LCloseCount] := AConn;
+    Inc(LCloseCount);
+  end;
+  for LI := 0 to LCloseCount - 1 do
+    if LToClose[LI] <> nil then
+    try
+      LToClose[LI].Close;
+    except
+    end;
 end;
 
 procedure TH1ClientTransport.PoolClear;
 var
   LI: Int32;
+  LToClose: array of ITcpStream;
+  LCloseCount: Int32;
 begin
+  LCloseCount := 0;
+  SetLength(LToClose, 0);
   FPoolLock.Acquire;
   try
     for LI := 0 to FPoolCount - 1 do
       if FPool[LI].Conn <> nil then
-        FPool[LI].Conn.Close;
+      begin
+        if LCloseCount >= Length(LToClose) then
+          SetLength(LToClose, LCloseCount + 4);
+        LToClose[LCloseCount] := FPool[LI].Conn;
+        Inc(LCloseCount);
+      end;
     FPoolCount := 0;
     SetLength(FPool, 0);
   finally
     FPoolLock.Release;
   end;
+  for LI := 0 to LCloseCount - 1 do
+    if LToClose[LI] <> nil then
+    try
+      LToClose[LI].Close;
+    except
+    end;
 end;
 
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
@@ -2328,7 +2495,8 @@ var
 begin
   Result := True;
   if not (AReq.Version in [hvHttp10, hvHttp11]) then
-    raise EHttpError.Create(hekProtocol, 'h1 transport only supports HTTP/1.x requests');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'h1 transport only supports HTTP/1.x requests');
 
   LUrl := AReq.Url;
   if AAbsoluteForm then
@@ -2435,7 +2603,7 @@ begin
               'HTTP request body read failed: ' + E.Message);
           if E is EHttpError then
             raise;
-          raise EHttpError.Create(hekProtocol,
+          raise EHttpError.CreateOp(hekProtocol, 'transport',
             'HTTP request body read failed: ' + E.Message);
         end;
       end;
@@ -2450,7 +2618,7 @@ begin
       begin
         if Supports(LBuf, IFlusher, LFlusher) then
           LFlusher.Flush;
-        raise EHttpError.Create(hekBody,
+        raise EHttpError.CreateOp(hekBody, 'transport',
           'HTTP request body shorter than declared content-length');
       end;
     end;
@@ -2470,7 +2638,7 @@ begin
               'HTTP request body read failed: ' + E.Message);
           if E is EHttpError then
             raise;
-          raise EHttpError.Create(hekProtocol,
+          raise EHttpError.CreateOp(hekProtocol, 'transport',
             'HTTP request body read failed: ' + E.Message);
         end;
       end;
@@ -2549,15 +2717,19 @@ begin
 
   if LParser.IsComplete and
     IsSkippableInformationalResponse(LParser.GetStatusCode) then
-    raise EHttpError.Create(hekProtocol, 'HTTP response incomplete: missing final response');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'HTTP response incomplete: missing final response');
 
   if LSkippedInformational and (not LCurrentResponseStarted) then
-    raise EHttpError.Create(hekProtocol, 'HTTP response incomplete: missing final response');
+    raise EHttpError.CreateOp(hekProtocol, 'transport',
+      'HTTP response incomplete: missing final response');
 
   if LParser.HasError then
-    raise EHttpError.Create(hekParse, 'HTTP parse error: ' + LParser.ErrorMessage);
+    raise EHttpError.CreateOp(hekParse, 'transport',
+      'HTTP parse error: ' + LParser.ErrorMessage);
   if not LParser.IsComplete then
-    raise EHttpError.Create(hekConnect, 'HTTP response incomplete: connection closed');
+    raise EHttpError.CreateOp(hekConnect, 'transport',
+      'HTTP response incomplete: connection closed');
 
   FPending := LPending;
   LHasResponseTail := FPending <> '';

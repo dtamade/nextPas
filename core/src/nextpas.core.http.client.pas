@@ -194,6 +194,20 @@ procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
+{** @desc Decode ABody for a single Content-Encoding token.
+   Empty/identity → pass-through. gzip/deflate → decompress via core.compress.
+   Unsupported / multi-coding → hekProtocol Op=content_encoding.
+   Corrupt payload → hekBody Op=content_encoding.
+   AMaxSize > 0 caps decompressed size; AMaxSize < 0 → hekArgument. }
+function HttpDecodeContentEncoding(const AEncoding: string;
+  const ABody: TBytes; const AMaxSize: Int64 = 0): TBytes;
+{** @desc Read wire body then decode via response Content-Encoding.
+   Consumes/closes body like HttpReadResponseBodyBytes. Missing encoding → raw. }
+function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64 = 0): TBytes;
+{** @desc HttpReadResponseBodyBytesDecoded as string (byte→char, same as raw string helper). }
+function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64 = 0): string;
 {** @desc Raise EHttpError if response status is not 2xx (200-299). Returns AResp for chaining. }
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; overload;
 {** @desc Same as HttpEnsureSuccess, with method/URL prefix in error messages. }
@@ -263,6 +277,7 @@ uses
   nextpas.core.io.memory,
   nextpas.core.text.conv,
   nextpas.core.encoding,
+  nextpas.core.compress,
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.form,
@@ -320,7 +335,7 @@ begin
     raise EHttpError.CreateOp(hekConnect, 'download',
       FormatHttpClientError('GET', AUrl, 'HTTP download returned no response'));
   if (AResp.StatusCode < 200) or (AResp.StatusCode >= 300) then
-    raise EHttpError.Create(hekStatus,
+    raise EHttpError.CreateOp(hekStatus, 'download',
       FormatHttpClientError('GET', AUrl,
         'HTTP download failed with status ' +
         IntToStr(Int64(AResp.StatusCode)) + ' ' +
@@ -337,6 +352,8 @@ begin
       'HTTP client connect timeout must not be negative');
   if AOptions.MaxRedirects < 0 then
     raise EHttpError.Create(hekArgument, 'HTTP client max redirects must not be negative');
+  if AOptions.IdleTTL < 0 then
+    raise EHttpError.Create(hekArgument, 'HTTP client IdleTTL must not be negative');
 end;
 
 procedure CloseRequestBody(const ABody: IReader);
@@ -1547,7 +1564,9 @@ end;
 
 function TAuthClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
-  if (AReq <> nil) and (AReq.Headers <> nil) then
+  { Outer auth wins: only set when not already present. }
+  if (AReq <> nil) and (AReq.Headers <> nil) and
+     (not AReq.Headers.Has('authorization')) then
     AReq.Headers.SetHeader('authorization', FAuthHeader);
   Result := inherited Send(AReq);
 end;
@@ -1569,7 +1588,9 @@ end;
 
 function THeaderClient.Send(const AReq: IHttpRequest): IHttpResponse;
 begin
-  if (AReq <> nil) and (AReq.Headers <> nil) then
+  { Outer WithHeader wins for the same name (Send walks outer→inner). }
+  if (AReq <> nil) and (AReq.Headers <> nil) and
+     (not AReq.Headers.Has(FName)) then
     AReq.Headers.SetHeader(FName, FValue);
   Result := inherited Send(AReq);
 end;
@@ -1597,22 +1618,24 @@ begin
   if not Supports(AReq, IHttpRequestWithOptions, LReqWithOpts) then
     Exit;
   LMerged := LReqWithOpts.RequestOptions;
-  if FRequestOptions.HasTimeout then
+  { Outer decorator Send runs first; only fill unset fields so later fluent
+    With* (outer) wins over earlier With* (inner). }
+  if FRequestOptions.HasTimeout and (not LMerged.HasTimeout) then
   begin
     LMerged.TimeoutMs := FRequestOptions.TimeoutMs;
     LMerged.HasTimeout := True;
   end;
-  if FRequestOptions.HasMaxRedirects then
+  if FRequestOptions.HasMaxRedirects and (not LMerged.HasMaxRedirects) then
   begin
     LMerged.MaxRedirects := FRequestOptions.MaxRedirects;
     LMerged.HasMaxRedirects := True;
   end;
-  if FRequestOptions.HasFollowRedirects then
+  if FRequestOptions.HasFollowRedirects and (not LMerged.HasFollowRedirects) then
   begin
     LMerged.FollowRedirects := FRequestOptions.FollowRedirects;
     LMerged.HasFollowRedirects := True;
   end;
-  if FRequestOptions.HasCancelToken then
+  if FRequestOptions.HasCancelToken and (not LMerged.HasCancelToken) then
   begin
     LMerged.CancelToken := FRequestOptions.CancelToken;
     LMerged.HasCancelToken := True;
@@ -1945,10 +1968,14 @@ begin
     CheckDownloadResponse(LResp, AUrl);
 
     LDestDir := nextpas.core.fs.PathDir(ADestPath);
-    if not nextpas.core.fs.MkdirAll(LDestDir) then
-      raise EHttpError.CreateOp(hekBody, 'download',
-        FormatHttpClientError('GET', AUrl,
-          'HTTP download could not create directory: ' + LDestDir));
+    try
+      nextpas.core.fs.MkdirAll(LDestDir);
+    except
+      on E: Exception do
+        raise EHttpError.CreateOp(hekBody, 'download',
+          FormatHttpClientError('GET', AUrl,
+            'HTTP download could not create directory: ' + LDestDir));
+    end;
 
     LTempFile := nextpas.core.fs.TempFile(LDestDir,
       '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
@@ -1963,10 +1990,14 @@ begin
       LTempFile.Close;
       LTempFile := nil;
 
-      if not nextpas.core.fs.Rename(LTempPath, ADestPath) then
-        raise EHttpError.CreateOp(hekBody, 'download',
-          FormatHttpClientError('GET', AUrl,
-            'HTTP download could not publish file: ' + ADestPath));
+      try
+        nextpas.core.fs.Rename(LTempPath, ADestPath);
+      except
+        on E: Exception do
+          raise EHttpError.CreateOp(hekBody, 'download',
+            FormatHttpClientError('GET', AUrl,
+              'HTTP download could not publish file: ' + ADestPath));
+      end;
       LCommitted := True;
     finally
       if LTempFile <> nil then
@@ -2019,6 +2050,90 @@ var
   LBody: TBytes;
 begin
   LBody := HttpReadResponseBodyBytes(AResp);
+  Result := '';
+  SetLength(Result, Length(LBody));
+  if Length(LBody) > 0 then
+    Move(LBody[0], Result[1], Length(LBody));
+end;
+
+function HttpDecodeContentEncoding(const AEncoding: string;
+  const ABody: TBytes; const AMaxSize: Int64): TBytes;
+var
+  LEncoding: string;
+  LComma: SizeInt;
+begin
+  if AMaxSize < 0 then
+    raise EHttpError.Create(hekArgument,
+      'content-encoding max decompressed size must not be negative');
+
+  LEncoding := LowerCase(Trim(AEncoding));
+  if (LEncoding = '') or (LEncoding = 'identity') then
+  begin
+    Result := ABody;
+    Exit;
+  end;
+
+  { C1: single coding only; stacked encodings are unsupported. }
+  LComma := Pos(',', LEncoding);
+  if LComma > 0 then
+    raise EHttpError.CreateOp(hekProtocol, 'content_encoding',
+      'unsupported Content-Encoding: multi-coding not supported');
+
+  if (LEncoding <> 'gzip') and (LEncoding <> 'deflate') and
+    (LEncoding <> 'x-gzip') then
+    raise EHttpError.CreateOp(hekProtocol, 'content_encoding',
+      'unsupported Content-Encoding: ' + LEncoding);
+
+  if (AMaxSize > 0) and (UInt64(AMaxSize) > UInt64(High(SizeUInt))) then
+    raise EHttpError.Create(hekArgument,
+      'content-encoding max decompressed size exceeds platform capacity');
+
+  try
+    if (LEncoding = 'gzip') or (LEncoding = 'x-gzip') then
+    begin
+      if AMaxSize > 0 then
+        Result := GzipDecompressWithMaxOutputSize(ABody, SizeUInt(AMaxSize))
+      else
+        Result := GzipDecompress(ABody);
+    end
+    else
+    begin
+      if AMaxSize > 0 then
+        Result := DeflateDecompressWithMaxOutputSize(ABody, SizeUInt(AMaxSize))
+      else
+        Result := DeflateDecompress(ABody);
+    end;
+  except
+    on E: EHttpError do
+      raise;
+    on E: Exception do
+      raise EHttpError.CreateOp(hekBody, 'content_encoding',
+        'failed to decode Content-Encoding: ' + E.Message);
+  end;
+end;
+
+function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64): TBytes;
+var
+  LRaw: TBytes;
+  LEncoding: string;
+begin
+  if AResp = nil then
+    raise EHttpError.Create(hekArgument, 'HTTP response is nil');
+
+  LRaw := HttpReadResponseBodyBytes(AResp);
+  LEncoding := '';
+  if (AResp.Headers <> nil) then
+    LEncoding := AResp.Headers.Get('content-encoding');
+  Result := HttpDecodeContentEncoding(LEncoding, LRaw, AMaxSize);
+end;
+
+function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64): string;
+var
+  LBody: TBytes;
+begin
+  LBody := HttpReadResponseBodyBytesDecoded(AResp, AMaxSize);
   Result := '';
   SetLength(Result, Length(LBody));
   if Length(LBody) > 0 then
@@ -2108,7 +2223,7 @@ begin
     raise EHttpError.Create(hekArgument,
       FormatHttpClientError(AMethod, AUrl, 'HTTP response is nil'));
   if not nextpas.core.http.base.HttpStatusIsSuccess(AResp.StatusCode) then
-    raise EHttpError.Create(hekStatus,
+    raise EHttpError.CreateOp(hekStatus, 'ensure',
       FormatHttpStatusFailure(AMethod, AUrl, AResp.StatusCode),
       AResp.StatusCode);
   Result := AResp;

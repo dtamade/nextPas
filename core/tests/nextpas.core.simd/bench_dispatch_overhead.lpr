@@ -136,7 +136,7 @@ end;
 function BenchCachedDispatchCall: Int64;
 begin
   if g_CachedDispatch <> nil then
-    g_DummyVec := g_CachedDispatch^.AddF32x4(g_OpA, g_OpB);
+    g_DummyVec := g_CachedDispatch^.CoreVectors.AddF32x4(g_OpA, g_OpB);
   Result := 1;
 end;
 

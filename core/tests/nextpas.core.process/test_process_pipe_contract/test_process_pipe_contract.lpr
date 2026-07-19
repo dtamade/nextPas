@@ -4,11 +4,14 @@ program test_process_pipe_contract;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes,
+  nextpas.core.thread,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.io.intf,
+  nextpas.core.time.base,
+  nextpas.core.platform.thread,
   nextpas.core.process.pipe
   {$IFDEF NEXTPAS_UNIX}
   , nextpas.core.platform.posix.base,
@@ -79,14 +82,14 @@ end;
 
 procedure WaitForFlag(var AFlag: Int32; const AName: string);
 var
-  LDeadline: QWord;
+  LDeadline: TInstant;
 begin
-  LDeadline := GetTickCount64 + 2000;
+  LDeadline := TInstant.Now.Add(TDuration.FromMilliseconds(2000));
   while InterlockedCompareExchange(AFlag, 0, 0) = 0 do
   begin
-    if GetTickCount64 > LDeadline then
+    if TInstant.Now > LDeadline then
       Fail(AName + ' timed out');
-    Sleep(1);
+    platform_thread_sleep_ms(1);
   end;
 end;
 
@@ -137,14 +140,14 @@ end;
 procedure WaitForPipeUnreadBytes(const AFd: Int32; const AExpected: SizeUInt;
   const AName: string);
 var
-  LDeadline: QWord;
+  LDeadline: TInstant;
 begin
-  LDeadline := GetTickCount64 + 2000;
+  LDeadline := TInstant.Now.Add(TDuration.FromMilliseconds(2000));
   while PipeUnreadBytes(AFd) < AExpected do
   begin
-    if GetTickCount64 > LDeadline then
+    if TInstant.Now > LDeadline then
       Fail(AName + ' timed out');
-    Sleep(1);
+    platform_thread_sleep_ms(1);
   end;
 end;
 
@@ -184,7 +187,7 @@ begin
     begin
       if InterlockedCompareExchange(ADone^, 0, 0) <> 0 then
         Exit;
-      Sleep(1);
+      platform_thread_sleep_ms(1);
       Continue;
     end;
     Check(LRead = 0, 'drain should not hit EOF before writer close');
@@ -484,8 +487,7 @@ procedure TestPipeReaderRetriesEintr;
 var
   LPipe: array[0..1] of Int32;
   LReader: TPipeReader;
-  LReaderThread: TThread;
-  LSignalThread: TThread;
+  LPool: IThreadPool;
   LReady: Int32;
   LDone: Int32;
   LThreadId: pthread_t;
@@ -495,9 +497,8 @@ var
   LErrorText: string;
 begin
   InstallSigUsr1NoRestart;
-  LReaderThread := nil;
-  LSignalThread := nil;
   LReader := nil;
+  LPool := nil;
   LReady := 0;
   LDone := 0;
   LThreadId := 0;
@@ -507,7 +508,8 @@ begin
   try
     Check(pipe(@LPipe[0]) = 0, 'pipe created');
     LReader := TPipeReader.Create(LPipe[0]);
-    LReaderThread := TThread.CreateAnonymousThread(procedure
+    LPool := ThreadPool(3);
+    LPool.Submit(procedure
     begin
       LThreadId := pthread_self;
       InterlockedExchange(LReady, 1);
@@ -519,38 +521,30 @@ begin
       end;
       InterlockedExchange(LDone, 1);
     end);
-    LReaderThread.FreeOnTerminate := False;
-    LReaderThread.Start;
     WaitForFlag(LReady, 'reader thread ready');
 
-    LSignalThread := TThread.CreateAnonymousThread(procedure
+    LPool.Submit(procedure
     begin
       while InterlockedCompareExchange(LDone, 0, 0) = 0 do
       begin
         pthread_kill(LThreadId, SIGUSR1);
-        Sleep(2);
+        platform_thread_sleep_ms(2);
       end;
     end);
-    LSignalThread.FreeOnTerminate := False;
-    LSignalThread.Start;
 
-    Sleep(50);
+    platform_thread_sleep_ms(50);
     LWriteByte := $4D;
     CheckEqual(Int64(1), Int64(write(LPipe[1], @LWriteByte, 1)),
       'main thread writes unblock byte');
 
-    LReaderThread.WaitFor;
-    LSignalThread.WaitFor;
+    LPool.WaitAll;
 
     CheckEqual('', LErrorText, 'reader thread error');
     Check(GSignalCount > 0, 'SIGUSR1 delivered while read pending');
     CheckEqual(Int64(1), Int64(LReadCount), 'reader retries after EINTR');
     CheckEqual(Int64(LWriteByte), Int64(LReadByte), 'reader receives written byte');
   finally
-    if LSignalThread <> nil then
-      LSignalThread.Free;
-    if LReaderThread <> nil then
-      LReaderThread.Free;
+    LPool := nil;
     if LReader <> nil then
       LReader.Free;
     Check(close(LPipe[1]) = 0, 'writer end closed');
@@ -562,9 +556,7 @@ procedure TestPipeWriterRetriesEintr;
 var
   LPipe: array[0..1] of Int32;
   LWriter: TPipeWriter;
-  LWriterThread: TThread;
-  LSignalThread: TThread;
-  LDrainThread: TThread;
+  LPool: IThreadPool;
   LReady: Int32;
   LDone: Int32;
   LThreadId: pthread_t;
@@ -575,9 +567,7 @@ var
   LErrorText: string;
 begin
   InstallSigUsr1NoRestart;
-  LWriterThread := nil;
-  LSignalThread := nil;
-  LDrainThread := nil;
+  LPool := nil;
   LWriter := nil;
   LReady := 0;
   LDone := 0;
@@ -595,7 +585,8 @@ begin
     SetNonBlocking(LPipe[1], False);
 
     LWriter := TPipeWriter.Create(LPipe[1]);
-    LWriterThread := TThread.CreateAnonymousThread(procedure
+    LPool := ThreadPool(4);
+    LPool.Submit(procedure
     begin
       LThreadId := pthread_self;
       InterlockedExchange(LReady, 1);
@@ -607,33 +598,25 @@ begin
       end;
       InterlockedExchange(LDone, 1);
     end);
-    LWriterThread.FreeOnTerminate := False;
-    LWriterThread.Start;
     WaitForFlag(LReady, 'writer thread ready');
 
-    LSignalThread := TThread.CreateAnonymousThread(procedure
+    LPool.Submit(procedure
     begin
       while InterlockedCompareExchange(LDone, 0, 0) = 0 do
       begin
         pthread_kill(LThreadId, SIGUSR1);
-        Sleep(2);
+        platform_thread_sleep_ms(2);
       end;
     end);
-    LSignalThread.FreeOnTerminate := False;
-    LSignalThread.Start;
 
     WaitForFlag(GSignalCount, 'writer EINTR signal');
 
-    LDrainThread := TThread.CreateAnonymousThread(procedure
+    LPool.Submit(procedure
     begin
       DrainUntilDone(LPipe[0], LDrained, @LDone);
     end);
-    LDrainThread.FreeOnTerminate := False;
-    LDrainThread.Start;
 
-    LWriterThread.WaitFor;
-    LSignalThread.WaitFor;
-    LDrainThread.WaitFor;
+    LPool.WaitAll;
 
     CheckEqual('', LErrorText, 'writer thread error');
     Check(GSignalCount > 0, 'SIGUSR1 delivered while write pending');
@@ -644,12 +627,7 @@ begin
     CheckEqual(Int64(LFilled + 1), Int64(LDrained),
       'pipe retains filled bytes plus retried write');
   finally
-    if LSignalThread <> nil then
-      LSignalThread.Free;
-    if LDrainThread <> nil then
-      LDrainThread.Free;
-    if LWriterThread <> nil then
-      LWriterThread.Free;
+    LPool := nil;
     if LWriter <> nil then
       LWriter.Free;
     Check(close(LPipe[0]) = 0, 'reader end closed');
@@ -664,8 +642,7 @@ const
 var
   LPipe: array[0..1] of Int32;
   LWriter: TPipeWriter;
-  LWriterThread: TThread;
-  LDrainThread: TThread;
+  LPool: IThreadPool;
   LReady: Int32;
   LDone: Int32;
   LThreadId: pthread_t;
@@ -676,15 +653,13 @@ var
   LErrorText: string;
   LI: SizeInt;
   LWriterOwnsFd: Boolean;
-  LWriterThreadStarted: Boolean;
-  LDrainThreadStarted: Boolean;
+  LWriterSubmitted: Boolean;
 begin
   InstallSigUsr1NoRestart;
   LPipe[0] := -1;
   LPipe[1] := -1;
   LWriter := nil;
-  LWriterThread := nil;
-  LDrainThread := nil;
+  LPool := nil;
   LReady := 0;
   LDone := 0;
   LThreadId := 0;
@@ -692,8 +667,7 @@ begin
   LWriteCount := 0;
   LErrorText := '';
   LWriterOwnsFd := False;
-  LWriterThreadStarted := False;
-  LDrainThreadStarted := False;
+  LWriterSubmitted := False;
   SetLength(LPayload, CWriteCount);
   for LI := 0 to High(LPayload) do
     LPayload[LI] := Byte(LI and $FF);
@@ -710,7 +684,8 @@ begin
     LWriter := TPipeWriter.Create(LPipe[1]);
     LWriterOwnsFd := True;
     LPipe[1] := -1;
-    LWriterThread := TThread.CreateAnonymousThread(procedure
+    LPool := ThreadPool(3);
+    LPool.Submit(procedure
     begin
       LThreadId := pthread_self;
       InterlockedExchange(LReady, 1);
@@ -722,9 +697,7 @@ begin
       end;
       InterlockedExchange(LDone, 1);
     end);
-    LWriterThread.FreeOnTerminate := False;
-    LWriterThread.Start;
-    LWriterThreadStarted := True;
+    LWriterSubmitted := True;
     WaitForFlag(LReady, 'writer thread ready');
     WaitForPipeUnreadBytes(LPipe[0], LFilled, 'writer fills drained window');
 
@@ -732,16 +705,12 @@ begin
       'interrupt writer after positive partial write');
     WaitForFlag(GSignalCount, 'writer positive short-write signal');
 
-    LDrainThread := TThread.CreateAnonymousThread(procedure
+    LPool.Submit(procedure
     begin
       DrainUntilDone(LPipe[0], LDrained, @LDone);
     end);
-    LDrainThread.FreeOnTerminate := False;
-    LDrainThread.Start;
-    LDrainThreadStarted := True;
 
-    LWriterThread.WaitFor;
-    LDrainThread.WaitFor;
+    LPool.WaitAll;
 
     CheckEqual('', LErrorText, 'writer thread error');
     CheckEqual(Int64(CWriteCount), Int64(LWriteCount),
@@ -749,25 +718,18 @@ begin
     CheckEqual(Int64(LFilled + CWriteCount - CDrainWindow), Int64(LDrained),
       'pipe receives original bytes plus full payload');
   finally
-    if (LDrainThread = nil) and LWriterThreadStarted and
-      (InterlockedCompareExchange(LDone, 0, 0) = 0) and (LPipe[0] >= 0) then
+    if LWriterSubmitted and (InterlockedCompareExchange(LDone, 0, 0) = 0) and
+      (LPipe[0] >= 0) and (LPool <> nil) then
     begin
-      LDrainThread := TThread.CreateAnonymousThread(procedure
+      LPool.Submit(procedure
       begin
         DrainUntilDone(LPipe[0], LDrained, @LDone);
       end);
-      LDrainThread.FreeOnTerminate := False;
-      LDrainThread.Start;
-      LDrainThreadStarted := True;
-    end;
-    if LWriterThreadStarted then
-      LWriterThread.WaitFor;
-    if LDrainThreadStarted then
-      LDrainThread.WaitFor;
-    if LDrainThread <> nil then
-      LDrainThread.Free;
-    if LWriterThread <> nil then
-      LWriterThread.Free;
+      LPool.WaitAll;
+    end
+    else if LPool <> nil then
+      LPool.WaitAll;
+    LPool := nil;
     if LWriter <> nil then
       LWriter.Free;
     if (not LWriterOwnsFd) and (LPipe[1] >= 0) then

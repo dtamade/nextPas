@@ -45,10 +45,16 @@ type
     FLastReadTimeoutMs: UInt32;
     FLastWriteTimeoutMs: UInt32;
     FCancelToken: INetCancelToken;
+    FCancelWaitable: INetCancelWaitable;
     procedure EnsureOpen(const AOperation: string);
     procedure ThrowIfCanceled;
     procedure ApplyReadTimeout;
     procedure ApplyWriteTimeout;
+    function CancelWakeHandle: PtrUInt;
+    function DeadlineTimeoutMs(const ADeadline: TDeadline): Int32;
+    { 0=timeout/retry, 1=ready, raises on cancel/deadline/error. }
+    function WaitIO(const AEvents: Int32; const ADeadline: TDeadline;
+      const AOpName: string): Int32;
   public
     constructor Create(const ASocket: TPlatformSocket;
       const ALocal, ARemote: TNetAddress);
@@ -144,8 +150,8 @@ begin
 end;
 
 const
-  { Slice length when a cancel token is attached so mid-IO cancel is observed. }
-  NET_IO_CANCEL_SLICE_MS = 50;
+  { Fallback slice when cancel token is probe-only (no WakeHandle). }
+  NET_IO_CANCEL_SLICE_MS = 10;
 
 procedure TTcpStream.EnsureOpen(const AOperation: string);
 begin
@@ -159,17 +165,111 @@ begin
     raise ECancelledError.Create('tcp operation canceled');
 end;
 
+function TTcpStream.CancelWakeHandle: PtrUInt;
+begin
+  if FCancelWaitable <> nil then
+    Result := FCancelWaitable.WakeHandle
+  else
+    Result := 0;
+end;
+
+function TTcpStream.DeadlineTimeoutMs(const ADeadline: TDeadline): Int32;
+var
+  LMs: Int64;
+begin
+  if ADeadline.IsInfinite then
+    Exit(-1);
+  if ADeadline.IsExpired then
+    Exit(0);
+  LMs := ADeadline.Remaining.AsMilliseconds;
+  if LMs < 0 then
+    LMs := 0;
+  if LMs > High(Int32) then
+    LMs := High(Int32);
+  Result := Int32(LMs);
+end;
+
+function TTcpStream.WaitIO(const AEvents: Int32; const ADeadline: TDeadline;
+  const AOpName: string): Int32;
+var
+  LWake: PtrUInt;
+  LWakeSock: TPlatformSocket;
+  LRc, LRevents: Int32;
+  LTimeout: Int32;
+begin
+  ThrowIfCanceled;
+  LWake := CancelWakeHandle;
+  if LWake <> 0 then
+  begin
+    { Poll owns the wait; clear SO_*TIMEO so recv/send do not re-slice. }
+    if FLastReadTimeoutMs <> 0 then
+    begin
+      platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, 0);
+      FLastReadTimeoutMs := 0;
+    end;
+    if FLastWriteTimeoutMs <> 0 then
+    begin
+      platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, 0);
+      FLastWriteTimeoutMs := 0;
+    end;
+    LTimeout := DeadlineTimeoutMs(ADeadline);
+{$IFDEF NEXTPAS_WINDOWS}
+    LWakeSock.Value := LWake;
+{$ELSE}
+    LWakeSock.Value := Int32(LWake);
+{$ENDIF}
+    LRc := platform_socket_poll_or_wake(FSocket, AEvents, LWakeSock, LTimeout, LRevents);
+    if LRc < 0 then
+      raise ENetworkError.Create('tcp ' + AOpName + ' poll failed (' +
+        IntToStr(LRc) + ')');
+    if LRc = 2 then
+    begin
+      if FCancelWaitable <> nil then
+        FCancelWaitable.DrainWake;
+      ThrowIfCanceled;
+      Exit(0);
+    end;
+    if LRc = 0 then
+    begin
+      ThrowIfCanceled;
+      if not ADeadline.IsInfinite then
+      begin
+        if ADeadline.IsExpired then
+          raise ETimeoutError.Create(AOpName + ' deadline exceeded');
+        Exit(0);
+      end;
+      Exit(0);
+    end;
+    Exit(1);
+  end;
+
+  if AEvents = PLATFORM_POLL_IN then
+    ApplyReadTimeout
+  else
+    ApplyWriteTimeout;
+  Result := 1;
+end;
+
 function TTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LRecvd: Int32;
   LResult: Int32;
+  LWait: Int32;
 begin
   EnsureOpen('read');
   if ACount = 0 then Exit(0);
   while True do
   begin
     ThrowIfCanceled;
-    ApplyReadTimeout;
+    LWait := WaitIO(PLATFORM_POLL_IN, FReadDeadline, 'read');
+    if LWait = 0 then
+    begin
+      { Wake without cancel, or slice/deadline retry path. }
+      if (CancelWakeHandle = 0) and (FCancelToken = nil) and
+         (not FReadDeadline.IsInfinite) and FReadDeadline.IsExpired then
+        raise ETimeoutError.Create('read deadline exceeded');
+      Continue;
+    end;
     LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
     if LResult = 0 then
       Exit(SizeUInt(LRecvd));
@@ -181,12 +281,11 @@ begin
       begin
         if FReadDeadline.IsExpired then
           raise ETimeoutError.Create('read deadline exceeded');
-        { Short cancel slice expired before the real deadline — retry. }
+        { Short cancel slice or spurious readiness — retry. }
         if FCancelToken <> nil then
           Continue;
         raise ETimeoutError.Create('read deadline exceeded');
       end;
-      { Infinite deadline + cancel token: short slice; retry until cancel. }
       if FCancelToken <> nil then
         Continue;
     end;
@@ -200,6 +299,7 @@ var
   LResult: Int32;
   LPtr: PByte;
   LRemaining: SizeUInt;
+  LWait: Int32;
 begin
   EnsureOpen('write');
   if ACount = 0 then Exit(0);
@@ -209,7 +309,9 @@ begin
   while LRemaining > 0 do
   begin
     ThrowIfCanceled;
-    ApplyWriteTimeout;
+    LWait := WaitIO(PLATFORM_POLL_OUT, FWriteDeadline, 'write');
+    if LWait = 0 then
+      Continue;
     LResult := platform_socket_send(FSocket, LPtr, Int32(LRemaining), PLATFORM_MSG_NOSIGNAL, LSent);
     if LResult <> 0 then
     begin
@@ -295,6 +397,10 @@ end;
 procedure TTcpStream.SetCancelToken(const AToken: INetCancelToken);
 begin
   FCancelToken := AToken;
+  FCancelWaitable := nil;
+  if (AToken <> nil) and
+     (AToken.QueryInterface(INetCancelWaitable, FCancelWaitable) <> 0) then
+    FCancelWaitable := nil;
 end;
 
 function TTcpStream.NativeSocketHandle: PtrUInt;

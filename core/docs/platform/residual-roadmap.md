@@ -40,10 +40,10 @@ LT4 is no longer a residual-only stage. Track and execute under:
 
 | Item | State |
 |------|--------|
-| Wine CI matrix (14 modules) | pass=14 fail=0 skip=0 |
-| Real Windows GHA gates | `platform-windows-ci-matrix.ps1`: 14 suite dirs + poller/io/socket real gates |
-| Windows `ci-matrix` | **Not promoted** (GHA is real-windows-runtime-ci focused set) |
-| macOS `focused-runtime` | **Not promoted** |
+| Wine CI matrix (15 modules) | includes `platform.error`; secondary only |
+| Real Windows GHA gates | promoted 17-gate set; script lists 18-gate candidate (+error) pending GHA |
+| Windows `ci-matrix` | **Promoted (D1.d)** for documented 17-gate set only; +error not promoted until GHA green |
+| macOS `focused-runtime` | **Promoted (D2.c)** for documented 8-gate set only; not full-host parity |
 
 Wine remains `wine-runtime-smoke` forever: useful regression signal, **never** substitute for real Windows `ci-matrix`.
 
@@ -66,16 +66,18 @@ make -C core/tests/architecture/source_contracts host-raw-ffi-audit
 make hygiene
 ```
 
-## dual-IO consumer whitelist (F5)
+## dual-IO consumer whitelist (F5) — permanent owner-only (D3.c)
 
 Production **call sites** of `platform_io_read` / `platform_io_write` / `platform_io_poll` / `platform_io_close`:
 
 | Unit | Allowed | Notes |
 |------|---------|-------|
-| `nextpas.core.platform.process.pas` | definitions (and any internal use) | transitional dual-API owner; keep symbols for compatibility |
+| `nextpas.core.platform.process.pas` | definitions (and any internal use) | **permanent** dual-API owner; symbols retained for compatibility; **no sunset this program** |
 | all other production units | **none** | `process.pipe` uses `platform.files` + local `PipePoll` (posix.ffi) |
 
 New code must use `platform.files` / `platform_process_*_ex` / `platform.io` poller.
+
+**Deprecation schedule (D3.c):** none. dual-IO remains owner-only on `platform.process` indefinitely for this program. Removal would require a future explicit owner decision + consumer migration plan outside residual LT0–LT3.
 
 ## Raw OS side-channel (F6)
 

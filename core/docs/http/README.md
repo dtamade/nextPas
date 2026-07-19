@@ -7,8 +7,8 @@ middleware chaining, and a centralized internal transport registry.
 
 | Doc | Role |
 |-----|------|
-| **[`ROADMAP.md`](ROADMAP.md)** | **Forward work only** — start here before coding |
-| [`GOAL_TREE.md`](GOAL_TREE.md) | North star, stage definition, do-not-drift rules |
+| **[`ROADMAP.md`](ROADMAP.md)** | **Sole forward NEXT** — Eras/Waves, Goal Loop, Inbox |
+| [`GOAL_TREE.md`](GOAL_TREE.md) | North star + do-not-drift only (no live Wave name) |
 | [`CONTRACT.md`](CONTRACT.md) | Public behavior contract |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Stable architecture facts, runtime ownership, protocol seams |
 | [`API_COVERAGE.md`](API_COVERAGE.md) | Public API evidence matrix |
@@ -174,6 +174,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   (`http_hello_server`, `http_websocket_echo_demo`) use Production.
   Convenience `NewHttpServerWithRequestArena` (no explicit options) also bases
   on **Production** + RequestArena so arena demos do not inherit unbounded RW.
+- **With* chain / Timeout vs ConnectTimeout / Default vs Production**：权威表见
+  [`CONTRACT.md`](CONTRACT.md) §2.2「With* 链语义（Wave E2）」；勿在 README 双写细节。
 - Cancel: `IHttpCancelToken` is **cooperative** → `hekCanceled` at Send /
   redirect / retry / H1 RoundTrip checkpoints, and mid-read/write via
   `ITcpStream.SetCancelToken` (~50ms SO_RCVTIMEO slices). Prefer pairing with

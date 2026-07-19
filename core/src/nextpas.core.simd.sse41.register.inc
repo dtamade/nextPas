@@ -38,57 +38,57 @@ begin
   begin
     // CRITICAL: Override 32-bit integer multiply with PMULLD
     // This is a huge improvement over SSE2's workaround!
-    dispatchTable.MulI32x4 := @SSE41MulI32x4;
-    dispatchTable.MulU32x4 := @SSE41MulU32x4;
+    dispatchTable.CoreVectors.MulI32x4 := @SSE41MulI32x4;
+    dispatchTable.CoreVectors.MulU32x4 := @SSE41MulU32x4;
 
     // Override 32-bit integer min/max (PMINSD/PMAXSD)
-    dispatchTable.MinI32x4 := @SSE41MinI32x4;
-    dispatchTable.MaxI32x4 := @SSE41MaxI32x4;
+    dispatchTable.CoreVectors.MinI32x4 := @SSE41MinI32x4;
+    dispatchTable.CoreVectors.MaxI32x4 := @SSE41MaxI32x4;
 
     // Override 32-bit unsigned min/max (PMINUD/PMAXUD)
-    dispatchTable.MinU32x4 := @SSE41MinU32x4;
-    dispatchTable.MaxU32x4 := @SSE41MaxU32x4;
+    dispatchTable.CoreVectors.MinU32x4 := @SSE41MinU32x4;
+    dispatchTable.CoreVectors.MaxU32x4 := @SSE41MaxU32x4;
 
     // Override 8-bit signed min/max (PMINSB/PMAXSB)
-    dispatchTable.MinI8x16 := @SSE41MinI8x16;
-    dispatchTable.MaxI8x16 := @SSE41MaxI8x16;
+    dispatchTable.CoreVectors.MinI8x16 := @SSE41MinI8x16;
+    dispatchTable.CoreVectors.MaxI8x16 := @SSE41MaxI8x16;
 
     // Override 16-bit unsigned min/max (PMINUW/PMAXUW)
-    dispatchTable.MinU16x8 := @SSE41MinU16x8;
-    dispatchTable.MaxU16x8 := @SSE41MaxU16x8;
+    dispatchTable.CoreVectors.MinU16x8 := @SSE41MinU16x8;
+    dispatchTable.CoreVectors.MaxU16x8 := @SSE41MaxU16x8;
 
     // Override dot product with single-instruction DPPS
-    dispatchTable.DotF32x4 := @SSE41DotF32x4;
-    dispatchTable.DotF32x3 := @SSE41DotF32x3;
+    dispatchTable.CoreVectors.DotF32x4 := @SSE41DotF32x4;
+    dispatchTable.CoreVectors.DotF32x3 := @SSE41DotF32x3;
 
     // Override rounding operations with hardware ROUNDPS/ROUNDPD
-    dispatchTable.RoundF32x4 := @SSE41RoundF32x4;
-    dispatchTable.FloorF32x4 := @SSE41FloorF32x4;
-    dispatchTable.CeilF32x4 := @SSE41CeilF32x4;
-    dispatchTable.TruncF32x4 := @SSE41TruncF32x4;
+    dispatchTable.CoreVectors.RoundF32x4 := @SSE41RoundF32x4;
+    dispatchTable.CoreVectors.FloorF32x4 := @SSE41FloorF32x4;
+    dispatchTable.CoreVectors.CeilF32x4 := @SSE41CeilF32x4;
+    dispatchTable.CoreVectors.TruncF32x4 := @SSE41TruncF32x4;
 
-    dispatchTable.RoundF64x2 := @SSE41RoundF64x2;
-    dispatchTable.FloorF64x2 := @SSE41FloorF64x2;
-    dispatchTable.CeilF64x2 := @SSE41CeilF64x2;
-    dispatchTable.TruncF64x2 := @SSE41TruncF64x2;
+    dispatchTable.CoreVectors.RoundF64x2 := @SSE41RoundF64x2;
+    dispatchTable.CoreVectors.FloorF64x2 := @SSE41FloorF64x2;
+    dispatchTable.CoreVectors.CeilF64x2 := @SSE41CeilF64x2;
+    dispatchTable.CoreVectors.TruncF64x2 := @SSE41TruncF64x2;
 
     // Override length with DPPS-based version
-    dispatchTable.LengthF32x4 := @SSE41LengthF32x4;
-    dispatchTable.LengthF32x3 := @SSE41LengthF32x3;
+    dispatchTable.CoreVectors.LengthF32x4 := @SSE41LengthF32x4;
+    dispatchTable.CoreVectors.LengthF32x3 := @SSE41LengthF32x3;
 
     // Override normalize with DPPS-based version
-    dispatchTable.NormalizeF32x4 := @SSE41NormalizeF32x4;
-    dispatchTable.NormalizeF32x3 := @SSE41NormalizeF32x3;
+    dispatchTable.CoreVectors.NormalizeF32x4 := @SSE41NormalizeF32x4;
+    dispatchTable.CoreVectors.NormalizeF32x3 := @SSE41NormalizeF32x3;
 
     // Override insert/extract
-    dispatchTable.InsertF32x4 := @SSE41InsertF32x4;
-    dispatchTable.ExtractF32x4 := @SSE41ExtractF32x4;
+    dispatchTable.CoreVectors.InsertF32x4 := @SSE41InsertF32x4;
+    dispatchTable.CoreVectors.ExtractF32x4 := @SSE41ExtractF32x4;
 
     // Override 64-bit comparison
-    dispatchTable.CmpEqI64x2 := @SSE41CmpEqI64x2;
+    dispatchTable.CoreVectors.CmpEqI64x2 := @SSE41CmpEqI64x2;
 
     // Override select with BLENDVPS
-    dispatchTable.SelectF32x4 := @SSE41SelectF32x4;
+    dispatchTable.CoreVectors.SelectF32x4 := @SSE41SelectF32x4;
   end;
 
   // Register the backend

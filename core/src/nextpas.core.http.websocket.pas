@@ -34,7 +34,7 @@ type
       Default Production discipline: 30000. }
     Timeout: Int64;
     { Optional cooperative cancel for dial/handshake and mid-frame I/O.
-      When HasCancelToken, stream SetCancelToken enables ~50ms slice polling
+      When HasCancelToken, stream SetCancelToken enables waitable cancel wake
       (same residual as HTTP client). Default: unset. }
     CancelToken: IHttpCancelToken;
     HasCancelToken: Boolean;
@@ -162,13 +162,16 @@ type
     function IsOpen: Boolean;
   end;
 
-  { Bridge IHttpCancelToken → INetCancelToken (local copy; H1/H2 have peers). }
-  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken)
+  { Bridge IHttpCancelToken → INetCancelToken; forward waitable when present. }
+  THttpNetCancelAdapter = class(TInterfacedObject, INetCancelToken, INetCancelWaitable)
   private
     FToken: IHttpCancelToken;
+    FWaitable: INetCancelWaitable;
   public
     constructor Create(const AToken: IHttpCancelToken);
     function IsCanceled: Boolean;
+    function WakeHandle: PtrUInt;
+    procedure DrainWake;
   end;
 
 { Helpers }
@@ -282,6 +285,10 @@ constructor THttpNetCancelAdapter.Create(const AToken: IHttpCancelToken);
 begin
   inherited Create;
   FToken := AToken;
+  FWaitable := nil;
+  if (AToken <> nil) and
+     (AToken.QueryInterface(INetCancelWaitable, FWaitable) <> 0) then
+    FWaitable := nil;
 end;
 
 function THttpNetCancelAdapter.IsCanceled: Boolean;
@@ -289,13 +296,31 @@ begin
   Result := (FToken <> nil) and FToken.IsCanceled;
 end;
 
+function THttpNetCancelAdapter.WakeHandle: PtrUInt;
+begin
+  if FWaitable <> nil then
+    Result := FWaitable.WakeHandle
+  else
+    Result := 0;
+end;
+
+procedure THttpNetCancelAdapter.DrainWake;
+begin
+  if FWaitable <> nil then
+    FWaitable.DrainWake;
+end;
+
 procedure ApplyWebSocketCancelToken(const AConn: ITcpStream;
   const AToken: IHttpCancelToken);
+var
+  LNet: INetCancelToken;
 begin
   if AConn = nil then
     Exit;
   if AToken = nil then
     AConn.SetCancelToken(nil)
+  else if AToken.QueryInterface(INetCancelToken, LNet) = 0 then
+    AConn.SetCancelToken(LNet)
   else
     AConn.SetCancelToken(THttpNetCancelAdapter.Create(AToken));
 end;

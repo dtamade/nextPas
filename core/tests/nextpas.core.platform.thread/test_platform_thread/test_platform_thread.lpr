@@ -332,14 +332,16 @@ var
   LBuf: array[0..255] of AnsiChar;
 begin
   LRet := platform_thread_set_name('test_thread');
+  {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  CheckEqual(Int64(0), Int64(LRet), 'set_name succeeds on supported Unix');
+  {$ELSE}
+  Check(LRet <> 0, 'set_name returns unsupported on this host');
+  {$ENDIF}
   {$IFDEF NEXTPAS_LINUX}
-  CheckEqual(Int64(0), Int64(LRet), 'set_name succeeds on Linux');
   FillChar(LBuf, SizeOf(LBuf), 0);
   LRet := platform_thread_get_name(@LBuf[0], 256);
   CheckEqual(Int64(0), Int64(LRet), 'get_name succeeds on Linux');
   Check(LBuf[0] <> #0, 'get_name returns non-empty');
-  {$ELSE}
-  Check(LRet <> 0, 'set_name returns unsupported on non-Linux');
   {$ENDIF}
 end;
 

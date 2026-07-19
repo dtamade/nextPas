@@ -1540,7 +1540,11 @@ end;
 
 procedure TConfig.SetBool(const AKey: string; AValue: Boolean);
 begin
-  SetString(AKey, BoolToStr(AValue));
+  { Canonical config text form is lowercase true/false for format parity. }
+  if AValue then
+    SetString(AKey, 'true')
+  else
+    SetString(AKey, 'false');
 end;
 
 procedure TConfig.SetFloat(const AKey: string; AValue: Double);

@@ -438,11 +438,16 @@ begin
   Result := (LStat.Mode and (PLATFORM_S_IXUSR or PLATFORM_S_IXGRP or PLATFORM_S_IXOTH)) <> 0;
 end;
 {$ELSE}
+var
+  LStat: TPlatformFileStat;
 begin
-  { Windows does not expose POSIX execute bits; always return False.
-    Callers needing Windows execute detection should check file extension
-    (.exe, .bat, .cmd, .com) or ACL via platform-specific APIs. }
-  Result := False;
+  { Windows: treat existing non-directory files as executable candidates.
+    PATHEXT / ACL filtering is owned by process.pathresolve LookPath. }
+  if (APath = nil) or (APath^ = #0) then
+    Exit(False);
+  if platform_file_stat(APath, LStat) <> 0 then
+    Exit(False);
+  Result := LStat.FileType <> ftDirectory;
 end;
 {$ENDIF}
 function platform_fs_file_size(const APath: PAnsiChar; out ASize: Int64): Int32;

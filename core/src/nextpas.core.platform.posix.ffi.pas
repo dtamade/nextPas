@@ -121,9 +121,9 @@ function shm_unlink(name: PAnsiChar): cint; cdecl; external {$IFDEF NEXTPAS_LINU
 {** @desc 打开文件
     @param path 文件路径
     @param flags 打开标志（O_RDONLY/WRITE/CREATE 等）
-    @param mode 创建权限
+    @param mode 创建权限（O_CREAT 时作为 vararg 传入；Darwin aarch64 要求 mode 走 varargs ABI）
     @return 文件描述符，-1 失败 *}
-function open(path: PAnsiChar; flags: Int32; mode: TPlatformFileModeArg): TPlatformFileDescriptor; cdecl; external 'c' name 'open';
+function open(path: PAnsiChar; flags: Int32): TPlatformFileDescriptor; cdecl; varargs; external 'c' name 'open';
 
 {** @desc 关闭文件描述符
     @param fd 文件描述符
@@ -165,9 +165,9 @@ function ftruncate(fd: TPlatformFileDescriptor; length: off_t): Int32; cdecl; ex
 {** @desc 文件控制
     @param fd 文件描述符
     @param cmd 命令（F_GETFL/SETFL 等）
-    @param arg 参数
+    @param arg 可选参数（F_SETFL/F_SETFD 等作为 vararg；Darwin aarch64 要求走 varargs ABI）
     @return 命令结果 *}
-function fcntl(fd: TPlatformFileDescriptor; cmd: Int32; arg: PtrInt): Int32; cdecl; external 'c' name 'fcntl';
+function fcntl(fd: TPlatformFileDescriptor; cmd: Int32): Int32; cdecl; varargs; external 'c' name 'fcntl';
 
 { Directory }
 
@@ -488,6 +488,7 @@ function pthread_cond_broadcast(cond: Pointer): Int32; cdecl; external 'pthread'
     @return 0 成功 *}
 function pipe(pipefd: PInt32): cint; cdecl; external 'c' name 'pipe';
 
+{$IFNDEF NEXTPAS_MACOS}
 {** @desc 创建管道（带标志）
     @param pipefd 输出管道文件描述符数组 [读, 写]
     @param flags 标志（O_CLOEXEC/O_NONBLOCK）
@@ -497,6 +498,7 @@ function pipe2(pipefd: PInt32; flags: cint): cint; cdecl; external 'c' name 'pip
 var
   {** 环境变量数组 *}
   environ: PPAnsiChar; external name 'environ';
+{$ENDIF}
 
 { File descriptor }
 

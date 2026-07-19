@@ -184,7 +184,11 @@ type
     Timeout: Int64;
     { OS dial + post-dial first-write budget (ms). 0 = fall back to Timeout. }
     ConnectTimeout: Int64;
+    { Max idle connections retained per authority (host/port/secure).
+      Not a global pool cap across hosts. Must be > 0. }
     MaxPoolSize: Int32;
+    { Wall-clock idle TTL (ms). 0 = no TTL. }
+    IdleTTL: Int64;
     HeaderTableSize: UInt32;
     EnablePush: Boolean;
     InitialStreamWindowSize: UInt32;
@@ -385,6 +389,7 @@ begin
   Result.Timeout := 30000;
   Result.ConnectTimeout := 0;
   Result.MaxPoolSize := 64;
+  Result.IdleTTL := 90000;
   Result.HeaderTableSize := H2_DEFAULT_HEADER_TABLE_SIZE;
   Result.EnablePush := False;
   Result.InitialStreamWindowSize := H2_DEFAULT_INITIAL_WINDOW_SIZE;
@@ -404,6 +409,7 @@ begin
   EnsureValidMaxFrameSize(MaxFrameSize);
   EnsureNonNegativeTimeout(Timeout, 'Timeout');
   EnsureNonNegativeTimeout(ConnectTimeout, 'ConnectTimeout');
+  EnsureNonNegativeTimeout(IdleTTL, 'IdleTTL');
   EnsureNonNegativeTimeout(PingTimeout, 'PingTimeout');
 end;
 

@@ -393,7 +393,9 @@ uses
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.scalar,
   nextpas.core.simd.intrinsics.base,
-  nextpas.core.simd.intrinsics.sse2;
+  nextpas.core.simd.intrinsics.sse2,
+  nextpas.core.math.trig,
+  Math;
 
 // Thread-local scratch buffers for Tan computation
 // 使用 PSingle (raw pointer) 代替动态数组，避免 FPC threadvar 清理问题

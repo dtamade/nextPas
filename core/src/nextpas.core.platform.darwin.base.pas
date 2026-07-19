@@ -102,10 +102,20 @@ type
   PPlatformDarwinStat = ^TPlatformDarwinStat;
 
   PPlatformPThreadState = ^TPlatformPThreadState;
+  { Darwin has no pthread_timedjoin_np; store user entry so timedjoin can poll
+    a Finished flag set by a trampoline before reaping with pthread_join.
+    Flat layout (no variant) avoids offset bugs when pthread_create writes
+    the thread id into the first field.
+    RefCount=2 on create (caller + trampoline); join/detach and trampoline
+    each release once so detach cannot Dispose while the trampoline still
+    writes Finished/RetVal. }
   TPlatformPThreadState = record
-    case Integer of
-      0: (FAlign: TPlatformPThreadTokenAlign);
-      1: (Thread: array[0..PLATFORM_PTHREAD_TOKEN_SIZE - 1] of Byte);
+    Thread: pthread_t;
+    UserProc: Pointer;
+    UserArg: Pointer;
+    RetVal: Pointer;
+    Finished: LongInt;
+    RefCount: LongInt;
   end;
 
   mach_timebase_info_data_t = record
@@ -122,9 +132,10 @@ const
   PTHREAD_CONDATTR_SETCLOCK_SUPPORTED = 0;
   PTHREAD_MUTEX_TIMEDLOCK_SUPPORTED = 0;
 
+  { Darwin pthread.h: NORMAL=0, ERRORCHECK=1, RECURSIVE=2 (not Linux order). }
   _PTHREAD_MUTEX_NORMAL = 0;
-  _PTHREAD_MUTEX_RECURSIVE = 1;
-  _PTHREAD_MUTEX_ERRORCHECK = 2;
+  _PTHREAD_MUTEX_ERRORCHECK = 1;
+  _PTHREAD_MUTEX_RECURSIVE = 2;
   PTHREAD_MUTEX_SIZE = SizeOf(pthread_mutex_t);
   PTHREAD_RWLOCK_SIZE = SizeOf(pthread_rwlock_t);
   PTHREAD_CONDVAR_SIZE = SizeOf(pthread_cond_t);
@@ -146,6 +157,9 @@ const
   O_TRUNC = Int32($400);
   O_APPEND = Int32($8);
   O_NONBLOCK = Int32($4);
+  { Darwin fcntl.h: O_FSYNC=0x80; O_SYNC is an alias of O_FSYNC. }
+  O_FSYNC = Int32($80);
+  O_SYNC = O_FSYNC;
   O_DIRECTORY = Int32($100000);
   O_CLOEXEC = Int32($1000000);
 

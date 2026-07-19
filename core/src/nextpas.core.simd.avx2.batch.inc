@@ -1,8 +1,9 @@
 // ============================================================================
 // AVX2 Batch Array Operations
-// 策略: 单 asm 循环 + 4x YMM 展开 (每轮 32 float)
+// 策略: 单 asm 循环 + 8x YMM 展开 (每轮 64 float)
 //        pointer bump 代替 index*4 地址计算
-//        尾部在同一 asm 块内处理 (16/8/4/scalar)
+//        尾部在同一 asm 块内处理 (32/16/8/4/scalar)
+//        预取优化: 大数组使用 prefetchnta 预取下一批数据
 // ============================================================================
 
 procedure AVX2ArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
@@ -19,39 +20,16 @@ begin
     mov rcx, pD
     mov r8, aCount
 
-    cmp r8, 4096
-    jae @loop64_setup
-    cmp r8, 32
-    jb @tail16
-
-  @loop32:
-    vmovups ymm0, [rax]
-    vaddps  ymm0, ymm0, [rdx]
-    vmovups [rcx], ymm0
-    vmovups ymm1, [rax + 32]
-    vaddps  ymm1, ymm1, [rdx + 32]
-    vmovups [rcx + 32], ymm1
-    vmovups ymm2, [rax + 64]
-    vaddps  ymm2, ymm2, [rdx + 64]
-    vmovups [rcx + 64], ymm2
-    vmovups ymm3, [rax + 96]
-    vaddps  ymm3, ymm3, [rdx + 96]
-    vmovups [rcx + 96], ymm3
-    add rax, 128
-    add rdx, 128
-    add rcx, 128
-    sub r8, 32
-    cmp r8, 32
-    jae @loop32
-    jmp @tail16
-
-  @loop64_setup:
+    // 小数组快速路径 (<64 elements)
     cmp r8, 64
-    jb @tail16
+    jb @tail32
+
+    // 大数组路径: 8x YMM 展开 + 预取
+    cmp r8, 1024
+    jae @loop64_prefetch
 
   @loop64:
-    prefetchnta [rax + 256]
-    prefetchnta [rdx + 256]
+    // 8x YMM 展开 (64 elements/iter)
     vmovups ymm0, [rax]
     vaddps  ymm0, ymm0, [rdx]
     vmovups [rcx], ymm0
@@ -82,6 +60,66 @@ begin
     sub r8, 64
     cmp r8, 64
     jae @loop64
+    jmp @tail32
+
+  @loop64_prefetch:
+    // 大数组路径: 8x YMM 展开 + 预取下一批数据
+    prefetchnta [rax + 512]
+    prefetchnta [rdx + 512]
+    prefetchnta [rax + 576]
+    prefetchnta [rdx + 576]
+
+    vmovups ymm0, [rax]
+    vaddps  ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vaddps  ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vaddps  ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vaddps  ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    vmovups ymm4, [rax + 128]
+    vaddps  ymm4, ymm4, [rdx + 128]
+    vmovups [rcx + 128], ymm4
+    vmovups ymm5, [rax + 160]
+    vaddps  ymm5, ymm5, [rdx + 160]
+    vmovups [rcx + 160], ymm5
+    vmovups ymm6, [rax + 192]
+    vaddps  ymm6, ymm6, [rdx + 192]
+    vmovups [rcx + 192], ymm6
+    vmovups ymm7, [rax + 224]
+    vaddps  ymm7, ymm7, [rdx + 224]
+    vmovups [rcx + 224], ymm7
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 64
+    cmp r8, 64
+    jae @loop64_prefetch
+    jmp @tail32
+
+  @tail32:
+    cmp r8, 32
+    jb @tail16
+    vmovups ymm0, [rax]
+    vaddps  ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vaddps  ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vaddps  ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vaddps  ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    add rax, 128
+    add rdx, 128
+    add rcx, 128
+    sub r8, 32
 
   @tail16:
     cmp r8, 16
@@ -152,10 +190,89 @@ begin
     mov rcx, pD
     mov r8, aCount
 
+    // 小数组快速路径 (<64 elements)
+    cmp r8, 64
+    jb @tail32
+
+    // 大数组路径: 8x YMM 展开 + 预取
+    cmp r8, 1024
+    jae @loop64_prefetch
+
+  @loop64:
+    // 8x YMM 展开 (64 elements/iter)
+    vmovups ymm0, [rax]
+    vmulps  ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vmulps  ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vmulps  ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vmulps  ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    vmovups ymm4, [rax + 128]
+    vmulps  ymm4, ymm4, [rdx + 128]
+    vmovups [rcx + 128], ymm4
+    vmovups ymm5, [rax + 160]
+    vmulps  ymm5, ymm5, [rdx + 160]
+    vmovups [rcx + 160], ymm5
+    vmovups ymm6, [rax + 192]
+    vmulps  ymm6, ymm6, [rdx + 192]
+    vmovups [rcx + 192], ymm6
+    vmovups ymm7, [rax + 224]
+    vmulps  ymm7, ymm7, [rdx + 224]
+    vmovups [rcx + 224], ymm7
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 64
+    cmp r8, 64
+    jae @loop64
+    jmp @tail32
+
+  @loop64_prefetch:
+    // 大数组路径: 8x YMM 展开 + 预取下一批数据
+    prefetchnta [rax + 512]
+    prefetchnta [rdx + 512]
+    prefetchnta [rax + 576]
+    prefetchnta [rdx + 576]
+
+    vmovups ymm0, [rax]
+    vmulps  ymm0, ymm0, [rdx]
+    vmovups [rcx], ymm0
+    vmovups ymm1, [rax + 32]
+    vmulps  ymm1, ymm1, [rdx + 32]
+    vmovups [rcx + 32], ymm1
+    vmovups ymm2, [rax + 64]
+    vmulps  ymm2, ymm2, [rdx + 64]
+    vmovups [rcx + 64], ymm2
+    vmovups ymm3, [rax + 96]
+    vmulps  ymm3, ymm3, [rdx + 96]
+    vmovups [rcx + 96], ymm3
+    vmovups ymm4, [rax + 128]
+    vmulps  ymm4, ymm4, [rdx + 128]
+    vmovups [rcx + 128], ymm4
+    vmovups ymm5, [rax + 160]
+    vmulps  ymm5, ymm5, [rdx + 160]
+    vmovups [rcx + 160], ymm5
+    vmovups ymm6, [rax + 192]
+    vmulps  ymm6, ymm6, [rdx + 192]
+    vmovups [rcx + 192], ymm6
+    vmovups ymm7, [rax + 224]
+    vmulps  ymm7, ymm7, [rdx + 224]
+    vmovups [rcx + 224], ymm7
+    add rax, 256
+    add rdx, 256
+    add rcx, 256
+    sub r8, 64
+    cmp r8, 64
+    jae @loop64_prefetch
+
+  @tail32:
     cmp r8, 32
     jb @tail16
-
-  @loop32:
     vmovups ymm0, [rax]
     vmulps  ymm0, ymm0, [rdx]
     vmovups [rcx], ymm0
@@ -172,8 +289,6 @@ begin
     add rdx, 128
     add rcx, 128
     sub r8, 32
-    cmp r8, 32
-    jae @loop32
 
   @tail16:
     cmp r8, 16
@@ -2768,6 +2883,774 @@ begin
   @done:
     vzeroupper
   end;
+  {$POP}
+end;
+
+// ============================================================================
+// AVX2 F64 Extended Batch Array Operations
+// 策略: 2x YMM 展开 (每轮 8 double = 64 bytes), 标量尾部
+// ============================================================================
+
+procedure AVX2ArrayAxpyF64(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pX, pY, pD: PDouble;
+  LAlpha: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pX := aX; pY := aY; pD := aDst; LAlpha := aAlpha; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pX
+      mov    rdx, pY
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      vbroadcastsd ymm7, LAlpha
+
+      vmovupd ymm0, [rax + r8]
+      vmulpd  ymm0, ymm0, ymm7
+      vaddpd  ymm0, ymm0, [rdx + r8]
+      vmovupd [rcx + r8], ymm0
+
+      vmovupd ymm1, [rax + r8 + 32]
+      vmulpd  ymm1, ymm1, ymm7
+      vaddpd  ymm1, ymm1, [rdx + r8 + 32]
+      vmovupd [rcx + r8 + 32], ymm1
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := LAlpha * pX[i] + pY[i];
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+procedure AVX2ArrayRcpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      mov    r9, $3FF0000000000000
+      movq   xmm7, r9
+      vbroadcastsd ymm7, xmm7
+
+      vmovupd ymm0, [rax + r8]
+      vdivpd  ymm0, ymm7, ymm0
+      vmovupd [rcx + r8], ymm0
+
+      vmovupd ymm1, [rax + r8 + 32]
+      vdivpd  ymm1, ymm7, ymm1
+      vmovupd [rcx + r8 + 32], ymm1
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := 1.0 / pS[i];
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+procedure AVX2ArrayRsqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      mov    r9, $3FF0000000000000
+      movq   xmm7, r9
+      vbroadcastsd ymm7, xmm7
+
+      vmovupd ymm0, [rax + r8]
+      vsqrtpd ymm0, ymm0
+      vdivpd  ymm0, ymm7, ymm0
+      vmovupd [rcx + r8], ymm0
+
+      vmovupd ymm1, [rax + r8 + 32]
+      vsqrtpd ymm1, ymm1
+      vdivpd  ymm1, ymm7, ymm1
+      vmovupd [rcx + r8 + 32], ymm1
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := 1.0 / Sqrt(pS[i]);
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+procedure AVX2ArrayTanF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Sin(pS[i]) / Cos(pS[i]);
+  {$POP}
+end;
+
+procedure AVX2ArraySignF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+  begin
+    if pS[i] > 0 then pD[i] := 1.0
+    else if pS[i] < 0 then pD[i] := -1.0
+    else pD[i] := 0.0;
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayFractF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := pS[i] - Int(pS[i]);
+  {$POP}
+end;
+
+procedure AVX2ArrayModF64(aSrc, aDst: PDouble; aCount: SizeUInt; aDivisor: Double);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := pS[i] - aDivisor * Int(pS[i] / aDivisor);
+  {$POP}
+end;
+
+procedure AVX2ArrayPowF64(aSrc, aDst: PDouble; aCount: SizeUInt; aExponent: Double);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := SimdPowerF64(pS[i], aExponent);
+  {$POP}
+end;
+
+procedure AVX2ArrayLerpF64(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double);
+var
+  i: SizeUInt;
+  pS1, pS2, pD: PDouble;
+  LT: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aStart; pS2 := aEnd; pD := aDst; LT := aT; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pS1
+      mov    rdx, pS2
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      vbroadcastsd ymm7, LT
+
+      vmovupd ymm0, [rdx + r8]
+      vsubpd  ymm0, ymm0, [rax + r8]
+      vmulpd  ymm0, ymm0, ymm7
+      vaddpd  ymm0, ymm0, [rax + r8]
+      vmovupd [rcx + r8], ymm0
+
+      vmovupd ymm1, [rdx + r8 + 32]
+      vsubpd  ymm1, ymm1, [rax + r8 + 32]
+      vmulpd  ymm1, ymm1, ymm7
+      vaddpd  ymm1, ymm1, [rax + r8 + 32]
+      vmovupd [rcx + r8 + 32], ymm1
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := pS1[i] + LT * (pS2[i] - pS1[i]);
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+procedure AVX2ArrayReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      vxorpd ymm7, ymm7, ymm7
+
+      vmovupd ymm0, [rax + r8]
+      vmaxpd  ymm0, ymm0, ymm7
+      vmovupd [rcx + r8], ymm0
+
+      vmovupd ymm1, [rax + r8 + 32]
+      vmaxpd  ymm1, ymm1, ymm7
+      vmovupd [rcx + r8 + 32], ymm1
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    if pS[i] > 0 then pD[i] := pS[i] else pD[i] := 0.0;
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+procedure AVX2ArrayAbsDiffF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS1, pS2, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS1 := aSrc1; pS2 := aSrc2; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pS1
+      mov    rdx, pS2
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      mov    r9, $7FFFFFFFFFFFFFFF
+      movq   xmm7, r9
+      vbroadcastsd ymm7, xmm7
+
+      vmovupd ymm0, [rax + r8]
+      vsubpd  ymm0, ymm0, [rdx + r8]
+      vandpd  ymm0, ymm0, ymm7
+      vmovupd [rcx + r8], ymm0
+
+      vmovupd ymm1, [rax + r8 + 32]
+      vsubpd  ymm1, ymm1, [rdx + r8 + 32]
+      vandpd  ymm1, ymm1, ymm7
+      vmovupd [rcx + r8 + 32], ymm1
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Abs(pS1[i] - pS2[i]);
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+procedure AVX2ArrayNormF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMean, aInvStd: Double);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+  LMean, LInvStd: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; LMean := aMean; LInvStd := aInvStd; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      vbroadcastsd ymm6, LMean
+      vbroadcastsd ymm7, LInvStd
+
+      vmovupd ymm0, [rax + r8]
+      vsubpd  ymm0, ymm0, ymm6
+      vmulpd  ymm0, ymm0, ymm7
+      vmovupd [rcx + r8], ymm0
+
+      vmovupd ymm1, [rax + r8 + 32]
+      vsubpd  ymm1, ymm1, ymm6
+      vmulpd  ymm1, ymm1, ymm7
+      vmovupd [rcx + r8 + 32], ymm1
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := (pS[i] - LMean) * LInvStd;
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+procedure AVX2ArrayLinearReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+  LScale, LBias, LVal: Double;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; LScale := aScale; LBias := aBias; i := 0;
+
+  // max(0, scale * x + bias) — same contract as Scalar / F32 vmax path
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+      vbroadcastsd ymm6, LScale
+      vbroadcastsd ymm7, LBias
+      vxorpd ymm5, ymm5, ymm5
+
+      vmovupd ymm0, [rax + r8]
+      vmulpd  ymm2, ymm0, ymm6
+      vaddpd  ymm2, ymm2, ymm7
+      vmaxpd  ymm2, ymm2, ymm5
+      vmovupd [rcx + r8], ymm2
+
+      vmovupd ymm1, [rax + r8 + 32]
+      vmulpd  ymm3, ymm1, ymm6
+      vaddpd  ymm3, ymm3, ymm7
+      vmaxpd  ymm3, ymm3, ymm5
+      vmovupd [rcx + r8 + 32], ymm3
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    LVal := LScale * pS[i] + LBias;
+    if LVal < 0 then LVal := 0;
+    pD[i] := LVal;
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+procedure AVX2ArrayStepF64(aEdge, aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pE, pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pE := aEdge; pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pE
+      mov    rdx, pS
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+
+      vmovupd ymm0, [rdx + r8]
+      vcmpltpd ymm0, ymm0, [rax + r8]
+      vmovupd [rcx + r8], ymm0
+
+      vmovupd ymm1, [rdx + r8 + 32]
+      vcmpltpd ymm1, ymm1, [rax + r8 + 32]
+      vmovupd [rcx + r8 + 32], ymm1
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    if pS[i] < pE[i] then pD[i] := 0.0 else pD[i] := 1.0;
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+procedure AVX2ArraySmoothstepF64(aEdge0, aEdge1, aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pE0, pE1, pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pE0 := aEdge0; pE1 := aEdge1; pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+  begin
+    if pS[i] <= pE0[i] then pD[i] := 0.0
+    else if pS[i] >= pE1[i] then pD[i] := 1.0
+    else
+    begin
+      pD[i] := (pS[i] - pE0[i]) / (pE1[i] - pE0[i]);
+      pD[i] := pD[i] * pD[i] * (3.0 - 2.0 * pD[i]);
+    end;
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayAtan2F64(aY, aX, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pY, pX, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pY := aY; pX := aX; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := ArcTan2(pY[i], pX[i]);
+  {$POP}
+end;
+
+procedure AVX2ArrayHypotF64(aX, aY, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pX, pY, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pX := aX; pY := aY; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    asm
+      mov    rax, pX
+      mov    rdx, pY
+      mov    rcx, pD
+      mov    r8, i
+      shl    r8, 3
+
+      vmovupd ymm0, [rax + r8]
+      vmulpd  ymm0, ymm0, ymm0
+      vmovupd ymm2, [rdx + r8]
+      vmulpd  ymm2, ymm2, ymm2
+      vaddpd  ymm0, ymm0, ymm2
+      vsqrtpd ymm0, ymm0
+      vmovupd [rcx + r8], ymm0
+
+      vmovupd ymm1, [rax + r8 + 32]
+      vmulpd  ymm1, ymm1, ymm1
+      vmovupd ymm3, [rdx + r8 + 32]
+      vmulpd  ymm3, ymm3, ymm3
+      vaddpd  ymm1, ymm1, ymm3
+      vsqrtpd ymm1, ymm1
+      vmovupd [rcx + r8 + 32], ymm1
+    end;
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Sqrt(pX[i] * pX[i] + pY[i] * pY[i]);
+    Inc(i);
+  end;
+
+  {$POP}
+end;
+
+// ============================================================================
+// AVX2 F64 Transcendental Batch Array Operations
+// 策略: 标量回退 + 循环展开 (8x unroll)
+// ============================================================================
+
+procedure AVX2ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Sin(pS[i]);
+    pD[i+1] := Sin(pS[i+1]);
+    pD[i+2] := Sin(pS[i+2]);
+    pD[i+3] := Sin(pS[i+3]);
+    pD[i+4] := Sin(pS[i+4]);
+    pD[i+5] := Sin(pS[i+5]);
+    pD[i+6] := Sin(pS[i+6]);
+    pD[i+7] := Sin(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Sin(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Cos(pS[i]);
+    pD[i+1] := Cos(pS[i+1]);
+    pD[i+2] := Cos(pS[i+2]);
+    pD[i+3] := Cos(pS[i+3]);
+    pD[i+4] := Cos(pS[i+4]);
+    pD[i+5] := Cos(pS[i+5]);
+    pD[i+6] := Cos(pS[i+6]);
+    pD[i+7] := Cos(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Cos(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Exp(pS[i]);
+    pD[i+1] := Exp(pS[i+1]);
+    pD[i+2] := Exp(pS[i+2]);
+    pD[i+3] := Exp(pS[i+3]);
+    pD[i+4] := Exp(pS[i+4]);
+    pD[i+5] := Exp(pS[i+5]);
+    pD[i+6] := Exp(pS[i+6]);
+    pD[i+7] := Exp(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Exp(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Ln(pS[i]);
+    pD[i+1] := Ln(pS[i+1]);
+    pD[i+2] := Ln(pS[i+2]);
+    pD[i+3] := Ln(pS[i+3]);
+    pD[i+4] := Ln(pS[i+4]);
+    pD[i+5] := Ln(pS[i+5]);
+    pD[i+6] := Ln(pS[i+6]);
+    pD[i+7] := Ln(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Ln(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayLog2F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Log2(pS[i]);
+    pD[i+1] := Log2(pS[i+1]);
+    pD[i+2] := Log2(pS[i+2]);
+    pD[i+3] := Log2(pS[i+3]);
+    pD[i+4] := Log2(pS[i+4]);
+    pD[i+5] := Log2(pS[i+5]);
+    pD[i+6] := Log2(pS[i+6]);
+    pD[i+7] := Log2(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Log2(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayLog10F64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst; i := 0;
+
+  while i + 8 <= aCount do
+  begin
+    pD[i] := Log10(pS[i]);
+    pD[i+1] := Log10(pS[i+1]);
+    pD[i+2] := Log10(pS[i+2]);
+    pD[i+3] := Log10(pS[i+3]);
+    pD[i+4] := Log10(pS[i+4]);
+    pD[i+5] := Log10(pS[i+5]);
+    pD[i+6] := Log10(pS[i+6]);
+    pD[i+7] := Log10(pS[i+7]);
+    Inc(i, 8);
+  end;
+
+  while i < aCount do
+  begin
+    pD[i] := Log10(pS[i]);
+    Inc(i);
+  end;
+  {$POP}
+end;
+
+procedure AVX2ArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Math.Ceil(pS[i]);
+  {$POP}
+end;
+
+procedure AVX2ArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Math.Floor(pS[i]);
+  {$POP}
+end;
+
+procedure AVX2ArrayRoundF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Double(System.Round(pS[i]));
+  {$POP}
+end;
+
+procedure AVX2ArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var
+  i: SizeUInt;
+  pS, pD: PDouble;
+begin
+  {$PUSH}{$Q-}{$R-}
+  if aCount = 0 then Exit;
+  pS := aSrc; pD := aDst;
+  for i := 0 to aCount - 1 do
+    pD[i] := Trunc(pS[i]);
   {$POP}
 end;
 

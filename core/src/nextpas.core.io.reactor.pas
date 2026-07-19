@@ -4,10 +4,10 @@ unit nextpas.core.io.reactor;
 
 interface
 
-uses nextpas.core.atomic, nextpas.core.errors, nextpas.core.platform.posix.base, nextpas.core.platform.linux.base, nextpas.core.platform.linux.modern, nextpas.core.io.uring;
+uses nextpas.core.atomic, nextpas.core.errors, nextpas.core.io.base, nextpas.core.platform.posix.base, nextpas.core.platform.linux.base, nextpas.core.platform.linux.modern, nextpas.core.io.uring;
 
 type
-  TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+  TIoCompletion = nextpas.core.io.base.TIoCompletion;
 
   TIoReactorEntry = record
     Callback: TIoCompletion;
@@ -50,6 +50,10 @@ type
     function AsyncClose(AFd: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncNop(ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncReadv(AFd: Int32; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncWritev(AFd: Int32; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
     // Event loop
     function Poll: Int32;
@@ -335,6 +339,35 @@ begin
   IoUringSqeSetData(LSqe, LId);
   Result := True;
 end;
+
+function TIoReactor.AsyncReadv(AFd: Int32; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var
+  LSqe: PIoUringSqe;
+  LId: UInt64;
+begin
+  LSqe := FRing.GetSqe;
+  if LSqe = nil then begin Result := False; Exit; end;
+  LId := AllocEntry(ACallback, AContext);
+  IoUringPrepReadv(LSqe, AFd, AIovecs, ANrVecs, AOffset);
+  IoUringSqeSetData(LSqe, LId);
+  Result := True;
+end;
+
+function TIoReactor.AsyncWritev(AFd: Int32; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var
+  LSqe: PIoUringSqe;
+  LId: UInt64;
+begin
+  LSqe := FRing.GetSqe;
+  if LSqe = nil then begin Result := False; Exit; end;
+  LId := AllocEntry(ACallback, AContext);
+  IoUringPrepWritev(LSqe, AFd, AIovecs, ANrVecs, AOffset);
+  IoUringSqeSetData(LSqe, LId);
+  Result := True;
+end;
+
 
 function TIoReactor.Flush: Int32;
 begin

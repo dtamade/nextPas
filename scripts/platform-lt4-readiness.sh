@@ -86,16 +86,29 @@ else
   mark_blocked "wine-runtime-smoke-script"
 fi
 
-# Real Windows GHA matrix script exists; full ci-matrix promotion still deferred.
-if [[ -f "$REPO_ROOT/core/scripts/platform-windows-ci-matrix.ps1" ]]; then
+# Real Windows GHA matrix: D1.d promoted documented 17-gate set to ci-matrix.
+if [[ -f "$REPO_ROOT/core/scripts/platform-windows-ci-matrix.sh" ]] \
+  || [[ -f "$REPO_ROOT/core/scripts/platform-windows-ci-matrix.ps1" ]]; then
   mark_ready "real-windows-ci-matrix-script"
-  note "GHA job test-windows-runtime runs platform-windows-ci-matrix.ps1 (focused real-Windows gates)"
+  note "GHA job test-windows-runtime runs platform-windows-ci-matrix.sh (truth=ci-matrix, 17-gate set)"
 else
   mark_blocked "real-windows-ci-matrix-script"
 fi
-mark_blocked "windows-ci-matrix-promoted"
+if grep -q 'truth=ci-matrix' "$REPO_ROOT/core/scripts/platform-windows-ci-matrix.sh" 2>/dev/null; then
+  mark_ready "windows-ci-matrix-promoted"
+  note "D1.d: documented 17-gate set is ci-matrix; not full-host Windows parity"
+else
+  mark_blocked "windows-ci-matrix-promoted"
+fi
+if [[ -f "$REPO_ROOT/core/scripts/platform-macos-ci-matrix.sh" ]]; then
+  mark_ready "macos-focused-matrix-script"
+  note "GHA job test-macos runs platform-macos-ci-matrix.sh (8-gate fail-closed; D2.b)"
+else
+  mark_blocked "macos-focused-matrix-script"
+fi
+# Host promotion stays blocked until D2.c after green GHA evidence.
 mark_blocked "macos-focused-runtime-host"
-note "ROADMAP D1.d still required before truth=ci-matrix; macOS is D2"
+note "macOS focused-runtime goal-tree promotion is ROADMAP D2.c after matrix green"
 
 echo "ready (${#ready[@]}):"
 for item in "${ready[@]}"; do
@@ -112,5 +125,10 @@ done
 
 echo ""
 echo "truth=lt4-inventory; wine-runtime-smoke tools may be ready;"
-echo "truth=lt4-inventory; real Windows ci-matrix and macOS focused-runtime remain registered-only"
-echo "status=registered-only"
+if printf '%s\n' "${ready[@]}" | grep -qx 'windows-ci-matrix-promoted'; then
+  echo "truth=lt4-inventory; windows documented 17-gate set is ci-matrix; macOS focused-runtime remains open (D2)"
+  echo "status=windows-ci-matrix-promoted;macos-open"
+else
+  echo "truth=lt4-inventory; real Windows ci-matrix and macOS focused-runtime remain registered-only"
+  echo "status=registered-only"
+fi

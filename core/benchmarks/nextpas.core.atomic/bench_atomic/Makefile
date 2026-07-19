@@ -15,13 +15,20 @@ CPP_COMPARE_BIN := $(CPP_COMPARE_DIR)/bench_atomic_cpp
 FPC_FLAGS ?= -MObjFPC -Sh -O2
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
+ENVELOPE_SCRIPT := $(CORE_ROOT)/docs/lockfree/scripts/print-bench-envelope.sh
+
 .PHONY: build run build-rust-compare run-rust-compare build-go-compare run-go-compare build-cpp-compare run-cpp-compare compare clean
+.PHONY: envelope
 
 build:
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
-run: build
+# H2-4: print evidence envelope before absolute numbers
+envelope:
+	@bash $(ENVELOPE_SCRIPT) "bench_atomic default"
+
+run: build envelope
 	$(BUILD_DIR)/$(PROGRAM)
 
 build-rust-compare:

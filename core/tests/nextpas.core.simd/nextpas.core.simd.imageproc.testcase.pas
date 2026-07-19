@@ -96,7 +96,7 @@ implementation
 
 procedure TTestCase_ImageProc.BeforeEach;
 begin
-  {{inherited SetUp; -- removed} -- removed}
+  // inherited SetUp; -- removed
   FillChar(FSrc1, SizeOf(FSrc1), 0);
   FillChar(FSrc2, SizeOf(FSrc2), 0);
   FillChar(FDest, SizeOf(FDest), 0);
@@ -110,7 +110,7 @@ begin
   FreeImage(FSrc1);
   FreeImage(FSrc2);
   FreeImage(FDest);
-  {{inherited TearDown; -- removed} -- removed}
+  // inherited TearDown; -- removed
 end;
 
 procedure TTestCase_ImageProc.FillImage(var aImg: TImage; const aValues: array of Byte);

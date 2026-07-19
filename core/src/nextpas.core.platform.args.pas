@@ -325,7 +325,7 @@ var
 begin
   if (ABuf = nil) or (ABufSize <= 0) then
     Exit(PLATFORM_ERR_INVALID);
-  LN := GetModuleFileNameW(0, @LWide[0], MAX_PATH + 1);
+  LN := GetModuleFileNameW(HMODULE(0), @LWide[0], MAX_PATH + 1);
   if LN = 0 then
     Exit(platform_map_windows_error_code(GetLastError));
   Result := WideToUtf8(@LWide[0], ABuf, ABufSize, LActual);

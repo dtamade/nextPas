@@ -509,6 +509,17 @@ function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
 function ServeFileDownload(const APath: string): THttpHandlerFunc; overload; inline;
 function ServeFileDownload(const APath, ADownloadName: string): THttpHandlerFunc; overload; inline;
+{** @desc Strong ETag from size+mtime. }
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string; inline;
+{** @desc If-None-Match match helper (`*`, exact, comma list). }
+function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean; inline;
+{** @desc If-Modified-Since not-modified check. }
+function HttpNotModifiedSince(const AIfModifiedSince: string;
+  const AModTimeUnix: Int64): Boolean; inline;
+{** @desc Conditional GET: write 304 when not modified; True if 304 written. }
+function HttpTryWriteNotModified(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AETag, ALastModified: string;
+  const AModTimeUnix: Int64): Boolean; inline;
 
 { WebSocket helper }
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket; overload; inline;
@@ -579,6 +590,15 @@ procedure HttpReleaseResponseBody(const AResp: IHttpResponse); inline;
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes; inline;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string; inline;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string; inline;
+{** @desc Decode body bytes for a single Content-Encoding (gzip/deflate/identity). }
+function HttpDecodeContentEncoding(const AEncoding: string;
+  const ABody: TBytes; const AMaxSize: Int64 = 0): TBytes; inline;
+{** @desc Read wire body then decode via Content-Encoding. }
+function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64 = 0): TBytes; inline;
+{** @desc Decoded response body as string. }
+function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64 = 0): string; inline;
 {** @desc Raise EHttpError if response status is not 2xx (200-299). Returns AResp for chaining. }
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse; overload; inline;
 {** @desc Same as HttpEnsureSuccess, with method/URL prefix in error messages. }
@@ -1013,7 +1033,8 @@ end;
 procedure HttpUseRequestArena(const ARouter: IHttpRouter; ACapacity: SizeUInt);
 begin
   if ARouter = nil then
-    raise EHttpError.Create('HttpUseRequestArena: router must not be nil');
+    raise EHttpError.Create(hekArgument,
+      'HttpUseRequestArena: router must not be nil');
   if ACapacity = 0 then
     ARouter.Use(RequestArenaMiddleware)
   else
@@ -1302,6 +1323,31 @@ begin
   Result := nextpas.core.http.static.ServeFileDownload(APath, ADownloadName);
 end;
 
+function HttpMakeStrongETag(const ASize, AModTime: Int64): string;
+begin
+  Result := nextpas.core.http.static.HttpMakeStrongETag(ASize, AModTime);
+end;
+
+function HttpIfNoneMatchMatches(const AIfNoneMatch, AServerETag: string): Boolean;
+begin
+  Result := nextpas.core.http.static.HttpIfNoneMatchMatches(AIfNoneMatch, AServerETag);
+end;
+
+function HttpNotModifiedSince(const AIfModifiedSince: string;
+  const AModTimeUnix: Int64): Boolean;
+begin
+  Result := nextpas.core.http.static.HttpNotModifiedSince(
+    AIfModifiedSince, AModTimeUnix);
+end;
+
+function HttpTryWriteNotModified(const AReq: IHttpRequest;
+  const AW: IHttpResponseWriter; const AETag, ALastModified: string;
+  const AModTimeUnix: Int64): Boolean;
+begin
+  Result := nextpas.core.http.static.HttpTryWriteNotModified(
+    AReq, AW, AETag, ALastModified, AModTimeUnix);
+end;
+
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket;
 begin
   Result := nextpas.core.http.websocket.UpgradeWebSocket(AReq, AW);
@@ -1504,6 +1550,27 @@ end;
 function HttpReadResponseBodyStringAuto(const AResp: IHttpResponse): string;
 begin
   Result := nextpas.core.http.client.HttpReadResponseBodyStringAuto(AResp);
+end;
+
+function HttpDecodeContentEncoding(const AEncoding: string;
+  const ABody: TBytes; const AMaxSize: Int64): TBytes;
+begin
+  Result := nextpas.core.http.client.HttpDecodeContentEncoding(
+    AEncoding, ABody, AMaxSize);
+end;
+
+function HttpReadResponseBodyBytesDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64): TBytes;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseBodyBytesDecoded(
+    AResp, AMaxSize);
+end;
+
+function HttpReadResponseBodyStringDecoded(const AResp: IHttpResponse;
+  const AMaxSize: Int64): string;
+begin
+  Result := nextpas.core.http.client.HttpReadResponseBodyStringDecoded(
+    AResp, AMaxSize);
 end;
 
 function HttpEnsureSuccess(const AResp: IHttpResponse): IHttpResponse;

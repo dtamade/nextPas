@@ -790,6 +790,12 @@ function FlushViewOfFile(lpBaseAddress: Pointer; dwNumberOfBytesToFlush: PtrUInt
     @return TRUE 成功 *}
 function CreatePipe(hReadPipe: PHANDLE; hWritePipe: PHANDLE; lpPipeAttributes: LPSECURITY_ATTRIBUTES; nSize: DWORD): WINBOOL; stdcall; external 'kernel32' name 'CreatePipe';
 
+{** @desc 窥探命名/匿名管道可读字节数 *}
+function PeekNamedPipe(hNamedPipe: HANDLE; lpBuffer: Pointer;
+  nBufferSize: DWORD; lpBytesRead: LPDWORD; lpTotalBytesAvail: LPDWORD;
+  lpBytesLeftThisMessage: LPDWORD): WINBOOL; stdcall;
+  external 'kernel32' name 'PeekNamedPipe';
+
 { Handle }
 
 {** @desc 设置句柄信息
@@ -821,6 +827,12 @@ function GetCurrentProcess: HANDLE; stdcall; external 'kernel32' name 'GetCurren
     @param Add 是否添加
     @return TRUE 成功 *}
 function SetConsoleCtrlHandler(HandlerRoutine: TConsoleCtrlHandlerRoutine; Add: WINBOOL): WINBOOL; stdcall; external 'kernel32' name 'SetConsoleCtrlHandler';
+
+{** @desc 向控制台进程组发送控制事件（Ctrl+C / Ctrl+Break）
+    @param dwCtrlEvent 控制事件类型（CTRL_C_EVENT / CTRL_BREAK_EVENT）
+    @param dwProcessGroupId 进程组 ID（0 表示当前）
+    @return TRUE 成功 *}
+function GenerateConsoleCtrlEvent(dwCtrlEvent: DWORD; dwProcessGroupId: DWORD): WINBOOL; stdcall; external 'kernel32' name 'GenerateConsoleCtrlEvent';
 
 {** @desc 获取标准句柄
     @param nStdHandle 标准句柄类型（STD_INPUT/OUTPUT/ERROR_HANDLE）

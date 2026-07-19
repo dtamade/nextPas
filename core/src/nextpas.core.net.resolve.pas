@@ -20,6 +20,33 @@ uses
   nextpas.core.errors,
   nextpas.core.platform.socket;
 
+{ 格式化 IPv6 地址字节为字符串 }
+function FormatIPv6Addr(AAddr: PByte): string;
+const
+  HexChars: array[0..15] of Char = '0123456789abcdef';
+var
+  I: Integer;
+  LGroup: UInt16;
+  LBuf: array[0..39] of Char;
+  LPos: Integer;
+begin
+  LPos := 0;
+  for I := 0 to 7 do
+  begin
+    LGroup := (UInt16(AAddr[I * 2]) shl 8) or UInt16(AAddr[I * 2 + 1]);
+    if I > 0 then
+    begin
+      LBuf[LPos] := ':';
+      Inc(LPos);
+    end;
+    LBuf[LPos] := HexChars[(LGroup shr 12) and $F]; Inc(LPos);
+    LBuf[LPos] := HexChars[(LGroup shr 8) and $F]; Inc(LPos);
+    LBuf[LPos] := HexChars[(LGroup shr 4) and $F]; Inc(LPos);
+    LBuf[LPos] := HexChars[LGroup and $F]; Inc(LPos);
+  end;
+  SetString(Result, @LBuf[0], LPos);
+end;
+
 function NetResolveIPv4(const AIP: string): UInt32;
 var
   LParts: array[0..3] of Byte;
@@ -63,6 +90,7 @@ end;
 function NetResolve(const AHost: string): TNetAddress;
 var
   LAddr: UInt32;
+  LAddr6: array[0..15] of Byte;
   LResult: Int32;
 begin
   if (AHost = '') or (AHost = 'localhost') then
@@ -71,14 +99,29 @@ begin
   if IsIPv4Literal(AHost) then
     Exit(TNetAddress.IPv4(AHost, 0));
 
+  { 尝试 IPv4 解析 }
   LResult := platform_socket_resolve_ipv4(PAnsiChar(AHost), LAddr);
-  if LResult <> 0 then
-    raise ENetworkError.Create('DNS resolve failed for: ' + AHost);
+  if LResult = 0 then
+  begin
+    Result.IP := IntToStr(LAddr and $FF) + '.' + IntToStr((LAddr shr 8) and $FF) + '.' +
+      IntToStr((LAddr shr 16) and $FF) + '.' + IntToStr((LAddr shr 24) and $FF);
+    Result.Port := 0;
+    Result.IsIPv6 := False;
+    Exit;
+  end;
 
-  Result.IP := IntToStr(LAddr and $FF) + '.' + IntToStr((LAddr shr 8) and $FF) + '.' +
-    IntToStr((LAddr shr 16) and $FF) + '.' + IntToStr((LAddr shr 24) and $FF);
-  Result.Port := 0;
-  Result.IsIPv6 := False;
+  { IPv4 失败，尝试 IPv6 解析 }
+  FillChar(LAddr6, SizeOf(LAddr6), 0);
+  LResult := platform_socket_resolve_ipv6(PAnsiChar(AHost), @LAddr6[0]);
+  if LResult = 0 then
+  begin
+    Result.IP := FormatIPv6Addr(@LAddr6[0]);
+    Result.Port := 0;
+    Result.IsIPv6 := True;
+    Exit;
+  end;
+
+  raise ENetworkError.Create('DNS resolve failed for: ' + AHost);
 end;
 
 end.

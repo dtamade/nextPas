@@ -209,9 +209,9 @@ begin
   Check(Pos('SetReadDeadline', LText) > 0,
     'timeout stream uses net deadline control',
     'deadline-based timeout wiring is missing in ' + TIMEOUT_PATH);
-  Check(Pos('WrapTStream(', LText) > 0,
-    'timeout stream keeps TStream compatibility bridge',
-    'TStream bridge is missing in ' + TIMEOUT_PATH);
+  Check(Pos('WrapTStream(', LText) = 0,
+    'timeout stream dropped TStream compatibility bridge',
+    'TStream bridge still present in ' + TIMEOUT_PATH);
 
   LText := LoadText(NONBLOCKING_PATH);
   Check(Pos('class(TInterfacedObject, IStream)', LText) > 0,
@@ -223,9 +223,9 @@ begin
   Check(Pos('ITcpStreamRuntime', LText) > 0,
     'nonblocking stream uses ITcpStreamRuntime',
     'runtime nonblocking seam is missing in ' + NONBLOCKING_PATH);
-  Check(Pos('WrapTStream(', LText) > 0,
-    'nonblocking stream keeps TStream compatibility bridge',
-    'TStream bridge is missing in ' + NONBLOCKING_PATH);
+  Check(Pos('WrapTStream(', LText) = 0,
+    'nonblocking stream dropped TStream compatibility bridge',
+    'TStream bridge still present in ' + NONBLOCKING_PATH);
 
   LText := LoadText(PENDING_PATH);
   Check(Pos('FinishIStream', LText) > 0,
@@ -234,9 +234,9 @@ begin
   Check(Pos('TryFinishIStream', LText) > 0,
     'pending connect exposes TryFinishIStream',
     'TryFinishIStream helper is missing in ' + PENDING_PATH);
-  Check(Pos('WrapIStream(', LText) > 0,
-    'pending connect bridges IStream back to TStream',
-    'pending TStream bridge is missing in ' + PENDING_PATH);
+  Check(Pos('WrapIStream(', LText) = 0,
+    'pending connect dropped IStream→TStream bridge',
+    'pending TStream bridge still present in ' + PENDING_PATH);
 
   LText := LoadText(TLS12_IO_PATH);
   Check(Pos('nextpas.core.io.intf', LText) > 0,
@@ -251,9 +251,9 @@ begin
   Check(Pos('IoReadFull', LText) > 0,
     'tls12.io uses IoReadFull',
     'IoReadFull usage is missing in ' + TLS12_IO_PATH);
-  Check(Pos('WrapTStream(', LText) > 0,
-    'tls12.io keeps TStream compatibility bridge',
-    'TStream bridge is missing in ' + TLS12_IO_PATH);
+  Check(Pos('WrapTStream(', LText) = 0,
+    'tls12.io dropped TStream compatibility bridge',
+    'TStream bridge still present in ' + TLS12_IO_PATH);
 
   LText := LoadText(WEBSOCKET_PATH);
   Check(Pos('nextpas.core.io.intf', LText) > 0,
@@ -265,9 +265,9 @@ begin
   Check(Pos('IoReadFull', LText) > 0,
     'websocket uses IoReadFull',
     'IoReadFull usage is missing in ' + WEBSOCKET_PATH);
-  Check(Pos('WrapTStream(', LText) > 0,
-    'websocket keeps TStream compatibility bridge',
-    'TStream bridge is missing in ' + WEBSOCKET_PATH);
+  Check(Pos('WrapTStream(', LText) = 0,
+    'websocket dropped TStream compatibility bridge',
+    'TStream bridge still present in ' + WEBSOCKET_PATH);
 
   LText := LoadText(TLS_UTILS_PATH);
   Check(Pos('TStrings', LText) = 0,

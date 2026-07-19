@@ -982,7 +982,8 @@ begin
   if LSent = 1 then
     Exit(0);
   LErr := WindowsSocketError;
-  if LErr = WSAEWOULDBLOCK then
+  { WindowsSocketError returns PLATFORM_ERR_* (WSAEWOULDBLOCK → AGAIN). }
+  if LErr = PLATFORM_ERR_AGAIN then
     Exit(0);
   Result := LErr;
 end;
@@ -1003,7 +1004,7 @@ begin
     if LRead = 0 then
       Exit(0);
     LErr := WindowsSocketError;
-    if LErr = WSAEWOULDBLOCK then
+    if LErr = PLATFORM_ERR_AGAIN then
       Exit(0);
     Result := LErr;
     Exit;

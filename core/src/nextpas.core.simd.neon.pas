@@ -55,7 +55,8 @@ interface
 uses
   nextpas.core.simd.backend.priority,
   nextpas.core.simd.base,
-  nextpas.core.simd.dispatch;
+  nextpas.core.simd.dispatch,
+  nextpas.core.simd.mask;
 
 // Register the NEON backend
 procedure RegisterNEONBackend;
@@ -65,6 +66,12 @@ procedure RegisterNEONBackend;
 // Memory operations
 function MemEqual_NEON(a, b: Pointer; len: SizeUInt): LongBool;
 function MemFindByte_NEON(p: Pointer; len: SizeUInt; value: Byte): PtrInt;
+function MemDiffRange_NEON(a, b: Pointer; len: SizeUInt; out firstDiff, lastDiff: SizeUInt): Boolean;
+procedure MemCopy_NEON(src, dst: Pointer; len: SizeUInt);
+procedure MemSet_NEON(dst: Pointer; len: SizeUInt; value: Byte);
+procedure MemReverse_NEON(p: Pointer; len: SizeUInt);
+function BytesIndexOf_NEON(haystack: Pointer; haystackLen: SizeUInt; needle: Pointer; needleLen: SizeUInt): PtrInt;
+function Utf8Validate_NEON(p: Pointer; len: SizeUInt): Boolean;
 
 // Statistics functions
 function SumBytes_NEON(p: Pointer; len: SizeUInt): UInt64;
@@ -78,6 +85,17 @@ procedure ToUpperAscii_NEON(p: Pointer; len: SizeUInt);
 
 // Search functions
 function BitsetPopCount_NEON(p: Pointer; byteLen: SizeUInt): SizeUInt;
+
+// === Phase 23a: BatchF32 Array Add / Sub / Mul ===
+procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+
+// === Phase 23b: BatchF32 Array Min / Max / Abs / Neg ===
+procedure NEONArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt);
+procedure NEONArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt);
 
 implementation
 

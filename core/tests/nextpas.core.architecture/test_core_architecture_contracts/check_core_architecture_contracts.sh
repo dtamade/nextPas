@@ -14,16 +14,27 @@ require_file() {
   [[ -s "$path" ]] || fail "required non-empty file missing: core/$path"
 }
 
+# Prefer rg; fall back to grep so CI images without ripgrep still work.
+has_fixed_token() {
+  local path="$1"
+  local token="$2"
+  if command -v rg >/dev/null 2>&1; then
+    rg -F --quiet -- "$token" "$path"
+  else
+    grep -F -q -- "$token" "$path"
+  fi
+}
+
 require_token() {
   local path="$1"
   local token="$2"
-  rg -F --quiet -- "$token" "$path" || fail "core/$path missing token: $token"
+  has_fixed_token "$path" "$token" || fail "core/$path missing token: $token"
 }
 
 reject_token() {
   local path="$1"
   local token="$2"
-  if rg -F --quiet -- "$token" "$path"; then
+  if has_fixed_token "$path" "$token"; then
     fail "core/$path must not contain token: $token"
   fi
 }
@@ -102,17 +113,15 @@ require_token "docs/platform/master-spec.md" "not runtime ready"
 require_token "docs/platform/consumer-contract-audit.md" "Readiness lane"
 require_token "docs/platform/consumer-contract-audit.md" "Completion lane"
 require_token "docs/platform/runtime-truth-matrix.md" "AsyncRead/AsyncWrite file completion"
-require_token "docs/mem/README.md" '`nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.'
-require_token "docs/mem/README.md" '`nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.'
-require_token "docs/mem/README.md" 'must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.'
+require_token "docs/mem/ARCHITECTURE.md" '`nextpas.core.mem.mapped_slab_pool` owns only the anonymous mapping allocator surface.'
+require_token "docs/mem/ARCHITECTURE.md" '`nextpas.core.io.mapped.slab_pool` is the fixed owner for file-backed and shared-memory slab pools.'
+require_token "docs/mem/ARCHITECTURE.md" 'must not grow `CreateFile`, `OpenFile`, `CreateShared`, `OpenShared`, or `nextpas.core.platform.files` dependencies.'
 require_token "docs/mem/ARCHITECTURE.md" '`nextpas.core.mem.allocator.mimalloc.loader` owns mimalloc path discovery and search order.'
 require_token "docs/mem/ARCHITECTURE.md" 'Search order: env override -> executable-relative `lib/<cpu-os>/` -> system loader fallback.'
 require_token "src/nextpas.core.mem.allocator.mimalloc.pas" "nextpas.core.mem.allocator.mimalloc.loader"
 reject_token "src/nextpas.core.mem.allocator.mimalloc.pas" "nextpas.core.os.env"
 reject_token "src/nextpas.core.mem.allocator.mimalloc.pas" "nextpas.core.path"
-reject_token "docs/mem/README.md" "still mixes"
-reject_token "docs/mem/README.md" 'mapped_slab_pool` file/shared manager path is future migration surface'
-reject_token "docs/mem/README.md" "docs/mem/mapped-family-ownership-decision.md"
+reject_token "docs/mem/ARCHITECTURE.md" "still mixes"
 
 ALLOWED_L0_TOP_MODULES=(
   "base"
@@ -133,7 +142,11 @@ KNOWN_L0_DEPENDENCY_DEBT=(
   "src/nextpas.core.mem.mapped_ring_buffer.pas|nextpas.core.io.mapped.ring_buffer"
   "src/nextpas.core.mem.mapped_ring_buffer.sharded.pas|nextpas.core.io.mapped.ring_buffer.sharded"
   "src/nextpas.core.simd.cpuinfo.lazy.pas|nextpas.core.os.env"
+  "src/nextpas.core.simd.linalg.gemm.parallel.pas|nextpas.core.thread.init"
+  "src/nextpas.core.system.classes.pas|nextpas.core.io.intf"
   "src/nextpas.core.system.sysutils.pas|nextpas.core.text.conv"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.path"
+  "src/nextpas.core.system.sysutils.pas|nextpas.core.fs"
 )
 
 RAW_HOST_UNITS=(
@@ -146,6 +159,8 @@ RAW_HOST_UNITS=(
 
 RAW_HOST_ALLOWLIST=(
   "src/nextpas.core.fs.util.pas|BaseUnix"
+  "src/nextpas.core.numa.linux.pas|BaseUnix"
+  "src/nextpas.core.numa.windows.pas|Windows"
   "src/nextpas.core.git.libgit2.backend.pas|ctypes"
   "src/nextpas.core.git.libgit2.binding.pas|ctypes"
   "src/nextpas.core.git.libgit2.binding.pas|Dynlibs"

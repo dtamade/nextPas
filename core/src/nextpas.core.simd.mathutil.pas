@@ -46,6 +46,7 @@ function SimdTruncFloat(AX: Double): Double; inline; overload;
 function SimdTruncFloatF32(AX: Single): Single; inline;
 function SimdTruncFloatF64(AX: Double): Double; inline;
 function SimdPowerF32(ABase, AExp: Single): Single;
+function SimdPowerF64(ABase, AExp: Double): Double;
 
 function SimdIsNaN(AX: Single): Boolean; inline; overload;
 function SimdIsNaN(AX: Double): Boolean; inline; overload;
@@ -321,6 +322,22 @@ begin
   if ABase < 0 then begin Result := SimdNaN; Exit; end;
   LLn := SimdLnF32(ABase);
   Result := Single(System.Exp(LLn * AExp));
+end;
+
+function SimdPowerF64(ABase, AExp: Double): Double;
+var
+  LLn: Double;
+begin
+  if ABase = 0 then
+  begin
+    if AExp = 0 then begin Result := 1.0; Exit; end;
+    if AExp > 0 then begin Result := 0.0; Exit; end;
+    Result := 1.0 / 0.0; // +Inf
+    Exit;
+  end;
+  if ABase < 0 then begin Result := 0.0 / 0.0; Exit; end; // NaN
+  LLn := System.Ln(ABase);
+  Result := System.Exp(LLn * AExp);
 end;
 
 function SimdIsNaN(AX: Single): Boolean; inline; overload;

@@ -7,16 +7,24 @@ interface
 uses
   nextpas.core.time.base, nextpas.core.time.deadline,
   nextpas.core.platform.io.base,
-  nextpas.core.platform.sync.base,
   nextpas.core.io.poller,
   nextpas.core.async.base, nextpas.core.async.timer,
-  nextpas.core.async.task;
+  nextpas.core.async.task,
+  nextpas.core.lockfree.mpsc;
 
 type
+  { MPSC item must stay unmanaged: Callback/Method/Context/OnDiscard only.
+    PostRef uses heap-wrapped TAsyncCallbackRef (managed) via Callback.
+    OnDiscard frees Context when Close discards an item without invoking it. }
   TAsyncPendingItem = record
     Callback: TAsyncCallback;
+    Method: TAsyncCallbackMethod;
     Context: Pointer;
+    OnDiscard: TAsyncCallback;
   end;
+
+  { H3-1: cross-thread Post path uses T1 MPSC (N-prod / 1-cons). }
+  TAsyncPendingQueue = specialize TMpscQueueImpl<TAsyncPendingItem>;
 
   TAsyncLoop = record
   private
@@ -25,10 +33,7 @@ type
     FWakeReady: Boolean;
     FTimers: TTimerHeap;
     FRunning: Int32;
-    FPendingQueue: array of TAsyncPendingItem;
-    FPendingCount: UInt32;
-    FPendingCap: UInt32;
-    FPendingLock: TPlatformMutex;
+    FPending: TAsyncPendingQueue;
     FPendingReady: Boolean;
     procedure DrainPending;
     procedure DrainWake;
@@ -40,10 +45,20 @@ type
 
     { Cross-thread wake }
     procedure Post(ACallback: TAsyncCallback; AContext: Pointer = nil);
+    procedure PostEx(ACallback: TAsyncCallback; AContext: Pointer;
+      AOnDiscard: TAsyncCallback);
+    procedure PostRef(ACallback: TAsyncCallbackRef; AContext: Pointer = nil);
+    procedure PostMethod(ACallback: TAsyncCallbackMethod; AContext: Pointer = nil);
     procedure Wake;
 
     { Timer scheduling }
     function Schedule(const ADelay: TDuration; ACallback: TAsyncCallback;
+      AContext: Pointer = nil): TAsyncTimerHandle;
+    function ScheduleEx(const ADelay: TDuration; ACallback: TAsyncCallback;
+      AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
+    function ScheduleRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
+      AContext: Pointer = nil): TAsyncTimerHandle;
+    function ScheduleMethod(const ADelay: TDuration; ACallback: TAsyncCallbackMethod;
       AContext: Pointer = nil): TAsyncTimerHandle;
     function ScheduleAt(const ADeadline: TDeadline; ACallback: TAsyncCallback;
       AContext: Pointer = nil): TAsyncTimerHandle;
@@ -56,9 +71,19 @@ type
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncAccept(AFd: PtrInt; AAddr: Pointer; AAddrLen: Pointer; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncConnect(AFd: PtrInt; AAddr: Pointer; AAddrLen: UInt32;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncRecvRef(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      ACallback: TIoCompletionRef; AContext: Pointer = nil): Boolean;
     function AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncClose(AFd: PtrInt;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncReadv(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncWritev(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
     { I/O with deadline }
@@ -74,6 +99,8 @@ type
     { Async sleep }
     function AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;
       AContext: Pointer = nil): TAsyncTimerHandle;
+    function AsyncSleepRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
+      AContext: Pointer = nil): TAsyncTimerHandle;
 
     { Event loop }
     function Poll: Int32;
@@ -87,16 +114,50 @@ implementation
 uses
   nextpas.core.atomic,
   nextpas.core.errors,
-  nextpas.core.platform.io,
-  nextpas.core.platform.sync;
+  nextpas.core.platform.io;
 
 const
   ETIMEDOUT_LINUX = 110;
-  PENDING_INITIAL_CAP = 32;
   ASYNC_PENDING_IO_IDLE_POLL_MS = 10;
   TIMEOUT_COMPLETION_PENDING = 0;
   TIMEOUT_COMPLETION_IO = 1;
   TIMEOUT_COMPLETION_TIMER = 2;
+
+
+type
+  PAsyncCallbackRefCtx = ^TAsyncCallbackRefCtx;
+  TAsyncCallbackRefCtx = record
+    Ref: TAsyncCallbackRef;
+    Context: Pointer;
+  end;
+
+procedure AsyncCallbackRefWrapper(AContext: Pointer);
+var
+  LCtx: PAsyncCallbackRefCtx;
+begin
+  LCtx := PAsyncCallbackRefCtx(AContext);
+  try
+    if Assigned(LCtx^.Ref) then
+      LCtx^.Ref(LCtx^.Context);
+  finally
+    Dispose(LCtx);
+  end;
+end;
+
+procedure DiscardPendingItem(const AItem: TAsyncPendingItem);
+begin
+  if Assigned(AItem.OnDiscard) then
+  begin
+    AItem.OnDiscard(AItem.Context);
+    Exit;
+  end;
+  if AItem.Callback = @AsyncCallbackRefWrapper then
+  begin
+    if AItem.Context <> nil then
+      Dispose(PAsyncCallbackRefCtx(AItem.Context));
+  end;
+end;
+
 
 type
   PAsyncLoop = ^TAsyncLoop;
@@ -170,6 +231,18 @@ begin
     TimeoutCtxRelease(ACtx);
 end;
 
+{ Close/Recycle abandoned timeout timer without firing: drop timer ownership only. }
+procedure TimeoutCtxDiscardTimer(AContext: Pointer);
+var
+  LCtx: PTimeoutCtx;
+begin
+  LCtx := PTimeoutCtx(AContext);
+  if LCtx = nil then
+    Exit;
+  LCtx^.TimerHandle := TAsyncTimerHandle.None;
+  TimeoutCtxRelease(LCtx);
+end;
+
 procedure TimeoutCtxDetachUserRefs(ACtx: PTimeoutCtx;
   out ACallback: TIoCompletion; out AContext: Pointer);
 begin
@@ -231,8 +304,8 @@ begin
   Result^.UserContext := AContext;
   Result^.CompletionState := TIMEOUT_COMPLETION_PENDING;
   Result^.RefCount := 2;
-  Result^.TimerHandle := ALoop^.FTimers.Schedule(ADeadline,
-    @TimeoutTimerCallback, Result);
+  Result^.TimerHandle := ALoop^.FTimers.ScheduleEx(ADeadline,
+    @TimeoutTimerCallback, Result, @TimeoutCtxDiscardTimer);
 end;
 
 { TAsyncLoop }
@@ -258,11 +331,7 @@ begin
     raise EInvalidOperationError.Create('async loop: wake poller creation failed');
   Result.FTimers := TTimerHeap.Create;
   Result.FRunning := 0;
-  Result.FPendingCount := 0;
-  Result.FPendingCap := PENDING_INITIAL_CAP;
-  SetLength(Result.FPendingQueue, PENDING_INITIAL_CAP);
-  if platform_mutex_init(Result.FPendingLock, PLATFORM_MUTEX_NORMAL) <> 0 then
-    raise EInvalidOperationError.Create('async loop: mutex init failed');
+  Result.FPending := TAsyncPendingQueue.Create;
   Result.FPendingReady := True;
 end;
 
@@ -270,45 +339,40 @@ procedure TAsyncLoop.Close;
 var
   LWakeWasReady: Boolean;
   LPendingWasReady: Boolean;
-  LI: UInt32;
-
-  procedure ClearPendingQueue;
-  begin
-    LI := 0;
-    while LI < FPendingCount do
-    begin
-      FPendingQueue[LI].Callback := nil;
-      FPendingQueue[LI].Context := nil;
-      Inc(LI);
-    end;
-    FPendingCount := 0;
-    FPendingCap := 0;
-    SetLength(FPendingQueue, 0);
-  end;
-
+  LItem: TAsyncPendingItem;
 begin
   LWakeWasReady := FWakeReady;
   LPendingWasReady := FPendingReady;
   AtomicStore32(FRunning, 0, moRelease);
   FWakeReady := False;
-  if LPendingWasReady then
+  { Publish closed before Close/drain so concurrent Post fails IsValid or Enqueue. }
+  FPendingReady := False;
+  if LPendingWasReady and (FPending <> nil) then
   begin
-    platform_mutex_lock(FPendingLock);
-    try
-      FPendingReady := False;
-      ClearPendingQueue;
-    finally
-      platform_mutex_unlock(FPendingLock);
+    FPending.Close;
+    { Discard remaining items without firing callbacks (same as prior ClearPendingQueue). }
+    while FPending.TryDequeue(LItem) do
+    begin
+      try
+        DiscardPendingItem(LItem);
+      except
+        { Close must continue releasing owned resources even if a discard hook fails. }
+      end;
+      LItem.Callback := nil;
+      LItem.Method := nil;
+      LItem.Context := nil;
+      LItem.OnDiscard := nil;
     end;
-  end
-  else
-    FPendingReady := False;
+  end;
   try
     FPoller.Close;
   finally
     FTimers.Close;
-    if LPendingWasReady then
-      platform_mutex_destroy(FPendingLock);
+    if LPendingWasReady and (FPending <> nil) then
+    begin
+      FPending.Free;
+      FPending := nil;
+    end;
     if LWakeWasReady then
       platform_poller_close(FWakePoller);
   end;
@@ -329,25 +393,60 @@ begin
 end;
 
 procedure TAsyncLoop.Post(ACallback: TAsyncCallback; AContext: Pointer);
+begin
+  PostEx(ACallback, AContext, nil);
+end;
+
+procedure TAsyncLoop.PostEx(ACallback: TAsyncCallback; AContext: Pointer;
+  AOnDiscard: TAsyncCallback);
 var
-  LNewCap: UInt32;
+  LItem: TAsyncPendingItem;
 begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: post after close');
-  platform_mutex_lock(FPendingLock);
+  if not Assigned(ACallback) then
+    raise EInvalidOperationError.Create('async loop: post nil callback');
+  LItem.Callback := ACallback;
+  LItem.Method := nil;
+  LItem.Context := AContext;
+  LItem.OnDiscard := AOnDiscard;
+  { MPSC Enqueue raises EInvalidOperationError when closed (ClosedPublishPolicy). }
+  FPending.Enqueue(LItem);
+  Wake;
+end;
+
+procedure TAsyncLoop.PostRef(ACallback: TAsyncCallbackRef; AContext: Pointer);
+var
+  LCtx: PAsyncCallbackRefCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: post after close');
+  if not Assigned(ACallback) then
+    raise EInvalidOperationError.Create('async loop: post nil callback');
+  New(LCtx);
+  LCtx^.Ref := ACallback;
+  LCtx^.Context := AContext;
   try
-    if FPendingCount >= FPendingCap then
-    begin
-      LNewCap := FPendingCap * 2;
-      SetLength(FPendingQueue, LNewCap);
-      FPendingCap := LNewCap;
-    end;
-    FPendingQueue[FPendingCount].Callback := ACallback;
-    FPendingQueue[FPendingCount].Context := AContext;
-    Inc(FPendingCount);
-  finally
-    platform_mutex_unlock(FPendingLock);
+    Post(@AsyncCallbackRefWrapper, LCtx);
+  except
+    Dispose(LCtx);
+    raise;
   end;
+end;
+
+procedure TAsyncLoop.PostMethod(ACallback: TAsyncCallbackMethod; AContext: Pointer);
+var
+  LItem: TAsyncPendingItem;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: post after close');
+  if not Assigned(ACallback) then
+    raise EInvalidOperationError.Create('async loop: post nil callback');
+  LItem.Callback := nil;
+  LItem.Method := ACallback;
+  LItem.Context := AContext;
+  LItem.OnDiscard := nil;
+  FPending.Enqueue(LItem);
   Wake;
 end;
 
@@ -371,35 +470,17 @@ end;
 
 procedure TAsyncLoop.DrainPending;
 var
-  LI: UInt32;
-  LItems: array of TAsyncPendingItem;
-  LCount: UInt32;
+  LItem: TAsyncPendingItem;
 begin
-  if not FPendingReady then
+  { Single-consumer: only the loop thread may TryDequeue. }
+  if (not FPendingReady) or (FPending = nil) then
     Exit;
-  platform_mutex_lock(FPendingLock);
-  try
-    LCount := FPendingCount;
-    if LCount > 0 then
-    begin
-      SetLength(LItems, LCount);
-      Move(FPendingQueue[0], LItems[0], LCount * SizeOf(TAsyncPendingItem));
-      for LI := 0 to LCount - 1 do
-      begin
-        FPendingQueue[LI].Callback := nil;
-        FPendingQueue[LI].Context := nil;
-      end;
-      FPendingCount := 0;
-    end;
-  finally
-    platform_mutex_unlock(FPendingLock);
-  end;
-  if LCount = 0 then
-    Exit;
-  for LI := 0 to LCount - 1 do
+  while FPending.TryDequeue(LItem) do
   begin
-    if Assigned(LItems[LI].Callback) then
-      LItems[LI].Callback(LItems[LI].Context);
+    if Assigned(LItem.Callback) then
+      LItem.Callback(LItem.Context)
+    else if Assigned(LItem.Method) then
+      LItem.Method(LItem.Context);
   end;
 end;
 
@@ -409,6 +490,30 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
+end;
+
+function TAsyncLoop.ScheduleEx(const ADelay: TDuration; ACallback: TAsyncCallback;
+  AContext: Pointer; AOnDiscard: TAsyncCallback): TAsyncTimerHandle;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FTimers.ScheduleAfterEx(ADelay, ACallback, AContext, AOnDiscard);
+end;
+
+function TAsyncLoop.ScheduleRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
+  AContext: Pointer): TAsyncTimerHandle;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FTimers.ScheduleAfterRef(ADelay, ACallback, AContext);
+end;
+
+function TAsyncLoop.ScheduleMethod(const ADelay: TDuration; ACallback: TAsyncCallbackMethod;
+  AContext: Pointer): TAsyncTimerHandle;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FTimers.ScheduleAfterMethod(ADelay, ACallback, AContext);
 end;
 
 function TAsyncLoop.ScheduleAt(const ADeadline: TDeadline; ACallback: TAsyncCallback;
@@ -450,6 +555,14 @@ begin
   Result := FPoller.AsyncAccept(AFd, AAddr, AAddrLen, AFlags, ACallback, AContext);
 end;
 
+function TAsyncLoop.AsyncConnect(AFd: PtrInt; AAddr: Pointer; AAddrLen: UInt32;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncConnect(AFd, AAddr, AAddrLen, ACallback, AContext);
+end;
+
 function TAsyncLoop.AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
@@ -458,12 +571,49 @@ begin
   Result := FPoller.AsyncRecv(AFd, ABuf, ALen, AFlags, ACallback, AContext);
 end;
 
+function TAsyncLoop.AsyncRecvRef(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  ACallback: TIoCompletionRef; AContext: Pointer): Boolean;
+var
+  LCtx: Pointer;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  LCtx := WrapIoCompletionRef(ACallback, AContext);
+  Result := AsyncRecv(AFd, ABuf, ALen, AFlags, @IoCompletionRefWrapper, LCtx);
+  if not Result then
+    Dispose(PIoCompletionRefCtx(LCtx));
+end;
+
 function TAsyncLoop.AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext);
+end;
+
+function TAsyncLoop.AsyncClose(AFd: PtrInt;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncClose(AFd, ACallback, AContext);
+end;
+
+function TAsyncLoop.AsyncReadv(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncReadv(AFd, AIovecs, ANrVecs, AOffset, ACallback, AContext);
+end;
+
+function TAsyncLoop.AsyncWritev(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncWritev(AFd, AIovecs, ANrVecs, AOffset, ACallback, AContext);
 end;
 
 function TAsyncLoop.Poll: Int32;
@@ -569,6 +719,12 @@ begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: operation after close');
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
+end;
+
+function TAsyncLoop.AsyncSleepRef(const ADelay: TDuration; ACallback: TAsyncCallbackRef;
+  AContext: Pointer): TAsyncTimerHandle;
+begin
+  Result := ScheduleRef(ADelay, ACallback, AContext);
 end;
 
 function TAsyncLoop.AsyncReadTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;

@@ -46,8 +46,14 @@ type
     constructor Create(const ACapacity: PtrUInt);
     destructor Destroy; override;
     function TryPush(const AValue: T): Boolean;
+    {** @desc Owner push with full/closed diagnostic; Boolean hot path unchanged. }
+    function TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
     function TryPop(out AValue: T): Boolean;
+    {** @desc Owner pop with empty/closed-empty diagnostic; Boolean hot path unchanged. }
+    function TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function TrySteal(out AValue: T): Boolean;
+    {** @desc Thief steal with empty/closed-empty diagnostic; CAS race may report empty. }
+    function TryStealEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
     function Drain(const AMaxCount: PtrUInt = High(PtrUInt)): PtrUInt;
     procedure Close;
     function IsClosed: Boolean; inline;
@@ -99,6 +105,20 @@ begin
   Result := True;
 end;
 
+function TWorkStealingDequeImpl.TryPushEx(const AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryPush(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteFull;
+  Result := False;
+end;
+
 function TWorkStealingDequeImpl.TryPop(out AValue: T): Boolean;
 var
   LBottom, LTop: Int64;
@@ -127,6 +147,20 @@ begin
   end;
 end;
 
+function TWorkStealingDequeImpl.TryPopEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TryPop(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
+end;
+
 function TWorkStealingDequeImpl.TrySteal(out AValue: T): Boolean;
 var
   LTop, LBottom: Int64;
@@ -139,6 +173,20 @@ begin
   if AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop then
     Exit(False);
   Result := True;
+end;
+
+function TWorkStealingDequeImpl.TryStealEx(out AValue: T; out AError: TLockFreeTryError): Boolean;
+begin
+  if TrySteal(AValue) then
+  begin
+    AError := lfteNone;
+    Exit(True);
+  end;
+  if IsClosed then
+    AError := lfteClosed
+  else
+    AError := lfteEmpty;
+  Result := False;
 end;
 
 function TWorkStealingDequeImpl.IsEmpty: Boolean; inline;

@@ -85,18 +85,34 @@ function ExpandEnvStrict(const AValue: string): string;
 function UserHomeDir: string;
 {** @desc 获取用户缓存目录
  *
- * @return 缓存目录路径（Unix: $HOME/.cache, Windows: %LOCALAPPDATA%）
+ * @params
+ *   AAppName  可选应用名；非空时拼接到缓存根目录下
  *
- * @note 环境变量不存在时返回空字符串
+ * @return Unix: $XDG_CACHE_HOME 或 $HOME/.cache；Windows: %LOCALAPPDATA%
+ *
+ * @note 根目录环境变量不存在时返回空字符串
  *}
-function UserCacheDir: string;
+function UserCacheDir(const AAppName: string = ''): string;
 {** @desc 获取用户配置目录
  *
- * @return 配置目录路径（Unix: $HOME/.config, Windows: %APPDATA%）
+ * @params
+ *   AAppName  可选应用名；非空时拼接到配置根目录下
  *
- * @note 环境变量不存在时返回空字符串
+ * @return Unix: $XDG_CONFIG_HOME 或 $HOME/.config；Windows: %APPDATA%
+ *
+ * @note 根目录环境变量不存在时返回空字符串
  *}
-function UserConfigDir: string;
+function UserConfigDir(const AAppName: string = ''): string;
+{** @desc 获取用户数据目录
+ *
+ * @params
+ *   AAppName  可选应用名；非空时拼接到数据根目录下
+ *
+ * @return Unix: $XDG_DATA_HOME 或 $HOME/.local/share；Windows: %LOCALAPPDATA%
+ *
+ * @note 根目录环境变量不存在时返回空字符串
+ *}
+function UserDataDir(const AAppName: string = ''): string;
 
 implementation
 
@@ -104,7 +120,11 @@ uses
   nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.text.builder,
-  nextpas.core.platform.env;
+  nextpas.core.platform.env,
+  nextpas.core.platform.error;
+
+type
+  TExpandMode = (emLoose, emDefault, emStrict);
 
 type
   PStringArray = ^TStringArray;
@@ -122,6 +142,28 @@ begin
       raise EArgumentError.Create('environment variable name must not contain NUL');
 end;
 
+{ Portable name for SetEnv/UnsetEnv/Expand placeholders: [A-Za-z_][A-Za-z0-9_]*.
+  GetEnv/TryGetEnv/HasEnv only use ValidateEnvName (may read odd existing names). }
+procedure ValidatePortableEnvName(const AName: string);
+var
+  I: Integer;
+  C: Char;
+begin
+  ValidateEnvName(AName);
+  C := AName[1];
+  if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or (C = '_')) then
+    raise EArgumentError.Create(
+      'environment variable name must start with letter or underscore: ' + AName);
+  for I := 2 to Length(AName) do
+  begin
+    C := AName[I];
+    if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or
+      ((C >= '0') and (C <= '9')) or (C = '_')) then
+      raise EArgumentError.Create(
+        'environment variable name must be [A-Za-z_][A-Za-z0-9_]*: ' + AName);
+  end;
+end;
+
 procedure ValidateEnvValue(const AValue: string);
 var
   I: Integer;
@@ -132,10 +174,16 @@ begin
 end;
 
 procedure RaiseEnvError(const ACode: Int32; const AOp, AName: string);
+var
+  LBuf: array[0..255] of AnsiChar;
+  LMsg: string;
 begin
   if ACode = 0 then
     Exit;
-  raise EIOError.Create(AOp + ' failed (' + IntToStr(ACode) + '): ' + AName);
+  LMsg := AOp + ' failed (' + IntToStr(ACode) + '): ' + AName;
+  if platform_error_message(ACode, @LBuf[0], SizeOf(LBuf)) > 0 then
+    LMsg := LMsg + ' — ' + string(PAnsiChar(@LBuf[0]));
+  raise EIOError.Create(LMsg);
 end;
 
 function CollectEnvEntry(const AEntry: PAnsiChar; AData: Pointer): Boolean;
@@ -238,7 +286,7 @@ procedure SetEnv(const AName, AValue: string);
 var
   LN, LV: string;
 begin
-  ValidateEnvName(AName);
+  ValidatePortableEnvName(AName);
   ValidateEnvValue(AValue);
   LN := AName;
   LV := AValue;
@@ -255,19 +303,33 @@ procedure UnsetEnv(const AName: string);
 var
   LN: string;
 begin
-  ValidateEnvName(AName);
+  ValidatePortableEnvName(AName);
   LN := AName;
   RaiseEnvError(platform_env_unset(PAnsiChar(LN)), 'unsetenv', AName);
 end;
 
-function ExpandEnv(const AValue: string): string;
+function ExpandEnvInternal(const AValue, ADefault: string;
+  const AMode: TExpandMode): string;
 var
   I, LStart: Integer;
-  LName: string;
-  LResolved: string;
+  LName, LResolved: string;
   LBuilder: TBufStringBuilder;
+
+  procedure AppendResolvedOrMode(const AVarName: string);
+  begin
+    if TryGetEnv(AVarName, LResolved) then
+      LBuilder.AppendStr(LResolved)
+    else
+      case AMode of
+        emLoose: ;
+        emDefault: LBuilder.AppendStr(ADefault);
+        emStrict:
+          raise EArgumentError.Create(
+            'undefined environment variable: ' + AVarName);
+      end;
+  end;
+
 begin
-  { P1-6 optimization: Use TBufStringBuilder for O(n) instead of O(n²) }
   LBuilder.Init(Length(AValue));
   try
     I := 1;
@@ -283,9 +345,8 @@ begin
           raise EArgumentError.Create(
             'unterminated ${...} in environment expansion');
         LName := Copy(AValue, LStart, I - LStart);
-        ValidateEnvName(LName);
-        if TryGetEnv(LName, LResolved) then
-          LBuilder.AppendStr(LResolved);
+        ValidatePortableEnvName(LName);
+        AppendResolvedOrMode(LName);
         Inc(I);
         Continue;
       end
@@ -293,16 +354,38 @@ begin
       begin
         LStart := I + 1;
         I := LStart;
-        while (I <= Length(AValue)) and (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+        while (I <= Length(AValue)) and
+          (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
           Inc(I);
         if I = LStart then
           LBuilder.AppendChar('$')
         else
         begin
           LName := Copy(AValue, LStart, I - LStart);
-          if TryGetEnv(LName, LResolved) then
-            LBuilder.AppendStr(LResolved);
+          ValidatePortableEnvName(LName);
+          AppendResolvedOrMode(LName);
         end;
+        Continue;
+      end
+      else if AValue[I] = '%' then
+      begin
+        { Windows-style %NAME% — NAME must be non-empty [A-Za-z0-9_] }
+        LStart := I + 1;
+        I := LStart;
+        while (I <= Length(AValue)) and
+          (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
+          Inc(I);
+        if (I > LStart) and (I <= Length(AValue)) and (AValue[I] = '%') then
+        begin
+          LName := Copy(AValue, LStart, I - LStart);
+          ValidatePortableEnvName(LName);
+          AppendResolvedOrMode(LName);
+          Inc(I);
+          Continue;
+        end;
+        { Not a valid %NAME% — emit literal '%' and rescan from next char }
+        LBuilder.AppendChar('%');
+        I := LStart;
         Continue;
       end
       else
@@ -315,126 +398,38 @@ begin
   finally
     LBuilder.Done;
   end;
+end;
+
+function ExpandEnv(const AValue: string): string;
+begin
+  Result := ExpandEnvInternal(AValue, '', emLoose);
 end;
 
 function ExpandEnvWithDefault(const AValue, ADefault: string): string;
-var
-  I, LStart: Integer;
-  LName: string;
-  LResolved: string;
-  LBuilder: TBufStringBuilder;
 begin
-  LBuilder.Init(Length(AValue));
-  try
-    I := 1;
-    while I <= Length(AValue) do
-    begin
-      if (AValue[I] = '$') and (I < Length(AValue)) and (AValue[I + 1] = '{') then
-      begin
-        LStart := I + 2;
-        I := LStart;
-        while (I <= Length(AValue)) and (AValue[I] <> '}') do
-          Inc(I);
-        if I > Length(AValue) then
-          raise EArgumentError.Create(
-            'unterminated ${...} in environment expansion');
-        LName := Copy(AValue, LStart, I - LStart);
-        ValidateEnvName(LName);
-        if not TryGetEnv(LName, LResolved) then
-          LBuilder.AppendStr(ADefault)
-        else
-          LBuilder.AppendStr(LResolved);
-        Inc(I);
-        Continue;
-      end
-      else if (AValue[I] = '$') and (I < Length(AValue)) then
-      begin
-        LStart := I + 1;
-        I := LStart;
-        while (I <= Length(AValue)) and (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
-          Inc(I);
-        if I = LStart then
-          LBuilder.AppendChar('$')
-        else
-        begin
-          LName := Copy(AValue, LStart, I - LStart);
-          if not TryGetEnv(LName, LResolved) then
-            LBuilder.AppendStr(ADefault)
-          else
-            LBuilder.AppendStr(LResolved);
-        end;
-        Continue;
-      end
-      else
-      begin
-        LBuilder.AppendChar(AValue[I]);
-        Inc(I);
-      end;
-    end;
-    Result := LBuilder.ToString;
-  finally
-    LBuilder.Done;
-  end;
+  Result := ExpandEnvInternal(AValue, ADefault, emDefault);
 end;
 
 function ExpandEnvStrict(const AValue: string): string;
-var
-  I, LStart: Integer;
-  LName: string;
-  LResolved: string;
-  LBuilder: TBufStringBuilder;
 begin
-  LBuilder.Init(Length(AValue));
-  try
-    I := 1;
-    while I <= Length(AValue) do
-    begin
-      if (AValue[I] = '$') and (I < Length(AValue)) and (AValue[I + 1] = '{') then
-      begin
-        LStart := I + 2;
-        I := LStart;
-        while (I <= Length(AValue)) and (AValue[I] <> '}') do
-          Inc(I);
-        if I > Length(AValue) then
-          raise EArgumentError.Create(
-            'unterminated ${...} in environment expansion');
-        LName := Copy(AValue, LStart, I - LStart);
-        ValidateEnvName(LName);
-        if not TryGetEnv(LName, LResolved) then
-          raise EArgumentError.Create(
-            'undefined environment variable: ' + LName);
-        LBuilder.AppendStr(LResolved);
-        Inc(I);
-        Continue;
-      end
-      else if (AValue[I] = '$') and (I < Length(AValue)) then
-      begin
-        LStart := I + 1;
-        I := LStart;
-        while (I <= Length(AValue)) and (AValue[I] in ['A'..'Z', 'a'..'z', '0'..'9', '_']) do
-          Inc(I);
-        if I = LStart then
-          LBuilder.AppendChar('$')
-        else
-        begin
-          LName := Copy(AValue, LStart, I - LStart);
-          if not TryGetEnv(LName, LResolved) then
-            raise EArgumentError.Create(
-              'undefined environment variable: ' + LName);
-          LBuilder.AppendStr(LResolved);
-        end;
-        Continue;
-      end
-      else
-      begin
-        LBuilder.AppendChar(AValue[I]);
-        Inc(I);
-      end;
-    end;
-    Result := LBuilder.ToString;
-  finally
-    LBuilder.Done;
-  end;
+  Result := ExpandEnvInternal(AValue, '', emStrict);
+end;
+
+function JoinUserDir(const ABase, AAppName: string): string;
+begin
+  if (ABase = '') or (AAppName = '') then
+    Exit(ABase);
+{$IFDEF NEXTPAS_WINDOWS}
+  if (ABase[Length(ABase)] = '\') or (ABase[Length(ABase)] = '/') then
+    Result := ABase + AAppName
+  else
+    Result := ABase + '\' + AAppName;
+{$ELSE}
+  if ABase[Length(ABase)] = '/' then
+    Result := ABase + AAppName
+  else
+    Result := ABase + '/' + AAppName;
+{$ENDIF}
 end;
 
 function UserHomeDir: string;
@@ -446,34 +441,67 @@ begin
 {$ENDIF}
 end;
 
-function UserCacheDir: string;
+function UserCacheDir(const AAppName: string): string;
 var
-  LHome: string;
+  LHome, LXdg: string;
 begin
 {$IFDEF NEXTPAS_WINDOWS}
   Result := GetEnv('LOCALAPPDATA');
 {$ELSE}
-  LHome := GetEnv('HOME');
-  if LHome <> '' then
-    Result := LHome + '/.cache'
+  if TryGetEnv('XDG_CACHE_HOME', LXdg) and (LXdg <> '') then
+    Result := LXdg
   else
-    Result := '';
+  begin
+    LHome := GetEnv('HOME');
+    if LHome <> '' then
+      Result := LHome + '/.cache'
+    else
+      Result := '';
+  end;
 {$ENDIF}
+  Result := JoinUserDir(Result, AAppName);
 end;
 
-function UserConfigDir: string;
+function UserConfigDir(const AAppName: string): string;
 var
-  LHome: string;
+  LHome, LXdg: string;
 begin
 {$IFDEF NEXTPAS_WINDOWS}
   Result := GetEnv('APPDATA');
 {$ELSE}
-  LHome := GetEnv('HOME');
-  if LHome <> '' then
-    Result := LHome + '/.config'
+  if TryGetEnv('XDG_CONFIG_HOME', LXdg) and (LXdg <> '') then
+    Result := LXdg
   else
-    Result := '';
+  begin
+    LHome := GetEnv('HOME');
+    if LHome <> '' then
+      Result := LHome + '/.config'
+    else
+      Result := '';
+  end;
 {$ENDIF}
+  Result := JoinUserDir(Result, AAppName);
+end;
+
+function UserDataDir(const AAppName: string): string;
+var
+  LHome, LXdg: string;
+begin
+{$IFDEF NEXTPAS_WINDOWS}
+  Result := GetEnv('LOCALAPPDATA');
+{$ELSE}
+  if TryGetEnv('XDG_DATA_HOME', LXdg) and (LXdg <> '') then
+    Result := LXdg
+  else
+  begin
+    LHome := GetEnv('HOME');
+    if LHome <> '' then
+      Result := LHome + '/.local/share'
+    else
+      Result := '';
+  end;
+{$ENDIF}
+  Result := JoinUserDir(Result, AAppName);
 end;
 
 end.

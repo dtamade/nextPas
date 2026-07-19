@@ -1,7 +1,8 @@
 program test_dialer;
 {$mode ObjFPC}{$H+}
 uses
-  SysUtils, Classes,
+  SysUtils,
+  nextpas.core.io.intf,
   nextpas.core.tls,
   nextpas.core.tls.base,
   nextpas.core.tls.tls,
@@ -18,7 +19,7 @@ begin if C then begin WriteLn('  [PASS] ', N); Inc(GPass); end else begin WriteL
 procedure TestDialerBasic;
 var
   LDialer: TSSLDialer;
-  LStream: TSSLStream;
+  LStream: IStream;
   LError: string;
 begin
   WriteLn('--- TSSLDialer basic ---');
@@ -34,8 +35,8 @@ begin
       Check(True, 'dial attempted (cert verify may fail in pure Pascal): ' + Copy(LError, 1, 60));
     if LStream <> nil then
     begin
-      Check(LStream is TSSLStream, 'returns TSSLStream');
-      LStream.Free;
+      Check(True, 'returns IStream');
+      LStream := nil;
     end;
   finally
     LDialer.Free;
@@ -45,7 +46,7 @@ end;
 procedure TestDialerErrors;
 var
   LDialer: TSSLDialer;
-  LStream: TSSLStream;
+  LStream: IStream;
   LError: string;
 begin
   WriteLn('--- TSSLDialer error cases ---');
@@ -69,7 +70,7 @@ end;
 procedure TestDialerDNS;
 var
   LDialer: TSSLDialer;
-  LStream: TSSLStream;
+  LStream: IStream;
   LError: string;
 begin
   WriteLn('--- TSSLDialer DNS resolution ---');
@@ -79,7 +80,7 @@ begin
     if LDialer.TryDial('one.one.one.one', 443, LStream, LError) then
     begin
       Check(True, 'DNS resolve + TLS to one.one.one.one');
-      LStream.Free;
+      LStream := nil;
     end
     else
       Check(True, 'DNS may not be available (skip): ' + LError);
@@ -92,7 +93,7 @@ procedure TestConnectionPool;
 var
   LDialer: TSSLDialer;
   LPool: TSSLConnectionPool;
-  LStream1, LStream2: TSSLStream;
+  LStream1, LStream2: IStream;
   LError: string;
 begin
   WriteLn('--- TSSLConnectionPool ---');
@@ -106,13 +107,14 @@ begin
 
     // Release back to pool
     LPool.Release('1.1.1.1', 443, LStream1);
+    LStream1 := nil;
 
     // Acquire again (should reuse from pool)
     Check(LPool.Acquire('1.1.1.1', 443, LStream2, LError), 'pool re-acquire succeeds');
     Check(LStream2 <> nil, 'reused stream not nil');
 
     // Clean up
-    LStream2.Free;
+    LStream2 := nil;
 
     // Test CloseAll
     LPool.CloseAll;
@@ -129,7 +131,6 @@ var
   LConn: ISSLConnection;
   LPending: TSSLPendingClientConnect;
   LStep: TSSLHandshakeStepResult;
-  LStream: TStream;
 begin
   WriteLn('--- TSSLPendingClientConnect ---');
   // Create a connection in non-blocking mode
