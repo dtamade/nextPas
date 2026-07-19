@@ -405,15 +405,17 @@ threadvar
   GTanBufCapacity: SizeUInt;
 
 procedure EnsureTanScratch(aCount: SizeUInt);
+var
+  LOldBytes: SizeUInt;
 begin
   if (GTanBufCapacity < aCount) or (aCount < GTanBufCapacity div 4) then
   begin
-    // 释放旧缓冲区
+    // sized free: capacity is the GetMem element count for both scratch buffers
+    LOldBytes := GTanBufCapacity * SizeOf(Single);
     if GTanSinBuf <> nil then
-      FreeMem(GTanSinBuf);
+      FreeMem(GTanSinBuf, LOldBytes);
     if GTanCosBuf <> nil then
-      FreeMem(GTanCosBuf);
-    // 分配新缓冲区
+      FreeMem(GTanCosBuf, LOldBytes);
     GTanBufCapacity := aCount;
     GTanSinBuf := GetMem(aCount * SizeOf(Single));
     GTanCosBuf := GetMem(aCount * SizeOf(Single));
@@ -5991,13 +5993,14 @@ end;
 finalization
   if GTanSinBuf <> nil then
   begin
-    FreeMem(GTanSinBuf);
+    FreeMem(GTanSinBuf, GTanBufCapacity * SizeOf(Single));
     GTanSinBuf := nil;
   end;
   if GTanCosBuf <> nil then
   begin
-    FreeMem(GTanCosBuf);
+    FreeMem(GTanCosBuf, GTanBufCapacity * SizeOf(Single));
     GTanCosBuf := nil;
   end;
+  GTanBufCapacity := 0;
 
 end.

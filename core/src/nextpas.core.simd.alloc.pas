@@ -91,10 +91,13 @@ end;
 procedure SimdFree(aPtr: Pointer);
 var
   LHeader: PAllocHeader;
+  LRawSize: SizeUInt;
 begin
   if aPtr = nil then Exit;
   LHeader := PAllocHeader(PtrUInt(aPtr) - SizeOf(TAllocHeader));
-  FreeMem(LHeader^.OrigPtr);
+  // Free the original GetMem block with its raw over-allocation size.
+  LRawSize := ComputeRawAllocationSize(LHeader^.Size, LHeader^.Alignment);
+  FreeMem(LHeader^.OrigPtr, LRawSize);
 end;
 
 function SimdRealloc(aPtr: Pointer; aNewSize: SizeUInt; aAlignment: TSimdAlignment = saAuto): Pointer;
