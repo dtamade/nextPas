@@ -2110,9 +2110,9 @@ begin
     MetricsMiddleware(nil);
   except
     on E: EHttpError do
-      LRaised := E.Kind = hekArgument;
+      LRaised := (E.Kind = hekArgument) and (E.Op = 'metrics');
   end;
-  Check(LRaised, 'raises hekArgument on nil collector');
+  Check(LRaised, 'raises hekArgument Op=metrics on nil collector');
 end;
 
 procedure TestMetricsWithCallbackInvoked;
@@ -2216,9 +2216,9 @@ begin
     MetricsMiddlewareWith(nil);
   except
     on E: EHttpError do
-      LRaised := E.Kind = hekArgument;
+      LRaised := (E.Kind = hekArgument) and (E.Op = 'metrics');
   end;
-  Check(LRaised, 'raises hekArgument on nil callback');
+  Check(LRaised, 'raises hekArgument Op=metrics on nil callback');
 end;
 
 procedure TestMethodGuardAllowsGetMethod;
@@ -2522,6 +2522,81 @@ begin
   LMetrics := LCollector.Snapshot;
   CheckEqual(1, LMetrics.TotalRequests, 'one request');
   CheckEqual(11, LMetrics.ResponseBytes, 'response bytes tracked');
+end;
+
+procedure TestMetricsRecordsOnHandlerException;
+var
+  LCollector: IHttpMetricsCollector;
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+  LMetrics: THttpMetrics;
+  LRaised: Boolean;
+begin
+  LCollector := NewHttpMetricsCollector;
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      raise Exception.Create('handler boom');
+    end),
+    [MetricsMiddleware(LCollector)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LRaised := False;
+  try
+    LHandler.ServeHTTP(LReqIntf, LW);
+  except
+    LRaised := True;
+  end;
+  Check(LRaised, 'handler exception propagates');
+  LMetrics := LCollector.Snapshot;
+  CheckEqual(1, LMetrics.TotalRequests, 'exception path still counted');
+  CheckEqual(1, LMetrics.Status5xx, 'uncommitted failure counts as 5xx');
+end;
+
+procedure TestMetricsCallbackExceptionDoesNotBreakRequest;
+var
+  LHandler: IHttpHandler;
+  LWObj: TMockResponseWriter;
+  LW: IHttpResponseWriter;
+  LReq: TMockRequest;
+  LReqIntf: IHttpRequest;
+begin
+  LHandler := Chain(
+    HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write('ok'[1], 2);
+    end),
+    [MetricsMiddlewareWith(procedure(const AStatus: Int64; const ADurationUs: Int64)
+    begin
+      raise Exception.Create('callback boom');
+    end)]
+  );
+  LReq := TMockRequest.Create(hmGet, '/api');
+  LReqIntf := LReq;
+  LWObj := TMockResponseWriter.Create;
+  LW := LWObj;
+  LHandler.ServeHTTP(LReqIntf, LW);
+  CheckEqual(Int64(HTTP_STATUS_OK), Int64(LWObj.Status), 'response still OK');
+  Check(Pos('ok', LWObj.Body) > 0, 'body still written');
+end;
+
+procedure TestMetricsNilArgsUseOpMetrics;
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.middleware.metrics.pas');
+  Check(Pos('METRICS_OP = ''metrics''', LSrc) > 0, 'metrics Op constant');
+  Check(Pos('CreateOp(hekArgument, METRICS_OP', LSrc) > 0,
+    'nil args use CreateOp Op=metrics');
+  Check(Pos('MetricsStatusAfterHandler', LSrc) > 0,
+    'exception path uses MetricsStatusAfterHandler');
 end;
 
 procedure TestDecompressGzipBody;
@@ -4015,6 +4090,10 @@ begin
   T.Test('MetricsWithFields: nil callback raises', @TestMetricsWithFieldsNilCallbackRaises);
   T.Test('Metrics: tracks request bytes', @TestMetricsTracksRequestBytes);
   T.Test('Metrics: tracks response bytes', @TestMetricsTracksResponseBytes);
+  T.Test('Metrics: records on handler exception', @TestMetricsRecordsOnHandlerException);
+  T.Test('Metrics: callback exception does not break request',
+    @TestMetricsCallbackExceptionDoesNotBreakRequest);
+  T.Test('Metrics: nil args use Op=metrics', @TestMetricsNilArgsUseOpMetrics);
   T.Test('Decompress: gzip body', @TestDecompressGzipBody);
   T.Test('Decompress: passes through plain', @TestDecompressPassesThroughPlain);
   T.Test('Decompress: enforces output limit', @TestDecompressEnforcesOutputLimit);
