@@ -559,6 +559,122 @@ begin
   CheckEqual('.', PathRelative('/a', '/a'), 'rel same');
 end;
 
+procedure TestPathCleanGoTableExtra;
+begin
+  CheckEqual('a/b', PathClean('a/b/.'), 'clean a/b/.');
+  CheckEqual('a', PathClean('a/b/..'), 'clean a/b/..');
+  CheckEqual('..', PathClean('..'), 'clean ..');
+  CheckEqual('../..', PathClean('../..'), 'clean ../..');
+  CheckEqual('/a', PathClean('/a/'), 'clean /a/');
+  CheckEqual('a/b', PathClean('a//b//'), 'clean a//b//');
+  CheckEqual('', PathClean(''), 'clean empty string');
+end;
+
+procedure TestPathCleanDotsAndSeps;
+begin
+  CheckEqual('/a/b', PathClean('//a//b//'), 'clean double root seps');
+  CheckEqual('b', PathClean('./a/../b'), 'clean ./a/../b');
+  CheckEqual('a', PathClean('a/././.'), 'clean a/././.');
+  CheckEqual('/', PathClean('/./'), 'clean /./');
+  CheckEqual('..', PathClean('a/../..'), 'clean a/../..');
+end;
+
+procedure TestPathJoinEdges;
+begin
+  Checkequal('/a/b', PathJoin('/a', 'b'), 'join abs+rel');
+  CheckEqual('/b', PathJoin('/a', '/b'), 'join abs+abs');
+  CheckEqual('a/b', PathJoin('a', 'b'), 'join rel+rel');
+  CheckEqual('/a', PathJoin('/a', ''), 'join trailing empty');
+  CheckEqual('b', PathJoin('', 'b'), 'join leading empty');
+end;
+
+procedure TestPathDirBaseExtTable;
+begin
+  CheckEqual('/a', PathDir('/a/b'), 'dir /a/b');
+  CheckEqual('', PathDir('file.txt'), 'dir bare name empty');
+  CheckEqual('.', PathDir('./x'), 'dir ./x keeps dot');
+  CheckEqual('b', PathBase('/a/b'), 'base /a/b');
+  CheckEqual('file.txt', PathBase('file.txt'), 'base bare');
+  CheckEqual('.txt', PathExt('file.txt'), 'ext .txt');
+  CheckEqual('', PathExt('file'), 'ext none');
+  CheckEqual('.gz', PathExt('a.tar.gz'), 'ext last');
+end;
+
+procedure TestPathIsAbsRelTable;
+begin
+  Check(PathIsAbsolute('/'), 'abs root');
+  Check(PathIsAbsolute('/a'), 'abs /a');
+  Check(not PathIsAbsolute('a'), 'not abs a');
+  Check(not PathIsAbsolute(''), 'not abs empty');
+  Check(PathIsRelative('a/b'), 'rel a/b');
+  Check(not PathIsRelative('/a'), 'not rel /a');
+end;
+
+procedure TestPathChangeWithoutExtTable;
+begin
+  CheckEqual('a.md', PathChangeExt('a.txt', '.md'), 'change ext');
+  CheckEqual('a', PathWithoutExt('a.txt'), 'without ext');
+  CheckEqual('a.tar', PathWithoutExt('a.tar.gz'), 'without last ext');
+  CheckEqual('.hidden', PathWithoutExt('.hidden'), 'without on dotfile');
+end;
+
+procedure TestPathStripPrefixExtra;
+begin
+  CheckEqual('', PathStripPrefix('/a', '/b'), 'strip mismatch');
+  CheckEqual('c', PathStripPrefix('/a/b/c', '/a/b'), 'strip nested');
+  CheckEqual('', PathStripPrefix('', '/a'), 'strip empty path');
+  CheckEqual('/a/b', PathStripPrefix('/a/b', ''), 'strip empty prefix');
+end;
+
+procedure TestPathSplitListEdges;
+var
+  L: TStringArray;
+begin
+  L := PathSplitList('only');
+  CheckEqual(Int64(1), Int64(Length(L)), 'split one');
+  CheckEqual('only', L[0], 'split only');
+  L := PathSplitList(PathListSeparator);
+  CheckEqual(Int64(2), Int64(Length(L)), 'split single sep');
+  CheckEqual('', L[0], 'split sep lead empty');
+  CheckEqual('', L[1], 'split sep trail empty');
+end;
+
+procedure TestPathVolumeStemExtra;
+begin
+  CheckEqual('', PathVolume('C:relative'), 'unix volume of windows-like');
+  CheckEqual('', PathVolume(''), 'volume empty');
+  CheckEqual('file', PathFileStem('dir/file.txt'), 'stem with dir');
+  CheckEqual('a', PathFileStem('a.'), 'stem trailing dot again');
+  CheckEqual('.bashrc', PathFileStem('.bashrc'), 'stem bashrc');
+end;
+
+procedure TestPathMatchTableExtra;
+begin
+  Check(PathMatch('*.pas', 'a.pas'), 'match *.pas');
+  Check(not PathMatch('*.pas', 'a.pp'), 'no match *.pas');
+  Check(PathMatch('a?c', 'abc'), 'match a?c');
+  Check(not PathMatch('a?c', 'ac'), 'no match a?c short');
+  Check(PathMatch('[ab]', 'a'), 'match class');
+  Check(not PathMatch('[ab]', 'c'), 'no match class');
+end;
+
+procedure TestPathToSlashExtra;
+begin
+  CheckEqual('a/b/c', PathToSlash('a/b/c'), 'to slash already');
+  CheckEqual('', PathToSlash(''), 'to slash empty');
+  CheckEqual('x', PathToSlash('x'), 'to slash single');
+end;
+
+procedure TestPathListSeparatorConst;
+begin
+  Check(PathListSeparator <> '', 'list sep non-empty');
+  {$IFDEF NEXTPAS_WINDOWS}
+  CheckEqual(';', PathListSeparator, 'windows PATH sep');
+  {$ELSE}
+  Checkequal(':', PathListSeparator, 'unix PATH sep');
+  {$ENDIF}
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.path');
   T.Test('PathJoin', @TestPathJoin);
@@ -598,6 +714,18 @@ begin
   T.Test('PathClean Go table', @TestPathCleanGoTable);
   T.Test('PathFileStem edges', @TestPathFileStemEdges);
   T.Test('PathRelative table', @TestPathRelativeTable);
+  T.Test('PathClean Go table extra', @TestPathCleanGoTableExtra);
+  T.Test('PathClean dots and seps', @TestPathCleanDotsAndSeps);
+  T.Test('PathJoin edges', @TestPathJoinEdges);
+  T.Test('PathDir Base Ext table', @TestPathDirBaseExtTable);
+  T.Test('PathIsAbs Rel table', @TestPathIsAbsRelTable);
+  T.Test('PathChange WithoutExt table', @TestPathChangeWithoutExtTable);
+  T.Test('PathStripPrefix extra', @TestPathStripPrefixExtra);
+  T.Test('PathSplitList edges', @TestPathSplitListEdges);
+  T.Test('PathVolume Stem extra', @TestPathVolumeStemExtra);
+  T.Test('PathMatch table extra', @TestPathMatchTableExtra);
+  T.Test('PathToSlash extra', @TestPathToSlashExtra);
+  T.Test('PathListSeparator const', @TestPathListSeparatorConst);
   T.Test('PathToSlash/FromSlash', @TestPathToFromSlash);
   T.Test('PathSplitList', @TestPathSplitList);
   T.Test('PathVolume/FileStem', @TestPathVolumeAndStem);

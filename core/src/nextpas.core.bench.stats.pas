@@ -16,26 +16,12 @@ uses
   nextpas.core.bench.intf;
 
 type
-  {** OLS 线性回归结果 (P1-1: 去除固定开销) }
-  TOLSRegression = record
-    Slope: Double;       { 每次迭代的时间（纳秒） }
-    Intercept: Double;   { 固定开销（纳秒） }
-    RSquared: Double;    { 拟合度 (0-1)，越接近 1 越好 }
-    Valid: Boolean;      { 回归是否有效 }
-  end;
-
   {** 统计分析器实现 }
   TBenchStatsAnalyzer = class(TInterfacedObject, IBenchStatsAnalyzer)
   private
 
-    {** Kahan 求和（减少浮点数累积误差） }
-    function KahanSum(const AData: TDoubleArray): Double;
-
-    {** 计算方差 }
-    function ComputeVariance(const AData: TDoubleArray; AMean: Double): Double;
-
-    {** 计算标准差 }
-    function ComputeStdDev(const AData: TDoubleArray; AMean: Double): Double;
+    {** 计算方差 (Welford 单遍算法) }
+    function ComputeVariance(const AData: TDoubleArray): Double;
 
     {** 计算百分位数 }
     function Percentile(const ASorted: TDoubleArray; APercent: Double): Double;
@@ -123,6 +109,13 @@ type
     function BayesianCredibleInterval(const AData: TDoubleArray;
       APriorMean, APriorStdDev: Double;
       ALevel: Double = 0.95; ASigma: Double = 0): TConfidenceInterval;
+
+    {** 截尾均值（Trimmed Mean）— 去掉两端各 ATrimPct% 后取均值 }
+    function TrimmedMean(const AData: TDoubleArray;
+      ATrimPct: Double = 20.0): Double;
+
+    {** Cohen's d 效应量 — 标准化均值差异 }
+    function CohenD(const A, B: TDoubleArray): Double;
   end;
 
 implementation
@@ -132,6 +125,59 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.bench.stats.advanced; { Phase B.2: for TAdvancedStats }
 
+{ === 内部辅助函数 === }
+
+function FilterValidValues(const AData: TDoubleArray): TDoubleArray;
+{ 过滤 NaN/Inf，返回仅包含有效值的新数组 }
+var
+  LLen, LValidCount, I: Integer;
+begin
+  LLen := Length(AData);
+  SetLength(Result, LLen);
+  LValidCount := 0;
+  for I := 0 to High(AData) do
+  begin
+    if IsDoubleNaN(AData[I]) or IsInfinite(AData[I]) then Continue;
+    Result[LValidCount] := AData[I];
+    Inc(LValidCount);
+  end;
+  SetLength(Result, LValidCount);
+end;
+
+procedure WelfordMeanVariance(const AData: TDoubleArray;
+  out AMean, AVariance: Double; out AValidCount: Integer);
+{ Welford 单遍算法：同时计算均值和方差，跳过 NaN/Inf。
+  避免 catastrophic cancellation（当数据值大且接近时）。 }
+var
+  I: Integer;
+  LDelta, LDelta2, LM2: Double;
+begin
+  AMean := 0.0; AVariance := 0.0; AValidCount := 0; LM2 := 0.0;
+  for I := 0 to High(AData) do
+  begin
+    if IsDoubleNaN(AData[I]) or IsInfinite(AData[I]) then Continue;
+    Inc(AValidCount);
+    LDelta := AData[I] - AMean;
+    AMean := AMean + LDelta / AValidCount;
+    LDelta2 := AData[I] - AMean;
+    LM2 := LM2 + LDelta * LDelta2;
+  end;
+  if AValidCount > 1 then
+    AVariance := LM2 / (AValidCount - 1)
+  else
+    AVariance := 0.0;
+end;
+
+const
+  { Lilliefors α=0.05 临界值 (Lilliefors 1967), 0-based, index=n }
+  LILLIEFORS_005_DATA: array[5..29] of Double = (
+    0.337, 0.319, 0.300, 0.285, 0.271, { n=5..9 }
+    0.258, 0.249, 0.242, 0.234, 0.227, { n=10..14 }
+    0.220, 0.213, 0.206, 0.199, 0.193, { n=15..19 }
+    0.190, 0.187, 0.184, 0.181, 0.178, { n=20..24 }
+    0.175, 0.172, 0.169, 0.167, 0.165  { n=25..29 }
+  );
+
 { TBenchStatsAnalyzer }
 
 constructor TBenchStatsAnalyzer.Create;
@@ -139,122 +185,50 @@ begin
   inherited Create;
 end;
 
-function TBenchStatsAnalyzer.KahanSum(const AData: TDoubleArray): Double;
-var
-  LSum, LCompensation, LNext, LTemp: Double;
-  I: Integer;
-begin
-  LSum := 0.0;
-  LCompensation := 0.0;
-
-  for I := 0 to High(AData) do
-  begin
-    LNext := AData[I] - LCompensation;
-    LTemp := LSum + LNext;
-    LCompensation := (LTemp - LSum) - LNext;
-    LSum := LTemp;
-  end;
-
-  Result := LSum;
-end;
-
 function TBenchStatsAnalyzer.Mean(const AData: TDoubleArray): Double;
 var
-  LLen: Integer;
+  LValid: TDoubleArray;
+  LLen, I: Integer;
   LSum: Double;
-  I: Integer;
 begin
-  LLen := Length(AData);
-  if LLen = 0 then
-    Exit(0.0);
-
-  // 快速路径：小数组使用简单求和（避免 KahanSum 开销）
-  // 阈值设为 256，覆盖常见基准测试场景 (100, 1000)
-  if LLen <= 256 then
-  begin
-    LSum := 0;
-    for I := 0 to High(AData) do
-      LSum += AData[I];
-    Result := LSum / LLen;
-  end
-  else
-    // 大数组使用 Kahan 求和保证精度
-    Result := KahanSum(AData) / LLen;
+  if Length(AData) = 0 then Exit(0.0);
+  LValid := FilterValidValues(AData);
+  LLen := Length(LValid);
+  if LLen = 0 then Exit(0.0);
+  LSum := 0;
+  for I := 0 to High(LValid) do
+    LSum += LValid[I];
+  Result := LSum / LLen;
 end;
 
 function TBenchStatsAnalyzer.Median(const AData: TDoubleArray): Double;
 var
-  LSorted: TDoubleArray;
+  LFiltered: TDoubleArray;
   LLen: Integer;
 begin
-  LLen := Length(AData);
-  if LLen = 0 then
-    Exit(0.0);
-
-  LSorted := Copy(AData);
-  SortDoubleArray(LSorted);
-
+  if Length(AData) = 0 then Exit(0.0);
+  LFiltered := FilterValidValues(AData);
+  LLen := Length(LFiltered);
+  if LLen = 0 then Exit(0.0);
+  SortDoubleArray(LFiltered);
   if LLen mod 2 = 1 then
-    Result := LSorted[LLen div 2]
+    Result := LFiltered[LLen div 2]
   else
-    Result := (LSorted[LLen div 2 - 1] + LSorted[LLen div 2]) / 2.0;
+    Result := (LFiltered[LLen div 2 - 1] + LFiltered[LLen div 2]) / 2.0;
 end;
 
-function TBenchStatsAnalyzer.ComputeVariance(const AData: TDoubleArray; AMean: Double): Double;
+function TBenchStatsAnalyzer.ComputeVariance(const AData: TDoubleArray): Double;
 var
-  LLen: Integer;
-  LSumSq, LCompensation, LNext, LTemp: Double;
-  LDiff: Double;
-  I: Integer;
+  LMean: Double;
+  LValidCount: Integer;
 begin
-  LLen := Length(AData);
-  if LLen <= 1 then
-    Exit(0.0);
-
-  {** NaN/Inf guard: avoid FPU exception 207 on NaN arithmetic }
-  if IsNan(AMean) or IsInfinite(AMean) then
-    Exit(0.0);
-
-  { Fast path: small arrays use simple summation (avoid Kahan overhead) }
-  if LLen <= 256 then
-  begin
-    LSumSq := 0.0;
-    for I := 0 to High(AData) do
-    begin
-      LDiff := AData[I] - AMean;
-      LSumSq := LSumSq + LDiff * LDiff;
-    end;
-    Result := LSumSq / (LLen - 1);
-  end
-  else
-  begin
-    { Kahan compensated summation for large arrays }
-    LSumSq := 0.0;
-    LCompensation := 0.0;
-    for I := 0 to High(AData) do
-    begin
-      LNext := Sqr(AData[I] - AMean) - LCompensation;
-      LTemp := LSumSq + LNext;
-      LCompensation := (LTemp - LSumSq) - LNext;
-      LSumSq := LTemp;
-    end;
-    Result := LSumSq / (LLen - 1);
-  end;
-end;
-
-function TBenchStatsAnalyzer.ComputeStdDev(const AData: TDoubleArray; AMean: Double): Double;
-begin
-  Result := Sqrt(ComputeVariance(AData, AMean));
+  if Length(AData) <= 1 then Exit(0.0);
+  WelfordMeanVariance(AData, LMean, Result, LValidCount);
 end;
 
 function TBenchStatsAnalyzer.StdDev(const AData: TDoubleArray): Double;
-var
-  LMean: Double;
 begin
-  if Length(AData) <= 1 then
-    Exit(0.0);
-  LMean := Mean(AData);
-  Result := ComputeStdDev(AData, LMean);
+  Result := Sqrt(ComputeVariance(AData));
 end;
 
 function TBenchStatsAnalyzer.CoefficientOfVariation(const AData: TDoubleArray): Double;
@@ -266,7 +240,7 @@ begin
   LMean := Mean(AData);
   if LMean <= 0 then
     Exit(0.0);
-  LStdDev := ComputeStdDev(AData, LMean);
+  LStdDev := Sqrt(ComputeVariance(AData));
   Result := LStdDev / LMean;
 end;
 
@@ -328,72 +302,51 @@ end;
    *  Replaces the old double-pass approach (Mean on unsorted + ComputeStdDev on unsorted). }
 function TBenchStatsAnalyzer.ComputeStats(const ASamples: TDoubleArray): TBenchStats;
 var
-  LSorted: TDoubleArray;
-  LLen: Integer;
-  LValidCount: Integer; { F-09: count of non-NaN samples }
+  LFiltered: TDoubleArray;
+  LValidCount: Integer;
   LMean, LVariance, LStdErr: Double;
-  LDelta, LDelta2, LM2: Double;
   LT95, LT99: Double;
   I: Integer;
   { B22: Outlier-aware variables }
   LQ1, LQ3, LFenceLow, LFenceHigh: Double;
-  LFilteredCount, LRunStart: Integer;
+  LOutlierFilteredCount, LMedianCount, LRunStart: Integer;
   LFilteredMean, LFilteredM2, LDeltaF, LDelta2F: Double;
 begin
-  LLen := Length(ASamples);
-  if LLen = 0 then
+  if Length(ASamples) = 0 then
     raise EBenchInvalidParam.Create('ComputeStats: sample array must not be empty');
 
-  LSorted := Copy(ASamples);
-  SortDoubleArray(LSorted);
-
-  { Welford's single-pass algorithm for numerically stable variance.
-    Reference: Welford, B.P. (1962). "Note on a Method for Calculating
-    Corrected Sums of Squares and Products". Technometrics.
-    F-09: Skip NaN samples to prevent NaN propagation. }
-  LMean := 0.0;
-  LM2 := 0.0;  { sum of squared deviations from current mean }
-  LValidCount := 0;
-  for I := 0 to High(ASamples) do
-  begin
-    if IsDoubleNaN(ASamples[I]) then
-      Continue;  { F-09: skip NaN samples }
-    Inc(LValidCount);
-    LDelta := ASamples[I] - LMean;
-    LMean := LMean + LDelta / LValidCount;
-    LDelta2 := ASamples[I] - LMean;
-    LM2 := LM2 + LDelta * LDelta2;
-  end;
-
-  if LValidCount > 1 then
-    LVariance := LM2 / (LValidCount - 1)  { sample variance, F-09: use valid count }
-  else
-    LVariance := 0.0;
-
-  { 全 NaN 输入：返回零值统计，避免 NaN 传播 }
+  { 过滤 NaN/Inf 后再排序 — 排序含 NaN 行为未定义，Inf 会污染百分位 }
+  LFiltered := FilterValidValues(ASamples);
+  LValidCount := Length(LFiltered);
   if LValidCount = 0 then
   begin
     Result := Default(TBenchStats);
     Exit;
   end;
 
+  { Welford 单遍方差（在排序前计算，不依赖顺序） }
+  WelfordMeanVariance(LFiltered, LMean, LVariance, LValidCount);
+
+  { 原地排序，省去一次 Copy 分配 }
+  SortDoubleArray(LFiltered);
+
   Result.Mean := LMean;
   if LVariance > 0 then
     Result.StdDev := Sqrt(LVariance)
   else
     Result.StdDev := 0.0;
-  { 直接在已排序的 LSorted 上查询百分位，避免 ComputePercentiles 再次排序 }
-  Result.Median := PercentileSorted(LSorted, 50);
-  Result.Min := LSorted[0];
-  Result.Max := LSorted[High(LSorted)];
-  Result.P5 := PercentileSorted(LSorted, 5.0);
-  Result.P25 := PercentileSorted(LSorted, 25.0);
-  Result.P75 := PercentileSorted(LSorted, 75.0);
-  Result.P95 := PercentileSorted(LSorted, 95.0);
-  Result.P99 := PercentileSorted(LSorted, 99.0);
+  { 在已排序的有效值上查询百分位 }
+  Result.Median := PercentileSorted(LFiltered, 50);
+  Result.Min := LFiltered[0];
+  Result.Max := LFiltered[High(LFiltered)];
+  Result.P5 := PercentileSorted(LFiltered, 5.0);
+  Result.P25 := PercentileSorted(LFiltered, 25.0);
+  Result.P75 := PercentileSorted(LFiltered, 75.0);
+  Result.P95 := PercentileSorted(LFiltered, 95.0);
+  Result.P99 := PercentileSorted(LFiltered, 99.0);
   Result.IQR := Result.P75 - Result.P25;
-  Result.OutlierCount := CountOutliers(LSorted, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
-  Result.SampleCount := LValidCount; { F-09: report valid sample count }
+  Result.OutlierCount := CountOutliers(LFiltered, Result.P25, Result.P75, OUTLIER_MULTIPLIER);
+  Result.SampleCount := LValidCount;
 
   { B22: Outlier-aware statistics — single-pass filtered mean/variance }
   Result.OutlierMethod := 'Tukey';
@@ -404,53 +357,46 @@ begin
     LQ3 := Result.P75;
     LFenceLow := LQ1 - OUTLIER_MULTIPLIER * Result.IQR;
     LFenceHigh := LQ3 + OUTLIER_MULTIPLIER * Result.IQR;
-    LFilteredCount := 0;
-    { Single pass: accumulate Welford mean/variance on filtered subset }
+    LOutlierFilteredCount := 0;
     LFilteredMean := 0.0;
     LFilteredM2 := 0.0;
-    for I := 0 to High(ASamples) do
+    for I := 0 to LValidCount - 1 do
     begin
-      if IsDoubleNaN(ASamples[I]) then
-        Continue;
-      if (ASamples[I] >= LFenceLow) and (ASamples[I] <= LFenceHigh) then
+      if (LFiltered[I] >= LFenceLow) and (LFiltered[I] <= LFenceHigh) then
       begin
-        Inc(LFilteredCount);
-        { Welford online update on filtered subset }
-        LDeltaF := ASamples[I] - LFilteredMean;
-        LFilteredMean := LFilteredMean + LDeltaF / LFilteredCount;
-        LDelta2F := ASamples[I] - LFilteredMean;
+        Inc(LOutlierFilteredCount);
+        LDeltaF := LFiltered[I] - LFilteredMean;
+        LFilteredMean := LFilteredMean + LDeltaF / LOutlierFilteredCount;
+        LDelta2F := LFiltered[I] - LFilteredMean;
         LFilteredM2 := LFilteredM2 + LDeltaF * LDelta2F;
       end;
     end;
-    if LFilteredCount > 0 then
+    if LOutlierFilteredCount > 0 then
     begin
-      Result.FilteredCount := LFilteredCount;
+      Result.FilteredCount := LOutlierFilteredCount;
       Result.FilteredMean := LFilteredMean;
-      if LFilteredCount > 1 then
-        Result.FilteredStdDev := Sqrt(LFilteredM2 / (LFilteredCount - 1))
+      if LOutlierFilteredCount > 1 then
+        Result.FilteredStdDev := Sqrt(LFilteredM2 / (LOutlierFilteredCount - 1))
       else
         Result.FilteredStdDev := 0.0;
-      { Filtered median: scan LSorted (already sorted) for values in [LFenceLow, LFenceHigh].
-        Avoids allocating + sorting a separate LFiltered array: O(N) vs O(N log N). }
-      LFilteredCount := 0;
+      { Filtered median: scan LFiltered for values in [LFenceLow, LFenceHigh] }
       I := 0;
-      { Skip values below the fence }
-      while (I <= High(LSorted)) and (LSorted[I] < LFenceLow) do
+      while (I <= High(LFiltered)) and (LFiltered[I] < LFenceLow) do
         Inc(I);
-      { Count values within the fence — I is now the start index }
       LRunStart := I;
-      while (I <= High(LSorted)) and (LSorted[I] <= LFenceHigh) do
+      LMedianCount := 0;
+      while (I <= High(LFiltered)) and (LFiltered[I] <= LFenceHigh) do
       begin
-        Inc(LFilteredCount);
+        Inc(LMedianCount);
         Inc(I);
       end;
-      if LFilteredCount > 0 then
+      if LMedianCount > 0 then
       begin
-        if LFilteredCount mod 2 = 1 then
-          Result.FilteredMedian := LSorted[LRunStart + LFilteredCount div 2]
+        if LMedianCount mod 2 = 1 then
+          Result.FilteredMedian := LFiltered[LRunStart + LMedianCount div 2]
         else
-          Result.FilteredMedian := (LSorted[LRunStart + LFilteredCount div 2 - 1] +
-                                    LSorted[LRunStart + LFilteredCount div 2]) / 2.0;
+          Result.FilteredMedian := (LFiltered[LRunStart + LMedianCount div 2 - 1] +
+                                    LFiltered[LRunStart + LMedianCount div 2]) / 2.0;
       end
       else
         Result.FilteredMedian := Result.Median;
@@ -575,8 +521,6 @@ begin
     Result := Result * (1.0 + 1.0 / (4.0 * LDF));
   if Result > 1.0 then
     Result := 1.0;
-  if Result < 0.001 then
-    Result := 0.001;
 end;
 
 function TBenchStatsAnalyzer.ShapiroWilkStatistic(const ASorted: TDoubleArray): Double;
@@ -687,7 +631,7 @@ begin
   LN := 0;
   for I := 0 to LN1 - 1 do
   begin
-    if not IsDoubleNaN(A[I]) then
+    if not IsDoubleNaN(A[I]) and not IsInfinite(A[I]) then
     begin
       LCombined[LN] := A[I];
       LGroup[LN] := 0;
@@ -697,7 +641,7 @@ begin
   LN1 := LN;
   for I := 0 to Length(B) - 1 do
   begin
-    if not IsDoubleNaN(B[I]) then
+    if not IsDoubleNaN(B[I]) and not IsInfinite(B[I]) then
     begin
       LCombined[LN] := B[I];
       LGroup[LN] := 1;
@@ -889,15 +833,10 @@ var
   LSorted: TDoubleArray;
 begin
   Result := Default(TPercentileResult);
-
-  if Length(ASamples) = 0 then
-    Exit;
-
-  // E03: 一次排序，多次查询
-  LSorted := Copy(ASamples);
+  if Length(ASamples) = 0 then Exit;
+  LSorted := FilterValidValues(ASamples);
+  if Length(LSorted) = 0 then Exit;
   SortDoubleArray(LSorted);
-
-  // 直接在已排序的 LSorted 上查询百分位（跳过 Percentile 的范围校验，硬编码值已在 [0,100] 内）
   Result.P5 := PercentileSorted(LSorted, 5.0);
   Result.P25 := PercentileSorted(LSorted, 25.0);
   Result.P50 := PercentileSorted(LSorted, 50.0);
@@ -1035,33 +974,10 @@ begin
   else if LN >= 5 then
   begin
     // 小样本: 使用 Lilliefors α=0.05 临界值（Lilliefors 1967）
-    // 直接写为 if-chain，避免 IfThen 依赖
-    if      (LN =  5) and (LMaxD > 0.337) then Result.PValue := 0.04
-    else if (LN =  6) and (LMaxD > 0.319) then Result.PValue := 0.04
-    else if (LN =  7) and (LMaxD > 0.300) then Result.PValue := 0.04
-    else if (LN =  8) and (LMaxD > 0.285) then Result.PValue := 0.04
-    else if (LN =  9) and (LMaxD > 0.271) then Result.PValue := 0.04
-    else if (LN = 10) and (LMaxD > 0.258) then Result.PValue := 0.04
-    else if (LN = 11) and (LMaxD > 0.249) then Result.PValue := 0.04
-    else if (LN = 12) and (LMaxD > 0.242) then Result.PValue := 0.04
-    else if (LN = 13) and (LMaxD > 0.234) then Result.PValue := 0.04
-    else if (LN = 14) and (LMaxD > 0.227) then Result.PValue := 0.04
-    else if (LN = 15) and (LMaxD > 0.220) then Result.PValue := 0.04
-    else if (LN = 16) and (LMaxD > 0.213) then Result.PValue := 0.04
-    else if (LN = 17) and (LMaxD > 0.206) then Result.PValue := 0.04
-    else if (LN = 18) and (LMaxD > 0.199) then Result.PValue := 0.04
-    else if (LN = 19) and (LMaxD > 0.193) then Result.PValue := 0.04
-    else if (LN = 20) and (LMaxD > 0.190) then Result.PValue := 0.04
-    else if (LN = 21) and (LMaxD > 0.187) then Result.PValue := 0.04
-    else if (LN = 22) and (LMaxD > 0.184) then Result.PValue := 0.04
-    else if (LN = 23) and (LMaxD > 0.181) then Result.PValue := 0.04
-    else if (LN = 24) and (LMaxD > 0.178) then Result.PValue := 0.04
-    else if (LN = 25) and (LMaxD > 0.175) then Result.PValue := 0.04
-    else if (LN = 26) and (LMaxD > 0.172) then Result.PValue := 0.04
-    else if (LN = 27) and (LMaxD > 0.169) then Result.PValue := 0.04
-    else if (LN = 28) and (LMaxD > 0.167) then Result.PValue := 0.04
-    else if (LN = 29) and (LMaxD > 0.165) then Result.PValue := 0.04
-    else Result.PValue := 0.5;
+    if (LN >= 5) and (LN <= 29) and (LMaxD > LILLIEFORS_005_DATA[LN]) then
+      Result.PValue := 0.04
+    else
+      Result.PValue := 0.5;
   end
   else
     // n<5: 无可靠检验
@@ -1237,7 +1153,7 @@ begin
   if ASigma > 0 then
     LSigma := ASigma
   else
-    LSigma := ComputeStdDev(AData, LSampleMean);
+    LSigma := Sqrt(ComputeVariance(AData));
 
   { 防止 σ = 0 }
   if LSigma < 1e-10 then
@@ -1274,6 +1190,57 @@ begin
   Result.Lower := LEstimate.PosteriorMean - LZ * LEstimate.PosteriorStdDev;
   Result.Upper := LEstimate.PosteriorMean + LZ * LEstimate.PosteriorStdDev;
   Result.Level := ALevel;
+end;
+
+function TBenchStatsAnalyzer.TrimmedMean(const AData: TDoubleArray;
+  ATrimPct: Double = 20.0): Double;
+var
+  LSorted: TDoubleArray;
+  LLen, LTrimCount, LStart, LEnd, I: Integer;
+  LSum: Double;
+begin
+  if Length(AData) = 0 then Exit(0.0);
+  if (ATrimPct < 0) or (ATrimPct >= 50) then
+    raise EBenchInvalidParam.CreateFmt(
+      'TBenchStatsAnalyzer.TrimmedMean: ATrimPct must be in [0, 50), got %.1f', [ATrimPct]);
+  if ATrimPct = 0 then Exit(Mean(AData));
+
+  LSorted := FilterValidValues(AData);
+  LLen := Length(LSorted);
+  if LLen = 0 then Exit(0.0);
+  SortDoubleArray(LSorted);
+
+  LTrimCount := Trunc(LLen * ATrimPct / 100.0);
+  LStart := LTrimCount;
+  LEnd := LLen - LTrimCount;
+  if LStart >= LEnd then
+  begin
+    { 截取后为空，直接在已排序数据上计算中位数，避免重复过滤+排序 }
+    if LLen mod 2 = 1 then
+      Exit(LSorted[LLen div 2])
+    else
+      Exit((LSorted[LLen div 2 - 1] + LSorted[LLen div 2]) / 2.0);
+  end;
+
+  LSum := 0;
+  for I := LStart to LEnd - 1 do
+    LSum += LSorted[I];
+  Result := LSum / (LEnd - LStart);
+end;
+
+function TBenchStatsAnalyzer.CohenD(const A, B: TDoubleArray): Double;
+var
+  LMeanA, LMeanB, LVarA, LVarB, LPooledVar, LPooledStdDev: Double;
+  LValidA, LValidB: Integer;
+begin
+  if (Length(A) = 0) or (Length(B) = 0) then Exit(0.0);
+  WelfordMeanVariance(A, LMeanA, LVarA, LValidA);
+  WelfordMeanVariance(B, LMeanB, LVarB, LValidB);
+  if (LValidA < 2) or (LValidB < 2) then Exit(0.0);
+  LPooledVar := ((LValidA - 1) * LVarA + (LValidB - 1) * LVarB) / (LValidA + LValidB - 2);
+  LPooledStdDev := Sqrt(LPooledVar);
+  if LPooledStdDev = 0 then Exit(0.0);
+  Result := (LMeanA - LMeanB) / LPooledStdDev;
 end;
 
 end.

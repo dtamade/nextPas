@@ -5,10 +5,16 @@ program bench_report;
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
+{**
+ * 报告生成路径基准。
+ * 直接构造 TBenchResults，避免「外层采样 × 内层 20 条 suite」嵌套挂死。
+ *}
+
 uses
   {$ifdef unix}
   nextpas.core.thread.init,
   {$endif}
+  SysUtils,
   nextpas.core.bench,
   nextpas.core.bench.base,
   nextpas.core.text.conv,
@@ -17,14 +23,18 @@ uses
 
 var
   GResults: array of TBenchResult;
+  GBaselines: array of TBaselineData;
+  GEnv: TBenchEnvironment;
 
 procedure InitTestResults;
 var
   I: Integer;
 begin
   SetLength(GResults, 20);
+  SetLength(GBaselines, 20);
   for I := 0 to 19 do
   begin
+    GResults[I] := Default(TBenchResult);
     GResults[I].Name := 'Bench' + IntToStr(I);
     GResults[I].Executed := True;
     GResults[I].Skipped := False;
@@ -40,130 +50,96 @@ begin
     GResults[I].P99 := GResults[I].NsPerOp + 20.0 + Random * 10.0;
     GResults[I].Outliers := Random(5);
     GResults[I].SampleCount := 30;
+
+    GBaselines[I] := Default(TBaselineData);
+    GBaselines[I].Name := GResults[I].Name;
+    GBaselines[I].NsPerOp := GResults[I].NsPerOp * 1.1;
   end;
+
+  GEnv := Default(TBenchEnvironment);
+  GEnv.OS := 'Linux';
+  GEnv.CPU := 'x86_64';
+  GEnv.Cores := 1;
+  GEnv.FPCVersion := '3.3.1';
+  GEnv.Timestamp := 'bench';
+end;
+
+function MakeResults: IBenchResults;
+begin
+  Result := TBenchResults.Create(GResults, GEnv, []);
+end;
+
+function MakeResultsWithBaselines: IBenchResults;
+begin
+  Result := TBenchResults.Create(GResults, GEnv, GBaselines);
 end;
 
 procedure BenchToConsole(const ACtx: IBenchContext);
 var
-  LSuite: IBenchSuite;
   LResults: IBenchResults;
-  I: Integer;
+  LOut: string;
 begin
-  LSuite := TBenchSuite.Create('Console');
-  LSuite.SetQuiet(True);
-  for I := 0 to High(GResults) do
-    LSuite.Add(GResults[I].Name, procedure(const ACtx2: IBenchContext) begin end);
-  LResults := LSuite.Run;
-  LResults.PrintToConsole;
-  LResults := nil;
-  LSuite := nil;
+  LResults := MakeResults;
+  LOut := LResults.PrintToConsole;
+  ACtx.SetBytes(Length(LOut));
 end;
 
 procedure BenchToJSON(const ACtx: IBenchContext);
 var
-  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LJSON: string;
-  I: Integer;
 begin
-  LSuite := TBenchSuite.Create('JSON');
-  LSuite.SetQuiet(True);
-  for I := 0 to High(GResults) do
-    LSuite.Add(GResults[I].Name, procedure(const ACtx2: IBenchContext) begin end);
-  LResults := LSuite.Run;
+  LResults := MakeResults;
   LJSON := LResults.ToJSON;
   ACtx.SetBytes(Length(LJSON));
-  LResults := nil;
-  LSuite := nil;
 end;
 
 procedure BenchToTSV(const ACtx: IBenchContext);
 var
-  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LTSV: string;
-  I: Integer;
 begin
-  LSuite := TBenchSuite.Create('TSV');
-  LSuite.SetQuiet(True);
-  for I := 0 to High(GResults) do
-    LSuite.Add(GResults[I].Name, procedure(const ACtx2: IBenchContext) begin end);
-  LResults := LSuite.Run;
+  LResults := MakeResults;
   LTSV := LResults.ToTSV;
   ACtx.SetBytes(Length(LTSV));
-  LResults := nil;
-  LSuite := nil;
 end;
 
 procedure BenchToHTML(const ACtx: IBenchContext);
 var
-  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LHTML: string;
-  I: Integer;
 begin
-  LSuite := TBenchSuite.Create('HTML');
-  LSuite.SetQuiet(True);
-  for I := 0 to High(GResults) do
-    LSuite.Add(GResults[I].Name, procedure(const ACtx2: IBenchContext) begin end);
-  LResults := LSuite.Run;
+  LResults := MakeResults;
   LHTML := LResults.ToHTML;
   ACtx.SetBytes(Length(LHTML));
-  LResults := nil;
-  LSuite := nil;
 end;
 
 procedure BenchSaveToJSON(const ACtx: IBenchContext);
 var
-  LSuite: IBenchSuite;
   LResults: IBenchResults;
-  I: Integer;
 begin
-  LSuite := TBenchSuite.Create('SaveJSON');
-  LSuite.SetQuiet(True);
-  for I := 0 to High(GResults) do
-    LSuite.Add(GResults[I].Name, procedure(const ACtx2: IBenchContext) begin end);
-  LResults := LSuite.Run;
+  ForceDirectories('build');
+  LResults := MakeResults;
   LResults.SaveToJSON('build/bench_output.json');
-  LResults := nil;
-  LSuite := nil;
 end;
 
 procedure BenchSaveToHTML(const ACtx: IBenchContext);
 var
-  LSuite: IBenchSuite;
   LResults: IBenchResults;
-  I: Integer;
 begin
-  LSuite := TBenchSuite.Create('SaveHTML');
-  LSuite.SetQuiet(True);
-  for I := 0 to High(GResults) do
-    LSuite.Add(GResults[I].Name, procedure(const ACtx2: IBenchContext) begin end);
-  LResults := LSuite.Run;
+  ForceDirectories('build');
+  LResults := MakeResults;
   LResults.SaveToHTML('build/bench_output.html');
-  LResults := nil;
-  LSuite := nil;
 end;
 
 procedure BenchCompareWithBaseline(const ACtx: IBenchContext);
 var
-  LSuite: IBenchSuite;
   LResults: IBenchResults;
   LComparisons: TBenchComparisonArray;
-  I: Integer;
 begin
-  LSuite := TBenchSuite.Create('Compare');
-  LSuite.SetQuiet(True);
-  for I := 0 to High(GResults) do
-  begin
-    LSuite.Add(GResults[I].Name, procedure(const ACtx2: IBenchContext) begin end);
-    LSuite.AddBaseline(GResults[I].Name, GResults[I].NsPerOp * 1.1);
-  end;
-  LResults := LSuite.Run;
+  LResults := MakeResultsWithBaselines;
   LComparisons := LResults.CompareWithBaseline;
   ACtx.SetBytes(Length(LComparisons) * SizeOf(TBenchComparison));
-  LResults := nil;
-  LSuite := nil;
 end;
 
 procedure RunReportBenchmarks;
@@ -179,9 +155,10 @@ begin
   InitTestResults;
 
   LSuite := TBenchSuite.Create('BenchReport');
-  LSuite.SetMinDuration(TDuration.FromMilliseconds(10));
-  LSuite.SetMaxIterations(10000);
-  LSuite.SetMinSamples(30);
+  LSuite.SetMinDuration(TDuration.FromMilliseconds(50));
+  LSuite.SetMaxIterations(500);
+  LSuite.SetMinSamples(5);
+  LSuite.SetWarmupIters(1);
   LSuite.SetQuiet(False);
 
   LSuite.Add('ToConsole/20', @BenchToConsole);

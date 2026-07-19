@@ -112,20 +112,36 @@ LResults := TBenchSuite.Create('MySuite')
 |------|------|
 | `PrintToConsole` | 返回格式化的控制台表格字符串（纯函数，不写 stdout） |
 | `ToBenchstat` | Go benchstat 兼容格式（tab-separated，可直接用 `benchstat` 分析） |
-| `ToJSON` | JSON 格式（含环境信息、统计详情） |
-| `ToTSV` | TSV 格式（含状态/跳过原因） |
-| `ToHTML` | 自包含 HTML（内联 CSS/SVG 图表/箱线图） |
-| `SaveToJSON(Path)` | 保存 JSON 到文件 |
-| `SaveToHTML(Path)` | 保存 HTML 到文件 |
-| `SaveToTSV(Path)` | 保存 TSV 到文件 |
-| `CompareTwoResults(A, B)` | 两个结果 Mann-Whitney U 对比 |
-| `CompareMultipleBaselines(Baselines)` | 多基线对比矩阵（超越 Go/Rust） |
-| `ToMatrixReport(Baselines)` | 多基线矩阵 Console 报告 |
-| `ToMatrixHTML(Baselines)` | 多基线矩阵 HTML（含 B/op + allocs/op） |
-| `ToMatrixJSON(Baselines)` | 多基线矩阵 JSON（CI 可消费） |
+| `ToJSON` / `ToTSV` / `ToHTML` / `ToCSV` / `ToSummary` | 各格式报告字符串 |
+| `SaveToJSON/HTML/TSV/CSV/Markdown(Path)` | 保存到文件 |
+| `CompareTwoResults(A, B)` | 两个结果 Mann-Whitney U 对比（RawSamples） |
+| `CompareMultipleBaselines(Baselines)` | 多基线对比矩阵 |
+| `ToMatrixReport/HTML/JSON/CSV(Baselines)` | 多基线矩阵报告 |
+| `SaveToMatrixJSON/HTML/CSV(Path, Baselines)` | 矩阵报告落盘 |
 | `SaveBaseline(Path, GitHash)` | 保存当前结果为命名基线 |
 | `AppendToTimeline(Path)` | 追加到 JSONL 时间线 |
-| `HasRegression(Threshold)` | 检测回归 |
+| `HasRegression(Threshold)` / `GetRegressionReport(Threshold)` | 回归检测与报告 |
+
+### IBenchResults 结果查询 / 聚合（Round 40–62）
+
+分组规则：名称中**首个 `/` 前**为组名；无 `/` 时整名为组名。
+
+| 方法 | 说明 |
+|------|------|
+| `GetFastest` / `GetSlowest` / `GetTopN` | 极值与 TopN |
+| `GetStableResults` / `GetUnstableResults` | 按 CV 阈值筛选 |
+| `FilterByPrefix/Suffix/Substring/NamePattern` | 名称过滤 |
+| `FilterByNsPerOpRange` / `FilterByStdDevRange` | 数值范围过滤 |
+| `SortByNsPerOp` / `SortByOpsPerSec` / `SortByCustomMetric` | 排序 |
+| `GetSummaryStats` / `GetPercentileStats` / `GetOutlierSummary` | 摘要统计 |
+| `GetTotalOpsPerSec` / `GetTotalIterations` / `GetTotalElapsed` 等 | 跨结果聚合 |
+| `GetGroups` / `GetGroupStats` | 分组枚举与组内聚合 |
+| `ToJSON/Markdown/HTML_Grouped` + `SaveTo*_Grouped` | 分组导出 |
+| `CompareGroups(A, B)` | 两组 NsPerOp 启发式对比（非 MWU） |
+| `GetGroupRegressionReport(Threshold)` | 分组两两回归报告 |
+
+> **API 冻结（2026-07-19）**：默认不再向 `IBenchResults` / `IBenchSuite` 堆叠便捷方法；
+> 后续增量优先落在 report/stats 子单元或文档化的明确缺口修复。
 
 ## TBenchRunner 便利 API
 

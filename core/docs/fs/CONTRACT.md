@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：1.9
+**版本**：1.10
 
 ---
 
@@ -87,13 +87,13 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_fs | 117 | + SameFile / 相对 symlink / ReadFile ENotFound |
+| test_fs | 133 | + R17 错误路径/原子写/Remove 静默等 |
 | test_fs_glob | 31 | GlobMatch / FsGlob |
 | test_fs_facade | 8 | 门面完整性（MkdirAll/Remove 按 procedure INV-5） |
 | test_fs_idir | 7 | IDir 接口 |
 | test_fs_ifile | 17 | IFile 接口 |
 | test_fs_text | 19 | BOM/UTF-8/UTF-16 |
-| **合计** | **6 个测试目录 / 195** | heaptrc 0 leak 为门禁 |
+| **合计** | **6 个测试目录 / 215** | heaptrc 0 leak 为门禁 |
 
 路径命名与 `nextpas.core.path` 对齐说明见 `core/docs/path/README.md`「命名规范」。
 
@@ -113,3 +113,4 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 2026-07-19 | 1.7 | PathDir 仅裸名压空；`./x` 保留 `.` | Claude |
 | 2026-07-19 | 1.8 | IsSymlink；R16 对标 | Claude |
 | 2026-07-19 | 1.9 | SameFile；质量测；117 | Claude |
+| 2026-07-19 | 1.10 | R17 质量表；133 | Claude |

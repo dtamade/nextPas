@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：1.2
+**版本**：1.3
 
 ---
 
@@ -120,18 +120,23 @@ end;
 
 ## 5. 内存管理
 
-- TBuffer 动态分配，CreateEmpty/CreateFilled 构造
+- TBuffer / TOverlayBuffer 默认 `array of` 托管 dynarray（`SetLength`）
+- **可选** `IAllocator`（`CreateEmpty/CreateFilled/Create(..., AAllocator)`；`nil` = 默认路径）
+- non-nil 路径：cell/marks 走 `GetMem`/`FreeMem`；`Destroy`/`Resize` 配对释放
+- `TTerminal.Create(AAllocator)` 将分配器下传到 prev/curr/merged/overlay 与 `TAnsiBackend`（`InitWith`）
+- buffer 生命周期 ⊆ allocator 生命周期（接口 refcount）
 - widget 通过接口引用计数自动释放
-- 无 IAllocator 集成（计划中）
+- Diff patch / image placements / input queue 仍用进程堆 dynarray（Phase 2 未迁）
 
 ---
 
 ## 6. 测试
 
-- 95 个测试目录，1630 T.Test 注册
+- 95 个测试目录，1635+ T.Test 注册
 - heaptrc 全覆盖（编译器标志 `-gh -dHEAPTRC_ACTIVE`）
 - 0 泄漏，0 失败
 - 测试源 0 SysUtils / BaseUnix / Unix 直接引用
+- tracking allocator 覆盖 TBuffer/TOverlay 可选路径
 
 ---
 
@@ -139,6 +144,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-19 | 1.3 | 可选 IAllocator：TBuffer/TOverlay/TTerminal/ANSI | Claude |
 | 2026-07-19 | 1.2 | 测试计数 1567→1630；测试 SysUtils 清零；docs/contracts 改指针 | Claude |
 | 2026-07-11 | 1.1 | 全面重写：对齐实际实现，修正接口签名、控件列表、不变量 | Claude |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |

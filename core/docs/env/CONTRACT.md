@@ -80,7 +80,7 @@
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_os_env | 41 | Get/Set/Unset/Expand/%VAR%/XDG/User*Dir + 可移植名 + 真 uses 门禁 |
+| test_os_env | 55 | R16 ClearEnv + R17 Expand/HasEnv/EnvKeys 表 |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---
@@ -96,3 +96,4 @@
 | 2026-07-19 | 1.4 | 真 uses 门禁（test_os_env） | Claude |
 | 2026-07-19 | 1.5 | INV-9 可移植名 Set/Expand；INV-10 线程 | Claude |
 | 2026-07-19 | 1.6 | ClearEnv（INV-11）；R16 对标 | Claude |
+| 2026-07-19 | 1.7 | R17 质量表；测试 55 | Claude |

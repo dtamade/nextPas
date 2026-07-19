@@ -20,7 +20,7 @@ unit nextpas.core.tui.terminal;
 
 interface
 
-uses nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.env;
+uses nextpas.core.mem.intf, nextpas.core.tui.base, nextpas.core.tui.cap.base, nextpas.core.tui.error, nextpas.core.tui.cell, nextpas.core.tui.buffer, nextpas.core.tui.overlay, nextpas.core.tui.event, nextpas.core.tui.input, nextpas.core.tui.interaction, nextpas.core.tui.image_cap, nextpas.core.tui.backend.ansi, nextpas.core.platform.console, nextpas.core.platform.signal, nextpas.core.platform.env;
 
 const
   STDIN_FD  = 0;
@@ -95,6 +95,7 @@ type
     FCellHeight: Word;
     FOptions: TTerminalOptions;
     FActiveOptions: TTerminalOptions;
+    FAllocator: IAllocator;
     procedure EnsureInputCapacity(AExtra: Integer);
     procedure DropInputBytes(ACount: Integer);
     function ReadAvailableBytes: Integer;
@@ -115,7 +116,7 @@ type
       ATermProgram, ATerm, ATermFeatures, AKittyWindowId: AnsiString)
       : TTuiTerminalCapabilityProfile; static;
 
-    constructor Create;
+    constructor Create(const AAllocator: IAllocator = nil);
     destructor Destroy; override;
 
     function EnterTui: Boolean; overload;
@@ -320,9 +321,10 @@ begin
       TTuiCapabilityStatus.Create(True, True, True, False, ''));
 end;
 
-constructor TTerminal.Create;
+constructor TTerminal.Create(const AAllocator: IAllocator);
 begin
   inherited Create;
+  FAllocator := AAllocator;
   FBackend := nil;
   FPrev := nil;
   FCurr := nil;
@@ -354,6 +356,7 @@ begin
   FCurr.Free;
   FPrev.Free;
   FBackend.Free;
+  FAllocator := nil;
   inherited;
 end;
 
@@ -387,17 +390,17 @@ begin
   try
     FActiveOptions := FOptions;
     LMouseMode := FActiveOptions.EffectiveMouseMode;
-    FBackend := TAnsiBackend.Create(STDOUT_FD);
+    FBackend := TAnsiBackend.Create(STDOUT_FD, FAllocator);
     FBackend.EnterAlternate(ToAnsiMouseMode(LMouseMode),
       FActiveOptions.UsesAlternateScrollKeys);
     FBackend.HideCursor;
     FBackend.ClearScreen;
     FBackend.Flush;
 
-    FPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, LSize.Cols, LSize.Rows));
-    FCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, LSize.Cols, LSize.Rows));
-    FMerged := TBuffer.CreateEmpty(TRect.Make(0, 0, LSize.Cols, LSize.Rows));
-    FOverlay := TOverlayBuffer.Create(TRect.Make(0, 0, LSize.Cols, LSize.Rows));
+    FPrev := TBuffer.CreateEmpty(TRect.Make(0, 0, LSize.Cols, LSize.Rows), FAllocator);
+    FCurr := TBuffer.CreateEmpty(TRect.Make(0, 0, LSize.Cols, LSize.Rows), FAllocator);
+    FMerged := TBuffer.CreateEmpty(TRect.Make(0, 0, LSize.Cols, LSize.Rows), FAllocator);
+    FOverlay := TOverlayBuffer.Create(TRect.Make(0, 0, LSize.Cols, LSize.Rows), FAllocator);
     DetectCapabilities;
     FHasMouseTracking := FActiveOptions.RequestsMouseTracking;
     FCellWidth := 0;
@@ -696,11 +699,11 @@ begin
   if FPrev <> nil then begin FPrev.Free; FPrev := nil; end;
   if FBackend <> nil then begin FBackend.Free; FBackend := nil; end;
 
-  FBackend := TAnsiBackend.Create(-1);
-  FPrev := TBuffer.CreateEmpty(AArea);
-  FCurr := TBuffer.CreateEmpty(AArea);
-  FMerged := TBuffer.CreateEmpty(AArea);
-  FOverlay := TOverlayBuffer.Create(AArea);
+  FBackend := TAnsiBackend.Create(-1, FAllocator);
+  FPrev := TBuffer.CreateEmpty(AArea, FAllocator);
+  FCurr := TBuffer.CreateEmpty(AArea, FAllocator);
+  FMerged := TBuffer.CreateEmpty(AArea, FAllocator);
+  FOverlay := TOverlayBuffer.Create(AArea, FAllocator);
   FCapabilityProfile := TTuiTerminalCapabilityProfile.Default;
   FActiveOptions := FOptions;
   FFrameActive := False;

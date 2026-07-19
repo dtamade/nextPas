@@ -28,6 +28,7 @@ type
   TCaseFoldEntry = nextpas.core.text.unicode.types.TCaseFoldEntry;
   TGraphemeBreakProperty = nextpas.core.text.unicode.types.TGraphemeBreakProperty;
   TIndicConjunctBreak = nextpas.core.text.unicode.types.TIndicConjunctBreak;
+  TWordBreakProperty = nextpas.core.text.unicode.types.TWordBreakProperty;
 
   TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
   TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
@@ -56,6 +57,7 @@ function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinar
 function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory; inline;
 function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty; inline;
 function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBreak; inline;
+function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -113,6 +115,7 @@ function SegmentLines(const AText: string): TSegmentResultArray; inline;
 function SegmentSentences(const AText: string): TSegmentResultArray; inline;
 { Shared UAX #29 grapheme-cluster core (byte-oriented). }
 function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
+function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
 
 // 排序规则函数
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32; inline;
@@ -151,6 +154,11 @@ end;
 function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBreak;
 begin
   Result := nextpas.core.text.unicode.props.GetIndicConjunctBreak(ACp);
+end;
+
+function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty;
+begin
+  Result := nextpas.core.text.unicode.props.GetWordBreakProperty(ACp);
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;
@@ -383,6 +391,11 @@ end;
 function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 begin
   Result := nextpas.core.text.unicode.segment.GraphemeClusterByteLen(AData, ALen);
+end;
+
+function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.text.unicode.segment.WordBreakByteLen(AData, ALen);
 end;
 
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;

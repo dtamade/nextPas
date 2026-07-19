@@ -580,6 +580,133 @@ begin
   CheckEqual('$$', ExpandEnv('$$'), 'double dollar literal pair');
 end;
 
+procedure TestExpandEnvBraceUndefined;
+begin
+  CheckEqual('', ExpandEnv('${NEXTPAS_NEVER_DEFINED_XYZ}'), 'brace undefined empty');
+  CheckEqual('x', ExpandEnv('x${NEXTPAS_NEVER_DEFINED_XYZ}'), 'brace undefined mid');
+end;
+
+procedure TestExpandEnvMultipleVars;
+begin
+  SetEnv('NEXTPAS_A_R17', 'aa');
+  SetEnv('NEXTPAS_B_R17', 'bb');
+  try
+    CheckEqual('aabb', ExpandEnv('$NEXTPAS_A_R17$NEXTPAS_B_R17'), 'adjacent vars');
+    CheckEqual('aa-bb', ExpandEnv('${NEXTPAS_A_R17}-${NEXTPAS_B_R17}'), 'brace pair');
+    CheckEqual('pre-aa-post', ExpandEnv('pre-$NEXTPAS_A_R17-post'), 'dollar mid');
+  finally
+    UnsetEnv('NEXTPAS_A_R17');
+    UnsetEnv('NEXTPAS_B_R17');
+  end;
+end;
+
+procedure TestExpandEnvStrictMissingRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ExpandEnvStrict('$NEXTPAS_STRICT_MISSING_XYZ');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ExpandEnvStrict missing raises');
+end;
+
+procedure TestGetEnvDefaultEdges;
+begin
+  CheckEqual('def', GetEnvDefault('NEXTPAS_MISSING_DEF_XYZ', 'def'), 'default used');
+  SetEnv('NEXTPAS_DEF_EMPTY', '');
+  try
+    CheckEqual('', GetEnvDefault('NEXTPAS_DEF_EMPTY', 'def'), 'empty value not default');
+  finally
+    UnsetEnv('NEXTPAS_DEF_EMPTY');
+  end;
+end;
+
+procedure TestTryGetEnvRoundtrip;
+var
+  LVal: string;
+begin
+  SetEnv('NEXTPAS_TRY_RT', 'v1');
+  try
+    Check(TryGetEnv('NEXTPAS_TRY_RT', LVal), 'try get true');
+    CheckEqual('v1', LVal, 'try get value');
+    Check(not TryGetEnv('NEXTPAS_TRY_MISSING_XYZ', LVal), 'try missing false');
+  finally
+    UnsetEnv('NEXTPAS_TRY_RT');
+  end;
+end;
+
+procedure TestEnvKeysContainsMarker;
+var
+  LKeys: TStringArray;
+  I: Integer;
+  LFound: Boolean;
+begin
+  SetEnv('NEXTPAS_KEY_MARK', '1');
+  try
+    LKeys := EnvKeys;
+    LFound := False;
+    for I := 0 to High(LKeys) do
+      if LKeys[I] = 'NEXTPAS_KEY_MARK' then
+        LFound := True;
+    Check(LFound, 'EnvKeys contains marker');
+  finally
+    UnsetEnv('NEXTPAS_KEY_MARK');
+  end;
+end;
+
+procedure TestSetEnvOverwriteRoundtrip;
+begin
+  SetEnv('NEXTPAS_OW', '1');
+  try
+    CheckEqual('1', GetEnv('NEXTPAS_OW'), 'set first');
+    SetEnv('NEXTPAS_OW', '2');
+    CheckEqual('2', GetEnv('NEXTPAS_OW'), 'overwrite');
+    UnsetEnv('NEXTPAS_OW');
+    Check(not HasEnv('NEXTPAS_OW'), 'unset after');
+  finally
+    UnsetEnv('NEXTPAS_OW');
+  end;
+end;
+
+procedure TestUserHomeDirNonEmpty;
+var
+  LHome: string;
+begin
+  LHome := UserHomeDir;
+  Check(LHome <> '', 'home non-empty');
+  Check(PathIsAbs(LHome) or (LHome[1] = '/'), 'home looks absolute');
+end;
+
+procedure TestExpandEnvPercentEdges;
+begin
+  SetEnv('NEXTPAS_PCT', 'P');
+  try
+    CheckEqual('P', ExpandEnv('%NEXTPAS_PCT%'), 'percent expand');
+    CheckEqual('%', ExpandEnv('%'), 'lone percent');
+    CheckEqual('%%', ExpandEnv('%%'), 'double percent');
+  finally
+    UnsetEnv('NEXTPAS_PCT');
+  end;
+end;
+
+procedure TestExpandEnvWithDefaultUndefined;
+begin
+  CheckEqual('fb', ExpandEnvWithDefault('$NEXTPAS_NOPE_XYZ', 'fb'), 'with default');
+  CheckEqual('xfb', ExpandEnvWithDefault('x$NEXTPAS_NOPE_XYZ', 'fb'), 'with default mid');
+end;
+
+procedure TestEnvironmentVariablesNonEmpty;
+var
+  LAll: TStringArray;
+begin
+  LAll := EnvironmentVariables;
+  Check(Length(LAll) > 0, 'environ non-empty');
+end;
+
 { --- main --- }
 
 begin
@@ -628,5 +755,16 @@ begin
   T.Test('ClearEnv', @TestClearEnv);
   T.Test('HasEnv empty vs missing', @TestHasEnvEmptyVsMissing);
   T.Test('ExpandEnv dollar literal', @TestExpandEnvDollarDollarLiteral);
+  T.Test('ExpandEnv brace undefined', @TestExpandEnvBraceUndefined);
+  T.Test('ExpandEnv multiple vars', @TestExpandEnvMultipleVars);
+  T.Test('ExpandEnvStrict missing raises', @TestExpandEnvStrictMissingRaises);
+  T.Test('GetEnvDefault edges', @TestGetEnvDefaultEdges);
+  T.Test('TryGetEnv roundtrip', @TestTryGetEnvRoundtrip);
+  T.Test('EnvKeys contains marker', @TestEnvKeysContainsMarker);
+  T.Test('SetEnv overwrite roundtrip', @TestSetEnvOverwriteRoundtrip);
+  T.Test('UserHomeDir non-empty', @TestUserHomeDirNonEmpty);
+  T.Test('ExpandEnv percent edges', @TestExpandEnvPercentEdges);
+  T.Test('ExpandEnvWithDefault undefined', @TestExpandEnvWithDefaultUndefined);
+  T.Test('EnvironmentVariables non-empty', @TestEnvironmentVariablesNonEmpty);
   if not T.Run then Halt(1);
 end.

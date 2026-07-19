@@ -13,7 +13,8 @@ interface
 
 uses
   nextpas.core.exception,
-  nextpas.core.io.linewriter;
+  nextpas.core.io.linewriter,
+  nextpas.core.time.base;
 
 type
   {** 双精度浮点数组 }
@@ -21,6 +22,9 @@ type
 
   {** 整数数组 }
   TInt64Array = array of Int64;
+
+  {** 字符串数组 }
+  TStringArray = array of string;
 
   {** 自定义指标键值对 }
   TCustomMetric = record
@@ -71,6 +75,14 @@ type
     FilteredStdDev: Double;
     FilteredMedian: Double;
     FilteredCount: Integer;
+
+    {** 获取 NsPerOp 的 TDuration 表示（类型安全的便捷方法）。
+     *  当 NsPerOp <= 0 时返回 TDuration.Zero。 }
+    function NsPerOpDuration: TDuration;
+
+    {** 获取 StdDev 的 TDuration 表示（类型安全的便捷方法）。
+     *  当 StdDev <= 0 时返回 TDuration.Zero。 }
+    function StdDevDuration: TDuration;
   end;
 
   {** 统计摘要 - 完整的统计分析结果 }
@@ -119,6 +131,14 @@ type
     Cores: Integer;
     FPCVersion: string;
     Timestamp: string;
+  end;
+
+  {** OLS 线性回归结果 (P1-1: 去除固定开销) }
+  TOLSRegression = record
+    Slope: Double;       { 每次迭代的时间（纳秒） }
+    Intercept: Double;   { 固定开销（纳秒） }
+    RSquared: Double;    { 拟合度 (0-1)，越接近 1 越好 }
+    Valid: Boolean;      { 回归是否有效 }
   end;
 
   {** B23: Progress callback procedure type }
@@ -290,6 +310,8 @@ const
    *  设置 =1 / true / yes 时启用内存跟踪（默认启用）。
    *  设置 =0 / false / no 时禁用内存跟踪。 }
   BENCH_ENV_MEMTRACK = 'NEXTPAS_BENCH_MEMTRACK';
+  {** 整体超时环境变量（毫秒），0=不超时 }
+  BENCH_ENV_TIMEOUT = 'NEXTPAS_BENCH_TIMEOUT';
 
   {** 元数据常量
    *  F-013: 手动维护版本号。语义化版本: MAJOR.MINOR。
@@ -324,6 +346,15 @@ const
     2.921, 2.898, 2.878, 2.861, 2.845,
     2.831, 2.819, 2.807, 2.797, 2.787,
     2.779, 2.771, 2.763, 2.756, 2.750
+  );
+
+  TINV90_DATA: array[0..29] of Double = (
+    6.314, 2.920, 2.353, 2.132, 2.015,
+    1.943, 1.895, 1.860, 1.833, 1.812,
+    1.796, 1.782, 1.771, 1.761, 1.753,
+    1.746, 1.740, 1.734, 1.729, 1.725,
+    1.721, 1.717, 1.714, 1.711, 1.708,
+    1.706, 1.703, 1.701, 1.699, 1.697
   );
 
 {** 从查找表获取 t 临界值（通用 helper，0-based 表，df 1-based） }
@@ -364,6 +395,24 @@ implementation
 
 uses
   nextpas.core.math.scalar;
+
+{ ===== TBenchResult 便捷方法 ===== }
+
+function TBenchResult.NsPerOpDuration: TDuration;
+begin
+  if NsPerOp > 0 then
+    Result := TDuration.FromNanoseconds(Round(NsPerOp))
+  else
+    Result := TDuration.Zero;
+end;
+
+function TBenchResult.StdDevDuration: TDuration;
+begin
+  if StdDev > 0 then
+    Result := TDuration.FromNanoseconds(Round(StdDev))
+  else
+    Result := TDuration.Zero;
+end;
 
 { ===== Xoroshiro128+ PRNG (Phase B.1) ===== }
 
