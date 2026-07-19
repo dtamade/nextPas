@@ -7,6 +7,7 @@ program test_worksteal;
 uses
   nextpas.core.thread.init,
   SysUtils,
+  Classes,
   nextpas.core.thread.base,
   nextpas.core.thread.intf,
   nextpas.core.thread.pool.worksteal,
@@ -15,11 +16,42 @@ uses
 
 var GCounter: Integer = 0;
 
+function WorkstealPoolSourceUsesT1Deque: Boolean;
+var
+  LPath: string;
+  LSrc: TStringList;
+begin
+  Result := False;
+  LPath := ExpandFileName(
+    IncludeTrailingPathDelimiter(ExtractFilePath(ParamStr(0))) +
+    '../../../../src/nextpas.core.thread.pool.worksteal.pas');
+  if not FileExists(LPath) then
+    LPath := ExpandFileName('core/src/nextpas.core.thread.pool.worksteal.pas');
+  if not FileExists(LPath) then
+    Exit(False);
+  LSrc := TStringList.Create;
+  try
+    LSrc.LoadFromFile(LPath);
+    Result :=
+      (Pos('nextpas.core.lockfree.deque', LSrc.Text) > 0) and
+      (Pos('TWorkStealingDequeImpl', LSrc.Text) > 0) and
+      (Pos('TDequeSlot', LSrc.Text) > 0);
+  finally
+    LSrc.Free;
+  end;
+end;
+
 var
   LRunner: TSuiteRunner;
   LSuite: TTestSuite;
 begin
   LSuite := TTestSuite.Create('thread.worksteal');
+
+  LSuite.Test('H3-5 source-contract: uses T1 lockfree.deque', procedure
+  begin
+    CheckTrue(WorkstealPoolSourceUsesT1Deque,
+      'thread.pool.worksteal must use nextpas.core.lockfree.deque T1 deque');
+  end);
 
   LSuite.Test('create and shutdown', procedure
   var LPool: IThreadPool;
