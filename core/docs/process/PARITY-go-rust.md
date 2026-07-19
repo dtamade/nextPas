@@ -13,8 +13,8 @@
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
 | **质量 Quality** | **9.2** | R19：WaitGraceful TimedOut（ignore TERM）、ProcessSucceeded 真值表、错误路径、path Clean/Rel 表 |
-| **规模 Scale (Essential)** | **8.8** | Essential API 齐；HardLink/Chtimes/Chown 仍 **Deferred（需 L0）** |
-| **综合** | **9.0** | 测试合计 **≥900**；质量 9.2 驱动综合达标 |
+| **规模 Scale (Essential)** | **9.1** | HardLink/Chtimes/Chown 已经 L0 落地（R20） |
+| **综合** | **9.15** | 测试 ≥900 + Essential 齐 |
 
 **目标线**：质量 ≥ 9.0（**R19 达 9.2**）；规模 Essential ≥ **0.85**；测试合计 ≥ **900**（达成）。
 
@@ -57,9 +57,9 @@
 | IFile.Sync | Sync | IFile.Sync | Done（接口已有） |
 | IsSymlink(path) | Lstat | **IsSymlink** | Done（R16） |
 | PathAbs / resolve | Abs/EvalSymlinks | PathAbs→`platform_path_resolve`（realpath） | **Done**（跟随 symlink） |
-| HardLink | Link/hard_link | — | **Deferred**（需 L0 `platform_file_link`） |
-| Chtimes | Chtimes | — | **Deferred**（需 L0 utimens） |
-| Chown | Chown | — | **Deferred**（需 L0 chown；FFI 有、公开 API 无） |
+| HardLink | Link/hard_link | **HardLink** | Done（R20；L0 `platform_file_link`） |
+| Chtimes | Chtimes | **Chtimes**（ns epoch） | Done（R20；L0 `platform_file_utimens`） |
+| Chown | Chown | **Chown** | Done（R20；L0 `platform_file_chown`；Win UNSUPPORTED） |
 | SameFile(inode) | SameFile | **SameFile** (lstat Dev+Ino) | Done（R16 续） |
 | Remove ENOENT | Go 报错 | **静默成功**（Pascal） | Done（有意 ≠ Go） |
 
@@ -108,15 +108,7 @@
 
 ### L0 缺口（platform 协作清单）
 
-L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但**无公开** `platform_file_*` API：
-
-| L2 期望 | 需要 L0 | 现状 |
-|---------|---------|------|
-| `HardLink` | `platform_file_link(old, new)` | 无公开 API（仅有 symlink） |
-| `Chtimes` | `platform_file_utimens(path, atime, mtime)` | syscall 号有，无封装 |
-| `Chown` | `platform_file_chown(path, uid, gid)` | `posix.ffi` 有 `chown`，files 层未导出 |
-
-**平台侧建议**：补齐三函数 + 错误码映射 + Windows 对等（或 `PLATFORM_ERR_UNSUPPORTED`），L2 再开一片。
+~~HardLink / Chtimes / Chown~~ — **R20 已落地**（`platform_file_link` / `utimens` / `chown` + fs 门面）。
 
 ### process 其他 Deferred
 
@@ -138,8 +130,8 @@ L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但
 
 | 项 | 性质 | 口径 |
 |----|------|------|
-| **HardLink / Chtimes / Chown** | 跨层依赖 | fs 语义与测试可随时接；当前 **Deferred**，因缺 `platform_file_link` / `utimens` / `chown` 公开 API。L2 **禁止**直调 POSIX。platform 补 L0 后本车道再开 L2 一片。规模分 ~8.8 停在此线是**预期**，不算本模块回归。 |
-| **测试冲 900** | 可选加厚 | R17 已满足 ≥750。900 是远期表驱动目标，**非灌水**。触发：用户指令「冲 900」、真实边界洞、或新 API（如 HardLink）顺带加厚。无触发时**不空转 eval**。 |
+| **HardLink / Chtimes / Chown** | 已落地 R20 | L0+L2 完成；Win chown = unsupported |
+| **测试冲 900** | 已达成 R19 | 合计 900；继续表驱动可选 |
 
 **周报可用一句：**
 
@@ -159,3 +151,4 @@ L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但
 | 2026-07-19 | R18 wine-runtime-smoke 实况绿（4/4）；去掉过时 expect 阻塞表述 |
 | 2026-07-19 | 维护策略口径：L0 Deferred + 900 可选 + 周报话术 |
 | 2026-07-19 | R19 质量属性表 + 测试 900；Quality 9.2 / 综合 9.0 |
+| 2026-07-19 | R20 HardLink/Chtimes/Chown L0+L2；规模 9.1 |

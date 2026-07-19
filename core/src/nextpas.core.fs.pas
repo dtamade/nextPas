@@ -148,6 +148,12 @@ procedure Truncate(const APath: string; const ASize: Int64); inline;
 procedure Symlink(const ATarget, ALinkPath: string); inline;
 {** @desc 读取符号链接的目标路径 *}
 function Readlink(const APath: string): string; inline;
+{** @desc 创建硬链接（对齐 Go os.Link） *}
+procedure HardLink(const AOldPath, ANewPath: string); inline;
+{** @desc 设置访问/修改时间（纳秒 epoch，与 Stat.ModTime 同单位） *}
+procedure Chtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64); inline;
+{** @desc 设置所有者（Unix 跟随链接；Windows 不支持） *}
+procedure Chown(const APath: string; const AUid, AGid: UInt32); inline;
 
 { Directory operations }
 {** @desc 创建单级目录；失败抛异常 *}
@@ -431,6 +437,21 @@ end;
 function Readlink(const APath: string): string;
 begin
   Result := nextpas.core.fs.util.FsReadlink(APath);
+end;
+
+procedure HardLink(const AOldPath, ANewPath: string);
+begin
+  nextpas.core.fs.util.FsHardLink(AOldPath, ANewPath);
+end;
+
+procedure Chtimes(const APath: string; const AAccessTimeNs, AModTimeNs: Int64);
+begin
+  nextpas.core.fs.util.FsChtimes(APath, AAccessTimeNs, AModTimeNs);
+end;
+
+procedure Chown(const APath: string; const AUid, AGid: UInt32);
+begin
+  nextpas.core.fs.util.FsChown(APath, AUid, AGid);
 end;
 
 procedure Mkdir(const APath: string; const APerm: TFilePermission);

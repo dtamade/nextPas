@@ -13,6 +13,8 @@ uses
   nextpas.core.platform.posix.ffi,
 {$ENDIF}
   nextpas.core.platform.process,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files,
 {$IFDEF NEXTPAS_LINUX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.base,
@@ -888,6 +890,105 @@ begin
   FsWriteFile(GTmpDir + '/tr-r19', TBytes.Create(1, 2, 3, 4));
   FsTruncate(GTmpDir + '/tr-r19', 2);
   CheckEqual(Int64(2), FsFileSize(GTmpDir + '/tr-r19'), 'r19tr size');
+end;
+
+
+procedure TestHardLinkR20;
+var
+  A, B: string;
+begin
+  A := GTmpDir + '/hl-a-r20.bin';
+  B := GTmpDir + '/hl-b-r20.bin';
+  FsWriteFile(A, TBytes.Create(1, 2, 3));
+  HardLink(A, B);
+  Check(SameFile(A, B), 'r20 hardlink samefile');
+  CheckEqual(Int64(3), FsFileSize(B), 'r20 hardlink size');
+  FsWriteFile(A, TBytes.Create(9, 9));
+  CheckEqual(Int64(2), FsFileSize(B), 'r20 hardlink shared data');
+end;
+
+procedure TestHardLinkMissingR20;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HardLink(GTmpDir + '/no-hl-src', GTmpDir + '/no-hl-dst');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r20 hardlink missing src');
+end;
+
+procedure TestHardLinkEmptyR20;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HardLink('', GTmpDir + '/x');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r20 hardlink empty');
+end;
+
+procedure TestChtimesR20;
+var
+  P: string;
+  Info: TFileInfo;
+  At, Mt: Int64;
+begin
+  P := GTmpDir + '/chtimes-r20.txt';
+  FsWriteFileText(P, 't');
+  At := Int64(1000000000) * 1600000000;
+  Mt := Int64(1000000000) * 1600000500;
+  Chtimes(P, At, Mt);
+  Info := Stat(P);
+  Check(Abs(Info.AccessTime - At) < 2000000000, 'r20 atime');
+  Check(Abs(Info.ModTime - Mt) < 2000000000, 'r20 mtime');
+end;
+
+procedure TestChtimesMissingR20;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    Chtimes(GTmpDir + '/no-ct-r20', 0, 0);
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r20 chtimes missing');
+end;
+
+procedure TestChownSelfR20;
+var
+  P: string;
+  S: TPlatformFileStat;
+begin
+  P := GTmpDir + '/chown-r20.txt';
+  FsWriteFileText(P, 'c');
+  Check(platform_file_stat(PAnsiChar(P), S) = 0, 'r20 chown pre-stat');
+  Chown(P, S.Uid, S.Gid);
+  Check(FsExists(P), 'r20 chown self ok');
+end;
+
+procedure TestChownMissingR20;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    Chown(GTmpDir + '/no-chown-r20', 0, 0);
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r20 chown missing raises');
 end;
 
 procedure TestFileSize;
@@ -2449,6 +2550,13 @@ begin
     T.Test('Remove file R19 extra', @TestRemoveFileR19Extra);
     T.Test('Chmod exists R19 extra', @TestChmodExistsR19Extra);
     T.Test('Truncate R19 extra', @TestTruncateR19Extra);
+    T.Test('HardLink R20', @TestHardLinkR20);
+    T.Test('HardLink missing R20', @TestHardLinkMissingR20);
+    T.Test('HardLink empty R20', @TestHardLinkEmptyR20);
+    T.Test('Chtimes R20', @TestChtimesR20);
+    T.Test('Chtimes missing R20', @TestChtimesMissingR20);
+    T.Test('Chown self R20', @TestChownSelfR20);
+    T.Test('Chown missing R20', @TestChownMissingR20);
     T.Test('FileSize', @TestFileSize);
 
     T.Test('Mkdir + ReadDir', @TestMkdirAndReadDir);

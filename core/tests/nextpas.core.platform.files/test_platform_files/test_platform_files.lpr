@@ -3,7 +3,6 @@ program test_platform_files;
 {$I nextpas.core.settings.inc}
 
 uses
-
   nextpas.core.fs,
   nextpas.core.fs.util,
   nextpas.core.text.conv,
@@ -11,6 +10,7 @@ uses
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.process,
   nextpas.core.test;
 
 var
@@ -804,6 +804,86 @@ begin
   Check(not LValid.IsInvalid, 'valid handle IsInvalid = false');
 end;
 
+procedure TestPlatformFileLink;
+var
+  H: TPlatformFileHandle;
+  SA, SB: TPlatformFileStat;
+  PathA, PathB: string;
+  N: PtrUInt;
+  Buf: array[0..15] of Byte;
+begin
+  PathA := '/tmp/nextpas_plink_a_' + IntToStr(platform_getpid) + '.bin';
+  PathB := '/tmp/nextpas_plink_b_' + IntToStr(platform_getpid) + '.bin';
+  platform_file_unlink(PAnsiChar(PathA));
+  platform_file_unlink(PAnsiChar(PathB));
+  Check(platform_file_open(PAnsiChar(PathA), fomWriteOnly, fcmCreateAlways, H) = 0, 'open a');
+  Check(platform_file_write(H, PAnsiChar('xyz'), 3, N) = 0, 'write a');
+  Check(N = 3, 'wrote 3');
+  platform_file_close(H);
+  Check(platform_file_link(PAnsiChar(PathA), PAnsiChar(PathB)) = 0, 'link');
+  Check(platform_file_lstat(PAnsiChar(PathA), SA) = 0, 'lstat a');
+  Check(platform_file_lstat(PAnsiChar(PathB), SB) = 0, 'lstat b');
+  Check(SA.Ino = SB.Ino, 'same ino');
+  Check(SA.Dev = SB.Dev, 'same dev');
+  Check(platform_file_open(PAnsiChar(PathB), fomReadOnly, fcmOpenExisting, H) = 0, 'open b');
+  Check(platform_file_read(H, @Buf[0], 3, N) = 0, 'read b');
+  Check(N = 3, 'read 3');
+  Check(Buf[0] = Ord('x'), 'content');
+  platform_file_close(H);
+  platform_file_unlink(PAnsiChar(PathA));
+  platform_file_unlink(PAnsiChar(PathB));
+end;
+
+procedure TestPlatformFileUtimens;
+var
+  H: TPlatformFileHandle;
+  S: TPlatformFileStat;
+  Path: string;
+  At, Mt: Int64;
+  N: PtrUInt;
+begin
+  Path := '/tmp/nextpas_putime_' + IntToStr(platform_getpid) + '.bin';
+  platform_file_unlink(PAnsiChar(Path));
+  Check(platform_file_open(PAnsiChar(Path), fomWriteOnly, fcmCreateAlways, H) = 0, 'open');
+  Check(platform_file_write(H, PAnsiChar('t'), 1, N) = 0, 'write');
+  platform_file_close(H);
+  At := Int64(1000000000) * 1700000000; { fixed sec * 1e9 }
+  Mt := Int64(1000000000) * 1700000100;
+  Check(platform_file_utimens(PAnsiChar(Path), At, Mt) = 0, 'utimens');
+  Check(platform_file_stat(PAnsiChar(Path), S) = 0, 'stat');
+  { allow 1s FS granularity }
+  Check(Abs(S.AccessTime - At) < 2000000000, 'atime near');
+  Check(Abs(S.ModTime - Mt) < 2000000000, 'mtime near');
+  platform_file_unlink(PAnsiChar(Path));
+end;
+
+procedure TestPlatformFileChownSelf;
+var
+  H: TPlatformFileHandle;
+  S: TPlatformFileStat;
+  Path: string;
+  N: PtrUInt;
+begin
+  Path := '/tmp/nextpas_pchown_' + IntToStr(platform_getpid) + '.bin';
+  platform_file_unlink(PAnsiChar(Path));
+  Check(platform_file_open(PAnsiChar(Path), fomWriteOnly, fcmCreateAlways, H) = 0, 'open');
+  Check(platform_file_write(H, PAnsiChar('c'), 1, N) = 0, 'write');
+  platform_file_close(H);
+  Check(platform_file_stat(PAnsiChar(Path), S) = 0, 'stat');
+  Check(platform_file_chown(PAnsiChar(Path), S.Uid, S.Gid) = 0, 'chown self');
+  Check(platform_file_chown(PAnsiChar('/no/such/chown_xyz'), 0, 0) <> 0, 'chown missing err');
+  platform_file_unlink(PAnsiChar(Path));
+end;
+
+procedure TestPlatformFileLinkNil;
+begin
+  Check(platform_file_link(nil, PAnsiChar('/tmp/x')) <> 0, 'link nil old');
+  Check(platform_file_link(PAnsiChar('/tmp/x'), nil) <> 0, 'link nil new');
+  Check(platform_file_utimens(nil, 0, 0) <> 0, 'utimens nil');
+  Check(platform_file_chown(nil, 0, 0) <> 0, 'chown nil');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.platform.files');
   T.Test('open/create/close', @TestOpenCreateClose);
@@ -866,5 +946,9 @@ begin
   T.Test('file lock shared', @TestFileLockShared);
   T.Test('truncate_path non-existent', @TestTruncatePathNonExistent);
   T.Test('file handle IsValid/IsInvalid', @TestFileHandleHelperMethods);
+  T.Test('file link hard', @TestPlatformFileLink);
+  T.Test('file utimens', @TestPlatformFileUtimens);
+  T.Test('file chown self', @TestPlatformFileChownSelf);
+  T.Test('file link/utimens/chown nil', @TestPlatformFileLinkNil);
   if not T.Run then Halt(1);
 end.

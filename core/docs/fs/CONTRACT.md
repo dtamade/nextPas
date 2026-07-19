@@ -51,6 +51,7 @@ fs.pas           ← 门面 re-export
 - **[INV-9]** 门面 `GetEnv`/`Param*` 为 **兼容入口**；新代码用 `nextpas.core.os.env` / `args`（见 README）。
 - **[INV-10]** `IsSymlink(APath)` / `FsIsSymlink`：不跟随链接；路径不存在返回 False（对齐常见「探测」语义，非抛错）。
 - **[INV-11]** `SameFile`/`FsSameFile`：lstat Dev+Ino；路径不存在抛 `ENotFoundError`。
+- **[INV-12]** `HardLink`/`Chtimes`/`Chown`：经 `platform_file_link`/`utimens`/`chown`；空路径 `EArgumentError`；Chtimes 时间为 **Unix 纳秒**（与 `Stat.ModTime` 同单位）；`Chown` 跟随 symlink（对齐 Go）；Windows 上 `Chown` 映射为不支持错误。
 
 ---
 
@@ -87,7 +88,7 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_fs | 151 | R19 错误分类 + 往返表 |
+| test_fs | 158 | R20 HardLink/Chtimes/Chown + R19 错误分类 |
 | test_fs_glob | 31 | GlobMatch / FsGlob |
 | test_fs_facade | 8 | 门面完整性（MkdirAll/Remove 按 procedure INV-5） |
 | test_fs_idir | 7 | IDir 接口 |
