@@ -125,7 +125,8 @@ end.
 | `AsyncSendTimeout(AFd, ABuf, ALen, AFlags, ADeadline, ACallback, AContext)` | Send with deadline |
 
 Timeout methods use a race mechanism: a timer and the I/O operation run concurrently.
-If the timer fires first, the callback receives `AResult = -110` (ETIMEDOUT).
+If the timer fires first, the callback receives `AResult = -110` (ETIMEDOUT) and the
+loop best-effort cancels the pending poller op (`TryCancelByContext`).
 If I/O completes first, the timer is cancelled automatically.
 The mechanism uses atomically-reference-counted `TTimeoutCtx` to ensure exactly one callback fires.
 
@@ -293,7 +294,11 @@ This split avoids forcing a result parameter into timer/post callbacks where it 
 - Linux `SO_RCVTIMEO` returns `EAGAIN` on timeout — the implementation detects this when a
   deadline is set and re-raises as `ETimeoutError`
 
-- **Timeout is notify-only**: the timer fires the callback with ETIMEDOUT but does not cancel the kernel I/O operation. The I/O will still complete eventually (and be discarded).
+- **Timeout cancel (best-effort by backend)**: when the deadline timer wins the CAS race, the loop calls `TPoller.TryCancelByContext` on the `TimeoutCtx`:
+  - **io_uring**: submits `IORING_OP_ASYNC_CANCEL` for the pending entry; the original CQE still arrives (often `-ECANCELED`) and is discarded by CAS
+  - **epoll**: removes the pending op from the reactor table and delivers an internal `-ECANCELED` completion so `TimeoutCtx` refcount is released (not a kernel read/write cancel)
+  - **IOCP**: not guaranteed yet (returns False)
+  - User API is unchanged: still exactly one user completion (`-110` or I/O result)
 - **No kqueue backend**: the poller backend enum and platform io base define no kqueue variant for the async module's use. no `pbkqueue` backend.
 - **IOCP is compile-only**: `pbIocp` exists in the backend enum and the reactor stub compiles, but no runtime verification has been done on Windows.
 - **WhenAll/WhenAny exist** in `async.combinators` (plus Ref variants).

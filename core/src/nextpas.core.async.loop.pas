@@ -111,6 +111,8 @@ type
     procedure Run;
     procedure RunOnce;
     procedure Stop;
+    { True if the I/O poller still has in-flight ops (after timeout cancel drain). }
+    function HasPendingIo: Boolean; inline;
   end;
 
 implementation
@@ -292,6 +294,13 @@ begin
       TimeoutCtxDetachUserRefs(LCtx, LUserCallback, LUserContext);
       if Assigned(LUserCallback) then
         LUserCallback(0, -ETIMEDOUT_LINUX, LUserContext);
+      { Best-effort cancel of still-pending I/O. Run may Stop before Flush/Poll
+        this tick — Flush here so io_uring cancel SQE is submitted promptly. }
+      if (LCtx^.Loop <> nil) and LCtx^.Loop.IsValid then
+      begin
+        if LCtx^.Loop.FPoller.TryCancelByContext(LCtx) then
+          LCtx^.Loop.FPoller.Flush;
+      end;
     end;
   finally
     TimeoutCtxRelease(LCtx);
@@ -731,6 +740,11 @@ procedure TAsyncLoop.Stop;
 begin
   AtomicStore32(FRunning, 0, moRelease);
   Wake;
+end;
+
+function TAsyncLoop.HasPendingIo: Boolean;
+begin
+  Result := FPoller.HasPending;
 end;
 
 function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;

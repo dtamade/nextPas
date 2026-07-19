@@ -63,6 +63,8 @@ type
     procedure Stop;
     function Flush: Int32;
     function HasPending: Boolean;
+    { Best-effort cancel of a pending op keyed by Context (timeout path). }
+    function TryCancelByContext(AContext: Pointer): Boolean;
   end;
 
 function PollerDetectBackend: TPollerBackend;
@@ -461,6 +463,23 @@ begin
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: Result := FIocp.HasPending;
+    {$ENDIF}
+  else
+    Result := False;
+  end;
+end;
+
+function TPoller.TryCancelByContext(AContext: Pointer): Boolean;
+begin
+  if AContext = nil then
+    Exit(False);
+  case FBackend of
+    {$IFDEF NEXTPAS_LINUX}
+    pbIoUring: Result := FUring.TryCancelByContext(AContext);
+    pbEpoll:   Result := FEpoll.TryCancelByContext(AContext);
+    {$ENDIF}
+    {$IFDEF NEXTPAS_WINDOWS}
+    pbIocp: Result := False; { B4: CancelIoEx by context }
     {$ENDIF}
   else
     Result := False;

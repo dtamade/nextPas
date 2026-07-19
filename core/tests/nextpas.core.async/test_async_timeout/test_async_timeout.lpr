@@ -240,6 +240,54 @@ begin
   platform_pipe_close(LPipe);
 end;
 
+{ === Test 3b: Timeout cancel drains pending without closing pipe === }
+
+procedure TestTimeoutCancelDrainsPending;
+var
+  LLoop: TAsyncLoop;
+  LPipe: TPlatformPipe;
+  LReadBuf: array[0..63] of Byte;
+  LI: Integer;
+begin
+  ResetState;
+  FillChar(LReadBuf, SizeOf(LReadBuf), 0);
+
+  if platform_pipe_create(LPipe) <> 0 then
+  begin
+    Fail('pipe creation failed');
+    Exit;
+  end;
+
+  LLoop := TAsyncLoop.Create(32);
+  try
+    GLoopRef := @LLoop;
+    LLoop.AsyncReadTimeout(LPipe.ReadFd, @LReadBuf[0], 64, -1,
+      TDeadline.After(TDuration.FromMilliseconds(50)), @IoCallback, nil);
+    LLoop.Schedule(TDuration.FromMilliseconds(500), @StopLoopCallback, nil);
+    LLoop.Run;
+
+    Check(GIoDone, 'timeout callback fired');
+    CheckEqual(Int64(-110), Int64(GIoResult), 'result is -ETIMEDOUT');
+    CheckEqual(Int64(1), Int64(GCallCount), 'single user callback');
+
+    { Do not close write end — cancel must clear pending I/O. }
+    for LI := 1 to 64 do
+    begin
+      if not LLoop.HasPendingIo then
+        Break;
+      LLoop.Poll;
+    end;
+    Check(not LLoop.HasPendingIo,
+      'HasPendingIo false after timeout cancel drain');
+    CheckEqual(Int64(1), Int64(GCallCount),
+      'cancel completion does not re-fire user callback');
+  finally
+    GLoopRef := nil;
+    LLoop.Free;
+    platform_pipe_close(LPipe);
+  end;
+end;
+
 { === Test 4: ReadTimeoutCloseReleasesPendingContext === }
 
 procedure TestReadTimeoutCloseReleasesPendingContext;
@@ -901,6 +949,8 @@ begin
     'lusercallback(auserdata, aresult, lusercontext);');
   CheckTimeoutBody(LTimerBody, 'TimeoutTimerCallback',
     'lusercallback(0, -etimedout_linux, lusercontext);');
+  Check(Pos('trycancelbycontext(lctx)', LTimerBody) > 0,
+    'TimeoutTimerCallback cancels pending I/O by TimeoutCtx');
 end;
 
 { === Main === }
@@ -913,6 +963,7 @@ begin
   T.Test('ReadTimeout', @TestReadTimeout);
   T.Test('ReadTimeoutLateIoCompletionSingleFire',
     @TestReadTimeoutLateIoCompletionSingleFire);
+  T.Test('TimeoutCancelDrainsPending', @TestTimeoutCancelDrainsPending);
   T.Test('ReadTimeoutCloseReleasesPendingContext', @TestReadTimeoutCloseReleasesPendingContext);
   T.Test('ReadTimeoutCloseBeforeDeadlineAbortsPendingContext',
     @TestReadTimeoutCloseBeforeDeadlineAbortsPendingContext);

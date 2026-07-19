@@ -4,7 +4,7 @@
 **层级**：L1（依赖 L0: base, sync）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：3.1
+**版本**：3.2
 
 ---
 
@@ -171,6 +171,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-19 | 3.2 | Timeout 内核 cancel（TryCancelByContext） | Claude |
 | 2026-07-19 | 3.1 | TAsyncLoop record→class；生命周期/Destroy 契约 | Claude |
 | 2026-07-11 | 3.0 | 添加 Combinators/Retry/SyncPrimitives | Claude |
 | 2026-07-11 | 2.0 | 添加 TaskGroup/Shutdown/Timeout 高级模式 | Claude |
@@ -193,3 +194,12 @@ end;
 
 - **Channel** = message/byte-chunk queue backpressure  
 - **IBackpressureController** (`net.async.backpressure`) = stream buffer + high/low watermarks + `OnStateChange` (Post on loop)
+
+### Timeout I/O cancel (B2)
+| Backend | Timer wins |
+|---------|------------|
+| io_uring | `TryCancelByContext` → `IORING_OP_ASYNC_CANCEL`; late CQE discarded by CAS |
+| epoll | Drop pending op + internal `-ECANCELED` to release `TimeoutCtx` (not kernel cancel) |
+| IOCP | Best-effort not guaranteed (stub False) |
+
+User still sees exactly one completion. `HasPendingIo` should clear after cancel drain (Poll).

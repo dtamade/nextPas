@@ -432,3 +432,7 @@ atsCancelled: TAsyncTaskStatus = 5;
 ### Backpressure (B1)
 - `IBackpressureController.OnStateChange` registers a callback; transitions are notified via `TAsyncLoop.PostEx` (not under the controller lock).
 - Channel queue backpressure and stream watermarks are separate tools — do not merge types.
+
+### Timeout cancel (B2)
+- `Async*Timeout` timer path calls `TPoller.TryCancelByContext(TimeoutCtx)` after user `-ETIMEDOUT`.
+- io_uring: real `IORING_OP_ASYNC_CANCEL`; epoll: remove pending + internal `-ECANCELED`; IOCP: not guaranteed.
