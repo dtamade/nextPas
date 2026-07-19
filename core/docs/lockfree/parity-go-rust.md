@@ -43,14 +43,14 @@
 
 ### 1.2 质量目标（Go/Rust 级）
 
-1. **首选路径唯一叙事**：新代码 `atomic_*`+`mo_*` 或 `TAtomic*`；见 atomic CONTRACT §1.4  
-2. **测试面**：边界 memory order、wrap、alignment、wait/notify、refcount 竞态 — **已大体具备**（`test_atomic` ~7k 行）  
-3. **消费者纪律**：core 内 ~1200 PascalCase + ~200 观测值 CAS → **分批**迁首选路径，禁止全库 sed  
-4. **文档**：本矩阵 + README；无 silent UB 承诺  
+1. **首选路径唯一叙事**：新代码 `atomic_*`+`mo_*` 或 `TAtomic*`；见 atomic CONTRACT §1.4
+2. **测试面**：边界 memory order、wrap、alignment、wait/notify、refcount 竞态 — **已大体具备**（`test_atomic` ~7k 行）
+3. **消费者纪律**：core 内 ~1200 PascalCase + ~200 观测值 CAS → **分批**迁首选路径，禁止全库 sed
+4. **文档**：本矩阵 + README；无 silent UB 承诺
 
 ### 1.3 Atomic 规模结论
 
-**功能规模已达或超过 Go `sync/atomic` 公开面，并接近 Rust std atomic + 实用扩展（wait、tagged、refcount）。**  
+**功能规模已达或超过 Go `sync/atomic` 公开面，并接近 Rust std atomic + 实用扩展（wait、tagged、refcount）。**
 剩余工作是 **一致性与清洁**（首选 API、消费者迁移、证据信封），不是补齐基础原语。
 
 ---
@@ -93,15 +93,15 @@
 
 ### 2.4 Lockfree 质量目标
 
-1. Progress 矩阵诚实（LF vs 分片锁 vs spin）  
-2. unmanaged 元素 + Close 纪律  
-3. Try\*Ex 诊断面  
-4. `verify-t1` + `verify-h3-consumers` + worksteal 常绿  
-5. 有信封的同机 Go/Rust bench（Q5）  
+1. Progress 矩阵诚实（LF vs 分片锁 vs spin）
+2. unmanaged 元素 + Close 纪律
+3. Try\*Ex 诊断面
+4. `verify-t1` + `verify-h3-consumers` + worksteal 常绿
+5. 有信封的同机 Go/Rust bench（Q5）
 
 ### 2.5 Lockfree 规模结论
 
-**T1 工具箱在「队列/通道/窃取/回收/分片 map」上已达写 runtime 的 Go/Rust 常用规模，部分超过 Go std。**  
+**T1 工具箱在「队列/通道/窃取/回收/分片 map」上已达写 runtime 的 Go/Rust 常用规模，部分超过 Go std。**
 缺口主要在：**select 完整度、T2 可导航性、API 命名一致性、可复现跨语言证据** — 由 Q2–Q5 推进。
 
 ---
@@ -121,11 +121,11 @@
 
 ## 4. 非目标
 
-- 替代 Go scheduler / goroutine  
-- 替代 Tokio / async Rust 全栈  
-- 把 T2 全量升默认门面  
-- invent R9；R8 静默生产化  
-- 无信封宣称吞吐碾压 Go/Rust  
+- 替代 Go scheduler / goroutine
+- 替代 Tokio / async Rust 全栈
+- 把 T2 全量升默认门面
+- invent R9；R8 静默生产化
+- 无信封宣称吞吐碾压 Go/Rust
 
 ---
 
