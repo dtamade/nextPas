@@ -428,3 +428,7 @@ atsCancelled: TAsyncTaskStatus = 5;
 - Heap wraps posted to the loop must provide OnDiscard when Close may discard them.
 - Timeout I/O uses ScheduleEx + TimeoutCtxDiscardTimer so Close free TTimeoutCtx.
 - TCP async write uses AsyncSend (not positioned AsyncWrite).
+
+### Backpressure (B1)
+- `IBackpressureController.OnStateChange` registers a callback; transitions are notified via `TAsyncLoop.PostEx` (not under the controller lock).
+- Channel queue backpressure and stream watermarks are separate tools — do not merge types.

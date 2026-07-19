@@ -311,8 +311,126 @@ begin
   LCh.TryReceive(LOut, SizeOf(LOut), LReceived);
   CheckEqual(Int64(1), Int64(LOut), 'received value 1');
   LVal := 4; Check(LCh.Send(LVal, SizeOf(LVal)), 'send 4 succeeds after receive');
-  LLoop.Close;
+  LCh := nil;
+  GLoopRef := nil;
   LLoop.Free;
+end;
+
+{ === Test 9b: BoundedSendAsyncWaits === }
+
+var
+  GSendAsyncDone: Boolean = False;
+
+procedure SendAsyncDoneCallback(AContext: Pointer);
+begin
+  GSendAsyncDone := True;
+  if GLoopRef <> nil then
+    GLoopRef^.Stop;
+end;
+
+procedure TestBoundedSendAsyncWaits;
+var
+  LLoop: TAsyncLoop;
+  LCh: IAsyncChannel;
+  LVal, LOut: UInt32;
+  LReceived: UInt32;
+begin
+  ResetState;
+  GSendAsyncDone := False;
+  LLoop := TAsyncLoop.Create(32);
+  try
+    GLoopRef := @LLoop;
+    { capacity 4 bytes = 1 UInt32 }
+    LCh := CreateBoundedAsyncChannel(LLoop, 4);
+    LVal := 1;
+    Check(LCh.Send(LVal, SizeOf(LVal)), 'fill channel');
+    Check(not LCh.TrySend(LVal, SizeOf(LVal)), 'TrySend fails when full');
+    LVal := 2;
+    LCh.SendAsync(LVal, SizeOf(LVal), @SendAsyncDoneCallback, nil);
+    Check(not GSendAsyncDone, 'SendAsync not done while full');
+    LOut := 0;
+    Check(LCh.TryReceive(LOut, SizeOf(LOut), LReceived), 'receive frees space');
+    CheckEqual(Int64(1), Int64(LOut), 'got first value');
+    LLoop.Schedule(TDuration.FromMilliseconds(50), @StopCallback, nil);
+    LLoop.Run;
+    Check(GSendAsyncDone, 'SendAsync completed after space');
+    Check(LCh.TryReceive(LOut, SizeOf(LOut), LReceived), 'receive async value');
+    CheckEqual(Int64(2), Int64(LOut), 'got async value');
+    LCh := nil;
+  finally
+    GLoopRef := nil;
+    LLoop.Free;
+  end;
+end;
+
+{ === Test 9c: SendAsyncOnClose === }
+
+procedure TestSendAsyncOnClose;
+var
+  LLoop: TAsyncLoop;
+  LCh: IAsyncChannel;
+  LVal: UInt32;
+begin
+  ResetState;
+  GSendAsyncDone := False;
+  LLoop := TAsyncLoop.Create(32);
+  try
+    GLoopRef := @LLoop;
+    LCh := CreateBoundedAsyncChannel(LLoop, 4);
+    LVal := 1;
+    Check(LCh.Send(LVal, SizeOf(LVal)), 'fill');
+    LVal := 2;
+    LCh.SendAsync(LVal, SizeOf(LVal), @SendAsyncDoneCallback, nil);
+    LCh.Close;
+    Check(LCh.IsClosed, 'closed');
+    LLoop.Schedule(TDuration.FromMilliseconds(50), @StopCallback, nil);
+    LLoop.Run;
+    Check(GSendAsyncDone, 'close wakes send waiter');
+    LCh := nil;
+  finally
+    GLoopRef := nil;
+    LLoop.Free;
+  end;
+end;
+
+{ === Test 9d: ReceiveThenTryReceive === }
+
+var
+  GRecvNotify: Boolean = False;
+
+procedure RecvNotifyCallback(AContext: Pointer);
+begin
+  GRecvNotify := True;
+  if GLoopRef <> nil then
+    GLoopRef^.Stop;
+end;
+
+procedure TestReceiveThenTryReceive;
+var
+  LLoop: TAsyncLoop;
+  LCh: IAsyncChannel;
+  LVal, LOut: UInt32;
+  LReceived: UInt32;
+begin
+  ResetState;
+  GRecvNotify := False;
+  LLoop := TAsyncLoop.Create(32);
+  try
+    GLoopRef := @LLoop;
+    LCh := CreateAsyncChannel(LLoop);
+    LCh.Receive(@RecvNotifyCallback, nil);
+    LVal := 42;
+    Check(LCh.Send(LVal, SizeOf(LVal)), 'send after receive wait');
+    LLoop.Schedule(TDuration.FromMilliseconds(50), @StopCallback, nil);
+    LLoop.Run;
+    Check(GRecvNotify, 'receive notify fired');
+    Check(LCh.TryReceive(LOut, SizeOf(LOut), LReceived), 'try receive data');
+    CheckEqual(Int64(42), Int64(LOut), 'value 42');
+    LCh := nil;
+  finally
+    GLoopRef := nil;
+    LLoop.Free;
+  end;
 end;
 
 { === Test 10: CondVarSignal === }
@@ -406,6 +524,9 @@ begin
   T.Test('ChannelClose', @TestChannelClose);
   T.Test('ChannelMultipleChunks', @TestChannelMultipleChunks);
   T.Test('BoundedChannel', @TestBoundedChannel);
+  T.Test('BoundedSendAsyncWaits', @TestBoundedSendAsyncWaits);
+  T.Test('SendAsyncOnClose', @TestSendAsyncOnClose);
+  T.Test('ReceiveThenTryReceive', @TestReceiveThenTryReceive);
   T.Test('CondVarSignal', @TestCondVarSignal);
   T.Test('CondVarBroadcast', @TestCondVarBroadcast);
 

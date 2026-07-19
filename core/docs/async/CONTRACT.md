@@ -156,7 +156,7 @@ end;
 | test_async_bench | 性能基准测试 (4 tests) |
 | test_async_combinators | WhenAll/WhenAny 组合器 (7 tests) |
 | test_async_integration | 集成测试 (4 tests) |
-| test_async_primitives | Timer + Loop 基础操作 (11 tests) |
+| test_async_primitives | Timer + Loop + Mutex/Sem/Channel/CondVar 基础操作 (11→14+ tests) |
 | test_async_retry | 异步重试机制 (5 tests) |
 | test_async_stress | 压力测试 (13 tests) |
 | test_async_timeout | 超时机制测试 (18 tests) |
@@ -182,3 +182,14 @@ end;
 - Abandoned timers: Close/Recycle runs `OnDiscard` then clears entry.
 - `CancelTimer` does not run OnDiscard.
 - Dependents must release before `Loop.Free` (or ensure they never touch a closed loop).
+
+### Channel backpressure (B1)
+| API | Full channel behavior |
+|-----|------------------------|
+| `Send` / `TrySend` | Returns False immediately (try semantics) |
+| `SendAsync` / `SendAsyncRef` | Copies payload into send-waiter queue; completes when space exists (or Close wakes waiter — check `IsClosed`) |
+| `TryReceive` | Dequeues bytes then `DrainSenders` |
+| `Receive` / `ReceiveRef` | Notify only; still call `TryReceive` for data |
+
+- **Channel** = message/byte-chunk queue backpressure  
+- **IBackpressureController** (`net.async.backpressure`) = stream buffer + high/low watermarks + `OnStateChange` (Post on loop)
