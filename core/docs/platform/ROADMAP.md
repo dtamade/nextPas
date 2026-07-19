@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **D1.d done**: documented 17-gate set is `truth=ci-matrix` (pass=17 on `windows-latest`; wine still green) |
+| Real Windows GHA | **D1.d done**: documented 17-gate set is `truth=ci-matrix` (pass=17 on `windows-latest`; wine still green). **+error expand**: wine matrix 15; Windows script 18-gate candidate pending GHA |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -82,7 +82,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Host | Current tier | Next honest claim |
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
-| Windows x86_64 | **`ci-matrix` for documented 17-gate set** + wine-runtime-smoke secondary | expand matrix modules; keep wine green |
+| Windows x86_64 | **`ci-matrix` for documented 17-gate set** + wine 15-module secondary; 18-gate script candidate (+error) | GHA green for +error then promote; keep wine green |
 | macOS | **`focused-runtime` for documented 8-gate set** (D2.c); inventory via best-effort | keep matrix green; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
@@ -292,6 +292,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-17 | **D3.c done**: dual-IO permanent owner-only on `platform.process`; no sunset this program. |
 | 2026-07-17 | **D3.d done**: freetype stays under platform as optional host binding; move-out requires separate owner lane. |
 | 2026-07-17 | **D3.e**: F7/F9/F10 remain Won't unless consumer pain forces reopen. |
+| 2026-07-19 | Expand matrix: add `platform.error` to wine matrix (14→15) and Windows scripts (17→18 candidate). Local wine single-gate + full matrix evidence required; do **not** promote 18-gate `ci-matrix` until GHA `test-windows-runtime` durable green. Fix goal-tree contract tokens + wine list honesty (dl/pipe/fmt/info/which suite-exists-not-gated). |
 
 ---
 
