@@ -89,15 +89,17 @@ threadvar
   GAVX2TanBufCapacity: SizeUInt;
 
 procedure EnsureAVX2TanScratch(aCount: SizeUInt);
+var
+  LOldBytes: SizeUInt;
 begin
   if (GAVX2TanBufCapacity < aCount) or (aCount < GAVX2TanBufCapacity div 4) then
   begin
-    // 释放旧缓冲区
+    // sized free: capacity is the GetMem element count for both scratch buffers
+    LOldBytes := GAVX2TanBufCapacity * SizeOf(Single);
     if GAVX2TanSinBuf <> nil then
-      FreeMem(GAVX2TanSinBuf);
+      FreeMem(GAVX2TanSinBuf, LOldBytes);
     if GAVX2TanCosBuf <> nil then
-      FreeMem(GAVX2TanCosBuf);
-    // 分配新缓冲区
+      FreeMem(GAVX2TanCosBuf, LOldBytes);
     GAVX2TanBufCapacity := aCount;
     GAVX2TanSinBuf := GetMem(aCount * SizeOf(Single));
     GAVX2TanCosBuf := GetMem(aCount * SizeOf(Single));
@@ -3258,13 +3260,14 @@ end;
 finalization
   if GAVX2TanSinBuf <> nil then
   begin
-    FreeMem(GAVX2TanSinBuf);
+    FreeMem(GAVX2TanSinBuf, GAVX2TanBufCapacity * SizeOf(Single));
     GAVX2TanSinBuf := nil;
   end;
   if GAVX2TanCosBuf <> nil then
   begin
-    FreeMem(GAVX2TanCosBuf);
+    FreeMem(GAVX2TanCosBuf, GAVX2TanBufCapacity * SizeOf(Single));
     GAVX2TanCosBuf := nil;
   end;
+  GAVX2TanBufCapacity := 0;
 
 end.

@@ -480,7 +480,7 @@ procedure FreeImage(var aImg: TImage);
 begin
   if Assigned(aImg.Data) then
   begin
-    FreeMem(aImg.Data);
+    FreeMem(aImg.Data, SizeUInt(aImg.DataSize));
     aImg.Data := nil;
   end;
   aImg.Width := 0;

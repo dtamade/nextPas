@@ -219,15 +219,21 @@ procedure AlignedFree(ptr: Pointer);
 var
   originalPtr: Pointer;
   headerBase: NativeUInt;
+  LRawSize: SizeUInt;
 begin
   if ptr <> nil then
   begin
-    // Retrieve original pointer from header and free whole block
+    // Header keeps [originalPtr][userSize] for realloc copy; raw block size is
+    // totalSize = userSize + header + alignment padding (not stored). Prefer
+    // sized free via TryBlockSize (DefaultHeap size-class capacity).
     {$PUSH}{$WARN 4055 OFF}
     headerBase := NativeUInt(ptr) - (SizeOf(Pointer) + SizeOf(NativeUInt));
     originalPtr := PPointer(headerBase)^;
     {$POP}
-    FreeMem(originalPtr);
+    if TryBlockSize(originalPtr, LRawSize) then
+      FreeMem(originalPtr, LRawSize)
+    else
+      FreeMem(originalPtr);
   end;
 end;
 
