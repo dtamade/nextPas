@@ -347,27 +347,33 @@ end;
 function TPoller.AsyncReadv(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
+  { Vectored async is Linux io_uring only. On Windows the case would otherwise
+    expand to only "else", which FPC rejects as an illegal empty case. }
+  {$IFDEF NEXTPAS_LINUX}
   case FBackend of
-    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.AsyncReadv(Int32(AFd), AIovecs, ANrVecs, AOffset,
                  nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
-    {$ENDIF}
   else
     Result := False;
   end;
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
 end;
 
 function TPoller.AsyncWritev(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
+  {$IFDEF NEXTPAS_LINUX}
   case FBackend of
-    {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.AsyncWritev(Int32(AFd), AIovecs, ANrVecs, AOffset,
                  nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
-    {$ENDIF}
   else
     Result := False;
   end;
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
 end;
 
 
