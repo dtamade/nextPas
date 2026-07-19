@@ -98,21 +98,57 @@ CLI multi-client keep-alive shape (pre-`c1472d3b3` semantics, no SysUtils).
 | 2026-07-19 Q0-2 | `no_url` 20k×4 | **epoll** | 16494 | 28144 | 142930 | **0.59** | enter zone only |
 | 2026-07-19 Q0-2 | `response_1k` 20k×4 | **epoll** | 16286 | 24236 | 132811 | **0.67** | enter zone |
 | 2026-07-19 Q0-2 | `no_url` 20k×4 | threaded | 96313 | 29286 | 156874 | **3.29** | char only |
-| **2026-07-19 S1-1** | `no_url` 20k×4 | **epoll** | **50322** | 31688 | 140364 | **1.59** | **scale-ready (≥0.80)** |
+| **2026-07-19 S1-1** | `no_url` 20k×4 | **epoll** | **50322** | 31688 | 140364 | **1.59** | **scale-ready (≥0.80)** (single run) |
 | 2026-07-19 S1-1 | `no_url` 20k×4 | threaded | 85284 | 32391 | 143501 | **2.63** | char only |
+| **2026-07-19 Q2-1** | `no_url` 20k×4 | **epoll** | **48802** | 22180 | 149536 | **2.20** | **runs=3 median; scale-ready RPS** |
+| **2026-07-19 Q2-1** | `response_1k` 20k×4 | **epoll** | **45997** | 23863 | 130069 | **1.93** | **runs=3 median; scale-ready RPS** |
+| 2026-07-19 Q2-1 | `no_url` 20k×4 | threaded | 90131 | 24696 | 151963 | **3.65** | char only (runs=1) |
 
 **S1-1 change**: poll-owned H1 path defaults to **reactor-inline handlers**
 (`PreferPollWorkerHandoff=False`). Removes per-request worker pool submit +
 completion wake for short keep-alive requests. Tests that assert handoff set
 `PreferPollWorkerHandoff=True`.
 
+**Q2-1 refresh**: same official harness; epoll rows use **`--runs 3` median**
+`req/s`. Reproduce:
+
+```sh
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url \
+  --nextpas-backend epoll --runs 3 \
+  --output build/projects/nextpas.core.http/server_comparison/q2-epoll-no_url-runs3.md
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload response_1k \
+  --nextpas-backend epoll --runs 3 \
+  --output build/projects/nextpas.core.http/server_comparison/q2-epoll-response_1k-runs3.md
+```
+
 **Readings**
 
-1. **S1-1 closed the epoll gap**: 0.59× → **1.59× Go** on official `no_url` KPI.
-2. threaded remains faster still (~2.6× Go); epoll is now competitive for scale claims.
-3. Rust `std_only` is reference only.
-4. Single-run snapshot; use `--runs 3` before external publication.
-5. **S1-3 connection ladder landed** (see below): 1k / 10k idle keep-alive stable with raised nofile.
+1. **S1-1 closed the epoll gap**: 0.59× → **1.59× Go** (single-run).
+2. **Q2-1 confirms scale RPS** on median of 3 runs: epoll `no_url` **2.20× Go**,
+   `response_1k` **1.93× Go** (both ≥ 0.80).
+3. threaded remains characterization (~3.6× Go); not the scale KPI backend.
+4. Rust `std_only` is reference only.
+5. **p99 not instrumented** — harness emits `req/s` / `ns/op` only; do not invent latency.
+6. **S1-3 connection ladder landed** (see below): 1k / 10k idle keep-alive stable with raised nofile.
+
+#### Q2-3 Scale-ready verdict (2026-07-19)
+
+| Claim | Verdict | Evidence |
+| ----- | ------- | -------- |
+| Enter parity zone (epoll H1) | **Met** | ratio ≥ 0.50 (Q2-1 medians ≫ 0.50) |
+| Scale-ready RPS (epoll H1 `no_url`) | **Met** | Q2-1 median **2.20×** Go (≥ 0.80) |
+| Scale-ready RPS (epoll H1 `response_1k`) | **Met** | Q2-1 median **1.93×** Go |
+| Scale-ready p99 ≤ 2× Go | **Not instrumented** | no latency/p99 in harness |
+| Connection ladder 1k / 10k idle | **Met** | S1-3 `bench_conn_ladder` |
+| **Scale-ready (H1 server, Linux epoll)** | **Yes — with residuals** | RPS + ladder Met; p99 residual |
+| Scale-ready (H1/**H2** server, Linux) | **No** | S3 H2 server scale open |
+| H3 ready | **No** | Blocked; no facade |
+
+**Allowed public phrasing**: *Scale-ready (H1 server, Linux epoll)* — same-machine
+official harness, with documented residuals (no p99, no H2 scale claim, no Windows
+scale claim, no H3). **Not** a cross-machine leaderboard.
 
 #### S1-3 Connection ladder (idle keep-alive hold — not RPS)
 

@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（S1-3 landed：1k/10k idle keep-alive 连接阶梯；NEXT=STOP until demand / Q2 optional）
+**Updated**: 2026-07-19（**Era Q2 Done**：comparator runs=3 刷新 + Scale-ready (H1, Linux epoll) 诚实宣称；NEXT=STOP until demand）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **STOP until demand**（Q2 comparator optional；S1-3 Met） |
+| **下一执行点** | **STOP until demand**（Era Q2 Done；S2/S3/H3 不自动开） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -758,13 +758,25 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 ### Era Q2 — 收口
 
-| Wave | Do |
-|------|-----|
-| **Q2-1** | 刷新 Go/Rust comparator 全表 |
-| **Q2-2** | CONTRACT/API_COVERAGE 对齐 |
-| **Q2-3** | 评审是否宣称 **Scale-ready (H1/H2 server, Linux)** |
+| Wave | Status | Do / Evidence |
+|------|--------|---------------|
+| **Q2-1** | **landed** | 刷新 Go/Rust comparator：epoll `no_url` / `response_1k` **`--runs 3` median**；threaded char |
+| **Q2-2** | **landed** | BENCHMARKS/GOAL_TREE/API_COVERAGE 与规模证据对齐；CONTRACT 无行为改 |
+| **Q2-3** | **landed** | 诚实宣称：**Scale-ready (H1 server, Linux epoll)**；**否决** H1/H2 整包与 p99 硬证 |
 
-**Parity Done when**：规模达标线 + Q1 质量波 landed（或诚实 Park）+ H3 仍无 facade。
+**Q2-1 Evidence**（2026-07-19，median `req/s`，20k×4）：
+
+| Workload | Backend | nextPas | Go | ratio |
+|----------|---------|--------:|---:|------:|
+| `no_url` | epoll | 48802 | 22180 | **2.20** |
+| `response_1k` | epoll | 45997 | 23863 | **1.93** |
+| `no_url` | threaded | 90131 | 24696 | 3.65（char） |
+
+**Q2-3 Verdict**：见 `BENCHMARKS.md` § Q2-3。允许 *Scale-ready (H1 server, Linux epoll)*；residual = p99 not instrumented、H2 S3 open、H3 Blocked、非跨机榜。
+
+**Era Q2 Done when**：Q2-1..Q2-3 landed。 **Met.**
+
+**Parity campaign（H1 server scale + Q1 质量）**：RPS + 连接阶梯 + Q1 **Met**；H2 scale / H3 **未宣称**。
 
 ---
 
@@ -778,7 +790,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 想法 | 备注 |
 |------|------|
-| （空 — 生产深度已在 Q1；规模在 S1–S3） | 新想法只追加 |
+| latency/p99 harness（官方 comparison 出 p99） | Q2 residual；未升格则勿实现 |
+| S3 H2 server scale 证据 | 需产品/需求再开 |
 
 ---
 
@@ -787,14 +800,15 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ```text
 1. Era 0–8 landed；Era 8 已在 main
 2. H3 Blocked — 跳过；禁止空 facade
-3. Parity Q0+S1-1 — epoll **1.59× Go**（RPS 规模达标）
+3. Parity Q0+S1-1+Q2-1 — epoll **2.20× Go**（runs=3 median `no_url`）
 4. **Era Q1 Done**（SSE / multipart / metrics / write-backpressure）
-5. **S1-3 Met** — 1k/10k idle keep-alive 阶梯 + soft-nofile 失败模式（BENCHMARKS）
-6. **NEXT = STOP until demand** — optional：Q2 comparator 刷新 / Q2-3 scale-ready 宣称评审
-7. 跨模块仅按本波 Land paths；path-limited landing only
+5. **S1-3 Met** — 1k/10k idle keep-alive 阶梯
+6. **Era Q2 Done** — comparator 刷新 + **Scale-ready (H1 server, Linux epoll)** 诚实宣称
+7. **NEXT = STOP until demand** — optional：S2 H1 hot path / S3 H2 scale / latency harness Inbox
+8. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
-**没有用户指令时：STOP（勿空转 H3 / 勿为清单硬开 Q2）。**
+**没有用户指令时：STOP（勿空转 H3 / 勿为清单硬开 S2/S3）。**
 
 ---
 
