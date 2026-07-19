@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.12a**
+**当前版本**: **v8.12b**
 **最后更新**: 2026-07-19
 
 ---
@@ -26,7 +26,7 @@
 | 指标 | 值 |
 |------|-----|
 | 套件 | **19**（+ scale report） |
-| 可计数过程 | **≥1800**（scale report 门禁，排除 stress） |
+| 可计数过程 | **≥2000**（scale report 门禁，排除 stress） |
 | Check*/To* 门禁 | 56 + 52 全引用 |
 | Runner 门禁 | TestSeq/RunParallel/报告 API 等 23 项 |
 
@@ -45,6 +45,7 @@
 | B10 v8.11b Runner/Lifecycle 深度 | **done** |
 | B11 v8.11c 规模报表+golden+≥1800 | **done** |
 | B12 v8.12a 薄套件+边界收口 | **done** |
+| B13 v8.12b 报告+门禁≥2000 | **done** |
 
 ### 暂缓
 
@@ -76,5 +77,5 @@ make -C core/tests/nextpas.core.test clean test   # 17/17
 
 ```bash
 make -C core/tests/nextpas.core.test/test_scale_report test
-# SCALE_MIN=1800 (default)
+# SCALE_MIN=2000 (default)
 ```

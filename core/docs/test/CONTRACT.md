@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.12a
+**版本**：v8.12b
 
 ---
 
@@ -390,6 +390,12 @@ end;
 | 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
 
 ## 11. 变更日志
+
+### v8.12b (2026-07-20) — 报告可观测 + 门禁 ≥2000
+
+- **JUnit golden**：Duration=0 固定 fixture + CheckSnapshot
+- **TAP formal**：version 13 / plan / YAML / footer totals
+- **scale report**：默认 SCALE_MIN=2000；打印 fail-path 启发式占比
 
 ### v8.12a (2026-07-20) — 薄套件 + 边界收口
 

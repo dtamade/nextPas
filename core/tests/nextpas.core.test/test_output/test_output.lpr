@@ -1915,6 +1915,77 @@ begin
   CheckSnapshot(LOut, LDir, 'report.tap');
 end;
 
+procedure TestB13JUnitGoldenSnapshot;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut, LDir: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('golden-junit');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 1;
+  LResults[0].Skipped := 1;
+  SetLength(LResults[0].Results, 3);
+  LResults[0].Results[0].Name := 'pass_case';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[0].Message := '';
+  LResults[0].Results[0].Duration := 0;
+  LResults[0].Results[1].Name := 'fail_case';
+  LResults[0].Results[1].Status := tsFailed;
+  LResults[0].Results[1].Message := 'expected 1 got 2';
+  LResults[0].Results[1].Duration := 0;
+  LResults[0].Results[2].Name := 'skip_case';
+  LResults[0].Results[2].Status := tsSkipped;
+  LResults[0].Results[2].Message := 'not yet';
+  LResults[0].Results[2].Duration := 0;
+  LOut := JUnitXML(LResults, 'golden-junit');
+  CheckContains(LOut, 'pass_case');
+  CheckContains(LOut, 'fail_case');
+  CheckContains(LOut, 'skip_case');
+  CheckContains(LOut, 'expected 1 got 2');
+  CheckContains(LOut, 'time="0.000"');
+  LDir := IncludeTrailingPathDelimiter(GetTempDir) +
+    'np-test-golden-junit-' + IntToStr(GetTickCount64);
+  CheckSnapshot(LOut, LDir, 'report.xml');
+end;
+
+procedure TestB13TAPFormalCompliance;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('tap-formal');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 1;
+  LResults[0].Skipped := 1;
+  SetLength(LResults[0].Results, 3);
+  LResults[0].Results[0].Name := 'a';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[0].Duration := 0;
+  LResults[0].Results[1].Name := 'b';
+  LResults[0].Results[1].Status := tsFailed;
+  LResults[0].Results[1].Message := 'nope';
+  LResults[0].Results[1].Duration := 0;
+  LResults[0].Results[2].Name := 'c';
+  LResults[0].Results[2].Status := tsSkipped;
+  LResults[0].Results[2].Message := 'later';
+  LResults[0].Results[2].Duration := 0;
+  LOut := TAPReport(LResults, 'formal');
+  CheckContains(LOut, 'TAP version 13');
+  CheckContains(LOut, '1..3');
+  CheckContains(LOut, 'ok 1');
+  CheckContains(LOut, 'not ok 2');
+  CheckContains(LOut, '# skip');
+  CheckContains(LOut, '  ---');
+  CheckContains(LOut, '  ...');
+  CheckContains(LOut, '# suites:');
+  CheckContains(LOut, '# total: 3');
+  CheckContains(LOut, '# passed: 1');
+  CheckContains(LOut, '# failed: 1');
+  CheckContains(LOut, '# skipped: 1');
+end;
+
 { ── B5: table-driven filter contracts (meaningful pass+fail paths) ───────── }
 
 procedure TestFilterTableCase(const AC: TTestCase);
@@ -2067,9 +2138,11 @@ begin
   Suite.Test('XmlEscape specials',            @TestXmlEscapeSpecials);
   Suite.Test('ColorDiff no ANSI when off',    @TestColorDiffNoAnsiWhenOff);
 
-  { B11: stable report golden fragments (Duration=0, no wall-clock) }
+  { B11/B13: stable report golden fragments (Duration=0, no wall-clock) }
   Suite.Test('B11 JSON golden snapshot',      @TestB11JSONGoldenSnapshot);
   Suite.Test('B11 TAP golden snapshot',       @TestB11TAPGoldenSnapshot);
+  Suite.Test('B13 JUnit golden snapshot',     @TestB13JUnitGoldenSnapshot);
+  Suite.Test('B13 TAP formal compliance',     @TestB13TAPFormalCompliance);
 
   { B5: 64 filter contracts (half negative) }
   SetLength(LFilterCases, 0);
