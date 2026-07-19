@@ -1,11 +1,11 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Steady**（Era D Steward 维护姿态；A–C 已闭合；D0/D1/D4 已交付）
-**Owner**: mem lane（`.worktrees/mem`）
-**更新**: 2026-07-17
+**状态**: **Era E Active**（对标 Go/Rust 质量与规模；D 仍 Steady 纪律）
+**Owner**: mem lane（`.worktrees/mem`）全权
+**更新**: 2026-07-19
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
-**最近 land（main）**: `d2b704ffe`（D0/D1）· `a0a374f19`（D4 Scorecard）· `c87ac8f60`（README Steady）
-**Steward 观测（docs only）**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [CONSUMER-OBSERVATION-2026-07-17.md](CONSUMER-OBSERVATION-2026-07-17.md)
+**对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
+**Steward 观测**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [CONSUMER-OBSERVATION-2026-07-17.md](CONSUMER-OBSERVATION-2026-07-17.md)
 
 ---
 
@@ -24,6 +24,7 @@
 | **B** | 标准库质量（门面 Tier、契约矩阵、Default 双轨、Scorecard、DEBUG） | **CLOSED** | [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md)（90 天 M1–M3 全勾） |
 | **C** | 可用性 + 产品表 dual-track + consumer-audit 全修 | **CLOSED** | [USABILITY-SCORE.md](USABILITY-SCORE.md) · [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) |
 | **D** | **平台 steward**：回归锁、按需集成、性能可信、治理卫生 | **Steady** | 下文 §4 |
+| **E** | **Go/Rust 对标**：可证明性能 + stdlib 表面规模 + 生产路径 | **Active** | [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · 下文 §4b |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -95,7 +96,7 @@
 | D3-b | simd 表/缓冲 sized free（CO-002） | D3 | **done** 2026-07-19（mem lane 受控跨模块） |
 | D9-a | inventory 可删/可归档清单（不删代码） | — | **done** 见 [INVENTORY-AUDIT](INVENTORY-AUDIT-2026-07-17.md) |
 | D9-b | consumer unsized free / 热路径 IAllocator 只读 findings | — | **done** 见 [CONSUMER-OBSERVATION](CONSUMER-OBSERVATION-2026-07-17.md) |
-| D9-c | P-a Tier-3 prune **设计备忘**（不删代码） | D9-a | **done** 2026-07-19 见 [PRUNE-P-a-DESIGN](PRUNE-P-a-DESIGN-2026-07-19.md)；执行待总控 |
+| D9-c | P-a Tier-3 prune **设计备忘**（不删代码） | D9-a | **done** → 执行见 Era E E2 |
 
 ### 4.3 退出条件（时代 D 何时算「够稳」）
 
@@ -112,7 +113,24 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 
 ---
 
-## 5. 明确不做（时代 D 有效期内）
+## 4b. 时代 E — Go / Rust 对标（Active）
+
+**一句话**: 质量 = 契约 + 诊断 + **可对标数字**；规模 = **stdlib 表面** + **生产路径覆盖**，不是文件数。
+
+| Slice | 内容 | 状态 |
+|-------|------|------|
+| E0 | [PARITY-GO-RUST.md](PARITY-GO-RUST.md) 纲领 + 本表 | **done** 2026-07-19 |
+| E1 | 修复 `bench_arena_go_rust`；`make compare` 三语同方法论 | **done** 2026-07-19 |
+| E2 | 执行 P-a：删 10 Tier-3 allocator + 16 test | **done** 2026-07-19 |
+| E3 | SCORECARD / README 链 live compare；调查 DefaultHeap 长跑 vs system | 进行中 |
+| E4 | D3 高价值 consumer sized free | 持续 |
+| E5 | 可选 P-b 剩余 Tier-3 | 按需 |
+
+**验收**: PARITY 表 P1–P7；`make lane-focused LANE=mem` 常绿。
+
+---
+
+## 5. 明确不做（时代 D/E 有效期内）
 
 1. 新开「Phase 29：再加一打 allocator」
 2. 全仓库 unsized `FreeMem` 机械替换
@@ -120,6 +138,7 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 4. 在 mem worktree 上冲 package DTO / HIR Operands 等 **非 mem owner** 产品表
 5. raw merge 整条 `mem` 分支进 main
 6. 把 Tier-3 实验类型重新塞回门面
+7. 复活 P-a 已删单元（除非命名 consumer + 总控）
 
 跨模块真正需要动别人生产代码时：先 `Needs Review`，path-limited land，验证双方 gate。
 
@@ -166,3 +185,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-17 | D4-a Scorecard RELEASE=1 基线刷新；时代 D → **Steady** |
 | 2026-07-19 | D9-c P-a prune 设计备忘（10 allocator + 16 tests；本会话不删） |
 | 2026-07-19 | D3-b simd sized FreeMem（avx2/sse2/image/imageproc/alloc/memutils） |
+| 2026-07-19 | **Era E** 开启：PARITY-GO-RUST；E1 compare 修复；E2 P-a 执行（10+16） |

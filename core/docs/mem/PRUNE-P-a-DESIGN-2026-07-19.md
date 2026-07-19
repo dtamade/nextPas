@@ -1,10 +1,10 @@
 # P-a Tier-3 prune 设计备忘（path-limited）
 
 **日期**: 2026-07-19
-**Lane**: `mem` @ reconverge 后（`origin/main` absorbed）
-**动作**: **设计 only — 本会话不删源码、不删测试、不改 Makefile**
-**前置**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [FACADES-SURFACE.md](FACADES-SURFACE.md) · [ROADMAP.md](ROADMAP.md) D9
-**审批**: 执行真删前需总控批准 + path-limited landing 候选
+**Lane**: `mem`
+**动作**: **EXECUTED 2026-07-19（Era E / Go-Rust 规模收敛）** — 10 源 + 16 test 已删
+**前置**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [FACADES-SURFACE.md](FACADES-SURFACE.md) · [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
+**审批**: mem owner 全权（对标 Go/Rust stdlib 表面规模）
 
 ---
 
@@ -129,7 +129,7 @@ P-a 删除与 **Growing / Arena 产品路径功能重叠最重** 的 10 个 Tier
 | 项 | 状态 |
 |----|------|
 | P-a 菜单可执行性 | **就绪**（0 prod refs） |
-| 本会话是否删除 | **否** |
-| 下一步 | 总控批准后开独立 prune slice；或继续 Steady 只禁止新增长 |
+| 本会话是否删除 | **是（E2 EXECUTED）** |
+| 下一步 | P-b 按需；禁止复活 P-a 单元 |
 
 相关：D9 inventory · ROADMAP 明确不做「无 consumer 的 Phase 29+」· Steady 默认不删、批准后 path-limited 执行。
