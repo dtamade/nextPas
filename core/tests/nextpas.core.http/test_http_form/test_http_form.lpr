@@ -4,9 +4,20 @@ program test_http_form;
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.test,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
+  nextpas.core.http.base,
   nextpas.core.http.form.base,
   nextpas.core.http.form;
+
+function StringToBytes(const AStr: string): TBytes;
+begin
+  SetLength(Result, Length(AStr));
+  if Length(AStr) > 0 then
+    Move(AStr[1], Result[0], Length(AStr));
+end;
 
 procedure TestParseUrlEncodedBasic;
 var
@@ -286,6 +297,112 @@ begin
   CheckEqual('hello world', LDecoded.Files[0].Content, 'roundtrip file content');
 end;
 
+procedure TestParseMultipartFromReaderRoundtrip;
+var
+  LBody, LBoundary: string;
+  LBytes: TBytes;
+  LStream: IStream;
+  LOpts: TMultipartParseOptions;
+  LData: TMultipartFormData;
+  LPos: Int64;
+begin
+  LBoundary := 'boundary';
+  LBody :=
+    '--boundary' + #13#10 +
+    'Content-Disposition: form-data; name="username"' + #13#10 +
+    #13#10 +
+    'alice' + #13#10 +
+    '--boundary--' + #13#10;
+  LBytes := StringToBytes(LBody);
+  LStream := CreateBytesStreamFrom(LBytes);
+  LOpts := MultipartParseOptionsDefault;
+  LData := ParseMultipartFormDataFromReader(LStream as IReader, LBoundary, LOpts);
+  CheckEqual(1, LData.FieldCount, 'from-reader field count');
+  CheckEqual('alice', LData.GetField('username'), 'from-reader field value');
+  { Caller still owns the stream: position is at EOF after full read, stream usable. }
+  LPos := LStream.GetPosition;
+  CheckEqual(Int64(Length(LBytes)), LPos, 'reader fully consumed but not closed by parse');
+end;
+
+procedure TestParseMultipartFromReaderMaxBytes;
+var
+  LBody: string;
+  LBytes: TBytes;
+  LStream: IStream;
+  LOpts: TMultipartParseOptions;
+  LCaught: Boolean;
+begin
+  LBody :=
+    '--boundary' + #13#10 +
+    'Content-Disposition: form-data; name="x"' + #13#10 +
+    #13#10 +
+    'hello-world-payload' + #13#10 +
+    '--boundary--' + #13#10;
+  LBytes := StringToBytes(LBody);
+  LStream := CreateBytesStreamFrom(LBytes);
+  LOpts.MaxBytes := 8;
+  LCaught := False;
+  try
+    ParseMultipartFormDataFromReader(LStream as IReader, 'boundary', LOpts);
+    Check(False, 'oversize body must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekBody) and (E.Op = 'multipart');
+  end;
+  Check(LCaught, 'MaxBytes exceed is hekBody Op=multipart');
+end;
+
+procedure TestParseMultipartFromReaderNilAndBoundary;
+var
+  LOpts: TMultipartParseOptions;
+  LCaught: Boolean;
+  LStream: IStream;
+  LBytes: TBytes;
+begin
+  LOpts := MultipartParseOptionsDefault;
+  LCaught := False;
+  try
+    ParseMultipartFormDataFromReader(nil, 'b', LOpts);
+    Check(False, 'nil reader must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (E.Op = 'multipart');
+  end;
+  Check(LCaught, 'nil reader is hekArgument Op=multipart');
+
+  SetLength(LBytes, 0);
+  LStream := CreateBytesStreamFrom(LBytes);
+  LCaught := False;
+  try
+    ParseMultipartFormDataFromReader(LStream as IReader, '', LOpts);
+    Check(False, 'empty boundary must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (E.Op = 'multipart');
+  end;
+  Check(LCaught, 'empty boundary is hekArgument Op=multipart');
+
+  LOpts.MaxBytes := 0;
+  LCaught := False;
+  try
+    ParseMultipartFormDataFromReader(LStream as IReader, 'b', LOpts);
+    Check(False, 'MaxBytes<=0 must raise');
+  except
+    on E: EHttpError do
+      LCaught := (E.Kind = hekArgument) and (E.Op = 'multipart');
+  end;
+  Check(LCaught, 'MaxBytes<=0 is hekArgument Op=multipart');
+end;
+
+procedure TestMultipartParseOptionsDefaultValue;
+var
+  LOpts: TMultipartParseOptions;
+begin
+  LOpts := MultipartParseOptionsDefault;
+  CheckEqual(HTTP_DEFAULT_MULTIPART_MAX_BYTES, LOpts.MaxBytes,
+    'default MaxBytes is 4 MiB');
+end;
+
 var
   T: TTestSuite;
 begin
@@ -306,5 +423,9 @@ begin
   T.Test('Encode Multipart: basic', @TestEncodeMultipartBasic);
   T.Test('Encode Multipart: with file', @TestEncodeMultipartWithFile);
   T.Test('Encode Multipart: roundtrip', @TestEncodeMultipartRoundtrip);
+  T.Test('Multipart FromReader: roundtrip + caller owns stream', @TestParseMultipartFromReaderRoundtrip);
+  T.Test('Multipart FromReader: MaxBytes hekBody Op=multipart', @TestParseMultipartFromReaderMaxBytes);
+  T.Test('Multipart FromReader: nil/boundary/MaxBytes args', @TestParseMultipartFromReaderNilAndBoundary);
+  T.Test('MultipartParseOptionsDefault MaxBytes', @TestMultipartParseOptionsDefaultValue);
   if not T.Run then Halt(1);
 end.

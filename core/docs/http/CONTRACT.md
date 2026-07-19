@@ -563,6 +563,32 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 
 证据：`test_http_middlewares` SSE 套件 + `test_http_server` `Live SSE event stream`。
 
+### 4.2 Multipart bounded stream ingest（Wave Q1-2）
+
+字符串 API `ParseMultipartFormData` / `EncodeMultipartFormData` **保留不变**。  
+新增 **有界流式摄入**（非磁盘 spool、非第二套 body 家族）：
+
+| API | 行为 |
+|-----|------|
+| `MultipartParseOptionsDefault` | `MaxBytes = HTTP_DEFAULT_MULTIPART_MAX_BYTES`（4 MiB，与 server Default.MaxBodySize 对齐量级） |
+| `ParseMultipartFormDataFromReader(Reader, Boundary, Options)` | 从 `IReader` 读至多 `MaxBytes` 字节，再解析 multipart |
+
+| Ownership | 规则 |
+|-----------|------|
+| `IReader` body | **调用方拥有**；parse **不** Close reader |
+| `TMultipartFormData` | 值类型；Fields/Files 内容由调用方持有 |
+| 超限 / 失败 | 抛 `EHttpError`；已分配缓冲随异常释放 |
+
+| 错误 | Kind | Op |
+|------|------|-----|
+| nil reader / empty boundary / MaxBytes≤0 | `hekArgument` | `multipart` |
+| body 超过 MaxBytes | `hekBody` | `multipart` |
+| 读路径其它失败 | `hekProtocol`（包装） | `multipart` |
+
+**诚实限制**：解析结果仍将 part 内容放入 `string` / `THttpFile.Content`（与既有模型一致）；**不是**零拷贝磁盘 spool。`PostMultipart` / `EncodeMultipartFormData` 仍为内存编码。大上传请显式设 `MaxBytes` 并在 handler 侧配合 server `MaxBodySize`。
+
+证据：`test_http_form` FromReader 套件。
+
 ---
 
 ## 5. 协议策略
