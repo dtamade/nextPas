@@ -78,7 +78,10 @@ type
   IHttpServer = nextpas.core.http.intf.IHttpServer;
   IHttpClient = nextpas.core.http.intf.IHttpClient;
   IHttpTransport = nextpas.core.http.intf.IHttpTransport;
+  IHttpTransportMultiplex = nextpas.core.http.intf.IHttpTransportMultiplex;
   IHttpTransportIdleConnections = nextpas.core.http.intf.IHttpTransportIdleConnections;
+  THttpResponseArray = nextpas.core.http.intf.THttpResponseArray;
+  THttpRequestArray = nextpas.core.http.intf.THttpRequestArray;
   IHttpServerTransport = nextpas.core.http.intf.IHttpServerTransport;
   ITcpServerSession = nextpas.core.http.intf.ITcpServerSession;
   ITcpServerSessionContext = nextpas.core.http.intf.ITcpServerSessionContext;

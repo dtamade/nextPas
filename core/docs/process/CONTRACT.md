@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：2.7
+**版本**：2.9
 
 ---
 
@@ -63,7 +63,11 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 - **[INV-10]** 未设置 `MaxOutput`（默认 0）时 `Run`/`Capture*`/`Output` 可耗尽内存；生产请显式 `.MaxOutput(N)`（非 bug）
 - **[INV-11]** `MergeStderr` / `Capture*Combined`：子进程 stderr→stdout 同管道；合并流在 `StdOut`，`StdErr` 为空（时间交错，对齐 Go CombinedOutput）。**要求** `Stdout(stPiped)`（`.Output` / `Capture*Combined` 会强制）；非 piped 时 `Spawn` 抛 `EProcessError`。stdout piped 时 Merge 覆盖 `Stderr(stPiped/stInherit)`；与 `Stderr(stNull)` 冲突时 `Spawn` 抛 `EProcessError`。
 - **[INV-12]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.process*` 源码与 process 测试套件不得 `uses` 裸 FPC RTL 单元（SysUtils/Classes/BaseUnix/Unix/Windows/…）；OS 能力仅经 `nextpas.core.platform.*` / 其他 core 模块。仅 `nextpas.core.system` 允许直接引用 FPC RTL。门禁：真实 uses 子句扫描（多行/末位单元），见 `core/tests/fpc_rtl_uses_scan.inc`。
-- **[INV-13]** **管道与 Wait**：`IChild` 仍持有 stdout/stderr 时，`Wait` **自动**走 `WaitWithOutput` 排水，避免管道写满死锁。`TakeStdout`/`TakeStderr` 后由调用方排水。`Destroy`：尽力 Kill+reap（约 5s 上限），超时 abandon 再 detach，**不保证**零僵尸。
+- **[INV-13]** **管道与 Wait/TryWait**：`IChild` 仍持有 stdout/stderr 时：
+  - `Wait` → **`WaitWithOutput`**（边 drain 边 reap），避免写满死锁与输出丢失；
+  - `TryWait`：`platform_process_try_wait` **已 reap** 后若仍持管道 → **仅 `DrainPipePair`**，用已有结果 `FinishWaitResult`；**禁止**再 `WaitWithOutput`/二次 wait（否则 ECHILD）。
+  - `TakeStdout`/`TakeStderr` 后由调用方排水，再 `Wait`/`TryWait`。
+  - `Destroy`：尽力 Kill+reap（约 5s 上限），超时 abandon 再 detach，**不保证**零僵尸。
 
 ---
 
@@ -101,7 +105,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_process | 277 | API 全覆盖 + ProcessSucceeded/MaxOutput/MergeStderr + Wait 自动排水 + FPC RTL 门禁 |
+| test_process | 281 | API 全覆盖 + Wait/TryWait 排水 + MergeStderr + FPC RTL 门禁 |
 | test_process_command | 48 | ICommand builder |
 | test_process_deep | 20 | timeout/large output |
 | test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |
@@ -123,3 +127,5 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.5 | INV-12 FPC RTL 隔离；测试去 SysUtils/Classes；EINTR 测改 ThreadPool | Claude |
 | 2026-07-19 | 2.6 | 真 uses 门禁 + MergeStderr/stNull 冲突；共享 fpc_rtl_uses_scan.inc | Claude |
 | 2026-07-19 | 2.7 | INV-13 Wait 自动排水；MergeStderr 强制 piped；Destroy 5s 写实；测试数口径 | Claude |
+| 2026-07-19 | 2.8 | INV-13 TryWait 持管道排水；Take* 责任钉死 | Claude |
+| 2026-07-19 | 2.9 | INV-13 钉死 TryWait=drain-only（非 WaitWithOutput） | Claude |

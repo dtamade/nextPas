@@ -32,6 +32,7 @@ interface
 uses
   nextpas.core.system,
   nextpas.core.text.conv,
+  nextpas.core.platform.thread,
   nextpas.core.test.base;
 
 { ── Typed Mock Values ──────────────────────────────────────────────────────── }
@@ -156,6 +157,8 @@ type
     FCallOrder: specialize TArray<string>;  { records method names in call order }
     FWhenEntries: specialize TArray<TMockWhenEntry>; { E-09: conditional returns }
     FWhenMethodNames: specialize TArray<string>; { methods configured only via When }
+    FOwnerThreadId: UInt64; { thread that created this mock; 0 = not yet assigned }
+    procedure CheckThread(const AMethod: string);
     procedure AppendCall(const ACall: TMockCall; const AMethodName: string);
     procedure AppendSetup(const ASetup: TMockCall);
     procedure SetTypedReturnValue(const AMethodName: string;
@@ -513,13 +516,11 @@ end;
 procedure RecordOrder(var AOrder: specialize TArray<string>;
   const AName: string);
 var
-  LOldLen, LCap: Integer;
+  LOldLen: Integer;
 begin
   LOldLen := Length(AOrder);
-  LCap := GrowCapacity(LOldLen, 16);
-  if LCap > LOldLen then SetLength(AOrder, LCap);
-  AOrder[LOldLen] := AName;
   SetLength(AOrder, LOldLen + 1);
+  AOrder[LOldLen] := AName;
 end;
 
 function FindSetupIndex(const ASetups: specialize TArray<TMockCall>;
@@ -542,6 +543,19 @@ begin
   FSetups := nil;
   FCallOrder := nil;
   FWhenMethodNames := nil;
+  FOwnerThreadId := 0; { assigned on first access }
+end;
+
+procedure TMockState.CheckThread(const AMethod: string);
+var
+  LCurrent: UInt64;
+begin
+  LCurrent := platform_thread_id;
+  if FOwnerThreadId = 0 then
+    FOwnerThreadId := LCurrent
+  else if LCurrent <> FOwnerThreadId then
+    InternalFail('TMock.' + AMethod + ': not thread-safe (created on thread ' +
+      UIntToStr(FOwnerThreadId) + ', called from ' + UIntToStr(LCurrent) + ')');
 end;
 
 destructor TMockState.Destroy;
@@ -557,25 +571,21 @@ end;
 procedure TMockState.AppendCall(const ACall: TMockCall;
   const AMethodName: string);
 var
-  LOldLen, LCap: Integer;
+  LOldLen: Integer;
 begin
   LOldLen := Length(FCalls);
-  LCap := GrowCapacity(LOldLen, 16);
-  if LCap > LOldLen then SetLength(FCalls, LCap);
-  FCalls[LOldLen] := ACall;
   SetLength(FCalls, LOldLen + 1);
+  FCalls[LOldLen] := ACall;
   RecordOrder(FCallOrder, AMethodName);
 end;
 
 procedure TMockState.AppendSetup(const ASetup: TMockCall);
 var
-  LOldLen, LCap: Integer;
+  LOldLen: Integer;
 begin
   LOldLen := Length(FSetups);
-  LCap := GrowCapacity(LOldLen, 4);
-  if LCap > LOldLen then SetLength(FSetups, LCap);
-  FSetups[LOldLen] := ASetup;
   SetLength(FSetups, LOldLen + 1);
+  FSetups[LOldLen] := ASetup;
 end;
 
 procedure TMockState.RecordCall(const AMethodName: string;
@@ -584,6 +594,7 @@ var
   LCall: TMockCall;
   I: Integer;
 begin
+  CheckThread('RecordCall');
   InitCallRecord(LCall, AMethodName);
   SetLength(LCall.Args, Length(AArgs));
   SetLength(LCall.TypedArgs, Length(AArgs));
@@ -591,7 +602,7 @@ begin
   begin
     LCall.Args[I] := AArgs[I];
     LCall.TypedArgs[I] := MockStr(AArgs[I]);
-    LCall.ArgHash := LCall.ArgHash * 31 + Length(AArgs[I]);
+    LCall.ArgHash := LCall.ArgHash * 31 + MockValueHash(LCall.TypedArgs[I]);
   end;
   AppendCall(LCall, AMethodName);
 end;
@@ -618,6 +629,7 @@ function TMockState.GetReturn(const AMethodName: string): string;
 var
   I: Integer;
 begin
+  CheckThread('GetReturn');
   for I := High(FSetups) downto 0 do
   begin
     if FSetups[I].MethodName = AMethodName then
@@ -751,7 +763,7 @@ procedure TMockState.AddWhenEntry(const AMethodName: string;
   const AReturnStr: string);
 var
   LEntry: TMockWhenEntry;
-  LOldLen, LCap, I: Integer;
+  LOldLen, I: Integer;
 begin
   LEntry.MethodName := AMethodName;
   SetLength(LEntry.Args, Length(AArgs));
@@ -761,10 +773,8 @@ begin
   LEntry.HasReturn := True;
   LEntry.ReturnStr := AReturnStr;
   LOldLen := Length(FWhenEntries);
-  LCap := GrowCapacity(LOldLen, 4);
-  if LCap > LOldLen then SetLength(FWhenEntries, LCap);
-  FWhenEntries[LOldLen] := LEntry;
   SetLength(FWhenEntries, LOldLen + 1);
+  FWhenEntries[LOldLen] := LEntry;
   TrackWhenMethod(AMethodName);
 end;
 
@@ -810,6 +820,7 @@ function TMockState.CallCount(const AMethodName: string): Integer;
 var
   I: Integer;
 begin
+  CheckThread('CallCount');
   Result := 0;
   for I := 0 to High(FCalls) do
     if FCalls[I].MethodName = AMethodName then
@@ -827,7 +838,7 @@ begin
     Reduces common case from O(n*m) to O(n) when args differ. }
   LHash := 0;
   for J := 0 to High(AArgs) do
-    LHash := LHash * 31 + Length(AArgs[J]);
+    LHash := LHash * 31 + MockValueHash(MockStr(AArgs[J]));
   for I := 0 to High(FCalls) do
   begin
     if FCalls[I].MethodName <> AMethodName then

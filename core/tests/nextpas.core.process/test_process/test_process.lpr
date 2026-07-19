@@ -606,6 +606,30 @@ begin
   Check('Wait inherit — stdout empty (not drained inherit)', LOut.StdOut = '');
 end;
 
+procedure TestTryWaitDrainsOwnedPipes;
+var
+  LChild: IChild;
+  LOut, LAgain: TProcessOutput;
+  LDone: Boolean;
+  I: Integer;
+begin
+  LChild := Command('/bin/echo').Arg('trywait-drain').Stdout(stPiped).Spawn;
+  LDone := False;
+  for I := 1 to 200 do
+  begin
+    LDone := LChild.TryWait(LOut);
+    if LDone then
+      Break;
+    platform_thread_sleep_ms(10);
+  end;
+  Check('TryWait drain — completed', LDone);
+  Check('TryWait drain — exited', LOut.Status = psExited);
+  Check('TryWait drain — captured stdout', Pos('trywait-drain', LOut.StdOut) > 0);
+  LAgain := LChild.Wait;
+  Check('TryWait drain — Wait repeats same stdout',
+    Pos('trywait-drain', LAgain.StdOut) > 0);
+end;
+
 procedure TestSpawnStdinPipe;
 var
   LChild: IChild;
@@ -1542,6 +1566,7 @@ begin
   TestMergeStderrRequiresStdoutPiped;
   TestWaitAutoDrainsOwnedPipes;
   TestWaitWithoutPipesLeavesStdoutEmpty;
+  TestTryWaitDrainsOwnedPipes;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;

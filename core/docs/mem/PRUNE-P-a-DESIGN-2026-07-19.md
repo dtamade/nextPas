@@ -1,16 +1,16 @@
 # P-a Tier-3 prune 设计备忘（path-limited）
 
-**日期**: 2026-07-19  
-**Lane**: `mem` @ reconverge 后（`origin/main` absorbed）  
-**动作**: **设计 only — 本会话不删源码、不删测试、不改 Makefile**  
-**前置**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [FACADES-SURFACE.md](FACADES-SURFACE.md) · [ROADMAP.md](ROADMAP.md) D9  
+**日期**: 2026-07-19
+**Lane**: `mem` @ reconverge 后（`origin/main` absorbed）
+**动作**: **设计 only — 本会话不删源码、不删测试、不改 Makefile**
+**前置**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [FACADES-SURFACE.md](FACADES-SURFACE.md) · [ROADMAP.md](ROADMAP.md) D9
 **审批**: 执行真删前需总控批准 + path-limited landing 候选
 
 ---
 
 ## 1. 一句话
 
-P-a 删除与 **Growing / Arena 产品路径功能重叠最重** 的 10 个 Tier-3 `allocator.*` 实验单元及其专属测试目录。  
+P-a 删除与 **Growing / Arena 产品路径功能重叠最重** 的 10 个 Tier-3 `allocator.*` 实验单元及其专属测试目录。
 重扫（2026-07-19）确认：**0 个 `core/src` 非 mem 产品引用**；门面 **无** re-export。
 
 ---
@@ -49,8 +49,8 @@ P-a 删除与 **Growing / Arena 产品路径功能重叠最重** 的 10 个 Tier
 
 方法：对每个目标单元名，扫描 `core/src/*.pas`：
 
-- **non-mem prod refs** = 文件名不以 `nextpas.core.mem` 开头且含单元全名  
-- **facade** = `nextpas.core.mem.pas` uses 是否出现  
+- **non-mem prod refs** = 文件名不以 `nextpas.core.mem` 开头且含单元全名
+- **facade** = `nextpas.core.mem.pas` uses 是否出现
 - **bench** = `core/benchmarks` / 根 `bench` 文本引用
 
 | 单元 | non-mem | facade | bench 命中 |
@@ -115,11 +115,11 @@ P-a 删除与 **Growing / Arena 产品路径功能重叠最重** 的 10 个 Tier
 
 ## 6. 验收标准（执行批）
 
-- [ ] 10 源 + 16 test 目录从树中消失  
-- [ ] `rg 'allocator\.(bump|dual|freelist|thread_cache|size_class|slab|arena2|arena_group|page|stack)' core/src` 无残留（除文档/archive）  
-- [ ] `make hygiene` + lane-focused + contract_matrix **PASS**  
-- [ ] Growing / Arena / FixedSlab 抽样 **PASS**  
-- [ ] FACADES / ARCHITECTURE 同步  
+- [ ] 10 源 + 16 test 目录从树中消失
+- [ ] `rg 'allocator\.(bump|dual|freelist|thread_cache|size_class|slab|arena2|arena_group|page|stack)' core/src` 无残留（除文档/archive）
+- [ ] `make hygiene` + lane-focused + contract_matrix **PASS**
+- [ ] Growing / Arena / FixedSlab 抽样 **PASS**
+- [ ] FACADES / ARCHITECTURE 同步
 - [ ] Ready 报告：path-limited 文件清单 + 明确「未动门面 Tier-2」
 
 ---

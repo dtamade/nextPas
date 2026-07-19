@@ -18,7 +18,8 @@ type
    *
    * @note Destroy：尽力 Kill + reap（最长约 5s）；超时则 abandon 再 detach，不保证无僵尸
    * @note Wait：若 IChild 仍持有 stdout/stderr 管道，自动走 WaitWithOutput 排水，避免管道写满死锁
-   * @note TakeStdout/TakeStderr 后由调用方排水；裸 Wait 不再负责已取走的端
+   * @note TryWait：进程已退出且仍持有管道时同样排水（与 Wait 一致，避免输出丢失）
+   * @note TakeStdout/TakeStderr 后由调用方排水；裸 Wait/TryWait 不再负责已取走的端
    * @note 捕获输出优先 WaitWithOutput；大输出请 Take* 流式读
    *}
   {** @note 非线程安全。IChild 的所有方法必须在同一线程调用 *}
@@ -26,7 +27,7 @@ type
     ['{A1B2C3D4-E5F6-7890-AB01-000000000001}']
     {** 阻塞等待子进程退出。仍持有管道时自动排水（等同 WaitWithOutput） *}
     function Wait: TProcessOutput;
-    {** 非阻塞检查子进程是否已退出。返回 False 表示仍在运行 *}
+    {** 非阻塞检查。已退出且仍持有管道时**仅排水**后返回 True（不二次 wait） *}
     function TryWait(out AOutput: TProcessOutput): Boolean;
     {** 放弃对子进程生命周期的管理，让子进程在句柄释放后继续运行。
      *    适用于 launcher 这类父进程即将退出的场景，不提供长期 daemon reaping 语义。 *}
@@ -253,6 +254,9 @@ function TChild.TryWait(out AOutput: TProcessOutput): Boolean;
 var
   LResult: TPlatformProcessResult;
   LErr: Int32;
+  LStdoutClosed, LStderrClosed: Boolean;
+  LLimited: Boolean;
+  LStdOut, LStdErr: string;
 begin
   if FWaited then
   begin
@@ -272,6 +276,28 @@ begin
     RaiseProcessPlatformError('platform_process_try_wait', LErr);
   if LResult.Status = nextpas.core.platform.process.base.psRunning then
     Exit(False);
+  { Process already reaped by try_wait. Still owning pipes → drain only
+    (do NOT call WaitWithOutput — second wait would ECHILD). INV-13. }
+  if (FStdoutReader <> nil) or (FStderrReader <> nil) then
+  begin
+    CloseWriterBestEffort(FStdinWriter);
+    LStdOut := '';
+    LStdErr := '';
+    LLimited := False;
+    LStdoutClosed := FStdoutReader = nil;
+    LStderrClosed := FStderrReader = nil;
+    while not (LStdoutClosed and LStderrClosed) do
+    begin
+      DrainPipePair(FStdoutReader, FStderrReader, 10, LStdOut, LStdErr,
+        LStdoutClosed, LStderrClosed, FMaxOutput, LLimited);
+      if LLimited then
+        Break;
+    end;
+    FStdoutReader := nil;
+    FStderrReader := nil;
+    AOutput := FinishWaitResult(LResult, LStdOut, LStdErr, False, LLimited);
+    Exit(True);
+  end;
   AOutput := FinishWaitResult(LResult, '', '');
   Result := True;
 end;

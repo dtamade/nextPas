@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-17 (Era 6 Excellence Done X0–X5; Era 7 residual Done; framework-complete non-H3 retained)
+> Last updated: 2026-07-19 (Era 8 Inbox depth Done I0–I3; NEXT → ROADMAP only — Era 8 STOP; framework-complete non-H3 retained)
 > Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — ordered Eras/Waves, Goal Loop, Inbox. This file is north star + stage truth, **not** a day-to-day backlog.
@@ -28,9 +28,10 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **framework-complete (non-H3)** | **yes** — Era 0–4 默认路径 landed |
 | **Excellence (Era 6)** | **Done** — X0–X5 landed（WS/cancel/IdleTTL/TLS residual/equal-fold+comparator）；H3 仍 Blocked |
 | **Residual (Era 7)** | **Done** — R1 hang；R2 dig→R4 清零 HTTPS 1×41B（capabilities cache）；R3 Windows cancel probe-only only |
+| **Inbox depth (Era 8)** | **Done** — I0–I3 landed（pool health / WS deflate / H2 multiplex）；H3 仍 Blocked |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | ~35 focused suites |
-| **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名；当前 STOP） |
+| **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
 
 四支柱、推荐路径、Done when、Gates、Inbox 均只在 ROADMAP 维护。
 
@@ -270,12 +271,12 @@ H3 is blocked on the QUIC module. Only `nextpas.core.tls.quic.crypto.pas` (QUIC 
 
 Static serving remains a helper-level public surface with tight range/conditional/stream contracts already landed.
 
-WebSocket is a **production-intended helper**: RFC framing coverage is already strong; Era 6 Wave X1 graduates it via **lifecycle contract + cancel/ownership evidence**, not by growing extension negotiation APIs.
+WebSocket is a **production-intended helper**: RFC framing coverage is already strong; Era 6 Wave X1 graduates lifecycle/cancel/ownership; Era 8 Wave I2 adds opt-in RFC 7692 permessage-deflate (no_context_takeover only).
 
 Graduation rules:
 
 - static: do not grow into a broader service family without a stable multi-feature contract
-- WebSocket: no new option families / permessage-deflate / subprotocol stacks without real consumer demand and ownership story
+- WebSocket: no subprotocol stacks / extra extension families beyond I2 permessage-deflate without real consumer demand
 - more negative-case tests alone are not progress unless they close a real behavior gap
 - WS-over-H2 stays parked until a real consumer
 

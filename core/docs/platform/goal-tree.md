@@ -7,11 +7,10 @@ Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
-- **Windows x86_64**: durable **`ci-matrix`** for documented 17-gate set on GHA
-  `test-windows-runtime` (14 wine-suite dirs + poller/io/socket real); Wine
-  runtime smoke secondary (now **15** matrix modules including `platform.error`).
-  Windows script lists **18-gate candidate** (+error) pending durable GHA green
-  before promote claims. Outside matrix: deeper AcceptEx/ConnectEx; signal is
+- **Windows x86_64**: durable **`ci-matrix`** for documented **18-gate** set on GHA
+  `test-windows-runtime` (**18** promoted; **19-gate candidate** with `platform.fmt`
+  pending GHA); Wine runtime smoke secondary (**16** matrix modules, +error +fmt).
+  Outside matrix: deeper AcceptEx/ConnectEx; signal is
   forced-compile/source-contract only; secure-zero is permanent FillChar+barrier.
   Forced Windows compile gates remain the compile-coherence boundary; remaining
   modules outside the documented set still need real-Windows runtime proof.
@@ -26,7 +25,7 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
-| Windows x86_64 | **ci-matrix** 17-gate set; wine 15-module secondary; 18-gate Windows script candidate | GHA green for +error then promote; keep wine green |
+| Windows x86_64 | **ci-matrix** 18-gate set; wine 16-module secondary; 19-gate (+fmt) candidate | GHA green for +fmt then promote; keep wine green |
 | macOS | **focused-runtime** 8-gate set (D2.c) | keep GHA matrix green |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
@@ -49,16 +48,17 @@ Focused runtime gates use heaptrc for leak-proof validation.
 
 ## Windows matrix evidence
 
-**Wine smoke** (Win64 PE under Wine; secondary; **15** matrix modules): time,
+**Wine smoke** (Win64 PE under Wine; secondary; **16** matrix modules): time,
 memory, sync, thread, io, process, files, fs, path, env, mmap, random, socket,
-error, io.reactor.iocp. Suites exist but are not matrix-gated yet: dl, pipe,
-fmt, info, which. Not covered: signal, console, args, freetype/net, pty.
+error, fmt, io.reactor.iocp. Suites exist but are not matrix-gated yet: dl, pipe,
+info, which. Not covered: signal, console, args, freetype/net, pty.
 
-**Real Windows ci-matrix (17 promoted; 18-gate script candidate)**: time, memory,
-sync, thread, io, process, files, fs, path, env, mmap, random, socket, error
-(candidate), io.reactor.iocp, poller.windows_runtime_smoke,
-platform.io.windows_real, platform.socket.windows_real. Promote 18 only after
-durable GHA `test-windows-runtime` green. Not full-host parity outside that list.
+**Real Windows ci-matrix (18 promoted; 19-gate script candidate +fmt)**: time,
+memory, sync, thread, io, process, files, fs, path, env, mmap, random, socket,
+error, fmt (candidate), io.reactor.iocp, poller.windows_runtime_smoke,
+platform.io.windows_real, platform.socket.windows_real. Promote 19 only after
+durable GHA green for +fmt. 18-gate evidence: run 29683362919 @ `4b831227f`.
+Not full-host parity outside that list.
 
 ## IOCP / readiness boundary
 

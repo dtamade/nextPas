@@ -62,6 +62,12 @@ begin Result := nextpas.core.test.helpers.MakeBufferConfig(ASink); end;
 procedure WithTempDir(AProc: TTempDirProc);
 begin nextpas.core.test.helpers.WithTempDir(AProc); end;
 
+function IntOverflowCheck(AValue: Int64; const AOp: string;
+  AOperand: Int64): Boolean;
+begin
+  Result := nextpas.core.test.helpers.IntOverflowCheck(AValue, AOp, AOperand);
+end;
+
 { ── Forward to test.prop ──────────────────────────────────────────────────── }
 
 function GenString(AMinLen, AMaxLen: Integer): IStringGenerator;

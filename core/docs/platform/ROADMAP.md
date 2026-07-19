@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **D1.d done**: documented 17-gate set is `truth=ci-matrix` (pass=17 on `windows-latest`; wine still green). **+error expand**: wine matrix 15; Windows script 18-gate candidate pending GHA |
+| Real Windows GHA | **18-gate `ci-matrix` promoted** (pass=18 on `windows-latest`, run 29683362919 @ `4b831227f`; wine 16 secondary; 19-gate +fmt candidate) |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -67,7 +67,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 
 | Gap | Severity | Notes |
 |-----|----------|--------|
-| Windows beyond documented 17-gate set | **P1** | Full AcceptEx-ConnectEx depth / modules outside 17-gate not in matrix |
+| Windows beyond documented 18-gate set | **P1** | Full AcceptEx-ConnectEx depth / modules outside 18-gate not in matrix |
 | macOS beyond documented 8-gate set | **P1** | D2.c done for listed modules only; full-host parity not claimed |
 | `platform.signal` Win64 runtime delivery | **P2** | D3.a: forced-compile + contract green; wine runtime not matrix (console Ctrl handler) |
 | Windows secure-zero native export | **P2** | D3.b closed: permanent FillChar+barrier; no stable DLL export across Wine+real Windows |
@@ -82,7 +82,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Host | Current tier | Next honest claim |
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
-| Windows x86_64 | **`ci-matrix` for documented 17-gate set** + wine 15-module secondary; 18-gate script candidate (+error) | GHA green for +error then promote; keep wine green |
+| Windows x86_64 | **`ci-matrix` for documented 18-gate set** + wine 16-module secondary; 19-gate (+fmt) candidate | GHA green for +fmt then promote; keep wine green |
 | macOS | **`focused-runtime` for documented 8-gate set** (D2.c); inventory via best-effort | keep matrix green; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
@@ -139,12 +139,12 @@ Do not start a later phase’s promotion claims until earlier phase exit criteri
 | 4 wine green | local `platform-wine-ci-matrix.sh` pass=14 fail=0 skip=0 |
 | 5 log language | scripts print `truth=ci-matrix; … scope=documented-17-gate-set` |
 
-**Documented superseding gate list (ci-matrix scope):**
-`platform.{time,memory,sync,thread,io,process,files,fs,path,env,mmap,random,socket}`,
+**Documented superseding gate list (ci-matrix scope, 18 after 2026-07-19 promote):**
+`platform.{time,memory,sync,thread,io,process,files,fs,path,env,mmap,random,socket,error}`,
 `io.reactor.iocp`, `poller.windows_runtime_smoke`, `platform.io.windows_real`,
 `platform.socket.windows_real`.
 
-**Not claimed by D1.d:** full-host Windows parity; modules outside the list (e.g. signal, console, secure-zero native); AcceptEx/ConnectEx beyond existing smoke gaps.
+**Not claimed:** full-host Windows parity; modules outside the list (e.g. signal, console, secure-zero native); AcceptEx/ConnectEx beyond existing smoke gaps.
 
 **Non-goals for D1:** macOS promotion; dual-IO removal; F7 mapping rewrite.
 
@@ -263,7 +263,7 @@ Optional readiness inventory (not a promotion):
 ## 5. Default execution queue (after confirmation)
 
 1. **D0** done.
-2. **D1.a–D1.d** done for documented 17-gate Windows `ci-matrix` set; keep wine + GHA green.
+2. **D1.a–D1.d** done; **18-gate Windows `ci-matrix`** promoted (2026-07-19); keep wine + GHA green.
 3. **D2.a–D2.c** done for documented 8-gate macOS `focused-runtime` set; keep GHA matrix green.
 4. **D3.a–D3.d** done (signal compile, secure-zero permanent fallback, dual-IO owner-only, freetype stay); D3.e remains Won't.
 5. **D4/D5** opportunistic / owner-gated.
@@ -293,6 +293,9 @@ Optional readiness inventory (not a promotion):
 | 2026-07-17 | **D3.d done**: freetype stays under platform as optional host binding; move-out requires separate owner lane. |
 | 2026-07-17 | **D3.e**: F7/F9/F10 remain Won't unless consumer pain forces reopen. |
 | 2026-07-19 | Expand matrix: add `platform.error` to wine matrix (14→15) and Windows scripts (17→18 candidate). Local wine single-gate + full matrix evidence required; do **not** promote 18-gate `ci-matrix` until GHA `test-windows-runtime` durable green. Fix goal-tree contract tokens + wine list honesty (dl/pipe/fmt/info/which suite-exists-not-gated). |
+| 2026-07-19 | **fix(io)**: Windows-safe `TPoller.AsyncReadv`/`AsyncWritev` (empty-case after IFDEF strip). Unblocks GHA `poller.windows_runtime_smoke`. Landed `4b831227f`. |
+| 2026-07-19 | **18-gate `ci-matrix` promoted**: GHA `test-windows-runtime` pass=18 fail=0 (run 29683362919 @ `4b831227f`); includes `platform.error`. Not full-host Windows parity. |
+| 2026-07-19 | Expand matrix: add `platform.fmt` to wine (15→16) and Windows scripts (18→19 candidate). Local wine evidence required; promote 19 only after GHA green. |
 
 ---
 

@@ -16,12 +16,12 @@
 | `PathNormalize` | `PathClean`（互为别名） | path / fs |
 | `PathJoin(a,b)` / `PathJoinN` | fs：`PathJoin2` / `PathJoin(array)` / `PathJoin3` | path / fs |
 | `PathBase` | 含扩展名；= `ExtractFileName` | path / fs |
-| `PathDir`（门面） | 裸文件名 → **空串**（SysUtils） | path / `fs.PathDir` |
+| `PathDir`（门面） | 裸文件名 → **空串**；`./x` → **`.`** | path / `fs.PathDir` |
 | `FsPathDir`（底层） | 裸文件名 → **`.`**（Go/platform） | `fs.path` only |
 
 - **仅需路径字符串操作**：优先 `uses nextpas.core.path`（`PathJoin` 为二元）。
 - **已依赖 fs**：用 `PathJoin([...])` 或 `PathJoin2`；不要假设 fs 的 `PathJoin` 是二元。
-- **PathDir 对照**：`path.PathDir` / `fs.PathDir` 对齐 SysUtils（`file.txt` → `''`）；需要 Go 语义时用 `FsPathDir`（`file.txt` → `'.'`）。
+- **PathDir 对照**：仅当路径**无** `/` `\` 分隔符时，门面把 `FsPathDir` 的 `'.'` 压成空串（`file.txt`→`''`）；`./x` 保留 `'.'`。底层 `FsPathDir` 始终 Go 语义。
 - **ExpandFileName / PathAbs**：解析绝对路径时依赖 **当前工作目录**，不是纯字符串函数。
 - 新代码不要再发明第三套命名。
 

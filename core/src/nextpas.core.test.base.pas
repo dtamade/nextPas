@@ -317,16 +317,11 @@ end;
 procedure AppendResult(var AResults: specialize TArray<TTestResult>;
   const AResult: TTestResult);
 var
-  LOldLen, LNewLen, LCap: Integer;
+  LOldLen: Integer;
 begin
   LOldLen := Length(AResults);
-  LCap := GrowCapacity(LOldLen, 16);
-  if LCap > LOldLen then
-    SetLength(AResults, LCap);
+  SetLength(AResults, LOldLen + 1);
   AResults[LOldLen] := AResult;
-  LNewLen := LOldLen + 1;
-  if LNewLen <> LCap then
-    SetLength(AResults, LNewLen);
 end;
 
 function GetTopSlowest(const AResults: TTestResults;
@@ -536,14 +531,11 @@ end;
 procedure RegisterEntry(var AEntries: specialize TArray<TTestEntry>;
   const AEntry: TTestEntry);
 var
-  LOldLen, LCap: Integer;
+  LOldLen: Integer;
 begin
   LOldLen := Length(AEntries);
-  LCap := GrowCapacity(LOldLen, 16);
-  if LCap > LOldLen then
-    SetLength(AEntries, LCap);
-  AEntries[LOldLen] := AEntry;
   SetLength(AEntries, LOldLen + 1);
+  AEntries[LOldLen] := AEntry;
 end;
 
 procedure CopyTags(out ATags: specialize TArray<string>;
@@ -567,13 +559,9 @@ begin
 end;
 
 function GrowCleanups(var ACleanups: specialize TArray<TTestClosure>): Integer;
-var
-  LOldLen, LCap: Integer;
 begin
-  LOldLen := Length(ACleanups);
-  LCap := GrowCapacity(LOldLen, 4);
-  if LCap > LOldLen then SetLength(ACleanups, LCap);
-  Result := LOldLen;
+  Result := Length(ACleanups);
+  SetLength(ACleanups, Result + 1);
 end;
 
 procedure RunShouldFailEntry(const AEntry: TTestEntry;

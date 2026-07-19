@@ -157,7 +157,13 @@ type
     destructor Destroy; override;
     function Handshake: Boolean;
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    { Same-connection multiplex: open concurrent streams, demux responses
+      in request order. Does not change serial RoundTrip semantics. }
+    function RoundTripMany(const AReqs: array of IHttpRequest): THttpResponseArray;
     function IsReusable: Boolean;
+    { Active liveness probe for pool borrow: PING/ACK when PingTimeout > 0.
+      Must not be called while holding the transport pool lock. }
+    function ProbeHealth: Boolean;
     { Wire/clear IHttpCancelToken for mid-read/write cancel slices on FConn. }
     procedure ApplyCancelToken(const AToken: IHttpCancelToken);
     procedure ClearCancelToken;
@@ -167,7 +173,7 @@ type
   end;
 
   TH2ClientTransport = class(TInterfacedObject, IHttpTransport,
-    IHttpTransportIdleConnections)
+    IHttpTransportMultiplex, IHttpTransportIdleConnections)
   private type
     TH2PoolEntry = record
       Host: string;
@@ -191,10 +197,16 @@ type
       const AConn: TH2ClientConnection);
     procedure PoolClear;
     function SecureClientContext: ISSLContext;
+    function AcquireConnection(const AHost: string; const APort: UInt16;
+      const ASecure: Boolean; out APooled: Boolean): TH2ClientConnection;
+    procedure ReleaseConnection(const AHost: string; const APort: UInt16;
+      const ASecure: Boolean; const AConn: TH2ClientConnection;
+      const AReqHeaders: IHttpHeaders);
   public
     constructor Create(const AOptions: TH2ClientTransportOptions);
     destructor Destroy; override;
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    function RoundTripMany(const AReqs: array of IHttpRequest): THttpResponseArray;
     procedure CloseIdleConnections;
   end;
 
@@ -1496,10 +1508,246 @@ begin
   end;
 end;
 
+function TH2ClientConnection.RoundTripMany(
+  const AReqs: array of IHttpRequest): THttpResponseArray;
+var
+  LCount: SizeInt;
+  LI: SizeInt;
+  LStreamIDs: array of UInt32;
+  LResponses: array of TH2ResponseState;
+  LFinished: array of Boolean;
+  LStreamIndex: SizeInt;
+  LRespIndex: SizeInt;
+  LHasBody: Boolean;
+  LFrame: TH2Frame;
+  LWasActive: Boolean;
+  LDone: SizeInt;
+  LDummyFlow: TH2StreamFlowControl;
+  LDummyResp: TH2ResponseState;
+  LMaxConc: UInt32;
+begin
+  Result := nil;
+  LCount := Length(AReqs);
+  SetLength(Result, LCount);
+  if LCount = 0 then
+    Exit;
+
+  for LI := 0 to LCount - 1 do
+  begin
+    if AReqs[LI] = nil then
+      raise EHttpError.Create(hekArgument, 'h2 RoundTripMany requires request');
+    if AReqs[LI].Headers = nil then
+      raise EHttpError.Create(hekArgument,
+        'h2 RoundTripMany requires request headers');
+    if (AReqs[LI].Body <> nil) and (AReqs[LI].ContentLength < 0) then
+      raise EHttpError.Create(hekArgument,
+        'HTTP/2 client does not support chunked/unknown-length request bodies');
+  end;
+
+  LWasActive := FState = h2ccsActive;
+  if LWasActive then
+    ApplyDeadline;
+  if not Handshake then
+    raise EHttpError.Create(hekProtocol, 'HTTP/2 client handshake failed');
+  if not LWasActive then
+    ApplyDeadline;
+  EnsureActive;
+
+  LMaxConc := FRemoteSettings.MaxConcurrentStreams;
+  if (LMaxConc > 0) and (UInt32(LCount) > LMaxConc) then
+    raise EHttpError.Create(hekArgument,
+      'HTTP/2 RoundTripMany exceeds peer MaxConcurrentStreams');
+
+  SetLength(LStreamIDs, LCount);
+  SetLength(LResponses, LCount);
+  SetLength(LFinished, LCount);
+  for LI := 0 to LCount - 1 do
+  begin
+    LStreamIDs[LI] := AllocateStreamID;
+    TH2ResponseState.Init(LResponses[LI]);
+    LResponses[LI].StreamID := LStreamIDs[LI];
+    AddActiveStream(LStreamIDs[LI]);
+    LFinished[LI] := False;
+  end;
+
+  try
+    { Open all streams: HEADERS (and bodies) before demux loop. }
+    for LI := 0 to LCount - 1 do
+    begin
+      LHasBody := (AReqs[LI].Body <> nil) and (AReqs[LI].ContentLength > 0);
+      SendRequestHeaders(LStreamIDs[LI], AReqs[LI], not LHasBody);
+      if LHasBody then
+      begin
+        LStreamIndex := FindActiveStreamIndex(LStreamIDs[LI]);
+        SendRequestBody(LStreamIDs[LI], AReqs[LI],
+          FActiveStreams[LStreamIndex].Flow, LResponses[LI]);
+        if LResponses[LI].EndStream then
+        begin
+          { RST while sending body — count as finished. }
+          LFinished[LI] := True;
+        end;
+      end;
+    end;
+
+    LDone := 0;
+    for LI := 0 to LCount - 1 do
+      if LFinished[LI] then
+        Inc(LDone);
+
+    while LDone < LCount do
+    begin
+      if not ReadFrame(LFrame) then
+        raise EHttpError.Create(hekProtocol,
+          'HTTP/2 multiplex response incomplete: connection closed');
+
+      if LFrame.Header.StreamID = 0 then
+      begin
+        LDummyFlow.Init(0, FRemoteSettings.InitialWindowSize,
+          FLocalSettings.InitialWindowSize);
+        TH2ResponseState.Init(LDummyResp);
+        DispatchFrame(LFrame, 0, LDummyFlow, LDummyResp);
+      end
+      else
+      begin
+        LRespIndex := -1;
+        for LI := 0 to LCount - 1 do
+          if LStreamIDs[LI] = LFrame.Header.StreamID then
+          begin
+            LRespIndex := LI;
+            Break;
+          end;
+        if LRespIndex < 0 then
+          raise EHttpError.Create(hekProtocol,
+            'HTTP/2 frame for unknown stream ' +
+            IntToStr(LFrame.Header.StreamID));
+        LStreamIndex := FindActiveStreamIndex(LStreamIDs[LRespIndex]);
+        if LStreamIndex < 0 then
+          raise EHttpError.Create(hekProtocol,
+            'HTTP/2 active stream missing for ' +
+            IntToStr(LStreamIDs[LRespIndex]));
+        DispatchFrame(LFrame, LStreamIDs[LRespIndex],
+          FActiveStreams[LStreamIndex].Flow, LResponses[LRespIndex]);
+        if LResponses[LRespIndex].PendingWindowUpdate > 0 then
+        begin
+          SendWindowUpdate(LStreamIDs[LRespIndex],
+            LResponses[LRespIndex].PendingWindowUpdate);
+          LResponses[LRespIndex].PendingWindowUpdate := 0;
+        end;
+        if LResponses[LRespIndex].EndStream and (not LFinished[LRespIndex]) then
+        begin
+          LFinished[LRespIndex] := True;
+          Inc(LDone);
+        end;
+      end;
+
+      if FGoawayReceived then
+      begin
+        for LI := 0 to LCount - 1 do
+          if (not LFinished[LI]) and
+             (LStreamIDs[LI] > FLastPeerStreamID) then
+            raise EHttpError.Create(hekProtocol,
+              'HTTP/2 GOAWAY received during multiplex response');
+        { Streams with ID <= last-stream-id may still complete. }
+        if LDone < LCount then
+        begin
+          { If all remaining are already finished or within last stream id,
+            keep reading; if GOAWAY and no unfinished streams that can complete
+            (all remaining > last), raised above. }
+        end;
+      end;
+      FlushPendingConnectionWindowUpdate;
+    end;
+
+    for LI := 0 to LCount - 1 do
+      Result[LI] := BuildResponse(LResponses[LI]);
+  finally
+    for LI := 0 to LCount - 1 do
+    begin
+      RemoveActiveStream(LStreamIDs[LI]);
+      LResponses[LI].Headers := nil;
+      LResponses[LI].HeadersStore := nil;
+    end;
+  end;
+end;
+
 function TH2ClientConnection.IsReusable: Boolean;
 begin
   Result := (FConn <> nil) and (FState = h2ccsActive) and
     (not FGoawayReceived) and (not FGoawaySent);
+end;
+
+function TH2ClientConnection.ProbeHealth: Boolean;
+var
+  LOpaque: UInt64;
+  LFrame: TH2Frame;
+  LStreamFlow: TH2StreamFlowControl;
+begin
+  { Borrow-time active probe (Wave I1). PingTimeout=0 disables wire PING. }
+  Result := False;
+  if not IsReusable then
+    Exit;
+  if FOptions.PingTimeout <= 0 then
+    Exit(True);
+  { Residual buffered frames mean the peer has already written on this
+    connection (live). Serial RoundTrip fixtures may also pre-queue the next
+    response; do not fail the probe on that data. }
+  if FReadBuffer <> '' then
+    Exit(True);
+
+  try
+    ApplyClientDeadline(FConn, ClientRequestDeadline(FOptions.PingTimeout));
+    try
+      LOpaque := GetTickCount64;
+      if LOpaque = 0 then
+        LOpaque := 1;
+      FLastPingData := not LOpaque;
+      SendFrame(H2_FRAME_PING, 0, 0, H2EncodePing(LOpaque));
+      { Dummy stream flow only for connection-level WINDOW_UPDATE dispatch. }
+      LStreamFlow.Init(1, FRemoteSettings.InitialWindowSize);
+      while True do
+      begin
+        if not IsReusable then
+          Exit(False);
+        if not ReadFrame(LFrame) then
+          Exit(False);
+        case LFrame.Header.FrameType of
+          H2_FRAME_PING:
+            begin
+              HandlePing(LFrame);
+              if ((LFrame.Header.Flags and H2_FLAG_PING_ACK) <> 0) and
+                 (FLastPingData = LOpaque) then
+                Exit(IsReusable);
+            end;
+          H2_FRAME_GOAWAY:
+            begin
+              HandleGoaway(LFrame);
+              Exit(False);
+            end;
+          H2_FRAME_SETTINGS:
+            HandleSettings(LFrame);
+          H2_FRAME_WINDOW_UPDATE:
+            begin
+              if LFrame.Header.StreamID <> 0 then
+                Exit(False);
+              HandleWindowUpdate(LFrame, 0, LStreamFlow);
+            end;
+          H2_FRAME_PUSH_PROMISE:
+            begin
+              FailConnection(H2_ERR_PROTOCOL_ERROR, 'PUSH_PROMISE',
+                'HTTP/2 PUSH_PROMISE received while server push is disabled');
+              Exit(False);
+            end;
+        else
+          { Unexpected stream-level traffic while idle → not healthy for reuse. }
+          Exit(False);
+        end;
+      end;
+    finally
+      ApplyClientDeadline(FConn, TDeadline.Infinite);
+    end;
+  except
+    Result := False;
+  end;
 end;
 
 procedure TH2ClientConnection.Close;
@@ -1614,7 +1862,8 @@ begin
     if LCandidate = nil then
       Break;
 
-    if LCandidate.IsReusable then
+    { Probe outside the pool lock: PING/Read can block (same hang class as Close). }
+    if LCandidate.IsReusable and LCandidate.ProbeHealth then
     begin
       Result := LCandidate;
       Break;
@@ -1775,6 +2024,56 @@ begin
     Result := LReqOpts.RequestOptions.EffectiveCancelToken;
 end;
 
+function TH2ClientTransport.AcquireConnection(const AHost: string;
+  const APort: UInt16; const ASecure: Boolean;
+  out APooled: Boolean): TH2ClientConnection;
+var
+  LRawConn: ITcpStream;
+  LSelectedALPN: string;
+  LHostKey: string;
+begin
+  LHostKey := CanonicalPoolHostKey(AHost);
+  Result := PoolGet(LHostKey, APort, ASecure);
+  APooled := Result <> nil;
+  if APooled then
+    Exit;
+  LRawConn := H2ClientDial(AHost, APort, FOptions.ConnectTimeout,
+    FOptions.Timeout);
+  if ASecure then
+  begin
+    H2ApplyPostDialDeadline(LRawConn, FOptions);
+    LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, AHost,
+      HTTP2_ALPN_PROTOCOL);
+    LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
+    if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
+      raise EHttpError.Create(hekProtocol,
+        'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
+    H2ApplyPostDialDeadline(LRawConn, FOptions);
+  end
+  else
+    H2ApplyPostDialDeadline(LRawConn, FOptions);
+  Result := TH2ClientConnection.Create(LRawConn, FOptions);
+end;
+
+procedure TH2ClientTransport.ReleaseConnection(const AHost: string;
+  const APort: UInt16; const ASecure: Boolean;
+  const AConn: TH2ClientConnection; const AReqHeaders: IHttpHeaders);
+var
+  LHostKey: string;
+begin
+  if AConn = nil then
+    Exit;
+  AConn.ClearCancelToken;
+  LHostKey := CanonicalPoolHostKey(AHost);
+  if HeadersHaveConnectionCloseToken(AReqHeaders) or (not AConn.IsReusable) then
+  begin
+    AConn.Close;
+    AConn.Free;
+  end
+  else
+    PoolPut(LHostKey, APort, ASecure, AConn);
+end;
+
 function TH2ClientTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LUrl: TUrl;
@@ -1814,30 +2113,7 @@ begin
   CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LCancel := H2RequestCancelToken(AReq);
   HttpThrowIfCanceled(LCancel);
-  LConn := PoolGet(LHostKey, LPort, LSecure);
-  LPooled := LConn <> nil;
-  if not LPooled then
-  begin
-    LRawConn := H2ClientDial(LHost, LPort, FOptions.ConnectTimeout,
-      FOptions.Timeout);
-    if LSecure then
-    begin
-      { Bound TLS handshake I/O on the raw TCP before wrap. }
-      H2ApplyPostDialDeadline(LRawConn, FOptions);
-      LRawConn := NewTlsClientTcpStream(LRawConn, SecureClientContext, LHost,
-        HTTP2_ALPN_PROTOCOL);
-      LSelectedALPN := LowerCase(Trim(TlsTcpStreamSelectedALPN(LRawConn)));
-      if LSelectedALPN <> HTTP2_ALPN_PROTOCOL then
-        raise EHttpError.Create(hekProtocol,
-          'HTTPS HTTP/2 client requires negotiated ALPN "h2"');
-      { Re-apply on the final TLS stream so connect budget covers H2 first-write
-        on both SSL timeouts and FInner; later ApplyDeadline re-arms Timeout. }
-      H2ApplyPostDialDeadline(LRawConn, FOptions);
-    end
-    else
-      H2ApplyPostDialDeadline(LRawConn, FOptions);
-    LConn := TH2ClientConnection.Create(LRawConn, FOptions);
-  end;
+  LConn := AcquireConnection(LHost, LPort, LSecure, LPooled);
   LRequestWriteComplete := False;
   try
     LConn.ApplyCancelToken(LCancel);
@@ -1913,14 +2189,96 @@ begin
       end;
     end;
   end;
-  LConn.ClearCancelToken;
-  if HeadersHaveConnectionCloseToken(AReq.Headers) or (not LConn.IsReusable) then
+  ReleaseConnection(LHost, LPort, LSecure, LConn, AReq.Headers);
+end;
+
+function TH2ClientTransport.RoundTripMany(
+  const AReqs: array of IHttpRequest): THttpResponseArray;
+var
+  LCount: SizeInt;
+  LI: SizeInt;
+  LUrl: TUrl;
+  LHost: string;
+  LPort: UInt16;
+  LSecure: Boolean;
+  LConn: TH2ClientConnection;
+  LPooled: Boolean;
+  LCancel: IHttpCancelToken;
+  LWrapped: Exception;
+  LOtherUrl: TUrl;
+  LOtherSecure: Boolean;
+  LOtherPort: UInt16;
+begin
+  Result := nil;
+  LCount := Length(AReqs);
+  SetLength(Result, LCount);
+  if LCount = 0 then
+    Exit;
+
+  if AReqs[0] = nil then
+    raise EHttpError.Create(hekArgument, 'h2 RoundTripMany requires request');
+  if AReqs[0].Headers = nil then
+    raise EHttpError.Create(hekArgument,
+      'h2 RoundTripMany requires request headers');
+  LUrl := AReqs[0].Url;
+  ValidateH2ClientUrlScheme(LUrl);
+  LHost := LUrl.Host;
+  if LHost = '' then
+    raise EHttpError.Create(hekParse, 'HTTP/2 client request requires host');
+  LSecure := LowerCase(LUrl.Scheme) = 'https';
+  LPort := LUrl.Port;
+  if LPort = 0 then
   begin
-    LConn.Close;
-    LConn.Free;
-  end
-  else
-    PoolPut(LHostKey, LPort, LSecure, LConn);
+    if LSecure then
+      LPort := 443
+    else
+      LPort := 80;
+  end;
+
+  for LI := 1 to LCount - 1 do
+  begin
+    if AReqs[LI] = nil then
+      raise EHttpError.Create(hekArgument, 'h2 RoundTripMany requires request');
+    LOtherUrl := AReqs[LI].Url;
+    ValidateH2ClientUrlScheme(LOtherUrl);
+    LOtherSecure := LowerCase(LOtherUrl.Scheme) = 'https';
+    LOtherPort := LOtherUrl.Port;
+    if LOtherPort = 0 then
+    begin
+      if LOtherSecure then
+        LOtherPort := 443
+      else
+        LOtherPort := 80;
+    end;
+    if (CanonicalPoolHostKey(LOtherUrl.Host) <> CanonicalPoolHostKey(LHost)) or
+       (LOtherPort <> LPort) or (LOtherSecure <> LSecure) then
+      raise EHttpError.Create(hekArgument,
+        'HTTP/2 RoundTripMany requires same authority for all requests');
+  end;
+
+  LCancel := H2RequestCancelToken(AReqs[0]);
+  HttpThrowIfCanceled(LCancel);
+  LConn := AcquireConnection(LHost, LPort, LSecure, LPooled);
+  try
+    LConn.ApplyCancelToken(LCancel);
+    try
+      Result := LConn.RoundTripMany(AReqs);
+    finally
+      LConn.ClearCancelToken;
+    end;
+  except
+    on E: Exception do
+    begin
+      LConn.ClearCancelToken;
+      LConn.Close;
+      LConn.Free;
+      LWrapped := HttpWrapTransportException(E);
+      if LWrapped <> nil then
+        raise LWrapped;
+      raise;
+    end;
+  end;
+  ReleaseConnection(LHost, LPort, LSecure, LConn, AReqs[0].Headers);
 end;
 
 procedure TH2ClientTransport.CloseIdleConnections;
