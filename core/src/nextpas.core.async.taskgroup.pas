@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.async.base,
   nextpas.core.async.loop,
-  nextpas.core.async.task;
+  nextpas.core.async.task,
+  nextpas.core.async.cancellation;
 
 type
   { Task group state }
@@ -49,9 +50,10 @@ type
     function TotalCount: UInt32;
   end;
 
-  { 创建任务组 }
+  { 创建任务组。AToken 非 nil 时：token 取消 → CancelAll（组级停）。 }
   function CreateTaskGroup(const ALoop: TAsyncLoop;
-    AOptions: TAsyncTaskGroupOptions = []): IAsyncTaskGroup;
+    AOptions: TAsyncTaskGroupOptions = [];
+    AToken: IAsyncCancellationToken = nil): IAsyncTaskGroup;
 
 implementation
 
@@ -81,10 +83,12 @@ type
     FTotalCount: UInt32;
     FOnAllComplete: TAsyncCallbackStorage;
     FLock: TPlatformMutex;
+    FToken: IAsyncCancellationToken;
     procedure CheckCompletion;
     procedure TaskDone;
   public
-    constructor Create(const ALoop: TAsyncLoop; AOptions: TAsyncTaskGroupOptions);
+    constructor Create(const ALoop: TAsyncLoop; AOptions: TAsyncTaskGroupOptions;
+      AToken: IAsyncCancellationToken);
     destructor Destroy; override;
     procedure RunTask(ACallback: TAsyncCallback; AContext: Pointer);
     procedure RunTaskRef(ACallback: TAsyncCallbackRef; AContext: Pointer);
@@ -102,7 +106,8 @@ type
   private
     FGroup: TAsyncTaskGroup;
   public
-    constructor Create(const ALoop: TAsyncLoop; AOptions: TAsyncTaskGroupOptions);
+    constructor Create(const ALoop: TAsyncLoop; AOptions: TAsyncTaskGroupOptions;
+      AToken: IAsyncCancellationToken);
     destructor Destroy; override;
     procedure RunTask(ACallback: TAsyncCallback; AContext: Pointer);
     procedure RunTaskRef(ACallback: TAsyncCallbackRef; AContext: Pointer);
@@ -159,15 +164,25 @@ begin
 end;
 
 function CreateTaskGroup(const ALoop: TAsyncLoop;
-  AOptions: TAsyncTaskGroupOptions): IAsyncTaskGroup;
+  AOptions: TAsyncTaskGroupOptions;
+  AToken: IAsyncCancellationToken): IAsyncTaskGroup;
 begin
-  Result := TAsyncTaskGroupWrapper.Create(ALoop, AOptions);
+  Result := TAsyncTaskGroupWrapper.Create(ALoop, AOptions, AToken);
+end;
+
+procedure TaskGroupTokenNotify(AContext: Pointer);
+var
+  LGroup: TAsyncTaskGroup;
+begin
+  LGroup := TAsyncTaskGroup(AContext);
+  if LGroup <> nil then
+    LGroup.CancelAll;
 end;
 
 { TAsyncTaskGroup }
 
 constructor TAsyncTaskGroup.Create(const ALoop: TAsyncLoop;
-  AOptions: TAsyncTaskGroupOptions);
+  AOptions: TAsyncTaskGroupOptions; AToken: IAsyncCancellationToken);
 begin
   inherited Create;
   FLoop := ALoop;
@@ -176,11 +191,15 @@ begin
   FActiveCount := 0;
   FCompletedCount := 0;
   FTotalCount := 0;
+  FToken := AToken;
   platform_mutex_init(FLock, PLATFORM_MUTEX_NORMAL);
+  if FToken <> nil then
+    FToken.OnCancel(@TaskGroupTokenNotify, Self);
 end;
 
 destructor TAsyncTaskGroup.Destroy;
 begin
+  FToken := nil;
   platform_mutex_destroy(FLock);
   inherited Destroy;
 end;
@@ -379,10 +398,10 @@ end;
 { TAsyncTaskGroupWrapper }
 
 constructor TAsyncTaskGroupWrapper.Create(const ALoop: TAsyncLoop;
-  AOptions: TAsyncTaskGroupOptions);
+  AOptions: TAsyncTaskGroupOptions; AToken: IAsyncCancellationToken);
 begin
   inherited Create;
-  FGroup := TAsyncTaskGroup.Create(ALoop, AOptions);
+  FGroup := TAsyncTaskGroup.Create(ALoop, AOptions, AToken);
 end;
 
 destructor TAsyncTaskGroupWrapper.Destroy;

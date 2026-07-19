@@ -3,7 +3,8 @@ program test_tui_buffer;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.mem,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
@@ -738,6 +739,63 @@ begin
   end;
 end;
 
+procedure TestCreateEmptyWithNilAllocator;
+var
+  LBuf: TBuffer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 2), nil);
+  try
+    CheckEqual(Int64(4), Int64(LBuf.Width), 'nil alloc width');
+    CheckEqual(Int64(8), Int64(LBuf.Length_), 'nil alloc length');
+    LBuf.SetString(0, 0, 'ab', StyleDefault);
+    AssertRows(LBuf, ['ab  ', '    '], 'nil alloc setstring');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestCreateEmptyWithTrackingAllocator;
+var
+  LTrack: TTrackingAllocator;
+  LAlloc: IAllocator;
+  LBuf: TBuffer;
+begin
+  LTrack := TTrackingAllocator.Create(DefaultAllocator);
+  LAlloc := LTrack;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 2), LAlloc);
+  try
+    Check(LTrack.ActiveAllocCount > 0, 'content allocated via tracker');
+    LBuf.SetString(0, 0, 'xy', StyleDefault);
+    AssertRows(LBuf, ['xy ', '   '], 'tracking setstring');
+  finally
+    LBuf.Free;
+  end;
+  CheckEqual(Int64(0), Int64(LTrack.ActiveAllocCount), 'no content leaks');
+  LAlloc := nil;
+end;
+
+procedure TestResizeWithAllocatorPreservesOverlap;
+var
+  LTrack: TTrackingAllocator;
+  LAlloc: IAllocator;
+  LBuf: TBuffer;
+begin
+  LTrack := TTrackingAllocator.Create(DefaultAllocator);
+  LAlloc := LTrack;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 2), LAlloc);
+  try
+    LBuf.SetString(1, 0, 'AB', StyleDefault);
+    LBuf.Resize(TRect.Make(0, 0, 6, 3));
+    CheckEqual(Int64(6), Int64(LBuf.Width), 'resized width');
+    CheckEqual(Int64(3), Int64(LBuf.Height), 'resized height');
+    AssertRows(LBuf, [' AB   ', '      ', '      '], 'overlap preserved');
+  finally
+    LBuf.Free;
+  end;
+  CheckEqual(Int64(0), Int64(LTrack.ActiveAllocCount), 'resize free old block');
+  LAlloc := nil;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.buffer');
   T.Test('create empty', @TestCreateEmpty);
@@ -785,5 +843,8 @@ begin
   T.Test('overwrite wide tail with narrow', @TestOverwriteWideGlyphTailWithNarrow);
   T.Test('set stringP overwrite wide tail with narrow', @TestSetStringPOverwriteWideTailWithNarrow);
   T.Test('overwrite width-1 grapheme clears glyph tail for diff', @TestOverwriteWidthOneGraphemeClearsGlyphTailForDiff);
+  T.Test('create empty with nil allocator', @TestCreateEmptyWithNilAllocator);
+  T.Test('create empty with tracking allocator', @TestCreateEmptyWithTrackingAllocator);
+  T.Test('resize with allocator preserves overlap', @TestResizeWithAllocatorPreservesOverlap);
   if not T.Run then Halt(1);
 end.

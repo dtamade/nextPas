@@ -13,6 +13,7 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.tcp,
   nextpas.core.net.async.tcp,
+  nextpas.core.net.async.backpressure,
   nextpas.core.async.base,
   nextpas.core.async.loop;
 
@@ -84,7 +85,7 @@ begin
     LListener.Close;
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -120,7 +121,7 @@ begin
     LListener.Close;
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -148,7 +149,7 @@ begin
     LListener.Close;
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -187,7 +188,59 @@ begin
     LListener.Close;
   finally
     GLoop.Close;
+    GLoop.Free;
+  end;
+end;
+
+{ Backpressure OnStateChange }
+
+var
+  GBpState: TBackpressureState;
+  GBpNotifyCount: Int32;
+
+procedure BpStateCallback(AState: TBackpressureState; AContext: Pointer);
+begin
+  GBpState := AState;
+  Inc(GBpNotifyCount);
+  GLoop.Stop;
+end;
+
+procedure TestBackpressureStateChange;
+var
+  LBp: IBackpressureController;
+  LCfg: TBackpressureConfig;
+  LBuf: array[0..15] of Byte;
+  LReadBuf: array[0..15] of Byte;
+  LWritten: UInt32;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GBpNotifyCount := 0;
+    GBpState := bpsNormal;
+    LCfg.HighWaterMark := 8;
+    LCfg.LowWaterMark := 2;
+    LBp := CreateBackpressureController(GLoop, LCfg);
+    LBp.OnStateChange(@BpStateCallback, nil);
+    FillChar(LBuf, SizeOf(LBuf), 1);
+    LWritten := LBp.Write(LBuf, 8);
+    CheckEqual(Int64(8), Int64(LWritten), 'write high watermark bytes');
+    Check(LBp.State = bpsPaused, 'state paused after high water');
+    GLoop.Schedule(TDuration.FromMilliseconds(50), @StopCallback, nil);
+    GLoop.Run;
+    Check(GBpNotifyCount >= 1, 'state change notified');
+    Check(GBpState = bpsPaused, 'notified paused');
+    { drain below low water → draining/normal path }
+    GBpNotifyCount := 0;
+    LBp.Read(LReadBuf, 7);
+    GLoop.Schedule(TDuration.FromMilliseconds(50), @StopCallback, nil);
+    GLoop.Run;
+    Check(GBpNotifyCount >= 1, 'drain notify');
+    Check(LBp.State in [bpsDraining, bpsNormal], 'not paused after drain');
+    LBp.Close;
+    LBp := nil;
+  finally
     GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -197,5 +250,6 @@ begin
   T.Test('AsyncTcpReadWrite', @TestAsyncTcpReadWrite);
   T.Test('AsyncTcpTimeout', @TestAsyncTcpTimeout);
   T.Test('AsyncTcpMultipleConnections', @TestAsyncTcpMultipleConnections);
+  T.Test('BackpressureStateChange', @TestBackpressureStateChange);
   T.Run;
 end.

@@ -430,12 +430,12 @@ begin
 
   // Rust criterion format: "name    time:   [lower mean upper unit]"
   // Example: "BenchmarkFoo    time:   [1.234 us 1.256 us 1.279 us]"
-  LLine := Trim(ALine);
+  LLine := nextpas.core.text.conv.Trim(ALine);
   if Pos('time:', LLine) = 0 then
     raise EParseError.CreateFmt('Invalid Rust bench line: %s', [ALine]);
 
   // Extract name
-  LName := Trim(Copy(LLine, 1, Pos('time:', LLine) - 1));
+  LName := nextpas.core.text.conv.Trim(Copy(LLine, 1, Pos('time:', LLine) - 1));
 
   // Extract time range
   LTimeStr := Copy(LLine, Pos('[', LLine) + 1, Pos(']', LLine) - Pos('[', LLine) - 1);
@@ -515,14 +515,14 @@ begin
   if Pos('NsPerOp', ALine) = 0 then
     raise EParseError.CreateFmt('Invalid FPC bench line: %s', [ALine]);
 
-  LName := Trim(ExtractValue(ALine, 'Name'));
+  LName := nextpas.core.text.conv.Trim(ExtractValue(ALine, 'Name'));
   if LName = '' then
     raise EParseError.CreateFmt('Missing Name in FPC bench line: %s', [ALine]);
 
-  LNsPerOpStr := Trim(ExtractValue(ALine, 'NsPerOp'));
+  LNsPerOpStr := nextpas.core.text.conv.Trim(ExtractValue(ALine, 'NsPerOp'));
   LNsPerOp := StrToFloatDef(LNsPerOpStr, 0);
 
-  LIterationsStr := Trim(ExtractValue(ALine, 'Iterations'));
+  LIterationsStr := nextpas.core.text.conv.Trim(ExtractValue(ALine, 'Iterations'));
   LIterations := StrToInt64Def(LIterationsStr, 1);
 
   Result.Name := LName;

@@ -166,6 +166,7 @@ function LoadStackFunctions: Boolean;
 procedure UnloadStackFunctions;
 
 // High-level helper functions
+// FreeStringStack frees only elements pushed by CreateStringStack (DefaultHeap GetMem).
 function CreateStringStack(const Strings: array of string): PSTACK_OF_OPENSSL_STRING;
 procedure FreeStringStack(Stack: PSTACK_OF_OPENSSL_STRING);
 function GetStringFromStack(Stack: PSTACK_OF_OPENSSL_STRING; Index: Integer): string;
@@ -345,7 +346,7 @@ end;
 
 procedure FreeStringStack(Stack: PSTACK_OF_OPENSSL_STRING);
 var
-  i, count: Integer;
+  i, count, L: Integer;
   str: PAnsiChar;
 begin
   if Stack = nil then
@@ -358,7 +359,13 @@ begin
     begin
       str := PAnsiChar(OPENSSL_sk_value(POPENSSL_STACK(Stack), i));
       if str <> nil then
-        FreeMem(str);
+      begin
+        { CreateStringStack only: NUL-terminated GetMem(len+1). }
+        L := 0;
+        while str[L] <> #0 do
+          Inc(L);
+        FreeMem(str, SizeUInt(L + 1));
+      end;
     end;
   end;
   

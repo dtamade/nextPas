@@ -10,7 +10,8 @@ interface
 
 uses
   nextpas.core.net.base,
-  nextpas.core.net.intf;
+  nextpas.core.net.intf,
+  nextpas.core.platform.socket;
 
 function NetTcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
 function NetTcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
@@ -18,6 +19,12 @@ function NetTcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
   ATimeoutMs <= 0 keeps unbounded blocking connect (legacy). }
 function NetTcpConnect(const AAddr: string; const APort: UInt16;
   const ATimeoutMs: Int64): ITcpStream;
+{ Adopt an already-connected socket into ITcpStream (for AsyncTcpDial). }
+function NetTcpStreamFromConnectedSocket(const ASock: TPlatformSocket;
+  const ARemote: TNetAddress): ITcpStream;
+{ Build sockaddr for connect from TNetAddress (IPv4/IPv6). }
+function NetBuildConnectSockAddr(const ARemote: TNetAddress;
+  out ASa: TPlatformSockAddr): Boolean;
 
 implementation
 
@@ -28,7 +35,6 @@ uses
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.socket,
   nextpas.core.net.resolve;
 
 type
@@ -687,25 +693,120 @@ begin
   Result := NetTcpConnect(AAddr, APort, 0);
 end;
 
-function NetTcpConnect(const AAddr: string; const APort: UInt16;
+{ Parse FormatIPv6Addr-style "xxxx:xxxx:..." (8 groups of 4 hex) into 16 bytes. }
+function ParseIPv6HexGroups(const AIP: string; ABytes: PByte): Boolean;
+var
+  LGroup, LNibble, LPos, LVal: Integer;
+  LC: Char;
+begin
+  Result := False;
+  if ABytes = nil then
+    Exit;
+  FillChar(ABytes^, 16, 0);
+  LPos := 1;
+  for LGroup := 0 to 7 do
+  begin
+    if LGroup > 0 then
+    begin
+      if (LPos > Length(AIP)) or (AIP[LPos] <> ':') then
+        Exit;
+      Inc(LPos);
+    end;
+    LVal := 0;
+    for LNibble := 0 to 3 do
+    begin
+      if LPos > Length(AIP) then
+        Exit;
+      LC := AIP[LPos];
+      Inc(LPos);
+      if LC in ['0'..'9'] then
+        LVal := (LVal shl 4) or (Ord(LC) - Ord('0'))
+      else if LC in ['a'..'f'] then
+        LVal := (LVal shl 4) or (Ord(LC) - Ord('a') + 10)
+      else if LC in ['A'..'F'] then
+        LVal := (LVal shl 4) or (Ord(LC) - Ord('A') + 10)
+      else
+        Exit;
+    end;
+    ABytes[LGroup * 2] := Byte((LVal shr 8) and $FF);
+    ABytes[LGroup * 2 + 1] := Byte(LVal and $FF);
+  end;
+  Result := LPos > Length(AIP);
+end;
+
+function BuildConnectSockAddr(const ARemote: TNetAddress;
+  out ASa: TPlatformSockAddr): Boolean;
+var
+  LBytes: array[0..15] of Byte;
+  LIP: UInt32;
+begin
+  Result := False;
+  FillChar(ASa, SizeOf(ASa), 0);
+  if ARemote.IsIPv6 then
+  begin
+    if not ParseIPv6HexGroups(ARemote.IP, @LBytes[0]) then
+      Exit;
+    Result := platform_sockaddr_ipv6(ARemote.Port, @LBytes[0], 0, ASa) = 0;
+  end
+  else
+  begin
+    LIP := platform_ipv4_parse(ARemote.IP);
+    Result := platform_sockaddr_ipv4(ARemote.Port, LIP, ASa) = 0;
+  end;
+end;
+
+function NetBuildConnectSockAddr(const ARemote: TNetAddress;
+  out ASa: TPlatformSockAddr): Boolean;
+begin
+  Result := BuildConnectSockAddr(ARemote, ASa);
+end;
+
+function NetTcpStreamFromConnectedSocket(const ASock: TPlatformSocket;
+  const ARemote: TNetAddress): ITcpStream;
+var
+  LLocal: TNetAddress;
+  LSa4: sockaddr_in;
+  LSa4Len: Int32;
+begin
+  { Best-effort restore blocking for stream I/O defaults. }
+  platform_socket_set_nonblocking(ASock, False);
+  LLocal := TNetAddress.Any(0);
+  if not ARemote.IsIPv6 then
+  begin
+    LSa4Len := SizeOf(LSa4);
+    if platform_socket_getsockname(ASock, @LSa4, @LSa4Len) = 0 then
+      LLocal := AddrFromSockAddr(LSa4);
+  end;
+  Result := TTcpStream.Create(ASock, LLocal, ARemote);
+end;
+
+function NetTcpConnectOne(const ARemote: TNetAddress;
   const ATimeoutMs: Int64): ITcpStream;
 var
   LSock: TPlatformSocket;
-  LSa: sockaddr_in;
-  LSaLen: Int32;
+  LSa: TPlatformSockAddr;
   LResult: Int32;
   LPoll: Int32;
   LRevents: Int32;
   LSockErr: Int32;
-  LRemote, LResolved: TNetAddress;
   LTimed: Boolean;
+  LDomain: Int32;
+  LLocal: TNetAddress;
+  LSa4: sockaddr_in;
+  LSa4Len: Int32;
 begin
-  LResolved := NetResolve(AAddr);
-  LRemote := TNetAddress.Create(LResolved.IP, APort);
-  LResult := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, LSock);
+  if not BuildConnectSockAddr(ARemote, LSa) then
+    raise ENetworkError.Create('tcp connect: invalid address ' + ARemote.IP);
+
+  if ARemote.IsIPv6 then
+    LDomain := PLATFORM_AF_INET6
+  else
+    LDomain := PLATFORM_AF_INET;
+
+  LResult := platform_socket_create(LDomain, PLATFORM_SOCK_STREAM, 0, LSock);
   if LResult <> 0 then
     raise ENetworkError.Create('tcp connect: socket create failed (' + IntToStr(LResult) + ')');
-  FillSockAddr(LRemote, LSa, LSaLen);
+
   LTimed := ATimeoutMs > 0;
   if LTimed then
   begin
@@ -715,7 +816,8 @@ begin
       raise ENetworkError.Create('tcp connect: set nonblocking failed');
     end;
   end;
-  LResult := platform_socket_connect(LSock, @LSa, LSaLen);
+
+  LResult := platform_socket_connect(LSock, @LSa.Storage[0], LSa.Len);
   if LTimed then
   begin
     if (LResult <> 0) and (not platform_socket_error_in_progress(LResult)) then
@@ -762,11 +864,57 @@ begin
     platform_socket_close(LSock);
     raise ENetworkError.Create('tcp connect failed (' + IntToStr(LResult) + ')');
   end;
-  LSaLen := SizeOf(LSa);
-  if platform_socket_getsockname(LSock, @LSa, @LSaLen) = 0 then
-    Result := TTcpStream.Create(LSock, AddrFromSockAddr(LSa), LRemote)
+
+  LLocal := TNetAddress.Any(0);
+  if not ARemote.IsIPv6 then
+  begin
+    LSa4Len := SizeOf(LSa4);
+    if platform_socket_getsockname(LSock, @LSa4, @LSa4Len) = 0 then
+      LLocal := AddrFromSockAddr(LSa4);
+  end;
+  Result := TTcpStream.Create(LSock, LLocal, ARemote);
+end;
+
+function NetTcpConnect(const AAddr: string; const APort: UInt16;
+  const ATimeoutMs: Int64): ITcpStream;
+var
+  LList: specialize TArray<TNetAddress>;
+  LI: Integer;
+  LRemote: TNetAddress;
+  LLastMsg: string;
+  LLastTimeout: Boolean;
+begin
+  { HE-lite: sequential multi-A / dual-stack dial (not concurrent RFC8305). }
+  LList := NetResolveAll(AAddr);
+  if Length(LList) = 0 then
+    raise ENetworkError.Create('tcp connect: no addresses for ' + AAddr);
+
+  LLastMsg := 'tcp connect failed';
+  LLastTimeout := False;
+  for LI := 0 to High(LList) do
+  begin
+    LRemote := LList[LI];
+    LRemote.Port := APort;
+    try
+      Result := NetTcpConnectOne(LRemote, ATimeoutMs);
+      Exit;
+    except
+      on E: ETimeoutError do
+      begin
+        LLastTimeout := True;
+        LLastMsg := E.Message;
+      end;
+      on E: Exception do
+      begin
+        LLastTimeout := False;
+        LLastMsg := E.Message;
+      end;
+    end;
+  end;
+  if LLastTimeout then
+    raise ETimeoutError.Create(LLastMsg)
   else
-    Result := TTcpStream.Create(LSock, TNetAddress.Any(0), LRemote);
+    raise ENetworkError.Create(LLastMsg);
 end;
 
 end.

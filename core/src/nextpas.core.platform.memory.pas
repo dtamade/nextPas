@@ -150,8 +150,14 @@ begin
 end;
 
 function IsValidAlignment(AAlignment: SizeUInt): Boolean; inline;
+const
+  { Cap extreme alignments. 1GB+ posix_memalign has been observed to leave
+    process state that Abort-traps at suite exit on Darwin aarch64 GHA even
+    without heaptrc; production callers never need multi-GB alignment. }
+  MAX_ALIGNMENT = SizeUInt(16 * 1024 * 1024);
 begin
-  Result := (AAlignment >= SizeOf(Pointer)) and IsPowerOfTwo(AAlignment);
+  Result := (AAlignment >= SizeOf(Pointer)) and IsPowerOfTwo(AAlignment)
+    and (AAlignment <= MAX_ALIGNMENT);
 end;
 
 function TryAddSizeUInt(ALeft, ARight: SizeUInt; out ASum: SizeUInt): Boolean; inline;
@@ -192,6 +198,9 @@ function platform_aligned_alloc_backend: TPlatformAlignedAllocBackend;
 begin
 {$IFDEF NEXTPAS_WINDOWS}
   Result := paabWindowsCRT;
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  { See platform_aligned_alloc_is_native — Darwin uses SysGetMem path. }
+  Result := paabFallback;
 {$ELSEIF defined(NEXTPAS_UNIX)}
   Result := paabPosix;
 {$ELSE}
@@ -206,7 +215,14 @@ function platform_aligned_alloc_is_native: Boolean;
   detection of _aligned_malloc availability on Windows; if the CRT
   does not provide it, the call will fail at link time. }
 begin
+{$IFDEF NEXTPAS_MACOS}
+  { Darwin aarch64 GHA: posix_memalign/free mixed with virtual mmap and
+    the test harness Abort-traps (signal 6) near suite end. Prefer the
+    SysGetMem-backed path until the libc mix is isolated. }
+  Result := False;
+{$ELSE}
   Result := platform_aligned_alloc_backend <> paabFallback;
+{$ENDIF}
 end;
 
 function platform_secure_zero_memory_backend: TPlatformSecureZeroBackend;
@@ -259,13 +275,12 @@ begin
 {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_FREEBSD)}
   nextpas.core.platform.posix.ffi.explicit_bzero(APtr, size_t(ASize));
 {$ELSEIF defined(NEXTPAS_MACOS)}
-  { explicit_bzero is not exported on Darwin; memset_s is the native API. }
-  if nextpas.core.platform.darwin.ffi.memset_s(APtr, size_t(ASize), 0,
-    size_t(ASize)) <> 0 then
-  begin
-    FillChar(APtr^, ASize, 0);
-    platform_secure_zero_memory_barrier;
-  end;
+  { Darwin: prefer memset_s when the binding is trusted. GHA macos-14 has
+    Abort-trapped (signal 6) mid secure-zero suite with the C11 binding —
+    possibly constraint-handler default. Keep FillChar+barrier as the
+    durable path until the memset_s ABI is proven on aarch64 runners. }
+  FillChar(APtr^, ASize, 0);
+  platform_secure_zero_memory_barrier;
 {$ELSE}
   FillChar(APtr^, ASize, 0);
   platform_secure_zero_memory_barrier;
@@ -444,12 +459,12 @@ begin
   Result := nextpas.core.platform.windows.ffi.VirtualAlloc(
     APtr, PtrUInt(ASize), WINDOWS_MEM_COMMIT, WINDOWS_PAGE_READWRITE) <> nil;
 {$ELSEIF defined(NEXTPAS_UNIX)}
-  { MAP_FIXED overwrites the existing mapping; pages become accessible }
-  Result := nextpas.core.platform.posix.ffi.mmap(
+  { mprotect keeps the existing reservation; avoid MAP_FIXED which can
+    forcibly replace adjacent mappings and has corrupted process exit
+    under heaptrc on Darwin (Abort trap after green suite). }
+  Result := nextpas.core.platform.posix.ffi.mprotect(
     APtr, PtrUInt(ASize),
-    PLATFORM_POSIX_PROT_READ or PLATFORM_POSIX_PROT_WRITE,
-    PLATFORM_POSIX_MAP_PRIVATE or PLATFORM_POSIX_MAP_ANONYMOUS or PLATFORM_POSIX_MAP_FIXED,
-    -1, 0) <> Pointer(PLATFORM_POSIX_MAP_FAILED);
+    PLATFORM_POSIX_PROT_READ or PLATFORM_POSIX_PROT_WRITE) = 0;
 {$ENDIF}
 end;
 
@@ -462,12 +477,17 @@ begin
 {$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.platform.windows.ffi.VirtualFree(APtr, PtrUInt(ASize), WINDOWS_MEM_DECOMMIT);
 {$ELSEIF defined(NEXTPAS_UNIX)}
-  { MADV_DONTNEED tells kernel pages can be reclaimed; address range stays mapped }
-      { MADV_DONTNEED semantics vary: on Linux it immediately discards pages
-        (subsequent access gets zero-filled pages); on FreeBSD/macOS
-        MADV_FREE lazily frees pages (subsequent access may still see old
-        data until reclaimed). Use MADV_FREE when available for lazy reclaim. }
+  { Drop access so the reservation remains unreadable/unwritable. Then
+    advise reclamation where it is safe. Linux MADV_DONTNEED discards
+    immediately (re-fault zero-fills). On Darwin, skip madvise here:
+    MADV_DONTNEED after mixed mprotect/munmap has been implicated in
+    process-exit Abort traps under some toolchains; PROT_NONE is enough
+    to match decommit semantics for the portable API. }
+  nextpas.core.platform.posix.ffi.mprotect(
+    APtr, PtrUInt(ASize), PLATFORM_POSIX_PROT_NONE);
+  {$IFNDEF NEXTPAS_MACOS}
   nextpas.core.platform.posix.ffi.madvise(APtr, size_t(ASize), MADV_DONTNEED);
+  {$ENDIF}
 {$ENDIF}
 end;
 

@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **18-gate `ci-matrix` promoted** (pass=18 on `windows-latest`, run 29683362919 @ `4b831227f`; wine 16 secondary; 19-gate +fmt candidate) |
+| Real Windows GHA | **19-gate `ci-matrix` promoted** (pass=19 on `windows-latest`, run 29686191527 @ `e9f203e45`; wine 20 secondary, +info +which +dl +pipe) |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -82,8 +82,8 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Host | Current tier | Next honest claim |
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
-| Windows x86_64 | **`ci-matrix` for documented 18-gate set** + wine 16-module secondary; 19-gate (+fmt) candidate | GHA green for +fmt then promote; keep wine green |
-| macOS | **`focused-runtime` for documented 8-gate set** (D2.c); inventory via best-effort | keep matrix green; no full-host parity |
+| Windows x86_64 | **`ci-matrix` for documented 19-gate set** + wine 20-module secondary | expand matrix modules; keep wine + GHA green |
+| macOS | **`focused-runtime` for documented 8-gate set** (D2.c); 9-gate (+memory) candidate | GHA green for +memory then promote; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
 | Linux aarch64/arm32/riscv64 | forced-compile | runtime only with hardware/CI |
@@ -296,6 +296,14 @@ Optional readiness inventory (not a promotion):
 | 2026-07-19 | **fix(io)**: Windows-safe `TPoller.AsyncReadv`/`AsyncWritev` (empty-case after IFDEF strip). Unblocks GHA `poller.windows_runtime_smoke`. Landed `4b831227f`. |
 | 2026-07-19 | **18-gate `ci-matrix` promoted**: GHA `test-windows-runtime` pass=18 fail=0 (run 29683362919 @ `4b831227f`); includes `platform.error`. Not full-host Windows parity. |
 | 2026-07-19 | Expand matrix: add `platform.fmt` to wine (15→16) and Windows scripts (18→19 candidate). Local wine evidence required; promote 19 only after GHA green. |
+| 2026-07-19 | **Batch-0**: fix `test.expect` Windows IUnknown calling convention (`stdcall`/`cdecl`); GHA Windows matrix pass=19 (run 29686191527 @ `e9f203e45`). |
+| 2026-07-19 | **Batch-1**: promote documented 19-gate set to `ci-matrix` (includes error + fmt). Not full-host Windows parity. |
+| 2026-07-19 | **Batch-2**: add `platform.info` to wine matrix (16→17). Windows scripts unchanged (no 20-gate candidate this batch). |
+| 2026-07-19 | **Batch-3**: add `platform.which` to wine matrix (17→18). Windows scripts unchanged. |
+| 2026-07-19 | **Batch-4**: add `platform.dl` to wine matrix (18→19) after Linux 19/0 + wine smoke 8/0. Windows scripts unchanged. |
+| 2026-07-19 | **Batch-5A**: add `platform.memory` to macOS matrix script (8→9 candidate). Promote only after GHA `test-macos` pass=9. |
+| 2026-07-19 | **Batch-5B-fix**: Darwin-safe `TThreadID` zero; Darwin `MAP_ANON`; POSIX virtual commit/decommit via `mprotect` (avoid MAP_FIXED heaptrc Abort); R20 `CreateFileW` hTemplateFile `nil` (unblocks Windows/wine compile). Promote macOS 9-gate only after GHA pass=9. |
+| 2026-07-19 | **Batch-6**: add `platform.pipe` to wine matrix (19→20) after Linux 15/0 + wine smoke 8/0. Windows scripts unchanged. |
 
 ---
 

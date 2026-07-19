@@ -89,7 +89,8 @@ implementation
 
 uses
   nextpas.core.platform.time,
-  nextpas.core.exception;
+  nextpas.core.exception,
+  nextpas.core.bench.intf;
 
 
 
@@ -231,7 +232,7 @@ begin
     begin
       { F-02: check for exceptions in worker threads }
       if LThreads[I].ExceptionMessage <> '' then
-        raise Exception.CreateFmt('Thread %d failed: %s',
+        raise EBenchError.CreateFmt('Thread %d failed: %s',
           [LThreads[I].BenchThreadId, LThreads[I].ExceptionMessage]);
 
       FResults.ThreadResults[I].ThreadId := LThreads[I].BenchThreadId;

@@ -1,8 +1,8 @@
 # nextpas.core.test — Advanced Pascal Unit Testing Framework
 
-> 模块负责人: test lane (worktree `.worktrees/test`)
+> 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-19
-> 治理状态: v8.7, 17 源文件 (.pas) + 4 .inc, 16 测试套件, ~930 测试过程（2026-07-19 全绿）
+> 治理状态: v8.9, 17 源文件 (.pas) + 4 .inc, 18 测试套件, ≥1500 可计数过程 + 双 source-contract 门禁
 
 ## Overview
 

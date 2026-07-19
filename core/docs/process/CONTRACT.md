@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.process*.pas`（6 个源文件）
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：2.9
+**最后更新**：2026-07-20
+**版本**：2.15
 
 ---
 
@@ -39,6 +39,9 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `ICommand.Timeout(ADuration)` | 设置超时；超时后 TimedOut=True 并 Kill |
 | `ICommand.MaxOutput(ABytes)` | 限制 stdout+stderr 累计；<=0 不限制；超限 OutputLimited=True 并 Kill |
 | `ICommand.MergeStderr` | stderr 与 stdout 共用写端；Output 的 StdOut 为交错流，StdErr 空 |
+| `ICommand.ExtraFd` | 额外 fd 映射到子进程 3+（Go ExtraFiles；Unix） |
+| `ICommand.Credential` | exec 前 setuid/setgid（Unix；Windows 不支持） |
+| `ICommand.CancelToken` | 取消令牌；Wait/Output/Status/WaitGraceful 路径 Kill 并置 `Cancelled`（无管道的 Wait 也会轮询） |
 | `IChild.Wait: TProcessOutput` | 阻塞等待 |
 | `IChild.TryWait: Boolean` | 非阻塞检查 |
 | `IChild.Kill` | 终止子进程（SIGKILL） |
@@ -46,18 +49,19 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `IChild.Detach` | 放弃生命周期管理 |
 | `IChild.TakeStdin/Stdout/Stderr` | 取走管道（大输出流式路径） |
 | `IChild.WaitWithOutput: TProcessOutput` | 并发读取 + 等待（全内存缓冲） |
+| `IChild.WaitGraceful(AGrace)` | SIGTERM → grace 内 wait → 超时 Kill；TimedOut 表示走了 Kill |
 
 ---
 
 ## 2. 不变量
 
-- **[INV-1]** IChild 释放时自动 Kill + Wait（防止僵尸进程）
+- **[INV-1]** 未 Wait/Detach 的 `Destroy`：**尽力** try_wait → 仍 running 则 Kill + 有限 reap（约 5s）→ 超时 abandon 再 detach；**不保证**零僵尸。已 Waited/Detached 不 Kill。
 - **[INV-2]** WaitWithOutput 用 poll(2) 同时读 stdout+stderr，避免死锁
 - **[INV-3]** 子进程 exec 前关闭所有继承的 fd（close(3..1023)）
 - **[INV-4]** EnvAdd 继承父进程环境并追加/覆盖；Env 完全替换
 - **[INV-5]** Timeout 超时后自动 Kill + Wait，且 TProcessOutput.TimedOut=True
 - **[INV-6]** LookPath/ResolveExecutablePath 对含目录部分的路径校验可执行性；未找到返回空/抛错
-- **[INV-7]** ProcessSucceeded ⇔ (not TimedOut) and (not OutputLimited) and (Status=psExited) and (ExitCode=0)
+- **[INV-7]** ProcessSucceeded ⇔ (not TimedOut) and (not OutputLimited) and (not Cancelled) and (Status=psExited) and (ExitCode=0)
 - **[INV-8]** MaxOutput 超限：停缓冲、Kill、OutputLimited=True（不伪装 TimedOut）
 - **[INV-9]** 父保留管道端不可继承；Windows 用 PeekNamedPipe 并发 drain
 - **[INV-10]** 未设置 `MaxOutput`（默认 0）时 `Run`/`Capture*`/`Output` 可耗尽内存；生产请显式 `.MaxOutput(N)`（非 bug）
@@ -105,12 +109,12 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_process | 281 | API 全覆盖 + Wait/TryWait 排水 + MergeStderr + FPC RTL 门禁 |
+| test_process | 455 | R21 Cancel/ExtraFd/Credential + R19 表 |
 | test_process_command | 48 | ICommand builder |
-| test_process_deep | 20 | timeout/large output |
+| test_process_deep | 24 | timeout/large + R22 Cancel Wait/Status/DoubleWait/MergeMax |
 | test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |
-| test_process_wine | wine-runtime-smoke | Windows L2（truth=wine） |
-| **合计** | **5 目录** | 2026-07-19 实测 Unix 全绿 + 0 leak |
+| test_process_wine | wine-runtime-smoke **4 passed**（2026-07-19 本机） | Windows L2 under Wine；≠ 真 host |
+| **合计** | **5 目录 / 544+ Unix** | 2026-07-20 R22 实测 Unix 全绿 + 0 leak |
 
 ---
 
@@ -129,3 +133,9 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.7 | INV-13 Wait 自动排水；MergeStderr 强制 piped；Destroy 5s 写实；测试数口径 | Claude |
 | 2026-07-19 | 2.8 | INV-13 TryWait 持管道排水；Take* 责任钉死 | Claude |
 | 2026-07-19 | 2.9 | INV-13 钉死 TryWait=drain-only（非 WaitWithOutput） | Claude |
+| 2026-07-19 | 2.10 | INV-1 对齐 Destroy 5s abandon（非无限 Kill+Wait） | Claude |
+| 2026-07-19 | 2.11 | WaitGraceful；测试 292 | Claude |
+| 2026-07-19 | 2.12 | R17 质量表；测试 340 | Claude |
+| 2026-07-19 | 2.13 | wine-runtime-smoke 实况 4/4 绿 | Claude |
+| 2026-07-19 | 2.14 | R19 质量表；测试 447 | Claude |
+| 2026-07-20 | 2.15 | R22 CancelToken 贯通 Wait/Status；WaitWithOutput 忙等修复；deep 24 | Claude |

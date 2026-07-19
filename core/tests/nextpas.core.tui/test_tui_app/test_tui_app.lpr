@@ -4,7 +4,7 @@ program test_tui_app;
 
 uses
   nextpas.core.thread.init,
-  SysUtils,
+  nextpas.core.text.conv,  { IntToStr }
   nextpas.core.tui.base,
   nextpas.core.tui.event,
   nextpas.core.tui.buffer,
@@ -403,7 +403,7 @@ begin
   Result.DataSize := 0;
   Result.Error := '';
   while not IsCancelled(Ctx) do
-    Sleep(1);
+    SleepMs(1);
   Result.Status := tsCompleted;
 end;
 

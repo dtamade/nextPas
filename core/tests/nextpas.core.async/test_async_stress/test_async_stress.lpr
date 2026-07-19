@@ -70,7 +70,7 @@ begin
   LLoop.Run;
   CheckEqual(Int64(1), Int64(GCallCount), 'post callback fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 2: PostFromOtherThread === }
@@ -114,7 +114,7 @@ begin
   platform_thread_join(LHandle, LRetVal);
   Check(GCallCount >= 5, 'all posts from other thread fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 3: Wake === }
@@ -144,7 +144,7 @@ begin
   platform_thread_join(LHandle, LRetVal);
   Check(True, 'wake did not hang');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 4: ManyTimers === }
@@ -198,7 +198,7 @@ begin
   end;
   Check(LOrdered, 'timers fired in order');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 5: RapidScheduleCancel === }
@@ -223,7 +223,7 @@ begin
   LLoop.Run;
   CheckEqual(Int64(0), Int64(GCallCount), 'no cancelled timers fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 6: CancelTimerAfterCloseIsStaleNoOp === }
@@ -238,7 +238,7 @@ begin
   LLoop := TAsyncLoop.Create(32);
   LH := LLoop.Schedule(TDuration.FromMilliseconds(100), @IncrementCallback, nil);
   Check(LH.IsValid, 'pre-close timer handle valid');
-  LLoop.Close;
+  LLoop.Free;
   Check(not LLoop.IsValid, 'loop invalid after close');
   LRaised := False;
   try
@@ -300,7 +300,7 @@ begin
   Check(GCallCount >= POST_STRESS_TOTAL,
     'all stress posts fired: got ' + IntToStr(GCallCount));
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 8: TimerPlusIO === }
@@ -353,7 +353,7 @@ begin
   Check(GIoFired, 'io fired in mixed test');
   CheckEqual(Int64($CA), Int64(LReadBuf[0]), 'io byte 0');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -379,7 +379,7 @@ begin
   LLoop.Run;
   CheckEqual(Int64(1), Int64(GCallCount), 'stop from post worked');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Main === }

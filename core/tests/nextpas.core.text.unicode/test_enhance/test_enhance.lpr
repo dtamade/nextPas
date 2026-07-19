@@ -59,13 +59,14 @@ begin
   Check(LResults[3].Length >= 2, 'Combining mark attached to base character');
 
   LResults := SegmentWords('Hello World');
-  CheckEqual(Int64(2), Int64(Length(LResults)), 'Hello World has 2 words');
+  { UAX#29: Hello | space | World }
+  CheckEqual(Int64(3), Int64(Length(LResults)), 'Hello World has 3 word segments');
 
-  // 测试连字符单词
+  // U+002D HYPHEN-MINUS 在 Word_Break 中为 Other → well | - | known
   LResults := SegmentWords('well-known');
-  CheckEqual(Int64(1), Int64(Length(LResults)), 'well-known is one word');
+  CheckEqual(Int64(3), Int64(Length(LResults)), 'well-known splits on ASCII hyphen (Other)');
 
-  // 测试带数字的单词
+  // 测试带数字的单词 (AHLetter × Numeric)
   LResults := SegmentWords('test123');
   CheckEqual(Int64(1), Int64(Length(LResults)), 'test123 is one word');
 
@@ -87,9 +88,9 @@ begin
   LResults := SegmentSentences('He said "Hello." She replied.');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Sentence with closing quote');
 
-  // 测试省略号（U+2026 HORIZONTAL ELLIPSIS）
+  // 测试省略号（U+2026 HORIZONTAL ELLIPSIS）— 非 STerm/ATerm，不强制断句
   LResults := SegmentSentences('Wait' + #$E2#$80#$A6 + ' Really?');
-  CheckEqual(Int64(2), Int64(Length(LResults)), 'Ellipsis + question');
+  CheckEqual(Int64(1), Int64(Length(LResults)), 'Ellipsis alone does not break sentence (UAX#29)');
 
   // 测试全角句号
   LResults := SegmentSentences('你好．世界！');
@@ -197,13 +198,13 @@ begin
   LPos := LSeg.NextGraphemeCluster('Hello', 5);
   CheckEqual(Int64(6), Int64(LPos), 'NextGraphemeCluster o→end');
 
-  // NextWord: 从头开始
+  // NextWord: 从头开始 — 第一词段 "Hello"
   LPos := LSeg.NextWord('Hello World', 1);
-  CheckEqual(Int64(6), Int64(LPos), 'NextWord Hello→space');
+  CheckEqual(Int64(6), Int64(LPos), 'NextWord Hello ends at space');
 
-  // NextWord: 从空格开始 — 跳过空格后找到下一个词的结尾
+  // NextWord: 从空格开始 — 空格本身是一段
   LPos := LSeg.NextWord('Hello World', 6);
-  Check(LPos > 6, 'NextWord space advances past space');
+  CheckEqual(Int64(7), Int64(LPos), 'NextWord space is its own segment');
 
   // NextLine: 从头开始 — LF 后是 Line2 的第一个字符
   LPos := LSeg.NextLine('Line1' + #10 + 'Line2', 1);
@@ -234,9 +235,9 @@ begin
   LResults := SegmentWords('');
   CheckEqual(Int64(0), Int64(Length(LResults)), 'Empty string has no words');
 
-  // 纯空格 — 可能产生 0 或 1 个非词段
+  // 纯空格 — WSegSpace × WSegSpace → 单段
   LResults := SegmentWords('   ');
-  Check(Length(LResults) <= 1, 'Spaces produce at most 1 segment');
+  CheckEqual(Int64(1), Int64(Length(LResults)), 'Spaces glue as one WSegSpace run');
 
   // 连字符后跟数字 — 可能拆分为多段
   LResults := SegmentWords('test-123');

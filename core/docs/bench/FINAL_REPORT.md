@@ -1,12 +1,17 @@
 # nextpas.core.bench 框架最终报告
 
+> **历史快照（archive）**  
+> 本文反映早期 `bench-framework` worktree 阶段的统计与结论。  
+> **当前权威入口**：`README.md` + `goal-tree.md` + `ARCHITECTURE.md`（2026-07-19 及之后）。  
+> 测试套件数、行数、worktree 路径以 goal-tree 为准，勿用本文旧数字作 gate 依据。
+
 ## 项目概述
 
 **目标**: 打造 freePascal 领域最优秀的基准测试框架
 
-**位置**: `.worktrees/bench-framework` worktree，分支 `bench-framework`
+**位置（历史）**: `.worktrees/bench-framework` / 分支 `bench-framework`
 
-**状态**: ✅ **生产就绪**，所有功能完成，测试通过
+**状态（历史）**: 当时标记为生产就绪
 
 ---
 

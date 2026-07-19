@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.fs*.pas`（9 个源文件）
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：1.7
+**最后更新**：2026-07-20
+**版本**：1.11
 
 ---
 
@@ -49,6 +49,9 @@ fs.pas           ← 门面 re-export
 - **[INV-7]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.fs*` / `path` / `os.env` 源码与本模块测试不得 `uses` 裸 FPC RTL 单元；能力经 platform / core 抽象。仅 `nextpas.core.system` 可直接引用 FPC RTL。文档中的「SysUtils 兼容」指 API 形状，不是 `uses SysUtils`。门禁：`test_fs` 真 uses 扫描（`fpc_rtl_uses_scan.inc`）。
 - **[INV-8]** `Remove` 对 ENOENT **静默成功**（对齐 Pascal Erase/DeleteFile；≠ Go `os.Remove`）。
 - **[INV-9]** 门面 `GetEnv`/`Param*` 为 **兼容入口**；新代码用 `nextpas.core.os.env` / `args`（见 README）。
+- **[INV-10]** `IsSymlink(APath)` / `FsIsSymlink`：不跟随链接；路径不存在返回 False（对齐常见「探测」语义，非抛错）。
+- **[INV-11]** `SameFile`/`FsSameFile`：lstat Dev+Ino；路径不存在抛 `ENotFoundError`。
+- **[INV-12]** `HardLink`/`Chtimes`/`Chown`：经 `platform_file_link`/`utimens`/`chown`；空路径 `EArgumentError`；Chtimes 时间为 **Unix 纳秒**（与 `Stat.ModTime` 同单位）；`Chown` 跟随 symlink（对齐 Go）；Windows 上 `Chown` 映射为不支持错误。
 
 ---
 
@@ -58,7 +61,8 @@ fs.pas           ← 门面 re-export
 |------|------|
 | 文件不存在 | ENotFoundError |
 | 权限不足 | EPermissionError |
-| 磁盘满 | EIOError / EResourceExhaustedError |
+| 磁盘满 / 内存不足 | EResourceExhaustedError（ENOSPC/ENOMEM；Win DISK_FULL/NOT_ENOUGH_MEMORY） |
+| 其它 I/O | EIOError |
 | 路径无效 | EArgumentError |
 
 ---
@@ -85,13 +89,13 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_fs | 113 | 文件读写/目录/路径/符号链接 + PathDir 门面 + 真 uses 门禁 |
+| test_fs | 158 | R20 HardLink/Chtimes/Chown + R19 错误分类 |
 | test_fs_glob | 31 | GlobMatch / FsGlob |
 | test_fs_facade | 8 | 门面完整性（MkdirAll/Remove 按 procedure INV-5） |
 | test_fs_idir | 7 | IDir 接口 |
 | test_fs_ifile | 17 | IFile 接口 |
 | test_fs_text | 19 | BOM/UTF-8/UTF-16 |
-| **合计** | **6 个测试目录 / 195** | heaptrc 0 leak 为门禁 |
+| **合计** | **6 个测试目录 / 233** | heaptrc 0 leak 为门禁 |
 
 路径命名与 `nextpas.core.path` 对齐说明见 `core/docs/path/README.md`「命名规范」。
 
@@ -109,3 +113,7 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 2026-07-19 | 1.5 | 真 uses 门禁（test_fs + fpc_rtl_uses_scan.inc） | Claude |
 | 2026-07-19 | 1.6 | PathDir 门面对齐 path；Remove ENOENT；Boolean 壳/env 迁移 INV | Claude |
 | 2026-07-19 | 1.7 | PathDir 仅裸名压空；`./x` 保留 `.` | Claude |
+| 2026-07-19 | 1.8 | IsSymlink；R16 对标 | Claude |
+| 2026-07-19 | 1.9 | SameFile；质量测；117 | Claude |
+| 2026-07-19 | 1.10 | R17 质量表；133 | Claude |
+| 2026-07-20 | 1.11 | R22 ENOSPC/ENOMEM→EResourceExhaustedError | Claude |

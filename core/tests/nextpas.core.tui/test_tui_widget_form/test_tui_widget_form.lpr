@@ -1,7 +1,6 @@
 program test_tui_widget_form;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.style,
@@ -254,6 +253,101 @@ begin
   CheckEqual(0, LSt.OffsetY, 'scroll to top');
 end;
 
+{ === TCheckboxState (immediate-mode) === }
+
+procedure TestCheckboxStateEmpty;
+var LS: TCheckboxState;
+begin
+  LS := TCheckboxState.Empty;
+  Check(not LS.Checked, 'empty unchecked');
+end;
+
+procedure TestCheckboxStateToggle;
+var LS: TCheckboxState;
+begin
+  LS := TCheckboxState.Empty;
+  LS.Toggle;
+  Check(LS.Checked, 'toggle to checked');
+  LS.Toggle;
+  Check(not LS.Checked, 'toggle back');
+end;
+
+procedure TestCheckboxStateRender;
+var LC: ICheckbox; LBuf: TBuffer; LS: TCheckboxState;
+begin
+  LC := TCheckbox.New('Accept', False);
+  LS := TCheckboxState.Empty;
+  LS.Checked := True;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LC.RenderStateful(TRect.Make(0, 0, 20, 1), LBuf, LS);
+    Check(Pos('[x]', LBuf.RowAsString(0)) > 0, 'stateful renders checked');
+  finally LBuf.Free; end;
+end;
+
+procedure TestCheckboxStateRenderUnchecked;
+var LC: ICheckbox; LBuf: TBuffer; LS: TCheckboxState;
+begin
+  LC := TCheckbox.New('Accept', True);
+  LS := TCheckboxState.Empty;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LC.RenderStateful(TRect.Make(0, 0, 20, 1), LBuf, LS);
+    Check(Pos('[ ]', LBuf.RowAsString(0)) > 0, 'stateful overrides constructor');
+  finally LBuf.Free; end;
+end;
+
+{ === TRadioGroupState (immediate-mode) === }
+
+procedure TestRadioGroupStateEmpty;
+var LS: TRadioGroupState;
+begin
+  LS := TRadioGroupState.Empty;
+  CheckEqual(0, LS.Selected, 'empty selected 0');
+end;
+
+procedure TestRadioGroupStateSelect;
+var LS: TRadioGroupState;
+begin
+  LS := TRadioGroupState.Empty;
+  LS.Select(2);
+  CheckEqual(2, LS.Selected, 'select 2');
+  LS.Select(-1);
+  CheckEqual(2, LS.Selected, 'negative ignored');
+end;
+
+procedure TestRadioGroupStateNextPrev;
+var LS: TRadioGroupState;
+begin
+  LS := TRadioGroupState.Empty;
+  LS.Next(3);
+  CheckEqual(1, LS.Selected, 'next to 1');
+  LS.Next(3);
+  CheckEqual(2, LS.Selected, 'next to 2');
+  LS.Next(3);
+  CheckEqual(2, LS.Selected, 'next clamped');
+  LS.Prev;
+  CheckEqual(1, LS.Selected, 'prev to 1');
+  LS.Prev;
+  CheckEqual(0, LS.Selected, 'prev to 0');
+  LS.Prev;
+  CheckEqual(0, LS.Selected, 'prev clamped');
+end;
+
+procedure TestRadioGroupStateRender;
+var LR: IRadioGroup; LBuf: TBuffer; LS: TRadioGroupState;
+begin
+  LR := TRadioGroup.New(['Red', 'Green', 'Blue']);
+  LS := TRadioGroupState.Empty;
+  LS.Select(1);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 3));
+  try
+    LR.RenderStateful(TRect.Make(0, 0, 20, 3), LBuf, LS);
+    Check(Pos('(*)', LBuf.RowAsString(1)) > 0, 'stateful selects index 1');
+    Check(Pos('( )', LBuf.RowAsString(0)) > 0, 'stateful index 0 unselected');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.form');
   T.Test('editor new', @TestEditorNew);
@@ -275,5 +369,13 @@ begin
     @TestCommandPaletteTinyViewportStaysClipped);
   T.Test('scrollview render', @TestScrollViewRender);
   T.Test('scrollview state', @TestScrollViewState);
+  T.Test('checkbox state empty', @TestCheckboxStateEmpty);
+  T.Test('checkbox state toggle', @TestCheckboxStateToggle);
+  T.Test('checkbox state render', @TestCheckboxStateRender);
+  T.Test('checkbox state render unchecked', @TestCheckboxStateRenderUnchecked);
+  T.Test('radio state empty', @TestRadioGroupStateEmpty);
+  T.Test('radio state select', @TestRadioGroupStateSelect);
+  T.Test('radio state next/prev', @TestRadioGroupStateNextPrev);
+  T.Test('radio state render', @TestRadioGroupStateRender);
   if not T.Run then Halt(1);
 end.

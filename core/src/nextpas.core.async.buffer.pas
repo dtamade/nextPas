@@ -119,7 +119,7 @@ end;
 procedure AsyncBufferFree(var ABuffer: TAsyncBuffer);
 begin
   if ABuffer.Owner and (ABuffer.Data <> nil) then
-    FreeMem(ABuffer.Data);
+    FreeMem(ABuffer.Data, ABuffer.Cap);
   ABuffer.Data := nil;
   ABuffer.Len := 0;
   ABuffer.Cap := 0;
@@ -195,7 +195,7 @@ end;
 procedure TAsyncBufferPool.FreeChunk(AChunk: PPoolChunk);
 begin
   if AChunk^.Data <> nil then
-    FreeMem(AChunk^.Data);
+    FreeMem(AChunk^.Data, FChunkSize);
   Dispose(AChunk);
 end;
 
@@ -274,7 +274,7 @@ begin
     end
     else
     begin
-      FreeMem(ABuffer.Data);
+      FreeMem(ABuffer.Data, ABuffer.Cap);
     end;
 
     ABuffer.Data := nil;

@@ -311,7 +311,7 @@ begin
     for I := 0 to Length(FBuffers) - 1 do
     begin
       if FBuffers[I].FData <> nil then
-        FreeMem(FBuffers[I].FData);
+        FreeMem(FBuffers[I].FData, FBuffers[I].FCapacity);
     end;
     SetLength(FBuffers, 0);
   finally
@@ -534,7 +534,7 @@ procedure TBufferPool.FreeDirect(ABuffer: PPooledBuffer);
 begin
   if ABuffer = nil then Exit;
   if ABuffer^.FData <> nil then
-    FreeMem(ABuffer^.FData);
+    FreeMem(ABuffer^.FData, ABuffer^.FCapacity);
   Dispose(ABuffer);
 end;
 

@@ -40,7 +40,7 @@ end;
 
 procedure TestScriptIncludesAllModuleMappings;
 const
-  EXPECTED_ENTRIES: array[0..15] of string = (
+  EXPECTED_ENTRIES: array[0..19] of string = (
     'platform.time core/tests/nextpas.core.platform.time/test_platform_time_wine',
     'platform.memory core/tests/nextpas.core.platform.memory/test_platform_memory_wine',
     'platform.sync core/tests/nextpas.core.platform.sync/test_platform_sync_wine',
@@ -56,6 +56,10 @@ const
     'platform.socket core/tests/nextpas.core.platform.socket/test_platform_socket_wine',
     'platform.error core/tests/nextpas.core.platform.error/test_platform_error_wine',
     'platform.fmt core/tests/nextpas.core.platform.fmt/test_platform_fmt_wine',
+    'platform.info core/tests/nextpas.core.platform.info/test_platform_info_wine',
+    'platform.which core/tests/nextpas.core.platform.which/test_platform_which_wine',
+    'platform.dl core/tests/nextpas.core.platform.dl/test_platform_dl_wine',
+    'platform.pipe core/tests/nextpas.core.platform.pipe/test_platform_pipe_wine',
     'io.reactor.iocp core/tests/nextpas.core.io.uring/test_reactor_iocp_wine'
   );
 var

@@ -8,7 +8,8 @@ uses
   nextpas.core.io.intf,
   nextpas.core.time.base,
   nextpas.core.process.base,
-  nextpas.core.platform.process.base;
+  nextpas.core.platform.process.base,
+  nextpas.core.async.cancellation;
 
 type
   {**
@@ -48,6 +49,12 @@ type
     function TakeStderr: IReader;
     {** 关闭 stdin，并发读取 stdout+stderr，然后 Wait。推荐用法 *}
     function WaitWithOutput: TProcessOutput;
+    {**
+     * @desc 先 SIGTERM，在 AGrace 内等待退出；超时则 Kill 再 reap（对齐 Go WaitDelay 意图）
+     * @note 仍持管道时在 reaped 后排水（同 TryWait drain-only）
+     * @note TimedOut=True 表示 grace 耗尽并走了 Kill
+     *}
+    function WaitGraceful(const AGrace: TDuration): TProcessOutput;
   end;
 
   { TChild — IChild 实现 }
@@ -61,17 +68,24 @@ type
     FDetached: Boolean;
     FTimeout: TDuration;
     FMaxOutput: Int64;
+    FCancelToken: IAsyncCancellationToken;
     FLastOutput: TProcessOutput;
     procedure EnsureAttached;
     procedure RaiseProcessPlatformError(const AOp: string; ACode: Int32);
     function FinishWaitResult(const AResult: TPlatformProcessResult;
       const AStdOut, AStdErr: string;
       const ATimedOut: Boolean = False;
-      const AOutputLimited: Boolean = False): TProcessOutput;
+      const AOutputLimited: Boolean = False;
+      const ACancelled: Boolean = False): TProcessOutput;
+    function DrainOwnedPipesAfterReap(const AResult: TPlatformProcessResult;
+      const ATimedOut: Boolean;
+      const ACancelled: Boolean = False): TProcessOutput;
+    function CancelRequested: Boolean;
   public
     constructor Create(const AProc: TPlatformProcess;
       const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
-      const ATimeout: TDuration; const AMaxOutput: Int64 = 0);
+      const ATimeout: TDuration; const AMaxOutput: Int64 = 0;
+      const ACancelToken: IAsyncCancellationToken = nil);
     destructor Destroy; override;
     function Wait: TProcessOutput;
     function TryWait(out AOutput: TProcessOutput): Boolean;
@@ -83,6 +97,7 @@ type
     function TakeStdout: IReader;
     function TakeStderr: IReader;
     function WaitWithOutput: TProcessOutput;
+    function WaitGraceful(const AGrace: TDuration): TProcessOutput;
   end;
 
 implementation
@@ -113,7 +128,8 @@ end;
 
 constructor TChild.Create(const AProc: TPlatformProcess;
   const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
-  const ATimeout: TDuration; const AMaxOutput: Int64);
+  const ATimeout: TDuration; const AMaxOutput: Int64;
+  const ACancelToken: IAsyncCancellationToken);
 begin
   inherited Create;
   FProc := AProc;
@@ -124,7 +140,13 @@ begin
   FDetached := False;
   FTimeout := ATimeout;
   FMaxOutput := AMaxOutput;
+  FCancelToken := ACancelToken;
   FillChar(FLastOutput, SizeOf(FLastOutput), 0);
+end;
+
+function TChild.CancelRequested: Boolean;
+begin
+  Result := (FCancelToken <> nil) and FCancelToken.IsCancelled;
 end;
 
 procedure TChild.EnsureAttached;
@@ -194,7 +216,9 @@ var
   LDeadline: TInstant;
   LErr: Int32;
   LTimedOut: Boolean;
+  LCancelled: Boolean;
   LSleepNs: Int64;
+  LHaveDeadline: Boolean;
 begin
   if FWaited then
     Exit(FLastOutput);
@@ -209,9 +233,16 @@ begin
   Result.StdErr := '';
   Result.TimedOut := False;
   Result.OutputLimited := False;
+  Result.Cancelled := False;
   LTimedOut := False;
+  LCancelled := False;
   CloseWriterBestEffort(FStdinWriter);
-  if FTimeout.IsZero then
+  LHaveDeadline := not FTimeout.IsZero;
+  if LHaveDeadline then
+    LDeadline := TInstant.Now.Add(FTimeout);
+
+  { Blocking wait only when nothing to poll (no timeout, no cancel token). }
+  if (not LHaveDeadline) and (FCancelToken = nil) then
   begin
     LErr := platform_process_wait(FProc, LResult);
     if LErr <> 0 then
@@ -219,15 +250,25 @@ begin
   end
   else
   begin
-    LDeadline := TInstant.Now.Add(FTimeout);
     LSleepNs := 1000000; { 1ms, exponential backoff up to 20ms }
     repeat
+      if CancelRequested then
+      begin
+        LErr := platform_process_kill(FProc);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_kill', LErr);
+        LErr := platform_process_wait(FProc, LResult);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_wait', LErr);
+        LCancelled := True;
+        Break;
+      end;
       LErr := platform_process_try_wait(FProc, LResult);
       if LErr <> 0 then
         RaiseProcessPlatformError('platform_process_try_wait', LErr);
       if LResult.Status <> nextpas.core.platform.process.base.psRunning then
         Break;
-      if TInstant.Now.DurationSince(LDeadline).IsPositive then
+      if LHaveDeadline and TInstant.Now.DurationSince(LDeadline).IsPositive then
       begin
         LErr := platform_process_kill(FProc);
         if LErr <> 0 then
@@ -247,16 +288,13 @@ begin
       end;
     until False;
   end;
-  Result := FinishWaitResult(LResult, '', '', LTimedOut);
+  Result := FinishWaitResult(LResult, '', '', LTimedOut, False, LCancelled);
 end;
 
 function TChild.TryWait(out AOutput: TProcessOutput): Boolean;
 var
   LResult: TPlatformProcessResult;
   LErr: Int32;
-  LStdoutClosed, LStderrClosed: Boolean;
-  LLimited: Boolean;
-  LStdOut, LStdErr: string;
 begin
   if FWaited then
   begin
@@ -276,8 +314,18 @@ begin
     RaiseProcessPlatformError('platform_process_try_wait', LErr);
   if LResult.Status = nextpas.core.platform.process.base.psRunning then
     Exit(False);
-  { Process already reaped by try_wait. Still owning pipes → drain only
-    (do NOT call WaitWithOutput — second wait would ECHILD). INV-13. }
+  AOutput := DrainOwnedPipesAfterReap(LResult, False);
+  Result := True;
+end;
+
+function TChild.DrainOwnedPipesAfterReap(const AResult: TPlatformProcessResult;
+  const ATimedOut: Boolean;
+  const ACancelled: Boolean): TProcessOutput;
+var
+  LStdoutClosed, LStderrClosed: Boolean;
+  LLimited: Boolean;
+  LStdOut, LStdErr: string;
+begin
   if (FStdoutReader <> nil) or (FStderrReader <> nil) then
   begin
     CloseWriterBestEffort(FStdinWriter);
@@ -295,11 +343,9 @@ begin
     end;
     FStdoutReader := nil;
     FStderrReader := nil;
-    AOutput := FinishWaitResult(LResult, LStdOut, LStdErr, False, LLimited);
-    Exit(True);
+    Exit(FinishWaitResult(AResult, LStdOut, LStdErr, ATimedOut, LLimited, ACancelled));
   end;
-  AOutput := FinishWaitResult(LResult, '', '');
-  Result := True;
+  Result := FinishWaitResult(AResult, '', '', ATimedOut, False, ACancelled);
 end;
 
 procedure TChild.Detach;
@@ -369,6 +415,7 @@ var
   LStdoutClosed, LStderrClosed: Boolean;
   LTimedOut: Boolean;
   LLimited: Boolean;
+  LCancelled: Boolean;
 begin
   if FWaited then
     Exit(FLastOutput);
@@ -379,8 +426,10 @@ begin
   Result.StdErr := '';
   Result.TimedOut := False;
   Result.OutputLimited := False;
+  Result.Cancelled := False;
   LTimedOut := False;
   LLimited := False;
+  LCancelled := False;
   LHaveProcessResult := False;
   LStdoutClosed := FStdoutReader = nil;
   LStderrClosed := FStderrReader = nil;
@@ -390,6 +439,18 @@ begin
     LDeadline := TInstant.Now.Add(FTimeout);
 
   repeat
+    if (not LHaveProcessResult) and CancelRequested then
+    begin
+      LErr := platform_process_kill(FProc);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_kill', LErr);
+      LErr := platform_process_wait(FProc, LProcessResult);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_wait', LErr);
+      LHaveProcessResult := True;
+      LCancelled := True;
+      LDrainDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DRAIN_TIMEOUT_NS));
+    end;
     DrainPipePair(FStdoutReader, FStderrReader, 10, Result.StdOut, Result.StdErr,
       LStdoutClosed, LStderrClosed, FMaxOutput, LLimited);
     if LLimited then
@@ -438,6 +499,9 @@ begin
         LStderrClosed := True;
         Break;
       end;
+      { Avoid busy-spin when process still running and pipes idle/closed. }
+      if not LHaveProcessResult then
+        platform_thread_sleep_ns(10000000);
       Continue;
     end;
 
@@ -492,7 +556,7 @@ begin
   FStderrReader := nil;
   if LHaveProcessResult then
     Result := FinishWaitResult(LProcessResult, Result.StdOut, Result.StdErr,
-      LTimedOut, LLimited)
+      LTimedOut, LLimited, LCancelled)
   else
   begin
     LWait := Wait;
@@ -508,16 +572,81 @@ begin
   end;
 end;
 
+function TChild.WaitGraceful(const AGrace: TDuration): TProcessOutput;
+const
+  SIGTERM = 15;
+var
+  LResult: TPlatformProcessResult;
+  LDeadline: TInstant;
+  LErr: Int32;
+  LTimedOut: Boolean;
+  LCancelled: Boolean;
+  LSleepNs: Int64;
+begin
+  if FWaited then
+    Exit(FLastOutput);
+  EnsureAttached;
+
+  LTimedOut := False;
+  LCancelled := False;
+  Signal(SIGTERM);
+  if AGrace.IsZero or AGrace.IsNegative then
+    LDeadline := TInstant.Now
+  else
+    LDeadline := TInstant.Now.Add(AGrace);
+  LSleepNs := 1000000;
+  FillChar(LResult, SizeOf(LResult), 0);
+  repeat
+    if CancelRequested then
+    begin
+      LCancelled := True;
+      LErr := platform_process_kill(FProc);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_kill', LErr);
+      LErr := platform_process_wait(FProc, LResult);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_wait', LErr);
+      Break;
+    end;
+    LErr := platform_process_try_wait(FProc, LResult);
+    if LErr <> 0 then
+      RaiseProcessPlatformError('platform_process_try_wait', LErr);
+    if LResult.Status <> nextpas.core.platform.process.base.psRunning then
+      Break;
+    if TInstant.Now.DurationSince(LDeadline).IsPositive then
+    begin
+      LTimedOut := True;
+      LErr := platform_process_kill(FProc);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_kill', LErr);
+      LErr := platform_process_wait(FProc, LResult);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_wait', LErr);
+      Break;
+    end;
+    platform_thread_sleep_ns(LSleepNs);
+    if LSleepNs < 20000000 then
+    begin
+      LSleepNs := LSleepNs * 2;
+      if LSleepNs > 20000000 then
+        LSleepNs := 20000000;
+    end;
+  until False;
+  Result := DrainOwnedPipesAfterReap(LResult, LTimedOut, LCancelled);
+end;
+
 function TChild.FinishWaitResult(const AResult: TPlatformProcessResult;
   const AStdOut, AStdErr: string;
   const ATimedOut: Boolean;
-  const AOutputLimited: Boolean): TProcessOutput;
+  const AOutputLimited: Boolean;
+  const ACancelled: Boolean): TProcessOutput;
 begin
   Result.ExitCode := AResult.ExitCode;
   Result.StdOut := AStdOut;
   Result.StdErr := AStdErr;
   Result.TimedOut := ATimedOut;
   Result.OutputLimited := AOutputLimited;
+  Result.Cancelled := ACancelled;
   case AResult.Status of
     psExited: Result.Status := nextpas.core.process.base.psExited;
     psSignaled: Result.Status := nextpas.core.process.base.psSignaled;

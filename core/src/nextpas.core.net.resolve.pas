@@ -1,6 +1,7 @@
 unit nextpas.core.net.resolve;
 {**
- * @desc DNS/地址解析：主机名→IP、IPv4 字面量解析。
+ * @desc DNS/地址解析：主机名→IP 列表、IPv4 字面量解析。
+ *       NetResolveAll 走 platform multi-A / dual-stack；NetResolve 返回首条。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -11,6 +12,7 @@ uses
   nextpas.core.net.base;
 
 function NetResolve(const AHost: string): TNetAddress;
+function NetResolveAll(const AHost: string): specialize TArray<TNetAddress>;
 function NetResolveIPv4(const AIP: string): UInt32;
 
 implementation
@@ -45,6 +47,14 @@ begin
     LBuf[LPos] := HexChars[LGroup and $F]; Inc(LPos);
   end;
   SetString(Result, @LBuf[0], LPos);
+end;
+
+function IPv4NetToString(ANet: UInt32): string;
+begin
+  Result := IntToStr(ANet and $FF) + '.' +
+    IntToStr((ANet shr 8) and $FF) + '.' +
+    IntToStr((ANet shr 16) and $FF) + '.' +
+    IntToStr((ANet shr 24) and $FF);
 end;
 
 function NetResolveIPv4(const AIP: string): UInt32;
@@ -87,41 +97,75 @@ begin
   Result := True;
 end;
 
-function NetResolve(const AHost: string): TNetAddress;
-var
-  LAddr: UInt32;
-  LAddr6: array[0..15] of Byte;
-  LResult: Int32;
+function IsIPv6Literal(const AHost: string): Boolean;
 begin
+  Result := Pos(':', AHost) > 0;
+end;
+
+function NetResolveAll(const AHost: string): specialize TArray<TNetAddress>;
+var
+  LRaw: array[0..PLATFORM_RESOLVE_MAX - 1] of TPlatformResolvedAddr;
+  LCount: Int32;
+  LRes: Int32;
+  LI, LJ: Integer;
+  LHost: AnsiString;
+begin
+  SetLength(Result, 0);
   if (AHost = '') or (AHost = 'localhost') then
-    Exit(TNetAddress.IPv4('127.0.0.1', 0));
+  begin
+    SetLength(Result, 1);
+    Result[0] := TNetAddress.IPv4('127.0.0.1', 0);
+    Exit;
+  end;
 
   if IsIPv4Literal(AHost) then
-    Exit(TNetAddress.IPv4(AHost, 0));
-
-  { 尝试 IPv4 解析 }
-  LResult := platform_socket_resolve_ipv4(PAnsiChar(AHost), LAddr);
-  if LResult = 0 then
   begin
-    Result.IP := IntToStr(LAddr and $FF) + '.' + IntToStr((LAddr shr 8) and $FF) + '.' +
-      IntToStr((LAddr shr 16) and $FF) + '.' + IntToStr((LAddr shr 24) and $FF);
-    Result.Port := 0;
-    Result.IsIPv6 := False;
+    SetLength(Result, 1);
+    Result[0] := TNetAddress.IPv4(AHost, 0);
     Exit;
   end;
 
-  { IPv4 失败，尝试 IPv6 解析 }
-  FillChar(LAddr6, SizeOf(LAddr6), 0);
-  LResult := platform_socket_resolve_ipv6(PAnsiChar(AHost), @LAddr6[0]);
-  if LResult = 0 then
+  if IsIPv6Literal(AHost) then
   begin
-    Result.IP := FormatIPv6Addr(@LAddr6[0]);
-    Result.Port := 0;
-    Result.IsIPv6 := True;
+    SetLength(Result, 1);
+    Result[0] := TNetAddress.IPv6(AHost, 0);
     Exit;
   end;
 
-  raise ENetworkError.Create('DNS resolve failed for: ' + AHost);
+  LHost := AHost;
+  LRes := platform_socket_resolve_stream(PAnsiChar(LHost), @LRaw[0],
+    PLATFORM_RESOLVE_MAX, LCount);
+  if (LRes <> 0) or (LCount <= 0) then
+    raise ENetworkError.Create('DNS resolve failed for: ' + AHost);
+
+  SetLength(Result, LCount);
+  LI := 0;
+  for LJ := 0 to LCount - 1 do
+    if not LRaw[LJ].IsIPv6 then
+    begin
+      Result[LI].IP := IPv4NetToString(LRaw[LJ].IPv4);
+      Result[LI].Port := 0;
+      Result[LI].IsIPv6 := False;
+      Inc(LI);
+    end;
+  for LJ := 0 to LCount - 1 do
+    if LRaw[LJ].IsIPv6 then
+    begin
+      Result[LI].IP := FormatIPv6Addr(@LRaw[LJ].IPv6[0]);
+      Result[LI].Port := 0;
+      Result[LI].IsIPv6 := True;
+      Inc(LI);
+    end;
+end;
+
+function NetResolve(const AHost: string): TNetAddress;
+var
+  LAll: specialize TArray<TNetAddress>;
+begin
+  LAll := NetResolveAll(AHost);
+  if Length(LAll) = 0 then
+    raise ENetworkError.Create('DNS resolve failed for: ' + AHost);
+  Result := LAll[0];
 end;
 
 end.

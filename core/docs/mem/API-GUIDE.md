@@ -1,21 +1,21 @@
 # nextpas.core.mem API 选择指南
 
 **目的**: 在三套 API 体系中选对入口（stdlib 手册决策树）。
-**最后更新**: 2026-07-17
-**入口**: [README.md](README.md) · **计划**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md)
+**最后更新**: 2026-07-20（F3 门面收紧）
+**入口**: [README.md](README.md) · **计划**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) · **门面冻结**: [FACADES-SURFACE.md](FACADES-SURFACE.md)
 
 ---
 
 ## 标准路径 vs 专家路径
 
-优先 **Tier-0**；策略/诊断再选 Tier-1/2。Tier-3 直接 `uses` 子单元，无兼容承诺。
+优先 **Tier-0**；生产诊断用门面 Tier-1；冷门包装器 / 并发池变体 **直接 uses 子单元**（F3）。
 
-| Tier | 你应该用什么 |
-|------|----------------|
-| **0 默认** | `DefaultHeap` / `GetMem`、`CreateDefaultArena` / `TLocalArena` / `TChunkedArena` / `TVirtualArena`、Fixed/Block/Slab 池、`GetMemStats` |
-| **1 组合** | `TFallbackAllocator`、`TBoundedAllocator`、`TThreadSafeAllocator`、`TAlignedAllocator`、`TStatsAllocator` … |
-| **2 诊断** | `TTrackingAllocator`、`TSentinelAllocator`、`TGuardAllocator`、`TFailAllocator` … 或 `NEXTPAS_MEM_DEBUG` |
-| **3 实验** | `TPredictionAllocator`、`TNumaAllocator`、`TReplayAllocator` 等 — 勿当默认 |
+| Tier | 你应该用什么 | 发现路径 |
+|------|----------------|----------|
+| **0 默认** | `DefaultHeap` / `GetMem`、`CreateDefaultArena` / Arena、Fixed/Block/Slab 池、`GetMemStats` | 门面 |
+| **1 组合/诊断** | `TFallbackAllocator`、`TTrackingAllocator`、`TSentinelAllocator`、`TGuardAllocator`；或 `NEXTPAS_MEM_DEBUG` | 门面 |
+| **2 子单元** | `TBoundedAllocator`、`TThreadSafeAllocator`、`TAlignedAllocator`、`TStatsAllocator`、`TFailAllocator`、`TSlabPoolConcurrent` … | `uses nextpas.core.mem.allocator.*` / `pool.slab.concurrent` 等 |
+| **3 实验** | 已删或 growable 等 — 勿当默认 | 子单元 / 禁止回门面 |
 
 热路径：**只** `DefaultHeap` / 过程式 `GetMem`。`DefaultAllocator` 是注入面，不要进热循环。
 

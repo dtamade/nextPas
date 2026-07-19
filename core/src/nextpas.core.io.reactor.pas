@@ -62,6 +62,9 @@ type
     procedure Stop;
     function Flush: Int32;
     function HasPending: Boolean;
+    { Best-effort cancel of one Active entry with matching Context.
+      io_uring: IORING_OP_ASYNC_CANCEL (target CQE still arrives). }
+    function TryCancelByContext(AContext: Pointer): Boolean;
   end;
 
 implementation
@@ -227,6 +230,43 @@ begin
   FRing.CqeSeen(ACqe);
   if Assigned(LCallback) then
     LCallback(LId, LResult, LContext);
+end;
+
+function TIoReactor.TryCancelByContext(AContext: Pointer): Boolean;
+var
+  LI: UInt32;
+  LTargetId: UInt64;
+  LCancelId: UInt64;
+  LSqe: PIoUringSqe;
+  LFound: Boolean;
+begin
+  Result := False;
+  if (AContext = nil) or (not IsValid) then
+    Exit;
+  LFound := False;
+  LTargetId := 0;
+  if FEntryCount > 0 then
+  begin
+    for LI := 0 to FEntryCount - 1 do
+    begin
+      if FEntries[LI].Active and (FEntries[LI].Context = AContext) then
+      begin
+        LTargetId := LI;
+        LFound := True;
+        Break;
+      end;
+    end;
+  end;
+  if not LFound then
+    Exit;
+  LSqe := FRing.GetSqe;
+  if LSqe = nil then
+    Exit;
+  { Cancel CQE uses its own entry so DispatchCqe does not free the target early. }
+  LCancelId := AllocEntry(nil, nil);
+  IoUringPrepCancel(LSqe, LTargetId, 0);
+  IoUringSqeSetData(LSqe, LCancelId);
+  Result := True;
 end;
 
 function TIoReactor.AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;

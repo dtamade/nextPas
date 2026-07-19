@@ -58,6 +58,9 @@ function AsyncTcpListen(const ALoop: TAsyncLoop;
 { 创建异步 TCP 连接 }
 function AsyncTcpConnect(const ALoop: TAsyncLoop;
   const AAddr: string; const APort: UInt16): IAsyncTcpStream;
+{ Wrap an existing connected ITcpStream for async I/O on ALoop. }
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop;
+  const AStream: ITcpStream): IAsyncTcpStream;
 
 implementation
 
@@ -273,7 +276,7 @@ var
   LFd: PtrInt;
 begin
   LFd := PtrInt(NativeSocketHandle);
-  Result := FLoop.AsyncWrite(LFd, ABuf, ALen, 0, ACallback, AContext);
+  Result := FLoop.AsyncSend(LFd, ABuf, ALen, 0, ACallback, AContext);
 end;
 
 function TAsyncTcpStream.AsyncWriteRef(ABuf: Pointer; ALen: UInt32;
@@ -282,7 +285,7 @@ var
   LFd: PtrInt;
 begin
   LFd := PtrInt(NativeSocketHandle);
-  Result := FLoop.AsyncWrite(LFd, ABuf, ALen, 0, @IoCompletionRefWrapper,
+  Result := FLoop.AsyncSend(LFd, ABuf, ALen, 0, @IoCompletionRefWrapper,
     WrapIoCompletionRef(ACallback, AContext));
 end;
 
@@ -303,7 +306,7 @@ var
   LFd: PtrInt;
 begin
   LFd := PtrInt(NativeSocketHandle);
-  Result := FLoop.AsyncWriteTimeout(LFd, ABuf, ALen, 0, ADeadline, ACallback, AContext);
+  Result := FLoop.AsyncSendTimeout(LFd, ABuf, ALen, 0, ADeadline, ACallback, AContext);
 end;
 
 { TAsyncTcpListener }
@@ -444,8 +447,17 @@ function AsyncTcpConnect(const ALoop: TAsyncLoop;
 var
   LStream: ITcpStream;
 begin
+  { NetTcpConnect uses NetResolveAll + sequential multi-A / dual-stack try (HE-lite). }
   LStream := NetTcpConnect(AAddr, APort);
   Result := TAsyncTcpStream.Create(LStream, ALoop) as IAsyncTcpStream;
+end;
+
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop;
+  const AStream: ITcpStream): IAsyncTcpStream;
+begin
+  if (ALoop = nil) or (AStream = nil) then
+    raise EInvalidOperationError.Create('AsyncTcpStreamAdopt: nil loop or stream');
+  Result := TAsyncTcpStream.Create(AStream, ALoop) as IAsyncTcpStream;
 end;
 
 end.

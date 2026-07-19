@@ -2,6 +2,8 @@
 
 L2 文件系统操作模块。提供文件读写、目录操作、路径工具和临时文件管理。
 
+**Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
+
 ## 快速开始
 
 ```pascal
@@ -89,11 +91,15 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `Exists(APath)` | 检查路径是否存在 |
 | `IsDir(APath)` | 检查是否为目录 |
 | `IsFile(APath)` | 检查是否为普通文件 |
+| `IsSymlink(APath)` | 检查是否为符号链接（不跟随；不存在 False） |
 | `FileSize(APath)` | 返回文件大小（字节） |
 | `Chmod(APath, APerm)` | 设置文件权限 |
 | `Truncate(APath, ASize)` | 截断文件 |
 | `Symlink(ATarget, ALinkPath)` | 创建符号链接 |
 | `Readlink(APath)` | 读取符号链接目标 |
+| `HardLink(AOld, ANew)` | 创建硬链接（对齐 Go `os.Link`） |
+| `Chtimes(APath, AAccessNs, AModNs)` | 访问/修改时间（Unix 纳秒 epoch） |
+| `Chown(APath, AUid, AGid)` | 所有者（Unix；Windows 不支持） |
 
 ### 目录操作
 
@@ -139,6 +145,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `GetEnvironmentVariable` / `ParamCount` / `ParamStr` | **兼容入口**；新代码用 `os.env` / `args` |
 | `GetTempDir` | 获取系统临时目录 |
 | `SameFileName(A, B)` | 比较文件名是否相同（平台相关大小写规则） |
+| `SameFile(A, B)` | 是否同一 inode（lstat Dev+Ino；对齐 Go `os.SameFile`） |
 | `ForceDirectories` / `DeleteFile` | Boolean 兼容壳（吞异常）；失败要分类请用 `MkdirAll` / `Remove` |
 | `Remove` | 删除；**ENOENT 静默成功**（Pascal Erase 语义） |
 

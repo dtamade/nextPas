@@ -16,7 +16,10 @@ begin
     '  h1 { color: #333; }' + LineEnding +
     '  table { border-collapse: collapse; width: 100%; margin: 20px 0; }' + LineEnding +
     '  th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }' + LineEnding +
-    '  th { background-color: #f2f2f2; font-weight: bold; }' + LineEnding +
+    '  th { background-color: #f2f2f2; font-weight: bold; cursor: pointer; user-select: none; }' + LineEnding +
+    '  th:hover { background-color: #e2e2e2; }' + LineEnding +
+    '  th.sorted-asc::after { content: " ▲"; }' + LineEnding +
+    '  th.sorted-desc::after { content: " ▼"; }' + LineEnding +
     '  tr:nth-child(even) { background-color: #f9f9f9; }' + LineEnding +
     '  tr:hover { background-color: #f1f1f1; }' + LineEnding +
     '  .benchmark-name { text-align: left; font-weight: bold; }' + LineEnding +
@@ -25,6 +28,7 @@ begin
     '  .bench-chart { width: 100%; height: auto; overflow: visible; }' + LineEnding +
     '  .chart-label { font: 11px sans-serif; fill: #27403a; }' + LineEnding +
     '  .chart-value { font: 11px sans-serif; fill: #5b6470; }' + LineEnding +
+    '  .summary { margin: 20px 0; padding: 15px; background: #e8f5e9; border-radius: 5px; }' + LineEnding +
     '</style>';
   FCSSCached := True;
   Result := FCachedCSS;
@@ -185,7 +189,71 @@ begin
 end;
 
 procedure TBenchReportGenerator.GenerateHTMLFooter(var ABuf: TLineBuffer);
+var
+  LExecuted, LSkipped, I: Integer;
 begin
+  BufferAddLine(ABuf, '');
+  BufferAddLine(ABuf, '  <div class="summary">');
+  BufferAddLine(ABuf, '    <h2>Summary</h2>');
+  BufferAddLine(ABuf, '    <p><strong>Total:</strong> ' + IntToStr(FResultCount) + '</p>');
+
+  { 统计已执行和跳过的数量 }
+  LExecuted := 0;
+  LSkipped := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Skipped then
+      Inc(LSkipped)
+    else if FResults[I].Executed then
+      Inc(LExecuted);
+  end;
+  BufferAddLine(ABuf, '    <p><strong>Executed:</strong> ' + IntToStr(LExecuted) + '</p>');
+  BufferAddLine(ABuf, '    <p><strong>Skipped:</strong> ' + IntToStr(LSkipped) + '</p>');
+  BufferAddLine(ABuf, '  </div>');
+
+  BufferAddLine(ABuf, '');
+  BufferAddLine(ABuf, '  <script>');
+  BufferAddLine(ABuf, '    function sortTable(col, type) {');
+  BufferAddLine(ABuf, '      var table = document.querySelector("table");');
+  BufferAddLine(ABuf, '      var tbody = table.querySelector("tbody");');
+  BufferAddLine(ABuf, '      var rows = Array.from(tbody.querySelectorAll("tr"));');
+  BufferAddLine(ABuf, '      var th = table.querySelectorAll("th")[col];');
+  BufferAddLine(ABuf, '      var asc = !th.classList.contains("sorted-asc");');
+  BufferAddLine(ABuf, '      ');
+  BufferAddLine(ABuf, '      // 清除所有排序标记');
+  BufferAddLine(ABuf, '      table.querySelectorAll("th").forEach(function(h) {');
+  BufferAddLine(ABuf, '        h.classList.remove("sorted-asc", "sorted-desc");');
+  BufferAddLine(ABuf, '      });');
+  BufferAddLine(ABuf, '      ');
+  BufferAddLine(ABuf, '      // 设置排序标记');
+  BufferAddLine(ABuf, '      th.classList.add(asc ? "sorted-asc" : "sorted-desc");');
+  BufferAddLine(ABuf, '      ');
+  BufferAddLine(ABuf, '      // 排序');
+  BufferAddLine(ABuf, '      rows.sort(function(a, b) {');
+  BufferAddLine(ABuf, '        var aVal = a.cells[col].textContent;');
+  BufferAddLine(ABuf, '        var bVal = b.cells[col].textContent;');
+  BufferAddLine(ABuf, '        ');
+  BufferAddLine(ABuf, '        if (type === "number") {');
+  BufferAddLine(ABuf, '          aVal = parseFloat(aVal.replace(/,/g, "")) || 0;');
+  BufferAddLine(ABuf, '          bVal = parseFloat(bVal.replace(/,/g, "")) || 0;');
+  BufferAddLine(ABuf, '        }');
+  BufferAddLine(ABuf, '        ');
+  BufferAddLine(ABuf, '        if (aVal < bVal) return asc ? -1 : 1;');
+  BufferAddLine(ABuf, '        if (aVal > bVal) return asc ? 1 : -1;');
+  BufferAddLine(ABuf, '        return 0;');
+  BufferAddLine(ABuf, '      });');
+  BufferAddLine(ABuf, '      ');
+  BufferAddLine(ABuf, '      // 重新排列');
+  BufferAddLine(ABuf, '      rows.forEach(function(row) { tbody.appendChild(row); });');
+  BufferAddLine(ABuf, '    }');
+  BufferAddLine(ABuf, '    ');
+  BufferAddLine(ABuf, '    // 绑定点击事件');
+  BufferAddLine(ABuf, '    document.querySelectorAll("th").forEach(function(th, i) {');
+  BufferAddLine(ABuf, '      th.addEventListener("click", function() {');
+  BufferAddLine(ABuf, '        sortTable(i, i === 0 ? "string" : "number");');
+  BufferAddLine(ABuf, '      });');
+  BufferAddLine(ABuf, '    });');
+  BufferAddLine(ABuf, '  </script>');
   BufferAddLine(ABuf, '</body>');
   BufferAddLine(ABuf, '</html>');
 end;
@@ -296,6 +364,7 @@ var
   I, J: Integer;
   LRatio: Double;
   LClass: string;
+  LTotalRows, LFaster, LSlower, LSame: Integer;
 begin
   LBuf := Default(TLineBuffer);
   try
@@ -314,9 +383,40 @@ begin
   BufferAddLine(LBuf, '  .geomean { background: #edf2f7; font-weight: 700; }');
   BufferAddLine(LBuf, '  h1 { color: #2d3748; }');
   BufferAddLine(LBuf, '  .subtitle { color: #718096; margin-bottom: 20px; }');
+  BufferAddLine(LBuf, '  .summary { margin: 20px 0; padding: 15px; background: #e8f5e9; border-radius: 5px; }');
+  BufferAddLine(LBuf, '  .summary p { margin: 5px 0; }');
   BufferAddLine(LBuf, '</style></head><body>');
   BufferAddLine(LBuf, '<h1>Multi-Baseline Comparison Matrix</h1>');
   BufferAddLine(LBuf, '<p class="subtitle">Ratio = current / baseline. &lt;1.0 = faster, &gt;1.0 = slower.</p>');
+
+  { 摘要部分 }
+  LTotalRows := Length(AMatrix.Rows);
+  LFaster := 0;
+  LSlower := 0;
+  LSame := 0;
+  for I := 0 to High(AMatrix.GeometricMeanRatios) do
+  begin
+    LRatio := AMatrix.GeometricMeanRatios[I];
+    if not IsDoubleNaN(LRatio) then
+    begin
+      if LRatio < 0.95 then
+        Inc(LFaster)
+      else if LRatio > 1.05 then
+        Inc(LSlower)
+      else
+        Inc(LSame);
+    end;
+  end;
+
+  BufferAddLine(LBuf, '<div class="summary">');
+  BufferAddLine(LBuf, '  <h2>Summary</h2>');
+  BufferAddLine(LBuf, '  <p><strong>Baselines:</strong> ' + IntToStr(Length(AMatrix.BaselineNames)) + '</p>');
+  BufferAddLine(LBuf, '  <p><strong>Benchmarks:</strong> ' + IntToStr(LTotalRows) + '</p>');
+  BufferAddLine(LBuf, '  <p><strong>Faster:</strong> ' + IntToStr(LFaster) + '</p>');
+  BufferAddLine(LBuf, '  <p><strong>Slower:</strong> ' + IntToStr(LSlower) + '</p>');
+  BufferAddLine(LBuf, '  <p><strong>Same:</strong> ' + IntToStr(LSame) + '</p>');
+  BufferAddLine(LBuf, '</div>');
+
   BufferAddLine(LBuf, '<table class="matrix">');
   BufferAddLine(LBuf, '<tr><th>Benchmark</th><th>ns/op</th><th>B/op</th><th>allocs/op</th>');
   for I := 0 to High(AMatrix.BaselineNames) do

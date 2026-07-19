@@ -53,7 +53,7 @@ type
 
   TAsyncMutex = class(TInterfacedObject, IAsyncMutex)
   private
-    FLoop: TAsyncLoop;  { 指向调用者的 loop，不拥有 }
+    FLoop: TAsyncLoop;  { not owned; must outlive mutex }
     FLocked: Boolean;
     FWaiterHead: PWaiterNode;
     FWaiterTail: PWaiterNode;
@@ -78,7 +78,7 @@ type
 constructor TAsyncMutex.Create(const ALoop: TAsyncLoop);
 begin
   inherited Create;
-  FLoop := ALoop;  { 存储指向调用者 loop 的指针 }
+  FLoop := ALoop;  { not owned }
   FLocked := False;
   FWaiterHead := nil;
   FWaiterTail := nil;

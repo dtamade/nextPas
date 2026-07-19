@@ -26,6 +26,9 @@ var
   GVerbResult: TTestRunResult;
   { Phase 10: Cleanup in parallel }
   GCleanupCounter: Integer = 0;
+  { B4 v8.8d: race-intent counters }
+  GAtomicCounter: LongInt = 0;
+  GSeqDone: LongInt = 0;
 
 { Named procedures for closures stored in global TTestSuite variables.
   Anonymous closures in global records leak because FPC finalizes global
@@ -53,6 +56,42 @@ end;
 procedure CleanupIncrement;
 begin
   InterLockedIncrement(GCleanupCounter);
+end;
+
+{ ── B4: race-intent helpers ──────────────────────────────────────────────── }
+
+procedure AtomicIncBody;
+var
+  I: Integer;
+begin
+  for I := 1 to 1000 do
+    InterLockedIncrement(GAtomicCounter);
+  CheckTrue(True, 'atomic body done');
+end;
+
+procedure SeqMarkerBody;
+begin
+  SleepMs(30);
+  { Phase 1 is serial — single writer before parallel workers start. }
+  GSeqDone := 1;
+  CheckTrue(True, 'seq marker');
+end;
+
+procedure ParSeesSeqDone;
+begin
+  { Phase-1 TestSeq finishes before Phase-2 parallel workers start. }
+  CheckTrue(GSeqDone = 1, 'TestSeq must complete before parallel tests');
+end;
+
+procedure ExpectStormBody;
+var
+  I: Integer;
+begin
+  for I := 1 to 500 do
+  begin
+    ExpectInt(I).ToEqualInt(I);
+    CheckEqual(I, I);
+  end;
 end;
 
 procedure TestParallelSimple;
@@ -680,6 +719,91 @@ begin
         IntToStr(Length(LResults)));
     ResetDefaultConfig;
     PassTest('RunAllParallelWithResult');
+  end;
+
+  { ── B4 v8.8d: race-intent pressure (Go -race substitute) ───────────── }
+  WriteLn;
+  SectionHeader('B4: Atomic counter under RunParallel');
+  begin
+    ResetDefaultConfig;
+    GAtomicCounter := 0;
+    LSuite := TTestSuite.Create('AtomicRace');
+    LSuite.Test('a1', @AtomicIncBody);
+    LSuite.Test('a2', @AtomicIncBody);
+    LSuite.Test('a3', @AtomicIncBody);
+    LSuite.Test('a4', @AtomicIncBody);
+    LSuite.Test('a5', @AtomicIncBody);
+    LSuite.Test('a6', @AtomicIncBody);
+    LSuite.Test('a7', @AtomicIncBody);
+    LSuite.Test('a8', @AtomicIncBody);
+    LSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed <> 8 then
+      FailTest('atomic race: expected 8 passed, got ' + IntToStr(GVerbResult.Passed));
+    if GAtomicCounter <> 8 * 1000 then
+      FailTest('atomic race: expected counter 8000, got ' + IntToStr(GAtomicCounter));
+    ResetDefaultConfig;
+    PassTest('B4 atomic counter');
+  end;
+
+  WriteLn;
+  SectionHeader('B4: TestSeq runs before parallel batch');
+  begin
+    ResetDefaultConfig;
+    GSeqDone := 0;
+    LSuite := TTestSuite.Create('SeqThenParallel');
+    LSuite.TestSeq('seq-first', @SeqMarkerBody);
+    LSuite.Test('par-a', @ParSeesSeqDone);
+    LSuite.Test('par-b', @ParSeesSeqDone);
+    LSuite.Test('par-c', @ParSeesSeqDone);
+    LSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed <> 4 then
+      FailTest('TestSeq mix: expected 4 passed, got ' + IntToStr(GVerbResult.Passed));
+    if GSeqDone <> 1 then
+      FailTest('TestSeq mix: GSeqDone not set');
+    ResetDefaultConfig;
+    PassTest('B4 TestSeq before parallel');
+  end;
+
+  WriteLn;
+  SectionHeader('B4: Expect/Check storm in parallel');
+  begin
+    ResetDefaultConfig;
+    LSuite := TTestSuite.Create('ExpectStorm');
+    LSuite.Test('e1', @ExpectStormBody);
+    LSuite.Test('e2', @ExpectStormBody);
+    LSuite.Test('e3', @ExpectStormBody);
+    LSuite.Test('e4', @ExpectStormBody);
+    LSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed <> 4 then
+      FailTest('expect storm: expected 4 passed, got ' + IntToStr(GVerbResult.Passed));
+    if GVerbResult.Failed <> 0 then
+      FailTest('expect storm: unexpected failures');
+    ResetDefaultConfig;
+    PassTest('B4 expect storm');
+  end;
+
+  WriteLn;
+  SectionHeader('B4: Parallel result aggregation totals');
+  begin
+    ResetDefaultConfig;
+    LSuite := TTestSuite.Create('AggTotals');
+    LSuite.Test('ok1', @TestParallelPassA);
+    LSuite.Test('ok2', @TestParallelPassB);
+    LSuite.Test('ok3', @TestParallelPassA);
+    LSuite.Test('bad', @TestParallelFail);
+    LSuite.Test('skp', @TestParallelSkip);
+    LSuite.RunParallelWithResult(nil, GVerbResult);
+    if GVerbResult.Passed + GVerbResult.Failed + GVerbResult.Skipped <> 5 then
+      FailTest('aggregation: P+F+S expected 5, got ' +
+        IntToStr(GVerbResult.Passed + GVerbResult.Failed + GVerbResult.Skipped));
+    if GVerbResult.Passed <> 3 then
+      FailTest('aggregation: expected 3 passed');
+    if GVerbResult.Failed <> 1 then
+      FailTest('aggregation: expected 1 failed');
+    if GVerbResult.Skipped <> 1 then
+      FailTest('aggregation: expected 1 skipped');
+    ResetDefaultConfig;
+    PassTest('B4 result aggregation');
   end;
 
   WriteLn;

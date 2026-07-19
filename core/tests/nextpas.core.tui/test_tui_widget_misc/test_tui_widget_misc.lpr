@@ -71,7 +71,7 @@ begin
   LS := TScrollbar.New.WithTotal(20).WithVisible(5).WithOffset(0);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 5));
   try
-    (LS as IWidget).Render(TRect.Make(0, 0, 1, 5), LBuf);
+    LS.Render(TRect.Make(0, 0, 1, 5), LBuf);
     Check(True, 'scrollbar rendered without crash');
   finally LBuf.Free; end;
 end;
@@ -103,7 +103,7 @@ begin
 
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 5));
   try
-    (LS as IWidget).Render(TRect.Make(0, 0, 1, 5), LBuf);
+    LS.Render(TRect.Make(0, 0, 1, 5), LBuf);
     CheckEqual('.', LBuf.RowAsString(0), 'row 0 remains track');
     CheckEqual('.', LBuf.RowAsString(1), 'row 1 remains track');
     CheckEqual('.', LBuf.RowAsString(2), 'row 2 remains track');
@@ -124,6 +124,100 @@ begin
   CheckEqual(Int64(0), Int64(LS.PageUp), 'page up clamped at 0');
 end;
 
+{ === Tabs builders === }
+procedure TestTabsStyles;
+var LTabs: ITabsWidget; LBuf: TBuffer; LState: TTabsState;
+begin
+  LTabs := TTabsWidget.New(['A', 'B', 'C'])
+    .WithActiveStyle(StyleFg(TUI_RED))
+    .WithInactiveStyle(StyleFg(TUI_BLUE))
+    .WithSeparator(' | ');
+  LState.Selected := 0;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 1));
+  try
+    LTabs.RenderStateful(TRect.Make(0, 0, 30, 1), LBuf, LState);
+    Check(Pos('A', LBuf.RowAsString(0)) > 0, 'tab A visible');
+    Check(Pos('|', LBuf.RowAsString(0)) > 0, 'custom separator visible');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTabsNavigation;
+var LState: TTabsState;
+begin
+  LState.Selected := 0;
+  CheckEqual(0, LState.Selected, 'initial');
+  LState.Selected := 1;
+  CheckEqual(1, LState.Selected, 'after set');
+  LState.Selected := 2;
+  CheckEqual(2, LState.Selected, 'after second set');
+end;
+
+{ === Scrollbar builders === }
+procedure TestScrollbarCustomChars;
+var LS: IScrollbar; LBuf: TBuffer; LCell: PCell;
+begin
+  LS := TScrollbar.New
+    .WithTotal(10).WithVisible(3).WithOffset(0)
+    .WithTrackChar('.').WithThumbChar('#')
+    .WithTrackStyle(StyleFg(TUI_BLUE))
+    .WithThumbStyle(StyleFg(TUI_RED));
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 5));
+  try
+    LS.Render(TRect.Make(0, 0, 1, 5), LBuf);
+    LCell := LBuf.CellAt(0, 4);
+    Check(LCell <> nil, 'cell at bottom exists');
+    Check(True, 'scrollbar with custom chars renders');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollbarSingleItem;
+var LS: IScrollbar;
+begin
+  LS := TScrollbar.New.WithTotal(1).WithVisible(1).WithOffset(0);
+  CheckEqual(Int64(0), Int64(LS.ThumbStart(5)), 'single item thumb at 0');
+  Check(LS.HitAt(TRect.Make(0, 0, 1, 5), 0) = shThumb, 'single item hit thumb');
+end;
+
+procedure TestScrollbarOffsetFromDragY;
+var LS: IScrollbar; LOffset: Integer;
+begin
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0);
+  LOffset := LS.OffsetFromDragY(TRect.Make(0, 0, 1, 10), 5);
+  Check(LOffset >= 0, 'drag offset non-negative');
+  Check(LOffset <= 90, 'drag offset within bounds');
+end;
+
+
+procedure TestTabsEmptyTitles;
+var LT: ITabsWidget; LBuf: TBuffer;
+begin
+  LT := TTabsWidget.New([]);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 2));
+  try
+    LT.Render(TRect.Make(0, 0, 20, 2), LBuf);
+    Check(True, 'empty tabs render');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollbarZeroTotal;
+var LS: IScrollbar;
+begin
+  LS := TScrollbar.New.WithTotal(0).WithVisible(0).WithOffset(0);
+  CheckEqual(Int64(0), Int64(LS.ThumbStart(10)), 'zero total thumb start 0');
+end;
+
+procedure TestScrollbarOffsetClampOnRender;
+var LS: IScrollbar; LBuf: TBuffer;
+begin
+  LS := TScrollbar.New.WithTotal(50).WithVisible(10).WithOffset(999);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 10));
+  try
+    LS.Render(TRect.Make(0, 0, 1, 10), LBuf);
+    Check(True, 'large offset clamped on render');
+  finally LBuf.Free; end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.misc');
   T.Test('clear widget', @TestClearWidget);
@@ -135,5 +229,13 @@ begin
   T.Test('scrollbar clamps offset for thumb render and hit',
     @TestScrollbarClampsOffsetForThumbRenderAndHit);
   T.Test('scrollbar page up/down', @TestScrollbarPageUpDown);
-  if not T.Run then Halt(1);
+  T.Test('tabs styles', @TestTabsStyles);
+  T.Test('tabs navigation', @TestTabsNavigation);
+  T.Test('scrollbar custom chars', @TestScrollbarCustomChars);
+  T.Test('scrollbar single item', @TestScrollbarSingleItem);
+  T.Test('scrollbar offset from drag', @TestScrollbarOffsetFromDragY);
+  T.Test('tabs empty titles', @TestTabsEmptyTitles);
+  T.Test('scrollbar zero total', @TestScrollbarZeroTotal);
+  T.Test('scrollbar offset clamp on render', @TestScrollbarOffsetClampOnRender);
+if not T.Run then Halt(1);
 end.

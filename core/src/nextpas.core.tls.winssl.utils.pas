@@ -516,7 +516,7 @@ begin
     Exit;
     
   if pBuffer^.pvBuffer <> nil then
-    FreeMem(pBuffer^.pvBuffer);
+    FreeMem(pBuffer^.pvBuffer, SizeUInt(pBuffer^.cbBuffer));
     
   Dispose(pBuffer);
 end;
@@ -548,10 +548,11 @@ begin
     for I := 0 to Integer(pBufferDesc^.cBuffers) - 1 do
     begin
       if pBuffer^.pvBuffer <> nil then
-        FreeMem(pBuffer^.pvBuffer);
+        FreeMem(pBuffer^.pvBuffer, SizeUInt(pBuffer^.cbBuffer));
       Inc(pBuffer);
     end;
-    FreeMem(pBufferDesc^.pBuffers);
+    FreeMem(pBufferDesc^.pBuffers,
+      SizeUInt(SizeOf(TSecBuffer)) * SizeUInt(pBufferDesc^.cBuffers));
   end;
   
   Dispose(pBufferDesc);
@@ -594,9 +595,16 @@ begin
 end;
 
 procedure FreePWideCharString(P: PWideChar);
+var
+  L: Integer;
 begin
-  if P <> nil then
-    FreeMem(P);
+  if P = nil then
+    Exit;
+  { Match StringToPWideChar: (Len + 1) * SizeOf(WideChar), Len via NUL scan. }
+  L := 0;
+  while P[L] <> #0 do
+    Inc(L);
+  FreeMem(P, SizeUInt(L + 1) * SizeOf(WideChar));
 end;
 
 function AnsiToWide(const S: AnsiString): WideString;

@@ -2,6 +2,8 @@
 
 路径操作兼容 facade，委托给 `nextpas.core.fs.path` 实现。
 
+**Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
+
 ## 模块定位
 
 - **层级**: L2 facade
@@ -42,6 +44,16 @@
 | `PathIsAbsolute(APath)` | 判断是否绝对路径 |
 | `PathIsRelative(APath)` | 判断是否相对路径 |
 | `PathNormalize(APath)` | 同 `PathClean` |
+
+### 对标 Go filepath 扩展
+
+| 函数 | 说明 |
+|------|------|
+| `PathToSlash` / `PathFromSlash` | `\`↔`/` / 平台分隔符 |
+| `PathSplitList` | PATH 列表拆分（`PathListSeparator`） |
+| `PathVolume` | 卷名/盘符（Unix 空） |
+| `PathFileStem` | 去掉最后一段扩展名的文件名 |
+| `PathStripPrefix` | 去掉路径前缀（非前缀返回 `''`） |
 
 ### SysUtils 兼容函数
 

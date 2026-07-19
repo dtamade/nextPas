@@ -199,8 +199,9 @@ begin
     'Tamil KA + AA is one display cluster');
   CheckEqual(Int64(1), Int64(StringDisplayWidth(#$E0#$A4#$95 + #$E0#$A5#$8D + #$E0#$A4#$B7)),
     'Devanagari KA + VIRAMA + SSA is one display cluster');
-  CheckEqual(Int64(1), Int64(StringDisplayWidth(#$E0#$AE#$95 + #$E0#$AF#$8D + #$E0#$AE#$95)),
-    'Tamil KA + VIRAMA + KA is one display cluster');
+  { Tamil is not InCB=Consonant — two clusters under UAX #29 GB9c. }
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(#$E0#$AE#$95 + #$E0#$AF#$8D + #$E0#$AE#$95)),
+    'Tamil KA + VIRAMA + KA is two display clusters');
 end;
 
 { CodepointWidth - 补充的 wide 区间（Codex 审查后新增） }

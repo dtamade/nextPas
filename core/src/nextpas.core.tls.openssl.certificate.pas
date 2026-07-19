@@ -1862,7 +1862,7 @@ begin
       end;
     end;
   finally
-    FreeMem(DER);
+    FreeMem(DER, SizeUInt(DERLen));
   end;
 end;
 

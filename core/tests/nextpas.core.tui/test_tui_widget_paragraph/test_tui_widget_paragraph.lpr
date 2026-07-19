@@ -92,6 +92,146 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestRightAlignment;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.New(TText.Raw('Hi')).WithAlignment(caRight);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 1), LBuf);
+    LLines := LBuf.AsLines;
+    { 'Hi' width 2, area 10 -> right aligned -> starts at col 8 }
+    Check(LLines[0][9] = 'H', 'H at col 8 (1-indexed 9)');
+  finally LBuf.Free; end;
+end;
+
+procedure TestWrappedShortcut;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.Wrapped('hello world');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 3));
+  try
+    LP.Render(TRect.Make(0, 0, 6, 3), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Pos('hello', LLines[0]) > 0, 'wrapped first line');
+    Check(Pos('world', LLines[1]) > 0, 'wrapped second line');
+  finally LBuf.Free; end;
+end;
+
+procedure TestEmptyText;
+var LP: IParagraph; LBuf: TBuffer;
+begin
+  LP := TParagraph.FromString('');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 1));
+  try
+    LP.Render(TRect.Make(0, 0, 5, 1), LBuf);
+    Check(True, 'empty text does not crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestMultiLineNoWrap;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.FromString('line1'#10'line2'#10'line3');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 3));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 3), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Pos('line1', LLines[0]) > 0, 'line1 rendered');
+    Check(Pos('line2', LLines[1]) > 0, 'line2 rendered');
+    Check(Pos('line3', LLines[2]) > 0, 'line3 rendered');
+  finally LBuf.Free; end;
+end;
+
+procedure TestLeftAlignmentDefault;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.FromString('Hi');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 1), LBuf);
+    LLines := LBuf.AsLines;
+    // Left alignment: 'H' at col 0
+    Check(LLines[0][1] = 'H', 'Left aligned: H at col 0');
+  finally LBuf.Free; end;
+end;
+
+procedure TestWithStyle;
+var LP: IParagraph; LBuf: TBuffer;
+  LStyle: TStyle;
+begin
+  LStyle.Fg := IndexedColor(3);
+  LP := TParagraph.FromString('styled').WithStyle(LStyle);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 1), LBuf);
+    Check(True, 'WithStyle renders without crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollYZero;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.New(TText.FromString('first'#10'second'))
+    .WithScrollY(0);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 2));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 2), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Pos('first', LLines[0]) > 0, 'ScrollY(0) shows first line');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollYBeyondContent;
+var LP: IParagraph; LBuf: TBuffer;
+begin
+  LP := TParagraph.New(TText.FromString('only'))
+    .WithScrollY(100);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 2));
+  try
+    LP.Render(TRect.Make(0, 0, 10, 2), LBuf);
+    Check(True, 'ScrollY beyond content does not crash');
+  finally LBuf.Free; end;
+end;
+
+procedure TestWrapMultiLine;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.Wrapped('ab cd ef gh');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 4));
+  try
+    LP.Render(TRect.Make(0, 0, 5, 4), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Pos('ab', LLines[0]) > 0, 'wrap: first line has ab');
+    Check(Pos('cd', LLines[1]) > 0, 'wrap: second line has cd');
+  finally LBuf.Free; end;
+end;
+
+
+procedure TestWrapEmptyString;
+var LP: IParagraph; LBuf: TBuffer;
+begin
+  LP := TParagraph.Wrapped('');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 2));
+  try
+    LP.Render(TRect.Make(0, 0, 8, 2), LBuf);
+    Check(True, 'empty wrapped text ok');
+  finally LBuf.Free; end;
+end;
+
+procedure TestSingleLongWordNoSpace;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.Wrapped('abcdefghij');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 3));
+  try
+    LP.Render(TRect.Make(0, 0, 4, 3), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Length(LLines[0]) > 0, 'long word produces output');
+  finally LBuf.Free; end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.paragraph');
   T.Test('simple render', @TestSimpleRender);
@@ -100,5 +240,16 @@ begin
   T.Test('wrap trim', @TestWrapTrim);
   T.Test('scroll y', @TestScrollY);
   T.Test('as IWidget', @TestAsIWidget);
-  if not T.Run then Halt(1);
+  T.Test('right alignment', @TestRightAlignment);
+  T.Test('wrapped shortcut', @TestWrappedShortcut);
+  T.Test('empty text', @TestEmptyText);
+  T.Test('multi-line no wrap', @TestMultiLineNoWrap);
+  T.Test('left alignment default', @TestLeftAlignmentDefault);
+  T.Test('with style', @TestWithStyle);
+  T.Test('scroll y zero', @TestScrollYZero);
+  T.Test('scroll y beyond content', @TestScrollYBeyondContent);
+  T.Test('wrap multi-line', @TestWrapMultiLine);
+  T.Test('wrap empty string', @TestWrapEmptyString);
+  T.Test('single long word no space', @TestSingleLongWordNoSpace);
+if not T.Run then Halt(1);
 end.

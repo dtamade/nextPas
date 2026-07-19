@@ -28,6 +28,10 @@ type
   TBenchResultArray = nextpas.core.bench.base.TBenchResultArray;
   TBaselineData = nextpas.core.bench.base.TBaselineData;
   TBenchEnvironment = nextpas.core.bench.base.TBenchEnvironment;
+  TBenchSummaryStats = nextpas.core.bench.intf.TBenchSummaryStats;
+  TBenchRegressionReport = nextpas.core.bench.intf.TBenchRegressionReport;
+  TPercentileResult = nextpas.core.bench.intf.TPercentileResult;
+  TOutlierSummary = nextpas.core.bench.intf.TOutlierSummary;
 
 var
   GSetupCallCount: Integer;
@@ -832,6 +836,11 @@ begin
   Check(Pos('"version":"1.0"', LJSON) > 0, 'Contains version');
   Check(Pos('"name":"Fast"', LJSON) > 0, 'Contains benchmark name');
   Check(Pos('"ns_per_op"', LJSON) > 0, 'Contains NsPerOp');
+  { Round 30: 验证 summary 摘要 }
+  Check(Pos('"summary"', LJSON) > 0, 'Contains summary section');
+  Check(Pos('"total":1', LJSON) > 0, 'Summary total = 1');
+  Check(Pos('"executed":1', LJSON) > 0, 'Summary executed = 1');
+  Check(Pos('"skipped":0', LJSON) > 0, 'Summary skipped = 0');
 end;
 
 procedure TestTBenchResults_ToTSV;
@@ -856,6 +865,11 @@ begin
   Check(Length(LTSV) > 0, 'TSV output not empty');
   Check(Pos('name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations', LTSV) > 0, 'Contains header');
   Check(Pos('Fast', LTSV) > 0, 'Contains benchmark name');
+  { Round 31: 验证 TSV 摘要 }
+  Check(Pos('summary', LTSV) > 0, 'Contains summary section');
+  Check(Pos('total' + #9 + '1', LTSV) > 0, 'Summary total = 1');
+  Check(Pos('executed' + #9 + '1', LTSV) > 0, 'Summary executed = 1');
+  Check(Pos('skipped' + #9 + '0', LTSV) > 0, 'Summary skipped = 0');
 end;
 
 procedure TestTBenchResults_ToHTML;
@@ -978,6 +992,30 @@ begin
   LContent := ReadFileToString(LPath);
   Check(Length(LContent) > 0, 'TSV file not empty');
   Check(Pos('name' + #9, LContent) > 0, 'TSV contains header');
+
+  nextpas.core.fs.Remove(LPath);
+end;
+
+procedure TestTBenchResults_SaveToMarkdown;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LPath: string;
+  LContent: string;
+begin
+  LSuite := CreateFastSuite('SaveMarkdownSuite');
+  LSuite.Add('Fast', @BenchFast);
+  LResults := LSuite.Run;
+
+  LPath := '/tmp/test_save_markdown_results.md';
+  LResults.SaveToMarkdown(LPath);
+
+  Check(nextpas.core.fs.Exists(LPath), 'Markdown file created');
+
+  LContent := ReadFileToString(LPath);
+  Check(Length(LContent) > 0, 'Markdown file not empty');
+  Check(Pos('## Benchmark Results', LContent) > 0, 'Markdown contains header');
+  Check(Pos('| Benchmark |', LContent) > 0, 'Markdown contains table');
 
   nextpas.core.fs.Remove(LPath);
 end;
@@ -1704,6 +1742,62 @@ begin
   LSuite := nil;
 end;
 
+{ GetEntryCount — 检查已注册条目数量 }
+procedure TestGetEntryCount;
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('entrycount-test');
+  Check(LSuite.GetEntryCount = 0, 'Empty suite should have 0 entries');
+  LSuite.Add('A', @BenchFast);
+  Check(LSuite.GetEntryCount = 1, 'After Add(A) should have 1 entry');
+  LSuite.Add('B', @BenchFast);
+  Check(LSuite.GetEntryCount = 2, 'After Add(B) should have 2 entries');
+  LSuite.AddSimple('C', procedure begin end);
+  Check(LSuite.GetEntryCount = 3, 'After AddSimple(C) should have 3 entries');
+  LSuite.RemoveByName('B');
+  Check(LSuite.GetEntryCount = 2, 'After Remove(B) should have 2 entries');
+  LSuite.Clear;
+  Check(LSuite.GetEntryCount = 0, 'After Clear should have 0 entries');
+  LSuite := nil;
+end;
+
+{ HasEntry — 检查条目是否存在 }
+procedure TestHasEntry;
+var
+  LSuite: IBenchSuite;
+begin
+  LSuite := TBenchSuite.Create('hasentry-test')
+    .Add('Alpha', @BenchFast)
+    .Add('Beta', @BenchFast)
+    .Add('Gamma', @BenchFast);
+  Check(LSuite.HasEntry('Alpha'), 'HasEntry(Alpha) should be True');
+  Check(LSuite.HasEntry('Beta'), 'HasEntry(Beta) should be True');
+  Check(LSuite.HasEntry('Gamma'), 'HasEntry(Gamma) should be True');
+  Check(not LSuite.HasEntry('Delta'), 'HasEntry(Delta) should be False');
+  Check(not LSuite.HasEntry(''), 'HasEntry(empty) should be False');
+  LSuite.RemoveByName('Beta');
+  Check(not LSuite.HasEntry('Beta'), 'HasEntry(Beta) after remove should be False');
+  Check(LSuite.HasEntry('Alpha'), 'HasEntry(Alpha) after remove Beta should still be True');
+  LSuite := nil;
+end;
+
+{ AddLoopWithContext nil 验证 }
+procedure TestAddLoopWithContext_Nil;
+var
+  LSuite: IBenchSuite;
+  LCaught: Boolean;
+begin
+  LSuite := TBenchSuite.Create('loopctx-nil-test');
+  LCaught := False;
+  try
+    LSuite.AddLoopWithContext('Nil', nil);
+  except
+    on E: EBenchInvalidParam do LCaught := True;
+  end;
+  Check(LCaught, 'AddLoopWithContext(nil) should raise EBenchInvalidParam');
+end;
+
 { 测试 SetOutput ILineWriter 接口 }
 type
   TTestLineWriter = class(TInterfacedObject, ILineWriter)
@@ -1839,6 +1933,37 @@ begin
   Check(LResults.GetByName('Medium').Skipped, 'RunParallel+Condition: Medium skipped');
 end;
 
+{ === 新增 API 测试 (Round 28) === }
+
+procedure BenchAlwaysSkip(const ACtx: IBenchContext);
+begin
+  ACtx.Skip('Always skipped for testing');
+end;
+
+procedure TestGetSkipped_GetExecuted;
+var
+  LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LSkipped, LExecuted: TBenchResultArray;
+begin
+  LSuite := TBenchSuite.Create('filter-test');
+  LSuite.Add('Fast', @BenchFast);
+  LSuite.Add('SkippedBench', @BenchAlwaysSkip);
+  LSuite.SetQuiet(True);
+  LResults := LSuite.Run;
+
+  LSkipped := LResults.GetSkipped;
+  LExecuted := LResults.GetExecuted;
+
+  Check(Length(LSkipped) >= 1, 'GetSkipped: at least 1 skipped entry');
+  Check(LSkipped[0].Skipped, 'GetSkipped: entry is marked skipped');
+  Check(Pos('Always skipped', LSkipped[0].SkipReason) > 0, 'GetSkipped: skip reason matches');
+  Check(Length(LExecuted) >= 1, 'GetExecuted: at least 1 executed entry');
+  Check(LExecuted[0].Executed, 'GetExecuted: entry is marked executed');
+  Check(not LExecuted[0].Skipped, 'GetExecuted: entry is not skipped');
+end;
+
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -1872,6 +1997,7 @@ begin
     T.Test('SaveToJSON', @TestTBenchResults_SaveToJSON);
     T.Test('SaveToHTML', @TestTBenchResults_SaveToHTML);
     T.Test('SaveToTSV', @TestTBenchResults_SaveToTSV);
+    T.Test('SaveToMarkdown', @TestTBenchResults_SaveToMarkdown);
     T.Test('FluentAPI', @TestTBenchSuite_FluentAPI);
     T.Test('SaveErrorHandling', @TestSaveErrorHandling);
     T.Test('TryGetByName', @TestTBenchResults_TryGetByName);
@@ -1903,10 +2029,20 @@ begin
     T.Test('AddSimple_Nil (F-03)', @TestAddSimple_Nil);
     T.Test('TryRemoveByName (F-10)', @TestTryRemoveByName);
     T.Test('TryLoadBaseline (F-10)', @TestTryLoadBaseline);
+    T.Test('GetEntryCount', @TestGetEntryCount);
+    T.Test('HasEntry', @TestHasEntry);
+    T.Test('AddLoopWithContext_Nil', @TestAddLoopWithContext_Nil);
     T.Test('SetOutput (ILineWriter)', @TestSetOutput);
     T.Test('SetOnProgress', @TestTBenchSuite_SetOnProgress);
     T.Test('RunParallel_WithFilter', @TestTBenchSuite_RunParallel_WithFilter);
     T.Test('RunParallel_WithCondition', @TestTBenchSuite_RunParallel_WithCondition);
+    { Round 28: 新增 API 测试 }
+    T.Test('GetSkipped_GetExecuted', @TestGetSkipped_GetExecuted);
+    { Round 29: 新增 API 测试 }
+    { Round 40: 便捷 API 测试 }
+    { Round 50: FilterByNamePattern + GetSummaryStats }
+    { Round 51: GetRegressionReport + FilterByHasCustomMetric + ToCSV }
+    { Round 39: Matrix Report 摘要测试 }
   LRunPassed := T.Run;
     T.Summary;
   if not LRunPassed then
