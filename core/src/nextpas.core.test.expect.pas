@@ -76,9 +76,13 @@ type
       const ARelEps: Double = 1e-9): IExpectation;
     function ToNotBeNearRel(const AExpected: Double;
       const ARelEps: Double = 1e-9): IExpectation;
-    { NaN checks }
-    function ToBeNaN: IExpectation;
-    function ToBeNotNaN: IExpectation;
+     { NaN checks }
+     function ToBeNaN: IExpectation;
+     function ToBeNotNaN: IExpectation;
+     { Infinity / finiteness checks (parity with CheckInf/CheckNotInf/CheckFinite) }
+     function ToBeInf: IExpectation;
+     function ToBeNotInf: IExpectation;
+     function ToBeFinite: IExpectation;
     { Byte array comparison: element-wise equality. }
     function ToEqualBytes(const AExpected: TBytes): IExpectation;
     { Int64 array comparison: element-wise equality. }
@@ -108,6 +112,12 @@ type
     { Object type checking: value must be an instance of AClass.
       Works with pointer expectations (ExpectPtr). }
     function ToBeInstanceOf(AClass: TClass): IExpectation;
+    { Snapshot comparison: string value must match the contents of the snapshot
+      file at ASnapshotDir/ASnapshotName. On first run (file not found), the
+      snapshot is created automatically. Set NEXTPAS_UPDATE_SNAPSHOTS=1 to
+      update existing snapshots. }
+    function ToMatchSnapshot(const ASnapshotDir,
+      ASnapshotName: string): IExpectation;
     { Unconditional failure — use in conditional branches. }
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
@@ -131,8 +141,9 @@ function ExpectArrayOfStr(const AValues: array of string): IExpectation;
 implementation
 
 uses
-  nextpas.core.math.scalar, { IsNan for Double comparison NaN guards }
-  nextpas.core.regex;       { RegexIsMatch for ToMatch }
+  nextpas.core.math.scalar,    { IsNan / IsInfinite for Double guards }
+  nextpas.core.regex,          { RegexIsMatch for ToMatch }
+  nextpas.core.test.check;     { CheckSnapshot delegation for ToMatchSnapshot }
 
 { ── Local helpers ─────────────────────────────────────────────────────────── }
 
@@ -177,9 +188,9 @@ type
   private
     FRefCount: LongInt;
   public
-    function QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
-    function _AddRef: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
-    function _Release: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
+    function QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+    function _AddRef: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+    function _Release: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
   end;
 
   TExpectation = class(TExpectationBase, IExpectation)
@@ -283,6 +294,9 @@ type
       const ARelEps: Double = 1e-9): IExpectation;
     function ToBeNaN: IExpectation;
     function ToBeNotNaN: IExpectation;
+    function ToBeInf: IExpectation;
+    function ToBeNotInf: IExpectation;
+    function ToBeFinite: IExpectation;
     { New: WithMessage, ToEqualBytes, ToFailUnexpected }
     function WithMessage(const AMessage: string): IExpectation;
     function ToEqualBytes(const AExpected: TBytes): IExpectation;
@@ -299,6 +313,8 @@ type
     function ToBeNotEmpty: IExpectation;
     function ToBeSorted: IExpectation;
     function ToBeInstanceOf(AClass: TClass): IExpectation;
+    function ToMatchSnapshot(const ASnapshotDir,
+      ASnapshotName: string): IExpectation;
     procedure ToFailUnexpected(const AMessage: string = '');
   end;
 
@@ -359,7 +375,7 @@ end;
 
 { ── TExpectationBase (non-atomic refcount) ─────────────────────────────────── }
 
-function TExpectationBase.QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
+function TExpectationBase.QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
 begin
   if GetInterface(IID, Obj) then
     Result := 0
@@ -367,13 +383,13 @@ begin
     Result := LongInt(E_NOINTERFACE);
 end;
 
-function TExpectationBase._AddRef: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
+function TExpectationBase._AddRef: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
 begin
   Inc(FRefCount);
   Result := FRefCount;
 end;
 
-function TExpectationBase._Release: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
+function TExpectationBase._Release: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
 begin
   Dec(FRefCount);
   Result := FRefCount;
@@ -1212,6 +1228,41 @@ begin
   Result := Self;
 end;
 
+function TExpectation.ToBeInf: IExpectation;
+begin
+  RequireKind(ekDouble, 'ToBeInf');
+  CheckMatch(IsInfinite(FDoubleValue),
+    'Expected non-infinite but got ' + FloatToStr(FDoubleValue),
+    'Expected infinite but got ' + FloatToStr(FDoubleValue));
+  Result := Self;
+end;
+
+function TExpectation.ToBeNotInf: IExpectation;
+begin
+  RequireKind(ekDouble, 'ToBeNotInf');
+  CheckMatch(not IsInfinite(FDoubleValue),
+    'Expected infinite but got ' + FloatToStr(FDoubleValue),
+    'Expected non-infinite but got ' + FloatToStr(FDoubleValue));
+  Result := Self;
+end;
+
+function TExpectation.ToBeFinite: IExpectation;
+var
+  LIsFinite: Boolean;
+  LActual: string;
+begin
+  RequireKind(ekDouble, 'ToBeFinite');
+  LIsFinite := (not IsNan(FDoubleValue)) and (not IsInfinite(FDoubleValue));
+  if IsNan(FDoubleValue) then
+    LActual := 'NaN'
+  else
+    LActual := FloatToStr(FDoubleValue);
+  CheckMatch(LIsFinite,
+    'Expected non-finite but got ' + LActual,
+    'Expected finite but got ' + LActual);
+  Result := Self;
+end;
+
 { ── TExpectation: WithMessage, ToEqualBytes, ToFailUnexpected ───────────── }
 
 function TExpectation.WithMessage(const AMessage: string): IExpectation;
@@ -1244,7 +1295,9 @@ begin
   { Both empty — always equal }
   if LActLen = 0 then
   begin
-    CheckMatch(True, '', '');
+    CheckMatch(True,
+      'Expected different byte array but both are empty',
+      '');
     Result := Self;
     Exit;
   end;
@@ -1263,7 +1316,9 @@ begin
       Exit;
     end;
   { All bytes match }
-  CheckMatch(True, '', '');
+  CheckMatch(True,
+    'Expected different byte array but both are equal (' + IntToStr(LLen) + ' bytes)',
+    '');
   Result := Self;
 end;
 
@@ -1558,7 +1613,7 @@ begin
           Exit;
         end;
       CheckMatch(True,
-        'Array not sorted',
+        'Expected array not to be sorted but it is',
         'Array is sorted');
     end;
     ekStrArray:
@@ -1575,7 +1630,7 @@ begin
           Exit;
         end;
       CheckMatch(True,
-        'Array not sorted',
+        'Expected array not to be sorted but it is',
         'Array is sorted');
     end;
   else
@@ -1629,6 +1684,14 @@ begin
   Result := Self;
 end;
 
+function TExpectation.ToMatchSnapshot(const ASnapshotDir,
+  ASnapshotName: string): IExpectation;
+begin
+  RequireKind(ekString, 'ToMatchSnapshot');
+  CheckSnapshot(FStrValue, ASnapshotDir, ASnapshotName);
+  Result := Self;
+end;
+
 { ── Expect factories ──────────────────────────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;
@@ -1663,7 +1726,7 @@ end;
 
 function ExpectObj(const AValue: TObject): IExpectation;
 begin
-  Result := TExpectation.CreatePtr(Pointer(AValue));
+  Result := TExpectation.AllocPtr(Pointer(AValue));
 end;
 
 function ExpectProc(AProc: TTestProc): IExpectation;

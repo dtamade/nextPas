@@ -949,6 +949,89 @@ begin
   ExpectFail(procedure begin ExpectDouble(1.0).Not_.ToBeNotNaN; end, 'NaN');
 end;
 
+{ F2: ToBeInf / ToBeNotInf / ToBeFinite }
+
+procedure TestExpectToBeInfPass;
+var
+  LInf: Double;
+begin
+  LInf := 1.0 / 0.0;
+  ExpectDouble(LInf).ToBeInf;
+  ExpectDouble(-1.0 / 0.0).ToBeInf;
+end;
+
+procedure TestExpectToBeInfFail;
+begin
+  ExpectFail(procedure begin ExpectDouble(0.0).ToBeInf; end, 'infinite');
+end;
+
+procedure TestExpectToBeNotInfPass;
+begin
+  ExpectDouble(0.0).ToBeNotInf;
+  ExpectDouble(1.5).ToBeNotInf;
+end;
+
+procedure TestExpectToBeNotInfFail;
+var
+  LInf: Double;
+begin
+  LInf := 1.0 / 0.0;
+  ExpectFail(procedure begin ExpectDouble(LInf).ToBeNotInf; end, 'infinite');
+end;
+
+procedure TestExpectToBeFinitePass;
+begin
+  ExpectDouble(1.5).ToBeFinite;
+  ExpectDouble(0.0).ToBeFinite;
+  ExpectDouble(-42.0).ToBeFinite;
+end;
+
+procedure TestExpectToBeFiniteFailNaN;
+var
+  LNaN: Double;
+begin
+  LNaN := 0.0 / 0.0;
+  ExpectFail(procedure begin ExpectDouble(LNaN).ToBeFinite; end, 'finite');
+end;
+
+procedure TestExpectToBeFiniteFailInf;
+var
+  LInf: Double;
+begin
+  LInf := 1.0 / 0.0;
+  ExpectFail(procedure begin ExpectDouble(LInf).ToBeFinite; end, 'finite');
+end;
+
+procedure TestExpectNotToBeInf;
+var
+  LInf: Double;
+begin
+  ExpectDouble(0.0).Not_.ToBeInf;
+  LInf := 1.0 / 0.0;
+  ExpectFail(procedure begin ExpectDouble(LInf).Not_.ToBeInf; end, 'non-infinite');
+end;
+
+procedure TestExpectNotToBeFinite;
+var
+  LInf: Double;
+begin
+  LInf := 1.0 / 0.0;
+  ExpectDouble(LInf).Not_.ToBeFinite;
+  ExpectFail(procedure begin ExpectDouble(1.5).Not_.ToBeFinite; end, 'non-finite');
+end;
+
+procedure TestIntOverflowCheck;
+begin
+  CheckFalse(IntOverflowCheck(1, '+', 2), '1+2 no overflow');
+  CheckTrue(IntOverflowCheck(High(Int64), '+', 1), 'High+1 overflows');
+  CheckTrue(IntOverflowCheck(Low(Int64), '-', 1), 'Low-1 overflows');
+  CheckFalse(IntOverflowCheck(10, '*', 2), '10*2 no overflow');
+  CheckTrue(IntOverflowCheck(High(Int64), '*', 2), 'High*2 overflows');
+  CheckTrue(IntOverflowCheck(Low(Int64), '*', -1), 'Low*-1 overflows');
+  CheckFalse(IntOverflowCheck(5, 'add', 0), 'add 0 no overflow');
+  CheckFalse(IntOverflowCheck(5, 'unknown', 99), 'unknown op → no signal');
+end;
+
 { E-10: Chaining returns self }
 
 procedure TestExpectChainingReturnsSelf;
@@ -1599,6 +1682,16 @@ begin
   LSuite.Test('ToBeNotNaN fail',               @TestExpectToBeNotNaNFail);
   LSuite.Test('Not_.ToBeNaN',                  @TestExpectToBeNaNNot);
   LSuite.Test('Not_.ToBeNotNaN',               @TestExpectToBeNotNaNNot);
+  LSuite.Test('ToBeInf pass',                  @TestExpectToBeInfPass);
+  LSuite.Test('ToBeInf fail',                  @TestExpectToBeInfFail);
+  LSuite.Test('ToBeNotInf pass',               @TestExpectToBeNotInfPass);
+  LSuite.Test('ToBeNotInf fail',               @TestExpectToBeNotInfFail);
+  LSuite.Test('ToBeFinite pass',               @TestExpectToBeFinitePass);
+  LSuite.Test('ToBeFinite fail (NaN)',         @TestExpectToBeFiniteFailNaN);
+  LSuite.Test('ToBeFinite fail (Inf)',         @TestExpectToBeFiniteFailInf);
+  LSuite.Test('Not_.ToBeInf',                  @TestExpectNotToBeInf);
+  LSuite.Test('Not_.ToBeFinite',               @TestExpectNotToBeFinite);
+  LSuite.Test('IntOverflowCheck',              @TestIntOverflowCheck);
   LSuite.Test('Chaining returns self',         @TestExpectChainingReturnsSelf);
 
   { WithMessage, ToEqualBytes, ToFailUnexpected }
