@@ -2,6 +2,13 @@
 
 基准测试框架模块。提供 Fluent Builder API 的基准测试套件、统计分析、基线管理、跨语言对比和报告生成。
 
+## 消费侧（写模块 bench 的人）
+
+- **[consumer-guide.md](consumer-guide.md)** — 最小配方、命名、`IBenchResults` 读侧、仓库布局  
+- 示例：`core/examples/bench/`、`core/examples/nextpas.core.bench/`  
+- 模块 bench 样例：`core/benchmarks/nextpas.core.*/`  
+- 跨语言子集：`scorecard-subset-2026-07-19.md`  
+
 ## 模块结构
 
 ```

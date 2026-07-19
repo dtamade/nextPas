@@ -1,3 +1,11 @@
+## 2026-07-20 consumer-guide + scorecard 再扩
+
+| 项 | 状态 |
+|----|------|
+| consumer-guide.md | ✅ 新建 |
+| README / tutorial 入口 | ✅ 链到消费侧 |
+| scorecard 子集 | + bitfield / packed / nativeset（共 8 track） |
+
 ## 2026-07-19 符号消歧 + SCORECARD 扩 track + 文档/CI
 
 | 项 | 状态 |
