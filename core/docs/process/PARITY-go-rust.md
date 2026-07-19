@@ -13,8 +13,8 @@
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
 | **质量 Quality** | **9.0** | CONTRACT INV 完整；真 uses 门禁；Wait/TryWait/PathDir/env 名已钉；R15 全量绿 |
-| **规模 Scale (Essential)** | **8.4** | R16：IsSymlink、path slash/list/volume/stem/strip、ClearEnv 已落地；HardLink/Chtimes/Chown 仍需 L0 |
-| **综合** | **8.7** | 质量保持；规模 Essential 接近 0.85 目标 |
+| **规模 Scale (Essential)** | **8.8** | R16 续：WaitGraceful、SameFile；HardLink/Chtimes/Chown 仍需 L0 |
+| **综合** | **8.9** | Essential 接近 0.90 |
 
 **目标线**：质量 ≥ 9.0（保持）；规模 Essential 覆盖率 ≥ **0.85**；测试合计 ≥ **900**。
 
@@ -38,7 +38,7 @@
 | Kill / Signal | Kill | kill | Kill/Signal | Partial（Win 信号有限） |
 | Timeout | context/WaitDelay | — | Timeout | Done |
 | MaxOutput | — | — | MaxOutput | Done |
-| Graceful stop | WaitDelay | — | Missing | P2 可选 |
+| Graceful stop | WaitDelay | — | **WaitGraceful** | Done（R16 续） |
 | ExtraFiles | ExtraFiles | — | Missing | Deferred |
 | Credential/uid | SysProcAttr | CommandExt | Missing | Deferred |
 | Context cancel | context | — | Missing | Deferred |
@@ -60,7 +60,7 @@
 | HardLink | Link/hard_link | — | Missing（需 L0） |
 | Chtimes | Chtimes | — | Missing（需 L0） |
 | Chown | Chown | — | Missing（需 L0） |
-| SameFile(inode) | SameFile | SameFileName only | Missing |
+| SameFile(inode) | SameFile | **SameFile** (lstat Dev+Ino) | Done（R16 续） |
 | Remove ENOENT | Go 报错 | **静默成功**（Pascal） | Done（有意 ≠ Go） |
 
 ### path
@@ -105,7 +105,7 @@ R16 增量后以 `make test` 重校准；目标 **≥ 900**。
 ## 延期（Deferred）说明
 
 - **process ExtraFiles / Credential / context 取消**：需 L0 spawn 扩展或跨模块 context；无真实消费者前不阻塞 Essential。  
-- **HardLink / Chtimes / Chown / SameFile(inode)**：缺 `platform_file_*`；Phase 3 与 platform 协作。  
+- **HardLink / Chtimes / Chown**：缺 `platform_file_link` / utimens / chown；与 platform 协作。SameFile 已用现有 Dev+Ino。  
 - **wine-runtime-smoke**：受 test.expect 交叉编译阻塞（外部债）。
 
 ---

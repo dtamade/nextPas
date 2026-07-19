@@ -142,6 +142,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `GetEnvironmentVariable` / `ParamCount` / `ParamStr` | **兼容入口**；新代码用 `os.env` / `args` |
 | `GetTempDir` | 获取系统临时目录 |
 | `SameFileName(A, B)` | 比较文件名是否相同（平台相关大小写规则） |
+| `SameFile(A, B)` | 是否同一 inode（lstat Dev+Ino；对齐 Go `os.SameFile`） |
 | `ForceDirectories` / `DeleteFile` | Boolean 兼容壳（吞异常）；失败要分类请用 `MkdirAll` / `Remove` |
 | `Remove` | 删除；**ENOENT 静默成功**（Pascal Erase 语义） |
 

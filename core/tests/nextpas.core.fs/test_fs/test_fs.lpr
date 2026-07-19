@@ -491,6 +491,52 @@ begin
   Check(not FsIsSymlink(GTmpDir), 'dir not symlink');
 end;
 
+procedure TestSameFile;
+var
+  LPath, LHard: string;
+  LRaised: Boolean;
+begin
+  LPath := GTmpDir + '/samefile-a.txt';
+  FsWriteFile(LPath, TBytes.Create(1, 2, 3));
+  Check(SameFile(LPath, LPath), 'same path is same file');
+  Check(FsSameFile(LPath, LPath), 'FsSameFile path');
+  LRaised := False;
+  try
+    SameFile(LPath, GTmpDir + '/no-such-samefile');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SameFile missing raises ENotFoundError');
+  LHard := GTmpDir + '/samefile-b.txt';
+  FsWriteFile(LHard, TBytes.Create(9));
+  Check(not SameFile(LPath, LHard), 'distinct files not same');
+end;
+
+procedure TestSymlinkRelativeTarget;
+var
+  LLink, LRead: string;
+begin
+  LLink := GTmpDir + '/rel-link';
+  FsSymlink('relative-target', LLink);
+  LRead := FsReadlink(LLink);
+  CheckEqual('relative-target', LRead, 'readlink keeps relative target');
+end;
+
+procedure TestReadFileMissingNotFound;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    FsReadFile(GTmpDir + '/no-read-file');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadFile missing raises ENotFoundError');
+end;
+
 procedure TestFileSize;
 begin
   FsWriteFile(GTmpDir + '/sz.bin', TBytes.Create(1, 2, 3));
@@ -2013,6 +2059,9 @@ begin
     T.Test('Exists', @TestExists);
     T.Test('IsFile/IsDir', @TestIsFileIsDir);
     T.Test('IsSymlink', @TestIsSymlink);
+    T.Test('SameFile', @TestSameFile);
+    T.Test('Symlink relative target', @TestSymlinkRelativeTarget);
+    T.Test('ReadFile missing ENotFound', @TestReadFileMissingNotFound);
     T.Test('FileSize', @TestFileSize);
 
     T.Test('Mkdir + ReadDir', @TestMkdirAndReadDir);

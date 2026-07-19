@@ -136,6 +136,8 @@ function IsDir(const APath: string): Boolean; inline;
 function IsFile(const APath: string): Boolean; inline;
 {** @desc 检查路径是否为符号链接（不跟随；不存在 False） *}
 function IsSymlink(const APath: string): Boolean; inline;
+{** @desc 是否同一文件（inode/Dev；对齐 Go os.SameFile） *}
+function SameFile(const A, B: string): Boolean; inline;
 {** @desc 返回文件大小（字节） *}
 function FileSize(const APath: string): Int64; inline;
 {** @desc 设置文件权限 *}
@@ -399,6 +401,11 @@ end;
 function IsSymlink(const APath: string): Boolean;
 begin
   Result := nextpas.core.fs.util.FsIsSymlink(APath);
+end;
+
+function SameFile(const A, B: string): Boolean;
+begin
+  Result := nextpas.core.fs.util.FsSameFile(A, B);
 end;
 
 function FileSize(const APath: string): Int64;

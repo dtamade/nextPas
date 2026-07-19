@@ -560,6 +560,26 @@ begin
     'post-restore suite continues');
 end;
 
+procedure TestHasEnvEmptyVsMissing;
+begin
+  SetEnv('NEXTPAS_EMPTY_HAS', '');
+  try
+    Check(HasEnv('NEXTPAS_EMPTY_HAS'), 'empty value still HasEnv');
+    Check(not HasEnv('NEXTPAS_MISSING_HAS_XYZ'), 'missing not HasEnv');
+    CheckEqual('', GetEnv('NEXTPAS_EMPTY_HAS'), 'empty GetEnv');
+    CheckEqual('', GetEnv('NEXTPAS_MISSING_HAS_XYZ'), 'missing GetEnv empty');
+  finally
+    UnsetEnv('NEXTPAS_EMPTY_HAS');
+  end;
+end;
+
+procedure TestExpandEnvDollarDollarLiteral;
+begin
+  { Lone $ stays; $$ is two lone $ }
+  CheckEqual('$', ExpandEnv('$'), 'lone dollar');
+  CheckEqual('$$', ExpandEnv('$$'), 'double dollar literal pair');
+end;
+
 { --- main --- }
 
 begin
@@ -606,5 +626,7 @@ begin
   T.Test('ExpandEnv portable placeholder', @TestExpandEnvRejectsNonPortablePlaceholder);
   T.Test('GetEnv allows non-portable lookup', @TestGetEnvAllowsNonPortableLookup);
   T.Test('ClearEnv', @TestClearEnv);
+  T.Test('HasEnv empty vs missing', @TestHasEnvEmptyVsMissing);
+  T.Test('ExpandEnv dollar literal', @TestExpandEnvDollarDollarLiteral);
   if not T.Run then Halt(1);
 end.

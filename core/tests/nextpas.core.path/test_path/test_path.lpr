@@ -533,6 +533,32 @@ begin
   end;
 end;
 
+procedure TestPathCleanGoTable;
+begin
+  CheckEqual('a/b', PathClean('a/./b'), 'clean a/./b');
+  CheckEqual('b', PathClean('a/../b'), 'clean a/../b');
+  CheckEqual('a/b', PathClean('a//b'), 'clean a//b');
+  CheckEqual('.', PathClean('a/..'), 'clean a/..');
+  CheckEqual('.', PathClean('./.'), 'clean ./.');
+  CheckEqual('/', PathClean('/a/../'), 'clean /a/../');
+  CheckEqual('/a/b', PathClean('/a/./b/'), 'clean /a/./b/');
+  CheckEqual('a', PathClean('./a'), 'clean ./a');
+end;
+
+procedure TestPathFileStemEdges;
+begin
+  CheckEqual('.hidden', PathFileStem('.hidden'), 'stem dotfile');
+  CheckEqual('a', PathFileStem('a.'), 'stem trailing dot');
+  CheckEqual('name', PathFileStem('/x/name.tar'), 'stem with dir');
+end;
+
+procedure TestPathRelativeTable;
+begin
+  CheckEqual('b', PathRelative('/a', '/a/b'), 'rel child');
+  CheckEqual('..', PathRelative('/a/b', '/a'), 'rel parent');
+  CheckEqual('.', PathRelative('/a', '/a'), 'rel same');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.path');
   T.Test('PathJoin', @TestPathJoin);
@@ -569,6 +595,9 @@ begin
   T.Test('PathMatch edge cases', @TestPathMatchEdgeCases);
   T.Test('PathJoinN', @TestPathJoinN);
   T.Test('PathClean', @TestPathClean);
+  T.Test('PathClean Go table', @TestPathCleanGoTable);
+  T.Test('PathFileStem edges', @TestPathFileStemEdges);
+  T.Test('PathRelative table', @TestPathRelativeTable);
   T.Test('PathToSlash/FromSlash', @TestPathToFromSlash);
   T.Test('PathSplitList', @TestPathSplitList);
   T.Test('PathVolume/FileStem', @TestPathVolumeAndStem);

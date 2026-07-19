@@ -34,6 +34,8 @@ function FsIsDir(const APath: string): Boolean;
 function FsIsFile(const APath: string): Boolean;
 {** @desc 是否为符号链接（不跟随链接；不存在返回 False） *}
 function FsIsSymlink(const APath: string): Boolean;
+{** @desc 是否为同一 inode（对齐 Go os.SameFile；lstat Dev+Ino） *}
+function FsSameFile(const A, B: string): Boolean;
 function FsFileSize(const APath: string): Int64;
 procedure FsChmod(const APath: string; const APerm: TFilePermission);
 procedure FsTruncate(const APath: string; const ASize: Int64);
@@ -422,6 +424,22 @@ begin
   if APath = '' then
     Exit(False);
   Result := platform_fs_is_symlink(PAnsiChar(APath));
+end;
+
+function FsSameFile(const A, B: string): Boolean;
+var
+  LA, LB: TPlatformFileStat;
+  LErr: Int32;
+begin
+  if (A = '') or (B = '') then
+    raise EArgumentError.Create('SameFile path must not be empty');
+  LErr := platform_file_lstat(PAnsiChar(A), LA);
+  if LErr <> 0 then
+    RaiseFsError(LErr, 'samefile', A);
+  LErr := platform_file_lstat(PAnsiChar(B), LB);
+  if LErr <> 0 then
+    RaiseFsError(LErr, 'samefile', B);
+  Result := (LA.Dev = LB.Dev) and (LA.Ino = LB.Ino);
 end;
 
 function FsFileSize(const APath: string): Int64;
