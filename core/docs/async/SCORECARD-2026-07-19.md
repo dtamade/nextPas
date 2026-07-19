@@ -26,7 +26,7 @@
 | F5 IoCompletionRefWrapper | **关闭** | `async.base` |
 | F6 BufferPool 锁 | **关闭** | platform_mutex |
 | F7 Signal 吞异常 | **部分** | 有错误回调路径；非本轮 |
-| F8 DNS IPv6 | **关闭** | dual-stack append v4+v6（每族 platform 首条） |
+| F8 DNS IPv6 | **关闭** | multi-A + dual-stack list；v4-first 排序 |
 | F9 TCP positioned read | **关闭** | AsyncRecv/Send |
 | F10 Combinator Ref | **关闭** | WhenAllRef/WhenAnyRef |
 | F11 Channel 背压 | **关闭** | SendAsync (B1) |
@@ -38,7 +38,7 @@
 |------|---------|--------------|------|
 | 取消贯通 API | context 几乎全栈 | Token 贯通核心路径 | **Q1 done** |
 | 超时+取消竞态 | 标准 | CAS 三方 | **Q1 done** |
-| dual-stack | 默认 | Addresses 可含 v4+v6 | **Q3 done** |
+| dual-stack | 默认 | multi-A + HE-lite 串行试连 | **Q6 done** |
 | 组合器竞态 soak | 成熟 | soak100 + token/timeout race | **Q2 done** |
 | 性能 scorecard | 社区基准 | 本机 metric 行 | **Q4 done** |
 

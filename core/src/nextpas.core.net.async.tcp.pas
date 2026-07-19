@@ -444,6 +444,7 @@ function AsyncTcpConnect(const ALoop: TAsyncLoop;
 var
   LStream: ITcpStream;
 begin
+  { NetTcpConnect uses NetResolveAll + sequential multi-A / dual-stack try (HE-lite). }
   LStream := NetTcpConnect(AAddr, APort);
   Result := TAsyncTcpStream.Create(LStream, ALoop) as IAsyncTcpStream;
 end;

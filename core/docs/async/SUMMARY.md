@@ -140,10 +140,9 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 
 ## 未来方向
 
-1. **Happy Eyeballs** / multi-A 全链 getaddrinfo（platform 扩 API）
-2. **AsyncTcpConnect** 按 Addresses 列表重试（IPv6-first 可选）
-3. **原生 Windows / macOS host runner** 升格证据层
-4. 见 [SCORECARD-2026-07-19.md](SCORECARD-2026-07-19.md)
+1. **真·Happy Eyeballs** 并发竞速（AsyncTcpDial）
+2. **原生 Windows / macOS host runner** 升格证据层
+3. 见 [SCORECARD-2026-07-19.md](SCORECARD-2026-07-19.md)
 
 ## 相关文档
 

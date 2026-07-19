@@ -1,8 +1,7 @@
 unit nextpas.core.net.async.resolve;
 {**
  * @desc 异步 DNS 解析：集成事件循环的非阻塞 DNS 解析。
- *       使用独立线程执行阻塞的地址解析，结果通过事件循环回调通知。
- *       Dual-stack: 同时收集 IPv4+IPv6（每族至多一条 platform 首条），成功则 Addresses 可含多项。
+ *       使用独立线程执行 platform_socket_resolve_stream（multi-A / dual-stack）。
  *       注意：使用此模块的程序需要在 uses 中包含 cthreads。
  *}
 
@@ -76,7 +75,6 @@ begin
     Result := Default(TNetAddress);
 end;
 
-{ DNS 完成回调 - 在事件循环线程中执行 }
 procedure DiscardDnsPostCtx(AContext: Pointer);
 begin
   if AContext <> nil then
@@ -98,7 +96,6 @@ begin
   end;
 end;
 
-{ 格式化 IPv6 地址字节为字符串 }
 function FormatIPv6Addr(AAddr: PByte): string;
 const
   HexChars: array[0..15] of Char = '0123456789abcdef';
@@ -125,15 +122,24 @@ begin
   SetString(Result, @LBuf[0], LPos);
 end;
 
-{ DNS 解析线程 }
+{ sin_addr.s_addr is network byte order; on LE print low byte first. }
+function IPv4NetToString(ANet: UInt32): string;
+begin
+  Result := IntToStr(ANet and $FF) + '.' +
+    IntToStr((ANet shr 8) and $FF) + '.' +
+    IntToStr((ANet shr 16) and $FF) + '.' +
+    IntToStr((ANet shr 24) and $FF);
+end;
+
 function DnsResolveThread(AParam: Pointer): Pointer; cdecl;
 var
   LCtx: PDnsContext;
   LResult: TDnsResult;
-  LAddr: UInt32;
-  LAddr6: array[0..15] of Byte;
-  LRes4, LRes6: Int32;
-  LCount: Integer;
+  LRaw: array[0..PLATFORM_RESOLVE_MAX - 1] of TPlatformResolvedAddr;
+  LCount: Int32;
+  LRes: Int32;
+  LI, LJdx: Integer;
+  LIsV4Lit: Boolean;
   LPostCtx: PDnsPostContext;
 begin
   Result := nil;
@@ -141,40 +147,67 @@ begin
   try
     FillChar(LResult, SizeOf(LResult), 0);
     SetLength(LResult.Addresses, 0);
-    LCount := 0;
 
-    { Dual-stack: collect both families when available (Go LookupIP-style list).
-      Each family contributes at most one address (platform returns first). }
-    LRes4 := platform_socket_resolve_ipv4(PAnsiChar(LCtx^.Host), LAddr);
-    if LRes4 = 0 then
+    { Fast path: IPv4 literal without DNS }
+    if (Length(LCtx^.Host) > 0) and (Pos(':', LCtx^.Host) = 0) then
     begin
-      SetLength(LResult.Addresses, LCount + 1);
-      LResult.Addresses[LCount].IP := IntToStr(LAddr and $FF) + '.' +
-        IntToStr((LAddr shr 8) and $FF) + '.' +
-        IntToStr((LAddr shr 16) and $FF) + '.' +
-        IntToStr((LAddr shr 24) and $FF);
-      LResult.Addresses[LCount].Port := 0;
-      LResult.Addresses[LCount].IsIPv6 := False;
-      Inc(LCount);
+      LIsV4Lit := True;
+      for LI := 1 to Length(LCtx^.Host) do
+        if not (LCtx^.Host[LI] in ['0'..'9', '.']) then
+        begin
+          LIsV4Lit := False;
+          Break;
+        end;
+      if LIsV4Lit then
+      begin
+        LResult.Error := 0;
+        SetLength(LResult.Addresses, 1);
+        LResult.Addresses[0].IP := string(LCtx^.Host);
+        LResult.Addresses[0].Port := 0;
+        LResult.Addresses[0].IsIPv6 := False;
+        New(LPostCtx);
+        LPostCtx^.Loop := LCtx^.Loop;
+        LPostCtx^.Callback := LCtx^.Callback;
+        LPostCtx^.CallbackRef := LCtx^.CallbackRef;
+        LPostCtx^.Context := LCtx^.Context;
+        LPostCtx^.Result := LResult;
+        LCtx^.Loop.PostEx(@DnsPostCallback, LPostCtx, @DiscardDnsPostCtx);
+        Exit;
+      end;
     end;
 
-    FillChar(LAddr6, SizeOf(LAddr6), 0);
-    LRes6 := platform_socket_resolve_ipv6(PAnsiChar(LCtx^.Host), @LAddr6[0]);
-    if LRes6 = 0 then
+    LRes := platform_socket_resolve_stream(PAnsiChar(LCtx^.Host), @LRaw[0],
+      PLATFORM_RESOLVE_MAX, LCount);
+    if (LRes = 0) and (LCount > 0) then
     begin
-      SetLength(LResult.Addresses, LCount + 1);
-      LResult.Addresses[LCount].IP := FormatIPv6Addr(@LAddr6[0]);
-      LResult.Addresses[LCount].Port := 0;
-      LResult.Addresses[LCount].IsIPv6 := True;
-      Inc(LCount);
-    end;
-
-    if LCount > 0 then
-      LResult.Error := 0
-    else if LRes4 <> 0 then
-      LResult.Error := LRes4
+      LResult.Error := 0;
+      SetLength(LResult.Addresses, LCount);
+      { Prefer IPv4 first then IPv6 for stable HE-lite order (legacy-compatible). }
+      LI := 0;
+      for LJdx := 0 to LCount - 1 do
+        if not LRaw[LJdx].IsIPv6 then
+        begin
+          LResult.Addresses[LI].IP := IPv4NetToString(LRaw[LJdx].IPv4);
+          LResult.Addresses[LI].Port := 0;
+          LResult.Addresses[LI].IsIPv6 := False;
+          Inc(LI);
+        end;
+      for LJdx := 0 to LCount - 1 do
+        if LRaw[LJdx].IsIPv6 then
+        begin
+          LResult.Addresses[LI].IP := FormatIPv6Addr(@LRaw[LJdx].IPv6[0]);
+          LResult.Addresses[LI].Port := 0;
+          LResult.Addresses[LI].IsIPv6 := True;
+          Inc(LI);
+        end;
+    end
     else
-      LResult.Error := LRes6;
+    begin
+      LResult.Error := LRes;
+      if LResult.Error = 0 then
+        LResult.Error := PLATFORM_ERR_INVALID;
+      SetLength(LResult.Addresses, 0);
+    end;
 
     New(LPostCtx);
     LPostCtx^.Loop := LCtx^.Loop;
@@ -183,7 +216,6 @@ begin
     LPostCtx^.Context := LCtx^.Context;
     LPostCtx^.Result := LResult;
     LCtx^.Loop.PostEx(@DnsPostCallback, LPostCtx, @DiscardDnsPostCtx);
-
   finally
     Dispose(LCtx);
   end;
