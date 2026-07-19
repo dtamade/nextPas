@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform.path; 委托 fs.path）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：2.3
+**版本**：2.4
 
 ---
 
@@ -44,6 +44,8 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 - **[INV-2]** UTF-8 字符串安全
 - **[INV-3]** 空路径返回空字符串
 - **[INV-4]** 本单元与 path 测试不 `uses` 裸 FPC RTL；「SysUtils 兼容」仅指 API 形状，实现委托 `fs.path` / `platform.path`。门禁：`test_path` 真 uses 扫描。
+- **[INV-5]** **PathDir 语义**：门面 `PathDir`/`PathSplit` 裸文件名目录为 **空串**（SysUtils）；底层 `FsPathDir` 为 **`.`**（Go）。`PathIsAbs` ≡ `PathIsAbsolute`。
+- **[INV-6]** `ExpandFileName` 委托 `FsPathAbs`，依赖 cwd。
 
 ---
 
@@ -85,3 +87,4 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | 2026-07-19 | 2.1 | 测试数口径校准 + 命名规范见 README | Claude |
 | 2026-07-19 | 2.2 | INV-4 FPC RTL 隔离 / 编译器无关 | Claude |
 | 2026-07-19 | 2.3 | 真 uses 门禁（test_path） | Claude |
+| 2026-07-19 | 2.4 | PathDir 双轨钉死；PathIsAbs；ExpandFileName cwd | Claude |

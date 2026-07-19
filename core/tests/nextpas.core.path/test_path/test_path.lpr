@@ -216,6 +216,9 @@ begin
   Check(PathIsAbsolute('/home/user') = True, 'absolute unix');
   Check(PathIsAbsolute('relative/path') = False, 'relative');
   Check(PathIsAbsolute('') = False, 'empty');
+  Check(PathIsAbs('/tmp') = True, 'PathIsAbs alias absolute');
+  Check(PathIsAbs('rel') = False, 'PathIsAbs alias relative');
+  Check(PathIsAbs('/x') = PathIsAbsolute('/x'), 'PathIsAbs equals PathIsAbsolute');
 end;
 
 procedure TestPathIsRelative;

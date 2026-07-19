@@ -113,9 +113,9 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | 函数 | 说明 |
 |------|------|
 | `PathJoin(AParts)` | 连接多个路径片段 |
-| `PathDir(APath)` | 提取目录部分 |
+| `PathDir(APath)` | 提取目录部分（门面：裸文件名 → `''`；底层 `FsPathDir` → `'.'`） |
 | `PathBase(APath)` | 提取文件名部分 |
-| `PathSplit(APath, ADir, ABase)` | 分离目录和文件名 |
+| `PathSplit(APath, ADir, ABase)` | 分离目录和文件名（门面裸文件名 `ADir=''`） |
 | `PathExt(APath)` | 提取扩展名 |
 | `PathClean(APath)` | 规范化路径 |
 | `PathAbs(APath)` | 转为绝对路径 |
@@ -127,7 +127,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `PathWithoutExt(APath)` | 去除扩展名 |
 | `PathMatch(APattern, AName)` | glob 模式匹配 |
 
-路径命名与 `nextpas.core.path` 对齐：`PathIsAbs` ⇔ `PathIsAbsolute`，`PathClean` ⇔ `PathNormalize`。详见 `core/docs/path/README.md`「命名规范」。
+路径命名与 `nextpas.core.path` 对齐：`PathIsAbs` ⇔ `PathIsAbsolute`，`PathClean` ⇔ `PathNormalize`，门面 `PathDir` 裸文件名 ⇔ 空串。详见 `core/docs/path/README.md`「命名规范」。
 
 ### 工具函数
 
@@ -135,10 +135,12 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 |------|------|
 | `GetCwd` | 获取当前工作目录 |
 | `SetCwd(APath)` | 设置当前工作目录 |
-| `GetEnv(AName)` | 获取环境变量 |
-| `EnvKeys` | 返回所有环境变量名 |
+| `GetEnv(AName)` | **兼容入口**；新代码用 `nextpas.core.os.env.GetEnv` / `TryGetEnv` |
+| `GetEnvironmentVariable` / `ParamCount` / `ParamStr` | **兼容入口**；新代码用 `os.env` / `args` |
 | `GetTempDir` | 获取系统临时目录 |
 | `SameFileName(A, B)` | 比较文件名是否相同（平台相关大小写规则） |
+| `ForceDirectories` / `DeleteFile` | Boolean 兼容壳（吞异常）；失败要分类请用 `MkdirAll` / `Remove` |
+| `Remove` | 删除；**ENOENT 静默成功**（Pascal Erase 语义） |
 
 ## 测试
 

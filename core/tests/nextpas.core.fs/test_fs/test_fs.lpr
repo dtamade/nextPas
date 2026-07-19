@@ -785,6 +785,22 @@ begin
   CheckEqual('/home/user', FsPathDir('/home/user/file.txt'), 'dir');
 end;
 
+procedure TestFacadePathDirSysUtilsEmpty;
+var
+  LDir, LBase: string;
+begin
+  { Public PathDir/PathSplit: bare name → '' (align path/SysUtils).
+    FsPathDir/FsPathSplit keep Go-style '.'. }
+  CheckEqual('', PathDir('file.txt'), 'facade PathDir bare file is empty');
+  CheckEqual('/home/user', PathDir('/home/user/file.txt'), 'facade PathDir with dir');
+  CheckEqual('.', FsPathDir('file.txt'), 'FsPathDir bare file is dot');
+  PathSplit('file.txt', LDir, LBase);
+  CheckEqual('', LDir, 'facade PathSplit bare dir empty');
+  CheckEqual('file.txt', LBase, 'facade PathSplit bare base');
+  FsPathSplit('file.txt', LDir, LBase);
+  CheckEqual('.', LDir, 'FsPathSplit bare dir is dot');
+end;
+
 procedure TestPathBase;
 begin
   CheckEqual('file.txt', FsPathBase('/home/user/file.txt'), 'base');
@@ -2010,6 +2026,7 @@ begin
 
     T.Test('PathJoin', @TestPathJoin);
     T.Test('PathDir', @TestPathDir);
+    T.Test('facade PathDir/PathSplit SysUtils empty', @TestFacadePathDirSysUtilsEmpty);
     T.Test('PathBase', @TestPathBase);
     T.Test('PathExt', @TestPathExt);
     T.Test('PathExt long result', @TestPathExtLongResult);

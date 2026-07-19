@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L1: text.base; 委托 platform.env）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：1.4
+**版本**：1.5
 
 ---
 
@@ -34,7 +34,7 @@
 
 ## 2. 不变量
 
-- **[INV-1]** 变量名不能为空，不能包含 `=` 或 NUL
+- **[INV-1]** 变量名不能为空，不能包含 `=` 或 NUL（Get/Has/Try）
 - **[INV-2]** 变量值不能包含 NUL
 - **[INV-3]** 未定义的变量展开为空字符串（loose）
 - **[INV-4]** `$` 后无变量名字符时保留原样 `$`
@@ -42,6 +42,8 @@
 - **[INV-6]** `TryGetEnv`/`HasEnv` 区分「存在且为空」与「未定义」；`GetEnv` 两者均 `''`
 - **[INV-7]** `%NAME%` 仅匹配非空 `[A-Za-z0-9_]`；不完整 `%` 保留字面量
 - **[INV-8]** 本单元与 env 测试不 `uses` 裸 FPC RTL；环境访问仅经 `platform.env`。门禁：`test_os_env` 真 uses 扫描。
+- **[INV-9]** **可移植名**：`SetEnv`/`UnsetEnv`/`Expand*` 占位符名必须为 `[A-Za-z_][A-Za-z0-9_]*`；`GetEnv`/`TryGetEnv`/`HasEnv` 仅 INV-1（可查询既有怪异名）。
+- **[INV-10]** 非线程安全（与 C getenv/setenv 一致）。
 
 ---
 
@@ -77,7 +79,7 @@
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_os_env | 38 | Get/Set/Unset/Expand/%VAR%/XDG/User*Dir + 真 uses 门禁 |
+| test_os_env | 41 | Get/Set/Unset/Expand/%VAR%/XDG/User*Dir + 可移植名 + 真 uses 门禁 |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---
@@ -91,3 +93,4 @@
 | 2026-07-19 | 1.2 | UserDataDir + %VAR%；INV-6/7；测试 36 | Claude |
 | 2026-07-19 | 1.3 | INV-8 FPC RTL 隔离 | Claude |
 | 2026-07-19 | 1.4 | 真 uses 门禁（test_os_env） | Claude |
+| 2026-07-19 | 1.5 | INV-9 可移植名 Set/Expand；INV-10 线程 | Claude |

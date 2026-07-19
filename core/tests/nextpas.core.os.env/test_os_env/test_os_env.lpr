@@ -48,6 +48,68 @@ begin
     LoadSourceText('tests/nextpas.core.os.env/test_os_env/test_os_env.lpr'));
 end;
 
+procedure TestSetEnvRejectsNonPortableName;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    SetEnv('BAD NAME', 'v');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SetEnv rejects space in name');
+
+  LRaised := False;
+  try
+    SetEnv('1ABC', 'v');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SetEnv rejects digit-leading name');
+
+  LRaised := False;
+  try
+    UnsetEnv('has-dash');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'UnsetEnv rejects dash in name');
+end;
+
+procedure TestExpandEnvRejectsNonPortablePlaceholder;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ExpandEnv('${foo-bar}');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ExpandEnv rejects non-portable ${name}');
+
+  LRaised := False;
+  try
+    ExpandEnv('$1ABC');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ExpandEnv rejects digit-leading $VAR');
+end;
+
+procedure TestGetEnvAllowsNonPortableLookup;
+begin
+  { Lookup only forbids empty / = / NUL — odd names return empty, do not raise. }
+  CheckEqual('', GetEnv('weird name'), 'GetEnv allows space name lookup');
+  CheckEqual('', GetEnv('1digit'), 'GetEnv allows digit-leading lookup');
+end;
+
 { --- existing tests --- }
 
 procedure Test_GetEnv_HOME;
@@ -510,5 +572,8 @@ begin
   T.Test('ExpandEnvStrict_EmptyValue', @TestExpandEnvStrict_EmptyValue);
   T.Test('env owned sources no bare FPC RTL uses', @TestEnvOwnedSourcesNoFpcRtl);
   T.Test('env test suite no bare FPC RTL uses', @TestEnvTestSuiteNoFpcRtl);
+  T.Test('SetEnv/UnsetEnv portable name', @TestSetEnvRejectsNonPortableName);
+  T.Test('ExpandEnv portable placeholder', @TestExpandEnvRejectsNonPortablePlaceholder);
+  T.Test('GetEnv allows non-portable lookup', @TestGetEnvAllowsNonPortableLookup);
   if not T.Run then Halt(1);
 end.

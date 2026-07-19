@@ -201,7 +201,8 @@ function PathJoin(const AParts: array of string): string; inline;
 function PathJoin2(const ABase, AChild: string): string; inline;
 {** @desc 连接三段路径 *}
 function PathJoin3(const A, B, C: string): string; inline;
-{** @desc 返回路径的目录部分 *}
+{** @desc 返回路径的目录部分（门面：裸文件名 → ''，对齐 path/SysUtils；
+ *  Go 风格 '.' 请用 FsPathDir） *}
 function PathDir(const APath: string): string; inline;
 {** @desc 返回路径的文件名部分（含扩展名） *}
 function PathBase(const APath: string): string; inline;
@@ -527,7 +528,11 @@ end;
 
 function PathDir(const APath: string): string;
 begin
+  { SysUtils/path facade: bare filename → '' (not Go-style '.').
+    Low-level FsPathDir keeps platform/Go '.' — see docs/path PathDir 对照. }
   Result := nextpas.core.fs.path.FsPathDir(APath);
+  if Result = '.' then
+    Result := '';
 end;
 
 function PathBase(const APath: string): string;
@@ -538,6 +543,8 @@ end;
 procedure PathSplit(const APath: string; out ADir, ABase: string);
 begin
   nextpas.core.fs.path.FsPathSplit(APath, ADir, ABase);
+  if ADir = '.' then
+    ADir := '';
 end;
 
 function PathExt(const APath: string): string;

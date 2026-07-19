@@ -164,7 +164,7 @@ WriteLn(Result.StdOut);  // "hello"
 | 只要文本且可忽略 exit | `Capture*` | **不检查退出码** |
 | 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut`；`Status` 返回 `TProcessOutput`（不捕获输出） |
 | 有界输出 | `.MaxOutput(N)` | stdout+stderr 累计；**默认无界（INV-10）**；超限 `OutputLimited` |
-| 合并 stderr | `.MergeStderr` / `Capture*Combined` | 真时间交错；`StdErr` 空、`StdOut` 为合并流；stdout piped 时覆盖 Stderr(stPiped/stInherit)；与 `Stderr(stNull)` 冲突抛错 |
+| 合并 stderr | `.MergeStderr` / `Capture*Combined` | 真时间交错；**要求** stdout piped（`.Output` 强制）；`StdErr` 空、`StdOut` 为合并流；覆盖 Stderr(stPiped/stInherit)；与 `Stderr(stNull)` 或非 piped stdout 冲突抛错 |
 | PATH 查找 | `LookPath` / `TryLookPath` | 含目录部分也校验可执行 |
 
 ### 便利函数冻结策略
@@ -213,7 +213,8 @@ nextpas.core.process.pathresolve.pas ← PATH 搜索逻辑（ResolveExecutablePa
 - **poll 并发读**：WaitWithOutput 用 poll(2) 同时读 stdout+stderr，避免死锁
 - **execvp**：默认继承父进程环境 + 搜索 PATH
 - **close(3..1023)**：子进程 exec 前关闭所有继承的 fd，防止管道泄漏
-- **Kill+Wait in Destroy**：IChild 释放时自动终止并 reap 子进程，防止僵尸
+- **Kill+reap in Destroy**：尽力终止并 reap 子进程（约 5s）；超时 abandon 再 detach，极端负载下不保证零僵尸
+- **Wait 与管道（INV-13）**：IChild 仍持有 stdout/stderr 时 `Wait` 自动排水（等同 `WaitWithOutput`），避免写满死锁；`TakeStdout`/`TakeStderr` 后由调用方负责
 
 ## 测试
 

@@ -16,14 +16,15 @@ type
    *
    * @desc 正在运行的子进程句柄
    *
-   * @note 释放时自动 Kill + Wait（防止僵尸进程）
-   * @note 如果 stdout/stderr 是 Piped，必须在 Wait 之前读完（否则可能死锁）
-   *       推荐用 WaitWithOutput 自动处理
+   * @note Destroy：尽力 Kill + reap（最长约 5s）；超时则 abandon 再 detach，不保证无僵尸
+   * @note Wait：若 IChild 仍持有 stdout/stderr 管道，自动走 WaitWithOutput 排水，避免管道写满死锁
+   * @note TakeStdout/TakeStderr 后由调用方排水；裸 Wait 不再负责已取走的端
+   * @note 捕获输出优先 WaitWithOutput；大输出请 Take* 流式读
    *}
   {** @note 非线程安全。IChild 的所有方法必须在同一线程调用 *}
   IChild = interface
     ['{A1B2C3D4-E5F6-7890-AB01-000000000001}']
-    {** 阻塞等待子进程退出，返回退出状态 *}
+    {** 阻塞等待子进程退出。仍持有管道时自动排水（等同 WaitWithOutput） *}
     function Wait: TProcessOutput;
     {** 非阻塞检查子进程是否已退出。返回 False 表示仍在运行 *}
     function TryWait(out AOutput: TProcessOutput): Boolean;
@@ -196,6 +197,9 @@ var
 begin
   if FWaited then
     Exit(FLastOutput);
+  { Own pipes still held → drain while reaping (INV-13). Take* clears readers. }
+  if (FStdoutReader <> nil) or (FStderrReader <> nil) then
+    Exit(WaitWithOutput);
   EnsureAttached;
 
   Result.ExitCode := 0;

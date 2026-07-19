@@ -557,6 +557,55 @@ begin
   Check('MergeStderr+Stderr(stNull) message', Pos('MergeStderr', LMsg) > 0);
 end;
 
+procedure TestMergeStderrRequiresStdoutPiped;
+var
+  LRaised: Boolean;
+  LMsg: string;
+begin
+  LRaised := False;
+  LMsg := '';
+  try
+    { Default stdout is stInherit — merge must fail closed (INV-11). }
+    Command('/bin/true').MergeStderr.Spawn;
+  except
+    on E: EProcessError do
+    begin
+      LRaised := True;
+      LMsg := E.Message;
+    end;
+  end;
+  Check('MergeStderr without Stdout(stPiped) raises', LRaised);
+  Check('MergeStderr non-piped message mentions Stdout',
+    Pos('Stdout', LMsg) > 0);
+end;
+
+procedure TestWaitAutoDrainsOwnedPipes;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  { > typical pipe buffer so bare Wait would deadlock without auto-drain (INV-13). }
+  LChild := Command('/bin/sh')
+    .Args(['-c', 'dd if=/dev/zero bs=1024 count=256 2>/dev/null | tr ''\0'' x'])
+    .Stdout(stPiped)
+    .Spawn;
+  LOut := LChild.Wait;
+  Check('Wait auto-drain — status exited', LOut.Status = psExited);
+  Check('Wait auto-drain — exit 0', LOut.ExitCode = 0);
+  Check('Wait auto-drain — captured large stdout', Length(LOut.StdOut) >= 200000);
+end;
+
+procedure TestWaitWithoutPipesLeavesStdoutEmpty;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/echo').Arg('no-pipe').Spawn;
+  LOut := LChild.Wait;
+  Check('Wait inherit — exited', LOut.Status = psExited);
+  Check('Wait inherit — stdout empty (not drained inherit)', LOut.StdOut = '');
+end;
+
 procedure TestSpawnStdinPipe;
 var
   LChild: IChild;
@@ -1490,6 +1539,9 @@ begin
   TestProcessOwnedSourcesNoFpcRtl;
   TestProcessTestSuitesNoFpcRtl;
   TestMergeStderrConflictsStderrNull;
+  TestMergeStderrRequiresStdoutPiped;
+  TestWaitAutoDrainsOwnedPipes;
+  TestWaitWithoutPipesLeavesStdoutEmpty;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;

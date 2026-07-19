@@ -142,6 +142,28 @@ begin
       raise EArgumentError.Create('environment variable name must not contain NUL');
 end;
 
+{ Portable name for SetEnv/UnsetEnv/Expand placeholders: [A-Za-z_][A-Za-z0-9_]*.
+  GetEnv/TryGetEnv/HasEnv only use ValidateEnvName (may read odd existing names). }
+procedure ValidatePortableEnvName(const AName: string);
+var
+  I: Integer;
+  C: Char;
+begin
+  ValidateEnvName(AName);
+  C := AName[1];
+  if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or (C = '_')) then
+    raise EArgumentError.Create(
+      'environment variable name must start with letter or underscore: ' + AName);
+  for I := 2 to Length(AName) do
+  begin
+    C := AName[I];
+    if not (((C >= 'A') and (C <= 'Z')) or ((C >= 'a') and (C <= 'z')) or
+      ((C >= '0') and (C <= '9')) or (C = '_')) then
+      raise EArgumentError.Create(
+        'environment variable name must be [A-Za-z_][A-Za-z0-9_]*: ' + AName);
+  end;
+end;
+
 procedure ValidateEnvValue(const AValue: string);
 var
   I: Integer;
@@ -264,7 +286,7 @@ procedure SetEnv(const AName, AValue: string);
 var
   LN, LV: string;
 begin
-  ValidateEnvName(AName);
+  ValidatePortableEnvName(AName);
   ValidateEnvValue(AValue);
   LN := AName;
   LV := AValue;
@@ -281,7 +303,7 @@ procedure UnsetEnv(const AName: string);
 var
   LN: string;
 begin
-  ValidateEnvName(AName);
+  ValidatePortableEnvName(AName);
   LN := AName;
   RaiseEnvError(platform_env_unset(PAnsiChar(LN)), 'unsetenv', AName);
 end;
@@ -323,7 +345,7 @@ begin
           raise EArgumentError.Create(
             'unterminated ${...} in environment expansion');
         LName := Copy(AValue, LStart, I - LStart);
-        ValidateEnvName(LName);
+        ValidatePortableEnvName(LName);
         AppendResolvedOrMode(LName);
         Inc(I);
         Continue;
@@ -340,6 +362,7 @@ begin
         else
         begin
           LName := Copy(AValue, LStart, I - LStart);
+          ValidatePortableEnvName(LName);
           AppendResolvedOrMode(LName);
         end;
         Continue;
@@ -355,6 +378,7 @@ begin
         if (I > LStart) and (I <= Length(AValue)) and (AValue[I] = '%') then
         begin
           LName := Copy(AValue, LStart, I - LStart);
+          ValidatePortableEnvName(LName);
           AppendResolvedOrMode(LName);
           Inc(I);
           Continue;
