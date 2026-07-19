@@ -279,6 +279,11 @@ function platform_socket_set_timeout(const ASocket: TPlatformSocket;
     @return True 表示 would block *}
 function platform_socket_error_would_block(const AError: Int32): Boolean;
 
+{** @desc 判断错误是否为 fd/资源表耗尽（EMFILE/ENFILE）
+    @param AError 错误码
+    @return True 表示资源限制 *}
+function platform_socket_error_resource_limit(const AError: Int32): Boolean;
+
 {** @desc 判断错误是否为超时
     @param AError 错误码
     @return True 表示超时 *}
@@ -709,6 +714,11 @@ end;
 function platform_socket_error_would_block(const AError: Int32): Boolean;
 begin
   Result := (AError = ESysEAGAIN) or (AError = ESysEWOULDBLOCK);
+end;
+
+function platform_socket_error_resource_limit(const AError: Int32): Boolean;
+begin
+  Result := (AError = ESysEMFILE) or (AError = ESysENFILE);
 end;
 
 function platform_socket_error_timed_out(const AError: Int32): Boolean;
@@ -1371,6 +1381,12 @@ begin
   Result := (AError = PLATFORM_ERR_AGAIN) or (AError = WSAEWOULDBLOCK);
 end;
 
+function platform_socket_error_resource_limit(const AError: Int32): Boolean;
+begin
+  { WSAEMFILE = too many open sockets. }
+  Result := AError = WSAEMFILE;
+end;
+
 function platform_socket_error_timed_out(const AError: Int32): Boolean;
 begin
   Result := (AError = PLATFORM_ERR_TIMEDOUT) or (AError = WSAETIMEDOUT);
@@ -1726,6 +1742,7 @@ function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32)
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const ANonBlock: Boolean): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const ATimeoutMs: Int64): Int32; begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_socket_error_would_block(const AError: Int32): Boolean; begin Result := False; end;
+function platform_socket_error_resource_limit(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_timed_out(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_error_in_progress(const AError: Int32): Boolean; begin Result := False; end;
 function platform_socket_poll(const ASocket: TPlatformSocket; const AEvents: Int32; const ATimeoutMs: Int32; out ARevents: Int32): Int32; begin ARevents := 0; Result := PLATFORM_ERR_UNSUPPORTED; end;

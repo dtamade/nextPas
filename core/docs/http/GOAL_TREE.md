@@ -84,7 +84,7 @@ Live product push is **Go/Rust-class quality + server scale** on H1/H2 — not H
 |------|---------|
 | Enter parity zone | epoll Direct keep-alive **≥ 0.5×** Go `net/http` same workload |
 | Scale-ready | **≥ 0.8×** Go req/s；p99 **≤ 2×** Go；no per-request leak |
-| Connection ladder | Documented stable points at 1k / 10k idle keep-alive + failure modes |
+| Connection ladder | **Met (S1-3)** — documented 1k / 10k idle keep-alive stable points + soft-nofile failure mode (`bench_conn_ladder` / BENCHMARKS) |
 
 G6 stage-closed numbers remain **characterization**, not the scale campaign exit.
 Scale campaign evidence lives in [`BENCHMARKS.md`](BENCHMARKS.md) § Parity Campaign and [`ROADMAP.md`](ROADMAP.md) S1–S3.

@@ -642,6 +642,11 @@ begin
   end;
   if platform_socket_error_would_block(LResult) then
     Exit(tarWouldBlock);
+  { EMFILE/ENFILE: process or system fd table full. Treat as temporary
+    backpressure (same as would-block for readiness loops) so one bad accept
+    does not tear down the epoll server. Threaded Accept still raises. }
+  if platform_socket_error_resource_limit(LResult) then
+    Exit(tarWouldBlock);
   raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
 end;
 
