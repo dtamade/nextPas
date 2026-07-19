@@ -32,8 +32,9 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 
 ### DNS / Happy Eyeballs truth (Q6–Q9)
 - `AsyncResolve`: single-worker AF_UNSPEC multi-A
-- `AsyncResolveEx`: parallel A + AAAA + Resolution Delay (default 50ms); dial host path uses Ex
-- `AsyncTcpDial`: concurrent staggered HE on loop thread (not DNS-race-while-dialing)
+- `AsyncResolveEx`: parallel A + AAAA + Resolution Delay (default 50ms), single merged callback
+- `AsyncResolveStream`: incremental per-family callbacks for DNS-race-while-dialing
+- `AsyncTcpDial`: concurrent staggered HE; host path races dial with late DNS family arrival
 - Evidence: `test_net_async_resolve` / `test_net_async_dial` 0 leak on Linux; host matrix script above
 
 ### Backend Model Classification

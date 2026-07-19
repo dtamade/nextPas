@@ -3,7 +3,8 @@ unit nextpas.core.net.async.dial;
  * Concurrent Happy Eyeballs (RFC8305 subset) over TAsyncLoop.
  * Staggered multi-A / dual-stack dial: MaxInFlight attempts in parallel,
  * ConnectionAttemptDelay between starts; first success wins.
- * DNS uses AsyncResolveEx (parallel A/AAAA + Resolution Delay).
+ * DNS uses AsyncResolveStream (parallel A/AAAA + Resolution Delay gate),
+ * then dials as families arrive (DNS-race-while-dialing subset).
  * AsyncTcpConnect remains HE-lite (sequential sync). Use AsyncTcpDial for race.
  *}
 
@@ -97,7 +98,13 @@ type
     FOverallTimer: TAsyncTimerHandle;
     FAttempts: array of PDialAttempt;
     FTokenBound: Boolean;
+    FDnsAllDone: Boolean;
+    FDialStarted: Boolean;
+    FOverallBound: Boolean;
     procedure OrderAddresses;
+    procedure EnsureOverallTimer;
+    procedure AppendAddresses(const ANew: array of TNetAddress);
+    procedure OnDnsStream(const AEvent: TDnsStreamEvent);
     procedure StartDialing;
     procedure KickStagger;
     procedure StartNextAttempts;
@@ -123,7 +130,7 @@ procedure DialStaggerCallback(AContext: Pointer); forward;
 procedure DialOverallCallback(AContext: Pointer); forward;
 procedure DialTokenAbort(AContext: Pointer); forward;
 procedure DialTokenNotify(AContext: Pointer); forward;
-procedure DialResolveCallback(const AResult: TDnsResult; AContext: Pointer); forward;
+procedure DialStreamCallback(const AEvent: TDnsStreamEvent; AContext: Pointer); forward;
 procedure DialDiscardTimer(AContext: Pointer); forward;
 
 function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions;
@@ -166,6 +173,9 @@ begin
   FStaggerTimer := TAsyncTimerHandle.None;
   FOverallTimer := TAsyncTimerHandle.None;
   FTokenBound := False;
+  FDnsAllDone := True; { Addrs path has no pending DNS }
+  FDialStarted := False;
+  FOverallBound := False;
 end;
 
 destructor TAsyncTcpDialer.Destroy;
@@ -413,7 +423,11 @@ begin
   if AtomicLoad32(FFinished, moAcquire) <> 0 then
     Exit;
   if (FInFlight = 0) and (FNextIndex >= Length(FAddrs)) then
+  begin
+    if not FDnsAllDone then
+      Exit; { more addresses may still arrive }
     FinishFail(FLastError);
+  end;
 end;
 
 function TAsyncTcpDialer.StartAttempt(AIndex: Integer): Boolean;
@@ -515,29 +529,150 @@ begin
     @DialStaggerCallback, Self, @DialDiscardTimer);
 end;
 
-procedure TAsyncTcpDialer.StartDialing;
+procedure TAsyncTcpDialer.EnsureOverallTimer;
 var
   LRem: TDuration;
 begin
-  if Length(FAddrs) = 0 then
+  if FOverallBound then
+    Exit;
+  FOverallBound := True;
+  if FOptions.OverallDeadline.IsInfinite then
+    Exit;
+  LRem := FOptions.OverallDeadline.Remaining;
+  if LRem.AsMilliseconds <= 0 then
   begin
-    FinishFail(-ECONNREFUSED_LINUX);
+    FinishFail(-ETIMEDOUT_LINUX);
     Exit;
   end;
+  FOverallTimer := FLoop.ScheduleEx(LRem, @DialOverallCallback, Self, @DialDiscardTimer);
+end;
+
+procedure TAsyncTcpDialer.AppendAddresses(const ANew: array of TNetAddress);
+var
+  LI, LBase, LRemCount, LNewCount, O, IRem, INew: Integer;
+  LRem, LMerged: array of TNetAddress;
+  LTakeNew: Boolean;
+begin
+  LNewCount := Length(ANew);
+  if LNewCount = 0 then
+    Exit;
+
+  if not FDialStarted then
+  begin
+    LBase := Length(FAddrs);
+    SetLength(FAddrs, LBase + LNewCount);
+    for LI := 0 to LNewCount - 1 do
+      FAddrs[LBase + LI] := ANew[LI];
+    Exit;
+  end;
+
+  { Interleave newly resolved family into not-yet-attempted suffix. }
+  LRemCount := Length(FAddrs) - FNextIndex;
+  if LRemCount < 0 then
+    LRemCount := 0;
+  SetLength(LRem, LRemCount);
+  for LI := 0 to LRemCount - 1 do
+    LRem[LI] := FAddrs[FNextIndex + LI];
+
+  if FOptions.InterleaveFamilies and (LRemCount > 0) then
+  begin
+    SetLength(LMerged, LRemCount + LNewCount);
+    O := 0;
+    IRem := 0;
+    INew := 0;
+    LTakeNew := True; { bias new family into race soon }
+    while (IRem < LRemCount) or (INew < LNewCount) do
+    begin
+      if LTakeNew and (INew < LNewCount) then
+      begin
+        LMerged[O] := ANew[INew];
+        Inc(INew);
+        Inc(O);
+      end
+      else if IRem < LRemCount then
+      begin
+        LMerged[O] := LRem[IRem];
+        Inc(IRem);
+        Inc(O);
+      end;
+      if (not LTakeNew) and (INew < LNewCount) then
+      begin
+        LMerged[O] := ANew[INew];
+        Inc(INew);
+        Inc(O);
+      end
+      else if LTakeNew and (IRem < LRemCount) then
+      begin
+        LMerged[O] := LRem[IRem];
+        Inc(IRem);
+        Inc(O);
+      end;
+      if (IRem >= LRemCount) and (INew >= LNewCount) then
+        Break;
+      LTakeNew := not LTakeNew;
+    end;
+    SetLength(FAddrs, FNextIndex + O);
+    for LI := 0 to O - 1 do
+      FAddrs[FNextIndex + LI] := LMerged[LI];
+  end
+  else
+  begin
+    LBase := Length(FAddrs);
+    SetLength(FAddrs, LBase + LNewCount);
+    for LI := 0 to LNewCount - 1 do
+      FAddrs[LBase + LI] := ANew[LI];
+  end;
+  SetLength(FAttempts, Length(FAddrs));
+end;
+
+procedure TAsyncTcpDialer.OnDnsStream(const AEvent: TDnsStreamEvent);
+begin
+  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+    Exit;
+
+  if Length(AEvent.Addresses) > 0 then
+    AppendAddresses(AEvent.Addresses);
+
+  if AEvent.AllDone then
+    FDnsAllDone := True;
+
+  if not FDialStarted then
+  begin
+    if Length(FAddrs) > 0 then
+      StartDialing
+    else if FDnsAllDone then
+    begin
+      if AEvent.Error <> 0 then
+        FinishFail(-Abs(AEvent.Error))
+      else
+        FinishFail(-ECONNREFUSED_LINUX);
+    end;
+    Exit;
+  end;
+
+  if Length(AEvent.Addresses) > 0 then
+    StartNextAttempts
+  else
+    MaybeCompleteIfIdle;
+end;
+
+procedure TAsyncTcpDialer.StartDialing;
+begin
+  if FDialStarted then
+    Exit;
+  if Length(FAddrs) = 0 then
+  begin
+    if FDnsAllDone then
+      FinishFail(-ECONNREFUSED_LINUX);
+    Exit;
+  end;
+  FDialStarted := True;
   OrderAddresses;
   SetLength(FAttempts, Length(FAddrs));
   BindToken;
-
-  if not FOptions.OverallDeadline.IsInfinite then
-  begin
-    LRem := FOptions.OverallDeadline.Remaining;
-    if LRem.AsMilliseconds <= 0 then
-    begin
-      FinishFail(-ETIMEDOUT_LINUX);
-      Exit;
-    end;
-    FOverallTimer := FLoop.ScheduleEx(LRem, @DialOverallCallback, Self, @DialDiscardTimer);
-  end;
+  EnsureOverallTimer;
+  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+    Exit;
 
   StartAttempt(0);
   KickStagger;
@@ -577,10 +712,16 @@ procedure TAsyncTcpDialer.BeginWithHost(const AHost: string);
 var
   LDnsOpts: TDnsResolveOptions;
 begin
+  FDnsAllDone := False;
+  FDialStarted := False;
+  BindToken;
+  EnsureOverallTimer;
+  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+    Exit;
   LDnsOpts := DefaultDnsResolveOptions;
   LDnsOpts.ResolutionDelayMs := FOptions.ResolutionDelayMs;
   LDnsOpts.PreferIPv6First := FOptions.PreferIPv6First;
-  if not AsyncResolveEx(FLoop, AHost, LDnsOpts, @DialResolveCallback, Self) then
+  if not AsyncResolveStream(FLoop, AHost, LDnsOpts, @DialStreamCallback, Self) then
     FinishFail(-ECONNREFUSED_LINUX);
 end;
 
@@ -588,6 +729,7 @@ procedure TAsyncTcpDialer.BeginWithAddrs(const AAddrs: array of TNetAddress);
 var
   LI: Integer;
 begin
+  FDnsAllDone := True;
   SetLength(FAddrs, Length(AAddrs));
   for LI := 0 to High(AAddrs) do
     FAddrs[LI] := AAddrs[LI];
@@ -648,26 +790,14 @@ begin
   LDialer.FLoop.Post(@DialTokenAbort, LDialer);
 end;
 
-procedure DialResolveCallback(const AResult: TDnsResult; AContext: Pointer);
+procedure DialStreamCallback(const AEvent: TDnsStreamEvent; AContext: Pointer);
 var
   LDialer: TAsyncTcpDialer;
-  LI: Integer;
 begin
   LDialer := TAsyncTcpDialer(AContext);
   if LDialer = nil then
     Exit;
-  if not AResult.Success then
-  begin
-    if AResult.Error <> 0 then
-      LDialer.FinishFail(-Abs(AResult.Error))
-    else
-      LDialer.FinishFail(-ECONNREFUSED_LINUX);
-    Exit;
-  end;
-  SetLength(LDialer.FAddrs, Length(AResult.Addresses));
-  for LI := 0 to High(AResult.Addresses) do
-    LDialer.FAddrs[LI] := AResult.Addresses[LI];
-  LDialer.StartDialing;
+  LDialer.OnDnsStream(AEvent);
 end;
 
 procedure DialDiscardTimer(AContext: Pointer);

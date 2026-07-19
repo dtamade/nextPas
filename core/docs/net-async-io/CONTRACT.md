@@ -464,3 +464,9 @@ atsCancelled: TAsyncTaskStatus = 5;
 - OrderAddresses: optional lead N of preferred family, then interleave or bucket remainder.
 - Host evidence: `core/scripts/async-host-matrix.sh` — Linux CI strict; macOS best-effort; not full-host parity.
 - Still **not** DNS-race-while-dialing (Happy Eyeballs DNS race phase 2).
+
+### DNS-race-while-dialing (Q10)
+- `AsyncResolveStream`: parallel A/AAAA; after Resolution Delay gate, posts per-family batches then one terminal `AllDone`.
+- `AsyncTcpDial` host path uses Stream: starts HE as soon as first family addresses arrive; late family addresses append/interleave into remaining attempts.
+- `MaybeCompleteIfIdle` waits for `FDnsAllDone` before failing empty.
+- Still not a full RFC8305 resolver-controlled interleave of DNS RTT with TCP SYN timing matrix.
