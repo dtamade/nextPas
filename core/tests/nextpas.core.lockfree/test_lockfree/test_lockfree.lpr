@@ -6615,10 +6615,10 @@ begin
     'SPSC queue must notify space waiters after consume');
   CheckBefore(LSpscTryEnqueueSourceSection,
     'FSlots[LTail and Int64(FMask)] := AValue;',
-    'AtomicStore64(FTailPublished, LTail + 1, moRelease);',
+    'atomic_store_64(FTailPublished, LTail + 1, mo_release);',
     'SPSC TryEnqueue must write the slot value before publishing the tail');
   CheckContains(LSpscTryEnqueueSourceSection,
-    'AtomicStore64(FTailPublished, LTail + 1, moRelease);',
+    'atomic_store_64(FTailPublished, LTail + 1, mo_release);',
     'SPSC TryEnqueue tail publish must use release ordering');
   CheckContains(LSpscPublishWakeTestSection,
     'SPSC DequeueTimeout consumer should still be pending before publish',
@@ -6679,13 +6679,13 @@ begin
     'SPSC close wait test must bound the blocked consumer wait wake latency');
   CheckContains(LSpscCloseWakeTestSection, 'blocked DequeueWait wake must leave the closed empty queue empty',
     'SPSC close wait test must prove the closed empty queue stays empty after the blocked consumer wait returns');
-  CheckContains(LSpscBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
+  CheckContains(LSpscBatchSourceSection, 'if atomic_load(FClosed, mo_acquire) <> 0 then',
     'SPSC batch enqueue must reject new items after close');
-  CheckContains(LSpscBatchSourceSection, 'FHeadCache := AtomicLoad64(FHeadPublished, moAcquire);',
+  CheckContains(LSpscBatchSourceSection, 'FHeadCache := atomic_load_64(FHeadPublished, mo_acquire);',
     'SPSC batch enqueue must refresh published head before sizing batch progress');
   CheckContains(LSpscBatchSourceSection, 'if LCount > PtrUInt(LAvail) then',
     'SPSC batch enqueue must cap published items to currently available space');
-  CheckContains(LSpscDequeueBatchSourceSection, 'FTailCache := AtomicLoad64(FTailPublished, moAcquire);',
+  CheckContains(LSpscDequeueBatchSourceSection, 'FTailCache := atomic_load_64(FTailPublished, mo_acquire);',
     'SPSC batch dequeue must refresh published tail before sizing batch progress');
   CheckContains(LSpscDequeueBatchSourceSection, 'if LCount > PtrUInt(LAvail) then',
     'SPSC batch dequeue must cap returned items to currently available data');
