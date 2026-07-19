@@ -6,6 +6,14 @@
 
 Ready 报告的性能证据以本 Scorecard 为准；历史微基准博物馆数据见 [BENCHMARKS.md](BENCHMARKS.md)。
 
+**Go/Rust 同方法论对照**（非本程序内嵌；人工并排）:
+
+```bash
+make -C core/benchmarks/nextpas.core.mem/bench_arena_go_rust compare
+```
+
+纲领与验收：[PARITY-GO-RUST.md](PARITY-GO-RUST.md)。
+
 ---
 
 ## 运行

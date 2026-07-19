@@ -8,7 +8,6 @@ uses
   nextpas.core.mem.allocator.sentinel,
   nextpas.core.mem.allocator.aligned,
   nextpas.core.mem.allocator.cascade,
-  nextpas.core.mem.allocator.freelist,
   nextpas.core.mem.intf,
   nextpas.core.mem.error;
 
