@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.11c
+**版本**：v8.12a
 
 ---
 
@@ -390,6 +390,13 @@ end;
 | 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
 
 ## 11. 变更日志
+
+### v8.12a (2026-07-20) — 薄套件 + 边界收口
+
+- **Discovery**：fail run、empty run、hooks on fail、双实例、Cleanup 幂等
+- **Advanced**：Discover+fail、JSON error、TAP error severity、retry message
+- **Assertions**：CheckEqual/NotEqual Double NaN + epsilon 恰界
+- **Filter**：hierarchical A/B/C、Test*/Sub、brace 路径边角
 
 ### v8.11c (2026-07-20) — 可观测规模与报告
 

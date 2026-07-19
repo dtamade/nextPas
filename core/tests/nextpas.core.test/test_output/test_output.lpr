@@ -1512,6 +1512,39 @@ begin
   SetTestFilter('');
 end;
 
+procedure TestB12HierarchicalFilterEdges;
+{ Residual edge cases: A/B/C vs A/B, Test*/Sub combo, deep mismatch. }
+var
+  LConfig: TTestConfig;
+begin
+  LConfig := DefaultConfig;
+  LConfig.AnsiMode := amOff;
+
+  SetTestFilter('A/B');
+  CheckTrue(MatchesFilter('A/B', LConfig), 'exact A/B');
+  CheckTrue(MatchesFilter('A/B/C', LConfig), 'A/B prefix of A/B/C');
+  CheckTrue(MatchesFilter('A', LConfig), 'parent A of A/B');
+  CheckFalse(MatchesFilter('A/C', LConfig), 'sibling A/C');
+  CheckFalse(MatchesFilter('A/B2', LConfig), 'A/B2 is not A/B or descendant');
+  CheckFalse(MatchesFilter('AB', LConfig), 'no slash prefix false friend');
+
+  SetTestFilter('Test*/Sub');
+  CheckTrue(MatchesFilter('TestFoo/Sub', LConfig), 'Test*/Sub matches TestFoo/Sub');
+  CheckTrue(MatchesFilter('TestBar/Sub/Leaf', LConfig), 'Test*/Sub matches deep');
+  CheckTrue(MatchesFilter('TestX', LConfig), 'parent TestX matches');
+  CheckFalse(MatchesFilter('Other/Sub', LConfig), 'Other/Sub no match');
+  CheckFalse(MatchesFilter('TestFoo/SubX', LConfig), 'SubX not exact Sub segment');
+
+  SetTestFilter('Suite/{Alpha,Beta}/Leaf');
+  CheckTrue(MatchesFilter('Suite/Alpha/Leaf', LConfig), 'brace Alpha/Leaf');
+  CheckTrue(MatchesFilter('Suite/Beta/Leaf', LConfig), 'brace Beta/Leaf');
+  CheckFalse(MatchesFilter('Suite/Gamma/Leaf', LConfig), 'brace Gamma miss');
+  CheckTrue(MatchesFilter('Suite/Alpha', LConfig), 'brace mid parent');
+  CheckTrue(MatchesFilter('Suite', LConfig), 'brace top parent');
+
+  SetTestFilter('');
+end;
+
 procedure TestGetTopSlowest;
 var
   LResults: TTestResults;
@@ -2006,6 +2039,7 @@ begin
   Suite.Test('TestJSONCapturedLogInFailure',  @TestJSONCapturedLogInFailure);
   Suite.Test('TestRunnerTagsOverload',        @TestRunnerTagsOverload);
   Suite.Test('Hierarchical filter matching',  @TestHierarchicalFilter);
+  Suite.Test('B12 Hierarchical filter edges', @TestB12HierarchicalFilterEdges);
   Suite.Test('GetTopSlowest',                 @TestGetTopSlowest);
 
   { R48: FormatDuration boundary tests }

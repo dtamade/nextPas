@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.11c**
+**当前版本**: **v8.12a**
 **最后更新**: 2026-07-19
 
 ---
@@ -44,6 +44,7 @@
 | B9 v8.11a 危险并发契约 | **done** |
 | B10 v8.11b Runner/Lifecycle 深度 | **done** |
 | B11 v8.11c 规模报表+golden+≥1800 | **done** |
+| B12 v8.12a 薄套件+边界收口 | **done** |
 
 ### 暂缓
 
