@@ -159,6 +159,10 @@ generic function Merge<T>(const aFirst, aSecond: array of T;
  *}
 procedure SortInt32(var aArr: array of Int32);
 
+const
+  { Visible to interface generics; keep private by naming convention. }
+  _INSERTION_SORT_THRESHOLD = 16;
+
 { Internal helpers - do not use directly }
 generic procedure _Swap<T>(var A, B: T); inline;
 generic procedure _ReverseRange<T>(var aArr: array of T; aLo, aHi: SizeInt);
@@ -168,6 +172,8 @@ generic procedure _SiftDownImpl<T>(var aArr: array of T; aStart, aEnd: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 generic procedure _HeapSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
+generic function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
+  aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): SizeInt;
 generic procedure _IntroSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
   aDepthLimit: SizeInt; aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer);
 
@@ -193,9 +199,6 @@ begin
     Dec(aHi);
   end;
 end;
-
-const
-  _INSERTION_SORT_THRESHOLD = 16;
 
 { Insertion sort for small partitions }
 generic procedure _InsertionSortImpl<T>(var aArr: array of T; aLo, aHi: SizeInt;
@@ -255,7 +258,7 @@ begin
 end;
 
 { Median-of-three pivot selection }
-function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
+generic function _MedianOfThreeIdx<T>(const aArr: array of T; aLo, aMid, aHi: SizeInt;
   aCompare: specialize TAlgoCompareFunc<T>; aData: Pointer): SizeInt;
 begin
   if aCompare(aArr[aLo], aArr[aMid], aData) < 0 then
@@ -333,14 +336,14 @@ begin
     begin
       { Tukey's ninther: median of three medians-of-three }
       N := (aHi - aLo) div 8;
-      PivotIdx := _MedianOfThreeIdx(aArr,
-        _MedianOfThreeIdx(aArr, aLo, aLo + N, aLo + 2 * N, aCompare, aData),
-        _MedianOfThreeIdx(aArr, Mid - N, Mid, Mid + N, aCompare, aData),
-        _MedianOfThreeIdx(aArr, aHi - 2 * N, aHi - N, aHi, aCompare, aData),
+      PivotIdx := specialize _MedianOfThreeIdx<T>(aArr,
+        specialize _MedianOfThreeIdx<T>(aArr, aLo, aLo + N, aLo + 2 * N, aCompare, aData),
+        specialize _MedianOfThreeIdx<T>(aArr, Mid - N, Mid, Mid + N, aCompare, aData),
+        specialize _MedianOfThreeIdx<T>(aArr, aHi - 2 * N, aHi - N, aHi, aCompare, aData),
         aCompare, aData);
     end
     else
-      PivotIdx := _MedianOfThreeIdx(aArr, aLo, Mid, aHi, aCompare, aData);
+      PivotIdx := specialize _MedianOfThreeIdx<T>(aArr, aLo, Mid, aHi, aCompare, aData);
     Pivot := aArr[PivotIdx];
 
     { Hoare partition }

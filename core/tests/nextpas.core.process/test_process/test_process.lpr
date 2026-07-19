@@ -141,12 +141,21 @@ begin
 end;
 
 procedure TestCommandStatus;
-var LCode: Integer;
+var
+  LOut: TProcessOutput;
 begin
-  LCode := Command('/bin/true').Status;
-  Check('Command status true — 0', LCode = 0);
-  LCode := Command('/bin/false').Status;
-  Check('Command status false — non-zero', LCode <> 0);
+  LOut := Command('/bin/true').Status;
+  Check('Command status true — 0', LOut.ExitCode = 0);
+  Check('Command status true — succeeded', ProcessSucceeded(LOut));
+  LOut := Command('/bin/false').Status;
+  Check('Command status false — non-zero', LOut.ExitCode <> 0);
+  Check('Command status false — not succeeded', not ProcessSucceeded(LOut));
+  LOut := Command('/bin/sleep')
+    .Args(['10'])
+    .Timeout(TDuration.FromMilliseconds(100))
+    .Status;
+  Check('Command status timeout — TimedOut', LOut.TimedOut);
+  Check('Command status timeout — not succeeded', not ProcessSucceeded(LOut));
 end;
 
 procedure TestSpawnAndWait;
@@ -328,7 +337,9 @@ begin
   CheckContains('Wait timeout sleep — process child uses platform thread seam',
     LSource, 'nextpas.core.platform.thread');
   CheckContains('Wait timeout sleep — timeout loop uses platform sleep',
-    LMethod, 'platform_thread_sleep_ns(10000000)');
+    LMethod, 'platform_thread_sleep_ns(LSleepNs)');
+  CheckContains('Wait timeout sleep — exponential backoff cap 20ms',
+    LMethod, '20000000');
   CheckAbsent('Wait timeout sleep — timeout loop avoids raw nanosleep',
     LMethod, 'nanosleep');
   CheckAbsent('Wait timeout sleep — timeout loop avoids raw TTimeSpec',
@@ -481,6 +492,120 @@ begin
     'LCur := environ');
 end;
 
+{$I ../../fpc_rtl_uses_scan.inc}
+
+procedure AssertSourceNoBareFpcRtlUses(const ALabel, ASource: string);
+var
+  LHit: string;
+begin
+  Check(ALabel + ' — no bare FPC RTL in uses',
+    not FindBareFpcRtlInUses(ASource, LHit));
+  if LHit <> '' then
+    WriteLn('    (hit unit: ', LHit, ')');
+end;
+
+procedure TestProcessOwnedSourcesNoFpcRtl;
+var
+  LFiles: array[0..5] of string;
+  LI: Integer;
+begin
+  { Real uses-clause scan (multi-line / trailing unit / no token false-negatives).
+    Dotted nextpas.core.platform.windows.* is legal. }
+  LFiles[0] := 'src/nextpas.core.process.pas';
+  LFiles[1] := 'src/nextpas.core.process.base.pas';
+  LFiles[2] := 'src/nextpas.core.process.command.pas';
+  LFiles[3] := 'src/nextpas.core.process.child.pas';
+  LFiles[4] := 'src/nextpas.core.process.pipe.pas';
+  LFiles[5] := 'src/nextpas.core.process.pathresolve.pas';
+  for LI := 0 to High(LFiles) do
+    AssertSourceNoBareFpcRtlUses('process src ' + LFiles[LI], LoadSourceText(LFiles[LI]));
+end;
+
+procedure TestProcessTestSuitesNoFpcRtl;
+var
+  LFiles: array[0..4] of string;
+  LI: Integer;
+begin
+  { Includes self: string literals in this gate are stripped before uses scan. }
+  LFiles[0] := 'tests/nextpas.core.process/test_process/test_process.lpr';
+  LFiles[1] := 'tests/nextpas.core.process/test_process_command/test_process_command.lpr';
+  LFiles[2] := 'tests/nextpas.core.process/test_process_deep/test_process_deep.lpr';
+  LFiles[3] :=
+    'tests/nextpas.core.process/test_process_pipe_contract/test_process_pipe_contract.lpr';
+  LFiles[4] := 'tests/nextpas.core.process/test_process_wine/test_process_wine.lpr';
+  for LI := 0 to High(LFiles) do
+    AssertSourceNoBareFpcRtlUses('process test ' + LFiles[LI], LoadSourceText(LFiles[LI]));
+end;
+
+procedure TestMergeStderrConflictsStderrNull;
+var
+  LRaised: Boolean;
+  LMsg: string;
+begin
+  LRaised := False;
+  LMsg := '';
+  try
+    Command('/bin/true').Stdout(stPiped).Stderr(stNull).MergeStderr.Spawn;
+  except
+    on E: EProcessError do
+    begin
+      LRaised := True;
+      LMsg := E.Message;
+    end;
+  end;
+  Check('MergeStderr+Stderr(stNull) raises', LRaised);
+  Check('MergeStderr+Stderr(stNull) message', Pos('MergeStderr', LMsg) > 0);
+end;
+
+procedure TestMergeStderrRequiresStdoutPiped;
+var
+  LRaised: Boolean;
+  LMsg: string;
+begin
+  LRaised := False;
+  LMsg := '';
+  try
+    { Default stdout is stInherit — merge must fail closed (INV-11). }
+    Command('/bin/true').MergeStderr.Spawn;
+  except
+    on E: EProcessError do
+    begin
+      LRaised := True;
+      LMsg := E.Message;
+    end;
+  end;
+  Check('MergeStderr without Stdout(stPiped) raises', LRaised);
+  Check('MergeStderr non-piped message mentions Stdout',
+    Pos('Stdout', LMsg) > 0);
+end;
+
+procedure TestWaitAutoDrainsOwnedPipes;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  { > typical pipe buffer so bare Wait would deadlock without auto-drain (INV-13). }
+  LChild := Command('/bin/sh')
+    .Args(['-c', 'dd if=/dev/zero bs=1024 count=256 2>/dev/null | tr ''\0'' x'])
+    .Stdout(stPiped)
+    .Spawn;
+  LOut := LChild.Wait;
+  Check('Wait auto-drain — status exited', LOut.Status = psExited);
+  Check('Wait auto-drain — exit 0', LOut.ExitCode = 0);
+  Check('Wait auto-drain — captured large stdout', Length(LOut.StdOut) >= 200000);
+end;
+
+procedure TestWaitWithoutPipesLeavesStdoutEmpty;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/echo').Arg('no-pipe').Spawn;
+  LOut := LChild.Wait;
+  Check('Wait inherit — exited', LOut.Status = psExited);
+  Check('Wait inherit — stdout empty (not drained inherit)', LOut.StdOut = '');
+end;
+
 procedure TestSpawnStdinPipe;
 var
   LChild: IChild;
@@ -572,13 +697,14 @@ begin
 end;
 
 procedure TestStdoutNull;
-var LCode: Integer;
+var
+  LOut: TProcessOutput;
 begin
-  LCode := TCommand.New('/bin/echo')
+  LOut := TCommand.New('/bin/echo')
     .Args(['should not appear'])
     .Stdout(stNull)
     .Status;
-  Check('Stdout null — exits 0', LCode = 0);
+  Check('Stdout null — exits 0', LOut.ExitCode = 0);
 end;
 
 procedure TestStderrPiped;
@@ -734,12 +860,31 @@ end;
 procedure TestCaptureCombined;
 var
   LCombined: string;
+  LOut: TProcessOutput;
+  PA, PB, PC: Integer;
 begin
   { sh -c outputs to both stdout and stderr }
   LCombined := CaptureCombined('/bin/sh',
     ['-c', 'echo "out"; echo "err" >&2']);
   Check('CaptureCombined — has stdout', Pos('out', LCombined) > 0);
   Check('CaptureCombined — has stderr', Pos('err', LCombined) > 0);
+
+  { True interleave: printf A; printf B >&2; printf C → ABC not ACB }
+  LCombined := CaptureCombined('/bin/sh',
+    ['-c', 'printf A; printf B >&2; printf C']);
+  Check('CaptureCombined interleave — equals ABC', LCombined = 'ABC');
+  PA := Pos('A', LCombined);
+  PB := Pos('B', LCombined);
+  PC := Pos('C', LCombined);
+  Check('CaptureCombined interleave — A before B', (PA > 0) and (PA < PB));
+  Check('CaptureCombined interleave — B before C', (PB > 0) and (PB < PC));
+
+  LOut := TCommand.New('/bin/sh')
+    .Args(['-c', 'echo hi; echo e >&2'])
+    .MergeStderr
+    .Output;
+  Check('MergeStderr Output — StdOut non-empty', LOut.StdOut <> '');
+  Check('MergeStderr Output — StdErr empty', LOut.StdErr = '');
 end;
 
 procedure TestCaptureInCombined;
@@ -1059,6 +1204,7 @@ begin
     .Timeout(TDuration.FromMilliseconds(200))
     .Output;
   Check('Timeout — killed (signaled)', LOut.Status = psSignaled);
+  Check('Timeout — TimedOut flag set', LOut.TimedOut);
   Check('Timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
 end;
 
@@ -1098,6 +1244,16 @@ begin
     on E: EProcessError do
       Check('LookPath nonexistent — correct exception', True);
   end;
+
+  { Absolute path that does not exist must not pretend to succeed }
+  try
+    LookPath('/nonexistent_abs_bin_xyz_12345');
+    Check('LookPath abs missing — should raise', False);
+  except
+    on E: EProcessError do
+      Check('LookPath abs missing — correct exception',
+        Pos('executable not found', E.Message) > 0);
+  end;
 end;
 
 procedure TestTryLookPath;
@@ -1117,6 +1273,97 @@ begin
   Check('TryLookPath nonexistent — not found',
     not TryLookPath('nonexistent_binary_12345', LPath));
   Check('TryLookPath nonexistent — path empty', LPath = '');
+
+  Check('TryLookPath abs missing — not found',
+    not TryLookPath('/nonexistent_abs_bin_xyz_12345', LPath));
+  Check('TryLookPath abs missing — path empty', LPath = '');
+end;
+
+procedure TestProcessSucceeded;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/true', []);
+  Check('ProcessSucceeded true — exit 0', ProcessSucceeded(LOut));
+
+  LOut := Run('/bin/false', []);
+  Check('ProcessSucceeded false — non-zero exit', not ProcessSucceeded(LOut));
+
+  LOut := TCommand.New('/bin/sleep')
+    .Arg('10')
+    .Timeout(TDuration.FromMilliseconds(200))
+    .Output;
+  Check('ProcessSucceeded false — timed out', not ProcessSucceeded(LOut));
+  Check('ProcessSucceeded timeout — TimedOut flag', LOut.TimedOut);
+end;
+
+procedure TestMaxOutput;
+var
+  LOut: TProcessOutput;
+begin
+  { yes emits infinite "y\n"; MaxOutput(64) must stop and flag OutputLimited }
+  LOut := TCommand.New('/usr/bin/yes')
+    .Stdout(stPiped)
+    .Stderr(stNull)
+    .MaxOutput(64)
+    .Output;
+  Check('MaxOutput — OutputLimited set', LOut.OutputLimited);
+  Check('MaxOutput — not TimedOut', not LOut.TimedOut);
+  Check('MaxOutput — buffered <= 64', Length(LOut.StdOut) <= 64);
+  Check('MaxOutput — ProcessSucceeded false', not ProcessSucceeded(LOut));
+
+  { Unlimited still works for small output }
+  LOut := TCommand.New('/bin/echo').Arg('ok-max').MaxOutput(0).Output;
+  Check('MaxOutput 0 — success', ProcessSucceeded(LOut));
+  Check('MaxOutput 0 — not limited', not LOut.OutputLimited);
+end;
+
+procedure TestMustCaptureAndRunChecked;
+var
+  LStr: string;
+  LOut: TProcessOutput;
+  LRaised: Boolean;
+begin
+  LStr := MustCapture('/bin/echo', ['ok-checked']);
+  Check('MustCapture success — stdout', Pos('ok-checked', LStr) > 0);
+
+  LOut := RunChecked('/bin/true', []);
+  Check('RunChecked success — exit 0', LOut.ExitCode = 0);
+  Check('RunChecked success — not timed out', not LOut.TimedOut);
+
+  LRaised := False;
+  try
+    MustCapture('/bin/false', []);
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('MustCapture false — raises', LRaised);
+
+  LRaised := False;
+  try
+    RunChecked('/bin/false', []);
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('RunChecked false — raises', LRaised);
+
+  { Capture still ignores non-zero exit (documented) }
+  LStr := Capture('/bin/false', []);
+  Check('Capture false — no raise, empty stdout', LStr = '');
+
+  LRaised := False;
+  try
+    MustCaptureCombined('/bin/false', []);
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('MustCaptureCombined false — raises', LRaised);
+
+  LStr := MustCaptureCombined('/bin/echo', ['combined-ok']);
+  Check('MustCaptureCombined success — has stdout', Pos('combined-ok', LStr) > 0);
 end;
 
 
@@ -1289,6 +1536,12 @@ begin
   TestPathResolverSourceContract;
   TestCommandSpawnPlatformHelperSourceContract;
   TestProcessEnvSnapshotSourceContract;
+  TestProcessOwnedSourcesNoFpcRtl;
+  TestProcessTestSuitesNoFpcRtl;
+  TestMergeStderrConflictsStderrNull;
+  TestMergeStderrRequiresStdoutPiped;
+  TestWaitAutoDrainsOwnedPipes;
+  TestWaitWithoutPipesLeavesStdoutEmpty;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;
@@ -1326,6 +1579,9 @@ begin
   TestRunLargeOutput;
   TestLookPath;
   TestTryLookPath;
+  TestProcessSucceeded;
+  TestMaxOutput;
+  TestMustCaptureAndRunChecked;
   TestSignal;
   TestRunTimeoutConvenience;
   TestCaptureTimeoutConvenience;

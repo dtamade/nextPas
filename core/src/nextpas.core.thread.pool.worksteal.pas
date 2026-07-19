@@ -64,6 +64,8 @@ type
     destructor Destroy; override;
     procedure Submit(const ATask: TThreadTask);
     procedure SubmitDirect(AData: Pointer; AProc: TThreadProc);
+    procedure SubmitBatch(const ATasks: array of TThreadTask);
+    procedure SignalWorkers(const ACount: Integer);
     procedure Shutdown;
     procedure WaitAll;
     function WaitAllTimeout(const ATimeoutNs: Int64): Boolean;
@@ -222,6 +224,53 @@ begin
   begin
     AProc(AData);
   end);
+end;
+
+procedure TWorkStealingPool.SubmitBatch(const ATasks: array of TThreadTask);
+var
+  LCount, LI, LQIdx: Integer;
+begin
+  LCount := Length(ATasks);
+  if LCount = 0 then
+    Exit;
+
+  FMutex.Acquire;
+  if FShutdown then
+  begin
+    FMutex.Release;
+    Exit;
+  end;
+
+  for LI := 0 to LCount - 1 do
+  begin
+    LQIdx := FNextQueue;
+    FNextQueue := (FNextQueue + 1) mod FWorkerCount;
+
+    if FQueues[LQIdx].Count >= QUEUE_CAPACITY then
+    begin
+      FCondVar.Broadcast;
+      FMutex.Release;
+      raise EInvalidOperation.Create('TWorkStealingPool.SubmitBatch: queue full');
+    end;
+
+    FQueues[LQIdx].Tasks[FQueues[LQIdx].Tail] := ATasks[LI];
+    FQueues[LQIdx].Tail := (FQueues[LQIdx].Tail + 1) mod QUEUE_CAPACITY;
+    Inc(FQueues[LQIdx].Count);
+    Inc(FPendingTasks);
+  end;
+
+  FCondVar.Broadcast;
+  FMutex.Release;
+end;
+
+procedure TWorkStealingPool.SignalWorkers(const ACount: Integer);
+var
+  I: Integer;
+begin
+  FMutex.Acquire;
+  for I := 0 to ACount - 1 do
+    FCondVar.Signal;
+  FMutex.Release;
 end;
 
 procedure TWorkStealingPool.Shutdown;

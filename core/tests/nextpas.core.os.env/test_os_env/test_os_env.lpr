@@ -6,10 +6,109 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.text.base,
+  nextpas.core.fs,
   nextpas.core.os.env;
 
 var
   T: TTestSuite;
+
+{$I ../../fpc_rtl_uses_scan.inc}
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+begin
+  LSourcePath := PathAbs('../../../' + ARelativePath);
+  Check(Exists(LSourcePath), 'source exists: ' + ARelativePath);
+  Result := ReadFileText(LSourcePath);
+end;
+
+procedure AssertSourceNoBareFpcRtlUses(const ALabel, ASource: string);
+var
+  LHit: string;
+  LOk: Boolean;
+  LMsg: string;
+begin
+  LOk := not FindBareFpcRtlInUses(ASource, LHit);
+  LMsg := ALabel + ' — no bare FPC RTL in uses';
+  if not LOk then
+    LMsg := LMsg + ' (hit: ' + LHit + ')';
+  Check(LOk, LMsg);
+end;
+
+procedure TestEnvOwnedSourcesNoFpcRtl;
+begin
+  AssertSourceNoBareFpcRtlUses('env src',
+    LoadSourceText('src/nextpas.core.os.env.pas'));
+end;
+
+procedure TestEnvTestSuiteNoFpcRtl;
+begin
+  AssertSourceNoBareFpcRtlUses('env test',
+    LoadSourceText('tests/nextpas.core.os.env/test_os_env/test_os_env.lpr'));
+end;
+
+procedure TestSetEnvRejectsNonPortableName;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    SetEnv('BAD NAME', 'v');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SetEnv rejects space in name');
+
+  LRaised := False;
+  try
+    SetEnv('1ABC', 'v');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SetEnv rejects digit-leading name');
+
+  LRaised := False;
+  try
+    UnsetEnv('has-dash');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'UnsetEnv rejects dash in name');
+end;
+
+procedure TestExpandEnvRejectsNonPortablePlaceholder;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    ExpandEnv('${foo-bar}');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ExpandEnv rejects non-portable ${name}');
+
+  LRaised := False;
+  try
+    ExpandEnv('$1ABC');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ExpandEnv rejects digit-leading $VAR');
+end;
+
+procedure TestGetEnvAllowsNonPortableLookup;
+begin
+  { Lookup only forbids empty / = / NUL — odd names return empty, do not raise. }
+  CheckEqual('', GetEnv('weird name'), 'GetEnv allows space name lookup');
+  CheckEqual('', GetEnv('1digit'), 'GetEnv allows digit-leading lookup');
+end;
 
 { --- existing tests --- }
 
@@ -244,20 +343,54 @@ end;
 
 procedure TestUserCacheDir;
 var
-  LCache: string;
+  LCache, LSaved, LApp: string;
+  LHadXdg: Boolean;
 begin
-  LCache := UserCacheDir;
-  Check(LCache <> '', 'UserCacheDir is not empty');
-  Check(Pos('.cache', LCache) > 0, 'UserCacheDir contains .cache');
+  LHadXdg := TryGetEnv('XDG_CACHE_HOME', LSaved);
+  try
+    UnsetEnv('XDG_CACHE_HOME');
+    LCache := UserCacheDir;
+    Check(LCache <> '', 'UserCacheDir is not empty');
+    Check(Pos('.cache', LCache) > 0, 'UserCacheDir fallback contains .cache');
+
+    SetEnv('XDG_CACHE_HOME', '/tmp/nextpas-xdg-cache-test');
+    LCache := UserCacheDir;
+    CheckEqual('/tmp/nextpas-xdg-cache-test', LCache,
+      'UserCacheDir respects XDG_CACHE_HOME');
+
+    LApp := UserCacheDir('myapp');
+    CheckEqual('/tmp/nextpas-xdg-cache-test/myapp', LApp,
+      'UserCacheDir joins AppName');
+  finally
+    if LHadXdg then
+      SetEnv('XDG_CACHE_HOME', LSaved)
+    else
+      UnsetEnv('XDG_CACHE_HOME');
+  end;
 end;
 
 procedure TestUserConfigDir;
 var
-  LConfig: string;
+  LConfig, LSaved: string;
+  LHadXdg: Boolean;
 begin
-  LConfig := UserConfigDir;
-  Check(LConfig <> '', 'UserConfigDir is not empty');
-  Check(Pos('.config', LConfig) > 0, 'UserConfigDir contains .config');
+  LHadXdg := TryGetEnv('XDG_CONFIG_HOME', LSaved);
+  try
+    UnsetEnv('XDG_CONFIG_HOME');
+    LConfig := UserConfigDir;
+    Check(LConfig <> '', 'UserConfigDir is not empty');
+    Check(Pos('.config', LConfig) > 0, 'UserConfigDir fallback contains .config');
+
+    SetEnv('XDG_CONFIG_HOME', '/tmp/nextpas-xdg-config-test');
+    LConfig := UserConfigDir('app');
+    CheckEqual('/tmp/nextpas-xdg-config-test/app', LConfig,
+      'UserConfigDir XDG + AppName');
+  finally
+    if LHadXdg then
+      SetEnv('XDG_CONFIG_HOME', LSaved)
+    else
+      UnsetEnv('XDG_CONFIG_HOME');
+  end;
 end;
 
 procedure TestGetEnvDefault;
@@ -354,6 +487,49 @@ begin
   UnsetEnv('NEXTPAS_TEST_EMPTY');
 end;
 
+procedure TestUserDataDir;
+var
+  LData, LSaved: string;
+  LHadXdg: Boolean;
+begin
+  LHadXdg := TryGetEnv('XDG_DATA_HOME', LSaved);
+  try
+    UnsetEnv('XDG_DATA_HOME');
+    LData := UserDataDir;
+    Check(LData <> '', 'UserDataDir is not empty');
+    Check(Pos('.local/share', LData) > 0, 'UserDataDir fallback contains .local/share');
+
+    SetEnv('XDG_DATA_HOME', '/tmp/nextpas-xdg-data-test');
+    LData := UserDataDir('app');
+    CheckEqual('/tmp/nextpas-xdg-data-test/app', LData,
+      'UserDataDir XDG + AppName');
+  finally
+    if LHadXdg then
+      SetEnv('XDG_DATA_HOME', LSaved)
+    else
+      UnsetEnv('XDG_DATA_HOME');
+  end;
+end;
+
+procedure TestExpandEnv_PercentVar;
+begin
+  SetEnv('NEXTPAS_TEST_PERCENT', 'pctval');
+  try
+    CheckEqual('pctval', ExpandEnv('%NEXTPAS_TEST_PERCENT%'),
+      'ExpandEnv expands %VAR%');
+    CheckEqual('pre-pctval-post', ExpandEnv('pre-%NEXTPAS_TEST_PERCENT%-post'),
+      'ExpandEnv percent in middle');
+    CheckEqual('100%', ExpandEnv('100%'),
+      'ExpandEnv lone trailing percent stays');
+    CheckEqual('a%b', ExpandEnv('a%b'),
+      'ExpandEnv incomplete percent stays literal');
+    CheckEqual('pctval/pctval', ExpandEnv('%NEXTPAS_TEST_PERCENT%/$NEXTPAS_TEST_PERCENT'),
+      'ExpandEnv mixed percent and dollar');
+  finally
+    UnsetEnv('NEXTPAS_TEST_PERCENT');
+  end;
+end;
+
 { --- main --- }
 
 begin
@@ -386,11 +562,18 @@ begin
   T.Test('UserHomeDir', @TestUserHomeDir);
   T.Test('UserCacheDir', @TestUserCacheDir);
   T.Test('UserConfigDir', @TestUserConfigDir);
+  T.Test('UserDataDir', @TestUserDataDir);
+  T.Test('ExpandEnv_PercentVar', @TestExpandEnv_PercentVar);
   T.Test('GetEnvDefault', @TestGetEnvDefault);
   T.Test('ExpandEnvWithDefault', @TestExpandEnvWithDefault);
   T.Test('ExpandEnvWithDefault_EmptyValue', @TestExpandEnvWithDefault_EmptyValue);
   T.Test('ExpandEnvStrict', @TestExpandEnvStrict);
   T.Test('ExpandEnvStrict_BraceSyntax', @TestExpandEnvStrict_BraceSyntax);
   T.Test('ExpandEnvStrict_EmptyValue', @TestExpandEnvStrict_EmptyValue);
+  T.Test('env owned sources no bare FPC RTL uses', @TestEnvOwnedSourcesNoFpcRtl);
+  T.Test('env test suite no bare FPC RTL uses', @TestEnvTestSuiteNoFpcRtl);
+  T.Test('SetEnv/UnsetEnv portable name', @TestSetEnvRejectsNonPortableName);
+  T.Test('ExpandEnv portable placeholder', @TestExpandEnvRejectsNonPortablePlaceholder);
+  T.Test('GetEnv allows non-portable lookup', @TestGetEnvAllowsNonPortableLookup);
   if not T.Run then Halt(1);
 end.

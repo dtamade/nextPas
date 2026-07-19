@@ -10,6 +10,8 @@ uses
 
 type
   TJsonStringValidationError = (
+    jsveNone,
+    jsveInvalidEscape,
     jsveControlChar
   );
 
@@ -38,6 +40,10 @@ function ScanIsJsonNumberToken(const AData: PAnsiChar;
   const ALen: SizeUInt): Boolean;
 function ScanJsonNumberHasIncompleteExponent(const AData: PAnsiChar;
   const ALen: SizeUInt): Boolean;
+{ Length of a number-like prefix that ends in an incomplete exponent (e/E[+/-]
+  without digits). Returns 0 when the input is not that shape. }
+function ScanJsonNumberIncompleteExponentSpan(const AData: PAnsiChar;
+  const ALen: SizeUInt): SizeUInt;
 procedure ViewSkipWhitespace(var AView: TStringView); inline;
 function ViewMatchLiteral(var AView: TStringView;
   const AExpected: PAnsiChar; const AExpectedLen: Byte): Boolean; inline;
@@ -489,29 +495,106 @@ begin
     AView.Advance(AExpectedLen);
 end;
 
+function JsonValidateParseHex4(const AData: PAnsiChar; const ALen: SizeUInt;
+  const AStart: SizeUInt): Int32;
+var
+  I: SizeUInt;
+  D, V: Int32;
+begin
+  V := 0;
+  for I := AStart to AStart + 3 do
+  begin
+    if I >= ALen then
+      Exit(-1);
+    D := HexDigitValue(Byte(AData[I]));
+    if D < 0 then
+      Exit(-1);
+    V := (V shl 4) or D;
+  end;
+  Result := V;
+end;
+
 function JsonValidateStringToken(const AData: PAnsiChar; const ALen: SizeUInt;
   out AError: TJsonStringValidationError;
   out AErrorOffset: SizeUInt): Boolean;
 var
-  I: SizeUInt;
+  LPos: SizeUInt;
   LCh: Byte;
+  LHi, LLo: UInt32;
 begin
-  I := 0;
-  while I < ALen do
+  { RFC 8259 §7: reject control bytes and invalid/truncated escapes. }
+  AError := jsveNone;
+  AErrorOffset := 0;
+  LPos := 0;
+  while LPos < ALen do
   begin
-    LCh := Byte(AData[I]);
-    if LCh = Ord('\') then
-    begin
-      Inc(I, 2); // skip backslash + escaped char
-      Continue;
-    end;
+    LCh := Byte(AData[LPos]);
     if LCh < $20 then
     begin
       AError := jsveControlChar;
-      AErrorOffset := I;
+      AErrorOffset := LPos;
       Exit(False);
     end;
-    Inc(I);
+    if LCh <> Ord('\') then
+    begin
+      Inc(LPos);
+      Continue;
+    end;
+
+    AErrorOffset := LPos;
+    Inc(LPos);
+    if LPos >= ALen then
+    begin
+      AError := jsveInvalidEscape;
+      Exit(False);
+    end;
+    LCh := Byte(AData[LPos]);
+    Inc(LPos);
+    case LCh of
+      Ord('"'), Ord('\'), Ord('/'), Ord('b'), Ord('f'), Ord('n'), Ord('r'),
+      Ord('t'):
+        ;
+      Ord('u'):
+      begin
+        if LPos + 4 > ALen then
+        begin
+          AError := jsveInvalidEscape;
+          Exit(False);
+        end;
+        LHi := UInt32(JsonValidateParseHex4(AData, ALen, LPos));
+        if Int32(LHi) < 0 then
+        begin
+          AError := jsveInvalidEscape;
+          Exit(False);
+        end;
+        Inc(LPos, 4);
+        if (LHi >= $D800) and (LHi <= $DBFF) then
+        begin
+          if (LPos + 6 > ALen) or (AData[LPos] <> '\') or
+            (AData[LPos + 1] <> 'u') then
+          begin
+            AError := jsveInvalidEscape;
+            Exit(False);
+          end;
+          Inc(LPos, 2);
+          LLo := UInt32(JsonValidateParseHex4(AData, ALen, LPos));
+          if (Int32(LLo) < 0) or (LLo < $DC00) or (LLo > $DFFF) then
+          begin
+            AError := jsveInvalidEscape;
+            Exit(False);
+          end;
+          Inc(LPos, 4);
+        end
+        else if (LHi >= $DC00) and (LHi <= $DFFF) then
+        begin
+          AError := jsveInvalidEscape;
+          Exit(False);
+        end;
+      end;
+    else
+      AError := jsveInvalidEscape;
+      Exit(False);
+    end;
   end;
   Result := True;
 end;
@@ -597,6 +680,57 @@ begin
       Exit;
     end;
   end;
+end;
+
+function ScanJsonNumberIncompleteExponentSpan(const AData: PAnsiChar;
+  const ALen: SizeUInt): SizeUInt;
+var
+  LPos: SizeUInt;
+  LCh: Byte;
+begin
+  Result := 0;
+  LPos := 0;
+  if (LPos < ALen) and (AData[LPos] = '-') then
+    Inc(LPos);
+  if LPos >= ALen then
+    Exit;
+  LCh := Byte(AData[LPos]);
+  if LCh = Ord('0') then
+  begin
+    Inc(LPos);
+    if (LPos < ALen) and IsDigit(Byte(AData[LPos])) then
+      Exit;
+  end
+  else if (LCh >= Ord('1')) and (LCh <= Ord('9')) then
+  begin
+    Inc(LPos);
+    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+      Inc(LPos);
+  end
+  else
+    Exit;
+
+  if (LPos < ALen) and (AData[LPos] = '.') then
+  begin
+    if ((LPos + 1) >= ALen) or not IsDigit(Byte(AData[LPos + 1])) then
+      Exit;
+    Inc(LPos);
+    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+      Inc(LPos);
+  end;
+
+  if LPos >= ALen then
+    Exit;
+  LCh := Byte(AData[LPos]);
+  if (LCh <> Ord('e')) and (LCh <> Ord('E')) then
+    Exit;
+  Inc(LPos);
+  if (LPos < ALen) and
+    ((Byte(AData[LPos]) = Ord('+')) or (Byte(AData[LPos]) = Ord('-'))) then
+    Inc(LPos);
+  if (LPos < ALen) and IsDigit(Byte(AData[LPos])) then
+    Exit;
+  Result := LPos;
 end;
 
 end.

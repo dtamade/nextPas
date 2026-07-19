@@ -24,7 +24,8 @@ uses
   nextpas.core.collections.linkedhashmap,
   nextpas.core.collections.priorityqueue,
   nextpas.core.collections.iterators,
-  nextpas.core.mem.intf;
+  nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base;
 
 var
   GPass: Integer;
@@ -33,8 +34,7 @@ procedure Pass(const AName: string);
 begin
   WriteLn('  PASS: ', AName);
   Inc(GPass);
-end,
-  nextpas.core.mem.allocator.base;
+end;
 
 type
   TCountingAllocator = class(TInterfacedObject, IAllocator)
@@ -42,14 +42,11 @@ type
     FAllocCount: SizeUInt;
     FDeallocCount: SizeUInt;
   public
-    function GetMem(ASize: SizeUInt): Pointer; override;
-    function AllocMem(ASize: SizeUInt): Pointer; override;
-    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer; override;
-    procedure FreeMem(ADst: Pointer); override;
-    function MemSizeOf(APtr: Pointer): SizeUInt; override;
-    function AllocAligned(ASize, AAlignment: SizeUInt): Pointer; override;
-    procedure FreeAligned(APtr: Pointer); override;
-    function Traits: TAllocatorTraits; override;
+    function GetMem(ASize: SizeUInt): Pointer;
+    function AllocMem(ASize: SizeUInt): Pointer;
+    function ReallocMem(ADst: Pointer; ASize: SizeUInt): Pointer;
+    procedure FreeMem(ADst: Pointer);
+    function Traits: TAllocatorTraits;
 
     property AllocCount: SizeUInt read FAllocCount;
     property DeallocCount: SizeUInt read FDeallocCount;
@@ -92,28 +89,11 @@ begin
   System.FreeMem(ADst);
 end;
 
-function TCountingAllocator.MemSizeOf(APtr: Pointer): SizeUInt;
-begin
-  Result := 0;
-end;
-
-function TCountingAllocator.AllocAligned(ASize, AAlignment: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-procedure TCountingAllocator.FreeAligned(APtr: Pointer);
-begin
-  FreeMem(APtr);
-end;
-
 function TCountingAllocator.Traits: TAllocatorTraits;
 begin
   Result.ZeroInitialized := False;
   Result.ThreadSafe := False;
   Result.SupportsRealloc := True;
-  Result.HasMemSize := False;
-  Result.SupportsAligned := False;
 end;
 
 function LoadCollectionsSource(const AFileName: string): string;

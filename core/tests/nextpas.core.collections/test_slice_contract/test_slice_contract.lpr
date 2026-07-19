@@ -122,19 +122,23 @@ begin
     'TReadOnlySpan2.SubSpan offset+length overflow');
 end;
 
-procedure TestSpan2CountSaturatesOnOverflow;
+procedure RaiseSpan2FromTwoAggregateOverflow;
 var
   LData: Byte;
   LA: TByteReadOnlySpan;
   LB: TByteReadOnlySpan;
-  LSpan: TByteReadOnlySpan2;
   LMax: SizeUInt;
 begin
   LMax := MAX_SIZE_UINT;
   LA := TByteReadOnlySpan.FromPointer(@LData, LMax, SizeOf(Byte));
   LB := TByteReadOnlySpan.FromPointer(@LData, 1, SizeOf(Byte));
-  LSpan := TByteReadOnlySpan2.FromTwo(LA, LB);
-  Check(LSpan.Count = LMax, 'TReadOnlySpan2.Count should saturate on overflow');
+  TByteReadOnlySpan2.FromTwo(LA, LB);
+end;
+
+procedure TestSpan2FromTwoRejectsAggregateOverflow;
+begin
+  CheckRaisesOutOfRange(@RaiseSpan2FromTwoAggregateOverflow,
+    'TReadOnlySpan2.FromTwo aggregate count overflow');
 end;
 
 procedure TestSpanFromPointerRejectsNilNonEmpty;
@@ -155,6 +159,6 @@ begin
   T.Test('span from pointer rejects zero elem size', @TestSpanFromPointerRejectsZeroElemSize);
   T.Test('span subspan rejects overflow', @TestSpanSubSpanRejectsOverflow);
   T.Test('span2 subspan rejects overflow', @TestSpan2SubSpanRejectsOverflow);
-  T.Test('span2 count saturates on overflow', @TestSpan2CountSaturatesOnOverflow);
+  T.Test('span2 FromTwo rejects aggregate overflow', @TestSpan2FromTwoRejectsAggregateOverflow);
   if not T.Run then Halt(1);
 end.

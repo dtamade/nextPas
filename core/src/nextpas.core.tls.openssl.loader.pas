@@ -26,6 +26,7 @@ interface
 
 uses
   nextpas.core.fs,
+  nextpas.core.os.env,
   nextpas.core.base,  // culong, cint 等 C 类型
   nextpas.core.text.conv,
   nextpas.core.platform.dl;
@@ -445,7 +446,7 @@ var
 begin
   FillChar(Result, SizeOf(Result), 0);
 
-  LRoot := Trim(nextpas.core.fs.GetEnv('OPENSSL_ROOT'));
+  LRoot := Trim(nextpas.core.os.env.GetEnv('OPENSSL_ROOT'));
   if LRoot = '' then
     Exit;
 
@@ -654,7 +655,8 @@ var
   LVersion: TOpenSSL_version;
   LVersionValue: culong;
 begin
-  // 初始化默认值
+  { Managed VersionString: clear properly before re-detect (no FillChar orphan). }
+  FVersionInfo.VersionString := '';
   FillChar(FVersionInfo, SizeOf(FVersionInfo), 0);
   FVersionInfo.VersionString := 'Unknown';
 

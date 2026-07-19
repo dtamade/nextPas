@@ -6,10 +6,11 @@ unit nextpas.core.io.reactor.kqueue;
 interface
 
 uses
+  nextpas.core.io.base,
   nextpas.core.platform.darwin.base;
 
 type
-  TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+  TIoCompletion = nextpas.core.io.base.TIoCompletion;
 
   TKqueueOpKind = (
     opRead,

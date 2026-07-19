@@ -17,15 +17,16 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 |------|------|
 | [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
 | [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
-| [`READY.md`](READY.md) | **状态入口**（R0–R7 基线 + **H2 in progress**） |
-| [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6） |
+| [`READY.md`](READY.md) | **状态入口**（**Maintenance**；H3-1…H3-3 done） |
+| [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6 complete） |
+| [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-3 done；H3-4/H3-5 未授权实现） |
 | [`bench-envelope.md`](bench-envelope.md) | **H2-4** bench 证据信封（禁止无信封绝对 Mops） |
-| [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 |
+| [`consumer-audit.md`](consumer-audit.md) | 消费者审计 + H3-3 门入口 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
 | [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
 
-历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap-h2 + roadmap 为准。主线 **R0–R7 + RC Ready 已完成**，当前 **H2 in progress**（详见 [`READY.md`](READY.md) / [`roadmap-h2.md`](roadmap-h2.md)）。
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-3 已完成**，当前 **Maintenance**（详见 [`READY.md`](READY.md)）。
 
 ## Progress-guarantee matrix
 
@@ -66,7 +67,9 @@ Within T2, containers are **documented** (not re-ranked into T1) as:
 | **Available** | Usable concurrent structure; progress often lock-based | trees/skiplist, sketches, `deque_lf` (spin-lock) |
 | **Experimental** | Research / unstable surface | `hashmap.rtm`, `hashmap.numa` |
 
-Full table: [`CONTRACT.md`](CONTRACT.md) §0.2. Selection: [`selection-guide.md`](selection-guide.md).
+**H3-2 production subset** (authorized): `bag` + `multimap` have a **unified** Close / managed / progress contract in [`CONTRACT.md`](CONTRACT.md) §0.3. Still **direct import only** — not default facade. Other Guarded types remain H2-2 tier docs only.
+
+Full table: [`CONTRACT.md`](CONTRACT.md) §0.2–§0.3. Selection: [`selection-guide.md`](selection-guide.md).
 
 ## 模块分层（T1 live set）
 
@@ -154,8 +157,8 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 `TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
 `TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
 `TSpmcQueue<T>` permits exactly one producer and multiple concurrent consumers; CAS-protected dequeue positions ensure exactly-once delivery under contention.
-`TLockFreeBag<T>` permits multiple concurrent producers and consumers; based on MPMC queue, allows duplicate elements. FIFO order is preserved. `Close` prevents new additions but existing elements can still be retrieved.
-`TLockFreeMultiMap<TKey, TValue>` permits multiple concurrent producers and consumers; based on sharded HashMap, each key can have multiple values. `Close` prevents new additions but existing data can still be read and removed.
+`TLockFreeBag<T>` (H3-2 Guarded subset): multiple concurrent producers/consumers; **MPMC sequence ring** (lock-free try path); allows duplicates; FIFO. `Close` blocks new adds (`arClosed`); existing elements still takeable. Unmanaged `T` only. Direct `uses nextpas.core.lockfree.bag`.
+`TLockFreeMultiMap<TKey, TValue>` (H3-2 Guarded subset): concurrent multi-value map under **one map spin lock** (lock-based, **not** sharded, **not** lock-free). `Close` blocks new adds (`mmClosed`); existing keys readable/removable. Unmanaged key/value. Direct `uses nextpas.core.lockfree.multimap`.
 `TConcurrentBloomFilter<T>` permits multiple concurrent producers and consumers; based on multiple hash functions. `Add` and `Contains` are lock-free. `Close` prevents new additions but existing data can still be queried. May have false positives but no false negatives.
 
 ## Linearization points

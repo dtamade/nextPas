@@ -386,12 +386,12 @@ end;
 { Bitmap helpers: set/clear/scan }
 procedure THashMap.BitmapSet(aIdx: SizeUInt);
 begin
-  (FBitmap + aIdx shr 3)^ := (FBitmap + aIdx shr 3)^ or (1 shl (aIdx and 7));
+  (FBitmap + (aIdx shr 3))^ := (FBitmap + (aIdx shr 3))^ or Byte(1 shl (aIdx and 7));
 end;
 
 procedure THashMap.BitmapClear(aIdx: SizeUInt);
 begin
-  (FBitmap + aIdx shr 3)^ := (FBitmap + aIdx shr 3)^ and not (1 shl (aIdx and 7));
+  (FBitmap + (aIdx shr 3))^ := (FBitmap + (aIdx shr 3))^ and not Byte(1 shl (aIdx and 7));
 end;
 
 procedure THashMap.BitmapZero;
@@ -399,7 +399,10 @@ begin
   FillChar(FBitmap^, (FCapacity + 7) div 8, 0);
 end;
 
-{ Find next set bit at or after aStart; returns FCapacity if none }
+{ Find next set bit at or after aStart; returns FCapacity if none.
+  First-byte scan must shift the byte so bit0 corresponds to aStart; using
+  (byte and ($FF shl bitIdx)) while still counting from LSB double-counts the
+  low zero bits and skips/mis-identifies occupied slots. }
 function THashMap.BitmapFindNext(aStart: SizeUInt): SizeUInt;
 var
   byteIdx: SizeUInt;
@@ -407,19 +410,26 @@ var
   b: Byte;
   endByte: SizeUInt;
 begin
+  if aStart >= FCapacity then
+    Exit(FCapacity);
+
   byteIdx := aStart shr 3;
   bitIdx := aStart and 7;
   endByte := (FCapacity + 7) div 8;
   if byteIdx < endByte then
   begin
-    { Check first byte with mask for bits >= aStart }
-    b := (FBitmap + byteIdx)^ and ($FF shl bitIdx);
+    { Align so bit 0 of b is the aStart bit within this byte. }
+    b := (FBitmap + byteIdx)^ shr bitIdx;
     if b <> 0 then
     begin
-      bitIdx := aStart and 7;
-      while (b and 1) = 0 do begin b := b shr 1; Inc(bitIdx); end;
+      while (b and 1) = 0 do
+      begin
+        b := b shr 1;
+        Inc(bitIdx);
+      end;
       Result := (byteIdx shl 3) + bitIdx;
-      if Result < FCapacity then Exit;
+      if Result < FCapacity then
+        Exit;
     end;
     Inc(byteIdx);
     { Scan remaining bytes }
@@ -429,9 +439,14 @@ begin
       if b <> 0 then
       begin
         bitIdx := 0;
-        while (b and 1) = 0 do begin b := b shr 1; Inc(bitIdx); end;
+        while (b and 1) = 0 do
+        begin
+          b := b shr 1;
+          Inc(bitIdx);
+        end;
         Result := (byteIdx shl 3) + bitIdx;
-        if Result < FCapacity then Exit;
+        if Result < FCapacity then
+          Exit;
       end;
       Inc(byteIdx);
     end;

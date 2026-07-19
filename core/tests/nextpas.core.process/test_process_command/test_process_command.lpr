@@ -3,7 +3,6 @@ program test_process_command;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils, Classes,
   nextpas.core.process,
   nextpas.core.time.base,
   nextpas.core.process.base,
@@ -296,12 +295,13 @@ end;
 { Additional: Status convenience method }
 procedure TestStatusConvenience;
 var
-  LCode: Integer;
+  LOut: TProcessOutput;
 begin
-  LCode := TCommand.New('/bin/true').Status;
-  Check('Status convenience — true returns 0', LCode = 0);
-  LCode := TCommand.New('/bin/false').Status;
-  Check('Status convenience — false returns non-zero', LCode <> 0);
+  LOut := TCommand.New('/bin/true').Status;
+  Check('Status convenience — true returns 0', LOut.ExitCode = 0);
+  Check('Status convenience — true ProcessSucceeded', ProcessSucceeded(LOut));
+  LOut := TCommand.New('/bin/false').Status;
+  Check('Status convenience — false returns non-zero', LOut.ExitCode <> 0);
 end;
 
 { Additional: EnvAdd overlay }

@@ -28,6 +28,8 @@ function PathExt(const APath: string): string;
 function PathChangeExt(const APath, ANewExt: string): string;
 {** @desc 判断路径是否为绝对路径 *}
 function PathIsAbsolute(const APath: string): Boolean;
+{** @desc PathIsAbsolute 别名（与 fs.PathIsAbs 对称） *}
+function PathIsAbs(const APath: string): Boolean; inline;
 {** @desc 判断路径是否为相对路径 *}
 function PathIsRelative(const APath: string): Boolean; inline;
 {** @desc 规范化路径（解析 . 和 ..，去除多余分隔符） *}
@@ -75,7 +77,7 @@ function ChangeFileExt(const AFileName, AExt: string): string; inline;
 function IncludeTrailingPathDelimiter(const APath: string): string;
 {** @desc 去除路径末尾的路径分隔符（SysUtils 兼容） *}
 function ExcludeTrailingPathDelimiter(const APath: string): string;
-{** @desc 将相对路径转为绝对路径（SysUtils 兼容，委托 FsPathAbs） *}
+{** @desc 转为绝对路径（SysUtils 兼容；委托 FsPathAbs，依赖 cwd，非纯字符串） *}
 function ExpandFileName(const APath: string): string;
 
 implementation
@@ -134,6 +136,11 @@ end;
 function PathIsAbsolute(const APath: string): Boolean;
 begin
   Result := FsPathIsAbs(APath);
+end;
+
+function PathIsAbs(const APath: string): Boolean;
+begin
+  Result := PathIsAbsolute(APath);
 end;
 
 function PathIsRelative(const APath: string): Boolean;

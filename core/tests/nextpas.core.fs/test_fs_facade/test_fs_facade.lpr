@@ -19,7 +19,9 @@ begin
 
   LSuite.Test('MkdirAll through facade', procedure begin
     if Exists(TmpDir) then RemoveAll(TmpDir);
-    CheckTrue(MkdirAll(TmpDir), 'MkdirAll should succeed');
+    { MkdirAll is procedure: success is no exception (INV-5). }
+    MkdirAll(TmpDir);
+    CheckTrue(IsDir(TmpDir), 'MkdirAll should create directory');
   end);
 
   LSuite.Test('Create and write file', procedure begin
@@ -65,7 +67,9 @@ begin
   end);
 
   LSuite.Test('Remove file', procedure begin
-    CheckTrue(Remove(RenamedPath), 'Remove through facade');
+    { Remove is procedure: success is no exception (INV-5). }
+    Remove(RenamedPath);
+    CheckTrue(not Exists(RenamedPath), 'Remove through facade');
   end);
 
   LSuite.SetTeardown(procedure begin
