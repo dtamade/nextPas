@@ -11,6 +11,9 @@ function NextConfigWindowsEnvBlockEntry(var ACursor: PAnsiChar;
 
 implementation
 
+uses
+  SysUtils;
+
 function TryConfigEnvNameToKey(const AName, APrefix: string;
   out AKey: string): Boolean;
 var
@@ -21,8 +24,15 @@ begin
   if LPrefixLen = 0 then
     Exit(False);
 
-  Result := (Length(AName) > LPrefixLen) and
-    (Copy(AName, 1, LPrefixLen) = APrefix);
+  if Length(AName) <= LPrefixLen then
+    Exit(False);
+
+  {$IFDEF MSWINDOWS}
+  { Windows environment names are case-insensitive. }
+  Result := SameText(Copy(AName, 1, LPrefixLen), APrefix);
+  {$ELSE}
+  Result := Copy(AName, 1, LPrefixLen) = APrefix;
+  {$ENDIF}
   if not Result then
     Exit;
 

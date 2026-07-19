@@ -13,7 +13,8 @@ implementation
 
 uses
   nextpas.core.text.conv,
-  nextpas.core.errors
+  nextpas.core.errors,
+  nextpas.core.platform.error
 {$IFDEF NEXTPAS_WINDOWS}
   , nextpas.core.platform.windows.base
 {$ENDIF}
@@ -48,10 +49,13 @@ const
 procedure RaiseFsError(const ACode: Int32; const AOp, APath: string);
 var
   LMsg: string;
+  LBuf: array[0..255] of AnsiChar;
 begin
   if ACode = 0 then
     Exit;
   LMsg := AOp + ' failed (' + IntToStr(ACode) + '): ' + APath;
+  if platform_error_message(ACode, @LBuf[0], SizeOf(LBuf)) > 0 then
+    LMsg := LMsg + ' — ' + string(PAnsiChar(@LBuf[0]));
 {$IFDEF NEXTPAS_WINDOWS}
   case ACode of
     ERR_FILE_NOT_FOUND, ERR_PATH_NOT_FOUND:

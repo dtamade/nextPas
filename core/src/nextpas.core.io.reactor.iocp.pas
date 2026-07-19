@@ -6,10 +6,11 @@ unit nextpas.core.io.reactor.iocp;
 interface
 
 uses
+  nextpas.core.io.base,
   nextpas.core.platform.windows.base;
 
 type
-  TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+  TIoCompletion = nextpas.core.io.base.TIoCompletion;
 
   TIocpOpKind = (
     opRead,

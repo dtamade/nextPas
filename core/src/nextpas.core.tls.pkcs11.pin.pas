@@ -77,7 +77,7 @@ type
 
 implementation
 
-uses nextpas.core.fs, nextpas.core.tls.pkcs11.api;
+uses nextpas.core.fs, nextpas.core.os.env, nextpas.core.tls.pkcs11.api;
 
 { TPKCS11PINManager }
 
@@ -120,7 +120,7 @@ end;
 
 class function TPKCS11PINManager.ReadPINFromEnvironment(const AVarName: string): string;
 begin
-  Result := GetEnv(AVarName);
+  Result := nextpas.core.os.env.GetEnv(AVarName);
   
   if Result = '' then
     raise EPKCS11Exception.Create(

@@ -5,9 +5,10 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 ## Truth Matrix
 
 ### linux runtime truth
-- io_uring backend (Linux 5.1+) via `TIoReactor`
-- epoll fallback (Linux 2.6+) via `TEpollReactor`
-- Runtime auto-detection: probes io_uring at `TPoller.Create` time; falls back to epoll on ENOSYS
+- io_uring is the linux completion backend (Linux 5.1+) via `TIoReactor` — `pbmCompletionQueue`
+- `pbepoll` is a readiness-backed fallback (Linux 2.6+) via `TEpollReactor` — not a completion-equivalent replacement for file I/O
+- Runtime auto-detection: `TryIoUringProbe` reports usable only when `io_uring_setup` returns a real fd (`LFd >= 0`); any setup failure falls back to epoll
+- If the real io_uring queue creation fails after probing, `TPoller.Create` switches backend truth to epoll (or `pbUnsupported` if epoll create also fails)
 - 18 timeout tests in `test_async_timeout` verify the race mechanism, `TTimeoutCtx` lifecycle, and heaptrc enforcement
 
 ### windows compile truth
@@ -28,7 +29,9 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 ### Backend Model Classification
 - `pbiouring` and `pbiocp` are `pbmCompletionQueue` — these backends signal completion when an operation finishes, not readiness
 - `pbepoll` is `pbmReadiness` — epoll signals when a fd is ready to read/write, not when an operation completes
+- Positioned file I/O is only a completion-backend capability (`pbIoUring` / `pbIocp`); epoll remains readiness-only and is not a completion-equivalent replacement for file I/O
 - `pbUnsupported` documents the absence of a usable backend
+- Application semantics are not identical across backends; readiness fallbacks cannot stand in for completion-queue file I/O
 
 ## Features
 
@@ -40,6 +43,18 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - Task state machine (idle/pending/completed/failed/timedout/cancelled)
 - Zero memory leaks (`test_async_timeout` enforces heaptrc on the timeout race mechanism)
 
+- Structured concurrency (TaskGroup with cancel/drain/wait semantics)
+- Graceful shutdown management (phased shutdown with timeout)
+- Generic timeout wrapper (IAsyncTimeout with cancel/timeout tracking)
+- WhenAll/WhenAny combinators (parallel execution with completion notification)
+- Async retry with exponential backoff (RetryWithBackoff/RetryWithFixedDelay)
+- Async sync primitives (Mutex, Semaphore, Channel, CondVar)
+- Vectored I/O (AsyncReadv/AsyncWritev for scatter/gather operations)
+- Async signal handling (IAsyncSignalHandler with signalfd integration)
+- Buffer pool (IAsyncBufferPool for efficient buffer allocation/reuse)
+- CancellationToken tree with parent/child propagation
+- PostRef/PostMethod/ScheduleRef three-form callbacks (PostRef heap-wrapped for MPSC unmanaged constraint)
+- PostEx/ScheduleEx with OnDiscard: Close frees heap-wrapped contexts without invoking callbacks
 ## Quick Start
 
 ```pascal
@@ -181,14 +196,15 @@ type
 At `TPoller.Create` time, the runtime probes for io_uring support:
 
 1. Call `syscall(SYS_io_uring_setup, 1, @params)` with minimal params
-2. If the syscall returns a valid fd (or any error other than ENOSYS), io_uring is available
-3. Otherwise, fall back to epoll
+2. Probe truth is usable only when the setup call returns a non-negative fd; the probe closes that fd immediately
+3. Any setup failure (including ENOSYS and other errno values) leaves the backend on epoll
+4. If the real io_uring queue creation fails after probing, create switches to epoll and re-validates the fallback
 
 This means:
 - Linux 5.1+ with io_uring: uses `TIoReactor` (io_uring) — `pbmCompletionQueue`
-- Linux 2.6+ without io_uring: uses `TEpollReactor` (epoll) — `pbmReadiness`
+- Linux 2.6+ without io_uring, or after create-time io_uring failure: uses `TEpollReactor` (epoll) — `pbmReadiness`
 - macOS/FreeBSD: returns `pbUnsupported` — no functional I/O backend
-- Windows: compile-only `pbIocp` stub — `pbmCompletionQueue`
+- Windows: compile-only `pbIocp` stub — `pbmCompletionQueue` (not windows runtime ready)
 
 Check the active backend at runtime:
 ```pascal
@@ -237,6 +253,7 @@ The wake timeout:
 `TAsyncLoop.Schedule` and `TTimerHeap.Schedule` use **different semantics**:
 
 | Layer | `Schedule` takes | `ScheduleAt`/`ScheduleAfter` takes |
+| `ScheduleEx` | Schedule with OnDiscard for abandoned timer context free |
 |-------|------------------|-----------------------------------|
 | `TAsyncLoop` | `TDuration` (relative delay) | `ScheduleAt(TDeadline)` (absolute time) |
 | `TTimerHeap` | `TDeadline` (absolute deadline) | `ScheduleAfter(TDuration)` (relative delay) |
@@ -279,3 +296,11 @@ All heap-owning record types use `Close` for teardown:
 - **IOCP is compile-only**: `pbIocp` exists in the backend enum and the reactor stub compiles, but no runtime verification has been done on Windows.
 - **No WhenAll/WhenAny combinators**: tasks must be composed manually via callbacks.
 - **No file descriptor lifecycle management**: the caller is responsible for opening/closing fds.
+
+
+## OnDiscard ownership
+
+- Heap-wrapped Post contexts must use `PostEx(..., OnDiscard)` when Close may discard before invoke.
+- Timer contexts that need Close cleanup use `ScheduleEx(..., OnDiscard)`.
+- `CancelTimer` does **not** run OnDiscard; the cancelling owner still cleans up.
+- Close/Recycle runs OnDiscard for abandoned timer entries.

@@ -27,8 +27,11 @@
 | 函数 | 说明 |
 |------|------|
 | `UserHomeDir` | 用户主目录（Unix: `$HOME`, Windows: `%USERPROFILE%`） |
-| `UserCacheDir` | 用户缓存目录（Unix: `$HOME/.cache`, Windows: `%LOCALAPPDATA%`） |
-| `UserConfigDir` | 用户配置目录（Unix: `$HOME/.config`, Windows: `%APPDATA%`） |
+| `UserCacheDir([AppName])` | 缓存目录（Unix: `$XDG_CACHE_HOME` 或 `$HOME/.cache`；Windows: `%LOCALAPPDATA%`） |
+| `UserConfigDir([AppName])` | 配置目录（Unix: `$XDG_CONFIG_HOME` 或 `$HOME/.config`；Windows: `%APPDATA%`） |
+| `UserDataDir([AppName])` | 数据目录（Unix: `$XDG_DATA_HOME` 或 `$HOME/.local/share`；Windows: `%LOCALAPPDATA%`） |
+
+**Windows 说明**：`UserCacheDir` 与 `UserDataDir` **同根** `%LOCALAPPDATA%`（常见映射）。区分方式：不同 `AppName`，或由调用方在返回路径下再拼 `cache`/`data` 子目录。Unix 上 Cache/Config/Data 根路径不同。
 
 ### 写入
 
@@ -41,9 +44,9 @@
 
 | 函数 | 说明 |
 |------|------|
-| `ExpandEnv(AValue)` | 展开 `${VAR}` 和 `$VAR` 占位符（未定义→空） |
-| `ExpandEnvWithDefault(AValue, ADefault)` | 展开 `${VAR}` 和 `$VAR`（未定义→默认值） |
-| `ExpandEnvStrict(AValue)` | 展开 `${VAR}` 和 `$VAR`（未定义→抛异常） |
+| `ExpandEnv(AValue)` | 展开 `${VAR}`、`$VAR` 与 `%VAR%`（未定义→空） |
+| `ExpandEnvWithDefault(AValue, ADefault)` | 展开（未定义→默认值） |
+| `ExpandEnvStrict(AValue)` | 展开（未定义→抛异常） |
 
 ## 使用示例
 
@@ -84,11 +87,14 @@ end;
 |------|------|------|
 | `${VAR}` | 首选语法，无歧义 | `${HOME}` |
 | `$VAR` | 简写，变量名边界为 `[A-Za-z0-9_]` | `$HOME` |
+| `%VAR%` | Windows 风格，变量名 `[A-Za-z0-9_]` | `%PATH%` |
 
 - 变量名边界：`$VAR.txt` → 展开 `$VAR` + `.txt`
 - 未定义变量 → 空字符串
 - `$` 后无变量名字符 → 保留原样 `$`
 - 未终止的 `${...}` → 抛 `EArgumentError`
+- 不完整 `%`（如 `100%`、`a%b`）→ 保留字面量
+- 空值 vs 未定义：`HasEnv`/`TryGetEnv` 可区分；`GetEnv` 两者都返回 `''`
 
 ## 线程安全
 

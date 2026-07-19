@@ -35,6 +35,7 @@ uses
   {$HINTS OFF}nextpas.core.math,{$HINTS ON}
   nextpas.core.mem.utils,
   nextpas.core.mem.intf,
+  nextpas.core.mem.allocator.base,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,
   nextpas.core.collections.forward_list.intf,
