@@ -39,6 +39,9 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `ICommand.Timeout(ADuration)` | 设置超时；超时后 TimedOut=True 并 Kill |
 | `ICommand.MaxOutput(ABytes)` | 限制 stdout+stderr 累计；<=0 不限制；超限 OutputLimited=True 并 Kill |
 | `ICommand.MergeStderr` | stderr 与 stdout 共用写端；Output 的 StdOut 为交错流，StdErr 空 |
+| `ICommand.ExtraFd` | 额外 fd 映射到子进程 3+（Go ExtraFiles；Unix） |
+| `ICommand.Credential` | exec 前 setuid/setgid（Unix；Windows 不支持） |
+| `ICommand.CancelToken` | 取消令牌；Wait/Output 路径 Kill 并置 `Cancelled` |
 | `IChild.Wait: TProcessOutput` | 阻塞等待 |
 | `IChild.TryWait: Boolean` | 非阻塞检查 |
 | `IChild.Kill` | 终止子进程（SIGKILL） |
@@ -58,7 +61,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 - **[INV-4]** EnvAdd 继承父进程环境并追加/覆盖；Env 完全替换
 - **[INV-5]** Timeout 超时后自动 Kill + Wait，且 TProcessOutput.TimedOut=True
 - **[INV-6]** LookPath/ResolveExecutablePath 对含目录部分的路径校验可执行性；未找到返回空/抛错
-- **[INV-7]** ProcessSucceeded ⇔ (not TimedOut) and (not OutputLimited) and (Status=psExited) and (ExitCode=0)
+- **[INV-7]** ProcessSucceeded ⇔ (not TimedOut) and (not OutputLimited) and (not Cancelled) and (Status=psExited) and (ExitCode=0)
 - **[INV-8]** MaxOutput 超限：停缓冲、Kill、OutputLimited=True（不伪装 TimedOut）
 - **[INV-9]** 父保留管道端不可继承；Windows 用 PeekNamedPipe 并发 drain
 - **[INV-10]** 未设置 `MaxOutput`（默认 0）时 `Run`/`Capture*`/`Output` 可耗尽内存；生产请显式 `.MaxOutput(N)`（非 bug）
@@ -106,7 +109,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_process | 447 | R19 TimedOut/真值表/错误路径 + 质量表 |
+| test_process | 455 | R21 Cancel/ExtraFd/Credential + R19 表 |
 | test_process_command | 48 | ICommand builder |
 | test_process_deep | 20 | timeout/large output |
 | test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |

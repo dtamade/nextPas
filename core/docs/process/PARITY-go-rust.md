@@ -13,8 +13,8 @@
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
 | **质量 Quality** | **9.2** | R19：WaitGraceful TimedOut（ignore TERM）、ProcessSucceeded 真值表、错误路径、path Clean/Rel 表 |
-| **规模 Scale (Essential)** | **9.1** | HardLink/Chtimes/Chown 已经 L0 落地（R20） |
-| **综合** | **9.15** | 测试 ≥900 + Essential 齐 |
+| **规模 Scale (Essential)** | **9.3** | R20 fs 三 API + R21 ExtraFd/Credential/CancelToken |
+| **综合** | **9.25** | 对标 Essential 接近完整 |
 
 **目标线**：质量 ≥ 9.0（**R19 达 9.2**）；规模 Essential ≥ **0.85**；测试合计 ≥ **900**（达成）。
 
@@ -39,9 +39,9 @@
 | Timeout | context/WaitDelay | — | Timeout | Done |
 | MaxOutput | — | — | MaxOutput | Done |
 | Graceful stop | WaitDelay | — | **WaitGraceful** | Done（R16 续） |
-| ExtraFiles | ExtraFiles | — | Missing | Deferred |
-| Credential/uid | SysProcAttr | CommandExt | Missing | Deferred |
-| Context cancel | context | — | Missing | Deferred |
+| ExtraFiles | ExtraFiles | — | **ExtraFd** | Done（R21；Unix fd→3+） |
+| Credential/uid | SysProcAttr | CommandExt | **Credential** | Done（R21；Unix；Win UNSUPPORTED） |
+| Context cancel | context | — | **CancelToken** | Done（R21；`IAsyncCancellationToken`） |
 
 ### fs
 
@@ -112,7 +112,7 @@
 
 ### process 其他 Deferred
 
-- ExtraFiles / Credential / context 取消：需 L0 spawn 扩展或跨模块 context；无真实消费者前不阻塞 Essential。
+- ~~ExtraFiles / Credential / context~~ — **R21 已落地**（Unix 完整；Win Extra/Cred UNSUPPORTED）。
 
 ### 外部债
 
@@ -152,3 +152,4 @@
 | 2026-07-19 | 维护策略口径：L0 Deferred + 900 可选 + 周报话术 |
 | 2026-07-19 | R19 质量属性表 + 测试 900；Quality 9.2 / 综合 9.0 |
 | 2026-07-19 | R20 HardLink/Chtimes/Chown L0+L2；规模 9.1 |
+| 2026-07-20 | R21 ExtraFd/Credential/CancelToken；规模 9.3 |
