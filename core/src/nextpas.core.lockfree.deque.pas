@@ -15,6 +15,9 @@ unit nextpas.core.lockfree.deque;
  *
  * @see Work Stealing — Blumofe & Leiserson, 1999
  * @see Cilk — work-stealing based parallel programming
+ *
+ * Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2).
+ * Last-item owner/thief arbitration uses mo_seq_cst on top/bottom.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -93,15 +96,15 @@ function TWorkStealingDequeImpl.TryPush(const AValue: T): Boolean;
 var
   LBottom, LTop, LSize: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
-  LBottom := AtomicLoad64(FBottom, moRelaxed);
-  LTop := AtomicLoad64(FTop, moAcquire);
+  LBottom := atomic_load_64(FBottom, mo_relaxed);
+  LTop := atomic_load_64(FTop, mo_acquire);
   LSize := LBottom - LTop;
   if LSize >= Int64(FCapacity) then
     Exit(False);
   FBuffer[PtrUInt(LBottom) and FMask] := AValue;
-  AtomicStore64(FBottom, LBottom + 1, moRelease);
+  atomic_store_64(FBottom, LBottom + 1, mo_release);
   Result := True;
 end;
 
@@ -122,27 +125,30 @@ end;
 function TWorkStealingDequeImpl.TryPop(out AValue: T): Boolean;
 var
   LBottom, LTop: Int64;
+  LExpected: Int64;
 begin
-  LBottom := AtomicLoad64(FBottom, moRelaxed) - 1;
-  AtomicStore64(FBottom, LBottom, moSeqCst);
-  LTop := AtomicLoad64(FTop, moSeqCst);
+  LBottom := atomic_load_64(FBottom, mo_relaxed) - 1;
+  atomic_store_64(FBottom, LBottom, mo_seq_cst);
+  LTop := atomic_load_64(FTop, mo_seq_cst);
   if LTop <= LBottom then
   begin
     AValue := FBuffer[PtrUInt(LBottom) and FMask];
     if LTop = LBottom then
     begin
-      if AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop then
+      LExpected := LTop;
+      if not atomic_compare_exchange_strong_64(FTop, LExpected, LTop + 1,
+        mo_seq_cst, mo_seq_cst) then
       begin
-        AtomicStore64(FBottom, LBottom + 1, moRelaxed);
+        atomic_store_64(FBottom, LBottom + 1, mo_relaxed);
         Exit(False);
       end;
-      AtomicStore64(FBottom, LBottom + 1, moRelaxed);
+      atomic_store_64(FBottom, LBottom + 1, mo_relaxed);
     end;
     Result := True;
   end
   else
   begin
-    AtomicStore64(FBottom, LBottom + 1, moRelaxed);
+    atomic_store_64(FBottom, LBottom + 1, mo_relaxed);
     Result := False;
   end;
 end;
@@ -164,13 +170,16 @@ end;
 function TWorkStealingDequeImpl.TrySteal(out AValue: T): Boolean;
 var
   LTop, LBottom: Int64;
+  LExpected: Int64;
 begin
-  LTop := AtomicLoad64(FTop, moSeqCst);
-  LBottom := AtomicLoad64(FBottom, moSeqCst);
+  LTop := atomic_load_64(FTop, mo_seq_cst);
+  LBottom := atomic_load_64(FBottom, mo_seq_cst);
   if LTop >= LBottom then
     Exit(False);
   AValue := FBuffer[PtrUInt(LTop) and FMask];
-  if AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop then
+  LExpected := LTop;
+  if not atomic_compare_exchange_strong_64(FTop, LExpected, LTop + 1,
+    mo_seq_cst, mo_seq_cst) then
     Exit(False);
   Result := True;
 end;
@@ -193,8 +202,8 @@ function TWorkStealingDequeImpl.IsEmpty: Boolean; inline;
 var
   LTop, LBottom: Int64;
 begin
-  LTop := AtomicLoad64(FTop, moAcquire);
-  LBottom := AtomicLoad64(FBottom, moAcquire);
+  LTop := atomic_load_64(FTop, mo_acquire);
+  LBottom := atomic_load_64(FBottom, mo_acquire);
   Result := LTop >= LBottom;
 end;
 
@@ -215,7 +224,7 @@ end;
 
 procedure TWorkStealingDequeImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TWorkStealingDequeImpl.Destroy;
@@ -226,15 +235,15 @@ end;
 
 function TWorkStealingDequeImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TWorkStealingDequeImpl.ApproxCount: PtrUInt; inline;
 var
   LTop, LBottom: Int64;
 begin
-  LTop := AtomicLoad64(FTop, moAcquire);
-  LBottom := AtomicLoad64(FBottom, moAcquire);
+  LTop := atomic_load_64(FTop, mo_acquire);
+  LBottom := atomic_load_64(FBottom, mo_acquire);
   if LBottom > LTop then
     Result := PtrUInt(LBottom - LTop)
   else

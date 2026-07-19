@@ -6961,25 +6961,29 @@ begin
     'deque owner push must reject writes once the bounded ring is full');
   CheckBefore(LDequeTryPushSourceSection,
     'FBuffer[PtrUInt(LBottom) and FMask] := AValue;',
-    'AtomicStore64(FBottom, LBottom + 1, moRelease);',
+    'atomic_store_64(FBottom, LBottom + 1, mo_release);',
     'deque owner TryPush must write the buffer slot before release-publishing bottom');
-  CheckContains(LDequeTryPushSourceSection, 'AtomicStore64(FBottom, LBottom + 1, moRelease);',
+  CheckContains(LDequeTryPushSourceSection, 'atomic_store_64(FBottom, LBottom + 1, mo_release);',
     'deque owner TryPush bottom publish must use release ordering');
-  CheckContains(LDequeSource, 'AtomicStore64(FBottom, LBottom, moSeqCst);',
+  CheckContains(LDequeSource, 'atomic_store_64(FBottom, LBottom, mo_seq_cst);',
     'deque owner pop must publish the speculative bottom decrement as seq_cst before last-item arbitration');
-  CheckContains(LDequeSource, 'LTop := AtomicLoad64(FTop, moSeqCst);',
+  CheckContains(LDequeSource, 'LTop := atomic_load_64(FTop, mo_seq_cst);',
     'deque owner pop must observe top with seq_cst before last-item arbitration');
-  CheckContains(LDequeSource, 'AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst)',
+  CheckContains(LDequeSource,
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LTop + 1,' + LineEnding +
+    '        mo_seq_cst, mo_seq_cst)',
     'deque owner pop must arbitrate the last item with a seq_cst top CAS');
-  CheckContains(LDequeSource, 'LTop := AtomicLoad64(FTop, moSeqCst);' + LineEnding +
-    '  LBottom := AtomicLoad64(FBottom, moSeqCst);',
+  CheckContains(LDequeSource, 'LTop := atomic_load_64(FTop, mo_seq_cst);' + LineEnding +
+    '  LBottom := atomic_load_64(FBottom, mo_seq_cst);',
     'deque thief steal must observe top and bottom with seq_cst before stealing');
   CheckBefore(LDequeTryStealSourceSection,
     'AValue := FBuffer[PtrUInt(LTop) and FMask];',
-    'AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop',
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LTop + 1,' + LineEnding +
+    '    mo_seq_cst, mo_seq_cst)',
     'deque thief TrySteal must read the candidate value before winning it through the top CAS');
   CheckContains(LDequeTryStealSourceSection,
-    'AtomicCompareExchange64(FTop, LTop, LTop + 1, moSeqCst) <> LTop',
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LTop + 1,' + LineEnding +
+    '    mo_seq_cst, mo_seq_cst)',
     'deque thief TrySteal top CAS must use seq_cst ordering');
   CheckContains(LDocsReadme,
     '`TWorkStealingDeque<T>` last-item owner/thief arbitration uses `seq_cst` ordering on `FTop` / `FBottom` loads, bottom store, and top CAS so the single remaining item is won exactly once.',
