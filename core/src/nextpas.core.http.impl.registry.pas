@@ -106,6 +106,8 @@ begin
   { H1 native connection-scoped RequestArena (Reset per request). }
   LH1Options.RequestArena := AOptions.RequestArena;
   LH1Options.RequestArenaCapacity := AOptions.RequestArenaCapacity;
+  { S1-1 scale default: reactor-inline handlers on poll-owned path. }
+  LH1Options.PreferPollWorkerHandoff := False;
   Result := NewH1ServerTransport(LH1Options);
 end;
 

@@ -1281,6 +1281,8 @@ begin
   Result.MaxRequestsPerConnection := AHttpOptions.MaxRequestsPerConnection;
   Result.RequestArena := AHttpOptions.RequestArena;
   Result.RequestArenaCapacity := AHttpOptions.RequestArenaCapacity;
+  { Unit tests assert WorkerHandoff submit counts / completion wakes. }
+  Result.PreferPollWorkerHandoff := True;
 end;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
