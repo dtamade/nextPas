@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-19 (Q1-3 metrics observability graduated; NEXT → ROADMAP Q1-4 backpressure; framework-complete non-H3 retained)
+> Last updated: 2026-07-19 (Era Q1 Done: SSE/multipart/metrics/write-backpressure; NEXT → ROADMAP STOP until demand; framework-complete non-H3 retained)
 > Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Parity Campaign Q/S eras, Goal Loop, Inbox.
