@@ -11,7 +11,7 @@
 #
 # Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the MODULE_ENTRIES list only — not full-host Windows parity.
-# 18-gate promoted (+error). +fmt is 19-gate candidate until GHA green.
+# 19-gate promoted (+error +fmt) after GHA pass=19 (run 29686191527).
 
 set -euo pipefail
 
@@ -54,7 +54,7 @@ fail_count=0
 failed=()
 
 echo "=== Platform Windows CI Matrix (real host) ==="
-echo "truth=ci-matrix; documented 19-gate set (candidate until GHA green for +fmt); not full-host Windows parity"
+echo "truth=ci-matrix; documented 19-gate set; not full-host Windows parity"
 echo "core=$CORE_ROOT"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 fpc -iV 2>/dev/null || true
