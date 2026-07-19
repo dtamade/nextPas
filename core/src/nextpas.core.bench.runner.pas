@@ -577,7 +577,7 @@ begin
   LValue := GetEnvironmentVariable(BENCH_ENV_QUIET);
   if LValue <> '' then
   begin
-    LLower := LowerCase(LValue);
+    LLower := nextpas.core.text.conv.LowerCase(LValue);
     if (LValue = '1') or (LLower = 'true') or (LLower = 'yes') or (LLower = 'on') then
       FConfig.Quiet := True;
   end;
@@ -586,7 +586,7 @@ begin
   LValue := GetEnvironmentVariable(BENCH_ENV_MEMTRACK);
   if LValue <> '' then
   begin
-    LLower := LowerCase(LValue);
+    LLower := nextpas.core.text.conv.LowerCase(LValue);
     if (LValue = '0') or (LLower = 'false') or (LLower = 'no') then
       FConfig.EnableMemoryTracking := False;
   end;
@@ -600,7 +600,7 @@ begin
   end;
 
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
-  FFilterLower := LowerCase(FFilter); { PF-08 }
+  FFilterLower := nextpas.core.text.conv.LowerCase(FFilter); { PF-08 }
   FFilterIsGlob := (Pos('*', FFilter) > 0) or (Pos('?', FFilter) > 0);
 end;
 
@@ -1125,7 +1125,7 @@ begin
   if FFilterLower = '' then
     Exit(True);
   if FFilterIsGlob then
-    Result := GlobMatch(FFilterLower, ALowerName)
+    Result := nextpas.core.bench.base.GlobMatch(FFilterLower, ALowerName)
   else
     Result := Pos(FFilterLower, ALowerName) > 0; { PF-08: 子串匹配 }
 end;
@@ -1224,7 +1224,7 @@ begin
   Result := Default(TBenchResult);
   Result.Name := LEntry.Name;
 
-  LLowerName := LowerCase(LEntry.Name);
+  LLowerName := nextpas.core.text.conv.LowerCase(LEntry.Name);
   if not ShouldRun(LEntry.Name, LLowerName) then
   begin
     Exit;
@@ -1382,7 +1382,7 @@ end;
 procedure TBenchRunner.SetFilter(const AFilter: string);
 begin
   FFilter := AFilter;
-  FFilterLower := LowerCase(AFilter); { PF-08: cache lowercase }
+  FFilterLower := nextpas.core.text.conv.LowerCase(AFilter); { PF-08: cache lowercase }
   FFilterIsGlob := (Pos('*', AFilter) > 0) or (Pos('?', AFilter) > 0);
 end;
 
