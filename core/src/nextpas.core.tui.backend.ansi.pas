@@ -53,6 +53,8 @@ type
       AAlternateScrollKeys: Boolean = False);
     procedure LeaveAlternate(AMouseMode: TAnsiMouseMode = amMouseFull;
       AAlternateScrollKeys: Boolean = False);
+    procedure PushKittyKeyboard(AFlags: Integer = KittyKeyboardDefaultFlags);
+    procedure PopKittyKeyboard;
     procedure MoveTo(AX, AY: Word);
 
     { 把 Patches 翻译为 ANSI 字节。Patches 假定按 (Y,X) 排序——buffer Diff
@@ -137,6 +139,16 @@ begin
     AnsiDisableAlternateScroll(FOut);
   AnsiLeaveAltScreen(FOut);
   ResetStyleCache;
+end;
+
+procedure TAnsiBackend.PushKittyKeyboard(AFlags: Integer);
+begin
+  AnsiKittyKeyboardPush(FOut, AFlags);
+end;
+
+procedure TAnsiBackend.PopKittyKeyboard;
+begin
+  AnsiKittyKeyboardPop(FOut);
 end;
 
 procedure TAnsiBackend.MoveTo(AX, AY: Word);
