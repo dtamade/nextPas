@@ -6713,7 +6713,7 @@ begin
     'MPMC queue must initialize slot sequence tokens with empty-state encoding');
   CheckContains(LMpmcSource, 'LExpected := EmptySequence(LPos);',
     'MPMC enqueue must compare against the empty-state token for the target position');
-  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease)',
+  CheckContains(LMpmcSource, 'atomic_store_64(FSlots[LIdx].Sequence, FullSequence(LPos), mo_release)',
     'MPMC enqueue linearization must publish slot sequence with release ordering');
   CheckContains(LMpmcSource, 'FActiveEnqueues: Int32;',
     'MPMC queue must track admitted producer operations that may still publish after Close');
@@ -6721,17 +6721,17 @@ begin
     'MPMC queue must centralize closed-empty terminal checks behind active producer tracking');
   CheckContains(LMpmcSource, 'procedure LeaveActiveEnqueue; inline;',
     'MPMC queue must centralize active producer decrement and wake handling');
-  CheckContains(LMpmcTryEnqueueSourceSection, 'AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);',
+  CheckContains(LMpmcTryEnqueueSourceSection, 'atomic_fetch_add(FActiveEnqueues, 1, mo_acq_rel);',
     'MPMC TryEnqueue must admit active producers before any slot reservation can happen');
   CheckBefore(LMpmcTryEnqueueSourceSection,
-    'AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel);',
-    'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
+    'atomic_fetch_add(FActiveEnqueues, 1, mo_acq_rel);',
+    'if atomic_load(FClosed, mo_acquire) <> 0 then',
     'MPMC TryEnqueue must admit active producers before the first Close observation');
   CheckContains(LMpmcTryEnqueueSourceSection, 'LeaveActiveEnqueue;',
     'MPMC TryEnqueue must decrement active producer tracking on every exit path');
-  CheckContains(LMpmcTryEnqueueSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then' + LineEnding + '      Exit(False);',
+  CheckContains(LMpmcTryEnqueueSourceSection, 'if atomic_load(FClosed, mo_acquire) <> 0 then' + LineEnding + '      Exit(False);',
     'MPMC TryEnqueue must re-check Close after admission but before reserving a slot');
-  CheckContains(LMpmcLeaveActiveSourceSection, 'AtomicFetchSub32(FActiveEnqueues, 1, moAcqRel) = 1',
+  CheckContains(LMpmcLeaveActiveSourceSection, 'atomic_fetch_sub(FActiveEnqueues, 1, mo_acq_rel) = 1',
     'MPMC active producer tracking must decrement with acquire-release ordering');
   CheckContains(LMpmcLeaveActiveSourceSection, 'LockFreeWakeAll(@FDataEpoch);',
     'MPMC active producer completion must wake all closed consumers waiting for terminal closed-empty');
@@ -6747,7 +6747,7 @@ begin
     'MPMC DequeueTimeout must prove the queue is still empty after observing no active producers');
   CheckContains(LMpmcSource, 'LExpected := FullSequence(LPos);',
     'MPMC dequeue must compare against the full-state token for the target position');
-  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), moRelease)',
+  CheckContains(LMpmcSource, 'atomic_store_64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), mo_release)',
     'MPMC dequeue must recycle slot sequence with release ordering');
   CheckContains(LMpmcSingleSlotTestSection, 'TIntMpmc.Create(1);',
     'MPMC single-slot test must construct a single-slot queue');
@@ -6901,7 +6901,7 @@ begin
   CheckContains(LTestSource,
     'T.Test(''MPMC timeout wakes on space release'', @TestMpmcEnqueueTimeoutWakesOnSpace);',
     'lockfree test runner must register the MPMC space wake runtime test');
-  CheckContains(LMpmcBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
+  CheckContains(LMpmcBatchSourceSection, 'if atomic_load(FClosed, mo_acquire) <> 0 then',
     'MPMC batch enqueue must reject new items after close');
   CheckContains(LMpmcBatchTestSection, 'mpmc batch enqueue after close rejected',
     'MPMC batch behavior test must cover close rejection');

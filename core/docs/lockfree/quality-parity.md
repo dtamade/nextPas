@@ -32,7 +32,7 @@
 |------|------|------|
 | **Q0** | 清洁基线 + reconverge 评估 | **done** |
 | **Q1** | Atomic 首选路径与质量加固 | **Q1-a done**；Q1-b/c pending |
-| **Q2** | T1 深度（首选路径 + stress） | **wait/ebr/stack/deque/spsc done**；mpmc/spmc/channel… 继续 |
+| **Q2** | T1 深度（首选路径 + stress） | **wait/ebr/stack/deque/spsc/mpmc done**；spmc/channel… 继续 |
 | **Q3** | Map/Channel 体验对标 | pending |
 | **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | pending |
 | **Q5** | 有信封 Go/Rust 同机对照常青 | pending |
@@ -96,6 +96,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 | 2026-07-19 | **Q2-a**：`lockfree.stack` 迁 preferred path；source-contract 同步 |
 | 2026-07-19 | **Q2-a**：`lockfree.deque` 迁 preferred path（seq_cst 仲裁保留）；source-contract 同步 |
 | 2026-07-19 | **Q2-a**：`lockfree.spsc` 迁 preferred path（load/store） |
+| 2026-07-19 | **Q2-a**：`lockfree.mpmc` 迁 preferred path（active enqueue + pos CAS） |
 
 ---
 
