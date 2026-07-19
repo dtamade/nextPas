@@ -591,6 +591,14 @@ begin
       FConfig.EnableMemoryTracking := False;
   end;
 
+  { F-018: BENCH_ENV_TIMEOUT — 整体超时（毫秒） }
+  LValue := GetEnvironmentVariable(BENCH_ENV_TIMEOUT);
+  if (LValue <> '') and TryStrToInt64(LValue, LTmp) then
+  begin
+    if LTmp < 0 then LTmp := 0;
+    FConfig.TimeoutMs := LTmp;
+  end;
+
   FFilter := GetEnvironmentVariable(BENCH_ENV_FILTER);
   FFilterLower := LowerCase(FFilter); { PF-08 }
   FFilterIsGlob := (Pos('*', FFilter) > 0) or (Pos('?', FFilter) > 0);
@@ -1140,26 +1148,26 @@ end;
 function FormatTimeAuto(ANs: Double): string;
 begin
   if ANs < 1000.0 then
-    Result := FormatFloat('0.0', ANs) + ' ns'
+    Result := FloatToStrF(ANs, 1) + ' ns'
   else if ANs < 1000000.0 then
-    Result := FormatFloat('0.00', ANs / 1000.0) + ' µs'
+    Result := FloatToStrF(ANs / 1000.0, 2) + ' µs'
   else if ANs < NANOSECONDS_PER_SECOND then
-    Result := FormatFloat('0.00', ANs / 1000000.0) + ' ms'
+    Result := FloatToStrF(ANs / 1000000.0, 2) + ' ms'
   else
-    Result := FormatFloat('0.000', ANs / NANOSECONDS_PER_SECOND) + ' s';
+    Result := FloatToStrF(ANs / NANOSECONDS_PER_SECOND, 3) + ' s';
 end;
 
 {** 格式化吞吐量（自动选择单位：ops/K/M/G） }
 function FormatOpsAuto(AOps: Double): string;
 begin
   if AOps < 1000.0 then
-    Result := FormatFloat('0', AOps) + ' ops/s'
+    Result := FloatToStrF(AOps, 0) + ' ops/s'
   else if AOps < 1000000.0 then
-    Result := FormatFloat('0.0', AOps / 1000.0) + ' Kops/s'
+    Result := FloatToStrF(AOps / 1000.0, 1) + ' Kops/s'
   else if AOps < NANOSECONDS_PER_SECOND then
-    Result := FormatFloat('0.0', AOps / 1000000.0) + ' Mops/s'
+    Result := FloatToStrF(AOps / 1000000.0, 1) + ' Mops/s'
   else
-    Result := FormatFloat('0.0', AOps / NANOSECONDS_PER_SECOND) + ' Gops/s';
+    Result := FloatToStrF(AOps / NANOSECONDS_PER_SECOND, 1) + ' Gops/s';
 end;
 
 {** 格式化大数字（带千位分隔符） }
@@ -1295,7 +1303,7 @@ begin
         FormatIntWithSep(LIters) + ' iters  ' +
         FormatTimeAuto(LStats.Mean) + '/op  ' +
         FormatOpsAuto(Result.OpsPerSec) + '  ' +
-        FormatFloat('0.0', LStats.StdDev) + ' stddev');
+        FloatToStrF(LStats.StdDev, 1) + ' stddev');
   finally
     if Assigned(LEntry.Teardown) then
       LEntry.Teardown(LSetupData);

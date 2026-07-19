@@ -3,6 +3,7 @@ program test_tui_overlay;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.mem,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.style,
@@ -525,6 +526,41 @@ begin
   end;
 end;
 
+procedure TestCreateResizeDestroyWithAllocator;
+var
+  LTrack: TTrackingAllocator;
+  LAlloc: IAllocator;
+  LOv: TOverlayBuffer;
+  LBase, LDest: TBuffer;
+  LLines: TBufferLines;
+  LCell: TCell;
+begin
+  LTrack := TTrackingAllocator.Create(DefaultAllocator);
+  LAlloc := LTrack;
+  LBase := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 2), LAlloc);
+  LDest := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 2), LAlloc);
+  LOv := TOverlayBuffer.Create(TRect.Make(0, 0, 4, 2), LAlloc);
+  try
+    Check(LTrack.ActiveAllocCount > 0, 'overlay+buffers allocated');
+    LBase.SetString(0, 0, 'base', StyleDefault);
+    LDest.SetString(0, 0, 'base', StyleDefault);
+    LCell := CELL_EMPTY;
+    CellSetSymbolAscii(LCell, 'X');
+    LOv.SetCell(0, 0, LCell);
+    LOv.MergeInto(LBase, LDest);
+    LLines := LDest.AsLines;
+    CheckEqual('Xase', LLines[0], 'merge with allocator overlay');
+    LOv.Resize(TRect.Make(0, 0, 6, 3));
+    CheckEqual(Int64(6), Int64(LOv.Area.Width), 'overlay resize width');
+  finally
+    LBase.Free;
+    LDest.Free;
+    LOv.Free;
+  end;
+  CheckEqual(Int64(0), Int64(LTrack.ActiveAllocCount), 'overlay allocator free');
+  LAlloc := nil;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.overlay');
   T.Test('create and clear', @TestCreateClear);
@@ -552,5 +588,6 @@ begin
   T.Test('set cell at boundary', @TestSetCellAtBoundary);
   T.Test('multiple set cell then merge', @TestMultipleSetCellThenMerge);
   T.Test('set string overwrites previous', @TestSetStringOverwritesPreviousMarks);
+  T.Test('create resize destroy with allocator', @TestCreateResizeDestroyWithAllocator);
   if not T.Run then Halt(1);
 end.

@@ -107,6 +107,15 @@ type
     {** 生成 HTML 报告 }
     function ToHTML: string;
 
+    {** 生成 Markdown 报告（适合 GitHub PR/CI 注释） }
+    function ToMarkdown: string;
+
+    {** 紧凑摘要（一行结果，适合快速检查） }
+    function ToSummary: string;
+
+    {** 保存 Markdown 到文件 }
+    procedure SaveToMarkdown(const APath: string);
+
     {** 生成跨语言对比 HTML 报告 }
     function ToCrossLanguageHTML(const AEntries: TCrossLangEntryArray): string;
 
@@ -144,7 +153,8 @@ uses
   nextpas.core.text.conv,
   nextpas.core.text.format,
   nextpas.core.math.scalar,
-  nextpas.core.json.writer;
+  nextpas.core.json.writer,
+  nextpas.core.fs;
 
 const
   HexDigits: array[0..15] of Char = '0123456789ABCDEF';
@@ -433,7 +443,7 @@ end;
 function TBenchReportGenerator.PrintToConsole: string;
 var
   LLines: TLineBuffer;
-  LSkippedCount: Integer;
+  LSkippedCount, LExecutedCount: Integer;
   LMaxDetail: Integer;
   I: Integer;
 begin
@@ -460,10 +470,12 @@ begin
 
   // results (non-skipped only) + count skipped in one pass (ST-16)
   LSkippedCount := 0;
+  LExecutedCount := 0;
   for I := 0 to FResultCount - 1 do
   begin
     if not FResults[I].Skipped then
     begin
+      Inc(LExecutedCount);
       // ST-18: columns match HTML header
       BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s %10s %10s %10s',
         [FResults[I].Name,
@@ -534,6 +546,13 @@ begin
          FResults[I].BytesPerOp]));
   end;
 
+  { 摘要 }
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, '=== Summary ===');
+  BufferAddLine(LLines, TextFormat('  Total: %d', [FResultCount]));
+  BufferAddLine(LLines, TextFormat('  Executed: %d', [LExecutedCount]));
+  BufferAddLine(LLines, TextFormat('  Skipped: %d', [LSkippedCount]));
+
   Result := BufferToString(LLines);
   finally
     LLines.Builder.Done;
@@ -545,6 +564,7 @@ var
   I: Integer;
   LBuilder: TStringBuilder;
   LWriter: TJsonWriter;
+  LExecutedCount, LSkippedCount: Integer;
 begin
   LBuilder.Init(256 + FResultCount * 256);
   try
@@ -565,6 +585,28 @@ begin
     LWriter.Key('fpc_version');
     LWriter.Str(FEnvironment.FPCVersion);
     LWriter.EndObject;
+
+    { 聚合统计摘要 }
+    LExecutedCount := 0;
+    LSkippedCount := 0;
+    for I := 0 to FResultCount - 1 do
+    begin
+      if FResults[I].Skipped then
+        Inc(LSkippedCount)
+      else if FResults[I].Executed then
+        Inc(LExecutedCount);
+    end;
+
+    LWriter.Key('summary');
+    LWriter.BeginObject;
+    LWriter.Key('total');
+    LWriter.Int(FResultCount);
+    LWriter.Key('executed');
+    LWriter.Int(LExecutedCount);
+    LWriter.Key('skipped');
+    LWriter.Int(LSkippedCount);
+    LWriter.EndObject;
+
     LWriter.Key('benchmarks');
     LWriter.BeginArray;
     for I := 0 to FResultCount - 1 do
@@ -623,6 +665,7 @@ end;
 function TBenchReportGenerator.ToTSV: string;
 var
   LLines: TLineBuffer;
+  LExecutedCount, LSkippedCount: Integer;
   I: Integer;
 begin
   LLines.Builder.Init(4096);
@@ -631,6 +674,8 @@ begin
   BufferAddLine(LLines, 'name' + #9 + 'status' + #9 + 'skip_reason' + #9 + 'iterations' + #9 + 'ns_per_op' + #9 + 'ops_per_sec' + #9 + 'stddev' + #9 + 'median' + #9 + 'p95' + #9 + 'p99' + #9 + 'outliers' + #9 + 'samples');
 
   // data
+  LExecutedCount := 0;
+  LSkippedCount := 0;
   for I := 0 to FResultCount - 1 do
   begin
     BufferAddLine(LLines,
@@ -646,7 +691,18 @@ begin
       FormatNumber(FResults[I].P99, 2) + #9 +
       IntToStr(FResults[I].Outliers) + #9 +
       IntToStr(FResults[I].SampleCount));
+    if FResults[I].Skipped then
+      Inc(LSkippedCount)
+    else if FResults[I].Executed then
+      Inc(LExecutedCount);
   end;
+
+  { 摘要行 }
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, 'summary' + #9 + '' + #9 + '' + #9 + '' + #9 + '' + #9 + '' + #9 + '' + #9 + '' + #9 + '' + #9 + '' + #9 + '' + #9 + '');
+  BufferAddLine(LLines, 'total' + #9 + IntToStr(FResultCount));
+  BufferAddLine(LLines, 'executed' + #9 + IntToStr(LExecutedCount));
+  BufferAddLine(LLines, 'skipped' + #9 + IntToStr(LSkippedCount));
 
   Result := BufferToString(LLines);
   finally
@@ -665,8 +721,13 @@ function TBenchReportGenerator.GenerateComparisonReport(
 var
   LLines: TLineBuffer;
   LStatus: string;
+  LFASTER, LSlower, LSame: Integer;
   I: Integer;
 begin
+  LFASTER := 0;
+  LSlower := 0;
+  LSame := 0;
+
   LLines.Builder.Init(4096);
   try
   BufferAddLine(LLines, '=== Baseline Comparison ===');
@@ -680,14 +741,26 @@ begin
     if ABaselines[I].IsSignificant then
     begin
       if ABaselines[I].Ratio > 1.0 then
-        LStatus := 'SLOWER'
+      begin
+        LStatus := 'SLOWER';
+        Inc(LSlower);
+      end
       else if ABaselines[I].Ratio < 1.0 then
-        LStatus := 'FASTER'
+      begin
+        LStatus := 'FASTER';
+        Inc(LFASTER);
+      end
       else
+      begin
         LStatus := '≈ same';
+        Inc(LSame);
+      end;
     end
     else
+    begin
       LStatus := '≈ same';
+      Inc(LSame);
+    end;
     BufferAddLine(LLines, TextFormat('  %-40s %10s %10s %10s %10s',
       [ABaselines[I].BaselineName,
        FormatTime(ABaselines[I].CurrentNsPerOp),
@@ -695,6 +768,14 @@ begin
        FormatNumber(ABaselines[I].Ratio, 2) + 'x',
        LStatus]));
   end;
+
+  { 摘要 }
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, '=== Summary ===');
+  BufferAddLine(LLines, TextFormat('  Total: %d', [Length(ABaselines)]));
+  BufferAddLine(LLines, TextFormat('  Faster: %d', [LFASTER]));
+  BufferAddLine(LLines, TextFormat('  Slower: %d', [LSlower]));
+  BufferAddLine(LLines, TextFormat('  Same: %d', [LSame]));
 
   Result := BufferToString(LLines);
   finally
@@ -707,6 +788,7 @@ var
   LLines: TLineBuffer;
   LPct: Double;
   LBytes, LAllocs: string;
+  LExecuted, LSkipped: Integer;
   I: Integer;
 begin
   LLines.Builder.Init(4096);
@@ -715,10 +797,17 @@ begin
   BufferAddLine(LLines, TextFormat('%-40s %12s %8s %12s %10s',
     ['name', 'ns/op', '+- %', 'B/op', 'allocs/op']));
 
+  LExecuted := 0;
+  LSkipped := 0;
   for I := 0 to FResultCount - 1 do
   begin
     if FResults[I].Skipped then
+    begin
+      Inc(LSkipped);
       Continue;
+    end;
+
+    Inc(LExecuted);
 
     if FResults[I].NsPerOp > 0 then
       LPct := (FResults[I].StdDev / FResults[I].NsPerOp) * 100.0
@@ -742,10 +831,162 @@ begin
        LAllocs]));
   end;
 
+  { 摘要 }
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, TextFormat('# %d executed, %d skipped, %d total',
+    [LExecuted, LSkipped, FResultCount]));
+
   Result := BufferToString(LLines);
   finally
     LLines.Builder.Done;
   end;
+end;
+
+function TBenchReportGenerator.ToSummary: string;
+var
+  LLines: TLineBuffer;
+  LExecuted, LSkipped: Integer;
+  I: Integer;
+  LR: TBenchResult;
+begin
+  LExecuted := 0;
+  LSkipped := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+      Inc(LExecuted)
+    else if FResults[I].Skipped then
+      Inc(LSkipped);
+  end;
+
+  LLines.Builder.Init(2048);
+  try
+    BufferAddLine(LLines, TextFormat('Benchmarks: %d results (%d executed, %d skipped)',
+      [FResultCount, LExecuted, LSkipped]));
+
+    for I := 0 to FResultCount - 1 do
+    begin
+      LR := FResults[I];
+      if LR.Executed and not LR.Skipped then
+      begin
+        if LR.StdDev > 0 then
+          BufferAddLine(LLines, TextFormat('  %s: %.1f ns/op, %.0f ops/s (±%.1f%%)',
+            [LR.Name, LR.NsPerOp, LR.OpsPerSec, LR.StdDev / LR.NsPerOp * 100]))
+        else
+          BufferAddLine(LLines, TextFormat('  %s: %.1f ns/op, %.0f ops/s',
+            [LR.Name, LR.NsPerOp, LR.OpsPerSec]));
+      end
+      else if LR.Skipped then
+        BufferAddLine(LLines, TextFormat('  %s: SKIPPED (%s)', [LR.Name, LR.SkipReason]))
+      else
+        BufferAddLine(LLines, TextFormat('  %s: NOT EXECUTED', [LR.Name]));
+    end;
+
+    Result := BufferToString(LLines);
+  finally
+    LLines.Builder.Done;
+  end;
+end;
+
+function TBenchReportGenerator.ToMarkdown: string;
+var
+  LLines: TLineBuffer;
+  LExecuted, LSkipped: Integer;
+  I: Integer;
+  LR: TBenchResult;
+  LCV: Double;
+  LTotalNsPerOp: Double;
+  LTotalOpsPerSec: Double;
+begin
+  LExecuted := 0;
+  LSkipped := 0;
+  LTotalNsPerOp := 0;
+  LTotalOpsPerSec := 0;
+  for I := 0 to FResultCount - 1 do
+  begin
+    if FResults[I].Executed and not FResults[I].Skipped then
+    begin
+      Inc(LExecuted);
+      LTotalNsPerOp := LTotalNsPerOp + FResults[I].NsPerOp;
+      LTotalOpsPerSec := LTotalOpsPerSec + FResults[I].OpsPerSec;
+    end
+    else if FResults[I].Skipped then
+      Inc(LSkipped);
+  end;
+
+  LLines.Builder.Init(4096);
+  try
+    { 标题 }
+    BufferAddLine(LLines, '## Benchmark Results');
+    BufferAddLine(LLines, '');
+
+    { 环境信息表格 }
+    BufferAddLine(LLines, '| Property | Value |');
+    BufferAddLine(LLines, '|----------|-------|');
+    BufferAddLine(LLines, TextFormat('| OS | %s |', [FEnvironment.OS]));
+    BufferAddLine(LLines, TextFormat('| CPU | %s |', [FEnvironment.CPU]));
+    BufferAddLine(LLines, TextFormat('| Cores | %d |', [FEnvironment.Cores]));
+    BufferAddLine(LLines, TextFormat('| FPC | %s |', [FEnvironment.FPCVersion]));
+    BufferAddLine(LLines, TextFormat('| Timestamp | %s |', [FEnvironment.Timestamp]));
+    BufferAddLine(LLines, '');
+
+    { 结果表格 }
+    if LExecuted > 0 then
+    begin
+      BufferAddLine(LLines, '| Benchmark | ns/op | ops/s | StdDev | Median | P95 | P99 |');
+      BufferAddLine(LLines, '|-----------|-------|-------|--------|--------|-----|-----|');
+      for I := 0 to FResultCount - 1 do
+      begin
+        LR := FResults[I];
+        if LR.Executed and not LR.Skipped then
+        begin
+          if LR.NsPerOp > 0 then
+            LCV := LR.StdDev / LR.NsPerOp * 100
+          else
+            LCV := 0;
+          BufferAddLine(LLines, TextFormat('| %s | %.1f | %.0f | %.1f (±%.1f%%) | %.1f | %.1f | %.1f |',
+            [LR.Name, LR.NsPerOp, LR.OpsPerSec, LR.StdDev, LCV,
+             LR.Median, LR.P95, LR.P99]));
+        end;
+      end;
+      BufferAddLine(LLines, '');
+    end;
+
+    { 跳过的基准 }
+    if LSkipped > 0 then
+    begin
+      BufferAddLine(LLines, '### Skipped');
+      BufferAddLine(LLines, '');
+      for I := 0 to FResultCount - 1 do
+      begin
+        if FResults[I].Skipped then
+          BufferAddLine(LLines, TextFormat('- **%s**: %s', [FResults[I].Name, FResults[I].SkipReason]));
+      end;
+      BufferAddLine(LLines, '');
+    end;
+
+    { 摘要 }
+    BufferAddLine(LLines, '### Summary');
+    BufferAddLine(LLines, '');
+    BufferAddLine(LLines, TextFormat('- **Total:** %d', [FResultCount]));
+    BufferAddLine(LLines, TextFormat('- **Executed:** %d', [LExecuted]));
+    BufferAddLine(LLines, TextFormat('- **Skipped:** %d', [LSkipped]));
+    if LExecuted > 0 then
+    begin
+      BufferAddLine(LLines, TextFormat('- **Avg ns/op:** %.1f', [LTotalNsPerOp / LExecuted]));
+      BufferAddLine(LLines, TextFormat('- **Avg ops/s:** %.0f', [LTotalOpsPerSec / LExecuted]));
+    end;
+    BufferAddLine(LLines, '');
+
+    Result := BufferToString(LLines);
+  finally
+    LLines.Builder.Done;
+  end;
+end;
+
+procedure TBenchReportGenerator.SaveToMarkdown(const APath: string);
+begin
+  WriteFileText(APath, ToMarkdown, PermDefault);
 end;
 
 { P2-1: 多基线对比矩阵 — Console 报告 }
@@ -831,6 +1072,12 @@ begin
     BufferAddLine(LLines, LLine);
   end;
 
+  { 摘要 }
+  BufferAddLine(LLines, '');
+  BufferAddLine(LLines, '=== Summary ===');
+  BufferAddLine(LLines, TextFormat('  Benchmarks: %d', [Length(AMatrix.Rows)]));
+  BufferAddLine(LLines, TextFormat('  Baselines: %d', [LNCols]));
+
   Result := BufferToString(LLines);
   finally
     LLines.Builder.Done;
@@ -844,11 +1091,47 @@ var
   LBuilder: TStringBuilder;
   LWriter: TJsonWriter;
   I, J: Integer;
+  LRatio: Double;
+  LTotalRows, LFaster, LSlower, LSame: Integer;
 begin
   LBuilder.Init(512);
   try
     LWriter.Init(LBuilder);
     LWriter.BeginObject;
+
+    { 摘要部分 }
+    LTotalRows := Length(AMatrix.Rows);
+    LFaster := 0;
+    LSlower := 0;
+    LSame := 0;
+    for I := 0 to High(AMatrix.GeometricMeanRatios) do
+    begin
+      LRatio := AMatrix.GeometricMeanRatios[I];
+      if not IsDoubleNaN(LRatio) then
+      begin
+        if LRatio < 0.95 then
+          Inc(LFaster)
+        else if LRatio > 1.05 then
+          Inc(LSlower)
+        else
+          Inc(LSame);
+      end;
+    end;
+
+    LWriter.Key('summary');
+    LWriter.BeginObject;
+    LWriter.Key('baselines');
+    LWriter.Int(Length(AMatrix.BaselineNames));
+    LWriter.Key('benchmarks');
+    LWriter.Int(LTotalRows);
+    LWriter.Key('faster');
+    LWriter.Int(LFaster);
+    LWriter.Key('slower');
+    LWriter.Int(LSlower);
+    LWriter.Key('same');
+    LWriter.Int(LSame);
+    LWriter.EndObject;
+
     LWriter.Key('baselines');
     LWriter.BeginArray;
     for I := 0 to High(AMatrix.BaselineNames) do

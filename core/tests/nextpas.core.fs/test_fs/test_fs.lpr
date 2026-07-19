@@ -537,6 +537,172 @@ begin
   Check(LRaised, 'ReadFile missing raises ENotFoundError');
 end;
 
+procedure TestWriteAtomicMissingParentRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    FsWriteAtomic(GTmpDir + '/no-parent-r17/nested/atomic.bin',
+      TBytes.Create(1, 2));
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+    on E: EIOError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'WriteAtomic missing parent raises');
+end;
+
+procedure TestCopyFileMissingSourceRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    FsCopyFile(GTmpDir + '/no-copy-src', GTmpDir + '/no-copy-dst');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'CopyFile missing source raises ENotFoundError');
+end;
+
+procedure TestWriteFileEmptyRoundtrip;
+var
+  LRead: TBytes;
+begin
+  FsWriteFile(GTmpDir + '/empty-r17.bin', nil);
+  LRead := FsReadFile(GTmpDir + '/empty-r17.bin');
+  CheckEqual(Int64(0), Int64(Length(LRead)), 'empty file len 0');
+  Check(FsExists(GTmpDir + '/empty-r17.bin'), 'empty file exists');
+  CheckEqual(Int64(0), FsFileSize(GTmpDir + '/empty-r17.bin'), 'empty size 0');
+end;
+
+procedure TestAppendFileTextRoundtrip;
+begin
+  FsWriteFileText(GTmpDir + '/append-r17.txt', 'a');
+  FsAppendFileText(GTmpDir + '/append-r17.txt', 'b');
+  CheckEqual('ab', FsReadFileText(GTmpDir + '/append-r17.txt'), 'append text');
+end;
+
+procedure TestAppendFileLineRoundtrip;
+var
+  LText: string;
+begin
+  FsWriteFileText(GTmpDir + '/line-r17.txt', '');
+  AppendFileLine(GTmpDir + '/line-r17.txt', 'one');
+  AppendFileLine(GTmpDir + '/line-r17.txt', 'two');
+  LText := FsReadFileText(GTmpDir + '/line-r17.txt');
+  Check(Pos('one', LText) > 0, 'line one');
+  Check(Pos('two', LText) > 0, 'line two');
+end;
+
+procedure TestExistsFalseForMissing;
+begin
+  Check(not FsExists(GTmpDir + '/definitely-missing-r17'), 'missing false');
+  Check(not Exists(GTmpDir + '/definitely-missing-r17'), 'facade missing false');
+end;
+
+procedure TestIsFileIsDirEdges;
+begin
+  FsWriteFile(GTmpDir + '/isfile-r17.txt', TBytes.Create(1));
+  FsMkdir(GTmpDir + '/isdir-r17');
+  Check(FsIsFile(GTmpDir + '/isfile-r17.txt'), 'is file');
+  Check(not FsIsDir(GTmpDir + '/isfile-r17.txt'), 'file not dir');
+  Check(FsIsDir(GTmpDir + '/isdir-r17'), 'is dir');
+  Check(not FsIsFile(GTmpDir + '/isdir-r17'), 'dir not file');
+  Check(not FsIsFile(GTmpDir + '/no-isfile'), 'missing not file');
+  Check(not FsIsDir(GTmpDir + '/no-isdir'), 'missing not dir');
+end;
+
+procedure TestRemoveMissingSilent;
+begin
+  FsRemove(GTmpDir + '/never-existed-r17');
+  Check(True, 'Remove missing silent');
+  Check(not FsExists(GTmpDir + '/never-existed-r17'), 'still missing');
+end;
+
+procedure TestRenameRoundtrip;
+begin
+  FsWriteFile(GTmpDir + '/ren-src-r17.txt', TBytes.Create(7));
+  FsRename(GTmpDir + '/ren-src-r17.txt', GTmpDir + '/ren-dst-r17.txt');
+  Check(not FsExists(GTmpDir + '/ren-src-r17.txt'), 'src gone');
+  Check(FsExists(GTmpDir + '/ren-dst-r17.txt'), 'dst present');
+  CheckEqual(Int64(1), FsFileSize(GTmpDir + '/ren-dst-r17.txt'), 'renamed size');
+end;
+
+procedure TestTruncatePathToZero;
+begin
+  FsWriteFile(GTmpDir + '/trunc-r17.bin', TBytes.Create(1, 2, 3, 4));
+  FsTruncate(GTmpDir + '/trunc-r17.bin', 0);
+  CheckEqual(Int64(0), FsFileSize(GTmpDir + '/trunc-r17.bin'), 'truncated zero');
+end;
+
+procedure TestChmodReadWrite;
+var
+  LInfo: TFileInfo;
+begin
+  FsWriteFile(GTmpDir + '/chmod-r17.txt', TBytes.Create(1));
+  FsChmod(GTmpDir + '/chmod-r17.txt', PermDefault); { 0644 }
+  LInfo := FsStat(GTmpDir + '/chmod-r17.txt');
+  Check(LInfo.Size = 1, 'chmod file size');
+  Check(FsIsFile(GTmpDir + '/chmod-r17.txt'), 'still file after chmod');
+end;
+
+procedure TestSameFileEmptyPathRaises;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    SameFile('', GTmpDir + '/x');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SameFile empty path raises EArgumentError');
+end;
+
+procedure TestWriteAtomicOverwrite;
+var
+  LRead: TBytes;
+begin
+  FsWriteAtomic(GTmpDir + '/atomic-ow.bin', TBytes.Create(1));
+  FsWriteAtomic(GTmpDir + '/atomic-ow.bin', TBytes.Create(9, 8));
+  LRead := FsReadFile(GTmpDir + '/atomic-ow.bin');
+  CheckEqual(Int64(2), Int64(Length(LRead)), 'atomic overwrite len');
+  CheckEqual(Byte(9), LRead[0], 'atomic overwrite first byte');
+end;
+
+procedure TestReadFileTextEmpty;
+begin
+  FsWriteFile(GTmpDir + '/empty-text-r17.txt', nil);
+  CheckEqual('', FsReadFileText(GTmpDir + '/empty-text-r17.txt'), 'empty text');
+end;
+
+procedure TestEnsureFileIdempotent;
+begin
+  FsEnsureFile(GTmpDir + '/ensure-r17.txt');
+  Check(FsExists(GTmpDir + '/ensure-r17.txt'), 'ensure creates');
+  FsWriteFileText(GTmpDir + '/ensure-r17.txt', 'keep');
+  FsEnsureFile(GTmpDir + '/ensure-r17.txt');
+  CheckEqual('keep', FsReadFileText(GTmpDir + '/ensure-r17.txt'), 'ensure preserves');
+end;
+
+procedure TestTempDirIsDirectory;
+var
+  LDir: string;
+begin
+  LDir := FsTempDir(GTmpDir, 'r17tmp*');
+  try
+    Check(FsIsDir(LDir), 'temp dir is dir');
+    Check(FsExists(LDir), 'temp dir exists');
+  finally
+    FsRemoveAll(LDir);
+  end;
+end;
+
 procedure TestFileSize;
 begin
   FsWriteFile(GTmpDir + '/sz.bin', TBytes.Create(1, 2, 3));
@@ -2062,6 +2228,22 @@ begin
     T.Test('SameFile', @TestSameFile);
     T.Test('Symlink relative target', @TestSymlinkRelativeTarget);
     T.Test('ReadFile missing ENotFound', @TestReadFileMissingNotFound);
+    T.Test('WriteAtomic missing parent', @TestWriteAtomicMissingParentRaises);
+    T.Test('CopyFile missing source', @TestCopyFileMissingSourceRaises);
+    T.Test('WriteFile empty roundtrip', @TestWriteFileEmptyRoundtrip);
+    T.Test('AppendFileText roundtrip', @TestAppendFileTextRoundtrip);
+    T.Test('AppendFileLine roundtrip', @TestAppendFileLineRoundtrip);
+    T.Test('Exists false for missing', @TestExistsFalseForMissing);
+    T.Test('IsFile IsDir edges', @TestIsFileIsDirEdges);
+    T.Test('Remove missing silent', @TestRemoveMissingSilent);
+    T.Test('Rename roundtrip', @TestRenameRoundtrip);
+    T.Test('Truncate path to zero', @TestTruncatePathToZero);
+    T.Test('Chmod read write', @TestChmodReadWrite);
+    T.Test('SameFile empty path raises', @TestSameFileEmptyPathRaises);
+    T.Test('WriteAtomic overwrite', @TestWriteAtomicOverwrite);
+    T.Test('ReadFileText empty', @TestReadFileTextEmpty);
+    T.Test('EnsureFile idempotent', @TestEnsureFileIdempotent);
+    T.Test('TempDir is directory', @TestTempDirIsDirectory);
     T.Test('FileSize', @TestFileSize);
 
     T.Test('Mkdir + ReadDir', @TestMkdirAndReadDir);

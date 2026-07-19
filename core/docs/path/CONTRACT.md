@@ -74,7 +74,7 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_path | 36 | 路径操作 + SysUtils 兼容 + 真 uses 门禁 |
+| test_path | 56 | R16 path API + R17 Clean/Rel/Match 表 |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---
@@ -91,3 +91,4 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | 2026-07-19 | 2.4 | PathDir 双轨钉死；PathIsAbs；ExpandFileName cwd | Claude |
 | 2026-07-19 | 2.5 | PathDir 仅裸名压空；`./x` 保留 `.` | Claude |
 | 2026-07-19 | 2.6 | R16 ToSlash/SplitList/Volume/Stem/StripPrefix | Claude |
+| 2026-07-19 | 2.7 | R17 质量表；测试 56 | Claude |

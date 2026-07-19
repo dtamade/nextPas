@@ -11,7 +11,8 @@ program test_test_bench;
 uses
   nextpas.core.test.bench,
   nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.text.conv;
 
 var
   GTestCount: Integer = 0;
@@ -173,10 +174,10 @@ begin
   Test_ParallelBench;
 
   WriteLn;
-  WriteLn('  ', GPassCount, ' passed, ', GFailCount, ' failed, 0 skipped');
+  WriteLn(Format('  %d passed, %d failed, 0 skipped', [GPassCount, GFailCount]));
   WriteLn('--- test-bench-integration ---');
-  WriteLn('  Total tests: ', GTestCount);
-  WriteLn('  Passed: ', GPassCount, ', Failed: ', GFailCount, ', Skipped: 0');
+  WriteLn(Format('  Total tests: %d', [GTestCount]));
+  WriteLn(Format('  Passed: %d, Failed: %d, Skipped: 0', [GPassCount, GFailCount]));
   WriteLn;
 
   if GFailCount > 0 then

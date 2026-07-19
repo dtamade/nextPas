@@ -1,25 +1,36 @@
 # nextpas.core.bench — 架构文档
 
+> **最后更新**: 2026-07-19（Round 62 + 审计收敛）
+
 ## 模块定位
 
 L1 层基准测试框架，仅依赖 L0（base, exception, platform.time）。
 
 ## 源文件清单
 
-| 文件 | 行数 | 职责 |
-|------|------|------|
-| `bench.base.pas` | ~980 | 核心类型（TBenchResult/TBenchStats/TBenchConfig）、常量、工具函数（IntroSort/NormalCDF/Xoroshiro128+） |
-| `bench.intf.pas` | ~530 | 接口定义（IBenchSuite/IBenchResults/IBenchContext/IBenchStatsAnalyzer/IBenchReportGenerator） |
-| `bench.pas` | ~1480 | 门面：TBenchSuite fluent builder + TBenchResults。用户唯一入口 |
-| `bench.runner.pas` | ~1310 | TBenchContext + TBenchRunner。校准、自适应预热、三执行路径（loop/parallel/sequential） |
-| `bench.stats.pas` | ~1210 | TBenchStatsAnalyzer。Welford 单遍统计、Mann-Whitney U、K-S 检验、OLS 回归、贝叶斯估计 |
-| `bench.stats.advanced.pas` | ~1130 | TAdvancedStats。MAD O(N)、Bootstrap CI/BCa、Fisher 置换、偏度/峰度、Cohen's d |
-| `bench.report.pas` | ~880 | TBenchReportGenerator。Console/JSON/TSV/HTML/Matrix/Benchstat 输出 |
-| `bench.baseline.pas` | ~480 | TBaselineManager。JSON 序列化、时间线追加 |
-| `bench.parallel.pas` | ~300 | TParallelBenchmark。TThread 工作线程、加速比/效率计算 |
-| `bench.run.pas` | ~290 | TBenchRun 线程安全执行器。原子计数、AllocBenchResult/FreeBenchResult |
-| `bench.memtrack.pas` | ~380 | TMemoryTracker。原子 CAS、全局 MemoryManager hook |
-| `bench.test_helpers.pas` | ~70 | 测试辅助：NoOpBench/BusyBench/AllocBench/MakeBenchEntry |
+| 文件 | 行数（约） | 职责 |
+|------|-----------|------|
+| `bench.base.pas` | ~1050 | 核心类型（TBenchResult/TBenchStats/TBenchConfig）、常量、工具函数 |
+| `bench.intf.pas` | ~900 | 接口定义（IBenchSuite/IBenchResults/IBenchContext/…） |
+| `bench.pas` | ~3240 | 门面：TBenchSuite fluent builder + TBenchResults（**已膨胀，见下**） |
+| `bench.runner.pas` | ~1430 | TBenchContext + TBenchRunner。校准、自适应预热、执行路径 |
+| `bench.stats.pas` | ~1250 | TBenchStatsAnalyzer。Welford、MWU、K-S、OLS、贝叶斯 |
+| `bench.stats.advanced.pas` | ~1130 | TAdvancedStats。MAD、Bootstrap/BCa、Fisher、偏度/峰度 |
+| `bench.report.pas` | ~1180 | TBenchReportGenerator。Console/JSON/TSV/HTML/Matrix |
+| `bench.baseline.pas` | ~490 | TBaselineManager。JSON 序列化、时间线追加 |
+| `bench.parallel.pas` | ~300 | TParallelBenchmark。TThread 工作线程 |
+| `bench.run.pas` | ~310 | TBenchRun 线程安全执行器 |
+| `bench.memtrack.pas` | ~380 | TMemoryTracker。MemoryManager hook |
+| `bench.xlang.pas` | ~570 | Go/Rust/FPC 跨语言输出解析 |
+| `bench.test_helpers.pas` | ~90 | 测试辅助 |
+
+## 门面策略
+
+- `bench.pas` 是用户唯一入口，但 TBenchResults 查询/聚合 API 已使门面 >3k 行。
+- **2026-07-19 起默认冻结** 向 `IBenchResults`/`IBenchSuite` 新增公共便捷方法。
+- 后续增量优先：`bench.report` / `bench.stats` 子单元，或明确 bugfix。
+- 分组相关内部 helper：`ExtractGroupName` / `CollectGroupResults` / `CollectGroupNsPerOp`
+  （GetGroups、GetGroupStats、CompareGroups、`To*_Grouped` 共用）。
 
 ## 数据流
 

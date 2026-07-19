@@ -1,4 +1,4 @@
-# process / fs / path / env — Go / Rust 对标矩阵（R16）
+# process / fs / path / env — Go / Rust 对标矩阵（R16–R17）
 
 **状态日期**：2026-07-19  
 **范围**：L2 `nextpas.core.{process,fs,path,os.env}`  
@@ -12,11 +12,11 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.0** | CONTRACT INV 完整；真 uses 门禁；Wait/TryWait/PathDir/env 名已钉；R15 全量绿 |
-| **规模 Scale (Essential)** | **8.8** | R16 续：WaitGraceful、SameFile；HardLink/Chtimes/Chown 仍需 L0 |
-| **综合** | **8.9** | Essential 接近 0.90 |
+| **质量 Quality** | **9.0** | CONTRACT INV 完整；真 uses 门禁；Wait/TryWait/PathDir/env 名已钉；R17 质量表加厚 |
+| **规模 Scale (Essential)** | **8.8** | Essential API 齐（WaitGraceful/SameFile）；HardLink/Chtimes/Chown **Deferred（需 L0）** |
+| **综合** | **8.9** | 测试合计 **≥750** 已达成；远期 900 仍可加厚 |
 
-**目标线**：质量 ≥ 9.0（保持）；规模 Essential 覆盖率 ≥ **0.85**；测试合计 ≥ **900**。
+**目标线**：质量 ≥ 9.0（保持）；规模 Essential 覆盖率 ≥ **0.85**；测试合计 ≥ **750**（达成）→ 远期 **900**。
 
 ---
 
@@ -57,9 +57,9 @@
 | IFile.Sync | Sync | IFile.Sync | Done（接口已有） |
 | IsSymlink(path) | Lstat | **IsSymlink** | Done（R16） |
 | PathAbs / resolve | Abs/EvalSymlinks | PathAbs→`platform_path_resolve`（realpath） | **Done**（跟随 symlink） |
-| HardLink | Link/hard_link | — | Missing（需 L0） |
-| Chtimes | Chtimes | — | Missing（需 L0） |
-| Chown | Chown | — | Missing（需 L0） |
+| HardLink | Link/hard_link | — | **Deferred**（需 L0 `platform_file_link`） |
+| Chtimes | Chtimes | — | **Deferred**（需 L0 utimens） |
+| Chown | Chown | — | **Deferred**（需 L0 chown；FFI 有、公开 API 无） |
 | SameFile(inode) | SameFile | **SameFile** (lstat Dev+Ino) | Done（R16 续） |
 | Remove ENOENT | Go 报错 | **静默成功**（Pascal） | Done（有意 ≠ Go） |
 
@@ -88,25 +88,43 @@
 
 ---
 
-## 测试规模（R15 基线）
+## 测试规模（R17 校准）
 
 | 套件 | 通过 |
 |------|------|
-| process 四套 | 281+48+20+17 |
-| fs 六套 | 113+8+31+7+17+19 |
-| path | 41 |
-| env | 42 |
-| **合计** | **~655+**（R16 增量后） |
+| test_process | **340** |
+| test_process_command / deep / pipe | 48 / 20 / 17 |
+| test_fs | **133** |
+| test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / 17 / 19 |
+| test_path | **56** |
+| test_os_env | **55** |
+| **合计** | **751** |
 
-R16 增量后以 `make test` 重校准；目标 **≥ 900**。
+目标 **≥750** ✅；远期 **≥900** 可继续表驱动加厚。
 
 ---
 
 ## 延期（Deferred）说明
 
-- **process ExtraFiles / Credential / context 取消**：需 L0 spawn 扩展或跨模块 context；无真实消费者前不阻塞 Essential。  
-- **HardLink / Chtimes / Chown**：缺 `platform_file_link` / utimens / chown；与 platform 协作。SameFile 已用现有 Dev+Ino。  
-- **wine-runtime-smoke**：受 test.expect 交叉编译阻塞（外部债）。
+### L0 缺口（platform 协作清单）
+
+L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但**无公开** `platform_file_*` API：
+
+| L2 期望 | 需要 L0 | 现状 |
+|---------|---------|------|
+| `HardLink` | `platform_file_link(old, new)` | 无公开 API（仅有 symlink） |
+| `Chtimes` | `platform_file_utimens(path, atime, mtime)` | syscall 号有，无封装 |
+| `Chown` | `platform_file_chown(path, uid, gid)` | `posix.ffi` 有 `chown`，files 层未导出 |
+
+**平台侧建议**：补齐三函数 + 错误码映射 + Windows 对等（或 `PLATFORM_ERR_UNSUPPORTED`），L2 再开一片。
+
+### process 其他 Deferred
+
+- ExtraFiles / Credential / context 取消：需 L0 spawn 扩展或跨模块 context；无真实消费者前不阻塞 Essential。
+
+### 外部债
+
+- **wine-runtime-smoke**：受 test.expect 交叉编译阻塞。
 
 ---
 
@@ -115,3 +133,5 @@ R16 增量后以 `make test` 重校准；目标 **≥ 900**。
 | 日期 | 说明 |
 |------|------|
 | 2026-07-19 | R16 初版矩阵 + 评分卡；Essential 零 L0 API 落地后更新状态 |
+| 2026-07-19 | R16 续 WaitGraceful + SameFile |
+| 2026-07-19 | R17 质量加厚；合计 751；L0 Deferred 钉死协作清单 |

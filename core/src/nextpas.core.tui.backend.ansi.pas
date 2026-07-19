@@ -17,6 +17,7 @@ unit nextpas.core.tui.backend.ansi;
 interface
 
 uses
+  nextpas.core.mem.intf,
   nextpas.core.text.builder,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
@@ -37,7 +38,7 @@ type
     FLastUl: TColor;
     FLastModifier: TModifier;
   public
-    constructor Create(AFd: Int32);
+    constructor Create(AFd: Int32; const AAllocator: IAllocator = nil);
     destructor Destroy; override;
 
     { 重置缓存的 SGR 状态——进入 alt screen / 首帧前调用，确保下次
@@ -78,11 +79,11 @@ uses
 
 { TAnsiBackend }
 
-constructor TAnsiBackend.Create(AFd: Int32);
+constructor TAnsiBackend.Create(AFd: Int32; const AAllocator: IAllocator);
 begin
   inherited Create;
   FFd := AFd;
-  FOut.Init(4096);
+  FOut.InitWith(4096, AAllocator);
   ResetStyleCache;
 end;
 

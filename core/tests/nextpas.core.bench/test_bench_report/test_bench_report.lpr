@@ -24,6 +24,7 @@ begin
   SetLength(LResults, 3);
 
   LResults[0].Name := 'HashMap.Put';
+  LResults[0].Executed := True;
   LResults[0].Iterations := 1000000;
   LResults[0].NsPerOp := 245.3;
   LResults[0].OpsPerSec := 4080000;
@@ -37,6 +38,7 @@ begin
   LResults[0].SampleCount := 30;
 
   LResults[1].Name := 'HashMap.Get(hit)';
+  LResults[1].Executed := True;
   LResults[1].Iterations := 5000000;
   LResults[1].NsPerOp := 89.2;
   LResults[1].OpsPerSec := 11210000;
@@ -50,6 +52,7 @@ begin
   LResults[1].SampleCount := 30;
 
   LResults[2].Name := 'Bytes.Compare';
+  LResults[2].Executed := True;
   LResults[2].Iterations := 10000000;
   LResults[2].NsPerOp := 45.1;
   LResults[2].OpsPerSec := 22170000;
@@ -679,6 +682,77 @@ begin
   Check(Length(LHTML) >= LCount1, 'SetMaxDetailCount(100) produces at least as much as default');
 end;
 
+procedure TestToMarkdown;
+var
+  LResults: array of TBenchResult;
+  LEnvironment: TBenchEnvironment;
+  LMarkdown: string;
+begin
+  LResults := CreateTestResults;
+  LEnvironment := CreateTestEnvironment;
+
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(LEnvironment);
+  LMarkdown := GGenerator.ToMarkdown;
+
+  CheckContains(LMarkdown, '## Benchmark Results');
+  CheckContains(LMarkdown, '| Property | Value |');
+  CheckContains(LMarkdown, '| OS | linux |');
+  CheckContains(LMarkdown, '| CPU | x86_64 |');
+  CheckContains(LMarkdown, '| Benchmark | ns/op | ops/s |');
+  CheckContains(LMarkdown, '| HashMap.Put | 245.3 |');
+  CheckContains(LMarkdown, '| HashMap.Get(hit) | 89.2 |');
+  CheckContains(LMarkdown, '**Total:** 3');
+  CheckContains(LMarkdown, '**Executed:** 3');
+  CheckContains(LMarkdown, '**Skipped:** 0');
+end;
+
+procedure TestToMarkdown_Skipped;
+var
+  LResults: array of TBenchResult;
+  LEnvironment: TBenchEnvironment;
+  LMarkdown: string;
+begin
+  LResults := CreateSkippedResults;
+  LEnvironment := CreateTestEnvironment;
+
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(LEnvironment);
+  LMarkdown := GGenerator.ToMarkdown;
+
+  CheckContains(LMarkdown, '## Benchmark Results');
+  CheckContains(LMarkdown, '### Skipped');
+  CheckContains(LMarkdown, 'SIMD extension unavailable');
+  CheckContains(LMarkdown, '**Total:** 4');
+  CheckContains(LMarkdown, '**Executed:** 3');
+  CheckContains(LMarkdown, '**Skipped:** 1');
+end;
+
+procedure TestSaveToMarkdown;
+var
+  LResults: array of TBenchResult;
+  LEnvironment: TBenchEnvironment;
+  LPath: string;
+  LFile: TextFile;
+  LLine: string;
+begin
+  LResults := CreateTestResults;
+  LEnvironment := CreateTestEnvironment;
+
+  GGenerator.SetResults(LResults);
+  GGenerator.SetEnvironment(LEnvironment);
+
+  LPath := '/tmp/test_save_markdown.md';
+  GGenerator.SaveToMarkdown(LPath);
+
+  { 验证文件存在且包含关键内容 }
+  AssignFile(LFile, LPath);
+  Reset(LFile);
+  ReadLn(LFile, LLine);
+  CheckContains(LLine, '## Benchmark Results');
+  CloseFile(LFile);
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -716,6 +790,9 @@ begin
     T.Test('empty results to HTML', @Test_EmptyResults_ToHTML);
     T.Test('empty results print to console', @Test_EmptyResults_PrintToConsole);
     T.Test('set max detail count', @TestSetMaxDetailCount);
+    T.Test('to Markdown', @TestToMarkdown);
+    T.Test('to Markdown skipped', @TestToMarkdown_Skipped);
+    T.Test('save to Markdown', @TestSaveToMarkdown);
   LRunPassed := T.Run;
     T.Summary;
   if not LRunPassed then
