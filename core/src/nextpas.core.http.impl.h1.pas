@@ -102,17 +102,31 @@ type
     procedure SetCancelToken(const AToken: INetCancelToken);
   end;
 
+  { S2-2: body reader for fast-path snapshot (fixed-length, fully buffered). }
+  TH1FastSnapshotBodyReader = class(TInterfacedObject, IReader)
+  private
+    FData: TBytes;
+    FPosition: SizeUInt;
+    FSize: SizeUInt;
+  public
+    constructor Create(const AData: TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
   TH1FastRequestSnapshot = class(TInterfacedObject, IH1Parser)
   private
     FMethod: THttpMethod;
     FUrl: string;
     FVersion: THttpVersion;
     FHeaders: IHttpHeaders;
+    FBody: TBytes;
     FBodySize: Int64;
     FComplete: Boolean;
     FRequestMetadata: TH1RequestMetadata;
   public
-    constructor Create(const AResult: TFastParseResult);
+    { ABuf is the same buffer FastParseRequest scanned; used to copy a complete
+      fixed-length body into the snapshot when ContentLength > 0. }
+    constructor Create(const AResult: TFastParseResult; const ABuf: PAnsiChar);
     function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
     procedure Finish;
     function GetMethod: THttpMethod;
@@ -768,9 +782,35 @@ begin
   FInner.SetCancelToken(AToken);
 end;
 
+{ TH1FastSnapshotBodyReader }
+
+constructor TH1FastSnapshotBodyReader.Create(const AData: TBytes);
+begin
+  inherited Create;
+  FData := AData;
+  FPosition := 0;
+  FSize := SizeUInt(Length(AData));
+end;
+
+function TH1FastSnapshotBodyReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvailable: SizeUInt;
+begin
+  if (ACount = 0) or (FPosition >= FSize) then
+    Exit(0);
+  LAvailable := FSize - FPosition;
+  if ACount < LAvailable then
+    Result := ACount
+  else
+    Result := LAvailable;
+  Move(FData[FPosition], ABuf, Result);
+  Inc(FPosition, Result);
+end;
+
 { TH1FastRequestSnapshot }
 
-constructor TH1FastRequestSnapshot.Create(const AResult: TFastParseResult);
+constructor TH1FastRequestSnapshot.Create(const AResult: TFastParseResult;
+  const ABuf: PAnsiChar);
 begin
   inherited Create;
   FMethod := AResult.Method;
@@ -778,6 +818,12 @@ begin
   FVersion := AResult.Version;
   FHeaders := AResult.Headers;
   FBodySize := AResult.ContentLength;
+  SetLength(FBody, 0);
+  if (AResult.ContentLength > 0) and (ABuf <> nil) then
+  begin
+    SetLength(FBody, AResult.ContentLength);
+    Move(ABuf[AResult.BodyStart], FBody[0], AResult.ContentLength);
+  end;
   FComplete := True;
   FRequestMetadata := Default(TH1RequestMetadata);
   FRequestMetadata.HasHost := AResult.HasHost;
@@ -829,7 +875,9 @@ end;
 
 function TH1FastRequestSnapshot.GetBody: string;
 begin
-  Result := '';
+  if Length(FBody) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@FBody[0]), Length(FBody));
 end;
 
 function TH1FastRequestSnapshot.GetBodySize: Int64;
@@ -839,7 +887,9 @@ end;
 
 function TH1FastRequestSnapshot.NewBodyReader: IReader;
 begin
-  Result := nil;
+  if Length(FBody) = 0 then
+    Exit(nil);
+  Result := TH1FastSnapshotBodyReader.Create(FBody);
 end;
 
 function TH1FastRequestSnapshot.HeadersComplete: Boolean;
@@ -1198,6 +1248,9 @@ end;
 
 function TH1ServerConnectionState.TryUseFastRequestParser(const ABuf: PAnsiChar;
   const ALen: SizeUInt; out AConsumed: SizeUInt): Boolean;
+const
+  { Cap body copy into snapshot; larger/streamed bodies stay on llhttp. }
+  FAST_PATH_MAX_BODY = 65536;
 var
   LFast: TFastParseResult;
 begin
@@ -1213,8 +1266,11 @@ begin
      (LFast.Consumed > ALen) then
     Exit(False);
 
+  { S2-2: fixed-length body allowed when fully buffered and within cap.
+    Still reject Expect / Transfer-Encoding / host policy / connection close. }
   if (LFast.Version <> hvHttp11) or
-     (LFast.ContentLength <> 0) or
+     (LFast.ContentLength < 0) or
+     (LFast.ContentLength > FAST_PATH_MAX_BODY) or
      (not LFast.HasHost) or
      LFast.HostRepeated or
      LFast.HasExpect or
@@ -1227,7 +1283,7 @@ begin
       LFast.ConnectionUnsupported) then
     Exit(False);
 
-  FParser := TH1FastRequestSnapshot.Create(LFast);
+  FParser := TH1FastRequestSnapshot.Create(LFast, ABuf);
   FParserIsSnapshot := True;
   AConsumed := LFast.Consumed;
   Result := True;

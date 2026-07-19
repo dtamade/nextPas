@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（S2-1 landed：H1 outbound buffer 连接级复用；NEXT=S2-2/S2-3 optional）
+**Updated**: 2026-07-19（S2-2 landed：fast path 固定 body 扩展；NEXT=S2-3 optional / STOP）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **S2-2** fast path 扩大（optional；无指令可 STOP） |
+| **下一执行点** | **S2-3** profiled 热点证据（optional）或 STOP |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -745,11 +745,11 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | Wave | Status | Do |
 |------|--------|-----|
 | **S2-1** | **landed** | 分配画像；连接级 H1 outbound buffer free-list 复用（active+queued 深度） |
-| **S2-2** | queued | fast path 扩大（安全回退不变） |
-| **S2-3** | queued | profiled 单热点前后证据（可与 S2-2 合并） |
+| **S2-2** | **landed** | fast path 扩大：完整缓冲的固定 `Content-Length` body（≤64KiB）走 snapshot；Expect/TE/close 仍回退 llhttp |
+| **S2-3** | queued | profiled 单热点前后证据（perf 受限时可 defer） |
 
-**S2-1 Evidence**：`AcquireOutboundBuffer` / `ReleaseOutboundBuffer` 在 poll drain 与 threaded 直写路径；spare×2 对齐 poll 有界 queue；`test_http_server` source-contract + 284/0。
-本机 epoll `no_url` 50k×4 表征：~47.8k → ~50–52k req/s（噪声大，非 KPI；正式比值仍看 Q2-1）。
+**S2-1 Evidence**：outbound free-list；`test_http_server` source-contract。
+**S2-2 Evidence**：`TryUseFastRequestParser` 去掉 `ContentLength=0` 硬门；`TH1FastSnapshotBodyReader`；live POST echo epoll + source-contract；286/0。
 
 ### Era S3 — H2 server scale
 
@@ -807,9 +807,10 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 4. **Era Q1 Done**（SSE / multipart / metrics / write-backpressure）
 5. **S1-3 Met** — 1k/10k idle keep-alive 阶梯
 6. **Era Q2 Done** — comparator 刷新 + **Scale-ready (H1 server, Linux epoll)** 诚实宣称
-7. **S2-1 Met** — 连接级 outbound buffer 复用 + 分配画像（BENCHMARKS）
-8. **NEXT = S2-2**（fast path 扩大）或 STOP；S3/latency 需指令/升格
-9. 跨模块仅按本波 Land paths；path-limited landing only
+7. **S2-1 Met** — 连接级 outbound buffer 复用
+8. **S2-2 Met** — fast path 固定 body（≤64KiB 完整缓冲）
+9. **NEXT = S2-3**（profiled 证据）或 STOP；S3/latency 需指令/升格
+10. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
 **没有用户指令时：STOP（勿空转 H3 / 勿为清单硬开 S3）。**
