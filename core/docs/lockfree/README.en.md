@@ -9,6 +9,9 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 
 **Layer**: L1 (depends on L0 `base` + `atomic`; see `core/docs/core-module-registry.md`).
 
+**Status**: Maintenance — H3-1…H3-5 complete. See [`READY.md`](READY.md).
+Absolute throughput numbers require [`bench-envelope.md`](bench-envelope.md). Chinese [`README.md`](README.md) is the fuller product entry.
+
 ## Progress-guarantee matrix
 
 | Class | Progress model | Sync mechanism | Default facade (T1) |

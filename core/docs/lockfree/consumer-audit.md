@@ -1,10 +1,10 @@
 # Atomic & Lockfree Consumer Audit (R7 + H2-6 + H3)
 
-> **日期**: 2026-07-18
+> **日期**: 2026-07-19
 > **范围**: `core/` 内 `uses nextpas.core.lockfree*` / `uses nextpas.core.atomic*`
 > **方法**: ripgrep 扫描 `core/src/**/*.pas` 的 uses 子句；抽样查看 Close/Destroy 与 legacy CAS 调用形态
-> **主线**: R7 完成；H2-6 最小真实消费者；H3-1 async MPSC；**H3-3 consumer regression 门**
-> **状态**: **R7 DONE** + **H2-6 consumer proof** + **H3-1/H3-3 gates**
+> **主线**: R7 完成；H2-6 最小真实消费者；H3-1 async MPSC；H3-3 consumer gate；**H3-5 thread worksteal → T1 deque**
+> **状态**: **R7 DONE** + **H2-6** + **H3-1/H3-3** + **H3-5 thread consumer**
 
 ---
 
@@ -12,7 +12,7 @@
 
 | 面 | 结论 |
 |----|------|
-| **lockfree 跨模块生产消费者** | **H3-1**：`nextpas.core.async.loop` 直接 `uses nextpas.core.lockfree.mpsc`（`TAsyncLoop.Post` pending 队列）。其余模块仍无 lockfree 容器 uses |
+| **lockfree 跨模块生产消费者** | **H3-1**：`async.loop` → `lockfree.mpsc`；**H3-5**：`thread.pool.worksteal` → `lockfree.deque`（unmanaged 槽间接层） |
 | **atomic 跨模块生产消费者** | **有**。约 20+ 个 L0–L2 单元直接依赖 `nextpas.core.atomic`（见 §3） |
 | **Close → join → Free 误用** | **未发现**需一刀切修复的跨模块误用（因为没有跨模块 lockfree 容器消费者） |
 | **legacy CAS** | lockfree 与部分 sync/id 热路径大量使用 `AtomicCompareExchange*`（返回观测值）；文档标记首选 `atomic_*` / `TAtomic*`，**不删 API** |
@@ -30,11 +30,12 @@
 |------|------|------|
 | `nextpas.core.lockfree*`（门面 + T1–T3 子单元） | **owner / 自用** | 内部 uses `lockfree.base` / `wait` / `ebr` / `deque` 等 |
 | **`nextpas.core.async.loop`** | **H3-1 生产消费者** | `uses nextpas.core.lockfree.mpsc`；`FPending: TMpscQueueImpl<TAsyncPendingItem>`；Close→discard→Free |
+| **`nextpas.core.thread.pool.worksteal`** | **H3-5 生产消费者** | `uses nextpas.core.lockfree.deque`；每 worker 一个 `TWorkStealingDequeImpl<TDequeSlot>`；槽内 `Pointer` → 堆上 `TThreadTask` 节点；**禁止** managed 元素直接入 deque |
 | `nextpas.core.bench.run.pas` | **注释 only** | `@see nextpas.core.lockfree.ebr`；无 uses |
 | `nextpas.core.collections.hashmap.pas` | **注释 only** | 文档指向 `TShardedHashMap`；无 uses |
 | `nextpas.core.collections.concurrent.hashmap.pas` | **同名异实现** | 自有 `TConcurrentHashMap`，**不是** lockfree 门面别名 |
 
-**判定**：H3-1 起 **async.loop** 为第一个跨模块 T1 容器消费者；HTTP/net 仍未直接 uses lockfree。
+**判定**：跨模块 T1 消费者 = **async.loop**（MPSC）+ **thread.pool.worksteal**（Deque）。HTTP/net 仍未直接 uses lockfree。
 
 ### 2.2 测试 / 基准 / 示例
 
@@ -54,7 +55,7 @@
 | `test_lockfree_stress` `TestChannelCloseJoinFree` | 2P+2C stress 加深同一生命周期（H2-5） |
 | `lockfree.workstealing` | 生产单元级消费 `TWorkStealingDeque`（仍属 lockfree 模块内） |
 
-**跨模块**：async.loop 已接入（H3-1）。http/net/thread 仍未直接 uses lockfree 容器。H2-6 示例 + H3-1 生产路径均遵守 Close 纪律（loop 外 join Post 线程后再 Close/Free）。
+**跨模块**：async.loop（H3-1）+ thread.pool.worksteal（H3-5）。http/net 仍未直接 uses lockfree 容器。
 
 ### 2.5 H3-3 consumer regression 门
 
@@ -64,7 +65,17 @@
 | 日志 | `core/build/verify-lockfree/verify-h3-consumers.log` |
 | 与 `verify-t1` | **不替代**；Maintenance / land 推荐两者都跑 |
 
-**thread worksteal 脚注（H3-5 草案）**：`thread.pool.worksteal` 与 `lockfree.workstealing` 仍是双实现；thread 侧为全局 mutex 数组环，**不是** T1 deque 消费者。审计与接入章程见 [`roadmap-h3.md`](roadmap-h3.md) §6（**未授权实现**）。
+### 2.6 H3-5 thread worksteal → T1 deque
+
+| 项 | 内容 |
+|----|------|
+| 实现 | `core/src/nextpas.core.thread.pool.worksteal.pas` |
+| 原语 | `specialize TWorkStealingDequeImpl<TDequeSlot>`；`TDequeSlot.Node: Pointer` → 堆 `TTaskNode`（持 `TThreadTask`） |
+| 依赖方向 | `thread` → `lockfree`；**禁止** lockfree → thread |
+| 生命周期 | `Shutdown` → Close deques → join workers → Free deques in `Destroy` |
+| 进度声明 | 池 = work-stealing concurrent；deque 热路径 lock-free；WaitAll/Shutdown 仍用 mutex/condvar |
+| 测试 | `core/tests/nextpas.core.thread/test_worksteal`（含 H3-5 source-contract） |
+| 同名 | `lockfree.workstealing.TWorkStealingPool` 仍是调度原语（无 OS 线程）；与 thread 池 **不同类型** |
 
 > **R8 脚注**：R8 轴（NUMA / RTM / formal，见 [`r8-research-status.md`](r8-research-status.md)）**无**跨模块生产依赖——这是**预期**状态（Experimental / T3 direct import only），不是审计缺口。
 
@@ -72,7 +83,9 @@
 
 抽检 T1 实现单元（`spsc` / `mpmc` / `mpsc` / `spmc` / `segqueue` / `msqueue` / `stack` / `deque` / `channel*`）：均实现 `Close`；`Destroy` 路径与 R1/R2 契约（Close+drain 或 Close 唤醒）一致。
 
-**跨模块抽检**：`async.loop` 在 Close 时先清 `FPendingReady`，再 `FPending.Close`，discard without fire，再 `Free`；符合 H3-1 契约。其余 core 生产路径仍 **无** lockfree 容器字段（thread.pool.worksteal 仍用自有数组环，见 §2.5）。
+**跨模块抽检**：
+- `async.loop`：Close 时先清 `FPendingReady`，再 `FPending.Close`，discard without fire，再 `Free`（H3-1）。
+- `thread.pool.worksteal`：`Shutdown` 设标志 → `Close` 各 deque → broadcast → join workers；`Destroy` 再 Free deques（H3-5）。
 
 **Advisory（给未来接入方）**：
 

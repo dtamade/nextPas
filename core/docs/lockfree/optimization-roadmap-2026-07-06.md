@@ -1,5 +1,9 @@
 # Atomic-Lockfree 全面优化规划
 
+> **Status**: **historical / archive only**（H3-4）
+> 文中绝对 ops/sec **不是**可复现发布证据。规范见 [`bench-envelope.md`](bench-envelope.md)。
+> 当前执行状态：[`READY.md`](READY.md)。
+>
 > 创建: 2026-07-06 | 状态: Phase 1-4 完成，Phase 5 审计完成
 
 ## 1. 优化总览

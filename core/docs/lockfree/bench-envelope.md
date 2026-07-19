@@ -1,7 +1,7 @@
-# Lockfree / Atomic Benchmark Evidence Envelope (H2-4)
+# Lockfree / Atomic Benchmark Evidence Envelope (H2-4 / H3-4)
 
 > **Status**: normative for any published or archived lockfree/atomic throughput number
-> **Date**: 2026-07-17
+> **Date**: 2026-07-19（H3-4 hygiene refresh）
 > **Owner**: atomic-lockfree lane
 
 ## Rule
@@ -90,6 +90,8 @@ command:   ...
 
 Files such as `benchmark-comparison-2026-06-16.md` / `benchmark-comparison-2026-07-06.md` are **evidence attachments**.
 If they lack a full envelope, treat numbers as **non-authoritative** until re-run under this document.
+H3-4 marked those files (and archived optimization/phase notes) **historical only / not reproducible without full envelope**.
+Active entry docs (`README.md`, `selection-guide.md`) must not restate bare absolute Mops marketing claims.
 
 ---
 

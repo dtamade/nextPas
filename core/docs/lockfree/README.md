@@ -17,16 +17,16 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 |------|------|
 | [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
 | [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
-| [`READY.md`](READY.md) | **状态入口**（**Maintenance**；H3-1…H3-3 done） |
+| [`READY.md`](READY.md) | **状态入口**（**Maintenance**；H3-1…H3-5 done） |
 | [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6 complete） |
-| [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-3 done；H3-4/H3-5 未授权实现） |
-| [`bench-envelope.md`](bench-envelope.md) | **H2-4** bench 证据信封（禁止无信封绝对 Mops） |
+| [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-5 complete） |
+| [`bench-envelope.md`](bench-envelope.md) | **H2-4 / H3-4** bench 证据信封（禁止无信封绝对 Mops） |
 | [`consumer-audit.md`](consumer-audit.md) | 消费者审计 + H3-3 门入口 |
 | [`selection-guide.md`](selection-guide.md) | 选型 |
-| [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步） |
+| [`api-reference.md`](api-reference.md) | API 摘要（改 API 须同步；H3-4 与 CONTRACT 对齐） |
 | [`../atomic/README.md`](../atomic/README.md) | atomic 入口 |
 
-历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-3 已完成**，当前 **Maintenance**（详见 [`READY.md`](READY.md)）。
+历史 `phase*-plan.md` / 旧优化笔记为归档；冲突以 CONTRACT + roadmap + READY 为准。主线 **R0–R7 + H2 + H3-1…H3-5 已完成**，当前 **Maintenance**（详见 [`READY.md`](READY.md)）。
 
 ## Progress-guarantee matrix
 
@@ -488,33 +488,27 @@ make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
 性能结论必须带上平台、编译参数、输入规模、benchmark 输出和 baseline 说明。没有这些证据时，不应写入
 性能胜过 Rust/Go/C++ 标准库的结论。
 
-## 性能基准 (2026-07-06)
+## 性能基准
 
-**平台**: Linux x86_64, FPC 3.3.1, -O2
-**输入**: OPS=1,000,000; capacity=1024
+**规范**：任何绝对 Mops/ops/s 必须附带 [`bench-envelope.md`](bench-envelope.md) 字段；禁止无信封营销数字（H2-4 / H3-4）。
 
-### 单线程 Try* 操作
+**复现入口**（同机同构建下相对排序才可讨论；绝对值须可复现）：
 
-| 数据结构 | 延迟 (ns/op) | 吞吐 (M ops/s) |
-|----------|-------------|---------------|
-| TSpscQueue | 9.9 | 101 |
-| TSpmcQueue | 13.4 | 75 |
-| TMpmcQueue | 14.3 | 70 |
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run
+# 或先打印信封：
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree envelope
+core/docs/lockfree/scripts/print-bench-envelope.sh
+```
 
-### Channel 性能
+历史一次同机数字（**historical only / not reproducible without full envelope**；详见
+[`benchmark-comparison-2026-07-06.md`](benchmark-comparison-2026-07-06.md)）：
 
-| 实现 | 场景 | 延迟 (ns/op) | 吞吐 (M ops/s) |
-|------|------|-------------|---------------|
-| **TLockFreeChannelSpsc** | **1P1C** | **38.2** | **26.2** |
-| TLockFreeChannel | MPMC | 90.9 | 11.0 |
+| 场景（示意） | 相对观察（历史） |
+|-------------|------------------|
+| 单线程 Try\* 环队列 | SPSC 通常快于 SPMC / MPMC |
+| 1P1C Channel | SPSC Channel 热路径通常快于 MPMC Channel 与 mutex+condvar 基线 |
+| 跨语言 1P1C | 历史轮次中 nextpas SPSC Channel 曾相对 Go buffered channel 更快；**不得**在无信封时复述绝对倍数 |
 
-### 跨语言对比 (1P1C Channel)
-
-| 实现 | 延迟 (ns/op) | 吞吐 (M ops/s) | 相对 Go |
-|------|-------------|---------------|---------|
-| **nextpas SPSC Channel** | **38.2** | **26.2** | **2.99x 快** |
-| Rust std::sync::mpsc | 48.3 | 20.7 | 2.37x 快 |
-| Go channel | 114.3 | 8.7 | 基准 |
-| C++ mutex+condvar | 202.2 | 4.9 | 0.56x |
-
-**结论**: nextpas SPSC Channel 比 Go channel 快 2.99x，比 Rust std::sync::mpsc 快 1.26x！
+不要把上表当作当前发布性能保证。新结论必须附完整 envelope + 本机 `bench_lockfree` 输出。
