@@ -345,6 +345,36 @@ begin
   Check(not IsSymbol($D800), 'surrogate not symbol');
 end;
 
+{ === Bidi_Class + Brackets (UAX #9 data) === }
+
+procedure TestBidiClassAndBrackets;
+begin
+  CheckEqual(Int64(Ord(bcL)), Int64(Ord(GetBidiClass(Ord('A')))), 'A is L');
+  { ASCII digits are EN }
+  CheckEqual(Int64(Ord(bcEN)), Int64(Ord(GetBidiClass(Ord('0')))), '0 is EN');
+  CheckEqual(Int64(Ord(bcEN)), Int64(Ord(GetBidiClass(Ord('9')))), '9 is EN');
+  CheckEqual(Int64(Ord(bcWS)), Int64(Ord(GetBidiClass(Ord(' ')))), 'space is WS');
+  CheckEqual(Int64(Ord(bcON)), Int64(Ord(GetBidiClass(Ord('!')))), '! is ON');
+  CheckEqual(Int64(Ord(bcR)), Int64(Ord(GetBidiClass($05D0))), 'Hebrew Alef is R');
+  CheckEqual(Int64(Ord(bcAL)), Int64(Ord(GetBidiClass($0627))), 'Arabic Alef is AL');
+  CheckEqual(Int64(Ord(bcAN)), Int64(Ord(GetBidiClass($0660))), 'Arabic-Indic digit is AN');
+  CheckEqual(Int64(Ord(bcLRE)), Int64(Ord(GetBidiClass($202A))), 'LRE');
+  CheckEqual(Int64(Ord(bcRLE)), Int64(Ord(GetBidiClass($202B))), 'RLE');
+  CheckEqual(Int64(Ord(bcPDF)), Int64(Ord(GetBidiClass($202C))), 'PDF');
+  CheckEqual(Int64(Ord(bcLRI)), Int64(Ord(GetBidiClass($2066))), 'LRI');
+  CheckEqual(Int64(Ord(bcRLI)), Int64(Ord(GetBidiClass($2067))), 'RLI');
+  CheckEqual(Int64(Ord(bcFSI)), Int64(Ord(GetBidiClass($2068))), 'FSI');
+  CheckEqual(Int64(Ord(bcPDI)), Int64(Ord(GetBidiClass($2069))), 'PDI');
+  CheckEqual(Int64(Ord(bcNSM)), Int64(Ord(GetBidiClass($0301))), 'combining acute NSM');
+
+  CheckEqual(Int64(Ord(bpbtOpen)), Int64(Ord(GetBidiPairedBracketType(Ord('(')))), '( open');
+  CheckEqual(Int64(Ord(bpbtClose)), Int64(Ord(GetBidiPairedBracketType(Ord(')')))), ') close');
+  CheckEqual(Int64(Ord(')')), Int64(GetBidiPairedBracket(Ord('('))), '( pairs )');
+  CheckEqual(Int64(Ord('(')), Int64(GetBidiPairedBracket(Ord(')'))), ') pairs (');
+  CheckEqual(Int64(Ord(bpbtNone)), Int64(Ord(GetBidiPairedBracketType(Ord('A')))), 'A no bracket');
+  CheckEqual(Int64(Ord('A')), Int64(GetBidiPairedBracket(Ord('A'))), 'A pair self');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.text.unicode');
   T.Test('IsUpper', @TestIsUpper);
@@ -366,5 +396,6 @@ begin
   T.Test('HasBinaryProperty', @TestHasBinaryProperty);
   T.Test('GraphemeBreakProperty', @TestGraphemeBreakProperty);
   T.Test('PropertyCombinations', @TestPropertyCombinations);
+  T.Test('BidiClassAndBrackets', @TestBidiClassAndBrackets);
   if not T.Run then Halt(1);
 end.

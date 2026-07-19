@@ -31,6 +31,8 @@ type
   TWordBreakProperty = nextpas.core.text.unicode.types.TWordBreakProperty;
   TSentenceBreakProperty = nextpas.core.text.unicode.types.TSentenceBreakProperty;
   TLineBreakClass = nextpas.core.text.unicode.types.TLineBreakClass;
+  TBidiClass = nextpas.core.text.unicode.types.TBidiClass;
+  TBidiPairedBracketType = nextpas.core.text.unicode.types.TBidiPairedBracketType;
 
   TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
   TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
@@ -62,6 +64,9 @@ function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBrea
 function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty; inline;
 function GetSentenceBreakProperty(const ACp: TUnicodeCodepoint): TSentenceBreakProperty; inline;
 function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inline;
+function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass; inline;
+function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
+function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -177,6 +182,21 @@ end;
 function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass;
 begin
   Result := nextpas.core.text.unicode.props.GetLineBreakClass(ACp);
+end;
+
+function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass;
+begin
+  Result := nextpas.core.text.unicode.props.GetBidiClass(ACp);
+end;
+
+function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint;
+begin
+  Result := nextpas.core.text.unicode.props.GetBidiPairedBracket(ACp);
+end;
+
+function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType;
+begin
+  Result := nextpas.core.text.unicode.props.GetBidiPairedBracketType(ACp);
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;
