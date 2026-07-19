@@ -63,6 +63,9 @@ T2/T3 子模块源文件仍保留在 `core/src/`，但**必须直接** `uses nex
 
 ### 0.2 T2 maturity tiers（H2-2）
 
+**权威可扫清单**（单元 → 档位 → progress → 测试）：[`t2-inventory.md`](t2-inventory.md)（Q4）。
+下表为摘要；与 inventory 冲突时以 inventory + 本文件 §0.3 为准。
+
 默认门面 **不** 升 T2。T2 直接 import 时用下列成熟度档位（文档分档，**不**重写算法）：
 
 | 档位 | 含义 | 消费者期望 |
@@ -132,6 +135,8 @@ R8 轴 **不** 因文档收口而升入 T1 / 默认门面；生产化属重大�
 | 门面不含 bag/multimap | `nextpas.core.lockfree.pas` 无 re-export（source-contract 钉住） |
 
 **H3-2 非目标**：全量 T2 契约化；T2 进默认门面；算法重写；R8 生产化；删 legacy CAS。
+
+**Q4（2026-07-20）**：明确 **不** 扩展 H3-2 生产子集。若未来扩展，须单独 charter（Close/managed/progress + focused tests + 门面隔离 + 批准）。见 [`t2-inventory.md`](t2-inventory.md)。
 
 ---
 

@@ -1,3 +1,7 @@
+//! Q5 matched scenarios vs nextpas TLockFreeChannel (same OPS/CAPACITY).
+//! C1: std::sync::mpsc 1P+1C (unbounded — semantic gap vs bounded channel).
+//! C2: Mutex+Condvar bounded VecDeque 2P+2C (closer to bounded MPMC).
+
 use std::collections::VecDeque;
 use std::hint::black_box;
 use std::sync::mpsc;
@@ -57,7 +61,7 @@ fn print_result(name: &str, elapsed: Duration, operations: usize) {
     );
 }
 
-fn bench_std_mpsc_spsc() -> u64 {
+fn bench_c1_mpsc_spsc() -> u64 {
     let start = Instant::now();
     let (tx, rx) = mpsc::channel::<u64>();
     let producer = thread::spawn(move || {
@@ -74,11 +78,11 @@ fn bench_std_mpsc_spsc() -> u64 {
     });
     producer.join().unwrap();
     let sum = consumer.join().unwrap();
-    print_result("std::sync::mpsc 1P+1C", start.elapsed(), N);
+    print_result("C1 std::sync::mpsc 1P+1C", start.elapsed(), N);
     sum
 }
 
-fn bench_bounded_mutex_condvar_mpmc() -> u64 {
+fn bench_c2_bounded_mpmc() -> u64 {
     let start = Instant::now();
     let queue = Arc::new(BoundedQueue::new());
     let mut producers = Vec::new();
@@ -113,38 +117,28 @@ fn bench_bounded_mutex_condvar_mpmc() -> u64 {
         .map(|consumer| consumer.join().unwrap())
         .fold(0u64, |acc, value| acc.wrapping_add(value));
 
-    print_result("Mutex+Condvar VecDeque 2P+2C", start.elapsed(), N);
+    print_result("C2 Mutex+Condvar VecDeque 2P+2C", start.elapsed(), N);
     sum
 }
 
-fn bench_mutex_vecdeque_single_thread() -> u64 {
-    let queue = Mutex::new(VecDeque::<u64>::with_capacity(CAPACITY));
-    let start = Instant::now();
-    let mut sink = 0u64;
-
-    for value in 1..=(N as u64) {
-        {
-            let mut queue = queue.lock().unwrap();
-            queue.push_back(value);
-            sink = sink.wrapping_add(queue.pop_front().unwrap());
-        }
-    }
-
-    print_result("Mutex<VecDeque> 1T", start.elapsed(), N);
-    sink
-}
-
 fn main() {
-    println!("=== Rust std lockfree comparison (1M ops) ===");
-    println!("Platform: {} {}", std::env::consts::OS, std::env::consts::ARCH);
-    println!("Compiler flags: rustc -C opt-level=3 (recommended manual command)");
-    println!("Input size: OPS=1000000; capacity=1024; scenarios=std::sync::mpsc 1P+1C, Mutex+Condvar VecDeque 2P+2C, Mutex<VecDeque> 1T");
-    println!("Baselines: Rust std synchronization primitives only; manual comparison source, not auto-run by Pascal benchmark");
+    println!("=== Q5 Rust matched suite (std peers vs nextpas Channel) ===");
+    println!(
+        "Platform: {} {}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
+    println!("Compiler: rustc -C opt-level=3");
+    println!(
+        "Input: OPS={} CAPACITY={} scenarios=C1 mpsc 1P+1C, C2 bounded mutex queue 2P+2C",
+        N, CAPACITY
+    );
+    println!("Peer: nextpas TLockFreeChannel (bounded). C1 mpsc is unbounded — semantic gap.");
+    println!("Honesty: same-host relative only; require bench-envelope.md fields for absolute Mops.");
     println!();
 
-    let mut sink = bench_std_mpsc_spsc();
-    sink = sink.wrapping_add(bench_bounded_mutex_condvar_mpmc());
-    sink = sink.wrapping_add(bench_mutex_vecdeque_single_thread());
+    let mut sink = bench_c1_mpsc_spsc();
+    sink = sink.wrapping_add(bench_c2_bounded_mpmc());
     black_box(sink);
 
     println!();

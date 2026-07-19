@@ -95,6 +95,30 @@ Active entry docs (`README.md`, `selection-guide.md`) must not restate bare abso
 
 ---
 
+## Q5 matched suite (same-host Go/Rust)
+
+**Entry**:
+
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched
+```
+
+| Scenario | nextpas | Go | Rust |
+|----------|---------|-----|------|
+| **C1** | `TLockFreeChannel` 1P+1C | buffered `chan` 1P+1C | `std::sync::mpsc` 1P+1C (**unbounded**) |
+| **C2** | `TLockFreeChannel` 2P+2C | buffered `chan` 2P+2C | Mutex+Condvar bounded `VecDeque` 2P+2C |
+
+**Honesty**:
+- Not bit-identical algorithms; use for **relative same-host** ordering only.
+- Micro suite (`bench_lockfree all` / `micro`) is **single-thread Try\*** — do **not** compare to multi-thread Go/Rust.
+- Absolute Mops require this envelope printed **before** numbers; `stats: samples=1` is not a marketing claim — re-run N≥3 for any published figure.
+- Soft-skip if `go` / `rustc` missing.
+
+Optional: keep a dated paste under `bench-results/` as historical attachment (not README marketing).
+
+---
+
 ## Non-goals
 
 - CI gate that fails on absolute regression (optional later; not H2-4)

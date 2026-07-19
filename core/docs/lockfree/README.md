@@ -472,15 +472,18 @@ External Rust/Go/C++ comparison sources should follow the same logical input ran
 `compare_rust/main.rs` 是外部 Rust comparison source，用于后续手动对照。Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline.
 `compare_go/main.go` 是外部 Go comparison source。Go std nearest equivalents: buffered `chan uint64` for 1P+1C and 2P+2C, and same-goroutine buffered channel send/receive for the 1T baseline.
 `compare_cpp/main.cpp` 是外部 C++ comparison source。C++ std nearest equivalents: `std::queue<uint64_t>` guarded by `std::mutex` and `std::condition_variable` for bounded 1P+1C and 2P+2C, and the same guarded queue for the 1T baseline.
-当前 Pascal benchmark 不会自动编译或运行 Rust、Go 或 C++ 程序；除非同一机器、同一轮次实际运行并记录外部输出，否则不能把它当作 Rust、Go 或 C++ runtime baseline 证据。
+**Q5**：`compare-matched` 会同轮跑 nextpas + Go + Rust（缺工具 soft-skip）。结论仍须同机信封；不可无信封宣称碾压 std。
 
-当前推荐的对照入口是 `bench_lockfree` Makefile：
+当前推荐的对照入口是 `bench_lockfree` Makefile（**Q5 matched 优先**）：
 
 ```bash
+# Q5: multi-thread C1/C2 + envelope (nextpas / Go / Rust)
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched
+# optional peers
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-rust-compare
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-go-compare
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-cpp-compare
-make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare   # + micro
 ```
 
 这些 target 最终会在 `core/build/projects/nextpas.core.lockfree/bench_lockfree/...` 下产出并运行：
@@ -500,10 +503,10 @@ make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
 
 ```bash
 export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched
+# 或 micro+matched：
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run
-# 或先打印信封：
 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree envelope
-core/docs/lockfree/scripts/print-bench-envelope.sh
 ```
 
 历史一次同机数字（**historical only / not reproducible without full envelope**；详见
