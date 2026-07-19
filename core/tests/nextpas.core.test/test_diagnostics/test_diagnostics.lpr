@@ -424,8 +424,8 @@ begin
   LSuite.Test('msg contract int equal',         @TestMsgContractIntEqual);
   LSuite.Test('msg contract snapshot mismatch', @TestMsgContractSnapshotMismatch);
 
-  { B3: 150 identity + B5: 80 fail-path (meaningful negative) }
-  SetLength(LCases, 150);
+  { B3/B5/B11: identity + fail-path tables (meaningful negative ≥30% of bulk) }
+  SetLength(LCases, 250);
   for I := 0 to High(LCases) do
   begin
     LCases[I].Name := 'id-' + IntToStr(I);
@@ -433,7 +433,7 @@ begin
   end;
   LSuite.TestTable('identity table', LCases, @TestIdentityCase);
 
-  SetLength(LCases, 80);
+  SetLength(LCases, 250);
   for I := 0 to High(LCases) do
   begin
     LCases[I].Name := 'fail-' + IntToStr(I);

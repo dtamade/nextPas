@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.11b**
+**当前版本**: **v8.11c**
 **最后更新**: 2026-07-19
 
 ---
@@ -25,8 +25,8 @@
 
 | 指标 | 值 |
 |------|-----|
-| 套件 | **18**（api + runner source-contract） |
-| 可计数过程 | **≥1500**（排除 stress 10K 空） |
+| 套件 | **19**（+ scale report） |
+| 可计数过程 | **≥1800**（scale report 门禁，排除 stress） |
 | Check*/To* 门禁 | 56 + 52 全引用 |
 | Runner 门禁 | TestSeq/RunParallel/报告 API 等 23 项 |
 
@@ -43,6 +43,7 @@
 | B8 v8.10 mock隔离/perf阈值/output深契约 | **done** |
 | B9 v8.11a 危险并发契约 | **done** |
 | B10 v8.11b Runner/Lifecycle 深度 | **done** |
+| B11 v8.11c 规模报表+golden+≥1800 | **done** |
 
 ### 暂缓
 
@@ -68,3 +69,11 @@ make -C core/tests/nextpas.core.test clean test   # 17/17
 | 跨线程用同一 `TMock` | fail `not thread-safe` |
 | 在 worker 线程 `RegisterStub`/`RegisterFixture` | raise `main thread` |
 | 并行测试内改 `GStubRegistry` 语义 | 禁止；仅 Setup 主线程注册 |
+
+
+## Scale report
+
+```bash
+make -C core/tests/nextpas.core.test/test_scale_report test
+# SCALE_MIN=1800 (default)
+```

@@ -1538,10 +1538,32 @@ begin
   end, 'ToMatchSnapshot');
 end;
 
+{ ── B11: fail-path table for ExpectInt ────────────────────────────────────── }
+
+procedure TestB11ExpectFailPathCase(const AC: TTestCase);
+{ Data: expected|actual — ExpectInt(actual).ToEqualInt(expected) must fail. }
+var
+  LPos: Integer;
+  LExp, LAct: string;
+  LExpN, LActN: Int64;
+begin
+  LPos := Pos('|', AC.Data);
+  CheckTrue(LPos > 0, 'B11 data format');
+  LExp := Copy(AC.Data, 1, LPos - 1);
+  LAct := Copy(AC.Data, LPos + 1, MaxInt);
+  LExpN := StrToInt(LExp);
+  LActN := StrToInt(LAct);
+  ExpectFail(procedure begin
+    ExpectInt(LActN).ToEqualInt(LExpN);
+  end, LExp);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
+  LB11Cases: specialize TArray<TTestCase>;
+  LB11I: Integer;
 begin
   WriteLn('=== test_expect ===');
   LSuite := TTestSuite.Create('IExpectation API');
@@ -1794,6 +1816,15 @@ begin
   LSuite.Test('ToBeSorted str pass',      @TestToBeSortedStrPass);
   LSuite.Test('ToBeSorted str fail',      @TestToBeSortedStrFail);
   LSuite.Test('ToBeSorted str empty',     @TestToBeSortedStrEmpty);
+
+  { B11: meaningful fail-path table for ExpectInt.ToEqualInt }
+  SetLength(LB11Cases, 200);
+  for LB11I := 0 to High(LB11Cases) do
+  begin
+    LB11Cases[LB11I].Name := 'exp-fail-' + IntToStr(LB11I);
+    LB11Cases[LB11I].Data := IntToStr(LB11I) + '|' + IntToStr(LB11I + 7);
+  end;
+  LSuite.TestTable('B11 expect fail-path', LB11Cases, @TestB11ExpectFailPathCase);
 
   if not LSuite.Run then
   begin

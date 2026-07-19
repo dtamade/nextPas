@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.11b
+**版本**：v8.11c
 
 ---
 
@@ -390,6 +390,13 @@ end;
 | 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
 
 ## 11. 变更日志
+
+### v8.11c (2026-07-20) — 可观测规模与报告
+
+- **Scale report**：`test_scale_report` 自动汇总可计数过程，门禁 ≥1800
+- **规模**：diagnostics/expect 有意义负路径表扩张（禁 stress 灌水）
+- **Golden**：JSON/TAP Duration=0 固定 fixture + CheckSnapshot
+- **Prop shrink**：min 边界、字符串缩短、向 0 收缩
 
 ### v8.11b (2026-07-20) — Runner/Lifecycle 深度
 
