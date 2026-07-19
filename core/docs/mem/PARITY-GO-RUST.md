@@ -51,7 +51,7 @@
 | E2 | P-a prune 10 Tier-3 | **done** |
 | E3 | SC1 对齐 + env 缓存快路径；P2 | **done** |
 | E4 | D3 sized free（simd/async/io/tls）+ openssl 双堆纪律 | **done** |
-| E5 | 可选 P-b / SC10 | 按需 |
+| E5 | P-b 剪 15 Tier-3 allocator | **done** 2026-07-19 |
 | E6 | Steady+ 关闭 | **done** |
 
 ---

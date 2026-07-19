@@ -16,7 +16,7 @@ make lane-focused LANE=mem
 
 **Steward 观测（2026-07-17，只读）**: [Inventory 可删清单](INVENTORY-AUDIT-2026-07-17.md) · [Consumer 热路径/unsized free](CONSUMER-OBSERVATION-2026-07-17.md) — **不删代码、不强制改 consumer**。
 
-**P-a prune（2026-07-19，EXECUTED）**: [PRUNE-P-a-DESIGN](PRUNE-P-a-DESIGN-2026-07-19.md) — 10 Tier-3 allocator + 16 tests 已删（Era E 表面收敛）。
+**P-a / P-b prune（EXECUTED）**: [P-a](PRUNE-P-a-DESIGN-2026-07-19.md) · [P-b](PRUNE-P-b-DESIGN-2026-07-19.md) — 实验分配器博物馆已收敛（保留 blockpool.growable）。
 
 **Go/Rust 对照**: `make -C core/benchmarks/nextpas.core.mem/bench_arena_go_rust compare`
 
