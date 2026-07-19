@@ -18,7 +18,8 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | [`CONTRACT.md`](CONTRACT.md) | **契约真相**（Close、managed、RTL isolation、`Try*Ex`） |
 | [`roadmap.md`](roadmap.md) | **推进主线**（R0–R8 阶段、验收、优先级） |
 | [`READY.md`](READY.md) | **状态入口**（Maintenance + **Q 线**；H3-1…H3-5 done） |
-| [`quality-parity.md`](quality-parity.md) | **Q0–Q5** 对标 Go/Rust 质量/规模（当前主线） |
+| [`parity-go-rust.md`](parity-go-rust.md) | **对标目标**：Go/Rust atomic+lockfree 质量与规模矩阵 |
+| [`quality-parity.md`](quality-parity.md) | **Q0–Q5** 执行主线（当前） |
 | [`roadmap-h2.md`](roadmap-h2.md) | **Horizon-2 执行章程**（H2-0…H2-6 complete） |
 | [`roadmap-h3.md`](roadmap-h3.md) | **Horizon-3**（H3-1…H3-5 complete） |
 | [`bench-envelope.md`](bench-envelope.md) | **H2-4 / H3-4** bench 证据信封（禁止无信封绝对 Mops） |

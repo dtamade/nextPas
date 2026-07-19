@@ -28,12 +28,14 @@ uses
 const
   SPIN_LIMIT = 32;
 
+{ Preferred path: atomic_* + mo_* (Go/Rust parity style; H2-3 / Q1). }
+
 procedure LockFreeNotifyData(AEpoch: PInt32; AWaiters: PInt32);
 begin
   if (AEpoch = nil) or (AWaiters = nil) then
     Exit;
-  AtomicFetchAdd32(AEpoch^, 1, moRelease);
-  if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
+  atomic_fetch_add(AEpoch^, 1, mo_release);
+  if atomic_load(AWaiters^, mo_relaxed) > 0 then
     platform_wake_address_all(AEpoch);
 end;
 
@@ -41,8 +43,8 @@ procedure LockFreeNotifySpace(AEpoch: PInt32; AWaiters: PInt32);
 begin
   if (AEpoch = nil) or (AWaiters = nil) then
     Exit;
-  AtomicFetchAdd32(AEpoch^, 1, moRelease);
-  if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
+  atomic_fetch_add(AEpoch^, 1, mo_release);
+  if atomic_load(AWaiters^, mo_relaxed) > 0 then
     platform_wake_address_all(AEpoch);
 end;
 
@@ -55,16 +57,16 @@ begin
     Exit;
   for LI := 0 to SPIN_LIMIT - 1 do
   begin
-    if AtomicLoad32(AEpoch^, moAcquire) <> AExpectedEpoch then
+    if atomic_load(AEpoch^, mo_acquire) <> AExpectedEpoch then
       Exit;
     CpuPause;
   end;
-  AtomicFetchAdd32(AWaiters^, 1, moAcqRel);
+  atomic_fetch_add(AWaiters^, 1, mo_acq_rel);
   try
-    if AtomicLoad32(AEpoch^, moAcquire) = AExpectedEpoch then
+    if atomic_load(AEpoch^, mo_acquire) = AExpectedEpoch then
       platform_wait_address32(AEpoch, AExpectedEpoch, ATimeoutNs);
   finally
-    AtomicFetchSub32(AWaiters^, 1, moAcqRel);
+    atomic_fetch_sub(AWaiters^, 1, mo_acq_rel);
   end;
 end;
 
@@ -84,7 +86,7 @@ procedure LockFreeWakeAll(AEpoch: PInt32);
 begin
   if AEpoch = nil then
     Exit;
-  AtomicFetchAdd32(AEpoch^, 1, moRelease);
+  atomic_fetch_add(AEpoch^, 1, mo_release);
   platform_wake_address_all(AEpoch);
 end;
 

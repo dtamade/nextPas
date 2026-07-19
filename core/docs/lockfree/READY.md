@@ -37,7 +37,8 @@ close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
 
 Authoritative contract: [`CONTRACT.md`](CONTRACT.md). Product entry: [`README.md`](README.md).
 R-line map: [`roadmap.md`](roadmap.md). **H2**: [`roadmap-h2.md`](roadmap-h2.md). **H3**: [`roadmap-h3.md`](roadmap-h3.md).
-**Q 线（当前）**: [`quality-parity.md`](quality-parity.md) — Go/Rust quality/scale; clean T1/T2 tiers.
+**Q 线（当前）**: [`quality-parity.md`](quality-parity.md) — 执行阶段。
+**对标目标**: [`parity-go-rust.md`](parity-go-rust.md) — Go/Rust atomic+lockfree 质量与规模矩阵。
 
 ---
 
