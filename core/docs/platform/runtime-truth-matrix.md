@@ -13,6 +13,7 @@
 | Platform memory secure-zero | Linux focused-runtime, POSIX forced-compile/source-contract, Windows permanent-fallback (source-contract + wine smoke) | Linux/POSIX host path uses shared POSIX `explicit_bzero` / Darwin `memset_s`; forced POSIX compile proves branch coherence. Windows closed as permanent FillChar+ReadWriteBarrier (`pszbWindowsPermanentFallback`); no stable RtlSecureZeroMemory/SecureZeroMemory DLL export across Wine+real Windows SDK. |
 | Platform signal Windows | forced-compile + source-contract | `NEXTPAS_FORCE_HOST_WINDOWS` compile gate + windows signal contract. Console Ctrl handler is not wine-matrix runtime evidence. |
 | Darwin/macOS documented 8-gate set | **focused-runtime** (GHA `test-macos` via `platform-macos-ci-matrix.sh`, fail-closed) | Documented set only: time/sync/thread/files/path/env/error/socket on `macos-14` aarch64. Not full-host macOS parity. Best-effort whole suite remains non-evidence. |
+| Darwin/macOS +memory (Batch-5) | **candidate** (script lists 9 gates; not promoted) | `platform.memory` added to `platform-macos-ci-matrix.sh`; promote to focused-runtime only after GHA pass=9. |
 | Darwin/FreeBSD best-effort CI | best-effort inventory only | Skipped/failed rows are non-evidence. |
 | Android/other forced host surfaces | forced-compile | Compile truth only. |
 
