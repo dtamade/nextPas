@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.10**
+**当前版本**: **v8.11a**
 **最后更新**: 2026-07-19
 
 ---
@@ -41,6 +41,7 @@
 | B6 Helper/Check=Fatal 文档 | **done** |
 | B7 runner 门禁 | **done** |
 | B8 v8.10 mock隔离/perf阈值/output深契约 | **done** |
+| B9 v8.11a 危险并发契约 | **done** |
 
 ### 暂缓
 
@@ -57,3 +58,12 @@ make -C core/tests/nextpas.core.test/<suite> clean test
 make hygiene
 make -C core/tests/nextpas.core.test clean test   # 17/17
 ```
+
+
+## 并行用户责任（可测）
+
+| 误用 | 期望 |
+|------|------|
+| 跨线程用同一 `TMock` | fail `not thread-safe` |
+| 在 worker 线程 `RegisterStub`/`RegisterFixture` | raise `main thread` |
+| 并行测试内改 `GStubRegistry` 语义 | 禁止；仅 Setup 主线程注册 |

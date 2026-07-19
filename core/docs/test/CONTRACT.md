@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.10
+**版本**：v8.11a
 
 ---
 
@@ -390,6 +390,12 @@ end;
 | 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
 
 ## 11. 变更日志
+
+### v8.11a (2026-07-20) — 危险并发契约钉死
+
+- **Mock**：跨线程 `RecordCall` / `GetReturn` / `Verify` 均失败，消息含 `not thread-safe`；`RecordCallTyped` 补 `CheckThread`
+- **RegisterStub / RegisterFixture**：非主线程调用 raise，消息含 `main thread`；主线程 RegisterStub OK
+- 文档：并行用户责任与自测交叉引用（见 go-rust-parity）
 
 ### v8.10 (2026-07-20) — Mock 并行隔离 + Perf 宽松阈值 + Output 深契约
 

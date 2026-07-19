@@ -1770,9 +1770,11 @@ end;
 { ── B8 v8.10: cross-thread isolation (not thread-safe by contract) ────────── }
 
 type
+  TMockCrossOp = (mcoRecordCall, mcoGetReturn, mcoVerify);
   PMockThreadCtx = ^TMockThreadCtx;
   TMockThreadCtx = record
     Mock: TMock;
+    Op: TMockCrossOp;
     Caught: Boolean;
     Msg: string;
   end;
@@ -1787,7 +1789,14 @@ begin
   C^.Msg := '';
   SetLength(LArgs, 0);
   try
-    C^.Mock.RecordCall('Cross', LArgs);
+    case C^.Op of
+      mcoRecordCall:
+        C^.Mock.RecordCall('Cross', LArgs);
+      mcoGetReturn:
+        C^.Mock.GetReturn('bind');
+      mcoVerify:
+        C^.Mock.Verify('bind').CalledExactly(1);
+    end;
   except
     on E: EAssertionFailed do
     begin
@@ -1798,8 +1807,7 @@ begin
   Result := 0;
 end;
 
-procedure TestMockCrossThreadNotSafe;
-{ Owner binds on first access in main; worker RecordCall must fail. }
+procedure RunMockCrossThread(AOp: TMockCrossOp; const ALabel: string);
 var
   LM: TMock;
   Ctx: TMockThreadCtx;
@@ -1809,18 +1817,35 @@ begin
   LM := TMock.Create;
   try
     SetLength(LArgs, 0);
+    LM.Setup('bind').Returns('v');
     LM.RecordCall('bind', LArgs); { bind owner thread }
     Ctx.Mock := LM;
+    Ctx.Op := AOp;
     Ctx.Caught := False;
     Ctx.Msg := '';
     TID := BeginThread(@MockCrossThreadWorker, @Ctx);
     CheckTrue(TID <> TThreadID(0), 'BeginThread ok');
     WaitForThreadTerminate(TID, 10000);
-    CheckTrue(Ctx.Caught, 'cross-thread RecordCall must raise');
+    CheckTrue(Ctx.Caught, ALabel + ' must raise on other thread');
     CheckContains(LowerCase(Ctx.Msg), 'not thread-safe');
   finally
     LM.Free;
   end;
+end;
+
+procedure TestMockCrossThreadNotSafe;
+begin
+  RunMockCrossThread(mcoRecordCall, 'RecordCall');
+end;
+
+procedure TestMockCrossThreadGetReturn;
+begin
+  RunMockCrossThread(mcoGetReturn, 'GetReturn');
+end;
+
+procedure TestMockCrossThreadVerify;
+begin
+  RunMockCrossThread(mcoVerify, 'Verify');
 end;
 
 procedure TestMockSameThreadOk;
@@ -2134,8 +2159,10 @@ begin
   Suite.Test('B5 Returns default empty', @TestB5ReturnsDefaultEmpty);
   Suite.Test('B5 CalledTimes zero', @TestB5CalledTimesZero);
 
-  { B8 v8.10 mock isolation }
-  Suite.Test('B8 cross-thread not safe', @TestMockCrossThreadNotSafe);
+  { B8/B9 mock isolation (not thread-safe by contract) }
+  Suite.Test('B8 cross-thread RecordCall', @TestMockCrossThreadNotSafe);
+  Suite.Test('B9 cross-thread GetReturn', @TestMockCrossThreadGetReturn);
+  Suite.Test('B9 cross-thread Verify', @TestMockCrossThreadVerify);
   Suite.Test('B8 same-thread ok', @TestMockSameThreadOk);
 
   Runner := TSuiteRunner.Create('mock-tests');

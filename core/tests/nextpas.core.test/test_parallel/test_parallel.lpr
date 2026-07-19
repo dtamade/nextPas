@@ -8,7 +8,8 @@ program test_parallel;
 uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
-  nextpas.core.test;
+  nextpas.core.test,
+  nextpas.core.test.runner;
 
 var
   GTestCounter: Integer = 0;
@@ -91,6 +92,112 @@ begin
   begin
     ExpectInt(I).ToEqualInt(I);
     CheckEqual(I, I);
+  end;
+end;
+
+{ ── B9: RegisterStub/Fixture main-thread-only contracts ─────────────────── }
+
+type
+  PRegThreadCtx = ^TRegThreadCtx;
+  TRegThreadCtx = record
+    Suite: TTestSuite;
+    OpStub: Boolean;
+    Caught: Boolean;
+    Msg: string;
+  end;
+
+function RegisterCrossThreadWorker(P: Pointer): PtrInt;
+var
+  C: PRegThreadCtx;
+  LPtr: Pointer;
+  LObj: TObject;
+begin
+  C := PRegThreadCtx(P);
+  C^.Caught := False;
+  C^.Msg := '';
+  try
+    if C^.OpStub then
+    begin
+      GetMem(LPtr, 8);
+      try
+        RegisterStub(C^.Suite, LPtr);
+      except
+        FreeMem(LPtr);
+        raise;
+      end;
+    end
+    else
+    begin
+      LObj := TObject.Create;
+      try
+        RegisterFixture(C^.Suite, LObj);
+      except
+        LObj.Free;
+        raise;
+      end;
+    end;
+  except
+    on E: Exception do
+    begin
+      C^.Caught := True;
+      C^.Msg := E.Message;
+    end;
+  end;
+  Result := 0;
+end;
+
+procedure TestRegisterStubMustBeMainThread;
+var
+  LSuite: TTestSuite;
+  Ctx: TRegThreadCtx;
+  TID: TThreadID;
+begin
+  LSuite := TTestSuite.Create('reg-stub');
+  Ctx.Suite := LSuite;
+  Ctx.OpStub := True;
+  Ctx.Caught := False;
+  Ctx.Msg := '';
+  TID := BeginThread(@RegisterCrossThreadWorker, @Ctx);
+  CheckTrue(TID <> TThreadID(0));
+  WaitForThreadTerminate(TID, 10000);
+  CheckTrue(Ctx.Caught, 'RegisterStub from worker must raise');
+  CheckContains(Ctx.Msg, 'main thread');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestRegisterFixtureMustBeMainThread;
+var
+  LSuite: TTestSuite;
+  Ctx: TRegThreadCtx;
+  TID: TThreadID;
+begin
+  LSuite := TTestSuite.Create('reg-fix');
+  Ctx.Suite := LSuite;
+  Ctx.OpStub := False;
+  Ctx.Caught := False;
+  Ctx.Msg := '';
+  TID := BeginThread(@RegisterCrossThreadWorker, @Ctx);
+  CheckTrue(TID <> TThreadID(0));
+  WaitForThreadTerminate(TID, 10000);
+  CheckTrue(Ctx.Caught, 'RegisterFixture from worker must raise');
+  CheckContains(Ctx.Msg, 'main thread');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestRegisterStubMainThreadOk;
+var
+  LSuite: TTestSuite;
+  LPtr: Pointer;
+begin
+  LSuite := TTestSuite.Create('reg-stub-ok');
+  GetMem(LPtr, 8);
+  try
+    RegisterStub(LSuite, LPtr);
+    CheckTrue(True, 'main-thread RegisterStub ok');
+  finally
+    { CleanupTableAllocations will FreeMem stubs registered on suite }
+    LSuite.CleanupTableAllocations;
+    LSuite := Default(TTestSuite);
   end;
 end;
 
@@ -804,6 +911,17 @@ begin
       FailTest('aggregation: expected 1 skipped');
     ResetDefaultConfig;
     PassTest('B4 result aggregation');
+  end;
+
+  WriteLn;
+  SectionHeader('B9: RegisterStub/Fixture main-thread only');
+  begin
+    TestRegisterStubMustBeMainThread;
+    PassTest('B9 RegisterStub worker fails');
+    TestRegisterFixtureMustBeMainThread;
+    PassTest('B9 RegisterFixture worker fails');
+    TestRegisterStubMainThreadOk;
+    PassTest('B9 RegisterStub main ok');
   end;
 
   WriteLn;
