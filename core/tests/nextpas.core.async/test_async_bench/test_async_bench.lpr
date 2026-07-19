@@ -21,6 +21,11 @@ var
 
 { === Benchmark helpers === }
 
+procedure BenchNopCallback(AContext: Pointer);
+begin
+  { intentionally empty — measures Post/Poll overhead only }
+end;
+
 function BenchPostThroughput: Double;
 var
   LLoop: TAsyncLoop;
@@ -30,20 +35,22 @@ var
 begin
   LCount := 100000;
   LLoop := TAsyncLoop.Create(128);
-  LStart := TInstant.Now;
-  for LI := 1 to LCount do
-    LLoop.Post(nil, nil);
-  { Drain all pending }
-  for LI := 1 to LCount do
-    LLoop.Poll;
-  LEnd := TInstant.Now;
-  LNs := LEnd.DurationSince(LStart).AsNanoseconds;
-  if LNs > 0 then
-    Result := LCount / (LNs / 1e9)
-  else
-    Result := 0;
-  LLoop.Close;
-    LLoop.Close;
+  try
+    LStart := TInstant.Now;
+    for LI := 1 to LCount do
+      LLoop.Post(@BenchNopCallback, nil);
+    { Drain all pending }
+    for LI := 1 to LCount do
+      LLoop.Poll;
+    LEnd := TInstant.Now;
+    LNs := LEnd.DurationSince(LStart).AsNanoseconds;
+    if LNs > 0 then
+      Result := LCount / (LNs / 1e9)
+    else
+      Result := 0;
+  finally
+    LLoop.Free;
+  end;
 end;
 
 function BenchTimerSchedule: Double;
@@ -55,17 +62,19 @@ var
 begin
   LCount := 10000;
   LLoop := TAsyncLoop.Create(128);
-  LStart := TInstant.Now;
-  for LI := 1 to LCount do
-    LLoop.Schedule(TDuration.FromMilliseconds(1000 + LI), nil, nil);
-  LEnd := TInstant.Now;
-  LNs := LEnd.DurationSince(LStart).AsNanoseconds;
-  if LNs > 0 then
-    Result := LCount / (LNs / 1e9)
-  else
-    Result := 0;
-  LLoop.Close;
-    LLoop.Close;
+  try
+    LStart := TInstant.Now;
+    for LI := 1 to LCount do
+      LLoop.Schedule(TDuration.FromMilliseconds(1000 + LI), @BenchNopCallback, nil);
+    LEnd := TInstant.Now;
+    LNs := LEnd.DurationSince(LStart).AsNanoseconds;
+    if LNs > 0 then
+      Result := LCount / (LNs / 1e9)
+    else
+      Result := 0;
+  finally
+    LLoop.Free;
+  end;
 end;
 
 function BenchMutexLockUnlock: Double;
@@ -78,21 +87,24 @@ var
 begin
   LCount := 100000;
   LLoop := TAsyncLoop.Create(32);
-  LMutex := CreateAsyncMutex(LLoop);
-  LStart := TInstant.Now;
-  for LI := 1 to LCount do
-  begin
-    LMutex.TryLock;
-    LMutex.Unlock;
+  try
+    LMutex := CreateAsyncMutex(LLoop);
+    LStart := TInstant.Now;
+    for LI := 1 to LCount do
+    begin
+      LMutex.TryLock;
+      LMutex.Unlock;
+    end;
+    LEnd := TInstant.Now;
+    LNs := LEnd.DurationSince(LStart).AsNanoseconds;
+    if LNs > 0 then
+      Result := LCount / (LNs / 1e9)
+    else
+      Result := 0;
+    LMutex := nil;
+  finally
+    LLoop.Free;
   end;
-  LEnd := TInstant.Now;
-  LNs := LEnd.DurationSince(LStart).AsNanoseconds;
-  if LNs > 0 then
-    Result := LCount / (LNs / 1e9)
-  else
-    Result := 0;
-  LLoop.Close;
-    LLoop.Close;
 end;
 
 function BenchChannelSendReceive: Double;
@@ -107,23 +119,26 @@ var
 begin
   LCount := 100000;
   LLoop := TAsyncLoop.Create(32);
-  LCh := CreateAsyncChannel(LLoop);
-  LStart := TInstant.Now;
-  for LI := 1 to LCount do
-  begin
-    LVal := LI;
-    LCh.Send(LVal, SizeOf(LVal));
-    LOut := 0;
-    LCh.TryReceive(LOut, SizeOf(LOut), LReceived);
+  try
+    LCh := CreateAsyncChannel(LLoop);
+    LStart := TInstant.Now;
+    for LI := 1 to LCount do
+    begin
+      LVal := LI;
+      LCh.Send(LVal, SizeOf(LVal));
+      LOut := 0;
+      LCh.TryReceive(LOut, SizeOf(LOut), LReceived);
+    end;
+    LEnd := TInstant.Now;
+    LNs := LEnd.DurationSince(LStart).AsNanoseconds;
+    if LNs > 0 then
+      Result := LCount / (LNs / 1e9)
+    else
+      Result := 0;
+    LCh := nil;
+  finally
+    LLoop.Free;
   end;
-  LEnd := TInstant.Now;
-  LNs := LEnd.DurationSince(LStart).AsNanoseconds;
-  if LNs > 0 then
-    Result := LCount / (LNs / 1e9)
-  else
-    Result := 0;
-  LLoop.Close;
-    LLoop.Close;
 end;
 
 { === Tests === }

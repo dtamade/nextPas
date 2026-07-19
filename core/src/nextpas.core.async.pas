@@ -1,7 +1,7 @@
 unit nextpas.core.async;
 {**
  * @desc 异步模块门面：re-export async.base / timer / loop / task 与高级子模块公共类型。
- *       TAsyncLoop 暴露 Post/PostEx/PostRef/PostMethod 与 Schedule/ScheduleEx。
+ *       TAsyncLoop 为 class；暴露 Post/PostEx/PostRef/PostMethod 与 Schedule/ScheduleEx。
  *       消费方只需 uses nextpas.core.async 即可使用完整异步框架。
  *}
 
@@ -70,6 +70,14 @@ type
   TCancelCallback = nextpas.core.async.cancellation.TCancelCallback;
   IAsyncCancellationToken = nextpas.core.async.cancellation.IAsyncCancellationToken;
 
+function CreateAsyncMutex(const ALoop: TAsyncLoop): IAsyncMutex; inline;
+function CreateAsyncSemaphore(const ALoop: TAsyncLoop;
+  AInitialCount: Int32): IAsyncSemaphore; inline;
+function CreateAsyncChannel(const ALoop: TAsyncLoop): IAsyncChannel; inline;
+function CreateBoundedAsyncChannel(const ALoop: TAsyncLoop;
+  ACapacity: UInt32): IAsyncChannel; inline;
+function CreateAsyncCondVar(const ALoop: TAsyncLoop): IAsyncCondVar; inline;
+
 const
   atsIdle: TAsyncTaskStatus = nextpas.core.async.base.atsIdle;
   atsPending: TAsyncTaskStatus = nextpas.core.async.base.atsPending;
@@ -99,5 +107,32 @@ const
   arrCancelled: TAsyncRetryResult = nextpas.core.async.retry.arrCancelled;
 
 implementation
+
+function CreateAsyncMutex(const ALoop: TAsyncLoop): IAsyncMutex;
+begin
+  Result := nextpas.core.async.mutex.CreateAsyncMutex(ALoop);
+end;
+
+function CreateAsyncSemaphore(const ALoop: TAsyncLoop;
+  AInitialCount: Int32): IAsyncSemaphore;
+begin
+  Result := nextpas.core.async.semaphore.CreateAsyncSemaphore(ALoop, AInitialCount);
+end;
+
+function CreateAsyncChannel(const ALoop: TAsyncLoop): IAsyncChannel;
+begin
+  Result := nextpas.core.async.channel.CreateAsyncChannel(ALoop);
+end;
+
+function CreateBoundedAsyncChannel(const ALoop: TAsyncLoop;
+  ACapacity: UInt32): IAsyncChannel;
+begin
+  Result := nextpas.core.async.channel.CreateBoundedAsyncChannel(ALoop, ACapacity);
+end;
+
+function CreateAsyncCondVar(const ALoop: TAsyncLoop): IAsyncCondVar;
+begin
+  Result := nextpas.core.async.condvar.CreateAsyncCondVar(ALoop);
+end;
 
 end.

@@ -47,7 +47,7 @@ begin
   LLoop.AsyncRecvTimeout(0, nil, 0, 0, LDeadline, nil, nil);
   LLoop.AsyncSendTimeout(0, nil, 0, 0, LDeadline, nil, nil);
   LLoop.Stop;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 begin

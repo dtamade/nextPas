@@ -70,7 +70,7 @@ begin
     Check(GDnsResult.FirstAddress.IP = '127.0.0.1', 'localhost should resolve to 127.0.0.1');
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -93,7 +93,7 @@ begin
     Check(GDnsResult.FirstAddress.IP = '192.168.1.1', 'IP literal should be returned as-is');
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -115,7 +115,7 @@ begin
     Check(GFailDone, 'DNS callback should fire');
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -138,7 +138,7 @@ begin
     Check(GRefResult.FirstAddress.IP = '127.0.0.1', 'localhost should resolve to 127.0.0.1');
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 

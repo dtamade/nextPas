@@ -34,10 +34,10 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (18-module matrix, including
-`platform.error`, `platform.fmt`, `platform.info`, and `platform.which`), and
-durable GHA **`ci-matrix`** for the **documented 19-gate set** in
-`platform-windows-ci-matrix.sh` / `.ps1` (16 suite dirs + poller/io/socket real
+Windows compile gates, Wine runtime smoke (19-module matrix, including
+`platform.error`, `platform.fmt`, `platform.info`, `platform.which`, and
+`platform.dl`), and durable GHA **`ci-matrix`** for the **documented 19-gate set**
+in `platform-windows-ci-matrix.sh` / `.ps1` (16 suite dirs + poller/io/socket real
 gates) under job `test-windows-runtime` on `windows-latest`.
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
@@ -58,6 +58,10 @@ macOS aarch64 (`macos-14`) has durable GHA **`focused-runtime`** for the
 **documented 8-gate set** in `platform-macos-ci-matrix.sh` under job
 `test-macos` (fail-closed step; ROADMAP D2.c):
 `platform.{time,sync,thread,files,path,env,error,socket}`.
+
+Batch-5A adds **`platform.memory`** to the matrix script as a **9-gate candidate**.
+Do **not** claim macOS focused-runtime for memory until GHA `test-macos`
+records `pass=9 fail=0`.
 
 D2.c promotion is **scoped**: it does **not** claim full-host macOS parity or
 treat best-effort whole-suite inventory as evidence.

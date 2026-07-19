@@ -550,6 +550,44 @@ begin
   end;
 end;
 
+procedure TestIocpTryCancelByContext;
+var
+  LListenSock, LAcceptSock, LClientSock: TPlatformSocket;
+  LReactor: TIocpReactor;
+  LRecvBuf: array[0..63] of AnsiChar;
+  LCtx: Integer;
+begin
+  { Hang AsyncRecv with no peer send, cancel by context, expect aborted completion. }
+  Check(CreateConnectedPair(LListenSock, LAcceptSock, LClientSock),
+    'connected pair');
+
+  LReactor := TIocpReactor.Create(4);
+  Check(LReactor.IsValid, 'reactor valid');
+  try
+    FillChar(LRecvBuf, SizeOf(LRecvBuf), 0);
+    LCtx := 42;
+    GRecvDone := False;
+    GRecvResult := 0;
+    Check(LReactor.AsyncRecv(PtrInt(LAcceptSock.Value), @LRecvBuf[0],
+      SizeOf(LRecvBuf), 0, @OnRecvDone, @LCtx), 'AsyncRecv should submit');
+    Check(LReactor.HasPending, 'pending recv before cancel');
+
+    Check(LReactor.TryCancelByContext(@LCtx),
+      'TryCancelByContext should hit pending recv');
+
+    Check(WaitForCompletion(GRecvDone, LReactor),
+      'cancel should deliver completion packet');
+    Check(GRecvResult < 0,
+      'cancelled recv result should be negative, got ' + IntToStr(GRecvResult));
+    Check(not LReactor.HasPending, 'pending cleared after cancel completion');
+  finally
+    LReactor.Close;
+    platform_socket_close(LClientSock);
+    platform_socket_close(LAcceptSock);
+    platform_socket_close(LListenSock);
+  end;
+end;
+
 {$ELSE}
 procedure TestNonWindowsSkip;
 begin
@@ -569,6 +607,7 @@ begin
   T.Test('AcceptEx+Send', @TestIocpAcceptSend);
   T.Test('ConnectEx', @TestIocpConnectEx);
   T.Test('AcceptEx+Recv', @TestIocpAcceptRecv);
+  T.Test('TryCancelByContext', @TestIocpTryCancelByContext);
   {$ELSE}
   T.Test('non-Windows skip', @TestNonWindowsSkip);
   {$ENDIF}

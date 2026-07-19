@@ -62,6 +62,9 @@ type
     procedure Stop;
     function Flush: Int32;
     function HasPending: Boolean;
+    { Best-effort CancelIoEx for pending ops matching AContext.
+      Does not free OVERLAPPED; completion still arrives via GQCS. }
+    function TryCancelByContext(AContext: Pointer): Boolean;
   end;
 
 implementation
@@ -779,6 +782,37 @@ end;
 function TIocpReactor.HasPending: Boolean;
 begin
   Result := AtomicLoad32(FPendingCount, moAcquire) > 0;
+end;
+
+function TIocpReactor.TryCancelByContext(AContext: Pointer): Boolean;
+var
+  LOp: PIocpPendingOp;
+  LOk: BOOL;
+  LError: DWORD;
+begin
+  Result := False;
+  if (AContext = nil) or (not IsValid) then
+    Exit;
+
+  LOp := PIocpPendingOp(FPendingHead);
+  while LOp <> nil do
+  begin
+    if LOp^.Context = AContext then
+    begin
+      LOk := CancelIoEx(LOp^.Handle, @LOp^.Overlapped);
+      if LOk then
+        Result := True
+      else
+      begin
+        LError := GetLastError;
+        { Already completed or no matching request — still best-effort hit. }
+        if (LError = ERROR_NOT_FOUND) or (LError = ERROR_OPERATION_ABORTED) then
+          Result := True;
+      end;
+      { Keep OVERLAPPED alive until GQCS delivers the completion packet. }
+    end;
+    LOp := LOp^.Next;
+  end;
 end;
 
 function TIocpReactor.PollOne: Boolean;

@@ -131,6 +131,24 @@ L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但
 
 ---
 
+## 维护策略（口径）
+
+**状态：Ready / 维护态。** Essential 与 wine-runtime-smoke 已绿；测试合计 **751 ≥750**。  
+剩余两项为**已知、非阻塞**开放债，不是「模块没做完」。
+
+| 项 | 性质 | 口径 |
+|----|------|------|
+| **HardLink / Chtimes / Chown** | 跨层依赖 | fs 语义与测试可随时接；当前 **Deferred**，因缺 `platform_file_link` / `utimens` / `chown` 公开 API。L2 **禁止**直调 POSIX。platform 补 L0 后本车道再开 L2 一片。规模分 ~8.8 停在此线是**预期**，不算本模块回归。 |
+| **测试冲 900** | 可选加厚 | R17 已满足 ≥750。900 是远期表驱动目标，**非灌水**。触发：用户指令「冲 900」、真实边界洞、或新 API（如 HardLink）顺带加厚。无触发时**不空转 eval**。 |
+
+**周报可用一句：**
+
+> process/fs/path/env：Ready / 维护态。Essential + wine 4/4 绿；测试 751。剩余 HardLink/Chtimes/Chown 等 platform L0；测试 900 可选、无触发不做。
+
+**不要说：**「fs 不支持 hardlink」（应说分层 Deferred）；「等有空再说」却不留 L0 清单（上表即清单）。
+
+---
+
 ## 变更记录
 
 | 日期 | 说明 |
@@ -139,3 +157,4 @@ L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但
 | 2026-07-19 | R16 续 WaitGraceful + SameFile |
 | 2026-07-19 | R17 质量加厚；合计 751；L0 Deferred 钉死协作清单 |
 | 2026-07-19 | R18 wine-runtime-smoke 实况绿（4/4）；去掉过时 expect 阻塞表述 |
+| 2026-07-19 | 维护策略口径：L0 Deferred + 900 可选 + 周报话术 |

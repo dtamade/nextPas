@@ -3,7 +3,7 @@
 | Host / seam | Evidence | Current truth |
 | --- | --- | --- |
 | Linux readiness poller | focused-runtime | Runtime-covered through focused platform/io and consumer gates. |
-| Windows readiness poller | wine-runtime-smoke + **ci-matrix** (GHA documented 19-gate set) | Durable on `windows-latest` for matrix modules; not full-host Windows parity. Wine matrix 18 modules (+error +fmt +info +which). |
+| Windows readiness poller | wine-runtime-smoke + **ci-matrix** (GHA documented 19-gate set) | Durable on `windows-latest` for matrix modules; not full-host Windows parity. Wine matrix 19 modules (+error +fmt +info +which +dl). |
 | Windows IOCP lifecycle | source-contract, forced-compile, wine-runtime-smoke, GHA `poller.windows_runtime_smoke` | Real port lifecycle exists in matrix; broader IOCP completion beyond smoke is not real Windows runtime ready as a whole-host claim. |
 | Windows IOCP AsyncRead/AsyncWrite file completion | source-contract, forced-compile, wine-runtime-smoke, GHA poller smoke | File completion is covered under documented ci-matrix poller gate; remaining AcceptEx/ConnectEx depth is not real Windows runtime ready beyond current smoke gaps. |
 | Windows IOCP socket completion | focused-runtime + ci-matrix (socket wine + windows_real gates) | `AsyncSend`/`AsyncRecv` and `AsyncAccept`/`AsyncConnect` verified on Wine and real Windows GHA/VM. |
@@ -13,6 +13,7 @@
 | Platform memory secure-zero | Linux focused-runtime, POSIX forced-compile/source-contract, Windows permanent-fallback (source-contract + wine smoke) | Linux/POSIX host path uses shared POSIX `explicit_bzero` / Darwin `memset_s`; forced POSIX compile proves branch coherence. Windows closed as permanent FillChar+ReadWriteBarrier (`pszbWindowsPermanentFallback`); no stable RtlSecureZeroMemory/SecureZeroMemory DLL export across Wine+real Windows SDK. |
 | Platform signal Windows | forced-compile + source-contract | `NEXTPAS_FORCE_HOST_WINDOWS` compile gate + windows signal contract. Console Ctrl handler is not wine-matrix runtime evidence. |
 | Darwin/macOS documented 8-gate set | **focused-runtime** (GHA `test-macos` via `platform-macos-ci-matrix.sh`, fail-closed) | Documented set only: time/sync/thread/files/path/env/error/socket on `macos-14` aarch64. Not full-host macOS parity. Best-effort whole suite remains non-evidence. |
+| Darwin/macOS +memory (Batch-5) | **candidate** (script lists 9 gates; not promoted) | `platform.memory` added to `platform-macos-ci-matrix.sh`; promote to focused-runtime only after GHA pass=9. |
 | Darwin/FreeBSD best-effort CI | best-effort inventory only | Skipped/failed rows are non-evidence. |
 | Android/other forced host surfaces | forced-compile | Compile truth only. |
 

@@ -1511,6 +1511,33 @@ begin
   end;
 end;
 
+{ ── v8.8a: ToMatchSnapshot (fluent mirror of CheckSnapshot) ─────────────── }
+
+procedure TestToMatchSnapshotCreateAndMatch;
+const
+  LSnapDir = '/tmp/np_snap_expect_a';
+begin
+  Expect('hello fluent').ToMatchSnapshot(LSnapDir, 'fluent1.txt');
+  Expect('hello fluent').ToMatchSnapshot(LSnapDir, 'fluent1.txt');
+end;
+
+procedure TestToMatchSnapshotMismatch;
+const
+  LSnapDir = '/tmp/np_snap_expect_b';
+begin
+  Expect('hello fluent').ToMatchSnapshot(LSnapDir, 'fluent2.txt');
+  ExpectFail(procedure begin
+    Expect('goodbye fluent').ToMatchSnapshot(LSnapDir, 'fluent2.txt');
+  end, 'mismatch');
+end;
+
+procedure TestToMatchSnapshotTypeMismatch;
+begin
+  ExpectFail(procedure begin
+    ExpectInt(42).ToMatchSnapshot('/tmp/np_snap_expect_type', 'x.txt');
+  end, 'ToMatchSnapshot');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -1752,6 +1779,11 @@ begin
   LSuite.Test('ToBeInstanceOf fail',       @TestToBeInstanceOfFail);
   LSuite.Test('ToBeInstanceOf nil',        @TestToBeInstanceOfNil);
   LSuite.Test('Not_.ToBeInstanceOf',       @TestToBeInstanceOfNot);
+
+  { v8.8a: ToMatchSnapshot }
+  LSuite.Test('ToMatchSnapshot create+match', @TestToMatchSnapshotCreateAndMatch);
+  LSuite.Test('ToMatchSnapshot mismatch',     @TestToMatchSnapshotMismatch);
+  LSuite.Test('ToMatchSnapshot type mismatch',@TestToMatchSnapshotTypeMismatch);
 
   LSuite.Test('ToBeSorted int pass',      @TestToBeSortedIntPass);
   LSuite.Test('ToBeSorted int fail',      @TestToBeSortedIntFail);

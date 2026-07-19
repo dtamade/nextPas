@@ -113,7 +113,7 @@ begin
 
   Check(GSleepFired, 'sleep callback fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 2: ReadSuccess === }
@@ -156,7 +156,7 @@ begin
   CheckEqual(Int64($BE), Int64(LReadBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -195,7 +195,7 @@ begin
   LLoop.Poll;
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -234,10 +234,58 @@ begin
     'late I/O completion does not replace timeout result');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   CheckEqual(Int64(1), Int64(GCallCount),
     'loop close does not redispatch timed-out read');
   platform_pipe_close(LPipe);
+end;
+
+{ === Test 3b: Timeout cancel drains pending without closing pipe === }
+
+procedure TestTimeoutCancelDrainsPending;
+var
+  LLoop: TAsyncLoop;
+  LPipe: TPlatformPipe;
+  LReadBuf: array[0..63] of Byte;
+  LI: Integer;
+begin
+  ResetState;
+  FillChar(LReadBuf, SizeOf(LReadBuf), 0);
+
+  if platform_pipe_create(LPipe) <> 0 then
+  begin
+    Fail('pipe creation failed');
+    Exit;
+  end;
+
+  LLoop := TAsyncLoop.Create(32);
+  try
+    GLoopRef := @LLoop;
+    LLoop.AsyncReadTimeout(LPipe.ReadFd, @LReadBuf[0], 64, -1,
+      TDeadline.After(TDuration.FromMilliseconds(50)), @IoCallback, nil);
+    LLoop.Schedule(TDuration.FromMilliseconds(500), @StopLoopCallback, nil);
+    LLoop.Run;
+
+    Check(GIoDone, 'timeout callback fired');
+    CheckEqual(Int64(-110), Int64(GIoResult), 'result is -ETIMEDOUT');
+    CheckEqual(Int64(1), Int64(GCallCount), 'single user callback');
+
+    { Do not close write end — cancel must clear pending I/O. }
+    for LI := 1 to 64 do
+    begin
+      if not LLoop.HasPendingIo then
+        Break;
+      LLoop.Poll;
+    end;
+    Check(not LLoop.HasPendingIo,
+      'HasPendingIo false after timeout cancel drain');
+    CheckEqual(Int64(1), Int64(GCallCount),
+      'cancel completion does not re-fire user callback');
+  finally
+    GLoopRef := nil;
+    LLoop.Free;
+    platform_pipe_close(LPipe);
+  end;
 end;
 
 { === Test 4: ReadTimeoutCloseReleasesPendingContext === }
@@ -269,7 +317,7 @@ begin
   CheckEqual(Int64(-110), Int64(GIoResult), 'result is -ETIMEDOUT');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -297,7 +345,7 @@ begin
     TDeadline.After(TDuration.FromSeconds(5)), @IoCallback, nil);
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 
   Check(GIoDone, 'close abort callback fired');
@@ -327,7 +375,7 @@ begin
       TDeadline.After(TDuration.FromSeconds(5)), @CloseAbortScheduleCallback, nil),
       'pending timeout read queued');
 
-    LLoop.Close;
+    LLoop.Free;
 
     Check(GIoDone, 'close abort callback fired');
     CheckEqual(Int64(1), Int64(GCallCount), 'callback fired exactly once');
@@ -398,7 +446,11 @@ begin
       'close dispatches all abort callbacks despite exception');
     CheckEqual(Int64(2), Int64(GRaisingCloseAbortCount),
       'all abort callbacks use -ECANCELED');
+    LLoop.Free;
+    LLoop := nil;
   finally
+    if LLoop <> nil then
+      LLoop.Free;
     if LPipe2Ready then
       platform_pipe_close(LPipe2);
     if LPipe1Ready then
@@ -450,7 +502,7 @@ begin
   CheckEqual(Int64(4), Int64(GWriteResult), 'wrote 4 bytes');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -497,7 +549,7 @@ begin
   CheckEqual(Int64(1), Int64(GDoubleFireCount), 'callback fired exactly once');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -538,7 +590,7 @@ begin
   CheckEqual(Int64($01), Int64(LReadBuf[0]), 'byte 0');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -618,7 +670,7 @@ begin
   LLoop.Poll;
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe0);
   platform_pipe_close(LPipe1);
   platform_pipe_close(LPipe2);
@@ -659,7 +711,7 @@ begin
   LLoop.Poll;
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -897,6 +949,8 @@ begin
     'lusercallback(auserdata, aresult, lusercontext);');
   CheckTimeoutBody(LTimerBody, 'TimeoutTimerCallback',
     'lusercallback(0, -etimedout_linux, lusercontext);');
+  Check(Pos('trycancelbycontext(lctx)', LTimerBody) > 0,
+    'TimeoutTimerCallback cancels pending I/O by TimeoutCtx');
 end;
 
 { === Main === }
@@ -909,6 +963,7 @@ begin
   T.Test('ReadTimeout', @TestReadTimeout);
   T.Test('ReadTimeoutLateIoCompletionSingleFire',
     @TestReadTimeoutLateIoCompletionSingleFire);
+  T.Test('TimeoutCancelDrainsPending', @TestTimeoutCancelDrainsPending);
   T.Test('ReadTimeoutCloseReleasesPendingContext', @TestReadTimeoutCloseReleasesPendingContext);
   T.Test('ReadTimeoutCloseBeforeDeadlineAbortsPendingContext',
     @TestReadTimeoutCloseBeforeDeadlineAbortsPendingContext);

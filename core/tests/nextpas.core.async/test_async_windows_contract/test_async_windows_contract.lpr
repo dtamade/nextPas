@@ -57,7 +57,7 @@ begin
     'tasyncloop = nextpas.core.async.loop.tasyncloop;',
     'async facade must re-export async loop type');
   CheckContains(LAsyncFacade,
-    'tiocompletion = nextpas.core.io.poller.tiocompletion;',
+    'tiocompletion = nextpas.core.async.base.tiocompletion;',
     'async facade must re-export file completion callback type');
 end;
 
@@ -115,8 +115,8 @@ begin
     'async Windows compile gate must touch async loop poll facade');
   CheckContains(LCompileGate, 'lloop.runonce;',
     'async Windows compile gate must touch async loop single-iteration runner');
-  CheckContains(LCompileGate, 'lloop.close;',
-    'async Windows compile gate must touch async loop close');
+  CheckContains(LCompileGate, 'lloop.free;',
+    'async Windows compile gate must free the heap-owned TAsyncLoop class');
 end;
 
 begin

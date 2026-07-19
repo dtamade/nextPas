@@ -16,7 +16,9 @@ uses
   nextpas.core.net.udp,
   nextpas.core.net.resolve,
   nextpas.core.net.async.tcp,
-  nextpas.core.net.async.resolve;
+  nextpas.core.net.async.resolve,
+  nextpas.core.net.async.backpressure,
+  nextpas.core.async.loop;
 
 type
   TNetAddress = nextpas.core.net.base.TNetAddress;
@@ -36,6 +38,10 @@ type
   TDnsResult = nextpas.core.net.async.resolve.TDnsResult;
   TDnsCallback = nextpas.core.net.async.resolve.TDnsCallback;
   TDnsCallbackRef = nextpas.core.net.async.resolve.TDnsCallbackRef;
+  TBackpressureState = nextpas.core.net.async.backpressure.TBackpressureState;
+  TBackpressureConfig = nextpas.core.net.async.backpressure.TBackpressureConfig;
+  TBackpressureCallback = nextpas.core.net.async.backpressure.TBackpressureCallback;
+  IBackpressureController = nextpas.core.net.async.backpressure.IBackpressureController;
 
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;
@@ -45,6 +51,12 @@ function TcpConnect(const AAddr: string; const APort: UInt16;
 function UdpBind(const AAddr: string; const APort: UInt16): IUdpSocket; inline;
 function Resolve(const AHost: string): TNetAddress; inline;
 function NewNetCancelToken: INetCancelController; inline;
+
+function CreateBackpressureController(
+  const ALoop: TAsyncLoop;
+  const AConfig: TBackpressureConfig): IBackpressureController; overload; inline;
+function CreateBackpressureController(
+  const ALoop: TAsyncLoop): IBackpressureController; overload; inline;
 
 implementation
 
@@ -77,6 +89,20 @@ end;
 function NewNetCancelToken: INetCancelController;
 begin
   Result := nextpas.core.net.cancel.NewNetCancelToken;
+end;
+
+function CreateBackpressureController(
+  const ALoop: TAsyncLoop;
+  const AConfig: TBackpressureConfig): IBackpressureController;
+begin
+  Result := nextpas.core.net.async.backpressure.CreateBackpressureController(
+    ALoop, AConfig);
+end;
+
+function CreateBackpressureController(
+  const ALoop: TAsyncLoop): IBackpressureController;
+begin
+  Result := nextpas.core.net.async.backpressure.CreateBackpressureController(ALoop);
 end;
 
 end.

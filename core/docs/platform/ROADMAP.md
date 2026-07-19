@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **19-gate `ci-matrix` promoted** (pass=19 on `windows-latest`, run 29686191527 @ `e9f203e45`; wine 18 secondary, +info +which) |
+| Real Windows GHA | **19-gate `ci-matrix` promoted** (pass=19 on `windows-latest`, run 29686191527 @ `e9f203e45`; wine 19 secondary, +info +which +dl) |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -82,8 +82,8 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Host | Current tier | Next honest claim |
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
-| Windows x86_64 | **`ci-matrix` for documented 19-gate set** + wine 18-module secondary | expand matrix modules; keep wine + GHA green |
-| macOS | **`focused-runtime` for documented 8-gate set** (D2.c); inventory via best-effort | keep matrix green; no full-host parity |
+| Windows x86_64 | **`ci-matrix` for documented 19-gate set** + wine 19-module secondary | expand matrix modules; keep wine + GHA green |
+| macOS | **`focused-runtime` for documented 8-gate set** (D2.c); 9-gate (+memory) candidate | GHA green for +memory then promote; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
 | Linux aarch64/arm32/riscv64 | forced-compile | runtime only with hardware/CI |
@@ -300,6 +300,8 @@ Optional readiness inventory (not a promotion):
 | 2026-07-19 | **Batch-1**: promote documented 19-gate set to `ci-matrix` (includes error + fmt). Not full-host Windows parity. |
 | 2026-07-19 | **Batch-2**: add `platform.info` to wine matrix (16→17). Windows scripts unchanged (no 20-gate candidate this batch). |
 | 2026-07-19 | **Batch-3**: add `platform.which` to wine matrix (17→18). Windows scripts unchanged. |
+| 2026-07-19 | **Batch-4**: add `platform.dl` to wine matrix (18→19) after Linux 19/0 + wine smoke 8/0. Windows scripts unchanged. |
+| 2026-07-19 | **Batch-5A**: add `platform.memory` to macOS matrix script (8→9 candidate). Promote only after GHA `test-macos` pass=9. |
 
 ---
 

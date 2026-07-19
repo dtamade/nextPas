@@ -1,7 +1,7 @@
 unit nextpas.core.net.async.backpressure;
 {**
  * @desc 异步背压控制：管理数据流的速率，防止缓冲区溢出。
- *       支持高/低水位标记、暂停/恢复读取。
+ *       支持高/低水位标记、暂停/恢复读取；OnStateChange 经 loop.Post 通知。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -13,47 +13,33 @@ uses
   nextpas.core.async.base, nextpas.core.async.loop;
 
 type
-  { 背压状态 }
   TBackpressureState = (
-    bpsNormal,      // 正常状态
-    bpsPaused,      // 已暂停（达到高水位）
-    bpsDraining     // 排空中（低于低水位，恢复读取）
+    bpsNormal,
+    bpsPaused,
+    bpsDraining
   );
 
-  { 背压配置 }
   TBackpressureConfig = record
-    HighWaterMark: UInt32;  // 高水位标记（暂停读取）
-    LowWaterMark: UInt32;   // 低水位标记（恢复读取）
+    HighWaterMark: UInt32;
+    LowWaterMark: UInt32;
     class function Default: TBackpressureConfig; static;
   end;
 
-  { 背压回调 }
   TBackpressureCallback = procedure(AState: TBackpressureState; AContext: Pointer);
 
-  { 背压控制器接口 }
   IBackpressureController = interface
     ['{F1A2B3C4-D5E6-7890-ABCD-600000000001}']
-    { 写入数据（返回实际写入的字节数） }
     function Write(const AData; ASize: UInt32): UInt32;
-
-    { 读取数据（返回实际读取的字节数） }
     function Read(var AData; ASize: UInt32): UInt32;
-
-    { 获取当前缓冲区大小 }
     function BufferedSize: UInt32;
-
-    { 获取状态 }
     function State: TBackpressureState;
-
-    { 手动暂停/恢复 }
     procedure Pause;
     procedure Resume;
-
-    { 关闭 }
+    { State-change notify is Post'ed on the loop thread (not under lock). }
+    procedure OnStateChange(ACallback: TBackpressureCallback; AContext: Pointer);
     procedure Close;
   end;
 
-{ 创建背压控制器 }
 function CreateBackpressureController(const ALoop: TAsyncLoop;
   const AConfig: TBackpressureConfig): IBackpressureController;
 overload;
@@ -68,6 +54,13 @@ uses
   nextpas.core.platform.sync;
 
 type
+  PStateNotifyCtx = ^TStateNotifyCtx;
+  TStateNotifyCtx = record
+    Callback: TBackpressureCallback;
+    State: TBackpressureState;
+    Context: Pointer;
+  end;
+
   TBackpressureController = class(TInterfacedObject, IBackpressureController)
   private
     FLoop: TAsyncLoop;
@@ -82,31 +75,49 @@ type
     FOnStateChange: TBackpressureCallback;
     FOnStateChangeCtx: Pointer;
 
-    procedure CheckWaterMarks;
+    { Returns True if state changed and a Post is required after unlock. }
+    function CheckWaterMarks(out ANewState: TBackpressureState): Boolean;
     procedure GrowBuffer(ANewCap: UInt32);
+    procedure PostStateChange(ACallback: TBackpressureCallback;
+      AState: TBackpressureState; AContext: Pointer);
   public
     constructor Create(const ALoop: TAsyncLoop; const AConfig: TBackpressureConfig);
     destructor Destroy; override;
 
-    { IBackpressureController }
     function Write(const AData; ASize: UInt32): UInt32;
     function Read(var AData; ASize: UInt32): UInt32;
     function BufferedSize: UInt32;
     function State: TBackpressureState;
     procedure Pause;
     procedure Resume;
+    procedure OnStateChange(ACallback: TBackpressureCallback; AContext: Pointer);
     procedure Close;
   end;
 
-{ TBackpressureConfig }
+procedure StateNotifyCallback(AContext: Pointer);
+var
+  LCtx: PStateNotifyCtx;
+begin
+  LCtx := PStateNotifyCtx(AContext);
+  try
+    if Assigned(LCtx^.Callback) then
+      LCtx^.Callback(LCtx^.State, LCtx^.Context);
+  finally
+    Dispose(LCtx);
+  end;
+end;
+
+procedure StateNotifyDiscard(AContext: Pointer);
+begin
+  if AContext <> nil then
+    Dispose(PStateNotifyCtx(AContext));
+end;
 
 class function TBackpressureConfig.Default: TBackpressureConfig;
 begin
-  Result.HighWaterMark := 64 * 1024;  // 64KB
-  Result.LowWaterMark := 16 * 1024;   // 16KB
+  Result.HighWaterMark := 64 * 1024;
+  Result.LowWaterMark := 16 * 1024;
 end;
-
-{ TBackpressureController }
 
 constructor TBackpressureController.Create(const ALoop: TAsyncLoop;
   const AConfig: TBackpressureConfig);
@@ -118,6 +129,8 @@ begin
   FBufferPos := 0;
   FBufferSize := 0;
   FBufferCap := AConfig.LowWaterMark;
+  if FBufferCap = 0 then
+    FBufferCap := 1;
   SetLength(FBuffer, FBufferCap);
   FClosed := False;
   FOnStateChange := nil;
@@ -133,7 +146,7 @@ begin
   inherited;
 end;
 
-procedure TBackpressureController.CheckWaterMarks;
+function TBackpressureController.CheckWaterMarks(out ANewState: TBackpressureState): Boolean;
 var
   LOldState: TBackpressureState;
 begin
@@ -157,8 +170,27 @@ begin
           FState := bpsPaused;
       end;
   end;
-  if (FState <> LOldState) and Assigned(FOnStateChange) then
-    FOnStateChange(FState, FOnStateChangeCtx);
+  ANewState := FState;
+  Result := (FState <> LOldState) and Assigned(FOnStateChange);
+end;
+
+procedure TBackpressureController.PostStateChange(ACallback: TBackpressureCallback;
+  AState: TBackpressureState; AContext: Pointer);
+var
+  LCtx: PStateNotifyCtx;
+begin
+  if not Assigned(ACallback) or (FLoop = nil) or (not FLoop.IsValid) then
+    Exit;
+  New(LCtx);
+  LCtx^.Callback := ACallback;
+  LCtx^.State := AState;
+  LCtx^.Context := AContext;
+  try
+    FLoop.PostEx(@StateNotifyCallback, LCtx, @StateNotifyDiscard);
+  except
+    Dispose(LCtx);
+    raise;
+  end;
 end;
 
 procedure TBackpressureController.GrowBuffer(ANewCap: UInt32);
@@ -169,25 +201,19 @@ begin
   if ANewCap <= FBufferCap then Exit;
   if FBufferSize = 0 then
   begin
-    { 空缓冲区，直接扩容 }
     SetLength(FBuffer, ANewCap);
     FBufferCap := ANewCap;
     FBufferPos := 0;
     Exit;
   end;
-  { 环形缓冲区可能 wrap，需要拆包到线性布局 }
   SetLength(LNewBuf, ANewCap);
   LReadPos := FBufferPos - FBufferSize;
   if LReadPos >= FBufferCap then
     LReadPos := LReadPos + FBufferCap;
   if LReadPos + FBufferSize <= FBufferCap then
-  begin
-    { 数据未 wrap，单次拷贝 }
-    Move(FBuffer[LReadPos], LNewBuf[0], FBufferSize);
-  end
+    Move(FBuffer[LReadPos], LNewBuf[0], FBufferSize)
   else
   begin
-    { 数据已 wrap，两段拷贝 }
     LHead := FBufferCap - LReadPos;
     Move(FBuffer[LReadPos], LNewBuf[0], LHead);
     LTail := FBufferSize - LHead;
@@ -203,21 +229,26 @@ var
   LSrc: PByte;
   LRemaining: UInt32;
   LChunk: UInt32;
+  LNotify: Boolean;
+  LState: TBackpressureState;
+  LCb: TBackpressureCallback;
+  LCtx: Pointer;
 begin
   if FClosed then Exit(0);
   if ASize = 0 then Exit(0);
+  LNotify := False;
+  LState := bpsNormal;
+  LCb := nil;
+  LCtx := nil;
 
   platform_mutex_lock(FLock);
   try
-    { 如果已暂停，不接受更多数据 }
     if FState = bpsPaused then
       Exit(0);
 
-    { 确保缓冲区足够大 }
     if FBufferSize + ASize > FBufferCap then
       GrowBuffer(FBufferSize + ASize);
 
-    { 写入数据 }
     LSrc := PByte(@AData);
     LRemaining := ASize;
     while LRemaining > 0 do
@@ -234,11 +265,18 @@ begin
         FBufferPos := 0;
     end;
 
-    CheckWaterMarks;
+    LNotify := CheckWaterMarks(LState);
+    if LNotify then
+    begin
+      LCb := FOnStateChange;
+      LCtx := FOnStateChangeCtx;
+    end;
     Result := ASize;
   finally
     platform_mutex_unlock(FLock);
   end;
+  if LNotify then
+    PostStateChange(LCb, LState, LCtx);
 end;
 
 function TBackpressureController.Read(var AData; ASize: UInt32): UInt32;
@@ -247,21 +285,27 @@ var
   LRemaining: UInt32;
   LChunk: UInt32;
   LReadPos: UInt32;
+  LNotify: Boolean;
+  LState: TBackpressureState;
+  LCb: TBackpressureCallback;
+  LCtx: Pointer;
 begin
   if FClosed then Exit(0);
   if ASize = 0 then Exit(0);
+  LNotify := False;
+  LState := bpsNormal;
+  LCb := nil;
+  LCtx := nil;
 
   platform_mutex_lock(FLock);
   try
     if FBufferSize = 0 then Exit(0);
 
-    { 读取数据 }
     LDst := PByte(@AData);
     LRemaining := ASize;
     if LRemaining > FBufferSize then
       LRemaining := FBufferSize;
 
-    { 计算读取位置 }
     LReadPos := FBufferPos - FBufferSize;
     if LReadPos >= FBufferCap then
       LReadPos := LReadPos + FBufferCap;
@@ -281,10 +325,17 @@ begin
         LReadPos := 0;
     end;
 
-    CheckWaterMarks;
+    LNotify := CheckWaterMarks(LState);
+    if LNotify then
+    begin
+      LCb := FOnStateChange;
+      LCtx := FOnStateChangeCtx;
+    end;
   finally
     platform_mutex_unlock(FLock);
   end;
+  if LNotify then
+    PostStateChange(LCb, LState, LCtx);
 end;
 
 function TBackpressureController.BufferedSize: UInt32;
@@ -308,22 +359,67 @@ begin
 end;
 
 procedure TBackpressureController.Pause;
+var
+  LNotify: Boolean;
+  LOld: TBackpressureState;
+  LCb: TBackpressureCallback;
+  LCtx: Pointer;
 begin
+  LNotify := False;
+  LCb := nil;
+  LCtx := nil;
   platform_mutex_lock(FLock);
   try
+    LOld := FState;
     FState := bpsPaused;
+    LNotify := (FState <> LOld) and Assigned(FOnStateChange);
+    if LNotify then
+    begin
+      LCb := FOnStateChange;
+      LCtx := FOnStateChangeCtx;
+    end;
   finally
     platform_mutex_unlock(FLock);
   end;
+  if LNotify then
+    PostStateChange(LCb, bpsPaused, LCtx);
 end;
 
 procedure TBackpressureController.Resume;
+var
+  LNotify: Boolean;
+  LState: TBackpressureState;
+  LCb: TBackpressureCallback;
+  LCtx: Pointer;
 begin
+  LNotify := False;
+  LState := bpsNormal;
+  LCb := nil;
+  LCtx := nil;
   platform_mutex_lock(FLock);
   try
     if FState = bpsPaused then
       FState := bpsDraining;
-    CheckWaterMarks;
+    LNotify := CheckWaterMarks(LState);
+    if LNotify then
+    begin
+      LCb := FOnStateChange;
+      LCtx := FOnStateChangeCtx;
+    end;
+  finally
+    platform_mutex_unlock(FLock);
+  end;
+  if LNotify then
+    PostStateChange(LCb, LState, LCtx);
+end;
+
+procedure TBackpressureController.OnStateChange(ACallback: TBackpressureCallback;
+  AContext: Pointer);
+begin
+  platform_mutex_lock(FLock);
+  try
+    FOnStateChange := ACallback;
+    FOnStateChangeCtx := AContext;
   finally
     platform_mutex_unlock(FLock);
   end;
@@ -337,12 +433,12 @@ begin
     FBuffer := nil;
     FBufferSize := 0;
     FBufferCap := 0;
+    FOnStateChange := nil;
+    FOnStateChangeCtx := nil;
   finally
     platform_mutex_unlock(FLock);
   end;
 end;
-
-{ 工厂函数 }
 
 function CreateBackpressureController(const ALoop: TAsyncLoop;
   const AConfig: TBackpressureConfig): IBackpressureController;

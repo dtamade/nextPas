@@ -96,6 +96,7 @@ type
     FOptions: TTerminalOptions;
     FActiveOptions: TTerminalOptions;
     FAllocator: IAllocator;
+    FKittyKeyboardPushed: Boolean;
     procedure EnsureInputCapacity(AExtra: Integer);
     procedure DropInputBytes(ACount: Integer);
     function ReadAvailableBytes: Integer;
@@ -103,6 +104,7 @@ type
       out AEv: TEvent; out ANeedMore: Boolean): Boolean;
     procedure CheckSignals(out AResizeOut: TEvent; out AHasResize: Boolean);
     procedure DetectCapabilities;
+    procedure TryNegotiateKittyKeyboard;
     procedure EnsureFrameRuntime(const AOperation: AnsiString);
     procedure EnsureEndFrameAllowed(const AFrame: TFrame);
     procedure ResizeBuffersTo(AWidth, AHeight: Word);
@@ -137,6 +139,8 @@ type
     procedure InjectInputBytesForTest(const ABytes: array of Byte);
     function PollQueuedEventForTest(AAtEOF: Boolean; out AEv: TEvent): Boolean;
     procedure InitializeFrameRuntimeForTest(const AArea: TRect);
+    procedure NegotiateKittyKeyboardForTest(ADetected: Boolean);
+    function BackendPendingForTest: AnsiString;
 
     property Capture: TPointerCapture read FCapture write FCapture;
     property Session: TInteractionSession read FSession write FSession;
@@ -304,7 +308,7 @@ begin
      (Pos('WezTerm', ATermProgram) > 0) or
      (Pos('ghostty', ATermProgram) > 0) then
     Result.KittyKeyboard := TTuiCapabilityStatus.Create(True, True, False, False,
-      'session-negotiation-not-implemented')
+      'session-negotiation-pending')
   else
     Result.KittyKeyboard := TTuiCapabilityStatus.Create(True, False, False, False,
       'env-hint-missing');
@@ -342,6 +346,7 @@ begin
   FCapabilityProfile := TTuiTerminalCapabilityProfile.Default;
   FOptions := TTerminalOptions.Default;
   FActiveOptions := FOptions;
+  FKittyKeyboardPushed := False;
   SetLength(FInputQueue, 256);
 end;
 
@@ -402,6 +407,7 @@ begin
     FMerged := TBuffer.CreateEmpty(TRect.Make(0, 0, LSize.Cols, LSize.Rows), FAllocator);
     FOverlay := TOverlayBuffer.Create(TRect.Make(0, 0, LSize.Cols, LSize.Rows), FAllocator);
     DetectCapabilities;
+    TryNegotiateKittyKeyboard;
     FHasMouseTracking := FActiveOptions.RequestsMouseTracking;
     FCellWidth := 0;
     FCellHeight := 0;
@@ -424,6 +430,19 @@ begin
 
   if FBackend <> nil then
   begin
+    if FKittyKeyboardPushed then
+    begin
+      FBackend.PopKittyKeyboard;
+      FKittyKeyboardPushed := False;
+      if FCapabilityProfile.KittyKeyboard.Detected then
+        FCapabilityProfile.KittyKeyboard := TTuiCapabilityStatus.Create(
+          FCapabilityProfile.KittyKeyboard.Requested, True, False, False,
+          'session-ended')
+      else
+        FCapabilityProfile.KittyKeyboard := TTuiCapabilityStatus.Create(
+          FCapabilityProfile.KittyKeyboard.Requested, False, False, False,
+          'env-hint-missing');
+    end;
     FBackend.LeaveAlternate(ToAnsiMouseMode(FActiveOptions.EffectiveMouseMode),
       FActiveOptions.UsesAlternateScrollKeys);
     FBackend.ShowCursor;
@@ -445,6 +464,7 @@ begin
   FInRawMode := False;
   FRawModeCaptured := False;
   FHasMouseTracking := False;
+  FKittyKeyboardPushed := False;
 end;
 
 { Frame lifecycle }
@@ -545,6 +565,28 @@ begin
   LKittyWindowId := platform_env_get_str('KITTY_WINDOW_ID');
   FCapabilityProfile := DetectCapabilityProfileFromHints(
     LCT, LTP, LT, LTF, LKittyWindowId);
+end;
+
+procedure TTerminal.TryNegotiateKittyKeyboard;
+begin
+  if FBackend = nil then Exit;
+  if FKittyKeyboardPushed then
+  begin
+    { Already pushed this session — keep Active projection consistent. }
+    FCapabilityProfile.KittyKeyboard := TTuiCapabilityStatus.Create(
+      True, True, True, False, '');
+    Exit;
+  end;
+  if FCapabilityProfile.KittyKeyboard.Requested and
+     FCapabilityProfile.KittyKeyboard.Detected then
+  begin
+    FBackend.PushKittyKeyboard;
+    { Flush may fail on test fd (-1) and retain pending; push still happened. }
+    FBackend.Flush;
+    FKittyKeyboardPushed := True;
+    FCapabilityProfile.KittyKeyboard := TTuiCapabilityStatus.Create(
+      True, True, True, False, '');
+  end;
 end;
 
 function TTerminal.GetHasTruecolor: Boolean;
@@ -712,8 +754,33 @@ begin
   FRawModeCaptured := False;
   FShouldQuit := False;
   FHasMouseTracking := False;
+  FKittyKeyboardPushed := False;
   FCellWidth := 0;
   FCellHeight := 0;
+end;
+
+procedure TTerminal.NegotiateKittyKeyboardForTest(ADetected: Boolean);
+begin
+  EnsureFrameRuntime('NegotiateKittyKeyboardForTest');
+  if ADetected then
+    FCapabilityProfile.KittyKeyboard := TTuiCapabilityStatus.Create(
+      True, True, False, False, 'session-negotiation-pending')
+  else
+    FCapabilityProfile.KittyKeyboard := TTuiCapabilityStatus.Create(
+      True, False, False, False, 'env-hint-missing');
+  TryNegotiateKittyKeyboard;
+end;
+
+function TTerminal.BackendPendingForTest: AnsiString;
+var
+  LLen: Integer;
+begin
+  Result := '';
+  if FBackend = nil then Exit;
+  LLen := FBackend.PendingLength;
+  SetLength(Result, LLen);
+  if LLen > 0 then
+    Move(FBackend.PendingBytes^, Result[1], LLen);
 end;
 
 procedure TTerminal.PromoteMousePos;

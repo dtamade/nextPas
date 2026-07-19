@@ -11,38 +11,31 @@ uses
   nextpas.core.async.loop;
 
 type
-  { 关闭阶段 }
   TShutdownPhase = (
-    spRunning,      { 正常运行 }
-    spDraining,     { 排空中：停止接受新工作，等待现有工作完成 }
-    spForceClose,   { 强制关闭：超时后强制关闭 }
-    spClosed        { 已关闭 }
+    spRunning,
+    spDraining,
+    spForceClose,
+    spClosed
   );
 
-  { 关闭选项 }
   TShutdownOption = (
-    soGraceful,       { 优雅关闭：排空后关闭 }
-    soAbortOnTimeout, { 超时后中止 }
-    soLogProgress     { 记录排空进度 }
+    soGraceful,
+    soAbortOnTimeout,
+    soLogProgress
   );
   TShutdownOptions = set of TShutdownOption;
 
   IAsyncShutdown = interface
     ['{C9E6F3A2-8D4B-4A1E-9F7C-3B8D6E5A2C1F}']
-    { 请求关闭 }
     procedure RequestShutdown;
-    { 关闭阶段 }
     function Phase: TShutdownPhase;
-    { 设置排空超时（毫秒） }
     procedure SetDrainTimeout(AMs: UInt32);
-    { 注册关闭回调 }
     procedure OnShutdown(ACallback: TAsyncCallback; AContext: Pointer);
     procedure OnShutdownRef(ACallback: TAsyncCallbackRef; AContext: Pointer);
-    { 是否正在关闭 }
     function IsShuttingDown: Boolean;
   end;
 
-  { 创建优雅关闭管理器 }
+  { ALoop is not owned; must outlive the manager. }
   function CreateShutdownManager(const ALoop: TAsyncLoop;
     AOptions: TShutdownOptions = [soGraceful];
     ADrainTimeoutMs: UInt32 = 5000): IAsyncShutdown;
@@ -61,17 +54,18 @@ type
     Next: PShutdownCallback;
   end;
 
-
   TAsyncShutdownManager = class(TInterfacedObject, IAsyncShutdown)
   private
     FLoop: TAsyncLoop;
     FOptions: TShutdownOptions;
     FPhase: TShutdownPhase;
     FDrainTimeoutMs: UInt32;
+    FDrainTimer: TAsyncTimerHandle;
     FCallbackHead: PShutdownCallback;
     FCallbackTail: PShutdownCallback;
     FLock: TPlatformMutex;
     procedure NotifyCallbacks;
+    procedure CancelDrainTimer;
   public
     constructor Create(const ALoop: TAsyncLoop; AOptions: TShutdownOptions;
       ADrainTimeoutMs: UInt32);
@@ -84,7 +78,6 @@ type
     function IsShuttingDown: Boolean;
   end;
 
-{ 排空超时回调：通过 AContext 恢复实例引用，无需全局变量 }
 procedure DrainTimeoutCallback(AContext: Pointer);
 var
   LMgr: TAsyncShutdownManager;
@@ -92,6 +85,7 @@ begin
   LMgr := TAsyncShutdownManager(AContext);
   platform_mutex_lock(LMgr.FLock);
   try
+    LMgr.FDrainTimer := TAsyncTimerHandle.None;
     if LMgr.FPhase <> spDraining then
       Exit;
     if soAbortOnTimeout in LMgr.FOptions then
@@ -110,8 +104,6 @@ begin
   Result := TAsyncShutdownManager.Create(ALoop, AOptions, ADrainTimeoutMs);
 end;
 
-{ TAsyncShutdownManager }
-
 constructor TAsyncShutdownManager.Create(const ALoop: TAsyncLoop;
   AOptions: TShutdownOptions; ADrainTimeoutMs: UInt32);
 begin
@@ -120,15 +112,28 @@ begin
   FOptions := AOptions;
   FPhase := spRunning;
   FDrainTimeoutMs := ADrainTimeoutMs;
+  FDrainTimer := TAsyncTimerHandle.None;
   FCallbackHead := nil;
   FCallbackTail := nil;
   platform_mutex_init(FLock, PLATFORM_MUTEX_NORMAL);
+end;
+
+procedure TAsyncShutdownManager.CancelDrainTimer;
+var
+  LTimer: TAsyncTimerHandle;
+begin
+  LTimer := FDrainTimer;
+  FDrainTimer := TAsyncTimerHandle.None;
+  { Loop may already be closed/freed by owner; only cancel while still valid. }
+  if LTimer.IsValid and (FLoop <> nil) and FLoop.IsValid then
+    FLoop.CancelTimer(LTimer);
 end;
 
 destructor TAsyncShutdownManager.Destroy;
 var
   LNode, LNext: PShutdownCallback;
 begin
+  CancelDrainTimer;
   LNode := FCallbackHead;
   while LNode <> nil do
   begin
@@ -136,6 +141,8 @@ begin
     Dispose(LNode);
     LNode := LNext;
   end;
+  FCallbackHead := nil;
+  FCallbackTail := nil;
   platform_mutex_destroy(FLock);
   inherited Destroy;
 end;
@@ -156,17 +163,22 @@ begin
 end;
 
 procedure TAsyncShutdownManager.RequestShutdown;
+var
+  LShouldArm: Boolean;
 begin
+  LShouldArm := False;
   platform_mutex_lock(FLock);
   try
     if FPhase <> spRunning then
       Exit;
     FPhase := spDraining;
+    LShouldArm := True;
   finally
     platform_mutex_unlock(FLock);
   end;
-  { 启动排空超时定时器，通过 AContext 传递 Self 指针 }
-  FLoop.Schedule(TDuration.FromMilliseconds(FDrainTimeoutMs),
+  if not LShouldArm then
+    Exit;
+  FDrainTimer := FLoop.Schedule(TDuration.FromMilliseconds(FDrainTimeoutMs),
     @DrainTimeoutCallback, Pointer(Self));
 end;
 
@@ -194,58 +206,62 @@ procedure TAsyncShutdownManager.OnShutdown(ACallback: TAsyncCallback;
   AContext: Pointer);
 var
   LNode: PShutdownCallback;
+  LPostNow: Boolean;
 begin
+  LPostNow := False;
   platform_mutex_lock(FLock);
   try
-    if FPhase = spClosed then
-    begin
-      platform_mutex_unlock(FLock);
-      { 通过 Post 调度，避免在调用者栈上直接执行 }
-      FLoop.Post(ACallback, AContext);
-      Exit;
-    end;
-    New(LNode);
-    LNode^.Regular := ACallback;
-    LNode^.Ref := nil;
-    LNode^.Context := AContext;
-    LNode^.Next := nil;
-    if FCallbackTail <> nil then
-      FCallbackTail^.Next := LNode
+    if FPhase in [spClosed, spForceClose] then
+      LPostNow := True
     else
-      FCallbackHead := LNode;
-    FCallbackTail := LNode;
+    begin
+      New(LNode);
+      LNode^.Regular := ACallback;
+      LNode^.Ref := nil;
+      LNode^.Context := AContext;
+      LNode^.Next := nil;
+      if FCallbackTail <> nil then
+        FCallbackTail^.Next := LNode
+      else
+        FCallbackHead := LNode;
+      FCallbackTail := LNode;
+    end;
   finally
     platform_mutex_unlock(FLock);
   end;
+  if LPostNow and Assigned(ACallback) and (FLoop <> nil) then
+    FLoop.Post(ACallback, AContext);
 end;
 
 procedure TAsyncShutdownManager.OnShutdownRef(ACallback: TAsyncCallbackRef;
   AContext: Pointer);
 var
   LNode: PShutdownCallback;
+  LPostNow: Boolean;
 begin
+  LPostNow := False;
   platform_mutex_lock(FLock);
   try
-    if FPhase = spClosed then
-    begin
-      platform_mutex_unlock(FLock);
-      { 通过 Post 调度，避免在调用者栈上直接执行 }
-      FLoop.PostRef(ACallback, AContext);
-      Exit;
-    end;
-    New(LNode);
-    LNode^.Regular := nil;
-    LNode^.Ref := ACallback;
-    LNode^.Context := AContext;
-    LNode^.Next := nil;
-    if FCallbackTail <> nil then
-      FCallbackTail^.Next := LNode
+    if FPhase in [spClosed, spForceClose] then
+      LPostNow := True
     else
-      FCallbackHead := LNode;
-    FCallbackTail := LNode;
+    begin
+      New(LNode);
+      LNode^.Regular := nil;
+      LNode^.Ref := ACallback;
+      LNode^.Context := AContext;
+      LNode^.Next := nil;
+      if FCallbackTail <> nil then
+        FCallbackTail^.Next := LNode
+      else
+        FCallbackHead := LNode;
+      FCallbackTail := LNode;
+    end;
   finally
     platform_mutex_unlock(FLock);
   end;
+  if LPostNow and Assigned(ACallback) and (FLoop <> nil) then
+    FLoop.PostRef(ACallback, AContext);
 end;
 
 function TAsyncShutdownManager.IsShuttingDown: Boolean;
