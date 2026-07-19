@@ -34,10 +34,10 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (18-module matrix, including
-`platform.error`, `platform.fmt`, `platform.info`, and `platform.which`), and
-durable GHA **`ci-matrix`** for the **documented 19-gate set** in
-`platform-windows-ci-matrix.sh` / `.ps1` (16 suite dirs + poller/io/socket real
+Windows compile gates, Wine runtime smoke (19-module matrix, including
+`platform.error`, `platform.fmt`, `platform.info`, `platform.which`, and
+`platform.dl`), and durable GHA **`ci-matrix`** for the **documented 19-gate set**
+in `platform-windows-ci-matrix.sh` / `.ps1` (16 suite dirs + poller/io/socket real
 gates) under job `test-windows-runtime` on `windows-latest`.
 
 Promotion is **scoped**: it does **not** claim full-host Windows parity for
