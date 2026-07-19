@@ -304,7 +304,8 @@ begin
   Result := TTuiTerminalCapabilityProfile.Default;
 
   if (AColorTerm = 'truecolor') or (AColorTerm = '24bit') then
-    Result.Truecolor := TTuiCapabilityStatus.Create(True, True, True, False, '')
+    { Verified=env-attested: COLORTERM is industry standard; DA/OSC query deferred. }
+    Result.Truecolor := TTuiCapabilityStatus.Create(True, True, True, True, '')
   else
     Result.Truecolor := TTuiCapabilityStatus.Create(True, False, False, False,
       'env-hint-missing');

@@ -95,6 +95,77 @@ begin
   LBackend.Free;
 end;
 
+procedure TestBackendMoveToOrigin;
+var
+  LBackend: TTestBackend;
+begin
+  LBackend := TTestBackend.Create(TRect.Make(0, 0, 8, 4));
+  try
+    LBackend.MoveTo(3, 2);
+    LBackend.MoveTo(0, 0);
+    CheckEqual(0, LBackend.CursorX, 'back to origin x');
+    CheckEqual(0, LBackend.CursorY, 'back to origin y');
+  finally
+    LBackend.Free;
+  end;
+end;
+
+procedure TestBackendHideThenResetShowsCursor;
+var
+  LBackend: TTestBackend;
+begin
+  LBackend := TTestBackend.Create(TRect.Make(0, 0, 8, 4));
+  try
+    LBackend.HideCursor;
+    Check(not LBackend.CursorVisible, 'hidden');
+    LBackend.ResetState;
+    Check(LBackend.CursorVisible, 'reset shows');
+  finally
+    LBackend.Free;
+  end;
+end;
+
+procedure TestBackendBufferArea;
+var
+  LBackend: TTestBackend;
+begin
+  LBackend := TTestBackend.Create(TRect.Make(0, 0, 12, 7));
+  try
+    CheckEqual(12, LBackend.Buffer.Area.Width, 'buffer width');
+    CheckEqual(7, LBackend.Buffer.Area.Height, 'buffer height');
+  finally
+    LBackend.Free;
+  end;
+end;
+
+procedure TestBackendEnterTwiceIdempotent;
+var
+  LBackend: TTestBackend;
+begin
+  LBackend := TTestBackend.Create(TRect.Make(0, 0, 8, 4));
+  try
+    LBackend.EnterAlternate;
+    LBackend.EnterAlternate;
+    Check(LBackend.OnAlternate, 'still alternate');
+  finally
+    LBackend.Free;
+  end;
+end;
+
+procedure TestBackendFlushAfterMove;
+var
+  LBackend: TTestBackend;
+begin
+  LBackend := TTestBackend.Create(TRect.Make(0, 0, 8, 4));
+  try
+    LBackend.MoveTo(1, 1);
+    Check(LBackend.Flush, 'flush ok');
+    CheckEqual(1, LBackend.CursorX, 'cursor kept after flush');
+  finally
+    LBackend.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('tui_backend_test');
   T.Test('TTestBackend.Create', @TestBackendCreate);
@@ -104,5 +175,10 @@ begin
   T.Test('TTestBackend.Flush', @TestBackendFlush);
   T.Test('TTestBackend.ClearScreen', @TestBackendClearScreen);
   T.Test('TTestBackend.ResetState', @TestBackendResetState);
+  T.Test('MoveTo origin', @TestBackendMoveToOrigin);
+  T.Test('Hide then Reset shows cursor', @TestBackendHideThenResetShowsCursor);
+  T.Test('Buffer area', @TestBackendBufferArea);
+  T.Test('EnterAlternate twice', @TestBackendEnterTwiceIdempotent);
+  T.Test('Flush after move', @TestBackendFlushAfterMove);
   if not T.Run then Halt(1);
 end.
