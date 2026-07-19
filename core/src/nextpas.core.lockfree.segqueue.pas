@@ -16,6 +16,8 @@ unit nextpas.core.lockfree.segqueue;
  *
  * @see Michael & Scott queue — classic lock-free queue design
  * @see Segment-based queues — cache-friendly unbounded queue
+ *
+ * Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -106,16 +108,17 @@ function TSegQueueImpl.AllocSegment(const AStartIndex: Int64): PSegment;
 var
   LI: Integer;
   LOldHead: PSegment;
+  LExpected: Pointer;
 begin
   { Try to pop from free pool (CAS-based lock-free stack) }
   repeat
-    LOldHead := PSegment(AtomicLoadPtr(Pointer(FFreePool), moAcquire));
+    LOldHead := PSegment(atomic_load(Pointer(FFreePool), mo_acquire));
     if LOldHead = nil then
       Break;
-    if AtomicCompareExchangePtr(Pointer(FFreePool),
-      Pointer(LOldHead), Pointer(LOldHead^.Next), moAcqRel) = Pointer(LOldHead) then
+    LExpected := Pointer(LOldHead);
+    if atomic_compare_exchange_strong(Pointer(FFreePool), LExpected, Pointer(LOldHead^.Next), mo_acq_rel, mo_acquire) then
     begin
-      AtomicFetchAdd32(FFreePoolCount, -1, moRelaxed);
+      atomic_fetch_add(FFreePoolCount, -1, mo_relaxed);
       LOldHead^.Next := nil;
       LOldHead^.StartIndex := AStartIndex;
       for LI := 0 to SEGQUEUE_SEGMENT_CAPACITY - 1 do
@@ -137,31 +140,33 @@ var
   LNext: PSegment;
   LNewSegment: PSegment;
   LTailSegment: PSegment;
+  LExpected: Pointer;
 begin
-  LTailSegment := PSegment(AtomicLoadPtr(Pointer(FTail), moAcquire));
+  LTailSegment := PSegment(atomic_load(Pointer(FTail), mo_acquire));
   if (LTailSegment <> nil) and (LTailSegment^.StartIndex <= APosition) and
      ((LTailSegment^.StartIndex + SEGQUEUE_SEGMENT_CAPACITY) > APosition) then
     Result := LTailSegment
   else
-    Result := PSegment(AtomicLoadPtr(Pointer(FHead), moAcquire));
+    Result := PSegment(atomic_load(Pointer(FHead), mo_acquire));
 
   while (Result^.StartIndex + SEGQUEUE_SEGMENT_CAPACITY) <= APosition do
   begin
-    LNext := PSegment(AtomicLoadPtr(Pointer(Result^.Next), moAcquire));
+    LNext := PSegment(atomic_load(Pointer(Result^.Next), mo_acquire));
     if LNext = nil then
     begin
       LNewSegment := AllocSegment(Result^.StartIndex + SEGQUEUE_SEGMENT_CAPACITY);
-      if AtomicCompareExchangePtr(Pointer(Result^.Next), nil,
-        LNewSegment, moRelease) = nil then
+      LExpected := nil;
+      if atomic_compare_exchange_strong(Pointer(Result^.Next), LExpected, Pointer(LNewSegment), mo_release, mo_relaxed) then
         LNext := LNewSegment
       else
       begin
         FreeMem(LNewSegment, SizeOf(TSegment));
-        LNext := PSegment(AtomicLoadPtr(Pointer(Result^.Next), moAcquire));
+        LNext := PSegment(atomic_load(Pointer(Result^.Next), mo_acquire));
       end;
     end;
     LockFreePrefetch(LNext);
-    AtomicCompareExchangePtr(Pointer(FTail), Result, LNext, moRelease);
+    LExpected := Pointer(Result);
+    atomic_compare_exchange_strong(Pointer(FTail), LExpected, Pointer(LNext), mo_release, mo_relaxed);
     Result := LNext;
   end;
 end;
@@ -214,18 +219,19 @@ var
   LSeg: PSegment;
   LQueue: TSegQueueImpl;
   LOldHead: PSegment;
+  LExpected: Pointer;
 begin
   LQueue := TSegQueueImpl(AUserData);
   LSeg := PSegment(AData);
-  if AtomicLoad32(LQueue.FFreePoolCount, moRelaxed) < SEGQUEUE_FREE_POOL_LIMIT then
+  if atomic_load(LQueue.FFreePoolCount, mo_relaxed) < SEGQUEUE_FREE_POOL_LIMIT then
   begin
     { Push to free pool using CAS (lock-free stack) }
     repeat
-      LOldHead := PSegment(AtomicLoadPtr(Pointer(LQueue.FFreePool), moAcquire));
+      LOldHead := PSegment(atomic_load(Pointer(LQueue.FFreePool), mo_acquire));
       LSeg^.Next := LOldHead;
-    until AtomicCompareExchangePtr(Pointer(LQueue.FFreePool),
-      Pointer(LOldHead), Pointer(LSeg), moAcqRel) = Pointer(LOldHead);
-    AtomicFetchAdd32(LQueue.FFreePoolCount, 1, moRelaxed);
+    LExpected := Pointer(LOldHead);
+    until atomic_compare_exchange_strong(Pointer(LQueue.FFreePool), LExpected, Pointer(LSeg), mo_acq_rel, mo_acquire);
+    atomic_fetch_add(LQueue.FFreePoolCount, 1, mo_relaxed);
   end
   else
     FreeMem(AData, SizeOf(TSegment));
@@ -237,20 +243,22 @@ var
   LIdx: Integer;
   LSeg: PSegment;
   LGuard: TEbrGuard;
+  LPosExpected: Int64;
 begin
   LGuard := TEbrGuard.Acquire(FEbr);
   try
     while True do
     begin
-      LPos := AtomicLoad64(FEnqueuePos, moRelaxed);
+      LPos := atomic_load_64(FEnqueuePos, mo_relaxed);
       LSeg := FindOrCreateSegment(LPos);
-      if AtomicCompareExchange64(FEnqueuePos, LPos, LPos + 1, moRelaxed) = LPos then
+      LPosExpected := LPos;
+      if atomic_compare_exchange_strong_64(FEnqueuePos, LPosExpected, LPos + 1, mo_relaxed, mo_relaxed) then
         Break;
     end;
 
     LIdx := Integer(LPos mod SEGQUEUE_SEGMENT_CAPACITY);
     LSeg^.Slots[LIdx].Value := AValue;
-    AtomicStore64(LSeg^.Slots[LIdx].Sequence, LPos + 1, moRelease);
+    atomic_store_64(LSeg^.Slots[LIdx].Sequence, LPos + 1, mo_release);
   finally
     LGuard.Release;
   end;
@@ -258,14 +266,14 @@ end;
 
 procedure TSegQueueImpl.Enqueue(const AValue: T);
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     raise EInvalidOperationError.Create('TSegQueue: Enqueue on closed queue');
   Publish(AValue);
 end;
 
 function TSegQueueImpl.TryEnqueue(const AValue: T): Boolean;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   Publish(AValue);
   Result := True;
@@ -303,12 +311,12 @@ end;
 
 procedure TSegQueueImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TSegQueueImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TSegQueueImpl.TryDequeue(out AValue: T): Boolean;
@@ -320,17 +328,19 @@ var
   LOldHead: PSegment;
   LSeq: Int64;
   LGuard: TEbrGuard;
+  LExpected: Pointer;
+  LPosExpected: Int64;
 begin
   while True do
   begin
-    LPos := AtomicLoad64(FDequeuePos, moRelaxed);
+    LPos := atomic_load_64(FDequeuePos, mo_relaxed);
     LGuard := TEbrGuard.Acquire(FEbr);
     try
-      LSeg := PSegment(AtomicLoadPtr(Pointer(FHead), moAcquire));
+      LSeg := PSegment(atomic_load(Pointer(FHead), mo_acquire));
       while (LSeg <> nil) and ((LSeg^.StartIndex + SEGQUEUE_SEGMENT_CAPACITY) <= LPos) do
       begin
         LOldHead := LSeg;
-        LNext := PSegment(AtomicLoadPtr(Pointer(LSeg^.Next), moAcquire));
+        LNext := PSegment(atomic_load(Pointer(LSeg^.Next), mo_acquire));
         if LNext = nil then
         begin
           Result := False;
@@ -338,14 +348,16 @@ begin
         end;
         { Prefetch next segment for better cache locality }
         LockFreePrefetch(LNext);
-        if AtomicCompareExchangePtr(Pointer(FHead), LOldHead, LNext, moAcqRel) = LOldHead then
+        LExpected := Pointer(LOldHead);
+        if atomic_compare_exchange_strong(Pointer(FHead), LExpected, Pointer(LNext), mo_acq_rel, mo_acquire) then
         begin
-          AtomicCompareExchangePtr(Pointer(FTail), LOldHead, LNext, moRelease);
+          LExpected := Pointer(LOldHead);
+          atomic_compare_exchange_strong(Pointer(FTail), LExpected, Pointer(LNext), mo_release, mo_relaxed);
           FEbr.Retire(LOldHead, @SegQueueReclaimSegment, Self);
           LSeg := LNext;
         end
         else
-          LSeg := PSegment(AtomicLoadPtr(Pointer(FHead), moAcquire));
+          LSeg := PSegment(atomic_load(Pointer(FHead), mo_acquire));
       end;
 
       if LSeg = nil then
@@ -355,10 +367,11 @@ begin
       end;
 
       LIdx := Integer(LPos mod SEGQUEUE_SEGMENT_CAPACITY);
-      LSeq := AtomicLoad64(LSeg^.Slots[LIdx].Sequence, moAcquire);
+      LSeq := atomic_load_64(LSeg^.Slots[LIdx].Sequence, mo_acquire);
       if LSeq = (LPos + 1) then
       begin
-        if AtomicCompareExchange64(FDequeuePos, LPos, LPos + 1, moRelaxed) = LPos then
+        LPosExpected := LPos;
+        if atomic_compare_exchange_strong_64(FDequeuePos, LPosExpected, LPos + 1, mo_relaxed, mo_relaxed) then
         begin
           AValue := LSeg^.Slots[LIdx].Value;
           LSeg^.Slots[LIdx].Value := Default(T);
@@ -394,7 +407,7 @@ end;
 
 function TSegQueueImpl.IsEmpty: Boolean;
 begin
-  Result := AtomicLoad64(FEnqueuePos, moRelaxed) <= AtomicLoad64(FDequeuePos, moRelaxed);
+  Result := atomic_load_64(FEnqueuePos, mo_relaxed) <= atomic_load_64(FDequeuePos, mo_relaxed);
 end;
 
 function TSegQueueImpl.ApproxCount: PtrUInt;
@@ -402,8 +415,8 @@ var
   LEnq: Int64;
   LDeq: Int64;
 begin
-  LEnq := AtomicLoad64(FEnqueuePos, moRelaxed);
-  LDeq := AtomicLoad64(FDequeuePos, moRelaxed);
+  LEnq := atomic_load_64(FEnqueuePos, mo_relaxed);
+  LDeq := atomic_load_64(FDequeuePos, mo_relaxed);
   if LEnq > LDeq then
     Result := PtrUInt(LEnq - LDeq)
   else

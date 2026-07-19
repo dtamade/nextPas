@@ -7007,10 +7007,10 @@ begin
   CheckNotContains(LHazardSource, 'AtomicStorePtr(Pointer(FThreads), nil, moRelease)',
     'hazard UnregisterThread must not blindly nil FThreads');
   CheckContains(LHazardSource,
-    'AtomicStorePtr(LThread^.HP[AHPIndex], APtr, moRelease);',
+    'atomic_store(LThread^.HP[AHPIndex], APtr, mo_release);',
     'hazard Protect must publish its pointer with a release store');
   CheckContains(LHazardSource,
-    'AtomicLoadPtr(LThread^.HP[LI], moAcquire)',
+    'atomic_load(LThread^.HP[LI], mo_acquire)',
     'hazard Collect must scan pointer publications with acquire loads');
   CheckNotContains(LHazardSource, 'procedure THazardDomain.DrainPendingFree;',
     'hazard thread records must not be reclaimed by an unprotected list traversal');
@@ -7018,7 +7018,7 @@ begin
     'hazard domain must expose a publish-and-revalidate source protection loop');
   CheckBefore(LHazardSource,
     'IncrementRetiredCount;',
-    'AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LNode, moRelease)',
+    'atomic_compare_exchange_strong(Pointer(FRetired), LExpected, Pointer(LNode), mo_release, mo_relaxed)',
     'hazard retired count must be published before the retired node becomes collectable');
   CheckContains(LCondVarSource, 'PConditionWaiter = ^TConditionWaiter;',
     'condition-variable notifications must be attached to registered waiter lifetimes');
