@@ -253,11 +253,12 @@ T2 **不进默认门面**。选型时先看档位（细节 [`CONTRACT.md`](CONTR
 │           - 阻塞/非阻塞/超时
 │           - Close 后已入队数据仍可读
 │
-└── 多路复用（Go select 语义）
+└── 多路复用（Go select 语义，Q3-a）
     └── 使用 TLockFreeSelector<T>
-        - 等待多个 channel 中第一个就绪
-        - 阻塞/超时两种等待模式
+        - 等待多个 channel 中第一个就绪（Add 注册序优先）
+        - Select / SelectTimeout / **TrySelect（≡ default）**
         - 所有 case 必须使用相同类型 T
+        - 详见 api-reference Selector 节
 ```
 
 ## 性能对比（相对排序，非绝对 Mops）

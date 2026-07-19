@@ -624,6 +624,7 @@ type
 | `case v := <-ch:` | `LSelector.AddRecv(LChannel, LOutVar)` |
 | `case ch <- v:` | `LSelector.AddSend(LChannel, LValue)` |
 | `select { ... }` | `LResult := LSelector.Select` |
+| `select { ... default: }` | `LResult := LSelector.TrySelect`（`Completed=False` 即 default） |
 
 **使用示例**:
 ```pascal
@@ -653,11 +654,12 @@ end;
 ```
 
 **设计约束**:
-- 所有 case 必须使用相同类型 T（与 Go select 的类型约束一致）
-- 不支持 `default` 分支（需要时直接 TrySend/TryReceive）
-- poll + backoff 策略（纯用户态轮询，不使用内核 wait address）
-- `AddSend` 存储值副本，Select 成功后才实际发送
-
+- 所有 case 必须使用相同类型 T（Go 可在同一 `select` 混不同类型；本实现不支持）
+- **无**语言级 `default` case 对象；用 **`TrySelect`** 表达 default
+- 多 case 同时就绪时按 **Add 注册序** 选最早 case（**非** Go 随机选择）
+- 等待：短 spin 后经 `lockfree.wait` 的 wait-address（`LockFreeWaitData`），不是纯忙轮询
+- `AddSend` 存储值副本，Select/TrySelect 成功时才实际发送
+- 空 closed channel 的 recv case 与 `TryReceive=False` 对齐：`TrySelect`/`SelectTimeout` 不完成
 ---
 
 ## Bag (nextpas.core.lockfree.bag)

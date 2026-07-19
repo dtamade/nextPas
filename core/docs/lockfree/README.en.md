@@ -239,13 +239,15 @@ The current design is safe under these conditions:
 
 ## Selector
 
-`TLockFreeSelector<T>` is a multi-channel multiplexer, Pascal implementation of Go `select` semantics.
+`TLockFreeSelector<T>` is a multi-channel multiplexer (Go `select` style; Q3-a pins).
 
 **Design Features**:
-- All cases must use the same type T (consistent with Go select type constraints)
-- poll + backoff strategy (pure user-space polling)
-- Supports blocking and timeout wait modes
-- AddSend stores value copy, actual send only on Select success
+- All cases must use the same type T
+- **`TrySelect` ≡ Go `select { default: }`** (`Completed=False` means default)
+- Multi-ready: earliest **Add** index wins (not Go random)
+- Wait: short spin + wait-address via `lockfree.wait` (not pure busy-poll)
+- Blocking / timeout / non-blocking modes
+- AddSend stores a value copy; send only on successful Select/TrySelect
 
 **Usage Example**:
 ```pascal

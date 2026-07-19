@@ -247,8 +247,23 @@ generic TShardedHashMap<TKey, TValue> = class
 end;
 generic TConcurrentHashMap<TKey, TValue> = class(specialize TShardedHashMapImpl<TKey, TValue>);
 
-// Channel / Selector / reclamation — 见 api-reference 与 README
+// Channel / reclamation — 见 api-reference 与 README
 ```
+
+### 1.2a Selector（Q3-a）
+
+`TLockFreeSelector<T>`（门面）/ `TLockFreeSelectorImpl<T>`：
+
+| 约束 | 语义 |
+|------|------|
+| 同类型 T | 所有 case 的 channel 元素类型必须相同 |
+| `TrySelect` | **Go `select { default: }` 等价**；无就绪 → `Completed=False` |
+| 多就绪次序 | 按 **Add 注册序** 选最早 case（**非** Go 随机） |
+| 等待 | 短 spin 后 `LockFreeWaitData`（`lockfree.wait`） |
+| closed-empty recv | 与 channel `TryReceive=False` 对齐；不伪完成 |
+| 并发 | **同一 selector 实例** 上不支持并发 `Select*` |
+
+权威 API 文本：[`api-reference.md`](api-reference.md) Selector 节。
 
 ### 1.3 ClosedPublishPolicy
 
