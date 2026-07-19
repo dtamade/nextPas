@@ -32,7 +32,7 @@
 |------|------|------|
 | **Q0** | 清洁基线 + reconverge 评估 | **done** |
 | **Q1** | Atomic 首选路径与质量加固 | **Q1-a done**；Q1-b/c pending |
-| **Q2** | T1 深度（Close/Try\*Ex/stress） | pending |
+| **Q2** | T1 深度（首选路径 + stress） | **Q2-a ebr done**；spsc/mpmc… 继续 |
 | **Q3** | Map/Channel 体验对标 | pending |
 | **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | pending |
 | **Q5** | 有信封 Go/Rust 同机对照常青 | pending |
@@ -92,6 +92,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 | 2026-07-19 | Q 线章程入仓；Q0 门绿；merge origin/main；post-merge 门绿 → **Q0 done** |
 | 2026-07-19 | **Q1-a** legacy 消费者扫描入仓（§5）；不删 API；迁移按热点分批 |
 | 2026-07-19 | **parity-go-rust.md** 入仓；`lockfree.wait` 迁 `atomic_*`+`mo_*` 示范 |
+| 2026-07-19 | **Q2-a**：`lockfree.ebr` 全量迁 preferred path（Boolean CAS + mo_*）；test_lockfree 178 绿 |
 
 ---
 
