@@ -301,6 +301,20 @@ begin
   end;
 end;
 
+procedure TestAnsiBackendKittyKeyboardQuery;
+var
+  LBE: TAnsiBackend;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  try
+    LBE.QueryKittyKeyboard;
+    CheckEqual(#27'[?u', PendingString(LBE),
+      'kitty keyboard query emits CSI ? u');
+  finally
+    LBE.Free;
+  end;
+end;
+
 procedure TestAnsiBackendKittyKeyboardPushPopIndependentOfMouse;
 var
   LBE: TAnsiBackend;
@@ -464,6 +478,8 @@ begin
     @TestAnsiBackendKittyKeyboardPushCustomFlags);
   T.Test('ansi backend kitty keyboard pop',
     @TestAnsiBackendKittyKeyboardPop);
+  T.Test('ansi backend kitty keyboard query',
+    @TestAnsiBackendKittyKeyboardQuery);
   T.Test('ansi backend kitty keyboard push pop independent of mouse',
     @TestAnsiBackendKittyKeyboardPushPopIndependentOfMouse);
   T.Test('ansi backend draw patches reuses cursor and style',

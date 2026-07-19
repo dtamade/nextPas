@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.tui*.pas`（81 个源文件）
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：1.5
+**最后更新**：2026-07-20
+**版本**：1.6
 
 ---
 
@@ -131,10 +131,13 @@ end;
 ### 5.1 Capability 会话协商
 
 - `CapabilityProfile.KittyKeyboard`：env hint → **Detected**；`EnterTui` 发出
-  `CSI = 5 ; 1 u`（disambiguate + report alternate keys）后 **Active=True**
-- `LeaveTui` 发出 `CSI < u` 并收回 Active（`FallbackReason=session-ended`）
-- **Verified** 仍为 False（未实现 `CSI ? u` 查询往返）
-- 非候选终端不发序列，Active 保持 False
+  `CSI = 5 ; 1 u`（disambiguate + report alternate keys）后 **Active=True**，
+  并异步发出 **query** `CSI ? u`（`FallbackReason=query-pending`）
+- 终端应答 `CSI ? <flags> u`：若 `(flags and 5) <> 0` → **Verified=True**；
+  `flags=0` → 保持 Active，Verified=False（`query-flags-zero`）；
+  无应答不阻塞、不回退 Active
+- `LeaveTui` 发出 `CSI < u` 并收回 Active/Verified（`FallbackReason=session-ended`）
+- 解析：`TryParseKittyKeyboardFlagsReply`；不产生用户事件
 
 ---
 
@@ -145,7 +148,7 @@ end;
 - 0 泄漏，0 失败
 - 测试源 0 SysUtils / BaseUnix / Unix 直接引用
 - tracking allocator 覆盖 TBuffer/TOverlay 可选路径
-- Kitty keyboard push/pop + profile Active 迁移有 focused 覆盖
+- Kitty keyboard push/pop/query + profile Active/**Verified** 有 focused 覆盖
 
 ### 6.1 Scorecard 与跨语言对标（Wave Q1）
 
@@ -164,6 +167,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.6 | Kitty keyboard query `CSI ? u` → Verified（非阻塞） | Claude |
 | 2026-07-19 | 1.5 | Wave Q1：scorecard + PARITY + bench_go_rust + 输入/clear/intf 加厚 | Claude |
 | 2026-07-19 | 1.4 | Kitty keyboard 会话 push/pop 协商 → Active | Claude |
 | 2026-07-19 | 1.3 | 可选 IAllocator：TBuffer/TOverlay/TTerminal/ANSI | Claude |

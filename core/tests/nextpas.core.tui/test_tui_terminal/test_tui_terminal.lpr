@@ -2228,6 +2228,7 @@ end;
 procedure TestKittyKeyboardNegotiationActivatesOnCandidate;
 var
   LTerm: TTerminal;
+  LPending: AnsiString;
 begin
   LTerm := TTerminal.Create;
   try
@@ -2238,12 +2239,13 @@ begin
     Check(LTerm.CapabilityProfile.KittyKeyboard.Active, 'active after session push');
     Check(LTerm.HasKittyKeyboard, 'HasKittyKeyboard projects Active');
     Check(not LTerm.CapabilityProfile.KittyKeyboard.Verified,
-      'verified stays false without CSI ? u query');
-    CheckEqual('', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason,
-      'active path clears fallback reason');
+      'verified stays false until CSI ? flags u reply');
+    Check(Pos('query-pending', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason) > 0,
+      'awaiting query reply');
     { InitializeFrameRuntimeForTest uses fd=-1; Flush retains pending on write fail. }
-    Check(Pos(#27'[=5;1u', LTerm.BackendPendingForTest) > 0,
-      'push sequence emitted to backend pending');
+    LPending := LTerm.BackendPendingForTest;
+    Check(Pos(#27'[=5;1u', LPending) > 0, 'push sequence emitted to backend pending');
+    Check(Pos(#27'[?u', LPending) > 0, 'query sequence emitted after push');
   finally
     LTerm.Free;
   end;
@@ -2319,6 +2321,115 @@ begin
     LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
     LTerm.NegotiateKittyKeyboardForTest(False);
     Check(Pos('=5;1u', LTerm.BackendPendingForTest) = 0, 'no push bytes without candidate');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardQueryReplySetsVerified;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+  LReply: array[0..4] of Byte;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Verified, 'pre-reply not verified');
+    { CSI ? 5 u }
+    LReply[0] := 27;
+    LReply[1] := Ord('[');
+    LReply[2] := Ord('?');
+    LReply[3] := Ord('5');
+    LReply[4] := Ord('u');
+    LTerm.InjectInputBytesForTest(LReply);
+    Check(not LTerm.PollQueuedEventForTest(True, LEv),
+      'flags reply is not a user event');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Active, 'active retained after reply');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Verified, 'verified after flags=5');
+    CheckEqual('', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason,
+      'verified clears fallback');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardQueryReplyZeroKeepsActiveUnverified;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+  LReply: array[0..4] of Byte;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    LReply[0] := 27;
+    LReply[1] := Ord('[');
+    LReply[2] := Ord('?');
+    LReply[3] := Ord('0');
+    LReply[4] := Ord('u');
+    LTerm.InjectInputBytesForTest(LReply);
+    Check(not LTerm.PollQueuedEventForTest(True, LEv), 'zero-flags not user event');
+    Check(LTerm.HasKittyKeyboard, 'active retained when flags=0');
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Verified, 'flags=0 not verified');
+    Check(Pos('query-flags-zero', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason) > 0,
+      'zero flags reason');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardQueryReplyThenKey;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+  LBuf: array[0..5] of Byte;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    { CSI ? 5 u then 'a' }
+    LBuf[0] := 27;
+    LBuf[1] := Ord('[');
+    LBuf[2] := Ord('?');
+    LBuf[3] := Ord('5');
+    LBuf[4] := Ord('u');
+    LBuf[5] := Ord('a');
+    LTerm.InjectInputBytesForTest(LBuf);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'following key still parses');
+    Check(LEv.Kind = evKey, 'key event');
+    Check(LEv.Key.Code = kcChar, 'char');
+    CheckEqual(Int64(Ord('a')), Int64(LEv.Key.Ch), 'char a');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Verified, 'verified from mixed stream');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardLeaveClearsVerified;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+  LReply: array[0..4] of Byte;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    LReply[0] := 27;
+    LReply[1] := Ord('[');
+    LReply[2] := Ord('?');
+    LReply[3] := Ord('5');
+    LReply[4] := Ord('u');
+    LTerm.InjectInputBytesForTest(LReply);
+    LTerm.PollQueuedEventForTest(True, LEv);
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Verified, 'verified before leave');
+    LTerm.LeaveTui;
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Verified, 'verified cleared on leave');
+    Check(not LTerm.HasKittyKeyboard, 'inactive after leave');
   finally
     LTerm.Free;
   end;
@@ -2475,5 +2586,13 @@ begin
     @TestKittyKeyboardLeaveClearsActive);
   T.Test('kitty keyboard push bytes absent without candidate',
     @TestKittyKeyboardPushBytesVisibleBeforeFlush);
+  T.Test('kitty keyboard query reply sets verified',
+    @TestKittyKeyboardQueryReplySetsVerified);
+  T.Test('kitty keyboard query zero keeps active unverified',
+    @TestKittyKeyboardQueryReplyZeroKeepsActiveUnverified);
+  T.Test('kitty keyboard query reply then key',
+    @TestKittyKeyboardQueryReplyThenKey);
+  T.Test('kitty keyboard leave clears verified',
+    @TestKittyKeyboardLeaveClearsVerified);
   if not T.Run then Halt(1);
 end.

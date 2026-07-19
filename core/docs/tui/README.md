@@ -83,9 +83,10 @@ end;
 `HasTruecolor`、`HasKittyKeyboard`、`ImageProtocol` 仍然保留，但它们现在只是 active-state projection，
 不再自己承担 hint heuristic。
 
-这点对 kitty keyboard 很关键：终端 hint 只说明“候选能力存在”（`Detected`）。`EnterTui` 在候选
+这点对 kitty keyboard 很重要：终端 hint 只说明“候选能力存在”（`Detected`）。`EnterTui` 在候选
 终端上发出 progressive enhancement push（默认 flags=5：disambiguate + report alternate keys）后才置
-`Active=True`；`LeaveTui` 配对 pop。`Verified` 仍需后续 `CSI ? u` 查询。
+`Active=True`，并异步 query `CSI ? u`；收到 `CSI ? <flags> u` 且与默认 flags 有交集时置
+`Verified=True`。`LeaveTui` 配对 pop。
 
 ## 继续看哪里
 

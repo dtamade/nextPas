@@ -55,6 +55,7 @@ type
       AAlternateScrollKeys: Boolean = False);
     procedure PushKittyKeyboard(AFlags: Integer = KittyKeyboardDefaultFlags);
     procedure PopKittyKeyboard;
+    procedure QueryKittyKeyboard;
     procedure MoveTo(AX, AY: Word);
 
     { 把 Patches 翻译为 ANSI 字节。Patches 假定按 (Y,X) 排序——buffer Diff
@@ -149,6 +150,11 @@ end;
 procedure TAnsiBackend.PopKittyKeyboard;
 begin
   AnsiKittyKeyboardPop(FOut);
+end;
+
+procedure TAnsiBackend.QueryKittyKeyboard;
+begin
+  AnsiKittyKeyboardQuery(FOut);
 end;
 
 procedure TAnsiBackend.MoveTo(AX, AY: Word);

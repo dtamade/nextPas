@@ -43,6 +43,8 @@ const
 
 procedure AnsiKittyKeyboardPush(var B: TStringBuilder; AFlags: Integer = KittyKeyboardDefaultFlags);
 procedure AnsiKittyKeyboardPop(var B: TStringBuilder);
+{ CSI ? u — query progressive enhancement flags (reply: CSI ? <flags> u). }
+procedure AnsiKittyKeyboardQuery(var B: TStringBuilder);
 
 { SGR emitter。每个写一个完整 SGR 序列，不 reset；后端在不兼容属性切换间
   调 AnsiSgrReset。 }
@@ -181,6 +183,14 @@ begin
   { CSI < u  — restore progressive enhancement stack }
   B.AppendByte(27); B.AppendChar('[');
   B.AppendChar('<');
+  B.AppendChar('u');
+end;
+
+procedure AnsiKittyKeyboardQuery(var B: TStringBuilder);
+begin
+  { CSI ? u — request current progressive enhancement flags }
+  B.AppendByte(27); B.AppendChar('[');
+  B.AppendChar('?');
   B.AppendChar('u');
 end;
 

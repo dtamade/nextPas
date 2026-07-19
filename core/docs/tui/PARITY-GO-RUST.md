@@ -73,8 +73,8 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 
 | Wave | 内容 |
 |------|------|
-| Q2 | Kitty `CSI ? u` → Verified；focus in/out |
-| Q3 | full 稀疏 widget 加厚 |
-| Q4 | Windows console / 交叉 CI |
-| Q5 | facade 晋升策略 |
-| Q6 | 可选完整 ratatui/crossterm crate 对照（重依赖） |
+| Q2 | Kitty `CSI ? u` → Verified | **Done 2026-07-20**（非阻塞 query/reply） |
+| Q3 | full 稀疏 widget 加厚 | 进行中 |
+| Q4 | Windows console / 交叉 CI | Wine smoke 计划中 |
+| Q5 | facade 晋升策略 | 后续 |
+| Q6 | 可选完整 ratatui/crossterm crate 对照（重依赖） | 后续 |

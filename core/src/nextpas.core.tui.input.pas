@@ -48,6 +48,12 @@ type
 function ParseOne(const Buf; Len: Integer; AtEOF: Boolean;
   out Out_: TEvent; out Consumed: Integer): TParseResult;
 
+{ Kitty progressive-enhancement query reply: ESC [ ? <flags> u.
+  Not a user event — terminal applies flags to CapabilityProfile.Verified.
+  prSuccess: Flags+Consumed set; prNeedMore: incomplete; prInvalid: not this form. }
+function TryParseKittyKeyboardFlagsReply(const Buf; Len: Integer; AtEOF: Boolean;
+  out Flags: Integer; out Consumed: Integer): TParseResult;
+
 implementation
 
 // Read byte at index I from Buf (treated as PByte).
@@ -128,6 +134,32 @@ begin
     Result := 1;
 end;
 
+function TryParseKittyKeyboardFlagsReply(const Buf; Len: Integer; AtEOF: Boolean;
+  out Flags: Integer; out Consumed: Integer): TParseResult;
+var
+  Pos: Integer;
+  HaveFlags: Boolean;
+begin
+  Flags := 0;
+  Consumed := 0;
+  if Len <= 0 then Exit(prInvalid);
+  { Only claim NeedMore when the prefix is unambiguously a kitty flags reply. }
+  if ByteAt(Buf, 0) <> 27 then Exit(prInvalid);
+  if Len < 2 then Exit(IncompleteStatus(AtEOF));
+  if ByteAt(Buf, 1) <> Ord('[') then Exit(prInvalid);
+  if Len < 3 then Exit(IncompleteStatus(AtEOF));
+  if ByteAt(Buf, 2) <> Ord('?') then Exit(prInvalid);
+  Pos := 3;
+  HaveFlags := ParseDecimal(Buf, Len, Pos, Flags);
+  if not HaveFlags then
+    Flags := 0;
+  if Pos >= Len then Exit(IncompleteStatus(AtEOF));
+  if ByteAt(Buf, Pos) <> Ord('u') then Exit(prInvalid);
+  Inc(Pos);
+  Consumed := Pos;
+  Result := prSuccess;
+end;
+
 // Parse a CSI body starting after `ESC [`.  Buf[0..Len-1] is the
 // whole input including the leading ESC; Body starts at index 2.
 // Returns prSuccess + number of bytes consumed (including ESC[ and
@@ -143,10 +175,26 @@ var
   Final: Byte;
   IsRelease: Boolean;
   MouseX, MouseY: Word;
+  LFlags: Integer;
+  LR: TParseResult;
 begin
   Out_ := NoneEvent;
   Consumed := 0;
   Pos := 2;     // skip ESC [
+
+  { Kitty keyboard flags reply: ESC [ ? <flags> u — not a key event.
+    Emit NoneEvent so terminal TryParseQueuedEvent can drop silently;
+    terminal prefers TryParseKittyKeyboardFlagsReply for Verified updates. }
+  if (Pos < Len) and (ByteAt(Buf, Pos) = Ord('?')) then
+  begin
+    LR := TryParseKittyKeyboardFlagsReply(Buf, Len, AtEOF, LFlags, Consumed);
+    if LR = prSuccess then
+    begin
+      Out_ := NoneEvent;
+      Exit(prSuccess);
+    end;
+    Exit(LR);
+  end;
 
   // Detect SGR mouse: ESC [ < ...
   if (Pos < Len) and (ByteAt(Buf, Pos) = Ord('<')) then
