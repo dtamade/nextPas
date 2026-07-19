@@ -30,7 +30,7 @@
 | F9 TCP positioned read | **关闭** | AsyncRecv/Send |
 | F10 Combinator Ref | **关闭** | WhenAllRef/WhenAnyRef |
 | F11 Channel 背压 | **关闭** | SendAsync (B1) |
-| F12 取消传播 | **Q1 已贯通** | combinator/taskgroup/Recv|SendTimeoutEx；非全 API 表面 |
+| F12 取消传播 | **Q1+Q5** | combinator/taskgroup + Read/Write/Recv/Send TimeoutEx |
 
 ## Go/Rust 差距（当前）
 
