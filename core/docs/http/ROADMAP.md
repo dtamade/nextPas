@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（Parity Q0-0/Q0-1 landed；**NEXT = Q0-2** 修 multi-conn comparison harness）
+**Updated**: 2026-07-19（Q0-2 landed：epoll 0.59× Go 进对标区；**NEXT = S1-1** epoll 规模地基）
 
 ---
 
@@ -111,13 +111,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave N0 Era 9 open | 完成（升格 C5/C4/A3；已并入 Parity Q1） |
 | Wave Q0-0 Parity open | 完成（北极星/退出线/战役地图；主战场=server scale） |
 | Wave Q0-1 workload spec | 完成（BENCHMARKS 官方规格 + 复现命令） |
-| Wave Q0-2 baseline ratio | **in progress** — multi-conn harness `ETimeoutError`；比值未出 |
-| **下一执行点** | **Wave Q0-2** — 修 `bench_http_server` multi-client 超时，再出 nextPas/Go 比值 |
+| Wave Q0-2 baseline ratio | **landed** — harness 恢复；epoll `no_url` **0.59× Go**（进对标区） |
+| **下一执行点** | **Wave S1-1** — epoll 连接/吞吐地基（逼近 0.80×） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
 ```text
-质量 ~75%   规模 ~20%   优雅 ~88%   诚实 ~95%  (Parity Q0；规模被 harness 卡住)
+质量 ~75%   规模 ~45%   优雅 ~88%   诚实 ~95%  (进对标区；epoll 距 0.80× 仍有洞)
 ```
 
 ---
@@ -697,14 +697,14 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | **in progress** |
-| **Do** | (1) 修复 multi-thread `run_server_comparison` nextPas 行 `ETimeoutError: read deadline exceeded`；(2) 跑 epoll+Go(+Rust) 官方规格；(3) 记 req/s 比值；决定插队 S1 或进 Q1-1 |
+| **Status** | **landed** |
+| **Do** | (1) 恢复 multi-conn `bench_http_server`（CLI + keep-alive 完整响应读）；(2) 跑 epoll/threaded + Go(+Rust)；(3) 记比值 |
 | **Don't** | 用 fullchain 单连接 ops/s 冒充 multi-conn 比值；假达标 |
-| **Done when** | nextPas multi-conn 行稳定出 `req/s`；BENCHMARKS Q0 表有数字；NEXT=Q1-1 或 S1-1 |
-| **Gates** | comparison harness 绿 + docs；可选 `test_http_server` 回归 |
-| **Land paths** | `benchmarks/nextpas.core.http/**`；必要时 `core/src/nextpas.core.http*` / `net*` 最小 |
-| **Evidence so far** | 2026-07-19：epoll/threaded 均 client/server 读超时；fullchain Direct/epoll ~8k ops/s 仅作 L2 表征 |
-| **Next** | Q1-1 或 S1-1（比值驱动） |
+| **Done when** | nextPas multi-conn 行稳定出 `req/s`；BENCHMARKS Q0 表有数字；NEXT 比值驱动 |
+| **Gates** | comparison harness 绿 + docs |
+| **Land paths** | `benchmarks/nextpas.core.http/bench_server/**`；`core/docs/http/**` |
+| **Evidence** | 根因：单连接 `Read until EOF` 超时。修复后：epoll `no_url` **16494/28144 = 0.59× Go**；threaded **96313/29286 = 3.29× Go**（非 KPI）；`response_1k` epoll 0.67× |
+| **Next** | **S1-1**（epoll 为规模瓶颈；threaded 已远超 Go） |
 
 ### Era Q1 — Server production depth（质量）
 
@@ -722,14 +722,15 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 ### Era S1 — Server scale foundation
 
-| Wave | Do |
-|------|-----|
-| **S1-1** | epoll 连接生命周期 / accept / idle 代价刻画 + 修阻塞点 |
-| **S1-2** | 有界 worker handoff / backpressure 文档 + 测 |
-| **S1-3** | multi-conn sustained bench + vs Go 比值 |
-| **S1-4** | 必要时最小跨模块修 net.server（双端 gate） |
+| Wave | Status | Do |
+|------|--------|-----|
+| **S1-1** | **queued (NEXT)** | epoll 路径：连接生命周期 / accept / idle / poll handoff 画像 + 修阻塞点；目标抬高 epoll 比值 |
+| **S1-2** | queued | 有界 worker handoff / backpressure 文档 + 测 |
+| **S1-3** | queued | multi-conn sustained（1k/10k 阶梯）+ vs Go 比值刷新 |
+| **S1-4** | queued | 必要时最小跨模块修 `net.server`（双端 gate） |
 
-**S1 退出**：epoll Direct **≥ 0.5× Go** 或诚实 Blocked 升级 net。
+**S1 退出**：epoll 官方 workload **≥ 0.80× Go**（scale-ready）或诚实 Blocked 升级 net。  
+**已知**：Q0-2 已 ≥0.50×；threaded 已 >3× Go → 优先挖 epoll，不是协议 handler。
 
 ### Era S2 — H1 hot path
 
@@ -778,13 +779,13 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ```text
 1. Era 0–8 landed；Era 8 已在 main
 2. H3 Blocked — 跳过；禁止空 facade
-3. Parity Q0-0/Q0-1 landed — 对标规格已冻结
-4. **NEXT = Wave Q0-2** — 先修 multi-conn comparison 超时，再出 nextPas/Go 比值
-5. 比值 ≪0.5× Go → 插队 S1；否则可并行 Q1-1 SSE
+3. Parity Q0 完成 — epoll 0.59× Go（进对标区）；threaded 3.29× Go（非 KPI）
+4. **NEXT = Wave S1-1** — epoll 规模地基（目标 0.80×）
+5. Q1 SSE/stream 可与 S1 并行，但默认先打规模主战场
 6. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
-**没有用户指令时：Goal Loop 自动执行 Q0-2→…；不要空转 H3；未达标禁止写「已对标」。**
+**没有用户指令时：Goal Loop 自动执行 S1-1→…；不要空转 H3；未达 0.80× 禁止写「规模达标」。**
 
 ---
 
@@ -805,7 +806,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
-| 2026-07-19 | **Parity Q0-0/Q0-1**：对标战役开壳 + workload 冻结；Q0-2：multi-conn harness `ETimeoutError` 阻塞比值；NEXT=Q0-2 修 harness |
+| 2026-07-19 | **Q0-2 landed**：恢复 multi-conn `bench_http_server`；epoll 0.59× Go / threaded 3.29× Go；NEXT=S1-1 |
+| 2026-07-19 | **Parity Q0-0/Q0-1**：对标战役开壳 + workload 冻结 |
 | 2026-07-19 | **Parity Campaign Q0-0**：北极星升为对标 Go/Rust 质量+规模；主战场 server；H3 Blocked；N1–N3→Q1 |
 | 2026-07-19 | **Era 9** N0：Production Depth 开启；升格 C5→N1 / C4→N2 / A3→N3（后并入 Q1） |
 | 2026-07-19 | fix(http)：client suite pool accept 非阻塞，消除 MaxPoolSize join hang |
