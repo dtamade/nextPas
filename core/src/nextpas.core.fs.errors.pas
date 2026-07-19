@@ -27,18 +27,22 @@ const
   ERR_ACCESS_DENIED   = 5;
   ERR_NOT_READY       = 21;
   ERR_FILE_EXISTS     = 80;
+  ERR_DISK_FULL       = 112;
   ERR_DIRECTORY       = 267;
   ERR_ALREADY_EXISTS  = 183;
   ERR_DIR_NOT_EMPTY   = Int32(ERROR_DIR_NOT_EMPTY);
+  ERR_NOT_ENOUGH_MEMORY = 8;
 {$ELSE}
 const
   EPERM_  = 1;
   ENOENT_ = 2;
+  ENOMEM_ = 12;
   EACCES_ = 13;
   EEXIST_ = 17;
   ENOTDIR_ = 20;
   EISDIR_ = 21;
   EINVAL_ = 22;
+  ENOSPC_ = 28;
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   ENOTEMPTY_ = 66;
 {$ELSE}
@@ -66,6 +70,8 @@ begin
       raise EAlreadyExistsError.Create(LMsg);
     ERR_DIRECTORY, ERR_DIR_NOT_EMPTY:
       raise EInvalidOperationError.Create(LMsg);
+    ERR_DISK_FULL, ERR_NOT_ENOUGH_MEMORY:
+      raise EResourceExhaustedError.Create(LMsg);
   else
     raise EIOError.Create(LMsg);
   end;
@@ -79,6 +85,8 @@ begin
       raise EAlreadyExistsError.Create(LMsg);
     EINVAL_, EISDIR_, ENOTDIR_, ENOTEMPTY_:
       raise EInvalidOperationError.Create(LMsg);
+    ENOSPC_, ENOMEM_:
+      raise EResourceExhaustedError.Create(LMsg);
   else
     raise EIOError.Create(LMsg);
   end;

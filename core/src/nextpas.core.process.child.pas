@@ -216,7 +216,9 @@ var
   LDeadline: TInstant;
   LErr: Int32;
   LTimedOut: Boolean;
+  LCancelled: Boolean;
   LSleepNs: Int64;
+  LHaveDeadline: Boolean;
 begin
   if FWaited then
     Exit(FLastOutput);
@@ -231,9 +233,16 @@ begin
   Result.StdErr := '';
   Result.TimedOut := False;
   Result.OutputLimited := False;
+  Result.Cancelled := False;
   LTimedOut := False;
+  LCancelled := False;
   CloseWriterBestEffort(FStdinWriter);
-  if FTimeout.IsZero then
+  LHaveDeadline := not FTimeout.IsZero;
+  if LHaveDeadline then
+    LDeadline := TInstant.Now.Add(FTimeout);
+
+  { Blocking wait only when nothing to poll (no timeout, no cancel token). }
+  if (not LHaveDeadline) and (FCancelToken = nil) then
   begin
     LErr := platform_process_wait(FProc, LResult);
     if LErr <> 0 then
@@ -241,15 +250,25 @@ begin
   end
   else
   begin
-    LDeadline := TInstant.Now.Add(FTimeout);
     LSleepNs := 1000000; { 1ms, exponential backoff up to 20ms }
     repeat
+      if CancelRequested then
+      begin
+        LErr := platform_process_kill(FProc);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_kill', LErr);
+        LErr := platform_process_wait(FProc, LResult);
+        if LErr <> 0 then
+          RaiseProcessPlatformError('platform_process_wait', LErr);
+        LCancelled := True;
+        Break;
+      end;
       LErr := platform_process_try_wait(FProc, LResult);
       if LErr <> 0 then
         RaiseProcessPlatformError('platform_process_try_wait', LErr);
       if LResult.Status <> nextpas.core.platform.process.base.psRunning then
         Break;
-      if TInstant.Now.DurationSince(LDeadline).IsPositive then
+      if LHaveDeadline and TInstant.Now.DurationSince(LDeadline).IsPositive then
       begin
         LErr := platform_process_kill(FProc);
         if LErr <> 0 then
@@ -269,7 +288,7 @@ begin
       end;
     until False;
   end;
-  Result := FinishWaitResult(LResult, '', '', LTimedOut);
+  Result := FinishWaitResult(LResult, '', '', LTimedOut, False, LCancelled);
 end;
 
 function TChild.TryWait(out AOutput: TProcessOutput): Boolean;
@@ -480,6 +499,9 @@ begin
         LStderrClosed := True;
         Break;
       end;
+      { Avoid busy-spin when process still running and pipes idle/closed. }
+      if not LHaveProcessResult then
+        platform_thread_sleep_ns(10000000);
       Continue;
     end;
 

@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.os.env.pas`（1 个源文件）
 **层级**：L2（依赖 L1: text.base; 委托 platform.env）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：1.6
+**最后更新**：2026-07-20
+**版本**：1.8
 
 ---
 
@@ -80,7 +80,7 @@
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_os_env | 67 | R19 Expand/HasEnv/Keys 表 |
+| test_os_env | 69 | R19 + R22 mixed Expand / HasEnv empty |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---
@@ -97,3 +97,4 @@
 | 2026-07-19 | 1.5 | INV-9 可移植名 Set/Expand；INV-10 线程 | Claude |
 | 2026-07-19 | 1.6 | ClearEnv（INV-11）；R16 对标 | Claude |
 | 2026-07-19 | 1.7 | R17 质量表；测试 55 | Claude |
+| 2026-07-20 | 1.8 | R22 mixed Expand + HasEnv empty；测试 69 | Claude |

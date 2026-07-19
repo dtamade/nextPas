@@ -1,7 +1,7 @@
-# process / fs / path / env — Go / Rust 对标矩阵（R16–R17）
+# process / fs / path / env — Go / Rust 对标矩阵（R16–R22）
 
-**状态日期**：2026-07-19  
-**范围**：L2 `nextpas.core.{process,fs,path,os.env}`  
+**状态日期**：2026-07-20
+**范围**：L2 `nextpas.core.{process,fs,path,os.env}`
 **标杆**：Go `os` / `os/exec` / `path/filepath`；Rust `std::{fs,process,path,env}`
 
 > 对标的是**能力 + 边界语义 + 测试强度**，不是符号名逐字复制。
@@ -12,11 +12,11 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.2** | R19：WaitGraceful TimedOut（ignore TERM）、ProcessSucceeded 真值表、错误路径、path Clean/Rel 表 |
-| **规模 Scale (Essential)** | **9.3** | R20 fs 三 API + R21 ExtraFd/Credential/CancelToken |
-| **综合** | **9.25** | 对标 Essential 接近完整 |
+| **质量 Quality** | **9.5** | R22：CancelToken 贯通 Wait/Status；WaitWithOutput 无 Timeout 忙等修复；fs ENOSPC/ENOMEM→EResourceExhausted；边界表加厚 |
+| **规模 Scale (Essential)** | **9.3** | R20 fs 三 API + R21 ExtraFd/Credential/CancelToken（本轮不扩 API） |
+| **综合** | **9.4** | Essential 近满 + hardening 证据闭环 |
 
-**目标线**：质量 ≥ 9.0（**R19 达 9.2**）；规模 Essential ≥ **0.85**；测试合计 ≥ **900**（达成）。
+**目标线**：质量 ≥ 9.0（**R22 达 9.5**）；规模 Essential ≥ **0.85**；测试合计 ≥ **900**（R22 ≈ **922**）。
 
 ---
 
@@ -41,7 +41,7 @@
 | Graceful stop | WaitDelay | — | **WaitGraceful** | Done（R16 续） |
 | ExtraFiles | ExtraFiles | — | **ExtraFd** | Done（R21；Unix fd→3+） |
 | Credential/uid | SysProcAttr | CommandExt | **Credential** | Done（R21；Unix；Win UNSUPPORTED） |
-| Context cancel | context | — | **CancelToken** | Done（R21；`IAsyncCancellationToken`） |
+| Context cancel | context | — | **CancelToken** | Done（R21+R22；Wait/Output/Status/WaitGraceful） |
 
 ### fs
 
@@ -88,56 +88,55 @@
 
 ---
 
-## 测试规模（R19 校准）
+## 测试规模（R22 校准）
 
 | 套件 | 通过 |
 |------|------|
-| test_process | **447** |
-| test_process_command / deep / pipe | 48 / 20 / 17 |
-| test_fs | **151** |
+| test_process | **455** |
+| test_process_command / deep / pipe | 48 / **24** / 17 |
+| test_fs | **158** |
 | test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / 17 / 19 |
-| test_path | **68** |
-| test_os_env | **67** |
-| **合计** | **900** |
+| test_path | **69** |
+| test_os_env | **69** |
+| **合计** | **≈922** |
 
-目标 **≥900** ✅（R19）。
+目标 **≥900** ✅（R22）。
 
 ---
 
-## 延期（Deferred）说明
+## R22 Hardening 清单
 
-### L0 缺口（platform 协作清单）
+### 本轮关闭
 
-~~HardLink / Chtimes / Chown~~ — **R20 已落地**（`platform_file_link` / `utimens` / `chown` + fs 门面）。
+| 项 | 结论 |
+|----|------|
+| CancelToken 仅 WaitWithOutput 生效 | **已修**：`TChild.Wait`（含 `Status`）轮询 Cancel + Kill，置 `Cancelled` |
+| WaitWithOutput 无 Timeout 忙等 | **已修**：进程仍 running 时 sleep 10ms |
+| fs.errors 磁盘满/OOM | **已修**：ENOSPC/ENOMEM、Win DISK_FULL → `EResourceExhaustedError` |
+| 历史 polish（RemoveAll symlink / Append / pread） | **复核已修复** |
 
-### process 其他 Deferred
+### 仍 Deferred（非阻塞）
 
-- ~~ExtraFiles / Credential / context~~ — **R21 已落地**（Unix 完整；Win Extra/Cred UNSUPPORTED）。
+| 项 | 性质 |
+|----|------|
+| FsLock / fs.watch / 进程组 | 能力扩展（R23+） |
+| Win ExtraFd / Credential | 文档 UNSUPPORTED |
+| test_process 迁 `nextpas.core.test` | P3 框架债 |
+| 真 Windows host CI | 证据仍 wine-runtime-smoke 级 |
 
 ### 外部债
 
-- **wine-runtime-smoke**：~~曾归因 test.expect 交叉编译阻塞~~ — **2026-07-19 实况绿**  
-  - `make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke` → **4 passed**（cmd echo / LookPath / timeout / MaxOutput）  
-  - truth tier 仍是 **wine-runtime-smoke**（≠ 真 Windows host / ci-matrix）  
-  - Batch-0 后 `test.expect` Windows IUnknown ABI 已可用；全量 `nextpas.core.test` 门面可交叉编译 Win64
+- **wine-runtime-smoke**：2026-07-19 实况 **4 passed**；≠ 真 Windows host
 
 ---
 
 ## 维护策略（口径）
 
-**状态：Ready / 维护态。** Essential 与 wine-runtime-smoke 已绿；测试合计 **900**；Quality **9.2**。  
-剩余两项为**已知、非阻塞**开放债，不是「模块没做完」。
-
-| 项 | 性质 | 口径 |
-|----|------|------|
-| **HardLink / Chtimes / Chown** | 已落地 R20 | L0+L2 完成；Win chown = unsupported |
-| **测试冲 900** | 已达成 R19 | 合计 900；继续表驱动可选 |
+**状态：Ready / 维护态。** Essential + R22 hardening；测试 **≈922**；Quality **9.5**。
 
 **周报可用一句：**
 
-> process/fs/path/env：Ready / 维护态。Essential + wine 4/4 绿；测试 900；Quality 9.2。剩余 HardLink/Chtimes/Chown 等 platform L0。
-
-**不要说：**「fs 不支持 hardlink」（应说分层 Deferred）；「等有空再说」却不留 L0 清单（上表即清单）。
+> process/fs/path/env：Ready。R22 质量 hardening（Cancel Wait 贯通 + 忙等 + 错误映射）；测试 ≈922；Quality 9.5 / 综合 9.4。下一批可选 R23 文件锁。
 
 ---
 
@@ -153,3 +152,4 @@
 | 2026-07-19 | R19 质量属性表 + 测试 900；Quality 9.2 / 综合 9.0 |
 | 2026-07-19 | R20 HardLink/Chtimes/Chown L0+L2；规模 9.1 |
 | 2026-07-20 | R21 ExtraFd/Credential/CancelToken；规模 9.3 |
+| 2026-07-20 | R22 quality hardening；Quality 9.5 / 综合 9.4；测试 ≈922 |

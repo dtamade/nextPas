@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.fs*.pas`（9 个源文件）
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：1.10
+**最后更新**：2026-07-20
+**版本**：1.11
 
 ---
 
@@ -61,7 +61,8 @@ fs.pas           ← 门面 re-export
 |------|------|
 | 文件不存在 | ENotFoundError |
 | 权限不足 | EPermissionError |
-| 磁盘满 | EIOError / EResourceExhaustedError |
+| 磁盘满 / 内存不足 | EResourceExhaustedError（ENOSPC/ENOMEM；Win DISK_FULL/NOT_ENOUGH_MEMORY） |
+| 其它 I/O | EIOError |
 | 路径无效 | EArgumentError |
 
 ---
@@ -115,3 +116,4 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 2026-07-19 | 1.8 | IsSymlink；R16 对标 | Claude |
 | 2026-07-19 | 1.9 | SameFile；质量测；117 | Claude |
 | 2026-07-19 | 1.10 | R17 质量表；133 | Claude |
+| 2026-07-20 | 1.11 | R22 ENOSPC/ENOMEM→EResourceExhaustedError | Claude |
