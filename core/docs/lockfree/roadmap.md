@@ -1,14 +1,13 @@
 # Atomic & Lockfree 可执行路线图（权威）
 
-> **状态**: **Maintenance**（2026-07-19）· R0–R7 + RC Ready + H2 + **H3-1…H3-5** **已完成** · **Owner**: atomic-lockfree lane
-> **范围**: atomic + lockfree + async + bag/multimap + consumer gate + 证据卫生 + thread worksteal
-> **当前执行主线**: **Maintenance**（H3 生产序列完成）。H2 见 [`roadmap-h2.md`](roadmap-h2.md)；H3 见 [`roadmap-h3.md`](roadmap-h3.md)。
-> **H3**: **H3-1…H3-5 all done**。
-> **R8**: 研究 pack 诚实收口（opt-in docs）— [`r8-research-status.md`](r8-research-status.md)；**不**默认生产化。
+> **状态**: **Maintenance + Q 线**（2026-07-19）· R0–R7 + H2 + **H3-1…H3-5 done** · **Owner**: atomic-lockfree lane（全权）
+> **范围**: atomic + lockfree + H3 消费者面
+> **当前执行主线**: **[Q 线 Quality/Parity](quality-parity.md)**（对标 Go/Rust 质量与规模；**不是 R9**）。
+> **H3**: **H3-1…H3-5 all done**。H2 见 [`roadmap-h2.md`](roadmap-h2.md)；H3 见 [`roadmap-h3.md`](roadmap-h3.md)。
+> **R8**: 研究 opt-in — [`r8-research-status.md`](r8-research-status.md)；**不**默认生产化。
 > **Lane**: `.worktrees/atomic-lockfree`；见 [`READY.md`](READY.md)。
-> 冲突时以 **CONTRACT + [`roadmap-h2.md`](roadmap-h2.md) + 本路线图** 为准。
-> **已锁定 (R 线)**: Q1 R4–R7 / Q2 R5 修 cap=1 / Q3 rings+MPSC 优先 / Q4 Makefile 证据 / Q5 phase 归档。
-> **已锁定 (H2)**: D1–D5 见 [`roadmap-h2.md`](roadmap-h2.md)；**不叫 R9**；R8 仍为 opt-in 研究。
+> 冲突时以 **CONTRACT + 本路线图 + quality-parity** 为准。
+> **已锁定 (R/H2)**: 见历史节；**不 invent R9**；R8 仍为 opt-in 研究。
 > **状态入口**: [`READY.md`](READY.md)。
 
 ---
@@ -21,8 +20,9 @@
 | [`README.md`](README.md) | 模块入口、T1 矩阵、生命周期、如何用 | **产品真相** |
 | **[`roadmap-h2.md`](roadmap-h2.md)** | Horizon-2（H2-0…H2-6）章程与完成记录 | **H2 完成记录** |
 | **[`roadmap-h3.md`](roadmap-h3.md)** | Horizon-3 章程 + H3-0…H3-5 记录 | **H3-1…H3-5 done** |
+| **[`quality-parity.md`](quality-parity.md)** | **Q0–Q5** 对标 Go/Rust 质量/规模 | **当前执行主线** |
 | **`roadmap.md`（本文件）** | R0–R7 完成记录、全局非目标、历史索引 | **R 线记录 + 指针** |
-| [`READY.md`](READY.md) | 状态入口、验收清单、Maintenance 策略 | **Maintenance**（H3 complete） |
+| [`READY.md`](READY.md) | 状态入口、验收清单、Maintenance + Q | **Maintenance + Q** |
 | [`r8-research-status.md`](r8-research-status.md) | R8（NUMA/RTM/TLA）诚实状态与 research pack 收口 | 研究，opt-in |
 | [`formal/README.md`](formal/README.md) | TLA+ 如何跑 / 无 TLC 时 model-only | 研究 |
 | [`consumer-audit.md`](consumer-audit.md) | R7 core 内 uses 消费者审计 | 证据 / 维护参考 |
@@ -35,7 +35,7 @@
 | `benchmark-comparison-*.md` | 历史对照数据（需平台信封） | 证据附件 |
 | `formal/tla/*` | 形式化模型 | 研究 |
 
-**原则**：R 线、H2、**H3-1…H3-5** 已完成；**默认 Maintenance**。不要再开无名编号的「Phase N」或擅自开 R9。R8 仅研究 opt-in（**不**生产化）。更后的 horizon 仍须单独授权。
+**原则**：R 线、H2、**H3-1…H3-5** 已完成。**默认执行 Q 线**（[`quality-parity.md`](quality-parity.md)），保持 Maintenance 清洁纪律。不要再开无名「Phase N」或 **R9**。R8 仅研究 opt-in。
 
 ---
 

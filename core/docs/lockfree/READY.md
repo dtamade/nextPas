@@ -1,20 +1,17 @@
 # Atomic & Lockfree — Ready / Horizon-2 / Horizon-3 状态
 
-> **Status**: **H3-5 done** → **Maintenance**（R0–R7 + H2 + **H3-1…H3-5 complete**）
+> **Status**: **H3-5 done** → **Maintenance + Q 线**（对标 Go/Rust 质量/规模）
 > **Date**: 2026-07-19
-> **Owner**: atomic-lockfree lane
-> **Scope**: atomic + lockfree + async.loop (H3-1) + bag/multimap (H3-2) + consumer gate (H3-3) + evidence hygiene (H3-4) + thread worksteal (H3-5)
+> **Owner**: atomic-lockfree lane（全权）
+> **Scope**: atomic + lockfree + H3 消费者面；执行主线见 [`quality-parity.md`](quality-parity.md)（**Q0–Q5**）
 
 Mainline stages **R0–R7 and RC Ready close-out are complete**.
-**Horizon-2 (H2-0…H2-6) is complete** — see [`roadmap-h2.md`](roadmap-h2.md).
-**Horizon-3 Wave-1 (H3-0e + H3-1) is complete** — async `Post` path uses T1 MPSC; see [`roadmap-h3.md`](roadmap-h3.md).
-**Horizon-3 H3-2 is complete** — T2 Guarded production subset for **bag + multimap** (CONTRACT §0.3); **not** default facade.
-**Horizon-3 H3-3 is complete** — consumer regression gate `verify-h3-consumers`.
-**Horizon-3 H3-4 is complete** — bench envelope hygiene + api-ref CONTRACT alignment.
-**Horizon-3 H3-5 is complete** — `thread.pool.worksteal` uses T1 `lockfree.deque` via unmanaged slots.
-**Current execution line**: **Maintenance** (H3 production sequence complete).
+**Horizon-2 / Horizon-3 (H3-1…H3-5) are complete** — see [`roadmap-h2.md`](roadmap-h2.md) / [`roadmap-h3.md`](roadmap-h3.md).
+**Current execution line**: **Q 线（Quality/Parity）** under Maintenance hygiene — **not R9**.
 **R8** remains **opt-in research** — see [`r8-research-status.md`](r8-research-status.md).
 Do **not** invent an R9.
+
+H3 close-out remains the production baseline; Q 线加深质量与可导航规模，不堆 T2 玩具。
 
 H3-1 land HEAD on main: `710ddd7ab` (feat `8d99b07ab` + Wave-1 status docs).
 H3-2 evidence: CONTRACT §0.3; `test_lockfree_bag` / `test_lockfree_multimap` H3-2 pins; multimap `Destroy` closes first.
@@ -39,8 +36,8 @@ close-out docs: `archive/atomic-lockfree-h2-closeout-20260717`.
 | **Consumer regression gate** | **H3-3 done** | `verify-h3-consumers` formalizes async + bag/multimap + H2-6 example |
 
 Authoritative contract: [`CONTRACT.md`](CONTRACT.md). Product entry: [`README.md`](README.md).
-R-line map: [`roadmap.md`](roadmap.md). **H2 charter (complete)**: [`roadmap-h2.md`](roadmap-h2.md).
-**H3 charter**: [`roadmap-h3.md`](roadmap-h3.md).
+R-line map: [`roadmap.md`](roadmap.md). **H2**: [`roadmap-h2.md`](roadmap-h2.md). **H3**: [`roadmap-h3.md`](roadmap-h3.md).
+**Q 线（当前）**: [`quality-parity.md`](quality-parity.md) — Go/Rust quality/scale; clean T1/T2 tiers.
 
 ---
 
@@ -106,14 +103,14 @@ Related earlier landings:
 
 ---
 
-## Policy during Maintenance (post-H3-5)
+## Policy during Maintenance + Q 线
 
-1. **Default**: fix T1/atomic/H3-2 bag·multimap / H3-1 async / H3-5 worksteal production bugs; amend CONTRACT when semantics change; keep **`verify-t1` + `verify-h3-consumers`** (+ `test_worksteal` when touching thread pool) green; keep absolute Mops behind envelope.
-2. **Do not open R9**. H2/H3 production sequence is complete; R8 stays research / opt-in.
+1. **Default**: execute **Q0–Q5** ([`quality-parity.md`](quality-parity.md)); fix T1/atomic/H3 consumer bugs; keep **`verify-t1` + `verify-h3-consumers`** (+ `test_worksteal` when relevant) green; absolute Mops only with envelope.
+2. **Do not open R9**. H3 is complete; Q 线 is the quality program; R8 stays research / opt-in.
 3. **Major changes** (Closed semantics, expand default facade to T2, promote R8 to production, delete legacy CAS): stop, revise roadmap, ask.
 4. Prefer path-limited landings; do not raw-merge long-lived lane history into `main`.
-5. Keep artifact hygiene: no `.o`/`.ppu`/build noise in the source tree; `make hygiene` before land.
-6. Further production waves **beyond H3-5** need a new charter.
+5. Keep artifact hygiene: no `.o`/`.ppu`/build noise; `make hygiene` before land.
+6. Expanding T2 **production subset** beyond bag/multimap requires a one-page charter under Q4.
 
 ---
 
