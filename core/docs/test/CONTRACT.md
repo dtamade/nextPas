@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-19
-**版本**：v8.8b
+**版本**：v8.8d
 
 ---
 
@@ -390,6 +390,26 @@ end;
 | 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
 
 ## 11. 变更日志
+
+### v8.8d (2026-07-19) — Go `-race` 意图：竞态与压力
+
+**并行竞态契约**（`test_parallel`）：
+- 8 线程 × 1000 `InterlockedIncrement` → 计数精确 8000
+- `TestSeq` 先于并行批完成（`GSeqDone` 可见性）
+- 4 线程 Expect/Check 风暴（各 500 次）全 pass
+- `RunParallelWithResult` 聚合：Passed+Failed+Skipped = 注册数
+
+**压力**（`test_stress`）：
+- 并行 12×2000 `CheckEqual`；并行 8×300 Expect 链（有断言，非空跑）
+
+### v8.8c (2026-07-19) — Go/Rust 规模爬升 ≥1200 可计数过程
+
+**规模**：
+- `test_prop`：50 个场景改为 `TTestSuite.Test` 可计数（Shrink 改直接测 API，避免 Prop FailTest/Halt）
+- `test_diagnostics`：+150 identity `TestTable`
+- `test_config`：+400 identity `TestTable`
+- `test_discovery`：+5 元数据过程
+- 可计数过程合计 **≥1200**（不含 stress 10K 空测试展开）
 
 ### v8.8b (2026-07-19) — Go/Rust 诊断质量：Snapshot 契约 + Diff 消息
 

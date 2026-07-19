@@ -198,6 +198,68 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+{ ── B3 scale: discovery metadata (no extra RunWithResult — fixture registry) ─ }
+
+procedure TestDiscoverEmptyZeroTests;
+var
+  LFixture: TEmptyFixture;
+  LSuite: TTestSuite;
+begin
+  LFixture := TEmptyFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  CheckEqual(0, Length(LSuite.Tests), 'empty fixture has zero tests');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestDiscoverSimpleNames;
+var
+  LFixture: TSimpleFixture;
+  LSuite: TTestSuite;
+begin
+  LFixture := TSimpleFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  CheckEqual(2, Length(LSuite.Tests));
+  CheckTrue((LSuite.Tests[0].Name = 'TestPass') or (LSuite.Tests[1].Name = 'TestPass'));
+  CheckTrue((LSuite.Tests[0].Name = 'TestAlsoPass') or (LSuite.Tests[1].Name = 'TestAlsoPass'));
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestDiscoverFailMethodName;
+var
+  LFixture: TFailFixture;
+  LSuite: TTestSuite;
+begin
+  LFixture := TFailFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  CheckEqual(1, Length(LSuite.Tests));
+  CheckEqual('TestFail', LSuite.Tests[0].Name);
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestDiscoverEntryNamesNonEmpty;
+var
+  LFixture: TSimpleFixture;
+  LSuite: TTestSuite;
+  I: Integer;
+begin
+  LFixture := TSimpleFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  for I := 0 to High(LSuite.Tests) do
+    CheckTrue(LSuite.Tests[I].Name <> '', 'discovered name non-empty');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestDiscoverHooksMethodCountAgain;
+var
+  LFixture: THooksFixture;
+  LSuite: TTestSuite;
+begin
+  LFixture := THooksFixture.Create;
+  LSuite := DiscoverTests(LFixture);
+  CheckEqual(3, Length(LSuite.Tests));
+  LSuite := Default(TTestSuite);
+end;
+
 { ── Main ───────────────────────────────────────────────────────────────────── }
 
 var
@@ -214,6 +276,12 @@ begin
   LSuite.Test('Discover AfterEach',      @TestDiscoverAfterEach);
   LSuite.Test('Discover method count',   @TestDiscoverMethodCount);
   LSuite.Test('Discover method names',   @TestDiscoverMethodName);
+  { B3 scale — metadata only (avoid fixture registry double-run AV) }
+  LSuite.Test('Discover empty zero',     @TestDiscoverEmptyZeroTests);
+  LSuite.Test('Discover simple names',   @TestDiscoverSimpleNames);
+  LSuite.Test('Discover fail method name',@TestDiscoverFailMethodName);
+  LSuite.Test('Discover entry names',    @TestDiscoverEntryNamesNonEmpty);
+  LSuite.Test('Discover hooks count again',@TestDiscoverHooksMethodCountAgain);
 
   if not LSuite.Run then
   begin

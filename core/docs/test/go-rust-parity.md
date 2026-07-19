@@ -100,6 +100,7 @@ make -C core/tests/nextpas.core.test clean test   # 16/16
 
 | 批次 | 状态 |
 |------|------|
-| B1 v8.8a 零裸奔 API | **done** |
-| B2 v8.8b 诊断质量 | **done**（Snapshot env 契约 + ColorDiff 统一 + diagnostics 消息契约） |
-| B3–B4 | planned |
+| B1 v8.8a 零裸奔 API | **done**（已 land main） |
+| B2 v8.8b 诊断质量 | **done**（已 land main） |
+| B3 v8.8c 规模爬升 | **done**（prop 可计数 + table bulk ≥1200） |
+| B4 v8.8d 竞态/压力 | **done**（原子计数 / TestSeq / Expect 风暴 / stress 并行） |

@@ -187,6 +187,55 @@ begin
   ExpectArrayOfInt(LA).ToEqualIntArray(LB);
 end;
 
+{ ── B4: Parallel stress with assertions (Go -race intent) ────────────────── }
+
+procedure ParallelManyChecksBody;
+var
+  I: Integer;
+begin
+  for I := 1 to 2000 do
+  begin
+    CheckEqual(I, I);
+    CheckTrue(I > 0);
+  end;
+end;
+
+procedure TestParallelManyChecks;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+begin
+  LSuite := TTestSuite.Create('parallel-many-checks');
+  for I := 1 to 12 do
+    LSuite.Test('pmc' + IntToStr(I), @ParallelManyChecksBody);
+  LSuite.RunParallelWithResult(nil, LResult);
+  CheckEqual(12, LResult.Passed, 'all parallel check storms pass');
+  CheckEqual(0, LResult.Failed);
+end;
+
+procedure ParallelExpectBody;
+var
+  I: Integer;
+begin
+  for I := 1 to 300 do
+    ExpectInt(I).ToEqualInt(I).ToBeGreaterThan(0);
+end;
+
+procedure TestParallelExpectStorm;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+begin
+  LSuite := TTestSuite.Create('parallel-expect-storm');
+  for I := 1 to 8 do
+    LSuite.Test('pe' + IntToStr(I), @ParallelExpectBody);
+  LSuite.RunParallelWithResult(nil, LResult);
+  CheckEqual(8, LResult.Passed);
+  CheckEqual(0, LResult.Failed);
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -205,6 +254,8 @@ begin
   LSuite.Test('10K mock calls',            @TestMockTenKCalls);
   LSuite.Test('10K expect calls',          @TestExpectTenKCalls);
   LSuite.Test('10K array equal',           @TestLargeArrayEqual);
+  LSuite.Test('parallel 12x2K checks',     @TestParallelManyChecks);
+  LSuite.Test('parallel 8x Expect storm',  @TestParallelExpectStorm);
 
   if not LSuite.Run then
   begin
