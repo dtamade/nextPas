@@ -562,7 +562,7 @@ begin
     pbKqueue: Result := FKqueue.TryCancelByContext(AContext);
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
-    pbIocp: Result := False; { B4: CancelIoEx by context }
+    pbIocp: Result := FIocp.TryCancelByContext(AContext);
     {$ENDIF}
   else
     Result := False;

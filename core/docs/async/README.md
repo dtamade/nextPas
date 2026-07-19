@@ -11,12 +11,13 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - If the real io_uring queue creation fails after probing, `TPoller.Create` switches backend truth to epoll (or `pbUnsupported` if epoll create also fails)
 - 18 timeout tests in `test_async_timeout` verify the race mechanism, `TTimeoutCtx` lifecycle, and heaptrc enforcement
 
-### windows compile truth
-- `TPoller` defines `pbIocp` in the backend enum on Windows, but `TIocpReactor` is currently a stub that raises `ENetworkError`
-- `nextpas.core.io.reactor.iocp.pas` contains the IOCP function declarations (`CreateIoCompletionPort`, `GetQueuedCompletionStatus`, `PostQueuedCompletionStatus`, `CancelIoEx`) with `external 'kernel32.dll'`
-- Backend model: `pbIocp` is classified as `pbmCompletionQueue` (completion-based, not readiness-based)
-- **source-contract + forced compile only**: tests exist (`test_async_windows_compile_gate`, `test_poller_windows_compile_gate`) that verify the Windows source compiles, but there are no runtime tests
-- **not windows runtime ready** — no Windows runner has proven runtime correctness on an actual Windows host
+### windows wine-runtime truth
+- `TPoller` defines `pbIocp` and wires `TIocpReactor` (`nextpas.core.io.reactor.iocp`) — full completion implementation (not a stub): `CreateIoCompletionPort`, overlapped `ReadFile`/`WriteFile`, `WSASend`/`WSARecv`, `AcceptEx`/`ConnectEx`, `GetQueuedCompletionStatus`, `CancelIoEx`
+- Backend model: `pbIocp` is `pbmCompletionQueue` (completion-based; positioned file I/O supported)
+- Timeout cancel: `TryCancelByContext` → `CancelIoEx` on matching pending ops; completion packet still arrives (often `-ERROR_OPERATION_ABORTED`) and is discarded by Timeout CAS when the timer already won
+- **truth=wine-runtime-smoke**: `test_reactor_iocp_wine` (socket + cancel) and `test_poller_windows_runtime_smoke` (overlapped file via poller) run under Wine on this worktree
+- **source-contract + forced compile** gates remain (`test_async_windows_compile_gate`, `test_poller_windows_compile_gate`)
+- **not windows runtime ready** as **native Windows host** evidence — no real Windows runner has proven the same suite on bare metal; Wine is not a host claim
 - **platform wake is not the iocp owner** — Windows platform wake (or its future replacement) is owned by the platform poller seam, not by the IOCP completion port; IOCP and platform wake are separate plumbing paths
 
 ### macOS/FreeBSD truth
@@ -40,6 +41,7 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 
 - io_uring backend (Linux 5.1+) with epoll fallback (Linux 2.6+)
 - kqueue readiness backend (macOS/FreeBSD) via `TKqueueReactor` / `pbKqueue`
+- IOCP completion backend (Windows) via `TIocpReactor` / `pbIocp` (wine-runtime-smoke)
 - Runtime backend detection (automatic best selection)
 - Timer heap (min-heap, O(log n) schedule/cancel)
 - I/O with deadline (timeout race mechanism with atomic CAS)
@@ -210,7 +212,7 @@ This means:
 - Linux 5.1+ with io_uring: uses `TIoReactor` (io_uring) — `pbmCompletionQueue`
 - Linux 2.6+ without io_uring, or after create-time io_uring failure: uses `TEpollReactor` (epoll) — `pbmReadiness`
 - macOS/FreeBSD: uses `TKqueueReactor` (kqueue) — `pbmReadiness` (compile-gate proven; host runtime not claimed here)
-- Windows: compile-only `pbIocp` stub — `pbmCompletionQueue` (not windows runtime ready)
+- Windows: `TIocpReactor` / `pbIocp` — `pbmCompletionQueue` (**truth=wine-runtime-smoke**; not windows runtime ready on native host)
 
 Check the active backend at runtime:
 ```pascal
@@ -301,9 +303,9 @@ This split avoids forcing a result parameter into timer/post callbacks where it 
 - **Timeout cancel (best-effort by backend)**: when the deadline timer wins the CAS race, the loop calls `TPoller.TryCancelByContext` on the `TimeoutCtx`:
   - **io_uring**: submits `IORING_OP_ASYNC_CANCEL` for the pending entry; the original CQE still arrives (often `-ECANCELED`) and is discarded by CAS
   - **epoll / kqueue**: removes the pending op from the reactor table and delivers an internal `-ECANCELED` completion so `TimeoutCtx` refcount is released (not a kernel read/write cancel)
-  - **IOCP**: not guaranteed yet (returns False)
+  - **IOCP**: `CancelIoEx` by context; OVERLAPPED stays until GQCS delivers aborted completion (discarded by CAS if timer already won)
   - User API is unchanged: still exactly one user completion (`-110` or I/O result)
-- **IOCP is compile-only**: `pbIocp` exists in the backend enum and the reactor stub compiles, but no runtime verification has been done on Windows.
+- **IOCP wine-runtime-smoke**: reactor socket + cancel and poller overlapped file smoke under Wine; still **not windows runtime ready** on a native Windows host
 - **WhenAll/WhenAny exist** in `async.combinators` (plus Ref variants).
 - **No file descriptor lifecycle management**: the caller is responsible for opening/closing fds.
 

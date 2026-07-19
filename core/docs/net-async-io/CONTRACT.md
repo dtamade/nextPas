@@ -435,7 +435,11 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 ### Timeout cancel (B2)
 - `Async*Timeout` timer path calls `TPoller.TryCancelByContext(TimeoutCtx)` after user `-ETIMEDOUT`.
-- io_uring: real `IORING_OP_ASYNC_CANCEL`; epoll/kqueue: remove pending + internal `-ECANCELED`; IOCP: not guaranteed.
+- io_uring: real `IORING_OP_ASYNC_CANCEL`; epoll/kqueue: remove pending + internal `-ECANCELED`; IOCP: `CancelIoEx` by context (completion packet still arrives).
+
+### IOCP (B4)
+- `TIocpReactor` is a real completion backend (not a stub); `TPoller` wires `pbIocp` on Windows.
+- Evidence: `truth=wine-runtime-smoke` via `test_reactor_iocp_wine` + `test_poller_windows_runtime_smoke`; still not native Windows host runtime ready.
 
 ### Kqueue (B3)
 - `pbKqueue` readiness backend wired into `TPoller` for macOS/FreeBSD (`TKqueueReactor`).

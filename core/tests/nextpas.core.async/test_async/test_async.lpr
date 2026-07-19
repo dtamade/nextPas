@@ -812,12 +812,16 @@ begin
 
   CheckSourceContains(LReadme, 'linux runtime truth',
     'async README must separate Linux runtime truth');
-  CheckSourceContains(LReadme, 'windows compile truth',
-    'async README must separate Windows compile truth');
+  CheckSourceContains(LReadme, 'windows wine-runtime truth',
+    'async README must separate Windows wine-runtime truth');
+  CheckSourceContains(LReadme, 'truth=wine-runtime-smoke',
+    'async README must name Wine runtime smoke evidence for IOCP');
   CheckSourceContains(LReadme, 'source-contract + forced compile',
     'async README must name Windows source-contract and forced compile limits');
   CheckSourceContains(LReadme, 'not windows runtime ready',
-    'async README must not claim Windows runtime readiness without runtime proof');
+    'async README must not claim native Windows host runtime readiness');
+  CheckSourceContains(LReadme, 'cancelioex',
+    'async README must document IOCP CancelIoEx cancel path');
   CheckSourceContains(LReadme, '`pbkqueue`',
     'async README must document pbKqueue readiness backend');
   CheckSourceContains(LReadme, 'not macos/freebsd host-runtime proven',
@@ -852,6 +856,10 @@ begin
     'async README must not collapse kqueue and IOCP truth');
   CheckSourceNotContains(LReadme, 'no `pbkqueue` backend',
     'async README must not claim absence of pbKqueue after B3');
+  CheckSourceNotContains(LReadme, 'currently a stub that raises',
+    'async README must not call TIocpReactor a stub after B4');
+  CheckSourceNotContains(LReadme, 'iocp is compile-only',
+    'async README must not claim IOCP is compile-only after wine smoke');
 
   CheckSourceContains(LPollerSource,
     'tpollerbackend = (pbiouring, pbepoll, pbkqueue, pbiocp, pbunsupported);',

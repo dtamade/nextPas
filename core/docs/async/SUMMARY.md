@@ -120,9 +120,9 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 | 平台 | 状态 | 说明 |
 |------|------|------|
 | Linux | ✅ | io_uring + epoll (自动检测) |
-| macOS | ❌ | 无 kqueue 后端 |
-| Windows | ❌ | IOCP 编译桩，无运行时 |
-| FreeBSD | ❌ | 无 kqueue 后端 |
+| macOS | ⚠️ | `pbKqueue` readiness 已接线；FORCE_HOST 编译门；未 host-runtime proven |
+| Windows | ⚠️ | `pbIocp` 真实现 + Wine runtime smoke；非原生 Windows host ready |
+| FreeBSD | ⚠️ | `pbKqueue` 已接线；FORCE_HOST 被 platform.thread 阻塞 |
 
 ## 线程安全
 
@@ -140,8 +140,8 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 
 ## 未来方向
 
-1. **macOS/FreeBSD**: 添加 kqueue 后端
-2. **Windows**: 完善 IOCP 运行时支持
+1. **原生 Windows host runner**: 升格 wine-runtime-smoke → host-runtime ready
+2. **macOS/FreeBSD host runtime smoke**: 有 runner 后再证明
 3. **性能优化**: 批量 I/O 操作
 4. **Channel 有界异步等待** + 与 net.async.backpressure 打通
 

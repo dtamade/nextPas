@@ -201,7 +201,7 @@ end;
 | io_uring | `TryCancelByContext` → `IORING_OP_ASYNC_CANCEL`; late CQE discarded by CAS |
 | epoll | Drop pending op + internal `-ECANCELED` to release `TimeoutCtx` (not kernel cancel) |
 | kqueue | Same best-effort as epoll (pending drop + internal `-ECANCELED`) |
-| IOCP | Best-effort not guaranteed (stub False) |
+| IOCP | `TryCancelByContext` → `CancelIoEx`; late GQCS packet (often aborted) discarded by CAS |
 
 User still sees exactly one completion. `HasPendingIo` should clear after cancel drain (Poll).
 
