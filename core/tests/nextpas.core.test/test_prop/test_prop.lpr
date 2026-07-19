@@ -32,12 +32,30 @@ begin
 end;
 
 procedure TestStringShrink;
+{ B3: do not use Prop()+PropFail (FailTest/Halt). Exercise Shrink API directly. }
+var
+  LGen: IStringGenerator;
+  LValue: string;
+  LCandidates: specialize TArray<string>;
+  I, J: Integer;
+  LFound: Boolean;
 begin
-  Prop('String shrink test', procedure(const S: string)
+  LGen := GenString(100);
+  LFound := False;
+  for I := 1 to 200 do
   begin
-    if Length(S) > 10 then
-      PropFail('String too long');
-  end, GenString(100), 100, True);
+    LValue := LGen.Generate;
+    if Length(LValue) > 10 then
+    begin
+      LFound := True;
+      LCandidates := LGen.Shrink(LValue);
+      CheckTrue(Length(LCandidates) > 0, 'shrink produces candidates');
+      for J := 0 to High(LCandidates) do
+        CheckTrue(Length(LCandidates[J]) <= Length(LValue), 'shrink not longer');
+      Break;
+    end;
+  end;
+  CheckTrue(LFound, 'expected Length>10 within 200 draws');
 end;
 
 { ── Int64 property tests ──────────────────────────────────────────────────── }
@@ -56,12 +74,30 @@ begin
 end;
 
 procedure TestIntShrink;
+{ B3: exercise IIntGenerator.Shrink without Prop FailTest/Halt. }
+var
+  LGen: IIntGenerator;
+  LValue: Int64;
+  LCandidates: specialize TArray<Int64>;
+  I, J: Integer;
+  LFound: Boolean;
 begin
-  Prop('Int shrink test', procedure(const V: Int64)
+  LGen := GenInt(0, 1000);
+  LFound := False;
+  for I := 1 to 200 do
   begin
-    if V > 100 then
-      PropFail('Value too large');
-  end, GenInt(0, 1000), 100, True);
+    LValue := LGen.Generate;
+    if LValue > 100 then
+    begin
+      LFound := True;
+      LCandidates := LGen.Shrink(LValue);
+      CheckTrue(Length(LCandidates) > 0, 'int shrink produces candidates');
+      for J := 0 to High(LCandidates) do
+        CheckTrue(LCandidates[J] <= LValue, 'int shrink not greater');
+      Break;
+    end;
+  end;
+  CheckTrue(LFound, 'expected V>100 within 200 draws');
 end;
 
 { ── Boolean property tests ────────────────────────────────────────────────── }
@@ -718,204 +754,75 @@ begin
 end;
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
+var
+  LSuite: TTestSuite;
 begin
   WriteLn('=== Property-based Testing Framework ===');
   WriteLn;
   Randomize;
 
-  SectionHeader('String properties');
-  TestStringProperty;
-  PassTest('String property passed');
+  { B3: register as TTestSuite for countable process metrics (Go/Rust scale). }
+  LSuite := TTestSuite.Create('prop');
+  LSuite.Test('StringProperty', @TestStringProperty);
+  LSuite.Test('StringShrink', @TestStringShrink);
+  LSuite.Test('IntProperty', @TestIntProperty);
+  LSuite.Test('IntShrink', @TestIntShrink);
+  LSuite.Test('BoolProperty', @TestBoolProperty);
+  LSuite.Test('BytesProperty', @TestBytesProperty);
+  LSuite.Test('MapIntToStr', @TestMapIntToStr);
+  LSuite.Test('FilterInt', @TestFilterInt);
+  LSuite.Test('FilterString', @TestFilterString);
+  LSuite.Test('FilterBytes', @TestFilterBytes);
+  LSuite.Test('GenChoiceInt', @TestGenChoiceInt);
+  LSuite.Test('GenChoiceString', @TestGenChoiceString);
+  LSuite.Test('GenChoiceBool', @TestGenChoiceBool);
+  LSuite.Test('GenOneOfInt', @TestGenOneOfInt);
+  LSuite.Test('GenOneOfString', @TestGenOneOfString);
+  LSuite.Test('IntShrinkRespectsMin', @TestIntShrinkRespectsMin);
+  LSuite.Test('FuzzBasic', @TestFuzzBasic);
+  LSuite.Test('FuzzString', @TestFuzzString);
+  LSuite.Test('FuzzGenBytes', @TestFuzzGenBytes);
+  LSuite.Test('FuzzGenString', @TestFuzzGenString);
+  LSuite.Test('FuzzEmptyCorpus', @TestFuzzEmptyCorpus);
+  LSuite.Test('CorpusCreate', @TestCorpusCreate);
+  LSuite.Test('CorpusAdd', @TestCorpusAdd);
+  LSuite.Test('CorpusAddString', @TestCorpusAddString);
+  LSuite.Test('CorpusSaveLoad', @TestCorpusSaveLoad);
+  LSuite.Test('CorpusHasFiles', @TestCorpusHasFiles);
+  LSuite.Test('FuzzWithCorpus', @TestFuzzWithCorpus);
+  LSuite.Test('FuzzStringWithCorpus', @TestFuzzStringWithCorpus);
+  LSuite.Test('GenArray', @TestGenArray);
+  LSuite.Test('GenArrayMinMax', @TestGenArrayMinMax);
+  LSuite.Test('GenTuple', @TestGenTuple);
+  LSuite.Test('BindInt', @TestBindInt);
+  LSuite.Test('StringShrinkImproved', @TestStringShrinkImproved);
+  LSuite.Test('CoverageTracker', @TestCoverageTracker);
+  LSuite.Test('FuzzStructuredInt', @TestFuzzStructuredInt);
+  LSuite.Test('FuzzStructuredString', @TestFuzzStructuredString);
+  LSuite.Test('FuzzParallel', @TestFuzzParallel);
+  LSuite.Test('FuzzParallelCoverage', @TestFuzzParallelCoverage);
+  LSuite.Test('GenIntLargeRange', @TestGenIntLargeRange);
+  LSuite.Test('GenIntSameMinMax', @TestGenIntSameMinMax);
+  LSuite.Test('GenStringEmpty', @TestGenStringEmpty);
+  LSuite.Test('GenArrayEmpty', @TestGenArrayEmpty);
+  LSuite.Test('GenIntMinMaxReversed', @TestGenIntMinMaxReversed);
+  LSuite.Test('GenChoiceIntEmpty', @TestGenChoiceIntEmpty);
+  LSuite.Test('GenChoiceStringEmpty', @TestGenChoiceStringEmpty);
+  LSuite.Test('GenOneOfIntEmpty', @TestGenOneOfIntEmpty);
+  LSuite.Test('GenOneOfStringEmpty', @TestGenOneOfStringEmpty);
+  LSuite.Test('GenStringMinMaxReversed', @TestGenStringMinMaxReversed);
+  LSuite.Test('GenBytesMinMaxReversed', @TestGenBytesMinMaxReversed);
+  LSuite.Test('GenArrayMinMaxReversed', @TestGenArrayMinMaxReversed);
 
-  SectionHeader('Int64 properties');
-  TestIntProperty;
-  PassTest('Int64 property passed');
-
-  SectionHeader('Boolean properties');
-  TestBoolProperty;
-  PassTest('Boolean property passed');
-
-  SectionHeader('TBytes properties');
-  TestBytesProperty;
-  PassTest('TBytes property passed');
-
-  SectionHeader('Combinator: MapIntToStr');
-  TestMapIntToStr;
-  PassTest('MapIntToStr passed');
-
-  SectionHeader('Combinator: FilterInt');
-  TestFilterInt;
-  PassTest('FilterInt passed');
-
-  SectionHeader('Combinator: FilterString');
-  TestFilterString;
-  PassTest('FilterString passed');
-
-  SectionHeader('Combinator: FilterBytes');
-  TestFilterBytes;
-  PassTest('FilterBytes passed');
-
-  SectionHeader('GenChoiceInt');
-  TestGenChoiceInt;
-  PassTest('GenChoiceInt passed');
-
-  SectionHeader('GenChoiceString');
-  TestGenChoiceString;
-  PassTest('GenChoiceString passed');
-
-  SectionHeader('GenChoiceBool');
-  TestGenChoiceBool;
-  PassTest('GenChoiceBool passed');
-
-  SectionHeader('GenOneOfInt');
-  TestGenOneOfInt;
-  PassTest('GenOneOfInt passed');
-
-  SectionHeader('GenOneOfString');
-  TestGenOneOfString;
-  PassTest('GenOneOfString passed');
-
-  SectionHeader('Int shrink respects min');
-  TestIntShrinkRespectsMin;
-  PassTest('Int shrink toward min passed');
-
-  SectionHeader('Fuzz basic');
-  TestFuzzBasic;
-  PassTest('Fuzz basic passed');
-
-  SectionHeader('Fuzz string');
-  TestFuzzString;
-  PassTest('Fuzz string passed');
-
-  SectionHeader('FuzzGenBytes');
-  TestFuzzGenBytes;
-  PassTest('FuzzGenBytes passed');
-
-  SectionHeader('FuzzGenString');
-  TestFuzzGenString;
-  PassTest('FuzzGenString passed');
-
-  SectionHeader('Fuzz empty corpus');
-  TestFuzzEmptyCorpus;
-  PassTest('Fuzz empty corpus passed');
-
-  SectionHeader('Corpus create');
-  TestCorpusCreate;
-  PassTest('Corpus create passed');
-
-  SectionHeader('Corpus add');
-  TestCorpusAdd;
-  PassTest('Corpus add passed');
-
-  SectionHeader('Corpus add string');
-  TestCorpusAddString;
-  PassTest('Corpus add string passed');
-
-  SectionHeader('Corpus save/load');
-  TestCorpusSaveLoad;
-  PassTest('Corpus save/load passed');
-
-  SectionHeader('Corpus HasFiles');
-  TestCorpusHasFiles;
-  PassTest('Corpus HasFiles passed');
-
-  SectionHeader('FuzzWithCorpus');
-  TestFuzzWithCorpus;
-  PassTest('FuzzWithCorpus passed');
-
-  SectionHeader('FuzzStringWithCorpus');
-  TestFuzzStringWithCorpus;
-  PassTest('FuzzStringWithCorpus passed');
-
-  SectionHeader('GenArray');
-  TestGenArray;
-  PassTest('GenArray passed');
-
-  SectionHeader('GenArray min/max');
-  TestGenArrayMinMax;
-  PassTest('GenArray min/max passed');
-
-  SectionHeader('GenTuple');
-  TestGenTuple;
-  PassTest('GenTuple passed');
-
-  SectionHeader('BindInt');
-  TestBindInt;
-  PassTest('BindInt passed');
-
-  SectionHeader('String shrink improved');
-  TestStringShrinkImproved;
-  PassTest('String shrink improved passed');
-
-  SectionHeader('Coverage tracker');
-  TestCoverageTracker;
-  PassTest('Coverage tracker passed');
-
-  SectionHeader('FuzzStructured int');
-  TestFuzzStructuredInt;
-  PassTest('FuzzStructured int passed');
-
-  SectionHeader('FuzzStructured string');
-  TestFuzzStructuredString;
-  PassTest('FuzzStructured string passed');
-
-  SectionHeader('FuzzParallel');
-  TestFuzzParallel;
-  PassTest('FuzzParallel passed');
-
-  SectionHeader('FuzzParallel coverage');
-  TestFuzzParallelCoverage;
-  PassTest('FuzzParallel coverage passed');
-
-  SectionHeader('GenInt large range');
-  TestGenIntLargeRange;
-  PassTest('GenInt large range passed');
-
-  SectionHeader('GenInt same min/max');
-  TestGenIntSameMinMax;
-  PassTest('GenInt same min/max passed');
-
-  SectionHeader('GenString empty');
-  TestGenStringEmpty;
-  PassTest('GenString empty passed');
-
-  SectionHeader('GenArray empty');
-  TestGenArrayEmpty;
-  PassTest('GenArray empty passed');
-
-  SectionHeader('GenInt min/max reversed');
-  TestGenIntMinMaxReversed;
-  PassTest('GenInt min/max reversed passed');
-
-  SectionHeader('GenChoiceInt empty');
-  TestGenChoiceIntEmpty;
-  PassTest('GenChoiceInt empty passed');
-
-  SectionHeader('GenChoiceString empty');
-  TestGenChoiceStringEmpty;
-  PassTest('GenChoiceString empty passed');
-
-  SectionHeader('GenOneOfInt empty');
-  TestGenOneOfIntEmpty;
-  PassTest('GenOneOfInt empty passed');
-
-  SectionHeader('GenOneOfString empty');
-  TestGenOneOfStringEmpty;
-  PassTest('GenOneOfString empty passed');
-
-  SectionHeader('GenString min/max reversed');
-  TestGenStringMinMaxReversed;
-  PassTest('GenString min/max reversed passed');
-
-  SectionHeader('GenBytes min/max reversed');
-  TestGenBytesMinMaxReversed;
-  PassTest('GenBytes min/max reversed passed');
-
-  SectionHeader('GenArray min/max reversed');
-  TestGenArrayMinMaxReversed;
-  PassTest('GenArray min/max reversed passed');
-
-
+  if not LSuite.Run then
+  begin
+    Finalize(LSuite);
+    WriteLn;
+    FailTest('SOME PROP TESTS FAILED');
+  end;
   WriteLn;
   PassTest('test_prop');
+  LSuite.Config.OutSink := nil;
+  LSuite.Config.ErrSink := nil;
+  Finalize(LSuite);
 end.
