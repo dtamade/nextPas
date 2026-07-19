@@ -16,6 +16,7 @@ uses
   nextpas.core.async.task,
   nextpas.core.async.timer,
   nextpas.core.async.loop,
+  nextpas.core.async.cancellation,
   nextpas.core.io.poller;
 
 var
@@ -283,6 +284,51 @@ begin
       'cancel completion does not re-fire user callback');
   finally
     GLoopRef := nil;
+    LLoop.Free;
+    platform_pipe_close(LPipe);
+  end;
+end;
+
+procedure TestRecvTimeoutExTokenCancel;
+var
+  LLoop: TAsyncLoop;
+  LPipe: TPlatformPipe;
+  LReadBuf: array[0..63] of Byte;
+  LToken: IAsyncCancellationToken;
+  LI: Integer;
+begin
+  ResetState;
+  FillChar(LReadBuf, SizeOf(LReadBuf), 0);
+  if platform_pipe_create(LPipe) <> 0 then
+  begin
+    Fail('pipe creation failed');
+    Exit;
+  end;
+
+  LLoop := TAsyncLoop.Create(32);
+  LToken := CreateCancellationToken;
+  try
+    GLoopRef := @LLoop;
+    Check(LLoop.AsyncRecvTimeoutEx(LPipe.ReadFd, @LReadBuf[0], 64, 0,
+      TDeadline.After(TDuration.FromMilliseconds(5000)), LToken,
+      @IoCallback, nil), 'AsyncRecvTimeoutEx submits');
+    LToken.Cancel;
+    LLoop.Schedule(TDuration.FromMilliseconds(200), @StopLoopCallback, nil);
+    LLoop.Run;
+
+    Check(GIoDone, 'token cancel callback fired');
+    CheckEqual(Int64(-125), Int64(GIoResult), 'result is -ECANCELED');
+    CheckEqual(Int64(1), Int64(GCallCount), 'single user callback');
+    for LI := 1 to 64 do
+    begin
+      if not LLoop.HasPendingIo then
+        Break;
+      LLoop.Poll;
+    end;
+    Check(not LLoop.HasPendingIo, 'pending drained after token cancel');
+  finally
+    GLoopRef := nil;
+    LToken := nil;
     LLoop.Free;
     platform_pipe_close(LPipe);
   end;
@@ -964,6 +1010,7 @@ begin
   T.Test('ReadTimeoutLateIoCompletionSingleFire',
     @TestReadTimeoutLateIoCompletionSingleFire);
   T.Test('TimeoutCancelDrainsPending', @TestTimeoutCancelDrainsPending);
+  T.Test('RecvTimeoutExTokenCancel', @TestRecvTimeoutExTokenCancel);
   T.Test('ReadTimeoutCloseReleasesPendingContext', @TestReadTimeoutCloseReleasesPendingContext);
   T.Test('ReadTimeoutCloseBeforeDeadlineAbortsPendingContext',
     @TestReadTimeoutCloseBeforeDeadlineAbortsPendingContext);

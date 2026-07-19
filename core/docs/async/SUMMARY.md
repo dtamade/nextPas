@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
 > 最后更新：2026-07-19
-> 版本：M3 TAsyncLoop class landed
+> 版本：M3+B1–B4 land；Q1 Cancellation 贯通
 
 ## 模块概览
 
@@ -140,10 +140,11 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 
 ## 未来方向
 
-1. **原生 Windows host runner**: 升格 wine-runtime-smoke → host-runtime ready
-2. **macOS/FreeBSD host runtime smoke**: 有 runner 后再证明
-3. **性能优化**: 批量 I/O 操作
-4. **Channel 有界异步等待** + 与 net.async.backpressure 打通
+1. **Q2** 组合器竞态 soak（WhenAll 永不完成 + cancel）
+2. **Q3** DNS multi-addr + dual-stack connect
+3. **Q4** 性能 scorecard vs Go
+4. **原生 Windows / macOS host runner** 升格证据层
+5. 见 [SCORECARD-2026-07-19.md](SCORECARD-2026-07-19.md)
 
 ## 相关文档
 

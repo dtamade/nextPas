@@ -12,7 +12,8 @@ uses
   nextpas.core.async.loop,
   nextpas.core.async.taskgroup,
   nextpas.core.async.combinators,
-  nextpas.core.async.retry;
+  nextpas.core.async.retry,
+  nextpas.core.async.cancellation;
 
 var
   GLoop: TAsyncLoop;
@@ -211,6 +212,36 @@ begin
   WriteLn('  PASS: WhenAllWithTimeout');
 end;
 
+procedure NeverRunsCallback(AContext: Pointer);
+begin
+  Inc(PInteger(AContext)^);
+end;
+
+procedure TestWhenAllTokenCancel;
+var
+  LCallbacks: array[0..0] of TAsyncCallback;
+  LContexts: array[0..0] of Pointer;
+  LOptions: TCombinatorOptions;
+  LToken: IAsyncCancellationToken;
+  LCounter: Integer;
+  I: Integer;
+begin
+  LCounter := 0;
+  GWhenAllDone := False;
+  LCallbacks[0] := @NeverRunsCallback;
+  LContexts[0] := @LCounter;
+  LOptions := DefaultCombinatorOptions;
+  LToken := CreateCancellationToken;
+  LOptions.Token := LToken;
+
+  WhenAll(LCallbacks, LContexts, 1, @WhenAllCompleteCallback, nil, LOptions, GLoop);
+  LToken.Cancel;
+  for I := 0 to 30 do
+    GLoop.Poll;
+  Check(GWhenAllDone, 'WhenAll token cancel should complete once');
+  WriteLn('  PASS: WhenAllTokenCancel');
+end;
+
 { ==================== 主测试套件 ==================== }
 
 procedure RunAllTests;
@@ -229,6 +260,7 @@ begin
   TestWhenAllSingle;
   TestWhenAllMultiple;
   TestWhenAllWithTimeout;
+  TestWhenAllTokenCancel;
 
   { WhenAny 测试 }
   WriteLn('--- WhenAny Tests ---');

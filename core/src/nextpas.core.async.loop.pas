@@ -10,6 +10,7 @@ uses
   nextpas.core.io.poller,
   nextpas.core.async.base, nextpas.core.async.timer,
   nextpas.core.async.task,
+  nextpas.core.async.cancellation,
   nextpas.core.lockfree.mpsc;
 
 type
@@ -99,6 +100,13 @@ type
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncSendTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    { Timeout + optional CancellationToken (token cancel ≈ -ECANCELED, races timer/I/O). }
+    function AsyncRecvTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncSendTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
     { Async sleep }
     function AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;
@@ -124,10 +132,12 @@ uses
 
 const
   ETIMEDOUT_LINUX = 110;
+  ECANCELED_LINUX = 125;
   ASYNC_PENDING_IO_IDLE_POLL_MS = 10;
   TIMEOUT_COMPLETION_PENDING = 0;
   TIMEOUT_COMPLETION_IO = 1;
   TIMEOUT_COMPLETION_TIMER = 2;
+  TIMEOUT_COMPLETION_TOKEN = 3;
 
 
 type
@@ -174,6 +184,8 @@ type
     TimerHandle: TAsyncTimerHandle;
     CompletionState: Int32;
     RefCount: Int32;
+    TokenOwner: Int32;
+    Token: IAsyncCancellationToken;
   end;
 
 function AsyncWakeTimeoutMs(const ADeadline: TDeadline): Int32;
@@ -218,7 +230,19 @@ begin
     ACtx^.Loop := nil;
     ACtx^.UserCallback := nil;
     ACtx^.UserContext := nil;
+    ACtx^.Token := nil;
     Dispose(ACtx);
+  end;
+end;
+
+procedure TimeoutCtxDropTokenOwner(ACtx: PTimeoutCtx);
+begin
+  if ACtx = nil then
+    Exit;
+  if AtomicExchange32(ACtx^.TokenOwner, 0, moAcqRel) = 1 then
+  begin
+    ACtx^.Token := nil;
+    TimeoutCtxRelease(ACtx);
   end;
 end;
 
@@ -273,6 +297,7 @@ begin
     begin
       TimeoutCtxDetachUserRefs(LCtx, LUserCallback, LUserContext);
       TimeoutCtxCancelTimerOwner(LCtx);
+      TimeoutCtxDropTokenOwner(LCtx);
       if Assigned(LUserCallback) then
         LUserCallback(AUserData, AResult, LUserContext);
     end;
@@ -294,8 +319,32 @@ begin
       TimeoutCtxDetachUserRefs(LCtx, LUserCallback, LUserContext);
       if Assigned(LUserCallback) then
         LUserCallback(0, -ETIMEDOUT_LINUX, LUserContext);
-      { Best-effort cancel of still-pending I/O. Run may Stop before Flush/Poll
-        this tick — Flush here so io_uring cancel SQE is submitted promptly. }
+      if (LCtx^.Loop <> nil) and LCtx^.Loop.IsValid then
+      begin
+        if LCtx^.Loop.FPoller.TryCancelByContext(LCtx) then
+          LCtx^.Loop.FPoller.Flush;
+      end;
+      TimeoutCtxDropTokenOwner(LCtx);
+    end;
+  finally
+    TimeoutCtxRelease(LCtx);
+  end;
+end;
+
+procedure TimeoutTokenCallback(AContext: Pointer);
+var
+  LCtx: PTimeoutCtx;
+  LUserCallback: TIoCompletion;
+  LUserContext: Pointer;
+begin
+  LCtx := PTimeoutCtx(AContext);
+  try
+    if TimeoutCtxClaimCompletion(LCtx, TIMEOUT_COMPLETION_TOKEN) then
+    begin
+      TimeoutCtxDetachUserRefs(LCtx, LUserCallback, LUserContext);
+      if Assigned(LUserCallback) then
+        LUserCallback(0, -ECANCELED_LINUX, LUserContext);
+      TimeoutCtxCancelTimerOwner(LCtx);
       if (LCtx^.Loop <> nil) and LCtx^.Loop.IsValid then
       begin
         if LCtx^.Loop.FPoller.TryCancelByContext(LCtx) then
@@ -303,21 +352,49 @@ begin
       end;
     end;
   finally
-    TimeoutCtxRelease(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx); { Post pin from TimeoutTokenNotify }
   end;
 end;
 
+procedure TimeoutTokenNotify(AContext: Pointer);
+var
+  LCtx: PTimeoutCtx;
+begin
+  LCtx := PTimeoutCtx(AContext);
+  if LCtx = nil then
+    Exit;
+  if AtomicLoad32(LCtx^.TokenOwner, moAcquire) = 0 then
+    Exit;
+  if AtomicLoad32(LCtx^.CompletionState, moAcquire) <> TIMEOUT_COMPLETION_PENDING then
+    Exit;
+  if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
+    Exit;
+  AtomicFetchAdd32(LCtx^.RefCount, 1, moAcqRel);
+  LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
+end;
+
 function TimeoutCtxCreate(ALoop: TAsyncLoop; const ADeadline: TDeadline;
-  ACallback: TIoCompletion; AContext: Pointer): PTimeoutCtx;
+  ACallback: TIoCompletion; AContext: Pointer;
+  AToken: IAsyncCancellationToken = nil): PTimeoutCtx;
 begin
   New(Result);
+  FillChar(Result^, SizeOf(Result^), 0);
   Result^.Loop := ALoop;
   Result^.UserCallback := ACallback;
   Result^.UserContext := AContext;
   Result^.CompletionState := TIMEOUT_COMPLETION_PENDING;
   Result^.RefCount := 2;
+  Result^.TokenOwner := 0;
+  Result^.Token := AToken;
   Result^.TimerHandle := ALoop.FTimers.ScheduleEx(ADeadline,
     @TimeoutTimerCallback, Result, @TimeoutCtxDiscardTimer);
+  if AToken <> nil then
+  begin
+    AtomicStore32(Result^.TokenOwner, 1, moRelease);
+    AtomicFetchAdd32(Result^.RefCount, 1, moAcqRel);
+    AToken.OnCancel(@TimeoutTokenNotify, Result);
+  end;
 end;
 
 { TAsyncLoop }
@@ -774,6 +851,7 @@ begin
   if not Result then
   begin
     TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
     TimeoutCtxRelease(LCtx);
   end;
 end;
@@ -791,6 +869,7 @@ begin
   if not Result then
   begin
     TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
     TimeoutCtxRelease(LCtx);
   end;
 end;
@@ -808,6 +887,7 @@ begin
   if not Result then
   begin
     TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
     TimeoutCtxRelease(LCtx);
   end;
 end;
@@ -825,6 +905,57 @@ begin
   if not Result then
   begin
     TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncRecvTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  if ADeadline.IsInfinite and (AToken = nil) then
+    Exit(AsyncRecv(AFd, ABuf, ALen, AFlags, ACallback, AContext));
+  if ADeadline.IsInfinite then
+  begin
+    { Token without finite deadline: use a far deadline so timer path exists;
+      token is the practical cancel. }
+    LCtx := TimeoutCtxCreate(Self, TDeadline.After(TDuration.FromSeconds(3600 * 24 * 365)),
+      ACallback, AContext, AToken);
+  end
+  else
+    LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext, AToken);
+  Result := FPoller.AsyncRecv(AFd, ABuf, ALen, AFlags, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncSendTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  if ADeadline.IsInfinite and (AToken = nil) then
+    Exit(AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext));
+  if ADeadline.IsInfinite then
+    LCtx := TimeoutCtxCreate(Self, TDeadline.After(TDuration.FromSeconds(3600 * 24 * 365)),
+      ACallback, AContext, AToken)
+  else
+    LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext, AToken);
+  Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
     TimeoutCtxRelease(LCtx);
   end;
 end;
