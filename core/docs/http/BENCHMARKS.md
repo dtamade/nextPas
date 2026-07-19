@@ -25,6 +25,108 @@ checklist that ends “ongoing with no standard.”
 Framework-complete **(non-H3)** does **not** require infinite ranking refresh.
 Optional P2/P4 and future hotspots are demand-driven only.
 
+## Parity Campaign — official scale workload (Q0)
+
+**Authority**: scale exit lines in [`GOAL_TREE.md`](GOAL_TREE.md) / [`ROADMAP.md`](ROADMAP.md).
+This section is the **only** official same-machine Go comparison recipe for the
+server-scale campaign. Older P3 fullchain rows remain characterization, not the
+scale KPI.
+
+### Workload spec (frozen)
+
+| Field | Value | Notes |
+| ----- | ----- | ----- |
+| Harness | `benchmarks/nextpas.core.http/run_server_comparison.sh` | builds nextPas + Go + Rust std |
+| Operation | `http.server.keepalive` | multi-thread client keep-alive |
+| Primary workload | `no_url` | minimal response; Direct-class shape |
+| Secondary | `response_1k` | body-bearing check (same threads/requests) |
+| Requests | `20000` | total client requests |
+| Threads | `4` | client concurrency |
+| Runs | `1` for smoke baseline; `3` before claiming a ratio gate | median if runs>1 |
+| nextPas backend | **`epoll`** for scale KPI | `threaded` = correctness baseline only |
+| Go row | always included | primary ratio denominator |
+| Rust std row | always included | reference; not sole KPI |
+| Hyper | optional `--include-hyper` | Tokio caveat; not sole KPI |
+| Platform | Linux amd64 | Windows not in scale claim |
+
+### Reproduce (one command)
+
+From repo `core/`:
+
+```sh
+# Primary scale KPI shape
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url \
+  --nextpas-backend epoll --runs 1 \
+  --output build/projects/nextpas.core.http/server_comparison/q0-baseline-epoll-no_url.md
+
+# Body-bearing secondary
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload response_1k \
+  --nextpas-backend epoll --runs 1 \
+  --output build/projects/nextpas.core.http/server_comparison/q0-baseline-epoll-response_1k.md
+
+# Correctness-baseline backend (not scale KPI)
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url \
+  --nextpas-backend threaded --runs 1 \
+  --output build/projects/nextpas.core.http/server_comparison/q0-baseline-threaded-no_url.md
+```
+
+**Ratio**: `nextpas_req_s / go_req_s` on the **same** run output.
+**Enter parity zone**: epoll + `no_url` ratio **≥ 0.50**.
+**Scale-ready**: ratio **≥ 0.80** and p99 policy per ROADMAP (when harness emits latency).
+
+### Q0 baseline snapshot (2026-07-19)
+
+**Machine**: Linux x86_64, 44 cores, FPC 3.3.1 (this worktree).
+
+#### Multi-conn official harness — **BLOCKED**
+
+`run_server_comparison.sh` nextPas row fails before emitting `req/s`:
+
+```text
+ETimeoutError: read deadline exceeded
+```
+
+Repro (both backends):
+
+```sh
+./benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 5000 --threads 4 --workload no_url \
+  --nextpas-backend epoll --runs 1
+# same with --nextpas-backend threaded
+```
+
+| Workload | Backend | nextPas | Go | Rust | nextPas/Go | Status |
+| -------- | ------- | ------- | -- | ---- | ---------: | ------ |
+| `no_url` 20k×4 | epoll | **FAIL** timeout | not reached | not reached | n/a | **blocked** |
+| `no_url` 5k×4 | threaded | **FAIL** timeout | not reached | not reached | n/a | **blocked** |
+
+**Campaign implication**: cannot claim enter-parity-zone (≥0.5× Go) until the
+multi-thread keep-alive comparison path is green. This is a **scale-floor bug**,
+not a documentation gap. NEXT work: unbreak `bench_http_server` multi-client
+path (likely server accept/read deadline or client deadline under concurrency).
+
+#### Interim single-connection characterization (not scale KPI)
+
+`bench_fullchain` still runs (sequential keep-alive on one connection):
+
+```sh
+NEXTPAS_BENCH_FILTER='Direct/Plaintext' NEXTPAS_BENCH_BACKEND=epoll \
+  NEXTPAS_BENCH_MAX_ITERS=2000 \
+  make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+```
+
+| Date | Backend | Filter | iters | ns/op | ops/s | p99 ns | Note |
+| ---- | ------- | ------ | ----: | ----: | ----: | -----: | ---- |
+| 2026-07-19 | epoll | Direct/Plaintext | 2000 | 125248 | **7984** | 140105 | L2 char only; ≠ multi-conn RPS |
+
+Do **not** divide this ops/s by Go multi-thread `req/s` — different harness shape.
+
+Caveats: single machine, single day; not a leaderboard; multi-conn ratio is the
+only scale gate (ROADMAP).
+
 The maintained Pascal benchmark assets under `benchmarks/nextpas.core.http/`
 are the focused projects with their own project `Makefile`s and focused smoke
 coverage:

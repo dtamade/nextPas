@@ -2,29 +2,37 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（Era 8 I0–I3 landed → **Done / STOP**；无用户指令勿空转 H3）
+**Updated**: 2026-07-19（Parity Q0-0/Q0-1 landed；**NEXT = Q0-2** 修 multi-conn comparison harness）
 
 ---
 
 ## 北极星（执行时服从）
 
-把 `nextpas.core.http` 做成 **Free Pascal 一流 HTTP 框架**：
+把 `nextpas.core.http` 做成 **可对标 Go `net/http` / Rust hyper 系的 H1/H2 HTTP 框架**——**质量 + 规模**双硬指标，不是「Pascal 里能跑」：
 
 | 支柱 | 含义 |
 |------|------|
-| **完整** | 生产 client/server 主路径诚实可用；缺口落地或明确 Park |
-| **高级** | 协议边角与运维面有证据；无假 facade |
-| **优雅** | 小接口、同步公开契约、ownership 清楚、零重复工厂 |
-| **高性能** | ladder + focused bench 证据驱动；不对标口号 |
+| **质量** | 正确性边角、Kind/Op、ownership、生产契约（SSE/流式/H2 server）有证据；无假 facade |
+| **规模** | **Server 主战场**：Linux epoll 下 keep-alive 吞吐/连接规模与 Go **同机比值**可验收 |
+| **优雅** | 小接口、同步公开契约；规模吃在 foundation/协议层，不泄漏 reactor |
+| **诚实** | H3 Blocked；Windows residual 写明；未达标禁止写「已对标」 |
+
+**规模退出线（Linux，同机 harness）**
+
+| 门槛 | 定义 |
+|------|------|
+| 进入对标区 | epoll Direct keep-alive **≥ 0.5×** Go net/http 同 workload |
+| 规模达标 | **≥ 0.8×** Go；p99 **≤ 2×** Go；无 per-request 泄漏 |
+| 连接阶梯 | 1k / 10k idle keep-alive 有文档化稳定点与失败模式 |
 
 **硬约束**
 
 - 只按本文件有序表推进；`archive/` 不是 backlog。
-- 不扩 API 只为对标 Go/Rust 清单（见 GOAL_TREE Do-Not-Drift）。
-- 跨模块默认：标 **Blocked** 或不在 http 堆 workaround；**Era 6** 起，为 H1/H2/WS 更好可 **受控** 改 `net`/`tls`（及最小 platform），须在本波 Land paths 声明 + 双端 gate。
+- **不**扩 API 只为对标清单；**不**把 public handler 改成 async 回调。
+- 跨模块：规模战役可受控改 `net`/`async`/`mem`/`tls`/最小 `platform`；须 Land paths + 双端 gate。
 - 一波 **最多 3 项**；land 后必须回写本文件。
-- 改序 / 升格 Inbox / 改 non-goal：先改本文件，再写代码。
-- **无 H3 需求**：Era 5 保持 Blocked；禁止空 facade。
+- **H3 仍 Blocked**；禁止空 facade。
+- 正确性 gate 红 → 性能波整波回滚。
 
 ---
 
@@ -98,12 +106,18 @@ CHECKPOINT（不阻塞续波）:
 | Wave R4 HTTPS 1×41B zero | 完成（capabilities cache FillChar → Default；client 0 unfreed） |
 | Wave I0 Era 8 open | 完成（Inbox 三项升格 I1–I3；推荐路径 I1→I2→I3） |
 | Wave I1 pool health probe | 完成（H1 TryRead 借出探针 + H2 PING/ACK；0 unfreed） |
-| **下一执行点** | **Era 8 Done / STOP**（I0–I3 landed；H3 仍 Blocked） |
+| Wave I2 WS deflate | 完成（RFC 7692 opt-in；ws 41/0 + ws_client 10/0） |
+| Wave I3 H2 multiplex | 完成（`RoundTripMany`；h2_client 72/0） |
+| Wave N0 Era 9 open | 完成（升格 C5/C4/A3；已并入 Parity Q1） |
+| Wave Q0-0 Parity open | 完成（北极星/退出线/战役地图；主战场=server scale） |
+| Wave Q0-1 workload spec | 完成（BENCHMARKS 官方规格 + 复现命令） |
+| Wave Q0-2 baseline ratio | **in progress** — multi-conn harness `ETimeoutError`；比值未出 |
+| **下一执行点** | **Wave Q0-2** — 修 `bench_http_server` multi-client 超时，再出 nextPas/Go 比值 |
 
-四支柱粗进度（执行中随 Era 更新，非 KPI）：
+战役粗进度（非 KPI；达标靠比值表）：
 
 ```text
-完整 ~93%   高级 ~87%   优雅 ~88%   性能 ~78%  (Era 8 Inbox depth)
+质量 ~75%   规模 ~20%   优雅 ~88%   诚实 ~95%  (Parity Q0；规模被 harness 卡住)
 ```
 
 ---
@@ -129,10 +143,19 @@ CHECKPOINT（不阻塞续波）:
 ## 推荐默认执行路径（goal 默认跟这条）
 
 ```text
-Era 0–4:  landed（framework-complete non-H3）
-Era 5:    H3-* Blocked — 跳过（无产品需求；禁止空 facade）
-Era 6:    X0 → X1 → X2 → X3 → X4 → X5   （H1/H2/WS 精品 + 跨模块反哺）
+Era 0–8:  landed（framework-complete non-H3 + Excellence + Residual + Inbox depth）
+Era 5/H3: Blocked — 跳过
+Era 9:    N0 landed；N1–N3 并入 Q1（不再单独 STOP）
+──── Parity Campaign（对标 Go/Rust 质量+规模）────
+Q0:  Q0-0 → Q0-1 → Q0-2     开壳 + workload + 基线比值  ← 当前
+Q1:  Q1-1 SSE → Q1-2 stream → Q1-3 obs → Q1-4 backpressure
+S1:  Server scale foundation（epoll 连接/吞吐）
+S2:  H1 hot path（分配/fast path）
+S3:  H2 server scale
+Q2:  证据收口 / Scale-ready 评审
 ```
+
+**插队规则**：Q0-2 基线若 epoll Direct **≪ 0.5× Go**，优先插入 **S1**，再回 Q1。
 
 ---
 
@@ -224,23 +247,23 @@ Era 6:    X0 → X1 → X2 → X3 → X4 → X5   （H1/H2/WS 精品 + 跨模块
 | **Next** | Wave E1（推荐路径跳过 C4/C5，除非 Inbox 升格） |
 | **Evidence** | 单段/open-ended/suffix 206；越界+multi 416；`Accept-Ranges: bytes`；`CopyFileRange`/`io.Copy` source-contract；CONTRACT 表 |
 
-### Wave C4 — Multipart / stream 收口（非默认；Inbox 升格）
+### Wave C4 — Multipart / stream 收口
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | parked until Inbox promote |
+| **Status** | **promoted → Era 9 Wave N2** |
 | **Do** | 大 body 流式 multipart、response stream 与 CONTRACT ownership 对齐 |
 | **Don't** | 第二套 body API |
 
-### Wave C5 — SSE 诚实毕业（非默认；Inbox 升格）
+### Wave C5 — SSE 诚实毕业
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | parked until Inbox promote |
+| **Status** | **promoted → Era 9 Wave N1** |
 | **Do** | SSE 写端 + 超时/cancel 检查点；文档化限制 |
 | **Don't** | 伪 realtime 总线 |
 
-**Era 1 Done when**：C1–C3 landed；C4/C5 要么 landed 要么仍明确 parked。 **Met**（C4/C5 parked）。
+**Era 1 Done when**：C1–C3 landed；C4/C5 要么 landed 要么仍明确 parked。 **Met**（C4/C5 升格 Era 9，不再阻塞 Era 1 关闭）。
 
 ---
 
@@ -312,11 +335,11 @@ Era 6:    X0 → X1 → X2 → X3 → X4 → X5   （H1/H2/WS 精品 + 跨模块
 | **Next** | Wave P1 |
 | **Evidence** | CONTRACT pool + H1/H2 选择表；MaxPoolSize per-authority（H1/H2）；CloseIdle + client 267 / h2_client 66 |
 
-### Wave A3+（默认 parked）
+### Wave A3+（默认 parked；A3 已升格）
 
 | Wave | 主题 | 状态 |
 |------|------|------|
-| A3 | Observability hooks（最小 seam） | parked until demand |
+| A3 | Observability hooks（最小 seam） | **promoted → Era 9 Wave N3** |
 | A4 | H2 CONNECT / WS-over-H2 | parked until real consumer |
 | A5 | Trailer / Expect client 扩展 | parked until demand |
 
@@ -621,7 +644,118 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | **Next** | Era 8 Done / STOP |
 | **Evidence** | `IHttpTransportMultiplex.RoundTripMany`；连接层 demux；同 authority 校验；`MaxConcurrentStreams`；串行 `RoundTrip` 不变；`test_http_h2_client` 72/0 |
 
-**Era 8 Done when**：I0–I3 landed（或 I3 诚实 Park 并写清原因）；H3 仍 Blocked。
+**Era 8 Done when**：I0–I3 landed（或 I3 诚实 Park 并写清原因）；H3 仍 Blocked。 **Met.**
+
+---
+
+## Era 9 — Production Depth（已并入 Parity Campaign）
+
+| Wave | 状态 |
+|------|------|
+| N0 | **landed** — 升格 C5/C4/A3 |
+| N1 SSE | **→ Q1-1** |
+| N2 multipart stream | **→ Q1-2** |
+| N3 observability | **→ Q1-3** |
+
+Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
+
+---
+
+## Parity Campaign — 对标 Go/Rust（质量 + 规模）
+
+**目标**：H1/H2 在 **Linux server 规模** 与 **生产质量** 上进入可对 Go `net/http` / Rust hyper 系 **同机验收** 的区间；H3 仍 Blocked。
+
+**主战场**：Server 吞吐与连接规模（epoll 为规模默认；threaded 仅正确性基线）。
+
+### Era Q0 — Open + baseline
+
+#### Wave Q0-0 — 战役开壳（docs）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed**（本提交） |
+| **Do** | 北极星/退出线/推荐路径切到 Parity；GOAL_TREE 同步；废除「Era 9 STOP」空转 |
+| **Don't** | 改协议代码；假宣称已对标 |
+| **Done when** | NEXT 唯一指向 Q0-1 |
+| **Gates** | docs + hygiene |
+| **Land paths** | `core/docs/http/**` |
+| **Next** | Wave Q0-1 |
+
+#### Wave Q0-1 — 固定对标 workload
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed** |
+| **Do** | 在 `BENCHMARKS.md` 写死官方对标规格：`no_url` / `response_1k`；requests/threads；`--nextpas-backend epoll`；Go 行必跑；一条可复现命令 |
+| **Don't** | 同时改多个 harness 语义 |
+| **Done when** | 命令可复制；规格表存在 |
+| **Gates** | docs |
+| **Evidence** | BENCHMARKS § Parity Campaign workload spec |
+| **Next** | Wave Q0-2 |
+
+#### Wave Q0-2 — 基线比值（含 harness 解锁）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **in progress** |
+| **Do** | (1) 修复 multi-thread `run_server_comparison` nextPas 行 `ETimeoutError: read deadline exceeded`；(2) 跑 epoll+Go(+Rust) 官方规格；(3) 记 req/s 比值；决定插队 S1 或进 Q1-1 |
+| **Don't** | 用 fullchain 单连接 ops/s 冒充 multi-conn 比值；假达标 |
+| **Done when** | nextPas multi-conn 行稳定出 `req/s`；BENCHMARKS Q0 表有数字；NEXT=Q1-1 或 S1-1 |
+| **Gates** | comparison harness 绿 + docs；可选 `test_http_server` 回归 |
+| **Land paths** | `benchmarks/nextpas.core.http/**`；必要时 `core/src/nextpas.core.http*` / `net*` 最小 |
+| **Evidence so far** | 2026-07-19：epoll/threaded 均 client/server 读超时；fullchain Direct/epoll ~8k ops/s 仅作 L2 表征 |
+| **Next** | Q1-1 或 S1-1（比值驱动） |
+
+### Era Q1 — Server production depth（质量）
+
+| Wave | 主题 | Status |
+|------|------|--------|
+| **Q1-1** | SSE 诚实毕业（原 N1/C5） | queued |
+| **Q1-2** | Multipart/stream 大 body（原 N2/C4） | queued |
+| **Q1-3** | Observability 最小 seam（原 N3/A3） | queued |
+| **Q1-4** | H1 长连接写失败 / backpressure 契约 | queued |
+
+**Q1-1 Done when**：CONTRACT SSE lifecycle/error；focused；0 unfreed；非 bus。  
+**Q1-2 Done when**：流式路径契约 + focused；ownership 写清。  
+**Q1-3 Done when**：opt-in hook/middleware focused；默认零开销。  
+**Q1-4 Done when**：写失败/stall 语义 focused；与规模路径一致。
+
+### Era S1 — Server scale foundation
+
+| Wave | Do |
+|------|-----|
+| **S1-1** | epoll 连接生命周期 / accept / idle 代价刻画 + 修阻塞点 |
+| **S1-2** | 有界 worker handoff / backpressure 文档 + 测 |
+| **S1-3** | multi-conn sustained bench + vs Go 比值 |
+| **S1-4** | 必要时最小跨模块修 net.server（双端 gate） |
+
+**S1 退出**：epoll Direct **≥ 0.5× Go** 或诚实 Blocked 升级 net。
+
+### Era S2 — H1 hot path
+
+| Wave | Do |
+|------|-----|
+| **S2-1** | 分配画像；arena/缓冲复用 |
+| **S2-2** | fast path 扩大（安全回退不变） |
+| **S2-3** | profiled 单热点前后证据 |
+
+### Era S3 — H2 server scale
+
+| Wave | Do |
+|------|-----|
+| **S3-1** | H2 server 多路/流控/GOAWAY 生产边角 |
+| **S3-2** | H2+epoll 规模证据 |
+| **S3-3** | 与 H1 harness 对照 + residual |
+
+### Era Q2 — 收口
+
+| Wave | Do |
+|------|-----|
+| **Q2-1** | 刷新 Go/Rust comparator 全表 |
+| **Q2-2** | CONTRACT/API_COVERAGE 对齐 |
+| **Q2-3** | 评审是否宣称 **Scale-ready (H1/H2 server, Linux)** |
+
+**Parity Done when**：规模达标线 + Q1 质量波 landed（或诚实 Park）+ H3 仍无 facade。
 
 ---
 
@@ -635,22 +769,22 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 想法 | 备注 |
 |------|------|
-| （空 — 三项已升格 Era 8） | 新想法只追加，不直接实现 |
+| （空 — 生产深度已在 Q1；规模在 S1–S3） | 新想法只追加 |
 
 ---
 
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Era 0–4 landed；framework-complete (non-H3) 已立住
-2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
-3. Era 6 X0–X5 landed — Excellence Done
-4. Era 7 + R4 Done（HTTPS client 0 unfreed）
-5. Era 8 I0–I3 landed — framework depth Done (non-H3)；H3 仍 Blocked
-6. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
+1. Era 0–8 landed；Era 8 已在 main
+2. H3 Blocked — 跳过；禁止空 facade
+3. Parity Q0-0/Q0-1 landed — 对标规格已冻结
+4. **NEXT = Wave Q0-2** — 先修 multi-conn comparison 超时，再出 nextPas/Go 比值
+5. 比值 ≪0.5× Go → 插队 S1；否则可并行 Q1-1 SSE
+6. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
-**没有用户指令时：STOP（Era 8 Done）；不要空转 H3。**
+**没有用户指令时：Goal Loop 自动执行 Q0-2→…；不要空转 H3；未达标禁止写「已对标」。**
 
 ---
 
@@ -671,6 +805,10 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-19 | **Parity Q0-0/Q0-1**：对标战役开壳 + workload 冻结；Q0-2：multi-conn harness `ETimeoutError` 阻塞比值；NEXT=Q0-2 修 harness |
+| 2026-07-19 | **Parity Campaign Q0-0**：北极星升为对标 Go/Rust 质量+规模；主战场 server；H3 Blocked；N1–N3→Q1 |
+| 2026-07-19 | **Era 9** N0：Production Depth 开启；升格 C5→N1 / C4→N2 / A3→N3（后并入 Q1） |
+| 2026-07-19 | fix(http)：client suite pool accept 非阻塞，消除 MaxPoolSize join hang |
 | 2026-07-19 | docs 对齐：顶部 Updated / changelog 与 **Era 8 Done / STOP** 一致（I0–I3 已 land） |
 | 2026-07-18 | Wave I3 landed：`IHttpTransportMultiplex.RoundTripMany`；h2_client 72/0；**Era 8 Done / STOP** |
 | 2026-07-18 | Wave I2 landed：WS permessage-deflate（RFC 7692 opt-in）；ws 41/0 + ws_client 10/0；NEXT=I3 |
