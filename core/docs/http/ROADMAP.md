@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（Q0-2 landed：epoll 0.59× Go 进对标区；**NEXT = S1-1** epoll 规模地基）
+**Updated**: 2026-07-19（S1-1 landed：epoll **1.59× Go** 规模达标；**NEXT = Q1-1** SSE）
 
 ---
 
@@ -111,13 +111,14 @@ CHECKPOINT（不阻塞续波）:
 | Wave N0 Era 9 open | 完成（升格 C5/C4/A3；已并入 Parity Q1） |
 | Wave Q0-0 Parity open | 完成（北极星/退出线/战役地图；主战场=server scale） |
 | Wave Q0-1 workload spec | 完成（BENCHMARKS 官方规格 + 复现命令） |
-| Wave Q0-2 baseline ratio | **landed** — harness 恢复；epoll `no_url` **0.59× Go**（进对标区） |
-| **下一执行点** | **Wave S1-1** — epoll 连接/吞吐地基（逼近 0.80×） |
+| Wave Q0-2 baseline ratio | **landed** — harness 恢复；epoll 0.59× Go 基线 |
+| Wave S1-1 reactor-inline | **landed** — poll 默认 inline handler；epoll **1.59× Go**（≥0.80 达标） |
+| **下一执行点** | **Wave Q1-1** — SSE 诚实毕业 |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
 ```text
-质量 ~75%   规模 ~45%   优雅 ~88%   诚实 ~95%  (进对标区；epoll 距 0.80× 仍有洞)
+质量 ~75%   规模 ~82%   优雅 ~88%   诚实 ~95%  (RPS 规模达标；连接阶梯/SSE 仍开)
 ```
 
 ---
@@ -724,13 +725,12 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | Wave | Status | Do |
 |------|--------|-----|
-| **S1-1** | **queued (NEXT)** | epoll 路径：连接生命周期 / accept / idle / poll handoff 画像 + 修阻塞点；目标抬高 epoll 比值 |
-| **S1-2** | queued | 有界 worker handoff / backpressure 文档 + 测 |
-| **S1-3** | queued | multi-conn sustained（1k/10k 阶梯）+ vs Go 比值刷新 |
-| **S1-4** | queued | 必要时最小跨模块修 `net.server`（双端 gate） |
+| **S1-1** | **landed** | poll-owned 默认 **reactor-inline** handler（`PreferPollWorkerHandoff=False`）；epoll 0.59→**1.59× Go** |
+| **S1-2** | parked until demand | 有界 worker handoff 再设计 / backpressure 文档（legacy PreferPollWorkerHandoff=True 仍可用） |
+| **S1-3** | queued optional | multi-conn sustained（1k/10k 连接阶梯） |
+| **S1-4** | parked | 跨模块 net 大改 — 当前不需要 |
 
-**S1 退出**：epoll 官方 workload **≥ 0.80× Go**（scale-ready）或诚实 Blocked 升级 net。  
-**已知**：Q0-2 已 ≥0.50×；threaded 已 >3× Go → 优先挖 epoll，不是协议 handler。
+**S1 RPS 退出**：**Met**（epoll `no_url` ≥ 0.80× Go）。连接阶梯仍 optional S1-3。
 
 ### Era S2 — H1 hot path
 
@@ -779,13 +779,13 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ```text
 1. Era 0–8 landed；Era 8 已在 main
 2. H3 Blocked — 跳过；禁止空 facade
-3. Parity Q0 完成 — epoll 0.59× Go（进对标区）；threaded 3.29× Go（非 KPI）
-4. **NEXT = Wave S1-1** — epoll 规模地基（目标 0.80×）
-5. Q1 SSE/stream 可与 S1 并行，但默认先打规模主战场
+3. Parity Q0+S1-1 — epoll **1.59× Go**（RPS 规模达标）
+4. **NEXT = Wave Q1-1** — SSE 诚实毕业
+5. S1-3 连接阶梯 optional；S2 hot path optional
 6. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
-**没有用户指令时：Goal Loop 自动执行 S1-1→…；不要空转 H3；未达 0.80× 禁止写「规模达标」。**
+**没有用户指令时：Goal Loop 自动执行 Q1-1→…；不要空转 H3。**
 
 ---
 
@@ -806,7 +806,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
-| 2026-07-19 | **Q0-2 landed**：恢复 multi-conn `bench_http_server`；epoll 0.59× Go / threaded 3.29× Go；NEXT=S1-1 |
+| 2026-07-19 | **S1-1 landed**：poll reactor-inline handlers；epoll 0.59→**1.59× Go**；NEXT=Q1-1 SSE |
+| 2026-07-19 | **Q0-2 landed**：恢复 multi-conn `bench_http_server`；epoll 0.59× Go 基线 |
 | 2026-07-19 | **Parity Q0-0/Q0-1**：对标战役开壳 + workload 冻结 |
 | 2026-07-19 | **Parity Campaign Q0-0**：北极星升为对标 Go/Rust 质量+规模；主战场 server；H3 Blocked；N1–N3→Q1 |
 | 2026-07-19 | **Era 9** N0：Production Depth 开启；升格 C5→N1 / C4→N2 / A3→N3（后并入 Q1） |

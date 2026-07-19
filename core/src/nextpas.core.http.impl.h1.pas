@@ -45,6 +45,11 @@ type
     { Connection-scoped LocalArena: Reset per request, attach for handlers. }
     RequestArena: Boolean;
     RequestArenaCapacity: SizeUInt;
+    { PreferPollWorkerHandoff: when True, poll-owned path submits each completed
+      request to WorkerHandoff (legacy isolation). Default False = reactor-inline
+      handler execution for short-request scale (S1-1). Tests that assert handoff
+      must set True. }
+    PreferPollWorkerHandoff: Boolean;
   end;
 
 function NewH1ClientTransport(const AOptions: TH1ClientTransportOptions): IHttpTransport;
@@ -1776,11 +1781,22 @@ var
   LHandoffResult: TTcpServerHandoffResult;
   LOutbound: IH1OutboundBuffer;
   LCloseAfterDrain: Boolean;
+  LInlineOnReactor: Boolean;
 begin
   AOwnership := tscoServer;
   ClearPollReadDeadline;
 
-  if FWorkerHandoff = nil then
+  { S1-1: Prefer reactor-inline handler execution when poll owns response drain
+    and PreferPollWorkerHandoff is False (production default).
+    Multi-conn keep-alive on epoll was ~0.59x Go while threaded was ~3.3x Go —
+    per-request WorkerHandoff (pool submit + completion wake) dominated short
+    request cost. Inline removes that tax.
+
+    Tradeoff: a blocking handler stalls the readiness reactor. PreferPollWorkerHandoff
+    restores legacy isolation for tests / long-handler deployments. }
+  LInlineOnReactor := (FWorkerHandoff = nil) or
+    (UsePollOwnedResponseDrain and (not FOptions.PreferPollWorkerHandoff));
+  if LInlineOnReactor then
   begin
     if FSocketRuntime <> nil then
       FSocketRuntime.SetBlocking(True);

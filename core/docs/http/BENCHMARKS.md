@@ -95,16 +95,24 @@ CLI multi-client keep-alive shape (pre-`c1472d3b3` semantics, no SysUtils).
 
 | Date | Workload | Backend | nextPas req/s | Go req/s | Rust std req/s | nextPas/Go | Gate |
 | ---- | -------- | ------- | ------------: | -------: | -------------: | ---------: | ---- |
-| 2026-07-19 | `no_url` 20k×4 | **epoll** | **16494** | 28144 | 142930 | **0.59** | **enter parity zone (≥0.50)**; not scale-ready (0.80) |
-| 2026-07-19 | `response_1k` 20k×4 | **epoll** | **16286** | 24236 | 132811 | **0.67** | enter zone |
-| 2026-07-19 | `no_url` 20k×4 | threaded | **96313** | 29286 | 156874 | **3.29** | char only — **not** scale KPI |
+| 2026-07-19 Q0-2 | `no_url` 20k×4 | **epoll** | 16494 | 28144 | 142930 | **0.59** | enter zone only |
+| 2026-07-19 Q0-2 | `response_1k` 20k×4 | **epoll** | 16286 | 24236 | 132811 | **0.67** | enter zone |
+| 2026-07-19 Q0-2 | `no_url` 20k×4 | threaded | 96313 | 29286 | 156874 | **3.29** | char only |
+| **2026-07-19 S1-1** | `no_url` 20k×4 | **epoll** | **50322** | 31688 | 140364 | **1.59** | **scale-ready (≥0.80)** |
+| 2026-07-19 S1-1 | `no_url` 20k×4 | threaded | 85284 | 32391 | 143501 | **2.63** | char only |
+
+**S1-1 change**: poll-owned H1 path defaults to **reactor-inline handlers**
+(`PreferPollWorkerHandoff=False`). Removes per-request worker pool submit +
+completion wake for short keep-alive requests. Tests that assert handoff set
+`PreferPollWorkerHandoff=True`.
 
 **Readings**
 
-1. **Scale KPI is epoll**: 0.59× Go on `no_url` → entered parity zone; gap to 0.80× is the S1/S2 job.
-2. **threaded ≫ Go** on this shape: protocol/handler path is competitive; **epoll path is the scale bottleneck**.
-3. Rust `std_only` row is a raw micro-server, not hyper; keep as reference only.
-4. Single-run snapshot; re-run with `--runs 3` before any external claim.
+1. **S1-1 closed the epoll gap**: 0.59× → **1.59× Go** on official `no_url` KPI.
+2. threaded remains faster still (~2.6× Go); epoll is now competitive for scale claims.
+3. Rust `std_only` is reference only.
+4. Single-run snapshot; use `--runs 3` before external publication.
+5. Connection-ladder (1k/10k idle) still open (S1-3).
 
 #### Interim single-connection characterization (not scale KPI)
 
