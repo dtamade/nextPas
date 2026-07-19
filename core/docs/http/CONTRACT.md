@@ -532,7 +532,36 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 - Client：idle pool 经 `CloseIdleConnections`；`Send` 拥有 close-capable request body。
 - Redirect：`301/302/303` → GET 无 body；`307/308` 保方法；跨 authority 剥离敏感头。
 - WebSocket / SSE：`UpgradeWebSocket` / `ConnectWebSocket`；`StartSSE` —
-  公开前置条件均为 `hekArgument`。
+  公开前置条件见下表。
+
+### 4.1 SSE production contract（Wave Q1-1）
+
+`StartSSE` / `ISSEEventWriter` 是 **H1 写端 helper**，不是 EventSource 客户端、
+不是消息总线、不是 WebSocket 替代。
+
+| 阶段 | 行为 |
+|------|------|
+| **StartSSE(AW)** | nil AW → `hekArgument` Op=`sse`。设置 `Content-Type: text/event-stream`、`Cache-Control: no-cache`、`Connection: keep-alive`，`WriteHeader(200)`，返回 open writer。 |
+| **WriteEvent / WriteEventSimple** | 编码 `retry:` / `event:` / `id:` / 多行 `data:` + 空行结束；然后 **Flush**。 |
+| **WriteComment** | `:` 注释行（可心跳）；Flush。 |
+| **WriteRetry** | 单独 `retry:` 行；Flush。负值 → `hekArgument` Op=`sse`。 |
+| **Close** | **幂等**；仅本地 `IsOpen=false`，不关闭底层 TCP。 |
+| **IsOpen** | Start 后 true，Close 后 false。 |
+
+| 错误 | Kind | Op |
+|------|------|-----|
+| nil writer / 字段注入（event/id 含 CR/LF）/ id 含 NUL / retry&lt;0 | `hekArgument` | `sse` |
+| write-after-close | `hekProtocol` | `sse` |
+| zero-progress write / over-report / underlying write or flush failure | `hekProtocol` | `sse` |
+
+**限制（诚实）**
+
+- 仅写端；无自动重连客户端 / Last-Event-ID 消费 API。
+- 无界背压由底层 `IHttpResponseWriter` 与 server `WriteTimeout` 决定。
+- 长连接 handler 会占用 server 执行路径；在 epoll **reactor-inline**（S1-1 默认）下，阻塞 handler 会拖累同 reactor 其他连接——长推送宜短事件或后续 offload。
+- 非 H2/H3 SSE；非 room/bus。
+
+证据：`test_http_middlewares` SSE 套件 + `test_http_server` `Live SSE event stream`。
 
 ---
 
