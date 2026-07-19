@@ -679,10 +679,12 @@ var
 
 function IsFrameworkFrame(const AFrameStr: string): Boolean;
 { Returns True if the frame belongs to the test framework and should be hidden
-  from the user-facing output. Matches unit name prefixes:
-    nextpas.core.test  (any sub-unit — followed by . , space, newline, or EOS)
+  from the user-facing output (Go t.Helper intent via unit-prefix filtering).
+  Matches unit name prefixes:
+    nextpas.core.test  (any sub-unit: .check, .helpers, .runner… )
     sysutils            (FPC exception machinery)
-    system              (FPC runtime) }
+    system              (FPC runtime)
+  There is no separate MarkHelper API: put helpers in nextpas.core.test.* units. }
 const
   CPrefix = 'nextpas.core.test';
 var

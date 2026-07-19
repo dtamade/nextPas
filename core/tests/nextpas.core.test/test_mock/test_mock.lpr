@@ -1624,6 +1624,149 @@ begin
   end;
 end;
 
+{ ── B5 fail-path / edge contracts ─────────────────────────────────────────── }
+
+procedure TestB5VerifyNeverAfterCall;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('X', []);
+    ExpectFail(procedure begin
+      LM.Verify('X').CalledNever;
+    end, '0 time');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5CalledOnceFailMsg;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.RecordCall('X', []);
+    LM.RecordCall('X', []);
+    ExpectFail(procedure begin
+      LM.Verify('X').CalledOnce;
+    end, 'exactly 1');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5SetupNeverCalled;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('NeedMe').Returns('v');
+    ExpectFail(procedure begin
+      LM.VerifyAll;
+    end, 'NeedMe');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5ResetCallsKeepsSetup;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('bar');
+    LM.RecordCall('Foo', []);
+    LM.ResetCalls;
+    CheckEqual('bar', LM.GetReturn('Foo'));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5CalledWithWrongArg;
+var
+  LM: TMock;
+  LArgs: array[0..0] of string;
+begin
+  LM := TMock.Create;
+  try
+    LArgs[0] := 'a';
+    LM.RecordCall('M', LArgs);
+    LArgs[0] := 'b';
+    ExpectFail(procedure begin
+      LM.Verify('M').CalledWith(LArgs);
+    end, 'b');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5DoubleSetupOverwrite;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Setup('Foo').Returns('one');
+    LM.Setup('Foo').Returns('two');
+    CheckEqual('two', LM.GetReturn('Foo'));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5VerifyInOrderEmpty;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.VerifyInOrder([]);
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5GetCallHistoryEmpty;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    CheckContains(LM.GetCallHistory, 'no calls');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5ReturnsDefaultEmpty;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    CheckEqual('', LM.GetReturn('NoSetup'));
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestB5CalledTimesZero;
+var
+  LM: TMock;
+begin
+  LM := TMock.Create;
+  try
+    LM.Verify('Never').CalledExactly(0);
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── TMockCaptor tests ─────────────────────────────────────────────────────── }
 
 procedure TestCaptorCaptureFrom;
@@ -1906,6 +2049,18 @@ begin
   Suite.Test('TestCaptorReset', @TestCaptorReset);
   Suite.Test('TestCaptorNoCallsFail', @TestCaptorNoCallsFail);
   Suite.Test('TestCaptorIndexOutOfRange', @TestCaptorIndexOutOfRange);
+
+  { B5: additional fail-path / edge contracts }
+  Suite.Test('B5 VerifyNever after call fails', @TestB5VerifyNeverAfterCall);
+  Suite.Test('B5 CalledOnce fail message', @TestB5CalledOnceFailMsg);
+  Suite.Test('B5 Setup then never called VerifyAll', @TestB5SetupNeverCalled);
+  Suite.Test('B5 ResetCalls keeps setup', @TestB5ResetCallsKeepsSetup);
+  Suite.Test('B5 CalledWith wrong arg fail', @TestB5CalledWithWrongArg);
+  Suite.Test('B5 Double setup overwrite', @TestB5DoubleSetupOverwrite);
+  Suite.Test('B5 VerifyInOrder empty pass', @TestB5VerifyInOrderEmpty);
+  Suite.Test('B5 GetCallHistory empty', @TestB5GetCallHistoryEmpty);
+  Suite.Test('B5 Returns default empty', @TestB5ReturnsDefaultEmpty);
+  Suite.Test('B5 CalledTimes zero', @TestB5CalledTimesZero);
 
   Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);
