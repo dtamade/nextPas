@@ -30,7 +30,7 @@
 | 阶段 | 名称 | 状态 |
 |------|------|------|
 | **Q0** | 清洁基线 + reconverge 评估 | **done** |
-| **Q1** | Atomic 首选路径与质量加固 | pending |
+| **Q1** | Atomic 首选路径与质量加固 | **Q1-a done**；Q1-b/c pending |
 | **Q2** | T1 深度（Close/Try\*Ex/stress） | pending |
 | **Q3** | Map/Channel 体验对标 | pending |
 | **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | pending |
@@ -89,3 +89,44 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 | 日期 | 事件 |
 |------|------|
 | 2026-07-19 | Q 线章程入仓；Q0 门绿；merge origin/main；post-merge 门绿 → **Q0 done** |
+| 2026-07-19 | **Q1-a** legacy 消费者扫描入仓（§5）；不删 API；迁移按热点分批 |
+
+---
+
+## 5. Q1-a — Legacy atomic 消费者扫描（2026-07-19）
+
+### 方法
+
+`rg` 扫描 `core/src/**/*.pas`，排除 `nextpas.core.atomic*` 自身实现。
+
+### 结果摘要
+
+| 模式 | 约略规模 | 含义 |
+|------|----------|------|
+| `AtomicCompareExchange32/64/Ptr` | **~200** 次（core 生产源，不含 atomic 单元） | legacy **返回观测值** CAS；与 `atomic_compare_exchange_*` Boolean 语义不同 |
+| PascalCase `AtomicLoad/Store/Fetch*` | **~1200** 次 | 兼容 wrapper；功能正确，但非首选命名 |
+
+### T1 热路径观察
+
+| 单元 | 倾向 |
+|------|------|
+| spsc / mpmc / mpsc / stack / deque / ebr | 大量 `AtomicLoad*` / `AtomicStore*` / `AtomicCompareExchange*`（PascalCase） |
+| channel / msqueue / hazard | 同上 + 自旋锁 CAS |
+| 多数 T2 | 自旋锁 `AtomicCompareExchange32(FLock, 0, 1)` |
+
+**对标 Go/Rust**：语义面已够用；差距在 **API 一致性与可读性**，不是缺 CAS。
+
+### 策略（Q1 后续，自主分批）
+
+1. **不删** legacy / PascalCase API（H2-3 锁定）。
+2. **新代码** 只写 `atomic_*` + `mo_*` 或 `TAtomic*`。
+3. **迁移优先级**（高→低）：
+   - 新改动的 T1 文件顺手改为本文件内一致风格（同一 PR 不混无关文件）
+   - 文档/示例/测试先示范首选路径
+   - 禁止一次「全库 sed」式迁移（风险高、diff 不可审）
+4. **CAS 迁移注意**：`AtomicCompareExchange*` 返回 **old**；`atomic_compare_exchange_strong` 返回 **Boolean** 且写回 `var Expected` — 必须逐点改，不能机械替换。
+
+### Q1-b/c（下一步）
+
+- Q1-b：atomic 测试边界抽检（alignment / GetMut / wait）— 缺则补
+- Q1-c：atomic README ↔ consumer-audit 交叉链接 + 本表指针
