@@ -1,6 +1,9 @@
 # Lockfree API 参考手册
 
-> 更新: 2026-07-17
+> 更新: 2026-07-19（H3-4：证据信封 + CONTRACT 对齐）
+>
+> **权威顺序**：[`CONTRACT.md`](CONTRACT.md) > 本文件 > 选型/README。改 API 必须同步本文件。
+> 绝对性能数字须带 [`bench-envelope.md`](bench-envelope.md)；禁止无信封 Mops 营销。
 
 [English](api-reference.en.md)
 
@@ -575,7 +578,7 @@ type
 **与 TLockFreeChannel 的区别**:
 - 使用原子 load/store 替代 CAS（1P1C 无竞争）
 - 无序列号开销（环形缓冲区直接索引）
-- 性能超越 Go channel (2.99x) 和 Rust std::sync::mpsc (1.26x)
+- 1P1C 热路径通常快于 MPMC Channel / mutex 基线；绝对倍数须带 [`bench-envelope.md`](bench-envelope.md)
 
 **使用场景**:
 - 单生产者单消费者
@@ -659,6 +662,10 @@ end;
 
 ## Bag (nextpas.core.lockfree.bag)
 
+> **H3-2 生产子集**（CONTRACT §0.3）：**直接** `uses nextpas.core.lockfree.bag`；**不**在默认 T1 门面。
+> **Progress**：有界 **lock-free ring（MPMC 序列号槽）** + wait-address 阻塞路径；不是“集合语义完全无锁重写”。
+> **Managed**：`IsManagedType(T)` → `EArgumentError`。生命周期：`Close` → drain/join → `Free`；`Destroy` 先 `Close`。
+
 ```pascal
 type
   TLockFreeBagAddResult = (arAdded, arFull, arClosed);
@@ -681,12 +688,10 @@ type
 ```
 
 **特点**:
-- 基于 MPMC 队列实现，允许重复元素
-- FIFO 顺序（先进先出）
-- AddWait/TakeWait 阻塞等待
-- AddTimeout/TakeTimeout 超时等待
-- Close 后不能再添加，但可以取出已有元素
-- 适用于任务队列、工作池等场景
+- 有界 ring bag，允许重复元素；FIFO
+- `TryAdd`/`TryTake` 热路径 CAS/序列号；AddWait/TakeWait 可阻塞
+- Close 后 `TryAdd` → `arClosed`，已入队仍可取出
+- 适用于任务袋、多生产者多消费者工作池等场景
 
 **使用示例**:
 
@@ -717,6 +722,10 @@ end;
 
 ## MultiMap (nextpas.core.lockfree.multimap)
 
+> **H3-2 生产子集**（CONTRACT §0.3）：**直接** `uses nextpas.core.lockfree.multimap`；**不**在默认 T1 门面。
+> **Progress**：**lock-based concurrent**（**单 map 自旋锁**），**不是**分片锁、**不是** lock-free map。
+> **Managed**：键/值均须 unmanaged。生命周期：`Close` → 停写 → 读完/清理 → `Free`；`Destroy` 先 `Close`。
+
 ```pascal
 type
   TLockFreeMultiMapAddResult = (mmAdded, mmKeyExists, mmFull, mmClosed);
@@ -738,10 +747,9 @@ type
 ```
 
 **特点**:
-- 基于分片锁 HashMap，每个键对应一个值列表
-- 支持一个键添加多个值
+- 单锁并发 multi-value map（每个键对应值列表）
 - Remove 删除整个键，RemoveValue 删除特定值
-- Close 后不能添加，但可以读取和删除
+- Close 后 `Add` → `mmClosed`；已有键仍可读/删
 - 适用于索引、标签系统等场景
 
 **使用示例**:
