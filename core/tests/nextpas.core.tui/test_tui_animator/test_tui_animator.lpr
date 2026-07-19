@@ -159,6 +159,24 @@ begin
   CheckEqual(0.0, EaseSpring(0), 1e-6);
 end;
 
+
+procedure TestAnimatorAnyRunningEmpty;
+var
+  A: TAnimator;
+begin
+  FillChar(A, SizeOf(A), 0);
+  Check(not A.AnyRunning, 'empty not running');
+  CheckEqual(0, A.RunningCount, 'running count 0');
+end;
+
+procedure TestAnimatorEaseLinearMid;
+begin
+  CheckEqual(0.5, EaseLinear(0.5), 1e-9);
+  CheckEqual(0.0, EaseInQuad(0), 1e-9);
+  CheckEqual(1.0, EaseInQuad(1), 1e-9);
+end;
+
+
 begin
   T := TTestSuite.Create('tui_animator');
   T.Test('TAnimator.Start', @TestAnimatorStart);
@@ -171,5 +189,7 @@ begin
   T.Test('TAnimator.Cancel invalid id', @TestAnimatorCancelInvalidId);
   T.Test('TAnimator.Tick clamps', @TestAnimatorTickClamp);
   T.Test('Easing functions', @TestEasingFunctions);
-  if not T.Run then Halt(1);
+    T.Test('AnyRunning empty', @TestAnimatorAnyRunningEmpty);
+  T.Test('EaseLinear mid', @TestAnimatorEaseLinearMid);
+if not T.Run then Halt(1);
 end.

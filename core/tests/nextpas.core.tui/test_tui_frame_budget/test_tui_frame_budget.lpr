@@ -112,6 +112,29 @@ begin
   Check(LBudget.Stats.FrameCount = 3, 'Should track 3 frames');
 end;
 
+
+procedure TestFrameBudgetIsOverBudgetFalseInitially;
+var
+  LBudget: TFrameBudget;
+begin
+  LBudget := TFrameBudget.Create(16.0);
+  LBudget.BeginFrame;
+  Check(not LBudget.IsOverBudget, 'just after BeginFrame not over 16ms');
+end;
+
+procedure TestFrameBudgetZeroBudgetCreate;
+var
+  LBudget: TFrameBudget;
+begin
+  LBudget := TFrameBudget.Create(0);
+  CheckEqual(0.0, LBudget.BudgetMs, 1e-9);
+  CheckEqual(0, LBudget.Stats.FrameCount, 'create zero frames');
+  LBudget.BeginFrame;
+  LBudget.EndFrame;
+  Check(LBudget.Stats.FrameCount = 1, 'zero budget still tracks frames');
+end;
+
+
 begin
   T := TTestSuite.Create('tui_frame_budget');
   T.Test('TFrameStats.Empty creates zero state', @TestFrameStatsEmpty);
@@ -124,5 +147,7 @@ begin
   T.Test('TFrameBudget.Reset', @TestFrameBudgetReset);
   T.Test('TFrameBudget.BeginFrame/EndFrame', @TestFrameBudgetBeginEndFrame);
   T.Test('TFrameBudget multiple frames', @TestFrameBudgetMultipleFrames);
-  if not T.Run then Halt(1);
+    T.Test('IsOverBudget false initially', @TestFrameBudgetIsOverBudgetFalseInitially);
+  T.Test('zero budget create', @TestFrameBudgetZeroBudgetCreate);
+if not T.Run then Halt(1);
 end.
