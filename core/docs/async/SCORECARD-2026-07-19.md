@@ -1,7 +1,7 @@
 # async / net / io 质量记分卡（2026-07-19）
 
-**范围**: nextpas.core.async + io reactors/poller + net.async  
-**对照**: Go `context` / `net` / channel；Rust `tokio` CancellationToken / select  
+**范围**: nextpas.core.async + io reactors/poller + net.async
+**对照**: Go `context` / `net` / channel；Rust `tokio` CancellationToken / select
 **基线**: main 已 land M3 + B1–B4
 
 ## 综合分（重估）
@@ -26,7 +26,7 @@
 | F5 IoCompletionRefWrapper | **关闭** | `async.base` |
 | F6 BufferPool 锁 | **关闭** | platform_mutex |
 | F7 Signal 吞异常 | **部分** | 有错误回调路径；非本轮 |
-| F8 DNS IPv6 | **部分** | 有 v6 fallback；非 multi-addr / Happy Eyeballs |
+| F8 DNS IPv6 | **关闭** | dual-stack append v4+v6（每族 platform 首条） |
 | F9 TCP positioned read | **关闭** | AsyncRecv/Send |
 | F10 Combinator Ref | **关闭** | WhenAllRef/WhenAnyRef |
 | F11 Channel 背压 | **关闭** | SendAsync (B1) |
@@ -34,17 +34,31 @@
 
 ## Go/Rust 差距（当前）
 
-| 能力 | Go/Rust | nextpas 现状 | Q 计划 |
-|------|---------|--------------|--------|
-| 取消贯通 API | context 几乎全栈 | Token 孤立 | **Q1** |
-| 超时+取消竞态 | 标准 | Timeout CAS 有；缺 token 方 | **Q1** |
-| dual-stack | 默认 | 单地址 fallback | Q3 |
-| 组合器竞态 soak | 成熟 | 基础测有 | Q2 |
-| 性能 scorecard | 社区基准 | bench 烟雾 | Q4 |
+| 能力 | Go/Rust | nextpas 现状 | 状态 |
+|------|---------|--------------|------|
+| 取消贯通 API | context 几乎全栈 | Token 贯通核心路径 | **Q1 done** |
+| 超时+取消竞态 | 标准 | CAS 三方 | **Q1 done** |
+| dual-stack | 默认 | Addresses 可含 v4+v6 | **Q3 done** |
+| 组合器竞态 soak | 成熟 | soak100 + token/timeout race | **Q2 done** |
+| 性能 scorecard | 社区基准 | 本机 metric 行 | **Q4 done** |
 
-## 本轮 Q1 成功标准（摘要）
+## 性能 scorecard（本机 2026-07-19，非严格 A/B）
 
-- Combinator `Token` 取消 → 一次 completion、0 leak  
-- TaskGroup `Token` → CancelAll  
-- `AsyncRecvTimeoutEx` / `AsyncSendTimeoutEx` + token 与 timer 竞态单次完成  
-- 文档不再写「无取消传播」  
+诚实声明：非同 harness 对照 Go/Rust；仅为数量级参考。CI 仅要求 `> 0`。
+
+| Metric | nextpas (this host) | 说明 |
+|--------|---------------------|------|
+| `post_ops_per_s` | ~3.6e5 | Post+Poll empty |
+| `timer_schedule_ops_per_s` | ~5.6e6 | Schedule only |
+| `mutex_ops_per_s` | ~1.3e7 | async mutex lock/unlock |
+| `channel_ops_per_s` | ~4.6e5 | send+TryReceive |
+
+运行：`make -C core/tests/nextpas.core.async/test_async_bench clean test`
+
+## Q1–Q4 成功标准（摘要）
+
+- [x] Combinator Token 取消 / soak
+- [x] TaskGroup Token
+- [x] Recv/SendTimeoutEx token
+- [x] dual-stack resolve list
+- [x] bench metric 行 + 本文档

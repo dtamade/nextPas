@@ -157,6 +157,7 @@ type
     Done: Boolean;
     Finished: Int32;
     TokenOwner: Int32;
+    RefCount: Int32;  { base + optional post pin for token abort }
     OnComplete: TAsyncCallback;
     OnCompleteRef: TAsyncCallbackRef;
     OnCompleteCtx: Pointer;
@@ -536,12 +537,17 @@ begin
   LState := PWhenAnyState(AContext);
   if LState = nil then
     Exit;
-  if AtomicCompareExchange32(LState^.Finished, 0, 1, moAcqRel) = 0 then
-  begin
-    LState^.Done := True;
-    WhenAnyFireComplete(LState);
+  try
+    if AtomicCompareExchange32(LState^.Finished, 0, 1, moAcqRel) = 0 then
+    begin
+      LState^.Done := True;
+      WhenAnyFireComplete(LState);
+    end;
+    WhenAnyReleaseToken(LState);
+  finally
+    if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
+      Dispose(LState);
   end;
-  WhenAnyReleaseToken(LState);
 end;
 
 procedure WhenAnyTokenNotify(AContext: Pointer);
@@ -555,6 +561,7 @@ begin
     Exit;
   if AtomicLoad32(LState^.Finished, moAcquire) <> 0 then
     Exit;
+  AtomicFetchAdd32(LState^.RefCount, 1, moAcqRel);
   LState^.Loop.Post(@WhenAnyTokenAbort, LState);
 end;
 
@@ -591,7 +598,8 @@ begin
   if LState^.Remaining <= 0 then
   begin
     WhenAnyReleaseToken(LState);
-    Dispose(LState);
+    if AtomicFetchSub32(LState^.RefCount, 1, moAcqRel) = 1 then
+      Dispose(LState);
   end;
 
   Dispose(LWrapped);
@@ -625,6 +633,7 @@ begin
   LState^.Done := False;
   LState^.Finished := 0;
   LState^.TokenOwner := 0;
+  LState^.RefCount := 1;
   LState^.OnComplete := AOnComplete;
   LState^.OnCompleteRef := nil;
   LState^.OnCompleteCtx := AOnCompleteCtx;
@@ -672,6 +681,7 @@ begin
   LState^.Done := False;
   LState^.Finished := 0;
   LState^.TokenOwner := 0;
+  LState^.RefCount := 1;
   LState^.OnComplete := nil;
   LState^.OnCompleteRef := AOnComplete;
   LState^.OnCompleteCtx := nil;

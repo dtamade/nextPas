@@ -148,6 +148,7 @@ var
   LOpsPerSec: Double;
 begin
   LOpsPerSec := BenchPostThroughput;
+  WriteLn('metric=post_ops_per_s value=', FormatFloat('0.0', LOpsPerSec));
   Check(LOpsPerSec > 0, 'post throughput: ' + FormatFloat('0.0', LOpsPerSec) + ' ops/sec');
 end;
 
@@ -156,6 +157,7 @@ var
   LOpsPerSec: Double;
 begin
   LOpsPerSec := BenchTimerSchedule;
+  WriteLn('metric=timer_schedule_ops_per_s value=', FormatFloat('0.0', LOpsPerSec));
   Check(LOpsPerSec > 0, 'timer schedule: ' + FormatFloat('0.0', LOpsPerSec) + ' ops/sec');
 end;
 
@@ -164,6 +166,7 @@ var
   LOpsPerSec: Double;
 begin
   LOpsPerSec := BenchMutexLockUnlock;
+  WriteLn('metric=mutex_ops_per_s value=', FormatFloat('0.0', LOpsPerSec));
   Check(LOpsPerSec > 0, 'mutex lock/unlock: ' + FormatFloat('0.0', LOpsPerSec) + ' ops/sec');
 end;
 
@@ -172,6 +175,7 @@ var
   LOpsPerSec: Double;
 begin
   LOpsPerSec := BenchChannelSendReceive;
+  WriteLn('metric=channel_ops_per_s value=', FormatFloat('0.0', LOpsPerSec));
   Check(LOpsPerSec > 0, 'channel send/receive: ' + FormatFloat('0.0', LOpsPerSec) + ' ops/sec');
 end;
 
