@@ -1767,6 +1767,78 @@ begin
   end;
 end;
 
+{ ── B8 v8.10: cross-thread isolation (not thread-safe by contract) ────────── }
+
+type
+  PMockThreadCtx = ^TMockThreadCtx;
+  TMockThreadCtx = record
+    Mock: TMock;
+    Caught: Boolean;
+    Msg: string;
+  end;
+
+function MockCrossThreadWorker(P: Pointer): PtrInt;
+var
+  C: PMockThreadCtx;
+  LArgs: array of string;
+begin
+  C := PMockThreadCtx(P);
+  C^.Caught := False;
+  C^.Msg := '';
+  SetLength(LArgs, 0);
+  try
+    C^.Mock.RecordCall('Cross', LArgs);
+  except
+    on E: EAssertionFailed do
+    begin
+      C^.Caught := True;
+      C^.Msg := E.Message;
+    end;
+  end;
+  Result := 0;
+end;
+
+procedure TestMockCrossThreadNotSafe;
+{ Owner binds on first access in main; worker RecordCall must fail. }
+var
+  LM: TMock;
+  Ctx: TMockThreadCtx;
+  TID: TThreadID;
+  LArgs: array of string;
+begin
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    LM.RecordCall('bind', LArgs); { bind owner thread }
+    Ctx.Mock := LM;
+    Ctx.Caught := False;
+    Ctx.Msg := '';
+    TID := BeginThread(@MockCrossThreadWorker, @Ctx);
+    CheckTrue(TID <> TThreadID(0), 'BeginThread ok');
+    WaitForThreadTerminate(TID, 10000);
+    CheckTrue(Ctx.Caught, 'cross-thread RecordCall must raise');
+    CheckContains(LowerCase(Ctx.Msg), 'not thread-safe');
+  finally
+    LM.Free;
+  end;
+end;
+
+procedure TestMockSameThreadOk;
+var
+  LM: TMock;
+  LArgs: array of string;
+begin
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    LM.RecordCall('A', LArgs);
+    LM.RecordCall('A', LArgs);
+    LM.Verify('A').CalledExactly(2);
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── TMockCaptor tests ─────────────────────────────────────────────────────── }
 
 procedure TestCaptorCaptureFrom;
@@ -2061,6 +2133,10 @@ begin
   Suite.Test('B5 GetCallHistory empty', @TestB5GetCallHistoryEmpty);
   Suite.Test('B5 Returns default empty', @TestB5ReturnsDefaultEmpty);
   Suite.Test('B5 CalledTimes zero', @TestB5CalledTimesZero);
+
+  { B8 v8.10 mock isolation }
+  Suite.Test('B8 cross-thread not safe', @TestMockCrossThreadNotSafe);
+  Suite.Test('B8 same-thread ok', @TestMockSameThreadOk);
 
   Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);

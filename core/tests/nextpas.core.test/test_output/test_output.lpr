@@ -1654,6 +1654,170 @@ begin
   SetTestFilter('');
 end;
 
+{ ── B8 v8.10: deeper report contracts ─────────────────────────────────────── }
+
+procedure TestJUnitEmptySuite;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('EmptySuite');
+  LResults[0].Passed := 0;
+  LResults[0].Failed := 0;
+  LResults[0].Skipped := 0;
+  SetLength(LResults[0].Results, 0);
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, 'testsuites');
+  CheckContains(LXml, 'EmptySuite');
+  CheckContains(LXml, 'tests="0"');
+end;
+
+procedure TestJUnitOnlySkipped;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('SkipOnly');
+  LResults[0].Skipped := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 's1';
+  LResults[0].Results[0].Status := tsSkipped;
+  LResults[0].Results[0].Message := 'not ready';
+  LResults[0].Results[1].Name := 's2';
+  LResults[0].Results[1].Status := tsSkipped;
+  LResults[0].Results[1].Message := 'later';
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, 'skipped');
+  CheckContains(LXml, 's1');
+  CheckContains(LXml, 's2');
+end;
+
+procedure TestJUnitFailureMessage;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('FailMsg');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'bad';
+  LResults[0].Results[0].Status := tsFailed;
+  LResults[0].Results[0].Message := 'expected: 1 actual: 2';
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, 'failure');
+  CheckContains(LXml, 'expected: 1');
+  CheckContains(LXml, 'actual: 2');
+end;
+
+procedure TestJSONAllStatusEnums;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('AllStat');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 1;
+  LResults[0].Skipped := 1;
+  SetLength(LResults[0].Results, 3);
+  LResults[0].Results[0].Name := 'p';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'f';
+  LResults[0].Results[1].Status := tsFailed;
+  LResults[0].Results[1].Message := 'boom';
+  LResults[0].Results[2].Name := 's';
+  LResults[0].Results[2].Status := tsSkipped;
+  LResults[0].Results[2].Message := 'skip-me';
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"status": "passed"');
+  CheckContains(LOut, '"status": "failed"');
+  CheckContains(LOut, '"status": "skipped"');
+  CheckContains(LOut, 'skip-me');
+end;
+
+procedure TestJSONErrorStatusContract;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('ErrStat');
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'err';
+  LResults[0].Results[0].Status := tsError;
+  LResults[0].Results[0].Message := 'segfault-ish';
+  LOut := JSONReport(LResults);
+  CheckContains(LOut, '"status": "error"');
+  CheckContains(LOut, 'segfault');
+end;
+
+procedure TestTAPPlanMatchesCount;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('TapPlan');
+  LResults[0].Passed := 2;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'a';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[1].Name := 'b';
+  LResults[0].Results[1].Status := tsPassed;
+  LOut := TAPReport(LResults);
+  CheckContains(LOut, '1..2');
+  CheckContains(LOut, 'ok 1');
+  CheckContains(LOut, 'ok 2');
+end;
+
+procedure TestXmlEscapeSpecials;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LXml: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('Esc');
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'a&b<c>"d''e';
+  LResults[0].Results[0].Status := tsPassed;
+  LXml := JUnitXML(LResults);
+  CheckContains(LXml, '&amp;');
+  CheckContains(LXml, '&lt;');
+  CheckContains(LXml, '&gt;');
+  CheckContains(LXml, '&quot;');
+  { apostrophe may be &apos; or remain depending on impl }
+  CheckTrue((Pos('&apos;', LXml) > 0) or (Pos('''', LXml) > 0),
+    'apostrophe escaped or present');
+end;
+
+procedure TestColorDiffNoAnsiWhenOff;
+var
+  LMsg: string;
+begin
+  { Force plain ColorDiff path used by CheckEqual(string). }
+  SetAnsiEnabled(False);
+  try
+    try
+      CheckEqual('aa', 'ab');
+      Fail('expected CheckEqual to fail');
+    except
+      on E: EAssertionFailed do
+      begin
+        LMsg := E.Message;
+        CheckContains(LMsg, 'differ at position');
+        CheckContains(LMsg, 'expected');
+        CheckContains(LMsg, 'actual');
+        CheckFalse(Pos(#27, LMsg) > 0, 'no ESC/CSI when ANSI off');
+      end;
+    end;
+  finally
+    SetAnsiEnabled(True);
+  end;
+end;
+
 { ── B5: table-driven filter contracts (meaningful pass+fail paths) ───────── }
 
 procedure TestFilterTableCase(const AC: TTestCase);
@@ -1794,6 +1958,16 @@ begin
   Suite.Test('Glob empty alternative',        @TestGlobEmptyAlternative);
   Suite.Test('Glob brace with wildcard',      @TestGlobBraceWithWildcard);
   Suite.Test('Glob brace with question',      @TestGlobBraceWithQuestion);
+
+  { B8 v8.10 deeper report contracts }
+  Suite.Test('JUnit empty suite',             @TestJUnitEmptySuite);
+  Suite.Test('JUnit only skipped',            @TestJUnitOnlySkipped);
+  Suite.Test('JUnit failure message',         @TestJUnitFailureMessage);
+  Suite.Test('JSON all status enums',         @TestJSONAllStatusEnums);
+  Suite.Test('JSON error status',             @TestJSONErrorStatusContract);
+  Suite.Test('TAP plan matches count',        @TestTAPPlanMatchesCount);
+  Suite.Test('XmlEscape specials',            @TestXmlEscapeSpecials);
+  Suite.Test('ColorDiff no ANSI when off',    @TestColorDiffNoAnsiWhenOff);
 
   { B5: 64 filter contracts (half negative) }
   SetLength(LFilterCases, 0);

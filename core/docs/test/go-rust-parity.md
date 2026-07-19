@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.9**
+**当前版本**: **v8.10**
 **最后更新**: 2026-07-19
 
 ---
@@ -39,7 +39,8 @@
 | B1–B4 v8.8 | **done + main** |
 | B5 v8.9a 有意义规模 | **done** |
 | B6 Helper/Check=Fatal 文档 | **done** |
-| B7 runner 门禁 | **done**（land 随后） |
+| B7 runner 门禁 | **done** |
+| B8 v8.10 mock隔离/perf阈值/output深契约 | **done** |
 
 ### 暂缓
 
