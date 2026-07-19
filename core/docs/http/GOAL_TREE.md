@@ -1,6 +1,6 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-19 (Era Q1 Done: SSE/multipart/metrics/write-backpressure; NEXT → ROADMAP STOP until demand; framework-complete non-H3 retained)
+> Last updated: 2026-07-19 (Era Q2 Done: comparator runs=3 + Scale-ready (H1 server, Linux epoll); NEXT → ROADMAP STOP until demand; framework-complete non-H3 retained)
 > Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
 > **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Parity Campaign Q/S eras, Goal Loop, Inbox.
@@ -31,7 +31,7 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **Residual (Era 7)** | **Done** — R1 hang；R2 dig→R4 清零 HTTPS 1×41B（capabilities cache）；R3 Windows cancel probe-only only |
 | **Inbox depth (Era 8)** | **Done** — I0–I3 landed（main）；H3 仍 Blocked |
 | **Production Depth (Era 9)** | **Absorbed** — N0 landed；N1–N3 → Parity **Q1** |
-| **Parity Campaign** | **Open** — 质量+规模对标 Go/Rust；主战场 server；Q0 → Q1/S1… |
+| **Parity Campaign** | **H1 server scale + Q1 Met**（Q2 收口）；H2 scale S3 open；H3 Blocked |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | ~35 focused suites |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
@@ -83,8 +83,10 @@ Live product push is **Go/Rust-class quality + server scale** on H1/H2 — not H
 | Gate | Meaning |
 |------|---------|
 | Enter parity zone | epoll Direct keep-alive **≥ 0.5×** Go `net/http` same workload |
-| Scale-ready | **≥ 0.8×** Go req/s；p99 **≤ 2×** Go；no per-request leak |
-| Connection ladder | **Met (S1-3)** — documented 1k / 10k idle keep-alive stable points + soft-nofile failure mode (`bench_conn_ladder` / BENCHMARKS) |
+| Scale-ready RPS | **Met (Q2-1)** — epoll `no_url` median **2.20×** Go（`--runs 3`）；`response_1k` **1.93×** |
+| Scale-ready p99 | **Not instrumented** — harness 无 latency；不伪造 |
+| Connection ladder | **Met (S1-3)** — 1k / 10k idle keep-alive + soft-nofile failure mode |
+| Claim | **Scale-ready (H1 server, Linux epoll)** — yes with residuals；**not** H1/H2 整包 |
 
 G6 stage-closed numbers remain **characterization**, not the scale campaign exit.
 Scale campaign evidence lives in [`BENCHMARKS.md`](BENCHMARKS.md) § Parity Campaign and [`ROADMAP.md`](ROADMAP.md) S1–S3.
