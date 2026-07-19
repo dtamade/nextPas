@@ -54,6 +54,7 @@ fs.pas           ← 门面 re-export
 - **[INV-11]** `SameFile`/`FsSameFile`：lstat Dev+Ino；路径不存在抛 `ENotFoundError`。
 - **[INV-12]** `HardLink`/`Chtimes`/`Chown`：经 `platform_file_link`/`utimens`/`chown`；空路径 `EArgumentError`；Chtimes 时间为 **Unix 纳秒**（与 `Stat.ModTime` 同单位）；`Chown` 跟随 symlink（对齐 Go）；Windows 上 `Chown` 映射为不支持错误。
 - **[INV-13]** **文件锁（R23）**：绑定打开中的 `IFile` 句柄；`flkExclusive` 互斥，`flkShared` 可并存且与 exclusive 互斥；`TryLock` 仅「忙」返回 False（`PLATFORM_ERR_AGAIN`/`BUSY` 及 Win 锁占用码）；其它错误 raise；关闭/销毁后 OS 释放锁。Unix 为 **advisory** `flock`；Windows `LockFileEx` 整文件，语义平台相关；**不保证** NFS 可靠。仅经 `platform_file_lock|trylock|unlock`。
+- **[INV-14]** **文件监视（R25）**：`Watch`/`IFsWatcher` 经 `platform.watch`；`Poll` 返回 False=无事件/超时，True=有事件；L0 返回码约定 0=空、1=事件。单 path 监视；不保证跨平台事件字段完全一致。
 
 ---
 
