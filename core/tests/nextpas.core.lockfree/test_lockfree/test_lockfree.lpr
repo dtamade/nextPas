@@ -6945,15 +6945,16 @@ begin
     'stack ApproxCount must keep traversal best-effort instead of trusting an unbounded chain');
   CheckBefore(LStackTryPushSourceSection,
     'FSlots[LIdx].Value := AValue;',
-    'AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop',
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LNewTop',
     'stack TryPush must write the slot value before publishing it through the top CAS');
   CheckBefore(LStackTryPushSourceSection,
     'FSlots[LIdx].Next := UnpackIdx(LOldTop);',
-    'AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop',
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LNewTop',
     'stack TryPush must link the previous top before publishing through the top CAS');
   CheckContains(LStackTryPushSourceSection,
-    'AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop',
-    'stack TryPush top CAS must use acquire-release ordering');
+    'atomic_compare_exchange_strong_64(FTop, LExpected, LNewTop,' + LineEnding +
+    '    mo_acq_rel, mo_acquire)',
+    'stack TryPush top CAS must use acquire-release success with acquire failure');
   CheckContains(LDequeSource, 'LCap := LockFreeNextPow2(ACapacity);',
     'deque constructor must round requested capacity to power-of-two storage');
   CheckContains(LDequeSource, 'if LSize >= Int64(FCapacity) then',
@@ -7206,8 +7207,11 @@ begin
   CheckContains(LMpscEnqueueSourceSection,
     'AtomicStoreNode(LPrev^.Next, LNode, mo_release);',
     'MPSC Enqueue previous-node link publish must use release ordering');
-  CheckContains(LDequeSource, 'AtomicCompareExchange64(FTop',
-    'work-stealing deque must linearize steals through top CAS');
+  if (Pos('atomic_compare_exchange_strong_64(FTop', LDequeSource) = 0) and
+     (Pos('AtomicCompareExchange64(FTop', LDequeSource) = 0) then
+    raise EAssertionFailed.Create(
+      'work-stealing deque must linearize steals through top CAS ' +
+      '(preferred atomic_compare_exchange_strong_64 or legacy AtomicCompareExchange64)');
   CheckContains(LWaitSource, 'platform_wait_address32',
     'lockfree wait helper must use the atomic/platform wait-address seam');
   CheckContains(LWaitSource,
