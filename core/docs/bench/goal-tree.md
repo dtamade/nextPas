@@ -196,6 +196,11 @@ B28  符号消歧 / 子集扩 track / 文档 CI (2026-07-19)              ✅
 B29  消费侧文档 + 子集再扩 (2026-07-20)                          ✅
   B29.1  consumer-guide.md                                     ✅
   B29.2  scorecard + bitfield/packed/nativeset                 ✅
+
+B30  可复现子集 + 消费抽检 (2026-07-20)                          ✅
+  B30.1  run-scorecard-subset.sh + scorecard-tracks.txt        ✅
+  B30.2  consumer-checklist.md (hash/vec/json)                 ✅
+  B30.3  archive/README 权威 vs 历史索引                       ✅
 ```
 
 ## 测试套件分布
@@ -250,7 +255,8 @@ B29  消费侧文档 + 子集再扩 (2026-07-20)                          ✅
 
 ## 未来候选
 
-- [ ] Go/Rust/C 跨语言性能对照数据
-- [ ] `BenchRun` 新执行器（基于 `nextpas.core.sync.ebr`）
-- [ ] `TInt64Array` 类型别名（base 模块导出）
-- [ ] `BENCH_DEFAULT_PARALLEL_THREADS` 常量
+- [x] Go/Rust/C 跨语言性能对照数据 — **部分完成**：轻量子集 + `run-scorecard-subset.sh`（全量 SCORECARD 仍推迟）
+- [ ] `BenchRun` 新执行器（基于 `nextpas.core.sync.ebr`）— 需独立设计 lane
+- [ ] `TInt64Array` 类型别名（base 模块导出）— 归 base
+- [ ] `BENCH_DEFAULT_PARALLEL_THREADS` 常量 — 低优先级
+- [ ] 全量 `bench/SCORECARD.md` 60+ track 刷新 — 明确推迟

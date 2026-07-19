@@ -77,8 +77,27 @@
 
 \* Go 侧 map 实现与 Pascal native set 工作量可能不完全等价，解读时注意。
 
+## bitscan（2026-07-20；脚本重跑）
+
+| Op | Pascal | Go (`go run`) | 说明 |
+|----|--------|---------------|------|
+| BsfQWord/100K | 97.2 µs/op | 81.1 µs/op | Go 略快 ~1.2× |
+| BsrQWord/100K | 95.7 µs/op | 123 µs/op | **Pascal ~1.3×** ✓ |
+| BsfBsr/100K | 133 µs/op | 202 µs/op | **Pascal ~1.5×** ✓ |
+| ByteSwap/100K | 64.9 µs/op | 285 µs/op | **Pascal ~4.4×** ✓ |
+
+## 如何重跑
+
+```bash
+bash core/docs/bench/scripts/run-scorecard-subset.sh --list
+bash core/docs/bench/scripts/run-scorecard-subset.sh
+bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks bitfield,nativeset
+```
+
+清单：`scorecard-tracks.txt`。脚本将 Pascal/Go 输出打到 stdout，产物在 `$TMPDIR/nextpas-scorecard-*`（退出清理）。
+
 ## 说明
 
 - 仅选无 Rust `target/` 的轻量 track，避免 hygiene 污染。
 - 编译产物应落在 `/tmp` 或 `build/`，勿提交进 git。
-- 子集共 **8** 类 track：boolsum / fncall / shortstr / recops / inttohex / bitfield / packed / nativeset。
+- 子集共 **9** 类 track：boolsum / fncall / shortstr / recops / inttohex / bitfield / packed / nativeset / bitscan。
