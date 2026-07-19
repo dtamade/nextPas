@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **18-gate `ci-matrix` promoted** (pass=18 on `windows-latest`, run 29683362919 @ `4b831227f`; wine 15 secondary) |
+| Real Windows GHA | **18-gate `ci-matrix` promoted** (pass=18 on `windows-latest`, run 29683362919 @ `4b831227f`; wine 16 secondary; 19-gate +fmt candidate) |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -82,7 +82,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Host | Current tier | Next honest claim |
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
-| Windows x86_64 | **`ci-matrix` for documented 18-gate set** + wine 15-module secondary | expand matrix modules; keep wine + GHA green |
+| Windows x86_64 | **`ci-matrix` for documented 18-gate set** + wine 16-module secondary; 19-gate (+fmt) candidate | GHA green for +fmt then promote; keep wine green |
 | macOS | **`focused-runtime` for documented 8-gate set** (D2.c); inventory via best-effort | keep matrix green; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
@@ -295,6 +295,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-19 | Expand matrix: add `platform.error` to wine matrix (14→15) and Windows scripts (17→18 candidate). Local wine single-gate + full matrix evidence required; do **not** promote 18-gate `ci-matrix` until GHA `test-windows-runtime` durable green. Fix goal-tree contract tokens + wine list honesty (dl/pipe/fmt/info/which suite-exists-not-gated). |
 | 2026-07-19 | **fix(io)**: Windows-safe `TPoller.AsyncReadv`/`AsyncWritev` (empty-case after IFDEF strip). Unblocks GHA `poller.windows_runtime_smoke`. Landed `4b831227f`. |
 | 2026-07-19 | **18-gate `ci-matrix` promoted**: GHA `test-windows-runtime` pass=18 fail=0 (run 29683362919 @ `4b831227f`); includes `platform.error`. Not full-host Windows parity. |
+| 2026-07-19 | Expand matrix: add `platform.fmt` to wine (15→16) and Windows scripts (18→19 candidate). Local wine evidence required; promote 19 only after GHA green. |
 
 ---
 
