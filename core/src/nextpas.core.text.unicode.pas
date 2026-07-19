@@ -13,6 +13,7 @@ uses
   nextpas.core.text.unicode.script,
   nextpas.core.text.unicode.block,
   nextpas.core.text.unicode.segment,
+  nextpas.core.text.unicode.bidi,
   nextpas.core.text.unicode.collate,
   nextpas.core.text.unicode.data;
 
@@ -33,6 +34,9 @@ type
   TLineBreakClass = nextpas.core.text.unicode.types.TLineBreakClass;
   TBidiClass = nextpas.core.text.unicode.types.TBidiClass;
   TBidiPairedBracketType = nextpas.core.text.unicode.types.TBidiPairedBracketType;
+  TBidiResolveResult = nextpas.core.text.unicode.bidi.TBidiResolveResult;
+  TBidiLevelArray = nextpas.core.text.unicode.bidi.TBidiLevelArray;
+  TBidiIndexArray = nextpas.core.text.unicode.bidi.TBidiIndexArray;
 
   TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
   TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
@@ -67,6 +71,9 @@ function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inlin
 function GetBidiClass(const ACp: TUnicodeCodepoint): TBidiClass; inline;
 function GetBidiPairedBracket(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
 function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType; inline;
+function ResolveBidi(const AText: string; const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
+function ResolveBidiClasses(const AClasses: array of TBidiClass;
+  const AParagraphDir: Integer = 2): TBidiResolveResult; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -197,6 +204,17 @@ end;
 function GetBidiPairedBracketType(const ACp: TUnicodeCodepoint): TBidiPairedBracketType;
 begin
   Result := nextpas.core.text.unicode.props.GetBidiPairedBracketType(ACp);
+end;
+
+function ResolveBidi(const AText: string; const AParagraphDir: Integer): TBidiResolveResult;
+begin
+  Result := nextpas.core.text.unicode.bidi.ResolveBidi(AText, AParagraphDir);
+end;
+
+function ResolveBidiClasses(const AClasses: array of TBidiClass;
+  const AParagraphDir: Integer): TBidiResolveResult;
+begin
+  Result := nextpas.core.text.unicode.bidi.ResolveBidiClasses(AClasses, AParagraphDir);
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;

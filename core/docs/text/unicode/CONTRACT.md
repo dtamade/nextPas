@@ -11,14 +11,15 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 |--------|------|
 | `types.pas` | 基础类型（含 `TIndicConjunctBreak`） |
 | `base.pas` | 区间二分查找原语 |
-| `props.pas` | GC / BinaryProperty / GCB / InCB / **WBP** / **SBP** / **LBP** |
+| `props.pas` | GC / Binary / GCB / InCB / WBP / SBP / LBP / **Bidi_Class** / brackets |
 | `casefold.pas` | 大小写映射 + CaseFold |
 | `normalize.pas` | NFC/NFD/NFKC/NFKD + QuickCheck |
 | `segment.pas` | UAX#29 Grapheme/Word/Sentence + **UAX#14 LineBreak** ByteLen |
+| `bidi.pas` | **UAX#9** 双向算法（至 L2） |
 | `collate.pas` | DUCET 排序 |
 | `script.pas` / `block.pas` | Script / Block |
 | `data.pas` | IUnicodeDataManager |
-| 门面 `unicode.pas` | re-export（Grapheme/Word/Sentence/LineBreak ByteLen + InCB/WBP/SBP/LBP） |
+| 门面 `unicode.pas` | re-export（含 ResolveBidi / GetBidiClass / 边界 ByteLen） |
 
 `text.grapheme.GraphemeNext` 委托 `GraphemeClusterByteLen` 做边界，本地只计算显示宽度。
 
@@ -44,6 +45,14 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 10. **Line 双语义**：
     - **硬** `NextLine` / `SegmentLines`：仅硬分隔符（CR/LF/NL 等），**不是** UAX#14
     - **软** `LineBreakByteLen` / `NextLineBreak` / `SegmentLineBreaks`：UAX#14 换行机会（`stLineBreak`）
+
+### 双向（UAX#9）
+
+1. **官方一致性**：`BidiCharacterTest.txt` 全量（~91707 数据行）fail=0
+2. **官方一致性**：`BidiTest.txt` abstract 全量（~770k 方向×行）fail=0
+3. 覆盖规则至 **L2**（含 X10 isolating runs、N0 括号配对）；**L3/L4** 平台相关，不在门禁
+4. API：`GetBidiClass` / `ResolveBidi` / `ResolveBidiClasses`（`AParagraphDir`：0=LTR,1=RTL,2=auto）
+
 ### 排序
 
 自反 / 对称 / 传递；`Compare` 与 sort key 符号一致；仅 DUCET。
@@ -69,7 +78,8 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 for t in test_case test_data test_enhance test_grapheme_uax29 \
          test_normalize test_property test_collate \
          test_conformance_normalize test_conformance_grapheme \
-         test_conformance_word test_conformance_sentence test_conformance_line; do
+         test_conformance_word test_conformance_sentence test_conformance_line \
+         test_conformance_bidi_character test_conformance_bidi; do
   make -C core/tests/nextpas.core.text.unicode/$t clean test
 done
 ```
@@ -82,12 +92,15 @@ python3 core/scripts/gen_unicode_fixtures.py --version 16.0.0 \
 python3 core/scripts/gen_unicode_wbp.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_sbp.py --version 16.0.0 --output-dir core/src
 python3 core/scripts/gen_unicode_lbp.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_bc.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_brackets.py --version 16.0.0 --output-dir core/src
 ```
 
 ## 变更记录
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | UAX#9 Bidi 官方双 harness 全绿（Character+Abstract）+ ResolveBidi API |
 | 2026-07-20 | NextLineBreak / SegmentLineBreaks 便利 API；stLineBreak |
 | 2026-07-20 | LineBreak 官方 16672/16672 全绿；硬 NextLine / 软 LineBreakByteLen 双语义钉死 |
 | 2026-07-19 | SentenceBreak 官方 harness + SBP + UAX#29 NextSentence |
