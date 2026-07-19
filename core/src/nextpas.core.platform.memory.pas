@@ -198,6 +198,9 @@ function platform_aligned_alloc_backend: TPlatformAlignedAllocBackend;
 begin
 {$IFDEF NEXTPAS_WINDOWS}
   Result := paabWindowsCRT;
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  { See platform_aligned_alloc_is_native — Darwin uses SysGetMem path. }
+  Result := paabFallback;
 {$ELSEIF defined(NEXTPAS_UNIX)}
   Result := paabPosix;
 {$ELSE}
@@ -212,7 +215,14 @@ function platform_aligned_alloc_is_native: Boolean;
   detection of _aligned_malloc availability on Windows; if the CRT
   does not provide it, the call will fail at link time. }
 begin
+{$IFDEF NEXTPAS_MACOS}
+  { Darwin aarch64 GHA: posix_memalign/free mixed with virtual mmap and
+    the test harness Abort-traps (signal 6) near suite end. Prefer the
+    SysGetMem-backed path until the libc mix is isolated. }
+  Result := False;
+{$ELSE}
   Result := platform_aligned_alloc_backend <> paabFallback;
+{$ENDIF}
 end;
 
 function platform_secure_zero_memory_backend: TPlatformSecureZeroBackend;

@@ -188,6 +188,12 @@ begin
     'forced/native Windows host must report Windows CRT backend source truth');
   Check(platform_aligned_alloc_is_native,
     'forced/native Windows host must report native backend source truth');
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  { Darwin uses SysGetMem path (see platform_aligned_alloc_is_native). }
+  Check(platform_aligned_alloc_backend = paabFallback,
+    'Darwin host reports fallback backend (SysGetMem path)');
+  Check(not platform_aligned_alloc_is_native,
+    'Darwin host is not native posix_memalign under current GHA-safe path');
 {$ELSEIF defined(NEXTPAS_UNIX)}
   Check(platform_aligned_alloc_backend = paabPosix,
     'forced/native POSIX host must report POSIX backend source truth');
