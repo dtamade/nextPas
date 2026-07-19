@@ -257,6 +257,11 @@ type
     FPollQueuedOutbound: IH1OutboundBuffer;
     FPollQueuedResponsePending: Boolean;
     FPollQueuedCloseAfterDrain: Boolean;
+    { S2-1: connection-scoped outbound buffer free-list (depth matches poll
+      active+queued responses). Avoids NewH1OutboundBuffer per keep-alive
+      request on the hot path. }
+    FSpareOutbound0: IH1OutboundBuffer;
+    FSpareOutbound1: IH1OutboundBuffer;
     FPollReadDeadline: TDeadline;
     FPollReadDeadlineIsIdle: Boolean;
     FPollWriteDeadline: TDeadline;
@@ -279,6 +284,8 @@ type
     procedure PreparePollKeepAliveRequestParse;
     procedure ResetPollResponseState;
     procedure PromoteQueuedPollResponse;
+    function AcquireOutboundBuffer: IH1OutboundBuffer;
+    procedure ReleaseOutboundBuffer(var AOutbound: IH1OutboundBuffer);
     function EnqueuePollResponse(const AOutbound: IH1OutboundBuffer;
       const ACloseAfterDrain: Boolean): Boolean;
     function CanParseBufferedPollRequestWhileDraining: Boolean;
@@ -1092,6 +1099,8 @@ begin
   FPollQueuedOutbound := nil;
   FPollQueuedResponsePending := False;
   FPollQueuedCloseAfterDrain := False;
+  FSpareOutbound0 := nil;
+  FSpareOutbound1 := nil;
   FPollReadDeadline := TDeadline.Infinite;
   FPollReadDeadlineIsIdle := False;
   FPollWriteDeadline := TDeadline.Infinite;
@@ -1099,6 +1108,39 @@ begin
   FRequestCount := 0;
   if FStreamRuntime <> nil then
     ArmPollRequestReadDeadline;
+end;
+
+function TH1ServerConnectionState.AcquireOutboundBuffer: IH1OutboundBuffer;
+begin
+  if FSpareOutbound0 <> nil then
+  begin
+    Result := FSpareOutbound0;
+    FSpareOutbound0 := nil;
+    Result.Reset;
+    Exit;
+  end;
+  if FSpareOutbound1 <> nil then
+  begin
+    Result := FSpareOutbound1;
+    FSpareOutbound1 := nil;
+    Result.Reset;
+    Exit;
+  end;
+  Result := NewH1OutboundBuffer;
+end;
+
+procedure TH1ServerConnectionState.ReleaseOutboundBuffer(
+  var AOutbound: IH1OutboundBuffer);
+begin
+  if AOutbound = nil then
+    Exit;
+  AOutbound.Reset;
+  if FSpareOutbound0 = nil then
+    FSpareOutbound0 := AOutbound
+  else if FSpareOutbound1 = nil then
+    FSpareOutbound1 := AOutbound;
+  { If both spares are full, drop — refcount frees the buffer. }
+  AOutbound := nil;
 end;
 
 procedure TH1ServerConnectionState.InvokeHandler(const AReq: IHttpRequest;
@@ -1225,10 +1267,10 @@ end;
 
 procedure TH1ServerConnectionState.ResetPollResponseState;
 begin
-  FPollOutbound := nil;
+  ReleaseOutboundBuffer(FPollOutbound);
   FPollResponsePending := False;
   FPollCloseAfterDrain := False;
-  FPollQueuedOutbound := nil;
+  ReleaseOutboundBuffer(FPollQueuedOutbound);
   FPollQueuedResponsePending := False;
   FPollQueuedCloseAfterDrain := False;
   FPollWriteDeadline := TDeadline.Infinite;
@@ -1292,9 +1334,11 @@ function TH1ServerConnectionState.QueuePollErrorResponse(
 var
   LOutbound: IH1OutboundBuffer;
 begin
-  LOutbound := NewH1OutboundBuffer;
+  LOutbound := AcquireOutboundBuffer;
   WriteErrorResponseToWriter(LOutbound as IWriter, AStatus);
   Result := EnqueuePollResponse(LOutbound, True);
+  if not Result then
+    ReleaseOutboundBuffer(LOutbound);
 end;
 
 procedure TH1ServerConnectionState.ApplyPollRequestResult(
@@ -1304,7 +1348,10 @@ begin
     Exit;
 
   if not EnqueuePollResponse(AWork.Outbound, AWork.CloseAfterDrain) then
+  begin
+    { Work object still holds the buffer; drop via work refcount. Keep-alive off. }
     FKeepAlive := False;
+  end;
 end;
 
 procedure TH1ServerConnectionState.ArmPollWriteDeadline;
@@ -1390,7 +1437,7 @@ begin
       LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
     else
       LHijackConn := FConn;
-    LOutbound := NewH1OutboundBuffer;
+    LOutbound := AcquireOutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
@@ -1406,6 +1453,8 @@ begin
       Result := tscoHandler;
       FKeepAlive := False;
       FConn.SetReadDeadline(TDeadline.Infinite);
+      { Hijack owns the connection; outbound buffer is not reused. }
+      LOutbound := nil;
       Exit;
     end;
 
@@ -1413,6 +1462,7 @@ begin
     LDrainStarted := True;
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
+    ReleaseOutboundBuffer(LOutbound);
 
   except
     on E: Exception do
@@ -1434,6 +1484,7 @@ begin
         except
         end;
       end;
+      ReleaseOutboundBuffer(LOutbound);
       FKeepAlive := False;
     end;
   end;
@@ -1472,7 +1523,7 @@ begin
 
     if HasHttp11HostPolicyError(FParser) then
     begin
-      LOutbound := NewH1OutboundBuffer;
+      LOutbound := AcquireOutboundBuffer;
       WriteErrorResponseToWriter(LOutbound as IWriter, HTTP_STATUS_BAD_REQUEST);
       AOutbound := LOutbound;
       ACloseAfterDrain := True;
@@ -1501,7 +1552,7 @@ begin
       LHijackConn := TReadPrependTcpStream.Create(FConn, FPending)
     else
       LHijackConn := FConn;
-    LOutbound := NewH1OutboundBuffer;
+    LOutbound := AcquireOutboundBuffer;
     LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
@@ -1516,6 +1567,9 @@ begin
     begin
       Result := tscoHandler;
       FKeepAlive := False;
+      { Hijack owns the connection; do not recycle this outbound buffer. }
+      LOutbound := nil;
+      AOutbound := nil;
       Exit;
     end;
 
@@ -1527,12 +1581,16 @@ begin
     on E: Exception do
     begin
       if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
-        Result := tscoHandler
+      begin
+        Result := tscoHandler;
+        LOutbound := nil;
+        AOutbound := nil;
+      end
       else if (LW = nil) or (not (LW as TH1ResponseWriter).HasCommitted) then
       begin
         if LOutbound = nil then
         begin
-          LOutbound := NewH1OutboundBuffer;
+          LOutbound := AcquireOutboundBuffer;
           LResponseWriter := LOutbound as IWriter;
         end;
         try
@@ -1541,6 +1599,7 @@ begin
           AOutbound := LOutbound;
           ACloseAfterDrain := True;
         except
+          ReleaseOutboundBuffer(LOutbound);
           AOutbound := nil;
           ACloseAfterDrain := False;
         end;
@@ -1940,7 +1999,7 @@ begin
         if FPollOutbound.IsEmpty then
         begin
           LCloseAfterDrain := FPollCloseAfterDrain;
-          FPollOutbound := nil;
+          ReleaseOutboundBuffer(FPollOutbound);
           FPollResponsePending := False;
           FPollCloseAfterDrain := False;
           FPollWriteDeadline := TDeadline.Infinite;

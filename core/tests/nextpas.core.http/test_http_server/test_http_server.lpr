@@ -12388,6 +12388,22 @@ begin
     'reactor-inline default does not remove drain/backpressure path');
 end;
 
+procedure TestH1OutboundBufferReuseSourceContract;
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('function TH1ServerConnectionState.AcquireOutboundBuffer', LSrc) > 0,
+    'S2-1 acquire outbound free-list');
+  Check(Pos('procedure TH1ServerConnectionState.ReleaseOutboundBuffer', LSrc) > 0,
+    'S2-1 release outbound free-list');
+  Check(Pos('FSpareOutbound0', LSrc) > 0, 'S2-1 spare slot 0');
+  Check(Pos('FSpareOutbound1', LSrc) > 0, 'S2-1 spare slot 1 (pipeline depth)');
+  Check(Pos('AcquireOutboundBuffer', LSrc) > 0, 'poll/threaded paths use acquire');
+  Check(Pos('ReleaseOutboundBuffer(FPollOutbound)', LSrc) > 0,
+    'drain completion returns buffer to free-list');
+end;
+
 { Main }
 
 begin
@@ -12899,5 +12915,7 @@ begin
   T.Test('Max requests per connection', @TestMaxRequestsPerConnection);
   T.Test('H1 write/backpressure contract source locks',
     @TestH1WriteBackpressureContractSource);
+  T.Test('H1 outbound buffer reuse source contract',
+    @TestH1OutboundBufferReuseSourceContract);
   if not T.Run then Halt(1);
 end.
