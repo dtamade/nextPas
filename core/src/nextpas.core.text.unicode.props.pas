@@ -11,6 +11,7 @@ uses
 function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinaryProperty): Boolean; inline;
 function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory; inline;
 function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty; inline;
+function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBreak; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -76,6 +77,7 @@ const
 {$I nextpas.core.text.unicode.data.inc}
 {$I nextpas.core.text.unicode.props.inc}
 {$I nextpas.core.text.unicode.gcb.inc}
+{$I nextpas.core.text.unicode.incb.inc}
 
 function GetAsciiGeneralCategory(const ACp: Byte): TGeneralCategory; inline;
 begin
@@ -206,6 +208,15 @@ begin
     Exit(TGraphemeBreakProperty(LValue));
 
   Result := gbpOther;
+end;
+
+function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBreak;
+var
+  LValue: Byte;
+begin
+  if FindRange3Value(ACp, INCB_RANGES, LValue) then
+    Exit(TIndicConjunctBreak(LValue));
+  Result := icbNone;
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;
