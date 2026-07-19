@@ -34,8 +34,8 @@
 | **Q1** | Atomic 首选路径与质量加固 | **Q1-a done**；Q1-b/c pending |
 | **Q2** | T1 深度（首选路径 + stress） | **done** — T1 preferred path 全量；verify-t1 绿；已 land main |
 | **Q3** | Map/Channel 体验对标 | **Q3-a/b/c done**（Selector 钉死 + Channel 对标表 + HashMap progress 诚实） |
-| **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | pending |
-| **Q5** | 有信封 Go/Rust 同机对照常青 | pending |
+| **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | **done** — inventory + **不扩** H3-2 |
+| **Q5** | 有信封 Go/Rust 同机对照常青 | **done** — compare-matched C1/C2 + envelope |
 
 ```
 H3 complete → Q0 → Q1 → Q2 → Q3 → Q4 → Q5 → Maintenance 循环
@@ -106,6 +106,21 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 | 2026-07-20 | **Land** H3-4/H3-5 + Q0–Q2 → main `1e535bfb4`；archive tag |
 | 2026-07-20 | **Q3-a**：Selector preferred atomics；TrySelect≡default；Add 序；wait 文档修正；钉测试 |
 | 2026-07-20 | **Q3-b/c**：Channel 对标表 + Close 幂等测；HashMap api-ref 诚实 progress / 去假对比 |
+| 2026-07-20 | **Q4**：[`t2-inventory.md`](t2-inventory.md)；**否决**本波扩 H3-2；CONTRACT/selection-guide 指针 |
+| 2026-07-20 | **Q5**：matched C1/C2 multi-thread channel；`compare-matched`；envelope 脚本增强 |
+
+### Q4 checklist
+
+- [x] T2 inventory（档位 + progress + tests）
+- [x] 书面否决 H3-2 扩子集
+- [x] CONTRACT §0.2 / selection-guide 指向 inventory
+- [x] 无 T2 进门面、无算法大改
+
+### Q5 checklist
+
+- [x] matched C1/C2 多线程 Pascal + Go + Rust
+- [x] envelope 可填 command/measured/stats；`compare-matched` 入口
+- [x] bench-envelope.md Q5 节 + 非公平声明
 
 ### Q3-a checklist
 
