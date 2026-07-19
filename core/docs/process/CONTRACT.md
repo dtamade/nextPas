@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：2.9
+**版本**：2.10
 
 ---
 
@@ -51,7 +51,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 ## 2. 不变量
 
-- **[INV-1]** IChild 释放时自动 Kill + Wait（防止僵尸进程）
+- **[INV-1]** 未 Wait/Detach 的 `Destroy`：**尽力** try_wait → 仍 running 则 Kill + 有限 reap（约 5s）→ 超时 abandon 再 detach；**不保证**零僵尸。已 Waited/Detached 不 Kill。
 - **[INV-2]** WaitWithOutput 用 poll(2) 同时读 stdout+stderr，避免死锁
 - **[INV-3]** 子进程 exec 前关闭所有继承的 fd（close(3..1023)）
 - **[INV-4]** EnvAdd 继承父进程环境并追加/覆盖；Env 完全替换
@@ -129,3 +129,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.7 | INV-13 Wait 自动排水；MergeStderr 强制 piped；Destroy 5s 写实；测试数口径 | Claude |
 | 2026-07-19 | 2.8 | INV-13 TryWait 持管道排水；Take* 责任钉死 | Claude |
 | 2026-07-19 | 2.9 | INV-13 钉死 TryWait=drain-only（非 WaitWithOutput） | Claude |
+| 2026-07-19 | 2.10 | INV-1 对齐 Destroy 5s abandon（非无限 Kill+Wait） | Claude |
