@@ -192,7 +192,7 @@ end;
 | `TryReceive` | Dequeues bytes then `DrainSenders` |
 | `Receive` / `ReceiveRef` | Notify only; still call `TryReceive` for data |
 
-- **Channel** = message/byte-chunk queue backpressure  
+- **Channel** = message/byte-chunk queue backpressure
 - **IBackpressureController** (`net.async.backpressure`) = stream buffer + high/low watermarks + `OnStateChange` (Post on loop)
 
 ### Timeout I/O cancel (B2)
