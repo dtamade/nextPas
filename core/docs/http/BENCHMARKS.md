@@ -150,6 +150,32 @@ completion wake for short keep-alive requests. Tests that assert handoff set
 official harness, with documented residuals (no p99, no H2 scale claim, no Windows
 scale claim, no H3). **Not** a cross-machine leaderboard.
 
+#### S2-1 H1 allocation map + outbound buffer reuse
+
+**Per keep-alive request (epoll poll-owned path, before S2-1)** — static map:
+
+| Site | Alloc? | Notes |
+| ---- | ------ | ----- |
+| `THttpRequest.CreateFromRequestTarget` | yes | method/url/headers materialization |
+| `TH1ResponseWriter.Create` | yes | per-response headers object |
+| `NewH1OutboundBuffer` | **was yes** | new class + growable byte array |
+| Parser body reader | conditional | only when body present |
+| `RequestArena` | optional | opt-in `WithRequestArena`; connection-scoped Reset |
+
+**S2-1 change**: connection free-list (`FSpareOutbound0/1`) recycles
+`IH1OutboundBuffer` after drain / reset. Depth **2** matches poll active +
+queued response bound. Hijack paths do **not** recycle (handler owns conn).
+
+**Characterization** (local, not scale KPI; 50k×4 `no_url` epoll):
+
+| When | req/s samples |
+| ---- | ------------- |
+| Pre (same session) | ~47779 |
+| Post S2-1 | ~49181 / 51135 / 51850 |
+
+Noise band large; treat as **directional** only. Official ratio remains Q2-1
+medians. Residual hot allocs: request + response writer objects (S2-2/S2-3).
+
 #### S1-3 Connection ladder (idle keep-alive hold — not RPS)
 
 Harness: `benchmarks/nextpas.core.http/bench_conn_ladder/`
