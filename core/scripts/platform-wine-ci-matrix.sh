@@ -25,6 +25,7 @@ MODULE_ENTRIES=(
   "platform.random core/tests/nextpas.core.platform.random/test_platform_random_wine"
   "platform.socket core/tests/nextpas.core.platform.socket/test_platform_socket_wine"
   "platform.error core/tests/nextpas.core.platform.error/test_platform_error_wine"
+  "platform.fmt core/tests/nextpas.core.platform.fmt/test_platform_fmt_wine"
   "io.reactor.iocp core/tests/nextpas.core.io.uring/test_reactor_iocp_wine"
 )
 
