@@ -109,6 +109,8 @@ var
   GTracking: TTrackingAllocator;
   GStats: TStatsAllocator;
   GHeapDebugState: SizeUInt;
+  { Combined HEAP_DEBUG|HEAP_SAFETY for process GetMem hot path (one load). }
+  GProcessRouteState: SizeUInt;
   GHeapSafetyState: SizeUInt;
   GArenaStrictState: SizeUInt;
 
@@ -200,11 +202,17 @@ var
   LOn: Boolean;
   LNew: SizeUInt;
 begin
-  LPrev := AtomicCmpExchange(AState, ENV_UNREAD, ENV_UNREAD);
+  { Hot path: plain load after first parse.
+    Previous CAS-as-load (AtomicCmpExchange dummy) is a full barrier per call;
+    process GetMem/FreeMem each check HEAP_DEBUG + HEAP_SAFETY → multi-barrier
+    tax (~7× vs DefaultHeap direct on SC1 flat loop). Env flags are write-once
+    after first parse; relaxed read is correct. }
+  LPrev := AState;
   if LPrev = ENV_ON then
     Exit(True);
   if LPrev = ENV_OFF then
     Exit(False);
+  { ENV_UNREAD: parse once, publish with CAS (first writer wins). }
   LEnv := platform_env_get_str(AEnvName);
   LOn := ParseMemHeapDebugEnv(LEnv);
   if LOn then
@@ -212,7 +220,7 @@ begin
   else
     LNew := ENV_OFF;
   AtomicCmpExchange(AState, LNew, ENV_UNREAD);
-  Result := AtomicCmpExchange(AState, 0, 0) = ENV_ON;
+  Result := AState = ENV_ON;
 end;
 
 procedure ParseMemDebugEnv(const AEnv: AnsiString; out AConfig: TMemDebugWrapConfig);
@@ -368,11 +376,27 @@ begin
 end;
 
 function IsMemHeapDebugEnabled: Boolean;
+var
+  LPrev: SizeUInt;
+  LOn: Boolean;
+  LNew: SizeUInt;
 begin
-  { Process path routes through DefaultAllocator when either flag is on. }
-  if CachedTruthyEnv(GHeapDebugState, MEM_HEAP_DEBUG_ENV) then
+  { Process path routes through DefaultAllocator when HEAP_DEBUG or HEAP_SAFETY
+    is on. Single cached flag so GetMem/FreeMem pay one plain load, not two
+    CAS/env probes. }
+  LPrev := GProcessRouteState;
+  if LPrev = ENV_ON then
     Exit(True);
-  Result := IsMemHeapSafetyEnabled;
+  if LPrev = ENV_OFF then
+    Exit(False);
+  LOn := CachedTruthyEnv(GHeapDebugState, MEM_HEAP_DEBUG_ENV) or
+    CachedTruthyEnv(GHeapSafetyState, MEM_HEAP_SAFETY_ENV);
+  if LOn then
+    LNew := ENV_ON
+  else
+    LNew := ENV_OFF;
+  AtomicCmpExchange(GProcessRouteState, LNew, ENV_UNREAD);
+  Result := GProcessRouteState = ENV_ON;
 end;
 
 procedure ResetDebugWrapForTests;
@@ -386,6 +410,7 @@ begin
   AtomicExchange(GHeapDebugState, ENV_UNREAD);
   AtomicExchange(GHeapSafetyState, ENV_UNREAD);
   AtomicExchange(GArenaStrictState, ENV_UNREAD);
+  AtomicExchange(GProcessRouteState, ENV_UNREAD);
 end;
 
 initialization
@@ -396,6 +421,7 @@ initialization
   GHeapDebugState := ENV_UNREAD;
   GHeapSafetyState := ENV_UNREAD;
   GArenaStrictState := ENV_UNREAD;
+  GProcessRouteState := ENV_UNREAD;
   ClearConfig(GConfig);
 
 finalization
@@ -406,5 +432,6 @@ finalization
   GHeapDebugState := ENV_UNREAD;
   GHeapSafetyState := ENV_UNREAD;
   GArenaStrictState := ENV_UNREAD;
+  GProcessRouteState := ENV_UNREAD;
 
 end.

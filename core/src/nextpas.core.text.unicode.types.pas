@@ -280,6 +280,14 @@ type
     gbpExtendedPictographic   // 14
   );
 
+  // Indic_Conjunct_Break (InCB) — Unicode 15.1+ / UAX #29 GB9c
+  TIndicConjunctBreak = (
+    icbNone = 0,
+    icbLinker = 1,
+    icbConsonant = 2,
+    icbExtend = 3
+  );
+
   // Block 属性枚举（Unicode 16.0）
   TUnicodeBlock = (
     ubBasicLatin,

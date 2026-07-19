@@ -53,11 +53,12 @@ begin
   CheckEqual(Int64(2), Int64(R.Width), 'Hangul conjoining mark does not add width');
   CheckEqual(Int64(2), Int64(R.CodePoints), 'Hangul conjoining mark stays in cluster');
 
-  S := #$E1#$84#$80 + #$E1#$87#$BF; { U+1100 + U+11FF }
+  S := #$E1#$84#$80 + #$E1#$87#$BF; { U+1100 L + U+11FF T }
   R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
-  CheckEqual(Int64(6), Int64(R.ByteLen), 'Hangul conjoining upper bound bytes');
-  CheckEqual(Int64(2), Int64(R.Width), 'Hangul conjoining upper bound width');
-  CheckEqual(Int64(2), Int64(R.CodePoints), 'Hangul conjoining upper bound cluster');
+  { UAX #29: L does not join T (GB6 is L×(L|V|LV|LVT) only). }
+  CheckEqual(Int64(3), Int64(R.ByteLen), 'Hangul L + T first cluster is L only');
+  CheckEqual(Int64(1), Int64(R.CodePoints), 'Hangul L alone');
+  CheckEqual(Int64(2), Int64(R.Width), 'Hangul L width');
 
   S := #$E1#$84#$80 + #$E1#$88#$80; { U+1100 + U+1200 }
   R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
@@ -255,9 +256,11 @@ begin
 
   S := #$E0#$AE#$95 + #$E0#$AF#$8D + #$E0#$AE#$95; { U+0B95 TAMIL KA + U+0BCD VIRAMA + U+0B95 KA }
   R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
-  CheckEqual(Int64(9), Int64(R.ByteLen), 'Tamil KA + VIRAMA + KA bytes');
-  CheckEqual(Int64(3), Int64(R.CodePoints), 'Tamil KA + VIRAMA + KA cps');
-  CheckEqual(Int64(1), Int64(R.Width), 'Tamil KA + VIRAMA + KA width');
+  { Tamil is outside InCB Consonant set — UAX #29 GB9c does not join.
+    First cluster is KA + VIRAMA (Extend); second KA starts a new cluster. }
+  CheckEqual(Int64(6), Int64(R.ByteLen), 'Tamil KA + VIRAMA first cluster bytes');
+  CheckEqual(Int64(2), Int64(R.CodePoints), 'Tamil KA + VIRAMA first cluster cps');
+  CheckEqual(Int64(1), Int64(R.Width), 'Tamil KA + VIRAMA first cluster width');
 end;
 
 procedure TestEmpty;

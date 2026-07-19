@@ -54,7 +54,7 @@ UTF-8 字符串处理、Unicode 支持、数值/格式化转换、只读视图�
 | `nextpas.core.text.strings`  | `TStringArray` 工具与批量字符串操作 | `StringsSplit`, `StringsJoin`, `StringsTrimAll`, `GlobMatch`         | 配置行、批量字符串转换                |
 | `nextpas.core.text.utils`    | 通用字符串 helper                   | `Trim`, `PadLeft`, `RepeatString`, `StringReplace`                   | 应用代码中的日常文本处理              |
 | `nextpas.core.text.width`    | 终端显示宽度                        | `CodepointWidth`, `StringDisplayWidth`                               | TUI、表格布局、列宽计算               |
-| `nextpas.core.text.grapheme` | grapheme cluster 边界与聚合宽度     | `GraphemeNext`, `TGraphemeResult`                                    | cursor 移动、emoji/ZWJ cluster 宽度   |
+| `nextpas.core.text.grapheme` | 边界委托 `GraphemeClusterByteLen`；本地算宽度 | `GraphemeNext`, `TGraphemeResult`                                    | cursor 移动、emoji/ZWJ cluster 宽度   |
 | `nextpas.core.text.conv`     | 数值与字符串转换的高层入口          | `IntToStr`, `TryStrToInt`, `FloatToStr`, `TextOfChar`                | 业务层格式化、解析入口                |
 | `nextpas.core.text.format`   | 轻量格式化器                        | `TextFormat`                                                         | 不想引 `SysUtils.Format` 的格式化输出 |
 
@@ -62,7 +62,7 @@ UTF-8 字符串处理、Unicode 支持、数值/格式化转换、只读视图�
 
 | 单元                        | 职责                                      | 关键 API                                                                                | 适合场景                                     |
 | --------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `nextpas.core.text.unicode` | 聚合 property/case/normalize 高频 surface | `UTF8ToUpper`, `UTF8CaseFold`, `NFC`, `HasBinaryProperty`                               | 只关心 Unicode 能力，不想分别引入 3 个子模块 |
+| `nextpas.core.text.unicode` | 聚合 property/case/normalize/segment/collate | `UTF8ToUpper`, `NFC`, `GraphemeClusterByteLen`, `GetIndicConjunctBreak`                 | 只关心 Unicode 能力，不想分别引入子模块 |
 
 > Unicode 子模块族的完整架构、API、数据生成管线和使用指南见 [`text/unicode/README.md`](unicode/README.md)。
 | `nextpas.core.text`         | 聚合高频文本 surface                      | `TextTrim`, `TStringView`, `IStringBuilder`, `MakeStringBuilder`, `TextEqualCanonical` | 大多数上层代码的默认入口                     |

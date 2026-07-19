@@ -49,7 +49,7 @@
 | E0 | 本纲领 + ROADMAP 时代 E | **本批** |
 | E1 | 修复 `bench_arena_go_rust` API 漂移；`make compare` | **本批** |
 | E2 | 执行 [P-a prune](PRUNE-P-a-DESIGN-2026-07-19.md)（10 Tier-3 + 测试） | **本批优先** |
-| E3 | SCORECARD / BENCHMARKS 链到 live compare；刷新 RELEASE 注记 | 随 E1 |
+| E3 | compare A/B 口径；env 缓存快路径；SCORECARD/PARITY 刷新 | **done** 2026-07-19 |
 | E4 | D3：高价值 consumer sized free（tls/simd 已部分） | 持续 |
 | E5 | 可选 SC10：scorecard 内嵌「仅文档引用 compare」或 shell 包装 | 按需 |
 
@@ -66,16 +66,27 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 make lane-focused LANE=mem
 ```
 
-### 4.1 本机快照（2026-07-19，同方法论 64B ×10000）
+### 4.1 本机快照（2026-07-19）
+
+**A — Arena**（与 Go/Rust Bump 同 batch 常量）：
 
 | 场景 | nextPas | Go | 解读 |
 |------|---------|-----|------|
-| Bump AllocFast / BumpArena | **3 ns/op** | 5 ns/op | **领先**（P3 达标） |
-| reset+reuse | **3 ns/op** | 4 ns/op | **领先** |
-| batch heap (alloc 保留) | DefaultHeap sized **~102** | runtime batch make **~99** | 同量级；Go 无显式 free |
-| System/glibc free 环 | System **~11** | — | Scorecard SC1 以 RELEASE=1 为准 |
+| Bump AllocFast / BumpArena | **~3 ns/op** | ~5 ns/op | **领先**（P3） |
+| reset+reuse | **~3 ns/op** | ~4 ns/op | **领先** |
 
-Rust Bump 常报 0 ns（DCE）— **不作假胜利**。权威 Ready 仍用 scorecard。
+**B — Heap SC1 平坦 200k alloc+free**（与 scorecard 同口径；**勿与 A 横比**）：
+
+| subject | ns/op | 解读 |
+|---------|-------|------|
+| DefaultHeap direct | **~14** | ≈ system |
+| process `GetMem` facade | **~18** | 单次 env 路由缓存；E3 修 CAS-as-load 后 |
+| System | **~13–21** | glibc；scorecard SC1 system ~21 |
+| scorecard SC1 growing / default_heap / system | **12 / 19 / 21** | **P2：Growing ≤ system** |
+
+**已否证的假红点**：旧 harness 嵌套 10M + `CachedTruthyEnv` 用 CAS 做读 → 门面假报 ~100 ns；**不是** Growing 内核 10× 慢于 glibc。
+
+Rust Bump 常报 0 ns（DCE）— **不作假胜利**。权威 Ready 仍用 scorecard RELEASE=1。
 
 ---
 

@@ -55,6 +55,10 @@ type
 // 全局分割器实例
 function UnicodeSegmenter: IUnicodeSegmenter;
 
+{ Shared UAX #29 grapheme-cluster core (byte-oriented).
+  Returns bytes consumed for the cluster starting at AData. }
+function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+
 implementation
 
 uses
@@ -230,114 +234,125 @@ begin
   Result := LResults;
 end;
 
-function TUnicodeSegmenter.NextGraphemeCluster(const AText: string; const APos: SizeInt): SizeInt;
+function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 {**
- * UAX #29 Grapheme Cluster Boundary algorithm (Unicode 16.0).
- *
- * Rules implemented:
- *   GB1:  sot ÷
- *   GB3:  CR × LF
- *   GB4:  (Control|CR|LF) ÷
- *   GB5:  ÷ (Control|CR|LF)
- *   GB6:  L × (L|V|LV|LVT)
- *   GB7:  (V|LV) × (V|T)
- *   GB8:  (LVT|T) × T
- *   GB9:  × (Extend|ZWJ)
- *   GB9a: × SpacingMark
- *   GB9b: Prepend ×
- *   GB11: \p{Extended_Pictographic} Extend* ZWJ × \p{Extended_Pictographic}
- *   GB12: sot (RI RI)* RI × RI
- *   GB13: [^RI] (RI RI)* RI × RI
- *   GB999: ÷
+ * UAX #29 Grapheme Cluster Boundary core (Unicode 16.0), byte-oriented.
+ * See NextGraphemeCluster for rule list.
  *}
 var
-  LLen: SizeInt;
-  LPos: SizeInt;
+  LPos: SizeUInt;
   LCurGcb: TGraphemeBreakProperty;
   LDecode: TUTF8DecodeResult;
-  LAheadPos: SizeInt;
+  LAheadPos: SizeUInt;
   LAheadGcb: TGraphemeBreakProperty;
   LAheadDecode: TUTF8DecodeResult;
   LRICount: SizeInt;
+  LInCB: TIndicConjunctBreak;
+  LAheadInCB: TIndicConjunctBreak;
+  LInCBConsonant: Boolean;
+  LInCBLinker: Boolean;
 begin
-  LLen := Length(AText);
-  if APos > LLen then
-    Exit(APos);
+  if (AData = nil) or (ALen = 0) then
+    Exit(0);
 
-  // Decode first codepoint
-  LDecode := UTF8Decode(@AText[APos], LLen - APos + 1);
+  LDecode := UTF8Decode(AData, ALen);
   if LDecode.ByteLen = 0 then
-    Exit(APos + 1); // Invalid UTF-8
+    Exit(1); // Invalid UTF-8: consume one byte
 
-  LPos := APos + LDecode.ByteLen;
+  LPos := SizeUInt(LDecode.ByteLen);
   LCurGcb := GetGraphemeBreakProperty(LDecode.CodePoint);
+  LInCB := GetIndicConjunctBreak(LDecode.CodePoint);
+  LInCBConsonant := (LInCB = icbConsonant);
+  LInCBLinker := False;
 
-  // GB4: (Control | CR | LF) ÷ — always isolated
   if LCurGcb in [gbpCR, gbpLF, gbpControl] then
   begin
-    // GB3: CR × LF
-    if (LCurGcb = gbpCR) and (LPos <= LLen) then
+    if (LCurGcb = gbpCR) and (LPos < ALen) then
     begin
-      LAheadDecode := UTF8Decode(@AText[LPos], LLen - LPos + 1);
-      if (LAheadDecode.ByteLen > 0) and (GetGraphemeBreakProperty(LAheadDecode.CodePoint) = gbpLF) then
-        Exit(LPos + LAheadDecode.ByteLen);
+      LAheadDecode := UTF8Decode(@AData[LPos], ALen - LPos);
+      if (LAheadDecode.ByteLen > 0) and
+         (GetGraphemeBreakProperty(LAheadDecode.CodePoint) = gbpLF) then
+        Exit(LPos + SizeUInt(LAheadDecode.ByteLen));
     end;
     Exit(LPos);
   end;
 
-  // Track RI pairs: count consecutive RI characters
   if LCurGcb = gbpRegionalIndicator then
     LRICount := 1
   else
     LRICount := 0;
 
-  // Main loop: try to extend the cluster
-  while LPos <= LLen do
+  while LPos < ALen do
   begin
-    LAheadDecode := UTF8Decode(@AText[LPos], LLen - LPos + 1);
+    LAheadDecode := UTF8Decode(@AData[LPos], ALen - LPos);
     if LAheadDecode.ByteLen = 0 then
-      Break;
+    begin
+      { Ill-formed UTF-8: treat as U+FFFD (Other) consuming 1 byte so
+        Prepend × replacement still forms one cluster. }
+      LAheadDecode.CodePoint := $FFFD;
+      LAheadDecode.ByteLen := 1;
+    end;
     LAheadGcb := GetGraphemeBreakProperty(LAheadDecode.CodePoint);
-    LAheadPos := LPos + LAheadDecode.ByteLen;
+    LAheadInCB := GetIndicConjunctBreak(LAheadDecode.CodePoint);
+    LAheadPos := LPos + SizeUInt(LAheadDecode.ByteLen);
 
-    // GB4: ÷ (Control | CR | LF)
     if LAheadGcb in [gbpCR, gbpLF, gbpControl] then
       Break;
 
-    // GB11: EP Extend* ZWJ × EP — must be checked BEFORE GB9
-    // If current is EP and next is ZWJ, look past ZWJ for EP
     if (LCurGcb = gbpExtendedPictographic) and (LAheadGcb = gbpZWJ) then
     begin
-      if LAheadPos <= LLen then
+      if LAheadPos < ALen then
       begin
-        LAheadDecode := UTF8Decode(@AText[LAheadPos], LLen - LAheadPos + 1);
+        LAheadDecode := UTF8Decode(@AData[LAheadPos], ALen - LAheadPos);
         if (LAheadDecode.ByteLen > 0) and
            (GetGraphemeBreakProperty(LAheadDecode.CodePoint) = gbpExtendedPictographic) then
         begin
-          // Consume both ZWJ and the following EP
           LCurGcb := gbpExtendedPictographic;
           LRICount := 0;
-          LPos := LAheadPos + LAheadDecode.ByteLen;
+          LInCBConsonant := False;
+          LInCBLinker := False;
+          LPos := LAheadPos + SizeUInt(LAheadDecode.ByteLen);
           Continue;
         end;
       end;
     end;
 
-    // GB9: × (Extend | ZWJ) — after GB11 check
     if LAheadGcb in [gbpExtend, gbpZWJ] then
     begin
+      if LCurGcb <> gbpExtendedPictographic then
+      begin
+        LCurGcb := LAheadGcb;
+        LRICount := 0;
+      end;
+      if LInCBConsonant and (LAheadInCB = icbLinker) then
+        LInCBLinker := True;
       LPos := LAheadPos;
       Continue;
     end;
 
-    // GB9a: × SpacingMark
     if LAheadGcb = gbpSpacingMark then
     begin
+      if LCurGcb <> gbpExtendedPictographic then
+      begin
+        LCurGcb := gbpSpacingMark;
+        LRICount := 0;
+      end;
+      LInCBConsonant := False;
+      LInCBLinker := False;
       LPos := LAheadPos;
       Continue;
     end;
 
-    // GB9b: Prepend ×
+    if (LAheadInCB = icbConsonant) and LInCBConsonant and LInCBLinker then
+    begin
+      LCurGcb := LAheadGcb;
+      LRICount := 0;
+      LInCBConsonant := True;
+      LInCBLinker := False;
+      LPos := LAheadPos;
+      Continue;
+    end;
+
     if LCurGcb = gbpPrepend then
     begin
       LCurGcb := LAheadGcb;
@@ -345,56 +360,72 @@ begin
         LRICount := 1
       else
         LRICount := 0;
+      LInCBConsonant := (LAheadInCB = icbConsonant);
+      LInCBLinker := False;
       LPos := LAheadPos;
       Continue;
     end;
 
-    // GB6: L × (L | V | LV | LVT)
     if (LCurGcb = gbpL) and (LAheadGcb in [gbpL, gbpV, gbpLV, gbpLVT]) then
     begin
       LCurGcb := LAheadGcb;
       LRICount := 0;
+      LInCBConsonant := False;
+      LInCBLinker := False;
       LPos := LAheadPos;
       Continue;
     end;
 
-    // GB7: (V | LV) × (V | T)
     if (LCurGcb in [gbpV, gbpLV]) and (LAheadGcb in [gbpV, gbpT]) then
     begin
       LCurGcb := LAheadGcb;
       LRICount := 0;
+      LInCBConsonant := False;
+      LInCBLinker := False;
       LPos := LAheadPos;
       Continue;
     end;
 
-    // GB8: (LVT | T) × T
     if (LCurGcb in [gbpLVT, gbpT]) and (LAheadGcb = gbpT) then
     begin
       LCurGcb := gbpT;
       LRICount := 0;
+      LInCBConsonant := False;
+      LInCBLinker := False;
       LPos := LAheadPos;
       Continue;
     end;
 
-    // GB12-13: Regional Indicator pairs
     if (LCurGcb = gbpRegionalIndicator) and (LAheadGcb = gbpRegionalIndicator) then
     begin
       Inc(LRICount);
-      // GB12/13: even count → no break (pair forming), odd → break (pair complete)
-      // LRICount=2 means we have 2 RIs = 1 pair → no break
-      // LRICount=3 means we have 3 RIs = 1 pair + 1 extra → break before 3rd
       if LRICount mod 2 = 1 then
         Break;
       LCurGcb := gbpRegionalIndicator;
+      LInCBConsonant := False;
+      LInCBLinker := False;
       LPos := LAheadPos;
       Continue;
     end;
 
-    // GB999: ÷ Any — default break
     Break;
   end;
 
   Result := LPos;
+end;
+
+function TUnicodeSegmenter.NextGraphemeCluster(const AText: string; const APos: SizeInt): SizeInt;
+var
+  LLen: SizeInt;
+  LBytes: SizeUInt;
+begin
+  LLen := Length(AText);
+  if APos > LLen then
+    Exit(APos);
+  if APos < 1 then
+    Exit(APos);
+  LBytes := GraphemeClusterByteLen(@AText[APos], SizeUInt(LLen - APos + 1));
+  Result := APos + SizeInt(LBytes);
 end;
 
 function IsCJKIdeograph(const ACp: TUnicodeCodepoint): Boolean; inline;
