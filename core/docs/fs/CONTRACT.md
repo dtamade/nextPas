@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：1.6
+**版本**：1.7
 
 ---
 
@@ -45,7 +45,7 @@ fs.pas           ← 门面 re-export
 - **[INV-3]** GlobMatch 支持 `*`, `?`, `[...]` 模式
 - **[INV-4]** CreateDirAll 递归创建，已存在时静默成功
 - **[INV-5]** Mkdir/MkdirAll/Remove/RemoveAll/Rename 为 **procedure**：失败抛异常，成功无返回值。`ForceDirectories`/`DeleteFile` 保留 Boolean 兼容壳（内部 try/except，**吞掉异常类型**；要错误分类请用 procedure API）
-- **[INV-6]** path 命名：`PathIsAbsolute`≡`PathIsAbs`，`PathNormalize`≡`PathClean`；`PathJoin2(a,b)` 对齐 path 二元 Join。门面 `PathDir`/`PathSplit` 裸文件名目录为 **空串**（对齐 `nextpas.core.path` / SysUtils）；`FsPathDir`/`FsPathSplit` 保持 Go **`.`**
+- **[INV-6]** path 命名：`PathIsAbsolute`≡`PathIsAbs`，`PathNormalize`≡`PathClean`；`PathJoin2(a,b)` 对齐 path 二元 Join。门面 `PathDir`/`PathSplit` 仅对**无分隔符**裸名把 `'.'`→`''`；`./x` 保留 `'.'`；`FsPathDir` 始终 Go **`.`**
 - **[INV-7]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.fs*` / `path` / `os.env` 源码与本模块测试不得 `uses` 裸 FPC RTL 单元；能力经 platform / core 抽象。仅 `nextpas.core.system` 可直接引用 FPC RTL。文档中的「SysUtils 兼容」指 API 形状，不是 `uses SysUtils`。门禁：`test_fs` 真 uses 扫描（`fpc_rtl_uses_scan.inc`）。
 - **[INV-8]** `Remove` 对 ENOENT **静默成功**（对齐 Pascal Erase/DeleteFile；≠ Go `os.Remove`）。
 - **[INV-9]** 门面 `GetEnv`/`Param*` 为 **兼容入口**；新代码用 `nextpas.core.os.env` / `args`（见 README）。
@@ -108,3 +108,4 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 2026-07-19 | 1.4 | INV-7 FPC RTL 隔离；fs 测试去 SysUtils | Claude |
 | 2026-07-19 | 1.5 | 真 uses 门禁（test_fs + fpc_rtl_uses_scan.inc） | Claude |
 | 2026-07-19 | 1.6 | PathDir 门面对齐 path；Remove ENOENT；Boolean 壳/env 迁移 INV | Claude |
+| 2026-07-19 | 1.7 | PathDir 仅裸名压空；`./x` 保留 `.` | Claude |

@@ -101,7 +101,8 @@ begin
   if APath = '' then
     Exit('');
   Result := FsPathDir(APath);
-  if Result = '.' then
+  { Bare filename only: SysUtils empty dir. Keep '.' for './x' etc. }
+  if (Result = '.') and (Pos('/', APath) = 0) and (Pos('\', APath) = 0) then
     Result := '';
 end;
 
@@ -119,7 +120,7 @@ begin
     Exit;
   end;
   FsPathSplit(APath, ADir, ABase);
-  if ADir = '.' then
+  if (ADir = '.') and (Pos('/', APath) = 0) and (Pos('\', APath) = 0) then
     ADir := '';
 end;
 

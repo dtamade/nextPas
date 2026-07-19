@@ -789,14 +789,18 @@ procedure TestFacadePathDirSysUtilsEmpty;
 var
   LDir, LBase: string;
 begin
-  { Public PathDir/PathSplit: bare name → '' (align path/SysUtils).
-    FsPathDir/FsPathSplit keep Go-style '.'. }
+  { Public PathDir/PathSplit: bare name → ''; './x' keeps '.'; Fs* stays Go. }
   CheckEqual('', PathDir('file.txt'), 'facade PathDir bare file is empty');
   CheckEqual('/home/user', PathDir('/home/user/file.txt'), 'facade PathDir with dir');
+  CheckEqual('.', PathDir('./x'), 'facade PathDir ./x keeps dot');
   CheckEqual('.', FsPathDir('file.txt'), 'FsPathDir bare file is dot');
+  CheckEqual('.', FsPathDir('./x'), 'FsPathDir ./x is dot');
   PathSplit('file.txt', LDir, LBase);
   CheckEqual('', LDir, 'facade PathSplit bare dir empty');
   CheckEqual('file.txt', LBase, 'facade PathSplit bare base');
+  PathSplit('./x', LDir, LBase);
+  CheckEqual('.', LDir, 'facade PathSplit ./x dir is dot');
+  CheckEqual('x', LBase, 'facade PathSplit ./x base');
   FsPathSplit('file.txt', LDir, LBase);
   CheckEqual('.', LDir, 'FsPathSplit bare dir is dot');
 end;

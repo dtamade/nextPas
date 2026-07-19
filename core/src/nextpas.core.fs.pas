@@ -528,10 +528,9 @@ end;
 
 function PathDir(const APath: string): string;
 begin
-  { SysUtils/path facade: bare filename → '' (not Go-style '.').
-    Low-level FsPathDir keeps platform/Go '.' — see docs/path PathDir 对照. }
+  { Bare filename → '' (SysUtils); './x' keeps '.'. FsPathDir stays Go-style. }
   Result := nextpas.core.fs.path.FsPathDir(APath);
-  if Result = '.' then
+  if (Result = '.') and (Pos('/', APath) = 0) and (Pos('\', APath) = 0) then
     Result := '';
 end;
 
@@ -543,7 +542,7 @@ end;
 procedure PathSplit(const APath: string; out ADir, ABase: string);
 begin
   nextpas.core.fs.path.FsPathSplit(APath, ADir, ABase);
-  if ADir = '.' then
+  if (ADir = '.') and (Pos('/', APath) = 0) and (Pos('\', APath) = 0) then
     ADir := '';
 end;
 

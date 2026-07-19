@@ -113,7 +113,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | 函数 | 说明 |
 |------|------|
 | `PathJoin(AParts)` | 连接多个路径片段 |
-| `PathDir(APath)` | 提取目录部分（门面：裸文件名 → `''`；底层 `FsPathDir` → `'.'`） |
+| `PathDir(APath)` | 目录部分（裸名→`''`；`./x`→`'.'`；`FsPathDir` 裸名→`'.'`） |
 | `PathBase(APath)` | 提取文件名部分 |
 | `PathSplit(APath, ADir, ABase)` | 分离目录和文件名（门面裸文件名 `ADir=''`） |
 | `PathExt(APath)` | 提取扩展名 |

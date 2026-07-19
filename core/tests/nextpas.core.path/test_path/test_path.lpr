@@ -116,6 +116,7 @@ procedure TestPathDir;
 begin
   Check(PathDir('/home/user/file.txt') = '/home/user', 'dir with file');
   Check(PathDir('file.txt') = '', 'dir no path');
+  Check(PathDir('./x') = '.', 'dir ./x keeps relative dot');
   Check(PathDir('/home/user/') = '/home/user', 'dir trailing sep');
   Check(PathDir('') = '', 'dir empty');
 end;
@@ -150,6 +151,10 @@ begin
   PathSplit('file.txt', LDir, LBase);
   CheckEqual('', LDir, 'split no path dir');
   CheckEqual('file.txt', LBase, 'split no path base');
+
+  PathSplit('./x', LDir, LBase);
+  CheckEqual('.', LDir, 'split ./x keeps relative dir');
+  CheckEqual('x', LBase, 'split ./x base');
 
   PathSplit('/home/user/', LDir, LBase);
   CheckEqual('/home/user', LDir, 'split trailing sep dir');
