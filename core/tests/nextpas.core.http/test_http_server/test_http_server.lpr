@@ -12404,6 +12404,71 @@ begin
     'drain completion returns buffer to free-list');
 end;
 
+procedure TestH1FastPathFixedBodySourceContract;
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('FAST_PATH_MAX_BODY = 65536', LSrc) > 0,
+    'S2-2 body size cap for snapshot copy');
+  Check(Pos('LFast.ContentLength > FAST_PATH_MAX_BODY', LSrc) > 0,
+    'S2-2 oversize body falls back to llhttp');
+  Check(Pos('TH1FastSnapshotBodyReader', LSrc) > 0,
+    'S2-2 snapshot body reader');
+  Check(Pos('TH1FastRequestSnapshot.Create(LFast, ABuf)', LSrc) > 0,
+    'S2-2 snapshot copies body from parse buffer');
+  { Still reject expect / TE / connection close }
+  Check(Pos('LFast.HasExpect', LSrc) > 0, 'S2-2 still rejects Expect');
+  Check(Pos('LFast.HasTransferEncoding', LSrc) > 0, 'S2-2 still rejects TE');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestLivePostFixedBodyOnEpoll;
+{ S2-2: fixed-length POST body readable on epoll (fast-path snapshot body). }
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LOpts: THttpServerOptions;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/echo', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBody: TBytes;
+    LStr: string;
+  begin
+    LBody := HttpReadRequestBodyBytes(AReq);
+    if Length(LBody) > 0 then
+      SetString(LStr, PAnsiChar(@LBody[0]), Length(LBody))
+    else
+      LStr := '';
+    AW.GetHeaders.SetHeader('content-type', 'text/plain');
+    AW.GetHeaders.SetHeader('content-length', IntToStr(Int64(Length(LStr))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    if Length(LStr) > 0 then
+      AW.Write(LStr[1], SizeUInt(Length(LStr)));
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'POST /echo HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Content-Length: 5'#13#10 +
+      'Connection: close'#13#10#13#10 +
+      'hello');
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'epoll POST fixed body status 200');
+    Check(Pos('hello', LResp) > 0, 'epoll POST fixed body echoed');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
+
 { Main }
 
 begin
@@ -12917,5 +12982,11 @@ begin
     @TestH1WriteBackpressureContractSource);
   T.Test('H1 outbound buffer reuse source contract',
     @TestH1OutboundBufferReuseSourceContract);
+  T.Test('H1 fast path fixed-body source contract',
+    @TestH1FastPathFixedBodySourceContract);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Test('Live POST fixed body on epoll (S2-2)',
+    @TestLivePostFixedBodyOnEpoll);
+  {$ENDIF}
   if not T.Run then Halt(1);
 end.

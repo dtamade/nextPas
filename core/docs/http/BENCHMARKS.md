@@ -174,7 +174,26 @@ queued response bound. Hijack paths do **not** recycle (handler owns conn).
 | Post S2-1 | ~49181 / 51135 / 51850 |
 
 Noise band large; treat as **directional** only. Official ratio remains Q2-1
-medians. Residual hot allocs: request + response writer objects (S2-2/S2-3).
+medians. Residual hot allocs: request + response writer objects (future).
+
+#### S2-2 Fast path fixed-length body
+
+**Before**: `TryUseFastRequestParser` required `ContentLength = 0` — any POST body
+fell through to llhttp even when the full body was already in the socket buffer.
+
+**After**: HTTP/1.1 + Host + complete fixed body with `ContentLength ≤ 65536`
+uses `TH1FastRequestSnapshot` + `TH1FastSnapshotBodyReader`. Still **falls back**
+to llhttp for:
+
+- `Expect` / `Transfer-Encoding`
+- `Connection: close` / unsupported tokens
+- missing/duplicate Host
+- incomplete body
+- body larger than 64 KiB (avoid large per-request copies)
+
+**Gates**: `test_http_h1fast` 32/0；`test_http_server` live POST epoll echo +
+source-contract. No change to official multi-conn QPS KPI shape (`no_url` is
+still zero-body).
 
 #### S1-3 Connection ladder (idle keep-alive hold — not RPS)
 
