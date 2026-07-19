@@ -48,5 +48,38 @@ if [[ "$fail" -ne 0 ]]; then
   echo "FAIL: runner/public surface not referenced in self-tests"
   exit 1
 fi
+
+echo "=== Darwin TThreadID + Windows IUnknown calling convention guards ==="
+RUNNER="$CORE_ROOT/src/nextpas.core.test.runner.pas"
+EXPECT="$CORE_ROOT/src/nextpas.core.test.expect.pas"
+# Bare 0 vs TThreadID is ShortInt-incompatible on Darwin aarch64.
+if rg -n 'LThreads\[I\]\s*(:=|=|<>)\s*0\b' "$RUNNER" >/dev/null; then
+  echo "FAIL: bare 0 used with LThreads[] — use TThreadID(0) (Darwin aarch64)"
+  fail=1
+else
+  echo "OK: LThreads uses TThreadID(0)"
+fi
+# Windows COM IUnknown methods must be stdcall; bare {$IFNDEF WINDOWS}cdecl
+# leaves no convention on Windows and fails syntax.
+if ! rg -q 'IFDEF WINDOWS\}stdcall\{.\*ELSE\}cdecl' "$EXPECT"; then
+  if ! rg -q '\$IFDEF WINDOWS\}stdcall' "$EXPECT"; then
+    echo "FAIL: TExpectationBase IUnknown must use stdcall on Windows"
+    fail=1
+  else
+    echo "OK: expect IUnknown stdcall on Windows"
+  fi
+else
+  echo "OK: expect IUnknown stdcall on Windows"
+fi
+# Reject the broken IFNDEF-only form that produces empty convention on Win.
+if rg -q '\$IFNDEF WINDOWS\}cdecl\{\$ENDIF\}' "$EXPECT"; then
+  echo "FAIL: expect still has IFNDEF WINDOWS cdecl-only form (empty on Win)"
+  fail=1
+fi
+
+if [[ "$fail" -ne 0 ]]; then
+  echo "FAIL: runner/expect ABI source contracts"
+  exit 1
+fi
 echo "PASS: runner/public source contracts"
 exit 0
