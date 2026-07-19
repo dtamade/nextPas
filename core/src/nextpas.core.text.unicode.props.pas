@@ -12,6 +12,7 @@ function HasBinaryProperty(const ACp: TUnicodeCodepoint; const AProperty: TBinar
 function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory; inline;
 function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty; inline;
 function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBreak; inline;
+function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -78,6 +79,7 @@ const
 {$I nextpas.core.text.unicode.props.inc}
 {$I nextpas.core.text.unicode.gcb.inc}
 {$I nextpas.core.text.unicode.incb.inc}
+{$I nextpas.core.text.unicode.wbp.inc}
 
 function GetAsciiGeneralCategory(const ACp: Byte): TGeneralCategory; inline;
 begin
@@ -217,6 +219,26 @@ begin
   if FindRange3Value(ACp, INCB_RANGES, LValue) then
     Exit(TIndicConjunctBreak(LValue));
   Result := icbNone;
+end;
+
+function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty;
+var
+  LValue: Byte;
+begin
+  if ACp > UNICODE_MAX_CODEPOINT then
+    Exit(wbpOther);
+
+  if ACp = $000D then Exit(wbpCR);
+  if ACp = $000A then Exit(wbpLF);
+  if ACp = $200D then Exit(wbpZWJ);
+
+  if ACp <= $FFFF then
+    Exit(TWordBreakProperty(WBP_BMP_TABLE[Byte(ACp shr 8), Byte(ACp and $FF)]));
+
+  if FindRange3Value(ACp, WBP_SMP_RANGES, LValue) then
+    Exit(TWordBreakProperty(LValue));
+
+  Result := wbpOther;
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;

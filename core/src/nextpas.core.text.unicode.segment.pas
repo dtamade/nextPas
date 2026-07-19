@@ -59,6 +59,10 @@ function UnicodeSegmenter: IUnicodeSegmenter;
   Returns bytes consumed for the cluster starting at AData. }
 function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 
+{ Shared UAX #29 word-boundary core (byte-oriented).
+  Returns bytes from AData to the next word break. }
+function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+
 implementation
 
 uses
@@ -135,8 +139,7 @@ begin
     Exit;
   end;
 
-  // 预分配空间
-  LCapacity := LLen div 4 + 1;
+  LCapacity := LLen div 2 + 1;
   SetLength(LResults, LCapacity);
   LCount := 0;
   LPos := 1;
@@ -155,7 +158,9 @@ begin
       LResults[LCount].Length := LPos - LStart;
       LResults[LCount].SegmentType := stWord;
       Inc(LCount);
-    end;
+    end
+    else
+      Break; { prevent infinite loop on zero-length advance }
   end;
 
   SetLength(LResults, LCount);
@@ -428,97 +433,275 @@ begin
   Result := APos + SizeInt(LBytes);
 end;
 
-function IsCJKIdeograph(const ACp: TUnicodeCodepoint): Boolean; inline;
+function IsWordIgnorable(const AWb: TWordBreakProperty): Boolean; inline;
 begin
-  // CJK Unified Ideographs + Extension A + Compatibility Ideographs
-  Result := ((ACp >= $4E00) and (ACp <= $9FFF)) or
-            ((ACp >= $3400) and (ACp <= $4DBF)) or
-            ((ACp >= $F900) and (ACp <= $FAFF));
+  Result := AWb in [wbpExtend, wbpFormat, wbpZWJ];
+end;
+
+function IsAHLetter(const AWb: TWordBreakProperty): Boolean; inline;
+begin
+  Result := AWb in [wbpALetter, wbpHebrewLetter];
+end;
+
+function IsMidNumLetQ(const AWb: TWordBreakProperty): Boolean; inline;
+begin
+  Result := AWb in [wbpMidNumLet, wbpSingleQuote];
+end;
+
+function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+{**
+ * UAX #29 Word Boundary (Unicode 16.0), byte-oriented.
+ * Returns the number of bytes from AData to the next word break.
+ *}
+const
+  MAX_CPS = 512;
+var
+  LCps: array[0..MAX_CPS - 1] of TUnicodeCodepoint;
+  LWb: array[0..MAX_CPS - 1] of TWordBreakProperty;
+  LByteEnds: array[0..MAX_CPS - 1] of SizeUInt;
+  LCount: Integer;
+  LPos: SizeUInt;
+  LDecode: TUTF8DecodeResult;
+  LI, LJ, LK: Integer;
+  LLeft, LRight: TWordBreakProperty;
+  LIsEP: Boolean;
+
+  function SkipIgnorableBack(AFrom: Integer): Integer;
+  begin
+    Result := AFrom;
+    while (Result >= 0) and IsWordIgnorable(LWb[Result]) do
+      Dec(Result);
+  end;
+
+  function SkipIgnorableForward(AFrom: Integer): Integer;
+  begin
+    Result := AFrom;
+    while (Result < LCount) and IsWordIgnorable(LWb[Result]) do
+      Inc(Result);
+  end;
+
+  function NextNonIgnorable(AFrom: Integer): Integer;
+  begin
+    Result := SkipIgnorableForward(AFrom);
+    if Result >= LCount then
+      Result := -1;
+  end;
+
+  function PrevNonIgnorable(AFrom: Integer): Integer;
+  begin
+    Result := SkipIgnorableBack(AFrom);
+  end;
+
+  function NoBreakBetween(const AIdx: Integer): Boolean;
+  { True if there is NO break opportunity between codepoint AIdx and AIdx+1. }
+  begin
+    Result := False;
+    if (AIdx < 0) or (AIdx + 1 >= LCount) then
+      Exit(False);
+
+    LLeft := LWb[AIdx];
+    LRight := LWb[AIdx + 1];
+
+    { WB3: CR × LF }
+    if (LLeft = wbpCR) and (LRight = wbpLF) then
+      Exit(True);
+
+    { WB3a: (Newline | CR | LF) ÷ }
+    if LLeft in [wbpNewline, wbpCR, wbpLF] then
+      Exit(False);
+
+    { WB3b: ÷ (Newline | CR | LF) }
+    if LRight in [wbpNewline, wbpCR, wbpLF] then
+      Exit(False);
+
+    { WB3c: ZWJ × Extended_Pictographic }
+    if LLeft = wbpZWJ then
+    begin
+      LIsEP := GetGraphemeBreakProperty(LCps[AIdx + 1]) = gbpExtendedPictographic;
+      if LIsEP then
+        Exit(True);
+    end;
+
+    { WB3d: WSegSpace × WSegSpace }
+    if (LLeft = wbpWSegSpace) and (LRight = wbpWSegSpace) then
+      Exit(True);
+
+    { WB4: do not break before Extend | Format | ZWJ }
+    if IsWordIgnorable(LRight) then
+      Exit(True);
+
+    { Resolve left through ignorable (WB4): left becomes last non-ignorable at/before AIdx }
+    LJ := PrevNonIgnorable(AIdx);
+    if LJ < 0 then
+      Exit(False); { only ignorables after sot → break before next base (WB999) }
+    LLeft := LWb[LJ];
+    LRight := LWb[AIdx + 1]; { already non-ignorable }
+
+    { WB5: AHLetter × AHLetter }
+    if IsAHLetter(LLeft) and IsAHLetter(LRight) then
+      Exit(True);
+
+    { WB6: AHLetter × (MidLetter | MidNumLetQ) AHLetter }
+    if IsAHLetter(LLeft) and ((LRight = wbpMidLetter) or IsMidNumLetQ(LRight)) then
+    begin
+      LK := NextNonIgnorable(AIdx + 2);
+      if (LK >= 0) and IsAHLetter(LWb[LK]) then
+        Exit(True);
+    end;
+
+    { WB7: AHLetter (MidLetter | MidNumLetQ) × AHLetter }
+    if IsAHLetter(LRight) and ((LLeft = wbpMidLetter) or IsMidNumLetQ(LLeft)) then
+    begin
+      LK := PrevNonIgnorable(LJ - 1);
+      if (LK >= 0) and IsAHLetter(LWb[LK]) then
+        Exit(True);
+    end;
+
+    { WB7a: Hebrew_Letter × Single_Quote }
+    if (LLeft = wbpHebrewLetter) and (LRight = wbpSingleQuote) then
+      Exit(True);
+
+    { WB7b: Hebrew_Letter × Double_Quote Hebrew_Letter }
+    if (LLeft = wbpHebrewLetter) and (LRight = wbpDoubleQuote) then
+    begin
+      LK := NextNonIgnorable(AIdx + 2);
+      if (LK >= 0) and (LWb[LK] = wbpHebrewLetter) then
+        Exit(True);
+    end;
+
+    { WB7c: Hebrew_Letter Double_Quote × Hebrew_Letter }
+    if (LLeft = wbpDoubleQuote) and (LRight = wbpHebrewLetter) then
+    begin
+      LK := PrevNonIgnorable(LJ - 1);
+      if (LK >= 0) and (LWb[LK] = wbpHebrewLetter) then
+        Exit(True);
+    end;
+
+    { WB8: Numeric × Numeric }
+    if (LLeft = wbpNumeric) and (LRight = wbpNumeric) then
+      Exit(True);
+
+    { WB9: AHLetter × Numeric }
+    if IsAHLetter(LLeft) and (LRight = wbpNumeric) then
+      Exit(True);
+
+    { WB10: Numeric × AHLetter }
+    if (LLeft = wbpNumeric) and IsAHLetter(LRight) then
+      Exit(True);
+
+    { WB11: Numeric (MidNum | MidNumLetQ) × Numeric }
+    if (LRight = wbpNumeric) and ((LLeft = wbpMidNum) or IsMidNumLetQ(LLeft)) then
+    begin
+      LK := PrevNonIgnorable(LJ - 1);
+      if (LK >= 0) and (LWb[LK] = wbpNumeric) then
+        Exit(True);
+    end;
+
+    { WB12: Numeric × (MidNum | MidNumLetQ) Numeric }
+    if (LLeft = wbpNumeric) and ((LRight = wbpMidNum) or IsMidNumLetQ(LRight)) then
+    begin
+      LK := NextNonIgnorable(AIdx + 2);
+      if (LK >= 0) and (LWb[LK] = wbpNumeric) then
+        Exit(True);
+    end;
+
+    { WB13: Katakana × Katakana }
+    if (LLeft = wbpKatakana) and (LRight = wbpKatakana) then
+      Exit(True);
+
+    { WB13a: (AHLetter | Numeric | Katakana | ExtendNumLet) × ExtendNumLet }
+    if (LRight = wbpExtendNumLet) and
+       (IsAHLetter(LLeft) or (LLeft in [wbpNumeric, wbpKatakana, wbpExtendNumLet])) then
+      Exit(True);
+
+    { WB13b: ExtendNumLet × (AHLetter | Numeric | Katakana) }
+    if (LLeft = wbpExtendNumLet) and
+       (IsAHLetter(LRight) or (LRight in [wbpNumeric, wbpKatakana])) then
+      Exit(True);
+
+    { WB15/16: Regional_Indicator × Regional_Indicator (pairs) }
+    if (LLeft = wbpRegionalIndicator) and (LRight = wbpRegionalIndicator) then
+    begin
+      { Count consecutive RIs immediately before AIdx+1, skipping only ignorables
+        that are glued (WB4) — RI sequences are contiguous non-ignorable RIs. }
+      LK := 0;
+      LJ := AIdx;
+      while LJ >= 0 do
+      begin
+        if IsWordIgnorable(LWb[LJ]) then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        if LWb[LJ] <> wbpRegionalIndicator then
+          Break;
+        Inc(LK);
+        Dec(LJ);
+      end;
+      { LK is number of RIs ending at AIdx inclusive.
+        Odd count → pair incomplete → no break (WB15/16). }
+      if (LK mod 2) = 1 then
+        Exit(True);
+    end;
+
+    { WB999: Any ÷ Any }
+    Result := False;
+  end;
+
+begin
+  if (AData = nil) or (ALen = 0) then
+    Exit(0);
+
+  { Decode up to MAX_CPS codepoints (enough for any official test row). }
+  LCount := 0;
+  LPos := 0;
+  while (LPos < ALen) and (LCount < MAX_CPS) do
+  begin
+    LDecode := UTF8Decode(@AData[LPos], ALen - LPos);
+    if LDecode.ByteLen = 0 then
+    begin
+      LCps[LCount] := $FFFD;
+      LWb[LCount] := wbpOther;
+      LPos := LPos + 1;
+    end
+    else
+    begin
+      LCps[LCount] := LDecode.CodePoint;
+      LWb[LCount] := GetWordBreakProperty(LDecode.CodePoint);
+      LPos := LPos + SizeUInt(LDecode.ByteLen);
+    end;
+    LByteEnds[LCount] := LPos;
+    Inc(LCount);
+  end;
+
+  if LCount = 0 then
+    Exit(0);
+
+  { Find first break after sot (index 0). }
+  for LI := 0 to LCount - 2 do
+  begin
+    if not NoBreakBetween(LI) then
+      Exit(LByteEnds[LI]);
+  end;
+
+  { No internal break → whole decoded span (or until we hit MAX_CPS mid-stream). }
+  Result := LByteEnds[LCount - 1];
 end;
 
 function TUnicodeSegmenter.NextWord(const AText: string; const APos: SizeInt): SizeInt;
 var
   LLen: SizeInt;
-  LCodepoint: TUnicodeCodepoint;
-  LCategory: TGeneralCategory;
-  LInWord: Boolean;
-  LDecode: TUTF8DecodeResult;
+  LBytes: SizeUInt;
 begin
   LLen := Length(AText);
   if APos > LLen then
-  begin
-    Result := APos;
-    Exit;
-  end;
-
-  // 跳过非单词字符
-  Result := APos;
-  LInWord := False;
-  while Result <= LLen do
-  begin
-    // 解码 UTF-8 字符
-    LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
-    if LDecode.ByteLen = 0 then
-    begin
-      // 无效的 UTF-8 序列，跳过一个字节
-      if LInWord then
-        Break;
-      Inc(Result);
-      Continue;
-    end;
-    LCodepoint := LDecode.CodePoint;
-    LCategory := GetGeneralCategory(LCodepoint);
-
-    // 判断是否是单词字符
-    if IsCJKIdeograph(LCodepoint) then
-    begin
-      // CJK 表意文字：每个字符是独立的词
-      if LInWord then
-        Break; // 前面的非 CJK 词结束
-      // CJK 字符本身就是一个词
-      Inc(Result, LDecode.ByteLen);
-      Break;
-    end
-    else if LCategory in [gcuUppercaseLetter, gcuLowercaseLetter, gcuTitlecaseLetter,
-                     gcuModifierLetter, gcuOtherLetter, gcuDecimalNumber,
-                     gcuConnectorPunctuation, gcuOtherNumber] then
-    begin
-      if not LInWord then
-        LInWord := True;
-    end
-    else if LCategory = gcuNonspacingMark then
-    begin
-      // 组合标记可以是单词的一部分（如重音符号）
-      if not LInWord then
-        LInWord := True;
-    end
-    else if (LCategory = gcuDashPunctuation) and LInWord then
-    begin
-      // 连字符可以是单词的一部分（如 "well-known"）
-      // 但需要检查下一个字符是否是字母
-      Inc(Result, LDecode.ByteLen);
-      // 如果连字符后面不是字母，则单词在此结束
-      if Result <= LLen then
-      begin
-        LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
-        if LDecode.ByteLen = 0 then
-          Break;
-        LCodepoint := LDecode.CodePoint;
-        LCategory := GetGeneralCategory(LCodepoint);
-        if not (LCategory in [gcuUppercaseLetter, gcuLowercaseLetter, gcuTitlecaseLetter,
-                             gcuModifierLetter, gcuOtherLetter]) then
-          Break;
-      end;
-      Continue;
-    end
-    else
-    begin
-      if LInWord then
-        Break;
-    end;
-
-    Inc(Result, LDecode.ByteLen);
-  end;
+    Exit(APos);
+  if APos < 1 then
+    Exit(APos);
+  LBytes := WordBreakByteLen(@AText[APos], SizeUInt(LLen - APos + 1));
+  if LBytes = 0 then
+    Exit(APos); { safety }
+  Result := APos + SizeInt(LBytes);
 end;
 
 function TUnicodeSegmenter.NextLine(const AText: string; const APos: SizeInt): SizeInt;

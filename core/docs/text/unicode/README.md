@@ -29,7 +29,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │  .inc 数据层（自动生成）                                     │
 │  data.inc, props.inc, casefold.inc, normalize.inc,          │
-│  gcb.inc, collate.inc, script.inc, block.inc                │
+│  gcb.inc, wbp.inc, collate.inc, script.inc, block.inc       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -47,6 +47,8 @@
 | `TGeneralCategory` | 通用类别枚举（30 值） |
 | `TBinaryProperty` | 二值属性枚举（21 值） |
 | `TGraphemeBreakProperty` | 字素簇分割属性（15 值） |
+| `TWordBreakProperty` | 词边界属性（19 值） |
+| `TIndicConjunctBreak` | InCB（GB9c） |
 | `TUnicodeScript` | 脚本属性枚举（160+ 值） |
 | `TUnicodeBlock` | Unicode 块枚举（300+ 值） |
 | `TCodepointRange2` | 码点范围（Lo, Hi, Delta） |
@@ -77,6 +79,8 @@ Unicode 属性查询的核心实现。BMP 使用 256×256 stage-2 查表（O(1)�
 | `HasBinaryProperty` | 查询 21 种二值属性 |
 | `GetGeneralCategory` | 获取通用类别 |
 | `GetGraphemeBreakProperty` | 获取字素簇分割属性 |
+| `GetWordBreakProperty` | 获取词边界属性 |
+| `GetIndicConjunctBreak` | 获取 InCB |
 | `IsLetter`, `IsDigit`, `IsWhitespace` 等 | 语义分类快捷函数 |
 
 **数据来源**: `nextpas.core.text.unicode.data.inc`, `nextpas.core.text.unicode.props.inc`, `nextpas.core.text.unicode.gcb.inc`
@@ -301,6 +305,7 @@ end;
 | `test_data` | IUnicodeDataManager |
 | **`test_conformance_normalize`** | **Unicode 16.0 NormalizationTest.txt 全量 (~19965)** |
 | **`test_conformance_grapheme`** | **Unicode 16.0 GraphemeBreakTest.txt 全量 (~1093)** |
+| **`test_conformance_word`** | **Unicode 16.0 WordBreakTest.txt 全量 (~1826)** |
 
 ```bash
 # 手写套件
@@ -312,6 +317,7 @@ done
 # 官方 conformance（fixture 已 vendoring，离线可跑）
 make -C core/tests/nextpas.core.text.unicode/test_conformance_normalize clean test
 make -C core/tests/nextpas.core.text.unicode/test_conformance_grapheme clean test
+make -C core/tests/nextpas.core.text.unicode/test_conformance_word clean test
 ```
 
 重新生成 fixture（开发机，需网络）：

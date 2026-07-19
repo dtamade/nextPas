@@ -288,6 +288,29 @@ type
     icbExtend = 3
   );
 
+  // Word_Break property (Unicode 16.0, UAX #29)
+  TWordBreakProperty = (
+    wbpOther = 0,
+    wbpCR = 1,
+    wbpLF = 2,
+    wbpNewline = 3,
+    wbpExtend = 4,
+    wbpZWJ = 5,
+    wbpRegionalIndicator = 6,
+    wbpFormat = 7,
+    wbpKatakana = 8,
+    wbpHebrewLetter = 9,
+    wbpALetter = 10,
+    wbpSingleQuote = 11,
+    wbpDoubleQuote = 12,
+    wbpMidNumLet = 13,
+    wbpMidLetter = 14,
+    wbpMidNum = 15,
+    wbpNumeric = 16,
+    wbpExtendNumLet = 17,
+    wbpWSegSpace = 18
+  );
+
   // Block 属性枚举（Unicode 16.0）
   TUnicodeBlock = (
     ubBasicLatin,
