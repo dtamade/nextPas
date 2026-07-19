@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-18（Era 8 I1 pool health probe landed → **NEXT = I2** WS deflate）
+**Updated**: 2026-07-19（Era 8 I0–I3 landed → **Done / STOP**；无用户指令勿空转 H3）
 
 ---
 
@@ -671,6 +671,9 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-19 | docs 对齐：顶部 Updated / changelog 与 **Era 8 Done / STOP** 一致（I0–I3 已 land） |
+| 2026-07-18 | Wave I3 landed：`IHttpTransportMultiplex.RoundTripMany`；h2_client 72/0；**Era 8 Done / STOP** |
+| 2026-07-18 | Wave I2 landed：WS permessage-deflate（RFC 7692 opt-in）；ws 41/0 + ws_client 10/0；NEXT=I3 |
 | 2026-07-18 | Wave I1 landed：H1 TryRead + H2 PING 借出健康探测；client 272/0 h2 69/0；NEXT=I2 |
 | 2026-07-18 | **Era 8** I0：Inbox 升格（I1 pool health / I2 WS deflate / I3 H2 multi）；NEXT=I1 |
 | 2026-07-18 | Wave R4：HTTPS 1×41B 清零（tls capabilities cache FillChar→Default）；client×2 / h2 0 unfreed |
