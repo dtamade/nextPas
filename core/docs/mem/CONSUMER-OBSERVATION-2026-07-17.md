@@ -136,7 +136,7 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 |----|------|------|
 | platform.* FreeMem | **WAIVE** | L0 禁止 uses mem |
 | bench.run / test.runner | **WAIVE** | harness |
-| simd.memutils TryBlockSize 回落 | **WAIVE** | 无 totalSize 时合法 unsized |
+| simd.memutils AlignedFree | **FIXED F6** | header 存 totalSize；sized `FreeMem`；无 unsized 回落 |
 | openssl 本模块 GetMem 串/DER/param 数组 | **FIXED E4-c** | 见 [OPENSSL-HEAP-DISCIPLINE.md](OPENSSL-HEAP-DISCIPLINE.md) |
 | OpenSSL CRYPTO 对象 | **禁止 FreeMem** | 只用 `*_free` FFI |
 | IAllocator.FreeMem | **设计内** | 五方法冻结；SC9 |

@@ -1,8 +1,8 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Era E Steady+**（对标 Go/Rust 主目标已达；默认只修回归 + D3 顺手）
+**状态**: **Era G Active**（Ecosystem Steward；F 已 CLOSED；默认只防回退 + D3 顺手 + 命名 consumer）
 **Owner**: mem lane（`.worktrees/mem`）全权
-**更新**: 2026-07-19
+**更新**: 2026-07-20
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
 **Steward 观测**: [INVENTORY-AUDIT-2026-07-17.md](INVENTORY-AUDIT-2026-07-17.md) · [CONSUMER-OBSERVATION-2026-07-17.md](CONSUMER-OBSERVATION-2026-07-17.md)
@@ -25,7 +25,8 @@
 | **C** | 可用性 + 产品表 dual-track + consumer-audit 全修 | **CLOSED** | [USABILITY-SCORE.md](USABILITY-SCORE.md) · [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) |
 | **D** | **平台 steward**：回归锁、按需集成、性能可信、治理卫生 | **Steady** | 下文 §4 |
 | **E** | **Go/Rust 对标**：可证明性能 + stdlib 表面规模 + 生产路径 | **Steady+** | [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · 下文 §4b |
-| **F** | **Steady+ 加固**：文档证据 + 门面可发现性 | **Active** | 下文 §4c |
+| **F** | **Steady+ 加固**：文档证据 + 门面可发现性 | **CLOSED** | 下文 §4c |
+| **G** | **Ecosystem Steward**：防回潮、按触达样板、证据习惯 | **Active** | 下文 §4d |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -133,7 +134,7 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 
 ---
 
-## 4c. 时代 F — Steady+ 加固（Active）
+## 4c. 时代 F — Steady+ 加固（CLOSED 2026-07-20）
 
 **目标**: 证据常绿、文档不撒谎、门面可发现（像 Go/Rust std 入口），**不**回潮博物馆。
 
@@ -153,7 +154,26 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 
 ---
 
-## 5. 明确不做（时代 D/E/F 有效期内）
+## 4d. 时代 G — Ecosystem Steward（Active）
+
+**目标**: 防回潮、按触达样板、证据习惯；**不是** 新分配器时代。
+
+| Slice | 内容 | 状态 |
+|-------|------|------|
+| G0 | F 收口卫生：状态文案 + CONSUMER 过时行 | **done** 2026-07-20 |
+| G1 | 门面 demoted 名单 source-contract（防回潮） | **done** 2026-07-20 |
+| G2 | 门面批 2 设计（mimalloc/mmap 是否出面） | 待批 |
+| G3 | blockpool.growable 决策备忘 | 按需 |
+| G4 | FreeMemOf 命名 consumer 样板（json/toml…） | 有 owner 才做 |
+| G5 | 多 host / 真机红点 | 红点驱动 |
+| G6 | scorecard/soak 证据入口常绿 | 与 G0 合并 docs |
+| G7 | CONSUMER 观测快照刷新 | 可选 docs |
+
+默认下一批：**G0+G1**。禁止全仓 FreeMem 扫、禁止 Phase 29。
+
+---
+
+## 5. 明确不做（时代 D/E/F/G 有效期内）
 
 1. 新开「Phase 29：再加一打 allocator」
 2. 全仓库 unsized `FreeMem` 机械替换
