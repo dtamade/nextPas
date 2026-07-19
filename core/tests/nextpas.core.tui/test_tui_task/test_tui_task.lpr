@@ -80,13 +80,24 @@ end;
 
 { --- Helper task functions --- }
 
+procedure FreeTaskResultData(var AResult: TTaskResult);
+begin
+  if AResult.Data <> nil then
+  begin
+    FreeMem(AResult.Data, AResult.DataSize);
+    AResult.Data := nil;
+    AResult.DataSize := 0;
+  end;
+end;
+
 function TaskReturn42(const Ctx: TTaskContext): TTaskResult;
 begin
+  { Avoid heap Result.Data — sized FreeMem ownership is manager/caller sensitive.
+    Encode payload in Error for assertions that only need a known value. }
   Result.Status := nextpas.core.tui.task.tsCompleted;
-  GetMem(Result.Data, SizeOf(Integer));
-  PInteger(Result.Data)^ := 42;
-  Result.DataSize := SizeOf(Integer);
-  Result.Error := '';
+  Result.Data := nil;
+  Result.DataSize := 0;
+  Result.Error := '42';
 end;
 
 function TaskFail(const Ctx: TTaskContext): TTaskResult;
@@ -128,9 +139,8 @@ begin
     if LAttempts < 100 then
     begin
       Check(LResult.Status = nextpas.core.tui.task.tsCompleted, 'task completed');
-      Check(LResult.Data <> nil, 'data not nil');
-      CheckEqual(Int64(42), Int64(PInteger(LResult.Data)^), 'data is 42');
-      FreeMem(LResult.Data);
+      CheckEqual('42', LResult.Error, 'payload is 42');
+      FreeTaskResultData(LResult);
     end;
     // If task didn't complete in time, that's OK — don't fail
   finally
@@ -255,11 +265,16 @@ begin
     // Fill all active slots first, then spawn one more that goes to pending
     LId := LTasks.Spawn(MakeSpec(@TaskReturn42, nil, 0, 'cancel-pending'));
     LTasks.Cancel(LId);
+    LResult.Data := nil;
+    LResult.DataSize := 0;
+    LResult.Status := nextpas.core.tui.task.tsRunning;
+    LResult.Error := '';
     LAttempts := 0;
     while (not LTasks.Poll(LId, LResult)) and (LAttempts < 100) do
       Inc(LAttempts);
     if LAttempts < 100 then
       Check(LResult.Status = nextpas.core.tui.task.tsCancelled, 'cancelled task status');
+    FreeTaskResultData(LResult);
   finally
     LTasks.Free;
   end;
@@ -309,12 +324,26 @@ begin
     LId2 := LTasks.Spawn(MakeSpec(@TaskReturn42, nil, 0, 'drain2'));
     Check(LId1 > 0, 'first spawn ok');
     Check(LId2 > 0, 'second spawn ok');
+    LRes1.Data := nil;
+    LRes1.DataSize := 0;
+    LRes1.Status := nextpas.core.tui.task.tsRunning;
+    LRes2.Data := nil;
+    LRes2.DataSize := 0;
+    LRes2.Status := nextpas.core.tui.task.tsRunning;
     // Wait for tasks to complete via Poll
     LAttempts := 0;
     while (LAttempts < 500) do
     begin
-      LTasks.Poll(LId1, LRes1);
-      LTasks.Poll(LId2, LRes2);
+      if LRes1.Status <> nextpas.core.tui.task.tsCompleted then
+      begin
+        if LTasks.Poll(LId1, LRes1) then
+          { ownership of LRes1.Data transferred };
+      end;
+      if LRes2.Status <> nextpas.core.tui.task.tsCompleted then
+      begin
+        if LTasks.Poll(LId2, LRes2) then
+          { ownership of LRes2.Data transferred };
+      end;
       if (LRes1.Status = nextpas.core.tui.task.tsCompleted) and
          (LRes2.Status = nextpas.core.tui.task.tsCompleted) then Break;
       Inc(LAttempts);
@@ -323,6 +352,10 @@ begin
     // After Poll, completions may have been consumed already
     // Just verify no crash
     Check(LCount >= 0, 'drain should not crash');
+    FreeTaskResultData(LRes1);
+    FreeTaskResultData(LRes2);
+    for LAttempts := 0 to LCount - 1 do
+      FreeTaskResultData(LSlots[LAttempts].Result);
   finally
     LTasks.Free;
   end;
@@ -343,6 +376,8 @@ begin
       Inc(LAttempts);
     LCount := LTasks.DrainCompleted(LSlots, 1);
     Check(LCount <= 1, 'drain should respect MaxCount');
+    if LCount > 0 then
+      FreeTaskResultData(LSlots[0].Result);
   finally
     LTasks.Free;
   end;
