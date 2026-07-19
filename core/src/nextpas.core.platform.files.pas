@@ -1487,7 +1487,7 @@ begin
     Exit(PLATFORM_ERR_INVALID);
   LHandle := CreateFileW(PWideChar(LPath), GENERIC_WRITE,
     FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE,
-    nil, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    nil, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nil);
   if LHandle = HANDLE(PtrInt(-1)) then
     Exit(platform_get_last_error);
   if not SetFileTime(LHandle, nil, @LAccess, @LWrite) then

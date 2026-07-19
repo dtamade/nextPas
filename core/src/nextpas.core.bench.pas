@@ -2603,7 +2603,7 @@ var
     if (Pos(',', AValue) > 0) or (Pos('"', AValue) > 0) or (Pos(#10, AValue) > 0) then
     begin
       LBuilder.AppendChar('"');
-      LBuilder.AppendStr(StringReplace(AValue, '"', '""', True));
+      LBuilder.AppendStr(nextpas.core.text.conv.StringReplace(AValue, '"', '""', True));
       LBuilder.AppendChar('"');
     end
     else

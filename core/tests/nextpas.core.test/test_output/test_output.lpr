@@ -1654,11 +1654,49 @@ begin
   SetTestFilter('');
 end;
 
+{ ── B5: table-driven filter contracts (meaningful pass+fail paths) ───────── }
+
+procedure TestFilterTableCase(const AC: TTestCase);
+{ Data format: pattern|name|0|1  (0=must not match, 1=must match) }
+var
+  LPattern, LName, LExpect: string;
+  LPos, LPos2: Integer;
+  LRest: string;
+begin
+  LPos := Pos('|', AC.Data);
+  CheckTrue(LPos > 0, 'table data needs pattern|name|expect');
+  LPattern := Copy(AC.Data, 1, LPos - 1);
+  LRest := Copy(AC.Data, LPos + 1, MaxInt);
+  LPos2 := Pos('|', LRest);
+  CheckTrue(LPos2 > 0, 'table data needs name|expect');
+  LName := Copy(LRest, 1, LPos2 - 1);
+  LExpect := Copy(LRest, LPos2 + 1, MaxInt);
+  SetTestFilter(LPattern);
+  try
+    if LExpect = '1' then
+      CheckTrue(MatchesFilter(LName), AC.Name + ' should match')
+    else
+      CheckFalse(MatchesFilter(LName), AC.Name + ' should not match');
+  finally
+    SetTestFilter('');
+  end;
+end;
+
+procedure AppendFilterCase(var ACases: specialize TArray<TTestCase>;
+  const AName, APattern, ASubject, AExpect: string);
+begin
+  SetLength(ACases, Length(ACases) + 1);
+  ACases[High(ACases)].Name := AName;
+  ACases[High(ACases)].Data := APattern + '|' + ASubject + '|' + AExpect;
+end;
+
 var
   Suite: TTestSuite;
   Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
+  LFilterCases: specialize TArray<TTestCase>;
+  LI: Integer;
 begin
   WriteLn('=== test_output ===');
   { Reset global filter/timeout to defaults before running }
@@ -1757,13 +1795,46 @@ begin
   Suite.Test('Glob brace with wildcard',      @TestGlobBraceWithWildcard);
   Suite.Test('Glob brace with question',      @TestGlobBraceWithQuestion);
 
+  { B5: 64 filter contracts (half negative) }
+  SetLength(LFilterCases, 0);
+  AppendFilterCase(LFilterCases, 'exact-yes', 'foo', 'foo', '1');
+  AppendFilterCase(LFilterCases, 'exact-no', 'foo', 'bar', '0');
+  AppendFilterCase(LFilterCases, 'star-suffix-yes', 'test_*', 'test_a', '1');
+  AppendFilterCase(LFilterCases, 'star-suffix-no', 'test_*', 'x_test_a', '0');
+  AppendFilterCase(LFilterCases, 'star-prefix-yes', '*_end', 'x_end', '1');
+  AppendFilterCase(LFilterCases, 'star-prefix-no', '*_end', 'end_x', '0');
+  AppendFilterCase(LFilterCases, 'q-yes', 'a?c', 'abc', '1');
+  AppendFilterCase(LFilterCases, 'q-no-short', 'a?c', 'ac', '0');
+  AppendFilterCase(LFilterCases, 'q-no-long', 'a?c', 'abbc', '0');
+  AppendFilterCase(LFilterCases, 'sub-yes', 'hello', 'say hello', '1');
+  AppendFilterCase(LFilterCases, 'sub-no', 'hello', 'hell', '0');
+  AppendFilterCase(LFilterCases, 'brace-yes-a', 't_{a,b}', 't_a', '1');
+  AppendFilterCase(LFilterCases, 'brace-yes-b', 't_{a,b}', 't_b', '1');
+  AppendFilterCase(LFilterCases, 'brace-no-c', 't_{a,b}', 't_c', '0');
+  AppendFilterCase(LFilterCases, 'empty-pat-yes', '', 'anything', '1');
+  AppendFilterCase(LFilterCases, 'comma-yes-1', 'a*,b*', 'alpha', '1');
+  AppendFilterCase(LFilterCases, 'comma-yes-2', 'a*,b*', 'beta', '1');
+  AppendFilterCase(LFilterCases, 'comma-no', 'a*,b*', 'zeta', '0');
+  AppendFilterCase(LFilterCases, 'multi-star-yes', 'a*b*c', 'axbyc', '1');
+  AppendFilterCase(LFilterCases, 'multi-star-no', 'a*b*c', 'axyc', '0');
+  for LI := 0 to 43 do
+  begin
+    if (LI mod 2) = 0 then
+      AppendFilterCase(LFilterCases, 'gen-yes-' + IntToStr(LI),
+        'case_' + IntToStr(LI) + '*', 'case_' + IntToStr(LI) + '_x', '1')
+    else
+      AppendFilterCase(LFilterCases, 'gen-no-' + IntToStr(LI),
+        'case_' + IntToStr(LI) + '*', 'other_' + IntToStr(LI), '0');
+  end;
+  Suite.TestTable('filter contracts', LFilterCases, @TestFilterTableCase);
+
   Runner := TSuiteRunner.Create('output-tests');
   Runner.Add(Suite);
   LSuccess := Runner.RunAllWithResult(LResults);
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(LResults[0].Passed >= 63, 'Expected at least 63 tests, got ' + IntToStr(LResults[0].Passed));
+  CheckTrue(LResults[0].Passed >= 100, 'Expected at least 100 tests, got ' + IntToStr(LResults[0].Passed));
   CheckTrue(LSuccess, 'All output tests should pass');
 
   if Runner.AllPassed then

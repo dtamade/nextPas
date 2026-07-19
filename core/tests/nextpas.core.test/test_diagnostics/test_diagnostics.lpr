@@ -364,6 +364,27 @@ begin
   CheckNotEqual(N, N + 1);
 end;
 
+procedure TestFailPathCase(const AC: TTestCase);
+{ Data: expected|actual — must fail with both values in message (B5 meaningful) }
+var
+  LPos: Integer;
+  LExp, LAct: string;
+  LExpN, LActN: Int64;
+begin
+  LPos := Pos('|', AC.Data);
+  CheckTrue(LPos > 0, 'fail-path data format');
+  LExp := Copy(AC.Data, 1, LPos - 1);
+  LAct := Copy(AC.Data, LPos + 1, MaxInt);
+  LExpN := StrToInt(LExp);
+  LActN := StrToInt(LAct);
+  ExpectFail(procedure begin
+    CheckEqual(LExpN, LActN);
+  end, LExp);
+  ExpectFail(procedure begin
+    CheckEqual(LExpN, LActN);
+  end, LAct);
+end;
+
 { ── Main ─────────────────────────────────────────────────────────────────── }
 
 var
@@ -403,7 +424,7 @@ begin
   LSuite.Test('msg contract int equal',         @TestMsgContractIntEqual);
   LSuite.Test('msg contract snapshot mismatch', @TestMsgContractSnapshotMismatch);
 
-  { B3: 150 table-driven identity processes (scale toward ≥1200 total) }
+  { B3: 150 identity + B5: 80 fail-path (meaningful negative) }
   SetLength(LCases, 150);
   for I := 0 to High(LCases) do
   begin
@@ -411,6 +432,14 @@ begin
     LCases[I].Data := IntToStr(I * 17 + 3);
   end;
   LSuite.TestTable('identity table', LCases, @TestIdentityCase);
+
+  SetLength(LCases, 80);
+  for I := 0 to High(LCases) do
+  begin
+    LCases[I].Name := 'fail-' + IntToStr(I);
+    LCases[I].Data := IntToStr(I) + '|' + IntToStr(I + 1000);
+  end;
+  LSuite.TestTable('fail-path equal', LCases, @TestFailPathCase);
 
   if not LSuite.Run then
   begin

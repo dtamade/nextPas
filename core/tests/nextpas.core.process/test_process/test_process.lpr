@@ -17,7 +17,8 @@ uses
   nextpas.core.process.pipe,
   nextpas.core.process.command,
   nextpas.core.io.intf,
-  nextpas.core.platform.process;
+  nextpas.core.platform.process,
+  nextpas.core.async.cancellation;
 
 var
   LPassed, LFailed: Integer;
@@ -2177,6 +2178,85 @@ begin
   Check('R19 batch multi line two', Pos('two', LOut.StdOut) > 0);
 end;
 
+
+procedure TestCancelTokenKillsSleep;
+var
+  LTok: IAsyncCancellationToken;
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LTok := CreateCancellationToken;
+  LChild := Command('/bin/sleep').Arg('30').CancelToken(LTok).Spawn;
+  platform_thread_sleep_ns(80000000);
+  LTok.Cancel;
+  LOut := LChild.WaitWithOutput;
+  Check('CancelToken — terminated', LOut.Status <> psRunning);
+  Check('CancelToken — Cancelled flag', LOut.Cancelled);
+  Check('CancelToken — not succeeded', not ProcessSucceeded(LOut));
+end;
+
+procedure TestCancelTokenBeforeSpawnRaises;
+var
+  LTok: IAsyncCancellationToken;
+  LRaised: Boolean;
+begin
+  LTok := CreateCancellationToken;
+  LTok.Cancel;
+  LRaised := False;
+  try
+    Command('/bin/true').CancelToken(LTok).Spawn;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('CancelToken pre-spawn — raises', LRaised);
+end;
+
+procedure TestCredentialSelfUid;
+var
+  LOut: TProcessOutput;
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    LOut := Command('/bin/true').Credential(0, 0).Status;
+    if LOut.ExitCode = 0 then
+      Check('Credential root/self path ok', True)
+    else
+      Check('Credential non-root may fail exit', True);
+  except
+    on E: EProcessError do
+    begin
+      LRaised := True;
+      Check('Credential non-root raises ok', LRaised);
+    end;
+  end;
+end;
+
+procedure TestExtraFdInherited;
+var
+  LPipe: array[0..1] of PtrInt;
+  LOut: TProcessOutput;
+  LErr: Int32;
+begin
+  LErr := platform_process_create_pipe(LPipe[0], LPipe[1]);
+  Check('ExtraFd pipe', LErr = 0);
+  try
+    LOut := Command('/bin/sh')
+      .Arg('-c')
+      .Arg('test -e /proc/self/fd/3 && echo has3')
+      .ExtraFd(Integer(LPipe[0]))
+      .Stdout(stPiped)
+      .Spawn
+      .WaitWithOutput;
+    Check('ExtraFd — has fd3', Pos('has3', LOut.StdOut) > 0);
+    Check('ExtraFd — exit 0', LOut.ExitCode = 0);
+  finally
+    platform_process_close_handle(LPipe[0]);
+    platform_process_close_handle(LPipe[1]);
+  end;
+end;
+
 procedure TestMergeStderrStdoutOnlyPipe;
 var
   LOut: TProcessOutput;
@@ -2320,6 +2400,10 @@ begin
   TestTryLookPathTrue;
   TestMergeStderrStdoutOnlyPipe;
   TestR19BatchExtra;
+  TestCancelTokenKillsSleep;
+  TestCancelTokenBeforeSpawnRaises;
+  TestCredentialSelfUid;
+  TestExtraFdInherited;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');

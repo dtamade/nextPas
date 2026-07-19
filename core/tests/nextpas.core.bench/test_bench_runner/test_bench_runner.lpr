@@ -384,6 +384,25 @@ begin
   end;
 end;
 
+{ 回归：GlobMatch 必须用 bench.base（* 可跨 '/'），勿误绑 fs.GlobMatch }
+procedure TestFilterGlobStar;
+var
+  LRunner: TBenchRunner;
+  LResult: TBenchResult;
+begin
+  LRunner := TBenchRunner.Create;
+  try
+    ConfigureFastRunner(LRunner);
+    LRunner.SetFilter('Sort*');
+    LResult := LRunner.RunOne('Sort/100', @BenchFast);
+    Check(LResult.Executed, 'Filter Sort*: Sort/100 must execute');
+    LResult := LRunner.RunOne('Hash/100', @BenchFast);
+    Check(not LResult.Executed, 'Filter Sort*: Hash/100 must not execute');
+  finally
+    LRunner.Free;
+  end;
+end;
+
 procedure TestConfig;
 var
   LRunner: TBenchRunner;
@@ -659,6 +678,7 @@ begin
   T.Test('RunOne TBenchEntry', @TestRunOneTBenchEntry);
   T.Test('RunAll', @TestRunAll);
   T.Test('Filter', @TestFilter);
+  T.Test('FilterGlobStar', @TestFilterGlobStar);
   T.Test('Config defaults and setters', @TestConfig);
   T.Test('Config quiet from env', @TestConfig_QuietEnv);
   T.Test('MeasureNs', @TestMeasureNs);

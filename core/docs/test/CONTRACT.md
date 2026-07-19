@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-19
-**版本**：v8.8d
+**版本**：v8.9
 
 ---
 
@@ -390,6 +390,21 @@ end;
 | 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
 
 ## 11. 变更日志
+
+### v8.9 (2026-07-19) — Go/Rust 第二波：规模 + Helper 语义 + runner 门禁
+
+**v8.9a 规模**：
+- `test_output`：64 filter 契约表（约半负路径）
+- `test_diagnostics`：+80 fail-path `CheckEqual` 消息契约
+- `test_mock`：+10 Verify/Setup 边界与失败路径
+- 可计数过程 **≥1500**（排除 stress 10K 空注册）
+
+**v8.9b 语义**：
+- **Check/Fail = Fatal**（raise 中止当前测试；无 SoftFail）
+- `IsFrameworkFrame` 文档化为 Go `t.Helper` 意图（按 `nextpas.core.test.*` 单元前缀过滤）
+
+**v8.9c 门禁**：
+- `test_runner_source_contracts`：TestSeq/RunParallel/CLI/报告等公共名必须出现在自测
 
 ### v8.8d (2026-07-19) — Go `-race` 意图：竞态与压力
 

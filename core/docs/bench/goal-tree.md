@@ -187,6 +187,11 @@ B26  审计收敛 / API 冻结 (2026-07-19)                           ✅
 B27  integration 软拆 (2026-07-19)                               ✅
   B27.1  test_bench_results_api 承载结果 API 测试 (~58)         ✅
   B27.2  test_bench_integration 保留生命周期/并行 (~66)         ✅
+
+B28  符号消歧 / 子集扩 track / 文档 CI (2026-07-19)              ✅
+  B28.1  runner/pas/xlang/baseline 限定 GlobMatch/LowerCase/…  ✅
+  B28.2  SCORECARD 子集 + shortstr/recops/inttohex             ✅
+  B28.3  README/CONTRACT/FINAL/ci-gate 口径对齐                  ✅
 ```
 
 ## 测试套件分布

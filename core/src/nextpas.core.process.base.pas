@@ -52,6 +52,8 @@ type
     StdErr: string;
     TimedOut: Boolean;
     OutputLimited: Boolean;
+    {** True 表示 CancelToken 触发 Kill（与 TimedOut 独立） *}
+    Cancelled: Boolean;
   end;
 
   {**

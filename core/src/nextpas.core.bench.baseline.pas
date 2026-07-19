@@ -400,7 +400,7 @@ var
   LCount: UInt32;
   I: UInt32;
 begin
-  if Trim(AJSON) = '' then
+  if nextpas.core.text.conv.Trim(AJSON) = '' then
   begin
     ClearBaselines;
     Exit;

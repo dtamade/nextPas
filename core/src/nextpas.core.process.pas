@@ -283,6 +283,7 @@ uses
 function ProcessSucceeded(const AOut: TProcessOutput): Boolean;
 begin
   Result := (not AOut.TimedOut) and (not AOut.OutputLimited) and
+    (not AOut.Cancelled) and
     (AOut.Status = psExited) and (AOut.ExitCode = 0);
 end;
 

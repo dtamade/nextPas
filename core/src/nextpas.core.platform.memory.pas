@@ -444,12 +444,12 @@ begin
   Result := nextpas.core.platform.windows.ffi.VirtualAlloc(
     APtr, PtrUInt(ASize), WINDOWS_MEM_COMMIT, WINDOWS_PAGE_READWRITE) <> nil;
 {$ELSEIF defined(NEXTPAS_UNIX)}
-  { MAP_FIXED overwrites the existing mapping; pages become accessible }
-  Result := nextpas.core.platform.posix.ffi.mmap(
+  { mprotect keeps the existing reservation; avoid MAP_FIXED which can
+    forcibly replace adjacent mappings and has corrupted process exit
+    under heaptrc on Darwin (Abort trap after green suite). }
+  Result := nextpas.core.platform.posix.ffi.mprotect(
     APtr, PtrUInt(ASize),
-    PLATFORM_POSIX_PROT_READ or PLATFORM_POSIX_PROT_WRITE,
-    PLATFORM_POSIX_MAP_PRIVATE or PLATFORM_POSIX_MAP_ANONYMOUS or PLATFORM_POSIX_MAP_FIXED,
-    -1, 0) <> Pointer(PLATFORM_POSIX_MAP_FAILED);
+    PLATFORM_POSIX_PROT_READ or PLATFORM_POSIX_PROT_WRITE) = 0;
 {$ENDIF}
 end;
 
@@ -462,12 +462,17 @@ begin
 {$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.platform.windows.ffi.VirtualFree(APtr, PtrUInt(ASize), WINDOWS_MEM_DECOMMIT);
 {$ELSEIF defined(NEXTPAS_UNIX)}
-  { MADV_DONTNEED tells kernel pages can be reclaimed; address range stays mapped }
-      { MADV_DONTNEED semantics vary: on Linux it immediately discards pages
-        (subsequent access gets zero-filled pages); on FreeBSD/macOS
-        MADV_FREE lazily frees pages (subsequent access may still see old
-        data until reclaimed). Use MADV_FREE when available for lazy reclaim. }
+  { Drop access so the reservation remains unreadable/unwritable. Then
+    advise reclamation where it is safe. Linux MADV_DONTNEED discards
+    immediately (re-fault zero-fills). On Darwin, skip madvise here:
+    MADV_DONTNEED after mixed mprotect/munmap has been implicated in
+    process-exit Abort traps under some toolchains; PROT_NONE is enough
+    to match decommit semantics for the portable API. }
+  nextpas.core.platform.posix.ffi.mprotect(
+    APtr, PtrUInt(ASize), PLATFORM_POSIX_PROT_NONE);
+  {$IFNDEF NEXTPAS_MACOS}
   nextpas.core.platform.posix.ffi.madvise(APtr, size_t(ASize), MADV_DONTNEED);
+  {$ENDIF}
 {$ENDIF}
 end;
 

@@ -1,3 +1,13 @@
+## 2026-07-19 符号消歧 + SCORECARD 扩 track + 文档/CI
+
+| 项 | 状态 |
+|----|------|
+| runner GlobMatch/LowerCase | ✅ 限定 bench.base / text.conv |
+| pas StringReplace, xlang/baseline Trim | ✅ text.conv |
+| TestFilterGlobStar | ✅ runner 17 tests |
+| SCORECARD 子集 | shortstr/recops/inttohex 追加（共 5 track 类） |
+| README/CONTRACT/FINAL/ci-gate | 对齐当前 gate 入口 |
+
 # bench 模块全面审查 — Findings（第二期）
 
 > **审查日期**: 2026-06-23
