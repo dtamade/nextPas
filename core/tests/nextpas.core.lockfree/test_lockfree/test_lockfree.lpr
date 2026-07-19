@@ -7000,8 +7000,8 @@ begin
     'goal tree must not report lockfree as broad completion without evidence-level truth');
   CheckContains(LChannelSource, 'TLockFreeChannel.Send: channel closed',
     'channel Send on closed must raise EInvalidOperationError');
-  CheckContains(LHashMapSource, 'AtomicExchange32(AShard.Lock, 1, moAcquire)',
-    'hashmap ShardLock must use AtomicExchange with moAcquire');
+  CheckContains(LHashMapSource, 'atomic_exchange(AShard.Lock, 1, mo_acquire)',
+    'hashmap ShardLock must use atomic_exchange with mo_acquire');
   CheckContains(LHazardSource, 'AllocMem(SizeOf(THazardThreadRec))',
     'hazard RegisterThread must use AllocMem for zero-init');
   CheckNotContains(LHazardSource, 'AtomicStorePtr(Pointer(FThreads), nil, moRelease)',
