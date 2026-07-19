@@ -356,9 +356,9 @@ end;
 
 ## 门面与 Tier
 
-- **门面** `nextpas.core.mem`：Tier-0 + 精选 Tier-1/2（**冻结**：禁止新增 Tier-3）
-- **Experimental (Tier-3)**：直接 `uses` 子单元，无兼容承诺
-- 门面白名单 / Tier-3 黑名单：[FACADES-SURFACE.md](FACADES-SURFACE.md)
+- **门面** `nextpas.core.mem`：Tier-0 + 生产诊断（tracking/sentinel/guard）+ mapped/ring/mimalloc（**冻结**；F3 已 demote 冷门包装器）
+- **冷门包装器 / 并发池变体 / Tier-3**：直接 `uses` 子单元，无门面兼容承诺
+- 门面白名单 / demoted 名单：[FACADES-SURFACE.md](FACADES-SURFACE.md)
 - 分层规则与符号表：[STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3
 - 架构 / owner：[ARCHITECTURE.md](ARCHITECTURE.md)
 - 运行时契约全文：[CONTRACT.md](CONTRACT.md)
@@ -376,7 +376,7 @@ end;
 | S4 | 诊断零成本默认 | ✅ `NEXTPAS_MEM_DEBUG`（仅插件面） |
 | S5 | 上层注入吃 DefaultHeap | ✅ Growing IAllocator 根；**HTTP + compiler 产品面**；compiler 源改用另 lane |
 | S6 | Arena/Pool 延迟优势 | ✅ SC4 / SC6 / SC7 |
-| S7 | 小门面 | ✅ Tier-3 已出门面 |
+| S7 | 小门面 | ✅ Tier-3 出门面；F3 uses 65→41 |
 
 ---
 

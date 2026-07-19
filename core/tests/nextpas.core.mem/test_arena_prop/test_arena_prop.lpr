@@ -16,6 +16,7 @@ uses
   nextpas.core.mem.arena,
   nextpas.core.mem.arena.chunked,
   nextpas.core.mem.arena.local,
+  nextpas.core.mem.blockpool.sharded,
   nextpas.core.base,
   nextpas.core.text;
 

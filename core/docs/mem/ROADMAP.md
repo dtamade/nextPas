@@ -141,11 +141,11 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 |-------|------|------|
 | F0 | ROADMAP/PARITY/README/CONSUMER 状态对齐 | **done** 2026-07-20 |
 | F1 | SCORECARD RELEASE 刷新（P-a/P-b 后） | **done** 2026-07-20 |
-| F2 | 门面 slim **设计**（本批不删 re-export） | **done** 见 [FACADES-SLIM-DESIGN-2026-07-20.md](FACADES-SLIM-DESIGN-2026-07-20.md) |
-| F3 | 门面收紧执行（按 F2 小批） | 待批准 |
+| F2 | 门面 slim **设计** | **done** 见 [FACADES-SLIM-DESIGN-2026-07-20.md](FACADES-SLIM-DESIGN-2026-07-20.md) |
+| F3 | 门面收紧执行（批 1 re-export demote） | **done** 2026-07-20 · uses 65→41 · [FACADES-SURFACE.md](FACADES-SURFACE.md) |
 | F4–F8 | FreeMemOf 样板 / 微税 / memutils / cross-OS / soak | 按需 |
 
-默认 F 有效期：**只 F0–F2 文档+证据**；F3 需显式批准（re-export breaking）。
+F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses` 子单元；源文件保留。
 
 ---
 
