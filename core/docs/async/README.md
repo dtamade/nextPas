@@ -20,22 +20,26 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - **platform wake is not the iocp owner** — Windows platform wake (or its future replacement) is owned by the platform poller seam, not by the IOCP completion port; IOCP and platform wake are separate plumbing paths
 
 ### macOS/FreeBSD truth
-- Poller backend enum does **not** have a `pbKqueue` entry — no `pbkqueue` backend
-- `nextpas.core.platform.io.base.pas` defines a `TKqueueReactor` but the poller does not wire it in
-- macOS/FreeBSD currently gets `pbUnsupported` when the poller fails to detect io_uring
-- `pbUnsupported` documents the `pbunsupported` fallback for any host that is not Linux with io_uring or epoll
-- Pure idle loops on unsupported backends will simply wait on platform wake without I/O polling
+- Poller backend enum includes `pbKqueue` — readiness backend via `TKqueueReactor` (`nextpas.core.io.reactor.kqueue`)
+- `TPoller` wires kqueue on `NEXTPAS_MACOS` / `NEXTPAS_FREEBSD` (`PollerDetectBackend` → `pbKqueue`)
+- Backend model: `pbKqueue` is `pbmReadiness` (aligned with epoll; not completion-queue file I/O)
+- Timeout cancel: best-effort like epoll (`TryCancelByContext` drops pending op + internal `-ECANCELED`)
+- **source-contract + forced compile only** on Linux hosts: `test_async_kqueue_compile_gate` uses `-dNEXTPAS_FORCE_HOST_DARWIN` to prove the kqueue path compiles (FreeBSD FORCE_HOST currently blocked by unrelated `platform.thread` typing)
+- **not macOS/FreeBSD host-runtime proven** in this worktree (no Darwin/FreeBSD runner has executed async I/O smoke here)
+- Pure idle loops without a valid backend wait on platform wake without I/O polling; with kqueue, I/O polling is available once Create succeeds
 
 ### Backend Model Classification
 - `pbiouring` and `pbiocp` are `pbmCompletionQueue` — these backends signal completion when an operation finishes, not readiness
 - `pbepoll` is `pbmReadiness` — epoll signals when a fd is ready to read/write, not when an operation completes
-- Positioned file I/O is only a completion-backend capability (`pbIoUring` / `pbIocp`); epoll remains readiness-only and is not a completion-equivalent replacement for file I/O
+- `pbkqueue` is `pbmReadiness` — kqueue EVFILT_READ/WRITE oneshot, same readiness class as epoll
+- Positioned file I/O is only a completion-backend capability (`pbIoUring` / `pbIocp`); epoll/kqueue remain readiness-only and are not completion-equivalent replacements for file I/O
 - `pbUnsupported` documents the absence of a usable backend
 - Application semantics are not identical across backends; readiness fallbacks cannot stand in for completion-queue file I/O
 
 ## Features
 
 - io_uring backend (Linux 5.1+) with epoll fallback (Linux 2.6+)
+- kqueue readiness backend (macOS/FreeBSD) via `TKqueueReactor` / `pbKqueue`
 - Runtime backend detection (automatic best selection)
 - Timer heap (min-heap, O(log n) schedule/cancel)
 - I/O with deadline (timeout race mechanism with atomic CAS)
@@ -205,7 +209,7 @@ At `TPoller.Create` time, the runtime probes for io_uring support:
 This means:
 - Linux 5.1+ with io_uring: uses `TIoReactor` (io_uring) — `pbmCompletionQueue`
 - Linux 2.6+ without io_uring, or after create-time io_uring failure: uses `TEpollReactor` (epoll) — `pbmReadiness`
-- macOS/FreeBSD: returns `pbUnsupported` — no functional I/O backend
+- macOS/FreeBSD: uses `TKqueueReactor` (kqueue) — `pbmReadiness` (compile-gate proven; host runtime not claimed here)
 - Windows: compile-only `pbIocp` stub — `pbmCompletionQueue` (not windows runtime ready)
 
 Check the active backend at runtime:
@@ -296,10 +300,9 @@ This split avoids forcing a result parameter into timer/post callbacks where it 
 
 - **Timeout cancel (best-effort by backend)**: when the deadline timer wins the CAS race, the loop calls `TPoller.TryCancelByContext` on the `TimeoutCtx`:
   - **io_uring**: submits `IORING_OP_ASYNC_CANCEL` for the pending entry; the original CQE still arrives (often `-ECANCELED`) and is discarded by CAS
-  - **epoll**: removes the pending op from the reactor table and delivers an internal `-ECANCELED` completion so `TimeoutCtx` refcount is released (not a kernel read/write cancel)
+  - **epoll / kqueue**: removes the pending op from the reactor table and delivers an internal `-ECANCELED` completion so `TimeoutCtx` refcount is released (not a kernel read/write cancel)
   - **IOCP**: not guaranteed yet (returns False)
   - User API is unchanged: still exactly one user completion (`-110` or I/O result)
-- **No kqueue backend**: the poller backend enum and platform io base define no kqueue variant for the async module's use. no `pbkqueue` backend.
 - **IOCP is compile-only**: `pbIocp` exists in the backend enum and the reactor stub compiles, but no runtime verification has been done on Windows.
 - **WhenAll/WhenAny exist** in `async.combinators` (plus Ref variants).
 - **No file descriptor lifecycle management**: the caller is responsible for opening/closing fds.

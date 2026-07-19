@@ -200,6 +200,11 @@ end;
 |---------|------------|
 | io_uring | `TryCancelByContext` → `IORING_OP_ASYNC_CANCEL`; late CQE discarded by CAS |
 | epoll | Drop pending op + internal `-ECANCELED` to release `TimeoutCtx` (not kernel cancel) |
+| kqueue | Same best-effort as epoll (pending drop + internal `-ECANCELED`) |
 | IOCP | Best-effort not guaranteed (stub False) |
 
 User still sees exactly one completion. `HasPendingIo` should clear after cancel drain (Poll).
+
+### Kqueue poller (B3)
+- `pbKqueue` readiness backend on macOS/FreeBSD; wired through `TPoller` / `TKqueueReactor`
+- Not host-runtime proven on this Linux worktree; forced-compile gate is the evidence

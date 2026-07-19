@@ -818,8 +818,12 @@ begin
     'async README must name Windows source-contract and forced compile limits');
   CheckSourceContains(LReadme, 'not windows runtime ready',
     'async README must not claim Windows runtime readiness without runtime proof');
-  CheckSourceContains(LReadme, 'no `pbkqueue` backend',
-    'async README must state current poller has no kqueue backend');
+  CheckSourceContains(LReadme, '`pbkqueue`',
+    'async README must document pbKqueue readiness backend');
+  CheckSourceContains(LReadme, 'not macos/freebsd host-runtime proven',
+    'async README must not claim kqueue host runtime without a runner');
+  CheckSourceContains(LReadme, 'source-contract + forced compile only',
+    'async README must name kqueue forced-compile evidence on non-BSD hosts');
   CheckSourceContains(LReadme, '`pbunsupported`',
     'async README must document the unsupported backend truth');
   CheckSourceContains(LReadme, '`test_async_timeout` enforces heaptrc',
@@ -834,6 +838,8 @@ begin
     'async README must document completion-queue backend models');
   CheckSourceContains(LReadme, '`pbepoll` is `pbmreadiness`',
     'async README must document epoll as readiness fallback');
+  CheckSourceContains(LReadme, '`pbkqueue` is `pbmreadiness`',
+    'async README must document kqueue as readiness backend');
   CheckSourceContains(LReadme, 'platform wake is not the iocp owner',
     'async README must keep platform wake separate from IOCP completion ownership');
   CheckSourceNotContains(LReadme, 'eventfd',
@@ -844,10 +850,12 @@ begin
     'async README must not overstate production quality');
   CheckSourceNotContains(LReadme, 'kqueue/iocp backends are stubs',
     'async README must not collapse kqueue and IOCP truth');
+  CheckSourceNotContains(LReadme, 'no `pbkqueue` backend',
+    'async README must not claim absence of pbKqueue after B3');
 
   CheckSourceContains(LPollerSource,
-    'tpollerbackend = (pbiouring, pbepoll, pbiocp, pbunsupported);',
-    'poller backend enum must expose current backend truth');
+    'tpollerbackend = (pbiouring, pbepoll, pbkqueue, pbiocp, pbunsupported);',
+    'poller backend enum must expose kqueue among backends');
   CheckSourceContains(LPollerSource,
     'tpollerbackendmodel = (pbmcompletionqueue, pbmreadiness, pbmunsupported);',
     'poller backend model enum must classify readiness vs completion truth');
@@ -855,8 +863,10 @@ begin
     'IOCP poller model must remain completion-queue truth');
   CheckSourceContains(LPollerSource, 'pbepoll: result := pbmreadiness;',
     'epoll poller model must remain readiness truth');
-  CheckSourceNotContains(LPollerSource, 'pbkqueue',
-    'poller backend enum must not imply a kqueue backend');
+  CheckSourceContains(LPollerSource, 'pbkqueue: result := pbmreadiness;',
+    'kqueue poller model must be readiness truth');
+  CheckSourceContains(LPollerSource, 'pbkqueue',
+    'poller source must wire pbKqueue backend');
 end;
 
 procedure TestAsyncFacadeExportsTaskStateMachine;

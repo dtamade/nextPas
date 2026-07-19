@@ -435,4 +435,8 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 ### Timeout cancel (B2)
 - `Async*Timeout` timer path calls `TPoller.TryCancelByContext(TimeoutCtx)` after user `-ETIMEDOUT`.
-- io_uring: real `IORING_OP_ASYNC_CANCEL`; epoll: remove pending + internal `-ECANCELED`; IOCP: not guaranteed.
+- io_uring: real `IORING_OP_ASYNC_CANCEL`; epoll/kqueue: remove pending + internal `-ECANCELED`; IOCP: not guaranteed.
+
+### Kqueue (B3)
+- `pbKqueue` readiness backend wired into `TPoller` for macOS/FreeBSD (`TKqueueReactor`).
+- Evidence: source-contract + `test_async_kqueue_compile_gate` (FORCE_HOST); not host-runtime proven here.

@@ -14,12 +14,15 @@ uses
   , nextpas.core.io.reactor
   , nextpas.core.io.reactor.epoll
   {$ENDIF}
+  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  , nextpas.core.io.reactor.kqueue
+  {$ENDIF}
   ;
 
 type
   TIoCompletion = nextpas.core.io.base.TIoCompletion;
 
-  TPollerBackend = (pbIoUring, pbEpoll, pbIocp, pbUnsupported);
+  TPollerBackend = (pbIoUring, pbEpoll, pbKqueue, pbIocp, pbUnsupported);
   TPollerBackendModel = (pbmCompletionQueue, pbmReadiness, pbmUnsupported);
 
   TPoller = record
@@ -28,6 +31,9 @@ type
     {$IFDEF NEXTPAS_LINUX}
     FUring: TIoReactor;
     FEpoll: TEpollReactor;
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    FKqueue: TKqueueReactor;
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     FIocp: TIocpReactor;
@@ -104,6 +110,8 @@ begin
   Result := pbEpoll;
   if TryIoUringProbe then
     Result := pbIoUring;
+  {$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  Result := pbKqueue;
   {$ELSE}
   Result := pbUnsupported;
   {$ENDIF}
@@ -115,6 +123,7 @@ begin
     pbIoUring: Result := pbmCompletionQueue;
     pbIocp: Result := pbmCompletionQueue;
     pbEpoll: Result := pbmReadiness;
+    pbKqueue: Result := pbmReadiness;
   else
     Result := pbmUnsupported;
   end;
@@ -126,6 +135,7 @@ begin
     pbIoUring: Result := True;
     pbIocp: Result := True;
     pbEpoll: Result := False;
+    pbKqueue: Result := False;
   else
     Result := False;
   end;
@@ -155,6 +165,14 @@ begin
           Result.FBackend := pbUnsupported;
       end;
     {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue:
+      begin
+        Result.FKqueue := TKqueueReactor.Create(AQueueDepth);
+        if not Result.FKqueue.IsValid then
+          Result.FBackend := pbUnsupported;
+      end;
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:
       begin
@@ -175,6 +193,9 @@ begin
     pbIoUring: FUring.Close;
     pbEpoll:   FEpoll.Close;
     {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: FKqueue.Close;
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: FIocp.Close;
     {$ENDIF}
@@ -189,6 +210,9 @@ begin
     {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.IsValid;
     pbEpoll:   Result := FEpoll.IsValid;
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: Result := FKqueue.IsValid;
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: Result := FIocp.IsValid;
@@ -218,6 +242,15 @@ begin
           nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
       end;
     {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue:
+      begin
+        if AOffset >= 0 then
+          Exit(False);
+        Result := FKqueue.AsyncRead(Int32(AFd), ABuf, ALen, AOffset,
+          nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
+      end;
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:    Result := FIocp.AsyncRead(AFd, ABuf, ALen, AOffset,
                  nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
@@ -242,6 +275,15 @@ begin
           nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
       end;
     {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue:
+      begin
+        if AOffset >= 0 then
+          Exit(False);
+        Result := FKqueue.AsyncWrite(Int32(AFd), ABuf, ALen, AOffset,
+          nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
+      end;
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:    Result := FIocp.AsyncWrite(AFd, ABuf, ALen, AOffset,
                  nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
@@ -260,6 +302,10 @@ begin
                  nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
     pbEpoll:   Result := FEpoll.AsyncAccept(Int32(AFd), AAddr, AAddrLen, AFlags,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue:  Result := FKqueue.AsyncAccept(Int32(AFd), AAddr, AAddrLen, AFlags,
+                 nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:    Result := FIocp.AsyncAccept(AFd, AAddr, AAddrLen, AFlags,
@@ -280,6 +326,10 @@ begin
     pbEpoll:   Result := FEpoll.AsyncConnect(Int32(AFd), AAddr, AAddrLen,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
     {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue:  Result := FKqueue.AsyncConnect(Int32(AFd), AAddr, AAddrLen,
+                 nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:    Result := FIocp.AsyncConnect(AFd, AAddr, AAddrLen,
                  nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
@@ -298,6 +348,10 @@ begin
                  nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
     pbEpoll:   Result := FEpoll.AsyncSend(Int32(AFd), ABuf, ALen, AFlags,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue:  Result := FKqueue.AsyncSend(Int32(AFd), ABuf, ALen, AFlags,
+                 nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:    Result := FIocp.AsyncSend(AFd, ABuf, ALen, AFlags,
@@ -318,6 +372,10 @@ begin
     pbEpoll:   Result := FEpoll.AsyncRecv(Int32(AFd), ABuf, ALen, AFlags,
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
     {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue:  Result := FKqueue.AsyncRecv(Int32(AFd), ABuf, ALen, AFlags,
+                 nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:    Result := FIocp.AsyncRecv(AFd, ABuf, ALen, AFlags,
                  nextpas.core.io.reactor.iocp.TIoCompletion(ACallback), AContext);
@@ -336,6 +394,10 @@ begin
                  nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
     pbEpoll:   Result := FEpoll.AsyncClose(Int32(AFd),
                  nextpas.core.io.reactor.epoll.TIoCompletion(ACallback), AContext);
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue:  Result := FKqueue.AsyncClose(Int32(AFd),
+                 nextpas.core.io.reactor.kqueue.TIoCompletion(ACallback), AContext);
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp:    Result := FIocp.AsyncClose(AFd,
@@ -386,6 +448,9 @@ begin
     pbIoUring: Result := FUring.Poll;
     pbEpoll:   Result := FEpoll.Poll;
     {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: Result := FKqueue.Poll;
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: Result := FIocp.Poll;
     {$ENDIF}
@@ -400,6 +465,9 @@ begin
     {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.PollOne;
     pbEpoll:   Result := FEpoll.PollOne;
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: Result := FKqueue.PollOne;
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: Result := FIocp.PollOne;
@@ -416,6 +484,9 @@ begin
     pbIoUring: FUring.Run;
     pbEpoll:   FEpoll.Run;
     {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: FKqueue.Run;
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: FIocp.Run;
     {$ENDIF}
@@ -430,6 +501,9 @@ begin
     {$IFDEF NEXTPAS_LINUX}
     pbIoUring: FUring.Stop;
     pbEpoll:   FEpoll.Stop;
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: FKqueue.Stop;
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: FIocp.Stop;
@@ -446,6 +520,9 @@ begin
     pbIoUring: Result := FUring.Flush;
     pbEpoll:   Result := FEpoll.Flush;
     {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: Result := FKqueue.Flush;
+    {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: Result := FIocp.Flush;
     {$ENDIF}
@@ -460,6 +537,9 @@ begin
     {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.HasPending;
     pbEpoll:   Result := FEpoll.HasPending;
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: Result := FKqueue.HasPending;
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: Result := FIocp.HasPending;
@@ -477,6 +557,9 @@ begin
     {$IFDEF NEXTPAS_LINUX}
     pbIoUring: Result := FUring.TryCancelByContext(AContext);
     pbEpoll:   Result := FEpoll.TryCancelByContext(AContext);
+    {$ENDIF}
+    {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+    pbKqueue: Result := FKqueue.TryCancelByContext(AContext);
     {$ENDIF}
     {$IFDEF NEXTPAS_WINDOWS}
     pbIocp: Result := False; { B4: CancelIoEx by context }
