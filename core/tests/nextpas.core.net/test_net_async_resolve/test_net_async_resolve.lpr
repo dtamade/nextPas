@@ -51,8 +51,6 @@ begin
   GLoop.Stop;
 end;
 
-{ 测试异步 DNS 解析 localhost }
-
 procedure TestAsyncResolveLocalhost;
 begin
   GLoop := TAsyncLoop.Create(32);
@@ -75,8 +73,6 @@ begin
   end;
 end;
 
-{ dual-stack: IPv4 literal still succeeds; IPv6 optional if platform returns it for hostnames }
-
 procedure TestAsyncResolveDualStackList;
 var
   LI: Integer;
@@ -96,14 +92,11 @@ begin
       if not GDnsResult.Addresses[LI].IsIPv6 then
         LHasV4 := True;
     Check(LHasV4, 'localhost dual-stack list includes IPv4');
-    { IPv6 (::1) may or may not be present depending on host; do not hard-fail. }
   finally
     GLoop.Close;
     GLoop.Free;
   end;
 end;
-
-{ 测试异步 DNS 解析 IP 字面量 }
 
 procedure TestAsyncResolveIPLiteral;
 begin
@@ -126,8 +119,6 @@ begin
   end;
 end;
 
-{ 测试异步 DNS 解析回调触发 }
-
 procedure TestAsyncResolveCallbackFires;
 begin
   GLoop := TAsyncLoop.Create(32);
@@ -135,7 +126,6 @@ begin
     GFailDone := False;
     GFailResult := Default(TDnsResult);
 
-    { 使用一个可能失败也可能成功的主机名，只验证回调被触发 }
     AsyncResolve(GLoop, 'nonexistent.example.invalid', @DnsFailCallback, nil);
 
     GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCallback, nil);
@@ -147,8 +137,6 @@ begin
     GLoop.Free;
   end;
 end;
-
-{ 测试异步 DNS 解析 Ref 回调 }
 
 procedure TestAsyncResolveRefCallback;
 begin
@@ -171,6 +159,61 @@ begin
   end;
 end;
 
+procedure TestAsyncResolveExParallelLocalhost;
+var
+  LOpts: TDnsResolveOptions;
+  LI: Integer;
+  LHasV4: Boolean;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDnsDone := False;
+    GDnsResult := Default(TDnsResult);
+    LOpts := DefaultDnsResolveOptions;
+    LOpts.ResolutionDelayMs := 0;
+    Check(AsyncResolveEx(GLoop, 'localhost', LOpts, @DnsCallback, nil),
+      'AsyncResolveEx submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(2000), @StopCallback, nil);
+    GLoop.Run;
+    Check(GDnsDone, 'ResolveEx completes');
+    Check(GDnsResult.Success, 'ResolveEx success');
+    LHasV4 := False;
+    for LI := 0 to High(GDnsResult.Addresses) do
+      if not GDnsResult.Addresses[LI].IsIPv6 then
+        LHasV4 := True;
+    Check(LHasV4, 'ResolveEx includes IPv4 for localhost');
+    CheckEqual(Int64(DNS_DEFAULT_RESOLUTION_DELAY_MS),
+      Int64(DefaultDnsResolveOptions.ResolutionDelayMs),
+      'default resolution delay 50ms');
+  finally
+    GLoop.Close;
+    GLoop.Free;
+  end;
+end;
+
+procedure TestAsyncResolveExIPLiteral;
+var
+  LOpts: TDnsResolveOptions;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDnsDone := False;
+    GDnsResult := Default(TDnsResult);
+    LOpts := DefaultDnsResolveOptions;
+    LOpts.ResolutionDelayMs := 0;
+    Check(AsyncResolveEx(GLoop, '10.0.0.1', LOpts, @DnsCallback, nil),
+      'ResolveEx literal submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(500), @StopCallback, nil);
+    GLoop.Run;
+    Check(GDnsDone, 'literal complete');
+    Check(GDnsResult.Success, 'literal success');
+    Check(GDnsResult.FirstAddress.IP = '10.0.0.1', 'literal passthrough');
+  finally
+    GLoop.Close;
+    GLoop.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('net_async_resolve');
   T.Test('AsyncResolveLocalhost', @TestAsyncResolveLocalhost);
@@ -178,5 +221,8 @@ begin
   T.Test('AsyncResolveIPLiteral', @TestAsyncResolveIPLiteral);
   T.Test('AsyncResolveCallbackFires', @TestAsyncResolveCallbackFires);
   T.Test('AsyncResolveRefCallback', @TestAsyncResolveRefCallback);
-  T.Run;
+  T.Test('AsyncResolveExParallelLocalhost', @TestAsyncResolveExParallelLocalhost);
+  T.Test('AsyncResolveExIPLiteral', @TestAsyncResolveExIPLiteral);
+  if not T.Run then
+    Halt(1);
 end.
