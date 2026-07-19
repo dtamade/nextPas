@@ -51,8 +51,8 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 
 | 模块 | 约站点 | 备注 |
 |------|--------|------|
-| `simd.avx2` / `simd.sse2` | 4+4 | 表缓冲；alloc 用 `GetMem(count*SizeOf)` → free 可带 size |
-| `simd.alloc` / `image` / `imageproc` / `memutils` | 1 each | 头指针/临时图 |
+| `simd.avx2` / `simd.sse2` | 4+4 | **CLOSED 2026-07-19**：`FreeMem(buf, capacity*SizeOf(Single))` |
+| `simd.alloc` / `image` / `imageproc` / `memutils` | 1 each | **CLOSED 2026-07-19**：raw size / row size / DataSize / TryBlockSize |
 | `tls.winssl.certificate` / `winssl.utils` | 5+4 | PEM/缓冲区；常可知长度 |
 | `tls.openssl.api.*` / `certificate` / `wolfssl.context` | 若干 | C API 缓冲；size 有时在邻域 |
 | `tls.buffer.pool` | 2 | 池缓冲 `FData` |
@@ -121,7 +121,7 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 | ID | 严重度 | 主题 | 建议 owner | 动作 |
 |----|--------|------|------------|------|
 | CO-001 | — | L0 System FreeMem | platform | **保持** |
-| CO-002 | P2 | simd 表/缓冲 unsized free | simd | 触达时 sized free |
+| CO-002 | P2 | simd 表/缓冲 unsized free | simd | **CLOSED 2026-07-19**（mem lane D3）：avx2/sse2 tan scratch、image FlipVertical、imageproc FreeImage、simd.alloc raw free、memutils AlignedFree TryBlockSize |
 | CO-003 | P2 | tls 缓冲 unsized free | tls | 触达时 sized / 长度邻域 |
 | CO-004 | P2 | iocp reactor unsized | io | 触达时 sized |
 | CO-005 | info | FreeMemOf 采用面仍窄 | collections / 文本 | 样板已在 swiss；扩展按触达 |

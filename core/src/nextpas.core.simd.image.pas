@@ -542,7 +542,7 @@ begin
     Move(aImg.RowPtr(aImg.Height - 1 - y)^, aImg.RowPtr(y)^, LRowSize);
     Move(LTmp^, aImg.RowPtr(aImg.Height - 1 - y)^, LRowSize);
   end;
-  FreeMem(LTmp);
+  FreeMem(LTmp, LRowSize);
 end;
 
 procedure ThresholdGray(const aSrc: TSimdImage; var aDst: TSimdImage; aThreshold: Byte);
