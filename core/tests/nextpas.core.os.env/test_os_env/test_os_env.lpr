@@ -7,7 +7,8 @@ uses
   nextpas.core.errors,
   nextpas.core.text.base,
   nextpas.core.fs,
-  nextpas.core.os.env;
+  nextpas.core.os.env,
+  nextpas.core.platform.env;
 
 var
   T: TTestSuite;
@@ -530,6 +531,35 @@ begin
   end;
 end;
 
+procedure TestClearEnv;
+var
+  LSnap: TStringArray;
+  I, Eq: Integer;
+  LName, LVal: string;
+  LCode: Int32;
+begin
+  SetEnv('NEXTPAS_CLEAR_ME', '1');
+  Check(HasEnv('NEXTPAS_CLEAR_ME'), 'pre-clear has marker');
+  LSnap := EnvironmentVariables;
+  try
+    ClearEnv;
+    Check(not HasEnv('NEXTPAS_CLEAR_ME'), 'ClearEnv removes marker');
+  finally
+    for I := 0 to High(LSnap) do
+    begin
+      Eq := Pos('=', LSnap[I]);
+      if Eq <= 1 then
+        Continue;
+      LName := Copy(LSnap[I], 1, Eq - 1);
+      LVal := Copy(LSnap[I], Eq + 1, MaxInt);
+      LCode := platform_env_set(PAnsiChar(LName), PAnsiChar(LVal));
+      Check(LCode = 0, 'restore env ' + LName);
+    end;
+  end;
+  Check(HasEnv('NEXTPAS_CLEAR_ME') or (not HasEnv('NEXTPAS_CLEAR_ME')),
+    'post-restore suite continues');
+end;
+
 { --- main --- }
 
 begin
@@ -575,5 +605,6 @@ begin
   T.Test('SetEnv/UnsetEnv portable name', @TestSetEnvRejectsNonPortableName);
   T.Test('ExpandEnv portable placeholder', @TestExpandEnvRejectsNonPortablePlaceholder);
   T.Test('GetEnv allows non-portable lookup', @TestGetEnvAllowsNonPortableLookup);
+  T.Test('ClearEnv', @TestClearEnv);
   if not T.Run then Halt(1);
 end.

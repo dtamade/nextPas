@@ -4,9 +4,11 @@ program test_path;
 
 uses
   nextpas.core.test,
+  nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.fs.util,
   nextpas.core.fs.path,
+  nextpas.core.fs.dir,
   nextpas.core.path;
 
 var
@@ -463,6 +465,74 @@ begin
   Check(PathClean('/../..') = '/', 'clean above root');
 end;
 
+procedure TestPathToFromSlash;
+begin
+  CheckEqual('a/b/c', PathToSlash('a\b\c'), 'ToSlash backslash');
+  CheckEqual('a/b', PathToSlash('a/b'), 'ToSlash already slash');
+  CheckEqual('', PathToSlash(''), 'ToSlash empty');
+  {$IFDEF NEXTPAS_WINDOWS}
+  CheckEqual('a\b\c', PathFromSlash('a/b/c'), 'FromSlash windows');
+  {$ELSE}
+  CheckEqual('a/b/c', PathFromSlash('a/b/c'), 'FromSlash unix identity');
+  {$ENDIF}
+end;
+
+procedure TestPathSplitList;
+var
+  L: TStringArray;
+begin
+  L := PathSplitList('');
+  CheckEqual(Int64(0), Int64(Length(L)), 'empty list');
+  L := PathSplitList('/bin' + PathListSeparator + '/usr/bin');
+  CheckEqual(Int64(2), Int64(Length(L)), 'two entries');
+  CheckEqual('/bin', L[0], 'first');
+  CheckEqual('/usr/bin', L[1], 'second');
+  L := PathSplitList(PathListSeparator + 'a' + PathListSeparator);
+  CheckEqual(Int64(3), Int64(Length(L)), 'leading trailing empty');
+  CheckEqual('', L[0], 'leading empty');
+  CheckEqual('a', L[1], 'middle');
+  CheckEqual('', L[2], 'trailing empty');
+end;
+
+procedure TestPathVolumeAndStem;
+begin
+  CheckEqual('', PathVolume('/home/x'), 'unix volume empty');
+  CheckEqual('archive.tar', PathFileStem('archive.tar.gz'), 'stem multi ext last only');
+  CheckEqual('file', PathFileStem('file.txt'), 'stem simple');
+  CheckEqual('file', PathFileStem('file'), 'stem no ext');
+  CheckEqual('', PathFileStem(''), 'stem empty');
+  CheckEqual('.hidden', PathFileStem('.hidden'), 'stem dotfile no ext strip if no PathExt');
+end;
+
+procedure TestPathStripPrefix;
+begin
+  CheckEqual('b/c', PathStripPrefix('/a/b/c', '/a'), 'strip /a');
+  CheckEqual('.', PathStripPrefix('/a', '/a'), 'equal -> dot');
+  CheckEqual('', PathStripPrefix('/ab/c', '/a'), 'not a path prefix');
+  CheckEqual('x', PathStripPrefix('/a/x', '/a/'), 'prefix with slash');
+  CheckEqual('', PathStripPrefix('/other', '/a'), 'no match');
+end;
+
+procedure TestPathAbsFollowsSymlink;
+var
+  LDir, LTarget, LLink, LAbs: string;
+begin
+  LDir := FsTempDir('', 'pathabs*');
+  try
+    LTarget := PathJoin(LDir, 'real.txt');
+    LLink := PathJoin(LDir, 'link.txt');
+    FsWriteFileText(LTarget, 'x');
+    FsSymlink(LTarget, LLink);
+    LAbs := ExpandFileName(LLink);
+    Check(PathIsAbs(LAbs), 'abs is absolute');
+    { realpath should land on the real file path, not the link path }
+    Check(Pos('link.txt', LAbs) = 0, 'PathAbs resolves through symlink');
+    Check(Pos('real.txt', LAbs) > 0, 'PathAbs points at real target name');
+  finally
+    FsRemoveAll(LDir);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.path');
   T.Test('PathJoin', @TestPathJoin);
@@ -499,6 +569,11 @@ begin
   T.Test('PathMatch edge cases', @TestPathMatchEdgeCases);
   T.Test('PathJoinN', @TestPathJoinN);
   T.Test('PathClean', @TestPathClean);
+  T.Test('PathToSlash/FromSlash', @TestPathToFromSlash);
+  T.Test('PathSplitList', @TestPathSplitList);
+  T.Test('PathVolume/FileStem', @TestPathVolumeAndStem);
+  T.Test('PathStripPrefix', @TestPathStripPrefix);
+  T.Test('PathAbs follows symlink', @TestPathAbsFollowsSymlink);
   T.Test('path owned sources no bare FPC RTL uses', @TestPathOwnedSourcesNoFpcRtl);
   T.Test('path test suite no bare FPC RTL uses', @TestPathTestSuiteNoFpcRtl);
 {$IFDEF NEXTPAS_WINDOWS}

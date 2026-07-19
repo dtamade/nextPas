@@ -475,6 +475,22 @@ begin
   Check(not FsIsFile(GTmpDir), 'not file');
 end;
 
+procedure TestIsSymlink;
+var
+  LTarget, LLink: string;
+begin
+  LTarget := GTmpDir + '/isym-target.txt';
+  LLink := GTmpDir + '/isym-link.txt';
+  FsWriteFile(LTarget, TBytes.Create(1));
+  Check(not FsIsSymlink(LTarget), 'regular file not symlink');
+  Check(not IsSymlink(LTarget), 'facade regular not symlink');
+  Check(not FsIsSymlink(GTmpDir + '/no-such-isym'), 'missing not symlink');
+  FsSymlink(LTarget, LLink);
+  Check(FsIsSymlink(LLink), 'FsIsSymlink true');
+  Check(IsSymlink(LLink), 'facade IsSymlink true');
+  Check(not FsIsSymlink(GTmpDir), 'dir not symlink');
+end;
+
 procedure TestFileSize;
 begin
   FsWriteFile(GTmpDir + '/sz.bin', TBytes.Create(1, 2, 3));
@@ -1996,6 +2012,7 @@ begin
 {$ENDIF}
     T.Test('Exists', @TestExists);
     T.Test('IsFile/IsDir', @TestIsFileIsDir);
+    T.Test('IsSymlink', @TestIsSymlink);
     T.Test('FileSize', @TestFileSize);
 
     T.Test('Mkdir + ReadDir', @TestMkdirAndReadDir);

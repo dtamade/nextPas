@@ -2,6 +2,8 @@
 
 L2 文件系统操作模块。提供文件读写、目录操作、路径工具和临时文件管理。
 
+**Go/Rust 对标**：见 [`../process/PARITY-go-rust.md`](../process/PARITY-go-rust.md)。
+
 ## 快速开始
 
 ```pascal
@@ -89,6 +91,7 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `Exists(APath)` | 检查路径是否存在 |
 | `IsDir(APath)` | 检查是否为目录 |
 | `IsFile(APath)` | 检查是否为普通文件 |
+| `IsSymlink(APath)` | 检查是否为符号链接（不跟随；不存在 False） |
 | `FileSize(APath)` | 返回文件大小（字节） |
 | `Chmod(APath, APerm)` | 设置文件权限 |
 | `Truncate(APath, ASize)` | 截断文件 |

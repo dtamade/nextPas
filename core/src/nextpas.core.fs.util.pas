@@ -32,6 +32,8 @@ function FsLstat(const APath: string): TFileInfo;
 function FsExists(const APath: string): Boolean;
 function FsIsDir(const APath: string): Boolean;
 function FsIsFile(const APath: string): Boolean;
+{** @desc 是否为符号链接（不跟随链接；不存在返回 False） *}
+function FsIsSymlink(const APath: string): Boolean;
 function FsFileSize(const APath: string): Int64;
 procedure FsChmod(const APath: string; const APerm: TFilePermission);
 procedure FsTruncate(const APath: string; const ASize: Int64);
@@ -413,6 +415,13 @@ end;
 function FsIsFile(const APath: string): Boolean;
 begin
   Result := platform_fs_is_file(PAnsiChar(APath));
+end;
+
+function FsIsSymlink(const APath: string): Boolean;
+begin
+  if APath = '' then
+    Exit(False);
+  Result := platform_fs_is_symlink(PAnsiChar(APath));
 end;
 
 function FsFileSize(const APath: string): Int64;
