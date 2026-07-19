@@ -150,7 +150,7 @@ begin
   while LChunk <> nil do
   begin
     LNextChunk := LChunk^.Next;
-    FreeMem(LChunk^.Data);
+    FreeMem(LChunk^.Data, LChunk^.Size);
     Dispose(LChunk);
     LChunk := LNextChunk;
   end;
@@ -165,7 +165,7 @@ begin
   while LSender <> nil do
   begin
     LNextSender := LSender^.Next;
-    FreeMem(LSender^.Data);
+    FreeMem(LSender^.Data, LSender^.Size);
     Dispose(LSender);
     LSender := LNextSender;
   end;
@@ -211,7 +211,7 @@ begin
   if AReceived > ASize then
     AReceived := ASize;
   Move(LChunk^.Data^, AData, AReceived);
-  FreeMem(LChunk^.Data);
+  FreeMem(LChunk^.Data, LChunk^.Size);
   Dispose(LChunk);
   Result := True;
 end;
@@ -255,7 +255,7 @@ begin
       FLoop.Post(LSender^.Callback, LSender^.Context)
     else if Assigned(LSender^.Ref) then
       FLoop.PostRef(LSender^.Ref, LSender^.Context);
-    FreeMem(LSender^.Data);
+    FreeMem(LSender^.Data, LSender^.Size);
     Dispose(LSender);
   end;
 end;
@@ -472,7 +472,7 @@ begin
         FLoop.Post(LSender^.Callback, LSender^.Context)
       else if Assigned(LSender^.Ref) then
         FLoop.PostRef(LSender^.Ref, LSender^.Context);
-      FreeMem(LSender^.Data);
+      FreeMem(LSender^.Data, LSender^.Size);
       Dispose(LSender);
     end;
     FSendTail := nil;

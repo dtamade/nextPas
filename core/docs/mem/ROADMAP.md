@@ -123,7 +123,7 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 | E1 | 修复 `bench_arena_go_rust`；`make compare` 三语同方法论 | **done** 2026-07-19 |
 | E2 | 执行 P-a：删 10 Tier-3 allocator + 16 test | **done** 2026-07-19 |
 | E3 | compare A/B 口径；env 缓存快路径；SCORECARD/PARITY 刷新 | **done** 2026-07-19 |
-| E4 | D3：tls.buffer.pool / winssl.utils / iocp / fileio sized free | **partial** 2026-07-19（openssl 等除外） |
+| E4 | D3 sized free：async buffer/channel + tls 清晰路径 | **partial** 2026-07-19（openssl stack/param 除外） |
 | E5 | 可选 P-b 剩余 Tier-3 | 按需 |
 
 **验收**: PARITY 表 P1–P7；`make lane-focused LANE=mem` 常绿。

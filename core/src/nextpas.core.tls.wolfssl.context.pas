@@ -254,7 +254,7 @@ begin
       Result := WOLFSSL_TLSEXT_ERR_OK
     else
     begin
-      FreeMem(LResponseCopy);
+      FreeMem(LResponseCopy, Length(LResponse));
       Result := WOLFSSL_TLSEXT_ERR_ALERT_FATAL;
     end;
   except
