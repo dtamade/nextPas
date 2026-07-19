@@ -1,10 +1,11 @@
 # nextpas.core.http Goal Tree
 
-> Last updated: 2026-07-19 (Era 9 Production Depth open N0; NEXT → ROADMAP N1 SSE; framework-complete non-H3 retained)
-> Goal: make `nextpas.core.http` one of the best Free Pascal HTTP frameworks, with public API quality, correctness, lifecycle clarity, maintainability, and performance evidence that stand up against Go `net/http` and high-quality Rust HTTP stacks.
+> Last updated: 2026-07-19 (Parity Q0-1 landed; NEXT → ROADMAP Q0-2 unbreak multi-conn comparison; framework-complete non-H3 retained)
+> Goal: make `nextpas.core.http` match **Go `net/http` / Rust hyper-class quality and server scale** on H1/H2 — not merely “best in Free Pascal.” Evidence is same-machine ratio + contracts, not slogans.
 >
-> **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — ordered Eras/Waves, Goal Loop, Inbox. This file is north star + stage truth, **not** a day-to-day backlog.
-> **Product focus**: H1/H2 client+server and WebSocket excellence. **No H3 product demand** — keep H3 blocked/honest, never fake facade.
+> **Forward execution (only)**: [`ROADMAP.md`](ROADMAP.md) — Parity Campaign Q/S eras, Goal Loop, Inbox.
+> **Scale battlefield**: **HTTP server** throughput and connection scale (Linux epoll default).
+> **H3**: blocked/honest, never fake facade.
 
 ## North Star And Scope
 
@@ -28,8 +29,9 @@ This goal tree covers `core/src/nextpas.core.http*`, HTTP tests/examples/benchma
 | **framework-complete (non-H3)** | **yes** — Era 0–4 默认路径 landed |
 | **Excellence (Era 6)** | **Done** — X0–X5 landed（WS/cancel/IdleTTL/TLS residual/equal-fold+comparator）；H3 仍 Blocked |
 | **Residual (Era 7)** | **Done** — R1 hang；R2 dig→R4 清零 HTTPS 1×41B（capabilities cache）；R3 Windows cancel probe-only only |
-| **Inbox depth (Era 8)** | **Done** — I0–I3 landed（pool health / WS deflate / H2 multiplex）；H3 仍 Blocked |
-| **Production Depth (Era 9)** | **Open** — N0 landed；路径 N1 SSE → N2 multipart stream → N3 observability |
+| **Inbox depth (Era 8)** | **Done** — I0–I3 landed（main）；H3 仍 Blocked |
+| **Production Depth (Era 9)** | **Absorbed** — N0 landed；N1–N3 → Parity **Q1** |
+| **Parity Campaign** | **Open** — 质量+规模对标 Go/Rust；主战场 server；Q0 → Q1/S1… |
 | Usability A–I | 完成 landed（含 Cookie site、FinalUrl/Version、proxy Basic-only） |
 | 主 Makefile gate | ~35 focused suites |
 | **NEXT** | **仅 [`ROADMAP.md`](ROADMAP.md)**（本文件不写具体 Wave 名） |
@@ -65,18 +67,29 @@ nextpas.core.http
 └── G6: Cross-language benchmark truth and long-run positioning  [stage-closed; further wins optional via Era 6 X5]
 ```
 
-### Excellence stage (post framework-complete non-H3)
+### Parity Campaign (post framework-complete non-H3)
 
-After framework-complete (non-H3), the live product push is **H1/H2 + WebSocket depth**, not H3.
+Live product push is **Go/Rust-class quality + server scale** on H1/H2 — not H3, not API-name parity.
 
-Win dimensions (not ecosystem checklists):
+**Quality bar**
 
-1. Correctness edges proven (timeouts, cancel, pools, WS close, H2 edges already landed).
+1. Correctness edges proven (timeouts, cancel, pools, WS, H2, SSE/stream when landed).
 2. Predictable contracts (Kind/Op, options, ownership).
-3. Evidence-backed performance (ladder + comparators; profiled wins).
-4. Pascal-first small synchronous APIs.
+3. Server production depth (long-lived writes, backpressure, H2 server edges).
+4. Pascal-first **synchronous** public APIs (no async handler rewrite).
 
-Lower-layer fixes (`net` cancel floor, `tls` factory residual) are preferred over HTTP-only workarounds when they unblock these dimensions. Ordered work: **only** [`ROADMAP.md`](ROADMAP.md) Era 6.
+**Scale bar (Linux server; same-machine)**
+
+| Gate | Meaning |
+|------|---------|
+| Enter parity zone | epoll Direct keep-alive **≥ 0.5×** Go `net/http` same workload |
+| Scale-ready | **≥ 0.8×** Go req/s；p99 **≤ 2×** Go；no per-request leak |
+| Connection ladder | Documented stable points at 1k / 10k idle keep-alive + failure modes |
+
+G6 stage-closed numbers remain **characterization**, not the scale campaign exit.
+Scale campaign evidence lives in [`BENCHMARKS.md`](BENCHMARKS.md) § Parity Campaign and [`ROADMAP.md`](ROADMAP.md) S1–S3.
+
+Lower-layer fixes (`net.server` epoll, `mem` arena, `tls`) preferred over HTTP workarounds.
 
 ### G6 stage performance complete
 
