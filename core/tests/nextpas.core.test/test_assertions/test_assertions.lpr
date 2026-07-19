@@ -1157,7 +1157,7 @@ procedure TestCheckArrayEqualFailValue;
 begin
   ExpectFail(procedure begin
     CheckArrayEqual([1, 2, 3], [1, 99, 3]);
-  end, 'index 1');
+  end, '[1]');
 end;
 
 procedure TestCheckArrayEqualEmpty;

@@ -1,8 +1,8 @@
 # nextpas.core.test — Advanced Pascal Unit Testing Framework
 
-> 模块负责人: Claude (test worktree)
-> 最后更新: 2026-07-09
-> 治理状态: v8.0, 17 源文件, 12 测试套件, ~824 测试 (不含 stress)
+> 模块负责人: test lane (worktree `.worktrees/test`)
+> 最后更新: 2026-07-19
+> 治理状态: v8.7, 17 源文件 (.pas) + 4 .inc, 16 测试套件, ~930 测试过程（2026-07-19 全绿）
 
 ## Overview
 
@@ -28,7 +28,7 @@
 - **Shuffle**: `SetDefaultShuffleSeed` deterministic test shuffling
 - **FailFast**: `SetDefaultFailFast` stop on first failure
 - **Short mode**: `ShortSkip` for Go-style `--short` mode
-- **Verbose mode**: `SetDefaultVerboseMode` per-test [PASS]/[FAIL]/[SKIP] output
+- **Verbose mode**: `SetDefaultVerboseMode` / `VerboseMode` per-test [PASS]/[FAIL]/[SKIP] output (there is **no** `OutputLevel` field)
 - **Progress**: `SetDefaultShowProgress` [N/Total] progress counter
 - **Mock framework**: `TMock` with setup/verify/typed values/call ordering
 - **RTTI discovery**: `DiscoverTests` auto-discovers published methods
@@ -101,6 +101,9 @@ Without these modeswitches, you must use named procedures with `@Proc` syntax.
 | `CheckSorted(array)` | Assert array is sorted in non-decreasing order |
 | `CheckIsNil(intf, msg)` | Assert interface reference is nil |
 | `CheckIsNotNil(intf, msg)` | Assert interface reference is not nil |
+| `CheckOneOf(value, values)` | Assert value is one of the given set (string/Int64/Boolean overloads) |
+| `CheckInstanceOf(obj, class)` | Assert object is instance of class (nil fails) |
+| `CheckSnapshot(actual, dir, name)` | Assert string matches snapshot file; create-on-miss fails under strict mode |
 | `Fail(msg)` | Unconditional failure |
 | `Skip(reason)` | Skip current test (raises `ETestSkipped`) |
 
@@ -138,6 +141,7 @@ ExpectProc(procedure begin StrToInt('bad'); end)
 | `ExpectDouble(Double)` | IExpectation (double) |
 | `ExpectPtr(Pointer)` | IExpectation (pointer) |
 | `ExpectProc(TTestProc)` | IExpectation (proc) |
+| `ExpectObj(TObject)` | IExpectation (object; for `ToBeInstanceOf`) |
 
 | Method | Applies to |
 |--------|-----------|
@@ -157,6 +161,9 @@ ExpectProc(procedure begin StrToInt('bad'); end)
 | `ToNotBeNear(expected, epsilon)` | Double (negated nearness) |
 | `ToBeSame(expected)` | Pointer (identity comparison) |
 | `ToEqualPointer(expected)` | Pointer (alias for ToBeSame) |
+| `ToBeInstanceOf(class)` | object (`ExpectObj`) |
+| `ToMatchSnapshot(dir, name)` | string (fluent snapshot compare) |
+| `ToBeOneOf` / `ToBeOneOfInt` / `ToBeOneOfBool` | membership (empty set always fails) |
 | `ToRaise(class, msg)` | proc |
 | `ToNotRaise` | proc (fails if any exception raised) |
 
@@ -185,6 +192,34 @@ end;
 
 Each case runs as a separate test entry (`ekTableTest`), with its own pass/fail status.
 `TTestCase.Name` appears in the test output; `TTestCase.Data` is a string for the caller to parse.
+
+### TestTable vs TestSubtest
+
+| API | Role | Context | When to use |
+|-----|------|---------|-------------|
+| `TestTable(name, cases, proc)` | Data-driven: same `proc`, different inputs | **No** `ITestContext`; callback gets `TTestCase` | Many input/output pairs, table-driven checks |
+| `TestSubtest(name, subtests, proc)` | Named subtests with independent context | Each subtest has its own `ITestContext` | Stepwise scenarios, nested `Run` / `RunNested` |
+
+**Recommendation**: Most tests prefer `Test()` + closure. Use `TestTable` when you have many input/output pairs. Use `TestSubtest` / `ITestContext.Run` when you need named sub-results or nesting.
+
+### Cleanup (three layers)
+
+| Layer | API | Scope | When it runs |
+|-------|-----|-------|--------------|
+| Suite Cleanup | `Suite.Cleanup(proc)` | suite-level | After **each** test (like Go `t.Cleanup()` registered on the suite) |
+| Test Cleanup | `Ctx.OnCleanup(proc)` | test-level | Registered inside the test body; runs when **that** test ends (LIFO) |
+| Setup / Teardown | `SetSetup` / `SetTeardown` | suite-level | Setup once before all tests; Teardown once after all tests |
+
+Notes:
+
+- Suite Cleanup and `Ctx.OnCleanup` both run LIFO.
+- `BeforeEach` / `AfterEach` still run around every test; Cleanup is for resource release, not suite-wide init/fini.
+- In parallel mode, test-level `OnCleanup` runs on the worker thread; Setup/Teardown stay serial on the main thread.
+
+### VerboseMode (not OutputLevel)
+
+`TTestConfig` has **no** `OutputLevel` field. Verbosity is only the Boolean `VerboseMode`
+(`SetDefaultVerboseMode` / CLI `--verbose`), which prints per-test `[PASS]`/`[FAIL]`/`[SKIP]`.
 
 ### TTestStatus Semantic Table
 
@@ -422,7 +457,7 @@ to reuse threads across test boundaries.
 
 ### Thread Safety Requirements
 
-When using `RunParallel`:
+When using `RunParallel` / `Suite.Parallel()`:
 
 - **BeforeEach / AfterEach** must be thread-safe -- they are called concurrently
   from multiple threads. Avoid shared mutable state or protect with a mutex.
@@ -435,6 +470,16 @@ When using `RunParallel`:
   Do not use `TestSubtest` entries with `RunParallel`.
 - **Thread-local context** (`GExecState`) is `threadvar` -- each thread has
   independent state, no data races.
+
+### Parallel user responsibility checklist
+
+Parallel tests share one process. Callers own concurrency safety:
+
+1. **No unsynchronized global mutable state** in parallel test bodies.
+2. **`GStubRegistry` / `GFixtureRegistry` are not thread-safe** -- register stubs/fixtures in `Setup()`, never inside parallel tests.
+3. **Output is mutex-protected** (safe to write from workers); **test-local state is not** shared or protected for you.
+4. Keep **BeforeEach / AfterEach** free of unsynchronized shared mutables.
+5. Prefer serial `Run` when you need **subtests** or **benchmarks** (skipped under parallel).
 
 ## Memory Leak Detection
 
@@ -530,22 +575,28 @@ Note: `Classes` is NOT a dependency. The framework uses `specialize TArray<T>` f
 
 ## Test Coverage
 
+> 实测：`make -C core/tests/nextpas.core.test clean test` → **16/16 suites passed**（2026-07-19）。
+> 下表「Tests」列为各套件主 suite 报告的测试过程数；multi-suite 程序取主路径合计近似值。不含 stress 内 10K 空测试展开。
+
 | Test Suite | Tests | Coverage |
 |-----------|-------|----------|
-| test_assertions | 167 | All Check* procedures + Skip/Fail + CheckNear/CheckNotNear + empty pattern + Double + Array + CI variants |
-| test_expect | 175 | IExpectation (40+ To* methods x 4 dimensions: success/fail/Not_/Not_fail) + Double/CI/Array/Bytes/Match variants |
-| test_mock | 196 | TMock setup/verify, typed values, call ordering, CalledWith, CalledInOrder, VerifyInOrder, GetCallHistory |
-| test_output | 83 | ANSI formatting, StatusDot, FormatStatusLine, JUnit XML, JSON, TAP, Error vs Failure |
-| test_runner | 13 | CLI/filter/shuffle/retry/timeout/parallel/count |
-| test_prop | 50 | Property testing generators, fuzzing, corpus, shrinking |
-| test_lifecycle | 21 | Setup/Teardown, BeforeEach/AfterEach, Cleanup, EachCleanups, TestTable |
-| test_bench | 22 | RunBenchTest, RunBenchSuite, CheckBenchPerformance, CheckBenchThroughput |
-| test_advanced | 19 | DiscoverTests, TestFixture, ShouldFail, TestTable |
-| test_diagnostics | 15 | Error vs failure distinction, JUnit/TAP/JSON diagnostic output |
-| test_parallel | 19 | Parallel execution, failure/skip in threads, timeout, table parallel |
-| test_subtests | 29 | Nested subtests, RunNested API, CleanupCallbacks, SinkPropagation |
-| test_stress | 10 | Stress tests (10K empty tests, large strings, glob perf, 100K output) |
-| **Total** | **819** | **2276 assertions**, 0 leaks |
+| test_assertions | 188 | All Check* + Skip/Fail + OneOf/InstanceOf/Snapshot + Double/Array/CI |
+| test_expect | 198 | IExpectation To* + Inf/Finite + InstanceOf + MatchSnapshot + negation |
+| test_mock | 112 | TMock setup/verify, typed values, ordering, TMockCaptor, thread asserts |
+| test_output | 81 | ANSI, JUnit/JSON/TAP, Error vs Failure, colored diff |
+| test_config | 38 | TTestConfig defaults, builder With*, TBufferSink, MakeBufferConfig |
+| test_discovery | 8 | DiscoverTests + TTestFixture BeforeEach/AfterEach |
+| test_runner | multi (~150 entries) | CLI/filter/shuffle/retry/timeout/parallel/cache/summary |
+| test_prop | ~50 | Property generators, fuzzing, corpus, shrinking |
+| test_lifecycle | 17 | Setup/Teardown, BeforeEach/AfterEach, Cleanup, TestTable |
+| test_bench | 22 | RunBenchTest/Suite, CheckBenchPerformance/Throughput |
+| test_advanced | 13 | DiscoverTests, TestFixture, ShouldFail, JSON escape |
+| test_diagnostics | 15 | Error vs failure, diagnostic message quality |
+| test_parallel | multi | Parallel execution, timeout, table parallel, lifecycle |
+| test_subtests | 15 | Nested subtests, RunNested, CleanupCallbacks, SinkPropagation |
+| test_stress | 10 | 10K empty, large strings, glob perf, 100K output |
+| test_perf_bench | microbench | Expect/Check/Mock 性能回归门禁（非单元计数） |
+| **Total** | **~930** | **16/16 green**；heaptrc 时序伪影见 CONTRACT §10 |
 
 ---
 
@@ -726,60 +777,70 @@ L4 扩展层:  discovery.pas, mock.pas, prop.pas, helpers.pas, bench.pas
 
 | 文件 | 行数 | 层 | 职责 |
 |------|------|----|------|
-| test.base.pas | 836 | L0 | 基础类型、异常、内部状态 |
-| test.config.pas | 1099 | L0 | TTestConfig、IOutputSink、TTestCache、TBufferSink |
-| test.check.pas | 1414 | L1 | Check* 断言 API (40+ 方法, 含 CI/Double/Array 变体) |
-| test.expect.pas | 1330 | L1 | IExpectation fluent API (40+ 方法) |
-| test.output.pas | 1166 | L2 | ANSI、过滤、JUnit XML、泄漏报告 |
+| test.base.pas | 913 | L0 | 基础类型、异常、内部状态 |
+| test.config.pas | 1214 | L0 | TTestConfig、IOutputSink、TTestCache、TBufferSink |
+| test.check.pas | 1734 | L1 | Check* 断言 API (50+ 方法, 含 OneOf/InstanceOf/Snapshot) |
+| test.expect.pas | 1768 | L1 | IExpectation fluent API (40+ 方法 + InstanceOf/MatchSnapshot) |
+| test.output.pas | 1273 | L2 | ANSI、过滤、JUnit XML、泄漏报告 |
 | test.output.json.pas | 185 | L2 | JSON 输出 |
 | test.output.tap.pas | 123 | L2 | TAP v13 输出 |
-| test.runner.pas | 2225 | L3 | TTestSuite、TSuiteRunner、retry/shuffle/failfast |
+| test.runner.pas | 2269 | L3 | TTestSuite、TSuiteRunner、retry/shuffle/failfast |
 | test.runner.cli.pas | 408 | L3 | CLI 参数解析 |
-| test.runner.context.pas | 579 | L3 | 子测试上下文、TTestResultAppender |
-| test.runner.parallel.pas | 521 | L3 | 并行执行、timeout watchdog |
-| test.discovery.pas | 177 | L4 | RTTI 自动发现 |
-| test.mock.pas | 1529 | L4 | Mock 框架 |
-| test.prop.pas | 2695 | L4 | 属性测试、模糊测试、语料库 |
-| test.helpers.pas | 195 | L4 | 测试辅助 (ExpectFail, WithMock, WithTempDir, WithTempFile) |
+| test.runner.context.pas | 620 | L3 | 子测试上下文、TTestResultAppender |
+| test.runner.parallel.pas | 580 | L3 | 并行执行、timeout watchdog |
+| test.discovery.pas | 179 | L4 | RTTI 自动发现 |
+| test.mock.pas | 1814 | L4 | Mock 框架 + TMockCaptor |
+| test.prop.pas | 2928 | L4 | 属性测试、模糊测试、语料库 |
+| test.helpers.pas | 281 | L4 | ExpectFail, WithMock, WithTempDir/File, IntOverflowCheck |
 | test.bench.pas | 206 | L4 | 测试框架与 bench 模块集成 |
-| test.pas | 537 | 门面 | 纯 re-export |
-| **总计** | **15208** | | |
+| test.pas | 580 | 门面 | 纯 re-export |
+| **总计** | **~17075** (.pas) | | 另有 4 个 fwd*.inc |
 
 ### 测试覆盖矩阵
 
 | 套件 | 模块覆盖 | 测试数 |
 |------|----------|--------|
-| test_assertions | check.pas, expect.pas | 167 |
-| test_expect | expect.pas | 175 |
-| test_mock | mock.pas | 196 |
-| test_output | output.pas, output.json.pas, output.tap.pas | 83 |
-| test_runner | runner.pas, runner.cli.pas | 13 |
-| test_prop | prop.pas | 50 |
-| test_lifecycle | runner.pas (setup/teardown) | 21 |
+| test_assertions | check.pas | 188 |
+| test_expect | expect.pas | 198 |
+| test_mock | mock.pas | 112 |
+| test_output | output*.pas | 81 |
+| test_config | config.pas | 38 |
+| test_discovery | discovery.pas | 8 |
+| test_runner | runner*.pas | multi |
+| test_prop | prop.pas | ~50 |
+| test_lifecycle | runner (lifecycle) | 17 |
 | test_bench | bench.pas | 22 |
-| test_advanced | runner.pas (advanced) | 19 |
-| test_parallel | runner.parallel.pas | 19 |
-| test_diagnostics | runner.pas (diagnostics) | 15 |
-| test_subtests | runner.pas (subtests) | 29 |
-| test_stress | runner.pas (stress) | 10 |
-| **总计** | | **819** (2276 assertions) |
+| test_advanced | runner (advanced) | 13 |
+| test_parallel | runner.parallel.pas | multi |
+| test_diagnostics | diagnostics | 15 |
+| test_subtests | runner.context | 15 |
+| test_stress | stress | 10 |
+| test_perf_bench | perf regression | microbench |
+| **总计** | 16 suites | **~930** (2026-07-19 全绿) |
+
+### Deferred / Backlog
+
+| 项 | 状态 | 原因 / 触发条件 |
+|----|------|----------------|
+| `IExpectation` 按类型拆分（`IStringExpectation` / `INumericExpectation` 等） | **暂缓 (P3)** | 破坏性 API；当前 `RequireKind` 运行时检查足够。触发：v9 major 或显式 breaking 窗口 + 全仓库 consumer 迁移指南 |
+| 接口拆分以外的 P3 锦上添花 | 视需求 | 不阻塞 v8.7 landing |
 
 ### 文档索引
 
 | 文档 | 说明 |
 |------|------|
 | [README.md](README.md) | 模块总览、API 参考、架构 |
-| [CONTRACT.md](CONTRACT.md) | 代码契约 |
+| [CONTRACT.md](CONTRACT.md) | 代码契约（权威版本与覆盖表） |
 | [benchmark-comparison.md](benchmark-comparison.md) | 竞品对比 |
 | [property-testing-guide.md](property-testing-guide.md) | 属性测试指南 |
 | [test-suite-version-history.md](test-suite-version-history.md) | 测试套件版本历史 |
 
-**历史文档** (v7.0 时代，保留作参考):
+**历史文档** (审计快照；**数字与状态以 CONTRACT/README 为准**):
 
 | 文档 | 说明 |
 |------|------|
 | [contract-audit.md](contract-audit.md) | 契约审计报告 |
-| [test-findings.md](test-findings.md) | 审计发现 (29 findings) |
+| [test-findings.md](test-findings.md) | 2026-06-29 审计发现（部分对标项已过时，见文内 banner） |
 | [test-framework-plan.md](test-framework-plan.md) | 框架实施方案 |
 | [usability-research-report.md](usability-research-report.md) | 可用性研究报告 |
 | [usability-implementation-plan.md](usability-implementation-plan.md) | 可用性实施计划 |

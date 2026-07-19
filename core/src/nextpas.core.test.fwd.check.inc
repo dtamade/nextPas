@@ -396,3 +396,21 @@ procedure CheckNotInf(const AValue: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckNotInf(AValue, AMessage); end;
 procedure CheckFinite(const AValue: Double; const AMessage: string);
 begin nextpas.core.test.check.CheckFinite(AValue, AMessage); end;
+
+procedure CheckOneOf(const AValue: string; const AValues: array of string);
+begin nextpas.core.test.check.CheckOneOf(AValue, AValues); end;
+procedure CheckOneOf(const AValue: string; const AValues: array of string; const AMessage: string);
+begin nextpas.core.test.check.CheckOneOf(AValue, AValues, AMessage); end;
+procedure CheckOneOfInt(const AValue: Int64; const AValues: array of Int64);
+begin nextpas.core.test.check.CheckOneOfInt(AValue, AValues); end;
+procedure CheckOneOfInt(const AValue: Int64; const AValues: array of Int64; const AMessage: string);
+begin nextpas.core.test.check.CheckOneOfInt(AValue, AValues, AMessage); end;
+procedure CheckOneOfBool(AValue: Boolean; const AValues: array of Boolean);
+begin nextpas.core.test.check.CheckOneOfBool(AValue, AValues); end;
+procedure CheckOneOfBool(AValue: Boolean; const AValues: array of Boolean; const AMessage: string);
+begin nextpas.core.test.check.CheckOneOfBool(AValue, AValues, AMessage); end;
+
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass);
+begin nextpas.core.test.check.CheckInstanceOf(AObject, AClass); end;
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass; const AMessage: string);
+begin nextpas.core.test.check.CheckInstanceOf(AObject, AClass, AMessage); end;

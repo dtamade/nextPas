@@ -308,6 +308,25 @@ procedure CheckNotEmpty(const AValue: TBytes); overload;
 procedure CheckNotEmpty(const AValue: TBytes;
   const AMessage: string); overload;
 
+{ ── Set Membership (v8.7) ────────────────────────────────────────────────────── }
+procedure CheckOneOf(const AValue: string;
+  const AValues: array of string); overload;
+procedure CheckOneOf(const AValue: string;
+  const AValues: array of string; const AMessage: string); overload;
+procedure CheckOneOfInt(const AValue: Int64;
+  const AValues: array of Int64); overload;
+procedure CheckOneOfInt(const AValue: Int64;
+  const AValues: array of Int64; const AMessage: string); overload;
+procedure CheckOneOfBool(AValue: Boolean;
+  const AValues: array of Boolean); overload;
+procedure CheckOneOfBool(AValue: Boolean;
+  const AValues: array of Boolean; const AMessage: string); overload;
+
+{ ── Instance Type Check (v8.7) ──────────────────────────────────────────────── }
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass); overload;
+procedure CheckInstanceOf(AObject: TObject; AClass: TClass;
+  const AMessage: string); overload;
+
 { ── Re-exported from test.base (stack trace) ─────────────────────────────── }
 
 function  GetLastTestTrace: string;
@@ -448,6 +467,10 @@ procedure ExpectFailWithMock(AProc: TMockProc;
   const AContains: string = '');
 function MakeBufferConfig(out ASink: TBufferSink): TTestConfig;
 procedure WithTempDir(AProc: TTempDirProc);
+{ Returns True if AValue op AOperand would overflow Int64.
+  AOp: '+'/'-'/'*' or 'add'/'sub'/'mul'. Utility guard, not an assertion. }
+function IntOverflowCheck(AValue: Int64; const AOp: string;
+  AOperand: Int64): Boolean;
 
 { ── Re-exported types from test.prop ───────────────────────────────────────── }
 
