@@ -1,7 +1,7 @@
 # Atomic / Lockfree — Q 线（Quality / Parity）
 
-> **状态**: **Q0 done** · **Q1-a done** · wait 首选路径示范 · **Q1-b/Q2 继续**
-> **日期**: 2026-07-19
+> **状态**: **Q0–Q2 done** · **Q3-a in progress** · Q3-b/c pending
+> **日期**: 2026-07-20
 > **Owner**: atomic-lockfree lane（全权）
 > **目标**: 对标 Go/Rust 的 **质量与可用规模**，并保持清洁
 > **编号**: **Q0–Q5**（**不是** R9；R8 仍为研究 opt-in）
@@ -32,8 +32,8 @@
 |------|------|------|
 | **Q0** | 清洁基线 + reconverge 评估 | **done** |
 | **Q1** | Atomic 首选路径与质量加固 | **Q1-a done**；Q1-b/c pending |
-| **Q2** | T1 深度（首选路径 + stress） | **Q2-a + Q2-b done** — T1 preferred path 全量；verify-t1 绿 |
-| **Q3** | Map/Channel 体验对标 | pending |
+| **Q2** | T1 深度（首选路径 + stress） | **done** — T1 preferred path 全量；verify-t1 绿；已 land main |
+| **Q3** | Map/Channel 体验对标 | **Q3-a** Selector 语义/测试；Q3-b Channel；Q3-c HashMap |
 | **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | pending |
 | **Q5** | 有信封 Go/Rust 同机对照常青 | pending |
 
@@ -103,6 +103,15 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 | 2026-07-19 | **Q2-a**：`lockfree.hazard` + `segqueue` 迁 preferred path（回收域 / 无界 segment） |
 | 2026-07-20 | **Q2-a**：`lockfree.msqueue` + `hashmap` 迁 preferred path（MS 无界队列 / 分片锁 map） |
 | 2026-07-20 | **Q2-b**：`verify-t1` 全门绿（atomic + main + stress 17） |
+| 2026-07-20 | **Land** H3-4/H3-5 + Q0–Q2 → main `1e535bfb4`；archive tag |
+| 2026-07-20 | **Q3-a**：Selector preferred atomics；TrySelect≡default；Add 序；wait 文档修正；钉测试 |
+
+### Q3-a checklist
+
+- [x] `selector.impl` → `atomic_*`+`mo_*`
+- [x] 头注释 / CONTRACT §1.2a / api-ref / README / selection-guide 语义一致
+- [x] 测试：case 序、TrySelect-as-default、closed-empty recv
+- [x] source-contract：preferred atomics + LockFreeWaitData；禁 legacy AtomicLoad32/FetchAdd32
 
 ---
 

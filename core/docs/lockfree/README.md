@@ -38,7 +38,7 @@ All T1 element-generic containers (`TSpscQueue`, `TMpmcQueue`, `TMpscQueue`, `TS
 | `TMpscQueue` | lock-free producers + single-owner consumer | no locks; single consumer only | yes |
 | `TWorkStealingDeque` | lock-free with single-owner push/pop | owner thread exclusive for push/pop; thieves steal | yes |
 | `TEbrDomain` / `THazardDomain` | reclamation domains (not containers) | atomics + TLS/HP slots | yes |
-| `TLockFreeSelector` | concurrent multiplexer | poll + backoff over channels | yes |
+| `TLockFreeSelector` | concurrent multiplexer | spin + wait-address over channels | yes |
 | `TShardedHashMap` / `TConcurrentHashMap` | **lock-based concurrent** | per-shard spin lock (+ optimistic read path) | yes (honest concurrent alias) |
 | Trees (SkipList/BTree/RBTree/Treap/…), caches, CRDT, filters, RTM/NUMA maps, most sync primitives in `lockfree.*` | **lock-based concurrent** or specialized | spin/RW locks as documented per unit | **no** — import unit directly |
 
@@ -297,13 +297,15 @@ epoch 推进或在 `Collect` 中重试检查。当前保守设计（单次 zero-
 
 ## Selector
 
-`TLockFreeSelector<T>` 是多路 Channel 复用器，Go `select` 语义的 Pascal 实现。
+`TLockFreeSelector<T>` 是多路 Channel 复用器，Go `select` 语义的 Pascal 实现（Q3-a 钉死）。
 
 **设计特点**:
-- 所有 case 必须使用相同类型 T（与 Go select 的类型约束一致）
-- poll + backoff 策略（纯用户态轮询）
-- 支持阻塞和超时两种等待模式
-- AddSend 存储值副本，Select 成功后才实际发送
+- 所有 case 必须使用相同类型 T
+- **`TrySelect` ≡ Go `select { default: }`**（`Completed=False` 走 default）
+- 多就绪时按 **Add 注册序** 选最早 case（非 Go 随机）
+- 等待：短 spin + `lockfree.wait` wait-address（非纯忙轮询）
+- 支持阻塞 / 超时 / 非阻塞三种等待模式
+- AddSend 存储值副本，Select/TrySelect 成功后才实际发送
 
 **使用示例**:
 ```pascal

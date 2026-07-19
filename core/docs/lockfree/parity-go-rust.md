@@ -68,7 +68,7 @@
 | Stack | 无 std | 库 | `TLockFreeStack` | **增强** |
 | Work-stealing deque | runtime 内部 | crossbeam deque | `TWorkStealingDeque` | **对标** |
 | Channel + close | `chan` + close | flume/async_channel | `TLockFreeChannel` (+ SPSC 变体) | **对标**（语义差见文档） |
-| select | `select` | 库/手写 | `TLockFreeSelector` | **部分对标**（同类型 T；无 default 分支） |
+| select | `select` | 库/手写 | `TLockFreeSelector` | **部分对标**（同类型 T；`TrySelect`≡default；多就绪按 Add 序非随机） |
 | 并发 map | `sync.Map` | dashmap | `TShardedHashMap`（**分片锁**） | **对标精神**（诚实非 LF） |
 | 内存回收 | GC | crossbeam epoch 等 | EBR + Hazard | **对标 Rust 无 GC 路径** |
 | 生命周期 | GC + channel close | Drop/ownership | **Close → join → Free** | **硬契约**（必须教） |

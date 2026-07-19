@@ -2,20 +2,27 @@ unit nextpas.core.lockfree.selector.impl;
 {**
  * @desc Channel Selector implementation for multiplexing.
  *
- * @details Go-style select for channels:
+ * @details Go-style select for channels (same element type T):
  *   - AddRecv: register channel for receiving
  *   - AddSend: register channel for sending
- *   - Select: blocking wait for any channel operation
- *   - TrySelect: non-blocking check for ready channels
+ *   - Select: blocking wait for any case
+ *   - TrySelect: non-blocking full scan — Go `select { default: }` equivalent
  *   - SelectTimeout: blocking with timeout
  *   - Clear: reset for reuse
+ *
+ * Case choice: PollOnce walks Add order (index 0 first). When several cases
+ * are ready, the earliest registered wins (not random like Go).
+ *
+ * Wait path: spin (SELECTOR_MAX_SPIN) then LockFreeWaitData on FNotifyEpoch
+ * (wait-address via lockfree.wait). Channels SetNotifier → NotifyChange.
+ *
+ * Preferred atomics: atomic_* + mo_* (Q3-a).
  *
  * @concurrency Thread-safe for single selector user:
  *   - Not thread-safe for concurrent Select calls on same selector
  *   - Thread-safe for channel operations (channels handle their own concurrency)
  *
  * @see Go select — multiplexing channels
- * @see epoll/kqueue — similar event multiplexing patterns
  *}
 
 {$I nextpas.core.settings.inc}
@@ -43,17 +50,18 @@ type
       **与 Go select 的对应关系**:
       - `case v := <-ch:` → `LSelector.AddRecv(LChannel, LOutVar)`
       - `case ch <- v:` → `LSelector.AddSend(LChannel, LValue)`
-      - `select` → `LResult := LSelector.Select`
-      - `select with default` → 先 TrySend/TryReceive，不走 Select
+      - `select { ... }` → `LResult := LSelector.Select`
+      - `select { ... default: }` → `LResult := LSelector.TrySelect`（Completed=False 即走 default）
 
       **设计约束**:
       - 所有 channel 必须是相同类型 T 的 TLockFreeChannelImpl<T>
-      - 不支持 default 分支（需要时直接 TrySend/TryReceive）
-      - poll + backoff 策略（非内核 wait address，纯用户态轮询）
+      - 无语言级 default case 对象；用 TrySelect 表达 default
+      - 多就绪时按 **Add 注册序** 选最早 case（非 Go 随机）
+      - 等待：短 spin 后经 lockfree.wait 的 wait-address（非纯忙轮询）
 
       **与 THazardGuard/TEbrGuard 的区别**:
       - Guard 管理单个域的生命周期（RAII）
-      - Selector 管理多个 channel 的多路复用（事件驱动）
+      - Selector 管理多个 channel 的多路复用
     @example
       var LSel: specialize TLockFreeSelectorImpl<Integer>;
           LCh1, LCh2: specialize TLockFreeChannelImpl<Integer>;
@@ -105,8 +113,8 @@ type
     {** @desc 阻塞等待第一个 case 完成
       @return 结果记录：Index=完成的 case 索引（按 Add 顺序从 0 开始），Completed=True }
     function Select: TSelectResult;
-    {** @desc 非阻塞尝试：立即检查所有 case，无一就绪则返回 Completed=False
-      @return 结果记录：就绪则 Completed=True + Index；否则 Completed=False, Index=-1 }
+    {** @desc 非阻塞尝试（Go select default 等价）：立即检查所有 case
+      @return 就绪则 Completed=True + Index；否则 Completed=False（Index 通常为 -1） }
     function TrySelect: TSelectResult;
     {** @desc 带超时等待第一个 case 完成
       @param ATimeoutNs 超时时间（纳秒）
@@ -197,8 +205,8 @@ end;
 
 procedure TLockFreeSelectorImpl.NotifyChange(AData: Pointer);
 begin
-  AtomicFetchAdd32(FNotifyEpoch, 1, moRelease);
-  if AtomicLoad32(FNotifyWaiters, moRelaxed) > 0 then
+  atomic_fetch_add(FNotifyEpoch, 1, mo_release);
+  if atomic_load(FNotifyWaiters, mo_relaxed) > 0 then
     LockFreeWakeAll(@FNotifyEpoch);
 end;
 
@@ -246,8 +254,8 @@ begin
     else
     begin
       LSpins := 0;
-      LEpoch := AtomicLoad32(FNotifyEpoch, moAcquire);
-      AtomicFetchAdd32(FNotifyWaiters, 1, moAcqRel);
+      LEpoch := atomic_load(FNotifyEpoch, mo_acquire);
+      atomic_fetch_add(FNotifyWaiters, 1, mo_acq_rel);
       try
         LIdx := PollOnce;
         if LIdx >= 0 then
@@ -256,10 +264,10 @@ begin
           Result.Completed := True;
           Exit;
         end;
-        if AtomicLoad32(FNotifyEpoch, moAcquire) = LEpoch then
+        if atomic_load(FNotifyEpoch, mo_acquire) = LEpoch then
           LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
       finally
-        AtomicFetchSub32(FNotifyWaiters, 1, moAcqRel);
+        atomic_fetch_sub(FNotifyWaiters, 1, mo_acq_rel);
       end;
     end;
   end;
@@ -303,8 +311,8 @@ begin
       LWaitNs := ATimeoutNs - LElapsed;
       if LWaitNs > 1000000 then
         LWaitNs := 1000000;
-      LEpoch := AtomicLoad32(FNotifyEpoch, moAcquire);
-      AtomicFetchAdd32(FNotifyWaiters, 1, moAcqRel);
+      LEpoch := atomic_load(FNotifyEpoch, mo_acquire);
+      atomic_fetch_add(FNotifyWaiters, 1, mo_acq_rel);
       try
         LIdx := PollOnce;
         if LIdx >= 0 then
@@ -317,10 +325,10 @@ begin
         LWaitNs := ATimeoutNs - LElapsed;
         if LWaitNs > 1000000 then
           LWaitNs := 1000000;
-        if (LWaitNs > 0) and (AtomicLoad32(FNotifyEpoch, moAcquire) = LEpoch) then
+        if (LWaitNs > 0) and (atomic_load(FNotifyEpoch, mo_acquire) = LEpoch) then
           LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters, LEpoch, LWaitNs);
       finally
-        AtomicFetchSub32(FNotifyWaiters, 1, moAcqRel);
+        atomic_fetch_sub(FNotifyWaiters, 1, mo_acq_rel);
       end;
     end;
   end;

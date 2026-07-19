@@ -5551,6 +5551,83 @@ begin
   end;
 end;
 
+{ Q3-a: multi-ready prefers first Add (registration order) }
+procedure TestSelectorCaseOrderPreferFirst;
+var
+  LSel: TIntSelector;
+  LCh1, LCh2: TIntChannel;
+  LVal: Integer;
+  LResult: TSelectResult;
+begin
+  LCh1 := TIntChannel.Create(4);
+  LCh2 := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LCh1.Send(11);
+    LCh2.Send(22);
+    LSel.AddRecv(LCh1, LVal);
+    LSel.AddRecv(LCh2, LVal);
+    LResult := LSel.TrySelect;
+    Check(LResult.Completed, 'both ready: TrySelect completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'both ready: prefers first Add (index 0)');
+    CheckEqual(Int64(11), Int64(LVal), 'both ready: receives Ch1 value');
+  finally
+    LSel.Free;
+    LCh2.Free;
+    LCh1.Free;
+  end;
+end;
+
+{ Q3-a: TrySelect ≡ Go select default }
+procedure TestSelectorTrySelectAsDefault;
+var
+  LSel: TIntSelector;
+  LCh: TIntChannel;
+  LVal: Integer;
+  LResult: TSelectResult;
+begin
+  LCh := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LSel.AddRecv(LCh, LVal);
+    LResult := LSel.TrySelect;
+    Check(not LResult.Completed, 'empty: TrySelect is default path (not completed)');
+    LCh.Send(7);
+    LResult := LSel.TrySelect;
+    Check(LResult.Completed, 'after publish: TrySelect completes');
+    CheckEqual(Int64(0), Int64(LResult.Index), 'after publish: index 0');
+    CheckEqual(Int64(7), Int64(LVal), 'after publish: value 7');
+  finally
+    LSel.Free;
+    LCh.Free;
+  end;
+end;
+
+{ Q3-a: closed empty recv aligns with TryReceive=False }
+procedure TestSelectorRecvOnClosedEmpty;
+var
+  LSel: TIntSelector;
+  LCh: TIntChannel;
+  LVal: Integer;
+  LResult: TSelectResult;
+begin
+  LCh := TIntChannel.Create(4);
+  LSel := TIntSelector.Create;
+  try
+    LCh.Close;
+    Check(not LCh.TryReceive(LVal), 'closed empty TryReceive is False');
+    LSel.AddRecv(LCh, LVal);
+    LResult := LSel.TrySelect;
+    Check(not LResult.Completed, 'closed empty: TrySelect does not complete');
+    LResult := LSel.SelectTimeout(5 * 1000 * 1000); { 5ms }
+    Check(not LResult.Completed, 'closed empty: SelectTimeout does not complete');
+    CheckEqual(Int64(-1), Int64(LResult.Index), 'closed empty: timeout Index=-1');
+  finally
+    LSel.Free;
+    LCh.Free;
+  end;
+end;
+
 { ============================================================ }
 { Edge-case: EBR with many guards                               }
 { ============================================================ }
@@ -6609,6 +6686,18 @@ begin
     'trie must reject managed values');
   CheckContains(LSelectorImplSource, 'if IsManagedType(T) then',
     'selector must reject managed element types');
+  CheckContains(LSelectorImplSource, 'atomic_load(FNotifyEpoch, mo_acquire)',
+    'selector wait path must use preferred atomic_load on FNotifyEpoch');
+  CheckContains(LSelectorImplSource, 'atomic_fetch_add(FNotifyWaiters, 1, mo_acq_rel)',
+    'selector wait path must use preferred atomic_fetch_add on FNotifyWaiters');
+  CheckContains(LSelectorImplSource, 'atomic_fetch_sub(FNotifyWaiters, 1, mo_acq_rel)',
+    'selector wait path must use preferred atomic_fetch_sub on FNotifyWaiters');
+  CheckContains(LSelectorImplSource, 'LockFreeWaitData(@FNotifyEpoch, @FNotifyWaiters',
+    'selector must wait via LockFreeWaitData (wait-address), not pure spin only');
+  CheckNotContains(LSelectorImplSource, 'AtomicLoad32(',
+    'selector must not use legacy AtomicLoad32 on hot path (Q3-a preferred)');
+  CheckNotContains(LSelectorImplSource, 'AtomicFetchAdd32(',
+    'selector must not use legacy AtomicFetchAdd32 (Q3-a preferred)');
   CheckContains(LSpscSource, 'LockFreeNotifyData(@FDataEpoch, @FDataWaiters)',
     'SPSC queue must notify data waiters after publish');
   CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
@@ -7610,6 +7699,9 @@ begin
   T.Test('Selector single channel', @TestSelectorSingleChannel);
   T.Test('Selector TrySelect empty', @TestSelectorTrySelectEmpty);
   T.Test('Selector clear resets', @TestSelectorClearResets);
+  T.Test('Selector case order prefer first', @TestSelectorCaseOrderPreferFirst);
+  T.Test('Selector TrySelect as default', @TestSelectorTrySelectAsDefault);
+  T.Test('Selector recv on closed empty', @TestSelectorRecvOnClosedEmpty);
   T.Test('EBR many guards', @TestEbrManyGuards);
 
   if not T.Run then Halt(1);
