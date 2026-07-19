@@ -26,6 +26,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.math,
   nextpas.core.base,
+  nextpas.core.platform.env,
   nextpas.core.test,
   nextpas.core.test.check,
   nextpas.core.test.prop;
@@ -478,6 +479,130 @@ const
 begin
   CheckSnapshot('hello world', LSnapDir, 'test2.txt');
   ExpectFail(procedure begin CheckSnapshot('goodbye world', LSnapDir, 'test2.txt'); end, 'mismatch');
+end;
+
+{ B2.1: Snapshot env contracts (insta / NEXTPAS_* parity) }
+
+procedure EnvSet(const AName, AValue: string);
+var
+  LN, LV: AnsiString;
+begin
+  { Keep AnsiString locals alive for the setenv call (no dangling PAnsiChar). }
+  LN := AnsiString(AName);
+  LV := AnsiString(AValue);
+  if platform_env_set(PAnsiChar(LN), PAnsiChar(LV)) <> 0 then
+    Fail('platform_env_set failed for ' + AName);
+  if string(platform_env_get_str(LN)) <> AValue then
+    Fail('platform_env_get_str mismatch after set for ' + AName);
+end;
+
+procedure EnvUnset(const AName: string);
+var
+  LN: AnsiString;
+begin
+  LN := AnsiString(AName);
+  platform_env_unset(PAnsiChar(LN));
+end;
+
+procedure TestCheckSnapshotFailOnCreate;
+const
+  LSnapDir = '/tmp/np_snap_b2_fail_create';
+  LName = 'missing.txt';
+var
+  LPath: string;
+begin
+  LPath := LSnapDir + '/' + LName;
+  { Ensure clean slate }
+  EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  try
+    { Remove prior file if any by writing then we'll rely on fail path when missing:
+      delete via overwrite of dir is hard; use unique name with random suffix via path }
+  except
+  end;
+  EnvSet('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE', '1');
+  try
+    ExpectFail(procedure begin
+      CheckSnapshot('content-never-written', LSnapDir + '_unique_a', 'nofile.txt');
+    end, 'does not exist');
+  finally
+    EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  end;
+end;
+
+procedure TestCheckSnapshotUpdate;
+var
+  LSnapDir, LName, LPath, LContents: string;
+  LStatus: TReadFileStatus;
+begin
+  { Unique dir avoids stale /tmp files across suite runs. }
+  LSnapDir := '/tmp/np_snap_b2_update_' + IntToStr(Random(MaxInt));
+  LName := 'upd.txt';
+  EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  try
+    CheckSnapshot('old-content', LSnapDir, LName);
+    LPath := LSnapDir + DirectorySeparator + LName;
+    EnvSet('NEXTPAS_UPDATE_SNAPSHOTS', '1');
+    try
+      CheckTrue(string(platform_env_get_str('NEXTPAS_UPDATE_SNAPSHOTS')) = '1',
+        'UPDATE env visible before CheckSnapshot');
+      { Should not raise; rewrite snapshot }
+      CheckSnapshot('new-content', LSnapDir, LName);
+    finally
+      EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+    end;
+    CheckTrue(ReadFileContents(LPath, LContents, LStatus), 'read updated snapshot');
+    CheckTrue(LStatus = rfsFound, 'status rfsFound');
+    CheckEqual('new-content', LContents);
+  finally
+    EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+    EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  end;
+end;
+
+procedure TestCheckSnapshotMismatchDiffMessage;
+const
+  LSnapDir = '/tmp/np_snap_b2_diffmsg';
+begin
+  EnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  EnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  CheckSnapshot('alpha-line', LSnapDir, 'diff.txt');
+  ExpectFail(procedure begin
+    CheckSnapshot('beta-line', LSnapDir, 'diff.txt');
+  end, 'differ at position');
+end;
+
+{ B2.2: string CheckEqual diagnostic contracts (go-cmp style markers) }
+
+procedure TestCheckEqualStringDiffMarkers;
+begin
+  EnvSet('NEXTPAS_COLOR', '0');
+  try
+    ExpectFail(procedure begin
+      CheckEqual('hello', 'hallo');
+    end, 'differ at position');
+    ExpectFail(procedure begin
+      CheckEqual('hello', 'hallo');
+    end, 'expected');
+    ExpectFail(procedure begin
+      CheckEqual('hello', 'hallo');
+    end, 'actual');
+  finally
+    EnvUnset('NEXTPAS_COLOR');
+  end;
+end;
+
+procedure TestCheckEqualMultilineDiff;
+begin
+  EnvSet('NEXTPAS_COLOR', '0');
+  try
+    ExpectFail(procedure begin
+      CheckEqual('line1' + #10 + 'line2', 'line1' + #10 + 'LINE2');
+    end, 'differ at position');
+  finally
+    EnvUnset('NEXTPAS_COLOR');
+  end;
 end;
 
 { E-10: CheckNaN / CheckNotNaN }
@@ -1503,6 +1628,113 @@ begin
   end, 'must be finite');
 end;
 
+{ ── v8.8a: CheckOneOf / CheckInstanceOf (Go/Rust zero-untested-API bar) ─── }
+
+procedure TestCheckOneOfStringPass;
+begin
+  CheckOneOf('b', ['a', 'b', 'c']);
+end;
+
+procedure TestCheckOneOfStringFail;
+begin
+  ExpectFail(procedure begin
+    CheckOneOf('z', ['a', 'b', 'c']);
+  end, 'not one of');
+end;
+
+procedure TestCheckOneOfStringEmpty;
+begin
+  { Empty set: no value can be a member (Go/Rust membership semantics). }
+  ExpectFail(procedure begin
+    CheckOneOf('a', []);
+  end, 'not one of');
+end;
+
+procedure TestCheckOneOfStringWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckOneOf('z', ['a'], 'custom-oneof');
+  end, 'custom-oneof');
+end;
+
+procedure TestCheckOneOfIntPass;
+begin
+  CheckOneOfInt(2, [1, 2, 3]);
+end;
+
+procedure TestCheckOneOfIntFail;
+begin
+  ExpectFail(procedure begin
+    CheckOneOfInt(9, [1, 2, 3]);
+  end, 'not one of');
+end;
+
+procedure TestCheckOneOfBoolPass;
+begin
+  CheckOneOfBool(True, [False, True]);
+end;
+
+procedure TestCheckOneOfBoolFail;
+begin
+  ExpectFail(procedure begin
+    CheckOneOfBool(True, [False]);
+  end, 'not one of');
+end;
+
+procedure TestCheckInstanceOfPass;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    CheckInstanceOf(LObj, TObject);
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestCheckInstanceOfFailType;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectFail(procedure begin
+      CheckInstanceOf(LObj, EAssertionFailed);
+    end, 'TObject');
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestCheckInstanceOfNilObject;
+begin
+  ExpectFail(procedure begin
+    CheckInstanceOf(nil, TObject);
+  end, 'nil');
+end;
+
+procedure TestCheckInstanceOfNilClass;
+var
+  LObj: TObject;
+begin
+  LObj := TObject.Create;
+  try
+    ExpectFail(procedure begin
+      CheckInstanceOf(LObj, nil);
+    end, 'AClass is nil');
+  finally
+    LObj.Free;
+  end;
+end;
+
+procedure TestCheckInstanceOfWithMessage;
+begin
+  ExpectFail(procedure begin
+    CheckInstanceOf(nil, TObject, 'custom-instanceof');
+  end, 'custom-instanceof');
+end;
+
 { ── CheckSorted tests ─────────────────────────────────────────────────────── }
 
 procedure TestCheckSortedIntPass;
@@ -1713,6 +1945,13 @@ begin
   { F-06: Snapshot testing }
   LSuite.Test('Snapshot create+match',     @TestCheckSnapshotCreateAndMatch);
   LSuite.Test('Snapshot mismatch',         @TestCheckSnapshotMismatch);
+  { B2.1 Snapshot env contracts }
+  LSuite.Test('Snapshot fail-on-create',   @TestCheckSnapshotFailOnCreate);
+  LSuite.Test('Snapshot update env',       @TestCheckSnapshotUpdate);
+  LSuite.Test('Snapshot mismatch diff msg',@TestCheckSnapshotMismatchDiffMessage);
+  { B2.2 string diff contracts }
+  LSuite.Test('Equal string diff markers', @TestCheckEqualStringDiffMarkers);
+  LSuite.Test('Equal multiline diff',      @TestCheckEqualMultilineDiff);
 
   { E-10: CheckNaN / CheckNotNaN coverage }
   LSuite.Test('CheckNaN pass',             @TestCheckNaNPass);
@@ -1809,6 +2048,21 @@ begin
   LSuite.Test('Finite fail (NaN)',       @TestCheckFiniteFailNaN);
   LSuite.Test('Inf+msg',                 @TestCheckInfWithMessage);
   LSuite.Test('Finite+msg',             @TestCheckFiniteWithMessage);
+
+  { v8.8a: Go/Rust quality — zero untested public membership/type APIs }
+  LSuite.Test('OneOf string pass',        @TestCheckOneOfStringPass);
+  LSuite.Test('OneOf string fail',        @TestCheckOneOfStringFail);
+  LSuite.Test('OneOf string empty',       @TestCheckOneOfStringEmpty);
+  LSuite.Test('OneOf string+msg',         @TestCheckOneOfStringWithMessage);
+  LSuite.Test('OneOfInt pass',            @TestCheckOneOfIntPass);
+  LSuite.Test('OneOfInt fail',            @TestCheckOneOfIntFail);
+  LSuite.Test('OneOfBool pass',           @TestCheckOneOfBoolPass);
+  LSuite.Test('OneOfBool fail',           @TestCheckOneOfBoolFail);
+  LSuite.Test('InstanceOf pass',          @TestCheckInstanceOfPass);
+  LSuite.Test('InstanceOf fail type',     @TestCheckInstanceOfFailType);
+  LSuite.Test('InstanceOf nil object',    @TestCheckInstanceOfNilObject);
+  LSuite.Test('InstanceOf nil class',     @TestCheckInstanceOfNilClass);
+  LSuite.Test('InstanceOf+msg',           @TestCheckInstanceOfWithMessage);
 
   if not LSuite.Run then
   begin

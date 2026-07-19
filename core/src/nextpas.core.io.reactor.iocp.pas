@@ -296,7 +296,7 @@ begin
     try
       if (LOp^.Kind = opAccept) and (LOp^.WSABuf.buf <> nil) then
       begin
-        FreeMem(LOp^.WSABuf.buf);
+        FreeMem(LOp^.WSABuf.buf, SizeUInt(LOp^.WSABuf.len));
         LOp^.WSABuf.buf := nil;
       end;
       if LOp^.Kind = opAccept then
@@ -512,7 +512,7 @@ begin
       SO_UPDATE_ACCEPT_CONTEXT, @LSock, SizeOf(TSocket));
     if LOp^.WSABuf.buf <> nil then
     begin
-      FreeMem(LOp^.WSABuf.buf);
+      FreeMem(LOp^.WSABuf.buf, SizeUInt(LOp^.WSABuf.len));
       LOp^.WSABuf.buf := nil;
     end;
   end
@@ -680,7 +680,7 @@ begin
     Exit(True);
 
   { AcceptEx failed synchronously — cleanup }
-  FreeMem(LAddrBuf);
+  FreeMem(LAddrBuf, ADDR_BUF_SIZE);
   LUserData := LOp^.UserData;
   IocpFreeOp(Self, LOp);
   closesocket(LAcceptSock);

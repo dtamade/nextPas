@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：2.12
+**版本**：2.13
 
 ---
 
@@ -110,7 +110,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | test_process_command | 48 | ICommand builder |
 | test_process_deep | 20 | timeout/large output |
 | test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |
-| test_process_wine | wine-runtime-smoke | Windows L2（truth=wine） |
+| test_process_wine | wine-runtime-smoke **4 passed**（2026-07-19 本机） | Windows L2 under Wine；≠ 真 host |
 | **合计** | **5 目录 / 425+ Unix** | 2026-07-19 实测 Unix 全绿 + 0 leak |
 
 ---
@@ -133,3 +133,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.10 | INV-1 对齐 Destroy 5s abandon（非无限 Kill+Wait） | Claude |
 | 2026-07-19 | 2.11 | WaitGraceful；测试 292 | Claude |
 | 2026-07-19 | 2.12 | R17 质量表；测试 340 | Claude |
+| 2026-07-19 | 2.13 | wine-runtime-smoke 实况 4/4 绿 | Claude |

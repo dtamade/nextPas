@@ -1261,10 +1261,11 @@ begin
       end;
       if AActual <> LExisting then
       begin
-        { Show first difference for debugging }
+        { Prefer ColorDiff (same contract as CheckEqual string: position +
+          expected/actual). Falls back to plain text when ANSI is off. }
         InternalFail('Snapshot mismatch: ' + LPath +
           ' (set NEXTPAS_UPDATE_SNAPSHOTS=1 to update)' + #10 +
-          StringDiff(LExisting, AActual));
+          ColorDiff(LExisting, AActual, DefaultConfig));
       end;
     end;
     rfsNotFound:
