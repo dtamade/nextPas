@@ -24,7 +24,8 @@ type
     MaxInFlight: UInt32;              { default 2 }
     OverallDeadline: TDeadline;       { Infinite = no overall timer }
     Token: IAsyncCancellationToken;   { optional }
-    PreferIPv6First: Boolean;         { default False = v4-first }
+    PreferIPv6First: Boolean;         { first family in interleaved order }
+    InterleaveFamilies: Boolean;      { default True: vX[0],vY[0],vX[1]... }
   end;
 
   TAsyncTcpDialCallback = procedure(AStream: IAsyncTcpStream; AError: Int32;
@@ -87,7 +88,7 @@ type
     FOverallTimer: TAsyncTimerHandle;
     FAttempts: array of PDialAttempt;
     FTokenBound: Boolean;
-    procedure SortPreferIPv6;
+    procedure OrderAddresses;
     procedure StartDialing;
     procedure KickStagger;
     procedure StartNextAttempts;
@@ -124,6 +125,7 @@ begin
   Result.OverallDeadline := TDeadline.Infinite;
   Result.Token := nil;
   Result.PreferIPv6First := False;
+  Result.InterleaveFamilies := True;
 end;
 
 function InvalidSocket: TPlatformSocket;
@@ -206,29 +208,100 @@ begin
   end;
 end;
 
-procedure TAsyncTcpDialer.SortPreferIPv6;
+procedure TAsyncTcpDialer.OrderAddresses;
 var
-  LTmp: array of TNetAddress;
-  LI, LN: Integer;
+  LV4, LV6, LOut: array of TNetAddress;
+  LI, N4, N6, O, I4, I6: Integer;
+  LTakeV6: Boolean;
 begin
-  if not FOptions.PreferIPv6First then
+  if Length(FAddrs) <= 1 then
     Exit;
-  SetLength(LTmp, Length(FAddrs));
-  LN := 0;
+
+  SetLength(LV4, Length(FAddrs));
+  SetLength(LV6, Length(FAddrs));
+  N4 := 0;
+  N6 := 0;
   for LI := 0 to High(FAddrs) do
     if FAddrs[LI].IsIPv6 then
     begin
-      LTmp[LN] := FAddrs[LI];
-      Inc(LN);
-    end;
-  for LI := 0 to High(FAddrs) do
-    if not FAddrs[LI].IsIPv6 then
+      LV6[N6] := FAddrs[LI];
+      Inc(N6);
+    end
+    else
     begin
-      LTmp[LN] := FAddrs[LI];
-      Inc(LN);
+      LV4[N4] := FAddrs[LI];
+      Inc(N4);
     end;
-  for LI := 0 to High(FAddrs) do
-    FAddrs[LI] := LTmp[LI];
+
+  if not FOptions.InterleaveFamilies then
+  begin
+    { Bucket order only }
+    SetLength(LOut, N4 + N6);
+    O := 0;
+    if FOptions.PreferIPv6First then
+    begin
+      for LI := 0 to N6 - 1 do begin LOut[O] := LV6[LI]; Inc(O); end;
+      for LI := 0 to N4 - 1 do begin LOut[O] := LV4[LI]; Inc(O); end;
+    end
+    else
+    begin
+      for LI := 0 to N4 - 1 do begin LOut[O] := LV4[LI]; Inc(O); end;
+      for LI := 0 to N6 - 1 do begin LOut[O] := LV6[LI]; Inc(O); end;
+    end;
+  end
+  else
+  begin
+    { RFC8305-style interleave: alternate families }
+    SetLength(LOut, N4 + N6);
+    O := 0;
+    I4 := 0;
+    I6 := 0;
+    LTakeV6 := FOptions.PreferIPv6First;
+    while (I4 < N4) or (I6 < N6) do
+    begin
+      if LTakeV6 then
+      begin
+        if I6 < N6 then
+        begin
+          LOut[O] := LV6[I6];
+          Inc(I6);
+          Inc(O);
+        end;
+      end
+      else if I4 < N4 then
+      begin
+        LOut[O] := LV4[I4];
+        Inc(I4);
+        Inc(O);
+      end;
+      if LTakeV6 then
+      begin
+        if I4 < N4 then
+        begin
+          LOut[O] := LV4[I4];
+          Inc(I4);
+          Inc(O);
+        end;
+      end
+      else if I6 < N6 then
+      begin
+        LOut[O] := LV6[I6];
+        Inc(I6);
+        Inc(O);
+      end;
+      { if one family exhausted, loop continues with the other via checks }
+      if (I4 >= N4) and (I6 >= N6) then
+        Break;
+      if LTakeV6 and (I6 >= N6) and (I4 < N4) then
+        LTakeV6 := False
+      else if (not LTakeV6) and (I4 >= N4) and (I6 < N6) then
+        LTakeV6 := True;
+    end;
+  end;
+
+  SetLength(FAddrs, Length(LOut));
+  for LI := 0 to High(LOut) do
+    FAddrs[LI] := LOut[LI];
 end;
 
 procedure TAsyncTcpDialer.BindToken;
@@ -259,7 +332,8 @@ begin
 
   CancelTimers;
   LRemote := FAddrs[AAttempt^.Index];
-  LRemote.Port := FPort;
+  if LRemote.Port = 0 then
+    LRemote.Port := FPort;
   LStream := NetTcpStreamFromConnectedSocket(AAttempt^.Fd, LRemote);
   AAttempt^.Fd := InvalidSocket;
   AAttempt^.Active := False;
@@ -319,7 +393,8 @@ begin
     FNextIndex := AIndex + 1;
 
   LRemote := FAddrs[AIndex];
-  LRemote.Port := FPort;
+  if LRemote.Port = 0 then
+    LRemote.Port := FPort;
 
   New(LAtt);
   FillChar(LAtt^, SizeOf(LAtt^), 0);
@@ -407,7 +482,7 @@ begin
     FinishFail(-ECONNREFUSED_LINUX);
     Exit;
   end;
-  SortPreferIPv6;
+  OrderAddresses;
   SetLength(FAttempts, Length(FAddrs));
   BindToken;
 

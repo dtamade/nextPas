@@ -127,11 +127,49 @@ begin
   end;
 end;
 
+procedure TestDialMultiAddrFirstFailsSecondWins;
+var
+  LListener: IAsyncTcpListener;
+  LOpts: TAsyncTcpDialOptions;
+  LPort: UInt16;
+  LAddrs: array[0..1] of TNetAddress;
+begin
+  { Concurrent HE: refused port then real listener — second wins, single callback. }
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDone := False;
+    GCallCount := 0;
+    GStream := nil;
+    GError := -1;
+    LListener := AsyncTcpListen(GLoop, '127.0.0.1', 0);
+    LPort := LListener.LocalAddr.Port;
+    LAddrs[0] := TNetAddress.IPv4('127.0.0.1', 1); { refused }
+    LAddrs[1] := TNetAddress.IPv4('127.0.0.1', LPort);
+    LOpts := DefaultAsyncTcpDialOptions;
+    LOpts.ConnectionAttemptDelayMs := 10;
+    LOpts.MaxInFlight := 2;
+    LOpts.InterleaveFamilies := False;
+    Check(AsyncTcpDialAddrs(GLoop, LAddrs, 0, LOpts, @OnDial, nil),
+      'multi-addr dial submit');
+    GLoop.Schedule(TDuration.FromMilliseconds(3000), @StopCb, nil);
+    GLoop.Run;
+    Check(GDone, 'multi-addr dial completes');
+    CheckEqual(Int64(1), Int64(GCallCount), 'single callback');
+    Check(GStream <> nil, 'second address wins');
+    CheckEqual(Int64(0), Int64(GError), 'success');
+    GStream := nil;
+    LListener := nil;
+  finally
+    GLoop.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('net_async_dial');
   T.Test('DialLocalhostSuccess', @TestDialLocalhostSuccess);
   T.Test('DialRefused', @TestDialRefused);
   T.Test('DialTokenCancel', @TestDialTokenCancel);
+  T.Test('DialMultiAddrFirstFailsSecondWins', @TestDialMultiAddrFirstFailsSecondWins);
   if not T.Run then
     Halt(1);
 end.
