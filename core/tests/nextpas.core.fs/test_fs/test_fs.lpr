@@ -475,6 +475,68 @@ begin
   Check(not FsIsFile(GTmpDir), 'not file');
 end;
 
+procedure TestIsSymlink;
+var
+  LTarget, LLink: string;
+begin
+  LTarget := GTmpDir + '/isym-target.txt';
+  LLink := GTmpDir + '/isym-link.txt';
+  FsWriteFile(LTarget, TBytes.Create(1));
+  Check(not FsIsSymlink(LTarget), 'regular file not symlink');
+  Check(not IsSymlink(LTarget), 'facade regular not symlink');
+  Check(not FsIsSymlink(GTmpDir + '/no-such-isym'), 'missing not symlink');
+  FsSymlink(LTarget, LLink);
+  Check(FsIsSymlink(LLink), 'FsIsSymlink true');
+  Check(IsSymlink(LLink), 'facade IsSymlink true');
+  Check(not FsIsSymlink(GTmpDir), 'dir not symlink');
+end;
+
+procedure TestSameFile;
+var
+  LPath, LHard: string;
+  LRaised: Boolean;
+begin
+  LPath := GTmpDir + '/samefile-a.txt';
+  FsWriteFile(LPath, TBytes.Create(1, 2, 3));
+  Check(SameFile(LPath, LPath), 'same path is same file');
+  Check(FsSameFile(LPath, LPath), 'FsSameFile path');
+  LRaised := False;
+  try
+    SameFile(LPath, GTmpDir + '/no-such-samefile');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'SameFile missing raises ENotFoundError');
+  LHard := GTmpDir + '/samefile-b.txt';
+  FsWriteFile(LHard, TBytes.Create(9));
+  Check(not SameFile(LPath, LHard), 'distinct files not same');
+end;
+
+procedure TestSymlinkRelativeTarget;
+var
+  LLink, LRead: string;
+begin
+  LLink := GTmpDir + '/rel-link';
+  FsSymlink('relative-target', LLink);
+  LRead := FsReadlink(LLink);
+  CheckEqual('relative-target', LRead, 'readlink keeps relative target');
+end;
+
+procedure TestReadFileMissingNotFound;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    FsReadFile(GTmpDir + '/no-read-file');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'ReadFile missing raises ENotFoundError');
+end;
+
 procedure TestFileSize;
 begin
   FsWriteFile(GTmpDir + '/sz.bin', TBytes.Create(1, 2, 3));
@@ -1996,6 +2058,10 @@ begin
 {$ENDIF}
     T.Test('Exists', @TestExists);
     T.Test('IsFile/IsDir', @TestIsFileIsDir);
+    T.Test('IsSymlink', @TestIsSymlink);
+    T.Test('SameFile', @TestSameFile);
+    T.Test('Symlink relative target', @TestSymlinkRelativeTarget);
+    T.Test('ReadFile missing ENotFound', @TestReadFileMissingNotFound);
     T.Test('FileSize', @TestFileSize);
 
     T.Test('Mkdir + ReadDir', @TestMkdirAndReadDir);

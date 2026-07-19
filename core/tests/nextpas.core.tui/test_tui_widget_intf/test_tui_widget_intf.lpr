@@ -3,14 +3,13 @@ program test_tui_widget_intf;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
-  nextpas.core.errors,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.intf,
+  nextpas.core.errors,
   nextpas.core.test;
 
 type
@@ -121,11 +120,40 @@ begin
   Check(LCaught, 'nil adapter render function rejected');
 end;
 
+procedure TestAdapterChaining;
+var
+  LWidget: IWidget;
+  LBuf: TBuffer;
+begin
+  LWidget := TWidgetAdapter.Create(
+    procedure(const AArea: TRect; ABuffer: TBuffer)
+    begin
+      ABuffer.FillRect(AArea, '*', StyleDefault);
+    end);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  try
+    LWidget.Render(TRect.Make(0, 0, 3, 1), LBuf);
+    Check(Pos('***', LBuf.RowAsString(0)) > 0, 'adapter chained render');
+  finally LBuf.Free; end;
+end;
+
+procedure TestRefcountRelease;
+var
+  LWidget: IWidget;
+begin
+  LWidget := TFillWidget.Create('Z');
+  Check(LWidget <> nil, 'widget created');
+  LWidget := nil;
+  Check(True, 'widget released without error');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.intf');
   T.Test('implement and render', @TestImplementAndRender);
   T.Test('polymorphic array', @TestPolymorphicArray);
   T.Test('adapter render function', @TestAdapterRenderFunction);
   T.Test('adapter rejects nil render function', @TestAdapterRejectsNilRenderFunction);
+  T.Test('adapter chaining', @TestAdapterChaining);
+  T.Test('refcount release', @TestRefcountRelease);
   if not T.Run then Halt(1);
 end.

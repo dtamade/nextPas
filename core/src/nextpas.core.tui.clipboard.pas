@@ -29,7 +29,12 @@ type
 
 implementation
 
-uses BaseUnix, Unix, nextpas.core.platform.env;
+uses
+  nextpas.core.platform.console,
+  nextpas.core.platform.env,
+  nextpas.core.platform.which,
+  nextpas.core.platform.process,
+  nextpas.core.platform.process.base;
 
 
 // ---------- Base64 encoder (self-contained) ----------
@@ -83,18 +88,11 @@ end;
 // ---------- Helpers ----------
 
 function ToolExists(const Name: AnsiString): Boolean;
-{$IFDEF UNIX}
 var
-  Ret: Integer;
+  LBuf: array[0..1023] of AnsiChar;
 begin
-  Ret := fpSystem('command -v ' + Name + ' >/dev/null 2>&1');
-  Result := (Ret = 0);
+  Result := platform_which(PAnsiChar(Name), @LBuf[0], 1024) >= 0;
 end;
-{$ELSE}
-begin
-  Result := False;
-end;
-{$ENDIF}
 
 function IsOSC52Terminal: Boolean;
 var
@@ -137,30 +135,86 @@ begin
   Result := '';
 end;
 
-function PasteCommand(const Tool: AnsiString): AnsiString;
+{ Run a tool with stdin redirected: write AInput to its stdin, return True on
+  success.  Uses platform_process_create_piped so no FPC RTL process units. }
+function RunWithStdin(const AToolPath: AnsiString;
+  const AArgs: array of PAnsiChar;
+  const AInput: AnsiString): Boolean;
+var
+  LProc: TPlatformProcess;
+  LPipes: TPlatformProcessPipes;
+  LArgv: array[0..7] of PAnsiChar;
+  LI, LWritten, LCount: Integer;
+  LResult: TPlatformProcessResult;
+  LErr: Int32;
 begin
-  if Tool = 'xclip' then
-    Result := 'xclip -selection clipboard -o'
-  else if Tool = 'xsel' then
-    Result := 'xsel --clipboard --output'
-  else if Tool = 'pbcopy' then
-    Result := 'pbpaste'
-  else if Tool = 'wl-copy' then
-    Result := 'wl-paste'
-  else
-    Result := '';
+  Result := False;
+  // Build nil-terminated argv
+  LCount := Length(AArgs);
+  if LCount > 7 then LCount := 7;
+  for LI := 0 to LCount - 1 do
+    LArgv[LI] := AArgs[LI];
+  LArgv[LCount] := nil;
+
+  LErr := platform_process_create_piped(
+    PAnsiChar(AToolPath), @LArgv[0], nil, [],
+    LProc, LPipes);
+  if LErr <> 0 then Exit;
+  try
+    // Write input to stdin
+    if Length(AInput) > 0 then
+    begin
+      LWritten := platform_process_write_stdin(
+        LPipes.StdinWrite, @AInput[1], Length(AInput));
+      if LWritten <> Length(AInput) then Exit;
+    end;
+    // Close stdin to signal EOF
+    platform_process_close_handle(LPipes.StdinWrite);
+    // Wait for process
+    if platform_process_wait(LProc, LResult, 5000) <> 0 then Exit;
+    Result := LResult.IsSuccess;
+  finally
+    platform_process_close_handle(LPipes.StdinWrite);
+    platform_process_close_handle(LPipes.StdoutRead);
+    platform_process_close_handle(LPipes.StderrRead);
+  end;
 end;
 
-function CopyCommand(const Tool: AnsiString): AnsiString;
+{ Run a tool and capture its stdout.  Returns the captured text. }
+function RunCaptureStdout(const AToolPath: AnsiString;
+  const AArgs: array of PAnsiChar): AnsiString;
+var
+  LBuf: array[0..8191] of AnsiChar;
+  LArgv: array[0..7] of PAnsiChar;
+  LI, LCount: Integer;
+  LOutLen, LExitCode: Int32;
 begin
-  if Tool = 'xclip' then
-    Result := 'xclip -selection clipboard'
-  else if Tool = 'xsel' then
-    Result := 'xsel --clipboard --input'
-  else if Tool = 'pbcopy' then
-    Result := 'pbcopy'
-  else if Tool = 'wl-copy' then
-    Result := 'wl-copy'
+  Result := '';
+  // Build nil-terminated argv
+  LCount := Length(AArgs);
+  if LCount > 7 then LCount := 7;
+  for LI := 0 to LCount - 1 do
+    LArgv[LI] := AArgs[LI];
+  LArgv[LCount] := nil;
+
+  if platform_process_run(
+    PAnsiChar(AToolPath), @LArgv[0], nil,
+    @LBuf[0], 8192, LOutLen, LExitCode) = 0 then
+  begin
+    if (LExitCode = 0) and (LOutLen > 0) then
+      SetString(Result, @LBuf[0], LOutLen);
+  end;
+end;
+
+{ Build a tool path from the tool name.  Returns empty string if not found. }
+function ResolveToolPath(const ATool: AnsiString): AnsiString;
+var
+  LBuf: array[0..1023] of AnsiChar;
+  LLen: Int32;
+begin
+  LLen := platform_which(PAnsiChar(ATool), @LBuf[0], 1024);
+  if LLen >= 0 then
+    SetString(Result, @LBuf[0], LLen)
   else
     Result := '';
 end;
@@ -199,45 +253,41 @@ begin
 end;
 
 function TClipboard.Copy(const Text: AnsiString): Boolean;
-{$IFDEF UNIX}
 var
-  Seq, Cmd: AnsiString;
-  F: System.Text;
-  Written: cint;
+  Seq, LPath: AnsiString;
+  Written: Int32;
 begin
   Result := False;
   case Method of
     cmOSC52:
     begin
       Seq := GetOSC52Copy(Text);
-      Written := fpWrite(1, @Seq[1], Length(Seq));
+      Written := platform_console_write(1, @Seq[1], Length(Seq));
       Result := (Written = Length(Seq));
     end;
     cmExternal:
     begin
-      Cmd := CopyCommand(ExternalTool);
-      if Cmd = '' then Exit;
-      if POpen(F, Cmd, 'W') <> 0 then Exit;
-      System.Write(F, Text);
-      Result := (PClose(F) = 0);
+      LPath := ResolveToolPath(ExternalTool);
+      if LPath = '' then Exit;
+      if ExternalTool = 'xclip' then
+        Result := RunWithStdin(LPath,
+          [PAnsiChar('xclip'), PAnsiChar('-selection'), PAnsiChar('clipboard'), nil], Text)
+      else if ExternalTool = 'xsel' then
+        Result := RunWithStdin(LPath,
+          [PAnsiChar('xsel'), PAnsiChar('--clipboard'), PAnsiChar('--input'), nil], Text)
+      else if ExternalTool = 'pbcopy' then
+        Result := RunWithStdin(LPath, [PAnsiChar('pbcopy'), nil], Text)
+      else if ExternalTool = 'wl-copy' then
+        Result := RunWithStdin(LPath, [PAnsiChar('wl-copy'), nil], Text);
     end;
     cmNone:
       Result := False;
   end;
 end;
-{$ELSE}
-begin
-  Result := False;
-end;
-{$ENDIF}
 
 function TClipboard.Paste: AnsiString;
-{$IFDEF UNIX}
 var
-  Cmd: AnsiString;
-  F: System.Text;
-  Line: AnsiString;
-  First: Boolean;
+  LPath: AnsiString;
 begin
   Result := '';
   case Method of
@@ -245,29 +295,22 @@ begin
       Result := '';
     cmExternal:
     begin
-      Cmd := PasteCommand(ExternalTool);
-      if Cmd = '' then Exit;
-      if POpen(F, Cmd, 'R') <> 0 then Exit;
-      First := True;
-      while not Eof(F) do
-      begin
-        ReadLn(F, Line);
-        if First then
-          First := False
-        else
-          Result := Result + LineEnding;
-        Result := Result + Line;
-      end;
-      PClose(F);
+      LPath := ResolveToolPath(ExternalTool);
+      if LPath = '' then Exit;
+      if ExternalTool = 'xclip' then
+        Result := RunCaptureStdout(LPath,
+          [PAnsiChar('xclip'), PAnsiChar('-selection'), PAnsiChar('clipboard'), PAnsiChar('-o'), nil])
+      else if ExternalTool = 'xsel' then
+        Result := RunCaptureStdout(LPath,
+          [PAnsiChar('xsel'), PAnsiChar('--clipboard'), PAnsiChar('--output'), nil])
+      else if ExternalTool = 'pbcopy' then
+        Result := RunCaptureStdout(LPath, [PAnsiChar('pbpaste'), nil])
+      else if ExternalTool = 'wl-copy' then
+        Result := RunCaptureStdout(LPath, [PAnsiChar('wl-paste'), nil]);
     end;
     cmNone:
       Result := '';
   end;
 end;
-{$ELSE}
-begin
-  Result := '';
-end;
-{$ENDIF}
 
 end.

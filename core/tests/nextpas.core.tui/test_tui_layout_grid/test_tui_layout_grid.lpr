@@ -58,11 +58,50 @@ begin
   CheckEqual(Int64(0), Int64(LG.Cols), 'empty cols');
 end;
 
+procedure Test1x1Grid;
+var
+  LG: TGridResult;
+begin
+  LG := Grid(TRect.Make(0, 0, 20, 10), 1, 1);
+  CheckEqual(Int64(1), Int64(LG.Rows), '1 row');
+  CheckEqual(Int64(1), Int64(LG.Cols), '1 col');
+  CheckEqual(Int64(20), Int64(LG.Cell(0, 0).Width), 'full width');
+  CheckEqual(Int64(10), Int64(LG.Cell(0, 0).Height), 'full height');
+  CheckEqual(Int64(0), Int64(LG.Cell(0, 0).X), 'origin x');
+  CheckEqual(Int64(0), Int64(LG.Cell(0, 0).Y), 'origin y');
+end;
+
+procedure Test3x3Grid;
+var
+  LG: TGridResult;
+begin
+  LG := Grid(TRect.Make(0, 0, 30, 9), 3, 3);
+  CheckEqual(Int64(3), Int64(LG.Rows), '3 rows');
+  CheckEqual(Int64(3), Int64(LG.Cols), '3 cols');
+  CheckEqual(Int64(10), Int64(LG.Cell(0, 0).Width), 'cell width 10');
+  CheckEqual(Int64(3), Int64(LG.Cell(0, 0).Height), 'cell height 3');
+  { Bottom-right cell }
+  CheckEqual(Int64(20), Int64(LG.Cell(2, 2).X), 'cell(2,2) x');
+  CheckEqual(Int64(6), Int64(LG.Cell(2, 2).Y), 'cell(2,2) y');
+end;
+
+procedure TestGridEmptyArea;
+var
+  LG: TGridResult;
+begin
+  LG := Grid(TRect.Make(0, 0, 0, 0), [], []);
+  CheckEqual(Int64(0), Int64(LG.Rows), 'empty area empty constraints rows');
+  CheckEqual(Int64(0), Int64(LG.Cols), 'empty area empty constraints cols');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.layout.grid');
   T.Test('uniform grid', @TestUniformGrid);
   T.Test('constraint grid', @TestConstraintGrid);
   T.Test('out of bounds', @TestOutOfBounds);
   T.Test('empty grid', @TestEmptyGrid);
+  T.Test('1x1 grid', @Test1x1Grid);
+  T.Test('3x3 grid', @Test3x3Grid);
+  T.Test('empty area grid', @TestGridEmptyArea);
   if not T.Run then Halt(1);
 end.

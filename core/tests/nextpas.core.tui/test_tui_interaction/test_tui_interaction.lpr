@@ -6,28 +6,73 @@ uses
   nextpas.core.tui.interaction,
   nextpas.core.test;
 var T: TTestSuite;
+
 procedure TestCapture;
 var C: TPointerCapture;
-begin C.Release; Check(not C.Active, 'released');
+begin
+  C.Release; Check(not C.Active, 'released');
   C.Acquire(Pointer(1), mbLeft); Check(C.Active, 'acquired');
-  C.Release; Check(not C.Active, 'released again'); end;
+  C.Release; Check(not C.Active, 'released again');
+end;
+
 procedure TestSession;
 var S: TInteractionSession;
-begin S.State := ssNone; Check(not S.IsActive, 'none not active');
+begin
+  S.State := ssNone; Check(not S.IsActive, 'none not active');
   S.Begin_(nil); Check(S.IsActive, 'active after begin');
   S.Commit; Check(S.State = ssCommitted, 'committed');
   S.State := ssNone; S.Begin_(nil); S.Cancel;
-  Check(S.State = ssCancelled, 'cancelled'); end;
+  Check(S.State = ssCancelled, 'cancelled');
+end;
+
 procedure TestHitTest;
-begin Check(HitTest(TRect.Make(2,2,4,4), 3, 3), 'inside');
-  Check(not HitTest(TRect.Make(2,2,4,4), 6, 3), 'outside right'); end;
+begin
+  Check(HitTest(TRect.Make(2,2,4,4), 3, 3), 'inside');
+  Check(not HitTest(TRect.Make(2,2,4,4), 6, 3), 'outside right');
+end;
+
+procedure TestHitTestBoundary;
+begin
+  Check(HitTest(TRect.Make(0,0,10,10), 0, 0), 'top-left corner inside');
+  Check(not HitTest(TRect.Make(0,0,10,10), 10, 0), 'right edge outside');
+  Check(not HitTest(TRect.Make(0,0,10,10), 0, 10), 'bottom edge outside');
+  Check(HitTest(TRect.Make(0,0,10,10), 9, 9), 'bottom-right-1 inside');
+  Check(not HitTest(TRect.Make(0,0,10,10), -1, 0), 'negative x outside');
+  Check(not HitTest(TRect.Make(0,0,10,10), 0, -1), 'negative y outside');
+end;
+
 procedure TestHover;
-begin Check(DetectHoverChange(TRect.Make(0,0,5,5), 10,10, 2,2) = hcEntered, 'entered');
+begin
+  Check(DetectHoverChange(TRect.Make(0,0,5,5), 10,10, 2,2) = hcEntered, 'entered');
   Check(DetectHoverChange(TRect.Make(0,0,5,5), 2,2, 10,10) = hcLeft, 'left');
-  Check(DetectHoverChange(TRect.Make(0,0,5,5), 2,2, 3,3) = hcStay, 'stay'); end;
+  Check(DetectHoverChange(TRect.Make(0,0,5,5), 2,2, 3,3) = hcStay, 'stay');
+end;
+
+procedure TestHoverSamePos;
+begin
+  Check(DetectHoverChange(TRect.Make(0,0,5,5), 3,3, 3,3) = hcStay, 'same position stay');
+end;
+
+procedure TestSessionMultipleTransitions;
+var S: TInteractionSession;
+begin
+  { committed -> none -> active -> cancelled }
+  S.State := ssNone; S.Begin_(nil); S.Commit;
+  Check(S.State = ssCommitted, 'first commit');
+  S.State := ssNone;
+  Check(not S.IsActive, 'none not active after reset');
+  S.Begin_(nil); S.Cancel;
+  Check(S.State = ssCancelled, 'cancelled after reset');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.interaction');
-  T.Test('capture', @TestCapture); T.Test('session', @TestSession);
-  T.Test('hit test', @TestHitTest); T.Test('hover', @TestHover);
+  T.Test('capture', @TestCapture);
+  T.Test('session', @TestSession);
+  T.Test('hit test', @TestHitTest);
+  T.Test('hit test boundary', @TestHitTestBoundary);
+  T.Test('hover', @TestHover);
+  T.Test('hover same position', @TestHoverSamePos);
+  T.Test('session multiple transitions', @TestSessionMultipleTransitions);
   if not T.Run then Halt(1);
 end.

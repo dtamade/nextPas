@@ -48,6 +48,12 @@ type
     function TakeStderr: IReader;
     {** 关闭 stdin，并发读取 stdout+stderr，然后 Wait。推荐用法 *}
     function WaitWithOutput: TProcessOutput;
+    {**
+     * @desc 先 SIGTERM，在 AGrace 内等待退出；超时则 Kill 再 reap（对齐 Go WaitDelay 意图）
+     * @note 仍持管道时在 reaped 后排水（同 TryWait drain-only）
+     * @note TimedOut=True 表示 grace 耗尽并走了 Kill
+     *}
+    function WaitGraceful(const AGrace: TDuration): TProcessOutput;
   end;
 
   { TChild — IChild 实现 }
@@ -68,6 +74,8 @@ type
       const AStdOut, AStdErr: string;
       const ATimedOut: Boolean = False;
       const AOutputLimited: Boolean = False): TProcessOutput;
+    function DrainOwnedPipesAfterReap(const AResult: TPlatformProcessResult;
+      const ATimedOut: Boolean): TProcessOutput;
   public
     constructor Create(const AProc: TPlatformProcess;
       const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
@@ -83,6 +91,7 @@ type
     function TakeStdout: IReader;
     function TakeStderr: IReader;
     function WaitWithOutput: TProcessOutput;
+    function WaitGraceful(const AGrace: TDuration): TProcessOutput;
   end;
 
 implementation
@@ -254,9 +263,6 @@ function TChild.TryWait(out AOutput: TProcessOutput): Boolean;
 var
   LResult: TPlatformProcessResult;
   LErr: Int32;
-  LStdoutClosed, LStderrClosed: Boolean;
-  LLimited: Boolean;
-  LStdOut, LStdErr: string;
 begin
   if FWaited then
   begin
@@ -276,8 +282,17 @@ begin
     RaiseProcessPlatformError('platform_process_try_wait', LErr);
   if LResult.Status = nextpas.core.platform.process.base.psRunning then
     Exit(False);
-  { Process already reaped by try_wait. Still owning pipes → drain only
-    (do NOT call WaitWithOutput — second wait would ECHILD). INV-13. }
+  AOutput := DrainOwnedPipesAfterReap(LResult, False);
+  Result := True;
+end;
+
+function TChild.DrainOwnedPipesAfterReap(const AResult: TPlatformProcessResult;
+  const ATimedOut: Boolean): TProcessOutput;
+var
+  LStdoutClosed, LStderrClosed: Boolean;
+  LLimited: Boolean;
+  LStdOut, LStdErr: string;
+begin
   if (FStdoutReader <> nil) or (FStderrReader <> nil) then
   begin
     CloseWriterBestEffort(FStdinWriter);
@@ -295,11 +310,9 @@ begin
     end;
     FStdoutReader := nil;
     FStderrReader := nil;
-    AOutput := FinishWaitResult(LResult, LStdOut, LStdErr, False, LLimited);
-    Exit(True);
+    Exit(FinishWaitResult(AResult, LStdOut, LStdErr, ATimedOut, LLimited));
   end;
-  AOutput := FinishWaitResult(LResult, '', '');
-  Result := True;
+  Result := FinishWaitResult(AResult, '', '', ATimedOut);
 end;
 
 procedure TChild.Detach;
@@ -506,6 +519,56 @@ begin
     FLastOutput.OutputLimited := Result.OutputLimited;
     Result := FLastOutput;
   end;
+end;
+
+function TChild.WaitGraceful(const AGrace: TDuration): TProcessOutput;
+const
+  SIGTERM = 15;
+var
+  LResult: TPlatformProcessResult;
+  LDeadline: TInstant;
+  LErr: Int32;
+  LTimedOut: Boolean;
+  LSleepNs: Int64;
+begin
+  if FWaited then
+    Exit(FLastOutput);
+  EnsureAttached;
+
+  LTimedOut := False;
+  Signal(SIGTERM);
+  if AGrace.IsZero or AGrace.IsNegative then
+    LDeadline := TInstant.Now
+  else
+    LDeadline := TInstant.Now.Add(AGrace);
+  LSleepNs := 1000000;
+  FillChar(LResult, SizeOf(LResult), 0);
+  repeat
+    LErr := platform_process_try_wait(FProc, LResult);
+    if LErr <> 0 then
+      RaiseProcessPlatformError('platform_process_try_wait', LErr);
+    if LResult.Status <> nextpas.core.platform.process.base.psRunning then
+      Break;
+    if TInstant.Now.DurationSince(LDeadline).IsPositive then
+    begin
+      LTimedOut := True;
+      LErr := platform_process_kill(FProc);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_kill', LErr);
+      LErr := platform_process_wait(FProc, LResult);
+      if LErr <> 0 then
+        RaiseProcessPlatformError('platform_process_wait', LErr);
+      Break;
+    end;
+    platform_thread_sleep_ns(LSleepNs);
+    if LSleepNs < 20000000 then
+    begin
+      LSleepNs := LSleepNs * 2;
+      if LSleepNs > 20000000 then
+        LSleepNs := 20000000;
+    end;
+  until False;
+  Result := DrainOwnedPipesAfterReap(LResult, LTimedOut);
 end;
 
 function TChild.FinishWaitResult(const AResult: TPlatformProcessResult;

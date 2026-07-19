@@ -1,7 +1,7 @@
 program test_tui_widget_complex;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.style,

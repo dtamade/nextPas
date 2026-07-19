@@ -86,6 +86,56 @@ begin
   CheckEqual(Int64(16), Int64(SizeOf(TStyle)), 'TStyle 16 bytes');
 end;
 
+procedure TestStyleEquals;
+var
+  LA, LB: TStyle;
+begin
+  LA := TStyle.Default.WithFg(TUI_RED);
+  LB := TStyle.Default.WithFg(TUI_RED);
+  Check(StyleEquals(LA, LB), 'same styles equal');
+  LB := TStyle.Default.WithFg(TUI_BLUE);
+  Check(not StyleEquals(LA, LB), 'different fg not equal');
+end;
+
+procedure TestPatchBothUnset;
+var
+  LBase, LOther, LResult: TStyle;
+begin
+  LBase := TStyle.Default;
+  LOther := TStyle.Default;
+  LResult := LBase.Patch(LOther);
+  Check(not ColorIsSet(LResult.Fg), 'both unset fg stays unset');
+  Check(not ColorIsSet(LResult.Bg), 'both unset bg stays unset');
+end;
+
+procedure TestPatchSelfOnly;
+var
+  LBase, LResult: TStyle;
+begin
+  LBase := TStyle.Default.WithFg(TUI_RED);
+  LResult := LBase.Patch(TStyle.Default);
+  Check(ColorEquals(LResult.Fg, TUI_RED), 'self fg preserved when other unset');
+end;
+
+procedure TestPatchOtherOnly;
+var
+  LOther, LResult: TStyle;
+begin
+  LOther := TStyle.Default.WithBg(TUI_BLUE);
+  LResult := TStyle.Default.Patch(LOther);
+  Check(ColorEquals(LResult.Bg, TUI_BLUE), 'other bg applied when self unset');
+end;
+
+procedure TestWithFgBgChain;
+var
+  LS: TStyle;
+begin
+  LS := TStyle.Default.WithFg(TUI_RED).WithBg(TUI_BLUE).WithModifier([mbBold]);
+  Check(ColorEquals(LS.Fg, TUI_RED), 'fg');
+  Check(ColorEquals(LS.Bg, TUI_BLUE), 'bg');
+  Check(mbBold in LS.AddMod, 'bold');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.style');
   T.Test('default', @TestDefault);
@@ -95,5 +145,10 @@ begin
   T.Test('patch colors', @TestPatchColors);
   T.Test('patch modifiers', @TestPatchModifiers);
   T.Test('size 16 bytes', @TestSize);
+  T.Test('style equals', @TestStyleEquals);
+  T.Test('patch both unset', @TestPatchBothUnset);
+  T.Test('patch self only', @TestPatchSelfOnly);
+  T.Test('patch other only', @TestPatchOtherOnly);
+  T.Test('with fg bg chain', @TestWithFgBgChain);
   if not T.Run then Halt(1);
 end.
