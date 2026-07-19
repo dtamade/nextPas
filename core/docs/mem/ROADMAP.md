@@ -122,7 +122,7 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 | E0 | [PARITY-GO-RUST.md](PARITY-GO-RUST.md) 纲领 + 本表 | **done** 2026-07-19 |
 | E1 | 修复 `bench_arena_go_rust`；`make compare` 三语同方法论 | **done** 2026-07-19 |
 | E2 | 执行 P-a：删 10 Tier-3 allocator + 16 test | **done** 2026-07-19 |
-| E3 | SCORECARD / README 链 live compare；调查 DefaultHeap 长跑 vs system | 进行中 |
+| E3 | compare A/B 口径；env 缓存快路径；SCORECARD/PARITY 刷新 | **done** 2026-07-19 |
 | E4 | D3 高价值 consumer sized free | 持续 |
 | E5 | 可选 P-b 剩余 Tier-3 | 按需 |
 
@@ -186,3 +186,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-19 | D9-c P-a prune 设计备忘（10 allocator + 16 tests；本会话不删） |
 | 2026-07-19 | D3-b simd sized FreeMem（avx2/sse2/image/imageproc/alloc/memutils） |
 | 2026-07-19 | **Era E** 开启：PARITY-GO-RUST；E1 compare 修复；E2 P-a 执行（10+16） |
+| 2026-07-19 | E3：SC1 对齐 heap 段；CachedTruthyEnv 去 CAS-as-load + process route 单缓存；P2 成立 |
