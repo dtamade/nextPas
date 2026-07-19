@@ -1641,16 +1641,18 @@ end;
 function TBenchResults.FilterByNamePattern(const APattern: string): TBenchResultArray;
 var
   LCount, I, LIdx: Integer;
-  LPatternLower: string;
+  LPatternLower, LNameLower: string;
 begin
-  LPatternLower := LowerCase(APattern);
+  { 显式限定单元：避免 LowerCase/GlobMatch 解析到错误符号 }
+  LPatternLower := nextpas.core.text.conv.LowerCase(APattern);
   { 第一遍：计数 }
   LCount := 0;
   for I := 0 to FResultCount - 1 do
   begin
     if FResults[I].Executed and (not FResults[I].Skipped) then
     begin
-      if GlobMatch(LPatternLower, LowerCase(FResults[I].Name)) then
+      LNameLower := nextpas.core.text.conv.LowerCase(FResults[I].Name);
+      if nextpas.core.bench.base.GlobMatch(LPatternLower, LNameLower) then
         Inc(LCount);
     end;
   end;
@@ -1662,7 +1664,8 @@ begin
   begin
     if FResults[I].Executed and (not FResults[I].Skipped) then
     begin
-      if GlobMatch(LPatternLower, LowerCase(FResults[I].Name)) then
+      LNameLower := nextpas.core.text.conv.LowerCase(FResults[I].Name);
+      if nextpas.core.bench.base.GlobMatch(LPatternLower, LNameLower) then
       begin
         Result[LIdx] := FResults[I];
         Result[LIdx].RawSamples := Copy(Result[LIdx].RawSamples);
