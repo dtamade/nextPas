@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（S1-1 landed：epoll **1.59× Go** 规模达标；**NEXT = Q1-1** SSE）
+**Updated**: 2026-07-19（Q1-1 landed：SSE 诚实毕业；**NEXT = Q1-2** multipart stream）
 
 ---
 
@@ -113,12 +113,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q0-1 workload spec | 完成（BENCHMARKS 官方规格 + 复现命令） |
 | Wave Q0-2 baseline ratio | **landed** — harness 恢复；epoll 0.59× Go 基线 |
 | Wave S1-1 reactor-inline | **landed** — poll 默认 inline handler；epoll **1.59× Go**（≥0.80 达标） |
-| **下一执行点** | **Wave Q1-1** — SSE 诚实毕业 |
+| Wave Q1-1 SSE graduation | **landed** — lifecycle 表 + Op=`sse` + live 证据 |
+| **下一执行点** | **Wave Q1-2** — Multipart / stream 大 body 收口 |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
 ```text
-质量 ~75%   规模 ~82%   优雅 ~88%   诚实 ~95%  (RPS 规模达标；连接阶梯/SSE 仍开)
+质量 ~82%   规模 ~82%   优雅 ~88%   诚实 ~95%  (SSE 毕业；multipart 仍开)
 ```
 
 ---
@@ -711,12 +712,12 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | Wave | 主题 | Status |
 |------|------|--------|
-| **Q1-1** | SSE 诚实毕业（原 N1/C5） | queued |
-| **Q1-2** | Multipart/stream 大 body（原 N2/C4） | queued |
+| **Q1-1** | SSE 诚实毕业（原 N1/C5） | **landed** |
+| **Q1-2** | Multipart/stream 大 body（原 N2/C4） | **queued (NEXT)** |
 | **Q1-3** | Observability 最小 seam（原 N3/A3） | queued |
 | **Q1-4** | H1 长连接写失败 / backpressure 契约 | queued |
 
-**Q1-1 Done when**：CONTRACT SSE lifecycle/error；focused；0 unfreed；非 bus。  
+**Q1-1 Evidence**：CONTRACT §4.1；CreateOp Op=`sse`；Flush after event；Close 幂等；`test_http_middlewares` SSE + `test_http_server` live；非 bus。  
 **Q1-2 Done when**：流式路径契约 + focused；ownership 写清。  
 **Q1-3 Done when**：opt-in hook/middleware focused；默认零开销。  
 **Q1-4 Done when**：写失败/stall 语义 focused；与规模路径一致。
@@ -780,12 +781,12 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 1. Era 0–8 landed；Era 8 已在 main
 2. H3 Blocked — 跳过；禁止空 facade
 3. Parity Q0+S1-1 — epoll **1.59× Go**（RPS 规模达标）
-4. **NEXT = Wave Q1-1** — SSE 诚实毕业
-5. S1-3 连接阶梯 optional；S2 hot path optional
-6. 跨模块仅按本波 Land paths；path-limited landing only
+4. Q1-1 SSE 诚实毕业 landed
+5. **NEXT = Wave Q1-2** — Multipart / stream 收口
+6. S1-3 连接阶梯 optional；跨模块仅按本波 Land paths
 ```
 
-**没有用户指令时：Goal Loop 自动执行 Q1-1→…；不要空转 H3。**
+**没有用户指令时：Goal Loop 自动执行 Q1-2→…；不要空转 H3。**
 
 ---
 
@@ -806,7 +807,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
-| 2026-07-19 | **S1-1 landed**：poll reactor-inline handlers；epoll 0.59→**1.59× Go**；NEXT=Q1-1 SSE |
+| 2026-07-19 | **Q1-1 landed**：SSE lifecycle/Op=`sse`/Flush/live；NEXT=Q1-2 multipart stream |
+| 2026-07-19 | **S1-1 landed**：poll reactor-inline handlers；epoll 0.59→**1.59× Go** |
 | 2026-07-19 | **Q0-2 landed**：恢复 multi-conn `bench_http_server`；epoll 0.59× Go 基线 |
 | 2026-07-19 | **Parity Q0-0/Q0-1**：对标战役开壳 + workload 冻结 |
 | 2026-07-19 | **Parity Campaign Q0-0**：北极星升为对标 Go/Rust 质量+规模；主战场 server；H3 Blocked；N1–N3→Q1 |

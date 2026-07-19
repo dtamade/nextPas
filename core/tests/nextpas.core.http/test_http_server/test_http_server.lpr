@@ -1579,6 +1579,64 @@ begin
   end;
 end;
 
+{ Q1-1: live SSE path — read until event body appears (keep-alive stream). }
+procedure TestLiveSSEEventStream;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LReq: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/events',
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LWriter: ISSEEventWriter;
+    begin
+      LWriter := StartSSE(AW);
+      LWriter.WriteEventSimple('message', 'hello-sse', '1');
+      LWriter.WriteComment('done');
+      LWriter.Close;
+    end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LReq := 'GET /events HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10;
+    LResp := '';
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], SizeOf(LBuf));
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (LN = 0) or (Pos('data: hello-sse', LResp) > 0);
+    finally
+      LConn.Close;
+    end;
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'live SSE status 200');
+    Check(Pos('text/event-stream', LResp) > 0, 'live SSE content-type');
+    Check(Pos('data: hello-sse', LResp) > 0, 'live SSE event data');
+    Check(Pos('id: 1', LResp) > 0, 'live SSE event id');
+    { Comment/framing covered by mock suite; chunked keep-alive may interleave
+      length prefixes so full ': done' substring is not required here. }
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 2: Server responds with custom body }
 procedure TestCustomBody;
 var
@@ -12315,6 +12373,7 @@ end;
 begin
   T := TTestSuite.Create('nextpas.core.http.server');
   T.Test('Simple GET 200', @TestSimpleGet200);
+  T.Test('Live SSE event stream', @TestLiveSSEEventStream);
   T.Test('Empty handler commits default response',
     @TestEmptyHandlerCommitsDefaultResponse);
   {$IFDEF NEXTPAS_LINUX}
