@@ -629,12 +629,6 @@ begin
   T.Test('secure zero source contracts', @TestSecureZeroSourceContracts);
   T.Test('realloc invalid alignment returns nil', @TestReallocInvalidAlignmentReturnsNil);
   T.Test('realloc mismatched alignment returns nil', @TestReallocMismatchedAlignmentReturnsNil);
-  { Darwin aarch64 GHA: after virtual mmap/mprotect/munmap the process
-    Abort-traps (signal 6) at suite exit even without heaptrc — remaining
-    aligned_alloc/secure-zero tests never finish cleanly. Keep virtual
-    coverage on Linux/Windows; Darwin virtual remains MAP_ANON + mprotect
-    source/forced-compile residual until isolated further. }
-{$IFNDEF NEXTPAS_MACOS}
   T.Test('virtual reserve zero size returns nil', @TestVirtualReserveZeroSizeReturnsNil);
   T.Test('virtual commit nil returns false', @TestVirtualCommitNilReturnsFalse);
   T.Test('virtual commit zero size returns false', @TestVirtualCommitZeroSizeReturnsFalse);
@@ -644,12 +638,9 @@ begin
   T.Test('virtual release zero size no-op', @TestVirtualReleaseZeroSizeNoOp);
   T.Test('madvise thp nil no-op', @TestMadviseThpNilNoOp);
   T.Test('madvise thp zero size no-op', @TestMadviseThpZeroSizeNoOp);
-{$ENDIF}
   T.Test('alloc very large alignment', @TestAllocVeryLargeAlignment);
   T.Test('realloc grow and shrink', @TestReallocGrowAndShrink);
-{$IFNDEF NEXTPAS_MACOS}
   T.Test('virtual reserve commit decommit release', @TestVirtualReserveCommitDecommitRelease);
-{$ENDIF}
   T.Test('secure zero large buffer', @TestSecureZeroLargeBuffer);
   T.Test('alloc various sizes', @TestAllocVariousSizes);
   T.Test('free nil multiple times', @TestFreeNilMultipleTimes);
