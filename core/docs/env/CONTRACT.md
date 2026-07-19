@@ -80,7 +80,7 @@
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_os_env | 55 | R16 ClearEnv + R17 Expand/HasEnv/EnvKeys 表 |
+| test_os_env | 67 | R19 Expand/HasEnv/Keys 表 |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---

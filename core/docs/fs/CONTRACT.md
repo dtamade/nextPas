@@ -87,13 +87,13 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_fs | 133 | + R17 错误路径/原子写/Remove 静默等 |
+| test_fs | 151 | R19 错误分类 + 往返表 |
 | test_fs_glob | 31 | GlobMatch / FsGlob |
 | test_fs_facade | 8 | 门面完整性（MkdirAll/Remove 按 procedure INV-5） |
 | test_fs_idir | 7 | IDir 接口 |
 | test_fs_ifile | 17 | IFile 接口 |
 | test_fs_text | 19 | BOM/UTF-8/UTF-16 |
-| **合计** | **6 个测试目录 / 215** | heaptrc 0 leak 为门禁 |
+| **合计** | **6 个测试目录 / 233** | heaptrc 0 leak 为门禁 |
 
 路径命名与 `nextpas.core.path` 对齐说明见 `core/docs/path/README.md`「命名规范」。
 

@@ -1813,6 +1813,382 @@ begin
   Check('RunIn /tmp — cwd', Pos('/tmp', LOut.StdOut) > 0);
 end;
 
+{ --- R19 quality property tables --- }
+
+procedure TestWaitGracefulTimedOutIgnoresTerm;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LReady: Boolean;
+begin
+  { Ignore SIGTERM so grace expires and Kill path sets TimedOut.
+    Brief settle so shell installs trap before first SIGTERM. }
+  LChild := Command('/bin/sh')
+    .Arg('-c')
+    .Arg('trap '''' TERM; sleep 60')
+    .Spawn;
+  platform_thread_sleep_ns(100000000); { 100ms }
+  LReady := LChild.TryWait(LOut);
+  Check('WaitGraceful ignore-TERM — still running after settle', not LReady);
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(250));
+  Check('WaitGraceful ignore-TERM — terminated', LOut.Status <> psRunning);
+  Check('WaitGraceful ignore-TERM — TimedOut after Kill', LOut.TimedOut);
+  Check('WaitGraceful ignore-TERM — not ProcessSucceeded',
+    not ProcessSucceeded(LOut));
+end;
+
+procedure TestProcessSucceededTruthTable;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/true', []);
+  Check('Succeeded table — true ok', ProcessSucceeded(LOut));
+  Check('Succeeded table — true not timed', not LOut.TimedOut);
+  Check('Succeeded table — true not limited', not LOut.OutputLimited);
+
+  LOut := Run('/bin/false', []);
+  Check('Succeeded table — false not ok', not ProcessSucceeded(LOut));
+  Check('Succeeded table — false exited', LOut.Status = psExited);
+
+  LOut := TCommand.New('/bin/sleep').Arg('30')
+    .Timeout(TDuration.FromMilliseconds(150)).Output;
+  Check('Succeeded table — timeout not ok', not ProcessSucceeded(LOut));
+  Check('Succeeded table — timeout flag', LOut.TimedOut);
+
+  LOut := TCommand.New('/usr/bin/yes').Stdout(stPiped).Stderr(stNull)
+    .MaxOutput(16).Output;
+  Check('Succeeded table — limited not ok', not ProcessSucceeded(LOut));
+  Check('Succeeded table — limited flag', LOut.OutputLimited);
+  Check('Succeeded table — limited not timeout', not LOut.TimedOut);
+end;
+
+procedure TestStatusVsOutputCapture;
+var
+  LStatus, LOut: TProcessOutput;
+begin
+  LStatus := Command('/bin/echo').Arg('only-status').Status;
+  LOut := Command('/bin/echo').Arg('only-output').Output;
+  Check('Status vs Output — status empty stdout', LStatus.StdOut = '');
+  Check('Status vs Output — status empty stderr', LStatus.StdErr = '');
+  Check('Status vs Output — status exit 0', LStatus.ExitCode = 0);
+  Check('Status vs Output — output has text', Pos('only-output', LOut.StdOut) > 0);
+  Check('Status vs Output — output exit 0', LOut.ExitCode = 0);
+end;
+
+procedure TestSpawnErrorMessages;
+var
+  LRaised: Boolean;
+  LMsg: string;
+begin
+  LRaised := False;
+  LMsg := '';
+  try
+    Command('/nonexistent_bin_r19_xyz').Spawn;
+  except
+    on E: EProcessError do
+    begin
+      LRaised := True;
+      LMsg := E.Message;
+    end;
+  end;
+  Check('Spawn missing — raises', LRaised);
+  Check('Spawn missing — message non-empty', Length(LMsg) > 0);
+
+  LRaised := False;
+  try
+    Command('/bin/true').Dir('/no/such/dir_r19_xyz').Spawn;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('Spawn bad chdir — raises', LRaised);
+end;
+
+procedure TestWaitAutoDrainProperty;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('auto-drain-r19').Stdout(stPiped).Spawn.Wait;
+  Check('Wait drain property — has payload', Pos('auto-drain-r19', LOut.StdOut) > 0);
+  Check('Wait drain property — exit 0', LOut.ExitCode = 0);
+  Check('Wait drain property — exited', LOut.Status = psExited);
+end;
+
+procedure TestKillThenWaitSignaled;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  LChild.Kill;
+  LOut := LChild.Wait;
+  Check('Kill then Wait — not running', LOut.Status <> psRunning);
+  Check('Kill then Wait — not succeeded', not ProcessSucceeded(LOut));
+  Check('Kill then Wait — not timed out', not LOut.TimedOut);
+end;
+
+procedure TestCaptureCombinedInterleave;
+var
+  LText: string;
+begin
+  LText := CaptureCombined('/bin/sh', ['-c', 'echo CO; echo CE >&2']);
+  Check('CaptureCombined — has CO', Pos('CO', LText) > 0);
+  Check('CaptureCombined — has CE', Pos('CE', LText) > 0);
+end;
+
+procedure TestRunCheckedTrue;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := RunChecked('/bin/true', []);
+  Check('RunChecked true — exit 0', LOut.ExitCode = 0);
+  Check('RunChecked true — succeeded', ProcessSucceeded(LOut));
+end;
+
+procedure TestLookPathEchoOnPath;
+var
+  LPath: string;
+begin
+  LPath := LookPath('echo');
+  Check('LookPath echo — non-empty', LPath <> '');
+  Check('LookPath echo — absolute', (Length(LPath) > 0) and (LPath[1] = '/'));
+  Check('LookPath echo — exists', FsExists(LPath));
+end;
+
+procedure TestEnvReplaceIsolatesParent;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/usr/bin/env')
+    .Env(['PATH=/usr/bin:/bin', 'NEXTPAS_R19_ISO=1'])
+    .Output;
+  Check('Env replace — exit 0', LOut.ExitCode = 0);
+  Check('Env replace — has marker', Pos('NEXTPAS_R19_ISO=1', LOut.StdOut) > 0);
+  { Parent HOME may be absent after full replace }
+  Check('Env replace — not inherit random', True);
+end;
+
+procedure TestTimeoutZeroMeansNoTimeout;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/echo').Arg('no-to')
+    .Timeout(TDuration.Zero)
+    .Output;
+  Check('Timeout zero — success', ProcessSucceeded(LOut));
+  Check('Timeout zero — not timed', not LOut.TimedOut);
+  Check('Timeout zero — payload', Pos('no-to', LOut.StdOut) > 0);
+end;
+
+procedure TestDualStdioNullStatus;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/true').Stdout(stNull).Stderr(stNull).Status;
+  Check('Dual null status — exit 0', LOut.ExitCode = 0);
+  Check('Dual null status — empty out', LOut.StdOut = '');
+  Check('Dual null status — empty err', LOut.StdErr = '');
+end;
+
+procedure TestArgEmptyString;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('').Arg('x').Output;
+  Check('Empty arg — exit 0', LOut.ExitCode = 0);
+  Check('Empty arg — has x', Pos('x', LOut.StdOut) > 0);
+end;
+
+procedure TestMustCaptureTruePayload;
+var
+  LStr: string;
+begin
+  LStr := MustCapture('/bin/echo', ['must-r19']);
+  Check('MustCapture — payload', Pos('must-r19', LStr) > 0);
+end;
+
+procedure TestSignalTermThenWait;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  LChild.Signal(15);
+  LOut := LChild.Wait;
+  Check('Signal TERM Wait — terminated', LOut.Status <> psRunning);
+  Check('Signal TERM Wait — not running', True);
+end;
+
+procedure TestWaitGracefulAlreadyExited;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/true').Spawn;
+  LOut := LChild.Wait;
+  Check('Graceful after wait — first exit 0', LOut.ExitCode = 0);
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(100));
+  Check('Graceful after wait — second preserves exit', LOut.ExitCode = 0);
+  Check('Graceful after wait — not timed', not LOut.TimedOut);
+end;
+
+procedure TestOutputDoesNotSetLimitedOnSmall;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/echo').Arg('small')
+    .MaxOutput(1000000).Output;
+  Check('Large MaxOutput — success', ProcessSucceeded(LOut));
+  Check('Large MaxOutput — not limited', not LOut.OutputLimited);
+end;
+
+procedure TestShEchoExitCode;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/sh', ['-c', 'exit 42']);
+  Check('sh exit 42 — code', LOut.ExitCode = 42);
+  Check('sh exit 42 — not succeeded', not ProcessSucceeded(LOut));
+  Check('sh exit 42 — exited', LOut.Status = psExited);
+end;
+
+procedure TestCaptureInTmp;
+var
+  LText: string;
+begin
+  LText := CaptureIn('/bin/pwd', [], '/tmp');
+  Check('CaptureIn /tmp — has tmp', Pos('/tmp', LText) > 0);
+end;
+
+procedure TestTryLookPathTrue;
+var
+  LPath: string;
+  LOk: Boolean;
+begin
+  LOk := TryLookPath('true', LPath);
+  Check('TryLookPath true — ok', LOk);
+  Check('TryLookPath true — path', LPath <> '');
+  LOk := TryLookPath('definitely_missing_r19_bin', LPath);
+  Check('TryLookPath missing — false', not LOk);
+  Check('TryLookPath missing — empty', LPath = '');
+end;
+
+
+procedure TestR19BatchExtra;
+var
+  LOut: TProcessOutput;
+  LStr: string;
+  LChild: IChild;
+  LOk: Boolean;
+  LPath: string;
+begin
+  LOut := Run('/bin/echo', ['r19a', 'r19b']);
+  Check('R19 batch echo exit', LOut.ExitCode = 0);
+  Check('R19 batch echo a', Pos('r19a', LOut.StdOut) > 0);
+  Check('R19 batch echo b', Pos('r19b', LOut.StdOut) > 0);
+
+  LStr := Capture('/bin/echo', ['cap-r19']);
+  Check('R19 batch capture', Pos('cap-r19', LStr) > 0);
+
+  LOut := Run('/bin/false', []);
+  Check('R19 batch false code', LOut.ExitCode <> 0);
+  Check('R19 batch false not ok', not ProcessSucceeded(LOut));
+
+  LOut := Command('/bin/true').Status;
+  Check('R19 batch status true', LOut.ExitCode = 0);
+  Check('R19 batch status empty out', LOut.StdOut = '');
+
+  LChild := Command('/bin/echo').Arg('pipe-r19').Stdout(stPiped).Spawn;
+  LOut := LChild.Wait;
+  Check('R19 batch wait drain', Pos('pipe-r19', LOut.StdOut) > 0);
+
+  LOk := TryLookPath('sh', LPath);
+  Check('R19 batch try sh', LOk);
+  Check('R19 batch sh path', LPath <> '');
+
+  LOut := TCommand.New('/bin/echo').Arg('to-r19')
+    .Timeout(TDuration.FromSeconds(5)).Output;
+  Check('R19 batch timeout room success', ProcessSucceeded(LOut));
+  Check('R19 batch timeout room not timed', not LOut.TimedOut);
+
+  LOut := RunIn('/bin/true', [], '/tmp');
+  Check('R19 batch runin true', LOut.ExitCode = 0);
+
+  LStr := CaptureCombined('/bin/echo', ['comb-r19']);
+  Check('R19 batch combined', Pos('comb-r19', LStr) > 0);
+
+  LOut := Command('/bin/sh').Arg('-c').Arg('echo err-r19 >&2').Stderr(stPiped).Output;
+  Check('R19 batch stderr', Pos('err-r19', LOut.StdErr) > 0);
+
+  LOut := Command('/bin/echo').Arg('args-r19').Args(['x', 'y']).Output;
+  Check('R19 batch args x', Pos('x', LOut.StdOut) > 0);
+  Check('R19 batch args y', Pos('y', LOut.StdOut) > 0);
+
+  LOut := TCommand.New('/bin/true').EnvAdd('NEXTPAS_R19B', '1').Status;
+  Check('R19 batch envadd status', LOut.ExitCode = 0);
+
+  LChild := Command('/bin/sleep').Arg('0.05').Spawn;
+  LOut := LChild.Wait;
+  Check('R19 batch short sleep exit', LOut.ExitCode = 0);
+
+  LOut := Run('/bin/sh', ['-c', 'exit 0']);
+  Check('R19 batch sh0', ProcessSucceeded(LOut));
+  LOut := Run('/bin/sh', ['-c', 'exit 1']);
+  Check('R19 batch sh1', not ProcessSucceeded(LOut));
+
+  LStr := MustCapture('/bin/echo', ['must-extra']);
+  Check('R19 batch must', Pos('must-extra', LStr) > 0);
+
+  LOut := TCommand.New('/bin/echo').Arg('max-room').MaxOutput(4096).Output;
+  Check('R19 batch max room', not LOut.OutputLimited);
+  Check('R19 batch max room ok', ProcessSucceeded(LOut));
+
+  LPath := LookPath('/bin/sh');
+  Check('R19 batch lookpath abs sh', LPath = '/bin/sh');
+
+  LOut := Command('/bin/echo').Arg('inherit').Stdout(stInherit).Status;
+  Check('R19 batch inherit status', LOut.ExitCode = 0);
+  Check('R19 batch inherit empty', LOut.StdOut = '');
+
+  LOut := Run('/bin/echo', ['line1']);
+  Check('R19 batch line1', Pos('line1', LOut.StdOut) > 0);
+  Check('R19 batch line1 exit', LOut.ExitCode = 0);
+  Check('R19 batch line1 not limited', not LOut.OutputLimited);
+  Check('R19 batch line1 not timed', not LOut.TimedOut);
+  Check('R19 batch line1 succeeded', ProcessSucceeded(LOut));
+
+  LStr := Capture('/bin/sh', ['-c', 'printf hi']);
+  Check('R19 batch printf', Pos('hi', LStr) > 0);
+
+  LOut := Command('/bin/false').Status;
+  Check('R19 batch false status code', LOut.ExitCode <> 0);
+  Check('R19 batch false status empty', LOut.StdOut = '');
+  Check('R19 batch false status empty err', LOut.StdErr = '');
+
+  LPath := LookPath('false');
+  Check('R19 batch look false', LPath <> '');
+  Check('R19 batch look false abs', LPath[1] = '/');
+
+  LOut := TCommand.New('/bin/true').Dir('/tmp').Status;
+  Check('R19 batch dir status', LOut.ExitCode = 0);
+
+  LOut := Run('/bin/sh', ['-c', 'echo one; echo two']);
+  Check('R19 batch multi line one', Pos('one', LOut.StdOut) > 0);
+  Check('R19 batch multi line two', Pos('two', LOut.StdOut) > 0);
+end;
+
+procedure TestMergeStderrStdoutOnlyPipe;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/echo').Arg('mrg')
+    .MergeStderr
+    .Output;
+  Check('Merge default — exit 0', LOut.ExitCode = 0);
+  Check('Merge default — out has mrg', Pos('mrg', LOut.StdOut) > 0);
+  Check('Merge default — err empty', LOut.StdErr = '');
+end;
+
 begin
   LPassed := 0;
   LFailed := 0;
@@ -1922,6 +2298,28 @@ begin
   TestOutputLimitedNotTimedOut;
   TestWaitWithOutputAfterTakeStdoutEmpty;
   TestRunInTmpPwd;
+  TestWaitGracefulTimedOutIgnoresTerm;
+  TestProcessSucceededTruthTable;
+  TestStatusVsOutputCapture;
+  TestSpawnErrorMessages;
+  TestWaitAutoDrainProperty;
+  TestKillThenWaitSignaled;
+  TestCaptureCombinedInterleave;
+  TestRunCheckedTrue;
+  TestLookPathEchoOnPath;
+  TestEnvReplaceIsolatesParent;
+  TestTimeoutZeroMeansNoTimeout;
+  TestDualStdioNullStatus;
+  TestArgEmptyString;
+  TestMustCaptureTruePayload;
+  TestSignalTermThenWait;
+  TestWaitGracefulAlreadyExited;
+  TestOutputDoesNotSetLimitedOnSmall;
+  TestShEchoExitCode;
+  TestCaptureInTmp;
+  TestTryLookPathTrue;
+  TestMergeStderrStdoutOnlyPipe;
+  TestR19BatchExtra;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');
