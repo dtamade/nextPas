@@ -124,7 +124,10 @@ L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但
 
 ### 外部债
 
-- **wine-runtime-smoke**：受 test.expect 交叉编译阻塞。
+- **wine-runtime-smoke**：~~曾归因 test.expect 交叉编译阻塞~~ — **2026-07-19 实况绿**  
+  - `make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke` → **4 passed**（cmd echo / LookPath / timeout / MaxOutput）  
+  - truth tier 仍是 **wine-runtime-smoke**（≠ 真 Windows host / ci-matrix）  
+  - Batch-0 后 `test.expect` Windows IUnknown ABI 已可用；全量 `nextpas.core.test` 门面可交叉编译 Win64
 
 ---
 
@@ -135,3 +138,4 @@ L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但
 | 2026-07-19 | R16 初版矩阵 + 评分卡；Essential 零 L0 API 落地后更新状态 |
 | 2026-07-19 | R16 续 WaitGraceful + SameFile |
 | 2026-07-19 | R17 质量加厚；合计 751；L0 Deferred 钉死协作清单 |
+| 2026-07-19 | R18 wine-runtime-smoke 实况绿（4/4）；去掉过时 expect 阻塞表述 |
