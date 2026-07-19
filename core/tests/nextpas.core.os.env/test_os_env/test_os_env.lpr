@@ -859,6 +859,36 @@ begin
   end;
 end;
 
+{ R22: mixed expand forms + empty vs missing }
+procedure TestExpandEnvMixedR22;
+begin
+  SetEnv('NEXTPAS_R22A', 'A');
+  SetEnv('NEXTPAS_R22B', 'B');
+  try
+    CheckEqual('A-B', ExpandEnv('$NEXTPAS_R22A-$NEXTPAS_R22B'), 'r22 mix dollar');
+    CheckEqual('A/B', ExpandEnv('${NEXTPAS_R22A}/${NEXTPAS_R22B}'), 'r22 mix brace');
+    CheckEqual('AB', ExpandEnv('%NEXTPAS_R22A%%NEXTPAS_R22B%'), 'r22 mix percent adjacent');
+    CheckEqual('A-B', ExpandEnv('%NEXTPAS_R22A%-%NEXTPAS_R22B%'), 'r22 mix percent sep');
+    CheckEqual('A-x', ExpandEnv('$NEXTPAS_R22A-x'), 'r22 dollar suffix');
+    CheckEqual('pre', ExpandEnv('pre${NEXTPAS_R22_MISS}'), 'r22 undefined empty');
+  finally
+    UnsetEnv('NEXTPAS_R22A');
+    UnsetEnv('NEXTPAS_R22B');
+  end;
+end;
+
+procedure TestHasEnvEmptyR22;
+begin
+  SetEnv('NEXTPAS_R22EMPTY', '');
+  try
+    Check(HasEnv('NEXTPAS_R22EMPTY'), 'r22 empty exists');
+    CheckEqual('', GetEnv('NEXTPAS_R22EMPTY'), 'r22 empty value');
+    Check(not HasEnv('NEXTPAS_R22NEVER'), 'r22 missing');
+  finally
+    UnsetEnv('NEXTPAS_R22EMPTY');
+  end;
+end;
+
 
 begin
   T := TTestSuite.Create('nextpas.core.os.env');
@@ -929,5 +959,7 @@ begin
   T.Test('TryGetEnv R19 extra', @TestTryGetEnvR19Extra);
   T.Test('Environ non-empty R19 extra', @TestEnvironNonEmptyR19Extra);
   T.Test('GetEnvDefault R19 extra', @TestGetEnvDefaultR19Extra);
+  T.Test('ExpandEnv mixed R22', @TestExpandEnvMixedR22);
+  T.Test('HasEnv empty R22', @TestHasEnvEmptyR22);
   if not T.Run then Halt(1);
 end.

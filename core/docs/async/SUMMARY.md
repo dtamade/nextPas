@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
 > 最后更新：2026-07-19
-> 版本：M3+B1–B4 land；Q1 Cancellation 贯通
+> 版本：M3+B1–B4 + Q1–Q4 land；Q5 Read/Write TimeoutEx
 
 ## 模块概览
 
@@ -140,11 +140,9 @@ nextpas.core.async 是单线程异步事件循环框架，支持跨平台 I/O �
 
 ## 未来方向
 
-1. **Q2** 组合器竞态 soak（WhenAll 永不完成 + cancel）
-2. **Q3** DNS multi-addr + dual-stack connect
-3. **Q4** 性能 scorecard vs Go
-4. **原生 Windows / macOS host runner** 升格证据层
-5. 见 [SCORECARD-2026-07-19.md](SCORECARD-2026-07-19.md)
+1. **真·Happy Eyeballs** 并发竞速（AsyncTcpDial）
+2. **原生 Windows / macOS host runner** 升格证据层
+3. 见 [SCORECARD-2026-07-19.md](SCORECARD-2026-07-19.md)
 
 ## 相关文档
 

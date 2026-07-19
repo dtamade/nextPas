@@ -101,6 +101,12 @@ type
     function AsyncSendTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     { Timeout + optional CancellationToken (token cancel ≈ -ECANCELED, races timer/I/O). }
+    function AsyncReadTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+      const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncWriteTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+      const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncRecvTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
@@ -952,6 +958,52 @@ begin
   else
     LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext, AToken);
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncReadTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+  const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  if ADeadline.IsInfinite and (AToken = nil) then
+    Exit(AsyncRead(AFd, ABuf, ALen, AOffset, ACallback, AContext));
+  if ADeadline.IsInfinite then
+    LCtx := TimeoutCtxCreate(Self, TDeadline.After(TDuration.FromSeconds(3600 * 24 * 365)),
+      ACallback, AContext, AToken)
+  else
+    LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext, AToken);
+  Result := FPoller.AsyncRead(AFd, ABuf, ALen, AOffset, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncWriteTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+  const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  if ADeadline.IsInfinite and (AToken = nil) then
+    Exit(AsyncWrite(AFd, ABuf, ALen, AOffset, ACallback, AContext));
+  if ADeadline.IsInfinite then
+    LCtx := TimeoutCtxCreate(Self, TDeadline.After(TDuration.FromSeconds(3600 * 24 * 365)),
+      ACallback, AContext, AToken)
+  else
+    LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext, AToken);
+  Result := FPoller.AsyncWrite(AFd, ABuf, ALen, AOffset, @TimeoutIoCallback, LCtx);
   if not Result then
   begin
     TimeoutCtxCancelTimerOwner(LCtx);

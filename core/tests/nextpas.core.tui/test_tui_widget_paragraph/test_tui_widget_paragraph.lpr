@@ -207,6 +207,31 @@ begin
   finally LBuf.Free; end;
 end;
 
+
+procedure TestWrapEmptyString;
+var LP: IParagraph; LBuf: TBuffer;
+begin
+  LP := TParagraph.Wrapped('');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 2));
+  try
+    LP.Render(TRect.Make(0, 0, 8, 2), LBuf);
+    Check(True, 'empty wrapped text ok');
+  finally LBuf.Free; end;
+end;
+
+procedure TestSingleLongWordNoSpace;
+var LP: IParagraph; LBuf: TBuffer; LLines: TBufferLines;
+begin
+  LP := TParagraph.Wrapped('abcdefghij');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 3));
+  try
+    LP.Render(TRect.Make(0, 0, 4, 3), LBuf);
+    LLines := LBuf.AsLines;
+    Check(Length(LLines[0]) > 0, 'long word produces output');
+  finally LBuf.Free; end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.paragraph');
   T.Test('simple render', @TestSimpleRender);
@@ -224,5 +249,7 @@ begin
   T.Test('scroll y zero', @TestScrollYZero);
   T.Test('scroll y beyond content', @TestScrollYBeyondContent);
   T.Test('wrap multi-line', @TestWrapMultiLine);
-  if not T.Run then Halt(1);
+  T.Test('wrap empty string', @TestWrapEmptyString);
+  T.Test('single long word no space', @TestSingleLongWordNoSpace);
+if not T.Run then Halt(1);
 end.

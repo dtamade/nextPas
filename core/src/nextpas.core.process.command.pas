@@ -69,7 +69,7 @@ type
     function ExtraFd(const AFd: Integer): ICommand;
     {** 在 exec 前 setgid+setuid（对齐 SysProcAttr.Credential；Unix；Windows 不支持） *}
     function Credential(const AUid, AGid: UInt32): ICommand;
-    {** 取消令牌：IsCancelled 时 Wait/Output 路径 Kill 子进程并置 Cancelled *}
+    {** 取消令牌：IsCancelled 时 Wait/Output/Status/WaitGraceful 路径 Kill 并置 Cancelled *}
     function CancelToken(const AToken: IAsyncCancellationToken): ICommand;
   end;
 

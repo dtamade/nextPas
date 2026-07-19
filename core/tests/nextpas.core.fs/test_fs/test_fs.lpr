@@ -1222,6 +1222,14 @@ begin
     'Windows non-empty directory error is named in fs error mapper');
   CheckContains(LSource, 'ERROR_DIR_NOT_EMPTY',
     'Windows non-empty directory mapping stays tied to platform kernel32 constant name');
+  CheckContains(LSource, 'ENOSPC_',
+    'POSIX ENOSPC is named in fs error mapper');
+  CheckContains(LSource, 'ENOMEM_',
+    'POSIX ENOMEM is named in fs error mapper');
+  CheckContains(LSource, 'EResourceExhaustedError',
+    'disk full / OOM map to EResourceExhaustedError');
+  CheckContains(LSource, 'ERR_DISK_FULL',
+    'Windows ERROR_DISK_FULL named in fs error mapper');
 end;
 
 procedure TestDirIterator;

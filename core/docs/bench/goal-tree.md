@@ -192,6 +192,10 @@ B28  符号消歧 / 子集扩 track / 文档 CI (2026-07-19)              ✅
   B28.1  runner/pas/xlang/baseline 限定 GlobMatch/LowerCase/…  ✅
   B28.2  SCORECARD 子集 + shortstr/recops/inttohex             ✅
   B28.3  README/CONTRACT/FINAL/ci-gate 口径对齐                  ✅
+
+B29  消费侧文档 + 子集再扩 (2026-07-20)                          ✅
+  B29.1  consumer-guide.md                                     ✅
+  B29.2  scorecard + bitfield/packed/nativeset                 ✅
 ```
 
 ## 测试套件分布

@@ -209,7 +209,7 @@ User still sees exactly one completion. `HasPendingIo` should clear after cancel
 - `IAsyncCancellationToken` 已存在父子传播；Q1 消费端：
   - `TCombinatorOptions.Token` → WhenAll/WhenAny 取消完成（一次 OnComplete）
   - `CreateTaskGroup(..., AToken)` → token Cancel → `CancelAll`
-  - `AsyncRecvTimeoutEx` / `AsyncSendTimeoutEx` → token Cancel → 用户完成 `-ECANCELED`（125），与 timer/I/O CAS 三方竞态
+  - `AsyncRecvTimeoutEx` / `AsyncSendTimeoutEx` / `AsyncReadTimeoutEx` / `AsyncWriteTimeoutEx` → token Cancel → 用户完成 `-ECANCELED`（125），与 timer/I/O CAS 三方竞态
 - 默认 `Token=nil` 保持旧行为
 - 非宣称 Go context 全 API 覆盖；Accept/Read 等 Ex 可后续扩展
 

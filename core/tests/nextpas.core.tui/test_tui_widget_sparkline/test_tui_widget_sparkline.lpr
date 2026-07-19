@@ -225,6 +225,54 @@ begin
   end;
 end;
 
+
+procedure TestSparklineAllZeroData;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+  LData: array[0..4] of Double;
+  I: Integer;
+begin
+  for I := 0 to 4 do LData[I] := 0.0;
+  LSparkline := TSparkline.New(LData);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 2));
+  try
+    LSparkline.Render(TRect.Make(0, 0, 10, 2), LBuffer);
+    Check(True, 'all-zero data renders');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestSparklineWithMaxZeroUsesData;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+  LData: array[0..2] of Double;
+begin
+  LData[0] := 1; LData[1] := 2; LData[2] := 3;
+  LSparkline := TSparkline.New(LData).WithMax(0);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 2));
+  try
+    LSparkline.Render(TRect.Make(0, 0, 6, 2), LBuffer);
+    Check(True, 'WithMax(0) falls back to data max');
+  finally LBuffer.Free; end;
+end;
+
+procedure TestSparklineWidthLargerThanData;
+var
+  LSparkline: ISparkline;
+  LBuffer: TBuffer;
+  LData: array[0..1] of Double;
+begin
+  LData[0] := 1; LData[1] := 5;
+  LSparkline := TSparkline.New(LData);
+  LBuffer := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
+  try
+    LSparkline.Render(TRect.Make(0, 0, 20, 1), LBuffer);
+    Check(True, 'width > data length renders');
+  finally LBuffer.Free; end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.sparkline');
   T.Test('TSparkline.New', @TestSparklineNew);
@@ -241,5 +289,8 @@ begin
   T.Test('single data point', @TestSparklineSingleDataPoint);
   T.Test('render small area', @TestSparklineRenderSmallArea);
   T.Test('many points', @TestSparklineManyPoints);
-  if not T.Run then Halt(1);
+  T.Test('all zero data', @TestSparklineAllZeroData);
+  T.Test('WithMax zero uses data', @TestSparklineWithMaxZeroUsesData);
+  T.Test('width larger than data', @TestSparklineWidthLargerThanData);
+if not T.Run then Halt(1);
 end.

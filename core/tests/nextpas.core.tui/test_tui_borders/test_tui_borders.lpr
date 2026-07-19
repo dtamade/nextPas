@@ -94,6 +94,31 @@ begin
   Check(BorderSetHeavy.Horizontal <> '', 'heavy H not empty');
 end;
 
+
+procedure TestDashedBorderSet;
+begin
+  Check(BorderSetDashed.Horizontal <> '', 'dashed H');
+  Check(BorderSetDashed.Vertical <> '', 'dashed V');
+end;
+
+procedure TestBorderSetsDiffer;
+begin
+  Check(BorderSetPlain.TopLeft <> BorderSetDouble.TopLeft, 'plain != double TL');
+  Check(BorderSetRounded.TopLeft <> BorderSetHeavy.TopLeft, 'rounded != heavy TL');
+end;
+
+procedure TestAllCornersPresent;
+var
+  S: TBorderSet;
+begin
+  S := BorderSetPlain;
+  Check(S.TopLeft <> '', 'TL');
+  Check(S.TopRight <> '', 'TR');
+  Check(S.BottomLeft <> '', 'BL');
+  Check(S.BottomRight <> '', 'BR');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.borders');
   T.Test('border sets', @TestBorderSets);
@@ -105,5 +130,8 @@ begin
   T.Test('all border glyphs', @TestAllBorderGlyphs);
   T.Test('single side borders', @TestSingleSideBorders);
   T.Test('border set types', @TestBorderSetType);
-  if not T.Run then Halt(1);
+    T.Test('dashed border set', @TestDashedBorderSet);
+  T.Test('border sets differ', @TestBorderSetsDiffer);
+  T.Test('all corners present', @TestAllCornersPresent);
+if not T.Run then Halt(1);
 end.

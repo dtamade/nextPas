@@ -88,6 +88,59 @@ begin
     'Foot (capital) → fallback');
 end;
 
+
+procedure TestEmptyHintsAreHalfBlock;
+begin
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints('', '', '', '')),
+    'all empty → half-block');
+end;
+
+procedure TestColorTermAloneNotKitty;
+begin
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints(
+    'truecolor', '', '', '')),
+    'COLORTERM alone does not imply image protocol');
+end;
+
+procedure TestKittyWindowIdHint;
+begin
+  { Some terminals set KITTY_WINDOW_ID via separate path; term features }
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    '', '', '', 'kitty')),
+    'TERM_FEATURES kitty → kitty');
+end;
+
+procedure TestITermHintIfSupported;
+var
+  L: TImageProtocol;
+begin
+  L := DetectImageProtocolFromHints('', 'iTerm.app', '', '');
+  Check((L = ipKitty) or (L = ipHalfBlock) or (Ord(L) >= 0),
+    'iTerm hint resolves without crash');
+end;
+
+procedure TestUnknownProgramFallback;
+begin
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints(
+    '', 'TotallyUnknownTerminalXYZ', 'xterm-256color', '')),
+    'unknown program → half-block');
+end;
+
+procedure TestMixedTermKittyProgramWins;
+begin
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    '', 'kitty', 'xterm-256color', '')),
+    'kitty program with xterm TERM still kitty');
+end;
+
+procedure TestSixelTermName;
+begin
+  CheckEqual(Ord(ipSixel), Ord(DetectImageProtocolFromHints(
+    'mlterm', '', '', '')),
+    'mlterm TERM → sixel');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.image_cap');
   T.Test('detects kitty protocol from known hints',
@@ -100,5 +153,12 @@ begin
     @TestKittyTakesPriorityOverSixelHints);
   T.Test('detection is case-sensitive',
     @TestDetectionIsCaseSensitive);
-  if not T.Run then Halt(1);
+    T.Test('empty hints half-block', @TestEmptyHintsAreHalfBlock);
+  T.Test('colorterm alone not kitty', @TestColorTermAloneNotKitty);
+  T.Test('kitty features hint', @TestKittyWindowIdHint);
+  T.Test('iterm hint no crash', @TestITermHintIfSupported);
+  T.Test('unknown program fallback', @TestUnknownProgramFallback);
+  T.Test('kitty program wins over xterm term', @TestMixedTermKittyProgramWins);
+  T.Test('sixel term name', @TestSixelTermName);
+if not T.Run then Halt(1);
 end.

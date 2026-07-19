@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.path.pas`（1 个源文件）
 **层级**：L2（依赖 L0-L1: platform.path; 委托 fs.path）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：2.6
+**最后更新**：2026-07-20
+**版本**：2.8
 
 ---
 
@@ -74,7 +74,7 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_path | 68 | R19 Clean/Rel/Match Go 表 |
+| test_path | 69 | R19 + R22 Clean/Rel/Dir 边 |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---
@@ -92,3 +92,4 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 | 2026-07-19 | 2.5 | PathDir 仅裸名压空；`./x` 保留 `.` | Claude |
 | 2026-07-19 | 2.6 | R16 ToSlash/SplitList/Volume/Stem/StripPrefix | Claude |
 | 2026-07-19 | 2.7 | R17 质量表；测试 56 | Claude |
+| 2026-07-20 | 2.8 | R22 Clean/Rel/Dir 边界用例；测试 69 | Claude |

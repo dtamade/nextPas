@@ -49,8 +49,36 @@
 
 相对 `strconv`：32 位持平/略优，64 位略慢；相对 `Sprintf` 均明显更快。
 
+## bitfield（2026-07-20 追加）
+
+| Op | Pascal | Go | 说明 |
+|----|--------|-----|------|
+| PopCount/64K | 52.6 µs/op | 44.6 µs/op | Go 略快 ~1.2× |
+| SetRange/64K×1K | 66.2 ms/op | 306 ms/op | **Pascal ~4.6×** ✓ |
+| TestRange/64K×1K | 54.5 ms/op | 175 ms/op | **Pascal ~3.2×** ✓ |
+
+## packed（2026-07-20；Go 为 `go run` 自管计时）
+
+| Op | Pascal | Go | 说明 |
+|----|--------|-----|------|
+| PackedCopy/100K | 500 µs/op | 321 µs/op | Go 更快 ~1.6× |
+| PackedMove/100K | 264 µs/op | 275 µs/op | 持平/Pascal 略优 |
+| PackedUpdate/100K | 228 µs/op | 245 µs/op | 持平/Pascal 略优 |
+| PackedFilter/100K | 137 µs/op | 166 µs/op | **Pascal ~1.2×** ✓ |
+| PackedCompact/100K | 458 µs/op | 265 µs/op | Go 更快 ~1.7× |
+
+## nativeset（2026-07-20）
+
+| Op | Pascal | Go | 说明 |
+|----|--------|-----|------|
+| Membership/256K | 792 µs/op | 7.35 ms/op | **Pascal ~9.3×** ✓ |
+| Intersection/100K | 254 µs/op | ~12.8 s/op* | Pascal 数量级领先 |
+| Union/100K | 260 µs/op | ~12.4 s/op* | Pascal 数量级领先 |
+
+\* Go 侧 map 实现与 Pascal native set 工作量可能不完全等价，解读时注意。
+
 ## 说明
 
 - 仅选无 Rust `target/` 的轻量 track，避免 hygiene 污染。
 - 编译产物应落在 `/tmp` 或 `build/`，勿提交进 git。
-- 与 2026-07-02 总表一致：互有胜负；Append/Compare/Ackermann 等 Pascal 可大幅领先。
+- 子集共 **8** 类 track：boolsum / fncall / shortstr / recops / inttohex / bitfield / packed / nativeset。

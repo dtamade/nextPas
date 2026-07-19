@@ -120,6 +120,68 @@ begin
   Check(not ColorEquals(LFocus.Fg, LBlur.Fg), 'Focused and blurred borders differ');
 end;
 
+
+procedure TestSecondaryTextStyle;
+var
+  LTheme: TTheme;
+  LStyle: TStyle;
+begin
+  LTheme := ThemeDefaultDark;
+  LStyle := LTheme.SecondaryText;
+  Check(ColorEquals(LStyle.Fg, LTheme.FgSecondary), 'SecondaryText fg');
+end;
+
+procedure TestAiLabelStyle;
+var
+  LTheme: TTheme;
+  LStyle: TStyle;
+begin
+  LTheme := ThemeDefaultDark;
+  LStyle := LTheme.AiLabel;
+  Check(ColorEquals(LStyle.Fg, LTheme.AccentAi), 'AiLabel fg');
+  Check(mbBold in LStyle.AddMod, 'AiLabel bold');
+end;
+
+procedure TestToolAndSystemLabels;
+var
+  LTheme: TTheme;
+begin
+  LTheme := ThemeDefaultDark;
+  Check(ColorEquals(LTheme.ToolLabel.Fg, LTheme.AccentTool), 'ToolLabel');
+  Check(ColorEquals(LTheme.SystemLabel.Fg, LTheme.AccentBrand), 'SystemLabel');
+  Check(ColorEquals(LTheme.InfoLabel.Fg, LTheme.StatusInfo), 'InfoLabel');
+end;
+
+procedure TestMessageBackgroundsDistinct;
+var
+  LTheme: TTheme;
+begin
+  LTheme := ThemeDefaultDark;
+  Check(not ColorEquals(LTheme.BgUserMsg, LTheme.BgAiMsg), 'user/ai bg differ');
+  Check(not ColorEquals(LTheme.BgCode, LTheme.BgPrimary), 'code bg distinct');
+  Check(not ColorEquals(LTheme.BgHighlight, LTheme.BgSecondary), 'highlight distinct');
+end;
+
+procedure TestBordersDistinctFromFocus;
+var
+  LTheme: TTheme;
+begin
+  LTheme := ThemeDefaultDark;
+  Check(not ColorEquals(LTheme.BorderNormal, LTheme.BorderFocus), 'border normal != focus');
+  Check(ColorEquals(LTheme.InputBorderFocused.Fg, LTheme.BorderFocus), 'focus border helper');
+end;
+
+procedure TestThemeDefaultDarkIdempotent;
+var
+  A, B: TTheme;
+begin
+  A := ThemeDefaultDark;
+  B := ThemeDefaultDark;
+  Check(ColorEquals(A.BgPrimary, B.BgPrimary), 'theme factory stable bg');
+  Check(ColorEquals(A.AccentUser, B.AccentUser), 'theme factory stable accent');
+end;
+
+
 begin
   T := TTestSuite.Create('tui_widget_chat_theme');
   T.Test('ThemeDefaultDark not nil', @TestDefaultDarkNotNil);
@@ -132,5 +194,11 @@ begin
   T.Test('UserLabel style', @TestUserLabelStyle);
   T.Test('StatusBar style', @TestStatusBarStyle);
   T.Test('InputBorder styles', @TestInputBorderStyles);
-  if not T.Run then Halt(1);
+  T.Test('SecondaryText style', @TestSecondaryTextStyle);
+  T.Test('AiLabel style', @TestAiLabelStyle);
+  T.Test('Tool and System labels', @TestToolAndSystemLabels);
+  T.Test('message backgrounds distinct', @TestMessageBackgroundsDistinct);
+  T.Test('borders distinct from focus', @TestBordersDistinctFromFocus);
+  T.Test('ThemeDefaultDark idempotent', @TestThemeDefaultDarkIdempotent);
+if not T.Run then Halt(1);
 end.

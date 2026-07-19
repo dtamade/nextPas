@@ -444,3 +444,8 @@ atsCancelled: TAsyncTaskStatus = 5;
 ### Kqueue (B3)
 - `pbKqueue` readiness backend wired into `TPoller` for macOS/FreeBSD (`TKqueueReactor`).
 - Evidence: source-contract + `test_async_kqueue_compile_gate` (FORCE_HOST); not host-runtime proven here.
+
+### HE-lite dial (Q6)
+- `platform_socket_resolve_stream`: getaddrinfo multi-A (cap 16), AF_UNSPEC.
+- `NetResolveAll` / `AsyncResolve`: v4-first then v6 list.
+- `NetTcpConnect` / `AsyncTcpConnect`: sequential try each address (IPv4+IPv6); **not** concurrent RFC8305 Happy Eyeballs.

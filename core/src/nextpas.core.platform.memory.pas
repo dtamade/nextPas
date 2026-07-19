@@ -150,8 +150,14 @@ begin
 end;
 
 function IsValidAlignment(AAlignment: SizeUInt): Boolean; inline;
+const
+  { Cap extreme alignments. 1GB+ posix_memalign has been observed to leave
+    process state that Abort-traps at suite exit on Darwin aarch64 GHA even
+    without heaptrc; production callers never need multi-GB alignment. }
+  MAX_ALIGNMENT = SizeUInt(16 * 1024 * 1024);
 begin
-  Result := (AAlignment >= SizeOf(Pointer)) and IsPowerOfTwo(AAlignment);
+  Result := (AAlignment >= SizeOf(Pointer)) and IsPowerOfTwo(AAlignment)
+    and (AAlignment <= MAX_ALIGNMENT);
 end;
 
 function TryAddSizeUInt(ALeft, ARight: SizeUInt; out ASum: SizeUInt): Boolean; inline;
@@ -259,13 +265,12 @@ begin
 {$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_FREEBSD)}
   nextpas.core.platform.posix.ffi.explicit_bzero(APtr, size_t(ASize));
 {$ELSEIF defined(NEXTPAS_MACOS)}
-  { explicit_bzero is not exported on Darwin; memset_s is the native API. }
-  if nextpas.core.platform.darwin.ffi.memset_s(APtr, size_t(ASize), 0,
-    size_t(ASize)) <> 0 then
-  begin
-    FillChar(APtr^, ASize, 0);
-    platform_secure_zero_memory_barrier;
-  end;
+  { Darwin: prefer memset_s when the binding is trusted. GHA macos-14 has
+    Abort-trapped (signal 6) mid secure-zero suite with the C11 binding —
+    possibly constraint-handler default. Keep FillChar+barrier as the
+    durable path until the memset_s ABI is proven on aarch64 runners. }
+  FillChar(APtr^, ASize, 0);
+  platform_secure_zero_memory_barrier;
 {$ELSE}
   FillChar(APtr^, ASize, 0);
   platform_secure_zero_memory_barrier;

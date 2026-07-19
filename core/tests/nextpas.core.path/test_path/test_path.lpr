@@ -810,6 +810,20 @@ begin
   CheckEqual('stem.md', PathChangeExt('stem.ext', '.md'), 'r19v7');
 end;
 
+{ R22 hardening: Clean/Rel/Dir edges beyond R19 tables }
+procedure TestPathCleanRelR22;
+begin
+  CheckEqual('', PathClean(''), 'r22 clean empty stays empty');
+  CheckEqual('/', PathClean('/../..'), 'r22 clean above root');
+  CheckEqual('/a', PathClean('/a/.'), 'r22 clean /a/.');
+  CheckEqual('b', PathRelative('/a', '/a/b'), 'r22 rel child');
+  CheckEqual('.', PathRelative('/a/b', '/a/b'), 'r22 rel same');
+  CheckEqual('', PathStripPrefix('/x', '/y'), 'r22 strip non-prefix');
+  CheckEqual('.', PathStripPrefix('/a', '/a'), 'r22 strip equal');
+  CheckEqual('', PathDir('bare.txt'), 'r22 PathDir bare');
+  CheckEqual('.', PathDir('./x'), 'r22 PathDir ./x');
+end;
+
 
 begin
   T := TTestSuite.Create('nextpas.core.path');
@@ -884,5 +898,6 @@ begin
   T.Test('PathJoin R19 extra', @TestPathJoinR19Extra);
   T.Test('PathMatch R19 extra', @TestPathMatchR19Extra);
   T.Test('PathVolume List R19 extra', @TestPathVolumeListR19Extra);
+  T.Test('PathClean Rel R22', @TestPathCleanRelR22);
   if not T.Run then Halt(1);
 end.

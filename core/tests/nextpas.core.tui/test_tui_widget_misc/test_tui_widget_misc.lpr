@@ -71,7 +71,7 @@ begin
   LS := TScrollbar.New.WithTotal(20).WithVisible(5).WithOffset(0);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 5));
   try
-    (LS as IWidget).Render(TRect.Make(0, 0, 1, 5), LBuf);
+    LS.Render(TRect.Make(0, 0, 1, 5), LBuf);
     Check(True, 'scrollbar rendered without crash');
   finally LBuf.Free; end;
 end;
@@ -103,7 +103,7 @@ begin
 
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 5));
   try
-    (LS as IWidget).Render(TRect.Make(0, 0, 1, 5), LBuf);
+    LS.Render(TRect.Make(0, 0, 1, 5), LBuf);
     CheckEqual('.', LBuf.RowAsString(0), 'row 0 remains track');
     CheckEqual('.', LBuf.RowAsString(1), 'row 1 remains track');
     CheckEqual('.', LBuf.RowAsString(2), 'row 2 remains track');
@@ -163,7 +163,7 @@ begin
     .WithThumbStyle(StyleFg(TUI_RED));
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 5));
   try
-    (LS as IWidget).Render(TRect.Make(0, 0, 1, 5), LBuf);
+    LS.Render(TRect.Make(0, 0, 1, 5), LBuf);
     LCell := LBuf.CellAt(0, 4);
     Check(LCell <> nil, 'cell at bottom exists');
     Check(True, 'scrollbar with custom chars renders');
@@ -187,6 +187,37 @@ begin
   Check(LOffset <= 90, 'drag offset within bounds');
 end;
 
+
+procedure TestTabsEmptyTitles;
+var LT: ITabsWidget; LBuf: TBuffer;
+begin
+  LT := TTabsWidget.New([]);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 2));
+  try
+    LT.Render(TRect.Make(0, 0, 20, 2), LBuf);
+    Check(True, 'empty tabs render');
+  finally LBuf.Free; end;
+end;
+
+procedure TestScrollbarZeroTotal;
+var LS: IScrollbar;
+begin
+  LS := TScrollbar.New.WithTotal(0).WithVisible(0).WithOffset(0);
+  CheckEqual(Int64(0), Int64(LS.ThumbStart(10)), 'zero total thumb start 0');
+end;
+
+procedure TestScrollbarOffsetClampOnRender;
+var LS: IScrollbar; LBuf: TBuffer;
+begin
+  LS := TScrollbar.New.WithTotal(50).WithVisible(10).WithOffset(999);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 10));
+  try
+    LS.Render(TRect.Make(0, 0, 1, 10), LBuf);
+    Check(True, 'large offset clamped on render');
+  finally LBuf.Free; end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.misc');
   T.Test('clear widget', @TestClearWidget);
@@ -203,5 +234,8 @@ begin
   T.Test('scrollbar custom chars', @TestScrollbarCustomChars);
   T.Test('scrollbar single item', @TestScrollbarSingleItem);
   T.Test('scrollbar offset from drag', @TestScrollbarOffsetFromDragY);
-  if not T.Run then Halt(1);
+  T.Test('tabs empty titles', @TestTabsEmptyTitles);
+  T.Test('scrollbar zero total', @TestScrollbarZeroTotal);
+  T.Test('scrollbar offset clamp on render', @TestScrollbarOffsetClampOnRender);
+if not T.Run then Halt(1);
 end.

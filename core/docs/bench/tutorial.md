@@ -19,7 +19,8 @@
 
 ### 安装
 
-bench 模块是 nextpas.core 的一部分，无需额外安装。
+bench 是 `nextpas.core` 的一部分，无需额外安装。  
+**模块作者请先看 [consumer-guide.md](consumer-guide.md)**；可运行示例：`core/examples/bench/quick_start.pas`。
 
 ### 第一个基准
 
@@ -29,7 +30,6 @@ program my_first_bench;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.bench,
   nextpas.core.time.base;
 
@@ -55,6 +55,8 @@ begin
   WriteLn(LResults.PrintToConsole);
 end.
 ```
+
+> 宿主 FPC 编译时不需要 `SysUtils` 仅为 WriteLn；优先依赖 `nextpas.core.*`。
 
 ### 输出解读
 

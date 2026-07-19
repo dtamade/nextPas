@@ -188,9 +188,9 @@ type
   private
     FRefCount: LongInt;
   public
-    function QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
-    function _AddRef: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
-    function _Release: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+    function QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
+    function _AddRef: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
+    function _Release: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
   end;
 
   TExpectation = class(TExpectationBase, IExpectation)
@@ -375,7 +375,7 @@ end;
 
 { ── TExpectationBase (non-atomic refcount) ─────────────────────────────────── }
 
-function TExpectationBase.QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+function TExpectationBase.QueryInterface({$IFDEF FPC_HAS_CONSTREF}constref{$ELSE}const{$ENDIF} IID: TGUID; out Obj): LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
 begin
   if GetInterface(IID, Obj) then
     Result := 0
@@ -383,13 +383,13 @@ begin
     Result := LongInt(E_NOINTERFACE);
 end;
 
-function TExpectationBase._AddRef: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+function TExpectationBase._AddRef: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
 begin
   Inc(FRefCount);
   Result := FRefCount;
 end;
 
-function TExpectationBase._Release: LongInt; {$IFNDEF WINDOWS}cdecl{$ENDIF};
+function TExpectationBase._Release: LongInt; {$IFDEF WINDOWS}stdcall{$ELSE}cdecl{$ENDIF};
 begin
   Dec(FRefCount);
   Result := FRefCount;

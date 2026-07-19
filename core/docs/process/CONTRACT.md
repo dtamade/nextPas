@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.process*.pas`（6 个源文件）
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：2.14
+**最后更新**：2026-07-20
+**版本**：2.15
 
 ---
 
@@ -41,7 +41,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `ICommand.MergeStderr` | stderr 与 stdout 共用写端；Output 的 StdOut 为交错流，StdErr 空 |
 | `ICommand.ExtraFd` | 额外 fd 映射到子进程 3+（Go ExtraFiles；Unix） |
 | `ICommand.Credential` | exec 前 setuid/setgid（Unix；Windows 不支持） |
-| `ICommand.CancelToken` | 取消令牌；Wait/Output 路径 Kill 并置 `Cancelled` |
+| `ICommand.CancelToken` | 取消令牌；Wait/Output/Status/WaitGraceful 路径 Kill 并置 `Cancelled`（无管道的 Wait 也会轮询） |
 | `IChild.Wait: TProcessOutput` | 阻塞等待 |
 | `IChild.TryWait: Boolean` | 非阻塞检查 |
 | `IChild.Kill` | 终止子进程（SIGKILL） |
@@ -111,10 +111,10 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 |----------|-----------|------|
 | test_process | 455 | R21 Cancel/ExtraFd/Credential + R19 表 |
 | test_process_command | 48 | ICommand builder |
-| test_process_deep | 20 | timeout/large output |
+| test_process_deep | 24 | timeout/large + R22 Cancel Wait/Status/DoubleWait/MergeMax |
 | test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |
 | test_process_wine | wine-runtime-smoke **4 passed**（2026-07-19 本机） | Windows L2 under Wine；≠ 真 host |
-| **合计** | **5 目录 / 532+ Unix** | 2026-07-19 R19 实测 Unix 全绿 + 0 leak |
+| **合计** | **5 目录 / 544+ Unix** | 2026-07-20 R22 实测 Unix 全绿 + 0 leak |
 
 ---
 
@@ -138,3 +138,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.12 | R17 质量表；测试 340 | Claude |
 | 2026-07-19 | 2.13 | wine-runtime-smoke 实况 4/4 绿 | Claude |
 | 2026-07-19 | 2.14 | R19 质量表；测试 447 | Claude |
+| 2026-07-20 | 2.15 | R22 CancelToken 贯通 Wait/Status；WaitWithOutput 忙等修复；deep 24 | Claude |

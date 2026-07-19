@@ -51,6 +51,78 @@ begin
   Check(not ModifierIsEmpty(LM), 'all bits not empty');
 end;
 
+
+procedure TestIncludeExclude;
+var
+  LM: TModifier;
+begin
+  LM := [];
+  Include(LM, mbBold);
+  Check(mbBold in LM, 'include bold');
+  Exclude(LM, mbBold);
+  Check(not (mbBold in LM), 'exclude bold');
+end;
+
+procedure TestUnionIntersection;
+var
+  A, B, C: TModifier;
+begin
+  A := [mbBold, mbItalic];
+  B := [mbItalic, mbUnderlined];
+  C := A + B;
+  Check(mbBold in C, 'union bold');
+  Check(mbUnderlined in C, 'union underline');
+  C := A * B;
+  Check(mbItalic in C, 'intersect italic');
+  Check(not (mbBold in C), 'intersect no bold');
+end;
+
+procedure TestDifference;
+var
+  A, B, C: TModifier;
+begin
+  A := [mbBold, mbDim, mbItalic];
+  B := [mbDim];
+  C := A - B;
+  Check(mbBold in C, 'diff keeps bold');
+  Check(not (mbDim in C), 'diff drops dim');
+end;
+
+procedure TestSingleFlags;
+begin
+  Check(mbBold in [mbBold], 'bold alone');
+  Check(mbDim in [mbDim], 'dim alone');
+  Check(mbItalic in [mbItalic], 'italic alone');
+  Check(mbUnderlined in [mbUnderlined], 'underline alone');
+  Check(mbReversed in [mbReversed], 'reversed alone');
+end;
+
+procedure TestEmptyEquality;
+begin
+  Check(ModifierEquals([], []), 'empty equals empty');
+  Check(ModifierIsEmpty([]), 'empty is empty');
+  Check(not ModifierEquals([mbBold], []), 'bold != empty');
+end;
+
+procedure TestSymmetryEquals;
+var
+  A, B: TModifier;
+begin
+  A := [mbBold, mbItalic];
+  B := [mbItalic, mbBold];
+  Check(ModifierEquals(A, B), 'set equality commutative');
+end;
+
+procedure TestHiddenCrossedOut;
+var
+  LM: TModifier;
+begin
+  LM := [mbHidden, mbCrossedOut];
+  Check(mbHidden in LM, 'hidden');
+  Check(mbCrossedOut in LM, 'crossed');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.modifier');
   T.Test('empty', @TestEmpty);
@@ -58,5 +130,12 @@ begin
   T.Test('set operations', @TestSetOps);
   T.Test('size 2 bytes', @TestSize);
   T.Test('all bits', @TestAllBits);
-  if not T.Run then Halt(1);
+    T.Test('include exclude', @TestIncludeExclude);
+  T.Test('union intersection', @TestUnionIntersection);
+  T.Test('difference', @TestDifference);
+  T.Test('single flags', @TestSingleFlags);
+  T.Test('empty equality', @TestEmptyEquality);
+  T.Test('symmetry equals', @TestSymmetryEquals);
+  T.Test('hidden crossed out', @TestHiddenCrossedOut);
+if not T.Run then Halt(1);
 end.
