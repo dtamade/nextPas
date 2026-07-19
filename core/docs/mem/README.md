@@ -2,7 +2,7 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-**Lane 状态（2026-07-17）**: 时代 A–C **CLOSED**；时代 D **Steady**（steward 维护）— 见 **[ROADMAP.md](ROADMAP.md)**。
+**Lane 状态（2026-07-19）**: 时代 A–C **CLOSED**；D **Steady**；**E Active**（对标 Go/Rust）— 见 **[ROADMAP.md](ROADMAP.md)** · **[PARITY-GO-RUST.md](PARITY-GO-RUST.md)**。
 可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
 
 ```bash
@@ -16,7 +16,9 @@ make lane-focused LANE=mem
 
 **Steward 观测（2026-07-17，只读）**: [Inventory 可删清单](INVENTORY-AUDIT-2026-07-17.md) · [Consumer 热路径/unsized free](CONSUMER-OBSERVATION-2026-07-17.md) — **不删代码、不强制改 consumer**。
 
-**P-a prune 设计（2026-07-19，只读）**: [PRUNE-P-a-DESIGN](PRUNE-P-a-DESIGN-2026-07-19.md) — 10 个与 Growing/Arena 重叠的 Tier-3 + 测试映射；**执行待总控批准**。
+**P-a prune（2026-07-19，EXECUTED）**: [PRUNE-P-a-DESIGN](PRUNE-P-a-DESIGN-2026-07-19.md) — 10 Tier-3 allocator + 16 tests 已删（Era E 表面收敛）。
+
+**Go/Rust 对照**: `make -C core/benchmarks/nextpas.core.mem/bench_arena_go_rust compare`
 
 ---
 
