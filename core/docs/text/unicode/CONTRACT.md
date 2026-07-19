@@ -18,7 +18,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 | `collate.pas` | DUCET 排序 |
 | `script.pas` / `block.pas` | Script / Block |
 | `data.pas` | IUnicodeDataManager |
-| 门面 `unicode.pas` | re-export |
+| 门面 `unicode.pas` | re-export（含 `GraphemeClusterByteLen` / `GetIndicConjunctBreak` / `TIndicConjunctBreak`） |
 
 `text.grapheme.GraphemeNext` 委托 `GraphemeClusterByteLen` 做边界，本地只计算显示宽度。
 
