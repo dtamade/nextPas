@@ -3,8 +3,15 @@
 **模块路径**：`core/src/nextpas.core.tui*.pas`（81 个源文件）
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-11
-**版本**：1.1
+**最后更新**：2026-07-19
+**版本**：1.2
+
+---
+
+## 概要
+
+L3 终端 UI：双缓冲 + immediate-mode widget + 分层 facade（core / ext / experimental / full）。
+默认 `nextpas.core.tui` 只保证终端正确性；app/runtime 走 `.ext`，协议能力走 `.experimental`。
 
 ---
 
@@ -121,9 +128,10 @@ end;
 
 ## 6. 测试
 
-- 95 个测试目录，1567 T.Test 注册
+- 95 个测试目录，1630 T.Test 注册
 - heaptrc 全覆盖（编译器标志 `-gh -dHEAPTRC_ACTIVE`）
 - 0 泄漏，0 失败
+- 测试源 0 SysUtils / BaseUnix / Unix 直接引用
 
 ---
 
@@ -131,5 +139,6 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-19 | 1.2 | 测试计数 1567→1630；测试 SysUtils 清零；docs/contracts 改指针 | Claude |
 | 2026-07-11 | 1.1 | 全面重写：对齐实际实现，修正接口签名、控件列表、不变量 | Claude |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |

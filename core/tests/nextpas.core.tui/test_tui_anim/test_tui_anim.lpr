@@ -3,7 +3,6 @@ program test_tui_anim;
 {$I nextpas.core.settings.inc}
 
 uses
-  Math,
   nextpas.core.tui.anim,
   nextpas.core.test;
 
