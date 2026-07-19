@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（Q1-4 landed：H1 write/backpressure 契约；**Era Q1 Done**；NEXT=STOP until demand）
+**Updated**: 2026-07-19（S1-3 landed：1k/10k idle keep-alive 连接阶梯；NEXT=STOP until demand / Q2 optional）
 
 ---
 
@@ -117,7 +117,7 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
-| **下一执行点** | **STOP until demand**（S1-3 连接阶梯 / Q2 comparator optional） |
+| **下一执行点** | **STOP until demand**（Q2 comparator optional；S1-3 Met） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -733,10 +733,12 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 |------|--------|-----|
 | **S1-1** | **landed** | poll-owned 默认 **reactor-inline** handler（`PreferPollWorkerHandoff=False`）；epoll 0.59→**1.59× Go** |
 | **S1-2** | parked until demand | 有界 worker handoff 再设计 / backpressure 文档（legacy PreferPollWorkerHandoff=True 仍可用） |
-| **S1-3** | queued optional | multi-conn sustained（1k/10k 连接阶梯） |
+| **S1-3** | **landed** | multi-conn sustained（1k/10k idle keep-alive 连接阶梯 + 失败模式） |
 | **S1-4** | parked | 跨模块 net 大改 — 当前不需要 |
 
-**S1 RPS 退出**：**Met**（epoll `no_url` ≥ 0.80× Go）。连接阶梯仍 optional S1-3。
+**S1 RPS 退出**：**Met**（epoll `no_url` ≥ 0.80× Go）。
+**S1 连接阶梯**：**Met** — epoll `bench_conn_ladder`：100 / **1000** / **10000** `stable=1`（raise soft nofile）；soft=1024 下 600 连接 `open_ok≈508` `stable=0` 为诚实失败模式。
+**Cross-module**：`TryAccept` 将 EMFILE/ENFILE 映射为 would-block 背压（`platform_socket_error_resource_limit`），避免 fd 耗尽时 epoll accept 路径崩溃。
 
 ### Era S2 — H1 hot path
 
@@ -787,11 +789,12 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 2. H3 Blocked — 跳过；禁止空 facade
 3. Parity Q0+S1-1 — epoll **1.59× Go**（RPS 规模达标）
 4. **Era Q1 Done**（SSE / multipart / metrics / write-backpressure）
-5. **NEXT = STOP until demand** — optional：S1-3 连接阶梯、Q2 comparator 刷新
-6. 跨模块仅按本波 Land paths；path-limited landing only
+5. **S1-3 Met** — 1k/10k idle keep-alive 阶梯 + soft-nofile 失败模式（BENCHMARKS）
+6. **NEXT = STOP until demand** — optional：Q2 comparator 刷新 / Q2-3 scale-ready 宣称评审
+7. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
-**没有用户指令时：STOP（勿空转 H3 / 勿为清单硬开 S1-3）。**
+**没有用户指令时：STOP（勿空转 H3 / 勿为清单硬开 Q2）。**
 
 ---
 

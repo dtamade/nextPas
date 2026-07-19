@@ -112,7 +112,43 @@ completion wake for short keep-alive requests. Tests that assert handoff set
 2. threaded remains faster still (~2.6× Go); epoll is now competitive for scale claims.
 3. Rust `std_only` is reference only.
 4. Single-run snapshot; use `--runs 3` before external publication.
-5. Connection-ladder (1k/10k idle) still open (S1-3).
+5. **S1-3 connection ladder landed** (see below): 1k / 10k idle keep-alive stable with raised nofile.
+
+#### S1-3 Connection ladder (idle keep-alive hold — not RPS)
+
+Harness: `benchmarks/nextpas.core.http/bench_conn_ladder/`
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_conn_ladder build
+# same-process client+server; raise soft RLIMIT_NOFILE when needed
+./build/projects/nextpas.core.http/bench_conn_ladder/bench_conn_ladder \
+  --connections 1000 --hold-ms 2000 --backend epoll --probe 1 --raise-nofile 1
+```
+
+Protocol per connection: GET `/` → read full response → **idle hold** → optional second
+GET probe → close. Machine-readable markers include `operation=http.server.conn_ladder`,
+`open_ok=`, `probe_ok=`, `stable=1|0`, `rlimit_nofile_soft=`, `nofile_raise=`.
+
+| Date | N | hold_ms | backend | open_ok | probe_ok | nofile soft | nofile_raise | stable | Note |
+| ---- | -: | ------: | ------- | ------: | -------: | ----------: | ------------ | -----: | ---- |
+| 2026-07-19 | 100 | 200 | epoll | 100 | 100 | 4296 | ok | **1** | CI smoke (`test_http_benchmarks`) |
+| 2026-07-19 | 1000 | 2000 | epoll | 1000 | 1000 | 6096 | ok | **1** | 1k ladder point |
+| 2026-07-19 | 10000 | 2000 | epoll | 10000 | 10000 | 24096 | ok | **1** | 10k ladder point |
+| 2026-07-19 | 600 | 100 | epoll | 508 | — | **1024** | skipped | **0** | failure mode: soft nofile |
+
+**Failure modes (documented)**
+
+| Mode | Symptom | Reproduction |
+|------|---------|--------------|
+| Soft `RLIMIT_NOFILE` | `open_fail>0`, `stable=0`; process stays up | `--raise-nofile 0 --connections 600` (soft=1024) |
+| Accept EMFILE (pre-fix) | readiness `TryAccept` raised → server tear-down / AV | fixed: `platform_socket_error_resource_limit` → `tarWouldBlock` |
+| Raised nofile 1k/10k | `stable=1` after probe | default `--raise-nofile 1` (uses `platform_resource_set_limit`) |
+
+**fd budget (same process)**: ≈ 2N client+server sockets + listen/epoll/stdio. Soft 1024
+tops out near ~500 concurrent holds; raise soft (≤ hard) for 1k/10k. Bench sets
+`IdleTimeout = hold_ms + 60s` so hold does not false-fail on Default 30s idle.
+
+**Not a Go connection leaderboard** — stability + failure-mode evidence only.
 
 #### Interim single-connection characterization (not scale KPI)
 
@@ -127,6 +163,7 @@ are the focused projects with their own project `Makefile`s and focused smoke
 coverage:
 
 - `bench_server`
+- `bench_conn_ladder` (S1-3 idle keep-alive connection ladder)
 - `bench_router`
 - `bench_headers`
 - `bench_h1writer`
