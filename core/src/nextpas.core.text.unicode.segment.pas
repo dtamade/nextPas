@@ -67,6 +67,11 @@ function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
   Returns bytes from AData to the next sentence break. }
 function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 
+{ Shared UAX #14 line-break opportunity core (byte-oriented).
+  Returns bytes from AData to the next line-break opportunity.
+  Distinct from NextLine (hard line separators only). }
+function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+
 implementation
 
 uses
@@ -975,6 +980,371 @@ begin
       Exit(LByteEnds[LI]);
   end;
 
+  Result := LByteEnds[LCount - 1];
+end;
+
+function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+{** UAX #14 line-break opportunities (Unicode 16.0). Not hard NextLine. **}
+const
+  MAX_CPS = 512;
+  LB_ACT_DIR = 0;
+  LB_ACT_IND = 1;
+  LB_ACT_CMI = 2;
+  LB_ACT_CMP = 3;
+  LB_ACT_PRH = 4;
+  LB_BRK_NO = 0;
+  LB_BRK_ALLOW = 1;
+  LB_BRK_MUST = 2;
+  LB_PAIR_TABLE: array[0..32, 0..32] of Byte = (
+    (4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4),
+    (0, 4, 4, 1, 1, 4, 4, 4, 4, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 4, 4, 4, 4, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (4, 4, 4, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 2, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+    (1, 4, 4, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 2, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (1, 4, 4, 1, 1, 1, 4, 4, 4, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 4, 2, 4, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0),
+    (1, 4, 4, 1, 1, 1, 4, 4, 4, 0, 0, 1, 1, 1, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 0, 1, 4, 4, 4, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 0, 1, 4, 4, 4, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (1, 4, 4, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 2, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 4, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (1, 4, 4, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 2, 4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 1, 4, 4, 4, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0),
+    (0, 4, 4, 1, 1, 0, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 2, 4, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0)
+  );
+  LB_EA_OP_COUNT = 29;
+  LB_EA_OP: array[0..28, 0..1] of TUnicodeCodepoint = (
+    ($2329, $2329),
+    ($3008, $3008),
+    ($300A, $300A),
+    ($300C, $300C),
+    ($300E, $300E),
+    ($3010, $3010),
+    ($3014, $3014),
+    ($3016, $3016),
+    ($3018, $3018),
+    ($301A, $301A),
+    ($301D, $301D),
+    ($FE17, $FE17),
+    ($FE35, $FE35),
+    ($FE37, $FE37),
+    ($FE39, $FE39),
+    ($FE3B, $FE3B),
+    ($FE3D, $FE3D),
+    ($FE3F, $FE3F),
+    ($FE41, $FE41),
+    ($FE43, $FE43),
+    ($FE47, $FE47),
+    ($FE59, $FE59),
+    ($FE5B, $FE5B),
+    ($FE5D, $FE5D),
+    ($FF08, $FF08),
+    ($FF3B, $FF3B),
+    ($FF5B, $FF5B),
+    ($FF5F, $FF5F),
+    ($FF62, $FF62)
+  );
+  LB_PF_QU_COUNT = 10;
+  LB_PF_QU: array[0..9] of TUnicodeCodepoint = (
+    $00BB, $2019, $201D, $203A, $2E03, $2E05, $2E0A, $2E0D, $2E1D, $2E21
+  );
+var
+  LCls: array[0..MAX_CPS - 1] of TLineBreakClass;
+  LCps: array[0..MAX_CPS - 1] of TUnicodeCodepoint;
+  LByteEnds: array[0..MAX_CPS - 1] of SizeUInt;
+  LAfter: array[0..MAX_CPS - 1] of Byte;
+  LCount, LI: Integer;
+  LPos: SizeUInt;
+  LDecode: TUTF8DecodeResult;
+  LCur, LNew, LLast, LNewR: TLineBreakClass;
+  LAction, LBrk: Byte;
+  LSkip: Boolean;
+  LFZwj, LFHebrew: Boolean;
+  LRiCount: Integer;
+  LCh: TUnicodeCodepoint;
+  LOrigRightU16, LOrigLeftU16: Boolean;
+
+  function InPairTable(const ACls: TLineBreakClass): Boolean; inline;
+  begin
+    Result := (ACls >= lbcOP) and (ACls <= lbcCB);
+  end;
+
+  function IsU16Ortho(const ACls: TLineBreakClass): Boolean; inline;
+  begin
+    Result := ACls in [lbcAK, lbcAP, lbcAS, lbcVF, lbcVI];
+  end;
+
+  function ResolveLB(const ACls: TLineBreakClass): TLineBreakClass;
+  begin
+    case ACls of
+      lbcAI: Result := lbcAL;
+      lbcCJ: Result := lbcNS;
+      lbcSA, lbcSG, lbcXX: Result := lbcAL;
+      lbcAK, lbcAP, lbcAS, lbcVF, lbcVI: Result := lbcID;
+    else
+      Result := ACls;
+    end;
+  end;
+
+  function IsEastAsianOP(const ACp: TUnicodeCodepoint): Boolean;
+  var
+    K: Integer;
+  begin
+    for K := 0 to LB_EA_OP_COUNT - 1 do
+      if (ACp >= LB_EA_OP[K, 0]) and (ACp <= LB_EA_OP[K, 1]) then
+        Exit(True);
+    Result := False;
+  end;
+
+  function IsPfQU(const ACp: TUnicodeCodepoint): Boolean;
+  var
+    K: Integer;
+  begin
+    for K := 0 to LB_PF_QU_COUNT - 1 do
+      if LB_PF_QU[K] = ACp then
+        Exit(True);
+    Result := False;
+  end;
+
+begin
+  if (AData = nil) or (ALen = 0) then
+    Exit(0);
+
+  LCount := 0;
+  LPos := 0;
+  while (LPos < ALen) and (LCount < MAX_CPS) do
+  begin
+    LDecode := UTF8Decode(@AData[LPos], ALen - LPos);
+    if LDecode.ByteLen = 0 then
+    begin
+      LCps[LCount] := $FFFD;
+      LCls[LCount] := lbcXX;
+      LPos := LPos + 1;
+    end
+    else
+    begin
+      LCps[LCount] := LDecode.CodePoint;
+      LCls[LCount] := GetLineBreakClass(LDecode.CodePoint);
+      LPos := LPos + SizeUInt(LDecode.ByteLen);
+    end;
+    LByteEnds[LCount] := LPos;
+    LAfter[LCount] := LB_BRK_NO;
+    Inc(LCount);
+  end;
+
+  if LCount = 0 then
+    Exit(0);
+  if LCount = 1 then
+    Exit(LByteEnds[0]);
+
+  LCur := ResolveLB(LCls[0]);
+  LNew := LCur;
+  if LCls[0] in [lbcLF, lbcNL] then
+    LCur := lbcBK;
+  if LCls[0] = lbcSP then
+  begin
+    LNew := lbcSP;
+    LCur := lbcWJ;
+  end;
+  { LB10: any remaining CM/ZWJ (incl. at sot / after hard break restart) → AL }
+  if LCur in [lbcCM, lbcZWJ] then
+    LCur := lbcAL;
+  LLast := lbcXX;
+  LFZwj := LCls[0] = lbcZWJ;
+  LFHebrew := False;
+  LRiCount := 0;
+
+  for LI := 0 to LCount - 2 do
+  begin
+    if (not (LNew in [lbcCM, lbcZWJ])) or
+       (LLast in [lbcBK, lbcCR, lbcLF, lbcNL, lbcSP, lbcZW, lbcXX]) then
+      LLast := LNew;
+    if LLast in [lbcCM, lbcZWJ] then
+      LLast := lbcAL;
+
+    LCh := LCps[LI + 1];
+    LNew := LCls[LI + 1];
+    LOrigRightU16 := IsU16Ortho(LNew);
+    LOrigLeftU16 := IsU16Ortho(LCls[LI]);
+
+    if (LCur = lbcBK) or ((LCur = lbcCR) and (LNew <> lbcLF)) then
+    begin
+      LAfter[LI] := LB_BRK_MUST;
+      { After hard break, next char starts a new line context (LB4/LB5). }
+      if LNew = lbcCM then
+        LCur := lbcAL { LB10: remaining CM → AL }
+      else if LNew in [lbcLF, lbcNL] then
+        LCur := lbcBK
+      else if LNew = lbcSP then
+      begin
+        LNew := lbcSP;
+        LCur := lbcWJ;
+      end
+      else
+        LCur := ResolveLB(LNew);
+      LLast := lbcXX;
+      LFZwj := LNew = lbcZWJ;
+      LFHebrew := False;
+      LRiCount := 0;
+      Continue;
+    end;
+
+    { LB10: CM/ZWJ after SP/ZW/hard → treat as AL for pairing }
+    if (LNew in [lbcCM, lbcZWJ]) and
+       (LCur in [lbcSP, lbcZW, lbcBK, lbcCR, lbcLF, lbcNL, lbcWJ]) then
+      LNew := lbcAL;
+
+    if LNew = lbcSP then
+    begin
+      LAfter[LI] := LB_BRK_NO;
+      LFZwj := False;
+      Continue;
+    end;
+    if LNew in [lbcBK, lbcLF, lbcNL] then
+    begin
+      LCur := lbcBK;
+      LAfter[LI] := LB_BRK_NO;
+      LFZwj := False;
+      Continue;
+    end;
+    if LNew = lbcCR then
+    begin
+      LCur := lbcCR;
+      LAfter[LI] := LB_BRK_NO;
+      LFZwj := False;
+      Continue;
+    end;
+
+    LNewR := ResolveLB(LNew);
+    LBrk := LB_BRK_ALLOW;
+    LSkip := False;
+
+    if (not InPairTable(LCur)) or (not InPairTable(LNewR)) then
+    begin
+      LBrk := LB_BRK_ALLOW;
+      if InPairTable(LNewR) then
+        LCur := LNewR
+      else
+        LCur := lbcAL;
+    end
+    else
+    begin
+      LAction := LB_PAIR_TABLE[Ord(LCur) - 1, Ord(LNewR) - 1];
+      case LAction of
+        LB_ACT_DIR: LBrk := LB_BRK_ALLOW;
+        LB_ACT_IND:
+          if LLast = lbcSP then LBrk := LB_BRK_ALLOW else LBrk := LB_BRK_NO;
+        LB_ACT_CMI:
+          if LLast <> lbcSP then
+          begin
+            LBrk := LB_BRK_NO;
+            LSkip := True;
+          end
+          else
+            LBrk := LB_BRK_ALLOW;
+        LB_ACT_CMP:
+          begin
+            LBrk := LB_BRK_NO;
+            if LLast <> lbcSP then
+              LSkip := True;
+          end;
+        LB_ACT_PRH: LBrk := LB_BRK_NO;
+      else
+        LBrk := LB_BRK_ALLOW;
+      end;
+
+      if LFZwj then
+        LBrk := LB_BRK_NO;
+
+      if ((LCur = lbcCL) and (LNewR in [lbcPO, lbcPR])) or
+         ((LCur = lbcCP) and (LNewR in [lbcPO, lbcPR])) or
+         ((LCur in [lbcPO, lbcPR]) and (LNewR = lbcOP)) then
+        LBrk := LB_BRK_ALLOW;
+
+      if (LLast <> lbcSP) and (LCur in [lbcAL, lbcHL, lbcNU]) and
+         (LNewR = lbcOP) and (not IsEastAsianOP(LCh)) then
+        LBrk := LB_BRK_NO;
+      if (LLast <> lbcSP) and (LCur = lbcCP) and
+         (LNewR in [lbcAL, lbcHL, lbcNU]) then
+        LBrk := LB_BRK_NO;
+
+      if (LOrigRightU16 or LOrigLeftU16) and (LBrk = LB_BRK_NO) and
+         (LAction = LB_ACT_IND) and (LLast <> lbcSP) and
+         (not (LCur in [lbcGL, lbcWJ, lbcQU, lbcOP, lbcCL, lbcCP, lbcNS, lbcEX, lbcIS, lbcSY])) then
+        LBrk := LB_BRK_ALLOW;
+
+      { LB18 SP ÷ with LB7/LB11/LB13/LB14/LB15b/LB16/LB17 exceptions }
+      if LLast = lbcSP then
+      begin
+        if LNewR in [lbcZW, lbcWJ, lbcSP] then
+          LBrk := LB_BRK_NO
+        else if LCur = lbcOP then
+          LBrk := LB_BRK_NO { LB14 }
+        else if (LCur in [lbcCL, lbcCP]) and (LNewR = lbcNS) then
+          LBrk := LB_BRK_NO { LB16 (U16: only CL|CP) }
+        else if (LCur = lbcB2) and (LNewR = lbcB2) then
+          LBrk := LB_BRK_NO { LB17 }
+        else if LNewR in [lbcCL, lbcCP, lbcEX, lbcIS, lbcSY] then
+          LBrk := LB_BRK_NO { LB13 }
+        else if (LNew = lbcQU) and IsPfQU(LCh) then
+          LBrk := LB_BRK_NO { LB15b }
+        else
+          LBrk := LB_BRK_ALLOW; { LB18 }
+      end;
+
+      if LFHebrew and (LCur in [lbcHY, lbcBA]) then
+      begin
+        LBrk := LB_BRK_NO;
+        LFHebrew := False;
+      end
+      else
+        LFHebrew := LCur = lbcHL;
+
+      if LCur = lbcRI then
+      begin
+        Inc(LRiCount);
+        if (LRiCount = 2) and (LNewR = lbcRI) then
+        begin
+          LBrk := LB_BRK_ALLOW;
+          LRiCount := 0;
+        end;
+      end
+      else
+        LRiCount := 0;
+
+      if not LSkip then
+        LCur := LNewR;
+    end;
+
+    LFZwj := LNew = lbcZWJ;
+    LAfter[LI] := LBrk;
+  end;
+
+  LAfter[LCount - 1] := LB_BRK_MUST;
+
+  for LI := 0 to LCount - 2 do
+  begin
+    if LAfter[LI] <> LB_BRK_NO then
+      Exit(LByteEnds[LI]);
+  end;
   Result := LByteEnds[LCount - 1];
 end;
 

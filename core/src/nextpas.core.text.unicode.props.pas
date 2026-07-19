@@ -14,6 +14,7 @@ function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakP
 function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBreak; inline;
 function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty; inline;
 function GetSentenceBreakProperty(const ACp: TUnicodeCodepoint): TSentenceBreakProperty; inline;
+function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -82,6 +83,7 @@ const
 {$I nextpas.core.text.unicode.incb.inc}
 {$I nextpas.core.text.unicode.wbp.inc}
 {$I nextpas.core.text.unicode.sbp.inc}
+{$I nextpas.core.text.unicode.lbp.inc}
 
 function GetAsciiGeneralCategory(const ACp: Byte): TGeneralCategory; inline;
 begin
@@ -260,6 +262,25 @@ begin
     Exit(TSentenceBreakProperty(LValue));
 
   Result := sbpOther;
+end;
+
+function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass;
+var
+  LValue: Byte;
+begin
+  if ACp > UNICODE_MAX_CODEPOINT then
+    Exit(lbcXX);
+
+  if ACp = $000D then Exit(lbcCR);
+  if ACp = $000A then Exit(lbcLF);
+
+  if ACp <= $FFFF then
+    Exit(TLineBreakClass(LBP_BMP_TABLE[Byte(ACp shr 8), Byte(ACp and $FF)]));
+
+  if FindRange3Value(ACp, LBP_SMP_RANGES, LValue) then
+    Exit(TLineBreakClass(LValue));
+
+  Result := lbcXX;
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;

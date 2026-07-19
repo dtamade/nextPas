@@ -166,6 +166,14 @@ def write_sentence_fixture(text: str, out_path: str, version: str) -> int:
     )
 
 
+def write_line_fixture(text: str, out_path: str, version: str) -> int:
+    """LineBreakTest allows leading × (flag 0); still requires trailing ÷."""
+    return write_break_fixture(
+        text, out_path, version, "auxiliary/LineBreakTest.txt",
+        require_leading_break=False,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Vendor Unicode conformance fixtures")
     parser.add_argument("--version", default=DEFAULT_VERSION)
@@ -203,6 +211,16 @@ def main() -> None:
         "--sentence-only",
         action="store_true",
         help="Only generate sentence_break_test.txt",
+    )
+    parser.add_argument(
+        "--line-src",
+        default=None,
+        help="Local LineBreakTest.txt (skip download)",
+    )
+    parser.add_argument(
+        "--line-only",
+        action="store_true",
+        help="Only generate line_break_test.txt",
     )
     args = parser.parse_args()
 

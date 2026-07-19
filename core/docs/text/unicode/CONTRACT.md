@@ -56,7 +56,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 
 1. 无 CLDR tailored grapheme / word
 2. Collation 仅 DUCET（无 locale）
-3. Line 仍为硬换行；UAX#14 LineBreak 待办
+3. **硬** `NextLine` 仍为硬分隔符；**UAX#14** `LineBreakByteLen` 已实现（官方 harness 进行中，~98%）
 
 ## 测试入口
 
@@ -64,7 +64,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 for t in test_case test_data test_enhance test_grapheme_uax29 \
          test_normalize test_property test_collate \
          test_conformance_normalize test_conformance_grapheme \
-         test_conformance_word test_conformance_sentence; do
+         test_conformance_word test_conformance_sentence test_conformance_line; do
   make -C core/tests/nextpas.core.text.unicode/$t clean test
 done
 ```
