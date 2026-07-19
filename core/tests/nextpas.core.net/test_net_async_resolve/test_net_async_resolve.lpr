@@ -68,6 +68,35 @@ begin
     Check(GDnsDone, 'DNS resolution should complete');
     Check(GDnsResult.Success, 'DNS resolution should succeed');
     Check(GDnsResult.FirstAddress.IP = '127.0.0.1', 'localhost should resolve to 127.0.0.1');
+    Check(Length(GDnsResult.Addresses) >= 1, 'dual-stack list has at least one address');
+  finally
+    GLoop.Close;
+    GLoop.Free;
+  end;
+end;
+
+{ dual-stack: IPv4 literal still succeeds; IPv6 optional if platform returns it for hostnames }
+
+procedure TestAsyncResolveDualStackList;
+var
+  LI: Integer;
+  LHasV4: Boolean;
+begin
+  GLoop := TAsyncLoop.Create(32);
+  try
+    GDnsDone := False;
+    GDnsResult := Default(TDnsResult);
+    AsyncResolve(GLoop, 'localhost', @DnsCallback, nil);
+    GLoop.Schedule(TDuration.FromMilliseconds(500), @StopCallback, nil);
+    GLoop.Run;
+    Check(GDnsDone, 'DNS resolution should complete');
+    Check(GDnsResult.Success, 'DNS resolution should succeed');
+    LHasV4 := False;
+    for LI := 0 to High(GDnsResult.Addresses) do
+      if not GDnsResult.Addresses[LI].IsIPv6 then
+        LHasV4 := True;
+    Check(LHasV4, 'localhost dual-stack list includes IPv4');
+    { IPv6 (::1) may or may not be present depending on host; do not hard-fail. }
   finally
     GLoop.Close;
     GLoop.Free;
@@ -145,6 +174,7 @@ end;
 begin
   T := TTestSuite.Create('net_async_resolve');
   T.Test('AsyncResolveLocalhost', @TestAsyncResolveLocalhost);
+  T.Test('AsyncResolveDualStackList', @TestAsyncResolveDualStackList);
   T.Test('AsyncResolveIPLiteral', @TestAsyncResolveIPLiteral);
   T.Test('AsyncResolveCallbackFires', @TestAsyncResolveCallbackFires);
   T.Test('AsyncResolveRefCallback', @TestAsyncResolveRefCallback);

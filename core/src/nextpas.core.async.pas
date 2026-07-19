@@ -77,6 +77,10 @@ function CreateAsyncChannel(const ALoop: TAsyncLoop): IAsyncChannel; inline;
 function CreateBoundedAsyncChannel(const ALoop: TAsyncLoop;
   ACapacity: UInt32): IAsyncChannel; inline;
 function CreateAsyncCondVar(const ALoop: TAsyncLoop): IAsyncCondVar; inline;
+function CreateCancellationToken: IAsyncCancellationToken; inline;
+function CreateTaskGroup(const ALoop: TAsyncLoop;
+  AOptions: TAsyncTaskGroupOptions = [];
+  AToken: IAsyncCancellationToken = nil): IAsyncTaskGroup; inline;
 
 const
   atsIdle: TAsyncTaskStatus = nextpas.core.async.base.atsIdle;
@@ -133,6 +137,18 @@ end;
 function CreateAsyncCondVar(const ALoop: TAsyncLoop): IAsyncCondVar;
 begin
   Result := nextpas.core.async.condvar.CreateAsyncCondVar(ALoop);
+end;
+
+function CreateCancellationToken: IAsyncCancellationToken;
+begin
+  Result := nextpas.core.async.cancellation.CreateCancellationToken;
+end;
+
+function CreateTaskGroup(const ALoop: TAsyncLoop;
+  AOptions: TAsyncTaskGroupOptions;
+  AToken: IAsyncCancellationToken): IAsyncTaskGroup;
+begin
+  Result := nextpas.core.async.taskgroup.CreateTaskGroup(ALoop, AOptions, AToken);
 end;
 
 end.

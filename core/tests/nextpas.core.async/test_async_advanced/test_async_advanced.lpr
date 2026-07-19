@@ -10,7 +10,8 @@ uses
   nextpas.core.async.loop,
   nextpas.core.async.task,
   nextpas.core.async.taskgroup,
-  nextpas.core.async.shutdown;
+  nextpas.core.async.shutdown,
+  nextpas.core.async.cancellation;
 
 var
   T: TTestSuite;
@@ -97,6 +98,23 @@ begin
 
   LLoop.Free;
 
+end;
+
+procedure TestTaskGroupTokenCancel;
+var
+  LLoop: TAsyncLoop;
+  LGroup: IAsyncTaskGroup;
+  LToken: IAsyncCancellationToken;
+begin
+  LLoop := TAsyncLoop.Create;
+  LToken := CreateCancellationToken;
+  LGroup := CreateTaskGroup(LLoop, [], LToken);
+  LGroup.RunTask(nil, nil);
+  LToken.Cancel;
+  Check(LGroup.State = agsCancelled, 'token cancel maps to CancelAll');
+  LGroup := nil;
+  LToken := nil;
+  LLoop.Free;
 end;
 
 procedure TestTaskGroupDrain;
@@ -267,6 +285,7 @@ begin
   T.Test('TaskGroupRunTask', @TestTaskGroupRunTask);
   T.Test('TaskGroupMultiple', @TestTaskGroupMultiple);
   T.Test('TaskGroupCancelAll', @TestTaskGroupCancelAll);
+  T.Test('TaskGroupTokenCancel', @TestTaskGroupTokenCancel);
   T.Test('TaskGroupDrain', @TestTaskGroupDrain);
   T.Test('TaskGroupOptions', @TestTaskGroupOptions);
   T.Test('TaskGroupWithLoop', @TestTaskGroupWithLoop);

@@ -305,6 +305,7 @@ This split avoids forcing a result parameter into timer/post callbacks where it 
   - **epoll / kqueue**: removes the pending op from the reactor table and delivers an internal `-ECANCELED` completion so `TimeoutCtx` refcount is released (not a kernel read/write cancel)
   - **IOCP**: `CancelIoEx` by context; OVERLAPPED stays until GQCS delivers aborted completion (discarded by CAS if timer already won)
   - User API is unchanged: still exactly one user completion (`-110` or I/O result)
+- **CancellationToken (Q1)**: optional `Token` on combinators / TaskGroup / `AsyncRecvTimeoutEx`+`AsyncSendTimeoutEx` — token cancel yields one completion (`-ECANCELED` on timeout-io); not a full Go `context` surface
 - **IOCP wine-runtime-smoke**: reactor socket + cancel and poller overlapped file smoke under Wine; still **not windows runtime ready** on a native Windows host
 - **WhenAll/WhenAny exist** in `async.combinators` (plus Ref variants).
 - **No file descriptor lifecycle management**: the caller is responsible for opening/closing fds.
