@@ -14,6 +14,8 @@ unit nextpas.core.lockfree.hazard;
  *
  * @see Hazard Pointers — Maged Michael, 2004
  * @see EBR — Epoch-Based Reclamation (complementary approach)
+ *
+ * Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -155,10 +157,14 @@ end;
 procedure THazardDomain.AcquireThreads;
 var
   LSpinCount: Int32;
+  LExpected: Int32;
 begin
   LSpinCount := 0;
-  while AtomicCompareExchange32(FThreadsLock, 0, 1, moAcquire) <> 0 do
+  while True do
   begin
+    LExpected := 0;
+    if atomic_compare_exchange_strong(FThreadsLock, LExpected, 1, mo_acquire, mo_relaxed) then
+      Exit;
     Inc(LSpinCount);
     if LSpinCount <= 64 then
       CpuPause
@@ -169,19 +175,24 @@ end;
 
 procedure THazardDomain.ReleaseThreads;
 begin
-  AtomicStore32(FThreadsLock, 0, moRelease);
+  atomic_store(FThreadsLock, 0, mo_release);
 end;
 
 procedure THazardDomain.IncrementRetiredCount;
 var
   LCount: Int32;
+  LExpected: Int32;
 begin
-  repeat
-    LCount := AtomicLoad32(FGlobalRetiredCount, moAcquire);
+  while True do
+  begin
+    LCount := atomic_load(FGlobalRetiredCount, mo_acquire);
     if LCount = High(Int32) then
       raise EInvalidOperationError.Create('THazardDomain.Retire: retired count overflow');
-  until AtomicCompareExchange32(FGlobalRetiredCount, LCount, LCount + 1,
-    moAcqRel) = LCount;
+    LExpected := LCount;
+    if atomic_compare_exchange_strong(FGlobalRetiredCount, LExpected, LCount + 1,
+      mo_acq_rel, mo_acquire) then
+      Exit;
+  end;
 end;
 
 destructor THazardDomain.Destroy;
@@ -259,7 +270,7 @@ begin
     else
       LPrevious^.Next := LCurrent^.Next;
     for LI := 0 to FHPCount - 1 do
-      AtomicStorePtr(LCurrent^.HP[LI], nil, moRelease);
+      atomic_store(LCurrent^.HP[LI], nil, mo_release);
     SetLength(LCurrent^.HP, 0);
     FreeMem(LCurrent, SizeOf(THazardThreadRec));
   finally
@@ -283,7 +294,7 @@ begin
     Result := APtr;
     Exit;
   end;
-  AtomicStorePtr(LThread^.HP[AHPIndex], APtr, moRelease);
+  atomic_store(LThread^.HP[AHPIndex], APtr, mo_release);
   Result := APtr;
 end;
 
@@ -298,9 +309,9 @@ begin
   if (LThread = nil) or (AHPIndex >= FHPCount) then
     raise EArgumentError.Create('THazardDomain.ProtectSource: invalid thread or HP index');
   repeat
-    Result := AtomicLoadPtr(ASource^, moAcquire);
-    AtomicStorePtr(LThread^.HP[AHPIndex], Result, moRelease);
-  until AtomicLoadPtr(ASource^, moAcquire) = Result;
+    Result := atomic_load(ASource^, mo_acquire);
+    atomic_store(LThread^.HP[AHPIndex], Result, mo_release);
+  until atomic_load(ASource^, mo_acquire) = Result;
 end;
 
 procedure THazardDomain.Clear(const AThreadId: PtrUInt; const AHPIndex: PtrUInt);
@@ -316,12 +327,13 @@ begin
   {$ENDIF}
   if (LThread = nil) or (AHPIndex >= FHPCount) then
     Exit;
-  AtomicStorePtr(LThread^.HP[AHPIndex], nil, moRelease);
+  atomic_store(LThread^.HP[AHPIndex], nil, mo_release);
 end;
 
 procedure THazardDomain.Retire(const AData: Pointer; const AReclaim: TLockFreeReclaimProc; const AUserData: Pointer);
 var
   LNode: PHazardRetiredNode;
+  LExpected: Pointer;
 begin
   if AData = nil then
     Exit;
@@ -336,8 +348,9 @@ begin
     raise;
   end;
   repeat
-    LNode^.Next := PHazardRetiredNode(AtomicLoadPtr(Pointer(FRetired), moRelaxed));
-  until AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LNode, moRelease) = LNode^.Next;
+    LNode^.Next := PHazardRetiredNode(atomic_load(Pointer(FRetired), mo_relaxed));
+  LExpected := Pointer(LNode^.Next);
+  until atomic_compare_exchange_strong(Pointer(FRetired), LExpected, Pointer(LNode), mo_release, mo_relaxed);
   // 不遍历线程链表触发 Collect（避免并发修改链表导致悬空指针）
   // Collect 由调用者显式触发，或在 Destroy 中统一回收
 end;
@@ -355,6 +368,7 @@ var
   LHazards: array of Pointer;
   LHazardCount: PtrUInt;
   LReclaimCount: Int32;
+  LExpected: Pointer;
 begin
   LHazardCount := 0;
   AcquireThreads;
@@ -372,7 +386,7 @@ begin
     begin
       for LI := 0 to FHPCount - 1 do
       begin
-        LHazards[LHazardIndex] := AtomicLoadPtr(LThread^.HP[LI], moAcquire);
+        LHazards[LHazardIndex] := atomic_load(LThread^.HP[LI], mo_acquire);
         Inc(LHazardIndex);
       end;
       LThread := LThread^.Next;
@@ -381,7 +395,7 @@ begin
     ReleaseThreads;
   end;
 
-  LList := PHazardRetiredNode(AtomicExchangePtr(Pointer(FRetired), nil, moAcqRel));
+  LList := PHazardRetiredNode(atomic_exchange(Pointer(FRetired), nil, mo_acq_rel));
   if LList = nil then
     Exit;
   LReclaimCount := 0;
@@ -424,10 +438,11 @@ begin
     while LNode^.Next <> nil do
       LNode := LNode^.Next;
     repeat
-      LNode^.Next := PHazardRetiredNode(AtomicLoadPtr(Pointer(FRetired), moRelaxed));
-    until AtomicCompareExchangePtr(Pointer(FRetired), LNode^.Next, LList, moRelease) = LNode^.Next;
+      LNode^.Next := PHazardRetiredNode(atomic_load(Pointer(FRetired), mo_relaxed));
+    LExpected := Pointer(LNode^.Next);
+    until atomic_compare_exchange_strong(Pointer(FRetired), LExpected, Pointer(LList), mo_release, mo_relaxed);
   end;
-  AtomicFetchSub32(FGlobalRetiredCount, LReclaimCount, moRelaxed);
+  atomic_fetch_sub(FGlobalRetiredCount, LReclaimCount, mo_relaxed);
 end;
 
 function THazardDomain.ActiveThreads: PtrUInt;
@@ -450,7 +465,7 @@ end;
 
 function THazardDomain.RetiredCount: PtrUInt; inline;
 begin
-  Result := PtrUInt(AtomicLoad32(FGlobalRetiredCount, moAcquire));
+  Result := PtrUInt(atomic_load(FGlobalRetiredCount, mo_acquire));
 end;
 
 { THazardGuard }
@@ -484,7 +499,7 @@ begin
   if FActive and (FDomain <> nil) then
     Result := FDomain.ProtectSource(FThreadId, FHPIndex, ASource)
   else
-    Result := AtomicLoadPtr(ASource^, moAcquire);
+    Result := atomic_load(ASource^, mo_acquire);
 end;
 
 procedure THazardGuard.Release;
