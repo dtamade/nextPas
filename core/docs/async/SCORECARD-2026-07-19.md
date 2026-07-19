@@ -38,7 +38,7 @@
 |------|---------|--------------|------|
 | 取消贯通 API | context 几乎全栈 | Token 贯通核心路径 | **Q1 done** |
 | 超时+取消竞态 | 标准 | CAS 三方 | **Q1 done** |
-| dual-stack | 默认 | multi-A + HE-lite 串行试连 | **Q6 done** |
+| dual-stack | 默认 | multi-A + HE-lite 串行 + **AsyncTcpDial 并发 HE** | **Q6+Q7** |
 | 组合器竞态 soak | 成熟 | soak100 + token/timeout race | **Q2 done** |
 | 性能 scorecard | 社区基准 | 本机 metric 行 | **Q4 done** |
 

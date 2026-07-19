@@ -17,6 +17,7 @@ uses
   nextpas.core.net.resolve,
   nextpas.core.net.async.tcp,
   nextpas.core.net.async.resolve,
+  nextpas.core.net.async.dial,
   nextpas.core.net.async.backpressure,
   nextpas.core.async.loop;
 
@@ -35,6 +36,8 @@ type
   IUdpSocket = nextpas.core.net.intf.IUdpSocket;
   IAsyncTcpStream = nextpas.core.net.async.tcp.IAsyncTcpStream;
   IAsyncTcpListener = nextpas.core.net.async.tcp.IAsyncTcpListener;
+  TAsyncTcpDialOptions = nextpas.core.net.async.dial.TAsyncTcpDialOptions;
+  TAsyncTcpDialCallback = nextpas.core.net.async.dial.TAsyncTcpDialCallback;
   TDnsResult = nextpas.core.net.async.resolve.TDnsResult;
   TDnsCallback = nextpas.core.net.async.resolve.TDnsCallback;
   TDnsCallbackRef = nextpas.core.net.async.resolve.TDnsCallbackRef;
