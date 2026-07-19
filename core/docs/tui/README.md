@@ -92,7 +92,10 @@ end;
 - 架构边界看 [ARCHITECTURE.md](./ARCHITECTURE.md)
 - 四层 facade 的冻结 ownership 看 [TIER_REGISTRY.md](./TIER_REGISTRY.md)
 - widget catalog 与 widget facade ownership 看 [WIDGET_CATALOG.md](./WIDGET_CATALOG.md)
-- benchmark smoke 口径看 [BENCHMARK.md](./BENCHMARK.md)
+- 代码契约看 [CONTRACT.md](./CONTRACT.md)
+- **Go/Rust 质量对标纲领**看 [PARITY-GO-RUST.md](./PARITY-GO-RUST.md)
+- **Scorecard 门禁场景**看 [SCORECARD.md](./SCORECARD.md)
+- benchmark smoke / 历史基线看 [BENCHMARK.md](./BENCHMARK.md)
 
 ## Examples
 
