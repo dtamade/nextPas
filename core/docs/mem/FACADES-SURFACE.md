@@ -31,35 +31,28 @@
 
 ### Tier-3 黑名单（不得出现在 `nextpas.core.mem` uses）
 
-仍存在于树中的实验单元（禁止进门面）：
+**仍保留且禁止进门面**：
 
 ```text
-nextpas.core.mem.allocator.prediction
-nextpas.core.mem.allocator.numa
-nextpas.core.mem.allocator.replay
-nextpas.core.mem.allocator.huge_page
-nextpas.core.mem.allocator.watermark
-nextpas.core.mem.allocator.sliding
-nextpas.core.mem.allocator.mapped_file
-nextpas.core.mem.allocator.bitmap
-nextpas.core.mem.allocator.cascade
-nextpas.core.mem.allocator.coalesce
-nextpas.core.mem.allocator.compact
-nextpas.core.mem.allocator.cow
-nextpas.core.mem.allocator.group
-nextpas.core.mem.allocator.pool2
-nextpas.core.mem.allocator.prefix
-nextpas.core.mem.blockpool.growable
+nextpas.core.mem.blockpool.growable   # used by blockpool.sharded; not facade
 ```
 
-**P-a 已删除（2026-07-19，Era E）** — 不得复活进树或进门面：
+**P-a 已删除（2026-07-19）** — 不得复活：
 
 ```text
 allocator.bump / dual / freelist / thread_cache / size_class / slab
 allocator.arena2 / arena_group / page / stack
 ```
 
-（完整实验清单以源码树 `core/src/nextpas.core.mem.allocator.*` 为准。）
+**P-b 已删除（2026-07-19，E5）** — 不得复活：
+
+```text
+allocator.prediction / numa / replay / huge_page / watermark / sliding
+allocator.mapped_file / bitmap / cascade / coalesce / compact / cow
+allocator.group / pool2 / prefix
+```
+
+（完整清单以源码树 `core/src/nextpas.core.mem.allocator.*` 为准；guardrails 仍 forbid 已删名进门面。）
 
 ---
 

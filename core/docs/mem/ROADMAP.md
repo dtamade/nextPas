@@ -124,8 +124,8 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 | E2 | 执行 P-a：删 10 Tier-3 allocator + 16 test | **done** 2026-07-19 |
 | E3 | compare A/B 口径；env 缓存快路径；SCORECARD/PARITY 刷新 | **done** 2026-07-19 |
 | E4 | D3 sized free + openssl 双堆纪律 | **done** 2026-07-19（E4-a/b/c + WAIVE 矩阵） |
-| E5 | 可选 P-b 剩余 Tier-3 | 按需（非阻塞） |
-| E6 | Era E → Steady+ 关闭条件 | **done** 2026-07-19（P1–P7 + E4 关闭） |
+| E5 | P-b 剩余 Tier-3 剪枝（15 allocator + tests） | **done** 2026-07-19 |
+| E6 | Era E → Steady+ 关闭条件 | **done** 2026-07-19（P1–P7 + E4/E5） |
 
 **验收**: PARITY 表 P1–P7；`make lane-focused LANE=mem` 常绿。
 **OpenSSL 堆纪律**: [OPENSSL-HEAP-DISCIPLINE.md](OPENSSL-HEAP-DISCIPLINE.md)
@@ -190,3 +190,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-19 | **Era E** 开启：PARITY-GO-RUST；E1 compare 修复；E2 P-a 执行（10+16） |
 | 2026-07-19 | E3：SC1 对齐 heap 段；CachedTruthyEnv 去 CAS-as-load + process route 单缓存；P2 成立 |
 | 2026-07-19 | E4-c/d：openssl DER/stack/param/utils + OPENSSL-HEAP-DISCIPLINE；E4/E6 关闭 |
+| 2026-07-19 | E5 P-b：删 15 Tier-3 allocator + 21 test 目录；保留 blockpool.growable |
