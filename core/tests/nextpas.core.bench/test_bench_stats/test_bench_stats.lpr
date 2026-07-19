@@ -421,42 +421,29 @@ procedure TestMean_NaNInfinity;
 var
   LData: TDoubleArray;
   LResult: Double;
-  LNoCrash: Boolean;
 begin
   SetLength(LData, 3);
 
-  { NaN input: FPC propagates NaN through arithmetic }
+  { NaN input: Mean 跳过 NaN，计算有效值均值 (1+3)/2 = 2 }
   LData[0] := 1.0; LData[1] := DoubleQuietNaN; LData[2] := 3.0;
-  LNoCrash := True;
-  try
-    LResult := GAnalyzer.Mean(LData);
-    Check(IsNan(LResult), 'Mean with NaN input returns NaN');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'Mean survives NaN input without crash');
+  LResult := GAnalyzer.Mean(LData);
+  CheckNear(2.0, LResult, 0.001, 'Mean skips NaN, returns mean of valid values');
 
-  { +Inf input: result should be +Inf }
+  { +Inf input: Mean 跳过 +Inf，计算有效值均值 (1+3)/2 = 2 }
   LData[0] := 1.0; LData[1] := MakePositiveInfinity; LData[2] := 3.0;
-  LNoCrash := True;
-  try
-    LResult := GAnalyzer.Mean(LData);
-    Check(LResult > 1e300, 'Mean with +Inf input returns +Inf');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'Mean survives +Inf input without crash');
+  LResult := GAnalyzer.Mean(LData);
+  CheckNear(2.0, LResult, 0.001, 'Mean skips +Inf, returns mean of valid values');
 
-  { -Inf input: result should be -Inf }
+  { -Inf input: Mean 跳过 -Inf，计算有效值均值 (1+3)/2 = 2 }
   LData[0] := 1.0; LData[1] := MakeNegativeInfinity; LData[2] := 3.0;
-  LNoCrash := True;
-  try
-    LResult := GAnalyzer.Mean(LData);
-    Check(LResult < -1e300, 'Mean with -Inf input returns -Inf');
-  except
-    LNoCrash := False;
-  end;
-  Check(LNoCrash, 'Mean survives -Inf input without crash');
+  LResult := GAnalyzer.Mean(LData);
+  CheckNear(2.0, LResult, 0.001, 'Mean skips -Inf, returns mean of valid values');
+
+  { 全 NaN: 返回 0 }
+  SetLength(LData, 2);
+  LData[0] := DoubleQuietNaN; LData[1] := DoubleQuietNaN;
+  LResult := GAnalyzer.Mean(LData);
+  CheckNear(0.0, LResult, 0.001, 'Mean with all NaN returns 0');
 end;
 
 procedure TestStdDev_NaNInfinity;
@@ -944,6 +931,189 @@ begin
   Check(LCaught, 'ComputeStats(empty) raises EBenchInvalidParam');
 end;
 
+procedure TestCoefficientOfVariation;
+var
+  LData: TDoubleArray;
+begin
+  { 空数组 → 0 }
+  SetLength(LData, 0);
+  Check(GAnalyzer.CoefficientOfVariation(LData) = 0.0, 'CV(empty) = 0');
+
+  { 单元素 → 0 }
+  SetLength(LData, 1);
+  LData[0] := 42.0;
+  Check(GAnalyzer.CoefficientOfVariation(LData) = 0.0, 'CV(single) = 0');
+
+  { 正常数据：[100, 110, 90, 105, 95], mean≈100, stddev≈7.9, CV≈0.079 }
+  SetLength(LData, 5);
+  LData[0] := 100; LData[1] := 110; LData[2] := 90;
+  LData[3] := 105; LData[4] := 95;
+  Check(GAnalyzer.CoefficientOfVariation(LData) > 0.05, 'CV(normal) > 0.05');
+  Check(GAnalyzer.CoefficientOfVariation(LData) < 0.10, 'CV(normal) < 0.10');
+
+  { Mean <= 0 → 0 }
+  SetLength(LData, 3);
+  LData[0] := -10; LData[1] := -20; LData[2] := -30;
+  Check(GAnalyzer.CoefficientOfVariation(LData) = 0.0, 'CV(negative mean) = 0');
+end;
+
+procedure TestTrimmedMean;
+var
+  LData: TDoubleArray;
+  LCaught: Boolean;
+begin
+  { 空数组 → 0 }
+  SetLength(LData, 0);
+  Check(GAnalyzer.TrimmedMean(LData) = 0.0, 'TrimmedMean(empty) = 0');
+
+  { 默认 20% 截尾：[1, 2, 3, 4, 5, 6, 7, 8, 9, 10] → 截掉 1,10 → 均值 (2+3+4+5+6+7+8+9)/8 = 5.5 }
+  SetLength(LData, 10);
+  LData[0] := 1; LData[1] := 2; LData[2] := 3; LData[3] := 4; LData[4] := 5;
+  LData[5] := 6; LData[6] := 7; LData[7] := 8; LData[8] := 9; LData[9] := 10;
+  CheckEqual(5.5, GAnalyzer.TrimmedMean(LData), 0.001);
+
+  { 0% 截尾退化为均值 }
+  CheckEqual(5.5, GAnalyzer.TrimmedMean(LData, 0.0), 0.001);
+
+  { 49% 截尾：几乎只剩中位数 }
+  CheckEqual(5.5, GAnalyzer.TrimmedMean(LData, 49.0), 0.001);
+
+  { 无效参数 }
+  LCaught := False;
+  try
+    GAnalyzer.TrimmedMean(LData, 50.0);
+  except
+    on E: EBenchInvalidParam do LCaught := True;
+  end;
+  Check(LCaught, 'TrimmedMean(50%) raises EBenchInvalidParam');
+end;
+
+procedure TestCohenD;
+var
+  LA, LB: TDoubleArray;
+  I: Integer;
+  LBigDiff: Double;
+begin
+  { 空数组 → 0 }
+  SetLength(LA, 0); SetLength(LB, 5);
+  Check(GAnalyzer.CohenD(LA, LB) = 0.0, 'CohenD(empty A) = 0');
+
+  { 相同数据 → d ≈ 0 }
+  SetLength(LA, 5);
+  LA[0] := 100; LA[1] := 100; LA[2] := 100; LA[3] := 100; LA[4] := 100;
+  LB := Copy(LA);
+  CheckEqual(0.0, GAnalyzer.CohenD(LA, LB), 0.001);
+
+  { 明显差异：A=[100,102,98,101,99], B=[200,202,198,201,199] → d ≈ -100/1.58 ≈ -63 }
+  SetLength(LA, 5);
+  LA[0] := 100; LA[1] := 102; LA[2] := 98; LA[3] := 101; LA[4] := 99;
+  SetLength(LB, 5);
+  LB[0] := 200; LB[1] := 202; LB[2] := 198; LB[3] := 201; LB[4] := 199;
+  Check(Abs(GAnalyzer.CohenD(LA, LB)) > 10.0, 'CohenD(large diff) > 10');
+
+  { 小差异：A=[100,101,99,100,100], B=[102,103,101,102,102] → d ≈ -2/1 ≈ -2 }
+  SetLength(LA, 5);
+  LA[0] := 100; LA[1] := 101; LA[2] := 99; LA[3] := 100; LA[4] := 100;
+  SetLength(LB, 5);
+  LB[0] := 102; LB[1] := 103; LB[2] := 101; LB[3] := 102; LB[4] := 102;
+  Check(Abs(GAnalyzer.CohenD(LA, LB)) > 1.0, 'CohenD(small diff) > 1.0');
+
+  { 数值稳定性：大数值 + 小差异 — 验证 Welford 算法避免灾难性抵消
+    旧实现用 A[I]-MeanA 计算方差，1e10 级数值减法丢失精度 }
+  SetLength(LA, 10); SetLength(LB, 10);
+  for I := 0 to 9 do begin
+    LA[I] := 1e10 + I * 0.1;       { mean ≈ 1e10 + 0.45 }
+    LB[I] := LA[I] + 100.0;        { mean ≈ 1e10 + 100.45 }
+  end;
+  LBigDiff := GAnalyzer.CohenD(LA, LB);
+  Check(Abs(LBigDiff) > 100.0, 'CohenD(big values, small var) huge effect size');
+end;
+
+procedure TestComputePercentiles;
+var
+  LData: TDoubleArray;
+  LP: TPercentileResult;
+  I: Integer;
+begin
+  { 空数组 }
+  SetLength(LData, 0);
+  LP := GAnalyzer.ComputePercentiles(LData);
+  Check(LP.P5 = 0.0, 'Percentiles(empty).P5 = 0');
+
+  { 单元素 }
+  SetLength(LData, 1);
+  LData[0] := 42.0;
+  LP := GAnalyzer.ComputePercentiles(LData);
+  CheckEqual(42.0, LP.P5, 0.001);
+  CheckEqual(42.0, LP.P50, 0.001);
+  CheckEqual(42.0, LP.P99, 0.001);
+
+  { 1..100 }
+  SetLength(LData, 100);
+  for I := 0 to 99 do
+    LData[I] := I + 1;
+  LP := GAnalyzer.ComputePercentiles(LData);
+  CheckEqual(5.95, LP.P5, 0.1);
+  CheckEqual(25.75, LP.P25, 0.1);
+  CheckEqual(50.5, LP.P50, 0.1);
+  CheckEqual(75.25, LP.P75, 0.1);
+  CheckEqual(95.05, LP.P95, 0.1);
+  CheckEqual(99.01, LP.P99, 0.1);
+end;
+
+procedure TestMedian_NaNInfinity;
+var
+  LData: TDoubleArray;
+  LResult: Double;
+begin
+  { Median 跳过 NaN，计算有效值中位数 }
+  SetLength(LData, 5);
+  LData[0] := 1.0; LData[1] := DoubleQuietNaN; LData[2] := 3.0; LData[3] := 5.0; LData[4] := 7.0;
+  LResult := GAnalyzer.Median(LData);
+  { 有效值: [1,3,5,7], 4个元素 → median = (3+5)/2 = 4 }
+  CheckNear(4.0, LResult, 0.001, 'Median skips NaN, returns median of valid values');
+
+  { Median 跳过 Inf }
+  SetLength(LData, 5);
+  LData[0] := 1.0; LData[1] := MakePositiveInfinity; LData[2] := 3.0; LData[3] := 5.0; LData[4] := 7.0;
+  LResult := GAnalyzer.Median(LData);
+  { 有效值: [1,3,5,7], 4个元素 → median = (3+5)/2 = 4 }
+  CheckNear(4.0, LResult, 0.001, 'Median skips +Inf, returns median of valid values');
+
+  { 全 NaN: 返回 0 }
+  SetLength(LData, 3);
+  LData[0] := DoubleQuietNaN; LData[1] := DoubleQuietNaN; LData[2] := DoubleQuietNaN;
+  LResult := GAnalyzer.Median(LData);
+  CheckNear(0.0, LResult, 0.001, 'Median with all NaN returns 0');
+end;
+
+procedure TestTrimmedMean_NaNInfinity;
+var
+  LData: TDoubleArray;
+  LResult: Double;
+begin
+  { TrimmedMean 跳过 NaN，对有效值截尾均值 }
+  SetLength(LData, 7);
+  LData[0] := 1.0; LData[1] := DoubleQuietNaN; LData[2] := 3.0; LData[3] := 5.0;
+  LData[4] := 7.0; LData[5] := 9.0; LData[6] := 11.0;
+  LResult := GAnalyzer.TrimmedMean(LData, 20.0);
+  { 有效值: [1,3,5,7,9,11], sorted; trim 20% = 1 from each end → [3,5,7,9] → mean = 6 }
+  CheckNear(6.0, LResult, 0.001, 'TrimmedMean skips NaN, trims valid values');
+
+  { TrimmedMean 跳过 Inf }
+  SetLength(LData, 5);
+  LData[0] := 1.0; LData[1] := MakePositiveInfinity; LData[2] := 3.0; LData[3] := 5.0; LData[4] := 7.0;
+  LResult := GAnalyzer.TrimmedMean(LData, 20.0);
+  { 有效值: [1,3,5,7], sorted; trim 20% = 0 from each end → [1,3,5,7] → mean = 4 }
+  CheckNear(4.0, LResult, 0.001, 'TrimmedMean skips +Inf, returns mean of valid values');
+
+  { 全 NaN: 返回 0 }
+  SetLength(LData, 2);
+  LData[0] := DoubleQuietNaN; LData[1] := DoubleQuietNaN;
+  LResult := GAnalyzer.TrimmedMean(LData, 20.0);
+  CheckNear(0.0, LResult, 0.001, 'TrimmedMean with all NaN returns 0');
+end;
+
 var
   T: TTestSuite;
   LRunPassed: Boolean;
@@ -990,6 +1160,12 @@ begin
   T.Test('SortIndirect_OddLength', @TestSortIndirect_OddLength);
   T.Test('Percentile_RangeValidation', @TestPercentile_RangeValidation);
   T.Test('ComputeStats_EmptyArray (U-12)', @TestComputeStats_EmptyArray);
+  T.Test('CoefficientOfVariation', @TestCoefficientOfVariation);
+  T.Test('TrimmedMean', @TestTrimmedMean);
+  T.Test('CohenD', @TestCohenD);
+  T.Test('ComputePercentiles', @TestComputePercentiles);
+  T.Test('Median_NaNInfinity', @TestMedian_NaNInfinity);
+  T.Test('TrimmedMean_NaNInfinity', @TestTrimmedMean_NaNInfinity);
 
   LRunPassed := T.Run;
   T.Summary;

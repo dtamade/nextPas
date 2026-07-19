@@ -5,17 +5,32 @@ program bench_overhead;
 {$modeswitch anonymousfunctions}
 {$modeswitch functionreferences}
 
+{**
+ * 框架注册/运行开销基准。
+ * 外层与内层采样均压到「分钟级内可跑完」；不测产品吞吐上限。
+ *}
+
 uses
   {$ifdef unix}
   nextpas.core.thread.init,
   {$endif}
   nextpas.core.bench,
   nextpas.core.time.base,
-  nextpas.core.time.format,
   nextpas.core.platform.time;
 
-var
-  GIterationCount: Integer;
+procedure NoOpBench(const ACtx: IBenchContext);
+begin
+end;
+
+{ 内层 suite：只跑通路径，不追求统计稳定 }
+procedure ConfigureTiny(const ASuite: IBenchSuite);
+begin
+  ASuite.SetQuiet(True);
+  ASuite.SetMinDuration(TDuration.FromMilliseconds(1));
+  ASuite.SetMaxIterations(1);
+  ASuite.SetMinSamples(1);
+  ASuite.SetWarmupIters(0);
+end;
 
 procedure BenchSuiteCreateDestroy(const ACtx: IBenchContext);
 var
@@ -25,7 +40,7 @@ begin
   for I := 1 to 100 do
   begin
     LSuite := TBenchSuite.Create('Test');
-    LSuite.Add('Dummy', nil);
+    LSuite.Add('Dummy', @NoOpBench);
     LSuite := nil;
   end;
   ACtx.SetBytes(100 * SizeOf(Pointer));
@@ -38,7 +53,7 @@ var
 begin
   LSuite := TBenchSuite.Create('Test');
   for I := 1 to 1000 do
-    LSuite.Add('Entry', nil);
+    LSuite.Add('Entry', @NoOpBench);
   ACtx.SetBytes(1000 * SizeOf(Pointer));
   LSuite := nil;
 end;
@@ -64,7 +79,7 @@ var
   LResults: IBenchResults;
 begin
   LSuite := TBenchSuite.Create('Empty');
-  LSuite.SetQuiet(True);
+  ConfigureTiny(LSuite);
   LResults := LSuite.Run;
   LResults := nil;
   LSuite := nil;
@@ -76,10 +91,8 @@ var
   LResults: IBenchResults;
 begin
   LSuite := TBenchSuite.Create('Single');
-  LSuite.SetQuiet(True);
-  LSuite.SetMinDuration(TDuration.FromMilliseconds(1));
-  LSuite.SetMaxIterations(10000);
-  LSuite.Add('Fast', procedure(const ACtx2: IBenchContext) begin end);
+  ConfigureTiny(LSuite);
+  LSuite.Add('Fast', @NoOpBench);
   LResults := LSuite.Run;
   LResults := nil;
   LSuite := nil;
@@ -91,14 +104,12 @@ var
   LResults: IBenchResults;
 begin
   LSuite := TBenchSuite.Create('Multiple');
-  LSuite.SetQuiet(True);
-  LSuite.SetMinDuration(TDuration.FromMilliseconds(1));
-  LSuite.SetMaxIterations(1000);
-  LSuite.Add('A', procedure(const ACtx2: IBenchContext) begin end);
-  LSuite.Add('B', procedure(const ACtx2: IBenchContext) begin end);
-  LSuite.Add('C', procedure(const ACtx2: IBenchContext) begin end);
-  LSuite.Add('D', procedure(const ACtx2: IBenchContext) begin end);
-  LSuite.Add('E', procedure(const ACtx2: IBenchContext) begin end);
+  ConfigureTiny(LSuite);
+  LSuite.Add('A', @NoOpBench);
+  LSuite.Add('B', @NoOpBench);
+  LSuite.Add('C', @NoOpBench);
+  LSuite.Add('D', @NoOpBench);
+  LSuite.Add('E', @NoOpBench);
   LResults := LSuite.Run;
   LResults := nil;
   LSuite := nil;
@@ -110,13 +121,12 @@ var
   LResults: IBenchResults;
   I: Integer;
 begin
-  for I := 1 to 100 do
+  { 10 次 create+run 周期；原先 100 次嵌套在外层采样下会挂死 }
+  for I := 1 to 10 do
   begin
     LSuite := TBenchSuite.Create('Cycle');
-    LSuite.SetQuiet(True);
-    LSuite.SetMinDuration(TDuration.FromMilliseconds(1));
-    LSuite.SetMaxIterations(100);
-    LSuite.Add('Dummy', procedure(const ACtx2: IBenchContext) begin end);
+    ConfigureTiny(LSuite);
+    LSuite.Add('Dummy', @NoOpBench);
     LResults := LSuite.Run;
     LResults := nil;
     LSuite := nil;
@@ -147,9 +157,11 @@ begin
   WriteLn;
 
   LSuite := TBenchSuite.Create('BenchOverhead');
-  LSuite.SetMinDuration(TDuration.FromMilliseconds(10));
-  LSuite.SetMaxIterations(100000);
-  LSuite.SetMinSamples(30);
+  { 外层：短时、少样本，保证 harness 可在约 1–2 分钟内结束 }
+  LSuite.SetMinDuration(TDuration.FromMilliseconds(50));
+  LSuite.SetMaxIterations(200);
+  LSuite.SetMinSamples(5);
+  LSuite.SetWarmupIters(1);
   LSuite.SetQuiet(False);
 
   LSuite.Add('SuiteCreateDestroy/100', @BenchSuiteCreateDestroy);
@@ -158,7 +170,7 @@ begin
   LSuite.Add('SuiteRunEmpty', @BenchSuiteRunEmpty);
   LSuite.Add('SuiteRunSingleFast', @BenchSuiteRunSingleFast);
   LSuite.Add('SuiteRunMultiple', @BenchSuiteRunMultiple);
-  LSuite.Add('SuiteRunCycle/100', @BenchSuiteRunCycle);
+  LSuite.Add('SuiteRunCycle/10', @BenchSuiteRunCycle);
   LSuite.Add('ContextGetElapsed/10000', @BenchContextGetElapsed);
 
   LResults := LSuite.Run;

@@ -181,9 +181,11 @@ begin
   InitTestData;
 
   LSuite := TBenchSuite.Create('BenchStats');
-  LSuite.SetMinDuration(TDuration.FromMilliseconds(10));
-  LSuite.SetMaxIterations(100000);
-  LSuite.SetMinSamples(30);
+  { 与 overhead/report 一致：短时 harness，避免全量 30 样本拖慢 CI }
+  LSuite.SetMinDuration(TDuration.FromMilliseconds(50));
+  LSuite.SetMaxIterations(5000);
+  LSuite.SetMinSamples(5);
+  LSuite.SetWarmupIters(1);
   LSuite.SetQuiet(False);
 
   LSuite.Add('Mean/100', @BenchMean100);

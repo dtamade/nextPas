@@ -83,24 +83,21 @@ end.
 
 ### IBenchResults
 
-| 方法 | 签名 | 说明 |
-|------|------|------|
-| `PrintToConsole` | `: string` | 格式化控制台表格 |
-| `ToBenchstat` | `: string` | Go benchstat 兼容格式 |
-| `ToJSON` | `: string` | JSON 格式 |
-| `ToTSV` | `: string` | TSV 格式 |
-| `ToHTML` | `: string` | 自包含 HTML（内联 CSS/SVG） |
-| `SaveToJSON` | `(Path: string)` | 保存 JSON 到文件 |
-| `SaveToHTML` | `(Path: string)` | 保存 HTML 到文件 |
-| `SaveToTSV` | `(Path: string)` | 保存 TSV 到文件 |
-| `CompareTwoResults` | `(A, B: TBenchResult): TBenchComparison` | Mann-Whitney U 对比 |
-| `CompareMultipleBaselines` | `(Baselines: TBaselineDataArray): TMatrixResult` | 多基线对比矩阵 |
-| `ToMatrixReport` | `(Baselines: TBaselineDataArray): string` | 多基线 Console 报告 |
-| `ToMatrixHTML` | `(Baselines: TBaselineDataArray): string` | 多基线 HTML |
-| `ToMatrixJSON` | `(Baselines: TBaselineDataArray): string` | 多基线 JSON |
-| `SaveBaseline` | `(Path: string; GitHash: string)` | 保存为命名基线 |
-| `AppendToTimeline` | `(Path: string)` | 追加到 JSONL 时间线 |
-| `HasRegression` | `(Threshold: Double): Boolean` | 检测回归（默认 5%） |
+完整签名以 `nextpas.core.bench.intf` 为准。常用子集：
+
+| 类别 | 方法 |
+|------|------|
+| 报告 | `PrintToConsole`, `ToJSON/TSV/HTML/CSV/Benchstat/Summary`, `SaveTo*` |
+| 矩阵 | `CompareMultipleBaselines`, `ToMatrixReport/HTML/JSON/CSV`, `SaveToMatrix*` |
+| 基线 | `SaveBaseline`, `AppendToTimeline`, `HasRegression`, `GetRegressionReport` |
+| 对比 | `CompareTwoResults`（MWU on RawSamples）, `CompareGroups`（组内 NsPerOp 启发式） |
+| 过滤/排序 | `FilterBy*`, `SortBy*`, `GetFastest/Slowest/TopN`, `GetStable/UnstableResults` |
+| 聚合 | `GetSummaryStats`, `GetTotal*`, `GetPercentileStats`, `GetOutlierSummary` |
+| 分组 | `GetGroups`, `GetGroupStats`, `To*_Grouped`, `SaveTo*_Grouped`, `GetGroupRegressionReport` |
+
+**分组规则**：首个 `/` 前为组名；无 `/` 时整名为组名（与 `GetGroups` 一致）。
+
+**API 冻结（2026-07-19）**：默认不再向 `IBenchResults`/`IBenchSuite` 新增便捷 API。
 
 ## 核心类型
 
