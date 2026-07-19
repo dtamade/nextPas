@@ -123,12 +123,25 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 |----|--------|------|------------|------|
 | CO-001 | — | L0 System FreeMem | platform | **保持** |
 | CO-002 | P2 | simd 表/缓冲 unsized free | simd | **CLOSED 2026-07-19**（mem lane D3）：avx2/sse2 tan scratch、image FlipVertical、imageproc FreeImage、simd.alloc raw free、memutils AlignedFree TryBlockSize |
-| CO-003 | P2 | tls 缓冲 unsized free | tls | **partial E4-b**：pool/utils/certificate/wolfssl/txt_db；stack/param 未做 |
+| CO-003 | P2 | tls 缓冲 unsized free | tls | **CLOSED E4-c 2026-07-19**（产品 GetMem 路径；见 §6.1 WAIVE） |
 | CO-004 | P2 | iocp / async fileio unsized | io | **CLOSED E4 2026-07-19** |
-| CO-006 | P2 | async buffer/channel unsized | async | **CLOSED E4-b 2026-07-19**（Cap/Size 配对） |
 | CO-005 | info | FreeMemOf 采用面仍窄 | collections / 文本 | 样板已在 swiss；扩展按触达 |
-| CO-006 | info | json/toml/node 插件 free 多 | 各模块 | 设计内；热则 Arena 或 FreeMemOf |
-| CO-007 | — | DefaultAllocator 默认 inject | — | **正确**；勿改热循环为虚调用 |
+| CO-006 | P2 | async buffer/channel unsized | async | **CLOSED E4-b 2026-07-19** |
+| CO-007 | info | json/toml/node 插件 free 多 | 各模块 | 设计内；热则 Arena 或 FreeMemOf |
+| CO-008 | — | DefaultAllocator 默认 inject | — | **正确**；勿改热循环为虚调用 |
+
+### 6.1 残余矩阵（E4 关闭时，2026-07-19 重扫）
+
+| 桶 | 处置 | 说明 |
+|----|------|------|
+| platform.* FreeMem | **WAIVE** | L0 禁止 uses mem |
+| bench.run / test.runner | **WAIVE** | harness |
+| simd.memutils TryBlockSize 回落 | **WAIVE** | 无 totalSize 时合法 unsized |
+| openssl 本模块 GetMem 串/DER/param 数组 | **FIXED E4-c** | 见 [OPENSSL-HEAP-DISCIPLINE.md](OPENSSL-HEAP-DISCIPLINE.md) |
+| OpenSSL CRYPTO 对象 | **禁止 FreeMem** | 只用 `*_free` FFI |
+| IAllocator.FreeMem | **设计内** | 五方法冻结；SC9 |
+
+过程式产品主路径 unsized：**无开放 P0/P1**。
 
 ---
 
@@ -146,9 +159,9 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 
 ## 8. 结论
 
-- **无新 P0**。
-- Unsized free **残留在 simd/tls/io 等**，适合 owner 顺手，不适合 mem 扫仓。
-- 「热路径 IAllocator」在 consumer 侧主要是 **合法 inject**；真正要避免的是 **新代码** 把过程式热路径改回虚调用。
+- **无新 P0**。E4-a/b/c 后产品过程式 free 主路径已 sized 或显式 WAIVE。
+- 「热路径 IAllocator」在 consumer 侧主要是 **合法 inject**；勿把过程式热路径改回虚调用。
 - 性能下一刀在 **consumer 触达时** 采用 sized free / Arena，不在 mem 再加分配器。
+- OpenSSL 双堆纪律：[OPENSSL-HEAP-DISCIPLINE.md](OPENSSL-HEAP-DISCIPLINE.md)。
 
 相关：[SCORECARD.md](SCORECARD.md) SC8/SC9 · [USABILITY-SCORE.md](USABILITY-SCORE.md) · [ROADMAP.md](ROADMAP.md) D3/D9 · [API-GUIDE.md](API-GUIDE.md)
