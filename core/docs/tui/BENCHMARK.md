@@ -78,10 +78,10 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 make -C core/benchmarks/nextpas.core.tui/bench_go_rust compare
 ```
 
-Ops: DiffIdentical / DiffDirty10 @ 200×50; ParseAscii / ParseCsiUp.  
+Ops: DiffIdentical / DiffDirty10 @ 200×50; ParseAscii / ParseCsiUp.
 Policy and anti-false-win rules: [PARITY-GO-RUST.md](./PARITY-GO-RUST.md) · [SCORECARD.md](./SCORECARD.md).
 
-Platform-level FPC/Go/Rust comparisons remain under `benchmarks/platform-comparison/`.  
+Platform-level FPC/Go/Rust comparisons remain under `benchmarks/platform-comparison/`.
 The tables above are historical smoke baselines (2026-06-02); refresh via scorecard for Ready reports.
 
 ## Summary

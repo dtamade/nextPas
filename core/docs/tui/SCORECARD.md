@@ -1,10 +1,10 @@
 # tui Scorecard
 
-**状态**: Wave Q1 Active  
-**权威入口**: `core/tests/nextpas.core.tui/scorecard/`  
+**状态**: Wave Q1 Active
+**权威入口**: `core/tests/nextpas.core.tui/scorecard/`
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
 
-Ready 报告的热路径证据以本 Scorecard 为准；历史 smoke 数字见 [BENCHMARK.md](BENCHMARK.md)。  
+Ready 报告的热路径证据以本 Scorecard 为准；历史 smoke 数字见 [BENCHMARK.md](BENCHMARK.md)。
 Go/Rust 同方法论对照：
 
 ```bash
@@ -37,9 +37,9 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 
 规则：
 
-- CI/focused 以正确性 + 可复现为主；**不**对 ns/op 设硬阈值。  
-- 禁止为 SC1 优化破坏输入正确性或 layout 契约。  
-- 跨语言绝对 ns 仅作说明；ops 语义必须一致。  
+- CI/focused 以正确性 + 可复现为主；**不**对 ns/op 设硬阈值。
+- 禁止为 SC1 优化破坏输入正确性或 layout 契约。
+- 跨语言绝对 ns 仅作说明；ops 语义必须一致。
 - nextPas Diff 比较完整 `TCell`（40B）；Go/Rust 对照为 **1-byte ch 简化核**——不可当「快于 ratatui」营销。
 
 ---
