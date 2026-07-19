@@ -83,7 +83,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
 | Windows x86_64 | **`ci-matrix` for documented 19-gate set** + wine 19-module secondary | expand matrix modules; keep wine + GHA green |
-| macOS | **`focused-runtime` for documented 8-gate set** (D2.c); inventory via best-effort | keep matrix green; no full-host parity |
+| macOS | **`focused-runtime` for documented 8-gate set** (D2.c); 9-gate (+memory) candidate | GHA green for +memory then promote; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
 | Linux aarch64/arm32/riscv64 | forced-compile | runtime only with hardware/CI |
@@ -301,6 +301,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-19 | **Batch-2**: add `platform.info` to wine matrix (16→17). Windows scripts unchanged (no 20-gate candidate this batch). |
 | 2026-07-19 | **Batch-3**: add `platform.which` to wine matrix (17→18). Windows scripts unchanged. |
 | 2026-07-19 | **Batch-4**: add `platform.dl` to wine matrix (18→19) after Linux 19/0 + wine smoke 8/0. Windows scripts unchanged. |
+| 2026-07-19 | **Batch-5A**: add `platform.memory` to macOS matrix script (8→9 candidate). Promote only after GHA `test-macos` pass=9. |
 
 ---
 

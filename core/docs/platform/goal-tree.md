@@ -14,7 +14,9 @@ Platform is in truth hardening. Linux has broad focused-runtime coverage.
   forced-compile/source-contract only; secure-zero is permanent FillChar+barrier.
   Forced Windows compile gates remain the compile-coherence boundary; remaining
   modules outside the documented set still need real-Windows runtime proof.
-- **macOS**: **focused-runtime** for documented 8-gate set (ROADMAP D2.c).
+- **macOS**: **focused-runtime** for documented 8-gate set (ROADMAP D2.c);
+  **9-gate candidate** adds `platform.memory` (Batch-5; promote only after GHA
+  `test-macos` pass=9).
 - **FreeBSD / Android**: source-contract, forced-compile, or best-effort CI only.
 
 Usability maintenance baseline 8.21 is closed (LT0–LT3 + dual-IO/F6 freeze). D0–D3 closed.
@@ -26,7 +28,7 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
 | Windows x86_64 | **ci-matrix** 19-gate set; wine 19-module secondary | expand matrix; keep GHA+wine green |
-| macOS | **focused-runtime** 8-gate set (D2.c) | keep GHA matrix green |
+| macOS | **focused-runtime** 8-gate set (D2.c); 9-gate (+memory) candidate | GHA green for +memory then promote |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
 
