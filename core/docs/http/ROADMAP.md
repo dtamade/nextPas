@@ -713,7 +713,7 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 4. Era 9 N0 landed — Production Depth open
 5. **NEXT = Wave N1**（SSE 诚实毕业）
 6. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
-7. landing/http-20260719 为 Era 8 Ready 候选（不混入 Era 9 实现）
+7. Era 8 已 ff-only 进入 main（archive/http-era8-landed-20260719）；lane 继续 Era 9
 ```
 
 **没有用户指令时：可按 Goal Loop 自动执行 N1；不要空转 H3。**
