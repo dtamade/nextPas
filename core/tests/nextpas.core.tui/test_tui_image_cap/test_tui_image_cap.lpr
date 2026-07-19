@@ -60,6 +60,34 @@ begin
     'generic terminal programs fall back to half-block');
 end;
 
+procedure TestKittyTakesPriorityOverSixelHints;
+begin
+  // TERM has 'kitty' AND TERM_FEATURES has 'sixel' → kitty wins
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    'xterm-kitty', '', 'sixel', '')),
+    'kitty TERM wins over sixel features');
+  // KITTY_WINDOW_ID set AND TERM=foot → kitty wins
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    'foot', '', '', '12345')),
+    'KITTY_WINDOW_ID wins over sixel TERM=foot');
+end;
+
+procedure TestDetectionIsCaseSensitive;
+begin
+  // WezTerm is case-sensitive (capital W)
+  CheckEqual(Ord(ipKitty), Ord(DetectImageProtocolFromHints(
+    '', 'WezTerm', '', '')),
+    'WezTerm (capital W) → kitty');
+  // 'wezterm' (lowercase) should NOT match kitty
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints(
+    '', 'wezterm', '', '')),
+    'wezterm (lowercase) → fallback');
+  // 'Foot' (capital F) should NOT match sixel
+  CheckEqual(Ord(ipHalfBlock), Ord(DetectImageProtocolFromHints(
+    '', 'Foot', '', '')),
+    'Foot (capital) → fallback');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.image_cap');
   T.Test('detects kitty protocol from known hints',
@@ -68,5 +96,9 @@ begin
     @TestDetectsSixelProtocolFromKnownHints);
   T.Test('falls back conservatively without enhanced hints',
     @TestFallsBackConservativelyWithoutEnhancedHints);
+  T.Test('kitty takes priority over sixel hints',
+    @TestKittyTakesPriorityOverSixelHints);
+  T.Test('detection is case-sensitive',
+    @TestDetectionIsCaseSensitive);
   if not T.Run then Halt(1);
 end.

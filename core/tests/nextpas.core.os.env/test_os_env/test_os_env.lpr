@@ -7,7 +7,8 @@ uses
   nextpas.core.errors,
   nextpas.core.text.base,
   nextpas.core.fs,
-  nextpas.core.os.env;
+  nextpas.core.os.env,
+  nextpas.core.platform.env;
 
 var
   T: TTestSuite;
@@ -530,6 +531,55 @@ begin
   end;
 end;
 
+procedure TestClearEnv;
+var
+  LSnap: TStringArray;
+  I, Eq: Integer;
+  LName, LVal: string;
+  LCode: Int32;
+begin
+  SetEnv('NEXTPAS_CLEAR_ME', '1');
+  Check(HasEnv('NEXTPAS_CLEAR_ME'), 'pre-clear has marker');
+  LSnap := EnvironmentVariables;
+  try
+    ClearEnv;
+    Check(not HasEnv('NEXTPAS_CLEAR_ME'), 'ClearEnv removes marker');
+  finally
+    for I := 0 to High(LSnap) do
+    begin
+      Eq := Pos('=', LSnap[I]);
+      if Eq <= 1 then
+        Continue;
+      LName := Copy(LSnap[I], 1, Eq - 1);
+      LVal := Copy(LSnap[I], Eq + 1, MaxInt);
+      LCode := platform_env_set(PAnsiChar(LName), PAnsiChar(LVal));
+      Check(LCode = 0, 'restore env ' + LName);
+    end;
+  end;
+  Check(HasEnv('NEXTPAS_CLEAR_ME') or (not HasEnv('NEXTPAS_CLEAR_ME')),
+    'post-restore suite continues');
+end;
+
+procedure TestHasEnvEmptyVsMissing;
+begin
+  SetEnv('NEXTPAS_EMPTY_HAS', '');
+  try
+    Check(HasEnv('NEXTPAS_EMPTY_HAS'), 'empty value still HasEnv');
+    Check(not HasEnv('NEXTPAS_MISSING_HAS_XYZ'), 'missing not HasEnv');
+    CheckEqual('', GetEnv('NEXTPAS_EMPTY_HAS'), 'empty GetEnv');
+    CheckEqual('', GetEnv('NEXTPAS_MISSING_HAS_XYZ'), 'missing GetEnv empty');
+  finally
+    UnsetEnv('NEXTPAS_EMPTY_HAS');
+  end;
+end;
+
+procedure TestExpandEnvDollarDollarLiteral;
+begin
+  { Lone $ stays; $$ is two lone $ }
+  CheckEqual('$', ExpandEnv('$'), 'lone dollar');
+  CheckEqual('$$', ExpandEnv('$$'), 'double dollar literal pair');
+end;
+
 { --- main --- }
 
 begin
@@ -575,5 +625,8 @@ begin
   T.Test('SetEnv/UnsetEnv portable name', @TestSetEnvRejectsNonPortableName);
   T.Test('ExpandEnv portable placeholder', @TestExpandEnvRejectsNonPortablePlaceholder);
   T.Test('GetEnv allows non-portable lookup', @TestGetEnvAllowsNonPortableLookup);
+  T.Test('ClearEnv', @TestClearEnv);
+  T.Test('HasEnv empty vs missing', @TestHasEnvEmptyVsMissing);
+  T.Test('ExpandEnv dollar literal', @TestExpandEnvDollarDollarLiteral);
   if not T.Run then Halt(1);
 end.

@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：2.10
+**版本**：2.11
 
 ---
 
@@ -46,6 +46,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | `IChild.Detach` | 放弃生命周期管理 |
 | `IChild.TakeStdin/Stdout/Stderr` | 取走管道（大输出流式路径） |
 | `IChild.WaitWithOutput: TProcessOutput` | 并发读取 + 等待（全内存缓冲） |
+| `IChild.WaitGraceful(AGrace)` | SIGTERM → grace 内 wait → 超时 Kill；TimedOut 表示走了 Kill |
 
 ---
 
@@ -105,7 +106,7 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_process | 281 | API 全覆盖 + Wait/TryWait 排水 + MergeStderr + FPC RTL 门禁 |
+| test_process | 292 | API 全覆盖 + WaitGraceful + Take*/Status 质量测 |
 | test_process_command | 48 | ICommand builder |
 | test_process_deep | 20 | timeout/large output |
 | test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |
@@ -130,3 +131,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.8 | INV-13 TryWait 持管道排水；Take* 责任钉死 | Claude |
 | 2026-07-19 | 2.9 | INV-13 钉死 TryWait=drain-only（非 WaitWithOutput） | Claude |
 | 2026-07-19 | 2.10 | INV-1 对齐 Destroy 5s abandon（非无限 Kill+Wait） | Claude |
+| 2026-07-19 | 2.11 | WaitGraceful；测试 292 | Claude |

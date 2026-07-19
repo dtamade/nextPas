@@ -311,10 +311,11 @@ begin
     while LPos > AStartIndex do
     begin
       LPrevCcc := GetCanonicalCombiningClass(ABuffer.ItemAt(LPos - 1));
+      // Keep comparing against the inserted mark's original CCC (LCcc).
+      // Do NOT overwrite LCcc with LPrevCcc — that breaks insertion sort.
       if (LPrevCcc = 0) or (LPrevCcc <= LCcc) then
         Break;
       ABuffer.ReplaceAt(LPos, ABuffer.ItemAt(LPos - 1));
-      LCcc := LPrevCcc;  // 移动后继承前一个 CCC，避免下次重复查表
       Dec(LPos);
     end;
     ABuffer.ReplaceAt(LPos, LCp);
@@ -421,6 +422,7 @@ var
   LCcc: Byte;
   LCurrent: TUnicodeCodepoint;
   LComposed: TUnicodeCodepoint;
+  LCanTry: Boolean;
 begin
   if ABuffer.Count = 0 then
     Exit;
@@ -440,32 +442,25 @@ begin
     begin
       LCurrent := ABuffer.ItemAt(LLookahead);
       LCcc := GetCanonicalCombiningClass(LCurrent);
-      if LCcc = 0 then
-        Break;
 
-      if ComposeHangulPair(ABuffer.ItemAt(LStarterIndex), LCurrent, LComposed) or
-         (FindComposition(ABuffer.ItemAt(LStarterIndex), LCurrent, LComposed) and
-          ((LLastCcc = 0) or (LLastCcc < LCcc))) then
+      { UAX #15: unblocked if immediately after starter (LLastCcc=0) or
+        LLastCcc < CCC(current). Adjacent starters (CCC=0) must also compose. }
+      LCanTry := (LLastCcc = 0) or ((LCcc <> 0) and (LLastCcc < LCcc));
+      if LCanTry and
+         (ComposeHangulPair(ABuffer.ItemAt(LStarterIndex), LCurrent, LComposed) or
+          FindComposition(ABuffer.ItemAt(LStarterIndex), LCurrent, LComposed)) then
       begin
         ABuffer.ReplaceAt(LStarterIndex, LComposed);
         ABuffer.DeleteAt(LLookahead);
-        // 组合后重置 LLastCcc：新字符是 starter 的一部分，不是 combining mark
         LLastCcc := 0;
         Continue;
       end;
 
+      if LCcc = 0 then
+        Break;
+
       LLastCcc := LCcc;
       Inc(LLookahead);
-    end;
-
-    if (LLookahead < ABuffer.Count) and (GetCanonicalCombiningClass(ABuffer.ItemAt(LLookahead)) = 0) then
-    begin
-      if ComposeHangulPair(ABuffer.ItemAt(LStarterIndex), ABuffer.ItemAt(LLookahead), LComposed) then
-      begin
-        ABuffer.ReplaceAt(LStarterIndex, LComposed);
-        ABuffer.DeleteAt(LLookahead);
-        Continue;
-      end;
     end;
 
     Inc(LStarterIndex);

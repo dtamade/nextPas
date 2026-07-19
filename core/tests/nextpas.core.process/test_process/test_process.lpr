@@ -1532,6 +1532,71 @@ begin
   Check('CaptureInWithInputString — contains input', Pos('hello dir', LText) > 0);
 end;
 
+procedure TestStatusLeavesStdoutEmpty;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('status-silent').Status;
+  Check('Status — exit 0', LOut.ExitCode = 0);
+  Check('Status — stdout empty', LOut.StdOut = '');
+  Check('Status — stderr empty', LOut.StdErr = '');
+  Check('Status — not timed out', not LOut.TimedOut);
+end;
+
+procedure TestTakeStdoutThenWaitDoesNotAutoDrain;
+var
+  LChild: IChild;
+  LReader: IReader;
+  LOut: TProcessOutput;
+  LBuf: array[0..63] of Byte;
+  LRead: SizeUInt;
+  LGot: string;
+begin
+  LChild := Command('/bin/echo')
+    .Arg('take-then-wait')
+    .Stdout(stPiped)
+    .Spawn;
+  LReader := LChild.TakeStdout;
+  LGot := '';
+  repeat
+    LRead := LReader.Read(LBuf[0], SizeOf(LBuf));
+    if LRead > 0 then
+    begin
+      SetLength(LGot, Length(LGot) + Integer(LRead));
+      Move(LBuf[0], LGot[Length(LGot) - Integer(LRead) + 1], LRead);
+    end;
+  until LRead = 0;
+  LOut := LChild.Wait;
+  Check('Take* then Wait — caller got payload', Pos('take-then-wait', LGot) > 0);
+  Check('Take* then Wait — auto StdOut empty', LOut.StdOut = '');
+  Check('Take* then Wait — exited', LOut.Status = psExited);
+end;
+
+procedure TestWaitGracefulTerminatesSleep;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  { Long sleep: grace may SIGTERM (default dies) or Kill; either ends process. }
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(200));
+  Check('WaitGraceful long-sleep — terminated', LOut.Status <> psRunning);
+  Check('WaitGraceful long-sleep — not still running flag',
+    LOut.Status in [psExited, psSignaled, psUnknown]);
+end;
+
+procedure TestWaitGracefulAcceptsTerm;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  { Default signal disposition for sleep is terminate on SIGTERM without needing kill. }
+  LChild := Command('/bin/sleep').Arg('5').Spawn;
+  LOut := LChild.WaitGraceful(TDuration.FromSeconds(2));
+  Check('WaitGraceful term — not running', LOut.Status <> psRunning);
+  { May be Signaled(SIGTERM) or Exited depending on platform; not TimedOut if term worked. }
+  Check('WaitGraceful term — finished under grace', not LOut.TimedOut);
+end;
 
 begin
   LPassed := 0;
@@ -1621,6 +1686,10 @@ begin
   TestRunInWithInputString;
   TestCaptureInWithInput;
   TestCaptureInWithInputString;
+  TestStatusLeavesStdoutEmpty;
+  TestTakeStdoutThenWaitDoesNotAutoDrain;
+  TestWaitGracefulTerminatesSleep;
+  TestWaitGracefulAcceptsTerm;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');

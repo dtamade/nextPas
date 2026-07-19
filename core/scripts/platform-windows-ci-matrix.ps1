@@ -10,7 +10,7 @@
 #
 # Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the listed module dirs only — not full-host Windows parity.
-# 18-gate promoted (+error). +fmt is 19-gate candidate until GHA green.
+# 19-gate promoted (+error +fmt) after GHA pass=19 (run 29686191527).
 
 $ErrorActionPreference = 'Stop'
 
@@ -59,7 +59,7 @@ $fail = 0
 $failed = @()
 
 Write-Output '=== Platform Windows CI Matrix (real host) ==='
-Write-Output 'truth=ci-matrix; documented 19-gate set (candidate until GHA green for +fmt); not full-host Windows parity'
+Write-Output 'truth=ci-matrix; documented 19-gate set; not full-host Windows parity'
 Write-Output "core=$CoreRoot"
 Write-Output ''
 

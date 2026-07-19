@@ -1,7 +1,6 @@
 program test_tui_syntax;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.tui.style,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,

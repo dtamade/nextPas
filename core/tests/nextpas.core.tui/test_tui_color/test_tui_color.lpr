@@ -58,6 +58,91 @@ begin
   CheckEqual(Int64(4), Int64(SizeOf(TColor)), 'TColor 4 bytes');
 end;
 
+procedure TestRgbShortcut;
+var
+  LC: TColor;
+begin
+  LC := Rgb(100, 200, 50);
+  Check(LC.Kind = ckRgb, 'rgb kind');
+  CheckEqual(Int64(100), Int64(LC.R), 'R');
+  CheckEqual(Int64(200), Int64(LC.G), 'G');
+  CheckEqual(Int64(50), Int64(LC.B), 'B');
+end;
+
+procedure TestIdxShortcut;
+var
+  LC: TColor;
+begin
+  LC := Idx(42);
+  Check(LC.Kind = ckIndexed, 'indexed kind');
+  CheckEqual(Int64(42), Int64(LC.Index), 'index 42');
+end;
+
+procedure TestHexColor;
+var
+  LC: TColor;
+begin
+  LC := HexColor('#FF8000');
+  Check(LC.Kind = ckRgb, 'hex kind rgb');
+  CheckEqual(Int64(255), Int64(LC.R), 'hex R');
+  CheckEqual(Int64(128), Int64(LC.G), 'hex G');
+  CheckEqual(Int64(0), Int64(LC.B), 'hex B');
+end;
+
+procedure TestHexColorWithoutHash;
+var
+  LC: TColor;
+begin
+  LC := HexColor('00FF00');
+  Check(LC.Kind = ckRgb, 'hex without hash');
+  CheckEqual(Int64(0), Int64(LC.R), 'R=0');
+  CheckEqual(Int64(255), Int64(LC.G), 'G=255');
+  CheckEqual(Int64(0), Int64(LC.B), 'B=0');
+end;
+
+procedure TestHexColorEmpty;
+var
+  LC: TColor;
+begin
+  LC := HexColor('');
+  Check(LC.Kind = ckReset, 'empty hex returns reset');
+end;
+
+procedure TestHexColorShort;
+var
+  LC: TColor;
+begin
+  LC := HexColor('#FFF');
+  Check(LC.Kind = ckReset, 'short hex returns reset');
+end;
+
+procedure TestAllNamedColors;
+begin
+  Check(TUI_BLACK.Index = 0, 'black=0');
+  Check(TUI_RED.Index = 1, 'red=1');
+  Check(TUI_GREEN.Index = 2, 'green=2');
+  Check(TUI_YELLOW.Index = 3, 'yellow=3');
+  Check(TUI_BLUE.Index = 4, 'blue=4');
+  Check(TUI_MAGENTA.Index = 5, 'magenta=5');
+  Check(TUI_CYAN.Index = 6, 'cyan=6');
+  Check(TUI_GRAY.Index = 7, 'gray=7');
+  Check(TUI_DARK_GRAY.Index = 8, 'dark gray=8');
+  Check(TUI_LIGHT_RED.Index = 9, 'light red=9');
+  Check(TUI_LIGHT_GREEN.Index = 10, 'light green=10');
+  Check(TUI_LIGHT_YELLOW.Index = 11, 'light yellow=11');
+  Check(TUI_LIGHT_BLUE.Index = 12, 'light blue=12');
+  Check(TUI_LIGHT_MAGENTA.Index = 13, 'light magenta=13');
+  Check(TUI_LIGHT_CYAN.Index = 14, 'light cyan=14');
+  Check(TUI_WHITE.Index = 15, 'white=15');
+end;
+
+procedure TestColorEqualsCrossKind;
+begin
+  Check(not ColorEquals(UnsetColor, ResetColor), 'unset != reset');
+  Check(not ColorEquals(IndexedColor(0), RgbColor(0, 0, 0)), 'indexed != rgb');
+  Check(not ColorEquals(ResetColor, IndexedColor(0)), 'reset != indexed');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.color');
   T.Test('constructors', @TestConstructors);
@@ -65,5 +150,13 @@ begin
   T.Test('is set', @TestIsSet);
   T.Test('named colors', @TestNamedColors);
   T.Test('size 4 bytes', @TestSize);
+  T.Test('Rgb shortcut', @TestRgbShortcut);
+  T.Test('Idx shortcut', @TestIdxShortcut);
+  T.Test('HexColor', @TestHexColor);
+  T.Test('HexColor without hash', @TestHexColorWithoutHash);
+  T.Test('HexColor empty', @TestHexColorEmpty);
+  T.Test('HexColor short', @TestHexColorShort);
+  T.Test('all named colors', @TestAllNamedColors);
+  T.Test('color equals cross kind', @TestColorEqualsCrossKind);
   if not T.Run then Halt(1);
 end.

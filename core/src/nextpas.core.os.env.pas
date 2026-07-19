@@ -45,6 +45,12 @@ function GetEnvDefault(const AName, ADefault: string): string;
 {** @desc 删除环境变量 *}
 procedure UnsetEnv(const AName: string);
 {**
+ * @desc 清除当前进程全部环境变量（对齐 Go os.Clearenv）
+ * @note 非线程安全；对 EnvKeys 快照逐个 unset（跳过含 '=' / NUL 的异常名）
+ * @note 比 UnsetEnv 宽松：不强制可移植名，以便真正清空进程环境
+ *}
+procedure ClearEnv;
+{**
  * @desc 展开字符串中的环境变量引用
  *
  * @params
@@ -306,6 +312,25 @@ begin
   ValidatePortableEnvName(AName);
   LN := AName;
   RaiseEnvError(platform_env_unset(PAnsiChar(LN)), 'unsetenv', AName);
+end;
+
+procedure ClearEnv;
+var
+  LKeys: TStringArray;
+  I: Integer;
+  LN: string;
+begin
+  LKeys := EnvKeys;
+  for I := 0 to High(LKeys) do
+  begin
+    LN := LKeys[I];
+    if LN = '' then
+      Continue;
+    if (Pos('=', LN) > 0) or (Pos(#0, LN) > 0) then
+      Continue;
+    { Best-effort: ignore platform errors so one bad key does not abort clear. }
+    platform_env_unset(PAnsiChar(LN));
+  end;
 end;
 
 function ExpandEnvInternal(const AValue, ADefault: string;
