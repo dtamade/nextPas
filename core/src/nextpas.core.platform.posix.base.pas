@@ -329,8 +329,17 @@ const
   PLATFORM_POSIX_MAP_SHARED = Int32(1);
   PLATFORM_POSIX_MAP_PRIVATE = Int32(2);
   PLATFORM_POSIX_MAP_FIXED = Int32($10);
+  { Linux/Android: MAP_ANONYMOUS=$20, MAP_NORESERVE=$4000.
+    Darwin/FreeBSD and other BSDs: MAP_ANON=$1000; MAP_NORESERVE is not a
+    portable flag (use 0 so OR is a no-op). Wrong Linux value on Darwin makes
+    mmap fail — platform.memory virtual_reserve tests abort on macOS CI. }
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
   PLATFORM_POSIX_MAP_ANONYMOUS = Int32($20);
   PLATFORM_POSIX_MAP_NORESERVE = Int32($4000);
+{$ELSE}
+  PLATFORM_POSIX_MAP_ANONYMOUS = Int32($1000);
+  PLATFORM_POSIX_MAP_NORESERVE = Int32(0);
+{$ENDIF}
   PLATFORM_POSIX_MAP_FAILED = PtrInt(-1); { Prefer PLATFORM_POSIX_MAP_FAILED_PTR for pointer comparisons }
   PLATFORM_POSIX_MAP_FAILED_PTR = PtrUInt(High(PtrUInt));
 
