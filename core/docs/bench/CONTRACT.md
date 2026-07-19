@@ -1,10 +1,9 @@
 # nextpas.core.bench 代码契约
 
-**模块路径**：`core/src/nextpas.core.bench*.pas`（11 个源文件）
-**层级**：L1（依赖 L0: base, text）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**模块路径**：`core/src/nextpas.core.bench*.pas`
+**层级**：L1（依赖 L0: base / text / platform.time 等）
+**最后更新**：2026-07-19
+**权威状态**：`goal-tree.md`（B0–B27）；API 冻结见 README
 
 ---
 
@@ -14,16 +13,19 @@
 
 | 文件 | 职责 |
 |------|------|
-| bench.base | TBaselineComparison, TBaselineManager, EBenchError 基础类型 |
-| bench.intf | IBenchResults, IBenchContext 接口定义 |
-| bench.runner | TParallelBenchmark, TBenchThread 基准测试运行器 |
-| bench.parallel | TParallelBenchConfig 并行基准配置 |
-| bench.stats | 统计计算（均值/中位数/标准差） |
-| bench.stats.advanced | 高级统计（百分位/自举） |
-| bench.baseline | 基线管理（保存/对比） |
-| bench.memtrack | 内存跟踪 |
+| bench.base | 类型/常量/GlobMatch/Xoroshiro 等 |
+| bench.intf | IBenchSuite / IBenchResults / IBenchContext |
+| bench.runner | TBenchContext + TBenchRunner |
+| bench.parallel | 并行基准 |
+| bench.stats / stats.advanced | 统计与高级统计 |
+| bench.baseline | 基线 JSON / 时间线 |
+| bench.memtrack | 内存追踪 |
 | bench.report | 报告生成 |
-| bench.pas | 门面 re-export |
+| bench.xlang | 跨语言输出解析 |
+| bench.run | 线程安全执行器 |
+| bench.pas | 门面（TBenchSuite / TBenchResults） |
+
+**符号纪律**：名称匹配必须用 `bench.base.GlobMatch`；字符串工具优先 `text.conv.*` 限定，避免与 `fs.GlobMatch` 等冲突。
 
 ### 1.2 核心接口
 

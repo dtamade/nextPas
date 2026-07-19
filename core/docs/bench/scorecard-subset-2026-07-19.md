@@ -5,7 +5,7 @@
 | 项 | 值 |
 |----|-----|
 | 机器 | Linux x86_64, Intel Xeon E5-2696 v4 @ 2.20GHz, 44 threads |
-| Pascal | FPC 3.3.1 `-O3`，`-Fu core/src` |
+| Pascal | FPC 3.3.1 `-O3`，`-Fu core/src`，产物落 `/tmp` |
 | Go | `go test -bench=. -benchtime=1s -count=1` |
 | 全量 SCORECARD | 仍以 **2026-07-02** 为基线（未全量重跑） |
 
@@ -23,8 +23,34 @@
 | Ackermann(3,5) | 74.6 µs/op | 245 µs/op | **3.28× 更快** ✓ |
 | Ackermann(3,6) | 292 µs/op | 981 µs/op | **3.36× 更快** ✓ |
 
+## shortstr
+
+| Op | Pascal | Go | 说明 |
+|----|--------|-----|------|
+| Copy/100K | 668 µs/op | 259 µs/op | Go 更快 ~2.6× |
+| Append/1K | 10.9 µs/op | 2.08 ms/op | **Pascal ~191×** ✓ |
+| Compare/100K | 1.94 ms/op | 15.9 ms/op | **Pascal ~8.2×** ✓ |
+
+## recops
+
+| Op | Pascal | Go | 说明 |
+|----|--------|-----|------|
+| RecFilter | 110 ms/op | 43.6 ms/op | Go 更快 ~2.5× |
+| RecCopy | 32.7 ms/op | 37.2 ms/op | **Pascal ~1.14×** ✓ |
+| RecFieldSum | 12.8 ms/op | 3.96 ms/op | Go 更快 ~3.2× |
+| RecBuild | 36.6 ms/op | 76.5 ms/op | **Pascal ~2.1×** ✓ |
+
+## inttohex（每轮 500 次转换）
+
+| Op | Pascal | Go (strconv) | Go (Sprintf) |
+|----|--------|--------------|--------------|
+| Hex64/500 | 54.4 µs/op | 41.9 µs/op | 185 µs/op |
+| Hex32/500 | 22.8 µs/op | 23.1 µs/op | 104 µs/op |
+
+相对 `strconv`：32 位持平/略优，64 位略慢；相对 `Sprintf` 均明显更快。
+
 ## 说明
 
 - 仅选无 Rust `target/` 的轻量 track，避免 hygiene 污染。
-- 编译产物已清理；勿把 `bench/*` 二进制提交进 git。
-- 与 2026-07-02 总表方向一致：若干微基准 Pascal 可明显快于 Go。
+- 编译产物应落在 `/tmp` 或 `build/`，勿提交进 git。
+- 与 2026-07-02 总表一致：互有胜负；Append/Compare/Ackermann 等 Pascal 可大幅领先。

@@ -338,28 +338,24 @@ end.
 ## 测试
 
 ```bash
-# 全量测试（15 个 suite）
-make -C core/tests/nextpas.core.bench test
+# 全量测试（22 个 suite，见 goal-tree.md）
+make -C core/tests/nextpas.core.bench clean test
 
-# 运行 bench 模块自身的基准测试
+# 模块自身 micro-bench
 make -C core/tests/nextpas.core.bench bench
+# 或：make -C core/benchmarks/nextpas.core.bench clean test
 
-# 单个 suite
+# 常用 suite
 make -C core/tests/nextpas.core.bench/test_bench_stats clean test
-make -C core/tests/nextpas.core.bench/test_bench_stats_advanced clean test
 make -C core/tests/nextpas.core.bench/test_bench_runner clean test
 make -C core/tests/nextpas.core.bench/test_bench_integration clean test
+make -C core/tests/nextpas.core.bench/test_bench_results_api clean test
 make -C core/tests/nextpas.core.bench/test_bench_report clean test
 make -C core/tests/nextpas.core.bench/test_bench_xlang clean test
 make -C core/tests/nextpas.core.bench/test_bench_baseline clean test
-make -C core/tests/nextpas.core.bench/test_bench_memtrack clean test
-make -C core/tests/nextpas.core.bench/test_bench_parallel clean test
-make -C core/tests/nextpas.core.bench/test_bench_parallel_heaptrc clean test
-make -C core/tests/nextpas.core.bench/test_bench_parallel_memtrack_heaptrc clean test
-make -C core/tests/nextpas.core.bench/test_bench_invalid_parameters_heaptrc clean test
-make -C core/tests/nextpas.core.bench/test_bench_matrix clean test
-make -C core/tests/nextpas.core.bench/test_bench_run clean test
 ```
+
+权威状态见 `goal-tree.md`（B0–B27）。历史调研文档（`bench-usability-*`、`FINAL_REPORT.md`）仅作归档，不以之为当前测试计数。
 
 ## 环境变量
 
