@@ -38,7 +38,7 @@
 |------|---------|--------------|------|
 | 取消贯通 API | context 几乎全栈 | Token 贯通核心路径 | **Q1 done** |
 | 超时+取消竞态 | 标准 | CAS 三方 | **Q1 done** |
-| dual-stack | 默认 | multi-A + HE-lite 串行 + **AsyncTcpDial 并发 HE** | **Q6+Q7** |
+| dual-stack | 默认 | multi-A + HE-lite 串行 + **AsyncTcpDial 并发 HE** + **并行 A/AAAA ResolveEx** | **Q6–Q9** |
 | 组合器竞态 soak | 成熟 | soak100 + token/timeout race | **Q2 done** |
 | 性能 scorecard | 社区基准 | 本机 metric 行 | **Q4 done** |
 
@@ -62,3 +62,4 @@
 - [x] Recv/SendTimeoutEx token
 - [x] dual-stack resolve list
 - [x] bench metric 行 + 本文档
+- [x] Q9 并行 A/AAAA + ResolutionDelay + FirstAddressFamilyCount + host matrix 钩子

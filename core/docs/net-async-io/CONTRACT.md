@@ -456,3 +456,11 @@ atsCancelled: TAsyncTaskStatus = 5;
 - Address `Port<>0` honored (else dial port); multi-A first-fail-second-win covered by tests.
 - Optional overall deadline + CancellationToken; single user callback; 0 leak.
 - Does **not** replace HE-lite sync `AsyncTcpConnect`.
+
+### Parallel DNS + RFC timer knobs (Q9)
+- `platform_socket_resolve_stream_family(AHost, AFamily, ...)`: multi-A for AF_INET / AF_INET6 / AF_UNSPEC.
+- `AsyncResolveEx` / `DefaultDnsResolveOptions`: parallel A + AAAA workers + **ResolutionDelayMs** (default 50); `AsyncResolve` remains single AF_UNSPEC path.
+- Dial options: `FirstAddressFamilyCount` (default 1), `ResolutionDelayMs` (default 50); dial host path uses `AsyncResolveEx`.
+- OrderAddresses: optional lead N of preferred family, then interleave or bucket remainder.
+- Host evidence: `core/scripts/async-host-matrix.sh` — Linux CI strict; macOS best-effort; not full-host parity.
+- Still **not** DNS-race-while-dialing (Happy Eyeballs DNS race phase 2).
