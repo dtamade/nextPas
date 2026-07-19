@@ -150,8 +150,14 @@ begin
 end;
 
 function IsValidAlignment(AAlignment: SizeUInt): Boolean; inline;
+const
+  { Cap extreme alignments. 1GB+ posix_memalign has been observed to leave
+    process state that Abort-traps at suite exit on Darwin aarch64 GHA even
+    without heaptrc; production callers never need multi-GB alignment. }
+  MAX_ALIGNMENT = SizeUInt(16 * 1024 * 1024);
 begin
-  Result := (AAlignment >= SizeOf(Pointer)) and IsPowerOfTwo(AAlignment);
+  Result := (AAlignment >= SizeOf(Pointer)) and IsPowerOfTwo(AAlignment)
+    and (AAlignment <= MAX_ALIGNMENT);
 end;
 
 function TryAddSizeUInt(ALeft, ARight: SizeUInt; out ASum: SizeUInt): Boolean; inline;
