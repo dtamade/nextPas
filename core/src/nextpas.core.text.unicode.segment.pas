@@ -1066,6 +1066,10 @@ const
   LB_PF_QU: array[0..9] of TUnicodeCodepoint = (
     $00BB, $2019, $201D, $203A, $2E03, $2E05, $2E0A, $2E0D, $2E1D, $2E21
   );
+  LB_PI_QU_COUNT = 12;
+  LB_PI_QU: array[0..11] of TUnicodeCodepoint = (
+    $00AB, $2018, $201B, $201C, $201F, $2039, $2E02, $2E04, $2E09, $2E0C, $2E1C, $2E20
+  );
 var
   LCls: array[0..MAX_CPS - 1] of TLineBreakClass;
   LCps: array[0..MAX_CPS - 1] of TUnicodeCodepoint;
@@ -1074,12 +1078,12 @@ var
   LCount, LI: Integer;
   LPos: SizeUInt;
   LDecode: TUTF8DecodeResult;
-  LCur, LNew, LLast, LNewR: TLineBreakClass;
+  LCur, LNew, LLast, LNewR, LRawCur: TLineBreakClass;
   LAction, LBrk: Byte;
   LSkip: Boolean;
-  LFZwj, LFHebrew: Boolean;
+  LFZwj, LFHebrew, LFHyInit, LFAfterOrthoVI: Boolean;
   LRiCount: Integer;
-  LCh: TUnicodeCodepoint;
+  LCh, LBaseCp: TUnicodeCodepoint;
   LOrigRightU16, LOrigLeftU16: Boolean;
 
   function InPairTable(const ACls: TLineBreakClass): Boolean; inline;
@@ -1124,6 +1128,16 @@ var
     Result := False;
   end;
 
+  function IsPiQU(const ACp: TUnicodeCodepoint): Boolean;
+  var
+    K: Integer;
+  begin
+    for K := 0 to LB_PI_QU_COUNT - 1 do
+      if LB_PI_QU[K] = ACp then
+        Exit(True);
+    Result := False;
+  end;
+
 begin
   if (AData = nil) or (ALen = 0) then
     Exit(0);
@@ -1156,21 +1170,35 @@ begin
     Exit(LByteEnds[0]);
 
   LCur := ResolveLB(LCls[0]);
+  LRawCur := LCls[0];
   LNew := LCur;
+  LBaseCp := LCps[0];
   if LCls[0] in [lbcLF, lbcNL] then
+  begin
     LCur := lbcBK;
+    LRawCur := lbcBK;
+  end;
   if LCls[0] = lbcSP then
   begin
     LNew := lbcSP;
     LCur := lbcWJ;
+    LRawCur := lbcWJ;
   end;
   { LB10: any remaining CM/ZWJ (incl. at sot / after hard break restart) → AL }
   if LCur in [lbcCM, lbcZWJ] then
+  begin
     LCur := lbcAL;
+    LRawCur := lbcAL;
+  end;
   LLast := lbcXX;
   LFZwj := LCls[0] = lbcZWJ;
   LFHebrew := False;
   LRiCount := 0;
+  LFHyInit := (LCls[0] = lbcHY) or (LCps[0] = $2010) or
+    ((LCls[0] in [lbcCM, lbcZWJ]) and (LCount > 1) and
+     ((LCls[1] = lbcHY) or (LCps[1] = $2010))) or
+    (LCur = lbcHY);
+  LFAfterOrthoVI := False;
 
   for LI := 0 to LCount - 2 do
   begin
@@ -1190,26 +1218,38 @@ begin
       LAfter[LI] := LB_BRK_MUST;
       { After hard break, next char starts a new line context (LB4/LB5). }
       if LNew = lbcCM then
-        LCur := lbcAL { LB10: remaining CM → AL }
+      begin
+        LCur := lbcAL;
+        LRawCur := lbcAL;
+      end
       else if LNew in [lbcLF, lbcNL] then
-        LCur := lbcBK
+      begin
+        LCur := lbcBK;
+        LRawCur := lbcBK;
+      end
       else if LNew = lbcSP then
       begin
         LNew := lbcSP;
         LCur := lbcWJ;
+        LRawCur := lbcWJ;
       end
       else
+      begin
         LCur := ResolveLB(LNew);
+        LRawCur := LNew;
+      end;
+      LBaseCp := LCh;
       LLast := lbcXX;
       LFZwj := LNew = lbcZWJ;
       LFHebrew := False;
       LRiCount := 0;
+      LFHyInit := (LNew = lbcHY) or (LNew = lbcCM);
       Continue;
     end;
 
-    { LB10: CM/ZWJ after SP/ZW/hard → treat as AL for pairing }
+    { LB10: remaining CM/ZWJ after SP/ZW/hard breaks only (not after WJ/GL) }
     if (LNew in [lbcCM, lbcZWJ]) and
-       (LCur in [lbcSP, lbcZW, lbcBK, lbcCR, lbcLF, lbcNL, lbcWJ]) then
+       (LCur in [lbcSP, lbcZW, lbcBK, lbcCR, lbcLF, lbcNL]) then
       LNew := lbcAL;
 
     if LNew = lbcSP then
@@ -1286,52 +1326,134 @@ begin
          (LNewR in [lbcAL, lbcHL, lbcNU]) then
         LBrk := LB_BRK_NO;
 
-      if (LOrigRightU16 or LOrigLeftU16) and (LBrk = LB_BRK_NO) and
-         (LAction = LB_ACT_IND) and (LLast <> lbcSP) and
-         (not (LCur in [lbcGL, lbcWJ, lbcQU, lbcOP, lbcCL, lbcCP, lbcNS, lbcEX, lbcIS, lbcSY])) then
+      { U16 LB28a + selective LB999 }
+      if (IsU16Ortho(LRawCur) or IsU16Ortho(LNew) or (LBaseCp = $25CC)) and (LLast <> lbcSP) then
+      begin
+        { LB28a: AP × (AK|AS); (AK|AS|◌) × (VF|VI); (… VI) × (AK|◌) }
+        if (LRawCur = lbcAP) and (LNew in [lbcAK, lbcAS]) then
+          LBrk := LB_BRK_NO
+        else if ((LRawCur in [lbcAK, lbcAS]) or (LBaseCp = $25CC)) and
+                (LNew in [lbcVF, lbcVI]) then
+        begin
+          LBrk := LB_BRK_NO;
+          if LNew = lbcVI then
+            LFAfterOrthoVI := True;
+        end
+        else if LFAfterOrthoVI and ((LNew in [lbcAK, lbcAS]) or (LCh = $25CC)) then
+        begin
+          LBrk := LB_BRK_NO;
+          LFAfterOrthoVI := False;
+        end
+        else if (LBaseCp = $25CC) and (LNew in [lbcAK, lbcAS, lbcVI, lbcVF]) then
+        begin
+          LBrk := LB_BRK_NO;
+          if LNew = lbcVI then
+            LFAfterOrthoVI := True;
+        end
+        else if (LBrk = LB_BRK_NO) and (LAction = LB_ACT_IND) then
+        begin
+          if LNewR in [lbcBA, lbcHY, lbcNS, lbcCM, lbcZWJ, lbcIN] then
+            { keep }
+          else if IsU16Ortho(LRawCur) and
+                  not (LNewR in [lbcQU, lbcGL, lbcWJ, lbcCL, lbcCP, lbcEX, lbcIS, lbcSY, lbcOP, lbcIN]) then
+            LBrk := LB_BRK_ALLOW
+          else if IsU16Ortho(LNew) and
+                  not (LRawCur in [lbcBB, lbcGL, lbcWJ, lbcQU, lbcOP, lbcCL, lbcCP, lbcNS,
+                                   lbcEX, lbcIS, lbcSY, lbcHY, lbcBA, lbcAK, lbcAS, lbcAP, lbcVI, lbcVF]) then
+            LBrk := LB_BRK_ALLOW;
+        end;
+        if (LBrk = LB_BRK_NO) and IsU16Ortho(LRawCur) and
+           (LNewR in [lbcPO, lbcPR, lbcAL, lbcHL, lbcNU, lbcEM, lbcEB, lbcRI, lbcH2, lbcH3]) then
+          LBrk := LB_BRK_ALLOW;
+        if not (LNew in [lbcVI, lbcCM, lbcZWJ, lbcAK, lbcAS]) then
+          LFAfterOrthoVI := False;
+      end;
+
+      { LB8: ZW SP* ÷ before non-ZW }
+      if (LLast = lbcSP) and (LCur = lbcZW) and (LNew <> lbcZW) then
+        LBrk := LB_BRK_ALLOW
+      else if (LCur = lbcZW) and not (LNew in [lbcSP, lbcZW]) then
         LBrk := LB_BRK_ALLOW;
 
-      { LB18 SP ÷ with LB7/LB11/LB13/LB14/LB15b/LB16/LB17 exceptions }
-      if LLast = lbcSP then
+      { LB21a: HL (HY|BA) × [^HL] — no break after Hebrew hyphen before non-HL }
+      if LFHebrew and (LCur in [lbcHY, lbcBA]) and (LNewR <> lbcHL) then
+        LBrk := LB_BRK_NO;
+
+      { LB30b: EB × EM; [ExtPict & Cn] × EM }
+      if (LNewR = lbcEM) and
+         ((LCur = lbcEB) or
+          ((GetGraphemeBreakProperty(LBaseCp) = gbpExtendedPictographic) and
+           (GetGeneralCategory(LBaseCp) = gcuUnassigned))) then
+        LBrk := LB_BRK_NO;
+
+      { SY × NU often breaks (pair IND overridden) }
+      if (LCur = lbcSY) and (LNewR = lbcNU) then
+        LBrk := LB_BRK_ALLOW;
+
+
+      { LB20a: word-initial hyphen (HY or U+2010 BA) × AL/AI }
+      if (((LCur = lbcHY) or (LBaseCp = $2010)) and (LNewR in [lbcAL, lbcAI]) and LFHyInit) then
+        LBrk := LB_BRK_NO;
+
+      { LB15a: Pi&QU SP* ×  (no break after opening quote + spaces) }
+      if (LCur = lbcQU) and IsPiQU(LBaseCp) and (LLast in [lbcSP, lbcXX]) then
+        LBrk := LB_BRK_NO;
+
+      { LB18 SP ÷ — after LB8 ZW SP* already handled }
+      if (LLast = lbcSP) and (LCur <> lbcZW) then
       begin
         if LNewR in [lbcZW, lbcWJ, lbcSP] then
           LBrk := LB_BRK_NO
         else if LCur = lbcOP then
           LBrk := LB_BRK_NO { LB14 }
+        else if (LCur = lbcQU) and IsPiQU(LBaseCp) then
+          LBrk := LB_BRK_NO { LB15a }
         else if (LCur in [lbcCL, lbcCP]) and (LNewR = lbcNS) then
-          LBrk := LB_BRK_NO { LB16 (U16: only CL|CP) }
+          LBrk := LB_BRK_NO { LB16 }
         else if (LCur = lbcB2) and (LNewR = lbcB2) then
           LBrk := LB_BRK_NO { LB17 }
+        else if (LNewR = lbcIS) and (LI + 2 < LCount) and
+                (ResolveLB(LCls[LI + 2]) = lbcNU) then
+          LBrk := LB_BRK_ALLOW { LB15c SP ÷ IS NU }
         else if LNewR in [lbcCL, lbcCP, lbcEX, lbcIS, lbcSY] then
-          LBrk := LB_BRK_NO { LB13 }
+          LBrk := LB_BRK_NO { LB13 / LB15d }
         else if (LNew = lbcQU) and IsPfQU(LCh) then
           LBrk := LB_BRK_NO { LB15b }
         else
           LBrk := LB_BRK_ALLOW; { LB18 }
       end;
 
-      if LFHebrew and (LCur in [lbcHY, lbcBA]) then
-      begin
-        LBrk := LB_BRK_NO;
+      { LB21a uses LFHebrew from prior HL; do not clear until after HY/BA×non-HL }
+      if LCur = lbcHL then
+        LFHebrew := True
+      else if not (LCur in [lbcHY, lbcBA, lbcCM, lbcZWJ]) then
         LFHebrew := False;
-      end
-      else
-        LFHebrew := LCur = lbcHL;
 
-      if LCur = lbcRI then
+      { LB30a: RI pairs only without intervening SP }
+      if (LCur = lbcRI) and (LNewR = lbcRI) and (LLast <> lbcSP) then
       begin
         Inc(LRiCount);
-        if (LRiCount = 2) and (LNewR = lbcRI) then
-        begin
-          LBrk := LB_BRK_ALLOW;
-          LRiCount := 0;
-        end;
+        if (LRiCount mod 2) = 0 then
+          LBrk := LB_BRK_ALLOW
+        else
+          LBrk := LB_BRK_NO;
       end
-      else
+      else if not (LNew in [lbcCM, lbcZWJ]) and (LNewR <> lbcRI) then
         LRiCount := 0;
 
       if not LSkip then
+      begin
+        if (LCur = lbcHY) and not (LNewR in [lbcCM, lbcZWJ, lbcHY]) then
+          LFHyInit := False;
         LCur := LNewR;
+        if not (LNew in [lbcCM, lbcZWJ, lbcSP]) then
+        begin
+          LBaseCp := LCh;
+          LRawCur := LNew; { raw class of new base }
+        end;
+        if LNewR = lbcHY then
+          LFHyInit := LFHyInit or (LLast in [lbcXX, lbcSP, lbcZW, lbcGL, lbcBK]);
+      end;
     end;
 
     LFZwj := LNew = lbcZWJ;

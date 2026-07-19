@@ -236,9 +236,8 @@ begin
       if LExpStr <> LObsStr then
       begin
         Inc(LFailCount);
-        if LFailCount <= 5 then
-          WriteLn(Format('FAIL line %d exp=%s obs=%s cps=%s',
-            [LLineNo, LExpStr, LObsStr, Copy(LLine, 1, LPipe - 1)]));
+        WriteLn(Format('FAIL line %d exp=%s obs=%s cps=%s',
+          [LLineNo, LExpStr, LObsStr, Copy(LLine, 1, LPipe - 1)]));
       end;
 
       Inc(LChecked);
