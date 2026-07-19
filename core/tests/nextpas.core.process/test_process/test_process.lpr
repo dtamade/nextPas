@@ -1598,6 +1598,221 @@ begin
   Check('WaitGraceful term — finished under grace', not LOut.TimedOut);
 end;
 
+procedure TestMergeStderrInterleave;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/sh')
+    .Arg('-c')
+    .Arg('echo OUT; echo ERR >&2')
+    .MergeStderr
+    .Output;
+  Check('MergeStderr interleave — exit 0', LOut.ExitCode = 0);
+  Check('MergeStderr interleave — stdout has OUT', Pos('OUT', LOut.StdOut) > 0);
+  Check('MergeStderr interleave — stdout has ERR', Pos('ERR', LOut.StdOut) > 0);
+  Check('MergeStderr interleave — stderr empty', LOut.StdErr = '');
+  Check('MergeStderr interleave — not timed out', not LOut.TimedOut);
+end;
+
+procedure TestStatusFalseExitCode;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/false').Status;
+  Check('Status false — exited', LOut.Status = psExited);
+  Check('Status false — non-zero', LOut.ExitCode <> 0);
+  Check('Status false — stdout empty', LOut.StdOut = '');
+  Check('Status false — stderr empty', LOut.StdErr = '');
+  Check('Status false — not succeeded', not ProcessSucceeded(LOut));
+end;
+
+procedure TestLookPathAbsoluteExecutable;
+var
+  LPath: string;
+begin
+  LPath := LookPath('/bin/true');
+  Check('LookPath abs true — non-empty', LPath <> '');
+  Check('LookPath abs true — path', LPath = '/bin/true');
+  LPath := LookPath('/bin/echo');
+  Check('LookPath abs echo — exact', LPath = '/bin/echo');
+end;
+
+procedure TestTryWaitWhileRunning;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LReady: Boolean;
+begin
+  LChild := Command('/bin/sleep').Arg('2').Spawn;
+  LReady := LChild.TryWait(LOut);
+  Check('TryWait while running — false', not LReady);
+  LOut := LChild.Wait;
+  Check('TryWait then Wait — terminated', LOut.Status <> psRunning);
+  Check('TryWait then Wait — exit 0', LOut.ExitCode = 0);
+end;
+
+procedure TestWaitGracefulZeroGrace;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  LOut := LChild.WaitGraceful(TDuration.FromMilliseconds(0));
+  Check('WaitGraceful zero grace — terminated', LOut.Status <> psRunning);
+  Check('WaitGraceful zero grace — not running flag',
+    LOut.Status in [psExited, psSignaled, psUnknown]);
+end;
+
+procedure TestDetachThenWaitRaises;
+var
+  LChild: IChild;
+  LRaised: Boolean;
+begin
+  { Use true so Detach does not leave a long-lived orphan. }
+  LChild := Command('/bin/true').Spawn;
+  LChild.Detach;
+  LRaised := False;
+  try
+    LChild.Wait;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('Detach then Wait — raises EProcessError', LRaised);
+end;
+
+procedure TestArgMultipleSpaces;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/echo').Arg('a b').Arg('c').Output;
+  Check('Arg spaces — exit 0', LOut.ExitCode = 0);
+  Check('Arg spaces — has a b', Pos('a b', LOut.StdOut) > 0);
+  Check('Arg spaces — has c', Pos('c', LOut.StdOut) > 0);
+end;
+
+procedure TestRunWithEmptyArgsArray;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/true', []);
+  Check('Run empty args — exit 0', LOut.ExitCode = 0);
+  Check('Run empty args — succeeded', ProcessSucceeded(LOut));
+  Check('Run empty args — not limited', not LOut.OutputLimited);
+end;
+
+procedure TestCaptureDoesNotRaiseOnFailure;
+var
+  LStr: string;
+begin
+  LStr := Capture('/bin/sh', ['-c', 'echo fail-out; exit 7']);
+  Check('Capture fail — stdout kept', Pos('fail-out', LStr) > 0);
+  LStr := Capture('/bin/false', []);
+  Check('Capture false — empty ok', LStr = '');
+end;
+
+procedure TestMaxOutputAllowsSmall;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/echo')
+    .Arg('tiny')
+    .MaxOutput(1024)
+    .Output;
+  Check('MaxOutput room — success', ProcessSucceeded(LOut));
+  Check('MaxOutput room — not limited', not LOut.OutputLimited);
+  Check('MaxOutput room — payload', Pos('tiny', LOut.StdOut) > 0);
+end;
+
+procedure TestStderrOnlyPiped;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/sh')
+    .Arg('-c')
+    .Arg('echo only-err >&2')
+    .Stdout(stNull)
+    .Stderr(stPiped)
+    .Output;
+  Check('Stderr only — exit 0', LOut.ExitCode = 0);
+  Check('Stderr only — stdout empty', LOut.StdOut = '');
+  Check('Stderr only — stderr has text', Pos('only-err', LOut.StdErr) > 0);
+end;
+
+procedure TestCommandDirTmp;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := Command('/bin/pwd').Dir('/tmp').Output;
+  Check('Dir /tmp — exit 0', LOut.ExitCode = 0);
+  Check('Dir /tmp — path contains tmp', Pos('/tmp', LOut.StdOut) > 0);
+end;
+
+procedure TestSignalAfterNaturalExit;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/true').Spawn;
+  LOut := LChild.Wait;
+  Check('Signal after exit — wait ok', LOut.ExitCode = 0);
+  { After Wait, Signal is a documented no-op (FWaited). }
+  LChild.Signal(15);
+  Check('Signal after exit — no-op safe', True);
+end;
+
+procedure TestEnvAddOverrides;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/usr/bin/env')
+    .EnvAdd('NEXTPAS_PROC_OV', 'one')
+    .EnvAdd('NEXTPAS_PROC_OV', 'two')
+    .Output;
+  Check('EnvAdd override — exit 0', LOut.ExitCode = 0);
+  Check('EnvAdd override — final value', Pos('NEXTPAS_PROC_OV=two', LOut.StdOut) > 0);
+  Check('EnvAdd override — not first', Pos('NEXTPAS_PROC_OV=one', LOut.StdOut) = 0);
+end;
+
+procedure TestOutputLimitedNotTimedOut;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/usr/bin/yes')
+    .Stdout(stPiped)
+    .Stderr(stNull)
+    .MaxOutput(32)
+    .Output;
+  Check('Limited vs timeout — OutputLimited', LOut.OutputLimited);
+  Check('Limited vs timeout — not TimedOut', not LOut.TimedOut);
+  Check('Limited vs timeout — ProcessSucceeded false', not ProcessSucceeded(LOut));
+  Check('Limited vs timeout — buffered small', Length(LOut.StdOut) <= 32);
+end;
+
+procedure TestWaitWithOutputAfterTakeStdoutEmpty;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LReader: IReader;
+  LBuf: array[0..31] of Byte;
+begin
+  LChild := Command('/bin/echo').Arg('gone').Stdout(stPiped).Spawn;
+  LReader := LChild.TakeStdout;
+  while LReader.Read(LBuf[0], SizeOf(LBuf)) > 0 do ;
+  LOut := LChild.WaitWithOutput;
+  Check('WaitWithOutput after Take — StdOut empty', LOut.StdOut = '');
+  Check('WaitWithOutput after Take — exited', LOut.Status = psExited);
+end;
+
+procedure TestRunInTmpPwd;
+var
+  LOut: TProcessOutput;
+begin
+  LOut := RunIn('/bin/pwd', [], '/tmp');
+  Check('RunIn /tmp — exit 0', LOut.ExitCode = 0);
+  Check('RunIn /tmp — cwd', Pos('/tmp', LOut.StdOut) > 0);
+end;
+
 begin
   LPassed := 0;
   LFailed := 0;
@@ -1690,6 +1905,23 @@ begin
   TestTakeStdoutThenWaitDoesNotAutoDrain;
   TestWaitGracefulTerminatesSleep;
   TestWaitGracefulAcceptsTerm;
+  TestMergeStderrInterleave;
+  TestStatusFalseExitCode;
+  TestLookPathAbsoluteExecutable;
+  TestTryWaitWhileRunning;
+  TestWaitGracefulZeroGrace;
+  TestDetachThenWaitRaises;
+  TestArgMultipleSpaces;
+  TestRunWithEmptyArgsArray;
+  TestCaptureDoesNotRaiseOnFailure;
+  TestMaxOutputAllowsSmall;
+  TestStderrOnlyPiped;
+  TestCommandDirTmp;
+  TestSignalAfterNaturalExit;
+  TestEnvAddOverrides;
+  TestOutputLimitedNotTimedOut;
+  TestWaitWithOutputAfterTakeStdoutEmpty;
+  TestRunInTmpPwd;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');
