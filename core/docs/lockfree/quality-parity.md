@@ -32,7 +32,7 @@
 |------|------|------|
 | **Q0** | 清洁基线 + reconverge 评估 | **done** |
 | **Q1** | Atomic 首选路径与质量加固 | **Q1-a done**；Q1-b/c pending |
-| **Q2** | T1 深度（首选路径 + stress） | **T1 主集 done**（含 hazard/segqueue）；msqueue/hashmap 待迁 |
+| **Q2** | T1 深度（首选路径 + stress） | **T1 facade 全量 preferred path done**（含 msqueue/hashmap）；下一 Q2-b stress 抽检 |
 | **Q3** | Map/Channel 体验对标 | pending |
 | **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | pending |
 | **Q5** | 有信封 Go/Rust 同机对照常青 | pending |
@@ -101,6 +101,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 | 2026-07-19 | **Q2-a**：`lockfree.mpsc` 迁 preferred path（节点指针 helpers 保留，标量用 atomic_*） |
 | 2026-07-19 | **Q2-a**：`lockfree.channel` + `channel.spsc` 迁 preferred path（notifier 锁 + sequence CAS） |
 | 2026-07-19 | **Q2-a**：`lockfree.hazard` + `segqueue` 迁 preferred path（回收域 / 无界 segment） |
+| 2026-07-20 | **Q2-a**：`lockfree.msqueue` + `hashmap` 迁 preferred path（MS 无界队列 / 分片锁 map） |
 
 ---
 

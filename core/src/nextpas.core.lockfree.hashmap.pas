@@ -10,6 +10,8 @@ unit nextpas.core.lockfree.hashmap;
  * @see dashmap (Rust) — similar sharded-lock design
  * @see sync.Map (Go) — different approach but same concurrent map category
  * @concurrency Thread-safe (see source for details).
+ *
+ * Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2). NOT lock-free.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -31,7 +33,7 @@ type
   {**
    * 分片锁并发 HashMap。
    *
-   * 使用分片自旋锁（per-shard spinlock via AtomicExchange32）实现并发安全，
+   * 使用分片自旋锁（per-shard spinlock via atomic_exchange）实现并发安全，
    * 不是 lock-free 结构。在高竞争场景下，自旋等待可能导致 CPU 浪费；
    * 适合竞争不激烈的快速路径。
    *
@@ -218,7 +220,7 @@ var
   LSpins: Int32;
 begin
   LSpins := 0;
-  while AtomicExchange32(AShard.Lock, 1, moAcquire) <> 0 do
+  while atomic_exchange(AShard.Lock, 1, mo_acquire) <> 0 do
   begin
     Inc(LSpins);
     if LSpins < 64 then
@@ -233,7 +235,7 @@ end;
 
 procedure TShardedHashMapImpl.ShardUnlock(var AShard: TShard);
 begin
-  AtomicStore32(AShard.Lock, 0, moRelease);
+  atomic_store(AShard.Lock, 0, mo_release);
 end;
 
 {** 获取读锁: 允许多个读者并发
@@ -241,17 +243,19 @@ end;
 procedure TShardedHashMapImpl.ShardReadLock(var AShard: TShard);
 var
   LLock: Int32;
+  LExpected: Int32;
   LSpins: Int32;
   LBackoff: Int32;
 begin
   LSpins := 0;
   LBackoff := 1;
   repeat
-    LLock := AtomicLoad32(AShard.Lock, moRelaxed);
+    LLock := atomic_load(AShard.Lock, mo_relaxed);
     if LLock >= 0 then
     begin
       { 尝试增加读锁计数 }
-      if AtomicCompareExchange32(AShard.Lock, LLock, LLock + 1, moAcquire) = LLock then
+      LExpected := LLock;
+      if atomic_compare_exchange_strong(AShard.Lock, LExpected, LLock + 1, mo_acquire, mo_relaxed) then
         Exit;
     end;
     { 有写锁，等待 }
@@ -281,18 +285,20 @@ end;
 {** 释放读锁 }
 procedure TShardedHashMapImpl.ShardReadUnlock(var AShard: TShard);
 begin
-  AtomicFetchSub32(AShard.Lock, 1, moRelease);
+  atomic_fetch_sub(AShard.Lock, 1, mo_release);
 end;
 
 {** 获取写锁: 独占访问 }
 procedure TShardedHashMapImpl.ShardWriteLock(var AShard: TShard);
 var
   LSpins: Int32;
+  LExpected: Int32;
 begin
   LSpins := 0;
   repeat
     { 尝试从 0 变为 -1 (写锁) }
-    if AtomicCompareExchange32(AShard.Lock, 0, -1, moAcquire) = 0 then
+    LExpected := 0;
+    if atomic_compare_exchange_strong(AShard.Lock, LExpected, -1, mo_acquire, mo_relaxed) then
       Exit;
     { 有读者或写者，等待 }
     Inc(LSpins);
@@ -309,7 +315,7 @@ end;
 {** 释放写锁 }
 procedure TShardedHashMapImpl.ShardWriteUnlock(var AShard: TShard);
 begin
-  AtomicStore32(AShard.Lock, 0, moRelease);
+  atomic_store(AShard.Lock, 0, mo_release);
 end;
 
 procedure TShardedHashMapImpl.ShardInit(var AShard: TShard; const ACapacity: PtrUInt);
@@ -420,7 +426,7 @@ begin
   ShardWriteLock(FShards[LShardIdx]);
   try
     { 标记写开始: 版本号+1 变为奇数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
       ShardResize(FShards[LShardIdx]);
     LFound := ShardFind(FShards[LShardIdx], AKey, LFoundIdx);
@@ -428,7 +434,7 @@ begin
     begin
       FShards[LShardIdx].Entries[LFoundIdx].Value := AValue;
       { 标记写结束: 版本号+1 变回偶数 }
-      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
       Exit;
     end;
     LIdx := PtrUInt(HashKey(AKey)) and FShards[LShardIdx].Mask;
@@ -439,7 +445,7 @@ begin
     FShards[LShardIdx].Entries[LIdx].State := esOccupied;
     Inc(FShards[LShardIdx].Count);
     { 标记写结束: 版本号+1 变回偶数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
   finally
     ShardWriteUnlock(FShards[LShardIdx]);
   end;
@@ -470,7 +476,7 @@ begin
   ShardWriteLock(FShards[LShardIdx]);
   try
     { 标记写开始: 版本号+1 变为奇数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
     begin
@@ -480,7 +486,7 @@ begin
       Dec(FShards[LShardIdx].Count);
     end;
     { 标记写结束: 版本号+1 变回偶数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
   finally
     ShardWriteUnlock(FShards[LShardIdx]);
   end;
@@ -495,7 +501,7 @@ begin
   ShardWriteLock(FShards[LShardIdx]);
   try
     { 标记写开始: 版本号+1 变为奇数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
     begin
@@ -506,7 +512,7 @@ begin
       Dec(FShards[LShardIdx].Count);
     end;
     { 标记写结束: 版本号+1 变回偶数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
   finally
     ShardWriteUnlock(FShards[LShardIdx]);
   end;
@@ -522,11 +528,11 @@ begin
   ShardWriteLock(FShards[LShardIdx]);
   try
     { 标记写开始: 版本号+1 变为奇数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     if ShardFind(FShards[LShardIdx], AKey, LFoundIdx) then
     begin
       { 标记写结束: 版本号+1 变回偶数 }
-      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
       Exit(False);
     end;
     if FShards[LShardIdx].Count * HASHMAP_LOAD_FACTOR_DEN >= FShards[LShardIdx].Capacity * HASHMAP_LOAD_FACTOR_NUM then
@@ -540,7 +546,7 @@ begin
     Inc(FShards[LShardIdx].Count);
     Result := True;
     { 标记写结束: 版本号+1 变回偶数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
   finally
     ShardWriteUnlock(FShards[LShardIdx]);
   end;
@@ -555,7 +561,7 @@ begin
   ShardWriteLock(FShards[LShardIdx]);
   try
     { 标记写开始: 版本号+1 变为奇数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     Result := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if Result then
     begin
@@ -563,7 +569,7 @@ begin
       FShards[LShardIdx].Entries[LIdx].Value := ANewValue;
     end;
     { 标记写结束: 版本号+1 变回偶数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
   finally
     ShardWriteUnlock(FShards[LShardIdx]);
   end;
@@ -669,14 +675,14 @@ begin
   ShardWriteLock(FShards[LShardIdx]);
   try
     { 标记写开始: 版本号+1 变为奇数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if LFound then
     begin
       Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
       Result.Existed := True;
       { 标记写结束: 版本号+1 变回偶数 }
-      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
       Exit;
     end;
     // Not found - insert default
@@ -692,7 +698,7 @@ begin
     Result.Value := ADefault;
     Result.Existed := False;
     { 标记写结束: 版本号+1 变回偶数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
   finally
     ShardWriteUnlock(FShards[LShardIdx]);
   end;
@@ -708,14 +714,14 @@ begin
   ShardWriteLock(FShards[LShardIdx]);
   try
     { 标记写开始: 版本号+1 变为奇数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if LFound then
     begin
       Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
       Result.Existed := True;
       { 标记写结束: 版本号+1 变回偶数 }
-      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
       Exit;
     end;
     // Not found - compute value via callback
@@ -731,7 +737,7 @@ begin
     Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
     Result.Existed := False;
     { 标记写结束: 版本号+1 变回偶数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
   finally
     ShardWriteUnlock(FShards[LShardIdx]);
   end;
@@ -747,7 +753,7 @@ begin
   ShardWriteLock(FShards[LShardIdx]);
   try
     { 标记写开始: 版本号+1 变为奇数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     LFound := ShardFind(FShards[LShardIdx], AKey, LIdx);
     if LFound then
     begin
@@ -755,7 +761,7 @@ begin
       Result.Value := FShards[LShardIdx].Entries[LIdx].Value;
       Result.Existed := True;
       { 标记写结束: 版本号+1 变回偶数 }
-      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
       Exit;
     end;
     // Not found - insert default
@@ -771,7 +777,7 @@ begin
     Result.Value := ADefault;
     Result.Existed := False;
     { 标记写结束: 版本号+1 变回偶数 }
-    AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+    atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
   finally
     ShardWriteUnlock(FShards[LShardIdx]);
   end;
@@ -787,7 +793,7 @@ begin
     ShardWriteLock(FShards[LShardIdx]);
     try
       { 标记写开始: 版本号+1 变为奇数 }
-      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
       for LEntryIdx := 0 to FShards[LShardIdx].Capacity - 1 do
       begin
         FShards[LShardIdx].Entries[LEntryIdx].State := esEmpty;
@@ -796,7 +802,7 @@ begin
       end;
       FShards[LShardIdx].Count := 0;
       { 标记写结束: 版本号+1 变回偶数 }
-      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     finally
       ShardWriteUnlock(FShards[LShardIdx]);
     end;
@@ -828,7 +834,7 @@ begin
     ShardWriteLock(FShards[LShardIdx]);
     try
       { 标记写开始: 版本号+1 变为奇数 }
-      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
       { 二次检查: 可能已被其他线程扩容 }
       if FShards[LShardIdx].Capacity < LCap then
       begin
@@ -853,7 +859,7 @@ begin
         end;
       end;
       { 标记写结束: 版本号+1 变回偶数 }
-      AtomicFetchAdd32(FShards[LShardIdx].Version, 1, moRelease);
+      atomic_fetch_add(FShards[LShardIdx].Version, 1, mo_release);
     finally
       ShardWriteUnlock(FShards[LShardIdx]);
     end;
