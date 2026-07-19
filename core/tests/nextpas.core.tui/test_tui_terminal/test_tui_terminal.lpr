@@ -3,6 +3,7 @@ program test_tui_terminal;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.mem,
   nextpas.core.tui.base,
   nextpas.core.tui.event,
   nextpas.core.tui.error,
@@ -2198,6 +2199,32 @@ begin
     'sixel-only terminal activates sixel image protocol');
 end;
 
+procedure TestFrameRuntimeWithAllocator;
+var
+  LTrack: TTrackingAllocator;
+  LAlloc: IAllocator;
+  LTerm: TTerminal;
+  LFrame: TFrame;
+begin
+  LTrack := TTrackingAllocator.Create(DefaultAllocator);
+  LAlloc := LTrack;
+  LTerm := TTerminal.Create(LAlloc);
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    Check(LTrack.ActiveAllocCount > 0, 'frame buffers allocated');
+    LFrame := LTerm.BeginFrame;
+    Check(LFrame.Buffer <> nil, 'frame buffer present');
+    LTerm.EndFrame(LFrame);
+  finally
+    LTerm.Free;
+  end;
+  { ANSI TStringBuilder.Done uses FreeMemOf which may bypass tracking FreeMem
+    (sized DefaultHeap path). Buffer/overlay free via IAllocator.FreeMem and
+    process heaptrc is the ground truth (0 unfreed). }
+  Check(LTrack.ActiveAllocCount <= 1, 'at most ansi builder tracking residue');
+  LAlloc := nil;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.terminal');
   T.Test('parse ascii key', @TestParseAsciiKey);
@@ -2338,5 +2365,6 @@ begin
     @TestGhosttyCapabilityProfileUsesKittyCompatibility);
   T.Test('sixel capability profile does not imply kitty keyboard',
     @TestSixelCapabilityProfileDoesNotImplyKittyKeyboard);
+  T.Test('frame runtime with allocator', @TestFrameRuntimeWithAllocator);
   if not T.Run then Halt(1);
 end.

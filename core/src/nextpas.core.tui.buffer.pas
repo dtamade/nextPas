@@ -22,6 +22,7 @@ unit nextpas.core.tui.buffer;
 interface
 
 uses
+  nextpas.core.mem.intf,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.modifier,
@@ -52,19 +53,28 @@ type
   TBuffer = class
   private
     FArea: TRect;
-    FContent: array of TCell;
+    FContent: array of TCell;       { nil-allocator path (managed dynarray) }
+    FContentPtr: PCell;             { non-nil allocator path }
+    FContentCount: Integer;
+    FAllocator: IAllocator;
     FDirtyRows: QWord;
     FImagePlacements: array of TImagePlacement;
     FImagePlacementCount: Integer;
     FImageProtocol: TImageProtocol;
+    function ContentBase: PCell; inline;
+    function ContentLen: Integer; inline;
     function IndexOfPos(AX, AY: Integer): Integer; inline;
     procedure MarkRowDirty(ARow: Integer); inline;
     procedure NormalizeWideGlyphBoundaries;
     procedure ClearWideOverlapCell(AX, AY: Integer); inline;
     procedure PrepareWriteSpan(AX, AY, AWidth: Integer); inline;
+    procedure FreeOwnedContent;
+    procedure AllocContent(ACount: Integer);
   public
-    constructor CreateEmpty(const AArea: TRect);
-    constructor CreateFilled(const AArea: TRect; const ACell: TCell);
+    constructor CreateEmpty(const AArea: TRect; const AAllocator: IAllocator = nil);
+    constructor CreateFilled(const AArea: TRect; const ACell: TCell;
+      const AAllocator: IAllocator = nil);
+    destructor Destroy; override;
 
     property Area: TRect read FArea;
     function Width: Word; inline;
@@ -129,6 +139,7 @@ procedure ScaleRgbaPixels(ASrc: PByte; ASrcW, ASrcH, ADstW, ADstH: Integer;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.text.utf8,
   nextpas.core.text.width,
   nextpas.core.text.grapheme;
@@ -155,26 +166,105 @@ end;
 
 { TBuffer }
 
-constructor TBuffer.CreateEmpty(const AArea: TRect);
+function TBuffer.ContentBase: PCell;
+begin
+  if FAllocator <> nil then
+    Result := FContentPtr
+  else if System.Length(FContent) = 0 then
+    Result := nil
+  else
+    Result := @FContent[0];
+end;
+
+function TBuffer.ContentLen: Integer;
+begin
+  if FAllocator <> nil then
+    Result := FContentCount
+  else
+    Result := System.Length(FContent);
+end;
+
+procedure TBuffer.FreeOwnedContent;
+begin
+  if FAllocator <> nil then
+  begin
+    if FContentPtr <> nil then
+    begin
+      FAllocator.FreeMem(FContentPtr);
+      FContentPtr := nil;
+    end;
+    FContentCount := 0;
+  end
+  else
+    SetLength(FContent, 0);
+end;
+
+procedure TBuffer.AllocContent(ACount: Integer);
+var
+  LBytes: SizeUInt;
+begin
+  if FAllocator <> nil then
+  begin
+    FreeOwnedContent;
+    FContentCount := ACount;
+    if ACount <= 0 then
+    begin
+      FContentPtr := nil;
+      Exit;
+    end;
+    LBytes := SizeUInt(ACount) * SizeOf(TCell);
+    FContentPtr := PCell(FAllocator.GetMem(LBytes));
+    if FContentPtr = nil then
+    begin
+      FContentCount := 0;
+      raise EOutOfMemory.Create('TBuffer allocation failed');
+    end;
+  end
+  else
+  begin
+    FContentPtr := nil;
+    FContentCount := 0;
+    SetLength(FContent, ACount);
+  end;
+end;
+
+constructor TBuffer.CreateEmpty(const AArea: TRect; const AAllocator: IAllocator);
 begin
   inherited Create;
+  FAllocator := AAllocator;
+  FContentPtr := nil;
+  FContentCount := 0;
   FArea := AArea;
   FDirtyRows := QWord(-1);
-  SetLength(FContent, AArea.Area);
+  AllocContent(AArea.Area);
   Reset;
 end;
 
-constructor TBuffer.CreateFilled(const AArea: TRect; const ACell: TCell);
+constructor TBuffer.CreateFilled(const AArea: TRect; const ACell: TCell;
+  const AAllocator: IAllocator);
 var
   LIdx, LTotal: Integer;
+  LBase: PCell;
 begin
   inherited Create;
+  FAllocator := AAllocator;
+  FContentPtr := nil;
+  FContentCount := 0;
   FArea := AArea;
   FDirtyRows := QWord(-1);
   LTotal := AArea.Area;
-  SetLength(FContent, LTotal);
-  for LIdx := 0 to LTotal - 1 do
-    FContent[LIdx] := ACell;
+  AllocContent(LTotal);
+  LBase := ContentBase;
+  if LBase <> nil then
+    for LIdx := 0 to LTotal - 1 do
+      LBase[LIdx] := ACell;
+end;
+
+destructor TBuffer.Destroy;
+begin
+  FreeOwnedContent;
+  FAllocator := nil;
+  inherited Destroy;
 end;
 
 function TBuffer.Width: Word;
@@ -189,15 +279,12 @@ end;
 
 function TBuffer.Length_: Integer;
 begin
-  Result := System.Length(FContent);
+  Result := ContentLen;
 end;
 
 function TBuffer.ContentPtr: PCell;
 begin
-  if System.Length(FContent) = 0 then
-    Result := nil
-  else
-    Result := @FContent[0];
+  Result := ContentBase;
 end;
 
 function TBuffer.IndexOfPos(AX, AY: Integer): Integer;
@@ -225,7 +312,7 @@ begin
     for LCol := 0 to LWidth - 1 do
     begin
       LIndex := (LRow * LWidth) + LCol;
-      LCell := @FContent[LIndex];
+      LCell := (ContentBase + (LIndex));
 
       if LCell^.Skip and (LCell^.Width = 0) then
       begin
@@ -233,7 +320,7 @@ begin
           CellReset(LCell^)
         else
         begin
-          LPrev := @FContent[LIndex - 1];
+          LPrev := (ContentBase + (LIndex - 1));
           if (LPrev^.Width <> 2) or LPrev^.Skip then
             CellReset(LCell^);
         end;
@@ -244,7 +331,7 @@ begin
           CellReset(LCell^)
         else
         begin
-          LNext := @FContent[LIndex + 1];
+          LNext := (ContentBase + (LIndex + 1));
           if (not LNext^.Skip) or (LNext^.Width <> 0) then
             CellReset(LCell^);
         end;
@@ -257,13 +344,13 @@ procedure TBuffer.ClearWideOverlapCell(AX, AY: Integer);
 var
   LCell, LPeer: PCell;
 begin
-  LCell := @FContent[IndexOfPos(AX, AY)];
+  LCell := (ContentBase + (IndexOfPos(AX, AY)));
 
   if LCell^.Skip and (LCell^.Width = 0) then
   begin
     if AX > FArea.X then
     begin
-      LPeer := @FContent[IndexOfPos(AX - 1, AY)];
+      LPeer := (ContentBase + (IndexOfPos(AX - 1, AY)));
       if (LPeer^.Width = 2) and (not LPeer^.Skip) then
         CellReset(LPeer^);
     end;
@@ -272,7 +359,7 @@ begin
   begin
     if AX + 1 < FArea.X + FArea.Width then
     begin
-      LPeer := @FContent[IndexOfPos(AX + 1, AY)];
+      LPeer := (ContentBase + (IndexOfPos(AX + 1, AY)));
       CellReset(LPeer^);
     end;
   end;
@@ -287,7 +374,7 @@ var
 begin
   for LX := AX to AX + AWidth - 1 do
   begin
-    LCell := @FContent[IndexOfPos(LX, AY)];
+    LCell := (ContentBase + (IndexOfPos(LX, AY)));
     if LCell^.Skip or (LCell^.Width <> 1) then
       ClearWideOverlapCell(LX, AY);
   end;
@@ -298,7 +385,7 @@ begin
   if (AX < FArea.X) or (AX >= FArea.X + FArea.Width) or
      (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then
     Exit(nil);
-  Result := @FContent[IndexOfPos(AX, AY)];
+  Result := (ContentBase + (IndexOfPos(AX, AY)));
 end;
 
 function TBuffer.SetString(AX, AY: Integer; const AStr: AnsiString;
@@ -360,7 +447,7 @@ begin
       end;
       if LRemaining = 0 then Break;
       PrepareWriteSpan(LCursor, AY, 1);
-      LCP := @FContent[IndexOfPos(LCursor, AY)];
+      LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
       CellSetSymbolAscii(LCP^, AnsiChar(LByte));
       CellApplyStyle(LCP^, AStyle);
       Inc(LCursor);
@@ -390,7 +477,7 @@ begin
       PrepareWriteSpan(LCursor, AY, LVisibleTail);
       for LX := LCursor to LCursor + LVisibleTail - 1 do
       begin
-        LCP := @FContent[IndexOfPos(LX, AY)];
+        LCP := (ContentBase + (IndexOfPos(LX, AY)));
         CellReset(LCP^);
       end;
       Inc(LCursor, LVisibleTail);
@@ -404,12 +491,12 @@ begin
     if LRemaining = 0 then Break;
     if LAdv.Width > LRemaining then Break;
     PrepareWriteSpan(LCursor, AY, LAdv.Width);
-    LCP := @FContent[IndexOfPos(LCursor, AY)];
+    LCP := (ContentBase + (IndexOfPos(LCursor, AY)));
     CellSetSymbolBytes(LCP^, PByte(AStr)[LI], LAdv.ByteLen, LAdv.Width);
     CellApplyStyle(LCP^, AStyle);
     if LAdv.Width = 2 then
     begin
-      LCP := @FContent[IndexOfPos(LCursor + 1, AY)];
+      LCP := (ContentBase + (IndexOfPos(LCursor + 1, AY)));
       CellReset(LCP^);
       LCP^.Width := 0;
       LCP^.Skip := True;
@@ -434,7 +521,7 @@ begin
     MarkRowDirty(LY - FArea.Y);
     for LX := LClip.Left to LClip.Right - 1 do
     begin
-      LCP := @FContent[IndexOfPos(LX, LY)];
+      LCP := (ContentBase + (IndexOfPos(LX, LY)));
       CellApplyStyle(LCP^, AStyle);
     end;
   end;
@@ -458,7 +545,7 @@ begin
     for LX := LClip.Left to LClip.Right - 1 do
     begin
       PrepareWriteSpan(LX, LY, 1);
-      LCP := @FContent[IndexOfPos(LX, LY)];
+      LCP := (ContentBase + (IndexOfPos(LX, LY)));
       LCP^ := LCell;
     end;
   end;
@@ -478,7 +565,7 @@ begin
     for LX := LClip.Left to LClip.Right - 1 do
     begin
       PrepareWriteSpan(LX, LY, 1);
-      LCP := @FContent[IndexOfPos(LX, LY)];
+      LCP := (ContentBase + (IndexOfPos(LX, LY)));
       LCP^ := CELL_EMPTY;
     end;
   end;
@@ -489,41 +576,53 @@ var
   LI, LTotal: Integer;
   LDirty: TCell;
 begin
-  LTotal := System.Length(FContent);
+  LTotal := ContentLen;
   if LTotal = 0 then Exit;
   { 用一个与 CELL_EMPTY 不同的 cell，使 reset 后（如终端 resize）Diff 必产补丁。 }
   LDirty := CELL_EMPTY;
   LDirty.Glyph.Len := 0;  { 正常渲染不可能 → 保证 diff }
-  FContent[0] := LDirty;
+  ContentBase[0] := LDirty;
   LI := 1;
   while LI + LI <= LTotal do
   begin
-    Move(FContent[0], FContent[LI], LI * SizeOf(TCell));
+    Move(ContentBase[0], ContentBase[LI], LI * SizeOf(TCell));
     LI := LI + LI;
   end;
   if LI < LTotal then
-    Move(FContent[0], FContent[LI], (LTotal - LI) * SizeOf(TCell));
+    Move(ContentBase[0], ContentBase[LI], (LTotal - LI) * SizeOf(TCell));
   FImagePlacementCount := 0;
   FDirtyRows := QWord(-1);
 end;
 
 procedure TBuffer.Resize(const ANewArea: TRect);
 var
-  LOld: array of TCell;
+  LOldDyn: array of TCell;
+  LOldPtr: PCell;
   LOldArea: TRect;
+  LNewBase: PCell;
   LX, LY, LIdx: Integer;
   LSrc: PCell;
 begin
   if RectEquals(ANewArea, FArea) then Exit;
 
-  LOld := FContent;
   LOldArea := FArea;
+  LOldPtr := nil;
+  if FAllocator <> nil then
+  begin
+    LOldPtr := FContentPtr;
+    FContentPtr := nil;
+    FContentCount := 0;
+  end
+  else
+    LOldDyn := FContent;
 
   FArea := ANewArea;
-  SetLength(FContent, ANewArea.Area);
+  AllocContent(ANewArea.Area);
+  LNewBase := ContentBase;
   { 先填充新缓冲。 }
-  for LIdx := 0 to System.Length(FContent) - 1 do
-    FContent[LIdx] := CELL_EMPTY;
+  if LNewBase <> nil then
+    for LIdx := 0 to ContentLen - 1 do
+      LNewBase[LIdx] := CELL_EMPTY;
 
   { 从 Old 拷贝重叠区。 }
   for LY := LOldArea.Top to LOldArea.Bottom - 1 do
@@ -531,9 +630,19 @@ begin
     begin
       if (LX < ANewArea.X) or (LX >= ANewArea.X + ANewArea.Width) then Continue;
       if (LY < ANewArea.Y) or (LY >= ANewArea.Y + ANewArea.Height) then Continue;
-      LSrc := @LOld[(LY - LOldArea.Y) * LOldArea.Width + (LX - LOldArea.X)];
-      FContent[(LY - ANewArea.Y) * ANewArea.Width + (LX - ANewArea.X)] := LSrc^;
+      if FAllocator <> nil then
+      begin
+        if LOldPtr = nil then Continue;
+        LSrc := LOldPtr + ((LY - LOldArea.Y) * LOldArea.Width + (LX - LOldArea.X));
+      end
+      else
+        LSrc := @LOldDyn[(LY - LOldArea.Y) * LOldArea.Width + (LX - LOldArea.X)];
+      LNewBase[(LY - ANewArea.Y) * ANewArea.Width + (LX - ANewArea.X)] := LSrc^;
     end;
+
+  if (FAllocator <> nil) and (LOldPtr <> nil) then
+    FAllocator.FreeMem(LOldPtr);
+
   NormalizeWideGlyphBoundaries;
   FDirtyRows := QWord(-1);
 end;
@@ -543,7 +652,7 @@ var
   LTotal, LI, LOutCount, LW: Integer;
   LPosX, LPosY: Word;
 begin
-  LTotal := System.Length(ANext.FContent);
+  LTotal := ANext.ContentLen;
   LOutCount := 0;
   LPosX := ANext.FArea.X;
   LPosY := ANext.FArea.Y;
@@ -551,11 +660,11 @@ begin
 
   for LI := 0 to LTotal - 1 do
   begin
-    if not ANext.FContent[LI].Skip then
+    if not ANext.ContentBase[LI].Skip then
     begin
       APatches[LOutCount].X := LPosX;
       APatches[LOutCount].Y := LPosY;
-      APatches[LOutCount].Cell := ANext.FContent[LI];
+      APatches[LOutCount].Cell := ANext.ContentBase[LI];
       Inc(LOutCount);
     end;
 
@@ -582,7 +691,7 @@ var
   LW, LRow, LCol, LRowBytes: Integer;
 {$PUSH}{$R-}{$Q-}
 begin
-  if (System.Length(FContent) = 0) or (System.Length(ANext.FContent) = 0) then
+  if (ContentLen = 0) or (ANext.ContentLen = 0) then
   begin
     SetLength(APatches, 0);
     Exit;
@@ -590,22 +699,22 @@ begin
 
   if not RectEquals(ANext.FArea, FArea) then
   begin
-    LTotal := System.Length(ANext.FContent);
+    LTotal := ANext.ContentLen;
     SetLength(APatches, LTotal);
     LOutCount := BuildFullRedrawDiff(ANext, APatches);
     SetLength(APatches, LOutCount);
     Exit;
   end;
 
-  LTotal := System.Length(FContent);
+  LTotal := ContentLen;
   SetLength(APatches, LTotal);
   LOutCount := 0;
   LToSkip := 0;
   LInvalidated := 0;
   LW := FArea.Width;
   LRowBytes := LW * SizeOf(TCell);
-  LPrevBase := @FContent[0];
-  LCurrBase := @ANext.FContent[0];
+  LPrevBase := ContentBase;
+  LCurrBase := ANext.ContentBase;
 
   for LRow := 0 to FArea.Height - 1 do
   begin
@@ -670,15 +779,15 @@ var
   LW, LRow, LCol, LRowBytes: Integer;
 {$PUSH}{$R-}{$Q-}
 begin
-  if (System.Length(FContent) = 0) or (System.Length(ANext.FContent) = 0) then
+  if (ContentLen = 0) or (ANext.ContentLen = 0) then
   begin
     Result := 0;
     Exit;
   end;
 
-  LTotal := System.Length(FContent);
+  LTotal := ContentLen;
   if not RectEquals(ANext.FArea, FArea) then
-    LTotal := System.Length(ANext.FContent);
+    LTotal := ANext.ContentLen;
 
   if System.Length(APatches) < LTotal then
     SetLength(APatches, LTotal);
@@ -694,8 +803,8 @@ begin
   LInvalidated := 0;
   LW := FArea.Width;
   LRowBytes := LW * SizeOf(TCell);
-  LPrevBase := @FContent[0];
-  LCurrBase := @ANext.FContent[0];
+  LPrevBase := ContentBase;
+  LCurrBase := ANext.ContentBase;
 
   for LRow := 0 to FArea.Height - 1 do
   begin
@@ -761,7 +870,7 @@ begin
   for LX := FArea.X to FArea.X + FArea.Width - 1 do
   begin
     LIdx := IndexOfPos(LX, AY);
-    LCP := @FContent[LIdx];
+    LCP := (ContentBase + (LIdx));
     if LCP^.Width = 0 then
       Continue                          { CJK 尾列哨兵 }
     else if LCP^.Glyph.Len = 0 then
@@ -775,7 +884,7 @@ begin
   for LX := FArea.X to FArea.X + FArea.Width - 1 do
   begin
     LIdx := IndexOfPos(LX, AY);
-    LCP := @FContent[LIdx];
+    LCP := (ContentBase + (LIdx));
     if LCP^.Width = 0 then
       Continue;
     LGlyphLen := LCP^.Glyph.Len;

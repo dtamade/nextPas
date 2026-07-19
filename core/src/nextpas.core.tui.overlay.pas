@@ -11,8 +11,8 @@ unit nextpas.core.tui.overlay;
  *   - 失效：消费方写入后置 FDirty，终端据此决定是否重新 merge。
  *
  * 性能：
- *   - 用全尺寸 `array of TCell`（同 base）+ 并行 `array of Boolean` 标记
- *     哪些 cell 被设置。
+ *   - 用全尺寸 cell + 并行 marks 标记哪些 cell 被设置。
+ *   - 可选 IAllocator：non-nil 走 GetMem/FreeMem；nil 走托管 dynarray。
  *   - Merge 单遍：mark[i] 则 dest[i]:=overlay[i] 否则保持 base。
  *   - Clear 是 FillChar(marks, N, 0)。
  *}
@@ -24,6 +24,7 @@ unit nextpas.core.tui.overlay;
 interface
 
 uses
+  nextpas.core.mem.intf,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.style,
@@ -36,10 +37,20 @@ type
     FArea: TRect;
     FCells: array of TCell;
     FMarks: array of Boolean;
+    FCellsPtr: PCell;
+    FMarksPtr: PBoolean;
+    FCount: Integer;
+    FAllocator: IAllocator;
     FDirty: Boolean;
     function IndexOf(AX, AY: Integer): Integer; inline;
+    function CellsBase: PCell; inline;
+    function MarksBase: PBoolean; inline;
+    function StorageLen: Integer; inline;
+    procedure FreeOwnedStorage;
+    procedure AllocStorage(ACount: Integer);
   public
-    constructor Create(const AArea: TRect);
+    constructor Create(const AArea: TRect; const AAllocator: IAllocator = nil);
+    destructor Destroy; override;
 
     property Area: TRect read FArea;
     property Dirty: Boolean read FDirty;
@@ -71,6 +82,7 @@ type
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.text.width,
   nextpas.core.text.grapheme;
 
@@ -92,16 +104,104 @@ end;
 
 { TOverlayBuffer }
 
-constructor TOverlayBuffer.Create(const AArea: TRect);
+function TOverlayBuffer.CellsBase: PCell;
+begin
+  if FAllocator <> nil then
+    Result := FCellsPtr
+  else if System.Length(FCells) = 0 then
+    Result := nil
+  else
+    Result := @FCells[0];
+end;
+
+function TOverlayBuffer.MarksBase: PBoolean;
+begin
+  if FAllocator <> nil then
+    Result := FMarksPtr
+  else if System.Length(FMarks) = 0 then
+    Result := nil
+  else
+    Result := @FMarks[0];
+end;
+
+function TOverlayBuffer.StorageLen: Integer;
+begin
+  if FAllocator <> nil then
+    Result := FCount
+  else
+    Result := System.Length(FMarks);
+end;
+
+procedure TOverlayBuffer.FreeOwnedStorage;
+begin
+  if FAllocator <> nil then
+  begin
+    if FCellsPtr <> nil then
+    begin
+      FAllocator.FreeMem(FCellsPtr);
+      FCellsPtr := nil;
+    end;
+    if FMarksPtr <> nil then
+    begin
+      FAllocator.FreeMem(FMarksPtr);
+      FMarksPtr := nil;
+    end;
+    FCount := 0;
+  end
+  else
+  begin
+    SetLength(FCells, 0);
+    SetLength(FMarks, 0);
+  end;
+end;
+
+procedure TOverlayBuffer.AllocStorage(ACount: Integer);
 var
-  LN: Integer;
+  LCellBytes, LMarkBytes: SizeUInt;
+begin
+  if FAllocator <> nil then
+  begin
+    FreeOwnedStorage;
+    FCount := ACount;
+    if ACount <= 0 then
+      Exit;
+    LCellBytes := SizeUInt(ACount) * SizeOf(TCell);
+    LMarkBytes := SizeUInt(ACount) * SizeOf(Boolean);
+    FCellsPtr := PCell(FAllocator.GetMem(LCellBytes));
+    FMarksPtr := PBoolean(FAllocator.GetMem(LMarkBytes));
+    if (FCellsPtr = nil) or (FMarksPtr = nil) then
+    begin
+      FreeOwnedStorage;
+      raise EOutOfMemory.Create('TOverlayBuffer allocation failed');
+    end;
+  end
+  else
+  begin
+    FCellsPtr := nil;
+    FMarksPtr := nil;
+    FCount := 0;
+    SetLength(FCells, ACount);
+    SetLength(FMarks, ACount);
+  end;
+end;
+
+constructor TOverlayBuffer.Create(const AArea: TRect; const AAllocator: IAllocator);
 begin
   inherited Create;
+  FAllocator := AAllocator;
+  FCellsPtr := nil;
+  FMarksPtr := nil;
+  FCount := 0;
   FArea := AArea;
-  LN := AArea.Area;
-  SetLength(FCells, LN);
-  SetLength(FMarks, LN);
+  AllocStorage(AArea.Area);
   Clear;
+end;
+
+destructor TOverlayBuffer.Destroy;
+begin
+  FreeOwnedStorage;
+  FAllocator := nil;
+  inherited Destroy;
 end;
 
 function TOverlayBuffer.IndexOf(AX, AY: Integer): Integer;
@@ -112,12 +212,17 @@ end;
 procedure TOverlayBuffer.SetCell(AX, AY: Integer; const ACell: TCell);
 var
   LIdx: Integer;
+  LCells: PCell;
+  LMarks: PBoolean;
 begin
   if (AX < FArea.X) or (AX >= FArea.X + FArea.Width) or
      (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
   LIdx := IndexOf(AX, AY);
-  FCells[LIdx] := ACell;
-  FMarks[LIdx] := True;
+  LCells := CellsBase;
+  LMarks := MarksBase;
+  if (LCells = nil) or (LMarks = nil) then Exit;
+  LCells[LIdx] := ACell;
+  LMarks[LIdx] := True;
   FDirty := True;
 end;
 
@@ -183,41 +288,47 @@ var
   LClip: TRect;
   LX, LY, LIdx: Integer;
   LCell: TCell;
+  LCells: PCell;
+  LMarks: PBoolean;
 begin
   LClip := FArea.Intersection(A);
   if LClip.IsEmpty then Exit;
+  LCells := CellsBase;
+  LMarks := MarksBase;
+  if (LCells = nil) or (LMarks = nil) then Exit;
   for LY := LClip.Top to LClip.Bottom - 1 do
     for LX := LClip.Left to LClip.Right - 1 do
     begin
       LIdx := IndexOf(LX, LY);
-      if FMarks[LIdx] then
-        CellApplyStyle(FCells[LIdx], AStyle)
+      if LMarks[LIdx] then
+        CellApplyStyle(LCells[LIdx], AStyle)
       else
       begin
         LCell := CELL_EMPTY;
         CellApplyStyle(LCell, AStyle);
-        FCells[LIdx] := LCell;
-        FMarks[LIdx] := True;
+        LCells[LIdx] := LCell;
+        LMarks[LIdx] := True;
       end;
     end;
   FDirty := True;
 end;
 
 procedure TOverlayBuffer.Clear;
+var
+  LMarks: PBoolean;
+  LN: Integer;
 begin
-  if System.Length(FMarks) > 0 then
-    FillChar(FMarks[0], System.Length(FMarks) * SizeOf(Boolean), 0);
+  LN := StorageLen;
+  LMarks := MarksBase;
+  if (LN > 0) and (LMarks <> nil) then
+    FillChar(LMarks^, LN * SizeOf(Boolean), 0);
   FDirty := True;
 end;
 
 procedure TOverlayBuffer.Resize(const ANewArea: TRect);
-var
-  LN: Integer;
 begin
   FArea := ANewArea;
-  LN := ANewArea.Area;
-  SetLength(FCells, LN);
-  SetLength(FMarks, LN);
+  AllocStorage(ANewArea.Area);
   Clear;
 end;
 
@@ -225,22 +336,27 @@ procedure TOverlayBuffer.MergeInto(ABase, ADest: TBuffer);
 var
   LI, LTotal: Integer;
   LDstCell: PCell;
+  LCells: PCell;
+  LMarks: PBoolean;
 begin
   Assert((ABase.Area.X = ADest.Area.X) and (ABase.Area.Y = ADest.Area.Y)
     and (ABase.Area.Width = ADest.Area.Width) and (ABase.Area.Height = ADest.Area.Height),
     'MergeInto: Base 与 Dest 必须同 Area');
-  LTotal := System.Length(FMarks);
+  LTotal := StorageLen;
   if LTotal = 0 then Exit;
+  LCells := CellsBase;
+  LMarks := MarksBase;
+  if (LCells = nil) or (LMarks = nil) then Exit;
   { Dest 应已是 Base 的拷贝或刚从 Base 填充。此处只覆盖标记过的位置。 }
   for LI := 0 to LTotal - 1 do
   begin
-    if FMarks[LI] then
+    if LMarks[LI] then
     begin
       LDstCell := ADest.CellAt(
         FArea.X + (LI mod FArea.Width),
         FArea.Y + (LI div FArea.Width));
       if LDstCell <> nil then
-        LDstCell^ := FCells[LI];
+        LDstCell^ := LCells[LI];
     end;
   end;
 end;
