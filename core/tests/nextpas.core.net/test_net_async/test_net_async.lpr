@@ -84,7 +84,7 @@ begin
     LListener.Close;
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -120,7 +120,7 @@ begin
     LListener.Close;
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -148,7 +148,7 @@ begin
     LListener.Close;
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 
@@ -187,7 +187,7 @@ begin
     LListener.Close;
   finally
     GLoop.Close;
-    GLoop.Close;
+    GLoop.Free;
   end;
 end;
 

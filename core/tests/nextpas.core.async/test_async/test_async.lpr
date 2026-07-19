@@ -331,7 +331,7 @@ var
 begin
   LLoop := TAsyncLoop.Create(32);
   Check(LLoop.IsValid, 'loop valid');
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopTimer;
@@ -346,7 +346,7 @@ begin
   LLoop.Run;
   CheckEqual(Int64(1), Int64(GCallCount), 'timer fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopMultiTimer;
@@ -366,7 +366,7 @@ begin
   CheckEqual(Int64(1), Int64(GCallOrder[0]), 'first=1');
   CheckEqual(Int64(2), Int64(GCallOrder[1]), 'second=2');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopStop;
@@ -384,7 +384,7 @@ begin
   { Only the stop callback should have fired }
   CheckEqual(Int64(1), Int64(GCallCount), 'only stop callback fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopStopWakesPlatformPollerSourceContract;
@@ -591,7 +591,7 @@ begin
   LDiscarded := False;
   LLoop := TAsyncLoop.Create(32);
   LLoop.PostEx(@MustNotInvokeCallback, @LDiscarded, @DiscardOnlyCallback);
-  LLoop.Close;
+  LLoop.Free;
   Check(GDiscardCount = 1, 'PostEx Close runs OnDiscard once');
   Check(GInvokeCount = 0, 'PostEx Close does not invoke pending callback');
   Check(LDiscarded, 'OnDiscard received context');
@@ -610,7 +610,7 @@ begin
   LH := LLoop.ScheduleEx(TDuration.FromMilliseconds(60000),
     @MustNotInvokeCallback, @LDiscarded, @DiscardOnlyCallback);
   Check(LH.IsValid, 'ScheduleEx returns valid handle');
-  LLoop.Close;
+  LLoop.Free;
   Check(GDiscardCount = 1, 'ScheduleEx Close runs OnDiscard once');
   Check(GInvokeCount = 0, 'ScheduleEx Close does not fire abandoned timer callback');
   Check(LDiscarded, 'timer OnDiscard received context');
@@ -629,7 +629,7 @@ begin
   LH := LLoop.ScheduleEx(TDuration.FromMilliseconds(60000),
     @MustNotInvokeCallback, @LDiscarded, @DiscardOnlyCallback);
   Check(LLoop.CancelTimer(LH), 'CancelTimer succeeds for live handle');
-  LLoop.Close;
+  LLoop.Free;
   Check(GDiscardCount = 0, 'Cancel clears OnDiscard; Close must not run it again');
   Check(GInvokeCount = 0, 'cancelled timer callback never fires');
   Check(not LDiscarded, 'OnDiscard must not run after Cancel');
@@ -921,7 +921,7 @@ begin
   { The cancelled timer should not have fired; only stop callback }
   CheckEqual(Int64(1), Int64(GCallCount), 'cancelled timer did not fire');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 var
@@ -981,7 +981,7 @@ begin
   CheckEqual(Int64($EF), Int64(LReadBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -998,7 +998,7 @@ begin
   LResult := LLoop.Poll;
   Check(LResult >= 1, 'poll returned events');
   CheckEqual(Int64(1), Int64(GCallCount), 'callback fired via poll');
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopPollDrainsPostBeforeExpiredTimer;
@@ -1019,7 +1019,7 @@ begin
     'Poll drains posted callbacks before expired timers');
   CheckEqual(Int64(0), Int64(LCtx.TimerCount),
     'posted cancellation prevents expired timer callback');
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 procedure TestAsyncLoopRunStopFromPostStillFiresExpiredTimers;
@@ -1041,7 +1041,7 @@ begin
     CheckEqual(Int64(1), Int64(LCtx.TimerCount),
       'Run fires already-expired timers before honoring Stop from posted callback');
   finally
-    LLoop.Close;
+    LLoop.Free;
   end;
 end;
 
@@ -1102,7 +1102,7 @@ begin
       CheckEqual(Int64(0), Int64(GRunOnceIoCount),
         'RunOnce skips I/O poll after Stop from posted callback');
     finally
-      LLoop.Close;
+      LLoop.Free;
     end;
   finally
     if LPipeReady then
@@ -1140,7 +1140,7 @@ begin
 
   Check(GScheduleAtFired, 'ScheduleAt callback fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncRecv/AsyncSend via TCP loopback === }
@@ -1205,7 +1205,7 @@ begin
   CheckEqual(Int64($DD), Int64(LRecvBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncRecv via TCP loopback === }
@@ -1268,7 +1268,7 @@ begin
   CheckEqual(Int64($44), Int64(LRecvBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncAccept on TCP listener === }
@@ -1327,7 +1327,7 @@ begin
   end;
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncRecvTimeout success === }
@@ -1392,7 +1392,7 @@ begin
   CheckEqual(Int64($EF), Int64(LRecvBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === AsyncRecvTimeout expired (no data arrives, deadline passes) === }
@@ -1433,7 +1433,7 @@ begin
   Check(GTimeoutIoResult < 0, 'result negative = timeout/cancel');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === TPoller direct API tests === }

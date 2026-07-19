@@ -277,10 +277,11 @@ TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 This split avoids forcing a result parameter into timer/post callbacks where it would always be ignored.
 `TAsyncTask.OnComplete` uses `TAsyncCallback` — the result is fetched separately via `GetResult`.
 
-### Resource lifecycle (Close convention)
+### Resource lifecycle (Close / Free convention)
 
-All heap-owning record types use `Close` for teardown:
-- `TAsyncLoop.Close` — releases poller, wake poller, MPSC pending queue (discard unfired Posts); aborts pending I/O
+- `TAsyncLoop` is a **class** (heap-owned). Call `Free` (or `Close` then `Free`); `Destroy` calls `Close` and does not re-raise.
+- `TAsyncLoop.Close` — idempotent: releases poller, wake poller, MPSC pending queue (discard unfired Posts); aborts pending I/O. May re-raise if an abort callback fails.
+- Dependents (`IAsyncMutex`, `IAsyncShutdown`, …) store a non-owning `TAsyncLoop` reference — free dependents before the loop.
 - `TPoller.Close` — releases backend reactor
 - `TTimerHeap.Close` — nils callback references, frees heap storage
 
@@ -294,7 +295,7 @@ All heap-owning record types use `Close` for teardown:
 - **Timeout is notify-only**: the timer fires the callback with ETIMEDOUT but does not cancel the kernel I/O operation. The I/O will still complete eventually (and be discarded).
 - **No kqueue backend**: the poller backend enum and platform io base define no kqueue variant for the async module's use. no `pbkqueue` backend.
 - **IOCP is compile-only**: `pbIocp` exists in the backend enum and the reactor stub compiles, but no runtime verification has been done on Windows.
-- **No WhenAll/WhenAny combinators**: tasks must be composed manually via callbacks.
+- **WhenAll/WhenAny exist** in `async.combinators` (plus Ref variants).
 - **No file descriptor lifecycle management**: the caller is responsible for opening/closing fds.
 
 

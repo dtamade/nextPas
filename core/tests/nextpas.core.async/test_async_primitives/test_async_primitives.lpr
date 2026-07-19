@@ -60,7 +60,7 @@ begin
   LMutex.Unlock;
   Check(not LMutex.IsLocked, 'mutex is unlocked after unlock');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 2: MutexAsyncLock === }
@@ -91,7 +91,7 @@ begin
   LMutex.Unlock;
   Check(not LMutex.IsLocked, 'mutex is unlocked');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 3: MutexFIFOOrder === }
@@ -134,7 +134,7 @@ begin
   CheckEqual(Int64(3), Int64(GFifoOrder[2]), 'third waiter got lock third');
   GFifoMutex := nil;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 4: SemaphoreBasic === }
@@ -160,7 +160,7 @@ begin
   LSem.Release;
   CheckEqual(Int64(3), Int64(LSem.Available), 'count is 3 after all releases');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 5: SemaphoreAsyncAcquire === }
@@ -188,7 +188,7 @@ begin
   CheckEqual(Int64(1), Int64(GCallCount), 'second acquire callback fired');
   LSem.Release;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 6: ChannelBasic === }
@@ -222,7 +222,7 @@ begin
   FillChar(LBuf, SizeOf(LBuf), 0);
   Check(not LCh.TryReceive(LBuf[0], 4, LReceived), 'empty channel receive fails');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 7: ChannelClose === }
@@ -252,7 +252,7 @@ begin
   LBuf[0] := $FF;
   Check(not LCh.Send(LBuf[0], 1), 'cannot send after close');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 8: ChannelMultipleChunks === }
@@ -283,7 +283,7 @@ begin
     CheckEqual(Int64(LI), Int64(LVal), 'chunk ' + IntToStr(LI) + ' value correct');
   end;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 9: BoundedChannel === }
@@ -312,7 +312,7 @@ begin
   CheckEqual(Int64(1), Int64(LOut), 'received value 1');
   LVal := 4; Check(LCh.Send(LVal, SizeOf(LVal)), 'send 4 succeeds after receive');
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 10: CondVarSignal === }
@@ -351,7 +351,7 @@ begin
   GCondVarMutex := nil;
   GCondVar := nil;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 11: CondVarBroadcast === }
@@ -389,7 +389,7 @@ begin
   GCondVarMutex := nil;
   GCondVar := nil;
   LLoop.Close;
-    LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Main === }

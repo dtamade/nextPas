@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.async*.pas` + `core/src/nextpas.core.net*.pas`
 **层级**：L1-L2（依赖 L0: platform, base, errors）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-11
-**版本**：1.0
+**最后更新**：2026-07-19
+**版本**：1.1
 
 ---
 
@@ -60,9 +60,10 @@ end;
 { 异步任务状态 }
 TAsyncTaskState = (atsIdle, atsPending, atsCompleted, atsFailed, atsTimedOut, atsCancelled);
 
-{ 事件循环 }
-TAsyncLoop = record
-  class function Create(AQueueDepth: UInt32 = 64): TAsyncLoop; static;
+{ 事件循环 — class，堆拥有；依赖存对象引用且不拥有 }
+TAsyncLoop = class
+  constructor Create(AQueueDepth: UInt32 = 64);
+  destructor Destroy; override;
   procedure Close;
   function IsValid: Boolean;
 
@@ -329,11 +330,12 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 ### 5.1 异步框架
 
-- **TAsyncLoop**: 值类型，内部管理 FPoller、FTimers、FPendingQueue
+- **TAsyncLoop**: **class**，内部管理 FPoller、FTimers、FPending MPSC；`Free`/`Close` 释放
 - **TTimerHeap**: 值类型，内部管理 FEntries、FHeap
 - **TAsyncTask**: 值类型，调用方管理生命周期
 - **匿名过程引用**: 引用计数，自动释放
 - **方法指针**: 绑定到对象，对象生命周期由调用方管理
+- **依赖 outlive**: mutex/channel/shutdown/net.async 等存 loop 引用但不拥有
 
 ### 5.2 网络层
 
@@ -418,9 +420,11 @@ atsCancelled: TAsyncTaskStatus = 5;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-19 | 1.1 | TAsyncLoop class 生命周期 | Claude |
 | 2026-07-11 | 1.0 | 初始版本 | Claude |
 
 
 ### OnDiscard / Close
 - Heap wraps posted to the loop must provide OnDiscard when Close may discard them.
 - Timeout I/O uses ScheduleEx + TimeoutCtxDiscardTimer so Close free TTimeoutCtx.
+- TCP async write uses AsyncSend (not positioned AsyncWrite).

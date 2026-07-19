@@ -44,7 +44,7 @@ begin
   LLoop.Poll;
   LLoop.RunOnce;
   LLoop.Stop;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 begin

@@ -113,7 +113,7 @@ begin
 
   Check(GSleepFired, 'sleep callback fired');
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
 end;
 
 { === Test 2: ReadSuccess === }
@@ -156,7 +156,7 @@ begin
   CheckEqual(Int64($BE), Int64(LReadBuf[3]), 'byte 3');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -195,7 +195,7 @@ begin
   LLoop.Poll;
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -234,7 +234,7 @@ begin
     'late I/O completion does not replace timeout result');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   CheckEqual(Int64(1), Int64(GCallCount),
     'loop close does not redispatch timed-out read');
   platform_pipe_close(LPipe);
@@ -269,7 +269,7 @@ begin
   CheckEqual(Int64(-110), Int64(GIoResult), 'result is -ETIMEDOUT');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -297,7 +297,7 @@ begin
     TDeadline.After(TDuration.FromSeconds(5)), @IoCallback, nil);
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 
   Check(GIoDone, 'close abort callback fired');
@@ -327,7 +327,7 @@ begin
       TDeadline.After(TDuration.FromSeconds(5)), @CloseAbortScheduleCallback, nil),
       'pending timeout read queued');
 
-    LLoop.Close;
+    LLoop.Free;
 
     Check(GIoDone, 'close abort callback fired');
     CheckEqual(Int64(1), Int64(GCallCount), 'callback fired exactly once');
@@ -398,7 +398,11 @@ begin
       'close dispatches all abort callbacks despite exception');
     CheckEqual(Int64(2), Int64(GRaisingCloseAbortCount),
       'all abort callbacks use -ECANCELED');
+    LLoop.Free;
+    LLoop := nil;
   finally
+    if LLoop <> nil then
+      LLoop.Free;
     if LPipe2Ready then
       platform_pipe_close(LPipe2);
     if LPipe1Ready then
@@ -450,7 +454,7 @@ begin
   CheckEqual(Int64(4), Int64(GWriteResult), 'wrote 4 bytes');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -497,7 +501,7 @@ begin
   CheckEqual(Int64(1), Int64(GDoubleFireCount), 'callback fired exactly once');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -538,7 +542,7 @@ begin
   CheckEqual(Int64($01), Int64(LReadBuf[0]), 'byte 0');
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 
@@ -618,7 +622,7 @@ begin
   LLoop.Poll;
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe0);
   platform_pipe_close(LPipe1);
   platform_pipe_close(LPipe2);
@@ -659,7 +663,7 @@ begin
   LLoop.Poll;
 
   GLoopRef := nil;
-  LLoop.Close;
+  LLoop.Free;
   platform_pipe_close(LPipe);
 end;
 

@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.async*.pas`（15 个源文件）
 **层级**：L1（依赖 L0: base, sync）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-11
-**版本**：3.0
+**最后更新**：2026-07-19
+**版本**：3.1
 
 ---
 
@@ -16,7 +16,7 @@
 |------|------|
 | async.base | 基础类型 (TAsyncCallback, TAsyncTimerHandle) |
 | async.timer | TTimerHeap (定时器堆) |
-| async.loop | TAsyncLoop (事件循环) |
+| async.loop | TAsyncLoop (**class** 事件循环) |
 | async.task | TAsyncTask (异步任务状态机) |
 | async.taskgroup | IAsyncTaskGroup (结构化并发) |
 | async.shutdown | IAsyncShutdown (优雅关闭管理器) |
@@ -38,17 +38,21 @@
 TAsyncCallback = procedure(AContext: Pointer);
 TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 
-{ TAsyncLoop }
-TAsyncLoop = record
-  function Create(AQueueDepth: Integer = 64): TAsyncLoop;
+{ TAsyncLoop — heap-owned class. Dependents store object refs (not owned).
+  Create / Close / Free: Free→Destroy calls Close (Destroy does not re-raise).
+  Close is idempotent; may re-raise poller abort-callback failures. }
+TAsyncLoop = class
+  constructor Create(AQueueDepth: UInt32 = 64);
+  destructor Destroy; override;
   procedure Close;
+  function IsValid: Boolean;
   procedure Run;
   procedure Stop;
-  procedure Poll;
-  function Schedule(ADelay: TDuration; ACallback: TAsyncCallback; AContext: Pointer): TAsyncTimerHandle;
-  procedure Post(ACallback: TAsyncCallback; AContext: Pointer);
+  function Poll: Int32;
+  function Schedule(const ADelay: TDuration; ACallback: TAsyncCallback; AContext: Pointer = nil): TAsyncTimerHandle;
+  procedure Post(ACallback: TAsyncCallback; AContext: Pointer = nil);
   procedure Wake;
-  // + AsyncRead/Write/Accept/Recv/Send variants
+  // + PostEx/ScheduleEx OnDiscard, AsyncRead/Write/Accept/Recv/Send variants
 end;
 
 { TAsyncTask }
@@ -103,7 +107,9 @@ end;
 - **[INV-4]** IAsyncTaskGroup.ActiveCount 在最后一个任务完成时变为 0
 - **[INV-5]** IAsyncShutdown 状态转换：Running→Draining→Closed/ForceClose
 - **[INV-6]** IAsyncTimeout 超时回调和完成回调只触发一个（原子 CAS 保护）
-- **[INV-7]** 所有 Record 类型的 Close 方法是幂等的
+- **[INV-7]** TAsyncLoop.Close 幂等；Destroy 调 Close 且不向外抛异常
+- **[INV-8]** 依赖对象（mutex/channel/shutdown/…）存 `TAsyncLoop` 引用且**不拥有**；loop 必须活过依赖；释放顺序：先 nil 接口/依赖，再 `Loop.Free`
+- **[INV-9]** 禁止 `FLoop := @ALoop` / `PAsyncLoop` 作为公共存储模式
 
 ---
 
@@ -165,6 +171,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-19 | 3.1 | TAsyncLoop record→class；生命周期/Destroy 契约 | Claude |
 | 2026-07-11 | 3.0 | 添加 Combinators/Retry/SyncPrimitives | Claude |
 | 2026-07-11 | 2.0 | 添加 TaskGroup/Shutdown/Timeout 高级模式 | Claude |
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
@@ -174,3 +181,4 @@ end;
 - Unfired MPSC items: invoke `OnDiscard(Context)` if set, else free PostRef heap wrap only.
 - Abandoned timers: Close/Recycle runs `OnDiscard` then clears entry.
 - `CancelTimer` does not run OnDiscard.
+- Dependents must release before `Loop.Free` (or ensure they never touch a closed loop).
