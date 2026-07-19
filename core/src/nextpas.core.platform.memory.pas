@@ -462,13 +462,17 @@ begin
 {$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.platform.windows.ffi.VirtualFree(APtr, PtrUInt(ASize), WINDOWS_MEM_DECOMMIT);
 {$ELSEIF defined(NEXTPAS_UNIX)}
-  { Drop access first so the reservation remains PROT_NONE-like; then
-    advise the kernel that pages can be reclaimed. MADV_DONTNEED semantics
-    vary: Linux discards immediately (re-fault zero-fills); Darwin/FreeBSD
-    may lazy-reclaim. Either way the address range stays mapped. }
+  { Drop access so the reservation remains unreadable/unwritable. Then
+    advise reclamation where it is safe. Linux MADV_DONTNEED discards
+    immediately (re-fault zero-fills). On Darwin, skip madvise here:
+    MADV_DONTNEED after mixed mprotect/munmap has been implicated in
+    process-exit Abort traps under some toolchains; PROT_NONE is enough
+    to match decommit semantics for the portable API. }
   nextpas.core.platform.posix.ffi.mprotect(
     APtr, PtrUInt(ASize), PLATFORM_POSIX_PROT_NONE);
+  {$IFNDEF NEXTPAS_MACOS}
   nextpas.core.platform.posix.ffi.madvise(APtr, size_t(ASize), MADV_DONTNEED);
+  {$ENDIF}
 {$ENDIF}
 end;
 
