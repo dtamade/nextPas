@@ -122,6 +122,13 @@ function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrIn
     @return 0 成功，否则返回错误码 *}
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
 
+{** @desc 设置句柄是否可被子进程继承
+    @param AHandle  管道/文件句柄
+    @param AInherit True=可继承；False=父进程保留端应设为不可继承
+    @return 0 成功 *}
+function platform_process_set_handle_inheritable(AHandle: PtrInt;
+  AInherit: Boolean): Int32;
+
 { Generic fd I/O — transitional dual-API for process.pipe only.
   Prefer platform.files / platform_process_*_ex for new code.
   platform_io_read/write/poll: value/sentinel (byte count or ready count; -1 on failure).
@@ -390,6 +397,25 @@ begin
   Result := PosixCheck(close(cint(AHandle)));
   if Result = 0 then
     AHandle := -1;
+end;
+
+function platform_process_set_handle_inheritable(AHandle: PtrInt;
+  AInherit: Boolean): Int32;
+var
+  LFlags: cint;
+begin
+  if AHandle < 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  LFlags := fcntl(cint(AHandle), F_GETFD, 0);
+  if LFlags < 0 then
+    Exit(platform_get_errno);
+  if AInherit then
+    LFlags := LFlags and (not FD_CLOEXEC)
+  else
+    LFlags := LFlags or FD_CLOEXEC;
+  if fcntl(cint(AHandle), F_SETFD, LFlags) < 0 then
+    Exit(platform_get_errno);
+  Result := 0;
 end;
 
 function platform_io_read(AFd: PtrInt; ABuf: Pointer; ACount: SizeUInt): PtrInt;
@@ -1457,6 +1483,23 @@ begin
   Result := 0;
 end;
 
+function platform_process_set_handle_inheritable(AHandle: PtrInt;
+  AInherit: Boolean): Int32;
+var
+  LFlags: DWORD;
+begin
+  if AHandle < 0 then
+    Exit(PLATFORM_ERR_INVALID);
+  if AInherit then
+    LFlags := HANDLE_FLAG_INHERIT
+  else
+    LFlags := 0;
+  if not SetHandleInformation(HANDLE(PtrUInt(AHandle)), HANDLE_FLAG_INHERIT,
+    LFlags) then
+    Exit(platform_get_last_error);
+  Result := 0;
+end;
+
 function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
   AChildStdin, AChildStdout, AChildStderr: PtrInt;
@@ -1610,15 +1653,245 @@ function platform_process_run_capture(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AStdoutBuf: PAnsiChar; AStdoutBufLen: Int32; out AStdoutLen: Int32;
   AStderrBuf: PAnsiChar; AStderrBufLen: Int32; out AStderrLen: Int32;
   out AExitCode: Int32): Int32;
+var
+  LProc: TPlatformProcess;
+  LResult: TPlatformProcessResult;
+  LStdoutRd, LStdoutWr: HANDLE;
+  LStderrRd, LStderrWr: HANDLE;
+  LDevNullRead: HANDLE;
+  LSA: SECURITY_ATTRIBUTES;
+  LFailStage: TPlatformProcessSpawnStage;
+  LNulPath: UnicodeString;
+  LRead, LAvail, LErr: DWORD;
+  LDiscard: array[0..4095] of Byte;
+  LStdoutDone, LStderrDone: Boolean;
+  LWaited: Boolean;
+  LPrevOut, LPrevErr: Int32;
+
+  procedure CloseIfValid(var AH: HANDLE);
+  begin
+    if AH <> HANDLE(PtrInt(-1)) then
+    begin
+      CloseHandle(AH);
+      AH := HANDLE(PtrInt(-1));
+    end;
+  end;
+
+  { Non-blocking drain of available bytes. ADone on EOF/broken pipe. }
+  function TryDrain(ARd: HANDLE; ABuf: PAnsiChar; ABufLen: Int32;
+    var ALen: Int32; var ADone: Boolean; AAllowBlockingEof: Boolean): Boolean;
+  begin
+    Result := True;
+    if ADone then
+      Exit;
+    LAvail := 0;
+    if not PeekNamedPipe(ARd, nil, 0, nil, @LAvail, nil) then
+    begin
+      LErr := GetLastError;
+      if (LErr = ERROR_BROKEN_PIPE) or (LErr = ERROR_HANDLE_EOF) then
+        ADone := True
+      else
+        Result := False;
+      Exit;
+    end;
+    if LAvail = 0 then
+    begin
+      { Only blocking-read for EOF after child has exited (writers closed). }
+      if not AAllowBlockingEof then
+        Exit;
+      LRead := 0;
+      if not ReadFile(ARd, @LDiscard[0], 1, @LRead, nil) then
+      begin
+        LErr := GetLastError;
+        if (LErr = ERROR_BROKEN_PIPE) or (LErr = ERROR_HANDLE_EOF) then
+          ADone := True
+        else
+          Result := False;
+        Exit;
+      end;
+      if LRead = 0 then
+      begin
+        ADone := True;
+        Exit;
+      end;
+      { Got 1 leftover byte }
+      if ALen < ABufLen then
+      begin
+        ABuf[ALen] := AnsiChar(LDiscard[0]);
+        Inc(ALen);
+      end;
+      Exit;
+    end;
+    while LAvail > 0 do
+    begin
+      LRead := 0;
+      if ALen < ABufLen then
+      begin
+        if not ReadFile(ARd, @ABuf[ALen], DWORD(ABufLen - ALen), @LRead, nil) then
+        begin
+          LErr := GetLastError;
+          if (LErr = ERROR_BROKEN_PIPE) or (LErr = ERROR_HANDLE_EOF) then
+            ADone := True
+          else
+            Result := False;
+          Exit;
+        end;
+        if LRead = 0 then
+        begin
+          ADone := True;
+          Exit;
+        end;
+        Inc(ALen, Int32(LRead));
+      end
+      else
+      begin
+        if not ReadFile(ARd, @LDiscard[0], DWORD(SizeOf(LDiscard)), @LRead, nil) then
+        begin
+          LErr := GetLastError;
+          if (LErr = ERROR_BROKEN_PIPE) or (LErr = ERROR_HANDLE_EOF) then
+            ADone := True
+          else
+            Result := False;
+          Exit;
+        end;
+        if LRead = 0 then
+        begin
+          ADone := True;
+          Exit;
+        end;
+      end;
+      if not PeekNamedPipe(ARd, nil, 0, nil, @LAvail, nil) then
+      begin
+        LErr := GetLastError;
+        if (LErr = ERROR_BROKEN_PIPE) or (LErr = ERROR_HANDLE_EOF) then
+          ADone := True
+        else
+          Result := False;
+        Exit;
+      end;
+    end;
+  end;
+
 begin
   AStdoutLen := 0;
   AStderrLen := 0;
   AExitCode := -1;
+  if APath = nil then
+    Exit(PLATFORM_ERR_INVALID);
   if IsInvalidOutputBuffer(AStdoutBuf, AStdoutBufLen) or
      IsInvalidOutputBuffer(AStderrBuf, AStderrBufLen) then
     Exit(PLATFORM_ERR_INVALID);
-  Result := platform_process_run(APath, AArgv, ACwd,
-    AStdoutBuf, AStdoutBufLen, AStdoutLen, AExitCode);
+
+  LStdoutRd := HANDLE(PtrInt(-1));
+  LStdoutWr := HANDLE(PtrInt(-1));
+  LStderrRd := HANDLE(PtrInt(-1));
+  LStderrWr := HANDLE(PtrInt(-1));
+  LDevNullRead := HANDLE(PtrInt(-1));
+  LWaited := False;
+
+  FillChar(LSA, SizeOf(LSA), 0);
+  LSA.nLength := SizeOf(LSA);
+  LSA.bInheritHandle := True;
+
+  if not CreatePipe(@LStdoutRd, @LStdoutWr, @LSA, 0) then
+    Exit(platform_get_last_error);
+  if not SetHandleInformation(LStdoutRd, HANDLE_FLAG_INHERIT, 0) then
+  begin
+    Result := platform_get_last_error;
+    CloseIfValid(LStdoutRd);
+    CloseIfValid(LStdoutWr);
+    Exit;
+  end;
+  if not CreatePipe(@LStderrRd, @LStderrWr, @LSA, 0) then
+  begin
+    Result := platform_get_last_error;
+    CloseIfValid(LStdoutRd);
+    CloseIfValid(LStdoutWr);
+    Exit;
+  end;
+  if not SetHandleInformation(LStderrRd, HANDLE_FLAG_INHERIT, 0) then
+  begin
+    Result := platform_get_last_error;
+    CloseIfValid(LStdoutRd);
+    CloseIfValid(LStdoutWr);
+    CloseIfValid(LStderrRd);
+    CloseIfValid(LStderrWr);
+    Exit;
+  end;
+
+  LNulPath := 'NUL';
+  LDevNullRead := CreateFileW(PWideChar(LNulPath), GENERIC_READ,
+    FILE_SHARE_READ or FILE_SHARE_WRITE, @LSA, OPEN_EXISTING,
+    FILE_ATTRIBUTE_NORMAL, nil);
+  if LDevNullRead = HANDLE(PtrInt(-1)) then
+  begin
+    Result := platform_get_last_error;
+    CloseIfValid(LStdoutRd);
+    CloseIfValid(LStdoutWr);
+    CloseIfValid(LStderrRd);
+    CloseIfValid(LStderrWr);
+    Exit;
+  end;
+
+  Result := platform_process_spawn_fds(APath, AArgv, nil, ACwd,
+    PtrInt(PtrUInt(LDevNullRead)), PtrInt(PtrUInt(LStdoutWr)),
+    PtrInt(PtrUInt(LStderrWr)), LProc, LFailStage);
+  CloseIfValid(LDevNullRead);
+  CloseIfValid(LStdoutWr);
+  CloseIfValid(LStderrWr);
+  if Result <> 0 then
+  begin
+    CloseIfValid(LStdoutRd);
+    CloseIfValid(LStderrRd);
+    Exit;
+  end;
+
+  LStdoutDone := False;
+  LStderrDone := False;
+  try
+    while (not LStdoutDone) or (not LStderrDone) do
+    begin
+      LPrevOut := AStdoutLen;
+      LPrevErr := AStderrLen;
+      if not TryDrain(LStdoutRd, AStdoutBuf, AStdoutBufLen, AStdoutLen,
+        LStdoutDone, LWaited) then
+        Exit(platform_get_last_error);
+      if not TryDrain(LStderrRd, AStderrBuf, AStderrBufLen, AStderrLen,
+        LStderrDone, LWaited) then
+        Exit(platform_get_last_error);
+      if LStdoutDone and LStderrDone then
+        Break;
+      if not LWaited then
+      begin
+        if platform_process_try_wait(LProc, LResult) = 0 then
+        begin
+          if LResult.Status <> nextpas.core.platform.process.base.psRunning then
+          begin
+            LWaited := True;
+            AExitCode := LResult.ExitCode;
+          end;
+        end;
+      end;
+      if (AStdoutLen = LPrevOut) and (AStderrLen = LPrevErr) then
+        Sleep(1);
+    end;
+    if (AStdoutBuf <> nil) and (AStdoutLen < AStdoutBufLen) then
+      AStdoutBuf[AStdoutLen] := #0;
+    if (AStderrBuf <> nil) and (AStderrLen < AStderrBufLen) then
+      AStderrBuf[AStderrLen] := #0;
+  finally
+    CloseIfValid(LStdoutRd);
+    CloseIfValid(LStderrRd);
+  end;
+
+  if not LWaited then
+  begin
+    Result := platform_process_wait(LProc, LResult);
+    if Result = 0 then
+      AExitCode := LResult.ExitCode;
+  end
+  else
+    Result := 0;
 end;
 
 function platform_process_run_exec(const APath: PAnsiChar; AArgv: PPAnsiChar;
@@ -1943,6 +2216,9 @@ function platform_process_open_null(const AForWrite: Boolean; out AHandle: PtrIn
 begin AHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_close_handle(var AHandle: PtrInt): Int32;
 begin AHandle := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
+function platform_process_set_handle_inheritable(AHandle: PtrInt;
+  AInherit: Boolean): Int32;
+begin Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_run(const APath: PAnsiChar; AArgv: PPAnsiChar; const ACwd: PAnsiChar; AOutBuf: PAnsiChar; AOutBufLen: Int32; out AOutLen: Int32; out AExitCode: Int32): Int32;
 begin AOutLen := 0; AExitCode := -1; Result := PLATFORM_ERR_UNSUPPORTED; end;
 function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; const ACwd: PAnsiChar; AChildStdin, AChildStdout, AChildStderr: PtrInt; out AProc: TPlatformProcess; out AFailStage: TPlatformProcessSpawnStage): Int32;

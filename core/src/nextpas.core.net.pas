@@ -14,7 +14,9 @@ uses
   nextpas.core.net.cancel,
   nextpas.core.net.tcp,
   nextpas.core.net.udp,
-  nextpas.core.net.resolve;
+  nextpas.core.net.resolve,
+  nextpas.core.net.async.tcp,
+  nextpas.core.net.async.resolve;
 
 type
   TNetAddress = nextpas.core.net.base.TNetAddress;
@@ -29,6 +31,11 @@ type
   ITcpStream = nextpas.core.net.intf.ITcpStream;
   ITcpListener = nextpas.core.net.intf.ITcpListener;
   IUdpSocket = nextpas.core.net.intf.IUdpSocket;
+  IAsyncTcpStream = nextpas.core.net.async.tcp.IAsyncTcpStream;
+  IAsyncTcpListener = nextpas.core.net.async.tcp.IAsyncTcpListener;
+  TDnsResult = nextpas.core.net.async.resolve.TDnsResult;
+  TDnsCallback = nextpas.core.net.async.resolve.TDnsCallback;
+  TDnsCallbackRef = nextpas.core.net.async.resolve.TDnsCallbackRef;
 
 function TcpListen(const AAddr: string; const APort: UInt16): ITcpListener; inline;
 function TcpConnect(const AAddr: string; const APort: UInt16): ITcpStream; inline;

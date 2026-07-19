@@ -331,8 +331,15 @@ begin
     Exit;
 
   LDir := nextpas.core.fs.PathDir(LLockFileName);
-  if (LDir <> '') and (not nextpas.core.fs.MkdirAll(LDir)) then
-    Exit;
+  if LDir <> '' then
+  begin
+    try
+      nextpas.core.fs.MkdirAll(LDir);
+    except
+      on Exception do
+        Exit;
+    end;
+  end;
 
   Result := platform_file_open_ex(PAnsiChar(LLockFileName),
     fomReadWrite, fcmOpenOrCreate, False, False, UInt32(PermDefault),
@@ -375,10 +382,24 @@ begin
   if APath = '' then
     Exit(True);
   if nextpas.core.fs.IsFile(APath) then
-    Exit(nextpas.core.fs.Remove(APath));
+  begin
+    try
+      nextpas.core.fs.Remove(APath);
+      Exit(True);
+    except
+      on Exception do
+        Exit(False);
+    end;
+  end;
   if not nextpas.core.fs.IsDir(APath) then
     Exit(True);
-  Result := nextpas.core.fs.RemoveAll(APath);
+  try
+    nextpas.core.fs.RemoveAll(APath);
+    Result := True;
+  except
+    on Exception do
+      Result := False;
+  end;
 end;
 
 function TFreePascalDirectoryEarlyDataReplayStore.RenamePathAt(
@@ -386,7 +407,13 @@ function TFreePascalDirectoryEarlyDataReplayStore.RenamePathAt(
   const ADestPath: string
 ): Boolean;
 begin
-  Result := nextpas.core.fs.Rename(ASourcePath, ADestPath);
+  try
+    nextpas.core.fs.Rename(ASourcePath, ADestPath);
+    Result := True;
+  except
+    on Exception do
+      Result := False;
+  end;
 end;
 
 function TFreePascalDirectoryEarlyDataReplayStore.WriteSnapshotDirectory(
@@ -401,8 +428,14 @@ var
 begin
   Result := False;
 
-  if (ADirectoryName = '') or (not nextpas.core.fs.MkdirAll(ADirectoryName)) then
+  if ADirectoryName = '' then
     Exit;
+  try
+    nextpas.core.fs.MkdirAll(ADirectoryName);
+  except
+    on Exception do
+      Exit;
+  end;
 
   try
     for I := 0 to High(AEntries) do
@@ -527,8 +560,15 @@ begin
     Exit;
 
   LParentDirectory := nextpas.core.fs.PathDir(FDirectoryName);
-  if (LParentDirectory <> '') and (not nextpas.core.fs.MkdirAll(LParentDirectory)) then
-    Exit;
+  if LParentDirectory <> '' then
+  begin
+    try
+      nextpas.core.fs.MkdirAll(LParentDirectory);
+    except
+      on Exception do
+        Exit;
+    end;
+  end;
 
   LTempDirectoryName := GetTempDirectoryName;
   LBackupDirectoryName := GetBackupDirectoryName;

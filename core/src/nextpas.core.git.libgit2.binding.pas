@@ -512,7 +512,7 @@ end;
 
 function git_reference_lookup(out ref_out: git_reference; repo: git_repository; const name: PChar): cint; cdecl;
 begin
-  Result := static_git_reference_lookup(reference, repo, name);
+  Result := static_git_reference_lookup(ref_out, repo, name);
 end;
 
 function git_reference_name(ref: git_reference): PChar; cdecl;
@@ -1386,7 +1386,7 @@ function git_reference_lookup(out ref_out: git_reference; repo: git_repository; 
 begin
   if not Assigned(dyn_git_reference_lookup) then
     Pointer(dyn_git_reference_lookup) := ResolveLibGit2Symbol('git_reference_lookup');
-  Result := dyn_git_reference_lookup(reference, repo, name);
+  Result := dyn_git_reference_lookup(ref_out, repo, name);
 end;
 
 function git_reference_name(ref: git_reference): PChar; cdecl;

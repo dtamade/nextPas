@@ -22,6 +22,8 @@ uses
 
 var
   T: TTestSuite;
+  GDiscardCount: Integer;
+  GInvokeCount: Integer;
 
 function ExpandRepoPath(const ARelativePath: string): string;
 begin
@@ -252,8 +254,13 @@ begin
     'fentries[ahandle.fid].callback := nil;',
     'successful timer cancel clears callback ownership immediately');
   CheckSourceOrder(LBody, 'fentries[ahandle.fid].cancelled := true;',
+    'fentries[ahandle.fid].ondiscard := nil;',
+    'successful timer cancel clears OnDiscard without invoking it');
+  CheckSourceOrder(LBody, 'fentries[ahandle.fid].cancelled := true;',
     'fentries[ahandle.fid].context := nil;',
     'successful timer cancel clears context ownership immediately');
+  CheckSourceNotContains(LBody, 'ondiscard(fentries',
+    'Cancel must not invoke OnDiscard; cancelling owner keeps cleanup duty');
 end;
 
 procedure TestTimerCloseClearsOwnerRefsSourceContract;
@@ -271,6 +278,9 @@ begin
   CheckSourceOrder(LBody, 'if fentrycount > 0 then',
     'for li := 0 to fentrycount - 1 do',
     'Close guards the UInt32 scan against empty-heap underflow');
+  CheckSourceOrder(LBody, 'fentries[li].ondiscard(fentries[li].context);',
+    'fentries[li].callback := nil;',
+    'Close runs OnDiscard before clearing callback ownership');
   CheckSourceOrder(LBody, 'fentries[li].callback := nil;',
     'setlength(fentries, 0);',
     'Close releases callback owner references before shrinking entries');
@@ -471,9 +481,15 @@ begin
   CheckSourceOrder(LCloseBody, 'fpending.close;',
     'fpending.trydequeue(litem)',
     'Close closes MPSC before discarding remaining pending items');
+  CheckSourceOrder(LCloseBody, 'fpending.trydequeue(litem)',
+    'discardpendingitem(litem)',
+    'Close runs DiscardPendingItem for OnDiscard/PostRef wraps');
   CheckSourceOrder(LCloseBody, 'litem.callback := nil;',
     'fpending.free;',
     'Close clears callback refs on discarded items before Free');
+  CheckSourceOrder(LCloseBody, 'litem.ondiscard := nil;',
+    'fpending.free;',
+    'Close clears OnDiscard refs on discarded items before Free');
   CheckSourceOrder(LCloseBody, 'litem.context := nil;',
     'fpending.free;',
     'Close clears context refs on discarded items before Free');
@@ -494,6 +510,129 @@ begin
   CheckSourceOrder(LDrainBody, 'while fpending.trydequeue(litem) do',
     'litem.callback(litem.context)',
     'DrainPending invokes callbacks after successful TryDequeue');
+end;
+
+procedure TestAsyncLoopPostExOnDiscardSourceContract;
+var
+  LSource: string;
+  LPostExBody: string;
+  LDiscardBody: string;
+  LTimeoutCreateBody: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.async.loop.pas');
+
+  LPostExBody := ExtractSourceRange(LSource, 'procedure tasyncloop.postex(',
+    'procedure tasyncloop.postref', 'async loop PostEx implementation');
+  CheckSourceOrder(LPostExBody, 'litem.ondiscard := aondiscard;',
+    'fpending.enqueue(litem);',
+    'PostEx stores OnDiscard before MPSC Enqueue');
+
+  LDiscardBody := ExtractSourceRange(LSource, 'procedure discardpendingitem(',
+    'type', 'DiscardPendingItem implementation');
+  CheckSourceOrder(LDiscardBody, 'if assigned(aitem.ondiscard) then',
+    'aitem.ondiscard(aitem.context);',
+    'DiscardPendingItem prefers OnDiscard over PostRef heuristic');
+
+  LTimeoutCreateBody := ExtractSourceRange(LSource, 'function timeoutctxcreate(',
+    '{ tasyncloop }', 'TimeoutCtxCreate implementation');
+  CheckSourceContains(LTimeoutCreateBody, 'scheduleex(adeadline',
+    'TimeoutCtxCreate schedules via ScheduleEx for Close discard');
+  CheckSourceContains(LTimeoutCreateBody, 'timeoutctxdiscardtimer',
+    'TimeoutCtxCreate installs TimeoutCtxDiscardTimer as OnDiscard');
+end;
+
+procedure TestAsyncLoopScheduleExSourceContract;
+var
+  LSource: string;
+  LBody: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LBody := ExtractSourceRange(LSource, 'function tasyncloop.scheduleex(',
+    'function tasyncloop.scheduleref', 'async loop ScheduleEx implementation');
+  CheckSourceOrder(LBody, 'if not isvalid then',
+    'ftimers.scheduleafterex(',
+    'ScheduleEx rejects closed loops before touching timer heap');
+end;
+
+procedure TestAsyncReadmeOnDiscardSourceContract;
+var
+  LReadme: string;
+begin
+  LReadme := LoadSourceText('docs/async/README.md');
+  CheckSourceContains(LReadme, 'postex',
+    'async README documents PostEx');
+  CheckSourceContains(LReadme, 'scheduleex',
+    'async README documents ScheduleEx');
+  CheckSourceContains(LReadme, 'ondiscard ownership',
+    'async README documents OnDiscard ownership rules');
+  CheckSourceContains(LReadme, 'canceltimer` does **not** run ondiscard',
+    'async README states CancelTimer does not run OnDiscard');
+end;
+
+procedure DiscardOnlyCallback(AContext: Pointer);
+begin
+  Inc(GDiscardCount);
+  if AContext <> nil then
+    PBoolean(AContext)^ := True;
+end;
+
+procedure MustNotInvokeCallback(AContext: Pointer);
+begin
+  Inc(GInvokeCount);
+end;
+
+procedure TestPostExCloseRunsOnDiscardWithoutInvoke;
+var
+  LLoop: TAsyncLoop;
+  LDiscarded: Boolean;
+begin
+  GDiscardCount := 0;
+  GInvokeCount := 0;
+  LDiscarded := False;
+  LLoop := TAsyncLoop.Create(32);
+  LLoop.PostEx(@MustNotInvokeCallback, @LDiscarded, @DiscardOnlyCallback);
+  LLoop.Close;
+  Check(GDiscardCount = 1, 'PostEx Close runs OnDiscard once');
+  Check(GInvokeCount = 0, 'PostEx Close does not invoke pending callback');
+  Check(LDiscarded, 'OnDiscard received context');
+end;
+
+procedure TestScheduleExCloseRunsOnDiscardWithoutInvoke;
+var
+  LLoop: TAsyncLoop;
+  LDiscarded: Boolean;
+  LH: TAsyncTimerHandle;
+begin
+  GDiscardCount := 0;
+  GInvokeCount := 0;
+  LDiscarded := False;
+  LLoop := TAsyncLoop.Create(32);
+  LH := LLoop.ScheduleEx(TDuration.FromMilliseconds(60000),
+    @MustNotInvokeCallback, @LDiscarded, @DiscardOnlyCallback);
+  Check(LH.IsValid, 'ScheduleEx returns valid handle');
+  LLoop.Close;
+  Check(GDiscardCount = 1, 'ScheduleEx Close runs OnDiscard once');
+  Check(GInvokeCount = 0, 'ScheduleEx Close does not fire abandoned timer callback');
+  Check(LDiscarded, 'timer OnDiscard received context');
+end;
+
+procedure TestCancelTimerClearsOnDiscardWithoutRunningIt;
+var
+  LLoop: TAsyncLoop;
+  LDiscarded: Boolean;
+  LH: TAsyncTimerHandle;
+begin
+  GDiscardCount := 0;
+  GInvokeCount := 0;
+  LDiscarded := False;
+  LLoop := TAsyncLoop.Create(32);
+  LH := LLoop.ScheduleEx(TDuration.FromMilliseconds(60000),
+    @MustNotInvokeCallback, @LDiscarded, @DiscardOnlyCallback);
+  Check(LLoop.CancelTimer(LH), 'CancelTimer succeeds for live handle');
+  LLoop.Close;
+  Check(GDiscardCount = 0, 'Cancel clears OnDiscard; Close must not run it again');
+  Check(GInvokeCount = 0, 'cancelled timer callback never fires');
+  Check(not LDiscarded, 'OnDiscard must not run after Cancel');
 end;
 
 procedure TestAsyncLoopIoSubmissionClosedStateSourceContract;
@@ -1341,6 +1480,18 @@ begin
     @TestAsyncLoopIdleWaitUsesWakeDrivenTimeoutSourceContract);
   T.Test('AsyncLoopPendingQueueMpscSourceContract',
     @TestAsyncLoopPendingQueueMpscSourceContract);
+  T.Test('AsyncLoopPostExOnDiscardSourceContract',
+    @TestAsyncLoopPostExOnDiscardSourceContract);
+  T.Test('AsyncLoopScheduleExSourceContract',
+    @TestAsyncLoopScheduleExSourceContract);
+  T.Test('AsyncReadmeOnDiscardSourceContract',
+    @TestAsyncReadmeOnDiscardSourceContract);
+  T.Test('PostExCloseRunsOnDiscardWithoutInvoke',
+    @TestPostExCloseRunsOnDiscardWithoutInvoke);
+  T.Test('ScheduleExCloseRunsOnDiscardWithoutInvoke',
+    @TestScheduleExCloseRunsOnDiscardWithoutInvoke);
+  T.Test('CancelTimerClearsOnDiscardWithoutRunningIt',
+    @TestCancelTimerClearsOnDiscardWithoutRunningIt);
   T.Test('AsyncLoopIoSubmissionClosedStateSourceContract',
     @TestAsyncLoopIoSubmissionClosedStateSourceContract);
   T.Test('AsyncLoopExecutionClosedStateSourceContract',

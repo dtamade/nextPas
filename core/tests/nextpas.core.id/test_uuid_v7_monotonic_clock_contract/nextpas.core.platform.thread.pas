@@ -19,11 +19,14 @@ function TestThreadYieldCount: SizeUInt;
 
 function platform_thread_create(out AHandle: TPlatformThreadHandle; AProc: TPlatformThreadProc; AArg: Pointer): Int32;
 function platform_thread_join(const AHandle: TPlatformThreadHandle; out ARetVal: Pointer): Int32;
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle; ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
 function platform_thread_self: TPlatformThreadToken;
 function platform_thread_id: UInt64;
 procedure platform_thread_yield;
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
+procedure platform_thread_sleep_ms(const AMilliseconds: UInt64);
+procedure platform_thread_sleep_sec(const ASeconds: UInt64);
 function platform_tls_create(out AKey: TPlatformTLSKey): Int32;
 function platform_tls_destroy(const AKey: TPlatformTLSKey): Int32;
 function platform_tls_set(const AKey: TPlatformTLSKey; const AValue: Pointer): Int32;
@@ -60,6 +63,12 @@ begin
   Result := -1;
 end;
 
+function platform_thread_timedjoin(const AHandle: TPlatformThreadHandle; ATimeoutMs: Int64; out ARetVal: Pointer): Int32;
+begin
+  ARetVal := nil;
+  Result := -1;
+end;
+
 function platform_thread_detach(const AHandle: TPlatformThreadHandle): Int32;
 begin
   Result := -1;
@@ -83,6 +92,14 @@ begin
 end;
 
 procedure platform_thread_sleep_ns(const ANanoseconds: UInt64);
+begin
+end;
+
+procedure platform_thread_sleep_ms(const AMilliseconds: UInt64);
+begin
+end;
+
+procedure platform_thread_sleep_sec(const ASeconds: UInt64);
 begin
 end;
 

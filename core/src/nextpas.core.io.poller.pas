@@ -5,7 +5,8 @@ unit nextpas.core.io.poller;
 interface
 
 uses
-  nextpas.core.base
+  nextpas.core.base,
+  nextpas.core.io.base
   {$IFDEF NEXTPAS_WINDOWS}
   , nextpas.core.io.reactor.iocp
   {$ENDIF}
@@ -16,7 +17,7 @@ uses
   ;
 
 type
-  TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+  TIoCompletion = nextpas.core.io.base.TIoCompletion;
 
   TPollerBackend = (pbIoUring, pbEpoll, pbIocp, pbUnsupported);
   TPollerBackendModel = (pbmCompletionQueue, pbmReadiness, pbmUnsupported);
@@ -50,6 +51,10 @@ type
     function AsyncRecv(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncClose(AFd: PtrInt;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncReadv(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncWritev(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
     function Poll: Int32;
@@ -338,6 +343,39 @@ begin
     Result := False;
   end;
 end;
+
+function TPoller.AsyncReadv(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  { Vectored async is Linux io_uring only. On Windows the case would otherwise
+    expand to only "else", which FPC rejects as an illegal empty case. }
+  {$IFDEF NEXTPAS_LINUX}
+  case FBackend of
+    pbIoUring: Result := FUring.AsyncReadv(Int32(AFd), AIovecs, ANrVecs, AOffset,
+                 nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
+  else
+    Result := False;
+  end;
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
+end;
+
+function TPoller.AsyncWritev(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  {$IFDEF NEXTPAS_LINUX}
+  case FBackend of
+    pbIoUring: Result := FUring.AsyncWritev(Int32(AFd), AIovecs, ANrVecs, AOffset,
+                 nextpas.core.io.reactor.TIoCompletion(ACallback), AContext);
+  else
+    Result := False;
+  end;
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
+end;
+
 
 function TPoller.Poll: Int32;
 begin

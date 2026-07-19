@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.fs*.pas`（9 个源文件）
 **层级**：L2（依赖 L0-L1）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**最后更新**：2026-07-19
+**版本**：1.7
 
 ---
 
@@ -44,6 +44,11 @@ fs.pas           ← 门面 re-export
 - **[INV-2]** ReadAllText 返回完整内容的 string 拷贝
 - **[INV-3]** GlobMatch 支持 `*`, `?`, `[...]` 模式
 - **[INV-4]** CreateDirAll 递归创建，已存在时静默成功
+- **[INV-5]** Mkdir/MkdirAll/Remove/RemoveAll/Rename 为 **procedure**：失败抛异常，成功无返回值。`ForceDirectories`/`DeleteFile` 保留 Boolean 兼容壳（内部 try/except，**吞掉异常类型**；要错误分类请用 procedure API）
+- **[INV-6]** path 命名：`PathIsAbsolute`≡`PathIsAbs`，`PathNormalize`≡`PathClean`；`PathJoin2(a,b)` 对齐 path 二元 Join。门面 `PathDir`/`PathSplit` 仅对**无分隔符**裸名把 `'.'`→`''`；`./x` 保留 `'.'`；`FsPathDir` 始终 Go **`.`**
+- **[INV-7]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.fs*` / `path` / `os.env` 源码与本模块测试不得 `uses` 裸 FPC RTL 单元；能力经 platform / core 抽象。仅 `nextpas.core.system` 可直接引用 FPC RTL。文档中的「SysUtils 兼容」指 API 形状，不是 `uses SysUtils`。门禁：`test_fs` 真 uses 扫描（`fpc_rtl_uses_scan.inc`）。
+- **[INV-8]** `Remove` 对 ENOENT **静默成功**（对齐 Pascal Erase/DeleteFile；≠ Go `os.Remove`）。
+- **[INV-9]** 门面 `GetEnv`/`Param*` 为 **兼容入口**；新代码用 `nextpas.core.os.env` / `args`（见 README）。
 
 ---
 
@@ -76,15 +81,19 @@ fs.pas           ← 门面 re-export
 
 test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 
-| 测试文件 | 测试数 | 说明 |
-|----------|--------|------|
-| test_fs | 97 | 文件读写/目录操作/路径/符号链接 |
-| test_fs_glob | 31 | GlobMatch 通配符匹配 |
-| test_fs_facade | 8 | 门面完整性 |
+**最后校准：2026-07-19**（suite 通过数以 `make test` 输出为准；与早期 Check 粒度统计不同）。
+
+| 测试目录 | 参考通过数 | 说明 |
+|----------|-----------|------|
+| test_fs | 113 | 文件读写/目录/路径/符号链接 + PathDir 门面 + 真 uses 门禁 |
+| test_fs_glob | 31 | GlobMatch / FsGlob |
+| test_fs_facade | 8 | 门面完整性（MkdirAll/Remove 按 procedure INV-5） |
 | test_fs_idir | 7 | IDir 接口 |
 | test_fs_ifile | 17 | IFile 接口 |
-| test_fs_text | 19 | 文本文件操作（BOM/UTF-8/UTF-16） |
-| **合计** | **6 个测试目录** | **179** |
+| test_fs_text | 19 | BOM/UTF-8/UTF-16 |
+| **合计** | **6 个测试目录 / 195** | heaptrc 0 leak 为门禁 |
+
+路径命名与 `nextpas.core.path` 对齐说明见 `core/docs/path/README.md`「命名规范」。
 
 ---
 
@@ -93,3 +102,10 @@ test_fs, test_fs_facade, test_fs_glob, test_fs_idir, test_fs_ifile, test_fs_text
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-07-19 | 1.1 | 测试数口径校准；INV-5 Boolean 见目录注释 | Claude |
+| 2026-07-19 | 1.2 | INV-5 procedure；Path 别名；GetEnv 兼容注释 | Claude |
+| 2026-07-19 | 1.3 | 修 test_fs_facade 对 procedure MkdirAll/Remove 的断言；六套件计数校准 | Claude |
+| 2026-07-19 | 1.4 | INV-7 FPC RTL 隔离；fs 测试去 SysUtils | Claude |
+| 2026-07-19 | 1.5 | 真 uses 门禁（test_fs + fpc_rtl_uses_scan.inc） | Claude |
+| 2026-07-19 | 1.6 | PathDir 门面对齐 path；Remove ENOENT；Boolean 壳/env 迁移 INV | Claude |
+| 2026-07-19 | 1.7 | PathDir 仅裸名压空；`./x` 保留 `.` | Claude |

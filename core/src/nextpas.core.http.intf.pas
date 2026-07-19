@@ -283,6 +283,20 @@ type
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
   end;
 
+  { Ordered response batch for same-connection multiplex (H2 Wave I3). }
+  THttpResponseArray = array of IHttpResponse;
+  THttpRequestArray = array of IHttpRequest;
+
+  { Optional transport capability: N requests on one H2 connection (concurrent
+    streams). Default IHttpTransport.RoundTrip remains serial one-stream.
+    Non-H2 transports do not implement this interface. }
+  IHttpTransportMultiplex = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000000020}']
+    { All requests must share the same authority (scheme/host/port).
+      Returns responses in request order. Empty input → empty array. }
+    function RoundTripMany(const AReqs: array of IHttpRequest): THttpResponseArray;
+  end;
+
   IHttpTransportIdleConnections = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-40000000000F}']
     procedure CloseIdleConnections;

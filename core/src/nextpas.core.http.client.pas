@@ -1968,10 +1968,14 @@ begin
     CheckDownloadResponse(LResp, AUrl);
 
     LDestDir := nextpas.core.fs.PathDir(ADestPath);
-    if not nextpas.core.fs.MkdirAll(LDestDir) then
-      raise EHttpError.CreateOp(hekBody, 'download',
-        FormatHttpClientError('GET', AUrl,
-          'HTTP download could not create directory: ' + LDestDir));
+    try
+      nextpas.core.fs.MkdirAll(LDestDir);
+    except
+      on E: Exception do
+        raise EHttpError.CreateOp(hekBody, 'download',
+          FormatHttpClientError('GET', AUrl,
+            'HTTP download could not create directory: ' + LDestDir));
+    end;
 
     LTempFile := nextpas.core.fs.TempFile(LDestDir,
       '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
@@ -1986,10 +1990,14 @@ begin
       LTempFile.Close;
       LTempFile := nil;
 
-      if not nextpas.core.fs.Rename(LTempPath, ADestPath) then
-        raise EHttpError.CreateOp(hekBody, 'download',
-          FormatHttpClientError('GET', AUrl,
-            'HTTP download could not publish file: ' + ADestPath));
+      try
+        nextpas.core.fs.Rename(LTempPath, ADestPath);
+      except
+        on E: Exception do
+          raise EHttpError.CreateOp(hekBody, 'download',
+            FormatHttpClientError('GET', AUrl,
+              'HTTP download could not publish file: ' + ADestPath));
+      end;
       LCommitted := True;
     finally
       if LTempFile <> nil then

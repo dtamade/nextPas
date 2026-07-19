@@ -26,6 +26,7 @@ interface
 
 uses
   nextpas.core.fs,
+  nextpas.core.os.env,
   nextpas.core.base,  // culong, cint 等 C 类型
   nextpas.core.text.conv,
   nextpas.core.platform.dl;
@@ -445,7 +446,7 @@ var
 begin
   FillChar(Result, SizeOf(Result), 0);
 
-  LRoot := Trim(nextpas.core.fs.GetEnv('OPENSSL_ROOT'));
+  LRoot := Trim(nextpas.core.os.env.GetEnv('OPENSSL_ROOT'));
   if LRoot = '' then
     Exit;
 

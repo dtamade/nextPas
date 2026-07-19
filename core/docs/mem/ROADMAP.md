@@ -92,8 +92,10 @@
 | D2-a | 默认 lane gate 不变：`lane-focused LANE=mem` | — | 已落地 |
 | D4-a | 刷新 SCORECARD 发布数字（`RELEASE=1` SC1–SC9 全 PASS） | 本机安静跑 | **landed** `a0a374f19` |
 | D3-a | 不主动扫仓；其它 lane 触达堆路径时提供 review 清单 | 其它模块 owner | 持续 |
+| D3-b | simd 表/缓冲 sized free（CO-002） | D3 | **done** 2026-07-19（mem lane 受控跨模块） |
 | D9-a | inventory 可删/可归档清单（不删代码） | — | **done** 见 [INVENTORY-AUDIT](INVENTORY-AUDIT-2026-07-17.md) |
 | D9-b | consumer unsized free / 热路径 IAllocator 只读 findings | — | **done** 见 [CONSUMER-OBSERVATION](CONSUMER-OBSERVATION-2026-07-17.md) |
+| D9-c | P-a Tier-3 prune **设计备忘**（不删代码） | D9-a | **done** 2026-07-19 见 [PRUNE-P-a-DESIGN](PRUNE-P-a-DESIGN-2026-07-19.md)；执行待总控 |
 
 ### 4.3 退出条件（时代 D 何时算「够稳」）
 
@@ -162,3 +164,5 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-17 | 初版权威路线图：归档时代 A 多文件 ROADMAP；标注 A–C 闭合；开启时代 D（Steward） |
 | 2026-07-17 | D0/D1 path-limited land → `origin/main` `d2b704ffe`；切片状态与退出条件同步 |
 | 2026-07-17 | D4-a Scorecard RELEASE=1 基线刷新；时代 D → **Steady** |
+| 2026-07-19 | D9-c P-a prune 设计备忘（10 allocator + 16 tests；本会话不删） |
+| 2026-07-19 | D3-b simd sized FreeMem（avx2/sse2/image/imageproc/alloc/memutils） |

@@ -9,11 +9,14 @@ program test_reactor_iocp_wine;
 
 uses
   SysUtils,
-  nextpas.core.test,
-  nextpas.core.platform.socket,
-  nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi,
-  nextpas.core.io.reactor.iocp;
+  nextpas.core.test
+  {$IFDEF NEXTPAS_WINDOWS}
+  , nextpas.core.platform.socket
+  , nextpas.core.platform.windows.base
+  , nextpas.core.platform.windows.ffi
+  , nextpas.core.io.reactor.iocp
+  {$ENDIF}
+  ;
 
 var
   T: TTestSuite;

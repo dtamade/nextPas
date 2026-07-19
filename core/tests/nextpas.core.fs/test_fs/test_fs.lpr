@@ -104,6 +104,54 @@ begin
   Check(Pos(AToken, ASource) = 0, AMessage);
 end;
 
+{$I ../../fpc_rtl_uses_scan.inc}
+
+procedure AssertSourceNoBareFpcRtlUses(const ALabel, ASource: string);
+var
+  LHit: string;
+  LOk: Boolean;
+  LMsg: string;
+begin
+  LOk := not FindBareFpcRtlInUses(ASource, LHit);
+  LMsg := ALabel + ' — no bare FPC RTL in uses';
+  if not LOk then
+    LMsg := LMsg + ' (hit: ' + LHit + ')';
+  Check(LOk, LMsg);
+end;
+
+procedure TestFsOwnedSourcesNoFpcRtl;
+var
+  LFiles: array[0..8] of string;
+  LI: Integer;
+begin
+  LFiles[0] := 'src/nextpas.core.fs.pas';
+  LFiles[1] := 'src/nextpas.core.fs.base.pas';
+  LFiles[2] := 'src/nextpas.core.fs.dir.pas';
+  LFiles[3] := 'src/nextpas.core.fs.errors.pas';
+  LFiles[4] := 'src/nextpas.core.fs.glob.pas';
+  LFiles[5] := 'src/nextpas.core.fs.intf.pas';
+  LFiles[6] := 'src/nextpas.core.fs.path.pas';
+  LFiles[7] := 'src/nextpas.core.fs.stream.pas';
+  LFiles[8] := 'src/nextpas.core.fs.util.pas';
+  for LI := 0 to High(LFiles) do
+    AssertSourceNoBareFpcRtlUses('fs src ' + LFiles[LI], LoadSourceText(LFiles[LI]));
+end;
+
+procedure TestFsTestSuitesNoFpcRtl;
+var
+  LFiles: array[0..5] of string;
+  LI: Integer;
+begin
+  LFiles[0] := 'tests/nextpas.core.fs/test_fs/test_fs.lpr';
+  LFiles[1] := 'tests/nextpas.core.fs/test_fs_facade/test_fs_facade.lpr';
+  LFiles[2] := 'tests/nextpas.core.fs/test_fs_glob/test_fs_glob.lpr';
+  LFiles[3] := 'tests/nextpas.core.fs/test_fs_idir/test_fs_idir.lpr';
+  LFiles[4] := 'tests/nextpas.core.fs/test_fs_ifile/test_fs_ifile.lpr';
+  LFiles[5] := 'tests/nextpas.core.fs/test_fs_text/test_fs_text.lpr';
+  for LI := 0 to High(LFiles) do
+    AssertSourceNoBareFpcRtlUses('fs test ' + LFiles[LI], LoadSourceText(LFiles[LI]));
+end;
+
 function WalkErrorCallback(const APath: string; const AInfo: TFileInfo;
   const AErr: Exception): Boolean;
 begin
@@ -453,7 +501,7 @@ end;
 
 procedure TestMkdirAll;
 begin
-  Check(FsMkdirAll(GTmpDir + '/a/b/c'), 'mkdir -p');
+  FsMkdirAll(GTmpDir + '/a/b/c');
   Check(FsIsDir(GTmpDir + '/a/b/c'), 'deep dir exists');
 end;
 
@@ -490,7 +538,7 @@ end;
 procedure TestRemove;
 begin
   FsWriteFile(GTmpDir + '/rm.txt', TBytes.Create(1));
-  Check(FsRemove(GTmpDir + '/rm.txt'), 'remove file');
+  FsRemove(GTmpDir + '/rm.txt');
   Check(not FsExists(GTmpDir + '/rm.txt'), 'gone');
 end;
 
@@ -517,17 +565,15 @@ end;
 
 procedure TestRemoveMissingPathReturnsTrue;
 begin
-  { FsRemove returns True for missing paths, matching Pascal Erase/DeleteFile }
-  Check(FsRemove(GTmpDir + '/missing-remove-path'),
-    'FsRemove missing path returns True');
+  { FsRemove treats missing paths as success (Pascal Erase/DeleteFile) }
+  FsRemove(GTmpDir + '/missing-remove-path');
+  Check(True, 'FsRemove missing path does not raise');
 end;
 
 procedure TestRemoveAllMissingPathReturnsTrue;
-var
-  LResult: Boolean;
 begin
-  LResult := FsRemoveAll(GTmpDir + '/missing-removeall-path');
-  Check(LResult, 'FsRemoveAll missing path returns True (nothing to remove)');
+  FsRemoveAll(GTmpDir + '/missing-removeall-path');
+  Check(True, 'FsRemoveAll missing path does not raise');
 end;
 
 procedure TestRemoveAllUnsafeRootGuardRaisesInvalidOperation;
@@ -557,7 +603,7 @@ procedure TestRemoveAll;
 begin
   FsMkdirAll(GTmpDir + '/rmall/sub');
   FsWriteFile(GTmpDir + '/rmall/sub/f.txt', TBytes.Create(1));
-  Check(FsRemoveAll(GTmpDir + '/rmall'), 'removeall');
+  FsRemoveAll(GTmpDir + '/rmall');
   Check(not FsExists(GTmpDir + '/rmall'), 'gone');
 end;
 
@@ -577,7 +623,7 @@ begin
     FsWriteFile(LPath + '/f.txt', TBytes.Create(I and $FF));
   end;
   Check(FsExists(LBase + '/d/d/f.txt'), 'deep tree created');
-  Check(FsRemoveAll(LBase), 'deep removeall');
+  FsRemoveAll(LBase);
   Check(not FsExists(LBase), 'deep tree gone');
 end;
 
@@ -630,7 +676,7 @@ end;
 procedure TestRename;
 begin
   FsWriteFile(GTmpDir + '/old.txt', TBytes.Create(42));
-  Check(FsRename(GTmpDir + '/old.txt', GTmpDir + '/new.txt'), 'rename');
+  FsRename(GTmpDir + '/old.txt', GTmpDir + '/new.txt');
   Check(not FsExists(GTmpDir + '/old.txt'), 'old gone');
   Check(FsExists(GTmpDir + '/new.txt'), 'new exists');
 end;
@@ -737,6 +783,26 @@ end;
 procedure TestPathDir;
 begin
   CheckEqual('/home/user', FsPathDir('/home/user/file.txt'), 'dir');
+end;
+
+procedure TestFacadePathDirSysUtilsEmpty;
+var
+  LDir, LBase: string;
+begin
+  { Public PathDir/PathSplit: bare name → ''; './x' keeps '.'; Fs* stays Go. }
+  CheckEqual('', PathDir('file.txt'), 'facade PathDir bare file is empty');
+  CheckEqual('/home/user', PathDir('/home/user/file.txt'), 'facade PathDir with dir');
+  CheckEqual('.', PathDir('./x'), 'facade PathDir ./x keeps dot');
+  CheckEqual('.', FsPathDir('file.txt'), 'FsPathDir bare file is dot');
+  CheckEqual('.', FsPathDir('./x'), 'FsPathDir ./x is dot');
+  PathSplit('file.txt', LDir, LBase);
+  CheckEqual('', LDir, 'facade PathSplit bare dir empty');
+  CheckEqual('file.txt', LBase, 'facade PathSplit bare base');
+  PathSplit('./x', LDir, LBase);
+  CheckEqual('.', LDir, 'facade PathSplit ./x dir is dot');
+  CheckEqual('x', LBase, 'facade PathSplit ./x base');
+  FsPathSplit('file.txt', LDir, LBase);
+  CheckEqual('.', LDir, 'FsPathSplit bare dir is dot');
 end;
 
 procedure TestPathBase;
@@ -1327,7 +1393,7 @@ begin
     Check(True, 'symlink unsupported, skip');
     Exit;
   end;
-  Check(FsRemove(LLink), 'remove symlink-to-dir returns true');
+  FsRemove(LLink);
   Check(not FsExists(LLink), 'symlink-to-dir link removed');
   Check(FsExists(LTarget + '/keep.txt'), 'symlink-to-dir target tree intact');
 end;
@@ -1964,6 +2030,7 @@ begin
 
     T.Test('PathJoin', @TestPathJoin);
     T.Test('PathDir', @TestPathDir);
+    T.Test('facade PathDir/PathSplit SysUtils empty', @TestFacadePathDirSysUtilsEmpty);
     T.Test('PathBase', @TestPathBase);
     T.Test('PathExt', @TestPathExt);
     T.Test('PathExt long result', @TestPathExtLongResult);
@@ -2068,6 +2135,8 @@ begin
     T.Test('Symlink + Readlink long target', @TestSymlinkReadlinkLongTarget);
     T.Test('Readlink regular file raises invalid operation', @TestReadlinkRegularFileRaisesInvalidOperation);
 {$ENDIF}
+    T.Test('fs owned sources no bare FPC RTL uses', @TestFsOwnedSourcesNoFpcRtl);
+    T.Test('fs test suites no bare FPC RTL uses', @TestFsTestSuitesNoFpcRtl);
 
   if not T.Run then Halt(1);
   finally

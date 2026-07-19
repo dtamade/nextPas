@@ -34,12 +34,12 @@ Without real runtime evidence, a host is not runtime ready.
 ## Current Windows truth
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
-Windows compile gates, Wine runtime smoke (14-module matrix), and durable GHA
-**`ci-matrix`** for the **documented 17-gate set** in
-`platform-windows-ci-matrix.sh` / `.ps1` (14 suite dirs + poller/io/socket real
-gates) under job `test-windows-runtime` on `windows-latest`.
+Windows compile gates, Wine runtime smoke (15-module matrix, including
+`platform.error`), and durable GHA **`ci-matrix`** for the **documented 18-gate
+set** in `platform-windows-ci-matrix.sh` / `.ps1` (15 suite dirs + poller/io/socket
+real gates) under job `test-windows-runtime` on `windows-latest`.
 
-D1.d promotion is **scoped**: it does **not** claim full-host Windows parity for
+Promotion is **scoped**: it does **not** claim full-host Windows parity for
 modules outside that list (e.g. signal, console, native secure-zero) or for
 IOCP AcceptEx/ConnectEx depth beyond current smoke gaps.
 
@@ -49,7 +49,7 @@ Allowed wording:
 - `forced Windows compile covered`
 - `wine-runtime-smoke` (secondary regression; never substitutes for real Windows)
 - `focused-runtime` for modules with real Windows host logs outside CI matrix
-- `ci-matrix` for the documented 17-gate set only (ROADMAP D1.d)
+- `ci-matrix` for the documented 18-gate set only (ROADMAP; GHA run 29683362919)
 
 ## Current macOS truth
 

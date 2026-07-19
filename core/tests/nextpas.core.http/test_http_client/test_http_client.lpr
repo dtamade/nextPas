@@ -6957,6 +6957,40 @@ begin
   end;
 end;
 
+procedure TestH1PoolHealthProbeSourceContract;
+var
+  LSource: string;
+  LGetPos: SizeInt;
+  LReusablePos: SizeInt;
+  LGetBlock: string;
+  LReusableBlock: string;
+  LEndPos: SizeInt;
+begin
+  { Wave I1: borrow-time TryRead probe is the H1 active health check.
+    Live peer-close races are covered by stale-retry suites; this contract
+    locks the probe into PoolGet outside the pool lock. }
+  LSource := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  LReusablePos := Pos(
+    'function TH1ClientTransport.PooledConnectionIsReusable', LSource);
+  Check(LReusablePos > 0, 'PooledConnectionIsReusable exists');
+  LGetPos := Pos('function TH1ClientTransport.PoolGet', LSource);
+  Check(LGetPos > LReusablePos, 'PoolGet follows reusable helper');
+  LReusableBlock := Copy(LSource, LReusablePos, LGetPos - LReusablePos);
+  Check(Pos('Active health probe on borrow', LReusableBlock) > 0,
+    'H1 probe documents Wave I1 health check');
+  Check(Pos('TryRead', LReusableBlock) > 0,
+    'H1 probe uses non-blocking TryRead');
+  Check(Pos('tsiorWouldBlock', LReusableBlock) > 0,
+    'H1 probe treats WouldBlock as live idle');
+  LEndPos := Pos('procedure TH1ClientTransport.PoolPut', LSource);
+  Check(LEndPos > LGetPos, 'PoolPut follows PoolGet');
+  LGetBlock := Copy(LSource, LGetPos, LEndPos - LGetPos);
+  Check(Pos('PooledConnectionIsReusable(LCandidate)', LGetBlock) > 0,
+    'PoolGet invokes health probe on candidate');
+  Check(Pos('Never Close or probe sockets while holding FPoolLock', LGetBlock) > 0,
+    'PoolGet probes outside pool lock');
+end;
+
 procedure TestClientMaxPoolSizeIsPerAuthority;
 var
   LPortA, LPortB: UInt16;
@@ -8207,6 +8241,8 @@ end;
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl;
 var
   LConn: ITcpStream;
+  LRuntime: ITcpListenerRuntime;
+  LAccept: TTcpAcceptResult;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
   LReply: string;
@@ -8214,14 +8250,33 @@ var
   LP: SizeInt;
 begin
   Result := nil;
+  { Non-blocking accept: closing the listener from the test thread does not
+    reliably wake a blocked Accept on all hosts (suite hang after MaxPoolSize). }
+  try
+    if GPoolListener = nil then
+      Exit;
+    LRuntime := GPoolListener as ITcpListenerRuntime;
+    LRuntime.SetBlocking(False);
+  except
+    Exit;
+  end;
   while True do
   begin
     try
-      LConn := GPoolListener.Accept;
+      if GPoolListener = nil then
+        Break;
+      LRuntime := GPoolListener as ITcpListenerRuntime;
+      LAccept := LRuntime.TryAccept(LConn);
     except
       Break;
     end;
-    if LConn = nil then Break;
+    if LAccept = tarWouldBlock then
+    begin
+      platform_thread_sleep_ms(10);
+      Continue;
+    end;
+    if (LAccept <> tarAccepted) or (LConn = nil) then
+      Break;
     InterlockedIncrement(GAcceptCount);
     { Bound idle keep-alive reads so a closed/expired client cannot leave this
       thread in an unbounded Read (suite hang after IdleTTL tests). }
@@ -8269,6 +8324,8 @@ end;
 function PoolAcceptThreadAlt(AArg: Pointer): Pointer; cdecl;
 var
   LConn: ITcpStream;
+  LRuntime: ITcpListenerRuntime;
+  LAccept: TTcpAcceptResult;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
   LReply: string;
@@ -8276,14 +8333,31 @@ var
   LP: SizeInt;
 begin
   Result := nil;
+  try
+    if GPoolListenerAlt = nil then
+      Exit;
+    LRuntime := GPoolListenerAlt as ITcpListenerRuntime;
+    LRuntime.SetBlocking(False);
+  except
+    Exit;
+  end;
   while True do
   begin
     try
-      LConn := GPoolListenerAlt.Accept;
+      if GPoolListenerAlt = nil then
+        Break;
+      LRuntime := GPoolListenerAlt as ITcpListenerRuntime;
+      LAccept := LRuntime.TryAccept(LConn);
     except
       Break;
     end;
-    if LConn = nil then Break;
+    if LAccept = tarWouldBlock then
+    begin
+      platform_thread_sleep_ms(10);
+      Continue;
+    end;
+    if (LAccept <> tarAccepted) or (LConn = nil) then
+      Break;
     InterlockedIncrement(GAcceptCountAlt);
     try
       LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
@@ -11327,6 +11401,8 @@ begin
     @TestClientPoolIdleTTLExpiresIdleConnections);
   T.Test('Client pool IdleTTL=0 keeps reuse',
     @TestClientPoolIdleTTLZeroKeepsReuse);
+  T.Test('H1 pool health probe source contract',
+    @TestH1PoolHealthProbeSourceContract);
   T.Test('Client MaxPoolSize is per authority',
     @TestClientMaxPoolSizeIsPerAuthority);
   T.Test('Client timeout does not poison idle connection reuse',

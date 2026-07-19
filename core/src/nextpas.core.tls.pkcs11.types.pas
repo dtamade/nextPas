@@ -222,6 +222,7 @@ implementation
 
 uses
   nextpas.core.fs,
+  nextpas.core.os.env,
   nextpas.core.text.compare;
 
 function HexCharToNibble(AChar: Char; out ANibble: Byte): Boolean;
@@ -330,7 +331,7 @@ begin
     if LVarName = '' then
       raise EPKCS11Exception.Create('PIN source env variable name is empty', CKR_ARGUMENTS_BAD);
 
-    Result := nextpas.core.fs.GetEnv(LVarName);
+    Result := nextpas.core.os.env.GetEnv(LVarName);
     if Result = '' then
       raise EPKCS11Exception.Create('PIN source environment variable not set or empty: ' + LVarName, CKR_PIN_INVALID);
     Exit;
@@ -437,7 +438,7 @@ begin
       
     pmEnvironment:
       if PINEnvVar <> '' then
-        Result := nextpas.core.fs.GetEnv(PINEnvVar);
+        Result := nextpas.core.os.env.GetEnv(PINEnvVar);
       
     pmFile:
       if PINFile <> '' then

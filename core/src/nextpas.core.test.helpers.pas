@@ -73,12 +73,20 @@ procedure WithTempDir(AProc: TTempDirProc);
     end); }
 procedure WithTempFile(AProc: TTempFileProc; const AExt: string = '.tmp');
 
+{ Guard helper: returns True if AValue op AOperand would overflow Int64.
+  Supported AOp: '+', '-', '*', 'add', 'sub', 'mul' (case-insensitive).
+  Unknown ops return False (no overflow signal).
+  Not a test assertion — call before arithmetic to decide whether to skip
+  or branch around overflowing operations. }
+function IntOverflowCheck(AValue: Int64; const AOp: string;
+  AOperand: Int64): Boolean;
+
 implementation
 
 uses
   nextpas.core.path,
   nextpas.core.fs,
-  nextpas.core.text.conv,
+  nextpas.core.text.conv,  { LowerCase, IntToStr }
   nextpas.core.time,
   nextpas.core.platform.env;
 
@@ -212,6 +220,62 @@ begin
       { Cleanup failure should not mask the original test exception }
     end;
   end;
+end;
+
+function IntOverflowCheck(AValue: Int64; const AOp: string;
+  AOperand: Int64): Boolean;
+var
+  LOp: string;
+begin
+  LOp := LowerCase(AOp);
+  if (LOp = '+') or (LOp = 'add') then
+  begin
+    { a + b overflows when signs match and result has wrong sign,
+      or when a is max/min and b has the same direction. }
+    if AOperand > 0 then
+      Result := AValue > (High(Int64) - AOperand)
+    else if AOperand < 0 then
+      Result := AValue < (Low(Int64) - AOperand)
+    else
+      Result := False;
+  end
+  else if (LOp = '-') or (LOp = 'sub') then
+  begin
+    { a - b == a + (-b); careful with Low(Int64) negation. }
+    if AOperand > 0 then
+      Result := AValue < (Low(Int64) + AOperand)
+    else if AOperand < 0 then
+    begin
+      { subtracting negative is adding |AOperand|;
+        Low(Int64) cannot be negated. }
+      if AOperand = Low(Int64) then
+        Result := AValue >= 0
+      else
+        Result := AValue > (High(Int64) + AOperand);
+    end
+    else
+      Result := False;
+  end
+  else if (LOp = '*') or (LOp = 'mul') then
+  begin
+    if (AValue = 0) or (AOperand = 0) then
+      Result := False
+    else if (AValue = -1) and (AOperand = Low(Int64)) then
+      Result := True
+    else if (AOperand = -1) and (AValue = Low(Int64)) then
+      Result := True
+    else if (AValue > 0) and (AOperand > 0) then
+      Result := AValue > (High(Int64) div AOperand)
+    else if (AValue > 0) and (AOperand < 0) then
+      Result := AOperand < (Low(Int64) div AValue)
+    else if (AValue < 0) and (AOperand > 0) then
+      Result := AValue < (Low(Int64) div AOperand)
+    else
+      { both negative: product is positive }
+      Result := AValue < (High(Int64) div AOperand);
+  end
+  else
+    Result := False;
 end;
 
 end.

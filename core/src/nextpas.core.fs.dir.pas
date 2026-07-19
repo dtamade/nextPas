@@ -16,18 +16,18 @@ type
 
 function FsReadDir(const APath: string): TDirEntryArray;
 function FsOpenDir(const APath: string): IDirIterator;
-{** @desc 创建单级目录
-    @note 成功返回 True；失败时抛出异常（EAlreadyExistsError / EPermissionError 等），
-          因此返回值恒为 True。保留 Boolean 返回值仅为向后兼容。 *}
-function FsMkdir(const APath: string;
-  const APerm: TFilePermission = PermDirDefault): Boolean;
-{** @desc 递归创建目录（等同 mkdir -p）
-    @note 成功返回 True；失败时抛出异常。保留 Boolean 返回值仅为向后兼容。 *}
-function FsMkdirAll(const APath: string;
-  const APerm: TFilePermission = PermDirDefault): Boolean;
-function FsRemove(const APath: string): Boolean;
-function FsRemoveAll(const APath: string): Boolean;
-function FsRename(const AOld, ANew: string): Boolean;
+{** @desc 创建单级目录；失败抛异常 *}
+procedure FsMkdir(const APath: string;
+  const APerm: TFilePermission = PermDirDefault);
+{** @desc 递归创建目录（等同 mkdir -p）；失败抛异常 *}
+procedure FsMkdirAll(const APath: string;
+  const APerm: TFilePermission = PermDirDefault);
+{** @desc 删除文件或空目录；不存在视为成功；其他失败抛异常 *}
+procedure FsRemove(const APath: string);
+{** @desc 递归删除（rm -rf）；失败抛异常 *}
+procedure FsRemoveAll(const APath: string);
+{** @desc 重命名/移动；失败抛异常 *}
+procedure FsRename(const AOld, ANew: string);
 procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
 {** @desc 递归遍历目录树，只访问文件（跳过目录条目）
  *
@@ -200,24 +200,22 @@ begin
   LIter.Close;
 end;
 
-function FsMkdir(const APath: string; const APerm: TFilePermission): Boolean;
+procedure FsMkdir(const APath: string; const APerm: TFilePermission);
 var
   LResult: Int32;
 begin
   LResult := platform_file_mkdir(PAnsiChar(APath), UInt32(APerm));
   if LResult <> 0 then
     RaiseFsError(LResult, 'mkdir', APath);
-  Result := True;
 end;
 
-function FsMkdirAll(const APath: string; const APerm: TFilePermission): Boolean;
+procedure FsMkdirAll(const APath: string; const APerm: TFilePermission);
 var
   LResult: Int32;
 begin
   LResult := platform_fs_mkdir_p(PAnsiChar(APath), UInt32(APerm));
   if LResult <> 0 then
     RaiseFsError(LResult, 'mkdirall', APath);
-  Result := True;
 end;
 
 { True only for a real directory; a symlink to a directory returns False so
@@ -246,7 +244,7 @@ begin
   Result := FsPathJoin([ADir, AName]);
 end;
 
-function FsRemove(const APath: string): Boolean;
+procedure FsRemove(const APath: string);
 var
   LStat: TPlatformFileStat;
   LResult: Int32;
@@ -254,9 +252,9 @@ begin
   LResult := platform_file_lstat(PAnsiChar(APath), LStat);
   if LResult <> 0 then
   begin
-    { 文件不存在时返回 True，保持与 Pascal Erase/DeleteFile 一致的行为 }
+    { 文件不存在时视为成功，保持与 Pascal Erase/DeleteFile 一致 }
     if LResult = PLATFORM_ERR_NOENT then
-      Exit(True);
+      Exit;
     RaiseFsError(LResult, 'lstat', APath);
   end;
 
@@ -266,10 +264,9 @@ begin
     LResult := platform_file_unlink(PAnsiChar(APath));
   if LResult <> 0 then
     RaiseFsError(LResult, 'remove', APath);
-  Result := True;
 end;
 
-function FsRemoveAll(const APath: string): Boolean;
+procedure FsRemoveAll(const APath: string);
 const
   OP_UNLINK = 0;
   OP_READDIR = 1;
@@ -291,19 +288,14 @@ begin
   if IsUnsafeRemoveAllRoot(APath) then
     raise EInvalidOperationError.Create('removeall refused unsafe root: ' + APath);
 
-  { P2-7 fix: Iterative post-order traversal using explicit stack to avoid
-    stack overflow on deeply nested directories (e.g. node_modules).
-
-    Strategy: push OP_READDIR for directories. When popped, read children,
-    push OP_RMDIR for self, then push children (dirs as OP_READDIR,
-    files as OP_UNLINK). Stack is LIFO so: children processed first,
-    then rmdir. }
+  { Iterative post-order traversal using explicit stack to avoid
+    stack overflow on deeply nested directories (e.g. node_modules). }
   if not IsRealDir(APath) then
   begin
     LResult := platform_file_unlink(PAnsiChar(APath));
     if (LResult <> 0) and (LResult <> PLATFORM_ERR_NOENT) then
       RaiseFsError(LResult, 'removeall', APath);
-    Exit(True);
+    Exit;
   end;
 
   SetLength(LStack, 64);
@@ -331,14 +323,12 @@ begin
       end;
       OP_READDIR:
       begin
-        { Push rmdir sentinel for this directory }
         if LStackTop >= Length(LStack) - 1 then
           SetLength(LStack, Length(LStack) * 2);
         Inc(LStackTop);
         LStack[LStackTop].Path := LCurrent.Path;
         LStack[LStackTop].Op := OP_RMDIR;
 
-        { Push children }
         LIter := FsOpenDir(LCurrent.Path);
         while LIter.Next do
         begin
@@ -359,17 +349,15 @@ begin
       end;
     end;
   end;
-  Result := True;
 end;
 
-function FsRename(const AOld, ANew: string): Boolean;
+procedure FsRename(const AOld, ANew: string);
 var
   LResult: Int32;
 begin
   LResult := platform_file_rename(PAnsiChar(AOld), PAnsiChar(ANew));
   if LResult <> 0 then
     RaiseFsError(LResult, 'rename', AOld);
-  Result := True;
 end;
 
 { FsWalk bridge — unit-level so callbacks can be plain functions }

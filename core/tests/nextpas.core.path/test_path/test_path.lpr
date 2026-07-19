@@ -46,6 +46,33 @@ begin
   Check(Pos(AToken, ASource) = 0, AMessage);
 end;
 
+{$I ../../fpc_rtl_uses_scan.inc}
+
+procedure AssertSourceNoBareFpcRtlUses(const ALabel, ASource: string);
+var
+  LHit: string;
+  LOk: Boolean;
+  LMsg: string;
+begin
+  LOk := not FindBareFpcRtlInUses(ASource, LHit);
+  LMsg := ALabel + ' — no bare FPC RTL in uses';
+  if not LOk then
+    LMsg := LMsg + ' (hit: ' + LHit + ')';
+  Check(LOk, LMsg);
+end;
+
+procedure TestPathOwnedSourcesNoFpcRtl;
+begin
+  AssertSourceNoBareFpcRtlUses('path src',
+    LoadSourceText('src/nextpas.core.path.pas'));
+end;
+
+procedure TestPathTestSuiteNoFpcRtl;
+begin
+  AssertSourceNoBareFpcRtlUses('path test',
+    LoadSourceText('tests/nextpas.core.path/test_path/test_path.lpr'));
+end;
+
 procedure TestPathJoin;
 begin
   Check(PathJoin('/home', 'user') = '/home/user', 'join basic');
@@ -89,6 +116,7 @@ procedure TestPathDir;
 begin
   Check(PathDir('/home/user/file.txt') = '/home/user', 'dir with file');
   Check(PathDir('file.txt') = '', 'dir no path');
+  Check(PathDir('./x') = '.', 'dir ./x keeps relative dot');
   Check(PathDir('/home/user/') = '/home/user', 'dir trailing sep');
   Check(PathDir('') = '', 'dir empty');
 end;
@@ -123,6 +151,10 @@ begin
   PathSplit('file.txt', LDir, LBase);
   CheckEqual('', LDir, 'split no path dir');
   CheckEqual('file.txt', LBase, 'split no path base');
+
+  PathSplit('./x', LDir, LBase);
+  CheckEqual('.', LDir, 'split ./x keeps relative dir');
+  CheckEqual('x', LBase, 'split ./x base');
 
   PathSplit('/home/user/', LDir, LBase);
   CheckEqual('/home/user', LDir, 'split trailing sep dir');
@@ -189,6 +221,9 @@ begin
   Check(PathIsAbsolute('/home/user') = True, 'absolute unix');
   Check(PathIsAbsolute('relative/path') = False, 'relative');
   Check(PathIsAbsolute('') = False, 'empty');
+  Check(PathIsAbs('/tmp') = True, 'PathIsAbs alias absolute');
+  Check(PathIsAbs('rel') = False, 'PathIsAbs alias relative');
+  Check(PathIsAbs('/x') = PathIsAbsolute('/x'), 'PathIsAbs equals PathIsAbsolute');
 end;
 
 procedure TestPathIsRelative;
@@ -464,6 +499,8 @@ begin
   T.Test('PathMatch edge cases', @TestPathMatchEdgeCases);
   T.Test('PathJoinN', @TestPathJoinN);
   T.Test('PathClean', @TestPathClean);
+  T.Test('path owned sources no bare FPC RTL uses', @TestPathOwnedSourcesNoFpcRtl);
+  T.Test('path test suite no bare FPC RTL uses', @TestPathTestSuiteNoFpcRtl);
 {$IFDEF NEXTPAS_WINDOWS}
   T.Test('Windows root wrapper contract', @TestWindowsRootWrapperContract);
 {$ENDIF}

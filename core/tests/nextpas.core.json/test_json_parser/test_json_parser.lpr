@@ -904,7 +904,7 @@ end;
 procedure TestNodeGrowthOOMFailsClosed;
 var
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: TMemAllocator;
+  LAllocator: IAllocator;
   Doc: TJsonDocument;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
@@ -924,7 +924,7 @@ end;
 procedure TestStringOverflowOOMFailsClosed;
 var
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: TMemAllocator;
+  LAllocator: IAllocator;
   Doc: TJsonDocument;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
@@ -944,7 +944,7 @@ end;
 procedure TestParsePreallocationOOMFailsClosed;
 var
   LAllocatorObj: TFailingReallocateAllocator;
-  LAllocator: TMemAllocator;
+  LAllocator: IAllocator;
   Doc: TJsonDocument;
 begin
   LAllocatorObj := TFailingReallocateAllocator.Create(1);
@@ -966,7 +966,7 @@ end;
 procedure TestInitAllocateOOMSetsError;
 var
   LAllocatorObj: TFailingAllocateAllocator;
-  LAllocator: TMemAllocator;
+  LAllocator: IAllocator;
   Doc: TJsonDocument;
 begin
   LAllocatorObj := TFailingAllocateAllocator.Create(1);

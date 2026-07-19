@@ -3,9 +3,11 @@ program test_fs_idir;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
   nextpas.core.test,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.platform.process,
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.fs.dir,
@@ -22,7 +24,7 @@ var
 
 procedure SetupTmpDir;
 begin
-  GTmpDir := '/tmp/nextpas_fs_idir_test_' + IntToStr(GetProcessID);
+  GTmpDir := '/tmp/nextpas_fs_idir_test_' + IntToStr(platform_getpid);
   nextpas.core.fs.MkdirAll(GTmpDir);
 end;
 

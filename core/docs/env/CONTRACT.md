@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.os.env.pas`（1 个源文件）
 **层级**：L2（依赖 L1: text.base; 委托 platform.env）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-11
-**版本**：1.0
+**最后更新**：2026-07-19
+**版本**：1.5
 
 ---
 
@@ -26,17 +26,24 @@
 | `EnvironmentVariableNamesCaseSensitive: Boolean` | 平台是否区分大小写 |
 | `SetEnv(AName, AValue)` | 设置环境变量 |
 | `UnsetEnv(AName)` | 删除环境变量 |
-| `ExpandEnv(AValue): string` | 展开 ${VAR} 和 $VAR 占位符 |
+| `ExpandEnv(AValue): string` | 展开 `${VAR}` / `$VAR` / `%VAR%` |
+| `ExpandEnvWithDefault` / `ExpandEnvStrict` | 默认值 / 严格模式 |
+| `UserHomeDir` / `UserCacheDir` / `UserConfigDir` / `UserDataDir` | 用户目录 |
 
 ---
 
 ## 2. 不变量
 
-- **[INV-1]** 变量名不能为空，不能包含 `=` 或 NUL
+- **[INV-1]** 变量名不能为空，不能包含 `=` 或 NUL（Get/Has/Try）
 - **[INV-2]** 变量值不能包含 NUL
-- **[INV-3]** 未定义的变量展开为空字符串
+- **[INV-3]** 未定义的变量展开为空字符串（loose）
 - **[INV-4]** `$` 后无变量名字符时保留原样 `$`
 - **[INV-5]** 未终止的 `${...}` 抛 EArgumentError
+- **[INV-6]** `TryGetEnv`/`HasEnv` 区分「存在且为空」与「未定义」；`GetEnv` 两者均 `''`
+- **[INV-7]** `%NAME%` 仅匹配非空 `[A-Za-z0-9_]`；不完整 `%` 保留字面量
+- **[INV-8]** 本单元与 env 测试不 `uses` 裸 FPC RTL；环境访问仅经 `platform.env`。门禁：`test_os_env` 真 uses 扫描。
+- **[INV-9]** **可移植名**：`SetEnv`/`UnsetEnv`/`Expand*` 占位符名必须为 `[A-Za-z_][A-Za-z0-9_]*`；`GetEnv`/`TryGetEnv`/`HasEnv` 仅 INV-1（可查询既有怪异名）。
+- **[INV-10]** 非线程安全（与 C getenv/setenv 一致）。
 
 ---
 
@@ -68,10 +75,12 @@
 
 ## 6. 测试覆盖
 
-| 测试文件 | 测试数 | 说明 |
-|----------|--------|------|
-| test_os_env | 24 | Get/Set/Unset/Expand + 边界条件 |
-| **合计** | **1 个测试目录** | **24** |
+**最后校准：2026-07-19**（以 `make -C core/tests/nextpas.core.os.env/test_os_env test` 输出为准）。
+
+| 测试文件 | 参考通过数 | 说明 |
+|----------|-----------|------|
+| test_os_env | 41 | Get/Set/Unset/Expand/%VAR%/XDG/User*Dir + 可移植名 + 真 uses 门禁 |
+| **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---
 
@@ -80,3 +89,8 @@
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
 | 2026-07-11 | 1.0 | 初始版本 | Claude |
+| 2026-07-19 | 1.1 | 测试数口径校准（含 XDG） | Claude |
+| 2026-07-19 | 1.2 | UserDataDir + %VAR%；INV-6/7；测试 36 | Claude |
+| 2026-07-19 | 1.3 | INV-8 FPC RTL 隔离 | Claude |
+| 2026-07-19 | 1.4 | 真 uses 门禁（test_os_env） | Claude |
+| 2026-07-19 | 1.5 | INV-9 可移植名 Set/Expand；INV-10 线程 | Claude |
