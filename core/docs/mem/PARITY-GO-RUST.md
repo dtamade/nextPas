@@ -1,6 +1,6 @@
 # mem × Go / Rust 对标纲领（Era E）
 
-**状态**: Active（2026-07-19）
+**状态**: Steady+（2026-07-19；E0–E4/E6 主目标已达）
 **Owner**: mem lane（全权）
 **活路线图**: [ROADMAP.md](ROADMAP.md) 时代 E
 **原则**: 对标的是 **stdlib 质量与生产规模**，不是「分配器文件数」或「博物馆广度」。
@@ -46,12 +46,13 @@
 
 | Slice | 内容 | 状态 |
 |-------|------|------|
-| E0 | 本纲领 + ROADMAP 时代 E | **本批** |
-| E1 | 修复 `bench_arena_go_rust` API 漂移；`make compare` | **本批** |
-| E2 | 执行 [P-a prune](PRUNE-P-a-DESIGN-2026-07-19.md)（10 Tier-3 + 测试） | **本批优先** |
-| E3 | compare A/B 口径；env 缓存快路径；SCORECARD/PARITY 刷新 | **done** 2026-07-19 |
-| E4 | D3：高价值 consumer sized free（tls/simd 已部分） | 持续 |
-| E5 | 可选 SC10：scorecard 内嵌「仅文档引用 compare」或 shell 包装 | 按需 |
+| E0 | 本纲领 + ROADMAP 时代 E | **done** |
+| E1 | `bench_arena_go_rust` + `make compare` | **done** |
+| E2 | P-a prune 10 Tier-3 | **done** |
+| E3 | SC1 对齐 + env 缓存快路径；P2 | **done** |
+| E4 | D3 sized free（simd/async/io/tls）+ openssl 双堆纪律 | **done** |
+| E5 | 可选 P-b / SC10 | 按需 |
+| E6 | Steady+ 关闭 | **done** |
 
 ---
 

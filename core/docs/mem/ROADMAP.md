@@ -1,6 +1,6 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Era E Active**（对标 Go/Rust 质量与规模；D 仍 Steady 纪律）
+**状态**: **Era E Steady+**（对标 Go/Rust 主目标已达；默认只修回归 + D3 顺手）
 **Owner**: mem lane（`.worktrees/mem`）全权
 **更新**: 2026-07-19
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
@@ -123,10 +123,12 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 | E1 | 修复 `bench_arena_go_rust`；`make compare` 三语同方法论 | **done** 2026-07-19 |
 | E2 | 执行 P-a：删 10 Tier-3 allocator + 16 test | **done** 2026-07-19 |
 | E3 | compare A/B 口径；env 缓存快路径；SCORECARD/PARITY 刷新 | **done** 2026-07-19 |
-| E4 | D3 sized free：async buffer/channel + tls 清晰路径 | **partial** 2026-07-19（openssl stack/param 除外） |
-| E5 | 可选 P-b 剩余 Tier-3 | 按需 |
+| E4 | D3 sized free + openssl 双堆纪律 | **done** 2026-07-19（E4-a/b/c + WAIVE 矩阵） |
+| E5 | 可选 P-b 剩余 Tier-3 | 按需（非阻塞） |
+| E6 | Era E → Steady+ 关闭条件 | **done** 2026-07-19（P1–P7 + E4 关闭） |
 
 **验收**: PARITY 表 P1–P7；`make lane-focused LANE=mem` 常绿。
+**OpenSSL 堆纪律**: [OPENSSL-HEAP-DISCIPLINE.md](OPENSSL-HEAP-DISCIPLINE.md)
 
 ---
 
@@ -187,3 +189,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-19 | D3-b simd sized FreeMem（avx2/sse2/image/imageproc/alloc/memutils） |
 | 2026-07-19 | **Era E** 开启：PARITY-GO-RUST；E1 compare 修复；E2 P-a 执行（10+16） |
 | 2026-07-19 | E3：SC1 对齐 heap 段；CachedTruthyEnv 去 CAS-as-load + process route 单缓存；P2 成立 |
+| 2026-07-19 | E4-c/d：openssl DER/stack/param/utils + OPENSSL-HEAP-DISCIPLINE；E4/E6 关闭 |
