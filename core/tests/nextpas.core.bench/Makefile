@@ -1,5 +1,6 @@
 PROJECTS := test_bench_baseline test_bench_stats test_bench_stats_advanced \
             test_bench_runner test_bench_report test_bench_integration \
+            test_bench_results_api \
             test_bench_parallel test_bench_parallel_heaptrc \
             test_bench_parallel_memtrack_heaptrc test_bench_memtrack \
             test_bench_xlang test_bench_invalid_parameters_heaptrc \

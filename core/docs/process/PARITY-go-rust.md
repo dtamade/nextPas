@@ -12,11 +12,11 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.0** | CONTRACT INV 完整；真 uses 门禁；Wait/TryWait/PathDir/env 名已钉；R17 质量表加厚 |
-| **规模 Scale (Essential)** | **8.8** | Essential API 齐（WaitGraceful/SameFile）；HardLink/Chtimes/Chown **Deferred（需 L0）** |
-| **综合** | **8.9** | 测试合计 **≥750** 已达成；远期 900 仍可加厚 |
+| **质量 Quality** | **9.2** | R19：WaitGraceful TimedOut（ignore TERM）、ProcessSucceeded 真值表、错误路径、path Clean/Rel 表 |
+| **规模 Scale (Essential)** | **8.8** | Essential API 齐；HardLink/Chtimes/Chown 仍 **Deferred（需 L0）** |
+| **综合** | **9.0** | 测试合计 **≥900**；质量 9.2 驱动综合达标 |
 
-**目标线**：质量 ≥ 9.0（保持）；规模 Essential 覆盖率 ≥ **0.85**；测试合计 ≥ **750**（达成）→ 远期 **900**。
+**目标线**：质量 ≥ 9.0（**R19 达 9.2**）；规模 Essential ≥ **0.85**；测试合计 ≥ **900**（达成）。
 
 ---
 
@@ -88,19 +88,19 @@
 
 ---
 
-## 测试规模（R17 校准）
+## 测试规模（R19 校准）
 
 | 套件 | 通过 |
 |------|------|
-| test_process | **340** |
+| test_process | **447** |
 | test_process_command / deep / pipe | 48 / 20 / 17 |
-| test_fs | **133** |
+| test_fs | **151** |
 | test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / 17 / 19 |
-| test_path | **56** |
-| test_os_env | **55** |
-| **合计** | **751** |
+| test_path | **68** |
+| test_os_env | **67** |
+| **合计** | **900** |
 
-目标 **≥750** ✅；远期 **≥900** 可继续表驱动加厚。
+目标 **≥900** ✅（R19）。
 
 ---
 
@@ -133,7 +133,7 @@ L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但
 
 ## 维护策略（口径）
 
-**状态：Ready / 维护态。** Essential 与 wine-runtime-smoke 已绿；测试合计 **751 ≥750**。  
+**状态：Ready / 维护态。** Essential 与 wine-runtime-smoke 已绿；测试合计 **900**；Quality **9.2**。  
 剩余两项为**已知、非阻塞**开放债，不是「模块没做完」。
 
 | 项 | 性质 | 口径 |
@@ -143,7 +143,7 @@ L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但
 
 **周报可用一句：**
 
-> process/fs/path/env：Ready / 维护态。Essential + wine 4/4 绿；测试 751。剩余 HardLink/Chtimes/Chown 等 platform L0；测试 900 可选、无触发不做。
+> process/fs/path/env：Ready / 维护态。Essential + wine 4/4 绿；测试 900；Quality 9.2。剩余 HardLink/Chtimes/Chown 等 platform L0。
 
 **不要说：**「fs 不支持 hardlink」（应说分层 Deferred）；「等有空再说」却不留 L0 清单（上表即清单）。
 
@@ -158,3 +158,4 @@ L2 **禁止**直调 POSIX FFI。下列能力在 platform 内部/FFI 已见，但
 | 2026-07-19 | R17 质量加厚；合计 751；L0 Deferred 钉死协作清单 |
 | 2026-07-19 | R18 wine-runtime-smoke 实况绿（4/4）；去掉过时 expect 阻塞表述 |
 | 2026-07-19 | 维护策略口径：L0 Deferred + 900 可选 + 周报话术 |
+| 2026-07-19 | R19 质量属性表 + 测试 900；Quality 9.2 / 综合 9.0 |

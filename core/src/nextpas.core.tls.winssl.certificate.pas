@@ -576,6 +576,7 @@ var
   DERData: TBytes;
   PEMData: PAnsiChar;
   PEMSize: DWORD;
+  LAllocSize: DWORD;
   PEMStr: AnsiString;
 begin
   Result := '';
@@ -597,8 +598,9 @@ begin
   ) then
     Exit;
 
-  // Allocate buffer and encode
-  PEMData := GetMem(PEMSize);
+  // Allocate buffer and encode (keep alloc size; API may shrink PEMSize out-param)
+  LAllocSize := PEMSize;
+  PEMData := GetMem(LAllocSize);
   try
     if CryptBinaryToStringA(
       @DERData[0],
@@ -612,7 +614,7 @@ begin
       Result := UTF8Decode(PEMStr);
     end;
   finally
-    FreeMem(PEMData);
+    FreeMem(PEMData, SizeUInt(LAllocSize));
   end;
 end;
 
@@ -1232,6 +1234,7 @@ var
   ExtInfo: PCERT_EXTENSION;
   BasicConstraints: PCERT_BASIC_CONSTRAINTS2_INFO;
   BasicConstraintsSize: DWORD;
+  LAllocSize: DWORD;
 begin
   Result := False;
 
@@ -1271,7 +1274,8 @@ begin
   ) then
     Exit;
 
-  BasicConstraints := GetMem(BasicConstraintsSize);
+  LAllocSize := BasicConstraintsSize;
+  BasicConstraints := GetMem(LAllocSize);
   try
     if CryptDecodeObject(
       X509_ASN_ENCODING or PKCS_7_ASN_ENCODING,
@@ -1286,7 +1290,7 @@ begin
       Result := BasicConstraints^.fCA;
     end;
   finally
-    FreeMem(BasicConstraints);
+    FreeMem(BasicConstraints, SizeUInt(LAllocSize));
   end;
 end;
 
@@ -1383,6 +1387,7 @@ var
   ExtInfo: PCERT_EXTENSION;
   AltNameInfo: PCERT_ALT_NAME_INFO;
   AltNameInfoSize: DWORD;
+  LAllocSize: DWORD;
   j: DWORD;
   AltName: PCERT_ALT_NAME_ENTRY;
   Addr4, Addr6: PByte;
@@ -1434,7 +1439,8 @@ begin
   ) then
     Exit;
 
-  AltNameInfo := GetMem(AltNameInfoSize);
+  LAllocSize := AltNameInfoSize;
+  AltNameInfo := GetMem(LAllocSize);
   try
     if CryptDecodeObject(
       X509_ASN_ENCODING or PKCS_7_ASN_ENCODING,
@@ -1491,7 +1497,7 @@ begin
       end;
     end;
   finally
-    FreeMem(AltNameInfo);
+    FreeMem(AltNameInfo, SizeUInt(LAllocSize));
   end;
 end;
 
@@ -1501,6 +1507,7 @@ var
   ExtInfo: PCERT_EXTENSION;
   KeyUsageInfo: PCRYPT_BIT_BLOB;
   KeyUsageSize: DWORD;
+  LAllocSize: DWORD;
   KeyUsageBits: Byte;
 
   procedure AddToResult(const S: string);
@@ -1547,7 +1554,8 @@ begin
   ) then
     Exit;
 
-  KeyUsageInfo := GetMem(KeyUsageSize);
+  LAllocSize := KeyUsageSize;
+  KeyUsageInfo := GetMem(LAllocSize);
   try
     if CryptDecodeObject(
       X509_ASN_ENCODING or PKCS_7_ASN_ENCODING,
@@ -1582,7 +1590,7 @@ begin
       end;
     end;
   finally
-    FreeMem(KeyUsageInfo);
+    FreeMem(KeyUsageInfo, SizeUInt(LAllocSize));
   end;
 end;
 
@@ -1592,6 +1600,7 @@ var
   ExtInfo: PCERT_EXTENSION;
   EnhKeyUsage: PCERT_ENHKEY_USAGE;
   EnhKeyUsageSize: DWORD;
+  LAllocSize: DWORD;
   i: DWORD;
   OIDStr: string;
 
@@ -1639,7 +1648,8 @@ begin
   ) then
     Exit;
 
-  EnhKeyUsage := GetMem(EnhKeyUsageSize);
+  LAllocSize := EnhKeyUsageSize;
+  EnhKeyUsage := GetMem(LAllocSize);
   try
     if CryptDecodeObject(
       X509_ASN_ENCODING or PKCS_7_ASN_ENCODING,
@@ -1670,7 +1680,7 @@ begin
       end;
     end;
   finally
-    FreeMem(EnhKeyUsage);
+    FreeMem(EnhKeyUsage, SizeUInt(LAllocSize));
   end;
 end;
 

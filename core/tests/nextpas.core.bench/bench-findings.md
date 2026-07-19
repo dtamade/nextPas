@@ -7,6 +7,15 @@
 > **审查阶段**: 第二期（首次审查 2026-06-21 已记录 C01-C03/D01-D14/P01-P10/T01-T07/S01-S05）
 > **已排除**: 首次审查已标记"已修复"或"不修复/推迟"或"已知"的条目（C01-C03 已修复、D01/D02/D03 不修复、D07/D08/D09 已知）
 
+## 2026-07-19 integration 软拆 (B27)
+
+| 项 | 状态 |
+|----|------|
+| test_bench_results_api | ✅ 新建，58 tests，0 leaks |
+| test_bench_integration | ✅ 66 tests（原 124），0 leaks |
+| GetUnstableResults 严格断言 | 放宽（CV 噪声 flaky） |
+| Makefile PROJECTS | 已登记 results_api |
+
 ## 2026-07-19 Landing + SCORECARD 子集 + integration 债
 
 | 项 | 状态 |

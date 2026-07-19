@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：2.13
+**版本**：2.14
 
 ---
 
@@ -106,12 +106,12 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_process | 340 | API 全覆盖 + WaitGraceful + R17 质量表 |
+| test_process | 447 | R19 TimedOut/真值表/错误路径 + 质量表 |
 | test_process_command | 48 | ICommand builder |
 | test_process_deep | 20 | timeout/large output |
 | test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |
 | test_process_wine | wine-runtime-smoke **4 passed**（2026-07-19 本机） | Windows L2 under Wine；≠ 真 host |
-| **合计** | **5 目录 / 425+ Unix** | 2026-07-19 实测 Unix 全绿 + 0 leak |
+| **合计** | **5 目录 / 532+ Unix** | 2026-07-19 R19 实测 Unix 全绿 + 0 leak |
 
 ---
 
@@ -134,3 +134,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.11 | WaitGraceful；测试 292 | Claude |
 | 2026-07-19 | 2.12 | R17 质量表；测试 340 | Claude |
 | 2026-07-19 | 2.13 | wine-runtime-smoke 实况 4/4 绿 | Claude |
+| 2026-07-19 | 2.14 | R19 质量表；测试 447 | Claude |
