@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（Q1-3 landed：metrics observability seam；**NEXT = Q1-4** backpressure）
+**Updated**: 2026-07-19（Q1-4 landed：H1 write/backpressure 契约；**Era Q1 Done**；NEXT=STOP until demand）
 
 ---
 
@@ -116,12 +116,13 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-1 SSE graduation | **landed** — lifecycle 表 + Op=`sse` + live 证据 |
 | Wave Q1-2 multipart stream | **landed** — FromReader + MaxBytes + Op=`multipart` + ownership |
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
-| **下一执行点** | **Wave Q1-4** — H1 长连接写失败 / backpressure 契约 |
+| Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
+| **下一执行点** | **STOP until demand**（S1-3 连接阶梯 / Q2 comparator optional） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
 ```text
-质量 ~92%   规模 ~82%   优雅 ~88%   诚实 ~95%  (obs 毕业；Q1-4 仍开)
+质量 ~95%   规模 ~82%   优雅 ~88%   诚实 ~95%  (Q1 生产深度 Done)
 ```
 
 ---
@@ -717,12 +718,14 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | **Q1-1** | SSE 诚实毕业（原 N1/C5） | **landed** |
 | **Q1-2** | Multipart/stream 大 body（原 N2/C4） | **landed** |
 | **Q1-3** | Observability 最小 seam（原 N3/A3） | **landed** |
-| **Q1-4** | H1 长连接写失败 / backpressure 契约 | **queued (NEXT)** |
+| **Q1-4** | H1 长连接写失败 / backpressure 契约 | **landed** |
 
 **Q1-1 Evidence**：CONTRACT §4.1；SSE Op=`sse`。  
 **Q1-2 Evidence**：CONTRACT §4.2；multipart FromReader。  
-**Q1-3 Evidence**：CONTRACT §4.3；try/finally 异常仍记；callback 隔离；Op=`metrics`；`test_http_middlewares`。  
-**Q1-4 Done when**：写失败/stall 语义 focused；与规模路径一致。
+**Q1-3 Evidence**：CONTRACT §4.3；metrics obs。  
+**Q1-4 Evidence**：CONTRACT §4.4；既有 real-socket/poll drain 测 + `H1 write/backpressure contract source locks`；与 S1-1 drain 路径一致。  
+
+**Era Q1 Done when**：Q1-1..Q1-4 landed。 **Met.**
 
 ### Era S1 — Server scale foundation
 
@@ -783,12 +786,12 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 1. Era 0–8 landed；Era 8 已在 main
 2. H3 Blocked — 跳过；禁止空 facade
 3. Parity Q0+S1-1 — epoll **1.59× Go**（RPS 规模达标）
-4. Q1-1..Q1-3 landed（SSE / multipart / metrics obs）
-5. **NEXT = Wave Q1-4** — H1 长连接写失败 / backpressure
-6. S1-3 连接阶梯 optional；跨模块仅按本波 Land paths
+4. **Era Q1 Done**（SSE / multipart / metrics / write-backpressure）
+5. **NEXT = STOP until demand** — optional：S1-3 连接阶梯、Q2 comparator 刷新
+6. 跨模块仅按本波 Land paths；path-limited landing only
 ```
 
-**没有用户指令时：Goal Loop 自动执行 Q1-4→…；不要空转 H3。**
+**没有用户指令时：STOP（勿空转 H3 / 勿为清单硬开 S1-3）。**
 
 ---
 
@@ -809,7 +812,8 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
-| 2026-07-19 | **Q1-3 landed**：metrics observability seam（异常仍记/callback 隔离/Op=metrics）；NEXT=Q1-4 |
+| 2026-07-19 | **Q1-4 landed**：H1 write/backpressure CONTRACT §4.4 + source-contract；**Era Q1 Done**；NEXT=STOP |
+| 2026-07-19 | **Q1-3 landed**：metrics observability seam（异常仍记/callback 隔离/Op=metrics） |
 | 2026-07-19 | **Q1-2 landed**：ParseMultipartFormDataFromReader 有界摄入 + ownership |
 | 2026-07-19 | **Q1-1 landed**：SSE lifecycle/Op=`sse`/Flush/live |
 | 2026-07-19 | **S1-1 landed**：poll reactor-inline handlers；epoll 0.59→**1.59× Go** |

@@ -608,6 +608,30 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 
 证据：`test_http_middlewares` Metrics 套件（含 exception + callback isolation）。
 
+### 4.4 H1 长连接写失败 / backpressure（Wave Q1-4）
+
+H1 server 响应写路径（threaded whole-run 与 epoll **poll-owned drain**）对长连接
+背压与写失败的 **final 契约**。实现与 focused 证据已长期存在；本节约成可读表。
+
+| 主题 | 语义 | 证据（`test_http_server`） |
+|------|------|---------------------------|
+| **WriteTimeout = 0** | 无写 deadline（`THttpServerOptions.Default` 测试兼容） | Server options Default vs Production |
+| **WriteTimeout > 0** | budget 从 **socket 真实 drain 开始**，**不**含 handler 在内存中拼响应的时间 | Real socket write timeout ignores slow buffered handler（threaded + epoll） |
+| **Would-block** | poll 路径订 `peWritable` 继续 drain；**仅有实际写出进度时** re-arm write deadline | poll-driven drains response via writable events；partial timed drain |
+| **Write deadline 到期** | 安全关闭连接；`WakeDeadline → infinite`；**不**追加 500；**不**再消费 follow-up pipeline | times out stalled drain on deadline wake；partial timed drain stops buffered follow-up |
+| **Zero-progress write** | 首次写失败/零进度 → **立即停 session**；不消费后续 pipelined 请求 | Session stops after zero-progress response write failure |
+| **已提交响应后 handler 异常** | **不**再向 wire 追加 synthetic 500 | Committed response exception 相关用例 |
+| **有界 response queue** | untimed poll：active drain + **1** queued；follow-up 错误保序 | queues bounded responses / queues follow-up 400/413/… |
+| **Timed stall + pipeline** | `WriteTimeout>0` 且 drain 已 stall 时，**不**继续处理同连接后续请求 | Real socket write timeout backpressure stops pipeline（threaded + epoll）及「does not emit follow-up 4xx/501」系列 |
+| **Direct error 响应** | parser/size/Expect 等 fail-fast 错误响应同样 arm write timeout | Direct error response arms write timeout on … |
+| **S1-1 关系** | `PreferPollWorkerHandoff=False`（默认）只决定 **handler 在 reactor 还是 worker 执行**；**不改变** drain/backpressure/WriteTimeout 语义 | S1-1 + 本表 drain 测 |
+
+**生产建议**：使用 `THttpServerOptions.Production` 或显式 `WithWriteTimeout`；勿依赖 Default 的 RW=0。
+
+**非目标**：严格 wall-clock SLA 冻结为 CI 阈值；跨机 backpressure 排行榜；改 WriteTimeout 默认值。
+
+证据索引（非穷尽）：`Session stops after zero-progress…`、`H1 poll-driven session times out stalled drain…`、`Real socket write timeout backpressure…`（threaded/epoll）、`Write timeout before any wire bytes…` / `after partial wire bytes…`、source-contract `H1 write/backpressure contract`。
+
 ---
 
 ## 5. 协议策略

@@ -20,6 +20,7 @@
 - **Residual-honest（Era 6–7）**：cancel waitable Unix（X2）；**Windows probe-only only**（R3）；pool IdleTTL（X3）+ suite hang 修（R1 close-outside-lock）；OpenSSL PinValidator free（X4）；HTTPS **1×41B process-lifetime** 无可靠 call stack（R2 Park）；headers equal-fold Get/Has（X5）；server `Default` RW=0 keep。
 - **WebSocket**：production-helper lifecycle 契约见 CONTRACT §2.2.3c；证据 `test_http_websocket` + `test_http_websocket_client`（含 close lifecycle / cancel Op）。
 - **SSE（Q1-1）**：写端 lifecycle 见 CONTRACT §4.1；Op=`sse`；证据 `test_http_middlewares` SSE 套件 + `test_http_server` live stream。
+- **H1 write/backpressure（Q1-4）**：见 **CONTRACT §4.4**（WriteTimeout 从 drain 起算、zero-progress/stall 停 session、不消费 pipeline、S1-1 关系）；证据 `test_http_server` + source-contract。
 - **历史档案**：[`archive/`](archive/README.md)。与 ROADMAP 冲突时以 ROADMAP + 源码为准。
 
 下列 **Public Surface Matrix** 是本文件的主内容：公开契约 ↔ 测试证据。

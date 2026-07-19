@@ -9,6 +9,7 @@ uses
   nextpas.core.test,
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.fs,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.net,
@@ -12368,6 +12369,25 @@ begin
   end;
 end;
 
+{ Q1-4: lock write/backpressure semantics in H1 source (CONTRACT §4.4). }
+procedure TestH1WriteBackpressureContractSource;
+var
+  LSrc: string;
+begin
+  LSrc := ReadFileText('../../../src/nextpas.core.http.impl.h1.pas');
+  Check(Pos('procedure TH1ServerConnectionState.ArmPollWriteDeadline', LSrc) > 0,
+    'poll write deadline arm exists');
+  Check(Pos('tsiorWouldBlock', LSrc) > 0, 'would-block drain path present');
+  Check(Pos('ANextEvents := [peWritable]', LSrc) > 0,
+    'would-block subscribes peWritable');
+  Check(Pos('FPollWriteDeadline := TDeadline.Infinite', LSrc) > 0,
+    'successful/timeout drain clears write deadline');
+  Check(Pos('PreferPollWorkerHandoff', LSrc) > 0,
+    'S1-1 handoff flag coexists with drain path');
+  Check(Pos('not FOptions.PreferPollWorkerHandoff', LSrc) > 0,
+    'reactor-inline default does not remove drain/backpressure path');
+end;
+
 { Main }
 
 begin
@@ -12877,5 +12897,7 @@ begin
   T.Test('Server options Default vs Production timeouts',
     @TestServerOptionsDefaultAndProductionTimeouts);
   T.Test('Max requests per connection', @TestMaxRequestsPerConnection);
+  T.Test('H1 write/backpressure contract source locks',
+    @TestH1WriteBackpressureContractSource);
   if not T.Run then Halt(1);
 end.
