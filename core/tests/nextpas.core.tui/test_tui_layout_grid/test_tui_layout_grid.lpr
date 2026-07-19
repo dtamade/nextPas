@@ -94,6 +94,59 @@ begin
   CheckEqual(Int64(0), Int64(LG.Cols), 'empty area empty constraints cols');
 end;
 
+
+procedure TestGridAreaConservation;
+var
+  LG: TGridResult;
+  LArea: TRect;
+  R, C, Sum: Integer;
+begin
+  LArea := TRect.Make(0, 0, 20, 12);
+  LG := Grid(LArea, 3, 4);
+  Sum := 0;
+  for R := 0 to 2 do
+    for C := 0 to 3 do
+      Inc(Sum, LG.Cell(R, C).Width * LG.Cell(R, C).Height);
+  CheckEqual(Int64(LArea.Width * LArea.Height), Int64(Sum), 'area conserved');
+end;
+
+procedure TestGridZeroRows;
+var
+  LG: TGridResult;
+begin
+  LG := Grid(TRect.Make(0, 0, 10, 10), 0, 3);
+  CheckEqual(Int64(0), Int64(LG.Rows), 'zero rows');
+end;
+
+procedure TestGridZeroCols;
+var
+  LG: TGridResult;
+begin
+  LG := Grid(TRect.Make(0, 0, 10, 10), 3, 0);
+  CheckEqual(Int64(0), Int64(LG.Cols), 'zero cols');
+end;
+
+procedure TestGridCellOutOfBoundsEmpty;
+var
+  LG: TGridResult;
+begin
+  LG := Grid(TRect.Make(0, 0, 10, 10), 2, 2);
+  Check(LG.Cell(5, 5).IsEmpty or (LG.Cell(5, 5).Width = 0),
+    'oob cell empty or zero');
+end;
+
+procedure TestGrid2x1VerticalSplit;
+var
+  LG: TGridResult;
+begin
+  LG := Grid(TRect.Make(0, 0, 10, 10), 2, 1);
+  CheckEqual(Int64(2), Int64(LG.Rows), '2 rows');
+  CheckEqual(Int64(1), Int64(LG.Cols), '1 col');
+  CheckEqual(Int64(0), Int64(LG.Cell(0, 0).Y), 'top at 0');
+  Check(LG.Cell(1, 0).Y > 0, 'bottom below top');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.layout.grid');
   T.Test('uniform grid', @TestUniformGrid);
@@ -103,5 +156,10 @@ begin
   T.Test('1x1 grid', @Test1x1Grid);
   T.Test('3x3 grid', @Test3x3Grid);
   T.Test('empty area grid', @TestGridEmptyArea);
-  if not T.Run then Halt(1);
+    T.Test('area conservation', @TestGridAreaConservation);
+  T.Test('zero rows', @TestGridZeroRows);
+  T.Test('zero cols', @TestGridZeroCols);
+  T.Test('cell out of bounds empty', @TestGridCellOutOfBoundsEmpty);
+  T.Test('2x1 vertical split', @TestGrid2x1VerticalSplit);
+if not T.Run then Halt(1);
 end.
