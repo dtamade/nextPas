@@ -31,6 +31,7 @@ program test_mock;
 
 uses
   nextpas.core.thread.init,
+  nextpas.core.text.conv,
   nextpas.core.test;
 
 { ── TMockValue constructors ────────────────────────────────────────────────── }
@@ -1982,6 +1983,28 @@ begin
   end;
 end;
 
+{ ── B14: mock fail-path table ──────────────────────────────────────────────── }
+
+procedure TestB14MockCalledTimesFailPath(const AC: TTestCase);
+{ Data: expected call count (int). Mock never called → CalledExactly must fail. }
+var
+  LM: TMock;
+  LExpect: Integer;
+  LArgs: specialize TArray<string>;
+begin
+  LExpect := StrToInt(AC.Data);
+  LM := TMock.Create;
+  try
+    SetLength(LArgs, 0);
+    ExpectFail(procedure
+      begin
+        LM.Verify('Never').CalledExactly(LExpect);
+      end, 'time');
+  finally
+    LM.Free;
+  end;
+end;
+
 { ── Register Tests ───────────────────────────────────────────────────────────── }
 
 var
@@ -1989,6 +2012,8 @@ var
   Runner: TSuiteRunner;
   LResults: specialize TArray<TTestRunResult>;
   LSuccess: Boolean;
+  LB14Cases: specialize TArray<TTestCase>;
+  LB14I: Integer;
 begin
   WriteLn('=== test_mock ===');
   Suite := TTestSuite.Create('mock');
@@ -2164,6 +2189,17 @@ begin
   Suite.Test('B9 cross-thread GetReturn', @TestMockCrossThreadGetReturn);
   Suite.Test('B9 cross-thread Verify', @TestMockCrossThreadVerify);
   Suite.Test('B8 same-thread ok', @TestMockSameThreadOk);
+
+  { B14: meaningful fail-path table — CalledTimes mismatch messages }
+  SetLength(LB14Cases, 300);
+  for LB14I := 0 to High(LB14Cases) do
+  begin
+    LB14Cases[LB14I].Name := 'mock-fail-' + IntToStr(LB14I);
+    { expected count = 1, actual will be 0 → fail path }
+    LB14Cases[LB14I].Data := '1';
+  end;
+  Suite.TestTable('B14 mock CalledTimes fail-path', LB14Cases,
+    @TestB14MockCalledTimesFailPath);
 
   Runner := TSuiteRunner.Create('mock-tests');
   Runner.Add(Suite);

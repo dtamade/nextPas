@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
 TESTS="$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)"
-MIN_COUNT="${SCALE_MIN:-2000}"
+MIN_COUNT="${SCALE_MIN:-2500}"
 
 python3 - "$TESTS" "$MIN_COUNT" <<'PY'
 import re, sys
