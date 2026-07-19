@@ -311,8 +311,10 @@ type
   end;
 ```
 
+**Progress（诚实）**: **分片自旋锁** 并发 map，**不是 lock-free**。`TConcurrentHashMap` 是**同一实现别名**，不是第二套算法。
+
 **设计特点**:
-- 分片锁（16 shards），每个 shard 使用 AtomicExchange32 自旋锁
+- 分片锁（16 shards），每 shard 自旋锁（preferred `atomic_exchange` 路径）
 - 开放寻址 + 线性探测
 - 负载因子 3/4，自动扩容
 - 仅支持 unmanaged 类型
@@ -336,13 +338,17 @@ type
 | GetOrUpdate | O(1) amortized | ✅ | 原子 get-or-create-then-update |
 | Clear | O(n) | ✅ | 逐 shard 清空 |
 
-**性能特征**（vs TConcurrentHashMap）:
+**命名**: `TConcurrentHashMap` ≡ `TShardedHashMap`（同 `TShardedHashMapImpl`）。不要用两者对比“性能差异”。
 
-| 场景 | TShardedHashMap | TConcurrentHashMap |
-|------|-----------------|-------------------|
-| 锁机制 | AtomicExchange ~1ns | RWLock ~10-50ns |
-| 内存管理 | 无引用计数 | 有引用计数 |
-| 适用场景 | 高频、低竞争、unmanaged | 通用、支持 managed |
+**精神对标**（非 API 拷贝）:
+
+| 场景 | Go `sync.Map` | dashmap 精神 | nextpas |
+|------|---------------|--------------|---------|
+| 插入/覆盖 | `Store` | `insert` | `Insert` |
+| 查找 | `Load` | `get` | `Find` / `Contains` |
+| 条件插入 | — | `entry` API | `TryInsert` / `GetOrInsert*` |
+| 删除 | `Delete` | `remove` | `Remove` |
+| Progress | 运行时内部 | 分片锁 | **分片自旋锁（诚实）** |
 
 **键相等性**:
 - 使用 `CompareByte` 逐字节比较，适用于所有 unmanaged 类型（Integer、Int64、record 等）

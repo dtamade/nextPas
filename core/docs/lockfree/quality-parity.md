@@ -1,6 +1,6 @@
 # Atomic / Lockfree — Q 线（Quality / Parity）
 
-> **状态**: **Q0–Q2 done** · **Q3-a in progress** · Q3-b/c pending
+> **状态**: **Q0–Q3 done** · 下步 Q4 / Q5
 > **日期**: 2026-07-20
 > **Owner**: atomic-lockfree lane（全权）
 > **目标**: 对标 Go/Rust 的 **质量与可用规模**，并保持清洁
@@ -33,7 +33,7 @@
 | **Q0** | 清洁基线 + reconverge 评估 | **done** |
 | **Q1** | Atomic 首选路径与质量加固 | **Q1-a done**；Q1-b/c pending |
 | **Q2** | T1 深度（首选路径 + stress） | **done** — T1 preferred path 全量；verify-t1 绿；已 land main |
-| **Q3** | Map/Channel 体验对标 | **Q3-a** Selector 语义/测试；Q3-b Channel；Q3-c HashMap |
+| **Q3** | Map/Channel 体验对标 | **Q3-a/b/c done**（Selector 钉死 + Channel 对标表 + HashMap progress 诚实） |
 | **Q4** | T2 精炼（审计 / 降档 / 可选生产子集） | pending |
 | **Q5** | 有信封 Go/Rust 同机对照常青 | pending |
 
@@ -105,6 +105,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 | 2026-07-20 | **Q2-b**：`verify-t1` 全门绿（atomic + main + stress 17） |
 | 2026-07-20 | **Land** H3-4/H3-5 + Q0–Q2 → main `1e535bfb4`；archive tag |
 | 2026-07-20 | **Q3-a**：Selector preferred atomics；TrySelect≡default；Add 序；wait 文档修正；钉测试 |
+| 2026-07-20 | **Q3-b/c**：Channel 对标表 + Close 幂等测；HashMap api-ref 诚实 progress / 去假对比 |
 
 ### Q3-a checklist
 
@@ -112,6 +113,30 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - [x] 头注释 / CONTRACT §1.2a / api-ref / README / selection-guide 语义一致
 - [x] 测试：case 序、TrySelect-as-default、closed-empty recv
 - [x] source-contract：preferred atomics + LockFreeWaitData；禁 legacy AtomicLoad32/FetchAdd32
+
+### Q3-b — Channel 体验对标
+
+| Go / Rust 精神 | nextpas | 备注 |
+|----------------|---------|------|
+| buffered `chan` | `TLockFreeChannel<T>(capacity)` | capacity 上取整 2^n |
+| unbuffered 精神 | capacity=1（R5） | 非运行时 rendezvous 全语义 |
+| close + drain | `Close`；已入队仍可 `TryReceive` | CONTRACT §1.3 |
+| send on closed | `Send` 抛错；`TrySend`=False | 与 Go panic / ok 差不同 |
+| select default | `TLockFreeSelector.TrySelect` | Q3-a |
+| 1P1C 快路径 | `TLockFreeChannelSpsc` | 无 MPMC 竞争 |
+| 诊断 full/empty/closed | `TrySendEx` / `TryReceiveEx` | Boolean 热路径不变 |
+| 动态容量 | `TryResize` | 有测；closed 拒绝 |
+
+**测试面**（已有）：basic/close/timeout/stress/cap=1/resize 系列/`Try*Ex`/SPSC 变体。Q3-b 补 **Close 幂等**。
+
+### Q3-c — HashMap 导航 + progress 诚实
+
+| 项 | 状态 |
+|----|------|
+| Progress：分片锁非 LF | README / selection-guide **已有**；api-ref 去掉误导「vs ConcurrentHashMap 性能」假对比 |
+| 别名诚实 | `TConcurrentHashMap` ≡ `TShardedHashMap` |
+| 对标表 | api-ref 增 sync.Map / dashmap 精神表 |
+| 不扩算法 | 本切片无 HashMap 实现改动 |
 
 ---
 

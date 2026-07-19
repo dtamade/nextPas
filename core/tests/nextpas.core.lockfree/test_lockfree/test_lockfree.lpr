@@ -2859,6 +2859,27 @@ begin
   end;
 end;
 
+{ Q3-b: Close is idempotent }
+procedure TestChannelCloseIdempotent;
+var
+  LCh: TIntChannel;
+  LV: Integer;
+begin
+  LCh := TIntChannel.Create(4);
+  try
+    Check(LCh.TrySend(1), 'seed');
+    LCh.Close;
+    Check(LCh.IsClosed, 'closed once');
+    LCh.Close;
+    Check(LCh.IsClosed, 'closed twice still closed');
+    Check(not LCh.TrySend(2), 'TrySend still rejected');
+    Check(LCh.TryReceive(LV), 'drain still works');
+    CheckEqual(Int64(1), Int64(LV), 'drained value');
+  finally
+    LCh.Free;
+  end;
+end;
+
 procedure TestChannelCloseRaiseOnSend;
 var
   LCh: TIntChannel;
@@ -7571,6 +7592,7 @@ begin
   T.Test('EBR boundary conditions', @TestEbrBoundaryConditions);
   T.Test('Channel basic', @TestChannelBasic);
   T.Test('Channel close', @TestChannelClose);
+  T.Test('Channel close idempotent', @TestChannelCloseIdempotent);
   T.Test('Channel close raises on Send', @TestChannelCloseRaiseOnSend);
   T.Test('Channel Send/Receive', @TestChannelSendReceive);
   T.Test('Channel SendTimeout', @TestChannelSendTimeout);
