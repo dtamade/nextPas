@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC7 (PARITY-GO-RUST Wave Q1–Q6)
+ * tui Scorecard SC1–SC8 (PARITY-GO-RUST Wave Q1–Q6)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -339,6 +339,37 @@ begin
   AddRow('SC7', 'cjk_width2', 0, 1, LOk, 'lead w=2 + skip tail');
 end;
 
+
+procedure RunSC8;
+var
+  LProfile: TTuiTerminalCapabilityProfile;
+  LOk: Boolean;
+begin
+  WriteLn('SC8 Truecolor env-attested profile ...');
+  LOk := True;
+  LProfile := TTerminal.DetectCapabilityProfileFromHints(
+    'truecolor', '', '', '', '');
+  if (not LProfile.Truecolor.Detected) or (not LProfile.Truecolor.Active) or
+     (not LProfile.Truecolor.Verified) then
+    LOk := False;
+  AddRow('SC8a', 'truecolor_env', 0, 1, LOk, 'COLORTERM truecolor R+D+A+V');
+
+  LOk := True;
+  LProfile := TTerminal.DetectCapabilityProfileFromHints(
+    '24bit', '', '', '', '');
+  if (not LProfile.Truecolor.Verified) or (not LProfile.Truecolor.Active) then
+    LOk := False;
+  AddRow('SC8b', 'truecolor_24bit', 0, 1, LOk, 'COLORTERM 24bit verified');
+
+  LOk := True;
+  LProfile := TTerminal.DetectCapabilityProfileFromHints(
+    '', '', '', '', '');
+  if LProfile.Truecolor.Detected or LProfile.Truecolor.Active or
+     LProfile.Truecolor.Verified then
+    LOk := False;
+  AddRow('SC8c', 'truecolor_absent', 0, 1, LOk, 'no COLORTERM → not verified');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -371,7 +402,7 @@ begin
   SetLength(GRows, 16);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC7 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC8 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -379,6 +410,7 @@ begin
   RunSC5;
   RunSC6;
   RunSC7;
+  RunSC8;
   PrintTable;
   if GFailed > 0 then
     Halt(1);

@@ -92,6 +92,52 @@ begin
   Check(LEvent.Key.Ch = Ord('z'), 'z');
 end;
 
+procedure TestFocusIn;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+begin
+  LBuf := #27'[I';
+  Check(ParseOne(LBuf[1], Length(LBuf), True, LEvent, LConsumed) = prSuccess, 'focus in');
+  Check(LEvent.Kind = evFocus, 'evFocus');
+  Check(LEvent.Focus.Kind = fkIn, 'fkIn');
+end;
+
+procedure TestFocusOut;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+begin
+  LBuf := #27'[O';
+  Check(ParseOne(LBuf[1], Length(LBuf), True, LEvent, LConsumed) = prSuccess, 'focus out');
+  Check(LEvent.Kind = evFocus, 'evFocus');
+  Check(LEvent.Focus.Kind = fkOut, 'fkOut');
+end;
+
+procedure TestArrowDown;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+begin
+  LBuf := #27'[B';
+  Check(ParseOne(LBuf[1], Length(LBuf), True, LEvent, LConsumed) = prSuccess, 'down');
+  Check(LEvent.Key.Code = kcDown, 'kcDown');
+end;
+
+procedure TestTab;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+begin
+  LBuf := #9;
+  Check(ParseOne(LBuf[1], 1, True, LEvent, LConsumed) = prSuccess, 'tab');
+  Check(LEvent.Key.Code = kcTab, 'kcTab');
+end;
+
 begin
   T := TTestSuite.Create('tui_input_wine');
   T.Test('ascii', @TestAscii);
@@ -100,5 +146,9 @@ begin
   T.Test('utf8 cjk', @TestUtf8Cjk);
   T.Test('kitty flags reply', @TestKittyFlagsReply);
   T.Test('invalid then ascii', @TestInvalidThenAscii);
+  T.Test('focus in', @TestFocusIn);
+  T.Test('focus out', @TestFocusOut);
+  T.Test('arrow down', @TestArrowDown);
+  T.Test('tab', @TestTab);
   if not T.Run then Halt(1);
 end.
