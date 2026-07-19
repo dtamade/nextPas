@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-18（R4 HTTPS 1×41B zero → **Done / STOP**）
+**Updated**: 2026-07-19（Era 8 I0–I3 landed → **Done / STOP**；无用户指令勿空转 H3）
 
 ---
 
@@ -96,12 +96,14 @@ CHECKPOINT（不阻塞续波）:
 | Wave R2 HTTPS 1×41B dig | 完成（当时无栈 → Park；R4 已清零） |
 | Wave R3 Windows cancel honesty | 完成（probe-only only + source-contract） |
 | Wave R4 HTTPS 1×41B zero | 完成（capabilities cache FillChar → Default；client 0 unfreed） |
-| **下一执行点** | **STOP**（R4 清零后；H3 仍 Blocked；无 Inbox 升格） |
+| Wave I0 Era 8 open | 完成（Inbox 三项升格 I1–I3；推荐路径 I1→I2→I3） |
+| Wave I1 pool health probe | 完成（H1 TryRead 借出探针 + H2 PING/ACK；0 unfreed） |
+| **下一执行点** | **Era 8 Done / STOP**（I0–I3 landed；H3 仍 Blocked） |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~92%   高级 ~86%   优雅 ~88%   性能 ~78%  (Residual hardening)
+完整 ~93%   高级 ~87%   优雅 ~88%   性能 ~78%  (Era 8 Inbox depth)
 ```
 
 ---
@@ -554,10 +556,72 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | SOCKS proxy | **Park**（更偏 net） |
 | Server push | **Non-goal**（ENABLE_PUSH=0） |
 | h2c Upgrade | **Park**（cleartext H2 = prior knowledge only） |
-| H2 同连接多路 RoundTrip API | **Park**（新公开面；另设计） |
+| H2 同连接多路 RoundTrip API | **Era 8 Wave I3**（升格；非默认路径） |
 | WS-over-H2 / H2 CONNECT | **Park** until real consumer |
 | H3 / QUIC | **Blocked / 无产品需求**；禁止空 facade |
 | 为对标而扩 API | **禁止** |
+
+---
+
+## Era 8 — Inbox Depth（池 / WS / H2 多路）
+
+**目标**：把三项长期 Inbox（pool 健康探测、WS permessage-deflate、H2 同连接多路）升格为有序 Wave，在 **framework-complete (non-H3)** 之上加深生产边缘。**不**开 H3；不扩无关 API 家族。
+
+**推荐路径**：`I0 → I1 → I2 → I3`
+
+### Wave I0 — Era 8 open + Inbox promote
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed** |
+| **Do** | 写 Era 8 有序表；三行 Inbox → I1/I2/I3 写满 Do/Don't/Done when/Gates；NEXT=I1；GOAL_TREE 指针可选 |
+| **Don't** | 改业务代码；开 H3 |
+| **Done when** | 全局 NEXT 唯一指向 I1；执行者只读本文件可开工 |
+| **Gates** | docs only + hygiene |
+| **Land paths** | `core/docs/http/**` |
+| **Next** | Wave I1 |
+| **Evidence** | Inbox 三行清空；Era 8 表 + 当前该做指向 I1 |
+
+### Wave I1 — Client pool active health probe
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed** |
+| **Do** | 借出路径主动健康探测：H1 非阻塞 TryRead 探针（peer close/半关闭淘汰）；H2 借出时 PING→ACK（`PingTimeout`；0=关）；探针/Close **不得**持 pool 锁；CONTRACT pool 表 + focused tests；heaptrc 0 |
+| **Don't** | 后台定时扫池线程；新 Options 家族；H2 同连接多路（I3）；改 IdleTTL 语义 |
+| **Done when** | peer-close / PING 失败连接不复用；IdleTTL/MaxPoolSize 行为不变；client + h2_client 绿且 0 unfreed |
+| **Gates** | `test_http_client`；`test_http_h2_client`；hygiene |
+| **Land paths** | `core/src/nextpas.core.http.impl.h1.pas`；`core/src/nextpas.core.http.impl.h2.client.pas`；相关 options/registry 最小；tests；`core/docs/http/**` |
+| **Next** | Wave I2 |
+| **Evidence** | H1 `PooledConnectionIsReusable` TryRead 借出探针（锁外）；H2 `ProbeHealth` PING/ACK（`PingTimeout`；缓冲非空跳过；0=关）；`test_http_client` 272/0；`test_http_h2_client` 69/0（含 PING on borrow / discard closed / PingTimeout=0） |
+
+### Wave I2 — WebSocket permessage-deflate
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed** |
+| **Do** | RFC 7692 permessage-deflate：握手扩展协商（client/server）；压缩/解压帧路径；失败/拒协商诚实；CONTRACT WS 表；focused WS tests；0 unfreed |
+| **Don't** | 子协议全家桶；WS-over-H2；新无关 Options 家族；无界压缩内存 |
+| **Done when** | 协商成功可互通；拒协商/关闭路径绿；无默认内存炸弹 |
+| **Gates** | `test_http_websocket` / `test_http_websocket_client`；hygiene |
+| **Land paths** | websocket 实现 + tests + `core/docs/http/**`；必要时最小跨模块（压缩库 owner） |
+| **Next** | Wave I3 |
+| **Evidence** | `EnablePermessageDeflate` opt-in；握手 `client/server_no_context_takeover`；RSV1 + `RawDeflateMessageCompress/Decompress`；默认拒协商；MaxMessageSize 约束解压；`test_http_websocket` 41/0；`test_http_websocket_client` 10/0 |
+
+### Wave I3 — H2 same-connection multiplex API
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed** |
+| **Do** | 同连接并发多 `RoundTrip`/流的**最小**公开面设计+实现；流 ID/流控/cancel 边界写 CONTRACT；与现串行池路径共存；focused 并发测试；0 unfreed |
+| **Don't** | 假 facade；破坏现同步契约默认语义；server push；h2c Upgrade |
+| **Done when** | 文档化 API + 至少 2 并发流证据；串行路径回归绿 |
+| **Gates** | `test_http_h2_client`（+ 新 focused 若拆分）；hygiene |
+| **Land paths** | H2 client/transport + intf/facade 最小 + docs + tests |
+| **Next** | Era 8 Done / STOP |
+| **Evidence** | `IHttpTransportMultiplex.RoundTripMany`；连接层 demux；同 authority 校验；`MaxConcurrentStreams`；串行 `RoundTrip` 不变；`test_http_h2_client` 72/0 |
+
+**Era 8 Done when**：I0–I3 landed（或 I3 诚实 Park 并写清原因）；H3 仍 Blocked。
 
 ---
 
@@ -571,9 +635,7 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 想法 | 备注 |
 |------|------|
-| H2 同连接多路并发 API | 需独立设计 Wave；非默认路径 |
-| WS 扩展协商（permessage-deflate 等） | 仅真实 consumer 升格 |
-| pool 主动健康探测 | 可在 idle TTL 之后 |
+| （空 — 三项已升格 Era 8） | 新想法只追加，不直接实现 |
 
 ---
 
@@ -583,11 +645,12 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 1. Era 0–4 landed；framework-complete (non-H3) 已立住
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
 3. Era 6 X0–X5 landed — Excellence Done
-4. Era 7 + R4 **Done / STOP**（R0–R4；HTTPS client 0 unfreed）；H3 仍 Blocked；Inbox 仅升格后开工
-5. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
+4. Era 7 + R4 Done（HTTPS client 0 unfreed）
+5. Era 8 I0–I3 landed — framework depth Done (non-H3)；H3 仍 Blocked
+6. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
 ```
 
-**没有用户指令时：STOP；不要空转 H3；Inbox 仅升格后开工。**
+**没有用户指令时：STOP（Era 8 Done）；不要空转 H3。**
 
 ---
 
@@ -608,6 +671,11 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-19 | docs 对齐：顶部 Updated / changelog 与 **Era 8 Done / STOP** 一致（I0–I3 已 land） |
+| 2026-07-18 | Wave I3 landed：`IHttpTransportMultiplex.RoundTripMany`；h2_client 72/0；**Era 8 Done / STOP** |
+| 2026-07-18 | Wave I2 landed：WS permessage-deflate（RFC 7692 opt-in）；ws 41/0 + ws_client 10/0；NEXT=I3 |
+| 2026-07-18 | Wave I1 landed：H1 TryRead + H2 PING 借出健康探测；client 272/0 h2 69/0；NEXT=I2 |
+| 2026-07-18 | **Era 8** I0：Inbox 升格（I1 pool health / I2 WS deflate / I3 H2 multi）；NEXT=I1 |
 | 2026-07-18 | Wave R4：HTTPS 1×41B 清零（tls capabilities cache FillChar→Default）；client×2 / h2 0 unfreed |
 | 2026-07-17 | 初版：合并 stage + Wave A–F；Phase P/Q/R/X；Wave G = NEXT |
 | 2026-07-17 | Wave L：历史 docs → `archive/` |
