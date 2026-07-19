@@ -339,7 +339,9 @@ begin
     Dec(LAbsTime.tv_nsec, 1000000000);
   end;
 
-  Result := pthread_timedjoin_np(PPThreadToken(@LState^.Thread[0])^, @ARetVal, @LAbsTime);
+  { pthread_timedjoin_np FFI takes PtrUInt; pthread_t is Pointer on FreeBSD. }
+  Result := pthread_timedjoin_np(
+    PtrUInt(PPThreadToken(@LState^.Thread[0])^), @ARetVal, @LAbsTime);
   if Result = 0 then
   begin
     Dispose(LState);

@@ -65,6 +65,7 @@ Writeln(FormatMemStats); // … debug_process=… debug_coverage_gap=…
 - 细节字段与 SC5 对齐：`TGrowingHeapStats`
 - 插件面 sized free 助手：`FreeMemOf(Alloc, P, Size)` / `TryFreeMemOf`（无 DEBUG wrap 且无 HEAP_DEBUG/SAFETY 时同堆走 DefaultHeap sized；否则走 `Alloc.FreeMem` 以保留 tracking；`TryFreeMemOf(nil, P)` 仅当 DefaultHeap 自有时 process free，foreign → False）
 - 插件面 sized realloc：`ReallocMemOf(Alloc, P, Old, New)` / `TryReallocMemOf`（同门控；wrap 开时走 `Alloc.ReallocMem`；**Try 与非 Try 成功语义一致**，含 nil allocator → process GetMem）
+- **样板（F4）**：已知容量的 inject 缓冲 → `text.builder` / `bytes.builder` 用 `FreeMemOf`/`ReallocMemOf`（禁止全仓机械替换；谁改谁顺手）
 - 一行 env profile：`FormatMemDebugProfile`（`heap_debug`/`heap_safety`/`arena_strict`/`debug`/`debug_process`/`debug_coverage_gap`）
 - `FormatMemStats` 含 `heap_safety=` / `arena_strict=`（与 HEAP_DEBUG / coverage_gap 并列）
 - 错误消息：`FormatAllocErrorMsg` / `IsWellFormedAllocErrorMsg`（见 [ERROR-POLICY.md](ERROR-POLICY.md)）

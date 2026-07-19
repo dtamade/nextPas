@@ -90,6 +90,26 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 
 SC5 说明：40 rounds × 256 × 64B churn + 周期 `Scavenge`；`final LiveBytes` 可保留少量 TLS/active 结构，门禁要求 **delta ReleasedSpans ≥ 1** 且 final ≤ peak。
 
+### SC5 / soak 复跑入口（F8）
+
+```bash
+# Scorecard 行（含 SC5 GetHeapStats 证据）
+make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
+
+# 多线程长跑 smoke（默认 10s × 4 workers；0 leak）
+make -C core/tests/nextpas.core.mem/test_soak clean test
+```
+
+- **不改** scavenge 策略 / 热路径；F8 只要求命令可发现 + 当次绿。
+- 2026-07-20 `test_soak`：3/3 PASS（continuous ~3.0M ops/10s；fragmentation；alloc/free ratio）。
+- SC5 当次示例：peak LiveBytes≈402KB · final≈12KB · ReleasedSpans≥1。
+
+### F5 process GetMem 微税（WAIVE）
+
+- 证据（同机 scorecard）：SC1 `default_heap` ≈15 ns/op；SC9 `hot_heap` ≈13 ns/op；`plugin_ia` ≈123 ns/op。
+- process `GetMem` 在 HEAP_DEBUG 关闭时已 inline 到 DefaultHeap；剩余税来自可选 env 门控，**拆掉会伤 DEBUG 可发现性**。
+- 决策：**不改代码**；若未来 profiling 证明 ≥3 ns 可安全省，再开独立 slice。
+
 SC6 说明：`TVirtualArena` 混合 AST 节点尺寸，每 unit `Reset`；门禁要求 peakUsed > 0 且 finalUsed 远小于 peak。
 
 SC7 说明：p99 是 **单次请求** 延迟（ns），不是单次 alloc；LocalArena 相对 system 约 **5.2×** mean / **11.7×** p99（本机 2026-07-20；system 路径抖动大）。

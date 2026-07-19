@@ -143,7 +143,11 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 | F1 | SCORECARD RELEASE 刷新（P-a/P-b 后） | **done** 2026-07-20 |
 | F2 | 门面 slim **设计** | **done** 见 [FACADES-SLIM-DESIGN-2026-07-20.md](FACADES-SLIM-DESIGN-2026-07-20.md) |
 | F3 | 门面收紧执行（批 1 re-export demote） | **done** 2026-07-20 · uses 65→41 · [FACADES-SURFACE.md](FACADES-SURFACE.md) |
-| F4–F8 | FreeMemOf 样板 / 微税 / memutils / cross-OS / soak | 按需 |
+| F4 | FreeMemOf 样板（`bytes.builder`，对照 text.builder） | **done** 2026-07-20 |
+| F5 | process GetMem 微税 | **WAIVE** 2026-07-20：SC1/SC9 热路径已紧；无 ≥3ns 可证明收益；禁止伤 HEAP_DEBUG |
+| F6 | simd.memutils header 存 totalSize（去 unsized free 回落） | **done** 2026-07-20 |
+| F7 | `test_mem_cross_os_compile_gate` | **done** 2026-07-20（FreeBSD FORCE_HOST `pthread_timedjoin_np` PtrUInt cast） |
+| F8 | soak / SC5 入口文档 | **done** 2026-07-20 · `test_soak` 3/3 + SCORECARD 说明 |
 
 F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses` 子单元；源文件保留。
 
