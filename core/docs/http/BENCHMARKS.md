@@ -81,51 +81,38 @@ From repo `core/`:
 
 **Machine**: Linux x86_64, 44 cores, FPC 3.3.1 (this worktree).
 
-#### Multi-conn official harness — **BLOCKED**
+#### Multi-conn official harness — **UNBLOCKED** (Q0-2)
 
-`run_server_comparison.sh` nextPas row fails before emitting `req/s`:
-
-```text
-ETimeoutError: read deadline exceeded
-```
-
-Repro (both backends):
+**Root cause**: `bench_http_server` had been reduced to a single-connection
+`TBenchSuite` that read until EOF on keep-alive (`ETimeoutError`). Restored
+CLI multi-client keep-alive shape (pre-`c1472d3b3` semantics, no SysUtils).
 
 ```sh
 ./benchmarks/nextpas.core.http/run_server_comparison.sh \
-  --requests 5000 --threads 4 --workload no_url \
+  --requests 20000 --threads 4 --workload no_url \
   --nextpas-backend epoll --runs 1
-# same with --nextpas-backend threaded
 ```
 
-| Workload | Backend | nextPas | Go | Rust | nextPas/Go | Status |
-| -------- | ------- | ------- | -- | ---- | ---------: | ------ |
-| `no_url` 20k×4 | epoll | **FAIL** timeout | not reached | not reached | n/a | **blocked** |
-| `no_url` 5k×4 | threaded | **FAIL** timeout | not reached | not reached | n/a | **blocked** |
+| Date | Workload | Backend | nextPas req/s | Go req/s | Rust std req/s | nextPas/Go | Gate |
+| ---- | -------- | ------- | ------------: | -------: | -------------: | ---------: | ---- |
+| 2026-07-19 | `no_url` 20k×4 | **epoll** | **16494** | 28144 | 142930 | **0.59** | **enter parity zone (≥0.50)**; not scale-ready (0.80) |
+| 2026-07-19 | `response_1k` 20k×4 | **epoll** | **16286** | 24236 | 132811 | **0.67** | enter zone |
+| 2026-07-19 | `no_url` 20k×4 | threaded | **96313** | 29286 | 156874 | **3.29** | char only — **not** scale KPI |
 
-**Campaign implication**: cannot claim enter-parity-zone (≥0.5× Go) until the
-multi-thread keep-alive comparison path is green. This is a **scale-floor bug**,
-not a documentation gap. NEXT work: unbreak `bench_http_server` multi-client
-path (likely server accept/read deadline or client deadline under concurrency).
+**Readings**
+
+1. **Scale KPI is epoll**: 0.59× Go on `no_url` → entered parity zone; gap to 0.80× is the S1/S2 job.
+2. **threaded ≫ Go** on this shape: protocol/handler path is competitive; **epoll path is the scale bottleneck**.
+3. Rust `std_only` row is a raw micro-server, not hyper; keep as reference only.
+4. Single-run snapshot; re-run with `--runs 3` before any external claim.
 
 #### Interim single-connection characterization (not scale KPI)
 
-`bench_fullchain` still runs (sequential keep-alive on one connection):
+| Date | Backend | Filter | iters | ns/op | ops/s | Note |
+| ---- | ------- | ------ | ----: | ----: | ----: | ---- |
+| 2026-07-19 | epoll | Direct/Plaintext | 2000 | 125248 | 7984 | L2 fullchain; ≠ multi-conn RPS |
 
-```sh
-NEXTPAS_BENCH_FILTER='Direct/Plaintext' NEXTPAS_BENCH_BACKEND=epoll \
-  NEXTPAS_BENCH_MAX_ITERS=2000 \
-  make -C benchmarks/nextpas.core.http/bench_fullchain clean run
-```
-
-| Date | Backend | Filter | iters | ns/op | ops/s | p99 ns | Note |
-| ---- | ------- | ------ | ----: | ----: | ----: | -----: | ---- |
-| 2026-07-19 | epoll | Direct/Plaintext | 2000 | 125248 | **7984** | 140105 | L2 char only; ≠ multi-conn RPS |
-
-Do **not** divide this ops/s by Go multi-thread `req/s` — different harness shape.
-
-Caveats: single machine, single day; not a leaderboard; multi-conn ratio is the
-only scale gate (ROADMAP).
+Caveats: single machine, single day; not a leaderboard.
 
 The maintained Pascal benchmark assets under `benchmarks/nextpas.core.http/`
 are the focused projects with their own project `Makefile`s and focused smoke
