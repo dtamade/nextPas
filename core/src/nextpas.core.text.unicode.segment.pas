@@ -12,8 +12,9 @@ type
   TSegmentType = (
     stGraphemeCluster,  // 字素簇
     stWord,             // 单词
-    stLine,             // 行
-    stSentence          // 句子
+    stLine,             // 硬行（CR/LF/NL/LS/PS 等分隔符）
+    stSentence,         // 句子
+    stLineBreak         // 软行（UAX#14 换行机会）
   );
 
   // 分割结果
@@ -33,10 +34,12 @@ type
     function SegmentWords(const AText: string): TSegmentResultArray;
     function SegmentLines(const AText: string): TSegmentResultArray;
     function SegmentSentences(const AText: string): TSegmentResultArray;
+    function SegmentLineBreaks(const AText: string): TSegmentResultArray;
     function NextGraphemeCluster(const AText: string; const APos: SizeInt): SizeInt;
     function NextWord(const AText: string; const APos: SizeInt): SizeInt;
     function NextLine(const AText: string; const APos: SizeInt): SizeInt;
     function NextSentence(const AText: string; const APos: SizeInt): SizeInt;
+    function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt;
   end;
 
   // 默认分割器实现
@@ -46,10 +49,12 @@ type
     function SegmentWords(const AText: string): TSegmentResultArray;
     function SegmentLines(const AText: string): TSegmentResultArray;
     function SegmentSentences(const AText: string): TSegmentResultArray;
+    function SegmentLineBreaks(const AText: string): TSegmentResultArray;
     function NextGraphemeCluster(const AText: string; const APos: SizeInt): SizeInt;
     function NextWord(const AText: string; const APos: SizeInt): SizeInt;
     function NextLine(const AText: string; const APos: SizeInt): SizeInt;
     function NextSentence(const AText: string; const APos: SizeInt): SizeInt;
+    function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt;
   end;
 
 // 全局分割器实例
@@ -71,6 +76,10 @@ function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUIn
   Returns bytes from AData to the next line-break opportunity.
   Distinct from NextLine (hard line separators only). }
 function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+
+{ UAX #14 string helpers (soft). Distinct from hard NextLine/SegmentLines. }
+function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt;
+function SegmentLineBreaks(const AText: string): TSegmentResultArray;
 
 implementation
 
@@ -242,6 +251,46 @@ begin
     LResults[LCount].Length := LPos - LStart;
     LResults[LCount].SegmentType := stSentence;
     Inc(LCount);
+  end;
+
+  SetLength(LResults, LCount);
+  Result := LResults;
+end;
+
+function TUnicodeSegmenter.SegmentLineBreaks(const AText: string): TSegmentResultArray;
+var
+  LPos, LStart, LLen, LCount, LCapacity: SizeInt;
+  LResults: TSegmentResultArray;
+begin
+  LLen := Length(AText);
+  if LLen = 0 then
+  begin
+    SetLength(Result, 0);
+    Exit;
+  end;
+
+  LCapacity := LLen div 8 + 1;
+  SetLength(LResults, LCapacity);
+  LCount := 0;
+  LPos := 1;
+  while LPos <= LLen do
+  begin
+    LStart := LPos;
+    LPos := NextLineBreak(AText, LPos);
+    if LPos > LStart then
+    begin
+      if LCount >= LCapacity then
+      begin
+        LCapacity := LCapacity * 2;
+        SetLength(LResults, LCapacity);
+      end;
+      LResults[LCount].Start := LStart;
+      LResults[LCount].Length := LPos - LStart;
+      LResults[LCount].SegmentType := stLineBreak;
+      Inc(LCount);
+    end
+    else
+      Break;
   end;
 
   SetLength(LResults, LCount);
@@ -1744,6 +1793,32 @@ begin
   if LBytes = 0 then
     Exit(APos);
   Result := APos + SizeInt(LBytes);
+end;
+
+function TUnicodeSegmenter.NextLineBreak(const AText: string; const APos: SizeInt): SizeInt;
+var
+  LLen: SizeInt;
+  LBytes: SizeUInt;
+begin
+  LLen := Length(AText);
+  if APos > LLen then
+    Exit(APos);
+  if APos < 1 then
+    Exit(APos);
+  LBytes := LineBreakByteLen(@AText[APos], SizeUInt(LLen - APos + 1));
+  if LBytes = 0 then
+    Exit(APos);
+  Result := APos + SizeInt(LBytes);
+end;
+
+function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt;
+begin
+  Result := UnicodeSegmenter.NextLineBreak(AText, APos);
+end;
+
+function SegmentLineBreaks(const AText: string): TSegmentResultArray;
+begin
+  Result := UnicodeSegmenter.SegmentLineBreaks(AText);
 end;
 
 initialization

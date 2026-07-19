@@ -6,6 +6,7 @@ uses
   nextpas.core.test,
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.types,
+  nextpas.core.text.unicode.segment,
   nextpas.core.text.unicode;
 
 var
@@ -183,6 +184,7 @@ procedure TestNextAPIs;
 var
   LSeg: IUnicodeSegmenter;
   LPos: SizeInt;
+  LSoft: TSegmentResultArray;
 begin
   LSeg := UnicodeSegmenter;
 
@@ -209,6 +211,19 @@ begin
   // NextLine: 从头开始 — LF 后是 Line2 的第一个字符
   LPos := LSeg.NextLine('Line1' + #10 + 'Line2', 1);
   Check(LPos > 5, 'NextLine advances past LF');
+
+  // NextLineBreak (UAX#14 soft): space is a break opportunity after "Hello"
+  LPos := LSeg.NextLineBreak('Hello World', 1);
+  CheckEqual(Int64(7), Int64(LPos), 'NextLineBreak after Hello+space');
+  // Hard NextLine on same string has no hard separator → past end
+  LPos := LSeg.NextLine('Hello World', 1);
+  CheckEqual(Int64(12), Int64(LPos), 'NextLine hard keeps whole string without LF');
+
+  // SegmentLineBreaks: soft segments
+  LSoft := LSeg.SegmentLineBreaks('Hello World');
+  Check(Length(LSoft) >= 2, 'SegmentLineBreaks soft-splits on space');
+  CheckEqual(Int64(Ord(stLineBreak)), Int64(Ord(LSoft[0].SegmentType)),
+    'SegmentLineBreaks uses stLineBreak');
 
   // NextSentence: 从头开始
   LPos := LSeg.NextSentence('Hello. World!', 1);

@@ -246,12 +246,11 @@ type
   IUnicodeSegmenter = interface
     function NextGraphemeCluster(const AText: string; APos: SizeInt): SizeInt;
     function NextWord(const AText: string; APos: SizeInt): SizeInt;
-    function NextLine(const AText: string; APos: SizeInt): SizeInt;
+    function NextLine(const AText: string; APos: SizeInt): SizeInt;       { hard }
     function NextSentence(const AText: string; APos: SizeInt): SizeInt;
-    function CountGraphemeClusters(const AText: string): SizeInt;
-    function SubstringByGraphemeClusters(const AText: string; AStart, ACount: SizeInt): string;
-    function GraphemeClusterByteLength(const AText: string; APos: SizeInt): SizeInt;
-    function ByteLength(const AText: string): SizeInt;
+    function NextLineBreak(const AText: string; APos: SizeInt): SizeInt;  { UAX#14 soft }
+    function SegmentLineBreaks(const AText: string): TSegmentResultArray;
+    { ... Segment* / Count* 等见源码 }
   end;
 ```
 
@@ -259,18 +258,17 @@ type
 |------|------|
 | `NextGraphemeCluster(Text, Pos)` | 下一个字素簇边界位置 |
 | `NextWord(Text, Pos)` | 下一个词边界位置 |
-| `NextLine(Text, Pos)` | 下一个换行机会位置 |
+| `NextLine(Text, Pos)` | **硬**行：CR/LF/NEL/LS/PS |
+| `NextLineBreak(Text, Pos)` | **软**行：UAX#14 换行机会（`LineBreakByteLen`） |
+| `SegmentLineBreaks(Text)` | 软行切段（`stLineBreak`） |
 | `NextSentence(Text, Pos)` | 下一个句子边界位置 |
-| `CountGraphemeClusters(Text)` | 统计字素簇数量 |
-| `SubstringByGraphemeClusters(Text, Start, Count)` | 按字素簇截取子串 |
-| `GraphemeClusterByteLength(Text, Pos)` | 当前字素簇的字节长度 |
-| `ByteLength(Text)` | 字符串总字节长度 |
 
 ```pascal
 var Seg := UnicodeSegmenter;
-Seg.CountGraphemeClusters('hello');           // → 5
-Seg.CountGraphemeClusters(Utf8Of([$1F600]));  // → 1 (emoji)
-Seg.NextWord('hello world', 1);               // → 6 (空格后)
+Seg.NextWord('hello world', 1);        // → 6
+Seg.NextLine('hello world', 1);        // → 12（无硬分隔符）
+Seg.NextLineBreak('hello world', 1);   // → 7（空格后机会）
+function LineBreakByteLen(Data, Len): SizeUInt; // 字节核
 ```
 
 ### UnicodeSegmenter

@@ -117,11 +117,13 @@ function SegmentGraphemeClusters(const AText: string): TSegmentResultArray; inli
 function SegmentWords(const AText: string): TSegmentResultArray; inline;
 function SegmentLines(const AText: string): TSegmentResultArray; inline;
 function SegmentSentences(const AText: string): TSegmentResultArray; inline;
+function SegmentLineBreaks(const AText: string): TSegmentResultArray; inline;
 { Shared UAX #29 grapheme-cluster core (byte-oriented). }
 function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
 function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
 function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
 function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
+function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt; inline;
 
 // 排序规则函数
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32; inline;
@@ -404,6 +406,11 @@ begin
   Result := nextpas.core.text.unicode.segment.UnicodeSegmenter.SegmentSentences(AText);
 end;
 
+function SegmentLineBreaks(const AText: string): TSegmentResultArray;
+begin
+  Result := nextpas.core.text.unicode.segment.SegmentLineBreaks(AText);
+end;
+
 function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 begin
   Result := nextpas.core.text.unicode.segment.GraphemeClusterByteLen(AData, ALen);
@@ -422,6 +429,11 @@ end;
 function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 begin
   Result := nextpas.core.text.unicode.segment.LineBreakByteLen(AData, ALen);
+end;
+
+function NextLineBreak(const AText: string; const APos: SizeInt): SizeInt;
+begin
+  Result := nextpas.core.text.unicode.segment.NextLineBreak(AText, APos);
 end;
 
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;
