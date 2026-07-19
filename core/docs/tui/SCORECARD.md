@@ -1,6 +1,6 @@
 # tui Scorecard
 
-**状态**: Wave Q1 Active
+**状态**: Wave Q1–Q5 Active
 **权威入口**: `core/tests/nextpas.core.tui/scorecard/`
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
 
@@ -34,6 +34,7 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 | SC3 | ParseOne ASCII / CSI 箭头 batch | kind 正确；ns/op |
 | SC4 | VerticalSplit 3 + Grid 4×4 | 区域不重叠、面积守恒 |
 | SC5 | Frame Begin/End 空帧（test runtime） | 成功完成；heaptrc 0 |
+| SC6 | Parse focus CSI I/O | kind=evFocus；正确性（可不记 ns） |
 
 规则：
 

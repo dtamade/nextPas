@@ -88,6 +88,10 @@ end;
 `Active=True`，并异步 query `CSI ? u`；收到 `CSI ? <flags> u` 且与默认 flags 有交集时置
 `Verified=True`。`LeaveTui` 配对 pop。
 
+终端 **focus reporting**（DECSET 1004）默认关闭；`TTerminalOptions.FocusReporting=True`
+时 EnterTui 启用，终端焦点变化以 `evFocus`（`fkIn`/`fkOut`）上报——不同于 ext 层的
+`TFocusManager` 控件焦点。
+
 ## 继续看哪里
 
 - 架构边界看 [ARCHITECTURE.md](./ARCHITECTURE.md)

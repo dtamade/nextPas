@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.6
+**版本**：1.7
 
 ---
 
@@ -139,6 +139,13 @@ end;
 - `LeaveTui` 发出 `CSI < u` 并收回 Active/Verified（`FallbackReason=session-ended`）
 - 解析：`TryParseKittyKeyboardFlagsReply`；不产生用户事件
 
+### 5.2 Terminal focus reporting（DECSET 1004）
+
+- `TTerminalOptions.FocusReporting`（默认 **False**，opt-in）
+- 启用时 `EnterTui` 发 `CSI ? 1004 h`，`LeaveTui` 配对 `CSI ? 1004 l`
+- 终端应答：`CSI I` → `evFocus`/`fkIn`；`CSI O` → `evFocus`/`fkOut`
+- 与 `nextpas.core.tui.focus` 的 **TFocusManager**（控件焦点）无关
+
 ---
 
 ## 6. 测试
@@ -167,6 +174,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.7 | DECSET 1004 focus reporting + 核心 suite 密度 ≥12 | Claude |
 | 2026-07-20 | 1.6 | Kitty keyboard query `CSI ? u` → Verified（非阻塞） | Claude |
 | 2026-07-19 | 1.5 | Wave Q1：scorecard + PARITY + bench_go_rust + 输入/clear/intf 加厚 | Claude |
 | 2026-07-19 | 1.4 | Kitty keyboard 会话 push/pop 协商 → Active | Claude |

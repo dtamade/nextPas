@@ -69,24 +69,14 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 
 ---
 
-## 4. 后续 Wave（非本批）
+## 4. Wave 状态
 
-| Wave | 内容 |
-|------|------|
-| Q2 | Kitty `CSI ? u` → Verified | **Done 2026-07-20**（非阻塞 query/reply） |
-| Q3 | full 稀疏 widget 加厚 | **Done 2026-07-20**（≥16 suites） |
-| Q4 | Windows console / 交叉 CI | **Done Wine smoke**（`test_tui_*_wine`；≠ real Windows） |
-| Q5 | facade 晋升策略 | 后续 |
-| Q6 | 可选完整 ratatui/crossterm crate 对照（重依赖） | 后续 |
-
-### Wine 证据等级（Q4）
-
-```bash
-make -C core/tests/nextpas.core.tui/test_tui_input_wine wine-runtime-smoke
-make -C core/tests/nextpas.core.tui/test_tui_buffer_wine wine-runtime-smoke
-make -C core/tests/nextpas.core.tui/test_tui_color_wine wine-runtime-smoke
-# 或由 core wine-smoke 发现 *_wine/*
-make -C core wine-smoke
-```
-
-`truth=wine-runtime-smoke`：Win64 交叉 + Wine 跑纯算法路径。**不是** real Windows console / GHA windows runner 就绪。
+| Wave | 内容 | 状态 |
+|------|------|------|
+| Q1 | PARITY / SCORECARD / bench_go_rust | **Done** |
+| Q2 | Kitty `CSI ? u` → Verified | **Done** |
+| Q3 | 稀疏 widget ≥16 | **Done** |
+| Q4 | Wine smoke input/buffer/color | **Done** |
+| Q5 | DECSET 1004 focus + 核心 suite 密度 | **本批** |
+| Q6 | facade 晋升策略 | 后续 |
+| Q7 | 完整 ratatui/crossterm crate 对照 | 后续 |
