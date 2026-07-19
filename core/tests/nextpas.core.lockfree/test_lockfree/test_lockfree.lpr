@@ -7218,9 +7218,12 @@ begin
     'procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;' + LineEnding +
     '  const AExpectedEpoch: Int32; const ATimeoutNs: Int64);',
     'lockfree space wait helper must receive the caller-observed epoch');
-  CheckContains(LWaitSource,
-    'if AtomicLoad32(AEpoch^, moAcquire) <> AExpectedEpoch then',
-    'lockfree wait helper must skip blocking when the epoch already advanced');
+  { Preferred path atomic_load(…, mo_acquire); legacy AtomicLoad32 still accepted. }
+  if (Pos('if atomic_load(AEpoch^, mo_acquire) <> AExpectedEpoch then', LWaitSource) = 0) and
+     (Pos('if AtomicLoad32(AEpoch^, moAcquire) <> AExpectedEpoch then', LWaitSource) = 0) then
+    raise EAssertionFailed.Create(
+      'lockfree wait helper must skip blocking when the epoch already advanced ' +
+      '(preferred atomic_load+mo_acquire or legacy AtomicLoad32+moAcquire)');
   CheckContains(LWaitSource, 'platform_wait_address32(AEpoch, AExpectedEpoch, ATimeoutNs);',
     'lockfree wait helper must wait on the caller-observed epoch');
   CheckContains(LSpscSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);',
@@ -7243,10 +7246,16 @@ begin
     'MPSC blocking dequeue must pass the observed data epoch to wait helper');
   CheckContains(LMpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
     'MPSC timeout dequeue must pass the observed data epoch to wait helper');
-  CheckContains(LWaitSource, 'AtomicFetchAdd32(AWaiters^, 1, moAcqRel)',
-    'lockfree wait helper must register waiters before blocking');
-  CheckContains(LWaitSource, 'AtomicFetchSub32(AWaiters^, 1, moAcqRel)',
-    'lockfree wait helper must unregister waiters after blocking');
+  if (Pos('atomic_fetch_add(AWaiters^, 1, mo_acq_rel)', LWaitSource) = 0) and
+     (Pos('AtomicFetchAdd32(AWaiters^, 1, moAcqRel)', LWaitSource) = 0) then
+    raise EAssertionFailed.Create(
+      'lockfree wait helper must register waiters before blocking ' +
+      '(preferred atomic_fetch_add+mo_acq_rel or legacy AtomicFetchAdd32)');
+  if (Pos('atomic_fetch_sub(AWaiters^, 1, mo_acq_rel)', LWaitSource) = 0) and
+     (Pos('AtomicFetchSub32(AWaiters^, 1, moAcqRel)', LWaitSource) = 0) then
+    raise EAssertionFailed.Create(
+      'lockfree wait helper must unregister waiters after blocking ' +
+      '(preferred atomic_fetch_sub+mo_acq_rel or legacy AtomicFetchSub32)');
   CheckContains(LBenchMakefile,
     '.PHONY: build run build-rust-compare run-rust-compare build-go-compare run-go-compare build-cpp-compare run-cpp-compare compare clean',
     'lockfree benchmark Makefile must expose Pascal and external baseline entrypoints');

@@ -1,10 +1,11 @@
 # Atomic / Lockfree — Q 线（Quality / Parity）
 
-> **状态**: **Q0 done** → **Q1 next**
+> **状态**: **Q0 done** · **Q1-a done** · wait 首选路径示范 · **Q1-b/Q2 继续**
 > **日期**: 2026-07-19
 > **Owner**: atomic-lockfree lane（全权）
 > **目标**: 对标 Go/Rust 的 **质量与可用规模**，并保持清洁
 > **编号**: **Q0–Q5**（**不是** R9；R8 仍为研究 opt-in）
+> **对标矩阵**: [`parity-go-rust.md`](parity-go-rust.md)
 
 权威契约仍是 [`CONTRACT.md`](CONTRACT.md)。状态入口 [`READY.md`](READY.md)。
 
@@ -90,6 +91,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 |------|------|
 | 2026-07-19 | Q 线章程入仓；Q0 门绿；merge origin/main；post-merge 门绿 → **Q0 done** |
 | 2026-07-19 | **Q1-a** legacy 消费者扫描入仓（§5）；不删 API；迁移按热点分批 |
+| 2026-07-19 | **parity-go-rust.md** 入仓；`lockfree.wait` 迁 `atomic_*`+`mo_*` 示范 |
 
 ---
 
