@@ -60,7 +60,9 @@ type
     {** 限制 stdout+stderr 累计捕获字节数；<=0 表示不限制。超限置 OutputLimited 并 Kill *}
     function MaxOutput(const ABytes: Int64): ICommand;
     {** 将子进程 stderr 写入与 stdout 同一管道（真时间交错，对齐 Go CombinedOutput）。
-     *  仅在 stdout 为 stPiped 时生效；合并后 WaitWithOutput 的 StdErr 为空。 *}
+     *  仅在 stdout 为 stPiped 时生效；合并后 WaitWithOutput 的 StdErr 为空。
+     *  优先级：stdout 为 stPiped 时 MergeStderr 覆盖 Stderr(stPiped/stInherit)；
+     *  与 Stderr(stNull) 冲突时 Spawn 抛 EProcessError。 *}
     function MergeStderr(const AEnable: Boolean = True): ICommand;
   end;
 
@@ -426,9 +428,15 @@ begin
     end;
 
     { MergeStderr: child stderr write end = stdout write end (true interleave).
-      Only when stdout is piped; otherwise fall through to normal stderr mode. }
+      Only when stdout is piped; otherwise fall through to normal stderr mode.
+      stNull + merge is contradictory (discard vs merge) — fail closed. }
     if FMergeStderr and (FStdoutMode = stPiped) and (LChildStdout >= 0) then
-      LChildStderr := LChildStdout
+    begin
+      if FStderrMode = stNull then
+        raise EProcessError.Create(
+          'MergeStderr conflicts with Stderr(stNull): cannot both discard and merge stderr');
+      LChildStderr := LChildStdout;
+    end
     else if FStderrMode = stPiped then
     begin
       LErr := platform_process_create_pipe(LStderrPipe[0], LStderrPipe[1]);

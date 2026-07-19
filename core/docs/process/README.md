@@ -164,7 +164,7 @@ WriteLn(Result.StdOut);  // "hello"
 | 只要文本且可忽略 exit | `Capture*` | **不检查退出码** |
 | 超时 | `.Timeout` 或 `RunTimeout` | 看 `TimedOut`；`Status` 返回 `TProcessOutput`（不捕获输出） |
 | 有界输出 | `.MaxOutput(N)` | stdout+stderr 累计；**默认无界（INV-10）**；超限 `OutputLimited` |
-| 合并 stderr | `.MergeStderr` / `Capture*Combined` | 真时间交错；`StdErr` 空、`StdOut` 为合并流 |
+| 合并 stderr | `.MergeStderr` / `Capture*Combined` | 真时间交错；`StdErr` 空、`StdOut` 为合并流；stdout piped 时覆盖 Stderr(stPiped/stInherit)；与 `Stderr(stNull)` 冲突抛错 |
 | PATH 查找 | `LookPath` / `TryLookPath` | 含目录部分也校验可执行 |
 
 ### 便利函数冻结策略

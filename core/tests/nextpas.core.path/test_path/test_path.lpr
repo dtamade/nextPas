@@ -46,6 +46,33 @@ begin
   Check(Pos(AToken, ASource) = 0, AMessage);
 end;
 
+{$I ../../fpc_rtl_uses_scan.inc}
+
+procedure AssertSourceNoBareFpcRtlUses(const ALabel, ASource: string);
+var
+  LHit: string;
+  LOk: Boolean;
+  LMsg: string;
+begin
+  LOk := not FindBareFpcRtlInUses(ASource, LHit);
+  LMsg := ALabel + ' — no bare FPC RTL in uses';
+  if not LOk then
+    LMsg := LMsg + ' (hit: ' + LHit + ')';
+  Check(LOk, LMsg);
+end;
+
+procedure TestPathOwnedSourcesNoFpcRtl;
+begin
+  AssertSourceNoBareFpcRtlUses('path src',
+    LoadSourceText('src/nextpas.core.path.pas'));
+end;
+
+procedure TestPathTestSuiteNoFpcRtl;
+begin
+  AssertSourceNoBareFpcRtlUses('path test',
+    LoadSourceText('tests/nextpas.core.path/test_path/test_path.lpr'));
+end;
+
 procedure TestPathJoin;
 begin
   Check(PathJoin('/home', 'user') = '/home/user', 'join basic');
@@ -464,6 +491,8 @@ begin
   T.Test('PathMatch edge cases', @TestPathMatchEdgeCases);
   T.Test('PathJoinN', @TestPathJoinN);
   T.Test('PathClean', @TestPathClean);
+  T.Test('path owned sources no bare FPC RTL uses', @TestPathOwnedSourcesNoFpcRtl);
+  T.Test('path test suite no bare FPC RTL uses', @TestPathTestSuiteNoFpcRtl);
 {$IFDEF NEXTPAS_WINDOWS}
   T.Test('Windows root wrapper contract', @TestWindowsRootWrapperContract);
 {$ENDIF}

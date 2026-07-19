@@ -6,10 +6,47 @@ uses
   nextpas.core.test,
   nextpas.core.errors,
   nextpas.core.text.base,
+  nextpas.core.fs,
   nextpas.core.os.env;
 
 var
   T: TTestSuite;
+
+{$I ../../fpc_rtl_uses_scan.inc}
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+begin
+  LSourcePath := PathAbs('../../../' + ARelativePath);
+  Check(Exists(LSourcePath), 'source exists: ' + ARelativePath);
+  Result := ReadFileText(LSourcePath);
+end;
+
+procedure AssertSourceNoBareFpcRtlUses(const ALabel, ASource: string);
+var
+  LHit: string;
+  LOk: Boolean;
+  LMsg: string;
+begin
+  LOk := not FindBareFpcRtlInUses(ASource, LHit);
+  LMsg := ALabel + ' — no bare FPC RTL in uses';
+  if not LOk then
+    LMsg := LMsg + ' (hit: ' + LHit + ')';
+  Check(LOk, LMsg);
+end;
+
+procedure TestEnvOwnedSourcesNoFpcRtl;
+begin
+  AssertSourceNoBareFpcRtlUses('env src',
+    LoadSourceText('src/nextpas.core.os.env.pas'));
+end;
+
+procedure TestEnvTestSuiteNoFpcRtl;
+begin
+  AssertSourceNoBareFpcRtlUses('env test',
+    LoadSourceText('tests/nextpas.core.os.env/test_os_env/test_os_env.lpr'));
+end;
 
 { --- existing tests --- }
 
@@ -471,5 +508,7 @@ begin
   T.Test('ExpandEnvStrict', @TestExpandEnvStrict);
   T.Test('ExpandEnvStrict_BraceSyntax', @TestExpandEnvStrict_BraceSyntax);
   T.Test('ExpandEnvStrict_EmptyValue', @TestExpandEnvStrict_EmptyValue);
+  T.Test('env owned sources no bare FPC RTL uses', @TestEnvOwnedSourcesNoFpcRtl);
+  T.Test('env test suite no bare FPC RTL uses', @TestEnvTestSuiteNoFpcRtl);
   if not T.Run then Halt(1);
 end.

@@ -104,6 +104,54 @@ begin
   Check(Pos(AToken, ASource) = 0, AMessage);
 end;
 
+{$I ../../fpc_rtl_uses_scan.inc}
+
+procedure AssertSourceNoBareFpcRtlUses(const ALabel, ASource: string);
+var
+  LHit: string;
+  LOk: Boolean;
+  LMsg: string;
+begin
+  LOk := not FindBareFpcRtlInUses(ASource, LHit);
+  LMsg := ALabel + ' — no bare FPC RTL in uses';
+  if not LOk then
+    LMsg := LMsg + ' (hit: ' + LHit + ')';
+  Check(LOk, LMsg);
+end;
+
+procedure TestFsOwnedSourcesNoFpcRtl;
+var
+  LFiles: array[0..8] of string;
+  LI: Integer;
+begin
+  LFiles[0] := 'src/nextpas.core.fs.pas';
+  LFiles[1] := 'src/nextpas.core.fs.base.pas';
+  LFiles[2] := 'src/nextpas.core.fs.dir.pas';
+  LFiles[3] := 'src/nextpas.core.fs.errors.pas';
+  LFiles[4] := 'src/nextpas.core.fs.glob.pas';
+  LFiles[5] := 'src/nextpas.core.fs.intf.pas';
+  LFiles[6] := 'src/nextpas.core.fs.path.pas';
+  LFiles[7] := 'src/nextpas.core.fs.stream.pas';
+  LFiles[8] := 'src/nextpas.core.fs.util.pas';
+  for LI := 0 to High(LFiles) do
+    AssertSourceNoBareFpcRtlUses('fs src ' + LFiles[LI], LoadSourceText(LFiles[LI]));
+end;
+
+procedure TestFsTestSuitesNoFpcRtl;
+var
+  LFiles: array[0..5] of string;
+  LI: Integer;
+begin
+  LFiles[0] := 'tests/nextpas.core.fs/test_fs/test_fs.lpr';
+  LFiles[1] := 'tests/nextpas.core.fs/test_fs_facade/test_fs_facade.lpr';
+  LFiles[2] := 'tests/nextpas.core.fs/test_fs_glob/test_fs_glob.lpr';
+  LFiles[3] := 'tests/nextpas.core.fs/test_fs_idir/test_fs_idir.lpr';
+  LFiles[4] := 'tests/nextpas.core.fs/test_fs_ifile/test_fs_ifile.lpr';
+  LFiles[5] := 'tests/nextpas.core.fs/test_fs_text/test_fs_text.lpr';
+  for LI := 0 to High(LFiles) do
+    AssertSourceNoBareFpcRtlUses('fs test ' + LFiles[LI], LoadSourceText(LFiles[LI]));
+end;
+
 function WalkErrorCallback(const APath: string; const AInfo: TFileInfo;
   const AErr: Exception): Boolean;
 begin
@@ -2066,6 +2114,8 @@ begin
     T.Test('Symlink + Readlink long target', @TestSymlinkReadlinkLongTarget);
     T.Test('Readlink regular file raises invalid operation', @TestReadlinkRegularFileRaisesInvalidOperation);
 {$ENDIF}
+    T.Test('fs owned sources no bare FPC RTL uses', @TestFsOwnedSourcesNoFpcRtl);
+    T.Test('fs test suites no bare FPC RTL uses', @TestFsTestSuitesNoFpcRtl);
 
   if not T.Run then Halt(1);
   finally

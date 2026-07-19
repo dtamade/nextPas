@@ -4,7 +4,7 @@
 **层级**：L2（依赖 L0-L1: platform, text, io, time）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：2.5
+**版本**：2.6
 
 ---
 
@@ -61,8 +61,8 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 - **[INV-8]** MaxOutput 超限：停缓冲、Kill、OutputLimited=True（不伪装 TimedOut）
 - **[INV-9]** 父保留管道端不可继承；Windows 用 PeekNamedPipe 并发 drain
 - **[INV-10]** 未设置 `MaxOutput`（默认 0）时 `Run`/`Capture*`/`Output` 可耗尽内存；生产请显式 `.MaxOutput(N)`（非 bug）
-- **[INV-11]** `MergeStderr` / `Capture*Combined`：子进程 stderr→stdout 同管道；合并流在 `StdOut`，`StdErr` 为空（时间交错，对齐 Go CombinedOutput）
-- **[INV-12]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.process*` 源码与 process 测试套件不得 `uses SysUtils/Classes/BaseUnix/Unix/Windows`；OS 能力仅经 `nextpas.core.platform.*` / 其他 core 模块。仅 `nextpas.core.system` 允许直接引用 FPC RTL。
+- **[INV-11]** `MergeStderr` / `Capture*Combined`：子进程 stderr→stdout 同管道；合并流在 `StdOut`，`StdErr` 为空（时间交错，对齐 Go CombinedOutput）。stdout 为 `stPiped` 时 Merge 覆盖 `Stderr(stPiped/stInherit)`；与 `Stderr(stNull)` 冲突时 `Spawn` 抛 `EProcessError`。
+- **[INV-12]** **FPC RTL 隔离 / 编译器无关**：`nextpas.core.process*` 源码与 process 测试套件不得 `uses` 裸 FPC RTL 单元（SysUtils/Classes/BaseUnix/Unix/Windows/…）；OS 能力仅经 `nextpas.core.platform.*` / 其他 core 模块。仅 `nextpas.core.system` 允许直接引用 FPC RTL。门禁：真实 uses 子句扫描（多行/末位单元），见 `core/tests/fpc_rtl_uses_scan.inc`。
 
 ---
 
@@ -120,3 +120,4 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 | 2026-07-19 | 2.3 | Status→TProcessOutput；INV-10 无界输出；L0 Win dual capture | Claude |
 | 2026-07-19 | 2.4 | MergeStderr 真 Combined；Status/Output 文档；测试数校准 | Claude |
 | 2026-07-19 | 2.5 | INV-12 FPC RTL 隔离；测试去 SysUtils/Classes；EINTR 测改 ThreadPool | Claude |
+| 2026-07-19 | 2.6 | 真 uses 门禁 + MergeStderr/stNull 冲突；共享 fpc_rtl_uses_scan.inc | Claude |

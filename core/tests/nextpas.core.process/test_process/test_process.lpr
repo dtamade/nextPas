@@ -492,14 +492,25 @@ begin
     'LCur := environ');
 end;
 
+{$I ../../fpc_rtl_uses_scan.inc}
+
+procedure AssertSourceNoBareFpcRtlUses(const ALabel, ASource: string);
+var
+  LHit: string;
+begin
+  Check(ALabel + ' — no bare FPC RTL in uses',
+    not FindBareFpcRtlInUses(ASource, LHit));
+  if LHit <> '' then
+    WriteLn('    (hit unit: ', LHit, ')');
+end;
+
 procedure TestProcessOwnedSourcesNoFpcRtl;
 var
   LFiles: array[0..5] of string;
   LI: Integer;
-  LSource: string;
 begin
-  { Compiler independence: only nextpas.core.system may use FPC RTL units.
-    Tokens are uses-clause shapes so comments / this gate's messages do not false-fail. }
+  { Real uses-clause scan (multi-line / trailing unit / no token false-negatives).
+    Dotted nextpas.core.platform.windows.* is legal. }
   LFiles[0] := 'src/nextpas.core.process.pas';
   LFiles[1] := 'src/nextpas.core.process.base.pas';
   LFiles[2] := 'src/nextpas.core.process.command.pas';
@@ -507,39 +518,43 @@ begin
   LFiles[4] := 'src/nextpas.core.process.pipe.pas';
   LFiles[5] := 'src/nextpas.core.process.pathresolve.pas';
   for LI := 0 to High(LFiles) do
-  begin
-    LSource := LoadSourceText(LFiles[LI]);
-    CheckAbsent('process src no uses SysUtils — ' + LFiles[LI], LSource, 'uses SysUtils');
-    CheckAbsent('process src no , SysUtils — ' + LFiles[LI], LSource, 'SysUtils,');
-    CheckAbsent('process src no uses Classes — ' + LFiles[LI], LSource, 'uses Classes');
-    CheckAbsent('process src no , Classes — ' + LFiles[LI], LSource, 'Classes,');
-    CheckAbsent('process src no uses BaseUnix — ' + LFiles[LI], LSource, 'uses BaseUnix');
-    CheckAbsent('process src no , BaseUnix — ' + LFiles[LI], LSource, 'BaseUnix,');
-    CheckAbsent('process src no uses Unix — ' + LFiles[LI], LSource, 'uses Unix');
-    CheckAbsent('process src no uses Windows — ' + LFiles[LI], LSource, 'uses Windows');
-  end;
+    AssertSourceNoBareFpcRtlUses('process src ' + LFiles[LI], LoadSourceText(LFiles[LI]));
 end;
 
 procedure TestProcessTestSuitesNoFpcRtl;
 var
-  LFiles: array[0..3] of string;
+  LFiles: array[0..4] of string;
   LI: Integer;
-  LSource: string;
 begin
-  { Skip self (this .lpr embeds the ban tokens as string literals in the gate). }
-  LFiles[0] := 'tests/nextpas.core.process/test_process_command/test_process_command.lpr';
-  LFiles[1] := 'tests/nextpas.core.process/test_process_deep/test_process_deep.lpr';
-  LFiles[2] :=
+  { Includes self: string literals in this gate are stripped before uses scan. }
+  LFiles[0] := 'tests/nextpas.core.process/test_process/test_process.lpr';
+  LFiles[1] := 'tests/nextpas.core.process/test_process_command/test_process_command.lpr';
+  LFiles[2] := 'tests/nextpas.core.process/test_process_deep/test_process_deep.lpr';
+  LFiles[3] :=
     'tests/nextpas.core.process/test_process_pipe_contract/test_process_pipe_contract.lpr';
-  LFiles[3] := 'tests/nextpas.core.process/test_process_wine/test_process_wine.lpr';
+  LFiles[4] := 'tests/nextpas.core.process/test_process_wine/test_process_wine.lpr';
   for LI := 0 to High(LFiles) do
-  begin
-    LSource := LoadSourceText(LFiles[LI]);
-    CheckAbsent('process test no uses SysUtils — ' + LFiles[LI], LSource, 'uses SysUtils');
-    CheckAbsent('process test no SysUtils, — ' + LFiles[LI], LSource, 'SysUtils,');
-    CheckAbsent('process test no uses Classes — ' + LFiles[LI], LSource, 'uses Classes');
-    CheckAbsent('process test no Classes, — ' + LFiles[LI], LSource, 'Classes,');
+    AssertSourceNoBareFpcRtlUses('process test ' + LFiles[LI], LoadSourceText(LFiles[LI]));
+end;
+
+procedure TestMergeStderrConflictsStderrNull;
+var
+  LRaised: Boolean;
+  LMsg: string;
+begin
+  LRaised := False;
+  LMsg := '';
+  try
+    Command('/bin/true').Stdout(stPiped).Stderr(stNull).MergeStderr.Spawn;
+  except
+    on E: EProcessError do
+    begin
+      LRaised := True;
+      LMsg := E.Message;
+    end;
   end;
+  Check('MergeStderr+Stderr(stNull) raises', LRaised);
+  Check('MergeStderr+Stderr(stNull) message', Pos('MergeStderr', LMsg) > 0);
 end;
 
 procedure TestSpawnStdinPipe;
@@ -1474,6 +1489,7 @@ begin
   TestProcessEnvSnapshotSourceContract;
   TestProcessOwnedSourcesNoFpcRtl;
   TestProcessTestSuitesNoFpcRtl;
+  TestMergeStderrConflictsStderrNull;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;
