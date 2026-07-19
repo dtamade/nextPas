@@ -29,7 +29,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │  .inc 数据层（自动生成）                                     │
 │  data.inc, props.inc, casefold.inc, normalize.inc,          │
-│  gcb.inc, wbp.inc, collate.inc, script.inc, block.inc       │
+│  gcb.inc, wbp.inc, sbp.inc, collate.inc, script.inc, block.inc       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -305,7 +305,7 @@ end;
 | `test_data` | IUnicodeDataManager |
 | **`test_conformance_normalize`** | **Unicode 16.0 NormalizationTest.txt 全量 (~19965)** |
 | **`test_conformance_grapheme`** | **Unicode 16.0 GraphemeBreakTest.txt 全量 (~1093)** |
-| **`test_conformance_word`** | **Unicode 16.0 WordBreakTest.txt 全量 (~1826)** |
+| **`test_conformance_word test_conformance_sentence`** | **Unicode 16.0 WordBreakTest.txt 全量 (~1826)** |
 
 ```bash
 # 手写套件
@@ -317,7 +317,7 @@ done
 # 官方 conformance（fixture 已 vendoring，离线可跑）
 make -C core/tests/nextpas.core.text.unicode/test_conformance_normalize clean test
 make -C core/tests/nextpas.core.text.unicode/test_conformance_grapheme clean test
-make -C core/tests/nextpas.core.text.unicode/test_conformance_word clean test
+make -C core/tests/nextpas.core.text.unicode/test_conformance_word test_conformance_sentence clean test
 ```
 
 重新生成 fixture（开发机，需网络）：

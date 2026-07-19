@@ -63,6 +63,10 @@ function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeU
   Returns bytes from AData to the next word break. }
 function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 
+{ Shared UAX #29 sentence-boundary core (byte-oriented).
+  Returns bytes from AData to the next sentence break. }
+function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+
 implementation
 
 uses
@@ -688,6 +692,292 @@ begin
   Result := LByteEnds[LCount - 1];
 end;
 
+function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+{**
+ * UAX #29 Sentence Boundary (Unicode 16.0), byte-oriented.
+ * Returns the number of bytes from AData to the next sentence break.
+ *}
+const
+  MAX_CPS = 512;
+var
+  LSb: array[0..MAX_CPS - 1] of TSentenceBreakProperty;
+  LByteEnds: array[0..MAX_CPS - 1] of SizeUInt;
+  LCount: Integer;
+  LPos: SizeUInt;
+  LDecode: TUTF8DecodeResult;
+  LI, LJ, LK: Integer;
+  LLeft, LRight: TSentenceBreakProperty;
+
+  function IsSentenceIgnorable(const ASb: TSentenceBreakProperty): Boolean; inline;
+  begin
+    Result := ASb in [sbpExtend, sbpFormat];
+  end;
+
+  function IsSATerm(const ASb: TSentenceBreakProperty): Boolean; inline;
+  begin
+    Result := ASb in [sbpSTerm, sbpATerm];
+  end;
+
+  function IsParaSep(const ASb: TSentenceBreakProperty): Boolean; inline;
+  begin
+    Result := ASb in [sbpSep, sbpCR, sbpLF];
+  end;
+
+  function PrevNonIgnorable(AFrom: Integer): Integer;
+  begin
+    Result := AFrom;
+    while (Result >= 0) and IsSentenceIgnorable(LSb[Result]) do
+      Dec(Result);
+  end;
+
+  function EndsWithSATermCloseSp(const AIdx: Integer): Boolean;
+  begin
+    LJ := PrevNonIgnorable(AIdx);
+    if LJ < 0 then
+      Exit(False);
+    if LSb[LJ] = sbpSp then
+    begin
+      while LJ >= 0 do
+      begin
+        if IsSentenceIgnorable(LSb[LJ]) then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        if LSb[LJ] = sbpSp then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        Break;
+      end;
+      LJ := PrevNonIgnorable(LJ);
+      if LJ < 0 then
+        Exit(False);
+    end;
+    if LSb[LJ] = sbpClose then
+    begin
+      while LJ >= 0 do
+      begin
+        if IsSentenceIgnorable(LSb[LJ]) then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        if LSb[LJ] = sbpClose then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        Break;
+      end;
+      LJ := PrevNonIgnorable(LJ);
+      if LJ < 0 then
+        Exit(False);
+    end;
+    Result := IsSATerm(LSb[LJ]);
+  end;
+
+  function EndsWithSATermClose(const AIdx: Integer): Boolean;
+  begin
+    LJ := PrevNonIgnorable(AIdx);
+    if LJ < 0 then
+      Exit(False);
+    if LSb[LJ] = sbpClose then
+    begin
+      while LJ >= 0 do
+      begin
+        if IsSentenceIgnorable(LSb[LJ]) then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        if LSb[LJ] = sbpClose then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        Break;
+      end;
+      LJ := PrevNonIgnorable(LJ);
+      if LJ < 0 then
+        Exit(False);
+    end;
+    Result := IsSATerm(LSb[LJ]);
+  end;
+
+  function EndsWithATermCloseSp(const AIdx: Integer): Boolean;
+  begin
+    LJ := PrevNonIgnorable(AIdx);
+    if LJ < 0 then
+      Exit(False);
+    if LSb[LJ] = sbpSp then
+    begin
+      while LJ >= 0 do
+      begin
+        if IsSentenceIgnorable(LSb[LJ]) then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        if LSb[LJ] = sbpSp then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        Break;
+      end;
+      LJ := PrevNonIgnorable(LJ);
+      if LJ < 0 then
+        Exit(False);
+    end;
+    if LSb[LJ] = sbpClose then
+    begin
+      while LJ >= 0 do
+      begin
+        if IsSentenceIgnorable(LSb[LJ]) then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        if LSb[LJ] = sbpClose then
+        begin
+          Dec(LJ);
+          Continue;
+        end;
+        Break;
+      end;
+      LJ := PrevNonIgnorable(LJ);
+      if LJ < 0 then
+        Exit(False);
+    end;
+    Result := LSb[LJ] = sbpATerm;
+  end;
+
+  function NoBreakBetween(const AIdx: Integer): Boolean;
+  { True if there is NO break opportunity between codepoint AIdx and AIdx+1. }
+  begin
+    Result := True;
+    if (AIdx < 0) or (AIdx + 1 >= LCount) then
+      Exit(True);
+
+    LLeft := LSb[AIdx];
+    LRight := LSb[AIdx + 1];
+
+    { SB3: CR × LF }
+    if (LLeft = sbpCR) and (LRight = sbpLF) then
+      Exit(True);
+
+    { SB4: (Sep | CR | LF) ÷ }
+    if IsParaSep(LLeft) then
+      Exit(False);
+
+    { SB5: do not break before Extend | Format }
+    if IsSentenceIgnorable(LRight) then
+      Exit(True);
+
+    LJ := PrevNonIgnorable(AIdx);
+    if LJ < 0 then
+      Exit(True);
+
+    { Extend/Format after ParaSep are not collapsed into prior base }
+    if IsSentenceIgnorable(LLeft) and IsParaSep(LSb[LJ]) then
+      Exit(True);
+
+    LLeft := LSb[LJ];
+    { LRight already non-ignorable }
+
+    { SB6: ATerm × Numeric }
+    if (LLeft = sbpATerm) and (LRight = sbpNumeric) then
+      Exit(True);
+
+    { SB7: (Upper | Lower) ATerm × Upper }
+    if (LLeft = sbpATerm) and (LRight = sbpUpper) then
+    begin
+      LK := PrevNonIgnorable(LJ - 1);
+      if (LK >= 0) and (LSb[LK] in [sbpUpper, sbpLower]) then
+        Exit(True);
+    end;
+
+    { SB8: ATerm Close* Sp* × (¬(OLetter | Upper | Lower | ParaSep | SATerm))* Lower }
+    if EndsWithATermCloseSp(AIdx) then
+    begin
+      LK := AIdx + 1;
+      while LK < LCount do
+      begin
+        if IsSentenceIgnorable(LSb[LK]) then
+        begin
+          Inc(LK);
+          Continue;
+        end;
+        if LSb[LK] = sbpLower then
+          Exit(True);
+        if LSb[LK] in [sbpOLetter, sbpUpper, sbpLower, sbpSep, sbpCR, sbpLF, sbpSTerm, sbpATerm] then
+          Break;
+        Inc(LK);
+      end;
+    end;
+
+    { SB8a: SATerm Close* Sp* × (SContinue | SATerm) }
+    if EndsWithSATermCloseSp(AIdx) and (LRight in [sbpSContinue, sbpSTerm, sbpATerm]) then
+      Exit(True);
+
+    { SB9: SATerm Close* × (Close | Sp | Sep | CR | LF) }
+    if EndsWithSATermClose(AIdx) and (LRight in [sbpClose, sbpSp, sbpSep, sbpCR, sbpLF]) then
+      Exit(True);
+
+    { SB10: SATerm Close* Sp* × (Sp | Sep | CR | LF) }
+    if EndsWithSATermCloseSp(AIdx) and (LRight in [sbpSp, sbpSep, sbpCR, sbpLF]) then
+      Exit(True);
+
+    { SB11: SATerm Close* Sp* (Sep | CR | LF)? ÷ }
+    if IsParaSep(LSb[AIdx]) then
+    begin
+      if EndsWithSATermCloseSp(AIdx - 1) then
+        Exit(False);
+    end
+    else if EndsWithSATermCloseSp(AIdx) then
+      Exit(False);
+
+    { SB12: Any × Any }
+    Result := True;
+  end;
+
+begin
+  if (AData = nil) or (ALen = 0) then
+    Exit(0);
+
+  LCount := 0;
+  LPos := 0;
+  while (LPos < ALen) and (LCount < MAX_CPS) do
+  begin
+    LDecode := UTF8Decode(@AData[LPos], ALen - LPos);
+    if LDecode.ByteLen = 0 then
+    begin
+      LSb[LCount] := sbpOther;
+      LPos := LPos + 1;
+    end
+    else
+    begin
+      LSb[LCount] := GetSentenceBreakProperty(LDecode.CodePoint);
+      LPos := LPos + SizeUInt(LDecode.ByteLen);
+    end;
+    LByteEnds[LCount] := LPos;
+    Inc(LCount);
+  end;
+
+  if LCount = 0 then
+    Exit(0);
+
+  for LI := 0 to LCount - 2 do
+  begin
+    if not NoBreakBetween(LI) then
+      Exit(LByteEnds[LI]);
+  end;
+
+  Result := LByteEnds[LCount - 1];
+end;
+
 function TUnicodeSegmenter.NextWord(const AText: string; const APos: SizeInt): SizeInt;
 var
   LLen: SizeInt;
@@ -774,110 +1064,17 @@ end;
 function TUnicodeSegmenter.NextSentence(const AText: string; const APos: SizeInt): SizeInt;
 var
   LLen: SizeInt;
-  LCodepoint: TUnicodeCodepoint;
-  LInSentence: Boolean;
-  LDecode: TUTF8DecodeResult;
+  LBytes: SizeUInt;
 begin
   LLen := Length(AText);
   if APos > LLen then
-  begin
-    Result := APos;
-    Exit;
-  end;
-
-  // 基于 UAX #29 简化实现：查找句子结束符
-  Result := APos;
-  LInSentence := False;
-  while Result <= LLen do
-  begin
-    // 解码 UTF-8 字符
-    LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
-    if LDecode.ByteLen = 0 then
-    begin
-      // 无效的 UTF-8 序列，跳过一个字节
-      if LInSentence then
-        Break;
-      Inc(Result);
-      Continue;
-    end;
-    LCodepoint := LDecode.CodePoint;
-
-    // 检查句子结束符（ASCII + CJK + 其他 Unicode 终止符）
-    case LCodepoint of
-      $002E, // .
-      $003F, // ?
-      $0021, // !
-      $3002, // 。 IDEOGRAPHIC FULL STOP
-      $FF01, // ！ FULLWIDTH EXCLAMATION MARK
-      $FF0E, // ． FULLWIDTH FULL STOP
-      $FF1F, // ？ FULLWIDTH QUESTION MARK
-      $2026, // … HORIZONTAL ELLIPSIS
-      $FE12, // ︒ PRESENTATION FORM FOR VERTICAL IDEOGRAPHIC FULL STOP
-      $FE15, // ︕ PRESENTATION FORM FOR VERTICAL EXCLAMATION MARK
-      $FE16, // ︖ PRESENTATION FORM FOR VERTICAL QUESTION MARK
-      $FE52, // ﹒ SMALL FULL STOP
-      $FE57, // ﹇ SMALL EXCLAMATION MARK
-      $FE5F: // ﹟ SMALL NUMBER SIGN
-      begin
-        Inc(Result, LDecode.ByteLen);
-        LInSentence := True;
-        // 跳过连续句子终止符（如 ... ?! !? 等）
-        while Result <= LLen do
-        begin
-          LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
-          if LDecode.ByteLen = 0 then
-            Break;
-          LCodepoint := LDecode.CodePoint;
-          case LCodepoint of
-            $002E, $003F, $0021, $3002, $FF01, $FF0E, $FF1F,
-            $2026, $FE12, $FE15, $FE16, $FE52, $FE57, $FE5F:
-              Inc(Result, LDecode.ByteLen);
-          else
-            Break;
-          end;
-        end;
-        // 遇到句子结束符后，跳过结尾引号/括号再停止
-        while Result <= LLen do
-        begin
-          LDecode := UTF8Decode(@AText[Result], LLen - Result + 1);
-          if LDecode.ByteLen = 0 then
-            Break;
-          LCodepoint := LDecode.CodePoint;
-          // 跳过结尾标点：引号、括号等
-          case LCodepoint of
-            $0022, // "
-            $0027, // '
-            $0029, // )
-            $005D, // ]
-            $007D, // }
-            $FF07, // ＇ FULLWIDTH APOSTROPHE
-            $FF09, // ） FULLWIDTH RIGHT PARENTHESIS
-            $300D, // 」 RIGHT CORNER BRACKET
-            $300F, // 』 RIGHT WHITE CORNER BRACKET
-            $3011, // 】 RIGHT BLACK LENTICULAR BRACKET
-            $2019, // ' RIGHT SINGLE QUOTATION MARK
-            $201D: // " RIGHT DOUBLE QUOTATION MARK
-              Inc(Result, LDecode.ByteLen);
-          else
-            Break;
-          end;
-        end;
-        Break;
-      end;
-      $000A, // LF
-      $000D, // CR
-      $0085, // NEL
-      $2028, // LS
-      $2029: // PS
-      begin
-        if LInSentence then
-          Break;
-        Inc(Result, LDecode.ByteLen);
-      end;
-    else
-      Inc(Result, LDecode.ByteLen);
-    end;
-  end;
+    Exit(APos);
+  if APos < 1 then
+    Exit(APos);
+  LBytes := SentenceBreakByteLen(@AText[APos], SizeUInt(LLen - APos + 1));
+  if LBytes = 0 then
+    Exit(APos);
+  Result := APos + SizeInt(LBytes);
 end;
 
 initialization

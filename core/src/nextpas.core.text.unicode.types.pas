@@ -311,6 +311,25 @@ type
     wbpWSegSpace = 18
   );
 
+  // Sentence_Break property (Unicode 16.0, UAX #29)
+  TSentenceBreakProperty = (
+    sbpOther = 0,
+    sbpCR = 1,
+    sbpLF = 2,
+    sbpExtend = 3,
+    sbpSep = 4,
+    sbpFormat = 5,
+    sbpSp = 6,
+    sbpLower = 7,
+    sbpUpper = 8,
+    sbpOLetter = 9,
+    sbpNumeric = 10,
+    sbpATerm = 11,
+    sbpSContinue = 12,
+    sbpSTerm = 13,
+    sbpClose = 14
+  );
+
   // Block 属性枚举（Unicode 16.0）
   TUnicodeBlock = (
     ubBasicLatin,

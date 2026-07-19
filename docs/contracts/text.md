@@ -53,7 +53,7 @@ function NFC/NFD/NFKC/NFKD(...): string;
 
 - 官方一致性：`NormalizationTest.txt`、`GraphemeBreakTest.txt`、`WordBreakTest.txt` 全量离线 harness
 - GB9c（InCB）已实现
-- Sentence/Line 为实用近似，**未**接官方 BreakTest 全量
+- Sentence 官方全量；Line 仍为硬换行近似
 
 ### 类型转换 (text.conv)
 

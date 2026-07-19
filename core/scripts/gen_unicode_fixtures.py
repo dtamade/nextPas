@@ -160,6 +160,12 @@ def write_word_fixture(text: str, out_path: str, version: str) -> int:
     )
 
 
+def write_sentence_fixture(text: str, out_path: str, version: str) -> int:
+    return write_break_fixture(
+        text, out_path, version, "auxiliary/SentenceBreakTest.txt"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Vendor Unicode conformance fixtures")
     parser.add_argument("--version", default=DEFAULT_VERSION)
@@ -188,6 +194,16 @@ def main() -> None:
         action="store_true",
         help="Only generate word_break_test.txt",
     )
+    parser.add_argument(
+        "--sentence-src",
+        default=None,
+        help="Local SentenceBreakTest.txt (skip download)",
+    )
+    parser.add_argument(
+        "--sentence-only",
+        action="store_true",
+        help="Only generate sentence_break_test.txt",
+    )
     args = parser.parse_args()
 
     os.makedirs(args.fixtures_dir, exist_ok=True)
@@ -210,6 +226,20 @@ def main() -> None:
         print(f"  Wrote {norm_path} ({n_norm} rows)", file=sys.stderr)
         print(f"  Wrote {gcb_path} ({n_gcb} rows)", file=sys.stderr)
 
+    if args.sentence_only:
+        if args.sentence_src:
+            sent_text = read_text_file(args.sentence_src)
+        else:
+            sent_text = download_ucd(args.version, "auxiliary/SentenceBreakTest.txt")
+        sent_path = os.path.join(args.fixtures_dir, "sentence_break_test.txt")
+        n_sent = write_sentence_fixture(sent_text, sent_path, args.version)
+        print(f"  Wrote {sent_path} ({n_sent} rows)", file=sys.stderr)
+        print("Done.", file=sys.stderr)
+        return
+
+    if not args.word_only:
+        pass  # normalization/grapheme handled above
+
     if args.word_src:
         word_text = read_text_file(args.word_src)
     else:
@@ -217,6 +247,14 @@ def main() -> None:
     word_path = os.path.join(args.fixtures_dir, "word_break_test.txt")
     n_word = write_word_fixture(word_text, word_path, args.version)
     print(f"  Wrote {word_path} ({n_word} rows)", file=sys.stderr)
+
+    if args.sentence_src:
+        sent_text = read_text_file(args.sentence_src)
+    else:
+        sent_text = download_ucd(args.version, "auxiliary/SentenceBreakTest.txt")
+    sent_path = os.path.join(args.fixtures_dir, "sentence_break_test.txt")
+    n_sent = write_sentence_fixture(sent_text, sent_path, args.version)
+    print(f"  Wrote {sent_path} ({n_sent} rows)", file=sys.stderr)
     print("Done.", file=sys.stderr)
 
 

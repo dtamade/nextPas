@@ -135,7 +135,7 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 ## 7. 已知限制
 
 1. Collation 仅 DUCET（无 CLDR locale）
-2. Sentence/Line 未接官方 BreakTest 全量
+2. Line 硬换行未接 UAX#14；Sentence 已官方 SentenceBreakTest
 3. 无 Bidi / UAX#14 完备化
 4. 无 CLDR tailored grapheme/word
 
