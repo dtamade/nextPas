@@ -24,7 +24,8 @@
 | **B** | 标准库质量（门面 Tier、契约矩阵、Default 双轨、Scorecard、DEBUG） | **CLOSED** | [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md)（90 天 M1–M3 全勾） |
 | **C** | 可用性 + 产品表 dual-track + consumer-audit 全修 | **CLOSED** | [USABILITY-SCORE.md](USABILITY-SCORE.md) · [CONSUMER-AUDIT-SUMMARY-2026-07-17.md](CONSUMER-AUDIT-SUMMARY-2026-07-17.md) |
 | **D** | **平台 steward**：回归锁、按需集成、性能可信、治理卫生 | **Steady** | 下文 §4 |
-| **E** | **Go/Rust 对标**：可证明性能 + stdlib 表面规模 + 生产路径 | **Active** | [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · 下文 §4b |
+| **E** | **Go/Rust 对标**：可证明性能 + stdlib 表面规模 + 生产路径 | **Steady+** | [PARITY-GO-RUST.md](PARITY-GO-RUST.md) · 下文 §4b |
+| **F** | **Steady+ 加固**：文档证据 + 门面可发现性 | **Active** | 下文 §4c |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -132,7 +133,23 @@ D9 观测是 **证据快照**，不是新功能 backlog：删 Tier-3 / 改 consu
 
 ---
 
-## 5. 明确不做（时代 D/E 有效期内）
+## 4c. 时代 F — Steady+ 加固（Active）
+
+**目标**: 证据常绿、文档不撒谎、门面可发现（像 Go/Rust std 入口），**不**回潮博物馆。
+
+| Slice | 内容 | 状态 |
+|-------|------|------|
+| F0 | ROADMAP/PARITY/README/CONSUMER 状态对齐 | **done** 2026-07-20 |
+| F1 | SCORECARD RELEASE 刷新（P-a/P-b 后） | **done** 2026-07-20 |
+| F2 | 门面 slim **设计**（本批不删 re-export） | **done** 见 [FACADES-SLIM-DESIGN-2026-07-20.md](FACADES-SLIM-DESIGN-2026-07-20.md) |
+| F3 | 门面收紧执行（按 F2 小批） | 待批准 |
+| F4–F8 | FreeMemOf 样板 / 微税 / memutils / cross-OS / soak | 按需 |
+
+默认 F 有效期：**只 F0–F2 文档+证据**；F3 需显式批准（re-export breaking）。
+
+---
+
+## 5. 明确不做（时代 D/E/F 有效期内）
 
 1. 新开「Phase 29：再加一打 allocator」
 2. 全仓库 unsized `FreeMem` 机械替换
@@ -191,3 +208,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-19 | E3：SC1 对齐 heap 段；CachedTruthyEnv 去 CAS-as-load + process route 单缓存；P2 成立 |
 | 2026-07-19 | E4-c/d：openssl DER/stack/param/utils + OPENSSL-HEAP-DISCIPLINE；E4/E6 关闭 |
 | 2026-07-19 | E5 P-b：删 15 Tier-3 allocator + 21 test 目录；保留 blockpool.growable |
+| 2026-07-20 | Era F 开启：F0 状态对齐 · F1 Scorecard · F2 门面 slim 设计 |
