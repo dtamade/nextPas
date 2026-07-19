@@ -12,7 +12,11 @@ uses
   nextpas.core.process.base,
   nextpas.core.process.child,
   nextpas.core.process.command,
-  nextpas.core.process.pipe;
+  nextpas.core.process.pipe,
+  nextpas.core.fs,
+  nextpas.core.platform.process,
+  nextpas.core.platform.thread,
+  nextpas.core.text.conv;
 
 var
   T: TTestSuite;
@@ -411,6 +415,53 @@ begin
   Check(not ProcessSucceeded(LOut), 'Merge+MaxOutput — not succeeded');
 end;
 
+{ R24: process group + KillTree }
+procedure TestNewProcessGroupKillTree;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+  LMarker: string;
+  LExists: Boolean;
+  I: Integer;
+begin
+  LMarker := '/tmp/nextpas_r24_pg_' + IntToStr(platform_getpid) + '.alive';
+  if Exists(LMarker) then
+    Remove(LMarker);
+  LChild := Command('/bin/sh')
+    .Args(['-c',
+      'sleep 60 & echo $! > "' + LMarker + '"; wait'])
+    .NewProcessGroup
+    .Spawn;
+  Check(LChild.ProcessGroupId = LChild.Pid, 'pgid equals pid for leader');
+  LExists := False;
+  for I := 1 to 50 do
+  begin
+    if Exists(LMarker) then
+    begin
+      LExists := True;
+      Break;
+    end;
+    platform_thread_sleep_ns(20000000);
+  end;
+  Check(LExists, 'grandchild marker created');
+  LChild.KillTree;
+  LOut := LChild.Wait;
+  Check(LOut.Status <> psRunning, 'KillTree terminated shell');
+  Check(LChild.ProcessGroupId > 0, 'pgid retained');
+end;
+
+procedure TestKillTreeWithoutGroup;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := Command('/bin/sleep').Arg('30').Spawn;
+  CheckEqual(Int64(0), Int64(LChild.ProcessGroupId), 'no group -> pgid 0');
+  LChild.KillTree;
+  LOut := LChild.Wait;
+  Check(LOut.Status <> psRunning, 'KillTree without group kills process');
+end;
+
 { --- Main --- }
 
 begin
@@ -439,5 +490,7 @@ begin
   T.Test('R22 CancelToken Status edges', @TestCancelTokenOnStatusBuilder);
   T.Test('R22 Double Wait cached', @TestDoubleWaitReturnsCached);
   T.Test('R22 MergeStderr MaxOutput', @TestMergeStderrMaxOutput);
+  T.Test('R24 NewProcessGroup KillTree', @TestNewProcessGroupKillTree);
+  T.Test('R24 KillTree without group', @TestKillTreeWithoutGroup);
   if not T.Run then Halt(1);
 end.

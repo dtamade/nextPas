@@ -201,6 +201,10 @@ B30  可复现子集 + 消费抽检 (2026-07-20)                          ✅
   B30.1  run-scorecard-subset.sh + scorecard-tracks.txt        ✅
   B30.2  consumer-checklist.md (hash/vec/json)                 ✅
   B30.3  archive/README 权威 vs 历史索引                       ✅
+
+B31  仓库入口 + 消费扩面 (2026-07-20)                            ✅
+  B31.1  make bench-module-test / bench-scorecard-smoke        ✅
+  B31.2  --summary TSV；checklist ≥8 模块                      ✅
 ```
 
 ## 测试套件分布

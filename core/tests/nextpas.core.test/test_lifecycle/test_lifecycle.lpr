@@ -387,6 +387,16 @@ end;
 
 var
   GSetupFailTeardownCalled: Integer = 0;
+  GSetupFailBodyCalled: Integer = 0;
+  GTeardownBoomSurvived: Integer = 0;
+  GBeforeEachBoomBody: Integer = 0;
+  GBeforeEachBoomAfter: Integer = 0;
+
+procedure SimpleTrueIncBody;
+begin
+  Inc(GSetupFailBodyCalled);
+  CheckTrue(True);
+end;
 
 procedure R657SetupFailTeardown;
 var
@@ -402,6 +412,130 @@ begin
   { When Setup fails, Teardown should NOT run (no teardown for partial init) }
   CheckEqual(GSetupFailTeardownCalled, 0);
   CheckTrue(LResult.Failed >= 1, 'Setup failure should count as failure');
+  LSuite := Default(TTestSuite);
+end;
+
+{ ── B10: Setup failure deep contract ──────────────────────────────────────── }
+
+procedure B10SetupFailBodyNotRun;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LFoundSetupError: Boolean;
+  LFoundSkipped: Boolean;
+begin
+  GSetupFailBodyCalled := 0;
+  GSetupFailTeardownCalled := 0;
+  LSuite := TTestSuite.Create('setup-fail-body');
+  LSuite.SetSetup(procedure begin raise EConvertError.Create('setup boom'); end);
+  LSuite.SetTeardown(procedure begin Inc(GSetupFailTeardownCalled); end);
+  LSuite.Test('body-a', @SimpleTrueIncBody);
+  LSuite.Test('body-b', @SimpleTrueIncBody);
+  LSuite.RunWithResult(LResult);
+  CheckEqual(GSetupFailBodyCalled, 0, 'body must not run after setup fail');
+  CheckEqual(GSetupFailTeardownCalled, 0, 'teardown must not run after setup fail');
+  LFoundSetupError := False;
+  LFoundSkipped := False;
+  for I := 0 to High(LResult.Results) do
+  begin
+    if (LResult.Results[I].Name = '[setup]') and
+       (LResult.Results[I].Status = tsError) then
+      LFoundSetupError := True;
+    if (LResult.Results[I].Status = tsSkipped) and
+       (Pos('setup failed', LResult.Results[I].Message) > 0) then
+      LFoundSkipped := True;
+  end;
+  CheckTrue(LFoundSetupError, 'expect synthetic [setup] tsError');
+  CheckTrue(LFoundSkipped, 'expect per-test tsSkipped with setup failed');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure B10SetupSkipViaETestSkipped;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LOk: Boolean;
+  I: Integer;
+  LFoundSkipped: Boolean;
+begin
+  { R4-01: setup ETestSkipped skips all tests but suite Result=False
+    (synthetic [setup] path). Body must never run. }
+  GSetupFailBodyCalled := 0;
+  LSuite := TTestSuite.Create('setup-skip');
+  LSuite.SetSetup(procedure
+    begin
+      raise ETestSkipped.Create('setup short-circuit');
+    end);
+  LSuite.Test('should-skip', @SimpleTrueIncBody);
+  LOk := LSuite.RunWithResult(LResult);
+  CheckEqual(GSetupFailBodyCalled, 0, 'body not run on setup skip');
+  CheckFalse(LOk, 'R4-01: setup skip makes suite not AllPassed');
+  LFoundSkipped := False;
+  for I := 0 to High(LResult.Results) do
+    if LResult.Results[I].Status = tsSkipped then
+      LFoundSkipped := True;
+  CheckTrue(LFoundSkipped, 'tests recorded as skipped after setup skip');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure B10TeardownExceptionSwallowed;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  LOk: Boolean;
+begin
+  GTeardownBoomSurvived := 0;
+  LSuite := TTestSuite.Create('teardown-boom');
+  LSuite.SetTeardown(procedure
+    begin
+      raise EConvertError.Create('teardown boom');
+    end);
+  LSuite.Test('still-pass', procedure
+    begin
+      Inc(GTeardownBoomSurvived);
+      CheckTrue(True);
+    end);
+  LOk := LSuite.RunWithResult(LResult);
+  CheckEqual(GTeardownBoomSurvived, 1, 'test body ran');
+  CheckTrue(LOk, 'teardown exception must not fail the suite');
+  CheckTrue(LResult.Passed >= 1, 'test still passed');
+  CheckTrue(LResult.Failed = 0, 'no failure from teardown');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure B10BeforeEachFailSkipsBodyRunsAfterEach;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LFoundBeforeEach: Boolean;
+begin
+  GBeforeEachBoomBody := 0;
+  GBeforeEachBoomAfter := 0;
+  LSuite := TTestSuite.Create('beforeeach-boom');
+  LSuite.OnBeforeEach(procedure
+    begin
+      raise EConvertError.Create('beforeEach boom');
+    end);
+  LSuite.OnAfterEach(procedure
+    begin
+      Inc(GBeforeEachBoomAfter);
+    end);
+  LSuite.Test('body', procedure
+    begin
+      Inc(GBeforeEachBoomBody);
+      CheckTrue(True);
+    end);
+  LSuite.RunWithResult(LResult);
+  CheckEqual(GBeforeEachBoomBody, 0, 'body skipped when BeforeEach fails');
+  CheckEqual(GBeforeEachBoomAfter, 1, 'AfterEach still runs after BeforeEach fail');
+  LFoundBeforeEach := False;
+  for I := 0 to High(LResult.Results) do
+    if (LResult.Results[I].Status = tsError) and
+       (Pos('beforeEach failed', LResult.Results[I].Message) > 0) then
+      LFoundBeforeEach := True;
+  CheckTrue(LFoundBeforeEach, 'result message mentions beforeEach failed');
   LSuite := Default(TTestSuite);
 end;
 
@@ -530,6 +664,11 @@ begin
   Suite.Test('TestFacadeSymbols', @TestFacadeSymbols);
   Suite.Test('TestResultAppenderResultsProperty', @TestResultAppenderResultsProperty);
   Suite.Test('R657SetupFailTeardown', @R657SetupFailTeardown);
+  Suite.Test('B10SetupFailBodyNotRun', @B10SetupFailBodyNotRun);
+  Suite.Test('B10SetupSkipViaETestSkipped', @B10SetupSkipViaETestSkipped);
+  Suite.Test('B10TeardownExceptionSwallowed', @B10TeardownExceptionSwallowed);
+  Suite.Test('B10BeforeEachFailSkipsBodyRunsAfterEach',
+    @B10BeforeEachFailSkipsBodyRunsAfterEach);
 
   { E-04: TTestConfigBuilder }
   Suite.Test('ConfigBuilder', @TestConfigBuilder);
@@ -541,7 +680,7 @@ begin
   WriteLn;
   Runner.Summary;
 
-  CheckTrue(LResults[0].Passed >= 15, 'Expected at least 15 tests, got ' + IntToStr(LResults[0].Passed));
+  CheckTrue(LResults[0].Passed >= 19, 'Expected at least 19 tests, got ' + IntToStr(LResults[0].Passed));
   CheckTrue(LSuccess, 'All lifecycle tests should pass');
 
   if Runner.AllPassed then

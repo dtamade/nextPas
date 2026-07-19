@@ -1091,6 +1091,12 @@ function fstatfs(fd: cint; buf: Pointer): cint; cdecl; external 'c' name 'fstatf
     @return 进程组 ID *}
 function getpgrp: pid_t; cdecl; external 'c' name 'getpgrp';
 
+{** @desc 设置进程组（pid/pgid 为 0 表示当前进程）
+    @param pid 进程 ID
+    @param pgid 进程组 ID
+    @return 0 成功 *}
+function setpgid(pid: pid_t; pgid: pid_t): Int32; cdecl; external 'c' name 'setpgid';
+
 {** @desc 设置进程组 ID
     @return 进程组 ID *}
 function setpgrp: pid_t; cdecl; external 'c' name 'setpgrp';

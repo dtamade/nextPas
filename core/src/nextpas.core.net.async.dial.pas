@@ -3,6 +3,7 @@ unit nextpas.core.net.async.dial;
  * Concurrent Happy Eyeballs (RFC8305 subset) over TAsyncLoop.
  * Staggered multi-A / dual-stack dial: MaxInFlight attempts in parallel,
  * ConnectionAttemptDelay between starts; first success wins.
+ * DNS uses AsyncResolveEx (parallel A/AAAA + Resolution Delay).
  * AsyncTcpConnect remains HE-lite (sequential sync). Use AsyncTcpDial for race.
  *}
 
@@ -18,6 +19,12 @@ uses
   nextpas.core.async.cancellation,
   nextpas.core.net.async.tcp;
 
+const
+  HE_DEFAULT_CONNECTION_ATTEMPT_DELAY_MS = 250;
+  HE_DEFAULT_RESOLUTION_DELAY_MS = 50;
+  HE_DEFAULT_MAX_IN_FLIGHT = 2;
+  HE_DEFAULT_FIRST_ADDRESS_FAMILY_COUNT = 1;
+
 type
   TAsyncTcpDialOptions = record
     ConnectionAttemptDelayMs: UInt32; { default 250 }
@@ -26,6 +33,8 @@ type
     Token: IAsyncCancellationToken;   { optional }
     PreferIPv6First: Boolean;         { first family in interleaved order }
     InterleaveFamilies: Boolean;      { default True: vX[0],vY[0],vX[1]... }
+    FirstAddressFamilyCount: UInt32;  { default 1: lead N of preferred family }
+    ResolutionDelayMs: UInt32;        { DNS Resolution Delay; default 50 }
   end;
 
   TAsyncTcpDialCallback = procedure(AStream: IAsyncTcpStream; AError: Int32;
@@ -120,12 +129,14 @@ procedure DialDiscardTimer(AContext: Pointer); forward;
 function DefaultAsyncTcpDialOptions: TAsyncTcpDialOptions;
 begin
   FillChar(Result, SizeOf(Result), 0);
-  Result.ConnectionAttemptDelayMs := 250;
-  Result.MaxInFlight := 2;
+  Result.ConnectionAttemptDelayMs := HE_DEFAULT_CONNECTION_ATTEMPT_DELAY_MS;
+  Result.MaxInFlight := HE_DEFAULT_MAX_IN_FLIGHT;
   Result.OverallDeadline := TDeadline.Infinite;
   Result.Token := nil;
   Result.PreferIPv6First := False;
   Result.InterleaveFamilies := True;
+  Result.FirstAddressFamilyCount := HE_DEFAULT_FIRST_ADDRESS_FAMILY_COUNT;
+  Result.ResolutionDelayMs := HE_DEFAULT_RESOLUTION_DELAY_MS;
 end;
 
 function InvalidSocket: TPlatformSocket;
@@ -142,9 +153,10 @@ begin
   FPort := APort;
   FOptions := AOptions;
   if FOptions.ConnectionAttemptDelayMs = 0 then
-    FOptions.ConnectionAttemptDelayMs := 250;
+    FOptions.ConnectionAttemptDelayMs := HE_DEFAULT_CONNECTION_ATTEMPT_DELAY_MS;
   if FOptions.MaxInFlight = 0 then
-    FOptions.MaxInFlight := 2;
+    FOptions.MaxInFlight := HE_DEFAULT_MAX_IN_FLIGHT;
+  { FirstAddressFamilyCount: 0 means "no lead prefix" (pure interleave). }
   FUserCb := ACallback;
   FUserCtx := AContext;
   FNextIndex := 0;
@@ -211,8 +223,9 @@ end;
 procedure TAsyncTcpDialer.OrderAddresses;
 var
   LV4, LV6, LOut: array of TNetAddress;
-  LI, N4, N6, O, I4, I6: Integer;
+  LI, N4, N6, O, I4, I6, LLead, LTake: Integer;
   LTakeV6: Boolean;
+  LLeadIsV6: Boolean;
 begin
   if Length(FAddrs) <= 1 then
     Exit;
@@ -233,30 +246,61 @@ begin
       Inc(N4);
     end;
 
-  if not FOptions.InterleaveFamilies then
+  SetLength(LOut, N4 + N6);
+  O := 0;
+  I4 := 0;
+  I6 := 0;
+
+  { RFC First Address Family Count: lead with N of preferred family. }
+  LLead := Integer(FOptions.FirstAddressFamilyCount);
+  LLeadIsV6 := FOptions.PreferIPv6First;
+  if LLead > 0 then
   begin
-    { Bucket order only }
-    SetLength(LOut, N4 + N6);
-    O := 0;
-    if FOptions.PreferIPv6First then
+    if LLeadIsV6 then
     begin
-      for LI := 0 to N6 - 1 do begin LOut[O] := LV6[LI]; Inc(O); end;
-      for LI := 0 to N4 - 1 do begin LOut[O] := LV4[LI]; Inc(O); end;
+      LTake := LLead;
+      if LTake > N6 then
+        LTake := N6;
+      for LI := 0 to LTake - 1 do
+      begin
+        LOut[O] := LV6[I6];
+        Inc(I6);
+        Inc(O);
+      end;
     end
     else
     begin
-      for LI := 0 to N4 - 1 do begin LOut[O] := LV4[LI]; Inc(O); end;
-      for LI := 0 to N6 - 1 do begin LOut[O] := LV6[LI]; Inc(O); end;
+      LTake := LLead;
+      if LTake > N4 then
+        LTake := N4;
+      for LI := 0 to LTake - 1 do
+      begin
+        LOut[O] := LV4[I4];
+        Inc(I4);
+        Inc(O);
+      end;
+    end;
+  end;
+
+  if not FOptions.InterleaveFamilies then
+  begin
+    if FOptions.PreferIPv6First then
+    begin
+      while I6 < N6 do begin LOut[O] := LV6[I6]; Inc(I6); Inc(O); end;
+      while I4 < N4 do begin LOut[O] := LV4[I4]; Inc(I4); Inc(O); end;
+    end
+    else
+    begin
+      while I4 < N4 do begin LOut[O] := LV4[I4]; Inc(I4); Inc(O); end;
+      while I6 < N6 do begin LOut[O] := LV6[I6]; Inc(I6); Inc(O); end;
     end;
   end
   else
   begin
-    { RFC8305-style interleave: alternate families }
-    SetLength(LOut, N4 + N6);
-    O := 0;
-    I4 := 0;
-    I6 := 0;
-    LTakeV6 := FOptions.PreferIPv6First;
+    if (LLead > 0) and ((LLeadIsV6 and (I6 > 0)) or ((not LLeadIsV6) and (I4 > 0))) then
+      LTakeV6 := not LLeadIsV6
+    else
+      LTakeV6 := FOptions.PreferIPv6First;
     while (I4 < N4) or (I6 < N6) do
     begin
       if LTakeV6 then
@@ -289,7 +333,6 @@ begin
         Inc(I6);
         Inc(O);
       end;
-      { if one family exhausted, loop continues with the other via checks }
       if (I4 >= N4) and (I6 >= N6) then
         Break;
       if LTakeV6 and (I6 >= N6) and (I4 < N4) then
@@ -299,8 +342,8 @@ begin
     end;
   end;
 
-  SetLength(FAddrs, Length(LOut));
-  for LI := 0 to High(LOut) do
+  SetLength(FAddrs, O);
+  for LI := 0 to O - 1 do
     FAddrs[LI] := LOut[LI];
 end;
 
@@ -386,7 +429,6 @@ begin
   if AtomicLoad32(FFinished, moAcquire) <> 0 then
     Exit;
 
-  { Always consume this index. }
   if AIndex = FNextIndex then
     Inc(FNextIndex)
   else if AIndex > FNextIndex then
@@ -532,8 +574,13 @@ begin
 end;
 
 procedure TAsyncTcpDialer.BeginWithHost(const AHost: string);
+var
+  LDnsOpts: TDnsResolveOptions;
 begin
-  if not AsyncResolve(FLoop, AHost, @DialResolveCallback, Self) then
+  LDnsOpts := DefaultDnsResolveOptions;
+  LDnsOpts.ResolutionDelayMs := FOptions.ResolutionDelayMs;
+  LDnsOpts.PreferIPv6First := FOptions.PreferIPv6First;
+  if not AsyncResolveEx(FLoop, AHost, LDnsOpts, @DialResolveCallback, Self) then
     FinishFail(-ECONNREFUSED_LINUX);
 end;
 

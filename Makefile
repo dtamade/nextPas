@@ -2,7 +2,7 @@ TEST_FILTER ?= smoke
 BASE_REF ?= main
 CORE_CI_HOST ?= host
 
-.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract
+.PHONY: rebuild-compiler stage0 stage0-heap-debug-recipe verify test test-smoke test-tooling test-compiler-incremental-cache test-compiler-constructor-typing test-incremental-gate test-compiler-system-intrinsics focused lane-focused landing-check core-ci-test core-ci-best-effort-test self-compile-module self-compile-modules c8-probe-np-allocator system-projection-check system-projection-sync hygiene clean clean-artifacts contract bench-module-test bench-scorecard-smoke
 
 rebuild-compiler:
 	./scripts/rebuild-compiler.sh
@@ -67,6 +67,15 @@ focused: hygiene
 lane-focused: hygiene
 	./scripts/lane-focused.sh --lane "$(LANE)"
 	$(MAKE) hygiene
+
+# nextpas.core.bench module gate (all suites under core/tests/nextpas.core.bench)
+bench-module-test: hygiene
+	$(MAKE) -C core/tests/nextpas.core.bench clean test
+	$(MAKE) hygiene
+
+# Lightweight scorecard smoke (single fast track; needs fpc + go)
+bench-scorecard-smoke:
+	bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks inttohex --summary
 
 landing-check: hygiene
 	@test -n "$(ALLOW_PATHS)" || { echo "ALLOW_PATHS is required, e.g. make landing-check ALLOW_PATHS='scripts tests/tooling docs/worktrees.md'" >&2; exit 1; }

@@ -118,17 +118,17 @@ make -C core/benchmarks/nextpas.core.bench clean test
 ## 8b. 轻量跨语言子集重跑
 
 ```bash
-# 列出 track
+# 仓库根一键 smoke
+make bench-scorecard-smoke
+
+# 列出 / 全量 / 部分 / TSV 摘要
 bash core/docs/bench/scripts/run-scorecard-subset.sh --list
-
-# 跑全部清单（产物在 $TMPDIR，自动清理）
 bash core/docs/bench/scripts/run-scorecard-subset.sh
-
-# 只跑部分
 bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks boolsum,inttohex
+bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks inttohex --summary
 ```
 
-清单文件：`scorecard-tracks.txt`。数字表：`scorecard-subset-2026-07-19.md`。
+清单：`scorecard-tracks.txt`。数字表：`scorecard-subset-2026-07-19.md`。
 
 ## 9. 不要做的事
 

@@ -613,6 +613,7 @@ var
   LCall: TMockCall;
   I: Integer;
 begin
+  CheckThread('RecordCallTyped');
   InitCallRecord(LCall, AMethodName);
   SetLength(LCall.Args, Length(AArgs));
   SetLength(LCall.TypedArgs, Length(AArgs));

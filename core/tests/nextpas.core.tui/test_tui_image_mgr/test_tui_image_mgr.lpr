@@ -54,7 +54,7 @@ var
 begin
   LMgr := TImageManager.Create(ipKitty);
   LMgr.InvalidateAll;
-  LMgr.InvalidateAll; // idempotent
+  LMgr.InvalidateAll;
   Check(True, 'InvalidateAll twice should not crash');
   LMgr.Free;
 end;
@@ -64,7 +64,6 @@ var
   LMgr: TImageManager;
 begin
   LMgr := TImageManager.Create(ipSixel);
-  // No Resolve called, slot count = 0
   LMgr.InvalidateAll;
   Check(True, 'InvalidateAll on empty manager should not crash');
   LMgr.Free;
@@ -82,6 +81,76 @@ begin
   LMgr2.Free;
 end;
 
+procedure TestImageManagerCreateAuto;
+var
+  LMgr: TImageManager;
+begin
+  LMgr := TImageManager.Create(ipAuto);
+  try
+    Check(LMgr <> nil, 'auto protocol manager');
+  finally
+    LMgr.Free;
+  end;
+end;
+
+procedure TestImageManagerInvalidateAllAllProtocols;
+var
+  P: TImageProtocol;
+  LMgr: TImageManager;
+begin
+  for P := Low(TImageProtocol) to High(TImageProtocol) do
+  begin
+    LMgr := TImageManager.Create(P);
+    try
+      LMgr.InvalidateAll;
+      Check(True, 'invalidate protocol');
+    finally
+      LMgr.Free;
+    end;
+  end;
+end;
+
+procedure TestImageManagerCreateFreeCycle;
+var
+  I: Integer;
+  LMgr: TImageManager;
+begin
+  for I := 1 to 5 do
+  begin
+    LMgr := TImageManager.Create(ipKitty);
+    LMgr.Free;
+  end;
+  Check(True, 'create/free cycle');
+end;
+
+procedure TestImageManagerSixelInvalidateEmpty;
+var
+  LMgr: TImageManager;
+begin
+  LMgr := TImageManager.Create(ipSixel);
+  try
+    LMgr.InvalidateAll;
+    LMgr.InvalidateAll;
+    Check(True, 'sixel empty invalidate');
+  finally
+    LMgr.Free;
+  end;
+end;
+
+procedure TestImageManagerHalfBlockThenKitty;
+var
+  LMgr: TImageManager;
+begin
+  LMgr := TImageManager.Create(ipHalfBlock);
+  LMgr.Free;
+  LMgr := TImageManager.Create(ipKitty);
+  try
+    Check(LMgr <> nil, 'recreate kitty after halfblock');
+  finally
+    LMgr.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('tui_image_mgr');
   T.Test('TImageManager.Create kitty', @TestImageManagerCreate);
@@ -91,5 +160,10 @@ begin
   T.Test('TImageManager.InvalidateAll twice', @TestImageManagerInvalidateAllTwice);
   T.Test('TImageManager.InvalidateAll empty', @TestImageManagerInvalidateAllEmpty);
   T.Test('TImageManager.Create multiple', @TestImageManagerCreateMultiple);
+  T.Test('Create auto', @TestImageManagerCreateAuto);
+  T.Test('InvalidateAll all protocols', @TestImageManagerInvalidateAllAllProtocols);
+  T.Test('Create free cycle', @TestImageManagerCreateFreeCycle);
+  T.Test('Sixel invalidate empty', @TestImageManagerSixelInvalidateEmpty);
+  T.Test('HalfBlock then Kitty', @TestImageManagerHalfBlockThenKitty);
   if not T.Run then Halt(1);
 end.

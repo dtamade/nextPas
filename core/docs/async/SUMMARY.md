@@ -1,7 +1,7 @@
 # core-net-async-io 模块总结
 
-> 最后更新：2026-07-19
-> 版本：M3+B1–B4 + Q1–Q4 land；Q5 Read/Write TimeoutEx
+> 最后更新：2026-07-20
+> 版本：M3+B1–B4 + Q1–Q9（并行 DNS + RFC HE 计时 + host matrix）
 
 ## 模块概览
 

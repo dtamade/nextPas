@@ -13,10 +13,10 @@
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
 | **质量 Quality** | **9.5** | R22 hardening 保持 |
-| **规模 Scale (Essential)** | **9.5** | R23 文件锁（IFile.Lock/TryLock/Unlock + OpenLocked） |
-| **综合** | **9.5** | Essential + 文件锁闭环 |
+| **规模 Scale (Essential)** | **9.7** | R23 lock + R24 process group + R25 watch |
+| **综合** | **9.6** | 能力闭环 + 证据仍 wine 级 |
 
-**目标线**：质量 ≥ 9.0；规模 Essential ≥ **0.85**；测试合计 ≥ **900**（R23 ifile +4 → ≈**926**）。
+**目标线**：质量 ≥ 9.0；规模 Essential ≥ **0.85**；测试合计 ≥ **900**。
 
 ---
 
@@ -63,6 +63,8 @@
 | SameFile(inode) | SameFile | **SameFile** (lstat Dev+Ino) | Done（R16 续） |
 | Remove ENOENT | Go 报错 | **静默成功**（Pascal） | Done（有意 ≠ Go） |
 | File lock | flock / fs2 | **IFile.Lock/TryLock/Unlock** + OpenLocked | Done（R23；L0 已有） |
+| File watch | fsnotify / notify | **Watch / IFsWatcher** | Done（R25；L0 platform.watch） |
+| Process group / tree kill | setpgid + kill(-pg) | **NewProcessGroup + KillTree** | Done（R24-PG；Unix；Win UNSUPPORTED） |
 
 ### path
 
@@ -133,11 +135,11 @@
 
 ## 维护策略（口径）
 
-**状态：Ready / 维护态。** Essential + R22 quality + R23 文件锁；测试 **≈926**；Quality **9.5** / Scale **9.5**。
+**状态：Ready（lane）。** R24-PG + R25 watch 已在 `process-fs-path-env`；wine L2 扩面仍可续。
 
-**周报可用一句：**
+**周报：**
 
-> process/fs/path/env：Ready。R23 文件锁（IFile.Lock/TryLock/OpenLocked）；测试 ≈926；综合 9.5。下一批可选 fs.watch 或进程组。
+> process/fs/path/env：R24 进程组 + KillTree；R25 IFsWatcher；Scale 9.7。待合 main；wine 扩面未完成可下一刀。
 
 ---
 
@@ -155,3 +157,4 @@
 | 2026-07-20 | R21 ExtraFd/Credential/CancelToken；规模 9.3 |
 | 2026-07-20 | R22 quality hardening；Quality 9.5 / 综合 9.4；测试 ≈922 |
 | 2026-07-20 | R23 File lock L2；Scale 9.5 / 综合 9.5；ifile 21；测试 ≈926 |
+| 2026-07-20 | R24-PG NewProcessGroup/KillTree；R25 fs.Watch；Scale 9.7 / 综合 9.6 |

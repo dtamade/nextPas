@@ -39,7 +39,7 @@ if [[ -n "${NEXTPAS_FPC_UNITS:-}" ]]; then
   echo "fpc-wrap=$WRAP units=$NEXTPAS_FPC_UNITS"
 fi
 
-# Documented set (ROADMAP): D2.b eight gates + Batch-5 platform.memory (9-gate candidate until GHA green).
+# Documented set (ROADMAP): D2.b eight gates + Batch-5 platform.memory (9-gate promoted).
 MODULE_ENTRIES=(
   "platform.time tests/nextpas.core.platform.time/test_platform_time_helpers"
   "platform.sync tests/nextpas.core.platform.sync/test_platform_sync"
@@ -59,7 +59,7 @@ failed=()
 GATE_TIMEOUT_SEC="${NEXTPAS_MACOS_GATE_TIMEOUT_SEC:-180}"
 
 echo "=== Platform macOS CI Matrix (real host) ==="
-echo "truth=macos-focused-runtime; documented 9-gate set (candidate until GHA green for +memory); not full-host macOS parity"
+echo "truth=macos-focused-runtime; documented 9-gate set (promoted); not full-host macOS parity"
 echo "core=$CORE_ROOT"
 echo "gate_timeout_sec=$GATE_TIMEOUT_SEC"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
@@ -133,7 +133,7 @@ for entry in "${MODULE_ENTRIES[@]}"; do
 done
 
 echo "summary: pass=$pass_count fail=$fail_count total=${#MODULE_ENTRIES[@]}"
-echo "truth=macos-focused-runtime; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-9-gate-set"
+echo "truth=macos-focused-runtime; gates_passed=$pass_count; gates_failed=$fail_count; scope=documented-9-gate-set-promoted"
 
 if [[ "$fail_count" -gt 0 ]]; then
   echo "failed:"

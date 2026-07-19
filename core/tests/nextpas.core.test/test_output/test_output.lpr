@@ -1818,6 +1818,70 @@ begin
   end;
 end;
 
+{ ── B11: report golden snapshots (stable fixtures, Duration=0) ───────────── }
+
+procedure TestB11JSONGoldenSnapshot;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut, LDir: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('golden-json');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 1;
+  LResults[0].Skipped := 1;
+  SetLength(LResults[0].Results, 3);
+  LResults[0].Results[0].Name := 'pass_case';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[0].Message := '';
+  LResults[0].Results[0].Duration := 0;
+  LResults[0].Results[1].Name := 'fail_case';
+  LResults[0].Results[1].Status := tsFailed;
+  LResults[0].Results[1].Message := 'expected 1 got 2';
+  LResults[0].Results[1].Duration := 0;
+  LResults[0].Results[2].Name := 'skip_case';
+  LResults[0].Results[2].Status := tsSkipped;
+  LResults[0].Results[2].Message := 'not yet';
+  LResults[0].Results[2].Duration := 0;
+  LOut := JSONReport(LResults, 'golden-json');
+  { Strip any wall-clock if present — Duration=0 should keep time 0.000 }
+  CheckContains(LOut, 'pass_case');
+  CheckContains(LOut, 'fail_case');
+  CheckContains(LOut, 'skip_case');
+  CheckContains(LOut, 'expected 1 got 2');
+  LDir := IncludeTrailingPathDelimiter(GetTempDir) +
+    'np-test-golden-json-' + IntToStr(GetTickCount64);
+  CheckSnapshot(LOut, LDir, 'report.json');
+end;
+
+procedure TestB11TAPGoldenSnapshot;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LOut, LDir: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('golden-tap');
+  LResults[0].Passed := 1;
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 2);
+  LResults[0].Results[0].Name := 'ok_one';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[0].Results[0].Message := '';
+  LResults[0].Results[0].Duration := 0;
+  LResults[0].Results[1].Name := 'not_ok_two';
+  LResults[0].Results[1].Status := tsFailed;
+  LResults[0].Results[1].Message := 'boom';
+  LResults[0].Results[1].Duration := 0;
+  LOut := TAPReport(LResults, 'golden-tap');
+  CheckContains(LOut, '1..2');
+  CheckContains(LOut, 'ok 1');
+  CheckContains(LOut, 'not ok 2');
+  CheckContains(LOut, 'boom');
+  LDir := IncludeTrailingPathDelimiter(GetTempDir) +
+    'np-test-golden-tap-' + IntToStr(GetTickCount64);
+  CheckSnapshot(LOut, LDir, 'report.tap');
+end;
+
 { ── B5: table-driven filter contracts (meaningful pass+fail paths) ───────── }
 
 procedure TestFilterTableCase(const AC: TTestCase);
@@ -1968,6 +2032,10 @@ begin
   Suite.Test('TAP plan matches count',        @TestTAPPlanMatchesCount);
   Suite.Test('XmlEscape specials',            @TestXmlEscapeSpecials);
   Suite.Test('ColorDiff no ANSI when off',    @TestColorDiffNoAnsiWhenOff);
+
+  { B11: stable report golden fragments (Duration=0, no wall-clock) }
+  Suite.Test('B11 JSON golden snapshot',      @TestB11JSONGoldenSnapshot);
+  Suite.Test('B11 TAP golden snapshot',       @TestB11TAPGoldenSnapshot);
 
   { B5: 64 filter contracts (half negative) }
   SetLength(LFilterCases, 0);

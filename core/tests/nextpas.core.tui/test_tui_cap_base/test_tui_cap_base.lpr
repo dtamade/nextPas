@@ -73,6 +73,66 @@ begin
   Check(LPolicy = tcpRequire, 'require policy');
 end;
 
+procedure TestCapabilityStatusPartialVerified;
+var
+  LStatus: TTuiCapabilityStatus;
+begin
+  LStatus := TTuiCapabilityStatus.Create(True, True, True, False, 'pending');
+  Check(LStatus.Active and (not LStatus.Verified), 'active unverified');
+  CheckEqual('pending', LStatus.FallbackReason, 'pending reason');
+end;
+
+procedure TestCapabilityStatusVerifiedClearsReason;
+var
+  LStatus: TTuiCapabilityStatus;
+begin
+  LStatus := TTuiCapabilityStatus.Create(True, True, True, True, '');
+  Check(LStatus.Verified, 'verified');
+  CheckEqual('', LStatus.FallbackReason, 'empty reason when verified');
+end;
+
+procedure TestCapabilityTierDistinct;
+begin
+  Check(Ord(tctCore) < Ord(tctExtended), 'core < extended');
+  Check(Ord(tctExtended) < Ord(tctExperimental), 'extended < experimental');
+  Check(Ord(tctExperimental) < Ord(tctFullOnly), 'experimental < full');
+end;
+
+procedure TestCapabilityPolicyDistinct;
+begin
+  Check(tcpAuto <> tcpEnable, 'auto != enable');
+  Check(tcpDisable <> tcpRequire, 'disable != require');
+end;
+
+procedure TestCapabilityStatusCopyFields;
+var
+  A, B: TTuiCapabilityStatus;
+begin
+  A := TTuiCapabilityStatus.Create(True, False, False, False, 'x');
+  B := A;
+  Check(not B.Detected, 'copy detected');
+  CheckEqual('x', B.FallbackReason, 'copy reason');
+end;
+
+procedure TestCapabilityStatusLongReason;
+var
+  LStatus: TTuiCapabilityStatus;
+  LReason: string;
+begin
+  LReason := 'session-negotiation-pending-query-flags-zero';
+  LStatus := TTuiCapabilityStatus.Create(True, True, True, False, LReason);
+  CheckEqual(LReason, LStatus.FallbackReason, 'long reason stored');
+end;
+
+procedure TestCapabilityStatusRequestedOnly;
+var
+  LStatus: TTuiCapabilityStatus;
+begin
+  LStatus := TTuiCapabilityStatus.Create(True, False, False, False, 'env-hint-missing');
+  Check(LStatus.Requested, 'requested only');
+  Check(not LStatus.Detected, 'not detected');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.cap_base');
   T.Test('capability status', @TestCapabilityStatus);
@@ -80,5 +140,12 @@ begin
   T.Test('capability status all false', @TestCapabilityStatusAllFalse);
   T.Test('capability tier enum', @TestCapabilityTierEnum);
   T.Test('capability policy enum', @TestCapabilityPolicyEnum);
+  T.Test('partial verified pending', @TestCapabilityStatusPartialVerified);
+  T.Test('verified clears reason', @TestCapabilityStatusVerifiedClearsReason);
+  T.Test('tier ordering', @TestCapabilityTierDistinct);
+  T.Test('policy distinct', @TestCapabilityPolicyDistinct);
+  T.Test('status copy fields', @TestCapabilityStatusCopyFields);
+  T.Test('long reason', @TestCapabilityStatusLongReason);
+  T.Test('requested only', @TestCapabilityStatusRequestedOnly);
   if not T.Run then Halt(1);
 end.

@@ -248,6 +248,12 @@ procedure RegisterStub(var ASuite: TTestSuite; APtr: Pointer);
   Records the GFixtureRegistry index in the suite for cleanup.
   Only call once per fixture (from DiscoverTests). }
 procedure RegisterFixture(var ASuite: TTestSuite; AFixture: TObject);
+{ White-box helpers for test_runner: pure single-arg CLI parsers (no ParamStr). }
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+function ExtractArgValue(const AArg, APrefix: string): string;
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
 { White-box helper for test_runner: parse --filter=value form from one argv item. }
 function ParseFilter(const AArg: string): string;
 { White-box helper for test_runner: parse --tag=value form from one argv item. }
@@ -276,6 +282,23 @@ uses
   nextpas.core.time.base;
 
 { Forward CLI helpers — declarations in interface, implementations in runner.cli }
+
+function HasArgFlag(const AArg, AFlag1: string;
+  const AFlag2: string = ''): Boolean;
+begin
+  Result := nextpas.core.test.runner.cli.HasArgFlag(AArg, AFlag1, AFlag2);
+end;
+
+function ExtractArgValue(const AArg, APrefix: string): string;
+begin
+  Result := nextpas.core.test.runner.cli.ExtractArgValue(AArg, APrefix);
+end;
+
+function ExtractArgIntValue(const AArg, APrefix: string;
+  ADefault: Integer): Integer;
+begin
+  Result := nextpas.core.test.runner.cli.ExtractArgIntValue(AArg, APrefix, ADefault);
+end;
 
 function ParseFilter(const AArg: string): string;
 begin Result := nextpas.core.test.runner.cli.ParseFilter(AArg); end;

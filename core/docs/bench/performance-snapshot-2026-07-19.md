@@ -72,3 +72,9 @@
 - 模块 benchmarks 可在约半分钟内稳定跑完，适合作为 focused 质量门。
 - HTML 报告约为 JSON 的 5×（20 results），与 self-bench 量级一致。
 - 空基准框架下限仍约 6–7 ns；suite 注册/链式配置开销在 µs 级。
+
+## 入口（B31）
+
+- `make bench-module-test`
+- `make bench-scorecard-smoke`
+- `bash core/docs/bench/scripts/run-scorecard-subset.sh --summary`

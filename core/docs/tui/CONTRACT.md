@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-20
-**版本**：1.8
+**版本**：1.9
 
 ---
 
@@ -130,6 +130,9 @@ end;
 
 ### 5.1 Capability 会话协商
 
+- `Truecolor`：`COLORTERM=truecolor|24bit` → Detected+Active+**Verified**（**env-attested**；非 DA 查询）
+
+
 - `CapabilityProfile.KittyKeyboard`：env hint → **Detected**；`EnterTui` 发出
   `CSI = 5 ; 1 u`（disambiguate + report alternate keys）后 **Active=True**，
   并异步发出 **query** `CSI ? u`（`FallbackReason=query-pending`）
@@ -174,6 +177,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-20 | 1.9 | Truecolor Verified=env-attested；error/backend_test/image_mgr/cap/integration 密度 | Claude |
 | 2026-07-20 | 1.8 | Scorecard SC6 focus + SC7 CJK width；ext 密度底线 | Claude |
 | 2026-07-20 | 1.7 | DECSET 1004 focus reporting + 核心 suite 密度 ≥12 | Claude |
 | 2026-07-20 | 1.6 | Kitty keyboard query `CSI ? u` → Verified（非阻塞） | Claude |

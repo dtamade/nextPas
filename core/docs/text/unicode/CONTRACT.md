@@ -43,7 +43,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 9. **Sentence**：`NextSentence` / `SegmentSentences` 按 UAX#29 边界（`SentenceBreakByteLen`）
 10. **Line 双语义**：
     - **硬** `NextLine` / `SegmentLines`：仅硬分隔符（CR/LF/NL 等），**不是** UAX#14
-    - **软** `LineBreakByteLen`：UAX#14 换行机会（Unicode 16.0 pair table + LB15a/b/c、LB19a、LB25、LB28a 等）
+    - **软** `LineBreakByteLen` / `NextLineBreak` / `SegmentLineBreaks`：UAX#14 换行机会（`stLineBreak`）
 ### 排序
 
 自反 / 对称 / 传递；`Compare` 与 sort key 符号一致；仅 DUCET。
@@ -60,7 +60,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 
 1. 无 CLDR tailored grapheme / word
 2. Collation 仅 DUCET（无 locale）
-3. **硬** `NextLine` 不替换为 UAX#14；软换行请用 `LineBreakByteLen`（已官方全绿）
+3. **硬** `NextLine` 不替换为 UAX#14；软换行用 `LineBreakByteLen` / `NextLineBreak` / `SegmentLineBreaks`
 4. 无完整 East_Asian_Width 表：LB19a 用 F/W/H 近似区间 + LB 类启发
 
 ## 测试入口
@@ -88,6 +88,7 @@ python3 core/scripts/gen_unicode_lbp.py --version 16.0.0 --output-dir core/src
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | NextLineBreak / SegmentLineBreaks 便利 API；stLineBreak |
 | 2026-07-20 | LineBreak 官方 16672/16672 全绿；硬 NextLine / 软 LineBreakByteLen 双语义钉死 |
 | 2026-07-19 | SentenceBreak 官方 harness + SBP + UAX#29 NextSentence |
 | 2026-07-19 | WordBreak 官方 harness + WBP 表 + UAX#29 NextWord |

@@ -55,6 +55,12 @@ type
      * @note TimedOut=True 表示 grace 耗尽并走了 Kill
      *}
     function WaitGraceful(const AGrace: TDuration): TProcessOutput;
+    {** 进程组 ID：NewProcessGroup 时等于 Pid；否则 0 *}
+    function ProcessGroupId: Integer;
+    {** 向进程组发 SIGKILL；未建组时等价 Kill *}
+    procedure KillTree;
+    {** 向进程组发信号；未建组时等价 Signal *}
+    procedure SignalTree(ASignal: Integer);
   end;
 
   { TChild — IChild 实现 }
@@ -69,6 +75,7 @@ type
     FTimeout: TDuration;
     FMaxOutput: Int64;
     FCancelToken: IAsyncCancellationToken;
+    FNewProcessGroup: Boolean;
     FLastOutput: TProcessOutput;
     procedure EnsureAttached;
     procedure RaiseProcessPlatformError(const AOp: string; ACode: Int32);
@@ -85,7 +92,8 @@ type
     constructor Create(const AProc: TPlatformProcess;
       const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
       const ATimeout: TDuration; const AMaxOutput: Int64 = 0;
-      const ACancelToken: IAsyncCancellationToken = nil);
+      const ACancelToken: IAsyncCancellationToken = nil;
+      const ANewProcessGroup: Boolean = False);
     destructor Destroy; override;
     function Wait: TProcessOutput;
     function TryWait(out AOutput: TProcessOutput): Boolean;
@@ -93,6 +101,9 @@ type
     procedure Kill;
     procedure Signal(ASignal: Integer);
     function Pid: Integer;
+    function ProcessGroupId: Integer;
+    procedure KillTree;
+    procedure SignalTree(ASignal: Integer);
     function TakeStdin: IWriter;
     function TakeStdout: IReader;
     function TakeStderr: IReader;
@@ -129,7 +140,8 @@ end;
 constructor TChild.Create(const AProc: TPlatformProcess;
   const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
   const ATimeout: TDuration; const AMaxOutput: Int64;
-  const ACancelToken: IAsyncCancellationToken);
+  const ACancelToken: IAsyncCancellationToken;
+  const ANewProcessGroup: Boolean);
 begin
   inherited Create;
   FProc := AProc;
@@ -141,6 +153,7 @@ begin
   FTimeout := ATimeout;
   FMaxOutput := AMaxOutput;
   FCancelToken := ACancelToken;
+  FNewProcessGroup := ANewProcessGroup;
   FillChar(FLastOutput, SizeOf(FLastOutput), 0);
 end;
 
@@ -172,13 +185,18 @@ const
 var
   LResult: TPlatformProcessResult;
   LDeadline: TInstant;
+  LKillOk: Boolean;
 begin
   if (not FWaited) and (not FDetached) then
   begin
     if platform_process_try_wait(FProc, LResult) = 0 then
       if LResult.Status = nextpas.core.platform.process.base.psRunning then
       begin
-        if platform_process_kill(FProc) = 0 then
+        if FNewProcessGroup then
+          LKillOk := platform_process_kill_group(platform_process_pid(FProc), 9) = 0
+        else
+          LKillOk := platform_process_kill(FProc) = 0;
+        if LKillOk then
         begin
           LDeadline := TInstant.Now.Add(TDuration.FromNanoseconds(DESTROY_TIMEOUT_NS));
           repeat
@@ -382,6 +400,52 @@ end;
 function TChild.Pid: Integer;
 begin
   Result := platform_process_pid(FProc);
+end;
+
+function TChild.ProcessGroupId: Integer;
+begin
+  if FNewProcessGroup then
+    Result := platform_process_pid(FProc)
+  else
+    Result := 0;
+end;
+
+procedure TChild.KillTree;
+const
+  SIGKILL = 9;
+var
+  LErr: Int32;
+  LPgid: Int32;
+begin
+  if FWaited then Exit;
+  EnsureAttached;
+  if not FNewProcessGroup then
+  begin
+    Kill;
+    Exit;
+  end;
+  LPgid := platform_process_pid(FProc);
+  LErr := platform_process_kill_group(LPgid, SIGKILL);
+  if LErr <> 0 then
+    RaiseProcessPlatformError('platform_process_kill_group', LErr);
+end;
+
+procedure TChild.SignalTree(ASignal: Integer);
+var
+  LErr: Int32;
+  LPgid: Int32;
+begin
+  if FWaited then Exit;
+  EnsureAttached;
+  if not FNewProcessGroup then
+  begin
+    Signal(ASignal);
+    Exit;
+  end;
+  LPgid := platform_process_pid(FProc);
+  LErr := platform_process_kill_group(LPgid, ASignal);
+  if LErr <> 0 then
+    RaiseProcessPlatformError('platform_process_kill_group', LErr);
 end;
 
 function TChild.TakeStdin: IWriter;

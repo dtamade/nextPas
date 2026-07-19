@@ -272,6 +272,62 @@ begin
     FailTest('Expected shrunk value <= 210, got: ' + LResult);
 end;
 
+{ ── B11: shrink quality boundaries ────────────────────────────────────────── }
+
+procedure TestB11IntShrinkAtExactMin;
+var
+  LGen: IIntGenerator;
+  LCands: specialize TArray<Int64>;
+  I: Integer;
+begin
+  { At generator min, shrink candidates must not go below min. }
+  LGen := GenInt(50, 200);
+  LCands := LGen.Shrink(50);
+  for I := 0 to High(LCands) do
+    CheckTrue(LCands[I] >= 50, 'shrink stays >= min, got ' + IntToStr(LCands[I]));
+end;
+
+procedure TestB11StringShrinkShorterOrEmpty;
+var
+  LGen: IStringGenerator;
+  LCands: specialize TArray<string>;
+  I: Integer;
+  LSrc: string;
+  LHasShorter: Boolean;
+begin
+  LGen := GenString(0, 32);
+  LSrc := 'abcdef';
+  LCands := LGen.Shrink(LSrc);
+  CheckTrue(Length(LCands) > 0, 'string shrink yields candidates');
+  LHasShorter := False;
+  for I := 0 to High(LCands) do
+  begin
+    CheckTrue(Length(LCands[I]) <= Length(LSrc),
+      'candidate not longer than source');
+    if Length(LCands[I]) < Length(LSrc) then
+      LHasShorter := True;
+  end;
+  CheckTrue(LHasShorter, 'at least one strictly shorter candidate');
+end;
+
+procedure TestB11IntShrinkMonotonicTowardBoundary;
+var
+  LResult: string;
+  LVal: Int64;
+begin
+  { Fail when V <> 0 for GenInt(-50, 50); shrink should approach 0. }
+  LResult := PropWithResult('B11 shrink to zero', procedure(const V: Int64)
+  begin
+    if V <> 0 then
+      PropFail('nonzero');
+  end, GenInt(-50, 50), 80, True);
+  if LResult = '' then
+    FailTest('expected property fail for nonzero');
+  LVal := StrToInt(LResult);
+  CheckTrue((LVal >= -2) and (LVal <= 2),
+    'shrunk near zero, got ' + LResult);
+end;
+
 { ── Fuzzing tests (v7.2a) ─────────────────────────────────────────────────── }
 
 procedure TestFuzzBasic;
@@ -779,6 +835,10 @@ begin
   LSuite.Test('GenOneOfInt', @TestGenOneOfInt);
   LSuite.Test('GenOneOfString', @TestGenOneOfString);
   LSuite.Test('IntShrinkRespectsMin', @TestIntShrinkRespectsMin);
+  LSuite.Test('B11IntShrinkAtExactMin', @TestB11IntShrinkAtExactMin);
+  LSuite.Test('B11StringShrinkShorterOrEmpty', @TestB11StringShrinkShorterOrEmpty);
+  LSuite.Test('B11IntShrinkMonotonicTowardBoundary',
+    @TestB11IntShrinkMonotonicTowardBoundary);
   LSuite.Test('FuzzBasic', @TestFuzzBasic);
   LSuite.Test('FuzzString', @TestFuzzString);
   LSuite.Test('FuzzGenBytes', @TestFuzzGenBytes);

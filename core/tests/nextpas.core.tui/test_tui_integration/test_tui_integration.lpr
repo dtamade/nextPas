@@ -250,6 +250,70 @@ begin
   LState.Free;
 end;
 
+
+procedure TestScreenStackCountAfterPushPop;
+var
+  LStack: TScreenStack;
+  LScreen, LPopped: TTestScreen;
+begin
+  LStack := TScreenStack.Create;
+  LScreen := MakeScreen;
+  try
+    Check(LStack.Count = 0, 'starts empty');
+    LStack.Push(LScreen);
+    Check(LStack.Count = 1, 'one after push');
+    LPopped := TTestScreen(LStack.Pop);
+    Check(LStack.Count = 0, 'empty after pop');
+    Check(LPopped = LScreen, 'pop returns same screen');
+    LPopped.Free;
+  finally
+    LStack.Free;
+  end;
+end;
+
+procedure TestFocusRegisterMultipleIdsDistinct;
+var
+  LFocus: TFocusManager;
+  A, B: TFocusId;
+begin
+  LFocus := TFocusManager.Create;
+  try
+    A := LFocus.Register(TRect.Make(0, 0, 4, 1));
+    B := LFocus.Register(TRect.Make(0, 2, 4, 1));
+    Check(A <> B, 'ids distinct');
+  finally
+    LFocus.Free;
+  end;
+end;
+
+procedure TestFocusBeginFrameIdempotent;
+var
+  LFocus: TFocusManager;
+begin
+  LFocus := TFocusManager.Create;
+  try
+    LFocus.BeginFrame;
+    LFocus.BeginFrame;
+    LFocus.Register(TRect.Make(0, 0, 1, 1));
+    Check(LFocus.FocusedId <> 0, 'has focus after register');
+  finally
+    LFocus.Free;
+  end;
+end;
+
+procedure TestScreenStackSharedStateNilDefault;
+var
+  LStack: TScreenStack;
+begin
+  LStack := TScreenStack.Create;
+  try
+    Check(LStack.SharedStateObject = nil, 'default shared nil');
+  finally
+    LStack.Free;
+  end;
+end;
+
+
 begin
   T := TTestSuite.Create('tui_integration');
   { Focus + Keybind }
@@ -262,5 +326,9 @@ begin
   T.Test('ScreenStack lifecycle push/pop', @TestScreenStackLifecycle);
   T.Test('ScreenStack replace lifecycle', @TestScreenStackReplaceLifecycle);
   T.Test('ScreenStack shared state', @TestScreenStackSharedState);
-  if not T.Run then Halt(1);
+    T.Test('ScreenStack count push/pop', @TestScreenStackCountAfterPushPop);
+  T.Test('Focus register ids distinct', @TestFocusRegisterMultipleIdsDistinct);
+  T.Test('Focus BeginFrame then register', @TestFocusBeginFrameIdempotent);
+  T.Test('ScreenStack shared nil default', @TestScreenStackSharedStateNilDefault);
+if not T.Run then Halt(1);
 end.
