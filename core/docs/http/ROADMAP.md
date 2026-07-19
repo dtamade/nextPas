@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-19（Era 8 I0–I3 landed → **Done / STOP**；无用户指令勿空转 H3）
+**Updated**: 2026-07-19（**Era 9** Production Depth open → **NEXT = N1** C5 SSE）
 
 ---
 
@@ -98,12 +98,15 @@ CHECKPOINT（不阻塞续波）:
 | Wave R4 HTTPS 1×41B zero | 完成（capabilities cache FillChar → Default；client 0 unfreed） |
 | Wave I0 Era 8 open | 完成（Inbox 三项升格 I1–I3；推荐路径 I1→I2→I3） |
 | Wave I1 pool health probe | 完成（H1 TryRead 借出探针 + H2 PING/ACK；0 unfreed） |
-| **下一执行点** | **Era 8 Done / STOP**（I0–I3 landed；H3 仍 Blocked） |
+| Wave I2 WS deflate | 完成（RFC 7692 opt-in；ws 41/0 + ws_client 10/0） |
+| Wave I3 H2 multiplex | 完成（`RoundTripMany`；h2_client 72/0） |
+| Wave N0 Era 9 open | 完成（升格 C5/C4/A3；推荐路径 N1→N2→N3） |
+| **下一执行点** | **Wave N1** — SSE 诚实毕业（C5） |
 
 四支柱粗进度（执行中随 Era 更新，非 KPI）：
 
 ```text
-完整 ~93%   高级 ~87%   优雅 ~88%   性能 ~78%  (Era 8 Inbox depth)
+完整 ~94%   高级 ~87%   优雅 ~88%   性能 ~78%  (Era 9 Production Depth)
 ```
 
 ---
@@ -131,7 +134,10 @@ CHECKPOINT（不阻塞续波）:
 ```text
 Era 0–4:  landed（framework-complete non-H3）
 Era 5:    H3-* Blocked — 跳过（无产品需求；禁止空 facade）
-Era 6:    X0 → X1 → X2 → X3 → X4 → X5   （H1/H2/WS 精品 + 跨模块反哺）
+Era 6:    X0 → X1 → X2 → X3 → X4 → X5   landed
+Era 7:    R0 → R1 → R2 → R3 (+ R4)      landed
+Era 8:    I0 → I1 → I2 → I3             landed
+Era 9:    N0 → N1(C5) → N2(C4) → N3(A3)  ← 当前
 ```
 
 ---
@@ -224,23 +230,23 @@ Era 6:    X0 → X1 → X2 → X3 → X4 → X5   （H1/H2/WS 精品 + 跨模块
 | **Next** | Wave E1（推荐路径跳过 C4/C5，除非 Inbox 升格） |
 | **Evidence** | 单段/open-ended/suffix 206；越界+multi 416；`Accept-Ranges: bytes`；`CopyFileRange`/`io.Copy` source-contract；CONTRACT 表 |
 
-### Wave C4 — Multipart / stream 收口（非默认；Inbox 升格）
+### Wave C4 — Multipart / stream 收口
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | parked until Inbox promote |
+| **Status** | **promoted → Era 9 Wave N2** |
 | **Do** | 大 body 流式 multipart、response stream 与 CONTRACT ownership 对齐 |
 | **Don't** | 第二套 body API |
 
-### Wave C5 — SSE 诚实毕业（非默认；Inbox 升格）
+### Wave C5 — SSE 诚实毕业
 
 | 字段 | 内容 |
 |------|------|
-| **Status** | parked until Inbox promote |
+| **Status** | **promoted → Era 9 Wave N1** |
 | **Do** | SSE 写端 + 超时/cancel 检查点；文档化限制 |
 | **Don't** | 伪 realtime 总线 |
 
-**Era 1 Done when**：C1–C3 landed；C4/C5 要么 landed 要么仍明确 parked。 **Met**（C4/C5 parked）。
+**Era 1 Done when**：C1–C3 landed；C4/C5 要么 landed 要么仍明确 parked。 **Met**（C4/C5 升格 Era 9，不再阻塞 Era 1 关闭）。
 
 ---
 
@@ -312,11 +318,11 @@ Era 6:    X0 → X1 → X2 → X3 → X4 → X5   （H1/H2/WS 精品 + 跨模块
 | **Next** | Wave P1 |
 | **Evidence** | CONTRACT pool + H1/H2 选择表；MaxPoolSize per-authority（H1/H2）；CloseIdle + client 267 / h2_client 66 |
 
-### Wave A3+（默认 parked）
+### Wave A3+（默认 parked；A3 已升格）
 
 | Wave | 主题 | 状态 |
 |------|------|------|
-| A3 | Observability hooks（最小 seam） | parked until demand |
+| A3 | Observability hooks（最小 seam） | **promoted → Era 9 Wave N3** |
 | A4 | H2 CONNECT / WS-over-H2 | parked until real consumer |
 | A5 | Trailer / Expect client 扩展 | parked until demand |
 
@@ -621,7 +627,66 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 | **Next** | Era 8 Done / STOP |
 | **Evidence** | `IHttpTransportMultiplex.RoundTripMany`；连接层 demux；同 authority 校验；`MaxConcurrentStreams`；串行 `RoundTrip` 不变；`test_http_h2_client` 72/0 |
 
-**Era 8 Done when**：I0–I3 landed（或 I3 诚实 Park 并写清原因）；H3 仍 Blocked。
+**Era 8 Done when**：I0–I3 landed（或 I3 诚实 Park 并写清原因）；H3 仍 Blocked。 **Met.**
+
+---
+
+## Era 9 — Production Depth（SSE / multipart 流式 / 可观测）
+
+**目标**：在 framework-complete (non-H3) + Era 8 depth 之上，把三条长期 parked 生产深度升格为有序 Wave：**SSE 诚实毕业 → multipart/stream 收口 → 最小可观测 seam**。**不**开 H3；不扩无关 API 家族。
+
+**推荐路径**：`N0 → N1 → N2 → N3`
+
+### Wave N0 — Era 9 open + promote C5/C4/A3
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **landed**（本提交起） |
+| **Do** | 写 Era 9 有序表；C5/C4/A3 升格为 N1/N2/N3 并写满 Do/Don't/Done when/Gates；NEXT=N1；GOAL_TREE 指针 |
+| **Don't** | 改业务代码；开 H3；实现 N1–N3 本波一并做完 |
+| **Done when** | 全局 NEXT 唯一指向 N1；执行者只读本文件可开工 |
+| **Gates** | docs only + hygiene |
+| **Land paths** | `core/docs/http/**` |
+| **Next** | Wave N1 |
+| **Evidence** | C5/C4/A3 从 parked 升格；推荐路径 N1→N2→N3；Inbox 仍空 |
+
+### Wave N1 — SSE 诚实毕业（原 C5）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | **queued**（NEXT） |
+| **Do** | 收口 `StartSSE` / `ISSEEventWriter` 生产契约：headers（`Content-Type: text/event-stream` 等）、flush/write 失败语义、超时与 cancel 检查点（Kind/Op）、`Close`/`IsOpen` 生命周期；CONTRACT 表 + focused 证明；文档化限制（非 bus、非 WS 替代） |
+| **Don't** | 伪 realtime 总线；SSE-over-H2 全家桶；无界缓冲；新 Options 家族堆叠 |
+| **Done when** | CONTRACT 有 SSE lifecycle/error 表；至少一条 live 或 mock 写路径 focused；cancel/timeout 边角有证据或诚实 residual；heaptrc 敏感路径 0 unfreed |
+| **Gates** | 新或扩展 SSE focused suite；触及则 client/server；hygiene；diff --check |
+| **Land paths** | `core/src/nextpas.core.http.sse.pas`；facade 若触及；tests；`core/docs/http/**` |
+| **Next** | Wave N2 |
+
+### Wave N2 — Multipart / stream 收口（原 C4）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | queued after N1 |
+| **Do** | 大 body 流式 multipart 解析/编码与 response stream ownership 对齐 CONTRACT；避免整 body 进内存的默认路径；focused 覆盖大/边界/失败 |
+| **Don't** | 第二套 body API；变成 CDN/上传框架；破坏现有 `EncodeMultipartFormData` / `ParseMultipartFormData` 主路径 |
+| **Done when** | 流式路径有契约 + focused；ownership（谁 close body）写清；0 unfreed |
+| **Gates** | form/message/client 相关 focused；hygiene |
+| **Land paths** | form/message/client 最小 + tests + docs |
+| **Next** | Wave N3 |
+
+### Wave N3 — Observability hooks 最小 seam（原 A3）
+
+| 字段 | 内容 |
+|------|------|
+| **Status** | queued after N2 |
+| **Do** | 最小可观测 seam：请求开始/结束、错误 Kind/Op、可选 duration 钩子或 metrics middleware 边界；CONTRACT 诚实声明非 APM |
+| **Don't** | 全家桶 APM/OpenTelemetry 产品化；强制全局单例；在协议层散落日志 |
+| **Done when** | 至少一条 hook/middleware 路径 focused；不破坏默认零开销主路径；文档化 opt-in |
+| **Gates** | middlewares/metrics 相关 focused；hygiene |
+| **Land paths** | middleware/metrics 最小 + tests + docs |
+| **Next** | Era 9 Done / STOP |
+
+**Era 9 Done when**：N0–N3 landed（或 N3 诚实 Park）；H3 仍 Blocked。
 
 ---
 
@@ -635,7 +700,7 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 想法 | 备注 |
 |------|------|
-| （空 — 三项已升格 Era 8） | 新想法只追加，不直接实现 |
+| （空 — C5/C4/A3 已升格 Era 9） | 新想法只追加，不直接实现 |
 
 ---
 
@@ -644,13 +709,14 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 ```text
 1. Era 0–4 landed；framework-complete (non-H3) 已立住
 2. Era 5 H3-* Blocked — 跳过；无产品需求；禁止空 facade
-3. Era 6 X0–X5 landed — Excellence Done
-4. Era 7 + R4 Done（HTTPS client 0 unfreed）
-5. Era 8 I0–I3 landed — framework depth Done (non-H3)；H3 仍 Blocked
+3. Era 6–8 landed（Excellence / Residual / Inbox depth）
+4. Era 9 N0 landed — Production Depth open
+5. **NEXT = Wave N1**（SSE 诚实毕业）
 6. 跨模块仅按本波 Land paths；不要用 archive/ 当 backlog
+7. landing/http-20260719 为 Era 8 Ready 候选（不混入 Era 9 实现）
 ```
 
-**没有用户指令时：STOP（Era 8 Done）；不要空转 H3。**
+**没有用户指令时：可按 Goal Loop 自动执行 N1；不要空转 H3。**
 
 ---
 
@@ -671,6 +737,8 @@ goal 遇到 H3-*：**标记 Blocked，跳过取下一可做 Wave**；禁止空�
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-19 | **Era 9** N0：Production Depth 开启；升格 C5→N1 / C4→N2 / A3→N3；NEXT=N1 |
+| 2026-07-19 | fix(http)：client suite pool accept 非阻塞，消除 MaxPoolSize join hang |
 | 2026-07-19 | docs 对齐：顶部 Updated / changelog 与 **Era 8 Done / STOP** 一致（I0–I3 已 land） |
 | 2026-07-18 | Wave I3 landed：`IHttpTransportMultiplex.RoundTripMany`；h2_client 72/0；**Era 8 Done / STOP** |
 | 2026-07-18 | Wave I2 landed：WS permessage-deflate（RFC 7692 opt-in）；ws 41/0 + ws_client 10/0；NEXT=I3 |
