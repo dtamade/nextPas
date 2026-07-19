@@ -1688,14 +1688,15 @@ begin
       filtered tests are invisible, not counted as pass/fail/skip) }
     if not IsTestEligible(Tests[I], LConfig, LTagFilter, True) then
     begin
-      LThreads[I] := 0;
+      { Darwin aarch64: TThreadID is not assignment-compatible with bare 0. }
+      LThreads[I] := TThreadID(0);
       LProcessed[I] := True;
       Continue;
     end;
     { Short mode — skip tests marked with ShortSkip (handle before thread spawn) }
     if LConfig.ShortMode and Tests[I].ShortSkip then
     begin
-      LThreads[I] := 0;
+      LThreads[I] := TThreadID(0);
       LProcessed[I] := True;
       Inc(LSkip);
       LResults[I] := MakeTestResult(Tests[I].Name, tsSkipped,
@@ -1711,7 +1712,7 @@ begin
     if LConfig.CacheEnabled and (LCacheKey <> '') and
        LCache.Get(LCacheKey, Tests[I].Name, LCacheEntry) then
     begin
-      LThreads[I] := 0;
+      LThreads[I] := TThreadID(0);
       LProcessed[I] := True;
       LCacheHits[I] := True;
       IncByStatus(TTestStatus(LCacheEntry.Status), LPass, LFail, LSkip);
@@ -1812,7 +1813,7 @@ begin
         Continue; { already ran in Phase 1 }
       LProcessed[I] := True;
       LThreads[I] := BeginThread(@ParallelThreadEntry, @LRecs[I]);
-      if LThreads[I] = 0 then
+      if LThreads[I] = TThreadID(0) then
       begin
         LResults[I] := MakeTestResult(Tests[I].Name, tsError,
           'BeginThread failed', 0);
@@ -1830,12 +1831,12 @@ begin
 
     { Join this batch before spawning the next }
     for I := 0 to High(Tests) do
-      if LThreads[I] <> 0 then
+      if LThreads[I] <> TThreadID(0) then
         WaitForThreadTerminate(LThreads[I], 0);
 
     { Close thread handles — required on Windows to avoid kernel handle leak }
     for I := 0 to High(Tests) do
-      if LThreads[I] <> 0 then
+      if LThreads[I] <> TThreadID(0) then
         CloseThread(LThreads[I]);
 
     { Clear handles for reuse in next batch }
@@ -1851,7 +1852,7 @@ begin
     written directly (tsError + 'BeginThread failed'). }
   for I := 0 to High(Tests) do
   begin
-    if (LThreads[I] <> 0) or (LResults[I].Status <> tsPassed) or
+    if (LThreads[I] <> TThreadID(0)) or (LResults[I].Status <> tsPassed) or
        (LResults[I].Name <> '') then
       AppendResult(AResult.Results, LResults[I]);
     { Cache store — persist result for future runs (skip cache-hit tests) }
