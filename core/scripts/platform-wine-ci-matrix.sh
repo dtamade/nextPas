@@ -28,6 +28,7 @@ MODULE_ENTRIES=(
   "platform.fmt core/tests/nextpas.core.platform.fmt/test_platform_fmt_wine"
   "platform.info core/tests/nextpas.core.platform.info/test_platform_info_wine"
   "platform.which core/tests/nextpas.core.platform.which/test_platform_which_wine"
+  "platform.dl core/tests/nextpas.core.platform.dl/test_platform_dl_wine"
   "io.reactor.iocp core/tests/nextpas.core.io.uring/test_reactor_iocp_wine"
 )
 
