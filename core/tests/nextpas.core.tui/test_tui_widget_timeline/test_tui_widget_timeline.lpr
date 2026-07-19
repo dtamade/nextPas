@@ -42,17 +42,27 @@ begin Check(TTimeline.New([TTimelineEvent.Make('T', 'E')]).WithNodeChar('*') <> 
 procedure TestRender;
 var B: TBuffer; A: TRect;
 begin
-  A := TRect.Make(0, 0, 40, 10); B := TBuffer.CreateEmpty(A);
-  TTimeline.New([TTimelineEvent.Make('10:00', 'A'), TTimelineEvent.Make('11:00', 'B')]).Render(A, B);
-  Check(True, 'Render');
+  A := TRect.Make(0, 0, 40, 10);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TTimeline.New([TTimelineEvent.Make('10:00', 'A'), TTimelineEvent.Make('11:00', 'B')]).Render(A, B);
+    Check(True, 'Render');
+  finally
+    B.Free;
+  end;
 end;
 
 procedure TestRenderEmpty;
 var B: TBuffer; A: TRect;
 begin
-  A := TRect.Make(0, 0, 20, 5); B := TBuffer.CreateEmpty(A);
-  TTimeline.New([]).Render(A, B);
-  Check(True, 'Render empty');
+  A := TRect.Make(0, 0, 20, 5);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TTimeline.New([]).Render(A, B);
+    Check(True, 'Render empty');
+  finally
+    B.Free;
+  end;
 end;
 
 procedure TestBuilderChaining;
@@ -61,6 +71,75 @@ begin
   S1.Fg := IndexedColor(1); S2.Fg := IndexedColor(2);
   Check(TTimeline.New([TTimelineEvent.Make('T', 'E').WithDescription('D')]).WithStyle(S1).WithLineStyle(S2).WithNodeChar('*') <> nil, 'chain');
 end;
+
+
+procedure TestRenderShowsTimeAndTitle;
+var B: TBuffer; A: TRect; L: AnsiString;
+begin
+  A := TRect.Make(0, 0, 40, 6);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TTimeline.New([TTimelineEvent.Make('10:00', 'Deploy')]).WithNodeChar('*').Render(A, B);
+    L := B.RowAsString(0);
+    Check(Pos('10:00', L) > 0, 'time visible');
+    Check(Pos('Deploy', L) > 0, 'title visible');
+    Check(Pos('*', L) > 0, 'custom node char');
+  finally B.Free; end;
+end;
+
+procedure TestRenderDescriptionOccupiesNextRow;
+var B: TBuffer; A: TRect;
+begin
+  A := TRect.Make(0, 0, 40, 6);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TTimeline.New([
+      TTimelineEvent.Make('09:00', 'Start').WithDescription('boot')
+    ]).Render(A, B);
+    Check(Pos('Start', B.RowAsString(0)) > 0, 'title on first row');
+    Check(Pos('boot', B.RowAsString(1)) > 0, 'description on next row');
+  finally B.Free; end;
+end;
+
+procedure TestRenderClipsToAreaHeight;
+var B: TBuffer; A: TRect; I: Integer; S: AnsiString;
+begin
+  A := TRect.Make(0, 0, 30, 1);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TTimeline.New([
+      TTimelineEvent.Make('1', 'First'),
+      TTimelineEvent.Make('2', 'Second')
+    ]).Render(A, B);
+    S := B.RowAsString(0);
+    Check(Pos('First', S) > 0, 'first event fits height 1');
+    { no second row exists }
+    CheckEqual(1, Length(B.AsLines), 'only one row buffer');
+  finally B.Free; end;
+end;
+
+procedure TestRenderZeroAreaNoCrash;
+var B: TBuffer; A: TRect;
+begin
+  A := TRect.Make(0, 0, 0, 0);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TTimeline.New([TTimelineEvent.Make('T', 'E')]).Render(A, B);
+    Check(True, 'zero area ok');
+  finally B.Free; end;
+end;
+
+procedure TestRenderNarrowWidthStillShowsTitlePrefix;
+var B: TBuffer; A: TRect;
+begin
+  A := TRect.Make(0, 0, 12, 3);
+  B := TBuffer.CreateEmpty(A);
+  try
+    TTimeline.New([TTimelineEvent.Make('t', 'HelloWorld')]).Render(A, B);
+    Check(Pos('Hello', B.RowAsString(0)) > 0, 'title prefix in narrow width');
+  finally B.Free; end;
+end;
+
 
 begin
   T := TTestSuite.Create('tui_widget_timeline');
@@ -75,5 +154,10 @@ begin
   T.Test('Render', @TestRender);
   T.Test('Render empty', @TestRenderEmpty);
   T.Test('Builder chaining', @TestBuilderChaining);
-  if not T.Run then Halt(1);
+  T.Test('render shows time and title', @TestRenderShowsTimeAndTitle);
+  T.Test('render description next row', @TestRenderDescriptionOccupiesNextRow);
+  T.Test('render clips to area height', @TestRenderClipsToAreaHeight);
+  T.Test('render zero area', @TestRenderZeroAreaNoCrash);
+  T.Test('render narrow width title prefix', @TestRenderNarrowWidthStillShowsTitlePrefix);
+if not T.Run then Halt(1);
 end.

@@ -164,6 +164,67 @@ begin
   finally LBuf.Free; end;
 end;
 
+
+procedure TestTreeEmptyNodes;
+var LTree: ITree; LState: TTreeState; LBuf: TBuffer;
+begin
+  LTree := TTree.New([]);
+  LState := TTreeState.Empty;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 3));
+  try
+    LTree.RenderStateful(TRect.Make(0, 0, 10, 3), LBuf, LState);
+    Check(True, 'empty tree renders');
+  finally LBuf.Free; end;
+end;
+
+procedure TestTreeSmallArea;
+var LTree: ITree; LState: TTreeState; LBuf: TBuffer;
+begin
+  LTree := TTree.New([TTreeNode.Make('Root')]);
+  LState := TTreeState.Empty;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 3, 1));
+  try
+    LTree.RenderStateful(TRect.Make(0, 0, 3, 1), LBuf, LState);
+    { 3-cell width may clip label; ensure no crash and row length holds }
+    CheckEqual(3, Length(LBuf.RowAsString(0)), 'small area row width');
+  finally LBuf.Free; end;
+end;
+
+procedure TestDialogEmptyMessage;
+var LD: IWidget; LBuf: TBuffer;
+begin
+  LD := TDialog.New('Title', '') as IWidget;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 8));
+  try
+    LD.Render(TRect.Make(0, 0, 20, 8), LBuf);
+    Check(Pos('Title', LBuf.RowAsString(0)) > 0, 'title with empty message');
+  finally LBuf.Free; end;
+end;
+
+procedure TestMenuEmptyItems;
+var LM: IMenu; LState: TMenuState; LBuf: TBuffer;
+begin
+  LM := TMenu.New([]);
+  LState := TMenuState.Default;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 3));
+  try
+    LM.RenderStateful(TRect.Make(0, 0, 20, 3), LBuf, LState);
+    CheckEqual(0, LM.ItemCount, 'empty menu item count');
+    CheckEqual(0, LM.SelectableCount, 'empty selectable');
+  finally LBuf.Free; end;
+end;
+
+procedure TestMenuMoveDownAtEndStays;
+var LM: IMenu; LState: TMenuState;
+begin
+  LM := TMenu.New([TMenuItem.Action('Only')]);
+  LState := TMenuState.Default;
+  LM.MoveDown(LState);
+  LM.MoveDown(LState);
+  CheckEqual(0, LState.Selected, 'move down at end stays');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.extended');
   T.Test('tree render', @TestTreeRender);
@@ -177,5 +238,10 @@ begin
   T.Test('menu move up', @TestMenuMoveUp);
   T.Test('menu item count', @TestMenuItemCount);
   T.Test('menu shortcut', @TestMenuShortcut);
-  if not T.Run then Halt(1);
+  T.Test('tree empty nodes', @TestTreeEmptyNodes);
+  T.Test('tree small area', @TestTreeSmallArea);
+  T.Test('dialog empty message', @TestDialogEmptyMessage);
+  T.Test('menu empty items', @TestMenuEmptyItems);
+  T.Test('menu move down at end stays', @TestMenuMoveDownAtEndStays);
+if not T.Run then Halt(1);
 end.

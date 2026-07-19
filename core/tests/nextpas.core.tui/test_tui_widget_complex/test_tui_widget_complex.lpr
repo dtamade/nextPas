@@ -128,7 +128,7 @@ begin
   LM := TMarkdown.New('# Hello' + #10 + 'Some text' + #10 + '- item1');
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 5));
   try
-    (LM as IWidget).Render(TRect.Make(0, 0, 30, 5), LBuf);
+    LM.Render(TRect.Make(0, 0, 30, 5), LBuf);
     Check(Pos('Hello', LBuf.RowAsString(0)) > 0, 'markdown renders heading');
   finally LBuf.Free; end;
 end;
@@ -139,7 +139,7 @@ begin
   LM := TMarkdown.New('');
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 3));
   try
-    (LM as IWidget).Render(TRect.Make(0, 0, 20, 3), LBuf);
+    LM.Render(TRect.Make(0, 0, 20, 3), LBuf);
     Check(True, 'empty markdown renders');
   finally LBuf.Free; end;
 end;
@@ -229,6 +229,43 @@ begin
   finally LBuf.Free; end;
 end;
 
+
+procedure TestDiffViewEmptyUnified;
+var LD: IDiffView; LBuf: TBuffer; LSt: TDiffViewState;
+begin
+  LD := TDiffView.FromUnifiedDiff('');
+  LSt := TDiffViewState.Empty;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 40, 5));
+  try
+    LD.RenderStateful(TRect.Make(0, 0, 40, 5), LBuf, LSt);
+    Check(True, 'empty unified diff renders');
+  finally LBuf.Free; end;
+end;
+
+procedure TestMarkdownSmallArea;
+var LM: IMarkdown; LBuf: TBuffer;
+begin
+  LM := TMarkdown.New('# Hi');
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LM.Render(TRect.Make(0, 0, 4, 1), LBuf);
+    Check(True, 'markdown small area');
+  finally LBuf.Free; end;
+end;
+
+procedure TestToastEmptyMessage;
+var LT: IToastManager; LBuf: TBuffer;
+begin
+  LT := TToastManager.New;
+  LT.Push('', tlInfo);
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 3));
+  try
+    (LT as IWidget).Render(TRect.Make(0, 0, 30, 3), LBuf);
+    CheckEqual(1, LT.Count, 'empty message still counted');
+  finally LBuf.Free; end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.widget.complex');
   T.Test('diffview new', @TestDiffViewNew);
@@ -245,5 +282,8 @@ begin
   T.Test('notification center render', @TestNotificationCenterRender);
   T.Test('toast push and tick', @TestToastPushAndTick);
   T.Test('toast render', @TestToastRender);
-  if not T.Run then Halt(1);
+  T.Test('diffview empty unified', @TestDiffViewEmptyUnified);
+  T.Test('markdown small area', @TestMarkdownSmallArea);
+  T.Test('toast empty message', @TestToastEmptyMessage);
+if not T.Run then Halt(1);
 end.
