@@ -183,6 +183,10 @@ B25  分组分析 (Round 57–62)                                    ✅
 B26  审计收敛 / API 冻结 (2026-07-19)                           ✅
   B26.1  停止默认向 IBenchResults 堆叠公共便捷 API            ✅
   B26.2  文档同步 README / API / ARCHITECTURE / goal-tree     ✅
+
+B27  integration 软拆 (2026-07-19)                               ✅
+  B27.1  test_bench_results_api 承载结果 API 测试 (~58)         ✅
+  B27.2  test_bench_integration 保留生命周期/并行 (~66)         ✅
 ```
 
 ## 测试套件分布
@@ -195,7 +199,8 @@ B26  审计收敛 / API 冻结 (2026-07-19)                           ✅
 | test_bench_stats_advanced | 43 | ✅ 零泄漏 | 高级统计 + 异常值分级 + NaN/Inf |
 | test_bench_mannwhitney | 10 | ✅ 零泄漏 | Mann-Whitney U 检验 |
 | test_bench_runner | 16 | ✅ 零泄漏 | 执行器 + StopTimer + 统计完整性 |
-| test_bench_integration | 124 | ✅ 零泄漏 | 集成 + 分组/聚合 API + 超时 |
+| test_bench_integration | 66 | ✅ 零泄漏 | 套件生命周期 / 并行 / 超时 / 基线 |
+| test_bench_results_api | 58 | ✅ 零泄漏 | 结果聚合/过滤/分组/矩阵 API |
 | test_bench_report | 33 | ✅ 零泄漏 | 报告生成 + 空结果 + 边界值 |
 | test_bench_xlang | 40 | ✅ 零泄漏 | 跨语言解析 + Unicode + 溢出保护 |
 | test_bench_baseline | 22 | ✅ 零泄漏 | 基线管理 + 字段验证 |
@@ -212,7 +217,7 @@ B26  审计收敛 / API 冻结 (2026-07-19)                           ✅
 | test_bench_self_bench | 17 | ✅ 0 leaks | 框架自举路径 |
 | test_bench_regression | 29 | ✅ 0 leaks | ToSummary + 自定义指标回归 |
 | test_bench_adaptive_warmup | 4 | ✅ 0 leaks | 自适应预热 (CV 阈值) |
-| **合计** | **~504** | **21/21 通过** | |
+| **合计** | **~504** | **22/22 通过** | |
 
 ### 跨语言基准对照 (benchmarks/)
 
