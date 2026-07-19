@@ -135,8 +135,8 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 ## 7. 已知限制
 
 1. Collation 仅 DUCET（无 CLDR locale）
-2. Line 硬换行未接 UAX#14；Sentence 已官方 SentenceBreakTest
-3. 无 Bidi / UAX#14 完备化
+2. Line 硬 `NextLine` 非 UAX#14；软 `LineBreakByteLen` 已官方 LineBreakTest 全绿
+3. 无 Bidi（UAX#9）全实现
 4. 无 CLDR tailored grapheme/word
 
 ---
@@ -145,5 +145,6 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 
 | 日期 | 版本 | 变更描述 |
 |------|------|----------|
+| 2026-07-20 | 1.2 | LineBreak UAX#14 官方全绿；硬/软 Line 双语义 |
 | 2026-07-19 | 1.1 | Conformance + grapheme 真源 + GB9c；测试表与子模块清单对齐 live |
 | 2026-07-01 | 1.0 | 初始版本 |

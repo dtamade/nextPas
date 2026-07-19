@@ -1082,9 +1082,15 @@ var
   LAction, LBrk: Byte;
   LSkip: Boolean;
   LFZwj, LFHebrew, LFHyInit, LFAfterOrthoVI: Boolean;
+  LFPiOpen, LFPrevEastAsian: Boolean;
   LRiCount: Integer;
   LCh, LBaseCp: TUnicodeCodepoint;
   LOrigRightU16, LOrigLeftU16: Boolean;
+  LNumState: Integer; { 0=none 1=prefix 2=prefixop 3=num 4=numclose }
+  LLb25Fixup: Integer;
+  LPeekCls: TLineBreakClass;
+  LPeekCp: TUnicodeCodepoint;
+  LPrevBase: TLineBreakClass;
 
   function InPairTable(const ACls: TLineBreakClass): Boolean; inline;
   begin
@@ -1118,6 +1124,31 @@ var
     Result := False;
   end;
 
+  { UAX#14 $EastAsian ≈ ea=F|W|H for LB19a (minimal ranges + LB classes). }
+  function IsEastAsianCp(const ACp: TUnicodeCodepoint): Boolean;
+  var
+    C: TLineBreakClass;
+  begin
+    if ((ACp >= $FF00) and (ACp <= $FF60)) or
+       ((ACp >= $FFE0) and (ACp <= $FFE6)) or
+       ((ACp >= $FF61) and (ACp <= $FFBE)) or
+       ((ACp >= $FFE8) and (ACp <= $FFEE)) then
+      Exit(True);
+    C := GetLineBreakClass(ACp);
+    if C in [lbcID, lbcAI, lbcCJ, lbcH2, lbcH3, lbcJL, lbcJV, lbcJT] then
+      Exit(True);
+    if ((ACp >= $2E80) and (ACp <= $9FFF)) or
+       ((ACp >= $A000) and (ACp <= $A4CF)) or
+       ((ACp >= $A960) and (ACp <= $A97F)) or
+       ((ACp >= $AC00) and (ACp <= $D7A3)) or
+       ((ACp >= $F900) and (ACp <= $FAFF)) or
+       ((ACp >= $FE10) and (ACp <= $FE19)) or
+       ((ACp >= $FE30) and (ACp <= $FE6B)) or
+       ((ACp >= $20000) and (ACp <= $3FFFD)) then
+      Exit(True);
+    Result := False;
+  end;
+
   function IsPfQU(const ACp: TUnicodeCodepoint): Boolean;
   var
     K: Integer;
@@ -1136,6 +1167,21 @@ var
       if LB_PI_QU[K] = ACp then
         Exit(True);
     Result := False;
+  end;
+
+  function PeekNonCM(const AFrom: Integer; out ACls: TLineBreakClass;
+    out ACp: TUnicodeCodepoint): Boolean;
+  var
+    J: Integer;
+  begin
+    J := AFrom;
+    while (J < LCount) and (LCls[J] in [lbcCM, lbcZWJ]) do
+      Inc(J);
+    if J >= LCount then
+      Exit(False);
+    ACls := LCls[J];
+    ACp := LCps[J];
+    Result := True;
   end;
 
 begin
@@ -1199,6 +1245,18 @@ begin
      ((LCls[1] = lbcHY) or (LCps[1] = $2010))) or
     (LCur = lbcHY);
   LFAfterOrthoVI := False;
+  LNumState := 0;
+  LLb25Fixup := -1;
+  { LB15a open context: Pi&QU after sot (or after hard break restart). }
+  LFPiOpen := IsPiQU(LCps[0]);
+  LFPrevEastAsian := False;
+  { LB25 seed from first character }
+  if LCls[0] = lbcNU then
+    LNumState := 3
+  else if LCls[0] in [lbcPR, lbcPO] then
+    LNumState := 1
+  else if ResolveLB(LCls[0]) = lbcNU then
+    LNumState := 3;
 
   for LI := 0 to LCount - 2 do
   begin
@@ -1244,6 +1302,15 @@ begin
       LFHebrew := False;
       LRiCount := 0;
       LFHyInit := (LNew = lbcHY) or (LNew = lbcCM);
+      LNumState := 0;
+      LLb25Fixup := -1;
+      LFPiOpen := IsPiQU(LCh);
+      LFPrevEastAsian := False;
+      LFAfterOrthoVI := False;
+      if LNew = lbcNU then
+        LNumState := 3
+      else if LNew in [lbcPR, lbcPO] then
+        LNumState := 1;
       Continue;
     end;
 
@@ -1256,6 +1323,8 @@ begin
     begin
       LAfter[LI] := LB_BRK_NO;
       LFZwj := False;
+      LNumState := 0;
+      LLb25Fixup := -1;
       Continue;
     end;
     if LNew in [lbcBK, lbcLF, lbcNL] then
@@ -1314,10 +1383,88 @@ begin
       if LFZwj then
         LBrk := LB_BRK_NO;
 
-      if ((LCur = lbcCL) and (LNewR in [lbcPO, lbcPR])) or
-         ((LCur = lbcCP) and (LNewR in [lbcPO, lbcPR])) or
-         ((LCur in [lbcPO, lbcPR]) and (LNewR = lbcOP)) then
-        LBrk := LB_BRK_ALLOW;
+      { LB25: pair-table tailoring + numeric state (libunibreak-shaped).
+        CM/ZWJ are transparent (do not advance LB25 state). }
+      if not (LNew in [lbcCM, lbcZWJ]) then
+      begin
+        if ((LCur = lbcCL) and (LNewR in [lbcPO, lbcPR])) or
+           ((LCur = lbcCP) and (LNewR in [lbcPO, lbcPR])) or
+           ((LCur in [lbcPO, lbcPR]) and (LNewR = lbcOP)) or
+           ((LCur = lbcSY) and (LNewR = lbcNU) and (LNumState <> 3) and (LNumState <> 4)) then
+          LBrk := LB_BRK_ALLOW;
+
+        case LNumState of
+          1: { PREFIX: saw PR|PO }
+            if LNewR in [lbcOP, lbcHY] then
+            begin
+              LLb25Fixup := LI;
+              LNumState := 2;
+            end
+            else if LNewR = lbcNU then
+              LNumState := 3
+            else if LNewR in [lbcPR, lbcPO] then
+              LNumState := 1
+            else
+            begin
+              { PR/PO × U16 orthographic: break (not a numeric prefix).
+                PR × ordinary ID (Hangul/emoji) stays pair-table IND. }
+              LNumState := 0;
+              if (IsU16Ortho(LNew) or (LCh = $25CC)) and
+                 (LAction = LB_ACT_IND) and (LLast <> lbcSP) then
+                LBrk := LB_BRK_ALLOW;
+            end;
+          2: { PREFIXOP: (PR|PO)(OP|HY) }
+            if LNewR = lbcNU then
+            begin
+              if LLb25Fixup >= 0 then
+                LAfter[LLb25Fixup] := LB_BRK_NO;
+              LLb25Fixup := -1;
+              LNumState := 3;
+            end
+            else if LNewR in [lbcPR, lbcPO] then
+            begin
+              LLb25Fixup := -1;
+              LNumState := 1;
+            end
+            else
+            begin
+              LLb25Fixup := -1;
+              LNumState := 0;
+            end;
+          3: { NUM }
+            if LNewR in [lbcNU, lbcSY, lbcIS] then
+            begin
+              LBrk := LB_BRK_NO;
+              LNumState := 3;
+            end
+            else if LNewR in [lbcCL, lbcCP] then
+              LNumState := 4
+            else if LNewR in [lbcPO, lbcPR] then
+            begin
+              LBrk := LB_BRK_NO;
+              LNumState := 1;
+            end
+            else
+              LNumState := 0;
+          4: { NUMCLOSE }
+            if LNewR in [lbcPO, lbcPR] then
+            begin
+              LBrk := LB_BRK_NO;
+              LNumState := 1;
+            end
+            else if LNewR = lbcNU then
+              LNumState := 3
+            else if LNewR in [lbcPR, lbcPO] then
+              LNumState := 1
+            else
+              LNumState := 0;
+        else { NONE }
+          if LNewR = lbcNU then
+            LNumState := 3
+          else if LNewR in [lbcPR, lbcPO] then
+            LNumState := 1;
+        end;
+      end;
 
       if (LLast <> lbcSP) and (LCur in [lbcAL, lbcHL, lbcNU]) and
          (LNewR = lbcOP) and (not IsEastAsianOP(LCh)) then
@@ -1326,10 +1473,10 @@ begin
          (LNewR in [lbcAL, lbcHL, lbcNU]) then
         LBrk := LB_BRK_NO;
 
-      { U16 LB28a + selective LB999 }
-      if (IsU16Ortho(LRawCur) or IsU16Ortho(LNew) or (LBaseCp = $25CC)) and (LLast <> lbcSP) then
+      { U16 LB28a orthographic syllables + ID-like breaks for U16 left side }
+      if (IsU16Ortho(LRawCur) or IsU16Ortho(LNew) or (LBaseCp = $25CC) or
+          (LCh = $25CC)) and (LLast <> lbcSP) then
       begin
-        { LB28a: AP × (AK|AS); (AK|AS|◌) × (VF|VI); (… VI) × (AK|◌) }
         if (LRawCur = lbcAP) and (LNew in [lbcAK, lbcAS]) then
           LBrk := LB_BRK_NO
         else if ((LRawCur in [lbcAK, lbcAS]) or (LBaseCp = $25CC)) and
@@ -1350,22 +1497,22 @@ begin
           if LNew = lbcVI then
             LFAfterOrthoVI := True;
         end
-        else if (LBrk = LB_BRK_NO) and (LAction = LB_ACT_IND) then
+        else if ((LRawCur in [lbcAK, lbcAS]) or (LBaseCp = $25CC)) and
+                ((LNew in [lbcAK, lbcAS]) or (LCh = $25CC)) then
         begin
-          if LNewR in [lbcBA, lbcHY, lbcNS, lbcCM, lbcZWJ, lbcIN] then
-            { keep }
-          else if IsU16Ortho(LRawCur) and
-                  not (LNewR in [lbcQU, lbcGL, lbcWJ, lbcCL, lbcCP, lbcEX, lbcIS, lbcSY, lbcOP, lbcIN]) then
-            LBrk := LB_BRK_ALLOW
-          else if IsU16Ortho(LNew) and
-                  not (LRawCur in [lbcBB, lbcGL, lbcWJ, lbcQU, lbcOP, lbcCL, lbcCP, lbcNS,
-                                   lbcEX, lbcIS, lbcSY, lbcHY, lbcBA, lbcAK, lbcAS, lbcAP, lbcVI, lbcVF]) then
+          if PeekNonCM(LI + 2, LPeekCls, LPeekCp) and (LPeekCls = lbcVF) then
+            LBrk := LB_BRK_NO;
+        end
+        else if (IsU16Ortho(LRawCur) or (LBaseCp = $25CC)) and
+                (LBrk = LB_BRK_NO) and (LAction = LB_ACT_IND) then
+        begin
+          { U16→ID sticky: allow ID-like breaks except before punctuation. }
+          if not (LNewR in [lbcBA, lbcHY, lbcNS, lbcCM, lbcZWJ, lbcIN, lbcQU,
+            lbcGL, lbcWJ, lbcCL, lbcCP, lbcEX, lbcIS, lbcSY, lbcOP]) then
             LBrk := LB_BRK_ALLOW;
         end;
-        if (LBrk = LB_BRK_NO) and IsU16Ortho(LRawCur) and
-           (LNewR in [lbcPO, lbcPR, lbcAL, lbcHL, lbcNU, lbcEM, lbcEB, lbcRI, lbcH2, lbcH3]) then
-          LBrk := LB_BRK_ALLOW;
-        if not (LNew in [lbcVI, lbcCM, lbcZWJ, lbcAK, lbcAS]) then
+
+        if not (LNew in [lbcVI, lbcCM, lbcZWJ, lbcAK, lbcAS]) and (LCh <> $25CC) then
           LFAfterOrthoVI := False;
       end;
 
@@ -1375,7 +1522,7 @@ begin
       else if (LCur = lbcZW) and not (LNew in [lbcSP, lbcZW]) then
         LBrk := LB_BRK_ALLOW;
 
-      { LB21a: HL (HY|BA) × [^HL] — no break after Hebrew hyphen before non-HL }
+      { LB21a: HL (HY|BA) × [^HL] }
       if LFHebrew and (LCur in [lbcHY, lbcBA]) and (LNewR <> lbcHL) then
         LBrk := LB_BRK_NO;
 
@@ -1386,17 +1533,25 @@ begin
            (GetGeneralCategory(LBaseCp) = gcuUnassigned))) then
         LBrk := LB_BRK_NO;
 
-      { SY × NU often breaks (pair IND overridden) }
-      if (LCur = lbcSY) and (LNewR = lbcNU) then
-        LBrk := LB_BRK_ALLOW;
-
-
       { LB20a: word-initial hyphen (HY or U+2010 BA) × AL/AI }
       if (((LCur = lbcHY) or (LBaseCp = $2010)) and (LNewR in [lbcAL, lbcAI]) and LFHyInit) then
         LBrk := LB_BRK_NO;
 
-      { LB15a: Pi&QU SP* ×  (no break after opening quote + spaces) }
-      if (LCur = lbcQU) and IsPiQU(LBaseCp) and (LLast in [lbcSP, lbcXX]) then
+      { LB19a: allow break before Pi&QU when EastAsian × Pi&QU × EastAsian }
+      if (LNew = lbcQU) and IsPiQU(LCh) and (LLast <> lbcSP) and
+         IsEastAsianCp(LBaseCp) and not (LCur in [lbcOP, lbcGL]) then
+      begin
+        if PeekNonCM(LI + 2, LPeekCls, LPeekCp) and IsEastAsianCp(LPeekCp) then
+          LBrk := LB_BRK_ALLOW;
+      end;
+      { LB19a: allow break after Pf&QU when EastAsian × Pf × EastAsian (excl.) }
+      if (LCur = lbcQU) and IsPfQU(LBaseCp) and LFPrevEastAsian and
+         IsEastAsianCp(LCh) and
+         not (LNewR in [lbcNS, lbcBA, lbcEX, lbcCL, lbcIN, lbcIS, lbcGL, lbcCM]) then
+        LBrk := LB_BRK_ALLOW;
+
+      { LB15a: only Pi&QU that opened after sot/BK/SP/OP/QU/GL/ZW }
+      if LFPiOpen and (LCur = lbcQU) and IsPiQU(LBaseCp) and (LLast in [lbcSP, lbcXX]) then
         LBrk := LB_BRK_NO;
 
       { LB18 SP ÷ — after LB8 ZW SP* already handled }
@@ -1406,8 +1561,8 @@ begin
           LBrk := LB_BRK_NO
         else if LCur = lbcOP then
           LBrk := LB_BRK_NO { LB14 }
-        else if (LCur = lbcQU) and IsPiQU(LBaseCp) then
-          LBrk := LB_BRK_NO { LB15a }
+        else if LFPiOpen and (LCur = lbcQU) and IsPiQU(LBaseCp) then
+          LBrk := LB_BRK_NO { LB15a including before OP }
         else if (LCur in [lbcCL, lbcCP]) and (LNewR = lbcNS) then
           LBrk := LB_BRK_NO { LB16 }
         else if (LCur = lbcB2) and (LNewR = lbcB2) then
@@ -1418,12 +1573,26 @@ begin
         else if LNewR in [lbcCL, lbcCP, lbcEX, lbcIS, lbcSY] then
           LBrk := LB_BRK_NO { LB13 / LB15d }
         else if (LNew = lbcQU) and IsPfQU(LCh) then
-          LBrk := LB_BRK_NO { LB15b }
+        begin
+          { LB15b: × Pf only if Pf is followed by SP/GL/WJ/CL/…/eot }
+          if (LI + 2 >= LCount) then
+            LBrk := LB_BRK_NO
+          else
+          begin
+            case LCls[LI + 2] of
+              lbcSP, lbcGL, lbcWJ, lbcCL, lbcQU, lbcCP, lbcEX, lbcIS, lbcSY,
+              lbcBK, lbcCR, lbcLF, lbcNL, lbcZW:
+                LBrk := LB_BRK_NO;
+            else
+              LBrk := LB_BRK_ALLOW;
+            end;
+          end;
+        end
         else
           LBrk := LB_BRK_ALLOW; { LB18 }
       end;
 
-      { LB21a uses LFHebrew from prior HL; do not clear until after HY/BA×non-HL }
+      { LB21a uses LFHebrew from prior HL }
       if LCur = lbcHL then
         LFHebrew := True
       else if not (LCur in [lbcHY, lbcBA, lbcCM, lbcZWJ]) then
@@ -1445,11 +1614,19 @@ begin
       begin
         if (LCur = lbcHY) and not (LNewR in [lbcCM, lbcZWJ, lbcHY]) then
           LFHyInit := False;
+        LPrevBase := LCur;
         LCur := LNewR;
         if not (LNew in [lbcCM, lbcZWJ, lbcSP]) then
         begin
+          LFPrevEastAsian := IsEastAsianCp(LBaseCp);
+          { LB15a: Pi&QU opens only after sot/BK/SP/OP/QU/GL/ZW }
+          if IsPiQU(LCh) then
+            LFPiOpen := (LLast in [lbcSP, lbcXX, lbcZW, lbcGL, lbcBK, lbcCR, lbcLF, lbcNL]) or
+                        (LPrevBase in [lbcOP, lbcQU, lbcGL, lbcWJ])
+          else
+            LFPiOpen := False;
           LBaseCp := LCh;
-          LRawCur := LNew; { raw class of new base }
+          LRawCur := LNew;
         end;
         if LNewR = lbcHY then
           LFHyInit := LFHyInit or (LLast in [lbcXX, lbcSP, lbcZW, lbcGL, lbcBK]);

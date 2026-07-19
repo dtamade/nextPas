@@ -51,9 +51,9 @@ function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBrea
 function NFC/NFD/NFKC/NFKD(...): string;
 ```
 
-- 官方一致性：`NormalizationTest.txt`、`GraphemeBreakTest.txt`、`WordBreakTest.txt` 全量离线 harness
+- 官方一致性：`NormalizationTest.txt`、`GraphemeBreakTest.txt`、`WordBreakTest.txt`、`SentenceBreakTest.txt`、`LineBreakTest.txt` 全量离线 harness
 - GB9c（InCB）已实现
-- Sentence 官方全量；Line 仍为硬换行近似
+- Line **双语义**：硬 `NextLine`（分隔符）vs 软 `LineBreakByteLen`（UAX#14 全绿）
 
 ### 类型转换 (text.conv)
 
@@ -75,7 +75,7 @@ function BoolToStr(AValue: Boolean): string;
 
 1. Collation 仅 DUCET（无 locale / CLDR）
 2. 无 Bidi（UAX#9）全实现
-3. Sentence/Line 未官方 BreakTest 全量
+3. 硬 `NextLine` 非 UAX#14；软换行用 `LineBreakByteLen`
 4. 无 CLDR tailored grapheme/word
 
 ---
