@@ -9,6 +9,9 @@ interface
   message. Never returns when ACode <> 0; a no-op when ACode = 0. }
 procedure RaiseFsError(const ACode: Int32; const AOp, APath: string);
 
+{ True when a non-blocking lock attempt failed because the lock is held. }
+function FsIsLockBusy(const ACode: Int32): Boolean;
+
 implementation
 
 uses
@@ -49,6 +52,21 @@ const
   ENOTEMPTY_ = 39;
 {$ENDIF}
 {$ENDIF}
+
+function FsIsLockBusy(const ACode: Int32): Boolean;
+begin
+  if ACode = 0 then
+    Exit(False);
+  { POSIX: flock LOCK_NB → EAGAIN/EWOULDBLOCK; some paths EBUSY. }
+  if (ACode = PLATFORM_ERR_AGAIN) or (ACode = PLATFORM_ERR_BUSY) then
+    Exit(True);
+{$IFDEF NEXTPAS_WINDOWS}
+  { ERROR_LOCK_VIOLATION=33, ERROR_BUSY=170, ERROR_LOCK_FAILED=167 }
+  if (ACode = 33) or (ACode = 170) or (ACode = 167) then
+    Exit(True);
+{$ENDIF}
+  Result := False;
+end;
 
 procedure RaiseFsError(const ACode: Int32; const AOp, APath: string);
 var

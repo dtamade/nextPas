@@ -16,6 +16,11 @@ type
     function Stat: TFileInfo;
     procedure Sync;
     procedure Truncate(const ASize: Int64);
+    { Blocking whole-file lock (advisory; Unix flock / Win LockFileEx). }
+    procedure Lock(const AKind: TFileLockKind = flkExclusive);
+    { Non-blocking; True=acquired, False=busy; other errors raise. }
+    function TryLock(const AKind: TFileLockKind = flkExclusive): Boolean;
+    procedure Unlock;
   end;
 
   IDirIterator = interface

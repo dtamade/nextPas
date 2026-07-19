@@ -48,6 +48,12 @@ type
 
   TDirEntryArray = array of TDirEntry;
 
+  { Whole-file advisory lock kind (flock / LockFileEx). }
+  TFileLockKind = (
+    flkShared,
+    flkExclusive
+  );
+
 const
   PermOwnerRead  = TFilePermission($100);
   PermOwnerWrite = TFilePermission($080);
