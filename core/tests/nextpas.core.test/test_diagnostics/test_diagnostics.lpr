@@ -13,6 +13,7 @@ program test_diagnostics;
 uses
   nextpas.core.thread.init,
   nextpas.core.text.conv,
+  nextpas.core.platform.env,
   nextpas.core.test,
   nextpas.core.test.base; { for IsFrameworkFrame, GLastTestTrace }
 
@@ -285,6 +286,72 @@ begin
     WriteLn('  (no trace captured — stack trace may not be available)');
 end;
 
+{ ── 5. B2.3 Failure message contracts (stable substrings) ────────────────── }
+
+procedure DiagEnvSet(const AName, AValue: string);
+begin
+  platform_env_set(PAnsiChar(AnsiString(AName)), PAnsiChar(AnsiString(AValue)));
+end;
+
+procedure DiagEnvUnset(const AName: string);
+begin
+  platform_env_unset(PAnsiChar(AnsiString(AName)));
+end;
+
+procedure TestMsgContractStringEqual;
+begin
+  DiagEnvSet('NEXTPAS_COLOR', '0');
+  try
+    ExpectFail(procedure begin
+      CheckEqual('abc', 'axc');
+    end, 'differ at position');
+    ExpectFail(procedure begin
+      CheckEqual('abc', 'axc');
+    end, 'expected');
+    ExpectFail(procedure begin
+      CheckEqual('abc', 'axc');
+    end, 'actual');
+  finally
+    DiagEnvUnset('NEXTPAS_COLOR');
+  end;
+end;
+
+procedure TestMsgContractIntEqual;
+begin
+  ExpectFail(procedure begin
+    CheckEqual(Int64(10), Int64(20));
+  end, 'expected');
+  ExpectFail(procedure begin
+    CheckEqual(Int64(10), Int64(20));
+  end, 'actual');
+  ExpectFail(procedure begin
+    CheckEqual(Int64(10), Int64(20));
+  end, '10');
+  ExpectFail(procedure begin
+    CheckEqual(Int64(10), Int64(20));
+  end, '20');
+end;
+
+procedure TestMsgContractSnapshotMismatch;
+const
+  LDir = '/tmp/np_snap_diag_b2';
+begin
+  DiagEnvUnset('NEXTPAS_SNAPSHOT_FAIL_ON_CREATE');
+  DiagEnvUnset('NEXTPAS_UPDATE_SNAPSHOTS');
+  DiagEnvSet('NEXTPAS_COLOR', '0');
+  try
+    CheckSnapshot('diag-old', LDir, 'm.txt');
+    ExpectFail(procedure begin
+      CheckSnapshot('diag-new', LDir, 'm.txt');
+    end, 'Snapshot mismatch');
+    ExpectFail(procedure begin
+      CheckSnapshot('diag-new', LDir, 'm.txt');
+    end, 'differ at position');
+  finally
+    DiagEnvUnset('NEXTPAS_COLOR');
+  end;
+end;
+
 { ── Main ─────────────────────────────────────────────────────────────────── }
 
 var
@@ -316,6 +383,11 @@ begin
 
   { Framework frame filtering }
   LSuite.Test('framework frame filtering',      @TestFrameworkFrameFiltering);
+
+  { B2.3 message contracts }
+  LSuite.Test('msg contract string equal',      @TestMsgContractStringEqual);
+  LSuite.Test('msg contract int equal',         @TestMsgContractIntEqual);
+  LSuite.Test('msg contract snapshot mismatch', @TestMsgContractSnapshotMismatch);
 
   if not LSuite.Run then
   begin
