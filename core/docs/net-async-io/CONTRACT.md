@@ -449,3 +449,10 @@ atsCancelled: TAsyncTaskStatus = 5;
 - `platform_socket_resolve_stream`: getaddrinfo multi-A (cap 16), AF_UNSPEC.
 - `NetResolveAll` / `AsyncResolve`: v4-first then v6 list.
 - `NetTcpConnect` / `AsyncTcpConnect`: sequential try each address (IPv4+IPv6); **not** concurrent RFC8305 Happy Eyeballs.
+
+### Concurrent Happy Eyeballs (Q7/Q8)
+- `AsyncTcpDial` / `AsyncTcpDialAddrs` in `net.async.dial`: staggered concurrent attempts on `TAsyncLoop` (`AsyncConnect` + timers).
+- Defaults: ConnectionAttemptDelayMs=250, MaxInFlight=2, **InterleaveFamilies=True** (RFC-style alternate v4/v6).
+- Address `Port<>0` honored (else dial port); multi-A first-fail-second-win covered by tests.
+- Optional overall deadline + CancellationToken; single user callback; 0 leak.
+- Does **not** replace HE-lite sync `AsyncTcpConnect`.

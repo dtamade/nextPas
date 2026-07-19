@@ -65,6 +65,58 @@ begin
   Check(S.State = ssCancelled, 'cancelled after reset');
 end;
 
+
+procedure TestCaptureReleaseClears;
+var
+  C: TPointerCapture;
+begin
+  C.Acquire(Pointer(1), mbLeft);
+  Check(C.Active, 'acquired');
+  C.Release;
+  Check(not C.Active, 'released');
+end;
+
+procedure TestSessionIsActiveLifecycle;
+var
+  S: TInteractionSession;
+begin
+  S.State := ssNone;
+  Check(not S.IsActive, 'none inactive');
+  S.Begin_(Pointer(2));
+  Check(S.IsActive, 'active after begin');
+  S.Commit;
+  Check(not S.IsActive, 'committed inactive');
+end;
+
+procedure TestHitTestOutside;
+begin
+  Check(not HitTest(TRect.Make(0, 0, 5, 5), 10, 10), 'outside false');
+  Check(HitTest(TRect.Make(0, 0, 5, 5), 0, 0), 'origin inside');
+end;
+
+procedure TestHoverEnterLeave;
+var
+  H: THoverChange;
+begin
+  H := DetectHoverChange(TRect.Make(0, 0, 5, 5), 10, 10, 1, 1);
+  Check(H = hcEntered, 'enter');
+  H := DetectHoverChange(TRect.Make(0, 0, 5, 5), 1, 1, 10, 10);
+  Check(H = hcLeft, 'leave');
+end;
+
+procedure TestHitTestEventUsesCoords;
+var
+  Ev: TMouseEvent;
+begin
+  Ev.X := 2;
+  Ev.Y := 2;
+  Ev.Kind := mkMoved;
+  Ev.Button := mbNone;
+  Ev.Modifiers := [];
+  Check(HitTestEvent(TRect.Make(0, 0, 5, 5), Ev), 'event inside');
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.interaction');
   T.Test('capture', @TestCapture);
@@ -74,5 +126,10 @@ begin
   T.Test('hover', @TestHover);
   T.Test('hover same position', @TestHoverSamePos);
   T.Test('session multiple transitions', @TestSessionMultipleTransitions);
-  if not T.Run then Halt(1);
+    T.Test('capture release clears', @TestCaptureReleaseClears);
+  T.Test('session is active lifecycle', @TestSessionIsActiveLifecycle);
+  T.Test('hit test outside', @TestHitTestOutside);
+  T.Test('hover enter leave', @TestHoverEnterLeave);
+  T.Test('hit test event coords', @TestHitTestEventUsesCoords);
+if not T.Run then Halt(1);
 end.

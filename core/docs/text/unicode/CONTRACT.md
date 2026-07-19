@@ -11,14 +11,14 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 |--------|------|
 | `types.pas` | 基础类型（含 `TIndicConjunctBreak`） |
 | `base.pas` | 区间二分查找原语 |
-| `props.pas` | GC / BinaryProperty / GCB / InCB / **WBP** |
+| `props.pas` | GC / BinaryProperty / GCB / InCB / **WBP** / **SBP** / **LBP** |
 | `casefold.pas` | 大小写映射 + CaseFold |
 | `normalize.pas` | NFC/NFD/NFKC/NFKD + QuickCheck |
-| `segment.pas` | UAX#29 + `GraphemeClusterByteLen` + **`WordBreakByteLen`** |
+| `segment.pas` | UAX#29 Grapheme/Word/Sentence + **UAX#14 LineBreak** ByteLen |
 | `collate.pas` | DUCET 排序 |
 | `script.pas` / `block.pas` | Script / Block |
 | `data.pas` | IUnicodeDataManager |
-| 门面 `unicode.pas` | re-export（含 `GraphemeClusterByteLen` / `WordBreakByteLen` / InCB / WBP） |
+| 门面 `unicode.pas` | re-export（Grapheme/Word/Sentence/LineBreak ByteLen + InCB/WBP/SBP/LBP） |
 
 `text.grapheme.GraphemeNext` 委托 `GraphemeClusterByteLen` 做边界，本地只计算显示宽度。
 
@@ -35,9 +35,15 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 1. 覆盖性 / 非空 / 边界单调
 2. **官方一致性**：`GraphemeBreakTest.txt` 全量通过（~1093 行）
 3. **官方一致性**：`WordBreakTest.txt` 全量通过（~1826 行）
-4. **单一真源**：`GraphemeNext` 与 `NextGraphemeCluster` 边界一致
-5. **GB9c**：`InCB=Consonant … Linker … × Consonant` 已实现
-6. **Word**：`NextWord` / `SegmentWords` 按 UAX#29 边界切分（含空白段）
+4. **官方一致性**：`SentenceBreakTest.txt` 全量通过（~512 行）
+5. **官方一致性**：`LineBreakTest.txt` 全量通过（~16672 行，UAX#14）
+6. **单一真源**：`GraphemeNext` 与 `NextGraphemeCluster` 边界一致
+7. **GB9c**：`InCB=Consonant … Linker … × Consonant` 已实现
+8. **Word**：`NextWord` / `SegmentWords` 按 UAX#29 边界切分（含空白段）
+9. **Sentence**：`NextSentence` / `SegmentSentences` 按 UAX#29 边界（`SentenceBreakByteLen`）
+10. **Line 双语义**：
+    - **硬** `NextLine` / `SegmentLines`：仅硬分隔符（CR/LF/NL 等），**不是** UAX#14
+    - **软** `LineBreakByteLen`：UAX#14 换行机会（Unicode 16.0 pair table + LB15a/b/c、LB19a、LB25、LB28a 等）
 ### 排序
 
 自反 / 对称 / 传递；`Compare` 与 sort key 符号一致；仅 DUCET。
@@ -54,7 +60,8 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 
 1. 无 CLDR tailored grapheme / word
 2. Collation 仅 DUCET（无 locale）
-3. Sentence/Line 未接官方 BreakTest 全量
+3. **硬** `NextLine` 不替换为 UAX#14；软换行请用 `LineBreakByteLen`（已官方全绿）
+4. 无完整 East_Asian_Width 表：LB19a 用 F/W/H 近似区间 + LB 类启发
 
 ## 测试入口
 
@@ -62,7 +69,7 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 for t in test_case test_data test_enhance test_grapheme_uax29 \
          test_normalize test_property test_collate \
          test_conformance_normalize test_conformance_grapheme \
-         test_conformance_word; do
+         test_conformance_word test_conformance_sentence test_conformance_line; do
   make -C core/tests/nextpas.core.text.unicode/$t clean test
 done
 ```
@@ -73,12 +80,16 @@ Fixture 生成：
 python3 core/scripts/gen_unicode_fixtures.py --version 16.0.0 \
   --fixtures-dir core/tests/nextpas.core.text.unicode/data
 python3 core/scripts/gen_unicode_wbp.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_sbp.py --version 16.0.0 --output-dir core/src
+python3 core/scripts/gen_unicode_lbp.py --version 16.0.0 --output-dir core/src
 ```
 
 ## 变更记录
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-20 | LineBreak 官方 16672/16672 全绿；硬 NextLine / 软 LineBreakByteLen 双语义钉死 |
+| 2026-07-19 | SentenceBreak 官方 harness + SBP + UAX#29 NextSentence |
 | 2026-07-19 | WordBreak 官方 harness + WBP 表 + UAX#29 NextWord |
 | 2026-07-19 | Conformance harness；CCC/compose 修复；GB9c/InCB；Grapheme 真源合并 |
 | 2026-07-11 | enhance 边界测试与文档四件套 |

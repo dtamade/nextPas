@@ -122,6 +122,20 @@ begin
   Check(LGroup.Count = 0, 'Index > 15 should not change Count');
 end;
 
+
+procedure TestLoadingGroupClearViaEmpty;
+var
+  G: TLoadingGroup;
+begin
+  G := TLoadingGroup.Empty;
+  G.Start(0, 1, 100);
+  Check(G.AnyLoading, 'loading after start');
+  G := TLoadingGroup.Empty;
+  Check(G.Count = 0, 'Empty resets');
+  Check(not G.AnyLoading, 'not loading after Empty');
+end;
+
+
 begin
   T := TTestSuite.Create('tui_loading');
   T.Test('TLoadingGroup.Empty creates empty group', @TestLoadingGroupEmpty);
@@ -135,5 +149,6 @@ begin
   T.Test('TLoadingGroup.GetPhase', @TestLoadingGroupGetPhase);
   T.Test('TLoadingGroup.GetPhase out of bounds', @TestLoadingGroupGetPhaseOutOfBounds);
   T.Test('TLoadingGroup.Start invalid index', @TestLoadingGroupStartInvalidIndex);
-  if not T.Run then Halt(1);
+    T.Test('Empty resets group', @TestLoadingGroupClearViaEmpty);
+if not T.Run then Halt(1);
 end.

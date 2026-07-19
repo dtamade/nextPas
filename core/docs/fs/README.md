@@ -54,7 +54,39 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 |------|------|
 | `Open(APath, AMode)` | 以指定模式打开文件，返回 `IFile` |
 | `Create(APath, APerm)` | 创建新文件（已存在则截断），返回 `IFile` |
+| `OpenLocked(APath[, Mode, Kind])` | 打开并阻塞获取整文件锁（`flkExclusive`/`flkShared`） |
 | `CopyFile(ASrc, ADst)` | 复制文件，返回写入字节数 |
+
+### 文件锁（IFile）
+
+整文件 **advisory** 锁（Unix `flock`；Windows `LockFileEx`）。锁绑定打开句柄，关闭后释放。
+
+```pascal
+var F := OpenLocked('/var/run/myapp.lock', [fmCreate, fmWrite], flkExclusive);
+try
+  // 单实例临界区
+finally
+  F.Close;  // 释放锁
+end;
+
+// 或手动：
+var A := Open(path, [fmRead, fmWrite]);
+if A.TryLock(flkExclusive) then
+begin
+  try
+    ...
+  finally
+    A.Unlock;
+  end;
+end;
+```
+
+| 方法 | 说明 |
+|------|------|
+| `Lock(kind)` | 阻塞获取；失败抛异常 |
+| `TryLock(kind)` | 非阻塞；忙返回 False，其它错误抛异常 |
+| `Unlock` | 释放 |
+| `OpenLocked` | Open + Lock 便利 |
 | `TempFile(ADir, APattern)` | 创建临时文件，返回 `IFile` |
 | `TempDir(ADir, APattern)` | 创建临时目录，返回路径 |
 | `Glob(ADir, APattern)` | 列出匹配 glob 模式的文件（单层） |

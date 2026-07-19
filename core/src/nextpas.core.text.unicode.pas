@@ -29,6 +29,8 @@ type
   TGraphemeBreakProperty = nextpas.core.text.unicode.types.TGraphemeBreakProperty;
   TIndicConjunctBreak = nextpas.core.text.unicode.types.TIndicConjunctBreak;
   TWordBreakProperty = nextpas.core.text.unicode.types.TWordBreakProperty;
+  TSentenceBreakProperty = nextpas.core.text.unicode.types.TSentenceBreakProperty;
+  TLineBreakClass = nextpas.core.text.unicode.types.TLineBreakClass;
 
   TCollationStrength = nextpas.core.text.unicode.collate.TCollationStrength;
   TCollationOptions = nextpas.core.text.unicode.collate.TCollationOptions;
@@ -58,6 +60,8 @@ function GetGeneralCategory(const ACp: TUnicodeCodepoint): TGeneralCategory; inl
 function GetGraphemeBreakProperty(const ACp: TUnicodeCodepoint): TGraphemeBreakProperty; inline;
 function GetIndicConjunctBreak(const ACp: TUnicodeCodepoint): TIndicConjunctBreak; inline;
 function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty; inline;
+function GetSentenceBreakProperty(const ACp: TUnicodeCodepoint): TSentenceBreakProperty; inline;
+function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass; inline;
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsLower(const ACp: TUnicodeCodepoint): Boolean; inline;
 function IsAlpha(const ACp: TUnicodeCodepoint): Boolean; inline;
@@ -116,6 +120,8 @@ function SegmentSentences(const AText: string): TSegmentResultArray; inline;
 { Shared UAX #29 grapheme-cluster core (byte-oriented). }
 function GraphemeClusterByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
 function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
+function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
+function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt; inline;
 
 // 排序规则函数
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32; inline;
@@ -159,6 +165,16 @@ end;
 function GetWordBreakProperty(const ACp: TUnicodeCodepoint): TWordBreakProperty;
 begin
   Result := nextpas.core.text.unicode.props.GetWordBreakProperty(ACp);
+end;
+
+function GetSentenceBreakProperty(const ACp: TUnicodeCodepoint): TSentenceBreakProperty;
+begin
+  Result := nextpas.core.text.unicode.props.GetSentenceBreakProperty(ACp);
+end;
+
+function GetLineBreakClass(const ACp: TUnicodeCodepoint): TLineBreakClass;
+begin
+  Result := nextpas.core.text.unicode.props.GetLineBreakClass(ACp);
 end;
 
 function IsUpper(const ACp: TUnicodeCodepoint): Boolean;
@@ -396,6 +412,16 @@ end;
 function WordBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 begin
   Result := nextpas.core.text.unicode.segment.WordBreakByteLen(AData, ALen);
+end;
+
+function SentenceBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.text.unicode.segment.SentenceBreakByteLen(AData, ALen);
+end;
+
+function LineBreakByteLen(const AData: PByte; const ALen: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.text.unicode.segment.LineBreakByteLen(AData, ALen);
 end;
 
 function GetCollationWeight(const ACp: TUnicodeCodepoint): UInt32;

@@ -1,4 +1,5 @@
 > **归档**（2026-07-17）：历史 Phase 4 计划。推进主线见 [`roadmap.md`](roadmap.md)。
+> **H3-4**：文中绝对 ops/s 为 historical only；规范见 [`bench-envelope.md`](bench-envelope.md)。
 
 # Phase 4: HashMap 读路径优化计划
 

@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.test*.pas`（17 个 .pas + 4 个 .inc）
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
-**最后更新**：2026-07-19
-**版本**：v8.9
+**最后更新**：2026-07-20
+**版本**：v8.10
 
 ---
 
@@ -390,6 +390,12 @@ end;
 | 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
 
 ## 11. 变更日志
+
+### v8.10 (2026-07-20) — Mock 并行隔离 + Perf 宽松阈值 + Output 深契约
+
+- **Mock**：跨线程 `RecordCall` 必须失败，消息含 `not thread-safe`；同线程仍 pass
+- **Perf**：`test_perf_bench` 支持 `--save-baseline` / `--baseline` / `--threshold`（默认 ratio 1.30 = +30%）；`make regression` 可选门禁（非默认 test 硬失败）
+- **Output**：JUnit 空/skip/failure 消息；JSON status 枚举；TAP `1..N`；XmlEscape 特殊字符；ANSI off 无 CSI
 
 ### v8.9 (2026-07-19) — Go/Rust 第二波：规模 + Helper 语义 + runner 门禁
 

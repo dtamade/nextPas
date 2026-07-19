@@ -19,6 +19,10 @@ function FsFromHandle(const AHandle: Int32; const AName: string): IFile;
 { Takes ownership of AHandle; the returned IFile closes it. }
 function FsFromPlatformHandle(const AHandle: TPlatformFileHandle;
   const AName: string): IFile;
+{ Open then Lock; on lock failure closes the file and re-raises. }
+function FsOpenLocked(const APath: string;
+  const AMode: TFileMode = [fmRead, fmWrite];
+  const AKind: TFileLockKind = flkExclusive): IFile;
 
 implementation
 
@@ -48,6 +52,9 @@ type
     function Stat: TFileInfo;
     procedure Sync;
     procedure Truncate(const ASize: Int64);
+    procedure Lock(const AKind: TFileLockKind = flkExclusive);
+    function TryLock(const AKind: TFileLockKind = flkExclusive): Boolean;
+    procedure Unlock;
     function ReadAt(var ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
     function WriteAt(const ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;
   end;
@@ -146,6 +153,22 @@ function FsFromPlatformHandle(const AHandle: TPlatformFileHandle;
   const AName: string): IFile;
 begin
   Result := TFile.Create(AHandle, AName);
+end;
+
+function FsOpenLocked(const APath: string; const AMode: TFileMode;
+  const AKind: TFileLockKind): IFile;
+var
+  LFile: IFile;
+begin
+  LFile := FsOpenFile(APath, AMode, PermDefault);
+  try
+    LFile.Lock(AKind);
+  except
+    LFile.Close;
+    LFile := nil;
+    raise;
+  end;
+  Result := LFile;
 end;
 
 { TFile }
@@ -294,6 +317,40 @@ begin
   LResult := platform_file_truncate(FHandle, ASize);
   if LResult <> 0 then
     RaiseFsError(LResult, 'truncate', FName);
+end;
+
+procedure TFile.Lock(const AKind: TFileLockKind);
+var
+  LResult: Int32;
+begin
+  CheckOpen;
+  LResult := platform_file_lock(FHandle, AKind = flkExclusive);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'lock', FName);
+end;
+
+function TFile.TryLock(const AKind: TFileLockKind): Boolean;
+var
+  LResult: Int32;
+begin
+  CheckOpen;
+  LResult := platform_file_trylock(FHandle, AKind = flkExclusive);
+  if LResult = 0 then
+    Exit(True);
+  if FsIsLockBusy(LResult) then
+    Exit(False);
+  RaiseFsError(LResult, 'trylock', FName);
+  Result := False;
+end;
+
+procedure TFile.Unlock;
+var
+  LResult: Int32;
+begin
+  CheckOpen;
+  LResult := platform_file_unlock(FHandle);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'unlock', FName);
 end;
 
 function TFile.ReadAt(var ABuf; const ACount: SizeUInt; const AOffset: Int64): SizeUInt;

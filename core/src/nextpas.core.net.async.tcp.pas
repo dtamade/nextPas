@@ -58,6 +58,9 @@ function AsyncTcpListen(const ALoop: TAsyncLoop;
 { 创建异步 TCP 连接 }
 function AsyncTcpConnect(const ALoop: TAsyncLoop;
   const AAddr: string; const APort: UInt16): IAsyncTcpStream;
+{ Wrap an existing connected ITcpStream for async I/O on ALoop. }
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop;
+  const AStream: ITcpStream): IAsyncTcpStream;
 
 implementation
 
@@ -447,6 +450,14 @@ begin
   { NetTcpConnect uses NetResolveAll + sequential multi-A / dual-stack try (HE-lite). }
   LStream := NetTcpConnect(AAddr, APort);
   Result := TAsyncTcpStream.Create(LStream, ALoop) as IAsyncTcpStream;
+end;
+
+function AsyncTcpStreamAdopt(const ALoop: TAsyncLoop;
+  const AStream: ITcpStream): IAsyncTcpStream;
+begin
+  if (ALoop = nil) or (AStream = nil) then
+    raise EInvalidOperationError.Create('AsyncTcpStreamAdopt: nil loop or stream');
+  Result := TAsyncTcpStream.Create(AStream, ALoop) as IAsyncTcpStream;
 end;
 
 end.

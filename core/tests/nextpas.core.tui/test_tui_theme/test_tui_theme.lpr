@@ -114,6 +114,27 @@ begin
   Check(not StyleEquals(LDark.Bg, LDracula.Bg), 'Dark and Dracula Bg should differ');
 end;
 
+
+procedure TestThemeLightSuccessError;
+var
+  L: TTheme;
+begin
+  L := TTheme.Light;
+  Check(not StyleEquals(L.Success, L.Error_), 'Light Success != Error');
+  Check(not StyleEquals(L.Warning, L.Muted), 'Light Warning != Muted');
+end;
+
+procedure TestThemeNordDraculaPrimaryDiffer;
+var
+  N, D: TTheme;
+begin
+  N := TTheme.Nord;
+  D := TTheme.Dracula;
+  Check(not StyleEquals(N.Primary, D.Primary), 'Nord/Dracula Primary differ');
+  Check(not StyleEquals(N.Bg, D.Bg), 'Nord/Dracula Bg differ');
+end;
+
+
 begin
   T := TTestSuite.Create('tui_theme');
   T.Test('TTheme.Dark creates valid theme', @TestThemeDark);
@@ -126,5 +147,7 @@ begin
   T.Test('TTheme.Dark Header has bold', @TestThemeHeaderHasBold);
   T.Test('TTheme.Light BorderFocused has bold', @TestThemeLightBorderFocusedHasBold);
   T.Test('Different presets have different styles', @TestThemeDifferentPresets);
-  if not T.Run then Halt(1);
+    T.Test('Light Success != Error', @TestThemeLightSuccessError);
+  T.Test('Nord Dracula Primary differ', @TestThemeNordDraculaPrimaryDiffer);
+if not T.Run then Halt(1);
 end.

@@ -88,9 +88,9 @@ begin
   LResults := SegmentSentences('He said "Hello." She replied.');
   CheckEqual(Int64(2), Int64(Length(LResults)), 'Sentence with closing quote');
 
-  // 测试省略号（U+2026 HORIZONTAL ELLIPSIS）
+  // 测试省略号（U+2026 HORIZONTAL ELLIPSIS）— 非 STerm/ATerm，不强制断句
   LResults := SegmentSentences('Wait' + #$E2#$80#$A6 + ' Really?');
-  CheckEqual(Int64(2), Int64(Length(LResults)), 'Ellipsis + question');
+  CheckEqual(Int64(1), Int64(Length(LResults)), 'Ellipsis alone does not break sentence (UAX#29)');
 
   // 测试全角句号
   LResults := SegmentSentences('你好．世界！');

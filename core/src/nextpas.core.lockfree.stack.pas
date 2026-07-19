@@ -15,6 +15,8 @@ unit nextpas.core.lockfree.stack;
  *
  * @see Treiber Stack — classic lock-free stack
  * @see Lock-free data structures — CAS-based algorithms
+ *
+ * Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -113,26 +115,31 @@ end;
 function TLockFreeStackImpl.TryPush(const AValue: T): Boolean;
 var
   LOldFree, LNewFree, LOldTop, LNewTop: Int64;
+  LExpected: Int64;
   LIdx: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   repeat
-    LOldFree := AtomicLoad64(FFreeHead, moAcquire);
+    LOldFree := atomic_load_64(FFreeHead, mo_acquire);
     LIdx := UnpackIdx(LOldFree);
     if LIdx = -1 then
       Exit(False);
     LNewFree := PackTagIdx(FSlots[LIdx].Next, UnpackTag(LOldFree) + 1);
-  until AtomicCompareExchange64(FFreeHead, LOldFree, LNewFree, moAcqRel) = LOldFree;
+    LExpected := LOldFree;
+  until atomic_compare_exchange_strong_64(FFreeHead, LExpected, LNewFree,
+    mo_acq_rel, mo_acquire);
 
-  AtomicFetchAdd64(FCount, 1, moRelaxed);
+  atomic_fetch_add_64(FCount, 1, mo_relaxed);
   FSlots[LIdx].Value := AValue;
 
   repeat
-    LOldTop := AtomicLoad64(FTop, moAcquire);
+    LOldTop := atomic_load_64(FTop, mo_acquire);
     FSlots[LIdx].Next := UnpackIdx(LOldTop);
     LNewTop := PackTagIdx(LIdx, UnpackTag(LOldTop) + 1);
-  until AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop;
+    LExpected := LOldTop;
+  until atomic_compare_exchange_strong_64(FTop, LExpected, LNewTop,
+    mo_acq_rel, mo_acquire);
   Result := True;
 end;
 
@@ -153,25 +160,30 @@ end;
 function TLockFreeStackImpl.TryPop(out AValue: T): Boolean;
 var
   LOldTop, LNewTop, LOldFree, LNewFree: Int64;
+  LExpected: Int64;
   LIdx: Int32;
 begin
   repeat
-    LOldTop := AtomicLoad64(FTop, moAcquire);
+    LOldTop := atomic_load_64(FTop, mo_acquire);
     LIdx := UnpackIdx(LOldTop);
     if LIdx = -1 then
       Exit(False);
     LNewTop := PackTagIdx(FSlots[LIdx].Next, UnpackTag(LOldTop) + 1);
-  until AtomicCompareExchange64(FTop, LOldTop, LNewTop, moAcqRel) = LOldTop;
+    LExpected := LOldTop;
+  until atomic_compare_exchange_strong_64(FTop, LExpected, LNewTop,
+    mo_acq_rel, mo_acquire);
 
-  AtomicFetchSub64(FCount, 1, moRelaxed);
+  atomic_fetch_sub_64(FCount, 1, mo_relaxed);
   AValue := FSlots[LIdx].Value;
   FSlots[LIdx].Value := Default(T);
 
   repeat
-    LOldFree := AtomicLoad64(FFreeHead, moAcquire);
+    LOldFree := atomic_load_64(FFreeHead, mo_acquire);
     FSlots[LIdx].Next := UnpackIdx(LOldFree);
     LNewFree := PackTagIdx(LIdx, UnpackTag(LOldFree) + 1);
-  until AtomicCompareExchange64(FFreeHead, LOldFree, LNewFree, moAcqRel) = LOldFree;
+    LExpected := LOldFree;
+  until atomic_compare_exchange_strong_64(FFreeHead, LExpected, LNewFree,
+    mo_acq_rel, mo_acquire);
   Result := True;
 end;
 
@@ -191,7 +203,7 @@ end;
 
 function TLockFreeStackImpl.IsEmpty: Boolean;
 begin
-  Result := UnpackIdx(AtomicLoad64(FTop, moAcquire)) = -1;
+  Result := UnpackIdx(atomic_load_64(FTop, mo_acquire)) = -1;
 end;
 
 function TLockFreeStackImpl.Drain(const AMaxCount: PtrUInt): PtrUInt;
@@ -211,7 +223,7 @@ end;
 
 procedure TLockFreeStackImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TLockFreeStackImpl.Destroy;
@@ -222,7 +234,7 @@ end;
 
 function TLockFreeStackImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TLockFreeStackImpl.ApproxCount: PtrUInt;
@@ -231,7 +243,7 @@ var
   LCount: PtrUInt;
 begin
   LCount := 0;
-  LIdx := UnpackIdx(AtomicLoad64(FTop, moAcquire));
+  LIdx := UnpackIdx(atomic_load_64(FTop, mo_acquire));
   while LIdx <> -1 do
   begin
     Inc(LCount);

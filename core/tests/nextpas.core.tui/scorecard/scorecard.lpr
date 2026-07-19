@@ -1,6 +1,6 @@
 program scorecard;
 {**
- * tui Scorecard SC1–SC5 (PARITY-GO-RUST Wave Q1)
+ * tui Scorecard SC1–SC7 (PARITY-GO-RUST Wave Q1–Q6)
  *
  * Fixed scenarios for Ready reports:
  *   SC1 Diff 200x50 identical
@@ -8,6 +8,8 @@ program scorecard;
  *   SC3 ParseOne ASCII / CSI arrow batch
  *   SC4 VerticalSplit 3 + Grid 4x4 correctness
  *   SC5 Frame Begin/End empty (test runtime)
+ *   SC6 ParseOne focus CSI I/O (DECSET 1004)
+ *   SC7 Wide CJK cell width correctness
  *}
 
 {$I nextpas.core.settings.inc}
@@ -283,6 +285,60 @@ begin
   end;
 end;
 
+procedure RunSC6;
+var
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+  LOk: Boolean;
+  LIn, LOut: array[0..2] of Byte;
+begin
+  WriteLn('SC6 ParseOne focus CSI I/O ...');
+  LIn[0] := 27;
+  LIn[1] := Ord('[');
+  LIn[2] := Ord('I');
+  LOut[0] := 27;
+  LOut[1] := Ord('[');
+  LOut[2] := Ord('O');
+
+  LOk := True;
+  LResult := ParseOne(LIn[0], 3, True, LEvent, LConsumed);
+  if (LResult <> prSuccess) or (LEvent.Kind <> evFocus) or
+     (LEvent.Focus.Kind <> fkIn) or (LConsumed <> 3) then
+    LOk := False;
+  AddRow('SC6a', 'parse_focus_in', 0, 1, LOk, 'CSI I → fkIn');
+
+  LOk := True;
+  LResult := ParseOne(LOut[0], 3, True, LEvent, LConsumed);
+  if (LResult <> prSuccess) or (LEvent.Kind <> evFocus) or
+     (LEvent.Focus.Kind <> fkOut) or (LConsumed <> 3) then
+    LOk := False;
+  AddRow('SC6b', 'parse_focus_out', 0, 1, LOk, 'CSI O → fkOut');
+end;
+
+procedure RunSC7;
+var
+  LBuf: TBuffer;
+  LLead, LTail: PCell;
+  LOk: Boolean;
+begin
+  WriteLn('SC7 Wide CJK cell width ...');
+  LOk := True;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 1));
+  try
+    LBuf.SetString(0, 0, #$E4#$B8#$AD, StyleDefault);
+    LLead := LBuf.CellAt(0, 0);
+    LTail := LBuf.CellAt(1, 0);
+    if (LLead = nil) or (LTail = nil) then
+      LOk := False
+    else if (LLead^.Width <> 2) or (not LTail^.Skip) or (LTail^.Width <> 0) then
+      LOk := False;
+  finally
+    LBuf.Free;
+  end;
+  AddRow('SC7', 'cjk_width2', 0, 1, LOk, 'lead w=2 + skip tail');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -315,12 +371,14 @@ begin
   SetLength(GRows, 16);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC5 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC7 ===');
   RunSC1;
   RunSC2;
   RunSC3;
   RunSC4;
   RunSC5;
+  RunSC6;
+  RunSC7;
   PrintTable;
   if GFailed > 0 then
     Halt(1);

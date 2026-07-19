@@ -1,4 +1,4 @@
-# process / fs / path / env — Go / Rust 对标矩阵（R16–R22）
+# process / fs / path / env — Go / Rust 对标矩阵（R16–R23）
 
 **状态日期**：2026-07-20
 **范围**：L2 `nextpas.core.{process,fs,path,os.env}`
@@ -12,11 +12,11 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **9.5** | R22：CancelToken 贯通 Wait/Status；WaitWithOutput 无 Timeout 忙等修复；fs ENOSPC/ENOMEM→EResourceExhausted；边界表加厚 |
-| **规模 Scale (Essential)** | **9.3** | R20 fs 三 API + R21 ExtraFd/Credential/CancelToken（本轮不扩 API） |
-| **综合** | **9.4** | Essential 近满 + hardening 证据闭环 |
+| **质量 Quality** | **9.5** | R22 hardening 保持 |
+| **规模 Scale (Essential)** | **9.5** | R23 文件锁（IFile.Lock/TryLock/Unlock + OpenLocked） |
+| **综合** | **9.5** | Essential + 文件锁闭环 |
 
-**目标线**：质量 ≥ 9.0（**R22 达 9.5**）；规模 Essential ≥ **0.85**；测试合计 ≥ **900**（R22 ≈ **922**）。
+**目标线**：质量 ≥ 9.0；规模 Essential ≥ **0.85**；测试合计 ≥ **900**（R23 ifile +4 → ≈**926**）。
 
 ---
 
@@ -62,6 +62,7 @@
 | Chown | Chown | **Chown** | Done（R20；L0 `platform_file_chown`；Win UNSUPPORTED） |
 | SameFile(inode) | SameFile | **SameFile** (lstat Dev+Ino) | Done（R16 续） |
 | Remove ENOENT | Go 报错 | **静默成功**（Pascal） | Done（有意 ≠ Go） |
+| File lock | flock / fs2 | **IFile.Lock/TryLock/Unlock** + OpenLocked | Done（R23；L0 已有） |
 
 ### path
 
@@ -88,19 +89,19 @@
 
 ---
 
-## 测试规模（R22 校准）
+## 测试规模（R23 校准）
 
 | 套件 | 通过 |
 |------|------|
 | test_process | **455** |
 | test_process_command / deep / pipe | 48 / **24** / 17 |
 | test_fs | **158** |
-| test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / 17 / 19 |
+| test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / **21** / 19 |
 | test_path | **69** |
 | test_os_env | **69** |
-| **合计** | **≈922** |
+| **合计** | **≈926** |
 
-目标 **≥900** ✅（R22）。
+目标 **≥900** ✅（R23）。
 
 ---
 
@@ -119,7 +120,7 @@
 
 | 项 | 性质 |
 |----|------|
-| FsLock / fs.watch / 进程组 | 能力扩展（R23+） |
+| FsLock / fs.watch / 进程组 | ~~FsLock~~ **R23 已落地**；watch / 进程组仍 Deferred |
 | Win ExtraFd / Credential | 文档 UNSUPPORTED |
 | test_process 迁 `nextpas.core.test` | P3 框架债 |
 | 真 Windows host CI | 证据仍 wine-runtime-smoke 级 |
@@ -132,11 +133,11 @@
 
 ## 维护策略（口径）
 
-**状态：Ready / 维护态。** Essential + R22 hardening；测试 **≈922**；Quality **9.5**。
+**状态：Ready / 维护态。** Essential + R22 quality + R23 文件锁；测试 **≈926**；Quality **9.5** / Scale **9.5**。
 
 **周报可用一句：**
 
-> process/fs/path/env：Ready。R22 质量 hardening（Cancel Wait 贯通 + 忙等 + 错误映射）；测试 ≈922；Quality 9.5 / 综合 9.4。下一批可选 R23 文件锁。
+> process/fs/path/env：Ready。R23 文件锁（IFile.Lock/TryLock/OpenLocked）；测试 ≈926；综合 9.5。下一批可选 fs.watch 或进程组。
 
 ---
 
@@ -153,3 +154,4 @@
 | 2026-07-19 | R20 HardLink/Chtimes/Chown L0+L2；规模 9.1 |
 | 2026-07-20 | R21 ExtraFd/Credential/CancelToken；规模 9.3 |
 | 2026-07-20 | R22 quality hardening；Quality 9.5 / 综合 9.4；测试 ≈922 |
+| 2026-07-20 | R23 File lock L2；Scale 9.5 / 综合 9.5；ifile 21；测试 ≈926 |

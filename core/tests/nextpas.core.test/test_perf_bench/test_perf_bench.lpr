@@ -1,15 +1,12 @@
 {**
  * @desc 性能回归基准 — test 模块关键路径吞吐量
  *
- * 测量：
- *   1. Check* 断言吞吐量（纯开销）
- *   2. IExpectation 流式 API 吞吐量
- *   3. TMock 注册+验证开销
- *   4. 对象池分配/回收速率
- *
  * 用法：
- *   nextpas.core.test.perf_bench --bench
- *   nextpas.core.test.perf_bench --bench --baseline baseline.json
+ *   test_perf_bench
+ *   test_perf_bench --save-baseline perf-baseline.json
+ *   test_perf_bench --baseline perf-baseline.json --threshold 0.30
+ *
+ * 阈值：相对基线 NsPerOp 增幅比例（0.30 = +30% 宽松门禁，对标 benchstat 防 flaky）
  *}
 program test_perf_bench;
 
@@ -23,7 +20,8 @@ uses
   nextpas.core.time.base,
   nextpas.core.test.check,
   nextpas.core.test.expect,
-  nextpas.core.test.mock;
+  nextpas.core.test.mock,
+  nextpas.core.text.conv;
 
 { === Benchmarks === }
 
@@ -101,10 +99,48 @@ end;
 
 var
   LSuite: IBenchSuite;
+  LResults: IBenchResults;
+  LSavePath, LBaselinePath: string;
+  LThreshold: Double;
+  I: Integer;
+  LArg: string;
 begin
+  LSavePath := '';
+  LBaselinePath := '';
+  { HasRegression: fail when Ratio=current/baseline > threshold.
+    Default 1.30 allows +30% slowdown (loose CI gate). }
+  LThreshold := 1.30;
+
+  I := 1;
+  while I <= ParamCount do
+  begin
+    LArg := ParamStr(I);
+    if (LArg = '--save-baseline') and (I < ParamCount) then
+    begin
+      Inc(I);
+      LSavePath := ParamStr(I);
+    end
+    else if (LArg = '--baseline') and (I < ParamCount) then
+    begin
+      Inc(I);
+      LBaselinePath := ParamStr(I);
+    end
+    else if (LArg = '--threshold') and (I < ParamCount) then
+    begin
+      Inc(I);
+      LThreshold := StrToFloat(ParamStr(I));
+      { 30 → 1.30 (percent); 1.30 stays ratio; 0.30 → 1.30 (delta) }
+      if LThreshold > 5.0 then
+        LThreshold := 1.0 + LThreshold / 100.0
+      else if LThreshold < 1.0 then
+        LThreshold := 1.0 + LThreshold;
+    end;
+    Inc(I);
+  end;
+
   LSuite := TBenchSuite.Create('test.perf')
-    .SetMinDuration(TDuration.FromMilliseconds(500))
-    .SetMinSamples(10)
+    .SetMinDuration(TDuration.FromMilliseconds(200))
+    .SetMinSamples(5)
 
     .Add('CheckEqual<Int>', @BenchCheckIntEq)
     .Add('CheckEqual<Str>', @BenchCheckStrEq)
@@ -118,5 +154,25 @@ begin
     .Add('Mock.Setup+Verify', @BenchMockSetup)
     .Add('Expect<ObjPool>', @BenchExpectObjPool);
 
-  LSuite.Run;
+  if LBaselinePath <> '' then
+  begin
+    if not LSuite.TryLoadBaseline(LBaselinePath) then
+      WriteLn('WARN: could not load baseline: ', LBaselinePath);
+  end;
+
+  LResults := LSuite.Run;
+
+  if LSavePath <> '' then
+  begin
+    LResults.SaveBaseline(LSavePath);
+    WriteLn('Saved baseline: ', LSavePath);
+  end;
+
+  if (LBaselinePath <> '') and LResults.HasRegression(LThreshold) then
+  begin
+    WriteLn('FAIL: performance regression (ratio threshold=',
+      FloatToStr(LThreshold), ' = +',
+      FloatToStr((LThreshold - 1.0) * 100), '%)');
+    Halt(1);
+  end;
 end.

@@ -113,6 +113,23 @@ make -C core/benchmarks/nextpas.core.bench clean test
 | `core/examples/bench/custom_metrics.pas` | 自定义指标 |
 | `core/benchmarks/nextpas.core.hash/bench_hash/` | 真实模块 bench |
 
+对照表：[consumer-checklist.md](consumer-checklist.md)（hash / vec / json 抽检）。
+
+## 8b. 轻量跨语言子集重跑
+
+```bash
+# 列出 track
+bash core/docs/bench/scripts/run-scorecard-subset.sh --list
+
+# 跑全部清单（产物在 $TMPDIR，自动清理）
+bash core/docs/bench/scripts/run-scorecard-subset.sh
+
+# 只跑部分
+bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks boolsum,inttohex
+```
+
+清单文件：`scorecard-tracks.txt`。数字表：`scorecard-subset-2026-07-19.md`。
+
 ## 9. 不要做的事
 
 - 在 hot path 里 `WriteLn` / 日志  

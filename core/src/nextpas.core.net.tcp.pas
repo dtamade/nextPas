@@ -10,7 +10,8 @@ interface
 
 uses
   nextpas.core.net.base,
-  nextpas.core.net.intf;
+  nextpas.core.net.intf,
+  nextpas.core.platform.socket;
 
 function NetTcpListen(const AAddr: string; const APort: UInt16): ITcpListener;
 function NetTcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
@@ -18,6 +19,12 @@ function NetTcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
   ATimeoutMs <= 0 keeps unbounded blocking connect (legacy). }
 function NetTcpConnect(const AAddr: string; const APort: UInt16;
   const ATimeoutMs: Int64): ITcpStream;
+{ Adopt an already-connected socket into ITcpStream (for AsyncTcpDial). }
+function NetTcpStreamFromConnectedSocket(const ASock: TPlatformSocket;
+  const ARemote: TNetAddress): ITcpStream;
+{ Build sockaddr for connect from TNetAddress (IPv4/IPv6). }
+function NetBuildConnectSockAddr(const ARemote: TNetAddress;
+  out ASa: TPlatformSockAddr): Boolean;
 
 implementation
 
@@ -28,7 +35,6 @@ uses
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.platform.posix.base,
-  nextpas.core.platform.socket,
   nextpas.core.net.resolve;
 
 type
@@ -747,6 +753,31 @@ begin
     LIP := platform_ipv4_parse(ARemote.IP);
     Result := platform_sockaddr_ipv4(ARemote.Port, LIP, ASa) = 0;
   end;
+end;
+
+function NetBuildConnectSockAddr(const ARemote: TNetAddress;
+  out ASa: TPlatformSockAddr): Boolean;
+begin
+  Result := BuildConnectSockAddr(ARemote, ASa);
+end;
+
+function NetTcpStreamFromConnectedSocket(const ASock: TPlatformSocket;
+  const ARemote: TNetAddress): ITcpStream;
+var
+  LLocal: TNetAddress;
+  LSa4: sockaddr_in;
+  LSa4Len: Int32;
+begin
+  { Best-effort restore blocking for stream I/O defaults. }
+  platform_socket_set_nonblocking(ASock, False);
+  LLocal := TNetAddress.Any(0);
+  if not ARemote.IsIPv6 then
+  begin
+    LSa4Len := SizeOf(LSa4);
+    if platform_socket_getsockname(ASock, @LSa4, @LSa4Len) = 0 then
+      LLocal := AddrFromSockAddr(LSa4);
+  end;
+  Result := TTcpStream.Create(ASock, LLocal, ARemote);
 end;
 
 function NetTcpConnectOne(const ARemote: TNetAddress;

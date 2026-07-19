@@ -1,3 +1,12 @@
+## 2026-07-20 B30 子集脚本 + consumer checklist + archive
+
+| 项 | 状态 |
+|----|------|
+| run-scorecard-subset.sh | ✅ smoke inttohex |
+| scorecard-tracks.txt | ✅ 8 track 清单 |
+| consumer-checklist.md | ✅ hash/vec/json |
+| archive/README.md | ✅ 历史索引 |
+
 ## 2026-07-20 consumer-guide + scorecard 再扩
 
 | 项 | 状态 |
