@@ -20,7 +20,7 @@ COMPILE_ONLY_TEST_DIRS := tests/nextpas.core.math/test_trig_host_compile_gate te
 # FPC unit/output paths
 FPC_FLAGS += -FU$(LIB_DIR) -FE$(BIN_DIR) -Fu$(SRC_DIR) -Fi$(SRC_DIR)
 
-.PHONY: build test examples benchmarks core-math-api-surface-smoke core-math-overview-local-smoke core-math-facade-local-smoke core-math-symbol-scope-local-smoke core-math-smoke core-math-full-local-smoke core-math-leak-local-smoke core-math-impl-simd-local-smoke core-math-impl-simd-win64-compile-smoke core-math-simd-seam-bench-smoke core-math-trig-local-smoke core-math-trig-win64-compile-smoke clean dirs
+.PHONY: build test examples benchmarks bench-module-test core-math-api-surface-smoke core-math-overview-local-smoke core-math-facade-local-smoke core-math-symbol-scope-local-smoke core-math-smoke core-math-full-local-smoke core-math-leak-local-smoke core-math-impl-simd-local-smoke core-math-impl-simd-win64-compile-smoke core-math-simd-seam-bench-smoke core-math-trig-local-smoke core-math-trig-win64-compile-smoke clean dirs
 
 # Default target
 build: dirs
@@ -115,6 +115,10 @@ examples: dirs
 		echo ""; \
 	done
 	@echo "All examples compiled."
+
+# nextpas.core.bench framework test gate
+bench-module-test: dirs
+	$(MAKE) -C tests/nextpas.core.bench clean test
 
 # Compile and run all benchmarks
 benchmarks: dirs

@@ -1,3 +1,13 @@
+## 2026-07-20 B31 仓库入口 + checklist 扩面
+
+| 项 | 状态 |
+|----|------|
+| make bench-module-test | ✅ 根 Makefile + core/Makefile |
+| make bench-scorecard-smoke | ✅ --tracks inttohex --summary |
+| run-scorecard-subset --summary | ✅ TSV track/pas_ok/go_ok |
+| consumer-checklist | ✅ 8 模块 |
+| goal-tree B31 | ✅ |
+
 ## 2026-07-20 B30 子集脚本 + consumer checklist + archive
 
 | 项 | 状态 |
@@ -51,7 +61,7 @@
 | landing-check | pass (behind=0, path-limited, full module gate) |
 | GlobMatch 符号冲突 | ✅ 修：FilterByNamePattern 限定 `bench.base.GlobMatch`（勿用 `fs.GlobMatch`） |
 | SCORECARD 子集 | ✅ boolsum/fncall → `core/docs/bench/scorecard-subset-2026-07-19.md` |
-| integration 软拆 | ⏭ 技术债：`test_bench_integration.lpr` ~3.3k 行；landing 后另开 |
+| integration 软拆 | ✅ 已完成：results_api 58 + integration 66 |
 
 ---
 
@@ -81,7 +91,7 @@
 |----|--------|------|------|
 | A-01 | P2 | ✅ 修 | `ToJSON/Markdown/HTML_Grouped` 用 `FilterByPrefix(G+'/')` 漏 bare 名；改 `CollectGroupResults` |
 | A-02 | P3 | ✅ 记 | `bench.pas` ~3240 行门面膨胀；文档冻结 + 后续子单元策略，不大拆 |
-| A-03 | P3 | ✅ 记 | integration 124 tests 单文件过大；技术债，本阶段不拆 |
+| A-03 | P3 | ✅ 已拆 | results_api / integration 软拆（B27） |
 | A-04 | — | ✅ | Makefile PROJECTS 与磁盘套件一致 |
 
 ### 改动文件（收敛）

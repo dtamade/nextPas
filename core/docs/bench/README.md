@@ -5,12 +5,25 @@
 ## 消费侧（写模块 bench 的人）
 
 - **[consumer-guide.md](consumer-guide.md)** — 最小配方、命名、`IBenchResults` 读侧、仓库布局  
-- **[consumer-checklist.md](consumer-checklist.md)** — 模块 bench 抽检表（hash / vec / json）  
+- **[consumer-checklist.md](consumer-checklist.md)** — 模块 bench 抽检表（8 模块）  
 - 示例：`core/examples/bench/`、`core/examples/nextpas.core.bench/`  
 - 模块 bench 样例：`core/benchmarks/nextpas.core.*/`  
 - 跨语言子集：`scorecard-subset-2026-07-19.md`  
-- 重跑子集：`bash core/docs/bench/scripts/run-scorecard-subset.sh`  
 - 历史文档索引：[archive/README.md](archive/README.md)  
+
+### 仓库一键入口
+
+```bash
+# 框架全部 focused suites（约 22 个）
+make bench-module-test
+
+# 轻量 scorecard smoke（inttohex；需 fpc + go）
+make bench-scorecard-smoke
+
+# 子集脚本（可 --tracks a,b 或 --summary）
+bash core/docs/bench/scripts/run-scorecard-subset.sh --list
+bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks inttohex --summary
+```
 
 ## 模块结构
 
