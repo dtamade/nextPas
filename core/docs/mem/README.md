@@ -2,7 +2,7 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-**Lane 状态（2026-07-20）**: A–C **CLOSED**；D **Steady**；E **Steady+**；**F Active**（门面可发现性）— [ROADMAP](ROADMAP.md) · [PARITY](PARITY-GO-RUST.md) · [FACADES-SLIM 设计](FACADES-SLIM-DESIGN-2026-07-20.md) · [OPENSSL 堆纪律](OPENSSL-HEAP-DISCIPLINE.md)。
+**Lane 状态（2026-07-20）**: A–C **CLOSED**；D **Steady**；E **Steady+**；F **CLOSED**；**G Active**（Ecosystem Steward）— [ROADMAP](ROADMAP.md) · [PARITY](PARITY-GO-RUST.md) · [FACADES-SURFACE](FACADES-SURFACE.md) · [OPENSSL 堆纪律](OPENSSL-HEAP-DISCIPLINE.md)。
 可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
 
 ```bash
@@ -19,6 +19,8 @@ make lane-focused LANE=mem
 **P-a / P-b prune（EXECUTED）**: [P-a](PRUNE-P-a-DESIGN-2026-07-19.md) · [P-b](PRUNE-P-b-DESIGN-2026-07-19.md) — 实验分配器博物馆已收敛（保留 blockpool.growable）。
 
 **Go/Rust 对照**: `make -C core/benchmarks/nextpas.core.mem/bench_arena_go_rust compare`
+
+**证据入口**: `make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1` · `make -C core/tests/nextpas.core.mem/test_soak clean test` · `make -C core/tests/nextpas.core.mem/test_mem_cross_os_compile_gate clean test`
 
 ---
 
