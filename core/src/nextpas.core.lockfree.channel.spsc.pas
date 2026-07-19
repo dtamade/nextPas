@@ -1,5 +1,7 @@
 unit nextpas.core.lockfree.channel.spsc;
 
+{ Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2). }
+
 {$I nextpas.core.settings.inc}
 
 interface
@@ -132,17 +134,17 @@ var
   LSendPos, LRecvPos: Int64;
   LIdx: PtrUInt;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
-  LSendPos := AtomicLoad64(FSendPos, moRelaxed);
-  LRecvPos := AtomicLoad64(FRecvPos, moAcquire);
+  LSendPos := atomic_load_64(FSendPos, mo_relaxed);
+  LRecvPos := atomic_load_64(FRecvPos, mo_acquire);
   if LSendPos - LRecvPos >= Int64(FCapacity) then
     Exit(False);
   LIdx := PtrUInt(LSendPos) and FMask;
   FSlots[LIdx].Value := AValue;
-  AtomicStore64(FSendPos, LSendPos + 1, moRelease);
+  atomic_store_64(FSendPos, LSendPos + 1, mo_release);
   { Fast path: only notify if there are waiters }
-  if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+  if atomic_load(FDataWaiters, mo_relaxed) > 0 then
     LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
   Result := True;
 end;
@@ -169,9 +171,9 @@ begin
     Exit;
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       raise EInvalidOperationError.Create('TLockFreeChannelSpsc.Send: channel closed');
-    LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
+    LEpoch := atomic_load(FSpaceEpoch, mo_acquire);
     if TrySend(AValue) then
       Exit;
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
@@ -191,12 +193,12 @@ begin
   LStart := platform_monotonic_ns;
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     LRemaining := ATimeoutNs - LElapsed;
     if LRemaining <= 0 then
       Exit(TrySend(AValue));
-    LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
+    LEpoch := atomic_load(FSpaceEpoch, mo_acquire);
     if TrySend(AValue) then
       Exit(True);
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);
@@ -209,20 +211,20 @@ var
   LSendPos, LRecvPos: Int64;
   LIdx: PtrUInt;
 begin
-  LRecvPos := AtomicLoad64(FRecvPos, moRelaxed);
-  LSendPos := AtomicLoad64(FSendPos, moAcquire);
+  LRecvPos := atomic_load_64(FRecvPos, mo_relaxed);
+  LSendPos := atomic_load_64(FSendPos, mo_acquire);
   if LRecvPos >= LSendPos then
   begin
-    if (AtomicLoad32(FClosed, moAcquire) <> 0) and (LRecvPos >= AtomicLoad64(FSendPos, moAcquire)) then
+    if (atomic_load(FClosed, mo_acquire) <> 0) and (LRecvPos >= atomic_load_64(FSendPos, mo_acquire)) then
       Exit(False);
     Exit(False);
   end;
   LIdx := PtrUInt(LRecvPos) and FMask;
   AValue := FSlots[LIdx].Value;
   FSlots[LIdx].Value := Default(T);
-  AtomicStore64(FRecvPos, LRecvPos + 1, moRelease);
+  atomic_store_64(FRecvPos, LRecvPos + 1, mo_release);
   { Fast path: only notify if there are waiters }
-  if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
+  if atomic_load(FSpaceWaiters, mo_relaxed) > 0 then
     LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
   Result := True;
 end;
@@ -249,9 +251,9 @@ begin
     Exit(True);
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(TryReceive(AValue));
-    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    LEpoch := atomic_load(FDataEpoch, mo_acquire);
     if TryReceive(AValue) then
       Exit(True);
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
@@ -271,12 +273,12 @@ begin
   LStart := platform_monotonic_ns;
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(TryReceive(AValue));
     LRemaining := ATimeoutNs - LElapsed;
     if LRemaining <= 0 then
       Exit(TryReceive(AValue));
-    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    LEpoch := atomic_load(FDataEpoch, mo_acquire);
     if TryReceive(AValue) then
       Exit(True);
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
@@ -286,27 +288,27 @@ end;
 
 procedure TLockFreeChannelSpscImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
   LockFreeWakeAll(@FSpaceEpoch);
   LockFreeWakeAll(@FDataEpoch);
 end;
 
 function TLockFreeChannelSpscImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TLockFreeChannelSpscImpl.IsEmpty: Boolean;
 begin
-  Result := AtomicLoad64(FRecvPos, moAcquire) >= AtomicLoad64(FSendPos, moAcquire);
+  Result := atomic_load_64(FRecvPos, mo_acquire) >= atomic_load_64(FSendPos, mo_acquire);
 end;
 
 function TLockFreeChannelSpscImpl.ApproxLen: PtrUInt;
 var
   LSend, LRecv: Int64;
 begin
-  LSend := AtomicLoad64(FSendPos, moAcquire);
-  LRecv := AtomicLoad64(FRecvPos, moAcquire);
+  LSend := atomic_load_64(FSendPos, mo_acquire);
+  LRecv := atomic_load_64(FRecvPos, mo_acquire);
   if LSend > LRecv then
     Result := PtrUInt(LSend - LRecv)
   else

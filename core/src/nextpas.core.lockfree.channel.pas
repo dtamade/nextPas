@@ -16,6 +16,8 @@ unit nextpas.core.lockfree.channel;
  *
  * @see Go channels — similar CSP model
  * @see Rust crossbeam::channel — similar bounded channel
+ *
+ * Preferred atomics: atomic_* + mo_* (Go/Rust parity / Q2).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -207,14 +209,21 @@ begin
 end;
 
 procedure TLockFreeChannelImpl.LockNotifier;
+var
+  LExpected: Int32;
 begin
-  while AtomicCompareExchange32(FNotifierLock, 0, 1, moAcqRel) <> 0 do
+  while True do
+  begin
+    LExpected := 0;
+    if atomic_compare_exchange_strong(FNotifierLock, LExpected, 1, mo_acq_rel, mo_acquire) then
+      Exit;
     CpuPause;
+  end;
 end;
 
 procedure TLockFreeChannelImpl.UnlockNotifier;
 begin
-  AtomicStore32(FNotifierLock, 0, moRelease);
+  atomic_store(FNotifierLock, 0, mo_release);
 end;
 
 function TLockFreeChannelImpl.SameNotifier(const ALeft, ARight: TChannelNotifier): Boolean;
@@ -237,12 +246,12 @@ begin
   LData := nil;
   LockNotifier;
   try
-    if (AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_ENABLED) and
+    if (atomic_load(FNotifierState, mo_relaxed) = CHANNEL_NOTIFIER_ENABLED) and
        Assigned(FNotifier) then
     begin
       LNotifier := FNotifier;
       LData := FNotifierData;
-      AtomicFetchAdd32(FNotifierCallbacks, 1, moAcqRel);
+      atomic_fetch_add(FNotifierCallbacks, 1, mo_acq_rel);
     end;
   finally
     UnlockNotifier;
@@ -251,7 +260,7 @@ begin
     try
       LNotifier(LData);
     finally
-      AtomicFetchSub32(FNotifierCallbacks, 1, moAcqRel);
+      atomic_fetch_sub(FNotifierCallbacks, 1, mo_acq_rel);
     end;
 end;
 
@@ -262,13 +271,13 @@ begin
     LockNotifier;
     if Assigned(ANotifier) then
     begin
-      if AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_DRAINING then
+      if atomic_load(FNotifierState, mo_relaxed) = CHANNEL_NOTIFIER_DRAINING then
       begin
         UnlockNotifier;
         CpuPause;
         Continue;
       end;
-      if AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_ENABLED then
+      if atomic_load(FNotifierState, mo_relaxed) = CHANNEL_NOTIFIER_ENABLED then
       begin
         if SameNotifier(FNotifier, ANotifier) and (FNotifierData = AData) then
         begin
@@ -281,32 +290,32 @@ begin
       end;
       FNotifier := ANotifier;
       FNotifierData := AData;
-      AtomicStore32(FNotifierState, CHANNEL_NOTIFIER_ENABLED, moRelaxed);
+      atomic_store(FNotifierState, CHANNEL_NOTIFIER_ENABLED, mo_relaxed);
       UnlockNotifier;
       Exit;
     end;
 
-    if AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_DRAINING then
+    if atomic_load(FNotifierState, mo_relaxed) = CHANNEL_NOTIFIER_DRAINING then
     begin
       UnlockNotifier;
-      while AtomicLoad32(FNotifierState, moAcquire) = CHANNEL_NOTIFIER_DRAINING do
+      while atomic_load(FNotifierState, mo_acquire) = CHANNEL_NOTIFIER_DRAINING do
         CpuPause;
       Continue;
     end;
-    if AtomicLoad32(FNotifierState, moRelaxed) = CHANNEL_NOTIFIER_NONE then
+    if atomic_load(FNotifierState, mo_relaxed) = CHANNEL_NOTIFIER_NONE then
     begin
       UnlockNotifier;
       Exit;
     end;
-    AtomicStore32(FNotifierState, CHANNEL_NOTIFIER_DRAINING, moRelease);
+    atomic_store(FNotifierState, CHANNEL_NOTIFIER_DRAINING, mo_release);
     FNotifier := nil;
     FNotifierData := nil;
     UnlockNotifier;
 
-    while AtomicLoad32(FNotifierCallbacks, moAcquire) <> 0 do
+    while atomic_load(FNotifierCallbacks, mo_acquire) <> 0 do
       CpuPause;
     LockNotifier;
-    AtomicStore32(FNotifierState, CHANNEL_NOTIFIER_NONE, moRelease);
+    atomic_store(FNotifierState, CHANNEL_NOTIFIER_NONE, mo_release);
     UnlockNotifier;
     Exit;
   end;
@@ -316,18 +325,18 @@ procedure TLockFreeChannelImpl.EnterOperation;
 begin
   while True do
   begin
-    while AtomicLoad32(FResizing, moAcquire) <> 0 do
+    while atomic_load(FResizing, mo_acquire) <> 0 do
       CpuPause;
-    AtomicFetchAdd32(FActiveOperations, 1, moAcqRel);
-    if AtomicLoad32(FResizing, moAcquire) = 0 then
+    atomic_fetch_add(FActiveOperations, 1, mo_acq_rel);
+    if atomic_load(FResizing, mo_acquire) = 0 then
       Exit;
-    AtomicFetchSub32(FActiveOperations, 1, moAcqRel);
+    atomic_fetch_sub(FActiveOperations, 1, mo_acq_rel);
   end;
 end;
 
 procedure TLockFreeChannelImpl.LeaveOperation;
 begin
-  AtomicFetchSub32(FActiveOperations, 1, moAcqRel);
+  atomic_fetch_sub(FActiveOperations, 1, mo_acq_rel);
 end;
 
 function TLockFreeChannelImpl.TrySend(const AValue: T): Boolean;
@@ -335,30 +344,32 @@ var
   LPos: Int64;
   LIdx: PtrUInt;
   LSeq, LExpected, LDiff: Int64;
+  LPosExpected: Int64;
   LBackoff: Integer;
   LI: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   EnterOperation;
   try
     LBackoff := 1;
     while True do
     begin
-      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      if atomic_load(FClosed, mo_acquire) <> 0 then
         Exit(False);
-      LPos := AtomicLoad64(FSendPos, moRelaxed);
+      LPos := atomic_load_64(FSendPos, mo_relaxed);
       LIdx := PtrUInt(LPos) and FMask;
-      LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+      LSeq := atomic_load_64(FSlots[LIdx].Sequence, mo_acquire);
       LExpected := EmptySequence(LPos);
       LDiff := LSeq - LExpected;
       if LDiff = 0 then
       begin
-        if AtomicCompareExchange64(FSendPos, LPos, LPos + 1, moRelaxed) = LPos then
+        LPosExpected := LPos;
+        if atomic_compare_exchange_strong_64(FSendPos, LPosExpected, LPos + 1, mo_relaxed, mo_relaxed) then
         begin
           FSlots[LIdx].Value := AValue;
-          AtomicStore64(FSlots[LIdx].Sequence, FullSequence(LPos), moRelease);
-          if AtomicLoad32(FDataWaiters, moRelaxed) > 0 then
+          atomic_store_64(FSlots[LIdx].Sequence, FullSequence(LPos), mo_release);
+          if atomic_load(FDataWaiters, mo_relaxed) > 0 then
             LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
           NotifyData;
           Exit(True);
@@ -407,9 +418,9 @@ begin
     Exit;
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       raise EInvalidOperationError.CreateFmt('TLockFreeChannel.Send: channel closed (capacity=%d)', [Capacity]);
-    LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
+    LEpoch := atomic_load(FSpaceEpoch, mo_acquire);
     if TrySend(AValue) then
       Exit;
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
@@ -427,12 +438,12 @@ begin
   LStart := TInstant.Now;
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
     if LRemaining <= 0 then
       Exit(TrySend(AValue));
-    LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
+    LEpoch := atomic_load(FSpaceEpoch, mo_acquire);
     if TrySend(AValue) then
       Exit(True);
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);
@@ -444,6 +455,7 @@ var
   LPos: Int64;
   LIdx: PtrUInt;
   LSeq, LExpected, LDiff: Int64;
+  LPosExpected: Int64;
   LBackoff: Integer;
   LI: Integer;
 begin
@@ -452,21 +464,22 @@ begin
     LBackoff := 1;
     while True do
     begin
-      if (AtomicLoad32(FClosed, moAcquire) <> 0) and (AtomicLoad64(FSendPos, moRelaxed) <= AtomicLoad64(FRecvPos, moRelaxed)) then
+      if (atomic_load(FClosed, mo_acquire) <> 0) and (atomic_load_64(FSendPos, mo_relaxed) <= atomic_load_64(FRecvPos, mo_relaxed)) then
         Exit(False);
-      LPos := AtomicLoad64(FRecvPos, moRelaxed);
+      LPos := atomic_load_64(FRecvPos, mo_relaxed);
       LIdx := PtrUInt(LPos) and FMask;
-      LSeq := AtomicLoad64(FSlots[LIdx].Sequence, moAcquire);
+      LSeq := atomic_load_64(FSlots[LIdx].Sequence, mo_acquire);
       LExpected := FullSequence(LPos);
       LDiff := LSeq - LExpected;
       if LDiff = 0 then
       begin
-        if AtomicCompareExchange64(FRecvPos, LPos, LPos + 1, moRelaxed) = LPos then
+        LPosExpected := LPos;
+        if atomic_compare_exchange_strong_64(FRecvPos, LPosExpected, LPos + 1, mo_relaxed, mo_relaxed) then
         begin
           AValue := FSlots[LIdx].Value;
           FSlots[LIdx].Value := Default(T);
-          AtomicStore64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), moRelease);
-          if AtomicLoad32(FSpaceWaiters, moRelaxed) > 0 then
+          atomic_store_64(FSlots[LIdx].Sequence, EmptySequence(LPos + Int64(FCapacity)), mo_release);
+          if atomic_load(FSpaceWaiters, mo_relaxed) > 0 then
             LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
           NotifySpace;
           Exit(True);
@@ -516,9 +529,9 @@ begin
     Exit(True);
   while True do
   begin
-    if (AtomicLoad32(FClosed, moAcquire) <> 0) and IsEmpty then
+    if (atomic_load(FClosed, mo_acquire) <> 0) and IsEmpty then
       Exit(False);
-    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    LEpoch := atomic_load(FDataEpoch, mo_acquire);
     if TryReceive(AValue) then
       Exit(True);
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LOCKFREE_WAIT_TIMEOUT_NS);
@@ -536,12 +549,12 @@ begin
   LStart := TInstant.Now;
   while True do
   begin
-    if (AtomicLoad32(FClosed, moAcquire) <> 0) and IsEmpty then
+    if (atomic_load(FClosed, mo_acquire) <> 0) and IsEmpty then
       Exit(False);
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
     if LRemaining <= 0 then
       Exit(TryReceive(AValue));
-    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    LEpoch := atomic_load(FDataEpoch, mo_acquire);
     if TryReceive(AValue) then
       Exit(True);
     LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);
@@ -550,14 +563,14 @@ end;
 
 procedure TLockFreeChannelImpl.Close;
 begin
-  if AtomicExchange32(FClosed, 1, moAcqRel) <> 0 then
+  if atomic_exchange(FClosed, 1, mo_acq_rel) <> 0 then
     Exit;
   WakeAllWaiters;
 end;
 
 function TLockFreeChannelImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moRelaxed) <> 0;
+  Result := atomic_load(FClosed, mo_relaxed) <> 0;
 end;
 
 function TLockFreeChannelImpl.IsEmpty: Boolean;
@@ -572,8 +585,8 @@ var
 begin
   EnterOperation;
   try
-    LSent := AtomicLoad64(FSendPos, moRelaxed);
-    LRecv := AtomicLoad64(FRecvPos, moRelaxed);
+    LSent := atomic_load_64(FSendPos, mo_relaxed);
+    LRecv := atomic_load_64(FRecvPos, mo_relaxed);
     if LSent > LRecv then
       Result := PtrUInt(LSent - LRecv)
     else
@@ -602,17 +615,19 @@ var
   LCount: PtrUInt;
   LI: PtrUInt;
   LOldIdx, LNewIdx: PtrUInt;
+  LResizeExpected: Int32;
 begin
   Result := False;
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   if ANewCapacity = 0 then
     Exit(False);
   { Acquire resize flag }
-  if AtomicCompareExchange32(FResizing, 0, 1, moAcqRel) <> 0 then
+  LResizeExpected := 0;
+  if not atomic_compare_exchange_strong(FResizing, LResizeExpected, 1, mo_acq_rel, mo_acquire) then
     Exit(False);
   try
-    while AtomicLoad32(FActiveOperations, moAcquire) <> 0 do
+    while atomic_load(FActiveOperations, mo_acquire) <> 0 do
       CpuPause;
     { Compute new capacity (power of 2, at least 1) }
     LNewCap := LockFreeNextPow2(ANewCapacity);
@@ -621,8 +636,8 @@ begin
     if LNewCap = FCapacity then
       Exit(True);
 
-    LSend := AtomicLoad64(FSendPos, moRelaxed);
-    LRecv := AtomicLoad64(FRecvPos, moRelaxed);
+    LSend := atomic_load_64(FSendPos, mo_relaxed);
+    LRecv := atomic_load_64(FRecvPos, mo_relaxed);
     if LSend > LRecv then
       LCount := PtrUInt(LSend - LRecv)
     else
@@ -643,18 +658,18 @@ begin
         LOldIdx := PtrUInt(LRecv + Int64(LI)) and FMask;
         LNewIdx := LI and LNewMask;
         LNewSlots[LNewIdx].Value := FSlots[LOldIdx].Value;
-        AtomicStore64(LNewSlots[LNewIdx].Sequence, FullSequence(Int64(LI)), moRelease);
+        atomic_store_64(LNewSlots[LNewIdx].Sequence, FullSequence(Int64(LI)), mo_release);
       end;
 
     FSlots := LNewSlots;
     FCapacity := LNewCap;
     FMask := LNewMask;
     // moRelease: 确保所有新槽位数据对后续读者可见
-    AtomicStore64(FRecvPos, 0, moRelease);
-    AtomicStore64(FSendPos, Int64(LCount), moRelease);
+    atomic_store_64(FRecvPos, 0, mo_release);
+    atomic_store_64(FSendPos, Int64(LCount), mo_release);
     Result := True;
   finally
-    AtomicStore32(FResizing, 0, moRelease);
+    atomic_store(FResizing, 0, mo_release);
   end;
   if Result then
   begin
