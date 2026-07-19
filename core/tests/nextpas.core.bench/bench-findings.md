@@ -7,6 +7,16 @@
 > **审查阶段**: 第二期（首次审查 2026-06-21 已记录 C01-C03/D01-D14/P01-P10/T01-T07/S01-S05）
 > **已排除**: 首次审查已标记"已修复"或"不修复/推迟"或"已知"的条目（C01-C03 已修复、D01/D02/D03 不修复、D07/D08/D09 已知）
 
+## 2026-07-19 Landing + SCORECARD 子集 + integration 债
+
+| 项 | 状态 |
+|----|------|
+| Landing candidate | `landing/bench-20260719` @ `.worktrees/landing-bench-20260719` |
+| landing-check | pass (behind=0, path-limited, full module gate) |
+| GlobMatch 符号冲突 | ✅ 修：FilterByNamePattern 限定 `bench.base.GlobMatch`（勿用 `fs.GlobMatch`） |
+| SCORECARD 子集 | ✅ boolsum/fncall → `core/docs/bench/scorecard-subset-2026-07-19.md` |
+| integration 软拆 | ⏭ 技术债：`test_bench_integration.lpr` ~3.3k 行；landing 后另开 |
+
 ---
 
 ## 2026-07-19 性能快照 + harness 驯服
