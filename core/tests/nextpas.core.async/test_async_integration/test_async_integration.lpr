@@ -231,7 +231,7 @@ begin
   TestWhenAllWithRetry;
 
   GLoop.Close;
-  GLoop.Close;
+  GLoop.Free;
 
   WriteLn('=== All integration tests passed ===');
 end;

@@ -59,7 +59,7 @@ begin
   end;
   WhenAll(LCallbacks, LContexts, 3, @WhenAllCompleteCallback, nil,
     DefaultCombinatorOptions, LLoop);
-  LLoop.Close;
+  LLoop.Free;
   WriteLn('  PASS: WhenAllCloseDiscardsWraps');
 end;
 
@@ -69,7 +69,7 @@ var
 begin
   LLoop := TAsyncLoop.Create;
   RetryWithBackoff(@SimpleCallback, nil, nil, nil, nil, nil, DefaultRetryOptions, LLoop);
-  LLoop.Close;
+  LLoop.Free;
   WriteLn('  PASS: RetryCloseDiscardsState');
 end;
 
@@ -238,7 +238,7 @@ begin
 
   for I := 0 to 20 do
     GLoop.Poll;
-  GLoop.Close;
+  GLoop.Free;
 
   WriteLn('=== All tests passed ===');
 end;

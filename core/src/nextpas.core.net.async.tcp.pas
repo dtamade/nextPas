@@ -273,7 +273,7 @@ var
   LFd: PtrInt;
 begin
   LFd := PtrInt(NativeSocketHandle);
-  Result := FLoop.AsyncWrite(LFd, ABuf, ALen, 0, ACallback, AContext);
+  Result := FLoop.AsyncSend(LFd, ABuf, ALen, 0, ACallback, AContext);
 end;
 
 function TAsyncTcpStream.AsyncWriteRef(ABuf: Pointer; ALen: UInt32;
@@ -282,7 +282,7 @@ var
   LFd: PtrInt;
 begin
   LFd := PtrInt(NativeSocketHandle);
-  Result := FLoop.AsyncWrite(LFd, ABuf, ALen, 0, @IoCompletionRefWrapper,
+  Result := FLoop.AsyncSend(LFd, ABuf, ALen, 0, @IoCompletionRefWrapper,
     WrapIoCompletionRef(ACallback, AContext));
 end;
 
@@ -303,7 +303,7 @@ var
   LFd: PtrInt;
 begin
   LFd := PtrInt(NativeSocketHandle);
-  Result := FLoop.AsyncWriteTimeout(LFd, ABuf, ALen, 0, ADeadline, ACallback, AContext);
+  Result := FLoop.AsyncSendTimeout(LFd, ABuf, ALen, 0, ADeadline, ACallback, AContext);
 end;
 
 { TAsyncTcpListener }

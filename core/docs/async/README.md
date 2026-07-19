@@ -11,31 +11,37 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - If the real io_uring queue creation fails after probing, `TPoller.Create` switches backend truth to epoll (or `pbUnsupported` if epoll create also fails)
 - 18 timeout tests in `test_async_timeout` verify the race mechanism, `TTimeoutCtx` lifecycle, and heaptrc enforcement
 
-### windows compile truth
-- `TPoller` defines `pbIocp` in the backend enum on Windows, but `TIocpReactor` is currently a stub that raises `ENetworkError`
-- `nextpas.core.io.reactor.iocp.pas` contains the IOCP function declarations (`CreateIoCompletionPort`, `GetQueuedCompletionStatus`, `PostQueuedCompletionStatus`, `CancelIoEx`) with `external 'kernel32.dll'`
-- Backend model: `pbIocp` is classified as `pbmCompletionQueue` (completion-based, not readiness-based)
-- **source-contract + forced compile only**: tests exist (`test_async_windows_compile_gate`, `test_poller_windows_compile_gate`) that verify the Windows source compiles, but there are no runtime tests
-- **not windows runtime ready** — no Windows runner has proven runtime correctness on an actual Windows host
+### windows wine-runtime truth
+- `TPoller` defines `pbIocp` and wires `TIocpReactor` (`nextpas.core.io.reactor.iocp`) — full completion implementation (not a stub): `CreateIoCompletionPort`, overlapped `ReadFile`/`WriteFile`, `WSASend`/`WSARecv`, `AcceptEx`/`ConnectEx`, `GetQueuedCompletionStatus`, `CancelIoEx`
+- Backend model: `pbIocp` is `pbmCompletionQueue` (completion-based; positioned file I/O supported)
+- Timeout cancel: `TryCancelByContext` → `CancelIoEx` on matching pending ops; completion packet still arrives (often `-ERROR_OPERATION_ABORTED`) and is discarded by Timeout CAS when the timer already won
+- **truth=wine-runtime-smoke**: `test_reactor_iocp_wine` (socket + cancel) and `test_poller_windows_runtime_smoke` (overlapped file via poller) run under Wine on this worktree
+- **source-contract + forced compile** gates remain (`test_async_windows_compile_gate`, `test_poller_windows_compile_gate`)
+- **not windows runtime ready** as **native Windows host** evidence — no real Windows runner has proven the same suite on bare metal; Wine is not a host claim
 - **platform wake is not the iocp owner** — Windows platform wake (or its future replacement) is owned by the platform poller seam, not by the IOCP completion port; IOCP and platform wake are separate plumbing paths
 
 ### macOS/FreeBSD truth
-- Poller backend enum does **not** have a `pbKqueue` entry — no `pbkqueue` backend
-- `nextpas.core.platform.io.base.pas` defines a `TKqueueReactor` but the poller does not wire it in
-- macOS/FreeBSD currently gets `pbUnsupported` when the poller fails to detect io_uring
-- `pbUnsupported` documents the `pbunsupported` fallback for any host that is not Linux with io_uring or epoll
-- Pure idle loops on unsupported backends will simply wait on platform wake without I/O polling
+- Poller backend enum includes `pbKqueue` — readiness backend via `TKqueueReactor` (`nextpas.core.io.reactor.kqueue`)
+- `TPoller` wires kqueue on `NEXTPAS_MACOS` / `NEXTPAS_FREEBSD` (`PollerDetectBackend` → `pbKqueue`)
+- Backend model: `pbKqueue` is `pbmReadiness` (aligned with epoll; not completion-queue file I/O)
+- Timeout cancel: best-effort like epoll (`TryCancelByContext` drops pending op + internal `-ECANCELED`)
+- **source-contract + forced compile only** on Linux hosts: `test_async_kqueue_compile_gate` uses `-dNEXTPAS_FORCE_HOST_DARWIN` to prove the kqueue path compiles (FreeBSD FORCE_HOST currently blocked by unrelated `platform.thread` typing)
+- **not macOS/FreeBSD host-runtime proven** in this worktree (no Darwin/FreeBSD runner has executed async I/O smoke here)
+- Pure idle loops without a valid backend wait on platform wake without I/O polling; with kqueue, I/O polling is available once Create succeeds
 
 ### Backend Model Classification
 - `pbiouring` and `pbiocp` are `pbmCompletionQueue` — these backends signal completion when an operation finishes, not readiness
 - `pbepoll` is `pbmReadiness` — epoll signals when a fd is ready to read/write, not when an operation completes
-- Positioned file I/O is only a completion-backend capability (`pbIoUring` / `pbIocp`); epoll remains readiness-only and is not a completion-equivalent replacement for file I/O
+- `pbkqueue` is `pbmReadiness` — kqueue EVFILT_READ/WRITE oneshot, same readiness class as epoll
+- Positioned file I/O is only a completion-backend capability (`pbIoUring` / `pbIocp`); epoll/kqueue remain readiness-only and are not completion-equivalent replacements for file I/O
 - `pbUnsupported` documents the absence of a usable backend
 - Application semantics are not identical across backends; readiness fallbacks cannot stand in for completion-queue file I/O
 
 ## Features
 
 - io_uring backend (Linux 5.1+) with epoll fallback (Linux 2.6+)
+- kqueue readiness backend (macOS/FreeBSD) via `TKqueueReactor` / `pbKqueue`
+- IOCP completion backend (Windows) via `TIocpReactor` / `pbIocp` (wine-runtime-smoke)
 - Runtime backend detection (automatic best selection)
 - Timer heap (min-heap, O(log n) schedule/cancel)
 - I/O with deadline (timeout race mechanism with atomic CAS)
@@ -49,6 +55,7 @@ Single-threaded async event loop for FreePascal with cross-platform backend supp
 - WhenAll/WhenAny combinators (parallel execution with completion notification)
 - Async retry with exponential backoff (RetryWithBackoff/RetryWithFixedDelay)
 - Async sync primitives (Mutex, Semaphore, Channel, CondVar)
+  - Channel: `Send`/`TrySend` try-fail when full; `SendAsync` queues until space (or Close)
 - Vectored I/O (AsyncReadv/AsyncWritev for scatter/gather operations)
 - Async signal handling (IAsyncSignalHandler with signalfd integration)
 - Buffer pool (IAsyncBufferPool for efficient buffer allocation/reuse)
@@ -124,7 +131,8 @@ end.
 | `AsyncSendTimeout(AFd, ABuf, ALen, AFlags, ADeadline, ACallback, AContext)` | Send with deadline |
 
 Timeout methods use a race mechanism: a timer and the I/O operation run concurrently.
-If the timer fires first, the callback receives `AResult = -110` (ETIMEDOUT).
+If the timer fires first, the callback receives `AResult = -110` (ETIMEDOUT) and the
+loop best-effort cancels the pending poller op (`TryCancelByContext`).
 If I/O completes first, the timer is cancelled automatically.
 The mechanism uses atomically-reference-counted `TTimeoutCtx` to ensure exactly one callback fires.
 
@@ -203,8 +211,8 @@ At `TPoller.Create` time, the runtime probes for io_uring support:
 This means:
 - Linux 5.1+ with io_uring: uses `TIoReactor` (io_uring) — `pbmCompletionQueue`
 - Linux 2.6+ without io_uring, or after create-time io_uring failure: uses `TEpollReactor` (epoll) — `pbmReadiness`
-- macOS/FreeBSD: returns `pbUnsupported` — no functional I/O backend
-- Windows: compile-only `pbIocp` stub — `pbmCompletionQueue` (not windows runtime ready)
+- macOS/FreeBSD: uses `TKqueueReactor` (kqueue) — `pbmReadiness` (compile-gate proven; host runtime not claimed here)
+- Windows: `TIocpReactor` / `pbIocp` — `pbmCompletionQueue` (**truth=wine-runtime-smoke**; not windows runtime ready on native host)
 
 Check the active backend at runtime:
 ```pascal
@@ -277,10 +285,11 @@ TIoCompletion = procedure(AUserData: UInt64; AResult: Int32; AContext: Pointer);
 This split avoids forcing a result parameter into timer/post callbacks where it would always be ignored.
 `TAsyncTask.OnComplete` uses `TAsyncCallback` — the result is fetched separately via `GetResult`.
 
-### Resource lifecycle (Close convention)
+### Resource lifecycle (Close / Free convention)
 
-All heap-owning record types use `Close` for teardown:
-- `TAsyncLoop.Close` — releases poller, wake poller, MPSC pending queue (discard unfired Posts); aborts pending I/O
+- `TAsyncLoop` is a **class** (heap-owned). Call `Free` (or `Close` then `Free`); `Destroy` calls `Close` and does not re-raise.
+- `TAsyncLoop.Close` — idempotent: releases poller, wake poller, MPSC pending queue (discard unfired Posts); aborts pending I/O. May re-raise if an abort callback fails.
+- Dependents (`IAsyncMutex`, `IAsyncShutdown`, …) store a non-owning `TAsyncLoop` reference — free dependents before the loop.
 - `TPoller.Close` — releases backend reactor
 - `TTimerHeap.Close` — nils callback references, frees heap storage
 
@@ -291,10 +300,13 @@ All heap-owning record types use `Close` for teardown:
 - Linux `SO_RCVTIMEO` returns `EAGAIN` on timeout — the implementation detects this when a
   deadline is set and re-raises as `ETimeoutError`
 
-- **Timeout is notify-only**: the timer fires the callback with ETIMEDOUT but does not cancel the kernel I/O operation. The I/O will still complete eventually (and be discarded).
-- **No kqueue backend**: the poller backend enum and platform io base define no kqueue variant for the async module's use. no `pbkqueue` backend.
-- **IOCP is compile-only**: `pbIocp` exists in the backend enum and the reactor stub compiles, but no runtime verification has been done on Windows.
-- **No WhenAll/WhenAny combinators**: tasks must be composed manually via callbacks.
+- **Timeout cancel (best-effort by backend)**: when the deadline timer wins the CAS race, the loop calls `TPoller.TryCancelByContext` on the `TimeoutCtx`:
+  - **io_uring**: submits `IORING_OP_ASYNC_CANCEL` for the pending entry; the original CQE still arrives (often `-ECANCELED`) and is discarded by CAS
+  - **epoll / kqueue**: removes the pending op from the reactor table and delivers an internal `-ECANCELED` completion so `TimeoutCtx` refcount is released (not a kernel read/write cancel)
+  - **IOCP**: `CancelIoEx` by context; OVERLAPPED stays until GQCS delivers aborted completion (discarded by CAS if timer already won)
+  - User API is unchanged: still exactly one user completion (`-110` or I/O result)
+- **IOCP wine-runtime-smoke**: reactor socket + cancel and poller overlapped file smoke under Wine; still **not windows runtime ready** on a native Windows host
+- **WhenAll/WhenAny exist** in `async.combinators` (plus Ref variants).
 - **No file descriptor lifecycle management**: the caller is responsible for opening/closing fds.
 
 

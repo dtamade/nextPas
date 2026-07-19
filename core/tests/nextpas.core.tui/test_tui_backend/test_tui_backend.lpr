@@ -259,6 +259,69 @@ begin
   end;
 end;
 
+procedure TestAnsiBackendKittyKeyboardPushDefaultFlags;
+var
+  LBE: TAnsiBackend;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  try
+    LBE.PushKittyKeyboard;
+    CheckEqual(#27'[=5;1u', PendingString(LBE),
+      'kitty keyboard push emits CSI = flags;1 u with default flags=5');
+  finally
+    LBE.Free;
+  end;
+end;
+
+procedure TestAnsiBackendKittyKeyboardPushCustomFlags;
+var
+  LBE: TAnsiBackend;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  try
+    LBE.PushKittyKeyboard(1);
+    CheckEqual(#27'[=1;1u', PendingString(LBE),
+      'kitty keyboard push accepts custom flags');
+  finally
+    LBE.Free;
+  end;
+end;
+
+procedure TestAnsiBackendKittyKeyboardPop;
+var
+  LBE: TAnsiBackend;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  try
+    LBE.PopKittyKeyboard;
+    CheckEqual(#27'[<u', PendingString(LBE),
+      'kitty keyboard pop emits CSI < u');
+  finally
+    LBE.Free;
+  end;
+end;
+
+procedure TestAnsiBackendKittyKeyboardPushPopIndependentOfMouse;
+var
+  LBE: TAnsiBackend;
+  LStr: AnsiString;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  try
+    LBE.EnterAlternate(amMouseNone, False);
+    LBE.PushKittyKeyboard;
+    LStr := PendingString(LBE);
+    Check(Pos(#27'[?1049h', LStr) > 0, 'alt screen still present');
+    Check(Pos(#27'[=5;1u', LStr) > 0, 'kitty push after alt screen');
+    Check(Pos(#27'[?1000h', LStr) = 0, 'no mouse tracking when amMouseNone');
+    LBE.DiscardPending;
+    LBE.PopKittyKeyboard;
+    CheckEqual(#27'[<u', PendingString(LBE), 'pop is a single sequence');
+  finally
+    LBE.Free;
+  end;
+end;
+
 procedure TestAnsiBackendDrawPatchesReusesCursorAndStyleForAdjacentCells;
 var
   LBE: TAnsiBackend;
@@ -395,6 +458,14 @@ begin
     @TestAnsiBackendEnterAlternateScrollOnly);
   T.Test('ansi backend leave alternate disables modes before leaving',
     @TestAnsiBackendLeaveAlternateDisablesModesBeforeLeaving);
+  T.Test('ansi backend kitty keyboard push default flags',
+    @TestAnsiBackendKittyKeyboardPushDefaultFlags);
+  T.Test('ansi backend kitty keyboard push custom flags',
+    @TestAnsiBackendKittyKeyboardPushCustomFlags);
+  T.Test('ansi backend kitty keyboard pop',
+    @TestAnsiBackendKittyKeyboardPop);
+  T.Test('ansi backend kitty keyboard push pop independent of mouse',
+    @TestAnsiBackendKittyKeyboardPushPopIndependentOfMouse);
   T.Test('ansi backend draw patches reuses cursor and style',
     @TestAnsiBackendDrawPatchesReusesCursorAndStyleForAdjacentCells);
   T.Test('ansi backend draw patches resets style for default cell',

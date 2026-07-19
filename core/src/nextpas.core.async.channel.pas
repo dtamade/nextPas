@@ -18,29 +18,27 @@ type
   { 异步通道 }
   IAsyncChannel = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-700000000003}']
-    { 发送数据（满时返回 False） }
+    { Non-blocking try-send: full or closed → False (no queue). }
     function Send(const AData; ASize: UInt32): Boolean;
+    { Alias of Send (symmetric with TryReceive). }
+    function TrySend(const AData; ASize: UInt32): Boolean;
 
-    { 异步发送（满时排队等待空间，回调通知发送完成） }
+    { Async send: queues a copy when full; completion callback when enqueued
+      (or when Close wakes waiters — caller must check IsClosed). }
     procedure SendAsync(const AData; ASize: UInt32;
       ACallback: TAsyncCallback; AContext: Pointer = nil);
     procedure SendAsyncRef(const AData; ASize: UInt32;
       ACallback: TAsyncCallbackRef; AContext: Pointer = nil);
 
-    { 异步接收 }
+    { Async receive notify: data available or closed → Post callback.
+      Caller still uses TryReceive to copy bytes out. }
     procedure Receive(ACallback: TAsyncCallback; AContext: Pointer = nil);
     procedure ReceiveRef(ACallback: TAsyncCallbackRef; AContext: Pointer = nil);
 
-    { 尝试接收（非阻塞） }
     function TryReceive(var AData; ASize: UInt32; out AReceived: UInt32): Boolean;
 
-    { 关闭通道 }
     procedure Close;
-
-    { 是否已关闭 }
     function IsClosed: Boolean;
-
-    { 缓冲区中的数据量 }
     function BufferedSize: UInt32;
   end;
 
@@ -109,6 +107,7 @@ type
 
     { IAsyncChannel }
     function Send(const AData; ASize: UInt32): Boolean;
+    function TrySend(const AData; ASize: UInt32): Boolean;
     procedure SendAsync(const AData; ASize: UInt32;
       ACallback: TAsyncCallback; AContext: Pointer = nil);
     procedure SendAsyncRef(const AData; ASize: UInt32;
@@ -276,6 +275,11 @@ begin
   finally
     platform_mutex_unlock(FLock);
   end;
+end;
+
+function TAsyncChannel.TrySend(const AData; ASize: UInt32): Boolean;
+begin
+  Result := Send(AData, ASize);
 end;
 
 procedure TAsyncChannel.SendAsync(const AData; ASize: UInt32;

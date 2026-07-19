@@ -1968,7 +1968,7 @@ begin
   Check(LProfile.KittyKeyboard.Detected, 'kitty keyboard env hint is recorded');
   Check(not LProfile.KittyKeyboard.Active, 'kitty keyboard stays inactive before negotiation');
   Check(Pos('negotiation', LProfile.KittyKeyboard.FallbackReason) > 0,
-    'kitty keyboard fallback explains missing negotiation');
+    'kitty keyboard fallback explains pending negotiation');
 
   Check(LProfile.ImageProtocol.Status.Requested, 'image protocol requested by default');
   Check(LProfile.ImageProtocol.Status.Detected, 'kitty image protocol is detected');
@@ -2225,6 +2225,105 @@ begin
   LAlloc := nil;
 end;
 
+procedure TestKittyKeyboardNegotiationActivatesOnCandidate;
+var
+  LTerm: TTerminal;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    Check(not LTerm.HasKittyKeyboard, 'inactive before negotiation');
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Detected, 'detected after negotiate candidate');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Active, 'active after session push');
+    Check(LTerm.HasKittyKeyboard, 'HasKittyKeyboard projects Active');
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Verified,
+      'verified stays false without CSI ? u query');
+    CheckEqual('', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason,
+      'active path clears fallback reason');
+    { InitializeFrameRuntimeForTest uses fd=-1; Flush retains pending on write fail. }
+    Check(Pos(#27'[=5;1u', LTerm.BackendPendingForTest) > 0,
+      'push sequence emitted to backend pending');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardNegotiationSkipsWhenNotDetected;
+var
+  LTerm: TTerminal;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(False);
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Detected, 'not detected');
+    Check(not LTerm.CapabilityProfile.KittyKeyboard.Active, 'stays inactive');
+    Check(not LTerm.HasKittyKeyboard, 'HasKittyKeyboard false');
+    Check(Pos('env-hint-missing', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason) > 0,
+      'fallback explains missing hint');
+    CheckEqual('', LTerm.BackendPendingForTest, 'no kitty sequence when not candidate');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardNegotiationIsIdempotent;
+var
+  LTerm: TTerminal;
+  LLenAfterFirst: Integer;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(LTerm.HasKittyKeyboard, 'first negotiate activates');
+    LLenAfterFirst := System.Length(LTerm.BackendPendingForTest);
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(LTerm.HasKittyKeyboard, 'second negotiate keeps active');
+    CheckEqual(Int64(LLenAfterFirst), Int64(System.Length(LTerm.BackendPendingForTest)),
+      'second negotiate does not re-emit push when already pushed');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardLeaveClearsActive;
+var
+  LTerm: TTerminal;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(True);
+    Check(LTerm.HasKittyKeyboard, 'active before leave');
+    LTerm.LeaveTui;
+    Check(not LTerm.HasKittyKeyboard, 'inactive after leave');
+    Check(LTerm.CapabilityProfile.KittyKeyboard.Detected,
+      'detected retained after leave');
+    Check(Pos('session-ended', LTerm.CapabilityProfile.KittyKeyboard.FallbackReason) > 0,
+      'leave records session-ended fallback');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestKittyKeyboardPushBytesVisibleBeforeFlush;
+var
+  LTerm: TTerminal;
+begin
+  { Direct backend path is covered in test_tui_backend; here we only assert
+    that a non-candidate never leaves pending push bytes after negotiate. }
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.NegotiateKittyKeyboardForTest(False);
+    Check(Pos('=5;1u', LTerm.BackendPendingForTest) = 0, 'no push bytes without candidate');
+  finally
+    LTerm.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.terminal');
   T.Test('parse ascii key', @TestParseAsciiKey);
@@ -2366,5 +2465,15 @@ begin
   T.Test('sixel capability profile does not imply kitty keyboard',
     @TestSixelCapabilityProfileDoesNotImplyKittyKeyboard);
   T.Test('frame runtime with allocator', @TestFrameRuntimeWithAllocator);
+  T.Test('kitty keyboard negotiation activates on candidate',
+    @TestKittyKeyboardNegotiationActivatesOnCandidate);
+  T.Test('kitty keyboard negotiation skips when not detected',
+    @TestKittyKeyboardNegotiationSkipsWhenNotDetected);
+  T.Test('kitty keyboard negotiation is idempotent',
+    @TestKittyKeyboardNegotiationIsIdempotent);
+  T.Test('kitty keyboard leave clears active',
+    @TestKittyKeyboardLeaveClearsActive);
+  T.Test('kitty keyboard push bytes absent without candidate',
+    @TestKittyKeyboardPushBytesVisibleBeforeFlush);
   if not T.Run then Halt(1);
 end.

@@ -36,6 +36,14 @@ procedure AnsiDisableMouseTracking(var B: TStringBuilder);
 procedure AnsiEnableAlternateScroll(var B: TStringBuilder);
 procedure AnsiDisableAlternateScroll(var B: TStringBuilder);
 
+{ Kitty keyboard progressive enhancement.
+  flags: 1=disambiguate escapes, 4=report alternate keys (default 5). }
+const
+  KittyKeyboardDefaultFlags = 5;
+
+procedure AnsiKittyKeyboardPush(var B: TStringBuilder; AFlags: Integer = KittyKeyboardDefaultFlags);
+procedure AnsiKittyKeyboardPop(var B: TStringBuilder);
+
 { SGR emitter。每个写一个完整 SGR 序列，不 reset；后端在不兼容属性切换间
   调 AnsiSgrReset。 }
 procedure AnsiSgrReset(var B: TStringBuilder); inline;
@@ -155,6 +163,25 @@ end;
 procedure AnsiDisableAlternateScroll(var B: TStringBuilder);
 begin
   AnsiDecPrivateMode(B, 1007, False);
+end;
+
+procedure AnsiKittyKeyboardPush(var B: TStringBuilder; AFlags: Integer);
+begin
+  { CSI = <flags> ; 1 u  — mode 1 = set/replace progressive enhancement flags }
+  B.AppendByte(27); B.AppendChar('[');
+  B.AppendChar('=');
+  B.AppendUInt(UInt64(AFlags));
+  B.AppendChar(';');
+  B.AppendChar('1');
+  B.AppendChar('u');
+end;
+
+procedure AnsiKittyKeyboardPop(var B: TStringBuilder);
+begin
+  { CSI < u  — restore progressive enhancement stack }
+  B.AppendByte(27); B.AppendChar('[');
+  B.AppendChar('<');
+  B.AppendChar('u');
 end;
 
 { SGR helpers }

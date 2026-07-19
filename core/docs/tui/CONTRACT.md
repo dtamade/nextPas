@@ -4,7 +4,7 @@
 **层级**：L3（依赖 L0-L2: text, sync, platform）
 **Owner**：Claude（AI 负责）
 **最后更新**：2026-07-19
-**版本**：1.3
+**版本**：1.4
 
 ---
 
@@ -128,15 +128,24 @@ end;
 - widget 通过接口引用计数自动释放
 - Diff patch / image placements / input queue 仍用进程堆 dynarray（Phase 2 未迁）
 
+### 5.1 Capability 会话协商
+
+- `CapabilityProfile.KittyKeyboard`：env hint → **Detected**；`EnterTui` 发出
+  `CSI = 5 ; 1 u`（disambiguate + report alternate keys）后 **Active=True**
+- `LeaveTui` 发出 `CSI < u` 并收回 Active（`FallbackReason=session-ended`）
+- **Verified** 仍为 False（未实现 `CSI ? u` 查询往返）
+- 非候选终端不发序列，Active 保持 False
+
 ---
 
 ## 6. 测试
 
-- 95 个测试目录，1635+ T.Test 注册
+- 95 个测试目录，1640+ T.Test 注册
 - heaptrc 全覆盖（编译器标志 `-gh -dHEAPTRC_ACTIVE`）
 - 0 泄漏，0 失败
 - 测试源 0 SysUtils / BaseUnix / Unix 直接引用
 - tracking allocator 覆盖 TBuffer/TOverlay 可选路径
+- Kitty keyboard push/pop + profile Active 迁移有 focused 覆盖
 
 ---
 
@@ -144,6 +153,7 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
+| 2026-07-19 | 1.4 | Kitty keyboard 会话 push/pop 协商 → Active | Claude |
 | 2026-07-19 | 1.3 | 可选 IAllocator：TBuffer/TOverlay/TTerminal/ANSI | Claude |
 | 2026-07-19 | 1.2 | 测试计数 1567→1630；测试 SysUtils 清零；docs/contracts 改指针 | Claude |
 | 2026-07-11 | 1.1 | 全面重写：对齐实际实现，修正接口签名、控件列表、不变量 | Claude |

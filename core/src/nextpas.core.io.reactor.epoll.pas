@@ -85,6 +85,9 @@ type
     procedure Stop;
     function Flush: Int32;
     function HasPending: Boolean;
+    { Drop one pending op with matching Context and deliver -ECANCELED
+      so TimeoutCtx I/O ref is released. Not a kernel syscall cancel. }
+    function TryCancelByContext(AContext: Pointer): Boolean;
   end;
 
 implementation
@@ -596,6 +599,44 @@ end;
 function TEpollReactor.HasPending: Boolean;
 begin
   Result := FPendingCount > 0;
+end;
+
+function TEpollReactor.TryCancelByContext(AContext: Pointer): Boolean;
+var
+  LI: UInt32;
+  LIdx: Int32;
+  LCallback: TIoCompletion;
+  LContext: Pointer;
+  LFd: Int32;
+  LUserData: UInt64;
+begin
+  Result := False;
+  if (AContext = nil) or (not IsValid) then
+    Exit;
+  LIdx := -1;
+  if FOpCount > 0 then
+  begin
+    for LI := 0 to FOpCount - 1 do
+    begin
+      if FOps[LI].Active and (FOps[LI].Context = AContext) then
+      begin
+        LIdx := Int32(LI);
+        Break;
+      end;
+    end;
+  end;
+  if LIdx < 0 then
+    Exit;
+  LCallback := FOps[LIdx].Callback;
+  LContext := FOps[LIdx].Context;
+  LFd := FOps[LIdx].Fd;
+  LUserData := UInt64(LIdx);
+  FreeOp(LIdx);
+  RemoveFd(LFd);
+  { Deliver internal completion so TimeoutCtx I/O ref is released via CAS-fail path. }
+  if Assigned(LCallback) then
+    LCallback(LUserData, -ESysECANCELED, LContext);
+  Result := True;
 end;
 
 function TEpollReactor.PollOne: Boolean;

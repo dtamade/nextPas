@@ -215,7 +215,7 @@ begin
   TestRetryZeroMaxRetries;
 
   GLoop.Close;
-  GLoop.Close;
+  GLoop.Free;
 
   WriteLn('=== All tests passed ===');
 end;
