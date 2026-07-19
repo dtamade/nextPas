@@ -1,8 +1,8 @@
 # 门面瘦身设计（F2 · 设计 only）
 
 **日期**: 2026-07-20
-**状态**: Design ready — **本批不改** `nextpas.core.mem.pas` re-export
-**执行**: 另开 F3 path-limited slice（需批准）
+**状态**: **Executed batch 1** — 门面 re-export 已收紧（F3）
+**执行**: F3 path-limited slice · interface uses **65 → 41**
 **关联**: [FACADES-SURFACE.md](FACADES-SURFACE.md) · [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §3 · [ROADMAP.md](ROADMAP.md) §4c
 
 ---
@@ -97,42 +97,39 @@ P-a + P-b 名单；`blockpool.growable` 保留源、**不进门面**。
 
 ---
 
-## 4. F3 执行计划（未来，不在本批）
+## 4. F3 执行记录（批 1 · done）
 
-### 批 1（低风险）
+1. 从 `nextpas.core.mem.pas` interface `uses` + type re-export 去掉 §3 Tier-2 批 1 名单（含 concurrent/sharded/stack_pool/budget/oom）
+2. `CreatePoolAllocator` 保留；`pool.allocator` 仅 implementation uses
+3. 更新 [FACADES-SURFACE.md](FACADES-SURFACE.md)
+4. `test_mem` 收窄为门面仍 re-export 的烟测；`test_arena_prop` 直接 uses `blockpool.sharded`
+5. 验证：`test_mem` / `test_debug_wrap` / `lane-focused` / hygiene
+6. **Breaking（re-export only）**：源文件未删
 
-1. 从 `nextpas.core.mem.pas` `uses` 与 type re-export 去掉 §3 Tier-2 批 1 名单
-2. 更新 [FACADES-SURFACE.md](FACADES-SURFACE.md)
-3. 更新 `check_usability_docs.sh` 若有硬编码名单
-4. 修 mem 测试：`uses nextpas.core.mem.allocator.logging` 等
-5. 验证：`lane-focused` + `test_debug_wrap` + 受影响 test_*
-6. path-limited land；CHANGELOG 写 **breaking（re-export）**
+### 批 2（可选，未做）
 
-### 批 2
+- mimalloc/mmap 是否降为「仅子单元」
+- 防回潮 source-contract（门面不得 uses demoted 名单）
 
-- 评估 concurrent/sharded 池是否需门面
-- mimalloc/mmap 文档「可选后端」vs 移出
-
-### 禁止
+### 禁止（仍有效）
 
 - 与功能修复混 commit
 - 一次移出 mapped/ring
 
 ---
 
-## 5. 验收（F3 时）
+## 5. 验收（F3 批 1）
 
-| 项 | 标准 |
-|----|------|
-| 门面 uses 数 | 批 1 后目标 **≤ 40**（约减 20+） |
-| 产品 `core/src` 非 mem | 无新增编译失败（0 引用包装器） |
-| DEBUG 链 | `NEXTPAS_MEM_DEBUG=…` 行为不变 |
-| 文档 | FACADES + API-GUIDE 同步 |
+| 项 | 标准 | 结果 |
+|----|------|------|
+| 门面 uses 数 | ≤ 42（目标 ~40） | **41** |
+| 产品 `core/src` 非 mem | 无 demoted 类型引用 | **0 hits** |
+| DEBUG 链 | `NEXTPAS_MEM_DEBUG` 不变 | debug_wrap 直接 uses 子单元 |
+| 文档 | FACADES + ROADMAP 同步 | done |
 
 ---
 
-## 6. 本批（F2）结论
+## 6. 结论
 
-- **设计就绪**；推荐 F3 批 1 按 §4。
-- **本批无生产代码变更**。
-- 批准 F3 前可只 land 本文 + F0/F1 文档。
+- F2 设计 + **F3 批 1 已执行**。
+- 调用冷门包装器 / 并发池：`uses nextpas.core.mem.<子单元>`。
