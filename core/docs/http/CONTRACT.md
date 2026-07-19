@@ -589,6 +589,25 @@ H1 server 对同连接上“当前请求 framing 完成后的未消费字节”�
 
 证据：`test_http_form` FromReader 套件。
 
+### 4.3 Observability 最小 seam（Wave Q1-3）
+
+`MetricsMiddleware` / `MetricsMiddlewareWith` / `MetricsMiddlewareWithFields` +
+`IHttpMetricsCollector` 是 **opt-in** 可观测 seam。
+
+| 规则 | 行为 |
+|------|------|
+| 默认开销 | **零**：不安装 middleware 则无采集、无锁、无回调 |
+| Collector | `NewHttpMetricsCollector` + `Snapshot` / `Reset`；线程安全 |
+| 字段 | `TotalRequests`、2xx–5xx 类计数、`TotalDurationUs`、`RequestBytes`、`ResponseBytes` |
+| 计时 | handler 前后 `try/finally`；**异常仍记录** |
+| 未提交 status | handler 抛异常且 `GetStatus=0` → 记 **status=500**（计入 5xx） |
+| Callback | `With` / `WithFields` 推送外部系统；**callback 内异常被吞掉**，不破坏请求 |
+| 构造失败 | nil collector/callback → `hekArgument` Op=`metrics` |
+
+**非目标**：OpenTelemetry / Prometheus exporter / 全局强制 metrics / 分布式 tracing。
+
+证据：`test_http_middlewares` Metrics 套件（含 exception + callback isolation）。
+
 ---
 
 ## 5. 协议策略
