@@ -16,6 +16,8 @@ make lane-focused LANE=mem
 
 **Steward 观测（2026-07-17，只读）**: [Inventory 可删清单](INVENTORY-AUDIT-2026-07-17.md) · [Consumer 热路径/unsized free](CONSUMER-OBSERVATION-2026-07-17.md) — **不删代码、不强制改 consumer**。
 
+**P-a prune 设计（2026-07-19，只读）**: [PRUNE-P-a-DESIGN](PRUNE-P-a-DESIGN-2026-07-19.md) — 10 个与 Growing/Arena 重叠的 Tier-3 + 测试映射；**执行待总控批准**。
+
 ---
 
 ## 30 秒上手
