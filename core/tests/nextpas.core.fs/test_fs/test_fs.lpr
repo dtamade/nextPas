@@ -13,6 +13,8 @@ uses
   nextpas.core.platform.posix.ffi,
 {$ENDIF}
   nextpas.core.platform.process,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files,
 {$IFDEF NEXTPAS_LINUX}
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.base,
@@ -701,6 +703,292 @@ begin
   finally
     FsRemoveAll(LDir);
   end;
+end;
+
+
+procedure TestStatMissingR19;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    FsStat(GTmpDir + '/no-stat-r19');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r19 Stat missing ENotFound');
+end;
+
+procedure TestOpenMissingR19;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    Open(GTmpDir + '/no-open-r19', [fmRead]);
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r19 Open missing ENotFound');
+end;
+
+procedure TestReadlinkMissingR19;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    FsReadlink(GTmpDir + '/no-link-r19');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r19 Readlink missing raises');
+end;
+
+procedure TestWriteFileRoundtripR19;
+begin
+  FsWriteFileText(GTmpDir + '/wr-r19.txt', 'hello-r19');
+  CheckEqual('hello-r19', FsReadFileText(GTmpDir + '/wr-r19.txt'), 'r19 write read');
+  Check(FsIsFile(GTmpDir + '/wr-r19.txt'), 'r19 is file');
+  Check(not FsIsDir(GTmpDir + '/wr-r19.txt'), 'r19 not dir');
+end;
+
+procedure TestMkdirAllIdempotentR19;
+begin
+  FsMkdirAll(GTmpDir + '/mk-r19/a/b');
+  FsMkdirAll(GTmpDir + '/mk-r19/a/b');
+  Check(FsIsDir(GTmpDir + '/mk-r19/a/b'), 'r19 mkdirall idem');
+end;
+
+procedure TestCopyFileRoundtripR19;
+var
+  N: Int64;
+begin
+  FsWriteFile(GTmpDir + '/cp-src-r19.bin', TBytes.Create(1, 2, 3));
+  N := FsCopyFile(GTmpDir + '/cp-src-r19.bin', GTmpDir + '/cp-dst-r19.bin');
+  CheckEqual(Int64(3), N, 'r19 copy n');
+  Check(FsExists(GTmpDir + '/cp-dst-r19.bin'), 'r19 copy exists');
+end;
+
+procedure TestRenameThenMissingR19;
+begin
+  FsWriteFile(GTmpDir + '/rn-src-r19', TBytes.Create(1));
+  FsRename(GTmpDir + '/rn-src-r19', GTmpDir + '/rn-dst-r19');
+  Check(not FsExists(GTmpDir + '/rn-src-r19'), 'r19 rename src gone');
+  Check(FsExists(GTmpDir + '/rn-dst-r19'), 'r19 rename dst');
+end;
+
+procedure TestIsSymlinkFacadeR19;
+var
+  LTarget, LLink: string;
+begin
+  LTarget := GTmpDir + '/sym-t-r19';
+  LLink := GTmpDir + '/sym-l-r19';
+  FsWriteFile(LTarget, TBytes.Create(1));
+  Check(not IsSymlink(LTarget), 'r19 not symlink file');
+  FsSymlink(LTarget, LLink);
+  Check(IsSymlink(LLink), 'r19 is symlink');
+  Check(not IsSymlink(GTmpDir + '/no-sym-r19'), 'r19 missing not symlink');
+end;
+
+procedure TestSameFileSelfR19;
+var
+  P: string;
+begin
+  P := GTmpDir + '/same-r19.txt';
+  FsWriteFile(P, TBytes.Create(9));
+  Check(SameFile(P, P), 'r19 same self');
+end;
+
+procedure TestSameFileMissingR19;
+var
+  P: string;
+  LRaised: Boolean;
+begin
+  P := GTmpDir + '/same-r19b.txt';
+  FsWriteFile(P, TBytes.Create(1));
+  LRaised := False;
+  try
+    SameFile(P, GTmpDir + '/same-r19-other.txt');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r19 same other missing raises');
+end;
+
+procedure TestFileSizeAfterWriteR19;
+begin
+  FsWriteFile(GTmpDir + '/sz-r19.bin', TBytes.Create(1, 2, 3, 4, 5));
+  CheckEqual(Int64(5), FsFileSize(GTmpDir + '/sz-r19.bin'), 'r19 size 5');
+end;
+
+procedure TestGetCwdNonEmptyR19;
+begin
+  Check(FsGetCwd <> '', 'r19 cwd non-empty');
+  Check(GetCwd <> '', 'r19 facade cwd');
+end;
+
+procedure TestTempFileWritableR19;
+var
+  F: IFile;
+  P: string;
+begin
+  F := FsTempFile(GTmpDir, 'r19tf*');
+  P := F.Name;
+  Check(P <> '', 'r19 temp path');
+  Check(FsExists(P), 'r19 temp exists');
+end;
+
+
+
+procedure TestExistsR19Extra;
+begin
+  FsWriteFile(GTmpDir + '/ex-r19', TBytes.Create(1));
+  Check(FsExists(GTmpDir + '/ex-r19'), 'r19ex1');
+  Check(Exists(GTmpDir + '/ex-r19'), 'r19ex2');
+  Check(not FsExists(GTmpDir + '/ex-r19-no'), 'r19ex3');
+end;
+
+procedure TestReadDirHasFileR19Extra;
+var
+  E: TDirEntryArray;
+  I: Integer;
+  Found: Boolean;
+begin
+  FsMkdir(GTmpDir + '/rd-r19');
+  FsWriteFile(GTmpDir + '/rd-r19/f.txt', TBytes.Create(1));
+  E := FsReadDir(GTmpDir + '/rd-r19');
+  Found := False;
+  for I := 0 to High(E) do
+    if E[I].Name = 'f.txt' then
+      Found := True;
+  Check(Found, 'r19rd found');
+end;
+
+procedure TestRemoveFileR19Extra;
+begin
+  FsWriteFile(GTmpDir + '/rm-r19', TBytes.Create(1));
+  FsRemove(GTmpDir + '/rm-r19');
+  Check(not FsExists(GTmpDir + '/rm-r19'), 'r19rm gone');
+end;
+
+procedure TestChmodExistsR19Extra;
+begin
+  FsWriteFile(GTmpDir + '/ch-r19', TBytes.Create(1));
+  FsChmod(GTmpDir + '/ch-r19', PermDefault);
+  Check(FsIsFile(GTmpDir + '/ch-r19'), 'r19ch still file');
+end;
+
+procedure TestTruncateR19Extra;
+begin
+  FsWriteFile(GTmpDir + '/tr-r19', TBytes.Create(1, 2, 3, 4));
+  FsTruncate(GTmpDir + '/tr-r19', 2);
+  CheckEqual(Int64(2), FsFileSize(GTmpDir + '/tr-r19'), 'r19tr size');
+end;
+
+
+procedure TestHardLinkR20;
+var
+  A, B: string;
+begin
+  A := GTmpDir + '/hl-a-r20.bin';
+  B := GTmpDir + '/hl-b-r20.bin';
+  FsWriteFile(A, TBytes.Create(1, 2, 3));
+  HardLink(A, B);
+  Check(SameFile(A, B), 'r20 hardlink samefile');
+  CheckEqual(Int64(3), FsFileSize(B), 'r20 hardlink size');
+  FsWriteFile(A, TBytes.Create(9, 9));
+  CheckEqual(Int64(2), FsFileSize(B), 'r20 hardlink shared data');
+end;
+
+procedure TestHardLinkMissingR20;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HardLink(GTmpDir + '/no-hl-src', GTmpDir + '/no-hl-dst');
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r20 hardlink missing src');
+end;
+
+procedure TestHardLinkEmptyR20;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    HardLink('', GTmpDir + '/x');
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r20 hardlink empty');
+end;
+
+procedure TestChtimesR20;
+var
+  P: string;
+  Info: TFileInfo;
+  At, Mt: Int64;
+begin
+  P := GTmpDir + '/chtimes-r20.txt';
+  FsWriteFileText(P, 't');
+  At := Int64(1000000000) * 1600000000;
+  Mt := Int64(1000000000) * 1600000500;
+  Chtimes(P, At, Mt);
+  Info := Stat(P);
+  Check(Abs(Info.AccessTime - At) < 2000000000, 'r20 atime');
+  Check(Abs(Info.ModTime - Mt) < 2000000000, 'r20 mtime');
+end;
+
+procedure TestChtimesMissingR20;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    Chtimes(GTmpDir + '/no-ct-r20', 0, 0);
+  except
+    on E: ENotFoundError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r20 chtimes missing');
+end;
+
+procedure TestChownSelfR20;
+var
+  P: string;
+  S: TPlatformFileStat;
+begin
+  P := GTmpDir + '/chown-r20.txt';
+  FsWriteFileText(P, 'c');
+  Check(platform_file_stat(PAnsiChar(P), S) = 0, 'r20 chown pre-stat');
+  Chown(P, S.Uid, S.Gid);
+  Check(FsExists(P), 'r20 chown self ok');
+end;
+
+procedure TestChownMissingR20;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    Chown(GTmpDir + '/no-chown-r20', 0, 0);
+  except
+    on E: Exception do
+      LRaised := True;
+  end;
+  Check(LRaised, 'r20 chown missing raises');
 end;
 
 procedure TestFileSize;
@@ -2244,6 +2532,31 @@ begin
     T.Test('ReadFileText empty', @TestReadFileTextEmpty);
     T.Test('EnsureFile idempotent', @TestEnsureFileIdempotent);
     T.Test('TempDir is directory', @TestTempDirIsDirectory);
+    T.Test('Stat missing R19', @TestStatMissingR19);
+    T.Test('Open missing R19', @TestOpenMissingR19);
+    T.Test('Readlink missing R19', @TestReadlinkMissingR19);
+    T.Test('WriteFile roundtrip R19', @TestWriteFileRoundtripR19);
+    T.Test('MkdirAll idempotent R19', @TestMkdirAllIdempotentR19);
+    T.Test('CopyFile roundtrip R19', @TestCopyFileRoundtripR19);
+    T.Test('Rename then missing R19', @TestRenameThenMissingR19);
+    T.Test('IsSymlink facade R19', @TestIsSymlinkFacadeR19);
+    T.Test('SameFile self R19', @TestSameFileSelfR19);
+    T.Test('SameFile missing R19', @TestSameFileMissingR19);
+    T.Test('FileSize after write R19', @TestFileSizeAfterWriteR19);
+    T.Test('GetCwd non-empty R19', @TestGetCwdNonEmptyR19);
+    T.Test('TempFile writable R19', @TestTempFileWritableR19);
+    T.Test('Exists R19 extra', @TestExistsR19Extra);
+    T.Test('ReadDir has file R19 extra', @TestReadDirHasFileR19Extra);
+    T.Test('Remove file R19 extra', @TestRemoveFileR19Extra);
+    T.Test('Chmod exists R19 extra', @TestChmodExistsR19Extra);
+    T.Test('Truncate R19 extra', @TestTruncateR19Extra);
+    T.Test('HardLink R20', @TestHardLinkR20);
+    T.Test('HardLink missing R20', @TestHardLinkMissingR20);
+    T.Test('HardLink empty R20', @TestHardLinkEmptyR20);
+    T.Test('Chtimes R20', @TestChtimesR20);
+    T.Test('Chtimes missing R20', @TestChtimesMissingR20);
+    T.Test('Chown self R20', @TestChownSelfR20);
+    T.Test('Chown missing R20', @TestChownMissingR20);
     T.Test('FileSize', @TestFileSize);
 
     T.Test('Mkdir + ReadDir', @TestMkdirAndReadDir);

@@ -1,5 +1,7 @@
 # nextPas Benchmark Scorecard
 
+> **子集刷新 (2026-07-19)**: 见 `core/docs/bench/scorecard-subset-2026-07-19.md` (boolsum / fncall)。本文件全量数字仍为 2026-07-02 基线。
+
 **Machine**: Linux x86_64, Intel Xeon E5-2696 v4 @ 2.20GHz, 44 threads
 **Compiler**: FPC 3.3.1 -O3 -CX -XX -Xs -dRELEASE | Go default -O2 (no explicit flag)
 **Date**: 2026-07-02

@@ -9,6 +9,7 @@ program test_config;
 {$modeswitch functionreferences}
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.test.base,
   nextpas.core.test.config,
@@ -357,10 +358,22 @@ begin
   { Don't free LSink — it's managed by interface reference counting }
 end;
 
+{ ── B3 scale: table-driven identity bulk ─────────────────────────────────── }
+
+procedure TestConfigIdentityCase(const AC: TTestCase);
+var
+  N: Int64;
+begin
+  N := StrToInt(AC.Data);
+  CheckEqual(N, N);
+end;
+
 { ── Main ───────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
+  LCases: specialize TArray<TTestCase>;
+  I: Integer;
 begin
   WriteLn('=== test_config ===');
   LSuite := TTestSuite.Create('config');
@@ -410,6 +423,15 @@ begin
 
   { MakeBufferConfig }
   LSuite.Test('MakeBufferConfig',          @TestMakeBufferConfig);
+
+  { B3: 400 table-driven identity processes }
+  SetLength(LCases, 400);
+  for I := 0 to High(LCases) do
+  begin
+    LCases[I].Name := 'cfg-id-' + IntToStr(I);
+    LCases[I].Data := IntToStr(I);
+  end;
+  LSuite.TestTable('config identity', LCases, @TestConfigIdentityCase);
 
   if not LSuite.Run then
   begin

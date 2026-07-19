@@ -534,6 +534,15 @@ function symlink(target: PAnsiChar; linkpath: PAnsiChar): cint; cdecl; external 
     @return 0 成功 *}
 function link(oldpath: PAnsiChar; newpath: PAnsiChar): cint; cdecl; external 'c' name 'link';
 
+{** @desc 设置访问/修改时间（纳秒；dirfd 常用 AT_FDCWD=-100）
+    @param dirfd 目录 fd 或 AT_FDCWD
+    @param pathname 路径
+    @param times 长度为 2 的 timespec 数组：atime, mtime
+    @param flags 0 或 AT_SYMLINK_NOFOLLOW
+    @return 0 成功 *}
+function utimensat(dirfd: cint; pathname: PAnsiChar; times: PTimeSpec;
+  flags: cint): cint; cdecl; external 'c' name 'utimensat';
+
 { Permission }
 
 {** @desc 设置文件权限

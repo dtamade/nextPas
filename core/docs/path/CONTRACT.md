@@ -74,7 +74,7 @@ SysUtils 路径函数的替代品。委托给 `nextpas.core.fs.path`（后者调
 
 | 测试文件 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_path | 56 | R16 path API + R17 Clean/Rel/Match 表 |
+| test_path | 68 | R19 Clean/Rel/Match Go 表 |
 | **合计** | **1 个测试目录** | heaptrc 0 leak |
 
 ---

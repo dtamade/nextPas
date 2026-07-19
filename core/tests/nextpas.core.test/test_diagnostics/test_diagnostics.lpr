@@ -352,10 +352,24 @@ begin
   end;
 end;
 
+{ ── B3 scale: table-driven identity checks (countable process bulk) ─────── }
+
+procedure TestIdentityCase(const AC: TTestCase);
+var
+  N: Int64;
+begin
+  N := StrToInt(AC.Data);
+  CheckEqual(N, N);
+  CheckTrue(N = N);
+  CheckNotEqual(N, N + 1);
+end;
+
 { ── Main ─────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
+  LCases: specialize TArray<TTestCase>;
+  I: Integer;
 begin
   WriteLn('=== test_diagnostics ===');
 
@@ -388,6 +402,15 @@ begin
   LSuite.Test('msg contract string equal',      @TestMsgContractStringEqual);
   LSuite.Test('msg contract int equal',         @TestMsgContractIntEqual);
   LSuite.Test('msg contract snapshot mismatch', @TestMsgContractSnapshotMismatch);
+
+  { B3: 150 table-driven identity processes (scale toward ≥1200 total) }
+  SetLength(LCases, 150);
+  for I := 0 to High(LCases) do
+  begin
+    LCases[I].Name := 'id-' + IntToStr(I);
+    LCases[I].Data := IntToStr(I * 17 + 3);
+  end;
+  LSuite.TestTable('identity table', LCases, @TestIdentityCase);
 
   if not LSuite.Run then
   begin

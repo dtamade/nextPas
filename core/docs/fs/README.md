@@ -97,6 +97,9 @@ nextpas.core.fs.errors.pas   ← 文件系统异常
 | `Truncate(APath, ASize)` | 截断文件 |
 | `Symlink(ATarget, ALinkPath)` | 创建符号链接 |
 | `Readlink(APath)` | 读取符号链接目标 |
+| `HardLink(AOld, ANew)` | 创建硬链接（对齐 Go `os.Link`） |
+| `Chtimes(APath, AAccessNs, AModNs)` | 访问/修改时间（Unix 纳秒 epoch） |
+| `Chown(APath, AUid, AGid)` | 所有者（Unix；Windows 不支持） |
 
 ### 目录操作
 

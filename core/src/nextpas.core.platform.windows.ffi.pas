@@ -950,6 +950,24 @@ function CreateSymbolicLinkA(lpSymlinkFileName: LPCSTR; lpTargetFileName: LPCSTR
     @return TRUE 成功 *}
 function CreateSymbolicLinkW(lpSymlinkFileName: LPCWSTR; lpTargetFileName: LPCWSTR; dwFlags: DWORD): BOOL; stdcall; external 'kernel32' name 'CreateSymbolicLinkW';
 
+{** @desc 创建硬链接（Unicode）
+    @param lpFileName 新链接路径
+    @param lpExistingFileName 已有文件路径
+    @param lpSecurityAttributes 安全属性（可为 nil）
+    @return TRUE 成功 *}
+function CreateHardLinkW(lpFileName: LPCWSTR; lpExistingFileName: LPCWSTR;
+  lpSecurityAttributes: Pointer): BOOL; stdcall; external 'kernel32' name 'CreateHardLinkW';
+
+{** @desc 设置文件时间
+    @param hFile 文件句柄
+    @param lpCreationTime 创建时间（可为 nil）
+    @param lpLastAccessTime 访问时间（可为 nil）
+    @param lpLastWriteTime 修改时间（可为 nil）
+    @return TRUE 成功 *}
+function SetFileTime(hFile: HANDLE; lpCreationTime: Pointer;
+  lpLastAccessTime: Pointer; lpLastWriteTime: Pointer): BOOL; stdcall;
+  external 'kernel32' name 'SetFileTime';
+
 {** @desc 获取最终路径（ANSI）
     @param hFile 文件句柄
     @param lpszFilePath 输出缓冲区
