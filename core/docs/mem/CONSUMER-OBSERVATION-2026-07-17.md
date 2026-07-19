@@ -53,7 +53,7 @@ Scorecard 税（RELEASE 2026-07-17）：unsized ~**8.9×** sized；plugin IA ~**
 |------|--------|------|
 | `simd.avx2` / `simd.sse2` | 4+4 | **CLOSED 2026-07-19**：`FreeMem(buf, capacity*SizeOf(Single))` |
 | `simd.alloc` / `image` / `imageproc` / `memutils` | 1 each | **CLOSED 2026-07-19**：raw size / row size / DataSize / TryBlockSize |
-| `tls.winssl.certificate` / `winssl.utils` | 5+4 | **utils partial E4 2026-07-19**（SecBuffer / PWide）；certificate 待审 |
+| `tls.winssl.certificate` / `winssl.utils` | — | **CLOSED E4**：utils + certificate 已 sized（alloc-size 快照） |
 | `tls.openssl.api.*` / `certificate` / `wolfssl.context` | 若干 | C API 缓冲；**本批不做** |
 | `tls.buffer.pool` | 2 | **CLOSED E4 2026-07-19**：`FreeMem(FData, FCapacity)` |
 | `io.reactor.iocp` | 3 | **CLOSED E4 2026-07-19**：Accept 缓冲 `WSABuf.len` / `ADDR_BUF_SIZE` |
