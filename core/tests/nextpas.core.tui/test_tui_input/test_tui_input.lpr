@@ -522,6 +522,50 @@ begin
   Check(LConsumed = 3, 'consumes 3');
 end;
 
+
+procedure TestParseOneFocusIn;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+begin
+  LBuf := #27'[I';
+  LResult := ParseOne(LBuf[1], Length(LBuf), False, LEvent, LConsumed);
+  Check(LResult = prSuccess, 'focus in parses');
+  Check(LEvent.Kind = evFocus, 'evFocus');
+  Check(LEvent.Focus.Kind = fkIn, 'fkIn');
+  Check(LConsumed = 3, 'consumes 3');
+end;
+
+procedure TestParseOneFocusOut;
+var
+  LBuf: AnsiString;
+  LEvent: TEvent;
+  LConsumed: Integer;
+  LResult: TParseResult;
+begin
+  LBuf := #27'[O';
+  LResult := ParseOne(LBuf[1], Length(LBuf), False, LEvent, LConsumed);
+  Check(LResult = prSuccess, 'focus out parses');
+  Check(LEvent.Kind = evFocus, 'evFocus');
+  Check(LEvent.Focus.Kind = fkOut, 'fkOut');
+end;
+
+procedure TestFocusHelpers;
+var
+  LIn, LOut: TEvent;
+begin
+  LIn := FocusEvent(fkIn);
+  LOut := FocusEvent(fkOut);
+  Check(IsFocus(LIn), 'IsFocus in');
+  Check(IsFocusIn(LIn), 'IsFocusIn');
+  Check(not IsFocusOut(LIn), 'not out');
+  Check(IsFocusOut(LOut), 'IsFocusOut');
+  Check(not IsKey(LIn), 'not key');
+end;
+
+
 begin
   T := TTestSuite.Create('tui_input');
   T.Test('ParseOne printable ASCII', @TestParseOnePrintableAscii);
@@ -558,5 +602,8 @@ begin
   T.Test('ParseOne F1', @TestParseOneF1);
   T.Test('invalid CSI at EOF falls back to Esc', @TestInvalidCsiAtEofFallsBackToEsc);
   T.Test('SS3 F1', @TestSs3F1);
-  if not T.Run then Halt(1);
+    T.Test('ParseOne focus in', @TestParseOneFocusIn);
+  T.Test('ParseOne focus out', @TestParseOneFocusOut);
+  T.Test('focus helpers', @TestFocusHelpers);
+if not T.Run then Halt(1);
 end.

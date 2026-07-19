@@ -455,6 +455,24 @@ begin
   end;
 end;
 
+
+procedure TestAnsiBackendFocusReportingEnableDisable;
+var
+  LBE: TAnsiBackend;
+begin
+  LBE := TAnsiBackend.Create(TEST_STDOUT_FD);
+  try
+    LBE.EnableFocusReporting;
+    Check(Pos(#27'[?1004h', PendingString(LBE)) > 0, 'enable 1004h');
+    LBE.DiscardPending;
+    LBE.DisableFocusReporting;
+    CheckEqual(#27'[?1004l', PendingString(LBE), 'disable 1004l');
+  finally
+    LBE.Free;
+  end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.backend');
   T.Test('test backend draw patches', @TestTestBackendDrawPatches);
@@ -492,5 +510,7 @@ begin
     @TestAnsiBackendDrawPatchesAppliesUnderlineColor);
   T.Test('ansi backend draw patches wide glyph advances cursor',
     @TestAnsiBackendDrawPatchesWideGlyphAdvancesCursor);
-  if not T.Run then Halt(1);
+    T.Test('ansi backend focus reporting enable disable',
+    @TestAnsiBackendFocusReportingEnableDisable);
+if not T.Run then Halt(1);
 end.

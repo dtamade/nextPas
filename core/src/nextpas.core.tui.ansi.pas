@@ -36,6 +36,10 @@ procedure AnsiDisableMouseTracking(var B: TStringBuilder);
 procedure AnsiEnableAlternateScroll(var B: TStringBuilder);
 procedure AnsiDisableAlternateScroll(var B: TStringBuilder);
 
+{ Terminal focus reporting (DECSET 1004) — reply CSI I / CSI O. }
+procedure AnsiEnableFocusReporting(var B: TStringBuilder);
+procedure AnsiDisableFocusReporting(var B: TStringBuilder);
+
 { Kitty keyboard progressive enhancement.
   flags: 1=disambiguate escapes, 4=report alternate keys (default 5). }
 const
@@ -165,6 +169,16 @@ end;
 procedure AnsiDisableAlternateScroll(var B: TStringBuilder);
 begin
   AnsiDecPrivateMode(B, 1007, False);
+end;
+
+procedure AnsiEnableFocusReporting(var B: TStringBuilder);
+begin
+  AnsiDecPrivateMode(B, 1004, True);
+end;
+
+procedure AnsiDisableFocusReporting(var B: TStringBuilder);
+begin
+  AnsiDecPrivateMode(B, 1004, False);
 end;
 
 procedure AnsiKittyKeyboardPush(var B: TStringBuilder; AFlags: Integer);

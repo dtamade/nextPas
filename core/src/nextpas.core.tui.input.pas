@@ -23,6 +23,7 @@ unit nextpas.core.tui.input;
 //   - CSI 11~..24~ -> F1..F12; CSI Z -> BackTab
 //   - CSI 1;<mods> letter -> arrows/Home/End with modifiers
 //   - CSI <keycode>;<mods>u -> kitty keyboard protocol (Shift+Enter etc)
+//   - CSI I / CSI O -> terminal focus in/out (DECSET 1004)
 //   - SS3 P/Q/R/S -> F1..F4 (legacy)
 //   - SGR mouse (CSI < b;x;y M/m) -> mkDown/mkUp/mkMoved/mkDrag/mkScrollUp/mkScrollDown
 //     with button (left/middle/right/none) and modifiers
@@ -326,6 +327,8 @@ begin
     Ord('D'): Out_ := KeyCodeEvent(kcLeft,  Mods);
     Ord('H'): Out_ := KeyCodeEvent(kcHome,  Mods);
     Ord('F'): Out_ := KeyCodeEvent(kcEnd,   Mods);
+    Ord('I'): Out_ := FocusEvent(fkIn);   { DECSET 1004 focus in }
+    Ord('O'): Out_ := FocusEvent(fkOut);  { DECSET 1004 focus out }
     Ord('~'):
       case Param1 of
         1, 7: Out_ := KeyCodeEvent(kcHome, Mods);

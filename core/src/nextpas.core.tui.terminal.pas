@@ -35,6 +35,8 @@ type
     MouseMode: TTerminalMouseMode;
     WheelMode: TTerminalWheelMode;
     SelectionMode: TTerminalSelectionMode;
+    { DECSET 1004 terminal focus reporting (CSI I/O). Default False. }
+    FocusReporting: Boolean;
 
     class function Default: TTerminalOptions; static;
     class function EditorDefault: TTerminalOptions; static;
@@ -97,6 +99,7 @@ type
     FActiveOptions: TTerminalOptions;
     FAllocator: IAllocator;
     FKittyKeyboardPushed: Boolean;
+    FFocusReportingEnabled: Boolean;
     procedure EnsureInputCapacity(AExtra: Integer);
     procedure DropInputBytes(ACount: Integer);
     function ReadAvailableBytes: Integer;
@@ -229,6 +232,7 @@ begin
   Result.MouseMode := tmMouseFull;
   Result.WheelMode := twWheelMouse;
   Result.SelectionMode := tsApplication;
+  Result.FocusReporting := False;
 end;
 
 class function TTerminalOptions.NativeSelectionWheel: TTerminalOptions;
@@ -236,6 +240,7 @@ begin
   Result.MouseMode := tmMouseNone;
   Result.WheelMode := twAlternateScrollKeys;
   Result.SelectionMode := tsTerminalNative;
+  Result.FocusReporting := False;
 end;
 
 function TTerminalOptions.EffectiveMouseMode: TTerminalMouseMode;
@@ -348,6 +353,7 @@ begin
   FOptions := TTerminalOptions.Default;
   FActiveOptions := FOptions;
   FKittyKeyboardPushed := False;
+  FFocusReportingEnabled := False;
   SetLength(FInputQueue, 256);
 end;
 
@@ -409,6 +415,14 @@ begin
     FOverlay := TOverlayBuffer.Create(TRect.Make(0, 0, LSize.Cols, LSize.Rows), FAllocator);
     DetectCapabilities;
     TryNegotiateKittyKeyboard;
+    if FActiveOptions.FocusReporting then
+    begin
+      FBackend.EnableFocusReporting;
+      FBackend.Flush;
+      FFocusReportingEnabled := True;
+    end
+    else
+      FFocusReportingEnabled := False;
     FHasMouseTracking := FActiveOptions.RequestsMouseTracking;
     FCellWidth := 0;
     FCellHeight := 0;
@@ -444,6 +458,11 @@ begin
           FCapabilityProfile.KittyKeyboard.Requested, False, False, False,
           'env-hint-missing');
     end;
+    if FFocusReportingEnabled then
+    begin
+      FBackend.DisableFocusReporting;
+      FFocusReportingEnabled := False;
+    end;
     FBackend.LeaveAlternate(ToAnsiMouseMode(FActiveOptions.EffectiveMouseMode),
       FActiveOptions.UsesAlternateScrollKeys);
     FBackend.ShowCursor;
@@ -466,6 +485,7 @@ begin
   FRawModeCaptured := False;
   FHasMouseTracking := False;
   FKittyKeyboardPushed := False;
+  FFocusReportingEnabled := False;
 end;
 
 { Frame lifecycle }
@@ -792,6 +812,7 @@ begin
   FShouldQuit := False;
   FHasMouseTracking := False;
   FKittyKeyboardPushed := False;
+  FFocusReportingEnabled := False;
   FCellWidth := 0;
   FCellHeight := 0;
 end;
@@ -828,7 +849,7 @@ end;
 procedure TTerminal.PostProcessEvent(var AEv: TEvent);
 begin
   case AEv.Kind of
-    evNone, evResize, evPaste: ;
+    evNone, evResize, evPaste, evFocus: ;
     evMouse:
       begin
         FLastMousePos.X := AEv.Mouse.X;

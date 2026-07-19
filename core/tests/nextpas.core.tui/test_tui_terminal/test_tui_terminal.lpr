@@ -2435,6 +2435,48 @@ begin
   end;
 end;
 
+
+procedure TestFocusReportingInjectEvents;
+var
+  LTerm: TTerminal;
+  LEv: TEvent;
+begin
+  LTerm := TTerminal.Create;
+  try
+    LTerm.InitializeFrameRuntimeForTest(TRect.Make(0, 0, 4, 2));
+    LTerm.InjectInputBytesForTest([27, Ord('['), Ord('I')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'focus in event');
+    Check(LEv.Kind = evFocus, 'kind focus');
+    Check(LEv.Focus.Kind = fkIn, 'in');
+    LTerm.InjectInputBytesForTest([27, Ord('['), Ord('O')]);
+    Check(LTerm.PollQueuedEventForTest(True, LEv), 'focus out event');
+    Check(LEv.Focus.Kind = fkOut, 'out');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+procedure TestFocusReportingOptionDefaults;
+var
+  LTerm: TTerminal;
+  LOpts: TTerminalOptions;
+begin
+  Check(not TTerminalOptions.EditorDefault.FocusReporting,
+    'EditorDefault focus reporting off');
+  Check(not TTerminalOptions.NativeSelectionWheel.FocusReporting,
+    'NativeSelectionWheel focus reporting off');
+  LTerm := TTerminal.Create;
+  try
+    LOpts := TTerminalOptions.EditorDefault;
+    LOpts.FocusReporting := True;
+    LTerm.Options := LOpts;
+    Check(LTerm.Options.FocusReporting, 'options carry FocusReporting');
+  finally
+    LTerm.Free;
+  end;
+end;
+
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.terminal');
   T.Test('parse ascii key', @TestParseAsciiKey);
@@ -2594,5 +2636,7 @@ begin
     @TestKittyKeyboardQueryReplyThenKey);
   T.Test('kitty keyboard leave clears verified',
     @TestKittyKeyboardLeaveClearsVerified);
-  if not T.Run then Halt(1);
+    T.Test('focus reporting inject events', @TestFocusReportingInjectEvents);
+  T.Test('focus reporting option defaults', @TestFocusReportingOptionDefaults);
+if not T.Run then Halt(1);
 end.
