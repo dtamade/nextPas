@@ -879,6 +879,65 @@ begin
     PassTest('ParseFilter helper');
   end;
 
+  { ── B10: CLI pure-parser table (filter/short/shuffle/timeout) ──────────── }
+  WriteLn;
+  SectionHeader('B10: CLI arg table');
+  begin
+    { ExtractArgValue table: prefix=value / no match / embedded equals }
+    if ExtractArgValue('--filter=alpha', '--filter') <> 'alpha' then
+      FailTest('ExtractArgValue filter=alpha');
+    if ExtractArgValue('--filter=', '--filter') <> '' then
+      FailTest('ExtractArgValue empty value should be empty string');
+    if ExtractArgValue('--filter', '--filter') <> '' then
+      FailTest('ExtractArgValue bare flag has no value');
+    if ExtractArgValue('--timeout=30', '--filter') <> '' then
+      FailTest('ExtractArgValue wrong prefix');
+    if ExtractArgValue('--filter=a=b=c', '--filter') <> 'a=b=c' then
+      FailTest('ExtractArgValue embedded equals');
+    if ParseFilter('--filter=glob*') <> 'glob*' then
+      FailTest('ParseFilter glob');
+    if ParseTag('--tag=slow') <> 'slow' then
+      FailTest('ParseTag slow');
+    if ParseTag('--tag=') <> '' then
+      FailTest('ParseTag empty');
+
+    { ExtractArgIntValue: timeout / negative clamp / default / garbage }
+    if ExtractArgIntValue('--timeout=5000', '--timeout', 0) <> 5000 then
+      FailTest('timeout=5000');
+    if ExtractArgIntValue('--timeout=0', '--timeout', 99) <> 0 then
+      FailTest('timeout=0 is valid zero');
+    if ExtractArgIntValue('--timeout=-3', '--timeout', 0) <> 0 then
+      FailTest('negative timeout clamps to 0');
+    if ExtractArgIntValue('--timeout=abc', '--timeout', 7) <> 7 then
+      FailTest('garbage timeout falls back to default');
+    if ExtractArgIntValue('--other=9', '--timeout', 3) <> 3 then
+      FailTest('missing prefix uses default');
+    if ExtractArgIntValue('--shuffle-seed=42', '--shuffle-seed', 0) <> 42 then
+      FailTest('shuffle-seed=42');
+    if ExtractArgIntValue('--count=10', '--count', 0) <> 10 then
+      FailTest('count=10');
+
+    { HasArgFlag: short / shuffle / failfast aliases }
+    if not HasArgFlag('--short', '--short', '-short') then
+      FailTest('--short flag');
+    if not HasArgFlag('-short', '--short', '-short') then
+      FailTest('-short alias');
+    if HasArgFlag('--shuffle', '--short', '-short') then
+      FailTest('shuffle is not short');
+    if not HasArgFlag('--shuffle', '--shuffle', '') then
+      FailTest('--shuffle flag');
+    if not HasArgFlag('--fail-fast', '--failfast', '--fail-fast') then
+      FailTest('--fail-fast alias');
+    if not HasArgFlag('--failfast', '--failfast', '--fail-fast') then
+      FailTest('--failfast flag');
+    if not HasArgFlag('-v', '--verbose', '-v') then
+      FailTest('-v verbose');
+    if HasArgFlag('--filter=x', '--verbose', '-v') then
+      FailTest('value form is not verbose flag');
+
+    PassTest('B10 CLI arg table');
+  end;
+
   WriteLn;
   SectionHeader('R6-58b: ParseTag helper');
   begin

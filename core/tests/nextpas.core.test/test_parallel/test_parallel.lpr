@@ -410,6 +410,53 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+{ ── B10: Parallel mixed suite — normal run + subtest skipped count ───────── }
+
+procedure TestParallelMixedSubtestCounts;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LSkippedSub: Integer;
+  LPassedNormal: Integer;
+begin
+  LSuite := TTestSuite.Create('ParMixedSub');
+  LSuite.Test('n1', @TestParallelPassA);
+  LSuite.Test('n2', @TestParallelPassA);
+  LSuite.TestSubtest('s1',
+    procedure(constref Ctx: ITestContext)
+    begin
+      Ctx.Run('leaf', procedure begin CheckTrue(False, 'must not run'); end);
+    end);
+  LSuite.TestSubtest('s2',
+    procedure(constref Ctx: ITestContext)
+    begin
+      Ctx.Run('leaf2', procedure begin CheckTrue(False, 'must not run'); end);
+    end);
+  LSuite.RunParallelWithResult(nil, LResult);
+  LSkippedSub := 0;
+  LPassedNormal := 0;
+  for I := 0 to High(LResult.Results) do
+  begin
+    if (LResult.Results[I].Status = tsSkipped) and
+       ((LResult.Results[I].Name = 's1') or (LResult.Results[I].Name = 's2')) then
+    begin
+      Inc(LSkippedSub);
+      CheckTrue(Pos('subtests not supported', LResult.Results[I].Message) > 0,
+        'skip message for ' + LResult.Results[I].Name);
+    end;
+    if (LResult.Results[I].Status = tsPassed) and
+       ((LResult.Results[I].Name = 'n1') or (LResult.Results[I].Name = 'n2')) then
+      Inc(LPassedNormal);
+  end;
+  CheckEqual(LPassedNormal, 2, 'two normal tests pass in parallel');
+  CheckEqual(LSkippedSub, 2, 'two subtests skipped in parallel');
+  CheckTrue(LResult.Failed = 0, 'mixed suite no failures');
+  CheckTrue(LResult.Skipped >= 2, 'Skipped counter >= 2');
+  PassTest('✓ B10 parallel mixed subtest counts');
+  LSuite := Default(TTestSuite);
+end;
+
 { ── R6-56: Table test parallel result name uniqueness ────────────────────── }
 
 procedure R656TableProc(const ACase: TTestCase);
@@ -662,6 +709,7 @@ begin
   WriteLn;
   SectionHeader('R6-54/R6-56: Parallel Coverage');
   TestParallelSubtestSkip;
+  TestParallelMixedSubtestCounts;
   TestTableParallelNameUniqueness;
   TestParallelSinkInjection;
 

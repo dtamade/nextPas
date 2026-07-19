@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.11a
+**版本**：v8.11b
 
 ---
 
@@ -390,6 +390,12 @@ end;
 | 本版本不实现接口拆分 | — | v8.7 仅文档落档，无代码变更 |
 
 ## 11. 变更日志
+
+### v8.11b (2026-07-20) — Runner/Lifecycle 深度
+
+- **CLI**：`HasArgFlag` / `ExtractArgValue` / `ExtractArgIntValue` 经 runner 白盒导出；filter/short/shuffle/timeout 表驱动
+- **Lifecycle**：Setup fail 体不跑 + `[setup]` tsError；Setup `ETestSkipped` 非失败；Teardown 异常不拖垮 suite；BeforeEach fail 仍跑 AfterEach
+- **Parallel subtest**：混合 suite 正常用例 pass + subtest skip 计数与消息
 
 ### v8.11a (2026-07-20) — 危险并发契约钉死
 
