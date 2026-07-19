@@ -59,7 +59,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Usability waves 1–4 | **Closed** at 8.21 maintenance |
 | LT0–LT3 residual | **Done** (docs freeze, live-name gates, dual-IO owner-only, raw OS side-channel) |
 | Wine matrix (14) | **pass=14 / fail=0 / skip=0** via `platform-wine-ci-matrix.sh` (secondary; never substitutes for real Windows) |
-| Real Windows GHA | **19-gate `ci-matrix` promoted** (pass=19 on `windows-latest`, run 29686191527 @ `e9f203e45`; wine 16 secondary) |
+| Real Windows GHA | **19-gate `ci-matrix` promoted** (pass=19 on `windows-latest`, run 29686191527 @ `e9f203e45`; wine 17 secondary, +info) |
 | Tier-2 Linux arches | aarch64 / arm32 / riscv64 forced-compile (13 modules) |
 | Readiness vs completion | Split held: `platform_poller_*` readiness; IOCP in `io.reactor.iocp` |
 
@@ -82,7 +82,7 @@ Wine is forever **`wine-runtime-smoke`**, never a substitute for real Windows `c
 | Host | Current tier | Next honest claim |
 |------|--------------|-------------------|
 | Linux x86_64 | focused-runtime | keep green |
-| Windows x86_64 | **`ci-matrix` for documented 19-gate set** + wine 16-module secondary | expand matrix modules; keep wine + GHA green |
+| Windows x86_64 | **`ci-matrix` for documented 19-gate set** + wine 17-module secondary | expand matrix modules; keep wine + GHA green |
 | macOS | **`focused-runtime` for documented 8-gate set** (D2.c); inventory via best-effort | keep matrix green; no full-host parity |
 | FreeBSD | source-contract / best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | device/runtime only with NDK owner |
@@ -298,6 +298,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-19 | Expand matrix: add `platform.fmt` to wine (15→16) and Windows scripts (18→19 candidate). Local wine evidence required; promote 19 only after GHA green. |
 | 2026-07-19 | **Batch-0**: fix `test.expect` Windows IUnknown calling convention (`stdcall`/`cdecl`); GHA Windows matrix pass=19 (run 29686191527 @ `e9f203e45`). |
 | 2026-07-19 | **Batch-1**: promote documented 19-gate set to `ci-matrix` (includes error + fmt). Not full-host Windows parity. |
+| 2026-07-19 | **Batch-2**: add `platform.info` to wine matrix (16→17). Windows scripts unchanged (no 20-gate candidate this batch). |
 
 ---
 
