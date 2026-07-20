@@ -24,6 +24,7 @@
 | **Q27** | Dial OnControl | Go Control 子集；attempt 级 fail | **done** |
 | **Q28** | Dial OnResolve | 自定义 Resolver via DnsFeed 契约 | **done** |
 | **Q29** | Pool AcquireAsyncEx | 贯通 TAsyncTcpDialOptions | **done** |
+| **Q30** | Dial AddressFamily 过滤 | dafAny/v4/v6 | **done** |
 | **—** | MPTCP | 平台/可移植性不足 | **deferred** |
 | **—** | full native-windows | 更广套件后再评估 | **deferred** |
 

@@ -54,6 +54,13 @@ type
   TAsyncTcpDialResolve = procedure(const AHost: string; APort: UInt16;
     const AFeed: IAsyncTcpDialDnsFeed; AContext: Pointer);
 
+  { Restrict dial addresses after resolve / for DialAddrs. }
+  TAsyncTcpDialAddressFamily = (
+    dafAny,
+    dafIPv4,
+    dafIPv6
+  );
+
   TAsyncTcpDialOptions = record
     ConnectionAttemptDelayMs: UInt32; { default 250; 0 = no delay between starts }
     MaxInFlight: UInt32;              { default 2; 0 => default }
@@ -75,6 +82,7 @@ type
     OnControlContext: Pointer;
     OnResolve: TAsyncTcpDialResolve;
     OnResolveContext: Pointer;
+    AddressFamily: TAsyncTcpDialAddressFamily; { default dafAny }
   end;
 
   TAsyncTcpDialCallback = procedure(AStream: IAsyncTcpStream; AError: Int32;
@@ -226,6 +234,7 @@ begin
   Result.OnControlContext := nil;
   Result.OnResolve := nil;
   Result.OnResolveContext := nil;
+  Result.AddressFamily := dafAny;
 end;
 
 function InvalidSocket: TPlatformSocket;
@@ -781,19 +790,46 @@ end;
 procedure TAsyncTcpDialer.AppendAddresses(const ANew: array of TNetAddress);
 var
   LI, LBase, LRemCount, LNewCount, O, IRem, INew: Integer;
-  LRem, LMerged: array of TNetAddress;
+  LRem, LMerged, LSrc: array of TNetAddress;
   LTakeNew: Boolean;
+  LKeep: Integer;
 begin
   LNewCount := Length(ANew);
   if LNewCount = 0 then
     Exit;
+
+  { AddressFamily filter (Q30) into LSrc. }
+  if FOptions.AddressFamily = dafAny then
+  begin
+    SetLength(LSrc, LNewCount);
+    for LI := 0 to LNewCount - 1 do
+      LSrc[LI] := ANew[LI];
+  end
+  else
+  begin
+    SetLength(LSrc, LNewCount);
+    LKeep := 0;
+    for LI := 0 to LNewCount - 1 do
+    begin
+      if (FOptions.AddressFamily = dafIPv6) and (not ANew[LI].IsIPv6) then
+        Continue;
+      if (FOptions.AddressFamily = dafIPv4) and ANew[LI].IsIPv6 then
+        Continue;
+      LSrc[LKeep] := ANew[LI];
+      Inc(LKeep);
+    end;
+    if LKeep = 0 then
+      Exit;
+    SetLength(LSrc, LKeep);
+  end;
+  LNewCount := Length(LSrc);
 
   if not FDialStarted then
   begin
     LBase := Length(FAddrs);
     SetLength(FAddrs, LBase + LNewCount);
     for LI := 0 to LNewCount - 1 do
-      FAddrs[LBase + LI] := ANew[LI];
+      FAddrs[LBase + LI] := LSrc[LI];
     Exit;
   end;
 
@@ -816,7 +852,7 @@ begin
     begin
       if LTakeNew and (INew < LNewCount) then
       begin
-        LMerged[O] := ANew[INew];
+        LMerged[O] := LSrc[INew];
         Inc(INew);
         Inc(O);
       end
@@ -828,7 +864,7 @@ begin
       end;
       if (not LTakeNew) and (INew < LNewCount) then
       begin
-        LMerged[O] := ANew[INew];
+        LMerged[O] := LSrc[INew];
         Inc(INew);
         Inc(O);
       end
@@ -851,7 +887,7 @@ begin
     LBase := Length(FAddrs);
     SetLength(FAddrs, LBase + LNewCount);
     for LI := 0 to LNewCount - 1 do
-      FAddrs[LBase + LI] := ANew[LI];
+      FAddrs[LBase + LI] := LSrc[LI];
   end;
   SetLength(FAttempts, Length(FAddrs));
 end;
@@ -979,13 +1015,11 @@ begin
 end;
 
 procedure TAsyncTcpDialer.BeginWithAddrs(const AAddrs: array of TNetAddress);
-var
-  LI: Integer;
 begin
   FDnsAllDone := True;
-  SetLength(FAddrs, Length(AAddrs));
-  for LI := 0 to High(AAddrs) do
-    FAddrs[LI] := AAddrs[LI];
+  { Reuse AppendAddresses filter path before dial starts. }
+  SetLength(FAddrs, 0);
+  AppendAddresses(AAddrs);
   StartDialing;
 end;
 
