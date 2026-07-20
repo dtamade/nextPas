@@ -47,6 +47,8 @@ uses
 
 {$I nextpas.core.text.unicode.normalize.inc}
 {$I nextpas.core.text.unicode.normalize_bmp_index.inc}
+{$I nextpas.core.text.unicode.normalize_compose_index.inc}
+{$I nextpas.core.text.unicode.nfc_qc.inc}
 
 const
   HANGUL_SBASE = TUnicodeCodepoint($AC00);
@@ -258,20 +260,38 @@ end;
 
 function FindComposition(const AStarter, ACombining: TUnicodeCodepoint; out AResult: TUnicodeCodepoint): Boolean;
 var
-  LLo: SizeInt;
-  LHi: SizeInt;
-  LMid: SizeInt;
+  LLo, LHi, LMid: SizeInt;
+  LRunLo, LRunHi: Int32;
 begin
+  { 1) binary search COMPOSE_RUNS by Starter }
   LLo := 0;
-  LHi := High(COMPOSE_TABLE);
+  LHi := COMPOSE_RUN_COUNT - 1;
+  LRunLo := -1;
+  LRunHi := -1;
   while LLo <= LHi do
   begin
     LMid := LLo + ((LHi - LLo) div 2);
-    if AStarter < COMPOSE_TABLE[LMid].Starter then
+    if AStarter < COMPOSE_RUNS[LMid].Starter then
       LHi := LMid - 1
-    else if AStarter > COMPOSE_TABLE[LMid].Starter then
+    else if AStarter > COMPOSE_RUNS[LMid].Starter then
       LLo := LMid + 1
-    else if ACombining < COMPOSE_TABLE[LMid].Combining then
+    else
+    begin
+      LRunLo := COMPOSE_RUNS[LMid].Lo;
+      LRunHi := COMPOSE_RUNS[LMid].Hi;
+      Break;
+    end;
+  end;
+  if LRunLo < 0 then
+    Exit(False);
+
+  { 2) binary search Combining within run }
+  LLo := LRunLo;
+  LHi := LRunHi;
+  while LLo <= LHi do
+  begin
+    LMid := LLo + ((LHi - LLo) div 2);
+    if ACombining < COMPOSE_TABLE[LMid].Combining then
       LHi := LMid - 1
     else if ACombining > COMPOSE_TABLE[LMid].Combining then
       LLo := LMid + 1
@@ -418,9 +438,7 @@ var
   LUsed: SizeInt;
   LIdx: SizeInt;
   LPtr: PByte;
-  LBuf: array[0..3] of Byte;
-  LLen: Byte;
-  LJ: Integer;
+  LCp: TUnicodeCodepoint;
 begin
   if ABuffer.Count = 0 then
     Exit('');
@@ -429,12 +447,35 @@ begin
   LUsed := 0;
   for LIdx := 0 to ABuffer.Count - 1 do
   begin
-    LLen := UTF8Encode(ABuffer.ItemAt(LIdx), @LBuf[0]);
-    if LLen = 0 then
-      Continue;
-    for LJ := 0 to Integer(LLen) - 1 do
-      LPtr[LUsed + LJ] := LBuf[LJ];
-    Inc(LUsed, LLen);
+    LCp := ABuffer.ItemAt(LIdx);
+    if LCp < $80 then
+    begin
+      LPtr[LUsed] := Byte(LCp);
+      Inc(LUsed);
+    end
+    else if LCp < $800 then
+    begin
+      LPtr[LUsed] := Byte($C0 or (LCp shr 6));
+      LPtr[LUsed + 1] := Byte($80 or (LCp and $3F));
+      Inc(LUsed, 2);
+    end
+    else if LCp < $10000 then
+    begin
+      if (LCp >= $D800) and (LCp <= $DFFF) then
+        Continue;
+      LPtr[LUsed] := Byte($E0 or (LCp shr 12));
+      LPtr[LUsed + 1] := Byte($80 or ((LCp shr 6) and $3F));
+      LPtr[LUsed + 2] := Byte($80 or (LCp and $3F));
+      Inc(LUsed, 3);
+    end
+    else if LCp <= $10FFFF then
+    begin
+      LPtr[LUsed] := Byte($F0 or (LCp shr 18));
+      LPtr[LUsed + 1] := Byte($80 or ((LCp shr 12) and $3F));
+      LPtr[LUsed + 2] := Byte($80 or ((LCp shr 6) and $3F));
+      LPtr[LUsed + 3] := Byte($80 or (LCp and $3F));
+      Inc(LUsed, 4);
+    end;
   end;
   SetLength(Result, LUsed);
 end;
@@ -473,15 +514,29 @@ var
   LComposed: TUnicodeCodepoint;
   LCanTry: Boolean;
   LStarter: TUnicodeCodepoint;
+  LCccs: array[0..255] of Byte;
+  LCount: SizeInt;
+  LI: SizeInt;
 begin
-  if ABuffer.Count = 0 then
+  LCount := ABuffer.Count;
+  if LCount = 0 then
     Exit;
+
+  if LCount <= 256 then
+  begin
+    for LI := 0 to LCount - 1 do
+      LCccs[LI] := GetCanonicalCombiningClass(ABuffer.ItemAt(LI));
+  end;
 
   LStarterIndex := 0;
   while LStarterIndex < ABuffer.Count do
   begin
     LStarter := ABuffer.ItemAt(LStarterIndex);
-    if GetCanonicalCombiningClass(LStarter) <> 0 then
+    if LCount <= 256 then
+      LCcc := LCccs[LStarterIndex]
+    else
+      LCcc := GetCanonicalCombiningClass(LStarter);
+    if LCcc <> 0 then
     begin
       Inc(LStarterIndex);
       Continue;
@@ -492,10 +547,11 @@ begin
     while LLookahead < ABuffer.Count do
     begin
       LCurrent := ABuffer.ItemAt(LLookahead);
-      LCcc := GetCanonicalCombiningClass(LCurrent);
+      if LCount <= 256 then
+        LCcc := LCccs[LLookahead]
+      else
+        LCcc := GetCanonicalCombiningClass(LCurrent);
 
-      { UAX #15: unblocked if immediately after starter (LLastCcc=0) or
-        LLastCcc < CCC(current). Adjacent starters (CCC=0) must also compose. }
       LCanTry := (LLastCcc = 0) or ((LCcc <> 0) and (LLastCcc < LCcc));
       if LCanTry and
          (ComposeHangulPair(LStarter, LCurrent, LComposed) or
@@ -504,6 +560,13 @@ begin
         ABuffer.ReplaceAt(LStarterIndex, LComposed);
         LStarter := LComposed;
         ABuffer.DeleteAt(LLookahead);
+        if LCount <= 256 then
+        begin
+          { shift CCC cache }
+          for LI := LLookahead to ABuffer.Count - 1 do
+            LCccs[LI] := LCccs[LI + 1];
+          LCccs[LStarterIndex] := 0; { composed is starter }
+        end;
         LLastCcc := 0;
         Continue;
       end;
@@ -549,6 +612,8 @@ end;
 
 function NFC(const AText: string): string;
 begin
+  if QuickCheckNFC(AText) then
+    Exit(AText);
   Result := NormalizeComposed(AText, False);
 end;
 
@@ -738,9 +803,42 @@ begin
   Result := True;
 end;
 
-function QuickCheckNFC(const AText: string): Boolean;
+function IsNfcQcNotYes(const ACp: TUnicodeCodepoint): Boolean; inline;
+var
+  LValue: Byte;
 begin
-  Result := QuickCheckComposed(AText, False);
+  if ACp <= $FFFF then
+    Exit(NFC_QC_NOT_YES_BMP[Byte(ACp shr 8), Byte(ACp and $FF)] <> 0);
+  if FindRange3Value(ACp, NFC_QC_NOT_YES_SMP, LValue) then
+    Exit(LValue <> 0);
+  Result := False;
+end;
+
+function QuickCheckNFC(const AText: string): Boolean;
+var
+  LIter: TUTF8Iterator;
+  LCp: UInt32;
+  LPrevCcc: Byte;
+  LCcc: Byte;
+begin
+  { Conservative: NFC_QC Yes only (N/M => False) + CCC non-decreasing. }
+  if AText = '' then
+    Exit(True);
+  if IsAsciiString(AText) then
+    Exit(True);
+
+  LPrevCcc := 0;
+  LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
+  while LIter.Next(LCp) do
+  begin
+    if IsNfcQcNotYes(LCp) then
+      Exit(False);
+    LCcc := GetCanonicalCombiningClass(LCp);
+    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
+      Exit(False);
+    LPrevCcc := LCcc;
+  end;
+  Result := True;
 end;
 
 function QuickCheckNFKC(const AText: string): Boolean;

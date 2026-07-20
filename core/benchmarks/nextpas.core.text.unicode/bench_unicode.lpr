@@ -13,11 +13,16 @@ uses
 const
   ASCII_50     = 'The quick brown fox jumps over the lazy dog 12345!';
   ASCII_200    = 'The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs. How vexingly quick daft zebras jump! The five boxing wizards jump quickly. Crazy Frederick bought many very exquisite opal jewels. Sphinx of black quartz, judge my vow. Two driven jocks help fax my big quiz.';
-  BMP_LATIN_50 = #$00C0#$00C1#$00C2#$00C3#$00C4#$00C5#$00C6#$00C7#$00C8#$00C9 +
-                 #$00CA#$00CB#$00CC#$00CD#$00CE#$00CF#$00D0#$00D1#$00D2#$00D3 +
-                 #$00D4#$00D5#$00D6#$00D8#$00D9#$00DA#$00DB#$00DC#$00DD#$00DE +
-                 #$00DF#$00E0#$00E1#$00E2#$00E3#$00E4#$00E5#$00E6#$00E7#$00E8 +
-                 #$00E9#$00EA#$00EB#$00EC#$00ED#$00EE#$00EF#$00F0#$00F1#$00F2;
+  BMP_LATIN_50   = #$C3#$80#$C3#$81#$C3#$82#$C3#$83#$C3#$84 +
+                 #$C3#$85#$C3#$86#$C3#$87#$C3#$88#$C3#$89 +
+                 #$C3#$8A#$C3#$8B#$C3#$8C#$C3#$8D#$C3#$8E +
+                 #$C3#$8F#$C3#$90#$C3#$91#$C3#$92#$C3#$93 +
+                 #$C3#$94#$C3#$95#$C3#$96#$C3#$98#$C3#$99 +
+                 #$C3#$9A#$C3#$9B#$C3#$9C#$C3#$9D#$C3#$9E +
+                 #$C3#$9F#$C3#$A0#$C3#$A1#$C3#$A2#$C3#$A3 +
+                 #$C3#$A4#$C3#$A5#$C3#$A6#$C3#$A7#$C3#$A8 +
+                 #$C3#$A9#$C3#$AA#$C3#$AB#$C3#$AC#$C3#$AD +
+                 #$C3#$AE#$C3#$AF#$C3#$B0#$C3#$B1#$C3#$B2;
   BMP_CJK_50   = #$4E00#$4E01#$4E02#$4E03#$4E04#$4E05#$4E06#$4E07#$4E08#$4E09 +
                  #$4E0A#$4E0B#$4E0C#$4E0D#$4E0E#$4E0F#$4E10#$4E11#$4E12#$4E13 +
                  #$4E14#$4E15#$4E16#$4E17#$4E18#$4E19#$4E1A#$4E1B#$4E1C#$4E1D +
