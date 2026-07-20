@@ -1,0 +1,14 @@
+TAP version 13
+1..2
+ok 1 - golden-tap / ok_one
+not ok 2 - golden-tap / not_ok_two
+  ---
+  message: |-
+    boom
+  severity: fail
+  ...
+# suites: 1
+# total: 2
+# passed: 1
+# failed: 1
+# skipped: 0

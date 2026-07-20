@@ -118,10 +118,12 @@
 
 ### 测试覆盖 (Test Coverage)
 
+> **v8.14 sync**: findings 与代码对齐；下列 T-01～T-05 历史缺口已在 v8.10–v8.12 关闭。
+>
 > **v8.12 sync**: T-01 NaN/epsilon 边角已在 v8.12a `test_assertions` 补齐；T-03 parallel subtest skip 已在 v8.10/v8.11 硬测；T-04 TAP/JSON 形式化 + golden 已在 v8.11c/v8.12b 补齐。
 
 
-#### T-01 [P1] 断言模块 NaN/边界测试缺口 (R3 部分修复)
+#### T-01 [P1] 断言模块 NaN/边界测试缺口 — ✅ FIXED (v8.12a)
 - **位置**: `test_assertions.lpr`, `test_expect.lpr`
 - **描述**: R3 已修复 NaN 守卫和添加部分边界测试，但仍有缺口：
   - `CheckEqual(Double)` 的 NaN 行为未测试（委托给 CheckNear，间接受 NaN 守卫保护）
@@ -130,22 +132,22 @@
   - `ToBeSame(nil, nil)` 的空指针场景未测试
 - **建议**: 补充 ~10 个边界测试。
 
-#### T-02 [P2] TMock 无 typed argument/return 测试
+#### T-02 [P2] TMock typed argument/return — ✅ FIXED (v8.6+/mock suite)
 - **位置**: `test_mock/test_mock.lpr`
 - **描述**: TMock 支持 `RecordCallTyped`/`GetReturnTyped`/`ReturnsDouble` 等 typed API，但测试套件主要测试 string-based API。`TMockValueKind` 的 5 种类型（mvString/mvInt64/mvBool/mvDouble/mvUnset）缺少全覆盖测试。
 - **建议**: 添加 `TestMockTypedArgs`、`TestMockReturnsDouble`、`TestMockReturnsBool` 等测试。
 
-#### T-03 [P2] Parallel mode 缺少 subtest graceful-skip 测试
+#### T-03 [P2] Parallel subtest graceful-skip — ✅ FIXED (v8.10/v8.11)
 - **位置**: `test_parallel/test_parallel.lpr`
 - **描述**: parallel.pas:318-323 在并行模式下跳过 subtests 并输出 "subtests not supported in parallel mode"，但没有测试验证此行为（跳过计数、输出消息）。
 - **建议**: 添加 `TestParallelSubtestSkipped` 测试。
 
-#### T-04 [P2] TAP/JSON 输出格式缺少独立验证
+#### T-04 [P2] TAP/JSON 格式验证 — ✅ FIXED (v8.11c/v8.12b/v8.13 golden)
 - **位置**: `test_output/test_output.lpr`
 - **描述**: TAP 和 JSON 输出格式在 `output.tap.pas` / `output.json.pas` 中实现，但测试主要通过 TBufferSink 间接验证。缺少对 TAP v13 格式合规性（`TAP version 13` header、`1..N` plan、YAML block scalar）的直接断言。
 - **建议**: 添加 `TestTAPFormatCompliance`、`TestJSONStructureCompliance` 测试。
 
-#### T-05 [P2] Glob/hierarchical filter 缺少复杂场景测试
+#### T-05 [P2] Glob/hierarchical filter — ✅ FIXED (v8.12a edges + B5 tables)
 - **位置**: `test_output/test_output.lpr`
 - **描述**: `MatchesGlob` 支持 `*`、`?`、嵌套 brace expansion，`MatchesHierarchical` 支持 Go-style `Parent/Sub/Leaf` 匹配。但缺少以下场景测试：
   - 嵌套 brace: `{a,{b,c}}`
@@ -217,13 +219,13 @@
 
 ### 对标差距 (Benchmark vs Rust/Go)
 
-#### B-01 [P2] 缺少测试缓存机制
+#### B-01 [P2] 测试缓存机制 — ✅ FIXED (TTestCache + test_runner)
 - **描述**: Go 1.10+ 支持 `go test` 自动缓存未变更的测试结果。nextpas.core.test 无此功能，每次运行都执行全部测试。
 - **影响**: 大型测试套件的 CI 反馈时间。
 - **建议**: 可通过源文件 hash + 结果 hash 实现简单缓存。优先级低。
 - **状态**: ✅ **已实现**（2026-07 回填）— `TTestCache` + CLI `--cache` / `CacheDir`（见 `test.config` / `test.runner.cli`）
 
-#### B-02 [P2] 缺少 fuzzing 支持
+#### B-02 [P2] fuzzing 支持 — ✅ FIXED (v7.2+/v8.0 prop fuzz)
 - **描述**: Go 1.18+ 内置 fuzzing (`testing.F`)。Rust 有 `cargo-fuzz` / `proptest`。nextpas.core.test 无 property-based testing。
 - **影响**: 无法自动发现边界条件 bug。
 - **建议**: 可在 v7.0 考虑添加 `Fuzz()` API，基于随机输入生成 + shrinking。
