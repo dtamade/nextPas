@@ -1961,7 +1961,7 @@ begin
     'atomic benchmark Makefile must isolate build artifacts under core/build');
   CheckContains(LAtomicBenchMakefile, 'FPC_FLAGS ?= -MObjFPC -Sh -O2',
     'atomic benchmark Makefile must default to optimized benchmark flags');
-  CheckContains(LAtomicBenchSource, 'WriteLn(''Platform: '', BenchmarkPlatformName)',
+  CheckContains(LAtomicBenchSource, 'WriteLn(''Platform: '', OSName, '' / '', CPUName)',
     'atomic benchmark must print the platform evidence field');
   CheckContains(LAtomicBenchSource, 'WriteLn(''Compiler flags: -MObjFPC -Sh -O2'')',
     'atomic benchmark must print the compiler flags evidence field');
