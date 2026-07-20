@@ -113,10 +113,14 @@ end;
 procedure TScalableBloomFilterImpl.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -129,7 +133,7 @@ end;
 
 procedure TScalableBloomFilterImpl.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TScalableBloomFilterImpl.LayerFalsePositiveRate(ALayerIdx: Int32): Double;
@@ -177,7 +181,7 @@ begin
     LBitIdx := LHash mod UInt64(FLayers[ALayerIdx].BitCount);
     FLayers[ALayerIdx].Bits[LBitIdx shr 6] := FLayers[ALayerIdx].Bits[LBitIdx shr 6] or (UInt64(1) shl (LBitIdx and 63));
   end;
-  AtomicFetchAdd64(FLayers[ALayerIdx].Count, 1, moRelaxed);
+  atomic_fetch_add_64(FLayers[ALayerIdx].Count, 1, mo_relaxed);
 end;
 
 function TScalableBloomFilterImpl.ContainsInLayer(ALayerIdx: Int32; const AValue: T): Boolean;
@@ -217,11 +221,11 @@ end;
 
 procedure TScalableBloomFilterImpl.Add(const AValue: T);
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit;
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit;
     GrowIfNeeded;
     AddToLayer(FLayerCount - 1, AValue);
@@ -234,11 +238,11 @@ function TScalableBloomFilterImpl.Contains(const AValue: T): Boolean;
 var
   LI: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     for LI := FLayerCount - 1 downto 0 do
     begin
@@ -269,7 +273,7 @@ begin
   try
     Result := 0;
     for LI := 0 to FLayerCount - 1 do
-      Result := Result + AtomicLoad64(FLayers[LI].Count, moRelaxed);
+      Result := Result + atomic_load_64(FLayers[LI].Count, mo_relaxed);
   finally
     Unlock;
   end;
@@ -299,7 +303,7 @@ procedure TScalableBloomFilterImpl.Close;
 begin
   Lock;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     Unlock;
   end;
@@ -307,7 +311,7 @@ end;
 
 function TScalableBloomFilterImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

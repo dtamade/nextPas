@@ -48,7 +48,7 @@ uses
 {$I nextpas.core.text.unicode.normalize.inc}
 {$I nextpas.core.text.unicode.normalize_bmp_index.inc}
 {$I nextpas.core.text.unicode.normalize_compose_index.inc}
-{$I nextpas.core.text.unicode.nfc_qc.inc}
+{$I nextpas.core.text.unicode.normalize_qc.inc}
 
 const
   HANGUL_SBASE = TUnicodeCodepoint($AC00);
@@ -607,6 +607,8 @@ end;
 
 function NFD(const AText: string): string;
 begin
+  if QuickCheckNFD(AText) then
+    Exit(AText);
   Result := NormalizeDecomposed(AText, False);
 end;
 
@@ -619,11 +621,15 @@ end;
 
 function NFKD(const AText: string): string;
 begin
+  if QuickCheckNFKD(AText) then
+    Exit(AText);
   Result := NormalizeDecomposed(AText, True);
 end;
 
 function NFKC(const AText: string): string;
 begin
+  if QuickCheckNFKC(AText) then
+    Exit(AText);
   Result := NormalizeComposed(AText, True);
 end;
 
@@ -657,193 +663,104 @@ begin
   Result := NFKC(AText) = AText;
 end;
 
-function QuickCheckNFD(const AText: string): Boolean;
-var
-  LIter: TUTF8Iterator;
-  LCp: UInt32;
-  LPrevCcc: Byte;
-  LCcc: Byte;
-  LKind: Byte;
+function IsNfcQcNotYes(const ACp: TUnicodeCodepoint): Boolean; inline;
+var LValue: Byte;
 begin
-  // QuickCheck NFD: 检查是否已经是 NFD 形式
-  // 条件：没有规范可分解字符(LKind=1) + combining class 非递减
-  // 注意：兼容分解(LKind=2)在 NFD 中是允许的
-  if AText = '' then
-    Exit(True);
-  if IsAsciiString(AText) then
-    Exit(True);
+  if ACp <= $FFFF then Exit(NFC_QC_NOT_YES_BMP[Byte(ACp shr 8), Byte(ACp and $FF)] <> 0);
+  if FindRange3Value(ACp, NFC_QC_NOT_YES_SMP, LValue) then Exit(LValue <> 0);
+  Result := False;
+end;
 
+function IsNfdQcNotYes(const ACp: TUnicodeCodepoint): Boolean; inline;
+var LValue: Byte;
+begin
+  if ACp <= $FFFF then Exit(NFD_QC_NOT_YES_BMP[Byte(ACp shr 8), Byte(ACp and $FF)] <> 0);
+  if FindRange3Value(ACp, NFD_QC_NOT_YES_SMP, LValue) then Exit(LValue <> 0);
+  Result := False;
+end;
+
+function IsNfkdQcNotYes(const ACp: TUnicodeCodepoint): Boolean; inline;
+var LValue: Byte;
+begin
+  if ACp <= $FFFF then Exit(NFKD_QC_NOT_YES_BMP[Byte(ACp shr 8), Byte(ACp and $FF)] <> 0);
+  if FindRange3Value(ACp, NFKD_QC_NOT_YES_SMP, LValue) then Exit(LValue <> 0);
+  Result := False;
+end;
+
+function IsNfkcQcNotYes(const ACp: TUnicodeCodepoint): Boolean; inline;
+var LValue: Byte;
+begin
+  if ACp <= $FFFF then Exit(NFKC_QC_NOT_YES_BMP[Byte(ACp shr 8), Byte(ACp and $FF)] <> 0);
+  if FindRange3Value(ACp, NFKC_QC_NOT_YES_SMP, LValue) then Exit(LValue <> 0);
+  Result := False;
+end;
+
+function QuickCheckNFC(const AText: string): Boolean;
+var LIter: TUTF8Iterator; LCp: UInt32; LPrevCcc, LCcc: Byte;
+begin
+  if AText = '' then Exit(True);
+  if IsAsciiString(AText) then Exit(True);
   LPrevCcc := 0;
   LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
   while LIter.Next(LCp) do
   begin
-    // 检查是否有规范分解（kind=1）
-    LKind := GetDecompositionKind(LCp);
-    if LKind = 1 then
-      Exit(False); // 有规范可分解字符，不是 NFD
-
-    // 检查 combining class 顺序
+    if IsNfcQcNotYes(LCp) then Exit(False);
     LCcc := GetCanonicalCombiningClass(LCp);
-    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
-      Exit(False); // combining class 递减，不是 NFD
+    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then Exit(False);
+    LPrevCcc := LCcc;
+  end;
+  Result := True;
+end;
+
+function QuickCheckNFD(const AText: string): Boolean;
+var LIter: TUTF8Iterator; LCp: UInt32; LPrevCcc, LCcc: Byte;
+begin
+  if AText = '' then Exit(True);
+  if IsAsciiString(AText) then Exit(True);
+  LPrevCcc := 0;
+  LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
+  while LIter.Next(LCp) do
+  begin
+    if IsNfdQcNotYes(LCp) then Exit(False);
+    LCcc := GetCanonicalCombiningClass(LCp);
+    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then Exit(False);
     LPrevCcc := LCcc;
   end;
   Result := True;
 end;
 
 function QuickCheckNFKD(const AText: string): Boolean;
-var
-  LIter: TUTF8Iterator;
-  LCp: UInt32;
-  LPrevCcc: Byte;
-  LCcc: Byte;
-  LKind: Byte;
+var LIter: TUTF8Iterator; LCp: UInt32; LPrevCcc, LCcc: Byte;
 begin
-  // QuickCheck NFKD: 检查是否已经是 NFKD 形式
-  // 条件：没有可分解字符(规范或兼容) + combining class 非递减
-  if AText = '' then
-    Exit(True);
-  if IsAsciiString(AText) then
-    Exit(True);
-
+  if AText = '' then Exit(True);
+  if IsAsciiString(AText) then Exit(True);
   LPrevCcc := 0;
   LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
   while LIter.Next(LCp) do
   begin
-    // 检查是否有任何分解（kind=1 规范 或 kind=2 兼容）
-    LKind := GetDecompositionKind(LCp);
-    if LKind <> 0 then
-      Exit(False);
-
-    // 检查 combining class 顺序
+    if IsNfkdQcNotYes(LCp) then Exit(False);
     LCcc := GetCanonicalCombiningClass(LCp);
-    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
-      Exit(False);
-    LPrevCcc := LCcc;
-  end;
-  Result := True;
-end;
-
-{ QuickCheck composed forms: 公共逻辑 }
-{ ACheckCompatibility=True  → NFKC（检查 kind=2 兼容分解） }
-{ ACheckCompatibility=False → NFC  （仅检查组合可能性） }
-function QuickCheckComposed(const AText: string; const ACheckCompatibility: Boolean): Boolean;
-var
-  LIter: TUTF8Iterator;
-  LCp: UInt32;
-  LPrevCcc: Byte;
-  LCcc: Byte;
-  LKind: Byte;
-  LStarter: TUnicodeCodepoint;
-  LHasStarter: Boolean;
-  LComposed: TUnicodeCodepoint;
-  LEntry: TDecompEntry;
-begin
-  if AText = '' then
-    Exit(True);
-  if IsAsciiString(AText) then
-    Exit(True);
-
-  LPrevCcc := 0;
-  LHasStarter := False;
-  LStarter := 0;
-  LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
-  while LIter.Next(LCp) do
-  begin
-    // NFKC: 检查兼容分解（kind=2）
-    if ACheckCompatibility then
-    begin
-      LKind := GetDecompositionKind(LCp);
-      if LKind = 2 then
-        Exit(False);
-    end;
-
-    // NFC: 检查 composition exclusion（单例分解、非 starter 分解）
-    // 这些字符有规范分解但不会被重新组合，因此不是 NFC 形式
-    if not ACheckCompatibility then
-    begin
-      LKind := GetDecompositionKind(LCp);
-      if LKind = 1 then
-      begin
-        if FindDecomposition(LCp, LEntry) then
-        begin
-          // 单例分解（分解到单个码点）
-          if LEntry.Len = 1 then
-            Exit(False);
-          // 非 starter 分解（首码点 CCC > 0）
-          if GetCanonicalCombiningClass(LEntry.Map[0]) > 0 then
-            Exit(False);
-        end;
-      end;
-    end;
-
-    LCcc := GetCanonicalCombiningClass(LCp);
-
-    // 检查 combining class 顺序
-    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
-      Exit(False);
-
-    // 检查是否可以组合
-    if LCcc = 0 then
-    begin
-      LStarter := LCp;
-      LHasStarter := True;
-    end
-    else if LHasStarter then
-    begin
-      if (LPrevCcc = 0) or (LPrevCcc < LCcc) then
-      begin
-        if FindComposition(LStarter, LCp, LComposed) and (LComposed <> LStarter) then
-          Exit(False);
-      end;
-    end;
-
-    LPrevCcc := LCcc;
-  end;
-  Result := True;
-end;
-
-function IsNfcQcNotYes(const ACp: TUnicodeCodepoint): Boolean; inline;
-var
-  LValue: Byte;
-begin
-  if ACp <= $FFFF then
-    Exit(NFC_QC_NOT_YES_BMP[Byte(ACp shr 8), Byte(ACp and $FF)] <> 0);
-  if FindRange3Value(ACp, NFC_QC_NOT_YES_SMP, LValue) then
-    Exit(LValue <> 0);
-  Result := False;
-end;
-
-function QuickCheckNFC(const AText: string): Boolean;
-var
-  LIter: TUTF8Iterator;
-  LCp: UInt32;
-  LPrevCcc: Byte;
-  LCcc: Byte;
-begin
-  { Conservative: NFC_QC Yes only (N/M => False) + CCC non-decreasing. }
-  if AText = '' then
-    Exit(True);
-  if IsAsciiString(AText) then
-    Exit(True);
-
-  LPrevCcc := 0;
-  LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
-  while LIter.Next(LCp) do
-  begin
-    if IsNfcQcNotYes(LCp) then
-      Exit(False);
-    LCcc := GetCanonicalCombiningClass(LCp);
-    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then
-      Exit(False);
+    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then Exit(False);
     LPrevCcc := LCcc;
   end;
   Result := True;
 end;
 
 function QuickCheckNFKC(const AText: string): Boolean;
+var LIter: TUTF8Iterator; LCp: UInt32; LPrevCcc, LCcc: Byte;
 begin
-  Result := QuickCheckComposed(AText, True);
+  if AText = '' then Exit(True);
+  if IsAsciiString(AText) then Exit(True);
+  LPrevCcc := 0;
+  LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
+  while LIter.Next(LCp) do
+  begin
+    if IsNfkcQcNotYes(LCp) then Exit(False);
+    LCcc := GetCanonicalCombiningClass(LCp);
+    if (LCcc <> 0) and (LPrevCcc <> 0) and (LCcc < LPrevCcc) then Exit(False);
+    LPrevCcc := LCcc;
+  end;
+  Result := True;
 end;
 
 { TCodepointBuffer }

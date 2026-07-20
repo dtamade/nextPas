@@ -124,11 +124,11 @@ begin
   LWordIndex := AIndex div 64;
   LBitMask := Int64(1) shl (AIndex mod 64);
   repeat
-    LOld := AtomicLoad64(FBits[LWordIndex], moRelaxed);
+    LOld := atomic_load_64(FBits[LWordIndex], mo_relaxed);
     if (LOld and LBitMask) <> 0 then
       Exit; // Already set
     LNew := LOld or LBitMask;
-  until AtomicCompareExchange64(FBits[LWordIndex], LOld, LNew, moRelaxed) = LOld;
+  until atomic_compare_exchange_strong_64(FBits[LWordIndex], LOld, LNew, mo_relaxed, mo_relaxed);
 end;
 
 function TConcurrentBloomFilterImpl.GetBit(AIndex: PtrUInt): Boolean;
@@ -138,7 +138,7 @@ var
 begin
   LWordIndex := AIndex div 64;
   LBitMask := Int64(1) shl (AIndex mod 64);
-  Result := (AtomicLoad64(FBits[LWordIndex], moAcquire) and LBitMask) <> 0;
+  Result := (atomic_load_64(FBits[LWordIndex], mo_acquire) and LBitMask) <> 0;
 end;
 
 function TConcurrentBloomFilterImpl.Add(const AValue: T): Boolean;
@@ -146,14 +146,14 @@ var
   LI: Integer;
   LIndex: PtrUInt;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   for LI := 0 to FHashCount - 1 do
   begin
     LIndex := GetBitIndex(AValue, LI);
     SetBit(LIndex);
   end;
-  AtomicFetchAdd64(FCount, 1, moRelaxed);
+  atomic_fetch_add_64(FCount, 1, mo_relaxed);
   Result := True;
 end;
 
@@ -176,23 +176,23 @@ var
   LI: PtrUInt;
 begin
   for LI := 0 to High(FBits) do
-    AtomicStore64(FBits[LI], 0, moRelaxed);
-  AtomicStore64(FCount, 0, moRelaxed);
+    atomic_store_64(FBits[LI], 0, mo_relaxed);
+  atomic_store_64(FCount, 0, mo_relaxed);
 end;
 
 procedure TConcurrentBloomFilterImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TConcurrentBloomFilterImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TConcurrentBloomFilterImpl.Count: PtrUInt; inline;
 begin
-  Result := PtrUInt(AtomicLoad64(FCount, moAcquire));
+  Result := PtrUInt(atomic_load_64(FCount, mo_acquire));
 end;
 
 function TConcurrentBloomFilterImpl.BitCount: PtrUInt; inline;

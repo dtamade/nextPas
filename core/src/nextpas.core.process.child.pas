@@ -268,7 +268,7 @@ begin
   end
   else
   begin
-    LSleepNs := 1000000; { 1ms, exponential backoff up to 20ms }
+    LSleepNs := 100000; { 100us, align WaitWithOutput/Destroy (R33) }
     repeat
       if CancelRequested then
       begin
@@ -668,7 +668,7 @@ begin
     LDeadline := TInstant.Now
   else
     LDeadline := TInstant.Now.Add(AGrace);
-  LSleepNs := 1000000;
+  LSleepNs := 100000; { 100us R33 }
   FillChar(LResult, SizeOf(LResult), 0);
   repeat
     if CancelRequested then

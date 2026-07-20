@@ -77,8 +77,7 @@ type
 implementation
 
 uses
-  nextpas.core.atomic,
-  nextpas.core.errors;
+  nextpas.core.atomic;
 
 constructor TCountingBloomFilter.Create(AWidth, ADepth: Int32);
 var
@@ -127,9 +126,9 @@ begin
   for I := 0 to FDepth - 1 do
   begin
     LIdx := HashN(AKey, I) * FDepth + I;
-    AtomicFetchAdd32(FCounters[LIdx], 1);
+    atomic_fetch_add(FCounters[LIdx], 1);
   end;
-  AtomicFetchAdd64(FCount, 1);
+  atomic_fetch_add_64(FCount, 1);
   Result := cbfOk;
 end;
 
@@ -142,7 +141,7 @@ begin
   begin
     LIdx := HashN(AKey, I) * FDepth + I;
     repeat
-      LOld := AtomicLoad32(FCounters[LIdx]);
+      LOld := atomic_load(FCounters[LIdx]);
       if LOld <= 0 then
       begin
         { Counter already 0 — element not present or already removed.
@@ -150,14 +149,14 @@ begin
         for LDecremented := LDecremented - 1 downto 0 do
         begin
           LIdx := HashN(AKey, LDecremented) * FDepth + LDecremented;
-          AtomicFetchAdd32(FCounters[LIdx], 1);
+          atomic_fetch_add(FCounters[LIdx], 1);
         end;
         Exit(cbfNotFound);
       end;
-    until AtomicCompareExchange32(FCounters[LIdx], LOld, LOld - 1) = LOld;
+    until atomic_compare_exchange_strong(FCounters[LIdx], LOld, LOld - 1, mo_seq_cst, mo_seq_cst);
     Inc(LDecremented);
   end;
-  AtomicFetchSub64(FCount, 1);
+  atomic_fetch_sub_64(FCount, 1);
   Result := cbfOk;
 end;
 
@@ -169,7 +168,7 @@ begin
   for I := 0 to FDepth - 1 do
   begin
     LIdx := HashN(AKey, I) * FDepth + I;
-    if AtomicLoad32(FCounters[LIdx]) <= 0 then
+    if atomic_load(FCounters[LIdx]) <= 0 then
     begin
       Result := False;
       Exit;
@@ -179,7 +178,7 @@ end;
 
 function TCountingBloomFilter.Count: Int64; inline;
 begin
-  Result := AtomicLoad64(FCount);
+  Result := atomic_load_64(FCount);
 end;
 
 procedure TCountingBloomFilter.Reset;
@@ -187,8 +186,8 @@ var
   I: Int32;
 begin
   for I := 0 to Length(FCounters) - 1 do
-    AtomicStore32(FCounters[I], 0);
-  AtomicStore64(FCount, 0);
+    atomic_store(FCounters[I], 0);
+  atomic_store_64(FCount, 0);
 end;
 
 end.

@@ -196,7 +196,7 @@ begin
   if ARoot = nil then
   begin
     ARoot := NewNode(True, AHash, AKey, AValue);
-    AtomicFetchAdd32(FSize, 1);
+    atomic_fetch_add(FSize, 1);
     Exit(tmOk);
   end;
 
@@ -223,7 +223,7 @@ begin
     begin
       ARoot^.Children[LIdx] := NewNode(True, AHash, AKey, AValue);
       Inc(ARoot^.ChildCount);
-      AtomicFetchAdd32(FSize, 1);
+      atomic_fetch_add(FSize, 1);
     end
     else
     begin
@@ -242,7 +242,7 @@ begin
   begin
     ARoot^.Children[LIdx] := NewNode(True, AHash, AKey, AValue);
     Inc(ARoot^.ChildCount);
-    AtomicFetchAdd32(FSize, 1);
+    atomic_fetch_add(FSize, 1);
     Exit(tmOk);
   end;
   Result := InsertNode(ARoot^.Children[LIdx], AHash, ADepth + 1,
@@ -268,7 +268,7 @@ begin
       ARoot^.Value := '';
       Dispose(ARoot);
       ARoot := nil;
-      AtomicFetchSub32(FSize, 1);
+      atomic_fetch_sub(FSize, 1);
       Exit(True);
     end;
     Exit(False);
@@ -311,10 +311,14 @@ end;
 procedure TConcurrentTrieMap.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -329,7 +333,7 @@ end;
 
 procedure TConcurrentTrieMap.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 constructor TConcurrentTrieMap.Create;
@@ -412,12 +416,12 @@ end;
 
 function TConcurrentTrieMap.Count: Int32; inline;
 begin
-  Result := AtomicLoad32(FSize);
+  Result := atomic_load(FSize);
 end;
 
 function TConcurrentTrieMap.IsEmpty: Boolean; inline;
 begin
-  Result := AtomicLoad32(FSize) = 0;
+  Result := atomic_load(FSize) = 0;
 end;
 
 procedure TConcurrentTrieMap.Clear;

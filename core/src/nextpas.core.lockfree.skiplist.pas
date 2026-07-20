@@ -222,10 +222,10 @@ var
 begin
   LSpins := 0;
   repeat
-    LLock := AtomicLoad32(ANode.Lock, moRelaxed);
+    LLock := atomic_load(ANode.Lock, mo_relaxed);
     if LLock >= 0 then
     begin
-      if AtomicCompareExchange32(ANode.Lock, LLock, LLock + 1, moAcquire) = LLock then
+      if atomic_compare_exchange_strong(ANode.Lock, LLock, LLock + 1, mo_acquire, mo_relaxed) then
         Exit;
     end;
     Inc(LSpins);
@@ -241,16 +241,18 @@ end;
 
 procedure TConcurrentSkipListImpl.NodeReadUnlock(var ANode: TSkipListNode);
 begin
-  AtomicFetchSub32(ANode.Lock, 1, moRelease);
+  atomic_fetch_sub(ANode.Lock, 1, mo_release);
 end;
 
 procedure TConcurrentSkipListImpl.NodeWriteLock(var ANode: TSkipListNode);
 var
   LSpins: Int32;
+  LCasExpected: Int32;
 begin
   LSpins := 0;
   repeat
-    if AtomicCompareExchange32(ANode.Lock, 0, -1, moAcquire) = 0 then
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(ANode.Lock, LCasExpected, -1, mo_acquire, mo_relaxed) then
       Exit;
     Inc(LSpins);
     if LSpins < 64 then
@@ -265,7 +267,7 @@ end;
 
 procedure TConcurrentSkipListImpl.NodeWriteUnlock(var ANode: TSkipListNode);
 begin
-  AtomicStore32(ANode.Lock, 0, moRelease);
+  atomic_store(ANode.Lock, 0, mo_release);
 end;
 
 procedure TConcurrentSkipListImpl.GlobalReadLock;
@@ -275,10 +277,10 @@ var
 begin
   LSpins := 0;
   repeat
-    LLock := AtomicLoad32(FLock, moRelaxed);
+    LLock := atomic_load(FLock, mo_relaxed);
     if LLock >= 0 then
     begin
-      if AtomicCompareExchange32(FLock, LLock, LLock + 1, moAcquire) = LLock then
+      if atomic_compare_exchange_strong(FLock, LLock, LLock + 1, mo_acquire, mo_relaxed) then
         Exit;
     end;
     Inc(LSpins);
@@ -294,16 +296,18 @@ end;
 
 procedure TConcurrentSkipListImpl.GlobalReadUnlock;
 begin
-  AtomicFetchSub32(FLock, 1, moRelease);
+  atomic_fetch_sub(FLock, 1, mo_release);
 end;
 
 procedure TConcurrentSkipListImpl.GlobalWriteLock;
 var
   LSpins: Int32;
+  LCasExpected: Int32;
 begin
   LSpins := 0;
   repeat
-    if AtomicCompareExchange32(FLock, 0, -1, moAcquire) = 0 then
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, -1, mo_acquire, mo_relaxed) then
       Exit;
     Inc(LSpins);
     if LSpins < 64 then
@@ -318,7 +322,7 @@ end;
 
 procedure TConcurrentSkipListImpl.GlobalWriteUnlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TConcurrentSkipListImpl.Insert(const AKey: TKey; const AValue: TValue);
@@ -370,7 +374,7 @@ begin
       LUpdate[LI]^.Next[LI] := LCurrent;
     end;
 
-    AtomicFetchAdd32(FSize, 1, moRelaxed);
+    atomic_fetch_add(FSize, 1, mo_relaxed);
   finally
     GlobalWriteUnlock;
   end;
@@ -438,7 +442,7 @@ begin
     for LI := 0 to LNext^.Level - 1 do
       LUpdate[LI]^.Next[LI] := LNext^.Next[LI];
 
-    AtomicFetchSub32(FSize, 1, moRelaxed);
+    atomic_fetch_sub(FSize, 1, mo_relaxed);
     FreeNode(LNext);
     Result := True;
   finally
@@ -455,7 +459,7 @@ end;
 
 function TConcurrentSkipListImpl.Count: Integer; inline;
 begin
-  Result := AtomicLoad32(FSize, moRelaxed);
+  Result := atomic_load(FSize, mo_relaxed);
 end;
 
 procedure TConcurrentSkipListImpl.ForEach(const ACallback: TForEachCallback);
@@ -585,7 +589,7 @@ begin
     for LI := 0 to FMaxLevel - 1 do
       FHead^.Next[LI] := FTail;
 
-    AtomicStore32(FSize, 0, moRelaxed);
+    atomic_store(FSize, 0, mo_relaxed);
   finally
     GlobalWriteUnlock;
   end;

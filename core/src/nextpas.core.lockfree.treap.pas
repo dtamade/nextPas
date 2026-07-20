@@ -106,10 +106,14 @@ end;
 procedure TConcurrentTreap.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -122,7 +126,7 @@ end;
 
 procedure TConcurrentTreap.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TConcurrentTreap.NextRandom: UInt64;
@@ -193,7 +197,7 @@ function TConcurrentTreap.InsertNode(ANode: PTreapNode; AKey, AValue: Int64): PT
 begin
   if ANode = nil then
   begin
-    AtomicFetchAdd64(FCount, 1, moRelaxed);
+    atomic_fetch_add_64(FCount, 1, mo_relaxed);
     Exit(CreateNode(AKey, AValue));
   end;
   if AKey = ANode^.Key then
@@ -230,21 +234,21 @@ begin
     if (ANode^.Left = nil) and (ANode^.Right = nil) then
     begin
       FreeNode(ANode);
-      AtomicFetchSub64(FCount, 1, moRelaxed);
+      atomic_fetch_sub_64(FCount, 1, mo_relaxed);
       Exit(nil);
     end
     else if (ANode^.Left = nil) then
     begin
       Result := ANode^.Right;
       FreeNode(ANode);
-      AtomicFetchSub64(FCount, 1, moRelaxed);
+      atomic_fetch_sub_64(FCount, 1, mo_relaxed);
       Exit(Result);
     end
     else if (ANode^.Right = nil) then
     begin
       Result := ANode^.Left;
       FreeNode(ANode);
-      AtomicFetchSub64(FCount, 1, moRelaxed);
+      atomic_fetch_sub_64(FCount, 1, mo_relaxed);
       Exit(Result);
     end
     else
@@ -283,7 +287,7 @@ function TConcurrentTreap.Insert(AKey, AValue: Int64): TTreapResult;
 var
   LOldCount: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(trClosed);
   Lock;
   try
@@ -301,7 +305,7 @@ function TConcurrentTreap.Remove(AKey: Int64): TTreapResult;
 var
   LOldCount: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(trClosed);
   Lock;
   try
@@ -319,7 +323,7 @@ function TConcurrentTreap.Find(AKey: Int64; out AValue: Int64): Boolean;
 var
   LNode: PTreapNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
   begin
     AValue := 0;
     Exit(False);
@@ -343,7 +347,7 @@ function TConcurrentTreap.Contains(AKey: Int64): Boolean;
 var
   LNode: PTreapNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   Lock;
   try
@@ -356,7 +360,7 @@ end;
 
 function TConcurrentTreap.GetCount: Int64;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed);
+  Result := atomic_load_64(FCount, mo_relaxed);
 end;
 
 procedure TConcurrentTreap.CollectSubtree(ANode: PTreapNode;
@@ -376,7 +380,7 @@ var
   LEntries: TTreapEntries;
   LCount, LI: SizeInt;
 begin
-  if (AtomicLoad32(FClosed, moAcquire) <> 0) or not Assigned(ACallback) then
+  if (atomic_load(FClosed, mo_acquire) <> 0) or not Assigned(ACallback) then
     Exit;
   Lock;
   try
@@ -414,12 +418,12 @@ end;
 
 procedure TConcurrentTreap.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TConcurrentTreap.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

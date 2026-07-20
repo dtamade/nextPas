@@ -76,10 +76,14 @@ implementation
 procedure TTDigestImpl.Lock;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Break;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -92,7 +96,7 @@ end;
 
 procedure TTDigestImpl.Unlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 constructor TTDigestImpl.Create(ACompression: UInt32);
@@ -199,12 +203,12 @@ function TTDigestImpl.Add(AValue: Double): TTDigestStatus;
 var
   LPos, LI, LNewCapacity: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(tdClosed);
 
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(tdClosed);
 
     LPos := FindInsertPos(AValue);
@@ -260,7 +264,7 @@ var
   LWeightSoFar: UInt64;
   LI: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(tdClosed);
   if (AQ < 0.0) or (AQ > 1.0) then
   begin
@@ -270,7 +274,7 @@ begin
 
   Lock;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(tdClosed);
     if FTotalWeight = 0 then
       Exit(tdEmpty);
@@ -321,7 +325,7 @@ procedure TTDigestImpl.Close;
 begin
   Lock;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     Unlock;
   end;
@@ -329,7 +333,7 @@ end;
 
 function TTDigestImpl.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

@@ -210,10 +210,10 @@ var
 begin
   LSpins := 0;
   repeat
-    LLock := AtomicLoad32(FLock, moRelaxed);
+    LLock := atomic_load(FLock, mo_relaxed);
     if LLock >= 0 then
     begin
-      if AtomicCompareExchange32(FLock, LLock, LLock + 1, moAcquire) = LLock then
+      if atomic_compare_exchange_strong(FLock, LLock, LLock + 1, mo_acquire, mo_relaxed) then
         Exit;
     end;
     Inc(LSpins);
@@ -229,16 +229,18 @@ end;
 
 procedure TConcurrentBTreeImpl.GlobalReadUnlock;
 begin
-  AtomicFetchSub32(FLock, 1, moRelease);
+  atomic_fetch_sub(FLock, 1, mo_release);
 end;
 
 procedure TConcurrentBTreeImpl.GlobalWriteLock;
 var
   LSpins: Int32;
+  LCasExpected: Int32;
 begin
   LSpins := 0;
   repeat
-    if AtomicCompareExchange32(FLock, 0, -1, moAcquire) = 0 then
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, -1, mo_acquire, mo_relaxed) then
       Exit;
     Inc(LSpins);
     if LSpins < 64 then
@@ -253,7 +255,7 @@ end;
 
 procedure TConcurrentBTreeImpl.GlobalWriteUnlock;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TConcurrentBTreeImpl.SplitChild(AParent: PBTreeNode; AIndex: Integer);
@@ -324,7 +326,7 @@ begin
       ANode^.Keys[LI + 1] := AKey;
       ANode^.Values[LI + 1] := AValue;
       Inc(ANode^.KeyCount);
-      AtomicFetchAdd32(FSize, 1, moRelaxed);
+      atomic_fetch_add(FSize, 1, mo_relaxed);
     end;
   end
   else
@@ -422,7 +424,7 @@ begin
   ANode^.Keys[ANode^.KeyCount - 1] := Default(TKey);
   ANode^.Values[ANode^.KeyCount - 1] := Default(TValue);
   Dec(ANode^.KeyCount);
-  AtomicFetchSub32(FSize, 1, moRelaxed);
+  atomic_fetch_sub(FSize, 1, mo_relaxed);
 end;
 
 function TConcurrentBTreeImpl.GetPredecessor(ANode: PBTreeNode; out AKey: TKey; out AValue: TValue): Boolean;
@@ -682,7 +684,7 @@ end;
 
 function TConcurrentBTreeImpl.Count: Integer; inline;
 begin
-  Result := AtomicLoad32(FSize, moRelaxed);
+  Result := atomic_load(FSize, mo_relaxed);
 end;
 
 procedure TConcurrentBTreeImpl.CollectNode(ANode: PBTreeNode;
@@ -814,7 +816,7 @@ begin
   try
     FreeNode(FRoot);
     FRoot := CreateNode(True);
-    AtomicStore32(FSize, 0, moRelaxed);
+    atomic_store(FSize, 0, mo_relaxed);
   finally
     GlobalWriteUnlock;
   end;
