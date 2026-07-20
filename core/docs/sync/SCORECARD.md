@@ -35,6 +35,8 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_pool
 | SC4 | RWLock read uncontended | `bench_sync` | ns/op, ops/s |
 | SC5 | RWLock write uncontended | `bench_sync` | ns/op, ops/s |
 | SC6 | TSyncPool Get/Put 单线程 1M | `test_sync_pool` | Mops/s |
+| SC7 | FutexMutex 2T contention | `test_sync` FutexMutex contention | 正确性（无死锁/漏递增） |
+| SC8 | Event multi-waiter / auto single-winner | `test_sync` Event manual/auto multi | 正确性 |
 
 规则：
 
@@ -63,6 +65,15 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_pool
 |----|---------|--------|
 | SC6 | 1M Get/Put single-thread | ~37M ops/s（本机一次：27ms） |
 
+**contended / multi-waiter（正确性门，2026-07-20 基线 a304e5b09）**:
+
+| ID | result |
+|----|--------|
+| SC7 | `FutexMutex contention` pass（阻塞→释放后 counter=1） |
+| SC8 | manual multi-waiter 全醒；auto single-winner 恰好 1 |
+
+数值型 contended ns/op 待后续 `bench_sync` 扩展；本批以 correctness 为准。
+
 ---
 
 ## 变更记录
@@ -70,3 +81,4 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_pool
 | 日期 | 变更 |
 |------|------|
 | 2026-07-20 | 初版 SC1–SC6 基线 |
+| 2026-07-20 | SC7/SC8 正确性 contended 场景 |
