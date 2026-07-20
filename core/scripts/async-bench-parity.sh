@@ -51,6 +51,26 @@ else
   echo "SKIP rust: cargo not installed"
 fi
 
+
+# --- dial localhost (Q19) ---
+echo
+echo "--- nextpas dial_ops_per_s ---"
+set +e
+make -C "$CORE_ROOT/tests/nextpas.core.net/test_net_async_dial_bench" clean test >"$OUT_DIR/nextpas-dial.log" 2>&1
+dial_rc=$?
+set -e
+grep -E 'metric=' "$OUT_DIR/nextpas-dial.log" | tee "$OUT_DIR/nextpas-dial.metrics" || true
+if [[ "$dial_rc" -ne 0 ]]; then
+  echo "WARN: nextpas dial bench exit $dial_rc" >&2
+fi
+
+if command -v go >/dev/null 2>&1; then
+  echo
+  echo "--- go dial peer ---"
+  (cd "$PARITY_DIR/go-dial" && GO111MODULE=on go run . >"$OUT_DIR/go-dial.metrics" 2>"$OUT_DIR/go-dial.log")
+  cat "$OUT_DIR/go-dial.metrics"
+fi
+
 echo
 echo "=== SCORECARD table ==="
 python3 - <<'PY' "$OUT_DIR"
@@ -70,7 +90,11 @@ def load(name):
     return d
 
 np = load("nextpas.metrics") or load("nextpas.log")
+npd = load("nextpas-dial.metrics") or load("nextpas-dial.log")
+np.update(npd)
 go = load("go.metrics")
+god = load("go-dial.metrics")
+go.update(god)
 rs = load("rust.metrics")
 keys = sorted(set(np) | set(go) | set(rs))
 print("| Metric | nextpas | go peer | rust peer |")
