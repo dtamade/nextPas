@@ -110,5 +110,41 @@ begin
   WriteLn('keyvalues-host=', LSnapshot.GetStringRequired('server.host'));
   WriteLn('keyvalues-port=', LSnapshot.GetIntRequired('server.port'));
 
+  { Wave K/L/M DX: section view, duration/size, clone/merge, debug dump. }
+  LSnapshot := ConfigBuilder
+    .AddJson('{"server":{"host":"sec-host","port":7},' +
+      '"timeout":"250ms","max_body":"2KB"}')
+    .Build;
+  if ConfigSection(LSnapshot, 'server').GetStringRequired('host') <> 'sec-host' then
+    Fail('ConfigSection host mismatch');
+  if LSnapshot.GetDurationNsRequired('timeout') <> Int64(250) * 1000000 then
+    Fail('GetDurationNs timeout mismatch');
+  if LSnapshot.GetByteSizeRequired('max_body') <> 2048 then
+    Fail('GetByteSize max_body mismatch');
+  WriteLn('section-host=',
+    ConfigSection(LSnapshot, 'server').GetStringRequired('host'));
+  WriteLn('duration-timeout-ns=', LSnapshot.GetDurationNsRequired('timeout'));
+  WriteLn('bytesize-max-body=', LSnapshot.GetByteSizeRequired('max_body'));
+
+  LMutable := TConfig.Create;
+  try
+    LMutable.SetString('a', '1');
+    LDirect := LMutable.Clone;
+    try
+      LDirect.SetString('a', '2');
+      if LMutable.GetString('a') <> '1' then
+        Fail('Clone must not share storage');
+      LMutable.MergeFrom(LDirect);
+      if LMutable.GetString('a') <> '2' then
+        Fail('MergeFrom did not overlay a');
+      WriteLn('clone-merge=pass');
+      WriteLn('debug-dump=', LMutable.DebugDump);
+    finally
+      LDirect.Free;
+    end;
+  finally
+    LMutable.Free;
+  end;
+
   WriteLn('config-startup-patterns-status=pass');
 end.
