@@ -56,8 +56,8 @@
 | D2 | Scorecard SC1–SC27 全绿 + C7/C8 全绿（focused 0 leak） | **已满足**（M1） |
 | D3 | 全部 widget 有专属 suite（基础 ≥16，其余 ≥12） | **已满足**（40/40） |
 | D4 | 7 demos 教学路径契约（app-first） | **已满足** |
-| D5 | `ext` 覆盖稳定应用最小集：TApp + 布局 + scroll/modal 级视口 | **未满足**（仍 full-only） |
-| D6 | 本 ROADMAP 权威存在；PARITY = Maintenance（B 完成后 → Idle） | **本文件起满足地图**；Idle 待 Phase B |
+| D5 | `ext` 覆盖稳定应用最小集：TApp + 布局 + scroll/modal 级视口 | **已满足**（Phase B1：scrollview+modal → ext） |
+| D6 | 本 ROADMAP 权威存在；PARITY = Maintenance（B 完成后 → Idle） | **地图已满足**；Idle 在 B3/B4 收尾后 |
 | D7 | 无 P0 正确性 bug 挂账（或有 issue + 复现测） | **默认满足** |
 
 **D5 是唯一拦路「产品形状」项**；其余质量门禁已齐。
@@ -122,7 +122,7 @@ full         core+ext+experimental + ~30 advanced widgets（迁移伞）
 |------|------|
 | TApp + ScreenStack / Task / Theme / Panel | Done |
 | Focus / Keybind / FrameBudget | Done（SC25–27） |
-| scrollview / modal 在 ext | **Partial** — 实现在 full；core reject 已有；**未晋升** |
+| scrollview / modal 在 ext | **Done**（Phase B1） |
 
 ### 3.3 experimental / full
 
@@ -139,16 +139,14 @@ full         core+ext+experimental + ~30 advanced widgets（迁移伞）
 
 Q1–M1。退出：D1–D4 + SC1–SC27 + C7/C8。
 
-### Phase B — Facade 诚实与稳定应用集 — **下一开发阶段**
-
-目标：`ext` 成为真实应用的完整稳定入口。
+### Phase B — Facade 诚实与稳定应用集 — **B1/B2 进行中**
 
 | 步骤 | 内容 | 退出 |
 |------|------|------|
-| B1 | scrollview + modal → **ext 导出** | 仅 uses ext 可用；core reject 仍失败；ext smoke |
-| B2 | CONTRACT / WIDGET_CATALOG / TIER_REGISTRY 同步 | 文档=导出 |
-| B3 | 评估下一批稳定候选（**最多 3 个**） | 书面列入/排除 |
-| B4 | full 标 migration-only | README 强调新代码 core/ext |
+| B1 | scrollview + modal → **ext 导出** | **本波实施** |
+| B2 | CONTRACT / WIDGET_CATALOG / TIER_REGISTRY 同步 | **本波实施** |
+| B3 | 评估下一批稳定候选（**最多 3 个**） | 待后续 |
+| B4 | full 标 migration-only | README 已强调；可再收紧 |
 
 **不做**：一次搬空 full；core 塞 TApp。  
 **B 完成后**：D5 满足 → 可进 Phase F Idle。
@@ -186,9 +184,9 @@ D1–D6 满足后：
 ```
 [DONE] Phase A (Q1–M1)
    ↓
-[本批] 本 ROADMAP 落地 + 文档指针
+[DONE] ROADMAP 落地
    ↓
-[下一刀] Phase B1–B2：scrollview+modal → ext
+[本波] Phase B1–B2：scrollview+modal → ext
    ↓
 [可选] B3 评估 0–3 个稳定 widget
    ↓

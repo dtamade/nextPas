@@ -94,7 +94,7 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | Q14 | SC20–22 SGR/DrawPatches/ratio + contract C7 | **Done** (`main@3eb99d877`+) |
 | Q15 | SC23–25 indexed SGR / style-change / focus Tab + C7 | **Done** (`main@17b18c4c8`+) |
 | M1 | Maintenance：SC26–27 + reject scrollview/modal + C8 | **Done** (`main@c06f621a8`+) |
-| 下一阶段 | **Phase B**（见 [ROADMAP](ROADMAP.md)）：scrollview+modal → ext | 待执行 |
+| 下一阶段 | **Phase B1–B2 进行中**：scrollview+modal → ext | 本波 |
 | 可选 | Truecolor DA / 完整 crate 对照 / Windows 真 console | ROADMAP Phase C/D；不阻塞 Done |
 
 ## 5. 质量维度 → 证据（对标 go/rust）
@@ -129,11 +129,11 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 4. 有 core reject 夹具证明不泄漏进 default facade（若目标是 ext）
 5. 产品确认
 
-### 晋升就绪证据（M1，**未**实施导出）
+### 晋升就绪证据
 
-| 候选 | 密度 | experimental | core reject | CONTRACT 条目 | 产品确认 |
-|------|------|--------------|-------------|---------------|----------|
-| scrollview | 23 | 否 | `rejects_scrollview` | 待晋升时写 | **未** |
-| modal | 16 | 否 | `rejects_modal` | 待晋升时写 | **未** |
+| 候选 | 密度 | experimental | core reject | ext 导出 | 产品确认 |
+|------|------|--------------|-------------|----------|----------|
+| scrollview | 23 | 否 | `rejects_scrollview` | **Phase B1 已导出** | 本波执行 |
+| modal | 16 | 否 | `rejects_modal` | **Phase B1 已导出** | 本波执行 |
 
 见 [TIER_REGISTRY.md](TIER_REGISTRY.md)。
