@@ -2,7 +2,7 @@
 
 > 模块负责人: test lane (worktree `.worktrees/test`) — 全权对标 Go/Rust 质量与规模
 > 最后更新: 2026-07-20
-> 治理状态: v8.20, 17 源文件 (.pas) + 4 .inc, 19 测试套件, ≥4500 可计数过程 + fail-path≥30% + SoftFail exact/subtest/CLI 契约 + 双 source-contract 门禁
+> 治理状态: v8.22, 17 源文件 (.pas) + 4 .inc, 19 测试套件, ≥5500 可计数过程 + Cache key 含 stop 语义 + Nested SoftFail
 
 ## Overview
 

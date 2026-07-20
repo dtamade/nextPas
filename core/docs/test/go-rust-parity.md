@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.20**
+**当前版本**: **v8.22**
 **最后更新**: 2026-07-20
 
 ---
@@ -16,7 +16,7 @@
 | 诊断 | cmp / testify | pretty_assertions / insta | ColorDiff + Snapshot 契约 |
 | 并行/竞态 | t.Parallel / -race | 串行默认 | RunParallel + 原子压力测 |
 | Prop/Fuzz | testing.F + 第三方 | proptest | 内置 + 可计数套件 |
-| 规模 | 上千级自测 | 同左 | **≥4500 可计数过程 + fail-path≥30%** |
+| 规模 | 上千级自测 | 同左 | **≥5500 可计数过程 + fail-path≥30%** |
 | 失败语义 | Error 可继续 / Fatal 停 | panic | **Check=Fatal**；**SoftFail** opt-in |
 
 ---
@@ -26,7 +26,7 @@
 | 指标 | 值 |
 |------|-----|
 | 套件 | **19**（+ scale report） |
-| 可计数过程 | **≥4500**（scale report；SCALE_MIN 默认 4500；FAIL_PATH_MIN_RATIO 默认 0.30） |
+| 可计数过程 | **≥5500**（scale report；SCALE_MIN 默认 5500；FAIL_PATH_MIN_RATIO 默认 0.30） |
 | Check*/To* 门禁 | 56 + 52 全引用 |
 | Runner 门禁 | TestSeq/RunParallel/报告 API 等 23 项 |
 
@@ -66,6 +66,14 @@
 | B34 v8.20 CLI/MaxFailures + SoftFail contracts | **done** |
 | B35 v8.20 softfail_demo | **done** |
 | B36 v8.20 SCALE_MIN=4500 | **done** |
+| B37 v8.21 Nested SoftFail 分层（产品） | **done** |
+| B38 v8.21 Cache 指纹表 | **done** |
+| B39 v8.21 薄套件加厚 | **done** |
+| B40 v8.21 SCALE_MIN=5000 | **done** |
+| B41 v8.22 ComputeKey stop 语义 | **done** |
+| B42 v8.22 SoftFail parallel/outside/PushPop | **done** |
+| B43 v8.22 thin + nested demo | **done** |
+| B44 v8.22 SCALE_MIN=5500 | **done** |
 
 ### 暂缓 / 阻塞
 
@@ -100,7 +108,7 @@ make -C core/tests/nextpas.core.test clean test   # 19/19
 
 ```bash
 make -C core/tests/nextpas.core.test/test_scale_report test
-# SCALE_MIN=4500 FAIL_PATH_MIN_RATIO=0.30 (defaults)
+# SCALE_MIN=5500 FAIL_PATH_MIN_RATIO=0.30 (defaults)
 ```
 
 消费者示例：
@@ -109,6 +117,8 @@ make -C core/tests/nextpas.core.test/test_scale_report test
 make -C core/examples/nextpas.core.test/smoke_suite run
 # SoftFail multi-message (expect exit 1 + join):
 make -C core/examples/nextpas.core.test/softfail_demo run
+# Nested SoftFail layering (expect exit 1):
+make -C core/examples/nextpas.core.test/nested_softfail_demo run
 ```
 
 

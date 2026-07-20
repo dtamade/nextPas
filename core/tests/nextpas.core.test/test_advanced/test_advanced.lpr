@@ -445,6 +445,40 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+procedure TestB39SoftFailAdvancedExact;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('adv-soft-exact');
+  LSuite.Test('soft', procedure
+    begin
+      SoftFail('x');
+      SoftFail('y');
+      SoftFail('z');
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckEqual('x; y; z', LResult.Results[0].Message, 'advanced SoftFail join exact');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB43SoftFailTAPMessage;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LTAP: string;
+begin
+  SetLength(LResults, 1);
+  LResults[0] := TTestRunResult.Create('soft-tap');
+  LResults[0].Failed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 's';
+  LResults[0].Results[0].Status := tsFailed;
+  LResults[0].Results[0].Message := 'a; b; c';
+  LTAP := TAPReport(LResults);
+  CheckContains(LTAP, 'a; b; c');
+  CheckContains(LTAP, 'not ok');
+end;
+
 procedure TestB26TAPMultiSuite;
 var
   LResults: specialize TArray<TTestRunResult>;
@@ -509,6 +543,8 @@ begin
   LSuite.Test('B12 RetryExhaustedMessage', @TestB12RetryExhaustedMessage);
   LSuite.Test('B26 SoftFail in advanced', @TestB26SoftFailAdvanced);
   LSuite.Test('B26 TAP multi suite header', @TestB26TAPMultiSuite);
+  LSuite.Test('B39 SoftFail join exact', @TestB39SoftFailAdvancedExact);
+  LSuite.Test('B43 SoftFail TAP multi soft msg', @TestB43SoftFailTAPMessage);
 
   LRunner := TSuiteRunner.Create('main');
   LRunner.Add(LSuite);
