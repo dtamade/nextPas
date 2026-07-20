@@ -431,6 +431,9 @@ end;
 
 destructor TASN1Node.Destroy;
 begin
+  // Own the child list: Clear frees each TASN1Node recursively.
+  FChildren.Free;
+  FChildren := nil;
   inherited Destroy;
 end;
 
@@ -1007,6 +1010,8 @@ begin
       end;
     end;
   except
+    // Partial trees must not leak on parse failure.
+    Result.Free;
     Result := nil;
     raise;
   end;
