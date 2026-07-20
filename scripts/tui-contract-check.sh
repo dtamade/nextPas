@@ -52,23 +52,23 @@ SCORECARD="$REPO_ROOT/core/docs/tui/SCORECARD.md"
 PARITY="$REPO_ROOT/core/docs/tui/PARITY-GO-RUST.md"
 SC_LPR="$TEST_DIR/scorecard/scorecard.lpr"
 if [ -f "$SCORECARD" ]; then
-  if grep -q 'SC22' "$SCORECARD" && grep -q 'SC23' "$SCORECARD" && grep -q 'SC25' "$SCORECARD"; then
-    ok "SCORECARD 含 SC22/SC23/SC25"
+  if grep -q 'SC25' "$SCORECARD" && grep -q 'SC26' "$SCORECARD" && grep -q 'SC27' "$SCORECARD"; then
+    ok "SCORECARD 含 SC25/SC26/SC27"
   else
-    fail_check "SCORECARD 缺少 SC22/SC23/SC25 条目"
+    fail_check "SCORECARD 缺少 SC25/SC26/SC27 条目"
   fi
 else
   fail_check "SCORECARD.md 不存在"
 fi
 if [ -f "$CONTRACT" ]; then
-  if grep -qE 'SC1[–-]SC' "$CONTRACT" && grep -qE '\*\*版本\*\*：1\.(1[6-9]|[2-9][0-9])' "$CONTRACT"; then
-    ok "CONTRACT 含 SC 范围与版本 ≥1.16"
+  if grep -qE 'SC1[–-]SC' "$CONTRACT" && grep -qE '\*\*版本\*\*：1\.(1[7-9]|[2-9][0-9])' "$CONTRACT"; then
+    ok "CONTRACT 含 SC 范围与版本 ≥1.17"
   else
     fail_check "CONTRACT 缺少 SC1–SC 范围或版本过旧"
   fi
 fi
 if [ -f "$SC_LPR" ]; then
-  for p in RunSC23 RunSC24 RunSC25; do
+  for p in RunSC25 RunSC26 RunSC27; do
     if grep -q "procedure $p" "$SC_LPR"; then ok "scorecard.lpr $p"; else fail_check "scorecard.lpr 缺 $p"; fi
   done
 else
@@ -78,6 +78,43 @@ if [ -f "$PARITY" ] && grep -q '质量维度' "$PARITY"; then
   ok "PARITY 含质量维度矩阵"
 else
   fail_check "PARITY 缺少质量维度"
+fi
+if [ -f "$PARITY" ] && grep -qi 'Maintenance' "$PARITY"; then
+  ok "PARITY 标记 Maintenance"
+else
+  fail_check "PARITY 未进入 Maintenance 状态"
+fi
+
+printf "\n${BOLD}C8: core facade reject 编译失败${NC}\n"
+FPC_BIN="${FPC:-/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc}"
+REJECT_DIR="$TEST_DIR/test_tui_core_facade"
+REJECT_BUILD="$REPO_ROOT/core/build/projects/nextpas.core.tui/reject_c8"
+if [ ! -x "$FPC_BIN" ] && ! command -v "$FPC_BIN" >/dev/null 2>&1; then
+  if command -v fpc >/dev/null 2>&1; then
+    FPC_BIN=$(command -v fpc)
+  else
+    fail_check "找不到 fpc（设 FPC= 或安装）"
+    FPC_BIN=""
+  fi
+fi
+if [ -n "$FPC_BIN" ]; then
+  mkdir -p "$REJECT_BUILD"
+  for rej in test_tui_core_facade_rejects_scrollview test_tui_core_facade_rejects_modal; do
+    src="$REJECT_DIR/${rej}.lpr"
+    if [ ! -f "$src" ]; then
+      fail_check "缺 reject 源: $rej.lpr"
+      continue
+    fi
+    # Expect identifier not found / compile fail when using core facade only.
+    if "$FPC_BIN" -MObjFPC -Sh -Sg -O1 \
+        -FU"$REJECT_BUILD" -FE"$REJECT_BUILD" \
+        -Fu"$REPO_ROOT/core/src" -Fi"$REPO_ROOT/core/src" \
+        "$src" >/dev/null 2>&1; then
+      fail_check "$rej 应编译失败却成功（core 泄漏？）"
+    else
+      ok "$rej 编译失败（预期）"
+    fi
+  done
 fi
 
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
