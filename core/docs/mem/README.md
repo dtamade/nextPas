@@ -2,7 +2,7 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-**Lane 状态（2026-07-20）**: A–C **CLOSED**；D **Steady**；E **Steady+**；F **CLOSED**；**G Active**（Ecosystem Steward）— [ROADMAP](ROADMAP.md) · [PARITY](PARITY-GO-RUST.md) · [FACADES-SURFACE](FACADES-SURFACE.md) · [OPENSSL 堆纪律](OPENSSL-HEAP-DISCIPLINE.md)。
+**Lane 状态（2026-07-20）**: A–C **CLOSED**；D **Steady**；E **Steady+**；F **CLOSED**；**G Steady**（Ecosystem Steward 收口）— [ROADMAP](ROADMAP.md) · [PARITY](PARITY-GO-RUST.md) · [FACADES-SURFACE](FACADES-SURFACE.md) · [growable KEEP](GROWABLE-KEEP-2026-07-20.md) · [OPENSSL 堆纪律](OPENSSL-HEAP-DISCIPLINE.md)。
 可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
 
 ```bash
