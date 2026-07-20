@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="golden-junit" tests="3" failures="1" errors="0" skipped="1">
+  <testsuite name="golden-junit" tests="3" failures="1" errors="0" skipped="1">
+    <testcase name="pass_case" time="0.000"/>
+    <testcase name="fail_case" time="0.000">
+      <failure type="AssertionFailure" message="expected 1 got 2"></failure>
+    </testcase>
+    <testcase name="skip_case" time="0.000">
+      <skipped message="not yet"/>
+    </testcase>
+  </testsuite>
+</testsuites>

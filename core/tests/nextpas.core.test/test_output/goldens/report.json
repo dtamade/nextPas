@@ -1,0 +1,34 @@
+{
+  "name": "golden-json",
+  "totalPassed": 1,
+  "totalFailed": 1,
+  "totalSkipped": 1,
+  "suites": [
+    {
+      "name": "golden-json",
+      "passed": 1,
+      "failed": 1,
+      "skipped": 1,
+      "allPassed": true,
+      "tests": [
+        {
+          "name": "pass_case",
+          "status": "passed"
+          ,"durationMs": 0
+        },
+        {
+          "name": "fail_case",
+          "status": "failed"
+          ,"message": "expected 1 got 2"
+          ,"durationMs": 0
+        },
+        {
+          "name": "skip_case",
+          "status": "skipped"
+          ,"message": "not yet"
+          ,"durationMs": 0
+        }
+      ]
+    }
+  ]
+}

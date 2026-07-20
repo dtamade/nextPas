@@ -1856,7 +1856,7 @@ end;
 procedure TestB11JSONGoldenSnapshot;
 var
   LResults: specialize TArray<TTestRunResult>;
-  LOut, LDir: string;
+  LOut: string;
 begin
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('golden-json');
@@ -1882,15 +1882,14 @@ begin
   CheckContains(LOut, 'fail_case');
   CheckContains(LOut, 'skip_case');
   CheckContains(LOut, 'expected 1 got 2');
-  LDir := IncludeTrailingPathDelimiter(GetTempDir) +
-    'np-test-golden-json-' + IntToStr(GetTickCount64);
-  CheckSnapshot(LOut, LDir, 'report.json');
+  { B19: committed golden under suite goldens/ (CWD = suite when make -C) }
+  CheckSnapshot(LOut, 'goldens', 'report.json');
 end;
 
 procedure TestB11TAPGoldenSnapshot;
 var
   LResults: specialize TArray<TTestRunResult>;
-  LOut, LDir: string;
+  LOut: string;
 begin
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('golden-tap');
@@ -1910,15 +1909,13 @@ begin
   CheckContains(LOut, 'ok 1');
   CheckContains(LOut, 'not ok 2');
   CheckContains(LOut, 'boom');
-  LDir := IncludeTrailingPathDelimiter(GetTempDir) +
-    'np-test-golden-tap-' + IntToStr(GetTickCount64);
-  CheckSnapshot(LOut, LDir, 'report.tap');
+  CheckSnapshot(LOut, 'goldens', 'report.tap');
 end;
 
 procedure TestB13JUnitGoldenSnapshot;
 var
   LResults: specialize TArray<TTestRunResult>;
-  LOut, LDir: string;
+  LOut: string;
 begin
   SetLength(LResults, 1);
   LResults[0] := TTestRunResult.Create('golden-junit');
@@ -1944,9 +1941,7 @@ begin
   CheckContains(LOut, 'skip_case');
   CheckContains(LOut, 'expected 1 got 2');
   CheckContains(LOut, 'time="0.000"');
-  LDir := IncludeTrailingPathDelimiter(GetTempDir) +
-    'np-test-golden-junit-' + IntToStr(GetTickCount64);
-  CheckSnapshot(LOut, LDir, 'report.xml');
+  CheckSnapshot(LOut, 'goldens', 'report.xml');
 end;
 
 procedure TestB13TAPFormalCompliance;
