@@ -34,6 +34,7 @@
 | **Q37** | async.tcp/udp Windows/macOS 可移植 | 去 accept4；async.udp TPlatformSockAddr | **done** |
 | **Q38** | Windows smoke 诚实化 | STRICT 收窄 + suite timeout；dial/udp/pool soft | **done** |
 | **Q39** | IOCP ConnectEx pre-bind | ConnectEx 前 wildcard bind + WSAGetLastError | **done** |
+| **Q40** | IOCP datagram | AsyncSendTo/AsyncRecvFrom via WSASendTo/WSARecvFrom | **done** |
 | **—** | MPTCP | 见下文：不做的原因 | **deferred permanently (for now)** |
 | **—** | full native-windows claim | 等 STRICT multi-week 绿 + soft 升 STRICT | **deferred** |
 
@@ -81,6 +82,21 @@ MSDN：`ConnectEx` 要求 socket **已 bind**。Dial 无 LocalAddr 时 Linux `co
 修复：`TIocpReactor.AsyncConnect` 在 ConnectEx 前按目标族 bind `0.0.0.0:0` / `::`；已 bind（LocalAddr）时忽略 `WSAEINVAL`；错误码改用 `WSAGetLastError`。
 
 UDP soft 仍待 IOCP `AsyncSendTo`/`AsyncRecvFrom`（poller 明确未实现）。
+
+### Q40 细节
+
+- `WSASendTo` / `WSARecvFrom` FFI
+- `TIocpReactor.AsyncSendTo` / `AsyncRecvFrom` + poller `pbIocp` 接线
+- 与 epoll 路径同样的回调契约（`AAddrLen` 指针 out for recvfrom）
+- soft 套件仍报告；GHA 绿后再升 STRICT
+
+### 待升 STRICT 条件
+
+| soft 套件 | 阻塞 | 修复 |
+|-----------|------|------|
+| dial / pool | ConnectEx unbound | **Q39** |
+| udp | 无 IOCP datagram | **Q40** |
+| cancel_bridge | 依赖 stream bind + dial | Q39 后应连带改善 |
 
 ## Q13 细节
 
