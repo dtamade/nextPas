@@ -94,24 +94,36 @@ var
   GV7Lock: Int32 = 0;
 
 function UuidV7Monotonic: string;
+var
+  LExpected: Int32;
 begin
-  while AtomicCompareExchange32(GV7Lock, 0, 1) <> 0 do
+  LExpected := 0;
+  while not atomic_compare_exchange_strong(GV7Lock, LExpected, 1, mo_acquire, mo_relaxed) do
+  begin
+    LExpected := 0;
     CpuPause;
+  end;
   try
     Result := GlobalV7Gen.NextString;
   finally
-    AtomicStore32(GV7Lock, 0, moRelease);
+    atomic_store(GV7Lock, 0, mo_release);
   end;
 end;
 
 function UuidV7MonotonicRaw: TUuid;
+var
+  LExpected: Int32;
 begin
-  while AtomicCompareExchange32(GV7Lock, 0, 1) <> 0 do
+  LExpected := 0;
+  while not atomic_compare_exchange_strong(GV7Lock, LExpected, 1, mo_acquire, mo_relaxed) do
+  begin
+    LExpected := 0;
     CpuPause;
+  end;
   try
     Result := GlobalV7Gen.Next;
   finally
-    AtomicStore32(GV7Lock, 0, moRelease);
+    atomic_store(GV7Lock, 0, mo_release);
   end;
 end;
 

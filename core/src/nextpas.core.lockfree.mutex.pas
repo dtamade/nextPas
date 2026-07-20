@@ -51,23 +51,29 @@ begin
 end;
 
 function TConcurrentMutex.TryLock: Boolean;
+var
+  LExpected: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
-  Result := AtomicCompareExchange32(FLocked, 0, 1, moAcquire) = 0;
+  LExpected := 0;
+  Result := atomic_compare_exchange_strong(FLocked, LExpected, 1, mo_acquire, mo_relaxed);
   if Result then
-    AtomicStore64(FOwnerThreadId, Int64(platform_thread_id), moRelaxed);
+    atomic_store_64(FOwnerThreadId, Int64(platform_thread_id), mo_relaxed);
 end;
 
 function TConcurrentMutex.Lock: Boolean;
+var
+  LExpected: Int32;
 begin
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
-    if AtomicCompareExchange32(FLocked, 0, 1, moAcquire) = 0 then
+    LExpected := 0;
+    if atomic_compare_exchange_strong(FLocked, LExpected, 1, mo_acquire, mo_relaxed) then
     begin
-      AtomicStore64(FOwnerThreadId, Int64(platform_thread_id), moRelaxed);
+      atomic_store_64(FOwnerThreadId, Int64(platform_thread_id), mo_relaxed);
       Exit(True);
     end;
     CpuPause;
@@ -78,15 +84,17 @@ function TConcurrentMutex.LockTimeout(const ATimeoutNs: Int64): Boolean;
 var
   LStart: TInstant;
   LRemaining: Int64;
+  LExpected: Int32;
 begin
   LStart := TInstant.Now;
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
-    if AtomicCompareExchange32(FLocked, 0, 1, moAcquire) = 0 then
+    LExpected := 0;
+    if atomic_compare_exchange_strong(FLocked, LExpected, 1, mo_acquire, mo_relaxed) then
     begin
-      AtomicStore64(FOwnerThreadId, Int64(platform_thread_id), moRelaxed);
+      atomic_store_64(FOwnerThreadId, Int64(platform_thread_id), mo_relaxed);
       Exit(True);
     end;
     LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
@@ -98,15 +106,15 @@ end;
 
 procedure TConcurrentMutex.Unlock;
 begin
-  if AtomicLoad64(FOwnerThreadId, moAcquire) <> Int64(platform_thread_id) then
+  if atomic_load_64(FOwnerThreadId, mo_acquire) <> Int64(platform_thread_id) then
     Exit;
-  AtomicStore64(FOwnerThreadId, 0, moRelaxed);
-  AtomicStore32(FLocked, 0, moRelease);
+  atomic_store_64(FOwnerThreadId, 0, mo_relaxed);
+  atomic_store(FLocked, 0, mo_release);
 end;
 
 procedure TConcurrentMutex.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TConcurrentMutex.Destroy;
@@ -117,18 +125,18 @@ end;
 
 function TConcurrentMutex.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TConcurrentMutex.IsLocked: Boolean; inline;
 begin
-  Result := AtomicLoad32(FLocked, moAcquire) <> 0;
+  Result := atomic_load(FLocked, mo_acquire) <> 0;
 end;
 
 function TConcurrentMutex.IsOwnedByCurrentThread: Boolean; inline;
 begin
   Result := IsLocked and
-    (AtomicLoad64(FOwnerThreadId, moAcquire) = Int64(platform_thread_id));
+    (atomic_load_64(FOwnerThreadId, mo_acquire) = Int64(platform_thread_id));
 end;
 
 end.
