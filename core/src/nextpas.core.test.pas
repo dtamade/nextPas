@@ -97,6 +97,10 @@ type
   TTestSuite = nextpas.core.test.runner.TTestSuite;
   TSuiteRunner = nextpas.core.test.runner.TSuiteRunner;
 
+{ v8.25: timeout-worker leak counter (parallel/serial timeout path). }
+function GetTimeoutWorkerLeakCount: Integer;
+procedure ResetTimeoutWorkerLeakCount;
+
 { ── Re-exported functions from test.expect ────────────────────────────────── }
 
 function Expect(const AValue: string): IExpectation;

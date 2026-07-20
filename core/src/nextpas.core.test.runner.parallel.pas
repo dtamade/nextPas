@@ -62,7 +62,21 @@ function ParallelWorkerProc(AArg: Pointer): Pointer; cdecl;
 var
   GTimeoutLeakCount: Integer;
 
+{ v8.25: public accessors for suite-level observability (TimeoutWorkerLeaks). }
+function GetTimeoutWorkerLeakCount: Integer;
+procedure ResetTimeoutWorkerLeakCount;
+
 implementation
+
+function GetTimeoutWorkerLeakCount: Integer;
+begin
+  Result := GTimeoutLeakCount;
+end;
+
+procedure ResetTimeoutWorkerLeakCount;
+begin
+  GTimeoutLeakCount := 0;
+end;
 
 { ═════════════════════════════════════════════════════════════════════════════ }
 { Timeout worker                                                                }

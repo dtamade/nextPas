@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.24**
+**当前版本**: **v8.25**
 **最后更新**: 2026-07-21
 
 ---
@@ -78,6 +78,8 @@
 | B46 v8.23 ComputeKey field source-contract + Soft 矩阵文档 | **done** |
 | B47 v8.24 sink → platform_console_write (no System.Write*) | **done** |
 | B48 v8.24 ITestDiscoveryBackend + FPC VMT default + inject | **done** |
+| B49 v8.25 TimeoutWorkerLeaks + Get/Reset counter | **done** |
+| B50 v8.25 scale low-signal ratio gate (≤55%) | **done** |
 
 ### 暂缓 / 阻塞
 
@@ -112,7 +114,7 @@ make -C core/tests/nextpas.core.test clean test   # 19/19
 
 ```bash
 make -C core/tests/nextpas.core.test/test_scale_report test
-# SCALE_MIN=5500 FAIL_PATH_MIN_RATIO=0.30 (defaults)
+# SCALE_MIN=5500 FAIL_PATH_MIN_RATIO=0.30 LOW_SIGNAL_MAX_RATIO=0.55 (defaults)
 ```
 
 消费者示例：

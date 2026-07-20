@@ -41,6 +41,9 @@ must_have=(
   SoftCheckEqual
   SoftCheckNear
   SoftFailOnly
+  GetTimeoutWorkerLeakCount
+  ResetTimeoutWorkerLeakCount
+  TimeoutWorkerLeaks
 )
 
 echo "=== ComputeKey must hash stop-semantic config fields (v8.22+) ==="
