@@ -9,9 +9,9 @@ program bench_custom_metrics;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.text.format;
 
 {*
  * 计算吞吐量（ops/sec）
@@ -69,10 +69,10 @@ begin
 
   LResult := LResults.GetByName('Memcpy/1KB');
 
-  WriteLn(Format('  %s:', [LResult.Name]));
-  WriteLn(Format('    Time:       %.2f ns/op', [LResult.NsPerOp]));
-  WriteLn(Format('    Throughput: %.2f ops/sec', [Throughput(LResult.NsPerOp)]));
-  WriteLn(Format('    Bandwidth:  %.2f MB/s',
+  WriteLn(TextFormat('  %s:', [LResult.Name]));
+  WriteLn(TextFormat('    Time:       %.2f ns/op', [LResult.NsPerOp]));
+  WriteLn(TextFormat('    Throughput: %.2f ops/sec', [Throughput(LResult.NsPerOp)]));
+  WriteLn(TextFormat('    Bandwidth:  %.2f MB/s',
     [Bandwidth(LResult.NsPerOp, LBytesPerOp)]));
 
   WriteLn;

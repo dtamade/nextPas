@@ -234,6 +234,45 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+procedure TestB42ParallelSoftFailMultiWorkerExact;
+{ Several parallel soft-only tests: each message exact; suite fails. }
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+  I: Integer;
+  LSoftCount: Integer;
+begin
+  LSuite := TTestSuite.Create('par-soft-multi');
+  LSuite.Test('s0', procedure begin SoftFail('p0'); end);
+  LSuite.Test('s1', procedure begin SoftFail('p1'); end);
+  LSuite.Test('s2', procedure begin SoftFail('p2'); end);
+  LSuite.Test('ok', procedure begin CheckTrue(True); end);
+  CheckFalse(LSuite.RunParallelWithResult(nil, LResult));
+  CheckEqual(3, LResult.Failed, 'three soft-only failures');
+  CheckEqual(1, LResult.Passed, 'one hard pass');
+  LSoftCount := 0;
+  for I := 0 to High(LResult.Results) do
+  begin
+    if LResult.Results[I].Name = 's0' then
+    begin
+      CheckEqual('p0', LResult.Results[I].Message);
+      Inc(LSoftCount);
+    end
+    else if LResult.Results[I].Name = 's1' then
+    begin
+      CheckEqual('p1', LResult.Results[I].Message);
+      Inc(LSoftCount);
+    end
+    else if LResult.Results[I].Name = 's2' then
+    begin
+      CheckEqual('p2', LResult.Results[I].Message);
+      Inc(LSoftCount);
+    end;
+  end;
+  CheckEqual(3, LSoftCount, 'all three soft messages found');
+  LSuite := Default(TTestSuite);
+end;
+
 procedure TestB30ParallelSoftFailPathCase(const AC: TTestCase);
 { Data: single soft message. RunParallel: that test fails exact, peer passes. }
 var
@@ -1045,6 +1084,8 @@ begin
   begin
     TestParallelSoftFail;
     PassTest('B23 parallel SoftFail');
+    TestB42ParallelSoftFailMultiWorkerExact;
+    PassTest('B42 parallel SoftFail multi exact');
   end;
 
   WriteLn;

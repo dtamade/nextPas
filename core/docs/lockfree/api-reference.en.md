@@ -672,8 +672,8 @@ type
 
 ## Bag (nextpas.core.lockfree.bag)
 
-> **H3-2 production subset** (CONTRACT §0.3): **direct** `uses nextpas.core.lockfree.bag`; **not** on default T1 facade.  
-> **Progress**: bounded **lock-free MPMC sequence ring** + wait-address path.  
+> **H3-2 production subset** (CONTRACT §0.3): **direct** `uses nextpas.core.lockfree.bag`; **not** on default T1 facade.
+> **Progress**: bounded **lock-free MPMC sequence ring** + wait-address path.
 > **Managed**: rejected. **Lifecycle**: Close → drain/join → Free (teaching: `t2_bag_close_join_free`).
 
 ```pascal
@@ -703,9 +703,9 @@ Duplicates allowed; FIFO. After Close, `TryAdd` → `arClosed`; already-added it
 
 ## MultiMap (nextpas.core.lockfree.multimap)
 
-> **H3-2 production subset** (CONTRACT §0.3): direct `uses`; **not** default facade.  
-> **Progress**: **single map spin lock** — **not** lock-free, **not** sharded.  
-> **Managed** keys/values rejected. Close → stop writers → read/cleanup → Free  
+> **H3-2 production subset** (CONTRACT §0.3): direct `uses`; **not** default facade.
+> **Progress**: **single map spin lock** — **not** lock-free, **not** sharded.
+> **Managed** keys/values rejected. Close → stop writers → read/cleanup → Free
 > (teaching: `t2_multimap_close_join_free`). After Close, `Add` → `mmClosed`; existing keys remain readable/removable.
 
 ```pascal

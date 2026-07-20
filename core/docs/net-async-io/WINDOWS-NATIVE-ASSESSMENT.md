@@ -61,10 +61,12 @@ bash core/scripts/async-windows-smoke-streak.sh
 
 - Temporarily re-add `continue-on-error` only with assessment note + streak reset if FPC/Windows flakes dominate.
 
-## Notes (Q35)
+## Notes (Q35–Q37)
 
 - Host tests that need threads must use `{$IFDEF UNIX}cthreads,{$ENDIF}` — Windows FPC has no `cthreads` unit; unconditional `uses cthreads` fails compile on win64 smoke.
 - Q33 expansion required this fix for dial/resolve/udp/pool/accept/cancel suites.
+- **Q36**: sync `net.tcp`/`net.udp` use `TPlatformSockAddr` only (no POSIX `sockaddr_in` in product path).
+- **Q37**: `async.tcp` no longer calls `accept4` (uses `platform_socket_accept` for sync try); `async.udp` uses `TPlatformSockAddr` like sync udp — unblocks Windows/macOS compile of expanded smoke suites.
 
 ## Full `truth=native-windows` (deferred)
 

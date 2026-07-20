@@ -70,12 +70,8 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi,
-  {$IFDEF NEXTPAS_LINUX}
-  nextpas.core.platform.linux.ffi,
-  {$ENDIF}
   nextpas.core.platform.socket,
+  nextpas.core.platform.socket.base,
   nextpas.core.net.tcp,
   nextpas.core.net.async.cancel;
 
@@ -369,24 +365,25 @@ function TAsyncTcpListener.AsyncAccept(ACallback: TIoCompletion;
   AContext: Pointer): Boolean;
 var
   LFd: PtrInt;
-  LSa: sockaddr;
+  LSa: array[0..127] of Byte;
   LSaLen: Int32;
+  LListen: TPlatformSocket;
+  LClient: TPlatformSocket;
   LRes: Int32;
 begin
   LFd := PtrInt(NativeSocketHandle);
   FillChar(LSa, SizeOf(LSa), 0);
   LSaLen := SizeOf(LSa);
-  { 先尝试同步 accept，解决边沿触发 epoll 的已有连接问题 }
-  LRes := accept4(cint(LFd), @LSa, @LSaLen, 0);
-  if LRes >= 0 then
+  LListen.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt(LFd){$ELSE}Int32(LFd){$ENDIF};
+  { 同步 accept 优先：边沿触发 epoll/kqueue 上已有连接；可移植（非 accept4）。 }
+  LRes := platform_socket_accept(LListen, @LSa, @LSaLen, LClient);
+  if LRes = 0 then
   begin
-    { 已有连接等待，直接触发回调 }
     if Assigned(ACallback) then
-      ACallback(0, LRes, AContext);
+      ACallback(0, Int32(LClient.Value), AContext);
     Result := True;
     Exit;
   end;
-  { 没有等待的连接，使用异步 accept }
   FillChar(LSa, SizeOf(LSa), 0);
   LSaLen := SizeOf(LSa);
   Result := FLoop.AsyncAccept(LFd, @LSa, @LSaLen, 0, ACallback, AContext);
@@ -396,19 +393,21 @@ function TAsyncTcpListener.AsyncAcceptRef(ACallback: TIoCompletionRef;
   AContext: Pointer): Boolean;
 var
   LFd: PtrInt;
-  LSa: sockaddr;
+  LSa: array[0..127] of Byte;
   LSaLen: Int32;
+  LListen: TPlatformSocket;
+  LClient: TPlatformSocket;
   LRes: Int32;
 begin
   LFd := PtrInt(NativeSocketHandle);
   FillChar(LSa, SizeOf(LSa), 0);
   LSaLen := SizeOf(LSa);
-  { 先尝试同步 accept }
-  LRes := accept4(cint(LFd), @LSa, @LSaLen, 0);
-  if LRes >= 0 then
+  LListen.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt(LFd){$ELSE}Int32(LFd){$ENDIF};
+  LRes := platform_socket_accept(LListen, @LSa, @LSaLen, LClient);
+  if LRes = 0 then
   begin
     if Assigned(ACallback) then
-      ACallback(0, LRes, AContext);
+      ACallback(0, Int32(LClient.Value), AContext);
     Result := True;
     Exit;
   end;
@@ -422,18 +421,21 @@ function TAsyncTcpListener.AsyncAcceptTimeout(const ADeadline: TDeadline;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 var
   LFd: PtrInt;
-  LSa: sockaddr;
+  LSa: array[0..127] of Byte;
   LSaLen: Int32;
+  LListen: TPlatformSocket;
+  LClient: TPlatformSocket;
   LRes: Int32;
 begin
   LFd := PtrInt(NativeSocketHandle);
   FillChar(LSa, SizeOf(LSa), 0);
   LSaLen := SizeOf(LSa);
-  LRes := accept4(cint(LFd), @LSa, @LSaLen, 0);
-  if LRes >= 0 then
+  LListen.Value := {$IFDEF NEXTPAS_WINDOWS}PtrUInt(LFd){$ELSE}Int32(LFd){$ENDIF};
+  LRes := platform_socket_accept(LListen, @LSa, @LSaLen, LClient);
+  if LRes = 0 then
   begin
     if Assigned(ACallback) then
-      ACallback(0, LRes, AContext);
+      ACallback(0, Int32(LClient.Value), AContext);
     Result := True;
     Exit;
   end;

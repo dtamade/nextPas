@@ -9,9 +9,10 @@ program bench_performance_tuning;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.text.format,
+  nextpas.core.bench.base;
 
 {*
  * 1. 避免测量偏差：使用 ResetTimer/StopTimer
@@ -100,7 +101,7 @@ begin
     .Add('Sort/Cold', @BenchSortWithSetupTeardown)
     .Run;
 
-  WriteLn(Format('  Cold: %.2f ns/op', [LResults.GetByName('Sort/Cold').NsPerOp]));
+  WriteLn(TextFormat('  Cold: %.2f ns/op', [LResults.GetByName('Sort/Cold').NsPerOp]));
 
   { 热启动：预热后稳定 }
   LResults := TBenchSuite.Create('CacheWarm')
@@ -109,7 +110,7 @@ begin
     .Add('Sort/Warm', @BenchSortWithSetupTeardown)
     .Run;
 
-  WriteLn(Format('  Warm: %.2f ns/op', [LResults.GetByName('Sort/Warm').NsPerOp]));
+  WriteLn(TextFormat('  Warm: %.2f ns/op', [LResults.GetByName('Sort/Warm').NsPerOp]));
   WriteLn;
 end;
 
@@ -140,8 +141,7 @@ begin
       Inc(LSum);
   end;
 
-  if LSum < 0 then
-    WriteLn('Impossible');
+  BenchBlackBoxInt64(LSum);
 end;
 
 procedure BenchBranchMisprediction(const ACtx: IBenchContext);
@@ -156,8 +156,7 @@ begin
       Inc(LSum);
   end;
 
-  if LSum < 0 then
-    WriteLn('Impossible');
+  BenchBlackBoxInt64(LSum);
 end;
 
 {*
@@ -177,8 +176,7 @@ begin
   for I := 0 to High(LData) do
     Inc(LSum, LData[I]);
 
-  if LSum < 0 then
-    WriteLn('Impossible');
+  BenchBlackBoxInt64(LSum);
 end;
 
 procedure BenchRandomAccess(const ACtx: IBenchContext);
@@ -201,8 +199,7 @@ begin
   for I := 0 to High(LIndices) do
     Inc(LSum, LData[LIndices[I]]);
 
-  if LSum < 0 then
-    WriteLn('Impossible');
+  BenchBlackBoxInt64(LSum);
 end;
 
 {*
@@ -239,7 +236,7 @@ begin
     .Add('Branch50', @BenchBranchPrediction)
     .Run;
 
-  WriteLn(Format('  50%% true: %.2f ns/op', [LResults.GetByName('Branch50').NsPerOp]));
+  WriteLn(TextFormat('  50%% true: %.2f ns/op', [LResults.GetByName('Branch50').NsPerOp]));
 
   SetupBranchData(0.01);  { 1% true，容易预测 }
   LResults := TBenchSuite.Create('Branch')
@@ -247,7 +244,7 @@ begin
     .Add('Branch1', @BenchBranchMisprediction)
     .Run;
 
-  WriteLn(Format('  1%% true: %.2f ns/op', [LResults.GetByName('Branch1').NsPerOp]));
+  WriteLn(TextFormat('  1%% true: %.2f ns/op', [LResults.GetByName('Branch1').NsPerOp]));
   WriteLn;
 
   { 4. 内存访问模式 }

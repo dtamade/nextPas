@@ -11,9 +11,9 @@ program bench_quick_start;
 {$modeswitch anonymousfunctions}
 
 uses
-  SysUtils,
   nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.bench.base;
 
 {*
  * 简单基准：测量整数求和性能
@@ -27,8 +27,7 @@ begin
   for I := 1 to 10000 do
     Inc(LSum, I);
   { 防止编译器优化掉计算结果 }
-  if LSum < 0 then
-    WriteLn('Impossible');
+  BenchBlackBoxInt64(LSum);
 end;
 
 {*
@@ -61,7 +60,9 @@ var
 
 procedure BenchAtomicIncrement(const ACtx: IBenchContext);
 begin
-  InterlockedIncrement64(GCounter);
+  { 示例用普通 Inc；真并发请用 nextpas.core.atomic }
+  Inc(GCounter);
+  BenchBlackBoxInt64(GCounter);
 end;
 
 {*
@@ -132,10 +133,11 @@ begin
   BenchLambdaExample;
 
   { 5. 保存结果到文件 }
-  WriteLn('5. Saving Results:');
-  LResults.SaveToJSON('bench-results.json');
-  LResults.SaveToHTML('bench-results.html');
-  WriteLn('   Saved to bench-results.json and bench-results.html');
+  WriteLn('5. Saving Results (ensure build/ exists):');
+  { 生产代码可用 nextpas.core.fs.ForceDirectories('build') }
+  LResults.SaveToJSON('build/bench-results.json');
+  LResults.SaveToHTML('build/bench-results.html');
+  WriteLn('   Saved to build/bench-results.json and build/bench-results.html');
 
   WriteLn;
   WriteLn('=== Quick Start Complete ===');

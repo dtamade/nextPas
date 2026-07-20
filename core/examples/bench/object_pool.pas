@@ -9,9 +9,11 @@ program bench_object_pool;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.bench,
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.text.format,
+  nextpas.core.bench.base,
+  nextpas.core.platform.time;
 
 {*
  * 简单基准函数
@@ -24,8 +26,7 @@ begin
   LSum := 0;
   for I := 1 to 1000 do
     Inc(LSum, I);
-  if LSum < 0 then
-    WriteLn('Impossible');
+  BenchBlackBoxInt64(LSum);
 end;
 
 {*
@@ -40,7 +41,7 @@ begin
 
   { 不使用对象池 }
   WriteLn('  Without Object Pool:');
-  LStart := GetTickCount64;
+  LStart := platform_monotonic_ns;
 
   LResults := TBenchSuite.Create('NoPool')
     .SetMinDuration(TDuration.FromMilliseconds(500))
@@ -48,24 +49,23 @@ begin
     .Add('Benchmark', @BenchIntegerSum)
     .Run;
 
-  LEnd := GetTickCount64;
-  WriteLn(Format('    Time: %d ms', [LEnd - LStart]));
-  WriteLn(Format('    Result: %.2f ns/op', [LResults.GetByName('Benchmark').NsPerOp]));
+  LEnd := platform_monotonic_ns;
+  WriteLn(TextFormat('    Wall: %d ms', [(LEnd - LStart) div 1000000]));
+  WriteLn(TextFormat('    Result: %.2f ns/op', [LResults.GetByName('Benchmark').NsPerOp]));
 
-  { 使用对象池 }
-  WriteLn('  With Object Pool:');
-  LStart := GetTickCount64;
+  { 再次运行（演示可复用 suite 配方；对象池 API 若未暴露则同路径） }
+  WriteLn('  Second run (same recipe):');
+  LStart := platform_monotonic_ns;
 
   LResults := TBenchSuite.Create('WithPool')
     .SetMinDuration(TDuration.FromMilliseconds(500))
     .SetMinSamples(20)
-    .EnableObjectPool
     .Add('Benchmark', @BenchIntegerSum)
     .Run;
 
-  LEnd := GetTickCount64;
-  WriteLn(Format('    Time: %d ms', [LEnd - LStart]));
-  WriteLn(Format('    Result: %.2f ns/op', [LResults.GetByName('Benchmark').NsPerOp]));
+  LEnd := platform_monotonic_ns;
+  WriteLn(TextFormat('    Wall: %d ms', [(LEnd - LStart) div 1000000]));
+  WriteLn(TextFormat('    Result: %.2f ns/op', [LResults.GetByName('Benchmark').NsPerOp]));
 
   WriteLn;
 end;

@@ -36,8 +36,10 @@ begin
 end.
 ```
 
-- **不要** `uses SysUtils` 仅为了 `WriteLn` / 字符串（FPC 宿主编译即可）。
-- 产物目录用 `build/` 或 ignored 路径，避免污染源码树。
+- **禁止** `uses SysUtils` / `Classes` 等 FPC RTL（项目隔离约束）；`WriteLn` 用 System 内建即可。
+- 目录：`nextpas.core.fs.ForceDirectories('build')`；JSON 落到 `build/`。
+- 防优化：`BenchBlackBoxInt64` / `BenchBlackBoxPtr` / `BenchBlackBoxBytes`（见 README Canonical）。
+- 用户控制循环优先 **`AddLoopWithContext`**，不要用无 context 的 `AddLoop` 还指望 `SetBytes`。
 
 ## 2. 命名约定
 
@@ -78,9 +80,9 @@ if LResults.HasRegression(1.10) then Halt(1);
 
 ## 5. 基线与回归
 
-1. 本地：`SaveBaseline(Path)` / `LoadBaseline`  
-2. CI：先跑模块 gate，再对业务 bench 二进制做阈值比较  
-3. 模板：`core/docs/bench/ci-gate.sh`（模块测试 smoke）  
+1. 本地：`SaveBaseline(Path)` / `LoadBaseline`
+2. CI：先跑模块 gate，再对业务 bench 二进制做阈值比较
+3. 模板：`core/docs/bench/ci-gate.sh`（模块测试 smoke）
 
 ## 6. 仓库布局约定
 
@@ -133,7 +135,7 @@ bash core/docs/bench/scripts/run-scorecard-subset.sh --tracks inttohex --summary
 
 ## 9. 不要做的事
 
-- 在 hot path 里 `WriteLn` / 日志  
-- 把 setup 算进计时（用 `ResetTimer` / `StopTimer`）  
-- 依赖未文档化的内部类型  
-- 继续向 `IBenchResults` 要求新「便利方法」（**API 冻结**）——优先组合现有 Filter/Get*  
+- 在 hot path 里 `WriteLn` / 日志
+- 把 setup 算进计时（用 `ResetTimer` / `StopTimer`）
+- 依赖未文档化的内部类型
+- 继续向 `IBenchResults` 要求新「便利方法」（**API 冻结**）——优先组合现有 Filter/Get*

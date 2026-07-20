@@ -256,6 +256,18 @@ function ApplySoftFails(var AStatus: TTestStatus; var AMsg: string): Boolean;
 { True when current test has soft fails but no hard InternalFail. Used so
   FailFast does not stop the suite on soft-only failures (Go t.Error). }
 function SoftFailOnly: Boolean;
+
+{ Nested SoftFail layering (Go t.Run): save/restore parent soft state around
+  nested subtest execution so parent SoftFail is not wiped by SetTestContext. }
+type
+  TSoftFailSnapshot = record
+    SoftFailCount: Integer;
+    SoftFailMsgs: specialize TArray<string>;
+    Failed: Boolean;
+  end;
+
+procedure PushSoftFailState(out ASnap: TSoftFailSnapshot);
+procedure PopSoftFailState(const ASnap: TSoftFailSnapshot);
 function  StrStartsWith(const S, APrefix: string): Boolean;
 function  StrEndsWith(const AStr, ASuffix: string): Boolean;
   { Returns True if AStr ends with ASuffix. Empty suffix always returns True. }
@@ -1028,6 +1040,33 @@ begin
   Result := (GExecState <> nil) and
     (GExecState^.SoftFailCount > 0) and
     (not GExecState^.HardFailed);
+end;
+
+procedure PushSoftFailState(out ASnap: TSoftFailSnapshot);
+begin
+  if GExecState = nil then
+  begin
+    ASnap.SoftFailCount := 0;
+    SetLength(ASnap.SoftFailMsgs, 0);
+    ASnap.Failed := False;
+    Exit;
+  end;
+  ASnap.SoftFailCount := GExecState^.SoftFailCount;
+  ASnap.SoftFailMsgs := Copy(GExecState^.SoftFailMsgs);
+  ASnap.Failed := GExecState^.Failed and (not GExecState^.HardFailed);
+end;
+
+procedure PopSoftFailState(const ASnap: TSoftFailSnapshot);
+begin
+  if GExecState = nil then
+    Exit;
+  GExecState^.SoftFailCount := ASnap.SoftFailCount;
+  GExecState^.SoftFailMsgs := Copy(ASnap.SoftFailMsgs);
+  { Restore soft-failed flag without clearing HardFailed from nested InternalFail. }
+  if ASnap.SoftFailCount > 0 then
+    GExecState^.Failed := True
+  else if not GExecState^.HardFailed then
+    GExecState^.Failed := ASnap.Failed;
 end;
 
 procedure SetTestContext(const ASuiteName, ATestName: string);

@@ -9,6 +9,46 @@
 > - 日常：只响应回归、明确授权的小修（文档/卫生/契约口径可做）
 > - **不**默认排期：EBR `BenchRun`（见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)）、全量 SCORECARD、门面大拆
 > - **值班 / Landing 纪律**（含 **FF 后必 push**）：[LANE-DUTY.md](LANE-DUTY.md)
+> - **B45**：可用性落地 — Canonical API、`BenchBlackBox*`、示例无 SysUtils
+
+## Canonical API（唯一推荐路径）
+
+**默认只用** `TBenchSuite` Fluent Builder：
+
+```pascal
+uses nextpas.core.bench, nextpas.core.time.base;
+
+procedure Hot(const ACtx: IBenchContext);
+var L: Int64; I: Integer;
+begin
+  L := 0;
+  for I := 1 to 1000 do Inc(L, I);
+  BenchBlackBoxInt64(L);  { 防优化；对标 criterion black_box }
+end;
+
+var R: IBenchResults;
+begin
+  R := TBenchSuite.Create('MyMod')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('MyMod/Hot', @Hot)
+    .Run;
+  WriteLn(R.PrintToConsole);  { System.WriteLn；勿 uses SysUtils }
+end.
+```
+
+| 场景 | 用 | 勿用 |
+|------|----|------|
+| 常规基准 | `Add` / `AddWithSetup` / `AddRange` | 裸 `GetTickCount` 循环 |
+| 用户控制 N 次循环且要 bytes/skip | **`AddLoopWithContext`** | 无 context 的 `AddLoop`（无法 SetBytes/Skip） |
+| 并行吞吐 | `AddParallel` | 并行时期望 memtrack（会自动禁用 + WARNING） |
+| 防优化 | `BenchBlackBoxInt64/Ptr/Bytes` | 假 `WriteLn` 副作用 |
+| 目录/文件 | `nextpas.core.fs.ForceDirectories` + `SaveToJSON('build/...')` | `uses SysUtils` |
+
+**Advanced（非默认）**：`TBenchRunner`（便利单测）、`TBenchRun`（原子多线程收集）。新代码默认不要选这两条，除非明确需要。
+
+**错误消息约定**：参数类异常类型为 `EBenchInvalidParam`，消息含 `TBenchSuite.*` / `TBenchResults.*` 前缀，便于 CI 文本匹配（不另加 ErrorCode 枚举，避 API 膨胀）。
 
 ## 消费侧（写模块 bench 的人）
 
@@ -106,7 +146,8 @@ LResults := TBenchSuite.Create('MySuite')
 | `AddWhen(Name, Func, Condition)` | 条件添加 |
 | `AddParallel(Name, Func, Threads)` | 并行基准 |
 | `AddRange(Name, Func, Params)` | 参数化基准（自动生成子基准） |
-| `AddLoop(Name, Func)` | 用户控制循环（见下方限制） |
+| `AddLoop(Name, Func)` | 用户控制循环（**无** IBenchContext；优先 `AddLoopWithContext`） |
+| `AddLoopWithContext(Name, Func)` | 用户控制循环且可 SetBytes/Skip/ResetTimer |
 | `Clear` | 清空所有已注册条目 |
 | `RemoveByName(Name)` | 按名称移除条目 |
 | `SetMinDuration(Duration)` | 最小持续时间 |

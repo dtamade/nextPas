@@ -395,6 +395,52 @@ begin
   end);
 end;
 
+procedure TestB39BenchNotExecutedThroughputFail;
+var
+  LRes: TBenchTestResult;
+begin
+  LRes.Name := 'skip-me';
+  LRes.Executed := False;
+  LRes.OpsPerSec := 1e9;
+  ExpectFail(procedure begin
+    CheckBenchThroughput(LRes, 1.0);
+  end, 'throughput');  { Executed=False → Check fails with default throughput msg }
+end;
+
+procedure TestB39BenchHugeThresholdPass;
+var
+  LRes: TBenchTestResult;
+begin
+  LRes.Name := 'ok';
+  LRes.Executed := True;
+  LRes.NsPerOp := 1.0;
+  CheckBenchPerformance(LRes, 1e12);
+end;
+
+procedure TestB43BenchNotExecutedPerfFail;
+var
+  LRes: TBenchTestResult;
+begin
+  LRes.Name := 'n';
+  LRes.Executed := False;
+  LRes.NsPerOp := 0;
+  ExpectFail(procedure begin
+    CheckBenchPerformance(LRes, 100.0);
+  end, 'performance');
+end;
+
+procedure TestB43BenchThroughputTooHigh;
+var
+  LRes: TBenchTestResult;
+begin
+  LRes.Name := 'slow';
+  LRes.Executed := True;
+  LRes.OpsPerSec := 10.0;
+  ExpectFail(procedure begin
+    CheckBenchThroughput(LRes, 1e9);
+  end, 'throughput');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -442,6 +488,10 @@ begin
   S.Test('B26 negative threshold fail', @TestB26NegativeThresholdAlwaysFail);
   S.Test('B26 throughput zero threshold', @TestB26ThroughputZeroThresholdPass);
   S.Test('B26 performance zero threshold fail', @TestB26PerformanceZeroThresholdFail);
+  S.Test('B39 not executed throughput fail', @TestB39BenchNotExecutedThroughputFail);
+  S.Test('B39 huge threshold pass', @TestB39BenchHugeThresholdPass);
+  S.Test('B43 not executed performance fail', @TestB43BenchNotExecutedPerfFail);
+  S.Test('B43 throughput high threshold fail', @TestB43BenchThroughputTooHigh);
 
   S.Run;
   S.Summary;

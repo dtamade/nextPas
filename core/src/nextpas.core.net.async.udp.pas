@@ -45,28 +45,27 @@ function AsyncUdpBind(const ALoop: TAsyncLoop; const AAddr: string;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.errors,
-  nextpas.core.platform.posix.base,
   nextpas.core.platform.socket,
+  nextpas.core.platform.socket.base,
   nextpas.core.net.udp,
-  nextpas.core.net.async.cancel,
-  SysUtils;
+  nextpas.core.net.async.cancel;
 
 type
   PUdpSendOp = ^TUdpSendOp;
   TUdpSendOp = record
     UserCb: TAsyncUdpSendCallback;
     UserCtx: Pointer;
-    Sa: sockaddr_in;
-    SaLen: Int32;
+    Sa: TPlatformSockAddr;
   end;
 
   PUdpRecvOp = ^TUdpRecvOp;
   TUdpRecvOp = record
     UserCb: TAsyncUdpRecvCallback;
     UserCtx: Pointer;
-    Sa: sockaddr_in;
-    SaLen: socklen_t;
+    Sa: TPlatformSockAddr;
+    SaLen: Int32;
   end;
 
   TAsyncUdpSocket = class(TInterfacedObject, IAsyncUdpSocket)
@@ -133,8 +132,10 @@ begin
   if AResult >= 0 then
   begin
     LBytes := AResult;
-    platform_sockaddr_to_ipv4(LOp^.Sa, LIP, LPort);
-    LFrom.IP := platform_ipv4_to_string(LIP);
+    LOp^.Sa.Len := LOp^.SaLen;
+    platform_sockaddr_ipv4_extract(LOp^.Sa, LIP, LPort);
+    { extract 给网络序；to_string 期望主机序 }
+    LFrom.IP := platform_ipv4_to_string(platform_ntohl(LIP));
     LFrom.Port := LPort;
     LFrom.IsIPv6 := False;
   end;
@@ -190,14 +191,14 @@ begin
   LOp^ := Default(TUdpSendOp);
   LOp^.UserCb := ACallback;
   LOp^.UserCtx := AContext;
-  if platform_sockaddr_from_ipv4(platform_ipv4_parse(AAddr.IP), AAddr.Port,
-    LOp^.Sa, LOp^.SaLen) <> 0 then
+  if nextpas.core.platform.socket.platform_sockaddr_ipv4(AAddr.Port,
+    platform_ipv4_parse(AAddr.IP), LOp^.Sa) <> 0 then
   begin
     Dispose(LOp);
     Exit;
   end;
-  Result := FLoop.AsyncSendTo(Fd, ABuf, ALen, 0, @LOp^.Sa, UInt32(LOp^.SaLen),
-    @UdpSendIoComplete, LOp);
+  Result := FLoop.AsyncSendTo(Fd, ABuf, ALen, 0, @LOp^.Sa.Storage[0],
+    UInt32(LOp^.Sa.Len), @UdpSendIoComplete, LOp);
   if not Result then
     Dispose(LOp);
 end;
@@ -214,9 +215,10 @@ begin
   LOp^ := Default(TUdpRecvOp);
   LOp^.UserCb := ACallback;
   LOp^.UserCtx := AContext;
-  LOp^.SaLen := SizeOf(LOp^.Sa);
-  Result := FLoop.AsyncRecvFrom(Fd, ABuf, ALen, 0, @LOp^.Sa, @LOp^.SaLen,
-    @UdpRecvIoComplete, LOp);
+  LOp^.Sa.Clear;
+  LOp^.SaLen := SizeOf(LOp^.Sa.Storage);
+  Result := FLoop.AsyncRecvFrom(Fd, ABuf, ALen, 0, @LOp^.Sa.Storage[0],
+    @LOp^.SaLen, @UdpRecvIoComplete, LOp);
   if not Result then
     Dispose(LOp);
 end;
@@ -238,14 +240,14 @@ begin
   LOp^ := Default(TUdpSendOp);
   LOp^.UserCb := ACallback;
   LOp^.UserCtx := AContext;
-  if platform_sockaddr_from_ipv4(platform_ipv4_parse(AAddr.IP), AAddr.Port,
-    LOp^.Sa, LOp^.SaLen) <> 0 then
+  if nextpas.core.platform.socket.platform_sockaddr_ipv4(AAddr.Port,
+    platform_ipv4_parse(AAddr.IP), LOp^.Sa) <> 0 then
   begin
     Dispose(LOp);
     Exit;
   end;
-  Result := FLoop.AsyncSendToTimeout(Fd, ABuf, ALen, 0, @LOp^.Sa, UInt32(LOp^.SaLen),
-    ADeadline, @UdpSendIoComplete, LOp);
+  Result := FLoop.AsyncSendToTimeout(Fd, ABuf, ALen, 0, @LOp^.Sa.Storage[0],
+    UInt32(LOp^.Sa.Len), ADeadline, @UdpSendIoComplete, LOp);
   if not Result then
     Dispose(LOp);
 end;
@@ -265,9 +267,10 @@ begin
   LOp^ := Default(TUdpRecvOp);
   LOp^.UserCb := ACallback;
   LOp^.UserCtx := AContext;
-  LOp^.SaLen := SizeOf(LOp^.Sa);
-  Result := FLoop.AsyncRecvFromTimeout(Fd, ABuf, ALen, 0, @LOp^.Sa, @LOp^.SaLen,
-    ADeadline, @UdpRecvIoComplete, LOp);
+  LOp^.Sa.Clear;
+  LOp^.SaLen := SizeOf(LOp^.Sa.Storage);
+  Result := FLoop.AsyncRecvFromTimeout(Fd, ABuf, ALen, 0, @LOp^.Sa.Storage[0],
+    @LOp^.SaLen, ADeadline, @UdpRecvIoComplete, LOp);
   if not Result then
     Dispose(LOp);
 end;
