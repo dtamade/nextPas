@@ -20,7 +20,7 @@ ENVELOPE_EXTRA ?= samples=1 (single run; raise N for claims)
 
 # Keep historical entrypoints substring for test_lockfree source-contract; Q5 adds matched/envelope.
 .PHONY: build run build-rust-compare run-rust-compare build-go-compare run-go-compare build-cpp-compare run-cpp-compare compare clean
-.PHONY: run-matched compare-matched envelope envelope-matched
+.PHONY: run-matched compare-matched compare-matched-formal envelope envelope-matched
 
 build:
 	@mkdir -p $(BUILD_DIR)
@@ -94,6 +94,11 @@ compare-matched: run-matched
 		"measured=OPS=1000000" \
 		"stats=$(ENVELOPE_EXTRA)"
 	@$(MAKE) run-rust-compare
+
+# Formal: SAMPLES>=3, aggregate mean/median/min/max into bench-results/.
+SAMPLES ?= 3
+compare-matched-formal:
+	@SAMPLES=$(SAMPLES) bash $(CORE_ROOT)/docs/lockfree/scripts/run-q5-matched-formal.sh
 
 clean:
 	rm -rf $(BUILD_DIR)

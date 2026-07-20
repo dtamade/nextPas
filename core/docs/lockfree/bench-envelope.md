@@ -115,6 +115,18 @@ make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched
 - Absolute Mops require this envelope printed **before** numbers; `stats: samples=1` is not a marketing claim — re-run N≥3 for any published figure.
 - Soft-skip if `go` / `rustc` missing.
 
+### Formal run (samples ≥ 3)
+
+```bash
+export PATH="/opt/fpcupdeluxe/fpc/bin/x86_64-linux:$PATH"
+SAMPLES=3 make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare-matched-formal
+# or:
+SAMPLES=3 core/docs/lockfree/scripts/run-q5-matched-formal.sh
+```
+
+Writes `core/docs/lockfree/bench-results/YYYY-MM-DD-<host>-q5-formal.md` with mean/median/min/max.
+**Publishable absolute Mops require samples≥3** and this envelope; single-run files are exploratory only.
+
 Optional: keep a dated paste under `bench-results/` as historical attachment (not README marketing).
 
 ---
