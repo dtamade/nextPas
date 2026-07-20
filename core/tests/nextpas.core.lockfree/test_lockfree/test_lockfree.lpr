@@ -7677,7 +7677,7 @@ begin
     'Rust comparison source platform line must use std::env::consts::OS');
   CheckContains(LRustCompareSource, 'std::env::consts::ARCH',
     'Rust comparison source platform line must use std::env::consts::ARCH');
-  CheckContains(LRustCompareSource, 'Compiler: rustc -C opt-level=3',
+  CheckContains(LRustCompareSource, 'Compiler flags: rustc -C opt-level=3',
     'Rust comparison source must print the compiler-flags evidence field');
   CheckContains(LRustCompareSource, 'Input: OPS={}',
     'Rust comparison source must print the input-size evidence field');
