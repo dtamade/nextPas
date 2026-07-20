@@ -6606,6 +6606,86 @@ begin
     'atomic_notify_one should succeed on supported platforms');
 end;
 
+const
+  AtomicNotifyOneWaiterCount = 4;
+
+procedure TestAtomicWaitNotifyOneMultiWaiter;
+{ Multiple waiters + sequential notify_one until all observe store (predicate loop). }
+var
+  LValue: Int32;
+  LDone: Int32;
+  LStarted: Int32;
+  LThreads: array[0..AtomicNotifyOneWaiterCount - 1] of TThread;
+  LI: Integer;
+  LSpin: Integer;
+  LWakes: Integer;
+begin
+  LValue := 0;
+  LDone := 0;
+  LStarted := 0;
+
+  for LI := 0 to AtomicNotifyOneWaiterCount - 1 do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+      var
+        LWaitRet: Int32;
+      begin
+        atomic_fetch_add(LStarted, 1, mo_seq_cst);
+        repeat
+          if atomic_load(LValue, mo_seq_cst) <> 0 then
+          begin
+            atomic_fetch_add(LDone, 1, mo_seq_cst);
+            Exit;
+          end;
+          LWaitRet := atomic_wait(LValue, 0, 1000000000);
+          if (LWaitRet <> 0) and (LWaitRet <> PLATFORM_ERR_AGAIN) and
+            (LWaitRet <> PLATFORM_ERR_TIMEOUT) then
+          begin
+            atomic_fetch_add(LDone, 1, mo_seq_cst);
+            Exit;
+          end;
+        until False;
+      end);
+    LThreads[LI].FreeOnTerminate := False;
+  end;
+
+  for LI := 0 to AtomicNotifyOneWaiterCount - 1 do
+    LThreads[LI].Start;
+
+  for LSpin := 1 to 1000 do
+  begin
+    if atomic_load(LStarted, mo_seq_cst) = AtomicNotifyOneWaiterCount then
+      Break;
+    SleepMs(1);
+  end;
+  CheckEqual(Int64(AtomicNotifyOneWaiterCount),
+    Int64(atomic_load(LStarted, mo_seq_cst)),
+    'all notify_one waiters must start');
+
+  atomic_store(LValue, 1, mo_seq_cst);
+  LWakes := 0;
+  for LI := 1 to AtomicNotifyOneWaiterCount * 4 do
+  begin
+    if atomic_load(LDone, mo_seq_cst) = AtomicNotifyOneWaiterCount then
+      Break;
+    CheckEqual(Int64(0), Int64(atomic_notify_one(LValue)),
+      'atomic_notify_one multi-waiter wake must succeed');
+    Inc(LWakes);
+    SleepMs(1);
+  end;
+
+  for LI := 0 to AtomicNotifyOneWaiterCount - 1 do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+
+  CheckEqual(Int64(AtomicNotifyOneWaiterCount),
+    Int64(atomic_load(LDone, mo_seq_cst)),
+    'all waiters must exit after store + notify_one sequence');
+  Check(LWakes >= 1, 'at least one notify_one must be issued');
+end;
+
 function AtomicWaitInt64Until(var AValue: Int64; const ADesired: Int64;
   const AWaitTimeoutNs: Int64; const AMaxWaits: Integer): Int32;
 var
@@ -7147,6 +7227,7 @@ begin
   T.Test('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
   T.Test('atomic wait/notify API', @TestAtomicWaitNotifySurfaceAndBehavior);
   T.Test('atomic wait/notify 64-bit API', @TestAtomicWaitNotify64SurfaceAndBehavior);
+  T.Test('atomic wait/notify_one multi-waiter', @TestAtomicWaitNotifyOneMultiWaiter);
   T.Test('atomic refcount contract', @TestAtomicRefCountContract);
   T.Test('atomic refcount concurrent borrow contract', @TestAtomicRefCountConcurrentBorrowContract);
   T.Test('atomic refcount terminal race contract', @TestAtomicRefCountTerminalRaceContract);

@@ -2208,6 +2208,109 @@ begin
   CheckWaitHelperSkipsStaleEpoch(True, 'space wait helper');
 end;
 
+procedure TestLockFreeWaitNilSafe;
+var
+  LEpoch: Int32;
+  LWaiters: Int32;
+begin
+  { Must not crash on nil counters (CONTRACT: defensive early exit). }
+  LockFreeWaitData(nil, nil, 0, 1000000);
+  LockFreeWaitSpace(nil, nil, 0, 1000000);
+  LockFreeNotifyData(nil, nil);
+  LockFreeNotifySpace(nil, nil);
+  LockFreeWakeAll(nil);
+  LEpoch := 0;
+  LWaiters := 0;
+  LockFreeWaitData(@LEpoch, nil, 0, 1000000);
+  LockFreeWaitData(nil, @LWaiters, 0, 1000000);
+  CheckEqual(Int64(0), Int64(LWaiters), 'nil epoch path must not register waiters');
+end;
+
+procedure TestLockFreeWaitTimeoutUnregistersWaiter;
+const
+  WaitTimeoutNs = Int64(5000000); { 5ms }
+var
+  LEpoch: Int32;
+  LWaiters: Int32;
+  LElapsedMs: QWord;
+begin
+  LEpoch := 0;
+  LWaiters := 0;
+  LElapsedMs := TestMonotonicMs;
+  LockFreeWaitData(@LEpoch, @LWaiters, 0, WaitTimeoutNs);
+  LElapsedMs := TestMonotonicMs - LElapsedMs;
+  CheckEqual(Int64(0), Int64(LWaiters),
+    'timeout/return must leave waiter count at 0 (finally unregister)');
+  Check(LElapsedMs < 2000,
+    'bounded wait must not hang for seconds when epoch is stable');
+end;
+
+const
+  LF_WAIT_NOTIFY_WAITERS = 4;
+
+var
+  GLfWaitEpoch: Int32;
+  GLfWaitWaiters: Int32;
+  GLfWaitDone: Int32;
+  GLfWaitStart: Int32;
+
+function LfWaitNotifyWaiter(AArg: Pointer): Pointer; cdecl;
+var
+  LExpected: Int32;
+begin
+  Result := nil;
+  while atomic_load(GLfWaitStart, mo_acquire) = 0 do
+    CpuPause;
+  LExpected := atomic_load(GLfWaitEpoch, mo_acquire);
+  LockFreeWaitData(@GLfWaitEpoch, @GLfWaitWaiters, LExpected, Int64(2000000000));
+  atomic_fetch_add(GLfWaitDone, 1, mo_release);
+end;
+
+procedure TestLockFreeWaitNotifyUnblocksWaiters;
+var
+  LHandles: array[0..LF_WAIT_NOTIFY_WAITERS - 1] of TPlatformThreadHandle;
+  LI: Integer;
+  LCount: Integer;
+  LRet: Pointer;
+  LSpin: Integer;
+begin
+  atomic_store(GLfWaitEpoch, 0, mo_release);
+  atomic_store(GLfWaitWaiters, 0, mo_release);
+  atomic_store(GLfWaitDone, 0, mo_release);
+  atomic_store(GLfWaitStart, 0, mo_release);
+  LCount := 0;
+  try
+    for LI := 0 to LF_WAIT_NOTIFY_WAITERS - 1 do
+    begin
+      StartThread(LHandles[LI], @LfWaitNotifyWaiter, nil, 'lf wait notify waiter');
+      Inc(LCount);
+    end;
+    atomic_store(GLfWaitStart, 1, mo_release);
+    { Give waiters time to enter spin/block path. }
+    for LSpin := 1 to 200 do
+    begin
+      if atomic_load(GLfWaitWaiters, mo_acquire) > 0 then
+        Break;
+      platform_thread_sleep_ns(1000000);
+    end;
+    LockFreeNotifyData(@GLfWaitEpoch, @GLfWaitWaiters);
+    for LI := 0 to LCount - 1 do
+      JoinThread(LHandles[LI], LRet, 'lf wait notify join');
+    LCount := 0;
+    CheckEqual(Int64(LF_WAIT_NOTIFY_WAITERS),
+      Int64(atomic_load(GLfWaitDone, mo_acquire)),
+      'all waiters must exit after LockFreeNotifyData');
+    CheckEqual(Int64(0), Int64(atomic_load(GLfWaitWaiters, mo_acquire)),
+      'waiter counter must return to 0 after all leave');
+    Check(atomic_load(GLfWaitEpoch, mo_acquire) <> 0,
+      'notify must advance epoch');
+  finally
+    LockFreeWakeAll(@GLfWaitEpoch);
+    for LI := 0 to LCount - 1 do
+      JoinThread(LHandles[LI], LRet, 'lf wait notify cleanup');
+  end;
+end;
+
 var
   GMpscWaitQ: TIntMpsc;
 
@@ -7671,6 +7774,9 @@ begin
   T.Test('MPMC batch dequeue AMaxCount cap', @TestMpmcBatchDequeueRespectsMaxCount);
   T.Test('MPMC capacity/empty/full', @TestMpmcCapacity);
   T.Test('LockFree wait stale epoch guard', @TestLockFreeWaitHelperStaleEpochGuard);
+  T.Test('LockFree wait nil-safe', @TestLockFreeWaitNilSafe);
+  T.Test('LockFree wait timeout unregisters waiter', @TestLockFreeWaitTimeoutUnregistersWaiter);
+  T.Test('LockFree wait notify unblocks waiters', @TestLockFreeWaitNotifyUnblocksWaiters);
   T.Test('MPSC dequeue wait', @TestMpscDequeueWait);
   T.Test('MPSC timeout wakes on publish', @TestMpscDequeueTimeoutWakesOnPublish);
   T.Test('MPSC dequeue timeout', @TestMpscDequeueTimeout);
