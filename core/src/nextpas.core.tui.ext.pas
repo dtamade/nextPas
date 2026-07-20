@@ -33,6 +33,8 @@ type
   TApp = nextpas.core.tui.app.TApp;
   TTuiFrame = nextpas.core.tui.TFrame;
   TFrame = nextpas.core.tui.TFrame;
+  TTuiEnterFailure = nextpas.core.tui.TTuiEnterFailure;
+  TTuiEnterResult = nextpas.core.tui.TTuiEnterResult;
   TRect = nextpas.core.tui.TRect;
   TBuffer = nextpas.core.tui.TBuffer;
   TEvent = nextpas.core.tui.TEvent;

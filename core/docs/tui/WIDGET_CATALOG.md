@@ -75,8 +75,18 @@ the correctness-first default surface small. `nextpas.core.tui.ext` owns stable 
 ## Usage Notes
 
 - Use `nextpas.core.tui` when you want the correctness-first default widget set with no app/runtime or protocol spillover.
-- Use `nextpas.core.tui.ext` when you need stable runtime composition helpers such as `TApp`, `TPanel`, `TScrollView`, `TModal`, `TDialog`, `TSplitPane`, `TSelect`, or theme presets.
-- Use `nextpas.core.tui.full` when you need migration compatibility or the broader advanced widget catalog.
+- Use `nextpas.core.tui.ext` when you need stable runtime composition helpers such as `TApp`, `TPanel`, `TScrollView`, `TModal`, `TDialog`, `TSplitPane`, `TSelect`, or theme presets. **Default for new apps.**
+- Use `nextpas.core.tui.full` when you need migration compatibility or the broader advanced widget catalog (**migration-only**).
+
+## Factory 约定（Phase U1）
+
+| 模式 | 何时用 | 例 |
+|------|--------|-----|
+| `TXxx.New` | 默认工厂 | `TInput.New` |
+| `TXxx.New(...)` | 必填初值 | `TDialog.New(title, body)` |
+| `FromStrings` / `FromX` | 从简单数据构造 | `TListWidget.FromStrings` |
+| 方向/形态工厂 | 无参无法表达形态 | `TSplitPane.Horizontal` |
+| 语义预设 | 常用配置 | `TBlock.Bordered` |
 
 ## Usage Pattern
 

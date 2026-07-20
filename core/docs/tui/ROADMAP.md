@@ -53,7 +53,7 @@
 | # | 出口标准 | 当前 |
 |---|----------|------|
 | D1 | 四层 facade 与 TIER_REGISTRY 一致，core 无 app/协议泄漏 | **已满足** |
-| D2 | Scorecard SC1–SC29 全绿 + C7/C8/C9 全绿（focused 0 leak） | **已满足**（E3 后 SC29） |
+| D2 | Scorecard SC1–SC30 全绿 + C7–C10 全绿（focused 0 leak） | **已满足**（U1 后 SC30/C10） |
 | D3 | 全部 widget 有专属 suite（基础 ≥16，其余 ≥12） | **已满足**（40/40） |
 | D4 | 7 demos 教学路径契约（app-first） | **已满足** |
 | D5 | `ext` 覆盖稳定应用最小集：TApp + 布局 + scroll/modal 级视口 | **已满足**（B1 Landed） |
@@ -189,7 +189,8 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
 |------|------|------|
 | E1 | `RELEASE=1` scorecard + `bench_go_rust compare` 刷新 SCORECARD/PARITY；C9 wine 存在性门禁 | **Done** |
 | E2 | DECSET 2026 Synchronized Update（EndFrame 包裹 + SC28 + opt-out） | **Done** |
-| E3 | DECAWM（DECSET 7）EnterAlternate 关 wrap / Leave 恢复 + SC29 | **Done**（本批） |
+| E3 | DECAWM（DECSET 7）EnterAlternate 关 wrap / Leave 恢复 + SC29 | **Done** |
+| U1 | 可用性闭环：Enter 诊断 + Stateful 约定 + C10 + 工厂/别名文档 + SC30 | **Done**（本批） |
 | E-ongoing | 重大变更后刷新快照；**不对 ns 设硬阈值**；禁止假胜营销 | 持续 |
 
 ---
@@ -208,6 +209,8 @@ Truecolor DA / 图像协议：仅 experimental 内演进。
 [DONE] Phase E2 DECSET 2026 Synchronized Update（SC28）
    ↓
 [DONE] Phase E3 DECAWM wrap-off（SC29）
+   ↓
+[DONE] Phase U1 可用性闭环（Enter 诊断 + C10 + SC30）
    ↓
 [NOW] Phase F Maintenance Idle
    │

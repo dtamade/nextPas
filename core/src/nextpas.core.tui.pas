@@ -110,6 +110,8 @@ type
   TTuiTerminal = nextpas.core.tui.terminal.TTerminal;
   TTuiFrame = nextpas.core.tui.terminal.TFrame;
   TTuiTerminalOptions = nextpas.core.tui.terminal.TTerminalOptions;
+  TTuiEnterFailure = nextpas.core.tui.terminal.TTuiEnterFailure;
+  TTuiEnterResult = nextpas.core.tui.terminal.TTuiEnterResult;
   TTerminal = nextpas.core.tui.terminal.TTerminal;
   TFrame = nextpas.core.tui.terminal.TFrame;
   TTerminalOptions = nextpas.core.tui.terminal.TTerminalOptions;

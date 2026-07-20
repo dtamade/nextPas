@@ -136,6 +136,8 @@ The current full-only advanced widget families include:
 
 `full` is for migration and broad compatibility. It is not the target shape of the default public API.
 
+**新代码默认禁止 `full`**（Phase U1 / C10）：应用入口用 `ext`；仅迁移或教学高级 catalog（如 `demo_widgets`）才 `full`。
+
 ## Promotion gate (full → ext/core)
 
 Before promoting a full-only widget family:

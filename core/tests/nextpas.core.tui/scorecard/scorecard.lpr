@@ -32,6 +32,7 @@ program scorecard;
  *   SC27 FrameBudget not over after BeginFrame
  *   SC28 Synchronized update DECSET 2026 (backend + EndFrame wrap)
  *   SC29 DECAWM auto-wrap off on EnterAlternate / on on Leave
+ *   SC30 EnterTui LastEnterResult reason tokens
  *}
 
 {$I nextpas.core.settings.inc}
@@ -1120,6 +1121,40 @@ begin
   AddRow('SC29b', 'wrap_on_leave', 0, 1, LOk, '7h then 1049l');
 end;
 
+procedure RunSC30;
+var
+  LTerm: TTerminal;
+  LRes: TTuiEnterResult;
+  LOk: Boolean;
+begin
+  WriteLn('SC30 EnterTui LastEnterResult reason tokens ...');
+  LOk := True;
+  LTerm := TTerminal.Create;
+  try
+    if not LTerm.LastEnterResult.Ok then
+      LOk := False;
+    LTerm.EnterTui;
+    LRes := LTerm.LastEnterResult;
+    if LRes.Ok then
+    begin
+      if LRes.Reason <> '' then
+        LOk := False;
+    end
+    else
+    begin
+      if (LRes.Reason <> 'not-a-terminal') and
+         (LRes.Reason <> 'set-raw-failed') and
+         (LRes.Reason <> 'session-setup-failed') then
+        LOk := False;
+      if LRes.Reason = '' then
+        LOk := False;
+    end;
+  finally
+    LTerm.Free;
+  end;
+  AddRow('SC30a', 'enter_reason', 0, 1, LOk, 'LastEnterResult token');
+end;
+
 procedure PrintTable;
 var
   I: Integer;
@@ -1152,7 +1187,7 @@ begin
   SetLength(GRows, 72);
   GRowCount := 0;
   GFailed := 0;
-  WriteLn('=== nextpas.core.tui scorecard SC1-SC29 ===');
+  WriteLn('=== nextpas.core.tui scorecard SC1-SC30 ===');
   RunSC1;
   RunSC2;
   RunSC3;
@@ -1182,6 +1217,7 @@ begin
   RunSC27;
   RunSC28;
   RunSC29;
+  RunSC30;
   PrintTable;
   if GFailed > 0 then
     Halt(1);
