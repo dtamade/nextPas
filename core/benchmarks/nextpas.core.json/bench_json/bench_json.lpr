@@ -4,7 +4,9 @@ uses
   SysUtils,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
-  nextpas.core.json, nextpas.core.json.parser, nextpas.core.json.serializer;
+  nextpas.core.text.view,
+  nextpas.core.text.conv,
+  nextpas.core.json, nextpas.core.json.value;
 const
   SMALL_JSON = '{"name":"test","value":42,"items":[1,2,3,4,5]}';
 var
@@ -13,56 +15,95 @@ var
   GLargeDoc: IJsonDocument;
   GCounter: UInt64;
 function BuildLargeJson: string;
-var LBuf: string; LI, LCap, LLen: Integer;
+var
+  LBuf: string;
+  LI, LCap, LLen: Integer;
+  LPiece: string;
 begin
-  LCap := 0; LLen := 0; LBuf := '';
-  for LI := 1 to 1000 do begin
-    if LLen + 60 > LCap then begin if LCap = 0 then LCap := 8192 else LCap := LCap * 2; SetLength(LBuf, LCap); end;
-    LLen := LLen + FormatBuf(LBuf[LLen + 1], '{"key":"item' + IntToStr(LI) + '","val":' + IntToStr(LI) + '},', []);
+  LCap := 0;
+  LLen := 0;
+  LBuf := '';
+  for LI := 1 to 1000 do
+  begin
+    LPiece := '{"key":"item' + IntToStr(LI) + '","val":' + IntToStr(LI) + '},';
+    if LLen + Length(LPiece) > LCap then
+    begin
+      if LCap = 0 then
+        LCap := 8192
+      else
+        LCap := LCap * 2;
+      while LCap < LLen + Length(LPiece) do
+        LCap := LCap * 2;
+      SetLength(LBuf, LCap);
+    end;
+    Move(LPiece[1], LBuf[LLen + 1], Length(LPiece));
+    Inc(LLen, Length(LPiece));
   end;
   SetLength(LBuf, LLen);
+  { drop trailing comma if present }
+  if (LLen > 0) and (LBuf[LLen] = ',') then
+    SetLength(LBuf, LLen - 1);
   Result := '{"items":[' + LBuf + ']}';
 end;
 procedure BenchParseSmall(const ACtx: IBenchContext);
-var LDoc: IJsonDocument; LName: string;
+var
+  LDoc: IJsonDocument;
+  LName: TStringView;
 begin
-  LDoc := TJsonParser.Parse(SMALL_JSON);
-  LName := LDoc.Root.AsObject.GetString('name');
-  GCounter := GCounter xor UInt64(Length(LName));
+  LDoc := JsonParse(SMALL_JSON);
+  LName := LDoc.Root.ObjectGet('name').AsStr;
+  GCounter := GCounter xor UInt64(LName.Len);
 end;
 procedure BenchParseLarge(const ACtx: IBenchContext);
-var LDoc: IJsonDocument;
+var
+  LDoc: IJsonDocument;
 begin
-  LDoc := TJsonParser.Parse(GLargeJson);
-  GCounter := GCounter xor UInt64(LDoc.Root.AsObject.Count);
+  LDoc := JsonParse(GLargeJson);
+  GCounter := GCounter xor UInt64(LDoc.Root.ObjectGet('items').ArrayLen);
 end;
 procedure BenchStringifySmall(const ACtx: IBenchContext);
-var LStr: string;
-begin LStr := GSmallDoc.Stringify; GCounter := GCounter xor UInt64(Length(LStr)); end;
-procedure BenchStringifyLarge(const ACtx: IBenchContext);
-var LStr: string;
-begin LStr := GLargeDoc.Stringify; GCounter := GCounter xor UInt64(Length(LStr)); end;
-procedure BenchAccessSmall(const ACtx: IBenchContext);
-var LVal: Integer; LLen: Integer;
+var
+  LStr: string;
 begin
-  LVal := GSmallDoc.Root.AsObject.GetInteger('value');
-  LLen := Length(GSmallDoc.Root.AsObject.GetArray('items'));
+  LStr := GSmallDoc.Stringify;
+  GCounter := GCounter xor UInt64(Length(LStr));
+end;
+procedure BenchStringifyLarge(const ACtx: IBenchContext);
+var
+  LStr: string;
+begin
+  LStr := GLargeDoc.Stringify;
+  GCounter := GCounter xor UInt64(Length(LStr));
+end;
+procedure BenchAccessSmall(const ACtx: IBenchContext);
+var
+  LVal: Int64;
+  LLen: UInt32;
+begin
+  LVal := GSmallDoc.Root.ObjectGet('value').AsInt;
+  LLen := GSmallDoc.Root.ObjectGet('items').ArrayLen;
   GCounter := GCounter xor UInt64(LVal) xor UInt64(LLen);
 end;
 procedure BenchAccessLarge(const ACtx: IBenchContext);
-var LObj: IJsonObject; LCount, LI, LVal: Integer;
+var
+  LItems: TJsonValue;
+  LCount, LI: UInt32;
+  LVal: Int64;
 begin
-  LObj := GLargeDoc.Root.AsObject; LCount := LObj.Count;
-  for LI := 0 to LCount - 1 do begin
-    LVal := LObj.GetPair(LI).Value.AsInteger;
+  LItems := GLargeDoc.Root.ObjectGet('items');
+  LCount := LItems.ArrayLen;
+  for LI := 0 to LCount - 1 do
+  begin
+    LVal := LItems.ArrayGet(LI).ObjectGet('val').AsInt;
     GCounter := GCounter xor UInt64(LVal);
   end;
 end;
-var LResults: IBenchResults;
+var
+  LResults: IBenchResults;
 begin
   GLargeJson := BuildLargeJson;
-  GSmallDoc := TJsonParser.Parse(SMALL_JSON);
-  GLargeDoc := TJsonParser.Parse(GLargeJson);
+  GSmallDoc := JsonParse(SMALL_JSON);
+  GLargeDoc := JsonParse(GLargeJson);
   GCounter := 0;
   LResults := TBenchSuite.Create('json')
     .SetQuiet(True)

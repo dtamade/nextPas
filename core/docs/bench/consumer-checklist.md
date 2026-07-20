@@ -3,7 +3,8 @@
 对照 [consumer-guide.md](consumer-guide.md)。**默认只记录**；模块 `.lpr` 大改归各模块 lane。
 
 抽检日期：2026-07-20 · 抽检人：bench lane  
-C3 落地：2026-07-20（Quiet + 50ms/5 samples + SaveToJSON）
+C3 落地：2026-07-20（Quiet + 50ms/5 samples + SaveToJSON）  
+B32：text/json/async 对齐当前模块 API，checklist 8 模块均可编跑
 
 ## 检查项
 
@@ -21,16 +22,16 @@ C3 落地：2026-07-20（Quiet + 50ms/5 samples + SaveToJSON）
 |------------|----|----|----|----|----|------|
 | `nextpas.core.hash/bench_hash` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-hash.json` |
 | `nextpas.core.collections/bench_vec` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-vec.json` |
-| `nextpas.core.json/bench_json` | ✅ | ✅ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-json.json` |
+| `nextpas.core.json/bench_json` | ✅ | ✅ | ✅ | ✅ | ✅ | `JsonParse` 门面；Quiet+50ms/5；`build/bench-json.json` |
 | `nextpas.core.fs/bench_fs` | ✅ | ✅ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-fs.json` |
 | `nextpas.core.encoding/bench_encoding` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-encoding.json` |
-| `nextpas.core.async/bench_async` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-async.json` |
+| `nextpas.core.async/bench_async` | ✅ | ⚠️ | ✅ | ✅ | ✅ | `TTimerHeap.Close`；Quiet+50ms/5；`build/bench-async.json` |
 | `nextpas.core.toml/bench_toml_parse` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-toml-parse.json` |
-| `nextpas.core.text/bench_text` | ✅ | ⚠️ | ✅ | ✅ | ✅ | Quiet+50ms/5；`build/bench-text.json` |
+| `nextpas.core.text/bench_text` | ✅ | ⚠️ | ✅ | ✅ | ✅ | `JsonEscape`（非已删 EscapeHtml）；Quiet+50ms/5；`build/bench-text.json` |
 
 **图例**：✅ 符合 · ⚠️ 部分符合 / 可改进 · ❌ 不符合
 
-## 汇总（2026-07-20 · C3 落地后）
+## 汇总（2026-07-20 · C3 + B32）
 
 | 模式 | 观察 |
 |------|------|
@@ -38,6 +39,7 @@ C3 落地：2026-07-20（Quiet + 50ms/5 samples + SaveToJSON）
 | C2 | json/fs 较好；async/text/toml/encoding 等命名仍偏扁平（后续可选） |
 | C3 | **checklist 8 模块已落地** Quiet + 50ms MinDuration + 5 MinSamples |
 | C4–C5 | 控制台 + `build/bench-*.json`；无源码树污染 |
+| 可编跑 | B32 后 8/8 均可 `make -C … run`（text/json/async API 已对齐） |
 
 ## 建议（其余模块 / C2）
 
