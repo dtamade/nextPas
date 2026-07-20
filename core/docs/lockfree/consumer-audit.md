@@ -1,10 +1,10 @@
 # Atomic & Lockfree Consumer Audit (R7 + H2-6 + H3)
 
-> **日期**: 2026-07-19
+> **日期**: 2026-07-20（legacy 计数刷新；uses 审计骨架仍为 2026-07-19）
 > **范围**: `core/` 内 `uses nextpas.core.lockfree*` / `uses nextpas.core.atomic*`
 > **方法**: ripgrep 扫描 `core/src/**/*.pas` 的 uses 子句；抽样查看 Close/Destroy 与 legacy CAS 调用形态
-> **主线**: R7 完成；H2-6 最小真实消费者；H3-1 async MPSC；H3-3 consumer gate；**H3-5 thread worksteal → T1 deque**
-> **状态**: **R7 DONE** + **H2-6** + **H3-1/H3-3** + **H3-5 thread consumer**
+> **主线**: R7 完成；H2-6 最小真实消费者；H3-1 async MPSC；H3-3 consumer gate；**H3-5 thread worksteal → T1 deque**；Maintenance preferred residual 0
+> **状态**: **R7 DONE** + **H2-6** + **H3-1/H3-3** + **H3-5 thread consumer** + **preferred-path M6 nail**
 
 ---
 
@@ -15,7 +15,7 @@
 | **lockfree 跨模块生产消费者** | **H3-1**：`async.loop` → `lockfree.mpsc`；**H3-5**：`thread.pool.worksteal` → `lockfree.deque`（unmanaged 槽间接层） |
 | **atomic 跨模块生产消费者** | **有**。约 20+ 个 L0–L2 单元直接依赖 `nextpas.core.atomic`（见 §3） |
 | **Close → join → Free 误用** | **未发现**需一刀切修复的跨模块误用（因为没有跨模块 lockfree 容器消费者） |
-| **legacy CAS** | core 内约 **~200** 次 `AtomicCompareExchange*` + **~1200** 次 PascalCase `AtomicLoad/Store/Fetch*`（Q1-a 扫描，2026-07-19）；首选 `atomic_*` / `TAtomic*`，**不删 API**；迁移策略见 [`quality-parity.md`](quality-parity.md) §5 |
+| **legacy CAS** | **生产**：lockfree 热路径 `Atomic*(` **= 0**；core 其它模块（排除 `atomic*` 自身）调用形 **≈ 0**（2026-07-20 刷新）。**测试**仍可用 PascalCase 协调标志。首选 `atomic_*` / `TAtomic*`，**不删** `atomic.compat`；策略见 [`quality-parity.md`](quality-parity.md) §5；回归钉 `test_lockfree_preferred_path` |
 | **T2 命名诚实** | `deque_lf` 等已注明；本轮扩充命名脚注表（CONTRACT / README） |
 
 **生命周期纪律（advisory）**：T1 有界队列/通道仍要求 `Close → join producers/waiters → Free`；`Destroy` 的 Close+drain 不能替代 join。未来若其它模块接入 T1 容器，应先读 [`CONTRACT.md`](CONTRACT.md) 与本审计。
@@ -136,7 +136,7 @@
 |------|------|------|
 | `atomic_load` / `atomic_store` / `atomic_compare_exchange_*` + `mo_*` | `io.mapped.ring_buffer`, `simd.cpuinfo` | **首选** |
 | `TAtomic*` record | 测试与新代码 | **首选**（类型边界清晰时） |
-| `AtomicCompareExchange32/64/Ptr`（返回观测值） | lockfree 热路径、sync.*、id.* | **legacy 兼容**；勿在新代码扩散 |
+| `AtomicCompareExchange32/64/Ptr`（返回观测值） | 历史测试 / compat 调用 | **legacy 兼容**；lockfree 生产热路径已 preferred；勿在新代码扩散 |
 | FPC `InterlockedCompareExchange` | `simd.dispatch` 等历史路径 | 模块外遗留；新路径应走 atomic 门面 |
 
 **H2-3 脚注**：测试/审计中出现 legacy CAS **不等于** preferred。新代码与触达修改必须 `atomic_*` / `TAtomic*`。

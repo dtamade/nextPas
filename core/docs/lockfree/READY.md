@@ -1,13 +1,14 @@
 # Atomic & Lockfree — Ready / Horizon-2 / Horizon-3 状态
 
-> **Status**: **H3-5 + Q0–Q5 done** → **Maintenance**（Q3–Q5 land tip `4447ae001`）
+> **Status**: **H3-5 + Q0–Q5 done** → **Maintenance**（preferred residual **0** + M6 nail）
 > **Date**: 2026-07-20
 > **Owner**: atomic-lockfree lane（全权）
-> **Scope**: atomic + lockfree + H3 消费者面；执行主线见 [`quality-parity.md`](quality-parity.md)（**Q0–Q5**）
+> **Scope**: atomic + lockfree + H3 消费者面；执行主线见 [`quality-parity.md`](quality-parity.md)（**Q0–Q5** + Maintenance）
 
 Mainline stages **R0–R7 and RC Ready close-out are complete**.
 **Horizon-2 / Horizon-3 (H3-1…H3-5) are complete** — see [`roadmap-h2.md`](roadmap-h2.md) / [`roadmap-h3.md`](roadmap-h3.md).
 **Current execution line**: **Maintenance** after Q0–Q5（[`quality-parity.md`](quality-parity.md)）；T2 inventory [`t2-inventory.md`](t2-inventory.md)；bench [`bench-envelope.md`](bench-envelope.md)；land archive `archive/atomic-lockfree-q3q5-landed-20260720` — **not R9**.
+**Preferred path**: lockfree 生产 `Atomic*(` residual **0**；回归钉 `make focused FOCUS=core/tests/nextpas.core.lockfree/test_lockfree_preferred_path`。
 **R8** remains **opt-in research** — see [`r8-research-status.md`](r8-research-status.md).
 Do **not** invent an R9.
 
