@@ -10,9 +10,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **8.3** | 宽松 parse + Try 路径；**TIniError** 结构化诊断 |
-| **规模 Scale** | **8.0** | section/key CRUD、typed read/write、roundtrip |
-| **综合** | **8.2** | 与 Go ini 常用 API 对齐；无继承/多文件 merge（交给 config） |
+| **质量 Quality** | **9.0** | Try 路径 + **TIniError** + IReader 入口 |
+| **规模 Scale** | **9.0** | CRUD、roundtrip、**IniParse(IReader)** |
+| **综合** | **9.0** | 与 Go ini 常用 API 对齐；多文件 merge 交给 config |
 
 ---
 
@@ -21,6 +21,7 @@
 | 能力 | Go ini | nextpas | 状态 |
 |------|--------|---------|------|
 | Load string/file | ✓ | LoadFromString/File | Done |
+| 从 Reader | — | `IniParse(IReader)` bulk | Done |
 | Try-load | 常见 | string + **TIniError** 重载 | Done |
 | Section/Key 读写 | ✓ | Read*/Write* | Done |
 | 大小写不敏感 | 常见 | INV-1 | Done |

@@ -19,6 +19,7 @@ type
     FConfig: TConfig;
     FFilePath: string;
     FFormat: TConfigFormat;
+    FAutoFormat: Boolean;
     FWatcher: TPlatformWatcher;
     FLastMtime: Int64;
     FLastSize: Int64;
@@ -27,8 +28,12 @@ type
     function GetFileMtime: Int64;
     function GetFileStat(out AMtime, ASize: Int64): Boolean;
     procedure DoReload;
+    procedure InitWatch(AConfig: TConfig; const AFilePath: string);
   public
-    constructor Create(AConfig: TConfig; const AFilePath: string; AFormat: TConfigFormat);
+    constructor Create(AConfig: TConfig; const AFilePath: string;
+      AFormat: TConfigFormat); overload;
+    { Extension detect + content sniff on each reload (same as TryLoadFromFile). }
+    constructor Create(AConfig: TConfig; const AFilePath: string); overload;
     destructor Destroy; override;
     function CheckReload: Boolean;
     property OnReload: TConfigReloadEvent read FOnReload write FOnReload;
@@ -45,12 +50,10 @@ uses
 
 { TConfigWatcher }
 
-constructor TConfigWatcher.Create(AConfig: TConfig; const AFilePath: string;
-  AFormat: TConfigFormat);
+procedure TConfigWatcher.InitWatch(AConfig: TConfig; const AFilePath: string);
 var
   LCanStat: Boolean;
 begin
-  inherited Create;
   if AConfig = nil then
     raise ENextPasError.Create('TConfigWatcher requires a config instance');
   if AFilePath = '' then
@@ -58,7 +61,6 @@ begin
 
   FConfig := AConfig;
   FFilePath := AFilePath;
-  FFormat := AFormat;
   FLastMtime := -1;
   FLastSize := -1;
   FillChar(FWatcher, SizeOf(FWatcher), 0);
@@ -71,6 +73,23 @@ begin
     if not FActive then
       platform_watch_close(FWatcher);
   end;
+end;
+
+constructor TConfigWatcher.Create(AConfig: TConfig; const AFilePath: string;
+  AFormat: TConfigFormat);
+begin
+  inherited Create;
+  FFormat := AFormat;
+  FAutoFormat := False;
+  InitWatch(AConfig, AFilePath);
+end;
+
+constructor TConfigWatcher.Create(AConfig: TConfig; const AFilePath: string);
+begin
+  inherited Create;
+  FFormat := cfIni;
+  FAutoFormat := True;
+  InitWatch(AConfig, AFilePath);
 end;
 
 destructor TConfigWatcher.Destroy;
@@ -109,10 +128,15 @@ procedure TConfigWatcher.DoReload;
 var
   LConfig: TConfig;
   LError: string;
+  LOk: Boolean;
 begin
   LConfig := TConfig.Create;
   try
-    if not LConfig.TryLoadFromFile(FFilePath, FFormat, LError) then
+    if FAutoFormat then
+      LOk := LConfig.TryLoadFromFile(FFilePath, LError)
+    else
+      LOk := LConfig.TryLoadFromFile(FFilePath, FFormat, LError);
+    if not LOk then
       raise EConfigError.Create(LError);
     FConfig.ReplaceFrom(LConfig);
   finally
