@@ -145,6 +145,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **Polish P2–P5 done**：api-ref/README.en 同步 preferred+示例；`t2_bag_close_join_free`；CONTRACT/README 假 LF 再扫；formal 能/不能声称；verify-h3 绿证
 - **Polish P2b done**：api-reference.en 展开 Stack/Deque/Bag/MultiMap/SegQueue；bag 示例挂入 `verify-h3-consumers`
 - **Polish P2c done**：EN README 命名诚实；api-ref.en T2 索引表；`t2_multimap_close_join_free` + verify-h3
+- **Phase E (bench weapon) done**：Channel NotifySelector skip when no notifier；C1/C2 matched ~1.4–2× wall 改进（envelope 见 bench-results）
 - **Phase D (false-LF) done**：`deque_spin`/`TConcurrentSpinDeque`；`deque_lf`/`TLockFreeDeque` alias
 - **Phase C (HashMap Close) done**：charter-c + Close/IsClosed；Destroy 先 Close；测+示例
 - **Phase B (Atomic L0) done**：wait/notify_one multi-waiter；lockfree.wait nil/timeout/notify 运行时测
