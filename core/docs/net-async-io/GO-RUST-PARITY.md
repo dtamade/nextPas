@@ -34,6 +34,7 @@
 |----|------|
 | Token / OverallDeadline / HE CAD / DNS race / lab feed | 有 |
 | LocalAddr (bind-before-connect) | **Q25** family-matched subset |
+| NoDelay / KeepAlive on win stream | **Q26** |
 | Control / 自定义 Resolver / MPTCP | 无或未接线 |
 | ClassifyNetError | **Q13** |
 | AsyncTcpDial 为推荐默认（文档） | **Q13** |

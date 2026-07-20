@@ -20,6 +20,7 @@
 | **Q23** | 多 host 公网 HE 矩阵 | 3 host + v4/v6 attempt 分计；可选 PreferIPv6First 遍 | **done** |
 | **Q24** | Windows fail-closed 就绪 | streak 观测脚本；**仅** streak 达标后去 continue-on-error | **A done / B deferred** |
 | **Q25** | Dial LocalAddr bind-before-connect | Go Dialer.LocalAddr subset；family match；0 leak | **done** |
+| **Q26** | Dial NoDelay/KeepAlive 选项 | 成功 stream 回调前 best-effort 应用 | **done** |
 
 ## Q13 细节
 

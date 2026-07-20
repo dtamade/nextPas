@@ -491,6 +491,7 @@ atsCancelled: TAsyncTaskStatus = 5;
 - **Recommended dial**: `AsyncTcpDial` / `AsyncTcpDialAddrs` (concurrent HE). `AsyncTcpConnect` remains HE-lite sequential **legacy**.
 - Lab-only: `AsyncTcpDialWithDnsFeed`.
 - **LocalAddr (Q25)**: `TAsyncTcpDialOptions.LocalAddr` — bind-before-connect when `IP <> ''` and family matches remote attempt (Go `Dialer.LocalAddr` subset). Empty IP = unset. No Control/MPTCP.
+- **NoDelay / KeepAlive (Q26)**: applied to the winning stream before the user callback when set true (defaults false; best-effort).
 - Evidence: `test_net_error_classify`; parity doc `core/docs/net-async-io/GO-RUST-PARITY.md`.
 
 ### Cancel vocabulary bridge (Q14)
