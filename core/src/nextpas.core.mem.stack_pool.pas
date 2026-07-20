@@ -374,7 +374,8 @@ implementation
 
 uses
   nextpas.core.base.utils,
-  nextpas.core.math;
+  nextpas.core.math,
+  nextpas.core.mem;
 
 constructor TStackPool.Create(const AConfig: TStackPoolConfig);
 begin
@@ -406,7 +407,7 @@ end;
 destructor TStackPool.Destroy;
 begin
   if FBuffer <> nil then
-    FBaseAllocator.FreeMem(FBuffer);
+    FreeMemOf(FBaseAllocator, FBuffer, FSize);
   inherited Destroy;
 end;
 
@@ -493,11 +494,17 @@ begin
 end;
 
 function TStackPool.AlignOffset(AOffset, AAlignment: SizeUInt): SizeUInt;
+var
+  LAbs: PtrUInt;
 begin
-  if AAlignment <= 1 then
-    Result := AOffset
-  else
-    Result := (AOffset + AAlignment - 1) and not (AAlignment - 1);
+  { Align absolute address (FBuffer + offset), not offset alone — otherwise
+    AllocAligned only works when GetMem returned a base already aligned to
+    AAlignment (heap freelist dependent). }
+  if (AAlignment <= 1) or (FBuffer = nil) then
+    Exit(AOffset);
+  LAbs := PtrUInt(FBuffer) + AOffset;
+  LAbs := (LAbs + PtrUInt(AAlignment - 1)) and not PtrUInt(AAlignment - 1);
+  Result := SizeUInt(LAbs - PtrUInt(FBuffer));
 end;
 
 // ============================================================================
@@ -894,8 +901,8 @@ begin
   if LOldUsedSize > 0 then
     CopyMem(LNewBuffer, FBuffer, LOldUsedSize);
 
-  // 释放旧缓冲区
-  FBaseAllocator.FreeMem(FBuffer);
+  // 释放旧缓冲区（FSize = 原 GetMem 字节数）
+  FreeMemOf(FBaseAllocator, FBuffer, FSize);
 
   // 更新池状态
   FBuffer := LNewBuffer;
