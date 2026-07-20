@@ -12,7 +12,9 @@
 # Evidence: truth=ci-matrix for the documented gate set (ROADMAP).
 # Scope is the MODULE_ENTRIES list only — not full-host Windows parity.
 # 20 platform gates promoted (+error +fmt +info) after GHA pass=20
-# (run 29718874441 @ 534d5e7c4). mem.host_runtime may also be listed (mem G4.x).
+# (run 29718874441 @ 534d5e7c4). Batch-14 candidate: +platform.which (do not
+# claim 21-platform ci-matrix until GHA green). mem.host_runtime may also be
+# listed (mem G4.x; not a platform facade gate).
 
 set -euo pipefail
 
@@ -45,6 +47,7 @@ MODULE_ENTRIES=(
   "platform.error tests/nextpas.core.platform.error/test_platform_error_wine"
   "platform.fmt tests/nextpas.core.platform.fmt/test_platform_fmt_wine"
   "platform.info tests/nextpas.core.platform.info/test_platform_info_wine"
+  "platform.which tests/nextpas.core.platform.which/test_platform_which_wine"
   "io.reactor.iocp tests/nextpas.core.io.uring/test_reactor_iocp_wine"
   "poller.windows_runtime_smoke tests/nextpas.core.io.uring/test_poller_windows_runtime_smoke"
   "platform.io.windows_real tests/nextpas.core.platform/test_platform_io_windows_real"
@@ -57,7 +60,7 @@ fail_count=0
 failed=()
 
 echo "=== Platform Windows CI Matrix (real host) ==="
-echo "truth=ci-matrix; documented 20-platform-gate set (+info); not full-host Windows parity"
+echo "truth=ci-matrix-candidate; 20 platform gates promoted + which candidate; mem.host optional; not full-host Windows parity"
 echo "core=$CORE_ROOT"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"
 fpc -iV 2>/dev/null || true
