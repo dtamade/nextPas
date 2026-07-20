@@ -407,17 +407,17 @@ begin
     'document must expose allocator accessor');
   CheckSourceContains(LSource, 'procedure setroot(aidx: uint32); inline;',
     'document must expose root setter for builder');
-  CheckSourceContains(LSource, 'lnewptr := fallocator.reallocmem(pointer(fnodes),',
+  CheckSourceContains(LSource, 'lnewptr := reallocmemof(fallocator, pointer(fnodes),',
     'node growth must stage reallocate result');
   CheckSourceContains(LSource, 'if lnewptr = nil then',
     'node growth must guard nil reallocate');
-  CheckSourceContains(LSource, 'lnewptr := fallocator.reallocmem(pointer(fanchors),',
+  CheckSourceContains(LSource, 'lnewptr := reallocmemof(fallocator, pointer(fanchors),',
     'anchor growth must stage reallocate result');
   CheckSourceContains(LSource, 'lptr := fallocator.getmem(fnodecap * sizeof(tyamlnode));',
     'init must stage node allocation');
   CheckSourceContains(LSource, 'lptr := fallocator.getmem(fanchorcap * sizeof(tyamlanchorentry));',
     'init must stage anchor allocation');
-  CheckSourceContains(LSource, 'fallocator.freemem(pointer(fnodes));',
+  CheckSourceContains(LSource, 'freememof(fallocator, pointer(fnodes),',
     'init must release staged nodes when anchor allocation fails');
   CheckSourceContains(LSource, 'if adoc.fnodes <> nil then',
     'parse with allocator must clean an existing document first');

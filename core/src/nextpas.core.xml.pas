@@ -88,7 +88,8 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.mem.default;
+  nextpas.core.mem.default,
+  nextpas.core.mem;
 
 type
   { TXmlDocumentImpl — IXmlDocument implementation wrapping TXmlDocument record }
@@ -126,8 +127,8 @@ begin
     LNewCap := ACap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := AAllocator.ReallocMem(Pointer(ASlots),
-    SizeUInt(LNewCap) * SizeOf(TXmlToken));
+  LNewPtr := ReallocMemOf(AAllocator, Pointer(ASlots),
+    SizeUInt(LOldCap) * SizeOf(TXmlToken), SizeUInt(LNewCap) * SizeOf(TXmlToken));
   if LNewPtr = nil then
     Exit(False);
   ASlots := PXmlTokenSlot(LNewPtr);
@@ -138,7 +139,7 @@ begin
 end;
 
 procedure ReleaseTokenSlots(const AAllocator: TMemAllocator; var ASlots: PXmlTokenSlot;
-  ACount: Integer);
+  ACount, ACap: Integer);
 var
   LI: Integer;
 begin
@@ -146,7 +147,7 @@ begin
     Exit;
   for LI := 0 to ACount - 1 do
     Finalize(ASlots[LI]);
-  AAllocator.FreeMem(Pointer(ASlots));
+  FreeMemOf(AAllocator, Pointer(ASlots), SizeUInt(ACap) * SizeOf(TXmlToken));
   ASlots := nil;
 end;
 
@@ -319,7 +320,7 @@ begin
       Result[LI] := LToks[LI];
   finally
     LReader.Free;
-    ReleaseTokenSlots(LAllocator, LToks, LCount);
+    ReleaseTokenSlots(LAllocator, LToks, LCount, LCap);
   end;
 end;
 

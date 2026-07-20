@@ -67,7 +67,8 @@ implementation
 
 uses
   nextpas.core.errors,
-  nextpas.core.mem.default;
+  nextpas.core.mem.default,
+  nextpas.core.mem;
 
 const
   XML_NODE_NONE = High(UInt32);
@@ -200,7 +201,7 @@ begin
     if FNodeCount > 0 then
       for LI := 0 to FNodeCount - 1 do
         Finalize(FNodes[LI]);
-    FAllocator.FreeMem(Pointer(FNodes));
+    FreeMemOf(FAllocator, Pointer(FNodes), SizeUInt(FNodeCap) * SizeOf(TXmlNodeData));
     FNodes := nil;
   end;
   if FAttributes <> nil then
@@ -208,7 +209,7 @@ begin
     if FAttrCount > 0 then
       for LI := 0 to FAttrCount - 1 do
         Finalize(FAttributes[LI]);
-    FAllocator.FreeMem(Pointer(FAttributes));
+    FreeMemOf(FAllocator, Pointer(FAttributes), SizeUInt(FAttrCap) * SizeOf(TXmlAttribute));
     FAttributes := nil;
   end;
   FNodeCount := 0;
@@ -233,8 +234,8 @@ begin
     LNewCap := FNodeCap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := FAllocator.ReallocMem(Pointer(FNodes),
-    LNewCap * SizeOf(TXmlNodeData));
+  LNewPtr := ReallocMemOf(FAllocator, Pointer(FNodes),
+    SizeUInt(LOldCap) * SizeOf(TXmlNodeData), SizeUInt(LNewCap) * SizeOf(TXmlNodeData));
   if LNewPtr = nil then
     raise EResourceExhaustedError.Create('TXmlDocument: out of memory');
   FNodes := PXmlNodeData(LNewPtr);
@@ -258,8 +259,8 @@ begin
     LNewCap := FAttrCap;
   while LNewCap < ANeeded do
     LNewCap := LNewCap * 2;
-  LNewPtr := FAllocator.ReallocMem(Pointer(FAttributes),
-    LNewCap * SizeOf(TXmlAttribute));
+  LNewPtr := ReallocMemOf(FAllocator, Pointer(FAttributes),
+    SizeUInt(LOldCap) * SizeOf(TXmlAttribute), SizeUInt(LNewCap) * SizeOf(TXmlAttribute));
   if LNewPtr = nil then
     raise EResourceExhaustedError.Create('TXmlDocument: out of memory');
   FAttributes := PXmlAttribute(LNewPtr);

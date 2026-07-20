@@ -64,7 +64,8 @@ procedure YamlDocParseViewWith(var ADoc: TYamlDocument; const AView: TStringView
 implementation
 
 uses
-  nextpas.core.mem.default;
+  nextpas.core.mem.default,
+  nextpas.core.mem;
 
 const
   INITIAL_CAPACITY = 64;
@@ -103,7 +104,7 @@ begin
   LPtr := FAllocator.GetMem(FAnchorCap * SizeOf(TYamlAnchorEntry));
   if LPtr = nil then
   begin
-    FAllocator.FreeMem(Pointer(FNodes));
+    FreeMemOf(FAllocator, Pointer(FNodes), SizeUInt(FNodeCap) * SizeOf(TYamlNode));
     FNodes := nil;
     SetError('out of memory', 0, 0, 0);
     Exit;
@@ -117,14 +118,14 @@ begin
     Exit;
   if FNodes <> nil then
   begin
-    FAllocator.FreeMem(Pointer(FNodes));
+    FreeMemOf(FAllocator, Pointer(FNodes), SizeUInt(FNodeCap) * SizeOf(TYamlNode));
     FNodes := nil;
   end;
   FNodeCap := 0;
   FNodeCount := 0;
   if FAnchors <> nil then
   begin
-    FAllocator.FreeMem(Pointer(FAnchors));
+    FreeMemOf(FAllocator, Pointer(FAnchors), SizeUInt(FAnchorCap) * SizeOf(TYamlAnchorEntry));
     FAnchors := nil;
   end;
   FAnchorCap := 0;
@@ -149,8 +150,8 @@ begin
   if FNodeCount >= FNodeCap then
   begin
     LNewCap := FNodeCap * 2;
-    LNewPtr := FAllocator.ReallocMem(Pointer(FNodes),
-      LNewCap * SizeOf(TYamlNode));
+    LNewPtr := ReallocMemOf(FAllocator, Pointer(FNodes),
+      SizeUInt(FNodeCap) * SizeOf(TYamlNode), SizeUInt(LNewCap) * SizeOf(TYamlNode));
     if LNewPtr = nil then
     begin
       SetError('out of memory', 0, 0, 0);
@@ -172,8 +173,9 @@ begin
   if FAnchorCount >= FAnchorCap then
   begin
     LNewCap := FAnchorCap * 2;
-    LNewPtr := FAllocator.ReallocMem(Pointer(FAnchors),
-      LNewCap * SizeOf(TYamlAnchorEntry));
+    LNewPtr := ReallocMemOf(FAllocator, Pointer(FAnchors),
+      SizeUInt(FAnchorCap) * SizeOf(TYamlAnchorEntry),
+      SizeUInt(LNewCap) * SizeOf(TYamlAnchorEntry));
     if LNewPtr = nil then
     begin
       SetError('out of memory', 0, 0, 0);
