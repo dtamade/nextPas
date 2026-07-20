@@ -81,24 +81,25 @@ make -C core/benchmarks/nextpas.core.process/bench_process run
 cd core/benchmarks/nextpas.core.process/bench_process/compare_go && go run main.go
 ```
 
-### nextpas（2026-07-20 R27）
+### nextpas（2026-07-20 R28 复测）
 
 | 项 | n | total | avg |
 |----|---|-------|-----|
 | LookPath(sh) | 200 | 8 ms | ~40 µs |
-| Command(/bin/true).Status | 50 | 55 ms | ~1.1 ms |
-| Capture(echo x) | 50 | 78 ms | **~1.6 ms** |
+| Command(/bin/true).Status | 50 | 53 ms | ~1.1 ms |
+| Capture(echo x) | 50 | 76 ms | **~1.5 ms** |
+| Output(echo x) dual-pipe | 50 | 83 ms | **~1.7 ms** |
 
 ### Go 对照（同机）
 
 | 项 | n | avg |
 |----|---|-----|
-| exec.LookPath(sh) | 200 | ~41 µs |
-| exec.Command(true).Run | 50 | ~0.76 ms |
-| exec.Command(echo).Output | 50 | ~1.2 ms |
+| exec.LookPath(sh) | 200 | ~46 µs |
+| exec.Command(true).Run | 50 | ~0.89 ms |
+| exec.Command(echo).Output | 50 | ~1.3 ms |
 
-R27：`Capture` 改 stdout-only（stderr→null）+ WaitWithOutput poll 1ms / reaped 后 0ms、sleep 100µs。  
-相对 Go Capture ~**1.3×**（优化前 ~10×）。
+R27：`Capture` stdout-only + WaitWithOutput poll 1ms / reaped 后 0ms、sleep 100µs。  
+R28：补 dual-pipe `Output` 行；Capture ~**1.2×** Go Output；dual-pipe Output ~**1.3×** Go；Status ~**1.2×** Go Run。
 
 ---
 

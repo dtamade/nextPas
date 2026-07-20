@@ -60,5 +60,15 @@ begin
   LNs := TInstant.Now.DurationSince(LStart).AsNanoseconds;
   Report('Capture(echo x)', 50, LNs);
 
+  { Dual-pipe Output (stdout+stderr piped) — aligns with Go exec.Output }
+  LStart := TInstant.Now;
+  for I := 1 to 50 do
+  begin
+    O := Command('/bin/echo').Args(['x']).Output;
+    GSink := GSink + Length(O.StdOut) + Length(O.StdErr);
+  end;
+  LNs := TInstant.Now.DurationSince(LStart).AsNanoseconds;
+  Report('Output(echo x) dual-pipe', 50, LNs);
+
   WriteLn('sink=', GSink);
 end.

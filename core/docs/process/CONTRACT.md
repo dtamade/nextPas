@@ -109,15 +109,15 @@ process.pas         ← 门面（Run/RunIn/Capture/Command/LookPath/ProcessSucce
 
 ## 6. 测试覆盖
 
-**口径**：下表为 `make ... test` 的 suite 通过数（framework 报告的 tests / Check 聚合因 suite 而异）。**最后校准：2026-07-19**（以当次执行输出为准）。
+**口径**：下表为 `make ... test` 的 suite 通过数（framework `T.Test` cases）。**最后校准：2026-07-20 R28**。
 
 | 测试目录 | 参考通过数 | 说明 |
 |----------|-----------|------|
-| test_process | 455 | R21 Cancel/ExtraFd/Credential + R19 表 |
-| test_process_command | 48 | ICommand builder |
-| test_process_deep | 27 | timeout/large + R22 Cancel + R24 KillTree |
-| test_process_pipe_contract | 17 | EINTR/EAGAIN/broken pipe |
-| test_process_wine | wine-runtime-smoke **4 passed**（2026-07-19 本机） | Windows L2 under Wine；≠ 真 host |
+| test_process | **128** | R28 迁 nextpas.core.test（原 455 手写 Check） |
+| test_process_command | **21** | R28 迁 nextpas.core.test（原 48 Check） |
+| test_process_deep | **27** | timeout/large + R22 Cancel + R24 KillTree + R26 group |
+| test_process_pipe_contract | **17** | EINTR/EAGAIN/broken pipe |
+| test_process_wine | wine-runtime-smoke **7 passed**（R26） | Windows L2 under Wine；≠ 真 host |
 | **合计** | **5 目录 / 544+ Unix** | 2026-07-20 R22 实测 Unix 全绿 + 0 leak |
 
 ---
