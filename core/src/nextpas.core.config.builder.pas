@@ -31,6 +31,7 @@ type
     cskToml,
     cskEnv,
     cskFile,
+    cskFileAuto, { resolve via extension + content sniff at Build }
     cskKeyValues
   );
 
@@ -468,6 +469,9 @@ begin
     cskFile:
       if not ACfg.TryLoadFromFile(ASource.Value, ASource.Format, LError) then
         raise EConfigError.Create(LError);
+    cskFileAuto:
+      if not ACfg.TryLoadFromFile(ASource.Value, LError) then
+        raise EConfigError.Create(LError);
     cskKeyValues:
       for LI := 0 to ASource.EntryCount - 1 do
         ACfg.SetString(ASource.Entries[LI].Key, ASource.Entries[LI].Value);
@@ -546,14 +550,11 @@ begin
 end;
 
 function TConfigBuilderImpl.AddFile(const APath: string): IConfigBuilder;
-var
-  LFormat: TConfigFormat;
 begin
   RequireConfigFilePath(APath);
-  if not TryDetectConfigFormat(APath, LFormat) then
-    raise EConfigError.Create(
-      'AddFile: cannot detect config format from path: ' + APath);
-  Result := AddFile(APath, LFormat);
+  { Extension detect + content sniff happen at Build (TryLoadFromFile). }
+  StoreSource(cskFileAuto, APath, cfIni);
+  Result := Self;
 end;
 
 function TConfigBuilderImpl.AddKeyValues(const AKeys, AValues: array of string): IConfigBuilder;

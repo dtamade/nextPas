@@ -29,8 +29,9 @@ var
   LCfg: IConfig;
 begin
   LCfg := ConfigLoad('app.json', cfJson);
-  { or auto-detect by extension: .ini / .json / .yaml / .yml / .toml }
+  { extension detect; falls back to content sniff when needed }
   LCfg := ConfigLoad('app.toml');
+  LCfg := ConfigLoad('/etc/myapp'); { no extension → sniff }
 end;
 ```
 

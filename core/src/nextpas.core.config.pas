@@ -213,6 +213,8 @@ function ConfigBorrow(AConfig: TConfig): IConfig;
 function IsSupportedConfigFormat(AFormat: TConfigFormat): Boolean;
 { Map path extension to TConfigFormat. False if unknown/empty extension. }
 function TryDetectConfigFormat(const APath: string; out AFormat: TConfigFormat): Boolean;
+{ Content sniff (no disk I/O). Try-parse order: JSON → TOML → YAML → INI. }
+function TrySniffConfigFormat(const AContent: string; out AFormat: TConfigFormat): Boolean;
 procedure AddString(var AItems: TStringArray; var ACount: Integer;
   const AValue: string);
 function FindEntryIndexInSnapshot(const AEntries: TConfigEntryArray;

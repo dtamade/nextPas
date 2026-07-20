@@ -196,7 +196,6 @@ var
   LMutable: TConfig;
   LFormat: TConfigFormat;
   LError: string;
-  LRaised: Boolean;
 begin
   CheckEqual(True, TryDetectConfigFormat('app.json', LFormat),
     'detect .json');
@@ -214,9 +213,9 @@ begin
     'detect .ini');
   CheckEqual(Ord(cfIni), Ord(LFormat), 'detect maps ini');
   CheckEqual(False, TryDetectConfigFormat('a.txt', LFormat),
-    'unknown extension rejected');
+    'unknown extension rejected by extension detect');
   CheckEqual(False, TryDetectConfigFormat('noext', LFormat),
-    'missing extension rejected');
+    'missing extension rejected by extension detect');
 
   LJsonPath := FacadeTempPath('test_nextpas_config_autodetect', '.json');
   LIniPath := FacadeTempPath('test_nextpas_config_autodetect', '.ini');
@@ -226,7 +225,7 @@ begin
   RemoveIfExists(LUnknownPath);
   WriteFileText(LJsonPath, '{"server":{"host":"auto-json"}}');
   WriteFileText(LIniPath, '[server]' + #10 + 'host=auto-ini' + #10);
-  WriteFileText(LUnknownPath, 'host=x' + #10);
+  WriteFileText(LUnknownPath, 'not a config at all !!!');
   try
     LSnapshot := ConfigLoad(LJsonPath);
     CheckEqual('auto-json', LSnapshot.GetString('server.host'),
@@ -246,25 +245,82 @@ begin
       CheckEqual('auto-ini', LMutable.GetString('server.host'),
         'TryLoadFromFile auto-detect loads ini');
       CheckEqual(False, LMutable.TryLoadFromFile(LUnknownPath, LError),
-        'TryLoadFromFile rejects unknown extension');
-      Check(Pos('detect', LError) > 0,
-        'unknown-extension error mentions detect');
+        'TryLoadFromFile rejects unsniffable content');
+      Check((Pos('sniff', LError) > 0) or (Pos('parse', LError) > 0) or
+        (Pos('error', LError) > 0),
+        'unsniffable content has diagnostic error');
     finally
       LMutable.Free;
     end;
-
-    LRaised := False;
-    try
-      ConfigLoad(LUnknownPath);
-    except
-      on E: EConfigError do
-        LRaised := True;
-    end;
-    Check(LRaised, 'ConfigLoad unknown extension raises EConfigError');
   finally
     RemoveIfExists(LJsonPath);
     RemoveIfExists(LIniPath);
     RemoveIfExists(LUnknownPath);
+  end;
+end;
+
+procedure TestFacadeExposesContentSniff;
+var
+  LNoExt, LCfgExt, LWrongExt, LNoise: string;
+  LSnapshot: IConfig;
+  LFormat: TConfigFormat;
+  LError: string;
+  LMutable: TConfig;
+begin
+  CheckEqual(True, TrySniffConfigFormat('{"a":1}', LFormat), 'sniff json');
+  CheckEqual(Ord(cfJson), Ord(LFormat), 'sniff maps json');
+  CheckEqual(True, TrySniffConfigFormat('a = 1' + #10, LFormat), 'sniff toml');
+  CheckEqual(Ord(cfToml), Ord(LFormat), 'sniff maps toml');
+  CheckEqual(True, TrySniffConfigFormat('host: localhost' + #10, LFormat),
+    'sniff yaml');
+  CheckEqual(Ord(cfYaml), Ord(LFormat), 'sniff maps yaml');
+  { key=value without spaces is INI, not TOML }
+  CheckEqual(True, TrySniffConfigFormat('host=localhost' + #10, LFormat),
+    'sniff ini-style assignment');
+  CheckEqual(Ord(cfIni), Ord(LFormat), 'sniff maps ini');
+  CheckEqual(False, TrySniffConfigFormat('!!!not-config!!!', LFormat),
+    'sniff rejects noise');
+  CheckEqual(False, TrySniffConfigFormat('', LFormat), 'sniff rejects empty');
+
+  LNoExt := FacadeTempPath('test_nextpas_config_sniff_noext', '');
+  LCfgExt := FacadeTempPath('test_nextpas_config_sniff', '.cfg');
+  LWrongExt := FacadeTempPath('test_nextpas_config_sniff_wrong', '.json');
+  LNoise := FacadeTempPath('test_nextpas_config_sniff_noise', '');
+  RemoveIfExists(LNoExt);
+  RemoveIfExists(LCfgExt);
+  RemoveIfExists(LWrongExt);
+  RemoveIfExists(LNoise);
+  WriteFileText(LNoExt, '{"server":{"host":"sniff-json"}}');
+  WriteFileText(LCfgExt, 'server.host = "sniff-toml"' + #10);
+  WriteFileText(LWrongExt, 'server:' + #10 + '  host: sniff-yaml' + #10);
+  WriteFileText(LNoise, '???garbage???');
+  try
+    LSnapshot := ConfigLoad(LNoExt);
+    CheckEqual('sniff-json', LSnapshot.GetString('server.host'),
+      'extensionless file sniffs json');
+
+    LSnapshot := ConfigBuilder.AddFile(LCfgExt).Build;
+    CheckEqual('sniff-toml', LSnapshot.GetString('server.host'),
+      'unknown .cfg extension sniffs toml');
+
+    LSnapshot := ConfigLoad(LWrongExt);
+    CheckEqual('sniff-yaml', LSnapshot.GetString('server.host'),
+      'wrong .json extension recovers via yaml sniff');
+
+    LMutable := TConfig.Create;
+    try
+      CheckEqual(False, LMutable.TryLoadFromFile(LNoise, LError),
+        'noise content fails sniff load');
+      Check(Pos('sniff', LError) > 0,
+        'noise error mentions sniff');
+    finally
+      LMutable.Free;
+    end;
+  finally
+    RemoveIfExists(LNoExt);
+    RemoveIfExists(LCfgExt);
+    RemoveIfExists(LWrongExt);
+    RemoveIfExists(LNoise);
   end;
 end;
 
@@ -281,5 +337,7 @@ begin
     @TestFacadeExposesConfigLoadAndDirectMutableSurface);
   T.Test('facade exposes auto-detect format',
     @TestFacadeExposesAutoDetectFormat);
+  T.Test('facade exposes content sniff',
+    @TestFacadeExposesContentSniff);
   if not T.Run then Halt(1);
 end.

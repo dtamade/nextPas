@@ -70,14 +70,21 @@ end;
 
 function ConfigBuilder: IConfigBuilder;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig; overload;
-function ConfigLoad(const APath: string): IConfig; overload; // 扩展名自动识别
+function ConfigLoad(const APath: string): IConfig; overload; // 扩展名 + 内容嗅探
 function ConfigBorrow(AConfig: TConfig): IConfig; // 非拥有 IConfig 视图
 function TryDetectConfigFormat(const APath: string; out AFormat: TConfigFormat): Boolean;
+function TrySniffConfigFormat(const AContent: string; out AFormat: TConfigFormat): Boolean;
 ```
 
 `AddKeyValues` 按链顺序应用；不依赖 `args`。长度不等或空 key 在 **Add 时** 立即 `EConfigError`。
 
-扩展名映射（大小写不敏感）：`.ini`→`cfIni`，`.json`→`cfJson`，`.yaml`/`.yml`→`cfYaml`，`.toml`→`cfToml`。未知扩展名在 `AddFile`/`ConfigLoad`/`LoadFromFile` 路径失败。
+扩展名映射（大小写不敏感）：`.ini`→`cfIni`，`.json`→`cfJson`，`.yaml`/`.yml`→`cfYaml`，`.toml`→`cfToml`。
+
+**无格式路径**（`AddFile(path)` / `ConfigLoad(path)` / `LoadFromFile` / `TryLoadFromFile`）：
+
+1. 扩展名命中 → 按扩展加载
+2. 扩展加载失败或无/未知扩展 → `TrySniffConfigFormat`（试解析：JSON 对象/数组 → TOML → YAML map/seq → INI 含 `=`）
+3. 仍失败 → 诊断错误（含 path / sniff）
 
 ### 2.4 可变 `TConfig`（摘要）
 
@@ -200,11 +207,11 @@ make focused FOCUS=core/tests/nextpas.core.config/test_config_export
 | CLI 浅桥 `config.args` | **已实现**（`ConfigBuilderAddPresentArgs` + 显式 kind 映射） |
 | 插值 mode | **已实现**（`cimDefault` / `cimStrict` / `cimDisabled`） |
 | borrowed `IConfig` | **已实现**（`ConfigBorrow`，非拥有视图） |
-| 扩展名自动识别 | **已实现**（`TryDetectConfigFormat` + `AddFile`/`ConfigLoad`/`LoadFromFile` 重载） |
+| 扩展名自动识别 | **已实现**（`TryDetectConfigFormat`） |
+| 内容嗅探（无/错扩展） | **已实现**（`TrySniffConfigFormat` + 无格式加载路径） |
 | Builder 内硬 `uses args` | Out of scope（浅桥独立单元） |
 | XML/CSV 作为 `TConfigFormat` | Out of scope |
 | `config.cli` 独立单元名 | 不采用；用 `AddKeyValues` |
-| 内容嗅探（无扩展名） | Future |
 
 ---
 
@@ -216,3 +223,4 @@ make focused FOCUS=core/tests/nextpas.core.config/test_config_export
 | 2026-07-20 | 2.0 | 对齐 6 单元真实 API 与 Builder 优先级 | config-formats lane |
 | 2026-07-20 | 2.1 | `AddKeyValues` 浅覆盖源 | config-formats lane |
 | 2026-07-20 | 2.2 | 插值 mode / ConfigBorrow 契约对齐；扩展名自动识别 | config-formats lane |
+| 2026-07-20 | 2.3 | 内容嗅探 `TrySniffConfigFormat`；错扩展恢复 | config-formats lane |
