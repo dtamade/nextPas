@@ -15,7 +15,7 @@
 | **lockfree 跨模块生产消费者** | **H3-1**：`async.loop` → `lockfree.mpsc`；**H3-5**：`thread.pool.worksteal` → `lockfree.deque`（unmanaged 槽间接层） |
 | **atomic 跨模块生产消费者** | **有**。约 20+ 个 L0–L2 单元直接依赖 `nextpas.core.atomic`（见 §3） |
 | **Close → join → Free 误用** | **未发现**需一刀切修复的跨模块误用（因为没有跨模块 lockfree 容器消费者） |
-| **legacy CAS** | **生产**：lockfree 热路径 `Atomic*(` **= 0**；core 其它模块（排除 `atomic*` 自身）调用形 **≈ 0**（2026-07-20 刷新）。**测试**仍可用 PascalCase 协调标志。首选 `atomic_*` / `TAtomic*`，**不删** `atomic.compat`；策略见 [`quality-parity.md`](quality-parity.md) §5；回归钉 `test_lockfree_preferred_path` |
+| **legacy CAS** | **生产**：lockfree 热路径 `Atomic*(` **= 0**；core 其它模块（排除 `atomic*` 自身）调用形 **= 0**（C1 再扫 2026-07-20）。首选 `atomic_*` / `TAtomic*`，**不删** `atomic.compat`；策略见 [`quality-parity.md`](quality-parity.md) §5；回归钉 `test_lockfree_preferred_path` |
 | **T2 命名诚实** | `deque_lf` 等已注明；本轮扩充命名脚注表（CONTRACT / README） |
 
 **生命周期纪律（advisory）**：T1 有界队列/通道仍要求 `Close → join producers/waiters → Free`；`Destroy` 的 Close+drain 不能替代 join。未来若其它模块接入 T1 容器，应先读 [`CONTRACT.md`](CONTRACT.md) 与本审计。
