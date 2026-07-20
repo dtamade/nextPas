@@ -7,9 +7,9 @@ Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
-- **Windows x86_64**: durable **`ci-matrix`** for documented **22 platform gates**
-  on GHA `test-windows-runtime` (+error +fmt +info +which +dl; run 29727006733
-  pass=23 fail=0 with mem.host). Scripts list **args (candidate, Batch-17)**.
+- **Windows x86_64**: durable **`ci-matrix`** for documented **23 platform gates**
+  on GHA `test-windows-runtime` (+error +fmt +info +which +dl +args). `args`
+  PASS on run 29728715160 (pass=24 fail=0 with mem.host).
   `mem.host_runtime` is mem-owned. Wine secondary **24** modules.
 - **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
   `platform-macos-ci-matrix.sh` fail-closed). Script may list mem.host → total=10.
@@ -25,7 +25,7 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
-| Windows x86_64 | **ci-matrix** 22 platform gates (+ optional mem.host in script) | expand platform candidates; keep GHA+wine green |
+| Windows x86_64 | **ci-matrix** 23 platform gates (+ optional mem.host in script) | expand platform candidates; keep GHA+wine green |
 | macOS | **focused-runtime** 9 platform gates (layer A fail-closed) | keep layer A green; layer B job is not platform evidence |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
@@ -54,13 +54,12 @@ error, fmt, info, which, dl, pipe, args, resource, watch (Win stub UNSUPPORTED),
 pty (ConPTY open/close; resize may E_NOTIMPL under Wine), io.reactor.iocp.
 Not covered: signal, console, freetype/net.
 
-**Real Windows ci-matrix (22 platform gates)** via `platform-windows-ci-matrix.sh`:
+**Real Windows ci-matrix (23 platform gates)** via `platform-windows-ci-matrix.sh`:
 time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
-socket, error, fmt, info, which, dl, io.reactor.iocp, poller.windows_runtime_smoke,
-platform.io.windows_real, platform.socket.windows_real. Promoted with `dl` after
-GHA 29727006733 @ `930d1b0e1` (pass=23 fail=0 with mem.host). Scripts also list
-**args (candidate, Batch-17)** and optional **mem.host_runtime** (mem-owned).
-Do not claim args as ci-matrix until GHA green.
+socket, error, fmt, info, which, dl, args, io.reactor.iocp, poller.windows_runtime_smoke,
+platform.io.windows_real, platform.socket.windows_real. Promoted with `args` after
+GHA PASS platform.args (run 29728715160) + prior dl promote. Optional
+**mem.host_runtime** is mem-owned.
 
 ## IOCP / readiness boundary
 
