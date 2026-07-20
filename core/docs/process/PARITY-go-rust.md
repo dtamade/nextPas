@@ -13,8 +13,8 @@
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
 | **质量 Quality** | **9.6** | R22 + R28：process 主套件迁 `nextpas.core.test` |
-| **规模 Scale (Essential)** | **9.7** | R23 lock + R24 process group + R25 watch |
-| **综合** | **9.7** | 能力闭环 + 框架合规 + wine×5 + SCORECARD |
+| **规模 Scale (Essential)** | **9.8** | R29 递归 Watch + R23–R25 |
+| **综合** | **9.8** | 能力闭环 + 框架合规 + wine×5 + SCORECARD |
 
 **目标线**：质量 ≥ 9.0；规模 Essential ≥ **0.85**；测试合计 ≥ **900**。
 
@@ -65,7 +65,7 @@
 | SameFile(inode) | SameFile | **SameFile** (lstat Dev+Ino) | Done（R16 续） |
 | Remove ENOENT | Go 报错 | **静默成功**（Pascal） | Done（有意 ≠ Go） |
 | File lock | flock / fs2 | **IFile.Lock/TryLock/Unlock** + OpenLocked | Done（R23；L0 已有） |
-| File watch | fsnotify / notify | **Watch / IFsWatcher** | Done（R25；L0 platform.watch） |
+| File watch | fsnotify / notify | **Watch / AddTree / IFsWatcher** | Done（R25+R29；Unix 递归；Win L0 UNSUPPORTED） |
 | Process group / tree kill | setpgid + kill(-pg) | **NewProcessGroup + KillTree** | Done（R24-PG；Unix；Win UNSUPPORTED） |
 
 ### path
@@ -101,6 +101,7 @@
 | test_process_command | **21** cases（原 48 Check 行） | **nextpas.core.test** |
 | test_process_deep / pipe | **27** / **17** | nextpas.core.test |
 | test_fs | **158** | nextpas.core.test |
+| test_fs_watch | **11** | nextpas.core.test（R29 AddTree） |
 | test_fs_{facade,glob,idir,ifile,text} | 8 / 31 / 7 / **21** / 19 | nextpas.core.test |
 | test_path | **69** | nextpas.core.test |
 | test_os_env | **69** | nextpas.core.test |
@@ -127,8 +128,8 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 |----|------|
 | Win Job Object / ExtraFd / Credential 完整化 | 文档 UNSUPPORTED；非阻塞 |
 | 真 Windows host CI | 证据仍 wine-runtime-smoke 级 |
-| 递归 fs.watch | 单 path 已够；递归另开 |
 | Status/spawn 再压到 1.0× Go | 已 ~1.2×；收益递减 |
+| Win platform.watch 实现 | 仍 UNSUPPORTED；wine 文档化 |
 
 ### 外部债 / 证据
 
@@ -140,11 +141,11 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 
 ## 维护策略（口径）
 
-**状态：Landed / 维护态（main）。** Essential + 锁 + 进程组 + Watch + wine×5 + SCORECARD + process 测试框架合规。
+**状态：Landed / 维护态（main）。** Essential + 锁 + 进程组 + **递归 Watch** + wine×5 + SCORECARD + process 测试框架合规。
 
 **周报：**
 
-> process/fs/path/env：维护态。R28 process/command 迁 nextpas.core.test + dual-pipe SCORECARD；Quality 9.6 / 综合 ~9.7。
+> process/fs/path/env：维护态。R29 AddTree 递归监视 + 路径消歧；Scale 9.8 / 综合 ~9.8。
 
 ---
 
@@ -166,3 +167,4 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 | 2026-07-20 | R24-EV L2 wine×4 + SCORECARD；综合 9.7 |
 | 2026-07-20 | R27 Capture ~1.6ms (~1.3× Go；stdout-only + drain fast-path) |
 | 2026-07-20 | R28 test_process + command 迁 nextpas.core.test；dual-pipe SCORECARD；Quality 9.6 |
+| 2026-07-20 | R29 IFsWatcher.AddTree 递归 + Wd 路径消歧；Scale 9.8；watch 11 |
