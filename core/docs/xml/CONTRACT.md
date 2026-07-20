@@ -31,7 +31,7 @@ type
   TXmlDocument = class ...; // 调用方 Free
   TXmlNode = class ...;
   EXmlError = class(EParseError)
-    // Pos: TXmlPosition (ByteOffset, Line, Column)
+    // Pos: TXmlPosition (ByteOffset, Line, Column; Col is Column alias)
   end;
 
   IXmlDocument = interface
@@ -72,7 +72,7 @@ type
 ## 3. 错误与失败契约
 
 - 主路径错误模型是 **异常** `EXmlError`，不是 JSON 式 error record
-- `EXmlError.Pos`：`ByteOffset`、`Line`、`Column`
+- `EXmlError.Pos`：`ByteOffset`、`Line`、`Column`（`Col` 为 `Column` 的 property 别名）
 - `TryXmlParse*`：不抛，返回 `False`
 
 这与 json/yaml/toml 的「document.HasError」模型不同，是 **有意差异**。

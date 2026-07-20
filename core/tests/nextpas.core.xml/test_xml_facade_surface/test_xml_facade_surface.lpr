@@ -194,6 +194,32 @@ begin
   CheckEqual(False, LOk, 'malformed TryXmlParse fails');
 end;
 
+
+procedure TestFacadeExposesPositionColAlias;
+var
+  LRaised: Boolean;
+  LPos: TXmlPosition;
+begin
+  LPos.ByteOffset := 10;
+  LPos.Line := 2;
+  LPos.Column := 7;
+  CheckEqual(LPos.Column, LPos.Col, 'Column/Col aliases match');
+  LPos.Col := 9;
+  CheckEqual(UInt32(9), LPos.Column, 'Col write updates Column');
+
+  LRaised := False;
+  try
+    XmlParse('<root');
+  except
+    on E: EXmlError do
+    begin
+      LRaised := True;
+      CheckEqual(E.Pos.Column, E.Pos.Col, 'EXmlError.Pos Col alias');
+    end;
+  end;
+  Check(LRaised, 'malformed xml raises EXmlError');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.xml (facade surface)');
   T.Test('facade exposes core surface', @TestFacadeExposesCoreSurface);
@@ -202,5 +228,7 @@ begin
   T.Test('facade exposes reader parse', @TestFacadeExposesReaderParse);
   T.Test('facade cdata entity default-ns',
     @TestFacadeCdataEntityAndDefaultNs);
+  T.Test('facade exposes position Col alias',
+    @TestFacadeExposesPositionColAlias);
   if not T.Run then Halt(1);
 end.

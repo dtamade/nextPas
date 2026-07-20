@@ -480,6 +480,32 @@ begin
   end;
 end;
 
+
+procedure TestFacadeExposesTryGetTyped;
+var
+  LCfg: IConfig;
+  LInt: Int64;
+  LBool: Boolean;
+  LFloat: Double;
+  LNs: Int64;
+  LBytes: Int64;
+begin
+  LCfg := ConfigBuilder
+    .AddJson('{"port":8080,"on":true,"ratio":1.5,"timeout":"250ms","limit":"2KiB","bad":"xx"}')
+    .Build;
+  Check(LCfg.TryGetInt('port', LInt) and (LInt = 8080), 'TryGetInt port');
+  Check(LCfg.TryGetBool('on', LBool) and LBool, 'TryGetBool on');
+  Check(LCfg.TryGetFloat('ratio', LFloat) and (Abs(LFloat - 1.5) < 1e-9),
+    'TryGetFloat ratio');
+  Check(LCfg.TryGetDurationNs('timeout', LNs) and (LNs = Int64(250) * 1000000),
+    'TryGetDurationNs 250ms');
+  Check(LCfg.TryGetByteSize('limit', LBytes) and (LBytes = 2048),
+    'TryGetByteSize 2KiB');
+  Check(not LCfg.TryGetInt('missing', LInt), 'TryGetInt missing');
+  Check(not LCfg.TryGetInt('bad', LInt), 'TryGetInt unparseable');
+  Check(not LCfg.TryGetBool('bad', LBool), 'TryGetBool unparseable');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.config (facade surface)');
   T.Test('facade exposes builder surface', @TestFacadeExposesBuilderSurface);
@@ -501,5 +527,7 @@ begin
     @TestFacadeExposesByteSizeAndWatcherAuto);
   T.Test('facade exposes clone and merge',
     @TestFacadeExposesCloneAndMerge);
+  T.Test('facade exposes TryGet typed',
+    @TestFacadeExposesTryGetTyped);
   if not T.Run then Halt(1);
 end.
