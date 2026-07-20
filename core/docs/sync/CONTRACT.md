@@ -4,7 +4,7 @@
 **层级**：L1
 **Owner**：sync lane（`.worktrees/sync`）
 **最后更新**：2026-07-20
-**版本**：1.1
+**版本**：1.2
 **权威性**：本文件为 sync 模块契约 SSOT。仓库索引 `docs/contracts/sync.md` 仅作入口，不得维护第二套 API 描述。
 
 ---
@@ -128,7 +128,7 @@ end;
 | `TSemaphore` | atomic count + address-wait | stable |
 | `TBarrier` | generation + address-wait；可复用 | stable |
 | `IEvent` | manual：generation 奇偶；auto：单 permit CAS | stable |
-| `TSyncPool` | TLS freelist + global 锁；**非门面** | experimental |
+| `TSyncPool` | TLS freelist + global `IMutex`；**非门面** | experimental |
 
 ### 1.5 CondVar 配对规则
 
@@ -140,7 +140,7 @@ end;
 
 - 单元：`nextpas.core.sync.pool`（**不**由门面 re-export）
 - TLS freelist 为进程级 `threadvar`：**一线程同一时间只应使用一个 pool 实例**
-- 冷路径全局栈：当前为 FPC `TRTLCriticalSection`（**known debt**，目标换 nextpas Mutex）
+- 冷路径全局栈：nextpas `IMutex`（`TMutex`），不再使用 FPC `TRTLCriticalSection`
 - `DrainTLS`：线程退出前归还 TLS freelist，避免 heaptrc 假泄漏
 
 ---
@@ -154,7 +154,7 @@ end;
 - **[INV-5]** 多个读者可并发持有 `IRWLock`；写者排他
 - **[INV-6]** `CondVar` 不得与 `TFutexMutex` 配对
 - **[INV-7]** 门面不依赖 `sync.pool`
-- **[INV-8]** 除 `sync.pool` 已知债外，L1 sync 实现不直接依赖 FPC 平台单元
+- **[INV-8]** L1 sync 实现（含 `sync.pool`）不直接依赖 FPC 平台同步原语 / 平台单元
 
 ---
 
@@ -189,7 +189,7 @@ end;
 | `IBarrier` | N 线程汇合 |
 | `IOnce` | 单次初始化 |
 | `IWaitGroup` | 等待 N 个完成 |
-| `TSyncPool` | TLS 无锁热路径 + global 锁冷路径 |
+| `TSyncPool` | TLS 无锁热路径 + global `IMutex` 冷路径 |
 
 ---
 
@@ -238,3 +238,4 @@ make -C core/tests/nextpas.core.sync test
 |------|------|------|
 | 2026-07-01 | 1.0 | 初始版本（含已过时的递归 Mutex / ILockable 描述） |
 | 2026-07-20 | 1.1 | 以 live source 重写 SSOT；标明 FutexMutex/Pool 级别；删除空 posix_fallback 叙述 |
+| 2026-07-20 | 1.2 | `TSyncPool` 冷路径改 nextpas `IMutex`；移除 FPC CriticalSection 债 |

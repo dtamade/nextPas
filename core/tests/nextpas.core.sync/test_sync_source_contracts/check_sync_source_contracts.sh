@@ -109,8 +109,12 @@ for unit in "$SRC"/nextpas.core.sync*.pas; do
   done
 done
 
-# --- Known debt: pool still uses TRTLCriticalSection ---
-require_token "$POOL" 'TRTLCriticalSection'
+# --- Pool cold path uses nextpas IMutex (no FPC CriticalSection) ---
+require_token "$POOL" 'IMutex'
+require_token "$POOL" 'TMutex.Create'
 require_token "$POOL" 'threadvar'
+for banned_cs in TRTLCriticalSection InitCriticalSection EnterCriticalSection LeaveCriticalSection DoneCriticalSection; do
+  forbid_token "$POOL" "$banned_cs"
+done
 
 echo "sync-source-contract=pass"
