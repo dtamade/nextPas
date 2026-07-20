@@ -9,7 +9,7 @@ program test_net_async_dial_bench;
   truth=localhost-*; not public DNS HE matrix. }
 
 uses
-  cthreads,
+  {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.test,
   nextpas.core.time.base,
