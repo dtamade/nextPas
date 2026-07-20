@@ -118,6 +118,10 @@ need_file "$SRC/nextpas.core.text.builder.pas"
 need_grep "$SRC/nextpas.core.text.builder.pas" 'ReallocMemOf' \
   'text.builder must use ReallocMemOf on inject grow (I1)'
 
+need_file "$SRC/nextpas.core.collections.element_manager.pas"
+need_grep "$SRC/nextpas.core.collections.element_manager.pas" 'ReallocMemOf' \
+  'element_manager must use ReallocMemOf on SupportsRealloc path (I residual)'
+
 need_file "$SRC/nextpas.core.json.parser.pas"
 need_grep "$SRC/nextpas.core.json.parser.pas" 'TJsonOwnedStr' \
   'json.parser must keep TJsonOwnedStr overflow size table (I2)'

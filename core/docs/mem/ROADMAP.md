@@ -199,7 +199,7 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 | **H2** | arr swap 缓冲 FreeMemOf + FreeMemOf 战役关闭声明 | **done** 2026-07-20 |
 | **H∞** | SCORECARD/soak 复跑 · host-runtime 续证 · **Idle 声明** | **done** 2026-07-20 → **Idle** |
 
-**H2 后**：inject FreeMemOf 主战役 **结束**。残余仅 WAIVE（tui tracking、owned 串无 size）。
+**H2 后**：inject FreeMemOf 主战役 **结束**。Era I 已关 owned 串 size 表；残余 WAIVE **仅** tui tracking。
 
 **Maintenance Idle 触发再开工**（任一即可）:
 
@@ -222,6 +222,8 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 | **I4** | source-contract 钉样板 + tui FreeMemOf WAIVE；文档 | **done** |
 
 **I 后**: 回 **Maintenance Idle**。残余 WAIVE **仅** tui inject tracking。禁止再开全仓 FreeMemOf。
+
+**I residual（同日）**: `collections.element_manager` SupportsRealloc 路径 `ReallocMemOf`（对齐 FreeMemOf / text.builder）。
 
 ---
 
@@ -290,3 +292,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-20 | H∞：SCORECARD RELEASE=1 + soak 3/3 复跑（post-H2 无回归）；host-runtime CI 证据续记 |
 | 2026-07-20 | **Maintenance Idle** 声明（对齐 bench B43 姿态）：H0–H2 + SCORECARD/soak/CI 齐；仅回归/命名 D3/GHA mem 红再开工 |
 | 2026-07-20 | **Era I CLOSED**：text ReallocMemOf · json/toml owned-size FreeMemOf · contracts；回 Idle |
+| 2026-07-20 | I residual：element_manager ReallocMemOf + Era I GHA host-runtime 证据 |

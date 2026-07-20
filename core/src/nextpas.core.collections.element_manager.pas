@@ -336,8 +336,9 @@ begin
     Exit;
   end;
 
-  { 调整内存 }
-  Result := FAllocator.ReallocMem(aDst, aNewElementCount * FElementSize);
+  { 调整内存 — sized ReallocMemOf (same-heap / tracking gate; Era I residual) }
+  Result := ReallocMemOf(FAllocator, aDst, aElementCount * FElementSize,
+    aNewElementCount * FElementSize);
 
   { 托管元素扩大时,初始化新扩大的内存 }
   if FIsManagedType and (aNewElementCount > aElementCount) then
