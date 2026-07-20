@@ -89,7 +89,7 @@ uses
   nextpas.core.tls.freepascal.context,
   nextpas.core.tls.utils,
   nextpas.core.tls.x509,
-  nextpas.core.crypto.x509verify;
+  nextpas.core.tls.x509verify;
 
 const
   CSystemStorePaths: array[0..4] of string = (

@@ -126,3 +126,10 @@ macOS job 残余红点在 async，不阻塞 mem Steady。
 | **test-macos** | **PASS** | matrix **10/10**；job 红于 kqueue（非 mem） |
 | **test-windows-runtime** | **PASS** | matrix **27/27** 含 mem；job 红于 **async Windows native smoke**（非 mem） |
 | test-linux | n/a | 红于 platform `master-spec.md` 超 120 行（非 mem） |
+
+### 5.9 I residual element_manager ReallocMemOf（run **29741340481** · `49245a198`）
+
+| Job | mem.host_runtime | 备注 |
+|-----|------------------|------|
+| **test-macos** | **PASS** | matrix **10/10**；job 红于 kqueue |
+| **test-windows-runtime** | **PASS** | matrix **27/27** 含 mem；job 红于 async smoke |

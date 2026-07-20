@@ -3,8 +3,8 @@
 **模块路径**：`core/src/nextpas.core.text*.pas`
 **层级**：L1（依赖 L0: base, exception 等）
 **Owner**：Claude（AI 负责）
-**最后更新**：2026-07-19
-**版本**：1.1
+**最后更新**：2026-07-20
+**版本**：1.3
 
 ---
 
@@ -117,18 +117,17 @@ text.pas           ← UTF-8 日常门面（re-export 常用符号）
 | 子系统 | 路径 / 套件 |
 |--------|-------------|
 | text 子模块 | `core/tests/nextpas.core.text.*/`（view/scan/utf8/width/grapheme…） |
+| unicode **一键门禁** | `make -C core/tests/nextpas.core.text.unicode gate`（M1） |
 | unicode 手写 | `test_case` `test_data` `test_enhance` `test_grapheme_uax29` `test_normalize` `test_property` `test_collate` |
-| unicode 官方 | `test_conformance_normalize`（~19965 行）`test_conformance_grapheme`（~1093 行） |
+| unicode 官方 | Norm / Grapheme / Word / Sentence / Line / Bidi×2 / Collate / Case 全套 `test_conformance_*` |
 
 ```bash
-for t in test_case test_data test_enhance test_grapheme_uax29 \
-         test_normalize test_property test_collate \
-         test_conformance_normalize test_conformance_grapheme; do
-  make -C core/tests/nextpas.core.text.unicode/$t clean test
-done
+make -C core/tests/nextpas.core.text.unicode gate
 make -C core/tests/nextpas.core.text.grapheme/test_grapheme clean test
 make -C core/tests/nextpas.core.text.width/test_text_width clean test
 ```
+
+导航地图：[unicode/ROADMAP.md](unicode/ROADMAP.md) · 性能：[unicode/SCORECARD.md](unicode/SCORECARD.md)
 
 ---
 
@@ -139,6 +138,8 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 3. UAX#9 Bidi 至 L2 官方 harness 全绿（L3/L4 不在门禁）
 4. 无 CLDR tailored grapheme/word
 5. East_Asian_Width 真表（UCD 16.0）；LB19a F|W|H；列宽 A→1
+6. **locale Case**（tr/az）与完整 segment/bidi/collate 在 **`text.unicode`**；`text` 门面仅 root case 子集（见 ROADMAP 门面表）
+7. `UTF8ToTitle` = 逐码点 title；词首 Title → ROADMAP **M2**
 
 ---
 
@@ -146,6 +147,7 @@ make -C core/tests/nextpas.core.text.width/test_text_width clean test
 
 | 日期 | 版本 | 变更描述 |
 |------|------|----------|
+| 2026-07-20 | 1.3 | M1：gate 入口 + ROADMAP/SCORECARD；门面/限制与 unicode live 对齐 |
 | 2026-07-20 | 1.2 | LineBreak UAX#14 官方全绿；硬/软 Line 双语义 |
 | 2026-07-19 | 1.1 | Conformance + grapheme 真源 + GB9c；测试表与子模块清单对齐 live |
 | 2026-07-01 | 1.0 | 初始版本 |

@@ -11,6 +11,8 @@ type
     ProcessHandle: PtrUInt;
     ThreadHandle: PtrUInt;
     Pid: UInt32;
+    { Job Object for NewProcessGroup tree kill (M2-W2); 0 if none. }
+    JobHandle: PtrUInt;
   {$ELSE}
     Pid: Int32;
   {$ENDIF}

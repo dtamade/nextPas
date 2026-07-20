@@ -25,5 +25,9 @@
 
 | 组件 | 后端 |
 |------|------|
-| `THashSet` | Swiss map |
-| `TMultiMap` / `TMultiSet` / `TLruCache` / 部分 concurrent | 仍依赖 `hashmap` 单元（OA 或 swiss table 视实现）— 变更需单独评估 |
+| `THashSet` | Swiss（`TSwissHashMap<K,Byte>`） |
+| `TMultiMap` / `TMultiSet` | Swiss |
+| `TLruCache` | Swiss 节点表；`hashmap` 单元仅 `HashMix*` helper |
+| `TLinkedHashMap` / `TLinkedHashSet` | Swiss 查找表 + 链表保序 |
+| `TConcurrentHashMap` | 分片 `TSwissTable` |
+| `THashMap`（OA） | 专家直构；无默认 `Make*` |

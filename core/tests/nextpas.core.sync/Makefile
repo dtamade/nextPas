@@ -5,7 +5,8 @@
 #   make list    — 列出 gate
 
 ALL_TESTS := test_sync test_sync_pool test_sync_source_contracts \
-	test_sync_windows_compile_gate test_sync_darwin_compile_gate
+	test_sync_windows_compile_gate test_sync_darwin_compile_gate \
+	test_sync_freebsd_compile_gate
 
 .PHONY: test clean list help $(ALL_TESTS)
 

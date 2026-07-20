@@ -48,6 +48,12 @@ type
   TAsyncUdpSendCallback = nextpas.core.net.async.udp.TAsyncUdpSendCallback;
   TAsyncTcpDialOptions = nextpas.core.net.async.dial.TAsyncTcpDialOptions;
   TAsyncTcpDialCallback = nextpas.core.net.async.dial.TAsyncTcpDialCallback;
+  TAsyncTcpDialAddressFamily = nextpas.core.net.async.dial.TAsyncTcpDialAddressFamily;
+  TAsyncTcpDialControl = nextpas.core.net.async.dial.TAsyncTcpDialControl;
+  TAsyncTcpDialResolve = nextpas.core.net.async.dial.TAsyncTcpDialResolve;
+  TAsyncTcpDialAttemptStart = nextpas.core.net.async.dial.TAsyncTcpDialAttemptStart;
+  TAsyncTcpDialAttemptResult = nextpas.core.net.async.dial.TAsyncTcpDialAttemptResult;
+  IAsyncTcpDialDnsFeed = nextpas.core.net.async.dial.IAsyncTcpDialDnsFeed;
   TDnsResult = nextpas.core.net.async.resolve.TDnsResult;
   TDnsCallback = nextpas.core.net.async.resolve.TDnsCallback;
   TDnsCallbackRef = nextpas.core.net.async.resolve.TDnsCallbackRef;
@@ -82,6 +88,9 @@ function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
   const AAddrs: array of TNetAddress; APort: UInt16;
   const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
   AContext: Pointer = nil): Boolean; inline;
+function AsyncTcpDialWithDnsFeed(const ALoop: TAsyncLoop; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer; out AFeed: IAsyncTcpDialDnsFeed): Boolean; inline;
 
 { Go-like error classification for dial/IO result codes (negative or positive). }
 function ClassifyNetError(ACode: Int32): TNetErrorClass; inline;
@@ -171,6 +180,14 @@ function AsyncTcpDialAddrs(const ALoop: TAsyncLoop;
 begin
   Result := nextpas.core.net.async.dial.AsyncTcpDialAddrs(ALoop, AAddrs, APort,
     AOptions, ACallback, AContext);
+end;
+
+function AsyncTcpDialWithDnsFeed(const ALoop: TAsyncLoop; APort: UInt16;
+  const AOptions: TAsyncTcpDialOptions; ACallback: TAsyncTcpDialCallback;
+  AContext: Pointer; out AFeed: IAsyncTcpDialDnsFeed): Boolean;
+begin
+  Result := nextpas.core.net.async.dial.AsyncTcpDialWithDnsFeed(ALoop, APort,
+    AOptions, ACallback, AContext, AFeed);
 end;
 
 function ClassifyNetError(ACode: Int32): TNetErrorClass;

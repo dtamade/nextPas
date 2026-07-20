@@ -35,9 +35,9 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.base.utils,
-  nextpas.core.tls.asn1,
+  nextpas.core.crypto.asn1,
   nextpas.core.crypto.bigint,
-  nextpas.core.tls.random;
+  nextpas.core.crypto.random;
 
 const
   P384_P_HEX = 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFFFF0000000000000000FFFFFFFF';

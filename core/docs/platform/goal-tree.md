@@ -7,10 +7,9 @@ Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
-- **Windows x86_64**: durable **`ci-matrix`** for documented **26 platform gates**
-  on GHA `test-windows-runtime` (+… +pipe +resource +pty). `pty` PASS on run
-  29734704405 (pass=27 fail=0 with mem.host). Watch S1+S2 RDCW poll landed
-  (not matrix-gated). Wine secondary **24**.
+- **Windows x86_64**: durable **`ci-matrix`** for documented **27 platform gates**
+  on GHA `test-windows-runtime` (+… +pty +watch S1–S3). `watch` PASS on run
+  29746628175 (pass=28 fail=0 with mem.host). Wine secondary **24**.
 - **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
   `platform-macos-ci-matrix.sh` fail-closed). Script may list mem.host → total=10.
   **Whole `test-macos` job** (layer B) may fail on non-platform inventory; that
@@ -25,7 +24,7 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
-| Windows x86_64 | **ci-matrix** 26 platform gates (+ optional mem.host in script) | expand platform candidates; keep GHA+wine green |
+| Windows x86_64 | **ci-matrix** 27 platform gates (+ optional mem.host in script) | expand platform candidates; keep GHA+wine green |
 | macOS | **focused-runtime** 9 platform gates (layer A fail-closed) | keep layer A green; layer B job is not platform evidence |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
@@ -54,12 +53,12 @@ error, fmt, info, which, dl, pipe, args, resource, watch (Win stub UNSUPPORTED),
 pty (ConPTY open/close; resize may E_NOTIMPL under Wine), io.reactor.iocp.
 Not covered: signal, console, freetype/net.
 
-**Real Windows ci-matrix (26 platform gates)** via `platform-windows-ci-matrix.sh`:
+**Real Windows ci-matrix (27 platform gates)** via `platform-windows-ci-matrix.sh`:
 time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
-socket, error, fmt, info, which, dl, args, pipe, resource, pty, io.reactor.iocp,
-poller.windows_runtime_smoke, platform.io.windows_real, platform.socket.windows_real.
-Promoted with `pty` after GHA PASS platform.pty (run 29734704405). Optional
-**mem.host_runtime** is mem-owned.
+socket, error, fmt, info, which, dl, args, pipe, resource, pty, watch,
+io.reactor.iocp, poller.windows_runtime_smoke, platform.io.windows_real,
+platform.socket.windows_real. Promoted with `watch` after GHA PASS
+platform.watch (run 29746628175). Optional **mem.host_runtime** is mem-owned.
 
 ## IOCP / readiness boundary
 

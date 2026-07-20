@@ -5,7 +5,7 @@ program test_x509_chain_verify;
 uses
   SysUtils, Classes,
   nextpas.core.tls.x509,
-  nextpas.core.tls.crypto.x509verify;
+  nextpas.core.tls.x509verify;
 
 var
   GPassCount: Integer = 0;

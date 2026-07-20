@@ -84,6 +84,7 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_source_contracts
 | 源契约 | `test_sync_source_contracts` | 门面/接口/边界防漂移 |
 | Win compile | `test_sync_windows_compile_gate` | `-dNEXTPAS_FORCE_HOST_WINDOWS` -Cn |
 | Darwin compile | `test_sync_darwin_compile_gate` | `-dNEXTPAS_FORCE_HOST_DARWIN` -Cn |
+| FreeBSD compile | `test_sync_freebsd_compile_gate` | `-dNEXTPAS_FORCE_HOST_FREEBSD` -Cn |
 
 Benchmark：`core/benchmarks/nextpas.core.sync/bench_sync/`
 

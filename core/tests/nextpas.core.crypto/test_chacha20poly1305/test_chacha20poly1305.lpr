@@ -4,7 +4,7 @@ program test_chacha20poly1305;
 
 uses
   SysUtils,
-  nextpas.core.tls.tls13.chacha20poly1305,
+  nextpas.core.crypto.chacha20poly1305,
   nextpas.core.test;
 
 function HexToBytes(const AHex: string): TBytes;

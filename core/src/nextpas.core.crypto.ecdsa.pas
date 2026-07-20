@@ -50,7 +50,7 @@ function TryToFixedLength32(const AValue: TBytes; out AResult: TBytes; out AErro
 implementation
 
 uses
-  nextpas.core.tls.asn1,
+  nextpas.core.crypto.asn1,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.constant_time,
   nextpas.core.crypto.hmac,

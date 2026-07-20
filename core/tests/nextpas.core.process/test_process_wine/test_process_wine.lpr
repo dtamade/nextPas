@@ -110,6 +110,65 @@ begin
   Check(not ProcessSucceeded(LOut), 'Status not succeeded');
 end;
 
+{ M2-W2: Job Object path for NewProcessGroup + KillTree. }
+procedure TestNewProcessGroupKillTree;
+var
+  LChild: IChild;
+  LOut: TProcessOutput;
+begin
+  LChild := TCommand.New('cmd.exe')
+    .Args(['/c', 'ping -n 30 127.0.0.1 >nul'])
+    .NewProcessGroup
+    .Spawn;
+  Check(LChild.ProcessGroupId = LChild.Pid, 'ProcessGroupId equals Pid on Win job');
+  LChild.KillTree;
+  LOut := LChild.Wait;
+  Check(LOut.Status <> psRunning, 'KillTree terminated job');
+end;
+
+{ M2-W3: fail-closed matrix for ExtraFd / Credential. }
+procedure TestExtraFdUnsupported;
+var
+  Raised: Boolean;
+  Msg: string;
+begin
+  Raised := False;
+  Msg := '';
+  try
+    TCommand.New('cmd.exe').Args(['/c', 'echo x']).ExtraFd(0).Spawn;
+  except
+    on E: EProcessError do
+    begin
+      Raised := True;
+      Msg := E.Message;
+    end;
+  end;
+  Check(Raised, 'ExtraFd raises on Windows');
+  Check((Pos('unsupported', Msg) > 0) or (Pos('Unsupported', Msg) > 0) or
+    (Pos('ExtraFd', Msg) > 0), 'ExtraFd message clear: ' + Msg);
+end;
+
+procedure TestCredentialUnsupported;
+var
+  Raised: Boolean;
+  Msg: string;
+begin
+  Raised := False;
+  Msg := '';
+  try
+    TCommand.New('cmd.exe').Args(['/c', 'echo x']).Credential(0, 0).Spawn;
+  except
+    on E: EProcessError do
+    begin
+      Raised := True;
+      Msg := E.Message;
+    end;
+  end;
+  Check(Raised, 'Credential raises on Windows');
+  Check((Pos('unsupported', Msg) > 0) or (Pos('Unsupported', Msg) > 0) or
+    (Pos('Credential', Msg) > 0), 'Credential message clear: ' + Msg);
+end;
+
 {$ELSE}
 
 procedure TestSkipHost;
@@ -130,6 +189,9 @@ begin
   T.Test('Status exit 0', @TestStatusExit0);
   T.Test('Status exit 1', @TestStatusExit1);
   T.Test('Kill', @TestWaitKill);
+  T.Test('NewProcessGroup KillTree', @TestNewProcessGroupKillTree);
+  T.Test('ExtraFd unsupported', @TestExtraFdUnsupported);
+  T.Test('Credential unsupported', @TestCredentialUnsupported);
 {$ELSE}
   T.Test('skip non-windows host', @TestSkipHost);
 {$ENDIF}

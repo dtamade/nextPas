@@ -35,7 +35,7 @@ make -C core/tests/nextpas.core.fs/test_fs_watch_wine wine-runtime-smoke
 
 | 套件 | 结果 | 说明 |
 |------|------|------|
-| process | **8 passed** | + Capture echo (R34)；timeout / MaxOutput / Status / Kill |
+| process | **11 passed** | + ExtraFd/Cred fail-closed（M2-W3）；Job KillTree；Capture |
 | fs | **3 passed** | Write-Read-Remove / MkdirAll / OpenLocked |
 | path | **4 passed** | Join-Clean / IsAbs-Volume / ToSlash / StripPrefix |
 | os.env | **3 passed** | GetEnv / Set-Unset-Expand / Expand brace |

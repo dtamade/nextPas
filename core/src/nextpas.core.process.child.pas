@@ -424,10 +424,15 @@ begin
     Kill;
     Exit;
   end;
+  {$IFDEF NEXTPAS_WINDOWS}
+  { M2-W2: Job Object is attached at spawn; kill terminates whole tree. }
+  Kill;
+  {$ELSE}
   LPgid := platform_process_pid(FProc);
   LErr := platform_process_kill_group(LPgid, SIGKILL);
   if LErr <> 0 then
     RaiseProcessPlatformError('platform_process_kill_group', LErr);
+  {$ENDIF}
 end;
 
 procedure TChild.SignalTree(ASignal: Integer);
@@ -442,10 +447,15 @@ begin
     Signal(ASignal);
     Exit;
   end;
+  {$IFDEF NEXTPAS_WINDOWS}
+  { Win has no POSIX process-group signals; tree stop uses Job kill. }
+  KillTree;
+  {$ELSE}
   LPgid := platform_process_pid(FProc);
   LErr := platform_process_kill_group(LPgid, ASignal);
   if LErr <> 0 then
     RaiseProcessPlatformError('platform_process_kill_group', LErr);
+  {$ENDIF}
 end;
 
 function TChild.TakeStdin: IWriter;

@@ -42,8 +42,12 @@ begin
 end;
 
 destructor TCondVar.Destroy;
+var
+  LRet: Int32;
 begin
-  platform_condvar_destroy(FHandle);
+  LRet := platform_condvar_destroy(FHandle);
+  if LRet <> 0 then
+    raise ENextPasError.CreateFmt('TCondVar.Destroy failed: %d', [LRet]);
   inherited;
 end;
 

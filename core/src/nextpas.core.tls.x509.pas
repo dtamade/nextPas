@@ -520,6 +520,7 @@ begin
   FRawCertificate := Copy(AData, 0, Length(AData));
 
   Reader := TASN1Reader.Create(AData);
+  Root := nil;
   try
     Root := Reader.Parse;
     if Root = nil then
@@ -829,6 +830,7 @@ begin
         if Length(KeyData) > 0 then
         begin
           Reader := TASN1Reader.Create(KeyData);
+          RSAKey := nil;
           try
             RSAKey := Reader.Parse;
             if (RSAKey <> nil) and RSAKey.IsSequence and (RSAKey.ChildCount >= 2) then
@@ -842,6 +844,8 @@ begin
                 FPublicKeyInfo.KeySize := FPublicKeyInfo.KeySize - 8;
             end;
           finally
+            RSAKey.Free;
+            Reader.Free;
           end;
         end;
       end;
@@ -947,6 +951,7 @@ begin
         if Length(FExtensions[I].Value) > 0 then
         begin
           Reader := TASN1Reader.Create(FExtensions[I].Value);
+          Node := nil;
           try
             Node := Reader.Parse;
             if (Node <> nil) and Node.IsBitString then
@@ -966,6 +971,8 @@ begin
               end;
             end;
           finally
+            Node.Free;
+            Reader.Free;
           end;
         end;
       end;
@@ -975,6 +982,7 @@ begin
         if Length(FExtensions[I].Value) > 0 then
         begin
           Reader := TASN1Reader.Create(FExtensions[I].Value);
+          Node := nil;
           try
             Node := Reader.Parse;
             if (Node <> nil) and Node.IsSequence then
@@ -990,6 +998,8 @@ begin
               end;
             end;
           finally
+            Node.Free;
+            Reader.Free;
           end;
         end;
       end;
@@ -999,6 +1009,7 @@ begin
         if Length(FExtensions[I].Value) > 0 then
         begin
           Reader := TASN1Reader.Create(FExtensions[I].Value);
+          Node := nil;
           try
             Node := Reader.Parse;
             if (Node <> nil) and Node.IsSequence then
@@ -1053,6 +1064,8 @@ begin
               end;
             end;
           finally
+            Node.Free;
+            Reader.Free;
           end;
         end;
       end;
@@ -1062,11 +1075,14 @@ begin
         if Length(FExtensions[I].Value) > 0 then
         begin
           Reader := TASN1Reader.Create(FExtensions[I].Value);
+          Node := nil;
           try
             Node := Reader.Parse;
             if (Node <> nil) and Node.IsOctetString then
               FSubjectKeyIdentifier := Node.AsOctetString;
           finally
+            Node.Free;
+            Reader.Free;
           end;
         end;
       end;
@@ -1076,6 +1092,7 @@ begin
         if Length(FExtensions[I].Value) > 0 then
         begin
           Reader := TASN1Reader.Create(FExtensions[I].Value);
+          Node := nil;
           try
             Node := Reader.Parse;
             if (Node <> nil) and Node.IsSequence then
@@ -1084,6 +1101,8 @@ begin
                 FAuthorityKeyIdentifier := Node.GetChild(0).RawData;
             end;
           finally
+            Node.Free;
+            Reader.Free;
           end;
         end;
       end;
@@ -1093,6 +1112,7 @@ begin
         if Length(FExtensions[I].Value) > 0 then
         begin
           Reader := TASN1Reader.Create(FExtensions[I].Value);
+          Node := nil;
           try
             Node := Reader.Parse;
             if (Node <> nil) and Node.IsSequence then
@@ -1113,6 +1133,8 @@ begin
               end;
             end;
           finally
+            Node.Free;
+            Reader.Free;
           end;
         end;
       end;

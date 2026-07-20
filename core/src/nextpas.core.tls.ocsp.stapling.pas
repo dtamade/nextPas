@@ -228,7 +228,7 @@ type
 
 implementation
 
-uses nextpas.core.time, nextpas.core.tls.http.client, nextpas.core.crypto.x509verify;
+uses nextpas.core.time, nextpas.core.tls.http.client, nextpas.core.tls.x509verify;
 
 // ========================================================================
 // TOCSPStaplingConfig

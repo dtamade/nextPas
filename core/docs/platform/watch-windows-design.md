@@ -1,12 +1,14 @@
 # Windows `platform.watch` design — ReadDirectoryChangesW
 
-**Status:** S1+S2 landed (create/add/close + RDCW poll one-event + timeout).
+**Status:** S1–S3 landed (create/add/close + RDCW poll + overflow AGAIN).
 **Owner:** platform lane. **Public API:** do not change without a new batch.
 
 **S1 decisions locked:** single-directory v1; recursive out of scope;
 `Fd` unused on Windows (`DirHandle` is validity).
 **S2:** OVERLAPPED + auto-reset event; poll returns **1** (event) / **0**
 (timeout) matching Linux test convention; residual multi-record drain.
+**S3:** rename Action mapping (old=Deleted, new=Created); overflow →
+`PLATFORM_ERR_AGAIN` + re-arm (`ERROR_NOTIFY_ENUM_DIR`).
 
 Stable portable API lives in `nextpas.core.platform.watch`. Linux (inotify)
 and Darwin/FreeBSD (kqueue EVFILT_VNODE) already provide focused-runtime.
@@ -118,9 +120,8 @@ Implementation sketch: OVERLAPPED + auto-reset event; `GetOverlappedResult` /
 `WaitForSingleObject` with timeout; on success walk notify records and return
 **one** coalesced event per `poll` call (v1), re-arm RDCW after drain.
 
-**Overflow:** if OS drops events, return a synthetic Modified on `"."` or
-`PLATFORM_ERR_AGAIN` once — pick one and test it; prefer explicit error for
-honesty.
+**Overflow (S3 locked):** `ERROR_NOTIFY_ENUM_DIR` → **`PLATFORM_ERR_AGAIN`**
+and re-arm RDCW (no synthetic Modified).
 
 ## 4. Error mapping
 

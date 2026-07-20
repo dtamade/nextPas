@@ -20,8 +20,7 @@ interface
 
 uses
   nextpas.core.base,
-  nextpas.core.tls.base,
-  nextpas.core.tls.exceptions;
+  nextpas.core.exception;
 
 type
   { Constant-time operations for cryptographic purposes }
@@ -192,7 +191,7 @@ begin
   
   // Select the appropriate length (assumes same length for security)
   if Length(IfTrue) <> Length(IfFalse) then
-    raise ESSLException.Create('Select requires equal-length arrays');
+    raise Exception.Create('Select requires equal-length arrays');
   
   Result := nil;
   SetLength(Result, Length(IfTrue));

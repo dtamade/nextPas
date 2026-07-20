@@ -108,6 +108,7 @@ const
   clRoot = nextpas.core.text.unicode.casefold.clRoot;
   clTurkish = nextpas.core.text.unicode.casefold.clTurkish;
   clAzeri = nextpas.core.text.unicode.casefold.clAzeri;
+  clLithuanian = nextpas.core.text.unicode.casefold.clLithuanian;
 
 // 大小写映射函数
 function CodepointToLower(const ACp: TUnicodeCodepoint): TUnicodeCodepoint; inline;
@@ -128,6 +129,8 @@ function UTF8ToLower(const AValue: string; const AOptions: TCaseOptions): string
 function UTF8ToTitle(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
 function UTF8CaseFold(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
 function UTF8CaseFoldSimple(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
+function UTF8ToTitleWords(const AValue: string): string; overload; inline;
+function UTF8ToTitleWords(const AValue: string; const AOptions: TCaseOptions): string; overload; inline;
 function DefaultCaseOptions: TCaseOptions; inline;
 
 // 规范化函数
@@ -424,6 +427,16 @@ end;
 function UTF8CaseFoldSimple(const AValue: string; const AOptions: TCaseOptions): string;
 begin
   Result := nextpas.core.text.unicode.casefold.UTF8CaseFoldSimple(AValue, AOptions);
+end;
+
+function UTF8ToTitleWords(const AValue: string): string;
+begin
+  Result := nextpas.core.text.unicode.casefold.UTF8ToTitleWords(AValue);
+end;
+
+function UTF8ToTitleWords(const AValue: string; const AOptions: TCaseOptions): string;
+begin
+  Result := nextpas.core.text.unicode.casefold.UTF8ToTitleWords(AValue, AOptions);
 end;
 
 function NFD(const AText: string): string;

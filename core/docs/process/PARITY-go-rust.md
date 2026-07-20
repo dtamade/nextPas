@@ -43,8 +43,8 @@
 | Timeout | context/WaitDelay | — | Timeout | Done |
 | MaxOutput | — | — | MaxOutput | Done |
 | Graceful stop | WaitDelay | — | **WaitGraceful** | Done（R16 续） |
-| ExtraFiles | ExtraFiles | — | **ExtraFd** | Done（R21；Unix fd→3+） |
-| Credential/uid | SysProcAttr | CommandExt | **Credential** | Done（R21；Unix；Win UNSUPPORTED） |
+| ExtraFiles | ExtraFiles | — | **ExtraFd** | Done Unix；**Win UNSUPPORTED fail-closed**（M2-W3） |
+| Credential/uid | SysProcAttr | CommandExt | **Credential** | Done Unix；**Win UNSUPPORTED fail-closed**（M2-W3） |
 | Context cancel | context | — | **CancelToken** | Done（R21+R22；Wait/Output/Status/WaitGraceful） |
 
 ### fs
@@ -68,7 +68,7 @@
 | Remove ENOENT | Go 报错 | **静默成功**（Pascal） | Done（有意 ≠ Go） |
 | File lock | flock / fs2 | **IFile.Lock/TryLock/Unlock** + OpenLocked | Done（R23；L0 已有） |
 | File watch | fsnotify / notify | **Watch / AddTree / Remove / IFsWatcher** | Done Unix；**Win S2 poll**（platform RDCW；Wine soft） |
-| Process group / tree kill | setpgid + kill(-pg) | **NewProcessGroup + KillTree** | Done（R24-PG；Unix；Win UNSUPPORTED） |
+| Process group / tree kill | setpgid + kill(-pg) | **NewProcessGroup + KillTree** | Done Unix；**Win Job Object**（M2-W2） |
 
 ### path
 
@@ -128,7 +128,7 @@ R28 起 process 主套件以 **T.Test 用例数** 计，不再用手写 PASS 行
 
 | 项 | 性质 |
 |----|------|
-| Win Job Object / ExtraFd / Credential | **M2-W2/W3**；platform 主责 |
+| ExtraFd / Credential Win | **M2-W3 DONE**（明文 fail-closed） |
 | Win platform.watch Poll | **M2-W1 DONE**（S2 RDCW；Wine soft） |
 | 真 Windows host CI | **M3**；基础设施 |
 | Status/spawn 1.0× Go | **非目标**（收益递减） |
@@ -160,6 +160,7 @@ Win 能力用 **W1–W4**，不用 R35+。
 |------|------|
 | 2026-07-20 | **ROADMAP**：Host 完成声明；冻结 R 序列；M2 Win Waves |
 | 2026-07-20 | **M2-W1**：Win watch S2 poll 已由 platform 落地；L2 wine 证据 |
+| 2026-07-20 | **M2-W2**：Win Job Object NewProcessGroup/KillTree |
 | 2026-07-20 | R34 fs 同方法 SCORECARD + wine Capture 8 + IFile ReadAt/WriteAt |
 | 2026-07-19 | R16 续 WaitGraceful + SameFile |
 | 2026-07-19 | R17 质量加厚；合计 751；L0 Deferred 钉死协作清单 |
@@ -180,3 +181,4 @@ Win 能力用 **W1–W4**，不用 R35+。
 | 2026-07-20 | R32 IFsWatcher.Remove + platform_watch_remove；watch 13 |
 | 2026-07-20 | R33 Wait/WaitGraceful 100µs 起步；wine×5 复跑全绿；SCORECARD 刷新 |
 | 2026-07-20 | R34 fs 同方法 SCORECARD + wine Capture 8 + IFile ReadAt/WriteAt |
+| 2026-07-20 | **M2-W3**：ExtraFd/Credential Win 支持矩阵 + fail-closed |

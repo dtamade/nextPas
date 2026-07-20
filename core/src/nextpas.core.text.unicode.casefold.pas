@@ -11,11 +11,13 @@ uses
 
 type
   { Default clRoot matches UCD root / existing harness.
-    clTurkish / clAzeri enable CaseFold T + SpecialCasing tr/az. }
+    clTurkish / clAzeri: CaseFold T + SpecialCasing tr/az.
+    clLithuanian: SpecialCasing lt (More_Above / After_Soft_Dotted / precomposed I). }
   TCaseLocale = (
     clRoot,
     clTurkish,
-    clAzeri
+    clAzeri,
+    clLithuanian
   );
 
   TCaseOptions = record
@@ -46,6 +48,11 @@ function UTF8ToTitle(const AValue: string; const AOptions: TCaseOptions): string
 function UTF8CaseFold(const AValue: string; const AOptions: TCaseOptions): string; overload;
 function UTF8CaseFoldSimple(const AValue: string; const AOptions: TCaseOptions): string; overload;
 
+{ UAX#29 Word_Break: title first codepoint of each word, lower the rest.
+  Default UTF8ToTitle remains per-codepoint title (unchanged). }
+function UTF8ToTitleWords(const AValue: string): string; overload;
+function UTF8ToTitleWords(const AValue: string; const AOptions: TCaseOptions): string; overload;
+
 { SpecialCasing 1:N (unconditional). Returns False if no entry. }
 function MapSpecialLower(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap; out ALen: Byte): Boolean;
 function MapSpecialUpper(const ACp: TUnicodeCodepoint; out ADst: TCaseFoldMap; out ALen: Byte): Boolean;
@@ -56,7 +63,8 @@ implementation
 uses
   nextpas.core.text.unicode.utils,
   nextpas.core.text.unicode.props,
-  nextpas.core.text.unicode.normalize;
+  nextpas.core.text.unicode.normalize,
+  nextpas.core.text.unicode.segment;
 
 {$I nextpas.core.text.unicode.data.inc}
 {$I nextpas.core.text.unicode.casefold.inc}
@@ -117,6 +125,49 @@ end;
 function IsTurkicLocale(const ALocale: TCaseLocale): Boolean; inline;
 begin
   Result := ALocale in [clTurkish, clAzeri];
+end;
+
+function IsLithuanianLocale(const ALocale: TCaseLocale): Boolean; inline;
+begin
+  Result := ALocale = clLithuanian;
+end;
+
+function HasMoreAbove(const ACps: array of TUnicodeCodepoint; const ACount, AIndex: SizeInt): Boolean;
+{ UAX §3.13 More_Above: a ccc=230 mark follows before next starter (ccc=0). }
+var
+  J: SizeInt;
+  LCcc: Byte;
+begin
+  J := AIndex + 1;
+  while J < ACount do
+  begin
+    LCcc := GetCanonicalCombiningClass(ACps[J]);
+    if LCcc = 0 then
+      Exit(False);
+    if LCcc = 230 then
+      Exit(True);
+    Inc(J);
+  end;
+  Result := False;
+end;
+
+function IsAfterSoftDotted(const ACps: array of TUnicodeCodepoint; const AIndex: SizeInt): Boolean;
+{ Last preceding ccc=0 character is Soft_Dotted; no intervening ccc=230. }
+var
+  J: SizeInt;
+  LCcc: Byte;
+begin
+  J := AIndex - 1;
+  while J >= 0 do
+  begin
+    LCcc := GetCanonicalCombiningClass(ACps[J]);
+    if LCcc = 230 then
+      Exit(False);
+    if LCcc = 0 then
+      Exit(HasBinaryProperty(ACps[J], ubpSoftDotted));
+    Dec(J);
+  end;
+  Result := False;
 end;
 
 
@@ -532,22 +583,42 @@ end;
 
 function UTF8ToUpper(const AValue: string; const AOptions: TCaseOptions): string;
 var
+  LCps: array of TUnicodeCodepoint;
+  LSkip: array of Boolean;
+  LCount, I: SizeInt;
   LIter: TUTF8Iterator;
   LCp: UInt32;
   LUsed: SizeInt;
   LMap: TCaseFoldMap;
   LLen: Byte;
-  LTurkic: Boolean;
+  LTurkic, LLt: Boolean;
 begin
   LTurkic := IsTurkicLocale(AOptions.Locale);
-  if (not LTurkic) and IsAsciiString(AValue) then
+  LLt := IsLithuanianLocale(AOptions.Locale);
+  if (not LTurkic) and (not LLt) and IsAsciiString(AValue) then
     Exit(MapAsciiString(AValue, ammUpper));
 
-  SetLength(Result, Length(AValue) * 2 + 8);
-  LUsed := 0;
+  LCount := 0;
+  SetLength(LCps, Length(AValue) + 4);
   LIter.Init(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
   while LIter.Next(LCp) do
   begin
+    if LCount >= Length(LCps) then
+      SetLength(LCps, Length(LCps) * 2);
+    LCps[LCount] := LCp;
+    Inc(LCount);
+  end;
+  SetLength(LSkip, LCount);
+  for I := 0 to LCount - 1 do
+    LSkip[I] := False;
+
+  SetLength(Result, Length(AValue) * 2 + 8);
+  LUsed := 0;
+  for I := 0 to LCount - 1 do
+  begin
+    if LSkip[I] then
+      Continue;
+    LCp := LCps[I];
     if LTurkic then
     begin
       if LCp = CP_LATIN_SMALL_I then
@@ -561,6 +632,8 @@ begin
         Continue;
       end;
     end;
+    if LLt and (LCp = CP_COMBINING_DOT_ABOVE) and IsAfterSoftDotted(LCps, I) then
+      Continue; { After_Soft_Dotted: remove combining dot for upper/title }
     if MapSpecialUpper(LCp, LMap, LLen) then
       AppendMap(Result, LUsed, LMap, LLen)
     else
@@ -642,6 +715,47 @@ begin
       end;
     end;
 
+    if IsLithuanianLocale(AOptions.Locale) then
+    begin
+      { 00CC / 00CD / 0128: precomposed I + accent → i + 0307 + accent }
+      if LCp = $00CC then
+      begin
+        AppendUtf8Codepoint(Result, LUsed, CP_LATIN_SMALL_I);
+        AppendUtf8Codepoint(Result, LUsed, CP_COMBINING_DOT_ABOVE);
+        AppendUtf8Codepoint(Result, LUsed, $0300);
+        Continue;
+      end;
+      if LCp = $00CD then
+      begin
+        AppendUtf8Codepoint(Result, LUsed, CP_LATIN_SMALL_I);
+        AppendUtf8Codepoint(Result, LUsed, CP_COMBINING_DOT_ABOVE);
+        AppendUtf8Codepoint(Result, LUsed, $0301);
+        Continue;
+      end;
+      if LCp = $0128 then
+      begin
+        AppendUtf8Codepoint(Result, LUsed, CP_LATIN_SMALL_I);
+        AppendUtf8Codepoint(Result, LUsed, CP_COMBINING_DOT_ABOVE);
+        AppendUtf8Codepoint(Result, LUsed, $0303);
+        Continue;
+      end;
+      { More_Above: I / J / Į → i/j/į + combining dot }
+      if (LCp = CP_LATIN_CAPITAL_I) or (LCp = $004A) or (LCp = $012E) then
+      begin
+        if HasMoreAbove(LCps, LCount, I) then
+        begin
+          if LCp = CP_LATIN_CAPITAL_I then
+            AppendUtf8Codepoint(Result, LUsed, CP_LATIN_SMALL_I)
+          else if LCp = $004A then
+            AppendUtf8Codepoint(Result, LUsed, $006A)
+          else
+            AppendUtf8Codepoint(Result, LUsed, $012F);
+          AppendUtf8Codepoint(Result, LUsed, CP_COMBINING_DOT_ABOVE);
+          Continue;
+        end;
+      end;
+    end;
+
     if LCp = GREEK_CAPITAL_SIGMA then
     begin
       if IsFinalSigmaContext(LCps, LCount, I) then
@@ -665,24 +779,38 @@ end;
 
 function UTF8ToTitle(const AValue: string; const AOptions: TCaseOptions): string;
 var
+  LCps: array of TUnicodeCodepoint;
+  LCount, I: SizeInt;
   LIter: TUTF8Iterator;
   LCp: UInt32;
   LUsed: SizeInt;
   LMap: TCaseFoldMap;
   LLen: Byte;
-  LTurkic: Boolean;
+  LTurkic, LLt: Boolean;
 begin
   if AValue = '' then
     Exit('');
   LTurkic := IsTurkicLocale(AOptions.Locale);
-  if (not LTurkic) and IsAsciiString(AValue) then
+  LLt := IsLithuanianLocale(AOptions.Locale);
+  if (not LTurkic) and (not LLt) and IsAsciiString(AValue) then
     Exit(MapAsciiString(AValue, ammUpper));
 
-  SetLength(Result, Length(AValue) * 2 + 8);
-  LUsed := 0;
+  LCount := 0;
+  SetLength(LCps, Length(AValue) + 4);
   LIter.Init(PByte(PAnsiChar(AValue)), SizeUInt(Length(AValue)));
   while LIter.Next(LCp) do
   begin
+    if LCount >= Length(LCps) then
+      SetLength(LCps, Length(LCps) * 2);
+    LCps[LCount] := LCp;
+    Inc(LCount);
+  end;
+
+  SetLength(Result, Length(AValue) * 2 + 8);
+  LUsed := 0;
+  for I := 0 to LCount - 1 do
+  begin
+    LCp := LCps[I];
     if LTurkic then
     begin
       if LCp = CP_LATIN_SMALL_I then
@@ -696,6 +824,8 @@ begin
         Continue;
       end;
     end;
+    if LLt and (LCp = CP_COMBINING_DOT_ABOVE) and IsAfterSoftDotted(LCps, I) then
+      Continue;
     if MapSpecialTitle(LCp, LMap, LLen) then
       AppendMap(Result, LUsed, LMap, LLen)
     else
@@ -758,5 +888,77 @@ begin
     AppendUtf8Codepoint(Result, LUsed, CaseFoldSimple(LCp, AOptions));
   SetLength(Result, LUsed);
 end;
+
+
+function UTF8ToTitleWords(const AValue: string): string;
+begin
+  Result := UTF8ToTitleWords(AValue, DefaultCaseOptions);
+end;
+
+function UTF8ToTitleWords(const AValue: string; const AOptions: TCaseOptions): string;
+var
+  LSegs: TSegmentResultArray;
+  LIdx, LByte: SizeInt;
+  LPiece: string;
+  LCps: array of TUnicodeCodepoint;
+  LCount, I: SizeInt;
+  LIter: TUTF8Iterator;
+  LCp: UInt32;
+  LUsed: SizeInt;
+  LMap: TCaseFoldMap;
+  LLen: Byte;
+  LRest: string;
+begin
+  if AValue = '' then
+    Exit('');
+  LSegs := UnicodeSegmenter.SegmentWords(AValue);
+  SetLength(Result, Length(AValue) * 2 + 8);
+  LUsed := 0;
+  for LIdx := 0 to High(LSegs) do
+  begin
+    LPiece := Copy(AValue, LSegs[LIdx].Start, LSegs[LIdx].Length);
+    LCount := 0;
+    SetLength(LCps, Length(LPiece) + 2);
+    LIter.Init(PByte(PAnsiChar(LPiece)), SizeUInt(Length(LPiece)));
+    while LIter.Next(LCp) do
+    begin
+      if LCount >= Length(LCps) then
+        SetLength(LCps, Length(LCps) * 2);
+      LCps[LCount] := LCp;
+      Inc(LCount);
+    end;
+    if LCount = 0 then
+      Continue;
+    { First codepoint → title (locale-aware specials) }
+    LCp := LCps[0];
+    if IsTurkicLocale(AOptions.Locale) and (LCp = CP_LATIN_SMALL_I) then
+      AppendUtf8Codepoint(Result, LUsed, CP_LATIN_CAPITAL_I_DOT)
+    else if IsTurkicLocale(AOptions.Locale) and (LCp = CP_LATIN_SMALL_DOTLESS_I) then
+      AppendUtf8Codepoint(Result, LUsed, CP_LATIN_CAPITAL_I)
+    else if MapSpecialTitle(LCp, LMap, LLen) then
+      AppendMap(Result, LUsed, LMap, LLen)
+    else
+      AppendUtf8Codepoint(Result, LUsed, CodepointToTitle(LCp));
+    { Remainder → UTF8ToLower of that tail }
+    if LCount > 1 then
+    begin
+      SetLength(LRest, (LCount - 1) * 4);
+      LByte := 0;
+      for I := 1 to LCount - 1 do
+        AppendUtf8Codepoint(LRest, LByte, LCps[I]);
+      SetLength(LRest, LByte);
+      LRest := UTF8ToLower(LRest, AOptions);
+      for I := 1 to Length(LRest) do
+      begin
+        if LUsed >= Length(Result) then
+          SetLength(Result, Length(Result) * 2);
+        Result[LUsed + 1] := LRest[I];
+        Inc(LUsed);
+      end;
+    end;
+  end;
+  SetLength(Result, LUsed);
+end;
+
 
 end.

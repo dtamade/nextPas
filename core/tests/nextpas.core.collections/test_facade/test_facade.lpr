@@ -200,7 +200,7 @@ begin
     CheckEqual(Int64(140), Int64(LValue), 'MakeMap callback value');
   end;
 
-  { MakeSet currently maps to MakeHashSet (OA IHashSet). }
+  { MakeSet currently maps to MakeHashSet (Swiss-backed IHashSet). }
   with specialize MakeSet<Integer> do
   begin
     Check(Add(9), 'MakeSet add');

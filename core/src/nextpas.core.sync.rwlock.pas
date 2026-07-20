@@ -93,8 +93,12 @@ begin
 end;
 
 destructor TRWLock.Destroy;
+var
+  LRet: Int32;
 begin
-  platform_rwlock_destroy(FHandle);
+  LRet := platform_rwlock_destroy(FHandle);
+  if LRet <> 0 then
+    raise ENextPasError.CreateFmt('TRWLock.Destroy failed: %d (held lock?)', [LRet]);
   inherited;
 end;
 

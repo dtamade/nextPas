@@ -27,7 +27,7 @@ type
   private
     FStore: PX509_STORE;
     FOwnsHandle: Boolean;
-    FCertificates: TList;  // 缓存证书列表用于枚举
+    FCertificates: array of PX509;  // 缓存证书列表用于枚举
 
     // Phase 2.5: 索引查找表 - O(log n) 替代 O(n) 线性搜索
     // 使用 TStringList (Sorted=True) 实现有序字典
@@ -106,20 +106,20 @@ begin
             ((Pos('hash', LReasonStr) > 0) or (Pos('already in store', LReasonStr) > 0));
 end;
 
-procedure FreeCertificateListRefs(ACerts: TList);
+procedure FreeCertificateListRefs(var ACerts: array of PX509);
 var
   I: Integer;
   LCert: PX509;
 begin
-  if (ACerts = nil) or (ACerts.Count = 0) then
+  if Length(ACerts) = 0 then
     Exit;
 
   if OpenSSLX509_Finalizing or (not Assigned(X509_free)) then
     Exit;
 
-  for I := 0 to ACerts.Count - 1 do
+  for I := 0 to High(ACerts) do
   begin
-    LCert := PX509(ACerts[I]);
+    LCert := ACerts[I];
     if LCert = nil then
       Continue;
 
@@ -130,6 +130,7 @@ begin
         TSecurityLog.Warning('OpenSSL',
           nextpas.core.text.conv.Format('Exception freeing X509 in cert store list: %s', [E.Message]));
     end;
+    ACerts[I] := nil;
   end;
 end;
 
@@ -177,7 +178,7 @@ begin
     FStore := X509_STORE_new();
 
   FOwnsHandle := True;
-  FCertificates := TList.Create;
+  SetLength(FCertificates, 0);
 
   // Phase 2.5: 初始化索引查找表
   FIndexByFingerprint := TStringList.Create;
@@ -200,7 +201,7 @@ begin
   FreeCertificateListRefs(FCertificates);
 
   // 清空证书列表
-  FCertificates.Clear;
+  SetLength(FCertificates, 0);
 
   // Phase 2.5: 释放索引查找表
   FIndexByFingerprint.Free;
@@ -308,8 +309,8 @@ begin
     if Assigned(X509_up_ref) then
       X509_up_ref(X509);
 
-    CertIndex := FCertificates.Count;
-    FCertificates.Add(X509);
+    CertIndex := Length(FCertificates);
+    begin SetLength(FCertificates, Length(FCertificates)+1); FCertificates[High(FCertificates)] := X509; end;
     BuildIndexForCertificate(CertIndex, X509);
     Result := True;
   end
@@ -324,8 +325,8 @@ begin
         if Assigned(X509_up_ref) then
           X509_up_ref(X509);
 
-        CertIndex := FCertificates.Count;
-        FCertificates.Add(X509);
+        CertIndex := Length(FCertificates);
+        begin SetLength(FCertificates, Length(FCertificates)+1); FCertificates[High(FCertificates)] := X509; end;
         BuildIndexForCertificate(CertIndex, X509);
       end;
     end
@@ -357,7 +358,7 @@ var
   FP: string;
 begin
   Result := False;
-  if (ACert = nil) or (FCertificates.Count = 0) then
+  if (ACert = nil) or (Length(FCertificates) = 0) then
     Exit;
   
   // 使用指纹进行匹配，避免依赖底层句柄是否复用
@@ -378,7 +379,7 @@ begin
   FreeCertificateListRefs(FCertificates);
 
   // 清空证书缓存列表
-  FCertificates.Clear;
+  SetLength(FCertificates, 0);
 
   // Phase 2.5: 清空索引
   ClearIndexes;
@@ -411,7 +412,7 @@ end;
 
 function TOpenSSLCertificateStore.GetCount: Integer;
 begin
-  Result := FCertificates.Count;
+  Result := Length(FCertificates);
 end;
 
 function TOpenSSLCertificateStore.GetCertificate(AIndex: Integer): ISSLCertificate;
@@ -420,10 +421,10 @@ var
 begin
   Result := nil;
   
-  if (AIndex < 0) or (AIndex >= FCertificates.Count) then
+  if (AIndex < 0) or (AIndex >= Length(FCertificates)) then
     Exit;
   
-  X509Cert := PX509(FCertificates[AIndex]);
+  X509Cert := FCertificates[AIndex];
   if X509Cert = nil then
     Exit;
   
@@ -477,8 +478,8 @@ begin
           if AddRet = 1 then
           begin
             // 保留一份引用用于枚举缓存（原始引用归 FCertificates 所有）
-            FCertificates.Add(X509Cert);
-            BuildIndexForCertificate(FCertificates.Count - 1, X509Cert);
+            begin SetLength(FCertificates, Length(FCertificates)+1); FCertificates[High(FCertificates)] := X509Cert; end;
+            BuildIndexForCertificate(Length(FCertificates) - 1, X509Cert);
             Inc(AddedCount);
           end
           else if IsDuplicateStoreCertError then
@@ -691,7 +692,7 @@ begin
   if Idx >= 0 then
   begin
     CertIndex := PtrInt(FIndexBySerialNumber.Objects[Idx]);
-    if (CertIndex >= 0) and (CertIndex < FCertificates.Count) then
+    if (CertIndex >= 0) and (CertIndex < Length(FCertificates)) then
       Result := GetCertificate(CertIndex);
   end;
 end;
@@ -714,7 +715,7 @@ begin
   if Idx >= 0 then
   begin
     CertIndex := PtrInt(FIndexByFingerprint.Objects[Idx]);
-    if (CertIndex >= 0) and (CertIndex < FCertificates.Count) then
+    if (CertIndex >= 0) and (CertIndex < Length(FCertificates)) then
       Result := GetCertificate(CertIndex);
   end;
 end;
@@ -749,7 +750,7 @@ begin
   // 不要把整个 store 都当作 trusted store。
   // 否则 shared verifier 会把 intermediate 也提前当成 trust anchor，
   // 导致本该继续补到 self-signed root 的链在第二跳被截断。
-  for I := 0 to FCertificates.Count - 1 do
+  for I := 0 to Length(FCertificates) - 1 do
   begin
     LStoreCert := GetCertificate(I);
     if LStoreCert = nil then

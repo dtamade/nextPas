@@ -11,46 +11,32 @@
 
 ## Done
 
-- [x] 门面 + 十种原语实现（Mutex / FutexMutex / RWLock / CondVar / SpinLock / WaitGroup / Once / Semaphore / Barrier / Event）
-- [x] 平台句柄路径走 `platform.sync`（含 rwlock 分模式 unlock）
-- [x] 用户态原语基于 atomic + address-wait
-- [x] CondVar / `INativeMutex` 类型级配对；`TFutexMutex` 不可配 CondVar
-- [x] `TSyncPool` TLS freelist + 并发测试与 bench；per-pool TLS；冷路径 `IMutex`
-- [x] 文档 SSOT：README + CONTRACT + SCORECARD + 本 GOAL_TREE
-- [x] source-contract + 行为测试 + Windows compile gate
-- [x] path-limited land 到 `origin/main`（2026-07-20）
-- [x] Stress / 超时边界补强（WaitGroup 高并发、Event multi-waiter、Semaphore timeout 0、CondVar signal）
-- [x] Darwin forced compile gate（`-dNEXTPAS_FORCE_HOST_DARWIN`）
-- [x] Destroy 持锁策略写入 CONTRACT
+- [x] 门面 + 原语 + platform.sync / INativeMutex / per-pool TLS
+- [x] Windows + Darwin + FreeBSD compile gate
+- [x] Stress / 超时边界 + source-contract
+- [x] SCORECARD SC1–SC10；contended multi-sample median/p95
+- [x] Destroy：传播 `platform_*_destroy` 错误；held destroy 最佳努力测试
+- [x] RecursiveMutex / Pool 门面 — **暂缓**（无生产消费者，已文档化）
+- [x] path-limited land 多批
 
 ---
 
 ## Now
 
-- [ ] path-limited landing（本批 B1–B3 提交）
-- [ ] SCORECARD contended 数字刷新（可选）
+- [ ] 本批 path-limited landing
 
 ---
 
 ## Next
 
-1. FreeBSD compile gate（若 FORCE_HOST 稳定）
-2. SCORECARD SC7/SC8 contended 本机基线固化
-3. 是否公开 `RecursiveMutex`；是否门面化 Pool（默认暂缓）
-4. 销毁持锁可检测路径（仅在有跨平台语义后）
+1. owner-thread 级 Destroy 检测（仅当需要跨平台统一语义时）
+2. contended bench 更高分辨率 / 绑核（可选）
+3. 有真实消费者时再评估 RecursiveMutex / Pool 门面
 
 ---
 
 ## Deferred
 
-- Channel / Latch / Notify（可能属 async 或独立模块）
-- 公开 API 重命名（`Do_` 等）— **冻结**
+- Channel / Latch / Notify
+- API 重命名 `Do_` — **冻结**
 - FPC `SyncObjs` 兼容层 — **禁止**
-
----
-
-## 非目标
-
-- 拥有 platform ABI 细节
-- 替代 `async` 事件循环内同步原语
-- 在本 lane 无理由大改 http/tls 消费者

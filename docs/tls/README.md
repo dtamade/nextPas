@@ -2,6 +2,11 @@
 
 Pure Pascal TLS 1.3/1.2 implementation with optional OpenSSL/WolfSSL/mbedTLS backends.
 
+> **Lane ownership (2026-07-20)**
+> This worktree owns **hash + crypto + tls** as one vertical.
+> Read first: [`OWNERSHIP.md`](OWNERSHIP.md) · [`VERIFY.md`](VERIFY.md) · [`../../core/docs/tls/CONTRACT.md`](../../core/docs/tls/CONTRACT.md).
+> Layering: `hash → crypto → tls → http`. Crypto must not depend on tls.
+
 ## Quick Start
 
 ```pascal

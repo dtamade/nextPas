@@ -39,7 +39,7 @@ implementation
 
 uses
   nextpas.core.tls.tls13.wire,
-  nextpas.core.tls.tls13.chacha20poly1305,
+  nextpas.core.crypto.chacha20poly1305,
   nextpas.core.crypto.aesgcm;
 
 function TLS13AEADTagLength(ACipherSuite: Word): Integer;

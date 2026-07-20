@@ -11,7 +11,8 @@ L1 容器库：动态数组、双端队列、哈希/有序映射与集合、链�
 | [PERF-HASHSET.md](PERF-HASHSET.md) | HashSet Swiss 本机 bench 数字 |
 | [CONSUMERS.md](CONSUMERS.md) | 外部消费者审计 |
 | [OWNERSHIP-AUDIT.md](OWNERSHIP-AUDIT.md) | 真职责边界（非按行数拆文件） |
-| [READY.md](READY.md) | Landing candidate Ready 报告 |
+| [READY.md](READY.md) | 历史 Ready / Landed 记录 |
+| [ROADMAP.md](ROADMAP.md) | 维护期审查结论与工作队列 |
 | 本 README | 导航与日常命令 |
 
 设计风格见 `core/docs/design-conventions.md`。不要依赖仓库根下 `task_plan.collections.md` 等临时规划文件作为真相。
