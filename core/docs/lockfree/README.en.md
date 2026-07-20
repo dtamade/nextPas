@@ -14,11 +14,14 @@ Absolute throughput numbers require [`bench-envelope.md`](bench-envelope.md). Ch
 
 **Preferred atomics**: new code uses `atomic_*` + `mo_*` / `TAtomic*`. Nail: `make focused FOCUS=core/tests/nextpas.core.lockfree/test_lockfree_preferred_path`.
 
-**Teaching examples** (Close → join → Free):
-- `core/examples/nextpas.core.lockfree/t1_close_join_free/` — Channel
-- `core/examples/nextpas.core.lockfree/t1_segqueue_workers/` — SegQueue N producers + N workers
-- `core/examples/nextpas.core.lockfree/t2_bag_close_join_free/` — H3-2 Bag
-- `core/examples/nextpas.core.lockfree/t2_multimap_close_join_free/` — H3-2 MultiMap (single spin lock)
+**Teaching examples**:
+- `t1_close_join_free/` — Channel (Close → join → Free)
+- `t1_segqueue_workers/` — SegQueue N producers + N workers
+- `t1_msqueue_close_join_free/` — MSQueue Close → join → Free (CONTRACT §1.3)
+- `t2_bag_close_join_free/` — H3-2 Bag
+- `t2_multimap_close_join_free/` — H3-2 MultiMap (single spin lock)
+- `t2_hashmap_join_free/` — HashMap **no Close** — stop writers → join → Free
+  (Skiplist same honesty: no Close; not H3-2 production subset)
 
 **Selection**: [`selection-guide.md`](selection-guide.md) / [EN](selection-guide.en.md) — includes **task-delivery** table (channel / bag / mpsc / segqueue).
 

@@ -13,7 +13,7 @@
 
 ## 原子类型 (nextpas.core.atomic)
 
-> 门面优先 `atomic_load` / `atomic_store` / `atomic_compare_exchange_strong*` / `atomic_fetch_*` + `mo_*`。  
+> 门面优先 `atomic_load` / `atomic_store` / `atomic_compare_exchange_strong*` / `atomic_fetch_*` + `mo_*`。
 > PascalCase `AtomicLoad32` 等为 **legacy 兼容**（[`../atomic/CONTRACT.md`](../atomic/CONTRACT.md) §1.4），新代码勿扩散。
 
 ### TAtomicInt32 / TAtomicInt64
@@ -319,6 +319,8 @@ type
 ```
 
 **Progress（诚实）**: **分片自旋锁** 并发 map，**不是 lock-free**。`TConcurrentHashMap` 是**同一实现别名**，不是第二套算法。
+
+**生命周期**: **无 `Close` / `IsClosed`**。生产推荐：停止写入 → join 所有访问方 → `Free`。教学示例：`t2_hashmap_join_free`。（SkipList 同理：无 Close，勿 invent H3-2 契约。）
 
 **设计特点**:
 - 分片锁（16 shards），每 shard 自旋锁（preferred `atomic_exchange` 路径）

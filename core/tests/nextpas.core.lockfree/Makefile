@@ -29,6 +29,8 @@ T1_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t1_close_join_fre
 T1_SEGQUEUE_WORKERS_DIR := ../../examples/nextpas.core.lockfree/t1_segqueue_workers
 T2_BAG_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_bag_close_join_free
 T2_MULTIMAP_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_multimap_close_join_free
+T1_MSQUEUE_CLOSE_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t1_msqueue_close_join_free
+T2_HASHMAP_JOIN_FREE_DIR := ../../examples/nextpas.core.lockfree/t2_hashmap_join_free
 NUMA_TEST_DIR := test_lockfree_numa
 RTM_TEST_DIR := test_lockfree_rtm
 FORMAL_TEST_DIR := test_lockfree_formal
@@ -61,7 +63,8 @@ verify-t1:
 # Does not replace verify-t1. Covers:
 #   - async.loop Post path uses T1 MPSC (H3-1 source-contract in test_async)
 #   - bag / multimap H3-2 production contract pins
-#   - H2-6 Close->join->Free examples (Channel + SegQueue + Bag)
+#   - H2-6 Close->join->Free examples (Channel + SegQueue + Bag + MSQueue)
+#   - HashMap stop->join->Free (no Close API honesty)
 verify-h3-consumers:
 	@mkdir -p $(VERIFY_LOG_DIR)
 	@echo "verify-h3-consumers: starting (log -> $(VERIFY_H3_CONSUMERS_LOG))"
@@ -81,10 +84,14 @@ verify-h3-consumers:
 	  $(MAKE) -C $(T1_CLOSE_JOIN_FREE_DIR) clean test; \
 	  echo "=== t1_segqueue_workers example (SegQueue N-worker lifecycle) ==="; \
 	  $(MAKE) -C $(T1_SEGQUEUE_WORKERS_DIR) clean test; \
+	  echo "=== t1_msqueue_close_join_free example (T1 MSQueue lifecycle) ==="; \
+	  $(MAKE) -C $(T1_MSQUEUE_CLOSE_JOIN_FREE_DIR) clean test; \
 	  echo "=== t2_bag_close_join_free example (H3-2 Bag lifecycle) ==="; \
 	  $(MAKE) -C $(T2_BAG_CLOSE_JOIN_FREE_DIR) clean test; \
 	  echo "=== t2_multimap_close_join_free example (H3-2 MultiMap lifecycle) ==="; \
 	  $(MAKE) -C $(T2_MULTIMAP_CLOSE_JOIN_FREE_DIR) clean test; \
+	  echo "=== t2_hashmap_join_free example (HashMap stop-join-Free, no Close) ==="; \
+	  $(MAKE) -C $(T2_HASHMAP_JOIN_FREE_DIR) clean test; \
 	  echo "verify-h3-consumers-status=pass"; \
 	} 2>&1 | tee $(VERIFY_H3_CONSUMERS_LOG)
 	@echo "verify-h3-consumers-status=pass log=$(VERIFY_H3_CONSUMERS_LOG)"
