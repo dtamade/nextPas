@@ -125,7 +125,7 @@ begin
   for LIdx := 0 to FCapacity - 1 do
   begin
     Result := (LHash + LIdx) and (FCapacity - 1);
-    LState := AtomicLoad32(FSlots[Result].FState, moAcquire);
+    LState := atomic_load(FSlots[Result].FState, mo_acquire);
     if LState = 0 then
       Exit(Result);
     if LState = 1 then
@@ -140,27 +140,31 @@ end;
 procedure TLockFreeHashTableImpl.EnterRead;
 begin
   repeat
-    while AtomicLoad32(FGrowing, moAcquire) <> 0 do
+    while atomic_load(FGrowing, mo_acquire) <> 0 do
       CpuPause;
-    AtomicFetchAdd32(FActiveReaders, 1, moAcqRel);
-    if AtomicLoad32(FGrowing, moAcquire) = 0 then
+    atomic_fetch_add(FActiveReaders, 1, mo_acq_rel);
+    if atomic_load(FGrowing, mo_acquire) = 0 then
       Exit;
-    AtomicFetchSub32(FActiveReaders, 1, moAcqRel);
+    atomic_fetch_sub(FActiveReaders, 1, mo_acq_rel);
   until False;
 end;
 
 procedure TLockFreeHashTableImpl.LeaveRead;
 begin
-  AtomicFetchSub32(FActiveReaders, 1, moRelease);
+  atomic_fetch_sub(FActiveReaders, 1, mo_release);
 end;
 
 procedure TLockFreeHashTableImpl.LockWriter;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcquire) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acquire, mo_relaxed) then
+      Exit;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -175,7 +179,7 @@ end;
 
 procedure TLockFreeHashTableImpl.UnlockWriter;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TLockFreeHashTableImpl.GrowLocked: Boolean;
@@ -188,7 +192,7 @@ begin
   if FUsedCount * 4 < Int64(LOldCap) * 3 then
     Exit(True);
 
-  LLiveCount := AtomicLoad64(FCount, moRelaxed);
+  LLiveCount := atomic_load_64(FCount, mo_relaxed);
   if LLiveCount * 2 < LOldCap then
     LNewCap := LOldCap
   else
@@ -198,9 +202,9 @@ begin
     LNewCap := LOldCap * 2;
   end;
 
-  AtomicStore32(FGrowing, 1, moRelease);
+  atomic_store(FGrowing, 1, mo_release);
   try
-    while AtomicLoad32(FActiveReaders, moAcquire) <> 0 do
+    while atomic_load(FActiveReaders, mo_acquire) <> 0 do
       CpuPause;
 
     SetLength(LNewSlots, LNewCap);
@@ -228,7 +232,7 @@ begin
     FUsedCount := LLiveCount;
     Result := True;
   finally
-    AtomicStore32(FGrowing, 0, moRelease);
+    atomic_store(FGrowing, 0, mo_release);
   end;
 end;
 
@@ -267,11 +271,11 @@ function TLockFreeHashTableImpl.Insert(const AKey: TKey; const AValue: TValue): 
 var
   LIdx: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(htClosed);
   LockWriter;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(htClosed);
 
     LIdx := FindSlot(AKey);
@@ -288,19 +292,19 @@ begin
     if LIdx < 0 then
       Exit(htFull);
 
-    AtomicStore32(FSlots[LIdx].FState, HASH_TABLE_RESERVED, moRelease);
+    atomic_store(FSlots[LIdx].FState, HASH_TABLE_RESERVED, mo_release);
     try
       FSlots[LIdx].FKey := AKey;
       FSlots[LIdx].FValue := AValue;
     except
       FSlots[LIdx].FKey := Default(TKey);
       FSlots[LIdx].FValue := Default(TValue);
-      AtomicStore32(FSlots[LIdx].FState, 0, moRelease);
+      atomic_store(FSlots[LIdx].FState, 0, mo_release);
       raise;
     end;
-    AtomicStore32(FSlots[LIdx].FState, 1, moRelease);
+    atomic_store(FSlots[LIdx].FState, 1, mo_release);
     Inc(FUsedCount);
-    AtomicFetchAdd64(FCount, 1, moRelaxed);
+    atomic_fetch_add_64(FCount, 1, mo_relaxed);
     Result := htOk;
   finally
     UnlockWriter;
@@ -316,7 +320,7 @@ begin
     LIdx := FindSlot(AKey);
     if LIdx < 0 then
       Exit(htNotFound);
-    if (AtomicLoad32(FSlots[LIdx].FState, moAcquire) = 1) and
+    if (atomic_load(FSlots[LIdx].FState, mo_acquire) = 1) and
        (FSlots[LIdx].FKey = AKey) then
     begin
       AValue := FSlots[LIdx].FValue;
@@ -339,8 +343,8 @@ begin
       Exit(htNotFound);
     if (FSlots[LIdx].FState = 1) and (FSlots[LIdx].FKey = AKey) then
     begin
-      AtomicStore32(FSlots[LIdx].FState, 2, moRelease);
-      AtomicFetchSub64(FCount, 1, moRelaxed);
+      atomic_store(FSlots[LIdx].FState, 2, mo_release);
+      atomic_fetch_sub_64(FCount, 1, mo_relaxed);
       Exit(htOk);
     end;
     Result := htNotFound;
@@ -357,7 +361,7 @@ begin
   try
     LIdx := FindSlot(AKey);
     Result := (LIdx >= 0) and
-              (AtomicLoad32(FSlots[LIdx].FState, moAcquire) = 1) and
+              (atomic_load(FSlots[LIdx].FState, mo_acquire) = 1) and
               (FSlots[LIdx].FKey = AKey);
   finally
     LeaveRead;
@@ -366,19 +370,19 @@ end;
 
 function TLockFreeHashTableImpl.ApproxCount: Int64; inline;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed);
+  Result := atomic_load_64(FCount, mo_relaxed);
 end;
 
 function TLockFreeHashTableImpl.IsEmpty: Boolean; inline;
 begin
-  Result := AtomicLoad64(FCount, moRelaxed) = 0;
+  Result := atomic_load_64(FCount, mo_relaxed) = 0;
 end;
 
 procedure TLockFreeHashTableImpl.Close;
 begin
   LockWriter;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     UnlockWriter;
   end;
@@ -396,10 +400,10 @@ begin
       begin
         FSlots[LI].FKey := Default(TKey);
         FSlots[LI].FValue := Default(TValue);
-        AtomicStore32(FSlots[LI].FState, 0, moRelease);
+        atomic_store(FSlots[LI].FState, 0, mo_release);
       end;
     end;
-    AtomicStore64(FCount, 0, moRelaxed);
+    atomic_store_64(FCount, 0, mo_relaxed);
     FUsedCount := 0;
   finally
     UnlockWriter;
@@ -408,7 +412,7 @@ end;
 
 function TLockFreeHashTableImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.
