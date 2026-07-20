@@ -4,6 +4,7 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 
 **契约**：[CONTRACT.md](CONTRACT.md)
 **目标树**：[GOAL_TREE.md](GOAL_TREE.md)
+**Scorecard**：[SCORECARD.md](SCORECARD.md)
 **层级**：L1（依赖 L0 `platform.sync` / `platform.thread`，以及 L1 `atomic`、`errors`、`time`）
 **状态**：Maintenance + 契约硬化（接管基线进行中）
 
@@ -35,7 +36,7 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 | 应用级 Mutex / RWLock / WaitGroup / … | **`sync`（本 lane）** | 公开门面 |
 | async 内 Mutex / Channel / CondVar | `async` | 不同事件循环语义，不混用 |
 | thread pool / worksteal | `thread` | 可消费 sync 原语 |
-| `TSyncPool` | `sync.pool` | 实验表面；TLS 单池约束；冷路径 nextpas `IMutex` |
+| `TSyncPool` | `sync.pool` | 实验表面；**per-pool TLS**；冷路径 nextpas `IMutex` |
 
 **禁止**
 
@@ -48,11 +49,11 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 ## 公开工厂（门面）
 
 ```pascal
-function Mutex: IMutex;                 // platform ERRORCHECK，非递归
+function Mutex: INativeMutex;           // platform ERRORCHECK，非递归；可配 CondVar
 function FutexMutex: IMutex;            // 高级：CAS + address-wait；不可配 CondVar
 function RWLock: IRWLock;
 function WaitGroup: IWaitGroup;
-function CondVar: ICondVar;             // 仅配对标准 TMutex
+function CondVar: ICondVar;             // Wait 需要 INativeMutex
 function Once: IOnce;
 function SpinLock: ISpinLock;
 function Semaphore(AInitial: Int32 = 1): ISemaphore;
@@ -81,6 +82,7 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_source_contracts
 | 原语行为 | `test_sync` | Mutex / Futex / RWLock / CondVar / Once / … |
 | 对象池 | `test_sync_pool` | `TSyncPool` TLS freelist |
 | 源契约 | `test_sync_source_contracts` | 门面/接口/边界防漂移 |
+| Win compile | `test_sync_windows_compile_gate` | `-dNEXTPAS_FORCE_HOST_WINDOWS` -Cn |
 
 Benchmark：`core/benchmarks/nextpas.core.sync/bench_sync/`
 

@@ -22,24 +22,26 @@
 - [x] 模块级测试 Makefile + source-contract gate
 - [x] 关键错误路径行为测试补强
 - [x] **E2** `TSyncPool` 冷路径：`TRTLCriticalSection` → nextpas `IMutex`/`TMutex`
+- [x] per-pool TLS freelist（多 pool 同线程隔离）
+- [x] `INativeMutex` 类型级 CondVar 配对
+- [x] Windows forced compile gate
+- [x] SCORECARD 初版（SC1–SC6）
 
 ---
 
 ## Now（当前 lane 焦点）
 
 - [x] 基线验证证据落盘（focused gates + hygiene，2026-07-20）
-- [ ] path-limited landing（`sync` 分支 commits 已就绪）
+- [ ] path-limited landing（landing candidate + landing-check）
 
 ---
 
 ## Next
 
-1. 评估 per-pool TLS（取消全局 threadvar 单池约束）
-2. CondVar / Futex 类型级隔离（若可无破坏消费者）
-3. L1 Windows / Darwin compile gate（与 platform 对齐）
-4. Stress / 超时边界 / 销毁持锁策略统一
-5. SCORECARD + 可复现 uncontended/contended bench 入口
-6. 是否公开 `RecursiveMutex`；是否门面化 Pool
+1. Darwin/FreeBSD compile gate（若 FORCE_HOST 路径稳定）
+2. Stress / 超时边界 / 销毁持锁策略统一
+3. SCORECARD contended 场景
+4. 是否公开 `RecursiveMutex`；是否门面化 Pool
 
 ---
 
