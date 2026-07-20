@@ -3,10 +3,15 @@ program test_config_examples;
 {$I nextpas.core.settings.inc}
 
 uses
-  Classes,
-  SysUtils,
-  Process,
-  nextpas.core.test;
+  nextpas.core.base,
+  nextpas.core.test,
+  nextpas.core.path,
+  nextpas.core.fs,
+  nextpas.core.os.env,
+  nextpas.core.process,
+  nextpas.core.process.base,
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 var
   T: TTestSuite;
@@ -32,22 +37,6 @@ const
     'examples/nextpas.core.config/config_mutation_patterns';
   ConfigUnitPath = 'src/nextpas.core.config.pas';
 
-procedure AppendAvailableProcessOutput(AProcess: TProcess; var AOutput: string);
-var
-  LBuffer: array[0..2047] of Byte;
-  LBytesRead: LongInt;
-  LChunk: RawByteString;
-begin
-  while AProcess.Output.NumBytesAvailable > 0 do
-  begin
-    LBytesRead := AProcess.Output.Read(LBuffer, SizeOf(LBuffer));
-    if LBytesRead <= 0 then
-      Break;
-    SetString(LChunk, PAnsiChar(@LBuffer[0]), LBytesRead);
-    AOutput := AOutput + string(LChunk);
-  end;
-end;
-
 function PathJoin(const ALeft, ARight: string): string;
 begin
   if ALeft = '' then
@@ -69,7 +58,7 @@ begin
 
   for I := 0 to 8 do
   begin
-    if FileExists(PathJoin(LDir, ConfigUnitPath)) and
+    if Exists(PathJoin(LDir, ConfigUnitPath)) and
       DirectoryExists(PathJoin(LDir, AExampleRelativeDir)) then
     begin
       ARootDir := LDir;
@@ -95,7 +84,7 @@ end;
 
 function ResolveMakeExecutable: string;
 begin
-  Result := Trim(GetEnvironmentVariable('MAKE'));
+  Result := Trim(GetEnv('MAKE'));
   if Result = '' then
     Result := 'make';
 end;
@@ -104,35 +93,27 @@ procedure RunProcessAndCapture(const AExecutable: string;
   const AArguments: array of string; const AWorkingDir: string;
   out AExitCode: Integer; out AOutput: string);
 var
-  LProcess: TProcess;
-  I: Integer;
+  LCmd: ICommand;
+  LOut: TProcessOutput;
 begin
   AExitCode := -1;
   AOutput := '';
-  LProcess := TProcess.Create(nil);
   try
-    LProcess.Executable := AExecutable;
-    LProcess.CurrentDirectory := AWorkingDir;
-    for I := Low(AArguments) to High(AArguments) do
-      LProcess.Parameters.Add(AArguments[I]);
-    LProcess.Options := [poUsePipes, poStderrToOutPut];
-    LProcess.Execute;
-    while LProcess.Running do
-    begin
-      AppendAvailableProcessOutput(LProcess, AOutput);
-      Sleep(10);
-    end;
-    AppendAvailableProcessOutput(LProcess, AOutput);
-    LProcess.WaitOnExit;
-    AExitCode := LProcess.ExitCode;
+    LCmd := Command(AExecutable)
+      .Args(AArguments)
+      .Dir(AWorkingDir)
+      .Stdout(stPiped)
+      .Stderr(stPiped);
+    LOut := LCmd.Spawn.WaitWithOutput;
+    AExitCode := LOut.ExitCode;
+    AOutput := LOut.StdOut + LOut.StdErr;
   except
     on E: Exception do
     begin
       AExitCode := -1;
-      AOutput := Format('%s: %s', [E.ClassName, E.Message]);
+      AOutput := TextFormat('%s: %s', [E.ClassName, E.Message]);
     end;
   end;
-  LProcess.Free;
 end;
 
 procedure CheckContains(const AOutput, AFragment, ALabel: string);
@@ -260,5 +241,6 @@ begin
   T.Test('mutation example run passes', @TestMutationPatternsExampleRunPasses);
   T.Test('mutation example reports write markers',
     @TestMutationPatternsExampleReportsWriteMarkers);
-  if not T.Run then Halt(1);
+  if not T.Run then
+    Halt(1);
 end.

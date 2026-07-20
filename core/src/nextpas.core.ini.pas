@@ -103,6 +103,7 @@ implementation
 
 uses
   nextpas.core.format.limits,
+  nextpas.core.fs,
   nextpas.core.io.util,
   nextpas.core.mem.default,
   nextpas.core.mem;
@@ -461,42 +462,7 @@ end;
 
 function TIniFile.TryLoadFromFile(const APath: string; out AError: TIniError): Boolean;
 var
-  LFile: TextFile;
-  LContent, LLine: string;
-  LLen, LCapacity, LIOResult: Integer;
-
-  procedure EnsureContentCapacity(AAdditional: Integer);
-  var
-    LRequired: Integer;
-  begin
-    LRequired := LLen + AAdditional;
-    if LRequired <= LCapacity then
-      Exit;
-    if LCapacity = 0 then
-      LCapacity := 1024;
-    while LCapacity < LRequired do
-      LCapacity := LCapacity * 2;
-    SetLength(LContent, LCapacity);
-  end;
-
-  procedure AppendToContent(const AText: string);
-  var
-    LTextLen: Integer;
-  begin
-    LTextLen := Length(AText);
-    if LTextLen = 0 then
-      Exit;
-    EnsureContentCapacity(LTextLen);
-    Move(AText[1], LContent[LLen + 1], LTextLen);
-    Inc(LLen, LTextLen);
-  end;
-
-  procedure AppendContentChar(ACh: AnsiChar);
-  begin
-    EnsureContentCapacity(1);
-    LContent[LLen + 1] := ACh;
-    Inc(LLen);
-  end;
+  LContent: string;
 
   procedure SetIoError(const AMessage: string);
   begin
@@ -511,32 +477,8 @@ begin
   AError.Line := 0;
   AError.Column := 0;
   AError.Offset := 0;
-  LContent := '';
-  LLen := 0;
-  LCapacity := 0;
-
   try
-    AssignFile(LFile, APath);
-    {$I-}
-    Reset(LFile);
-    {$I+}
-    LIOResult := IOResult;
-    if LIOResult <> 0 then
-    begin
-      SetIoError('Cannot open file "' + APath + '": IO error ' + IntToStr(LIOResult));
-      Exit(False);
-    end;
-
-    try
-      while not EOF(LFile) do
-      begin
-        ReadLn(LFile, LLine);
-        AppendToContent(LLine);
-        AppendContentChar(#10);
-      end;
-    finally
-      CloseFile(LFile);
-    end;
+    LContent := ReadFileText(APath);
   except
     on E: Exception do
     begin
@@ -545,7 +487,6 @@ begin
     end;
   end;
 
-  SetLength(LContent, LLen);
   Result := TryLoadFromString(LContent, AError);
   if not Result and (AError.Message <> '') and (AError.Line > 0) then
     AError.Message := 'Cannot parse file "' + APath + '": ' +
@@ -567,64 +508,15 @@ end;
 
 procedure TIniFile.LoadFromFile(const AFileName: string);
 var
-  LFile: TextFile;
-  LContent, LLine: string;
-  LLen, LCapacity: Integer;
-
-  procedure EnsureContentCapacity(AAdditional: Integer);
-  var
-    LRequired: Integer;
-  begin
-    LRequired := LLen + AAdditional;
-    if LRequired <= LCapacity then
-      Exit;
-    if LCapacity = 0 then
-      LCapacity := 1024;
-    while LCapacity < LRequired do
-      LCapacity := LCapacity * 2;
-    SetLength(LContent, LCapacity);
-  end;
-
-  procedure AppendToContent(const AText: string);
-  var
-    LTextLen: Integer;
-  begin
-    LTextLen := Length(AText);
-    if LTextLen = 0 then
-      Exit;
-    EnsureContentCapacity(LTextLen);
-    Move(AText[1], LContent[LLen + 1], LTextLen);
-    Inc(LLen, LTextLen);
-  end;
-
-  procedure AppendContentChar(ACh: AnsiChar);
-  begin
-    EnsureContentCapacity(1);
-    LContent[LLen + 1] := ACh;
-    Inc(LLen);
-  end;
-
+  LContent: string;
 begin
-  LContent := '';
-  LLen := 0;
-  LCapacity := 0;
-  AssignFile(LFile, AFileName);
-  {$I-}
-  Reset(LFile);
-  {$I+}
-  if IOResult <> 0 then
-    raise ENextPasError.Create('Cannot open file: ' + AFileName, ecIO);
   try
-    while not EOF(LFile) do
-    begin
-      ReadLn(LFile, LLine);
-      AppendToContent(LLine);
-      AppendContentChar(#10);
-    end;
-  finally
-    CloseFile(LFile);
+    LContent := ReadFileText(AFileName);
+  except
+    on E: Exception do
+      raise ENextPasError.Create('Cannot open file: ' + AFileName + ': ' +
+        E.Message, ecIO);
   end;
-  SetLength(LContent, LLen);
   LoadFromString(LContent);
 end;
 
@@ -693,20 +585,23 @@ end;
 
 procedure TIniFile.SaveToFile(const AFileName: string);
 var
-  LFile: TextFile;
   LContent: string;
+  LData: TBytes;
 begin
   LContent := ToString;
-  AssignFile(LFile, AFileName);
-  {$I-}
-  Rewrite(LFile);
-  {$I+}
-  if IOResult <> 0 then
-    raise ENextPasError.Create('Cannot write file: ' + AFileName, ecIO);
   try
-    Write(LFile, LContent);
-  finally
-    CloseFile(LFile);
+    if Length(LContent) > 0 then
+    begin
+      SetLength(LData, Length(LContent));
+      Move(PAnsiChar(LContent)^, LData[0], Length(LContent));
+      WriteAtomic(AFileName, LData);
+    end
+    else
+      WriteAtomic(AFileName, nil);
+  except
+    on E: Exception do
+      raise ENextPasError.Create('Cannot write file: ' + AFileName + ': ' +
+        E.Message, ecIO);
   end;
 end;
 

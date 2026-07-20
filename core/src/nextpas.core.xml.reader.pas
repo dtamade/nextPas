@@ -74,7 +74,8 @@ implementation
 
 uses
   nextpas.core.text.scan,
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.format;
 
 const
   XmlNamespaceUri = 'http://www.w3.org/XML/1998/namespace';
@@ -1111,7 +1112,7 @@ begin
   if not FHasError then
   begin
     FHasError := True;
-    FError := Format('[%d:%d] %s', [FLine, FCol, AMsg]);
+    FError := TextFormat('[%d:%d] %s', [FLine, FCol, AMsg]);
   end;
 end;
 

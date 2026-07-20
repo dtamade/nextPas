@@ -29,6 +29,8 @@ type
     function IsBool: Boolean; inline;
     function IsInt: Boolean; inline;
     function IsReal: Boolean; inline;
+    { YAML/TOML-style alias for IsReal. }
+    function IsFloat: Boolean; inline;
     function IsStr: Boolean; inline;
     function IsArray: Boolean; inline;
     function IsObject: Boolean; inline;
@@ -44,6 +46,9 @@ type
     function ArrayGet(AIndex: UInt32): TJsonValue;  { Invalid if out of bounds }
     function ObjectGet(const AKey: TStringView): TJsonValue; overload; { Invalid if missing }
     function ObjectGet(const AKey: string): TJsonValue; overload;
+    { TOML/YAML-style alias for ObjectGet. }
+    function Get(const AKey: TStringView): TJsonValue; overload; inline;
+    function Get(const AKey: string): TJsonValue; overload; inline;
     function ObjectHas(const AKey: TStringView): Boolean; overload;
     function ObjectHas(const AKey: string): Boolean; overload;
     function ObjectLen: UInt32;             { Number of key-value pairs }
@@ -90,6 +95,11 @@ end;
 function TJsonValue.IsReal: Boolean;
 begin
   Result := Kind = jnkReal;
+end;
+
+function TJsonValue.IsFloat: Boolean;
+begin
+  Result := IsReal;
 end;
 
 function TJsonValue.IsStr: Boolean;
@@ -260,6 +270,16 @@ end;
 function TJsonValue.ObjectGet(const AKey: string): TJsonValue;
 begin
   Result := ObjectGet(TStringView.FromStr(AKey));
+end;
+
+function TJsonValue.Get(const AKey: TStringView): TJsonValue;
+begin
+  Result := ObjectGet(AKey);
+end;
+
+function TJsonValue.Get(const AKey: string): TJsonValue;
+begin
+  Result := ObjectGet(AKey);
 end;
 
 function TJsonValue.ObjectHas(const AKey: string): Boolean;
