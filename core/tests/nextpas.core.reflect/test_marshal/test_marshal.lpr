@@ -225,7 +225,7 @@ begin
   LServer.Timeout := 1.25;
   LConfig := TConfig.Create;
   try
-    ConfigUnmarshal(nil, LRegistry, LTypeID, @LServer);
+    ConfigUnmarshal(TConfig(nil), LRegistry, LTypeID, @LServer);
     ConfigUnmarshal(LConfig, nil, LTypeID, @LServer);
     ConfigUnmarshal(LConfig, LRegistry, 0, @LServer);
     ConfigUnmarshal(LConfig, LRegistry, LTypeID, nil);
@@ -239,6 +239,66 @@ begin
   end;
 end;
 
+procedure TestUnmarshalFromIConfig;
+var
+  LRegistry: ITypeRegistry;
+  LTypeID: TTypeID;
+  LSnapshot: IConfig;
+  LServer: TServerConfig;
+begin
+  LRegistry := CreateTypeRegistry;
+  LTypeID := RegisterServerConfig(LRegistry);
+  LServer.Host := '';
+  LServer.Port := 0;
+  LServer.Debug := False;
+  LServer.Timeout := 0.0;
+
+  LSnapshot := ConfigBuilder
+    .AddJson('{"Host":"from-builder","Port":4242,"Debug":true,"Timeout":3.5}')
+    .Build;
+
+  ConfigUnmarshal(LSnapshot, LRegistry, LTypeID, @LServer);
+
+  CheckEqual('from-builder', LServer.Host, 'IConfig Host');
+  CheckEqual(Int64(4242), Int64(LServer.Port), 'IConfig Port');
+  CheckEqual(True, LServer.Debug, 'IConfig Debug');
+  Check((LServer.Timeout > 3.49) and (LServer.Timeout < 3.51), 'IConfig Timeout');
+end;
+
+procedure TestUnmarshalWithSectionPrefix;
+var
+  LRegistry: ITypeRegistry;
+  LTypeID: TTypeID;
+  LConfig: TConfig;
+  LServer: TServerConfig;
+begin
+  LRegistry := CreateTypeRegistry;
+  LTypeID := RegisterServerConfig(LRegistry);
+  LServer.Host := '';
+  LServer.Port := 0;
+  LServer.Debug := False;
+  LServer.Timeout := 0.0;
+  LConfig := TConfig.Create;
+  try
+    LConfig.LoadFromJson(
+      '{"server":{"Host":"prefixed","Port":9000,"Debug":false,"Timeout":1.0}}');
+    { Flat keys after load: server.Host, server.Port, ... case-insensitive. }
+    ConfigUnmarshal(LConfig, LRegistry, LTypeID, @LServer, 'server');
+
+    CheckEqual('prefixed', LServer.Host, 'prefix Host');
+    CheckEqual(Int64(9000), Int64(LServer.Port), 'prefix Port');
+    CheckEqual(False, LServer.Debug, 'prefix Debug');
+    Check((LServer.Timeout > 0.99) and (LServer.Timeout < 1.01), 'prefix Timeout');
+
+    { Trailing dot on prefix is accepted. }
+    LServer.Host := '';
+    ConfigUnmarshal(LConfig, LRegistry, LTypeID, @LServer, 'server.');
+    CheckEqual('prefixed', LServer.Host, 'prefix Host with trailing dot');
+  finally
+    LConfig.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.reflect.marshal');
   T.Test('unmarshal server config', @TestUnmarshalServerConfig);
@@ -246,5 +306,7 @@ begin
   T.Test('empty config keeps zero values', @TestEmptyConfigKeepsZeroValues);
   T.Test('multiple record types', @TestMultipleRecordTypes);
   T.Test('invalid inputs do not crash', @TestInvalidInputsDoNotCrash);
+  T.Test('unmarshal from IConfig snapshot', @TestUnmarshalFromIConfig);
+  T.Test('unmarshal with section prefix', @TestUnmarshalWithSectionPrefix);
   if not T.Run then Halt(1);
 end.

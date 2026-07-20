@@ -1,6 +1,6 @@
 # nextpas.core.config 代码契约
 
-**模块路径**：`core/src/nextpas.core.config*.pas`（6 个源文件）
+**模块路径**：`core/src/nextpas.core.config*.pas` + `config.*.inc` 实现分片
 **层级**：L3（依赖 L0–L2：`ini`、`json`、`yaml`、`toml`、`os.env`、`platform.watch`、`sync`、`errors`、`text.conv`）
 **Owner**：config-json-xml-toml-yaml-csv-ini lane
 **最后更新**：2026-07-20
@@ -182,8 +182,9 @@ make focused FOCUS=core/tests/nextpas.core.config/test_config_export
 | 项 | 状态 |
 |----|------|
 | `AddKeyValues` 浅 CLI/map 注入 | **已实现**（不依赖 `args`） |
+| typed bind `ConfigUnmarshal` | **已实现**于 `nextpas.core.reflect.marshal`（`IConfig`/`TConfig` + section prefix） |
 | `AddArgs(TArgParser)` 深耦合 | Future（需分层审计） |
-| typed bind（IConfig → record） | Future |
+| 嵌套 record 递归 bind | Future（当前 flat + prefix） |
 | 插值 mode 扩展 | Future |
 | borrowed `IConfig` adapter | Future |
 | XML/CSV 作为 `TConfigFormat` | Out of scope |
