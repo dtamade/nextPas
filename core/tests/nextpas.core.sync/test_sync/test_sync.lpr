@@ -579,6 +579,132 @@ begin
   Check(not LEv.WaitTimeout(1000000), 'second Wait must timeout with no second permit');
 end;
 
+procedure TestWaitGroupHighConcurrency;
+var
+  LWg: IWaitGroup;
+  LCounter: Int32;
+  LThreads: array[0..15] of TThread;
+  LI: Integer;
+begin
+  LWg := WaitGroup;
+  LCounter := 0;
+  LWg.Add(16);
+  for LI := 0 to 15 do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    begin
+      InterlockedIncrement(LCounter);
+      LWg.Done;
+    end);
+    LThreads[LI].FreeOnTerminate := False;
+    LThreads[LI].Start;
+  end;
+  LWg.Wait;
+  CheckEqual(Int64(16), Int64(LCounter), '16 workers all completed before Wait returns');
+  for LI := 0 to 15 do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+end;
+
+procedure TestEventManualMultiWaiter;
+var
+  LEv: IEvent;
+  LPassed: Int32;
+  LThreads: array[0..3] of TThread;
+  LI: Integer;
+begin
+  LEv := Event(True); { manual reset }
+  LPassed := 0;
+  for LI := 0 to 3 do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    begin
+      LEv.Wait;
+      InterlockedIncrement(LPassed);
+    end);
+    LThreads[LI].FreeOnTerminate := False;
+    LThreads[LI].Start;
+  end;
+  Sleep(20);
+  CheckEqual(Int64(0), Int64(LPassed), 'waiters blocked before Set');
+  LEv.SetEvent;
+  for LI := 0 to 3 do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+  CheckEqual(Int64(4), Int64(LPassed), 'manual reset wakes all waiters');
+end;
+
+procedure TestEventAutoSingleWinner;
+var
+  LEv: IEvent;
+  LPassed: Int32;
+  LThreads: array[0..3] of TThread;
+  LI: Integer;
+begin
+  LEv := Event(False); { auto reset }
+  LPassed := 0;
+  for LI := 0 to 3 do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    begin
+      if LEv.WaitTimeout(200000000) then { 200ms }
+        InterlockedIncrement(LPassed);
+    end);
+    LThreads[LI].FreeOnTerminate := False;
+    LThreads[LI].Start;
+  end;
+  Sleep(20);
+  LEv.SetEvent;
+  for LI := 0 to 3 do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+  CheckEqual(Int64(1), Int64(LPassed), 'auto-reset single Set admits exactly one waiter');
+end;
+
+procedure TestSemaphoreTimeoutZero;
+var
+  LSem: ISemaphore;
+begin
+  LSem := Semaphore(0);
+  Check(not LSem.TryAcquireTimeout(0), 'timeout 0 on empty semaphore fails');
+  LSem.Release;
+  Check(LSem.TryAcquireTimeout(0), 'timeout 0 succeeds when permit available');
+end;
+
+procedure TestCondVarSignalWakesWaiter;
+var
+  LCond: ICondVar;
+  LMutex: INativeMutex;
+  LWoke: Int32;
+  LThread: TThread;
+begin
+  LCond := CondVar;
+  LMutex := Mutex;
+  LWoke := 0;
+  LMutex.Acquire;
+  LThread := TThread.CreateAnonymousThread(procedure
+  begin
+    Sleep(30);
+    LMutex.Acquire;
+    LCond.Signal;
+    LMutex.Release;
+  end);
+  LThread.FreeOnTerminate := False;
+  LThread.Start;
+  Check(LCond.WaitTimeout(LMutex, 500000000), 'waiter sees signal within 500ms');
+  InterlockedIncrement(LWoke);
+  LMutex.Release;
+  LThread.WaitFor;
+  LThread.Free;
+  CheckEqual(Int64(1), Int64(LWoke), 'condvar signal path completed');
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.sync');
   T.Test('Mutex basic', @TestMutexBasic);
@@ -621,6 +747,11 @@ begin
   T.Test('AutoReset idempotent', @TestAutoResetIdempotent);
   T.Test('ManualReset set+reset pulse', @TestManualResetSetResetPulse);
   T.Test('Event auto-reset single permit', @TestEventAutoResetSinglePermit);
+  T.Test('WaitGroup high concurrency', @TestWaitGroupHighConcurrency);
+  T.Test('Event manual multi-waiter', @TestEventManualMultiWaiter);
+  T.Test('Event auto single winner', @TestEventAutoSingleWinner);
+  T.Test('Semaphore timeout zero', @TestSemaphoreTimeoutZero);
+  T.Test('CondVar signal wakes waiter', @TestCondVarSignalWakesWaiter);
 
   if not T.Run then Halt(1);
 end.
