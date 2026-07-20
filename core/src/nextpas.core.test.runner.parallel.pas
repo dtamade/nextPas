@@ -478,6 +478,9 @@ begin
     end;
   end;
 
+  { SoftFail: flip pass→fail before mutex counter update }
+  ApplySoftFails(LStatus, LFailMsg);
+
   R^.Mtx.Acquire;
   try
     IncByStatus(LStatus, R^.Pass^, R^.Fail^, R^.Skip^);

@@ -165,8 +165,8 @@ begin
   Result^.UserData := AReactor.FNextUserData;
   Result^.Next := PIocpPendingOp(AReactor.FPendingHead);
   AReactor.FPendingHead := Result;
-  AtomicStore32(AReactor.FPendingDone, 0, moRelease);
-  AtomicFetchAdd32(AReactor.FPendingCount, 1, moAcqRel);
+  atomic_store(AReactor.FPendingDone, 0, mo_release);
+  atomic_fetch_add(AReactor.FPendingCount, 1, mo_acq_rel);
 end;
 
 procedure IocpUnlinkOp(var AReactor: TIocpReactor; AOp: PIocpPendingOp);
@@ -184,9 +184,9 @@ begin
         AReactor.FPendingHead := LCurrent^.Next
       else
         LPrevious^.Next := LCurrent^.Next;
-      LPendingCount := AtomicFetchSub32(AReactor.FPendingCount, 1, moAcqRel) - 1;
+      LPendingCount := atomic_fetch_sub(AReactor.FPendingCount, 1, mo_acq_rel) - 1;
       if LPendingCount = 0 then
-        AtomicStore32(AReactor.FPendingDone, 1, moRelease);
+        atomic_store(AReactor.FPendingDone, 1, mo_release);
       Exit;
     end;
     LPrevious := LCurrent;
@@ -228,15 +228,15 @@ var
   LOverlapped: LPOVERLAPPED;
   LOk: BOOL;
 begin
-  if AtomicLoad32(AReactor.FPendingCount, moAcquire) = 0 then
+  if atomic_load(AReactor.FPendingCount, mo_acquire) = 0 then
     Exit(True);
 
   LWaitedMs := 0;
   while LWaitedMs < ATimeoutMs do
   begin
-    if AtomicLoad32(AReactor.FPendingDone, moAcquire) <> 0 then
+    if atomic_load(AReactor.FPendingDone, mo_acquire) <> 0 then
       Exit(True);
-    if AtomicLoad32(AReactor.FPendingCount, moAcquire) = 0 then
+    if atomic_load(AReactor.FPendingCount, mo_acquire) = 0 then
       Exit(True);
 
     LBytes := 0;
@@ -248,7 +248,7 @@ begin
     Inc(LWaitedMs, IOCP_CLOSE_PENDING_POLL_MS);
   end;
 
-  Result := AtomicLoad32(AReactor.FPendingCount, moAcquire) = 0;
+  Result := atomic_load(AReactor.FPendingCount, mo_acquire) = 0;
 end;
 
 procedure IocpLoadWinsockExt;
@@ -285,8 +285,8 @@ var
 begin
   LOp := PIocpPendingOp(AReactor.FPendingHead);
   AReactor.FPendingHead := nil;
-  AtomicStore32(AReactor.FPendingCount, 0, moRelease);
-  AtomicStore32(AReactor.FPendingDone, 1, moRelease);
+  atomic_store(AReactor.FPendingCount, 0, mo_release);
+  atomic_store(AReactor.FPendingDone, 1, mo_release);
   LHasException := False;
   LExceptionMessage := '';
   while LOp <> nil do
@@ -543,8 +543,8 @@ class function TIocpReactor.Create(AMaxEvents: UInt32): TIocpReactor;
 begin
   FillChar(Result, SizeOf(Result), 0);
   Result.FMaxEvents := AMaxEvents;
-  AtomicStore32(Result.FRunning, 0, moRelease);
-  AtomicStore32(Result.FPendingDone, 1, moRelease);
+  atomic_store(Result.FRunning, 0, mo_release);
+  atomic_store(Result.FPendingDone, 1, mo_release);
   Result.FPort := PtrUInt(CreateIoCompletionPort(HANDLE(INVALID_HANDLE_VALUE),
     nil, 0, AMaxEvents));
 end;
@@ -553,14 +553,14 @@ procedure TIocpReactor.Close;
 var
   LPort: PtrUInt;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
   LPort := FPort;
   if LPort <> 0 then
     PostQueuedCompletionStatus(HANDLE(LPort), 0, 0, nil);
   FPort := 0;
   FMaxEvents := 0;
   try
-    if AtomicLoad32(FPendingCount, moAcquire) > 0 then
+    if atomic_load(FPendingCount, mo_acquire) > 0 then
     begin
       IocpCancelPendingOps(Self);
       IocpWaitForPendingOps(Self, HANDLE(LPort), IOCP_CLOSE_PENDING_TIMEOUT_MS);
@@ -781,7 +781,7 @@ end;
 
 function TIocpReactor.HasPending: Boolean;
 begin
-  Result := AtomicLoad32(FPendingCount, moAcquire) > 0;
+  Result := atomic_load(FPendingCount, mo_acquire) > 0;
 end;
 
 function TIocpReactor.TryCancelByContext(AContext: Pointer): Boolean;
@@ -845,9 +845,9 @@ begin
   if FPort = 0 then
     Exit;
 
-  AtomicStore32(FRunning, 1, moRelease);
+  atomic_store(FRunning, 1, mo_release);
   try
-    while AtomicLoad32(FRunning, moAcquire) <> 0 do
+    while atomic_load(FRunning, mo_acquire) <> 0 do
     begin
       LBytes := 0;
       LKey := 0;
@@ -861,13 +861,13 @@ begin
       IocpDispatchCompletion(Self, LBytes, LOk, LOverlapped);
     end;
   finally
-    AtomicStore32(FRunning, 0, moRelease);
+    atomic_store(FRunning, 0, mo_release);
   end;
 end;
 
 procedure TIocpReactor.Stop;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
   if FPort <> 0 then
     PostQueuedCompletionStatus(HANDLE(FPort), 0, 0, nil);
 end;

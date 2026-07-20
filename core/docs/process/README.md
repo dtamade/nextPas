@@ -154,7 +154,7 @@ WriteLn(Result.StdOut);  // "hello"
 - 无 POSIX 信号语义：`Signal` 仅 `SIGKILL(9)` → `TerminateProcess`；其它信号返回 unsupported
 - 管道：父端句柄清 inherit + `PeekNamedPipe` 并发 drain（避免双流死锁）
 - PATHEXT / LookPath 已支持
-- 验证：`make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke`（2026-07-19 本机 **4 passed**；truth=wine-runtime-smoke）
+- 验证：`make -C core/tests/nextpas.core.process/test_process_wine wine-runtime-smoke`（2026-07-20 R26 本机 **7 passed**；truth=wine-runtime-smoke）
 
 ## 推荐 API 分层（避免便利函数爆炸）
 

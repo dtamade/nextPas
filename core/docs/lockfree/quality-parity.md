@@ -130,7 +130,7 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **done**：`async.cancellation`、`sync.once`、`sync.barrier`、`thread.future`、`id.xid`、`async.combinators`、`bench.run`
 - **done**：`sync.event` / `semaphore` / `spinlock`、`stopwatch.tick.*`、`io.reactor`+`epoll`+`kqueue`
 - **H4-1 done**：`thread.pool` → SegQueue
-- **推迟**：`net.async.*`、`io.reactor.iocp`、`async.loop`、mem.*
+- **done（本波）**：`net.async.resolve/dial`、`net.server.threaded`、`io.reactor.iocp`、`async.loop`、`mem.debug_wrap`/`central`/`allocator.growing`/`cache.thread`
 
 ### Q3-a checklist
 

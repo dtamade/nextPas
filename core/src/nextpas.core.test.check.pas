@@ -193,6 +193,12 @@ procedure CheckNotMatch(const APattern, AStr: string;
 procedure Fail(const AMessage: string);
 { Fail with "unexpected ClassName: Message" — for catch-all exception handlers. }
 procedure FailUnexpected(const E: Exception);
+{ SoftFail (Go t.Error): record failure without aborting the test body.
+  Check*/Fail remain Fatal (raise). }
+procedure SoftFail(const AMessage: string);
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string = '');
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string = '');
 procedure Skip(const AReason: string = '');
 
 { ── Snapshot Testing ──────────────────────────────────────────────────────── }
@@ -1203,6 +1209,22 @@ end;
 procedure FailUnexpected(const E: Exception);
 begin
   InternalFail('unexpected ' + E.ClassName + ': ' + E.Message);
+end;
+
+procedure SoftFail(const AMessage: string);
+begin
+  nextpas.core.test.base.SoftFail(AMessage);
+end;
+
+procedure SoftCheckTrue(ACondition: Boolean; const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckTrue(ACondition, AMessage);
+end;
+
+procedure SoftCheckEqual(const AExpected, AActual: Int64;
+  const AMessage: string);
+begin
+  nextpas.core.test.base.SoftCheckEqual(AExpected, AActual, AMessage);
 end;
 
 procedure Skip(const AReason: string);

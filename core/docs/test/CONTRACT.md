@@ -4,7 +4,7 @@
 **层级**：L0-L4（分层架构，详见 README.md）
 **Owner**：test lane（`.worktrees/test`）
 **最后更新**：2026-07-20
-**版本**：v8.15
+**版本**：v8.16
 
 ---
 
@@ -388,12 +388,19 @@ end;
 |----|------|------|
 | CLI 可注入 argv（`ApplyCLIArgsFrom`） | **done (v8.13)** | 与 ParamStr 解耦，表驱动可测 |
 | perf 跨机硬门禁入库 | **不做** | 仅软策略：`PERF_SKIP` / host baseline；跨 OS 数字不作默认 CI fail |
-| SoftFail / CheckSoft | **暂缓** | Check=Fatal 钉死；opt-in Soft 需显式产品拍板 |
+| SoftFail / SoftCheck* | **done (v8.16)** | opt-in Go t.Error；Check*/Fail 仍 Fatal |
 | `IExpectation` 按类型拆分 | **暂缓 (v9)** | 兼容风险高；`RequireKind` 已覆盖类型误用 |
 | TSAN | **阻塞** | 无 FPC 一体化 ThreadSanitizer 路径；靠契约测与原子压力 |
 | 编译器 coverage 插桩 | **阻塞** | 等 nextpas 编译器；现有 fuzz 软覆盖点非源码覆盖 |
 
 ## 11. 变更日志
+
+### v8.16 (2026-07-20) — SoftFail opt-in（Go t.Error）
+
+- **API**：`SoftFail` / `SoftCheckTrue` / `SoftCheckEqual`（不 raise）
+- **Check*/Fail/Expect**：仍 Fatal
+- **Runner**：测试结束 `ApplySoftFails` → tsFailed + 消息（首条 + more count）
+- **IExpectation 拆分**：仍 v9
 
 ### v8.15 (2026-07-20) — CI 严格 golden + contracts 门禁
 
@@ -467,7 +474,7 @@ end;
 - 可计数过程 **≥1500**（排除 stress 10K 空注册）
 
 **v8.9b 语义**：
-- **Check/Fail = Fatal**（raise 中止当前测试；无 SoftFail）
+- **Check/Fail = Fatal**（raise 中止当前测试）；**SoftFail** opt-in 不 raise、结束时记 fail
 - `IsFrameworkFrame` 文档化为 Go `t.Helper` 意图（按 `nextpas.core.test.*` 单元前缀过滤）
 
 **v8.9c 门禁**：

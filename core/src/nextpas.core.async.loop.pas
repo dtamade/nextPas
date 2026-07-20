@@ -84,6 +84,12 @@ type
       ACallback: TIoCompletionRef; AContext: Pointer = nil): Boolean;
     function AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncSendTo(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: UInt32;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncRecvFrom(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: Pointer;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncClose(AFd: PtrInt;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncReadv(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
@@ -100,6 +106,12 @@ type
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncSendTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncRecvFromTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: Pointer; const ADeadline: TDeadline;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncSendToTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: UInt32; const ADeadline: TDeadline;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     { Timeout + optional CancellationToken (token cancel ≈ -ECANCELED, races timer/I/O). }
     function AsyncReadTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
@@ -222,16 +234,19 @@ begin
 end;
 
 function TimeoutCtxClaimCompletion(ACtx: PTimeoutCtx; AState: Int32): Boolean;
+var
+  LExpected: Int32;
 begin
-  Result := AtomicCompareExchange32(ACtx^.CompletionState,
-    TIMEOUT_COMPLETION_PENDING, AState, moAcqRel) = TIMEOUT_COMPLETION_PENDING;
+  LExpected := TIMEOUT_COMPLETION_PENDING;
+  Result := atomic_compare_exchange_strong(ACtx^.CompletionState, LExpected, AState,
+    mo_acq_rel, mo_acquire);
 end;
 
 procedure TimeoutCtxRelease(ACtx: PTimeoutCtx);
 begin
   if ACtx = nil then
     Exit;
-  if AtomicFetchSub32(ACtx^.RefCount, 1, moAcqRel) = 1 then
+  if atomic_fetch_sub(ACtx^.RefCount, 1, mo_acq_rel) = 1 then
   begin
     ACtx^.Loop := nil;
     ACtx^.UserCallback := nil;
@@ -245,7 +260,7 @@ procedure TimeoutCtxDropTokenOwner(ACtx: PTimeoutCtx);
 begin
   if ACtx = nil then
     Exit;
-  if AtomicExchange32(ACtx^.TokenOwner, 0, moAcqRel) = 1 then
+  if atomic_exchange(ACtx^.TokenOwner, 0, mo_acq_rel) = 1 then
   begin
     ACtx^.Token := nil;
     TimeoutCtxRelease(ACtx);
@@ -370,13 +385,13 @@ begin
   LCtx := PTimeoutCtx(AContext);
   if LCtx = nil then
     Exit;
-  if AtomicLoad32(LCtx^.TokenOwner, moAcquire) = 0 then
+  if atomic_load(LCtx^.TokenOwner, mo_acquire) = 0 then
     Exit;
-  if AtomicLoad32(LCtx^.CompletionState, moAcquire) <> TIMEOUT_COMPLETION_PENDING then
+  if atomic_load(LCtx^.CompletionState, mo_acquire) <> TIMEOUT_COMPLETION_PENDING then
     Exit;
   if (LCtx^.Loop = nil) or (not LCtx^.Loop.IsValid) then
     Exit;
-  AtomicFetchAdd32(LCtx^.RefCount, 1, moAcqRel);
+  atomic_fetch_add(LCtx^.RefCount, 1, mo_acq_rel);
   LCtx^.Loop.Post(@TimeoutTokenCallback, LCtx);
 end;
 
@@ -397,8 +412,8 @@ begin
     @TimeoutTimerCallback, Result, @TimeoutCtxDiscardTimer);
   if AToken <> nil then
   begin
-    AtomicStore32(Result^.TokenOwner, 1, moRelease);
-    AtomicFetchAdd32(Result^.RefCount, 1, moAcqRel);
+    atomic_store(Result^.TokenOwner, 1, mo_release);
+    atomic_fetch_add(Result^.RefCount, 1, mo_acq_rel);
     AToken.OnCancel(@TimeoutTokenNotify, Result);
   end;
 end;
@@ -455,7 +470,7 @@ begin
   FClosed := True;
   LWakeWasReady := FWakeReady;
   LPendingWasReady := FPendingReady;
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
   FWakeReady := False;
   { Publish closed before Close/drain so concurrent Post fails IsValid or Enqueue. }
   FPendingReady := False;
@@ -704,6 +719,24 @@ begin
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext);
 end;
 
+function TAsyncLoop.AsyncSendTo(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: UInt32;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncSendTo(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen, ACallback, AContext);
+end;
+
+function TAsyncLoop.AsyncRecvFrom(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Pointer;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncRecvFrom(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen, ACallback, AContext);
+end;
+
 function TAsyncLoop.AsyncClose(AFd: PtrInt;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
@@ -754,9 +787,9 @@ var
 begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: run after close');
-  AtomicStore32(FRunning, 1, moRelease);
+  atomic_store(FRunning, 1, mo_release);
   try
-    while AtomicLoad32(FRunning, moAcquire) <> 0 do
+    while atomic_load(FRunning, mo_acquire) <> 0 do
     begin
       { Drain wake signal and process pending callbacks }
       DrainWake;
@@ -764,7 +797,7 @@ begin
       { Fire expired timers }
       LFired := FTimers.FireExpired;
       { Check if stopped from callback }
-      if AtomicLoad32(FRunning, moAcquire) = 0 then
+      if atomic_load(FRunning, mo_acquire) = 0 then
         Break;
       { Poll I/O non-blocking }
       FPoller.Flush;
@@ -777,7 +810,7 @@ begin
       WaitForWake(AsyncIdleWakeTimeoutMs(FPoller, LNext));
     end;
   finally
-    AtomicStore32(FRunning, 0, moRelease);
+    atomic_store(FRunning, 0, mo_release);
   end;
 end;
 
@@ -789,14 +822,14 @@ var
 begin
   if not IsValid then
     raise EInvalidOperationError.Create('async loop: run once after close');
-  AtomicStore32(FRunning, 1, moRelease);
+  atomic_store(FRunning, 1, mo_release);
   try
     { Drain pending first }
     DrainWake;
     DrainPending;
     { Timers first (consistent with Run) }
     LFired := FTimers.FireExpired;
-    if AtomicLoad32(FRunning, moAcquire) = 0 then
+    if atomic_load(FRunning, mo_acquire) = 0 then
       Exit;
     { Then I/O }
     FPoller.Flush;
@@ -810,18 +843,18 @@ begin
     DrainWake;
     DrainPending;
     FTimers.FireExpired;
-    if AtomicLoad32(FRunning, moAcquire) = 0 then
+    if atomic_load(FRunning, mo_acquire) = 0 then
       Exit;
     FPoller.Flush;
     FPoller.Poll;
   finally
-    AtomicStore32(FRunning, 0, moRelease);
+    atomic_store(FRunning, 0, mo_release);
   end;
 end;
 
 procedure TAsyncLoop.Stop;
 begin
-  AtomicStore32(FRunning, 0, moRelease);
+  atomic_store(FRunning, 0, mo_release);
   Wake;
 end;
 
@@ -908,6 +941,46 @@ begin
     Exit(AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext));
   LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext);
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncRecvFromTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Pointer; const ADeadline: TDeadline;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  if ADeadline.IsInfinite then
+    Exit(AsyncRecvFrom(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen, ACallback, AContext));
+  LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext);
+  Result := FPoller.AsyncRecvFrom(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen,
+    @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncSendToTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: UInt32; const ADeadline: TDeadline;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  if ADeadline.IsInfinite then
+    Exit(AsyncSendTo(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen, ACallback, AContext));
+  LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext);
+  Result := FPoller.AsyncSendTo(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen,
+    @TimeoutIoCallback, LCtx);
   if not Result then
   begin
     TimeoutCtxCancelTimerOwner(LCtx);

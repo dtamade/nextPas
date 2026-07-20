@@ -62,7 +62,7 @@ failed=()
 GATE_TIMEOUT_SEC="${NEXTPAS_MACOS_GATE_TIMEOUT_SEC:-180}"
 
 echo "=== Platform macOS CI Matrix (real host) ==="
-echo "truth=macos-focused-runtime; documented 9-gate set (promoted); not full-host macOS parity"
+echo "truth=macos-focused-runtime; documented 9 platform gates (+ optional mem.host); layer A fail-closed only; not full-host macOS parity"
 echo "core=$CORE_ROOT"
 echo "gate_timeout_sec=$GATE_TIMEOUT_SEC"
 echo "fpc=$(command -v fpc 2>/dev/null || true)"

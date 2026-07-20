@@ -1,6 +1,8 @@
 program bench_csv;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
-uses nextpas.core.bench, nextpas.core.bench.intf, nextpas.core.csv;
+uses SysUtils,
+  nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base, nextpas.core.csv;
 var GSmallCsv: string; GLargeCsv: string; GSink: UInt64;
 function BuildCsv(ARowCount: Integer): string;
 var LLen, LCap, LI: Integer; LBuffer: string;
@@ -18,10 +20,16 @@ begin LReader := TCsvReader.Create(GSmallCsv); LRows := LReader.ReadAll; GSink :
 procedure BenchParseLarge(const ACtx: IBenchContext);
 var LReader: TCsvReader; LRows: TStringMatrix;
 begin LReader := TCsvReader.Create(GLargeCsv); LRows := LReader.ReadAll; GSink := GSink xor UInt64(Length(LRows)); end;
-var LSuite: IBenchSuite;
+var LResults: IBenchResults;
 begin
   GSmallCsv := BuildCsv(1000); GLargeCsv := BuildCsv(10000); GSink := 0;
-  LSuite := TBenchSuite.Create('csv');
-  LSuite.Add('Parse/1K-rows', @BenchParseSmall).Add('Parse/10K-rows', @BenchParseLarge);
-  WriteLn(LSuite.Run.PrintToConsole);
+  LResults := TBenchSuite.Create('csv')
+    .SetQuiet(True)
+    .SetMinDuration(TDuration.FromMilliseconds(50))
+    .SetMinSamples(5)
+    .Add('Parse/1K-rows', @BenchParseSmall).Add('Parse/10K-rows', @BenchParseLarge)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-csv.json');
 end.

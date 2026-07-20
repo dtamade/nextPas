@@ -222,6 +222,12 @@ var I: Int64; LCp: UInt32; LIter: TUTF8Iterator; begin
   end;
 end;
 
+procedure BenchUTF8CaseFoldSimple_Ascii200(AIterations: Int64);
+var I: Int64; begin for I := 1 to AIterations do LSink := UTF8CaseFoldSimple(ASCII_200); end;
+
+procedure BenchUTF8CaseFoldSimple_BmpLatin50(AIterations: Int64);
+var I: Int64; begin for I := 1 to AIterations do LSink := UTF8CaseFoldSimple(BMP_LATIN_50); end;
+
 procedure BenchIsAsciiString_Ascii200(AIterations: Int64);
 var I: Int64; LBool: Boolean; begin
   for I := 1 to AIterations do LBool := IsAsciiString(ASCII_200);
@@ -298,6 +304,8 @@ begin
     LResults := TBenchSuite.Create('Unicode Case & Utils')
       .AddLoop('CaseFoldSimple ASCII-200', @BenchCaseFoldSimple_Ascii200)
       .AddLoop('CaseFoldSimple BMP-Latin-50', @BenchCaseFoldSimple_BmpLatin50)
+      .AddLoop('UTF8CaseFoldSimple ASCII-200', @BenchUTF8CaseFoldSimple_Ascii200)
+      .AddLoop('UTF8CaseFoldSimple BMP-Latin-50', @BenchUTF8CaseFoldSimple_BmpLatin50)
       .AddLoop('IsAsciiString ASCII-200', @BenchIsAsciiString_Ascii200)
       .AddLoop('IsAsciiString BMP-Latin-50', @BenchIsAsciiString_BmpLatin50)
       .Run;

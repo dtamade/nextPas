@@ -406,7 +406,7 @@ begin
         PLATFORM_AF_INET, @LParent^.V4Raw[0], PLATFORM_RESOLVE_MAX, LCount);
       LParent^.V4Count := LCount;
       LParent^.V4Err := LRes;
-      AtomicStore32(LParent^.V4Done, 1, moRelease);
+      atomic_store(LParent^.V4Done, 1, mo_release);
     end
     else
     begin
@@ -414,7 +414,7 @@ begin
         PLATFORM_AF_INET6, @LParent^.V6Raw[0], PLATFORM_RESOLVE_MAX, LCount);
       LParent^.V6Count := LCount;
       LParent^.V6Err := LRes;
-      AtomicStore32(LParent^.V6Done, 1, moRelease);
+      atomic_store(LParent^.V6Done, 1, mo_release);
     end;
   finally
     Dispose(LWorker);
@@ -431,14 +431,14 @@ begin
   LFirstDone := False;
   while True do
   begin
-    LBothDone := (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) and
-      (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0);
+    LBothDone := (atomic_load(LCtx^.V4Done, mo_acquire) <> 0) and
+      (atomic_load(LCtx^.V6Done, mo_acquire) <> 0);
     if LBothDone then
       Break;
     if not LFirstDone then
     begin
-      if (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) or
-         (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0) then
+      if (atomic_load(LCtx^.V4Done, mo_acquire) <> 0) or
+         (atomic_load(LCtx^.V6Done, mo_acquire) <> 0) then
       begin
         LFirstDone := True;
         LWaitedMs := 0;
@@ -458,8 +458,8 @@ var
   LWaitedMs: UInt32;
 begin
   LWaitedMs := 0;
-  while (AtomicLoad32(LCtx^.V4Done, moAcquire) = 0) or
-        (AtomicLoad32(LCtx^.V6Done, moAcquire) = 0) do
+  while (atomic_load(LCtx^.V4Done, mo_acquire) = 0) or
+        (atomic_load(LCtx^.V6Done, mo_acquire) = 0) do
   begin
     platform_thread_sleep_ms(1);
     Inc(LWaitedMs);
@@ -478,8 +478,8 @@ begin
   LCtx^.V6Count := 0;
   LCtx^.V4Err := PLATFORM_ERR_INVALID;
   LCtx^.V6Err := PLATFORM_ERR_INVALID;
-  AtomicStore32(LCtx^.V4Done, 0, moRelease);
-  AtomicStore32(LCtx^.V6Done, 0, moRelease);
+  atomic_store(LCtx^.V4Done, 0, mo_release);
+  atomic_store(LCtx^.V6Done, 0, mo_release);
   New(LWorker4);
   LWorker4^.Parent := LCtx;
   LWorker4^.Family := PLATFORM_AF_INET;
@@ -491,7 +491,7 @@ begin
   if platform_thread_create(LHandle4, @DnsFamilyWorkerThread, LWorker4) <> 0 then
   begin
     Dispose(LWorker4);
-    AtomicStore32(LCtx^.V4Done, 1, moRelease);
+    atomic_store(LCtx^.V4Done, 1, mo_release);
     LCtx^.V4Err := PLATFORM_ERR_INVALID;
     Result := False;
   end
@@ -500,7 +500,7 @@ begin
   if platform_thread_create(LHandle6, @DnsFamilyWorkerThread, LWorker6) <> 0 then
   begin
     Dispose(LWorker6);
-    AtomicStore32(LCtx^.V6Done, 1, moRelease);
+    atomic_store(LCtx^.V6Done, 1, mo_release);
     LCtx^.V6Err := PLATFORM_ERR_INVALID;
     Result := False;
   end
@@ -519,7 +519,7 @@ begin
   SetLength(Result.Addresses, 0);
   if AIsIPv6 then
   begin
-    LOk := (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0) and
+    LOk := (atomic_load(LCtx^.V6Done, mo_acquire) <> 0) and
       (LCtx^.V6Err = 0) and (LCtx^.V6Count > 0);
     Result.Error := LCtx^.V6Err;
     if LOk then
@@ -539,7 +539,7 @@ begin
   end
   else
   begin
-    LOk := (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) and
+    LOk := (atomic_load(LCtx^.V4Done, mo_acquire) <> 0) and
       (LCtx^.V4Err = 0) and (LCtx^.V4Count > 0);
     Result.Error := LCtx^.V4Err;
     if LOk then
@@ -604,12 +604,12 @@ begin
     LSpawnOk := SpawnFamilyWorkers(LCtx);
     WaitFamilyGate(LCtx);
 
-    LOk4 := (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) and
+    LOk4 := (atomic_load(LCtx^.V4Done, mo_acquire) <> 0) and
       (LCtx^.V4Err = 0) and (LCtx^.V4Count > 0);
-    LOk6 := (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0) and
+    LOk6 := (atomic_load(LCtx^.V6Done, mo_acquire) <> 0) and
       (LCtx^.V6Err = 0) and (LCtx^.V6Count > 0);
-    LBothDone := (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) and
-      (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0);
+    LBothDone := (atomic_load(LCtx^.V4Done, mo_acquire) <> 0) and
+      (atomic_load(LCtx^.V6Done, mo_acquire) <> 0);
 
     if LCtx^.Streaming then
     begin
@@ -618,7 +618,7 @@ begin
 
       if LCtx^.PreferIPv6First then
       begin
-        if AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0 then
+        if atomic_load(LCtx^.V6Done, mo_acquire) <> 0 then
         begin
           LEvent := BuildFamilyEvent(LCtx, True);
           LEvent.AllDone := False;
@@ -626,7 +626,7 @@ begin
             PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
           LPostedV6 := True;
         end;
-        if AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0 then
+        if atomic_load(LCtx^.V4Done, mo_acquire) <> 0 then
         begin
           LEvent := BuildFamilyEvent(LCtx, False);
           LEvent.AllDone := False;
@@ -637,7 +637,7 @@ begin
       end
       else
       begin
-        if AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0 then
+        if atomic_load(LCtx^.V4Done, mo_acquire) <> 0 then
         begin
           LEvent := BuildFamilyEvent(LCtx, False);
           LEvent.AllDone := False;
@@ -645,7 +645,7 @@ begin
             PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
           LPostedV4 := True;
         end;
-        if AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0 then
+        if atomic_load(LCtx^.V6Done, mo_acquire) <> 0 then
         begin
           LEvent := BuildFamilyEvent(LCtx, True);
           LEvent.AllDone := False;
@@ -658,15 +658,15 @@ begin
       if not LBothDone then
       begin
         LWaitedMs := 0;
-        while (AtomicLoad32(LCtx^.V4Done, moAcquire) = 0) or
-              (AtomicLoad32(LCtx^.V6Done, moAcquire) = 0) do
+        while (atomic_load(LCtx^.V4Done, mo_acquire) = 0) or
+              (atomic_load(LCtx^.V6Done, mo_acquire) = 0) do
         begin
           platform_thread_sleep_ms(1);
           Inc(LWaitedMs);
           if LWaitedMs > 60000 then
             Break;
         end;
-        if (not LPostedV4) and (AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0) then
+        if (not LPostedV4) and (atomic_load(LCtx^.V4Done, mo_acquire) <> 0) then
         begin
           LEvent := BuildFamilyEvent(LCtx, False);
           LEvent.AllDone := False;
@@ -674,7 +674,7 @@ begin
             PostDnsStreamEvent(LCtx^.Loop, LCtx^.StreamCallback, LCtx^.Context, LEvent);
           LPostedV4 := True;
         end;
-        if (not LPostedV6) and (AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0) then
+        if (not LPostedV6) and (atomic_load(LCtx^.V6Done, mo_acquire) <> 0) then
         begin
           LEvent := BuildFamilyEvent(LCtx, True);
           LEvent.AllDone := False;
@@ -724,9 +724,9 @@ begin
       end
       else
       begin
-        if AtomicLoad32(LCtx^.V4Done, moAcquire) <> 0 then
+        if atomic_load(LCtx^.V4Done, mo_acquire) <> 0 then
           LResult.Error := LCtx^.V4Err
-        else if AtomicLoad32(LCtx^.V6Done, moAcquire) <> 0 then
+        else if atomic_load(LCtx^.V6Done, mo_acquire) <> 0 then
           LResult.Error := LCtx^.V6Err
         else
           LResult.Error := PLATFORM_ERR_INVALID;

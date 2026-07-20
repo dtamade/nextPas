@@ -505,8 +505,10 @@ var
   LCb: TAsyncTcpDialCallback;
   LCtx: Pointer;
   LRemote: TNetAddress;
+  LExpected: Int32;
 begin
-  if AtomicCompareExchange32(FFinished, 0, 1, moAcqRel) <> 0 then
+  LExpected := 0;
+  if not atomic_compare_exchange_strong(FFinished, LExpected, 1, mo_acq_rel, mo_acquire) then
   begin
     if (AAttempt <> nil) and AAttempt^.Fd.IsValid then
     begin
@@ -540,8 +542,10 @@ procedure TAsyncTcpDialer.FinishFail(AError: Int32);
 var
   LCb: TAsyncTcpDialCallback;
   LCtx: Pointer;
+  LExpected: Int32;
 begin
-  if AtomicCompareExchange32(FFinished, 0, 1, moAcqRel) <> 0 then
+  LExpected := 0;
+  if not atomic_compare_exchange_strong(FFinished, LExpected, 1, mo_acq_rel, mo_acquire) then
     Exit;
   CancelTimers;
   AbortAllAttempts;
@@ -555,7 +559,7 @@ end;
 
 procedure TAsyncTcpDialer.MaybeCompleteIfIdle;
 begin
-  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+  if atomic_load(FFinished, mo_acquire) <> 0 then
     Exit;
   if (FInFlight = 0) and (FNextIndex >= Length(FAddrs)) then
   begin
@@ -575,7 +579,7 @@ begin
   Result := False;
   if (AIndex < 0) or (AIndex >= Length(FAddrs)) then
     Exit;
-  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+  if atomic_load(FFinished, mo_acquire) <> 0 then
     Exit;
 
   if AIndex = FNextIndex then
@@ -642,7 +646,7 @@ begin
     Synchronous setup failures may advance to the next address without waiting
     CAD (no SYN was sent). }
   LGuard := 0;
-  while (AtomicLoad32(FFinished, moAcquire) = 0) and
+  while (atomic_load(FFinished, mo_acquire) = 0) and
         (FInFlight < Int32(FOptions.MaxInFlight)) and
         (FNextIndex < Length(FAddrs)) and
         (LGuard < Length(FAddrs) + 2) do
@@ -661,7 +665,7 @@ end;
 
 procedure TAsyncTcpDialer.KickStagger;
 begin
-  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+  if atomic_load(FFinished, mo_acquire) <> 0 then
     Exit;
   if FNextIndex >= Length(FAddrs) then
     Exit;
@@ -775,7 +779,7 @@ end;
 
 procedure TAsyncTcpDialer.OnDnsStream(const AEvent: TDnsStreamEvent);
 begin
-  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+  if atomic_load(FFinished, mo_acquire) <> 0 then
     Exit;
 
   if Length(AEvent.Addresses) > 0 then
@@ -819,7 +823,7 @@ begin
   SetLength(FAttempts, Length(FAddrs));
   BindToken;
   EnsureOverallTimer;
-  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+  if atomic_load(FFinished, mo_acquire) <> 0 then
     Exit;
 
   { First attempt immediate; further starts only via CAD stagger (or CAD=0 path). }
@@ -853,11 +857,11 @@ begin
     AAttempt^.Fd := InvalidSocket;
   end;
 
-  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+  if atomic_load(FFinished, mo_acquire) <> 0 then
     Exit;
 
   MaybeCompleteIfIdle;
-  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+  if atomic_load(FFinished, mo_acquire) <> 0 then
     Exit;
   if FNextIndex >= Length(FAddrs) then
     Exit;
@@ -877,7 +881,7 @@ begin
   FDialStarted := False;
   BindToken;
   EnsureOverallTimer;
-  if AtomicLoad32(FFinished, moAcquire) <> 0 then
+  if atomic_load(FFinished, mo_acquire) <> 0 then
     Exit;
   LDnsOpts := DefaultDnsResolveOptions;
   LDnsOpts.ResolutionDelayMs := FOptions.ResolutionDelayMs;
@@ -923,7 +927,7 @@ begin
   if LDialer = nil then
     Exit;
   LDialer.FStaggerTimer := TAsyncTimerHandle.None;
-  if AtomicLoad32(LDialer.FFinished, moAcquire) <> 0 then
+  if atomic_load(LDialer.FFinished, mo_acquire) <> 0 then
     Exit;
   LDialer.StartNextAttempts;
 end;

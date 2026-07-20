@@ -1364,6 +1364,15 @@ begin
       end;
     end;
 
+    { SoftFail (Go t.Error): if body/hooks soft-failed but status still pass,
+      flip to tsFailed and correct pass/fail counters. }
+    if ApplySoftFails(LStatus, LLastFailMsg) then
+    begin
+      Inc(LFail);
+      if LPass > 0 then
+        Dec(LPass);
+    end;
+
     { Record test result }
     LTestResult := MakeTestResult(LEntry.Name, LStatus, LLastFailMsg,
       LStart.Elapsed.AsMilliseconds);

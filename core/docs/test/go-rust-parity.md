@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.15**
+**当前版本**: **v8.16**
 **最后更新**: 2026-07-20
 
 ---
@@ -17,7 +17,7 @@
 | 并行/竞态 | t.Parallel / -race | 串行默认 | RunParallel + 原子压力测 |
 | Prop/Fuzz | testing.F + 第三方 | proptest | 内置 + 可计数套件 |
 | 规模 | 上千级自测 | 同左 | **≥2500 可计数过程** |
-| 失败语义 | Error 可继续 / Fatal 停 | panic | **Check = Fatal**（raise） |
+| 失败语义 | Error 可继续 / Fatal 停 | panic | **Check=Fatal**；**SoftFail** opt-in |
 
 ---
 
@@ -53,10 +53,10 @@
 | B19 v8.14b report golden 入库 | **done** |
 | B20 v8.14c subtests 深度 | **done** |
 | B21 v8.15 CI golden + contracts 门禁 | **done** |
+| B22 v8.16 SoftFail opt-in | **done** |
 
 ### 暂缓 / 阻塞
 
-- SoftFail API（Check=Fatal 默认；opt-in 需拍板）
 - IExpectation 类型拆分（v9 breaking）
 - TSAN（无 FPC 一体化路径）
 - 编译器 coverage 插桩（等 nextpas 编译器）
