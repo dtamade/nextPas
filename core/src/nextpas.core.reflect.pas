@@ -64,6 +64,9 @@ type
     function AddDynArrayField(ATypeID: TTypeID; const AName: string;
       AOffset: PtrUInt; AElementKind: TFieldKind; AElementSize: SizeUInt;
       ADynArrayTypeInfo: Pointer; AElementTypeID: TTypeID = 0): Boolean;
+    function AddRecordField(ATypeID: TTypeID; const AName: string;
+      AOffset: PtrUInt; ASubTypeID: TTypeID;
+      AFlags: TFieldFlags = []): Boolean;
     function FindType(const AName: string): PTypeDef;
     function FindTypeByID(AID: TTypeID): PTypeDef;
     function GetTypeID(const AName: string): TTypeID;
@@ -180,6 +183,34 @@ begin
   LField^.ElementSize := AElementSize;
   LField^.ElementTypeID := AElementTypeID;
   LField^.DynArrayTypeInfo := ADynArrayTypeInfo;
+  Result := True;
+end;
+
+function TTypeRegistry.AddRecordField(ATypeID: TTypeID; const AName: string;
+  AOffset: PtrUInt; ASubTypeID: TTypeID; AFlags: TFieldFlags): Boolean;
+var
+  LType: PTypeDef;
+  LSub: PTypeDef;
+  LField: PFieldDef;
+  LSize: Integer;
+begin
+  Result := False;
+  if ASubTypeID = TYPE_ID_NONE then
+    Exit;
+  LSub := FindTypeByID(ASubTypeID);
+  if LSub = nil then
+    Exit;
+  LSize := LSub^.Size;
+  if LSize <= 0 then
+    LSize := 0;
+  if not AddField(ATypeID, AName, AOffset, fkRecord, LSize, AFlags) then
+    Exit;
+
+  LType := FindTypeByID(ATypeID);
+  if (LType = nil) or (LType^.FieldCount <= 0) then
+    Exit;
+  LField := @LType^.Fields[LType^.FieldCount - 1];
+  LField^.SubTypeID := ASubTypeID;
   Result := True;
 end;
 

@@ -65,16 +65,22 @@ type
   TConfigUnmarshalVisitor = class(TBaseTypeVisitor)
   private
     FConfig: IConfig;
+    FRegistry: ITypeRegistry;
     FPrefix: string;
     function FullKey(const AFieldName: string): string;
   public
-    constructor Create(const AConfig: IConfig; const APrefix: string);
+    constructor Create(const AConfig: IConfig; ARegistry: ITypeRegistry;
+      const APrefix: string);
     function ShouldVisit(const AField: TFieldDef): Boolean; override;
     procedure VisitBool(const AField: TFieldDef; APtr: PBoolean); override;
     procedure VisitInt32(const AField: TFieldDef; APtr: PInt32); override;
     procedure VisitInt64(const AField: TFieldDef; APtr: PInt64); override;
+    procedure VisitUInt32(const AField: TFieldDef; APtr: PDWord); override;
+    procedure VisitFloat32(const AField: TFieldDef; APtr: PSingle); override;
     procedure VisitFloat64(const AField: TFieldDef; APtr: PDouble); override;
     procedure VisitString(const AField: TFieldDef; APtr: PString); override;
+    procedure VisitRecord(const AField: TFieldDef; APtr: Pointer;
+      ASubType: PTypeDef); override;
     procedure VisitDynArray(const AField: TFieldDef; AArrayPtr: PPointer;
       AElementType: PTypeDef); override;
   end;
@@ -206,10 +212,11 @@ begin
 end;
 
 constructor TConfigUnmarshalVisitor.Create(const AConfig: IConfig;
-  const APrefix: string);
+  ARegistry: ITypeRegistry; const APrefix: string);
 begin
   inherited Create;
   FConfig := AConfig;
+  FRegistry := ARegistry;
   FPrefix := NormalizeConfigPrefix(APrefix);
 end;
 
@@ -222,6 +229,10 @@ function TConfigUnmarshalVisitor.ShouldVisit(const AField: TFieldDef): Boolean;
 var
   LKey: string;
 begin
+  { Nested records always descend; leaf ShouldVisit gates keep missing defaults. }
+  if AField.Kind = fkRecord then
+    Exit(True);
+
   LKey := FullKey(AField.Name);
   if AField.Kind = fkDynArray then
   begin
@@ -255,6 +266,26 @@ begin
   APtr^ := FConfig.GetInt(FullKey(AField.Name));
 end;
 
+procedure TConfigUnmarshalVisitor.VisitUInt32(const AField: TFieldDef;
+  APtr: PDWord);
+var
+  LVal: Int64;
+begin
+  LVal := FConfig.GetInt(FullKey(AField.Name));
+  case AField.Kind of
+    fkUInt8: PByte(APtr)^ := Byte(LVal);
+    fkUInt16: PWord(APtr)^ := Word(LVal);
+  else
+    APtr^ := DWord(LVal);
+  end;
+end;
+
+procedure TConfigUnmarshalVisitor.VisitFloat32(const AField: TFieldDef;
+  APtr: PSingle);
+begin
+  APtr^ := Single(FConfig.GetFloat(FullKey(AField.Name)));
+end;
+
 procedure TConfigUnmarshalVisitor.VisitFloat64(const AField: TFieldDef;
   APtr: PDouble);
 begin
@@ -265,6 +296,21 @@ procedure TConfigUnmarshalVisitor.VisitString(const AField: TFieldDef;
   APtr: PString);
 begin
   APtr^ := FConfig.GetString(FullKey(AField.Name));
+end;
+
+procedure TConfigUnmarshalVisitor.VisitRecord(const AField: TFieldDef;
+  APtr: Pointer; ASubType: PTypeDef);
+var
+  LSaved: string;
+  LSelf: ITypeVisitor;
+begin
+  if (ASubType = nil) or (APtr = nil) or (FRegistry = nil) then
+    Exit;
+  LSaved := FPrefix;
+  FPrefix := FullKey(AField.Name);
+  LSelf := Self as ITypeVisitor;
+  FRegistry.Visit(ASubType, APtr, LSelf);
+  FPrefix := LSaved;
 end;
 
 procedure TConfigUnmarshalVisitor.VisitDynArray(const AField: TFieldDef;
@@ -305,7 +351,7 @@ begin
   if LTypeDef = nil then
     Exit;
 
-  LVisitor := TConfigUnmarshalVisitor.Create(AConfig, APrefix);
+  LVisitor := TConfigUnmarshalVisitor.Create(AConfig, ARegistry, APrefix);
   LIntf := LVisitor as ITypeVisitor;
   ARegistry.Visit(LTypeDef, ATarget, LIntf);
   LIntf := nil;
