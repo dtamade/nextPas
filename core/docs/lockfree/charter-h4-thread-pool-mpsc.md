@@ -1,8 +1,8 @@
 # H4-1 Charter — `thread.pool` Submit 路径接入 T1 MPSC
 
-> **Status**: charter **open**（2026-07-20）— **未授权实现**直至本页验收勾选 + lane/总控确认  
-> **Owner**: atomic-lockfree（跨模块需 thread 侧配合验证）  
-> **编号**: **H4-1**（**不是** R9）  
+> **Status**: charter **open**（2026-07-20）— **未授权实现**直至本页验收勾选 + lane/总控确认
+> **Owner**: atomic-lockfree（跨模块需 thread 侧配合验证）
+> **编号**: **H4-1**（**不是** R9）
 > **依据**: READY「Additional cross-module consumer wiring → requires new charter」
 
 ---
@@ -83,7 +83,7 @@
 
 ## 8. 实现授权
 
-本文件 alone **不**授权改生产代码。  
+本文件 alone **不**授权改生产代码。
 实现前：在 issue/会话中明确「**H4-1 implement approved**」，再开独立切片。
 
 **备选（更高风险，本 charter 不覆盖）**：`net.server.threaded` 接入队列 — 需 net lane 联合 charter。
