@@ -423,6 +423,43 @@ begin
   A.Close;
 end;
 
+
+{ R34: positioned I/O (pread/pwrite semantics). }
+procedure TestIFile_ReadAtWriteAtMid;
+var
+  LF: IFile;
+  LPath: string;
+  LOrig, LMid: array[0..7] of Byte;
+  LGot: array[0..7] of Byte;
+  LN: SizeUInt;
+  I: Integer;
+  LPosBefore: Int64;
+begin
+  LPath := GTmpDir + '/pread_pwrite.bin';
+  for I := 0 to 7 do
+    LOrig[I] := Byte(I + 1);
+  WriteRawFile(LPath, [1, 2, 3, 4, 5, 6, 7, 8]);
+  LF := nextpas.core.fs.Open(LPath, [fmRead, fmWrite]);
+  LPosBefore := LF.Position;
+  LMid[0] := $AA;
+  LMid[1] := $BB;
+  LN := LF.WriteAt(LMid[0], 2, 3);
+  CheckEqual(Int64(2), Int64(LN), 'WriteAt mid wrote 2');
+  CheckEqual(LPosBefore, LF.Position, 'WriteAt does not move Position');
+  FillChar(LGot[0], SizeOf(LGot), 0);
+  LN := LF.ReadAt(LGot[0], 8, 0);
+  CheckEqual(Int64(8), Int64(LN), 'ReadAt full 8');
+  CheckEqual(Byte(1), LGot[0], 'byte0');
+  CheckEqual(Byte(2), LGot[1], 'byte1');
+  CheckEqual(Byte(3), LGot[2], 'byte2');
+  CheckEqual(Byte($AA), LGot[3], 'mid0');
+  CheckEqual(Byte($BB), LGot[4], 'mid1');
+  CheckEqual(Byte(6), LGot[5], 'byte5');
+  LN := LF.ReadAt(LGot[0], 4, 100);
+  CheckEqual(Int64(0), Int64(LN), 'ReadAt past EOF returns 0');
+  LF.Close;
+end;
+
 procedure TestIFile_OpenLocked;
 var
   LPath: string;
@@ -466,6 +503,7 @@ begin
     T.Test('R23 shared locks', @TestIFile_LockShared);
     T.Test('R23 blocking Lock', @TestIFile_LockBlocking);
     T.Test('R23 OpenLocked', @TestIFile_OpenLocked);
+    T.Test('R34 ReadAt WriteAt mid', @TestIFile_ReadAtWriteAtMid);
 
   if not T.Run then Halt(1);
   finally

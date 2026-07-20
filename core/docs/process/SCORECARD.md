@@ -33,7 +33,7 @@ make -C core/tests/nextpas.core.fs/test_fs_watch_wine wine-runtime-smoke
 
 | 套件 | 结果 | 说明 |
 |------|------|------|
-| process | **7 passed** | echo / LookPath / timeout / MaxOutput / Status×2 / Kill |
+| process | **8 passed** | + Capture echo (R34)；timeout / MaxOutput / Status / Kill |
 | fs | **3 passed** | Write-Read-Remove / MkdirAll / OpenLocked |
 | path | **4 passed** | Join-Clean / IsAbs-Volume / ToSlash / StripPrefix |
 | os.env | **3 passed** | GetEnv / Set-Unset-Expand / Expand brace |
@@ -59,18 +59,21 @@ make -C core/benchmarks/nextpas.core.fs/bench_fs run
 | FileSize | ~1.4 µs | — | ~2.5% |
 | ReadAll/64KB | ~131 µs | ~480 MB/s | ~1% |
 
-### Go 对照（`compare_go`，1MB×20）
+### 同方法对照（R34，create/write/close 循环）
 
 ```bash
+make -C core/benchmarks/nextpas.core.fs/bench_fs run   # 末尾 aligned 段
 cd core/benchmarks/nextpas.core.fs/bench_fs/compare_go && go run main.go
 ```
 
-| 项 | 结果（量级） |
-|----|----------------|
-| SeqWrite 1MB×20 | ~2 GB/s |
-| SeqRead 1MB×20 | ~0.4 GB/s |
+| 方法 | nextpas | Go | 备注 |
+|------|---------|-----|------|
+| SeqWrite 64KB×200 | ~1.6 GB/s | ~1.7 GB/s | ~持平 |
+| SeqRead 64KB×200 | ~5.6 GB/s | ~0.56 GB/s | nextpas 更高（page cache 路径） |
+| SeqWrite 1MB×20 | ~1.8 GB/s | ~2.1 GB/s | ~0.85× Go |
+| SeqRead 1MB×20 | ~8.0 GB/s | ~0.39 GB/s | nextpas 更高（同上；非网络） |
 
-块大小/迭代与 Pascal 不同，**不可直接除法对比**。
+**truth**：同机、同 open/write/close 循环；Read 差异受 OS page cache 与 `io.ReadAll` vs 分块 Read 影响，**不**单独宣称全面 I/O 胜 Go。
 
 ---
 
