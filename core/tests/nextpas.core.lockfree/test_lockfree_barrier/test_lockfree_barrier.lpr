@@ -24,7 +24,7 @@ var
 begin
   LArgs := PBarrierArgs(AData);
   LArgs^.Result := LArgs^.Barrier.AwaitTimeout(LArgs^.TimeoutNs);
-  AtomicStore32(LArgs^.Done^, 1, moRelease);
+  atomic_store(LArgs^.Done^, 1, mo_release);
   Result := 0;
 end;
 
@@ -130,7 +130,7 @@ begin
     Check(bwArrived = LMainResult, 'Barrier should still be reusable after timeout');
 
     LSpin := 0;
-    while (AtomicLoad32(LDone, moAcquire) = 0) and (LSpin < 1000000) do
+    while (atomic_load(LDone, mo_acquire) = 0) and (LSpin < 1000000) do
     begin
       CpuPause;
       Inc(LSpin);

@@ -2,6 +2,7 @@ unit nextpas.core.net.async.pool;
 {**
  * Async-capable TCP connection pool.
  * Sync Acquire uses NetTcpConnect; AcquireAsync uses AsyncTcpDial (HE) on a loop.
+ * AcquireAsyncEx forwards TAsyncTcpDialOptions (LocalAddr/NoDelay/KeepAlive/Control/…).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -12,7 +13,8 @@ uses
   nextpas.core.time.base, nextpas.core.time.deadline,
   nextpas.core.net.base, nextpas.core.net.intf,
   nextpas.core.async.loop,
-  nextpas.core.async.cancellation;
+  nextpas.core.async.cancellation,
+  nextpas.core.net.async.dial;
 
 type
   TConnectionPoolConfig = record
@@ -32,6 +34,10 @@ type
     function AcquireAsync(const AHost: string; APort: UInt16;
       ACallback: TAcquireAsyncCallback; AContext: Pointer = nil;
       AToken: IAsyncCancellationToken = nil): Boolean;
+    { Same as AcquireAsync but passes full dial options (Token inside opts). }
+    function AcquireAsyncEx(const AHost: string; APort: UInt16;
+      const ADialOpts: TAsyncTcpDialOptions;
+      ACallback: TAcquireAsyncCallback; AContext: Pointer = nil): Boolean;
     procedure Release(AStream: ITcpStream);
     procedure Discard(AStream: ITcpStream);
     function ActiveCount: UInt32;
@@ -52,8 +58,7 @@ uses
   nextpas.core.errors,
   nextpas.core.platform.sync,
   nextpas.core.net.tcp,
-  nextpas.core.net.async.tcp,
-  nextpas.core.net.async.dial;
+  nextpas.core.net.async.tcp;
 
 const
   ECONNREFUSED_LINUX = 111;
@@ -104,6 +109,9 @@ type
     function AcquireAsync(const AHost: string; APort: UInt16;
       ACallback: TAcquireAsyncCallback; AContext: Pointer;
       AToken: IAsyncCancellationToken): Boolean;
+    function AcquireAsyncEx(const AHost: string; APort: UInt16;
+      const ADialOpts: TAsyncTcpDialOptions;
+      ACallback: TAcquireAsyncCallback; AContext: Pointer): Boolean;
     procedure Release(AStream: ITcpStream);
     procedure Discard(AStream: ITcpStream);
     function ActiveCount: UInt32;
@@ -323,6 +331,19 @@ function TConnectionPool.AcquireAsync(const AHost: string; APort: UInt16;
   ACallback: TAcquireAsyncCallback; AContext: Pointer;
   AToken: IAsyncCancellationToken): Boolean;
 var
+  LOpts: TAsyncTcpDialOptions;
+begin
+  LOpts := DefaultAsyncTcpDialOptions;
+  LOpts.Token := AToken;
+  LOpts.ConnectionAttemptDelayMs := 50;
+  LOpts.MaxInFlight := 2;
+  Result := AcquireAsyncEx(AHost, APort, LOpts, ACallback, AContext);
+end;
+
+function TConnectionPool.AcquireAsyncEx(const AHost: string; APort: UInt16;
+  const ADialOpts: TAsyncTcpDialOptions;
+  ACallback: TAcquireAsyncCallback; AContext: Pointer): Boolean;
+var
   LIdle: ITcpStream;
   LDeliver: PIdleDeliverCtx;
   LDialCtx: PAcquireAsyncCtx;
@@ -393,13 +414,11 @@ begin
   LDialCtx^.Host := AHost;
   LDialCtx^.Port := APort;
 
-  LOpts := DefaultAsyncTcpDialOptions;
+  LOpts := ADialOpts;
+  { Pool ConnectTimeout applies only when dial opts leave overall deadline open. }
   LMs := FConfig.ConnectTimeout.AsMilliseconds;
-  if LMs > 0 then
+  if (LMs > 0) and LOpts.OverallDeadline.IsInfinite then
     LOpts.OverallDeadline := TDeadline.After(FConfig.ConnectTimeout);
-  LOpts.Token := AToken;
-  LOpts.ConnectionAttemptDelayMs := 50;
-  LOpts.MaxInFlight := 2;
 
   if not AsyncTcpDial(FLoop, AHost, APort, LOpts, @PoolDialDone, LDialCtx) then
   begin

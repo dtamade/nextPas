@@ -48,8 +48,8 @@ var
 begin
   for LI := 0 to FPairCount - 1 do
   begin
-    AtomicFetchAdd32(FReady^, 1, moAcqRel);
-    while AtomicLoad32(FStart^, moAcquire) <= LI do
+    atomic_fetch_add(FReady^, 1, mo_acq_rel);
+    while atomic_load(FStart^, mo_acquire) <= LI do
       CpuPause;
     LLeft := LI * 2;
     LRight := LLeft + 1;
@@ -57,7 +57,7 @@ begin
       FResults[LI] := FSet.Union(LRight, LLeft)
     else
       FResults[LI] := FSet.Union(LLeft, LRight);
-    AtomicFetchAdd32(FDone^, 1, moAcqRel);
+    atomic_fetch_add(FDone^, 1, mo_acq_rel);
   end;
 end;
 
@@ -294,10 +294,10 @@ begin
     LReverse.Start;
     for LI := 0 to PAIR_COUNT - 1 do
     begin
-      while AtomicLoad32(LReady, moAcquire) < (LI + 1) * 2 do
+      while atomic_load(LReady, mo_acquire) < (LI + 1) * 2 do
         CpuPause;
-      AtomicStore32(LStart, LI + 1, moRelease);
-      while AtomicLoad32(LDone, moAcquire) < (LI + 1) * 2 do
+      atomic_store(LStart, LI + 1, mo_release);
+      while atomic_load(LDone, mo_acquire) < (LI + 1) * 2 do
         CpuPause;
     end;
     LForward.WaitFor;

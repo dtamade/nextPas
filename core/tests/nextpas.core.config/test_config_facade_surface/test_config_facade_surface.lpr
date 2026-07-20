@@ -6,6 +6,7 @@ uses
   SysUtils,
   nextpas.core.fs,
   nextpas.core.config,
+  nextpas.core.config.watcher,
   nextpas.core.test;
 
 var
@@ -373,6 +374,64 @@ begin
     'GetDurationNs default');
 end;
 
+procedure TestFacadeExposesByteSizeAndWatcherAuto;
+var
+  LCfg: IConfig;
+  LMutable: TConfig;
+  LBytes: Int64;
+  LPath: string;
+  LWatcher: TConfigWatcher;
+  LReloaded: Boolean;
+  LAttempt: Integer;
+begin
+  CheckEqual(True, TryParseConfigByteSize('1KB', LBytes), 'parse 1KB');
+  CheckEqual(Int64(1024), LBytes, '1KB = 1024');
+  CheckEqual(True, TryParseConfigByteSize('2MiB', LBytes), 'parse 2MiB');
+  CheckEqual(Int64(2) * 1024 * 1024, LBytes, '2MiB');
+  CheckEqual(True, TryParseConfigByteSize('512', LBytes), 'bare bytes');
+  CheckEqual(Int64(512), LBytes, '512 bytes');
+  CheckEqual(False, TryParseConfigByteSize('xx', LBytes), 'invalid size');
+
+  LCfg := ConfigBuilder
+    .AddJson('{"max_body":"4MB","limit":"100"}')
+    .Build;
+  CheckEqual(Int64(4) * 1024 * 1024, LCfg.GetByteSize('max_body'),
+    'GetByteSize 4MB');
+  CheckEqual(Int64(100), LCfg.GetByteSizeRequired('limit'),
+    'GetByteSize bare');
+  CheckEqual(Int64(7), LCfg.GetByteSize('missing', 7),
+    'GetByteSize default');
+
+  LPath := FacadeTempPath('test_nextpas_config_watcher_auto', '.json');
+  RemoveIfExists(LPath);
+  WriteFileText(LPath, '{"server":{"host":"initial"}}');
+  LMutable := TConfig.Create;
+  try
+    LMutable.LoadFromFile(LPath);
+    LWatcher := TConfigWatcher.Create(LMutable, LPath);
+    try
+      CheckEqual(False, LWatcher.CheckReload, 'auto watcher stable');
+      LReloaded := False;
+      for LAttempt := 0 to 20 do
+      begin
+        Sleep(20);
+        WriteFileText(LPath, '{"server":{"host":"reloaded"},"x":1}');
+        LReloaded := LWatcher.CheckReload;
+        if LReloaded then
+          Break;
+      end;
+      CheckEqual(True, LReloaded, 'auto watcher reloads');
+      CheckEqual('reloaded', LMutable.GetString('server.host'),
+        'auto watcher content');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LMutable.Free;
+    RemoveIfExists(LPath);
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.config (facade surface)');
   T.Test('facade exposes builder surface', @TestFacadeExposesBuilderSurface);
@@ -390,5 +449,7 @@ begin
     @TestFacadeExposesContentSniff);
   T.Test('facade exposes section and duration',
     @TestFacadeExposesSectionAndDuration);
+  T.Test('facade exposes byte size and watcher auto',
+    @TestFacadeExposesByteSizeAndWatcherAuto);
   if not T.Run then Halt(1);
 end.

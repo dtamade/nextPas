@@ -118,6 +118,7 @@ type
     // 对齐与原始缓冲
     FAlignment: SizeUInt;        // 实际使用的对齐（默认为 max(pointer,16)）
     FRawBuffer: Pointer;         // 原始分配指针，用于释放
+    FRawAllocSize: SizeUInt;     // GetMem 实际字节数（含对齐 over-alloc）
     // 统计
     FPeakAllocated: Integer;
     FTotalAllocCalls: QWord;
@@ -243,6 +244,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.mem;
+
 {$PUSH}
 {$WARN 4055 OFF} // pointer/ordinal conversions in pool internals
 
@@ -342,11 +346,12 @@ begin
 
   // 分配连续 Arena（对齐）
   // 如果分配器不提供对齐接口，则 over-allocate 并手动对齐
-  LRaw := FAllocator.GetMem(FTotalSize + (FAlignment - 1));
+  FRawAllocSize := FTotalSize + (FAlignment - 1);
+  LRaw := FAllocator.GetMem(FRawAllocSize);
   if LRaw = nil then
     raise EOutOfMemory.Create(aeOutOfMemory,
       'TFixedPool.Create: failed to allocate arena buffer (' +
-      IntToStr(Int64(FTotalSize + (FAlignment - 1))) + ' bytes)');
+      IntToStr(Int64(FRawAllocSize)) + ' bytes)');
   FRawBuffer := LRaw;
   try
     LAddr := PtrUInt(LRaw);
@@ -361,8 +366,9 @@ begin
     RebuildFreeStack;
   except
     // 异常安全：释放已分配的内存
-    FAllocator.FreeMem(FRawBuffer);
+    FreeMemOf(FAllocator, FRawBuffer, FRawAllocSize);
     FRawBuffer := nil;
+    FRawAllocSize := 0;
     raise;
   end;
 end;
@@ -383,9 +389,10 @@ begin
   {$ENDIF}
   // ✅ C-3: 移除死代码分支，FRawBuffer 总是被赋值
   if FRawBuffer <> nil then
-    FAllocator.FreeMem(FRawBuffer);
+    FreeMemOf(FAllocator, FRawBuffer, FRawAllocSize);
   FBuffer := nil;
   FRawBuffer := nil;
+  FRawAllocSize := 0;
   SetLength(FFreeStack, 0);
   SetLength(FIsFree, 0);
   inherited Destroy;

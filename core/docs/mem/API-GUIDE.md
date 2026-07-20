@@ -92,8 +92,9 @@ Writeln(FormatMemStats); // … debug_process=… debug_coverage_gap=…
 | 解析器 node 数组（json/yaml/…） | （已关闭）无 size 的 owned 串 — **Era I** 起用 size 表 |
 | owned 串 + size 表（`TJsonOwnedStr` / `TTomlOwnedBuf`） | tui inject 须观察 Free（永久 WAIVE FreeMemOf） |
 
-样板：builders · json/yaml/toml/xml/ini/csv · collections.node/hashmap/swiss。
-**禁止**全仓机械替换。
+样板：builders · json/yaml/toml/xml/ini/csv · collections.node/hashmap/swiss。  
+**mem-owner**（Era J）：单 slab 后备 `LocalArena` / `TBlockPool` / `TFixedPool` Destroy 用 `FreeMemOf`（已知 alloc size）。  
+**禁止**全仓机械替换；多段 slab/chunked 不默认扫。
 
 ## 三套 API 体系
 

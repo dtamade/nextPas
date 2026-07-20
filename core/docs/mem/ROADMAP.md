@@ -1,6 +1,6 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Era I done → Maintenance Idle（2026-07-20）** — owned-string size 表 + text ReallocMemOf 已关；残余 WAIVE 仅 tui tracking
+**状态**: **Era J done → Maintenance Idle（2026-07-20）** — mem-owner LocalArena/BlockPool/FixedPool FreeMemOf；残余 WAIVE 仅 tui tracking
 **Owner**: mem lane（`.worktrees/mem`）全权
 **更新**: 2026-07-20
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
@@ -30,6 +30,7 @@
 | **G** | **Ecosystem Steward**：防回潮、按触达样板、证据习惯 | **Steady** | 下文 §4d |
 | **H** | **Maintenance only**：决策树 + FreeMemOf 收口 + 只回归 | **Idle** | 下文 §4d Era H |
 | **I** | **Owned-size 收口**：json/toml size 表 + text ReallocMemOf + 契约钉 | **CLOSED** | 下文 §4e |
+| **J** | **mem-owner sized free**：LocalArena/BlockPool/FixedPool backing FreeMemOf | **CLOSED** | 下文 §4f |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -199,7 +200,7 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 | **H2** | arr swap 缓冲 FreeMemOf + FreeMemOf 战役关闭声明 | **done** 2026-07-20 |
 | **H∞** | SCORECARD/soak 复跑 · host-runtime 续证 · **Idle 声明** | **done** 2026-07-20 → **Idle** |
 
-**H2 后**：inject FreeMemOf 主战役 **结束**。残余仅 WAIVE（tui tracking、owned 串无 size）。
+**H2 后**：inject FreeMemOf 主战役 **结束**。Era I 已关 owned 串 size 表；残余 WAIVE **仅** tui tracking。
 
 **Maintenance Idle 触发再开工**（任一即可）:
 
@@ -223,9 +224,22 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 
 **I 后**: 回 **Maintenance Idle**。残余 WAIVE **仅** tui inject tracking。禁止再开全仓 FreeMemOf。
 
+**I residual（同日）**: `collections.element_manager` SupportsRealloc 路径 `ReallocMemOf`（对齐 FreeMemOf / text.builder）。
+
+### Era J — mem-owner sized free（CLOSED 2026-07-20）
+
+| 切片 | 内容 | 状态 |
+|------|------|------|
+| **J1** | `TLocalArena` Destroy `FreeMemOf(FBacking, FCapacity)` | **done** |
+| **J2** | `TBlockPool` `FRawAllocSize` + Destroy FreeMemOf | **done** |
+| **J3** | `TFixedPool` `FRawAllocSize` + Destroy/except FreeMemOf | **done** |
+| **J4** | source-contract + SCORECARD/soak 证据 | **done** |
+
+**J 后**: 回 **Maintenance Idle**。多段 slab/chunked FreeMemOf **不**默认排期。tui WAIVE 不变。
+
 ---
 
-## 5. 明确不做（时代 D/E/F/G/H/I 有效期内）
+## 5. 明确不做（时代 D/E/F/G/H/I/J 有效期内）
 
 1. 新开「Phase 29：再加一打 allocator」
 2. 全仓库 unsized `FreeMem` 机械替换
@@ -290,3 +304,5 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-20 | H∞：SCORECARD RELEASE=1 + soak 3/3 复跑（post-H2 无回归）；host-runtime CI 证据续记 |
 | 2026-07-20 | **Maintenance Idle** 声明（对齐 bench B43 姿态）：H0–H2 + SCORECARD/soak/CI 齐；仅回归/命名 D3/GHA mem 红再开工 |
 | 2026-07-20 | **Era I CLOSED**：text ReallocMemOf · json/toml owned-size FreeMemOf · contracts；回 Idle |
+| 2026-07-20 | I residual：element_manager ReallocMemOf + Era I GHA host-runtime 证据 |
+| 2026-07-20 | **Era J CLOSED**：LocalArena/BlockPool/FixedPool backing FreeMemOf；回 Idle |

@@ -45,7 +45,8 @@ type
     FWritePos: SizeUInt;
     FCount: SizeUInt;
     FCap: SizeUInt;
-    FMutex: IMutex;
+    { CondVar.Wait requires INativeMutex (sync contract); Mutex() is native. }
+    FMutex: INativeMutex;
     FNotEmpty: ICondVar;
     FNotFull: ICondVar;
     FWriterClosed: Boolean;

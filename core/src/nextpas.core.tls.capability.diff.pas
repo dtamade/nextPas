@@ -17,7 +17,6 @@ unit nextpas.core.tls.capability.diff;
 interface
 
 uses
-  Classes,
   nextpas.core.exception,
   nextpas.core.base,
   nextpas.core.text.conv,
@@ -423,64 +422,71 @@ end;
 
 function GenerateTextReport(const ADiff: TCapabilityDiffResult): string;
 var
-  Report: TStringList;
-  i: Integer;
-begin
-  Report := TStringList.Create;
-  try
-    Report.Add('════════════════════════════════════════════════════════════');
-    Report.Add('  能力矩阵差异报告');
-    Report.Add('════════════════════════════════════════════════════════════');
-    Report.Add('');
+  Lines: array of string;
+  I, N: Integer;
 
-    // 差异级别
-    Report.Add('差异级别: ' + ADiff.Summary);
-    Report.Add('');
-
-    // 评分差异
-    Report.Add('评分变化:');
-    Report.Add(nextpas.core.text.conv.Format('  安全评分: %+d', [ADiff.SecurityScoreDiff]));
-    Report.Add(nextpas.core.text.conv.Format('  性能评分: %+d', [ADiff.PerformanceScoreDiff]));
-    Report.Add(nextpas.core.text.conv.Format('  兼容性级别: %+d', [ADiff.CompatibilityLevelDiff]));
-    Report.Add('');
-
-    // 新增功能
-    if Length(ADiff.AddedFeatures) > 0 then
-    begin
-      Report.Add(nextpas.core.text.conv.Format('新增功能 (%d):' , [Length(ADiff.AddedFeatures)]));
-      for i := 0 to High(ADiff.AddedFeatures) do
-        Report.Add('  + ' + ADiff.AddedFeatures[i]);
-      Report.Add('');
-    end;
-
-    // 缺失功能
-    if Length(ADiff.RemovedFeatures) > 0 then
-    begin
-      Report.Add(nextpas.core.text.conv.Format('缺失功能 (%d):', [Length(ADiff.RemovedFeatures)]));
-      for i := 0 to High(ADiff.RemovedFeatures) do
-        Report.Add('  - ' + ADiff.RemovedFeatures[i]);
-      Report.Add('');
-    end;
-
-    // 字段变更
-    if Length(ADiff.ChangedFields) > 0 then
-    begin
-      Report.Add(nextpas.core.text.conv.Format('字段变更 (%d):', [Length(ADiff.ChangedFields)]));
-      for i := 0 to High(ADiff.ChangedFields) do
-      begin
-        Report.Add(nextpas.core.text.conv.Format('  • %s:', [ADiff.ChangedFields[i].FieldName]));
-        Report.Add(nextpas.core.text.conv.Format('      %s → %s',
-          [ADiff.ChangedFields[i].OldValue, ADiff.ChangedFields[i].NewValue]));
-      end;
-      Report.Add('');
-    end;
-
-    Report.Add('════════════════════════════════════════════════════════════');
-
-    Result := Report.Text;
-  finally
-    Report.Free;
+  procedure AddLine(const S: string);
+  begin
+    if N >= Length(Lines) then
+      SetLength(Lines, N * 2 + 8);
+    Lines[N] := S;
+    Inc(N);
   end;
+
+begin
+  N := 0;
+  SetLength(Lines, 32);
+  AddLine('════════════════════════════════════════════════════════════');
+  AddLine('  能力矩阵差异报告');
+  AddLine('════════════════════════════════════════════════════════════');
+  AddLine('');
+  AddLine('差异级别: ' + ADiff.Summary);
+  AddLine('');
+  AddLine('评分变化:');
+  AddLine(nextpas.core.text.conv.Format('  安全评分: %+d', [ADiff.SecurityScoreDiff]));
+  AddLine(nextpas.core.text.conv.Format('  性能评分: %+d', [ADiff.PerformanceScoreDiff]));
+  AddLine(nextpas.core.text.conv.Format('  兼容性级别: %+d', [ADiff.CompatibilityLevelDiff]));
+  AddLine('');
+
+  if Length(ADiff.AddedFeatures) > 0 then
+  begin
+    AddLine(nextpas.core.text.conv.Format('新增功能 (%d):', [Length(ADiff.AddedFeatures)]));
+    for I := 0 to High(ADiff.AddedFeatures) do
+      AddLine('  + ' + ADiff.AddedFeatures[I]);
+    AddLine('');
+  end;
+
+  if Length(ADiff.RemovedFeatures) > 0 then
+  begin
+    AddLine(nextpas.core.text.conv.Format('缺失功能 (%d):', [Length(ADiff.RemovedFeatures)]));
+    for I := 0 to High(ADiff.RemovedFeatures) do
+      AddLine('  - ' + ADiff.RemovedFeatures[I]);
+    AddLine('');
+  end;
+
+  if Length(ADiff.ChangedFields) > 0 then
+  begin
+    AddLine(nextpas.core.text.conv.Format('字段变更 (%d):', [Length(ADiff.ChangedFields)]));
+    for I := 0 to High(ADiff.ChangedFields) do
+    begin
+      AddLine(nextpas.core.text.conv.Format('  • %s:', [ADiff.ChangedFields[I].FieldName]));
+      AddLine(nextpas.core.text.conv.Format('      %s → %s',
+        [ADiff.ChangedFields[I].OldValue, ADiff.ChangedFields[I].NewValue]));
+    end;
+    AddLine('');
+  end;
+
+  AddLine('════════════════════════════════════════════════════════════');
+
+  Result := '';
+  for I := 0 to N - 1 do
+  begin
+    if I > 0 then
+      Result := Result + LineEnding;
+    Result := Result + Lines[I];
+  end;
+  if N > 0 then
+    Result := Result + LineEnding;
 end;
 
 { GenerateDiffReport - JSON format }

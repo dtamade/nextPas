@@ -60,9 +60,17 @@ type
   TUnicodeCollator = class(TInterfacedObject, IUnicodeCollator)
   private
     FOptions: TCollationOptions;
+    { Scratch buffers reused across Compare/GetSortKey (instance-local). }
+    FElsA: TCollationElementArray;
+    FElsB: TCollationElementArray;
+    FCpsBuf: TCodepointArray;
     function CollectElements(const ANormalized: string): TCollationElementArray;
+    function CollectElementsInto(const ANormalized: string;
+      var AElements: TCollationElementArray): SizeInt;
     function ElementsToSortKey(const AElements: TCollationElementArray): TCollationKey;
-    function CompareElements(const A, B: TCollationElementArray): Integer;
+    function CompareElements(const A: TCollationElementArray; const ACount: SizeInt;
+      const B: TCollationElementArray; const BCount: SizeInt): Integer; overload;
+    function CompareElements(const A, B: TCollationElementArray): Integer; overload;
   public
     constructor Create(const AOptions: TCollationOptions);
     function Compare(const A, B: string): Integer;
@@ -89,9 +97,24 @@ uses
   nextpas.core.text.unicode.normalize,
   nextpas.core.text.unicode.base,
   nextpas.core.text.unicode.props,
+  nextpas.core.text.unicode.utils,
   nextpas.core.text.utf8;
 
 {$I nextpas.core.text.unicode.collate.inc}
+
+type
+  TAsciiCollationCE = record
+    Primary: UInt16;
+    Secondary: UInt16;
+    Tertiary: UInt16;
+    Variable: Boolean;
+    Len: Byte; { 0 = implicit fallback; 1 = single CE from pool; >1 rare multi }
+    Offset: UInt32;
+  end;
+
+var
+  GAsciiCE: array[0..127] of TAsciiCollationCE;
+  GAsciiCEReady: Boolean;
 
 const
   IMPLICIT_BASE_CORE_HAN = $FB40;
@@ -683,9 +706,44 @@ begin
   FOptions := AOptions;
 end;
 
-function TUnicodeCollator.CollectElements(const ANormalized: string): TCollationElementArray;
+
+procedure EnsureAsciiCETable;
 var
-  LCps: array of TUnicodeCodepoint;
+  B: Integer;
+  LOff: UInt32;
+  LLen: Byte;
+  LP, LS, LT: UInt16;
+  LV: Boolean;
+begin
+  if GAsciiCEReady then Exit;
+  for B := 0 to 127 do
+  begin
+    GAsciiCE[B].Len := 0;
+    GAsciiCE[B].Offset := 0;
+    GAsciiCE[B].Primary := 0;
+    GAsciiCE[B].Secondary := 0;
+    GAsciiCE[B].Tertiary := 0;
+    GAsciiCE[B].Variable := False;
+    if LookupExplicit(UInt32(B), LOff, LLen) then
+    begin
+      GAsciiCE[B].Len := LLen;
+      GAsciiCE[B].Offset := LOff;
+      if LLen >= 1 then
+      begin
+        UnpackCE(COLLATE_CE_POOL[LOff], LP, LS, LT, LV);
+        GAsciiCE[B].Primary := LP;
+        GAsciiCE[B].Secondary := LS;
+        GAsciiCE[B].Tertiary := LT;
+        GAsciiCE[B].Variable := LV;
+      end;
+    end;
+  end;
+  GAsciiCEReady := True;
+end;
+
+function TUnicodeCollator.CollectElementsInto(const ANormalized: string;
+  var AElements: TCollationElementArray): SizeInt;
+var
   LCpCount: SizeInt;
   LIter: TUTF8Iterator;
   LCp: UInt32;
@@ -693,58 +751,111 @@ var
   LOff, LOff2: UInt32;
   LLen, LLen2: Byte;
   LCount: SizeInt;
-  LElements: TCollationElementArray;
   LSkipCps: TCodepointArray;
   LSkipCount: SizeInt;
   LSkipI: SizeInt;
+  LNeed: SizeInt;
+  LI: SizeInt;
+  LByte: Byte;
 begin
+  LCount := 0;
+  if ANormalized = '' then
+    Exit(0);
+
+  { Pure ASCII: no NFD expansion, no UCA contractions on 00..7F alone. }
+  if IsAsciiString(ANormalized) then
+  begin
+    EnsureAsciiCETable;
+    LNeed := Length(ANormalized) * 2 + 8;
+    if Length(AElements) < LNeed then
+      SetLength(AElements, LNeed);
+    for LI := 1 to Length(ANormalized) do
+    begin
+      LByte := Byte(ANormalized[LI]);
+      if GAsciiCE[LByte].Len = 1 then
+      begin
+        if LCount >= Length(AElements) then
+          SetLength(AElements, Length(AElements) * 2 + 8);
+        AElements[LCount].Primary := GAsciiCE[LByte].Primary;
+        AElements[LCount].Secondary := GAsciiCE[LByte].Secondary;
+        AElements[LCount].Tertiary := GAsciiCE[LByte].Tertiary;
+        AElements[LCount].Quaternary := 0;
+        AElements[LCount].Variable := GAsciiCE[LByte].Variable;
+        AElements[LCount].Codepoint := LByte;
+        AElements[LCount].IsDigit := False;
+        AElements[LCount].DigitValue := 0;
+        Inc(LCount);
+      end
+      else if GAsciiCE[LByte].Len > 1 then
+        AppendFromPool(AElements, LCount, GAsciiCE[LByte].Offset, GAsciiCE[LByte].Len, LByte)
+      else if LookupExplicit(LByte, LOff, LLen) then
+        AppendFromPool(AElements, LCount, LOff, LLen, LByte)
+      else
+        AppendImplicit(AElements, LCount, LByte);
+    end;
+    ApplyVariableWeighting(AElements, LCount, FOptions.VariableWeighting);
+    if FOptions.NumericOrdering then
+      FillDigitSequences(AElements, LCount);
+    Exit(LCount);
+  end;
+
   LCpCount := 0;
-  SetLength(LCps, Length(ANormalized) + 4);
+  LNeed := Length(ANormalized) + 4;
+  if Length(FCpsBuf) < LNeed then
+    SetLength(FCpsBuf, LNeed);
   LIter.Init(PByte(PAnsiChar(ANormalized)), SizeUInt(Length(ANormalized)));
   while LIter.Next(LCp) do
   begin
-    if LCpCount >= Length(LCps) then
-      SetLength(LCps, Length(LCps) * 2);
-    LCps[LCpCount] := LCp;
+    if LCpCount >= Length(FCpsBuf) then
+      SetLength(FCpsBuf, Length(FCpsBuf) * 2);
+    FCpsBuf[LCpCount] := LCp;
     Inc(LCpCount);
   end;
 
-  LCount := 0;
-  SetLength(LElements, LCpCount * 2 + 8);
+  LNeed := LCpCount * 2 + 8;
+  if Length(AElements) < LNeed then
+    SetLength(AElements, LNeed);
   LPos := 0;
   while LPos < LCpCount do
   begin
-    if MatchContraction(LCps, LPos, LCpCount, LMatchLen, LOff, LLen, LSkipCps, LSkipCount) then
+    { Fast reject: most codepoints never start a contraction (binary search once). }
+    if (FindContractionFirst(FCpsBuf[LPos]) >= 0) and
+       MatchContraction(FCpsBuf, LPos, LCpCount, LMatchLen, LOff, LLen, LSkipCps, LSkipCount) then
     begin
-      AppendFromPool(LElements, LCount, LOff, LLen, LCps[LPos]);
+      AppendFromPool(AElements, LCount, LOff, LLen, FCpsBuf[LPos]);
       for LSkipI := 0 to LSkipCount - 1 do
       begin
         if LookupExplicit(LSkipCps[LSkipI], LOff2, LLen2) then
-          AppendFromPool(LElements, LCount, LOff2, LLen2, LSkipCps[LSkipI])
+          AppendFromPool(AElements, LCount, LOff2, LLen2, LSkipCps[LSkipI])
         else
-          AppendImplicit(LElements, LCount, LSkipCps[LSkipI]);
+          AppendImplicit(AElements, LCount, LSkipCps[LSkipI]);
       end;
       Inc(LPos, LMatchLen);
     end
-    else if LookupExplicit(LCps[LPos], LOff, LLen) then
+    else if LookupExplicit(FCpsBuf[LPos], LOff, LLen) then
     begin
-      AppendFromPool(LElements, LCount, LOff, LLen, LCps[LPos]);
+      AppendFromPool(AElements, LCount, LOff, LLen, FCpsBuf[LPos]);
       Inc(LPos);
     end
     else
     begin
-      AppendImplicit(LElements, LCount, LCps[LPos]);
+      AppendImplicit(AElements, LCount, FCpsBuf[LPos]);
       Inc(LPos);
     end;
   end;
 
-  ApplyVariableWeighting(LElements, LCount, FOptions.VariableWeighting);
-
+  ApplyVariableWeighting(AElements, LCount, FOptions.VariableWeighting);
   if FOptions.NumericOrdering then
-    FillDigitSequences(LElements, LCount);
+    FillDigitSequences(AElements, LCount);
+  Result := LCount;
+end;
 
-  SetLength(LElements, LCount);
-  Result := LElements;
+function TUnicodeCollator.CollectElements(const ANormalized: string): TCollationElementArray;
+var
+  LCount: SizeInt;
+begin
+  LCount := CollectElementsInto(ANormalized, Result);
+  SetLength(Result, LCount);
 end;
 
 procedure AppendU16BE(var AKey: TCollationKey; var APos: SizeInt; const AValue: UInt16);
@@ -814,23 +925,29 @@ begin
 end;
 
 function TUnicodeCollator.CompareElements(const A, B: TCollationElementArray): Integer;
+begin
+  Result := CompareElements(A, Length(A), B, Length(B));
+end;
+
+function TUnicodeCollator.CompareElements(const A: TCollationElementArray; const ACount: SizeInt;
+  const B: TCollationElementArray; const BCount: SizeInt): Integer;
 var
   IA, IB: SizeInt;
   WA, WB: UInt16;
   NA, NB: SizeInt;
   HA, HB: Boolean;
 
-  function NextPri(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  function NextPri(const E: TCollationElementArray; const ECount: SizeInt; var Idx: SizeInt; out W: UInt16): Boolean;
   var
     LDig: UInt32;
   begin
-    while Idx < Length(E) do
+    while Idx < ECount do
     begin
       if FOptions.NumericOrdering and E[Idx].IsDigit then
       begin
         LDig := E[Idx].DigitValue;
         W := UInt16(LDig and $FFFF);
-        while (Idx < Length(E)) and E[Idx].IsDigit and (E[Idx].DigitValue = LDig) do
+        while (Idx < ECount) and E[Idx].IsDigit and (E[Idx].DigitValue = LDig) do
           Inc(Idx);
         Exit(True);
       end;
@@ -846,9 +963,9 @@ var
     Result := False;
   end;
 
-  function NextSecFwd(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  function NextSecFwd(const E: TCollationElementArray; const ECount: SizeInt; var Idx: SizeInt; out W: UInt16): Boolean;
   begin
-    while Idx < Length(E) do
+    while Idx < ECount do
     begin
       if E[Idx].Secondary <> 0 then
       begin
@@ -862,7 +979,7 @@ var
     Result := False;
   end;
 
-  function NextSecRev(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  function NextSecRev(const E: TCollationElementArray; const ECount: SizeInt; var Idx: SizeInt; out W: UInt16): Boolean;
   begin
     while Idx >= 0 do
     begin
@@ -878,9 +995,9 @@ var
     Result := False;
   end;
 
-  function NextTer(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  function NextTer(const E: TCollationElementArray; const ECount: SizeInt; var Idx: SizeInt; out W: UInt16): Boolean;
   begin
-    while Idx < Length(E) do
+    while Idx < ECount do
     begin
       if E[Idx].Tertiary <> 0 then
       begin
@@ -894,9 +1011,9 @@ var
     Result := False;
   end;
 
-  function NextQuat(const E: TCollationElementArray; var Idx: SizeInt; out W: UInt16): Boolean;
+  function NextQuat(const E: TCollationElementArray; const ECount: SizeInt; var Idx: SizeInt; out W: UInt16): Boolean;
   begin
-    while Idx < Length(E) do
+    while Idx < ECount do
     begin
       if E[Idx].Quaternary <> 0 then
       begin
@@ -911,14 +1028,14 @@ var
   end;
 
 begin
-  NA := Length(A);
-  NB := Length(B);
+  NA := ACount;
+  NB := BCount;
 
   IA := 0; IB := 0;
   while True do
   begin
-    HA := NextPri(A, IA, WA);
-    HB := NextPri(B, IB, WB);
+    HA := NextPri(A, NA, IA, WA);
+    HB := NextPri(B, NB, IB, WB);
     if not HA and not HB then Break;
     if not HA then Exit(-1);
     if not HB then Exit(1);
@@ -933,8 +1050,8 @@ begin
     IA := NA - 1; IB := NB - 1;
     while True do
     begin
-      HA := NextSecRev(A, IA, WA);
-      HB := NextSecRev(B, IB, WB);
+      HA := NextSecRev(A, NA, IA, WA);
+      HB := NextSecRev(B, NB, IB, WB);
       if not HA and not HB then Break;
       if not HA then Exit(-1);
       if not HB then Exit(1);
@@ -947,8 +1064,8 @@ begin
     IA := 0; IB := 0;
     while True do
     begin
-      HA := NextSecFwd(A, IA, WA);
-      HB := NextSecFwd(B, IB, WB);
+      HA := NextSecFwd(A, NA, IA, WA);
+      HB := NextSecFwd(B, NB, IB, WB);
       if not HA and not HB then Break;
       if not HA then Exit(-1);
       if not HB then Exit(1);
@@ -975,8 +1092,8 @@ begin
   IA := 0; IB := 0;
   while True do
   begin
-    HA := NextTer(A, IA, WA);
-    HB := NextTer(B, IB, WB);
+    HA := NextTer(A, NA, IA, WA);
+    HB := NextTer(B, NB, IB, WB);
     if not HA and not HB then Break;
     if not HA then Exit(-1);
     if not HB then Exit(1);
@@ -989,8 +1106,8 @@ begin
     IA := 0; IB := 0;
     while True do
     begin
-      HA := NextQuat(A, IA, WA);
-      HB := NextQuat(B, IB, WB);
+      HA := NextQuat(A, NA, IA, WA);
+      HB := NextQuat(B, NB, IB, WB);
       if not HA and not HB then Break;
       if not HA then Exit(-1);
       if not HB then Exit(1);
@@ -1005,35 +1122,57 @@ end;
 function TUnicodeCollator.GetSortKey(const AText: string): TCollationKey;
 var
   LNormalized: string;
-  LElements: TCollationElementArray;
+  LCount: SizeInt;
+  LSaved: TCollationElementArray;
 begin
   if AText = '' then
   begin
     SetLength(Result, 0);
     Exit;
   end;
-  LNormalized := NFD(AText);
-  LElements := CollectElements(LNormalized);
-  Result := ElementsToSortKey(LElements);
+  if IsAsciiString(AText) then
+    LNormalized := AText
+  else if QuickCheckNFD(AText) then
+    LNormalized := AText
+  else
+    LNormalized := NFD(AText);
+  LCount := CollectElementsInto(LNormalized, FElsA);
+  { ElementsToSortKey uses Length — temporarily shrink view via copy of count slice }
+  SetLength(LSaved, LCount);
+  if LCount > 0 then
+    Move(FElsA[0], LSaved[0], LCount * SizeOf(TCollationElement));
+  Result := ElementsToSortKey(LSaved);
 end;
 
 function TUnicodeCollator.Compare(const A, B: string): Integer;
 var
   LNA, LNB: string;
-  LEA, LEB: TCollationElementArray;
+  LCountA, LCountB: SizeInt;
   LIterA, LIterB: TUTF8Iterator;
   LCA, LCB: UInt32;
   HA, HB: Boolean;
+  LAscii: Boolean;
 begin
   if A = B then Exit(0);
   if A = '' then Exit(-1);
   if B = '' then Exit(1);
 
-  LNA := NFD(A);
-  LNB := NFD(B);
-  LEA := CollectElements(LNA);
-  LEB := CollectElements(LNB);
-  Result := CompareElements(LEA, LEB);
+  LAscii := IsAsciiString(A) and IsAsciiString(B);
+  if LAscii then
+  begin
+    LNA := A;
+    LNB := B;
+  end
+  else
+  begin
+    { Avoid second full normalize when input is already NFD. }
+    if QuickCheckNFD(A) then LNA := A else LNA := NFD(A);
+    if QuickCheckNFD(B) then LNB := B else LNB := NFD(B);
+  end;
+
+  LCountA := CollectElementsInto(LNA, FElsA);
+  LCountB := CollectElementsInto(LNB, FElsB);
+  Result := CompareElements(FElsA, LCountA, FElsB, LCountB);
   if Result <> 0 then Exit;
   if FOptions.Strength < csIdentical then Exit(0);
 
@@ -1105,6 +1244,7 @@ begin
 end;
 
 initialization
+  GAsciiCEReady := False;
   InitCriticalSection(FCollatorCS);
 
 finalization

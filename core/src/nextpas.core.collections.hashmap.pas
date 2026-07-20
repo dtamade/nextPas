@@ -86,7 +86,7 @@ type
    * @note
    *   - 使用线性探测（Linear Probing）解决哈希冲突
    *   - 墓碑标记（Tombstone）处理删除，保证探测链完整性
-   *   - 自动扩容：当 LoadFactor > 0.86 时触发 rehash
+   *   - 自动扩容：当 LoadFactor > DEFAULT_MAX_LOAD_FACTOR（0.75）时触发 rehash
    *   - 容量始终为 2 的幂次，便于位运算取模
    *   - 支持自定义哈希函数和相等比较函数
    *

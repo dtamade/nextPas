@@ -256,13 +256,13 @@ var
   LV: Integer;
 begin
   Result := nil;
-  while AtomicLoad64(GPQConsumeCount, moAcquire) < PQ_CONCURRENCY_TOTAL do
+  while atomic_load_64(GPQConsumeCount, mo_acquire) < PQ_CONCURRENCY_TOTAL do
   begin
     if GPQ.TryDequeue(LV) then
     begin
       if (LV >= 1) and (LV <= PQ_CONCURRENCY_TOTAL) then
-        AtomicFetchAdd32(GPQConsumed[LV - 1], 1, moRelaxed);
-      AtomicFetchAdd64(GPQConsumeCount, 1, moRelaxed);
+        atomic_fetch_add(GPQConsumed[LV - 1], 1, mo_relaxed);
+      atomic_fetch_add_64(GPQConsumeCount, 1, mo_relaxed);
     end
     else
       CpuPause;
@@ -297,17 +297,17 @@ begin
     end;
 
     JoinStartedThreads(LProducers, LProducerCount, 'PQ producer');
-    while AtomicLoad64(GPQConsumeCount, moAcquire) < PQ_CONCURRENCY_TOTAL do
+    while atomic_load_64(GPQConsumeCount, mo_acquire) < PQ_CONCURRENCY_TOTAL do
       platform_thread_sleep_ns(1000000);
     JoinStartedThreads(LConsumers, LConsumerCount, 'PQ consumer');
 
-    CheckEqual(Int64(PQ_CONCURRENCY_TOTAL), AtomicLoad64(GPQConsumeCount, moAcquire), 'consumed all');
+    CheckEqual(Int64(PQ_CONCURRENCY_TOTAL), atomic_load_64(GPQConsumeCount, mo_acquire), 'consumed all');
 
     LDups := 0;
     LMissing := 0;
     for LI := 0 to PQ_CONCURRENCY_TOTAL - 1 do
     begin
-      LSeen := AtomicLoad32(GPQConsumed[LI], moRelaxed);
+      LSeen := atomic_load(GPQConsumed[LI], mo_relaxed);
       if LSeen = 0 then
         Inc(LMissing)
       else if LSeen > 1 then

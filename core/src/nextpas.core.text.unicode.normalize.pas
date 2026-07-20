@@ -700,6 +700,9 @@ var LIter: TUTF8Iterator; LCp: UInt32; LPrevCcc, LCcc: Byte;
 begin
   if AText = '' then Exit(True);
   if IsAsciiString(AText) then Exit(True);
+  { Ill-formed UTF-8 is never "definitely normalized" (NFD/NFC must emit U+FFFD). }
+  if not UTF8IsValid(PByte(PAnsiChar(AText)), SizeUInt(Length(AText))) then
+    Exit(False);
   LPrevCcc := 0;
   LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
   while LIter.Next(LCp) do
@@ -717,6 +720,9 @@ var LIter: TUTF8Iterator; LCp: UInt32; LPrevCcc, LCcc: Byte;
 begin
   if AText = '' then Exit(True);
   if IsAsciiString(AText) then Exit(True);
+  { Ill-formed UTF-8 is never "definitely normalized" (NFD/NFC must emit U+FFFD). }
+  if not UTF8IsValid(PByte(PAnsiChar(AText)), SizeUInt(Length(AText))) then
+    Exit(False);
   LPrevCcc := 0;
   LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
   while LIter.Next(LCp) do
@@ -734,6 +740,9 @@ var LIter: TUTF8Iterator; LCp: UInt32; LPrevCcc, LCcc: Byte;
 begin
   if AText = '' then Exit(True);
   if IsAsciiString(AText) then Exit(True);
+  { Ill-formed UTF-8 is never "definitely normalized" (NFD/NFC must emit U+FFFD). }
+  if not UTF8IsValid(PByte(PAnsiChar(AText)), SizeUInt(Length(AText))) then
+    Exit(False);
   LPrevCcc := 0;
   LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
   while LIter.Next(LCp) do
@@ -751,6 +760,9 @@ var LIter: TUTF8Iterator; LCp: UInt32; LPrevCcc, LCcc: Byte;
 begin
   if AText = '' then Exit(True);
   if IsAsciiString(AText) then Exit(True);
+  { Ill-formed UTF-8 is never "definitely normalized" (NFD/NFC must emit U+FFFD). }
+  if not UTF8IsValid(PByte(PAnsiChar(AText)), SizeUInt(Length(AText))) then
+    Exit(False);
   LPrevCcc := 0;
   LIter.Init(PByte(PAnsiChar(AText)), SizeUInt(Length(AText)));
   while LIter.Next(LCp) do

@@ -21,7 +21,10 @@ uses
   nextpas.core.tui.widget.panel,
   nextpas.core.tui.widget.chat_theme,
   nextpas.core.tui.widget.scrollview,
-  nextpas.core.tui.widget.modal;
+  nextpas.core.tui.widget.modal,
+  nextpas.core.tui.widget.dialog,
+  nextpas.core.tui.widget.split_pane,
+  nextpas.core.tui.widget.select;
 
 type
   ETui = nextpas.core.tui.error.ETui;
@@ -76,6 +79,16 @@ type
   IModal = nextpas.core.tui.widget.modal.IModal;
   TModalSize = nextpas.core.tui.widget.modal.TModalSize;
   TModal = nextpas.core.tui.widget.modal.TModal;
+  IDialog = nextpas.core.tui.widget.dialog.IDialog;
+  TDialogButton = nextpas.core.tui.widget.dialog.TDialogButton;
+  TDialog = nextpas.core.tui.widget.dialog.TDialog;
+  ISplitPane = nextpas.core.tui.widget.split_pane.ISplitPane;
+  TSplitDirection = nextpas.core.tui.widget.split_pane.TSplitDirection;
+  TSplitPaneState = nextpas.core.tui.widget.split_pane.TSplitPaneState;
+  TSplitPane = nextpas.core.tui.widget.split_pane.TSplitPane;
+  ISelect = nextpas.core.tui.widget.select.ISelect;
+  TSelectState = nextpas.core.tui.widget.select.TSelectState;
+  TSelect = nextpas.core.tui.widget.select.TSelect;
 
 const
   peTop = nextpas.core.tui.widget.panel.peTop;

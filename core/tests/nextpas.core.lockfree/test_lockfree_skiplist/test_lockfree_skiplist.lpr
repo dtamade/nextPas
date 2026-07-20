@@ -795,14 +795,14 @@ begin
   LBase := LThreadID * CONCURRENT_OPS;
 
   { Wait for signal }
-  while AtomicLoad32(GConcurrentReady, moAcquire) = 0 do
+  while atomic_load(GConcurrentReady, mo_acquire) = 0 do
     CpuPause;
 
   { Insert keys }
   for LI := 1 to CONCURRENT_OPS do
     GConcurrentSkipList.Insert(LBase + LI, (LBase + LI) * 10);
 
-  AtomicFetchAdd32(GConcurrentDone, 1, moRelease);
+  atomic_fetch_add(GConcurrentDone, 1, mo_release);
 end;
 
 procedure TestSkipListConcurrentInsert;
@@ -813,8 +813,8 @@ var
 begin
   GConcurrentSkipList := TIntIntSkipList.Create;
   try
-    AtomicStore32(GConcurrentReady, 0, moRelease);
-    AtomicStore32(GConcurrentDone, 0, moRelease);
+    atomic_store(GConcurrentReady, 0, mo_release);
+    atomic_store(GConcurrentDone, 0, mo_release);
 
     { Create threads }
     for LI := 0 to CONCURRENT_THREADS - 1 do
@@ -824,7 +824,7 @@ begin
     end;
 
     { Signal ready }
-    AtomicStore32(GConcurrentReady, 1, moRelease);
+    atomic_store(GConcurrentReady, 1, mo_release);
 
     { Wait for completion }
     for LI := 0 to CONCURRENT_THREADS - 1 do
@@ -849,14 +849,14 @@ begin
   Result := 0;
 
   { Wait for signal }
-  while AtomicLoad32(GConcurrentReady, moAcquire) = 0 do
+  while atomic_load(GConcurrentReady, mo_acquire) = 0 do
     CpuPause;
 
   { Find keys }
   for LI := 1 to CONCURRENT_OPS do
     GConcurrentSkipList.Find(LI, LV);
 
-  AtomicFetchAdd32(GConcurrentDone, 1, moRelease);
+  atomic_fetch_add(GConcurrentDone, 1, mo_release);
 end;
 
 procedure TestSkipListConcurrentFind;
@@ -871,8 +871,8 @@ begin
     for LI := 1 to CONCURRENT_OPS do
       GConcurrentSkipList.Insert(LI, LI * 10);
 
-    AtomicStore32(GConcurrentReady, 0, moRelease);
-    AtomicStore32(GConcurrentDone, 0, moRelease);
+    atomic_store(GConcurrentReady, 0, mo_release);
+    atomic_store(GConcurrentDone, 0, mo_release);
 
     { Create threads }
     for LI := 0 to CONCURRENT_THREADS - 1 do
@@ -882,7 +882,7 @@ begin
     end;
 
     { Signal ready }
-    AtomicStore32(GConcurrentReady, 1, moRelease);
+    atomic_store(GConcurrentReady, 1, mo_release);
 
     { Wait for completion }
     for LI := 0 to CONCURRENT_THREADS - 1 do

@@ -27,6 +27,9 @@ the correctness-first default surface small. `nextpas.core.tui.ext` owns stable 
 | TPanel | IPanel | No | Grid layout with borders and separators for app/runtime composition |
 | TScrollView | IScrollView | Yes | Scrollable viewport with optional scrollbar (Phase B stable set) |
 | TModal | IModal | No | Centered overlay shell with optional dim background (Phase B stable set) |
+| TDialog | IDialog | No | Titled dialog with body and button row (Idle 单点晋升) |
+| TSplitPane | ISplitPane | Yes | Horizontal/vertical split with draggable divider (Idle 单点晋升) |
+| TSelect | ISelect | Yes | Dropdown selection for forms (Idle 单点晋升) |
 
 ## Full Compatibility / Advanced Widgets (`nextpas.core.tui.full`)
 
@@ -37,12 +40,9 @@ the correctness-first default surface small. `nextpas.core.tui.ext` owns stable 
 | TBarChart | IBarChart | No | Vertical bar chart (Unicode blocks) |
 | TCanvas | ICanvas | No | Braille dot-matrix drawing surface |
 | TTree | ITree | Yes | Hierarchical tree with expand/collapse |
-| TDialog | IDialog | No | Modal dialog with buttons |
 | TMenu | IMenu | Yes | Vertical menu with shortcuts |
-| TSplitPane | ISplitPane | Yes | Horizontal/vertical split |
 | TPopover | IPopover | Yes | Positioned popup |
 | TTooltip | ITooltip | No | Anchored tooltip with border |
-| TSelect | ISelect | Yes | Dropdown selection |
 | TCalendar | ICalendar | Yes | Month grid calendar |
 | TBreadcrumb | IBreadcrumb | No | Path breadcrumb trail |
 | TStatusBar | IStatusBar | No | Left/center/right segment bar |
@@ -75,7 +75,7 @@ the correctness-first default surface small. `nextpas.core.tui.ext` owns stable 
 ## Usage Notes
 
 - Use `nextpas.core.tui` when you want the correctness-first default widget set with no app/runtime or protocol spillover.
-- Use `nextpas.core.tui.ext` when you need stable runtime composition helpers such as `TApp`, `TPanel`, `TScrollView`, `TModal`, or theme presets.
+- Use `nextpas.core.tui.ext` when you need stable runtime composition helpers such as `TApp`, `TPanel`, `TScrollView`, `TModal`, `TDialog`, `TSplitPane`, `TSelect`, or theme presets.
 - Use `nextpas.core.tui.full` when you need migration compatibility or the broader advanced widget catalog.
 
 ## Usage Pattern

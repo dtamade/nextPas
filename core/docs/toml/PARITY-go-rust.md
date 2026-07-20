@@ -10,9 +10,9 @@
 
 | 维度 | 分 (0–10) | 说明 |
 |------|-----------|------|
-| **质量 Quality** | **8.7** | 结构化 `TTomlError`；datetime 类型 |
-| **规模 Scale** | **8.5** | Parse/Builder/Writer + config flatten |
-| **综合** | **8.6** | 与 TOML 1.0 常用表对齐 |
+| **质量 Quality** | **9.0** | `TTomlError`；datetime；IReader；深度/大值/dup |
+| **规模 Scale** | **9.0** | Parse/Builder/Writer + compliance/fuzz 厚 |
+| **综合** | **9.0** | 与 TOML 1.0 常用表对齐 |
 
 ---
 

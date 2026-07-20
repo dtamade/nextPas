@@ -1,7 +1,7 @@
 # async / net / io 质量记分卡（2026-07-20）
 
-**范围**: nextpas.core.async + io reactors/poller + net.async  
-**对照**: Go `net`/`context`；Rust `tokio`（质量属性，非 API 克隆）  
+**范围**: nextpas.core.async + io reactors/poller + net.async
+**对照**: Go `net`/`context`；Rust `tokio`（质量属性，非 API 克隆）
 **基线**: Q1–Q12 Landed；调研 [GO-RUST-PARITY.md](../net-async-io/GO-RUST-PARITY.md)
 
 ## D1–D8（重估）
@@ -12,11 +12,11 @@
 | D2 超时竞态 | 8.5 | CAS + dial deadline |
 | D3 双栈 HE | 8.5 | 严格 CAD + DNS race + lab feed |
 | D4 错误可判定 | **7.5→8.0** | **ClassifyNetError (Q13)** |
-| D5 平台证据 | **8.0** | accept/connect smoke + kqueue accept/connect；Windows still wine |
-| D6 性能诚实 | **7.5** | Q18 same-host peer table; not API-equivalent |
-| D7 API 可用性 | 7.5 | Dial 推荐路径文档化 |
+| D5 平台证据 | **8.0** | accept/connect + kqueue；Windows **candidate fail-closed** |
+| D6 性能诚实 | **7.8** | Q18–Q20 bench parity + dial concurrent |
+| D7 API 可用性 | **8.2** | Dial options 面 Q25–Q31 + pool Ex |
 | D8 生命周期 | 9.0 | class loop + 0 leak 纪律 |
-| **综合** | **~8.1** | 较 07-19 的 ~8.6 更严（按 D 轴诚实重估） |
+| **综合** | **~8.3** | Q31 后诚实重估 |
 
 ## Go/Rust 差距（当前）
 
@@ -46,6 +46,13 @@
 - [x] Q24A windows smoke streak observer; **Q24B fail-closed promoted** (candidate claim)
 - [x] Q25 Dial LocalAddr bind-before-connect + Default() managed-safe options
 - [x] Q26 Dial NoDelay/KeepAlive options on winning stream
+- [x] Q27 Dial OnControl (Control subset)
+- [x] Q28 Dial OnResolve (custom resolver via feed)
+- [x] Q29 Pool AcquireAsyncEx dial options
+- [x] Q30 Dial AddressFamily filter (dafIPv4/dafIPv6)
+- [x] Q31 Dial OnAttemptResult observability
+- [x] Q32 facade AsyncTcpDialWithDnsFeed + GO-RUST-PARITY re-score ~8.3
+- [ ] MPTCP deferred; full native-windows deferred
 
 ## 性能 scorecard（同机 2026-07-20）
 

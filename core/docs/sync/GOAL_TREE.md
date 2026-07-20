@@ -11,50 +11,32 @@
 
 ## Done
 
-- [x] 门面 + 十种原语实现（Mutex / FutexMutex / RWLock / CondVar / SpinLock / WaitGroup / Once / Semaphore / Barrier / Event）
-- [x] 平台句柄路径走 `platform.sync`（含 rwlock 分模式 unlock）
-- [x] 用户态原语基于 atomic + address-wait
-- [x] CondVar 拒绝 `TFutexMutex` 配对
-- [x] `TSyncPool` TLS freelist + 并发测试与 bench
-- [x] 基础 `test_sync` / `test_sync_pool` 行为覆盖
-- [x] 文档 SSOT：README + CONTRACT + 本 GOAL_TREE
-- [x] 删除空壳 `test_sync_posix_fallback`
-- [x] 模块级测试 Makefile + source-contract gate
-- [x] 关键错误路径行为测试补强
-- [x] **E2** `TSyncPool` 冷路径：`TRTLCriticalSection` → nextpas `IMutex`/`TMutex`
-- [x] per-pool TLS freelist（多 pool 同线程隔离）
-- [x] `INativeMutex` 类型级 CondVar 配对
-- [x] Windows forced compile gate
-- [x] SCORECARD 初版（SC1–SC6）
+- [x] 门面 + 原语 + platform.sync / INativeMutex / per-pool TLS
+- [x] Windows + Darwin + FreeBSD compile gate
+- [x] Stress / 超时边界 + source-contract
+- [x] SCORECARD SC1–SC10；contended multi-sample median/p95
+- [x] Destroy：传播 `platform_*_destroy` 错误；held destroy 最佳努力测试
+- [x] RecursiveMutex / Pool 门面 — **暂缓**（无生产消费者，已文档化）
+- [x] path-limited land 多批
 
 ---
 
-## Now（当前 lane 焦点）
+## Now
 
-- [x] 基线验证证据落盘（focused gates + hygiene，2026-07-20）
-- [ ] path-limited landing（landing candidate + landing-check）
+- [ ] 本批 path-limited landing
 
 ---
 
 ## Next
 
-1. Darwin/FreeBSD compile gate（若 FORCE_HOST 路径稳定）
-2. Stress / 超时边界 / 销毁持锁策略统一
-3. SCORECARD contended 场景
-4. 是否公开 `RecursiveMutex`；是否门面化 Pool
+1. owner-thread 级 Destroy 检测（仅当需要跨平台统一语义时）
+2. contended bench 更高分辨率 / 绑核（可选）
+3. 有真实消费者时再评估 RecursiveMutex / Pool 门面
 
 ---
 
 ## Deferred
 
-- Channel / Latch / Notify（可能属 async 或独立模块）
-- 公开 API 重命名（`Do_` 等）— **冻结**，需大版本策略
-- 把 sync 做成 FPC `SyncObjs` 兼容层 — **禁止**（见双编译器原则）
-
----
-
-## 非目标
-
-- 拥有 platform ABI 细节
-- 替代 `async` 事件循环内同步原语
-- 在本 lane 无理由大改 http/tls 消费者
+- Channel / Latch / Notify
+- API 重命名 `Do_` — **冻结**
+- FPC `SyncObjs` 兼容层 — **禁止**

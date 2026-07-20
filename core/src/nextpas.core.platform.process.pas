@@ -1480,6 +1480,24 @@ begin
   Result := 0;
 end;
 
+function CreateWindowsJobForProcess(var AProc: TPlatformProcess): Boolean;
+var
+  LJob: HANDLE;
+begin
+  Result := False;
+  AProc.JobHandle := 0;
+  LJob := CreateJobObjectW(nil, nil);
+  if (LJob = nil) or (LJob = HANDLE(PtrInt(-1))) then
+    Exit;
+  if not AssignProcessToJobObject(LJob, HANDLE(AProc.ProcessHandle)) then
+  begin
+    CloseHandle(LJob);
+    Exit;
+  end;
+  AProc.JobHandle := PtrUInt(LJob);
+  Result := True;
+end;
+
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
 var
   LSI: STARTUPINFOW;
@@ -1547,6 +1565,11 @@ end;
 
 procedure platform_process_detach(var AProc: TPlatformProcess);
 begin
+  if AProc.JobHandle <> 0 then
+  begin
+    CloseHandle(HANDLE(AProc.JobHandle));
+    AProc.JobHandle := 0;
+  end;
   if AProc.ProcessHandle <> 0 then
     CloseHandle(HANDLE(AProc.ProcessHandle));
   AProc.ProcessHandle := 0;
@@ -1557,7 +1580,15 @@ function platform_process_signal(const AProc: TPlatformProcess; ASignal: Int32):
 begin
   if ASignal = PLATFORM_SIGKILL then
   begin
-    if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then
+    { M2-W2: Job Object kills process tree when NewProcessGroup was used. }
+    if AProc.JobHandle <> 0 then
+    begin
+      if TerminateJobObject(HANDLE(AProc.JobHandle), 1) then
+        Result := 0
+      else
+        Result := platform_get_last_error;
+    end
+    else if TerminateProcess(HANDLE(AProc.ProcessHandle), 1) then
       Result := 0
     else
       Result := platform_get_last_error;
@@ -1573,6 +1604,7 @@ end;
 
 function platform_process_kill_group(APgid: Int32; ASignal: Int32): Int32;
 begin
+  { Windows has no POSIX pgid; KillTree uses platform_process_kill with JobHandle. }
   Result := PLATFORM_ERR_UNSUPPORTED;
 end;
 
@@ -1672,7 +1704,8 @@ begin
 
   if APath = nil then
     Exit(PLATFORM_ERR_INVALID);
-  if (AExtraFdCount > 0) or ASetCred or ANewProcessGroup then
+  { ExtraFd / Credential still unsupported on Windows. NewProcessGroup uses Job Object. }
+  if (AExtraFdCount > 0) or ASetCred then
   begin
     AFailStage := pssExec;
     Exit(PLATFORM_ERR_UNSUPPORTED);
@@ -1694,7 +1727,11 @@ begin
   else
     LSI.hStdError := GetStdHandle(STD_ERROR_HANDLE);
 
-  Result := CreateWindowsProcess(APath, AArgv, AEnvp, ACwd, True, 0, LSI, LPI);
+  if ANewProcessGroup then
+    Result := CreateWindowsProcess(APath, AArgv, AEnvp, ACwd, True,
+      CREATE_SUSPENDED, LSI, LPI)
+  else
+    Result := CreateWindowsProcess(APath, AArgv, AEnvp, ACwd, True, 0, LSI, LPI);
   if Result <> 0 then
   begin
     AFailStage := pssExec;
@@ -1703,6 +1740,39 @@ begin
   AProc.ProcessHandle := PtrUInt(LPI.hProcess);
   AProc.ThreadHandle := PtrUInt(LPI.hThread);
   AProc.Pid := LPI.dwProcessId;
+  AProc.JobHandle := 0;
+
+  if ANewProcessGroup then
+  begin
+    { M2-W2: Job Object as process-tree container (Go-ish tree kill). }
+    if not CreateWindowsJobForProcess(AProc) then
+    begin
+      Result := platform_get_last_error;
+      if Result = 0 then
+        Result := PLATFORM_ERR_UNKNOWN;
+      TerminateProcess(HANDLE(AProc.ProcessHandle), 1);
+      CloseHandle(LPI.hThread);
+      CloseHandle(LPI.hProcess);
+      FillChar(AProc, SizeOf(AProc), 0);
+      AFailStage := pssExec;
+      Exit;
+    end;
+    if ResumeThread(LPI.hThread) = DWORD($FFFFFFFF) then
+    begin
+      Result := platform_get_last_error;
+      if AProc.JobHandle <> 0 then
+      begin
+        TerminateJobObject(HANDLE(AProc.JobHandle), 1);
+        CloseHandle(HANDLE(AProc.JobHandle));
+      end;
+      CloseHandle(LPI.hThread);
+      CloseHandle(LPI.hProcess);
+      FillChar(AProc, SizeOf(AProc), 0);
+      AFailStage := pssExec;
+      Exit;
+    end;
+  end;
+
   CloseHandle(HANDLE(AProc.ThreadHandle));
   AProc.ThreadHandle := 0;
   Result := 0;

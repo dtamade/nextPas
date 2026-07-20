@@ -103,10 +103,10 @@ begin
   while GMpmcSatQ.DequeueWait(LV) do
   begin
     if (LV >= 0) and (LV < MPMC_SAT_TOTAL) then
-      AtomicFetchAdd32(GMpmcSatConsumed[LV], 1, moRelaxed)
+      atomic_fetch_add(GMpmcSatConsumed[LV], 1, mo_relaxed)
     else
-      AtomicFetchAdd64(GMpmcSatOutOfRangeCount, 1, moRelaxed);
-    AtomicFetchAdd64(GMpmcSatConsumeCount, 1, moRelaxed);
+      atomic_fetch_add_64(GMpmcSatOutOfRangeCount, 1, mo_relaxed);
+    atomic_fetch_add_64(GMpmcSatConsumeCount, 1, mo_relaxed);
   end;
 end;
 
@@ -153,9 +153,9 @@ begin
     LMissing := 0;
     for LI := 0 to MPMC_SAT_TOTAL - 1 do
     begin
-      if AtomicLoad32(GMpmcSatConsumed[LI], moRelaxed) = 0 then
+      if atomic_load(GMpmcSatConsumed[LI], mo_relaxed) = 0 then
         Inc(LMissing)
-      else if AtomicLoad32(GMpmcSatConsumed[LI], moRelaxed) > 1 then
+      else if atomic_load(GMpmcSatConsumed[LI], mo_relaxed) > 1 then
         Inc(LDups);
     end;
     CheckEqual(Int64(0), Int64(LMissing), 'no missing messages');
@@ -203,10 +203,10 @@ begin
   while GMpmcSingleSlotQ.DequeueWait(LV) do
   begin
     if (LV >= 0) and (LV < MPMC_SINGLE_SLOT_TOTAL) then
-      AtomicFetchAdd32(GMpmcSingleSlotConsumed[LV], 1, moRelaxed)
+      atomic_fetch_add(GMpmcSingleSlotConsumed[LV], 1, mo_relaxed)
     else
-      AtomicFetchAdd64(GMpmcSingleSlotOutOfRangeCount, 1, moRelaxed);
-    AtomicFetchAdd64(GMpmcSingleSlotConsumeCount, 1, moRelaxed);
+      atomic_fetch_add_64(GMpmcSingleSlotOutOfRangeCount, 1, mo_relaxed);
+    atomic_fetch_add_64(GMpmcSingleSlotConsumeCount, 1, mo_relaxed);
   end;
 end;
 
@@ -250,9 +250,9 @@ begin
     LMissing := 0;
     for LI := 0 to MPMC_SINGLE_SLOT_TOTAL - 1 do
     begin
-      if AtomicLoad32(GMpmcSingleSlotConsumed[LI], moRelaxed) = 0 then
+      if atomic_load(GMpmcSingleSlotConsumed[LI], mo_relaxed) = 0 then
         Inc(LMissing)
-      else if AtomicLoad32(GMpmcSingleSlotConsumed[LI], moRelaxed) > 1 then
+      else if atomic_load(GMpmcSingleSlotConsumed[LI], mo_relaxed) > 1 then
         Inc(LDups);
     end;
     CheckEqual(Int64(0), Int64(LMissing), 'single-slot contention no missing messages');
@@ -302,13 +302,13 @@ begin
     while not GStackABA.TryPop(LV) do
       CpuPause;
     if (LV >= 0) and (LV < STACK_ABA_TOTAL) then
-      AtomicFetchAdd32(GStackABASeen[LV], 1, moRelaxed)
+      atomic_fetch_add(GStackABASeen[LV], 1, mo_relaxed)
     else
-      AtomicFetchAdd64(GStackABAOutOfRange, 1, moRelaxed);
+      atomic_fetch_add_64(GStackABAOutOfRange, 1, mo_relaxed);
     Inc(LPopped);
   end;
-  AtomicFetchAdd64(GStackABAPushOk, LPushed, moRelaxed);
-  AtomicFetchAdd64(GStackABAPopOk, LPopped, moRelaxed);
+  atomic_fetch_add_64(GStackABAPushOk, LPushed, mo_relaxed);
+  atomic_fetch_add_64(GStackABAPopOk, LPopped, mo_relaxed);
 end;
 
 procedure TestStackABA;
@@ -341,9 +341,9 @@ begin
     LMissing := 0;
     for LI := 0 to STACK_ABA_TOTAL - 1 do
     begin
-      if AtomicLoad32(GStackABASeen[LI], moRelaxed) = 0 then
+      if atomic_load(GStackABASeen[LI], mo_relaxed) = 0 then
         Inc(LMissing)
-      else if AtomicLoad32(GStackABASeen[LI], moRelaxed) > 1 then
+      else if atomic_load(GStackABASeen[LI], mo_relaxed) > 1 then
         Inc(LDups);
     end;
     CheckEqual(Int64(0), Int64(LMissing), 'stack ABA no missing tokens');
@@ -397,20 +397,20 @@ begin
   Result := nil;
   LIdx := Integer(PtrUInt(AArg));
   LCount := 0;
-  AtomicFetchAdd32(GMpscCloseStarted, 1, moRelease);
+  atomic_fetch_add(GMpscCloseStarted, 1, mo_release);
   while LCount < MPSC_CLOSE_MAX_PER_PRODUCER do
   begin
     { TryEnqueue returns False once Close is observed; never use Enqueue here
       because Close raises EInvalidOperationError after the queue is closed. }
     if not GMpscCloseQ.TryEnqueue(MpscCloseToken(LIdx, LCount)) then
       Break;
-    AtomicFetchAdd64(GMpscClosePublished, 1, moRelaxed);
+    atomic_fetch_add_64(GMpscClosePublished, 1, mo_relaxed);
     Inc(LCount);
     if LCount and $FF = 0 then
       CpuPause;
   end;
-  AtomicStore64(GMpscCloseSent[LIdx], Int64(LCount), moRelease);
-  AtomicFetchAdd32(GMpscCloseFinished, 1, moRelease);
+  atomic_store_64(GMpscCloseSent[LIdx], Int64(LCount), mo_release);
+  atomic_fetch_add(GMpscCloseFinished, 1, mo_release);
 end;
 
 procedure TestMpscCloseRace;
@@ -445,23 +445,23 @@ begin
 
     for LI := 1 to 1000 do
     begin
-      if AtomicLoad32(GMpscCloseStarted, moAcquire) = MPSC_CLOSE_PRODUCERS then
+      if atomic_load(GMpscCloseStarted, mo_acquire) = MPSC_CLOSE_PRODUCERS then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
     CheckEqual(Int64(MPSC_CLOSE_PRODUCERS),
-      Int64(AtomicLoad32(GMpscCloseStarted, moAcquire)),
+      Int64(atomic_load(GMpscCloseStarted, mo_acquire)),
       'MPSC close race producers must all start before close');
 
     for LI := 1 to 1000 do
     begin
-      if AtomicLoad64(GMpscClosePublished, moAcquire) > 0 then
+      if atomic_load_64(GMpscClosePublished, mo_acquire) > 0 then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
-    Check(AtomicLoad64(GMpscClosePublished, moAcquire) > 0,
+    Check(atomic_load_64(GMpscClosePublished, mo_acquire) > 0,
       'MPSC close race producers published before close');
-    Check(AtomicLoad32(GMpscCloseFinished, moAcquire) < MPSC_CLOSE_PRODUCERS,
+    Check(atomic_load(GMpscCloseFinished, mo_acquire) < MPSC_CLOSE_PRODUCERS,
       'MPSC close race closed while producers were still live');
 
     GMpscCloseQ.Close;
@@ -478,24 +478,24 @@ begin
       if (LV < 0) or
          (LProducer < 0) or (LProducer >= MPSC_CLOSE_PRODUCERS) or
          (LSeq < 0) or (LSeq >= MPSC_CLOSE_MAX_PER_PRODUCER) then
-        AtomicFetchAdd64(GMpscCloseOutOfRange, 1, moRelaxed)
+        atomic_fetch_add_64(GMpscCloseOutOfRange, 1, mo_relaxed)
       else
-        AtomicFetchAdd32(GMpscCloseSeen[LProducer, LSeq], 1, moRelaxed);
+        atomic_fetch_add(GMpscCloseSeen[LProducer, LSeq], 1, mo_relaxed);
     end;
 
     LTotalSent := 0;
-    LOutOfRange := AtomicLoad64(GMpscCloseOutOfRange, moAcquire);
+    LOutOfRange := atomic_load_64(GMpscCloseOutOfRange, mo_acquire);
     LDups := 0;
     LMissing := 0;
     for LI := 0 to MPSC_CLOSE_PRODUCERS - 1 do
     begin
-      LSent := AtomicLoad64(GMpscCloseSent[LI], moAcquire);
+      LSent := atomic_load_64(GMpscCloseSent[LI], mo_acquire);
       Inc(LTotalSent, LSent);
       Check(LSent <= MPSC_CLOSE_MAX_PER_PRODUCER,
         'MPSC close race producer stayed inside bounded token domain');
       for LJ := 0 to MPSC_CLOSE_MAX_PER_PRODUCER - 1 do
       begin
-        LSeen := AtomicLoad32(GMpscCloseSeen[LI, LJ], moRelaxed);
+        LSeen := atomic_load(GMpscCloseSeen[LI, LJ], mo_relaxed);
         if LJ < LSent then
         begin
           if LSeen = 0 then
@@ -569,7 +569,7 @@ var
 begin
   if (AValue < 0) or (AValue >= MPSC_LIVE_RECLAIM_TOTAL) then
   begin
-    AtomicFetchAdd64(GMpscLiveReclaimOutOfRange, 1, moRelaxed);
+    atomic_fetch_add_64(GMpscLiveReclaimOutOfRange, 1, mo_relaxed);
     Exit;
   end;
 
@@ -578,16 +578,16 @@ begin
   if (LProducer < 0) or (LProducer >= MPSC_LIVE_RECLAIM_PRODUCERS) or
      (LSeq < 0) or (LSeq >= MPSC_LIVE_RECLAIM_PER_PRODUCER) then
   begin
-    AtomicFetchAdd64(GMpscLiveReclaimOutOfRange, 1, moRelaxed);
+    atomic_fetch_add_64(GMpscLiveReclaimOutOfRange, 1, mo_relaxed);
     Exit;
   end;
 
-  LPrevSeq := AtomicLoad32(GMpscLiveReclaimLastSeq[LProducer], moRelaxed);
+  LPrevSeq := atomic_load(GMpscLiveReclaimLastSeq[LProducer], mo_relaxed);
   if LSeq <= LPrevSeq then
-    AtomicFetchAdd64(GMpscLiveReclaimMonotonicBreaks, 1, moRelaxed);
-  AtomicStore32(GMpscLiveReclaimLastSeq[LProducer], LSeq, moRelaxed);
-  AtomicFetchAdd32(GMpscLiveReclaimSeen[AValue], 1, moRelaxed);
-  AtomicFetchAdd64(GMpscLiveReclaimConsumed, 1, moRelease);
+    atomic_fetch_add_64(GMpscLiveReclaimMonotonicBreaks, 1, mo_relaxed);
+  atomic_store(GMpscLiveReclaimLastSeq[LProducer], LSeq, mo_relaxed);
+  atomic_fetch_add(GMpscLiveReclaimSeen[AValue], 1, mo_relaxed);
+  atomic_fetch_add_64(GMpscLiveReclaimConsumed, 1, mo_release);
 end;
 
 function MpscLiveReclaimProducer(AArg: Pointer): Pointer; cdecl;
@@ -597,29 +597,29 @@ var
 begin
   Result := nil;
   LProducer := Integer(PtrUInt(AArg));
-  AtomicFetchAdd32(GMpscLiveReclaimStarted, 1, moAcqRel);
-  while AtomicLoad32(GMpscLiveReclaimStart, moAcquire) = 0 do
+  atomic_fetch_add(GMpscLiveReclaimStarted, 1, mo_acq_rel);
+  while atomic_load(GMpscLiveReclaimStart, mo_acquire) = 0 do
     CpuPause;
-  if AtomicLoad32(GMpscLiveReclaimStart, moAcquire) <> 1 then
+  if atomic_load(GMpscLiveReclaimStart, mo_acquire) <> 1 then
   begin
-    AtomicFetchAdd32(GMpscLiveReclaimFinished, 1, moAcqRel);
+    atomic_fetch_add(GMpscLiveReclaimFinished, 1, mo_acq_rel);
     Exit;
   end;
 
   for LSeq := 0 to MPSC_LIVE_RECLAIM_PER_PRODUCER - 1 do
   begin
-    if AtomicLoad32(GMpscLiveReclaimStart, moAcquire) <> 1 then
+    if atomic_load(GMpscLiveReclaimStart, mo_acquire) <> 1 then
       Break;
     GMpscLiveReclaimQ.Enqueue(MpscLiveReclaimToken(LProducer, LSeq));
-    AtomicFetchAdd64(GMpscLiveReclaimPublished, 1, moRelease);
+    atomic_fetch_add_64(GMpscLiveReclaimPublished, 1, mo_release);
     if LSeq = 0 then
-      while (AtomicLoad32(GMpscLiveReclaimContinue, moAcquire) = 0) and
-            (AtomicLoad32(GMpscLiveReclaimStart, moAcquire) = 1) do
+      while (atomic_load(GMpscLiveReclaimContinue, mo_acquire) = 0) and
+            (atomic_load(GMpscLiveReclaimStart, mo_acquire) = 1) do
         CpuPause;
     if LSeq and $3F = 0 then
       CpuPause;
   end;
-  AtomicFetchAdd32(GMpscLiveReclaimFinished, 1, moAcqRel);
+  atomic_fetch_add(GMpscLiveReclaimFinished, 1, mo_acq_rel);
 end;
 
 function MpscLiveReclaimConsumer(AArg: Pointer): Pointer; cdecl;
@@ -627,9 +627,9 @@ var
   LV: Integer;
 begin
   Result := nil;
-  while (AtomicLoad32(GMpscLiveReclaimFinished, moAcquire) < MPSC_LIVE_RECLAIM_PRODUCERS) or
-        (AtomicLoad64(GMpscLiveReclaimConsumed, moAcquire) <
-          AtomicLoad64(GMpscLiveReclaimPublished, moAcquire)) do
+  while (atomic_load(GMpscLiveReclaimFinished, mo_acquire) < MPSC_LIVE_RECLAIM_PRODUCERS) or
+        (atomic_load_64(GMpscLiveReclaimConsumed, mo_acquire) <
+          atomic_load_64(GMpscLiveReclaimPublished, mo_acquire)) do
   begin
     if GMpscLiveReclaimQ.TryDequeue(LV) then
       RecordMpscLiveReclaimValue(LV)
@@ -656,18 +656,18 @@ begin
   LConsumerStarted := False;
   LProducerCount := 0;
   try
-    AtomicStore32(GMpscLiveReclaimStart, 0, moRelease);
-    AtomicStore32(GMpscLiveReclaimContinue, 0, moRelease);
-    AtomicStore32(GMpscLiveReclaimStarted, 0, moRelease);
-    AtomicStore32(GMpscLiveReclaimFinished, 0, moRelease);
-    AtomicStore64(GMpscLiveReclaimPublished, 0, moRelease);
-    AtomicStore64(GMpscLiveReclaimConsumed, 0, moRelease);
-    AtomicStore64(GMpscLiveReclaimOutOfRange, 0, moRelease);
-    AtomicStore64(GMpscLiveReclaimMonotonicBreaks, 0, moRelease);
+    atomic_store(GMpscLiveReclaimStart, 0, mo_release);
+    atomic_store(GMpscLiveReclaimContinue, 0, mo_release);
+    atomic_store(GMpscLiveReclaimStarted, 0, mo_release);
+    atomic_store(GMpscLiveReclaimFinished, 0, mo_release);
+    atomic_store_64(GMpscLiveReclaimPublished, 0, mo_release);
+    atomic_store_64(GMpscLiveReclaimConsumed, 0, mo_release);
+    atomic_store_64(GMpscLiveReclaimOutOfRange, 0, mo_release);
+    atomic_store_64(GMpscLiveReclaimMonotonicBreaks, 0, mo_release);
     for LI := 0 to MPSC_LIVE_RECLAIM_TOTAL - 1 do
-      AtomicStore32(GMpscLiveReclaimSeen[LI], 0, moRelaxed);
+      atomic_store(GMpscLiveReclaimSeen[LI], 0, mo_relaxed);
     for LI := 0 to MPSC_LIVE_RECLAIM_PRODUCERS - 1 do
-      AtomicStore32(GMpscLiveReclaimLastSeq[LI], -1, moRelaxed);
+      atomic_store(GMpscLiveReclaimLastSeq[LI], -1, mo_relaxed);
 
     StartThread(LConsumer, @MpscLiveReclaimConsumer, nil, 'MPSC live-reclaim consumer thread');
     LConsumerStarted := True;
@@ -680,31 +680,31 @@ begin
 
     for LI := 1 to 1000 do
     begin
-      if AtomicLoad32(GMpscLiveReclaimStarted, moAcquire) = MPSC_LIVE_RECLAIM_PRODUCERS then
+      if atomic_load(GMpscLiveReclaimStarted, mo_acquire) = MPSC_LIVE_RECLAIM_PRODUCERS then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
     CheckEqual(Int64(MPSC_LIVE_RECLAIM_PRODUCERS),
-      Int64(AtomicLoad32(GMpscLiveReclaimStarted, moAcquire)),
+      Int64(atomic_load(GMpscLiveReclaimStarted, mo_acquire)),
       'MPSC live consumer producers must all start before release');
 
-    AtomicStore32(GMpscLiveReclaimStart, 1, moRelease);
+    atomic_store(GMpscLiveReclaimStart, 1, mo_release);
     for LI := 1 to 1000 do
     begin
-      if AtomicLoad64(GMpscLiveReclaimConsumed, moAcquire) > 0 then
+      if atomic_load_64(GMpscLiveReclaimConsumed, mo_acquire) > 0 then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
-    if AtomicLoad64(GMpscLiveReclaimConsumed, moAcquire) = 0 then
+    if atomic_load_64(GMpscLiveReclaimConsumed, mo_acquire) = 0 then
     begin
-      AtomicStore32(GMpscLiveReclaimStart, 2, moRelease);
-      AtomicStore32(GMpscLiveReclaimContinue, 1, moRelease);
+      atomic_store(GMpscLiveReclaimStart, 2, mo_release);
+      atomic_store(GMpscLiveReclaimContinue, 1, mo_release);
     end;
-    Check(AtomicLoad64(GMpscLiveReclaimConsumed, moAcquire) > 0,
+    Check(atomic_load_64(GMpscLiveReclaimConsumed, mo_acquire) > 0,
       'MPSC live consumer must dequeue before producers finish');
-    Check(AtomicLoad32(GMpscLiveReclaimFinished, moAcquire) < MPSC_LIVE_RECLAIM_PRODUCERS,
+    Check(atomic_load(GMpscLiveReclaimFinished, mo_acquire) < MPSC_LIVE_RECLAIM_PRODUCERS,
       'MPSC live consumer must run while producers are active');
-    AtomicStore32(GMpscLiveReclaimContinue, 1, moRelease);
+    atomic_store(GMpscLiveReclaimContinue, 1, mo_release);
 
     JoinStartedThreads(LProducers, LProducerCount, 'MPSC live-reclaim producer thread');
     GMpscLiveReclaimQ.Close;
@@ -714,7 +714,7 @@ begin
     LMissing := 0;
     for LI := 0 to MPSC_LIVE_RECLAIM_TOTAL - 1 do
     begin
-      LSeen := AtomicLoad32(GMpscLiveReclaimSeen[LI], moRelaxed);
+      LSeen := atomic_load(GMpscLiveReclaimSeen[LI], mo_relaxed);
       if LSeen = 0 then
         Inc(LMissing)
       else if LSeen > 1 then
@@ -733,8 +733,8 @@ begin
     CheckEqual(Int64(0), LDuplicates, 'MPSC live consumer no duplicate tokens');
     Check(GMpscLiveReclaimQ.IsEmpty, 'MPSC live consumer queue empty after drain');
   finally
-    AtomicStore32(GMpscLiveReclaimStart, 2, moRelease);
-    AtomicStore32(GMpscLiveReclaimContinue, 1, moRelease);
+    atomic_store(GMpscLiveReclaimStart, 2, mo_release);
+    atomic_store(GMpscLiveReclaimContinue, 1, mo_release);
     GMpscLiveReclaimQ.Close;
     JoinStartedThreads(LProducers, LProducerCount, 'MPSC live-reclaim producer thread');
     JoinStartedThread(LConsumer, LConsumerStarted, 'MPSC live-reclaim consumer thread');
@@ -763,9 +763,9 @@ var
 procedure RecordDequeStealValue(const AValue: Integer; var ALocalCount: Int64);
 begin
   if (AValue >= 0) and (AValue < DEQUE_STEAL_TOTAL) then
-    AtomicFetchAdd32(GDequeStealBitmap[AValue], 1, moRelaxed)
+    atomic_fetch_add(GDequeStealBitmap[AValue], 1, mo_relaxed)
   else
-    AtomicFetchAdd64(GDequeStealOutOfRangeCount, 1, moRelaxed);
+    atomic_fetch_add_64(GDequeStealOutOfRangeCount, 1, mo_relaxed);
   Inc(ALocalCount);
 end;
 
@@ -776,7 +776,7 @@ var
 begin
   Result := nil;
   LCount := 0;
-  while AtomicLoad32(GDequeStealDone, moAcquire) = 0 do
+  while atomic_load(GDequeStealDone, mo_acquire) = 0 do
   begin
     if GDequeStealD.TrySteal(LV) then
     begin
@@ -790,7 +790,7 @@ begin
   begin
     RecordDequeStealValue(LV, LCount);
   end;
-  AtomicFetchAdd64(GDequeStealThiefCount, LCount, moRelaxed);
+  atomic_fetch_add_64(GDequeStealThiefCount, LCount, mo_relaxed);
 end;
 
 procedure TestDequeExtremeSteal;
@@ -835,7 +835,7 @@ begin
     end;
 
     { Signal thieves to stop }
-    AtomicStore32(GDequeStealDone, 1, moRelease);
+    atomic_store(GDequeStealDone, 1, mo_release);
     JoinStartedThreads(LThieves, LThiefCount, 'deque steal thief thread');
 
     { Verify exactly-once }
@@ -843,9 +843,9 @@ begin
     LMissing := 0;
     for LI := 0 to DEQUE_STEAL_TOTAL - 1 do
     begin
-      if AtomicLoad32(GDequeStealBitmap[LI], moRelaxed) = 0 then
+      if atomic_load(GDequeStealBitmap[LI], mo_relaxed) = 0 then
         Inc(LMissing)
-      else if AtomicLoad32(GDequeStealBitmap[LI], moRelaxed) > 1 then
+      else if atomic_load(GDequeStealBitmap[LI], mo_relaxed) > 1 then
         Inc(LDups);
     end;
     CheckEqual(Int64(0), GDequeStealOutOfRangeCount, 'deque no out-of-range values');
@@ -853,7 +853,7 @@ begin
     CheckEqual(Int64(0), Int64(LDups), 'deque no duplicates');
     CheckEqual(Int64(DEQUE_STEAL_TOTAL), LOwnerPop + GDequeStealThiefCount, 'total = pushed');
   finally
-    AtomicStore32(GDequeStealDone, 1, moRelease);
+    atomic_store(GDequeStealDone, 1, mo_release);
     JoinStartedThreads(LThieves, LThiefCount, 'deque steal thief thread');
     GDequeStealD.Free;
   end;
@@ -900,7 +900,7 @@ begin
         Inc(LI);
     end;
   end;
-  AtomicStore64(GSpscCloseSent, Int64(LI), moRelease);
+  atomic_store_64(GSpscCloseSent, Int64(LI), mo_release);
 end;
 
 function SpscCloseConsumer(AArg: Pointer): Pointer; cdecl;
@@ -916,9 +916,9 @@ begin
     if GSpscCloseQ.DequeueTimeout(LV, 1000000) then
     begin
       if (LV >= 0) and (LV < SPSC_CLOSE_SEND_TARGET) then
-        AtomicFetchAdd32(GSpscCloseSeen[LV], 1, moRelaxed)
+        atomic_fetch_add(GSpscCloseSeen[LV], 1, mo_relaxed)
       else
-        AtomicFetchAdd64(GSpscCloseOutOfRange, 1, moRelaxed);
+        atomic_fetch_add_64(GSpscCloseOutOfRange, 1, mo_relaxed);
       Inc(LCount)
     end
     else if GSpscCloseQ.IsClosed then
@@ -930,12 +930,12 @@ begin
   while GSpscCloseQ.TryDequeue(LV) do
   begin
     if (LV >= 0) and (LV < SPSC_CLOSE_SEND_TARGET) then
-      AtomicFetchAdd32(GSpscCloseSeen[LV], 1, moRelaxed)
+      atomic_fetch_add(GSpscCloseSeen[LV], 1, mo_relaxed)
     else
-      AtomicFetchAdd64(GSpscCloseOutOfRange, 1, moRelaxed);
+      atomic_fetch_add_64(GSpscCloseOutOfRange, 1, mo_relaxed);
     Inc(LCount);
   end;
-  AtomicStore64(GSpscCloseRecv, LCount, moRelease);
+  atomic_store_64(GSpscCloseRecv, LCount, mo_release);
 end;
 
 procedure TestSpscFullClose;
@@ -967,13 +967,13 @@ begin
     JoinStartedThread(LProd, LProducerStarted, 'SPSC close producer thread');
     JoinStartedThread(LCons, LConsumerStarted, 'SPSC close consumer thread');
 
-    LSent := AtomicLoad64(GSpscCloseSent, moAcquire);
+    LSent := atomic_load_64(GSpscCloseSent, mo_acquire);
     LDups := 0;
     LMissing := 0;
     LUnexpected := 0;
     for LI := 0 to SPSC_CLOSE_SEND_TARGET - 1 do
     begin
-      LSeen := AtomicLoad32(GSpscCloseSeen[LI], moRelaxed);
+      LSeen := atomic_load(GSpscCloseSeen[LI], mo_relaxed);
       if LI < LSent then
       begin
         if LSeen = 0 then
@@ -1040,13 +1040,13 @@ begin
   while GMpmcCycleQ.DequeueWait(LV) do
   begin
     if (LV >= 1) and (LV <= MPMC_CYCLE_PRODUCERS * MPMC_CYCLE_PER_PRODUCER) then
-      AtomicFetchAdd32(GMpmcCycleConsumed[LV - 1], 1, moRelaxed)
+      atomic_fetch_add(GMpmcCycleConsumed[LV - 1], 1, mo_relaxed)
     else
-      AtomicFetchAdd64(GMpmcCycleOutOfRangeCount, 1, moRelaxed);
-    AtomicFetchAdd64(GMpmcCycleConsumeCount, 1, moRelaxed);
+      atomic_fetch_add_64(GMpmcCycleOutOfRangeCount, 1, mo_relaxed);
+    atomic_fetch_add_64(GMpmcCycleConsumeCount, 1, mo_relaxed);
     Inc(LSum, Int64(LV));
   end;
-  AtomicFetchAdd64(GMpmcCycleSum, LSum, moRelaxed);
+  atomic_fetch_add_64(GMpmcCycleSum, LSum, mo_relaxed);
 end;
 
 procedure TestMpmcRapidCycles;
@@ -1094,7 +1094,7 @@ begin
       LMissing := 0;
       for LI := 0 to LTotal - 1 do
       begin
-        LSeen := AtomicLoad32(GMpmcCycleConsumed[LI], moRelaxed);
+        LSeen := atomic_load(GMpmcCycleConsumed[LI], mo_relaxed);
         if LSeen = 0 then
           Inc(LMissing)
         else if LSeen > 1 then
@@ -1147,23 +1147,23 @@ var
   LValue: Integer;
 begin
   Result := nil;
-  AtomicFetchAdd32(GMpmcCloseRaceStarted, 1, moAcqRel);
-  while AtomicLoad32(GMpmcCloseRaceStart, moAcquire) = 0 do
+  atomic_fetch_add(GMpmcCloseRaceStarted, 1, mo_acq_rel);
+  while atomic_load(GMpmcCloseRaceStart, mo_acquire) = 0 do
     CpuPause;
 
   while True do
   begin
-    LValue := Integer(AtomicFetchAdd64(GMpmcCloseRaceNextValue, 1, moRelaxed));
+    LValue := Integer(atomic_fetch_add_64(GMpmcCloseRaceNextValue, 1, mo_relaxed));
     if LValue >= MPMC_CLOSE_RACE_MAX_VALUES then
       Break;
     if GMpmcCloseRaceQ.TryEnqueue(LValue) then
-      AtomicFetchAdd64(GMpmcCloseRacePublished, 1, moRelease)
+      atomic_fetch_add_64(GMpmcCloseRacePublished, 1, mo_release)
     else if GMpmcCloseRaceQ.IsClosed then
       Break
     else
       CpuPause;
   end;
-  AtomicFetchAdd32(GMpmcCloseRaceDone, 1, moAcqRel);
+  atomic_fetch_add(GMpmcCloseRaceDone, 1, mo_acq_rel);
 end;
 
 function MpmcCloseRaceConsumer(AArg: Pointer): Pointer; cdecl;
@@ -1174,10 +1174,10 @@ begin
   while GMpmcCloseRaceQ.DequeueWait(LV) do
   begin
     if (LV >= 0) and (LV < MPMC_CLOSE_RACE_MAX_VALUES) then
-      AtomicFetchAdd32(GMpmcCloseRaceConsumedMap[LV], 1, moRelaxed)
+      atomic_fetch_add(GMpmcCloseRaceConsumedMap[LV], 1, mo_relaxed)
     else
-      AtomicFetchAdd64(GMpmcCloseRaceOutOfRange, 1, moRelaxed);
-    AtomicFetchAdd64(GMpmcCloseRaceConsumed, 1, moRelease);
+      atomic_fetch_add_64(GMpmcCloseRaceOutOfRange, 1, mo_relaxed);
+    atomic_fetch_add_64(GMpmcCloseRaceConsumed, 1, mo_release);
   end;
 end;
 
@@ -1189,10 +1189,10 @@ begin
   while GMpmcCloseRaceQ.DequeueTimeout(LV, 1000000000) do
   begin
     if (LV >= 0) and (LV < MPMC_CLOSE_RACE_MAX_VALUES) then
-      AtomicFetchAdd32(GMpmcCloseRaceConsumedMap[LV], 1, moRelaxed)
+      atomic_fetch_add(GMpmcCloseRaceConsumedMap[LV], 1, mo_relaxed)
     else
-      AtomicFetchAdd64(GMpmcCloseRaceOutOfRange, 1, moRelaxed);
-    AtomicFetchAdd64(GMpmcCloseRaceConsumed, 1, moRelease);
+      atomic_fetch_add_64(GMpmcCloseRaceOutOfRange, 1, mo_relaxed);
+    atomic_fetch_add_64(GMpmcCloseRaceConsumed, 1, mo_release);
   end;
 end;
 
@@ -1210,15 +1210,15 @@ begin
   LProducerCount := 0;
   LConsumerCount := 0;
   try
-    AtomicStore32(GMpmcCloseRaceStart, 0, moRelease);
-    AtomicStore32(GMpmcCloseRaceStarted, 0, moRelease);
-    AtomicStore32(GMpmcCloseRaceDone, 0, moRelease);
-    AtomicStore64(GMpmcCloseRaceNextValue, 0, moRelease);
-    AtomicStore64(GMpmcCloseRacePublished, 0, moRelease);
-    AtomicStore64(GMpmcCloseRaceConsumed, 0, moRelease);
-    AtomicStore64(GMpmcCloseRaceOutOfRange, 0, moRelease);
+    atomic_store(GMpmcCloseRaceStart, 0, mo_release);
+    atomic_store(GMpmcCloseRaceStarted, 0, mo_release);
+    atomic_store(GMpmcCloseRaceDone, 0, mo_release);
+    atomic_store_64(GMpmcCloseRaceNextValue, 0, mo_release);
+    atomic_store_64(GMpmcCloseRacePublished, 0, mo_release);
+    atomic_store_64(GMpmcCloseRaceConsumed, 0, mo_release);
+    atomic_store_64(GMpmcCloseRaceOutOfRange, 0, mo_release);
     for LI := 0 to MPMC_CLOSE_RACE_MAX_VALUES - 1 do
-      AtomicStore32(GMpmcCloseRaceConsumedMap[LI], 0, moRelaxed);
+      atomic_store(GMpmcCloseRaceConsumedMap[LI], 0, mo_relaxed);
 
     for LI := 0 to MPMC_CLOSE_RACE_CONSUMERS - 1 do
     begin
@@ -1233,24 +1233,24 @@ begin
 
     for LI := 1 to 1000 do
     begin
-      if AtomicLoad32(GMpmcCloseRaceStarted, moAcquire) = MPMC_CLOSE_RACE_PRODUCERS then
+      if atomic_load(GMpmcCloseRaceStarted, mo_acquire) = MPMC_CLOSE_RACE_PRODUCERS then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
     CheckEqual(Int64(MPMC_CLOSE_RACE_PRODUCERS),
-      Int64(AtomicLoad32(GMpmcCloseRaceStarted, moAcquire)),
+      Int64(atomic_load(GMpmcCloseRaceStarted, mo_acquire)),
       'MPMC close race producers must all start before release');
 
-    AtomicStore32(GMpmcCloseRaceStart, 1, moRelease);
+    atomic_store(GMpmcCloseRaceStart, 1, mo_release);
     for LI := 1 to 1000 do
     begin
-      if AtomicLoad64(GMpmcCloseRacePublished, moAcquire) >= MPMC_CLOSE_RACE_CAPACITY then
+      if atomic_load_64(GMpmcCloseRacePublished, mo_acquire) >= MPMC_CLOSE_RACE_CAPACITY then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
-    Check(AtomicLoad64(GMpmcCloseRacePublished, moAcquire) > 0,
+    Check(atomic_load_64(GMpmcCloseRacePublished, mo_acquire) > 0,
       'MPMC close race must publish at least one item before close');
-    Check(AtomicLoad32(GMpmcCloseRaceDone, moAcquire) < MPMC_CLOSE_RACE_PRODUCERS,
+    Check(atomic_load(GMpmcCloseRaceDone, mo_acquire) < MPMC_CLOSE_RACE_PRODUCERS,
       'MPMC close race must close while producers are still live');
 
     GMpmcCloseRaceQ.Close;
@@ -1265,7 +1265,7 @@ begin
     LDuplicates := 0;
     for LI := 0 to MPMC_CLOSE_RACE_MAX_VALUES - 1 do
     begin
-      if AtomicLoad32(GMpmcCloseRaceConsumedMap[LI], moRelaxed) > 1 then
+      if atomic_load(GMpmcCloseRaceConsumedMap[LI], mo_relaxed) > 1 then
         Inc(LDuplicates);
     end;
 
@@ -1278,7 +1278,7 @@ begin
     CheckEqual(Int64(0), LLeftover,
       'close race leaves no drainable items after consumers exit');
   finally
-    AtomicStore32(GMpmcCloseRaceStart, 1, moRelease);
+    atomic_store(GMpmcCloseRaceStart, 1, mo_release);
     GMpmcCloseRaceQ.Close;
     JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
     JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
@@ -1300,15 +1300,15 @@ begin
   LProducerCount := 0;
   LConsumerCount := 0;
   try
-    AtomicStore32(GMpmcCloseRaceStart, 0, moRelease);
-    AtomicStore32(GMpmcCloseRaceStarted, 0, moRelease);
-    AtomicStore32(GMpmcCloseRaceDone, 0, moRelease);
-    AtomicStore64(GMpmcCloseRaceNextValue, 0, moRelease);
-    AtomicStore64(GMpmcCloseRacePublished, 0, moRelease);
-    AtomicStore64(GMpmcCloseRaceConsumed, 0, moRelease);
-    AtomicStore64(GMpmcCloseRaceOutOfRange, 0, moRelease);
+    atomic_store(GMpmcCloseRaceStart, 0, mo_release);
+    atomic_store(GMpmcCloseRaceStarted, 0, mo_release);
+    atomic_store(GMpmcCloseRaceDone, 0, mo_release);
+    atomic_store_64(GMpmcCloseRaceNextValue, 0, mo_release);
+    atomic_store_64(GMpmcCloseRacePublished, 0, mo_release);
+    atomic_store_64(GMpmcCloseRaceConsumed, 0, mo_release);
+    atomic_store_64(GMpmcCloseRaceOutOfRange, 0, mo_release);
     for LI := 0 to MPMC_CLOSE_RACE_MAX_VALUES - 1 do
-      AtomicStore32(GMpmcCloseRaceConsumedMap[LI], 0, moRelaxed);
+      atomic_store(GMpmcCloseRaceConsumedMap[LI], 0, mo_relaxed);
 
     for LI := 0 to MPMC_CLOSE_RACE_CONSUMERS - 1 do
     begin
@@ -1323,24 +1323,24 @@ begin
 
     for LI := 1 to 1000 do
     begin
-      if AtomicLoad32(GMpmcCloseRaceStarted, moAcquire) = MPMC_CLOSE_RACE_PRODUCERS then
+      if atomic_load(GMpmcCloseRaceStarted, mo_acquire) = MPMC_CLOSE_RACE_PRODUCERS then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
     CheckEqual(Int64(MPMC_CLOSE_RACE_PRODUCERS),
-      Int64(AtomicLoad32(GMpmcCloseRaceStarted, moAcquire)),
+      Int64(atomic_load(GMpmcCloseRaceStarted, mo_acquire)),
       'MPMC close race timeout producers must all start before release');
 
-    AtomicStore32(GMpmcCloseRaceStart, 1, moRelease);
+    atomic_store(GMpmcCloseRaceStart, 1, mo_release);
     for LI := 1 to 1000 do
     begin
-      if AtomicLoad64(GMpmcCloseRacePublished, moAcquire) >= MPMC_CLOSE_RACE_CAPACITY then
+      if atomic_load_64(GMpmcCloseRacePublished, mo_acquire) >= MPMC_CLOSE_RACE_CAPACITY then
         Break;
       platform_thread_sleep_ns(1000000);
     end;
-    Check(AtomicLoad64(GMpmcCloseRacePublished, moAcquire) > 0,
+    Check(atomic_load_64(GMpmcCloseRacePublished, mo_acquire) > 0,
       'MPMC close race timeout must publish at least one item before close');
-    Check(AtomicLoad32(GMpmcCloseRaceDone, moAcquire) < MPMC_CLOSE_RACE_PRODUCERS,
+    Check(atomic_load(GMpmcCloseRaceDone, mo_acquire) < MPMC_CLOSE_RACE_PRODUCERS,
       'MPMC close race timeout must close while producers are still live');
 
     GMpmcCloseRaceQ.Close;
@@ -1355,7 +1355,7 @@ begin
     LDuplicates := 0;
     for LI := 0 to MPMC_CLOSE_RACE_MAX_VALUES - 1 do
     begin
-      if AtomicLoad32(GMpmcCloseRaceConsumedMap[LI], moRelaxed) > 1 then
+      if atomic_load(GMpmcCloseRaceConsumedMap[LI], mo_relaxed) > 1 then
         Inc(LDuplicates);
     end;
 
@@ -1368,7 +1368,7 @@ begin
     CheckEqual(Int64(0), LLeftover,
       'close race timeout leaves no drainable items after consumers exit');
   finally
-    AtomicStore32(GMpmcCloseRaceStart, 1, moRelease);
+    atomic_store(GMpmcCloseRaceStart, 1, mo_release);
     GMpmcCloseRaceQ.Close;
     JoinStartedThreads(LProducers, LProducerCount, 'timeout producer thread');
     JoinStartedThreads(LConsumers, LConsumerCount, 'timeout consumer thread');
@@ -1407,8 +1407,8 @@ begin
     if GStackExhaust.TryPop(LV) then
       Inc(LPop);
   end;
-  AtomicFetchAdd64(GStackExhaustPushOk, LPush, moRelaxed);
-  AtomicFetchAdd64(GStackExhaustPopOk, LPop, moRelaxed);
+  atomic_fetch_add_64(GStackExhaustPushOk, LPush, mo_relaxed);
+  atomic_fetch_add_64(GStackExhaustPopOk, LPop, mo_relaxed);
 end;
 
 procedure TestStackExhaustion;
@@ -1477,15 +1477,15 @@ var
   LV: Integer;
 begin
   Result := nil;
-  while AtomicLoad64(GSegQueueStressConsumeCount, moAcquire) < SEGQUEUE_STRESS_TOTAL do
+  while atomic_load_64(GSegQueueStressConsumeCount, mo_acquire) < SEGQUEUE_STRESS_TOTAL do
   begin
     if GSegQueueStressQ.TryDequeue(LV) then
     begin
       if (LV >= 0) and (LV < SEGQUEUE_STRESS_TOTAL) then
-        AtomicFetchAdd32(GSegQueueStressConsumed[LV], 1, moRelaxed)
+        atomic_fetch_add(GSegQueueStressConsumed[LV], 1, mo_relaxed)
       else
-        AtomicFetchAdd64(GSegQueueStressOutOfRangeCount, 1, moRelaxed);
-      AtomicFetchAdd64(GSegQueueStressConsumeCount, 1, moRelaxed);
+        atomic_fetch_add_64(GSegQueueStressOutOfRangeCount, 1, mo_relaxed);
+      atomic_fetch_add_64(GSegQueueStressConsumeCount, 1, mo_relaxed);
     end
     else
       CpuPause;
@@ -1530,9 +1530,9 @@ begin
     LMissing := 0;
     for LI := 0 to SEGQUEUE_STRESS_TOTAL - 1 do
     begin
-      if AtomicLoad32(GSegQueueStressConsumed[LI], moRelaxed) = 0 then
+      if atomic_load(GSegQueueStressConsumed[LI], mo_relaxed) = 0 then
         Inc(LMissing)
-      else if AtomicLoad32(GSegQueueStressConsumed[LI], moRelaxed) > 1 then
+      else if atomic_load(GSegQueueStressConsumed[LI], mo_relaxed) > 1 then
         Inc(LDups);
     end;
     CheckEqual(Int64(0), Int64(LMissing), 'no missing messages');
@@ -1569,12 +1569,12 @@ var
   LV: Integer;
 begin
   Result := nil;
-  while AtomicLoad64(GSpmcConsumeCount, moAcquire) < 1000 do
+  while atomic_load_64(GSpmcConsumeCount, mo_acquire) < 1000 do
   begin
     if GSpmcQ.TryDequeue(LV) then
     begin
       InterlockedExchangeAdd64(GSpmcSum, Int64(LV));
-      AtomicFetchAdd64(GSpmcConsumeCount, 1, moRelaxed);
+      atomic_fetch_add_64(GSpmcConsumeCount, 1, mo_relaxed);
     end
     else
       CpuPause;
@@ -1604,10 +1604,10 @@ begin
     StartThread(LProducers[0], @SpmcProducer, nil, 'SPMC producer thread');
     Inc(LProducerCount);
     JoinStartedThreads(LProducers, LProducerCount, 'producer thread');
-    while AtomicLoad64(GSpmcConsumeCount, moAcquire) < 1000 do
+    while atomic_load_64(GSpmcConsumeCount, mo_acquire) < 1000 do
       platform_thread_sleep_ns(1000000);
     LExpected := Int64(1000) * 1001 div 2;
-    CheckEqual(Int64(1000), AtomicLoad64(GSpmcConsumeCount, moAcquire), 'SPMC 1P+4C consume count');
+    CheckEqual(Int64(1000), atomic_load_64(GSpmcConsumeCount, mo_acquire), 'SPMC 1P+4C consume count');
     CheckEqual(LExpected, GSpmcSum, 'SPMC 1P+4C sum');
   finally
     JoinStartedThreads(LConsumers, LConsumerCount, 'consumer thread');
@@ -1804,7 +1804,7 @@ begin
     GHashMapClearMap.Clear;
     platform_thread_sleep_ns(1000000);
   end;
-  AtomicStore32(GHashMapClearDone, 1, moRelease);
+  atomic_store(GHashMapClearDone, 1, mo_release);
 end;
 
 procedure TestHashMapConcurrentClear;
@@ -1869,12 +1869,12 @@ begin
     begin
       if GChCjf.TrySendEx(LBase + LI, LErr) then
       begin
-        AtomicFetchAdd64(GChCjfSent, 1, moRelaxed);
+        atomic_fetch_add_64(GChCjfSent, 1, mo_relaxed);
         Break;
       end;
       if LErr = lfteClosed then
       begin
-        AtomicFetchAdd64(GChCjfClosedPublish, 1, moRelaxed);
+        atomic_fetch_add_64(GChCjfClosedPublish, 1, mo_relaxed);
         Exit;
       end;
       { full: retry }
@@ -1892,12 +1892,12 @@ begin
   begin
     if GChCjf.TryReceiveEx(LV, LErr) then
     begin
-      AtomicFetchAdd64(GChCjfRecv, 1, moRelaxed);
+      atomic_fetch_add_64(GChCjfRecv, 1, mo_relaxed);
       Continue;
     end;
     if LErr = lfteClosed then
     begin
-      AtomicFetchAdd64(GChCjfClosedEmpty, 1, moRelaxed);
+      atomic_fetch_add_64(GChCjfClosedEmpty, 1, mo_relaxed);
       Exit;
     end;
     { empty, not closed: spin }

@@ -136,7 +136,8 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **done**：T2 簇 D–G preferred — 树族（trie/treap/skiplist/radix/scapegoat/rbtree/bplus/btree/trie_map/skiplist_map）、cowarray/rcu/snapshot/lru、crdt/ringbuffer/timeoutqueue/bitset/forkjoin、bloom/counting_bloom/scalable_bloom + hyperloglog/tdigest/spacesaving/countminsketch
 - **done**：T2 长尾收口 — 全部 `lockfree*.pas` 热路径 preferred；`mpsc` 私有 `LoadNode/StoreNode/ExchangeNode`（去 Atomic 前缀）；residual **0**
 - **M6 done**：生产 residual 回归钉 `test_lockfree_preferred_path`；§5 Q1-a 扫描刷新；Q3-b Close 幂等正文对齐
-- **剩余**：无（lockfree 生产热路径）；legacy public API 仍可在 `atomic.compat` 保留；测试/fixture 中 PascalCase 协调标志另波可选
+- **M7 done**：lockfree 测试/bench harness preferred `atomic_*`（`test_lockfree` / stress / 各 T2 gate 协调标志）；source-contract 对齐 Q5 Go/Rust 对照源
+- **剩余**：无（生产 + 本仓 lockfree 测试调用形）；legacy public API 仍可在 `atomic.compat` 保留
 
 ### Q3-a checklist
 

@@ -3,15 +3,23 @@ program bench_sync;
 {$I nextpas.core.settings.inc}
 
 uses
-  SysUtils,
+  {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils, Classes,
   nextpas.core.thread.init,
   nextpas.core.bench,
   nextpas.core.time.base,
   nextpas.core.sync;
 
+const
+  CONTENDED_ITERS = 200000;
+  CONTENDED_SAMPLES = 7;
+  CONTENDED_WARMUP = 1;
+
 var
   LResults: IBenchResults;
   GSink: Int64;
+  GContendedMutex: IMutex;
+  GContendedIters: Int64;
 
 procedure BenchMutexLockUnlock(aIters: Int64);
 var
@@ -91,6 +99,118 @@ begin
   end;
 end;
 
+function SampleContended2T(const AMutex: IMutex; const AItersPerThread: Int64): Double;
+var
+  LThreads: array[0..1] of TThread;
+  LStart: TInstant;
+  LI: Integer;
+  LTotalOps: Int64;
+  LNs: Int64;
+begin
+  GContendedMutex := AMutex;
+  GContendedIters := AItersPerThread;
+  LStart := TInstant.Now;
+  for LI := 0 to 1 do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    var
+      LIt: Int64;
+    begin
+      for LIt := 1 to GContendedIters do
+      begin
+        GContendedMutex.Acquire;
+        Inc(GSink);
+        GContendedMutex.Release;
+      end;
+    end);
+    LThreads[LI].FreeOnTerminate := False;
+    LThreads[LI].Start;
+  end;
+  for LI := 0 to 1 do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+  LTotalOps := AItersPerThread * 2;
+  LNs := LStart.Elapsed.AsNanoseconds;
+  if LTotalOps <= 0 then
+    Exit(0);
+  Result := LNs / LTotalOps;
+end;
+
+procedure SortDoubles(var A: array of Double; ACount: Integer);
+var
+  I, J: Integer;
+  T: Double;
+begin
+  for I := 0 to ACount - 2 do
+    for J := I + 1 to ACount - 1 do
+      if A[J] < A[I] then
+      begin
+        T := A[I];
+        A[I] := A[J];
+        A[J] := T;
+      end;
+end;
+
+type
+  TContendedStats = record
+    Median: Double;
+    P95: Double;
+    MinV: Double;
+    MaxV: Double;
+    Mean: Double;
+    CVPct: Double;
+  end;
+
+function RunContended2TRobust(const ALabel: string; const AMutex: IMutex): TContendedStats;
+var
+  LSamples: array[0..CONTENDED_SAMPLES - 1] of Double;
+  LI: Integer;
+  LSum, LVar, LStd: Double;
+  LIdxP95: Integer;
+begin
+  { warmup discarded }
+  for LI := 1 to CONTENDED_WARMUP do
+    SampleContended2T(AMutex, CONTENDED_ITERS);
+
+  LSum := 0;
+  for LI := 0 to CONTENDED_SAMPLES - 1 do
+  begin
+    LSamples[LI] := SampleContended2T(AMutex, CONTENDED_ITERS);
+    LSum := LSum + LSamples[LI];
+  end;
+
+  SortDoubles(LSamples, CONTENDED_SAMPLES);
+  Result.MinV := LSamples[0];
+  Result.MaxV := LSamples[CONTENDED_SAMPLES - 1];
+  Result.Median := LSamples[CONTENDED_SAMPLES div 2];
+  LIdxP95 := (CONTENDED_SAMPLES * 95) div 100;
+  if LIdxP95 >= CONTENDED_SAMPLES then
+    LIdxP95 := CONTENDED_SAMPLES - 1;
+  Result.P95 := LSamples[LIdxP95];
+  Result.Mean := LSum / CONTENDED_SAMPLES;
+  LVar := 0;
+  for LI := 0 to CONTENDED_SAMPLES - 1 do
+    LVar := LVar + Sqr(LSamples[LI] - Result.Mean);
+  LVar := LVar / CONTENDED_SAMPLES;
+  LStd := Sqrt(LVar);
+  if Result.Mean > 0 then
+    Result.CVPct := 100.0 * LStd / Result.Mean
+  else
+    Result.CVPct := 0;
+
+  WriteLn(Format(
+    '  %-32s  n=%d  median=%.1f  p95=%.1f  min=%.1f  max=%.1f  mean=%.1f  CV=%.1f%%',
+    [ALabel, CONTENDED_SAMPLES, Result.Median, Result.P95, Result.MinV, Result.MaxV,
+     Result.Mean, Result.CVPct]));
+  if Result.CVPct > 25.0 then
+    WriteLn('  WARNING: noisy samples (CV>25%) — treat as trend only');
+end;
+
+var
+  GSc9, GSc10: TContendedStats;
+
 begin
   WriteLn('=== nextpas.core.sync benchmark (uncontended) ===');
   WriteLn;
@@ -108,4 +228,15 @@ begin
   WriteLn(LResults.PrintToConsole);
   ForceDirectories('build');
   LResults.SaveToJSON('build/bench-sync.json');
+
+  WriteLn;
+  WriteLn(Format('=== contended 2T (warmup=%d samples=%d iters/thread=%d, TInstant wall) ===',
+    [CONTENDED_WARMUP, CONTENDED_SAMPLES, CONTENDED_ITERS]));
+  WriteLn;
+  GSc9 := RunContended2TRobust('sync/Mutex/Contended2T', Mutex);
+  GSc10 := RunContended2TRobust('sync/FutexMutex/Contended2T', FutexMutex);
+  WriteLn;
+  WriteLn(Format(
+    'SCORECARD_HINT SC9_median=%.1f SC9_p95=%.1f SC10_median=%.1f SC10_p95=%.1f',
+    [GSc9.Median, GSc9.P95, GSc10.Median, GSc10.P95]));
 end.

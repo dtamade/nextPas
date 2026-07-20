@@ -6,6 +6,27 @@
 make focused FOCUS=core/tests/nextpas.core.crypto/test_crypto_layer_contract
 ```
 
+## Heaptrc zero gates (Batch B)
+
+These must report `0 unfreed memory blocks`:
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.crypto/test_pkcs8
+make focused FOCUS=core/tests/nextpas.core.crypto/test_x509verify
+```
+
+## Static hygiene (Batch B)
+
+```bash
+# no TList on cleaned hot paths
+rg -n '\bTList\b' core/src/nextpas.core.tls.openssl.context.pas \
+  core/src/nextpas.core.tls.openssl.certstore.pas \
+  core/src/nextpas.core.tls.winssl.certstore.pas
+
+# CSPRNG owner
+rg -n '/dev/urandom|CryptGenRandom' core/src/nextpas.core.tls.random.pas  # expect empty
+```
+
 Static checks:
 
 - no `nextpas.core.tls` in `core/src/nextpas.core.crypto*.pas`

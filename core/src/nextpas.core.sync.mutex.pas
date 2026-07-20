@@ -84,8 +84,12 @@ begin
 end;
 
 destructor TMutex.Destroy;
+var
+  LRet: Int32;
 begin
-  platform_mutex_destroy(FHandle);
+  LRet := platform_mutex_destroy(FHandle);
+  if LRet <> 0 then
+    raise ENextPasError.CreateFmt('TMutex.Destroy failed: %d (held lock?)', [LRet]);
   inherited;
 end;
 

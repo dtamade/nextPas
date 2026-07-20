@@ -94,7 +94,8 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 | M1 | Maintenance：SC26–27 + reject scrollview/modal + C8 | **Done** (`main@c06f621a8`+) |
 | Phase B | scrollview+modal → ext；B3 停止再晋升 | **Done**（B1 `main@d0009c00f`+） |
 | 当前 | **Maintenance Idle**（见 ROADMAP） | Active |
-| 可选 | Truecolor DA / crate / Windows console；单点晋升 dialog/split/select | 不阻塞 Idle |
+| Idle 单点 | dialog + split_pane + **select** → ext | **Done**；B3 候选表清空 |
+| 可选 | Truecolor DA / crate / Windows console | 不阻塞 Idle |
 
 ## 5. 质量维度 → 证据（对标 go/rust）
 
@@ -132,7 +133,10 @@ make focused FOCUS=core/tests/nextpas.core.tui/test_tui_widget_intf
 
 | 候选 | 密度 | experimental | core reject | ext 导出 | 产品确认 |
 |------|------|--------------|-------------|----------|----------|
-| scrollview | 23 | 否 | `rejects_scrollview` | **Phase B1 已导出** | 本波执行 |
-| modal | 16 | 否 | `rejects_modal` | **Phase B1 已导出** | 本波执行 |
+| scrollview | 23 | 否 | `rejects_scrollview` | **Phase B1 已导出** | Done |
+| modal | 16 | 否 | `rejects_modal` | **Phase B1 已导出** | Done |
+| dialog | 17 | 否 | `rejects_dialog` | **Idle 单点已导出** | Done |
+| split_pane | 17 | 否 | `rejects_split_pane` | **Idle 单点已导出** | Done |
+| select | 19 | 否 | `rejects_select` | **Idle 单点已导出** | Done |
 
 见 [TIER_REGISTRY.md](TIER_REGISTRY.md)。

@@ -62,7 +62,7 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 ## 基线快照
 
 **环境**: Linux x86_64, FPC 3.3.1-19195
-**日期**: 2026-07-20（**H∞** post-H2 FreeMemOf close；`RELEASE=1` 本机一次全 PASS）
+**日期**: 2026-07-20（**Era J** mem-owner FreeMemOf 后 `RELEASE=1` 本机全 PASS）
 **命令**: `make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1`
 **结果**: `SCORECARD: ALL PASS (17 rows)`
 
@@ -70,22 +70,22 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 
 | ID | subject | ns/op | p99 | Mops/s | 备注 |
 |----|---------|-------|-----|--------|------|
-| SC1 | growing | 12 | — | 83.3 | ≤ system |
-| SC1 | default_heap | 14 | — | 71.4 | Growing 单例 |
+| SC1 | growing | 9 | — | 111.1 | ≤ system |
+| SC1 | default_heap | 15 | — | 66.7 | Growing 单例 |
 | SC1 | system | 24 | — | 41.7 | glibc via System.GetMem |
 | SC2 | growing | 24 | 22 | 41.7 | sizes 16..4K |
-| SC2 | system | 40 | 40 | 25.0 | |
-| SC3 | growing | 112 | — | 8.9 | producer alloc / consumer free |
+| SC2 | system | 39 | 39 | 25.6 | |
+| SC3 | growing | 122 | — | 8.2 | producer alloc / consumer free |
 | SC4 | local_arena | 2 | — | 500 | AllocFast reset+reuse 64B |
-| SC5 | growing | 99 | — | 10.1 | peak≈407KB; final≈16KB; ReleasedSpans=35 |
-| SC6 | virtual_arena | 11 | — | 90.9 | peakUsed=352KB; finalUsed=0 |
-| SC7 | local_arena | 77 | 55 | 13.0 | per-request scope |
-| SC7 | system | 242 | 344 | 4.1 | 同负载对照（抖动大） |
-| SC8 | free_sized | 14 | — | 71.4 | `FreeMem(ptr,size)` |
-| SC8 | free_unsized | 128 | — | 7.8 | span 扫描；~**9.1×** 更慢 |
+| SC5 | growing | 102 | — | 9.8 | peak≈402KB; final≈12KB; ReleasedSpans=35 |
+| SC6 | virtual_arena | 12 | — | 83.3 | peakUsed=352KB; finalUsed=0 |
+| SC7 | local_arena | 77 | 73 | 13.0 | per-request scope |
+| SC7 | system | 244 | 268 | 4.1 | 同负载对照（抖动大） |
+| SC8 | free_sized | 15 | — | 66.7 | `FreeMem(ptr,size)` |
+| SC8 | free_unsized | 112 | — | 8.9 | span 扫描；~**7.5×** 更慢 |
 | SC8 | try_block_size | — | — | — | 正确性 |
-| SC9 | hot_heap | 13 | — | 76.9 | DefaultHeap sized |
-| SC9 | plugin_ia | 125 | — | 8.0 | vtable；~**9.6×** 更慢 |
+| SC9 | hot_heap | 17 | — | 58.8 | DefaultHeap sized |
+| SC9 | plugin_ia | 128 | — | 7.8 | vtable；~**7.5×** 更慢 |
 | SC9 | same_heap | — | — | — | 同堆互释正确性 |
 SC5 说明：40 rounds × 256 × 64B churn + 周期 `Scavenge`；`final LiveBytes` 可保留少量 TLS/active 结构，门禁要求 **delta ReleasedSpans ≥ 1** 且 final ≤ peak。
 

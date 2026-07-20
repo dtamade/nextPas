@@ -6,6 +6,8 @@
 
 模块族采用 **门面 + 子模块** 架构：`nextpas.core.text.unicode` 是消费者入口，只做类型别名和 inline forward；真实算法和数据在各子模块中。
 
+**导航**：[ROADMAP](ROADMAP.md) · [CONTRACT](CONTRACT.md) · [SCORECARD](SCORECARD.md) · [API-REFERENCE](API-REFERENCE.md) · [COOKBOOK](COOKBOOK.md) · [PERFORMANCE](PERFORMANCE.md)
+
 ## 模块架构
 
 ```
@@ -303,28 +305,36 @@ end;
 | `test_grapheme_uax29` | UAX #29 手写 GB 规则 |
 | `test_collate` | DUCET 排序选项 |
 | `test_data` | IUnicodeDataManager |
-| **`test_conformance_normalize`** | **Unicode 16.0 NormalizationTest.txt 全量 (~19965)** |
-| **`test_conformance_grapheme`** | **Unicode 16.0 GraphemeBreakTest.txt 全量 (~1093)** |
-| **`test_conformance_word test_conformance_sentence`** | **Unicode 16.0 WordBreakTest.txt 全量 (~1826)** |
+| **`test_conformance_*`** | Norm / Grapheme / Word / Sentence / Line / Bidi×2 / Collate / Case 官方全量 |
 
 ```bash
-# 手写套件
-for t in test_case test_data test_enhance test_grapheme_uax29 \
-         test_normalize test_property test_collate; do
-  make -C core/tests/nextpas.core.text.unicode/$t clean test
-done
-
-# 官方 conformance（fixture 已 vendoring，离线可跑）
-make -C core/tests/nextpas.core.text.unicode/test_conformance_normalize clean test
-make -C core/tests/nextpas.core.text.unicode/test_conformance_grapheme clean test
-make -C core/tests/nextpas.core.text.unicode/test_conformance_word test_conformance_sentence clean test
+# M1 一键门禁（推荐）
+make -C core/tests/nextpas.core.text.unicode gate
 ```
 
-重新生成 fixture（开发机，需网络）：
+导航：[ROADMAP](ROADMAP.md) · [SCORECARD](SCORECARD.md) · [CONTRACT](CONTRACT.md)
+
+### UCD 升版一条龙
+
+开发机需网络；版本号替换为新 UCD。生成后必须 `gate` 全绿。
 
 ```bash
-python3 core/scripts/gen_unicode_fixtures.py --version 16.0.0 \
-  --fixtures-dir core/tests/nextpas.core.text.unicode/data
+VER=16.0.0
+OUT=core/src
+FIX=core/tests/nextpas.core.text.unicode/data
+
+python3 core/scripts/gen_unicode_fixtures.py --version $VER --fixtures-dir $FIX
+python3 core/scripts/gen_unicode_wbp.py --version $VER --output-dir $OUT
+python3 core/scripts/gen_unicode_sbp.py --version $VER --output-dir $OUT
+python3 core/scripts/gen_unicode_lbp.py --version $VER --output-dir $OUT
+python3 core/scripts/gen_unicode_bc.py --version $VER --output-dir $OUT
+python3 core/scripts/gen_unicode_brackets.py --version $VER --output-dir $OUT
+python3 core/scripts/gen_unicode_collate.py --version $VER --output-dir $OUT
+python3 core/scripts/gen_unicode_eaw.py --version $VER --output-dir $OUT
+python3 core/scripts/gen_unicode_special_casing.py --version $VER --output-dir $OUT
+# 另见: gen_unicode_data / gen_unicode_norm_qc / gen_unicode_compose_index（以 --help 为准）
+
+make -C core/tests/nextpas.core.text.unicode gate
 ```
 
 ## 依赖关系

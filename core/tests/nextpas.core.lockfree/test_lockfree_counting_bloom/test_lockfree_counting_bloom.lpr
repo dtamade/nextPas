@@ -182,10 +182,10 @@ end;
 function ConcurrentRemoveWorker(AArg: Pointer): Pointer; cdecl;
 begin
   Result := nil;
-  while AtomicLoad32(GConcurrentStart, moAcquire) = 0 do
+  while atomic_load(GConcurrentStart, mo_acquire) = 0 do
     CpuPause;
   if GConcurrentFilter.Remove('shared') = cbfOk then
-    AtomicFetchAdd32(GConcurrentRemoveOk, 1, moRelaxed);
+    atomic_fetch_add(GConcurrentRemoveOk, 1, mo_relaxed);
 end;
 
 procedure Test_ConcurrentRemoveDoesNotUnderflow;
@@ -205,7 +205,7 @@ begin
     for LIndex := 0 to THREAD_COUNT - 1 do
       Check(platform_thread_create(LHandles[LIndex], @ConcurrentRemoveWorker, nil) = 0,
         'create concurrent remover');
-    AtomicStore32(GConcurrentStart, 1, moRelease);
+    atomic_store(GConcurrentStart, 1, mo_release);
     for LIndex := 0 to THREAD_COUNT - 1 do
       Check(platform_thread_join(LHandles[LIndex], LReturnValue) = 0,
         'join concurrent remover');
