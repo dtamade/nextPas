@@ -2,10 +2,12 @@
 
 基准测试框架模块。提供 Fluent Builder API 的基准测试套件、统计分析、基线管理、跨语言对比和报告生成。
 
-> **Lane 状态：Maintenance Idle（2026-07-20 · B43）**  
-> API 冻结；消费 checklist **19** 模块 C3 全绿；scorecard 子集 **11** track。  
-> 日常：只响应回归、明确授权的小修。  
-> **不**默认排期：EBR `BenchRun`（见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)）、全量 SCORECARD、门面大拆。
+> **Lane 状态：Maintenance Idle（2026-07-20 · B43；B44 卫生包）**
+>
+> - API 冻结；消费 checklist **19** 模块 C3 全绿；scorecard 子集 **11** track
+> - 默认 gate：**22** suites（`core/tests/nextpas.core.bench/Makefile` PROJECTS）
+> - 日常：只响应回归、明确授权的小修（文档/卫生/契约口径可做）
+> - **不**默认排期：EBR `BenchRun`（见 [ebr-benchrun-design-note.md](ebr-benchrun-design-note.md)）、全量 SCORECARD、门面大拆
 
 ## 消费侧（写模块 bench 的人）
 
@@ -20,7 +22,7 @@
 ### 仓库一键入口
 
 ```bash
-# 框架全部 focused suites（约 22 个）
+# 框架全部 focused suites（22 个 PROJECTS）
 make bench-module-test
 
 # 轻量 scorecard smoke（inttohex；需 fpc + go）
@@ -283,10 +285,10 @@ end.
 
 | 指标 | 状态 |
 |------|------|
-| 测试套件 | 23 |
-| 框架级测试 | ~381 |
+| 测试套件 | **22**（Makefile PROJECTS；见 goal-tree） |
+| 框架级测试 | **~504** |
 | 框架 | 全部使用 `nextpas.core.test` |
-| heaptrc | 23/23 套件全部启用 -gh，零泄漏 |
+| heaptrc | **22/22** 套件全部启用 -gh，零泄漏 |
 | NaN 安全 | `SortDoubleArray` 先分区 NaN 再排序 |
 | 统计防护 | `Variance`/`Skewness`/`Kurtosis` NaN/Inf guard |
 | `GetData` 语义 | 返回 `Copy(FData)` 独立副本 |
@@ -370,7 +372,7 @@ end.
 ## 测试
 
 ```bash
-# 全量测试（22 个 suite，见 goal-tree.md）
+# 全量测试（22 个 PROJECTS，见 goal-tree.md）
 make -C core/tests/nextpas.core.bench clean test
 
 # 模块自身 micro-bench
