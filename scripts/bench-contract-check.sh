@@ -79,6 +79,44 @@ else
   ok "无 orphan test_test_bench_integration"
 fi
 
+printf "\n${BOLD}C9: core/benchmarks/nextpas.core.* 禁止直连 FPC RTL${NC}\n"
+BENCH_ROOT="$REPO_ROOT/core/benchmarks"
+# 白名单：刻意 FPC RTL 对照
+EXCLUDE_PATH="$BENCH_ROOT/platform-comparison"
+RTL_LIST=""
+if [ -d "$BENCH_ROOT" ]; then
+  if command -v rg >/dev/null 2>&1; then
+    RTL_LIST=$(rg -l --glob 'nextpas.core.*/**/*.{lpr,pas}' \
+      -e '\bSysUtils\b' -e '\bClasses\b' -e '\bBaseUnix\b' -e '\bUnix\b' -e '\bWindows\b' \
+      "$BENCH_ROOT" 2>/dev/null || true)
+  else
+    RTL_LIST=$(find "$BENCH_ROOT" -path '*/nextpas.core.*/*' \( -name '*.lpr' -o -name '*.pas' \) \
+      -print0 2>/dev/null | xargs -0 grep -lE '\bSysUtils\b|\bClasses\b|\bBaseUnix\b' 2>/dev/null || true)
+  fi
+fi
+# filter whitelist and nextpas.core.math false positives handled by Classes/SysUtils only
+if [ -n "$RTL_LIST" ]; then
+  FILTERED=""
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    case "$f" in
+      *platform-comparison*) continue ;;
+    esac
+    FILTERED="${FILTERED}${f}
+"
+  done <<EOF
+$RTL_LIST
+EOF
+  if [ -n "$(echo "$FILTERED" | sed '/^$/d')" ]; then
+    fail_check "benchmarks 仍含 RTL uses:"
+    echo "$FILTERED" | sed '/^$/d' | while read -r line; do printf "    %s\n" "$line"; done
+  else
+    ok "nextpas.core.* benches 无 SysUtils/Classes/BaseUnix/Unix/Windows"
+  fi
+else
+  ok "nextpas.core.* benches 无 SysUtils/Classes/BaseUnix/Unix/Windows"
+fi
+
 printf "\n${BOLD}═══════════════════════════════════${NC}\n"
 printf "${GREEN}通过: %d${NC}  ${RED}失败: %d${NC}  ${YELLOW}警告: %d${NC}\n" "$pass" "$fail" "$warn"
 if [ "$fail" -gt 0 ]; then printf "\n${RED}${BOLD}契约门禁: 失败${NC}\n"; exit 1

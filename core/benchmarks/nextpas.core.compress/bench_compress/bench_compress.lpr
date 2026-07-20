@@ -4,9 +4,14 @@ program bench_compress;
 {$Q-}{$R-}
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.bench,
+  nextpas.core.bench.intf,
   nextpas.core.time.base,
-  nextpas.core.compress;
+  nextpas.core.compress,
+  nextpas.core.text.conv,
+  nextpas.core.text.format,
+  nextpas.core.exception;
 
 const
   DATA_SIZE = 1024 * 1024;
@@ -29,10 +34,10 @@ var
   LI: Integer;
 begin
   if Length(AExpected) <> Length(AActual) then
-    raise Exception.Create(ALabel + ': length mismatch');
+    raise EInvalidOperationError.Create(ALabel + ': length mismatch');
   for LI := 0 to High(AExpected) do
     if AExpected[LI] <> AActual[LI] then
-      raise Exception.Create(ALabel + ': byte mismatch at ' + IntToStr(LI));
+      raise EInvalidOperationError.Create(ALabel + ': byte mismatch at ' + IntToStr(LI));
 end;
 
 procedure BenchDeflateCompress;
@@ -53,7 +58,7 @@ begin
     LCompressed := DeflateCompress(GData);
   LElapsed := LStart.Elapsed.AsSecondsF;
 
-  WriteLn(Format('Deflate compress   %6.1f MB/s  ratio=%.1f%%', [
+  WriteLn(TextFormat('Deflate compress   %6.1f MB/s  ratio=%.1f%%', [
     (DATA_SIZE * ITERATIONS / 1048576.0) / LElapsed, LRatio]));
 end;
 
@@ -73,7 +78,7 @@ begin
     LDecompressed := DeflateDecompress(LCompressed);
   LElapsed := LStart.Elapsed.AsSecondsF;
 
-  WriteLn(Format('Deflate decompress %6.1f MB/s', [
+  WriteLn(TextFormat('Deflate decompress %6.1f MB/s', [
     (DATA_SIZE * ITERATIONS / 1048576.0) / LElapsed]));
 end;
 
@@ -95,7 +100,7 @@ begin
     LCompressed := GzipCompress(GData);
   LElapsed := LStart.Elapsed.AsSecondsF;
 
-  WriteLn(Format('Gzip compress      %6.1f MB/s  ratio=%.1f%%', [
+  WriteLn(TextFormat('Gzip compress      %6.1f MB/s  ratio=%.1f%%', [
     (DATA_SIZE * ITERATIONS / 1048576.0) / LElapsed, LRatio]));
 end;
 
@@ -115,7 +120,7 @@ begin
     LDecompressed := GzipDecompress(LCompressed);
   LElapsed := LStart.Elapsed.AsSecondsF;
 
-  WriteLn(Format('Gzip decompress    %6.1f MB/s', [
+  WriteLn(TextFormat('Gzip decompress    %6.1f MB/s', [
     (DATA_SIZE * ITERATIONS / 1048576.0) / LElapsed]));
 end;
 
@@ -137,7 +142,7 @@ begin
     LCompressed := Lz4Compress(GData);
   LElapsed := LStart.Elapsed.AsSecondsF;
 
-  WriteLn(Format('LZ4 compress       %6.1f MB/s  ratio=%.1f%%', [
+  WriteLn(TextFormat('LZ4 compress       %6.1f MB/s  ratio=%.1f%%', [
     (DATA_SIZE * ITERATIONS / 1048576.0) / LElapsed, LRatio]));
 end;
 
@@ -157,13 +162,13 @@ begin
     LDecompressed := Lz4Decompress(LCompressed, DATA_SIZE);
   LElapsed := LStart.Elapsed.AsSecondsF;
 
-  WriteLn(Format('LZ4 decompress     %6.1f MB/s', [
+  WriteLn(TextFormat('LZ4 decompress     %6.1f MB/s', [
     (DATA_SIZE * ITERATIONS / 1048576.0) / LElapsed]));
 end;
 
 begin
   GenerateData;
-  WriteLn(Format('=== Pascal compress benchmark (1MB x %d iterations) ===', [ITERATIONS]));
+  WriteLn(TextFormat('=== Pascal compress benchmark (1MB x %d iterations) ===', [ITERATIONS]));
   WriteLn;
   BenchDeflateCompress;
   BenchDeflateDecompress;

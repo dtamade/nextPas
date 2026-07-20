@@ -1,9 +1,11 @@
 program bench_io;
 {$I nextpas.core.settings.inc}
-uses SysUtils,
+uses
+  nextpas.core.base,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base, nextpas.core.io.base, nextpas.core.io.intf,
-  nextpas.core.io.memory, nextpas.core.io.buffer, nextpas.core.io.util;
+  nextpas.core.io.memory, nextpas.core.io.buffer, nextpas.core.io.util,
+  nextpas.core.fs;
 var GSink: UInt64;
 procedure BenchCopy64KB(const ACtx: IBenchContext);
 var LSrc, LDst: IStream; LData: TBytes; LI: Integer; LN: Int64;

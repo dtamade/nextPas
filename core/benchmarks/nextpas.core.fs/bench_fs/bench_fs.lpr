@@ -1,12 +1,12 @@
 program bench_fs;
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base, nextpas.core.io.intf,
   nextpas.core.fs.base, nextpas.core.fs.intf, nextpas.core.fs.stream,
-  nextpas.core.fs.util;
+  nextpas.core.fs.util, nextpas.core.fs,
+  nextpas.core.text.conv;
 
 var
   GTmpDir: string;

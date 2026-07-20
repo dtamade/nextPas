@@ -63,14 +63,22 @@ B43：**Maintenance Idle** — 默认不扩面；回归 / 明确授权再动
 ## 可复制片段（CI 友好）
 
 ```pascal
+procedure BenchHot(const ACtx: IBenchContext);
+var L: Int64; I: Integer;
+begin
+  L := 0;
+  for I := 1 to 1000 do Inc(L, I);
+  BenchBlackBoxInt64(L);  { 推荐：防优化 }
+end;
+
 LResults := TBenchSuite.Create('MyMod')
   .SetQuiet(True)
   .SetMinDuration(TDuration.FromMilliseconds(50))
   .SetMinSamples(5)
   .Add('MyMod/HotPath', @BenchHot)
   .Run;
-WriteLn(LResults.PrintToConsole);
-ForceDirectories('build');
+WriteLn(LResults.PrintToConsole);  { System.WriteLn；勿 uses SysUtils }
+ForceDirectories('build');         { nextpas.core.fs }
 LResults.SaveToJSON('build/bench-mymod.json');
 ```
 

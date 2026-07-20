@@ -13,7 +13,6 @@ program bench_lockfree;
  *}
 {$I nextpas.core.settings.inc}
 uses
-  SysUtils,
   nextpas.core.thread.init,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base,
@@ -21,7 +20,9 @@ uses
   nextpas.core.lockfree.ebr, nextpas.core.lockfree.spsc, nextpas.core.lockfree.mpmc,
   nextpas.core.lockfree.segqueue, nextpas.core.lockfree.spmc,
   nextpas.core.lockfree.channel, nextpas.core.lockfree.channel.spsc,
-  nextpas.core.platform.thread, nextpas.core.platform.time, nextpas.core.platform.info;
+  nextpas.core.platform.thread, nextpas.core.platform.time, nextpas.core.platform.info,
+  nextpas.core.fs,
+  nextpas.core.exception;
 
 const
   OPS = 1000000;
@@ -148,9 +149,9 @@ var
   LOpsPerP, LOpsPerC: Integer;
 begin
   if (AProducers < 1) or (AConsumers < 1) or (AProducers > 8) or (AConsumers > 8) then
-    raise Exception.Create('RunMatchedChannelOnce: bad producer/consumer count');
+    raise EInvalidOperationError.Create('RunMatchedChannelOnce: bad producer/consumer count');
   if (OPS mod AProducers <> 0) or (OPS mod AConsumers <> 0) then
-    raise Exception.Create('RunMatchedChannelOnce: OPS must divide producer/consumer counts');
+    raise EInvalidOperationError.Create('RunMatchedChannelOnce: OPS must divide producer/consumer counts');
 
   LOpsPerP := OPS div AProducers;
   LOpsPerC := OPS div AConsumers;
@@ -159,10 +160,10 @@ begin
   try
     for LI := 0 to AConsumers - 1 do
       if platform_thread_create(LConsumers[LI], @MatchConsumer, Pointer(PtrUInt(LOpsPerC))) <> 0 then
-        raise Exception.Create('consumer create failed');
+        raise EInvalidOperationError.Create('consumer create failed');
     for LI := 0 to AProducers - 1 do
       if platform_thread_create(LProducers[LI], @MatchProducer, Pointer(PtrUInt(LOpsPerP))) <> 0 then
-        raise Exception.Create('producer create failed');
+        raise EInvalidOperationError.Create('producer create failed');
     for LI := 0 to AProducers - 1 do
       platform_thread_join(LProducers[LI], LRet);
     for LI := 0 to AConsumers - 1 do

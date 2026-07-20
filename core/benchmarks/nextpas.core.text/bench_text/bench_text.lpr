@@ -1,11 +1,11 @@
 program bench_text;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
-uses SysUtils,
-  nextpas.core.base,
+uses nextpas.core.base,
   nextpas.core.bench, nextpas.core.bench.intf,
   nextpas.core.time.base, nextpas.core.text.view, nextpas.core.text.number,
   nextpas.core.text.escape, nextpas.core.text.scan, nextpas.core.text.utf8,
-  nextpas.core.text.builder, nextpas.core.text.conv;
+  nextpas.core.text.builder, nextpas.core.text.conv,
+  nextpas.core.fs;
 var GSink: UInt64;
 procedure BenchIndexOf(const ACtx: IBenchContext);
 const DATA = 'The quick brown fox jumps over the lazy dog and finds the hidden treasure at the end';

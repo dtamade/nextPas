@@ -1,8 +1,9 @@
 program bench_yaml;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
-uses SysUtils,
-  nextpas.core.bench, nextpas.core.bench.intf,
-  nextpas.core.time.base, nextpas.core.yaml;
+uses nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base, nextpas.core.yaml,
+  nextpas.core.fs,
+  nextpas.core.text.conv;
 var GSmall, GMedium, GLarge: string; GSink: UInt64;
 procedure BuildTestData;
 var LI: Integer;

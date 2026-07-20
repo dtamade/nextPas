@@ -4,10 +4,13 @@ program bench_sync;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils, Classes,
   nextpas.core.thread.init,
   nextpas.core.bench,
+  nextpas.core.bench.intf,
   nextpas.core.time.base,
+  nextpas.core.fs,
+  nextpas.core.text.format,
+  nextpas.core.system.classes,
   nextpas.core.sync;
 
 const
@@ -200,7 +203,7 @@ begin
   else
     Result.CVPct := 0;
 
-  WriteLn(Format(
+  WriteLn(TextFormat(
     '  %-32s  n=%d  median=%.1f  p95=%.1f  min=%.1f  max=%.1f  mean=%.1f  CV=%.1f%%',
     [ALabel, CONTENDED_SAMPLES, Result.Median, Result.P95, Result.MinV, Result.MaxV,
      Result.Mean, Result.CVPct]));
@@ -230,13 +233,13 @@ begin
   LResults.SaveToJSON('build/bench-sync.json');
 
   WriteLn;
-  WriteLn(Format('=== contended 2T (warmup=%d samples=%d iters/thread=%d, TInstant wall) ===',
+  WriteLn(TextFormat('=== contended 2T (warmup=%d samples=%d iters/thread=%d, TInstant wall) ===',
     [CONTENDED_WARMUP, CONTENDED_SAMPLES, CONTENDED_ITERS]));
   WriteLn;
   GSc9 := RunContended2TRobust('sync/Mutex/Contended2T', Mutex);
   GSc10 := RunContended2TRobust('sync/FutexMutex/Contended2T', FutexMutex);
   WriteLn;
-  WriteLn(Format(
+  WriteLn(TextFormat(
     'SCORECARD_HINT SC9_median=%.1f SC9_p95=%.1f SC10_median=%.1f SC10_p95=%.1f',
     [GSc9.Median, GSc9.P95, GSc10.Median, GSc10.P95]));
 end.

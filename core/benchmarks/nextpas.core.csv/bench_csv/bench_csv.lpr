@@ -1,8 +1,8 @@
 program bench_csv;
 {$I nextpas.core.settings.inc}{$Q-}{$R-}
-uses SysUtils,
-  nextpas.core.bench, nextpas.core.bench.intf,
-  nextpas.core.time.base, nextpas.core.csv;
+uses nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base, nextpas.core.csv,
+  nextpas.core.fs;
 var GSmallCsv: string; GLargeCsv: string; GSink: UInt64;
 function BuildCsv(ARowCount: Integer): string;
 var LLen, LCap, LI: Integer; LBuffer: string;
