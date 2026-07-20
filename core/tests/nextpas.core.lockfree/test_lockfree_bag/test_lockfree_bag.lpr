@@ -232,7 +232,7 @@ begin
     'Bag tracks admitted producers across Close');
   Check(Pos('function ClosedAndNoActiveEnqueues', LSource) > 0,
     'Bag closed-empty checks active producers');
-  Check(Pos('AtomicFetchAdd32(FActiveEnqueues, 1, moAcqRel)', LSource) > 0,
+  Check(Pos('atomic_fetch_add(FActiveEnqueues, 1, mo_acq_rel)', LSource) > 0,
     'Bag enters the admitted-producer interval before checking Close');
   Check(Pos('LPos - FDequeuePos', LSource) = 0,
     'Bag full detection must not read dequeue position non-atomically');

@@ -52,15 +52,15 @@ function TConcurrentRwLock.TryReadLock: Boolean;
 var
   LOld: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   repeat
-    LOld := AtomicLoad32(FState, moRelaxed);
-    if (LOld < 0) or (AtomicLoad32(FWriterPending, moAcquire) <> 0) then
+    LOld := atomic_load(FState, mo_relaxed);
+    if (LOld < 0) or (atomic_load(FWriterPending, mo_acquire) <> 0) then
       Exit(False);  // Write locked
     if LOld = High(Int32) then
       Exit(False);
-  until AtomicCompareExchange32(FState, LOld, LOld + 1, moAcqRel) = LOld;
+  until atomic_compare_exchange_strong(FState, LOld, LOld + 1, mo_acq_rel, mo_acquire);
   Result := True;
 end;
 
@@ -68,7 +68,7 @@ function TConcurrentRwLock.ReadLock: Boolean;
 begin
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     if TryReadLock then
       Exit(True);
@@ -77,28 +77,31 @@ begin
 end;
 
 function TConcurrentRwLock.TryWriteLock: Boolean;
+var
+  LExpected: Int32;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
-  Result := AtomicCompareExchange32(FState, 0, -1) = 0;
+  LExpected := 0;
+  Result := atomic_compare_exchange_strong(FState, LExpected, -1, mo_seq_cst, mo_seq_cst);
 end;
 
 function TConcurrentRwLock.WriteLock: Boolean;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
-  AtomicFetchAdd32(FWriterPending, 1, moAcqRel);
+  atomic_fetch_add(FWriterPending, 1, mo_acq_rel);
   try
     while True do
     begin
-      if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      if atomic_load(FClosed, mo_acquire) <> 0 then
         Exit(False);
       if TryWriteLock then
         Exit(True);
       CpuPause;
     end;
   finally
-    AtomicFetchSub32(FWriterPending, 1, moAcqRel);
+    atomic_fetch_sub(FWriterPending, 1, mo_acq_rel);
   end;
 end;
 
@@ -107,20 +110,23 @@ var
   LOld: Int32;
 begin
   repeat
-    LOld := AtomicLoad32(FState, moAcquire);
+    LOld := atomic_load(FState, mo_acquire);
     if LOld <= 0 then
       Exit;
-  until AtomicCompareExchange32(FState, LOld, LOld - 1, moRelease) = LOld;
+  until atomic_compare_exchange_strong(FState, LOld, LOld - 1, mo_release, mo_relaxed);
 end;
 
 procedure TConcurrentRwLock.WriteUnlock;
+var
+  LExpected: Int32;
 begin
-  AtomicCompareExchange32(FState, -1, 0, moRelease);
+  LExpected := -1;
+  atomic_compare_exchange_strong(FState, LExpected, 0, mo_release, mo_relaxed);
 end;
 
 procedure TConcurrentRwLock.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TConcurrentRwLock.Destroy;
@@ -131,14 +137,14 @@ end;
 
 function TConcurrentRwLock.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TConcurrentRwLock.ReaderCount: Int32; inline;
 var
   LState: Int32;
 begin
-  LState := AtomicLoad32(FState, moAcquire);
+  LState := atomic_load(FState, mo_acquire);
   if LState > 0 then
     Result := LState
   else
@@ -147,7 +153,7 @@ end;
 
 function TConcurrentRwLock.IsWriteLocked: Boolean; inline;
 begin
-  Result := AtomicLoad32(FState, moAcquire) < 0;
+  Result := atomic_load(FState, mo_acquire) < 0;
 end;
 
 end.

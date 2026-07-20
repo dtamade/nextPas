@@ -126,11 +126,13 @@ procedure TaskWrapFinish(AContext: Pointer; ARunUser: Boolean);
 var
   LCtx: PTaskWrapCtx;
   LGroup: TAsyncTaskGroup;
+  LExpected: Int32;
 begin
   LCtx := PTaskWrapCtx(AContext);
   if LCtx = nil then
     Exit;
-  if AtomicCompareExchange32(LCtx^.Done, 0, 1) <> 0 then
+  LExpected := 0;
+  if not atomic_compare_exchange_strong(LCtx^.Done, LExpected, 1, mo_acq_rel, mo_acquire) then
     Exit;
   LGroup := TAsyncTaskGroup(LCtx^.Group);
   try

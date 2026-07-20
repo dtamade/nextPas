@@ -52,10 +52,10 @@ var
   LOld: Int64;
 begin
   repeat
-    LOld := AtomicLoad64(FCount, moAcquire);
+    LOld := atomic_load_64(FCount, mo_acquire);
     if LOld <= 0 then
       Exit;
-  until AtomicCompareExchange64(FCount, LOld, LOld - 1, moRelease) = LOld;
+  until atomic_compare_exchange_strong_64(FCount, LOld, LOld - 1, mo_release, mo_relaxed);
 end;
 
 procedure TCountDownLatch.DoneN(const AN: Int64);
@@ -66,21 +66,21 @@ begin
   if AN <= 0 then
     raise EArgumentError.Create('TCountDownLatch.DoneN: N must be > 0');
   repeat
-    LOld := AtomicLoad64(FCount, moAcquire);
+    LOld := atomic_load_64(FCount, mo_acquire);
     if LOld <= 0 then
       Exit;
     if LOld > AN then
       LNew := LOld - AN
     else
       LNew := 0;
-  until AtomicCompareExchange64(FCount, LOld, LNew, moRelease) = LOld;
+  until atomic_compare_exchange_strong_64(FCount, LOld, LNew, mo_release, mo_relaxed);
 end;
 
 procedure TCountDownLatch.Wait;
 begin
-  while AtomicLoad64(FCount, moAcquire) > 0 do
+  while atomic_load_64(FCount, mo_acquire) > 0 do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit;
     CpuPause;
   end;
@@ -93,9 +93,9 @@ begin
   if ATimeoutNs <= 0 then
     raise EArgumentError.Create('TCountDownLatch.WaitTimeout: timeout must be > 0');
   LStart := TInstant.Now;
-  while AtomicLoad64(FCount, moAcquire) > 0 do
+  while atomic_load_64(FCount, mo_acquire) > 0 do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
     if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
       Exit(False);
@@ -106,12 +106,12 @@ end;
 
 function TCountDownLatch.GetCount: Int64; inline;
 begin
-  Result := AtomicLoad64(FCount, moAcquire);
+  Result := atomic_load_64(FCount, mo_acquire);
 end;
 
 procedure TCountDownLatch.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TCountDownLatch.Destroy;
@@ -122,7 +122,7 @@ end;
 
 function TCountDownLatch.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

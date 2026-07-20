@@ -55,13 +55,13 @@ function TConcurrentSemaphore.TryAcquire: Boolean;
 var
   LOld: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   repeat
-    LOld := AtomicLoad64(FAvailable, moRelaxed);
+    LOld := atomic_load_64(FAvailable, mo_relaxed);
     if LOld <= 0 then
       Exit(False);
-  until AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moAcquire) = LOld;
+  until atomic_compare_exchange_strong_64(FAvailable, LOld, LOld - 1, mo_acquire, mo_acquire);
   Result := True;
 end;
 
@@ -71,15 +71,15 @@ var
 begin
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
-    LOld := AtomicLoad64(FAvailable, moRelaxed);
+    LOld := atomic_load_64(FAvailable, mo_relaxed);
     if LOld <= 0 then
     begin
       CpuPause;
       Continue;
     end;
-    if AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moAcquire) = LOld then
+    if atomic_compare_exchange_strong_64(FAvailable, LOld, LOld - 1, mo_acquire, mo_acquire) then
       Exit(True);
   end;
 end;
@@ -93,9 +93,9 @@ begin
   LStart := TInstant.Now;
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(False);
-    LOld := AtomicLoad64(FAvailable, moRelaxed);
+    LOld := atomic_load_64(FAvailable, mo_relaxed);
     if LOld <= 0 then
     begin
       LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
@@ -104,7 +104,7 @@ begin
       CpuPause;
       Continue;
     end;
-    if AtomicCompareExchange64(FAvailable, LOld, LOld - 1, moAcquire) = LOld then
+    if atomic_compare_exchange_strong_64(FAvailable, LOld, LOld - 1, mo_acquire, mo_acquire) then
       Exit(True);
   end;
 end;
@@ -114,15 +114,15 @@ var
   LOld: Int64;
 begin
   repeat
-    LOld := AtomicLoad64(FAvailable, moAcquire);
+    LOld := atomic_load_64(FAvailable, mo_acquire);
     if LOld >= FMaxPermits then
       Exit;
-  until AtomicCompareExchange64(FAvailable, LOld, LOld + 1, moRelease) = LOld;
+  until atomic_compare_exchange_strong_64(FAvailable, LOld, LOld + 1, mo_release, mo_relaxed);
 end;
 
 procedure TConcurrentSemaphore.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TConcurrentSemaphore.Destroy;
@@ -133,12 +133,12 @@ end;
 
 function TConcurrentSemaphore.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TConcurrentSemaphore.AvailablePermits: Int64; inline;
 begin
-  Result := AtomicLoad64(FAvailable, moAcquire);
+  Result := atomic_load_64(FAvailable, mo_acquire);
 end;
 
 function TConcurrentSemaphore.MaxPermits: Int64; inline;

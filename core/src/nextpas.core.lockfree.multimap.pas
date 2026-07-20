@@ -165,10 +165,13 @@ end;
 procedure TLockFreeMultiMapImpl.LockMap;
 var
   LSpin: Integer;
+  LExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  LExpected := 0;
+  while not atomic_compare_exchange_strong(FLock, LExpected, 1, mo_acq_rel, mo_acquire) do
   begin
+    LExpected := 0;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -183,7 +186,7 @@ end;
 
 procedure TLockFreeMultiMapImpl.UnlockMap;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 function TLockFreeMultiMapImpl.Add(const AKey: TKey; const AValue: TValue): TLockFreeMultiMapAddResult;
@@ -192,11 +195,11 @@ var
   LPair: PPair;
   LLen: Integer;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(mmClosed);
   LockMap;
   try
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(mmClosed);
     if FindBucketIndex(AKey, LIdx) then
     begin
@@ -206,7 +209,7 @@ begin
         SetLength(LPair^.Values, LLen * 2);
       LPair^.Values[LLen] := AValue;
       LPair^.Count := LLen + 1;
-      AtomicFetchAdd64(FCount, 1, moRelaxed);
+      atomic_fetch_add_64(FCount, 1, mo_relaxed);
       Exit(mmAdded);
     end;
     if LIdx >= FCapacity then
@@ -219,7 +222,7 @@ begin
       LPair^.Values[0] := AValue;
       LPair^.Count := 1;
       FBuckets[LIdx] := LPair;
-      AtomicFetchAdd64(FCount, 1, moRelaxed);
+      atomic_fetch_add_64(FCount, 1, mo_relaxed);
       Exit(mmAdded);
     end;
     Exit(mmFull);
@@ -271,7 +274,7 @@ begin
     if not FindBucketIndex(AKey, LIdx) then
       Exit(False);
     LPair := FBuckets[LIdx];
-    AtomicFetchSub64(FCount, LPair^.Count, moRelaxed);
+    atomic_fetch_sub_64(FCount, LPair^.Count, mo_relaxed);
     SetLength(LPair^.Values, 0);
     Dispose(LPair);
     FBuckets[LIdx] := nil;
@@ -302,7 +305,7 @@ begin
         if LI < LCount - 1 then
           Move(LPair^.Values[LI + 1], LPair^.Values[LI], (LCount - LI - 1) * SizeOf(TValue));
         LPair^.Count := LCount - 1;
-        AtomicFetchSub64(FCount, 1, moRelaxed);
+        atomic_fetch_sub_64(FCount, 1, mo_relaxed);
         if LPair^.Count = 0 then
         begin
           SetLength(LPair^.Values, 0);
@@ -331,7 +334,7 @@ begin
       LPair := FBuckets[LI];
       if LPair <> nil then
       begin
-        AtomicFetchSub64(FCount, LPair^.Count, moRelaxed);
+        atomic_fetch_sub_64(FCount, LPair^.Count, mo_relaxed);
         SetLength(LPair^.Values, 0);
         Dispose(LPair);
         FBuckets[LI] := nil;
@@ -346,7 +349,7 @@ procedure TLockFreeMultiMapImpl.Close;
 begin
   LockMap;
   try
-    AtomicStore32(FClosed, 1, moRelease);
+    atomic_store(FClosed, 1, mo_release);
   finally
     UnlockMap;
   end;
@@ -354,17 +357,17 @@ end;
 
 function TLockFreeMultiMapImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 function TLockFreeMultiMapImpl.IsEmpty: Boolean; inline;
 begin
-  Result := AtomicLoad64(FCount, moAcquire) = 0;
+  Result := atomic_load_64(FCount, mo_acquire) = 0;
 end;
 
 function TLockFreeMultiMapImpl.Count: PtrUInt; inline;
 begin
-  Result := PtrUInt(AtomicLoad64(FCount, moAcquire));
+  Result := PtrUInt(atomic_load_64(FCount, mo_acquire));
 end;
 
 function TLockFreeMultiMapImpl.KeyCount: PtrUInt;
