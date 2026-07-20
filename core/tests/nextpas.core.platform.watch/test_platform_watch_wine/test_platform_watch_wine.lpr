@@ -17,7 +17,7 @@ uses
 
 var
   LPassed, LFailed: Int32;
-  LUnderWine: Boolean;
+  LUnderWine, LWatchDebug: Boolean;
 
 procedure Check(ACond: Boolean; const AName: string);
 begin
@@ -45,6 +45,32 @@ begin
   Result := LProc <> nil;
 end;
 
+function WatchDebugEnabled: Boolean;
+var
+  LBuf: array[0..7] of AnsiChar;
+begin
+  FillChar(LBuf, SizeOf(LBuf), 0);
+  Result := GetEnvironmentVariableA('NEXTPAS_WATCH_DEBUG', @LBuf[0], SizeOf(LBuf)) > 0;
+end;
+
+procedure Diag(const AMsg: string); overload;
+begin
+  if LWatchDebug then
+    WriteLn('  diag: ', AMsg);
+end;
+
+procedure Diag(const AMsg: string; AVal: Int32); overload;
+begin
+  if LWatchDebug then
+    WriteLn('  diag: ', AMsg, AVal);
+end;
+
+procedure DiagPoll(AIdx, ARet, APending: Int32);
+begin
+  if LWatchDebug then
+    WriteLn('  diag: poll#', AIdx, ' ret=', ARet, ' pending=', APending);
+end;
+
 procedure MaybeSoftEvent(AGot: Boolean; const AName: string; AAllowSoft: Boolean;
   ALastPoll: Int32; ACreated, ADeleted, AModified: Boolean);
 begin
@@ -52,14 +78,17 @@ begin
     Check(True, AName)
   else if AAllowSoft then
   begin
-    WriteLn('  ~ ', AName, ' residual under Wine (soft); last_poll=', ALastPoll);
+    WriteLn('  ~ ', AName, ' residual under Wine (soft)');
+    if LWatchDebug then
+      WriteLn('  diag: last_poll=', ALastPoll);
     Inc(LPassed);
   end
   else
   begin
-    WriteLn('  diag: ', AName, ' FAILED hard; last_poll=', ALastPoll,
-      ' created=', Ord(ACreated), ' deleted=', Ord(ADeleted),
-      ' modified=', Ord(AModified));
+    if LWatchDebug then
+      WriteLn('  diag: hard-fail last_poll=', ALastPoll,
+        ' created=', Ord(ACreated), ' deleted=', Ord(ADeleted),
+        ' modified=', Ord(AModified));
     Check(False, AName + ' (hard on real Windows)');
   end;
 end;
@@ -80,15 +109,14 @@ var
   LGotDelete, LGotMulti: Boolean;
 begin
   LUnderWine := RunningUnderWine;
+  LWatchDebug := WatchDebugEnabled;
   WriteLn('=== platform.watch windows smoke ===');
   if LUnderWine then
-  begin
-    WriteLn('host=wine; truth=wine-runtime-smoke; create/delete may soft');
-  end
+    WriteLn('host=wine; truth=wine-runtime-smoke; create/delete may soft')
   else
-  begin
-    WriteLn('host=real-windows; create+delete hard asserts (RDCW lpBytesReturned=NULL fix)');
-  end;
+    WriteLn('host=real-windows; create+delete hard asserts');
+  if LWatchDebug then
+    WriteLn('NEXTPAS_WATCH_DEBUG=1 (pending/poll diagnostics on)');
   LPassed := 0;
   LFailed := 0;
   LDirPath := '';
@@ -120,16 +148,14 @@ begin
     LRet := platform_watch_add(LWatcher, @LDir[0]);
     Check(LRet > 0, 'watch_add valid dir returns positive wd');
     Check(LWatcher.IsValid, 'watcher valid');
-    WriteLn('  diag: after add pending_count=',
-      platform_watch_debug_pending_count(LWatcher));
+    Diag('after add pending_count=', platform_watch_debug_pending_count(LWatcher));
   end;
 
   WriteLn('Test 3: poll timeout → 0');
   if LWatcher.IsValid then
   begin
     Check(platform_watch_poll(LWatcher, LEvent, 20) = 0, 'timeout returns 0');
-    WriteLn('  diag: after timeout pending_count=',
-      platform_watch_debug_pending_count(LWatcher));
+    Diag('after timeout pending_count=', platform_watch_debug_pending_count(LWatcher));
   end;
 
   WriteLn('Test 4: create file → event');
@@ -146,8 +172,7 @@ begin
       platform_file_close(LHandle);
     end;
     Check(LRet = 0, 'create probe file');
-    WriteLn('  diag: after create pending_count=',
-      platform_watch_debug_pending_count(LWatcher));
+    Diag('after create pending_count=', platform_watch_debug_pending_count(LWatcher));
     LRet := 0;
     FillChar(LEvent, SizeOf(LEvent), 0);
     for I := 1 to 40 do
@@ -156,8 +181,7 @@ begin
       if (LRet > 0) and (LEvent.Created or LEvent.Modified) then
         Break;
       if (I = 1) or (I = 10) or (I = 40) then
-        WriteLn('  diag: poll#', I, ' ret=', LRet, ' pending=',
-          platform_watch_debug_pending_count(LWatcher));
+        DiagPoll(I, LRet, platform_watch_debug_pending_count(LWatcher));
     end;
     MaybeSoftEvent((LRet > 0) and (LEvent.Created or LEvent.Modified),
       'create event', LUnderWine, LRet, LEvent.Created, LEvent.Deleted, LEvent.Modified);

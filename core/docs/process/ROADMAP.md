@@ -222,3 +222,4 @@ Host + Win：仅 Maintenance（bug/安全）
 | 2026-07-20 | **U1**：可用性收敛 — 便利 MaxOutput 64MiB、EProcessError.Cancelled、Preferred/决策树文档 |
 | 2026-07-20 | **U1-docs**：CONTRACT 核心表去重；SCORECARD 记 U1 |
 | 2026-07-20 | **U2**：builder 默认 MaxOutput 64MiB（三态）；TFsWatchEvent.Kind；wine fs ReadAt |
+| 2026-07-21 | **U2-docs**：SCORECARD wine 合计 25；host-windows 证据口径诚实（ReadAt 待 GHA） |

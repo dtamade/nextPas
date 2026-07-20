@@ -338,6 +338,7 @@ Optional readiness inventory (not a promotion):
 | 2026-07-20 | **fix(RDCW)**: arm with sync empty batch keeps `Pending=True` so poll waits on notify event (GHA 29752923987 create+delete hard PASS; matrix pass=28 fail=0). |
 | 2026-07-20 | **test**: watch smoke two-dir multi-dir events + multi-event count loop; diagnostics pending_count. |
 | 2026-07-20 | **test(fs)**: L2 `test_fs_watch_wine` hard create + two-dir multi-path on real Windows; Wine soft OK (consumes platform multi-dir). |
+| 2026-07-21 | **chore**: platform watch smoke diag gated by `NEXTPAS_WATCH_DEBUG=1` (quiet default CI). |
 
 ---
 

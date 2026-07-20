@@ -41,7 +41,7 @@ bash core/tests/run_l2_wine_min_set.sh
 | path | **4 passed** | Join-Clean / IsAbs-Volume / ToSlash / StripPrefix |
 | os.env | **3 passed** | GetEnv / Set-Unset-Expand / Expand brace |
 | fs.watch | **3 passed** | create/close + poll timeout + create-event soft |
-| **合计** | **24 passed** | truth=`wine-runtime-smoke` |
+| **合计** | **25 passed** | truth=`wine-runtime-smoke`（11+4+3+4+3） |
 
 Host `make test` 在非 Windows 上为 skip 分支（1 passed）。
 
@@ -58,12 +58,12 @@ bash core/scripts/l2-windows-ci-matrix.sh
 
 | 套件 | 结果 | truth |
 |------|------|-------|
-| l2.process | **11 passed** | host-windows |
-| l2.fs | **4 passed** | host-windows（+ReadAt U2） |
+| l2.process | **11 passed** | host-windows（GHA 29751744779） |
+| l2.fs | **3 passed** | host-windows 首证；U2 ReadAt 已 wine 绿，**待**下次 GHA 复证为 4 |
 | l2.fs.watch | **3 passed** | host-windows |
 | l2.path | **4 passed** | host-windows |
 | l2.os.env | **3 passed** | host-windows |
-| **合计** | **5/5 gates · 24 cases** | **`host-windows`** |
+| **合计** | **5/5 gates · 24 cases** | **`host-windows`** 首证；wine 现 **25** |
 
 证据：GHA `test-windows-runtime` run **29751744779** @ `b824a31ce`  
 （platform 矩阵 27/28 时 L2 仍绿：`if: always()` 解耦）。

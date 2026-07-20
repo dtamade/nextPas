@@ -2,7 +2,7 @@
 
 **Authority**: 本文件是 HTTP 模块**向前开发**的唯一执行入口。
 **Companion**: 北极星见 `GOAL_TREE.md`；契约见 `CONTRACT.md`；证据矩阵见 `API_COVERAGE.md`。
-**Updated**: 2026-07-20（**H2P-3 landed**：TLS-ALPN `h2` e2e 4/4 0 unfreed；NEXT=**R1** claim review）
+**Updated**: 2026-07-21（**R1 landed**：维持 H1 epoll scale-ready；package **No**；默认 **STOP**）
 
 ---
 
@@ -118,7 +118,8 @@ CHECKPOINT（不阻塞续波）:
 | Wave Q1-3 observability | **landed** — metrics try/finally + Op=`metrics` + CONTRACT |
 | Wave Q1-4 write/backpressure | **landed** — CONTRACT §4.4 + source-contract；**Era Q1 Done** |
 | Wave H2P-1..3 | **landed** — mid/press scale evidence + TLS-ALPN e2e |
-| **下一执行点** | **R1** claim review（默认 package **仍 No**；无新 KPI 不升 CLAIM） |
+| Wave R1 claim review | **landed** — 维持 H1 epoll scale-ready；package **No** |
+| **下一执行点** | **STOP**（无新需求；H3 Blocked；勿假 package scale-ready） |
 
 战役粗进度（非 KPI；达标靠比值表）：
 
@@ -852,11 +853,11 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | Wave | Status | Do |
 |------|--------|-----|
 | **R0** | **landed** | **维持** *Scale-ready (H1 server, Linux epoll)*；p99 为必要条件；冻结 [`CLAIM.md`](CLAIM.md)；H2P/H3/HTTPS scale **不宣称** |
-| **R1** | **NEXT** | H2P 证据后 claim 评审：默认 **不**升 H1+H2 package；写明 TLS-ALPN live 与 residual |
+| **R1** | **landed** | H2P 后评审：**维持** H1 epoll scale-ready；**否决** H1+H2 package / HTTPS scale；H2 TLS ALPN residual Met；默认 **STOP** |
 
-**R Done when**：CLAIM 与证据一致；REPRO Claim 行对齐。 **R0 Met；R1 pending.**
+**R Done when**：CLAIM 与证据一致；REPRO Claim 行对齐；默认 STOP。 **R0+R1 Met (2026-07-21).**
 
-**推荐路径**：`… → H2P-1 → H2P-2 → H2P-3 → R1`（H3 Blocked）
+**推荐路径**：`… → H2P-3 → R1 → STOP`（H3 Blocked；升 package 须新 KPI + 产品需求）
 
 ---
 
@@ -877,14 +878,13 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 ## 当前该做（给执行者 / goal）
 
 ```text
-1. Parity Plus + RH-1 Met；H2P-1..3 Met
+1. Parity Plus + RH-1 + H2P-1..3 + R1 Met
 2. H3 Blocked — 跳过；禁止空 facade
-3. **NEXT = R1**（claim review；默认 package No；不空转 H3）
-4. path-limited land
+3. **NEXT = STOP**（idle；有产品/KPI 需求再开波）
+4. 无指令时不要空转 H3 / 不要假 package scale-ready
 ```
 
-**没有用户指令时：可停在 H2P-3 Done 后做 R1 评审或 STOP；勿空转 H3 / 勿假 package scale-ready。**
-**升 CLAIM package 须 R1 明确 Yes。**
+**默认 STOP。** 升 CLAIM package 须：冻结 H2 KPI 门闩 + multi-run 证据 + 产品明确 Yes（见 `CLAIM.md` §6）。
 
 ---
 
@@ -893,7 +893,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 | 文档 | 角色 |
 |------|------|
 | **ROADMAP.md（本文件）** | 向前做什么、顺序、状态、Goal Loop |
-| **[`CLAIM.md`](CLAIM.md)** | 对外可说什么 / 禁止宣称（R0 冻结） |
+| **[`CLAIM.md`](CLAIM.md)** | 对外可说什么 / 禁止宣称（R1 冻结） |
 | **[`REPRO.md`](REPRO.md)** | 1h 复现剧本 |
 | **GOAL_TREE.md** | 为什么做、阶段定义、不漂移；**不**维护日更 backlog |
 | **CONTRACT.md** | 对外行为契约 |
@@ -907,6 +907,7 @@ Era 9 不再作为独立 NEXT；执行以 **Parity Campaign** 为准。
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-21 | **R1 landed**：维持 H1 epoll scale-ready；package No；H2 ALPN residual Met；NEXT=STOP |
 | 2026-07-20 | **H2P-3 landed**：TLS-ALPN h2 e2e 4/4 0 unfreed；OpenSSL per-conn ALPN；NEXT=R1 |
 | 2026-07-20 | **H2P-2 landed**：加压阶梯全绿；16×32×100 ~11.5k req/s；NEXT=H2P-3 ALPN |
 | 2026-07-20 | **H2P-1 开波**（用户授权）：H2 分表规格 + REPRO；S2-b Rust p50/p99；S1 抽检 |
