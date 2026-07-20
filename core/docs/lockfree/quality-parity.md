@@ -143,7 +143,8 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **Ready 收口 done**：`READY.md` 三句话交付 + selection-guide「任务投递四选一」
 - **Polish P1 done**：inventory 全表 progress 诚实；EN selection-guide；`t1_segqueue_workers` + verify-h3
 - **Polish P2–P5 done**：api-ref/README.en 同步 preferred+示例；`t2_bag_close_join_free`；CONTRACT/README 假 LF 再扫；formal 能/不能声称；verify-h3 绿证
-- **剩余（本模块内）**：api-reference.en 细对齐、可选更多教学示例；legacy public API 仍可在 `atomic.compat` 保留
+- **Polish P2b done**：api-reference.en 展开 Stack/Deque/Bag/MultiMap/SegQueue；bag 示例挂入 `verify-h3-consumers`
+- **剩余（本模块内）**：可选更多 T2 教学示例；legacy public API 仍可在 `atomic.compat` 保留
 
 ### Q3-a checklist
 
