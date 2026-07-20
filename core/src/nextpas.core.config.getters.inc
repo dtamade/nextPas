@@ -3,8 +3,10 @@ var
   LFound: Boolean;
   LIdx: Integer;
   LStack: TStringArray;
+  LFailUnresolved: Boolean;
 begin
   RequireConfigKey(AKey);
+  LFailUnresolved := FInterpolationMode = cimStrict;
   LFound := False;
   FLock.AcquireRead;
   try
@@ -12,17 +14,22 @@ begin
     if LIdx >= 0 then
     begin
       LFound := True;
+      if FInterpolationMode = cimDisabled then
+      begin
+        Result := FEntries[LIdx].Value;
+        Exit;
+      end;
       if TryGetResolvedEntryFastLocked(LIdx, Result) then
         Exit;
     end
     else
     begin
       Result := ADefault;
-      if Pos('$', Result) = 0 then
+      if (Pos('$', Result) = 0) or (FInterpolationMode = cimDisabled) then
         Exit;
       LStack := nil;
       Result := InterpolateConfigValue(FEntries, FLowerKeys, FLookupSlots,
-        FCount, ADefault, LStack, False, '');
+        FCount, ADefault, LStack, LFailUnresolved, AKey);
       Exit;
     end;
   finally
@@ -33,13 +40,13 @@ begin
     Exit;
 
   Result := ADefault;
-  if Pos('$', Result) <> 0 then
+  if (Pos('$', Result) <> 0) and (FInterpolationMode <> cimDisabled) then
   begin
     FLock.AcquireRead;
     try
       LStack := nil;
       Result := InterpolateConfigValue(FEntries, FLowerKeys, FLookupSlots,
-        FCount, ADefault, LStack, False, '');
+        FCount, ADefault, LStack, LFailUnresolved, AKey);
     finally
       FLock.ReleaseRead;
     end;
@@ -70,17 +77,19 @@ var
   LValues: TStringArray;
   LStack: TStringArray;
   LAllLiteral: Boolean;
+  LFailUnresolved: Boolean;
 begin
   if AKey <> '' then
     RequireConfigKey(AKey);
   Result := nil;
   LLowerKey := LowerCase(AKey);
+  LFailUnresolved := FInterpolationMode = cimStrict;
   FLock.AcquireRead;
   try
     if HasArrayCacheLocked(LLowerKey) then
     begin
       CopyArrayCacheLocked(LValues, LAllLiteral);
-      if LAllLiteral then
+      if LAllLiteral or (FInterpolationMode = cimDisabled) then
       begin
         Result := LValues;
         Exit;
@@ -90,7 +99,7 @@ begin
       LStack := nil;
       for LI := 0 to Length(LValues) - 1 do
         Result[LI] := InterpolateConfigValue(FEntries, FLowerKeys, FLookupSlots,
-          FCount, LValues[LI], LStack, False, '');
+          FCount, LValues[LI], LStack, LFailUnresolved, AKey);
       Exit;
     end;
   finally
@@ -102,7 +111,7 @@ begin
     if not HasArrayCacheLocked(LLowerKey) then
       BuildArrayCacheLocked(AKey, LLowerKey);
     CopyArrayCacheLocked(LValues, LAllLiteral);
-    if LAllLiteral then
+    if LAllLiteral or (FInterpolationMode = cimDisabled) then
     begin
       Result := LValues;
       Exit;
@@ -112,7 +121,7 @@ begin
     LStack := nil;
     for LI := 0 to Length(LValues) - 1 do
       Result[LI] := InterpolateConfigValue(FEntries, FLowerKeys, FLookupSlots,
-        FCount, LValues[LI], LStack, False, '');
+        FCount, LValues[LI], LStack, LFailUnresolved, AKey);
   finally
     FLock.ReleaseWrite;
   end;
@@ -357,6 +366,7 @@ var
   LEntryHasPlaceholder: array of Boolean;
   LCount: Integer;
   LI: Integer;
+  LMode: TConfigInterpolationMode;
 begin
   if AOther = nil then
     raise ENextPasError.Create('TConfig.ReplaceFrom requires a source config');
@@ -366,6 +376,7 @@ begin
   AOther.FLock.AcquireRead;
   try
     LCount := AOther.FCount;
+    LMode := AOther.FInterpolationMode;
     SetLength(LEntries, LCount);
     SetLength(LLowerKeys, LCount);
     SetLength(LEntryHasPlaceholder, LCount);
@@ -385,6 +396,7 @@ begin
     FLowerKeys := LLowerKeys;
     FEntryHasPlaceholder := LEntryHasPlaceholder;
     FCount := LCount;
+    FInterpolationMode := LMode;
     InvalidateReadCachesLocked;
     RebuildLookupIndex;
   finally
@@ -449,6 +461,29 @@ begin
   end;
 end;
 
+procedure TConfig.SetInterpolationMode(AMode: TConfigInterpolationMode);
+begin
+  FLock.AcquireWrite;
+  try
+    if FInterpolationMode = AMode then
+      Exit;
+    FInterpolationMode := AMode;
+    InvalidateInterpolationCacheLocked;
+  finally
+    FLock.ReleaseWrite;
+  end;
+end;
+
+function TConfig.GetInterpolationMode: TConfigInterpolationMode;
+begin
+  FLock.AcquireRead;
+  try
+    Result := FInterpolationMode;
+  finally
+    FLock.ReleaseRead;
+  end;
+end;
+
 { Config facade factories }
 
 function ConfigBuilder: IConfigBuilder;
@@ -459,4 +494,9 @@ end;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
 begin
   Result := nextpas.core.config.builder.ConfigLoad(APath, AFormat);
+end;
+
+function ConfigBorrow(AConfig: TConfig): IConfig;
+begin
+  Result := nextpas.core.config.builder.ConfigBorrow(AConfig);
 end;

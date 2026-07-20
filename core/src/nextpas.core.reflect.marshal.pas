@@ -55,6 +55,7 @@ type
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;
+    function GetInterpolationMode: TConfigInterpolationMode;
     function ToIni: string;
     function ToJson: string;
     function ToYaml: string;
@@ -189,6 +190,11 @@ end;
 function TConfigAsIConfig.GetSection(const APrefix: string): TStringArray;
 begin
   Result := FConfig.GetSection(APrefix);
+end;
+
+function TConfigAsIConfig.GetInterpolationMode: TConfigInterpolationMode;
+begin
+  Result := FConfig.GetInterpolationMode;
 end;
 
 function TConfigAsIConfig.ToIni: string;
