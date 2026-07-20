@@ -11,39 +11,32 @@
 
 ## Done
 
-- [x] 门面 + 十种原语 + platform.sync 路径
-- [x] INativeMutex / per-pool TLS / pool IMutex 冷路径
-- [x] 文档 SSOT + source-contract + stress 边界
-- [x] Windows + Darwin + FreeBSD forced compile gate
-- [x] SCORECARD SC1–SC10（含 2T contended wall ns/op）
-- [x] Destroy 持锁策略文档化
-- [x] path-limited land 到 origin/main（多批）
+- [x] 门面 + 原语 + platform.sync / INativeMutex / per-pool TLS
+- [x] Windows + Darwin + FreeBSD compile gate
+- [x] Stress / 超时边界 + source-contract
+- [x] SCORECARD SC1–SC10；contended multi-sample median/p95
+- [x] Destroy：传播 `platform_*_destroy` 错误；held destroy 最佳努力测试
+- [x] RecursiveMutex / Pool 门面 — **暂缓**（无生产消费者，已文档化）
+- [x] path-limited land 多批
 
 ---
 
 ## Now
 
-- [ ] 本批 path-limited landing（FreeBSD gate + bench contended + docs）
+- [ ] 本批 path-limited landing
 
 ---
 
 ## Next
 
-1. 销毁持锁可检测路径（仅在有跨平台语义后）
-2. 更稳的 contended bench（更多 sample / 排除噪声）
-3. 公开 `RecursiveMutex` / 门面化 Pool — **默认暂缓**（见 SCORECARD 决策表）
+1. owner-thread 级 Destroy 检测（仅当需要跨平台统一语义时）
+2. contended bench 更高分辨率 / 绑核（可选）
+3. 有真实消费者时再评估 RecursiveMutex / Pool 门面
 
 ---
 
 ## Deferred
 
 - Channel / Latch / Notify
-- 公开 API 重命名（`Do_`）— **冻结**
+- API 重命名 `Do_` — **冻结**
 - FPC `SyncObjs` 兼容层 — **禁止**
-
----
-
-## 非目标
-
-- 拥有 platform ABI 细节
-- 替代 `async` 事件循环内同步原语

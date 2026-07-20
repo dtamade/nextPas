@@ -74,21 +74,23 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_pool
 | SC7 | `FutexMutex contention` pass |
 | SC8 | manual multi-waiter 全醒；auto single-winner 恰好 1 |
 
-**contended 2T wall-clock**（2×200k ops）:
+**contended 2T wall-clock**（warmup=1, samples=7, 2×200k ops, **median**）:
 
-| ID | name | ns/op | notes |
-|----|------|------:|-------|
-| SC9 | Mutex/Contended2T | ~250 | wall, not per-thread CPU |
-| SC10 | FutexMutex/Contended2T | ~252 | wall; 与 SC9 同量级（争用主导） |
+| ID | name | median ns/op | p95 | CV | notes |
+|----|------|-------------:|----:|---:|-------|
+| SC9 | Mutex/Contended2T | 250.6 | 250.7 | ~0% | TInstant wall; timer quantize-ish |
+| SC10 | FutexMutex/Contended2T | 250.7 | 250.7 | ~0% | 与 SC9 同量级（争用主导） |
+
+命令：`make -C core/benchmarks/nextpas.core.sync/bench_sync clean run`
 
 ---
 
 ## 决策（暂缓）
 
-| 议题 | 决定 |
-|------|------|
-| 公开 `RecursiveMutex` | **暂缓** — 默认 ERRORCHECK 非递归；无硬消费者前不扩 API |
-| `TSyncPool` 门面化 | **暂缓** — 仍 experimental 旁路单元 |
+| 议题 | 决定 | 证据 |
+|------|------|------|
+| 公开 `RecursiveMutex` | **暂缓** | 默认 ERRORCHECK；`PLATFORM_MUTEX_RECURSIVE` 存在但无生产调用 |
+| `TSyncPool` 门面化 | **暂缓** | 仅 `test_sync_pool` + 文档；无 core 生产 `CreateSyncPool` |
 
 ---
 
@@ -97,5 +99,5 @@ make focused FOCUS=core/tests/nextpas.core.sync/test_sync_pool
 | 日期 | 变更 |
 |------|------|
 | 2026-07-20 | 初版 SC1–SC6 基线 |
-| 2026-07-20 | SC7/SC8 正确性 contended |
-| 2026-07-20 | bench 2T Contended2T；SC9/SC10 数值；决策表 |
+| 2026-07-20 | SC7/SC8 正确性；SC9/SC10 单次 wall |
+| 2026-07-20 | SC9/SC10 multi-sample median/p95；Destroy error surface |

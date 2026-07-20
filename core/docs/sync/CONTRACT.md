@@ -171,7 +171,9 @@ end;
 | `CondVar` + 非 `INativeMutex` | **编译期**不可传入（`ICondVar.Wait` 签名） |
 | `Once` 回调异常 | 状态回 INIT，异常上抛，可再次 `Do_` |
 | `CondVar.Wait` 非持有者 / 错误 handle | 未定义（调用方契约） |
-| Destroy 时锁仍被持有 | **调用方必须先释放**。L1 不强制检测；`platform_mutex_destroy` 行为依宿主（可能 EBUSY / 未定义）。不得依赖「Destroy 自动解锁」 |
+| Destroy 时仍持锁 | **调用方必须先释放**。若 `platform_*_destroy` 返回非 0（POSIX 常为 EBUSY），L1 **raise**；若宿主返回 0 则无 L1 检测。不得依赖「Destroy 自动解锁」 |
+| 公开 `RecursiveMutex` | **暂缓** — 默认 ERRORCHECK 非递归；无生产消费者前不扩 API |
+| `TSyncPool` 进门面 | **暂缓** — 仍 `sync.pool` experimental |
 
 ---
 
