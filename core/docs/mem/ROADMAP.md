@@ -1,6 +1,6 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Era L done → Maintenance Idle（2026-07-20）** — LocalBlockPool/FixedSlab/Slab fallback FreeMemOf；残余 WAIVE 仅 tui tracking
+**状态**: **Era M done → Maintenance Idle（2026-07-20）** — FixedSlab AlignedFallback + sharded TLS sized free；残余 WAIVE 仅 tui tracking
 **Owner**: mem lane（`.worktrees/mem`）全权
 **更新**: 2026-07-20
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)
@@ -33,6 +33,7 @@
 | **J** | **mem-owner sized free**：LocalArena/BlockPool/FixedPool backing FreeMemOf | **CLOSED** | 下文 §4f |
 | **K** | **mem-owner FreeMemOf 扩展**：growable/chunked/stack/ring（已有 size 字段） | **CLOSED** | 下文 §4g |
 | **L** | **残余 mem-owner FreeMemOf**：LocalBlockPool + FixedSlab FRaw + Slab fallback | **CLOSED** | 下文 §4h |
+| **M** | **收尾 FreeMemOf**：FixedSlab AlignedFallback size 表 + sharded TLS node sized free | **CLOSED** | 下文 §4i |
 
 成功标准 S1–S7（时代 B）见 [README.md](README.md)；可用性主线无未关 P0/P1。
 
@@ -262,11 +263,21 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 | **L5** | `TSlabPool` fallback FreeMemOf(RawPtr, Size+Align-1) | **done** |
 | **L3/4** | contracts · 验证 · land | **done** |
 
-**L 后**: **Maintenance Idle**。残余：fixed_slab **AlignedFallback**（无 size 表）· tui WAIVE · IAllocator 实现体。
+**L 后**: **Maintenance Idle**。Era M 关 AlignedFallback size 表 + sharded TLS node。
+
+### Era M — 收尾 FreeMemOf（CLOSED 2026-07-20）
+
+| 切片 | 内容 | 状态 |
+|------|------|------|
+| **M1–M2** | `TFixedSlabPool` AlignedFallback `FAlignedFallbackRawSizes` + FreeMemOf | **done** |
+| **M3** | `TShardedBlockPool` TLS `TThreadCacheNode.AllocSize` + sized `System.FreeMem` | **done** |
+| **M4–M5** | contracts · 验证 · land | **done** |
+
+**M 后**: **Maintenance Idle**。残余仅 **tui inject WAIVE** + IAllocator 实现体。无默认下一批 FreeMemOf。
 
 ---
 
-## 5. 明确不做（时代 D/E/F/G/H/I/J/K/L 有效期内）
+## 5. 明确不做（时代 D/E/F/G/H/I/J/K/L/M 有效期内）
 
 1. 新开「Phase 29：再加一打 allocator」
 2. 全仓库 unsized `FreeMem` 机械替换
@@ -335,3 +346,4 @@ Consumer-audit 回归：`check_consumer_audit_contracts.sh`（挂在 usability g
 | 2026-07-20 | **Era J CLOSED**：LocalArena/BlockPool/FixedPool backing FreeMemOf；回 Idle |
 | 2026-07-20 | **Era K CLOSED**：growable/chunked/stack/ring FreeMemOf（既有 size 字段） |
 | 2026-07-20 | **Era L CLOSED**：LocalBlockPool + FixedSlab FRaw + Slab fallback FreeMemOf |
+| 2026-07-20 | **Era M CLOSED**：FixedSlab AlignedFallback FreeMemOf + sharded TLS sized free |
