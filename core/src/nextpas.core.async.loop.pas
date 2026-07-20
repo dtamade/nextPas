@@ -84,6 +84,12 @@ type
       ACallback: TIoCompletionRef; AContext: Pointer = nil): Boolean;
     function AsyncSend(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncSendTo(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: UInt32;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncRecvFrom(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: Pointer;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncClose(AFd: PtrInt;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncReadv(AFd: PtrInt; AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64;
@@ -100,6 +106,12 @@ type
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     function AsyncSendTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncRecvFromTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: Pointer; const ADeadline: TDeadline;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncSendToTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      AAddr: Pointer; AAddrLen: UInt32; const ADeadline: TDeadline;
+      ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
     { Timeout + optional CancellationToken (token cancel ≈ -ECANCELED, races timer/I/O). }
     function AsyncReadTimeoutEx(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
       const ADeadline: TDeadline; AToken: IAsyncCancellationToken;
@@ -704,6 +716,24 @@ begin
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext);
 end;
 
+function TAsyncLoop.AsyncSendTo(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: UInt32;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncSendTo(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen, ACallback, AContext);
+end;
+
+function TAsyncLoop.AsyncRecvFrom(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Pointer;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  Result := FPoller.AsyncRecvFrom(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen, ACallback, AContext);
+end;
+
 function TAsyncLoop.AsyncClose(AFd: PtrInt;
   ACallback: TIoCompletion; AContext: Pointer): Boolean;
 begin
@@ -908,6 +938,46 @@ begin
     Exit(AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext));
   LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext);
   Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncRecvFromTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: Pointer; const ADeadline: TDeadline;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  if ADeadline.IsInfinite then
+    Exit(AsyncRecvFrom(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen, ACallback, AContext));
+  LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext);
+  Result := FPoller.AsyncRecvFrom(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen,
+    @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    TimeoutCtxCancelTimerOwner(LCtx);
+    TimeoutCtxDropTokenOwner(LCtx);
+    TimeoutCtxRelease(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncSendToTimeout(AFd: PtrInt; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  AAddr: Pointer; AAddrLen: UInt32; const ADeadline: TDeadline;
+  ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if not IsValid then
+    raise EInvalidOperationError.Create('async loop: operation after close');
+  if ADeadline.IsInfinite then
+    Exit(AsyncSendTo(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen, ACallback, AContext));
+  LCtx := TimeoutCtxCreate(Self, ADeadline, ACallback, AContext);
+  Result := FPoller.AsyncSendTo(AFd, ABuf, ALen, AFlags, AAddr, AAddrLen,
+    @TimeoutIoCallback, LCtx);
   if not Result then
   begin
     TimeoutCtxCancelTimerOwner(LCtx);

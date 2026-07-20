@@ -34,7 +34,8 @@
 - [x] Q1–Q12（取消、HE、DNS race、CAD、lab feed、macOS fail-closed）
 - [x] Q13 Wave R 文档 + ClassifyNetError + Dial 推荐路径
 - [x] Q14 NetCancelFromAsync + BindCancelToken + test_net_cancel_bridge
-- [ ] Q15–Q18 见 ROADMAP-Q13.md
+- [x] Q15 AsyncUdpBind + SendTo/RecvFrom + test_net_async_udp
+- [ ] Q16–Q18 见 ROADMAP-Q13.md
 
 ## 性能 scorecard
 
