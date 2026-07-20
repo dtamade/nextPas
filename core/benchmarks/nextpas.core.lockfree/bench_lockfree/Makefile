@@ -18,8 +18,9 @@ FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)
 ENVELOPE_SCRIPT := $(CORE_ROOT)/docs/lockfree/scripts/print-bench-envelope.sh
 ENVELOPE_EXTRA ?= samples=1 (single run; raise N for claims)
 
-.PHONY: build run run-matched build-rust-compare run-rust-compare build-go-compare run-go-compare
-.PHONY: build-cpp-compare run-cpp-compare compare compare-matched clean envelope envelope-matched
+# Keep historical entrypoints substring for test_lockfree source-contract; Q5 adds matched/envelope.
+.PHONY: build run build-rust-compare run-rust-compare build-go-compare run-go-compare build-cpp-compare run-cpp-compare compare clean
+.PHONY: run-matched compare-matched envelope envelope-matched
 
 build:
 	@mkdir -p $(BUILD_DIR)
