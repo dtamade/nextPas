@@ -104,6 +104,8 @@ var
   W: IFsWatcher;
   E: TFsWatchEvent;
   D1, D2: string;
+  Saw1, Saw2: Boolean;
+  I: Integer;
 begin
   D1 := GTmp + '/m1';
   D2 := GTmp + '/m2';
@@ -112,10 +114,24 @@ begin
   W := Watch;
   W.Add(D1);
   W.Add(D2);
+  { Burst both creates — residual queue must not drop either (R30). }
   WriteFileText(D1 + '/a.txt', '1');
-  Check(PollMatch(W, 'm1', E), 'multi-path saw m1 event path');
   WriteFileText(D2 + '/b.txt', '2');
-  Check(PollMatch(W, 'm2', E), 'multi-path saw m2 event path');
+  Saw1 := False;
+  Saw2 := False;
+  for I := 1 to 30 do
+  begin
+    if not W.Poll(E, TDuration.FromMilliseconds(50)) then
+      Continue;
+    if Pos('m1', E.Name) > 0 then
+      Saw1 := True;
+    if Pos('m2', E.Name) > 0 then
+      Saw2 := True;
+    if Saw1 and Saw2 then
+      Break;
+  end;
+  Check(Saw1, 'multi-path saw m1 event path');
+  Check(Saw2, 'multi-path saw m2 event path');
   W.Close;
 end;
 
@@ -241,6 +257,36 @@ begin
   Check(Raised, 'Poll after Close raises');
 end;
 
+{ R30: two creates in one inotify batch must both surface across Polls. }
+procedure TestBurstEventsNoDrop;
+var
+  W: IFsWatcher;
+  E: TFsWatchEvent;
+  SawA, SawB: Boolean;
+  I: Integer;
+begin
+  W := Watch;
+  W.Add(GTmp);
+  WriteFileText(GTmp + '/burst_a.txt', 'a');
+  WriteFileText(GTmp + '/burst_b.txt', 'b');
+  SawA := False;
+  SawB := False;
+  for I := 1 to 20 do
+  begin
+    if not W.Poll(E, TDuration.FromMilliseconds(50)) then
+      Continue;
+    if Pos('burst_a', E.Name) > 0 then
+      SawA := True;
+    if Pos('burst_b', E.Name) > 0 then
+      SawB := True;
+    if SawA and SawB then
+      Break;
+  end;
+  Check(SawA, 'burst kept event for burst_a');
+  Check(SawB, 'burst kept event for burst_b');
+  W.Close;
+end;
+
 begin
   Setup;
   try
@@ -256,6 +302,7 @@ begin
     T.Test('AddTree not dir', @TestAddTreeNotDirRaises);
     T.Test('AddTree auto-mount', @TestAddTreeAutoMount);
     T.Test('closed raises', @TestClosedWatcherRaises);
+    T.Test('burst events no drop', @TestBurstEventsNoDrop);
     if not T.Run then
       Halt(1);
   finally
