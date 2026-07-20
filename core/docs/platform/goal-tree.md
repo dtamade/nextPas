@@ -7,10 +7,10 @@ Closed usability freeze: [residual-roadmap.md](residual-roadmap.md).
 
 Platform is in truth hardening. Linux has broad focused-runtime coverage.
 
-- **Windows x86_64**: durable **`ci-matrix`** for documented **24 platform gates**
-  on GHA `test-windows-runtime` (+error +fmt +info +which +dl +args +pipe;
-  pass=25 fail=0 with mem.host). Scripts list **resource (candidate, Batch-19)**.
-  Watch S1 create/add/close landed (poll still UNSUPPORTED). Wine secondary **24**.
+- **Windows x86_64**: durable **`ci-matrix`** for documented **25 platform gates**
+  on GHA `test-windows-runtime` (+… +args +pipe +resource). `resource` PASS on
+  run 29730911054 (pass=26 fail=0 with mem.host). Watch S1 create/add/close
+  landed (poll still UNSUPPORTED). Wine secondary **24**.
 - **macOS**: **focused-runtime** for documented **9 platform gates** (layer A:
   `platform-macos-ci-matrix.sh` fail-closed). Script may list mem.host → total=10.
   **Whole `test-macos` job** (layer B) may fail on non-platform inventory; that
@@ -25,7 +25,7 @@ F7/F9/F10 Won't; F14 freetype stays under platform.
 | Host | Current truth | Required next proof |
 | --- | --- | --- |
 | Linux x86_64 | focused-runtime across facade modules | keep gates green |
-| Windows x86_64 | **ci-matrix** 24 platform gates (+ optional mem.host in script) | expand platform candidates; keep GHA+wine green |
+| Windows x86_64 | **ci-matrix** 25 platform gates (+ optional mem.host in script) | expand platform candidates; keep GHA+wine green |
 | macOS | **focused-runtime** 9 platform gates (layer A fail-closed) | keep layer A green; layer B job is not platform evidence |
 | FreeBSD | best-effort | forced-compile or runtime when CI stable |
 | Android | forced-compile fragments | runtime evidence |
@@ -54,13 +54,12 @@ error, fmt, info, which, dl, pipe, args, resource, watch (Win stub UNSUPPORTED),
 pty (ConPTY open/close; resize may E_NOTIMPL under Wine), io.reactor.iocp.
 Not covered: signal, console, freetype/net.
 
-**Real Windows ci-matrix (24 platform gates)** via `platform-windows-ci-matrix.sh`:
+**Real Windows ci-matrix (25 platform gates)** via `platform-windows-ci-matrix.sh`:
 time, memory, sync, thread, io, process, files, fs, path, env, mmap, random,
-socket, error, fmt, info, which, dl, args, pipe, io.reactor.iocp,
+socket, error, fmt, info, which, dl, args, pipe, resource, io.reactor.iocp,
 poller.windows_runtime_smoke, platform.io.windows_real, platform.socket.windows_real.
-Promoted with `pipe` after GHA PASS platform.pipe. Scripts also list
-**resource (candidate, Batch-19)** and optional **mem.host_runtime** (mem-owned).
-Do not claim resource as ci-matrix until GHA green.
+Promoted with `resource` after GHA PASS platform.resource (run 29730911054).
+Optional **mem.host_runtime** is mem-owned.
 
 ## IOCP / readiness boundary
 
