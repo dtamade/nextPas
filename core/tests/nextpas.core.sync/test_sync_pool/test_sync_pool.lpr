@@ -23,7 +23,11 @@ program test_sync_pool;
 
 uses
   nextpas.core.thread.init,
-  SysUtils, Classes, SyncObjs, Math,
+  nextpas.core.thread.base,
+  nextpas.core.platform.thread,
+  nextpas.core.base,
+  nextpas.core.text,
+  nextpas.core.time.base,
   nextpas.core.sync.pool;
 
 type
@@ -35,7 +39,7 @@ type
     procedure Reset;
   end;
 
-  TTestThread = class(TThread)
+  TTestThread = class(TWorkerThread)
   private
     FPool: TSyncPool;
     FOps: SizeInt;
@@ -47,7 +51,7 @@ type
     property HitRate: Double read FHitRate;
   end;
 
-  THighContentionThread = class(TThread)
+  THighContentionThread = class(TWorkerThread)
   private
     FPool: TSyncPool;
     FOps: SizeInt;
@@ -143,8 +147,7 @@ end;
 
 constructor TTestThread.Create(APool: TSyncPool; AOps: SizeInt);
 begin
-  inherited Create(False);
-  FreeOnTerminate := False;
+  inherited Create;
   FPool := APool;
   FOps := AOps;
   FHitRate := 0;
@@ -176,8 +179,7 @@ end;
 
 constructor THighContentionThread.Create(APool: TSyncPool; AOps: SizeInt);
 begin
-  inherited Create(False);
-  FreeOnTerminate := False;
+  inherited Create;
   FPool := APool;
   FOps := AOps;
   FContentionCount := 0;
@@ -402,28 +404,31 @@ var
   LThreads: array[0..THREAD_COUNT-1] of TTestThread;
   I: Integer;
   LTotalHits: Double;
-  LStartTime: TDateTime;
+  LStart: TInstant;
 begin
   WriteLn('--- TestMultiThread16x5K ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
     .WithDestroy(@DestroyTestObject)
     .Build;
   try
-    LStartTime := Now;
+    LStart := TInstant.Now;
     for I := 0 to THREAD_COUNT - 1 do
+    begin
       LThreads[I] := TTestThread.Create(LPool, OPS_PER_THREAD);
+      LThreads[I].Start;
+    end;
 
     for I := 0 to THREAD_COUNT - 1 do
       LThreads[I].WaitFor;
 
-    WriteLn('  Time: ', FormatDateTime('s.zzz', Now - LStartTime), 's');
+    WriteLn('  Time: ', IntToStr(LStart.Elapsed.AsNanoseconds div 1000000), ' ms');
 
     LTotalHits := 0;
     for I := 0 to THREAD_COUNT - 1 do begin
       LTotalHits := LTotalHits + LThreads[I].HitRate;
       LThreads[I].Free;
     end;
-    WriteLn(Format('  Avg TLS hit rate: %d%%', [Round(LTotalHits / THREAD_COUNT * 100)]));
+    WriteLn('  Avg TLS hit rate: ', IntToStr(Trunc(LTotalHits / THREAD_COUNT * 100 + 0.5)), '%');
     CheckTrue(True, 'Multi-thread completed without crash');
     CheckTrue(LTotalHits / THREAD_COUNT > 0.90,
       'TLS hit rate > 90%');
@@ -444,21 +449,24 @@ var
   LThreads: array[0..THREAD_COUNT-1] of THighContentionThread;
   I: Integer;
   LTotalContention: SizeInt;
-  LStartTime: TDateTime;
+  LStart: TInstant;
 begin
   WriteLn('--- TestHighContention32x2K ---');
   LPool := TSyncPoolBuilder.Create(@CreateTestObject)
     .WithDestroy(@DestroyTestObject)
     .Build;
   try
-    LStartTime := Now;
+    LStart := TInstant.Now;
     for I := 0 to THREAD_COUNT - 1 do
+    begin
       LThreads[I] := THighContentionThread.Create(LPool, OPS_PER_THREAD);
+      LThreads[I].Start;
+    end;
 
     for I := 0 to THREAD_COUNT - 1 do
       LThreads[I].WaitFor;
 
-    WriteLn('  Time: ', FormatDateTime('s.zzz', Now - LStartTime), 's');
+    WriteLn('  Time: ', IntToStr(LStart.Elapsed.AsNanoseconds div 1000000), ' ms');
 
     LTotalContention := 0;
     for I := 0 to THREAD_COUNT - 1 do begin
@@ -482,7 +490,7 @@ var
   LPool: TSyncPool;
   LObj: Pointer;
   I: Integer;
-  LPoolStart, LDirectStart: Int64;
+  LPoolStart, LDirectStart: TInstant;
   LPoolUs, LDirectUs: Double;
 begin
   WriteLn('--- TestBenchmarkPoolVsDirect ---');
@@ -490,28 +498,28 @@ begin
   { 测量 Pool Get/Put }
   LPool := CreateSyncPool(@CreateTestObject);
   try
-    LPoolStart := GetTickCount64;
+    LPoolStart := TInstant.Now;
     for I := 1 to OPS do begin
       LObj := LPool.Get;
       LPool.Put(LObj);
     end;
-    LPoolUs := (GetTickCount64 - LPoolStart);
+    LPoolUs := LPoolStart.Elapsed.AsNanoseconds / 1.0e6;
   finally
     LPool.Free;
   end;
 
   { 测量直接 Create/Free }
-  LDirectStart := GetTickCount64;
+  LDirectStart := TInstant.Now;
   for I := 1 to OPS do begin
     LObj := TTestObject.Create(42);
     TTestObject(LObj).Free;
   end;
-  LDirectUs := (GetTickCount64 - LDirectStart);
+  LDirectUs := LDirectStart.Elapsed.AsNanoseconds / 1.0e6;
 
-  WriteLn(Format('  Pool:    %0.0f ms (%d ops)', [LPoolUs, OPS]));
-  WriteLn(Format('  Direct:  %0.0f ms (%d ops)', [LDirectUs, OPS]));
+  WriteLn('  Pool:    ', IntToStr(Trunc(LPoolUs)), ' ms (', IntToStr(OPS), ' ops)');
+  WriteLn('  Direct:  ', IntToStr(Trunc(LDirectUs)), ' ms (', IntToStr(OPS), ' ops)');
   if LPoolUs > 0 then
-    WriteLn(Format('  Speedup: %0.1fx faster', [LDirectUs / LPoolUs]));
+    WriteLn('  Speedup: ', (LDirectUs / LPoolUs):0:1, 'x faster');
   CheckTrue(True, 'Benchmark completed');
 end;
 
@@ -525,7 +533,7 @@ var
   LPool: TSyncPool;
   LObj: Pointer;
   I: Integer;
-  LStart: Int64;
+  LStart: TInstant;
   LMs: Double;
 begin
   WriteLn('--- TestGetPutSingleThread ---');
@@ -538,16 +546,16 @@ begin
     end;
 
     { benchmark }
-    LStart := GetTickCount64;
+    LStart := TInstant.Now;
     for I := 1 to OPS do begin
       LObj := LPool.Get;
       LPool.Put(LObj);
     end;
-    LMs := (GetTickCount64 - LStart);
+    LMs := LStart.Elapsed.AsNanoseconds / 1.0e6;
 
-    WriteLn(Format('  1M Get/Put pairs: %0.0f ms', [LMs]));
+    WriteLn('  1M Get/Put pairs: ', IntToStr(Trunc(LMs)), ' ms');
     if LMs > 0 then
-      WriteLn(Format('  Throughput: %0.0fM ops/sec', [OPS / LMs / 1000]));
+      WriteLn('  Throughput: ', IntToStr(Trunc(OPS / LMs / 1000)), 'M ops/sec');
     CheckTrue(True, 'Single-thread benchmark completed');
   finally
     LPool.Free;
@@ -574,7 +582,7 @@ begin
       LPool.Put(LObj);
     end;
     CheckTrue(True, 'Single slot contention completed');
-    WriteLn(Format('  Created: %d objects', [Integer(LPool.TotalCreated)]));
+    WriteLn('  Created: ', IntToStr(Integer(LPool.TotalCreated)), ' objects');
   finally
     LPool.Free;
   end;
@@ -605,7 +613,7 @@ begin
     LPool.Free;
   end;
   CheckTrue(True, 'Leak detection test completed');
-  WriteLn(Format('  Objects destroyed: %d', [GDestroyCallCount]));
+  WriteLn('  Objects destroyed: ', IntToStr(GDestroyCallCount));
 end;
 
 { =========================================================================== }

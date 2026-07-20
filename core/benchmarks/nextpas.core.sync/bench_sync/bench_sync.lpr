@@ -4,10 +4,12 @@ program bench_sync;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils, Classes,
   nextpas.core.thread.init,
+  nextpas.core.thread.base,
   nextpas.core.bench,
   nextpas.core.time.base,
+  nextpas.core.text,
+  nextpas.core.fs,
   nextpas.core.sync;
 
 const
@@ -15,11 +17,33 @@ const
   CONTENDED_SAMPLES = 7;
   CONTENDED_WARMUP = 1;
 
+type
+  TProcWorker = class(TWorkerThread)
+  private
+    FProc: TThreadTask;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const AProc: TThreadTask);
+  end;
+
 var
   LResults: IBenchResults;
   GSink: Int64;
   GContendedMutex: IMutex;
   GContendedIters: Int64;
+
+constructor TProcWorker.Create(const AProc: TThreadTask);
+begin
+  inherited Create;
+  FProc := AProc;
+end;
+
+procedure TProcWorker.Execute;
+begin
+  if Assigned(FProc) then
+    FProc();
+end;
 
 procedure BenchMutexLockUnlock(aIters: Int64);
 var
@@ -101,7 +125,7 @@ end;
 
 function SampleContended2T(const AMutex: IMutex; const AItersPerThread: Int64): Double;
 var
-  LThreads: array[0..1] of TThread;
+  LThreads: array[0..1] of TProcWorker;
   LStart: TInstant;
   LI: Integer;
   LTotalOps: Int64;
@@ -112,7 +136,7 @@ begin
   LStart := TInstant.Now;
   for LI := 0 to 1 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     var
       LIt: Int64;
     begin
@@ -123,7 +147,6 @@ begin
         GContendedMutex.Release;
       end;
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
   for LI := 0 to 1 do
@@ -170,7 +193,6 @@ var
   LSum, LVar, LStd: Double;
   LIdxP95: Integer;
 begin
-  { warmup discarded }
   for LI := 1 to CONTENDED_WARMUP do
     SampleContended2T(AMutex, CONTENDED_ITERS);
 
@@ -200,7 +222,7 @@ begin
   else
     Result.CVPct := 0;
 
-  WriteLn(Format(
+  WriteLn(TextFormat(
     '  %-32s  n=%d  median=%.1f  p95=%.1f  min=%.1f  max=%.1f  mean=%.1f  CV=%.1f%%',
     [ALabel, CONTENDED_SAMPLES, Result.Median, Result.P95, Result.MinV, Result.MaxV,
      Result.Mean, Result.CVPct]));
@@ -230,13 +252,13 @@ begin
   LResults.SaveToJSON('build/bench-sync.json');
 
   WriteLn;
-  WriteLn(Format('=== contended 2T (warmup=%d samples=%d iters/thread=%d, TInstant wall) ===',
+  WriteLn(TextFormat('=== contended 2T (warmup=%d samples=%d iters/thread=%d, TInstant wall) ===',
     [CONTENDED_WARMUP, CONTENDED_SAMPLES, CONTENDED_ITERS]));
   WriteLn;
   GSc9 := RunContended2TRobust('sync/Mutex/Contended2T', Mutex);
   GSc10 := RunContended2TRobust('sync/FutexMutex/Contended2T', FutexMutex);
   WriteLn;
-  WriteLn(Format(
+  WriteLn(TextFormat(
     'SCORECARD_HINT SC9_median=%.1f SC9_p95=%.1f SC10_median=%.1f SC10_p95=%.1f',
     [GSc9.Median, GSc9.P95, GSc10.Median, GSc10.P95]));
 end.

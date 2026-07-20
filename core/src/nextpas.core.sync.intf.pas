@@ -5,7 +5,8 @@ unit nextpas.core.sync.intf;
 interface
 
 uses
-  nextpas.core.sync.base;
+  nextpas.core.sync.base,
+  nextpas.core.time.base;
 
 type
   ILockGuard = interface
@@ -49,12 +50,15 @@ type
     procedure Add(const ACount: Int32 = 1);
     procedure Done;
     procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
   end;
 
   ICondVar = interface
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560006}']
     procedure Wait(const AMutex: INativeMutex);
     function WaitTimeout(const AMutex: INativeMutex; const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const AMutex: INativeMutex; const ATimeout: TDuration): Boolean;
     procedure Signal;
     procedure Broadcast;
   end;
@@ -62,6 +66,7 @@ type
   IOnce = interface
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560010}']
     procedure Do_(const AProc: TOnceProc);
+    procedure DoOnce(const AProc: TOnceProc);
     function Done: Boolean;
   end;
 
@@ -74,6 +79,7 @@ type
     procedure Acquire;
     function TryAcquire: Boolean;
     function TryAcquireTimeout(const ATimeoutNs: Int64): Boolean;
+    function TryAcquireTimeout(const ATimeout: TDuration): Boolean;
     procedure Release;
     procedure Release(const ACount: Int32);
     function Available: Int32;
@@ -90,6 +96,7 @@ type
     procedure Reset;
     procedure Wait;
     function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const ATimeout: TDuration): Boolean;
     function IsSet: Boolean;
   end;
 

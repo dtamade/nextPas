@@ -6,7 +6,7 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 **目标树**：[GOAL_TREE.md](GOAL_TREE.md)
 **Scorecard**：[SCORECARD.md](SCORECARD.md)
 **层级**：L1（依赖 L0 `platform.sync` / `platform.thread`，以及 L1 `atomic`、`errors`、`time`）
-**状态**：**Maintenance Ready (idle)** — 稳定；仅消费者缺陷 / 平台契约 / 架构触发时开 slice
+**状态**：**Maintenance Ready** — CONTRACT **1.4**（`TDuration` 超时、`DoOnce`、统一 errors、消费者 `TWorkerThread`）；仅缺陷 / 平台 / 架构触发时再开 slice
 
 ---
 
@@ -17,8 +17,9 @@ L1 同步原语门面：为 nextpas.core 与上层模块提供稳定、可组合
 | 表面 | 单元 | 说明 |
 |------|------|------|
 | 门面 | `nextpas.core.sync` | 工厂函数 + 接口 re-export |
-| 接口 | `nextpas.core.sync.intf` | `ILock` / `IMutex` / `IRWLock` / … |
+| 接口 | `nextpas.core.sync.intf` | `ILock` / `IMutex` / `INativeMutex` / `IRWLock` / … |
 | 基本类型 | `nextpas.core.sync.base` | `TOnceProc`、`TBarrierWaitResult` 等 |
+| 错误 | `nextpas.core.sync.errors` | 内部 `SyncRaise*`（不进门面） |
 | 实现 | `mutex` / `rwlock` / `condvar` / `spinlock` / `waitgroup` / `once` / `semaphore` / `barrier` / `event` | 各原语实现 |
 | 实验旁路 | `nextpas.core.sync.pool` | `TSyncPool`（**未**进门面） |
 
@@ -61,7 +62,12 @@ function Barrier(ACount: Int32): IBarrier;
 function Event(AManualReset: Boolean = True): IEvent;
 ```
 
-超时参数在 live API 中为 **纳秒**（`WaitTimeout` / `TryAcquireTimeout`）。
+超时参数：
+
+- **纳秒** `Int64`（`WaitTimeout` / `TryAcquireTimeout`）
+- **`TDuration` 重载**（`nextpas.core.time.base`）— 与 ns 语义等价
+
+`IOnce` 提供 `Do_`（冻结名）与 `DoOnce`（可读别名）。多线程消费者使用 `TWorkerThread`，不依赖 FPC `Classes.TThread` / `SyncObjs`。
 
 ---
 

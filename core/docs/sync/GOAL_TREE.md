@@ -1,8 +1,8 @@
 # nextpas.core.sync Goal Tree
 
 **Lane**: `sync` @ `.worktrees/sync`
-**状态**: **Maintenance Ready (idle)**
-**更新**: 2026-07-20
+**状态**: **Maintenance Ready**
+**更新**: 2026-07-20（CONTRACT 1.4 usability slice）
 
 ## 愿景
 
@@ -20,6 +20,8 @@
 - [x] 文档 SSOT：README / CONTRACT / SCORECARD / 本 GOAL_TREE
 - [x] RecursiveMutex / Pool 门面 — **暂缓**（无生产消费者）
 - [x] path-limited land 多批；landing worktree 已清理
+- [x] **1.4 usability**：`TDuration` 超时重载、`DoOnce`、`WaitGroup.WaitTimeout`、`sync.errors`、`FHandle` private
+- [x] 测试 / 示例 / bench 剥离 `SysUtils`/`Classes`/`SyncObjs`，统一 `TWorkerThread`
 
 ---
 
@@ -41,8 +43,9 @@ Lane 保持与 `origin/main` 对齐；仅在下列触发时再开 slice：
 
 ## Deferred（硬禁止 / 冻结）
 
-- 公开 API 重命名（如 `Do_`）— **冻结**
-- FPC `SyncObjs` 兼容层 — **禁止**
+- 公开 API 重命名（如 `Do_`）— **冻结**（`DoOnce` 为别名，不替换）
+- FPC `SyncObjs` / 在 L1 消费者直接依赖 `SysUtils`/`Classes` — **禁止**
+- P3 扩展（Channel / Latch / Notify / Scoped 组合器）— **待消费者驱动**
 
 ---
 

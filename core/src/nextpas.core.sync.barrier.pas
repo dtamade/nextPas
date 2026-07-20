@@ -14,7 +14,7 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.errors,
+  nextpas.core.sync.errors,
   nextpas.core.platform.sync;
 
 type
@@ -32,7 +32,7 @@ constructor TBarrier.Create(const ACount: Int32);
 begin
   inherited Create;
   if ACount <= 0 then
-    raise EArgumentError.Create('Barrier: count must be > 0');
+    SyncRaiseArg('Barrier: count must be > 0');
   FTotal := ACount;
   FCount := ACount;
   FGeneration := 0;

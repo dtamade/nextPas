@@ -6,14 +6,10 @@ interface
 
 uses
   nextpas.core.sync.intf,
-  nextpas.core.platform.sync;
+  nextpas.core.platform.sync,
+  nextpas.core.time.base;
 
 type
-  {**
-   * @desc 条件变量，配合 INativeMutex（platform-backed TMutex）使用
-   * @note Wait 会原子释放 mutex 并阻塞，被唤醒后重新获取 mutex
-   *       基于 platform_condvar（pthread_cond / Windows CONDITION_VARIABLE）
-   *}
   TCondVar = class(TInterfacedObject, ICondVar)
   private
     FHandle: TPlatformCondVar;
@@ -22,6 +18,7 @@ type
     destructor Destroy; override;
     procedure Wait(const AMutex: INativeMutex);
     function WaitTimeout(const AMutex: INativeMutex; const ATimeoutNs: Int64): Boolean;
+    function WaitTimeout(const AMutex: INativeMutex; const ATimeout: TDuration): Boolean;
     procedure Signal;
     procedure Broadcast;
   end;
@@ -29,7 +26,7 @@ type
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.sync.errors;
 
 constructor TCondVar.Create;
 var
@@ -38,7 +35,7 @@ begin
   inherited Create;
   LRet := platform_condvar_init(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TCondVar.Create failed: %d', [LRet]);
+    SyncRaiseOpFailed('TCondVar', 'Create', LRet);
 end;
 
 destructor TCondVar.Destroy;
@@ -47,7 +44,7 @@ var
 begin
   LRet := platform_condvar_destroy(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TCondVar.Destroy failed: %d', [LRet]);
+    SyncRaiseOpFailed('TCondVar', 'Destroy', LRet);
   inherited;
 end;
 
@@ -57,7 +54,7 @@ var
 begin
   LRet := platform_condvar_wait(FHandle, TPlatformMutex(AMutex.NativeHandle^));
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TCondVar.Wait failed: %d', [LRet]);
+    SyncRaiseOpFailed('TCondVar', 'Wait', LRet);
 end;
 
 function TCondVar.WaitTimeout(const AMutex: INativeMutex; const ATimeoutNs: Int64): Boolean;
@@ -66,6 +63,11 @@ var
 begin
   LRet := platform_condvar_timedwait(FHandle, TPlatformMutex(AMutex.NativeHandle^), ATimeoutNs);
   Result := (LRet = 0);
+end;
+
+function TCondVar.WaitTimeout(const AMutex: INativeMutex; const ATimeout: TDuration): Boolean;
+begin
+  Result := WaitTimeout(AMutex, ATimeout.AsNanoseconds);
 end;
 
 procedure TCondVar.Signal;

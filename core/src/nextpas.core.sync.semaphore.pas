@@ -5,7 +5,8 @@ unit nextpas.core.sync.semaphore;
 interface
 
 uses
-  nextpas.core.sync.intf;
+  nextpas.core.sync.intf,
+  nextpas.core.time.base;
 
 function CreateSemaphore(const AInitial: Int32): ISemaphore;
 
@@ -13,9 +14,8 @@ implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.errors,
-  nextpas.core.platform.sync,
-  nextpas.core.time.base;
+  nextpas.core.sync.errors,
+  nextpas.core.platform.sync;
 
 type
   TSemaphore = class(TInterfacedObject, ISemaphore)
@@ -26,6 +26,7 @@ type
     procedure Acquire;
     function TryAcquire: Boolean;
     function TryAcquireTimeout(const ATimeoutNs: Int64): Boolean;
+    function TryAcquireTimeout(const ATimeout: TDuration): Boolean;
     procedure Release;
     procedure Release(const ACount: Int32);
     function Available: Int32;
@@ -35,7 +36,7 @@ constructor TSemaphore.Create(const AInitial: Int32);
 begin
   inherited Create;
   if AInitial < 0 then
-    raise EArgumentError.Create('Semaphore: initial must be >= 0');
+    SyncRaiseArg('Semaphore: initial must be >= 0');
   FCount := AInitial;
 end;
 
@@ -51,7 +52,6 @@ begin
     LNew := LCurrent - 1;
     if atomic_compare_exchange_strong(FCount, LCurrent, LNew, mo_acq_rel, mo_acquire) then
       Exit(True);
-    { LCurrent updated to observed on failure }
   end;
 end;
 
@@ -95,6 +95,11 @@ begin
   end;
 end;
 
+function TSemaphore.TryAcquireTimeout(const ATimeout: TDuration): Boolean;
+begin
+  Result := TryAcquireTimeout(ATimeout.AsNanoseconds);
+end;
+
 procedure TSemaphore.Release;
 begin
   atomic_fetch_add(FCount, 1, mo_release);
@@ -106,7 +111,7 @@ var
   LI: Int32;
 begin
   if ACount <= 0 then
-    raise EArgumentError.Create('Semaphore.Release: count must be > 0');
+    SyncRaiseArg('Semaphore.Release: count must be > 0');
   atomic_fetch_add(FCount, ACount, mo_release);
   for LI := 0 to ACount - 1 do
     platform_wake_address_one(@FCount);

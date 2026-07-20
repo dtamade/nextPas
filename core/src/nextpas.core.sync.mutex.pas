@@ -14,7 +14,7 @@ type
    * @note 非递归，同一线程重入会返回错误
    *}
   TMutex = class(TInterfacedObject, ILock, IMutex, INativeMutex)
-  public
+  private
     FHandle: TPlatformMutex;
   public
     constructor Create;
@@ -45,7 +45,7 @@ type
 implementation
 
 uses
-  nextpas.core.errors;
+  nextpas.core.sync.errors;
 
 type
   TLockGuardImpl = class(TInterfacedObject, ILockGuard)
@@ -80,7 +80,7 @@ begin
   inherited Create;
   LRet := platform_mutex_init(FHandle, PLATFORM_MUTEX_ERRORCHECK);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TMutex.Create failed: %d', [LRet]);
+    SyncRaiseOpFailed('TMutex', 'Create', LRet);
 end;
 
 destructor TMutex.Destroy;
@@ -89,7 +89,7 @@ var
 begin
   LRet := platform_mutex_destroy(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TMutex.Destroy failed: %d (held lock?)', [LRet]);
+    SyncRaiseOpFailed('TMutex', 'Destroy', LRet);
   inherited;
 end;
 
@@ -99,7 +99,7 @@ var
 begin
   LRet := platform_mutex_lock(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TMutex.Acquire failed: %d', [LRet]);
+    SyncRaiseOpFailed('TMutex', 'Acquire', LRet);
 end;
 
 function TMutex.TryAcquire: Boolean;
@@ -113,7 +113,7 @@ var
 begin
   LRet := platform_mutex_unlock(FHandle);
   if LRet <> 0 then
-    raise ENextPasError.CreateFmt('TMutex.Release failed: %d', [LRet]);
+    SyncRaiseOpFailed('TMutex', 'Release', LRet);
 end;
 
 function TMutex.Lock: ILockGuard;
@@ -145,12 +145,10 @@ var
   LOld: Int32;
   LSpins: Int32;
 begin
-  // Fast path: CAS unlocked -> locked
   LOld := InterlockedCompareExchange(FState, STATE_LOCKED, STATE_UNLOCKED);
   if LOld = STATE_UNLOCKED then
     Exit;
 
-  // Medium path: short spin
   for LSpins := 0 to 39 do
   begin
     if FState = STATE_UNLOCKED then
@@ -166,7 +164,6 @@ begin
     {$ENDIF}
   end;
 
-  // Slow path: mark as contended and wait
   while True do
   begin
     LOld := InterlockedExchange(FState, STATE_LOCKED_WITH_WAITERS);

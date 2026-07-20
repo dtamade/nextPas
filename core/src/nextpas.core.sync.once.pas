@@ -28,6 +28,7 @@ type
   public
     constructor Create;
     procedure Do_(const AProc: TOnceProc);
+    procedure DoOnce(const AProc: TOnceProc);
     function Done: Boolean;
   end;
 
@@ -65,6 +66,11 @@ begin
     end;
     platform_wait_address32(@FState, STATE_RUNNING, -1);
   end;
+end;
+
+procedure TOnce.DoOnce(const AProc: TOnceProc);
+begin
+  Do_(AProc);
 end;
 
 function TOnce.Done: Boolean;

@@ -2,7 +2,7 @@
  * nextpas.core.sync consumer smoke (L1 facade).
  *
  * Demonstrates Mutex/INativeMutex + CondVar, WaitGroup, Once, Event,
- * and SpinLock guard without depending on FPC SyncObjs.
+ * and SpinLock guard using nextpas thread + time (no FPC RTL units).
  *}
 program sync_basics;
 
@@ -10,13 +10,36 @@ program sync_basics;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils, Classes,
   nextpas.core.thread.init,
+  nextpas.core.thread.base,
+  nextpas.core.time.base,
   nextpas.core.sync;
+
+type
+  TProcWorker = class(TWorkerThread)
+  private
+    FProc: TThreadTask;
+  protected
+    procedure Execute; override;
+  public
+    constructor Create(const AProc: TThreadTask);
+  end;
 
 var
   GOnceHits: Int32;
   GWgHits: Int32;
+
+constructor TProcWorker.Create(const AProc: TThreadTask);
+begin
+  inherited Create;
+  FProc := AProc;
+end;
+
+procedure TProcWorker.Execute;
+begin
+  if Assigned(FProc) then
+    FProc();
+end;
 
 procedure OnceMark;
 begin
@@ -47,14 +70,15 @@ begin
   LM.Release;
 
   LM.Acquire;
-  Require(not LCv.WaitTimeout(LM, 1000000), 'condvar timeout without signal');
+  Require(not LCv.WaitTimeout(LM, TDuration.FromMilliseconds(1)),
+    'condvar timeout without signal');
   LM.Release;
 end;
 
 procedure DemoWaitGroup;
 var
   LWg: IWaitGroup;
-  LThreads: array[0..3] of TThread;
+  LThreads: array[0..3] of TProcWorker;
   LI: Integer;
 begin
   LWg := WaitGroup;
@@ -62,12 +86,11 @@ begin
   LWg.Add(4);
   for LI := 0 to 3 do
   begin
-    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    LThreads[LI] := TProcWorker.Create(procedure
     begin
       InterlockedIncrement(GWgHits);
       LWg.Done;
     end);
-    LThreads[LI].FreeOnTerminate := False;
     LThreads[LI].Start;
   end;
   LWg.Wait;
@@ -88,14 +111,14 @@ begin
   LOnce := Once;
   GOnceHits := 0;
   for LI := 1 to 5 do
-    LOnce.Do_(@OnceMark);
+    LOnce.DoOnce(@OnceMark);
   Require(GOnceHits = 1, 'once runs once');
   Require(LOnce.Done, 'once done');
 
   LEv := Event(False);
   Require(not LEv.IsSet, 'event initially unset');
   LEv.SetEvent;
-  Require(LEv.WaitTimeout(1000000), 'event wait after set');
+  Require(LEv.WaitTimeout(TDuration.FromMilliseconds(1)), 'event wait after set');
   Require(not LEv.IsSet, 'auto-reset consumed');
 end;
 

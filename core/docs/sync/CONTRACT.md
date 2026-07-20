@@ -4,7 +4,7 @@
 **层级**：L1
 **Owner**：sync lane（`.worktrees/sync`）
 **最后更新**：2026-07-20
-**版本**：1.3
+**版本**：1.4
 **权威性**：本文件为 sync 模块契约 SSOT。仓库索引 `docs/contracts/sync.md` 仅作入口，不得维护第二套 API 描述。
 
 ---
@@ -18,6 +18,7 @@
 | `nextpas.core.sync.pas` | 门面：工厂 + 类型 re-export |
 | `nextpas.core.sync.base.pas` | `TLockState`、`TOnceProc`、`TBarrierWaitResult` |
 | `nextpas.core.sync.intf.pas` | 全部公开 interface |
+| `nextpas.core.sync.errors.pas` | 内部错误映射（`SyncRaise*`）；**不**进门面 re-export |
 | `nextpas.core.sync.mutex.pas` | `TMutex`、`TFutexMutex` |
 | `nextpas.core.sync.rwlock.pas` | `TRWLock` |
 | `nextpas.core.sync.condvar.pas` | `TCondVar` |
@@ -32,7 +33,7 @@
 ### 1.2 门面工厂
 
 ```pascal
-function Mutex: IMutex;
+function Mutex: INativeMutex;
 function FutexMutex: IMutex;
 function RWLock: IRWLock;
 function WaitGroup: IWaitGroup;
@@ -54,7 +55,13 @@ ILock = interface
   function Lock: ILockGuard;
 end;
 
+{ Application mutex — no native handle escape hatch. }
 IMutex = interface(ILock)
+end;
+
+{ Platform-backed mutex: NativeHandle → TPlatformMutex.
+  Required partner for ICondVar.Wait / WaitTimeout. }
+INativeMutex = interface(IMutex)
   function NativeHandle: Pointer;
 end;
 
@@ -73,17 +80,21 @@ IWaitGroup = interface
   procedure Add(const ACount: Int32 = 1);
   procedure Done;
   procedure Wait;
+  function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+  function WaitTimeout(const ATimeout: TDuration): Boolean;
 end;
 
 ICondVar = interface
-  procedure Wait(const AMutex: IMutex);
-  function WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Boolean;
+  procedure Wait(const AMutex: INativeMutex);
+  function WaitTimeout(const AMutex: INativeMutex; const ATimeoutNs: Int64): Boolean;
+  function WaitTimeout(const AMutex: INativeMutex; const ATimeout: TDuration): Boolean;
   procedure Signal;
   procedure Broadcast;
 end;
 
 IOnce = interface
-  procedure Do_(const AProc: TOnceProc);  // 命名冻结：避开关键字 Do
+  procedure Do_(const AProc: TOnceProc);   // 命名冻结：避开关键字 Do
+  procedure DoOnce(const AProc: TOnceProc); // 可读别名；语义 ≡ Do_
   function Done: Boolean;
 end;
 
@@ -94,6 +105,7 @@ ISemaphore = interface
   procedure Acquire;
   function TryAcquire: Boolean;
   function TryAcquireTimeout(const ATimeoutNs: Int64): Boolean;
+  function TryAcquireTimeout(const ATimeout: TDuration): Boolean;
   procedure Release;
   procedure Release(const ACount: Int32);
   function Available: Int32;
@@ -108,32 +120,39 @@ IEvent = interface
   procedure Reset;
   procedure Wait;
   function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+  function WaitTimeout(const ATimeout: TDuration): Boolean;
   function IsSet: Boolean;
 end;
 ```
 
-**已废弃文档名（不得再写）**：`ILockable`、`IRWLockable`、`DoCall`、`WaitFor` / `WaitForTimeout`（毫秒版签名）。
+**超时约定**
+
+- 纳秒重载：`ATimeoutNs` 为 `Int64`（ns）
+- `TDuration` 重载：转发到 `.AsNanoseconds`（与 `nextpas.core.time.base` 对齐）
+- 返回 `Boolean`：`True` = 成功/未超时，`False` = 超时
+
+**已废弃文档名（不得再写）**：`ILockable`、`IRWLockable`、`DoCall`、`WaitFor` / `WaitForTimeout`（毫秒版签名）、`IMutex.NativeHandle`（已迁至 `INativeMutex`）。
 
 ### 1.4 原语语义摘要
 
 | 原语 | 实现要点 | 公开级别 |
 |------|----------|----------|
-| `TMutex` | `platform_mutex_init(..., PLATFORM_MUTEX_ERRORCHECK)`，**非递归**；实现 `INativeMutex` | stable |
+| `TMutex` | `platform_mutex_init(..., PLATFORM_MUTEX_ERRORCHECK)`，**非递归**；实现 `INativeMutex`；`FHandle` **private** | stable |
 | `TFutexMutex` | CAS 三态 + spin + address-wait；**仅** `IMutex`（不可配 CondVar） | advanced |
-| `TRWLock` | platform rwlock；`ReleaseRead`→`rdunlock`，`ReleaseWrite`→`wrunlock` | stable |
-| `TCondVar` | platform condvar；**仅**可与标准 `TMutex` 配对 | stable |
+| `TRWLock` | platform rwlock；`FHandle` **private** | stable |
+| `TCondVar` | platform condvar；**仅**可与标准 `TMutex` 配对；`FHandle` **private** | stable |
 | `TSpinLock` | atomic flag + `CpuPause` / `platform_thread_yield` | stable |
-| `TWaitGroup` | atomic counter + address-wait | stable |
-| `TOnce` | 三态 INIT/RUNNING/DONE；回调异常回滚到 INIT | stable |
-| `TSemaphore` | atomic count + address-wait | stable |
+| `TWaitGroup` | atomic counter + address-wait；含 `WaitTimeout` | stable |
+| `TOnce` | 三态 INIT/RUNNING/DONE；回调异常回滚到 INIT；`DoOnce` ≡ `Do_` | stable |
+| `TSemaphore` | atomic count + address-wait；超时 ns / `TDuration` | stable |
 | `TBarrier` | generation + address-wait；可复用 | stable |
-| `IEvent` | manual：generation 奇偶；auto：单 permit CAS | stable |
+| `IEvent` | manual：generation 奇偶；auto：单 permit CAS；超时 ns / `TDuration` | stable |
 | `TSyncPool` | TLS freelist + global `IMutex`；**非门面** | experimental |
 
 ### 1.5 CondVar 配对规则
 
 - `ICondVar.Wait` / `WaitTimeout` 参数类型为 **`INativeMutex`**（编译期隔离）
-- `NativeHandle` 必须指向完整 `TPlatformMutex`
+- `NativeHandle` 必须指向完整 `TPlatformMutex`（仅经接口方法暴露，不公开字段）
 - `TFutexMutex` 不实现 `INativeMutex`，无法传入 Wait
 
 ### 1.6 TSyncPool（实验）
@@ -143,33 +162,41 @@ end;
 - 冷路径全局栈：nextpas `IMutex`（`TMutex`）
 - `DrainTLS`：线程退出前归还 TLS freelist，避免 heaptrc 假泄漏
 
+### 1.7 消费者线程模型
+
+- 测试 / 示例 / 本模块 bench **禁止**直接 `uses SysUtils` / `Classes` / `SyncObjs`
+- 多线程任务使用 `nextpas.core.thread.base.TWorkerThread`（或模块内薄包装），不使用 FPC `TThread`
+
 ---
 
 ## 2. 不变量
 
 - **[INV-1]** 默认 `Mutex` 为 **非递归** ERRORCHECK；同线程重入由平台/实现报错，非合法用法
-- **[INV-2]** `Once.Do_` 在成功路径上回调恰好执行一次；异常路径不置 DONE，允许重试
-- **[INV-3]** `WaitGroup.Done` 次数不得超过 `Add` 总和；超出 raise
-- **[INV-4]** `WaitGroup.Add` 要求 `ACount > 0`
+- **[INV-2]** `Once.Do_` / `DoOnce` 在成功路径上回调恰好执行一次；异常路径不置 DONE，允许重试
+- **[INV-3]** `WaitGroup.Done` 次数不得超过 `Add` 总和；超出 raise `EInvalidOperationError`
+- **[INV-4]** `WaitGroup.Add` 要求 `ACount > 0`；否则 raise `EArgumentError`
 - **[INV-5]** 多个读者可并发持有 `IRWLock`；写者排他
 - **[INV-6]** `CondVar` 不得与 `TFutexMutex` 配对
-- **[INV-7]** 门面不依赖 `sync.pool`
-- **[INV-8]** L1 sync 实现（含 `sync.pool`）不直接依赖 FPC 平台同步原语 / 平台单元
+- **[INV-7]** 门面不依赖 `sync.pool` / `sync.errors` re-export
+- **[INV-8]** L1 sync 实现（含 `sync.pool`）不直接依赖 FPC 平台同步原语 / 平台单元 / `SysUtils` / `Classes` / `SyncObjs`
+- **[INV-9]** 平台句柄字段 `FHandle` 为 **private**；外部仅经 `INativeMutex.NativeHandle` 取得 mutex 指针
 
 ---
 
 ## 3. 错误处理
 
+统一通过 `nextpas.core.sync.errors` 抛出 `nextpas.core.errors` 类型（非 FPC `SysUtils.Exception` 专用路径）：
+
 | 场景 | 行为 |
 |------|------|
-| `TMutex` platform init/lock/unlock 失败 | raise `ENextPasError` |
-| `WaitGroup.Add` ≤ 0 | raise `ENextPasError` |
-| `WaitGroup.Done` 导致计数 < 0 | raise `ENextPasError` |
-| `Semaphore` 初始 < 0 | raise `EArgumentError` |
-| `Semaphore.Release(count)` count ≤ 0 | raise `EArgumentError` |
-| `Barrier` count ≤ 0 | raise `EArgumentError` |
-| `CondVar` + 非 `INativeMutex` | **编译期**不可传入（`ICondVar.Wait` 签名） |
-| `Once` 回调异常 | 状态回 INIT，异常上抛，可再次 `Do_` |
+| `TMutex` / `TRWLock` / `TCondVar` platform init/lock/unlock/destroy 失败 | `EInvalidOperationError`，消息含 op 名 + 平台码名 |
+| `WaitGroup.Add` ≤ 0 | `EArgumentError` |
+| `WaitGroup.Done` 导致计数 < 0 | `EInvalidOperationError` |
+| `Semaphore` 初始 < 0 | `EArgumentError` |
+| `Semaphore.Release(count)` count ≤ 0 | `EArgumentError` |
+| `Barrier` count ≤ 0 | `EArgumentError` |
+| `CondVar` + 非 `INativeMutex` | **编译期**不可传入 |
+| `Once` 回调异常 | 状态回 INIT，异常上抛，可再次 `Do_` / `DoOnce` |
 | `CondVar.Wait` 非持有者 / 错误 handle | 未定义（调用方契约） |
 | Destroy 时仍持锁 | **调用方必须先释放**。若 `platform_*_destroy` 返回非 0（POSIX 常为 EBUSY），L1 **raise**；若宿主返回 0 则无 L1 检测。不得依赖「Destroy 自动解锁」 |
 | 公开 `RecursiveMutex` | **暂缓** — 默认 ERRORCHECK 非递归；无生产消费者前不扩 API |
@@ -187,7 +214,7 @@ end;
 | `IRWLock` | 多读单写 |
 | `ISemaphore` | 最多 N 并发 permit |
 | `IEvent` | 等待 / 唤醒 |
-| `ICondVar` | 与合法 `IMutex` 配合 |
+| `ICondVar` | 与合法 `INativeMutex` 配合 |
 | `IBarrier` | N 线程汇合 |
 | `IOnce` | 单次初始化 |
 | `IWaitGroup` | 等待 N 个完成 |
@@ -208,9 +235,9 @@ end;
 
 | Gate | 路径 | 说明 |
 |------|------|------|
-| 核心原语 | `core/tests/nextpas.core.sync/test_sync` | 行为 + 关键错误路径 |
-| TSyncPool | `core/tests/nextpas.core.sync/test_sync_pool` | TLS / 并发 / Drain |
-| 源契约 | `core/tests/nextpas.core.sync/test_sync_source_contracts` | 门面/边界/非递归默认 |
+| 核心原语 | `core/tests/nextpas.core.sync/test_sync` | 行为 + 超时 + DoOnce + 错误路径；`TWorkerThread` |
+| TSyncPool | `core/tests/nextpas.core.sync/test_sync_pool` | TLS / 并发 / Drain；`TWorkerThread` |
+| 源契约 | `core/tests/nextpas.core.sync/test_sync_source_contracts` | 门面/边界/RTL 隔离/非递归默认 |
 
 ```bash
 make -C core/tests/nextpas.core.sync test
@@ -226,11 +253,16 @@ make -C core/tests/nextpas.core.sync test
 - `nextpas.core.platform.thread`（SpinLock yield）
 - `nextpas.core.atomic`（Event / Once / Semaphore / Barrier）
 - `nextpas.core.errors` / `exception`（错误类型）
-- `nextpas.core.time.base`（Semaphore 超时 deadline）
+- `nextpas.core.time.base`（`TDuration` 超时重载）
+- `nextpas.core.base`（`IntToStr` 等基础工具，经 errors 使用）
 
 **被依赖（典型）**
 
 - http、tls、thread、test.runner、collections.concurrent、net.server、config、tui 等
+
+**禁止依赖（实现 / 本模块测试与示例）**
+
+- FPC `SysUtils`、`Classes`、`SyncObjs`、`Windows`、`BaseUnix`、`PThreads`（应走 platform / thread）
 
 ---
 
@@ -242,3 +274,4 @@ make -C core/tests/nextpas.core.sync test
 | 2026-07-20 | 1.1 | 以 live source 重写 SSOT；标明 FutexMutex/Pool 级别；删除空 posix_fallback 叙述 |
 | 2026-07-20 | 1.2 | `TSyncPool` 冷路径改 nextpas `IMutex`；移除 FPC CriticalSection 债 |
 | 2026-07-20 | 1.3 | per-pool TLS；INativeMutex；Win compile gate；SCORECARD |
+| 2026-07-20 | 1.4 | `WaitTimeout`/`TryAcquireTimeout` `TDuration` 重载；`DoOnce` 别名；`WaitGroup.WaitTimeout`；`sync.errors` 统一错误；`FHandle` private；测试/示例/bench 禁用 SysUtils/Classes/SyncObjs，改 `TWorkerThread` |
