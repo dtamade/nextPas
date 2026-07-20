@@ -93,3 +93,14 @@ macOS job 残余红点在 async，不阻塞 mem Steady。
 |-----|------------------|------|
 | **test-macos** | **PASS** | platform matrix 10/10；job 红于 kqueue |
 | **test-windows-runtime** | **PASS** | matrix **23/23 全绿** |
+
+### 5.5 H2 FreeMemOf close 后（run **29729148831** · 2026-07-20 · `d080a4b8a`）
+
+| Job | mem.host_runtime | 备注 |
+|-----|------------------|------|
+| **test-macos** | **PASS** | platform matrix **10/10**（含 mem）；job 红于 **async.kqueue**（`accept4` 未定义，非 mem） |
+| **test-windows-runtime** | **PASS** | matrix **24/24 全绿**（含 mem） |
+| test-linux | n/a | 红于 **ARCH-SOURCE-CONTRACT**（`docs/platform/master-spec.md` 超 120 行）；非 mem |
+| test-freebsd | n/a | job **success** |
+
+结论：H2 land 后 Darwin/Windows 真机 host-runtime 仍稳；整 job 红点仍属 async/platform 治理，不阻塞 mem Maintenance。
