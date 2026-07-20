@@ -255,11 +255,23 @@ implementation
 
 uses
   nextpas.core.platform.thread,  // platform_thread_id for DEBUG thread-safety check (CS-017)
-  nextpas.core.mem.secure;       // SecureZeroMemory for AllocMem zero-fill
+  nextpas.core.mem.secure,       // SecureZeroMemory for AllocMem zero-fill
+  nextpas.core.mem;
 
 const
   HASH_MIN_CAP = 64;
   FB_TOMBSTONE = PtrUInt(1);
+
+{ Fallback raw alloc size matches AllocFallback LNeeded := ASize + (AAlign - 1). }
+function FallbackRawAllocSize(const ASize, AAlignment: SizeUInt): SizeUInt; inline;
+begin
+  if AAlignment <= 1 then
+    Result := ASize
+  else if ASize > High(SizeUInt) - (AAlignment - 1) then
+    Result := High(SizeUInt)
+  else
+    Result := ASize + (AAlignment - 1);
+end;
 
 function CreateDefaultSlabConfig: TSlabConfig;
 begin
@@ -621,7 +633,8 @@ begin
       LKey := FFbKeys[LIdx];
       if (LKey <> 0) and (LKey <> FB_TOMBSTONE) then
         if FFbRawPtrs[LIdx] <> nil then
-          FAllocator.FreeMem(FFbRawPtrs[LIdx]);
+          FreeMemOf(FAllocator, FFbRawPtrs[LIdx],
+            FallbackRawAllocSize(FFbSizes[LIdx], FFbAlignments[LIdx]));
     end;
   FbMapClear;
 end;
@@ -654,7 +667,7 @@ begin
     FbMapInsert(LUser, LRaw, ASize, LAlign);
   except
     // strong exception safety: do not leak raw pointer
-    FAllocator.FreeMem(LRaw);
+    FreeMemOf(FAllocator, LRaw, LNeeded);
     raise;
   end;
   Result := LUser;
@@ -1146,7 +1159,8 @@ begin
   // 释放旧块并移除 tracking（注意：先分配成功再销毁旧块）
   if TryUntrackFallbackAlloc(APtr, LAlloc) then
     if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
-      FAllocator.FreeMem(LAlloc.RawPtr);
+      FreeMemOf(FAllocator, LAlloc.RawPtr,
+        FallbackRawAllocSize(LAlloc.Size, LAlloc.Alignment));
 
   Result := LNew;
 end;
@@ -1176,7 +1190,8 @@ begin
   else if TryUntrackFallbackAlloc(APtr, LAlloc) then
   begin
     if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
-      FAllocator.FreeMem(LAlloc.RawPtr);
+      FreeMemOf(FAllocator, LAlloc.RawPtr,
+        FallbackRawAllocSize(LAlloc.Size, LAlloc.Alignment));
     Inc(FTotalFrees);
   end
   else

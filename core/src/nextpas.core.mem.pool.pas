@@ -28,6 +28,7 @@ type
   TLocalBlockPool = class
   private
     FBacking: Pointer;
+    FBackingSize: SizeUInt;  { GetMem 字节数 = BlockSize * Count }
     FBlockSize: SizeUInt;
     FBlockCount: SizeUInt;
     FFreeStack: Pointer;
@@ -79,6 +80,9 @@ function CreateFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator): IFixe
 function CreateFixedSlabPool(ACapacity: SizeUInt): IFixedSlabPool; overload;
 
 implementation
+
+uses
+  nextpas.core.mem;
 
 type
   PFreeNode = ^TFreeNode;
@@ -154,12 +158,14 @@ begin
     raise EOutOfMemory.Create(aeOutOfMemory,
       'TLocalBlockPool.Create: size overflow (block_size=' + LBlockSizeStr + ', count=' + LBlockCountStr + ')');
   end;
+  FBackingSize := LTotalSize;
   if FAllocator <> nil then
     FBacking := FAllocator.GetMem(LTotalSize)
   else
     FBacking := GetMem(LTotalSize);
   if FBacking = nil then
   begin
+    FBackingSize := 0;
     Str(LTotalSize, LTotalSizeStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
       'TLocalBlockPool.Create: out of memory (requested ' + LTotalSizeStr + ' bytes)');
@@ -185,11 +191,12 @@ begin
   if FBacking <> nil then
   begin
     if FAllocator <> nil then
-      FAllocator.FreeMem(FBacking)
+      FreeMemOf(FAllocator, FBacking, FBackingSize)
     else
-      FreeMem(FBacking);
+      FreeMem(FBacking, FBackingSize);
     FBacking := nil;
   end;
+  FBackingSize := 0;
   FFreeStack := nil;
   FBlockCount := 0;
   FAcquired := 0;
