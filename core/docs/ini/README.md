@@ -8,13 +8,16 @@ Supports sections, key=value pairs, comments (`;` and `#`), empty line skipping,
 
 `LoadFromString` stays permissive, while `LoadFromFile` raises `ENextPasError` on file I/O failures.
 
-`TryLoadFromString` and `TryLoadFromFile` return `False` and populate `Error`.
+`TryLoadFromString` and `TryLoadFromFile` return `False` and populate a string
+`AError` (there is no `TIniError` record type). Messages often include a
+`line N` prefix for parse validation failures.
 
-`LoadFromString` and the try-load validators recognize LF, CRLF, and lone CR as physical line endings; source diagnostics report byte offsets against the original input.
+`LoadFromString` and the try-load validators recognize LF, CRLF, and lone CR as
+physical line endings.
 
-Duplicate parsed sections merge into the existing section, and duplicate parsed keys update the existing key slot with the last parsed value. Try-load accepts those duplicates.
-
-`TIniError` exposes `Message`, `Line`, `Column`, and `Offset`; non-source file I/O failures use `Line = 0` and `Column = 0`.
+Duplicate parsed sections merge into the existing section, and duplicate parsed
+keys update the existing key slot with the last parsed value. Try-load accepts
+those duplicates.
 
 Callers own `TIniFile` instances and must free them.
 

@@ -1,78 +1,123 @@
 # nextpas.core.xml 代码契约
 
 **模块路径**：`core/src/nextpas.core.xml*.pas`（5 个源文件）
-**层级**：L1（依赖 L0: base, mem）
-**Owner**：Claude（AI 负责）
-**最后更新**：2026-07-01
-**版本**：1.0
+**层级**：L2（`design-conventions` 将 xml 放在 L2 系统能力；非 L1）
+**Owner**：config-json-xml-toml-yaml-csv-ini lane
+**最后更新**：2026-07-20
+**版本**：2.0（对齐真实 class API + IXmlDocument；废止 1.0 record Reader 描述）
 
 ---
 
-## 1. 接口契约
+## 1. 源文件与职责
 
-### 1.1 子模块
-
-| 文件 | 职责 |
+| 单元 | 职责 |
 |------|------|
-| xml.base | TXmlTokenKind, TXmlName, TXmlAttribute, EXmlError, TXmlPosition |
-| xml.reader | TXmlReader 流式 SAX 解析器 |
-| xml.writer | TXmlWriter 流式写入器 |
-| xml.dom | TXmlDocument, TXmlNode DOM 树 |
-| xml.pas | 门面 |
+| `xml.base` | `TXmlTokenKind`、`TXmlName`、`TXmlPosition`、`EXmlError`、属性/命名空间类型 |
+| `xml.reader` | `TXmlReader` **class** 分词/流式读 |
+| `xml.writer` | `TXmlWriter` **class** 序列化 |
+| `xml.dom` | `TXmlDocument` / `TXmlNode` **class** DOM |
+| `xml.pas` | 门面 re-export + `XmlParse*` / `XmlTokenize*` / 编解码辅助 + `IXmlDocument` |
 
-### 1.2 核心类型
+---
+
+## 2. 公开 API
+
+### 2.1 门面类型
 
 ```pascal
-TXmlReader = record
-  class function Create(const AInput: string): TXmlReader; static;
-  function NextToken: Boolean;
-  function Token: TXmlToken;
-  // SAX 风格流式读取
-end;
+type
+  TXmlReader = class ...;   // 调用方 Free
+  TXmlWriter = class ...;   // 调用方 Free
+  TXmlDocument = class ...; // 调用方 Free
+  TXmlNode = class ...;
+  EXmlError = class(EParseError)
+    // Pos: TXmlPosition (ByteOffset, Line, Column)
+  end;
 
-TXmlWriter = record
-  class function Create: TXmlWriter; static;
-  procedure WriteStartElement(const AName: string);
-  procedure WriteAttribute(const AName, AValue: string);
-  procedure WriteEndElement;
-  procedure WriteText(const AText: string);
-  function ToString: string;
-end;
-
-TXmlDocument = class
-  // DOM 风格操作
-  function Root: TXmlNode;
-  function FindNode(const APath: string): TXmlNode;
-  function ToString: string;
-end;
+  IXmlDocument = interface
+    property Root: TXmlNode;
+    property HasError: Boolean;
+    property Error: EXmlError;
+    property Document: TXmlDocument;
+    function Stringify: string;
+  end;
 ```
 
+### 2.2 解析入口
+
+| 函数 | 返回 | 失败 |
+|------|------|------|
+| `XmlParse` / `XmlParseWith` | `TXmlDocument` | 抛 `EXmlError` |
+| `TryXmlParse` / `TryXmlParseWith` | `Boolean` | `False` 且 `ADoc = nil` |
+| `XmlParseDoc` / `XmlParseDocWith` | `IXmlDocument` | 适配 interface 生命周期 |
+| `TryXmlParseDoc` / `TryXmlParseDocWith` | `Boolean` + `IXmlDocument` | 失败路径按实现 |
+| `XmlTokenize` / `XmlTokenizeWith` | `TXmlTokenArray` | 失败抛 `EXmlError` |
+
+### 2.3 编解码辅助
+
+- `XmlDecodeEntities`
+- `XmlEncodeText`
+- `XmlEncodeAttr`
+
+### 2.4 推荐入口
+
+- **应用代码 / 与 JSON 风格对齐**：优先 `XmlParseDoc` → `IXmlDocument`
+- **需要细粒度 token 控制**：`TXmlReader`
+- **就地改 DOM 树**：`TXmlDocument` + 调用方 `Free`
+
+**config 不加载 XML**（`TConfigFormat` 无 `cfXml`）。
+
 ---
 
-## 2. 不变量
+## 3. 错误与失败契约
 
-- **[INV-1]** TXmlReader 为 record，零堆分配（视图引用输入）
-- **[INV-2]** EXmlError 包含位置信息（Line/Column）
-- **[INV-3]** TXmlWriter 输出合法 XML（自闭合标签、转义特殊字符）
-- **[INV-4]** DOM 树父节点拥有子节点
+- 主路径错误模型是 **异常** `EXmlError`，不是 JSON 式 error record
+- `EXmlError.Pos`：`ByteOffset`、`Line`、`Column`
+- `TryXmlParse*`：不抛，返回 `False`
 
----
-
-## 3. 错误处理
-
-| 场景 | 异常 |
-|------|------|
-| 非法 XML 语法 | EXmlError + 位置信息 |
-| 未闭合标签 | EXmlError |
-| 非法字符引用 | EXmlError |
+这与 json/yaml/toml 的「document.HasError」模型不同，是 **有意差异**。
 
 ---
 
-## 4-6. 概要
+## 4. Lifetime / 所有权
 
-- **线程安全**: TXmlReader/Writer ✅（值类型）; TXmlDocument ❌
-- **内存**: Reader 零分配; Writer 内部 buffer; Document 树结构拥有子节点
-- **测试**: 7 个测试目录
+- `TXmlDocument` / `TXmlReader` / `TXmlWriter`：调用方拥有并 `Free`
+- `IXmlDocument`：COM 引用计数；内部持有 `TXmlDocument`
+- DOM：父节点拥有子节点
+
+---
+
+## 5. 不变量
+
+- **[INV-1]** Reader/Writer/Document 为 class，不是零堆 record（1.0 文档错误）
+- **[INV-2]** well-formedness 检查、namespace、CDATA、注释、PI、XML 声明、DOCTYPE（以实现/测试为准）
+- **[INV-3]** Writer 转义特殊字符；非法 close 操作拒绝
+
+---
+
+## 6. 依赖边界
+
+- `text.view`、`text.scan`、`errors`、`mem`
+- 相对 json/toml 为 **低优先级** 格式模块（design-conventions 亦标注）
+
+---
+
+## 7. 测试入口
+
+```bash
+make focused FOCUS=core/tests/nextpas.core.xml/test_xml_facade_surface
+make focused FOCUS=core/tests/nextpas.core.xml/test_xml_roundtrip
+```
+
+套件：`test_xml`、`test_xml_dom`、`test_xml_reader`、`test_xml_writer`、`test_xml_edge_cases`、`test_xml_roundtrip`、`test_xml_facade_surface`。
+
+---
+
+## 8. Out of scope / Future
+
+- XPath / XQuery / XSD / full DTD validation
+- 把 Reader 改成 record 零分配公开 API（除非独立设计 slice）
+- 纳入 `TConfigFormat`
 
 ---
 
@@ -80,4 +125,5 @@ end;
 
 | 日期 | 版本 | 变更描述 | 作者 |
 |------|------|----------|------|
-| 2026-07-01 | 1.0 | 初始版本 | Claude |
+| 2026-07-01 | 1.0 | 初始（record Reader/L1 描述错误，已废止） | — |
+| 2026-07-20 | 2.0 | 对齐 class API、IXmlDocument、L2 | config-formats lane |
