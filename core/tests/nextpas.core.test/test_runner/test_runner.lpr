@@ -938,6 +938,57 @@ begin
     PassTest('B10 CLI arg table');
   end;
 
+  { ── B15: ApplyCLIArgsFrom injectable argv ──────────────────────────────── }
+  WriteLn;
+  SectionHeader('B15: ApplyCLIArgsFrom');
+  begin
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom(['--filter=alpha*', '--short', '--fail-fast',
+      '--timeout=30', '--shuffle-seed=7', '--verbose', '--failures-max=3']);
+    CheckEqual(GetTestFilter, 'alpha*', 'filter from injected argv');
+    CheckTrue(GetShortMode(DefaultConfig), 'short mode');
+    CheckTrue(GetFailFast(DefaultConfig), 'fail-fast');
+    CheckEqual(GetRunTimeoutSec(DefaultConfig), 30, 'timeout sec');
+    CheckEqual(GetShuffleSeed(DefaultConfig), 7, 'shuffle seed');
+    CheckTrue(GetVerboseMode(DefaultConfig), 'verbose');
+    CheckEqual(GetMaxFailures(DefaultConfig), 3, 'max failures');
+
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom(['--filter', 'beta', '--tag', 'slow', '--count', '2',
+      '--json', '--progress', '--list']);
+    CheckEqual(GetTestFilter, 'beta', 'space-separated filter value');
+    CheckEqual(GetTagFilter, 'slow', 'tag');
+    CheckEqual(GetRepeatAllCount(DefaultConfig), 2, 'count');
+    CheckTrue(GetJsonOutput(DefaultConfig), 'json');
+    CheckTrue(GetShowProgress(DefaultConfig), 'progress');
+    CheckTrue(GetListMode(DefaultConfig), 'list');
+
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom(['--bench=MyBench*', '--benchtime=2s', '--benchmem']);
+    CheckTrue(GetBenchEnabled(DefaultConfig), 'bench enabled');
+    CheckEqual(GetTestFilter, 'MyBench*', 'bench pattern → filter');
+    CheckEqual(GetBenchTimeMs(DefaultConfig), 2000, 'benchtime 2s → ms');
+    CheckTrue(GetBenchMem(DefaultConfig), 'benchmem');
+
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom(['--shuffle']);
+    CheckEqual(GetShuffleSeed(DefaultConfig), -1, 'bare --shuffle → -1');
+
+    ResetDefaultConfig;
+    ApplyCLIArgsFrom([]);
+    CheckEqual(GetTestFilter, '', 'empty argv no filter');
+    CheckFalse(GetShortMode(DefaultConfig), 'empty argv no short');
+
+    { Does not clobber pre-set filter }
+    ResetDefaultConfig;
+    SetTestFilter('keep-me');
+    ApplyCLIArgsFrom(['--filter=overwrite']);
+    CheckEqual(GetTestFilter, 'keep-me', 'pre-set filter preserved');
+
+    ResetDefaultConfig;
+    PassTest('B15 ApplyCLIArgsFrom');
+  end;
+
   WriteLn;
   SectionHeader('R6-58b: ParseTag helper');
   begin

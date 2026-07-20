@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.12c**
+**当前版本**: **v8.13**
 **最后更新**: 2026-07-19
 
 ---
@@ -47,12 +47,16 @@
 | B12 v8.12a 薄套件+边界收口 | **done** |
 | B13 v8.12b 报告+门禁≥2000 | **done** |
 | B14 v8.12c shrink+≥2500 | **done** |
+| B15 v8.13a ApplyCLIArgsFrom | **done** |
+| B16 v8.13b perf 软跨机策略 | **done** |
 
-### 暂缓
+### 暂缓 / 阻塞
 
-- IExpectation 类型拆分
-- SoftFail API（破坏性；文档钉死 Check=Fatal）
-- TSAN / 编译器覆盖率插桩
+- SoftFail API（Check=Fatal 默认；opt-in 需拍板）
+- IExpectation 类型拆分（v9 breaking）
+- TSAN（无 FPC 一体化路径）
+- 编译器 coverage 插桩（等 nextpas 编译器）
+- 跨 OS perf **硬**门禁入库（软策略已做：PERF_SKIP / host baseline）
 
 ---
 

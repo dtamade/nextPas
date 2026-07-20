@@ -33,6 +33,7 @@ must_have=(
   JSONReport
   TAPReport
   CheckSnapshot
+  ApplyCLIArgsFrom
   Prop
   Fuzz
 )
