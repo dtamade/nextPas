@@ -181,99 +181,77 @@ function BatchSmoothstepSimdF64(const AEdge0, AEdge1, AInput: array of Double;
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.simd,
   nextpas.core.math.trig,
   nextpas.core.math.scalar;
 
-{ Helper: compute min count from input/output arrays }
+{ Length policy (usability P0):
+  - Default: all non-empty arrays must share the same Length; else EArgumentError.
+  - Either side empty -> 0 (no raise).
+  - Define NEXTPAS_MATH_BATCH_TRUNCATE_MIN for legacy min-length truncate. }
+
+function ResolveEqualOrMin(const A, B: SizeInt): SizeInt; inline;
+begin
+  if (A = 0) or (B = 0) then
+    Exit(0);
+  if A = B then
+    Exit(A);
+{$IFDEF NEXTPAS_MATH_BATCH_TRUNCATE_MIN}
+  if A < B then
+    Result := A
+  else
+    Result := B;
+{$ELSE}
+  raise EArgumentError.Create(
+    'Batch: array lengths must match (got ' + IntToStr(Int64(A)) +
+    ' vs ' + IntToStr(Int64(B)) + ')');
+{$ENDIF}
+end;
+
+function ResolveEqualOrMin3(const A, B, C: SizeInt): SizeInt; inline;
+begin
+  Result := ResolveEqualOrMin(ResolveEqualOrMin(A, B), C);
+end;
+
+function ResolveEqualOrMin4(const A, B, C, D: SizeInt): SizeInt; inline;
+begin
+  Result := ResolveEqualOrMin(ResolveEqualOrMin3(A, B, C), D);
+end;
+
+{ Helper: batch open-array length for 1 in + 1 out }
 function MinArrayCount(const AInput: array of Single;
                       const AOutput: array of Single): SizeInt; inline; overload;
-var
-  LInCount, LOutCount: SizeInt;
 begin
-  LInCount := Length(AInput);
-  LOutCount := Length(AOutput);
-  if LInCount < LOutCount then
-    Result := LInCount
-  else
-    Result := LOutCount;
+  Result := ResolveEqualOrMin(Length(AInput), Length(AOutput));
 end;
 
 function MinArrayCount(const AInput: array of Double;
                       const AOutput: array of Double): SizeInt; inline; overload;
-var
-  LInCount, LOutCount: SizeInt;
 begin
-  LInCount := Length(AInput);
-  LOutCount := Length(AOutput);
-  if LInCount < LOutCount then
-    Result := LInCount
-  else
-    Result := LOutCount;
+  Result := ResolveEqualOrMin(Length(AInput), Length(AOutput));
 end;
 
-{ Helper: compute min count from two input arrays and one output array }
+{ Helper: two inputs + one output }
 function MinArrayCount3(const A1, A2, AOutput: array of Single): SizeInt; inline; overload;
-var
-  L1, L2, LOut: SizeInt;
 begin
-  L1 := Length(A1);
-  L2 := Length(A2);
-  LOut := Length(AOutput);
-  Result := L1;
-  if L2 < Result then
-    Result := L2;
-  if LOut < Result then
-    Result := LOut;
+  Result := ResolveEqualOrMin3(Length(A1), Length(A2), Length(AOutput));
 end;
 
 function MinArrayCount3(const A1, A2, AOutput: array of Double): SizeInt; inline; overload;
-var
-  L1, L2, LOut: SizeInt;
 begin
-  L1 := Length(A1);
-  L2 := Length(A2);
-  LOut := Length(AOutput);
-  Result := L1;
-  if L2 < Result then
-    Result := L2;
-  if LOut < Result then
-    Result := LOut;
+  Result := ResolveEqualOrMin3(Length(A1), Length(A2), Length(AOutput));
 end;
 
-{ Helper: compute min count from three input arrays and one output array }
+{ Helper: three inputs + one output }
 function MinArrayCount4(const A1, A2, A3, AOutput: array of Single): SizeInt; inline; overload;
-var
-  L1, L2, L3, LOut: SizeInt;
 begin
-  L1 := Length(A1);
-  L2 := Length(A2);
-  L3 := Length(A3);
-  LOut := Length(AOutput);
-  Result := L1;
-  if L2 < Result then
-    Result := L2;
-  if L3 < Result then
-    Result := L3;
-  if LOut < Result then
-    Result := LOut;
+  Result := ResolveEqualOrMin4(Length(A1), Length(A2), Length(A3), Length(AOutput));
 end;
 
 function MinArrayCount4(const A1, A2, A3, AOutput: array of Double): SizeInt; inline; overload;
-var
-  L1, L2, L3, LOut: SizeInt;
 begin
-  L1 := Length(A1);
-  L2 := Length(A2);
-  L3 := Length(A3);
-  LOut := Length(AOutput);
-  Result := L1;
-  if L2 < Result then
-    Result := L2;
-  if L3 < Result then
-    Result := L3;
-  if LOut < Result then
-    Result := LOut;
+  Result := ResolveEqualOrMin4(Length(A1), Length(A2), Length(A3), Length(AOutput));
 end;
 
 { ============================================================================

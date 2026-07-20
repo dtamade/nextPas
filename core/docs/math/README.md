@@ -12,7 +12,8 @@ uses
 ```
 
 Use submodules only for narrower imports, such as `nextpas.core.math.vec` or
-`nextpas.core.math.random`.
+`nextpas.core.math.random`. Prefer **math** for apps; **simd** `Array*` is kernel-level
+(no open-array bounds). Batch arrays require **equal lengths** (see `API.md`).
 
 Detailed behavior contracts live in `API.md`; this README stays compact.
 
@@ -47,10 +48,21 @@ Detailed behavior contracts live in `API.md`; this README stays compact.
   (`Array*` / `VecF32x*`) live in simd; no reverse simd→math dependency; after
   simd Batch leaf changes, re-run math focused consumer smoke.
 
+## FPC RTL Isolation
+
+Production `nextpas.core.math*` and `nextpas.core.simd*` units must not
+`uses` FPC RTL packages (`Math`, `SysUtils`, `Classes`, OS units, …). Numeric
+primitives are owned by math; OS detection is owned by platform. See
+`CONTRACT.md` §0 and:
+
+```sh
+make -C core/tests/nextpas.core.math/test_rtl_isolation test
+```
+
 ## Verification Entry Points
 
 ```sh
-# Preferred focused suite (17 projects, heaptrc on Pascal tests)
+# Preferred focused suite (includes rtl_isolation + heaptrc on Pascal tests)
 make -C core/tests/nextpas.core.math clean test
 
 # API/docs/source-contract gate

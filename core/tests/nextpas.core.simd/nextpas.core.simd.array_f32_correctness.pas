@@ -7,7 +7,8 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  nextpas.core.text.conv, Math,
+  nextpas.core.text.conv,
+  nextpas.core.math,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.scalar,
@@ -240,6 +241,69 @@ begin
   WriteLn('  ArrayDivF32: checked');
 end;
 
+procedure CheckBitsEqualF32(const aCtx: string; aExpected, aActual: Single);
+var
+  eBits, aBits: LongWord;
+begin
+  Inc(g_TotalChecks);
+  eBits := PLongWord(@aExpected)^;
+  aBits := PLongWord(@aActual)^;
+  if eBits <> aBits then
+    Fail(aCtx + ': expected bits=$' + IntToHex(eBits, 8) + ' got bits=$' + IntToHex(aBits, 8));
+end;
+
+{ B1 unit test: ArrayDiv specials must match scalar baseline bit-for-bit. }
+procedure TestArrayDivF32_SpecialParity;
+var
+  LSrc1, LSrc2, LDstScalar, LDstDispatch: array[0..15] of Single;
+  LCount: SizeUInt;
+  i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LBits: LongWord;
+  LPosInf, LNegInf, LQNaN, LNegZero: Single;
+  LSavedMask: TFPUExceptionMask;
+begin
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LBits := $7F800000; LPosInf := PSingle(@LBits)^;
+    LBits := $FF800000; LNegInf := PSingle(@LBits)^;
+    LBits := $7FC00001; LQNaN := PSingle(@LBits)^;
+    LBits := $80000000; LNegZero := PSingle(@LBits)^;
+
+    LDispatch := GetDispatchTable;
+    LCount := 8;
+    LSrc1[0] := 1.0;  LSrc2[0] := 0.0;   { + / 0  → +Inf }
+    LSrc1[1] := -2.0; LSrc2[1] := 0.0;   { - / 0  → -Inf }
+    LSrc1[2] := 0.0;  LSrc2[2] := 0.0;   { 0 / 0  → NaN }
+    LSrc1[3] := 3.0;  LSrc2[3] := 1.0;
+    LSrc1[4] := 1.0;  LSrc2[4] := LNegZero;
+    LSrc1[5] := LPosInf; LSrc2[5] := 2.0;
+    LSrc1[6] := LNegInf; LSrc2[6] := -4.0;
+    LSrc1[7] := LQNaN; LSrc2[7] := 5.0;
+    for i := 8 to 15 do
+    begin
+      LSrc1[i] := 0.0;
+      LSrc2[i] := 1.0;
+    end;
+
+    FillChar(LDstScalar, SizeOf(LDstScalar), 0);
+    FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
+    ScalarArrayDivF32(@LSrc1[0], @LSrc2[0], @LDstScalar[0], LCount);
+    LDispatch^.BatchF32.ArrayDiv(@LSrc1[0], @LSrc2[0], @LDstDispatch[0], LCount);
+    for i := 0 to Integer(LCount) - 1 do
+      CheckBitsEqualF32(Format('ArrayDivF32_Special[i=%d]', [i]), LDstScalar[i], LDstDispatch[i]);
+
+    { count=0 must be a no-op (dst untouched). }
+    LDstDispatch[0] := 42.0;
+    LDispatch^.BatchF32.ArrayDiv(@LSrc1[0], @LSrc2[0], @LDstDispatch[0], 0);
+    CheckBitsEqualF32('ArrayDivF32_Special[count=0]', 42.0, LDstDispatch[0]);
+    WriteLn('  ArrayDivF32_SpecialParity: checked');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
 procedure TestArrayAbsNegSqrtF32;
 var
   LSrc, LDstScalar, LDstDispatch: array[0..MAX_COUNT-1] of Single;
@@ -429,6 +493,7 @@ begin
   TestArrayAxpyF32;
   TestArraySubF32;
   TestArrayDivF32;
+  TestArrayDivF32_SpecialParity;
   TestArrayAbsNegSqrtF32;
   TestArrayClampF32;
   TestArrayFmaF32;

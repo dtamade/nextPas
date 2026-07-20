@@ -347,9 +347,6 @@ const
 
 implementation
 
-uses
-  Math;
-
 { TVec2f }
 
 operator + (constref A, B: TVec2f): TVec2f;
@@ -451,14 +448,14 @@ end;
 
 function TVec2f.Max(const AOther: TVec2f): TVec2f;
 begin
-  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
+  Result.FData[0] := nextpas.core.math.scalar.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Max(FData[1], AOther.FData[1]);
 end;
 
 function TVec2f.Min(const AOther: TVec2f): TVec2f;
 begin
-  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
+  Result.FData[0] := nextpas.core.math.scalar.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Min(FData[1], AOther.FData[1]);
 end;
 
 function TVec2f.Abs: TVec2f;
@@ -584,14 +581,14 @@ end;
 
 function TVec2d.Max(const AOther: TVec2d): TVec2d;
 begin
-  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
+  Result.FData[0] := nextpas.core.math.scalar.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Max(FData[1], AOther.FData[1]);
 end;
 
 function TVec2d.Min(const AOther: TVec2d): TVec2d;
 begin
-  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
+  Result.FData[0] := nextpas.core.math.scalar.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Min(FData[1], AOther.FData[1]);
 end;
 
 function TVec2d.Abs: TVec2d;
@@ -730,16 +727,16 @@ end;
 
 function TVec3f.Max(const AOther: TVec3f): TVec3f;
 begin
-  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
-  Result.FData[2] := Math.Max(FData[2], AOther.FData[2]);
+  Result.FData[0] := nextpas.core.math.scalar.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Max(FData[1], AOther.FData[1]);
+  Result.FData[2] := nextpas.core.math.scalar.Max(FData[2], AOther.FData[2]);
 end;
 
 function TVec3f.Min(const AOther: TVec3f): TVec3f;
 begin
-  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
-  Result.FData[2] := Math.Min(FData[2], AOther.FData[2]);
+  Result.FData[0] := nextpas.core.math.scalar.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Min(FData[1], AOther.FData[1]);
+  Result.FData[2] := nextpas.core.math.scalar.Min(FData[2], AOther.FData[2]);
 end;
 
 function TVec3f.Abs: TVec3f;
@@ -888,16 +885,16 @@ end;
 
 function TVec3d.Max(const AOther: TVec3d): TVec3d;
 begin
-  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
-  Result.FData[2] := Math.Max(FData[2], AOther.FData[2]);
+  Result.FData[0] := nextpas.core.math.scalar.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Max(FData[1], AOther.FData[1]);
+  Result.FData[2] := nextpas.core.math.scalar.Max(FData[2], AOther.FData[2]);
 end;
 
 function TVec3d.Min(const AOther: TVec3d): TVec3d;
 begin
-  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
-  Result.FData[2] := Math.Min(FData[2], AOther.FData[2]);
+  Result.FData[0] := nextpas.core.math.scalar.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Min(FData[1], AOther.FData[1]);
+  Result.FData[2] := nextpas.core.math.scalar.Min(FData[2], AOther.FData[2]);
 end;
 
 function TVec3d.Abs: TVec3d;
@@ -1052,18 +1049,18 @@ end;
 
 function TVec4f.Max(const AOther: TVec4f): TVec4f;
 begin
-  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
-  Result.FData[2] := Math.Max(FData[2], AOther.FData[2]);
-  Result.FData[3] := Math.Max(FData[3], AOther.FData[3]);
+  Result.FData[0] := nextpas.core.math.scalar.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Max(FData[1], AOther.FData[1]);
+  Result.FData[2] := nextpas.core.math.scalar.Max(FData[2], AOther.FData[2]);
+  Result.FData[3] := nextpas.core.math.scalar.Max(FData[3], AOther.FData[3]);
 end;
 
 function TVec4f.Min(const AOther: TVec4f): TVec4f;
 begin
-  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
-  Result.FData[2] := Math.Min(FData[2], AOther.FData[2]);
-  Result.FData[3] := Math.Min(FData[3], AOther.FData[3]);
+  Result.FData[0] := nextpas.core.math.scalar.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Min(FData[1], AOther.FData[1]);
+  Result.FData[2] := nextpas.core.math.scalar.Min(FData[2], AOther.FData[2]);
+  Result.FData[3] := nextpas.core.math.scalar.Min(FData[3], AOther.FData[3]);
 end;
 
 function TVec4f.Abs: TVec4f;
@@ -1221,18 +1218,18 @@ end;
 
 function TVec4d.Max(const AOther: TVec4d): TVec4d;
 begin
-  Result.FData[0] := Math.Max(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Max(FData[1], AOther.FData[1]);
-  Result.FData[2] := Math.Max(FData[2], AOther.FData[2]);
-  Result.FData[3] := Math.Max(FData[3], AOther.FData[3]);
+  Result.FData[0] := nextpas.core.math.scalar.Max(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Max(FData[1], AOther.FData[1]);
+  Result.FData[2] := nextpas.core.math.scalar.Max(FData[2], AOther.FData[2]);
+  Result.FData[3] := nextpas.core.math.scalar.Max(FData[3], AOther.FData[3]);
 end;
 
 function TVec4d.Min(const AOther: TVec4d): TVec4d;
 begin
-  Result.FData[0] := Math.Min(FData[0], AOther.FData[0]);
-  Result.FData[1] := Math.Min(FData[1], AOther.FData[1]);
-  Result.FData[2] := Math.Min(FData[2], AOther.FData[2]);
-  Result.FData[3] := Math.Min(FData[3], AOther.FData[3]);
+  Result.FData[0] := nextpas.core.math.scalar.Min(FData[0], AOther.FData[0]);
+  Result.FData[1] := nextpas.core.math.scalar.Min(FData[1], AOther.FData[1]);
+  Result.FData[2] := nextpas.core.math.scalar.Min(FData[2], AOther.FData[2]);
+  Result.FData[3] := nextpas.core.math.scalar.Min(FData[3], AOther.FData[3]);
 end;
 
 function TVec4d.Abs: TVec4d;

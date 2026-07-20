@@ -13,18 +13,16 @@ implementation
 uses
   nextpas.core.base
   {$IFDEF LINUX}
-  , Unix
+  , nextpas.core.platform.linux.base
+  , nextpas.core.platform.posix.ffi
+  {$ELSE}
+    {$IFDEF UNIX}
+    , nextpas.core.platform.posix.ffi
+    {$ENDIF}
   {$ENDIF}
   ;
 
 {$I nextpas.core.simd.cpuinfo.helpers.inc}
-
-{$IFNDEF FPC_HAS_SYSCONF}
-const
-  _SC_NPROCESSORS_ONLN = 84; // Linux x86_64 value
-
-function fpSysConf(name: cint): clong; cdecl; external 'c' name 'sysconf';
-{$ENDIF}
 
 {$IFDEF LINUX}
 // Linux core count detection
@@ -38,6 +36,7 @@ var
   CurPhysId, CurCoreId: Integer;
   i: Integer;
   Found: Boolean;
+  Online: PtrInt;
 {$endif}
 begin
   {$if defined(CPUX86_64) or defined(CPUI386)}
@@ -60,13 +59,13 @@ begin
         begin
           i := Pos(':', Line);
           if i > 0 then
-            CurPhysId := StrToIntDef(Trim(Copy(Line, i+1, Length(Line))), -1);
+            CurPhysId := Integer(CpuInfoStrToIntDef(Copy(Line, i + 1, Length(Line)), -1));
         end;
         if Pos('core id', Line) = 1 then
         begin
           i := Pos(':', Line);
           if i > 0 then
-            CurCoreId := StrToIntDef(Trim(Copy(Line, i+1, Length(Line))), -1);
+            CurCoreId := Integer(CpuInfoStrToIntDef(Copy(Line, i + 1, Length(Line)), -1));
           if (CurPhysId >= 0) and (CurCoreId >= 0) then
           begin
             Found := False;
@@ -93,18 +92,22 @@ begin
       CloseFile(F);
     end;
     if Logical = 0 then
-      Logical := fpSysConf(_SC_NPROCESSORS_ONLN);
+    begin
+      Online := sysconf(_SC_NPROCESSORS_ONLN);
+      Logical := LongInt(Online);
+    end;
     if Physical = 0 then
       Physical := Logical;
     Result := (Physical > 0) and (Logical > 0);
   except
-    Logical := fpSysConf(_SC_NPROCESSORS_ONLN);
+    Online := sysconf(_SC_NPROCESSORS_ONLN);
+    Logical := LongInt(Online);
     Physical := Logical;
     Result := Logical > 0;
   end;
   {$else}
   // Non-x86: prefer sysconf and treat physical = logical
-  Logical := fpSysConf(_SC_NPROCESSORS_ONLN);
+  Logical := LongInt(sysconf(_SC_NPROCESSORS_ONLN));
   if Logical < 1 then Logical := 1;
   Physical := Logical;
   Result := True;
@@ -113,21 +116,31 @@ end;
 {$ENDIF}
 
 function DetectCoreCounts(out Physical, Logical: LongInt): Boolean;
+var
+  Online: PtrInt;
 begin
   {$IFDEF LINUX}
   Result := DetectLinuxCores(Physical, Logical);
   if not Result then
   begin
-    Logical := fpSysConf(_SC_NPROCESSORS_ONLN);
+    Online := sysconf(_SC_NPROCESSORS_ONLN);
+    Logical := LongInt(Online);
     if Logical < 1 then Logical := 1;
     Physical := Logical;
     Result := True;
   end;
   {$ELSE}
-  Logical := fpSysConf(_SC_NPROCESSORS_ONLN);
-  if Logical < 1 then Logical := 1;
-  Physical := Logical;
-  Result := True;
+    {$IFDEF UNIX}
+    Online := sysconf(84); // portable fallback: Linux x86_64 _SC_NPROCESSORS_ONLN
+    Logical := LongInt(Online);
+    if Logical < 1 then Logical := 1;
+    Physical := Logical;
+    Result := True;
+    {$ELSE}
+    Physical := 0;
+    Logical := 0;
+    Result := False;
+    {$ENDIF}
   {$ENDIF}
 end;
 

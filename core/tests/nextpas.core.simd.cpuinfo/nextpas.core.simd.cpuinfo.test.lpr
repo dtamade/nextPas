@@ -7,7 +7,6 @@ uses
   {$IFDEF UNIX}
   nextpas.core.thread.init,
   {$ENDIF}
-  Classes, SysUtils,
   nextpas.core.test,
   nextpas.core.simd.cpuinfo.testcase,
   nextpas.core.simd.cpuinfo.lazy.testcase

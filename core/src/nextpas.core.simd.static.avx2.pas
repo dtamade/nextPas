@@ -40,7 +40,7 @@ uses
 procedure RequireStaticAVX2Target;
 begin
   if not nextpas.core.simd.cpuinfo.HasAVX2 then
-    raise Exception.Create('nextpas.core.simd.static.avx2: CPU does not support AVX2');
+    raise ENotSupportedError.Create('nextpas.core.simd.static.avx2: CPU does not support AVX2');
 end;
 
 // === F32x4 ===

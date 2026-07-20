@@ -11,16 +11,17 @@ function DetectCoreCounts(out Physical, Logical: LongInt): Boolean;
 implementation
 
 uses
-  BaseUnix,
-  nextpas.core.base;
+  nextpas.core.base
+  {$IFDEF DARWIN}
+  , nextpas.core.platform.darwin.ffi
+  {$ENDIF}
+  ;
 
-function sysctlbyname(Name: PAnsiChar; oldp: Pointer; oldlenp: psize_t; newp: Pointer;
-  newlen: size_t): cint; cdecl; external name 'sysctlbyname';
-
+{$IFDEF DARWIN}
 function ReadCpuCountByName(const aName: PAnsiChar; out aValue: LongInt): Boolean;
 var
-  LRawValue: cint;
-  LSize: size_t;
+  LRawValue: Int32;
+  LSize: PtrUInt;
 begin
   LRawValue := 0;
   LSize := SizeOf(LRawValue);
@@ -28,12 +29,14 @@ begin
   if Result then
     aValue := LRawValue;
 end;
+{$ENDIF}
 
 function DetectCoreCounts(out Physical, Logical: LongInt): Boolean;
 begin
   Physical := 0;
   Logical := 0;
 
+  {$IFDEF DARWIN}
   if (not ReadCpuCountByName('hw.physicalcpu', Physical)) or (Physical < 1) then
     if (not ReadCpuCountByName('hw.physicalcpu_max', Physical)) or (Physical < 1) then
       ReadCpuCountByName('machdep.cpu.core_count', Physical);
@@ -53,6 +56,9 @@ begin
     Logical := 1;
 
   Result := (Physical > 0) and (Logical > 0);
+  {$ELSE}
+  Result := False;
+  {$ENDIF}
 end;
 
 end.

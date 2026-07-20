@@ -2,9 +2,13 @@ program test_simdgen_parity;
 {$I ../../src/nextpas.core.settings.inc}
 
 uses
-  nextpas.core.thread.init, nextpas.core.text.conv, Math,
-  nextpas.core.simd.base, nextpas.core.simd.dispatch,
-  nextpas.core.simd.scalar, nextpas.core.simd.generated.scalar;
+  nextpas.core.thread.init,
+  nextpas.core.text.conv,
+  nextpas.core.math,
+  nextpas.core.simd.base,
+  nextpas.core.simd.dispatch,
+  nextpas.core.simd.scalar,
+  nextpas.core.simd.generated.scalar;
 
 var
   GPassCount: Integer = 0;

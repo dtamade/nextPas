@@ -2,15 +2,13 @@ program test_parallel;
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 uses
-  nextpas.core.thread.init, nextpas.core.text.conv, Unix, BaseUnix,
-  nextpas.core.simd, nextpas.core.simd.alloc,
+  nextpas.core.time.base,
+  nextpas.core.thread.init, nextpas.core.text.conv, nextpas.core.simd, nextpas.core.simd.alloc,
   nextpas.core.simd.linalg.gemm, nextpas.core.simd.linalg.gemm.parallel;
 
 function GetTimeUs: Int64;
-var LTs: TTimeVal;
 begin
-  fpgettimeofday(@LTs, nil);
-  Result := Int64(LTs.tv_sec) * 1000000 + LTs.tv_usec;
+  Result := TInstant.Now.DurationSince(Default(TInstant)).AsMicroseconds;
 end;
 
 var

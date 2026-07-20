@@ -9,10 +9,15 @@ unit nextpas.core.simd.ieee754.testcase;
 interface
 
 uses
-  Math, Classes, nextpas.core.text.conv, nextpas.core.math, nextpas.core.test,
-  nextpas.core.simd, nextpas.core.simd.testcase,
-  nextpas.core.simd.base, nextpas.core.simd.dispatch,
-  nextpas.core.simd.scalar, nextpas.core.simd.ops;
+  nextpas.core.math,
+  nextpas.core.text.conv,
+  nextpas.core.test,
+  nextpas.core.simd,
+  nextpas.core.simd.testcase,
+  nextpas.core.simd.base,
+  nextpas.core.simd.dispatch,
+  nextpas.core.simd.scalar,
+  nextpas.core.simd.ops;
 
 type
   TIEEE754MaskedVectorAsmStatefulTestCase = class(TSimdVectorAsmStatefulTestCase)

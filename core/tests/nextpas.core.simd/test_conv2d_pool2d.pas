@@ -3,7 +3,9 @@ program test_conv2d_pool2d;
 {$mode objfpc}{$H+}
 
 uses
-  nextpas.core.text.conv, Math, nextpas.core.simd.nn;
+  nextpas.core.text.conv,
+  nextpas.core.math,
+  nextpas.core.simd.nn;
 
 var
   LPass, LFail: Integer;

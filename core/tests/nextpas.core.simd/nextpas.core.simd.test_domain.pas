@@ -4,7 +4,8 @@ program nextpas.core.simd.test_domain;
 
 uses
   nextpas.core.thread.init,
-  nextpas.core.text.conv, Math,
+  nextpas.core.text.conv,
+  nextpas.core.math,
   nextpas.core.simd,
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,

@@ -44,14 +44,28 @@ unit nextpas.core.simd.dispatchapi.testcase;
 interface
 
 uses
-  Classes, Math, nextpas.core.math, nextpas.core.path, nextpas.core.text.conv, nextpas.core.platform.files, nextpas.core.platform.files.base,
-  nextpas.core.platform.path, nextpas.core.system.sysutils, nextpas.core.test, nextpas.core.simd,
-  nextpas.core.simd.testcase, nextpas.core.simd.base,
-  nextpas.core.simd.bench, nextpas.core.simd.cpuinfo,
-  nextpas.core.simd.cpuinfo.base, nextpas.core.simd.utils,
-  nextpas.core.simd.ops, nextpas.core.simd.dispatch,
-  nextpas.core.simd.dataplane, nextpas.core.simd.backend.priority,
-  nextpas.core.simd.public_smoke_support, nextpas.core.simd.scalar;
+  Classes,
+  nextpas.core.math,
+  nextpas.core.path,
+  nextpas.core.text.conv,
+  nextpas.core.platform.files,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.path,
+  nextpas.core.system.sysutils,
+  nextpas.core.test,
+  nextpas.core.simd,
+  nextpas.core.simd.testcase,
+  nextpas.core.simd.base,
+  nextpas.core.simd.bench,
+  nextpas.core.simd.cpuinfo,
+  nextpas.core.simd.cpuinfo.base,
+  nextpas.core.simd.utils,
+  nextpas.core.simd.ops,
+  nextpas.core.simd.dispatch,
+  nextpas.core.simd.dataplane,
+  nextpas.core.simd.backend.priority,
+  nextpas.core.simd.public_smoke_support,
+  nextpas.core.simd.scalar;
 
 type
 
@@ -151,6 +165,27 @@ type
     procedure Test_SSE2_F32VectorMath_Use_NonScalar_Impl_And_Keep_Parity;
     procedure Test_NEON_PlatformFacadeSlots_Reuse_BaseScalar_When_AlwaysScalarByDesign;
     procedure Test_NEON_FacadeFastSlots_OnlyBind_When_NEONAsm_Is_Compiled;
+    procedure Test_BatchF32_ArrayDiv_SpecialParity_Matches_Scalar;
+    procedure Test_BatchF32_ArrayMulAddScalar_Parity;
+    procedure Test_BatchF32_ArrayLerpClamp_Parity;
+    procedure Test_BatchF32_ArrayFmaAxpy_Parity;
+    procedure Test_BatchF32_ArraySqrtReduceSum_Parity;
+    procedure Test_BatchF32_ReduceMinMax_Parity;
+    procedure Test_BatchF32_ArrayRcpReduceDot_Parity;
+    procedure Test_BatchF32_ArrayRsqrtRcpRefine_Parity;
+    procedure Test_BatchF32_ArrayRsqrtRefine_Parity;
+    procedure Test_BatchF32_ArrayLinear_Parity;
+    procedure Test_BatchF32_ArrayCeilFloorTrunc_Parity;
+    procedure Test_BatchF32_ArrayReLUAbsDiff_Parity;
+    procedure Test_BatchF64_ArrayCore8_Parity;
+    procedure Test_BatchF64_SqrtBroadcastReduce_Parity;
+    procedure Test_BatchF64_LinearClampLerpFmaAxpy_Parity;
+    procedure Test_BatchF64_CeilFloorTruncReLUAbsDiff_Parity;
+    procedure Test_BatchF64_RcpRsqrtRefine_Parity;
+    procedure Test_BatchF32_ArraySinExp_NearParity;
+    procedure Test_BatchF32_ArrayCosSinCos_NearParity;
+    procedure Test_BatchF32_ArrayLogFamily_NearParity;
+    procedure Test_BatchF64_ArraySinExp_NearParity;
     procedure Test_NEON_WideFloatMemoryUtilitySlots_Bind_AsmHelpers_When_Available;
     procedure Test_NEON_DotFallbackSlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
     procedure Test_NEON_WideFallbackOnlySlots_Reuse_BaseScalar_When_Wrappers_Are_Only_ScalarForwarders;
@@ -6879,16 +6914,17 @@ begin
     LSourceLines.Free;
   end;
 
-  // Phase 22b closed Memory (15/15). Phase 23a/23b own BatchF32 Add/Sub/Mul/
-  // Min/Max/Abs/Neg under ASM (asserted in FacadeFastSlots). Remaining Batch* stay scalar.
+  // Phase 22b closed Memory (15/15). Phase 23 + B1/B2 own BatchF32 Add/Sub/Mul/
+  // Min/Max/Abs/Neg/Div/MulScalar/AddScalar under ASM (FacadeFastSlots). Remaining Batch* stay scalar.
   CheckTrue(Trim(LFacadeSource) <> '', 'Retired platform facade include should remain as an audited empty boundary');
-  CheckTrue(Pos('table.batchf64.', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF64 until a real NEON leaf exists');
+  // Wave C4 + C5–C5d: F32/F64 transc sample — forbid broader expansion.
+  CheckTrue(Pos('table.batchf64.arrayround :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF64.ArrayRound until owned');
+  CheckTrue(Pos('table.batchf64.arraylog :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF64.ArrayLog until owned');
+  CheckTrue(Pos('table.batchf64.arraycos :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF64.ArrayCos until owned');
+  CheckTrue(Pos('table.batchf32.arraytan :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayTan until owned');
   CheckTrue(Pos('table.batchinteger.', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchInteger until a real NEON leaf exists');
-  // Forbid premature wider BatchF32 ownership beyond S23a/S23b.
-  CheckTrue(Pos('table.batchf32.arraydiv :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayDiv until a later Phase 23 slice owns it');
-  CheckTrue(Pos('table.batchf32.arraysqrt :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArraySqrt until a later slice owns it');
-  CheckTrue(Pos('table.batchf32.arrayfma :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayFma until a later slice owns it');
-  CheckTrue(Pos('table.batchf32.reducesum :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ReduceSum until a later slice owns it');
+  // Wave C boundary: Round still unowned (C2 owns Ceil/Floor/Trunc only).
+  CheckTrue(Pos('table.batchf32.arrayround :=', LRegisterSource) = 0, 'RegisterNEONBackend should not override BatchF32.ArrayRound until C2b owns it');
 
   // Defensive: no Memory dead wrappers reintroduced into the retired include.
   AssertRegisterKeepsBaseScalar('retired MemReverse platform path', 'table.Memory.Reverse := @MemReverse_Scalar;');
@@ -6905,12 +6941,12 @@ begin
     Exit;
   {$ENDIF}
 
-  // Remaining Batch slots still inherit FillBase scalar (not S23a/S23b leaves).
-  AssertSlotReusesScalar('BatchF32.ArrayDiv', Pointer(LScalarTable.BatchF32.ArrayDiv), Pointer(LNEONTable.BatchF32.ArrayDiv));
-  AssertSlotReusesScalar('BatchF32.ArraySqrt', Pointer(LScalarTable.BatchF32.ArraySqrt), Pointer(LNEONTable.BatchF32.ArraySqrt));
-  AssertSlotReusesScalar('BatchF32.ArrayFma', Pointer(LScalarTable.BatchF32.ArrayFma), Pointer(LNEONTable.BatchF32.ArrayFma));
-  AssertSlotReusesScalar('BatchF32.ReduceSum', Pointer(LScalarTable.BatchF32.ReduceSum), Pointer(LNEONTable.BatchF32.ReduceSum));
-  AssertSlotReusesScalar('BatchF64.ArrayAdd', Pointer(LScalarTable.BatchF64.ArrayAdd), Pointer(LNEONTable.BatchF64.ArrayAdd));
+  // Remaining Batch slots still inherit FillBase scalar (outside owned leaves).
+  AssertSlotReusesScalar('BatchF32.ArrayTan', Pointer(LScalarTable.BatchF32.ArrayTan), Pointer(LNEONTable.BatchF32.ArrayTan));
+  AssertSlotReusesScalar('BatchF32.ArrayRound', Pointer(LScalarTable.BatchF32.ArrayRound), Pointer(LNEONTable.BatchF32.ArrayRound));
+  AssertSlotReusesScalar('BatchF64.ArrayLog', Pointer(LScalarTable.BatchF64.ArrayLog), Pointer(LNEONTable.BatchF64.ArrayLog));
+  AssertSlotReusesScalar('BatchF64.ArrayCos', Pointer(LScalarTable.BatchF64.ArrayCos), Pointer(LNEONTable.BatchF64.ArrayCos));
+  AssertSlotReusesScalar('BatchF64.ArrayRound', Pointer(LScalarTable.BatchF64.ArrayRound), Pointer(LNEONTable.BatchF64.ArrayRound));
   AssertSlotReusesScalar('BatchInteger.ArrayAddI32', Pointer(LScalarTable.BatchInteger.ArrayAddI32), Pointer(LNEONTable.BatchInteger.ArrayAddI32));
 end;
 
@@ -6971,10 +7007,76 @@ begin
   AssertSourceContains('NEONArrayAddF32 asm', 'procedure NEONArrayAddF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('NEONArraySubF32 asm', 'procedure NEONArraySubF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('NEONArrayMulF32 asm', 'procedure NEONArrayMulF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayDivF32 asm', 'procedure NEONArrayDivF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('NEONArrayMinF32 asm', 'procedure NEONArrayMinF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('NEONArrayMaxF32 asm', 'procedure NEONArrayMaxF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('NEONArrayAbsF32 asm', 'procedure NEONArrayAbsF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('NEONArrayNegF32 asm', 'procedure NEONArrayNegF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayMulScalarF32 asm', 'procedure NEONArrayMulScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAddScalarF32 asm', 'procedure NEONArrayAddScalarF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScalar: Single); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayClampF32 asm', 'procedure NEONArrayClampF32(aSrc, aDst: PSingle; aCount: SizeUInt; aMin, aMax: Single); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayLerpF32 asm', 'procedure NEONArrayLerpF32(aStart, aEnd, aDst: PSingle; aCount: SizeUInt; aT: Single); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayFmaF32 asm', 'procedure NEONArrayFmaF32(aA, aB, aC, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAxpyF32 asm', 'procedure NEONArrayAxpyF32(aAlpha: Single; aX, aY, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArraySqrtF32 asm', 'procedure NEONArraySqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONReduceSumF32 asm', 'function NEONReduceSumF32(aSrc: PSingle; aCount: SizeUInt): Single; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONReduceMinF32 asm', 'function NEONReduceMinF32(aSrc: PSingle; aCount: SizeUInt): Single; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONReduceMaxF32 asm', 'function NEONReduceMaxF32(aSrc: PSingle; aCount: SizeUInt): Single; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayRcpF32 asm', 'procedure NEONArrayRcpF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONReduceDotF32 asm', 'function NEONReduceDotF32(aSrc1, aSrc2: PSingle; aCount: SizeUInt): Single; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayRsqrtF32 asm', 'procedure NEONArrayRsqrtF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayRcpRefineF32 asm', 'procedure NEONArrayRcpRefineF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayRsqrtRefineF32 asm', 'procedure NEONArrayRsqrtRefineF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayLinearF32 asm', 'procedure NEONArrayLinearF32(aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayCeilF32 asm', 'procedure NEONArrayCeilF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayFloorF32 asm', 'procedure NEONArrayFloorF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayTruncF32 asm', 'procedure NEONArrayTruncF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayReLUF32 asm', 'procedure NEONArrayReLUF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAbsDiffF32 asm', 'procedure NEONArrayAbsDiffF32(aSrc1, aSrc2, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAddF64 asm', 'procedure NEONArrayAddF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArraySubF64 asm', 'procedure NEONArraySubF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayMulF64 asm', 'procedure NEONArrayMulF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayDivF64 asm', 'procedure NEONArrayDivF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayMinF64 asm', 'procedure NEONArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayMaxF64 asm', 'procedure NEONArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAbsF64 asm', 'procedure NEONArrayAbsF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayNegF64 asm', 'procedure NEONArrayNegF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArraySqrtF64 asm', 'procedure NEONArraySqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayMulScalarF64 asm', 'procedure NEONArrayMulScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAddScalarF64 asm', 'procedure NEONArrayAddScalarF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONReduceSumF64 asm', 'function NEONReduceSumF64(aSrc: PDouble; aCount: SizeUInt): Double; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONReduceDotF64 asm', 'function NEONReduceDotF64(aSrc1, aSrc2: PDouble; aCount: SizeUInt): Double; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONReduceMinF64 asm', 'function NEONReduceMinF64(aSrc: PDouble; aCount: SizeUInt): Double; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONReduceMaxF64 asm', 'function NEONReduceMaxF64(aSrc: PDouble; aCount: SizeUInt): Double; assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayLinearF64 asm', 'procedure NEONArrayLinearF64(aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayClampF64 asm', 'procedure NEONArrayClampF64(aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayLerpF64 asm', 'procedure NEONArrayLerpF64(aStart, aEnd, aDst: PDouble; aCount: SizeUInt; aT: Double); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayFmaF64 asm', 'procedure NEONArrayFmaF64(aA, aB, aC, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAxpyF64 asm', 'procedure NEONArrayAxpyF64(aAlpha: Double; aX, aY, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayCeilF64 asm', 'procedure NEONArrayCeilF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayFloorF64 asm', 'procedure NEONArrayFloorF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayTruncF64 asm', 'procedure NEONArrayTruncF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayReLUF64 asm', 'procedure NEONArrayReLUF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayAbsDiffF64 asm', 'procedure NEONArrayAbsDiffF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayRcpF64 asm', 'procedure NEONArrayRcpF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayRsqrtF64 asm', 'procedure NEONArrayRsqrtF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayRcpRefineF64 asm', 'procedure NEONArrayRcpRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayRsqrtRefineF64 asm', 'procedure NEONArrayRsqrtRefineF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArraySinF32 C5e asm', 'procedure NEONArraySinF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayExpF32 C5e asm', 'procedure NEONArrayExpF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArraySinF32 C5e 4-wide', 'fmul  v3.4s, v2.4s, v16.4s', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayExpF32 C5e 4-wide', 'fmul  v1.4s, v0.4s, v16.4s', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayCosF32 C5e-ext asm', 'procedure NEONArrayCosF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArraySinCosF32 C5b', 'procedure NEONArraySinCosF32(aSrc, aSinDst, aCosDst: PSingle; aCount: SizeUInt);', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayLogF32 C5e-ext asm', 'procedure NEONArrayLogF32(aSrc, aDst: PSingle; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayLog2F32 C5c', 'procedure NEONArrayLog2F32(aSrc, aDst: PSingle; aCount: SizeUInt);', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayLog10F32 C5c', 'procedure NEONArrayLog10F32(aSrc, aDst: PSingle; aCount: SizeUInt);', LAsmFacadeSource);
+  AssertSourceContains('NEONArraySinF64 C5e-ext asm', 'procedure NEONArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayExpF64 C5e-ext asm', 'procedure NEONArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt); assembler; nostackframe;', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayCosF32 4-wide', 'fmul  v3.4s, v2.4s, v16.4s', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayLogF32 4-wide', 'fdiv  v4.4s, v4.4s, v5.4s', LAsmFacadeSource);
+  AssertSourceContains('NEONArraySinF64 2-wide', 'fmul  v3.2d, v2.2d, v16.2d', LAsmFacadeSource);
+  AssertSourceContains('NEONArrayExpF64 2-wide', 'fmul  v1.2d, v0.2d, v16.2d', LAsmFacadeSource);
   AssertSourceContains('SumBytes_NEON asm', 'function SumBytes_NEON(p: Pointer; len: SizeUInt): UInt64; assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('MinMaxBytes_NEON asm', 'procedure MinMaxBytes_NEON(p: Pointer; len: SizeUInt; out minVal, maxVal: Byte); assembler; nostackframe;', LAsmFacadeSource);
   AssertSourceContains('CountByte_NEON asm', 'function CountByte_NEON(p: Pointer; len: SizeUInt; value: Byte): SizeUInt; assembler; nostackframe;', LAsmFacadeSource);
@@ -6994,10 +7096,70 @@ begin
   AssertSourceContains('NEONArrayAddF32 scalar fallback', 'ScalarArrayAddF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('NEONArraySubF32 scalar fallback', 'ScalarArraySubF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('NEONArrayMulF32 scalar fallback', 'ScalarArrayMulF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayDivF32 scalar fallback', 'ScalarArrayDivF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('NEONArrayMinF32 scalar fallback', 'ScalarArrayMinF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('NEONArrayMaxF32 scalar fallback', 'ScalarArrayMaxF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('NEONArrayAbsF32 scalar fallback', 'ScalarArrayAbsF32(aSrc, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('NEONArrayNegF32 scalar fallback', 'ScalarArrayNegF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayMulScalarF32 scalar fallback', 'ScalarArrayMulScalarF32(aSrc, aDst, aCount, aScalar);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAddScalarF32 scalar fallback', 'ScalarArrayAddScalarF32(aSrc, aDst, aCount, aScalar);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayClampF32 scalar fallback', 'ScalarArrayClampF32(aSrc, aDst, aCount, aMin, aMax);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayLerpF32 scalar fallback', 'ScalarArrayLerpF32(aStart, aEnd, aDst, aCount, aT);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayFmaF32 scalar fallback', 'ScalarArrayFmaF32(aA, aB, aC, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAxpyF32 scalar fallback', 'ScalarArrayAxpyF32(aAlpha, aX, aY, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArraySqrtF32 scalar fallback', 'ScalarArraySqrtF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONReduceSumF32 scalar fallback', 'Result := ScalarReduceSumF32(aSrc, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONReduceMinF32 scalar fallback', 'Result := ScalarReduceMinF32(aSrc, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONReduceMaxF32 scalar fallback', 'Result := ScalarReduceMaxF32(aSrc, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayRcpF32 scalar fallback', 'ScalarArrayRcpF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONReduceDotF32 scalar fallback', 'Result := ScalarReduceDotF32(aSrc1, aSrc2, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayRsqrtF32 scalar fallback', 'ScalarArrayRsqrtF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayRcpRefineF32 scalar fallback', 'ScalarArrayRcpRefineF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayRsqrtRefineF32 scalar fallback', 'ScalarArrayRsqrtRefineF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayLinearF32 scalar fallback', 'ScalarArrayLinearF32(aSrc, aDst, aCount, aScale, aBias);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayCeilF32 scalar fallback', 'ScalarArrayCeilF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayFloorF32 scalar fallback', 'ScalarArrayFloorF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayTruncF32 scalar fallback', 'ScalarArrayTruncF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayReLUF32 scalar fallback', 'ScalarArrayReLUF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAbsDiffF32 scalar fallback', 'ScalarArrayAbsDiffF32(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAddF64 scalar fallback', 'ScalarArrayAddF64(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArraySubF64 scalar fallback', 'ScalarArraySubF64(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayMulF64 scalar fallback', 'ScalarArrayMulF64(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayDivF64 scalar fallback', 'ScalarArrayDivF64(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayMinF64 scalar fallback', 'ScalarArrayMinF64(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayMaxF64 scalar fallback', 'ScalarArrayMaxF64(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAbsF64 scalar fallback', 'ScalarArrayAbsF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayNegF64 scalar fallback', 'ScalarArrayNegF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArraySqrtF64 scalar fallback', 'ScalarArraySqrtF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayMulScalarF64 scalar fallback', 'ScalarArrayMulScalarF64(aSrc, aDst, aCount, aScalar);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAddScalarF64 scalar fallback', 'ScalarArrayAddScalarF64(aSrc, aDst, aCount, aScalar);', LScalarFacadeSource);
+  AssertSourceContains('NEONReduceSumF64 scalar fallback', 'Result := ScalarReduceSumF64(aSrc, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONReduceDotF64 scalar fallback', 'Result := ScalarReduceDotF64(aSrc1, aSrc2, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONReduceMinF64 scalar fallback', 'Result := ScalarReduceMinF64(aSrc, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONReduceMaxF64 scalar fallback', 'Result := ScalarReduceMaxF64(aSrc, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayLinearF64 scalar fallback', 'ScalarArrayLinearF64(aSrc, aDst, aCount, aScale, aBias);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayClampF64 scalar fallback', 'ScalarArrayClampF64(aSrc, aDst, aCount, aMin, aMax);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayLerpF64 scalar fallback', 'ScalarArrayLerpF64(aStart, aEnd, aDst, aCount, aT);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayFmaF64 scalar fallback', 'ScalarArrayFmaF64(aA, aB, aC, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAxpyF64 scalar fallback', 'ScalarArrayAxpyF64(aAlpha, aX, aY, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayCeilF64 scalar fallback', 'ScalarArrayCeilF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayFloorF64 scalar fallback', 'ScalarArrayFloorF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayTruncF64 scalar fallback', 'ScalarArrayTruncF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayReLUF64 scalar fallback', 'ScalarArrayReLUF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayAbsDiffF64 scalar fallback', 'ScalarArrayAbsDiffF64(aSrc1, aSrc2, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayRcpF64 scalar fallback', 'ScalarArrayRcpF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayRsqrtF64 scalar fallback', 'ScalarArrayRsqrtF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayRcpRefineF64 scalar fallback', 'ScalarArrayRcpRefineF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayRsqrtRefineF64 scalar fallback', 'ScalarArrayRsqrtRefineF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArraySinF32 scalar fallback', 'ScalarArraySinF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayExpF32 scalar fallback', 'ScalarArrayExpF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayCosF32 scalar fallback', 'ScalarArrayCosF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArraySinCosF32 scalar fallback', 'ScalarArraySinCosF32(aSrc, aSinDst, aCosDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayLogF32 scalar fallback', 'ScalarArrayLogF32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayLog2F32 scalar fallback', 'ScalarArrayLog2F32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayLog10F32 scalar fallback', 'ScalarArrayLog10F32(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArraySinF64 scalar fallback', 'ScalarArraySinF64(aSrc, aDst, aCount);', LScalarFacadeSource);
+  AssertSourceContains('NEONArrayExpF64 scalar fallback', 'ScalarArrayExpF64(aSrc, aDst, aCount);', LScalarFacadeSource);
   AssertSourceContains('SumBytes_NEON scalar fallback', 'Result := SumBytes_Scalar(p, len);', LScalarFacadeSource);
   AssertSourceContains('MinMaxBytes_NEON scalar fallback', 'MinMaxBytes_Scalar(p, len, minVal, maxVal);', LScalarFacadeSource);
   AssertSourceContains('CountByte_NEON scalar fallback', 'Result := CountByte_Scalar(p, len, value);', LScalarFacadeSource);
@@ -7017,10 +7179,70 @@ begin
   CheckTrue(Pos('table.batchf32.arrayadd := @neonarrayaddf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAddF32 for Phase 23a BatchF32 leaves');
   CheckTrue(Pos('table.batchf32.arraysub := @neonarraysubf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArraySubF32 for Phase 23a BatchF32 leaves');
   CheckTrue(Pos('table.batchf32.arraymul := @neonarraymulf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMulF32 for Phase 23a BatchF32 leaves');
+  CheckTrue(Pos('table.batchf32.arraydiv := @neonarraydivf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayDivF32 for Batch B1 BatchF32 leaves');
   CheckTrue(Pos('table.batchf32.arraymin := @neonarrayminf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMinF32 for Phase 23b BatchF32 leaves');
   CheckTrue(Pos('table.batchf32.arraymax := @neonarraymaxf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMaxF32 for Phase 23b BatchF32 leaves');
   CheckTrue(Pos('table.batchf32.arrayabs := @neonarrayabsf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAbsF32 for Phase 23b BatchF32 leaves');
   CheckTrue(Pos('table.batchf32.arrayneg := @neonarraynegf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayNegF32 for Phase 23b BatchF32 leaves');
+  CheckTrue(Pos('table.batchf32.arraymulscalar := @neonarraymulscalarf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMulScalarF32 for Batch B2');
+  CheckTrue(Pos('table.batchf32.arrayaddscalar := @neonarrayaddscalarf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAddScalarF32 for Batch B2');
+  CheckTrue(Pos('table.batchf32.arrayclamp := @neonarrayclampf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayClampF32 for Batch B3');
+  CheckTrue(Pos('table.batchf32.arraylerp := @neonarraylerpf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayLerpF32 for Batch B3');
+  CheckTrue(Pos('table.batchf32.arrayfma := @neonarrayfmaf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayFmaF32 for Batch B4');
+  CheckTrue(Pos('table.batchf32.arrayaxpy := @neonarrayaxpyf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAxpyF32 for Batch B4');
+  CheckTrue(Pos('table.batchf32.arraysqrt := @neonarraysqrtf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArraySqrtF32 for Batch B5');
+  CheckTrue(Pos('table.batchf32.reducesum := @neonreducesumf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONReduceSumF32 for Batch B5');
+  CheckTrue(Pos('table.batchf32.reducemin := @neonreduceminf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONReduceMinF32 for Batch B6');
+  CheckTrue(Pos('table.batchf32.reducemax := @neonreducemaxf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONReduceMaxF32 for Batch B6');
+  CheckTrue(Pos('table.batchf32.arrayrcp := @neonarrayrcpf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayRcpF32 for Batch B7');
+  CheckTrue(Pos('table.batchf32.reducedot := @neonreducedotf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONReduceDotF32 for Batch B7');
+  CheckTrue(Pos('table.batchf32.arrayrsqrt := @neonarrayrsqrtf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayRsqrtF32 for Batch B8');
+  CheckTrue(Pos('table.batchf32.arrayrcprefine := @neonarrayrcprefinef32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayRcpRefineF32 for Batch B8');
+  CheckTrue(Pos('table.batchf32.arrayrsqrtrefine := @neonarrayrsqrtrefinef32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayRsqrtRefineF32 for Batch B9');
+  CheckTrue(Pos('table.batchf32.arraylinear := @neonarraylinearf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayLinearF32 for Wave C1');
+  CheckTrue(Pos('table.batchf32.arrayceil := @neonarrayceilf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayCeilF32 for Wave C2');
+  CheckTrue(Pos('table.batchf32.arrayfloor := @neonarrayfloorf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayFloorF32 for Wave C2');
+  CheckTrue(Pos('table.batchf32.arraytrunc := @neonarraytruncf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayTruncF32 for Wave C2');
+  CheckTrue(Pos('table.batchf32.arrayrelu := @neonarrayreluf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayReLUF32 for Wave C3');
+  CheckTrue(Pos('table.batchf32.arrayabsdiff := @neonarrayabsdifff32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAbsDiffF32 for Wave C3');
+  CheckTrue(Pos('table.batchf64.arrayadd := @neonarrayaddf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAddF64 for Wave C4a');
+  CheckTrue(Pos('table.batchf64.arraysub := @neonarraysubf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArraySubF64 for Wave C4a');
+  CheckTrue(Pos('table.batchf64.arraymul := @neonarraymulf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMulF64 for Wave C4a');
+  CheckTrue(Pos('table.batchf64.arraydiv := @neonarraydivf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayDivF64 for Wave C4a');
+  CheckTrue(Pos('table.batchf64.arraymin := @neonarrayminf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMinF64 for Wave C4a');
+  CheckTrue(Pos('table.batchf64.arraymax := @neonarraymaxf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMaxF64 for Wave C4a');
+  CheckTrue(Pos('table.batchf64.arrayabs := @neonarrayabsf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAbsF64 for Wave C4a');
+  CheckTrue(Pos('table.batchf64.arrayneg := @neonarraynegf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayNegF64 for Wave C4a');
+  CheckTrue(Pos('table.batchf64.arraysqrt := @neonarraysqrtf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArraySqrtF64 for Wave C4b');
+  CheckTrue(Pos('table.batchf64.arraymulscalar := @neonarraymulscalarf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayMulScalarF64 for Wave C4b');
+  CheckTrue(Pos('table.batchf64.arrayaddscalar := @neonarrayaddscalarf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAddScalarF64 for Wave C4b');
+  CheckTrue(Pos('table.batchf64.reducesum := @neonreducesumf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONReduceSumF64 for Wave C4b');
+  CheckTrue(Pos('table.batchf64.reducedot := @neonreducedotf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONReduceDotF64 for Wave C4b');
+  CheckTrue(Pos('table.batchf64.reducemin := @neonreduceminf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONReduceMinF64 for Wave C4b');
+  CheckTrue(Pos('table.batchf64.reducemax := @neonreducemaxf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONReduceMaxF64 for Wave C4b');
+  CheckTrue(Pos('table.batchf64.arraylinear := @neonarraylinearf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayLinearF64 for Wave C4c');
+  CheckTrue(Pos('table.batchf64.arrayclamp := @neonarrayclampf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayClampF64 for Wave C4c');
+  CheckTrue(Pos('table.batchf64.arraylerp := @neonarraylerpf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayLerpF64 for Wave C4c');
+  CheckTrue(Pos('table.batchf64.arrayfma := @neonarrayfmaf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayFmaF64 for Wave C4c');
+  CheckTrue(Pos('table.batchf64.arrayaxpy := @neonarrayaxpyf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAxpyF64 for Wave C4c');
+  CheckTrue(Pos('table.batchf64.arrayceil := @neonarrayceilf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayCeilF64 for Wave C4d');
+  CheckTrue(Pos('table.batchf64.arrayfloor := @neonarrayfloorf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayFloorF64 for Wave C4d');
+  CheckTrue(Pos('table.batchf64.arraytrunc := @neonarraytruncf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayTruncF64 for Wave C4d');
+  CheckTrue(Pos('table.batchf64.arrayrelu := @neonarrayreluf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayReLUF64 for Wave C4d');
+  CheckTrue(Pos('table.batchf64.arrayabsdiff := @neonarrayabsdifff64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayAbsDiffF64 for Wave C4d');
+  CheckTrue(Pos('table.batchf64.arrayrcp := @neonarrayrcpf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayRcpF64 for Wave C4e');
+  CheckTrue(Pos('table.batchf64.arrayrsqrt := @neonarrayrsqrtf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayRsqrtF64 for Wave C4e');
+  CheckTrue(Pos('table.batchf64.arrayrcprefine := @neonarrayrcprefinef64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayRcpRefineF64 for Wave C4e');
+  CheckTrue(Pos('table.batchf64.arrayrsqrtrefine := @neonarrayrsqrtrefinef64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayRsqrtRefineF64 for Wave C4e');
+  CheckTrue(Pos('table.batchf32.arraysin := @neonarraysinf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArraySinF32 for Wave C5');
+  CheckTrue(Pos('table.batchf32.arrayexp := @neonarrayexpf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayExpF32 for Wave C5');
+  CheckTrue(Pos('table.batchf32.arraycos := @neonarraycosf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayCosF32 for Wave C5b');
+  CheckTrue(Pos('table.batchf32.arraysincos := @neonarraysincosf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArraySinCosF32 for Wave C5b');
+  CheckTrue(Pos('table.batchf32.arraylog := @neonarraylogf32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayLogF32 for Wave C5c');
+  CheckTrue(Pos('table.batchf32.arraylog2 := @neonarraylog2f32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayLog2F32 for Wave C5c');
+  CheckTrue(Pos('table.batchf32.arraylog10 := @neonarraylog10f32;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayLog10F32 for Wave C5c');
+  CheckTrue(Pos('table.batchf64.arraysin := @neonarraysinf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArraySinF64 for Wave C5d');
+  CheckTrue(Pos('table.batchf64.arrayexp := @neonarrayexpf64;', LRegisterSource) > 0, 'RegisterNEONBackend should wire NEONArrayExpF64 for Wave C5d');
   CheckTrue(Pos('table.memory.sumbytes := @sumbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire SumBytes_NEON explicitly so asm builds keep the native facade slot');
   CheckTrue(Pos('table.memory.minmaxbytes := @minmaxbytes_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire MinMaxBytes_NEON explicitly so asm builds keep the native facade slot');
   CheckTrue(Pos('table.memory.countbyte := @countbyte_neon;', LRegisterSource) > 0, 'RegisterNEONBackend should still wire CountByte_NEON explicitly so asm builds keep the native facade slot');
@@ -7049,10 +7271,70 @@ begin
   AssertRuntimeSlotExpectation('BatchF32.ArrayAdd', Pointer(LScalarTable.BatchF32.ArrayAdd), Pointer(LNEONTable.BatchF32.ArrayAdd));
   AssertRuntimeSlotExpectation('BatchF32.ArraySub', Pointer(LScalarTable.BatchF32.ArraySub), Pointer(LNEONTable.BatchF32.ArraySub));
   AssertRuntimeSlotExpectation('BatchF32.ArrayMul', Pointer(LScalarTable.BatchF32.ArrayMul), Pointer(LNEONTable.BatchF32.ArrayMul));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayDiv', Pointer(LScalarTable.BatchF32.ArrayDiv), Pointer(LNEONTable.BatchF32.ArrayDiv));
   AssertRuntimeSlotExpectation('BatchF32.ArrayMin', Pointer(LScalarTable.BatchF32.ArrayMin), Pointer(LNEONTable.BatchF32.ArrayMin));
   AssertRuntimeSlotExpectation('BatchF32.ArrayMax', Pointer(LScalarTable.BatchF32.ArrayMax), Pointer(LNEONTable.BatchF32.ArrayMax));
   AssertRuntimeSlotExpectation('BatchF32.ArrayAbs', Pointer(LScalarTable.BatchF32.ArrayAbs), Pointer(LNEONTable.BatchF32.ArrayAbs));
   AssertRuntimeSlotExpectation('BatchF32.ArrayNeg', Pointer(LScalarTable.BatchF32.ArrayNeg), Pointer(LNEONTable.BatchF32.ArrayNeg));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayMulScalar', Pointer(LScalarTable.BatchF32.ArrayMulScalar), Pointer(LNEONTable.BatchF32.ArrayMulScalar));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayAddScalar', Pointer(LScalarTable.BatchF32.ArrayAddScalar), Pointer(LNEONTable.BatchF32.ArrayAddScalar));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayClamp', Pointer(LScalarTable.BatchF32.ArrayClamp), Pointer(LNEONTable.BatchF32.ArrayClamp));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayLerp', Pointer(LScalarTable.BatchF32.ArrayLerp), Pointer(LNEONTable.BatchF32.ArrayLerp));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayFma', Pointer(LScalarTable.BatchF32.ArrayFma), Pointer(LNEONTable.BatchF32.ArrayFma));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayAxpy', Pointer(LScalarTable.BatchF32.ArrayAxpy), Pointer(LNEONTable.BatchF32.ArrayAxpy));
+  AssertRuntimeSlotExpectation('BatchF32.ArraySqrt', Pointer(LScalarTable.BatchF32.ArraySqrt), Pointer(LNEONTable.BatchF32.ArraySqrt));
+  AssertRuntimeSlotExpectation('BatchF32.ReduceSum', Pointer(LScalarTable.BatchF32.ReduceSum), Pointer(LNEONTable.BatchF32.ReduceSum));
+  AssertRuntimeSlotExpectation('BatchF32.ReduceMin', Pointer(LScalarTable.BatchF32.ReduceMin), Pointer(LNEONTable.BatchF32.ReduceMin));
+  AssertRuntimeSlotExpectation('BatchF32.ReduceMax', Pointer(LScalarTable.BatchF32.ReduceMax), Pointer(LNEONTable.BatchF32.ReduceMax));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayRcp', Pointer(LScalarTable.BatchF32.ArrayRcp), Pointer(LNEONTable.BatchF32.ArrayRcp));
+  AssertRuntimeSlotExpectation('BatchF32.ReduceDot', Pointer(LScalarTable.BatchF32.ReduceDot), Pointer(LNEONTable.BatchF32.ReduceDot));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayRsqrt', Pointer(LScalarTable.BatchF32.ArrayRsqrt), Pointer(LNEONTable.BatchF32.ArrayRsqrt));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayRcpRefine', Pointer(LScalarTable.BatchF32.ArrayRcpRefine), Pointer(LNEONTable.BatchF32.ArrayRcpRefine));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayRsqrtRefine', Pointer(LScalarTable.BatchF32.ArrayRsqrtRefine), Pointer(LNEONTable.BatchF32.ArrayRsqrtRefine));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayLinear', Pointer(LScalarTable.BatchF32.ArrayLinear), Pointer(LNEONTable.BatchF32.ArrayLinear));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayCeil', Pointer(LScalarTable.BatchF32.ArrayCeil), Pointer(LNEONTable.BatchF32.ArrayCeil));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayFloor', Pointer(LScalarTable.BatchF32.ArrayFloor), Pointer(LNEONTable.BatchF32.ArrayFloor));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayTrunc', Pointer(LScalarTable.BatchF32.ArrayTrunc), Pointer(LNEONTable.BatchF32.ArrayTrunc));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayReLU', Pointer(LScalarTable.BatchF32.ArrayReLU), Pointer(LNEONTable.BatchF32.ArrayReLU));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayAbsDiff', Pointer(LScalarTable.BatchF32.ArrayAbsDiff), Pointer(LNEONTable.BatchF32.ArrayAbsDiff));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayAdd', Pointer(LScalarTable.BatchF64.ArrayAdd), Pointer(LNEONTable.BatchF64.ArrayAdd));
+  AssertRuntimeSlotExpectation('BatchF64.ArraySub', Pointer(LScalarTable.BatchF64.ArraySub), Pointer(LNEONTable.BatchF64.ArraySub));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayMul', Pointer(LScalarTable.BatchF64.ArrayMul), Pointer(LNEONTable.BatchF64.ArrayMul));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayDiv', Pointer(LScalarTable.BatchF64.ArrayDiv), Pointer(LNEONTable.BatchF64.ArrayDiv));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayMin', Pointer(LScalarTable.BatchF64.ArrayMin), Pointer(LNEONTable.BatchF64.ArrayMin));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayMax', Pointer(LScalarTable.BatchF64.ArrayMax), Pointer(LNEONTable.BatchF64.ArrayMax));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayAbs', Pointer(LScalarTable.BatchF64.ArrayAbs), Pointer(LNEONTable.BatchF64.ArrayAbs));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayNeg', Pointer(LScalarTable.BatchF64.ArrayNeg), Pointer(LNEONTable.BatchF64.ArrayNeg));
+  AssertRuntimeSlotExpectation('BatchF64.ArraySqrt', Pointer(LScalarTable.BatchF64.ArraySqrt), Pointer(LNEONTable.BatchF64.ArraySqrt));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayMulScalar', Pointer(LScalarTable.BatchF64.ArrayMulScalar), Pointer(LNEONTable.BatchF64.ArrayMulScalar));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayAddScalar', Pointer(LScalarTable.BatchF64.ArrayAddScalar), Pointer(LNEONTable.BatchF64.ArrayAddScalar));
+  AssertRuntimeSlotExpectation('BatchF64.ReduceSum', Pointer(LScalarTable.BatchF64.ReduceSum), Pointer(LNEONTable.BatchF64.ReduceSum));
+  AssertRuntimeSlotExpectation('BatchF64.ReduceDot', Pointer(LScalarTable.BatchF64.ReduceDot), Pointer(LNEONTable.BatchF64.ReduceDot));
+  AssertRuntimeSlotExpectation('BatchF64.ReduceMin', Pointer(LScalarTable.BatchF64.ReduceMin), Pointer(LNEONTable.BatchF64.ReduceMin));
+  AssertRuntimeSlotExpectation('BatchF64.ReduceMax', Pointer(LScalarTable.BatchF64.ReduceMax), Pointer(LNEONTable.BatchF64.ReduceMax));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayLinear', Pointer(LScalarTable.BatchF64.ArrayLinear), Pointer(LNEONTable.BatchF64.ArrayLinear));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayClamp', Pointer(LScalarTable.BatchF64.ArrayClamp), Pointer(LNEONTable.BatchF64.ArrayClamp));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayLerp', Pointer(LScalarTable.BatchF64.ArrayLerp), Pointer(LNEONTable.BatchF64.ArrayLerp));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayFma', Pointer(LScalarTable.BatchF64.ArrayFma), Pointer(LNEONTable.BatchF64.ArrayFma));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayAxpy', Pointer(LScalarTable.BatchF64.ArrayAxpy), Pointer(LNEONTable.BatchF64.ArrayAxpy));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayCeil', Pointer(LScalarTable.BatchF64.ArrayCeil), Pointer(LNEONTable.BatchF64.ArrayCeil));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayFloor', Pointer(LScalarTable.BatchF64.ArrayFloor), Pointer(LNEONTable.BatchF64.ArrayFloor));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayTrunc', Pointer(LScalarTable.BatchF64.ArrayTrunc), Pointer(LNEONTable.BatchF64.ArrayTrunc));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayReLU', Pointer(LScalarTable.BatchF64.ArrayReLU), Pointer(LNEONTable.BatchF64.ArrayReLU));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayAbsDiff', Pointer(LScalarTable.BatchF64.ArrayAbsDiff), Pointer(LNEONTable.BatchF64.ArrayAbsDiff));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayRcp', Pointer(LScalarTable.BatchF64.ArrayRcp), Pointer(LNEONTable.BatchF64.ArrayRcp));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayRsqrt', Pointer(LScalarTable.BatchF64.ArrayRsqrt), Pointer(LNEONTable.BatchF64.ArrayRsqrt));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayRcpRefine', Pointer(LScalarTable.BatchF64.ArrayRcpRefine), Pointer(LNEONTable.BatchF64.ArrayRcpRefine));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayRsqrtRefine', Pointer(LScalarTable.BatchF64.ArrayRsqrtRefine), Pointer(LNEONTable.BatchF64.ArrayRsqrtRefine));
+  AssertRuntimeSlotExpectation('BatchF32.ArraySin', Pointer(LScalarTable.BatchF32.ArraySin), Pointer(LNEONTable.BatchF32.ArraySin));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayExp', Pointer(LScalarTable.BatchF32.ArrayExp), Pointer(LNEONTable.BatchF32.ArrayExp));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayCos', Pointer(LScalarTable.BatchF32.ArrayCos), Pointer(LNEONTable.BatchF32.ArrayCos));
+  AssertRuntimeSlotExpectation('BatchF32.ArraySinCos', Pointer(LScalarTable.BatchF32.ArraySinCos), Pointer(LNEONTable.BatchF32.ArraySinCos));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayLog', Pointer(LScalarTable.BatchF32.ArrayLog), Pointer(LNEONTable.BatchF32.ArrayLog));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayLog2', Pointer(LScalarTable.BatchF32.ArrayLog2), Pointer(LNEONTable.BatchF32.ArrayLog2));
+  AssertRuntimeSlotExpectation('BatchF32.ArrayLog10', Pointer(LScalarTable.BatchF32.ArrayLog10), Pointer(LNEONTable.BatchF32.ArrayLog10));
+  AssertRuntimeSlotExpectation('BatchF64.ArraySin', Pointer(LScalarTable.BatchF64.ArraySin), Pointer(LNEONTable.BatchF64.ArraySin));
+  AssertRuntimeSlotExpectation('BatchF64.ArrayExp', Pointer(LScalarTable.BatchF64.ArrayExp), Pointer(LNEONTable.BatchF64.ArrayExp));
   AssertRuntimeSlotExpectation('SumBytes', Pointer(LScalarTable.Memory.SumBytes), Pointer(LNEONTable.Memory.SumBytes));
   AssertRuntimeSlotExpectation('MinMaxBytes', Pointer(LScalarTable.Memory.MinMaxBytes), Pointer(LNEONTable.Memory.MinMaxBytes));
   AssertRuntimeSlotExpectation('CountByte', Pointer(LScalarTable.Memory.CountByte), Pointer(LNEONTable.Memory.CountByte));
@@ -7060,6 +7342,1593 @@ begin
   AssertRuntimeSlotExpectation('ToLowerAscii', Pointer(LScalarTable.Memory.ToLowerAscii), Pointer(LNEONTable.Memory.ToLowerAscii));
   AssertRuntimeSlotExpectation('ToUpperAscii', Pointer(LScalarTable.Memory.ToUpperAscii), Pointer(LNEONTable.Memory.ToUpperAscii));
   AssertRuntimeSlotExpectation('BitsetPopCount', Pointer(LScalarTable.Memory.BitsetPopCount), Pointer(LNEONTable.Memory.BitsetPopCount));
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayDiv_SpecialParity_Matches_Scalar;
+var
+  LSrc1, LSrc2, LDstScalar, LDstDispatch: array[0..15] of Single;
+  LCount: SizeUInt;
+  i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LBits: LongWord;
+  LPosInf, LNegInf, LQNaN, LNegZero: Single;
+  eBits, aBits: LongWord;
+  LSavedMask: TFPUExceptionMask;
+begin
+  { Batch B1 unit test: ArrayDiv specials (+/-0, Inf, NaN, count=0) match scalar bits. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LBits := $7F800000; LPosInf := PSingle(@LBits)^;
+    LBits := $FF800000; LNegInf := PSingle(@LBits)^;
+    LBits := $7FC00001; LQNaN := PSingle(@LBits)^;
+    LBits := $80000000; LNegZero := PSingle(@LBits)^;
+
+    LDispatch := GetDispatchTable;
+    LCount := 8;
+    LSrc1[0] := 1.0;  LSrc2[0] := 0.0;
+    LSrc1[1] := -2.0; LSrc2[1] := 0.0;
+    LSrc1[2] := 0.0;  LSrc2[2] := 0.0;
+    LSrc1[3] := 3.0;  LSrc2[3] := 1.0;
+    LSrc1[4] := 1.0;  LSrc2[4] := LNegZero;
+    LSrc1[5] := LPosInf; LSrc2[5] := 2.0;
+    LSrc1[6] := LNegInf; LSrc2[6] := -4.0;
+    LSrc1[7] := LQNaN; LSrc2[7] := 5.0;
+    for i := 8 to 15 do
+    begin
+      LSrc1[i] := 0.0;
+      LSrc2[i] := 1.0;
+    end;
+
+    FillChar(LDstScalar, SizeOf(LDstScalar), 0);
+    FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
+    ScalarArrayDivF32(@LSrc1[0], @LSrc2[0], @LDstScalar[0], LCount);
+    LDispatch^.BatchF32.ArrayDiv(@LSrc1[0], @LSrc2[0], @LDstDispatch[0], LCount);
+    for i := 0 to Integer(LCount) - 1 do
+    begin
+      eBits := PLongWord(@LDstScalar[i])^;
+      aBits := PLongWord(@LDstDispatch[i])^;
+      CheckEqual(eBits, aBits, 'ArrayDiv special parity lane ' + IntToStr(i));
+    end;
+
+    LDstDispatch[0] := 42.0;
+    LDispatch^.BatchF32.ArrayDiv(@LSrc1[0], @LSrc2[0], @LDstDispatch[0], 0);
+    CheckTrue(Abs(LDstDispatch[0] - 42.0) < 1e-6, 'ArrayDiv count=0 must leave dst untouched');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayMulAddScalar_Parity;
+var
+  LSrc, LDstScalar, LDstDispatch: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LScalar: Single;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+  LBits: LongWord;
+  LQNaN: Single;
+begin
+  { Batch B2 unit test: MulScalar/AddScalar match scalar for lengths + specials. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Single(i) * 0.25 - 4.0;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+      LScalar := 2.5;
+      FillChar(LDstScalar, SizeOf(LDstScalar), 0);
+      FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
+      ScalarArrayMulScalarF32(@LSrc[0], @LDstScalar[0], LCount, LScalar);
+      LDispatch^.BatchF32.ArrayMulScalar(@LSrc[0], @LDstDispatch[0], LCount, LScalar);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstScalar[i])^;
+        aBits := PLongWord(@LDstDispatch[i])^;
+        CheckEqual(eBits, aBits, 'MulScalar parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      LScalar := -1.5;
+      FillChar(LDstScalar, SizeOf(LDstScalar), 0);
+      FillChar(LDstDispatch, SizeOf(LDstDispatch), 0);
+      ScalarArrayAddScalarF32(@LSrc[0], @LDstScalar[0], LCount, LScalar);
+      LDispatch^.BatchF32.ArrayAddScalar(@LSrc[0], @LDstDispatch[0], LCount, LScalar);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstScalar[i])^;
+        aBits := PLongWord(@LDstDispatch[i])^;
+        CheckEqual(eBits, aBits, 'AddScalar parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    { count=0 no-op }
+    LDstDispatch[0] := 99.0;
+    LDispatch^.BatchF32.ArrayMulScalar(@LSrc[0], @LDstDispatch[0], 0, 3.0);
+    CheckTrue(Abs(LDstDispatch[0] - 99.0) < 1e-6, 'MulScalar count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayAddScalar(@LSrc[0], @LDstDispatch[0], 0, 3.0);
+    CheckTrue(Abs(LDstDispatch[0] - 99.0) < 1e-6, 'AddScalar count=0 leaves dst');
+
+    { NaN * scale and NaN + offset }
+    LBits := $7FC00001; LQNaN := PSingle(@LBits)^;
+    LSrc[0] := LQNaN;
+    ScalarArrayMulScalarF32(@LSrc[0], @LDstScalar[0], 1, 2.0);
+    LDispatch^.BatchF32.ArrayMulScalar(@LSrc[0], @LDstDispatch[0], 1, 2.0);
+    eBits := PLongWord(@LDstScalar[0])^;
+    aBits := PLongWord(@LDstDispatch[0])^;
+    CheckEqual(eBits, aBits, 'MulScalar NaN parity');
+    ScalarArrayAddScalarF32(@LSrc[0], @LDstScalar[0], 1, 2.0);
+    LDispatch^.BatchF32.ArrayAddScalar(@LSrc[0], @LDstDispatch[0], 1, 2.0);
+    eBits := PLongWord(@LDstScalar[0])^;
+    aBits := PLongWord(@LDstDispatch[0])^;
+    CheckEqual(eBits, aBits, 'AddScalar NaN parity');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayLerpClamp_Parity;
+var
+  LSrc, LStart, LEnd, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+  LMin, LMax, LT: Single;
+begin
+  { Batch B3: Clamp/Lerp match scalar for length matrix, endpoints, count=0. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+    begin
+      LSrc[i] := Single(i) - 10.0;
+      LStart[i] := Single(i) * 0.1;
+      LEnd[i] := Single(i) * 0.1 + 5.0;
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+      LMin := -2.0;
+      LMax := 8.0;
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayClampF32(@LSrc[0], @LDstS[0], LCount, LMin, LMax);
+      LDispatch^.BatchF32.ArrayClamp(@LSrc[0], @LDstD[0], LCount, LMin, LMax);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Clamp parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      LT := 0.0;
+      ScalarArrayLerpF32(@LStart[0], @LEnd[0], @LDstS[0], LCount, LT);
+      LDispatch^.BatchF32.ArrayLerp(@LStart[0], @LEnd[0], @LDstD[0], LCount, LT);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Lerp t=0 count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      LT := 1.0;
+      ScalarArrayLerpF32(@LStart[0], @LEnd[0], @LDstS[0], LCount, LT);
+      LDispatch^.BatchF32.ArrayLerp(@LStart[0], @LEnd[0], @LDstD[0], LCount, LT);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Lerp t=1 count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      LT := 0.5;
+      ScalarArrayLerpF32(@LStart[0], @LEnd[0], @LDstS[0], LCount, LT);
+      LDispatch^.BatchF32.ArrayLerp(@LStart[0], @LEnd[0], @LDstD[0], LCount, LT);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Lerp t=0.5 count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 77.0;
+    LDispatch^.BatchF32.ArrayClamp(@LSrc[0], @LDstD[0], 0, -1.0, 1.0);
+    CheckTrue(Abs(LDstD[0] - 77.0) < 1e-6, 'Clamp count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayLerp(@LStart[0], @LEnd[0], @LDstD[0], 0, 0.5);
+    CheckTrue(Abs(LDstD[0] - 77.0) < 1e-6, 'Lerp count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayFmaAxpy_Parity;
+var
+  LA, LB, LC, LX, LY, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+  LAlpha: Single;
+  LAlphas: array[0..2] of Single = (0.0, 1.0, 2.5);
+  ai: Integer;
+begin
+  { Batch B4: Fma/Axpy match scalar for length matrix and alpha set. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+    begin
+      LA[i] := Single(i) * 0.1;
+      LB[i] := Single(i) * 0.2 + 1.0;
+      LC[i] := Single(i) * 0.05 - 0.5;
+      LX[i] := Single(i) - 5.0;
+      LY[i] := Single(i) * 0.25;
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayFmaF32(@LA[0], @LB[0], @LC[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayFma(@LA[0], @LB[0], @LC[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Fma parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      for ai := 0 to High(LAlphas) do
+      begin
+        LAlpha := LAlphas[ai];
+        FillChar(LDstS, SizeOf(LDstS), 0);
+        FillChar(LDstD, SizeOf(LDstD), 0);
+        ScalarArrayAxpyF32(LAlpha, @LX[0], @LY[0], @LDstS[0], LCount);
+        LDispatch^.BatchF32.ArrayAxpy(LAlpha, @LX[0], @LY[0], @LDstD[0], LCount);
+        for i := 0 to Integer(LCount) - 1 do
+        begin
+          eBits := PLongWord(@LDstS[i])^;
+          aBits := PLongWord(@LDstD[i])^;
+          CheckEqual(eBits, aBits, 'Axpy parity alpha=' + IntToStr(ai) + ' count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+        end;
+      end;
+    end;
+
+    LDstD[0] := 55.0;
+    LDispatch^.BatchF32.ArrayFma(@LA[0], @LB[0], @LC[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 55.0) < 1e-6, 'Fma count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayAxpy(2.0, @LX[0], @LY[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 55.0) < 1e-6, 'Axpy count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArraySqrtReduceSum_Parity;
+var
+  LSrc, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+  LSumS, LSumD: Single;
+  LAbsDiff, LScale: Single;
+begin
+  { Batch B5: Sqrt bit-parity on non-neg; ReduceSum near-parity (assoc). }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Single(i) * 0.25 + 0.01; { non-negative for sqrt }
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArraySqrtF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArraySqrt(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Sqrt parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      LSumS := ScalarReduceSumF32(@LSrc[0], LCount);
+      LSumD := LDispatch^.BatchF32.ReduceSum(@LSrc[0], LCount);
+      if LCount <= 1 then
+      begin
+        eBits := PLongWord(@LSumS)^;
+        aBits := PLongWord(@LSumD)^;
+        CheckEqual(eBits, aBits, 'ReduceSum bit parity count=' + IntToStr(LCount));
+      end
+      else
+      begin
+        LAbsDiff := Abs(LSumS - LSumD);
+        LScale := Abs(LSumS);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        CheckTrue(LAbsDiff <= 1e-4 * LScale + 1e-5,
+          'ReduceSum near parity count=' + IntToStr(LCount));
+      end;
+    end;
+
+    LDstD[0] := 33.0;
+    LDispatch^.BatchF32.ArraySqrt(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 33.0) < 1e-6, 'Sqrt count=0 leaves dst');
+    CheckTrue(Abs(LDispatch^.BatchF32.ReduceSum(@LSrc[0], 0)) < 1e-6, 'ReduceSum count=0 is 0');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ReduceMinMax_Parity;
+var
+  LSrc: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+  LMinS, LMinD, LMaxS, LMaxD: Single;
+begin
+  { Batch B6: ReduceMin/Max match scalar (count=0 → 0). }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Single((i * 7) mod 31) - 10.0;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+      LMinS := ScalarReduceMinF32(@LSrc[0], LCount);
+      LMinD := LDispatch^.BatchF32.ReduceMin(@LSrc[0], LCount);
+      LMaxS := ScalarReduceMaxF32(@LSrc[0], LCount);
+      LMaxD := LDispatch^.BatchF32.ReduceMax(@LSrc[0], LCount);
+      eBits := PLongWord(@LMinS)^;
+      aBits := PLongWord(@LMinD)^;
+      CheckEqual(eBits, aBits, 'ReduceMin parity count=' + IntToStr(LCount));
+      eBits := PLongWord(@LMaxS)^;
+      aBits := PLongWord(@LMaxD)^;
+      CheckEqual(eBits, aBits, 'ReduceMax parity count=' + IntToStr(LCount));
+    end;
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayRcpReduceDot_Parity;
+var
+  LSrc, LSrc2, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+  LDotS, LDotD, LAbsDiff, LScale: Single;
+begin
+  { Batch B7: Rcp exact 1/x; ReduceDot near-parity for long counts. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+    begin
+      LSrc[i] := Single(i) * 0.15 + 0.5; { non-zero for rcp }
+      LSrc2[i] := Single(i) * 0.1 - 2.0;
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayRcpF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayRcp(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Rcp parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      LDotS := ScalarReduceDotF32(@LSrc[0], @LSrc2[0], LCount);
+      LDotD := LDispatch^.BatchF32.ReduceDot(@LSrc[0], @LSrc2[0], LCount);
+      if LCount <= 1 then
+      begin
+        eBits := PLongWord(@LDotS)^;
+        aBits := PLongWord(@LDotD)^;
+        CheckEqual(eBits, aBits, 'ReduceDot bit parity count=' + IntToStr(LCount));
+      end
+      else
+      begin
+        LAbsDiff := Abs(LDotS - LDotD);
+        LScale := Abs(LDotS);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        CheckTrue(LAbsDiff <= 1e-4 * LScale + 1e-5,
+          'ReduceDot near parity count=' + IntToStr(LCount));
+      end;
+    end;
+
+    LDstD[0] := 11.0;
+    LDispatch^.BatchF32.ArrayRcp(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 11.0) < 1e-6, 'Rcp count=0 leaves dst');
+    CheckTrue(Abs(LDispatch^.BatchF32.ReduceDot(@LSrc[0], @LSrc2[0], 0)) < 1e-6, 'ReduceDot count=0 is 0');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayRsqrtRcpRefine_Parity;
+var
+  LSrc, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+begin
+  { Batch B8: Rsqrt=1/sqrt, RcpRefine=1/x exact vs scalar. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Single(i) * 0.2 + 0.25; { positive }
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayRsqrtF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayRsqrt(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Rsqrt parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayRcpRefineF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayRcpRefine(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'RcpRefine parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 9.0;
+    LDispatch^.BatchF32.ArrayRsqrt(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 9.0) < 1e-6, 'Rsqrt count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayRcpRefine(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 9.0) < 1e-6, 'RcpRefine count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayRsqrtRefine_Parity;
+var
+  LSrc, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+begin
+  { Batch B9: RsqrtRefine = 1/sqrt exact vs scalar. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Single(i) * 0.2 + 0.25;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayRsqrtRefineF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayRsqrtRefine(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'RsqrtRefine parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 8.0;
+    LDispatch^.BatchF32.ArrayRsqrtRefine(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 8.0) < 1e-6, 'RsqrtRefine count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayLinear_Parity;
+var
+  LSrc, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+  LScale, LBias: Single;
+begin
+  { Wave C1: ArrayLinear dst = scale*src + bias vs scalar. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Single(i) * 0.25 - 3.0;
+    LScale := 1.5;
+    LBias := -0.75;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayLinearF32(@LSrc[0], @LDstS[0], LCount, LScale, LBias);
+      LDispatch^.BatchF32.ArrayLinear(@LSrc[0], @LDstD[0], LCount, LScale, LBias);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Linear parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    { scale=0 → all bias }
+    FillChar(LDstS, SizeOf(LDstS), 0);
+    FillChar(LDstD, SizeOf(LDstD), 0);
+    ScalarArrayLinearF32(@LSrc[0], @LDstS[0], 8, 0.0, 2.5);
+    LDispatch^.BatchF32.ArrayLinear(@LSrc[0], @LDstD[0], 8, 0.0, 2.5);
+    for i := 0 to 7 do
+    begin
+      eBits := PLongWord(@LDstS[i])^;
+      aBits := PLongWord(@LDstD[i])^;
+      CheckEqual(eBits, aBits, 'Linear scale=0 i=' + IntToStr(i));
+    end;
+
+    LDstD[0] := 6.0;
+    LDispatch^.BatchF32.ArrayLinear(@LSrc[0], @LDstD[0], 0, LScale, LBias);
+    CheckTrue(Abs(LDstD[0] - 6.0) < 1e-6, 'Linear count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayCeilFloorTrunc_Parity;
+var
+  LSrc, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+begin
+  { Wave C2: Ceil/Floor/Trunc bit-match scalar (incl. negatives). }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Single(i) * 0.37 - 8.5; { mix of signs / fractions }
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayCeilF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayCeil(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Ceil parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayFloorF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayFloor(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Floor parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayTruncF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayTrunc(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'Trunc parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 4.0;
+    LDispatch^.BatchF32.ArrayCeil(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 4.0) < 1e-6, 'Ceil count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayFloor(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 4.0) < 1e-6, 'Floor count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayTrunc(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 4.0) < 1e-6, 'Trunc count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayReLUAbsDiff_Parity;
+var
+  LSrc, LSrc2, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 65);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: LongWord;
+begin
+  { Wave C3: ReLU max(x,0); AbsDiff abs(a-b). }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+    begin
+      LSrc[i] := Single(i) * 0.5 - 8.0;
+      LSrc2[i] := Single(i) * 0.3 - 2.0;
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayReLUF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayReLU(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'ReLU parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayAbsDiffF32(@LSrc[0], @LSrc2[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayAbsDiff(@LSrc[0], @LSrc2[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PLongWord(@LDstS[i])^;
+        aBits := PLongWord(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'AbsDiff parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 3.0;
+    LDispatch^.BatchF32.ArrayReLU(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 3.0) < 1e-6, 'ReLU count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayAbsDiff(@LSrc[0], @LSrc2[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 3.0) < 1e-6, 'AbsDiff count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF64_ArrayCore8_Parity;
+var
+  LSrc1, LSrc2, LDstS, LDstD: array[0..64] of Double;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 2, 3, 8, 33);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: UInt64;
+begin
+  { Wave C4a: F64 Add/Sub/Mul/Div/Min/Max/Abs/Neg vs scalar bit parity. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+    begin
+      LSrc1[i] := Double(i) * 0.17 - 4.0;
+      LSrc2[i] := Double(i) * 0.11 + 0.5; { non-zero for Div }
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayAddF64(@LSrc1[0], @LSrc2[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayAdd(@LSrc1[0], @LSrc2[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Add parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArraySubF64(@LSrc1[0], @LSrc2[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArraySub(@LSrc1[0], @LSrc2[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Sub parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayMulF64(@LSrc1[0], @LSrc2[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayMul(@LSrc1[0], @LSrc2[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Mul parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayDivF64(@LSrc1[0], @LSrc2[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayDiv(@LSrc1[0], @LSrc2[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Div parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayMinF64(@LSrc1[0], @LSrc2[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayMin(@LSrc1[0], @LSrc2[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Min parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayMaxF64(@LSrc1[0], @LSrc2[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayMax(@LSrc1[0], @LSrc2[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Max parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayAbsF64(@LSrc1[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayAbs(@LSrc1[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Abs parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayNegF64(@LSrc1[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayNeg(@LSrc1[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Neg parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 9.0;
+    LDispatch^.BatchF64.ArrayAdd(@LSrc1[0], @LSrc2[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 9.0) < 1e-15, 'F64 Add count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF64_SqrtBroadcastReduce_Parity;
+var
+  LSrc, LSrc2, LDstS, LDstD: array[0..64] of Double;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 2, 3, 8, 33);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: UInt64;
+  LScalar: Double;
+  LSumS, LSumD, LDotS, LDotD, LMinS, LMinD, LMaxS, LMaxD: Double;
+  LAbsDiff, LScale: Double;
+begin
+  { Wave C4b: Sqrt/MulScalar/AddScalar bit-parity; Reduce* near/bit as F32. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    LScalar := 2.5;
+    for i := 0 to 64 do
+    begin
+      LSrc[i] := Double(i) * 0.25 + 0.01; { non-negative for sqrt }
+      LSrc2[i] := Double(i) * 0.13 - 1.5;
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArraySqrtF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArraySqrt(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Sqrt parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayMulScalarF64(@LSrc2[0], @LDstS[0], LCount, LScalar);
+      LDispatch^.BatchF64.ArrayMulScalar(@LSrc2[0], @LDstD[0], LCount, LScalar);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 MulScalar parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayAddScalarF64(@LSrc2[0], @LDstS[0], LCount, LScalar);
+      LDispatch^.BatchF64.ArrayAddScalar(@LSrc2[0], @LDstD[0], LCount, LScalar);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 AddScalar parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      LSumS := ScalarReduceSumF64(@LSrc2[0], LCount);
+      LSumD := LDispatch^.BatchF64.ReduceSum(@LSrc2[0], LCount);
+      if LCount <= 1 then
+      begin
+        eBits := PUInt64(@LSumS)^;
+        aBits := PUInt64(@LSumD)^;
+        CheckEqual(eBits, aBits, 'F64 ReduceSum bit parity count=' + IntToStr(LCount));
+      end
+      else
+      begin
+        LAbsDiff := Abs(LSumS - LSumD);
+        LScale := Abs(LSumS);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        CheckTrue(LAbsDiff <= 1e-12 * LScale + 1e-14,
+          'F64 ReduceSum near parity count=' + IntToStr(LCount));
+      end;
+
+      LDotS := ScalarReduceDotF64(@LSrc[0], @LSrc2[0], LCount);
+      LDotD := LDispatch^.BatchF64.ReduceDot(@LSrc[0], @LSrc2[0], LCount);
+      if LCount <= 1 then
+      begin
+        eBits := PUInt64(@LDotS)^;
+        aBits := PUInt64(@LDotD)^;
+        CheckEqual(eBits, aBits, 'F64 ReduceDot bit parity count=' + IntToStr(LCount));
+      end
+      else
+      begin
+        LAbsDiff := Abs(LDotS - LDotD);
+        LScale := Abs(LDotS);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        CheckTrue(LAbsDiff <= 1e-12 * LScale + 1e-14,
+          'F64 ReduceDot near parity count=' + IntToStr(LCount));
+      end;
+
+      LMinS := ScalarReduceMinF64(@LSrc2[0], LCount);
+      LMinD := LDispatch^.BatchF64.ReduceMin(@LSrc2[0], LCount);
+      eBits := PUInt64(@LMinS)^;
+      aBits := PUInt64(@LMinD)^;
+      CheckEqual(eBits, aBits, 'F64 ReduceMin parity count=' + IntToStr(LCount));
+
+      LMaxS := ScalarReduceMaxF64(@LSrc2[0], LCount);
+      LMaxD := LDispatch^.BatchF64.ReduceMax(@LSrc2[0], LCount);
+      eBits := PUInt64(@LMaxS)^;
+      aBits := PUInt64(@LMaxD)^;
+      CheckEqual(eBits, aBits, 'F64 ReduceMax parity count=' + IntToStr(LCount));
+    end;
+
+    LDstD[0] := 11.0;
+    LDispatch^.BatchF64.ArraySqrt(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 11.0) < 1e-15, 'F64 Sqrt count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayMulScalar(@LSrc[0], @LDstD[0], 0, LScalar);
+    CheckTrue(Abs(LDstD[0] - 11.0) < 1e-15, 'F64 MulScalar count=0 leaves dst');
+    CheckTrue(Abs(LDispatch^.BatchF64.ReduceSum(@LSrc[0], 0)) < 1e-15, 'F64 ReduceSum count=0 is 0');
+    CheckTrue(Abs(LDispatch^.BatchF64.ReduceDot(@LSrc[0], @LSrc2[0], 0)) < 1e-15, 'F64 ReduceDot count=0 is 0');
+    CheckTrue(Abs(LDispatch^.BatchF64.ReduceMin(@LSrc[0], 0)) < 1e-15, 'F64 ReduceMin count=0 is 0');
+    CheckTrue(Abs(LDispatch^.BatchF64.ReduceMax(@LSrc[0], 0)) < 1e-15, 'F64 ReduceMax count=0 is 0');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF64_LinearClampLerpFmaAxpy_Parity;
+var
+  LSrc, LStart, LEnd, LA, LB, LC, LDstS, LDstD: array[0..64] of Double;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 2, 3, 8, 33);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: UInt64;
+  LScale, LBias, LMin, LMax, LT, LAlpha: Double;
+begin
+  { Wave C4c: Linear/Clamp/Lerp/Fma/Axpy vs scalar bit parity. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    LScale := 1.5;
+    LBias := -0.25;
+    LMin := -2.0;
+    LMax := 3.0;
+    LT := 0.5;
+    LAlpha := 2.0;
+    for i := 0 to 64 do
+    begin
+      LSrc[i] := Double(i) * 0.31 - 4.0;
+      LStart[i] := Double(i) * 0.1;
+      LEnd[i] := Double(i) * 0.1 + 5.0;
+      LA[i] := Double(i) * 0.07 - 1.0;
+      LB[i] := Double(i) * 0.03 + 0.5;
+      LC[i] := Double(i) * 0.02 - 0.25;
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayLinearF64(@LSrc[0], @LDstS[0], LCount, LScale, LBias);
+      LDispatch^.BatchF64.ArrayLinear(@LSrc[0], @LDstD[0], LCount, LScale, LBias);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Linear parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayClampF64(@LSrc[0], @LDstS[0], LCount, LMin, LMax);
+      LDispatch^.BatchF64.ArrayClamp(@LSrc[0], @LDstD[0], LCount, LMin, LMax);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Clamp parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayLerpF64(@LStart[0], @LEnd[0], @LDstS[0], LCount, LT);
+      LDispatch^.BatchF64.ArrayLerp(@LStart[0], @LEnd[0], @LDstD[0], LCount, LT);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Lerp parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayFmaF64(@LA[0], @LB[0], @LC[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayFma(@LA[0], @LB[0], @LC[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Fma parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayAxpyF64(LAlpha, @LA[0], @LB[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayAxpy(LAlpha, @LA[0], @LB[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Axpy parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 13.0;
+    LDispatch^.BatchF64.ArrayLinear(@LSrc[0], @LDstD[0], 0, LScale, LBias);
+    CheckTrue(Abs(LDstD[0] - 13.0) < 1e-15, 'F64 Linear count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayClamp(@LSrc[0], @LDstD[0], 0, LMin, LMax);
+    CheckTrue(Abs(LDstD[0] - 13.0) < 1e-15, 'F64 Clamp count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayLerp(@LStart[0], @LEnd[0], @LDstD[0], 0, LT);
+    CheckTrue(Abs(LDstD[0] - 13.0) < 1e-15, 'F64 Lerp count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayFma(@LA[0], @LB[0], @LC[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 13.0) < 1e-15, 'F64 Fma count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayAxpy(LAlpha, @LA[0], @LB[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 13.0) < 1e-15, 'F64 Axpy count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF64_CeilFloorTruncReLUAbsDiff_Parity;
+var
+  LSrc, LSrc2, LDstS, LDstD: array[0..64] of Double;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 2, 3, 8, 33);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: UInt64;
+begin
+  { Wave C4d: Ceil/Floor/Trunc/ReLU/AbsDiff vs scalar bit parity. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+    begin
+      LSrc[i] := Double(i) * 0.37 - 5.5; { negatives + halves for rounding }
+      LSrc2[i] := Double(i) * 0.19 - 2.25;
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayCeilF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayCeil(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Ceil parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayFloorF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayFloor(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Floor parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayTruncF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayTrunc(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Trunc parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayReLUF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayReLU(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 ReLU parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayAbsDiffF64(@LSrc[0], @LSrc2[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayAbsDiff(@LSrc[0], @LSrc2[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 AbsDiff parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 17.0;
+    LDispatch^.BatchF64.ArrayCeil(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 17.0) < 1e-15, 'F64 Ceil count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayFloor(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 17.0) < 1e-15, 'F64 Floor count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayTrunc(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 17.0) < 1e-15, 'F64 Trunc count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayReLU(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 17.0) < 1e-15, 'F64 ReLU count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayAbsDiff(@LSrc[0], @LSrc2[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 17.0) < 1e-15, 'F64 AbsDiff count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF64_RcpRsqrtRefine_Parity;
+var
+  LSrc, LDstS, LDstD: array[0..64] of Double;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 2, 3, 8, 33);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  eBits, aBits: UInt64;
+begin
+  { Wave C4e: Rcp/Rsqrt/RcpRefine/RsqrtRefine exact fdiv/fsqrt vs scalar bit parity. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Double(i) * 0.25 + 0.05; { positive non-zero for rcp/rsqrt }
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayRcpF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayRcp(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Rcp parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayRsqrtF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayRsqrt(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 Rsqrt parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayRcpRefineF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayRcpRefine(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 RcpRefine parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayRsqrtRefineF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayRsqrtRefine(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        eBits := PUInt64(@LDstS[i])^;
+        aBits := PUInt64(@LDstD[i])^;
+        CheckEqual(eBits, aBits, 'F64 RsqrtRefine parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 19.0;
+    LDispatch^.BatchF64.ArrayRcp(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 19.0) < 1e-15, 'F64 Rcp count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayRsqrt(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 19.0) < 1e-15, 'F64 Rsqrt count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayRcpRefine(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 19.0) < 1e-15, 'F64 RcpRefine count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayRsqrtRefine(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 19.0) < 1e-15, 'F64 RsqrtRefine count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArraySinExp_NearParity;
+var
+  LSrc, LExpSrc, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 33);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  LAbsDiff, LScale, LTol: Single;
+begin
+  { Wave C5: Sin/Exp near-parity vs scalar (Cody-Waite poly; not bit-equal). }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+    begin
+      LSrc[i] := Single(i) * 0.35 - 8.0; { multi-quadrant sin }
+      LExpSrc[i] := Single(i) * 0.5 - 12.0; { moderate exp domain }
+      if LExpSrc[i] > 20.0 then
+        LExpSrc[i] := 20.0
+      else if LExpSrc[i] < -20.0 then
+        LExpSrc[i] := -20.0;
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArraySinF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArraySin(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        LAbsDiff := Abs(LDstS[i] - LDstD[i]);
+        LScale := Abs(LDstS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-5 * LScale + 1e-6;
+        if LTol < 8.0 * 1.2e-7 * LScale then
+          LTol := 8.0 * 1.2e-7 * LScale + 1e-6;
+        CheckTrue(LAbsDiff <= LTol,
+          'F32 Sin near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayExpF32(@LExpSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayExp(@LExpSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        LAbsDiff := Abs(LDstS[i] - LDstD[i]);
+        LScale := Abs(LDstS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-4 * LScale + 1e-5;
+        CheckTrue(LAbsDiff <= LTol,
+          'F32 Exp near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 21.0;
+    LDispatch^.BatchF32.ArraySin(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 21.0) < 1e-6, 'F32 Sin count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayExp(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 21.0) < 1e-6, 'F32 Exp count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayCosSinCos_NearParity;
+var
+  LSrc, LDstS, LDstD, LSinS, LSinD, LCosS, LCosD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 33);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  LAbsDiff, LScale, LTol: Single;
+begin
+  { Wave C5b: Cos / SinCos near-parity vs scalar. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Single(i) * 0.41 - 9.0;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayCosF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayCos(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        LAbsDiff := Abs(LDstS[i] - LDstD[i]);
+        LScale := Abs(LDstS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-5 * LScale + 1e-6;
+        CheckTrue(LAbsDiff <= LTol,
+          'F32 Cos near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LSinS, SizeOf(LSinS), 0);
+      FillChar(LCosS, SizeOf(LCosS), 0);
+      FillChar(LSinD, SizeOf(LSinD), 0);
+      FillChar(LCosD, SizeOf(LCosD), 0);
+      ScalarArraySinCosF32(@LSrc[0], @LSinS[0], @LCosS[0], LCount);
+      LDispatch^.BatchF32.ArraySinCos(@LSrc[0], @LSinD[0], @LCosD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        LAbsDiff := Abs(LSinS[i] - LSinD[i]);
+        LScale := Abs(LSinS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-5 * LScale + 1e-6;
+        CheckTrue(LAbsDiff <= LTol,
+          'F32 SinCos.sin near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+        LAbsDiff := Abs(LCosS[i] - LCosD[i]);
+        LScale := Abs(LCosS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-5 * LScale + 1e-6;
+        CheckTrue(LAbsDiff <= LTol,
+          'F32 SinCos.cos near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 23.0;
+    LSinD[0] := 24.0;
+    LCosD[0] := 25.0;
+    LDispatch^.BatchF32.ArrayCos(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 23.0) < 1e-6, 'F32 Cos count=0 leaves dst');
+    LDispatch^.BatchF32.ArraySinCos(@LSrc[0], @LSinD[0], @LCosD[0], 0);
+    CheckTrue(Abs(LSinD[0] - 24.0) < 1e-6, 'F32 SinCos count=0 leaves sin dst');
+    CheckTrue(Abs(LCosD[0] - 25.0) < 1e-6, 'F32 SinCos count=0 leaves cos dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF32_ArrayLogFamily_NearParity;
+var
+  LSrc, LDstS, LDstD: array[0..64] of Single;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 4, 7, 16, 33);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  LAbsDiff, LScale, LTol: Single;
+begin
+  { Wave C5c: Log/Log2/Log10 near-parity vs scalar; positive inputs only. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+      LSrc[i] := Single(i) * 0.37 + 0.05; { (0.05 .. ~24) all positive }
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayLogF32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayLog(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        LAbsDiff := Abs(LDstS[i] - LDstD[i]);
+        LScale := Abs(LDstS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-5 * LScale + 1e-6;
+        CheckTrue(LAbsDiff <= LTol,
+          'F32 Log near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayLog2F32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayLog2(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        LAbsDiff := Abs(LDstS[i] - LDstD[i]);
+        LScale := Abs(LDstS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-4 * LScale + 1e-5;
+        CheckTrue(LAbsDiff <= LTol,
+          'F32 Log2 near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayLog10F32(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF32.ArrayLog10(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        LAbsDiff := Abs(LDstS[i] - LDstD[i]);
+        LScale := Abs(LDstS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-4 * LScale + 1e-5;
+        CheckTrue(LAbsDiff <= LTol,
+          'F32 Log10 near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 27.0;
+    LDispatch^.BatchF32.ArrayLog(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 27.0) < 1e-6, 'F32 Log count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayLog2(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 27.0) < 1e-6, 'F32 Log2 count=0 leaves dst');
+    LDispatch^.BatchF32.ArrayLog10(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 27.0) < 1e-6, 'F32 Log10 count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
+end;
+
+procedure TTestCase_DispatchAPI.Test_BatchF64_ArraySinExp_NearParity;
+var
+  LSrc, LExpSrc, LDstS, LDstD: array[0..64] of Double;
+  LCount: SizeUInt;
+  LCounts: array[0..5] of SizeUInt = (0, 1, 2, 3, 8, 33);
+  ci, i: Integer;
+  LDispatch: PSimdDispatchTable;
+  LSavedMask: TFPUExceptionMask;
+  LAbsDiff, LScale, LTol: Double;
+begin
+  { Wave C5d: F64 Sin/Exp near-parity vs scalar. }
+  LSavedMask := GetExceptionMask;
+  SetExceptionMask([exInvalidOp, exDenormalized, exZeroDivide, exOverflow, exUnderflow, exPrecision]);
+  try
+    LDispatch := GetDispatchTable;
+    for i := 0 to 64 do
+    begin
+      LSrc[i] := Double(i) * 0.35 - 8.0;
+      LExpSrc[i] := Double(i) * 0.4 - 10.0;
+      if LExpSrc[i] > 20.0 then
+        LExpSrc[i] := 20.0
+      else if LExpSrc[i] < -20.0 then
+        LExpSrc[i] := -20.0;
+    end;
+
+    for ci := 0 to High(LCounts) do
+    begin
+      LCount := LCounts[ci];
+      if LCount > 65 then
+        LCount := 65;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArraySinF64(@LSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArraySin(@LSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        LAbsDiff := Abs(LDstS[i] - LDstD[i]);
+        LScale := Abs(LDstS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-10 * LScale + 1e-12;
+        CheckTrue(LAbsDiff <= LTol,
+          'F64 Sin near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+
+      FillChar(LDstS, SizeOf(LDstS), 0);
+      FillChar(LDstD, SizeOf(LDstD), 0);
+      ScalarArrayExpF64(@LExpSrc[0], @LDstS[0], LCount);
+      LDispatch^.BatchF64.ArrayExp(@LExpSrc[0], @LDstD[0], LCount);
+      for i := 0 to Integer(LCount) - 1 do
+      begin
+        LAbsDiff := Abs(LDstS[i] - LDstD[i]);
+        LScale := Abs(LDstS[i]);
+        if LScale < 1.0 then
+          LScale := 1.0;
+        LTol := 1e-9 * LScale + 1e-12;
+        CheckTrue(LAbsDiff <= LTol,
+          'F64 Exp near parity count=' + IntToStr(LCount) + ' i=' + IntToStr(i));
+      end;
+    end;
+
+    LDstD[0] := 29.0;
+    LDispatch^.BatchF64.ArraySin(@LSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 29.0) < 1e-15, 'F64 Sin count=0 leaves dst');
+    LDispatch^.BatchF64.ArrayExp(@LExpSrc[0], @LDstD[0], 0);
+    CheckTrue(Abs(LDstD[0] - 29.0) < 1e-15, 'F64 Exp count=0 leaves dst');
+  finally
+    SetExceptionMask(LSavedMask);
+  end;
 end;
 
 procedure TTestCase_DispatchAPI.Test_NEON_WideFloatMemoryUtilitySlots_Bind_AsmHelpers_When_Available;

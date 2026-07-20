@@ -13,7 +13,7 @@ uses
 implementation
 
 uses
-  Math;
+  nextpas.core.math;
 
 {$I ../../src/generated/nextpas.core.simd.scalar.impl.inc}
 

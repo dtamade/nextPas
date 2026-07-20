@@ -4,7 +4,6 @@ program test_algorithms;
 
 uses
   nextpas.core.thread.init,
-  Classes,
   nextpas.core.test,
   nextpas.core.simd,
   nextpas.core.simd.algorithms.testcase;

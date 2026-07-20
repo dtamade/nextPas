@@ -6,7 +6,7 @@ unit nextpas.core.simd.dataplane.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
+  nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd,
   nextpas.core.simd.testcase, nextpas.core.simd.base,
   nextpas.core.simd.dispatch, nextpas.core.simd.direct,
   nextpas.core.simd.dataplane, nextpas.core.simd.scalar;

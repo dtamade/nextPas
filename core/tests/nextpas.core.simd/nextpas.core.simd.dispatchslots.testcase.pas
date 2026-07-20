@@ -9,7 +9,7 @@ unit nextpas.core.simd.dispatchslots.testcase;
 interface
 
 uses
-  Classes, nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd.testcase,
+  nextpas.core.text.conv, nextpas.core.test, nextpas.core.simd.testcase,
   nextpas.core.simd.base, nextpas.core.simd.dispatch,
   nextpas.core.simd.backend.iface, nextpas.core.simd.backend.adapter;
 

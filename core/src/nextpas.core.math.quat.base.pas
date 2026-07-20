@@ -5,8 +5,8 @@ unit nextpas.core.math.quat.base;
 interface
 
 uses
-  Math,
   nextpas.core.math.scalar,
+  nextpas.core.math.trig,
   nextpas.core.math.vec.base,
   nextpas.core.math.mat.base;
 
