@@ -89,6 +89,9 @@ uses nextpas.core.system.typinfo, nextpas.core.base, nextpas.core.math, nextpas.
 
 implementation
 
+uses
+  nextpas.core.mem;
+
 { TElementManager }
 
 constructor TElementManager.Create(aAllocator: TMemAllocator);
@@ -327,7 +330,7 @@ begin
       LCopyCount := aNewElementCount;
     if LCopyCount > 0 then
       Move(aDst^, Result^, LCopyCount * FElementSize);
-    FAllocator.FreeMem(aDst);
+    FreeMemOf(FAllocator, aDst, aElementCount * FElementSize);
     if FIsManagedType and (aNewElementCount > aElementCount) then
       InitializeElements(Pointer(Result + aElementCount), aNewElementCount - aElementCount);
     Exit;
@@ -352,7 +355,7 @@ begin
   if FIsManagedType then
     FinalizeManagedElements(aDst, aElementCount);
 
-  FAllocator.FreeMem(aDst);
+  FreeMemOf(FAllocator, aDst, aElementCount * FElementSize);
 end;
 
 procedure TElementManager.FreeElement(aDst: Pointer);

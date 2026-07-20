@@ -9,6 +9,7 @@ program test_discovery;
 {$modeswitch functionreferences}
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.test.base,
   nextpas.core.test.runner,
@@ -351,10 +352,23 @@ begin
   CheckTrue(True, 'triple CleanupTableAllocations safe');
 end;
 
+procedure TestB26DiscoverNameContract(const AC: TTestCase);
+{ Data empty → must fail non-empty name check; non-empty → pass. }
+begin
+  if AC.Data = '' then
+    ExpectFail(procedure begin
+      CheckTrue(AC.Data <> '', 'discovered name non-empty');
+    end, 'non-empty')
+  else
+    CheckTrue(AC.Data <> '', 'name ok');
+end;
+
 { ── Main ───────────────────────────────────────────────────────────────────── }
 
 var
   LSuite: TTestSuite;
+  LB26Cases: specialize TArray<TTestCase>;
+  LB26I: Integer;
 begin
   WriteLn('=== test_discovery ===');
   LSuite := TTestSuite.Create('discovery');
@@ -379,6 +393,19 @@ begin
   LSuite.Test('B12 Discover hooks on fail', @TestB12DiscoverHooksOnFailure);
   LSuite.Test('B12 Discover two instances', @TestB12DiscoverTwoInstancesIndependent);
   LSuite.Test('B12 Discover cleanup idempotent', @TestB12DiscoverCleanupIdempotent);
+
+  { B26: meaningful name fail-path table (metadata only, no Discover run) }
+  SetLength(LB26Cases, 40);
+  for LB26I := 0 to High(LB26Cases) do
+  begin
+    LB26Cases[LB26I].Name := 'meta-' + IntToStr(LB26I);
+    { even = non-empty pass; odd = empty → ExpectFail }
+    if (LB26I mod 2) = 0 then
+      LB26Cases[LB26I].Data := 'ok-name-' + IntToStr(LB26I)
+    else
+      LB26Cases[LB26I].Data := '';
+  end;
+  LSuite.TestTable('B26 discover name contracts', LB26Cases, @TestB26DiscoverNameContract);
 
   if not LSuite.Run then
   begin

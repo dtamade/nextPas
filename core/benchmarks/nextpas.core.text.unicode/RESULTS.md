@@ -77,3 +77,20 @@
 
 - NFC BMP-Latin 分解/组合路径减分配（逼近 Go 1.2× 内）
 - CaseFold BMP stage-2 全表（非 Latin-1）
+
+## NFC BMP-Latin 第二轮 (2026-07-20c)
+
+### 重要：测项修正
+旧 micro 使用 Pascal `#$00C0` **单字节 Latin-1**，不是 U+00C0 的 UTF-8。  
+修正为真实 UTF-8 后：已 NFC 串 `QuickCheckNFC=True`，短路后：
+
+| 操作 | nextPas | Go | 比率 |
+|------|--------:|---:|-----:|
+| NFC real-UTF8 BMP-Latin (已 NFC) | **~1031 ns** | ~2819 ns | **0.36×** 领先 |
+
+全量规范化路径仍保留 compose 索引 + 内联 UTF-8 写出优化。
+
+### 实现
+- UCD `NFC_QC` N/M 表（`nfc_qc.inc`，SMP 已排序）+ **安全** `NFC` 短路
+- `FindComposition` starter-run 索引（391 runs）
+- `BufferToUtf8` BMP 内联 1/2/3 字节编码

@@ -428,6 +428,46 @@ begin
   LSuite := Default(TTestSuite);
 end;
 
+procedure TestB26SoftFailAdvanced;
+var
+  LSuite: TTestSuite;
+  LResult: TTestRunResult;
+begin
+  LSuite := TTestSuite.Create('adv-soft');
+  LSuite.Test('soft', procedure
+    begin
+      SoftFail('adv soft');
+      SoftCheckEqual(1, 2);
+    end);
+  CheckFalse(LSuite.RunWithResult(LResult));
+  CheckEqual(LResult.Failed, 1);
+  CheckContains(LResult.Results[0].Message, 'adv soft');
+  LSuite := Default(TTestSuite);
+end;
+
+procedure TestB26TAPMultiSuite;
+var
+  LResults: specialize TArray<TTestRunResult>;
+  LTAP: string;
+begin
+  SetLength(LResults, 2);
+  LResults[0] := TTestRunResult.Create('S1');
+  LResults[0].Passed := 1;
+  SetLength(LResults[0].Results, 1);
+  LResults[0].Results[0].Name := 'a';
+  LResults[0].Results[0].Status := tsPassed;
+  LResults[1] := TTestRunResult.Create('S2');
+  LResults[1].Failed := 1;
+  SetLength(LResults[1].Results, 1);
+  LResults[1].Results[0].Name := 'b';
+  LResults[1].Results[0].Status := tsFailed;
+  LResults[1].Results[0].Message := 'nope';
+  LTAP := TAPReport(LResults);
+  CheckContains(LTAP, 'TAP version 13');
+  CheckContains(LTAP, '# suites: 2');
+  CheckContains(LTAP, 'not ok');
+end;
+
 { ── Main ──────────────────────────────────────────────────────────────────── }
 
 var
@@ -467,6 +507,8 @@ begin
   LSuite.Test('B12 TAPErrorSeverity', @TestB12TAPErrorSeverity);
   LSuite.Test('B12 DiscoverRunCleanupIdempotent', @TestB12DiscoverRunCleanupIdempotent);
   LSuite.Test('B12 RetryExhaustedMessage', @TestB12RetryExhaustedMessage);
+  LSuite.Test('B26 SoftFail in advanced', @TestB26SoftFailAdvanced);
+  LSuite.Test('B26 TAP multi suite header', @TestB26TAPMultiSuite);
 
   LRunner := TSuiteRunner.Create('main');
   LRunner.Add(LSuite);

@@ -1,7 +1,7 @@
 # nextpas.core.test — Go / Rust 质量与规模对标
 
 **Owner**: test lane（全权）
-**当前版本**: **v8.17**
+**当前版本**: **v8.18**
 **最后更新**: 2026-07-20
 
 ---
@@ -16,7 +16,7 @@
 | 诊断 | cmp / testify | pretty_assertions / insta | ColorDiff + Snapshot 契约 |
 | 并行/竞态 | t.Parallel / -race | 串行默认 | RunParallel + 原子压力测 |
 | Prop/Fuzz | testing.F + 第三方 | proptest | 内置 + 可计数套件 |
-| 规模 | 上千级自测 | 同左 | **≥2500 可计数过程** |
+| 规模 | 上千级自测 | 同左 | **≥3000 可计数过程 + fail-path≥30%** |
 | 失败语义 | Error 可继续 / Fatal 停 | panic | **Check=Fatal**；**SoftFail** opt-in |
 
 ---
@@ -26,7 +26,7 @@
 | 指标 | 值 |
 |------|-----|
 | 套件 | **19**（+ scale report） |
-| 可计数过程 | **≥2500**（scale report；含 TestSubtest；SCALE_MIN 默认 2500） |
+| 可计数过程 | **≥3000**（scale report；SCALE_MIN 默认 3000；FAIL_PATH_MIN_RATIO 默认 0.30） |
 | Check*/To* 门禁 | 56 + 52 全引用 |
 | Runner 门禁 | TestSeq/RunParallel/报告 API 等 23 项 |
 
@@ -55,6 +55,9 @@
 | B21 v8.15 CI golden + contracts 门禁 | **done** |
 | B22 v8.16 SoftFail opt-in | **done** |
 | B23–B24 v8.17 SoftFail 完成度 | **done** |
+| B26 v8.18 薄套件加厚 | **done** |
+| B27 v8.18 规模≥3000 + fail-path 硬门禁 | **done** |
+| B28 v8.18 消费者 smoke_suite 示例 | **done** |
 
 ### 暂缓 / 阻塞
 
@@ -89,8 +92,15 @@ make -C core/tests/nextpas.core.test clean test   # 19/19
 
 ```bash
 make -C core/tests/nextpas.core.test/test_scale_report test
-# SCALE_MIN=2500 (default)
+# SCALE_MIN=3000 FAIL_PATH_MIN_RATIO=0.30 (defaults)
 ```
+
+消费者示例：
+
+```bash
+make -C core/examples/nextpas.core.test/smoke_suite run
+```
+
 
 
 ## perf 策略

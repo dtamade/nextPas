@@ -1,6 +1,6 @@
 # tui Scorecard
 
-**状态**: Wave Q1–Q12 Active
+**状态**: Wave Q1–Q13 Active
 **权威入口**: `core/tests/nextpas.core.tui/scorecard/`
 **对标纲领**: [PARITY-GO-RUST.md](PARITY-GO-RUST.md)
 
@@ -45,6 +45,9 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 | SC14 | HorizontalSplit 3 | 面积守恒 + 左右固定宽 |
 | SC15 | Input resilience | incomplete CSI NeedMore；非法字节后恢复 |
 | SC16 | Diff single-cell bound | 1 cell dirty → patches>0 且 ≪ 全量 |
+| SC17 | Backend mouse alt modes | Enter `1003h`/`1006h`；Leave 先 disable 再 `1049l` |
+| SC18 | ResizeEvent helpers | kind/dims/IsResize |
+| SC19 | Percentage VSplit 50/50 | 高度和 + 面积守恒 |
 
 规则：
 
@@ -66,7 +69,7 @@ make -C core/tests/nextpas.core.tui/scorecard clean test RELEASE=1
 | SC2 | diff_dirty10 | ~35–37k | 2000 | Y |
 | SC3a | parse_ascii | ~36–50 | 50000 | Y |
 | SC3b | parse_csi_up | ~45–50 | 50000 | Y |
-| SC4a–SC16a | correctness gates | — | 1 | Y |
+| SC4a–SC19a | correctness gates | — | 1 | Y |
 
 ### `bench_go_rust compare`（同机，简化核）
 
