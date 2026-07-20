@@ -180,7 +180,7 @@ var
   Evt: TPlatformWatchEvent;
   H: TPlatformFileHandle;
   LWritten: PtrUInt;
-  R: Int32;
+  R, I: Int32;
 begin
   platform_file_mkdir('/tmp/nextpas_watch_test5', 493);
   Check(platform_watch_create(W) = 0, 'create');
@@ -191,14 +191,21 @@ begin
   platform_file_write(H, PAnsiChar('x'), 1, LWritten);
   platform_file_close(H);
 
-  // Wait a bit then delete
-  platform_watch_poll(W, Evt, 100); // consume create event
+  { Drain create/modify residuals so delete is not shadowed (R30 multi-event). }
+  while platform_watch_poll(W, Evt, 50) > 0 do
+    ;
 
   platform_file_unlink('/tmp/nextpas_watch_test5/delete.txt');
 
-  R := platform_watch_poll(W, Evt, 1000);
-  Check(R > 0, 'got delete event');
-  Check(Evt.Deleted, 'event is deleted');
+  R := 0;
+  FillChar(Evt, SizeOf(Evt), 0);
+  for I := 1 to 20 do
+  begin
+    R := platform_watch_poll(W, Evt, 100);
+    if (R > 0) and Evt.Deleted then
+      Break;
+  end;
+  Check((R > 0) and Evt.Deleted, 'got delete event');
 
   platform_watch_close(W);
   platform_file_rmdir('/tmp/nextpas_watch_test5');

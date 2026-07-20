@@ -1,146 +1,32 @@
-# nextpas.core.sync 代码契约
+# nextpas.core.sync 契约索引
 
-> 模块路径: `core/src/nextpas.core.sync.*.pas`
-> 创建日期: 2026-07-04
-> 维护者: AI
+> **权威契约**：[`core/docs/sync/CONTRACT.md`](../../core/docs/sync/CONTRACT.md)
+> **模块入口**：[`core/docs/sync/README.md`](../../core/docs/sync/README.md)
+> **目标树**：[`core/docs/sync/GOAL_TREE.md`](../../core/docs/sync/GOAL_TREE.md)
 
----
-
-## 概述
-
-同步原语门面。聚合 Mutex、RWLock、SpinLock、WaitGroup、CondVar、
-Semaphore、Barrier、Event、Once 共 9 种同步原语。
+本文件仅作仓库级 `docs/contracts/` 入口，**不**维护第二套 API 签名或语义描述。
+任何接口、错误语义、线程安全不变量的变更必须先改 `core/docs/sync/CONTRACT.md`，并同步行为 / source-contract 测试。
 
 ---
 
-## 接口签名
+## 一句话
 
-### 工厂函数
+L1 同步原语门面：Mutex、FutexMutex、RWLock、SpinLock、WaitGroup、CondVar、Once、Semaphore、Barrier、Event；实验旁路 `TSyncPool`（未进门面）。
 
-```pascal
-function Mutex: IMutex;
-function FutexMutex: IMutex;      { futex 优化版本 }
-function RWLock: IRWLock;
-function WaitGroup: IWaitGroup;
-function CondVar: ICondVar;
-function Once: IOnce;
-function SpinLock: ISpinLock;
-function Semaphore(AInitial: Int32 = 1): ISemaphore;
-function Barrier(ACount: Int32): IBarrier;
-function Event(AManualReset: Boolean = True): IEvent;
+## 测试
+
+```bash
+make -C core/tests/nextpas.core.sync test
 ```
 
-### 核心接口
+## 依赖边界
 
-```pascal
-type
-  ILock = interface
-    procedure Acquire;
-    procedure Release;
-    function TryAcquire: Boolean;
-  end;
-
-  IMutex = interface(ILock)
-    { 独占锁 }
-  end;
-
-  IRWLock = interface
-    procedure AcquireRead;
-    procedure AcquireWrite;
-    procedure ReleaseRead;
-    procedure ReleaseWrite;
-    function TryAcquireRead: Boolean;
-    function TryAcquireWrite: Boolean;
-  end;
-
-  IWaitGroup = interface
-    procedure Add(ADelta: Int32);
-    procedure Done;
-    procedure Wait;
-  end;
-
-  ICondVar = interface
-    procedure Wait(AMutex: IMutex);
-    function WaitFor(AMutex: IMutex; ATimeoutMs: Int32): Boolean;
-    procedure Signal;
-    procedure Broadcast;
-  end;
-
-  IOnce = interface
-    procedure DoCall(AProc: TOnceProc);
-  end;
-
-  ISemaphore = interface
-    procedure Acquire;
-    procedure Release;
-    function TryAcquire: Boolean;
-  end;
-
-  IBarrier = interface
-    function Wait: TBarrierWaitResult;
-  end;
-
-  IEvent = interface
-    procedure WaitFor;
-    function WaitForTimeout(AMs: Int32): Boolean;
-    procedure Signal;
-    procedure Reset;
-  end;
-```
-
----
-
-## 后置条件
-
-1. `Mutex`: 返回新互斥锁实例
-2. `WaitGroup.Add(n)`: 计数器增加 n
-3. `WaitGroup.Done()`: 计数器减 1
-4. `WaitGroup.Wait()`: 阻塞直到计数器为 0
-5. `Once.DoCall`: 回调只执行一次（首次调用）
-
----
-
-## 错误语义
-
-| 场景 | 行为 |
-|------|------|
-| WaitGroup 计数器为负 | raise EInvalidState |
-| CondVar.Wait 非持有者调用 | 未定义行为 |
-| Semaphore 释放超过获取次数 | raise EInvalidState |
-
----
-
-## 线程安全
-
-- **所有同步原语完全线程安全**
-- 这是它们存在的唯一目的
-
----
-
-## 内存管理
-
-- 所有原语为接口类型，引用计数自动管理
-- 底层使用 platform.sync 的 pthread/futex/CRITICAL_SECTION
-
----
-
-## 测试覆盖
-
-| 套件 | 路径 |
-|------|------|
-| test_sync_* | `core/tests/nextpas.core.sync/` |
-
----
-
-## 依赖关系
-
-- 依赖: `nextpas.core.platform.sync`（底层原语）
-- 被依赖: collections (ConcurrentHashMap), lockfree, http, net
-
----
+- 依赖：`nextpas.core.platform.sync`（宿主原语）、`nextpas.core.atomic`（用户态无锁路径）
+- 被依赖：http、tls、thread、test.runner、collections.concurrent、net 等
 
 ## 变更记录
 
-| 日期 | 变更 | 原因 |
-|------|------|------|
-| 2026-07-04 | 初始版本 | 契约建立 |
+| 日期 | 变更 |
+|------|------|
+| 2026-07-04 | 初始（含已过时的方法名描述） |
+| 2026-07-20 | 收敛为薄索引；权威迁至 `core/docs/sync/CONTRACT.md` |

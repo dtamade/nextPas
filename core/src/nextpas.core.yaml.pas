@@ -8,14 +8,16 @@ unit nextpas.core.yaml;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.view,
   nextpas.core.mem.intf,
+  nextpas.core.io.intf,
   nextpas.core.yaml.types,
   nextpas.core.yaml.parser,
   nextpas.core.yaml.value,
   nextpas.core.yaml.builder,
   nextpas.core.yaml.writer,
- nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base;
 
 type
   TYamlNodeKind = nextpas.core.yaml.types.TYamlNodeKind;
@@ -34,7 +36,9 @@ type
 
 function YamlParse(const AInput: string): IYamlDocument; overload;
 function YamlParse(const AInput: TStringView): IYamlDocument; overload;
-function TryYamlParse(const AInput: string; out ADoc: IYamlDocument): Boolean;
+function YamlParse(const AReader: IReader): IYamlDocument; overload;
+function TryYamlParse(const AInput: string; out ADoc: IYamlDocument): Boolean; overload;
+function TryYamlParse(const AReader: IReader; out ADoc: IYamlDocument): Boolean; overload;
 
 { Parse with custom allocator. YAML internals use RTL-managed dynamic arrays;
   the allocator controls parser document storage. }
@@ -45,7 +49,15 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.io.util,
   nextpas.core.mem.default;
+
+function YamlBytesToString(const ABytes: TBytes): string;
+begin
+  if Length(ABytes) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
+end;
 
 type
   TYamlDocumentImpl = class(TInterfacedObject, IYamlDocument)
@@ -142,6 +154,27 @@ function TryYamlParse(const AInput: string; out ADoc: IYamlDocument): Boolean;
 begin
   ADoc := YamlParse(AInput);
   Result := not ADoc.HasError;
+end;
+
+function YamlParse(const AReader: IReader): IYamlDocument;
+begin
+  if AReader = nil then
+    raise EArgumentError.Create('YamlParse: reader must not be nil');
+  Result := YamlParse(YamlBytesToString(IoReadAll(AReader)));
+end;
+
+function TryYamlParse(const AReader: IReader; out ADoc: IYamlDocument): Boolean;
+begin
+  ADoc := nil;
+  if AReader = nil then
+    Exit(False);
+  try
+    ADoc := YamlParse(AReader);
+    Result := not ADoc.HasError;
+  except
+    ADoc := nil;
+    Result := False;
+  end;
 end;
 
 function YamlParseWith(const AInput: string; const AAllocator: TMemAllocator): IYamlDocument;

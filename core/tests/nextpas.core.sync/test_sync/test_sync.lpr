@@ -5,58 +5,12 @@ program test_sync;
 uses
   nextpas.core.thread.init,
   SysUtils, Classes,
+  nextpas.core.errors,
   nextpas.core.test,
   nextpas.core.sync;
 
 var
   T: TTestSuite;
-
-type
-  TSignalOnReleaseMutex = class(TInterfacedObject, ILock, IMutex)
-  private
-    FCondVar: ICondVar;
-    FReleased: Boolean;
-  public
-    constructor Create(const ACondVar: ICondVar);
-    procedure Acquire;
-    function TryAcquire: Boolean;
-    procedure Release;
-    function Lock: ILockGuard;
-    function NativeHandle: Pointer;
-    property Released: Boolean read FReleased;
-  end;
-
-constructor TSignalOnReleaseMutex.Create(const ACondVar: ICondVar);
-begin
-  inherited Create;
-  FCondVar := ACondVar;
-  FReleased := False;
-end;
-
-procedure TSignalOnReleaseMutex.Acquire;
-begin
-end;
-
-function TSignalOnReleaseMutex.TryAcquire: Boolean;
-begin
-  Result := True;
-end;
-
-procedure TSignalOnReleaseMutex.Release;
-begin
-  FReleased := True;
-  FCondVar.Signal;
-end;
-
-function TSignalOnReleaseMutex.Lock: ILockGuard;
-begin
-  Result := nil;
-end;
-
-function TSignalOnReleaseMutex.NativeHandle: Pointer;
-begin
-  Result := nil;
-end;
 
 procedure TestMutexBasic;
 var
@@ -225,7 +179,7 @@ end;
 procedure TestCondVarDoesNotLoseSignalDuringRelease;
 var
   LCond: ICondVar;
-  LMutex: IMutex;
+  LMutex: INativeMutex;
 begin
   LCond := CondVar;
   LMutex := Mutex;
@@ -471,7 +425,7 @@ end;
 procedure TestCondVarBroadcast;
 var
   LCond: ICondVar;
-  LMutex: IMutex;
+  LMutex: INativeMutex;
 begin
   LCond := CondVar;
   LMutex := Mutex;
@@ -479,6 +433,150 @@ begin
   LMutex.Acquire;
   Check(not LCond.WaitTimeout(LMutex, 1000000), 'timeout (no signal)');
   LMutex.Release;
+end;
+
+procedure TestWaitGroupDoneTooMany;
+var
+  LWg: IWaitGroup;
+  LRaised: Boolean;
+begin
+  LWg := WaitGroup;
+  LRaised := False;
+  try
+    LWg.Done;
+  except
+    on E: ENextPasError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Done without Add must raise');
+end;
+
+procedure TestWaitGroupAddNonPositive;
+var
+  LWg: IWaitGroup;
+  LRaised: Boolean;
+begin
+  LWg := WaitGroup;
+  LRaised := False;
+  try
+    LWg.Add(0);
+  except
+    on E: ENextPasError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Add(0) must raise');
+
+  LRaised := False;
+  try
+    LWg.Add(-1);
+  except
+    on E: ENextPasError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Add(negative) must raise');
+end;
+
+procedure TestCondVarWithNativeMutex;
+var
+  LCond: ICondVar;
+  LMutex: INativeMutex;
+begin
+  LCond := CondVar;
+  LMutex := Mutex;
+  LMutex.Acquire;
+  Check(not LCond.WaitTimeout(LMutex, 1000000), 'native mutex timeout without signal');
+  LMutex.Release;
+end;
+
+procedure TestFutexMutexIsNotNativeMutex;
+var
+  LMutex: IMutex;
+  LNative: INativeMutex;
+begin
+  LMutex := FutexMutex;
+  Check(not Supports(LMutex, INativeMutex, LNative),
+    'FutexMutex must not implement INativeMutex (type-level CondVar isolation)');
+  Check(Supports(Mutex, INativeMutex, LNative),
+    'Mutex factory must implement INativeMutex');
+end;
+
+procedure TestSemaphoreNegativeInitial;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    Semaphore(-1);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Semaphore(-1) must raise');
+end;
+
+procedure TestBarrierInvalidCount;
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    Barrier(0);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Barrier(0) must raise');
+
+  LRaised := False;
+  try
+    Barrier(-3);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Barrier(negative) must raise');
+end;
+
+procedure TestOnceConcurrent;
+var
+  LOnce: IOnce;
+  LThreads: array[0..7] of TThread;
+  LI: Integer;
+begin
+  LOnce := Once;
+  GOnceCounter := 0;
+
+  for LI := 0 to 7 do
+  begin
+    LThreads[LI] := TThread.CreateAnonymousThread(procedure
+    begin
+      LOnce.Do_(@OnceIncrement);
+    end);
+    LThreads[LI].FreeOnTerminate := False;
+    LThreads[LI].Start;
+  end;
+
+  for LI := 0 to 7 do
+  begin
+    LThreads[LI].WaitFor;
+    LThreads[LI].Free;
+  end;
+
+  CheckEqual(Int64(1), Int64(GOnceCounter), 'Once concurrent must run callback exactly once');
+  Check(LOnce.Done, 'Once must be done after concurrent Do_');
+end;
+
+procedure TestEventAutoResetSinglePermit;
+var
+  LEv: IEvent;
+begin
+  LEv := Event(False);
+  LEv.SetEvent;
+  LEv.SetEvent; { idempotent: still one permit }
+  Check(LEv.IsSet, 'auto-reset event set');
+  LEv.Wait;
+  Check(not LEv.IsSet, 'first Wait consumes the permit');
+  Check(not LEv.WaitTimeout(1000000), 'second Wait must timeout with no second permit');
 end;
 
 begin
@@ -497,24 +595,32 @@ begin
   T.Test('RWLock try acquire', @TestRWLockTryAcquire);
   T.Test('WaitGroup basic', @TestWaitGroupBasic);
   T.Test('WaitGroup multiple', @TestWaitGroupMultiple);
+  T.Test('WaitGroup done too many', @TestWaitGroupDoneTooMany);
+  T.Test('WaitGroup add non-positive', @TestWaitGroupAddNonPositive);
   T.Test('CondVar broadcast', @TestCondVarBroadcast);
   T.Test('CondVar does not lose signal during release', @TestCondVarDoesNotLoseSignalDuringRelease);
+  T.Test('CondVar with INativeMutex', @TestCondVarWithNativeMutex);
+  T.Test('FutexMutex is not INativeMutex', @TestFutexMutexIsNotNativeMutex);
 
   T.Test('Once basic', @TestOnceBasic);
   T.Test('Once not done before call', @TestOnceDoneBeforeCall);
   T.Test('Once exception resets', @TestOnceExceptionResets);
+  T.Test('Once concurrent', @TestOnceConcurrent);
   T.Test('SpinLock basic', @TestSpinLockBasic);
   T.Test('SpinLock guard', @TestSpinLockGuard);
   T.Test('Semaphore basic', @TestSemaphoreBasic);
   T.Test('Semaphore timeout', @TestSemaphoreTimeout);
   T.Test('Semaphore release multiple', @TestSemaphoreReleaseMultiple);
+  T.Test('Semaphore negative initial', @TestSemaphoreNegativeInitial);
 
   T.Test('Barrier single thread', @TestBarrierSingleThread);
+  T.Test('Barrier invalid count', @TestBarrierInvalidCount);
   T.Test('Event manual reset', @TestEventManualReset);
   T.Test('Event auto reset', @TestEventAutoReset);
   T.Test('Event timeout', @TestEventTimeout);
   T.Test('AutoReset idempotent', @TestAutoResetIdempotent);
   T.Test('ManualReset set+reset pulse', @TestManualResetSetResetPulse);
+  T.Test('Event auto-reset single permit', @TestEventAutoResetSinglePermit);
 
   if not T.Run then Halt(1);
 end.

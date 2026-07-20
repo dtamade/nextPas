@@ -8,14 +8,16 @@ unit nextpas.core.json;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.mem.intf,
+  nextpas.core.io.intf,
   nextpas.core.json.types,
   nextpas.core.json.parser,
   nextpas.core.json.value,
   nextpas.core.json.writer,
- nextpas.core.mem.allocator.base;
+  nextpas.core.mem.allocator.base;
 
 type
   TJsonNodeKind = nextpas.core.json.types.TJsonNodeKind;
@@ -36,7 +38,10 @@ type
 { Parse JSON string into a document. Returns IJsonDocument (auto-released). }
 function JsonParse(const AInput: string): IJsonDocument; overload;
 function JsonParse(const AInput: TStringView): IJsonDocument; overload;
-function TryJsonParse(const AInput: string; out ADoc: IJsonDocument): Boolean;
+{ Bulk-read IReader then parse (not token-streaming Decoder). }
+function JsonParse(const AReader: IReader): IJsonDocument; overload;
+function TryJsonParse(const AInput: string; out ADoc: IJsonDocument): Boolean; overload;
+function TryJsonParse(const AReader: IReader; out ADoc: IJsonDocument): Boolean; overload;
 
 { Parse with custom allocator (arena/pool for bulk allocation). }
 function JsonParseWith(const AInput: string; const AAllocator: TMemAllocator): IJsonDocument; overload;
@@ -50,7 +55,15 @@ implementation
 uses
   nextpas.core.mem.default,
   nextpas.core.errors,
+  nextpas.core.io.util,
   nextpas.core.text.escape;
+
+function JsonBytesToString(const ABytes: TBytes): string;
+begin
+  if Length(ABytes) = 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@ABytes[0]), Length(ABytes));
+end;
 
 type
   TJsonDocumentImpl = class(TInterfacedObject, IJsonDocument)
@@ -319,6 +332,27 @@ function TryJsonParse(const AInput: string; out ADoc: IJsonDocument): Boolean;
 begin
   ADoc := JsonParse(AInput);
   Result := not ADoc.HasError;
+end;
+
+function JsonParse(const AReader: IReader): IJsonDocument;
+begin
+  if AReader = nil then
+    raise EArgumentError.Create('JsonParse: reader must not be nil');
+  Result := JsonParse(JsonBytesToString(IoReadAll(AReader)));
+end;
+
+function TryJsonParse(const AReader: IReader; out ADoc: IJsonDocument): Boolean;
+begin
+  ADoc := nil;
+  if AReader = nil then
+    Exit(False);
+  try
+    ADoc := JsonParse(AReader);
+    Result := not ADoc.HasError;
+  except
+    ADoc := nil;
+    Result := False;
+  end;
 end;
 
 function JsonParseWith(const AInput: string; const AAllocator: TMemAllocator): IJsonDocument;

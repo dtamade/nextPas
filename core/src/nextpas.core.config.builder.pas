@@ -14,6 +14,8 @@ function ConfigBuilder: IConfigBuilder;
 function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig; overload;
 function ConfigLoad(const APath: string): IConfig; overload;
 function ConfigBorrow(AConfig: TConfig): IConfig;
+function ConfigSection(const AConfig: IConfig; const APrefix: string): IConfig; overload;
+function ConfigSection(AConfig: TConfig; const APrefix: string): IConfig; overload;
 
 implementation
 
@@ -21,7 +23,8 @@ uses
   nextpas.core.base,
   nextpas.core.config.env,
   nextpas.core.fs,
-  nextpas.core.platform.files.base;
+  nextpas.core.platform.files.base,
+  nextpas.core.text.conv;
 
 type
   TConfigSourceKind = (
@@ -59,10 +62,12 @@ type
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
+    function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
     function GetFloatRequired(const AKey: string): Double;
+    function GetDurationNsRequired(const AKey: string): Int64;
     procedure Require(const AKeys: array of string);
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
@@ -88,10 +93,45 @@ type
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
+    function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetStringRequired(const AKey: string): string;
     function GetIntRequired(const AKey: string): Int64;
     function GetBoolRequired(const AKey: string): Boolean;
     function GetFloatRequired(const AKey: string): Double;
+    function GetDurationNsRequired(const AKey: string): Int64;
+    procedure Require(const AKeys: array of string);
+    function Has(const AKey: string): Boolean;
+    function GetKeys: TStringArray;
+    function GetSection(const APrefix: string): TStringArray;
+    function GetInterpolationMode: TConfigInterpolationMode;
+    function ToIni: string;
+    function ToJson: string;
+    function ToYaml: string;
+    function ToToml: string;
+  end;
+
+  { Non-owning prefix view over any IConfig (viper Sub). }
+  TSectionConfig = class(TInterfacedObject, IConfig)
+  private
+    FParent: IConfig;
+    FPrefix: string;
+    function GetCount: Integer;
+    function FullKey(const AKey: string): string;
+  public
+    constructor Create(const AParent: IConfig; const APrefix: string);
+    function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
+    function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
+    function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
+    function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
+    function GetDurationNs(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetStringRequired(const AKey: string): string;
+    function GetIntRequired(const AKey: string): Int64;
+    function GetBoolRequired(const AKey: string): Boolean;
+    function GetFloatRequired(const AKey: string): Double;
+    function GetDurationNsRequired(const AKey: string): Int64;
     procedure Require(const AKeys: array of string);
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
@@ -219,6 +259,11 @@ begin
   Result := FConfig.GetFloat(AKey, ADefault);
 end;
 
+function TOwnedConfig.GetDurationNs(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FConfig.GetDurationNs(AKey, ADefault);
+end;
+
 function TOwnedConfig.GetStringRequired(const AKey: string): string;
 begin
   Result := FConfig.GetStringRequired(AKey);
@@ -237,6 +282,11 @@ end;
 function TOwnedConfig.GetFloatRequired(const AKey: string): Double;
 begin
   Result := FConfig.GetFloatRequired(AKey);
+end;
+
+function TOwnedConfig.GetDurationNsRequired(const AKey: string): Int64;
+begin
+  Result := FConfig.GetDurationNsRequired(AKey);
 end;
 
 procedure TOwnedConfig.Require(const AKeys: array of string);
@@ -332,6 +382,11 @@ begin
   Result := FConfig.GetFloat(AKey, ADefault);
 end;
 
+function TBorrowedConfig.GetDurationNs(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FConfig.GetDurationNs(AKey, ADefault);
+end;
+
 function TBorrowedConfig.GetStringRequired(const AKey: string): string;
 begin
   Result := FConfig.GetStringRequired(AKey);
@@ -350,6 +405,11 @@ end;
 function TBorrowedConfig.GetFloatRequired(const AKey: string): Double;
 begin
   Result := FConfig.GetFloatRequired(AKey);
+end;
+
+function TBorrowedConfig.GetDurationNsRequired(const AKey: string): Int64;
+begin
+  Result := FConfig.GetDurationNsRequired(AKey);
 end;
 
 procedure TBorrowedConfig.Require(const AKeys: array of string);
@@ -395,6 +455,219 @@ end;
 function TBorrowedConfig.ToToml: string;
 begin
   Result := FConfig.ToToml;
+end;
+
+{ TSectionConfig }
+
+function NormalizeSectionPrefix(const APrefix: string): string;
+begin
+  Result := APrefix;
+  while (Length(Result) > 0) and (Result[Length(Result)] = '.') do
+    SetLength(Result, Length(Result) - 1);
+end;
+
+constructor TSectionConfig.Create(const AParent: IConfig; const APrefix: string);
+begin
+  inherited Create;
+  if AParent = nil then
+    raise EConfigError.Create('ConfigSection requires a non-nil parent IConfig');
+  FParent := AParent;
+  FPrefix := NormalizeSectionPrefix(APrefix);
+end;
+
+function TSectionConfig.FullKey(const AKey: string): string;
+begin
+  if FPrefix = '' then
+    Exit(AKey);
+  if AKey = '' then
+    Exit(FPrefix);
+  Result := FPrefix + '.' + AKey;
+end;
+
+function TSectionConfig.GetCount: Integer;
+var
+  LKeys: TStringArray;
+begin
+  LKeys := GetKeys;
+  Result := Length(LKeys);
+end;
+
+function TSectionConfig.GetString(const AKey: string; const ADefault: string): string;
+begin
+  Result := FParent.GetString(FullKey(AKey), ADefault);
+end;
+
+function TSectionConfig.GetRawString(const AKey: string; const ADefault: string): string;
+begin
+  Result := FParent.GetRawString(FullKey(AKey), ADefault);
+end;
+
+function TSectionConfig.GetStringArray(const AKey: string): TStringArray;
+begin
+  Result := FParent.GetStringArray(FullKey(AKey));
+end;
+
+function TSectionConfig.GetRawStringArray(const AKey: string): TStringArray;
+begin
+  Result := FParent.GetRawStringArray(FullKey(AKey));
+end;
+
+function TSectionConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FParent.GetInt(FullKey(AKey), ADefault);
+end;
+
+function TSectionConfig.GetBool(const AKey: string; ADefault: Boolean): Boolean;
+begin
+  Result := FParent.GetBool(FullKey(AKey), ADefault);
+end;
+
+function TSectionConfig.GetFloat(const AKey: string; ADefault: Double): Double;
+begin
+  Result := FParent.GetFloat(FullKey(AKey), ADefault);
+end;
+
+function TSectionConfig.GetDurationNs(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FParent.GetDurationNs(FullKey(AKey), ADefault);
+end;
+
+function TSectionConfig.GetStringRequired(const AKey: string): string;
+begin
+  Result := FParent.GetStringRequired(FullKey(AKey));
+end;
+
+function TSectionConfig.GetIntRequired(const AKey: string): Int64;
+begin
+  Result := FParent.GetIntRequired(FullKey(AKey));
+end;
+
+function TSectionConfig.GetBoolRequired(const AKey: string): Boolean;
+begin
+  Result := FParent.GetBoolRequired(FullKey(AKey));
+end;
+
+function TSectionConfig.GetFloatRequired(const AKey: string): Double;
+begin
+  Result := FParent.GetFloatRequired(FullKey(AKey));
+end;
+
+function TSectionConfig.GetDurationNsRequired(const AKey: string): Int64;
+begin
+  Result := FParent.GetDurationNsRequired(FullKey(AKey));
+end;
+
+procedure TSectionConfig.Require(const AKeys: array of string);
+var
+  LI: Integer;
+  LFull: array of string;
+begin
+  SetLength(LFull, Length(AKeys));
+  for LI := 0 to High(AKeys) do
+    LFull[LI] := FullKey(AKeys[LI]);
+  FParent.Require(LFull);
+end;
+
+function TSectionConfig.Has(const AKey: string): Boolean;
+begin
+  Result := FParent.Has(FullKey(AKey));
+end;
+
+function SectionKeySuffix(const AKey, APrefix: string; out ASuffix: string): Boolean;
+var
+  LPrefixLen: Integer;
+begin
+  ASuffix := '';
+  if AKey = '' then
+    Exit(False);
+  if APrefix = '' then
+  begin
+    ASuffix := AKey;
+    Exit(True);
+  end;
+  LPrefixLen := Length(APrefix);
+  if Length(AKey) <= LPrefixLen then
+    Exit(False);
+  if AKey[LPrefixLen + 1] <> '.' then
+    Exit(False);
+  if LowerCase(Copy(AKey, 1, LPrefixLen)) <> LowerCase(APrefix) then
+    Exit(False);
+  ASuffix := Copy(AKey, LPrefixLen + 2, Length(AKey) - LPrefixLen - 1);
+  Result := ASuffix <> '';
+end;
+
+function TSectionConfig.GetKeys: TStringArray;
+var
+  LAll: TStringArray;
+  LSuffix: string;
+  LCount, LI: Integer;
+begin
+  LAll := FParent.GetKeys;
+  Result := nil;
+  LCount := 0;
+  for LI := 0 to High(LAll) do
+    if SectionKeySuffix(LAll[LI], FPrefix, LSuffix) then
+    begin
+      if LCount >= Length(Result) then
+        SetLength(Result, LCount + 8);
+      Result[LCount] := LSuffix;
+      Inc(LCount);
+    end;
+  SetLength(Result, LCount);
+end;
+
+function TSectionConfig.GetSection(const APrefix: string): TStringArray;
+var
+  LJoined: string;
+begin
+  if FPrefix = '' then
+    LJoined := NormalizeSectionPrefix(APrefix)
+  else if NormalizeSectionPrefix(APrefix) = '' then
+    LJoined := FPrefix
+  else
+    LJoined := FPrefix + '.' + NormalizeSectionPrefix(APrefix);
+  Result := FParent.GetSection(LJoined);
+end;
+
+function TSectionConfig.GetInterpolationMode: TConfigInterpolationMode;
+begin
+  Result := FParent.GetInterpolationMode;
+end;
+
+function TSectionConfig.ToIni: string;
+begin
+  Result := '';
+  raise EConfigError.Create('ConfigSection view does not support export');
+end;
+
+function TSectionConfig.ToJson: string;
+begin
+  Result := '';
+  raise EConfigError.Create('ConfigSection view does not support export');
+end;
+
+function TSectionConfig.ToYaml: string;
+begin
+  Result := '';
+  raise EConfigError.Create('ConfigSection view does not support export');
+end;
+
+function TSectionConfig.ToToml: string;
+begin
+  Result := '';
+  raise EConfigError.Create('ConfigSection view does not support export');
+end;
+
+function ConfigSection(const AConfig: IConfig; const APrefix: string): IConfig;
+begin
+  Result := TSectionConfig.Create(AConfig, APrefix);
+end;
+
+function ConfigSection(AConfig: TConfig; const APrefix: string): IConfig;
+begin
+  if AConfig = nil then
+    raise EConfigError.Create('ConfigSection requires a non-nil TConfig');
+  Result := ConfigSection(ConfigBorrow(AConfig), APrefix);
 end;
 
 { TConfigBuilderImpl }

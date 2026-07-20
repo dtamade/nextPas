@@ -50,6 +50,9 @@ type
     { Optional local bind before connect (Go Dialer.LocalAddr subset).
       Empty IP = unset. Family must match remote attempt or bind is skipped. }
     LocalAddr: TNetAddress;
+    { Applied to the winning stream before user callback (best-effort). }
+    NoDelay: Boolean;   { TCP_NODELAY; default False }
+    KeepAlive: Boolean; { SO_KEEPALIVE; default False }
   end;
 
   TAsyncTcpDialCallback = procedure(AStream: IAsyncTcpStream; AError: Int32;
@@ -202,6 +205,8 @@ begin
   Result.LocalAddr.IP := '';
   Result.LocalAddr.Port := 0;
   Result.LocalAddr.IsIPv6 := False;
+  Result.NoDelay := False;
+  Result.KeepAlive := False;
 end;
 
 function InvalidSocket: TPlatformSocket;
@@ -535,6 +540,11 @@ begin
   if FInFlight > 0 then
     Dec(FInFlight);
   AbortAllAttempts;
+
+  if FOptions.NoDelay then
+    LStream.SetNoDelay(True);
+  if FOptions.KeepAlive then
+    LStream.SetKeepAlive(True);
 
   LAsync := AsyncTcpStreamAdopt(FLoop, LStream);
   LCb := FUserCb;
