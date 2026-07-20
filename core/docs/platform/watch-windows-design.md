@@ -9,9 +9,12 @@
 (timeout) matching Linux test convention; residual multi-record drain.
 **S3:** rename Action mapping (old=Deleted, new=Created); overflow →
 `PLATFORM_ERR_AGAIN` + re-arm (`ERROR_NOTIFY_ENUM_DIR`).
-**Batch-22:** smoke hard-asserts create+delete on real Windows; Wine soft OK.
+**Batch-22:** smoke hard-asserts create+delete on real Windows; Wine soft OK
+(GHA 29752923987).
 **Batch-23:** multi-dir slots (`PLATFORM_WATCH_WIN_MAX=8`); `add` returns
 positive wd; `remove(wd)` closes slot; poll via WaitForMultipleObjects.
+**RDCW arm:** if ReadDirectoryChangesW returns success with 0 bytes, keep
+`Pending` so poll does not busy re-arm with empty wait set.
 
 Stable portable API lives in `nextpas.core.platform.watch`. Linux (inotify)
 and Darwin/FreeBSD (kqueue EVFILT_VNODE) already provide focused-runtime.
