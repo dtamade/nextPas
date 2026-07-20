@@ -71,24 +71,27 @@ begin
 end;
 
 function TExchangerImpl.Exchange(const AValue: T; out AOutValue: T): TLockFreeExchangeResult;
+var
+  LCasExpected: Int32;
 begin
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(exClosed);
 
-    if AtomicCompareExchange32(FState, EXCHANGER_STATE_EMPTY, EXCHANGER_STATE_RESERVED, moAcqRel) = EXCHANGER_STATE_EMPTY then
+    LCasExpected := EXCHANGER_STATE_EMPTY;
+    if atomic_compare_exchange_strong(FState, LCasExpected, EXCHANGER_STATE_RESERVED, mo_acq_rel, mo_acquire) then
     begin
       FOfferValue := AValue;
-      AtomicStore32(FState, EXCHANGER_STATE_READY, moRelease);
+      atomic_store(FState, EXCHANGER_STATE_READY, mo_release);
 
       while True do
       begin
-        case AtomicLoad32(FState, moAcquire) of
+        case atomic_load(FState, mo_acquire) of
           EXCHANGER_STATE_COMPLETED:
             begin
               AOutValue := FReplyValue;
-              AtomicStore32(FState, EXCHANGER_STATE_EMPTY, moRelease);
+              atomic_store(FState, EXCHANGER_STATE_EMPTY, mo_release);
               Exit(exExchanged);
             end;
           EXCHANGER_STATE_READY:
@@ -99,20 +102,22 @@ begin
           raise EInvalidOperationError.Create('TExchanger.Exchange: invalid exchanger state');
         end;
 
-        if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        if atomic_load(FClosed, mo_acquire) <> 0 then
         begin
-          if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_EMPTY, moAcqRel) = EXCHANGER_STATE_READY then
+          LCasExpected := EXCHANGER_STATE_READY;
+          if atomic_compare_exchange_strong(FState, LCasExpected, EXCHANGER_STATE_EMPTY, mo_acq_rel, mo_acquire) then
             Exit(exClosed);
         end;
         CpuPause;
       end;
     end;
 
-    if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_CLAIMED, moAcqRel) = EXCHANGER_STATE_READY then
+    LCasExpected := EXCHANGER_STATE_READY;
+    if atomic_compare_exchange_strong(FState, LCasExpected, EXCHANGER_STATE_CLAIMED, mo_acq_rel, mo_acquire) then
     begin
       AOutValue := FOfferValue;
       FReplyValue := AValue;
-      AtomicStore32(FState, EXCHANGER_STATE_COMPLETED, moRelease);
+      atomic_store(FState, EXCHANGER_STATE_COMPLETED, mo_release);
       Exit(exExchanged);
     end;
 
@@ -124,6 +129,7 @@ function TExchangerImpl.ExchangeTimeout(const AValue: T; out AOutValue: T; const
 var
   LStart: TInstant;
   LState: Int32;
+  LCasExpected: Int32;
 begin
   if ATimeoutNs <= 0 then
     raise EArgumentError.Create('TExchanger.ExchangeTimeout: timeout must be > 0');
@@ -131,45 +137,49 @@ begin
 
   while True do
   begin
-    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    if atomic_load(FClosed, mo_acquire) <> 0 then
       Exit(exClosed);
     if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
       Exit(exTimeout);
 
-    if AtomicCompareExchange32(FState, EXCHANGER_STATE_EMPTY, EXCHANGER_STATE_RESERVED, moAcqRel) = EXCHANGER_STATE_EMPTY then
+    LCasExpected := EXCHANGER_STATE_EMPTY;
+    if atomic_compare_exchange_strong(FState, LCasExpected, EXCHANGER_STATE_RESERVED, mo_acq_rel, mo_acquire) then
     begin
       FOfferValue := AValue;
-      AtomicStore32(FState, EXCHANGER_STATE_READY, moRelease);
+      atomic_store(FState, EXCHANGER_STATE_READY, mo_release);
 
       while True do
       begin
-        LState := AtomicLoad32(FState, moAcquire);
+        LState := atomic_load(FState, mo_acquire);
         if LState = EXCHANGER_STATE_COMPLETED then
         begin
           AOutValue := FReplyValue;
-          AtomicStore32(FState, EXCHANGER_STATE_EMPTY, moRelease);
+          atomic_store(FState, EXCHANGER_STATE_EMPTY, mo_release);
           Exit(exExchanged);
         end;
 
-        if AtomicLoad32(FClosed, moAcquire) <> 0 then
+        if atomic_load(FClosed, mo_acquire) <> 0 then
         begin
-          if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_EMPTY, moAcqRel) = EXCHANGER_STATE_READY then
+          LCasExpected := EXCHANGER_STATE_READY;
+          if atomic_compare_exchange_strong(FState, LCasExpected, EXCHANGER_STATE_EMPTY, mo_acq_rel, mo_acquire) then
             Exit(exClosed);
         end;
         if LStart.Elapsed.AsNanoseconds >= ATimeoutNs then
         begin
-          if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_EMPTY, moAcqRel) = EXCHANGER_STATE_READY then
+          LCasExpected := EXCHANGER_STATE_READY;
+          if atomic_compare_exchange_strong(FState, LCasExpected, EXCHANGER_STATE_EMPTY, mo_acq_rel, mo_acquire) then
             Exit(exTimeout);
         end;
         CpuPause;
       end;
     end;
 
-    if AtomicCompareExchange32(FState, EXCHANGER_STATE_READY, EXCHANGER_STATE_CLAIMED, moAcqRel) = EXCHANGER_STATE_READY then
+    LCasExpected := EXCHANGER_STATE_READY;
+    if atomic_compare_exchange_strong(FState, LCasExpected, EXCHANGER_STATE_CLAIMED, mo_acq_rel, mo_acquire) then
     begin
       AOutValue := FOfferValue;
       FReplyValue := AValue;
-      AtomicStore32(FState, EXCHANGER_STATE_COMPLETED, moRelease);
+      atomic_store(FState, EXCHANGER_STATE_COMPLETED, mo_release);
       Exit(exExchanged);
     end;
 
@@ -179,7 +189,7 @@ end;
 
 procedure TExchangerImpl.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 destructor TExchangerImpl.Destroy;
@@ -190,7 +200,7 @@ end;
 
 function TExchangerImpl.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

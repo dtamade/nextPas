@@ -132,7 +132,8 @@ Bench 信封：[`bench-envelope.md`](bench-envelope.md)。
 - **H4-1 done**：`thread.pool` → SegQueue
 - **done**：`net.async.resolve/dial`、`net.server.threaded`、`io.reactor.iocp`、`async.loop`、`mem.debug_wrap`/`central`/`allocator.growing`/`cache.thread`
 - **done**：id.rng/v7.monotonic、worksteal owner-lock、taskgroup；**H3-2** bag/multimap；**T2 sync** mutex/rwlock/semaphore/countdown
-- **剩余 T2**：elimination_stack、hashtable、树/图/缓存等（下波）
+- **done**：T2 大户 preferred — elimination_stack、stampedlock、hashtable、phaser、exchanger、flatcombining、lfu、leftright、dag、graph
+- **剩余 T2**：树族（trie/treap/skiplist/rbtree/…）、cowarray/rcu/snapshot/lru、crdt/ringbuffer/timeoutqueue/bitset/forkjoin、bloom/sketch 等（可按簇再开）
 
 ### Q3-a checklist
 

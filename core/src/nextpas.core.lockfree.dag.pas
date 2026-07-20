@@ -178,7 +178,7 @@ var
   end;
 
 begin
-  SetLength(LVisited, AtomicLoad64(FNodeCount, moAcquire));
+  SetLength(LVisited, atomic_load_64(FNodeCount, mo_acquire));
   SetLength(LStack, Length(LVisited));
   LVisitedCount := 0;
   LStackCount := 0;
@@ -217,23 +217,34 @@ begin
 end;
 
 procedure TConcurrentDAG.LockNode(ANode: PDagNode);
+var
+  LCasExpected: Int32;
 begin
-  while AtomicCompareExchange32(ANode^.Lock, 0, 1) <> 0 do
+  while True do
+  begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(ANode^.Lock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Exit;
     CpuPause;
+  end;
 end;
 
 procedure TConcurrentDAG.UnlockNode(ANode: PDagNode);
 begin
-  AtomicStore32(ANode^.Lock, 0, moRelease);
+  atomic_store(ANode^.Lock, 0, mo_release);
 end;
 
 procedure TConcurrentDAG.LockDag;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Exit;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -248,7 +259,7 @@ end;
 
 procedure TConcurrentDAG.UnlockDag;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TConcurrentDAG.FreeNode(ANode: PDagNode);
@@ -271,7 +282,7 @@ function TConcurrentDAG.AddNode(AId: Int64): TDagResult;
 var
   LNode: PDagNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(dagClosed);
   LockDag;
   try
@@ -280,7 +291,7 @@ begin
     LNode := AllocDagNode(AId);
     LNode^.Next := FRoot;
     FRoot := LNode;
-    AtomicFetchAdd64(FNodeCount, 1, moRelaxed);
+    atomic_fetch_add_64(FNodeCount, 1, mo_relaxed);
     Result := dagOk;
   finally
     UnlockDag;
@@ -294,7 +305,7 @@ var
   LEdge, LNextEdge: PDagEdge;
   LRemovedEdges: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(dagClosed);
   LockDag;
   try
@@ -316,16 +327,16 @@ begin
           LNextEdge := LEdge^.Next;
           LTarget := FindNode(LEdge^.TargetId);
           if LTarget <> nil then
-            AtomicFetchSub32(LTarget^.InCount, 1, moRelaxed);
+            atomic_fetch_sub(LTarget^.InCount, 1, mo_relaxed);
           Inc(LRemovedEdges);
           Dispose(LEdge);
           LEdge := LNextEdge;
         end;
         if LRemovedEdges > 0 then
-          AtomicFetchSub64(FEdgeCount, LRemovedEdges, moRelaxed);
+          atomic_fetch_sub_64(FEdgeCount, LRemovedEdges, mo_relaxed);
         LCurrent^.OutEdges := nil;
         Dispose(LCurrent);
-        AtomicFetchSub64(FNodeCount, 1, moRelaxed);
+        atomic_fetch_sub_64(FNodeCount, 1, mo_relaxed);
         Exit(dagOk);
       end;
       LPrev := LCurrent;
@@ -343,7 +354,7 @@ var
   LFrom, LTo: PDagNode;
   LEdge: PDagEdge;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(dagClosed);
   LockDag;
   try
@@ -367,8 +378,8 @@ begin
       LEdge := AllocDagEdge(AToId);
       LEdge^.Next := LFrom^.OutEdges;
       LFrom^.OutEdges := LEdge;
-      AtomicFetchAdd32(LTo^.InCount, 1, moRelaxed);
-      AtomicFetchAdd64(FEdgeCount, 1, moRelaxed);
+      atomic_fetch_add(LTo^.InCount, 1, mo_relaxed);
+      atomic_fetch_add_64(FEdgeCount, 1, mo_relaxed);
       Result := dagOk;
     finally
       UnlockNode(LFrom);
@@ -383,7 +394,7 @@ var
   LFrom, LTo: PDagNode;
   LPrev, LCurrent: PDagEdge;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(dagClosed);
   LockDag;
   try
@@ -405,8 +416,8 @@ begin
             LFrom^.OutEdges := LCurrent^.Next
           else
             LPrev^.Next := LCurrent^.Next;
-          AtomicFetchSub32(LTo^.InCount, 1, moRelaxed);
-          AtomicFetchSub64(FEdgeCount, 1, moRelaxed);
+          atomic_fetch_sub(LTo^.InCount, 1, mo_relaxed);
+          atomic_fetch_sub_64(FEdgeCount, 1, mo_relaxed);
           Dispose(LCurrent);
           Exit(dagOk);
         end;
@@ -427,7 +438,7 @@ var
   LFrom: PDagNode;
   LEdge: PDagEdge;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   LockDag;
   try
@@ -454,12 +465,12 @@ end;
 
 function TConcurrentDAG.GetNodeCount: Int64; inline;
 begin
-  Result := AtomicLoad64(FNodeCount, moAcquire);
+  Result := atomic_load_64(FNodeCount, mo_acquire);
 end;
 
 function TConcurrentDAG.GetEdgeCount: Int64; inline;
 begin
-  Result := AtomicLoad64(FEdgeCount, moAcquire);
+  Result := atomic_load_64(FEdgeCount, mo_acquire);
 end;
 
 function TConcurrentDAG.InDegree(AId: Int64): Int32;
@@ -471,7 +482,7 @@ begin
     LNode := FindNode(AId);
     if LNode = nil then
       Exit(-1);
-    Result := AtomicLoad32(LNode^.InCount, moAcquire);
+    Result := atomic_load(LNode^.InCount, mo_acquire);
   finally
     UnlockDag;
   end;
@@ -699,8 +710,8 @@ begin
       LNode := LNext;
     end;
     FRoot := nil;
-    AtomicStore64(FNodeCount, 0, moRelaxed);
-    AtomicStore64(FEdgeCount, 0, moRelaxed);
+    atomic_store_64(FNodeCount, 0, mo_relaxed);
+    atomic_store_64(FEdgeCount, 0, mo_relaxed);
   finally
     UnlockDag;
   end;
@@ -708,12 +719,12 @@ end;
 
 procedure TConcurrentDAG.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TConcurrentDAG.IsClosed: Boolean;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.

@@ -171,23 +171,34 @@ begin
 end;
 
 procedure TLockFreeGraph.LockVertex(AVertex: PVertexNode);
+var
+  LCasExpected: Int32;
 begin
-  while AtomicCompareExchange32(AVertex^.Lock, 0, 1) <> 0 do
+  while True do
+  begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(AVertex^.Lock, LCasExpected, 1, mo_seq_cst, mo_seq_cst) then
+      Exit;
     CpuPause;
+  end;
 end;
 
 procedure TLockFreeGraph.UnlockVertex(AVertex: PVertexNode);
 begin
-  AtomicStore32(AVertex^.Lock, 0, moRelease);
+  atomic_store(AVertex^.Lock, 0, mo_release);
 end;
 
 procedure TLockFreeGraph.LockGraph;
 var
   LSpin: Integer;
+  LCasExpected: Int32;
 begin
   LSpin := 0;
-  while AtomicCompareExchange32(FLock, 0, 1, moAcqRel) <> 0 do
+  while True do
   begin
+    LCasExpected := 0;
+    if atomic_compare_exchange_strong(FLock, LCasExpected, 1, mo_acq_rel, mo_acquire) then
+      Exit;
     Inc(LSpin);
     if LSpin > LOCKFREE_SPIN_COUNT then
     begin
@@ -202,7 +213,7 @@ end;
 
 procedure TLockFreeGraph.UnlockGraph;
 begin
-  AtomicStore32(FLock, 0, moRelease);
+  atomic_store(FLock, 0, mo_release);
 end;
 
 procedure TLockFreeGraph.FreeVertex(AVertex: PVertexNode);
@@ -225,7 +236,7 @@ function TLockFreeGraph.AddVertex(AId: Int64): TLockFreeGraphResult;
 var
   LVertex: PVertexNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(grClosed);
   LockGraph;
   try
@@ -234,7 +245,7 @@ begin
     LVertex := AllocVertexNode(AId);
     LVertex^.Next := FRoot;
     FRoot := LVertex;
-    AtomicFetchAdd64(FVertexCount, 1, moRelaxed);
+    atomic_fetch_add_64(FVertexCount, 1, mo_relaxed);
     Result := grAdded;
   finally
     UnlockGraph;
@@ -246,7 +257,7 @@ var
   LPrev, LCurrent: PVertexNode;
   LRemovedEdges: Int64;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(grClosed);
   LockGraph;
   try
@@ -263,9 +274,9 @@ begin
         LRemovedEdges := RemoveIncomingEdgesLocked(AId);
         LRemovedEdges := LRemovedEdges + CountNeighbors(LCurrent);
         if LRemovedEdges > 0 then
-          AtomicFetchSub64(FEdgeCount, LRemovedEdges, moRelaxed);
+          atomic_fetch_sub_64(FEdgeCount, LRemovedEdges, mo_relaxed);
         FreeVertex(LCurrent);
-        AtomicFetchSub64(FVertexCount, 1, moRelaxed);
+        atomic_fetch_sub_64(FVertexCount, 1, mo_relaxed);
         Exit(grRemoved);
       end;
       LPrev := LCurrent;
@@ -282,7 +293,7 @@ var
   LFromVertex, LToVertex: PVertexNode;
   LNeighbor: PNeighborNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(grClosed);
   LockGraph;
   try
@@ -302,7 +313,7 @@ begin
       LNeighbor := AllocNeighborNode(AToId);
       LNeighbor^.Next := LFromVertex^.Neighbors;
       LFromVertex^.Neighbors := LNeighbor;
-      AtomicFetchAdd64(FEdgeCount, 1, moRelaxed);
+      atomic_fetch_add_64(FEdgeCount, 1, mo_relaxed);
       Result := grAdded;
     finally
       UnlockVertex(LFromVertex);
@@ -317,7 +328,7 @@ var
   LFromVertex: PVertexNode;
   LPrev, LCurrent: PNeighborNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(grClosed);
   LockGraph;
   try
@@ -337,7 +348,7 @@ begin
           else
             LPrev^.Next := LCurrent^.Next;
           Dispose(LCurrent);
-          AtomicFetchSub64(FEdgeCount, 1, moRelaxed);
+          atomic_fetch_sub_64(FEdgeCount, 1, mo_relaxed);
           Exit(grRemoved);
         end;
         LPrev := LCurrent;
@@ -357,7 +368,7 @@ var
   LFromVertex: PVertexNode;
   LNeighbor: PNeighborNode;
 begin
-  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+  if atomic_load(FClosed, mo_acquire) <> 0 then
     Exit(False);
   LockGraph;
   try
@@ -384,12 +395,12 @@ end;
 
 function TLockFreeGraph.GetVertexCount: Int64; inline;
 begin
-  Result := AtomicLoad64(FVertexCount, moAcquire);
+  Result := atomic_load_64(FVertexCount, mo_acquire);
 end;
 
 function TLockFreeGraph.GetEdgeCount: Int64; inline;
 begin
-  Result := AtomicLoad64(FEdgeCount, moAcquire);
+  Result := atomic_load_64(FEdgeCount, mo_acquire);
 end;
 
 procedure TLockFreeGraph.Clear;
@@ -406,8 +417,8 @@ begin
       LVertex := LNext;
     end;
     FRoot := nil;
-    AtomicStore64(FVertexCount, 0, moRelaxed);
-    AtomicStore64(FEdgeCount, 0, moRelaxed);
+    atomic_store_64(FVertexCount, 0, mo_relaxed);
+    atomic_store_64(FEdgeCount, 0, mo_relaxed);
   finally
     UnlockGraph;
   end;
@@ -415,12 +426,12 @@ end;
 
 procedure TLockFreeGraph.Close;
 begin
-  AtomicStore32(FClosed, 1, moRelease);
+  atomic_store(FClosed, 1, mo_release);
 end;
 
 function TLockFreeGraph.IsClosed: Boolean; inline;
 begin
-  Result := AtomicLoad32(FClosed, moAcquire) <> 0;
+  Result := atomic_load(FClosed, mo_acquire) <> 0;
 end;
 
 end.
