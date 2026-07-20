@@ -1821,7 +1821,7 @@ procedure TestFpcRtlIsolationSourceContract;
 const
   Src = '../../../src/';
   { Full production surface: every nextpas.core.atomic* and nextpas.core.lockfree* unit. }
-  Paths: array[0..106] of string = (
+  Paths: array[0..107] of string = (
     'nextpas.core.atomic.pas',
     'nextpas.core.atomic.core.pas',
     'nextpas.core.atomic.types.pas',
