@@ -2,9 +2,9 @@
 
 标准库级内存底座。目标不是“更多分配器”，而是：**默认路径正确、契约一致、性能可证明、诊断零成本默认**。
 
-> **Lane 状态：Maintenance Idle（2026-07-20 · post-Era K）**  
-> A–C **CLOSED** · D–G Steady · H **Idle** · I–K **CLOSED**  
-> FreeMemOf consumer + owned-size + mem-owner 单 slab/多段（已有 size）已关；残余 WAIVE 仅 tui tracking。  
+> **Lane 状态：Maintenance Idle（2026-07-20 · post-Era L）**  
+> A–C **CLOSED** · D–G Steady · H **Idle** · I–L **CLOSED**  
+> FreeMemOf consumer + mem-owner 主路径已关；残余 tui WAIVE + FixedSlab AlignedFallback。  
 > 日常：只响应回归、命名 D3、GHA `mem.host_runtime` 红。  
 > **不**默认排期：Phase 29、全仓 FreeMem 扫。  
 > 路线图：[ROADMAP](ROADMAP.md) · 决策树：[API-GUIDE](API-GUIDE.md) · 性能：[SCORECARD](SCORECARD.md) · 真机 CI：[MEM-HOST-RUNTIME-CI](MEM-HOST-RUNTIME-CI.md)

@@ -189,6 +189,25 @@ need_file "$SRC/nextpas.core.mem.pool.fixed.growable.pas"
 need_grep "$SRC/nextpas.core.mem.pool.fixed.growable.pas" 'FreeMemOf\(FAllocator, FArenas\[LArenaIndex\]\.Base, FArenas\[LArenaIndex\]\.Size\)' \
   'TGrowingFixedPool Destroy must FreeMemOf arena Base/Size (K5)'
 
+# --- Era L: LocalBlockPool + FixedSlab raw + SlabPool fallback ---
+need_file "$SRC/nextpas.core.mem.pool.pas"
+need_grep "$SRC/nextpas.core.mem.pool.pas" 'FBackingSize' \
+  'TLocalBlockPool must track FBackingSize (L1)'
+need_grep "$SRC/nextpas.core.mem.pool.pas" 'FreeMemOf\(FAllocator, FBacking, FBackingSize\)' \
+  'TLocalBlockPool Destroy must FreeMemOf FBacking (L1)'
+
+need_file "$SRC/nextpas.core.mem.pool.fixed_slab.pas"
+need_grep "$SRC/nextpas.core.mem.pool.fixed_slab.pas" 'FRawAllocSize' \
+  'TFixedSlabPool must track FRawAllocSize (L2)'
+need_grep "$SRC/nextpas.core.mem.pool.fixed_slab.pas" 'FreeMemOf\(FAllocator, FRaw, FRawAllocSize\)' \
+  'TFixedSlabPool Destroy must FreeMemOf FRaw (L2)'
+
+need_file "$SRC/nextpas.core.mem.pool.slab.pas"
+need_grep "$SRC/nextpas.core.mem.pool.slab.pas" 'FallbackRawAllocSize' \
+  'TSlabPool must use FallbackRawAllocSize for fallback free (L5)'
+need_grep "$SRC/nextpas.core.mem.pool.slab.pas" 'FreeMemOf\(FAllocator, LAlloc\.RawPtr' \
+  'TSlabPool FreeMem fallback must FreeMemOf RawPtr (L5)'
+
 if [[ "$FAIL" -ne 0 ]]; then
   echo "consumer-audit-contracts: FAILED" >&2
   exit 1

@@ -54,6 +54,7 @@ type
   private
     FAllocator: IAllocator;
     FRaw: Pointer;
+    FRawAllocSize: SizeUInt;  { GetMem 字节数（含页对齐 over-alloc） }
     FBase: PByte;
     FRegionEnd: PByte;
     FSize: SizeUInt;
@@ -125,6 +126,9 @@ type
 
 
 implementation
+
+uses
+  nextpas.core.mem;
 
 const
   FIXED_SLAB_OWNERSHIP_MIN_CAP = 64;
@@ -208,8 +212,13 @@ begin
       'TFixedSlabPool.Create: ownership index overflow (' + IntToStr(desired_pages) + ')');
   ownership_capacity := desired_pages * 16;
 
+  FRawAllocSize := allocation_size;
   FRaw := FAllocator.GetMem(allocation_size);
-  if FRaw = nil then Exit;
+  if FRaw = nil then
+  begin
+    FRawAllocSize := 0;
+    Exit;
+  end;
 
   FBase := ngx_align_ptr(PByte(FRaw), NGX_SLAB_PAGE_SIZE);
   FCore := FBase;
@@ -231,7 +240,9 @@ begin
   SetLength(FAlignedFallbackRawPtrs, 0);
   SetLength(FAlignedFallbackStates, 0);
   if FRaw <> nil then
-    FAllocator.FreeMem(FRaw);
+    FreeMemOf(FAllocator, FRaw, FRawAllocSize);
+  FRaw := nil;
+  FRawAllocSize := 0;
   SetLength(FOwnKeys, 0);
   SetLength(FOwnStates, 0);
   SetLength(FOwnSizes, 0);
