@@ -27,6 +27,19 @@ rg -n '\bTList\b' core/src/nextpas.core.tls.openssl.context.pas \
 rg -n '/dev/urandom|CryptGenRandom' core/src/nextpas.core.tls.random.pas  # expect empty
 ```
 
+## Batch C — cert options + ASN free
+
+```bash
+# value-type SAN (no TStringList ownership footgun)
+rg -n 'SubjectAltNames\s*:=\s*TStringList\.Create' core/src/nextpas.core.tls*.pas  # empty
+
+make focused FOCUS=core/tests/nextpas.core.tls/test_tls_asn1_free_contract
+make focused FOCUS=core/tests/nextpas.core.crypto/test_ecdsa
+make focused FOCUS=core/tests/nextpas.core.crypto/test_p384
+```
+
+Known residual: `test_dialer` may fail on `io.pipe` IMutex vs INativeMutex (sync/io lane).
+
 Static checks:
 
 - no `nextpas.core.tls` in `core/src/nextpas.core.crypto*.pas`

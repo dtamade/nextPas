@@ -54,6 +54,8 @@ Prefer the **owner unit** in new code. Shims exist for call-site stability.
   X.509 parse paths must free temporary `TASN1Reader`/`TASN1Node`
 - **D8** (Batch B) Prefer dynamic arrays / interface arrays over FPC `TList`
   for TLS registries and cert caches; no bare interface pointers in lists
+- **D9** (Batch C) `TCertGenOptions.SubjectAltNames` and `TCertInfo.SubjectAltNames`
+  are `TStringArray` value types — never `TStringList` (no Free required)
 
 ## Related docs
 

@@ -54,18 +54,12 @@ function BuildCurrentValidCertPEM(out ACertPEM: string): Boolean;
 var LOptions: TCertGenOptions; LKeyPEM: string;
 begin
   LOptions := TCertificateUtils.DefaultGenOptions;
-  try
-    LOptions.CommonName := 'x509verify-utc-contract.local';
-    LOptions.Organization := 'nextpas core';
-    LOptions.ValidDays := 1;
-    LOptions.NotBefore := Now - (1.0 / 24.0);
-    LOptions.NotAfter := Now + (1.0 / 24.0);
-    Result := TCertificateUtils.GenerateSelfSigned(LOptions, ACertPEM, LKeyPEM);
-  finally
-    { DefaultGenOptions allocates SubjectAltNames: TStringList. }
-    LOptions.SubjectAltNames.Free;
-    LOptions.SubjectAltNames := nil;
-  end;
+  LOptions.CommonName := 'x509verify-utc-contract.local';
+  LOptions.Organization := 'nextpas core';
+  LOptions.ValidDays := 1;
+  LOptions.NotBefore := Now - (1.0 / 24.0);
+  LOptions.NotAfter := Now + (1.0 / 24.0);
+  Result := TCertificateUtils.GenerateSelfSigned(LOptions, ACertPEM, LKeyPEM);
 end;
 
 var

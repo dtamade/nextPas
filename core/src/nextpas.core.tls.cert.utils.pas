@@ -93,7 +93,7 @@ type
     PublicKeyType: string;     // 公钥类型
     PublicKeyBits: Integer;    // 公钥位数
     SignatureAlgorithm: string;// 签名算法
-    SubjectAltNames: TStringList; // SAN (备用名称)
+    SubjectAltNames: TStringArray; // SAN (备用名称，值类型，无需 Free)
     KeyUsage: string;          // 密钥用途
     IsCA: Boolean;             // 是否CA证书
     Version: Integer;          // 证书版本
@@ -113,11 +113,12 @@ type
     KeyType: TKeyType;         // 密钥类型
     KeyBits: Integer;          // RSA密钥位数 (2048/4096)
     ECCurve: string;           // EC曲线名称 (prime256v1/secp384r1)
-    SubjectAltNames: TStringList; // 备用名称
+    SubjectAltNames: TStringArray; // 备用名称（值类型，无需 Free）
     IsCA: Boolean;             // 是否CA证书
     SerialNumber: Int64;       // 序列号 (0=自动生成)
     OCSPResponderURL: string;  // 可选：写入 AIA 的 OCSP Responder URL（http/https）
   end;
+
 
   {**
    * 企业级证书工具类
@@ -286,6 +287,12 @@ type
     ): Boolean;
   end;
 
+{ Append a SAN entry to certificate generation options (value-type array). }
+procedure CertOptionsAddSAN(var AOptions: TCertGenOptions; const ASAN: string);
+{ Join SAN entries for OpenSSL extension text (comma-separated). }
+function JoinSubjectAltNames(const ANames: TStringArray): string;
+
+
 implementation
 
 uses
@@ -298,6 +305,27 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.factory,
   nextpas.core.tls.certchain;
+
+
+procedure CertOptionsAddSAN(var AOptions: TCertGenOptions; const ASAN: string);
+begin
+  SetLength(AOptions.SubjectAltNames, Length(AOptions.SubjectAltNames) + 1);
+  AOptions.SubjectAltNames[High(AOptions.SubjectAltNames)] := ASAN;
+end;
+
+function JoinSubjectAltNames(const ANames: TStringArray): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  for I := 0 to High(ANames) do
+  begin
+    if I > 0 then
+      Result := Result + ',';
+    Result := Result + ANames[I];
+  end;
+end;
+
 
 { TCertificateUtils }
 
@@ -417,7 +445,7 @@ begin
   Result.KeyType := ktRSA;
   Result.KeyBits := DEFAULT_RSA_KEY_BITS;
   Result.ECCurve := DEFAULT_EC_CURVE;
-  Result.SubjectAltNames := TStringList.Create;
+  SetLength(Result.SubjectAltNames, 0);
   Result.IsCA := False;
   Result.SerialNumber := 0;
   Result.OCSPResponderURL := '';
@@ -973,14 +1001,11 @@ begin
       AddExtension(LCert, LCert, NID_authority_key_identifier, 'keyid:always');
 
       // Subject Alternative Names
-      if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
+      if Length(AOptions.SubjectAltNames) > 0 then
       begin
-        // Force comma delimiter without quotes
-        AOptions.SubjectAltNames.Delimiter := ',';
-        AOptions.SubjectAltNames.QuoteChar := #0;
-        if not AddExtension(LCert, LCert, NID_subject_alt_name, AOptions.SubjectAltNames.DelimitedText) then
+        if not AddExtension(LCert, LCert, NID_subject_alt_name,
+          JoinSubjectAltNames(AOptions.SubjectAltNames)) then
           ; // Check for failure silently or convert to exception if critical
-
       end;
 
       // Authority Information Access (OCSP)
@@ -1271,8 +1296,9 @@ begin
           AddExtension(LCert, LCACert, NID_authority_key_identifier, 'keyid:always,issuer');
 
           // Subject Alternative Names
-          if (AOptions.SubjectAltNames <> nil) and (AOptions.SubjectAltNames.Count > 0) then
-            AddExtension(LCert, LCACert, NID_subject_alt_name, AOptions.SubjectAltNames.DelimitedText);
+          if Length(AOptions.SubjectAltNames) > 0 then
+            AddExtension(LCert, LCACert, NID_subject_alt_name,
+              JoinSubjectAltNames(AOptions.SubjectAltNames));
 
           // Authority Information Access (OCSP)
           if (AOptions.OCSPResponderURL <> '') and Assigned(OBJ_txt2nid) then
@@ -1438,7 +1464,7 @@ var
   LKeyUsageFlags: Cardinal;
 begin
   FillChar(Result, SizeOf(Result), 0);
-  Result.SubjectAltNames := TStringList.Create;
+  SetLength(Result.SubjectAltNames, 0);
 
   if not TOpenSSLLoader.IsModuleLoaded(osmCore) then
     LoadOpenSSLCore();
@@ -1626,7 +1652,9 @@ begin
               if (LType = 2) and (LVal <> nil) then // 2 = GEN_DNS
               begin
                 // LVal is ASN1_STRING (implicitly).
-                Result.SubjectAltNames.Add('DNS:' + ASN1StringToString(ASN1_STRING(LVal)));
+                SetLength(Result.SubjectAltNames, Length(Result.SubjectAltNames) + 1);
+                Result.SubjectAltNames[High(Result.SubjectAltNames)] :=
+                  'DNS:' + ASN1StringToString(ASN1_STRING(LVal));
               end;
             end;
           end;
@@ -1971,13 +1999,9 @@ var
   LCurrentTime: TDateTime;
 begin
   LInfo := GetInfo(ACertPEM);
-  try
-    LCurrentTime := DateTimeUtcNow;
-    Result := (LCurrentTime >= LInfo.NotBefore) and
-      (LCurrentTime <= LInfo.NotAfter);
-  finally
-    LInfo.SubjectAltNames.Free;
-  end;
+  LCurrentTime := DateTimeUtcNow;
+  Result := (LCurrentTime >= LInfo.NotBefore) and
+    (LCurrentTime <= LInfo.NotAfter);
 end;
 
 {**
@@ -2177,7 +2201,7 @@ begin
     Result := True;
   except
     FillChar(AInfo, SizeOf(AInfo), 0);
-    AInfo.SubjectAltNames := TStringList.Create;
+    SetLength(AInfo.SubjectAltNames, 0);
     Result := False;
   end;
 end;

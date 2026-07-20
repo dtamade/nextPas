@@ -182,7 +182,6 @@ begin
       
     finally
       if LInfo.SubjectAltNames <> nil then
-        LInfo.SubjectAltNames.Free;
     end;
     
   except

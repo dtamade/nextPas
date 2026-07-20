@@ -107,7 +107,6 @@ begin
         'PublicKeyBits=' + IntToStr(LInfo.PublicKeyBits));
     finally
       if Assigned(LInfo.SubjectAltNames) then
-        LInfo.SubjectAltNames.Free;
     end;
   except
     on E: Exception do
@@ -157,7 +156,6 @@ begin
         'CA KeyUsage=' + LCAInfo.KeyUsage);
     finally
       if Assigned(LCAInfo.SubjectAltNames) then
-        LCAInfo.SubjectAltNames.Free;
     end;
   except
     on E: Exception do
@@ -221,7 +219,6 @@ begin
         'PublicKeyBits=' + IntToStr(LInfo.PublicKeyBits));
     finally
       if Assigned(LInfo.SubjectAltNames) then
-        LInfo.SubjectAltNames.Free;
     end;
   except
     on E: Exception do

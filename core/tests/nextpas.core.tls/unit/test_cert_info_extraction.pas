@@ -69,7 +69,6 @@ begin
   WriteLn('  Valid: ', DateTimeToStr(LInfo.NotBefore), ' to ', DateTimeToStr(LInfo.NotAfter));
   
   if Assigned(LInfo.SubjectAltNames) then
-    LInfo.SubjectAltNames.Free;
   WriteLn;
 end;
 
@@ -85,15 +84,13 @@ begin
   // 当前证书可能没有SAN，所以只检查对象存在
   AssertTrue(Assigned(LInfo.SubjectAltNames), 'SubjectAltNames list should be created');
   
-  WriteLn('  SAN Count: ', LInfo.SubjectAltNames.Count);
-  if LInfo.SubjectAltNames.Count > 0 then
+  WriteLn('  SAN Count: ', Length(LInfo.SubjectAltNames));
+  if Length(LInfo.SubjectAltNames) > 0 then
   begin
     WriteLn('  SANs:');
-    for i := 0 to LInfo.SubjectAltNames.Count - 1 do
+    for i := 0 to Length(LInfo.SubjectAltNames) - 1 do
       WriteLn('    - ', LInfo.SubjectAltNames[i]);
   end;
-  
-  LInfo.SubjectAltNames.Free;
   WriteLn;
 end;
 
@@ -110,7 +107,6 @@ begin
   WriteLn('  IsCA: ', LInfo.IsCA);
   
   if Assigned(LInfo.SubjectAltNames) then
-    LInfo.SubjectAltNames.Free;
   WriteLn;
 end;
 

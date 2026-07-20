@@ -78,7 +78,6 @@ begin
         Assert(LInfo.NotBefore > 0, 'Should extract NotBefore');
         Assert(LInfo.NotAfter > 0, 'Should extract NotAfter');
       finally
-        LInfo.SubjectAltNames.Free;
       end;
     end
     else
@@ -89,12 +88,10 @@ begin
     begin
       // GetInfo 可能返回空的 Info 结构体而不抛异常
       Assert(LInfo.Subject = '', 'Should return empty subject for invalid PEM');
-      LInfo.SubjectAltNames.Free;
     end
     else
     begin
       Assert(True, 'Correctly failed with invalid PEM');
-      LInfo.SubjectAltNames.Free;
     end;
   end;
 

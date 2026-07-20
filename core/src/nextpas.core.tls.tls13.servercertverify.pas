@@ -925,6 +925,7 @@ begin
   if Length(LKeyDER) = 0 then Exit;
 
   LReader := TASN1Reader.Create(LKeyDER);
+  LRoot := nil;
   try
     try LRoot := LReader.Parse; except Exit; end;
     try

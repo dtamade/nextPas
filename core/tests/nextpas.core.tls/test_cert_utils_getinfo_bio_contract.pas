@@ -74,7 +74,6 @@ begin
       raise Exception.Create('GetInfo warmup returned nil SubjectAltNames');
   finally
     if Assigned(LInfo.SubjectAltNames) then
-      LInfo.SubjectAltNames.Free;
   end;
 end;
 
@@ -93,8 +92,8 @@ begin
   AssertTrue(AName + ' should allocate SubjectAltNames', Assigned(AInfo.SubjectAltNames),
     'SubjectAltNames=nil');
   if Assigned(AInfo.SubjectAltNames) then
-    AssertTrue(AName + ' should keep SubjectAltNames empty', AInfo.SubjectAltNames.Count = 0,
-      'Count=' + IntToStr(AInfo.SubjectAltNames.Count));
+    AssertTrue(AName + ' should keep SubjectAltNames empty', Length(AInfo.SubjectAltNames) = 0,
+      'Count=' + IntToStr(Length(AInfo.SubjectAltNames)));
 end;
 
 procedure AssertGetInfoSafeDegrade(const AName, APEM: string);
@@ -126,7 +125,6 @@ begin
       AssertEmptyInfo(AName, LInfo);
     finally
       if Assigned(LInfo.SubjectAltNames) then
-        LInfo.SubjectAltNames.Free;
     end;
   end;
 
@@ -154,7 +152,6 @@ begin
         'unexpected TryGetInfo result state');
     finally
       if Assigned(LTryInfo.SubjectAltNames) then
-        LTryInfo.SubjectAltNames.Free;
     end;
   end;
 end;

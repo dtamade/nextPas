@@ -134,7 +134,6 @@ begin
       LVerifier.Free;
     end;
   finally
-    LInfo.SubjectAltNames.Free;
   end;
 end;
 

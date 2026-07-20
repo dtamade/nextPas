@@ -93,9 +93,9 @@ begin
   LOptions.NotBefore := Now - 2;
   LOptions.NotAfter := Now + 30;
   LOptions.SerialNumber := ASerialNumber;
-  LOptions.SubjectAltNames := TStringList.Create;
+  SetLength(LOptions.SubjectAltNames, 0);
   try
-    LOptions.SubjectAltNames.Add('example.com');
+    CertOptionsAddSAN(LOptions, 'example.com');
     AssertTrue(
       TCertificateUtils.GenerateSigned(
         LOptions,
@@ -107,8 +107,6 @@ begin
       'GenerateSigned should create a CA-signed leaf certificate for fast revocation contracts'
     );
   finally
-    LOptions.SubjectAltNames.Free;
-    LOptions.SubjectAltNames := nil;
   end;
 
   Result := CreateFreePascalCertificate;
