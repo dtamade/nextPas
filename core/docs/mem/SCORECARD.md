@@ -1,8 +1,8 @@
 # mem Scorecard
 
-**状态**: Steady+ 基线（SC1–SC9 绿；RELEASE 数字 2026-07-20 · Era F · F1）
+**状态**: Steady+ 基线（SC1–SC9 绿；RELEASE 数字 **2026-07-20 · H0** 刷新）
 **权威入口**: `core/tests/nextpas.core.mem/scorecard/`
-**计划引用**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §7 · [ROADMAP.md](ROADMAP.md) F1
+**计划引用**: [STDLIB-QUALITY-PLAN.md](STDLIB-QUALITY-PLAN.md) §7 · [ROADMAP.md](ROADMAP.md) H0
 
 Ready 报告的性能证据以本 Scorecard 为准；历史微基准博物馆数据见 [BENCHMARKS.md](BENCHMARKS.md)。
 
@@ -62,7 +62,7 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 ## 基线快照
 
 **环境**: Linux x86_64, FPC 3.3.1-19195
-**日期**: 2026-07-20（Era F · F1；P-a/P-b 后 `RELEASE=1` 本机一次全 PASS）
+**日期**: 2026-07-20（**H0** Steady 收官；G4 residual 后 `RELEASE=1` 本机一次全 PASS）
 **命令**: `make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1`
 **结果**: `SCORECARD: ALL PASS (17 rows)`
 
@@ -70,23 +70,23 @@ make -C core/tests/nextpas.core.mem/scorecard clean test RELEASE=1
 
 | ID | subject | ns/op | p99 | Mops/s | 备注 |
 |----|---------|-------|-----|--------|------|
-| SC1 | growing | 10 | — | 100.0 | ~2.3× system |
-| SC1 | default_heap | 22 | — | 45.5 | Growing 单例（DefaultHeap） |
-| SC1 | system | 23 | — | 43.5 | glibc via System.GetMem |
-| SC2 | growing | 24 | 22 | 41.7 | sizes 16..4K |
-| SC2 | system | 42 | 86 | 23.8 | |
-| SC3 | growing | 119 | — | 8.4 | producer alloc / consumer free |
+| SC1 | growing | 8 | — | 125.0 | ≤ system |
+| SC1 | default_heap | 15 | — | 66.7 | Growing 单例 |
+| SC1 | system | 21 | — | 47.6 | glibc via System.GetMem |
+| SC2 | growing | 23 | 22 | 43.5 | sizes 16..4K |
+| SC2 | system | 44 | 76 | 22.7 | |
+| SC3 | growing | 121 | — | 8.3 | producer alloc / consumer free |
 | SC4 | local_arena | 2 | — | 500 | AllocFast reset+reuse 64B |
-| SC5 | growing | 75 | — | 13.3 | peak LiveBytes≈402KB; final≈12KB; delta Released≈501KB / 35 spans |
-| SC6 | virtual_arena | 11 | — | 90.9 | 200 units × 4000 mixed nodes; peakUsed=352KB; finalUsed=0 |
-| SC7 | local_arena | 79 | 55 | 12.7 | per-request scope（hdr+body+temps） |
-| SC7 | system | 410 | 646 | 2.4 | 同负载 GetMem/FreeMem 对照 |
-| SC8 | free_sized | 20 | — | 50.0 | `FreeMem(ptr,size)` 优选热 free |
-| SC8 | free_unsized | 129 | — | 7.8 | `FreeMem(ptr)` span 扫描；~**6.5×** 更慢 |
-| SC8 | try_block_size | — | — | — | 正确性：size-class ≥ 请求 |
-| SC9 | hot_heap | 14 | — | 71.4 | DefaultHeap sized path |
-| SC9 | plugin_ia | 130 | — | 7.7 | DefaultAllocator vtable path；~**9.3×** 更慢 |
-| SC9 | same_heap | — | — | — | 正确性：插件块可 hot sized free |
+| SC5 | growing | 72 | — | 13.9 | peak≈402KB; final≈12KB; ReleasedSpans=35 |
+| SC6 | virtual_arena | 11 | — | 90.9 | peakUsed=352KB; finalUsed=0 |
+| SC7 | local_arena | 75 | 54 | 13.3 | per-request scope |
+| SC7 | system | 265 | 265 | 3.8 | 同负载对照（抖动大） |
+| SC8 | free_sized | 14 | — | 71.4 | `FreeMem(ptr,size)` |
+| SC8 | free_unsized | 120 | — | 8.3 | span 扫描；~**8.6×** 更慢 |
+| SC8 | try_block_size | — | — | — | 正确性 |
+| SC9 | hot_heap | 14 | — | 71.4 | DefaultHeap sized |
+| SC9 | plugin_ia | 139 | — | 7.2 | vtable；~**9.9×** 更慢 |
+| SC9 | same_heap | — | — | — | 同堆互释正确性 |
 
 SC5 说明：40 rounds × 256 × 64B churn + 周期 `Scavenge`；`final LiveBytes` 可保留少量 TLS/active 结构，门禁要求 **delta ReleasedSpans ≥ 1** 且 final ≤ peak。
 
@@ -106,9 +106,12 @@ make -C core/tests/nextpas.core.mem/test_soak clean test
 
 ### F5 process GetMem 微税（WAIVE）
 
-- 证据（同机 scorecard）：SC1 `default_heap` ≈15 ns/op；SC9 `hot_heap` ≈13 ns/op；`plugin_ia` ≈123 ns/op。
-- process `GetMem` 在 HEAP_DEBUG 关闭时已 inline 到 DefaultHeap；剩余税来自可选 env 门控，**拆掉会伤 DEBUG 可发现性**。
-- 决策：**不改代码**；若未来 profiling 证明 ≥3 ns 可安全省，再开独立 slice。
+- 证据（H0 同机）：SC1 `default_heap` ≈15 ns/op；SC9 `hot_heap` ≈14；`plugin_ia` ≈139。
+- process `GetMem` 在 HEAP_DEBUG 关闭时已 inline 到 DefaultHeap；**不改代码**。
+
+### H0 说明
+
+- 本表刷新于 FreeMemOf 浪潮与 G5.x 真机门之后；权威仍以当次 `RELEASE=1` 输出为准。
 
 SC6 说明：`TVirtualArena` 混合 AST 节点尺寸，每 unit `Reset`；门禁要求 peakUsed > 0 且 finalUsed 远小于 peak。
 

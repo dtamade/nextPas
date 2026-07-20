@@ -171,6 +171,15 @@ need_grep "$MEM_DOCS/FACADES-SURFACE.md" 'F3 批 1 已移出门面|demoted|F3' \
   'FACADES-SURFACE must document F3 demotion list'
 need_grep "$MEM_DOCS/ROADMAP.md" '时代 G|Ecosystem Steward|4d' \
   'ROADMAP must define Era G'
+# H0-d: Darwin/Windows platform CI matrices must keep mem host-runtime evidence
+need_grep "$ROOT/core/scripts/platform-macos-ci-matrix.sh" 'mem\.host_runtime' \
+  'macos CI matrix must include mem.host_runtime'
+need_grep "$ROOT/core/scripts/platform-windows-ci-matrix.sh" 'mem\.host_runtime' \
+  'windows CI matrix must include mem.host_runtime'
+need_grep "$MEM_DOCS/API-GUIDE.md" 'FreeMemOf 决策树|决策树（H0）' \
+  'API-GUIDE must document FreeMemOf decision tree'
+need_grep "$MEM_DOCS/MEM-HOST-RUNTIME-CI.md" 'host-runtime|mem\.host_runtime' \
+  'MEM-HOST-RUNTIME-CI must document host-runtime evidence'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'GetGrowingIAllocator|Growing IAllocator' 'USABILITY-SCORE must cover S5 root'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'HEAP_DEBUG|NEXTPAS_MEM_HEAP_DEBUG' 'USABILITY-SCORE must cover HEAP_DEBUG opt-in'
 need_grep "$MEM_DOCS/USABILITY-SCORE.md" 'TryBlockSize|SC8' 'USABILITY-SCORE must cover TryBlockSize/SC8'

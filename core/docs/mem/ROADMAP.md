@@ -176,9 +176,27 @@ F3 **breaking（re-export only）**：冷门包装器与并发池变体改 `uses
 **Steady 之后默认**: 只修回归 · D3 谁改谁顺手 · cross-OS/GHA 有红再开。
 禁止全仓 FreeMem 扫、禁止 Phase 29、禁止误删 growable。
 
+### G 成功标准（均已满足）
+
+| ID | 标准 | 证据 |
+|----|------|------|
+| GS1 | 门面 demote + 防回潮 | G1–G2 · guardrails |
+| GS2 | FreeMemOf 样板覆盖主 inject 表/槽 | G4 · residual · node/hashmap |
+| GS3 | Darwin/Windows 真机 mem host-runtime | G5.x · [MEM-HOST-RUNTIME-CI.md](MEM-HOST-RUNTIME-CI.md) |
+| GS4 | growable KEEP 有文 | G3 |
+| GS5 | 证据入口常绿 | G6 · scorecard/soak |
+
+### Era H — Maintenance only（不新开大时代）
+
+| 切片 | 内容 | 状态 |
+|------|------|------|
+| **H0** | Steady 收官：决策树 · SCORECARD 刷新 · CI guardrail · 文档终态 | **done** 2026-07-20 |
+| H1 | element_manager FreeMemOf（仅当 tracking 测允许） | 可选 |
+| H∞ | 回归 / 命名 D3 / GHA mem 红 | 持续 |
+
 ---
 
-## 5. 明确不做（时代 D/E/F/G 有效期内）
+## 5. 明确不做（时代 D/E/F/G/H 有效期内）
 
 1. 新开「Phase 29：再加一打 allocator」
 2. 全仓库 unsized `FreeMem` 机械替换
