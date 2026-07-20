@@ -321,3 +321,19 @@ L2V := InvertBidiIndexMap(R.VisualToLogical, Length(R.Levels));
 // 显示串：按视觉序拼 UTF-8（不含 L3 镜像）
 Display := ApplyBidiVisualOrder(MixedHebrewEnglish, 2);
 ```
+
+
+## 错误策略（P3-2）
+
+三层模型见 [ERROR_MODEL.md](../ERROR_MODEL.md)：
+
+- **L0** Unicode 处理：非法 UTF-8 → U+FFFD，不抛
+- **L1** StrTo* / Format / View：异常或 Try*
+- **L2** IDNA：`TIDNAErrorKind`，不抛
+
+```pascal
+var K: TIDNAErrorKind;
+ACE := IDNAToASCII(Domain, K);
+if K <> idnaOk then
+  // 使用 IDNAErrorKindName(K)
+```

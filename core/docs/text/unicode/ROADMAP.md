@@ -56,7 +56,7 @@
 |----|------|----------|
 | **P3-0** 岸线 + 错误模型 + 门面矩阵 | ✅ | re-land P2-3/4 + P0；`TIDNAErrorKind`；门面矩阵 v2；ROADMAP 与 tip 对齐 |
 | **P3-1** IDNA MappingTable | ✅ | UTS#46 IdnaMappingTable 全表 + Nontransitional Map 步 |
-| **P3-2** 统一 text 错误策略 | ⬜ | 非法 UTF-8 / convert 与 IDNA 错误文档化一致 |
+| **P3-2** 统一 text 错误策略 | ✅ | [ERROR_MODEL.md](../ERROR_MODEL.md) L0/L1/L2 真源 |
 | **P2-6** CLDR Collation | 🔒 | 仍深水 |
 
 
@@ -174,6 +174,7 @@ UCD 升版（generators 一条龙）见 [README.md](README.md#ucd-升版一条�
 
 | 日期 | 说明 |
 |------|------|
+| 2026-07-21 | **P3-2**：ERROR_MODEL L0/L1/L2 统一错误策略 |
 | 2026-07-21 | **P3-1**：IdnaMappingTable 全表 + ApplyIdnaMap / GetIdnaMapStatus |
 | 2026-07-21 | **P3-0**：re-land P2-3/4+P0；TIDNAErrorKind；门面矩阵 v2 |
 | 2026-07-20 | P2-5：Punycode + IDNA ToASCII/ToUnicode |

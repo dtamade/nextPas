@@ -84,11 +84,17 @@ DUCET 排序、UAX#29 文本分割、大小写映射和属性查询。基于 Uni
 
 ## 错误处理
 
-| 场景 | 行为 |
-|------|------|
-| 空输入 | 空结果 |
-| 非法 UTF-8 | 按 U+FFFD、消费 1 字节（可与 Prepend 组簇） |
-| 代理对 | 无效序列 |
+**真源**：[../ERROR_MODEL.md](../ERROR_MODEL.md)（P3-2）。
+
+| 场景 | 行为 | 层 |
+|------|------|-----|
+| 空输入 | 空结果 | L0 |
+| 非法 UTF-8 | U+FFFD、消费 1 字节（可与 Prepend 组簇） | L0 |
+| 代理对 | 无效序列 | L0 |
+| IDNA 失败 | `Result=''` + `TIDNAErrorKind`（string 兼容 = KindName） | L2 |
+| MappingTable disallowed | `idnaDisallowed` | L2 |
+
+L0 算法路径 **不因坏 UTF-8 抛异常**。IDNA **不抛**，见 ERROR_MODEL §4。
 
 ## 已知限制
 
@@ -113,6 +119,7 @@ Fixture / UCD 升版生成：见 [README.md#ucd-升版一条龙](README.md#ucd-�
 
 | 日期 | 变更 |
 |------|------|
+| 2026-07-21 | P3-2：错误策略链接 ERROR_MODEL.md |
 | 2026-07-21 | P3-1：IdnaMappingTable + ApplyIdnaMap |
 | 2026-07-21 | P3-0：TIDNAErrorKind + 门面 re-export SCX/Bidi visual |
 | 2026-07-20 | M2：UTF8ToTitleWords + clLithuanian |
