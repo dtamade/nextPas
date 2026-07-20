@@ -564,7 +564,7 @@ begin Result := Deleted; end;
 function TPlatformWatchEvent.NameStr: AnsiString;
 begin SetString(Result, PAnsiChar(@Name[0]), NameLen); end;
 
-{ Batch-15 S1+S2: create/add/close + ReadDirectoryChangesW poll (one event). }
+{ Batch-15 S1–S3: create/add/close + RDCW poll + overflow AGAIN. }
 
 const
   WIN_WATCH_NOTIFY_FILTER =
@@ -586,6 +586,28 @@ begin
   AWatcher.PendPos := 0;
   AWatcher.Pending := False;
   AWatcher.Fd := -1;
+end;
+
+function WinWatchArm(var AWatcher: TPlatformWatcher): Int32; forward;
+
+function WinWatchMapIoError(var AWatcher: TPlatformWatcher): Int32;
+var
+  LErr: DWORD;
+  LArm: Int32;
+begin
+  LErr := GetLastError;
+  AWatcher.Pending := False;
+  AWatcher.PendLen := 0;
+  AWatcher.PendPos := 0;
+  if LErr = ERROR_NOTIFY_ENUM_DIR then
+  begin
+    { Buffer overflow: events may have been lost; re-arm and report AGAIN. }
+    LArm := WinWatchArm(AWatcher);
+    if LArm <> 0 then
+      Exit(LArm);
+    Exit(PLATFORM_ERR_AGAIN);
+  end;
+  Result := platform_get_last_error;
 end;
 
 function WinWatchArm(var AWatcher: TPlatformWatcher): Int32;
@@ -622,6 +644,11 @@ begin
     begin
       AWatcher.Pending := True;
       Result := 0;
+    end
+    else if LErr = ERROR_NOTIFY_ENUM_DIR then
+    begin
+      AWatcher.Pending := False;
+      Result := PLATFORM_ERR_AGAIN;
     end
     else
       Result := platform_get_last_error;
@@ -796,10 +823,7 @@ begin
   LOvl := WinWatchOverlapped(AWatcher);
   LBytes := 0;
   if not GetOverlappedResult(HANDLE(AWatcher.DirHandle), LOvl, @LBytes, False) then
-  begin
-    AWatcher.Pending := False;
-    Exit(platform_get_last_error);
-  end;
+    Exit(WinWatchMapIoError(AWatcher));
   AWatcher.Pending := False;
   AWatcher.PendLen := Int32(LBytes);
   AWatcher.PendPos := 0;
