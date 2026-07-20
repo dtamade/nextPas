@@ -4,24 +4,24 @@ L2 进程执行模块。提供类似 Go `os/exec` 和 Rust `std::process::Comman
 
 **开发地图**：[`ROADMAP.md`](./ROADMAP.md) · **Windows**：[WIN.md](./WIN.md) · **对标**：[PARITY-go-rust.md](./PARITY-go-rust.md) · **证据**：[SCORECARD.md](./SCORECARD.md)
 
-> Host Essential + M2/M3 Done（Maintenance）。**U1 可用性收敛**：安全默认 MaxOutput（便利层）+ Preferred API。新需求贴标签（ROADMAP §5）。
+> Host Essential + M2/M3 + U1/U2 Done（Maintenance）。安全默认 MaxOutput（便利+builder）；Preferred API。新需求贴标签（ROADMAP §5）。
 
 ## 生产默认（Preferred）
 
 ```pascal
 uses nextpas.core.process;
 
-// 推荐：builder + 显式上限 + 超时
+// 推荐：builder + 超时；未调用 MaxOutput 时缓冲路径默认 64 MiB（U2）
 var Out := Command('/usr/bin/tool')
   .Args(['--flag'])
   .Timeout(TDuration.FromSeconds(30))
-  .MaxOutput(1024 * 1024)  // 生产务必限制；builder 默认 0=无限
+  .MaxOutput(1024 * 1024)  // 生产可再收紧；省略则仍 64MiB 默认
   .Output;
 if not ProcessSucceeded(Out) then
   // Out.TimedOut / Out.OutputLimited / Out.Cancelled / Out.ExitCode
   ...
 
-// 便利层：Run/Capture* 已套 cProcessDefaultMaxOutput（64 MiB）；无限用 builder .MaxOutput(0)
+// 便利层与 builder 未配置时同为 64 MiB；无限必须显式 MaxOutput(0)
 var Text := MustCapture('/bin/echo', ['ok']);
 var St := RunChecked('/bin/true', []);
 var Path := LookPath('fpc');
