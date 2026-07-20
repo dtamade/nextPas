@@ -644,21 +644,8 @@ function StringToHashAlgorithm(const AName: string): THashAlgorithm;
 
 implementation
 
-{$IFDEF WINDOWS}
 uses
-  Windows;
-
-const
-  BCRYPT_USE_SYSTEM_PREFERRED_RNG = $00000002;
-
-// BCryptGenRandom - Windows Vista+ secure random number generator
-function BCryptGenRandom(
-  hAlgorithm: THandle;
-  pbBuffer: PByte;
-  cbBuffer: ULONG;
-  dwFlags: ULONG
-): LONG; stdcall; external 'bcrypt.dll' name 'BCryptGenRandom';
-{$ENDIF}
+  nextpas.core.crypto.random;
 
 const
   // 缓冲区大小常量
@@ -764,39 +751,11 @@ begin
 end;
 
 class procedure TCryptoUtils.SystemRandom(ABuffer: PByte; ASize: Integer);
-{$IFDEF UNIX}
-var
-  LFile: File;
-  LBytesRead: Integer;
-{$ENDIF}
-{$IFDEF WINDOWS}
-var
-  LStatus: LONG;
-{$ENDIF}
 begin
-  {$IFDEF UNIX}
-  LBytesRead := 0;
-  AssignFile(LFile, '/dev/urandom');
-  try
-    Reset(LFile, 1);
-    try
-      BlockRead(LFile, ABuffer^, ASize, LBytesRead);
-      if LBytesRead <> ASize then
-        raise ESSLCryptoError.Create('Insufficient random bytes from /dev/urandom');
-    finally
-      CloseFile(LFile);
-    end;
-  except
-    on E: Exception do
-      raise ESSLCryptoError.Create('System random source failed: ' + E.Message);
-  end;
-  {$ELSE}
-  // Windows: Use BCryptGenRandom (cryptographically secure, Vista+)
-  LStatus := BCryptGenRandom(0, ABuffer, ULONG(ASize), BCRYPT_USE_SYSTEM_PREFERRED_RNG);
-  if LStatus <> 0 then
-    raise ESSLCryptoError.CreateFmt(
-      'BCryptGenRandom failed with NTSTATUS: 0x%x', [LStatus]);
-  {$ENDIF}
+  if (ABuffer = nil) or (ASize <= 0) then
+    raise ESSLCryptoError.Create('System random: invalid buffer or size');
+  if not SecureRandomBytes(ABuffer, ASize) then
+    raise ESSLCryptoError.Create('System random source failed');
 end;
 
 class function TCryptoUtils.GetEVPCipher(AAlgorithm: TEncryptionAlgorithm): PEVP_CIPHER;
