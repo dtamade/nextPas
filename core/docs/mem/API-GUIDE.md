@@ -88,8 +88,9 @@ Writeln(FormatMemStats); // … debug_process=… debug_coverage_gap=…
 | 用 FreeMemOf | 用 IAllocator.FreeMem |
 |--------------|----------------------|
 | 容量字段已知的表/registry/槽 | inject 面要测 tracking 计数 |
-| builder 缓冲（text/bytes） | 不确定是否同堆 |
-| 解析器 node 数组（json/yaml/…） | 无 size 的 owned 字符串指针 |
+| builder 缓冲（text/bytes；Realloc 用 `ReallocMemOf`） | 不确定是否同堆 |
+| 解析器 node 数组（json/yaml/…） | （已关闭）无 size 的 owned 串 — **Era I** 起用 size 表 |
+| owned 串 + size 表（`TJsonOwnedStr` / `TTomlOwnedBuf`） | tui inject 须观察 Free（永久 WAIVE FreeMemOf） |
 
 样板：builders · json/yaml/toml/xml/ini/csv · collections.node/hashmap/swiss。
 **禁止**全仓机械替换。
