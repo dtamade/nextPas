@@ -144,6 +144,8 @@ end;
 - **[INV-2]** 格式加载走真实 DOM 模块 + `flatten`，禁止手写行解析 JSON/YAML/TOML
 - **[INV-3]** 数组索引规范（canonical indexes）
 - **[INV-4]** 多源合并后仍是一张扁平表
+- **[INV-5]** YAML：`LoadFromYaml` 只展平 `IYamlDocument.Root`；底层 parser **拒绝多文档**
+  （第二个 `---` → 解析错误，不静默合并多根）
 
 ---
 
