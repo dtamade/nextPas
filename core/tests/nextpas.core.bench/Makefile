@@ -1,3 +1,4 @@
+# 默认 gate：下列 22 项。test_test_bench_integration/ 为历史孤儿目录，不在此列表。
 PROJECTS := test_bench_baseline test_bench_stats test_bench_stats_advanced \
             test_bench_runner test_bench_report test_bench_integration \
             test_bench_results_api \

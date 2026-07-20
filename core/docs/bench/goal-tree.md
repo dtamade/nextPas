@@ -228,6 +228,13 @@ B44  接手卫生包 (2026-07-20)                                       ✅
   B44.1  merge/fast-forward main；文档/registry/CONTRACT 口径     ✅
   B44.2  scorecard 根 micro 误追踪 ELF 出库 + .gitignore          ✅
   B44.3  make hygiene + bench-module-test + smoke 验证            ✅
+
+B45  可用性评估落地 (2026-07-20)                                     ✅
+  B45.1  BenchBlackBox* 防优化 sink + self_bench 测试             ✅
+  B45.2  官方示例去掉 SysUtils；fs + BlackBox                     ✅
+  B45.3  Canonical API 文档 + CONTRACT 索引/错误约定/RTL 节       ✅
+  B45.4  checklist +http/mem/collections 抽检；contract-check 增强 ✅
+  B45.5  门面物理大拆 / EBR / 全量 SCORECARD — 仍推迟             ⏸
 ```
 
 ## 测试套件分布
