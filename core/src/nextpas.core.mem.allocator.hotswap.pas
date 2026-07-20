@@ -103,7 +103,7 @@ constructor THotswapAllocator.Create(AInitial: IAllocator);
 begin
   inherited Create;
   if AInitial = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'THotswapAllocator.Create: AInitial cannot be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('THotswapAllocator', 'Create', 'AInitial cannot be nil'));
   FCurrent := AInitial;
   FSwapCount := 0;
 end;
@@ -117,7 +117,7 @@ end;
 procedure THotswapAllocator.Swap(ANew: IAllocator);
 begin
   if ANew = nil then
-    raise EAllocError.Create(aeInvalidLayout, 'THotswapAllocator.Swap: ANew cannot be nil');
+    raise EAllocError.Create(aeInvalidLayout, FormatAllocErrorMsg('THotswapAllocator', 'Swap', 'ANew cannot be nil'));
   FCurrent := ANew;
   Inc(FSwapCount);
 end;

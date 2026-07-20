@@ -115,7 +115,7 @@ begin
        (LBlock^.TotalSize < HeaderSize) or
        (LBlock^.TotalSize > FReservationSize - LCurrentOffset) then
       raise EAllocError.Create(aeInternalError,
-        'TMemoryMapAllocator: block chain corruption at offset ' + IntToStr(Int64(LCurrentOffset)));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'block chain corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
 
     if LPayloadOffset = LCurrentOffset + HeaderSize then
     begin
@@ -154,12 +154,12 @@ begin
   begin
     if LCurrentOffset >= FReservationSize then
       raise EAllocError.Create(aeInternalError,
-        'TMemoryMapAllocator: free list offset out of range (' + IntToStr(Int64(LCurrentOffset)) + '/' + IntToStr(Int64(FReservationSize)) + ')');
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'free list offset out of range (' + IntToStr(Int64(LCurrentOffset)) + '/' + IntToStr(Int64(FReservationSize)) + ')'));
 
     LBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
     if (LBlock^.Magic <> MAP_BLOCK_MAGIC) or (LBlock^.State <> MAP_BLOCK_FREE) then
       raise EAllocError.Create(aeInternalError,
-        'TMemoryMapAllocator: free list corruption at offset ' + IntToStr(Int64(LCurrentOffset)));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'free list corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
 
     if LBlock^.TotalSize >= LNeeded then
     begin
@@ -220,12 +220,12 @@ var
 begin
   if APtr = nil then Exit;
   if not FindBlockForPayload(APtr, LBlockPtr, LHeaderOffset) then
-    raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.FreeMem: pointer not owned');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TMemoryMapAllocator', 'FreeMem', 'pointer not owned'));
   LBlock := PMemoryMapBlockHeader(LBlockPtr);
   if LBlock^.State = MAP_BLOCK_FREE then
-    raise EAllocError.Create(aeDoubleFree, 'TMemoryMapAllocator.FreeMem: double free detected');
+    raise EAllocError.Create(aeDoubleFree, FormatAllocErrorMsg('TMemoryMapAllocator', 'FreeMem', 'double free detected'));
   if LBlock^.State <> MAP_BLOCK_USED then
-    raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.FreeMem: invalid block state');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TMemoryMapAllocator', 'FreeMem', 'invalid block state'));
 
   { Mark the freed block as free. }
   LBlock^.State := MAP_BLOCK_FREE;
@@ -241,7 +241,7 @@ begin
     LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
     if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
       raise EAllocError.Create(aeInternalError,
-        'TMemoryMapAllocator: coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset)));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
 
     if LCurBlock^.State = MAP_BLOCK_FREE then
     begin
@@ -255,7 +255,7 @@ begin
         LCurBlock := PMemoryMapBlockHeader(FBase + LCurrentOffset);
         if (LCurBlock^.Magic <> MAP_BLOCK_MAGIC) or (LCurBlock^.TotalSize < HeaderSize) then
           raise EAllocError.Create(aeInternalError,
-            'TMemoryMapAllocator: coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset)));
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'coalesce scan corruption at offset ' + IntToStr(Int64(LCurrentOffset))));
         if LCurBlock^.State <> MAP_BLOCK_FREE then
           Break;
         Inc(LRunSize, LCurBlock^.TotalSize);
@@ -295,11 +295,11 @@ begin
 
   if aReservationSize < HeaderSize + SizeOf(Pointer) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TMemoryMapAllocator: invalid reservation size (' + IntToStr(Int64(aReservationSize)) + ')');
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'invalid reservation size (' + IntToStr(Int64(aReservationSize)) + ')'));
   {$IF SizeOf(SizeUInt) < SizeOf(UInt64)}
   if aReservationSize > High(SizeUInt) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TMemoryMapAllocator: reservation size exceeds addressable range (' + IntToStr(Int64(aReservationSize)) + ')');
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Raise', 'reservation size exceeds addressable range (' + IntToStr(Int64(aReservationSize)) + ')'));
   {$ENDIF}
 
   FMap := TMemoryMap.Create;
@@ -309,8 +309,8 @@ begin
     FMap := nil;
     FLock.Done;
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TMemoryMapAllocator.Create: failed to create anonymous mapping (' +
-      IntToStr(Int64(aReservationSize)) + ' bytes)');
+      FormatAllocErrorMsg('TMemoryMapAllocator', 'Create', 'failed to create anonymous mapping (' +
+      IntToStr(Int64(aReservationSize)) + ' bytes)'));
   end;
 
   FBase := FMap.BaseAddress;
@@ -376,11 +376,11 @@ begin
   FLock.Acquire;
   try
     if not FindBlockForPayload(APtr, LOldBlockPtr, LHeaderOffset) then
-      raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.ReallocMem: pointer not owned');
+      raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TMemoryMapAllocator', 'ReallocMem', 'pointer not owned'));
 
     LOldBlock := PMemoryMapBlockHeader(LOldBlockPtr);
     if LOldBlock^.State <> MAP_BLOCK_USED then
-      raise EAllocError.Create(aeInvalidPointer, 'TMemoryMapAllocator.ReallocMem: invalid block');
+      raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TMemoryMapAllocator', 'ReallocMem', 'invalid block'));
 
     if ASize <= (LOldBlock^.TotalSize - HeaderSize) then
     begin

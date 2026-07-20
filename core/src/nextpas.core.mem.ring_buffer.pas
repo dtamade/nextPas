@@ -348,8 +348,8 @@ begin
   FBuffer := FBaseAllocator.GetMem(FCapacity * FElementSize);
   if FBuffer = nil then
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TRingBuffer.Create: failed to allocate memory (capacity=' +
-      IntToStr(Int64(FCapacity)) + ', elem_size=' + IntToStr(Int64(FElementSize)) + ')');
+      FormatAllocErrorMsg('TRingBuffer', 'Create', 'failed to allocate memory (capacity=' +
+      IntToStr(Int64(FCapacity)) + ', elem_size=' + IntToStr(Int64(FElementSize)) + ')'));
 end;
 
 destructor TRingBuffer.Destroy;

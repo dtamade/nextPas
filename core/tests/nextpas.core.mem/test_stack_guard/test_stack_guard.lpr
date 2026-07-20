@@ -2,7 +2,6 @@ program test_stack_guard;
 {$mode ObjFPC}{$H+}
 
 uses
-  SysUtils,
   nextpas.core.text.conv,
   nextpas.core.test,
   nextpas.core.mem.stack_guard,

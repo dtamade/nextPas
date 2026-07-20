@@ -1,6 +1,6 @@
 # nextpas.core.mem 路线图（权威）
 
-**状态**: **Era M done → Maintenance Idle（2026-07-20）** — FixedSlab AlignedFallback + sharded TLS sized free；残余 WAIVE 仅 tui tracking
+**状态**: **Era M done → Maintenance Idle（2026-07-20）** — FixedSlab AlignedFallback + sharded TLS sized free；残余 WAIVE 仅 tui tracking；**可用性债 R-* CLOSED**（见 USABILITY-FIX-PLAN-2026-07-20）
 **Owner**: mem lane（`.worktrees/mem`）全权
 **更新**: 2026-07-20
 **原则**: 只维护一份活路线图；历史 phase 清单进 [archive/](archive/)

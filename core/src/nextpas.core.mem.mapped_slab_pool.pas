@@ -424,12 +424,12 @@ var
 begin
   if aPtr = nil then Exit;
   if not IsValid then
-    raise EAllocError.Create(aePoolClosed, 'TMappedSlabAllocator.FreeBlock: pool is not valid');
+    raise EAllocError.Create(aePoolClosed, FormatAllocErrorMsg('TMappedSlabAllocator', 'FreeBlock', 'pool is not valid'));
 
   LHeader := PMappedSlabHeader(FHeader);
   if (not PointerToDataOffset(aPtr, LPayloadOffset)) or
      (LPayloadOffset < SizeOf(TMappedSlabBlockHeader)) then
-    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabAllocator.FreeBlock: pointer is not from this pool');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TMappedSlabAllocator', 'FreeBlock', 'pointer is not from this pool'));
 
   LBlockOffset := LPayloadOffset - SizeOf(TMappedSlabBlockHeader);
   LPageIndex := LBlockOffset div FPageSize;
@@ -438,30 +438,30 @@ begin
     Str(LPageIndex, LPageIndexStr);
     Str(LHeader^.TotalPages, LTotalPagesStr);
     raise EAllocError.Create(aeInvalidPointer,
-      'TMappedSlabAllocator.FreeBlock: page index out of range (' + LPageIndexStr + '/' + LTotalPagesStr + ')');
+      FormatAllocErrorMsg('TMappedSlabAllocator', 'FreeBlock', 'page index out of range (' + LPageIndexStr + '/' + LTotalPagesStr + ')'));
   end;
 
   LPage := PMappedSlabPage(GetPageDescriptor(LPageIndex));
   if (LPage^.BlockSize = 0) or (LPage^.Generation <> LHeader^.ResetGeneration) then
-    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabAllocator.FreeBlock: stale or unowned pointer');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TMappedSlabAllocator', 'FreeBlock', 'stale or unowned pointer'));
 
   LPageStart := UInt64(LPageIndex) * UInt64(FPageSize);
   LBlockStride := LPage^.BlockSize + SizeOf(TMappedSlabBlockHeader);
   LWithinPage := LBlockOffset - LPageStart;
   if (LBlockStride = 0) or (LWithinPage mod LBlockStride <> 0) then
-    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabAllocator.FreeBlock: pointer is not a block payload');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TMappedSlabAllocator', 'FreeBlock', 'pointer is not a block payload'));
 
   LBlock := PMappedSlabBlockHeader(DataOffsetToPointer(LBlockOffset));
   if (LBlock^.Magic <> BLOCK_MAGIC) or
      (LBlock^.PageIndex <> LPageIndex) or
      (LBlock^.BlockSize <> LPage^.BlockSize) or
      (LBlock^.Generation <> LPage^.Generation) then
-    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabAllocator.FreeBlock: invalid block header');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TMappedSlabAllocator', 'FreeBlock', 'invalid block header'));
 
   if LBlock^.State = BLOCK_STATE_FREE then
-    raise EAllocError.Create(aeDoubleFree, 'TMappedSlabAllocator.FreeBlock: double free detected');
+    raise EAllocError.Create(aeDoubleFree, FormatAllocErrorMsg('TMappedSlabAllocator', 'FreeBlock', 'double free detected'));
   if LBlock^.State <> BLOCK_STATE_USED then
-    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabAllocator.FreeBlock: invalid block state');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TMappedSlabAllocator', 'FreeBlock', 'invalid block state'));
 
   LBlock^.State := BLOCK_STATE_FREE;
   LBlock^.NextFreeOffset := LPage^.FreeHeadOffset;

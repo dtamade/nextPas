@@ -41,7 +41,7 @@ set_lane_defaults() {
       ;;
     mem)
       TRUTH_KIND="runtime"
-      FOCUS_PATH="core/tests/nextpas.core.mem/test_usability_guardrails"
+      FOCUS_PATH="core/tests/nextpas.core.mem/lane_gate"
       ;;
     system)
       TRUTH_KIND="source-contract"

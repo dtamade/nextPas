@@ -156,7 +156,7 @@ begin
     Str(LActualBlockSize, LBlockSizeStr);
     Str(ABlockCount, LBlockCountStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TLocalBlockPool.Create: size overflow (block_size=' + LBlockSizeStr + ', count=' + LBlockCountStr + ')');
+      FormatAllocErrorMsg('TLocalBlockPool', 'Create', 'size overflow (block_size=' + LBlockSizeStr + ', count=' + LBlockCountStr + ')'));
   end;
   FBackingSize := LTotalSize;
   if FAllocator <> nil then
@@ -168,7 +168,7 @@ begin
     FBackingSize := 0;
     Str(LTotalSize, LTotalSizeStr);
     raise EOutOfMemory.Create(aeOutOfMemory,
-      'TLocalBlockPool.Create: out of memory (requested ' + LTotalSizeStr + ' bytes)');
+      FormatAllocErrorMsg('TLocalBlockPool', 'Create', 'out of memory (requested ' + LTotalSizeStr + ' bytes)'));
   end;
   ZeroMem(FBacking, LTotalSize);
 
@@ -236,17 +236,17 @@ begin
   if APtr = nil then
     Exit;
   if not Owns(APtr) then
-    raise EAllocError.Create(aeInvalidPointer, 'TLocalBlockPool.Release: pointer not owned');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TLocalBlockPool', 'Release', 'pointer not owned'));
   LDiff := PtrUInt(APtr) - PtrUInt(FBacking);
   if (FBlockSize = 0) or ((LDiff mod FBlockSize) <> 0) then
-    raise EAllocError.Create(aeInvalidPointer, 'TLocalBlockPool.Release: misaligned pointer');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TLocalBlockPool', 'Release', 'misaligned pointer'));
 
   { O(1) double-free 检测：位图查询 }
   LIdx := BlockIndex(APtr);
   if IsFreeBit(LIdx) then
-    raise EAllocError.Create(aeDoubleFree, 'TLocalBlockPool.Release: double free detected');
+    raise EAllocError.Create(aeDoubleFree, FormatAllocErrorMsg('TLocalBlockPool', 'Release', 'double free detected'));
   if FAcquired = 0 then
-    raise EAllocError.Create(aeDoubleFree, 'TLocalBlockPool.Release: allocation count underflow');
+    raise EAllocError.Create(aeDoubleFree, FormatAllocErrorMsg('TLocalBlockPool', 'Release', 'allocation count underflow'));
 
   { 标记为 free（设置位） }
   SetFreeBit(LIdx);

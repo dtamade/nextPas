@@ -188,29 +188,29 @@ begin
   n := NGX_SLAB_PAGE_SHIFT - FMinShift;
   if ACapacity > High(SizeUInt) - (NGX_SLAB_PAGE_SIZE - 1) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TFixedSlabPool.Create: capacity overflow (' + IntToStr(ACapacity) + ')');
+      FormatAllocErrorMsg('TFixedSlabPool', 'Create', 'capacity overflow (' + IntToStr(ACapacity) + ')'));
   desired_pages := (ACapacity + NGX_SLAB_PAGE_SIZE - 1) div NGX_SLAB_PAGE_SIZE;
   overhead_base := SizeOf(ngx_slab_pool_t) + n * (SizeOf(ngx_slab_page_t) + SizeOf(ngx_slab_stat_t));
   per_page_cost := SizeOf(ngx_slab_page_t) + NGX_SLAB_PAGE_SIZE;
   if (desired_pages <> 0) and (per_page_cost > High(SizeUInt) div desired_pages) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TFixedSlabPool.Create: region size overflow (' + IntToStr(desired_pages) + ' * ' + IntToStr(per_page_cost) + ')');
+      FormatAllocErrorMsg('TFixedSlabPool', 'Create', 'region size overflow (' + IntToStr(desired_pages) + ' * ' + IntToStr(per_page_cost) + ')'));
   page_payload_cost := desired_pages * per_page_cost;
   if overhead_base > High(SizeUInt) - page_payload_cost then
     raise EAllocError.Create(aeInvalidLayout,
-      'TFixedSlabPool.Create: region size overflow (' + IntToStr(overhead_base) + ' + ' + IntToStr(page_payload_cost) + ')');
+      FormatAllocErrorMsg('TFixedSlabPool', 'Create', 'region size overflow (' + IntToStr(overhead_base) + ' + ' + IntToStr(page_payload_cost) + ')'));
   total_size := overhead_base + page_payload_cost;
   if total_size > High(SizeUInt) - NGX_SLAB_PAGE_SIZE then
     raise EAllocError.Create(aeInvalidLayout,
-      'TFixedSlabPool.Create: region size overflow (' + IntToStr(total_size) + ')');
+      FormatAllocErrorMsg('TFixedSlabPool', 'Create', 'region size overflow (' + IntToStr(total_size) + ')'));
   total_size := total_size + NGX_SLAB_PAGE_SIZE;
   if total_size > High(SizeUInt) - (NGX_SLAB_PAGE_SIZE - 1) then
     raise EAllocError.Create(aeInvalidLayout,
-      'TFixedSlabPool.Create: allocation size overflow (' + IntToStr(total_size) + ')');
+      FormatAllocErrorMsg('TFixedSlabPool', 'Create', 'allocation size overflow (' + IntToStr(total_size) + ')'));
   allocation_size := total_size + (NGX_SLAB_PAGE_SIZE - 1);
   if desired_pages > High(SizeUInt) div 16 then
     raise EAllocError.Create(aeInvalidLayout,
-      'TFixedSlabPool.Create: ownership index overflow (' + IntToStr(desired_pages) + ')');
+      FormatAllocErrorMsg('TFixedSlabPool', 'Create', 'ownership index overflow (' + IntToStr(desired_pages) + ')'));
   ownership_capacity := desired_pages * 16;
 
   FRawAllocSize := allocation_size;
@@ -537,17 +537,17 @@ var
 begin
   ASize := 0;
   if APtr = nil then
-    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer cannot be nil');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TFixedSlabPool', AOperation, 'pointer cannot be nil'));
 
   if not OwnershipLookup(PtrUInt(APtr), LIndex) then
-    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer is not tracked');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TFixedSlabPool', AOperation, 'pointer is not tracked'));
 
   if FOwnStates[LIndex] = FIXED_SLAB_OWNERSHIP_RELEASED then
-    raise EAllocError.Create(aeDoubleFree, 'TFixedSlabPool.' + AOperation + ': double free detected');
+    raise EAllocError.Create(aeDoubleFree, FormatAllocErrorMsg('TFixedSlabPool', AOperation, 'double free detected'));
 
   if (FOwnStates[LIndex] <> FIXED_SLAB_OWNERSHIP_ACTIVE) or
      (not IsLiveChunkStart(APtr, LLiveSize)) then
-    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer is not a live block');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TFixedSlabPool', AOperation, 'pointer is not a live block'));
 
   ASize := FOwnSizes[LIndex];
   if ASize = 0 then
@@ -595,17 +595,17 @@ end;
 function TFixedSlabPool.ValidateAlignedFallbackPointer(APtr: Pointer; const AOperation: string): Integer;
 begin
   if APtr = nil then
-    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer cannot be nil');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TFixedSlabPool', AOperation, 'pointer cannot be nil'));
 
   Result := AlignedFallbackIndexOf(APtr);
   if Result < 0 then
-    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer is not tracked');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TFixedSlabPool', AOperation, 'pointer is not tracked'));
 
   if FAlignedFallbackStates[Result] = FIXED_SLAB_ALIGNED_RELEASED then
-    raise EAllocError.Create(aeDoubleFree, 'TFixedSlabPool.' + AOperation + ': double free detected');
+    raise EAllocError.Create(aeDoubleFree, FormatAllocErrorMsg('TFixedSlabPool', AOperation, 'double free detected'));
 
   if FAlignedFallbackStates[Result] <> FIXED_SLAB_ALIGNED_ACTIVE then
-    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.' + AOperation + ': pointer is not active');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TFixedSlabPool', AOperation, 'pointer is not active'));
 end;
 
 procedure TFixedSlabPool.FreeActiveAlignedFallbacks;
@@ -769,7 +769,7 @@ begin
   if not IsLiveChunkStart(Result, LChunkSize) then
   begin
     ngx_slab_free_locked(Pngx_slab_pool_t(FCore), Result);
-    raise EAllocError.Create(aeInternalError, 'TFixedSlabPool.GetMem: allocated pointer is not a live block');
+    raise EAllocError.Create(aeInternalError, FormatAllocErrorMsg('TFixedSlabPool', 'GetMem', 'allocated pointer is not a live block'));
   end;
   TrackAllocated(Result, LChunkSize);
 end;
@@ -825,7 +825,7 @@ var
 begin
   if APtr = nil then Exit;
   if FCore = nil then
-    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.FreeMem: pool is not initialized');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TFixedSlabPool', 'FreeMem', 'pool is not initialized'));
   ValidateTrackedLivePointer(APtr, 'FreeMem', LSize);
   ngx_slab_free_locked(Pngx_slab_pool_t(FCore), APtr);
   if OwnershipLookup(PtrUInt(APtr), LIndex) then
@@ -842,7 +842,7 @@ var
 begin
   if APtr = nil then Exit;
   if FCore = nil then
-    raise EAllocError.Create(aeInvalidPointer, 'TFixedSlabPool.SecureFree: pool is not initialized');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TFixedSlabPool', 'SecureFree', 'pool is not initialized'));
   ValidateTrackedLivePointer(APtr, 'SecureFree', LSize);
   SecureZeroMemory(APtr, LSize);
   ngx_slab_free_locked(Pngx_slab_pool_t(FCore), APtr);
@@ -874,7 +874,7 @@ begin
     if LNeeded < ASize then Exit(nil);
     LRaw := FAllocator.GetMem(LNeeded);
     if LRaw = nil then Exit(nil);
-    Result := AlignUpUnChecked(Pointer(PtrUInt(LRaw) + SizeOf(Pointer)), AAlignment);
+    Result := AlignUpUnchecked(Pointer(PtrUInt(LRaw) + SizeOf(Pointer)), AAlignment);
     LHeaderPtr := PPointer(PtrUInt(Result) - SizeOf(Pointer));
     LHeaderPtr^ := LRaw;
     TrackAlignedFallback(Result, LRaw, LNeeded);

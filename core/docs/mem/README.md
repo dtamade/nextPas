@@ -8,7 +8,10 @@
 > 日常：只响应回归、命名 D3、GHA `mem.host_runtime` 红。  
 > **不**默认排期：Phase 29、全仓 FreeMem 扫。  
 > 路线图：[ROADMAP](ROADMAP.md) · 决策树：[API-GUIDE](API-GUIDE.md) · 性能：[SCORECARD](SCORECARD.md) · 真机 CI：[MEM-HOST-RUNTIME-CI](MEM-HOST-RUNTIME-CI.md)
-可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。默认 focused：
+可用性权威：[USABILITY-SCORE.md](USABILITY-SCORE.md)。
+**可用性修复（2026-07-20 Implemented）**: [调研](USABILITY-FIX-RESEARCH-2026-07-20.md) · [实施规划](USABILITY-FIX-PLAN-2026-07-20.md)。
+
+默认 focused：
 
 ```bash
 make lane-focused LANE=mem
@@ -186,7 +189,7 @@ GetMemStats(S);
 | `arena_strict` / `ArenaStrictEnabled` | `NEXTPAS_MEM_ARENA_STRICT` | Arena FreeMem raise |
 | `debug` / `DebugEnabled` | `NEXTPAS_MEM_DEBUG`（或 SAFETY 注入） | wrap 是否建成 |
 | `debug_process` / `DebugObservesProcess` | debug ∧ heap_debug | wrap 是否观察过程式 GetMem |
-| `debug_coverage_gap` | debug ∧ ¬heap_debug | **假阴性风险**（只 DEBUG 不看热路径） |
+| `debug_coverage_gap` | debug ∧ ¬heap_debug | **假阴性风险**（只 DEBUG 不看热路径）；gap 时 Format 另附 `WARN=debug_coverage_gap` |
 | `DebugActiveAllocs` / `DebugAllocCount` | 仅 wrap 建成时 | 插件面诊断计数 |
 
 `FormatMemStats` 一行始终含 `heap_safety=` / `arena_strict=` / `debug_process=` / `debug_coverage_gap=`。

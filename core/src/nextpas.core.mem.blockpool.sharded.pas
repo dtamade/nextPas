@@ -540,7 +540,8 @@ begin
     end;
 
     if (LState and ROUTING_READ_MASK) = ROUTING_READ_MASK then
-      raise EAllocError.Create(aeInternalError, 'TShardedBlockPool: routing reader overflow');
+      raise EAllocError.Create(aeInternalError,
+      FormatAllocErrorMsg('TShardedBlockPool', 'Raise', 'routing reader overflow'));
 
     LDesired := LState + 1;
     if InterlockedCompareExchange(FRoutingState, LDesired, LState) = LState then
@@ -1216,7 +1217,7 @@ var
   // Limit capacity to prevent excessive memory use.
   if AConfig.ThreadCacheCapacity > SHARDED_BLOCKPOOL_THREADCACHE_MAX then
     raise EAllocError.Create(aeInvalidLayout,
-      'TShardedBlockPool: ThreadCacheCapacity max is ' + IntToStr(SHARDED_BLOCKPOOL_THREADCACHE_MAX));
+      FormatAllocErrorMsg('TShardedBlockPool', 'Raise', 'ThreadCacheCapacity max is ' + IntToStr(SHARDED_BLOCKPOOL_THREADCACHE_MAX)));
   FThreadCacheCapacity := AConfig.ThreadCacheCapacity;
   FThreadCacheCheckDoubleFree := AConfig.ThreadCacheCheckDoubleFree;
   FTrackInUse := AConfig.TrackInUse;
@@ -1454,21 +1455,21 @@ begin
   if aPtr = nil then Exit;
 
   if not TryRoute(aPtr, LShard, LBase) then
-    raise EAllocError.Create(aeInvalidPointer, 'TShardedBlockPool.Release: pointer does not belong to this pool');
+    raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TShardedBlockPool', 'Release', 'pointer does not belong to this pool'));
 
   // Quick alignment check to avoid corrupting memory on remote-free fast path.
   if LBase = nil then
-    raise EAllocError.Create(aeInternalError, 'TShardedBlockPool.Release: invalid routing entry');
+    raise EAllocError.Create(aeInternalError, FormatAllocErrorMsg('TShardedBlockPool', 'Release', 'invalid routing entry'));
   LDiff := PtrUInt(aPtr) - PtrUInt(LBase);
   if FBlockMask <> 0 then
   begin
     if (LDiff and PtrUInt(FBlockMask)) <> 0 then
-      raise EAllocError.Create(aeInvalidPointer, 'TShardedBlockPool.Release: misaligned pointer');
+      raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TShardedBlockPool', 'Release', 'misaligned pointer'));
   end
   else
   begin
     if (FBlockSize <> 0) and ((LDiff mod FBlockSize) <> 0) then
-      raise EAllocError.Create(aeInvalidPointer, 'TShardedBlockPool.Release: misaligned pointer');
+      raise EAllocError.Create(aeInvalidPointer, FormatAllocErrorMsg('TShardedBlockPool', 'Release', 'misaligned pointer'));
   end;
 
   // Release must perform the owner-shard state transition synchronously.

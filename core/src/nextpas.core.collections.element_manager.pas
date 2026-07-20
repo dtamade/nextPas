@@ -214,7 +214,7 @@ begin
     if FIsManagedType then
       CopyArray(aDst, aSrc, FElementTypeInfo, aElementCount)
     else
-      nextpas.core.mem.utils.CopyUnChecked(aSrc, aDst, aElementCount * FElementSize);
+      nextpas.core.mem.utils.CopyUnchecked(aSrc, aDst, aElementCount * FElementSize);
   end;
 end;
 
@@ -228,7 +228,7 @@ begin
   { 非托管类型,直接拷贝 }
   if not FIsManagedType then
   begin
-    nextpas.core.mem.utils.CopyUnChecked(aSrc, aDst, aElementCount * FElementSize);
+    nextpas.core.mem.utils.CopyUnchecked(aSrc, aDst, aElementCount * FElementSize);
     exit;
   end;
 
