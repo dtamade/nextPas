@@ -272,6 +272,24 @@ begin
   end;
 end;
 
+procedure TestExtDialogSurface;
+var
+  LDialog: IDialog;
+  LBuf: TBuffer;
+  LArea: TRect;
+begin
+  LDialog := TDialog.New('Confirm', 'Proceed?').WithButtons(['OK', 'Cancel']);
+  Check(LDialog <> nil, 'ext exposes TDialog');
+  LArea := TRect.Make(0, 0, 40, 20);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    LDialog.Render(LArea, LBuf);
+    Check(True, 'dialog render via ext');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestSuite.Create('nextpas.core.tui.ext_facade');
   T.Test('ext surface', @TestExtSurface);
@@ -288,5 +306,6 @@ begin
   T.Test('ext panel grid 1x1', @TestExtPanelGridOneByOne);
   T.Test('ext scrollview surface', @TestExtScrollViewSurface);
   T.Test('ext modal surface', @TestExtModalSurface);
+  T.Test('ext dialog surface', @TestExtDialogSurface);
   if not T.Run then Halt(1);
 end.
