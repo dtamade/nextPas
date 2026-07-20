@@ -35,9 +35,9 @@ Without real runtime evidence, a host is not runtime ready.
 
 Windows x86_64 has host ABI declarations, source-contract coverage, forced
 Windows compile gates, Wine runtime smoke (24-module matrix, including
-`platform.watch` UNSUPPORTED smoke and `platform.pty` ConPTY smoke), and durable
-GHA **`ci-matrix`** for the **documented 27 platform gates** in
-`platform-windows-ci-matrix.sh` / `.ps1`.
+`platform.watch` RDCW create/timeout with soft event residual under Wine and
+`platform.pty` ConPTY smoke), and durable GHA **`ci-matrix`** for the
+**documented 27 platform gates** in `platform-windows-ci-matrix.sh` / `.ps1`.
 
 ### Count honesty (do not mix)
 

@@ -209,8 +209,8 @@ UTF-16 helpers.
 
 - `core/src/nextpas.core.platform.watch.pas` — portable API + stubs
 - `core/tests/nextpas.core.platform.watch/test_platform_watch/` — Linux behaviour
-- `core/tests/nextpas.core.platform.watch/test_platform_watch_wine/` — Win UNSUPPORTED smoke
-- Higher layer: `nextpas.core.fs.watch` (if present) should keep consuming portable API only
+- `core/tests/nextpas.core.platform.watch/test_platform_watch_wine/` — RDCW wine smoke (hard timeout; soft events under Wine)
+- Higher layer: `nextpas.core.fs.watch` consumes portable API; AddTree = multi-dir walk
 
 ---
 
