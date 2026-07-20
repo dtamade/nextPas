@@ -7,12 +7,16 @@ program bench_lockfree;
  *   C2 — TLockFreeChannel 2P+2C
  * Micro (single-thread Try*; do NOT compare to multi-thread Go/Rust):
  *   SPSC/MPMC/Seg/SPMC TryDequeue, Channel 1T TrySendReceive, EBR Retire
+ *
+ * B40: both suites use TBenchSuite (Quiet + short config for micro;
+ * matched uses MaxIterations/MinSamples=1 so multi-thread OPS runs once per entry).
  *}
 {$I nextpas.core.settings.inc}
 uses
   SysUtils,
   nextpas.core.thread.init,
   nextpas.core.bench, nextpas.core.bench.intf,
+  nextpas.core.time.base,
   nextpas.core.atomic, nextpas.core.lockfree,
   nextpas.core.lockfree.ebr, nextpas.core.lockfree.spsc, nextpas.core.lockfree.mpmc,
   nextpas.core.lockfree.segqueue, nextpas.core.lockfree.spmc,
@@ -108,22 +112,6 @@ begin
       GBenchSink := GBenchSink + LV;
 end;
 
-procedure PrintTimed(const AName: string; const AElapsedNs: QWord; const AOperations: Int64);
-var
-  LMs, LMops, LNsPerOp: Double;
-begin
-  if AElapsedNs = 0 then
-  begin
-    WriteLn(Format('  %-34s %8s  %6s  %5s', [AName, 'n/a', 'n/a', 'n/a']));
-    Exit;
-  end;
-  LMs := Double(AElapsedNs) / 1.0e6;
-  LMops := (Double(AOperations) / (Double(AElapsedNs) / 1.0e9)) / 1.0e6;
-  LNsPerOp := Double(AElapsedNs) / Double(AOperations);
-  WriteLn(Format('  %-34s %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
-    [AName, LMs, LMops, LNsPerOp]));
-end;
-
 function MatchProducer(AArg: Pointer): Pointer; cdecl;
 var
   LI, LCount: Integer;
@@ -151,26 +139,24 @@ begin
   InterlockedExchangeAdd64(GMatchSum, LLocal);
 end;
 
-procedure RunMatchedChannel(const AName: string; const AProducers, AConsumers: Integer);
+procedure RunMatchedChannelOnce(const AProducers, AConsumers: Integer);
 var
   LProducers: array[0..7] of TPlatformThreadHandle;
   LConsumers: array[0..7] of TPlatformThreadHandle;
   LI: Integer;
-  LStart, LEnd: QWord;
   LRet: Pointer;
   LOpsPerP, LOpsPerC: Integer;
 begin
   if (AProducers < 1) or (AConsumers < 1) or (AProducers > 8) or (AConsumers > 8) then
-    raise Exception.Create('RunMatchedChannel: bad producer/consumer count');
+    raise Exception.Create('RunMatchedChannelOnce: bad producer/consumer count');
   if (OPS mod AProducers <> 0) or (OPS mod AConsumers <> 0) then
-    raise Exception.Create('RunMatchedChannel: OPS must divide producer/consumer counts');
+    raise Exception.Create('RunMatchedChannelOnce: OPS must divide producer/consumer counts');
 
   LOpsPerP := OPS div AProducers;
   LOpsPerC := OPS div AConsumers;
   GMatchCh := TIntChannel.Create(CAPACITY);
   GMatchSum := 0;
   try
-    LStart := platform_monotonic_ns;
     for LI := 0 to AConsumers - 1 do
       if platform_thread_create(LConsumers[LI], @MatchConsumer, Pointer(PtrUInt(LOpsPerC))) <> 0 then
         raise Exception.Create('consumer create failed');
@@ -181,8 +167,6 @@ begin
       platform_thread_join(LProducers[LI], LRet);
     for LI := 0 to AConsumers - 1 do
       platform_thread_join(LConsumers[LI], LRet);
-    LEnd := platform_monotonic_ns;
-    PrintTimed(AName, LEnd - LStart, OPS);
     GBenchSink := GBenchSink + GMatchSum;
   finally
     GMatchCh.Close;
@@ -191,7 +175,21 @@ begin
   end;
 end;
 
+procedure BenchMatchedC1(const ACtx: IBenchContext);
+begin
+  RunMatchedChannelOnce(1, 1);
+  ACtx.SetBytes(OPS * SizeOf(Integer));
+end;
+
+procedure BenchMatchedC2(const ACtx: IBenchContext);
+begin
+  RunMatchedChannelOnce(2, 2);
+  ACtx.SetBytes(OPS * SizeOf(Integer));
+end;
+
 procedure RunMatchedSuite;
+var
+  LResults: IBenchResults;
 begin
   WriteLn('=== Q5 matched suite (multi-thread; compare with Go/Rust) ===');
   WriteLn('Scenario C1: TLockFreeChannel 1P+1C  OPS=', OPS, ' CAP=', CAPACITY);
@@ -199,14 +197,25 @@ begin
   WriteLn('Note: Go uses buffered chan; Rust C1 uses std::sync::mpsc (unbounded).');
   WriteLn('      Absolute Mops only valid with full bench-envelope.md fields.');
   WriteLn;
-  RunMatchedChannel('C1 TLockFreeChannel 1P+1C', 1, 1);
-  RunMatchedChannel('C2 TLockFreeChannel 2P+2C', 2, 2);
+  { One multi-thread sample per entry — avoid re-running 1M-op scenarios. }
+  LResults := TBenchSuite.Create('lockfree-matched')
+    .SetQuiet(True)
+    .SetWarmupIters(0)
+    .SetMinSamples(1)
+    .SetMaxIterations(1)
+    .SetMinDuration(TDuration.FromMicroseconds(1))
+    .Add('lockfree/matched/C1_1P1C', @BenchMatchedC1)
+    .Add('lockfree/matched/C2_2P2C', @BenchMatchedC2)
+    .Run;
+  WriteLn(LResults.PrintToConsole);
+  ForceDirectories('build');
+  LResults.SaveToJSON('build/bench-lockfree-matched.json');
   WriteLn;
 end;
 
 procedure RunMicroSuite;
 var
-  LSuite: IBenchSuite;
+  LResults: IBenchResults;
   LI: Integer;
 begin
   WriteLn('=== Micro suite (single-thread Try*; NOT matched to multi-thread Go/Rust) ===');
@@ -227,15 +236,21 @@ begin
       GSeg.TryEnqueue(LI);
       GSpmc.TryEnqueue(LI);
     end;
-    LSuite := TBenchSuite.Create('lockfree-micro');
-    LSuite.Add('SPSC/TryDequeue', @BenchSpscTryDequeue)
-      .Add('MPMC/TryDequeue', @BenchMpmcTryDequeue)
-      .Add('SegQueue/TryDequeue', @BenchSegTryDequeue)
-      .Add('SPMC/TryDequeue', @BenchSpmcTryDequeue)
-      .Add('EBR/Retire', @BenchEbrRetire)
-      .Add('Channel/TrySendReceive 1T', @BenchChannelTrySendReceive)
-      .Add('ChannelSpsc/TrySendReceive 1T', @BenchChannelSpscTrySendReceive);
-    WriteLn(LSuite.Run.PrintToConsole);
+    LResults := TBenchSuite.Create('lockfree-micro')
+      .SetQuiet(True)
+      .SetMinDuration(TDuration.FromMilliseconds(50))
+      .SetMinSamples(5)
+      .Add('lockfree/micro/SPSC/TryDequeue', @BenchSpscTryDequeue)
+      .Add('lockfree/micro/MPMC/TryDequeue', @BenchMpmcTryDequeue)
+      .Add('lockfree/micro/SegQueue/TryDequeue', @BenchSegTryDequeue)
+      .Add('lockfree/micro/SPMC/TryDequeue', @BenchSpmcTryDequeue)
+      .Add('lockfree/micro/EBR/Retire', @BenchEbrRetire)
+      .Add('lockfree/micro/Channel/TrySendReceive', @BenchChannelTrySendReceive)
+      .Add('lockfree/micro/ChannelSpsc/TrySendReceive', @BenchChannelSpscTrySendReceive)
+      .Run;
+    WriteLn(LResults.PrintToConsole);
+    ForceDirectories('build');
+    LResults.SaveToJSON('build/bench-lockfree-micro.json');
   finally
     GEbrDomain.Free;
     GSpsc.Free;
